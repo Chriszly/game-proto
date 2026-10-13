@@ -16,6 +16,7 @@ import {
   BELT_LANES,
   BELT_MS,
   BELTS,
+  SERVE_MS,
   CAULDRONS,
   EXPANSION_COST,
   MAX_CRAFTSMEN,
@@ -98,7 +99,7 @@ export function tick(state: GameState, dt: number, workingAt: StationId | null, 
 
   for (const id of BELTS) runBelt(state, id, dt);
 
-  if (crew(state, 'counter', workingAt) > 0) serveFromShelf(state);
+  serveCustomers(state, dt, workingAt);
   if (state.craftsmen.counter.level >= 2) collectTill(state);
   for (const order of state.orders) order.patience -= dt;
   state.orders = state.orders.filter((o) => o.patience > 0);
@@ -249,18 +250,41 @@ export function harvest(state: GameState, plotIndex: number): Feedback {
 }
 
 /**
- * Customers take what they ordered from the counter shelf and pay into the till. Orders the shelf
- * can fill completely go first (oldest first); leftover matching potions go towards the rest.
+ * Serving at the counter. The doctor on the work spot hands customers everything on the shelf they
+ * want at once. Craftsmen take SERVE_MS over each potion, sped up by each pair of hands.
  */
-function serveFromShelf(state: GameState) {
+function serveCustomers(state: GameState, dt: number, workingAt: StationId | null) {
+  const { counter } = state;
+  const hired = state.craftsmen.counter.level;
+  if (hired === 0) {
+    if (workingAt === 'counter') serveFromShelf(state);
+    return;
+  }
+  if (!state.orders.some((o) => o.wants.some((want) => counter.shelf.includes(want)))) {
+    counter.serving = 0;
+    return;
+  }
+  counter.serving = (counter.serving ?? 0) + dt * hired;
+  if (counter.serving < SERVE_MS) return;
+  counter.serving = 0;
+  serveFromShelf(state, 1);
+}
+
+/**
+ * Customers take what they ordered from the counter shelf, at most `limit` potions, and pay into
+ * the till. Orders the shelf can fill completely go first (oldest first); leftover matching potions
+ * go towards the rest.
+ */
+function serveFromShelf(state: GameState, limit = Infinity) {
   const { counter } = state;
   if (counter.shelf.length === 0) return;
   const give = (order: Order) => {
     order.wants = order.wants.filter((want) => {
       const i = counter.shelf.indexOf(want);
-      if (i < 0) return true;
+      if (i < 0 || limit <= 0) return true;
       counter.shelf.splice(i, 1);
       counter.till += order.pay[want] ?? 0;
+      limit--;
       return false;
     });
   };

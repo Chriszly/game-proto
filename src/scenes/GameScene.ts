@@ -37,6 +37,7 @@ import {
   MAX_CRAFTSMEN,
   GUILD_UPGRADES,
   MAX_ORDER_SLOTS,
+  SERVE_MS,
   beltBuildable,
   gardenBuilt,
   gardenOf,
@@ -595,6 +596,13 @@ export class GameScene extends Phaser.Scene {
       const { counter } = this.state;
       tillCoin.setVisible(counter.till > 0);
       till.setText(counter.till > 0 ? `${counter.till}` : '');
+    });
+
+    // How far the counter's craftsmen are with handing over the next potion.
+    const serving = new ProgressBar(this, COUNTER.x, COUNTER.y + 36, 44, 0x9ccf6a, UI_DEPTH);
+    this.views.push(() => {
+      const done = this.state.counter.serving ?? 0;
+      serving.set(this.state.craftsmen.counter.level > 0 && done > 0 ? done / SERVE_MS : null);
     });
 
     // One customer slot per possible order; slot i shows the i-th open order once its customer has

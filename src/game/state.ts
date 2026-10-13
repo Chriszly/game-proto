@@ -23,6 +23,8 @@ export interface Cauldron {
 export interface Counter {
   shelf: PotionId[];
   till: number;
+  /** How far the craftsmen are with handing over the next potion, towards SERVE_MS. */
+  serving?: number;
 }
 
 export interface Order {
@@ -210,6 +212,8 @@ export const beltBuildable = (state: GameState, id: BeltId) =>
   (id !== 'garden2' || state.expansion.fields.some((f) => f.built));
 /** Coins needed for the expansion's land, each field, the refining table and the cauldron. */
 export const EXPANSION_COST = { land: 100, field: 25, refiner: 50, cauldron: 75 };
+/** How long a craftsman takes to hand a customer one potion; the doctor hands them over at once. */
+export const SERVE_MS = 1_500;
 /** Least time between two items in a belt's lane, so they don't overlap. */
 export const BELT_GAP_MS = 600;
 /**
