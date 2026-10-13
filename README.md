@@ -9,8 +9,8 @@ brew potions in the cauldron and sell them to customers at the storefront.
 
 The apothecary is laid out as a U: goods go down the left arm (the wheat field and mandrake patch,
 then the refining table), along the bottom (the cauldron) and up the middle into the shop at the
-top. The right arm mirrors the left and is kept free for a second production line, and the open
-courtyard inside the U is where the doctor works. The map is bigger than the screen, so the camera
+top. The right arm is grass for now: an expansion will open it up for a second production line
+that mirrors the left. The courtyard inside the U is where the doctor works. The map is bigger than the screen, so the camera
 follows the doctor.
 
 ## How to play

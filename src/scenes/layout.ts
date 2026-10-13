@@ -1,9 +1,9 @@
 import { PLOTS_PER_GARDEN } from '../game/state';
 
 // World positions for the U-shaped apothecary. Goods flow down the left arm (gardens, refining
-// table), along the bottom (cauldron) and up the middle into the shop at the top. The right arm
-// mirrors the left and is kept free for a second production line. The world is bigger than the
-// 960x540 view, so the camera follows the doctor.
+// table), along the bottom (cauldron) and up the middle into the shop at the top. The right arm,
+// which will mirror the left for a second production line, is plain grass until that expansion is
+// bought. The world is bigger than the 960x540 view, so the camera follows the doctor.
 
 export const HUD_HEIGHT = 44;
 export const WORLD = { w: 1200, h: 810 };
@@ -19,10 +19,13 @@ export const plotPosition = (i: number) => {
   return { x: area.x + 48 + (i % PLOTS_PER_GARDEN) * 90, y: area.y + 100 };
 };
 
-/** Packed earth below the gardens and the shop, with a strip leading up to the shop door. */
+/**
+ * Packed earth below the gardens and up to the shop door. Everything right of the shop stays grass
+ * until an expansion for the second line is bought.
+ */
 export const YARDS = [
-  { x: 24, y: 448, w: 1152, h: 344 },
-  { x: 316, y: 400, w: 568, h: 60 },
+  { x: 24, y: 448, w: 736, h: 344 },
+  { x: 316, y: 400, w: 444, h: 60 },
 ];
 
 /** The refining table stands below the gardens; goods run through it from top to bottom. */
