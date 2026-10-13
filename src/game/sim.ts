@@ -18,7 +18,10 @@ import {
   CAULDRONS,
   EXPANSION_COST,
   MAX_CRAFTSMEN,
-  MAX_ORDERS,
+  beltSpeed,
+  growthSpeed,
+  maxOrders,
+  potionPrice,
   REFINERS,
   LINE2_GARDEN,
   UPGRADES,
@@ -56,7 +59,7 @@ const crew = (state: GameState, id: StationId, workingAt: StationId | null) => s
  */
 export function tick(state: GameState, dt: number, workingAt: StationId | null, rand: () => number = Math.random) {
   for (const plot of state.plots) {
-    plot.grown = Math.min(plot.grown + dt, GROW_MS[plot.plant]);
+    plot.grown = Math.min(plot.grown + dt * growthSpeed(state), GROW_MS[plot.plant]);
   }
 
   for (const id of REFINERS) {
@@ -95,7 +98,7 @@ export function tick(state: GameState, dt: number, workingAt: StationId | null, 
   state.nextOrderIn -= dt;
   if (state.nextOrderIn <= 0) {
     state.nextOrderIn = 12_000 + rand() * 8_000;
-    if (state.orders.length < MAX_ORDERS) state.orders.push(newOrder(state, rand));
+    if (state.orders.length < maxOrders(state)) state.orders.push(newOrder(state, rand));
   }
 }
 
@@ -150,10 +153,11 @@ function runBelt(state: GameState, id: BeltId, dt: number) {
   const belt = state.belts[id];
   if (!belt.built) return;
   const length = BELT_MS[id];
+  const step = dt * beltSpeed(state);
   if (belt.items.length > 0 && belt.items[0].at >= length && giveFromBelt(state, id, belt.items[0].id)) belt.items.shift();
   belt.items.forEach((item, i) => {
     const room = i === 0 ? length : belt.items[i - 1].at - BELT_GAP_MS;
-    item.at = Math.max(item.at, Math.min(item.at + dt, room));
+    item.at = Math.max(item.at, Math.min(item.at + step, room));
   });
   const last = belt.items[belt.items.length - 1];
   if (!last || last.at >= BELT_GAP_MS) {
@@ -187,7 +191,7 @@ function newOrder(state: GameState, rand: () => number) {
   const wants = Array.from({ length: count }, () => potions[Math.floor(rand() * potions.length)]);
   // Customers tip per potion, more generously and patiently at a better counter.
   const level = state.upgrades.counter.level;
-  const reward = wants.reduce((sum, p) => sum + POTION_PRICE[p], 0) + count * 2 * (level + 1);
+  const reward = wants.reduce((sum, p) => sum + potionPrice(state, p), 0) + count * 2 * (level + 1);
   const maxPatience = (60_000 + rand() * 30_000) * (1 + 0.25 * level);
   return { id: state.nextOrderId++, wants, reward, patience: maxPatience, maxPatience };
 }
