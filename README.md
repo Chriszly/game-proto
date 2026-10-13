@@ -19,7 +19,7 @@ follows the doctor.
 | --- | --- |
 | WASD / arrow keys, or tap | Walk |
 | Walk past ripe plants | Harvest every ripe plant within one character height of the doctor; the spinning sickle marks the edge |
-| Stand on a floor marker | Green: drop off items. Blue: work the station. Gold: pick up products or coins. Purple: pay coins to upgrade |
+| Stand on a floor marker | Green: drop off items. Blue: work the station. Gold: pick up products or coins. Purple: pay coins to upgrade or build a belt |
 
 1. **Gardens**: each garden grows one kind of plant. Harvest ripe wheat in the wheat field and
    mandrake in the mandrake patch. Plots regrow on their own.
@@ -33,6 +33,14 @@ follows the doctor.
 
 Every station has an upgrade marker. Upgrades cost 20, 40 and 80 coins: the refining table and
 cauldron work faster, and customers at an upgraded counter tip more and wait longer.
+
+**Conveyor belts** take the walking out of the loop. Three can be bought on their own purple build
+markers, a handful of coins at a time: gardens to refining table (60 coins), table to cauldron (100)
+and cauldron to counter (150). A belt picks ripe plants or finished goods up at its start and
+hands them to the next station when it has room; the drop and pick-up markers it replaces go away.
+The belts are steampunk machinery, brass rails over leather slats, in an otherwise medieval world.
+
+![All three belts built](docs/screenshots/belts-map.png)
 
 You can carry four items at a time; they stack up on the doctor's back. Progress is saved in the browser automatically; "New game"
 in the top bar starts over.
@@ -50,8 +58,9 @@ npm run preview   # serve the production build
 
 `e2e/playthrough.spec.ts` plays the whole loop in headless Chromium with real clicks: it harvests
 both gardens, refines, brews, sells to customers until it has 20 coins and buys a counter upgrade,
-checking items, coins and the upgrade along the way. It plays at 4x speed (`PLAYTHROUGH_SPEED`),
-so the run takes about 15 seconds. The Playthrough workflow runs it on every PR
+then sells more until it can buy the garden belt and watches the belt bring plants to the refining
+table, checking items, coins, the upgrade and the belt along the way. It plays at 4x speed
+(`PLAYTHROUGH_SPEED`), so the run takes under a minute. The Playthrough workflow runs it on every PR
 and push to main and uploads a video and milestone screenshots as the `playthrough` artifact.
 
 ```sh
@@ -72,6 +81,6 @@ unzip it and serve the folder (for example with `npx serve`) to play.
 - `src/scenes/`: Phaser scenes. `BootScene` bakes textures, `GameScene` draws the world and wires
   input to the rules.
 - `src/art/`: all the pixel art, drawn in code on a shared palette and baked into textures at
-  startup: the plague doctor, townsfolk, items, gardens, stations, floor markers, ground tiles and
+  startup: the plague doctor, townsfolk, items, gardens, stations, conveyor belts, floor markers, ground tiles and
   interface pieces.
 - `src/ui/`: small reusable display pieces (icon rows, progress bars).
