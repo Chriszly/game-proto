@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { plantTexture } from '../art/garden';
+import { customerTexture } from '../art/townsfolk';
 import { GROW_MS, ITEMS, REFINE } from '../game/items';
 import {
   collectTill,
@@ -40,7 +41,6 @@ const UI_DEPTH = 10_000;
 const AUTOSAVE_MS = 3_000;
 /** How often a floor marker moves the next item while the doctor stands on it. */
 const MARKER_INTERVAL_MS = 200;
-const CUSTOMER_TINTS = [0x8f5a9e, 0x4d7aa8, 0xa8584d, 0x5e8f62, 0xb8934a];
 
 /** A floor marker that acts by itself, one step at a time, while the doctor stands on it. */
 interface Marker {
@@ -266,17 +266,15 @@ export class GameScene extends Phaser.Scene {
     // One customer slot per possible order; slot i shows the i-th open order.
     for (let i = 0; i < MAX_ORDERS; i++) {
       const { x, y } = customerPosition(i);
-      const customer = this.add.image(x, y, 'customer').setScale(2).setDepth(y);
-      const head = this.add.image(x, y, 'customer-head').setScale(2).setDepth(y);
+      const customer = this.add.image(x, y, customerTexture(0)).setScale(2).setDepth(y);
       const wants = new IconRow(this, x, y - 52, UI_DEPTH);
       const patience = new ProgressBar(this, x, y - 40, 40, 0xe0b84a, UI_DEPTH);
       this.views.push(() => {
         const order = this.state.orders[i];
         customer.setVisible(!!order);
-        head.setVisible(!!order);
         wants.set(order ? order.wants : []);
         patience.set(order ? order.patience / order.maxPatience : null);
-        if (order) customer.setTint(CUSTOMER_TINTS[order.id % CUSTOMER_TINTS.length]);
+        if (order) customer.setTexture(customerTexture(order.id));
       });
     }
   }
