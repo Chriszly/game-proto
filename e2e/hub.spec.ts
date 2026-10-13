@@ -1,7 +1,10 @@
 import { expect, test } from '@playwright/test';
 
 // The hub lists every game and each card opens its game.
-const GAMES = [{ name: 'Apothecary', path: '/games/apothecary/' }];
+const GAMES = [
+  { name: 'Apothecary', path: '/games/apothecary/' },
+  { name: 'Rampart', path: '/games/rampart/' },
+];
 
 test('hub opens each game', async ({ page }, testInfo) => {
   await page.goto('/');

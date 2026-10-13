@@ -16,6 +16,7 @@ export default defineConfig({
   projects: [
     { name: 'hub', testDir: 'e2e' },
     { name: 'apothecary', testDir: 'games/apothecary/e2e' },
+    { name: 'rampart', testDir: 'games/rampart/e2e' },
   ],
   webServer: {
     command: 'npm run dev -- --port 5173 --strictPort',
