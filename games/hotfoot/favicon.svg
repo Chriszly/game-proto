@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>Hotfoot</title>
+  <circle cx="7" cy="10" r="5" fill="#e37100"/>
+  <circle cx="25" cy="10" r="5" fill="#e37100"/>
+  <circle cx="7" cy="10" r="2.4" fill="#ffb787"/>
+  <circle cx="25" cy="10" r="2.4" fill="#ffb787"/>
+  <ellipse cx="16" cy="19.5" rx="13" ry="12" fill="#e37100"/>
+  <path d="M15 6.5 C15 2 19 0.5 23.5 1 C21 2.2 19.5 4 18.5 7 Z" fill="#b8343f"/>
+  <path d="M5.2 15 C5.2 4.5 26.8 4.5 26.8 15 Z" fill="#9a97aa"/>
+  <path d="M8.5 12 C9 8.5 12 7 14.5 6.8" stroke="#d4d2de" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+  <rect x="4" y="13.6" width="24" height="2.6" rx="1" fill="#6d6a7c"/>
+  <rect x="15" y="6" width="2" height="7.6" fill="#6d6a7c"/>
+  <circle cx="10.5" cy="20.0" r="2.3" fill="#0d1117"/>
+  <circle cx="21.5" cy="20.0" r="2.3" fill="#0d1117"/>
+  <circle cx="11.3" cy="19.2" r="0.8" fill="#ffffff"/>
+  <circle cx="22.3" cy="19.2" r="0.8" fill="#ffffff"/>
+  <ellipse cx="16" cy="25.6" rx="4.6" ry="3.3" fill="#ffdcc7"/>
+  <ellipse cx="16" cy="24.6" rx="2.2" ry="1.4" fill="#311300"/>
+</svg>
