@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>Tiny Kingdom</title>
+  <circle cx="7" cy="9" r="5" fill="#e37100"/>
+  <circle cx="25" cy="9" r="5" fill="#e37100"/>
+  <circle cx="7" cy="9" r="2.4" fill="#ffb787"/>
+  <circle cx="25" cy="9" r="2.4" fill="#ffb787"/>
+  <ellipse cx="16" cy="19.5" rx="13" ry="12" fill="#e37100"/>
+  <path d="M9 10.5 L8.4 2.6 L12.4 6 L16 0.8 L19.6 6 L23.6 2.6 L23 10.5 Z" fill="#f3c64e" stroke="#964900" stroke-width="0.8" stroke-linejoin="round"/>
+  <rect x="9" y="8.4" width="14" height="2.2" fill="#d9a22e"/>
+  <circle cx="12.4" cy="9.5" r="0.8" fill="#c43b2e"/>
+  <circle cx="16" cy="9.5" r="0.8" fill="#3a7bc8"/>
+  <circle cx="19.6" cy="9.5" r="0.8" fill="#c43b2e"/>
+  <circle cx="10.5" cy="17.5" r="2.3" fill="#0d1117"/>
+  <circle cx="21.5" cy="17.5" r="2.3" fill="#0d1117"/>
+  <circle cx="11.3" cy="16.7" r="0.8" fill="#ffffff"/>
+  <circle cx="22.3" cy="16.7" r="0.8" fill="#ffffff"/>
+  <ellipse cx="16" cy="24" rx="4.6" ry="3.3" fill="#ffdcc7"/>
+  <ellipse cx="16" cy="23" rx="2.2" ry="1.4" fill="#311300"/>
+</svg>
