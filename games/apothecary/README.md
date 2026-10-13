@@ -19,6 +19,7 @@ map is bigger than the screen, so the camera follows the doctor.
 | Control | Action |
 | --- | --- |
 | WASD / arrow keys, or tap | Walk |
+| Mouse wheel, + / - keys, or pinch with two fingers | Zoom in and out; the top bar stays the same size and the zoom is remembered |
 | Walk past ripe plants | Harvest every ripe plant within one character height of the doctor; the spinning sickle marks the edge |
 | Recipes (top bar) | Show what each station makes from what, and what each potion sells for; tap again to close |
 | Drop all (top bar) | Throw away everything the doctor carries |
@@ -81,8 +82,11 @@ The **guild** in the bottom-left corner of the yard sells upgrades for the rest 
 growth makes every garden grow a quarter faster per level (20, then 40 coins), belts run half again
 as fast per level, carrying more goods a second (30, then 60), prices make customers pay a quarter
 more per potion per level (20, then 40), an extra order slot lets a fourth customer wait at the
-counter (30), and customers makes them come in half again as often per level, a new one every 8 to
-13 seconds and then every 6 to 10 instead of every 12 to 20 (25, then 50).
+counter (30), and customers makes them come in more often, a new one every 6 to 10 seconds and then
+every 4 to 7 instead of every 12 to 20 (25, then 50). A busier shop is harder to keep up with: per
+customers level, a fifth more customers want two potions (35% at first, then 55% and 75%), and they
+wait a third less long, then half as long. One line with a craftsman per station can't serve
+everyone at the top level; it takes the second line, more craftsmen or station upgrades.
 
 ![The guild](docs/screenshots/guild.png)
 

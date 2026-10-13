@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>Beehive Baron</title>
+  <circle cx="7" cy="5" r="5" fill="#e37100"/>
+  <circle cx="25" cy="5" r="5" fill="#e37100"/>
+  <circle cx="7" cy="5" r="2.4" fill="#ffb787"/>
+  <circle cx="25" cy="5" r="2.4" fill="#ffb787"/>
+  <ellipse cx="16" cy="14.5" rx="13" ry="12" fill="#e37100"/>
+  <circle cx="10.5" cy="12.0" r="2.3" fill="#0d1117"/>
+  <circle cx="21.5" cy="12.0" r="2.3" fill="#0d1117"/>
+  <circle cx="11.3" cy="11.2" r="0.8" fill="#ffffff"/>
+  <circle cx="22.3" cy="11.2" r="0.8" fill="#ffffff"/>
+  <ellipse cx="16" cy="18.4" rx="2.4" ry="1.6" fill="#311300"/>
+  <ellipse cx="16" cy="27" rx="9" ry="5" fill="#d98a14" stroke="#4a2e1a" stroke-width="0.8"/>
+  <rect x="8.5" y="21.5" width="15" height="3" rx="1" fill="#a8743f" stroke="#4a2e1a" stroke-width="0.8"/>
+  <path d="M10 24.5 H22 V25.6 C21.2 25.6 21 27.4 20.2 27.4 C19.4 27.4 19.4 25.6 18.6 25.6 H13.4 C12.6 25.6 12.6 28.2 11.8 28.2 C11 28.2 11 25.6 10 25.6 Z" fill="#f5b52e"/>
+  <ellipse cx="12.5" cy="28.5" rx="1.6" ry="1" fill="#ffe08a"/>
+  <ellipse cx="28" cy="21" rx="2.4" ry="1.7" fill="#f8c832" stroke="#24201c" stroke-width="0.6"/>
+  <path d="M27.4 19.4 V22.6 M28.8 19.4 V22.6" stroke="#24201c" stroke-width="0.8"/>
+  <ellipse cx="27.2" cy="18.6" rx="1.3" ry="0.9" fill="#e8f4ff" stroke="#24201c" stroke-width="0.4"/>
+</svg>

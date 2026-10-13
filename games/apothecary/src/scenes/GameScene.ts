@@ -136,6 +136,26 @@ const SICKLE_LINGER_MS = 400;
 const PRIORITY_SIGN_W = 92;
 /** How long the doctor stands still on a purple marker before it starts taking coins, so walking over one buys nothing. */
 const STILL_MS = 400;
+/**
+ * Floor marker captions: outlined so they read on dirt, grass and boards alike, and wrapped so a
+ * long one doesn't run into its neighbour's.
+ */
+const CAPTION = {
+  fontFamily: 'monospace',
+  fontSize: '11px',
+  stroke: '#1b1410',
+  strokeThickness: 3,
+  align: 'center',
+  wordWrap: { width: 92 },
+};
+
+/** Closest and farthest the view zooms: out until the whole yard is tall enough to fit, in to double size. */
+const MIN_ZOOM = 0.62;
+const MAX_ZOOM = 2;
+/** How much one mouse wheel notch or key press zooms. */
+const ZOOM_STEP = 1.1;
+/** Where the zoom is kept between visits; it's a view preference, so "New game" keeps it. */
+const ZOOM_KEY = 'apothecary-zoom';
 
 /** A floor marker that acts by itself, one step at a time, while the doctor stands on it. */
 interface Marker {
@@ -194,6 +214,10 @@ export class GameScene extends Phaser.Scene {
   private startingOver = false;
   /** Per-frame view updates, each reading from `state`. */
   private views: (() => void)[] = [];
+  /** Draws the top bar and panels at a fixed size, while the main camera zooms the world. */
+  private uiCamera!: Phaser.Cameras.Scene2D.Camera;
+  /** The finger spread and zoom when a two-finger pinch began, or null while there is no pinch. */
+  private pinch: { spread: number; zoom: number } | null = null;
 
   constructor() {
     super('Game');
@@ -229,7 +253,9 @@ export class GameScene extends Phaser.Scene {
     this.followPlayer();
     this.createShopfront();
     this.createHud();
+    this.createUiCamera();
     this.createControls();
+    this.createZoom();
     this.setUpSaving();
   }
 
@@ -259,6 +285,54 @@ export class GameScene extends Phaser.Scene {
   /** The world is bigger than the view, so the camera keeps the doctor in sight within its edges. */
   private followPlayer() {
     this.cameras.main.setBounds(0, 0, WORLD.w, WORLD.h).startFollow(this.player, true);
+  }
+
+  /**
+   * A second camera, never zoomed or scrolled, draws everything from `UI_DEPTH` up (the top bar and
+   * its panels), and the main camera draws the rest, so zooming leaves the top bar as it is.
+   * `splitCameras` sorts each object, including ones created later, every frame.
+   */
+  private createUiCamera() {
+    this.uiCamera = this.cameras.add(0, 0, this.scale.width, this.scale.height);
+    this.splitCameras();
+  }
+
+  private splitCameras() {
+    const world = this.cameras.main.id;
+    const ui = this.uiCamera.id;
+    for (const obj of this.children.list) obj.cameraFilter = (obj as unknown as { depth: number }).depth >= UI_DEPTH ? world : ui;
+  }
+
+  /** Zoom with the mouse wheel, the + and - keys, or a two-finger pinch. */
+  private createZoom() {
+    this.setZoom(Number(readZoom()) || 1);
+    this.input.on('wheel', (_p: Phaser.Input.Pointer, _over: unknown, _dx: number, dy: number) => {
+      if (dy !== 0) this.setZoom(this.cameras.main.zoom * (dy < 0 ? ZOOM_STEP : 1 / ZOOM_STEP));
+    });
+    this.input.keyboard!.on('keydown', (e: KeyboardEvent) => {
+      if (e.key === '+' || e.key === '=') this.setZoom(this.cameras.main.zoom * ZOOM_STEP);
+      if (e.key === '-' || e.key === '_') this.setZoom(this.cameras.main.zoom / ZOOM_STEP);
+    });
+    // A second touch pointer, so two fingers can pinch.
+    if (this.input.manager.pointersTotal < 3) this.input.addPointer(1);
+    this.input.on('pointermove', () => {
+      const [a, b] = [this.input.pointer1, this.input.pointer2];
+      if (!a.isDown || !b.isDown) return;
+      const spread = Phaser.Math.Distance.Between(a.x, a.y, b.x, b.y);
+      if (!this.pinch) this.pinch = { spread, zoom: this.cameras.main.zoom };
+      else if (this.pinch.spread > 0) this.setZoom((this.pinch.zoom * spread) / this.pinch.spread);
+    });
+    this.input.on('pointerup', () => {
+      if (!this.input.pointer1.isDown || !this.input.pointer2.isDown) this.pinch = null;
+    });
+  }
+
+  private setZoom(zoom: number) {
+    const clamped = Phaser.Math.Clamp(zoom, MIN_ZOOM, MAX_ZOOM);
+    // Zoomed out past the world's width, the bounds widen evenly on both sides so the yard stays centred.
+    const w = Math.max(WORLD.w, this.scale.width / clamped);
+    this.cameras.main.setZoom(clamped).setBounds((WORLD.w - w) / 2, 0, w, WORLD.h);
+    writeZoom(clamped);
   }
 
   private ground(x: number, y: number, w: number, h: number, texture: string, depth = -1000) {
@@ -445,7 +519,7 @@ export class GameScene extends Phaser.Scene {
   private addMarker(at: Point, texture: string, caption: string, act: () => Feedback | null, gone?: () => boolean) {
     const pad = this.add.image(at.x, at.y, texture).setDepth(-400);
     const text = this.add
-      .text(at.x, at.y + 26, caption, { fontFamily: 'monospace', fontSize: '10px', color: '#f3e9d2' })
+      .text(at.x, at.y + 26, caption, { ...CAPTION, color: '#f3e9d2' })
       .setOrigin(0.5, 0)
       .setDepth(-400);
     const shown = () => !gone?.();
@@ -509,7 +583,7 @@ export class GameScene extends Phaser.Scene {
     const marker = this.markers.length - 1;
     this.markers[marker].pays = true;
     const text = this.add
-      .text(at.x, at.y + 26, '', { fontFamily: 'monospace', fontSize: '10px', color: '#e6d3f5' })
+      .text(at.x, at.y + 26, '', { ...CAPTION, color: '#e6d3f5' })
       .setOrigin(0.5, 0)
       .setDepth(-400);
     this.views.push(() => {
@@ -542,7 +616,7 @@ export class GameScene extends Phaser.Scene {
   private addBuildMarker(at: Point, caption: string, cost: number, build: Build, shown: () => boolean, act: () => Feedback | null) {
     const pad = this.add.image(at.x, at.y, 'pad-up').setDepth(-400);
     const text = this.add
-      .text(at.x, at.y + 26, '', { fontFamily: 'monospace', fontSize: '10px', color: '#e6d3f5' })
+      .text(at.x, at.y + 26, '', { ...CAPTION, color: '#e6d3f5' })
       .setOrigin(0.5, 0)
       .setDepth(-400);
     this.markers.push({ zone: new Phaser.Geom.Rectangle(at.x - 22, at.y - 22, 44, 44), act, shown, pays: true });
@@ -737,7 +811,7 @@ export class GameScene extends Phaser.Scene {
     const coins = this.add.text(44, HUD_HEIGHT / 2 - 1, '', style).setOrigin(0, 0.5).setDepth(UI_DEPTH);
     this.add.text(width / 2 - 92, HUD_HEIGHT / 2, 'Hands', style).setOrigin(1, 0.5).setDepth(UI_DEPTH);
     this.add
-      .text(width - 110, HUD_HEIGHT / 2, 'Walk: WASD / tap\nHarvest: walk past ripe plants', { ...style, fontSize: '11px' })
+      .text(width - 110, HUD_HEIGHT / 2, 'Walk: WASD / tap\nHarvest: walk past ripe plants', { ...style, fontSize: '12px' })
       .setOrigin(1, 0.5)
       .setDepth(UI_DEPTH);
     this.hudButton(width - 16, 'Settings', () => {
@@ -835,13 +909,21 @@ export class GameScene extends Phaser.Scene {
     // Touch / click to walk, so the same controls work on phones.
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       if (p.y < HUD_HEIGHT) return;
+      // A second finger starts a pinch: stop walking instead of heading for it.
+      if (this.input.pointer1.isDown && this.input.pointer2.isDown) {
+        this.pointerTarget = null;
+        this.waypoint = null;
+        return;
+      }
       // While a panel is open, a tap anywhere below the top bar closes it instead of walking.
       if (this.recipes.visible || this.settings.visible) {
         this.recipes.toggle(false);
         this.settings.toggle(false);
         return;
       }
-      this.pointerTarget = this.reachable(new Phaser.Math.Vector2(p.worldX, p.worldY));
+      // Where the tap is in the world, through the zoomed main camera rather than the top bar's.
+      const at = this.cameras.main.getWorldPoint(p.x, p.y);
+      this.pointerTarget = this.reachable(new Phaser.Math.Vector2(at.x, at.y));
       this.heading = null;
       this.waypoint = this.routeAround(this.pointerTarget);
     });
@@ -923,6 +1005,7 @@ export class GameScene extends Phaser.Scene {
     this.state.player.x = this.player.x;
     this.state.player.y = this.player.y;
     for (const view of this.views) view();
+    this.splitCameras();
   }
 
   private standOnMarkers() {
@@ -1163,4 +1246,20 @@ function walkTowards(obj: Phaser.GameObjects.Image, to: Point, step: number, lea
   else obj.setX(along(obj.x, to.x));
   obj.setDepth(obj.y);
   return obj.x === to.x && obj.y === to.y;
+}
+
+function readZoom() {
+  try {
+    return localStorage.getItem(ZOOM_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeZoom(zoom: number) {
+  try {
+    localStorage.setItem(ZOOM_KEY, String(zoom));
+  } catch {
+    // Without storage the zoom just isn't remembered.
+  }
 }

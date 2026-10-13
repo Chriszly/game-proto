@@ -1,11 +1,15 @@
 import { byDifficulty } from '../../../../shared/settings';
-import { DESKS, FIRST_ORDER, PATIENCE_MS, PATIENCE_PER_TIER_MS, VISITOR_EVERY_MS, forgeMs, oreChance, type GameState } from './state';
+import { DESKS, FIRST_ORDER, PATIENCE_MS, PATIENCE_PER_TIER_MS, VISITOR_EVERY_MS, autoForging, forgeMs, oreChance, type GameState } from './state';
 import { MAX_TIER, swordOf } from './swords';
-import { nextPrice, type UpgradeId } from './upgrades';
+import { locked, nextPrice, type UpgradeId } from './upgrades';
 
-/** Moves the smithy on by `dt` milliseconds: the forge cools, adventurers come, wait and leave. */
+/**
+ * Moves the smithy on by `dt` milliseconds: the forge cools (and forges by itself with the Auto
+ * Forge on), adventurers come, wait and leave.
+ */
 export function tick(s: GameState, dt: number) {
   s.heatMs = Math.max(0, s.heatMs - dt);
+  if (autoForging(s)) forge(s);
 
   for (const a of s.adventurers) a.patienceMs -= dt;
   for (const a of s.adventurers.filter((a) => a.patienceMs <= 0)) {
@@ -84,11 +88,20 @@ export function sell(s: GameState, from: number, id: number) {
   return true;
 }
 
-/** Buys the next rank of an upgrade, if there are coins enough and ranks left. */
+/** Buys the next rank of an upgrade, if it is unlocked and there are coins enough and ranks left. */
 export function buy(s: GameState, id: UpgradeId) {
   const price = nextPrice(id, s.ranks[id]);
-  if (price === null || s.coins < price) return false;
+  if (price === null || s.coins < price || locked(id, s.ranks)) return false;
   s.coins -= price;
   s.ranks[id]++;
+  // A new Auto Forge starts switched on.
+  if (id === 'auto') s.autoForge = true;
+  return true;
+}
+
+/** Switches a bought Auto Forge on or off. */
+export function toggleAutoForge(s: GameState) {
+  if (s.ranks.auto === 0) return false;
+  s.autoForge = !s.autoForge;
   return true;
 }

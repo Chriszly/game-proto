@@ -79,7 +79,14 @@ counter. Coins buy upgrades, craftsmen, conveyor belts and a mirrored second pro
 - Taps: `reachable` moves a tapped spot out of any station or wall area into `pointerTarget`;
   `routeAround` picks a `waypoint`: the front door (`SHOP_DOORWAY`) into or out of the shop,
   otherwise a corner of the nearest `blockedAreas` rectangle (or the whole shop) in the way. Taps
-  close an open panel instead of walking; HUD buttons stop propagation.
+  close an open panel instead of walking; HUD buttons stop propagation. The tapped spot comes from
+  `cameras.main.getWorldPoint`, since the pointer's own `worldX/Y` may be the UI camera's.
+- Zoom: two cameras. The main camera follows the doctor and zooms (`MIN_ZOOM` 0.62 to `MAX_ZOOM`
+  2, by the mouse wheel, + and - keys, or a two-finger pinch on `pointer1`/`pointer2`, which also
+  cancels the walk the second finger's tap would start). `uiCamera` never moves and draws
+  everything from `UI_DEPTH` up: `splitCameras` sets each object's `cameraFilter` by its depth every
+  frame, so later objects sort themselves. `setZoom` clamps, widens the camera bounds evenly when the
+  view is wider than the world, and stores the zoom under `apothecary-zoom`.
 - Shop walls: `SHOP_WALLS` are drawn, with gaps for `SHOP_DOOR` and `SHOP_BACK_DOOR`.
   `SHOP_BLOCKS` are what the doctor collides with: the front and side walls, and the back wall with
   the street behind it as one block, so only customers use the street door.
@@ -143,6 +150,7 @@ null), `expansion` (land, two fields, refiner, cauldron as `Build`s).
   `FEEDERS_LAYOUT` (3) gets `ontoOwnRuns`, which moves belt items up to their run's join; a save
   whose `layout` differs from `LAYOUT` (4, since belts end at pallets) gets the fresh `player`
   spot. Belt items keep their `at`; the belts kept their runs and order, so no migration moves them.
+- `apothecary-zoom`: the main camera's zoom, a view preference that "New game" keeps.
 - "New game" (`clearSave` + `scene.restart`) removes only `apothecary-save`. The old
   `apothecary-fps` key is no longer used; the frame rate comes from the hub.
 
@@ -162,8 +170,9 @@ null), `expansion` (land, two fields, refiner, cauldron as `Build`s).
   `craftsmanCost`), belts (`BELT_COST`, `BELT_MS`, `BELT_LANES`, `BELT_GAP_MS`, `BELT_ENDS`),
   `EXPANSION_COST`, `SERVE_MS`, `MAX_ORDERS`, pallet size, and effect formulas (`speedAt`,
   `growthSpeed`, `beltSpeed`, `potionPrice`, `orderInterval`, `carryCapacity`, `walkSpeed`,
-  `harvestReach`): `src/game/state.ts`. Tip, patience and difficulty are in `newOrder` in
-  `src/game/sim.ts`.
+  `harvestReach`): `src/game/state.ts`. Order size, tip, patience and difficulty are in
+  `newOrder` in `src/game/sim.ts`; the customers level raises the two-potion chance and divides
+  patience by `1 + 0.5 * level`, alongside `orderInterval`.
 - Walk speed `SPEED` (160), `MAX_WALK_STEP_PX`, `CUSTOMER_SPEED` and the scene's interval constants:
   top of `src/scenes/GameScene.ts`.
 
@@ -245,5 +254,7 @@ null), `expansion` (land, two fields, refiner, cauldron as `Build`s).
 - `atCounter` lives only in the scene; `tick` called without it serves every customer at once.
 - Garden belt build spots sit outside a maxed sickle's reach on purpose, so hands a new belt empties
   do not refill from the patch.
+- Anything at `UI_DEPTH` or above is drawn by the unzoomed `uiCamera` at screen positions, so world
+  objects must stay below it (`WORLD_UI_DEPTH` is the highest).
 - `tick` runs before `movePlayer`, so `workingAt` uses last frame's feet position.
 - Healing Draught art is red; keep any cross shapes off red (root rule on red crosses).

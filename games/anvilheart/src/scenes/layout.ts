@@ -11,7 +11,7 @@ export const FURNACE = { x: 130, y: 196 };
 export const FORGE_BUTTON = { x: 130, y: 344, w: 180, h: 48 };
 export const HEAT_BAR = { x: 40, y: 374, w: 180, h: 10 };
 /** The upgrade buttons, by their centres. */
-export const UPGRADE_BUTTONS = { x: 130, ys: [430, 490], w: 200, h: 48 };
+export const UPGRADE_BUTTONS = { x: 130, ys: [410, 458, 506], w: 200, h: 42 };
 
 /** The anvil board: its top left corner and the size of each cell. */
 export const BOARD = { x: 256, y: 60, cell: 100 };

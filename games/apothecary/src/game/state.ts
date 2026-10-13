@@ -176,8 +176,8 @@ export const MAX_ORDERS = 3;
 export const maxOrders = (state: GameState) => MAX_ORDERS + state.upgrades.slots.level;
 /** The most customers there can ever be, for laying out their places. */
 export const MAX_ORDER_SLOTS = MAX_ORDERS + UPGRADES.slots.max;
-/** Time until the next customer comes in: 12 to 20 seconds, and customers come half again as often per customers level. */
-export const orderInterval = (state: GameState, roll: number) => (12_000 + roll * 8_000) / (1 + 0.5 * state.upgrades.customers.level);
+/** Time until the next customer comes in: 12 to 20 seconds, one more time as often per customers level. */
+export const orderInterval = (state: GameState, roll: number) => (12_000 + roll * 8_000) / (1 + state.upgrades.customers.level);
 /** How fast plants grow: a quarter faster per growth level. */
 export const growthSpeed = (state: GameState) => 1 + 0.25 * state.upgrades.growth.level;
 /** How fast belts run, and so how many items they carry a second: half again per belt level. */
