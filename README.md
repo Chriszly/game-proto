@@ -8,6 +8,7 @@ start page lists the games; each one lives in its own folder under `games/`.
 | Game | What it is |
 | --- | --- |
 | [Apothecary](games/apothecary/README.md) | Run a medieval apothecary as a plague doctor: grow herbs, refine them, brew potions and sell them to customers. |
+| [Horde Defense](games/horde/README.md) | Hold the bottom of a road against growing waves of zombies: move left and right, shoot automatically, and shoot crates open for upgrades. |
 
 ## Running locally
 
