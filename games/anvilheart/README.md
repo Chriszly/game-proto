@@ -19,6 +19,7 @@ them one by dragging it onto them. The coins buy upgrades for the forge.
 | Drag a sword onto an empty anvil or another sword | Move it there, or swap the two |
 | Drag a sword onto an adventurer | Sell it, if it is at least as good as the one they asked for |
 | Tap an upgrade | Buy its next rank |
+| Tap Auto Forge, once bought | Switch the auto forge on or off |
 | New smithy (bottom right) | Throw the board, coins and upgrades away and start again |
 
 1. **The forge** makes one sword at a time and then has to heat up again (1.2s), shown by the bar
@@ -52,6 +53,9 @@ them one by dragging it onto them. The coins buy upgrades for the forge.
 | --- | --- | --- |
 | Bellows | 4 (40, 110, 260, 600 coins) | The forge heats up 20% faster per rank |
 | Fine Ore | 3 (90, 250, 700 coins) | 20% chance per rank that the forge makes an Iron Shortsword |
+| Auto Forge | 1 (1200 coins), once Bellows and Fine Ore are maxed | The forge makes a sword by itself whenever it is hot and an anvil is free, so you only merge and sell. Tap it again to pause or restart it |
+
+![Auto Forge, unlocked once the other upgrades are maxed, forging on its own](docs/screenshots/auto-forge-on.png)
 
 The difficulty, set on the hub page's Settings, changes one thing: adventurers wait 50% longer on Easy and 30% less on Hard.
 

@@ -3,10 +3,10 @@ import Phaser from 'phaser';
 import { adventurerTexture } from '../art/characters';
 import { swordTexture } from '../art/swords';
 import { clearProgress, loadProgress, saveProgress } from '../game/save';
-import { buy, drop, forge, sell, tick } from '../game/sim';
+import { buy, drop, forge, sell, tick, toggleAutoForge } from '../game/sim';
 import { DESKS, GRID, SLOTS, forgeMs, freshProgress, newShop, progressOf, type Adventurer, type GameState } from '../game/state';
 import { swordOf } from '../game/swords';
-import { UPGRADES, UPGRADE_IDS, nextPrice, type UpgradeId } from '../game/upgrades';
+import { UPGRADES, UPGRADE_IDS, locked, nextPrice, type UpgradeId } from '../game/upgrades';
 import { Button } from '../ui/Button';
 import {
   BOARD,
@@ -127,6 +127,8 @@ export class GameScene extends Phaser.Scene {
     this.lastFrame = time;
     this.clock += dt;
     tick(this.state, dt);
+    // The Auto Forge forges inside tick; keep its swords like a tapped Forge's.
+    if (this.state.events.some((e) => e.kind === 'forged')) this.save();
 
     this.drawSwords();
     this.drawVisitors();
@@ -140,8 +142,10 @@ export class GameScene extends Phaser.Scene {
     if (forge(this.state)) this.save();
   }
 
+  /** Buys an upgrade; a bought Auto Forge's button switches it on and off instead. */
   private buy(id: UpgradeId) {
-    if (buy(this.state, id)) this.save();
+    const done = id === 'auto' && this.state.ranks.auto > 0 ? toggleAutoForge(this.state) : buy(this.state, id);
+    if (done) this.save();
   }
 
   private save() {
@@ -293,8 +297,15 @@ export class GameScene extends Phaser.Scene {
       const rank = s.ranks[id];
       const price = nextPrice(id, rank);
       const u = UPGRADES[id];
-      const caption = price === null ? `${u.name} (max)\n${u.blurb}` : `${u.name} ${rank + 1}: ${price}c\n${u.blurb}`;
-      this.upgradeButtons.get(id)!.set(caption, price !== null && s.coins >= price, 14);
+      const button = this.upgradeButtons.get(id)!;
+      if (id === 'auto' && rank > 0) {
+        button.set(s.autoForge ? `${u.name}: on\ntap to pause` : `${u.name}: off\ntap to start`, true, 14);
+        continue;
+      }
+      const name = u.prices.length > 1 ? `${u.name} ${rank + 1}` : u.name;
+      const blurb = locked(id, s.ranks) ? 'max the others first' : u.blurb;
+      const caption = price === null ? `${u.name} (max)\n${u.blurb}` : `${name}: ${price}c\n${blurb}`;
+      button.set(caption, price !== null && s.coins >= price && !locked(id, s.ranks), 14);
     }
   }
 
