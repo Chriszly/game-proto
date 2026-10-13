@@ -15,6 +15,8 @@ export const GOLD = { dark: 0x8f6a24, mid: 0xc9a040, light: 0xe6c766, shine: 0xf
 export const RED = { dark: 0x6e1e28, mid: 0xb8343f, light: 0xe0584f, shine: 0xf4a08a };
 export const FIRE = { dark: 0xb8343f, mid: 0xf09a3a, light: 0xf8d460, white: 0xfff4d0 };
 export const FROST = { mid: 0x6aaee0, light: 0xa8dcf8 };
+export const GOBLIN = { dark: 0x3d5a22, mid: 0x6a8f34, light: 0x98bd4c };
+export const BAT = { dark: 0x5a3a78, mid: 0x8a62b0, light: 0xbc9ae0 };
 /** The green cross on the field dressing. */
 export const HEAL = { mid: 0x3fa34d, light: 0x6cc76a };
 export const CLOTH = { dark: 0xa89c7c, mid: 0xd8cfa8, light: 0xf1e8d0 };

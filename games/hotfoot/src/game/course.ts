@@ -1,51 +1,139 @@
-import { LEAD_IN, STAGE_LEN, type GameState, type TrapKind } from './state';
+import { AWAKE, FLAMES, LEAD_IN, STAGE_LEN, speedOf, type GameState, type TrapKind } from './state';
 
-// Lays out a stage's traps and coins between its start and its checkpoint. Traps come closer
-// together on later stages; every random pick goes through Math.random so a seeded run repeats.
+// Lays out a stage's obstacles and coins between its start and its checkpoint: traps, goblins and
+// bats, and raised ledges to climb. New kinds join on later stages, and obstacles come closer
+// together; every random pick goes through Math.random so a seeded run repeats.
 
-/** No trap this close before the checkpoint, so the knight lands before reaching it. */
+/** No obstacle this close before the checkpoint, so the knight lands before reaching it. */
 const CLEAR_BEFORE_CHECKPOINT = 420;
+
+/** One obstacle on the course: a trap, a foe, or a ledge or flight of steps to climb. */
+export type Piece = Exclude<TrapKind, 'pit'> | 'pit' | 'ledge' | 'steps';
+
+/** What can turn up on a stage. Spikes come up most often; fire vents and bats join on stage 2, steps on stage 3. */
+export function piecesOf(stage: number): Piece[] {
+  const pool: Piece[] = ['spikes', 'spikes', 'blade', 'pit', 'goblin', 'ledge'];
+  if (stage >= 2) pool.push('flames', 'bat');
+  if (stage >= 3) pool.push('steps', 'goblin');
+  return pool;
+}
+
+/** The first stage shows these once each, in this order, before mixing them up. */
+export const OPENING: Piece[] = ['spikes', 'blade', 'goblin', 'ledge'];
 
 const pickOf = <T>(items: T[]) => items[Math.floor(Math.random() * items.length)];
 
-/** Room between one trap and the next on a stage: at least the length of a jump and a landing. */
+/** Room between one obstacle and the next on a stage: at least the length of a jump and a landing. */
 export function gapsOf(stage: number) {
   const min = Math.max(300, 440 - 25 * (stage - 1));
   return { min, max: min + 200 };
 }
 
-function widthOf(kind: TrapKind) {
-  if (kind === 'spikes') return 36 + 12 * Math.floor(Math.random() * 3);
-  if (kind === 'pit') return 80 + 16 * Math.floor(Math.random() * 3);
-  return 26;
+/** How long a goblin's beat is, and how fast it walks it. */
+const GOBLIN = { w: 24, beat: 160, speed: (stage: number) => Math.min(100, 50 + 10 * stage) };
+/** A bat's size, its height over the road (too low to run under) and its speed. */
+const BAT = { w: 34, h: 34, speed: (stage: number) => Math.min(160, 80 + 15 * stage) };
+/** Ledge heights: a low step, and a tall one from stage 3. */
+const LEDGE_H = { low: 48, high: 80 };
+
+interface Plan {
+  /** Course length the piece takes up from where it starts. */
+  span: number;
+  place: (x: number) => void;
+}
+
+function planOf(s: GameState, piece: Piece): Plan {
+  const id = () => s.nextId++;
+  const coin = (x: number, h: number) => s.course.push({ id: id(), x, h, pulled: false });
+  /** An arc of coins over a jump, on ground of height `base`. */
+  const arc = (mid: number, base = 0) => {
+    for (const [dx, h] of [[-44, 70], [0, 104], [44, 70]]) coin(mid + dx, base + h);
+  };
+  /** Low coins along the ground, picked up on a slide. */
+  const low = (mid: number) => {
+    for (const dx of [-30, 0, 30]) coin(mid + dx, 10);
+  };
+  const trap = (kind: TrapKind, x: number, w: number, extra: Partial<GameState['traps'][number]> = {}) =>
+    s.traps.push({ id: id(), kind, x, w, h: 0, vx: 0, ...extra });
+
+  switch (piece) {
+    case 'spikes': {
+      const w = 36 + 12 * Math.floor(Math.random() * 3);
+      return { span: w, place: (x) => (trap('spikes', x, w), arc(x + w / 2)) };
+    }
+    case 'pit': {
+      const w = 80 + 16 * Math.floor(Math.random() * 3);
+      return { span: w, place: (x) => (trap('pit', x, w), arc(x + w / 2)) };
+    }
+    case 'blade':
+      return { span: 26, place: (x) => (trap('blade', x, 26), low(x + 13)) };
+    case 'flames': {
+      // Each vent starts somewhere in its burn, so they don't all flare together.
+      const phase = Math.floor(Math.random() * FLAMES.cycle);
+      return { span: 32, place: (x) => (trap('flames', x, 32, { phase }), arc(x + 16)) };
+    }
+    case 'goblin': {
+      // A goblin walks a beat of road, starting at its far end and heading for the knight.
+      const vx = -GOBLIN.speed(s.stage);
+      return {
+        span: GOBLIN.beat,
+        place: (x) => {
+          trap('goblin', x + GOBLIN.beat - GOBLIN.w, GOBLIN.w, { vx, from: x, to: x + GOBLIN.beat });
+          for (const dx of [40, 80, 120]) coin(x + dx, 120);
+        },
+      };
+    }
+    case 'bat': {
+      // A bat flies at the knight once awake; it starts far enough out to meet them at `x`.
+      const v = BAT.speed(s.stage);
+      const ahead = (v * AWAKE) / (speedOf(s.stage) + v);
+      return { span: BAT.w + 40, place: (x) => (trap('bat', x + ahead, BAT.w, { h: BAT.h, vx: -v }), low(x + 13)) };
+    }
+    case 'ledge': {
+      // A raised stretch to jump up onto, with coins along its top and a drop off its far end.
+      const h = s.stage >= 3 && Math.random() < 0.5 ? LEDGE_H.high : LEDGE_H.low;
+      const w = 280 + 40 * Math.floor(Math.random() * 4);
+      return {
+        span: w,
+        place: (x) => {
+          s.ledges.push({ id: id(), x, w, h });
+          for (let cx = x + 140; cx < x + w - 20; cx += 40) coin(cx, h + 12);
+        },
+      };
+    }
+    case 'steps': {
+      // Two steps up, one after the other, then a drop from the top back to the road. Each step is
+      // long enough to land a jump on and jump again before the next, at the stage's speed.
+      const w = Math.max(240, 40 * Math.ceil(speedOf(s.stage) / 40));
+      return {
+        span: 2 * w,
+        place: (x) => {
+          s.ledges.push({ id: id(), x, w, h: LEDGE_H.low }, { id: id(), x: x + w, w, h: LEDGE_H.high });
+          arc(x + w, LEDGE_H.low);
+          for (let cx = x + w + 140; cx < x + 2 * w - 20; cx += 40) coin(cx, LEDGE_H.high + 12);
+        },
+      };
+    }
+  }
 }
 
 export function buildStage(s: GameState) {
   const end = s.checkpointX - CLEAR_BEFORE_CHECKPOINT;
   const { min, max } = gapsOf(s.stage);
-  const id = () => s.nextId++;
   let x = s.stageStart + LEAD_IN;
-  let last: TrapKind | null = null;
-  // The first stage shows each trap once before mixing them up.
-  const opening: TrapKind[] = s.stage === 1 ? ['spikes', 'blade', 'pit'] : [];
+  let last: Piece | null = null;
+  const opening = s.stage === 1 ? [...OPENING] : [];
   // A row of coins on the clear run, to show the way.
-  for (let i = 0; i < 5; i++) s.course.push({ id: id(), x: s.stageStart + 300 + i * 40, h: 12, pulled: false });
+  for (let i = 0; i < 5; i++) s.course.push({ id: s.nextId++, x: s.stageStart + 300 + i * 40, h: 12, pulled: false });
   while (x < end) {
-    // Spikes come up most often, and a pit never follows a pit.
-    const kinds: TrapKind[] = ['spikes', 'spikes', 'blade', 'pit'].filter((k) => !(k === 'pit' && last === 'pit')) as TrapKind[];
-    const kind = opening.shift() ?? pickOf(kinds);
-    last = kind;
-    const w = widthOf(kind);
-    s.traps.push({ id: id(), kind, x, w });
-    const mid = x + w / 2;
-    if (kind === 'blade') {
-      // Low coins under the blade, picked up on a slide.
-      for (const dx of [-30, 0, 30]) s.course.push({ id: id(), x: mid + dx, h: 10, pulled: false });
-    } else {
-      // An arc of coins over the jump.
-      for (const [dx, h] of [[-44, 70], [0, 104], [44, 70]]) s.course.push({ id: id(), x: mid + dx, h, pulled: false });
-    }
-    x += w + min + Math.random() * (max - min);
+    // Nothing but spikes comes twice in a row. The opening is evenly spaced, so it always fits.
+    const first = opening.shift();
+    const piece = first ?? pickOf(piecesOf(s.stage).filter((p) => p === 'spikes' || p !== last));
+    const plan = planOf(s, piece);
+    if (x + plan.span > end) break;
+    plan.place(x);
+    last = piece;
+    x += plan.span + (first ? min : min + Math.random() * (max - min));
   }
 }
 

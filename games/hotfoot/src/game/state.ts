@@ -2,7 +2,8 @@ import { byDifficulty } from '../../../../shared/settings';
 import { BOONS, type BoonId } from './boons';
 
 // The run in plain numbers. The course runs left to right along x in world pixels; heights are
-// measured up from the ground, so the knight's feet are at h = 0 when running.
+// measured up from the road, so the knight's feet are at h = 0 when running on it and at a
+// ledge's height when running on top of one.
 
 /** The knight's box: its width, and its height standing and sliding. */
 export const RUNNER = { w: 28, h: 60, slideH: 26 };
@@ -25,7 +26,9 @@ export const LEAD_IN = 700;
 /** Running speed on a stage, in pixels per second. */
 export const speedOf = (stage: number) => Math.min(480, 260 + 30 * (stage - 1));
 
-export type TrapKind = 'spikes' | 'pit' | 'blade';
+export type TrapKind = 'spikes' | 'pit' | 'blade' | 'flames' | 'goblin' | 'bat';
+/** The traps that move along the course and can be stomped on from above. */
+export const FOES: readonly TrapKind[] = ['goblin', 'bat'];
 
 export interface Trap {
   id: number;
@@ -33,13 +36,56 @@ export interface Trap {
   /** Left edge and width along the course. */
   x: number;
   w: number;
+  /** Height of the ground it stands on, up from the road; a bat's is where it flies. */
+  h: number;
+  /** Speed along the course: a goblin's walk, a bat's flight (negative is towards the knight). */
+  vx: number;
+  /** A goblin walks back and forth between these; a fire vent starts its burn this far in. */
+  from?: number;
+  to?: number;
+  phase?: number;
 }
 
-/** What height each trap fills: spikes on the ground, and a blade hanging down to `lo`. */
+/**
+ * What height each trap fills, up from its own `h`: spikes on the ground, a blade hanging down
+ * to `lo`, flames while lit, a goblin standing and a bat in flight.
+ */
 export const TRAP_SPAN: Record<Exclude<TrapKind, 'pit'>, { lo: number; hi: number }> = {
   spikes: { lo: 0, hi: 24 },
   blade: { lo: 34, hi: 1000 },
+  flames: { lo: 0, hi: 64 },
+  goblin: { lo: 0, hi: 34 },
+  bat: { lo: 0, hi: 20 },
 };
+
+/** Goblins and bats start moving once they are this close ahead, just off the right of the screen. */
+export const AWAKE = 760;
+
+/** A fire vent burns for `lit` ms of every `cycle`, and sputters for `warn` ms before. */
+export const FLAMES = { cycle: 1800, lit: 800, warn: 300 };
+
+/** Where a fire vent is in its burn: off, about to flare, or lit. */
+export function flameOf(s: Pick<GameState, 'time'>, t: Trap): 'off' | 'warn' | 'lit' {
+  const at = (s.time + (t.phase ?? 0)) % FLAMES.cycle;
+  if (at < FLAMES.lit) return 'lit';
+  return at >= FLAMES.cycle - FLAMES.warn ? 'warn' : 'off';
+}
+
+/** A raised stretch of ground: the knight jumps up onto it and drops off its far end. */
+export interface Ledge {
+  id: number;
+  x: number;
+  w: number;
+  /** Height of its top above the road. */
+  h: number;
+}
+
+/** Height of the ground under a stretch of course: the highest ledge over it, or the road. */
+export function floorAt(s: Pick<GameState, 'ledges'>, x0: number, x1 = x0) {
+  let h = 0;
+  for (const l of s.ledges) if (x1 > l.x && x0 < l.x + l.w) h = Math.max(h, l.h);
+  return h;
+}
 
 export interface Coin {
   id: number;
@@ -51,7 +97,7 @@ export interface Coin {
 
 export interface Effect {
   id: number;
-  kind: 'coin' | 'hit' | 'block' | 'dust';
+  kind: 'coin' | 'hit' | 'block' | 'dust' | 'stomp';
   x: number;
   h: number;
   ms: number;
@@ -59,7 +105,7 @@ export interface Effect {
 }
 
 export interface Runner {
-  /** Height of the feet above the ground, and upward speed. */
+  /** Height of the feet above the road, and upward speed. */
   h: number;
   vh: number;
   /** Time left on the current slide; 0 when not sliding. */
@@ -83,6 +129,10 @@ export interface GameState {
   coins: number;
   /** Hits taken this run, blocked ones included. */
   hits: number;
+  /** Goblins and bats stomped on this run. */
+  stomps: number;
+  /** Time spent running this run, in ms; fire vents burn by it. */
+  time: number;
   /** Hits the aegis will still shrug off before the next checkpoint. */
   shields: number;
   ranks: Partial<Record<BoonId, number>>;
@@ -92,6 +142,7 @@ export interface GameState {
   stageStart: number;
   checkpointX: number;
   traps: Trap[];
+  ledges: Ledge[];
   course: Coin[];
   effects: Effect[];
   /** Best distance reached in any run, in metres. */
@@ -134,12 +185,15 @@ export function freshState(best = 0): GameState {
     hearts: START_HEARTS,
     coins: 0,
     hits: 0,
+    stomps: 0,
+    time: 0,
     shields: 0,
     ranks: {},
     choices: null,
     stageStart: 0,
     checkpointX: STAGE_LEN,
     traps: [],
+    ledges: [],
     course: [],
     effects: [],
     best,

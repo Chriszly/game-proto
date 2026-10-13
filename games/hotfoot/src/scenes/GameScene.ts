@@ -1,11 +1,11 @@
 import Phaser from 'phaser';
 import { iconTexture } from '../art/icons';
 import type { KnightPose } from '../art/knight';
-import { FROST, GOLD, RED } from '../art/palette';
+import { CLOTH, FROST, GOBLIN, GOLD, INK, RED } from '../art/palette';
 import { BOONS, type BoonId } from '../game/boons';
 import { loadBest, saveBest } from '../game/save';
 import { jump, newRun, pick, slide, tick } from '../game/sim';
-import { metres, stats, type GameState } from '../game/state';
+import { RUNNER, flameOf, floorAt, metres, stats, type GameState, type Trap } from '../game/state';
 import { BoonCards } from '../ui/BoonCards';
 import { makeButton } from '../ui/Button';
 import { FONT, GROUND_Y, HUD_HEIGHT, RUNNER_X, TAP_SPLIT_Y, UI_DEPTH, VIEW } from './layout';
@@ -35,6 +35,9 @@ export class GameScene extends Phaser.Scene {
   boonCards!: BoonCards;
   private traps = new Map<number, Phaser.GameObjects.Image>();
   private coins = new Map<number, Phaser.GameObjects.Image>();
+  private ledges = new Map<number, Phaser.GameObjects.TileSprite>();
+  /** The dark sides of the ledges, redrawn every frame. */
+  private ledgeSides!: Phaser.GameObjects.Graphics;
   private far!: Phaser.GameObjects.TileSprite;
   private near!: Phaser.GameObjects.TileSprite;
   private ground!: Phaser.GameObjects.TileSprite;
@@ -58,6 +61,7 @@ export class GameScene extends Phaser.Scene {
   create() {
     this.traps.clear();
     this.coins.clear();
+    this.ledges.clear();
     this.state = newRun(loadBest());
 
     this.add.image(0, 0, 'sky').setOrigin(0);
@@ -66,6 +70,7 @@ export class GameScene extends Phaser.Scene {
     this.far = this.add.tileSprite(0, GROUND_Y - farH + 20, VIEW.w, farH, 'far').setOrigin(0);
     this.near = this.add.tileSprite(0, GROUND_Y - nearH + 6, VIEW.w, nearH, 'near').setOrigin(0);
     this.ground = this.add.tileSprite(0, GROUND_Y, VIEW.w, VIEW.h - GROUND_Y, 'ground').setOrigin(0).setDepth(1);
+    this.ledgeSides = this.add.graphics().setDepth(2);
     this.flag = this.add.image(0, GROUND_Y + 2, 'checkpoint').setOrigin(7 / 36, 1).setDepth(3);
     this.knight = this.add.image(RUNNER_X, GROUND_Y, 'knight-run0').setDepth(5);
     this.fx = this.add.graphics().setDepth(6);
@@ -128,16 +133,41 @@ export class GameScene extends Phaser.Scene {
     this.flag.setX(this.sx(s.checkpointX)).setVisible(this.sx(s.checkpointX) < VIEW.w + 80);
 
     const seen = new Set<number>();
+    const sides = this.ledgeSides.clear();
+    for (const l of s.ledges) {
+      seen.add(l.id);
+      let sprite = this.ledges.get(l.id);
+      if (!sprite) {
+        // The stone reaches a little below the road's top so it sits on the road.
+        sprite = this.add.tileSprite(0, GROUND_Y - l.h, l.w, l.h + 6, 'ledge').setOrigin(0).setDepth(1.5);
+        this.ledges.set(l.id, sprite);
+      }
+      const x = this.sx(l.x);
+      sprite.setX(x).setTilePosition(l.x, 0);
+      sides.fillStyle(INK, 0.9).fillRect(x, GROUND_Y - l.h, 2, l.h + 2).fillRect(x + l.w - 2, GROUND_Y - l.h, 2, l.h + 2);
+      sides.fillStyle(INK, 0.25).fillRect(x + 2, GROUND_Y - l.h + 8, 4, l.h - 6);
+    }
+    for (const [id, sprite] of this.ledges) {
+      if (seen.has(id)) continue;
+      sprite.destroy();
+      this.ledges.delete(id);
+    }
+
+    seen.clear();
     for (const t of s.traps) {
       seen.add(t.id);
       let sprite = this.traps.get(t.id);
       if (!sprite) {
-        if (t.kind === 'spikes') sprite = this.add.image(0, GROUND_Y + 2, `spikes-${t.w}`).setOrigin(0, 1).setDepth(4);
+        if (t.kind === 'spikes') sprite = this.add.image(0, GROUND_Y - t.h + 2, `spikes-${t.w}`).setOrigin(0, 1).setDepth(4);
         else if (t.kind === 'pit') sprite = this.add.image(0, GROUND_Y, `pit-${t.w}`).setOrigin(0, 0).setDepth(2);
-        else sprite = this.add.image(0, 0, 'blade').setOrigin(0.5, 0).setDepth(4);
+        // The blade hangs from above the screen, so it is lifted whole over raised ground.
+        else if (t.kind === 'blade') sprite = this.add.image(0, -t.h, 'blade').setOrigin(0.5, 0).setDepth(4);
+        else if (t.kind === 'flames') sprite = this.add.image(0, GROUND_Y - t.h + 2, 'flames-off').setOrigin(0, 1).setDepth(4);
+        else if (t.kind === 'goblin') sprite = this.add.image(0, GROUND_Y - t.h + 2, 'goblin-0').setOrigin(0.5, 1).setDepth(4);
+        else sprite = this.add.image(0, 0, 'bat-0').setOrigin(0.5, 0.5).setDepth(4);
         this.traps.set(t.id, sprite);
       }
-      sprite.setX(t.kind === 'blade' ? this.sx(t.x + t.w / 2) : this.sx(t.x));
+      this.drawTrap(t, sprite);
     }
     for (const [id, sprite] of this.traps) {
       if (seen.has(id)) continue;
@@ -164,12 +194,30 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** Places a trap's sprite, and animates the ones that move or burn. */
+  private drawTrap(t: Trap, sprite: Phaser.GameObjects.Image) {
+    if (t.kind === 'blade' || t.kind === 'goblin' || t.kind === 'bat') sprite.setX(this.sx(t.x + t.w / 2));
+    else sprite.setX(this.sx(t.x));
+    if (t.kind === 'flames') {
+      const burn = flameOf(this.state, t);
+      sprite.setTexture(burn === 'lit' ? `flames-lit${Math.floor(this.clock / 90) % 2}` : `flames-${burn}`);
+    } else if (t.kind === 'goblin') {
+      // Steps in time with its walk, and faces the way it is going.
+      const moving = t.vx !== 0 && this.state.phase === 'running';
+      sprite.setTexture(`goblin-${moving ? Math.floor(t.x / 10) & 1 : 0}`).setFlipX(t.vx > 0);
+    } else if (t.kind === 'bat') {
+      // Flaps, bobbing a little; the bob is only for show, the bat's box stays put.
+      const flap = Math.floor(this.clock / 110 + t.id) % 2;
+      sprite.setTexture(`bat-${flap}`).setY(GROUND_Y - t.h - 10 + (flap ? 2 : -2));
+    }
+  }
+
   private drawKnight() {
     const s = this.state;
     const r = s.runner;
     let pose: KnightPose;
     if (s.phase === 'over' || r.slideMs > 0) pose = 'slide';
-    else if (r.h > 0) pose = r.vh > 0 ? 'jump' : 'fall';
+    else if (r.h > floorAt(s, s.distance - RUNNER.w / 2, s.distance + RUNNER.w / 2)) pose = r.vh > 0 ? 'jump' : 'fall';
     else if (s.phase === 'checkpoint') pose = 'run1';
     else pose = `run${Math.floor(s.distance / STRIDE_PX) % 4}` as KnightPose;
     this.knight
@@ -201,8 +249,16 @@ export class GameScene extends Phaser.Scene {
       } else if (e.kind === 'block') {
         g.fillStyle(FROST.light, 0.35 * (1 - t)).fillCircle(x, y, 40);
         g.lineStyle(3, FROST.mid, 1 - t).strokeCircle(x, y, 40);
+      } else if (e.kind === 'stomp') {
+        // A puff of dust and a few stars where a goblin or bat was knocked out.
+        g.fillStyle(CLOTH.mid, 0.6 * (1 - t)).fillCircle(x - 12, y + 4 - 8 * t, 8 + 8 * t).fillCircle(x + 12, y + 4 - 8 * t, 8 + 8 * t);
+        g.fillStyle(GOBLIN.light, 0.6 * (1 - t)).fillCircle(x, y - 4 - 10 * t, 6 + 6 * t);
+        for (let i = 0; i < 3; i++) {
+          const a = -Math.PI / 2 + (i - 1) * 0.9;
+          g.fillStyle(GOLD.shine, 1 - t).fillRect(x + Math.cos(a) * 26 * t - 2, y - 6 + Math.sin(a) * 26 * t - 2, 4, 4);
+        }
       } else {
-        g.fillStyle(0xd8cfa8, 0.5 * (1 - t)).fillCircle(x - 10 - 16 * t, GROUND_Y - 4 - 6 * t, 5 + 4 * t).fillCircle(x - 22 - 20 * t, GROUND_Y - 3 - 4 * t, 4 + 3 * t);
+        g.fillStyle(0xd8cfa8, 0.5 * (1 - t)).fillCircle(x - 10 - 16 * t, y - 4 - 6 * t, 5 + 4 * t).fillCircle(x - 22 - 20 * t, y - 3 - 4 * t, 4 + 3 * t);
       }
     }
     if (s.shields > 0 && s.phase === 'running') {
@@ -258,8 +314,9 @@ export class GameScene extends Phaser.Scene {
   /** A new run from the start, with no boons; only the best distance carries over. */
   private restart() {
     this.state = newRun(this.state.best);
-    for (const sprite of [...this.traps.values(), ...this.coins.values()]) sprite.destroy();
+    for (const sprite of [...this.traps.values(), ...this.coins.values(), ...this.ledges.values()]) sprite.destroy();
     this.traps.clear();
     this.coins.clear();
+    this.ledges.clear();
   }
 }

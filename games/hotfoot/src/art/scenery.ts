@@ -4,7 +4,8 @@ import { DIRT, FIRE, GOLD, GRASS, HILLS, INK, IRON, RED, SKY, STONE, TABARD, WOO
 import { PixelCanvas, seeded } from './pixelArt';
 
 // The world the knight runs through: a dusk sky, far hills and a ruined castle and near trees that
-// scroll slower than the ground, the ground strip itself, and the traps, coins and checkpoint flag.
+// scroll slower than the ground, the ground strip itself, the stone of raised ledges, and the
+// traps, coins and checkpoint flag.
 // The scrolling layers wrap around, so they tile seamlessly.
 
 /** Art pixels are drawn this many screen pixels wide. */
@@ -149,6 +150,61 @@ function blade(scene: Phaser.Scene) {
   c.bake(scene, 'blade', S);
 }
 
+/**
+ * The stone of a raised ledge: grass on top of an old castle wall, tall enough for the highest
+ * ledge plus the road below it. It tiles sideways; GameScene crops it to each ledge's height.
+ */
+function ledge(scene: Phaser.Scene) {
+  const w = 32;
+  const h = 64;
+  const c = new PixelCanvas(w, h);
+  c.rect(0, 0, w, h, STONE.mid);
+  for (let row = 0; row * 5 + 4 < h; row++) {
+    const y = 4 + row * 5;
+    c.rect(0, y, w, 1, STONE.dark);
+    for (let x = row % 2 ? 4 : 0; x < w; x += 8) c.rect(x, y + 1, 1, 4, STONE.dark).rect(x + 1, y + 1, 6, 1, STONE.light);
+  }
+  const rand = seeded(11);
+  for (let i = 0; i < 10; i++) c.px(Math.floor(rand() * w), 6 + Math.floor(rand() * (h - 6)), rand() < 0.5 ? STONE.shine : GRASS.dark);
+  c.rect(0, 0, w, 3, GRASS.mid).rect(0, 0, w, 1, GRASS.shine).rect(0, 3, w, 1, GRASS.dark);
+  for (const x of [2, 7, 13, 20, 26]) c.rect(x, 4, 1, 2, GRASS.dark);
+  c.bake(scene, 'ledge', S);
+}
+
+/**
+ * A fire vent: an iron grate in the road that flares into a column of flame. Baked as `flames-off`,
+ * `flames-warn` (sputtering just before it flares) and two flickering `flames-lit<n>` frames, all
+ * the same size with the grate at the bottom; the column is as tall as `TRAP_SPAN.flames.hi`.
+ */
+function flames(scene: Phaser.Scene) {
+  const w = 16;
+  const h = 36;
+  const grate = (c: PixelCanvas) => {
+    c.rect(0, h - 4, w, 4, IRON.dark).rect(0, h - 4, w, 1, IRON.light);
+    for (let x = 2; x < w - 1; x += 3) c.rect(x, h - 3, 1, 2, INK);
+  };
+  const off = new PixelCanvas(w, h);
+  grate(off);
+  off.px(5, h - 6, STONE.light, 0.6).px(9, h - 8, STONE.light, 0.4);
+  off.bake(scene, 'flames-off', S);
+
+  const warn = new PixelCanvas(w, h);
+  for (const x of [3, 7, 11]) warn.rect(x, h - 7, 2, 3, FIRE.mid).px(x, h - 8, FIRE.light);
+  grate(warn);
+  warn.bake(scene, 'flames-warn', S);
+
+  for (const frame of [0, 1]) {
+    const c = new PixelCanvas(w, h);
+    const sway = frame ? 1 : -1;
+    c.ellipse(1, 6, 14, 28, FIRE.dark).ellipse(3 + sway, 2, 10, 26, FIRE.dark);
+    c.ellipse(3, 12, 10, 22, FIRE.mid).ellipse(5 - sway, 8, 6, 18, FIRE.mid);
+    c.ellipse(5, 20, 6, 14, FIRE.light).ellipse(6 + sway, 26, 4, 7, FIRE.white);
+    c.px(4 + sway * 2, frame ? 1 : 3, FIRE.mid).px(11 - sway, frame ? 4 : 2, FIRE.light);
+    grate(c);
+    c.bake(scene, `flames-lit${frame}`, S);
+  }
+}
+
 function coin(scene: Phaser.Scene) {
   const full = new PixelCanvas(8, 8);
   full.ellipse(0, 0, 8, 8, GOLD.mid).ellipse(1, 1, 6, 6, GOLD.light).rect(3, 2, 1, 4, GOLD.dark).px(2, 2, GOLD.shine);
@@ -183,6 +239,8 @@ export function bakeScenery(scene: Phaser.Scene) {
   spikes(scene);
   pits(scene);
   blade(scene);
+  flames(scene);
+  ledge(scene);
   coin(scene);
   checkpoint(scene);
 }

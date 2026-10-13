@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { bakeFoes } from '../art/foes';
 import { bakeIcons } from '../art/icons';
 import { bakeKnight } from '../art/knight';
 import { bakeScenery } from '../art/scenery';
@@ -11,6 +12,7 @@ export class BootScene extends Phaser.Scene {
 
   create() {
     bakeScenery(this);
+    bakeFoes(this);
     bakeKnight(this);
     bakeIcons(this);
     this.scene.start('Game');
