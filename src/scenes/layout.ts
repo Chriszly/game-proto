@@ -18,17 +18,35 @@ export const plotPosition = (i: number) => {
 export const REFINER = { x: 450, y: 170 };
 export const CAULDRON = { x: 450, y: 400 };
 
-/** Drop-off, pick-up and upgrade markers in a row on the floor in front of a station. */
-export const markersFor = (x: number, y: number) => ({
-  drop: { x: x - 56, y },
-  pickUp: { x, y },
-  upgrade: { x: x + 56, y },
-});
-export const REFINER_MARKERS = markersFor(REFINER.x, REFINER.y + 76);
-export const CAULDRON_MARKERS = markersFor(CAULDRON.x, CAULDRON.y + 70);
+/**
+ * Markers around a station: drop-off on its left and pick-up on its right, so goods flow from the
+ * garden side towards the shop side, and the upgrade marker out of the way, on the side farthest
+ * from the walkway (the open row between the refining table and the cauldron, or the shop floor).
+ */
+export interface StationMarkers {
+  drop: { x: number; y: number };
+  pickUp: { x: number; y: number };
+  upgrade: { x: number; y: number };
+}
+
+export const REFINER_MARKERS: StationMarkers = {
+  drop: { x: REFINER.x - 80, y: REFINER.y + 8 },
+  pickUp: { x: REFINER.x + 80, y: REFINER.y + 8 },
+  upgrade: { x: REFINER.x, y: REFINER.y - 70 },
+};
+export const CAULDRON_MARKERS: StationMarkers = {
+  drop: { x: CAULDRON.x - 80, y: CAULDRON.y + 8 },
+  pickUp: { x: CAULDRON.x + 80, y: CAULDRON.y + 8 },
+  upgrade: { x: CAULDRON.x, y: CAULDRON.y + 82 },
+};
 
 export const SHOP = { x: 610, y: 68, w: 326, h: 440 };
 export const COUNTER = { x: 773, y: 250 };
-export const COUNTER_MARKERS = markersFor(COUNTER.x, COUNTER.y + 74);
+export const COUNTER_MARKERS: StationMarkers = {
+  drop: { x: COUNTER.x - 128, y: COUNTER.y + 12 },
+  pickUp: { x: COUNTER.x + 128, y: COUNTER.y + 12 },
+  // The far corner of the shop, away from the door and the path to the counter.
+  upgrade: { x: SHOP.x + SHOP.w - 40, y: SHOP.y + SHOP.h - 50 },
+};
 /** Where waiting customer i stands, on the far side of the counter. */
 export const customerPosition = (i: number) => ({ x: 713 + i * 60, y: 190 });

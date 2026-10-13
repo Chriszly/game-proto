@@ -140,7 +140,7 @@ export class GameScene extends Phaser.Scene {
         .setOrigin(0.5)
         .setDepth(-900);
     for (const area of GARDEN_AREAS) label(area.x + area.w / 2, area.y + 14, area.name);
-    label(REFINER.x, REFINER.y - 60, 'Refining table');
+    label(REFINER.x, REFINER.y + 46, 'Refining table');
     label(CAULDRON.x, CAULDRON.y - 64, 'Cauldron');
     label(SHOP.x + SHOP.w / 2, SHOP.y + 14, 'Storefront');
   }
