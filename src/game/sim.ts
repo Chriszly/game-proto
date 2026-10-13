@@ -13,6 +13,7 @@ import {
 import {
   BELT_COST,
   BELT_GAP_MS,
+  BELT_LANES,
   BELT_MS,
   BELTS,
   CAULDRONS,
@@ -34,6 +35,7 @@ import {
   palletHasRoom,
   upgradeCost,
   type BeltId,
+  type BeltItem,
   type Build,
   type Cauldron,
   type CauldronId,
@@ -116,17 +118,19 @@ export const refining = (refiner: Refiner) => refiner.queue.findIndex((plant) =>
 
 /**
  * Where each belt takes goods from: a ripe plant from either garden of its line, or a station's
- * finished goods.
+ * finished goods; only goods whose lane has room at the start.
  */
-function takeForBelt(state: GameState, belt: BeltId): ItemId | null {
+function takeForBelt(state: GameState, belt: BeltId, fits: (id: ItemId) => boolean): ItemId | null {
   if (belt === 'garden' || belt === 'garden2') {
     const line2 = belt === 'garden2';
-    const i = state.plots.findIndex((_, i) => gardenOf(i) >= LINE2_GARDEN === line2 && isRipe(state, i));
+    const i = state.plots.findIndex((p, i) => gardenOf(i) >= LINE2_GARDEN === line2 && isRipe(state, i) && fits(p.plant));
     if (i < 0) return null;
     state.plots[i].grown = 0;
     return state.plots[i].plant;
   }
-  return state[belt].output.shift() ?? null;
+  const output = state[belt].output;
+  const i = output.findIndex(fits);
+  return i < 0 ? null : output.splice(i, 1)[0];
 }
 
 /** Where each belt hands its goods to: the station's tray they go in. */
@@ -151,28 +155,30 @@ function giveFromBelt(state: GameState, belt: BeltId, id: ItemId) {
 }
 
 /**
- * Moves a built belt's items along. The item at the end is handed over when the next station has
- * room; until then it waits and the items behind it queue up. A new item is taken on once the last
- * one has moved a gap away from the start.
+ * Moves a built belt's items along, each in its own kind's lane. The item at the end of a lane is
+ * handed over when the next station has room; until then it waits and the items behind it in that
+ * lane queue up, while the other lanes keep moving. A new item is taken on once the last one in its
+ * lane has moved a gap away from the start.
  */
 function runBelt(state: GameState, id: BeltId, dt: number) {
   const belt = state.belts[id];
   if (!belt.built) return;
   const length = BELT_MS[id];
   const step = dt * beltSpeed(state);
-  if (belt.items.length > 0 && belt.items[0].at >= length && giveFromBelt(state, id, belt.items[0].id)) belt.items.shift();
-  belt.items.forEach((item, i) => {
-    const room = i === 0 ? length : belt.items[i - 1].at - BELT_GAP_MS;
+  // The item last seen in each lane: the one ahead of the next in that lane, and in the end the rearmost.
+  const ahead = new Map<ItemId, BeltItem>();
+  belt.items = belt.items.filter((item) => {
+    const front = !ahead.has(item.id);
+    if (front && item.at >= length && giveFromBelt(state, id, item.id)) return false;
+    const room = front ? length : ahead.get(item.id)!.at - BELT_GAP_MS;
     item.at = Math.max(item.at, Math.min(item.at + step, room));
+    ahead.set(item.id, item);
+    return true;
   });
-  const last = belt.items[belt.items.length - 1];
-  if (!last || last.at >= BELT_GAP_MS) {
-    const item = takeForBelt(state, id);
-    if (item) belt.items.push({ id: item, at: 0 });
-  }
+  const item = takeForBelt(state, id, (kind) => BELT_LANES[id].includes(kind) && (ahead.get(kind)?.at ?? Infinity) >= BELT_GAP_MS);
+  if (item) belt.items.push({ id: item, at: 0 });
 }
 
-/** Starts the first recipe the cauldron holds the goods for and has room on the potion's pallet for. */
 /**
  * How many more of a potion customers want than the apothecary has ready: on the counter's shelf,
  * on the cauldrons' pallets and in the doctor's hands.
