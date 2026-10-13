@@ -65,8 +65,11 @@ export function bakePlaceholders(scene: Phaser.Scene) {
     for (let x = 10; x < 200; x += 38) g.fillRect(x, 16, 4, 26);
   });
 
+  // Body and head are separate so only the clothes get tinted per customer.
   bake(scene, 'customer', 22, 34, (g) => {
-    g.fillStyle(0xffffff).fillRect(3, 12, 16, 22); // tinted per customer
+    g.fillStyle(0xffffff).fillRect(3, 12, 16, 22);
+  });
+  bake(scene, 'customer-head', 22, 34, (g) => {
     g.fillStyle(0xe8c49a).fillCircle(11, 8, 7);
   });
 
