@@ -1,18 +1,18 @@
-name: Playthrough Rampart
+name: Playthrough Deadline
 
-# Plays Rampart's first wave. Runs only when the game's folder or a shared file it builds
+# Plays Deadline's first round. Runs only when the game's folder or a shared file it builds
 # and tests with changes; every game has its own playthrough-<name>.yml like this one.
 on:
   push:
     branches: [main]
     paths: &paths
-      - games/rampart/**
+      - games/deadline/**
       - package.json
       - package-lock.json
       - tsconfig.json
       - vite.config.ts
       - playwright.config.ts
-      - .github/workflows/playthrough-rampart.yml
+      - .github/workflows/playthrough-deadline.yml
   pull_request:
     paths: *paths
   workflow_dispatch:
@@ -21,7 +21,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: playthrough-rampart-${{ github.ref }}
+  group: playthrough-deadline-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -36,15 +36,15 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      # Plays the first wave in headless Chromium at 4x speed.
-      - run: npx playwright test --project rampart
+      # Plays the first round in headless Chromium at 4x speed.
+      - run: npx playwright test --project deadline
         env:
           PLAYTHROUGH_SPEED: 4
       # Video and milestone screenshots of the run, pass or fail; open the report's index.html to browse them.
       - if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playthrough-rampart
+          name: playthrough-deadline
           path: |
             test-results
             playwright-report

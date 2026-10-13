@@ -1,4 +1,4 @@
-# Rampart
+# Palisade
 
 A wave defense prototype built with [Phaser 4](https://phaser.io), TypeScript and Vite, part of
 the [game hub](../../README.md).
@@ -70,7 +70,7 @@ picked. Once fewer than three upgrades are left, "Mend the Barricade" fills the 
 
 ## Running locally
 
-`npm run dev` at the repo root, then open `/games/rampart/` (or pick Rampart on the hub page).
+`npm run dev` at the repo root, then open `/games/palisade/` (or pick Palisade on the hub page).
 
 ## Playthrough test
 
@@ -79,17 +79,17 @@ for the wave to come on and the ranger to shoot, checks that kills fill the expe
 foe's experience, that the battle waits on the level-up, taps the first card and checks its
 upgrade was taken, then plays on until the wave is cleared with the barricade standing. Like the
 Apothecary test it owns the game clock and plays at 4x speed (`PLAYTHROUGH_SPEED`). The
-**Playthrough Rampart** workflow (`.github/workflows/playthrough-rampart.yml`) runs it on every PR
+**Playthrough Palisade** workflow (`.github/workflows/playthrough-palisade.yml`) runs it on every PR
 and push to main that touches this folder or a shared build file, and uploads the video and
-screenshots as the `playthrough-rampart` artifact.
+screenshots as the `playthrough-palisade` artifact.
 
 ```sh
-npx playwright test --project rampart
+npx playwright test --project palisade
 ```
 
 ## Code layout
 
-All paths are inside `games/rampart/`.
+All paths are inside `games/palisade/`.
 
 - `src/game/`: the rules in plain TypeScript with no Phaser dependency. `enemies.ts` and
   `upgrades.ts` are data tables, `waves.ts` says what each wave brings, `state.ts` holds the run

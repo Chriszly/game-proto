@@ -3,8 +3,8 @@ import { expect, test, type Page } from '@playwright/test';
 // The hub lists every game and each card opens its game.
 const GAMES = [
   { name: 'Apothecary', path: '/games/apothecary/' },
-  { name: 'Horde Defense', path: '/games/horde/' },
-  { name: 'Rampart', path: '/games/rampart/' },
+  { name: 'Deadline', path: '/games/deadline/' },
+  { name: 'Palisade', path: '/games/palisade/' },
 ];
 
 // Every page links a favicon that loads.

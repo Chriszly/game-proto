@@ -1,7 +1,7 @@
 import { freshProgress, type Progress } from './state';
 
 // Only the hero's progress is saved: level, experience and upgrades. A run always starts at wave 1.
-const KEY = 'rampart-progress';
+const KEY = 'palisade-progress';
 
 export function loadProgress(): Progress {
   const fresh = freshProgress();
