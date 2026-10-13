@@ -2,13 +2,14 @@ import Phaser from 'phaser';
 import { plantTexture } from '../art/placeholders';
 import { GROW_MS, ITEMS, REFINE } from '../game/items';
 import {
+  collectTill,
   dropAtRefiner,
   dropInCauldron,
   harvest,
   payUpgrade,
   pickUpFromCauldron,
   pickUpFromRefiner,
-  serveOrders,
+  stockShelf,
   tick,
   type Feedback,
 } from '../game/sim';
@@ -21,6 +22,7 @@ import {
   CAULDRON,
   CAULDRON_MARKERS,
   COUNTER,
+  COUNTER_MARKERS,
   GARDEN_AREAS,
   HUD_HEIGHT,
   REFINER,
@@ -221,7 +223,27 @@ export class GameScene extends Phaser.Scene {
 
   private createShopfront() {
     this.addObstacle(COUNTER.x, COUNTER.y, 'counter', 200, 30);
-    this.addInteractable(COUNTER.x, COUNTER.y + 40, 240, 120, () => 'Serve customers', () => serveOrders(this.state));
+    const shelf = new IconRow(this, COUNTER.x, COUNTER.y - 6, COUNTER.y + 1);
+    this.addMarker(COUNTER_MARKERS.drop, 'pad-in', 'Drop', () => stockShelf(this.state));
+    this.addMarker(COUNTER_MARKERS.pickUp, 'pad-out', 'Coins', () => collectTill(this.state));
+    this.addUpgradeMarker(COUNTER_MARKERS.upgrade, 'counter');
+    const tillCoin = this.add.image(COUNTER_MARKERS.pickUp.x - 8, COUNTER_MARKERS.pickUp.y, 'coin').setDepth(-300);
+    const till = this.add
+      .text(COUNTER_MARKERS.pickUp.x - 1, COUNTER_MARKERS.pickUp.y, '', {
+        fontFamily: 'monospace',
+        fontSize: '12px',
+        color: '#fff4c2',
+        stroke: '#1b1410',
+        strokeThickness: 3,
+      })
+      .setOrigin(0, 0.5)
+      .setDepth(-300);
+    this.views.push(() => {
+      const { counter } = this.state;
+      shelf.set(counter.shelf);
+      tillCoin.setVisible(counter.till > 0);
+      till.setText(counter.till > 0 ? `${counter.till}` : '');
+    });
 
     // One customer slot per possible order; slot i shows the i-th open order.
     for (let i = 0; i < MAX_ORDERS; i++) {
@@ -248,7 +270,7 @@ export class GameScene extends Phaser.Scene {
     const coins = this.add.text(16, HUD_HEIGHT / 2, '', style).setOrigin(0, 0.5).setDepth(UI_DEPTH);
     this.add.text(width / 2 - 92, HUD_HEIGHT / 2, 'Hands', style).setOrigin(1, 0.5).setDepth(UI_DEPTH);
     this.add
-      .text(width - 110, HUD_HEIGHT / 2, 'Walk: WASD / tap\nUse: E / Space / tap', { ...style, fontSize: '11px' })
+      .text(width - 110, HUD_HEIGHT / 2, 'Walk: WASD / tap\nHarvest: E / Space / tap', { ...style, fontSize: '11px' })
       .setOrigin(1, 0.5)
       .setDepth(UI_DEPTH);
     this.add

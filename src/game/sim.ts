@@ -51,6 +51,7 @@ export function tick(state: GameState, dt: number, rand: () => number = Math.ran
     }
   }
 
+  serveFromShelf(state);
   for (const order of state.orders) order.patience -= dt;
   state.orders = state.orders.filter((o) => o.patience > 0);
 
@@ -82,9 +83,10 @@ function newOrder(state: GameState, rand: () => number) {
   const potions = Object.keys(POTION_PRICE) as PotionId[];
   const count = rand() < 0.35 ? 2 : 1;
   const wants = Array.from({ length: count }, () => potions[Math.floor(rand() * potions.length)]);
-  // A small tip on top of list price rewards serving the order instead of just selling.
-  const reward = wants.reduce((sum, p) => sum + POTION_PRICE[p], 0) + count * 2;
-  const maxPatience = 60_000 + rand() * 30_000;
+  // Customers tip per potion, more generously and patiently at a better counter.
+  const level = state.upgrades.counter.level;
+  const reward = wants.reduce((sum, p) => sum + POTION_PRICE[p], 0) + count * 2 * (level + 1);
+  const maxPatience = (60_000 + rand() * 30_000) * (1 + 0.25 * level);
   return { id: state.nextOrderId++, wants, reward, patience: maxPatience, maxPatience };
 }
 
@@ -108,31 +110,24 @@ export function harvest(state: GameState, plotIndex: number): Feedback {
 }
 
 /**
- * Hands over carried potions to waiting customers. Orders the doctor can fill completely go first
- * (oldest first); any matching potions left over go towards the remaining orders.
+ * Customers take what they ordered from the counter shelf and pay into the till. Orders the shelf
+ * can fill completely go first (oldest first); leftover matching potions go towards the rest.
  */
-export function serveOrders(state: GameState): Feedback {
-  const feedback: Feedback = [];
+function serveFromShelf(state: GameState) {
+  const { counter } = state;
+  if (counter.shelf.length === 0) return;
   const give = (order: Order) => {
     order.wants = order.wants.filter((want) => {
-      const i = state.carrying.indexOf(want);
+      const i = counter.shelf.indexOf(want);
       if (i < 0) return true;
-      state.carrying.splice(i, 1);
-      feedback.push(`Gave ${ITEMS[want].name}`);
+      counter.shelf.splice(i, 1);
       return false;
     });
-    if (order.wants.length === 0) {
-      state.coins += order.reward;
-      feedback.push(`+${order.reward} coins`);
-    }
+    if (order.wants.length === 0) counter.till += order.reward;
   };
-  for (const order of state.orders) if (canFill(state.carrying, order)) give(order);
+  for (const order of state.orders) if (canFill(counter.shelf, order)) give(order);
   for (const order of state.orders) if (order.wants.length > 0) give(order);
   state.orders = state.orders.filter((o) => o.wants.length > 0);
-
-  if (feedback.length > 0) return feedback;
-  if (state.orders.length === 0) return ['No customers yet'];
-  return state.carrying.some(isPotion) ? ['Nobody ordered that'] : ['Bring potions'];
 }
 
 function canFill(carrying: readonly ItemId[], order: Order) {
@@ -201,4 +196,21 @@ export function payUpgrade(state: GameState, station: StationId): Feedback | nul
   upgrade.level++;
   upgrade.paid = 0;
   return [`${STATION_NAMES[station]} level ${upgrade.level + 1}!`];
+}
+
+export function stockShelf(state: GameState): Feedback | null {
+  if (state.counter.shelf.length >= STATION_CAPACITY) return null;
+  const potion = takeTopFromBack(state, isPotion);
+  if (!potion) return null;
+  state.counter.shelf.push(potion);
+  return [`- ${ITEMS[potion].name}`];
+}
+
+export function collectTill(state: GameState): Feedback | null {
+  const { counter } = state;
+  if (counter.till === 0) return null;
+  state.coins += counter.till;
+  const feedback = [`+${counter.till} coins`];
+  counter.till = 0;
+  return feedback;
 }

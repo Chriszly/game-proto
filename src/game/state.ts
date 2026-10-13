@@ -19,6 +19,12 @@ export interface Cauldron {
   output: PotionId[];
 }
 
+/** Potions put out for customers, and the coins they have paid that wait to be picked up. */
+export interface Counter {
+  shelf: PotionId[];
+  till: number;
+}
+
 export interface Order {
   id: number;
   /** Potions still owed; the order pays out once this is empty. */
@@ -44,6 +50,7 @@ export interface GameState {
   plots: Plot[];
   refiner: Refiner;
   cauldron: Cauldron;
+  counter: Counter;
   upgrades: Record<StationId, Upgrade>;
   orders: Order[];
   nextOrderIn: number;
@@ -75,6 +82,7 @@ export function createInitialState(): GameState {
     plots: GARDENS.flatMap((plant) => Array.from({ length: PLOTS_PER_GARDEN }, () => ripe(plant))),
     refiner: { queue: [], progress: 0, output: [] },
     cauldron: { contents: [], brewing: null, output: [] },
+    counter: { shelf: [], till: 0 },
     upgrades: { refiner: { level: 0, paid: 0 }, cauldron: { level: 0, paid: 0 }, counter: { level: 0, paid: 0 } },
     orders: [],
     nextOrderIn: 3_000,

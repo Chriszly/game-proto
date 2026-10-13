@@ -29,5 +29,6 @@ export const CAULDRON_MARKERS = markersFor(CAULDRON.x, CAULDRON.y + 70);
 
 export const SHOP = { x: 610, y: 68, w: 326, h: 440 };
 export const COUNTER = { x: 773, y: 250 };
+export const COUNTER_MARKERS = markersFor(COUNTER.x, COUNTER.y + 74);
 /** Where waiting customer i stands, on the far side of the counter. */
 export const customerPosition = (i: number) => ({ x: 713 + i * 60, y: 190 });
