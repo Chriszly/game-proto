@@ -8,6 +8,7 @@ const GAMES = [
   { name: 'Tiny Kingdom', path: '/games/tiny-kingdom/' },
   { name: 'Rogue Runner', path: '/games/rogue-runner/' },
   { name: 'Merge Forge', path: '/games/merge-forge/' },
+  { name: 'Pirate Raid', path: '/games/pirate-raid/' },
 ];
 
 // Every page links a favicon that loads.

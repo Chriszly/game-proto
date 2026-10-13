@@ -26,6 +26,7 @@ export default defineConfig({
     { name: 'tiny-kingdom', testDir: 'games/tiny-kingdom/e2e' },
     { name: 'rogue-runner', testDir: 'games/rogue-runner/e2e' },
     { name: 'merge-forge', testDir: 'games/merge-forge/e2e' },
+    { name: 'pirate-raid', testDir: 'games/pirate-raid/e2e' },
   ],
   webServer: {
     command: 'npm run dev -- --port 5173 --strictPort',
