@@ -148,7 +148,7 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
       return /webgl/i.test(id) ? null : getContext.call(this, id, ...rest);
     } as typeof HTMLCanvasElement.prototype.getContext;
   }, FRAME_MS);
-  await page.goto('/');
+  await page.goto('/games/apothecary/');
   const game = scene(page);
   const canvas = page.locator('canvas');
 

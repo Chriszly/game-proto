@@ -1,8 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
-// End-to-end playthrough: runs the dev server (which exposes `window.game`) and plays the game in Chromium.
+// End-to-end tests: run the dev server (which exposes `window.game`) and play in Chromium.
+// One project per game, each with its tests in games/<name>/e2e, plus one for the hub page.
 export default defineConfig({
-  testDir: 'e2e',
   timeout: 10 * 60_000,
   retries: 0,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
@@ -13,6 +13,10 @@ export default defineConfig({
     baseURL: 'http://localhost:5173',
     trace: 'retain-on-failure',
   },
+  projects: [
+    { name: 'hub', testDir: 'e2e' },
+    { name: 'apothecary', testDir: 'games/apothecary/e2e' },
+  ],
   webServer: {
     command: 'npm run dev -- --port 5173 --strictPort',
     url: 'http://localhost:5173',

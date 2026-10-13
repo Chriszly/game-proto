@@ -25,7 +25,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      # Plays the first round of the loop in headless Chromium at 4x speed: harvest, refine, brew, sell.
+      # Checks the hub page, then plays the first round of every game in headless Chromium at 4x speed.
       - run: npm run test:e2e
         env:
           PLAYTHROUGH_SPEED: 4
