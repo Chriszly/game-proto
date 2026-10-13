@@ -46,6 +46,11 @@ const AUTOSAVE_MS = 3_000;
 const MARKER_INTERVAL_MS = 200;
 /** Pause between plants when several in reach are ripe, so each pickup can be seen. */
 const HARVEST_INTERVAL_MS = 150;
+/** Sickle spin speed in radians per millisecond, its distance from the doctor's centre, and how
+ * long it keeps spinning after the last ripe plant in reach. */
+const SICKLE_SPIN = 0.014;
+const SICKLE_ORBIT = 26;
+const SICKLE_LINGER_MS = 400;
 
 /** A floor marker that acts by itself, one step at a time, while the doctor stands on it. */
 interface Marker {
@@ -71,6 +76,10 @@ export class GameScene extends Phaser.Scene {
   /** Plot centres, in plot order, for finding ripe plants within the doctor's reach. */
   private plotCentres: Phaser.Math.Vector2[] = [];
   private nextHarvestAt = 0;
+  /** Spins around the doctor while harvesting. */
+  private sickle!: Phaser.GameObjects.Image;
+  private sickleAngle = 0;
+  private lastHarvestingAt = -Infinity;
   private nextFeedbackAt = 0;
   /** Per-frame view updates, each reading from `state`. */
   private views: (() => void)[] = [];
@@ -338,6 +347,7 @@ export class GameScene extends Phaser.Scene {
     this.player.body!.setSize(15, 7.5).setOffset(4.5, 28.5);
     this.player.setCollideWorldBounds(true);
     this.physics.add.collider(this.player, this.obstacles);
+    this.sickle = this.add.image(x, y, 'sickle').setScale(PLAYER_SCALE).setVisible(false);
   }
 
   private createControls() {
@@ -377,6 +387,23 @@ export class GameScene extends Phaser.Scene {
     return true;
   }
 
+  /** Swings the sickle in circles around the doctor while harvesting, and a moment after. */
+  private spinSickle(harvesting: boolean, delta: number) {
+    if (harvesting) this.lastHarvestingAt = this.time.now;
+    const show = this.time.now - this.lastHarvestingAt < SICKLE_LINGER_MS;
+    this.sickle.setVisible(show);
+    if (!show) return;
+    this.sickleAngle = (this.sickleAngle + delta * SICKLE_SPIN) % (Math.PI * 2);
+    this.sickle
+      .setPosition(
+        this.player.x + Math.cos(this.sickleAngle) * SICKLE_ORBIT,
+        this.player.y + Math.sin(this.sickleAngle) * SICKLE_ORBIT,
+      )
+      .setRotation(this.sickleAngle + Math.PI / 2)
+      // In front of the doctor on the lower half of the circle, behind on the upper half.
+      .setDepth(this.player.depth + Math.sin(this.sickleAngle));
+  }
+
   private showFeedback(lines: Feedback) {
     // Stagger lines so several pickups read one after another.
     const start = Math.max(this.time.now, this.nextFeedbackAt);
@@ -406,7 +433,7 @@ export class GameScene extends Phaser.Scene {
 
     this.standOnMarkers();
 
-    this.autoHarvest();
+    this.spinSickle(this.autoHarvest(), delta);
 
     this.state.player.x = this.player.x;
     this.state.player.y = this.player.y;

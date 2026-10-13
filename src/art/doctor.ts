@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { INK } from './palette';
+import { GOLD, INK, STONE, WOOD } from './palette';
 import { PixelCanvas, type Palette } from './pixelArt';
 
 // Plague doctor, side view facing right: wide-brimmed hat, brass goggles, bone-white beak mask,
@@ -103,7 +103,27 @@ export const DOCTOR_FRAMES: Record<string, string[]> = {
 /** Walk cycle, in order. */
 export const DOCTOR_WALK = ['doctor-stride', 'doctor-pass', 'doctor-stride-far', 'doctor-pass'];
 
+// A harvesting sickle: curved iron blade on a short wooden handle, spun around the doctor.
+const SICKLE = [
+  '................',
+  '.....BBBBB......',
+  '...BBSSSSSBB....',
+  '..BSS.....SBB...',
+  '.BS.........B...',
+  '.BS.........Bw..',
+  '.B...........w..',
+  '.B...........h..',
+  '..B..........H..',
+  '.............h..',
+  '.............H..',
+  '.............h..',
+  '.............h..',
+  '................',
+];
+const SICKLE_PALETTE: Palette = { B: STONE.light, S: STONE.shine, w: GOLD.dark, h: WOOD.mid, H: WOOD.light };
+
 export function bakeDoctor(scene: Phaser.Scene) {
+  new PixelCanvas(SICKLE[0].length, SICKLE.length).grid(0, 0, SICKLE, SICKLE_PALETTE).outline(INK).bake(scene, 'sickle');
   for (const [key, rows] of Object.entries(DOCTOR_FRAMES)) {
     new PixelCanvas(rows[0].length, rows.length).grid(0, 0, rows, DOCTOR_PALETTE).outline(INK).bake(scene, key);
   }
