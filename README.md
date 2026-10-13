@@ -58,6 +58,14 @@ a longer sickle harvests from a quarter further away (25, then 50 coins each).
 
 ![The outfitter](docs/screenshots/playthrough-9-outfitted.png)
 
+The **guild** in the bottom-left corner of the yard sells upgrades for the rest of the apothecary:
+growth makes every garden grow a quarter faster per level (20, then 40 coins), belts run half again
+as fast per level, carrying more goods a second (30, then 60), prices make customers pay a quarter
+more per potion per level (20, then 40), and an extra order slot lets a fourth customer wait at the
+counter (30).
+
+![The guild](docs/screenshots/guild.png)
+
 **Conveyor belts** take the walking out of the loop. Three can be bought on their own purple build
 markers, a handful of coins at a time: gardens to refining table (60 coins), table to cauldron (100)
 and cauldron to counter (150). A belt picks ripe plants or finished goods up at its start and
@@ -93,12 +101,14 @@ npm run preview   # serve the production build
 `e2e/playthrough.spec.ts` plays the whole loop in headless Chromium with real clicks: it harvests
 both gardens, refines, brews, sells to customers until it has 20 coins and buys a counter upgrade.
 It sells more to buy the expansion's land, a wheat field, a refining table and a cauldron, and
-plays a round on that second line. It buys the outfitter's pack, boots and sickle and checks each
-one works. It hires a craftsman for the refining table and buys the garden belt, which clears the
-plants from the doctor's hands, then watches the belt bring plants to the table, where the
-craftsman refines them. Last it picks up refined goods and empties its hands with the Drop all
-button, checking items, coins, upgrades and purchases along the way. It plays at 4x speed
-(`PLAYTHROUGH_SPEED`), so the run takes about three minutes. The Playthrough workflow runs it on every PR
+plays a round on that second line. It buys all four guild upgrades, then the outfitter's pack,
+boots and sickle, checking each of the doctor's upgrades works. It hires a craftsman for the
+refining table and buys the garden belt, which clears the plants from the doctor's hands, then
+watches the faster belt bring plants to the table, where the craftsman refines them. It picks up
+refined goods and empties its hands with the Drop all button, and last checks the faster growth,
+the new prices and a fourth customer, checking items, coins, upgrades and purchases along the way.
+It plays at 4x speed (`PLAYTHROUGH_SPEED`), so the run takes about four minutes. The
+Playthrough workflow runs it on every PR
 and push to main and uploads a video and milestone screenshots as the `playthrough` artifact.
 
 ```sh
