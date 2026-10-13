@@ -16,7 +16,7 @@ Playwright config, CI workflows and PR template are shared. The games so far are
   `README.md`, a `cover.png` (a 16:9 screenshot) and an `e2e/playthrough.spec.ts` that plays its
   first round. Give it a `favicon.svg` linked from its `index.html`: the orange bear from the hub's
   `favicon.svg` (same ears, head, dot eyes and muzzle, 32x32 viewBox) with one prop for the game,
-  like Apothecary's plague doctor hat and beak or Rampart's feathered archer's cap. Then add a card for it in the hub's `index.html` and in `e2e/hub.spec.ts`, a
+  like Apothecary's plague doctor hat and beak. Then add a card for it in the hub's `index.html` and in `e2e/hub.spec.ts`, a
   Playwright project in `playwright.config.ts`, and a row in the README's table of games. Vite picks
   up `games/*/index.html` on its own. Keep save keys and other browser storage prefixed with the
   game's name, since every game shares the hub's origin.
