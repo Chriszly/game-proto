@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import type { BoonId } from '../game/boons';
-import { CLOTH, FROST, GOLD, INK, IRON, RED, TABARD, WOOD } from './palette';
+import { CLOTH, FROST, GOLD, HEAL, INK, IRON, RED, TABARD, WOOD } from './palette';
 import { PixelCanvas } from './pixelArt';
 
 // Small pictures for the boon cards and the hearts in the top bar, drawn on a 16x16 grid.
@@ -54,7 +54,7 @@ const ICONS: Record<BoonId | 'heart-empty', Draw> = {
   },
   mend: (c) => {
     c.rect(2, 5, 12, 6, CLOTH.light).rect(2, 5, 12, 1, CLOTH.mid).rect(2, 10, 12, 1, CLOTH.dark);
-    c.rect(7, 6, 2, 4, RED.mid).rect(6, 7, 4, 2, RED.mid);
+    c.rect(7, 6, 2, 4, HEAL.mid).rect(6, 7, 4, 2, HEAL.mid).px(7, 6, HEAL.light);
   },
 };
 
