@@ -65,6 +65,14 @@ rules and for how to debug a failing run.
 Each CI run also uploads a `game-build` artifact: download it from the run's summary page,
 unzip it and serve the folder (for example with `npx serve`) to play.
 
+## Container image
+
+Every push to main also builds the game into a container image (`Dockerfile`: the build served
+by nginx on port 8080) for arm64 and amd64, and publishes it as `ghcr.io/chriszly/game-proto:latest`
+(and `:sha-<commit>`). Pull requests only check that the image builds.
+
+To try it locally: `npm run build && docker build -t game-proto . && docker run --rm -p 8080:8080 game-proto`.
+
 ## Code layout
 
 - `src/game/`: the rules (items, recipes, state, simulation tick and player actions) in plain
