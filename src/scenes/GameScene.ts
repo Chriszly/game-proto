@@ -300,16 +300,17 @@ export class GameScene extends Phaser.Scene {
 
   private createHud() {
     const { width } = this.scale;
-    this.add.rectangle(0, 0, width, HUD_HEIGHT, 0x1b1410).setOrigin(0).setDepth(UI_DEPTH);
+    this.add.tileSprite(0, 0, width, HUD_HEIGHT, 'hud-bar').setOrigin(0).setDepth(UI_DEPTH);
     const style = { fontFamily: 'monospace', fontSize: '16px', color: '#f3e9d2' };
-    const coins = this.add.text(16, HUD_HEIGHT / 2, '', style).setOrigin(0, 0.5).setDepth(UI_DEPTH);
+    this.add.image(26, HUD_HEIGHT / 2 - 1, 'coin').setScale(2).setDepth(UI_DEPTH);
+    const coins = this.add.text(44, HUD_HEIGHT / 2 - 1, '', style).setOrigin(0, 0.5).setDepth(UI_DEPTH);
     this.add.text(width / 2 - 92, HUD_HEIGHT / 2, 'Hands', style).setOrigin(1, 0.5).setDepth(UI_DEPTH);
     this.add
       .text(width - 110, HUD_HEIGHT / 2, 'Walk: WASD / tap\nHarvest: E / Space / tap', { ...style, fontSize: '11px' })
       .setOrigin(1, 0.5)
       .setDepth(UI_DEPTH);
     this.add
-      .text(width - 16, HUD_HEIGHT / 2, 'New game', { ...style, fontSize: '12px', backgroundColor: '#5a3d22', padding: { x: 6, y: 4 } })
+      .text(width - 16, HUD_HEIGHT / 2, 'New game', { ...style, fontSize: '12px', backgroundColor: '#5c3a21', padding: { x: 6, y: 4 } })
       .setOrigin(1, 0.5)
       .setDepth(UI_DEPTH)
       .setInteractive({ useHandCursor: true })
@@ -320,13 +321,13 @@ export class GameScene extends Phaser.Scene {
 
     const slots = Array.from({ length: CARRY_CAPACITY }, (_, i) => {
       const x = width / 2 - 60 + i * 40;
-      this.add.rectangle(x, HUD_HEIGHT / 2, 32, 32, 0x3a2c22).setStrokeStyle(2, 0x8a6239).setDepth(UI_DEPTH);
-      return this.add.image(x, HUD_HEIGHT / 2, 'item-wheat').setScale(1.5).setDepth(UI_DEPTH);
+      this.add.image(x, HUD_HEIGHT / 2 - 1, 'slot').setDepth(UI_DEPTH);
+      return this.add.image(x, HUD_HEIGHT / 2 - 1, 'item-wheat').setScale(1.5).setDepth(UI_DEPTH);
     });
     const pack = new BackStack(this);
 
     this.prompt = this.add
-      .text(0, 0, '', { ...style, fontSize: '12px', backgroundColor: '#1b1410cc', padding: { x: 4, y: 2 } })
+      .text(0, 0, '', { ...style, fontSize: '12px', backgroundColor: '#2a1c14dd', padding: { x: 4, y: 2 } })
       .setOrigin(0.5, 0)
       .setDepth(UI_DEPTH);
 

@@ -19,8 +19,12 @@ export class ProgressBar {
     this.bar.clear();
     if (fraction === null) return;
     const left = this.x - this.width / 2;
-    this.bar.fillStyle(0x1b1410, 0.8).fillRect(left, this.y, this.width, 6);
-    this.bar.fillStyle(this.color).fillRect(left + 1, this.y + 1, (this.width - 2) * Phaser.Math.Clamp(fraction, 0, 1), 4);
+    const filled = Math.round((this.width - 2) * Phaser.Math.Clamp(fraction, 0, 1));
+    this.bar.fillStyle(0x1d1418, 0.9).fillRect(left, this.y, this.width, 6);
+    this.bar.fillStyle(0x3a2818).fillRect(left + 1, this.y + 1, this.width - 2, 4);
+    this.bar.fillStyle(this.color).fillRect(left + 1, this.y + 1, filled, 4);
+    // A lighter top edge, like the shine on the pixel art.
+    this.bar.fillStyle(0xffffff, 0.35).fillRect(left + 1, this.y + 1, filled, 1);
   }
 
   moveTo(x: number, y: number) {

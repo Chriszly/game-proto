@@ -6,6 +6,7 @@ import { bakeItems } from '../art/items';
 import { bakeMarkers } from '../art/markers';
 import { bakeStations } from '../art/stations';
 import { bakeTownsfolk } from '../art/townsfolk';
+import { bakeUi } from '../art/ui';
 
 // Generates all textures at runtime so the prototype needs no asset files yet.
 export class BootScene extends Phaser.Scene {
@@ -21,6 +22,7 @@ export class BootScene extends Phaser.Scene {
     bakeMarkers(this);
     bakeTownsfolk(this);
     bakeGround(this);
+    bakeUi(this);
 
     this.scene.start('Game');
   }
