@@ -12,7 +12,7 @@ brew potions in the cauldron and sell them to customers at the storefront.
 | Control | Action |
 | --- | --- |
 | WASD / arrow keys, or tap | Walk |
-| E / Space, or tap a plot | Harvest the plot you are standing at |
+| Walk past ripe plants | Harvest every ripe plant within one character height of the doctor |
 | Stand on a floor marker | Green: drop off items. Blue: work the station. Gold: pick up products or coins. Purple: pay coins to upgrade |
 
 1. **Gardens**: each garden grows one kind of plant. Harvest ripe wheat in the wheat field and

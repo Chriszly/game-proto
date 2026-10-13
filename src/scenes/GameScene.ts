@@ -2,12 +2,13 @@ import Phaser from 'phaser';
 import { plantTexture } from '../art/garden';
 import { customerTexture } from '../art/townsfolk';
 import { signTexture } from '../art/ui';
-import { GROW_MS, ITEMS, REFINE } from '../game/items';
+import { GROW_MS, REFINE } from '../game/items';
 import {
   collectTill,
   dropAtRefiner,
   dropInCauldron,
   harvest,
+  isRipe,
   payUpgrade,
   pickUpFromCauldron,
   pickUpFromRefiner,
@@ -43,18 +44,18 @@ const UI_DEPTH = 10_000;
 const AUTOSAVE_MS = 3_000;
 /** How often a floor marker moves the next item while the doctor stands on it. */
 const MARKER_INTERVAL_MS = 200;
+/** Pause between plants when several in reach are ripe, so each pickup can be seen. */
+const HARVEST_INTERVAL_MS = 150;
+/** Sickle spin speed in radians per millisecond, its distance from the doctor's centre, and how
+ * long it keeps spinning after the last ripe plant in reach. */
+const SICKLE_SPIN = 0.014;
+const SICKLE_ORBIT = 26;
+const SICKLE_LINGER_MS = 400;
 
 /** A floor marker that acts by itself, one step at a time, while the doctor stands on it. */
 interface Marker {
   zone: Phaser.Geom.Rectangle;
   act: () => Feedback | null;
-}
-
-/** Something the doctor can use when their feet are inside `zone`. */
-interface Interactable {
-  zone: Phaser.Geom.Rectangle;
-  label: () => string;
-  use: () => Feedback;
 }
 
 export class GameScene extends Phaser.Scene {
@@ -68,14 +69,17 @@ export class GameScene extends Phaser.Scene {
   /** Station footprints grown by the doctor's feet, used to walk around stations after a tap. */
   private blockedAreas: Phaser.Geom.Rectangle[] = [];
   private obstacles!: Phaser.Physics.Arcade.StaticGroup;
-  private interactables: Interactable[] = [];
   private markers: Marker[] = [];
   /** Work spots: the station whose spot holds the doctor's feet is the one that works. */
   private workSpots: { zone: Phaser.Geom.Rectangle; station: StationId }[] = [];
   private nextMarkerAt = 0;
-  /** Set when the player taps a station: walk there, then use it on arrival. */
-  private pendingUse: Interactable | null = null;
-  private prompt!: Phaser.GameObjects.Text;
+  /** Plot centres, in plot order, for finding ripe plants within the doctor's reach. */
+  private plotCentres: Phaser.Math.Vector2[] = [];
+  private nextHarvestAt = 0;
+  /** Spins around the doctor while harvesting. */
+  private sickle!: Phaser.GameObjects.Image;
+  private sickleAngle = 0;
+  private lastHarvestingAt = -Infinity;
   private nextFeedbackAt = 0;
   /** Per-frame view updates, each reading from `state`. */
   private views: (() => void)[] = [];
@@ -86,11 +90,10 @@ export class GameScene extends Phaser.Scene {
 
   create() {
     this.state = loadState();
-    this.interactables = [];
+    this.plotCentres = [];
     this.markers = [];
     this.workSpots = [];
     this.views = [];
-    this.pendingUse = null;
     this.pointerTarget = null;
     this.waypoint = null;
     this.blockedAreas = [];
@@ -125,10 +128,6 @@ export class GameScene extends Phaser.Scene {
     if (!window.confirm('Start a new game? Your saved progress will be lost.')) return;
     clearSave();
     this.scene.restart();
-  }
-
-  private addInteractable(x: number, y: number, w: number, h: number, label: () => string, use: () => Feedback) {
-    this.interactables.push({ zone: new Phaser.Geom.Rectangle(x - w / 2, y - h / 2, w, h), label, use });
   }
 
   private drawGrounds() {
@@ -184,14 +183,7 @@ export class GameScene extends Phaser.Scene {
         plant.setTexture(plantTexture(plot.plant, grown >= 1 ? 2 : grown >= 0.5 ? 1 : 0));
         growth.set(grown >= 1 ? null : grown);
       });
-      this.addInteractable(
-        x,
-        y,
-        90,
-        150,
-        () => `Harvest ${ITEMS[plot.plant].name}`,
-        () => harvest(this.state, i),
-      );
+      this.plotCentres[i] = new Phaser.Math.Vector2(x, y);
     });
   }
 
@@ -306,7 +298,7 @@ export class GameScene extends Phaser.Scene {
     const coins = this.add.text(44, HUD_HEIGHT / 2 - 1, '', style).setOrigin(0, 0.5).setDepth(UI_DEPTH);
     this.add.text(width / 2 - 92, HUD_HEIGHT / 2, 'Hands', style).setOrigin(1, 0.5).setDepth(UI_DEPTH);
     this.add
-      .text(width - 110, HUD_HEIGHT / 2, 'Walk: WASD / tap\nHarvest: E / Space / tap', { ...style, fontSize: '11px' })
+      .text(width - 110, HUD_HEIGHT / 2, 'Walk: WASD / tap\nHarvest: walk past ripe plants', { ...style, fontSize: '11px' })
       .setOrigin(1, 0.5)
       .setDepth(UI_DEPTH);
     this.add
@@ -325,11 +317,6 @@ export class GameScene extends Phaser.Scene {
       return this.add.image(x, HUD_HEIGHT / 2 - 1, 'item-wheat').setScale(1.5).setDepth(UI_DEPTH);
     });
     const pack = new BackStack(this);
-
-    this.prompt = this.add
-      .text(0, 0, '', { ...style, fontSize: '12px', backgroundColor: '#2a1c14dd', padding: { x: 4, y: 2 } })
-      .setOrigin(0.5, 0)
-      .setDepth(UI_DEPTH);
 
     this.views.push(() => {
       coins.setText(`Coins: ${this.state.coins}`);
@@ -360,6 +347,7 @@ export class GameScene extends Phaser.Scene {
     this.player.body!.setSize(15, 7.5).setOffset(4.5, 28.5);
     this.player.setCollideWorldBounds(true);
     this.physics.add.collider(this.player, this.obstacles);
+    this.sickle = this.add.image(x, y, 'sickle').setScale(PLAYER_SCALE).setVisible(false);
   }
 
   private createControls() {
@@ -372,38 +360,48 @@ export class GameScene extends Phaser.Scene {
       right: keyboard.addKey('D'),
     };
 
-    keyboard.on('keydown-E', () => this.useNearest());
-    keyboard.on('keydown-SPACE', () => this.useNearest());
-
-    // Touch / click to walk, so the same controls work on phones. Tapping a station also uses it.
+    // Touch / click to walk, so the same controls work on phones.
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       if (p.worldY < HUD_HEIGHT) return;
       this.pointerTarget = new Phaser.Math.Vector2(p.worldX, p.worldY);
       this.waypoint = this.routeAround(this.pointerTarget);
-      this.pendingUse = this.interactables.find((it) => it.zone.contains(p.worldX, p.worldY)) ?? null;
     });
   }
 
-  /** The interactable whose zone holds the doctor's feet, nearest centre first. */
-  private nearest(): Interactable | null {
-    const x = this.player.x;
-    const y = this.feetY();
-    let best: Interactable | null = null;
-    let bestDist = Infinity;
-    for (const it of this.interactables) {
-      if (!it.zone.contains(x, y)) continue;
-      const d = Phaser.Math.Distance.Between(x, y, it.zone.centerX, it.zone.centerY);
-      if (d < bestDist) {
-        best = it;
-        bestDist = d;
-      }
+  /**
+   * Harvests ripe plants within one character height of the doctor's centre, one plant at a time
+   * so each pickup can be seen. Returns whether a ripe plant is in reach with room to carry it.
+   */
+  private autoHarvest() {
+    const reach = this.player.displayHeight;
+    const centre = new Phaser.Math.Vector2(this.player.x, this.player.y);
+    const inReach = this.plotCentres
+      .map((at, i) => ({ i, d: at.distance(centre) }))
+      .filter(({ i, d }) => d <= reach && isRipe(this.state, i))
+      .sort((a, b) => a.d - b.d);
+    if (inReach.length === 0 || this.state.carrying.length >= CARRY_CAPACITY) return false;
+    if (this.time.now >= this.nextHarvestAt) {
+      this.nextHarvestAt = this.time.now + HARVEST_INTERVAL_MS;
+      this.showFeedback(harvest(this.state, inReach[0].i));
     }
-    return best;
+    return true;
   }
 
-  private useNearest() {
-    const target = this.nearest();
-    if (target) this.showFeedback(target.use());
+  /** Swings the sickle in circles around the doctor while harvesting, and a moment after. */
+  private spinSickle(harvesting: boolean, delta: number) {
+    if (harvesting) this.lastHarvestingAt = this.time.now;
+    const show = this.time.now - this.lastHarvestingAt < SICKLE_LINGER_MS;
+    this.sickle.setVisible(show);
+    if (!show) return;
+    this.sickleAngle = (this.sickleAngle + delta * SICKLE_SPIN) % (Math.PI * 2);
+    this.sickle
+      .setPosition(
+        this.player.x + Math.cos(this.sickleAngle) * SICKLE_ORBIT,
+        this.player.y + Math.sin(this.sickleAngle) * SICKLE_ORBIT,
+      )
+      .setRotation(this.sickleAngle + Math.PI / 2)
+      // In front of the doctor on the lower half of the circle, behind on the upper half.
+      .setDepth(this.player.depth + Math.sin(this.sickleAngle));
   }
 
   private showFeedback(lines: Feedback) {
@@ -435,15 +433,7 @@ export class GameScene extends Phaser.Scene {
 
     this.standOnMarkers();
 
-    const near = this.nearest();
-    if (this.pendingUse && near === this.pendingUse) {
-      this.pendingUse = null;
-      this.pointerTarget = null;
-      this.player.setVelocity(0, 0);
-      this.showFeedback(near.use());
-    }
-    this.prompt.setVisible(!!near);
-    if (near) this.prompt.setText(near.label()).setPosition(this.player.x, this.feetY() + 8);
+    this.spinSickle(this.autoHarvest(), delta);
 
     this.state.player.x = this.player.x;
     this.state.player.y = this.player.y;
@@ -467,7 +457,6 @@ export class GameScene extends Phaser.Scene {
 
     if (dir.lengthSq() > 0) {
       this.pointerTarget = null;
-      this.pendingUse = null;
     } else if (this.pointerTarget) {
       // Steer the feet, not the sprite centre, to the tapped spot, via a corner if a station is in the way.
       const target = this.waypoint ?? this.pointerTarget;
@@ -476,8 +465,7 @@ export class GameScene extends Phaser.Scene {
         this.waypoint = this.routeAround(this.pointerTarget);
       } else if (!this.waypoint && dir.length() < 4) {
         this.pointerTarget = null;
-        this.pendingUse = null;
-        dir.set(0, 0);
+          dir.set(0, 0);
       }
     }
 
