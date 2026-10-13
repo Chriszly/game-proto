@@ -26,7 +26,7 @@ import {
   gardenBuilt,
   gardenOf,
   speedAt,
-  stationCapacity,
+  palletHasRoom,
   upgradeCost,
   type BeltId,
   type Build,
@@ -35,6 +35,7 @@ import {
   type GameState,
   type RefinerId,
   type Order,
+  type Refiner,
   type StationId,
   type UpgradeId,
 } from './state';
@@ -52,11 +53,12 @@ export function tick(state: GameState, dt: number, workingAt: StationId | null, 
 
   for (const id of REFINERS) {
     const refiner = state[id];
-    if (workingAt !== id || refiner.queue.length === 0 || refiner.output.length >= stationCapacity(state, id)) continue;
+    const next = refining(refiner);
+    if (workingAt !== id || next < 0) continue;
     refiner.progress += dt * speedAt(state.upgrades[id].level);
-    const recipe = REFINE[refiner.queue[0]];
+    const recipe = REFINE[refiner.queue[next]];
     if (refiner.progress >= recipe.ms) {
-      refiner.queue.shift();
+      refiner.queue.splice(next, 1);
       refiner.output.push(recipe.out);
       refiner.progress = 0;
     }
@@ -64,7 +66,7 @@ export function tick(state: GameState, dt: number, workingAt: StationId | null, 
 
   for (const id of CAULDRONS) {
     const cauldron = state[id];
-    if (!cauldron.brewing && cauldron.output.length < stationCapacity(state, id)) startBrew(cauldron);
+    if (!cauldron.brewing) startBrew(cauldron);
     if (workingAt !== id || !cauldron.brewing) continue;
     cauldron.brewing.progress += dt * speedAt(state.upgrades[id].level);
     if (cauldron.brewing.progress >= cauldron.brewing.ms) {
@@ -87,6 +89,12 @@ export function tick(state: GameState, dt: number, workingAt: StationId | null, 
 }
 
 /**
+ * Which waiting plant the refining table works on: the first whose output pallet has room, or -1
+ * when there is none.
+ */
+export const refining = (refiner: Refiner) => refiner.queue.findIndex((plant) => palletHasRoom(refiner.output, REFINE[plant].out));
+
+/**
  * Where each belt takes goods from: a ripe plant from either garden of its line, or a station's
  * finished goods.
  */
@@ -101,23 +109,23 @@ function takeForBelt(state: GameState, belt: BeltId): ItemId | null {
   return state[belt].output.shift() ?? null;
 }
 
-/** Where each belt hands its goods to: the station, and the tray they go in. */
-function beltTarget(state: GameState, belt: BeltId): [StationId, ItemId[]] {
-  const targets: Record<BeltId, [StationId, ItemId[]]> = {
-    garden: ['refiner', state.refiner.queue],
-    refiner: ['cauldron', state.cauldron.contents],
-    cauldron: ['counter', state.counter.shelf],
-    garden2: ['refiner2', state.refiner2.queue],
-    refiner2: ['cauldron2', state.cauldron2.contents],
-    cauldron2: ['counter', state.counter.shelf],
+/** Where each belt hands its goods to: the station's tray they go in. */
+function beltTarget(state: GameState, belt: BeltId): ItemId[] {
+  const targets: Record<BeltId, ItemId[]> = {
+    garden: state.refiner.queue,
+    refiner: state.cauldron.contents,
+    cauldron: state.counter.shelf,
+    garden2: state.refiner2.queue,
+    refiner2: state.cauldron2.contents,
+    cauldron2: state.counter.shelf,
   };
   return targets[belt];
 }
 
 /** Hands an item from the end of a belt to the next station, if it has room. */
 function giveFromBelt(state: GameState, belt: BeltId, id: ItemId) {
-  const [station, to] = beltTarget(state, belt);
-  if (to.length >= stationCapacity(state, station)) return false;
+  const to = beltTarget(state, belt);
+  if (!palletHasRoom(to, id)) return false;
   (to as ItemId[]).push(id);
   return true;
 }
@@ -143,8 +151,10 @@ function runBelt(state: GameState, id: BeltId, dt: number) {
   }
 }
 
+/** Starts the first recipe the cauldron holds the goods for and has room on the potion's pallet for. */
 function startBrew(cauldron: Cauldron) {
   for (const recipe of RECIPES) {
+    if (!palletHasRoom(cauldron.output, recipe.out)) continue;
     const left = [...cauldron.contents];
     const ok = recipe.inputs.every((input) => {
       const i = left.indexOf(input);
@@ -224,11 +234,11 @@ function canFill(carrying: readonly ItemId[], order: Order) {
 // Floor markers: while the doctor stands on one, the scene calls its action repeatedly, and each
 // call moves at most one item (or one handful of coins). They return null when nothing moved.
 
-/** Takes the topmost carried item matching `pick` off the doctor's back. */
-function takeTopFromBack<T extends ItemId>(state: GameState, pick: (id: ItemId) => id is T): T | null {
+/** Takes the topmost carried item matching `pick` that has room on its pallet in `to` off the doctor's back. */
+function takeTopFromBack<T extends ItemId>(state: GameState, pick: (id: ItemId) => id is T, to: readonly ItemId[]): T | null {
   for (let i = state.carrying.length - 1; i >= 0; i--) {
     const id = state.carrying[i];
-    if (pick(id)) {
+    if (pick(id) && palletHasRoom(to, id)) {
       state.carrying.splice(i, 1);
       return id;
     }
@@ -244,8 +254,7 @@ function pickUpOne(state: GameState, from: ItemId[]): Feedback | null {
 }
 
 export function dropAtRefiner(state: GameState, id: RefinerId = 'refiner'): Feedback | null {
-  if (state[id].queue.length >= stationCapacity(state, id)) return null;
-  const plant = takeTopFromBack(state, isPlant);
+  const plant = takeTopFromBack(state, isPlant, state[id].queue);
   if (!plant) return null;
   state[id].queue.push(plant);
   return [`- ${ITEMS[plant].name}`];
@@ -254,8 +263,7 @@ export function dropAtRefiner(state: GameState, id: RefinerId = 'refiner'): Feed
 export const pickUpFromRefiner = (state: GameState, id: RefinerId = 'refiner') => pickUpOne(state, state[id].output);
 
 export function dropInCauldron(state: GameState, id: CauldronId = 'cauldron'): Feedback | null {
-  if (state[id].contents.length >= stationCapacity(state, id)) return null;
-  const good = takeTopFromBack(state, isRefined);
+  const good = takeTopFromBack(state, isRefined, state[id].contents);
   if (!good) return null;
   state[id].contents.push(good);
   return [`- ${ITEMS[good].name}`];
@@ -319,8 +327,7 @@ export function payExpansion(state: GameState, part: ExpansionPart): Feedback | 
 }
 
 export function stockShelf(state: GameState): Feedback | null {
-  if (state.counter.shelf.length >= stationCapacity(state, 'counter')) return null;
-  const potion = takeTopFromBack(state, isPotion);
+  const potion = takeTopFromBack(state, isPotion, state.counter.shelf);
   if (!potion) return null;
   state.counter.shelf.push(potion);
   return [`- ${ITEMS[potion].name}`];

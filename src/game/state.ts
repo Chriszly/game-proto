@@ -153,8 +153,15 @@ export const MAX_CARRY = 4 + UPGRADES.pack.max;
 export const walkSpeed = (state: GameState) => 1 + 0.2 * state.upgrades.boots.level;
 /** Harvest reach in character heights: one, and a quarter more per sickle level. */
 export const harvestReach = (state: GameState) => 1 + 0.25 * state.upgrades.sickle.level;
-/** How many items a station holds in each of its trays (waiting, done, or on the shelf). */
-export const stationCapacity = (_state: GameState, _id: StationId) => 6;
+/**
+ * Every station keeps each kind of goods coming in or going out on its own pallet: two by two items
+ * on the base, stacked up to ten layers high.
+ */
+export const PALLET_BASE = 4;
+export const PALLET_LAYERS = 10;
+export const PALLET_SIZE = PALLET_BASE * PALLET_LAYERS;
+/** Whether the pallet for `item` in a station's tray has room for one more. */
+export const palletHasRoom = (tray: readonly ItemId[], item: ItemId) => tray.filter((id) => id === item).length < PALLET_SIZE;
 
 /** Bumped whenever station positions move, so a loaded save doesn't put the doctor inside one. */
 export const LAYOUT = 2;

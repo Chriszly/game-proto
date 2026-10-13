@@ -50,3 +50,8 @@ export const POTION_PRICE: Record<PotionId, number> = {
 export const isPlant = (id: ItemId): id is PlantId => ITEMS[id].kind === 'plant';
 export const isRefined = (id: ItemId): id is RefinedId => ITEMS[id].kind === 'refined';
 export const isPotion = (id: ItemId): id is PotionId => ITEMS[id].kind === 'potion';
+
+/** Every item of each kind, in the order their pallets stand. */
+export const PLANTS = Object.keys(GROW_MS) as PlantId[];
+export const REFINED = [...new Set(PLANTS.map((p) => REFINE[p].out))];
+export const POTIONS = Object.keys(POTION_PRICE) as PotionId[];

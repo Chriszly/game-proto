@@ -4,7 +4,7 @@ import { plantTexture } from '../art/garden';
 import { itemTexture } from '../art/items';
 import { customerTexture } from '../art/townsfolk';
 import { signTexture } from '../art/ui';
-import { GROW_MS, REFINE, type ItemId } from '../game/items';
+import { GROW_MS, PLANTS, POTIONS, REFINE, REFINED, type ItemId } from '../game/items';
 import {
   collectTill,
   dropAtRefiner,
@@ -16,6 +16,7 @@ import {
   payUpgrade,
   pickUpFromCauldron,
   pickUpFromRefiner,
+  refining,
   stockShelf,
   tick,
   type ExpansionPart,
@@ -50,6 +51,7 @@ import {
 } from '../game/state';
 import { BackStack } from '../ui/BackStack';
 import { IconRow } from '../ui/IconRow';
+import { Pallet } from '../ui/Pallet';
 import { ProgressBar } from '../ui/ProgressBar';
 import {
   BELT_BUILD,
@@ -66,6 +68,7 @@ import {
   HUD_HEIGHT,
   LABELS,
   OUTFITTER,
+  PALLETS,
   REFINER,
   REFINER2,
   REFINER2_MARKERS,
@@ -77,6 +80,7 @@ import {
   customerPosition,
   plotPosition,
   type StationMarkers,
+  type StationPallets,
 } from './layout';
 
 type Point = { x: number; y: number };
@@ -133,6 +137,8 @@ export class GameScene extends Phaser.Scene {
   private sickleAngle = 0;
   private lastHarvestingAt = -Infinity;
   private nextFeedbackAt = 0;
+  /** Each standing station's pallets, for goods coming in and going out; read by the playthrough test. */
+  private pallets: Partial<Record<StationId, { in: Pallet[]; out: Pallet[] }>> = {};
   /** Per-frame view updates, each reading from `state`. */
   private views: (() => void)[] = [];
 
@@ -145,6 +151,7 @@ export class GameScene extends Phaser.Scene {
     this.plotCentres = [];
     this.markers = [];
     this.workSpots = [];
+    this.pallets = {};
     this.views = [];
     this.pointerTarget = null;
     this.waypoint = null;
@@ -294,16 +301,15 @@ export class GameScene extends Phaser.Scene {
     const refiner = this.state[id];
     this.label(label.x, label.y, 'Refining table');
     this.addObstacle(at.x, at.y, 'table', 84, 30);
-    const queue = new IconRow(this, at.x, at.y - 4, at.y + 1);
-    const refining = new ProgressBar(this, at.x, at.y + 30, 60, 0xd8cfa8, UI_DEPTH);
-    const refined = this.addMarker(m.pickUp, 'pad-out', 'Pick up', () => pickUpFromRefiner(this.state, id), () => this.state.belts[beltOut].built);
+    this.addPallets(id, PALLETS[id], [PLANTS, REFINED], [() => refiner.queue, () => refiner.output]);
+    const progress = new ProgressBar(this, at.x, at.y + 30, 60, 0xd8cfa8, UI_DEPTH);
+    this.addMarker(m.pickUp, 'pad-out', 'Pick up', () => pickUpFromRefiner(this.state, id), () => this.state.belts[beltOut].built);
     this.addMarker(m.drop, 'pad-in', 'Drop', () => dropAtRefiner(this.state, id), () => this.state.belts[beltIn].built);
     this.addWorkSpot(m.work, id);
     this.addUpgradeMarker(m.upgrade, id);
     this.views.push(() => {
-      queue.set(refiner.queue);
-      refined.set(refiner.output);
-      refining.set(refiner.queue.length > 0 ? refiner.progress / REFINE[refiner.queue[0]].ms : null);
+      const next = refining(refiner);
+      progress.set(next >= 0 ? refiner.progress / REFINE[refiner.queue[next]].ms : null);
     });
   }
 
@@ -312,23 +318,42 @@ export class GameScene extends Phaser.Scene {
     const cauldron = this.state[id];
     this.label(label.x, label.y, 'Cauldron');
     this.addObstacle(at.x, at.y, 'cauldron', 60, 28).play('cauldron-boil');
-    const pot = new IconRow(this, at.x, at.y - 40, UI_DEPTH);
+    this.addPallets(id, PALLETS[id], [REFINED, POTIONS], [() => cauldron.contents, () => cauldron.output]);
     const brewing = new ProgressBar(this, at.x, at.y + 34, 60, 0x58a35a, UI_DEPTH);
-    const brewed = this.addMarker(m.pickUp, 'pad-out', 'Pick up', () => pickUpFromCauldron(this.state, id), () => this.state.belts[beltOut].built);
+    this.addMarker(m.pickUp, 'pad-out', 'Pick up', () => pickUpFromCauldron(this.state, id), () => this.state.belts[beltOut].built);
     this.addMarker(m.drop, 'pad-in', 'Drop', () => dropInCauldron(this.state, id), () => this.state.belts[beltIn].built);
     this.addWorkSpot(m.work, id);
     this.addUpgradeMarker(m.upgrade, id);
     this.views.push(() => {
-      pot.set(cauldron.contents);
-      brewed.set(cauldron.output);
       brewing.set(cauldron.brewing ? cauldron.brewing.progress / cauldron.brewing.ms : null);
     });
   }
 
   /**
-   * Lays a floor marker with a caption; returns an icon row on the marker for showing what waits
-   * there. A marker a belt replaces goes away once `gone` holds.
+   * A station's pallets: one per kind of goods coming in (`kinds[0]`, kept in `trays[0]`) and going
+   * out (`kinds[1]`, kept in `trays[1]`), each stacked as high as that tray holds of its kind.
    */
+  private addPallets(
+    id: StationId,
+    at: StationPallets,
+    kinds: [readonly ItemId[], readonly ItemId[]],
+    trays: [() => readonly ItemId[], () => readonly ItemId[]],
+  ) {
+    const pallets = {
+      in: at.in.map((p, i) => new Pallet(this, p.x, p.y, kinds[0][i])),
+      out: at.out.map((p, i) => new Pallet(this, p.x, p.y, kinds[1][i])),
+    };
+    this.pallets[id] = pallets;
+    const stack = (row: Pallet[], tray: readonly ItemId[]) => {
+      for (const pallet of row) pallet.set(tray.filter((item) => item === pallet.item).length);
+    };
+    this.views.push(() => {
+      stack(pallets.in, trays[0]());
+      stack(pallets.out, trays[1]());
+    });
+  }
+
+  /** Lays a floor marker with a caption. A marker a belt replaces goes away once `gone` holds. */
   private addMarker(at: Point, texture: string, caption: string, act: () => Feedback | null, gone?: () => boolean) {
     const pad = this.add.image(at.x, at.y, texture).setDepth(-400);
     const text = this.add
@@ -343,8 +368,6 @@ export class GameScene extends Phaser.Scene {
         text.setVisible(shown());
       });
     }
-    const row = new IconRow(this, at.x, at.y, -300, 8);
-    return { set: (items: readonly ItemId[]) => row.set(shown() ? items : []) };
   }
 
   /** The spot the doctor stands on to make the station work. */
@@ -469,7 +492,7 @@ export class GameScene extends Phaser.Scene {
 
   private createShopfront() {
     this.addObstacle(COUNTER.x, COUNTER.y, 'counter', 200, 30);
-    const shelf = new IconRow(this, COUNTER.x, COUNTER.y - 6, COUNTER.y + 1);
+    this.addPallets('counter', PALLETS.counter, [POTIONS, []], [() => this.state.counter.shelf, () => []]);
     // Potions are stocked by hand until every cauldron standing has its belt to the counter.
     const allBelted = () =>
       this.state.belts.cauldron.built && (!stationBuilt(this.state, 'cauldron2') || this.state.belts.cauldron2.built);
@@ -490,7 +513,6 @@ export class GameScene extends Phaser.Scene {
       .setDepth(-300);
     this.views.push(() => {
       const { counter } = this.state;
-      shelf.set(counter.shelf);
       tillCoin.setVisible(counter.till > 0);
       till.setText(counter.till > 0 ? `${counter.till}` : '');
     });
