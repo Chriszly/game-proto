@@ -34,6 +34,7 @@ export default defineConfig({
     { name: 'wyrmrail', testDir: 'games/wyrmrail/e2e' },
     { name: 'shrine-stack', testDir: 'games/shrine-stack/e2e' },
     { name: 'mapmaker', testDir: 'games/mapmaker/e2e' },
+    { name: 'lanternkeep', testDir: 'games/lanternkeep/e2e' },
   ],
   webServer: {
     command: 'npm run dev -- --port 5173 --strictPort',

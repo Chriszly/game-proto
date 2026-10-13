@@ -21,6 +21,7 @@ start page lists the games; each one lives in its own folder under `games/`.
 | [Wyrmrail](games/wyrmrail/README.md) | Lay track across a valley and send a dragon-drawn train to carry cargo between villages before each order's time runs out, with a new village joining the line each round. |
 | [Shrine Stack](games/shrine-stack/README.md) | Stack a temple from swinging stones: tap to drop each one, overhangs break off, and every balanced tier of three stones earns a blessing. |
 | [Mapmaker](games/mapmaker/README.md) | Reveal a fog-covered island tile by tile on a voyage's supplies, climb hills and peaks to see further, and sell your charts at port for upgrades. |
+| [Lanternkeep](games/lanternkeep/README.md) | Send moths from their jar to light a castle's lanterns before night falls, keep them burning on scarce oil, and upgrade wicks, oil and the moths between nights. |
 
 ## Settings
 
@@ -47,6 +48,7 @@ The hub's **Settings** button opens the settings every game shares. They are sav
   | Wyrmrail | orders allow 50% more time | orders allow 30% less time |
   | Shrine Stack | stones swing 20% slower | stones swing 25% faster |
   | Mapmaker | 16 supplies a voyage | 9 supplies a voyage |
+  | Lanternkeep | lanterns burn 30% longer | lanterns burn 20% shorter |
 
 - **Frame rate (FPS)**: the most frames per second a game draws, 30 to 320 (60 by default).
 - **Show FPS**: a readout of the frame rate in each game's corner.
