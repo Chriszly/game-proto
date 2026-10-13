@@ -131,7 +131,7 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
     const cdp = await page.context().newCDPSession(page);
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: Number(process.env.CPU_THROTTLE) });
   }
-  // The test owns the clock: game time only moves when the test advances it, one 16ms animation
+  // The test owns the clock: game time only moves when the test advances it, one 64ms animation
   // frame at a time, so walking, timers and customers behave the same on a slow runner as on a fast
   // one, and waiting on a timer costs no real time.
   const start = new Date('2026-01-01T00:00:00Z');

@@ -1,7 +1,7 @@
 import {
   GROW_MS,
   ITEMS,
-  POTION_PRICE,
+  POTIONS,
   RECIPES,
   REFINE,
   isPlant,
@@ -13,6 +13,7 @@ import {
 import {
   BELT_COST,
   BELT_GAP_MS,
+  BELT_JOIN_MS,
   BELT_LANES,
   BELT_MS,
   BELTS,
@@ -30,6 +31,7 @@ import {
   UPGRADES,
   beltBuildable,
   carryCapacity,
+  stationBuilt,
   craftsmanCost,
   gardenBuilt,
   gardenOf,
@@ -75,10 +77,13 @@ export function tick(state: GameState, dt: number, workingAt: StationId | null, 
     const next = refining(refiner);
     const hands = crew(state, id, workingAt);
     if (hands === 0 || next < 0) continue;
+    // The plant being worked on moves to the front of the queue, so its progress stays its own even
+    // when a plant ahead of it gets room on its pallet again.
+    if (next > 0) refiner.queue.unshift(...refiner.queue.splice(next, 1));
     refiner.progress += dt * hands * speedAt(state.upgrades[id].level);
-    const recipe = REFINE[refiner.queue[next]];
+    const recipe = REFINE[refiner.queue[0]];
     if (refiner.progress >= recipe.ms) {
-      refiner.queue.splice(next, 1);
+      refiner.queue.shift();
       refiner.output.push(recipe.out);
       refiner.progress = 0;
     }
@@ -157,6 +162,17 @@ function giveFromBelt(state: GameState, belt: BeltId, id: ItemId) {
 }
 
 /**
+ * The two cauldron belts share their run up to the counter, so in each lane an item keeps a gap
+ * behind the other belt's items as well, from a gap before the join on. Returns the other belt's
+ * items near or past the join, which only matter to a cauldron belt.
+ */
+function mergingItems(state: GameState, id: BeltId): BeltItem[] {
+  if (id !== 'cauldron' && id !== 'cauldron2') return [];
+  const other = state.belts[id === 'cauldron' ? 'cauldron2' : 'cauldron'];
+  return other.built ? other.items.filter((item) => item.at >= BELT_JOIN_MS - BELT_GAP_MS) : [];
+}
+
+/**
  * Moves a built belt's items along, each in its own kind's lane. The item at the end of a lane is
  * handed over when the next station has room; until then it waits and the items behind it in that
  * lane queue up, while the other lanes keep moving. A new item is taken on once the last one in its
@@ -170,10 +186,16 @@ function runBelt(state: GameState, id: BeltId, dt: number) {
   const step = (dt * beltSpeed(state)) / BELT_LANES[id].length;
   // The item last seen in each lane: the one ahead of the next in that lane, and in the end the rearmost.
   const ahead = new Map<ItemId, BeltItem>();
+  const merging = mergingItems(state, id);
   belt.items = belt.items.filter((item) => {
     const front = !ahead.has(item.id);
     if (front && item.at >= length && giveFromBelt(state, id, item.id)) return false;
-    const room = front ? length : ahead.get(item.id)!.at - BELT_GAP_MS;
+    let room = front ? length : ahead.get(item.id)!.at - BELT_GAP_MS;
+    for (const other of merging) {
+      // The first line's belt goes first when two items reach the join together.
+      const first = other.at > item.at || (other.at === item.at && id === 'cauldron2');
+      if (other.id === item.id && first) room = Math.min(room, other.at - BELT_GAP_MS);
+    }
     item.at = Math.max(item.at, Math.min(item.at + step, room));
     ahead.set(item.id, item);
     return true;
@@ -219,9 +241,8 @@ function startBrew(state: GameState, cauldron: Cauldron) {
 }
 
 function newOrder(state: GameState, rand: () => number) {
-  const potions = Object.keys(POTION_PRICE) as PotionId[];
   const count = rand() < 0.35 ? 2 : 1;
-  const wants = Array.from({ length: count }, () => potions[Math.floor(rand() * potions.length)]);
+  const wants = Array.from({ length: count }, () => POTIONS[Math.floor(rand() * POTIONS.length)]);
   // Customers pay for each potion as they get it, with a tip that is more generous, and patience
   // that lasts longer, at a better counter.
   const level = state.upgrades.counter.level;
@@ -344,16 +365,22 @@ export function dropInCauldron(state: GameState, id: CauldronId = 'cauldron'): F
 export const pickUpFromCauldron = (state: GameState, id: CauldronId = 'cauldron') => pickUpOne(state, state[id].output);
 
 const UPGRADE_STEP = 5;
-/** Pays a handful of coins towards the next of something bought in levels, going up once fully paid. */
+/** Pays a handful of coins towards `cost`; once it is fully paid, `complete` says what was bought. */
+function pay(state: GameState, toward: { paid: number }, cost: number, complete: () => string): Feedback {
+  const coins = Math.min(UPGRADE_STEP, state.coins, cost - toward.paid);
+  state.coins -= coins;
+  toward.paid += coins;
+  return toward.paid < cost ? [`-${coins} coins`] : [complete()];
+}
+
+/** Pays towards the next of something bought in levels, going up once fully paid. */
 function payLevel(state: GameState, upgrade: Upgrade, max: number, cost: number, done: () => string): Feedback | null {
   if (upgrade.level >= max || state.coins === 0) return null;
-  const pay = Math.min(UPGRADE_STEP, state.coins, cost - upgrade.paid);
-  state.coins -= pay;
-  upgrade.paid += pay;
-  if (upgrade.paid < cost) return [`-${pay} coins`];
-  upgrade.level++;
-  upgrade.paid = 0;
-  return [done()];
+  return pay(state, upgrade, cost, () => {
+    upgrade.level++;
+    upgrade.paid = 0;
+    return done();
+  });
 }
 
 /** Pays a handful of coins towards an upgrade's next level, levelling it up once fully paid. */
@@ -368,15 +395,13 @@ export function payCraftsman(state: GameState, id: StationId): Feedback | null {
   return payLevel(state, hired, MAX_CRAFTSMEN, craftsmanCost(hired.level), () => 'Craftsman hired!');
 }
 
-/** Pays a handful of coins towards a build, which is done once fully paid. */
+/** Pays towards a build, which is done once fully paid. */
 function payToward(state: GameState, build: Build, cost: number, done: string): Feedback | null {
   if (build.built || state.coins === 0) return null;
-  const pay = Math.min(UPGRADE_STEP, state.coins, cost - build.paid);
-  state.coins -= pay;
-  build.paid += pay;
-  if (build.paid < cost) return [`-${pay} coins`];
-  build.built = true;
-  return [done];
+  return pay(state, build, cost, () => {
+    build.built = true;
+    return done;
+  });
 }
 
 const BELT_NAMES: Record<BeltId, string> = {
@@ -388,26 +413,43 @@ const BELT_NAMES: Record<BeltId, string> = {
   cauldron2: 'Cauldron belt',
 };
 
-/** What each belt carries: plants from the gardens, refined goods from the tables, potions from the cauldrons. */
-const BELT_CARRIES: Record<BeltId, (id: ItemId) => boolean> = {
-  garden: isPlant,
-  refiner: isRefined,
-  cauldron: isPotion,
-  garden2: isPlant,
-  refiner2: isRefined,
-  cauldron2: isPotion,
+/** Each belt's twin on the other line, which takes the same kind of goods by hand until it is built. */
+const OTHER_LINE: Record<BeltId, BeltId> = {
+  garden: 'garden2',
+  refiner: 'refiner2',
+  cauldron: 'cauldron2',
+  garden2: 'garden',
+  refiner2: 'refiner',
+  cauldron2: 'cauldron',
+};
+
+/**
+ * The station that has to stand for a belt's step to be done by hand: the table or cauldron the goods
+ * are taken to, or for a cauldron belt the cauldron whose potions are carried to the counter.
+ */
+const HAND_STATION: Record<BeltId, StationId> = {
+  garden: 'refiner',
+  refiner: 'cauldron',
+  cauldron: 'cauldron',
+  garden2: 'refiner2',
+  refiner2: 'cauldron2',
+  cauldron2: 'cauldron2',
 };
 
 /**
  * Pays a handful of coins towards building a belt, which starts running once fully paid. The belt
- * takes over that step of the work, so the goods it carries are cleared from the doctor's hands.
+ * takes over that step of the work, so the goods it carries are cleared from the doctor's hands,
+ * unless the other line still takes them by hand.
  */
 export function payBelt(state: GameState, id: BeltId): Feedback | null {
   if (!beltBuildable(state, id)) return null;
   const feedback = payToward(state, state.belts[id], BELT_COST[id], `${BELT_NAMES[id]} built!`);
   if (!feedback || !state.belts[id].built) return feedback;
-  const cleared = state.carrying.filter(BELT_CARRIES[id]).length;
-  state.carrying = state.carrying.filter((item) => !BELT_CARRIES[id](item));
+  const other = OTHER_LINE[id];
+  if (!state.belts[other].built && stationBuilt(state, HAND_STATION[other])) return feedback;
+  const carried = (item: ItemId) => BELT_LANES[id].includes(item);
+  const cleared = state.carrying.filter(carried).length;
+  state.carrying = state.carrying.filter((item) => !carried(item));
   return cleared > 0 ? [...feedback, `- ${cleared} from hands`] : feedback;
 }
 

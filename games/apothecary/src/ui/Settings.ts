@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { INK, WOOD } from '../art/palette';
-import { FRAME_RATES, frameRate, setFrameRate } from '../frameCap';
+import { FRAME_RATES, frameRate, physicsRate, setFrameRate } from '../frameCap';
 
 const WIDTH = 360;
 const TEXT = { fontFamily: 'monospace', fontSize: '12px', color: '#f3e9d2' };
@@ -48,6 +48,7 @@ export class Settings {
     FRAME_RATES.forEach((fps, i) => {
       const text = button(-WIDTH / 2 + 30 + i * step, 64, String(fps), () => {
         setFrameRate(fps);
+        scene.physics.world.setFPS(physicsRate());
         this.update();
       });
       this.rates.push({ text, fps });

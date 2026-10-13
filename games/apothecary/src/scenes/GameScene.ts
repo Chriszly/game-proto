@@ -24,6 +24,7 @@ import {
   type ExpansionPart,
   type Feedback,
 } from '../game/sim';
+import { physicsRate } from '../frameCap';
 import { clearSave, loadState, saveState } from '../game/save';
 import {
   BELTS,
@@ -181,6 +182,8 @@ export class GameScene extends Phaser.Scene {
     this.waypoint = null;
     this.blockedAreas = [];
     this.physics.world.setBounds(0, HUD_HEIGHT, WORLD.w, WORLD.h - HUD_HEIGHT);
+    // Step physics with every frame at a high frame rate, so walking is as smooth as the drawing.
+    this.physics.world.setFPS(physicsRate());
     this.obstacles = this.physics.add.staticGroup();
 
     this.drawGrounds();
@@ -881,7 +884,8 @@ export class GameScene extends Phaser.Scene {
       // overshoot it back and forth.
       const passed = this.heading !== null && dir.dot(this.heading) <= 0;
       if (this.waypoint && (dir.length() < 6 || passed)) {
-        this.waypoint = this.routeAround(this.pointerTarget);
+        // Route on from the corner itself, wherever on its edges the feet stopped.
+        this.waypoint = this.routeAround(this.pointerTarget, this.waypoint);
         turned = true;
       } else if (!this.waypoint && (dir.length() < 4 || passed)) {
         // Settle the feet on the spot itself, a step back if the last frame carried them past it.
@@ -900,23 +904,23 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * When a station blocks the straight line from the doctor's feet to `to`, returns the corner of
-   * that station to walk to first (the one making the shorter trip); otherwise null.
+   * When a station blocks the straight line from the doctor's feet, or the corner they just reached,
+   * to `to`, returns the corner of that station to walk to first (the one making the shorter trip);
+   * otherwise null.
    */
-  private routeAround(to: Phaser.Math.Vector2): Phaser.Math.Vector2 | null {
-    const from = new Phaser.Math.Vector2(this.player.x, this.feetY());
+  private routeAround(to: Phaser.Math.Vector2, from = new Phaser.Math.Vector2(this.player.x, this.feetY())): Phaser.Math.Vector2 | null {
     const blocks = (a: Phaser.Math.Vector2, b: Phaser.Math.Vector2, area: Phaser.Geom.Rectangle) =>
       Phaser.Geom.Intersects.LineToRectangle(new Phaser.Geom.Line(a.x, a.y, b.x, b.y), area);
     for (const area of this.blockedAreas) {
-      if (area.contains(from.x, from.y) || area.contains(to.x, to.y) || !blocks(from, to, area)) continue;
-      // Test against a slightly smaller area so lines along an edge or through a corner count as clear.
+      // Test against a slightly smaller area so lines along an edge or from a corner count as clear.
       const inner = new Phaser.Geom.Rectangle(area.x + 2, area.y + 2, area.width - 4, area.height - 4);
+      if (inner.contains(from.x, from.y) || area.contains(to.x, to.y) || !blocks(from, to, inner)) continue;
       const corners = [
         new Phaser.Math.Vector2(area.left, area.top),
         new Phaser.Math.Vector2(area.right, area.top),
         new Phaser.Math.Vector2(area.left, area.bottom),
         new Phaser.Math.Vector2(area.right, area.bottom),
-      ].filter((c) => !blocks(from, c, inner));
+      ].filter((c) => !c.equals(from) && !blocks(from, c, inner));
       corners.sort((a, b) => from.distance(a) + a.distance(to) - (from.distance(b) + b.distance(to)));
       return corners[0] ?? null;
     }
