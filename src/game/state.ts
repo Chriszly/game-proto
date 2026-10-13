@@ -1,4 +1,4 @@
-import { GROW_MS, type ItemId, type PlantId, type PotionId, type RefinedId } from './items';
+import { GROW_MS, POTION_PRICE, type ItemId, type PlantId, type PotionId, type RefinedId } from './items';
 
 export interface Plot {
   plant: PlantId;
@@ -85,11 +85,13 @@ export interface Upgrade {
 }
 
 /**
- * What can be upgraded: every station, and the doctor's pack (carry more), boots (walk faster) and
- * sickle (harvest from further away).
+ * What can be upgraded: every station; the doctor's pack (carry more), boots (walk faster) and
+ * sickle (harvest from further away); and at the guild, the gardens' growth, the belts' speed, the
+ * shop's prices and an extra order slot.
  */
-export type UpgradeId = StationId | 'pack' | 'boots' | 'sickle';
+export type UpgradeId = StationId | 'pack' | 'boots' | 'sickle' | 'growth' | 'belts' | 'prices' | 'slots';
 export const DOCTOR_UPGRADES = ['pack', 'boots', 'sickle'] as const;
+export const GUILD_UPGRADES = ['growth', 'belts', 'prices', 'slots'] as const;
 
 /** Each upgrade's highest level (levels count from 0), its first cost, which doubles per level, and name. */
 export const UPGRADES: Record<UpgradeId, { max: number; cost: number; name: string }> = {
@@ -101,6 +103,10 @@ export const UPGRADES: Record<UpgradeId, { max: number; cost: number; name: stri
   pack: { max: 2, cost: 30, name: 'Pack' },
   boots: { max: 2, cost: 25, name: 'Boots' },
   sickle: { max: 2, cost: 25, name: 'Sickle' },
+  growth: { max: 2, cost: 20, name: 'Growth' },
+  belts: { max: 2, cost: 30, name: 'Belts' },
+  prices: { max: 2, cost: 20, name: 'Prices' },
+  slots: { max: 1, cost: 30, name: 'Slots' },
 };
 export const UPGRADE_IDS = Object.keys(UPGRADES) as UpgradeId[];
 /** Coins needed to take an upgrade from `level` to the next: stations 20, 40, 80, 160. */
@@ -151,7 +157,17 @@ export const gardenBuilt = (state: GameState, garden: number) =>
 export const stationBuilt = (state: GameState, id: StationId) =>
   id === 'refiner2' ? state.expansion.refiner.built : id === 'cauldron2' ? state.expansion.cauldron.built : true;
 
+/** Customers who can wait at once: three, and one more with the extra order slot. */
 export const MAX_ORDERS = 3;
+export const maxOrders = (state: GameState) => MAX_ORDERS + state.upgrades.slots.level;
+/** The most customers there can ever be, for laying out their places. */
+export const MAX_ORDER_SLOTS = MAX_ORDERS + UPGRADES.slots.max;
+/** How fast plants grow: a quarter faster per growth level. */
+export const growthSpeed = (state: GameState) => 1 + 0.25 * state.upgrades.growth.level;
+/** How fast belts run, and so how many items they carry a second: half again per belt level. */
+export const beltSpeed = (state: GameState) => 1 + 0.5 * state.upgrades.belts.level;
+/** What customers pay for a potion: a quarter more per price level, rounded. */
+export const potionPrice = (state: GameState, potion: PotionId) => Math.round(POTION_PRICE[potion] * (1 + 0.25 * state.upgrades.prices.level));
 
 /** How many items the doctor carries: four, and one more per pack level. */
 export const carryCapacity = (state: GameState) => 4 + state.upgrades.pack.level;

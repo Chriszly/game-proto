@@ -43,6 +43,18 @@ export const EXPANSION_YARDS = [
 ];
 /** The outfitter's sign on the grass right of the shop; its upgrade markers run down below it. */
 export const OUTFITTER = { x: 830, y: 80 };
+/**
+ * The guild's sign and its upgrade markers in the empty bottom-left corner of the yard, away from
+ * the doctor's rounds: garden growth and belt speed on the right, prices and the extra order slot on
+ * the left.
+ */
+export const GUILD = {
+  sign: { x: 140, y: 760 },
+  growth: { x: 190, y: 700 },
+  belts: { x: 190, y: 800 },
+  prices: { x: 90, y: 800 },
+  slots: { x: 90, y: 700 },
+};
 /** Where the doctor stands to buy the expansion's land: on the grass just right of the shop door. */
 export const EXPANSION_LAND = { x: 820, y: 430 };
 
@@ -100,13 +112,13 @@ export const COUNTER_MARKERS: StationMarkers = {
   upgrade: { x: COUNTER.x + 110, y: COUNTER.y + 76 },
 };
 /** Where waiting customer i stands, on the far side of the counter. */
-export const customerPosition = (i: number) => ({ x: COUNTER.x - 60 + i * 60, y: COUNTER.y - 60 });
+export const customerPosition = (i: number) => ({ x: COUNTER.x - 75 + i * 50, y: COUNTER.y - 60 });
 
 /** Labels for the stations, placed clear of their markers and pallets. */
 export const LABELS = {
-  refiner: { x: 110, y: 540 },
+  refiner: { x: 110, y: 560 },
   cauldron: { x: 460, y: 800 },
-  refiner2: mirror({ x: 110, y: 540 }),
+  refiner2: mirror({ x: 110, y: 560 }),
   cauldron2: mirror({ x: 460, y: 800 }),
 };
 
@@ -160,12 +172,16 @@ export const BELT_PATHS: Record<BeltId, { x: number; y: number }[][]> = {
   refiner2: [[{ x: 870, y: 566 }, { x: 870, y: 720 }, { x: 776, y: 720 }]],
   cauldron2: [[{ x: 704, y: 720 }, { x: 600, y: 720 }, { x: 600, y: 292 }]],
 };
-/** Where the doctor stands to pay for each belt; the cauldron belts' markers face the courtyard. */
+/**
+ * Where the doctor stands to pay for each belt; the cauldron belts' markers face the courtyard. The
+ * garden belts' markers stand out of a long sickle's reach of the mandrakes, so the hands the belt
+ * empties don't fill up again from the patch.
+ */
 export const BELT_BUILD: Record<BeltId, { x: number; y: number }> = {
-  garden: { x: 170, y: 468 },
+  garden: { x: 170, y: 500 },
   refiner: { x: 170, y: 612 },
   cauldron: { x: 520, y: 576 },
-  garden2: mirror({ x: 170, y: 468 }),
+  garden2: mirror({ x: 170, y: 500 }),
   refiner2: mirror({ x: 170, y: 612 }),
   cauldron2: mirror({ x: 520, y: 576 }),
 };

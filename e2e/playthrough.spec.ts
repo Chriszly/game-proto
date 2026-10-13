@@ -22,7 +22,8 @@ interface GameState {
   counter: { shelf: ItemId[]; till: number };
   upgrades: Record<string, { level: number; paid: number }>;
   craftsmen: Record<string, { level: number; paid: number }>;
-  orders: { wants: ItemId[] }[];
+  orders: { id: number; wants: ItemId[]; reward: number }[];
+  nextOrderId: number;
   belts: Record<string, { built: boolean; paid: number; items: { id: ItemId; at: number }[] }>;
 }
 
@@ -50,7 +51,7 @@ const LEAVE_SHOP = { x: 650, y: 330 };
  */
 const LEAVE_CAULDRONS = { x: 600, y: 690 };
 const COUNTER = { drop: { x: 472, y: 282 }, work: { x: 520, y: 340 }, coins: { x: 728, y: 282 }, upgrade: { x: 710, y: 346 } };
-const GARDEN_BELT = { x: 170, y: 468, cost: 60 };
+const GARDEN_BELT = { x: 170, y: 500, cost: 60 };
 // The expansion's second line on the right arm, mirroring the first.
 const LAND = { x: 820, y: 430, cost: 100 };
 // The outfitter's stall right of the shop, with the doctor's upgrades top to bottom.
@@ -67,6 +68,21 @@ const CAULDRON2 = { drop: { x: 820, y: 728 }, work: { x: 750, y: 650 }, pickUp: 
 
 /** The Drop all button in the top bar, on screen rather than in the world. */
 const DROP_ALL = { x: 296, y: 22 };
+
+/**
+ * The guild in the bottom-left corner of the yard: garden growth, belt speed, potion prices and an
+ * extra order slot. It is reached along the bottom of the yard, clear of the cauldron's markers, and
+ * left between its two rows of markers.
+ */
+const GUILD = {
+  growth: { x: 190, y: 700, cost: 20 },
+  belts: { x: 190, y: 800, cost: 30 },
+  prices: { x: 90, y: 800, cost: 20 },
+  slots: { x: 90, y: 700, cost: 30 },
+};
+const TO_GUILD = [{ x: 600, y: 690 }, { x: 240, y: 690 }];
+const FROM_GUILD = [{ x: 90, y: 750 }, { x: 240, y: 750 }, { x: 240, y: 690 }, { x: 600, y: 690 }];
+const POTION_PRICE: Record<string, number> = { healingDraught: 8, sleepingTonic: 15 };
 
 const UPGRADE_COST = 20;
 /**
@@ -411,10 +427,25 @@ test('plays the whole game loop', async ({ page }, testInfo) => {
 
   // Outfitter, a craftsman and the conveyor belt: sell more rounds until all are affordable.
   const { pack, boots, sickle } = OUTFITTER;
-  await earn(sickle.cost + boots.cost + pack.cost + REFINER.hire.cost + GARDEN_BELT.cost, 'the outfitter, a craftsman and the garden belt', 8);
+  const guildCost = GUILD.growth.cost + GUILD.belts.cost + GUILD.prices.cost + GUILD.slots.cost;
+  await earn(
+    sickle.cost + boots.cost + pack.cost + guildCost + REFINER.hire.cost + GARDEN_BELT.cost,
+    'the guild, the outfitter, a craftsman and the garden belt',
+    14,
+  );
+
+  // The guild: faster growth, faster belts, higher prices and a fourth customer. Each is checked once
+  // the belt runs at the end.
+  await walkTo(LEAVE_SHOP, SHOP_DOOR, ...TO_GUILD);
+  await buy('growth', GUILD.growth, GUILD.growth.cost, (s) => s.upgrades.growth.level === 1);
+  await buy('belt speed', GUILD.belts, GUILD.belts.cost, (s) => s.upgrades.belts.level === 1);
+  await buy('prices', GUILD.prices, GUILD.prices.cost, (s) => s.upgrades.prices.level === 1);
+  // Customers who come in from here on pay the higher prices.
+  const pricedFrom = (await game.state()).nextOrderId;
+  await buy('order slot', GUILD.slots, GUILD.slots.cost, (s) => s.upgrades.slots.level === 1);
 
   // A longer sickle harvests from a quarter further away.
-  await walkTo(LEAVE_SHOP, SHOP_DOOR, { x: sickle.x, y: SHOP_DOOR.y });
+  await walkTo(...FROM_GUILD, SHOP_DOOR, { x: sickle.x, y: SHOP_DOOR.y });
   expect(await game.reach()).toBe(72);
   await buy('sickle', sickle, sickle.cost, (s) => s.upgrades.sickle.level === 1);
   expect(await game.reach()).toBe(90);
@@ -485,7 +516,15 @@ test('plays the whole game loop', async ({ page }, testInfo) => {
   const queued = s.refiner.queue.length + s.refiner.output.length;
   const refined = s.refiner.output.length;
   await walkTo(REFINER.drop);
-  await until('a plant on the garden belt', (s) => s.belts.garden.items.length > 0, 20_000);
+  s = await until('a plant on the garden belt', (s) => s.belts.garden.items.length > 0, 20_000);
+  // The faster belt carries it half again as far in the same time. Physics and frames run in their own
+  // steps, so allow a little either way; at the old speed it would be 480 short.
+  const span = STEP_MS * 5;
+  const along = s.belts.garden.items[0].at;
+  await play(span - STEP_MS, async () => false);
+  s = await game.state();
+  expect(s.belts.garden.items[0].at - along).toBeGreaterThan(span * 1.5 - 100);
+  expect(s.belts.garden.items[0].at - along).toBeLessThan(span * 1.5 + 100);
   await snap('10-belt');
   s = await until('the belt delivered to the refining table', (s) => s.refiner.queue.length + s.refiner.output.length > queued, 20_000);
   expect(s.carrying).toEqual([]);
@@ -504,6 +543,25 @@ test('plays the whole game loop', async ({ page }, testInfo) => {
   s = await until('hands emptied', (s) => s.carrying.length === 0, 1_000);
   // Tapping the top bar doesn't walk the doctor.
   expect((await game.feet()).moving).toBe(false);
+  // Faster growth: a plot the belt picked grows a quarter faster than before.
+  const growMs: Record<string, number> = { wheat: 8_000, mandrake: 14_000 };
+  const regrowing = (p: { plant: string; grown: number }) => p.grown + span * 1.5 < growMs[p.plant];
+  s = await until('a plot regrowing after the belt picked it', (s) => s.plots.slice(0, 6).some(regrowing));
+  const plot = s.plots.findIndex((p, i) => i < 6 && regrowing(p));
+  const grown = s.plots[plot].grown;
+  await play(span - STEP_MS, async () => false);
+  const regrown = (await game.state()).plots[plot].grown - grown;
+  expect(regrown).toBeGreaterThan(span * 1.25 - 100);
+  expect(regrown).toBeLessThan(span * 1.25 + 100);
+  // Higher prices: customers since then pay a quarter more per potion, plus their tips.
+  s = await until('a customer at the new prices', (s) => s.orders.some((o) => o.id >= pricedFrom), 30_000);
+  for (const order of s.orders.filter((o) => o.id >= pricedFrom)) {
+    const potions = order.wants.reduce((sum, p) => sum + Math.round(POTION_PRICE[p] * 1.25), 0);
+    expect(order.reward).toBe(potions + order.wants.length * 2 * (s.upgrades.counter.level + 1));
+  }
+  // The extra order slot: with nobody serving, a fourth customer comes in to wait.
+  s = await until('a fourth customer', (s) => s.orders.length === 4, 60_000);
+
   // Only what the playthrough meant to buy was paid for; no walk clipped another purple marker.
   const unpaid = { level: 0, paid: 0 };
   const bought = { level: 1, paid: 0 };
@@ -516,6 +574,10 @@ test('plays the whole game loop', async ({ page }, testInfo) => {
     pack: bought,
     boots: bought,
     sickle: bought,
+    growth: bought,
+    belts: bought,
+    prices: bought,
+    slots: bought,
   });
   expect(s.craftsmen).toEqual({ refiner: bought, cauldron: unpaid, refiner2: unpaid, cauldron2: unpaid, counter: unpaid });
 
