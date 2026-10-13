@@ -5,7 +5,8 @@ each game, and each game lives in its own folder, `games/<name>/`, with its own 
 `e2e/`, `docs/screenshots/` and `README.md` (how to play and its code layout). The build, tsconfig,
 Playwright config, CI workflows and PR template are shared. The games are Apothecary, in
 `games/apothecary/`, Deadline, in `games/deadline/`, Palisade, in `games/palisade/`, Tiny Kingdom,
-in `games/tiny-kingdom/`, and Rogue Runner, in `games/rogue-runner/`.
+in `games/tiny-kingdom/`, Rogue Runner, in `games/rogue-runner/`, and Merge Forge, in
+`games/merge-forge/`.
 
 ## Work on one game at a time
 

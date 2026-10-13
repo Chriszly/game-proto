@@ -7,6 +7,7 @@ const GAMES = [
   { name: 'Palisade', path: '/games/palisade/' },
   { name: 'Tiny Kingdom', path: '/games/tiny-kingdom/' },
   { name: 'Rogue Runner', path: '/games/rogue-runner/' },
+  { name: 'Merge Forge', path: '/games/merge-forge/' },
 ];
 
 // Every page links a favicon that loads.
