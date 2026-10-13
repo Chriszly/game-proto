@@ -10,6 +10,7 @@ start page lists the games; each one lives in its own folder under `games/`.
 | [Apothecary](games/apothecary/README.md) | Run a medieval apothecary as a plague doctor: grow herbs, refine them, brew potions and sell them to customers. |
 | [Deadline](games/deadline/README.md) | Hold the bottom of a road against growing waves of zombies: move left and right, shoot automatically, and shoot crates open for upgrades. |
 | [Palisade](games/palisade/README.md) | Hold a barricade against waves of goblins, orcs and dark knights as a ranger, picking one of three upgrades each level, with a boss every ten waves. |
+| [Tiny Kingdom](games/tiny-kingdom/README.md) | Place farms, houses and towers on a small island grid, each scoring against its neighbours, and reach each round's goal before the tiles run out. |
 | [Pirate Raid](games/pirate-raid/README.md) | Captain a pirate ship: steer left and right to bring your broadsides to bear on enemy ships, sail over their loot, and upgrade hull and cannons at the harbor between waves. |
 
 ## Running locally
