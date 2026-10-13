@@ -46,8 +46,8 @@ the doctor keeps the item and a belt waits until there is room.
 
 **Craftsmen** work a station so the doctor doesn't have to stand on its work spot. Each station
 takes up to two, hired one at a time on the purple marker beside it (30, then 60 coins); they
-stand by the station once hired. Every pair of hands counts: a refining table or cauldron works
-as fast again for each craftsman, and the doctor on the work spot adds one more. At the counter
+stand by the station once hired, and its work spot goes away. A refining table or cauldron works
+as fast again for each craftsman. At the counter
 the first craftsman serves customers, and the second also brings the coins from the till.
 
 ![Craftsmen at the stations](docs/screenshots/craftsmen-map.png)
