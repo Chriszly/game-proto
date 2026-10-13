@@ -77,7 +77,8 @@ counter (30), and customers makes them come in half again as often per level, a 
 markers, a handful of coins at a time: gardens to refining table (60 coins), table to cauldron (100)
 and cauldron to counter (150). A belt picks ripe plants or finished goods up at its start and
 hands them to the next station when it has room; the drop and pick-up markers it replaces go away,
-and the goods it carries are cleared from the doctor's hands when it is built. Each belt has a
+though a drop marker comes back while the doctor carries goods it takes, such as goods from the
+other line, and the goods it carries are cleared from the doctor's hands when it is built. Each belt has a
 narrow lane for every kind of goods it carries (wheat and mandrake, flour and seeds, or the two
 potions), so when one kind waits for room at the next station the other keeps moving. The lanes
 run at half speed, so a belt carries as many goods a second as a one-lane belt would.
@@ -90,7 +91,8 @@ on the grass right of the shop (100 coins), which lays the yard and puts a build
 part will go: a wheat field and a mandrake patch (25 coins each), a refining table (50) and a
 cauldron (75). The second line works like the first and has its own belts, buildable once the
 stations at both ends stand; its cauldron belt meets the first line's at a T and shares the run up
-to the counter. The counter's drop marker stays until every cauldron has its belt.
+to the counter. The counter's drop marker stays until every cauldron has its belt, and comes back whenever the
+doctor carries a potion.
 
 ![Both lines with all their belts](docs/screenshots/expansion-map.png)
 
