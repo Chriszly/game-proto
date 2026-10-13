@@ -18,7 +18,8 @@ interface GameState {
 }
 
 // Floor spots in the 960x540 world, from src/scenes/layout.ts. Walking targets the doctor's feet.
-const WHEAT_ROW = { from: { x: 264, y: 200 }, to: { x: 84, y: 200 } };
+const WHEAT_XS = [264, 174, 84];
+const WHEAT_Y = 200;
 const MANDRAKE = { x: 174, y: 430 };
 const WALKWAY = { x: 340, y: 290 };
 const REFINER = { drop: { x: 370, y: 178 }, work: { x: 450, y: 108 }, pickUp: { x: 530, y: 178 } };
@@ -96,7 +97,14 @@ test('plays the whole game loop', async ({ page }, testInfo) => {
   }
 
   async function until(what: string, check: (s: GameState) => boolean, timeout = 30_000) {
-    await expect.poll(async () => check(await game.state()), { message: what, timeout }).toBe(true);
+    try {
+      await expect.poll(async () => check(await game.state()), { message: what, timeout }).toBe(true);
+    } catch (e) {
+      // Name where the doctor stood and what the world looked like, to tell a slow runner from a bug.
+      const { orders, plots, ...s } = await game.state();
+      const at = await game.feet();
+      throw new Error(`${(e as Error).message}\nDoctor at ${JSON.stringify(at)}, state ${JSON.stringify(s)}`);
+    }
     return game.state();
   }
 
@@ -111,8 +119,12 @@ test('plays the whole game loop', async ({ page }, testInfo) => {
 
     // Gardens: walk along the wheat row, then past one mandrake, until both hands are full.
     await until('a ripe wheat row', (s) => s.plots.slice(0, 3).every((p) => p.grown >= 8_000), 20_000);
-    await walkTo(WHEAT_ROW.from, WHEAT_ROW.to);
-    await until('three wheat harvested', (s) => count(s.carrying).wheat === 3);
+    // Stop at each plant in turn, so a slow frame rate can't carry the doctor past one.
+    for (const [i, x] of WHEAT_XS.entries()) {
+      await walkTo({ x, y: WHEAT_Y });
+      await until(`wheat ${i + 1} harvested`, (s) => (count(s.carrying).wheat ?? 0) >= i + 1);
+    }
+    expect(count((await game.state()).carrying)).toEqual({ wheat: 3 });
     await until('a ripe mandrake', (s) => s.plots[4].grown >= 14_000, 20_000);
     await walkTo(MANDRAKE);
     let s = await until('one mandrake harvested', (s) => s.carrying.length === 4);
