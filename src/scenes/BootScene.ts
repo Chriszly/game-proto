@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { bakeDoctor } from '../art/doctor';
 import { bakeGarden } from '../art/garden';
 import { bakeItems } from '../art/items';
+import { bakeMarkers } from '../art/markers';
 import { bakeStations } from '../art/stations';
 import { bakePlaceholders } from '../art/placeholders';
 
@@ -17,6 +18,7 @@ export class BootScene extends Phaser.Scene {
     bakeItems(this);
     bakeGarden(this);
     bakeStations(this);
+    bakeMarkers(this);
 
     this.scene.start('Game');
   }
