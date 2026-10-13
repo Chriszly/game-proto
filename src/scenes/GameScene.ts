@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { plantTexture } from '../art/garden';
 import { customerTexture } from '../art/townsfolk';
+import { signTexture } from '../art/ui';
 import { GROW_MS, ITEMS, REFINE } from '../game/items';
 import {
   collectTill,
@@ -29,6 +30,7 @@ import {
   REFINER,
   REFINER_MARKERS,
   SHOP,
+  YARD,
   customerPosition,
   plotPosition,
 } from './layout';
@@ -130,28 +132,45 @@ export class GameScene extends Phaser.Scene {
   }
 
   private drawGrounds() {
-    const g = this.add.graphics().setDepth(-1000);
-    // Gardens: tilled earth inside a picket fence.
-    for (const area of GARDEN_AREAS) {
-      g.fillStyle(0x4f6e35).fillRect(area.x, area.y, area.w, area.h);
-      g.lineStyle(4, 0xa88a5c).strokeRect(area.x, area.y, area.w, area.h);
-    }
-    // Shop: plank floor with a door gap facing the street.
-    g.fillStyle(0x7a5a3a).fillRect(SHOP.x, SHOP.y, SHOP.w, SHOP.h);
-    g.lineStyle(1, 0x5f4429);
-    for (let y = SHOP.y + 20; y < SHOP.y + SHOP.h; y += 20) g.lineBetween(SHOP.x, y, SHOP.x + SHOP.w, y);
-    g.lineStyle(6, 0x4a3a2c).strokeRect(SHOP.x, SHOP.y, SHOP.w, SHOP.h);
-    g.fillStyle(0x7a5a3a).fillRect(SHOP.x - 4, SHOP.y + 290, 8, 90);
+    const { width, height } = this.scale;
+    const ground = (x: number, y: number, w: number, h: number, texture: string, depth = -1000) =>
+      this.add.tileSprite(x, y, w, h, texture).setOrigin(0).setDepth(depth);
+    ground(0, HUD_HEIGHT, width, height - HUD_HEIGHT, 'tile-grass');
 
-    const label = (x: number, y: number, text: string) =>
-      this.add
-        .text(x, y, text, { fontFamily: 'monospace', fontSize: '13px', color: '#f3e9d2' })
+    // Workshop yard of packed earth, with a path to the shop door.
+    ground(YARD.x, YARD.y, YARD.w, YARD.h, 'tile-dirt');
+    ground(YARD.x + YARD.w, SHOP.y + 290, SHOP.x - YARD.x - YARD.w, 90, 'tile-dirt');
+
+    // Gardens: meadow inside a picket fence.
+    for (const area of GARDEN_AREAS) {
+      ground(area.x, area.y, area.w, area.h, 'tile-meadow');
+      ground(area.x - 12, area.y, 32, area.h, 'fence-v', -990);
+      ground(area.x + area.w - 20, area.y, 32, area.h, 'fence-v', -990);
+      ground(area.x, area.y - 4, area.w, 32, 'fence-h', -980);
+      ground(area.x, area.y + area.h - 28, area.w, 32, 'fence-h', -980);
+    }
+
+    // Shop: plank floor inside stone walls, with a doorway facing the yard.
+    ground(SHOP.x, SHOP.y, SHOP.w, SHOP.h, 'tile-planks');
+    const wall = 16;
+    ground(SHOP.x - wall / 2, SHOP.y - wall / 2, SHOP.w + wall, wall, 'tile-wall', -990);
+    ground(SHOP.x - wall / 2, SHOP.y + SHOP.h - wall / 2, SHOP.w + wall, wall, 'tile-wall', -990);
+    ground(SHOP.x + SHOP.w - wall / 2, SHOP.y, wall, SHOP.h, 'tile-wall', -990);
+    ground(SHOP.x - wall / 2, SHOP.y, wall, 290, 'tile-wall', -990);
+    ground(SHOP.x - wall / 2, SHOP.y + 380, wall, SHOP.h - 380, 'tile-wall', -990);
+
+    // Place names on wooden signs.
+    const label = (x: number, y: number, text: string) => {
+      const name = this.add
+        .text(x, y, text, { fontFamily: 'monospace', fontSize: '13px', color: '#f3e9d2', stroke: '#3b2416', strokeThickness: 2 })
         .setOrigin(0.5)
         .setDepth(-900);
-    for (const area of GARDEN_AREAS) label(area.x + area.w / 2, area.y + 14, area.name);
+      this.add.image(x, y, signTexture(this, name.width + 16)).setDepth(-910);
+    };
+    for (const area of GARDEN_AREAS) label(area.x + area.w / 2, area.y + 10, area.name);
     label(REFINER.x, REFINER.y + 46, 'Refining table');
     label(CAULDRON.x, CAULDRON.y - 64, 'Cauldron');
-    label(SHOP.x + SHOP.w / 2, SHOP.y + 14, 'Storefront');
+    label(SHOP.x + SHOP.w / 2, SHOP.y, 'Storefront');
   }
 
   private createPlots() {
