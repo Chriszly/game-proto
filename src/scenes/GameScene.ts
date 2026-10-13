@@ -84,7 +84,9 @@ import {
   REFINER2_MARKERS,
   REFINER_MARKERS,
   SHOP,
+  SHOP_BACK_DOOR,
   SHOP_DOOR,
+  STREET,
   WORLD,
   YARDS,
   customerPosition,
@@ -102,6 +104,8 @@ const PLAYER_SCALE = 2;
 const MAX_STEP_MS = 250;
 const UI_DEPTH = 10_000;
 const AUTOSAVE_MS = 3_000;
+/** How fast customers walk, in pixels per second. */
+const CUSTOMER_SPEED = 120;
 /** How often a floor marker moves the next item while the doctor stands on it. */
 const MARKER_INTERVAL_MS = 200;
 /** Pause between plants when several in reach are ripe, so each pickup can be seen. */
@@ -149,6 +153,10 @@ export class GameScene extends Phaser.Scene {
   private nextFeedbackAt = 0;
   /** Each standing station's pallets, for goods coming in and going out; read by the playthrough test. */
   private pallets: Partial<Record<StationId, { in: Pallet[]; out: Pallet[] }>> = {};
+  /** Game time of the frame being drawn, for things that move on their own. */
+  private frameMs = 0;
+  /** Where each customer in the shop stands, and whether they have reached their spot; read by the playthrough test. */
+  customers: { id: number; x: number; y: number; arrived: boolean }[] = [];
   /** The recipe overview opened from the top bar. */
   private recipes!: RecipeBook;
   /** Per-frame view updates, each reading from `state`. */
@@ -266,7 +274,10 @@ export class GameScene extends Phaser.Scene {
     ground(SHOP.x, SHOP.y, SHOP.w, SHOP.h, 'tile-planks');
     const wall = 16;
     const bottom = SHOP.y + SHOP.h - wall / 2;
-    ground(SHOP.x - wall / 2, SHOP.y - wall / 2, SHOP.w + wall, wall, 'tile-wall', -990);
+    // The back wall has a street door that customers come and go by.
+    ground(SHOP.x - wall / 2, SHOP.y - wall / 2, SHOP_BACK_DOOR.from - SHOP.x + wall / 2, wall, 'tile-wall', -990);
+    ground(SHOP_BACK_DOOR.to, SHOP.y - wall / 2, SHOP.x + SHOP.w + wall / 2 - SHOP_BACK_DOOR.to, wall, 'tile-wall', -990);
+    ground(SHOP_BACK_DOOR.from, 0, SHOP_BACK_DOOR.to - SHOP_BACK_DOOR.from, SHOP.y, 'tile-planks', -995);
     ground(SHOP.x - wall / 2, bottom, SHOP_DOOR.from - SHOP.x + wall / 2, wall, 'tile-wall', -990);
     ground(SHOP_DOOR.to, bottom, SHOP.x + SHOP.w + wall / 2 - SHOP_DOOR.to, wall, 'tile-wall', -990);
     ground(SHOP.x - wall / 2, SHOP.y, wall, SHOP.h, 'tile-wall', -990);
@@ -586,20 +597,43 @@ export class GameScene extends Phaser.Scene {
       till.setText(counter.till > 0 ? `${counter.till}` : '');
     });
 
-    // One customer slot per possible order; slot i shows the i-th open order.
+    // One customer slot per possible order; slot i shows the i-th open order once its customer has
+    // walked up to it.
+    const customers = new Map<number, Phaser.GameObjects.Image>();
     for (let i = 0; i < MAX_ORDER_SLOTS; i++) {
       const { x, y } = customerPosition(i);
-      const customer = this.add.image(x, y, customerTexture(0)).setScale(2).setDepth(y);
       const wants = new IconRow(this, x, y - 52, UI_DEPTH);
       const patience = new ProgressBar(this, x, y - 40, 40, 0xe0b84a, UI_DEPTH);
       this.views.push(() => {
         const order = this.state.orders[i];
-        customer.setVisible(!!order);
-        wants.set(order ? order.wants : []);
-        patience.set(order ? order.patience / order.maxPatience : null);
-        if (order) customer.setTexture(customerTexture(order.id));
+        const there = order && customers.get(order.id)?.getData('arrived');
+        wants.set(there ? order.wants : []);
+        patience.set(there ? order.patience / order.maxPatience : null);
       });
     }
+    // Customers walk in by the street door to their spot at the counter, move along as those ahead
+    // leave, and walk back out once served or out of patience.
+    this.views.push(() => {
+      const step = (CUSTOMER_SPEED * this.frameMs) / 1000;
+      const waiting = new Set(this.state.orders.map((o) => o.id));
+      this.state.orders.forEach((order, i) => {
+        if (!customers.has(order.id)) {
+          const sprite = this.add.image(STREET.x, STREET.y, customerTexture(order.id)).setScale(2);
+          customers.set(order.id, sprite);
+        }
+        const sprite = customers.get(order.id)!;
+        sprite.setData('arrived', walkTowards(sprite, customerPosition(i), step));
+      });
+      for (const [id, sprite] of customers) {
+        if (waiting.has(id)) continue;
+        sprite.setData('arrived', false);
+        if (walkTowards(sprite, STREET, step, true)) {
+          sprite.destroy();
+          customers.delete(id);
+        }
+      }
+      this.customers = [...customers].map(([id, s]) => ({ id, x: s.x, y: s.y, arrived: !!s.getData('arrived') }));
+    });
   }
 
   private createHud() {
@@ -776,6 +810,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number) {
+    this.frameMs = Math.min(delta, MAX_STEP_MS);
     const feetY = this.feetY();
     const workingAt = this.workSpots.find((w) => w.zone.contains(this.player.x, feetY))?.station ?? null;
     tick(this.state, Math.min(delta, MAX_STEP_MS), workingAt);
@@ -875,4 +910,17 @@ export class GameScene extends Phaser.Scene {
     // Draw lower sprites in front of higher ones.
     this.player.setDepth(this.feetY());
   }
+}
+
+/**
+ * Moves `obj` up to `step` pixels towards `to`, one axis at a time: across a row before going up or
+ * down when `leaving`, otherwise up or down first. Returns whether it has arrived.
+ */
+function walkTowards(obj: Phaser.GameObjects.Image, to: Point, step: number, leaving = false) {
+  const along = (from: number, target: number) => from + Phaser.Math.Clamp(target - from, -step, step);
+  const vertical = leaving ? obj.x === to.x : obj.y !== to.y;
+  if (vertical) obj.setY(along(obj.y, to.y));
+  else obj.setX(along(obj.x, to.x));
+  obj.setDepth(obj.y);
+  return obj.x === to.x && obj.y === to.y;
 }

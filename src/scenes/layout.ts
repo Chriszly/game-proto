@@ -113,6 +113,13 @@ export const COUNTER_MARKERS: StationMarkers = {
 };
 /** Where waiting customer i stands, on the far side of the counter. */
 export const customerPosition = (i: number) => ({ x: COUNTER.x - 75 + i * 50, y: COUNTER.y - 60 });
+/**
+ * The street door in the shop's back wall, left of its sign and above the counter's pallets, and the
+ * spot outside it where customers come from and go back to. They keep clear of the counter's hire
+ * marker on the right.
+ */
+export const SHOP_BACK_DOOR = { from: 460, to: 500 };
+export const STREET = { x: 480, y: 40 };
 
 /** Labels for the stations, placed clear of their markers and pallets. */
 export const LABELS = {
