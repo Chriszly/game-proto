@@ -8,13 +8,24 @@ export type Pt = { x: number; y: number };
 
 const LEATHER = 0x3a2a20;
 const SLAT = 0x56402e;
+/** Width of one lane, just wide enough for an item's art, of the brass strip between lanes, and of the rail along each edge. */
+const LANE = 12;
+const DIVIDER = 2;
+const RAIL = 3;
+
+/** How far from a belt's middle the centre of lane `lane` of `lanes` lies, across the belt. */
+export const laneOffset = (lane: number, lanes: number) => (lane - (lanes - 1) / 2) * (LANE + DIVIDER);
 
 /**
  * Draws belts along `runs`, each a list of points joined by straight horizontal or vertical
- * stretches. Runs that meet at a point, or where one ends on another's stretch, are joined there.
+ * stretches, `lanes` lanes wide and no wider. Runs that meet at a point, or where one ends on
+ * another's stretch, are joined there.
  */
-export function drawBelts(scene: Phaser.Scene, runs: Pt[][], depth: number) {
-  const W = 20, H = W / 2;
+export function drawBelts(scene: Phaser.Scene, runs: Pt[][], depth: number, lanes: number) {
+  const W = 2 * RAIL + lanes * LANE + (lanes - 1) * DIVIDER, H = W / 2;
+  // Offsets across the belt, from its middle, of the strips between lanes and of each lane's centre.
+  const dividers = Array.from({ length: lanes - 1 }, (_, i) => (laneOffset(i, lanes) + laneOffset(i + 1, lanes)) / 2);
+  const centres = Array.from({ length: lanes }, (_, i) => laneOffset(i, lanes));
   const g = scene.add.graphics().setDepth(depth);
   const segs: { a: Pt; b: Pt }[] = [];
   for (const run of runs) for (let i = 0; i < run.length - 1; i++) segs.push({ a: run[i], b: run[i + 1] });
@@ -65,12 +76,21 @@ export function drawBelts(scene: Phaser.Scene, runs: Pt[][], depth: number) {
     g.fillStyle(GOLD.light);
     if (horiz) { g.fillRect(rx, ry, rw, 1); g.fillRect(rx, ry + rh - 3, rw, 1); for (let x = rx + 6; x < rx + rw - 2; x += 12) { g.fillRect(x, ry + 1, 1, 1); g.fillRect(x, ry + rh - 2, 1, 1); } }
     else { g.fillRect(rx, ry, 1, rh); g.fillRect(rx + rw - 3, ry, 1, rh); for (let y = ry + 6; y < ry + rh - 2; y += 12) { g.fillRect(rx + 1, y, 1, 1); g.fillRect(rx + rw - 2, y, 1, 1); } }
+    // Brass strips between the lanes.
+    g.fillStyle(GOLD.dark);
+    for (const off of dividers) {
+      if (horiz) g.fillRect(rx, a.y + off - DIVIDER / 2, rw, DIVIDER);
+      else g.fillRect(a.x + off - DIVIDER / 2, ry, DIVIDER, rh);
+    }
+    // A small arrow down the middle of each lane.
     const dx = Math.sign(b.x - a.x), dy = Math.sign(b.y - a.y), len = Math.hypot(b.x - a.x, b.y - a.y);
     g.fillStyle(GOLD.mid, 0.9);
     for (let d = 28; d < len - 18; d += 48) {
-      const cx = a.x + dx * d, cy = a.y + dy * d;
-      if (horiz) g.fillTriangle(cx + dx * 4, cy, cx - dx * 3, cy - 5, cx - dx * 3, cy + 5);
-      else g.fillTriangle(cx, cy + dy * 4, cx - 5, cy - dy * 3, cx + 5, cy - dy * 3);
+      for (const off of centres) {
+        const cx = a.x + dx * d + (horiz ? 0 : off), cy = a.y + dy * d + (horiz ? off : 0);
+        if (horiz) g.fillTriangle(cx + dx * 3, cy, cx - dx * 2, cy - 3, cx - dx * 2, cy + 3);
+        else g.fillTriangle(cx, cy + dy * 3, cx - 3, cy - dy * 2, cx + 3, cy - dy * 2);
+      }
     }
   }
 
@@ -115,6 +135,9 @@ export function drawBelts(scene: Phaser.Scene, runs: Pt[][], depth: number) {
         const a = s + ((e - s) * t) / 5;
         for (let r = 5; r < W - 4; r += 1) g.fillRect(Math.round(o.x + Math.cos(a) * r) - 1, Math.round(o.y + Math.sin(a) * r) - 1, 2, 2);
       }
+      // The strips between lanes bend round with the belt.
+      g.lineStyle(DIVIDER, GOLD.dark);
+      for (const off of dividers) g.beginPath().arc(o.x, o.y, H + off, s, e, false).strokePath();
       wedge(4, GOLD.dark); wedge(2, GOLD.light);
       bracket(o.x, o.y);
       continue;
@@ -126,8 +149,15 @@ export function drawBelts(scene: Phaser.Scene, runs: Pt[][], depth: number) {
     for (let i = 3; i < W - 3; i += 4) for (let j = 3; j < W - 3; j += 4) g.fillRect(x + i, y + j, 2, 2);
     for (const side of ALL) if (!ds.includes(side)) rail(side, c);
     if (ds.length === 1) {
+      // The strips between lanes run on to the end roller.
+      const v = DIRS[ds[0]];
+      g.fillStyle(GOLD.dark);
+      for (const off of dividers) {
+        if (v.x !== 0) g.fillRect(x, c.y + off - DIVIDER / 2, W, DIVIDER);
+        else g.fillRect(c.x + off - DIVIDER / 2, y, DIVIDER, W);
+      }
       // End roller across the open end.
-      const v = DIRS[ds[0]], back = { x: c.x - v.x * (H - 3), y: c.y - v.y * (H - 3) };
+      const back = { x: c.x - v.x * (H - 3), y: c.y - v.y * (H - 3) };
       g.fillStyle(IRON.dark);
       if (v.x !== 0) g.fillRect(back.x - 3, y + 2, 6, W - 4); else g.fillRect(x + 2, back.y - 3, W - 4, 6);
       g.fillStyle(IRON.shine);
@@ -151,13 +181,15 @@ export function drawBelts(scene: Phaser.Scene, runs: Pt[][], depth: number) {
   return g;
 }
 
-/** The point `t` (0 to 1) of the way along a run of points. */
-export function pointAlong(run: Pt[], t: number): Pt {
+/** The point `t` (0 to 1) of the way along a run of points, and the direction the run goes there. */
+export function pointAlong(run: Pt[], t: number): Pt & { dx: number; dy: number } {
   const parts = run.slice(1).map((p, i) => ({ a: run[i], b: p, len: Math.hypot(p.x - run[i].x, p.y - run[i].y) }));
   let d = Math.max(0, Math.min(1, t)) * parts.reduce((sum, p) => sum + p.len, 0);
   for (const { a, b, len } of parts) {
-    if (d <= len) return { x: a.x + ((b.x - a.x) * d) / len, y: a.y + ((b.y - a.y) * d) / len };
+    const dx = (b.x - a.x) / len, dy = (b.y - a.y) / len;
+    if (d <= len) return { x: a.x + dx * d, y: a.y + dy * d, dx, dy };
     d -= len;
   }
-  return run[run.length - 1];
+  const { a, b, len } = parts[parts.length - 1];
+  return { ...b, dx: (b.x - a.x) / len, dy: (b.y - a.y) / len };
 }
