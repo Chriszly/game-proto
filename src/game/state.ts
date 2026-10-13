@@ -1,4 +1,4 @@
-import { GROW_MS, POTION_PRICE, type ItemId, type PlantId, type PotionId, type RefinedId } from './items';
+import { GROW_MS, PLANTS, POTION_PRICE, POTIONS, REFINED, type ItemId, type PlantId, type PotionId, type RefinedId } from './items';
 
 export interface Plot {
   plant: PlantId;
@@ -64,7 +64,7 @@ export interface Build {
 
 /** A belt is bought like any build, and then carries goods. */
 export interface Belt extends Build {
-  /** Items on the belt, the one nearest the end first. */
+  /** Items on the belt, in the order they got on, so in each lane the one nearest the end first. */
   items: BeltItem[];
 }
 
@@ -193,7 +193,7 @@ export const LAYOUT = 2;
 
 /** Coins needed to build each belt. */
 export const BELT_COST: Record<BeltId, number> = { garden: 60, refiner: 100, cauldron: 150, garden2: 60, refiner2: 100, cauldron2: 150 };
-/** How long an item takes from one end of each belt to the other: about 100 pixels a second. */
+/** How long an item takes from one end of each belt to the other in a one-lane belt: about 100 pixels a second. */
 export const BELT_MS: Record<BeltId, number> = { garden: 4_000, refiner: 2_500, cauldron: 5_500, garden2: 4_000, refiner2: 2_500, cauldron2: 5_500 };
 /** The stations a belt joins, which must both stand before it can be built. */
 export const BELT_ENDS: Record<BeltId, StationId[]> = {
@@ -210,8 +210,21 @@ export const beltBuildable = (state: GameState, id: BeltId) =>
   (id !== 'garden2' || state.expansion.fields.some((f) => f.built));
 /** Coins needed for the expansion's land, each field, the refining table and the cauldron. */
 export const EXPANSION_COST = { land: 100, field: 25, refiner: 50, cauldron: 75 };
-/** Least time between two items on a belt, so they don't overlap. */
+/** Least time between two items in a belt's lane, so they don't overlap. */
 export const BELT_GAP_MS = 600;
+/**
+ * Each belt has a lane for every kind of goods it carries, side by side: plants from the gardens,
+ * refined goods from the tables, potions from the cauldrons. Goods in one lane don't wait for the
+ * other's.
+ */
+export const BELT_LANES: Record<BeltId, readonly ItemId[]> = {
+  garden: PLANTS,
+  refiner: REFINED,
+  cauldron: POTIONS,
+  garden2: PLANTS,
+  refiner2: REFINED,
+  cauldron2: POTIONS,
+};
 
 /** Work-speed multiplier for the refining table and cauldron. */
 export const speedAt = (level: number) => 1 + 0.5 * level;

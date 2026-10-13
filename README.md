@@ -74,10 +74,13 @@ counter (30).
 markers, a handful of coins at a time: gardens to refining table (60 coins), table to cauldron (100)
 and cauldron to counter (150). A belt picks ripe plants or finished goods up at its start and
 hands them to the next station when it has room; the drop and pick-up markers it replaces go away,
-and the goods it carries are cleared from the doctor's hands when it is built.
+and the goods it carries are cleared from the doctor's hands when it is built. Each belt has a
+narrow lane for every kind of goods it carries (wheat and mandrake, flour and seeds, or the two
+potions), so when one kind waits for room at the next station the other keeps moving. The lanes
+run at half speed, so a belt carries as many goods a second as a one-lane belt would.
 The belts are steampunk machinery, brass rails over leather slats, in an otherwise medieval world.
 
-![All three belts built](docs/screenshots/belts-map.png)
+![All three belts built, with a lane for each kind of goods](docs/screenshots/belt-lanes.png)
 
 **The expansion** opens the right arm for a second production line. Its land is bought on a marker
 on the grass right of the shop (100 coins), which lays the yard and puts a build marker where each

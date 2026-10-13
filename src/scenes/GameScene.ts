@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { drawBelts, pointAlong } from '../art/belts';
+import { drawBelts, laneOffset, pointAlong } from '../art/belts';
 import { plantTexture } from '../art/garden';
 import { itemTexture } from '../art/items';
 import { craftsmanTexture, customerTexture } from '../art/townsfolk';
@@ -28,6 +28,7 @@ import { clearSave, loadState, saveState } from '../game/save';
 import {
   BELTS,
   BELT_COST,
+  BELT_LANES,
   BELT_MS,
   DOCTOR_UPGRADES,
   EXPANSION_COST,
@@ -516,7 +517,8 @@ export class GameScene extends Phaser.Scene {
       if (built.join() === drawn) return;
       drawn = built.join();
       network?.destroy();
-      network = built.length > 0 ? drawBelts(this, built.flatMap((id) => BELT_PATHS[id]), -600) : null;
+      const lanes = Math.max(...built.map((id) => BELT_LANES[id].length));
+      network = built.length > 0 ? drawBelts(this, built.flatMap((id) => BELT_PATHS[id]), -600, lanes) : null;
     });
 
     for (const id of BELTS) {
@@ -527,13 +529,18 @@ export class GameScene extends Phaser.Scene {
       const riding: Phaser.GameObjects.Image[] = [];
       const main = BELT_PATHS[id][0];
       this.views.push(() => {
-        while (riding.length < belt.items.length) riding.push(this.add.image(0, 0, itemTexture(belt.items[0].id)).setDepth(-550));
+        while (riding.length < belt.items.length) {
+          riding.push(this.add.image(0, 0, itemTexture(belt.items[0].id)).setDepth(-550));
+        }
+        const lanes = BELT_LANES[id];
         riding.forEach((icon, i) => {
           const item = belt.items[i];
           icon.setVisible(!!item);
           if (!item) return;
-          const { x, y } = pointAlong(main, item.at / BELT_MS[id]);
-          icon.setTexture(itemTexture(item.id)).setPosition(x, y);
+          // Across the belt into the item's own lane.
+          const { x, y, dx, dy } = pointAlong(main, item.at / BELT_MS[id]);
+          const off = laneOffset(lanes.indexOf(item.id), lanes.length);
+          icon.setTexture(itemTexture(item.id)).setPosition(x - dy * off, y + dx * off);
         });
       });
     }
