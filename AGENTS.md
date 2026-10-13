@@ -4,7 +4,8 @@ This repo is a hub of small Phaser 4 + TypeScript + Vite games. The hub page (`i
 each game, and each game lives in its own folder, `games/<name>/`, with its own `index.html`, `src/`,
 `e2e/`, `docs/screenshots/` and `README.md` (how to play and its code layout). The build, tsconfig,
 Playwright config, CI workflows and PR template are shared. The games are Apothecary, in
-`games/apothecary/`, Deadline, in `games/deadline/`, and Palisade, in `games/palisade/`.
+`games/apothecary/`, Deadline, in `games/deadline/`, Palisade, in `games/palisade/`, and Potion Puzzle, in
+`games/potion-puzzle/`.
 
 ## Work on one game at a time
 

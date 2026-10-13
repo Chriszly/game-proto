@@ -23,6 +23,7 @@ export default defineConfig({
       use: { viewport: { width: 540, height: 960 }, video: { mode: 'on', size: { width: 540, height: 960 } } },
     },
     { name: 'palisade', testDir: 'games/palisade/e2e' },
+    { name: 'potion-puzzle', testDir: 'games/potion-puzzle/e2e' },
   ],
   webServer: {
     command: 'npm run dev -- --port 5173 --strictPort',
