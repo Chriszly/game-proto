@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { drawBelts, pointAlong } from '../art/belts';
 import { plantTexture } from '../art/garden';
 import { itemTexture } from '../art/items';
-import { customerTexture } from '../art/townsfolk';
+import { craftsmanTexture, customerTexture } from '../art/townsfolk';
 import { signTexture } from '../art/ui';
 import { GROW_MS, PLANTS, POTIONS, REFINE, REFINED, type ItemId } from '../game/items';
 import {
@@ -13,6 +13,7 @@ import {
   harvest,
   isRipe,
   payBelt,
+  payCraftsman,
   payExpansion,
   payUpgrade,
   pickUpFromCauldron,
@@ -32,12 +33,14 @@ import {
   EXPANSION_COST,
   LINE2_GARDEN,
   MAX_CARRY,
+  MAX_CRAFTSMEN,
   MAX_ORDERS,
   beltBuildable,
   gardenBuilt,
   gardenOf,
   UPGRADES,
   carryCapacity,
+  craftsmanCost,
   harvestReach,
   stationBuilt,
   upgradeCost,
@@ -47,6 +50,7 @@ import {
   type GameState,
   type RefinerId,
   type StationId,
+  type Upgrade,
   type UpgradeId,
   walkSpeed,
 } from '../game/state';
@@ -63,6 +67,7 @@ import {
   CAULDRON_MARKERS,
   COUNTER,
   COUNTER_MARKERS,
+  CRAFTSMEN,
   EXPANSION_LAND,
   EXPANSION_YARDS,
   GARDEN_AREAS,
@@ -308,6 +313,7 @@ export class GameScene extends Phaser.Scene {
     this.addMarker(m.drop, 'pad-in', 'Drop', () => dropAtRefiner(this.state, id), () => this.state.belts[beltIn].built);
     this.addWorkSpot(m.work, id);
     this.addUpgradeMarker(m.upgrade, id);
+    this.addCraftsmen(id);
     this.views.push(() => {
       const next = refining(refiner);
       progress.set(next >= 0 ? refiner.progress / REFINE[refiner.queue[next]].ms : null);
@@ -325,6 +331,7 @@ export class GameScene extends Phaser.Scene {
     this.addMarker(m.drop, 'pad-in', 'Drop', () => dropInCauldron(this.state, id), () => this.state.belts[beltIn].built);
     this.addWorkSpot(m.work, id);
     this.addUpgradeMarker(m.upgrade, id);
+    this.addCraftsmen(id);
     this.views.push(() => {
       brewing.set(cauldron.brewing ? cauldron.brewing.progress / cauldron.brewing.ms : null);
     });
@@ -379,24 +386,65 @@ export class GameScene extends Phaser.Scene {
 
   /** An upgrade marker, captioned with the next level and its price, after `name` if given. */
   private addUpgradeMarker(at: Point, id: UpgradeId, name = 'Lv') {
-    this.addMarker(at, 'pad-up', '', () => {
-      const level = this.state.upgrades[id].level;
-      const feedback = payUpgrade(this.state, id);
-      // A finished level doesn't roll straight into paying for the next.
-      if (this.state.upgrades[id].level > level) this.markers[marker].paused = true;
-      return feedback;
-    });
+    this.addLevelMarker(at, () => this.state.upgrades[id], UPGRADES[id].max, (level) => upgradeCost(id, level), () => payUpgrade(this.state, id), (level, maxed) =>
+      maxed ? `${name} ${level + 1} max` : `${name} ${level + 2}: ${upgradeCost(id, level)}c`,
+    );
+  }
+
+  /**
+   * A purple marker for something bought a level at a time, like an upgrade or a craftsman: standing
+   * on it pays towards the next level, captioned by `caption`, with a bar for how much is paid. It
+   * is shown while `shown` holds.
+   */
+  private addLevelMarker(
+    at: Point,
+    get: () => Upgrade,
+    max: number,
+    cost: (level: number) => number,
+    pay: () => Feedback | null,
+    caption: (level: number, maxed: boolean) => string,
+    shown: () => boolean = () => true,
+  ) {
+    this.addMarker(
+      at,
+      'pad-up',
+      '',
+      () => {
+        const level = get().level;
+        const feedback = pay();
+        // A finished level doesn't roll straight into paying for the next.
+        if (get().level > level) this.markers[marker].paused = true;
+        return feedback;
+      },
+      () => !shown(),
+    );
     const marker = this.markers.length - 1;
-    const caption = this.add
+    const text = this.add
       .text(at.x, at.y + 26, '', { fontFamily: 'monospace', fontSize: '10px', color: '#e6d3f5' })
       .setOrigin(0.5, 0)
       .setDepth(-400);
     const paid = new ProgressBar(this, at.x, at.y + 38, 40, 0xe0b84a, -400);
     this.views.push(() => {
-      const { level, paid: sofar } = this.state.upgrades[id];
-      const maxed = level >= UPGRADES[id].max;
-      caption.setText(maxed ? `${name} ${level + 1} max` : `${name} ${level + 2}: ${upgradeCost(id, level)}c`);
-      paid.set(maxed ? null : sofar / upgradeCost(id, level));
+      const { level, paid: sofar } = get();
+      const maxed = level >= max;
+      text.setVisible(shown()).setText(caption(level, maxed));
+      paid.set(maxed || !shown() ? null : sofar / cost(level));
+    });
+  }
+
+  /**
+   * A station's craftsmen: a marker to hire them one at a time, and the craftsmen themselves standing
+   * by the station once hired.
+   */
+  private addCraftsmen(id: StationId) {
+    const { hire, stand } = CRAFTSMEN[id];
+    const hired = () => this.state.craftsmen[id];
+    this.addLevelMarker(hire, hired, MAX_CRAFTSMEN, craftsmanCost, () => payCraftsman(this.state, id), (level, maxed) =>
+      maxed ? `Crew ${level}/${MAX_CRAFTSMEN}` : `Hire ${craftsmanCost(level)}c`,
+    );
+    stand.forEach((at, i) => {
+      const craftsman = this.add.image(at.x, at.y, craftsmanTexture(i)).setOrigin(0.5, 1).setScale(2).setDepth(at.y).setFlipX(i === 1);
+      this.views.push(() => craftsman.setVisible(hired().level > i));
     });
   }
 
@@ -501,6 +549,7 @@ export class GameScene extends Phaser.Scene {
     this.addMarker(COUNTER_MARKERS.pickUp, 'pad-out', 'Coins', () => collectTill(this.state));
     this.addWorkSpot(COUNTER_MARKERS.work, 'counter');
     this.addUpgradeMarker(COUNTER_MARKERS.upgrade, 'counter');
+    this.addCraftsmen('counter');
     const tillCoin = this.add.image(COUNTER_MARKERS.pickUp.x - 8, COUNTER_MARKERS.pickUp.y, 'coin').setDepth(-300);
     const till = this.add
       .text(COUNTER_MARKERS.pickUp.x - 1, COUNTER_MARKERS.pickUp.y, '', {

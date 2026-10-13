@@ -82,6 +82,15 @@ const LOOKS: { head: string[]; palette: Palette }[] = [
   { head: BARE, palette: { ...SKIN[1], H: 0x2a2020, h: 0x16100f, T: 0x8f5a9e, t: 0x5f3a6a, B: 0xc9a040, k: 0xf5e3a0 } },
 ];
 
+/** Craftsmen hired to work the stations: bare-headed, in work shirts under a leather apron. */
+export const CRAFTSMAN_LOOKS = 2;
+export const craftsmanTexture = (i: number) => `craftsman-${i % CRAFTSMAN_LOOKS}`;
+const CRAFTSMEN: Palette[] = [
+  { ...SKIN[0], H: 0x5c3a21, h: 0x3b2416, T: 0xd8cfa8, t: 0xa89c7c, B: 0x3b2416, k: 0xc9a040 },
+  { ...SKIN[2], H: 0x16100f, h: 0x0c0808, T: 0x8a8794, t: 0x5d5a66, B: 0x3b2416, k: 0xc9a040 },
+];
+const APRON = { light: 0x9c6a3e, dark: 0x6b4426 };
+
 export function bakeTownsfolk(scene: Phaser.Scene) {
   LOOKS.forEach(({ head, palette }, i) => {
     const rows = [...head, ...BODY];
@@ -89,5 +98,15 @@ export function bakeTownsfolk(scene: Phaser.Scene) {
       .grid(0, 0, rows, { ...palette, e: INK, P: 0x3a3040, F: 0x3b2416 })
       .outline(INK)
       .bake(scene, `customer-${i}`);
+  });
+  CRAFTSMEN.forEach((palette, i) => {
+    const rows = [...BARE, ...BODY];
+    const top = BARE.length;
+    const c = new PixelCanvas(22, rows.length).grid(0, 0, rows, { ...palette, e: INK, P: 0x3a3040, F: 0x3b2416 });
+    // A leather apron from the chest to the knees, on a strap round the neck.
+    c.rect(7, top + 1, 8, 13, APRON.light).rect(7, top + 13, 8, 1, APRON.dark);
+    c.rect(7, top, 1, 1, APRON.dark).rect(14, top, 1, 1, APRON.dark);
+    c.rect(9, top + 6, 4, 2, APRON.dark);
+    c.outline(INK).bake(scene, craftsmanTexture(i));
   });
 }
