@@ -24,6 +24,7 @@ export default defineConfig({
     },
     { name: 'palisade', testDir: 'games/palisade/e2e' },
     { name: 'tiny-kingdom', testDir: 'games/tiny-kingdom/e2e' },
+    { name: 'rogue-runner', testDir: 'games/rogue-runner/e2e' },
     { name: 'merge-forge', testDir: 'games/merge-forge/e2e' },
   ],
   webServer: {
