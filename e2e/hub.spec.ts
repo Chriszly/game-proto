@@ -44,3 +44,50 @@ test('hub opens each game', async ({ page }, testInfo) => {
     await expectFavicon(page);
   }
 });
+
+// The hub's Settings panel saves the shared settings, and a game opened afterwards honours them.
+test('hub settings reach the games', async ({ page }, testInfo) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Settings' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Settings' });
+  await expect(dialog).toBeVisible();
+  const choice = (setting: string, option: string) => dialog.getByRole('group', { name: setting }).getByRole('button', { name: option, exact: true });
+  await expect(choice('Difficulty', 'Normal')).toHaveAttribute('aria-pressed', 'true');
+  await expect(choice('Frame rate (FPS)', '60')).toHaveAttribute('aria-pressed', 'true');
+
+  await choice('Difficulty', 'Hard').click();
+  await choice('Frame rate (FPS)', '30').click();
+  await choice('Show FPS', 'On').click();
+  await expect(choice('Difficulty', 'Hard')).toHaveAttribute('aria-pressed', 'true');
+  testInfo.attach('settings', { body: await page.screenshot({ path: testInfo.outputPath('settings.png') }), contentType: 'image/png' });
+  await dialog.getByRole('button', { name: 'Close' }).click();
+  await expect(dialog).toBeHidden();
+
+  // The choices are kept across visits.
+  await page.reload();
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await expect(choice('Difficulty', 'Hard')).toHaveAttribute('aria-pressed', 'true');
+  await expect(choice('Show FPS', 'On')).toHaveAttribute('aria-pressed', 'true');
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('hub-settings')!))).toEqual({
+    difficulty: 'hard',
+    fps: 30,
+    showFps: true,
+    reduceMotion: false,
+  });
+
+  // A game opened now shows the FPS readout.
+  await page.goto('/games/apothecary/');
+  await expect(page.locator('.fps-readout')).toHaveText(/^\d+ FPS$/);
+
+  // Reset all progress clears the games' saves and keeps the settings.
+  await page.goto('/');
+  await page.evaluate(() => localStorage.setItem('apothecary-save', '{}'));
+  page.once('dialog', (d) => d.accept());
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await dialog.getByRole('button', { name: 'Reset all progress' }).click();
+  expect(await page.evaluate(() => Object.keys(localStorage))).toEqual(['hub-settings']);
+
+  await dialog.getByRole('button', { name: 'Restore defaults' }).click();
+  await expect(choice('Difficulty', 'Normal')).toHaveAttribute('aria-pressed', 'true');
+  await expect(choice('Show FPS', 'Off')).toHaveAttribute('aria-pressed', 'true');
+});

@@ -58,6 +58,8 @@ A hint on the first stretch of the run shows where to tap.
 
 ![After a fall](docs/screenshots/game-over.png)
 
+The difficulty, set on the hub page's Settings, changes one thing: the knight starts with 5 hearts on Easy and 2 on Hard.
+
 ## Running locally
 
 `npm run dev` at the repo root, then open `/games/hotfoot/` (or pick Hotfoot on the hub

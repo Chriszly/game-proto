@@ -1,3 +1,4 @@
+import { byDifficulty } from '../../../../shared/settings';
 import { BUILDINGS, isBuilding, startingGrid, type Building, type Cell } from './tiles';
 
 // The rules in plain TypeScript, with no Phaser. The score is always the whole board's score:
@@ -28,8 +29,11 @@ export const FIRST_POUCH: Pouch = { farm: 4, house: 4, tower: 2 };
 /** The tiles each later round adds to whatever is left. */
 export const ROUND_POUCH: Pouch = { farm: 3, house: 3, tower: 2 };
 
-/** The score that ends round `round`: 20, 45, 75, 110, ... (each round asks 5 more than the last). */
-export const goalFor = (round: number) => (5 * round * round + 35 * round) / 2;
+/**
+ * The score that ends round `round`: 20, 45, 75, 110, ... (each round asks 5 more than the last),
+ * a fifth lower on Easy and a fifth higher on Hard.
+ */
+export const goalFor = (round: number) => Math.round(((5 * round * round + 35 * round) / 2) * byDifficulty(0.8, 1, 1.2));
 
 export function newGame(best = 0): GameState {
   return {

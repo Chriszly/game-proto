@@ -1,3 +1,4 @@
+import { byDifficulty } from '../../../../shared/settings';
 import { ENEMIES, type EnemyKind } from './enemies';
 
 /** Every tenth wave brings a boss. */
@@ -41,9 +42,9 @@ export function waveFoes(wave: number): EnemyKind[] {
   return foes;
 }
 
-/** A foe's full health in a wave; a boss's is spread over its bars. */
+/** A foe's full health in a wave, scaled by the hub's difficulty; a boss's is spread over its bars. */
 export function foeHp(kind: EnemyKind, wave: number) {
   const type = ENEMIES[kind];
-  const hp = Math.round(type.hp * hpScale(wave));
+  const hp = Math.round(type.hp * hpScale(wave) * byDifficulty(0.75, 1, 1.3));
   return type.boss ? hp * bossBars(wave) : hp;
 }

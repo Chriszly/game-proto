@@ -1,3 +1,4 @@
+import { byDifficulty } from '../../../../shared/settings';
 // The rules and numbers of the game, kept apart from drawing so they are easy to tune.
 
 /** The battlefield, in game pixels: a portrait screen with the hero at the bottom. */
@@ -82,11 +83,11 @@ export const isBossWave = (wave: number) => wave % 5 === 0;
 export const waveSize = (wave: number) => 12 + 6 * (wave - 1);
 
 /**
- * Plans a wave: who comes in, when and where. Waves grow in size and toughness, bring runners from
+ * Plans a wave: who comes in, when and where. Waves grow in size and toughness (scaled by the hub's difficulty), bring runners from
  * wave 2 and brutes from wave 3, and carry a pickup or more in among the enemies.
  */
 export function planWave(wave: number, rand: () => number = Math.random): Spawn[] {
-  const toughness = 1 + 0.3 * (wave - 1);
+  const toughness = (1 + 0.3 * (wave - 1)) * byDifficulty(0.75, 1, 1.3);
   const gap = Math.max(180, 550 - 35 * (wave - 1));
   const x = () => Math.round(SPAWN_MARGIN + rand() * (VIEW.w - 2 * SPAWN_MARGIN));
   const spawns: Spawn[] = [];

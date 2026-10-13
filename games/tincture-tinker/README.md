@@ -51,6 +51,8 @@ The favicon is the hub's bear with three potions lined up: a match of three.
 
 ![The favicon](docs/screenshots/favicon.png)
 
+The difficulty, set on the hub page's Settings, changes one thing: each order gives 5 more moves on Easy and 3 fewer on Hard.
+
 ## Running locally
 
 `npm run dev` at the repo root, then open `/games/tincture-tinker/` (or pick TinctureTinker on the hub

@@ -40,6 +40,8 @@ reaches the sandbags in front of the soldier, it's game over.
 
 ![A boss at the end of wave 5](docs/screenshots/boss.png)
 
+The difficulty, set on the hub page's Settings, changes one thing: zombies have 25% less health on Easy and 30% more on Hard.
+
 ## Code layout
 
 - `src/game/rules.ts`: the numbers and rules: enemy stats, upgrades, wave plans. No drawing.

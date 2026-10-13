@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { BootScene } from './scenes/BootScene';
 import { GameScene } from './scenes/GameScene';
-import { capFrameRate } from './frameCap';
+import { setupGame } from '../../../shared/setupGame';
 
 export const GAME_WIDTH = 960;
 export const GAME_HEIGHT = 540;
@@ -23,7 +23,7 @@ const game = new Phaser.Game({
   },
   scene: [BootScene, GameScene],
 });
-capFrameRate(game);
+setupGame(game);
 
 // Handy for poking at state from the browser console during development.
 if (import.meta.env.DEV) Object.assign(window, { game });

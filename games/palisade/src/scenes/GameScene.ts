@@ -1,3 +1,4 @@
+import { settings } from '../../../../shared/settings';
 import Phaser from 'phaser';
 import { foeTexture } from '../art/characters';
 import { BAR, BOSS_BARS, FIRE, STORM } from '../art/palette';
@@ -126,9 +127,11 @@ export class GameScene extends Phaser.Scene {
         .setTexture(foeTexture(e.kind, e.attacking ? 0 : frame))
         .setPosition(e.x + lunge, feet + bob)
         .setDepth(feet);
-      // A hit flashes white, in blinks so a foe under steady fire still shows.
-      if (e.hitMs > 0 && Math.floor(this.clock / 50) % 2 === 0) sprite.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
-      else if (e.burnMs > 0) sprite.setTint(Math.floor(this.clock / 120) % 2 ? 0xffb070 : 0xffd8a0).setTintMode(Phaser.TintModes.MULTIPLY);
+      // A hit flashes white, in blinks so a foe under steady fire still shows; with reduced motion
+      // the blinks and the burn's flicker hold still.
+      const blink = (ms: number) => (settings.reduceMotion ? 0 : Math.floor(this.clock / ms) % 2);
+      if (e.hitMs > 0 && blink(50) === 0) sprite.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
+      else if (e.burnMs > 0) sprite.setTint(blink(120) ? 0xffb070 : 0xffd8a0).setTintMode(Phaser.TintModes.MULTIPLY);
       else if (e.slowMs > 0) sprite.setTint(0xa8dcf8).setTintMode(Phaser.TintModes.MULTIPLY);
       else sprite.clearTint();
       if (!type.boss) this.drawHpBar(e, feet - sprite.height - 6);

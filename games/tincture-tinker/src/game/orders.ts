@@ -1,3 +1,4 @@
+import { byDifficulty } from '../../../../shared/settings';
 import type { Kind } from './kinds';
 
 // The potion orders, one after another. Each asks for so many of a few ingredients within a number
@@ -40,5 +41,6 @@ export function orderFor(number: number): Order {
   const base = ORDERS[(number - 1) % ORDERS.length];
   const round = Math.floor((number - 1) / ORDERS.length);
   const needs = Object.fromEntries(Object.entries(base.needs).map(([kind, n]) => [kind, n + round * ROUND_NEEDS]));
-  return { ...base, number, needs, price: base.price + round * ROUND_PRICE };
+  // Easy gives five more moves, Hard three fewer.
+  return { ...base, number, needs, moves: base.moves + byDifficulty(5, 0, -3), price: base.price + round * ROUND_PRICE };
 }

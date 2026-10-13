@@ -99,9 +99,9 @@ doctor carries a potion.
 
 You can carry four items at a time, more with a bigger pack; they stack up on the doctor's back. Progress is saved in the browser automatically.
 
-"Settings" in the top bar sets the frame rate (30, 60, 144, 160, 240 or 320 FPS, 60 by default; the
-game never draws faster than the display refreshes) and has "New game", which starts over. The frame
-rate is remembered in the browser and kept by a new game.
+"Settings" in the top bar shows the difficulty and frame rate the game runs with, which are set on
+the hub page's Settings, and has "New game", which starts over. On Easy customers wait 50% longer
+before they leave, on Hard 30% less.
 
 ![The settings panel](docs/screenshots/settings.png)
 
@@ -138,4 +138,3 @@ All paths are inside `games/apothecary/`.
   startup: the plague doctor, townsfolk, items, gardens, stations, conveyor belts, floor markers, ground tiles and
   interface pieces.
 - `src/ui/`: small reusable display pieces (icon rows, progress bars) and the recipe and settings panels.
-- `src/frameCap.ts`: caps how often the game updates and draws at the chosen frame rate.

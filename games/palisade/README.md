@@ -68,6 +68,8 @@ picked. Once fewer than three upgrades are left, "Mend the Barricade" fills the 
 
 ![After a fall](docs/screenshots/game-over.png)
 
+The difficulty, set on the hub page's Settings, changes one thing: foes have 25% less health on Easy and 30% more on Hard.
+
 ## Running locally
 
 `npm run dev` at the repo root, then open `/games/palisade/` (or pick Palisade on the hub page).

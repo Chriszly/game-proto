@@ -22,12 +22,44 @@
       .game h2 { display: flex; align-items: center; gap: 10px; margin: 12px 14px 4px; font-size: 20px; color: #f3c64e; }
       .game .icon { width: 32px; height: 32px; flex: none; image-rendering: pixelated; }
       .game p { margin: 0 14px 16px; color: #d8c7a6; }
+      header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+      button { font: inherit; color: #f1e3c6; background: #3d2b1f; border: 2px solid #5a3f2a; padding: 6px 12px;
+        cursor: pointer; box-shadow: 0 3px 0 #0e0a08; }
+      button:hover, button:focus-visible { border-color: #f3c64e; outline: none; }
+      button[aria-pressed="true"] { background: #8f6a24; border-color: #f3c64e; color: #fff6dc; }
+      #open-settings { flex: none; margin-top: 6px; }
+      dialog { width: min(560px, calc(100vw - 32px)); box-sizing: border-box; padding: 0; color: inherit;
+        background: #2c2018; border: 3px solid #5a3f2a; box-shadow: 0 6px 0 #0e0a08; }
+      .panel { position: relative; padding: 20px; }
+      dialog::backdrop { background: rgba(10, 6, 4, 0.7); }
+      dialog h2 { margin: 0 0 4px; color: #f3c64e; }
+      dialog .lede { margin-bottom: 16px; }
+      .setting { padding: 12px 0; border-top: 2px solid #3d2b1f; }
+      .setting-name { margin-bottom: 8px; color: #f3c64e; }
+      .setting-choices { display: flex; flex-wrap: wrap; gap: 8px; }
+      .setting-hint { margin-top: 6px; font-size: 13px; color: #a8957a; }
+      .settings-actions { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 14px; border-top: 2px solid #3d2b1f; }
+      #reset-progress { margin-left: auto; color: #f0b48a; }
+      #close-settings { position: absolute; top: 14px; right: 14px; }
     </style>
   </head>
   <body>
     <main>
-      <h1>Game hub</h1>
-      <p class="lede">Small game prototypes. Pick one to play.</p>
+      <header>
+        <div>
+          <h1>Game hub</h1>
+          <p class="lede">Small game prototypes. Pick one to play.</p>
+        </div>
+        <button type="button" id="open-settings">Settings</button>
+      </header>
+      <!-- The settings every game reads; the rows come from shared/settings.ts. -->
+      <dialog id="settings" aria-labelledby="settings-title">
+        <div class="panel">
+          <h2 id="settings-title">Settings</h2>
+          <p class="lede">These apply to every game the next time it opens.</p>
+          <button type="button" id="close-settings">Close</button>
+        </div>
+      </dialog>
       <!-- One entry per game in games/<name>; see AGENTS.md for adding a game. -->
       <ul class="games">
         <li class="game">
@@ -95,5 +127,15 @@
         </li>
       </ul>
     </main>
+    <script type="module">
+      import { mountSettingsPanel } from './shared/settingsPanel.ts';
+
+      const dialog = document.getElementById('settings');
+      mountSettingsPanel(dialog.querySelector('.panel'));
+      document.getElementById('open-settings').addEventListener('click', () => dialog.showModal());
+      document.getElementById('close-settings').addEventListener('click', () => dialog.close());
+      // A click on the backdrop closes it too.
+      dialog.addEventListener('click', (e) => e.target === dialog && dialog.close());
+    </script>
   </body>
 </html>

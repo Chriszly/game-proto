@@ -53,6 +53,8 @@ them one by dragging it onto them. The coins buy upgrades for the forge.
 | Bellows | 4 (40, 110, 260, 600 coins) | The forge heats up 20% faster per rank |
 | Fine Ore | 3 (90, 250, 700 coins) | 20% chance per rank that the forge makes an Iron Shortsword |
 
+The difficulty, set on the hub page's Settings, changes one thing: adventurers wait 50% longer on Easy and 30% less on Hard.
+
 ## Running locally
 
 `npm run dev` at the repo root, then open `/games/anvilheart/` (or pick Anvilheart on the hub page).

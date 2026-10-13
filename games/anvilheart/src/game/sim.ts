@@ -1,3 +1,4 @@
+import { byDifficulty } from '../../../../shared/settings';
 import { DESKS, FIRST_ORDER, PATIENCE_MS, PATIENCE_PER_TIER_MS, VISITOR_EVERY_MS, forgeMs, oreChance, type GameState } from './state';
 import { MAX_TIER, swordOf } from './swords';
 import { nextPrice, type UpgradeId } from './upgrades';
@@ -30,7 +31,8 @@ function arrive(s: GameState) {
   // After the first order, they ask for anything up to one better than the best sword made yet.
   const top = Math.min(MAX_TIER, Math.max(3, s.bestTier + 1));
   const wants = s.orders === 0 ? FIRST_ORDER : 1 + Math.floor(Math.random() * top);
-  const patience = PATIENCE_MS + PATIENCE_PER_TIER_MS * wants;
+  // Easier difficulties give adventurers more patience.
+  const patience = (PATIENCE_MS + PATIENCE_PER_TIER_MS * wants) * byDifficulty(1.5, 1, 0.7);
   s.adventurers.push({ id: s.nextId++, desk, wants, patience, patienceMs: patience, look: Math.floor(Math.random() * 4) });
   s.orders++;
 }

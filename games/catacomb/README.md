@@ -75,6 +75,8 @@ The deck starts with five Strikes, four Defends and a Bash.
 
 ![Victory over the Bone King](docs/screenshots/victory.png)
 
+The difficulty, set on the hub page's Settings, changes one thing: foes have 25% less health on Easy and 30% more on Hard.
+
 ## Running locally
 
 `npm run dev` at the repo root, then open `/games/catacomb/` (or pick Catacomb on the hub page).

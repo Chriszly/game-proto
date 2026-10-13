@@ -11,5 +11,5 @@
     "isolatedModules": true,
     "types": ["vite/client"]
   },
-  "include": ["games/*/src"]
+  "include": ["games/*/src", "shared"]
 }

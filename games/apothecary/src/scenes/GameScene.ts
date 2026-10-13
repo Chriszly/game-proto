@@ -161,7 +161,7 @@ export class GameScene extends Phaser.Scene {
   customers: { id: number; x: number; y: number; arrived: boolean }[] = [];
   /** The recipe overview opened from the top bar. */
   private recipes!: RecipeBook;
-  /** The settings panel opened from the top bar: frame rate and a new game. */
+  /** The settings panel opened from the top bar: the hub's settings and a new game. */
   private settings!: Settings;
   /** Per-frame view updates, each reading from `state`. */
   private views: (() => void)[] = [];
