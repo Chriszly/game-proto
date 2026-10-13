@@ -23,6 +23,7 @@ export default defineConfig({
       use: { viewport: { width: 540, height: 960 }, video: { mode: 'on', size: { width: 540, height: 960 } } },
     },
     { name: 'palisade', testDir: 'games/palisade/e2e' },
+    { name: 'tiny-kingdom', testDir: 'games/tiny-kingdom/e2e' },
     { name: 'merge-forge', testDir: 'games/merge-forge/e2e' },
   ],
   webServer: {
