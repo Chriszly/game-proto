@@ -34,7 +34,8 @@ import {
   LINE2_GARDEN,
   MAX_CARRY,
   MAX_CRAFTSMEN,
-  MAX_ORDERS,
+  GUILD_UPGRADES,
+  MAX_ORDER_SLOTS,
   beltBuildable,
   gardenBuilt,
   gardenOf,
@@ -71,6 +72,7 @@ import {
   EXPANSION_LAND,
   EXPANSION_YARDS,
   GARDEN_AREAS,
+  GUILD,
   HUD_HEIGHT,
   LABELS,
   OUTFITTER,
@@ -170,6 +172,7 @@ export class GameScene extends Phaser.Scene {
     this.createStations();
     this.createExpansion();
     this.createOutfitter();
+    this.createGuild();
     this.createBelts();
     this.createPlayer();
     this.followPlayer();
@@ -539,6 +542,12 @@ export class GameScene extends Phaser.Scene {
     DOCTOR_UPGRADES.forEach((id, i) => this.addUpgradeMarker({ x: OUTFITTER.x, y: OUTFITTER.y + 60 + i * 90 }, id, UPGRADES[id].name));
   }
 
+  /** The guild in the corner of the yard: upgrades for the gardens, the belts and the shop. */
+  private createGuild() {
+    this.label(GUILD.sign.x, GUILD.sign.y, 'Guild');
+    for (const id of GUILD_UPGRADES) this.addUpgradeMarker(GUILD[id], id, UPGRADES[id].name);
+  }
+
   private createShopfront() {
     this.addObstacle(COUNTER.x, COUNTER.y, 'counter', 200, 30);
     this.addPallets('counter', PALLETS.counter, [POTIONS, []], [() => this.state.counter.shelf, () => []]);
@@ -568,7 +577,7 @@ export class GameScene extends Phaser.Scene {
     });
 
     // One customer slot per possible order; slot i shows the i-th open order.
-    for (let i = 0; i < MAX_ORDERS; i++) {
+    for (let i = 0; i < MAX_ORDER_SLOTS; i++) {
       const { x, y } = customerPosition(i);
       const customer = this.add.image(x, y, customerTexture(0)).setScale(2).setDepth(y);
       const wants = new IconRow(this, x, y - 52, UI_DEPTH);
