@@ -196,6 +196,8 @@ export const palletHasRoom = (tray: readonly ItemId[], item: ItemId) => tray.fil
 
 /** Bumped whenever stations or walls move, so a loaded save doesn't put the doctor inside one. */
 export const LAYOUT = 3;
+/** The layout from which goods get on a belt at the start of their own run, such as a feeder. */
+export const FEEDERS_LAYOUT = 3;
 
 /** Coins needed to build each belt. */
 export const BELT_COST: Record<BeltId, number> = { garden: 60, refiner: 100, cauldron: 150, garden2: 60, refiner2: 100, cauldron2: 150 };

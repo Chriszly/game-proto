@@ -587,7 +587,8 @@ export class GameScene extends Phaser.Scene {
             return;
           }
           // Goods loaded from the doctor's hands wait out of sight until their turn to get on.
-          const { run, start, join, off } = spans.get(item.id)!;
+          // A kind the belt has no lane for (from an edited save) rides down the middle of the main run.
+          const { run, start, join, off } = spans.get(item.id) ?? { run: 0, start: 0, join: 0, off: 0 };
           icon.setVisible(item.at >= start);
           // Along the main run, across the belt into the item's own lane. On a feeder, the item moves
           // over into that lane as it goes, so it carries straight on where the feeder joins.

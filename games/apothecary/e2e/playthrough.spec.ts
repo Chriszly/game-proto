@@ -118,13 +118,16 @@ function scene(page: Page) {
     recipes: () => read<{ open: boolean; lines: string[] }>((s) => ({ open: s.recipes.visible, lines: s.recipes.lines })),
     /** Where each customer in the shop stands, and whether they have reached their spot at the counter. */
     customers: () => read<{ id: number; x: number; y: number; arrived: boolean }[]>((s) => s.customers),
-    /** Whether the first customer has reached the counter, and their order's patience, in one look. */
+    /**
+     * Whether the first customer in the shop has reached the counter, and their own order's patience,
+     * in one look; null while there is no such customer with an order.
+     */
     firstCustomer: () =>
-      read<{ arrived: boolean; patience: number; maxPatience: number }>((s) => ({
-        arrived: s.customers[0].arrived,
-        patience: s.state.orders[0].patience,
-        maxPatience: s.state.orders[0].maxPatience,
-      })),
+      read<{ arrived: boolean; patience: number; maxPatience: number } | null>((s) => {
+        const customer = s.customers[0];
+        const order = customer && s.state.orders.find((o: { id: number }) => o.id === customer.id);
+        return order ? { arrived: customer.arrived, patience: order.patience, maxPatience: order.maxPatience } : null;
+      }),
   };
 }
 
@@ -290,8 +293,8 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
   let patient = true;
   const reached = await play(10_000, async () => {
     const first = await game.firstCustomer();
-    if (!first.arrived && first.patience < first.maxPatience) patient = false;
-    return first.arrived;
+    if (first && !first.arrived && first.patience < first.maxPatience) patient = false;
+    return !!first?.arrived;
   });
   expect(reached, 'the customer reached the counter').toBe(true);
   expect(patient, 'full patience while walking in').toBe(true);
@@ -299,7 +302,7 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
   expect(customers[0]).toMatchObject(FIRST_CUSTOMER);
   const waiting = await play(STEP_MS, async () => {
     const first = await game.firstCustomer();
-    return first.patience < first.maxPatience;
+    return !!first && first.patience < first.maxPatience;
   });
   expect(waiting, 'patience counts down once at the counter').toBe(true);
 

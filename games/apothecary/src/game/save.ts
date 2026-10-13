@@ -1,5 +1,5 @@
 import type { ItemId } from './items';
-import { BELT_GAP_MS, BELTS, createInitialState, type GameState } from './state';
+import { BELT_GAP_MS, BELTS, FEEDERS_LAYOUT, createInitialState, type GameState } from './state';
 import { beltSpan } from '../scenes/layout';
 
 const KEY = 'apothecary-save';
@@ -32,9 +32,6 @@ export function loadState(): GameState {
     return fresh;
   }
 }
-
-/** The layout from which goods get on a belt at the start of their own run, such as a feeder. */
-const FEEDERS_LAYOUT = 3;
 
 /**
  * Goods saved on a belt before they got on at the start of their own run (mandrakes now come in on
