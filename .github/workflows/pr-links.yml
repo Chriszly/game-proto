@@ -44,8 +44,11 @@ jobs:
               text.split(/\r?\n/).flatMap((line, i) =>
                 [...line.matchAll(link)]
                   .map(m => m[0])
-                  .filter(url => !onGitHub(host(url)))
-                  .map(url => `${where}, line ${i + 1}: ${url}`));
+                  .map(host)
+                  .filter(h => !onGitHub(h))
+                  // Only the host is reported, so the failure does not repeat
+                  // session ids or other paths from the link.
+                  .map(h => `${where}, line ${i + 1}: ${h || 'a link that is not a valid URL'}`));
 
             const commits = await github.paginate(github.rest.pulls.listCommits, {
               ...context.repo,
