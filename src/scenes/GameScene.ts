@@ -192,7 +192,7 @@ export class GameScene extends Phaser.Scene {
       refining.set(refiner.queue.length > 0 ? refiner.progress / REFINE[refiner.queue[0]].ms : null);
     });
 
-    this.addObstacle(CAULDRON.x, CAULDRON.y, 'cauldron', 60, 28);
+    this.addObstacle(CAULDRON.x, CAULDRON.y, 'cauldron', 60, 28).play('cauldron-boil');
     const pot = new IconRow(this, CAULDRON.x, CAULDRON.y - 40, UI_DEPTH);
     const brewing = new ProgressBar(this, CAULDRON.x, CAULDRON.y + 34, 60, 0x58a35a, UI_DEPTH);
     const brewed = this.addMarker(CAULDRON_MARKERS.pickUp, 'pad-out', 'Pick up', () => pickUpFromCauldron(this.state));
@@ -326,7 +326,7 @@ export class GameScene extends Phaser.Scene {
 
   /** A station image whose lower part blocks walking, so the doctor can pass behind its top edge. */
   private addObstacle(x: number, y: number, texture: string, bodyW: number, bodyH: number) {
-    const img = this.add.image(x, y, texture).setDepth(y);
+    const img = this.add.sprite(x, y, texture).setDepth(y);
     const block = this.add.zone(x, y + img.height / 2 - bodyH / 2, bodyW, bodyH);
     this.obstacles.add(block);
     this.blockedAreas.push(new Phaser.Geom.Rectangle(x - bodyW / 2 - 18, block.y - bodyH / 2 - 10, bodyW + 36, bodyH + 20));

@@ -11,29 +11,6 @@ function bake(scene: Phaser.Scene, key: string, w: number, h: number, draw: (g: 
 
 
 export function bakePlaceholders(scene: Phaser.Scene) {
-  bake(scene, 'table', 88, 52, (g) => {
-    g.fillStyle(0x6b4a2c).fillRect(0, 8, 88, 36);
-    g.fillStyle(0x8a6239).fillRect(0, 4, 88, 8);
-    g.fillStyle(0x4a321d).fillRect(4, 44, 8, 8).fillRect(76, 44, 8, 8);
-    g.fillStyle(0x9a9a92).fillCircle(26, 22, 12); // mortar
-    g.fillStyle(0x6d6d66).fillCircle(26, 22, 7);
-    g.fillStyle(0xd8cfa8).fillRect(50, 14, 28, 18); // drying cloth
-  });
-
-  bake(scene, 'cauldron', 72, 60, (g) => {
-    g.fillStyle(0x7a3b16).fillTriangle(10, 60, 36, 40, 62, 60); // fire
-    g.fillStyle(0x1e1c20).fillEllipse(36, 34, 68, 44);
-    g.fillStyle(0x2f2c33).fillEllipse(36, 18, 60, 18);
-    g.fillStyle(0x58a35a).fillEllipse(36, 19, 48, 11);
-  });
-
-  bake(scene, 'counter', 200, 44, (g) => {
-    g.fillStyle(0x5a3d22).fillRect(0, 10, 200, 34);
-    g.fillStyle(0x8a6239).fillRect(0, 0, 200, 14);
-    g.fillStyle(0x6b4a2c);
-    for (let x = 10; x < 200; x += 38) g.fillRect(x, 16, 4, 26);
-  });
-
   // Body and head are separate so only the clothes get tinted per customer.
   bake(scene, 'customer', 22, 34, (g) => {
     g.fillStyle(0xffffff).fillRect(3, 12, 16, 22);
