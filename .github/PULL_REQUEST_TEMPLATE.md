@@ -1,0 +1,44 @@
+## Summary
+
+<!-- What does this PR do and why? Keep it short. -->
+
+## Type of change
+
+<!-- Check all that apply -->
+
+- [ ] Bug fix
+- [ ] New feature / gameplay
+- [ ] Art, sound or other assets
+- [ ] Documentation update
+- [ ] Refactor / cleanup
+- [ ] Build / CI / tooling
+
+## Checklist
+
+- [ ] No secrets, passwords or personal info added
+- [ ] No links outside github.com in the description or commit messages
+- [ ] README updated if setup, controls or behavior changed
+- [ ] Commit messages are clear and concise
+
+## Testing
+
+<!-- How was this verified? Include the exact commands you ran. -->
+
+- [ ] Ran `npm run build`
+- [ ] Played the changed part in the browser (`npm run dev`)
+
+## Screenshots
+
+<!-- Screenshots of newly added elements, committed to the repo so the images are hosted on GitHub. Skip if nothing visual changed. -->
+
+---
+
+<!-- Optional -->
+
+## Related issues / PRs
+
+<!-- e.g. Fixes #12 -->
+
+## Notes for reviewers
+
+<!-- Anything worth calling out: breaking changes, side effects, known issues -->
