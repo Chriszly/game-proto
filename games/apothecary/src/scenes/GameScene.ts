@@ -136,6 +136,18 @@ const SICKLE_LINGER_MS = 400;
 const PRIORITY_SIGN_W = 92;
 /** How long the doctor stands still on a purple marker before it starts taking coins, so walking over one buys nothing. */
 const STILL_MS = 400;
+/**
+ * Floor marker captions: outlined so they read on dirt, grass and boards alike, and wrapped so a
+ * long one doesn't run into its neighbour's.
+ */
+const CAPTION = {
+  fontFamily: 'monospace',
+  fontSize: '11px',
+  stroke: '#1b1410',
+  strokeThickness: 3,
+  align: 'center',
+  wordWrap: { width: 92 },
+};
 
 /** A floor marker that acts by itself, one step at a time, while the doctor stands on it. */
 interface Marker {
@@ -445,7 +457,7 @@ export class GameScene extends Phaser.Scene {
   private addMarker(at: Point, texture: string, caption: string, act: () => Feedback | null, gone?: () => boolean) {
     const pad = this.add.image(at.x, at.y, texture).setDepth(-400);
     const text = this.add
-      .text(at.x, at.y + 26, caption, { fontFamily: 'monospace', fontSize: '10px', color: '#f3e9d2' })
+      .text(at.x, at.y + 26, caption, { ...CAPTION, color: '#f3e9d2' })
       .setOrigin(0.5, 0)
       .setDepth(-400);
     const shown = () => !gone?.();
@@ -509,7 +521,7 @@ export class GameScene extends Phaser.Scene {
     const marker = this.markers.length - 1;
     this.markers[marker].pays = true;
     const text = this.add
-      .text(at.x, at.y + 26, '', { fontFamily: 'monospace', fontSize: '10px', color: '#e6d3f5' })
+      .text(at.x, at.y + 26, '', { ...CAPTION, color: '#e6d3f5' })
       .setOrigin(0.5, 0)
       .setDepth(-400);
     this.views.push(() => {
@@ -542,7 +554,7 @@ export class GameScene extends Phaser.Scene {
   private addBuildMarker(at: Point, caption: string, cost: number, build: Build, shown: () => boolean, act: () => Feedback | null) {
     const pad = this.add.image(at.x, at.y, 'pad-up').setDepth(-400);
     const text = this.add
-      .text(at.x, at.y + 26, '', { fontFamily: 'monospace', fontSize: '10px', color: '#e6d3f5' })
+      .text(at.x, at.y + 26, '', { ...CAPTION, color: '#e6d3f5' })
       .setOrigin(0.5, 0)
       .setDepth(-400);
     this.markers.push({ zone: new Phaser.Geom.Rectangle(at.x - 22, at.y - 22, 44, 44), act, shown, pays: true });
@@ -737,7 +749,7 @@ export class GameScene extends Phaser.Scene {
     const coins = this.add.text(44, HUD_HEIGHT / 2 - 1, '', style).setOrigin(0, 0.5).setDepth(UI_DEPTH);
     this.add.text(width / 2 - 92, HUD_HEIGHT / 2, 'Hands', style).setOrigin(1, 0.5).setDepth(UI_DEPTH);
     this.add
-      .text(width - 110, HUD_HEIGHT / 2, 'Walk: WASD / tap\nHarvest: walk past ripe plants', { ...style, fontSize: '11px' })
+      .text(width - 110, HUD_HEIGHT / 2, 'Walk: WASD / tap\nHarvest: walk past ripe plants', { ...style, fontSize: '12px' })
       .setOrigin(1, 0.5)
       .setDepth(UI_DEPTH);
     this.hudButton(width - 16, 'Settings', () => {

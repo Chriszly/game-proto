@@ -59,7 +59,7 @@ export class RecipeBook {
       this.prices.push({ text, potion: recipe.out });
     }
     y += 6;
-    parts.push(scene.add.text(0, y, 'Tap to close', { ...TEXT, fontSize: '11px', color: '#bfae8e' }).setOrigin(0.5, 0));
+    parts.push(scene.add.text(0, y, 'Tap to close', { ...TEXT, fontSize: '12px', color: '#cdbd9c' }).setOrigin(0.5, 0));
     y += 18;
 
     const h = y + 28;
