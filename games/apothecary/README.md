@@ -32,7 +32,9 @@ map is bigger than the screen, so the camera follows the doctor.
    mandrake seeds brew a Sleeping Tonic. Stand on the work spot while it brews. When work starts,
    the cauldron brews whichever potion customers are waiting for that the shop has least of.
 4. **Storefront**: customers come in by the street door in the shop's back wall, walk up to the
-   counter and show the potions they want and how long they will wait. Drop potions
+   counter and show the potions they want and how long they will wait; they are only served, and
+   only lose patience, once they stand at the counter. The doctor goes in and out by the front door,
+   since the shop's walls are solid and the street door is the customers' own. Drop potions
    on the counter and stand on the work spot behind it; customers pay for each potion as they get
    it and leave the coins on the pick-up marker.
 
@@ -77,10 +79,11 @@ counter (30), and customers makes them come in half again as often per level, a 
 **Conveyor belts** take the walking out of the loop. Three can be bought on their own purple build
 markers, a handful of coins at a time: gardens to refining table (60 coins), table to cauldron (100)
 and cauldron to counter (150). A belt picks ripe plants or finished goods up at its start and
-hands them to the next station when it has room; the drop and pick-up markers it replaces go away,
+hands them to the next station when it has room; mandrakes get on the garden belt at their own
+patch. The drop and pick-up markers it replaces go away,
 though a drop marker comes back while the doctor carries goods it takes, such as goods from the
-other line. The goods it carries are cleared from the doctor's hands when it is built, unless the
-other line still moves them by hand. Each belt has a
+other line. The goods it carries go from the doctor's hands onto it when it is built, one after
+another, unless the other line still moves them by hand. Each belt has a
 narrow lane for every kind of goods it carries (wheat and mandrake, flour and seeds, or the two
 potions), so when one kind waits for room at the next station the other keeps moving. The lanes
 run at half speed, so a belt carries as many goods a second as a one-lane belt would.

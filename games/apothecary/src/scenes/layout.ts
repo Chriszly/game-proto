@@ -1,4 +1,5 @@
-import { BELT_MS, PLOTS_PER_GARDEN, type BeltId } from '../game/state';
+import type { ItemId, PlantId } from '../game/items';
+import { BELT_MS, GARDENS, PLOTS_PER_GARDEN, type BeltId } from '../game/state';
 
 // World positions for the U-shaped apothecary. Goods flow down the left arm (gardens, refining
 // table), along the bottom (cauldron) and up the middle into the shop at the top. The right arm is
@@ -130,6 +131,31 @@ export const customerPosition = (i: number) => ({ x: COUNTER.x - 56 + i * 45, y:
 export const SHOP_BACK_DOOR = { from: 460, to: 500 };
 export const STREET = { x: 480, y: 40 };
 
+/** How thick the shop's stone walls are; each runs along an edge of the shop, half inside and half out. */
+const WALL = 16;
+/** The shop's stone walls, with gaps for its two doors. */
+export const SHOP_WALLS = [
+  // The back wall, either side of the street door.
+  { x: SHOP.x - WALL / 2, y: SHOP.y - WALL / 2, w: SHOP_BACK_DOOR.from - SHOP.x + WALL / 2, h: WALL },
+  { x: SHOP_BACK_DOOR.to, y: SHOP.y - WALL / 2, w: SHOP.x + SHOP.w + WALL / 2 - SHOP_BACK_DOOR.to, h: WALL },
+  // The front wall, either side of the door.
+  { x: SHOP.x - WALL / 2, y: SHOP.y + SHOP.h - WALL / 2, w: SHOP_DOOR.from - SHOP.x + WALL / 2, h: WALL },
+  { x: SHOP_DOOR.to, y: SHOP.y + SHOP.h - WALL / 2, w: SHOP.x + SHOP.w + WALL / 2 - SHOP_DOOR.to, h: WALL },
+  // The side walls.
+  { x: SHOP.x - WALL / 2, y: SHOP.y, w: WALL, h: SHOP.h },
+  { x: SHOP.x + SHOP.w - WALL / 2, y: SHOP.y, w: WALL, h: SHOP.h },
+];
+/**
+ * Where the doctor can't walk: the shop's front and side walls, and its back wall with the street
+ * behind it, which only customers use.
+ */
+export const SHOP_BLOCKS = [
+  { x: SHOP.x - WALL / 2, y: 0, w: SHOP.w + WALL, h: SHOP.y + WALL / 2 },
+  ...SHOP_WALLS.slice(2),
+];
+/** Where the doctor lines up to walk through the front door: just inside it and just outside it. */
+export const SHOP_DOORWAY = { inside: SHOP.y + SHOP.h - WALL / 2 - 8, outside: SHOP.y + SHOP.h + WALL / 2 + 8 };
+
 /** Labels for the stations, placed clear of their markers and pallets. */
 export const LABELS = {
   refiner: { x: 110, y: 560 },
@@ -193,6 +219,40 @@ export const BELT_PATHS: Record<BeltId, { x: number; y: number }[][]> = {
 export const runLength = (run: { x: number; y: number }[]) =>
   run.slice(1).reduce((n, p, i) => n + Math.hypot(p.x - run[i].x, p.y - run[i].y), 0);
 
+/** How far along `run` the point `p` on it is, in pixels. */
+function distanceTo(run: { x: number; y: number }[], p: { x: number; y: number }) {
+  let d = 0;
+  for (let i = 1; i < run.length; i++) {
+    const a = run[i - 1], b = run[i];
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    const along = Math.hypot(p.x - a.x, p.y - a.y);
+    if (Math.abs(along + Math.hypot(b.x - p.x, b.y - p.y) - len) < 0.01) return d + along;
+    d += len;
+  }
+  throw new Error(`${p.x},${p.y} is not on the belt`);
+}
+
+/**
+ * Which of a belt's runs goods of a kind get on at: on the garden belts, the run from the field that
+ * grows them, so mandrakes come in on the feeder from their patch.
+ */
+export const beltRun = (id: BeltId, kind: ItemId) =>
+  id === 'garden' || id === 'garden2' ? Math.max(0, GARDENS.indexOf(kind as PlantId)) : 0;
+
+/**
+ * Where goods on a belt's run get on and where that run joins the main one, in ms along the main
+ * run. Goods on a feeder start as far before its join as the feeder is long, so they ride it at the
+ * belt's speed before carrying on along the main run.
+ */
+export function beltRunMs(id: BeltId, run: number) {
+  if (run === 0) return { start: 0, join: 0 };
+  const main = BELT_PATHS[id][0];
+  const feeder = BELT_PATHS[id][run];
+  const msPerPx = BELT_MS[id] / runLength(main);
+  const join = distanceTo(main, feeder[feeder.length - 1]);
+  return { start: (join - runLength(feeder)) * msPerPx, join: join * msPerPx };
+}
+
 /**
  * How far along the cauldron belts are where they meet, at the end of their first stretch. Both are
  * the same length, so from there on their items are side by side.
@@ -201,7 +261,7 @@ export const BELT_JOIN_MS = (BELT_MS.cauldron * runLength(BELT_PATHS.cauldron[0]
 /**
  * Where the doctor stands to pay for each belt; the cauldron belts' markers face the courtyard. The
  * garden belts' markers stand out of a long sickle's reach of the mandrakes, so the hands the belt
- * empties don't fill up again from the patch.
+ * empties onto itself don't fill up again from the patch.
  */
 export const BELT_BUILD: Record<BeltId, { x: number; y: number }> = {
   garden: { x: 170, y: 500 },

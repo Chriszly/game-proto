@@ -52,8 +52,8 @@ import {
   type Upgrade,
   type UpgradeId,
 } from './state';
-// Where the cauldron belts meet comes from their paths; the layout is plain data, free of Phaser too.
-import { BELT_JOIN_MS } from '../scenes/layout';
+// Where belts meet comes from their paths; the layout is plain data, free of Phaser too.
+import { BELT_JOIN_MS, beltRun, beltRunMs } from '../scenes/layout';
 
 // Pure game rules, kept free of Phaser so later automation can drive the same functions.
 
@@ -115,7 +115,8 @@ export function tick(state: GameState, dt: number, workingAt: StationId | null, 
 
   serveCustomers(state, dt, workingAt);
   if (state.craftsmen.counter.level >= 2) collectTill(state);
-  for (const order of state.orders) order.patience -= dt;
+  // Customers lose patience once they stand at the counter.
+  for (const order of state.orders) if (order.arrived) order.patience -= dt;
   state.orders = state.orders.filter((o) => o.patience > 0);
 
   state.nextOrderIn -= dt;
@@ -218,9 +219,12 @@ function runBelt(state: GameState, id: BeltId, dt: number) {
     ahead.set(item.id, item);
     return true;
   });
-  const item = takeForBelt(state, id, (kind) => BELT_LANES[id].includes(kind) && (ahead.get(kind)?.at ?? Infinity) >= BELT_GAP_MS);
-  if (item) belt.items.push({ id: item, at: 0 });
+  const item = takeForBelt(state, id, (kind) => BELT_LANES[id].includes(kind) && (ahead.get(kind)?.at ?? Infinity) >= beltStart(id, kind) + BELT_GAP_MS);
+  if (item) belt.items.push({ id: item, at: beltStart(id, item) });
 }
+
+/** Where goods of a kind get on a belt, in ms along its main run: the start of their own run. */
+const beltStart = (id: BeltId, kind: ItemId) => beltRunMs(id, beltRun(id, kind)).start;
 
 /**
  * How many more of a potion customers want than the apothecary has ready or on the way: on the
@@ -266,7 +270,7 @@ function newOrder(state: GameState, rand: () => number) {
   const level = state.upgrades.counter.level;
   const pay = Object.fromEntries(wants.map((p) => [p, potionPrice(state, p) + 2 * (level + 1)]));
   const maxPatience = (60_000 + rand() * 30_000) * (1 + 0.25 * level);
-  return { id: state.nextOrderId++, wants, pay, patience: maxPatience, maxPatience };
+  return { id: state.nextOrderId++, wants, pay, patience: maxPatience, maxPatience, arrived: false };
 }
 
 /** Whether a plot can be harvested: grown, in a garden that is there. */
@@ -300,7 +304,7 @@ function serveCustomers(state: GameState, dt: number, workingAt: StationId | nul
     if (workingAt === 'counter') serveFromShelf(state);
     return;
   }
-  if (!state.orders.some((o) => o.wants.some((want) => counter.shelf.includes(want)))) {
+  if (!state.orders.some((o) => o.arrived && o.wants.some((want) => counter.shelf.includes(want)))) {
     counter.serving = 0;
     return;
   }
@@ -328,8 +332,10 @@ function serveFromShelf(state: GameState, limit = Infinity) {
       return false;
     });
   };
-  for (const order of state.orders) if (canFill(counter.shelf, order)) give(order);
-  for (const order of state.orders) if (order.wants.length > 0) give(order);
+  // Only customers standing at the counter get served.
+  const waiting = state.orders.filter((order) => order.arrived);
+  for (const order of waiting) if (canFill(counter.shelf, order)) give(order);
+  for (const order of waiting) if (order.wants.length > 0) give(order);
   state.orders = state.orders.filter((o) => o.wants.length > 0);
 }
 
@@ -458,18 +464,24 @@ export const doneByHand = (state: GameState, id: BeltId) =>
 
 /**
  * Pays a handful of coins towards building a belt, which starts running once fully paid. The belt
- * takes over that step of the work, so the goods it carries are cleared from the doctor's hands,
- * unless the other line still takes them by hand.
+ * takes over that step of the work, so the goods it carries go from the doctor's hands onto it,
+ * unless the other line still takes them by hand. They get on one after another, a gap apart in each
+ * lane, so those waiting their turn stand just before the start, out of sight.
  */
 export function payBelt(state: GameState, id: BeltId): Feedback | null {
   if (!beltBuildable(state, id)) return null;
-  const feedback = payToward(state, state.belts[id], BELT_COST[id], `${BELT_NAMES[id]} built!`);
-  if (!feedback || !state.belts[id].built) return feedback;
+  const belt = state.belts[id];
+  const feedback = payToward(state, belt, BELT_COST[id], `${BELT_NAMES[id]} built!`);
+  if (!feedback || !belt.built) return feedback;
   if (doneByHand(state, OTHER_LINE[id])) return feedback;
   const carried = (item: ItemId) => BELT_LANES[id].includes(item);
-  const cleared = state.carrying.filter(carried).length;
+  const loaded = state.carrying.filter(carried);
   state.carrying = state.carrying.filter((item) => !carried(item));
-  return cleared > 0 ? [...feedback, `- ${cleared} from hands`] : feedback;
+  loaded.forEach((item, i) => {
+    const ahead = loaded.slice(0, i).filter((other) => other === item).length;
+    belt.items.push({ id: item, at: beltStart(id, item) - ahead * BELT_GAP_MS });
+  });
+  return loaded.length > 0 ? [...feedback, `${loaded.length} onto the belt`] : feedback;
 }
 
 /** Drops everything the doctor carries; the goods are gone. */

@@ -19,7 +19,7 @@ interface GameState {
   counter: { shelf: ItemId[]; till: number };
   upgrades: Record<string, { level: number; paid: number }>;
   craftsmen: Record<string, { level: number; paid: number }>;
-  orders: { id: number; wants: ItemId[]; pay: Record<string, number>; patience: number }[];
+  orders: { id: number; wants: ItemId[]; pay: Record<string, number>; patience: number; maxPatience: number; arrived: boolean }[];
   nextOrderId: number;
   belts: Record<string, { built: boolean; paid: number; items: { id: ItemId; at: number }[] }>;
 }
@@ -36,7 +36,6 @@ const REFINER = {
   pickUp: { x: 330, y: 612 },
 };
 const CAULDRON = { drop: { x: 380, y: 728 }, work: { x: 450, y: 650 }, pickUp: { x: 540, y: 728 } };
-const SHOP_DOOR = { x: 600, y: 420 };
 /** On the way out from the coins, a step towards the door that keeps clear of the upgrade marker. */
 const LEAVE_SHOP = { x: 650, y: 330 };
 /**
@@ -280,8 +279,13 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
   expect(await play(10_000, async () => (customers = await game.customers()).length > 0), 'a customer came in').toBe(true);
   expect(customers[0]).toMatchObject({ x: STREET.x, arrived: false });
   expect(customers[0].y).toBeLessThan(FIRST_CUSTOMER.y);
+  // Until they reach the counter, they can't be served and don't lose patience.
+  let [order] = (await game.state()).orders;
+  expect(order).toMatchObject({ arrived: false, patience: order.maxPatience });
   expect(await play(10_000, async () => (customers = await game.customers())[0].arrived), 'the customer reached the counter').toBe(true);
   expect(customers[0]).toMatchObject(FIRST_CUSTOMER);
+  [order] = (await game.state()).orders;
+  expect(order.arrived, 'the order knows its customer is at the counter').toBe(true);
 
   // One round of the loop: harvest, refine, brew, sell and collect the coins.
   // Gardens: walk along the wheat row, then past one mandrake, until both hands are full.
@@ -341,7 +345,8 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
   await walkTo(LEAVE_CAULDRONS);
 
   // Storefront: stock the shelf, serve customers until one has paid, then take the coins.
-  await walkTo(SHOP_DOOR, COUNTER.drop);
+  // A tap straight at the counter: the shop's walls are solid, so the doctor finds the way in by the door.
+  await walkTo(COUNTER.drop);
   s = await until('potions on the shelf', (s) => s.carrying.length === 0);
   // The potions stand on their pallets behind the counter.
   const shelf = count(s.counter.shelf);

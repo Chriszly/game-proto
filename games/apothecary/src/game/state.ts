@@ -33,8 +33,14 @@ export interface Order {
   wants: PotionId[];
   /** What the customer pays for each potion they get, tip included, fixed when they arrive. */
   pay: Partial<Record<PotionId, number>>;
+  /** Milliseconds the customer waits at the counter before leaving. */
   patience: number;
   maxPatience: number;
+  /**
+   * Whether the customer has reached the counter, set by whoever shows them walking in. Only then do
+   * they get served, and lose patience.
+   */
+  arrived: boolean;
 }
 
 /** The refining tables and cauldrons: one of each on the first production line, and on the second. */
@@ -193,8 +199,8 @@ export const PALLET_SIZE = PALLET_BASE * PALLET_LAYERS;
 /** Whether the pallet for `item` in a station's tray has room for one more. */
 export const palletHasRoom = (tray: readonly ItemId[], item: ItemId) => tray.filter((id) => id === item).length < PALLET_SIZE;
 
-/** Bumped whenever station positions move, so a loaded save doesn't put the doctor inside one. */
-export const LAYOUT = 2;
+/** Bumped whenever stations or walls move, so a loaded save doesn't put the doctor inside one. */
+export const LAYOUT = 3;
 
 /** Coins needed to build each belt. */
 export const BELT_COST: Record<BeltId, number> = { garden: 60, refiner: 100, cauldron: 150, garden2: 60, refiner2: 100, cauldron2: 150 };
