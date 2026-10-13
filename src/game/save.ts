@@ -19,6 +19,8 @@ export function loadState(): GameState {
       upgrades: { ...fresh.upgrades, ...saved.upgrades },
       craftsmen: { ...fresh.craftsmen, ...saved.craftsmen },
       belts: { ...fresh.belts, ...saved.belts },
+      // Customers from before they paid per potion go home; new ones come along soon.
+      orders: (saved.orders ?? []).filter((o) => o.pay),
     };
     // The stations have moved since this save; start the doctor somewhere clear of them.
     if (saved.layout !== fresh.layout) return { ...state, layout: fresh.layout, player: fresh.player };

@@ -209,11 +209,12 @@ function newOrder(state: GameState, rand: () => number) {
   const potions = Object.keys(POTION_PRICE) as PotionId[];
   const count = rand() < 0.35 ? 2 : 1;
   const wants = Array.from({ length: count }, () => potions[Math.floor(rand() * potions.length)]);
-  // Customers tip per potion, more generously and patiently at a better counter.
+  // Customers pay for each potion as they get it, with a tip that is more generous, and patience
+  // that lasts longer, at a better counter.
   const level = state.upgrades.counter.level;
-  const reward = wants.reduce((sum, p) => sum + potionPrice(state, p), 0) + count * 2 * (level + 1);
+  const pay = Object.fromEntries(wants.map((p) => [p, potionPrice(state, p) + 2 * (level + 1)]));
   const maxPatience = (60_000 + rand() * 30_000) * (1 + 0.25 * level);
-  return { id: state.nextOrderId++, wants, reward, patience: maxPatience, maxPatience };
+  return { id: state.nextOrderId++, wants, pay, patience: maxPatience, maxPatience };
 }
 
 /** Whether a plot can be harvested: grown, in a garden that is there. */
@@ -248,9 +249,9 @@ function serveFromShelf(state: GameState) {
       const i = counter.shelf.indexOf(want);
       if (i < 0) return true;
       counter.shelf.splice(i, 1);
+      counter.till += order.pay[want] ?? 0;
       return false;
     });
-    if (order.wants.length === 0) counter.till += order.reward;
   };
   for (const order of state.orders) if (canFill(counter.shelf, order)) give(order);
   for (const order of state.orders) if (order.wants.length > 0) give(order);

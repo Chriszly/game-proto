@@ -27,9 +27,10 @@ export interface Counter {
 
 export interface Order {
   id: number;
-  /** Potions still owed; the order pays out once this is empty. */
+  /** Potions still owed; the customer leaves once this is empty. */
   wants: PotionId[];
-  reward: number;
+  /** What the customer pays for each potion they get, tip included, fixed when they arrive. */
+  pay: Partial<Record<PotionId, number>>;
   patience: number;
   maxPatience: number;
 }
