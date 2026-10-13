@@ -1,0 +1,179 @@
+import { BOONS, BOON_IDS, type BoonId } from './boons';
+import { buildStage, nextStage } from './course';
+import { COIN_REACH, DROP_V, GRAVITY, RUNNER, TRAP_SPAN, canTake, freshState, metres, speedOf, stats, type GameState, type Trap } from './state';
+
+// Moves the run on: the knight runs, jumps, slides and lands, traps hurt, coins are picked up,
+// and each checkpoint stops the run on a choice of two boons.
+
+/** A pulled coin's speed towards the knight. */
+const PULL_SPEED = 700;
+/** How far behind the knight traps and coins are dropped. */
+const BEHIND = 600;
+
+export function newRun(best = 0): GameState {
+  const s = freshState(best);
+  buildStage(s);
+  return s;
+}
+
+const grounded = (s: GameState) => s.runner.h <= 0 && s.runner.vh <= 0;
+
+/** Jump: off the ground, or again in the air with Second Leap. A jump ends a slide. */
+export function jump(s: GameState) {
+  if (s.phase !== 'running') return false;
+  const r = s.runner;
+  if (r.jumps <= 0) return false;
+  r.jumps -= 1;
+  r.vh = stats(s).jumpV;
+  r.h = Math.max(r.h, 0.01);
+  r.slideMs = 0;
+  r.slideQueued = false;
+  return true;
+}
+
+/** Slide under a blade; in the air, drop fast and slide on landing. */
+export function slide(s: GameState) {
+  if (s.phase !== 'running') return false;
+  const r = s.runner;
+  if (grounded(s)) {
+    r.slideMs = stats(s).slideMs;
+  } else {
+    r.vh = Math.min(r.vh, -DROP_V);
+    r.slideQueued = true;
+  }
+  return true;
+}
+
+/** The knight's box this moment: x along the course, and heights from feet to head. */
+export function runnerBox(s: GameState) {
+  const tall = s.runner.slideMs > 0 ? RUNNER.slideH : RUNNER.h;
+  return { x0: s.distance - RUNNER.w / 2, x1: s.distance + RUNNER.w / 2, lo: s.runner.h, hi: s.runner.h + tall };
+}
+
+function touches(s: GameState, t: Trap) {
+  const box = runnerBox(s);
+  if (t.kind === 'pit') {
+    // The knight falls in when standing over the middle of the pit.
+    return grounded(s) && s.distance > t.x + 8 && s.distance < t.x + t.w - 8;
+  }
+  const span = TRAP_SPAN[t.kind];
+  return box.x1 > t.x && box.x0 < t.x + t.w && box.hi > span.lo && box.lo < span.hi;
+}
+
+function effect(s: GameState, kind: GameState['effects'][number]['kind'], x: number, h: number, total: number) {
+  s.effects.push({ id: s.nextId++, kind, x, h, ms: total, total });
+}
+
+function hurt(s: GameState, t: Trap) {
+  const st = stats(s);
+  const r = s.runner;
+  s.hits += 1;
+  r.hurtMs = st.hurtMs;
+  if (t.kind === 'pit') {
+    // Thrown back up out of the pit, high enough to clear it.
+    r.vh = st.jumpV;
+    r.h = 0.01;
+    r.slideMs = 0;
+    r.jumps = st.jumps - 1;
+  }
+  if (s.shields > 0) {
+    s.shields -= 1;
+    effect(s, 'block', s.distance, r.h + RUNNER.h / 2, 500);
+    return;
+  }
+  s.hearts -= 1;
+  effect(s, 'hit', s.distance, r.h + RUNNER.h / 2, 500);
+  if (s.hearts <= 0) {
+    s.hearts = 0;
+    s.phase = 'over';
+    s.best = Math.max(s.best, metres(s.distance));
+  }
+}
+
+/** Moves the run on by `dt` milliseconds. Nothing moves at a checkpoint or after a fall. */
+export function tick(s: GameState, dt: number) {
+  for (const e of s.effects) e.ms -= dt;
+  s.effects = s.effects.filter((e) => e.ms > 0);
+  if (s.phase !== 'running') return;
+  const sec = dt / 1000;
+  const st = stats(s);
+  const r = s.runner;
+
+  s.distance = Math.min(s.checkpointX, s.distance + s.speed * sec);
+  if (r.h > 0 || r.vh > 0) {
+    r.vh -= GRAVITY * sec;
+    r.h += r.vh * sec;
+    if (r.h <= 0) {
+      r.h = 0;
+      r.vh = 0;
+      effect(s, 'dust', s.distance, 0, 300);
+      if (r.slideQueued) r.slideMs = st.slideMs;
+      r.slideQueued = false;
+    }
+  }
+  if (grounded(s)) r.jumps = st.jumps;
+  r.slideMs = Math.max(0, r.slideMs - dt);
+  r.hurtMs = Math.max(0, r.hurtMs - dt);
+
+  if (r.hurtMs <= 0) {
+    const hit = s.traps.find((t) => touches(s, t));
+    if (hit) hurt(s, hit);
+  }
+
+  // Coins: picked up on touch, and drawn in from further off with a lodestone.
+  const box = runnerBox(s);
+  const midH = (box.lo + box.hi) / 2;
+  for (const c of s.course) {
+    const dx = Math.max(box.x0 - c.x, 0, c.x - box.x1);
+    const dh = Math.max(box.lo - c.h, 0, c.h - box.hi);
+    const near = Math.hypot(dx, dh);
+    if (near < COIN_REACH) {
+      c.x = Number.NaN;
+      s.coins += st.coinValue;
+      effect(s, 'coin', s.distance, midH, 400);
+      continue;
+    }
+    if (near < st.reach) c.pulled = true;
+    if (c.pulled) {
+      const tx = s.distance - c.x;
+      const th = midH - c.h;
+      const len = Math.hypot(tx, th) || 1;
+      const step = Math.min(len, PULL_SPEED * sec);
+      c.x += (tx / len) * step;
+      c.h += (th / len) * step;
+    }
+  }
+  s.course = s.course.filter((c) => !Number.isNaN(c.x) && c.x > s.distance - BEHIND);
+  s.traps = s.traps.filter((t) => t.x + t.w > s.distance - BEHIND);
+
+  if (s.phase === 'running' && s.distance >= s.checkpointX) {
+    s.phase = 'checkpoint';
+    s.best = Math.max(s.best, metres(s.distance));
+    s.choices = rollChoices(s);
+    r.slideMs = 0;
+  }
+}
+
+/** Two different boons the knight can still take; Field Dressing fills in when few are left. */
+export function rollChoices(s: GameState): BoonId[] {
+  const pool = BOON_IDS.filter((id) => !BOONS[id].filler && canTake(s, id));
+  const picks: BoonId[] = [];
+  while (picks.length < 2 && pool.length > 0) picks.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+  while (picks.length < 2) picks.push('mend');
+  return picks;
+}
+
+/** Takes a boon at a checkpoint and starts the next stage. */
+export function pick(s: GameState, id: BoonId) {
+  if (s.phase !== 'checkpoint' || !s.choices?.includes(id)) return false;
+  s.ranks[id] = (s.ranks[id] ?? 0) + 1;
+  const st = stats(s);
+  if (id === 'heart') s.hearts = Math.min(st.maxHearts, s.hearts + 1);
+  if (id === 'mend') s.hearts = Math.min(st.maxHearts, s.hearts + 2);
+  s.choices = null;
+  s.phase = 'running';
+  s.shields = st.shields;
+  nextStage(s);
+  s.speed = speedOf(s.stage);
+  return true;
+}
