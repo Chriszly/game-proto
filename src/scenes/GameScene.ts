@@ -380,7 +380,7 @@ export class GameScene extends Phaser.Scene {
 
   /**
    * The expansion: a marker to buy the land on the grass right of the shop, then one for each field,
-   * the refining table and the cauldron of the second line, where each will stand.
+   * the refining table and the cauldron of the second line, where each will go.
    */
   private createExpansion() {
     const { expansion } = this.state;
@@ -398,8 +398,9 @@ export class GameScene extends Phaser.Scene {
           build,
         };
       }),
-      { part: 'refiner', at: REFINER2, caption: 'Table', cost: EXPANSION_COST.refiner, build: expansion.refiner },
-      { part: 'cauldron', at: CAULDRON2, caption: 'Cauldron', cost: EXPANSION_COST.cauldron, build: expansion.cauldron },
+      // The stations are bought from where their work spots will be, clear of where they will stand.
+      { part: 'refiner', at: REFINER2_MARKERS.work, caption: 'Table', cost: EXPANSION_COST.refiner, build: expansion.refiner },
+      { part: 'cauldron', at: CAULDRON2_MARKERS.work, caption: 'Cauldron', cost: EXPANSION_COST.cauldron, build: expansion.cauldron },
     ];
     for (const { part, at, caption, cost, build } of parts) {
       this.addBuildMarker(at, caption, cost, build, () => expansion.land.built && !build.built, () => payExpansion(this.state, part));
