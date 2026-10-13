@@ -5,7 +5,8 @@ each game, and each game lives in its own folder, `games/<name>/`, with its own 
 `e2e/`, `docs/screenshots/` and `README.md` (how to play and its code layout). The build, tsconfig,
 Playwright config, CI workflows and PR template are shared. The games are Apothecary, in
 `games/apothecary/`, Deadline, in `games/deadline/`, Palisade, in `games/palisade/`, Tiny Kingdom, in
-`games/tiny-kingdom/`, and Potion Puzzle, in `games/potion-puzzle/`.
+`games/tiny-kingdom/`, Rogue Runner, in `games/rogue-runner/`, Merge Forge, in `games/merge-forge/`, and
+Potion Puzzle, in `games/potion-puzzle/`.
 
 ## Work on one game at a time
 
@@ -23,6 +24,9 @@ Playwright config, CI workflows and PR template are shared. The games are Apothe
   Playwright project in `playwright.config.ts`, and a row in the README's table of games. Vite picks
   up `games/*/index.html` on its own. Keep save keys and other browser storage prefixed with the
   game's name, since every game shares the hub's origin.
+- **Never use a red cross.** No game art, icon, button, cover or favicon (the hub's included) may show a
+  red cross: no red plus, red-cross health or medic symbol, or red crosshair. Use a green cross (or
+  another colour) for healing and aiming marks instead.
 
 Each game's playthrough follows the rules below. They are written for Apothecary; a new game keeps
 the same rules with its own first round, files and state.
