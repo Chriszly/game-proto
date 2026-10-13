@@ -3,7 +3,8 @@ import { expect, test, type Page } from '@playwright/test';
 // Plays the whole loop with real inputs (clicks to walk, as on a phone): harvest both gardens,
 // refine, brew, sell at the counter until there are enough coins, then buy an upgrade. Sell more to
 // buy the expansion's land, a field, a refining table and a cauldron, and play a round on that
-// second line. Last, buy the conveyor belt that carries plants from the gardens to the table.
+// second line. Then kit the doctor out with a bigger pack, faster boots and a longer sickle, and
+// last buy the conveyor belt that carries plants from the gardens to the table.
 // Game state is only read, through the `game` object the dev build puts on window.
 
 type Point = { x: number; y: number };
@@ -18,7 +19,7 @@ interface GameState {
   cauldron2: { contents: ItemId[]; brewing: unknown; output: ItemId[] };
   expansion: Record<'land' | 'refiner' | 'cauldron', { built: boolean; paid: number }> & { fields: { built: boolean; paid: number }[] };
   counter: { shelf: ItemId[]; till: number };
-  upgrades: Record<'refiner' | 'cauldron' | 'counter', { level: number; paid: number }>;
+  upgrades: Record<string, { level: number; paid: number }>;
   orders: { wants: ItemId[] }[];
   belts: Record<string, { built: boolean; paid: number; items: { id: ItemId; at: number }[] }>;
 }
@@ -43,6 +44,13 @@ const COUNTER = { drop: { x: 472, y: 282 }, work: { x: 520, y: 340 }, coins: { x
 const GARDEN_BELT = { x: 230, y: 468, cost: 60 };
 // The expansion's second line on the right arm, mirroring the first.
 const LAND = { x: 820, y: 430, cost: 100 };
+// The outfitter's stall right of the shop, with the doctor's upgrades top to bottom.
+const OUTFITTER = {
+  pack: { x: 830, y: 140, cost: 30 },
+  boots: { x: 830, y: 230, cost: 25 },
+  sickle: { x: 830, y: 320, cost: 25 },
+};
+const MANDRAKE_XS = [162, 252, 72];
 const WHEAT2_XS = [1038, 1128, 948];
 const WHEAT2_FIELD = { x: 1038, y: 152, cost: 25 };
 const REFINER2 = { drop: { x: 870, y: 468 }, work: { x: 770, y: 540 }, pickUp: { x: 870, y: 612 }, cost: 50 };
@@ -78,6 +86,8 @@ function scene(page: Page) {
     feet: () => read<Point & { moving: boolean }>((s) => ({ x: s.player.x, y: s.player.body.center.y, moving: !!s.pointerTarget })),
     /** The top-left corner of the view in the world, which moves as the camera follows the doctor. */
     view: () => read<Point>((s) => ({ x: s.cameras.main.scrollX, y: s.cameras.main.scrollY })),
+    /** How far from the doctor's centre ripe plants are harvested, in pixels. */
+    reach: () => read<number>((s) => s.harvestReach()),
   };
 }
 
@@ -306,11 +316,12 @@ test('plays the whole game loop', async ({ page }, testInfo) => {
   await walkTo(COUNTER.upgrade);
   await until('counter upgraded', (s) => s.upgrades.counter.level === 1);
   await snap('5-upgraded');
-  // Step off before more coins go towards the next level; whatever did is held in `paid`.
+  // The next level isn't paid for until the doctor steps off the marker and back on.
+  await play(1_000, async () => false);
   await walkTo({ x: COUNTER.upgrade.x - 90, y: COUNTER.upgrade.y });
   const done = await game.state();
-  expect(done.upgrades.counter.level).toBe(1);
-  expect(done.coins + done.upgrades.counter.paid).toBe(rich.coins - UPGRADE_COST);
+  expect(done.upgrades.counter).toEqual({ level: 1, paid: 0 });
+  expect(done.coins).toBe(rich.coins - UPGRADE_COST);
 
   // Expansion: buy the land on the grass right of the shop, which lays the right arm's yard.
   await earn(LAND.cost, 'the land', 6);
@@ -357,13 +368,62 @@ test('plays the whole game loop', async ({ page }, testInfo) => {
   await walkTo(LEAVE_CAULDRONS);
   await sell();
 
-  // Conveyor belt: sell more rounds until the garden belt is affordable, then pay for it on its
-  // build marker. From then on ripe plants ride from the gardens to the refining table by themselves.
-  await earn(GARDEN_BELT.cost, 'the garden belt', 6);
+  // Outfitter and conveyor belt: sell more rounds until both are affordable.
+  const { pack, boots, sickle } = OUTFITTER;
+  await earn(sickle.cost + boots.cost + pack.cost + GARDEN_BELT.cost, 'the outfitter and the garden belt', 8);
+
+  // A longer sickle harvests from a quarter further away.
+  await walkTo(LEAVE_SHOP, SHOP_DOOR, { x: sickle.x, y: SHOP_DOOR.y });
+  expect(await game.reach()).toBe(72);
+  await buy('sickle', sickle, sickle.cost, (s) => s.upgrades.sickle.level === 1);
+  expect(await game.reach()).toBe(90);
+
+  await buy('boots', boots, boots.cost, (s) => s.upgrades.boots.level === 1);
+  await buy('pack', pack, pack.cost, (s) => s.upgrades.pack.level === 1);
+  // Down the gap between the shop wall and the outfitter's markers into the yard.
+  await walkTo({ x: 785, y: pack.y }, { x: 785, y: SHOP_DOOR.y });
+
+  // Faster boots: the doctor covers a fifth more ground in the same time. Head off along the top of
+  // the yard and, once under way, measure how far five steps of game time take them.
+  const box = (await canvas.boundingBox())!;
+  const view = await game.view();
+  const away = { x: 400, y: SHOP_DOOR.y };
+  await page.mouse.click(box.x + ((away.x - view.x) * box.width) / VIEW.w, box.y + ((away.y - view.y) * box.width) / VIEW.w);
+  await play(0, async () => false);
+  const from = await game.feet();
+  const ms = STEP_MS * 5;
+  await play(ms - STEP_MS, async () => false); // one step per STEP_MS, and one more at the end
+  const to = await game.feet();
+  expect(to.moving).toBe(true);
+  // Physics moves in its own fixed ticks, so allow a few pixels either way; without the boots it
+  // would be 30 pixels short.
+  const moved = Math.hypot(to.x - from.x, to.y - from.y);
+  expect(moved).toBeGreaterThan((WALK_SPEED * 1.2 * ms) / 1000 - 5);
+  expect(moved).toBeLessThan((WALK_SPEED * 1.2 * ms) / 1000 + 5);
+  await walkTo(SHOP_DOOR);
+
+  // A bigger pack carries five: the wheat row and two mandrakes, with no room for the third.
+  await until('a ripe wheat row and mandrake patch', (s) => s.plots.slice(0, 6).every((p, i) => p.grown >= (i < 3 ? 8_000 : 14_000)), 20_000);
+  for (const [i, x] of WHEAT_XS.entries()) {
+    await walkTo({ x, y: WHEAT_Y });
+    await until(`wheat ${i + 1} harvested into the bigger pack`, (s) => (count(s.carrying).wheat ?? 0) >= i + 1);
+  }
+  for (const [i, x] of MANDRAKE_XS.slice(0, 2).entries()) {
+    await walkTo({ x, y: MANDRAKE.y });
+    await until(`mandrake ${i + 1} harvested into the bigger pack`, (s) => (count(s.carrying).mandrake ?? 0) >= i + 1);
+  }
+  await walkTo({ x: MANDRAKE_XS[2], y: MANDRAKE.y });
+  await play(1_000, async () => false);
+  s = await game.state();
+  expect(count(s.carrying)).toEqual({ wheat: 3, mandrake: 2 });
+  expect(s.plots[3].grown).toBeGreaterThanOrEqual(14_000);
+  await snap('9-outfitted');
+
+  // Conveyor belt: pay for it on its build marker. From then on ripe plants ride from the gardens to
+  // the refining table by themselves.
   const saved = await game.state();
   expect(saved.belts.garden).toEqual({ built: false, paid: 0, items: [] });
-  // Along the top of the yard, above the refining table's markers.
-  await walkTo(LEAVE_SHOP, SHOP_DOOR, { x: 380, y: SHOP_DOOR.y }, GARDEN_BELT);
+  await walkTo(GARDEN_BELT);
   s = await until('garden belt built', (s) => s.belts.garden.built);
   expect(s.coins).toBe(saved.coins - GARDEN_BELT.cost);
   // Wait by the table while the belt brings in the plants. Whatever the doctor picked up passing the
@@ -373,12 +433,22 @@ test('plays the whole game loop', async ({ page }, testInfo) => {
   const queued = s.refiner.queue.length + s.refiner.output.length;
   await walkTo(REFINER.drop, REFINER.work);
   await until('a plant on the garden belt', (s) => s.belts.garden.items.length > 0, 20_000);
-  await snap('9-belt');
+  await snap('10-belt');
   s = await until('the belt delivered to the refining table', (s) => s.refiner.queue.length + s.refiner.output.length > queued, 20_000);
   expect(s.carrying).toEqual(inHand);
   // Only what the playthrough meant to buy was paid for; no walk clipped another purple marker.
   const unpaid = { level: 0, paid: 0 };
-  expect(s.upgrades).toEqual({ refiner: unpaid, cauldron: unpaid, refiner2: unpaid, cauldron2: unpaid, counter: { level: 1, paid: 0 } });
+  const bought = { level: 1, paid: 0 };
+  expect(s.upgrades).toEqual({
+    refiner: unpaid,
+    cauldron: unpaid,
+    refiner2: unpaid,
+    cauldron2: unpaid,
+    counter: bought,
+    pack: bought,
+    boots: bought,
+    sickle: bought,
+  });
 
   const speed = gameMs / (Date.now() - startedAt);
   console.log(`Played ${Math.round(gameMs / 1000)}s of game time at ${speed.toFixed(1)}x (target ${SPEED}x).`);
