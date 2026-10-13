@@ -1,14 +1,17 @@
 import Phaser from 'phaser';
+import { drawBelts, pointAlong } from '../art/belts';
 import { plantTexture } from '../art/garden';
+import { itemTexture } from '../art/items';
 import { customerTexture } from '../art/townsfolk';
 import { signTexture } from '../art/ui';
-import { GROW_MS, REFINE } from '../game/items';
+import { GROW_MS, REFINE, type ItemId } from '../game/items';
 import {
   collectTill,
   dropAtRefiner,
   dropInCauldron,
   harvest,
   isRipe,
+  payBelt,
   payUpgrade,
   pickUpFromCauldron,
   pickUpFromRefiner,
@@ -17,11 +20,24 @@ import {
   type Feedback,
 } from '../game/sim';
 import { clearSave, loadState, saveState } from '../game/save';
-import { CARRY_CAPACITY, MAX_LEVEL, MAX_ORDERS, upgradeCost, type GameState, type StationId } from '../game/state';
+import {
+  BELTS,
+  BELT_COST,
+  BELT_MS,
+  CARRY_CAPACITY,
+  MAX_LEVEL,
+  MAX_ORDERS,
+  upgradeCost,
+  type BeltId,
+  type GameState,
+  type StationId,
+} from '../game/state';
 import { BackStack } from '../ui/BackStack';
 import { IconRow } from '../ui/IconRow';
 import { ProgressBar } from '../ui/ProgressBar';
 import {
+  BELT_BUILD,
+  BELT_PATHS,
   CAULDRON,
   CAULDRON_MARKERS,
   COUNTER,
@@ -61,6 +77,8 @@ const SICKLE_LINGER_MS = 400;
 interface Marker {
   zone: Phaser.Geom.Rectangle;
   act: () => Feedback | null;
+  /** Whether the marker is there at all; markers a belt replaces go once it is built. */
+  shown: () => boolean;
 }
 
 export class GameScene extends Phaser.Scene {
@@ -108,6 +126,7 @@ export class GameScene extends Phaser.Scene {
     this.drawGrounds();
     this.createPlots();
     this.createStations();
+    this.createBelts();
     this.createPlayer();
     this.followPlayer();
     this.createShopfront();
@@ -203,8 +222,8 @@ export class GameScene extends Phaser.Scene {
     this.addObstacle(REFINER.x, REFINER.y, 'table', 84, 30);
     const refinerQueue = new IconRow(this, REFINER.x, REFINER.y - 4, REFINER.y + 1);
     const refining = new ProgressBar(this, REFINER.x, REFINER.y + 30, 60, 0xd8cfa8, UI_DEPTH);
-    const refined = this.addMarker(REFINER_MARKERS.pickUp, 'pad-out', 'Pick up', () => pickUpFromRefiner(this.state));
-    this.addMarker(REFINER_MARKERS.drop, 'pad-in', 'Drop', () => dropAtRefiner(this.state));
+    const refined = this.addMarker(REFINER_MARKERS.pickUp, 'pad-out', 'Pick up', () => pickUpFromRefiner(this.state), 'refiner');
+    this.addMarker(REFINER_MARKERS.drop, 'pad-in', 'Drop', () => dropAtRefiner(this.state), 'garden');
     this.addWorkSpot(REFINER_MARKERS.work, 'refiner');
     this.addUpgradeMarker(REFINER_MARKERS.upgrade, 'refiner');
     this.views.push(() => {
@@ -216,8 +235,8 @@ export class GameScene extends Phaser.Scene {
     this.addObstacle(CAULDRON.x, CAULDRON.y, 'cauldron', 60, 28).play('cauldron-boil');
     const pot = new IconRow(this, CAULDRON.x, CAULDRON.y - 40, UI_DEPTH);
     const brewing = new ProgressBar(this, CAULDRON.x, CAULDRON.y + 34, 60, 0x58a35a, UI_DEPTH);
-    const brewed = this.addMarker(CAULDRON_MARKERS.pickUp, 'pad-out', 'Pick up', () => pickUpFromCauldron(this.state));
-    this.addMarker(CAULDRON_MARKERS.drop, 'pad-in', 'Drop', () => dropInCauldron(this.state));
+    const brewed = this.addMarker(CAULDRON_MARKERS.pickUp, 'pad-out', 'Pick up', () => pickUpFromCauldron(this.state), 'cauldron');
+    this.addMarker(CAULDRON_MARKERS.drop, 'pad-in', 'Drop', () => dropInCauldron(this.state), 'refiner');
     this.addWorkSpot(CAULDRON_MARKERS.work, 'cauldron');
     this.addUpgradeMarker(CAULDRON_MARKERS.upgrade, 'cauldron');
     this.views.push(() => {
@@ -227,15 +246,26 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  /** Lays a floor marker with a caption; returns an icon row on the marker for showing what waits there. */
-  private addMarker(at: { x: number; y: number }, texture: string, caption: string, act: () => Feedback | null) {
-    this.add.image(at.x, at.y, texture).setDepth(-400);
-    this.add
+  /**
+   * Lays a floor marker with a caption; returns an icon row on the marker for showing what waits
+   * there. A marker that `replacedBy` a belt goes away once that belt is built.
+   */
+  private addMarker(at: { x: number; y: number }, texture: string, caption: string, act: () => Feedback | null, replacedBy?: BeltId) {
+    const pad = this.add.image(at.x, at.y, texture).setDepth(-400);
+    const text = this.add
       .text(at.x, at.y + 26, caption, { fontFamily: 'monospace', fontSize: '10px', color: '#f3e9d2' })
       .setOrigin(0.5, 0)
       .setDepth(-400);
-    this.markers.push({ zone: new Phaser.Geom.Rectangle(at.x - 22, at.y - 22, 44, 44), act });
-    return new IconRow(this, at.x, at.y, -300, 8);
+    const shown = () => !replacedBy || !this.state.belts[replacedBy].built;
+    this.markers.push({ zone: new Phaser.Geom.Rectangle(at.x - 22, at.y - 22, 44, 44), act, shown });
+    if (replacedBy) {
+      this.views.push(() => {
+        pad.setVisible(shown());
+        text.setVisible(shown());
+      });
+    }
+    const row = new IconRow(this, at.x, at.y, -300, 8);
+    return { set: (items: readonly ItemId[]) => row.set(shown() ? items : []) };
   }
 
   /** The spot the doctor stands on to make the station work. */
@@ -259,10 +289,53 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * Conveyor belts: a build marker for each until it is paid off, then the belt itself with the goods
+   * riding along it.
+   */
+  private createBelts() {
+    for (const id of BELTS) {
+      const belt = this.state.belts[id];
+      const at = BELT_BUILD[id];
+      const pad = this.add.image(at.x, at.y, 'pad-up').setDepth(-400);
+      const caption = this.add
+        .text(at.x, at.y + 26, `Belt: ${BELT_COST[id]}c`, { fontFamily: 'monospace', fontSize: '10px', color: '#e6d3f5' })
+        .setOrigin(0.5, 0)
+        .setDepth(-400);
+      const paid = new ProgressBar(this, at.x, at.y + 38, 40, 0xe0b84a, -400);
+      this.markers.push({
+        zone: new Phaser.Geom.Rectangle(at.x - 22, at.y - 22, 44, 44),
+        act: () => payBelt(this.state, id),
+        shown: () => !belt.built,
+      });
+
+      let drawn = false;
+      const riding: Phaser.GameObjects.Image[] = [];
+      const main = BELT_PATHS[id][0];
+      this.views.push(() => {
+        pad.setVisible(!belt.built);
+        caption.setVisible(!belt.built);
+        paid.set(belt.built ? null : belt.paid / BELT_COST[id]);
+        if (belt.built && !drawn) {
+          drawBelts(this, BELT_PATHS[id], -600);
+          drawn = true;
+        }
+        while (riding.length < belt.items.length) riding.push(this.add.image(0, 0, itemTexture(belt.items[0].id)).setDepth(-550));
+        riding.forEach((icon, i) => {
+          const item = belt.items[i];
+          icon.setVisible(!!item);
+          if (!item) return;
+          const { x, y } = pointAlong(main, item.at / BELT_MS[id]);
+          icon.setTexture(itemTexture(item.id)).setPosition(x, y);
+        });
+      });
+    }
+  }
+
   private createShopfront() {
     this.addObstacle(COUNTER.x, COUNTER.y, 'counter', 200, 30);
     const shelf = new IconRow(this, COUNTER.x, COUNTER.y - 6, COUNTER.y + 1);
-    this.addMarker(COUNTER_MARKERS.drop, 'pad-in', 'Drop', () => stockShelf(this.state));
+    this.addMarker(COUNTER_MARKERS.drop, 'pad-in', 'Drop', () => stockShelf(this.state), 'cauldron');
     this.addMarker(COUNTER_MARKERS.pickUp, 'pad-out', 'Coins', () => collectTill(this.state));
     this.addWorkSpot(COUNTER_MARKERS.work, 'counter');
     this.addUpgradeMarker(COUNTER_MARKERS.upgrade, 'counter');
@@ -459,7 +532,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private standOnMarkers() {
-    const marker = this.markers.find((m) => m.zone.contains(this.player.x, this.feetY()));
+    const marker = this.markers.find((m) => m.shown() && m.zone.contains(this.player.x, this.feetY()));
     if (!marker || this.time.now < this.nextMarkerAt) return;
     this.nextMarkerAt = this.time.now + MARKER_INTERVAL_MS;
     const feedback = marker.act();
