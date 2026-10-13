@@ -23,6 +23,7 @@ import {
   stockShelf,
   tick,
   type ExpansionPart,
+  cyclePriority,
   type Feedback,
 } from '../game/sim';
 import { clearSave, loadState, saveState } from '../game/save';
@@ -51,6 +52,7 @@ import {
   type BeltId,
   type Build,
   type CauldronId,
+  type CraftingId,
   type GameState,
   type RefinerId,
   type StationId,
@@ -81,6 +83,7 @@ import {
   GUILD,
   HUD_HEIGHT,
   LABELS,
+  PRIORITY_SIGNS,
   OUTFITTER,
   PALLETS,
   REFINER,
@@ -129,6 +132,8 @@ const HARVEST_INTERVAL_MS = 150;
 const SICKLE_SPIN = 0.008;
 const SICKLE_SCALE = 1;
 const SICKLE_LINGER_MS = 400;
+/** Width of a crafting station's priority sign, wide enough for "First:" and its choice. */
+const PRIORITY_SIGN_W = 92;
 
 /** A floor marker that acts by itself, one step at a time, while the doctor stands on it. */
 interface Marker {
@@ -274,6 +279,30 @@ export class GameScene extends Phaser.Scene {
     this.add.image(x, y, signTexture(this, name.width + 16)).setDepth(-910);
   }
 
+  /**
+   * A small sign saying what a crafting station makes first: the item's icon, or "any" when it is
+   * left to the station. Tapping it moves on to the next choice and doesn't walk the doctor.
+   */
+  private addPrioritySign(id: CraftingId, at: Point) {
+    const sign = this.add.image(at.x, at.y, signTexture(this, PRIORITY_SIGN_W)).setDepth(-910);
+    const left = at.x - sign.width / 2 + 8;
+    const style = { fontFamily: 'monospace', fontSize: '12px', color: '#f3e9d2', stroke: '#3b2416', strokeThickness: 2 };
+    const caption = this.add.text(left, at.y, 'First:', style).setOrigin(0, 0.5).setDepth(-900);
+    const choiceX = left + caption.width + 6;
+    const any = this.add.text(choiceX, at.y, 'any', style).setOrigin(0, 0.5).setDepth(-900);
+    const icon = this.add.image(choiceX + 8, at.y, 'pallet').setDepth(-900);
+    sign.setInteractive({ useHandCursor: true }).on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
+      e.stopPropagation();
+      cyclePriority(this.state, id);
+    });
+    this.views.push(() => {
+      const first = this.state.priority[id];
+      any.setVisible(!first);
+      icon.setVisible(!!first);
+      if (first) icon.setTexture(itemTexture(first));
+    });
+  }
+
   /** Runs `create` once, on the first frame `ready` holds: for things bought during play, or loaded built. */
   private once(ready: () => boolean, create: () => void) {
     let done = false;
@@ -349,6 +378,7 @@ export class GameScene extends Phaser.Scene {
   private addRefiner(id: RefinerId, at: Point, m: StationMarkers, label: Point, beltIn: BeltId, beltOut: BeltId) {
     const refiner = this.state[id];
     this.label(label.x, label.y, 'Refining table');
+    this.addPrioritySign(id, PRIORITY_SIGNS[id]);
     this.addObstacle(at.x, at.y, 'table', 84, 30);
     this.addPallets(id, PALLETS[id], [PLANTS, REFINED], [() => refiner.queue, () => refiner.output]);
     const progress = new ProgressBar(this, at.x, at.y + 30, 60, 0xd8cfa8, WORLD_UI_DEPTH);
@@ -367,6 +397,7 @@ export class GameScene extends Phaser.Scene {
   private addCauldron(id: CauldronId, at: Point, m: StationMarkers, label: Point, beltIn: BeltId, beltOut: BeltId) {
     const cauldron = this.state[id];
     this.label(label.x, label.y, 'Cauldron');
+    this.addPrioritySign(id, PRIORITY_SIGNS[id]);
     this.addObstacle(at.x, at.y, 'cauldron', 60, 28).play('cauldron-boil');
     this.addPallets(id, PALLETS[id], [REFINED, POTIONS], [() => cauldron.contents, () => cauldron.output]);
     const brewing = new ProgressBar(this, at.x, at.y + 34, 60, 0x58a35a, WORLD_UI_DEPTH);

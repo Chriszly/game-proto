@@ -8,7 +8,9 @@ import {
   isPlant,
   isPotion,
   isRefined,
+  PLANTS,
   type ItemId,
+  type PlantId,
   type PotionId,
 } from './items';
 import {
@@ -41,6 +43,7 @@ import {
   palletHasRoom,
   upgradeCost,
   type BeltId,
+  type CraftingId,
   type BeltItem,
   type Build,
   type Cauldron,
@@ -86,7 +89,7 @@ export function tick(
 
   for (const id of REFINERS) {
     const refiner = state[id];
-    const next = refining(refiner);
+    const next = refining(refiner, state.priority[id]);
     const hands = crew(state, id, workingAt);
     if (hands === 0 || next < 0) continue;
     // The plant being worked on moves to the front of the queue, so its progress stays its own even
@@ -97,8 +100,11 @@ export function tick(
     if (refiner.progress >= recipe.ms) {
       refiner.queue.shift();
       refiner.output.push(recipe.out);
-      // Work past the end of this plant goes on the next, so a slow frame rate makes no less.
+      // Work past the end of this plant goes on the next, so a slow frame rate makes no less. The
+      // next is picked now, so the priority applies to it as well.
       refiner.progress = refiner.queue.length > 0 ? refiner.progress - recipe.ms : 0;
+      const after = firstToRefine(refiner, state.priority[id]);
+      if (after > 0) refiner.queue.unshift(...refiner.queue.splice(after, 1));
     }
   }
 
@@ -107,7 +113,7 @@ export function tick(
     const hands = crew(state, id, workingAt);
     if (hands === 0) continue;
     // The recipe is picked when work starts, from everything in the cauldron by then.
-    if (!cauldron.brewing) startBrew(state, cauldron);
+    if (!cauldron.brewing) startBrew(state, cauldron, state.priority[id]);
     if (!cauldron.brewing) continue;
     cauldron.brewing.progress += dt * hands * speedAt(state.upgrades[id].level);
     if (cauldron.brewing.progress >= cauldron.brewing.ms) {
@@ -115,7 +121,7 @@ export function tick(
       cauldron.output.push(cauldron.brewing.out);
       cauldron.brewing = null;
       // Work past the end of this brew goes on the next, if there is one.
-      const next = startBrew(state, cauldron);
+      const next = startBrew(state, cauldron, state.priority[id]);
       if (next) next.progress = over;
     }
   }
@@ -135,10 +141,24 @@ export function tick(
 }
 
 /**
- * Which waiting plant the refining table works on: the first whose output pallet has room, or -1
- * when there is none.
+ * Which waiting plant the refining table works on, or -1 when there is none: the one at the front
+ * while work on it has started, otherwise the first one to start on.
  */
-export const refining = (refiner: Refiner) => refiner.queue.findIndex((plant) => palletHasRoom(refiner.output, REFINE[plant].out));
+export function refining(refiner: Refiner, first: PlantId | null = null) {
+  const front = refiner.queue[0];
+  if (refiner.progress > 0 && front && palletHasRoom(refiner.output, REFINE[front].out)) return 0;
+  return firstToRefine(refiner, first);
+}
+
+/**
+ * Which waiting plant to start on: the first of the priority plant `first` whose output pallet has
+ * room, or else the first of any, or -1 when no output pallet has room.
+ */
+function firstToRefine(refiner: Refiner, first: PlantId | null) {
+  const fits = (plant: PlantId) => palletHasRoom(refiner.output, REFINE[plant].out);
+  const preferred = first ? refiner.queue.findIndex((plant) => plant === first && fits(plant)) : -1;
+  return preferred >= 0 ? preferred : refiner.queue.findIndex(fits);
+}
 
 /**
  * Where each belt takes goods from: a ripe plant from either garden of its line, or a station's
@@ -255,9 +275,10 @@ export function shortfall(state: GameState, potion: PotionId) {
  * for, so the potion customers are waiting for gets brewed first. Ties go in recipe order. Returns
  * the brew started, if any.
  */
-function startBrew(state: GameState, cauldron: Cauldron) {
+function startBrew(state: GameState, cauldron: Cauldron, first: PotionId | null = null) {
   const need = new Map(RECIPES.map((r) => [r.out, shortfall(state, r.out)]));
-  const byNeed = [...RECIPES].sort((a, b) => need.get(b.out)! - need.get(a.out)!);
+  // The priority potion goes first whenever its ingredients are in; the rest by need.
+  const byNeed = [...RECIPES].sort((a, b) => Number(b.out === first) - Number(a.out === first) || need.get(b.out)! - need.get(a.out)!);
   for (const recipe of byNeed) {
     if (!palletHasRoom(cauldron.output, recipe.out)) continue;
     const left = without(cauldron.contents, recipe.inputs);
@@ -425,6 +446,17 @@ function payLevel(state: GameState, upgrade: Upgrade, max: number, cost: number,
 export function payUpgrade(state: GameState, id: UpgradeId): Feedback | null {
   const upgrade = state.upgrades[id];
   return payLevel(state, upgrade, UPGRADES[id].max, upgradeCost(id, upgrade.level), () => `${UPGRADES[id].name} level ${upgrade.level + 1}!`);
+}
+
+/**
+ * Moves a crafting station's priority on to the next choice: from none (the station's own order) to
+ * each plant or potion it makes in turn, and back to none.
+ */
+export function cyclePriority(state: GameState, id: CraftingId): Feedback {
+  const choices: (PlantId | PotionId | null)[] = [null, ...(id === 'refiner' || id === 'refiner2' ? PLANTS : POTIONS)];
+  const next = choices[(choices.indexOf(state.priority[id]) + 1) % choices.length];
+  (state.priority as Record<CraftingId, PlantId | PotionId | null>)[id] = next;
+  return [next ? `${ITEMS[next].name} first` : 'Any order'];
 }
 
 /** Pays a handful of coins towards hiring a station's next craftsman, who starts work once fully paid. */

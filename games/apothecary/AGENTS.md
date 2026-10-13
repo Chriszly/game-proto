@@ -13,7 +13,8 @@ counter. Coins buy upgrades, craftsmen, conveyor belts and a mirrored second pro
 - Implemented: the full loop on both lines, auto-harvest with a spinning sickle, floor markers
   (drop, work, pick up, pay), pallets that show station stock, customers served only at the
   counter, a walled shop entered by its front door, station upgrades (5 levels), outfitter and
-  guild upgrades, two craftsmen per station, six belts with one lane per item kind, the expansion,
+  guild upgrades, two craftsmen per station, a priority choice per crafting station, six belts
+  with one lane per item kind, the expansion,
   a Recipes panel and a Settings panel. Progress autosaves to localStorage.
 - There is one scene with no title, win or lose screen, and no audio. A customer who runs out of
   patience just leaves; there is no penalty.
@@ -35,8 +36,8 @@ counter. Coins buy upgrades, craftsmen, conveyor belts and a mirrored second pro
   `walkSpeed`, `potionPrice`, `stationBuilt`, `anyFieldBuilt`, `beltBuildable`, ...).
 - `src/game/sim.ts`: the rules, free of Phaser. `tick` advances the world; marker actions
   (`dropAtRefiner`, `pickUpFromCauldron`, `stockShelf`, `collectTill`, `payUpgrade`,
-  `payCraftsman`, `payBelt`, `payExpansion`, `dropAll`) and `harvest` each change state and return
-  `Feedback` lines. Also `shortfall`, `refining` and `doneByHand`.
+  `payCraftsman`, `payBelt`, `payExpansion`, `dropAll`, `cyclePriority`) and `harvest` each change
+  state and return `Feedback` lines. Also `shortfall`, `refining` and `doneByHand`.
 - `src/game/save.ts`: `loadState`, `saveState`, `clearSave` (key `apothecary-save`), and the
   `ontoOwnRuns` belt migration.
 - `src/scenes/BootScene.ts`: bakes all textures and animations, then starts `Game`.
@@ -44,7 +45,7 @@ counter. Coins buy upgrades, craftsmen, conveyor belts and a mirrored second pro
   around stations and through the shop door, calls the sim each frame and updates views. Also
   `walkTowards` for customer sprites.
 - `src/scenes/layout.ts`: every world position (gardens, plots, yards, stations, markers, pallets,
-  craftsmen, guild, outfitter, shop, its walls and doors, customer spots), plus the belt geometry:
+  priority signs, craftsmen, guild, outfitter, shop, its walls and doors, customer spots), plus the belt geometry:
   `BELT_PATHS` (main run first, then feeders; each runs from a station's out pallets to the next
   station's in pallets), `runLength`, `beltSpan`, `BELT_JOIN_MS` and `BELT_BUILD`. It imports no
   Phaser, since `sim.ts` and `save.ts` use it.
@@ -95,6 +96,10 @@ counter. Coins buy upgrades, craftsmen, conveyor belts and a mirrored second pro
   feeder) and join the main run at `join`. The cauldron belts merge at `BELT_JOIN_MS`
   (`mergingItems`), measured to `CAULDRON_BELTS_MEET`. `payBelt` loads matching goods from the
   doctor's hands, unless `doneByHand` says the other line's twin is still by hand.
+- Priority: `addPrioritySign` puts a tappable "First:" sign at `PRIORITY_SIGNS[id]` by each
+  table's and cauldron's label; a tap calls `cyclePriority` (none, then each plant or potion in
+  `PLANTS`/`POTIONS` order) and stops propagation so the doctor doesn't walk. The sign shows the
+  item's icon, or "any".
 - Customers: the scene walks each order's sprite from `STREET` to `customerPosition(i)` and adds
   the order to its `atCounter` set once it arrives. `tick` serves, and counts down patience for,
   only orders `atCounter` accepts (default: all). Wants and patience show only once arrived.
@@ -109,24 +114,29 @@ two per line), `refiner`/`refiner2` (`queue`, `progress`, `output`), `cauldron`/
 (`contents`, `brewing`, `output`), `counter` (`shelf`, `till`, `serving`), `orders` (each with fixed
 per-potion `pay`, and `patience` that counts down only at the counter), `upgrades`, `craftsmen` (an
 `Upgrade` whose `level` is the number hired), `belts` (a `Build` plus riding `items`, each `at` ms
-along the main run), `expansion` (land, two fields, refiner, cauldron as `Build`s).
+along the main run), `priority` (per `CraftingId`, a `PlantId` or `PotionId` to make first, or
+null), `expansion` (land, two fields, refiner, cauldron as `Build`s).
 
 - Only `src/game/sim.ts` changes rules state, mutating in place. The scene writes only
   `state.player` and passes `workingAt` and `atCounter`; it never edits stock directly.
 - Every tray holds at most `PALLET_SIZE` (40) of each item kind; `palletHasRoom` guards every add.
 - Second-line stations and fields exist in state from the start; `stationBuilt` and `gardenBuilt`
   gate them. A station works only with `crew` > 0: its craftsmen, or the doctor on its work spot.
-- The refiner moves the plant it works on to the front of `queue`. Work past the end of a plant,
+- The refiner moves the plant it works on to the front of `queue`; `refining` keeps a started plant
+  there and otherwise picks the priority plant first (`firstToRefine`), also right after finishing
+  one, so leftover work goes onto the priority plant. Work past the end of a plant,
   brew or served potion carries over to the next, so slow frame rates lose nothing.
-- `startBrew` picks the recipe when work starts, by `shortfall` (wanted minus on the shelf,
-  carried, brewing, on cauldron pallets and riding cauldron belts); ties go in `RECIPES` order.
+- `startBrew` picks the recipe when work starts: the cauldron's priority potion if its inputs are
+  in and its pallet has room, otherwise by `shortfall` (wanted minus on the shelf, carried, brewing,
+  on cauldron pallets and riding cauldron belts); ties go in `RECIPES` order. A priority never makes
+  a station wait.
 
 ### Persistence
 
 - `apothecary-save`: the whole `GameState`, saved every `AUTOSAVE_MS` (3s), on tab hide and on
   `pagehide` (not after "New game" is confirmed). `loadState` discards saves whose `version`
-  differs or that lack `plots`, shallow-merges top-level fields, merges `upgrades`, `craftsmen` and
-  `belts` per key, appends new plots and drops orders without `pay`. A save from before
+  differs or that lack `plots`, shallow-merges top-level fields, merges `upgrades`, `craftsmen`,
+  `belts` and `priority` per key, appends new plots and drops orders without `pay`. A save from before
   `FEEDERS_LAYOUT` (3) gets `ontoOwnRuns`, which moves belt items up to their run's join; a save
   whose `layout` differs from `LAYOUT` (4, since belts end at pallets) gets the fresh `player`
   spot. Belt items keep their `at`; the belts kept their runs and order, so no migration moves them.
@@ -180,7 +190,8 @@ along the main run), `expansion` (land, two fields, refiner, cauldron as `Build`
 - Inputs: canvas clicks only (walking, the Recipes button at screen 219,22, a tap to close it). It
   watches the first customer walk in from `STREET`, and walks into the shop by the door routing.
 - It seeds `Math.random`, owns `page.clock`, makes `requestAnimationFrame` a 64ms timer and forces
-  the canvas renderer. It starts with empty storage, so it expects a fresh state on Normal.
+  the canvas renderer. It starts with empty storage, so it expects a fresh state on Normal, with
+  every priority left at "any"; its taps must not land on a priority sign, which takes the tap.
 - Mirrored in `e2e/playthrough.spec.ts` (update together): every spot in its constants block
   (wheat plot x's and row, mandrake spot, refiner, cauldron and counter markers, `LEAVE_SHOP`,
   `LEAVE_CAULDRONS`, `STREET`, `FIRST_CUSTOMER` = `customerPosition(0)`), `WALK_SPEED`,
@@ -214,7 +225,7 @@ along the main run), `expansion` (land, two fields, refiner, cauldron as `Build`
 
 ## Gotchas
 
-- `loadState` only merges `upgrades`, `craftsmen` and `belts` per key. A new field nested in
+- `loadState` only merges `upgrades`, `craftsmen`, `belts` and `priority` per key. A new field nested in
   `expansion`, `counter` or a station is missing from old saves unless handled there.
 - Marker zones must not overlap: `standOnMarkers` takes the first shown one in creation order.
   Test walks must also avoid purple markers; the test asserts nothing was bought.

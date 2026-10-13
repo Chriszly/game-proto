@@ -167,6 +167,16 @@ export const LABELS = {
   refiner2: mirror({ x: 110, y: 560 }),
   cauldron2: mirror({ x: 460, y: 860 }),
 };
+/**
+ * The sign under or beside each crafting station's label that shows, and on a tap changes, what it
+ * makes first: below the refining table's label, and on the outer side of the cauldron's.
+ */
+export const PRIORITY_SIGNS = {
+  refiner: { x: 110, y: 588 },
+  cauldron: { x: 358, y: 860 },
+  refiner2: mirror({ x: 110, y: 588 }),
+  cauldron2: mirror({ x: 358, y: 860 }),
+};
 
 /**
  * Where each station's pallets stand, given by the middle of their bottom edge: one for each kind
