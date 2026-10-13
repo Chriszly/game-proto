@@ -1,0 +1,51 @@
+name: Playthrough Merge Forge
+
+# Plays Merge Forge's first sale. Runs only when the game's folder or a shared file it builds
+# and tests with changes; every game has its own playthrough-<name>.yml like this one.
+on:
+  push:
+    branches: [main]
+    paths: &paths
+      - games/merge-forge/**
+      - package.json
+      - package-lock.json
+      - tsconfig.json
+      - vite.config.ts
+      - playwright.config.ts
+      - .github/workflows/playthrough-merge-forge.yml
+  pull_request:
+    paths: *paths
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: playthrough-merge-forge-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  play:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      # Plays the first sale in headless Chromium at 4x speed.
+      - run: npx playwright test --project merge-forge
+        env:
+          PLAYTHROUGH_SPEED: 4
+      # Video and milestone screenshots of the run, pass or fail; open the report's index.html to browse them.
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playthrough-merge-forge
+          path: |
+            test-results
+            playwright-report
+          retention-days: 14
