@@ -24,7 +24,7 @@ interface GameState {
   belts: Record<string, { built: boolean; paid: number; items: { id: ItemId; at: number }[] }>;
 }
 
-// Floor spots in the 1200x810 world, from src/scenes/layout.ts. Walking targets the doctor's feet.
+// Floor spots in the 1200x880 world, from src/scenes/layout.ts. Walking targets the doctor's feet.
 // The world is bigger than the 960x540 view; the camera follows the doctor.
 const VIEW = { w: 960, h: 540, hud: 44 };
 const WHEAT_XS = [252, 162, 72];
@@ -41,7 +41,7 @@ const LEAVE_SHOP = { x: 650, y: 330 };
  */
 const LEAVE_CAULDRONS = { x: 600, y: 690 };
 const COUNTER = { drop: { x: 472, y: 282 }, work: { x: 520, y: 340 }, coins: { x: 728, y: 282 }, upgrade: { x: 710, y: 346 } };
-const GARDEN_BELT = { x: 230, y: 468, cost: 60 };
+const GARDEN_BELT = { x: 170, y: 468, cost: 60 };
 // The expansion's second line on the right arm, mirroring the first.
 const LAND = { x: 820, y: 430, cost: 100 };
 // The outfitter's stall right of the shop, with the doctor's upgrades top to bottom.
@@ -88,6 +88,16 @@ function scene(page: Page) {
     view: () => read<Point>((s) => ({ x: s.cameras.main.scrollX, y: s.cameras.main.scrollY })),
     /** How far from the doctor's centre ripe plants are harvested, in pixels. */
     reach: () => read<number>((s) => s.harvestReach()),
+    /** How many items each of a station's pallets shows, by item, for goods coming in and going out. */
+    pallets: (station: string) =>
+      page.evaluate(
+        (id) => {
+          const p = (window as any).game.scene.getScene('Game').pallets[id];
+          const shown = (row: { item: string; count: number }[]) => Object.fromEntries(row.map((x) => [x.item, x.count]));
+          return { in: shown(p.in), out: shown(p.out) };
+        },
+        station,
+      ) as Promise<{ in: Record<string, number>; out: Record<string, number> }>,
   };
 }
 
@@ -243,9 +253,16 @@ test('plays the whole game loop', async ({ page }, testInfo) => {
     await walkTo(REFINER.drop);
     s = await until('plants dropped at the refining table', (s) => s.carrying.length === 0);
     expect(s.refiner.queue.length + s.refiner.output.length).toBe(4);
+    // Each kind of plant goes on its own pallet beside the table.
+    if (cycle === 1) {
+      expect(await game.pallets('refiner')).toEqual({ in: { wheat: 3, mandrake: 1 }, out: { flour: 0, mandrakeSeeds: 0 } });
+    }
     await walkTo(REFINER.work);
     if (cycle === 1) await snap('2-refining');
     await until('plants refined', (s) => s.refiner.output.length === 4);
+    if (cycle === 1) {
+      expect(await game.pallets('refiner')).toEqual({ in: { wheat: 0, mandrake: 0 }, out: { flour: 3, mandrakeSeeds: 1 } });
+    }
     await walkTo(REFINER.pickUp);
     s = await until('refined goods picked up', (s) => s.carrying.length === 4);
     expect(count(s.carrying)).toEqual({ flour: 3, mandrakeSeeds: 1 });
@@ -256,10 +273,16 @@ test('plays the whole game loop', async ({ page }, testInfo) => {
     await walkTo(CAULDRON.work);
     if (cycle === 1) await snap('3-brewing');
     await until('potions brewed', (s) => s.cauldron.output.length === 2);
+    if (cycle === 1) {
+      expect(await game.pallets('cauldron')).toEqual({
+        in: { flour: 0, mandrakeSeeds: 0 },
+        out: { healingDraught: 1, sleepingTonic: 1 },
+      });
+    }
     await walkTo(CAULDRON.pickUp);
     s = await until('potions picked up', (s) => s.carrying.length === 2);
     // Down at the cauldron, the bottom of the U, the view has scrolled to the bottom edge of the world.
-    expect((await game.view()).y).toBe(810 - VIEW.h);
+    expect((await game.view()).y).toBe(880 - VIEW.h);
     expect(count(s.carrying)).toEqual({ sleepingTonic: 1, healingDraught: 1 });
 
     await walkTo(LEAVE_CAULDRONS);
@@ -270,6 +293,9 @@ test('plays the whole game loop', async ({ page }, testInfo) => {
   async function sell() {
     await walkTo(SHOP_DOOR, COUNTER.drop);
     let s = await until('potions on the shelf', (s) => s.carrying.length === 0);
+    // The potions stand on their pallets behind the counter.
+    const shelf = count(s.counter.shelf);
+    expect((await game.pallets('counter')).in).toEqual({ healingDraught: shelf.healingDraught ?? 0, sleepingTonic: shelf.sleepingTonic ?? 0 });
     await walkTo(COUNTER.work);
     if (cycle === 1) await snap('4-serving');
     s = await until('customers served', (s) => s.counter.shelf.length === 0 || s.counter.till > 0, 45_000);
