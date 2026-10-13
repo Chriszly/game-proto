@@ -28,10 +28,13 @@ import {
   COUNTER_MARKERS,
   GARDEN_AREAS,
   HUD_HEIGHT,
+  LABELS,
   REFINER,
   REFINER_MARKERS,
   SHOP,
-  YARD,
+  SHOP_DOOR,
+  WORLD,
+  YARDS,
   customerPosition,
   plotPosition,
 } from './layout';
@@ -99,13 +102,14 @@ export class GameScene extends Phaser.Scene {
     this.pointerTarget = null;
     this.waypoint = null;
     this.blockedAreas = [];
-    this.physics.world.setBounds(0, HUD_HEIGHT, this.scale.width, this.scale.height - HUD_HEIGHT);
+    this.physics.world.setBounds(0, HUD_HEIGHT, WORLD.w, WORLD.h - HUD_HEIGHT);
     this.obstacles = this.physics.add.staticGroup();
 
     this.drawGrounds();
     this.createPlots();
     this.createStations();
     this.createPlayer();
+    this.followPlayer();
     this.createShopfront();
     this.createHud();
     this.createControls();
@@ -132,15 +136,18 @@ export class GameScene extends Phaser.Scene {
     this.scene.restart();
   }
 
+  /** The world is bigger than the view, so the camera keeps the doctor in sight within its edges. */
+  private followPlayer() {
+    this.cameras.main.setBounds(0, 0, WORLD.w, WORLD.h).startFollow(this.player, true);
+  }
+
   private drawGrounds() {
-    const { width, height } = this.scale;
     const ground = (x: number, y: number, w: number, h: number, texture: string, depth = -1000) =>
       this.add.tileSprite(x, y, w, h, texture).setOrigin(0).setDepth(depth);
-    ground(0, HUD_HEIGHT, width, height - HUD_HEIGHT, 'tile-grass');
+    ground(0, 0, WORLD.w, WORLD.h, 'tile-grass');
 
-    // Workshop yard of packed earth, with a path to the shop door.
-    ground(YARD.x, YARD.y, YARD.w, YARD.h, 'tile-dirt');
-    ground(YARD.x + YARD.w, SHOP.y + 290, SHOP.x - YARD.x - YARD.w, 90, 'tile-dirt');
+    // Workshop yard of packed earth around the courtyard, with a strip up to the shop door.
+    for (const yard of YARDS) ground(yard.x, yard.y, yard.w, yard.h, 'tile-dirt', -999);
 
     // Gardens: meadow inside a picket fence.
     for (const area of GARDEN_AREAS) {
@@ -151,14 +158,15 @@ export class GameScene extends Phaser.Scene {
       ground(area.x, area.y + area.h - 28, area.w, 32, 'fence-h', -980);
     }
 
-    // Shop: plank floor inside stone walls, with a doorway facing the yard.
+    // Shop: plank floor inside stone walls, with a doorway in the bottom wall facing the courtyard.
     ground(SHOP.x, SHOP.y, SHOP.w, SHOP.h, 'tile-planks');
     const wall = 16;
+    const bottom = SHOP.y + SHOP.h - wall / 2;
     ground(SHOP.x - wall / 2, SHOP.y - wall / 2, SHOP.w + wall, wall, 'tile-wall', -990);
-    ground(SHOP.x - wall / 2, SHOP.y + SHOP.h - wall / 2, SHOP.w + wall, wall, 'tile-wall', -990);
+    ground(SHOP.x - wall / 2, bottom, SHOP_DOOR.from - SHOP.x + wall / 2, wall, 'tile-wall', -990);
+    ground(SHOP_DOOR.to, bottom, SHOP.x + SHOP.w + wall / 2 - SHOP_DOOR.to, wall, 'tile-wall', -990);
+    ground(SHOP.x - wall / 2, SHOP.y, wall, SHOP.h, 'tile-wall', -990);
     ground(SHOP.x + SHOP.w - wall / 2, SHOP.y, wall, SHOP.h, 'tile-wall', -990);
-    ground(SHOP.x - wall / 2, SHOP.y, wall, 290, 'tile-wall', -990);
-    ground(SHOP.x - wall / 2, SHOP.y + 380, wall, SHOP.h - 380, 'tile-wall', -990);
 
     // Place names on wooden signs.
     const label = (x: number, y: number, text: string) => {
@@ -169,8 +177,8 @@ export class GameScene extends Phaser.Scene {
       this.add.image(x, y, signTexture(this, name.width + 16)).setDepth(-910);
     };
     for (const area of GARDEN_AREAS) label(area.x + area.w / 2, area.y + 10, area.name);
-    label(REFINER.x, REFINER.y + 46, 'Refining table');
-    label(CAULDRON.x, CAULDRON.y - 64, 'Cauldron');
+    label(LABELS.refiner.x, LABELS.refiner.y, 'Refining table');
+    label(LABELS.cauldron.x, LABELS.cauldron.y, 'Cauldron');
     label(SHOP.x + SHOP.w / 2, SHOP.y, 'Storefront');
   }
 
@@ -294,6 +302,7 @@ export class GameScene extends Phaser.Scene {
 
   private createHud() {
     const { width } = this.scale;
+    const first = this.children.list.length;
     this.add.tileSprite(0, 0, width, HUD_HEIGHT, 'hud-bar').setOrigin(0).setDepth(UI_DEPTH);
     const style = { fontFamily: 'monospace', fontSize: '16px', color: '#f3e9d2' };
     this.add.image(26, HUD_HEIGHT / 2 - 1, 'coin').setScale(2).setDepth(UI_DEPTH);
@@ -318,6 +327,8 @@ export class GameScene extends Phaser.Scene {
       this.add.image(x, HUD_HEIGHT / 2 - 1, 'slot').setDepth(UI_DEPTH);
       return this.add.image(x, HUD_HEIGHT / 2 - 1, 'item-wheat').setScale(1.5).setDepth(UI_DEPTH);
     });
+    // Everything in the top bar stays put while the camera follows the doctor.
+    for (const obj of this.children.list.slice(first)) (obj as unknown as Phaser.GameObjects.Components.ScrollFactor).setScrollFactor(0);
     const pack = new BackStack(this);
 
     this.views.push(() => {
@@ -364,7 +375,7 @@ export class GameScene extends Phaser.Scene {
 
     // Touch / click to walk, so the same controls work on phones.
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
-      if (p.worldY < HUD_HEIGHT) return;
+      if (p.y < HUD_HEIGHT) return;
       this.pointerTarget = new Phaser.Math.Vector2(p.worldX, p.worldY);
       this.waypoint = this.routeAround(this.pointerTarget);
     });

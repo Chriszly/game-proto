@@ -11,7 +11,10 @@ export function loadState(): GameState {
     const saved = JSON.parse(raw) as Partial<GameState>;
     if (saved.version !== fresh.version || saved.plots?.length !== fresh.plots.length) return fresh;
     // Fields added after the save was written fall back to their defaults.
-    return { ...fresh, ...saved };
+    const state = { ...fresh, ...saved };
+    // The stations have moved since this save; start the doctor somewhere clear of them.
+    if (saved.layout !== fresh.layout) return { ...state, layout: fresh.layout, player: fresh.player };
+    return state;
   } catch {
     return fresh;
   }

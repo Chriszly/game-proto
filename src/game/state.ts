@@ -44,6 +44,8 @@ export interface Upgrade {
 
 export interface GameState {
   version: 3;
+  /** Which world layout the save was made in; a save from another layout starts the doctor at the start spot. */
+  layout: number;
   coins: number;
   carrying: ItemId[];
   player: { x: number; y: number };
@@ -65,6 +67,9 @@ export const CARRY_CAPACITY = 4;
 export const STATION_CAPACITY = 6;
 export const MAX_ORDERS = 3;
 
+/** Bumped whenever station positions move, so a loaded save doesn't put the doctor inside one. */
+export const LAYOUT = 2;
+
 export const MAX_LEVEL = 3;
 /** Coins needed to go from `level` to the next level: 20, 40, 80. */
 export const upgradeCost = (level: number) => 20 * 2 ** level;
@@ -75,9 +80,11 @@ export function createInitialState(): GameState {
   const ripe = (plant: PlantId): Plot => ({ plant, grown: GROW_MS[plant] });
   return {
     version: 3,
+    layout: LAYOUT,
     coins: 0,
     carrying: [],
-    player: { x: 450, y: 290 },
+    // The middle of the courtyard inside the U (see src/scenes/layout.ts).
+    player: { x: 600, y: 540 },
     // Start ripe so the first harvest can happen right away.
     plots: GARDENS.flatMap((plant) => Array.from({ length: PLOTS_PER_GARDEN }, () => ripe(plant))),
     refiner: { queue: [], progress: 0, output: [] },
