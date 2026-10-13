@@ -6,6 +6,8 @@ const GAMES = [
   { name: 'Deadline', path: '/games/deadline/' },
   { name: 'Palisade', path: '/games/palisade/' },
   { name: 'Tiny Kingdom', path: '/games/tiny-kingdom/' },
+  { name: 'Rogue Runner', path: '/games/rogue-runner/' },
+  { name: 'Merge Forge', path: '/games/merge-forge/' },
   { name: 'Pirate Raid', path: '/games/pirate-raid/' },
 ];
 

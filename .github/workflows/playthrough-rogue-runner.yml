@@ -1,0 +1,51 @@
+name: Playthrough Rogue Runner
+
+# Plays Rogue Runner's first stage. Runs only when the game's folder or a shared file it builds
+# and tests with changes; every game has its own playthrough-<name>.yml like this one.
+on:
+  push:
+    branches: [main]
+    paths: &paths
+      - games/rogue-runner/**
+      - package.json
+      - package-lock.json
+      - tsconfig.json
+      - vite.config.ts
+      - playwright.config.ts
+      - .github/workflows/playthrough-rogue-runner.yml
+  pull_request:
+    paths: *paths
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: playthrough-rogue-runner-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  play:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      # Plays the first stage in headless Chromium at 4x speed.
+      - run: npx playwright test --project rogue-runner
+        env:
+          PLAYTHROUGH_SPEED: 4
+      # Video and milestone screenshots of the run, pass or fail; open the report's index.html to browse them.
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playthrough-rogue-runner
+          path: |
+            test-results
+            playwright-report
+          retention-days: 14
