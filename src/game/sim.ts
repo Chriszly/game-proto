@@ -164,7 +164,8 @@ function runBelt(state: GameState, id: BeltId, dt: number) {
   const belt = state.belts[id];
   if (!belt.built) return;
   const length = BELT_MS[id];
-  const step = dt * beltSpeed(state);
+  // Each lane runs at a share of the belt's speed, so all lanes together carry as much as one did.
+  const step = (dt * beltSpeed(state)) / BELT_LANES[id].length;
   // The item last seen in each lane: the one ahead of the next in that lane, and in the end the rearmost.
   const ahead = new Map<ItemId, BeltItem>();
   belt.items = belt.items.filter((item) => {

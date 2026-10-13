@@ -76,7 +76,8 @@ and cauldron to counter (150). A belt picks ripe plants or finished goods up at 
 hands them to the next station when it has room; the drop and pick-up markers it replaces go away,
 and the goods it carries are cleared from the doctor's hands when it is built. Each belt has a
 narrow lane for every kind of goods it carries (wheat and mandrake, flour and seeds, or the two
-potions), so when one kind waits for room at the next station the other keeps moving.
+potions), so when one kind waits for room at the next station the other keeps moving. The lanes
+run at half speed, so a belt carries as many goods a second as a one-lane belt would.
 The belts are steampunk machinery, brass rails over leather slats, in an otherwise medieval world.
 
 ![All three belts built, with a lane for each kind of goods](docs/screenshots/belt-lanes.png)

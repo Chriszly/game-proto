@@ -193,7 +193,7 @@ export const LAYOUT = 2;
 
 /** Coins needed to build each belt. */
 export const BELT_COST: Record<BeltId, number> = { garden: 60, refiner: 100, cauldron: 150, garden2: 60, refiner2: 100, cauldron2: 150 };
-/** How long an item takes from one end of each belt to the other: about 100 pixels a second. */
+/** How long an item takes from one end of each belt to the other in a one-lane belt: about 100 pixels a second. */
 export const BELT_MS: Record<BeltId, number> = { garden: 4_000, refiner: 2_500, cauldron: 5_500, garden2: 4_000, refiner2: 2_500, cauldron2: 5_500 };
 /** The stations a belt joins, which must both stand before it can be built. */
 export const BELT_ENDS: Record<BeltId, StationId[]> = {
