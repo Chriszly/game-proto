@@ -18,6 +18,15 @@ export const plotPosition = (i: number) => {
 export const REFINER = { x: 450, y: 170 };
 export const CAULDRON = { x: 450, y: 400 };
 
+/** Drop-off, pick-up and upgrade markers in a row on the floor in front of a station. */
+export const markersFor = (x: number, y: number) => ({
+  drop: { x: x - 56, y },
+  pickUp: { x, y },
+  upgrade: { x: x + 56, y },
+});
+export const REFINER_MARKERS = markersFor(REFINER.x, REFINER.y + 76);
+export const CAULDRON_MARKERS = markersFor(CAULDRON.x, CAULDRON.y + 70);
+
 export const SHOP = { x: 610, y: 68, w: 326, h: 440 };
 export const COUNTER = { x: 773, y: 250 };
 /** Where waiting customer i stands, on the far side of the counter. */

@@ -9,7 +9,6 @@ import {
   isRefined,
   type ItemId,
   type PotionId,
-  type RefinedId,
 } from './items';
 import {
   CARRY_CAPACITY,
@@ -99,26 +98,6 @@ export type Feedback = string[];
 
 const freeHands = (state: GameState) => CARRY_CAPACITY - state.carrying.length;
 
-/** Moves items matching `pick` out of the player's hands, up to `limit`. */
-function takeFromHands<T extends ItemId>(state: GameState, pick: (id: ItemId) => id is T, limit: number): T[] {
-  const taken: T[] = [];
-  state.carrying = state.carrying.filter((id) => {
-    if (taken.length < limit && pick(id)) {
-      taken.push(id);
-      return false;
-    }
-    return true;
-  });
-  return taken;
-}
-
-function collect(state: GameState, from: ItemId[], feedback: Feedback) {
-  const n = Math.min(freeHands(state), from.length);
-  const picked = from.splice(0, n);
-  state.carrying.push(...picked);
-  for (const id of picked) feedback.push(`+ ${ITEMS[id].name}`);
-}
-
 export function harvest(state: GameState, plotIndex: number): Feedback {
   const plot = state.plots[plotIndex];
   if (!isRipe(state, plotIndex)) return ['Not ripe yet'];
@@ -126,28 +105,6 @@ export function harvest(state: GameState, plotIndex: number): Feedback {
   plot.grown = 0;
   state.carrying.push(plot.plant);
   return [`+ ${ITEMS[plot.plant].name}`];
-}
-
-/** Picks up finished goods first, then drops off any plants being carried. */
-export function useRefiner(state: GameState): Feedback {
-  const feedback: Feedback = [];
-  collect(state, state.refiner.output, feedback);
-  const room = STATION_CAPACITY - state.refiner.queue.length;
-  const plants = takeFromHands(state, isPlant, room);
-  state.refiner.queue.push(...plants);
-  if (plants.length > 0) feedback.push(`Refining ${plants.length}`);
-  return feedback.length > 0 ? feedback : ['Bring harvested plants'];
-}
-
-/** Picks up finished potions first, then drops refined goods into the pot. */
-export function useCauldron(state: GameState): Feedback {
-  const feedback: Feedback = [];
-  collect(state, state.cauldron.output, feedback);
-  const room = STATION_CAPACITY - state.cauldron.contents.length;
-  const goods: RefinedId[] = takeFromHands(state, isRefined, room);
-  state.cauldron.contents.push(...goods);
-  if (goods.length > 0) feedback.push(`Added ${goods.length} to the pot`);
-  return feedback.length > 0 ? feedback : ['Bring refined goods'];
 }
 
 /**
