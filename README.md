@@ -49,7 +49,8 @@ the doctor keeps the item and a belt waits until there is room.
 takes up to two, hired one at a time on the purple marker beside it (30, then 60 coins); they
 stand by the station once hired, and its work spot goes away. A refining table or cauldron works
 as fast again for each craftsman. At the counter
-the first craftsman serves customers, and the second also brings the coins from the till.
+the first craftsman serves customers, a potion every 1.5 seconds where the doctor hands them over
+at once, and the second makes that twice as fast and also brings the coins from the till.
 
 ![Craftsmen at the stations](docs/screenshots/craftsmen-map.png)
 
