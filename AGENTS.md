@@ -6,7 +6,8 @@ each game, and each game lives in its own folder, `games/<name>/`, with its own 
 Playwright config, CI workflows and PR template are shared. The games are Apothecary, in
 `games/apothecary/`, Deadline, in `games/deadline/`, Palisade, in `games/palisade/`, Tiny Kingdom, in
 `games/tiny-kingdom/`, Rogue Runner, in `games/rogue-runner/`, Merge Forge, in `games/merge-forge/`,
-Pirate Raid, in `games/pirate-raid/`, and Potion Puzzle, in `games/potion-puzzle/`.
+Pirate Raid, in `games/pirate-raid/`, Potion Puzzle, in `games/potion-puzzle/`, and Delve, in
+`games/delve/`.
 
 ## Work on one game at a time
 

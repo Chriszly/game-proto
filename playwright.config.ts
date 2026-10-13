@@ -28,6 +28,7 @@ export default defineConfig({
     { name: 'merge-forge', testDir: 'games/merge-forge/e2e' },
     { name: 'pirate-raid', testDir: 'games/pirate-raid/e2e' },
     { name: 'potion-puzzle', testDir: 'games/potion-puzzle/e2e' },
+    { name: 'delve', testDir: 'games/delve/e2e' },
   ],
   webServer: {
     command: 'npm run dev -- --port 5173 --strictPort',
