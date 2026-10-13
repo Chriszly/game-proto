@@ -51,7 +51,7 @@ export function createInitialState(): GameState {
     version: 1,
     coins: 0,
     carrying: [],
-    player: { x: 480, y: 300 },
+    player: { x: 450, y: 290 },
     // Start ripe so the first harvest can happen right away.
     plots: [ripe('sage'), ripe('sage'), ripe('sage'), ripe('mandrake'), ripe('mandrake'), ripe('mandrake')],
     refiner: { queue: [], progress: 0, output: [] },

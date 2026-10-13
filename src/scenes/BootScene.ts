@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { DOCTOR_FRAMES, DOCTOR_PALETTE } from '../art/doctor';
 import { bakePixelArt } from '../art/pixelArt';
+import { bakePlaceholders } from '../art/placeholders';
 
 // Generates all textures at runtime so the prototype needs no asset files yet.
 export class BootScene extends Phaser.Scene {
@@ -18,6 +19,7 @@ export class BootScene extends Phaser.Scene {
       frameRate: 10,
       repeat: -1,
     });
+    bakePlaceholders(this);
 
     this.scene.start('Game');
   }
