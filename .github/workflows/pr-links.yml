@@ -62,6 +62,8 @@ jobs:
             ];
 
             if (hits.length > 0) {
+              // One error annotation per link, shown on the run's summary page.
+              for (const hit of hits) core.error(hit, { title: 'Link outside GitHub' });
               core.setFailed(`PR links outside GitHub; edit the title or description, or reword the commits and the check re-runs:\n${hits.join('\n')}`);
             } else {
               console.log(`PR title, description and ${commits.length} commit message(s) link only to GitHub.`);
