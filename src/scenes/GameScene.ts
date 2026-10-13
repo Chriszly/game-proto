@@ -47,7 +47,7 @@ const MARKER_INTERVAL_MS = 200;
 /** Pause between plants when several in reach are ripe, so each pickup can be seen. */
 const HARVEST_INTERVAL_MS = 150;
 /** Harvest radius around the doctor's centre, in character heights. */
-const HARVEST_REACH = 1.5;
+const HARVEST_REACH = 1;
 /** Sickle spin speed in radians per millisecond, its size, and how long it keeps spinning after the
  * last ripe plant in reach. It circles on the edge of the harvest radius, tracing the area. */
 const SICKLE_SPIN = 0.008;
