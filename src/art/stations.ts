@@ -108,7 +108,23 @@ function bakeCounter(scene: Phaser.Scene) {
   c.bake(scene, 'counter', SCALE);
 }
 
+/** A wooden pallet seen from the front: a slatted deck on three blocks. 36x16 on screen. */
+function bakePallet(scene: Phaser.Scene) {
+  const c = new PixelCanvas(18, 8);
+  // Deck boards, with a gap between each.
+  c.rect(1, 1, 16, 3, WOOD.light);
+  for (const x of [1, 6, 11]) c.rect(x, 1, 5, 1, WOOD.shine);
+  for (const x of [5, 10, 15]) c.rect(x, 1, 1, 3, WOOD.mid);
+  c.rect(1, 3, 16, 1, WOOD.mid);
+  // Blocks under the deck, on a bottom board.
+  for (const x of [1, 8, 14]) c.rect(x, 4, 3, 2, WOOD.dark);
+  c.rect(1, 6, 16, 1, WOOD.mid);
+  c.outline(INK);
+  c.bake(scene, 'pallet', SCALE);
+}
+
 export function bakeStations(scene: Phaser.Scene) {
+  bakePallet(scene);
   bakeTable(scene);
   for (const frame of [0, 1, 2]) bakeCauldron(scene, frame);
   scene.anims.create({

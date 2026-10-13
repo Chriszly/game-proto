@@ -7,7 +7,7 @@ import { PLOTS_PER_GARDEN, type BeltId } from '../game/state';
 // than the 960x540 view, so the camera follows the doctor.
 
 export const HUD_HEIGHT = 44;
-export const WORLD = { w: 1200, h: 810 };
+export const WORLD = { w: 1200, h: 880 };
 
 /** The second line mirrors the first across the middle of the map. */
 const mirror = (p: { x: number; y: number }) => ({ x: WORLD.w - p.x, y: p.y });
@@ -33,12 +33,12 @@ export const plotPosition = (i: number) => {
  * until an expansion for the second line is bought.
  */
 export const YARDS = [
-  { x: 24, y: 448, w: 736, h: 344 },
+  { x: 24, y: 448, w: 736, h: 414 },
   { x: 316, y: 400, w: 444, h: 60 },
 ];
 /** The right arm's yard, laid once the expansion's land is bought. */
 export const EXPANSION_YARDS = [
-  { x: 760, y: 448, w: 416, h: 344 },
+  { x: 760, y: 448, w: 416, h: 414 },
   { x: 760, y: 400, w: 124, h: 60 },
 ];
 /** The outfitter's sign on the grass right of the shop; its upgrade markers run down below it. */
@@ -102,12 +102,39 @@ export const COUNTER_MARKERS: StationMarkers = {
 /** Where waiting customer i stands, on the far side of the counter. */
 export const customerPosition = (i: number) => ({ x: COUNTER.x - 60 + i * 60, y: COUNTER.y - 60 });
 
-/** Labels for the stations, placed clear of their markers. */
+/** Labels for the stations, placed clear of their markers and pallets. */
 export const LABELS = {
-  refiner: { x: 170, y: 540 },
-  cauldron: { x: 330, y: 770 },
-  refiner2: mirror({ x: 170, y: 540 }),
-  cauldron2: mirror({ x: 330, y: 770 }),
+  refiner: { x: 110, y: 540 },
+  cauldron: { x: 460, y: 800 },
+  refiner2: mirror({ x: 110, y: 540 }),
+  cauldron2: mirror({ x: 460, y: 800 }),
+};
+
+/**
+ * Where each station's pallets stand, given by the middle of their bottom edge: one for each kind
+ * of goods coming in and one for each kind going out, in the order of PLANTS, REFINED and POTIONS.
+ * The refining table keeps them on its left, plants above and refined goods below; the cauldron
+ * keeps them below its drop-off and pick-up; the counter keeps its potions behind its left end.
+ */
+export interface StationPallets {
+  in: { x: number; y: number }[];
+  out: { x: number; y: number }[];
+}
+const REFINER_PALLETS: StationPallets = {
+  in: [{ x: 222, y: 530 }, { x: 262, y: 530 }],
+  out: [{ x: 222, y: 612 }, { x: 262, y: 612 }],
+};
+const CAULDRON_PALLETS: StationPallets = {
+  in: [{ x: 362, y: 840 }, { x: 398, y: 840 }],
+  out: [{ x: 522, y: 840 }, { x: 558, y: 840 }],
+};
+const mirrorPallets = (p: StationPallets): StationPallets => ({ in: p.in.map(mirror), out: p.out.map(mirror) });
+export const PALLETS = {
+  refiner: REFINER_PALLETS,
+  cauldron: CAULDRON_PALLETS,
+  refiner2: mirrorPallets(REFINER_PALLETS),
+  cauldron2: mirrorPallets(CAULDRON_PALLETS),
+  counter: { in: [{ x: 467, y: 240 }, { x: 501, y: 240 }], out: [] } as StationPallets,
 };
 
 /**
@@ -135,10 +162,10 @@ export const BELT_PATHS: Record<BeltId, { x: number; y: number }[][]> = {
 };
 /** Where the doctor stands to pay for each belt; the cauldron belts' markers face the courtyard. */
 export const BELT_BUILD: Record<BeltId, { x: number; y: number }> = {
-  garden: { x: 230, y: 468 },
-  refiner: { x: 230, y: 612 },
+  garden: { x: 170, y: 468 },
+  refiner: { x: 170, y: 612 },
   cauldron: { x: 520, y: 576 },
-  garden2: mirror({ x: 230, y: 468 }),
-  refiner2: mirror({ x: 230, y: 612 }),
+  garden2: mirror({ x: 170, y: 468 }),
+  refiner2: mirror({ x: 170, y: 612 }),
   cauldron2: mirror({ x: 520, y: 576 }),
 };
