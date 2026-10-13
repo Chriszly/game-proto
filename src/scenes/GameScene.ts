@@ -116,6 +116,8 @@ export class GameScene extends Phaser.Scene {
   private pointerTarget: Phaser.Math.Vector2 | null = null;
   /** A corner to walk to first when a station stands between the doctor and the tapped spot. */
   private waypoint: Phaser.Math.Vector2 | null = null;
+  /** Which way the doctor set off towards the tapped spot (or corner) last frame. */
+  private heading: Phaser.Math.Vector2 | null = null;
   /** Station footprints grown by the doctor's feet, used to walk around stations after a tap. */
   private blockedAreas: Phaser.Geom.Rectangle[] = [];
   private obstacles!: Phaser.Physics.Arcade.StaticGroup;
@@ -589,6 +591,7 @@ export class GameScene extends Phaser.Scene {
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       if (p.y < HUD_HEIGHT) return;
       this.pointerTarget = new Phaser.Math.Vector2(p.worldX, p.worldY);
+      this.heading = null;
       this.waypoint = this.routeAround(this.pointerTarget);
     });
   }
@@ -687,21 +690,31 @@ export class GameScene extends Phaser.Scene {
     if (this.cursors.up.isDown || this.wasd.up.isDown) dir.y -= 1;
     if (this.cursors.down.isDown || this.wasd.down.isDown) dir.y += 1;
 
+    let turned = false;
     if (dir.lengthSq() > 0) {
       this.pointerTarget = null;
     } else if (this.pointerTarget) {
       // Steer the feet, not the sprite centre, to the tapped spot, via a corner if a station is in the way.
       const target = this.waypoint ?? this.pointerTarget;
       dir.set(target.x - this.player.x, target.y - this.feetY());
-      if (this.waypoint && dir.length() < 6) {
+      // Walking past the spot counts as getting there, so a fast walk on a slow frame rate doesn't
+      // overshoot it back and forth.
+      const passed = this.heading !== null && dir.dot(this.heading) <= 0;
+      if (this.waypoint && (dir.length() < 6 || passed)) {
         this.waypoint = this.routeAround(this.pointerTarget);
-      } else if (!this.waypoint && dir.length() < 4) {
+        turned = true;
+      } else if (!this.waypoint && (dir.length() < 4 || passed)) {
+        // Settle the feet on the spot itself, a step back if the last frame carried them past it.
+        if (passed) this.player.body!.reset(target.x, this.player.y + dir.y);
         this.pointerTarget = null;
-          dir.set(0, 0);
+        dir.set(0, 0);
       }
     }
 
-    dir.normalize().scale(SPEED * walkSpeed(this.state));
+    dir.normalize();
+    // Heading towards a new corner or spot is only known from the next frame.
+    this.heading = this.pointerTarget && !turned && dir.lengthSq() > 0 ? dir.clone() : null;
+    dir.scale(SPEED * walkSpeed(this.state));
     this.player.setVelocity(dir.x, dir.y);
     this.animatePlayer(dir);
   }
