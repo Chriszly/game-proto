@@ -33,7 +33,7 @@ import {
 } from './layout';
 
 const SPEED = 160;
-const PLAYER_SCALE = 3;
+const PLAYER_SCALE = 2;
 /** Longest simulated step, so a backgrounded tab doesn't jump the world forward. */
 const MAX_STEP_MS = 250;
 const UI_DEPTH = 10_000;
@@ -338,7 +338,8 @@ export class GameScene extends Phaser.Scene {
     this.player = this.physics.add.sprite(x, y, 'doctor-idle');
     this.player.setScale(PLAYER_SCALE);
     // Collide with the feet only, so the hat and beak can overlap things behind the doctor.
-    this.player.body!.setSize(10, 5).setOffset(3, 19);
+    // In texture pixels: a 30x15 box at (9, 57) once scaled, as before the art was redrawn.
+    this.player.body!.setSize(15, 7.5).setOffset(4.5, 28.5);
     this.player.setCollideWorldBounds(true);
     this.physics.add.collider(this.player, this.obstacles);
   }
