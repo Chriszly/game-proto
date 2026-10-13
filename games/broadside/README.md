@@ -34,13 +34,17 @@ the gold buys a stronger hull, heavier shot, more guns, a faster crew and faster
 5. **The sea has no edge.** Like on a globe, sailing off the top brings you back in at the
    bottom, and off the left side back in on the right. Enemy ships, loot and cannonballs cross
    over the same way, and the arrows point the shortest way round.
-6. **The run is over when your hull is sunk**. "Sail again" starts afresh at wave 1. The best wave
+6. **Islands**: the shallows around an island are safe, but a ship that runs onto the sand,
+   yours or an enemy's, glances off and takes 8 damage to its hull.
+7. **The run is over when your hull is sunk**. "Sail again" starts afresh at wave 1. The best wave
    beaten is kept in the browser.
 
 ![Hauling in the plunder](docs/screenshots/playthrough-1-loot.png)
 
 ![Just over the northern edge: the island ahead lies at the far south of the sea, and the sloop
 off the port bow came over the edge after the ship](docs/screenshots/wrap-around.png)
+
+![Running aground on an island: the hull flashes and the ship glances off](docs/screenshots/run-aground.png)
 
 ### Enemy ships
 

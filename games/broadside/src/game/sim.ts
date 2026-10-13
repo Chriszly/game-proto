@@ -1,9 +1,12 @@
 import { byDifficulty } from '../../../../shared/settings';
 import { ENEMIES } from './ships';
 import {
+  AGROUND_DAMAGE,
+  AGROUND_MS,
   ARC,
   BALL_SPEED,
   BREAK_MS,
+  ISLANDS,
   LOOT_MS,
   LOOT_PULL,
   WORLD,
@@ -77,25 +80,72 @@ export function tick(s: GameState, dt: number) {
 
   const p = stats(s);
   steer(s.player, s.player.heading + (s.helm * Math.PI) / 2, p.turn * Math.abs(s.helm), p.speed, dt);
-  if (s.phase !== 'fighting') return;
+  if (s.phase !== 'fighting') {
+    runAground(s, s.player);
+    playerSunk(s);
+    return;
+  }
 
   spawn(s, dt);
   for (const e of s.enemies) sailEnemy(s, e, dt);
   separate(s);
+  for (const ship of [s.player, ...s.enemies]) runAground(s, ship);
   fireBroadsides(s, dt);
   moveBalls(s, dt);
 
   for (const e of s.enemies.filter((e) => e.hp <= 0)) sink(s, e);
   s.enemies = s.enemies.filter((e) => e.hp > 0);
-  if (s.player.hp <= 0) {
-    s.player.hp = 0;
-    s.phase = 'over';
-    s.bestWave = Math.max(s.bestWave, s.wave - 1);
-    return;
-  }
+  if (playerSunk(s)) return;
 
   gatherLoot(s, dt);
   if (s.toSpawn.length === 0 && s.enemies.length === 0 && s.loot.length === 0) reachHarbor(s);
+}
+
+/** Ends the run if the player's hull is gone. */
+function playerSunk(s: GameState) {
+  if (s.player.hp > 0) return false;
+  s.player.hp = 0;
+  s.phase = 'over';
+  s.bestWave = Math.max(s.bestWave, s.wave - 1);
+  return true;
+}
+
+/**
+ * A ship that sails onto an island's beach, player or enemy, is pushed back off it, glances away
+ * as off a wall and takes `AGROUND_DAMAGE` to its hull, at most once every `AGROUND_MS`. The beach
+ * is an ellipse, grown by part of the ship's radius so the bow touches sand before the hull does.
+ */
+function runAground(s: GameState, ship: Ship) {
+  const reach = radiusOf(ship) * 0.6;
+  for (const island of ISLANDS) {
+    const { dx, dy } = offset(island, ship);
+    const ax = island.rx + reach;
+    const ay = island.ry + reach;
+    const n = Math.hypot(dx / ax, dy / ay);
+    if (n >= 1) continue;
+    // Out to the edge of the grown ellipse, along the line from its centre.
+    const scale = n === 0 ? 0 : 1 / n;
+    ship.x = island.x + (n === 0 ? ax : dx * scale);
+    ship.y = island.y + dy * scale;
+    wrapPoint(ship);
+    // Glance off: mirror the heading in the beach's normal when sailing into it.
+    let nx = dx / (ax * ax);
+    let ny = dy / (ay * ay);
+    const len = Math.hypot(nx, ny) || 1;
+    nx /= len;
+    ny /= len;
+    if (n === 0) [nx, ny] = [1, 0];
+    const vx = Math.cos(ship.heading);
+    const vy = Math.sin(ship.heading);
+    const into = vx * nx + vy * ny;
+    if (into < 0) ship.heading = Math.atan2(vy - 2 * into * ny, vx - 2 * into * nx);
+    if (ship.agroundMs <= 0) {
+      ship.hp -= AGROUND_DAMAGE;
+      ship.hitMs = 160;
+      ship.agroundMs = AGROUND_MS;
+      effect(s, 'hit', wrapCoord(ship.x - nx * reach, WORLD.w), wrapCoord(ship.y - ny * reach, WORLD.h), 400);
+    }
+  }
 }
 
 /**
@@ -110,6 +160,7 @@ function steer(ship: Ship, heading: number, turn: number, speed: number, dt: num
   ship.y += (Math.sin(ship.heading) * speed * dt) / 1000;
   wrapPoint(ship);
   ship.hitMs = Math.max(0, ship.hitMs - dt);
+  ship.agroundMs = Math.max(0, ship.agroundMs - dt);
 }
 
 function spawn(s: GameState, dt: number) {

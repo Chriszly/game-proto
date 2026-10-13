@@ -8,6 +8,23 @@ import { waveShips } from './waves';
  */
 export const WORLD = { w: 1920, h: 1200 };
 
+/**
+ * The islands on the sea: their texture and centre, and the half-widths of the sandy beach that
+ * ships run aground on (the shallows around it are drawn but safe). The beach is 78% by 72% of
+ * the texture, from `bakeIsland` in src/art/art.ts.
+ */
+export const ISLANDS = [
+  { key: 'island-0', x: 330, y: 260, rx: 58, ry: 36 },
+  { key: 'island-1', x: 1540, y: 330, rx: 39, ry: 29 },
+  { key: 'island-2', x: 1180, y: 940, rx: 27, ry: 19 },
+  { key: 'island-1', x: 420, y: 960, rx: 39, ry: 29 },
+  { key: 'island-2', x: 1700, y: 1020, rx: 27, ry: 19 },
+];
+/** Hull damage a ship takes each time it runs onto an island's beach. */
+export const AGROUND_DAMAGE = 8;
+/** After running aground, how long before the same ship can be damaged by an island again. */
+export const AGROUND_MS = 800;
+
 /** A coordinate brought back onto the sea, in [0, size). */
 export const wrapCoord = (v: number, size: number) => ((v % size) + size) % size;
 
@@ -48,6 +65,8 @@ export interface Ship {
   reload: Record<Side, number>;
   /** Time left to flash after a hit. */
   hitMs: number;
+  /** Time left before an island can damage this ship again. */
+  agroundMs: number;
 }
 
 export interface Ball {
@@ -123,7 +142,7 @@ export function stats(s: GameState) {
 }
 
 export function newShip(id: number, kind: Ship['kind'], x: number, y: number, heading: number, hp: number): Ship {
-  return { id, kind, x, y, heading, hp, maxHp: hp, reload: { port: 0, starboard: 0 }, hitMs: 0 };
+  return { id, kind, x, y, heading, hp, maxHp: hp, reload: { port: 0, starboard: 0 }, hitMs: 0, agroundMs: 0 };
 }
 
 export function newRun(bestWave = 0): GameState {

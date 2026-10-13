@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { SHIP_LOOKS } from '../art/art';
 import { loadBestWave, saveBestWave } from '../game/save';
 import { buy, repair, setSail, tick } from '../game/sim';
-import { ARC, newRun, offset, stats, type GameState, type Ship } from '../game/state';
+import { ARC, ISLANDS, newRun, offset, stats, type GameState, type Ship } from '../game/state';
 import { makeButton } from '../ui/Button';
 import { Harbor, type HarborAction } from '../ui/Harbor';
 import { pinToScreen } from '../ui/screen';
@@ -14,14 +14,6 @@ const MAX_STEP_MS = 250;
 const WAKE_EVERY_MS = 90;
 const WAKE_MS = 1400;
 const HP_BAR_W = 34;
-/** Scenery: where the islands lie on the sea (`WORLD` in src/game/state.ts). */
-const ISLANDS = [
-  { key: 'island-0', x: 330, y: 260 },
-  { key: 'island-1', x: 1540, y: 330 },
-  { key: 'island-2', x: 1180, y: 940 },
-  { key: 'island-1', x: 420, y: 960 },
-  { key: 'island-2', x: 1700, y: 1020 },
-];
 
 const textStyle = (size: number, color = '#f3e9d2') => ({
   fontFamily: FONT,

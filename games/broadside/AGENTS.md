@@ -17,14 +17,16 @@ off either side. Sunk enemies drop loot barrels, and gold buys upgrades at a har
   repair, a game-over panel with "Sail again", and off-screen arrows pointing to enemies and loot.
   The sea wraps around at every edge like a globe: sailing off the north edge comes back in at the
   south, and off the west edge in at the east. Ships, balls and loot all wrap, and every distance
-  and bearing takes the shortest way round.
+  and bearing takes the shortest way round. Islands have collision: any ship, player or enemy,
+  that sails onto an island's beach is pushed off, glances away and takes `AGROUND_DAMAGE`.
 - **Screens:** there is only `GameScene`. The wave banner, the harbor panel and the game-over panel
   are overlays drawn on top of it. There is no title screen, pause or in-game settings; the shared
   settings (difficulty, frame cap, FPS readout, reduced motion) are set on the hub page.
 - **Persistence:** only the best wave beaten is saved. Each run starts fresh at wave 1.
 - **Rough or unused:** there is no sound. The `coin` texture baked in `src/art/art.ts` is never
-  used. `ShipType.name` in `src/game/ships.ts` is never shown. Islands are scenery only, with no
-  collision. There are no TODO comments in the code.
+  used. `ShipType.name` in `src/game/ships.ts` is never shown. Enemy captains don't steer around
+  islands, so they can run aground chasing the player (and even sink themselves). There are no
+  TODO comments in the code.
 
 ## Architecture
 
@@ -38,10 +40,11 @@ File map (all under `src/`, plus the shared files it imports):
 - `scenes/layout.ts`: `VIEW`, `HUD_HEIGHT`, the `HELM` button centres, the `HARBOR` panel and row
   geometry, `BUTTON`, `UI_DEPTH` and `FONT`.
 - `game/state.ts`: types, the world and timing constants, the base `PLAYER` stats, `stats()` (the
-  player's stats after upgrades), `newShip`, `newRun` and `radiusOf`, plus the wrapping helpers
-  `wrapCoord`, `wrapPoint` and `offset` (the shortest `dx`, `dy` between two points on the sea).
-- `game/sim.ts`: all rules. `tick` handles steering, spawning, enemy AI, separation, firing, balls,
-  sinking, loot and reaching the harbor. `buy`, `repair` and `setSail` are the harbor actions.
+  player's stats after upgrades), `newShip`, `newRun`, `radiusOf` and `ISLANDS`, plus the
+  wrapping helpers `wrapCoord`, `wrapPoint` and `offset` (the shortest `dx`, `dy` between two
+  points on the sea).
+- `game/sim.ts`: all rules. `tick` handles steering, spawning, enemy AI, separation, running
+  aground on islands (`runAground`), firing, balls, sinking, loot and reaching the harbor. `buy`, `repair` and `setSail` are the harbor actions.
 - `game/ships.ts`: the `ENEMIES` table (hp, radius, speed, turn, guns, damage, reload, range, loot).
 - `game/upgrades.ts`: the `UPGRADES` table, `UPGRADE_IDS`, `costOf` and `REPAIR_COST`.
 - `game/waves.ts`: `waveShips(wave)` (which ships come, in order) and `hpScale(wave)`.
@@ -86,7 +89,13 @@ How it runs:
   bounds. Everything else is drawn at `place(p)`: its nearest copy around the player, which works
   because the sea is more than twice the view on each axis. The water is a screen-sized tile
   sprite at scroll factor 0 whose tile position follows the camera's scroll, and the islands are
-  repositioned by `place` every frame.
+  repositioned by `place` every frame from `ISLANDS` in `state.ts`.
+- **Islands:** `runAground` in `sim.ts` treats each island's beach as an ellipse grown by part of
+  the ship's radius. A ship inside it is moved out to its edge along the line from the centre,
+  its heading is mirrored in the ellipse's normal if it was sailing in, and, unless `agroundMs`
+  is still running, it loses `AGROUND_DAMAGE` hp, flashes and leaves a `hit` effect. It runs for
+  every ship after `separate` while fighting, and for the player alone in `break`, so an island
+  can end the run in either phase (`playerSunk`).
 
 State model (`src/game/state.ts`):
 
@@ -94,7 +103,8 @@ State model (`src/game/state.ts`):
   `helm`, `enemies`, `balls`, `loot`, `effects`, `gold`, `plundered`, `sunk`, `ranks` (upgrade
   ranks, absent means 0), `bestWave` and `nextId`.
 - `Ship` has a heading in radians (0 is east, positive is clockwise on screen), `hp`/`maxHp`,
-  per-side `reload` timers and `hitMs`. The player is always id 1 with kind `player`.
+  per-side `reload` timers, `hitMs` and `agroundMs` (the cooldown before an island can damage it
+  again). The player is always id 1 with kind `player`.
 - `Ball` carries its velocity, remaining `ms`, `damage` and `fromPlayer`. `Loot` has `gold` and
   `ms` to live. An `Effect` is visual only (`splash`, `smoke`, `hit`, `sink`, `coins`).
 - Only `sim.ts` functions mutate state, plus the scene writing `helm` each frame. The player's
@@ -114,6 +124,9 @@ There is no `Date` or `setTimeout` in the game.
 Data tables, where to tune:
 
 - Player base stats: `PLAYER` in `state.ts`. Upgrade effects: `stats()` in `state.ts`.
+- `ISLANDS` (texture key, centre, and `rx`/`ry`, the beach's half-widths, which must match the beach
+  ellipse in `bakeIsland` in `art/art.ts`), `AGROUND_DAMAGE` (8) and `AGROUND_MS` (800): in
+  `state.ts`. In `runAground` the beach grows by 0.6 of the ship's radius.
 - World, `BREAK_MS`, `LOOT_MS`, `LOOT_PULL`, `ARC` (broadside half-angle) and `BALL_SPEED`: in
   `state.ts`.
 - `SPAWN_MS`, `SPAWN_DISTANCE`, `LOOT_DRIFT`, `ENEMY_SPREAD` and `HARBOR_PATCH`: at the top
@@ -132,7 +145,8 @@ Data tables, where to tune:
   `ENEMIES[kind].hp * hpScale(wave)` by `byDifficulty(0.75, 1, 1.3)` (Easy 0.75, Normal 1, Hard
   1.3) from `shared/settings.ts`, before rounding. The player's stats are not scaled.
 - The game does not read `settings.reduceMotion` itself. The only flash is the orange hit tint
-  while `hitMs > 0` in `GameScene`, which stays on with reduced motion.
+  while `hitMs > 0` in `GameScene` (from a cannonball or running aground), which stays on with
+  reduced motion.
 - Normal must stay exactly as designed: the playthrough runs on Normal and relies on wave 1 sloop
   hp. Keep the Broadside row of the difficulty table in the root `README.md` (and the sentence in
   this game's `README.md`) in sync with the multipliers.
