@@ -78,11 +78,33 @@ export interface Expansion {
   cauldron: Build;
 }
 
-/** A station's upgrade level and the coins paid so far towards the next one. */
+/** An upgrade's level and the coins paid so far towards the next one. */
 export interface Upgrade {
   level: number;
   paid: number;
 }
+
+/**
+ * What can be upgraded: every station, and the doctor's pack (carry more), boots (walk faster) and
+ * sickle (harvest from further away).
+ */
+export type UpgradeId = StationId | 'pack' | 'boots' | 'sickle';
+export const DOCTOR_UPGRADES = ['pack', 'boots', 'sickle'] as const;
+
+/** Each upgrade's highest level (levels count from 0), its first cost, which doubles per level, and name. */
+export const UPGRADES: Record<UpgradeId, { max: number; cost: number; name: string }> = {
+  refiner: { max: 4, cost: 20, name: 'Refining table' },
+  cauldron: { max: 4, cost: 20, name: 'Cauldron' },
+  refiner2: { max: 4, cost: 20, name: 'Refining table' },
+  cauldron2: { max: 4, cost: 20, name: 'Cauldron' },
+  counter: { max: 4, cost: 20, name: 'Counter' },
+  pack: { max: 2, cost: 30, name: 'Pack' },
+  boots: { max: 2, cost: 25, name: 'Boots' },
+  sickle: { max: 2, cost: 25, name: 'Sickle' },
+};
+export const UPGRADE_IDS = Object.keys(UPGRADES) as UpgradeId[];
+/** Coins needed to take an upgrade from `level` to the next: stations 20, 40, 80, 160. */
+export const upgradeCost = (id: UpgradeId, level: number) => UPGRADES[id].cost * 2 ** level;
 
 export interface GameState {
   version: 3;
@@ -98,7 +120,7 @@ export interface GameState {
   cauldron2: Cauldron;
   counter: Counter;
   expansion: Expansion;
-  upgrades: Record<StationId, Upgrade>;
+  upgrades: Record<UpgradeId, Upgrade>;
   belts: Record<BeltId, Belt>;
   orders: Order[];
   nextOrderIn: number;
@@ -121,16 +143,22 @@ export const gardenBuilt = (state: GameState, garden: number) =>
 export const stationBuilt = (state: GameState, id: StationId) =>
   id === 'refiner2' ? state.expansion.refiner.built : id === 'cauldron2' ? state.expansion.cauldron.built : true;
 
-export const CARRY_CAPACITY = 4;
-export const STATION_CAPACITY = 6;
 export const MAX_ORDERS = 3;
+
+/** How many items the doctor carries: four, and one more per pack level. */
+export const carryCapacity = (state: GameState) => 4 + state.upgrades.pack.level;
+/** The most a pack can hold, for laying out the carry slots. */
+export const MAX_CARRY = 4 + UPGRADES.pack.max;
+/** Walking speed multiplier: a fifth faster per boots level. */
+export const walkSpeed = (state: GameState) => 1 + 0.2 * state.upgrades.boots.level;
+/** Harvest reach in character heights: one, and a quarter more per sickle level. */
+export const harvestReach = (state: GameState) => 1 + 0.25 * state.upgrades.sickle.level;
+/** How many items a station holds in each of its trays (waiting, done, or on the shelf). */
+export const stationCapacity = (_state: GameState, _id: StationId) => 6;
 
 /** Bumped whenever station positions move, so a loaded save doesn't put the doctor inside one. */
 export const LAYOUT = 2;
 
-export const MAX_LEVEL = 3;
-/** Coins needed to go from `level` to the next level: 20, 40, 80. */
-export const upgradeCost = (level: number) => 20 * 2 ** level;
 /** Coins needed to build each belt. */
 export const BELT_COST: Record<BeltId, number> = { garden: 60, refiner: 100, cauldron: 150, garden2: 60, refiner2: 100, cauldron2: 150 };
 /** How long an item takes from one end of each belt to the other: about 100 pixels a second. */
@@ -175,13 +203,7 @@ export function createInitialState(): GameState {
     cauldron2: { contents: [], brewing: null, output: [] },
     counter: { shelf: [], till: 0 },
     expansion: { land: unbuilt(), fields: [unbuilt(), unbuilt()], refiner: unbuilt(), cauldron: unbuilt() },
-    upgrades: {
-      refiner: { level: 0, paid: 0 },
-      cauldron: { level: 0, paid: 0 },
-      refiner2: { level: 0, paid: 0 },
-      cauldron2: { level: 0, paid: 0 },
-      counter: { level: 0, paid: 0 },
-    },
+    upgrades: Object.fromEntries(UPGRADE_IDS.map((id) => [id, { level: 0, paid: 0 }])) as Record<UpgradeId, Upgrade>,
     belts: Object.fromEntries(BELTS.map((id) => [id, { ...unbuilt(), items: [] }])) as unknown as Record<BeltId, Belt>,
     orders: [],
     nextOrderIn: 3_000,

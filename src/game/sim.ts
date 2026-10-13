@@ -16,17 +16,17 @@ import {
   BELT_MS,
   BELTS,
   CAULDRONS,
-  CARRY_CAPACITY,
   EXPANSION_COST,
-  MAX_LEVEL,
   MAX_ORDERS,
   REFINERS,
   LINE2_GARDEN,
-  STATION_CAPACITY,
+  UPGRADES,
   beltBuildable,
+  carryCapacity,
   gardenBuilt,
   gardenOf,
   speedAt,
+  stationCapacity,
   upgradeCost,
   type BeltId,
   type Build,
@@ -36,6 +36,7 @@ import {
   type RefinerId,
   type Order,
   type StationId,
+  type UpgradeId,
 } from './state';
 
 // Pure game rules, kept free of Phaser so later automation can drive the same functions.
@@ -51,7 +52,7 @@ export function tick(state: GameState, dt: number, workingAt: StationId | null, 
 
   for (const id of REFINERS) {
     const refiner = state[id];
-    if (workingAt !== id || refiner.queue.length === 0 || refiner.output.length >= STATION_CAPACITY) continue;
+    if (workingAt !== id || refiner.queue.length === 0 || refiner.output.length >= stationCapacity(state, id)) continue;
     refiner.progress += dt * speedAt(state.upgrades[id].level);
     const recipe = REFINE[refiner.queue[0]];
     if (refiner.progress >= recipe.ms) {
@@ -63,7 +64,7 @@ export function tick(state: GameState, dt: number, workingAt: StationId | null, 
 
   for (const id of CAULDRONS) {
     const cauldron = state[id];
-    if (!cauldron.brewing && cauldron.output.length < STATION_CAPACITY) startBrew(cauldron);
+    if (!cauldron.brewing && cauldron.output.length < stationCapacity(state, id)) startBrew(cauldron);
     if (workingAt !== id || !cauldron.brewing) continue;
     cauldron.brewing.progress += dt * speedAt(state.upgrades[id].level);
     if (cauldron.brewing.progress >= cauldron.brewing.ms) {
@@ -100,21 +101,23 @@ function takeForBelt(state: GameState, belt: BeltId): ItemId | null {
   return state[belt].output.shift() ?? null;
 }
 
-/** Where each belt hands its goods to. */
-const beltTarget = (state: GameState, belt: BeltId): ItemId[] =>
-  ({
-    garden: state.refiner.queue,
-    refiner: state.cauldron.contents,
-    cauldron: state.counter.shelf,
-    garden2: state.refiner2.queue,
-    refiner2: state.cauldron2.contents,
-    cauldron2: state.counter.shelf,
-  })[belt];
+/** Where each belt hands its goods to: the station, and the tray they go in. */
+function beltTarget(state: GameState, belt: BeltId): [StationId, ItemId[]] {
+  const targets: Record<BeltId, [StationId, ItemId[]]> = {
+    garden: ['refiner', state.refiner.queue],
+    refiner: ['cauldron', state.cauldron.contents],
+    cauldron: ['counter', state.counter.shelf],
+    garden2: ['refiner2', state.refiner2.queue],
+    refiner2: ['cauldron2', state.cauldron2.contents],
+    cauldron2: ['counter', state.counter.shelf],
+  };
+  return targets[belt];
+}
 
 /** Hands an item from the end of a belt to the next station, if it has room. */
 function giveFromBelt(state: GameState, belt: BeltId, id: ItemId) {
-  const to = beltTarget(state, belt);
-  if (to.length >= STATION_CAPACITY) return false;
+  const [station, to] = beltTarget(state, belt);
+  if (to.length >= stationCapacity(state, station)) return false;
   (to as ItemId[]).push(id);
   return true;
 }
@@ -177,7 +180,7 @@ export function isRipe(state: GameState, plotIndex: number) {
 /** Outcome of an interaction, as short lines for floating feedback text. */
 export type Feedback = string[];
 
-const freeHands = (state: GameState) => CARRY_CAPACITY - state.carrying.length;
+const freeHands = (state: GameState) => carryCapacity(state) - state.carrying.length;
 
 export function harvest(state: GameState, plotIndex: number): Feedback {
   const plot = state.plots[plotIndex];
@@ -241,7 +244,7 @@ function pickUpOne(state: GameState, from: ItemId[]): Feedback | null {
 }
 
 export function dropAtRefiner(state: GameState, id: RefinerId = 'refiner'): Feedback | null {
-  if (state[id].queue.length >= STATION_CAPACITY) return null;
+  if (state[id].queue.length >= stationCapacity(state, id)) return null;
   const plant = takeTopFromBack(state, isPlant);
   if (!plant) return null;
   state[id].queue.push(plant);
@@ -251,7 +254,7 @@ export function dropAtRefiner(state: GameState, id: RefinerId = 'refiner'): Feed
 export const pickUpFromRefiner = (state: GameState, id: RefinerId = 'refiner') => pickUpOne(state, state[id].output);
 
 export function dropInCauldron(state: GameState, id: CauldronId = 'cauldron'): Feedback | null {
-  if (state[id].contents.length >= STATION_CAPACITY) return null;
+  if (state[id].contents.length >= stationCapacity(state, id)) return null;
   const good = takeTopFromBack(state, isRefined);
   if (!good) return null;
   state[id].contents.push(good);
@@ -261,26 +264,18 @@ export function dropInCauldron(state: GameState, id: CauldronId = 'cauldron'): F
 export const pickUpFromCauldron = (state: GameState, id: CauldronId = 'cauldron') => pickUpOne(state, state[id].output);
 
 const UPGRADE_STEP = 5;
-const STATION_NAMES: Record<StationId, string> = {
-  refiner: 'Refining table',
-  cauldron: 'Cauldron',
-  refiner2: 'Refining table',
-  cauldron2: 'Cauldron',
-  counter: 'Counter',
-};
-
-/** Pays a handful of coins towards the station's next level, levelling it up once fully paid. */
-export function payUpgrade(state: GameState, station: StationId): Feedback | null {
-  const upgrade = state.upgrades[station];
-  if (upgrade.level >= MAX_LEVEL || state.coins === 0) return null;
-  const cost = upgradeCost(upgrade.level);
+/** Pays a handful of coins towards an upgrade's next level, levelling it up once fully paid. */
+export function payUpgrade(state: GameState, id: UpgradeId): Feedback | null {
+  const upgrade = state.upgrades[id];
+  if (upgrade.level >= UPGRADES[id].max || state.coins === 0) return null;
+  const cost = upgradeCost(id, upgrade.level);
   const pay = Math.min(UPGRADE_STEP, state.coins, cost - upgrade.paid);
   state.coins -= pay;
   upgrade.paid += pay;
   if (upgrade.paid < cost) return [`-${pay} coins`];
   upgrade.level++;
   upgrade.paid = 0;
-  return [`${STATION_NAMES[station]} level ${upgrade.level + 1}!`];
+  return [`${UPGRADES[id].name} level ${upgrade.level + 1}!`];
 }
 
 /** Pays a handful of coins towards a build, which is done once fully paid. */
@@ -324,7 +319,7 @@ export function payExpansion(state: GameState, part: ExpansionPart): Feedback | 
 }
 
 export function stockShelf(state: GameState): Feedback | null {
-  if (state.counter.shelf.length >= STATION_CAPACITY) return null;
+  if (state.counter.shelf.length >= stationCapacity(state, 'counter')) return null;
   const potion = takeTopFromBack(state, isPotion);
   if (!potion) return null;
   state.counter.shelf.push(potion);
