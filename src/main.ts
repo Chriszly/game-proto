@@ -23,7 +23,7 @@ const game = new Phaser.Game({
   },
   scene: [BootScene, GameScene],
 });
-capFrameRate(game, 60);
+capFrameRate(game);
 
 // Handy for poking at state from the browser console during development.
 if (import.meta.env.DEV) Object.assign(window, { game });

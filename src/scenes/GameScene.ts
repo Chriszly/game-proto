@@ -61,6 +61,7 @@ import { BackStack } from '../ui/BackStack';
 import { IconRow } from '../ui/IconRow';
 import { Pallet } from '../ui/Pallet';
 import { RecipeBook } from '../ui/RecipeBook';
+import { Settings } from '../ui/Settings';
 import { ProgressBar } from '../ui/ProgressBar';
 import {
   BELT_BUILD,
@@ -160,6 +161,8 @@ export class GameScene extends Phaser.Scene {
   customers: { id: number; x: number; y: number; arrived: boolean }[] = [];
   /** The recipe overview opened from the top bar. */
   private recipes!: RecipeBook;
+  /** The settings panel opened from the top bar: frame rate and a new game. */
+  private settings!: Settings;
   /** Per-frame view updates, each reading from `state`. */
   private views: (() => void)[] = [];
 
@@ -665,14 +668,20 @@ export class GameScene extends Phaser.Scene {
       .text(width - 110, HUD_HEIGHT / 2, 'Walk: WASD / tap\nHarvest: walk past ripe plants', { ...style, fontSize: '11px' })
       .setOrigin(1, 0.5)
       .setDepth(UI_DEPTH);
-    this.hudButton(width - 16, 'New game', () => this.startOver());
+    this.hudButton(width - 16, 'Settings', () => {
+      this.recipes.toggle(false);
+      this.settings.toggle();
+    });
     // Empties the doctor's hands, for goods that are no longer needed.
     const drop = this.hudButton(width / 2 - 150, 'Drop all', () => {
       const feedback = dropAll(this.state);
       if (feedback) this.showFeedback(feedback);
     });
     // What each station makes from what, in a panel over the map.
-    this.hudButton(width / 2 - 230, 'Recipes', () => this.recipes.toggle());
+    this.hudButton(width / 2 - 230, 'Recipes', () => {
+      this.settings.toggle(false);
+      this.recipes.toggle();
+    });
 
     // A slot for everything the biggest pack holds; those beyond the current pack stay hidden.
     const frames: Phaser.GameObjects.Image[] = [];
@@ -685,6 +694,7 @@ export class GameScene extends Phaser.Scene {
     for (const obj of this.children.list.slice(first)) (obj as unknown as Phaser.GameObjects.Components.ScrollFactor).setScrollFactor(0);
     const pack = new BackStack(this);
     this.recipes = new RecipeBook(this, UI_DEPTH + 1);
+    this.settings = new Settings(this, UI_DEPTH + 1, () => this.startOver());
 
     this.views.push(() => {
       coins.setText(`Coins: ${this.state.coins}`);
@@ -753,9 +763,10 @@ export class GameScene extends Phaser.Scene {
     // Touch / click to walk, so the same controls work on phones.
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       if (p.y < HUD_HEIGHT) return;
-      // While the recipes are open, a tap anywhere below the top bar closes them instead of walking.
-      if (this.recipes.visible) {
+      // While a panel is open, a tap anywhere below the top bar closes it instead of walking.
+      if (this.recipes.visible || this.settings.visible) {
         this.recipes.toggle(false);
+        this.settings.toggle(false);
         return;
       }
       this.pointerTarget = new Phaser.Math.Vector2(p.worldX, p.worldY);

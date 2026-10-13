@@ -96,8 +96,13 @@ doctor carries a potion.
 
 ![Both lines with all their belts](docs/screenshots/expansion-map.png)
 
-You can carry four items at a time, more with a bigger pack; they stack up on the doctor's back. Progress is saved in the browser automatically; "New game"
-in the top bar starts over.
+You can carry four items at a time, more with a bigger pack; they stack up on the doctor's back. Progress is saved in the browser automatically.
+
+"Settings" in the top bar sets the frame rate (30, 60, 144, 160, 240 or 320 FPS, 60 by default; the
+game never draws faster than the display refreshes) and has "New game", which starts over. The frame
+rate is remembered in the browser and kept by a new game.
+
+![The settings panel](docs/screenshots/settings.png)
 
 ## Running locally
 
@@ -143,4 +148,5 @@ by nginx on port 8080) for arm64 and amd64, and publishes it as `ghcr.io/chriszl
 - `src/art/`: all the pixel art, drawn in code on a shared palette and baked into textures at
   startup: the plague doctor, townsfolk, items, gardens, stations, conveyor belts, floor markers, ground tiles and
   interface pieces.
-- `src/ui/`: small reusable display pieces (icon rows, progress bars).
+- `src/ui/`: small reusable display pieces (icon rows, progress bars) and the recipe and settings panels.
+- `src/frameCap.ts`: caps how often the game updates and draws at the chosen frame rate.
