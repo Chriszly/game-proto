@@ -2,7 +2,8 @@ import Phaser from 'phaser';
 import { plantTexture } from '../art/placeholders';
 import { GROW_MS, ITEMS, REFINE } from '../game/items';
 import { harvest, serveOrders, tick, useCauldron, useRefiner, type Feedback } from '../game/sim';
-import { CARRY_CAPACITY, MAX_ORDERS, createInitialState, type GameState } from '../game/state';
+import { clearSave, loadState, saveState } from '../game/save';
+import { CARRY_CAPACITY, MAX_ORDERS, type GameState } from '../game/state';
 import { IconRow } from '../ui/IconRow';
 import { ProgressBar } from '../ui/ProgressBar';
 import { CAULDRON, COUNTER, GARDEN, HUD_HEIGHT, REFINER, SHOP, customerPosition, plotPosition } from './layout';
@@ -12,6 +13,7 @@ const PLAYER_SCALE = 3;
 /** Longest simulated step, so a backgrounded tab doesn't jump the world forward. */
 const MAX_STEP_MS = 250;
 const UI_DEPTH = 10_000;
+const AUTOSAVE_MS = 3_000;
 const CUSTOMER_TINTS = [0x8f5a9e, 0x4d7aa8, 0xa8584d, 0x5e8f62, 0xb8934a];
 
 /** Something the doctor can use when their feet are inside `zone`. */
@@ -41,7 +43,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   create() {
-    this.state = createInitialState();
+    this.state = loadState();
+    this.interactables = [];
+    this.views = [];
+    this.pendingUse = null;
+    this.pointerTarget = null;
     this.physics.world.setBounds(0, HUD_HEIGHT, this.scale.width, this.scale.height - HUD_HEIGHT);
     this.obstacles = this.physics.add.staticGroup();
 
@@ -52,6 +58,27 @@ export class GameScene extends Phaser.Scene {
     this.createShopfront();
     this.createHud();
     this.createControls();
+    this.setUpSaving();
+  }
+
+  private setUpSaving() {
+    const save = () => saveState(this.state);
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') save();
+    };
+    this.time.addEvent({ delay: AUTOSAVE_MS, loop: true, callback: save });
+    document.addEventListener('visibilitychange', onHide);
+    window.addEventListener('pagehide', save);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      document.removeEventListener('visibilitychange', onHide);
+      window.removeEventListener('pagehide', save);
+    });
+  }
+
+  private startOver() {
+    if (!window.confirm('Start a new game? Your saved progress will be lost.')) return;
+    clearSave();
+    this.scene.restart();
   }
 
   private addInteractable(x: number, y: number, w: number, h: number, label: () => string, use: () => Feedback) {
@@ -158,9 +185,18 @@ export class GameScene extends Phaser.Scene {
     const coins = this.add.text(16, HUD_HEIGHT / 2, '', style).setOrigin(0, 0.5).setDepth(UI_DEPTH);
     this.add.text(width / 2 - 92, HUD_HEIGHT / 2, 'Hands', style).setOrigin(1, 0.5).setDepth(UI_DEPTH);
     this.add
-      .text(width - 16, HUD_HEIGHT / 2, 'Walk: WASD / tap   Use: E / Space / tap', { ...style, fontSize: '12px' })
+      .text(width - 110, HUD_HEIGHT / 2, 'Walk: WASD / tap\nUse: E / Space / tap', { ...style, fontSize: '11px' })
       .setOrigin(1, 0.5)
       .setDepth(UI_DEPTH);
+    this.add
+      .text(width - 16, HUD_HEIGHT / 2, 'New game', { ...style, fontSize: '12px', backgroundColor: '#5a3d22', padding: { x: 6, y: 4 } })
+      .setOrigin(1, 0.5)
+      .setDepth(UI_DEPTH)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
+        e.stopPropagation();
+        this.startOver();
+      });
 
     const slots = Array.from({ length: CARRY_CAPACITY }, (_, i) => {
       const x = width / 2 - 60 + i * 40;
@@ -219,6 +255,7 @@ export class GameScene extends Phaser.Scene {
 
     // Touch / click to walk, so the same controls work on phones. Tapping a station also uses it.
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      if (p.worldY < HUD_HEIGHT) return;
       this.pointerTarget = new Phaser.Math.Vector2(p.worldX, p.worldY);
       this.pendingUse = this.interactables.find((it) => it.zone.contains(p.worldX, p.worldY)) ?? null;
     });
