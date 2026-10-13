@@ -48,8 +48,12 @@ import {
 
 // Pure game rules, kept free of Phaser so later automation can drive the same functions.
 
-/** How many work a station: its craftsmen, and the doctor when standing on its work spot. */
-const crew = (state: GameState, id: StationId, workingAt: StationId | null) => state.craftsmen[id].level + (workingAt === id ? 1 : 0);
+/**
+ * How many work a station: its craftsmen once any are hired, otherwise the doctor when standing on
+ * its work spot. A station with craftsmen has no work spot left.
+ */
+const crew = (state: GameState, id: StationId, workingAt: StationId | null) =>
+  state.craftsmen[id].level > 0 ? state.craftsmen[id].level : workingAt === id ? 1 : 0;
 
 /**
  * Advances the world by `dt` ms. Stations only work while someone works them: the doctor standing

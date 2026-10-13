@@ -384,9 +384,9 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** The spot the doctor stands on to make the station work. */
+  /** The spot the doctor stands on to make the station work, gone once a craftsman is hired there. */
   private addWorkSpot(at: { x: number; y: number }, station: StationId) {
-    this.addMarker(at, 'pad-work', 'Work', () => null);
+    this.addMarker(at, 'pad-work', 'Work', () => null, () => this.state.craftsmen[station].level > 0);
     this.workSpots.push({ zone: new Phaser.Geom.Rectangle(at.x - 22, at.y - 22, 44, 44), station });
   }
 
