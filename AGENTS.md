@@ -8,7 +8,8 @@ Playwright config, CI workflows and PR template are shared. The games are Apothe
 `games/apothecary/`, Deadline, in `games/deadline/`, Palisade, in `games/palisade/`, Tiny Kingdom, in
 `games/tiny-kingdom/`, Hotfoot, in `games/hotfoot/`, Anvilheart, in `games/anvilheart/`,
 Broadside, in `games/broadside/`, TinctureTinker, in `games/tincture-tinker/`, Catacomb, in
-`games/catacomb/`, and Golem Garden, in `games/golem-garden/`.
+`games/catacomb/`, Golem Garden, in `games/golem-garden/`, and Beehive Baron, in
+`games/beehive-baron/`.
 
 Each game's guide for agents, to read before changing it:
 
@@ -24,6 +25,7 @@ Each game's guide for agents, to read before changing it:
 | TinctureTinker | [games/tincture-tinker/AGENTS.md](games/tincture-tinker/AGENTS.md) |
 | Catacomb | [games/catacomb/AGENTS.md](games/catacomb/AGENTS.md) |
 | Golem Garden | [games/golem-garden/AGENTS.md](games/golem-garden/AGENTS.md) |
+| Beehive Baron | [games/beehive-baron/AGENTS.md](games/beehive-baron/AGENTS.md) |
 
 ## Work on one game at a time
 

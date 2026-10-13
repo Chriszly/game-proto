@@ -17,6 +17,7 @@ start page lists the games; each one lives in its own folder under `games/`.
 | [TinctureTinker](games/tincture-tinker/README.md) | A match-3 board of Apothecary's ingredients: swap tiles to gather what each potion order asks for before the moves run out, and sell the potion for coins. |
 | [Catacomb](games/catacomb/README.md) | Fight through a short dungeon with a deck of cards: a hand of five each turn against foes who show what they will do next, and a new card after every fight. |
 | [Golem Garden](games/golem-garden/README.md) | A tower defense in a garden: plant seeds beside the path that grow into pebble and moss golems, and stop the pests before they eat the Heartwood. |
+| [Beehive Baron](games/beehive-baron/README.md) | Run a beehive: build comb cells, send foragers out to the flowers for nectar, harvest the ripened honey and sell it for more bees and upgrades. |
 
 ## Settings
 
@@ -39,6 +40,7 @@ The hub's **Settings** button opens the settings every game shares. They are sav
   | TinctureTinker | 5 more moves per order | 3 fewer moves per order |
   | Catacomb | foes have 25% less health | foes have 30% more health |
   | Golem Garden | pests have 25% less health | pests have 30% more health |
+  | Beehive Baron | foraging trips 25% shorter | foraging trips 30% longer |
 
 - **Frame rate (FPS)**: the most frames per second a game draws, 30 to 320 (60 by default).
 - **Show FPS**: a readout of the frame rate in each game's corner.
