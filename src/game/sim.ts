@@ -11,12 +11,17 @@ import {
   type PotionId,
 } from './items';
 import {
+  BELT_COST,
+  BELT_GAP_MS,
+  BELT_MS,
+  BELTS,
   CARRY_CAPACITY,
   MAX_LEVEL,
   MAX_ORDERS,
   STATION_CAPACITY,
   speedAt,
   upgradeCost,
+  type BeltId,
   type Cauldron,
   type GameState,
   type Order,
@@ -55,6 +60,8 @@ export function tick(state: GameState, dt: number, workingAt: StationId | null, 
     }
   }
 
+  for (const id of BELTS) runBelt(state, id, dt);
+
   if (workingAt === 'counter') serveFromShelf(state);
   for (const order of state.orders) order.patience -= dt;
   state.orders = state.orders.filter((o) => o.patience > 0);
@@ -63,6 +70,47 @@ export function tick(state: GameState, dt: number, workingAt: StationId | null, 
   if (state.nextOrderIn <= 0) {
     state.nextOrderIn = 12_000 + rand() * 8_000;
     if (state.orders.length < MAX_ORDERS) state.orders.push(newOrder(state, rand));
+  }
+}
+
+/** Where each belt takes goods from: a ripe plant from either garden, or a station's finished goods. */
+function takeForBelt(state: GameState, belt: BeltId): ItemId | null {
+  if (belt === 'garden') {
+    const plot = state.plots.find((p) => p.grown >= GROW_MS[p.plant]);
+    if (!plot) return null;
+    plot.grown = 0;
+    return plot.plant;
+  }
+  const from = belt === 'refiner' ? state.refiner.output : state.cauldron.output;
+  return from.shift() ?? null;
+}
+
+/** Hands an item from the end of a belt to the next station, if it has room. */
+function giveFromBelt(state: GameState, belt: BeltId, id: ItemId) {
+  const to = belt === 'garden' ? state.refiner.queue : belt === 'refiner' ? state.cauldron.contents : state.counter.shelf;
+  if (to.length >= STATION_CAPACITY) return false;
+  (to as ItemId[]).push(id);
+  return true;
+}
+
+/**
+ * Moves a built belt's items along. The item at the end is handed over when the next station has
+ * room; until then it waits and the items behind it queue up. A new item is taken on once the last
+ * one has moved a gap away from the start.
+ */
+function runBelt(state: GameState, id: BeltId, dt: number) {
+  const belt = state.belts[id];
+  if (!belt.built) return;
+  const length = BELT_MS[id];
+  if (belt.items.length > 0 && belt.items[0].at >= length && giveFromBelt(state, id, belt.items[0].id)) belt.items.shift();
+  belt.items.forEach((item, i) => {
+    const room = i === 0 ? length : belt.items[i - 1].at - BELT_GAP_MS;
+    item.at = Math.max(item.at, Math.min(item.at + dt, room));
+  });
+  const last = belt.items[belt.items.length - 1];
+  if (!last || last.at >= BELT_GAP_MS) {
+    const item = takeForBelt(state, id);
+    if (item) belt.items.push({ id: item, at: 0 });
   }
 }
 
@@ -200,6 +248,20 @@ export function payUpgrade(state: GameState, station: StationId): Feedback | nul
   upgrade.level++;
   upgrade.paid = 0;
   return [`${STATION_NAMES[station]} level ${upgrade.level + 1}!`];
+}
+
+const BELT_NAMES: Record<BeltId, string> = { garden: 'Garden belt', refiner: 'Table belt', cauldron: 'Cauldron belt' };
+
+/** Pays a handful of coins towards building a belt, which starts running once fully paid. */
+export function payBelt(state: GameState, id: BeltId): Feedback | null {
+  const belt = state.belts[id];
+  if (belt.built || state.coins === 0) return null;
+  const pay = Math.min(UPGRADE_STEP, state.coins, BELT_COST[id] - belt.paid);
+  state.coins -= pay;
+  belt.paid += pay;
+  if (belt.paid < BELT_COST[id]) return [`-${pay} coins`];
+  belt.built = true;
+  return [`${BELT_NAMES[id]} built!`];
 }
 
 export function stockShelf(state: GameState): Feedback | null {
