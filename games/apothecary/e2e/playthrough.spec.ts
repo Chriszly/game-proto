@@ -49,7 +49,7 @@ const COUNTER = { drop: { x: 472, y: 282 }, work: { x: 520, y: 340 }, coins: { x
 const RECIPES_BUTTON = { x: 219, y: 22 };
 /** Customers come in from the street door in the shop's back wall and line up behind the counter. */
 const STREET = { x: 480, y: 40 };
-const FIRST_CUSTOMER = { x: 525, y: 210 };
+const FIRST_CUSTOMER = { x: 544, y: 210 };
 
 const POTION_PRICE: Record<string, number> = { healingDraught: 8, sleepingTonic: 15 };
 

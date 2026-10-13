@@ -246,8 +246,9 @@ export function createInitialState(): GameState {
     layout: LAYOUT,
     coins: 0,
     carrying: [],
-    // The middle of the courtyard inside the U (see src/scenes/layout.ts).
-    player: { x: 600, y: 540 },
+    // The middle of the courtyard inside the U (see src/scenes/layout.ts), standing above the
+    // cauldrons' hire markers rather than on them.
+    player: { x: 600, y: 520 },
     // Start ripe so the first harvest can happen right away.
     plots: GARDENS.flatMap((plant) => Array.from({ length: PLOTS_PER_GARDEN }, () => ripe(plant))),
     refiner: { queue: [], progress: 0, output: [] },

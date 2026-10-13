@@ -41,8 +41,11 @@ export const EXPANSION_YARDS = [
   { x: 760, y: 448, w: 416, h: 414 },
   { x: 760, y: 400, w: 124, h: 60 },
 ];
-/** The outfitter's sign on the grass right of the shop; its upgrade markers run down below it. */
-export const OUTFITTER = { x: 830, y: 80 };
+/**
+ * The outfitter's sign on the grass right of the shop; its upgrade markers run down below it, their
+ * captions clear of the second line's garden belt.
+ */
+export const OUTFITTER = { x: 810, y: 80 };
 /**
  * The guild's sign and its upgrade markers in the empty bottom-left corner of the yard, away from
  * the doctor's rounds: the shop's extra order slot, customers and prices on the left and in the
@@ -80,13 +83,15 @@ export const REFINER_MARKERS: StationMarkers = {
   drop: { x: REFINER.x, y: REFINER.y - 72 },
   pickUp: { x: REFINER.x, y: REFINER.y + 72 },
   work: { x: REFINER.x + 100, y: REFINER.y },
-  upgrade: { x: REFINER.x + 100, y: REFINER.y - 70 },
+  // High enough that its caption clears the heads of the craftsmen standing by the table.
+  upgrade: { x: REFINER.x + 100, y: REFINER.y - 74 },
 };
 export const CAULDRON_MARKERS: StationMarkers = {
   drop: { x: CAULDRON.x - 80, y: CAULDRON.y + 8 },
   pickUp: { x: CAULDRON.x + 80, y: CAULDRON.y + 8 },
   work: { x: CAULDRON.x - 10, y: CAULDRON.y - 70 },
-  upgrade: { x: CAULDRON.x + 70, y: CAULDRON.y - 70 },
+  // Left enough that the hire marker's caption above it clears it.
+  upgrade: { x: CAULDRON.x + 62, y: CAULDRON.y - 70 },
 };
 
 /** The second line's stations and markers, mirrored onto the right arm. */
@@ -112,8 +117,11 @@ export const COUNTER_MARKERS: StationMarkers = {
   work: { x: COUNTER.x - 80, y: COUNTER.y + 70 },
   upgrade: { x: COUNTER.x + 110, y: COUNTER.y + 76 },
 };
-/** Where waiting customer i stands, on the far side of the counter. */
-export const customerPosition = (i: number) => ({ x: COUNTER.x - 75 + i * 50, y: COUNTER.y - 60 });
+/**
+ * Where waiting customer i stands, on the far side of the counter: right of its pallets and left of
+ * its hire marker.
+ */
+export const customerPosition = (i: number) => ({ x: COUNTER.x - 56 + i * 45, y: COUNTER.y - 60 });
 /**
  * The street door in the shop's back wall, left of its sign and above the counter's pallets, and the
  * spot outside it where customers come from and go back to. They keep clear of the counter's hire
@@ -154,7 +162,7 @@ export const PALLETS = {
   cauldron: CAULDRON_PALLETS,
   refiner2: mirrorPallets(REFINER_PALLETS),
   cauldron2: mirrorPallets(CAULDRON_PALLETS),
-  counter: { in: [{ x: 467, y: 240 }, { x: 501, y: 240 }], out: [] } as StationPallets,
+  counter: { in: [{ x: 465, y: 240 }, { x: 503, y: 240 }], out: [] } as StationPallets,
 };
 
 /**
@@ -198,10 +206,10 @@ export const BELT_JOIN_MS = (BELT_MS.cauldron * runLength(BELT_PATHS.cauldron[0]
 export const BELT_BUILD: Record<BeltId, { x: number; y: number }> = {
   garden: { x: 170, y: 500 },
   refiner: { x: 170, y: 612 },
-  cauldron: { x: 520, y: 576 },
+  cauldron: { x: 514, y: 576 },
   garden2: mirror({ x: 170, y: 500 }),
   refiner2: mirror({ x: 170, y: 612 }),
-  cauldron2: mirror({ x: 520, y: 576 }),
+  cauldron2: mirror({ x: 514, y: 576 }),
 };
 
 /**
@@ -209,9 +217,9 @@ export const BELT_BUILD: Record<BeltId, { x: number; y: number }> = {
  * where the two of them stand once hired (their feet), by the station.
  */
 export const CRAFTSMEN = {
-  refiner: { hire: { x: 500, y: 470 }, stand: [{ x: 392, y: 575 }, { x: 468, y: 575 }] },
+  refiner: { hire: { x: 500, y: 466 }, stand: [{ x: 392, y: 575 }, { x: 468, y: 575 }] },
   cauldron: { hire: { x: 570, y: 600 }, stand: [{ x: 376, y: 688 }, { x: 414, y: 702 }] },
-  refiner2: { hire: mirror({ x: 500, y: 470 }), stand: [mirror({ x: 392, y: 575 }), mirror({ x: 468, y: 575 })] },
+  refiner2: { hire: mirror({ x: 500, y: 466 }), stand: [mirror({ x: 392, y: 575 }), mirror({ x: 468, y: 575 })] },
   cauldron2: { hire: mirror({ x: 570, y: 600 }), stand: [mirror({ x: 376, y: 688 }), mirror({ x: 414, y: 702 })] },
   counter: { hire: { x: 725, y: 180 }, stand: [{ x: 560, y: 330 }, { x: 650, y: 330 }] },
 };
