@@ -1,10 +1,19 @@
+import { PLOTS_PER_GARDEN } from '../game/state';
+
 // World positions for the 960x540 view: garden on the left, workshop in the middle, shop on the right.
 
 export const HUD_HEIGHT = 44;
 
-export const GARDEN = { x: 24, y: 68, w: 300, h: 440 };
-/** Plot i sits in column i / 3 and row i % 3, so each plant gets its own column. */
-export const plotPosition = (i: number) => ({ x: 104 + Math.floor(i / 3) * 140, y: 150 + (i % 3) * 130 });
+/** Fenced garden areas, top to bottom, matching the order of GARDENS in the game state. */
+export const GARDEN_AREAS = [
+  { x: 24, y: 68, w: 300, h: 210, name: 'Wheat field' },
+  { x: 24, y: 298, w: 300, h: 210, name: 'Mandrake patch' },
+];
+/** Plot i is slot i % 3 of garden i / 3, the slots spread across the garden in one row. */
+export const plotPosition = (i: number) => {
+  const area = GARDEN_AREAS[Math.floor(i / PLOTS_PER_GARDEN)];
+  return { x: area.x + 60 + (i % PLOTS_PER_GARDEN) * 90, y: area.y + 118 };
+};
 
 export const REFINER = { x: 450, y: 170 };
 export const CAULDRON = { x: 450, y: 400 };

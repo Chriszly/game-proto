@@ -7,7 +7,7 @@ import { CARRY_CAPACITY, MAX_ORDERS, type GameState } from '../game/state';
 import { BackStack } from '../ui/BackStack';
 import { IconRow } from '../ui/IconRow';
 import { ProgressBar } from '../ui/ProgressBar';
-import { CAULDRON, COUNTER, GARDEN, HUD_HEIGHT, REFINER, SHOP, customerPosition, plotPosition } from './layout';
+import { CAULDRON, COUNTER, GARDEN_AREAS, HUD_HEIGHT, REFINER, SHOP, customerPosition, plotPosition } from './layout';
 
 const SPEED = 160;
 const PLAYER_SCALE = 3;
@@ -88,9 +88,11 @@ export class GameScene extends Phaser.Scene {
 
   private drawGrounds() {
     const g = this.add.graphics().setDepth(-1000);
-    // Garden: tilled earth inside a picket fence.
-    g.fillStyle(0x4f6e35).fillRect(GARDEN.x, GARDEN.y, GARDEN.w, GARDEN.h);
-    g.lineStyle(4, 0xa88a5c).strokeRect(GARDEN.x, GARDEN.y, GARDEN.w, GARDEN.h);
+    // Gardens: tilled earth inside a picket fence.
+    for (const area of GARDEN_AREAS) {
+      g.fillStyle(0x4f6e35).fillRect(area.x, area.y, area.w, area.h);
+      g.lineStyle(4, 0xa88a5c).strokeRect(area.x, area.y, area.w, area.h);
+    }
     // Shop: plank floor with a door gap facing the street.
     g.fillStyle(0x7a5a3a).fillRect(SHOP.x, SHOP.y, SHOP.w, SHOP.h);
     g.lineStyle(1, 0x5f4429);
@@ -103,7 +105,7 @@ export class GameScene extends Phaser.Scene {
         .text(x, y, text, { fontFamily: 'monospace', fontSize: '13px', color: '#f3e9d2' })
         .setOrigin(0.5)
         .setDepth(-900);
-    label(GARDEN.x + GARDEN.w / 2, GARDEN.y + 14, 'Backyard garden');
+    for (const area of GARDEN_AREAS) label(area.x + area.w / 2, area.y + 14, area.name);
     label(REFINER.x, REFINER.y - 60, 'Refining table');
     label(CAULDRON.x, CAULDRON.y - 64, 'Cauldron');
     label(SHOP.x + SHOP.w / 2, SHOP.y + 14, 'Storefront');
@@ -123,8 +125,8 @@ export class GameScene extends Phaser.Scene {
       this.addInteractable(
         x,
         y,
-        120,
-        120,
+        90,
+        150,
         () => `Harvest ${ITEMS[plot.plant].name}`,
         () => harvest(this.state, i),
       );
@@ -202,7 +204,7 @@ export class GameScene extends Phaser.Scene {
     const slots = Array.from({ length: CARRY_CAPACITY }, (_, i) => {
       const x = width / 2 - 60 + i * 40;
       this.add.rectangle(x, HUD_HEIGHT / 2, 32, 32, 0x3a2c22).setStrokeStyle(2, 0x8a6239).setDepth(UI_DEPTH);
-      return this.add.image(x, HUD_HEIGHT / 2, 'item-sage').setScale(1.5).setDepth(UI_DEPTH);
+      return this.add.image(x, HUD_HEIGHT / 2, 'item-wheat').setScale(1.5).setDepth(UI_DEPTH);
     });
     const pack = new BackStack(this);
 
