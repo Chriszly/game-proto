@@ -134,6 +134,8 @@ const SICKLE_SCALE = 1;
 const SICKLE_LINGER_MS = 400;
 /** Width of a crafting station's priority sign, wide enough for "First:" and its choice. */
 const PRIORITY_SIGN_W = 92;
+/** How long the doctor stands still on a purple marker before it starts taking coins, so walking over one buys nothing. */
+const STILL_MS = 400;
 
 /** A floor marker that acts by itself, one step at a time, while the doctor stands on it. */
 interface Marker {
@@ -143,6 +145,8 @@ interface Marker {
   shown: () => boolean;
   /** Set once an upgrade level is paid off; the next level waits until the doctor steps off and on again. */
   paused?: boolean;
+  /** A purple marker that takes coins: it pays only once the doctor has stood still on it for `STILL_MS`. */
+  pays?: boolean;
 }
 
 export class GameScene extends Phaser.Scene {
@@ -164,6 +168,8 @@ export class GameScene extends Phaser.Scene {
   /** Work spots: the station whose spot holds the doctor's feet is the one that works. */
   private workSpots: { zone: Phaser.Geom.Rectangle; station: StationId }[] = [];
   private nextMarkerAt = 0;
+  /** Since when the doctor has stood still, by `this.time.now`, or null while walking. */
+  private stillSince: number | null = null;
   /** Plot centres, in plot order, for finding ripe plants within the doctor's reach. */
   private plotCentres: Phaser.Math.Vector2[] = [];
   private nextHarvestAt = 0;
@@ -468,15 +474,15 @@ export class GameScene extends Phaser.Scene {
 
   /** An upgrade marker, captioned with the next level and its price, after `name` if given. */
   private addUpgradeMarker(at: Point, id: UpgradeId, name = 'Lv') {
-    this.addLevelMarker(at, () => this.state.upgrades[id], UPGRADES[id].max, (level) => upgradeCost(id, level), () => payUpgrade(this.state, id), (level, maxed) =>
-      maxed ? `${name} ${level + 1} max` : `${name} ${level + 2}: ${upgradeCost(id, level)}c`,
+    this.addLevelMarker(at, () => this.state.upgrades[id], UPGRADES[id].max, (level) => upgradeCost(id, level), () => payUpgrade(this.state, id), (level, maxed, left) =>
+      maxed ? `${name} ${level + 1} max` : `${name} ${level + 2}: ${left}c`,
     );
   }
 
   /**
    * A purple marker for something bought a level at a time, like an upgrade or a craftsman: standing
-   * on it pays towards the next level, captioned by `caption`, with a bar for how much is paid. It
-   * is shown while `shown` holds.
+   * still on it pays towards the next level, captioned by `caption` with the coins still to pay for
+   * it. It is shown while `shown` holds.
    */
   private addLevelMarker(
     at: Point,
@@ -484,7 +490,7 @@ export class GameScene extends Phaser.Scene {
     max: number,
     cost: (level: number) => number,
     pay: () => Feedback | null,
-    caption: (level: number, maxed: boolean) => string,
+    caption: (level: number, maxed: boolean, left: number) => string,
     shown: () => boolean = () => true,
   ) {
     this.addMarker(
@@ -501,16 +507,15 @@ export class GameScene extends Phaser.Scene {
       () => !shown(),
     );
     const marker = this.markers.length - 1;
+    this.markers[marker].pays = true;
     const text = this.add
       .text(at.x, at.y + 26, '', { fontFamily: 'monospace', fontSize: '10px', color: '#e6d3f5' })
       .setOrigin(0.5, 0)
       .setDepth(-400);
-    const paid = new ProgressBar(this, at.x, at.y + 38, 40, 0xe0b84a, -400);
     this.views.push(() => {
-      const { level, paid: sofar } = get();
+      const { level, paid } = get();
       const maxed = level >= max;
-      text.setVisible(shown()).setText(caption(level, maxed));
-      paid.set(maxed || !shown() ? null : sofar / cost(level));
+      text.setVisible(shown()).setText(caption(level, maxed, maxed ? 0 : cost(level) - paid));
     });
   }
 
@@ -521,8 +526,8 @@ export class GameScene extends Phaser.Scene {
   private addCraftsmen(id: StationId) {
     const { hire, stand } = CRAFTSMEN[id];
     const hired = () => this.state.craftsmen[id];
-    this.addLevelMarker(hire, hired, MAX_CRAFTSMEN, craftsmanCost, () => payCraftsman(this.state, id), (level, maxed) =>
-      maxed ? `Crew ${level}/${MAX_CRAFTSMEN}` : `Hire ${craftsmanCost(level)}c`,
+    this.addLevelMarker(hire, hired, MAX_CRAFTSMEN, craftsmanCost, () => payCraftsman(this.state, id), (level, maxed, left) =>
+      maxed ? `Crew ${level}/${MAX_CRAFTSMEN}` : `Hire ${left}c`,
     );
     stand.forEach((at, i) => {
       const craftsman = this.add.image(at.x, at.y, craftsmanTexture(i)).setOrigin(0.5, 1).setScale(2).setDepth(at.y).setFlipX(i === 1);
@@ -531,22 +536,20 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * A purple build marker with a price and how much is paid, shown while `shown` holds; standing on
-   * it pays towards the build.
+   * A purple build marker captioned with the coins still to pay for the build, shown while `shown`
+   * holds; standing still on it pays towards the build.
    */
   private addBuildMarker(at: Point, caption: string, cost: number, build: Build, shown: () => boolean, act: () => Feedback | null) {
     const pad = this.add.image(at.x, at.y, 'pad-up').setDepth(-400);
     const text = this.add
-      .text(at.x, at.y + 26, `${caption}: ${cost}c`, { fontFamily: 'monospace', fontSize: '10px', color: '#e6d3f5' })
+      .text(at.x, at.y + 26, '', { fontFamily: 'monospace', fontSize: '10px', color: '#e6d3f5' })
       .setOrigin(0.5, 0)
       .setDepth(-400);
-    const paid = new ProgressBar(this, at.x, at.y + 38, 40, 0xe0b84a, -400);
-    this.markers.push({ zone: new Phaser.Geom.Rectangle(at.x - 22, at.y - 22, 44, 44), act, shown });
+    this.markers.push({ zone: new Phaser.Geom.Rectangle(at.x - 22, at.y - 22, 44, 44), act, shown, pays: true });
     this.views.push(() => {
       const show = shown();
       pad.setVisible(show);
-      text.setVisible(show);
-      paid.set(show ? build.paid / cost : null);
+      text.setVisible(show).setText(`${caption}: ${cost - build.paid}c`);
     });
   }
 
@@ -926,7 +929,11 @@ export class GameScene extends Phaser.Scene {
     const under = (m: Marker) => m.zone.contains(this.feetX(), this.feetY());
     for (const m of this.markers) if (m.paused && !under(m)) m.paused = false;
     const marker = this.markers.find((m) => m.shown() && under(m));
+    const moving = this.player.body!.velocity.lengthSq() > 0;
+    if (moving) this.stillSince = null;
+    else this.stillSince ??= this.time.now;
     if (!marker || marker.paused || this.time.now < this.nextMarkerAt) return;
+    if (marker.pays && (this.stillSince === null || this.time.now - this.stillSince < STILL_MS)) return;
     this.nextMarkerAt = this.time.now + MARKER_INTERVAL_MS;
     const feedback = marker.act();
     if (feedback) this.showFeedback(feedback);

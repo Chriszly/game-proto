@@ -86,6 +86,9 @@ counter. Coins buy upgrades, craftsmen, conveyor belts and a mirrored second pro
 - Markers: `addMarker`, `addLevelMarker` and `addBuildMarker` push a `Marker` (44x44 zone, `act`,
   `shown`). `standOnMarkers` runs the first shown marker under the feet once every
   `MARKER_INTERVAL_MS` (200); each call moves one item or pays at most 5 coins (`UPGRADE_STEP`).
+  Purple markers (`pays`) take coins only once the doctor's body has stood still for `STILL_MS`
+  (400, tracked in `stillSince`), so walking over one buys nothing; their captions show the coins
+  still to pay (cost minus `paid`), with no bar.
   A level marker sets `paused` after a level completes until the doctor steps off.
 - Belts: each belt starts at the front edge of a station's out pallets (or in the gardens) and ends
   at the edge of the next station's in pallets, which stand side by side across its end, each at the
@@ -228,7 +231,7 @@ null), `expansion` (land, two fields, refiner, cauldron as `Build`s).
 - `loadState` only merges `upgrades`, `craftsmen`, `belts` and `priority` per key. A new field nested in
   `expansion`, `counter` or a station is missing from old saves unless handled there.
 - Marker zones must not overlap: `standOnMarkers` takes the first shown one in creation order.
-  Test walks must also avoid purple markers; the test asserts nothing was bought.
+  Test walks must also avoid stopping on purple markers; the test asserts nothing was bought.
 - Pallet positions in `PALLETS` are matched by index to `PLANTS`, `REFINED` and `POTIONS`; a new
   kind without a position gets no pallet.
 - `layout.ts` mirrors line two with `mirror`; moving a line-one spot moves its twin. It must stay
