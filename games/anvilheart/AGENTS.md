@@ -19,8 +19,9 @@ Implemented today:
   Bellows and Fine Ore are maxed): the forge then makes a sword by itself whenever it is hot and an
   anvil is free, so the player only merges and sells. Once bought, its button switches it on and
   off (`autoForge`).
-- One screen (`GameScene`) with a HUD, drag highlights, patience and heat bars, and a
-  "New smithy" reset link in the bottom right corner.
+- One screen (`GameScene`) with a HUD, drag highlights, patience and heat bars, a row of
+  discovered swords under the board (one frame per tier, showing the sword's picture only, no
+  name, once `bestTier` has reached it), and a "New smithy" reset link in the bottom right corner.
 - Persistence of the board, coins, swords sold, best tier, upgrade ranks and the Auto Forge switch
   in `localStorage`.
 
@@ -58,7 +59,8 @@ File map (`src/`):
 - `scenes/GameScene.ts`: draws the smithy, turns pointer input into sim calls, animates events,
   saves, and offers `spots()` for the test.
 - `scenes/layout.ts`: every screen position (`VIEW`, `FURNACE`, `FORGE_BUTTON`, `HEAT_BAR`,
-  `UPGRADE_BUTTONS`, `BOARD`, `DESK`) and hit tests `slotAt` and `deskAt`.
+  `UPGRADE_BUTTONS`, `BOARD`, `DISCOVERED` with `discoveredCentre`, `DESK`) and hit tests `slotAt`
+  and `deskAt`.
 - `ui/Button.ts`: a wooden caption button that fires on `pointerdown` and can be disabled.
 - `art/palette.ts`: the shared colours. `art/pixelArt.ts`: `bakePixelArt`, `PixelCanvas` and the
   `seeded` RNG. `art/swords.ts`, `art/characters.ts`, `art/scenery.ts`: the sword tiers, the four
@@ -82,7 +84,9 @@ How it runs:
   bought Auto Forge's button calls `toggleAutoForge` instead. Each successful action calls `save()`.
 - Rendering is mixed. Sword sprites (`swords[]`, one per slot) and visitor containers (`visitors`,
   keyed by adventurer id) are diffed against state. The `marks` and `hud` graphics are cleared and
-  redrawn every frame (patience bars, merge and buyer outlines, HUD, heat bar). Sim functions push
+  redrawn every frame (patience bars, merge and buyer outlines, HUD, heat bar). The discovered
+  row's frames and sword images are made once in `createDiscovered`; `drawHud` shows each image
+  whose tier is at most `bestTier`. The "adventurer on the way" hint sits in the empty first desk. Sim functions push
   `GameEvent`s onto `state.events`; `drawEvents` drains them for pop, flash and floating text
   tweens.
 
@@ -183,4 +187,7 @@ patience in `arrive`.
 - Dropping on a desk with nobody there does nothing; the sword returns to its slot.
 - Visitor containers are built once in `makeVisitor` and never refreshed; anything about an
   adventurer that changes over time must be drawn in `drawMarks` (like the patience bar).
+- The discovered row reads `bestTier`, so it shows every tier up to the best one made, even a
+  tier the Fine Ore skipped. It fills the space between the board and the bottom edge; the
+  one-line instructions sit between it and the board.
 - All browser storage must stay prefixed `anvilheart-`, since every game shares the hub's origin.

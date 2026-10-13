@@ -27,6 +27,13 @@ export function slotAt(x: number, y: number) {
   return row * GRID.cols + col;
 }
 
+/** The row of swords discovered so far, under the board: one frame per tier, by its centre. */
+export const DISCOVERED = { y: 504, size: 38, gap: 44 };
+export const discoveredCentre = (tier: number, tiers: number) => ({
+  x: BOARD.x + (GRID.cols * BOARD.cell) / 2 + (tier - 1 - (tiers - 1) / 2) * DISCOVERED.gap,
+  y: DISCOVERED.y,
+});
+
 /** The spots at the counter, from the top: each is a box with the adventurer and their order. */
 export const DESK = { x: 682, y: 54, w: 262, h: 152, gap: 4 };
 export const deskBox = (desk: number) => ({ x: DESK.x, y: DESK.y + desk * (DESK.h + DESK.gap), w: DESK.w, h: DESK.h });

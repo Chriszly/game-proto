@@ -30,7 +30,11 @@ them one by dragging it onto them. The coins buy upgrades for the forge.
    first one always wants an Iron Shortsword; later ones ask for anything up to one tier better
    than your best sword so far. They pay the price of the sword you give them, and leave if they
    wait too long (the bar under their order).
-4. **The smithy is kept**: the board, coins, swords sold and upgrades are saved in the browser.
+4. **Discovered swords** are shown in a row under the anvils, one frame per tier. A frame shows its
+   sword's picture once you have made that sword, and stays empty until then.
+5. **The smithy is kept**: the board, coins, swords sold and upgrades are saved in the browser.
+
+![The row of discovered swords under the anvils](docs/screenshots/discovered-swords.png)
 
 ![Dragging a dagger onto its twin](docs/screenshots/playthrough-1-dragging.png)
 
