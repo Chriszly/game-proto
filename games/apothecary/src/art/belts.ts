@@ -1,5 +1,4 @@
 import Phaser from 'phaser';
-import { runLength } from '../scenes/layout';
 import { GOLD, INK, IRON } from './palette';
 
 // Steampunk conveyor belts: brass rails with rivets around dark leather slats, drawn as one network
@@ -185,7 +184,7 @@ export function drawBelts(scene: Phaser.Scene, runs: Pt[][], depth: number, lane
 /** The point `t` (0 to 1) of the way along a run of points, and the direction the run goes there. */
 export function pointAlong(run: Pt[], t: number): Pt & { dx: number; dy: number } {
   const parts = run.slice(1).map((p, i) => ({ a: run[i], b: p, len: Math.hypot(p.x - run[i].x, p.y - run[i].y) }));
-  let d = Math.max(0, Math.min(1, t)) * runLength(run);
+  let d = Math.max(0, Math.min(1, t)) * parts.reduce((sum, p) => sum + p.len, 0);
   for (const { a, b, len } of parts) {
     const dx = (b.x - a.x) / len, dy = (b.y - a.y) / len;
     if (d <= len) return { x: a.x + dx * d, y: a.y + dy * d, dx, dy };

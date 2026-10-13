@@ -346,8 +346,8 @@ export class GameScene extends Phaser.Scene {
     this.addUpgradeMarker(m.upgrade, id);
     this.addCraftsmen(id);
     this.views.push(() => {
-      const next = refining(refiner);
-      progress.set(next >= 0 ? refiner.progress / REFINE[refiner.queue[next]].ms : null);
+      // The plant being refined is always the front one (see tick).
+      progress.set(refining(refiner) >= 0 ? refiner.progress / REFINE[refiner.queue[0]].ms : null);
     });
   }
 
@@ -848,7 +848,7 @@ export class GameScene extends Phaser.Scene {
   update(_time: number, delta: number) {
     this.frameMs = Math.min(delta, MAX_STEP_MS);
     const feetY = this.feetY();
-    const workingAt = this.workSpots.find((w) => w.zone.contains(this.player.x, feetY))?.station ?? null;
+    const workingAt = this.workSpots.find((w) => w.zone.contains(this.feetX(), feetY))?.station ?? null;
     tick(this.state, Math.min(delta, MAX_STEP_MS), workingAt);
     this.movePlayer();
 
@@ -862,7 +862,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private standOnMarkers() {
-    const under = (m: Marker) => m.zone.contains(this.player.x, this.feetY());
+    const under = (m: Marker) => m.zone.contains(this.feetX(), this.feetY());
     for (const m of this.markers) if (m.paused && !under(m)) m.paused = false;
     const marker = this.markers.find((m) => m.shown() && under(m));
     if (!marker || marker.paused || this.time.now < this.nextMarkerAt) return;
@@ -883,7 +883,7 @@ export class GameScene extends Phaser.Scene {
     } else if (this.pointerTarget) {
       // Steer the feet, not the sprite centre, to the tapped spot, via a corner if a station is in the way.
       const target = this.waypoint ?? this.pointerTarget;
-      dir.set(target.x - this.player.x, target.y - this.feetY());
+      dir.set(target.x - this.feetX(), target.y - this.feetY());
       // Walking past the spot counts as getting there, so a fast walk on a slow frame rate doesn't
       // overshoot it back and forth.
       const passed = this.heading !== null && dir.dot(this.heading) <= 0;
@@ -892,7 +892,7 @@ export class GameScene extends Phaser.Scene {
         this.settleFeet(this.waypoint);
         this.waypoint = this.routeAround(this.pointerTarget);
         const next = this.waypoint ?? this.pointerTarget;
-        dir.set(next.x - this.player.x, next.y - this.feetY());
+        dir.set(next.x - this.feetX(), next.y - this.feetY());
       } else if (!this.waypoint && (dir.length() < 4 || passed)) {
         // Settle the feet on the spot itself, a step back if the last frame carried them past it.
         if (passed) this.settleFeet(target);
@@ -910,10 +910,11 @@ export class GameScene extends Phaser.Scene {
 
   /**
    * Each station's blocked area slightly shrunk, which walking is tested against so lines along an
-   * edge or from a corner count as clear.
+   * edge or from a corner count as clear. It stays wider than where feet touching the station stand,
+   * half the feet's size (15 by 7.5 pixels) from it, so they still route around it.
    */
   private innerArea(area: Phaser.Geom.Rectangle) {
-    return new Phaser.Geom.Rectangle(area.x + 2, area.y + 2, area.width - 4, area.height - 4);
+    return new Phaser.Geom.Rectangle(area.x + 4, area.y + 3, area.width - 8, area.height - 6);
   }
 
   /**
@@ -921,7 +922,7 @@ export class GameScene extends Phaser.Scene {
    * the nearest such station to walk to first (the one making the shorter trip); otherwise null.
    */
   private routeAround(to: Phaser.Math.Vector2): Phaser.Math.Vector2 | null {
-    const from = new Phaser.Math.Vector2(this.player.x, this.feetY());
+    const from = new Phaser.Math.Vector2(this.feetX(), this.feetY());
     const line = (a: Phaser.Math.Vector2, b: Phaser.Math.Vector2) => new Phaser.Geom.Line(a.x, a.y, b.x, b.y);
     const blocks = (a: Phaser.Math.Vector2, b: Phaser.Math.Vector2, area: Phaser.Geom.Rectangle) =>
       Phaser.Geom.Intersects.LineToRectangle(line(a, b), area);
@@ -939,8 +940,20 @@ export class GameScene extends Phaser.Scene {
       new Phaser.Math.Vector2(area.left, area.bottom),
       new Phaser.Math.Vector2(area.right, area.bottom),
     ].filter((c) => from.distance(c) > 0.5 && !blocks(from, c, inner));
+    // Prefer a corner the way to which no other station blocks either.
+    const others = this.blockedAreas.filter((a) => a !== area).map((a) => this.innerArea(a)).filter((a) => !a.contains(from.x, from.y));
+    const clear = corners.filter((c) => others.every((other) => !blocks(from, c, other)));
+    if (clear.length > 0) corners.splice(0, corners.length, ...clear);
     corners.sort((a, b) => from.distance(a) + a.distance(to) - (from.distance(b) + b.distance(to)));
     return corners[0] ?? null;
+  }
+
+  /**
+   * Where the doctor's feet are, from the physics body: during the update it has already stepped
+   * this frame, while the sprite only follows it afterwards.
+   */
+  private feetX() {
+    return this.player.body!.center.x;
   }
 
   private feetY() {

@@ -173,7 +173,10 @@ function mergingItems(state: GameState, id: BeltId) {
   const other = state.belts[OTHER_LINE[id]];
   if ((id !== 'cauldron' && id !== 'cauldron2') || !other.built) return byLane;
   for (const item of other.items) {
-    if (item.at >= BELT_JOIN_MS - BELT_GAP_MS) byLane.set(item.id, [...(byLane.get(item.id) ?? []), item]);
+    if (item.at < BELT_JOIN_MS - BELT_GAP_MS) continue;
+    const lane = byLane.get(item.id);
+    if (lane) lane.push(item);
+    else byLane.set(item.id, [item]);
   }
   return byLane;
 }
@@ -232,7 +235,8 @@ export function shortfall(state: GameState, potion: PotionId) {
  * for, so the potion customers are waiting for gets brewed first. Ties go in recipe order.
  */
 function startBrew(state: GameState, cauldron: Cauldron) {
-  const byNeed = [...RECIPES].sort((a, b) => shortfall(state, b.out) - shortfall(state, a.out));
+  const need = new Map(RECIPES.map((r) => [r.out, shortfall(state, r.out)]));
+  const byNeed = [...RECIPES].sort((a, b) => need.get(b.out)! - need.get(a.out)!);
   for (const recipe of byNeed) {
     if (!palletHasRoom(cauldron.output, recipe.out)) continue;
     const left = [...cauldron.contents];

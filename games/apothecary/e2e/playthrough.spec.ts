@@ -73,11 +73,18 @@ const SPEED = Number(process.env.PLAYTHROUGH_SPEED ?? 4);
 
 /**
  * How many more of a potion customers want than the shop has ready, as the cauldron counts it when
- * it picks a recipe: on the shelf, in the doctor's hands and on the cauldrons' pallets.
+ * it picks a recipe: on the shelf, in the doctor's hands, on the cauldrons' pallets and riding their
+ * belts.
  */
 const shortfall = (s: GameState, potion: ItemId) =>
   s.orders.flatMap((o) => o.wants).filter((p) => p === potion).length -
-  [...s.counter.shelf, ...s.carrying, ...s.cauldron.output, ...s.cauldron2.output].filter((p) => p === potion).length;
+  [
+    ...s.counter.shelf,
+    ...s.carrying,
+    ...s.cauldron.output,
+    ...s.cauldron2.output,
+    ...[...s.belts.cauldron.items, ...s.belts.cauldron2.items].map((item) => item.id),
+  ].filter((p) => p === potion).length;
 
 /** What a customer coming in now pays for a potion: its price with the guild's upgrade, and a tip. */
 const potionPay = (s: GameState, potion: string) =>
