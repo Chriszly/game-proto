@@ -9,7 +9,7 @@ export default defineConfig({
   use: {
     ...devices['Desktop Chrome'],
     viewport: { width: 960, height: 540 },
-    video: 'on',
+    video: { mode: 'on', size: { width: 960, height: 540 } },
     baseURL: 'http://localhost:5173',
     trace: 'retain-on-failure',
   },

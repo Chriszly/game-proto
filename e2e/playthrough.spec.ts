@@ -28,8 +28,23 @@ const SHOP_DOOR = { x: 600, y: 335 };
 const COUNTER = { drop: { x: 645, y: 262 }, work: { x: 773, y: 302 }, coins: { x: 901, y: 262 }, upgrade: { x: 896, y: 468 } };
 
 const UPGRADE_COST = 20;
+/**
+ * Game time per animation frame, every frame the same length. Longer frames mean fewer to draw, so
+ * the game can play at SPEED on a CI runner without a GPU.
+ */
+const FRAME_MS = 64;
 /** Game time advanced between checks: a few animation frames. */
-const STEP_MS = 50;
+const STEP_MS = 192;
+/** The doctor's walking speed in pixels per second, from GameScene. */
+const WALK_SPEED = 160;
+/** The doctor stops within 4px of a tapped spot, but the last frame's step can carry the feet past it. */
+const ARRIVED_PX = 4 + (WALK_SPEED * FRAME_MS) / 1000 + 2;
+/**
+ * How many times faster than real time the game plays, so the recorded video runs at that speed.
+ * CI plays at 4x. A machine that can't keep up plays as fast as it can; the end of the run logs the
+ * speed it reached.
+ */
+const SPEED = Number(process.env.PLAYTHROUGH_SPEED ?? 4);
 
 const count = (items: ItemId[]) =>
   items.reduce<Record<string, number>>((acc, id) => ({ ...acc, [id]: (acc[id] ?? 0) + 1 }), {});
@@ -67,15 +82,37 @@ test('plays the whole game loop', async ({ page }, testInfo) => {
   const start = new Date('2026-01-01T00:00:00Z');
   await page.clock.install({ time: start });
   await page.clock.pauseAt(new Date(start.getTime() + 1_000));
+  await page.addInitScript((frameMs) => {
+    // Animation frames come from the test's clock at a fixed step, so each one is FRAME_MS long.
+    window.requestAnimationFrame = (cb) => window.setTimeout(() => cb(performance.now()), frameMs);
+    window.cancelAnimationFrame = (id) => window.clearTimeout(id);
+    // Phaser falls back to its canvas renderer. CI has no GPU, and WebGL in software is too slow to
+    // play at SPEED; the game, its rules and the pixel art are the same either way.
+    const getContext = HTMLCanvasElement.prototype.getContext as (this: HTMLCanvasElement, id: string, ...rest: unknown[]) => unknown;
+    HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, id: string, ...rest: unknown[]) {
+      return /webgl/i.test(id) ? null : getContext.call(this, id, ...rest);
+    } as typeof HTMLCanvasElement.prototype.getContext;
+  }, FRAME_MS);
   await page.goto('/');
   const game = scene(page);
   const canvas = page.locator('canvas');
 
-  /** Advances game time in small steps until `done` holds; returns false if `ms` ran out first. */
+  /** Game time played since the game started, and the real time when it started. */
+  let gameMs = 0;
+  let startedAt = 0;
+
+  /**
+   * Advances game time in small steps until `done` holds; returns false if `ms` ran out first. Once
+   * the game has started, each step waits until real time catches up with game time / SPEED.
+   */
   async function play(ms: number, done: () => Promise<boolean>) {
     for (let t = 0; t <= ms; t += STEP_MS) {
       if (await done()) return true;
       await page.clock.runFor(STEP_MS);
+      if (!startedAt) continue;
+      gameMs += STEP_MS;
+      const ahead = gameMs / SPEED - (Date.now() - startedAt);
+      if (ahead > 0) await new Promise((r) => setTimeout(r, ahead));
     }
     return done();
   }
@@ -84,6 +121,7 @@ test('plays the whole game loop', async ({ page }, testInfo) => {
     await play(10_000, () => page.evaluate(() => !!(window as any).game?.scene.getScene('Game')?.player)),
     'game started',
   ).toBe(true);
+  startedAt = Date.now();
 
   const snap = async (name: string) =>
     testInfo.attach(name, { body: await page.screenshot({ path: testInfo.outputPath(`${name}.png`) }), contentType: 'image/png' });
@@ -97,7 +135,7 @@ test('plays the whole game loop', async ({ page }, testInfo) => {
       let at = await game.feet();
       const arrived = await play(15_000, async () => {
         at = await game.feet();
-        return !at.moving && Math.hypot(at.x - to.x, at.y - to.y) < 6;
+        return !at.moving && Math.hypot(at.x - to.x, at.y - to.y) < ARRIVED_PX;
       });
       expect(arrived, `walk to ${to.x},${to.y}; the doctor's feet are at ${JSON.stringify(at)}`).toBe(true);
     }
@@ -188,5 +226,7 @@ test('plays the whole game loop', async ({ page }, testInfo) => {
   expect(done.upgrades.counter.level).toBe(1);
   expect(done.coins + done.upgrades.counter.paid).toBe(rich.coins - UPGRADE_COST);
 
+  const speed = gameMs / (Date.now() - startedAt);
+  console.log(`Played ${Math.round(gameMs / 1000)}s of game time at ${speed.toFixed(1)}x (target ${SPEED}x).`);
   expect(errors).toEqual([]);
 });

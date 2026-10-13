@@ -44,7 +44,8 @@ npm run preview   # serve the production build
 
 `e2e/playthrough.spec.ts` plays the whole loop in headless Chromium with real clicks: it harvests
 both gardens, refines, brews, sells to customers until it has 20 coins and buys a counter upgrade,
-checking items, coins and the upgrade along the way. The Playthrough workflow runs it on every PR
+checking items, coins and the upgrade along the way. It plays at 4x speed (`PLAYTHROUGH_SPEED`),
+so the run takes about 15 seconds. The Playthrough workflow runs it on every PR
 and push to main and uploads a video and milestone screenshots as the `playthrough` artifact.
 
 ```sh

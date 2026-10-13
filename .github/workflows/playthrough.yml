@@ -25,8 +25,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      # Plays the whole loop in headless Chromium: harvest, refine, brew, sell, upgrade.
+      # Plays the whole loop in headless Chromium at 4x speed: harvest, refine, brew, sell, upgrade.
       - run: npm run test:e2e
+        env:
+          PLAYTHROUGH_SPEED: 4
       # Video and milestone screenshots of the run, pass or fail; open the report's index.html to browse them.
       - if: always()
         uses: actions/upload-artifact@v4

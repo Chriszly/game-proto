@@ -26,10 +26,15 @@ that the game can still be played from start to finish, so it has to stay accura
   only reads state through `window.game` (exposed by the dev build in `src/main.ts`). Don't write to
   game state from the test or add shortcuts that bypass the real controls.
 - **Keep it deterministic.** The test owns the game clock (`page.clock`): game time only moves when
-  the test advances it, in 16ms animation frames, so a slow runner plays exactly like a fast one.
-  `Math.random` is seeded so customer orders repeat. Keep game timing on `requestAnimationFrame`,
-  Phaser's clock or `performance.now`, and new randomness behind `Math.random`, so runs stay
-  reproducible. Waits are measured in game time, not real time.
+  the test advances it, in fixed 64ms animation frames, so a slow runner plays exactly like a fast
+  one. `Math.random` is seeded so customer orders repeat. Keep game timing on
+  `requestAnimationFrame`, Phaser's clock or `performance.now`, and new randomness behind
+  `Math.random`, so runs stay reproducible. Waits are measured in game time, not real time.
+- **It plays at 4x speed.** The test paces game time at `PLAYTHROUGH_SPEED` times real time (4 in
+  CI, set in the workflow), so the recorded video is a 4x time-lapse. It renders with Phaser's
+  canvas renderer, because software WebGL on a runner without a GPU is too slow for that. The end
+  of each run logs the speed it reached (`Played 48s of game time at 4.0x`); a busy runner can fall
+  short of 4x, which slows the video but never changes the result.
 - **Keep the PR screenshots honest.** The test saves milestone screenshots; when the look of the
   loop changes, refresh the `docs/screenshots/playthrough-*.png` files from a fresh run.
 
@@ -44,6 +49,7 @@ npm run test:e2e                  # starts the dev server on port 5173 and plays
 - It reuses a dev server already running on port 5173, so you can keep `npm run dev` open.
 - `CPU_THROTTLE=4 npm run test:e2e` slows the browser's CPU to simulate a slow CI runner. The run
   takes longer but must play out the same; if it doesn't, something escaped the test's clock.
+- `PLAYTHROUGH_SPEED=1 npm run test:e2e` plays at normal speed, handy with `--headed` to watch it.
 - `npx playwright test --headed` shows the browser while it plays; `--debug` steps through it.
 - Also run `npm run build` (typecheck and build) before pushing.
 
