@@ -25,6 +25,8 @@ interface GameState {
 type Button = { id: string; x: number; y: number; w: number; h: number };
 
 const VIEW = { w: 960, h: 540 };
+/** The size of the sea, from src/game/state.ts; it wraps around at its edges. */
+const WORLD = { w: 1920, h: 1200 };
 /** The helm buttons' centres, from src/scenes/layout.ts. */
 const HELM = { port: { x: 86, y: 456 }, starboard: { x: 874, y: 456 } };
 /** Wave 1 is two sloops, from src/game/waves.ts; each leaves 10 gold, from src/game/ships.ts. */
@@ -51,9 +53,21 @@ const STEP_MS = 192;
 const SPEED = Number(process.env.PLAYTHROUGH_SPEED ?? 4);
 
 const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
-const bearing = (from: { x: number; y: number }, to: { x: number; y: number }) => Math.atan2(to.y - from.y, to.x - from.x);
+/** The shortest way from one point to another; the sea wraps at its edges, like a globe. */
+function offset(from: { x: number; y: number }, to: { x: number; y: number }) {
+  const across = (d: number, size: number) => d - size * Math.round(d / size);
+  return { dx: across(to.x - from.x, WORLD.w), dy: across(to.y - from.y, WORLD.h) };
+}
+const bearing = (from: { x: number; y: number }, to: { x: number; y: number }) => {
+  const { dx, dy } = offset(from, to);
+  return Math.atan2(dy, dx);
+};
+const distance = (a: { x: number; y: number }, b: { x: number; y: number }) => {
+  const { dx, dy } = offset(a, b);
+  return Math.hypot(dx, dy);
+};
 const nearest = <T extends { x: number; y: number }>(from: { x: number; y: number }, items: T[]) =>
-  [...items].sort((a, b) => Math.hypot(a.x - from.x, a.y - from.y) - Math.hypot(b.x - from.x, b.y - from.y))[0];
+  [...items].sort((a, b) => distance(from, a) - distance(from, b))[0];
 
 /**
  * Where to point the bow: sail at the nearest enemy, then turn side-on to it so a broadside bears,
@@ -64,7 +78,7 @@ function course(s: GameState): number | null {
   const enemy = nearest(p, s.enemies);
   if (enemy) {
     const b = bearing(p, enemy);
-    if (Math.hypot(enemy.x - p.x, enemy.y - p.y) > CLOSE_IN) return b;
+    if (distance(p, enemy) > CLOSE_IN) return b;
     const starboard = b - Math.PI / 2;
     const port = b + Math.PI / 2;
     return Math.abs(wrap(starboard - p.heading)) < Math.abs(wrap(port - p.heading)) ? starboard : port;
@@ -230,15 +244,13 @@ test('plays the first wave', async ({ page }, testInfo) => {
   await snap('0-broadside');
   s = await until('an enemy hit', (s) => s.enemies.some((e) => e.hp < e.maxHp) || s.sunk > 0, 10_000, course);
 
-  // A sunk ship leaves a barrel of loot floating behind.
+  // A sunk ship leaves a barrel of loot floating behind; sailing over it adds its gold to the hold.
   s = await until('a sloop sunk', (s) => s.sunk > 0, 60_000, course);
-  expect(s.loot.length + (s.gold > 0 ? 1 : 0)).toBeGreaterThan(0);
-
-  // Sink the other and sail over the loot: each barrel adds its gold to the hold. The harbor opens
-  // once no ship or loot is left.
-  s = await until('first loot picked up', (s) => s.gold > 0, 60_000, course);
-  expect(s.gold).toBe(SLOOP_LOOT);
+  expect(s.loot.length + s.gold / SLOOP_LOOT).toBe(1);
   await snap('1-loot');
+
+  // Sink the other. Once the last ship of the wave goes down, the crew hauls in every barrel still
+  // afloat and the harbor opens.
   s = await until('wave 1 beaten', (s) => s.phase === 'harbor', 90_000, course);
   await helm(0);
   expect(s).toMatchObject({ wave: 1, sunk: 2, gold: 2 * SLOOP_LOOT, plundered: 2 * SLOOP_LOOT, bestWave: 1, enemies: [], loot: [] });

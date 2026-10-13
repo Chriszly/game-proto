@@ -78,7 +78,10 @@ function bakeWater(scene: Phaser.Scene) {
   g.destroy();
 }
 
-/** A small sandy island with palm trees; just scenery, ships sail over the shallows. */
+/**
+ * A small sandy island with palm trees. Ships sail over the shallows but run aground on the sand,
+ * whose size `ISLANDS` in src/game/state.ts copies.
+ */
 function bakeIsland(scene: Phaser.Scene, key: string, w: number, h: number, palms: number) {
   const g = scene.add.graphics();
   g.fillStyle(0x3d8fa8, 0.7).fillEllipse(w / 2, h / 2, w, h);
