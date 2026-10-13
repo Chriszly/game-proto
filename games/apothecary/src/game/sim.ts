@@ -53,7 +53,7 @@ import {
   type UpgradeId,
 } from './state';
 // Where belts meet comes from their paths; the layout is plain data, free of Phaser too.
-import { BELT_JOIN_MS, beltRun, beltRunMs } from '../scenes/layout';
+import { BELT_JOIN_MS, beltSpan } from '../scenes/layout';
 
 // Pure game rules, kept free of Phaser so later automation can drive the same functions.
 
@@ -68,9 +68,17 @@ const crew = (state: GameState, id: StationId, workingAt: StationId | null) =>
  * Advances the world by `dt` ms. Stations only work while someone works them: the doctor standing
  * at their work spot, given as `workingAt`, or their craftsmen. The refining table and cauldron make
  * progress, faster with each extra pair of hands, and customers are served. A counter's second
- * craftsman also takes the coins from the till.
+ * craftsman also takes the coins from the till. Customers are served, and lose patience, only once
+ * they stand at the counter, as `atCounter` says; without anyone showing them walk in, they are
+ * there at once.
  */
-export function tick(state: GameState, dt: number, workingAt: StationId | null, rand: () => number = Math.random) {
+export function tick(
+  state: GameState,
+  dt: number,
+  workingAt: StationId | null,
+  atCounter: (order: Order) => boolean = () => true,
+  rand: () => number = Math.random,
+) {
   for (const plot of state.plots) {
     plot.grown = Math.min(plot.grown + dt * growthSpeed(state), GROW_MS[plot.plant]);
   }
@@ -113,10 +121,9 @@ export function tick(state: GameState, dt: number, workingAt: StationId | null, 
 
   for (const id of BELTS) runBelt(state, id, dt);
 
-  serveCustomers(state, dt, workingAt);
+  serveCustomers(state, dt, workingAt, atCounter);
   if (state.craftsmen.counter.level >= 2) collectTill(state);
-  // Customers lose patience once they stand at the counter.
-  for (const order of state.orders) if (order.arrived) order.patience -= dt;
+  for (const order of state.orders) if (atCounter(order)) order.patience -= dt;
   state.orders = state.orders.filter((o) => o.patience > 0);
 
   state.nextOrderIn -= dt;
@@ -224,7 +231,7 @@ function runBelt(state: GameState, id: BeltId, dt: number) {
 }
 
 /** Where goods of a kind get on a belt, in ms along its main run: the start of their own run. */
-const beltStart = (id: BeltId, kind: ItemId) => beltRunMs(id, beltRun(id, kind)).start;
+const beltStart = (id: BeltId, kind: ItemId) => beltSpan(id, kind).start;
 
 /**
  * How many more of a potion customers want than the apothecary has ready or on the way: on the
@@ -270,7 +277,7 @@ function newOrder(state: GameState, rand: () => number) {
   const level = state.upgrades.counter.level;
   const pay = Object.fromEntries(wants.map((p) => [p, potionPrice(state, p) + 2 * (level + 1)]));
   const maxPatience = (60_000 + rand() * 30_000) * (1 + 0.25 * level);
-  return { id: state.nextOrderId++, wants, pay, patience: maxPatience, maxPatience, arrived: false };
+  return { id: state.nextOrderId++, wants, pay, patience: maxPatience, maxPatience };
 }
 
 /** Whether a plot can be harvested: grown, in a garden that is there. */
@@ -297,21 +304,21 @@ export function harvest(state: GameState, plotIndex: number): Feedback {
  * Serving at the counter. The doctor on the work spot hands customers everything on the shelf they
  * want at once. Craftsmen take SERVE_MS over each potion, sped up by each pair of hands.
  */
-function serveCustomers(state: GameState, dt: number, workingAt: StationId | null) {
+function serveCustomers(state: GameState, dt: number, workingAt: StationId | null, atCounter: (order: Order) => boolean) {
   const { counter } = state;
   const hired = state.craftsmen.counter.level;
   if (hired === 0) {
-    if (workingAt === 'counter') serveFromShelf(state);
+    if (workingAt === 'counter') serveFromShelf(state, atCounter);
     return;
   }
-  if (!state.orders.some((o) => o.arrived && o.wants.some((want) => counter.shelf.includes(want)))) {
+  if (!state.orders.some((o) => atCounter(o) && o.wants.some((want) => counter.shelf.includes(want)))) {
     counter.serving = 0;
     return;
   }
   counter.serving = (counter.serving ?? 0) + dt * hired;
   if (counter.serving < SERVE_MS) return;
   counter.serving -= SERVE_MS;
-  serveFromShelf(state, 1);
+  serveFromShelf(state, atCounter, 1);
 }
 
 /**
@@ -319,7 +326,7 @@ function serveCustomers(state: GameState, dt: number, workingAt: StationId | nul
  * the till. Orders the shelf can fill completely go first (oldest first); leftover matching potions
  * go towards the rest.
  */
-function serveFromShelf(state: GameState, limit = Infinity) {
+function serveFromShelf(state: GameState, atCounter: (order: Order) => boolean, limit = Infinity) {
   const { counter } = state;
   if (counter.shelf.length === 0) return;
   const give = (order: Order) => {
@@ -333,7 +340,7 @@ function serveFromShelf(state: GameState, limit = Infinity) {
     });
   };
   // Only customers standing at the counter get served.
-  const waiting = state.orders.filter((order) => order.arrived);
+  const waiting = state.orders.filter(atCounter);
   for (const order of waiting) if (canFill(counter.shelf, order)) give(order);
   for (const order of waiting) if (order.wants.length > 0) give(order);
   state.orders = state.orders.filter((o) => o.wants.length > 0);

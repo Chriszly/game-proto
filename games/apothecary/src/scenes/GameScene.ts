@@ -67,8 +67,7 @@ import { ProgressBar } from '../ui/ProgressBar';
 import {
   BELT_BUILD,
   BELT_PATHS,
-  beltRun,
-  beltRunMs,
+  beltSpan,
   CAULDRON,
   CAULDRON2,
   CAULDRON2_MARKERS,
@@ -153,6 +152,8 @@ export class GameScene extends Phaser.Scene {
   private heading: Phaser.Math.Vector2 | null = null;
   /** Station footprints grown by the doctor's feet, used to walk around stations after a tap. */
   private blockedAreas: Phaser.Geom.Rectangle[] = [];
+  /** The shop as measured for the doctor's feet, and the feet's half size it was measured for. */
+  private shopMeasured: ReturnType<GameScene['measureShop']> | null = null;
   private obstacles!: Phaser.Physics.Arcade.StaticGroup;
   private markers: Marker[] = [];
   /** Work spots: the station whose spot holds the doctor's feet is the one that works. */
@@ -172,6 +173,8 @@ export class GameScene extends Phaser.Scene {
   private frameMs = 0;
   /** Where each customer in the shop stands, and whether they have reached their spot; read by the playthrough test. */
   customers: { id: number; x: number; y: number; arrived: boolean }[] = [];
+  /** The orders whose customers have reached the counter, so they can be served. */
+  private atCounter = new Set<number>();
   /** The recipe overview opened from the top bar. */
   private recipes!: RecipeBook;
   /** The settings panel opened from the top bar: frame rate and a new game. */
@@ -196,6 +199,8 @@ export class GameScene extends Phaser.Scene {
     this.pointerTarget = null;
     this.waypoint = null;
     this.blockedAreas = [];
+    this.atCounter = new Set();
+    this.shopMeasured = null;
     this.physics.world.setBounds(0, HUD_HEIGHT, WORLD.w, WORLD.h - HUD_HEIGHT);
     // Restarting the scene for a new game keeps its event listeners, so this one is added once.
     this.events.off(Phaser.Scenes.Events.PRE_UPDATE, this.limitWalkStep, this);
@@ -579,12 +584,13 @@ export class GameScene extends Phaser.Scene {
             return;
           }
           // Goods loaded from the doctor's hands wait out of sight until their turn to get on.
-          const run = beltRun(id, item.id);
-          const { start, join } = beltRunMs(id, run);
+          const { run, start, join } = beltSpan(id, item.id);
           icon.setVisible(item.at >= start);
-          // Along a feeder up to its join, then along the main run; across the belt into the item's own lane.
-          const { x, y, dx, dy } =
-            run > 0 && item.at < join ? pointAlong(feeders[run - 1], (item.at - start) / (join - start)) : pointAlong(main, item.at / BELT_MS[id]);
+          // Along the main run, across the belt into the item's own lane. On a feeder, the item rides
+          // towards that lane on the main run, so it carries straight on where the feeder joins.
+          const onFeeder = run > 0 && item.at < join;
+          const { dx, dy } = pointAlong(main, (onFeeder ? join : item.at) / BELT_MS[id]);
+          const { x, y } = onFeeder ? pointAlong(feeders[run - 1], (item.at - start) / (join - start)) : pointAlong(main, item.at / BELT_MS[id]);
           const off = laneOffset(lanes.indexOf(item.id), lanes.length);
           icon.setTexture(itemTexture(item.id)).setPosition(x - dy * off, y + dx * off);
         });
@@ -666,10 +672,11 @@ export class GameScene extends Phaser.Scene {
         const sprite = customers.get(order.id)!;
         sprite.setData('arrived', walkTowards(sprite, customerPosition(i), step));
         // Served from here on, even while moving up to a spot freed by someone ahead.
-        if (sprite.getData('arrived')) order.arrived = true;
+        if (sprite.getData('arrived')) this.atCounter.add(order.id);
       });
       for (const [id, sprite] of customers) {
         if (waiting.has(id)) continue;
+        this.atCounter.delete(id);
         sprite.setData('arrived', false);
         if (walkTowards(sprite, STREET, step, true)) {
           sprite.destroy();
@@ -865,7 +872,7 @@ export class GameScene extends Phaser.Scene {
     this.frameMs = Math.min(delta, MAX_STEP_MS);
     const feetY = this.feetY();
     const workingAt = this.workSpots.find((w) => w.zone.contains(this.feetX(), feetY))?.station ?? null;
-    tick(this.state, this.frameMs, workingAt);
+    tick(this.state, this.frameMs, workingAt, (order) => this.atCounter.has(order.id));
     this.movePlayer();
 
     this.standOnMarkers();
@@ -933,31 +940,37 @@ export class GameScene extends Phaser.Scene {
     return new Phaser.Geom.Rectangle(area.x + 4, area.y + 4, area.width - 8, area.height - 8);
   }
 
-  /** The shop's walls and the street behind it grown by half the feet's size: where the feet can't stand. */
-  private wallAreas() {
+  /**
+   * Where the doctor's feet can't stand for the shop: its walls and the street behind it grown by half
+   * the feet's size (`walls`), and the whole shop, street included, as one more area to walk around
+   * like a station's (`area`), from the top of the world down to where feet stand clear of its front
+   * wall. `inside` is between the side walls and above that, so the doorway counts as inside.
+   */
+  private measureShop(halfWidth: number, halfHeight: number) {
+    const walls = SHOP_BLOCKS.map((w) => new Phaser.Geom.Rectangle(w.x - halfWidth, w.y - halfHeight, w.w + 2 * halfWidth, w.h + 2 * halfHeight));
+    const left = Math.min(...walls.map((w) => w.left)), right = Math.max(...walls.map((w) => w.right));
+    const bottom = Math.max(...walls.map((w) => w.bottom));
+    return {
+      halfWidth,
+      halfHeight,
+      walls,
+      area: new Phaser.Geom.Rectangle(left - 3, 0, right - left + 6, bottom + 3),
+      inside: new Phaser.Geom.Rectangle(left + halfWidth, 0, right - left - 2 * halfWidth, bottom),
+    };
+  }
+
+  /** The shop measured for the feet; measured again if their size changes, as it does once the body takes the sprite's scale. */
+  private shop() {
     const { halfWidth, halfHeight } = this.player.body!;
-    return SHOP_BLOCKS.map((w) => new Phaser.Geom.Rectangle(w.x - halfWidth, w.y - halfHeight, w.w + 2 * halfWidth, w.h + 2 * halfHeight));
+    const m = this.shopMeasured;
+    if (m?.halfWidth !== halfWidth || m.halfHeight !== halfHeight) this.shopMeasured = this.measureShop(halfWidth, halfHeight);
+    return this.shopMeasured!;
   }
 
-  /**
-   * The whole shop, street included, as one more area to walk around, like a station's: from the top
-   * of the world down to where feet stand clear of its front wall.
-   */
-  private shopArea() {
-    const walls = this.wallAreas();
-    const left = Math.min(...walls.map((w) => w.left)) - 3, right = Math.max(...walls.map((w) => w.right)) + 3;
-    const bottom = Math.max(...walls.map((w) => w.bottom)) + 3;
-    return new Phaser.Geom.Rectangle(left, 0, right - left, bottom);
-  }
-
-  /**
-   * Whether feet at a spot are in the shop: between its side walls and above where they clear its
-   * front wall, so feet in the doorway count as inside.
-   */
+  /** Whether feet at a spot are in the shop. */
   private inShop(p: Point) {
-    const walls = this.wallAreas();
-    const left = Math.min(...SHOP_BLOCKS.map((w) => w.x)), right = Math.max(...SHOP_BLOCKS.map((w) => w.x + w.w));
-    return p.x > left && p.x < right && p.y < Math.max(...walls.map((w) => w.bottom));
+    const { inside } = this.shop();
+    return p.x > inside.left && p.x < inside.right && p.y < inside.bottom;
   }
 
   /**
@@ -973,7 +986,7 @@ export class GameScene extends Phaser.Scene {
     const blocks = (a: Phaser.Math.Vector2, b: Phaser.Math.Vector2, area: Phaser.Geom.Rectangle) =>
       Phaser.Geom.Intersects.LineToRectangle(line(a, b), area);
     // Shrunk like the stations' areas, so a line along a wall's edge counts as clear.
-    const walls = this.wallAreas().map((w) => this.innerArea(w));
+    const walls = this.shop().walls.map((w) => this.innerArea(w));
     const wallsBlock = (a: Phaser.Math.Vector2, b: Phaser.Math.Vector2) => walls.some((w) => blocks(a, b, w));
     let goal = to;
     const inside = this.inShop(from);
@@ -984,7 +997,7 @@ export class GameScene extends Phaser.Scene {
       const far = new Phaser.Math.Vector2(x, inside ? SHOP_DOORWAY.outside : SHOP_DOORWAY.inside);
       goal = wallsBlock(from, far) ? near : far;
     }
-    const areas = inside || this.inShop(goal) ? this.blockedAreas : [...this.blockedAreas, this.shopArea()];
+    const areas = inside || this.inShop(goal) ? this.blockedAreas : [...this.blockedAreas, this.shop().area];
     // How far along the way each station in it is.
     const inTheWay = areas
       .map((area) => ({ area, inner: this.innerArea(area) }))
@@ -1007,7 +1020,8 @@ export class GameScene extends Phaser.Scene {
     const clear = corners.filter((c) => others.every((other) => !blocks(from, c, other)));
     if (clear.length > 0) corners.splice(0, corners.length, ...clear);
     corners.sort((a, b) => from.distance(a) + a.distance(goal) - (from.distance(b) + b.distance(goal)));
-    return corners[0] ?? null;
+    // With no corner to go by, still head for the door rather than straight at a wall.
+    return corners[0] ?? (goal === to ? null : goal);
   }
 
   /**
@@ -1061,7 +1075,7 @@ export class GameScene extends Phaser.Scene {
     // its corners, so it moves to the nearest edge outside the others too, if there is one.
     const areas = [
       ...this.blockedAreas.map((area) => ({ area, inner: this.innerArea(area) })),
-      ...this.wallAreas().map((area) => ({ area, inner: new Phaser.Geom.Rectangle(area.x + 0.5, area.y + 0.5, area.width - 1, area.height - 1) })),
+      ...this.shop().walls.map((area) => ({ area, inner: new Phaser.Geom.Rectangle(area.x + 0.5, area.y + 0.5, area.width - 1, area.height - 1) })),
     ];
     for (let moves = 0; moves < 3; moves++) {
       const hit = areas.find(({ inner }) => inner.contains(to.x, to.y));

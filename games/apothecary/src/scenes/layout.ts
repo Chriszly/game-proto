@@ -1,5 +1,5 @@
 import type { ItemId, PlantId } from '../game/items';
-import { BELT_MS, GARDENS, PLOTS_PER_GARDEN, type BeltId } from '../game/state';
+import { BELT_MS, BELTS, GARDENS, LINE2_GARDEN, PLOTS_PER_GARDEN, type BeltId } from '../game/state';
 
 // World positions for the U-shaped apothecary. Goods flow down the left arm (gardens, refining
 // table), along the bottom (cauldron) and up the middle into the shop at the top. The right arm is
@@ -233,25 +233,39 @@ function distanceTo(run: { x: number; y: number }[], p: { x: number; y: number }
 }
 
 /**
- * Which of a belt's runs goods of a kind get on at: on the garden belts, the run from the field that
- * grows them, so mandrakes come in on the feeder from their patch.
+ * Which of a belt's runs goods of a kind get on at: on the garden belts, the run from the field of
+ * its line that grows them (the runs are in the order of the line's GARDENS), so mandrakes come in on
+ * the feeder from their patch. Everything else gets on at the start of the main run.
  */
-export const beltRun = (id: BeltId, kind: ItemId) =>
-  id === 'garden' || id === 'garden2' ? Math.max(0, GARDENS.indexOf(kind as PlantId)) : 0;
+function beltRun(id: BeltId, kind: ItemId) {
+  if (id !== 'garden' && id !== 'garden2') return 0;
+  const first = id === 'garden2' ? LINE2_GARDEN : 0;
+  const run = GARDENS.slice(first, first + LINE2_GARDEN).indexOf(kind as PlantId);
+  return run > 0 && run < BELT_PATHS[id].length ? run : 0;
+}
 
 /**
- * Where goods on a belt's run get on and where that run joins the main one, in ms along the main
- * run. Goods on a feeder start as far before its join as the feeder is long, so they ride it at the
- * belt's speed before carrying on along the main run.
+ * Where goods on each of a belt's runs get on and where that run joins the main one, in ms along the
+ * main run. Goods on a feeder start as far before its join as the feeder is long, so they ride it at
+ * the belt's speed before carrying on along the main run.
  */
-export function beltRunMs(id: BeltId, run: number) {
-  if (run === 0) return { start: 0, join: 0 };
-  const main = BELT_PATHS[id][0];
-  const feeder = BELT_PATHS[id][run];
-  const msPerPx = BELT_MS[id] / runLength(main);
-  const join = distanceTo(main, feeder[feeder.length - 1]);
-  return { start: (join - runLength(feeder)) * msPerPx, join: join * msPerPx };
-}
+const RUN_MS = Object.fromEntries(
+  BELTS.map((id) => {
+    const [main, ...feeders] = BELT_PATHS[id];
+    const msPerPx = BELT_MS[id] / runLength(main);
+    const runs = feeders.map((feeder) => {
+      const join = distanceTo(main, feeder[feeder.length - 1]);
+      return { start: (join - runLength(feeder)) * msPerPx, join: join * msPerPx };
+    });
+    return [id, [{ start: 0, join: 0 }, ...runs]];
+  }),
+) as Record<BeltId, { start: number; join: number }[]>;
+
+/** The run goods of a kind ride on a belt, and where on its main run they get on and join it, in ms. */
+export const beltSpan = (id: BeltId, kind: ItemId) => {
+  const run = beltRun(id, kind);
+  return { run, ...RUN_MS[id][run] };
+};
 
 /**
  * How far along the cauldron belts are where they meet, at the end of their first stretch. Both are

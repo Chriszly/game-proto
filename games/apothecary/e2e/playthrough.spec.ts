@@ -19,7 +19,7 @@ interface GameState {
   counter: { shelf: ItemId[]; till: number };
   upgrades: Record<string, { level: number; paid: number }>;
   craftsmen: Record<string, { level: number; paid: number }>;
-  orders: { id: number; wants: ItemId[]; pay: Record<string, number>; patience: number; maxPatience: number; arrived: boolean }[];
+  orders: { id: number; wants: ItemId[]; pay: Record<string, number>; patience: number; maxPatience: number }[];
   nextOrderId: number;
   belts: Record<string, { built: boolean; paid: number; items: { id: ItemId; at: number }[] }>;
 }
@@ -279,13 +279,16 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
   expect(await play(10_000, async () => (customers = await game.customers()).length > 0), 'a customer came in').toBe(true);
   expect(customers[0]).toMatchObject({ x: STREET.x, arrived: false });
   expect(customers[0].y).toBeLessThan(FIRST_CUSTOMER.y);
-  // Until they reach the counter, they can't be served and don't lose patience.
+  // Until they reach the counter, they don't lose patience.
   let [order] = (await game.state()).orders;
-  expect(order).toMatchObject({ arrived: false, patience: order.maxPatience });
+  expect(order.patience, 'patience while walking in').toBe(order.maxPatience);
   expect(await play(10_000, async () => (customers = await game.customers())[0].arrived), 'the customer reached the counter').toBe(true);
   expect(customers[0]).toMatchObject(FIRST_CUSTOMER);
-  [order] = (await game.state()).orders;
-  expect(order.arrived, 'the order knows its customer is at the counter').toBe(true);
+  const waiting = await play(STEP_MS, async () => {
+    [order] = (await game.state()).orders;
+    return order.patience < order.maxPatience;
+  });
+  expect(waiting, 'patience runs out once at the counter').toBe(true);
 
   // One round of the loop: harvest, refine, brew, sell and collect the coins.
   // Gardens: walk along the wheat row, then past one mandrake, until both hands are full.

@@ -36,11 +36,6 @@ export interface Order {
   /** Milliseconds the customer waits at the counter before leaving. */
   patience: number;
   maxPatience: number;
-  /**
-   * Whether the customer has reached the counter, set by whoever shows them walking in. Only then do
-   * they get served, and lose patience.
-   */
-  arrived: boolean;
 }
 
 /** The refining tables and cauldrons: one of each on the first production line, and on the second. */
