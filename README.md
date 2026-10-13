@@ -14,15 +14,16 @@ brew potions in the cauldron and sell them to customers at the storefront.
 | WASD / arrow keys, or tap | Walk |
 | E / Space, or tap a station | Use the plot or station you are standing at |
 
-1. **Backyard garden**: harvest ripe sage and mandrake. Plots regrow on their own.
-2. **Refining table**: drop off plants; sage becomes sage powder, mandrake becomes mandrake seeds.
+1. **Gardens**: each garden grows one kind of plant. Harvest ripe wheat in the wheat field and
+   mandrake in the mandrake patch. Plots regrow on their own.
+2. **Refining table**: drop off plants; wheat becomes wheat flour, mandrake becomes mandrake seeds.
    Come back to collect the finished goods.
-3. **Cauldron**: drop in refined goods. Two sage powder brew a Healing Draught, sage powder and
+3. **Cauldron**: drop in refined goods. Two wheat flour brew a Healing Draught, wheat flour and
    mandrake seeds brew a Sleeping Tonic.
 4. **Storefront**: customers show the potions they want and how long they will wait. Serve them at
    the counter for coins.
 
-You can carry four items at a time. Progress is saved in the browser automatically; "New game"
+You can carry four items at a time; they stack up on the doctor's back. Progress is saved in the browser automatically; "New game"
 in the top bar starts over.
 
 ## Running locally

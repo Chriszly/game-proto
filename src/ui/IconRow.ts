@@ -24,11 +24,4 @@ export class IconRow {
       if (i < items.length) icon.setTexture(itemTexture(items[i])).setPosition(left + i * this.spacing, this.y);
     });
   }
-
-  moveTo(x: number, y: number, depth: number) {
-    this.x = x;
-    this.y = y;
-    this.depth = depth;
-    for (const icon of this.icons) icon.setDepth(depth);
-  }
 }

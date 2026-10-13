@@ -22,13 +22,18 @@ export function bakePlaceholders(scene: Phaser.Scene) {
 
   // Three growth stages per plant: sprout, growing, ripe.
   for (const stage of [0, 1, 2]) {
-    bake(scene, plantTexture('sage', stage), 40, 40, (g) => {
-      const r = 6 + stage * 5;
-      g.fillStyle(0x5d8f4a).fillCircle(20, 40 - r, r);
-      g.fillStyle(0x7fae6a).fillCircle(20 - r / 2, 40 - r * 1.2, r * 0.6);
-      if (stage === 2) {
-        g.fillStyle(0xb48ad8);
-        for (const [x, y] of [[12, 12], [26, 9], [20, 18], [30, 20]]) g.fillCircle(x, y, 3);
+    bake(scene, plantTexture('wheat', stage), 48, 44, (g) => {
+      // A row of stalks: short green shoots, then taller green, then golden with grain heads.
+      const h = [8, 22, 34][stage];
+      const stalk = stage === 2 ? 0xc9a040 : 0x6f9a3e;
+      for (let i = 0; i < 6; i++) {
+        const x = 5 + i * 7.5;
+        const top = 44 - h + (i % 2) * 3;
+        g.fillStyle(stalk).fillRect(x, top, 2, 44 - top);
+        if (stage === 2) {
+          g.fillStyle(ITEMS.wheat.color);
+          for (let k = 0; k < 4; k++) g.fillEllipse(x + (k % 2 ? 2.5 : -0.5), top + 2 + k * 2.5, 3, 4);
+        }
       }
     });
     bake(scene, plantTexture('mandrake', stage), 40, 40, (g) => {
@@ -76,7 +81,12 @@ export function bakePlaceholders(scene: Phaser.Scene) {
   for (const [id, def] of Object.entries(ITEMS) as [ItemId, (typeof ITEMS)[ItemId]][]) {
     bake(scene, itemTexture(id), 16, 16, (g) => {
       g.fillStyle(def.color);
-      if (def.kind === 'plant') {
+      if (id === 'wheat') {
+        // Sheaf: stalks tied in the middle with grain heads on top.
+        g.fillStyle(0xc9a040).fillRect(4, 6, 2, 10).fillRect(7, 5, 2, 11).fillRect(10, 6, 2, 10);
+        g.fillStyle(def.color).fillEllipse(5, 4, 4, 7).fillEllipse(8, 3, 4, 7).fillEllipse(11, 4, 4, 7);
+        g.fillStyle(0x8a6239).fillRect(3, 10, 10, 2);
+      } else if (def.kind === 'plant') {
         g.fillEllipse(8, 9, 10, 13);
         g.fillStyle(0x3f7a35).fillRect(7, 1, 2, 5);
       } else if (def.kind === 'refined') {

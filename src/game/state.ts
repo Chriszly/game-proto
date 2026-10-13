@@ -29,7 +29,7 @@ export interface Order {
 }
 
 export interface GameState {
-  version: 1;
+  version: 2;
   coins: number;
   carrying: ItemId[];
   player: { x: number; y: number };
@@ -41,6 +41,10 @@ export interface GameState {
   nextOrderId: number;
 }
 
+/** Each garden grows a single kind of plant; the wheat field comes first. */
+export const GARDENS: PlantId[] = ['wheat', 'mandrake'];
+export const PLOTS_PER_GARDEN = 3;
+
 export const CARRY_CAPACITY = 4;
 export const STATION_CAPACITY = 6;
 export const MAX_ORDERS = 3;
@@ -48,12 +52,12 @@ export const MAX_ORDERS = 3;
 export function createInitialState(): GameState {
   const ripe = (plant: PlantId): Plot => ({ plant, grown: GROW_MS[plant] });
   return {
-    version: 1,
+    version: 2,
     coins: 0,
     carrying: [],
     player: { x: 450, y: 290 },
     // Start ripe so the first harvest can happen right away.
-    plots: [ripe('sage'), ripe('sage'), ripe('sage'), ripe('mandrake'), ripe('mandrake'), ripe('mandrake')],
+    plots: GARDENS.flatMap((plant) => Array.from({ length: PLOTS_PER_GARDEN }, () => ripe(plant))),
     refiner: { queue: [], progress: 0, output: [] },
     cauldron: { contents: [], brewing: null, output: [] },
     orders: [],
