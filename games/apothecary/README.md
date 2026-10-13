@@ -19,6 +19,7 @@ map is bigger than the screen, so the camera follows the doctor.
 | Control | Action |
 | --- | --- |
 | WASD / arrow keys, or tap | Walk |
+| Mouse wheel, + / - keys, or pinch with two fingers | Zoom in and out; the top bar stays the same size and the zoom is remembered |
 | Walk past ripe plants | Harvest every ripe plant within one character height of the doctor; the spinning sickle marks the edge |
 | Recipes (top bar) | Show what each station makes from what, and what each potion sells for; tap again to close |
 | Drop all (top bar) | Throw away everything the doctor carries |

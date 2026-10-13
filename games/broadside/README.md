@@ -28,13 +28,24 @@ the gold buys a stronger hull, heavier shot, more guns, a faster crew and faster
    broadsides. Their crews aim worse than yours. Red arrows at the edge of the screen point to
    ships out of sight.
 3. **Loot**: every sunk ship leaves a barrel of gold that drifts toward your ship once close. It
-   sinks after 25 seconds, blinking at the end; gold arrows point to barrels out of sight.
-4. **The harbor** opens once no enemy ship or loot is left. The crew patches a quarter of the
+   sinks after 25 seconds, blinking at the end; gold arrows point to barrels out of sight. Once
+   the last ship of a wave goes down, the crew hauls in every barrel still afloat.
+4. **The harbor** opens as soon as the last enemy ship of the wave is sunk. The crew patches a quarter of the
    hull for free; the rest is 10 gold.
-5. **The run is over when your hull is sunk**. "Sail again" starts afresh at wave 1. The best wave
+5. **The sea has no edge.** Like on a globe, sailing off the top brings you back in at the
+   bottom, and off the left side back in on the right. Enemy ships, loot and cannonballs cross
+   over the same way, and the arrows point the shortest way round.
+6. **Islands**: the shallows around an island are safe, but a ship that runs onto the sand,
+   yours or an enemy's, glances off and takes 8 damage to its hull.
+7. **The run is over when your hull is sunk**. "Sail again" starts afresh at wave 1. The best wave
    beaten is kept in the browser.
 
 ![Hauling in the plunder](docs/screenshots/playthrough-1-loot.png)
+
+![Just over the northern edge: the island ahead lies at the far south of the sea, and the sloop
+off the port bow came over the edge after the ship](docs/screenshots/wrap-around.png)
+
+![Running aground on an island: the hull flashes and the ship glances off](docs/screenshots/run-aground.png)
 
 ### Enemy ships
 
@@ -69,8 +80,8 @@ page).
 
 `e2e/playthrough.spec.ts` plays the first wave in headless Chromium. It holds the helm buttons
 down to check that the ship turns each way and sails straight on once let go, then steers by them
-to close on each sloop and turn side-on until a broadside fires, hits and sinks it. It sails over
-the loot and checks the gold, waits for the harbor, buys Heavy Shot with the plunder and sets sail
+to close on each sloop and turn side-on until a broadside fires, hits and sinks it. It checks the
+gold from the loot (sailed over, or hauled in when the wave ends), waits for the harbor, buys Heavy Shot with the plunder and sets sail
 for wave 2. Like the other games' tests it owns the game clock and plays at 4x speed
 (`PLAYTHROUGH_SPEED`). The **Playthrough Broadside** workflow
 (`.github/workflows/playthrough-broadside.yml`) runs it on every PR and push to main that touches
@@ -90,7 +101,7 @@ All paths are inside `games/broadside/`.
   and works out the player's ship from the upgrades bought, `sim.ts` sails the ships, fires the
   broadsides and runs the harbor, and `save.ts` keeps the best wave.
 - `src/scenes/`: `BootScene` bakes textures, `GameScene` draws the sea, follows the ship with the
-  camera and wires the helm buttons and keys to the rules, `layout.ts` says where things are drawn.
+  camera across the wrapping sea and wires the helm buttons and keys to the rules, `layout.ts` says where things are drawn.
 - `src/art/`: the ships, islands, sea, cannonballs and loot, drawn in code and baked into textures
   at startup.
 - `src/ui/`: the harbor panel and buttons.
