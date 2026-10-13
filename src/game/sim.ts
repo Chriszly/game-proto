@@ -23,6 +23,7 @@ import {
   beltSpeed,
   growthSpeed,
   maxOrders,
+  orderInterval,
   potionPrice,
   REFINERS,
   LINE2_GARDEN,
@@ -106,7 +107,7 @@ export function tick(state: GameState, dt: number, workingAt: StationId | null, 
 
   state.nextOrderIn -= dt;
   if (state.nextOrderIn <= 0) {
-    state.nextOrderIn = 12_000 + rand() * 8_000;
+    state.nextOrderIn = orderInterval(state, rand());
     if (state.orders.length < maxOrders(state)) state.orders.push(newOrder(state, rand));
   }
 }

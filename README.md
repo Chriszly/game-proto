@@ -67,8 +67,9 @@ a longer sickle harvests from a quarter further away (25, then 50 coins each).
 The **guild** in the bottom-left corner of the yard sells upgrades for the rest of the apothecary:
 growth makes every garden grow a quarter faster per level (20, then 40 coins), belts run half again
 as fast per level, carrying more goods a second (30, then 60), prices make customers pay a quarter
-more per potion per level (20, then 40), and an extra order slot lets a fourth customer wait at the
-counter (30).
+more per potion per level (20, then 40), an extra order slot lets a fourth customer wait at the
+counter (30), and customers makes them come in half again as often per level, a new one every 8 to
+13 seconds and then every 6 to 10 instead of every 12 to 20 (25, then 50).
 
 ![The guild](docs/screenshots/guild.png)
 

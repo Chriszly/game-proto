@@ -45,15 +45,16 @@ export const EXPANSION_YARDS = [
 export const OUTFITTER = { x: 830, y: 80 };
 /**
  * The guild's sign and its upgrade markers in the empty bottom-left corner of the yard, away from
- * the doctor's rounds: garden growth and belt speed on the right, prices and the extra order slot on
- * the left.
+ * the doctor's rounds: the shop's extra order slot, customers and prices on the left and in the
+ * middle, garden growth and belt speed on the right, and the sign at the bottom in the middle.
  */
 export const GUILD = {
-  sign: { x: 140, y: 760 },
-  growth: { x: 190, y: 700 },
-  belts: { x: 190, y: 800 },
-  prices: { x: 90, y: 800 },
-  slots: { x: 90, y: 700 },
+  sign: { x: 170, y: 800 },
+  slots: { x: 70, y: 700 },
+  customers: { x: 170, y: 700 },
+  growth: { x: 270, y: 700 },
+  prices: { x: 70, y: 800 },
+  belts: { x: 270, y: 800 },
 };
 /** Where the doctor stands to buy the expansion's land: on the grass just right of the shop door. */
 export const EXPANSION_LAND = { x: 820, y: 430 };
