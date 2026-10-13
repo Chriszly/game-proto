@@ -237,10 +237,12 @@ function distanceTo(run: { x: number; y: number }[], p: { x: number; y: number }
  * its line that grows them (the runs are in the order of the line's GARDENS), so mandrakes come in on
  * the feeder from their patch. Everything else gets on at the start of the main run.
  */
+const GARDEN_RUNS: Partial<Record<BeltId, readonly PlantId[]>> = {
+  garden: GARDENS.slice(0, LINE2_GARDEN),
+  garden2: GARDENS.slice(LINE2_GARDEN, 2 * LINE2_GARDEN),
+};
 function beltRun(id: BeltId, kind: ItemId) {
-  if (id !== 'garden' && id !== 'garden2') return 0;
-  const first = id === 'garden2' ? LINE2_GARDEN : 0;
-  const run = GARDENS.slice(first, first + LINE2_GARDEN).indexOf(kind as PlantId);
+  const run = GARDEN_RUNS[id]?.indexOf(kind as PlantId) ?? 0;
   return run > 0 && run < BELT_PATHS[id].length ? run : 0;
 }
 

@@ -279,10 +279,17 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
   expect(await play(10_000, async () => (customers = await game.customers()).length > 0), 'a customer came in').toBe(true);
   expect(customers[0]).toMatchObject({ x: STREET.x, arrived: false });
   expect(customers[0].y).toBeLessThan(FIRST_CUSTOMER.y);
-  // Until they reach the counter, they don't lose patience.
+  // All the way to the counter, they don't lose patience.
   let [order] = (await game.state()).orders;
-  expect(order.patience, 'patience while walking in').toBe(order.maxPatience);
-  expect(await play(10_000, async () => (customers = await game.customers())[0].arrived), 'the customer reached the counter').toBe(true);
+  let patient = true;
+  const reached = await play(10_000, async () => {
+    customers = await game.customers();
+    [order] = (await game.state()).orders;
+    if (!customers[0].arrived && order.patience < order.maxPatience) patient = false;
+    return customers[0].arrived;
+  });
+  expect(reached, 'the customer reached the counter').toBe(true);
+  expect(patient, 'full patience while walking in').toBe(true);
   expect(customers[0]).toMatchObject(FIRST_CUSTOMER);
   const waiting = await play(STEP_MS, async () => {
     [order] = (await game.state()).orders;

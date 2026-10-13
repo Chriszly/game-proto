@@ -586,13 +586,17 @@ export class GameScene extends Phaser.Scene {
           // Goods loaded from the doctor's hands wait out of sight until their turn to get on.
           const { run, start, join } = beltSpan(id, item.id);
           icon.setVisible(item.at >= start);
-          // Along the main run, across the belt into the item's own lane. On a feeder, the item rides
-          // towards that lane on the main run, so it carries straight on where the feeder joins.
-          const onFeeder = run > 0 && item.at < join;
-          const { dx, dy } = pointAlong(main, (onFeeder ? join : item.at) / BELT_MS[id]);
-          const { x, y } = onFeeder ? pointAlong(feeders[run - 1], (item.at - start) / (join - start)) : pointAlong(main, item.at / BELT_MS[id]);
+          // Along the main run, across the belt into the item's own lane. On a feeder, the item moves
+          // over into that lane as it goes, so it carries straight on where the feeder joins.
           const off = laneOffset(lanes.indexOf(item.id), lanes.length);
-          icon.setTexture(itemTexture(item.id)).setPosition(x - dy * off, y + dx * off);
+          let { x, y, dx, dy } = pointAlong(main, Math.max(item.at, join) / BELT_MS[id]);
+          let across = off;
+          if (run > 0 && item.at < join) {
+            const along = (item.at - start) / (join - start);
+            ({ x, y } = pointAlong(feeders[run - 1], along));
+            across = off * Math.max(0, along);
+          }
+          icon.setTexture(itemTexture(item.id)).setPosition(x - dy * across, y + dx * across);
         });
       });
     }

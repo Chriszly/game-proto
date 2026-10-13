@@ -89,6 +89,7 @@ potions), so when one kind waits for room at the next station the other keeps mo
 run at half speed, so a belt carries as many goods a second as a one-lane belt would.
 
 ![The garden belt just built: what the doctor carried gets on it, and a mandrake rides in from its patch](docs/screenshots/garden-belt-loading.png)
+
 The belts are steampunk machinery, brass rails over leather slats, in an otherwise medieval world.
 
 ![All three belts built, with a lane for each kind of goods](docs/screenshots/belt-lanes.png)

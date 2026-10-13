@@ -37,17 +37,17 @@ export function loadState(): GameState {
 
 /**
  * Goods saved on a belt before they got on at the start of their own run (mandrakes now come in on
- * their patch's feeder) move up to that start, a gap apart in each lane, the rearmost out of sight.
+ * their patch's feeder) were drawn on the main run, so any short of where their run joins it move up
+ * to the join, or a gap behind the one ahead of them in their lane.
  */
 function ontoOwnRuns(state: GameState) {
   for (const id of BELTS) {
-    const queued = new Map<ItemId, number>();
+    // The items in each lane come front first.
+    const ahead = new Map<ItemId, number>();
     for (const item of state.belts[id].items) {
-      const { start } = beltSpan(id, item.id);
-      if (item.at >= start) continue;
-      const ahead = queued.get(item.id) ?? 0;
-      item.at = start - ahead * BELT_GAP_MS;
-      queued.set(item.id, ahead + 1);
+      const { join } = beltSpan(id, item.id);
+      if (item.at < join) item.at = Math.min(join, (ahead.get(item.id) ?? Infinity) - BELT_GAP_MS);
+      ahead.set(item.id, item.at);
     }
   }
 }
