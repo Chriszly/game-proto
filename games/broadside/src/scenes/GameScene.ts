@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { SHIP_LOOKS } from '../art/art';
 import { loadBestWave, saveBestWave } from '../game/save';
 import { buy, repair, setSail, tick } from '../game/sim';
-import { ARC, WORLD, newRun, stats, type GameState, type Ship } from '../game/state';
+import { ARC, newRun, offset, stats, type GameState, type Ship } from '../game/state';
 import { makeButton } from '../ui/Button';
 import { Harbor, type HarborAction } from '../ui/Harbor';
 import { pinToScreen } from '../ui/screen';
@@ -14,7 +14,7 @@ const MAX_STEP_MS = 250;
 const WAKE_EVERY_MS = 90;
 const WAKE_MS = 1400;
 const HP_BAR_W = 34;
-/** Scenery: where the islands lie on the sea. */
+/** Scenery: where the islands lie on the sea (`WORLD` in src/game/state.ts). */
 const ISLANDS = [
   { key: 'island-0', x: 330, y: 260 },
   { key: 'island-1', x: 1540, y: 330 },
@@ -43,6 +43,15 @@ export class GameScene extends Phaser.Scene {
   private floaters = new Map<number, Phaser.GameObjects.Text>();
   private wakes: { x: number; y: number; ms: number; size: number }[] = [];
   private water!: Phaser.GameObjects.TileSprite;
+  private islands: { image: Phaser.GameObjects.Image; x: number; y: number }[] = [];
+  /**
+   * Where the player's ship is drawn. The sea wraps at its edges but this does not: it follows
+   * the ship's every move, so the camera never jumps when the ship crosses an edge. Everything
+   * else is drawn at its nearest copy around the player (see `place`).
+   */
+  private view = { x: 0, y: 0 };
+  /** The player's position in the sea last frame, to move `view` by. */
+  private lastPlayer = { x: 0, y: 0 };
   private arcs!: Phaser.GameObjects.Graphics;
   private bars!: Phaser.GameObjects.Graphics;
   private fx!: Phaser.GameObjects.Graphics;
@@ -71,13 +80,16 @@ export class GameScene extends Phaser.Scene {
     this.helmLabels = [];
     this.lastFrame = null;
     this.state = newRun(loadBestWave());
+    this.view = { x: this.state.player.x, y: this.state.player.y };
+    this.lastPlayer = { ...this.view };
 
-    this.water = this.add.tileSprite(0, 0, WORLD.w, WORLD.h, 'water').setOrigin(0);
-    for (const i of ISLANDS) this.add.image(i.x, i.y, i.key).setDepth(1);
+    // The water fills the screen and scrolls with the camera, so it never runs out at an edge.
+    this.water = this.add.tileSprite(0, 0, VIEW.w, VIEW.h, 'water').setOrigin(0).setScrollFactor(0);
+    this.islands = ISLANDS.map((i) => ({ image: this.add.image(i.x, i.y, i.key).setDepth(1), x: i.x, y: i.y }));
     this.arcs = this.add.graphics().setDepth(2);
     this.fx = this.add.graphics().setDepth(5);
     this.bars = this.add.graphics().setDepth(UI_DEPTH - 20);
-    this.cameras.main.setBounds(0, 0, WORLD.w, WORLD.h).setRoundPixels(true);
+    this.cameras.main.setRoundPixels(true);
 
     this.createHud();
     this.createHelm();
@@ -106,8 +118,14 @@ export class GameScene extends Phaser.Scene {
     if (s.phase !== phase && (s.phase === 'harbor' || s.phase === 'over')) saveBestWave(s.bestWave);
     this.clock += dt;
 
-    this.water.tilePositionX = this.clock / 160;
-    this.water.tilePositionY = Math.sin(this.clock / 2000) * 6;
+    this.followPlayer();
+    const cam = this.cameras.main;
+    this.water.tilePositionX = cam.scrollX + this.clock / 160;
+    this.water.tilePositionY = cam.scrollY + Math.sin(this.clock / 2000) * 6;
+    for (const i of this.islands) {
+      const at = this.place(i);
+      i.image.setPosition(at.x, at.y);
+    }
     this.drawWakes(dt);
     this.drawShips();
     this.drawBalls();
@@ -124,6 +142,24 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** Moves `view` along with the player's ship and centres the camera on it. */
+  private followPlayer() {
+    const { dx, dy } = offset(this.lastPlayer, this.state.player);
+    this.view.x += dx;
+    this.view.y += dy;
+    this.lastPlayer = { x: this.state.player.x, y: this.state.player.y };
+    this.cameras.main.setScroll(Math.round(this.view.x - VIEW.w / 2), Math.round(this.view.y - VIEW.h / 2));
+  }
+
+  /**
+   * Where to draw something at `p` on the sea: its copy nearest the player's ship, which is the
+   * one on screen. The sea is bigger than the screen, so only one copy can ever be in sight.
+   */
+  private place(p: { x: number; y: number }) {
+    const { dx, dy } = offset(this.state.player, p);
+    return { x: this.view.x + dx, y: this.view.y + dy };
+  }
+
   private harborAction(id: HarborAction) {
     if (id === 'sail') setSail(this.state);
     else if (id === 'repair') repair(this.state);
@@ -138,13 +174,13 @@ export class GameScene extends Phaser.Scene {
       seen.add(ship.id);
       let sprite = this.ships.get(ship.id);
       if (!sprite) {
-        sprite = this.add.image(ship.x, ship.y, `ship-${ship.kind}`).setDepth(4);
+        sprite = this.add.image(0, 0, `ship-${ship.kind}`).setDepth(4);
         this.ships.set(ship.id, sprite);
-        if (ship.kind === 'player') this.cameras.main.startFollow(sprite, true);
       }
       // A gentle roll on the swell.
       const roll = Math.sin(this.clock / 420 + ship.id) * 0.03;
-      sprite.setPosition(ship.x, ship.y).setRotation(ship.heading + roll);
+      const at = this.place(ship);
+      sprite.setPosition(at.x, at.y).setRotation(ship.heading + roll);
       if (ship.hitMs > 0) sprite.setTint(0xff8060).setTintMode(Phaser.TintModes.FILL);
       else sprite.clearTint();
       if (ship.kind !== 'player') this.drawHpBar(ship);
@@ -158,8 +194,9 @@ export class GameScene extends Phaser.Scene {
 
   private drawHpBar(ship: Ship) {
     if (ship.hp >= ship.maxHp) return;
-    const x = Math.round(ship.x - HP_BAR_W / 2);
-    const y = Math.round(ship.y - SHIP_LOOKS[ship.kind].length / 2 - 12);
+    const at = this.place(ship);
+    const x = Math.round(at.x - HP_BAR_W / 2);
+    const y = Math.round(at.y - SHIP_LOOKS[ship.kind].length / 2 - 12);
     const fill = Math.round((HP_BAR_W - 2) * Phaser.Math.Clamp(ship.hp / ship.maxHp, 0, 1));
     this.bars.fillStyle(0x0c1820).fillRect(x, y, HP_BAR_W, 5);
     this.bars.fillStyle(0x3a3a40).fillRect(x + 1, y + 1, HP_BAR_W - 2, 3);
@@ -187,10 +224,11 @@ export class GameScene extends Phaser.Scene {
       seen.add(b.id);
       let sprite = this.balls.get(b.id);
       if (!sprite) {
-        sprite = this.add.image(b.x, b.y, 'ball').setDepth(6);
+        sprite = this.add.image(0, 0, 'ball').setDepth(6);
         this.balls.set(b.id, sprite);
       }
-      sprite.setPosition(b.x, b.y);
+      const at = this.place(b);
+      sprite.setPosition(at.x, at.y);
     }
     for (const [id, sprite] of this.balls) {
       if (seen.has(id)) continue;
@@ -205,12 +243,13 @@ export class GameScene extends Phaser.Scene {
       seen.add(l.id);
       let sprite = this.loot.get(l.id);
       if (!sprite) {
-        sprite = this.add.image(l.x, l.y, 'loot').setDepth(3);
+        sprite = this.add.image(0, 0, 'loot').setDepth(3);
         this.loot.set(l.id, sprite);
       }
       // Bobbing on the water, and blinking in its last few seconds before it sinks.
       const fading = l.ms < 4000 && Math.floor(this.clock / 200) % 2 === 0;
-      sprite.setPosition(l.x, l.y + Math.sin(this.clock / 300 + l.id) * 2).setAlpha(fading ? 0.4 : 1);
+      const at = this.place(l);
+      sprite.setPosition(at.x, at.y + Math.sin(this.clock / 300 + l.id) * 2).setAlpha(fading ? 0.4 : 1);
     }
     for (const [id, sprite] of this.loot) {
       if (seen.has(id)) continue;
@@ -224,12 +263,14 @@ export class GameScene extends Phaser.Scene {
     g.clear();
     for (const w of this.wakes) {
       const t = 1 - w.ms / WAKE_MS;
-      g.fillStyle(0xe8f4f8, 0.3 * (1 - t)).fillCircle(w.x, w.y, w.size * (0.6 + t));
+      const at = this.place(w);
+      g.fillStyle(0xe8f4f8, 0.3 * (1 - t)).fillCircle(at.x, at.y, w.size * (0.6 + t));
     }
     const sinking = new Set<number>();
     const floaters = new Set<number>();
-    for (const e of this.state.effects) {
-      const t = 1 - e.ms / e.total;
+    for (const fx of this.state.effects) {
+      const t = 1 - fx.ms / fx.total;
+      const e = { ...fx, ...this.place(fx) };
       if (e.kind === 'smoke') {
         g.fillStyle(0xd8d8d0, 0.7 * (1 - t)).fillCircle(e.x, e.y, 4 + t * 10);
       } else if (e.kind === 'splash') {
@@ -245,7 +286,7 @@ export class GameScene extends Phaser.Scene {
           sprite = this.add.image(e.x, e.y, `ship-${e.ship}`).setDepth(3).setTint(0x405060).setTintMode(Phaser.TintModes.MULTIPLY);
           this.sinking.set(e.id, sprite);
         }
-        sprite.setRotation((e.heading ?? 0) + t * 0.6).setScale(1 - t * 0.5).setAlpha(1 - t);
+        sprite.setPosition(e.x, e.y).setRotation((e.heading ?? 0) + t * 0.6).setScale(1 - t * 0.5).setAlpha(1 - t);
         g.lineStyle(2, 0xe8f4f8, 0.6 * (1 - t)).strokeCircle(e.x, e.y, 10 + t * 30);
       } else if (e.kind === 'coins') {
         floaters.add(e.id);
@@ -272,7 +313,7 @@ export class GameScene extends Phaser.Scene {
     g.clear();
     const s = this.state;
     if (s.phase !== 'fighting' && s.phase !== 'break') return;
-    const p = s.player;
+    const p = { ...s.player, ...this.view };
     const range = stats(s).range;
     for (const side of [1, -1]) {
       const out = p.heading + (side * Math.PI) / 2;
@@ -330,10 +371,13 @@ export class GameScene extends Phaser.Scene {
   /** Arrows at the edge of the screen toward enemy ships (red) and loot (gold) out of sight. */
   private drawPointers() {
     const g = this.hud;
-    const view = this.cameras.main.worldView;
+    const cam = this.cameras.main;
+    const view = new Phaser.Geom.Rectangle(cam.scrollX, cam.scrollY, VIEW.w, VIEW.h);
     const cx = view.centerX;
     const cy = view.centerY;
-    const mark = (x: number, y: number, color: number) => {
+    // Each arrow points the shortest way to its target, which may be over an edge of the sea.
+    const mark = (target: { x: number; y: number }, color: number) => {
+      const { x, y } = this.place(target);
       if (view.contains(x, y)) return;
       const a = Math.atan2(y - cy, x - cx);
       // Where the line toward the target leaves the screen, kept clear of the top bar.
@@ -345,8 +389,8 @@ export class GameScene extends Phaser.Scene {
       const tip = (d: number, off: number) => ({ x: px + Math.cos(a + off) * d, y: py + Math.sin(a + off) * d });
       g.fillStyle(color, 0.9).fillTriangle(tip(10, 0).x, tip(10, 0).y, tip(8, 2.4).x, tip(8, 2.4).y, tip(8, -2.4).x, tip(8, -2.4).y);
     };
-    for (const e of this.state.enemies) mark(e.x, e.y, 0xe0584f);
-    for (const l of this.state.loot) mark(l.x, l.y, 0xf3c64e);
+    for (const e of this.state.enemies) mark(e, 0xe0584f);
+    for (const l of this.state.loot) mark(l, 0xf3c64e);
   }
 
   private helmLabels: Phaser.GameObjects.Text[] = [];

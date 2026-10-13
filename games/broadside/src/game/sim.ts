@@ -8,12 +8,15 @@ import {
   LOOT_PULL,
   WORLD,
   newShip,
+  offset,
   radiusOf,
   stats,
   type Effect,
   type GameState,
   type Ship,
   type Side,
+  wrapCoord,
+  wrapPoint,
 } from './state';
 import { costOf, REPAIR_COST, type UpgradeId } from './upgrades';
 import { hpScale, waveShips } from './waves';
@@ -22,8 +25,6 @@ import { hpScale, waveShips } from './waves';
 const SPAWN_MS = 2500;
 /** How far from the player a new enemy ship appears. */
 const SPAWN_DISTANCE = 520;
-/** Ships are kept this far inside the edge of the sea. */
-const EDGE = 40;
 /** How fast loot drifts toward the player once in reach, pixels per second. */
 const LOOT_DRIFT = 140;
 /** How far off an enemy gun crew's aim can be, in radians. */
@@ -38,8 +39,15 @@ export function wrap(a: number) {
   return a;
 }
 
-const bearing = (from: { x: number; y: number }, to: { x: number; y: number }) => Math.atan2(to.y - from.y, to.x - from.x);
-const distance = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(b.x - a.x, b.y - a.y);
+// Both measure the shortest way across the sea, which may wrap over an edge.
+const bearing = (from: { x: number; y: number }, to: { x: number; y: number }) => {
+  const { dx, dy } = offset(from, to);
+  return Math.atan2(dy, dx);
+};
+const distance = (a: { x: number; y: number }, b: { x: number; y: number }) => {
+  const { dx, dy } = offset(a, b);
+  return Math.hypot(dx, dy);
+};
 
 /** Which side of `ship`, if any, has `target` within its broadside's arc. */
 export function sideFacing(ship: Ship, target: { x: number; y: number }): Side | null {
@@ -90,13 +98,17 @@ export function tick(s: GameState, dt: number) {
   if (s.toSpawn.length === 0 && s.enemies.length === 0 && s.loot.length === 0) reachHarbor(s);
 }
 
-/** Turns a ship toward `heading` at up to `turn` radians a second, then sails it forward. */
+/**
+ * Turns a ship toward `heading` at up to `turn` radians a second, then sails it forward, over the
+ * edge of the sea and back in on the other side if it gets there.
+ */
 function steer(ship: Ship, heading: number, turn: number, speed: number, dt: number) {
   const diff = wrap(heading - ship.heading);
   const most = (turn * dt) / 1000;
   ship.heading = wrap(ship.heading + Math.max(-most, Math.min(most, diff)));
-  ship.x = Math.max(EDGE, Math.min(WORLD.w - EDGE, ship.x + (Math.cos(ship.heading) * speed * dt) / 1000));
-  ship.y = Math.max(EDGE, Math.min(WORLD.h - EDGE, ship.y + (Math.sin(ship.heading) * speed * dt) / 1000));
+  ship.x += (Math.cos(ship.heading) * speed * dt) / 1000;
+  ship.y += (Math.sin(ship.heading) * speed * dt) / 1000;
+  wrapPoint(ship);
   ship.hitMs = Math.max(0, ship.hitMs - dt);
 }
 
@@ -106,8 +118,8 @@ function spawn(s: GameState, dt: number) {
   s.spawnMs = SPAWN_MS;
   const kind = s.toSpawn.shift()!;
   const angle = Math.random() * Math.PI * 2;
-  const x = Math.max(EDGE * 2, Math.min(WORLD.w - EDGE * 2, s.player.x + Math.cos(angle) * SPAWN_DISTANCE));
-  const y = Math.max(EDGE * 2, Math.min(WORLD.h - EDGE * 2, s.player.y + Math.sin(angle) * SPAWN_DISTANCE));
+  const x = wrapCoord(s.player.x + Math.cos(angle) * SPAWN_DISTANCE, WORLD.w);
+  const y = wrapCoord(s.player.y + Math.sin(angle) * SPAWN_DISTANCE, WORLD.h);
   const hp = Math.round(ENEMIES[kind].hp * hpScale(s.wave) * byDifficulty(0.75, 1, 1.3));
   s.enemies.push(newShip(s.nextId++, kind, x, y, bearing({ x, y }, s.player), hp));
 }
@@ -140,12 +152,15 @@ function separate(s: GameState) {
       const d = distance(a, b);
       const overlap = radiusOf(a) + radiusOf(b) - d;
       if (overlap <= 0 || d === 0) continue;
-      const nx = (b.x - a.x) / d;
-      const ny = (b.y - a.y) / d;
+      const { dx, dy } = offset(a, b);
+      const nx = dx / d;
+      const ny = dy / d;
       a.x -= (nx * overlap) / 2;
       a.y -= (ny * overlap) / 2;
       b.x += (nx * overlap) / 2;
       b.y += (ny * overlap) / 2;
+      wrapPoint(a);
+      wrapPoint(b);
     }
   }
 }
@@ -185,8 +200,8 @@ function fire(s: GameState, ship: Ship, side: Side, target: Ship, targetSpeed: n
   const r = radiusOf(ship);
   for (let i = 0; i < guns; i++) {
     const along = guns === 1 ? 0 : (i / (guns - 1) - 0.5) * r * 1.2;
-    const x = ship.x + Math.cos(ship.heading) * along + Math.cos(out) * r * 0.6;
-    const y = ship.y + Math.sin(ship.heading) * along + Math.sin(out) * r * 0.6;
+    const x = wrapCoord(ship.x + Math.cos(ship.heading) * along + Math.cos(out) * r * 0.6, WORLD.w);
+    const y = wrapCoord(ship.y + Math.sin(ship.heading) * along + Math.sin(out) * r * 0.6, WORLD.h);
     const dir = aim + (Math.random() * 2 - 1) * spread;
     s.balls.push({
       id: s.nextId++,
@@ -206,6 +221,7 @@ function moveBalls(s: GameState, dt: number) {
   s.balls = s.balls.filter((ball) => {
     ball.x += (ball.vx * dt) / 1000;
     ball.y += (ball.vy * dt) / 1000;
+    wrapPoint(ball);
     ball.ms -= dt;
     const targets = ball.fromPlayer ? s.enemies : [s.player];
     const hit = targets.find((t) => t.hp > 0 && distance(ball, t) < radiusOf(t));
@@ -244,8 +260,10 @@ function gatherLoot(s: GameState, dt: number) {
     }
     if (d < LOOT_PULL) {
       const step = Math.min(d, (LOOT_DRIFT * dt) / 1000);
-      l.x += ((player.x - l.x) / d) * step;
-      l.y += ((player.y - l.y) / d) * step;
+      const { dx, dy } = offset(l, player);
+      l.x += (dx / d) * step;
+      l.y += (dy / d) * step;
+      wrapPoint(l);
     }
     return l.ms > 0;
   });

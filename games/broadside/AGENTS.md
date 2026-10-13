@@ -15,14 +15,16 @@ off either side. Sunk enemies drop loot barrels, and gold buys upgrades at a har
   away rather than ram. Broadsides lead their target, and enemy aim has a random spread. Loot
   drifts toward the player and expires. There is a harbor shop with five upgrades plus a paid
   repair, a game-over panel with "Sail again", and off-screen arrows pointing to enemies and loot.
+  The sea wraps around at every edge like a globe: sailing off the north edge comes back in at the
+  south, and off the west edge in at the east. Ships, balls and loot all wrap, and every distance
+  and bearing takes the shortest way round.
 - **Screens:** there is only `GameScene`. The wave banner, the harbor panel and the game-over panel
   are overlays drawn on top of it. There is no title screen, pause or in-game settings; the shared
   settings (difficulty, frame cap, FPS readout, reduced motion) are set on the hub page.
 - **Persistence:** only the best wave beaten is saved. Each run starts fresh at wave 1.
 - **Rough or unused:** there is no sound. The `coin` texture baked in `src/art/art.ts` is never
   used. `ShipType.name` in `src/game/ships.ts` is never shown. Islands are scenery only, with no
-  collision. Ships only stay inside `WORLD` because `steer` clamps them to `EDGE`. There are no
-  TODO comments in the code.
+  collision. There are no TODO comments in the code.
 
 ## Architecture
 
@@ -36,7 +38,8 @@ File map (all under `src/`, plus the shared files it imports):
 - `scenes/layout.ts`: `VIEW`, `HUD_HEIGHT`, the `HELM` button centres, the `HARBOR` panel and row
   geometry, `BUTTON`, `UI_DEPTH` and `FONT`.
 - `game/state.ts`: types, the world and timing constants, the base `PLAYER` stats, `stats()` (the
-  player's stats after upgrades), `newShip`, `newRun` and `radiusOf`.
+  player's stats after upgrades), `newShip`, `newRun` and `radiusOf`, plus the wrapping helpers
+  `wrapCoord`, `wrapPoint` and `offset` (the shortest `dx`, `dy` between two points on the sea).
 - `game/sim.ts`: all rules. `tick` handles steering, spawning, enemy AI, separation, firing, balls,
   sinking, loot and reaching the harbor. `buy`, `repair` and `setSail` are the harbor actions.
 - `game/ships.ts`: the `ENEMIES` table (hp, radius, speed, turn, guns, damage, reload, range, loot).
@@ -73,9 +76,17 @@ How it runs:
 - **Rendering:** ships, balls, loot, sinking hulks and the "+N gold" floaters are sprites kept in
   maps keyed by entity or effect id. They are created on first sight, moved each frame and
   destroyed when the id disappears from state. Wakes, smoke, splashes, hits, the range arcs, HP
-  bars, the HUD and the edge pointers are Graphics, cleared and redrawn every frame. The camera
-  follows the player's sprite inside `WORLD` (1920x1200). The HUD, helm and overlays use scroll
-  factor 0.
+  bars, the HUD and the edge pointers are Graphics, cleared and redrawn every frame. The HUD, helm
+  and overlays use scroll factor 0.
+- **Wrapping sea:** `WORLD` (1920x1200) wraps on both axes. In the sim, every move ends in
+  `wrapPoint`, and `bearing` and `distance` in `sim.ts` go through `offset`, so ships chase, aim,
+  separate and pull in loot across an edge. The scene keeps `view`, the player's position without
+  wrapping (moved each frame by the `offset` from `lastPlayer`), and `followPlayer` centres the
+  camera on it with `setScroll`, so the camera never jumps at an edge and there are no camera
+  bounds. Everything else is drawn at `place(p)`: its nearest copy around the player, which works
+  because the sea is more than twice the view on each axis. The water is a screen-sized tile
+  sprite at scroll factor 0 whose tile position follows the camera's scroll, and the islands are
+  repositioned by `place` every frame.
 
 State model (`src/game/state.ts`):
 
@@ -105,7 +116,7 @@ Data tables, where to tune:
 - Player base stats: `PLAYER` in `state.ts`. Upgrade effects: `stats()` in `state.ts`.
 - World, `BREAK_MS`, `LOOT_MS`, `LOOT_PULL`, `ARC` (broadside half-angle) and `BALL_SPEED`: in
   `state.ts`.
-- `SPAWN_MS`, `SPAWN_DISTANCE`, `EDGE`, `LOOT_DRIFT`, `ENEMY_SPREAD` and `HARBOR_PATCH`: at the top
+- `SPAWN_MS`, `SPAWN_DISTANCE`, `LOOT_DRIFT`, `ENEMY_SPREAD` and `HARBOR_PATCH`: at the top
   of `sim.ts`. The loot formula (`loot + 2 * (wave - 1)`) is in `sink`, and the +30 hp on a hull
   purchase is in `buy`.
 - Enemy stats: `ENEMIES` in `ships.ts`. Wave makeup and hp scaling: `waves.ts`. The difficulty
@@ -130,7 +141,8 @@ Data tables, where to tune:
 
 ## Testing hooks
 
-- `src/main.ts` puts `game` on `window` in dev builds. The test reads
+- `src/main.ts` puts `game` on `window` in dev builds. State positions are always inside `WORLD`;
+  the scene's drawn positions are not (see "Wrapping sea"). The test reads
   `game.scene.getScene('Game').state` (deep-copied through JSON) and `.harbor.buttons`.
 - `e2e/playthrough.spec.ts` seeds `Math.random` and drives 64ms frames. It presses the mouse down on
   the helm button centres to steer: first to check a turn each way and that the ship holds its
@@ -139,7 +151,8 @@ Data tables, where to tune:
   `sail`.
 - Keep in sync with the test: `HELM` centres (copied into the test), `VIEW`, wave 1 being
   `['sloop', 'sloop']`, sloop loot 10 (plus the per-wave bonus, which is 0 on wave 1), the player
-  hull of 120, Heavy Shot's first cost of 15, and `CLOSE_IN` (220) staying under `PLAYER.range`.
+  hull of 120, Heavy Shot's first cost of 15, `CLOSE_IN` (220) staying under `PLAYER.range`, and
+  `WORLD` (copied into the test, which measures bearings and distances the shortest way round).
   The test also relies on: the `break` phase allowing steering, the first enemy appearing within
   5s, `GameState` field names, harbor button ids matching `UpgradeId` / `'sail'`, `bestWave`
   becoming 1 on reaching the harbor, and wave 2 having more ships than wave 1.
@@ -170,5 +183,10 @@ Data tables, where to tune:
   position carry over between waves.
 - Everything that is fixed on screen must be scroll factor 0, and containers need `pinToScreen`,
   not a plain `setScrollFactor`. Otherwise taps land in the wrong place once the camera moves.
+- Never draw at a state position directly or compare positions with a plain subtraction: use
+  `place` in the scene and `offset` (or `bearing` and `distance`) in the sim, or things near an
+  edge show up a whole sea away. Anything new that moves must end its move with `wrapPoint`.
+- `WORLD` must stay more than twice `VIEW` on each axis, or two copies of one thing could be on
+  screen while only the nearest is drawn.
 - `drawPointers` draws into the same `hud` Graphics as the top bar, so it must run after
   `hud.clear()` in `drawHud`.

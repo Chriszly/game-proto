@@ -2,8 +2,27 @@ import { ENEMIES, type EnemyKind } from './ships';
 import type { UpgradeId } from './upgrades';
 import { waveShips } from './waves';
 
-/** The sea the battle is fought on; the camera follows the player across it. */
+/**
+ * The sea the battle is fought on; the camera follows the player across it. It has no edges: like
+ * a globe, sailing off one side brings a ship back in on the opposite side.
+ */
 export const WORLD = { w: 1920, h: 1200 };
+
+/** A coordinate brought back onto the sea, in [0, size). */
+export const wrapCoord = (v: number, size: number) => ((v % size) + size) % size;
+
+/** Moves a point that has sailed off one side of the sea back in on the other. */
+export function wrapPoint(p: { x: number; y: number }) {
+  p.x = wrapCoord(p.x, WORLD.w);
+  p.y = wrapCoord(p.y, WORLD.h);
+}
+
+/** The shortest way from `from` to `to` across the wrapping sea, which may cross an edge. */
+export function offset(from: { x: number; y: number }, to: { x: number; y: number }) {
+  const dx = wrapCoord(to.x - from.x + WORLD.w / 2, WORLD.w) - WORLD.w / 2;
+  const dy = wrapCoord(to.y - from.y + WORLD.h / 2, WORLD.h) - WORLD.h / 2;
+  return { dx, dy };
+}
 /** How long the banner shows before a wave. */
 export const BREAK_MS = 2000;
 /** How long a floating barrel of loot lasts before it sinks. */

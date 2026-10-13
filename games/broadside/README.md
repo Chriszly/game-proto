@@ -31,10 +31,16 @@ the gold buys a stronger hull, heavier shot, more guns, a faster crew and faster
    sinks after 25 seconds, blinking at the end; gold arrows point to barrels out of sight.
 4. **The harbor** opens once no enemy ship or loot is left. The crew patches a quarter of the
    hull for free; the rest is 10 gold.
-5. **The run is over when your hull is sunk**. "Sail again" starts afresh at wave 1. The best wave
+5. **The sea has no edge.** Like on a globe, sailing off the top brings you back in at the
+   bottom, and off the left side back in on the right. Enemy ships, loot and cannonballs cross
+   over the same way, and the arrows point the shortest way round.
+6. **The run is over when your hull is sunk**. "Sail again" starts afresh at wave 1. The best wave
    beaten is kept in the browser.
 
 ![Hauling in the plunder](docs/screenshots/playthrough-1-loot.png)
+
+![Just over the northern edge: the island ahead lies at the far south of the sea, and the sloop
+off the port bow came over the edge after the ship](docs/screenshots/wrap-around.png)
 
 ### Enemy ships
 
@@ -90,7 +96,7 @@ All paths are inside `games/broadside/`.
   and works out the player's ship from the upgrades bought, `sim.ts` sails the ships, fires the
   broadsides and runs the harbor, and `save.ts` keeps the best wave.
 - `src/scenes/`: `BootScene` bakes textures, `GameScene` draws the sea, follows the ship with the
-  camera and wires the helm buttons and keys to the rules, `layout.ts` says where things are drawn.
+  camera across the wrapping sea and wires the helm buttons and keys to the rules, `layout.ts` says where things are drawn.
 - `src/art/`: the ships, islands, sea, cannonballs and loot, drawn in code and baked into textures
   at startup.
 - `src/ui/`: the harbor panel and buttons.
