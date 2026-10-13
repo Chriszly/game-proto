@@ -42,9 +42,10 @@ map is bigger than the screen, so the camera follows the doctor.
 
 **Pallets**: every station keeps each kind of goods coming in or going out on its own pallet: two
 by two on the base, stacked up to ten layers high, so 40 of each kind. The refining table keeps
-its pallets on its left (plants above, flour and seeds below), the cauldron below its drop-off and
-pick-up, and the counter keeps its potions behind its left end. A full pallet takes nothing more:
-the doctor keeps the item and a belt waits until there is room.
+its plants on a pair of pallets above it and its flour and seeds on a pair below it, the cauldron
+keeps flour and seeds on its left and potions on its right, and the counter keeps its potions in
+front of it. The drop and pick-up markers stand beside the pallets they fill and empty. A full
+pallet takes nothing more: the doctor keeps the item and a belt waits until there is room.
 
 ![Pallets at the refining tables and cauldrons](docs/screenshots/pallets-map.png)
 
@@ -78,9 +79,10 @@ counter (30), and customers makes them come in half again as often per level, a 
 
 **Conveyor belts** take the walking out of the loop. Three can be bought on their own purple build
 markers, a handful of coins at a time: gardens to refining table (60 coins), table to cauldron (100)
-and cauldron to counter (150). A belt picks ripe plants or finished goods up at its start and
-hands them to the next station when it has room; mandrakes get on the garden belt at their own
-patch. The drop and pick-up markers it replaces go away,
+and cauldron to counter (150). A belt picks ripe plants up from the gardens, or finished goods
+from a station's out pallets, and runs to the next station's in pallets, where each lane ends at
+its own kind's pallet; it hands goods over when that pallet has room. Mandrakes get on the garden
+belt at their own patch. The drop and pick-up markers it replaces go away,
 though a drop marker comes back while the doctor carries goods it takes, such as goods from the
 other line. The goods it carries go from the doctor's hands onto it when it is built, one after
 another, unless the other line still moves them by hand. Each belt has a
@@ -92,7 +94,9 @@ run at half speed, so a belt carries as many goods a second as a one-lane belt w
 
 The belts are steampunk machinery, brass rails over leather slats, in an otherwise medieval world.
 
-![All three belts built, with a lane for each kind of goods](docs/screenshots/belt-lanes.png)
+![All three belts built, each running from pallets to pallets with a lane for each kind of goods](docs/screenshots/belt-lanes.png)
+
+![The cauldron belt ending at the counter's potion pallets](docs/screenshots/belts-to-pallets-counter.png)
 
 **The expansion** opens the right arm for a second production line. Its land is bought on a marker
 on the grass right of the shop (100 coins), which lays the yard and puts a build marker where each
