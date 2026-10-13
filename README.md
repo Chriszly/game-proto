@@ -19,6 +19,7 @@ map is bigger than the screen, so the camera follows the doctor.
 | --- | --- |
 | WASD / arrow keys, or tap | Walk |
 | Walk past ripe plants | Harvest every ripe plant within one character height of the doctor; the spinning sickle marks the edge |
+| Recipes (top bar) | Show what each station makes from what, and what each potion sells for; tap again to close |
 | Drop all (top bar) | Throw away everything the doctor carries |
 | Stand on a floor marker | Green: drop off items. Blue: work the station. Gold: pick up products or coins. Purple: pay coins to upgrade or build something |
 
@@ -27,10 +28,13 @@ map is bigger than the screen, so the camera follows the doctor.
 2. **Refining table**: drop off plants; wheat becomes wheat flour, mandrake becomes mandrake seeds.
    Stand on the work spot while it refines; pick the finished goods up on the pick-up marker.
 3. **Cauldron**: drop in refined goods. Two wheat flour brew a Healing Draught, wheat flour and
-   mandrake seeds brew a Sleeping Tonic. Stand on the work spot while it brews.
+   mandrake seeds brew a Sleeping Tonic. Stand on the work spot while it brews. When work starts,
+   the cauldron brews whichever potion customers are waiting for that the shop has least of.
 4. **Storefront**: customers show the potions they want and how long they will wait. Drop potions
-   on the counter and stand on the work spot behind it; customers take what they ordered and
-   leave coins on the pick-up marker.
+   on the counter and stand on the work spot behind it; customers pay for each potion as they get
+   it and leave the coins on the pick-up marker.
+
+![The recipes](docs/screenshots/playthrough-0-recipes.png)
 
 **Pallets**: every station keeps each kind of goods coming in or going out on its own pallet: two
 by two on the base, stacked up to ten layers high, so 40 of each kind. The refining table keeps
@@ -56,7 +60,7 @@ The **outfitter** on the grass right of the shop kits the doctor out, two levels
 pack carries one more item per level (30, then 60 coins), boots walk a fifth faster per level and
 a longer sickle harvests from a quarter further away (25, then 50 coins each).
 
-![The outfitter](docs/screenshots/playthrough-9-outfitted.png)
+![The outfitter](docs/screenshots/outfitter.png)
 
 The **guild** in the bottom-left corner of the yard sells upgrades for the rest of the apothecary:
 growth makes every garden grow a quarter faster per level (20, then 40 coins), belts run half again
@@ -98,17 +102,11 @@ npm run preview   # serve the production build
 
 ## Playthrough test
 
-`e2e/playthrough.spec.ts` plays the whole loop in headless Chromium with real clicks: it harvests
-both gardens, refines, brews, sells to customers until it has 20 coins and buys a counter upgrade.
-It sells more to buy the expansion's land, a wheat field, a refining table and a cauldron, and
-plays a round on that second line. It buys all four guild upgrades, then the outfitter's pack,
-boots and sickle, checking each of the doctor's upgrades works. It hires a craftsman for the
-refining table and buys the garden belt, which clears the plants from the doctor's hands, then
-watches the faster belt bring plants to the table, where the craftsman refines them. It picks up
-refined goods and empties its hands with the Drop all button, and last checks the faster growth,
-the new prices and a fourth customer, checking items, coins, upgrades and purchases along the way.
-It plays at 4x speed (`PLAYTHROUGH_SPEED`), so the run takes about four minutes. The
-Playthrough workflow runs it on every PR
+`e2e/playthrough.spec.ts` plays the first round of the loop in headless Chromium with real
+clicks: it opens and closes the recipes, harvests both gardens, refines, brews, sells potions to a
+customer and collects the coins, checking items, pallets, the recipe the cauldron picks and what
+each potion is paid along the way. It plays at 4x speed (`PLAYTHROUGH_SPEED`), so the run takes
+under a minute. The Playthrough workflow runs it on every PR
 and push to main and uploads a video and milestone screenshots as the `playthrough` artifact.
 
 ```sh

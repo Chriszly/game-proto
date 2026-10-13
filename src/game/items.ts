@@ -36,7 +36,7 @@ export interface Recipe {
   ms: number;
 }
 
-// Checked in order, so the recipe with the rarer ingredient comes first.
+// A cauldron brews whichever of these the shop is shortest of; ties go in this order, rarer ingredient first.
 export const RECIPES: Recipe[] = [
   { out: 'sleepingTonic', inputs: ['flour', 'mandrakeSeeds'], ms: 5_000 },
   { out: 'healingDraught', inputs: ['flour', 'flour'], ms: 4_000 },

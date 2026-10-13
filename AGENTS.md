@@ -4,19 +4,21 @@ Apothecary is a Phaser 4 + TypeScript + Vite game. See the README for how to pla
 
 ## Keep the playthrough test working
 
-`e2e/playthrough.spec.ts` plays the whole game in headless Chromium, and the **Playthrough** workflow
+`e2e/playthrough.spec.ts` plays one round of the loop in headless Chromium: it opens the recipes,
+harvests, refines, brews and sells potions to a customer. The **Playthrough** workflow
 (`.github/workflows/playthrough.yml`) runs it on every PR and every push to main. It is the check
-that the game can still be played from start to finish, so it has to stay accurate.
+that the core loop can still be played, so it has to stay accurate.
 
 - **Change the test in the same PR as the game.** A change to gameplay, layout, input or balance
   that the playthrough depends on goes in together with its test update. That includes rules and
   numbers in `src/game/` (items, recipes, grow, refine and brew times, prices, carry and station
-  capacity, upgrade costs), positions in `src/scenes/layout.ts`, controls and marker behaviour in
+  capacity), positions in `src/scenes/layout.ts`, controls and marker behaviour in
   `src/scenes/GameScene.ts`, and the `GameScene` fields the test reads (`state`, `player`,
   `pointerTarget`). Don't leave a red playthrough for a follow-up PR.
-- **Add new content to the playthrough.** A new station, item, recipe, garden, upgrade or other
-  step in the loop gets a step in the test that uses it and asserts its effect on the game state.
-  Features that are not part of the loop yet (menus, new screens) get a check when they are added.
+- **Keep it to the first round.** The playthrough covers harvesting, refining, brewing and selling
+  to a customer, and nothing bought with the coins. A change to that round (a new plant, recipe or
+  step a first round goes through) gets a step in the test that asserts its effect on the game
+  state. Upgrades, expansions, craftsmen, belts and other purchases stay out of it.
 - **Never skip or loosen the test to get green.** No `test.skip`, `test.fixme`, `.only`, removed
   assertions, `continue-on-error`, path filters that stop the workflow from running, or retries.
   Don't raise timeouts or tolerances unless the failure is shown to come from a slow runner rather
@@ -33,7 +35,7 @@ that the game can still be played from start to finish, so it has to stay accura
 - **It plays at 4x speed.** The test paces game time at `PLAYTHROUGH_SPEED` times real time (4 in
   CI, set in the workflow), so the recorded video is a 4x time-lapse. It renders with Phaser's
   canvas renderer, because software WebGL on a runner without a GPU is too slow for that. The end
-  of each run logs the speed it reached (`Played 48s of game time at 4.0x`); a busy runner can fall
+  of each run logs the speed it reached (`Played 47s of game time at 4.0x`); a busy runner can fall
   short of 4x, which slows the video but never changes the result.
 - **Keep the PR screenshots honest.** The test saves milestone screenshots; when the look of the
   loop changes, refresh the `docs/screenshots/playthrough-*.png` files from a fresh run.

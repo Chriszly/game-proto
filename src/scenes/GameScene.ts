@@ -58,6 +58,7 @@ import {
 import { BackStack } from '../ui/BackStack';
 import { IconRow } from '../ui/IconRow';
 import { Pallet } from '../ui/Pallet';
+import { RecipeBook } from '../ui/RecipeBook';
 import { ProgressBar } from '../ui/ProgressBar';
 import {
   BELT_BUILD,
@@ -147,6 +148,8 @@ export class GameScene extends Phaser.Scene {
   private nextFeedbackAt = 0;
   /** Each standing station's pallets, for goods coming in and going out; read by the playthrough test. */
   private pallets: Partial<Record<StationId, { in: Pallet[]; out: Pallet[] }>> = {};
+  /** The recipe overview opened from the top bar. */
+  private recipes!: RecipeBook;
   /** Per-frame view updates, each reading from `state`. */
   private views: (() => void)[] = [];
 
@@ -610,6 +613,8 @@ export class GameScene extends Phaser.Scene {
       const feedback = dropAll(this.state);
       if (feedback) this.showFeedback(feedback);
     });
+    // What each station makes from what, in a panel over the map.
+    this.hudButton(width / 2 - 230, 'Recipes', () => this.recipes.toggle());
 
     // A slot for everything the biggest pack holds; those beyond the current pack stay hidden.
     const frames: Phaser.GameObjects.Image[] = [];
@@ -621,6 +626,7 @@ export class GameScene extends Phaser.Scene {
     // Everything in the top bar stays put while the camera follows the doctor.
     for (const obj of this.children.list.slice(first)) (obj as unknown as Phaser.GameObjects.Components.ScrollFactor).setScrollFactor(0);
     const pack = new BackStack(this);
+    this.recipes = new RecipeBook(this, UI_DEPTH + 1);
 
     this.views.push(() => {
       coins.setText(`Coins: ${this.state.coins}`);
@@ -632,6 +638,7 @@ export class GameScene extends Phaser.Scene {
         if (item) slot.setTexture(`item-${item}`);
       });
       pack.update(this.player, this.state.carrying);
+      this.recipes.update(this.state);
     });
   }
 
@@ -688,6 +695,11 @@ export class GameScene extends Phaser.Scene {
     // Touch / click to walk, so the same controls work on phones.
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       if (p.y < HUD_HEIGHT) return;
+      // While the recipes are open, a tap anywhere below the top bar closes them instead of walking.
+      if (this.recipes.visible) {
+        this.recipes.toggle(false);
+        return;
+      }
       this.pointerTarget = new Phaser.Math.Vector2(p.worldX, p.worldY);
       this.heading = null;
       this.waypoint = this.routeAround(this.pointerTarget);
