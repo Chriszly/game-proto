@@ -52,6 +52,10 @@ const HERO_PALETTE: Palette = {
   H: 0x3d5229, h: 0x56713a, s: 0xd9a46f, U: 0x5d6b3a, u: 0x46512b,
   P: 0x6b4a2b, p: 0x8a6438, b: 0x22201e, B: 0x2a2018,
 };
+/** Companions wear the same kit in desert tan, so the hero stays easy to pick out among them. */
+const COMPANION_PALETTE: Palette = {
+  ...HERO_PALETTE, H: 0x8a7448, h: 0xa88f5c, U: 0x9a8458, u: 0x7a6844,
+};
 
 const GRUNT = [
   '....gggg....',
@@ -144,7 +148,7 @@ const BULLET_PALETTE: Palette = { y: 0xfff4b0, Y: 0xffd23f, o: 0xff8a2f };
 export const UPGRADE_COLORS: Record<UpgradeKind, number> = {
   rate: 0xffd23f,
   damage: 0xff5a4a,
-  multishot: 0x4ab0ff,
+  companion: 0x4ab0ff,
   pierce: 0x6ae06a,
 };
 
@@ -184,6 +188,7 @@ const SPLAT = [
 
 export function bakeSprites(scene: Phaser.Scene) {
   bake(scene, 'hero', HERO, HERO_PALETTE);
+  bake(scene, 'companion', HERO, COMPANION_PALETTE);
   bake(scene, 'grunt', GRUNT, GRUNT_PALETTE);
   bake(scene, 'runner', RUNNER, RUNNER_PALETTE);
   bake(scene, 'brute', BRUTE, BRUTE_PALETTE);

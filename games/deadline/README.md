@@ -31,11 +31,16 @@ reaches the sandbags in front of the soldier, it's game over.
   | --- | --- |
   | Fire rate (yellow) | 20% less time between volleys |
   | Damage +1 (red) | Each bullet takes one more hit point |
-  | Bullets +1 (blue) | One more bullet in each volley, side by side |
+  | Companion +1 (blue) | Another soldier joins the squad and fires with you |
   | Pierce +1 (green) | Bullets go through one more zombie |
 
   A crate nobody opens is lost behind the sandbags.
-- **Bosses** come at the end of every fifth wave, with a big health bar along the bottom of the
+- **Companions** line up beside and behind the soldier, up to three rows of three. Each row is
+  shifted a little to the side, so every rifle has its own clear line of fire. Once the squad is
+  full, companion crates give Damage +1 instead.
+
+  ![A full squad of nine](docs/screenshots/companions-full-squad.png)
+- **Bosses** come at the end of every fifth wave, with a big health bar along the top of the
   screen.
 
 ![A boss at the end of wave 5](docs/screenshots/boss.png)

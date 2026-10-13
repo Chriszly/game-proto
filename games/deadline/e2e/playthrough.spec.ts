@@ -6,8 +6,8 @@ import { expect, test, type Page } from '@playwright/test';
 // Game state is only read, through the `game` object the dev build puts on window.
 
 type Point = { x: number; y: number };
-type UpgradeKind = 'rate' | 'damage' | 'multishot' | 'pierce';
-interface Stats { damage: number; fireInterval: number; shots: number; pierce: number }
+type UpgradeKind = 'rate' | 'damage' | 'companion' | 'pierce';
+interface Stats { damage: number; fireInterval: number; companions: number; pierce: number }
 interface GameState {
   wave: number;
   phase: 'wave' | 'break' | 'over';
@@ -21,12 +21,12 @@ interface Pickup { id: number; upgrade: UpgradeKind; hp: number; maxHp: number; 
 const VIEW = { w: 540, h: 960 };
 const HERO_Y = 880;
 const WAVE_1_ENEMIES = 12;
-const BASE_STATS: Stats = { damage: 1, fireInterval: 340, shots: 1, pierce: 0 };
+const BASE_STATS: Stats = { damage: 1, fireInterval: 340, companions: 0, pierce: 0 };
 /** What each pickup does to the hero's starting stats. */
 const UPGRADED: Record<UpgradeKind, Stats> = {
   rate: { ...BASE_STATS, fireInterval: 272 },
   damage: { ...BASE_STATS, damage: 2 },
-  multishot: { ...BASE_STATS, shots: 2 },
+  companion: { ...BASE_STATS, companions: 1 },
   pierce: { ...BASE_STATS, pierce: 1 },
 };
 

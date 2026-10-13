@@ -13,7 +13,21 @@ export const REACH_Y = HERO.y - 28;
 export const SPAWN_Y = HUD_HEIGHT - 40;
 /** How far in from the screen's sides enemies and pickups come in. */
 export const SPAWN_MARGIN = 40;
-export const BULLET = { speed: 720, spacing: 14, radius: 4 };
+export const BULLET = { speed: 720, radius: 4 };
+
+/**
+ * Where the hero and their companions stand, as offsets from the hero: up to three rows of three,
+ * the hero in the middle of the front row. Each row is shifted a third of a step from the last, so
+ * all nine rifles are in different columns and every one of them has a clear line of fire.
+ * Companions fill the slots after the hero's in order: the front row first, then the rows behind.
+ */
+export const SQUAD_SLOTS: { dx: number; dy: number }[] = [
+  { dx: 0, dy: 0 }, { dx: -60, dy: 0 }, { dx: 60, dy: 0 },
+  { dx: 20, dy: 24 }, { dx: -40, dy: 24 }, { dx: 80, dy: 24 },
+  { dx: -20, dy: 48 }, { dx: 40, dy: 48 }, { dx: -80, dy: 48 },
+];
+/** The most companions the hero can have: the slots left once the hero has theirs. */
+export const MAX_COMPANIONS = SQUAD_SLOTS.length - 1;
 /** The pause between one wave being cleared and the next coming in, in ms. */
 export const BREAK_MS = 2500;
 
@@ -30,13 +44,13 @@ export const ENEMIES: Record<EnemyKind, { hp: number; speed: number; steer: numb
   boss: { hp: 200, speed: 18, steer: 10, radius: 38 },
 };
 
-export type UpgradeKind = 'rate' | 'damage' | 'multishot' | 'pierce';
+export type UpgradeKind = 'rate' | 'damage' | 'companion' | 'pierce';
 
 /** What each pickup does, with the name shown on its crate. */
 export const UPGRADES: Record<UpgradeKind, { label: string }> = {
   rate: { label: 'Fire rate' },
   damage: { label: 'Damage +1' },
-  multishot: { label: 'Bullets +1' },
+  companion: { label: 'Companion +1' },
   pierce: { label: 'Pierce +1' },
 };
 export const UPGRADE_KINDS = Object.keys(UPGRADES) as UpgradeKind[];
@@ -48,13 +62,13 @@ export interface Stats {
   damage: number;
   /** Time between volleys, in ms. */
   fireInterval: number;
-  /** Bullets in each volley, side by side. */
-  shots: number;
+  /** Soldiers at the hero's side, each firing a bullet of their own every volley. */
+  companions: number;
   /** Enemies a bullet passes through before it stops. */
   pierce: number;
 }
 
-export const BASE_STATS: Stats = { damage: 1, fireInterval: 340, shots: 1, pierce: 0 };
+export const BASE_STATS: Stats = { damage: 1, fireInterval: 340, companions: 0, pierce: 0 };
 /** The fastest the hero can fire, in ms between volleys. */
 export const MIN_FIRE_INTERVAL = 90;
 
@@ -64,8 +78,8 @@ export function applyUpgrade(stats: Stats, kind: UpgradeKind): Stats {
       return { ...stats, fireInterval: Math.max(MIN_FIRE_INTERVAL, Math.round(stats.fireInterval * 0.8)) };
     case 'damage':
       return { ...stats, damage: stats.damage + 1 };
-    case 'multishot':
-      return { ...stats, shots: stats.shots + 1 };
+    case 'companion':
+      return { ...stats, companions: Math.min(MAX_COMPANIONS, stats.companions + 1) };
     case 'pierce':
       return { ...stats, pierce: stats.pierce + 1 };
   }
