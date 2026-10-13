@@ -32,11 +32,11 @@ The hub's **Settings** button opens the settings every game shares. They are sav
   | Deadline | zombies have 25% less health | zombies have 30% more health |
   | Palisade | foes have 25% less health | foes have 30% more health |
   | Tiny Kingdom | round goals 20% lower | round goals 20% higher |
-  | Rogue Runner | 5 hearts | 2 hearts |
-  | Merge Forge | adventurers wait 50% longer | adventurers wait 30% less |
-  | Pirate Raid | enemy ships have 25% less health | enemy ships have 30% more health |
-  | Potion Puzzle | 5 more moves per order | 3 fewer moves per order |
-  | Delve | foes have 25% less health | foes have 30% more health |
+  | Hotfoot | 5 hearts | 2 hearts |
+  | Anvilheart | adventurers wait 50% longer | adventurers wait 30% less |
+  | Broadside | enemy ships have 25% less health | enemy ships have 30% more health |
+  | TinctureTinker | 5 more moves per order | 3 fewer moves per order |
+  | Catacomb | foes have 25% less health | foes have 30% more health |
 
 - **Frame rate (FPS)**: the most frames per second a game draws, 30 to 320 (60 by default).
 - **Show FPS**: a readout of the frame rate in each game's corner.
