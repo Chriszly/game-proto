@@ -15,15 +15,25 @@ import {
   BELT_GAP_MS,
   BELT_MS,
   BELTS,
+  CAULDRONS,
   CARRY_CAPACITY,
+  EXPANSION_COST,
   MAX_LEVEL,
   MAX_ORDERS,
+  REFINERS,
+  LINE2_GARDEN,
   STATION_CAPACITY,
+  beltBuildable,
+  gardenBuilt,
+  gardenOf,
   speedAt,
   upgradeCost,
   type BeltId,
+  type Build,
   type Cauldron,
+  type CauldronId,
   type GameState,
+  type RefinerId,
   type Order,
   type StationId,
 } from './state';
@@ -39,9 +49,10 @@ export function tick(state: GameState, dt: number, workingAt: StationId | null, 
     plot.grown = Math.min(plot.grown + dt, GROW_MS[plot.plant]);
   }
 
-  const refiner = state.refiner;
-  if (workingAt === 'refiner' && refiner.queue.length > 0 && refiner.output.length < STATION_CAPACITY) {
-    refiner.progress += dt * speedAt(state.upgrades.refiner.level);
+  for (const id of REFINERS) {
+    const refiner = state[id];
+    if (workingAt !== id || refiner.queue.length === 0 || refiner.output.length >= STATION_CAPACITY) continue;
+    refiner.progress += dt * speedAt(state.upgrades[id].level);
     const recipe = REFINE[refiner.queue[0]];
     if (refiner.progress >= recipe.ms) {
       refiner.queue.shift();
@@ -50,10 +61,11 @@ export function tick(state: GameState, dt: number, workingAt: StationId | null, 
     }
   }
 
-  const cauldron = state.cauldron;
-  if (!cauldron.brewing && cauldron.output.length < STATION_CAPACITY) startBrew(cauldron);
-  if (workingAt === 'cauldron' && cauldron.brewing) {
-    cauldron.brewing.progress += dt * speedAt(state.upgrades.cauldron.level);
+  for (const id of CAULDRONS) {
+    const cauldron = state[id];
+    if (!cauldron.brewing && cauldron.output.length < STATION_CAPACITY) startBrew(cauldron);
+    if (workingAt !== id || !cauldron.brewing) continue;
+    cauldron.brewing.progress += dt * speedAt(state.upgrades[id].level);
     if (cauldron.brewing.progress >= cauldron.brewing.ms) {
       cauldron.output.push(cauldron.brewing.out);
       cauldron.brewing = null;
@@ -73,21 +85,35 @@ export function tick(state: GameState, dt: number, workingAt: StationId | null, 
   }
 }
 
-/** Where each belt takes goods from: a ripe plant from either garden, or a station's finished goods. */
+/**
+ * Where each belt takes goods from: a ripe plant from either garden of its line, or a station's
+ * finished goods.
+ */
 function takeForBelt(state: GameState, belt: BeltId): ItemId | null {
-  if (belt === 'garden') {
-    const plot = state.plots.find((p) => p.grown >= GROW_MS[p.plant]);
-    if (!plot) return null;
-    plot.grown = 0;
-    return plot.plant;
+  if (belt === 'garden' || belt === 'garden2') {
+    const line2 = belt === 'garden2';
+    const i = state.plots.findIndex((_, i) => gardenOf(i) >= LINE2_GARDEN === line2 && isRipe(state, i));
+    if (i < 0) return null;
+    state.plots[i].grown = 0;
+    return state.plots[i].plant;
   }
-  const from = belt === 'refiner' ? state.refiner.output : state.cauldron.output;
-  return from.shift() ?? null;
+  return state[belt].output.shift() ?? null;
 }
+
+/** Where each belt hands its goods to. */
+const beltTarget = (state: GameState, belt: BeltId): ItemId[] =>
+  ({
+    garden: state.refiner.queue,
+    refiner: state.cauldron.contents,
+    cauldron: state.counter.shelf,
+    garden2: state.refiner2.queue,
+    refiner2: state.cauldron2.contents,
+    cauldron2: state.counter.shelf,
+  })[belt];
 
 /** Hands an item from the end of a belt to the next station, if it has room. */
 function giveFromBelt(state: GameState, belt: BeltId, id: ItemId) {
-  const to = belt === 'garden' ? state.refiner.queue : belt === 'refiner' ? state.cauldron.contents : state.counter.shelf;
+  const to = beltTarget(state, belt);
   if (to.length >= STATION_CAPACITY) return false;
   (to as ItemId[]).push(id);
   return true;
@@ -142,9 +168,10 @@ function newOrder(state: GameState, rand: () => number) {
   return { id: state.nextOrderId++, wants, reward, patience: maxPatience, maxPatience };
 }
 
+/** Whether a plot can be harvested: grown, in a garden that is there. */
 export function isRipe(state: GameState, plotIndex: number) {
   const plot = state.plots[plotIndex];
-  return plot.grown >= GROW_MS[plot.plant];
+  return plot.grown >= GROW_MS[plot.plant] && gardenBuilt(state, gardenOf(plotIndex));
 }
 
 /** Outcome of an interaction, as short lines for floating feedback text. */
@@ -213,28 +240,34 @@ function pickUpOne(state: GameState, from: ItemId[]): Feedback | null {
   return [`+ ${ITEMS[id].name}`];
 }
 
-export function dropAtRefiner(state: GameState): Feedback | null {
-  if (state.refiner.queue.length >= STATION_CAPACITY) return null;
+export function dropAtRefiner(state: GameState, id: RefinerId = 'refiner'): Feedback | null {
+  if (state[id].queue.length >= STATION_CAPACITY) return null;
   const plant = takeTopFromBack(state, isPlant);
   if (!plant) return null;
-  state.refiner.queue.push(plant);
+  state[id].queue.push(plant);
   return [`- ${ITEMS[plant].name}`];
 }
 
-export const pickUpFromRefiner = (state: GameState) => pickUpOne(state, state.refiner.output);
+export const pickUpFromRefiner = (state: GameState, id: RefinerId = 'refiner') => pickUpOne(state, state[id].output);
 
-export function dropInCauldron(state: GameState): Feedback | null {
-  if (state.cauldron.contents.length >= STATION_CAPACITY) return null;
+export function dropInCauldron(state: GameState, id: CauldronId = 'cauldron'): Feedback | null {
+  if (state[id].contents.length >= STATION_CAPACITY) return null;
   const good = takeTopFromBack(state, isRefined);
   if (!good) return null;
-  state.cauldron.contents.push(good);
+  state[id].contents.push(good);
   return [`- ${ITEMS[good].name}`];
 }
 
-export const pickUpFromCauldron = (state: GameState) => pickUpOne(state, state.cauldron.output);
+export const pickUpFromCauldron = (state: GameState, id: CauldronId = 'cauldron') => pickUpOne(state, state[id].output);
 
 const UPGRADE_STEP = 5;
-const STATION_NAMES: Record<StationId, string> = { refiner: 'Refining table', cauldron: 'Cauldron', counter: 'Counter' };
+const STATION_NAMES: Record<StationId, string> = {
+  refiner: 'Refining table',
+  cauldron: 'Cauldron',
+  refiner2: 'Refining table',
+  cauldron2: 'Cauldron',
+  counter: 'Counter',
+};
 
 /** Pays a handful of coins towards the station's next level, levelling it up once fully paid. */
 export function payUpgrade(state: GameState, station: StationId): Feedback | null {
@@ -250,18 +283,44 @@ export function payUpgrade(state: GameState, station: StationId): Feedback | nul
   return [`${STATION_NAMES[station]} level ${upgrade.level + 1}!`];
 }
 
-const BELT_NAMES: Record<BeltId, string> = { garden: 'Garden belt', refiner: 'Table belt', cauldron: 'Cauldron belt' };
+/** Pays a handful of coins towards a build, which is done once fully paid. */
+function payToward(state: GameState, build: Build, cost: number, done: string): Feedback | null {
+  if (build.built || state.coins === 0) return null;
+  const pay = Math.min(UPGRADE_STEP, state.coins, cost - build.paid);
+  state.coins -= pay;
+  build.paid += pay;
+  if (build.paid < cost) return [`-${pay} coins`];
+  build.built = true;
+  return [done];
+}
+
+const BELT_NAMES: Record<BeltId, string> = {
+  garden: 'Garden belt',
+  refiner: 'Table belt',
+  cauldron: 'Cauldron belt',
+  garden2: 'Garden belt',
+  refiner2: 'Table belt',
+  cauldron2: 'Cauldron belt',
+};
 
 /** Pays a handful of coins towards building a belt, which starts running once fully paid. */
 export function payBelt(state: GameState, id: BeltId): Feedback | null {
-  const belt = state.belts[id];
-  if (belt.built || state.coins === 0) return null;
-  const pay = Math.min(UPGRADE_STEP, state.coins, BELT_COST[id] - belt.paid);
-  state.coins -= pay;
-  belt.paid += pay;
-  if (belt.paid < BELT_COST[id]) return [`-${pay} coins`];
-  belt.built = true;
-  return [`${BELT_NAMES[id]} built!`];
+  if (!beltBuildable(state, id)) return null;
+  return payToward(state, state.belts[id], BELT_COST[id], `${BELT_NAMES[id]} built!`);
+}
+
+/** What can be built on the expansion: its land first, then a field, the table or the cauldron. */
+export type ExpansionPart = 'land' | 'field1' | 'field2' | 'refiner' | 'cauldron';
+
+/** Pays a handful of coins towards part of the expansion; everything but the land needs the land first. */
+export function payExpansion(state: GameState, part: ExpansionPart): Feedback | null {
+  const { expansion } = state;
+  if (part === 'land') return payToward(state, expansion.land, EXPANSION_COST.land, 'New land bought!');
+  if (!expansion.land.built) return null;
+  if (part === 'refiner') return payToward(state, expansion.refiner, EXPANSION_COST.refiner, 'Refining table built!');
+  if (part === 'cauldron') return payToward(state, expansion.cauldron, EXPANSION_COST.cauldron, 'Cauldron built!');
+  const field = expansion.fields[part === 'field1' ? 0 : 1];
+  return payToward(state, field, EXPANSION_COST.field, 'Field planted!');
 }
 
 export function stockShelf(state: GameState): Feedback | null {
