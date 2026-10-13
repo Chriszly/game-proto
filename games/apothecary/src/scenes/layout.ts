@@ -232,15 +232,16 @@ function distanceTo(run: { x: number; y: number }[], p: { x: number; y: number }
   throw new Error(`${p.x},${p.y} is not on the belt`);
 }
 
-/**
- * Which of a belt's runs goods of a kind get on at: on the garden belts, the run from the field of
- * its line that grows them (the runs are in the order of the line's GARDENS), so mandrakes come in on
- * the feeder from their patch. Everything else gets on at the start of the main run.
- */
+/** Each garden belt's line's fields' plants, in the order of the belt's runs. */
 const GARDEN_RUNS: Partial<Record<BeltId, readonly PlantId[]>> = {
   garden: GARDENS.slice(0, LINE2_GARDEN),
   garden2: GARDENS.slice(LINE2_GARDEN, 2 * LINE2_GARDEN),
 };
+/**
+ * Which of a belt's runs goods of a kind get on at: on the garden belts, the run from the field of
+ * its line that grows them, so mandrakes come in on the feeder from their patch. Everything else gets
+ * on at the start of the main run.
+ */
 function beltRun(id: BeltId, kind: ItemId) {
   const run = GARDEN_RUNS[id]?.indexOf(kind as PlantId) ?? 0;
   return run > 0 && run < BELT_PATHS[id].length ? run : 0;

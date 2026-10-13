@@ -572,11 +572,14 @@ export class GameScene extends Phaser.Scene {
       );
       const riding: Phaser.GameObjects.Image[] = [];
       const [main, ...feeders] = BELT_PATHS[id];
+      // For each kind of goods: the run it gets on at, where on the main run that starts and joins,
+      // and how far across the belt its lane is.
+      const lanes = BELT_LANES[id];
+      const spans = new Map(lanes.map((kind, lane) => [kind, { ...beltSpan(id, kind), off: laneOffset(lane, lanes.length) }]));
       this.views.push(() => {
         while (riding.length < belt.items.length) {
           riding.push(this.add.image(0, 0, itemTexture(belt.items[0].id)).setDepth(-550));
         }
-        const lanes = BELT_LANES[id];
         riding.forEach((icon, i) => {
           const item = belt.items[i];
           if (!item) {
@@ -584,11 +587,10 @@ export class GameScene extends Phaser.Scene {
             return;
           }
           // Goods loaded from the doctor's hands wait out of sight until their turn to get on.
-          const { run, start, join } = beltSpan(id, item.id);
+          const { run, start, join, off } = spans.get(item.id)!;
           icon.setVisible(item.at >= start);
           // Along the main run, across the belt into the item's own lane. On a feeder, the item moves
           // over into that lane as it goes, so it carries straight on where the feeder joins.
-          const off = laneOffset(lanes.indexOf(item.id), lanes.length);
           let { x, y, dx, dy } = pointAlong(main, Math.max(item.at, join) / BELT_MS[id]);
           let across = off;
           if (run > 0 && item.at < join) {
