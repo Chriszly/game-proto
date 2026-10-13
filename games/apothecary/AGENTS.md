@@ -45,8 +45,9 @@ counter. Coins buy upgrades, craftsmen, conveyor belts and a mirrored second pro
   `walkTowards` for customer sprites.
 - `src/scenes/layout.ts`: every world position (gardens, plots, yards, stations, markers, pallets,
   craftsmen, guild, outfitter, shop, its walls and doors, customer spots), plus the belt geometry:
-  `BELT_PATHS` (main run first, then feeders), `runLength`, `beltSpan`, `BELT_JOIN_MS` and
-  `BELT_BUILD`. It imports no Phaser, since `sim.ts` and `save.ts` use it.
+  `BELT_PATHS` (main run first, then feeders; each runs from a station's out pallets to the next
+  station's in pallets), `runLength`, `beltSpan`, `BELT_JOIN_MS` and `BELT_BUILD`. It imports no
+  Phaser, since `sim.ts` and `save.ts` use it.
 - `src/art/`: pixel art painted on `PixelCanvas` (`pixelArt.ts`) with the shared `palette.ts`, baked
   by one `bake*` function per file. `belts.ts` is the exception: `drawBelts` draws the belt network
   into a Graphics object at runtime, and `pointAlong`/`laneOffset` place items on it.
@@ -85,11 +86,15 @@ counter. Coins buy upgrades, craftsmen, conveyor belts and a mirrored second pro
   `shown`). `standOnMarkers` runs the first shown marker under the feet once every
   `MARKER_INTERVAL_MS` (200); each call moves one item or pays at most 5 coins (`UPGRADE_STEP`).
   A level marker sets `paused` after a level completes until the doctor steps off.
-- Belts: a built belt hides its pick-up marker, and its drop marker unless the doctor carries
-  that kind; the counter's drop stays until `doneByHand` is false for both cauldron belts. Goods
-  get on at `beltSpan(id, kind).start` (mandrakes on their patch's feeder) and join the main run at
-  `join`. The cauldron belts merge at `BELT_JOIN_MS` (`mergingItems`). `payBelt` loads matching
-  goods from the doctor's hands, unless `doneByHand` says the other line's twin is still by hand.
+- Belts: each belt starts at the front edge of a station's out pallets (or in the gardens) and ends
+  at the edge of the next station's in pallets, which stand side by side across its end, each at the
+  end of its kind's lane. The sim still takes from the station's `output` and hands to its tray;
+  the pallets are those trays drawn. A built belt hides its pick-up marker, and its drop marker
+  unless the doctor carries that kind; the counter's drop stays until `doneByHand` is false for
+  both cauldron belts. Goods get on at `beltSpan(id, kind).start` (mandrakes on their patch's
+  feeder) and join the main run at `join`. The cauldron belts merge at `BELT_JOIN_MS`
+  (`mergingItems`), measured to `CAULDRON_BELTS_MEET`. `payBelt` loads matching goods from the
+  doctor's hands, unless `doneByHand` says the other line's twin is still by hand.
 - Customers: the scene walks each order's sprite from `STREET` to `customerPosition(i)` and adds
   the order to its `atCounter` set once it arrives. `tick` serves, and counts down patience for,
   only orders `atCounter` accepts (default: all). Wants and patience show only once arrived.
@@ -123,7 +128,8 @@ along the main run), `expansion` (land, two fields, refiner, cauldron as `Build`
   differs or that lack `plots`, shallow-merges top-level fields, merges `upgrades`, `craftsmen` and
   `belts` per key, appends new plots and drops orders without `pay`. A save from before
   `FEEDERS_LAYOUT` (3) gets `ontoOwnRuns`, which moves belt items up to their run's join; a save
-  whose `layout` differs from `LAYOUT` (3) gets the fresh `player` spot.
+  whose `layout` differs from `LAYOUT` (4, since belts end at pallets) gets the fresh `player`
+  spot. Belt items keep their `at`; the belts kept their runs and order, so no migration moves them.
 - "New game" (`clearSave` + `scene.restart`) removes only `apothecary-save`. The old
   `apothecary-fps` key is no longer used; the frame rate comes from the hub.
 
@@ -198,7 +204,8 @@ along the main run), `expansion` (land, two fields, refiner, cauldron as `Build`
 - Add an upgrade: an `UpgradeId` and `UPGRADES` entry, add it to `DOCTOR_UPGRADES` or
   `GUILD_UPGRADES` (the guild also needs a spot in `GUILD` in layout), and apply its level in a
   helper in `src/game/state.ts` used by the sim or scene.
-- Move a station, marker or wall: edit `src/scenes/layout.ts`, bump `LAYOUT` in
+- Move a station, marker or wall: edit `src/scenes/layout.ts` (a station's pallets and the belt
+  ends at them move with it, and `BELT_MS` stays about 100 pixels a second), bump `LAYOUT` in
   `src/game/state.ts`, update the test's coordinates, and refresh
   `docs/screenshots/playthrough-*.png`. If belt paths change where goods ride, add a migration in
   `loadState` keyed on the saved `layout`, like `ontoOwnRuns`.
@@ -215,8 +222,12 @@ along the main run), `expansion` (land, two fields, refiner, cauldron as `Build`
   kind without a position gets no pallet.
 - `layout.ts` mirrors line two with `mirror`; moving a line-one spot moves its twin. It must stay
   free of Phaser, since the sim and save import it.
-- `BELT_JOIN_MS` is measured on the first cauldron belt and assumes both cauldron belts are the
-  same length; keep them mirrored.
+- Belt lanes do not mirror (heading south a belt's first lane is on its right, heading north on its
+  left), so `mirrorPallets` also swaps each pair to keep every kind at the end of its lane. Line
+  one's pallet lists are in kind order but placed by lane, so the first kind's pallet may be the
+  right one.
+- `BELT_JOIN_MS` is measured on the first cauldron belt to `CAULDRON_BELTS_MEET` and assumes both
+  cauldron belts are the same length; keep them mirrored.
 - `atCounter` lives only in the scene; `tick` called without it serves every customer at once.
 - Garden belt build spots sit outside a maxed sickle's reach on purpose, so hands a new belt empties
   do not refill from the patch.

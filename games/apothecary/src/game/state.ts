@@ -195,14 +195,14 @@ export const PALLET_SIZE = PALLET_BASE * PALLET_LAYERS;
 export const palletHasRoom = (tray: readonly ItemId[], item: ItemId) => tray.filter((id) => id === item).length < PALLET_SIZE;
 
 /** Bumped whenever stations or walls move, so a loaded save doesn't put the doctor inside one. */
-export const LAYOUT = 3;
+export const LAYOUT = 4;
 /** The layout from which goods get on a belt at the start of their own run, such as a feeder. */
 export const FEEDERS_LAYOUT = 3;
 
 /** Coins needed to build each belt. */
 export const BELT_COST: Record<BeltId, number> = { garden: 60, refiner: 100, cauldron: 150, garden2: 60, refiner2: 100, cauldron2: 150 };
 /** How long an item takes from one end of each belt to the other in a one-lane belt: about 100 pixels a second. */
-export const BELT_MS: Record<BeltId, number> = { garden: 4_000, refiner: 2_500, cauldron: 5_500, garden2: 4_000, refiner2: 2_500, cauldron2: 5_500 };
+export const BELT_MS: Record<BeltId, number> = { garden: 3_500, refiner: 1_500, cauldron: 6_000, garden2: 3_500, refiner2: 1_500, cauldron2: 6_000 };
 /** The stations a belt joins, which must both stand before it can be built. */
 export const BELT_ENDS: Record<BeltId, StationId[]> = {
   garden: ['refiner'],

@@ -31,19 +31,19 @@ const WHEAT_XS = [252, 162, 72];
 const WHEAT_Y = 178;
 const MANDRAKE = { x: 162, y: 370 };
 const REFINER = {
-  drop: { x: 330, y: 468 },
+  drop: { x: 252, y: 488 },
   work: { x: 430, y: 540 },
-  pickUp: { x: 330, y: 612 },
+  pickUp: { x: 252, y: 624 },
 };
-const CAULDRON = { drop: { x: 380, y: 728 }, work: { x: 450, y: 650 }, pickUp: { x: 540, y: 728 } };
+const CAULDRON = { drop: { x: 380, y: 804 }, work: { x: 440, y: 660 }, pickUp: { x: 490, y: 804 } };
 /** On the way out from the coins, a step towards the door that keeps clear of the upgrade marker. */
 const LEAVE_SHOP = { x: 650, y: 330 };
 /**
- * From either cauldron's pick-up, a step to the belt corner below the door, so the walk up to the door
+ * From either cauldron's pick-up, a step onto the belt's run below the door, so the walk up to the door
  * keeps clear of the cauldrons' upgrade markers.
  */
 const LEAVE_CAULDRONS = { x: 600, y: 690 };
-const COUNTER = { drop: { x: 472, y: 282 }, work: { x: 520, y: 340 }, coins: { x: 728, y: 282 } };
+const COUNTER = { drop: { x: 472, y: 282 }, work: { x: 496, y: 346 }, coins: { x: 728, y: 282 } };
 /** The Recipes button in the top bar, on screen rather than in the world. */
 const RECIPES_BUTTON = { x: 219, y: 22 };
 /** Customers come in from the street door in the shop's back wall and line up behind the counter. */
@@ -327,7 +327,7 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
   await walkTo(REFINER.drop);
   s = await until('plants dropped at the refining table', (s) => s.carrying.length === 0);
   expect(s.refiner.queue.length + s.refiner.output.length).toBe(4);
-  // Each kind of plant goes on its own pallet beside the table.
+  // Each kind of plant goes on its own pallet above the table.
   expect(await game.pallets('refiner')).toEqual({ in: { wheat: 3, mandrake: 1 }, out: { flour: 0, mandrakeSeeds: 0 } });
   await walkTo(REFINER.work);
   await snap('2-refining');
@@ -367,7 +367,7 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
   // A tap straight at the counter: the shop's walls are solid, so the doctor finds the way in by the door.
   await walkTo(COUNTER.drop);
   s = await until('potions on the shelf', (s) => s.carrying.length === 0);
-  // The potions stand on their pallets behind the counter.
+  // The potions stand on their pallets in front of the counter.
   const shelf = count(s.counter.shelf);
   expect((await game.pallets('counter')).in).toEqual({ healingDraught: shelf.healingDraught ?? 0, sleepingTonic: shelf.sleepingTonic ?? 0 });
   await walkTo(COUNTER.work);
