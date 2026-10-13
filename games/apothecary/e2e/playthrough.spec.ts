@@ -73,8 +73,8 @@ const SPEED = Number(process.env.PLAYTHROUGH_SPEED ?? 4);
 
 /**
  * How many more of a potion customers want than the shop has ready, as the cauldron counts it when
- * it picks a recipe: on the shelf, in the doctor's hands, on the cauldrons' pallets and riding their
- * belts.
+ * it picks a recipe: on the shelf, in the doctor's hands, brewing, on the cauldrons' pallets and
+ * riding their belts.
  */
 const shortfall = (s: GameState, potion: ItemId) =>
   s.orders.flatMap((o) => o.wants).filter((p) => p === potion).length -
@@ -83,6 +83,7 @@ const shortfall = (s: GameState, potion: ItemId) =>
     ...s.carrying,
     ...s.cauldron.output,
     ...s.cauldron2.output,
+    ...[s.cauldron.brewing?.out, s.cauldron2.brewing?.out].filter((p) => p !== undefined),
     ...s.belts.cauldron.items.map((item) => item.id),
     ...s.belts.cauldron2.items.map((item) => item.id),
   ].filter((p) => p === potion).length;
@@ -104,8 +105,6 @@ function scene(page: Page) {
     target: () => read<Point | null>((s) => s.pointerTarget && { x: s.pointerTarget.x, y: s.pointerTarget.y }),
     /** The top-left corner of the view in the world, which moves as the camera follows the doctor. */
     view: () => read<Point>((s) => ({ x: s.cameras.main.scrollX, y: s.cameras.main.scrollY })),
-    /** How far from the doctor's centre ripe plants are harvested, in pixels. */
-    reach: () => read<number>((s) => s.harvestReach()),
     /** How many items each of a station's pallets shows, by item, for goods coming in and going out. */
     pallets: (station: string) =>
       page.evaluate(

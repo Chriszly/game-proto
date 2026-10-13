@@ -696,7 +696,7 @@ export class GameScene extends Phaser.Scene {
     const slots = Array.from({ length: MAX_CARRY }, (_, i) => {
       const x = width / 2 - 60 + i * 40;
       frames.push(this.add.image(x, HUD_HEIGHT / 2 - 1, 'slot').setDepth(UI_DEPTH));
-      return this.add.image(x, HUD_HEIGHT / 2 - 1, 'item-wheat').setScale(1.5).setDepth(UI_DEPTH);
+      return this.add.image(x, HUD_HEIGHT / 2 - 1, itemTexture('wheat')).setScale(1.5).setDepth(UI_DEPTH);
     });
     // Everything in the top bar stays put while the camera follows the doctor.
     for (const obj of this.children.list.slice(first)) (obj as unknown as Phaser.GameObjects.Components.ScrollFactor).setScrollFactor(0);
@@ -711,7 +711,7 @@ export class GameScene extends Phaser.Scene {
       slots.forEach((slot, i) => {
         const item = this.state.carrying[i];
         slot.setVisible(!!item);
-        if (item) slot.setTexture(`item-${item}`);
+        if (item) slot.setTexture(itemTexture(item));
       });
       pack.update(this.player, this.state.carrying);
       this.recipes.update(this.state);
@@ -984,10 +984,17 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * A tapped spot the feet can't stand on, inside a station, moves out to the nearest edge of the
-   * station's blocked area, so the doctor walks up to the station instead of into it.
+   * A tapped spot the feet can't stand on moves to the nearest one they can: inside the world's
+   * edges, and out of a station to the nearest edge of its blocked area, so the doctor walks up to
+   * the station instead of into it.
    */
   private reachable(to: Phaser.Math.Vector2) {
+    const { bounds } = this.physics.world;
+    const { halfWidth, halfHeight } = this.player.body!;
+    to.set(
+      Phaser.Math.Clamp(to.x, bounds.left + halfWidth, bounds.right - halfWidth),
+      Phaser.Math.Clamp(to.y, bounds.top + halfHeight, bounds.bottom - halfHeight),
+    );
     for (const area of this.blockedAreas) {
       // The same area walking routes around, so the moved spot gets routed to.
       if (!this.innerArea(area).contains(to.x, to.y)) continue;

@@ -218,14 +218,15 @@ function runBelt(state: GameState, id: BeltId, dt: number) {
 }
 
 /**
- * How many more of a potion customers want than the apothecary has ready: on the counter's shelf,
- * on the cauldrons' pallets and belts, and in the doctor's hands.
+ * How many more of a potion customers want than the apothecary has ready or on the way: on the
+ * counter's shelf, brewing, on the cauldrons' pallets and belts, and in the doctor's hands.
  */
 export function shortfall(state: GameState, potion: PotionId) {
   const wanted = state.orders.reduce((n, o) => n + o.wants.filter((p) => p === potion).length, 0);
   // Each cauldron's belt is named after it.
   const riding = CAULDRONS.flatMap((id) => state.belts[id].items.map((item) => item.id));
-  const ready = [state.counter.shelf, state.carrying, riding, ...CAULDRONS.map((id) => state[id].output)].reduce(
+  const brewing = CAULDRONS.flatMap((id) => state[id].brewing?.out ?? []);
+  const ready = [state.counter.shelf, state.carrying, riding, brewing, ...CAULDRONS.map((id) => state[id].output)].reduce(
     (n, items) => n + items.filter((p) => p === potion).length,
     0,
   );
@@ -241,14 +242,8 @@ function startBrew(state: GameState, cauldron: Cauldron) {
   const byNeed = [...RECIPES].sort((a, b) => need.get(b.out)! - need.get(a.out)!);
   for (const recipe of byNeed) {
     if (!palletHasRoom(cauldron.output, recipe.out)) continue;
-    const left = [...cauldron.contents];
-    const ok = recipe.inputs.every((input) => {
-      const i = left.indexOf(input);
-      if (i < 0) return false;
-      left.splice(i, 1);
-      return true;
-    });
-    if (ok) {
+    const left = without(cauldron.contents, recipe.inputs);
+    if (left) {
       cauldron.contents = left;
       cauldron.brewing = { out: recipe.out, ms: recipe.ms, progress: 0 };
       return;
@@ -332,12 +327,18 @@ function serveFromShelf(state: GameState, limit = Infinity) {
 }
 
 function canFill(carrying: readonly ItemId[], order: Order) {
-  const left = [...carrying];
-  return order.wants.every((want) => {
-    const i = left.indexOf(want);
-    if (i >= 0) left.splice(i, 1);
-    return i >= 0;
-  });
+  return without(carrying, order.wants) !== null;
+}
+
+/** What is left of `items` once one of each of `taken` is taken out, or null if any is missing. */
+function without<T extends ItemId>(items: readonly T[], taken: readonly T[]): T[] | null {
+  const left = [...items];
+  for (const item of taken) {
+    const i = left.indexOf(item);
+    if (i < 0) return null;
+    left.splice(i, 1);
+  }
+  return left;
 }
 
 // Floor markers: while the doctor stands on one, the scene calls its action repeatedly, and each
