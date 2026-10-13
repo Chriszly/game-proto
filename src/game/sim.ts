@@ -25,13 +25,17 @@ import {
 
 // Pure game rules, kept free of Phaser so later automation can drive the same functions.
 
-export function tick(state: GameState, dt: number, rand: () => number = Math.random) {
+/**
+ * Advances the world by `dt` ms. Stations only work while the doctor stands at their work spot,
+ * given as `workingAt`: the refining table and cauldron make progress, and customers are served.
+ */
+export function tick(state: GameState, dt: number, workingAt: StationId | null, rand: () => number = Math.random) {
   for (const plot of state.plots) {
     plot.grown = Math.min(plot.grown + dt, GROW_MS[plot.plant]);
   }
 
   const refiner = state.refiner;
-  if (refiner.queue.length > 0 && refiner.output.length < STATION_CAPACITY) {
+  if (workingAt === 'refiner' && refiner.queue.length > 0 && refiner.output.length < STATION_CAPACITY) {
     refiner.progress += dt * speedAt(state.upgrades.refiner.level);
     const recipe = REFINE[refiner.queue[0]];
     if (refiner.progress >= recipe.ms) {
@@ -43,7 +47,7 @@ export function tick(state: GameState, dt: number, rand: () => number = Math.ran
 
   const cauldron = state.cauldron;
   if (!cauldron.brewing && cauldron.output.length < STATION_CAPACITY) startBrew(cauldron);
-  if (cauldron.brewing) {
+  if (workingAt === 'cauldron' && cauldron.brewing) {
     cauldron.brewing.progress += dt * speedAt(state.upgrades.cauldron.level);
     if (cauldron.brewing.progress >= cauldron.brewing.ms) {
       cauldron.output.push(cauldron.brewing.out);
@@ -51,7 +55,7 @@ export function tick(state: GameState, dt: number, rand: () => number = Math.ran
     }
   }
 
-  serveFromShelf(state);
+  if (workingAt === 'counter') serveFromShelf(state);
   for (const order of state.orders) order.patience -= dt;
   state.orders = state.orders.filter((o) => o.patience > 0);
 

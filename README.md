@@ -13,16 +13,17 @@ brew potions in the cauldron and sell them to customers at the storefront.
 | --- | --- |
 | WASD / arrow keys, or tap | Walk |
 | E / Space, or tap a plot | Harvest the plot you are standing at |
-| Stand on a floor marker | Green: drop off items. Gold: pick up products or coins. Purple: pay coins to upgrade |
+| Stand on a floor marker | Green: drop off items. Blue: work the station. Gold: pick up products or coins. Purple: pay coins to upgrade |
 
 1. **Gardens**: each garden grows one kind of plant. Harvest ripe wheat in the wheat field and
    mandrake in the mandrake patch. Plots regrow on their own.
 2. **Refining table**: drop off plants; wheat becomes wheat flour, mandrake becomes mandrake seeds.
-   Finished goods wait on the pick-up marker.
+   Stand on the work spot while it refines; finished goods wait on the pick-up marker.
 3. **Cauldron**: drop in refined goods. Two wheat flour brew a Healing Draught, wheat flour and
-   mandrake seeds brew a Sleeping Tonic.
+   mandrake seeds brew a Sleeping Tonic. Stand on the work spot while it brews.
 4. **Storefront**: customers show the potions they want and how long they will wait. Drop potions
-   on the counter; customers take what they ordered and leave coins on the pick-up marker.
+   on the counter and stand on the work spot behind it; customers take what they ordered and
+   leave coins on the pick-up marker.
 
 Every station has an upgrade marker. Upgrades cost 20, 40 and 80 coins: the refining table and
 cauldron work faster, and customers at an upgraded counter tip more and wait longer.

@@ -68,6 +68,8 @@ export class GameScene extends Phaser.Scene {
   private obstacles!: Phaser.Physics.Arcade.StaticGroup;
   private interactables: Interactable[] = [];
   private markers: Marker[] = [];
+  /** Work spots: the station whose spot holds the doctor's feet is the one that works. */
+  private workSpots: { zone: Phaser.Geom.Rectangle; station: StationId }[] = [];
   private nextMarkerAt = 0;
   /** Set when the player taps a station: walk there, then use it on arrival. */
   private pendingUse: Interactable | null = null;
@@ -84,6 +86,7 @@ export class GameScene extends Phaser.Scene {
     this.state = loadState();
     this.interactables = [];
     this.markers = [];
+    this.workSpots = [];
     this.views = [];
     this.pendingUse = null;
     this.pointerTarget = null;
@@ -181,6 +184,7 @@ export class GameScene extends Phaser.Scene {
     const refining = new ProgressBar(this, REFINER.x, REFINER.y + 30, 60, 0xd8cfa8, UI_DEPTH);
     const refined = this.addMarker(REFINER_MARKERS.pickUp, 'pad-out', 'Pick up', () => pickUpFromRefiner(this.state));
     this.addMarker(REFINER_MARKERS.drop, 'pad-in', 'Drop', () => dropAtRefiner(this.state));
+    this.addWorkSpot(REFINER_MARKERS.work, 'refiner');
     this.addUpgradeMarker(REFINER_MARKERS.upgrade, 'refiner');
     this.views.push(() => {
       refinerQueue.set(refiner.queue);
@@ -193,6 +197,7 @@ export class GameScene extends Phaser.Scene {
     const brewing = new ProgressBar(this, CAULDRON.x, CAULDRON.y + 34, 60, 0x58a35a, UI_DEPTH);
     const brewed = this.addMarker(CAULDRON_MARKERS.pickUp, 'pad-out', 'Pick up', () => pickUpFromCauldron(this.state));
     this.addMarker(CAULDRON_MARKERS.drop, 'pad-in', 'Drop', () => dropInCauldron(this.state));
+    this.addWorkSpot(CAULDRON_MARKERS.work, 'cauldron');
     this.addUpgradeMarker(CAULDRON_MARKERS.upgrade, 'cauldron');
     this.views.push(() => {
       pot.set(cauldron.contents);
@@ -210,6 +215,12 @@ export class GameScene extends Phaser.Scene {
       .setDepth(-400);
     this.markers.push({ zone: new Phaser.Geom.Rectangle(at.x - 22, at.y - 22, 44, 44), act });
     return new IconRow(this, at.x, at.y, -300, 8);
+  }
+
+  /** The spot the doctor stands on to make the station work. */
+  private addWorkSpot(at: { x: number; y: number }, station: StationId) {
+    this.addMarker(at, 'pad-work', 'Work', () => null);
+    this.workSpots.push({ zone: new Phaser.Geom.Rectangle(at.x - 22, at.y - 22, 44, 44), station });
   }
 
   private addUpgradeMarker(at: { x: number; y: number }, station: StationId) {
@@ -232,6 +243,7 @@ export class GameScene extends Phaser.Scene {
     const shelf = new IconRow(this, COUNTER.x, COUNTER.y - 6, COUNTER.y + 1);
     this.addMarker(COUNTER_MARKERS.drop, 'pad-in', 'Drop', () => stockShelf(this.state));
     this.addMarker(COUNTER_MARKERS.pickUp, 'pad-out', 'Coins', () => collectTill(this.state));
+    this.addWorkSpot(COUNTER_MARKERS.work, 'counter');
     this.addUpgradeMarker(COUNTER_MARKERS.upgrade, 'counter');
     const tillCoin = this.add.image(COUNTER_MARKERS.pickUp.x - 8, COUNTER_MARKERS.pickUp.y, 'coin').setDepth(-300);
     const till = this.add
@@ -397,7 +409,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number) {
-    tick(this.state, Math.min(delta, MAX_STEP_MS));
+    const feetY = this.feetY();
+    const workingAt = this.workSpots.find((w) => w.zone.contains(this.player.x, feetY))?.station ?? null;
+    tick(this.state, Math.min(delta, MAX_STEP_MS), workingAt);
     this.movePlayer();
 
     this.standOnMarkers();
