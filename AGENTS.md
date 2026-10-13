@@ -2,27 +2,49 @@
 
 This repo is a hub of small Phaser 4 + TypeScript + Vite games. The hub page (`index.html`) links to
 each game, and each game lives in its own folder, `games/<name>/`, with its own `index.html`, `src/`,
-`e2e/`, `docs/screenshots/` and `README.md` (how to play and its code layout). The build, tsconfig,
+`e2e/`, `docs/screenshots/`, `README.md` (how to play and its code layout) and `AGENTS.md` (its
+current state and architecture, for agents; read it before changing the game). The build, tsconfig,
 Playwright config, CI workflows and PR template are shared. The games are Apothecary, in
 `games/apothecary/`, Deadline, in `games/deadline/`, Palisade, in `games/palisade/`, Tiny Kingdom, in
 `games/tiny-kingdom/`, Hotfoot, in `games/hotfoot/`, Anvilheart, in `games/anvilheart/`,
 Broadside, in `games/broadside/`, TinctureTinker, in `games/tincture-tinker/`, and Catacomb, in
 `games/catacomb/`.
 
+Each game's guide for agents, to read before changing it:
+
+| Game | Guide |
+| --- | --- |
+| Apothecary | [games/apothecary/AGENTS.md](games/apothecary/AGENTS.md) |
+| Deadline | [games/deadline/AGENTS.md](games/deadline/AGENTS.md) |
+| Palisade | [games/palisade/AGENTS.md](games/palisade/AGENTS.md) |
+| Tiny Kingdom | [games/tiny-kingdom/AGENTS.md](games/tiny-kingdom/AGENTS.md) |
+| Hotfoot | [games/hotfoot/AGENTS.md](games/hotfoot/AGENTS.md) |
+| Anvilheart | [games/anvilheart/AGENTS.md](games/anvilheart/AGENTS.md) |
+| Broadside | [games/broadside/AGENTS.md](games/broadside/AGENTS.md) |
+| TinctureTinker | [games/tincture-tinker/AGENTS.md](games/tincture-tinker/AGENTS.md) |
+| Catacomb | [games/catacomb/AGENTS.md](games/catacomb/AGENTS.md) |
+
 ## Work on one game at a time
 
 - **Keep games apart.** A game's code stays in its folder and never imports from another game.
   Something two games both need can move to a shared folder once a second game actually needs it.
+- **Keep the game's `AGENTS.md` up to date.** Each game's `games/<name>/AGENTS.md` describes what
+  is built today, how the code fits together, its save keys, its test hooks and how to make common
+  changes. A PR that changes a game updates that file in the same PR wherever it no longer matches:
+  a new or removed feature, file, type, save key or test hook, or a recipe that changed. A
+  `CLAUDE.md` next to it imports it (`@AGENTS.md`), like the root one does.
 - **Say which game a PR is for** in its title or summary, and keep its screenshots in that game's
   `docs/screenshots/`.
 - **Add a game** by creating `games/<name>/` with an `index.html` that loads `./src/main.ts`, a
-  `README.md`, a `cover.png` (a 16:9 screenshot) and an `e2e/playthrough.spec.ts` that plays its
-  first round, plus its own `.github/workflows/playthrough-<name>.yml`: copy Apothecary's and change
+  `README.md`, an `AGENTS.md` (current state and architecture) with a `CLAUDE.md` that imports it,
+  a `cover.png` (a 16:9 screenshot) and an `e2e/playthrough.spec.ts` that plays its first round,
+  plus its own `.github/workflows/playthrough-<name>.yml`: copy Apothecary's and change
   the name, the `games/<name>/**` path, the workflow's own path, the concurrency group, the
   `--project` and the artifact name. Give it a `favicon.svg` linked from its `index.html`: the orange bear from the hub's
   `favicon.svg` (same ears, head, dot eyes and muzzle, 32x32 viewBox) with one prop for the game,
   like Apothecary's plague doctor hat and beak. Then add a card for it in the hub's `index.html` and in `e2e/hub.spec.ts`, a
-  Playwright project in `playwright.config.ts`, and a row in the README's table of games. Vite picks
+  Playwright project in `playwright.config.ts`, a row in the README's table of games and a row in
+  the table of guides above. Vite picks
   up `games/*/index.html` on its own. Keep save keys and other browser storage prefixed with the
   game's name, since every game shares the hub's origin.
 - **Honour the hub's settings.** Every game calls `setupGame(game)` from `shared/setupGame.ts`
