@@ -7,6 +7,7 @@ import { signTexture } from '../art/ui';
 import { GROW_MS, PLANTS, POTIONS, REFINE, REFINED, isPlant, isPotion, isRefined, type ItemId } from '../game/items';
 import {
   collectTill,
+  doneByHand,
   dropAll,
   dropAtRefiner,
   dropInCauldron,
@@ -66,6 +67,7 @@ import { ProgressBar } from '../ui/ProgressBar';
 import {
   BELT_BUILD,
   BELT_PATHS,
+  beltSpan,
   CAULDRON,
   CAULDRON2,
   CAULDRON2_MARKERS,
@@ -88,6 +90,9 @@ import {
   SHOP,
   SHOP_BACK_DOOR,
   SHOP_DOOR,
+  SHOP_BLOCKS,
+  SHOP_DOORWAY,
+  SHOP_WALLS,
   STREET,
   WORLD,
   YARDS,
@@ -101,10 +106,17 @@ type Point = { x: number; y: number };
 
 /** Walking speed in pixels per second, before the doctor's boots are upgraded. */
 const SPEED = 160;
+/**
+ * Most the doctor walks in one physics step. A long frame walks slower instead, so its one step can't
+ * carry the feet through a station.
+ */
+const MAX_WALK_STEP_PX = 20;
 const PLAYER_SCALE = 2;
 /** Longest simulated step, so a backgrounded tab doesn't jump the world forward. */
 const MAX_STEP_MS = 250;
 const UI_DEPTH = 10_000;
+/** Bars, icons and feedback over the world, kept under the top bar and panels when the camera scrolls them up there. */
+const WORLD_UI_DEPTH = UI_DEPTH - 1;
 const AUTOSAVE_MS = 3_000;
 /** How fast customers walk, in pixels per second. */
 const CUSTOMER_SPEED = 120;
@@ -140,6 +152,8 @@ export class GameScene extends Phaser.Scene {
   private heading: Phaser.Math.Vector2 | null = null;
   /** Station footprints grown by the doctor's feet, used to walk around stations after a tap. */
   private blockedAreas: Phaser.Geom.Rectangle[] = [];
+  /** The shop as measured for the doctor's feet, and the feet's half size it was measured for. */
+  private shopMeasured: ReturnType<GameScene['measureShop']> | null = null;
   private obstacles!: Phaser.Physics.Arcade.StaticGroup;
   private markers: Marker[] = [];
   /** Work spots: the station whose spot holds the doctor's feet is the one that works. */
@@ -159,10 +173,14 @@ export class GameScene extends Phaser.Scene {
   private frameMs = 0;
   /** Where each customer in the shop stands, and whether they have reached their spot; read by the playthrough test. */
   customers: { id: number; x: number; y: number; arrived: boolean }[] = [];
+  /** The orders whose customers have reached the counter, so they can be served. */
+  private atCounter = new Set<number>();
   /** The recipe overview opened from the top bar. */
   private recipes!: RecipeBook;
   /** The settings panel opened from the top bar: the hub's settings and a new game. */
   private settings!: Settings;
+  /** Set once a new game is confirmed, so nothing saves the old one before the scene restarts. */
+  private startingOver = false;
   /** Per-frame view updates, each reading from `state`. */
   private views: (() => void)[] = [];
 
@@ -172,6 +190,7 @@ export class GameScene extends Phaser.Scene {
 
   create() {
     this.state = loadState();
+    this.startingOver = false;
     this.plotCentres = [];
     this.markers = [];
     this.workSpots = [];
@@ -180,7 +199,12 @@ export class GameScene extends Phaser.Scene {
     this.pointerTarget = null;
     this.waypoint = null;
     this.blockedAreas = [];
+    this.atCounter = new Set();
+    this.shopMeasured = null;
     this.physics.world.setBounds(0, HUD_HEIGHT, WORLD.w, WORLD.h - HUD_HEIGHT);
+    // Restarting the scene for a new game keeps its event listeners, so this one is added once.
+    this.events.off(Phaser.Scenes.Events.PRE_UPDATE, this.limitWalkStep, this);
+    this.events.on(Phaser.Scenes.Events.PRE_UPDATE, this.limitWalkStep, this);
     this.obstacles = this.physics.add.staticGroup();
 
     this.drawGrounds();
@@ -199,7 +223,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   private setUpSaving() {
-    const save = () => saveState(this.state);
+    const save = () => {
+      if (!this.startingOver) saveState(this.state);
+    };
     const onHide = () => {
       if (document.visibilityState === 'hidden') save();
     };
@@ -214,6 +240,7 @@ export class GameScene extends Phaser.Scene {
 
   private startOver() {
     if (!window.confirm('Start a new game? Your saved progress will be lost.')) return;
+    this.startingOver = true;
     clearSave();
     this.scene.restart();
   }
@@ -276,16 +303,10 @@ export class GameScene extends Phaser.Scene {
 
     // Shop: plank floor inside stone walls, with a doorway in the bottom wall facing the courtyard.
     ground(SHOP.x, SHOP.y, SHOP.w, SHOP.h, 'tile-planks');
-    const wall = 16;
-    const bottom = SHOP.y + SHOP.h - wall / 2;
     // The back wall has a street door that customers come and go by.
-    ground(SHOP.x - wall / 2, SHOP.y - wall / 2, SHOP_BACK_DOOR.from - SHOP.x + wall / 2, wall, 'tile-wall', -990);
-    ground(SHOP_BACK_DOOR.to, SHOP.y - wall / 2, SHOP.x + SHOP.w + wall / 2 - SHOP_BACK_DOOR.to, wall, 'tile-wall', -990);
     ground(SHOP_BACK_DOOR.from, 0, SHOP_BACK_DOOR.to - SHOP_BACK_DOOR.from, SHOP.y, 'tile-planks', -995);
-    ground(SHOP.x - wall / 2, bottom, SHOP_DOOR.from - SHOP.x + wall / 2, wall, 'tile-wall', -990);
-    ground(SHOP_DOOR.to, bottom, SHOP.x + SHOP.w + wall / 2 - SHOP_DOOR.to, wall, 'tile-wall', -990);
-    ground(SHOP.x - wall / 2, SHOP.y, wall, SHOP.h, 'tile-wall', -990);
-    ground(SHOP.x + SHOP.w - wall / 2, SHOP.y, wall, SHOP.h, 'tile-wall', -990);
+    for (const wall of SHOP_WALLS) ground(wall.x, wall.y, wall.w, wall.h, 'tile-wall', -990);
+    for (const block of SHOP_BLOCKS) this.obstacles.add(this.add.zone(block.x + block.w / 2, block.y + block.h / 2, block.w, block.h));
 
     this.label(SHOP.x + SHOP.w / 2, SHOP.y, 'Storefront');
   }
@@ -299,7 +320,7 @@ export class GameScene extends Phaser.Scene {
         () => {
           this.add.image(x, y, 'plot').setDepth(-500);
           const plant = this.add.image(x, y + 10, plantTexture(plot.plant, 2)).setOrigin(0.5, 1).setDepth(y);
-          const growth = new ProgressBar(this, x, y + 26, 44, 0x9ccf6a, UI_DEPTH);
+          const growth = new ProgressBar(this, x, y + 26, 44, 0x9ccf6a, WORLD_UI_DEPTH);
           this.views.push(() => {
             const grown = plot.grown / GROW_MS[plot.plant];
             plant.setTexture(plantTexture(plot.plant, grown >= 1 ? 2 : grown >= 0.5 ? 1 : 0));
@@ -330,15 +351,15 @@ export class GameScene extends Phaser.Scene {
     this.label(label.x, label.y, 'Refining table');
     this.addObstacle(at.x, at.y, 'table', 84, 30);
     this.addPallets(id, PALLETS[id], [PLANTS, REFINED], [() => refiner.queue, () => refiner.output]);
-    const progress = new ProgressBar(this, at.x, at.y + 30, 60, 0xd8cfa8, UI_DEPTH);
+    const progress = new ProgressBar(this, at.x, at.y + 30, 60, 0xd8cfa8, WORLD_UI_DEPTH);
     this.addMarker(m.pickUp, 'pad-out', 'Pick up', () => pickUpFromRefiner(this.state, id), () => this.state.belts[beltOut].built);
     this.addMarker(m.drop, 'pad-in', 'Drop', () => dropAtRefiner(this.state, id), () => this.state.belts[beltIn].built && !this.carries(isPlant));
     this.addWorkSpot(m.work, id);
     this.addUpgradeMarker(m.upgrade, id);
     this.addCraftsmen(id);
     this.views.push(() => {
-      const next = refining(refiner);
-      progress.set(next >= 0 ? refiner.progress / REFINE[refiner.queue[next]].ms : null);
+      // The plant being refined is always the front one (see tick).
+      progress.set(refining(refiner) >= 0 ? refiner.progress / REFINE[refiner.queue[0]].ms : null);
     });
   }
 
@@ -348,7 +369,7 @@ export class GameScene extends Phaser.Scene {
     this.label(label.x, label.y, 'Cauldron');
     this.addObstacle(at.x, at.y, 'cauldron', 60, 28).play('cauldron-boil');
     this.addPallets(id, PALLETS[id], [REFINED, POTIONS], [() => cauldron.contents, () => cauldron.output]);
-    const brewing = new ProgressBar(this, at.x, at.y + 34, 60, 0x58a35a, UI_DEPTH);
+    const brewing = new ProgressBar(this, at.x, at.y + 34, 60, 0x58a35a, WORLD_UI_DEPTH);
     this.addMarker(m.pickUp, 'pad-out', 'Pick up', () => pickUpFromCauldron(this.state, id), () => this.state.belts[beltOut].built);
     this.addMarker(m.drop, 'pad-in', 'Drop', () => dropInCauldron(this.state, id), () => this.state.belts[beltIn].built && !this.carries(isRefined));
     this.addWorkSpot(m.work, id);
@@ -550,20 +571,35 @@ export class GameScene extends Phaser.Scene {
         payBelt(this.state, id),
       );
       const riding: Phaser.GameObjects.Image[] = [];
-      const main = BELT_PATHS[id][0];
+      const [main, ...feeders] = BELT_PATHS[id];
+      // For each kind of goods: the run it gets on at, where on the main run that starts and joins,
+      // and how far across the belt its lane is.
+      const lanes = BELT_LANES[id];
+      const spans = new Map(lanes.map((kind, lane) => [kind, { ...beltSpan(id, kind), off: laneOffset(lane, lanes.length) }]));
       this.views.push(() => {
         while (riding.length < belt.items.length) {
           riding.push(this.add.image(0, 0, itemTexture(belt.items[0].id)).setDepth(-550));
         }
-        const lanes = BELT_LANES[id];
         riding.forEach((icon, i) => {
           const item = belt.items[i];
-          icon.setVisible(!!item);
-          if (!item) return;
-          // Across the belt into the item's own lane.
-          const { x, y, dx, dy } = pointAlong(main, item.at / BELT_MS[id]);
-          const off = laneOffset(lanes.indexOf(item.id), lanes.length);
-          icon.setTexture(itemTexture(item.id)).setPosition(x - dy * off, y + dx * off);
+          if (!item) {
+            icon.setVisible(false);
+            return;
+          }
+          // Goods loaded from the doctor's hands wait out of sight until their turn to get on.
+          // A kind the belt has no lane for (from an edited save) rides down the middle of the main run.
+          const { run, start, join, off } = spans.get(item.id) ?? { run: 0, start: 0, join: 0, off: 0 };
+          icon.setVisible(item.at >= start);
+          // Along the main run, across the belt into the item's own lane. On a feeder, the item moves
+          // over into that lane as it goes, so it carries straight on where the feeder joins.
+          let { x, y, dx, dy } = pointAlong(main, Math.max(item.at, join) / BELT_MS[id]);
+          let across = off;
+          if (run > 0 && item.at < join) {
+            const along = (item.at - start) / (join - start);
+            ({ x, y } = pointAlong(feeders[run - 1], along));
+            across = off * Math.max(0, along);
+          }
+          icon.setTexture(itemTexture(item.id)).setPosition(x - dy * across, y + dx * across);
         });
       });
     }
@@ -586,8 +622,7 @@ export class GameScene extends Phaser.Scene {
     this.addPallets('counter', PALLETS.counter, [POTIONS, []], [() => this.state.counter.shelf, () => []]);
     // Potions are stocked by hand until every cauldron standing has its belt to the counter, and
     // whenever the doctor carries one.
-    const allBelted = () =>
-      this.state.belts.cauldron.built && (!stationBuilt(this.state, 'cauldron2') || this.state.belts.cauldron2.built);
+    const allBelted = () => !doneByHand(this.state, 'cauldron') && !doneByHand(this.state, 'cauldron2');
     this.addMarker(COUNTER_MARKERS.drop, 'pad-in', 'Drop', () => stockShelf(this.state), () => allBelted() && !this.carries(isPotion));
     this.addMarker(COUNTER_MARKERS.pickUp, 'pad-out', 'Coins', () => collectTill(this.state));
     this.addWorkSpot(COUNTER_MARKERS.work, 'counter');
@@ -611,7 +646,7 @@ export class GameScene extends Phaser.Scene {
     });
 
     // How far the counter's craftsmen are with handing over the next potion.
-    const serving = new ProgressBar(this, COUNTER.x, COUNTER.y + 36, 44, 0x9ccf6a, UI_DEPTH);
+    const serving = new ProgressBar(this, COUNTER.x, COUNTER.y + 36, 44, 0x9ccf6a, WORLD_UI_DEPTH);
     this.views.push(() => {
       const done = this.state.counter.serving ?? 0;
       serving.set(this.state.craftsmen.counter.level > 0 && done > 0 ? done / SERVE_MS : null);
@@ -622,8 +657,8 @@ export class GameScene extends Phaser.Scene {
     const customers = new Map<number, Phaser.GameObjects.Image>();
     for (let i = 0; i < MAX_ORDER_SLOTS; i++) {
       const { x, y } = customerPosition(i);
-      const wants = new IconRow(this, x, y - 52, UI_DEPTH);
-      const patience = new ProgressBar(this, x, y - 40, 40, 0xe0b84a, UI_DEPTH);
+      const wants = new IconRow(this, x, y - 52, WORLD_UI_DEPTH);
+      const patience = new ProgressBar(this, x, y - 40, 40, 0xe0b84a, WORLD_UI_DEPTH);
       this.views.push(() => {
         const order = this.state.orders[i];
         const there = order && customers.get(order.id)?.getData('arrived');
@@ -643,9 +678,12 @@ export class GameScene extends Phaser.Scene {
         }
         const sprite = customers.get(order.id)!;
         sprite.setData('arrived', walkTowards(sprite, customerPosition(i), step));
+        // Served from here on, even while moving up to a spot freed by someone ahead.
+        if (sprite.getData('arrived')) this.atCounter.add(order.id);
       });
       for (const [id, sprite] of customers) {
         if (waiting.has(id)) continue;
+        this.atCounter.delete(id);
         sprite.setData('arrived', false);
         if (walkTowards(sprite, STREET, step, true)) {
           sprite.destroy();
@@ -688,7 +726,7 @@ export class GameScene extends Phaser.Scene {
     const slots = Array.from({ length: MAX_CARRY }, (_, i) => {
       const x = width / 2 - 60 + i * 40;
       frames.push(this.add.image(x, HUD_HEIGHT / 2 - 1, 'slot').setDepth(UI_DEPTH));
-      return this.add.image(x, HUD_HEIGHT / 2 - 1, 'item-wheat').setScale(1.5).setDepth(UI_DEPTH);
+      return this.add.image(x, HUD_HEIGHT / 2 - 1, itemTexture('wheat')).setScale(1.5).setDepth(UI_DEPTH);
     });
     // Everything in the top bar stays put while the camera follows the doctor.
     for (const obj of this.children.list.slice(first)) (obj as unknown as Phaser.GameObjects.Components.ScrollFactor).setScrollFactor(0);
@@ -703,7 +741,7 @@ export class GameScene extends Phaser.Scene {
       slots.forEach((slot, i) => {
         const item = this.state.carrying[i];
         slot.setVisible(!!item);
-        if (item) slot.setTexture(`item-${item}`);
+        if (item) slot.setTexture(itemTexture(item));
       });
       pack.update(this.player, this.state.carrying);
       this.recipes.update(this.state);
@@ -769,7 +807,7 @@ export class GameScene extends Phaser.Scene {
         this.settings.toggle(false);
         return;
       }
-      this.pointerTarget = new Phaser.Math.Vector2(p.worldX, p.worldY);
+      this.pointerTarget = this.reachable(new Phaser.Math.Vector2(p.worldX, p.worldY));
       this.heading = null;
       this.waypoint = this.routeAround(this.pointerTarget);
     });
@@ -830,7 +868,7 @@ export class GameScene extends Phaser.Scene {
             strokeThickness: 3,
           })
           .setOrigin(0.5)
-          .setDepth(UI_DEPTH + 1);
+          .setDepth(WORLD_UI_DEPTH);
         this.tweens.add({ targets: text, y: text.y - 36, alpha: 0, duration: 1100, onComplete: () => text.destroy() });
       });
     });
@@ -840,8 +878,8 @@ export class GameScene extends Phaser.Scene {
   update(_time: number, delta: number) {
     this.frameMs = Math.min(delta, MAX_STEP_MS);
     const feetY = this.feetY();
-    const workingAt = this.workSpots.find((w) => w.zone.contains(this.player.x, feetY))?.station ?? null;
-    tick(this.state, Math.min(delta, MAX_STEP_MS), workingAt);
+    const workingAt = this.workSpots.find((w) => w.zone.contains(this.feetX(), feetY))?.station ?? null;
+    tick(this.state, this.frameMs, workingAt, (order) => this.atCounter.has(order.id));
     this.movePlayer();
 
     this.standOnMarkers();
@@ -854,7 +892,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private standOnMarkers() {
-    const under = (m: Marker) => m.zone.contains(this.player.x, this.feetY());
+    const under = (m: Marker) => m.zone.contains(this.feetX(), this.feetY());
     for (const m of this.markers) if (m.paused && !under(m)) m.paused = false;
     const marker = this.markers.find((m) => m.shown() && under(m));
     if (!marker || marker.paused || this.time.now < this.nextMarkerAt) return;
@@ -870,61 +908,197 @@ export class GameScene extends Phaser.Scene {
     if (this.cursors.up.isDown || this.wasd.up.isDown) dir.y -= 1;
     if (this.cursors.down.isDown || this.wasd.down.isDown) dir.y += 1;
 
-    let turned = false;
     if (dir.lengthSq() > 0) {
       this.pointerTarget = null;
     } else if (this.pointerTarget) {
       // Steer the feet, not the sprite centre, to the tapped spot, via a corner if a station is in the way.
       const target = this.waypoint ?? this.pointerTarget;
-      dir.set(target.x - this.player.x, target.y - this.feetY());
+      dir.set(target.x - this.feetX(), target.y - this.feetY());
       // Walking past the spot counts as getting there, so a fast walk on a slow frame rate doesn't
       // overshoot it back and forth.
       const passed = this.heading !== null && dir.dot(this.heading) <= 0;
       if (this.waypoint && (dir.length() < 6 || passed)) {
+        // Settle the feet on the corner, so the next leg starts clear of the station, and head on.
+        this.settleFeet(this.waypoint);
         this.waypoint = this.routeAround(this.pointerTarget);
-        turned = true;
+        const next = this.waypoint ?? this.pointerTarget;
+        dir.set(next.x - this.feetX(), next.y - this.feetY());
       } else if (!this.waypoint && (dir.length() < 4 || passed)) {
         // Settle the feet on the spot itself, a step back if the last frame carried them past it.
-        if (passed) this.player.body!.reset(target.x, this.player.y + dir.y);
+        if (passed) this.settleFeet(target);
         this.pointerTarget = null;
         dir.set(0, 0);
       }
     }
 
     dir.normalize();
-    // Heading towards a new corner or spot is only known from the next frame.
-    this.heading = this.pointerTarget && !turned && dir.lengthSq() > 0 ? dir.clone() : null;
+    this.heading = this.pointerTarget && dir.lengthSq() > 0 ? dir.clone() : null;
     dir.scale(SPEED * walkSpeed(this.state));
     this.player.setVelocity(dir.x, dir.y);
     this.animatePlayer(dir);
   }
 
   /**
-   * When a station blocks the straight line from the doctor's feet to `to`, returns the corner of
-   * that station to walk to first (the one making the shorter trip); otherwise null.
+   * Each station's blocked area slightly shrunk, which walking is tested against so lines along an
+   * edge or from a corner count as clear. It stays clear of where feet touching the station stand,
+   * half the feet's size (15 by 7 pixels) from it, so they still route around it.
+   */
+  private innerArea(area: Phaser.Geom.Rectangle) {
+    return new Phaser.Geom.Rectangle(area.x + 4, area.y + 4, area.width - 8, area.height - 8);
+  }
+
+  /**
+   * Where the doctor's feet can't stand for the shop: its walls and the street behind it grown by half
+   * the feet's size (`walls`), and the whole shop, street included, as one more area to walk around
+   * like a station's (`area`), from the top of the world down to where feet stand clear of its front
+   * wall. `inside` is between the side walls and above that, so the doorway counts as inside.
+   */
+  private measureShop(halfWidth: number, halfHeight: number) {
+    const walls = SHOP_BLOCKS.map((w) => new Phaser.Geom.Rectangle(w.x - halfWidth, w.y - halfHeight, w.w + 2 * halfWidth, w.h + 2 * halfHeight));
+    const left = Math.min(...walls.map((w) => w.left)), right = Math.max(...walls.map((w) => w.right));
+    const bottom = Math.max(...walls.map((w) => w.bottom));
+    return {
+      halfWidth,
+      halfHeight,
+      walls,
+      area: new Phaser.Geom.Rectangle(left - 3, 0, right - left + 6, bottom + 3),
+      inside: new Phaser.Geom.Rectangle(left + halfWidth, 0, right - left - 2 * halfWidth, bottom),
+    };
+  }
+
+  /** The shop measured for the feet; measured again if their size changes, as it does once the body takes the sprite's scale. */
+  private shop() {
+    const { halfWidth, halfHeight } = this.player.body!;
+    const m = this.shopMeasured;
+    if (m?.halfWidth !== halfWidth || m.halfHeight !== halfHeight) this.shopMeasured = this.measureShop(halfWidth, halfHeight);
+    return this.shopMeasured!;
+  }
+
+  /** Whether feet at a spot are in the shop. */
+  private inShop(p: Point) {
+    const { inside } = this.shop();
+    return p.x > inside.left && p.x < inside.right && p.y < inside.bottom;
+  }
+
+  /**
+   * Where to walk first on the way to `to`. Into or out of the shop, that is the front door, unless a
+   * straight line to the spot clears the walls: the spot in line with the door on this side of it, and
+   * then the one on the other side. When a station, or outside the shop the shop itself, blocks the way
+   * there, it is the corner of the nearest such area (the one making the shorter trip). Null once the
+   * way to `to` is clear.
    */
   private routeAround(to: Phaser.Math.Vector2): Phaser.Math.Vector2 | null {
-    const from = new Phaser.Math.Vector2(this.player.x, this.feetY());
+    const from = new Phaser.Math.Vector2(this.feetX(), this.feetY());
+    const line = (a: Phaser.Math.Vector2, b: Phaser.Math.Vector2) => new Phaser.Geom.Line(a.x, a.y, b.x, b.y);
     const blocks = (a: Phaser.Math.Vector2, b: Phaser.Math.Vector2, area: Phaser.Geom.Rectangle) =>
-      Phaser.Geom.Intersects.LineToRectangle(new Phaser.Geom.Line(a.x, a.y, b.x, b.y), area);
-    for (const area of this.blockedAreas) {
-      if (area.contains(from.x, from.y) || area.contains(to.x, to.y) || !blocks(from, to, area)) continue;
-      // Test against a slightly smaller area so lines along an edge or through a corner count as clear.
-      const inner = new Phaser.Geom.Rectangle(area.x + 2, area.y + 2, area.width - 4, area.height - 4);
-      const corners = [
-        new Phaser.Math.Vector2(area.left, area.top),
-        new Phaser.Math.Vector2(area.right, area.top),
-        new Phaser.Math.Vector2(area.left, area.bottom),
-        new Phaser.Math.Vector2(area.right, area.bottom),
-      ].filter((c) => !blocks(from, c, inner));
-      corners.sort((a, b) => from.distance(a) + a.distance(to) - (from.distance(b) + b.distance(to)));
-      return corners[0] ?? null;
+      Phaser.Geom.Intersects.LineToRectangle(line(a, b), area);
+    // Shrunk like the stations' areas, so a line along a wall's edge counts as clear.
+    const walls = this.shop().walls.map((w) => this.innerArea(w));
+    const wallsBlock = (a: Phaser.Math.Vector2, b: Phaser.Math.Vector2) => walls.some((w) => blocks(a, b, w));
+    let goal = to;
+    const inside = this.inShop(from);
+    if (inside !== this.inShop(to) && wallsBlock(from, to)) {
+      const { halfWidth } = this.player.body!;
+      const x = Phaser.Math.Clamp(from.x, SHOP_DOOR.from + halfWidth + 2, SHOP_DOOR.to - halfWidth - 2);
+      const near = new Phaser.Math.Vector2(x, inside ? SHOP_DOORWAY.inside : SHOP_DOORWAY.outside);
+      const far = new Phaser.Math.Vector2(x, inside ? SHOP_DOORWAY.outside : SHOP_DOORWAY.inside);
+      goal = wallsBlock(from, far) ? near : far;
     }
-    return null;
+    const areas = inside || this.inShop(goal) ? this.blockedAreas : [...this.blockedAreas, this.shop().area];
+    // How far along the way each station in it is.
+    const inTheWay = areas
+      .map((area) => ({ area, inner: this.innerArea(area) }))
+      .filter(({ inner }) => !inner.contains(from.x, from.y) && !inner.contains(goal.x, goal.y) && blocks(from, goal, inner))
+      .map((s) => ({ ...s, d: Math.min(...Phaser.Geom.Intersects.GetLineToRectangle(line(from, goal), s.inner).map((p) => from.distance(p))) }))
+      .sort((a, b) => a.d - b.d);
+    if (inTheWay.length === 0) return goal === to ? null : goal;
+    const { area, inner } = inTheWay[0];
+    const { bounds } = this.physics.world;
+    const { halfWidth, halfHeight } = this.player.body!;
+    const reach = new Phaser.Geom.Rectangle(bounds.x + halfWidth, bounds.y + halfHeight, bounds.width - 2 * halfWidth, bounds.height - 2 * halfHeight);
+    const corners = [
+      new Phaser.Math.Vector2(area.left, area.top),
+      new Phaser.Math.Vector2(area.right, area.top),
+      new Phaser.Math.Vector2(area.left, area.bottom),
+      new Phaser.Math.Vector2(area.right, area.bottom),
+    ].filter((c) => reach.contains(c.x, c.y) && from.distance(c) > 0.5 && !blocks(from, c, inner));
+    // Prefer a corner the way to which no other station blocks either.
+    const others = areas.filter((a) => a !== area).map((a) => this.innerArea(a)).filter((a) => !a.contains(from.x, from.y));
+    const clear = corners.filter((c) => others.every((other) => !blocks(from, c, other)));
+    if (clear.length > 0) corners.splice(0, corners.length, ...clear);
+    corners.sort((a, b) => from.distance(a) + a.distance(goal) - (from.distance(b) + b.distance(goal)));
+    // With no corner to go by, still head for the door rather than straight at a wall.
+    return corners[0] ?? (goal === to ? null : goal);
+  }
+
+  /**
+   * Where the doctor's feet are, from the physics body: during the update it has already stepped
+   * this frame, while the sprite only follows it afterwards.
+   */
+  private feetX() {
+    return this.player.body!.center.x;
   }
 
   private feetY() {
     return this.player.body!.center.y;
+  }
+
+  /**
+   * Physics steps once per frame (see main.ts), right after this, with the frame's whole delta; a
+   * long frame slows the doctor down to MAX_WALK_STEP_PX for that step.
+   */
+  private limitWalkStep(_time: number, delta: number) {
+    const body = this.player?.body;
+    if (body && body.velocity.length() * (delta / 1000) > MAX_WALK_STEP_PX) body.velocity.setLength((MAX_WALK_STEP_PX * 1000) / delta);
+  }
+
+  /** Stops the doctor with their feet on a spot. */
+  private settleFeet(at: Point) {
+    const body = this.player.body as Phaser.Physics.Arcade.Body;
+    body.stop();
+    // The body has already stepped this frame and the sprite follows it after the update, so place the
+    // sprite and take the body from it, rather than Arcade's reset, which also drops the body's offset.
+    this.player.x = at.x;
+    body.updateFromGameObject();
+    this.player.y += at.y - body.center.y;
+    body.updateFromGameObject();
+    body.prev.copy(body.position);
+    body.prevFrame.copy(body.position);
+  }
+
+  /**
+   * A tapped spot the feet can't stand on moves to the nearest one they can: inside the world's
+   * edges, and out of a station or a shop wall to the nearest edge of its area, so the doctor walks up
+   * to it instead of into it.
+   */
+  private reachable(to: Phaser.Math.Vector2) {
+    const { bounds } = this.physics.world;
+    const { halfWidth, halfHeight } = this.player.body!;
+    to.set(
+      Phaser.Math.Clamp(to.x, bounds.left + halfWidth, bounds.right - halfWidth),
+      Phaser.Math.Clamp(to.y, bounds.top + halfHeight, bounds.bottom - halfHeight),
+    );
+    // The same areas walking routes around, so the moved spot gets routed to. The shop's walls meet at
+    // its corners, so it moves to the nearest edge outside the others too, if there is one.
+    const areas = [
+      ...this.blockedAreas.map((area) => ({ area, inner: this.innerArea(area) })),
+      ...this.shop().walls.map((area) => ({ area, inner: new Phaser.Geom.Rectangle(area.x + 0.5, area.y + 0.5, area.width - 1, area.height - 1) })),
+    ];
+    for (let moves = 0; moves < 3; moves++) {
+      const hit = areas.find(({ inner }) => inner.contains(to.x, to.y));
+      if (!hit) break;
+      const { area } = hit;
+      const edges = [
+        { d: to.x - area.left, x: area.left, y: to.y },
+        { d: area.right - to.x, x: area.right, y: to.y },
+        { d: to.y - area.top, x: to.x, y: area.top },
+        { d: area.bottom - to.y, x: to.x, y: area.bottom },
+      ].filter((e) => e.y >= bounds.top + halfHeight);
+      const free = edges.filter((e) => !areas.some((other) => other !== hit && other.inner.contains(e.x, e.y)));
+      const nearest = (free.length > 0 ? free : edges).reduce((a, b) => (b.d < a.d ? b : a));
+      to.set(nearest.x, nearest.y);
+    }
+    return to;
   }
 
   private animatePlayer(velocity: Phaser.Math.Vector2) {

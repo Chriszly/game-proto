@@ -19,7 +19,7 @@ interface GameState {
   counter: { shelf: ItemId[]; till: number };
   upgrades: Record<string, { level: number; paid: number }>;
   craftsmen: Record<string, { level: number; paid: number }>;
-  orders: { id: number; wants: ItemId[]; pay: Record<string, number>; patience: number }[];
+  orders: { id: number; wants: ItemId[]; pay: Record<string, number>; patience: number; maxPatience: number }[];
   nextOrderId: number;
   belts: Record<string, { built: boolean; paid: number; items: { id: ItemId; at: number }[] }>;
 }
@@ -36,7 +36,6 @@ const REFINER = {
   pickUp: { x: 330, y: 612 },
 };
 const CAULDRON = { drop: { x: 380, y: 728 }, work: { x: 450, y: 650 }, pickUp: { x: 540, y: 728 } };
-const SHOP_DOOR = { x: 600, y: 420 };
 /** On the way out from the coins, a step towards the door that keeps clear of the upgrade marker. */
 const LEAVE_SHOP = { x: 650, y: 330 };
 /**
@@ -49,7 +48,7 @@ const COUNTER = { drop: { x: 472, y: 282 }, work: { x: 520, y: 340 }, coins: { x
 const RECIPES_BUTTON = { x: 219, y: 22 };
 /** Customers come in from the street door in the shop's back wall and line up behind the counter. */
 const STREET = { x: 480, y: 40 };
-const FIRST_CUSTOMER = { x: 525, y: 210 };
+const FIRST_CUSTOMER = { x: 544, y: 210 };
 
 const POTION_PRICE: Record<string, number> = { healingDraught: 8, sleepingTonic: 15 };
 
@@ -73,11 +72,20 @@ const SPEED = Number(process.env.PLAYTHROUGH_SPEED ?? 4);
 
 /**
  * How many more of a potion customers want than the shop has ready, as the cauldron counts it when
- * it picks a recipe: on the shelf, in the doctor's hands and on the cauldrons' pallets.
+ * it picks a recipe: on the shelf, in the doctor's hands, brewing, on the cauldrons' pallets and
+ * riding their belts.
  */
 const shortfall = (s: GameState, potion: ItemId) =>
   s.orders.flatMap((o) => o.wants).filter((p) => p === potion).length -
-  [...s.counter.shelf, ...s.carrying, ...s.cauldron.output, ...s.cauldron2.output].filter((p) => p === potion).length;
+  [
+    ...s.counter.shelf,
+    ...s.carrying,
+    ...s.cauldron.output,
+    ...s.cauldron2.output,
+    ...[s.cauldron.brewing?.out, s.cauldron2.brewing?.out].filter((p) => p !== undefined),
+    ...s.belts.cauldron.items.map((item) => item.id),
+    ...s.belts.cauldron2.items.map((item) => item.id),
+  ].filter((p) => p === potion).length;
 
 /** What a customer coming in now pays for a potion: its price with the guild's upgrade, and a tip. */
 const potionPay = (s: GameState, potion: string) =>
@@ -91,11 +99,11 @@ function scene(page: Page) {
     page.evaluate(`(${fn.toString()})(window.game.scene.getScene('Game'))`) as Promise<T>;
   return {
     state: () => read<GameState>((s) => JSON.parse(JSON.stringify(s.state))),
-    feet: () => read<Point & { moving: boolean }>((s) => ({ x: s.player.x, y: s.player.body.center.y, moving: !!s.pointerTarget })),
+    feet: () => read<Point & { moving: boolean }>((s) => ({ x: s.player.body.center.x, y: s.player.body.center.y, moving: !!s.pointerTarget })),
+    /** Where the doctor walks to: the tapped spot, or the edge of a station tapped inside it. */
+    target: () => read<Point | null>((s) => s.pointerTarget && { x: s.pointerTarget.x, y: s.pointerTarget.y }),
     /** The top-left corner of the view in the world, which moves as the camera follows the doctor. */
     view: () => read<Point>((s) => ({ x: s.cameras.main.scrollX, y: s.cameras.main.scrollY })),
-    /** How far from the doctor's centre ripe plants are harvested, in pixels. */
-    reach: () => read<number>((s) => s.harvestReach()),
     /** How many items each of a station's pallets shows, by item, for goods coming in and going out. */
     pallets: (station: string) =>
       page.evaluate(
@@ -110,6 +118,16 @@ function scene(page: Page) {
     recipes: () => read<{ open: boolean; lines: string[] }>((s) => ({ open: s.recipes.visible, lines: s.recipes.lines })),
     /** Where each customer in the shop stands, and whether they have reached their spot at the counter. */
     customers: () => read<{ id: number; x: number; y: number; arrived: boolean }[]>((s) => s.customers),
+    /**
+     * Whether the first customer in the shop has reached the counter, and their own order's patience,
+     * in one look; null while there is no such customer with an order.
+     */
+    firstCustomer: () =>
+      read<{ arrived: boolean; patience: number; maxPatience: number } | null>((s) => {
+        const customer = s.customers[0];
+        const order = customer && s.state.orders.find((o: { id: number }) => o.id === customer.id);
+        return order ? { arrived: customer.arrived, patience: order.patience, maxPatience: order.maxPatience } : null;
+      }),
   };
 }
 
@@ -131,7 +149,7 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
     const cdp = await page.context().newCDPSession(page);
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: Number(process.env.CPU_THROTTLE) });
   }
-  // The test owns the clock: game time only moves when the test advances it, one 16ms animation
+  // The test owns the clock: game time only moves when the test advances it, one 64ms animation
   // frame at a time, so walking, timers and customers behave the same on a slow runner as on a fast
   // one, and waiting on a timer costs no real time.
   const start = new Date('2026-01-01T00:00:00Z');
@@ -181,12 +199,16 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
   const snap = async (name: string) =>
     testInfo.attach(name, { body: await page.screenshot({ path: testInfo.outputPath(`${name}.png`) }), contentType: 'image/png' });
 
-  /** Taps a spot on screen, as a player would, and waits for the doctor's feet to arrive there. */
-  async function tapAndWalk(to: Point) {
+  /**
+   * Taps a spot on screen, as a player would, and waits for the doctor's feet to arrive there. A hop
+   * on the way to a spot can land inside a station, so it waits for where the game walks to instead.
+   */
+  async function tapAndWalk(tapped: Point, hop = false) {
     const box = (await canvas.boundingBox())!;
     const scale = box.width / VIEW.w;
     const view = await game.view();
-    await page.mouse.click(box.x + (to.x - view.x) * scale, box.y + (to.y - view.y) * scale);
+    await page.mouse.click(box.x + (tapped.x - view.x) * scale, box.y + (tapped.y - view.y) * scale);
+    const to = (hop && (await game.target())) || tapped;
     let at = await game.feet();
     const arrived = await play(15_000, async () => {
       at = await game.feet();
@@ -219,7 +241,7 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
         if (dx < 0) t = Math.min(t, (left - from.x) / dx);
         if (dy > 0) t = Math.min(t, (bottom - from.y) / dy);
         if (dy < 0) t = Math.min(t, (top - from.y) / dy);
-        await tapAndWalk({ x: Math.round(from.x + dx * t), y: Math.round(from.y + dy * t) });
+        await tapAndWalk({ x: Math.round(from.x + dx * t), y: Math.round(from.y + dy * t) }, true);
       }
     }
   }
@@ -267,8 +289,22 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
   expect(await play(10_000, async () => (customers = await game.customers()).length > 0), 'a customer came in').toBe(true);
   expect(customers[0]).toMatchObject({ x: STREET.x, arrived: false });
   expect(customers[0].y).toBeLessThan(FIRST_CUSTOMER.y);
-  expect(await play(10_000, async () => (customers = await game.customers())[0].arrived), 'the customer reached the counter').toBe(true);
+  // All the way to the counter, they don't lose patience.
+  let patient = true;
+  const reached = await play(10_000, async () => {
+    const first = await game.firstCustomer();
+    if (first && !first.arrived && first.patience < first.maxPatience) patient = false;
+    return !!first?.arrived;
+  });
+  expect(reached, 'the customer reached the counter').toBe(true);
+  expect(patient, 'full patience while walking in').toBe(true);
+  customers = await game.customers();
   expect(customers[0]).toMatchObject(FIRST_CUSTOMER);
+  const waiting = await play(STEP_MS, async () => {
+    const first = await game.firstCustomer();
+    return !!first && first.patience < first.maxPatience;
+  });
+  expect(waiting, 'patience counts down once at the counter').toBe(true);
 
   // One round of the loop: harvest, refine, brew, sell and collect the coins.
   // Gardens: walk along the wheat row, then past one mandrake, until both hands are full.
@@ -328,7 +364,8 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
   await walkTo(LEAVE_CAULDRONS);
 
   // Storefront: stock the shelf, serve customers until one has paid, then take the coins.
-  await walkTo(SHOP_DOOR, COUNTER.drop);
+  // A tap straight at the counter: the shop's walls are solid, so the doctor finds the way in by the door.
+  await walkTo(COUNTER.drop);
   s = await until('potions on the shelf', (s) => s.carrying.length === 0);
   // The potions stand on their pallets behind the counter.
   const shelf = count(s.counter.shelf);

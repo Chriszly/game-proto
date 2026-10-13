@@ -33,6 +33,7 @@ export interface Order {
   wants: PotionId[];
   /** What the customer pays for each potion they get, tip included, fixed when they arrive. */
   pay: Partial<Record<PotionId, number>>;
+  /** Milliseconds the customer waits at the counter before leaving. */
   patience: number;
   maxPatience: number;
 }
@@ -193,8 +194,10 @@ export const PALLET_SIZE = PALLET_BASE * PALLET_LAYERS;
 /** Whether the pallet for `item` in a station's tray has room for one more. */
 export const palletHasRoom = (tray: readonly ItemId[], item: ItemId) => tray.filter((id) => id === item).length < PALLET_SIZE;
 
-/** Bumped whenever station positions move, so a loaded save doesn't put the doctor inside one. */
-export const LAYOUT = 2;
+/** Bumped whenever stations or walls move, so a loaded save doesn't put the doctor inside one. */
+export const LAYOUT = 3;
+/** The layout from which goods get on a belt at the start of their own run, such as a feeder. */
+export const FEEDERS_LAYOUT = 3;
 
 /** Coins needed to build each belt. */
 export const BELT_COST: Record<BeltId, number> = { garden: 60, refiner: 100, cauldron: 150, garden2: 60, refiner2: 100, cauldron2: 150 };
@@ -209,10 +212,11 @@ export const BELT_ENDS: Record<BeltId, StationId[]> = {
   refiner2: ['refiner2', 'cauldron2'],
   cauldron2: ['cauldron2', 'counter'],
 };
+/** Whether any of the second line's fields is built, for its garden belt to pick from. */
+export const anyFieldBuilt = (state: GameState) => state.expansion.fields.some((f) => f.built);
 /** The second line's garden belt also needs one of its fields to pick from. */
 export const beltBuildable = (state: GameState, id: BeltId) =>
-  BELT_ENDS[id].every((station) => stationBuilt(state, station)) &&
-  (id !== 'garden2' || state.expansion.fields.some((f) => f.built));
+  BELT_ENDS[id].every((station) => stationBuilt(state, station)) && (id !== 'garden2' || anyFieldBuilt(state));
 /** Coins needed for the expansion's land, each field, the refining table and the cauldron. */
 export const EXPANSION_COST = { land: 100, field: 25, refiner: 50, cauldron: 75 };
 /** How long a craftsman takes to hand a customer one potion; the doctor hands them over at once. */
@@ -245,8 +249,9 @@ export function createInitialState(): GameState {
     layout: LAYOUT,
     coins: 0,
     carrying: [],
-    // The middle of the courtyard inside the U (see src/scenes/layout.ts).
-    player: { x: 600, y: 540 },
+    // The middle of the courtyard inside the U (see src/scenes/layout.ts), standing above the
+    // cauldrons' hire markers rather than on them.
+    player: { x: 600, y: 520 },
     // Start ripe so the first harvest can happen right away.
     plots: GARDENS.flatMap((plant) => Array.from({ length: PLOTS_PER_GARDEN }, () => ripe(plant))),
     refiner: { queue: [], progress: 0, output: [] },

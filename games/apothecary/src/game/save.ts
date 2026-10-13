@@ -1,4 +1,6 @@
-import { createInitialState, type GameState } from './state';
+import type { ItemId } from './items';
+import { BELT_GAP_MS, BELTS, FEEDERS_LAYOUT, createInitialState, type GameState } from './state';
+import { beltSpan } from '../scenes/layout';
 
 const KEY = 'apothecary-save';
 
@@ -22,11 +24,29 @@ export function loadState(): GameState {
       // Customers from before they paid per potion go home; new ones come along soon.
       orders: (saved.orders ?? []).filter((o) => o.pay),
     };
+    if ((saved.layout ?? 0) < FEEDERS_LAYOUT) ontoOwnRuns(state);
     // The stations have moved since this save; start the doctor somewhere clear of them.
     if (saved.layout !== fresh.layout) return { ...state, layout: fresh.layout, player: fresh.player };
     return state;
   } catch {
     return fresh;
+  }
+}
+
+/**
+ * Goods saved on a belt before they got on at the start of their own run (mandrakes now come in on
+ * their patch's feeder) were drawn on the main run, so any short of where their run joins it move up
+ * to the join, or a gap behind the one ahead of them in their lane. They never move back.
+ */
+function ontoOwnRuns(state: GameState) {
+  for (const id of BELTS) {
+    // The items in each lane come front first.
+    const ahead = new Map<ItemId, number>();
+    for (const item of state.belts[id].items) {
+      const { join } = beltSpan(id, item.id);
+      if (item.at < join) item.at = Math.max(item.at, Math.min(join, (ahead.get(item.id) ?? Infinity) - BELT_GAP_MS));
+      ahead.set(item.id, item.at);
+    }
   }
 }
 

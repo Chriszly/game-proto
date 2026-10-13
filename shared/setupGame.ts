@@ -28,6 +28,10 @@ function capFrameRate(game: Phaser.Game, fps: number) {
   let next = -Infinity;
   loop.step = (time: number) => {
     if (time < next - SLACK_MS) return;
+    // While starting up or out of focus, Phaser cuts each delta down to its target frame time. Keep
+    // that above the cap's frame time, so a low cap or an uneven display doesn't slow the game down.
+    loop.targetFps = fps / 2;
+    (loop as unknown as { _target: number })._target = 2 * interval;
     // Behind by more than a frame (a hidden tab, a slow frame, a higher cap): count again from now.
     next = time - next > interval ? time + interval : next + interval;
     step(time);
