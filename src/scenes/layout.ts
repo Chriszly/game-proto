@@ -41,6 +41,8 @@ export const EXPANSION_YARDS = [
   { x: 760, y: 448, w: 416, h: 344 },
   { x: 760, y: 400, w: 124, h: 60 },
 ];
+/** The outfitter's sign on the grass right of the shop; its upgrade markers run down below it. */
+export const OUTFITTER = { x: 830, y: 80 };
 /** Where the doctor stands to buy the expansion's land: on the grass just right of the shop door. */
 export const EXPANSION_LAND = { x: 820, y: 430 };
 

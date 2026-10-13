@@ -26,14 +26,17 @@ import {
   BELTS,
   BELT_COST,
   BELT_MS,
-  CARRY_CAPACITY,
+  DOCTOR_UPGRADES,
   EXPANSION_COST,
   LINE2_GARDEN,
-  MAX_LEVEL,
+  MAX_CARRY,
   MAX_ORDERS,
   beltBuildable,
   gardenBuilt,
   gardenOf,
+  UPGRADES,
+  carryCapacity,
+  harvestReach,
   stationBuilt,
   upgradeCost,
   type BeltId,
@@ -42,6 +45,8 @@ import {
   type GameState,
   type RefinerId,
   type StationId,
+  type UpgradeId,
+  walkSpeed,
 } from '../game/state';
 import { BackStack } from '../ui/BackStack';
 import { IconRow } from '../ui/IconRow';
@@ -60,6 +65,7 @@ import {
   GARDEN_AREAS,
   HUD_HEIGHT,
   LABELS,
+  OUTFITTER,
   REFINER,
   REFINER2,
   REFINER2_MARKERS,
@@ -75,6 +81,7 @@ import {
 
 type Point = { x: number; y: number };
 
+/** Walking speed in pixels per second, before the doctor's boots are upgraded. */
 const SPEED = 160;
 const PLAYER_SCALE = 2;
 /** Longest simulated step, so a backgrounded tab doesn't jump the world forward. */
@@ -85,8 +92,6 @@ const AUTOSAVE_MS = 3_000;
 const MARKER_INTERVAL_MS = 200;
 /** Pause between plants when several in reach are ripe, so each pickup can be seen. */
 const HARVEST_INTERVAL_MS = 150;
-/** Harvest radius around the doctor's centre, in character heights. */
-const HARVEST_REACH = 1;
 /** Sickle spin speed in radians per millisecond, its size, and how long it keeps spinning after the
  * last ripe plant in reach. It circles on the edge of the harvest radius, tracing the area. */
 const SICKLE_SPIN = 0.008;
@@ -99,6 +104,8 @@ interface Marker {
   act: () => Feedback | null;
   /** Whether the marker is there at all; markers a belt replaces go once it is built. */
   shown: () => boolean;
+  /** Set once an upgrade level is paid off; the next level waits until the doctor steps off and on again. */
+  paused?: boolean;
 }
 
 export class GameScene extends Phaser.Scene {
@@ -109,6 +116,8 @@ export class GameScene extends Phaser.Scene {
   private pointerTarget: Phaser.Math.Vector2 | null = null;
   /** A corner to walk to first when a station stands between the doctor and the tapped spot. */
   private waypoint: Phaser.Math.Vector2 | null = null;
+  /** Which way the doctor set off towards the tapped spot (or corner) last frame. */
+  private heading: Phaser.Math.Vector2 | null = null;
   /** Station footprints grown by the doctor's feet, used to walk around stations after a tap. */
   private blockedAreas: Phaser.Geom.Rectangle[] = [];
   private obstacles!: Phaser.Physics.Arcade.StaticGroup;
@@ -147,6 +156,7 @@ export class GameScene extends Phaser.Scene {
     this.createPlots();
     this.createStations();
     this.createExpansion();
+    this.createOutfitter();
     this.createBelts();
     this.createPlayer();
     this.followPlayer();
@@ -343,18 +353,26 @@ export class GameScene extends Phaser.Scene {
     this.workSpots.push({ zone: new Phaser.Geom.Rectangle(at.x - 22, at.y - 22, 44, 44), station });
   }
 
-  private addUpgradeMarker(at: { x: number; y: number }, station: StationId) {
-    this.addMarker(at, 'pad-up', '', () => payUpgrade(this.state, station));
+  /** An upgrade marker, captioned with the next level and its price, after `name` if given. */
+  private addUpgradeMarker(at: Point, id: UpgradeId, name = 'Lv') {
+    this.addMarker(at, 'pad-up', '', () => {
+      const level = this.state.upgrades[id].level;
+      const feedback = payUpgrade(this.state, id);
+      // A finished level doesn't roll straight into paying for the next.
+      if (this.state.upgrades[id].level > level) this.markers[marker].paused = true;
+      return feedback;
+    });
+    const marker = this.markers.length - 1;
     const caption = this.add
       .text(at.x, at.y + 26, '', { fontFamily: 'monospace', fontSize: '10px', color: '#e6d3f5' })
       .setOrigin(0.5, 0)
       .setDepth(-400);
     const paid = new ProgressBar(this, at.x, at.y + 38, 40, 0xe0b84a, -400);
     this.views.push(() => {
-      const { level, paid: sofar } = this.state.upgrades[station];
-      const maxed = level >= MAX_LEVEL;
-      caption.setText(maxed ? `Lv ${level + 1} max` : `Lv ${level + 2}: ${upgradeCost(level)}c`);
-      paid.set(maxed ? null : sofar / upgradeCost(level));
+      const { level, paid: sofar } = this.state.upgrades[id];
+      const maxed = level >= UPGRADES[id].max;
+      caption.setText(maxed ? `${name} ${level + 1} max` : `${name} ${level + 2}: ${upgradeCost(id, level)}c`);
+      paid.set(maxed ? null : sofar / upgradeCost(id, level));
     });
   }
 
@@ -443,6 +461,12 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** The outfitter's stall right of the shop: upgrades for the doctor's pack, boots and sickle. */
+  private createOutfitter() {
+    this.label(OUTFITTER.x, OUTFITTER.y, 'Outfitter');
+    DOCTOR_UPGRADES.forEach((id, i) => this.addUpgradeMarker({ x: OUTFITTER.x, y: OUTFITTER.y + 60 + i * 90 }, id, UPGRADES[id].name));
+  }
+
   private createShopfront() {
     this.addObstacle(COUNTER.x, COUNTER.y, 'counter', 200, 30);
     const shelf = new IconRow(this, COUNTER.x, COUNTER.y - 6, COUNTER.y + 1);
@@ -509,9 +533,11 @@ export class GameScene extends Phaser.Scene {
         this.startOver();
       });
 
-    const slots = Array.from({ length: CARRY_CAPACITY }, (_, i) => {
+    // A slot for everything the biggest pack holds; those beyond the current pack stay hidden.
+    const frames: Phaser.GameObjects.Image[] = [];
+    const slots = Array.from({ length: MAX_CARRY }, (_, i) => {
       const x = width / 2 - 60 + i * 40;
-      this.add.image(x, HUD_HEIGHT / 2 - 1, 'slot').setDepth(UI_DEPTH);
+      frames.push(this.add.image(x, HUD_HEIGHT / 2 - 1, 'slot').setDepth(UI_DEPTH));
       return this.add.image(x, HUD_HEIGHT / 2 - 1, 'item-wheat').setScale(1.5).setDepth(UI_DEPTH);
     });
     // Everything in the top bar stays put while the camera follows the doctor.
@@ -520,6 +546,7 @@ export class GameScene extends Phaser.Scene {
 
     this.views.push(() => {
       coins.setText(`Coins: ${this.state.coins}`);
+      frames.forEach((frame, i) => frame.setVisible(i < carryCapacity(this.state)));
       slots.forEach((slot, i) => {
         const item = this.state.carrying[i];
         slot.setVisible(!!item);
@@ -564,16 +591,17 @@ export class GameScene extends Phaser.Scene {
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       if (p.y < HUD_HEIGHT) return;
       this.pointerTarget = new Phaser.Math.Vector2(p.worldX, p.worldY);
+      this.heading = null;
       this.waypoint = this.routeAround(this.pointerTarget);
     });
   }
 
   /**
-   * Harvests ripe plants within HARVEST_REACH character heights of the doctor's centre, one at a time
+   * Harvests ripe plants within the sickle's reach of the doctor's centre, one at a time
    * so each pickup can be seen. Returns whether a ripe plant is in reach with room to carry it.
    */
   private harvestReach() {
-    return this.player.displayHeight * HARVEST_REACH;
+    return this.player.displayHeight * harvestReach(this.state);
   }
 
   private autoHarvest() {
@@ -583,7 +611,7 @@ export class GameScene extends Phaser.Scene {
       .map((at, i) => ({ i, d: at.distance(centre) }))
       .filter(({ i, d }) => d <= reach && isRipe(this.state, i))
       .sort((a, b) => a.d - b.d);
-    if (inReach.length === 0 || this.state.carrying.length >= CARRY_CAPACITY) return false;
+    if (inReach.length === 0 || this.state.carrying.length >= carryCapacity(this.state)) return false;
     if (this.time.now >= this.nextHarvestAt) {
       this.nextHarvestAt = this.time.now + HARVEST_INTERVAL_MS;
       this.showFeedback(harvest(this.state, inReach[0].i));
@@ -646,8 +674,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   private standOnMarkers() {
-    const marker = this.markers.find((m) => m.shown() && m.zone.contains(this.player.x, this.feetY()));
-    if (!marker || this.time.now < this.nextMarkerAt) return;
+    const under = (m: Marker) => m.zone.contains(this.player.x, this.feetY());
+    for (const m of this.markers) if (m.paused && !under(m)) m.paused = false;
+    const marker = this.markers.find((m) => m.shown() && under(m));
+    if (!marker || marker.paused || this.time.now < this.nextMarkerAt) return;
     this.nextMarkerAt = this.time.now + MARKER_INTERVAL_MS;
     const feedback = marker.act();
     if (feedback) this.showFeedback(feedback);
@@ -660,21 +690,31 @@ export class GameScene extends Phaser.Scene {
     if (this.cursors.up.isDown || this.wasd.up.isDown) dir.y -= 1;
     if (this.cursors.down.isDown || this.wasd.down.isDown) dir.y += 1;
 
+    let turned = false;
     if (dir.lengthSq() > 0) {
       this.pointerTarget = null;
     } else if (this.pointerTarget) {
       // Steer the feet, not the sprite centre, to the tapped spot, via a corner if a station is in the way.
       const target = this.waypoint ?? this.pointerTarget;
       dir.set(target.x - this.player.x, target.y - this.feetY());
-      if (this.waypoint && dir.length() < 6) {
+      // Walking past the spot counts as getting there, so a fast walk on a slow frame rate doesn't
+      // overshoot it back and forth.
+      const passed = this.heading !== null && dir.dot(this.heading) <= 0;
+      if (this.waypoint && (dir.length() < 6 || passed)) {
         this.waypoint = this.routeAround(this.pointerTarget);
-      } else if (!this.waypoint && dir.length() < 4) {
+        turned = true;
+      } else if (!this.waypoint && (dir.length() < 4 || passed)) {
+        // Settle the feet on the spot itself, a step back if the last frame carried them past it.
+        if (passed) this.player.body!.reset(target.x, this.player.y + dir.y);
         this.pointerTarget = null;
-          dir.set(0, 0);
+        dir.set(0, 0);
       }
     }
 
-    dir.normalize().scale(SPEED);
+    dir.normalize();
+    // Heading towards a new corner or spot is only known from the next frame.
+    this.heading = this.pointerTarget && !turned && dir.lengthSq() > 0 ? dir.clone() : null;
+    dir.scale(SPEED * walkSpeed(this.state));
     this.player.setVelocity(dir.x, dir.y);
     this.animatePlayer(dir);
   }

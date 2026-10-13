@@ -31,8 +31,15 @@ map is bigger than the screen, so the camera follows the doctor.
    on the counter and stand on the work spot behind it; customers take what they ordered and
    leave coins on the pick-up marker.
 
-Every station has an upgrade marker. Upgrades cost 20, 40 and 80 coins: the refining table and
-cauldron work faster, and customers at an upgraded counter tip more and wait longer.
+Every station has an upgrade marker and goes up to level 5. Upgrades cost 20, 40, 80 and 160
+coins: the refining table and cauldron work faster, and customers at an upgraded counter tip more
+and wait longer. Once a level is paid off, step off the marker and back on to start on the next.
+
+The **outfitter** on the grass right of the shop kits the doctor out, two levels each: a bigger
+pack carries one more item per level (30, then 60 coins), boots walk a fifth faster per level and
+a longer sickle harvests from a quarter further away (25, then 50 coins each).
+
+![The outfitter](docs/screenshots/playthrough-9-outfitted.png)
 
 **Conveyor belts** take the walking out of the loop. Three can be bought on their own purple build
 markers, a handful of coins at a time: gardens to refining table (60 coins), table to cauldron (100)
@@ -51,7 +58,7 @@ to the counter. The counter's drop marker stays until every cauldron has its bel
 
 ![Both lines with all their belts](docs/screenshots/expansion-map.png)
 
-You can carry four items at a time; they stack up on the doctor's back. Progress is saved in the browser automatically; "New game"
+You can carry four items at a time, more with a bigger pack; they stack up on the doctor's back. Progress is saved in the browser automatically; "New game"
 in the top bar starts over.
 
 ## Running locally
@@ -68,7 +75,8 @@ npm run preview   # serve the production build
 `e2e/playthrough.spec.ts` plays the whole loop in headless Chromium with real clicks: it harvests
 both gardens, refines, brews, sells to customers until it has 20 coins and buys a counter upgrade.
 It sells more to buy the expansion's land, a wheat field, a refining table and a cauldron, and
-plays a round on that second line. Last it buys the garden belt and watches the belt bring plants
+plays a round on that second line. It buys the outfitter's pack, boots and sickle and checks each
+one works. Last it buys the garden belt and watches the belt bring plants
 to the refining table, checking items, coins, upgrades and purchases along the way. It plays at 4x
 speed (`PLAYTHROUGH_SPEED`), so the run takes about three minutes. The Playthrough workflow runs it on every PR
 and push to main and uploads a video and milestone screenshots as the `playthrough` artifact.
