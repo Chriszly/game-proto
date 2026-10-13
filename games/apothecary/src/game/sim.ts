@@ -88,7 +88,8 @@ export function tick(state: GameState, dt: number, workingAt: StationId | null, 
     if (refiner.progress >= recipe.ms) {
       refiner.queue.shift();
       refiner.output.push(recipe.out);
-      refiner.progress = 0;
+      // Work past the end of this plant goes on the next, so a slow frame rate makes no less.
+      refiner.progress = refiner.queue.length > 0 ? refiner.progress - recipe.ms : 0;
     }
   }
 
@@ -101,8 +102,12 @@ export function tick(state: GameState, dt: number, workingAt: StationId | null, 
     if (!cauldron.brewing) continue;
     cauldron.brewing.progress += dt * hands * speedAt(state.upgrades[id].level);
     if (cauldron.brewing.progress >= cauldron.brewing.ms) {
+      const over = cauldron.brewing.progress - cauldron.brewing.ms;
       cauldron.output.push(cauldron.brewing.out);
       cauldron.brewing = null;
+      // Work past the end of this brew goes on the next, if there is one.
+      const next = startBrew(state, cauldron);
+      if (next) next.progress = over;
     }
   }
 
@@ -235,7 +240,8 @@ export function shortfall(state: GameState, potion: PotionId) {
 
 /**
  * Starts the recipe the shop is shortest of among those the cauldron has the ingredients and room
- * for, so the potion customers are waiting for gets brewed first. Ties go in recipe order.
+ * for, so the potion customers are waiting for gets brewed first. Ties go in recipe order. Returns
+ * the brew started, if any.
  */
 function startBrew(state: GameState, cauldron: Cauldron) {
   const need = new Map(RECIPES.map((r) => [r.out, shortfall(state, r.out)]));
@@ -246,9 +252,10 @@ function startBrew(state: GameState, cauldron: Cauldron) {
     if (left) {
       cauldron.contents = left;
       cauldron.brewing = { out: recipe.out, ms: recipe.ms, progress: 0 };
-      return;
+      return cauldron.brewing;
     }
   }
+  return null;
 }
 
 function newOrder(state: GameState, rand: () => number) {
@@ -299,7 +306,7 @@ function serveCustomers(state: GameState, dt: number, workingAt: StationId | nul
   }
   counter.serving = (counter.serving ?? 0) + dt * hired;
   if (counter.serving < SERVE_MS) return;
-  counter.serving = 0;
+  counter.serving -= SERVE_MS;
   serveFromShelf(state, 1);
 }
 

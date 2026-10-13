@@ -111,6 +111,8 @@ const PLAYER_SCALE = 2;
 /** Longest simulated step, so a backgrounded tab doesn't jump the world forward. */
 const MAX_STEP_MS = 250;
 const UI_DEPTH = 10_000;
+/** Bars, icons and feedback over the world, kept under the top bar and panels when the camera scrolls them up there. */
+const WORLD_UI_DEPTH = UI_DEPTH - 1;
 const AUTOSAVE_MS = 3_000;
 /** How fast customers walk, in pixels per second. */
 const CUSTOMER_SPEED = 120;
@@ -169,6 +171,8 @@ export class GameScene extends Phaser.Scene {
   private recipes!: RecipeBook;
   /** The settings panel opened from the top bar: frame rate and a new game. */
   private settings!: Settings;
+  /** Set once a new game is confirmed, so nothing saves the old one before the scene restarts. */
+  private startingOver = false;
   /** Per-frame view updates, each reading from `state`. */
   private views: (() => void)[] = [];
 
@@ -178,6 +182,7 @@ export class GameScene extends Phaser.Scene {
 
   create() {
     this.state = loadState();
+    this.startingOver = false;
     this.plotCentres = [];
     this.markers = [];
     this.workSpots = [];
@@ -208,7 +213,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   private setUpSaving() {
-    const save = () => saveState(this.state);
+    const save = () => {
+      if (!this.startingOver) saveState(this.state);
+    };
     const onHide = () => {
       if (document.visibilityState === 'hidden') save();
     };
@@ -223,6 +230,7 @@ export class GameScene extends Phaser.Scene {
 
   private startOver() {
     if (!window.confirm('Start a new game? Your saved progress will be lost.')) return;
+    this.startingOver = true;
     clearSave();
     this.scene.restart();
   }
@@ -308,7 +316,7 @@ export class GameScene extends Phaser.Scene {
         () => {
           this.add.image(x, y, 'plot').setDepth(-500);
           const plant = this.add.image(x, y + 10, plantTexture(plot.plant, 2)).setOrigin(0.5, 1).setDepth(y);
-          const growth = new ProgressBar(this, x, y + 26, 44, 0x9ccf6a, UI_DEPTH);
+          const growth = new ProgressBar(this, x, y + 26, 44, 0x9ccf6a, WORLD_UI_DEPTH);
           this.views.push(() => {
             const grown = plot.grown / GROW_MS[plot.plant];
             plant.setTexture(plantTexture(plot.plant, grown >= 1 ? 2 : grown >= 0.5 ? 1 : 0));
@@ -339,7 +347,7 @@ export class GameScene extends Phaser.Scene {
     this.label(label.x, label.y, 'Refining table');
     this.addObstacle(at.x, at.y, 'table', 84, 30);
     this.addPallets(id, PALLETS[id], [PLANTS, REFINED], [() => refiner.queue, () => refiner.output]);
-    const progress = new ProgressBar(this, at.x, at.y + 30, 60, 0xd8cfa8, UI_DEPTH);
+    const progress = new ProgressBar(this, at.x, at.y + 30, 60, 0xd8cfa8, WORLD_UI_DEPTH);
     this.addMarker(m.pickUp, 'pad-out', 'Pick up', () => pickUpFromRefiner(this.state, id), () => this.state.belts[beltOut].built);
     this.addMarker(m.drop, 'pad-in', 'Drop', () => dropAtRefiner(this.state, id), () => this.state.belts[beltIn].built && !this.carries(isPlant));
     this.addWorkSpot(m.work, id);
@@ -357,7 +365,7 @@ export class GameScene extends Phaser.Scene {
     this.label(label.x, label.y, 'Cauldron');
     this.addObstacle(at.x, at.y, 'cauldron', 60, 28).play('cauldron-boil');
     this.addPallets(id, PALLETS[id], [REFINED, POTIONS], [() => cauldron.contents, () => cauldron.output]);
-    const brewing = new ProgressBar(this, at.x, at.y + 34, 60, 0x58a35a, UI_DEPTH);
+    const brewing = new ProgressBar(this, at.x, at.y + 34, 60, 0x58a35a, WORLD_UI_DEPTH);
     this.addMarker(m.pickUp, 'pad-out', 'Pick up', () => pickUpFromCauldron(this.state, id), () => this.state.belts[beltOut].built);
     this.addMarker(m.drop, 'pad-in', 'Drop', () => dropInCauldron(this.state, id), () => this.state.belts[beltIn].built && !this.carries(isRefined));
     this.addWorkSpot(m.work, id);
@@ -619,7 +627,7 @@ export class GameScene extends Phaser.Scene {
     });
 
     // How far the counter's craftsmen are with handing over the next potion.
-    const serving = new ProgressBar(this, COUNTER.x, COUNTER.y + 36, 44, 0x9ccf6a, UI_DEPTH);
+    const serving = new ProgressBar(this, COUNTER.x, COUNTER.y + 36, 44, 0x9ccf6a, WORLD_UI_DEPTH);
     this.views.push(() => {
       const done = this.state.counter.serving ?? 0;
       serving.set(this.state.craftsmen.counter.level > 0 && done > 0 ? done / SERVE_MS : null);
@@ -630,8 +638,8 @@ export class GameScene extends Phaser.Scene {
     const customers = new Map<number, Phaser.GameObjects.Image>();
     for (let i = 0; i < MAX_ORDER_SLOTS; i++) {
       const { x, y } = customerPosition(i);
-      const wants = new IconRow(this, x, y - 52, UI_DEPTH);
-      const patience = new ProgressBar(this, x, y - 40, 40, 0xe0b84a, UI_DEPTH);
+      const wants = new IconRow(this, x, y - 52, WORLD_UI_DEPTH);
+      const patience = new ProgressBar(this, x, y - 40, 40, 0xe0b84a, WORLD_UI_DEPTH);
       this.views.push(() => {
         const order = this.state.orders[i];
         const there = order && customers.get(order.id)?.getData('arrived');
@@ -838,7 +846,7 @@ export class GameScene extends Phaser.Scene {
             strokeThickness: 3,
           })
           .setOrigin(0.5)
-          .setDepth(UI_DEPTH + 1);
+          .setDepth(WORLD_UI_DEPTH);
         this.tweens.add({ targets: text, y: text.y - 36, alpha: 0, duration: 1100, onComplete: () => text.destroy() });
       });
     });
@@ -849,7 +857,7 @@ export class GameScene extends Phaser.Scene {
     this.frameMs = Math.min(delta, MAX_STEP_MS);
     const feetY = this.feetY();
     const workingAt = this.workSpots.find((w) => w.zone.contains(this.feetX(), feetY))?.station ?? null;
-    tick(this.state, Math.min(delta, MAX_STEP_MS), workingAt);
+    tick(this.state, this.frameMs, workingAt);
     this.movePlayer();
 
     this.standOnMarkers();
