@@ -1,0 +1,38 @@
+name: Playthrough
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: playthrough-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  play:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      # Plays the whole loop in headless Chromium: harvest, refine, brew, sell, upgrade.
+      - run: npm run test:e2e
+      # Video and milestone screenshots of the run, pass or fail; open the report's index.html to browse them.
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playthrough
+          path: |
+            test-results
+            playwright-report
+          retention-days: 14
