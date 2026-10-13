@@ -8,17 +8,21 @@ game, as the root `AGENTS.md` asks.
 
 Anvilheart is a merge game in a smithy. A forge puts Rusty Daggers onto a 4x4 board of anvils,
 two swords of the same tier merge into the next tier (eight tiers), and adventurers at a counter of
-three desks buy swords at least as good as the one they ask for. Coins buy two upgrades.
+three desks buy swords at least as good as the one they ask for. Coins buy three upgrades.
 
 Implemented today:
 
 - The full loop: forge with a heat-up cooldown, drag to move, swap or merge, drag onto an
   adventurer to sell, adventurers arriving on a timer and leaving when their patience runs out.
-- Progression: `bestTier` raises the tier adventurers may ask for; upgrades Bellows (faster forge)
-  and Fine Ore (chance the forge makes a tier 2 sword).
+- Progression: `bestTier` raises the tier adventurers may ask for; upgrades Bellows (faster forge),
+  Fine Ore (chance the forge makes a tier 2 sword) and, last, Auto Forge (one rank, locked until
+  Bellows and Fine Ore are maxed): the forge then makes a sword by itself whenever it is hot and an
+  anvil is free, so the player only merges and sells. Once bought, its button switches it on and
+  off (`autoForge`).
 - One screen (`GameScene`) with a HUD, drag highlights, patience and heat bars, and a
   "New smithy" reset link in the bottom right corner.
-- Persistence of the board, coins, swords sold, best tier and upgrade ranks in `localStorage`.
+- Persistence of the board, coins, swords sold, best tier, upgrade ranks and the Auto Forge switch
+  in `localStorage`.
 
 Missing or rough:
 
@@ -42,13 +46,13 @@ File map (`src/`):
 - `main.ts`: creates the `Phaser.Game` (960x540, `Scale.FIT`, `pixelArt`) with `BootScene` and
   `GameScene`, calls `setupGame(game)`, and exposes `game` on window in dev builds.
 - `game/state.ts`: types (`GameState`, `Adventurer`, `GameEvent`, `Progress`), board and timing
-  constants, `freshProgress`, `newShop`, `progressOf`, and the upgrade formulas `forgeMs` and
-  `oreChance`.
+  constants, `freshProgress`, `newShop`, `progressOf`, and the upgrade formulas `forgeMs`,
+  `oreChance` and `autoForging`.
 - `game/sim.ts`: the rules as pure functions on `GameState`: `tick`, `forge`, `drop`, `sell`,
-  `buy`, plus the private `arrive`.
+  `buy`, `toggleAutoForge`, plus the private `arrive`.
 - `game/swords.ts`: the `SWORDS` table (name, price per tier), `MAX_TIER`, `swordOf`.
-- `game/upgrades.ts`: the `UPGRADES` table (name, blurb, price per rank), `UPGRADE_IDS`,
-  `nextPrice`.
+- `game/upgrades.ts`: the `UPGRADES` table (name, blurb, price per rank, and `after`: the upgrades
+  that must be maxed first), `UPGRADE_IDS`, `nextPrice`, `locked`.
 - `game/save.ts`: `loadProgress`, `saveProgress`, `clearProgress`.
 - `scenes/BootScene.ts`: bakes all textures, then starts `Game`.
 - `scenes/GameScene.ts`: draws the smithy, turns pointer input into sim calls, animates events,
@@ -69,12 +73,13 @@ How it runs:
   pixel grids into Phaser graphics and `generateTexture` them (keys `background`, `furnace-0/1`,
   `anvil`, `sword-<tier>`, `adventurer-<look>`). There are no asset files.
 - Tick: `GameScene.update(time)` takes `dt` from the frame timestamp (clamped to `MAX_STEP_MS`,
-  250ms), adds it to `clock`, and calls `tick(state, dt)`, which cools the forge, drains patience
-  and brings adventurers. Then it draws.
+  250ms), adds it to `clock`, and calls `tick(state, dt)`, which cools the forge, forges when
+  `autoForging`, drains patience and brings adventurers. If that pushed a `forged` event the scene
+  saves. Then it draws.
 - Input: scene `pointerdown` picks up a sword (`pickUp`), `pointermove` moves the held sprite,
   `pointerup` calls `putDown`, which calls `drop` if over an anvil or `sell` if over a desk with an
-  adventurer. `gameout` puts the sword back. Forge and upgrade buttons call `forge` and `buy`. Each
-  successful action calls `save()`.
+  adventurer. `gameout` puts the sword back. Forge and upgrade buttons call `forge` and `buy`; a
+  bought Auto Forge's button calls `toggleAutoForge` instead. Each successful action calls `save()`.
 - Rendering is mixed. Sword sprites (`swords[]`, one per slot) and visitor containers (`visitors`,
   keyed by adventurer id) are diffed against state. The `marks` and `hud` graphics are cleared and
   redrawn every frame (patience bars, merge and buyer outlines, HUD, heat bar). Sim functions push
@@ -88,24 +93,30 @@ State model (`src/game/state.ts`):
 - `adventurers` holds at most `DESKS` (3); each has a unique `desk`, `wants` (minimum tier),
   `patienceMs` counting down from `patience`, and `look`.
 - `heatMs` is 0 when the forge is ready. `nextVisitorMs` only counts down while a desk is free.
+- `autoForge` is the Auto Forge's on/off switch; it only matters once `ranks.auto` is 1. `buy`
+  turns it on when the Auto Forge is bought. `buy` refuses an upgrade while `locked` says one of
+  its `after` upgrades still has ranks left.
 - `orders` counts adventurers who arrived; when it is 0 the next one wants `FIRST_ORDER`. `newShop`
   sets it to `progress.sold`, so a returning player who has sold gets random orders at once.
 - Only `src/game/sim.ts` changes rules state; the scene replaces `state` wholesale only on load and
   on "New smithy". `bestTier` is raised by `forge` and `drop` and never falls.
 
 Persistence: one key of its own, `anvilheart-progress`, holding `Progress` as JSON (`coins`,
-`slots`, `sold`, `bestTier`, `ranks`). Adventurers, heat and timers are not saved. `loadProgress`
-merges over `freshProgress()`, so a new upgrade id in `ranks` loads as rank 0 from old saves.
+`slots`, `sold`, `bestTier`, `ranks`, `autoForge`). Adventurers, heat and timers are not saved.
+`loadProgress` merges over `freshProgress()`, so a new upgrade id in `ranks` loads as rank 0 and
+`autoForge` as false from old saves.
 
 Randomness and timing:
 
 - `Math.random` is only used in `src/game/sim.ts`: twice per `arrive` (order tier, skipped for the
-  first order, and look) and once per `forge` call (the Fine Ore roll, made even at rank 0).
+  first order, and look) and once per `forge` call (the Fine Ore roll, made even at rank 0),
+  including the forges the Auto Forge makes in `tick`.
 - Art uses `seeded()` from `src/art/pixelArt.ts`, not `Math.random`.
 - Game time comes only from the `time` Phaser passes to `update`; tweens use Phaser's clock.
 
 Data tables: sword names and prices in `src/game/swords.ts`; upgrade prices and blurbs in
-`src/game/upgrades.ts`, with their effects in `forgeMs` and `oreChance` in `src/game/state.ts`;
+`src/game/upgrades.ts`, with their effects in `forgeMs`, `oreChance` and `autoForging` in
+`src/game/state.ts`;
 forge time, visitor timing, patience, `FIRST_ORDER`, board size and desk count in
 `src/game/state.ts`; the order range (`Math.max(3, bestTier + 1)`) and the difficulty multiplier on
 patience in `arrive`.
@@ -149,9 +160,11 @@ patience in `arrive`.
   `src/art/swords.ts` (it must have one per tier or `bakeSwords` crashes). The 18x18 canvas in
   `bakeSword` already clips the tier 8 blade tip, so a tier 9 needs a bigger canvas or a shorter
   blade.
-- Add an upgrade: add the id to `UpgradeId` and `UPGRADES` in `src/game/upgrades.ts`, its rank 0 in
-  `freshProgress` in `src/game/state.ts`, its effect where the rule lives (a helper like `forgeMs`),
-  and a third y in `UPGRADE_BUTTONS.ys` in `src/scenes/layout.ts` (there are only two).
+- Add an upgrade: add the id to `UpgradeId` and `UPGRADES` in `src/game/upgrades.ts` (with `after`
+  if it waits for others), its rank 0 in `freshProgress` in `src/game/state.ts`, its effect where
+  the rule lives (a helper like `forgeMs`), and a y in `UPGRADE_BUTTONS.ys` in
+  `src/scenes/layout.ts`. The three buttons already fill the left column down to the bottom edge,
+  so a fourth needs a new place or smaller buttons.
 - Retune timing or prices: edit the constants above. Check the test still holds (first visitor
   within 5s, forge time above 192ms and under 5s, Shortsword price matching `SHORTSWORD_PRICE`).
 - Add an adventurer look: add a head to `HEADS` and a palette to `PALETTES` in

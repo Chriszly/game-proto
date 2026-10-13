@@ -44,6 +44,8 @@ export interface GameState {
   /** The best sword made so far. */
   bestTier: number;
   ranks: Record<UpgradeId, number>;
+  /** Whether the Auto Forge, once bought, is switched on. */
+  autoForge: boolean;
   orders: number;
   nextId: number;
   /** Things that just happened, for the scene to animate; it empties the list as it draws them. */
@@ -63,6 +65,7 @@ export interface Progress {
   sold: number;
   bestTier: number;
   ranks: Record<UpgradeId, number>;
+  autoForge: boolean;
 }
 
 export const freshProgress = (): Progress => ({
@@ -70,7 +73,8 @@ export const freshProgress = (): Progress => ({
   slots: new Array(SLOTS).fill(null),
   sold: 0,
   bestTier: 0,
-  ranks: { bellows: 0, ore: 0 },
+  ranks: { bellows: 0, ore: 0, auto: 0 },
+  autoForge: false,
 });
 
 export function newShop(progress: Progress): GameState {
@@ -88,6 +92,7 @@ export function newShop(progress: Progress): GameState {
     walkedOff: 0,
     bestTier: progress.bestTier,
     ranks: { ...progress.ranks },
+    autoForge: progress.autoForge === true,
     orders: progress.sold,
     nextId: 1,
     events: [],
@@ -100,9 +105,12 @@ export const progressOf = (s: GameState): Progress => ({
   sold: s.sold,
   bestTier: s.bestTier,
   ranks: { ...s.ranks },
+  autoForge: s.autoForge,
 });
 
 /** The forge's heat-up time with the bellows bought so far. */
 export const forgeMs = (s: GameState) => Math.round(FORGE_MS * Math.pow(0.8, s.ranks.bellows));
 /** The chance the forge makes an Iron Shortsword rather than a dagger. */
 export const oreChance = (s: GameState) => 0.2 * s.ranks.ore;
+/** Whether the forge makes swords by itself: the Auto Forge is bought and switched on. */
+export const autoForging = (s: GameState) => s.ranks.auto > 0 && s.autoForge;
