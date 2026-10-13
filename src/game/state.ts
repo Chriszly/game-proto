@@ -90,11 +90,11 @@ export interface Upgrade {
 /**
  * What can be upgraded: every station; the doctor's pack (carry more), boots (walk faster) and
  * sickle (harvest from further away); and at the guild, the gardens' growth, the belts' speed, the
- * shop's prices and an extra order slot.
+ * shop's prices, an extra order slot and how often customers come in.
  */
-export type UpgradeId = StationId | 'pack' | 'boots' | 'sickle' | 'growth' | 'belts' | 'prices' | 'slots';
+export type UpgradeId = StationId | 'pack' | 'boots' | 'sickle' | 'growth' | 'belts' | 'prices' | 'slots' | 'customers';
 export const DOCTOR_UPGRADES = ['pack', 'boots', 'sickle'] as const;
-export const GUILD_UPGRADES = ['growth', 'belts', 'prices', 'slots'] as const;
+export const GUILD_UPGRADES = ['growth', 'belts', 'prices', 'slots', 'customers'] as const;
 
 /** Each upgrade's highest level (levels count from 0), its first cost, which doubles per level, and name. */
 export const UPGRADES: Record<UpgradeId, { max: number; cost: number; name: string }> = {
@@ -110,6 +110,7 @@ export const UPGRADES: Record<UpgradeId, { max: number; cost: number; name: stri
   belts: { max: 2, cost: 30, name: 'Belts' },
   prices: { max: 2, cost: 20, name: 'Prices' },
   slots: { max: 1, cost: 30, name: 'Slots' },
+  customers: { max: 2, cost: 25, name: 'Customers' },
 };
 export const UPGRADE_IDS = Object.keys(UPGRADES) as UpgradeId[];
 /** Coins needed to take an upgrade from `level` to the next: stations 20, 40, 80, 160. */
@@ -165,6 +166,8 @@ export const MAX_ORDERS = 3;
 export const maxOrders = (state: GameState) => MAX_ORDERS + state.upgrades.slots.level;
 /** The most customers there can ever be, for laying out their places. */
 export const MAX_ORDER_SLOTS = MAX_ORDERS + UPGRADES.slots.max;
+/** Time until the next customer comes in: 12 to 20 seconds, and customers come half again as often per customers level. */
+export const orderInterval = (state: GameState, roll: number) => (12_000 + roll * 8_000) / (1 + 0.5 * state.upgrades.customers.level);
 /** How fast plants grow: a quarter faster per growth level. */
 export const growthSpeed = (state: GameState) => 1 + 0.25 * state.upgrades.growth.level;
 /** How fast belts run, and so how many items they carry a second: half again per belt level. */
