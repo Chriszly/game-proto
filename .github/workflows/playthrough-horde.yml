@@ -1,16 +1,27 @@
-name: Playthrough
+name: Playthrough Horde Defense
 
+# Plays Horde Defense's first round. Runs only when the game's folder or a shared file it builds
+# and tests with changes; every game has its own playthrough-<name>.yml like this one.
 on:
   push:
     branches: [main]
+    paths: &paths
+      - games/horde/**
+      - package.json
+      - package-lock.json
+      - tsconfig.json
+      - vite.config.ts
+      - playwright.config.ts
+      - .github/workflows/playthrough-horde.yml
   pull_request:
+    paths: *paths
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: playthrough-${{ github.ref }}
+  group: playthrough-horde-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -25,15 +36,15 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      # Checks the hub page, then plays the first round of every game in headless Chromium at 4x speed.
-      - run: npm run test:e2e
+      # Plays the first round in headless Chromium at 4x speed.
+      - run: npx playwright test --project horde
         env:
           PLAYTHROUGH_SPEED: 4
       # Video and milestone screenshots of the run, pass or fail; open the report's index.html to browse them.
       - if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playthrough
+          name: playthrough-horde
           path: |
             test-results
             playwright-report
