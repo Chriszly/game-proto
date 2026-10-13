@@ -17,9 +17,10 @@
       .game a { display: block; height: 100%; color: inherit; text-decoration: none; background: #2c2018;
         border: 3px solid #5a3f2a; box-shadow: 0 4px 0 #0e0a08; transition: transform 0.1s, border-color 0.1s; }
       .game a:hover, .game a:focus-visible { border-color: #f3c64e; transform: translateY(-2px); outline: none; }
-      .game img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover;
+      .game .cover { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover;
         border-bottom: 3px solid #5a3f2a; }
-      .game h2 { margin: 12px 14px 4px; font-size: 20px; color: #f3c64e; }
+      .game h2 { display: flex; align-items: center; gap: 10px; margin: 12px 14px 4px; font-size: 20px; color: #f3c64e; }
+      .game .icon { width: 32px; height: 32px; flex: none; image-rendering: pixelated; }
       .game p { margin: 0 14px 16px; color: #d8c7a6; }
       header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
       button { font: inherit; color: #f1e3c6; background: #3d2b1f; border: 2px solid #5a3f2a; padding: 6px 12px;
@@ -63,64 +64,64 @@
       <ul class="games">
         <li class="game">
           <a href="games/apothecary/">
-            <img src="./games/apothecary/cover.png" alt="The apothecary shop with a customer at the counter" />
-            <h2>Apothecary</h2>
+            <img class="cover" src="./games/apothecary/cover.png" alt="The apothecary shop with a customer at the counter" />
+            <h2><img class="icon" src="./games/apothecary/favicon.svg" alt="" />Apothecary</h2>
             <p>Run a medieval apothecary as a plague doctor: grow herbs, refine them, brew potions and sell them.</p>
           </a>
         </li>
         <li class="game">
           <a href="games/deadline/">
-            <img src="./games/deadline/cover.png" alt="A soldier behind sandbags shooting a zombie horde coming down a road" />
-            <h2>Deadline</h2>
+            <img class="cover" src="./games/deadline/cover.png" alt="A soldier behind sandbags shooting a zombie horde coming down a road" />
+            <h2><img class="icon" src="./games/deadline/favicon.svg" alt="" />Deadline</h2>
             <p>Hold the bottom of the road against waves of zombies: move left and right, and shoot crates open for upgrades.</p>
           </a>
         </li>
         <li class="game">
           <a href="games/palisade/">
-            <img src="./games/palisade/cover.png" alt="The ranger behind the barricade facing the Troll King" />
-            <h2>Palisade</h2>
+            <img class="cover" src="./games/palisade/cover.png" alt="The ranger behind the barricade facing the Troll King" />
+            <h2><img class="icon" src="./games/palisade/favicon.svg" alt="" />Palisade</h2>
             <p>Hold the barricade as a ranger: arrows fly on their own, every level-up offers three upgrades, and a boss comes every ten waves.</p>
           </a>
         </li>
         <li class="game">
           <a href="games/tiny-kingdom/">
-            <img src="./games/tiny-kingdom/cover.png" alt="A small island kingdom of farms, houses and towers between lakes and forests" />
-            <h2>Tiny Kingdom</h2>
+            <img class="cover" src="./games/tiny-kingdom/cover.png" alt="A small island kingdom of farms, houses and towers between lakes and forests" />
+            <h2><img class="icon" src="./games/tiny-kingdom/favicon.svg" alt="" />Tiny Kingdom</h2>
             <p>Place farms, houses and towers on a small island. Each one scores against its neighbours, so plan the layout before the tiles run out.</p>
           </a>
         </li>
         <li class="game">
-          <a href="games/rogue-runner/">
-            <img src="./games/rogue-runner/cover.png" alt="A knight leaping over coins on a road at dusk, a spiked log hanging ahead" />
-            <h2>Rogue Runner</h2>
+          <a href="games/hotfoot/">
+            <img class="cover" src="./games/hotfoot/cover.png" alt="A knight leaping over coins on a road at dusk, a spiked log hanging ahead" />
+            <h2><img class="icon" src="./games/hotfoot/favicon.svg" alt="" />Hotfoot</h2>
             <p>Run as a knight who never stops: tap to jump spikes and pits or slide under blades, and pick one of two boons at every checkpoint.</p>
           </a>
         </li>
         <li class="game">
-          <a href="games/merge-forge/">
-            <img src="./games/merge-forge/cover.png" alt="The smithy with swords on anvils and adventurers at the counter" />
-            <h2>Merge Forge</h2>
+          <a href="games/anvilheart/">
+            <img class="cover" src="./games/anvilheart/cover.png" alt="The smithy with swords on anvils and adventurers at the counter" />
+            <h2><img class="icon" src="./games/anvilheart/favicon.svg" alt="" />Anvilheart</h2>
             <p>Run a smithy: forge swords, drag matching ones together to merge them into better blades, and sell them to adventurers.</p>
           </a>
         </li>
         <li class="game">
-          <a href="games/pirate-raid/">
-            <img src="./games/pirate-raid/cover.png" alt="A pirate ship firing a broadside at an enemy sloop" />
-            <h2>Pirate Raid</h2>
+          <a href="games/broadside/">
+            <img class="cover" src="./games/broadside/cover.png" alt="A pirate ship firing a broadside at an enemy sloop" />
+            <h2><img class="icon" src="./games/broadside/favicon.svg" alt="" />Broadside</h2>
             <p>Captain a pirate ship: steer left and right, fire broadsides at enemy ships, and spend the plunder on your ship between waves.</p>
           </a>
         </li>
         <li class="game">
-          <a href="games/potion-puzzle/">
-            <img src="./games/potion-puzzle/cover.png" alt="A board of herbs, roots and crystals next to an order for a Healing Draught" />
-            <h2>Potion Puzzle</h2>
+          <a href="games/tincture-tinker/">
+            <img class="cover" src="./games/tincture-tinker/cover.png" alt="A board of herbs, roots and crystals next to an order for a Healing Draught" />
+            <h2><img class="icon" src="./games/tincture-tinker/favicon.svg" alt="" />TinctureTinker</h2>
             <p>Swap ingredients to match three or more and gather what each potion order asks for before the moves run out.</p>
           </a>
         </li>
         <li class="game">
-          <a href="games/delve/">
-            <img src="./games/delve/cover.png" alt="A knight with a hand of cards facing a slime in a dungeon room" />
-            <h2>Delve</h2>
+          <a href="games/catacomb/">
+            <img class="cover" src="./games/catacomb/cover.png" alt="A knight with a hand of cards facing a slime in a dungeon room" />
+            <h2><img class="icon" src="./games/catacomb/favicon.svg" alt="" />Catacomb</h2>
             <p>Fight through a short dungeon with a deck of cards: play a hand of five each turn, and add a new card after every fight.</p>
           </a>
         </li>

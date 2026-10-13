@@ -6,11 +6,11 @@ const GAMES = [
   { name: 'Deadline', path: '/games/deadline/' },
   { name: 'Palisade', path: '/games/palisade/' },
   { name: 'Tiny Kingdom', path: '/games/tiny-kingdom/' },
-  { name: 'Rogue Runner', path: '/games/rogue-runner/' },
-  { name: 'Merge Forge', path: '/games/merge-forge/' },
-  { name: 'Pirate Raid', path: '/games/pirate-raid/' },
-  { name: 'Potion Puzzle', path: '/games/potion-puzzle/' },
-  { name: 'Delve', path: '/games/delve/' },
+  { name: 'Hotfoot', path: '/games/hotfoot/' },
+  { name: 'Anvilheart', path: '/games/anvilheart/' },
+  { name: 'Broadside', path: '/games/broadside/' },
+  { name: 'TinctureTinker', path: '/games/tincture-tinker/' },
+  { name: 'Catacomb', path: '/games/catacomb/' },
 ];
 
 // Every page links a favicon that loads.
@@ -27,7 +27,13 @@ test('hub opens each game', async ({ page }, testInfo) => {
   await page.goto('/');
   await expect(page.locator('.game')).toHaveCount(GAMES.length);
   await expectFavicon(page);
-  await expect(page.locator('.game img').first()).toHaveJSProperty('complete', true);
+  await expect(page.locator('.game .cover').first()).toHaveJSProperty('complete', true);
+  // Each card shows its game's favicon next to the name.
+  const icons = page.locator('.game h2 .icon');
+  await expect(icons).toHaveCount(GAMES.length);
+  for (const icon of await icons.all()) {
+    await expect.poll(() => icon.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
+  }
   testInfo.attach('hub', { body: await page.screenshot({ path: testInfo.outputPath('hub.png') }), contentType: 'image/png' });
 
   for (const { name, path } of GAMES) {
