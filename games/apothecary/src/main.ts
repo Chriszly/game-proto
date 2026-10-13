@@ -19,7 +19,9 @@ const game = new Phaser.Game({
   },
   physics: {
     default: 'arcade',
-    arcade: { debug: false },
+    // Step physics once per drawn frame with its real delta, so walking is as smooth as the chosen
+    // frame rate rather than stepping at a fixed 60Hz.
+    arcade: { debug: false, fixedStep: false },
   },
   scene: [BootScene, GameScene],
 });

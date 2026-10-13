@@ -220,10 +220,10 @@ export const SERVE_MS = 1_500;
 /** Least time between two items in a belt's lane, so they don't overlap. */
 export const BELT_GAP_MS = 600;
 /**
- * How far along the cauldron belts are when they meet, 104 of their 532 pixels (see BELT_PATHS in
- * src/scenes/layout.ts). Both are the same length, so from there on their items are side by side.
+ * How far along the cauldron belts are where they meet, which src/scenes/layout.ts checks against
+ * BELT_PATHS. Both are the same length, so from there on their items are side by side.
  */
-export const BELT_JOIN_MS = Math.round((BELT_MS.cauldron * 104) / 532);
+export const BELT_JOIN_MS = 1_075;
 /**
  * Each belt has a lane for every kind of goods it carries, side by side: plants from the gardens,
  * refined goods from the tables, potions from the cauldrons. Goods in one lane don't wait for the

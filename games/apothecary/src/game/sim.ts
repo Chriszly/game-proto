@@ -162,13 +162,13 @@ function giveFromBelt(state: GameState, belt: BeltId, id: ItemId) {
 }
 
 /**
- * The two cauldron belts share their run up to the counter, so in each lane an item keeps a gap
- * behind the other belt's items as well, from a gap before the join on. Returns the other belt's
- * items near or past the join, which only matter to a cauldron belt.
+ * The two cauldron belts share their run up to the counter, so in each lane an item from a gap
+ * before the join on keeps a gap behind the other belt's items there as well. Returns the other
+ * belt's items near or past the join, which only matter to a cauldron belt.
  */
 function mergingItems(state: GameState, id: BeltId): BeltItem[] {
   if (id !== 'cauldron' && id !== 'cauldron2') return [];
-  const other = state.belts[id === 'cauldron' ? 'cauldron2' : 'cauldron'];
+  const other = state.belts[OTHER_LINE[id]];
   return other.built ? other.items.filter((item) => item.at >= BELT_JOIN_MS - BELT_GAP_MS) : [];
 }
 
@@ -191,7 +191,7 @@ function runBelt(state: GameState, id: BeltId, dt: number) {
     const front = !ahead.has(item.id);
     if (front && item.at >= length && giveFromBelt(state, id, item.id)) return false;
     let room = front ? length : ahead.get(item.id)!.at - BELT_GAP_MS;
-    for (const other of merging) {
+    for (const other of item.at >= BELT_JOIN_MS - BELT_GAP_MS ? merging : []) {
       // The first line's belt goes first when two items reach the join together.
       const first = other.at > item.at || (other.at === item.at && id === 'cauldron2');
       if (other.id === item.id && first) room = Math.min(room, other.at - BELT_GAP_MS);

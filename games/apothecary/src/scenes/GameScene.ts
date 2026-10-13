@@ -24,7 +24,6 @@ import {
   type ExpansionPart,
   type Feedback,
 } from '../game/sim';
-import { physicsRate } from '../frameCap';
 import { clearSave, loadState, saveState } from '../game/save';
 import {
   BELTS,
@@ -182,8 +181,6 @@ export class GameScene extends Phaser.Scene {
     this.waypoint = null;
     this.blockedAreas = [];
     this.physics.world.setBounds(0, HUD_HEIGHT, WORLD.w, WORLD.h - HUD_HEIGHT);
-    // Step physics with every frame at a high frame rate, so walking is as smooth as the drawing.
-    this.physics.world.setFPS(physicsRate());
     this.obstacles = this.physics.add.staticGroup();
 
     this.drawGrounds();
@@ -873,7 +870,6 @@ export class GameScene extends Phaser.Scene {
     if (this.cursors.up.isDown || this.wasd.up.isDown) dir.y -= 1;
     if (this.cursors.down.isDown || this.wasd.down.isDown) dir.y += 1;
 
-    let turned = false;
     if (dir.lengthSq() > 0) {
       this.pointerTarget = null;
     } else if (this.pointerTarget) {
@@ -884,9 +880,13 @@ export class GameScene extends Phaser.Scene {
       // overshoot it back and forth.
       const passed = this.heading !== null && dir.dot(this.heading) <= 0;
       if (this.waypoint && (dir.length() < 6 || passed)) {
-        // Route on from the corner itself, wherever on its edges the feet stopped.
-        this.waypoint = this.routeAround(this.pointerTarget, this.waypoint);
-        turned = true;
+        // Settle the feet on the corner, so the next leg starts clear of the station, and head on from
+        // there. (Arcade's reset leaves the body's centre off until the next step, so it isn't read.)
+        const corner = this.waypoint;
+        this.player.body!.reset(corner.x, this.player.y + dir.y);
+        this.waypoint = this.routeAround(this.pointerTarget, corner);
+        const next = this.waypoint ?? this.pointerTarget;
+        dir.set(next.x - corner.x, next.y - corner.y);
       } else if (!this.waypoint && (dir.length() < 4 || passed)) {
         // Settle the feet on the spot itself, a step back if the last frame carried them past it.
         if (passed) this.player.body!.reset(target.x, this.player.y + dir.y);
@@ -896,17 +896,15 @@ export class GameScene extends Phaser.Scene {
     }
 
     dir.normalize();
-    // Heading towards a new corner or spot is only known from the next frame.
-    this.heading = this.pointerTarget && !turned && dir.lengthSq() > 0 ? dir.clone() : null;
+    this.heading = this.pointerTarget && dir.lengthSq() > 0 ? dir.clone() : null;
     dir.scale(SPEED * walkSpeed(this.state));
     this.player.setVelocity(dir.x, dir.y);
     this.animatePlayer(dir);
   }
 
   /**
-   * When a station blocks the straight line from the doctor's feet, or the corner they just reached,
-   * to `to`, returns the corner of that station to walk to first (the one making the shorter trip);
-   * otherwise null.
+   * When a station blocks the straight line from the doctor's feet, or `from`, to `to`, returns the
+   * corner of that station to walk to first (the one making the shorter trip); otherwise null.
    */
   private routeAround(to: Phaser.Math.Vector2, from = new Phaser.Math.Vector2(this.player.x, this.feetY())): Phaser.Math.Vector2 | null {
     const blocks = (a: Phaser.Math.Vector2, b: Phaser.Math.Vector2, area: Phaser.Geom.Rectangle) =>
@@ -920,7 +918,7 @@ export class GameScene extends Phaser.Scene {
         new Phaser.Math.Vector2(area.right, area.top),
         new Phaser.Math.Vector2(area.left, area.bottom),
         new Phaser.Math.Vector2(area.right, area.bottom),
-      ].filter((c) => !c.equals(from) && !blocks(from, c, inner));
+      ].filter((c) => from.distance(c) > 0.5 && !blocks(from, c, inner));
       corners.sort((a, b) => from.distance(a) + a.distance(to) - (from.distance(b) + b.distance(to)));
       return corners[0] ?? null;
     }

@@ -1,4 +1,4 @@
-import { PLOTS_PER_GARDEN, type BeltId } from '../game/state';
+import { BELT_JOIN_MS, BELT_MS, PLOTS_PER_GARDEN, type BeltId } from '../game/state';
 
 // World positions for the U-shaped apothecary. Goods flow down the left arm (gardens, refining
 // table), along the bottom (cauldron) and up the middle into the shop at the top. The right arm is
@@ -180,6 +180,15 @@ export const BELT_PATHS: Record<BeltId, { x: number; y: number }[][]> = {
   refiner2: [[{ x: 870, y: 566 }, { x: 870, y: 720 }, { x: 776, y: 720 }]],
   cauldron2: [[{ x: 704, y: 720 }, { x: 600, y: 720 }, { x: 600, y: 292 }]],
 };
+
+// The game spaces the two cauldron belts' items from where they meet; check it still matches the paths.
+const pathLength = (path: { x: number; y: number }[]) =>
+  path.slice(1).reduce((n, p, i) => n + Math.hypot(p.x - path[i].x, p.y - path[i].y), 0);
+for (const id of ['cauldron', 'cauldron2'] as const) {
+  const [run] = BELT_PATHS[id];
+  const join = (BELT_MS[id] * pathLength(run.slice(0, 2))) / pathLength(run);
+  if (Math.abs(join - BELT_JOIN_MS) > 1) throw new Error(`BELT_JOIN_MS should be ${Math.round(join)} for the ${id} belt`);
+}
 /**
  * Where the doctor stands to pay for each belt; the cauldron belts' markers face the courtyard. The
  * garden belts' markers stand out of a long sickle's reach of the mandrakes, so the hands the belt

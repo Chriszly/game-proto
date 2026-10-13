@@ -6,10 +6,7 @@ export type FrameRate = (typeof FRAME_RATES)[number];
 
 const KEY = 'apothecary-fps';
 const DEFAULT: FrameRate = 60;
-/**
- * Frames that come up to this early still run, so a display whose frames jitter, or that runs a hair
- * faster than the cap, keeps them all.
- */
+/** Frames that come up to this early still run, so a display whose frames jitter keeps them all. */
 const SLACK_MS = 1;
 
 /** The chosen frame rate, kept apart from the save so a new game keeps it. */
@@ -25,9 +22,6 @@ function loadFrameRate(): FrameRate {
 let fps = loadFrameRate();
 
 export const frameRate = () => fps;
-
-/** How often physics steps: with every frame, but never under 60 times a second. */
-export const physicsRate = () => Math.max(60, fps);
 
 export function setFrameRate(rate: FrameRate) {
   fps = rate;
@@ -52,9 +46,8 @@ export function capFrameRate(game: Phaser.Game) {
   loop.step = (time: number) => {
     if (time < next - SLACK_MS) return;
     const interval = 1000 / fps;
-    // Behind by more than a frame (a hidden tab, a slow frame, a higher cap), or a frame early: count
-    // again from now. Otherwise keep to the schedule, so skipped frames don't lower the frame rate.
-    next = time - next > interval || time < next ? time + interval : next + interval;
+    // Behind by more than a frame (a hidden tab, a slow frame, a higher cap): count again from now.
+    next = time - next > interval ? time + interval : next + interval;
     step(time);
   };
 }
