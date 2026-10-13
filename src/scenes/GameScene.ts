@@ -4,6 +4,7 @@ import { GROW_MS, ITEMS, REFINE } from '../game/items';
 import { harvest, serveOrders, tick, useCauldron, useRefiner, type Feedback } from '../game/sim';
 import { clearSave, loadState, saveState } from '../game/save';
 import { CARRY_CAPACITY, MAX_ORDERS, type GameState } from '../game/state';
+import { BackStack } from '../ui/BackStack';
 import { IconRow } from '../ui/IconRow';
 import { ProgressBar } from '../ui/ProgressBar';
 import { CAULDRON, COUNTER, GARDEN, HUD_HEIGHT, REFINER, SHOP, customerPosition, plotPosition } from './layout';
@@ -203,7 +204,7 @@ export class GameScene extends Phaser.Scene {
       this.add.rectangle(x, HUD_HEIGHT / 2, 32, 32, 0x3a2c22).setStrokeStyle(2, 0x8a6239).setDepth(UI_DEPTH);
       return this.add.image(x, HUD_HEIGHT / 2, 'item-sage').setScale(1.5).setDepth(UI_DEPTH);
     });
-    const overhead = new IconRow(this, 0, 0, UI_DEPTH, 12);
+    const pack = new BackStack(this);
 
     this.prompt = this.add
       .text(0, 0, '', { ...style, fontSize: '12px', backgroundColor: '#1b1410cc', padding: { x: 4, y: 2 } })
@@ -217,8 +218,7 @@ export class GameScene extends Phaser.Scene {
         slot.setVisible(!!item);
         if (item) slot.setTexture(`item-${item}`);
       });
-      overhead.moveTo(this.player.x, this.player.y - 44, UI_DEPTH);
-      overhead.set(this.state.carrying);
+      pack.update(this.player, this.state.carrying);
     });
   }
 
