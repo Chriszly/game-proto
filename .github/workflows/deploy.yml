@@ -1,4 +1,4 @@
-name: Deploy to GitHub Pages
+name: Build
 
 on:
   push:
@@ -26,13 +26,19 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      - if: github.event_name != 'pull_request'
+      # Downloadable build from the run's summary page; unzip and serve dist/ to play.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: game-build
+          path: dist
+      - if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-pages-artifact@v3
         with:
           path: dist
 
+  # Manual only: GitHub Pages is unavailable while the repo is private.
   deploy:
-    if: github.event_name != 'pull_request'
+    if: github.event_name == 'workflow_dispatch'
     needs: build
     runs-on: ubuntu-latest
     environment:
