@@ -306,10 +306,35 @@ const BELT_NAMES: Record<BeltId, string> = {
   cauldron2: 'Cauldron belt',
 };
 
-/** Pays a handful of coins towards building a belt, which starts running once fully paid. */
+/** What each belt carries: plants from the gardens, refined goods from the tables, potions from the cauldrons. */
+const BELT_CARRIES: Record<BeltId, (id: ItemId) => boolean> = {
+  garden: isPlant,
+  refiner: isRefined,
+  cauldron: isPotion,
+  garden2: isPlant,
+  refiner2: isRefined,
+  cauldron2: isPotion,
+};
+
+/**
+ * Pays a handful of coins towards building a belt, which starts running once fully paid. The belt
+ * takes over that step of the work, so the goods it carries are cleared from the doctor's hands.
+ */
 export function payBelt(state: GameState, id: BeltId): Feedback | null {
   if (!beltBuildable(state, id)) return null;
-  return payToward(state, state.belts[id], BELT_COST[id], `${BELT_NAMES[id]} built!`);
+  const feedback = payToward(state, state.belts[id], BELT_COST[id], `${BELT_NAMES[id]} built!`);
+  if (!feedback || !state.belts[id].built) return feedback;
+  const cleared = state.carrying.filter(BELT_CARRIES[id]).length;
+  state.carrying = state.carrying.filter((item) => !BELT_CARRIES[id](item));
+  return cleared > 0 ? [...feedback, `- ${cleared} from hands`] : feedback;
+}
+
+/** Drops everything the doctor carries; the goods are gone. */
+export function dropAll(state: GameState): Feedback | null {
+  if (state.carrying.length === 0) return null;
+  const dropped = state.carrying.length;
+  state.carrying = [];
+  return [`Dropped ${dropped}`];
 }
 
 /** What can be built on the expansion: its land first, then a field, the table or the cauldron. */

@@ -3,8 +3,9 @@ import { expect, test, type Page } from '@playwright/test';
 // Plays the whole loop with real inputs (clicks to walk, as on a phone): harvest both gardens,
 // refine, brew, sell at the counter until there are enough coins, then buy an upgrade. Sell more to
 // buy the expansion's land, a field, a refining table and a cauldron, and play a round on that
-// second line. Then kit the doctor out with a bigger pack, faster boots and a longer sickle, and
-// last buy the conveyor belt that carries plants from the gardens to the table.
+// second line. Then kit the doctor out with a bigger pack, faster boots and a longer sickle, buy
+// the conveyor belt that carries plants from the gardens to the table, and last drop everything
+// carried with the Drop all button.
 // Game state is only read, through the `game` object the dev build puts on window.
 
 type Point = { x: number; y: number };
@@ -55,6 +56,9 @@ const WHEAT2_XS = [1038, 1128, 948];
 const WHEAT2_FIELD = { x: 1038, y: 152, cost: 25 };
 const REFINER2 = { drop: { x: 870, y: 468 }, work: { x: 770, y: 540 }, pickUp: { x: 870, y: 612 }, cost: 50 };
 const CAULDRON2 = { drop: { x: 820, y: 728 }, work: { x: 750, y: 650 }, pickUp: { x: 660, y: 728 }, cost: 75 };
+
+/** The Drop all button in the top bar, on screen rather than in the world. */
+const DROP_ALL = { x: 296, y: 22 };
 
 const UPGRADE_COST = 20;
 /**
@@ -411,10 +415,13 @@ test('plays the whole game loop', async ({ page }, testInfo) => {
 
   // Faster boots: the doctor covers a fifth more ground in the same time. Head off along the top of
   // the yard and, once under way, measure how far five steps of game time take them.
-  const box = (await canvas.boundingBox())!;
+  const strideBox = (await canvas.boundingBox())!;
   const view = await game.view();
   const away = { x: 400, y: SHOP_DOOR.y };
-  await page.mouse.click(box.x + ((away.x - view.x) * box.width) / VIEW.w, box.y + ((away.y - view.y) * box.width) / VIEW.w);
+  await page.mouse.click(
+    strideBox.x + ((away.x - view.x) * strideBox.width) / VIEW.w,
+    strideBox.y + ((away.y - view.y) * strideBox.width) / VIEW.w,
+  );
   await play(0, async () => false);
   const from = await game.feet();
   const ms = STEP_MS * 5;
@@ -446,22 +453,33 @@ test('plays the whole game loop', async ({ page }, testInfo) => {
   await snap('9-outfitted');
 
   // Conveyor belt: pay for it on its build marker. From then on ripe plants ride from the gardens to
-  // the refining table by themselves.
+  // the refining table by themselves, so the plants the doctor carries are cleared from their hands.
   const saved = await game.state();
   expect(saved.belts.garden).toEqual({ built: false, paid: 0, items: [] });
+  expect(saved.carrying.length).toBeGreaterThan(0);
   await walkTo(GARDEN_BELT);
   s = await until('garden belt built', (s) => s.belts.garden.built);
   expect(s.coins).toBe(saved.coins - GARDEN_BELT.cost);
-  // Wait by the table while the belt brings in the plants. Whatever the doctor picked up passing the
-  // mandrakes stays in hand: the table's drop marker went away with the belt.
-  // Anything that reaches the table from here on came by belt.
-  const inHand = s.carrying;
+  expect(s.carrying).toEqual([]);
+  // Wait by the table while the belt brings in the plants; anything that reaches the table from here
+  // on came by belt. The doctor's hands stay empty: the table's drop marker went away with the belt.
   const queued = s.refiner.queue.length + s.refiner.output.length;
   await walkTo(REFINER.drop, REFINER.work);
   await until('a plant on the garden belt', (s) => s.belts.garden.items.length > 0, 20_000);
   await snap('10-belt');
   s = await until('the belt delivered to the refining table', (s) => s.refiner.queue.length + s.refiner.output.length > queued, 20_000);
-  expect(s.carrying).toEqual(inHand);
+  expect(s.carrying).toEqual([]);
+
+  // Drop all: pick up refined goods, then tap the button in the top bar to empty the doctor's hands.
+  await until('goods refined at the table', (s) => s.refiner.output.length >= 2, 20_000);
+  await walkTo(REFINER.pickUp);
+  await until('refined goods in hand', (s) => s.carrying.length >= 2);
+  await walkTo(REFINER.work);
+  const box = (await canvas.boundingBox())!;
+  await page.mouse.click(box.x + (DROP_ALL.x * box.width) / VIEW.w, box.y + (DROP_ALL.y * box.width) / VIEW.w);
+  await until('hands emptied', (s) => s.carrying.length === 0, 1_000);
+  // Tapping the top bar doesn't walk the doctor.
+  expect((await game.feet()).moving).toBe(false);
   // Only what the playthrough meant to buy was paid for; no walk clipped another purple marker.
   const unpaid = { level: 0, paid: 0 };
   const bought = { level: 1, paid: 0 };
