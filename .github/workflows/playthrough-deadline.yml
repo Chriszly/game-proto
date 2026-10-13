@@ -1,21 +1,13 @@
 name: Playthrough Deadline
 
-# Plays Deadline's first round. Runs only when the game's folder or a shared file it builds
-# and tests with changes; every game has its own playthrough-<name>.yml like this one.
+# Plays Deadline's first round. Runs only when the game's own folder (or this
+# workflow) changes; every game has its own playthrough-<name>.yml like this one.
+# It runs on pull requests only, not on pushes to main, so a merge doesn't replay it.
 on:
-  push:
-    branches: [main]
-    paths: &paths
-      - games/deadline/**
-      - shared/**
-      - package.json
-      - package-lock.json
-      - tsconfig.json
-      - vite.config.ts
-      - playwright.config.ts
-      - .github/workflows/playthrough-deadline.yml
   pull_request:
-    paths: *paths
+    paths:
+      - games/deadline/**
+      - .github/workflows/playthrough-deadline.yml
   workflow_dispatch:
 
 permissions:
