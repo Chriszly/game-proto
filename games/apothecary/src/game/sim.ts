@@ -14,7 +14,6 @@ import {
   BELT_COST,
   BELT_ENDS,
   BELT_GAP_MS,
-  BELT_JOIN_MS,
   BELT_LANES,
   BELT_MS,
   BELTS,
@@ -52,6 +51,8 @@ import {
   type Upgrade,
   type UpgradeId,
 } from './state';
+// Where the cauldron belts meet comes from their paths; the layout is plain data, free of Phaser too.
+import { BELT_JOIN_MS } from '../scenes/layout';
 
 // Pure game rules, kept free of Phaser so later automation can drive the same functions.
 
@@ -165,12 +166,16 @@ function giveFromBelt(state: GameState, belt: BeltId, id: ItemId) {
 /**
  * The two cauldron belts share their run up to the counter, so in each lane an item from a gap
  * before the join on keeps a gap behind the other belt's items there as well. Returns the other
- * belt's items near or past the join, which only matter to a cauldron belt.
+ * belt's items near or past the join, by lane, which only matter to a cauldron belt.
  */
-function mergingItems(state: GameState, id: BeltId): BeltItem[] {
-  if (id !== 'cauldron' && id !== 'cauldron2') return [];
+function mergingItems(state: GameState, id: BeltId) {
+  const byLane = new Map<ItemId, BeltItem[]>();
   const other = state.belts[OTHER_LINE[id]];
-  return other.built ? other.items.filter((item) => item.at >= BELT_JOIN_MS - BELT_GAP_MS) : [];
+  if ((id !== 'cauldron' && id !== 'cauldron2') || !other.built) return byLane;
+  for (const item of other.items) {
+    if (item.at >= BELT_JOIN_MS - BELT_GAP_MS) byLane.set(item.id, [...(byLane.get(item.id) ?? []), item]);
+  }
+  return byLane;
 }
 
 /**
@@ -188,14 +193,17 @@ function runBelt(state: GameState, id: BeltId, dt: number) {
   // The item last seen in each lane: the one ahead of the next in that lane, and in the end the rearmost.
   const ahead = new Map<ItemId, BeltItem>();
   const merging = mergingItems(state, id);
+  const joining = (item: BeltItem) => item.at + step >= BELT_JOIN_MS - BELT_GAP_MS;
   belt.items = belt.items.filter((item) => {
     const front = !ahead.has(item.id);
     if (front && item.at >= length && giveFromBelt(state, id, item.id)) return false;
     let room = front ? length : ahead.get(item.id)!.at - BELT_GAP_MS;
-    for (const other of item.at + step >= BELT_JOIN_MS - BELT_GAP_MS ? merging : []) {
-      // The first line's belt goes first when two items reach the join together.
-      const first = other.at > item.at || (other.at === item.at && id === 'cauldron2');
-      if (other.id === item.id && first) room = Math.min(room, other.at - BELT_GAP_MS);
+    if (joining(item)) {
+      for (const other of merging.get(item.id) ?? []) {
+        // The first line's belt goes first when two items reach the join together.
+        const first = other.at > item.at || (other.at === item.at && id === 'cauldron2');
+        if (first) room = Math.min(room, other.at - BELT_GAP_MS);
+      }
     }
     item.at = Math.max(item.at, Math.min(item.at + step, room));
     ahead.set(item.id, item);
@@ -429,7 +437,7 @@ const OTHER_LINE: Record<BeltId, BeltId> = {
  * Whether a belt's step is still done by hand: it isn't built, while a station at its ends stands
  * (not counting the counter both lines share), or for the second line's garden belt, a field.
  */
-const doneByHand = (state: GameState, id: BeltId) =>
+export const doneByHand = (state: GameState, id: BeltId) =>
   !state.belts[id].built &&
   (BELT_ENDS[id].some((station) => station !== 'counter' && stationBuilt(state, station)) ||
     (id === 'garden2' && state.expansion.fields.some((f) => f.built)));

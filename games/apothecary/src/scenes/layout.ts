@@ -1,4 +1,4 @@
-import { BELT_JOIN_MS, BELT_MS, PLOTS_PER_GARDEN, type BeltId } from '../game/state';
+import { BELT_MS, PLOTS_PER_GARDEN, type BeltId } from '../game/state';
 
 // World positions for the U-shaped apothecary. Goods flow down the left arm (gardens, refining
 // table), along the bottom (cauldron) and up the middle into the shop at the top. The right arm is
@@ -181,15 +181,15 @@ export const BELT_PATHS: Record<BeltId, { x: number; y: number }[][]> = {
   cauldron2: [[{ x: 704, y: 720 }, { x: 600, y: 720 }, { x: 600, y: 292 }]],
 };
 
-// The game spaces the two cauldron belts' items from where they meet; the dev build (and so the
-// playthrough) checks it still matches the paths.
-const pathLength = (path: { x: number; y: number }[]) =>
-  path.slice(1).reduce((n, p, i) => n + Math.hypot(p.x - path[i].x, p.y - path[i].y), 0);
-for (const id of import.meta.env.DEV ? (['cauldron', 'cauldron2'] as const) : []) {
-  const [run] = BELT_PATHS[id];
-  const join = (BELT_MS[id] * pathLength(run.slice(0, 2))) / pathLength(run);
-  if (Math.abs(join - BELT_JOIN_MS) > 1) throw new Error(`BELT_JOIN_MS should be ${Math.round(join)} for the ${id} belt`);
-}
+/** The length of a belt run in pixels. */
+export const runLength = (run: { x: number; y: number }[]) =>
+  run.slice(1).reduce((n, p, i) => n + Math.hypot(p.x - run[i].x, p.y - run[i].y), 0);
+
+/**
+ * How far along the cauldron belts are where they meet, at the end of their first stretch. Both are
+ * the same length, so from there on their items are side by side.
+ */
+export const BELT_JOIN_MS = (BELT_MS.cauldron * runLength(BELT_PATHS.cauldron[0].slice(0, 2))) / runLength(BELT_PATHS.cauldron[0]);
 /**
  * Where the doctor stands to pay for each belt; the cauldron belts' markers face the courtyard. The
  * garden belts' markers stand out of a long sickle's reach of the mandrakes, so the hands the belt

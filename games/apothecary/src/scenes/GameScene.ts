@@ -7,6 +7,7 @@ import { signTexture } from '../art/ui';
 import { GROW_MS, PLANTS, POTIONS, REFINE, REFINED, isPlant, isPotion, isRefined, type ItemId } from '../game/items';
 import {
   collectTill,
+  doneByHand,
   dropAll,
   dropAtRefiner,
   dropInCauldron,
@@ -594,8 +595,7 @@ export class GameScene extends Phaser.Scene {
     this.addPallets('counter', PALLETS.counter, [POTIONS, []], [() => this.state.counter.shelf, () => []]);
     // Potions are stocked by hand until every cauldron standing has its belt to the counter, and
     // whenever the doctor carries one.
-    const allBelted = () =>
-      this.state.belts.cauldron.built && (!stationBuilt(this.state, 'cauldron2') || this.state.belts.cauldron2.built);
+    const allBelted = () => !doneByHand(this.state, 'cauldron') && !doneByHand(this.state, 'cauldron2');
     this.addMarker(COUNTER_MARKERS.drop, 'pad-in', 'Drop', () => stockShelf(this.state), () => allBelted() && !this.carries(isPotion));
     this.addMarker(COUNTER_MARKERS.pickUp, 'pad-out', 'Coins', () => collectTill(this.state));
     this.addWorkSpot(COUNTER_MARKERS.work, 'counter');
@@ -909,27 +909,38 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
+   * Each station's blocked area slightly shrunk, which walking is tested against so lines along an
+   * edge or from a corner count as clear.
+   */
+  private innerArea(area: Phaser.Geom.Rectangle) {
+    return new Phaser.Geom.Rectangle(area.x + 2, area.y + 2, area.width - 4, area.height - 4);
+  }
+
+  /**
    * When a station blocks the straight line from the doctor's feet to `to`, returns the corner of
-   * that station to walk to first (the one making the shorter trip); otherwise null.
+   * the nearest such station to walk to first (the one making the shorter trip); otherwise null.
    */
   private routeAround(to: Phaser.Math.Vector2): Phaser.Math.Vector2 | null {
     const from = new Phaser.Math.Vector2(this.player.x, this.feetY());
+    const line = (a: Phaser.Math.Vector2, b: Phaser.Math.Vector2) => new Phaser.Geom.Line(a.x, a.y, b.x, b.y);
     const blocks = (a: Phaser.Math.Vector2, b: Phaser.Math.Vector2, area: Phaser.Geom.Rectangle) =>
-      Phaser.Geom.Intersects.LineToRectangle(new Phaser.Geom.Line(a.x, a.y, b.x, b.y), area);
-    for (const area of this.blockedAreas) {
-      // Test against a slightly smaller area so lines along an edge or from a corner count as clear.
-      const inner = new Phaser.Geom.Rectangle(area.x + 2, area.y + 2, area.width - 4, area.height - 4);
-      if (inner.contains(from.x, from.y) || inner.contains(to.x, to.y) || !blocks(from, to, inner)) continue;
-      const corners = [
-        new Phaser.Math.Vector2(area.left, area.top),
-        new Phaser.Math.Vector2(area.right, area.top),
-        new Phaser.Math.Vector2(area.left, area.bottom),
-        new Phaser.Math.Vector2(area.right, area.bottom),
-      ].filter((c) => from.distance(c) > 0.5 && !blocks(from, c, inner));
-      corners.sort((a, b) => from.distance(a) + a.distance(to) - (from.distance(b) + b.distance(to)));
-      return corners[0] ?? null;
-    }
-    return null;
+      Phaser.Geom.Intersects.LineToRectangle(line(a, b), area);
+    // How far along the way each station in it is.
+    const inTheWay = this.blockedAreas
+      .map((area) => ({ area, inner: this.innerArea(area) }))
+      .filter(({ inner }) => !inner.contains(from.x, from.y) && !inner.contains(to.x, to.y) && blocks(from, to, inner))
+      .map((s) => ({ ...s, d: Math.min(...Phaser.Geom.Intersects.GetLineToRectangle(line(from, to), s.inner).map((p) => from.distance(p))) }))
+      .sort((a, b) => a.d - b.d);
+    if (inTheWay.length === 0) return null;
+    const { area, inner } = inTheWay[0];
+    const corners = [
+      new Phaser.Math.Vector2(area.left, area.top),
+      new Phaser.Math.Vector2(area.right, area.top),
+      new Phaser.Math.Vector2(area.left, area.bottom),
+      new Phaser.Math.Vector2(area.right, area.bottom),
+    ].filter((c) => from.distance(c) > 0.5 && !blocks(from, c, inner));
+    corners.sort((a, b) => from.distance(a) + a.distance(to) - (from.distance(b) + b.distance(to)));
+    return corners[0] ?? null;
   }
 
   private feetY() {
@@ -965,8 +976,8 @@ export class GameScene extends Phaser.Scene {
    */
   private reachable(to: Phaser.Math.Vector2) {
     for (const area of this.blockedAreas) {
-      // The feet can't get closer to the station's body than half their size: 15 by 7.5 pixels.
-      if (!new Phaser.Geom.Rectangle(area.x + 3, area.y + 2.5, area.width - 6, area.height - 5).contains(to.x, to.y)) continue;
+      // The same area walking routes around, so the moved spot gets routed to.
+      if (!this.innerArea(area).contains(to.x, to.y)) continue;
       const edges = [
         { d: to.x - area.left, x: area.left, y: to.y },
         { d: area.right - to.x, x: area.right, y: to.y },
