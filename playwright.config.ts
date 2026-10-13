@@ -22,6 +22,7 @@ export default defineConfig({
       testDir: 'games/horde/e2e',
       use: { viewport: { width: 540, height: 960 }, video: { mode: 'on', size: { width: 540, height: 960 } } },
     },
+    { name: 'rampart', testDir: 'games/rampart/e2e' },
   ],
   webServer: {
     command: 'npm run dev -- --port 5173 --strictPort',

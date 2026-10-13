@@ -4,6 +4,7 @@ import { expect, test, type Page } from '@playwright/test';
 const GAMES = [
   { name: 'Apothecary', path: '/games/apothecary/' },
   { name: 'Horde Defense', path: '/games/horde/' },
+  { name: 'Rampart', path: '/games/rampart/' },
 ];
 
 // Every page links a favicon that loads.
