@@ -17,5 +17,5 @@ export const STORM = { mid: 0x9d90f0, light: 0xd2cbff, white: 0xf4f0ff };
 export const CLOTH = { dark: 0xa89c7c, mid: 0xd8cfa8, light: 0xf1e8d0 };
 
 /** Health bar colours: green for a foe's bar, and one per boss bar, from the last bar up. */
-export const BAR = { back: 0x1d1418, empty: 0x3a2818, hp: 0x7ccf5a, wall: 0xc9a040, xp: 0x6aaee0 };
+export const BAR = { back: 0x1d1418, empty: 0x3a2818, hp: 0x7ccf5a, barricade: 0xc9a040, xp: 0x6aaee0 };
 export const BOSS_BARS = [0xd8433f, 0xf09a3a, 0xe6c766, 0x7ccf5a, 0x5aa0d8, 0x9d90f0];

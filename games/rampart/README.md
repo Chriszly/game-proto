@@ -3,9 +3,9 @@
 A wave defense prototype built with [Phaser 4](https://phaser.io), TypeScript and Vite, part of
 the [game hub](../../README.md).
 
-A ranger stands on a stone tower on the left, behind a wall. Goblins, orcs and dark knights march
-in from the right in ever bigger waves, and every tenth wave the Troll King comes with them. The
-ranger can't move and shoots on their own, always at the foe nearest the wall. Every kill fills
+A ranger stands on the road on the left, behind a cheval de frise: a heavy log with sharpened
+stakes driven through it. Goblins, orcs and dark knights march in from the right in ever bigger waves, and every tenth wave the Troll King comes with them. The
+ranger can't move and shoots on their own, always at the foe nearest the barricade. Every kill fills
 the experience bar, and every level-up pauses the battle on three upgrades to pick from.
 
 ![A wave coming on](docs/screenshots/playthrough-0-battle.png)
@@ -18,9 +18,9 @@ the experience bar, and every level-up pauses the battle on three upgrades to pi
 | Fight again / New hero | After a fall: start again from wave 1 keeping the hero, or with a new one |
 
 1. **Waves**: each wave brings more foes than the last, with more health. A short break with the
-   wave's banner comes before each, and the wall gets a tenth of its health back.
-2. **The wall** stops the foes, who hit it until it breaks. Once it is rubble they walk on to the
-   tower, and **the run is over when a foe reaches the hero**.
+   wave's banner comes before each, and the barricade gets a tenth of its health back.
+2. **The barricade** stops the foes, who hack at it until it breaks, losing stakes as it goes. Once
+   it is splinters they walk on to the hero, and **the run is over when a foe reaches the hero**.
 3. **Experience and level-ups**: each foe gives experience when it falls. A full bar is a level,
    and the battle waits while three different upgrades are offered.
 4. **The hero is kept**: level, experience and every upgrade picked carry over to the next run,
@@ -42,7 +42,7 @@ the experience bar, and every level-up pauses the battle on three upgrades to pi
 ### Upgrades
 
 Most upgrades have several ranks. Follow-ups only show up once the upgrade they improve has been
-picked. Once fewer than three upgrades are left, "Mend the Wall" fills the gaps.
+picked. Once fewer than three upgrades are left, "Mend the Barricade" fills the gaps.
 
 | Upgrade | Ranks | What it does |
 | --- | --- | --- |
@@ -61,7 +61,7 @@ picked. Once fewer than three upgrades are left, "Mend the Wall" fills the gaps.
 | Pyromancy | 3 | Fireballs come 15% sooner and hit 40% harder (after Tome of Fire) |
 | Storm Staff | 1 | A new missile: lightning every 3.5s that leaps between 3 foes, through armour |
 | Forked Lightning | 3 | Lightning leaps to one more foe and hits 25% harder (after Storm Staff) |
-| Masonry | 5 | The wall gets 25% more health and is repaired |
+| Stout Timber | 5 | The barricade gets 25% more health and is repaired |
 | Battle Lore | 3 | 20% more experience |
 
 ![Fire arrows, a fireball and burning foes](docs/screenshots/upgrades.png)
@@ -77,7 +77,7 @@ picked. Once fewer than three upgrades are left, "Mend the Wall" fills the gaps.
 `e2e/playthrough.spec.ts` plays the first wave in headless Chromium: it checks the new hero, waits
 for the wave to come on and the ranger to shoot, checks that kills fill the experience bar by each
 foe's experience, that the battle waits on the level-up, taps the first card and checks its
-upgrade was taken, then plays on until the wave is cleared with the wall standing. Like the
+upgrade was taken, then plays on until the wave is cleared with the barricade standing. Like the
 Apothecary test it owns the game clock and plays at 4x speed (`PLAYTHROUGH_SPEED`).
 
 ```sh
@@ -95,7 +95,7 @@ All paths are inside `games/rampart/`.
 - `src/scenes/`: `BootScene` bakes textures, `GameScene` draws the battle and wires taps to the
   rules, `layout.ts` says where things are drawn.
 - `src/art/`: all the pixel art, drawn in code and baked into textures at startup: the ranger and
-  the foes, the battlefield, tower and wall (which crumbles in stages), missiles and upgrade icons.
+  the foes, the battlefield, the barricade (which breaks up in stages), missiles and upgrade icons.
 - `src/ui/`: the level-up cards and buttons.
 
 Adding an upgrade is an entry in `src/game/upgrades.ts` and its effect in `stats` in

@@ -8,7 +8,7 @@ start page lists the games; each one lives in its own folder under `games/`.
 | Game | What it is |
 | --- | --- |
 | [Apothecary](games/apothecary/README.md) | Run a medieval apothecary as a plague doctor: grow herbs, refine them, brew potions and sell them to customers. |
-| [Rampart](games/rampart/README.md) | Hold the wall against waves of goblins, orcs and dark knights as a ranger on a tower, picking one of three upgrades each level, with a boss every ten waves. |
+| [Rampart](games/rampart/README.md) | Hold a barricade against waves of goblins, orcs and dark knights as a ranger, picking one of three upgrades each level, with a boss every ten waves. |
 
 ## Running locally
 

@@ -1,4 +1,4 @@
-// The foes that march on the wall. Numbers are for wave 1; later waves scale health up (see waves.ts).
+// The foes that march on the barricade. Numbers are for wave 1; later waves scale health up (see waves.ts).
 
 export type EnemyKind = 'goblin' | 'orc' | 'knight' | 'troll';
 
@@ -8,13 +8,13 @@ export interface EnemyType {
   hp: number;
   /** Walking speed in pixels per second. */
   speed: number;
-  /** Damage a second dealt to the wall while it stands in front of it. */
+  /** Damage a second dealt to the barricade while it stands in front of it. */
   dps: number;
   /** Flat damage taken off every arrow and fireball hit; burning and lightning ignore it. */
   armor: number;
   /** Experience for the kill. */
   xp: number;
-  /** Hit radius in pixels, also how far its front stands from the wall. */
+  /** Hit radius in pixels, also how far its front stands from the barricade. */
   radius: number;
   /** Bosses have several health bars, from the boss's wave count; others have one. */
   boss?: boolean;

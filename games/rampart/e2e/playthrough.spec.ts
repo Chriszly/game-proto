@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 // Plays the first wave with real inputs: the hero shoots the foes on their own, the first kills
 // fill the experience bar, the level-up cards come up and one is tapped, as on a phone, and the
-// wave is cleared with the wall still standing.
+// wave is cleared with the barricade still standing.
 // Game state is only read, through the `game` object the dev build puts on window.
 
 type Kind = 'goblin' | 'orc' | 'knight' | 'troll';
@@ -15,7 +15,7 @@ interface GameState {
   wave: number;
   phase: 'break' | 'fighting' | 'over';
   toSpawn: Kind[];
-  wall: { hp: number; max: number };
+  barricade: { hp: number; max: number };
   enemies: { id: number; kind: Kind; x: number; y: number; hp: number; maxHp: number }[];
   missiles: { id: number; kind: string }[];
   choices: string[] | null;
@@ -149,10 +149,10 @@ test('plays the first wave', async ({ page }, testInfo) => {
     await play(STEP_MS, async () => false);
   }
 
-  // A new hero: level 1, no upgrades, the wall whole, and a short break before the first wave.
+  // A new hero: level 1, no upgrades, the barricade whole, and a short break before the first wave.
   let s = await game.state();
   expect(s).toMatchObject({ level: 1, xp: 0, ranks: {}, levelUps: 0, wave: 1, phase: 'break', kills: 0, choices: null });
-  expect(s.wall.hp).toBe(s.wall.max);
+  expect(s.barricade.hp).toBe(s.barricade.max);
 
   // The first wave comes on, an orc first, and the hero shoots at the foes without being told to.
   s = await until('the first wave came on', (s) => s.phase === 'fighting' && s.enemies.length > 0, 5_000);
@@ -190,7 +190,7 @@ test('plays the first wave', async ({ page }, testInfo) => {
   expect(s.choices).toBeNull();
   expect(s.levelUps).toBe(0);
 
-  // Clear the wave, taking the first card of any further level-up. The wall holds.
+  // Clear the wave, taking the first card of any further level-up. The barricade holds.
   for (let picks = 0; ; picks++) {
     expect(picks, 'level-ups in wave 1').toBeLessThan(3);
     s = await until('wave 1 cleared or a level-up', (s) => s.wave === 2 || s.choices !== null, 60_000);
@@ -199,7 +199,7 @@ test('plays the first wave', async ({ page }, testInfo) => {
   }
   expect(s).toMatchObject({ phase: 'break', bestWave: 1, kills: 6 });
   expect(earned(s)).toBe(3 * XP.goblin + 3 * XP.orc);
-  expect(s.wall.hp).toBeGreaterThan(0);
+  expect(s.barricade.hp).toBeGreaterThan(0);
   await snap('2-wave-cleared');
 
   const speed = gameMs / (Date.now() - startedAt);

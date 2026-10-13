@@ -2,17 +2,17 @@ import type { EnemyKind } from './enemies';
 import { FIRST_BREAK_MS } from './waves';
 import { UPGRADES, UPGRADE_IDS, type UpgradeId } from './upgrades';
 
-// The battlefield, in the 960x540 view. Foes walk in from the right towards the wall, and past
-// it to the hero's tower once it falls.
+// The battlefield, in the 960x540 view. Foes walk in from the right towards the barricade, and past
+// it to the hero once it falls.
 export const FIELD = { top: 286, bottom: 488 };
 export const SPAWN_X = 1_000;
-/** Where the hero stands on the tower, and where arrows leave the bow. */
-export const HERO = { x: 78, y: 214 };
-export const BOW = { x: 100, y: 214 };
+/** Where the hero stands on the ground behind the barricade, and where arrows leave the bow. */
+export const HERO = { x: 66, y: 387 };
+export const BOW = { x: 88, y: 382 };
 /** A foe whose front reaches this far left has got to the hero, and the run is over. */
-export const TOWER_FRONT = 128;
-/** The wall's face towards the foes. */
-export const WALL_FRONT = 214;
+export const HERO_FRONT = 96;
+/** The barricade's face towards the foes. */
+export const BARRICADE_FRONT = 214;
 
 /** Experience needed to go up from `level` to the next. */
 export const xpToNext = (level: number) => 8 + 6 * (level - 1);
@@ -32,7 +32,7 @@ export interface Enemy {
   /** Burning: takes `burnDps` a second until `burnMs` runs out. */
   burnDps: number;
   burnMs: number;
-  /** Whether it stands at the wall, hitting it. */
+  /** Whether it stands at the barricade, hitting it. */
   attacking: boolean;
   /** Counts down after each hit, for the flash. */
   hitMs: number;
@@ -90,7 +90,7 @@ export interface GameState {
   /** Foes of this wave still to come on, and the time until the next one does. */
   toSpawn: EnemyKind[];
   spawnMs: number;
-  wall: { hp: number; max: number };
+  barricade: { hp: number; max: number };
   enemies: Enemy[];
   missiles: Missile[];
   effects: Effect[];
@@ -103,7 +103,7 @@ export interface GameState {
 }
 
 export const VERSION = 1;
-export const BASE_WALL_HP = 200;
+export const BASE_BARRICADE_HP = 200;
 
 export const rank = (state: Pick<GameState, 'ranks'>, id: UpgradeId) => state.ranks[id] ?? 0;
 
@@ -124,7 +124,7 @@ export function stats(state: Pick<GameState, 'ranks'>) {
       ? { ms: 3_000 * 0.85 ** r('pyromancy'), damage: 30 * (1 + 0.4 * r('pyromancy')), radius: 70 }
       : null,
     storm: r('storm') ? { ms: 3_500, damage: 20 * (1 + 0.25 * r('forked')), leaps: 3 + r('forked') } : null,
-    wallMax: Math.round(BASE_WALL_HP * (1 + 0.25 * r('mason'))),
+    barricadeMax: Math.round(BASE_BARRICADE_HP * (1 + 0.25 * r('timber'))),
     xpGain: 1 + 0.2 * r('lore'),
   };
 }
@@ -140,7 +140,7 @@ export function freshProgress(): Progress {
 
 /** A new run from wave 1, with the hero's progress kept. */
 export function newRun(progress: Progress): GameState {
-  const wallMax = stats(progress).wallMax;
+  const barricadeMax = stats(progress).barricadeMax;
   return {
     version: VERSION,
     ...progress,
@@ -150,7 +150,7 @@ export function newRun(progress: Progress): GameState {
     breakMs: FIRST_BREAK_MS,
     toSpawn: [],
     spawnMs: 0,
-    wall: { hp: wallMax, max: wallMax },
+    barricade: { hp: barricadeMax, max: barricadeMax },
     enemies: [],
     missiles: [],
     effects: [],

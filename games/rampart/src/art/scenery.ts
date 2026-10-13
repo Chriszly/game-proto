@@ -1,17 +1,16 @@
 import Phaser from 'phaser';
-import { DIRT, GRASS, INK, SKY, STONE, WOOD, GOLD, RED } from './palette';
+import { CLOTH, DIRT, GOLD, GRASS, INK, RED, SKY, STONE, WOOD } from './palette';
 import { PixelCanvas, seeded } from './pixelArt';
 
 // The battlefield behind everything: an evening sky over far mountains and a castle on the hills,
-// a grassy meadow and the trampled road the foes march along. Plus the hero's tower and the wall,
-// which crumbles in stages as it loses health. Painted at half size and baked at twice that.
+// a grassy meadow and the trampled road the foes march along. Plus the barricade in front of the
+// hero, which breaks up in stages as it loses health. Painted at half size and baked at twice that.
 
 const BG_SCALE = 2;
 
 export function bakeScenery(scene: Phaser.Scene) {
   bakeBackground(scene);
-  bakeTower(scene);
-  for (const stage of [0, 1, 2, 3]) bakeWall(scene, stage);
+  for (const stage of [0, 1, 2, 3]) bakeBarricade(scene, stage);
 }
 
 function bakeBackground(scene: Phaser.Scene) {
@@ -71,75 +70,63 @@ function bakeBackground(scene: Phaser.Scene) {
   c.bake(scene, 'background', BG_SCALE);
 }
 
-/** A round stone watchtower with battlements, which the hero stands on. 34 x 120, baked at 2x. */
-function bakeTower(scene: Phaser.Scene) {
-  const c = new PixelCanvas(36, 122);
-  const rnd = seeded(11);
-  // Battlements along the top, then the wall of the tower in staggered courses of stone.
-  for (let x = 0; x < 36; x += 6) c.rect(x, 0, 4, 6, STONE.mid).rect(x, 0, 4, 1, STONE.shine);
-  c.rect(0, 6, 36, 6, STONE.mid).rect(0, 6, 36, 1, STONE.light).rect(0, 11, 36, 1, STONE.dark);
-  c.rect(2, 12, 32, 110, STONE.mid);
-  for (let row = 0; row < 22; row++) {
-    const y = 12 + row * 5;
-    c.rect(2, y + 4, 32, 1, STONE.dark);
-    for (let x = 2 + (row % 2) * 4; x < 34; x += 8) {
-      c.rect(x, y, 1, 4, STONE.dark);
-      c.rect(x + 1, y, 6, 1, rnd() < 0.5 ? STONE.light : STONE.mid);
-    }
-  }
-  // Shading on the round side, a slit window and a door at the foot.
-  c.rect(2, 12, 3, 110, STONE.dark, 0.5).rect(31, 12, 3, 110, STONE.light, 0.25);
-  c.rect(16, 36, 4, 12, INK).rect(16, 60, 4, 12, INK);
-  c.ellipse(12, 98, 12, 10, WOOD.dark).rect(12, 103, 12, 19, WOOD.dark).rect(14, 104, 8, 18, WOOD.mid);
-  c.rect(17, 104, 1, 18, WOOD.dark).px(20, 112, GOLD.mid);
-  c.bake(scene, 'tower', 2);
-}
-
 /**
- * The wall seen from above and the side, running the length of the field: a thick course of
- * stone with merlons facing the foes. Stage 0 is whole; 1 and 2 add cracks and missing stones;
- * 3 is the rubble left when it falls. 18 x 124, baked at 2x.
+ * The cheval de frise seen from above and the side, running the length of the field: a heavy log
+ * with pairs of sharpened stakes driven crosswise through it, their points towards the foes.
+ * Stage 0 is whole; 1 and 2 have stakes snapped off and then knocked out; 3 is the splintered
+ * wreck left when it falls. 32 x 124, baked at 2x.
  */
-function bakeWall(scene: Phaser.Scene, stage: number) {
-  const W = 20;
+function bakeBarricade(scene: Phaser.Scene, stage: number) {
+  const W = 32;
   const H = 124;
   const c = new PixelCanvas(W, H);
   const rnd = seeded(23);
   if (stage === 3) {
-    for (let i = 0; i < 70; i++) {
-      const x = Math.floor(rnd() * (W - 4));
-      const y = Math.floor(rnd() * (H - 3));
-      c.rect(x, y, 3 + Math.floor(rnd() * 3), 2, rnd() < 0.5 ? STONE.mid : STONE.dark).px(x, y, STONE.light);
+    for (let i = 0; i < 46; i++) {
+      const x = 2 + Math.floor(rnd() * (W - 12));
+      const y = 2 + Math.floor(rnd() * (H - 6));
+      const len = 4 + Math.floor(rnd() * 6);
+      const dy = rnd() < 0.5 ? 2 : -2;
+      c.line(x, y, x + len, y + dy, WOOD.light).line(x, y + 1, x + len, y + dy + 1, WOOD.dark).px(x + len, y + dy, CLOTH.dark);
     }
-    c.bake(scene, 'wall-3', 2);
+    c.outline(INK);
+    c.bake(scene, 'barricade-3', 2);
     return;
   }
-  // The walkway on top, then the face with its merlons.
-  c.rect(0, 0, 13, H, STONE.mid).rect(0, 0, 2, H, STONE.dark);
-  for (let y = 0; y < H; y += 6) {
-    c.rect(2, y, 11, 1, STONE.dark);
-    c.rect(3 + ((y / 6) % 2) * 4, y + 1, 1, 5, STONE.dark);
-    c.rect(4, y + 1, 4, 1, STONE.light);
-  }
-  c.rect(13, 0, 2, H, STONE.light);
-  for (let y = 0; y < H; y += 10) c.rect(15, y, 4, 6, STONE.mid).rect(15, y, 4, 1, STONE.shine).rect(18, y, 1, 6, STONE.dark);
-  // Damage: cracks, then knocked-out stones and missing merlons.
-  const cracks = stage === 0 ? 0 : stage === 1 ? 6 : 14;
-  for (let i = 0; i < cracks; i++) {
-    let x = 2 + Math.floor(rnd() * 12);
-    let y = Math.floor(rnd() * (H - 10));
-    for (let j = 0; j < 6; j++) {
-      c.px(x, y, INK);
-      x += rnd() < 0.5 ? 1 : -1;
-      y += 1;
+  // The log along the field, with its bark.
+  const log = (y: number, h: number) => {
+    c.rect(12, y, 8, h, WOOD.mid).rect(12, y, 1, h, WOOD.dark).rect(19, y, 1, h, WOOD.dark).rect(15, y, 1, h, WOOD.light).rect(16, y, 1, h, WOOD.shine, 0.5);
+  };
+  log(1, H - 2);
+  for (let y = 3; y < H; y += 5) c.px(13 + (y % 4), y, WOOD.dark);
+  // Pairs of crossed stakes driven through the log, sharpened at both ends.
+  for (let y = 9; y < H - 8; y += 15) {
+    // Damaged stages snap the points off some stakes and knock others out altogether.
+    const roll = rnd();
+    const gone = stage === 2 && roll < 0.4;
+    const snapped = (stage === 1 && roll < 0.4) || (stage === 2 && roll < 0.85);
+    if (gone) {
+      c.rect(13, y - 1, 6, 3, WOOD.dark).px(15, y, INK);
+      continue;
     }
-  }
-  if (stage === 2) {
-    for (let i = 0; i < 6; i++) {
-      const y = Math.floor(rnd() * (H - 8));
-      c.rect(6 + Math.floor(rnd() * 6), y, 5, 4, STONE.dark).rect(7, y + 1, 3, 2, INK, 0.6);
+    const reach = snapped ? 22 : 30;
+    for (const dir of [1, -1]) {
+      const y0 = y + dir * 7;
+      const slope = (-dir * 14) / 29;
+      const yAt = (x: number) => Math.round(y0 + slope * (x - 1));
+      for (let x = 1; x <= reach; x++) c.px(x, yAt(x), WOOD.light).px(x, yAt(x) + 1, WOOD.mid);
+      if (!snapped) c.px(reach, yAt(reach), CLOTH.light).px(reach - 1, yAt(reach - 1), CLOTH.mid).px(reach - 1, yAt(reach - 1) + 1, CLOTH.dark);
+      else c.px(reach, yAt(reach), CLOTH.dark).px(reach, yAt(reach) + 1, CLOTH.dark);
+      c.px(1, yAt(1), CLOTH.dark).px(2, yAt(2) + 1, WOOD.dark);
     }
-    for (let y = 0; y < H; y += 30) c.clear(15, y + 1).clear(16, y + 1).rect(15, y + 2, 4, 4, STONE.dark);
+    // The log over the stakes where they cross it, with an iron band.
+    log(y - 3, 7);
+    c.rect(12, y - 1, 8, 2, 0x3c3946).rect(12, y - 1, 8, 1, 0x5d5a6a);
   }
-  c.bake(scene, `wall-${stage}`, 2);
+  if (stage > 0) for (let i = 0; i < stage * 6; i++) {
+    const y = 4 + Math.floor(rnd() * (H - 12));
+    c.line(13, y, 17, y + 4, INK);
+  }
+  c.outline(INK);
+  c.bake(scene, `barricade-${stage}`, 2);
 }

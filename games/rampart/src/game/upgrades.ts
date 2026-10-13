@@ -18,7 +18,7 @@ export type UpgradeId =
   | 'pyromancy'
   | 'storm'
   | 'forked'
-  | 'mason'
+  | 'timber'
   | 'lore'
   | 'mend';
 
@@ -33,7 +33,7 @@ export type Icon =
   | 'blast'
   | 'fireball'
   | 'storm'
-  | 'wall'
+  | 'barricade'
   | 'book'
   | 'mend';
 
@@ -65,9 +65,9 @@ export const UPGRADES: Record<UpgradeId, Upgrade> = {
   pyromancy: { name: 'Pyromancy', text: 'Fireballs come 15% sooner and hit 40% harder', maxRank: 3, icon: 'fireball', requires: 'fireball' },
   storm: { name: 'Storm Staff', text: 'Call lightning every 3.5s that leaps between 3 foes', maxRank: 1, icon: 'storm' },
   forked: { name: 'Forked Lightning', text: 'Lightning leaps to one more foe and hits 25% harder', maxRank: 3, icon: 'storm', requires: 'storm' },
-  mason: { name: 'Masonry', text: 'The wall gets 25% more health and is repaired', maxRank: 5, icon: 'wall' },
+  timber: { name: 'Stout Timber', text: 'The barricade gets 25% more health and is repaired', maxRank: 5, icon: 'barricade' },
   lore: { name: 'Battle Lore', text: 'Gain 20% more experience', maxRank: 3, icon: 'book' },
-  mend: { name: 'Mend the Wall', text: 'Repair half of the wall', maxRank: Infinity, icon: 'mend', filler: true },
+  mend: { name: 'Mend the Barricade', text: 'Repair half of the barricade', maxRank: Infinity, icon: 'mend', filler: true },
 };
 
 export const UPGRADE_IDS = Object.keys(UPGRADES) as UpgradeId[];

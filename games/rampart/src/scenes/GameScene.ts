@@ -9,7 +9,7 @@ import type { UpgradeId } from '../game/upgrades';
 import { isBossWave } from '../game/waves';
 import { makeButton } from '../ui/Button';
 import { LevelUp } from '../ui/LevelUp';
-import { BOSS_BAR, FONT, HERO_FEET, HUD_HEIGHT, TOWER, UI_DEPTH, VIEW, WALL, XP_BAR } from './layout';
+import { BOSS_BAR, FONT, HERO_FEET, HUD_HEIGHT, UI_DEPTH, VIEW, BARRICADE, XP_BAR } from './layout';
 
 /** Longest simulated step, so a backgrounded tab doesn't jump the battle forward. */
 const MAX_STEP_MS = 250;
@@ -34,12 +34,12 @@ export class GameScene extends Phaser.Scene {
   private missiles = new Map<number, Phaser.GameObjects.Image>();
   private crits = new Map<number, Phaser.GameObjects.Text>();
   private hero!: Phaser.GameObjects.Image;
-  private wall!: Phaser.GameObjects.Image;
+  private barricade!: Phaser.GameObjects.Image;
   private bars!: Phaser.GameObjects.Graphics;
   private fx!: Phaser.GameObjects.Graphics;
   private hud!: Phaser.GameObjects.Graphics;
   private waveText!: Phaser.GameObjects.Text;
-  private wallText!: Phaser.GameObjects.Text;
+  private barricadeText!: Phaser.GameObjects.Text;
   private killsText!: Phaser.GameObjects.Text;
   private levelText!: Phaser.GameObjects.Text;
   private xpText!: Phaser.GameObjects.Text;
@@ -63,9 +63,8 @@ export class GameScene extends Phaser.Scene {
     if (this.state.levelUps > 0) this.state.choices = rollChoices(this.state);
 
     this.add.image(0, 0, 'background').setOrigin(0);
-    this.add.image(TOWER.x, TOWER.y, 'tower').setOrigin(0.5, 0).setDepth(TOWER.y + 200);
-    this.hero = this.add.image(HERO_FEET.x, HERO_FEET.y, 'hero').setOrigin(0.5, 1).setDepth(TOWER.y + 201);
-    this.wall = this.add.image(WALL.x, WALL.y, 'wall-0').setOrigin(0).setDepth(1);
+    this.hero = this.add.image(HERO_FEET.x, HERO_FEET.y, 'hero').setOrigin(0.5, 1).setDepth(HERO_FEET.y);
+    this.barricade = this.add.image(BARRICADE.x, BARRICADE.y, 'barricade-0').setOrigin(0).setDepth(1);
     this.bars = this.add.graphics().setDepth(UI_DEPTH - 20);
     this.fx = this.add.graphics().setDepth(UI_DEPTH - 30);
     this.createHud();
@@ -95,7 +94,7 @@ export class GameScene extends Phaser.Scene {
     this.gameOver.setVisible(s.phase === 'over');
     if (s.phase === 'over') {
       this.gameOverText.setText(
-        `The foes reached the tower on wave ${s.wave}.\n${s.kills} foes slain this run, best wave cleared: ${s.bestWave}.\n\n` +
+        `The foes broke through and reached the hero on wave ${s.wave}.\n${s.kills} foes slain this run, best wave cleared: ${s.bestWave}.\n\n` +
           `The hero keeps level ${s.level} and every upgrade picked.`,
       );
     }
@@ -117,7 +116,7 @@ export class GameScene extends Phaser.Scene {
       }
       const type = ENEMIES[e.kind];
       const pace = e.slowMs > 0 ? 1 - e.slow : 1;
-      // Walk in two frames with a bob; at the wall, lunge at it in time with the blows.
+      // Walk in two frames with a bob; at the barricade, lunge at it in time with the blows.
       const phase = ((this.clock * pace) / STRIDE_MS + e.id * 0.37) % 1;
       const frame = phase < 0.5 ? 0 : 1;
       const lunge = e.attacking ? -Math.max(0, Math.sin(phase * Math.PI * 2)) * 6 : 0;
@@ -127,7 +126,8 @@ export class GameScene extends Phaser.Scene {
         .setTexture(foeTexture(e.kind, e.attacking ? 0 : frame))
         .setPosition(e.x + lunge, feet + bob)
         .setDepth(feet);
-      if (e.hitMs > 0) sprite.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
+      // A hit flashes white, in blinks so a foe under steady fire still shows.
+      if (e.hitMs > 0 && Math.floor(this.clock / 50) % 2 === 0) sprite.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
       else if (e.burnMs > 0) sprite.setTint(Math.floor(this.clock / 120) % 2 ? 0xffb070 : 0xffd8a0).setTintMode(Phaser.TintModes.MULTIPLY);
       else if (e.slowMs > 0) sprite.setTint(0xa8dcf8).setTintMode(Phaser.TintModes.MULTIPLY);
       else sprite.clearTint();
@@ -229,15 +229,15 @@ export class GameScene extends Phaser.Scene {
     if (cd > this.lastArrowCooldown) this.hero.setX(HERO_FEET.x - 3);
     else this.hero.setX(Math.min(HERO_FEET.x, this.hero.x + 0.5));
     this.lastArrowCooldown = cd;
-    const wall = this.state.wall;
-    const health = wall.hp / wall.max;
-    this.wall.setTexture(wall.hp <= 0 ? 'wall-3' : health > 0.66 ? 'wall-0' : health > 0.33 ? 'wall-1' : 'wall-2');
+    const barricade = this.state.barricade;
+    const health = barricade.hp / barricade.max;
+    this.barricade.setTexture(barricade.hp <= 0 ? 'barricade-3' : health > 0.66 ? 'barricade-0' : health > 0.33 ? 'barricade-1' : 'barricade-2');
   }
 
   private createHud() {
     this.hud = this.add.graphics().setDepth(UI_DEPTH);
     this.waveText = this.add.text(16, 10, '', textStyle(18, '#f3c64e')).setDepth(UI_DEPTH + 1);
-    this.wallText = this.add.text(176, 12, '', textStyle(14)).setDepth(UI_DEPTH + 1);
+    this.barricadeText = this.add.text(140, 12, '', textStyle(14)).setDepth(UI_DEPTH + 1);
     this.killsText = this.add.text(VIEW.w - 16, 12, '', textStyle(14)).setOrigin(1, 0).setDepth(UI_DEPTH + 1);
     this.levelText = this.add.text(16, XP_BAR.y - 2, '', textStyle(16, '#a8dcf8')).setDepth(UI_DEPTH + 1);
     this.xpText = this.add.text(XP_BAR.x + XP_BAR.w / 2, XP_BAR.y + XP_BAR.h / 2, '', textStyle(12)).setOrigin(0.5).setDepth(UI_DEPTH + 1);
@@ -253,13 +253,13 @@ export class GameScene extends Phaser.Scene {
     g.fillStyle(0x5a3f2a).fillRect(0, HUD_HEIGHT - 3, VIEW.w, 3);
     this.waveText.setText(`Wave ${s.wave}`);
 
-    // The wall's health in the top bar.
-    const wx = 230;
+    // The barricade's health in the top bar.
+    const wx = 232;
     const ww = 200;
     g.fillStyle(BAR.back).fillRect(wx, 12, ww, 16);
     g.fillStyle(BAR.empty).fillRect(wx + 2, 14, ww - 4, 12);
-    g.fillStyle(s.wall.hp > 0 ? BAR.wall : BAR.empty).fillRect(wx + 2, 14, Math.round((ww - 4) * (s.wall.hp / s.wall.max)), 12);
-    this.wallText.setText('Wall');
+    g.fillStyle(s.barricade.hp > 0 ? BAR.barricade : BAR.empty).fillRect(wx + 2, 14, Math.round((ww - 4) * (s.barricade.hp / s.barricade.max)), 12);
+    this.barricadeText.setText('Barricade');
     this.killsText.setText(`Foes left ${s.toSpawn.length + s.enemies.length}   Slain ${s.kills}   Best wave ${s.bestWave}`);
 
     // Experience along the bottom.

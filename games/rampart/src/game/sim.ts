@@ -3,8 +3,8 @@ import {
   BOW,
   FIELD,
   SPAWN_X,
-  TOWER_FRONT,
-  WALL_FRONT,
+  HERO_FRONT,
+  BARRICADE_FRONT,
   offerable,
   progressOf,
   newRun,
@@ -26,8 +26,8 @@ export const ARROW_SPEED = 720;
 const FIREBALL_SPEED = 400;
 /** How far lightning leaps from one foe to the next. */
 const LEAP_RANGE = 170;
-/** How much of its health the wall gets back after each wave cleared. */
-const WALL_REPAIR = 0.1;
+/** How much of its health the barricade gets back after each wave cleared. */
+const BARRICADE_REPAIR = 0.1;
 const HIT_FLASH_MS = 90;
 /** Foes are shot once their middle has come into the 960px view. */
 const VIEW_RIGHT = 950;
@@ -93,7 +93,7 @@ function spawn(state: GameState, dt: number) {
   state.spawnMs = spawnInterval(state.wave);
 }
 
-/** Foes that have come into view, nearest to the wall first: the ones to shoot. */
+/** Foes that have come into view, nearest to the barricade first: the ones to shoot. */
 function targets(state: GameState) {
   return state.enemies.filter((e) => e.x < VIEW_RIGHT).sort((a, b) => a.x - b.x);
 }
@@ -215,7 +215,7 @@ function explode(state: GameState, x: number, y: number, radius: number, damage:
   }
 }
 
-/** Lightning strikes the foe nearest the wall and leaps on to the nearest foe it has not struck. */
+/** Lightning strikes the foe nearest the barricade and leaps on to the nearest foe it has not struck. */
 function lightning(state: GameState, s: Stats, first: Enemy) {
   const struck: Enemy[] = [first];
   while (struck.length < s.storm!.leaps) {
@@ -235,7 +235,7 @@ function hurt(foe: Enemy, damage: number, armored: boolean) {
 }
 
 function moveEnemies(state: GameState, dt: number) {
-  const wallUp = state.wall.hp > 0;
+  const barricadeUp = state.barricade.hp > 0;
   for (const e of state.enemies) {
     const type = ENEMIES[e.kind];
     e.hitMs = Math.max(0, e.hitMs - dt);
@@ -249,15 +249,15 @@ function moveEnemies(state: GameState, dt: number) {
       e.slowMs = Math.max(0, e.slowMs - dt);
       if (e.slowMs === 0) e.slow = 0;
     }
-    const stop = (wallUp ? WALL_FRONT : TOWER_FRONT) + type.radius;
-    e.attacking = wallUp && e.x <= stop;
+    const stop = (barricadeUp ? BARRICADE_FRONT : HERO_FRONT) + type.radius;
+    e.attacking = barricadeUp && e.x <= stop;
     if (e.attacking) {
       e.x = stop;
-      state.wall.hp = Math.max(0, state.wall.hp - (type.dps * pace * dt) / 1000);
+      state.barricade.hp = Math.max(0, state.barricade.hp - (type.dps * pace * dt) / 1000);
     } else {
       e.x -= (type.speed * pace * dt) / 1000;
     }
-    if (!wallUp && e.x - type.radius <= TOWER_FRONT) {
+    if (!barricadeUp && e.x - type.radius <= HERO_FRONT) {
       gameOver(state);
       return;
     }
@@ -299,9 +299,9 @@ export function rollChoices(state: GameState): UpgradeId[] {
 export function pick(state: GameState, id: UpgradeId) {
   if (!state.choices?.includes(id)) return false;
   if (!UPGRADES[id].filler) state.ranks[id] = (state.ranks[id] ?? 0) + 1;
-  const wallMax = stats(state).wallMax;
-  if (id === 'mason') state.wall = { hp: wallMax, max: wallMax };
-  if (id === 'mend') state.wall.hp = Math.min(state.wall.max, state.wall.hp + state.wall.max / 2);
+  const barricadeMax = stats(state).barricadeMax;
+  if (id === 'timber') state.barricade = { hp: barricadeMax, max: barricadeMax };
+  if (id === 'mend') state.barricade.hp = Math.min(state.barricade.max, state.barricade.hp + state.barricade.max / 2);
   state.levelUps--;
   state.choices = state.levelUps > 0 ? rollChoices(state) : null;
   return true;
@@ -313,7 +313,7 @@ function clearWave(state: GameState) {
   state.phase = 'break';
   state.breakMs = BREAK_MS;
   state.missiles = [];
-  state.wall.hp = Math.min(state.wall.max, state.wall.hp + state.wall.max * WALL_REPAIR);
+  state.barricade.hp = Math.min(state.barricade.max, state.barricade.hp + state.barricade.max * BARRICADE_REPAIR);
 }
 
 function gameOver(state: GameState) {
