@@ -4,7 +4,7 @@ import { plantTexture } from '../art/garden';
 import { itemTexture } from '../art/items';
 import { craftsmanTexture, customerTexture } from '../art/townsfolk';
 import { signTexture } from '../art/ui';
-import { GROW_MS, PLANTS, POTIONS, REFINE, REFINED, type ItemId } from '../game/items';
+import { GROW_MS, PLANTS, POTIONS, REFINE, REFINED, isPlant, isPotion, isRefined, type ItemId } from '../game/items';
 import {
   collectTill,
   dropAll,
@@ -329,7 +329,7 @@ export class GameScene extends Phaser.Scene {
     this.addPallets(id, PALLETS[id], [PLANTS, REFINED], [() => refiner.queue, () => refiner.output]);
     const progress = new ProgressBar(this, at.x, at.y + 30, 60, 0xd8cfa8, UI_DEPTH);
     this.addMarker(m.pickUp, 'pad-out', 'Pick up', () => pickUpFromRefiner(this.state, id), () => this.state.belts[beltOut].built);
-    this.addMarker(m.drop, 'pad-in', 'Drop', () => dropAtRefiner(this.state, id), () => this.state.belts[beltIn].built);
+    this.addMarker(m.drop, 'pad-in', 'Drop', () => dropAtRefiner(this.state, id), () => this.state.belts[beltIn].built && !this.carries(isPlant));
     this.addWorkSpot(m.work, id);
     this.addUpgradeMarker(m.upgrade, id);
     this.addCraftsmen(id);
@@ -347,7 +347,7 @@ export class GameScene extends Phaser.Scene {
     this.addPallets(id, PALLETS[id], [REFINED, POTIONS], [() => cauldron.contents, () => cauldron.output]);
     const brewing = new ProgressBar(this, at.x, at.y + 34, 60, 0x58a35a, UI_DEPTH);
     this.addMarker(m.pickUp, 'pad-out', 'Pick up', () => pickUpFromCauldron(this.state, id), () => this.state.belts[beltOut].built);
-    this.addMarker(m.drop, 'pad-in', 'Drop', () => dropInCauldron(this.state, id), () => this.state.belts[beltIn].built);
+    this.addMarker(m.drop, 'pad-in', 'Drop', () => dropInCauldron(this.state, id), () => this.state.belts[beltIn].built && !this.carries(isRefined));
     this.addWorkSpot(m.work, id);
     this.addUpgradeMarker(m.upgrade, id);
     this.addCraftsmen(id);
@@ -395,6 +395,14 @@ export class GameScene extends Phaser.Scene {
         text.setVisible(shown());
       });
     }
+  }
+
+  /**
+   * Whether the doctor carries something of a kind. A drop marker that a belt made unneeded comes
+   * back while the doctor carries what it takes, such as goods from the other line.
+   */
+  private carries(kind: (item: ItemId) => boolean) {
+    return this.state.carrying.some(kind);
   }
 
   /** The spot the doctor stands on to make the station work, gone once a craftsman is hired there. */
@@ -573,10 +581,11 @@ export class GameScene extends Phaser.Scene {
   private createShopfront() {
     this.addObstacle(COUNTER.x, COUNTER.y, 'counter', 200, 30);
     this.addPallets('counter', PALLETS.counter, [POTIONS, []], [() => this.state.counter.shelf, () => []]);
-    // Potions are stocked by hand until every cauldron standing has its belt to the counter.
+    // Potions are stocked by hand until every cauldron standing has its belt to the counter, and
+    // whenever the doctor carries one.
     const allBelted = () =>
       this.state.belts.cauldron.built && (!stationBuilt(this.state, 'cauldron2') || this.state.belts.cauldron2.built);
-    this.addMarker(COUNTER_MARKERS.drop, 'pad-in', 'Drop', () => stockShelf(this.state), allBelted);
+    this.addMarker(COUNTER_MARKERS.drop, 'pad-in', 'Drop', () => stockShelf(this.state), () => allBelted() && !this.carries(isPotion));
     this.addMarker(COUNTER_MARKERS.pickUp, 'pad-out', 'Coins', () => collectTill(this.state));
     this.addWorkSpot(COUNTER_MARKERS.work, 'counter');
     this.addUpgradeMarker(COUNTER_MARKERS.upgrade, 'counter');
