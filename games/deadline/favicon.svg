@@ -12,7 +12,7 @@
   <ellipse cx="16" cy="25" rx="5.5" ry="4" fill="#ffdcc7"/>
   <ellipse cx="16" cy="23.6" rx="2.4" ry="1.6" fill="#311300"/>
   <path d="M16 25 V26.6" stroke="#311300" stroke-width="1.2" stroke-linecap="round"/>
-  <circle cx="26" cy="26" r="4.4" fill="#ffffff" stroke="#c43b2e" stroke-width="1.6"/>
-  <path d="M26 20.8 V23.6 M26 28.4 V31.2 M20.8 26 H23.6 M28.4 26 H31.2" stroke="#c43b2e" stroke-width="1.5" stroke-linecap="round"/>
-  <circle cx="26" cy="26" r="1" fill="#c43b2e"/>
+  <circle cx="26" cy="26" r="4.4" fill="#ffffff" stroke="#2f9e44" stroke-width="1.6"/>
+  <path d="M26 20.8 V23.6 M26 28.4 V31.2 M20.8 26 H23.6 M28.4 26 H31.2" stroke="#2f9e44" stroke-width="1.5" stroke-linecap="round"/>
+  <circle cx="26" cy="26" r="1" fill="#2f9e44"/>
 </svg>
