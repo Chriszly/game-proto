@@ -244,15 +244,13 @@ test('plays the first wave', async ({ page }, testInfo) => {
   await snap('0-broadside');
   s = await until('an enemy hit', (s) => s.enemies.some((e) => e.hp < e.maxHp) || s.sunk > 0, 10_000, course);
 
-  // A sunk ship leaves a barrel of loot floating behind.
+  // A sunk ship leaves a barrel of loot floating behind; sailing over it adds its gold to the hold.
   s = await until('a sloop sunk', (s) => s.sunk > 0, 60_000, course);
-  expect(s.loot.length + (s.gold > 0 ? 1 : 0)).toBeGreaterThan(0);
-
-  // Sink the other and sail over the loot: each barrel adds its gold to the hold. The harbor opens
-  // once no ship or loot is left.
-  s = await until('first loot picked up', (s) => s.gold > 0, 60_000, course);
-  expect(s.gold).toBe(SLOOP_LOOT);
+  expect(s.loot.length + s.gold / SLOOP_LOOT).toBe(1);
   await snap('1-loot');
+
+  // Sink the other. Once the last ship of the wave goes down, the crew hauls in every barrel still
+  // afloat and the harbor opens.
   s = await until('wave 1 beaten', (s) => s.phase === 'harbor', 90_000, course);
   await helm(0);
   expect(s).toMatchObject({ wave: 1, sunk: 2, gold: 2 * SLOOP_LOOT, plundered: 2 * SLOOP_LOOT, bestWave: 1, enemies: [], loot: [] });

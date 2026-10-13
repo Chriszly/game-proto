@@ -13,7 +13,8 @@ off either side. Sunk enemies drop loot barrels, and gold buys upgrades at a har
 - **Implemented:** endless waves (sloops from wave 1, brigs from wave 3, galleons from wave 5) with
   enemy hull scaling per wave. Enemy AI closes in, turns to bring a broadside to bear and bears
   away rather than ram. Broadsides lead their target, and enemy aim has a random spread. Loot
-  drifts toward the player and expires. There is a harbor shop with five upgrades plus a paid
+  drifts toward the player and expires; when a wave's last enemy sinks, every barrel still afloat
+  is hauled in at once. There is a harbor shop with five upgrades plus a paid
   repair, a game-over panel with "Sail again", and off-screen arrows pointing to enemies and loot.
   The sea wraps around at every edge like a globe: sailing off the north edge comes back in at the
   south, and off the west edge in at the east. Ships, balls and loot all wrap, and every distance
@@ -44,7 +45,8 @@ File map (all under `src/`, plus the shared files it imports):
   wrapping helpers `wrapCoord`, `wrapPoint` and `offset` (the shortest `dx`, `dy` between two
   points on the sea).
 - `game/sim.ts`: all rules. `tick` handles steering, spawning, enemy AI, separation, running
-  aground on islands (`runAground`), firing, balls, sinking, loot and reaching the harbor. `buy`, `repair` and `setSail` are the harbor actions.
+  aground on islands (`runAground`), firing, balls, sinking, loot (`haulIn`) and reaching the
+  harbor. `buy`, `repair` and `setSail` are the harbor actions.
 - `game/ships.ts`: the `ENEMIES` table (hp, radius, speed, turn, guns, damage, reload, range, loot).
 - `game/upgrades.ts`: the `UPGRADES` table, `UPGRADE_IDS`, `costOf` and `REPAIR_COST`.
 - `game/waves.ts`: `waveShips(wave)` (which ships come, in order) and `hpScale(wave)`.
@@ -70,8 +72,9 @@ How it runs:
   second.
 - **Phases:** `GameState.phase` is one of `break` (wave banner for `BREAK_MS`; the player can sail
   but nothing spawns or fires), `fighting`, `harbor` or `over`. `tick` returns early in `harbor`
-  and `over`, after ageing effects. The harbor opens once `toSpawn`, `enemies` and `loot` are all
-  empty. The game is over when the player's hp reaches 0 or below.
+  and `over`, after ageing effects. The harbor opens once `toSpawn` and `enemies` are both empty;
+  on that tick every barrel left in `loot` goes through `haulIn` (gold, `plundered` and a `coins`
+  effect) and `loot` is emptied. The game is over when the player's hp reaches 0 or below.
 - **Input:** each frame the scene sets `state.helm` to -1, 0 or 1. Keys (Left/A, Right/D) win over
   the pointer. Pressing on a helm circle sets `pointerHelm`, and any `pointerup` or `gameout`
   clears it. Harbor rows and the "Set sail" button call `buy`, `repair` or `setSail` through
@@ -161,7 +164,8 @@ Data tables, where to tune:
 - `e2e/playthrough.spec.ts` seeds `Math.random` and drives 64ms frames. It presses the mouse down on
   the helm button centres to steer: first to check a turn each way and that the ship holds its
   heading with the helm released, then to close on each sloop to within `CLOSE_IN` and turn
-  side-on. It sinks both sloops, picks up the loot, and at the harbor taps the `shot` row and then
+  side-on. It sinks both sloops, checks that the first leaves loot (afloat or already sailed
+  over) and that the harbor opens with both sloops' gold aboard, then taps the `shot` row and
   `sail`.
 - Keep in sync with the test: `HELM` centres (copied into the test), `VIEW`, wave 1 being
   `['sloop', 'sloop']`, sloop loot 10 (plus the per-wave bonus, which is 0 on wave 1), the player

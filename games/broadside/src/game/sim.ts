@@ -16,6 +16,7 @@ import {
   stats,
   type Effect,
   type GameState,
+  type Loot,
   type Ship,
   type Side,
   wrapCoord,
@@ -98,7 +99,12 @@ export function tick(s: GameState, dt: number) {
   if (playerSunk(s)) return;
 
   gatherLoot(s, dt);
-  if (s.toSpawn.length === 0 && s.enemies.length === 0 && s.loot.length === 0) reachHarbor(s);
+  if (s.toSpawn.length === 0 && s.enemies.length === 0) {
+    // The wave is beaten: the crew hauls in every barrel still afloat before putting into harbor.
+    for (const l of s.loot) haulIn(s, l);
+    s.loot = [];
+    reachHarbor(s);
+  }
 }
 
 /** Ends the run if the player's hull is gone. */
@@ -304,9 +310,7 @@ function gatherLoot(s: GameState, dt: number) {
     l.ms -= dt;
     const d = distance(l, player);
     if (d < radiusOf(player) + 8) {
-      s.gold += l.gold;
-      s.plundered += l.gold;
-      effect(s, 'coins', l.x, l.y, 900, { gold: l.gold });
+      haulIn(s, l);
       return false;
     }
     if (d < LOOT_PULL) {
@@ -318,6 +322,13 @@ function gatherLoot(s: GameState, dt: number) {
     }
     return l.ms > 0;
   });
+}
+
+/** A barrel of loot comes aboard: its gold goes into the hold. */
+function haulIn(s: GameState, l: Loot) {
+  s.gold += l.gold;
+  s.plundered += l.gold;
+  effect(s, 'coins', l.x, l.y, 900, { gold: l.gold });
 }
 
 function reachHarbor(s: GameState) {
