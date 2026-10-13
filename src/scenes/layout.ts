@@ -20,24 +20,28 @@ export const CAULDRON = { x: 450, y: 400 };
 
 /**
  * Markers around a station: drop-off on its left and pick-up on its right, so goods flow from the
- * garden side towards the shop side, and the upgrade marker out of the way, on the side farthest
- * from the walkway (the open row between the refining table and the cauldron, or the shop floor).
+ * garden side towards the shop side. The work spot, where the doctor stands to craft, is on the side
+ * farthest from the walkway (the open row between the refining table and the cauldron), and the
+ * upgrade marker has a corner of its own.
  */
 export interface StationMarkers {
   drop: { x: number; y: number };
   pickUp: { x: number; y: number };
+  work: { x: number; y: number };
   upgrade: { x: number; y: number };
 }
 
 export const REFINER_MARKERS: StationMarkers = {
   drop: { x: REFINER.x - 80, y: REFINER.y + 8 },
   pickUp: { x: REFINER.x + 80, y: REFINER.y + 8 },
-  upgrade: { x: REFINER.x, y: REFINER.y - 70 },
+  work: { x: REFINER.x, y: REFINER.y - 62 },
+  upgrade: { x: REFINER.x + 80, y: REFINER.y - 62 },
 };
 export const CAULDRON_MARKERS: StationMarkers = {
   drop: { x: CAULDRON.x - 80, y: CAULDRON.y + 8 },
   pickUp: { x: CAULDRON.x + 80, y: CAULDRON.y + 8 },
-  upgrade: { x: CAULDRON.x, y: CAULDRON.y + 82 },
+  work: { x: CAULDRON.x, y: CAULDRON.y + 82 },
+  upgrade: { x: CAULDRON.x + 80, y: CAULDRON.y + 82 },
 };
 
 export const SHOP = { x: 610, y: 68, w: 326, h: 440 };
@@ -45,6 +49,8 @@ export const COUNTER = { x: 773, y: 250 };
 export const COUNTER_MARKERS: StationMarkers = {
   drop: { x: COUNTER.x - 128, y: COUNTER.y + 12 },
   pickUp: { x: COUNTER.x + 128, y: COUNTER.y + 12 },
+  // Behind the counter, facing the customers.
+  work: { x: COUNTER.x, y: COUNTER.y + 52 },
   // The far corner of the shop, away from the door and the path to the counter.
   upgrade: { x: SHOP.x + SHOP.w - 40, y: SHOP.y + SHOP.h - 50 },
 };
