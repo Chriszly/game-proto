@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>Golem Garden</title>
+  <circle cx="7" cy="9" r="5" fill="#e37100"/>
+  <circle cx="25" cy="9" r="5" fill="#e37100"/>
+  <circle cx="7" cy="9" r="2.4" fill="#ffb787"/>
+  <circle cx="25" cy="9" r="2.4" fill="#ffb787"/>
+  <ellipse cx="16" cy="19.5" rx="13" ry="12" fill="#e37100"/>
+  <path d="M16 9.5 C15.6 7 16.2 5 16.6 3.6" fill="none" stroke="#2c6430" stroke-width="1.4" stroke-linecap="round"/>
+  <path d="M16.4 5 C13.4 1.6 9.6 2.6 9 4.4 C11.4 6.4 14.4 6.4 16.4 5 Z" fill="#64b450" stroke="#2c6430" stroke-width="0.7" stroke-linejoin="round"/>
+  <path d="M16.6 4.2 C18.8 0.8 22.8 0.8 23.8 2.4 C21.8 4.8 18.8 5.2 16.6 4.2 Z" fill="#3f8a42" stroke="#2c6430" stroke-width="0.7" stroke-linejoin="round"/>
+  <ellipse cx="16" cy="10.4" rx="3.4" ry="1.4" fill="#6b4a2c"/>
+  <circle cx="10.5" cy="17.5" r="2.3" fill="#0d1117"/>
+  <circle cx="21.5" cy="17.5" r="2.3" fill="#0d1117"/>
+  <circle cx="11.3" cy="16.7" r="0.8" fill="#ffffff"/>
+  <circle cx="22.3" cy="16.7" r="0.8" fill="#ffffff"/>
+  <ellipse cx="16" cy="24" rx="4.6" ry="3.3" fill="#ffdcc7"/>
+  <ellipse cx="16" cy="23" rx="2.2" ry="1.4" fill="#311300"/>
+</svg>

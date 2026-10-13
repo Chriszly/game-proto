@@ -29,6 +29,7 @@ export default defineConfig({
     { name: 'broadside', testDir: 'games/broadside/e2e' },
     { name: 'tincture-tinker', testDir: 'games/tincture-tinker/e2e' },
     { name: 'catacomb', testDir: 'games/catacomb/e2e' },
+    { name: 'golem-garden', testDir: 'games/golem-garden/e2e' },
   ],
   webServer: {
     command: 'npm run dev -- --port 5173 --strictPort',

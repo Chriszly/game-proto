@@ -16,6 +16,7 @@ start page lists the games; each one lives in its own folder under `games/`.
 | [Broadside](games/broadside/README.md) | Captain a pirate ship: steer left and right to bring your broadsides to bear on enemy ships, sail over their loot, and upgrade hull and cannons at the harbor between waves. |
 | [TinctureTinker](games/tincture-tinker/README.md) | A match-3 board of Apothecary's ingredients: swap tiles to gather what each potion order asks for before the moves run out, and sell the potion for coins. |
 | [Catacomb](games/catacomb/README.md) | Fight through a short dungeon with a deck of cards: a hand of five each turn against foes who show what they will do next, and a new card after every fight. |
+| [Golem Garden](games/golem-garden/README.md) | A tower defense in a garden: plant seeds beside the path that grow into pebble and moss golems, and stop the pests before they eat the Heartwood. |
 
 ## Settings
 
@@ -37,6 +38,7 @@ The hub's **Settings** button opens the settings every game shares. They are sav
   | Broadside | enemy ships have 25% less health | enemy ships have 30% more health |
   | TinctureTinker | 5 more moves per order | 3 fewer moves per order |
   | Catacomb | foes have 25% less health | foes have 30% more health |
+  | Golem Garden | pests have 25% less health | pests have 30% more health |
 
 - **Frame rate (FPS)**: the most frames per second a game draws, 30 to 320 (60 by default).
 - **Show FPS**: a readout of the frame rate in each game's corner.
