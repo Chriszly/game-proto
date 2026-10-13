@@ -1,31 +1,39 @@
 import { PLOTS_PER_GARDEN } from '../game/state';
 
-// World positions for the 960x540 view: garden on the left, workshop in the middle, shop on the right.
+// World positions for the U-shaped apothecary. Goods flow down the left arm (gardens, refining
+// table), along the bottom (cauldron) and up the middle into the shop at the top. The right arm
+// mirrors the left and is kept free for a second production line. The world is bigger than the
+// 960x540 view, so the camera follows the doctor.
 
 export const HUD_HEIGHT = 44;
+export const WORLD = { w: 1200, h: 810 };
 
 /** Fenced garden areas, top to bottom, matching the order of GARDENS in the game state. */
 export const GARDEN_AREAS = [
-  { x: 24, y: 68, w: 300, h: 210, name: 'Wheat field' },
-  { x: 24, y: 298, w: 300, h: 210, name: 'Mandrake patch' },
+  { x: 24, y: 64, w: 276, h: 176, name: 'Wheat field' },
+  { x: 24, y: 256, w: 276, h: 176, name: 'Mandrake patch' },
 ];
 /** Plot i is slot i % 3 of garden i / 3, the slots spread across the garden in one row. */
 export const plotPosition = (i: number) => {
   const area = GARDEN_AREAS[Math.floor(i / PLOTS_PER_GARDEN)];
-  return { x: area.x + 60 + (i % PLOTS_PER_GARDEN) * 90, y: area.y + 118 };
+  return { x: area.x + 48 + (i % PLOTS_PER_GARDEN) * 90, y: area.y + 100 };
 };
 
-/** The workshop yard between the gardens and the shop, where the refining table and cauldron stand. */
-export const YARD = { x: 340, y: 68, w: 254, h: 440 };
+/** Packed earth below the gardens and the shop, with a strip leading up to the shop door. */
+export const YARDS = [
+  { x: 24, y: 448, w: 1152, h: 344 },
+  { x: 316, y: 400, w: 568, h: 60 },
+];
 
-export const REFINER = { x: 450, y: 170 };
-export const CAULDRON = { x: 450, y: 400 };
+/** The refining table stands below the gardens; goods run through it from top to bottom. */
+export const REFINER = { x: 330, y: 540 };
+/** The cauldron stands at the bottom of the U; goods run through it from left to right. */
+export const CAULDRON = { x: 460, y: 720 };
 
 /**
- * Markers around a station: drop-off on its left and pick-up on its right, so goods flow from the
- * garden side towards the shop side. The work spot, where the doctor stands to craft, is on the side
- * farthest from the walkway (the open row between the refining table and the cauldron), and the
- * upgrade marker has a corner of its own.
+ * Markers around a station: drop-off where goods come in and pick-up where they leave, in the
+ * direction goods flow along the U. The work spot, where the doctor stands to craft, and the upgrade
+ * marker face the open courtyard inside the U.
  */
 export interface StationMarkers {
   drop: { x: number; y: number };
@@ -35,27 +43,34 @@ export interface StationMarkers {
 }
 
 export const REFINER_MARKERS: StationMarkers = {
-  drop: { x: REFINER.x - 80, y: REFINER.y + 8 },
-  pickUp: { x: REFINER.x + 80, y: REFINER.y + 8 },
-  work: { x: REFINER.x, y: REFINER.y - 62 },
-  upgrade: { x: REFINER.x + 80, y: REFINER.y - 62 },
+  drop: { x: REFINER.x, y: REFINER.y - 72 },
+  pickUp: { x: REFINER.x, y: REFINER.y + 72 },
+  work: { x: REFINER.x + 100, y: REFINER.y },
+  upgrade: { x: REFINER.x + 100, y: REFINER.y - 70 },
 };
 export const CAULDRON_MARKERS: StationMarkers = {
   drop: { x: CAULDRON.x - 80, y: CAULDRON.y + 8 },
   pickUp: { x: CAULDRON.x + 80, y: CAULDRON.y + 8 },
-  work: { x: CAULDRON.x, y: CAULDRON.y + 82 },
-  upgrade: { x: CAULDRON.x + 80, y: CAULDRON.y + 82 },
+  work: { x: CAULDRON.x - 10, y: CAULDRON.y - 70 },
+  upgrade: { x: CAULDRON.x + 70, y: CAULDRON.y - 70 },
 };
 
-export const SHOP = { x: 610, y: 68, w: 326, h: 440 };
-export const COUNTER = { x: 773, y: 250 };
+/** The shop sits at the top of the U, between the two arms, with its door facing the courtyard. */
+export const SHOP = { x: 440, y: 64, w: 320, h: 336 };
+export const SHOP_DOOR = { from: 560, to: 640 };
+export const COUNTER = { x: 600, y: 270 };
 export const COUNTER_MARKERS: StationMarkers = {
   drop: { x: COUNTER.x - 128, y: COUNTER.y + 12 },
   pickUp: { x: COUNTER.x + 128, y: COUNTER.y + 12 },
-  // Behind the counter, facing the customers.
-  work: { x: COUNTER.x, y: COUNTER.y + 52 },
-  // The far corner of the shop, away from the door and the path to the counter.
-  upgrade: { x: SHOP.x + SHOP.w - 40, y: SHOP.y + SHOP.h - 50 },
+  // Behind the counter, to the side of the doorway where goods will come in.
+  work: { x: COUNTER.x - 80, y: COUNTER.y + 70 },
+  upgrade: { x: COUNTER.x + 110, y: COUNTER.y + 76 },
 };
 /** Where waiting customer i stands, on the far side of the counter. */
-export const customerPosition = (i: number) => ({ x: 713 + i * 60, y: 190 });
+export const customerPosition = (i: number) => ({ x: COUNTER.x - 60 + i * 60, y: COUNTER.y - 60 });
+
+/** Labels for the stations, placed clear of their markers. */
+export const LABELS = {
+  refiner: { x: 170, y: 540 },
+  cauldron: { x: 330, y: 770 },
+};

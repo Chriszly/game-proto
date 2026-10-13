@@ -17,15 +17,16 @@ interface GameState {
   orders: { wants: ItemId[] }[];
 }
 
-// Floor spots in the 960x540 world, from src/scenes/layout.ts. Walking targets the doctor's feet.
-const WHEAT_XS = [264, 174, 84];
-const WHEAT_Y = 200;
-const MANDRAKE = { x: 174, y: 430 };
-const WALKWAY = { x: 340, y: 290 };
-const REFINER = { drop: { x: 370, y: 178 }, work: { x: 450, y: 108 }, pickUp: { x: 530, y: 178 } };
-const CAULDRON = { drop: { x: 370, y: 408 }, work: { x: 450, y: 482 }, pickUp: { x: 530, y: 408 } };
-const SHOP_DOOR = { x: 600, y: 335 };
-const COUNTER = { drop: { x: 645, y: 262 }, work: { x: 773, y: 302 }, coins: { x: 901, y: 262 }, upgrade: { x: 896, y: 468 } };
+// Floor spots in the 1200x810 world, from src/scenes/layout.ts. Walking targets the doctor's feet.
+// The world is bigger than the 960x540 view; the camera follows the doctor.
+const VIEW = { w: 960, h: 540, hud: 44 };
+const WHEAT_XS = [252, 162, 72];
+const WHEAT_Y = 178;
+const MANDRAKE = { x: 162, y: 370 };
+const REFINER = { drop: { x: 330, y: 468 }, work: { x: 430, y: 540 }, pickUp: { x: 330, y: 612 } };
+const CAULDRON = { drop: { x: 380, y: 728 }, work: { x: 450, y: 650 }, pickUp: { x: 540, y: 728 } };
+const SHOP_DOOR = { x: 600, y: 420 };
+const COUNTER = { drop: { x: 472, y: 282 }, work: { x: 520, y: 340 }, coins: { x: 728, y: 282 }, upgrade: { x: 710, y: 346 } };
 
 const UPGRADE_COST = 20;
 /**
@@ -55,6 +56,8 @@ function scene(page: Page) {
   return {
     state: () => read<GameState>((s) => JSON.parse(JSON.stringify(s.state))),
     feet: () => read<Point & { moving: boolean }>((s) => ({ x: s.player.x, y: s.player.body.center.y, moving: !!s.pointerTarget })),
+    /** The top-left corner of the view in the world, which moves as the camera follows the doctor. */
+    view: () => read<Point>((s) => ({ x: s.cameras.main.scrollX, y: s.cameras.main.scrollY })),
   };
 }
 
@@ -126,18 +129,46 @@ test('plays the whole game loop', async ({ page }, testInfo) => {
   const snap = async (name: string) =>
     testInfo.attach(name, { body: await page.screenshot({ path: testInfo.outputPath(`${name}.png`) }), contentType: 'image/png' });
 
-  /** Clicks the spot, like a tap, and waits for the doctor's feet to arrive. */
+  /** Taps a spot on screen, as a player would, and waits for the doctor's feet to arrive there. */
+  async function tapAndWalk(to: Point) {
+    const box = (await canvas.boundingBox())!;
+    const scale = box.width / VIEW.w;
+    const view = await game.view();
+    await page.mouse.click(box.x + (to.x - view.x) * scale, box.y + (to.y - view.y) * scale);
+    let at = await game.feet();
+    const arrived = await play(15_000, async () => {
+      at = await game.feet();
+      return !at.moving && Math.hypot(at.x - to.x, at.y - to.y) < ARRIVED_PX;
+    });
+    expect(arrived, `walk to ${to.x},${to.y}; the doctor's feet are at ${JSON.stringify(at)}`).toBe(true);
+  }
+
+  /**
+   * Walks to each spot in turn. A spot outside the view is reached in hops: tap the farthest point
+   * towards it that is on screen, let the camera follow, and tap again.
+   */
   async function walkTo(...route: Point[]) {
+    const margin = 40;
     for (const to of route) {
-      const box = (await canvas.boundingBox())!;
-      const scale = box.width / 960;
-      await page.mouse.click(box.x + to.x * scale, box.y + to.y * scale);
-      let at = await game.feet();
-      const arrived = await play(15_000, async () => {
-        at = await game.feet();
-        return !at.moving && Math.hypot(at.x - to.x, at.y - to.y) < ARRIVED_PX;
-      });
-      expect(arrived, `walk to ${to.x},${to.y}; the doctor's feet are at ${JSON.stringify(at)}`).toBe(true);
+      for (let hop = 0; ; hop++) {
+        expect(hop, `hops to reach ${to.x},${to.y}`).toBeLessThan(6);
+        const view = await game.view();
+        const left = view.x + margin, right = view.x + VIEW.w - margin;
+        const top = view.y + VIEW.hud + margin, bottom = view.y + VIEW.h - margin;
+        if (to.x >= left && to.x <= right && to.y >= top && to.y <= bottom) {
+          await tapAndWalk(to);
+          break;
+        }
+        // The farthest point on the straight line towards the spot that is still on screen.
+        const from = await game.feet();
+        const dx = to.x - from.x, dy = to.y - from.y;
+        let t = 1;
+        if (dx > 0) t = Math.min(t, (right - from.x) / dx);
+        if (dx < 0) t = Math.min(t, (left - from.x) / dx);
+        if (dy > 0) t = Math.min(t, (bottom - from.y) / dy);
+        if (dy < 0) t = Math.min(t, (top - from.y) / dy);
+        await tapAndWalk({ x: Math.round(from.x + dx * t), y: Math.round(from.y + dy * t) });
+      }
     }
   }
 
@@ -171,6 +202,8 @@ test('plays the whole game loop', async ({ page }, testInfo) => {
       await until(`wheat ${i + 1} harvested`, (s) => (count(s.carrying).wheat ?? 0) >= i + 1);
     }
     expect(count((await game.state()).carrying)).toEqual({ wheat: 3 });
+    // The camera followed the doctor up to the wheat field, at the top-left corner of the world.
+    expect(await game.view()).toEqual({ x: 0, y: 0 });
     await until('a ripe mandrake', (s) => s.plots[4].grown >= 14_000, 20_000);
     await walkTo(MANDRAKE);
     let s = await until('one mandrake harvested', (s) => s.carrying.length === 4);
@@ -178,7 +211,7 @@ test('plays the whole game loop', async ({ page }, testInfo) => {
     if (cycle === 1) await snap('1-harvested');
 
     // Refining table: drop the plants, work until they are refined, pick the goods up.
-    await walkTo(WALKWAY, REFINER.drop);
+    await walkTo(REFINER.drop);
     s = await until('plants dropped at the refining table', (s) => s.carrying.length === 0);
     expect(s.refiner.queue.length + s.refiner.output.length).toBe(4);
     await walkTo(REFINER.work);
@@ -189,13 +222,15 @@ test('plays the whole game loop', async ({ page }, testInfo) => {
     expect(count(s.carrying)).toEqual({ flour: 3, mandrakeSeeds: 1 });
 
     // Cauldron: flour and seeds brew a Sleeping Tonic, two flour a Healing Draught.
-    await walkTo({ x: REFINER.pickUp.x, y: WALKWAY.y }, { x: CAULDRON.drop.x, y: WALKWAY.y }, CAULDRON.drop);
+    await walkTo(CAULDRON.drop);
     await until('goods in the cauldron', (s) => s.carrying.length === 0);
     await walkTo(CAULDRON.work);
     if (cycle === 1) await snap('3-brewing');
     await until('potions brewed', (s) => s.cauldron.output.length === 2);
     await walkTo(CAULDRON.pickUp);
     s = await until('potions picked up', (s) => s.carrying.length === 2);
+    // Down at the cauldron, the bottom of the U, the view has scrolled to the bottom edge of the world.
+    expect((await game.view()).y).toBe(810 - VIEW.h);
     expect(count(s.carrying)).toEqual({ sleepingTonic: 1, healingDraught: 1 });
 
     // Storefront: stock the shelf and serve customers until the shelf is empty, then take the coins.
@@ -211,7 +246,7 @@ test('plays the whole game loop', async ({ page }, testInfo) => {
       expect(s.coins).toBe(before);
     }
     // Back to the gardens for the next round, if needed.
-    if (s.coins < UPGRADE_COST) await walkTo(SHOP_DOOR, WALKWAY);
+    if (s.coins < UPGRADE_COST) await walkTo(SHOP_DOOR);
   }
 
   // Upgrade: stand on the counter's upgrade marker until the next level is paid for.
@@ -221,7 +256,7 @@ test('plays the whole game loop', async ({ page }, testInfo) => {
   await until('counter upgraded', (s) => s.upgrades.counter.level === 1);
   await snap('5-upgraded');
   // Step off before more coins go towards the next level; whatever did is held in `paid`.
-  await walkTo({ x: COUNTER.upgrade.x - 80, y: COUNTER.upgrade.y });
+  await walkTo({ x: COUNTER.upgrade.x - 90, y: COUNTER.upgrade.y });
   const done = await game.state();
   expect(done.upgrades.counter.level).toBe(1);
   expect(done.coins + done.upgrades.counter.paid).toBe(rich.coins - UPGRADE_COST);

@@ -5,7 +5,13 @@ Apothecary: a small automation game prototype built with [Phaser 4](https://phas
 You play a plague doctor running a medieval apothecary. Grow herbs in the backyard, refine them,
 brew potions in the cauldron and sell them to customers at the storefront.
 
-![Overview](docs/screenshots/overview.png)
+![The whole map](docs/screenshots/u-layout-map.png)
+
+The apothecary is laid out as a U: goods go down the left arm (the wheat field and mandrake patch,
+then the refining table), along the bottom (the cauldron) and up the middle into the shop at the
+top. The right arm mirrors the left and is kept free for a second production line, and the open
+courtyard inside the U is where the doctor works. The map is bigger than the screen, so the camera
+follows the doctor.
 
 ## How to play
 
