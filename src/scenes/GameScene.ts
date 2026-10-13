@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 
 const SPEED = 160;
+const PLAYER_SCALE = 3;
 
 export class GameScene extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Sprite;
@@ -23,7 +24,10 @@ export class GameScene extends Phaser.Scene {
       })
       .setOrigin(0.5, 0);
 
-    this.player = this.physics.add.sprite(width / 2, height / 2, 'player');
+    this.player = this.physics.add.sprite(width / 2, height / 2, 'doctor-idle');
+    this.player.setScale(PLAYER_SCALE);
+    // Collide with the feet only, so the hat and beak can overlap things behind the doctor.
+    this.player.body!.setSize(10, 5).setOffset(3, 19);
     this.player.setCollideWorldBounds(true);
 
     const keyboard = this.input.keyboard!;
@@ -60,5 +64,18 @@ export class GameScene extends Phaser.Scene {
 
     dir.normalize().scale(SPEED);
     this.player.setVelocity(dir.x, dir.y);
+    this.animatePlayer(dir);
+  }
+
+  private animatePlayer(velocity: Phaser.Math.Vector2) {
+    if (velocity.x !== 0) this.player.setFlipX(velocity.x < 0);
+    if (velocity.lengthSq() > 0) {
+      this.player.anims.play('doctor-walk', true);
+    } else {
+      this.player.anims.stop();
+      this.player.setTexture('doctor-idle');
+    }
+    // Draw lower sprites in front of higher ones.
+    this.player.setDepth(this.player.y);
   }
 }
