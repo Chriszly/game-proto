@@ -1,3 +1,4 @@
+import { settings } from '../../../../shared/settings';
 import Phaser from 'phaser';
 import { adventurerTexture } from '../art/characters';
 import { swordTexture } from '../art/swords';
@@ -228,7 +229,7 @@ export class GameScene extends Phaser.Scene {
         if (!sprite) continue;
         sprite.setScale(e.kind === 'merged' ? 1.5 : 0.4);
         this.tweens.add({ targets: sprite, scale: 1, duration: 250, ease: 'Back.Out' });
-        if (e.kind === 'merged') {
+        if (e.kind === 'merged' && !settings.reduceMotion) {
           const flash = this.add.circle(c.x, c.y - SWORD_LIFT, 40, 0xfff4d0, 0.8).setDepth(9);
           this.tweens.add({ targets: flash, scale: 1.6, alpha: 0, duration: 350, onComplete: () => flash.destroy() });
         }

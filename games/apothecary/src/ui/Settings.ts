@@ -1,20 +1,18 @@
 import Phaser from 'phaser';
 import { INK, WOOD } from '../art/palette';
-import { FRAME_RATES, frameRate, setFrameRate } from '../frameCap';
+import { settings } from '../../../../shared/settings';
 
 const WIDTH = 360;
 const TEXT = { fontFamily: 'monospace', fontSize: '12px', color: '#f3e9d2' };
 const BUTTON = { ...TEXT, backgroundColor: '#5c3a21', padding: { x: 6, y: 4 } };
-const CHOSEN = '#8f6a24';
 
 /**
- * A panel over the middle of the screen with the game's settings: the frame rate, and starting a
- * new game. The scene closes it on a tap outside the panel. Its parts are not in a container,
+ * A panel over the middle of the screen that shows the hub's settings this game runs with (they are
+ * changed on the hub page) and starts a new game. The scene closes it on a tap outside the panel. Its parts are not in a container,
  * because taps on a container's children miss once the camera has scrolled.
  */
 export class Settings {
   private parts: (Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.Visible)[];
-  private rates: { text: Phaser.GameObjects.Text; fps: (typeof FRAME_RATES)[number] }[] = [];
 
   constructor(scene: Phaser.Scene, depth: number, onNewGame: () => void) {
     const { width, height } = scene.scale;
@@ -43,21 +41,14 @@ export class Settings {
     };
 
     parts.push(scene.add.text(cx, top + 14, 'Settings', { ...TEXT, fontSize: '14px', color: '#e6c766' }).setOrigin(0.5, 0));
-    parts.push(scene.add.text(cx, top + 44, 'Frame rate (FPS)', TEXT).setOrigin(0.5, 0));
-    const step = (WIDTH - 60) / (FRAME_RATES.length - 1);
-    FRAME_RATES.forEach((fps, i) => {
-      const text = button(-WIDTH / 2 + 30 + i * step, 64, String(fps), () => {
-        setFrameRate(fps);
-        this.update();
-      });
-      this.rates.push({ text, fps });
-    });
+    const difficulty = settings.difficulty[0].toUpperCase() + settings.difficulty.slice(1);
+    parts.push(scene.add.text(cx, top + 44, `Difficulty: ${difficulty}   Frame rate: ${settings.fps} FPS`, TEXT).setOrigin(0.5, 0));
+    parts.push(scene.add.text(cx, top + 64, 'Change these on the hub page', { ...TEXT, fontSize: '11px', color: '#bfae8e' }).setOrigin(0.5, 0));
     button(0, 108, 'New game', onNewGame);
     parts.push(scene.add.text(cx, top + 146, 'Tap outside to close', { ...TEXT, fontSize: '11px', color: '#bfae8e' }).setOrigin(0.5, 0));
 
     for (const part of parts) (part as unknown as Phaser.GameObjects.Image).setScrollFactor(0).setDepth(depth).setVisible(false);
     this.parts = parts;
-    this.update();
   }
 
   get visible() {
@@ -66,10 +57,5 @@ export class Settings {
 
   toggle(open = !this.visible) {
     for (const part of this.parts) part.setVisible(open);
-  }
-
-  /** Marks the chosen frame rate. */
-  private update() {
-    for (const { text, fps } of this.rates) text.setBackgroundColor(fps === frameRate() ? CHOSEN : BUTTON.backgroundColor);
   }
 }

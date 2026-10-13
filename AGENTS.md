@@ -25,6 +25,14 @@ Pirate Raid, in `games/pirate-raid/`, Potion Puzzle, in `games/potion-puzzle/`, 
   Playwright project in `playwright.config.ts`, and a row in the README's table of games. Vite picks
   up `games/*/index.html` on its own. Keep save keys and other browser storage prefixed with the
   game's name, since every game shares the hub's origin.
+- **Honour the hub's settings.** Every game calls `setupGame(game)` from `shared/setupGame.ts`
+  right after creating its `Phaser.Game`, which applies the frame cap, the FPS readout and reduced
+  motion. Each game also implements the difficulty itself: scale one or two of its own balance
+  numbers with `byDifficulty(easy, normal, hard)` from `shared/settings.ts`, keep Normal exactly as
+  designed (the playthrough runs on Normal), and add the game's row to the difficulty table in the
+  README. Skip camera shake and flashes, and hold blinking or jittering effects still, when
+  `settings.reduceMotion` is on. A new setting goes into `shared/settings.ts` (its type, default and
+  `SETTING_FIELDS` row, which the hub panel shows on its own) and then into every game.
 - **Never use a red cross.** No game art, icon, button, cover or favicon (the hub's included) may show a
   red cross: no red plus, red-cross health or medic symbol, or red crosshair. Use a green cross (or
   another colour) for healing and aiming marks instead.

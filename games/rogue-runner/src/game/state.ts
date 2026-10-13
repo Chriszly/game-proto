@@ -1,3 +1,4 @@
+import { byDifficulty } from '../../../../shared/settings';
 import { BOONS, type BoonId } from './boons';
 
 // The run in plain numbers. The course runs left to right along x in world pixels; heights are
@@ -13,7 +14,8 @@ export const DROP_V = 1100;
 export const SLIDE_MS = 620;
 /** How long the knight can't be hurt again after a hit. */
 export const HURT_MS = 1100;
-export const START_HEARTS = 3;
+/** Hearts at the start of a run: more on Easy, fewer on Hard. */
+export const START_HEARTS = byDifficulty(5, 3, 2);
 /** How near a coin has to be to the knight's box to be picked up. */
 export const COIN_REACH = 14;
 /** Length of a stage, from one checkpoint to the next, and the clear run at its start. */

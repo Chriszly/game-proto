@@ -17,6 +17,32 @@ start page lists the games; each one lives in its own folder under `games/`.
 | [Potion Puzzle](games/potion-puzzle/README.md) | A match-3 board of Apothecary's ingredients: swap tiles to gather what each potion order asks for before the moves run out, and sell the potion for coins. |
 | [Delve](games/delve/README.md) | Fight through a short dungeon with a deck of cards: a hand of five each turn against foes who show what they will do next, and a new card after every fight. |
 
+## Settings
+
+The hub's **Settings** button opens the settings every game shares. They are saved in the browser
+(`shared/settings.ts`) and apply to a game the next time it opens.
+
+![The hub's settings](docs/screenshots/hub-settings.png)
+
+- **Difficulty**: Easy, Normal or Hard. Normal is each game as designed; each game picks what it scales:
+
+  | Game | Easy | Hard |
+  | --- | --- | --- |
+  | Apothecary | customers wait 50% longer | customers wait 30% less |
+  | Deadline | zombies have 25% less health | zombies have 30% more health |
+  | Palisade | foes have 25% less health | foes have 30% more health |
+  | Tiny Kingdom | round goals 20% lower | round goals 20% higher |
+  | Rogue Runner | 5 hearts | 2 hearts |
+  | Merge Forge | adventurers wait 50% longer | adventurers wait 30% less |
+  | Pirate Raid | enemy ships have 25% less health | enemy ships have 30% more health |
+  | Potion Puzzle | 5 more moves per order | 3 fewer moves per order |
+  | Delve | foes have 25% less health | foes have 30% more health |
+
+- **Frame rate (FPS)**: the most frames per second a game draws, 30 to 320 (60 by default).
+- **Show FPS**: a readout of the frame rate in each game's corner.
+- **Reduce motion**: turns off screen shake, flashes and blinking hit effects.
+- **Restore defaults** and **Reset all progress**, which erases every game's save and keeps the settings.
+
 ## Running locally
 
 ```sh
@@ -31,7 +57,11 @@ npm run preview   # serve the production build
 - `index.html`: the hub page, one card per game.
 - `games/<name>/`: one game, with its own `index.html`, `src/`, `e2e/` playthrough test, `docs/`
   screenshots and `README.md`. Games don't import from each other.
-- `e2e/hub.spec.ts`: checks that the hub lists every game and that each card opens it.
+- `shared/`: the settings every game shares (`settings.ts`), the hub's Settings panel
+  (`settingsPanel.ts`) and `setupGame.ts`, which each game calls to apply the frame cap, the FPS
+  readout and reduced motion.
+- `e2e/hub.spec.ts`: checks that the hub lists every game, that each card opens it, and that the
+  settings are saved and reach a game.
 - `package.json`, `tsconfig.json`, `vite.config.ts` and `playwright.config.ts` are shared. Vite
   builds every `games/*/index.html` next to the hub; Playwright runs one project per game.
 

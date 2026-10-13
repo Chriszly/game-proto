@@ -1,3 +1,4 @@
+import { byDifficulty } from '../../../../shared/settings';
 import { ENEMIES } from './ships';
 import {
   ARC,
@@ -107,7 +108,7 @@ function spawn(s: GameState, dt: number) {
   const angle = Math.random() * Math.PI * 2;
   const x = Math.max(EDGE * 2, Math.min(WORLD.w - EDGE * 2, s.player.x + Math.cos(angle) * SPAWN_DISTANCE));
   const y = Math.max(EDGE * 2, Math.min(WORLD.h - EDGE * 2, s.player.y + Math.sin(angle) * SPAWN_DISTANCE));
-  const hp = Math.round(ENEMIES[kind].hp * hpScale(s.wave));
+  const hp = Math.round(ENEMIES[kind].hp * hpScale(s.wave) * byDifficulty(0.75, 1, 1.3));
   s.enemies.push(newShip(s.nextId++, kind, x, y, bearing({ x, y }, s.player), hp));
 }
 

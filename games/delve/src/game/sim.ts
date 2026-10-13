@@ -1,3 +1,4 @@
+import { byDifficulty } from '../../../../shared/settings';
 import { COMMON, RARE, STARTER_DECK, card, type CardId } from './cards';
 import { ENEMIES, type EnemyKind, type Intent } from './enemies';
 import { ROOMS, reachable } from './map';
@@ -82,7 +83,8 @@ function startFight(s: GameState, foes: EnemyKind[]) {
     block: 0,
     turn: 0,
     enemies: foes.map((kind) => {
-      const hp = ENEMIES[kind].hp;
+      // Foes are a quarter weaker on Easy and 30% tougher on Hard.
+      const hp = Math.round(ENEMIES[kind].hp * byDifficulty(0.75, 1, 1.3));
       return { id: s.nextId++, kind, hp, maxHp: hp, block: 0, strength: 0, step: 0, hitMs: 0, actMs: 0 };
     }),
     acted: 0,

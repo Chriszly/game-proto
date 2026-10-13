@@ -7,6 +7,7 @@ on:
     branches: [main]
     paths: &paths
       - games/merge-forge/**
+      - shared/**
       - package.json
       - package-lock.json
       - tsconfig.json

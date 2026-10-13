@@ -12,6 +12,7 @@ on:
       - games/*/index.html
       - games/*/cover.png
       - games/*/favicon.svg
+      - shared/**
       - package.json
       - package-lock.json
       - tsconfig.json

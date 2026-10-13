@@ -58,6 +58,8 @@ Every wave brings one more sloop than the last, and enemy hulls get 12% tougher 
 
 ![The harbor between waves](docs/screenshots/playthrough-2-harbor.png)
 
+The difficulty, set on the hub page's Settings, changes one thing: enemy ships have 25% less health on Easy and 30% more on Hard.
+
 ## Running locally
 
 `npm run dev` at the repo root, then open `/games/pirate-raid/` (or pick Pirate Raid on the hub

@@ -44,6 +44,8 @@ tiles or room first and the kingdom is finished.
 
 ![The kingdom is built](docs/screenshots/game-over.png)
 
+The difficulty, set on the hub page's Settings, changes one thing: round goals are 20% lower on Easy and 20% higher on Hard.
+
 ## Running locally
 
 `npm run dev` at the repo root, then open `/games/tiny-kingdom/` (or pick Tiny Kingdom on the hub
