@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
-import { plantTexture } from '../art/placeholders';
+import { plantTexture } from '../art/garden';
+import { customerTexture } from '../art/townsfolk';
+import { signTexture } from '../art/ui';
 import { GROW_MS, ITEMS, REFINE } from '../game/items';
 import {
   collectTill,
@@ -28,19 +30,19 @@ import {
   REFINER,
   REFINER_MARKERS,
   SHOP,
+  YARD,
   customerPosition,
   plotPosition,
 } from './layout';
 
 const SPEED = 160;
-const PLAYER_SCALE = 3;
+const PLAYER_SCALE = 2;
 /** Longest simulated step, so a backgrounded tab doesn't jump the world forward. */
 const MAX_STEP_MS = 250;
 const UI_DEPTH = 10_000;
 const AUTOSAVE_MS = 3_000;
 /** How often a floor marker moves the next item while the doctor stands on it. */
 const MARKER_INTERVAL_MS = 200;
-const CUSTOMER_TINTS = [0x8f5a9e, 0x4d7aa8, 0xa8584d, 0x5e8f62, 0xb8934a];
 
 /** A floor marker that acts by itself, one step at a time, while the doctor stands on it. */
 interface Marker {
@@ -130,28 +132,45 @@ export class GameScene extends Phaser.Scene {
   }
 
   private drawGrounds() {
-    const g = this.add.graphics().setDepth(-1000);
-    // Gardens: tilled earth inside a picket fence.
-    for (const area of GARDEN_AREAS) {
-      g.fillStyle(0x4f6e35).fillRect(area.x, area.y, area.w, area.h);
-      g.lineStyle(4, 0xa88a5c).strokeRect(area.x, area.y, area.w, area.h);
-    }
-    // Shop: plank floor with a door gap facing the street.
-    g.fillStyle(0x7a5a3a).fillRect(SHOP.x, SHOP.y, SHOP.w, SHOP.h);
-    g.lineStyle(1, 0x5f4429);
-    for (let y = SHOP.y + 20; y < SHOP.y + SHOP.h; y += 20) g.lineBetween(SHOP.x, y, SHOP.x + SHOP.w, y);
-    g.lineStyle(6, 0x4a3a2c).strokeRect(SHOP.x, SHOP.y, SHOP.w, SHOP.h);
-    g.fillStyle(0x7a5a3a).fillRect(SHOP.x - 4, SHOP.y + 290, 8, 90);
+    const { width, height } = this.scale;
+    const ground = (x: number, y: number, w: number, h: number, texture: string, depth = -1000) =>
+      this.add.tileSprite(x, y, w, h, texture).setOrigin(0).setDepth(depth);
+    ground(0, HUD_HEIGHT, width, height - HUD_HEIGHT, 'tile-grass');
 
-    const label = (x: number, y: number, text: string) =>
-      this.add
-        .text(x, y, text, { fontFamily: 'monospace', fontSize: '13px', color: '#f3e9d2' })
+    // Workshop yard of packed earth, with a path to the shop door.
+    ground(YARD.x, YARD.y, YARD.w, YARD.h, 'tile-dirt');
+    ground(YARD.x + YARD.w, SHOP.y + 290, SHOP.x - YARD.x - YARD.w, 90, 'tile-dirt');
+
+    // Gardens: meadow inside a picket fence.
+    for (const area of GARDEN_AREAS) {
+      ground(area.x, area.y, area.w, area.h, 'tile-meadow');
+      ground(area.x - 12, area.y, 32, area.h, 'fence-v', -990);
+      ground(area.x + area.w - 20, area.y, 32, area.h, 'fence-v', -990);
+      ground(area.x, area.y - 4, area.w, 32, 'fence-h', -980);
+      ground(area.x, area.y + area.h - 28, area.w, 32, 'fence-h', -980);
+    }
+
+    // Shop: plank floor inside stone walls, with a doorway facing the yard.
+    ground(SHOP.x, SHOP.y, SHOP.w, SHOP.h, 'tile-planks');
+    const wall = 16;
+    ground(SHOP.x - wall / 2, SHOP.y - wall / 2, SHOP.w + wall, wall, 'tile-wall', -990);
+    ground(SHOP.x - wall / 2, SHOP.y + SHOP.h - wall / 2, SHOP.w + wall, wall, 'tile-wall', -990);
+    ground(SHOP.x + SHOP.w - wall / 2, SHOP.y, wall, SHOP.h, 'tile-wall', -990);
+    ground(SHOP.x - wall / 2, SHOP.y, wall, 290, 'tile-wall', -990);
+    ground(SHOP.x - wall / 2, SHOP.y + 380, wall, SHOP.h - 380, 'tile-wall', -990);
+
+    // Place names on wooden signs.
+    const label = (x: number, y: number, text: string) => {
+      const name = this.add
+        .text(x, y, text, { fontFamily: 'monospace', fontSize: '13px', color: '#f3e9d2', stroke: '#3b2416', strokeThickness: 2 })
         .setOrigin(0.5)
         .setDepth(-900);
-    for (const area of GARDEN_AREAS) label(area.x + area.w / 2, area.y + 14, area.name);
+      this.add.image(x, y, signTexture(this, name.width + 16)).setDepth(-910);
+    };
+    for (const area of GARDEN_AREAS) label(area.x + area.w / 2, area.y + 10, area.name);
     label(REFINER.x, REFINER.y + 46, 'Refining table');
     label(CAULDRON.x, CAULDRON.y - 64, 'Cauldron');
-    label(SHOP.x + SHOP.w / 2, SHOP.y + 14, 'Storefront');
+    label(SHOP.x + SHOP.w / 2, SHOP.y, 'Storefront');
   }
 
   private createPlots() {
@@ -192,7 +211,7 @@ export class GameScene extends Phaser.Scene {
       refining.set(refiner.queue.length > 0 ? refiner.progress / REFINE[refiner.queue[0]].ms : null);
     });
 
-    this.addObstacle(CAULDRON.x, CAULDRON.y, 'cauldron', 60, 28);
+    this.addObstacle(CAULDRON.x, CAULDRON.y, 'cauldron', 60, 28).play('cauldron-boil');
     const pot = new IconRow(this, CAULDRON.x, CAULDRON.y - 40, UI_DEPTH);
     const brewing = new ProgressBar(this, CAULDRON.x, CAULDRON.y + 34, 60, 0x58a35a, UI_DEPTH);
     const brewed = this.addMarker(CAULDRON_MARKERS.pickUp, 'pad-out', 'Pick up', () => pickUpFromCauldron(this.state));
@@ -266,33 +285,32 @@ export class GameScene extends Phaser.Scene {
     // One customer slot per possible order; slot i shows the i-th open order.
     for (let i = 0; i < MAX_ORDERS; i++) {
       const { x, y } = customerPosition(i);
-      const customer = this.add.image(x, y, 'customer').setScale(2).setDepth(y);
-      const head = this.add.image(x, y, 'customer-head').setScale(2).setDepth(y);
+      const customer = this.add.image(x, y, customerTexture(0)).setScale(2).setDepth(y);
       const wants = new IconRow(this, x, y - 52, UI_DEPTH);
       const patience = new ProgressBar(this, x, y - 40, 40, 0xe0b84a, UI_DEPTH);
       this.views.push(() => {
         const order = this.state.orders[i];
         customer.setVisible(!!order);
-        head.setVisible(!!order);
         wants.set(order ? order.wants : []);
         patience.set(order ? order.patience / order.maxPatience : null);
-        if (order) customer.setTint(CUSTOMER_TINTS[order.id % CUSTOMER_TINTS.length]);
+        if (order) customer.setTexture(customerTexture(order.id));
       });
     }
   }
 
   private createHud() {
     const { width } = this.scale;
-    this.add.rectangle(0, 0, width, HUD_HEIGHT, 0x1b1410).setOrigin(0).setDepth(UI_DEPTH);
+    this.add.tileSprite(0, 0, width, HUD_HEIGHT, 'hud-bar').setOrigin(0).setDepth(UI_DEPTH);
     const style = { fontFamily: 'monospace', fontSize: '16px', color: '#f3e9d2' };
-    const coins = this.add.text(16, HUD_HEIGHT / 2, '', style).setOrigin(0, 0.5).setDepth(UI_DEPTH);
+    this.add.image(26, HUD_HEIGHT / 2 - 1, 'coin').setScale(2).setDepth(UI_DEPTH);
+    const coins = this.add.text(44, HUD_HEIGHT / 2 - 1, '', style).setOrigin(0, 0.5).setDepth(UI_DEPTH);
     this.add.text(width / 2 - 92, HUD_HEIGHT / 2, 'Hands', style).setOrigin(1, 0.5).setDepth(UI_DEPTH);
     this.add
       .text(width - 110, HUD_HEIGHT / 2, 'Walk: WASD / tap\nHarvest: E / Space / tap', { ...style, fontSize: '11px' })
       .setOrigin(1, 0.5)
       .setDepth(UI_DEPTH);
     this.add
-      .text(width - 16, HUD_HEIGHT / 2, 'New game', { ...style, fontSize: '12px', backgroundColor: '#5a3d22', padding: { x: 6, y: 4 } })
+      .text(width - 16, HUD_HEIGHT / 2, 'New game', { ...style, fontSize: '12px', backgroundColor: '#5c3a21', padding: { x: 6, y: 4 } })
       .setOrigin(1, 0.5)
       .setDepth(UI_DEPTH)
       .setInteractive({ useHandCursor: true })
@@ -303,13 +321,13 @@ export class GameScene extends Phaser.Scene {
 
     const slots = Array.from({ length: CARRY_CAPACITY }, (_, i) => {
       const x = width / 2 - 60 + i * 40;
-      this.add.rectangle(x, HUD_HEIGHT / 2, 32, 32, 0x3a2c22).setStrokeStyle(2, 0x8a6239).setDepth(UI_DEPTH);
-      return this.add.image(x, HUD_HEIGHT / 2, 'item-wheat').setScale(1.5).setDepth(UI_DEPTH);
+      this.add.image(x, HUD_HEIGHT / 2 - 1, 'slot').setDepth(UI_DEPTH);
+      return this.add.image(x, HUD_HEIGHT / 2 - 1, 'item-wheat').setScale(1.5).setDepth(UI_DEPTH);
     });
     const pack = new BackStack(this);
 
     this.prompt = this.add
-      .text(0, 0, '', { ...style, fontSize: '12px', backgroundColor: '#1b1410cc', padding: { x: 4, y: 2 } })
+      .text(0, 0, '', { ...style, fontSize: '12px', backgroundColor: '#2a1c14dd', padding: { x: 4, y: 2 } })
       .setOrigin(0.5, 0)
       .setDepth(UI_DEPTH);
 
@@ -326,7 +344,7 @@ export class GameScene extends Phaser.Scene {
 
   /** A station image whose lower part blocks walking, so the doctor can pass behind its top edge. */
   private addObstacle(x: number, y: number, texture: string, bodyW: number, bodyH: number) {
-    const img = this.add.image(x, y, texture).setDepth(y);
+    const img = this.add.sprite(x, y, texture).setDepth(y);
     const block = this.add.zone(x, y + img.height / 2 - bodyH / 2, bodyW, bodyH);
     this.obstacles.add(block);
     this.blockedAreas.push(new Phaser.Geom.Rectangle(x - bodyW / 2 - 18, block.y - bodyH / 2 - 10, bodyW + 36, bodyH + 20));
@@ -338,7 +356,8 @@ export class GameScene extends Phaser.Scene {
     this.player = this.physics.add.sprite(x, y, 'doctor-idle');
     this.player.setScale(PLAYER_SCALE);
     // Collide with the feet only, so the hat and beak can overlap things behind the doctor.
-    this.player.body!.setSize(10, 5).setOffset(3, 19);
+    // In texture pixels: a 30x15 box at (9, 57) once scaled, as before the art was redrawn.
+    this.player.body!.setSize(15, 7.5).setOffset(4.5, 28.5);
     this.player.setCollideWorldBounds(true);
     this.physics.add.collider(this.player, this.obstacles);
   }

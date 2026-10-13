@@ -49,5 +49,7 @@ unzip it and serve the folder (for example with `npx serve`) to play.
   TypeScript with no Phaser dependency, plus saving.
 - `src/scenes/`: Phaser scenes. `BootScene` bakes textures, `GameScene` draws the world and wires
   input to the rules.
-- `src/art/`: the pixel-art plague doctor and placeholder art for everything else.
+- `src/art/`: all the pixel art, drawn in code on a shared palette and baked into textures at
+  startup: the plague doctor, townsfolk, items, gardens, stations, floor markers, ground tiles and
+  interface pieces.
 - `src/ui/`: small reusable display pieces (icon rows, progress bars).

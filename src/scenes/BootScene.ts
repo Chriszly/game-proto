@@ -1,7 +1,12 @@
 import Phaser from 'phaser';
-import { DOCTOR_FRAMES, DOCTOR_PALETTE } from '../art/doctor';
-import { bakePixelArt } from '../art/pixelArt';
-import { bakePlaceholders } from '../art/placeholders';
+import { bakeDoctor } from '../art/doctor';
+import { bakeGarden } from '../art/garden';
+import { bakeGround } from '../art/ground';
+import { bakeItems } from '../art/items';
+import { bakeMarkers } from '../art/markers';
+import { bakeStations } from '../art/stations';
+import { bakeTownsfolk } from '../art/townsfolk';
+import { bakeUi } from '../art/ui';
 
 // Generates all textures at runtime so the prototype needs no asset files yet.
 export class BootScene extends Phaser.Scene {
@@ -10,16 +15,14 @@ export class BootScene extends Phaser.Scene {
   }
 
   create() {
-    for (const [key, rows] of Object.entries(DOCTOR_FRAMES)) {
-      bakePixelArt(this, key, rows, DOCTOR_PALETTE);
-    }
-    this.anims.create({
-      key: 'doctor-walk',
-      frames: [{ key: 'doctor-stride' }, { key: 'doctor-idle' }, { key: 'doctor-pass' }, { key: 'doctor-idle' }],
-      frameRate: 10,
-      repeat: -1,
-    });
-    bakePlaceholders(this);
+    bakeDoctor(this);
+    bakeItems(this);
+    bakeGarden(this);
+    bakeStations(this);
+    bakeMarkers(this);
+    bakeTownsfolk(this);
+    bakeGround(this);
+    bakeUi(this);
 
     this.scene.start('Game');
   }

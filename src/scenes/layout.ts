@@ -15,6 +15,9 @@ export const plotPosition = (i: number) => {
   return { x: area.x + 60 + (i % PLOTS_PER_GARDEN) * 90, y: area.y + 118 };
 };
 
+/** The workshop yard between the gardens and the shop, where the refining table and cauldron stand. */
+export const YARD = { x: 340, y: 68, w: 254, h: 440 };
+
 export const REFINER = { x: 450, y: 170 };
 export const CAULDRON = { x: 450, y: 400 };
 
