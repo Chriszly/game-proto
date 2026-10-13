@@ -61,6 +61,10 @@ export class GameScene extends Phaser.Scene {
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasd!: Record<'up' | 'down' | 'left' | 'right', Phaser.Input.Keyboard.Key>;
   private pointerTarget: Phaser.Math.Vector2 | null = null;
+  /** A corner to walk to first when a station stands between the doctor and the tapped spot. */
+  private waypoint: Phaser.Math.Vector2 | null = null;
+  /** Station footprints grown by the doctor's feet, used to walk around stations after a tap. */
+  private blockedAreas: Phaser.Geom.Rectangle[] = [];
   private obstacles!: Phaser.Physics.Arcade.StaticGroup;
   private interactables: Interactable[] = [];
   private markers: Marker[] = [];
@@ -83,6 +87,8 @@ export class GameScene extends Phaser.Scene {
     this.views = [];
     this.pendingUse = null;
     this.pointerTarget = null;
+    this.waypoint = null;
+    this.blockedAreas = [];
     this.physics.world.setBounds(0, HUD_HEIGHT, this.scale.width, this.scale.height - HUD_HEIGHT);
     this.obstacles = this.physics.add.staticGroup();
 
@@ -311,6 +317,7 @@ export class GameScene extends Phaser.Scene {
     const img = this.add.image(x, y, texture).setDepth(y);
     const block = this.add.zone(x, y + img.height / 2 - bodyH / 2, bodyW, bodyH);
     this.obstacles.add(block);
+    this.blockedAreas.push(new Phaser.Geom.Rectangle(x - bodyW / 2 - 18, block.y - bodyH / 2 - 10, bodyW + 36, bodyH + 20));
     return img;
   }
 
@@ -341,6 +348,7 @@ export class GameScene extends Phaser.Scene {
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       if (p.worldY < HUD_HEIGHT) return;
       this.pointerTarget = new Phaser.Math.Vector2(p.worldX, p.worldY);
+      this.waypoint = this.routeAround(this.pointerTarget);
       this.pendingUse = this.interactables.find((it) => it.zone.contains(p.worldX, p.worldY)) ?? null;
     });
   }
@@ -428,9 +436,12 @@ export class GameScene extends Phaser.Scene {
       this.pointerTarget = null;
       this.pendingUse = null;
     } else if (this.pointerTarget) {
-      // Steer the feet, not the sprite centre, to the tapped spot.
-      dir.set(this.pointerTarget.x - this.player.x, this.pointerTarget.y - this.feetY());
-      if (dir.length() < 4) {
+      // Steer the feet, not the sprite centre, to the tapped spot, via a corner if a station is in the way.
+      const target = this.waypoint ?? this.pointerTarget;
+      dir.set(target.x - this.player.x, target.y - this.feetY());
+      if (this.waypoint && dir.length() < 6) {
+        this.waypoint = this.routeAround(this.pointerTarget);
+      } else if (!this.waypoint && dir.length() < 4) {
         this.pointerTarget = null;
         this.pendingUse = null;
         dir.set(0, 0);
@@ -440,6 +451,30 @@ export class GameScene extends Phaser.Scene {
     dir.normalize().scale(SPEED);
     this.player.setVelocity(dir.x, dir.y);
     this.animatePlayer(dir);
+  }
+
+  /**
+   * When a station blocks the straight line from the doctor's feet to `to`, returns the corner of
+   * that station to walk to first (the one making the shorter trip); otherwise null.
+   */
+  private routeAround(to: Phaser.Math.Vector2): Phaser.Math.Vector2 | null {
+    const from = new Phaser.Math.Vector2(this.player.x, this.feetY());
+    const blocks = (a: Phaser.Math.Vector2, b: Phaser.Math.Vector2, area: Phaser.Geom.Rectangle) =>
+      Phaser.Geom.Intersects.LineToRectangle(new Phaser.Geom.Line(a.x, a.y, b.x, b.y), area);
+    for (const area of this.blockedAreas) {
+      if (area.contains(from.x, from.y) || area.contains(to.x, to.y) || !blocks(from, to, area)) continue;
+      // Test against a slightly smaller area so lines along an edge or through a corner count as clear.
+      const inner = new Phaser.Geom.Rectangle(area.x + 2, area.y + 2, area.width - 4, area.height - 4);
+      const corners = [
+        new Phaser.Math.Vector2(area.left, area.top),
+        new Phaser.Math.Vector2(area.right, area.top),
+        new Phaser.Math.Vector2(area.left, area.bottom),
+        new Phaser.Math.Vector2(area.right, area.bottom),
+      ].filter((c) => !blocks(from, c, inner));
+      corners.sort((a, b) => from.distance(a) + a.distance(to) - (from.distance(b) + b.distance(to)));
+      return corners[0] ?? null;
+    }
+    return null;
   }
 
   private feetY() {
