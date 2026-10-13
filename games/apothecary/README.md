@@ -22,7 +22,7 @@ map is bigger than the screen, so the camera follows the doctor.
 | Walk past ripe plants | Harvest every ripe plant within one character height of the doctor; the spinning sickle marks the edge |
 | Recipes (top bar) | Show what each station makes from what, and what each potion sells for; tap again to close |
 | Drop all (top bar) | Throw away everything the doctor carries |
-| Stand on a floor marker | Green: drop off items. Blue: work the station. Gold: pick up products or coins. Purple: pay coins to upgrade or build something |
+| Stand on a floor marker | Green: drop off items. Blue: work the station. Gold: pick up products or coins. Purple: stand still on it to pay coins towards an upgrade or build; its caption shows the coins still to pay |
 
 1. **Gardens**: each garden grows one kind of plant. Harvest ripe wheat in the wheat field and
    mandrake in the mandrake patch. Plots regrow on their own.
