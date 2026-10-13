@@ -9,9 +9,9 @@ brew potions in the cauldron and sell them to customers at the storefront.
 
 The apothecary is laid out as a U: goods go down the left arm (the wheat field and mandrake patch,
 then the refining table), along the bottom (the cauldron) and up the middle into the shop at the
-top. The right arm is grass for now: an expansion will open it up for a second production line
-that mirrors the left. The courtyard inside the U is where the doctor works. The map is bigger than the screen, so the camera
-follows the doctor.
+top. The right arm is grass until the expansion is bought, which opens it up for a second
+production line that mirrors the left. The courtyard inside the U is where the doctor works. The
+map is bigger than the screen, so the camera follows the doctor.
 
 ## How to play
 
@@ -19,7 +19,7 @@ follows the doctor.
 | --- | --- |
 | WASD / arrow keys, or tap | Walk |
 | Walk past ripe plants | Harvest every ripe plant within one character height of the doctor; the spinning sickle marks the edge |
-| Stand on a floor marker | Green: drop off items. Blue: work the station. Gold: pick up products or coins. Purple: pay coins to upgrade or build a belt |
+| Stand on a floor marker | Green: drop off items. Blue: work the station. Gold: pick up products or coins. Purple: pay coins to upgrade or build something |
 
 1. **Gardens**: each garden grows one kind of plant. Harvest ripe wheat in the wheat field and
    mandrake in the mandrake patch. Plots regrow on their own.
@@ -42,6 +42,15 @@ The belts are steampunk machinery, brass rails over leather slats, in an otherwi
 
 ![All three belts built](docs/screenshots/belts-map.png)
 
+**The expansion** opens the right arm for a second production line. Its land is bought on a marker
+on the grass right of the shop (100 coins), which lays the yard and puts a build marker where each
+part will go: a wheat field and a mandrake patch (25 coins each), a refining table (50) and a
+cauldron (75). The second line works like the first and has its own belts, buildable once the
+stations at both ends stand; its cauldron belt meets the first line's at a T and shares the run up
+to the counter. The counter's drop marker stays until every cauldron has its belt.
+
+![Both lines with all their belts](docs/screenshots/expansion-map.png)
+
 You can carry four items at a time; they stack up on the doctor's back. Progress is saved in the browser automatically; "New game"
 in the top bar starts over.
 
@@ -57,10 +66,11 @@ npm run preview   # serve the production build
 ## Playthrough test
 
 `e2e/playthrough.spec.ts` plays the whole loop in headless Chromium with real clicks: it harvests
-both gardens, refines, brews, sells to customers until it has 20 coins and buys a counter upgrade,
-then sells more until it can buy the garden belt and watches the belt bring plants to the refining
-table, checking items, coins, the upgrade and the belt along the way. It plays at 4x speed
-(`PLAYTHROUGH_SPEED`), so the run takes under a minute. The Playthrough workflow runs it on every PR
+both gardens, refines, brews, sells to customers until it has 20 coins and buys a counter upgrade.
+It sells more to buy the expansion's land, a wheat field, a refining table and a cauldron, and
+plays a round on that second line. Last it buys the garden belt and watches the belt bring plants
+to the refining table, checking items, coins, upgrades and purchases along the way. It plays at 4x
+speed (`PLAYTHROUGH_SPEED`), so the run takes about three minutes. The Playthrough workflow runs it on every PR
 and push to main and uploads a video and milestone screenshots as the `playthrough` artifact.
 
 ```sh
