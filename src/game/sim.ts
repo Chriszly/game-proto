@@ -11,7 +11,18 @@ import {
   type PotionId,
   type RefinedId,
 } from './items';
-import { CARRY_CAPACITY, MAX_ORDERS, STATION_CAPACITY, type Cauldron, type GameState, type Order } from './state';
+import {
+  CARRY_CAPACITY,
+  MAX_LEVEL,
+  MAX_ORDERS,
+  STATION_CAPACITY,
+  speedAt,
+  upgradeCost,
+  type Cauldron,
+  type GameState,
+  type Order,
+  type StationId,
+} from './state';
 
 // Pure game rules, kept free of Phaser so later automation can drive the same functions.
 
@@ -22,7 +33,7 @@ export function tick(state: GameState, dt: number, rand: () => number = Math.ran
 
   const refiner = state.refiner;
   if (refiner.queue.length > 0 && refiner.output.length < STATION_CAPACITY) {
-    refiner.progress += dt;
+    refiner.progress += dt * speedAt(state.upgrades.refiner.level);
     const recipe = REFINE[refiner.queue[0]];
     if (refiner.progress >= recipe.ms) {
       refiner.queue.shift();
@@ -34,7 +45,7 @@ export function tick(state: GameState, dt: number, rand: () => number = Math.ran
   const cauldron = state.cauldron;
   if (!cauldron.brewing && cauldron.output.length < STATION_CAPACITY) startBrew(cauldron);
   if (cauldron.brewing) {
-    cauldron.brewing.progress += dt;
+    cauldron.brewing.progress += dt * speedAt(state.upgrades.cauldron.level);
     if (cauldron.brewing.progress >= cauldron.brewing.ms) {
       cauldron.output.push(cauldron.brewing.out);
       cauldron.brewing = null;
@@ -174,4 +185,63 @@ function canFill(carrying: readonly ItemId[], order: Order) {
     if (i >= 0) left.splice(i, 1);
     return i >= 0;
   });
+}
+
+// Floor markers: while the doctor stands on one, the scene calls its action repeatedly, and each
+// call moves at most one item (or one handful of coins). They return null when nothing moved.
+
+/** Takes the topmost carried item matching `pick` off the doctor's back. */
+function takeTopFromBack<T extends ItemId>(state: GameState, pick: (id: ItemId) => id is T): T | null {
+  for (let i = state.carrying.length - 1; i >= 0; i--) {
+    const id = state.carrying[i];
+    if (pick(id)) {
+      state.carrying.splice(i, 1);
+      return id;
+    }
+  }
+  return null;
+}
+
+function pickUpOne(state: GameState, from: ItemId[]): Feedback | null {
+  if (from.length === 0 || freeHands(state) === 0) return null;
+  const id = from.shift()!;
+  state.carrying.push(id);
+  return [`+ ${ITEMS[id].name}`];
+}
+
+export function dropAtRefiner(state: GameState): Feedback | null {
+  if (state.refiner.queue.length >= STATION_CAPACITY) return null;
+  const plant = takeTopFromBack(state, isPlant);
+  if (!plant) return null;
+  state.refiner.queue.push(plant);
+  return [`- ${ITEMS[plant].name}`];
+}
+
+export const pickUpFromRefiner = (state: GameState) => pickUpOne(state, state.refiner.output);
+
+export function dropInCauldron(state: GameState): Feedback | null {
+  if (state.cauldron.contents.length >= STATION_CAPACITY) return null;
+  const good = takeTopFromBack(state, isRefined);
+  if (!good) return null;
+  state.cauldron.contents.push(good);
+  return [`- ${ITEMS[good].name}`];
+}
+
+export const pickUpFromCauldron = (state: GameState) => pickUpOne(state, state.cauldron.output);
+
+const UPGRADE_STEP = 5;
+const STATION_NAMES: Record<StationId, string> = { refiner: 'Refining table', cauldron: 'Cauldron', counter: 'Counter' };
+
+/** Pays a handful of coins towards the station's next level, levelling it up once fully paid. */
+export function payUpgrade(state: GameState, station: StationId): Feedback | null {
+  const upgrade = state.upgrades[station];
+  if (upgrade.level >= MAX_LEVEL || state.coins === 0) return null;
+  const cost = upgradeCost(upgrade.level);
+  const pay = Math.min(UPGRADE_STEP, state.coins, cost - upgrade.paid);
+  state.coins -= pay;
+  upgrade.paid += pay;
+  if (upgrade.paid < cost) return [`-${pay} coins`];
+  upgrade.level++;
+  upgrade.paid = 0;
+  return [`${STATION_NAMES[station]} level ${upgrade.level + 1}!`];
 }

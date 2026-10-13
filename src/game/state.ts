@@ -28,14 +28,23 @@ export interface Order {
   maxPatience: number;
 }
 
+export type StationId = 'refiner' | 'cauldron' | 'counter';
+
+/** A station's upgrade level and the coins paid so far towards the next one. */
+export interface Upgrade {
+  level: number;
+  paid: number;
+}
+
 export interface GameState {
-  version: 2;
+  version: 3;
   coins: number;
   carrying: ItemId[];
   player: { x: number; y: number };
   plots: Plot[];
   refiner: Refiner;
   cauldron: Cauldron;
+  upgrades: Record<StationId, Upgrade>;
   orders: Order[];
   nextOrderIn: number;
   nextOrderId: number;
@@ -49,10 +58,16 @@ export const CARRY_CAPACITY = 4;
 export const STATION_CAPACITY = 6;
 export const MAX_ORDERS = 3;
 
+export const MAX_LEVEL = 3;
+/** Coins needed to go from `level` to the next level: 20, 40, 80. */
+export const upgradeCost = (level: number) => 20 * 2 ** level;
+/** Work-speed multiplier for the refining table and cauldron. */
+export const speedAt = (level: number) => 1 + 0.5 * level;
+
 export function createInitialState(): GameState {
   const ripe = (plant: PlantId): Plot => ({ plant, grown: GROW_MS[plant] });
   return {
-    version: 2,
+    version: 3,
     coins: 0,
     carrying: [],
     player: { x: 450, y: 290 },
@@ -60,6 +75,7 @@ export function createInitialState(): GameState {
     plots: GARDENS.flatMap((plant) => Array.from({ length: PLOTS_PER_GARDEN }, () => ripe(plant))),
     refiner: { queue: [], progress: 0, output: [] },
     cauldron: { contents: [], brewing: null, output: [] },
+    upgrades: { refiner: { level: 0, paid: 0 }, cauldron: { level: 0, paid: 0 }, counter: { level: 0, paid: 0 } },
     orders: [],
     nextOrderIn: 3_000,
     nextOrderId: 1,
