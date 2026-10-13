@@ -7,6 +7,7 @@ import { signTexture } from '../art/ui';
 import { GROW_MS, PLANTS, POTIONS, REFINE, REFINED, type ItemId } from '../game/items';
 import {
   collectTill,
+  dropAll,
   dropAtRefiner,
   dropInCauldron,
   harvest,
@@ -545,15 +546,12 @@ export class GameScene extends Phaser.Scene {
       .text(width - 110, HUD_HEIGHT / 2, 'Walk: WASD / tap\nHarvest: walk past ripe plants', { ...style, fontSize: '11px' })
       .setOrigin(1, 0.5)
       .setDepth(UI_DEPTH);
-    this.add
-      .text(width - 16, HUD_HEIGHT / 2, 'New game', { ...style, fontSize: '12px', backgroundColor: '#5c3a21', padding: { x: 6, y: 4 } })
-      .setOrigin(1, 0.5)
-      .setDepth(UI_DEPTH)
-      .setInteractive({ useHandCursor: true })
-      .on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
-        e.stopPropagation();
-        this.startOver();
-      });
+    this.hudButton(width - 16, 'New game', () => this.startOver());
+    // Empties the doctor's hands, for goods that are no longer needed.
+    const drop = this.hudButton(width / 2 - 150, 'Drop all', () => {
+      const feedback = dropAll(this.state);
+      if (feedback) this.showFeedback(feedback);
+    });
 
     // A slot for everything the biggest pack holds; those beyond the current pack stay hidden.
     const frames: Phaser.GameObjects.Image[] = [];
@@ -568,6 +566,7 @@ export class GameScene extends Phaser.Scene {
 
     this.views.push(() => {
       coins.setText(`Coins: ${this.state.coins}`);
+      drop.setAlpha(this.state.carrying.length > 0 ? 1 : 0.5);
       frames.forEach((frame, i) => frame.setVisible(i < carryCapacity(this.state)));
       slots.forEach((slot, i) => {
         const item = this.state.carrying[i];
@@ -576,6 +575,25 @@ export class GameScene extends Phaser.Scene {
       });
       pack.update(this.player, this.state.carrying);
     });
+  }
+
+  /** A button in the top bar, right-aligned at `x`; tapping it doesn't walk the doctor. */
+  private hudButton(x: number, label: string, onTap: () => void) {
+    return this.add
+      .text(x, HUD_HEIGHT / 2, label, {
+        fontFamily: 'monospace',
+        fontSize: '12px',
+        color: '#f3e9d2',
+        backgroundColor: '#5c3a21',
+        padding: { x: 6, y: 4 },
+      })
+      .setOrigin(1, 0.5)
+      .setDepth(UI_DEPTH)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
+        e.stopPropagation();
+        onTap();
+      });
   }
 
   /** A station image whose lower part blocks walking, so the doctor can pass behind its top edge. */

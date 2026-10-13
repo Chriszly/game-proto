@@ -329,6 +329,14 @@ export function payBelt(state: GameState, id: BeltId): Feedback | null {
   return cleared > 0 ? [...feedback, `- ${cleared} from hands`] : feedback;
 }
 
+/** Drops everything the doctor carries; the goods are gone. */
+export function dropAll(state: GameState): Feedback | null {
+  if (state.carrying.length === 0) return null;
+  const dropped = state.carrying.length;
+  state.carrying = [];
+  return [`Dropped ${dropped}`];
+}
+
 /** What can be built on the expansion: its land first, then a field, the table or the cauldron. */
 export type ExpansionPart = 'land' | 'field1' | 'field2' | 'refiner' | 'cauldron';
 
