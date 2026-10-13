@@ -6,7 +6,8 @@ each game, and each game lives in its own folder, `games/<name>/`, with its own 
 Playwright config, CI workflows and PR template are shared. The games are Apothecary, in
 `games/apothecary/`, Deadline, in `games/deadline/`, Palisade, in `games/palisade/`, Tiny Kingdom, in
 `games/tiny-kingdom/`, Hotfoot, in `games/hotfoot/`, Anvilheart, in `games/anvilheart/`,
-Broadside, in `games/broadside/`, and TinctureTinker, in `games/tincture-tinker/`.
+Broadside, in `games/broadside/`, TinctureTinker, in `games/tincture-tinker/`, and Catacomb, in
+`games/catacomb/`.
 
 ## Work on one game at a time
 
