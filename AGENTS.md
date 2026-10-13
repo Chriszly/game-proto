@@ -9,8 +9,8 @@ Playwright config, CI workflows and PR template are shared. The games are Apothe
 `games/tiny-kingdom/`, Hotfoot, in `games/hotfoot/`, Anvilheart, in `games/anvilheart/`,
 Broadside, in `games/broadside/`, TinctureTinker, in `games/tincture-tinker/`, Catacomb, in
 `games/catacomb/`, Golem Garden, in `games/golem-garden/`, Beehive Baron, in
-`games/beehive-baron/`, Wyrmrail, in `games/wyrmrail/`, and Shrine Stack, in
-`games/shrine-stack/`.
+`games/beehive-baron/`, Wyrmrail, in `games/wyrmrail/`, Shrine Stack, in `games/shrine-stack/`,
+and Mapmaker, in `games/mapmaker/`.
 
 Each game's guide for agents, to read before changing it:
 
@@ -29,6 +29,7 @@ Each game's guide for agents, to read before changing it:
 | Beehive Baron | [games/beehive-baron/AGENTS.md](games/beehive-baron/AGENTS.md) |
 | Wyrmrail | [games/wyrmrail/AGENTS.md](games/wyrmrail/AGENTS.md) |
 | Shrine Stack | [games/shrine-stack/AGENTS.md](games/shrine-stack/AGENTS.md) |
+| Mapmaker | [games/mapmaker/AGENTS.md](games/mapmaker/AGENTS.md) |
 
 ## Work on one game at a time
 

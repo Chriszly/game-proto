@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>Mapmaker</title>
+  <circle cx="7" cy="5" r="5" fill="#e37100"/>
+  <circle cx="25" cy="5" r="5" fill="#e37100"/>
+  <circle cx="7" cy="5" r="2.4" fill="#ffb787"/>
+  <circle cx="25" cy="5" r="2.4" fill="#ffb787"/>
+  <ellipse cx="16" cy="14.5" rx="13" ry="12" fill="#e37100"/>
+  <circle cx="10.5" cy="11.5" r="2.3" fill="#0d1117"/>
+  <circle cx="21.5" cy="11.5" r="2.3" fill="#0d1117"/>
+  <circle cx="11.3" cy="10.7" r="0.8" fill="#ffffff"/>
+  <circle cx="22.3" cy="10.7" r="0.8" fill="#ffffff"/>
+  <ellipse cx="16" cy="17.6" rx="4.6" ry="3.3" fill="#ffdcc7"/>
+  <ellipse cx="16" cy="16.6" rx="2.2" ry="1.4" fill="#311300"/>
+  <rect x="5" y="21" width="22" height="10.4" rx="0.8" fill="#ead6a6" stroke="#311300" stroke-width="0.8"/>
+  <rect x="3.4" y="20.4" width="3" height="11.6" rx="1.5" fill="#d9c08a" stroke="#311300" stroke-width="0.8"/>
+  <rect x="25.6" y="20.4" width="3" height="11.6" rx="1.5" fill="#d9c08a" stroke="#311300" stroke-width="0.8"/>
+  <path d="M8.4 24 C10 22.4 13.6 22.6 14.6 24.4 C15.6 26.2 14 28.8 11.4 29 C9 29.2 7.4 27.4 8.4 24 Z" fill="#5a8f3a" stroke="#2a68a4" stroke-width="0.9"/>
+  <path d="M13.4 26.4 Q17 23.4 20 25.6 T23.4 24.2" stroke="#5c3a21" stroke-width="0.9" stroke-dasharray="1.2 1" fill="none"/>
+  <path d="M23.4 22.4 L24 23.8 L25.4 24 L24.3 24.9 L24.6 26.3 L23.4 25.6 L22.2 26.3 L22.5 24.9 L21.4 24 L22.8 23.8 Z" fill="#c9a040"/>
+</svg>

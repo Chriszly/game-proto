@@ -33,6 +33,7 @@ export default defineConfig({
     { name: 'beehive-baron', testDir: 'games/beehive-baron/e2e' },
     { name: 'wyrmrail', testDir: 'games/wyrmrail/e2e' },
     { name: 'shrine-stack', testDir: 'games/shrine-stack/e2e' },
+    { name: 'mapmaker', testDir: 'games/mapmaker/e2e' },
   ],
   webServer: {
     command: 'npm run dev -- --port 5173 --strictPort',
