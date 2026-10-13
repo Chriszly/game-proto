@@ -162,8 +162,9 @@ null), `expansion` (land, two fields, refiner, cauldron as `Build`s).
   `craftsmanCost`), belts (`BELT_COST`, `BELT_MS`, `BELT_LANES`, `BELT_GAP_MS`, `BELT_ENDS`),
   `EXPANSION_COST`, `SERVE_MS`, `MAX_ORDERS`, pallet size, and effect formulas (`speedAt`,
   `growthSpeed`, `beltSpeed`, `potionPrice`, `orderInterval`, `carryCapacity`, `walkSpeed`,
-  `harvestReach`): `src/game/state.ts`. Tip, patience and difficulty are in `newOrder` in
-  `src/game/sim.ts`.
+  `harvestReach`): `src/game/state.ts`. Order size, tip, patience and difficulty are in
+  `newOrder` in `src/game/sim.ts`; the customers level raises the two-potion chance and divides
+  patience by `1 + 0.5 * level`, alongside `orderInterval`.
 - Walk speed `SPEED` (160), `MAX_WALK_STEP_PX`, `CUSTOMER_SPEED` and the scene's interval constants:
   top of `src/scenes/GameScene.ts`.
 
