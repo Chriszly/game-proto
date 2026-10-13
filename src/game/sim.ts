@@ -11,7 +11,7 @@ import {
   type PotionId,
   type RefinedId,
 } from './items';
-import { CARRY_CAPACITY, MAX_ORDERS, STATION_CAPACITY, type Cauldron, type GameState } from './state';
+import { CARRY_CAPACITY, MAX_ORDERS, STATION_CAPACITY, type Cauldron, type GameState, type Order } from './state';
 
 // Pure game rules, kept free of Phaser so later automation can drive the same functions.
 
@@ -139,10 +139,13 @@ export function useCauldron(state: GameState): Feedback {
   return feedback.length > 0 ? feedback : ['Bring refined goods'];
 }
 
-/** Hands over every carried potion that an order is waiting for, oldest order first. */
+/**
+ * Hands over carried potions to waiting customers. Orders the doctor can fill completely go first
+ * (oldest first); any matching potions left over go towards the remaining orders.
+ */
 export function serveOrders(state: GameState): Feedback {
   const feedback: Feedback = [];
-  for (const order of state.orders) {
+  const give = (order: Order) => {
     order.wants = order.wants.filter((want) => {
       const i = state.carrying.indexOf(want);
       if (i < 0) return true;
@@ -154,9 +157,21 @@ export function serveOrders(state: GameState): Feedback {
       state.coins += order.reward;
       feedback.push(`+${order.reward} coins`);
     }
-  }
+  };
+  for (const order of state.orders) if (canFill(state.carrying, order)) give(order);
+  for (const order of state.orders) if (order.wants.length > 0) give(order);
   state.orders = state.orders.filter((o) => o.wants.length > 0);
+
   if (feedback.length > 0) return feedback;
   if (state.orders.length === 0) return ['No customers yet'];
   return state.carrying.some(isPotion) ? ['Nobody ordered that'] : ['Bring potions'];
+}
+
+function canFill(carrying: readonly ItemId[], order: Order) {
+  const left = [...carrying];
+  return order.wants.every((want) => {
+    const i = left.indexOf(want);
+    if (i >= 0) left.splice(i, 1);
+    return i >= 0;
+  });
 }
