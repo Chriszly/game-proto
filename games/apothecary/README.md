@@ -58,6 +58,15 @@ at once, and the second makes that twice as fast and also brings the coins from 
 
 ![Craftsmen at the stations](docs/screenshots/craftsmen-map.png)
 
+**Priority**: each refining table and cauldron has a small "First:" sign by its name. Tap it to
+choose what the station makes first whenever it can: wheat or mandrake at a table, a Healing
+Draught or a Sleeping Tonic at a cauldron, or "any" to leave it to the station (a table takes
+plants in the order they came, a cauldron brews what the customers are shortest of). Tapping the
+sign doesn't walk the doctor. A station with nothing for its priority makes something else rather
+than wait.
+
+![Priority signs: wheat first at the table, Sleeping Tonic first at the cauldron](docs/screenshots/station-priority.png)
+
 Every station has an upgrade marker and goes up to level 5. Upgrades cost 20, 40, 80 and 160
 coins: the refining table and cauldron work faster, and customers at an upgraded counter tip more
 and wait longer. Once a level is paid off, step off the marker and back on to start on the next.

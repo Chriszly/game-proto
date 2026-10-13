@@ -21,6 +21,7 @@ export function loadState(): GameState {
       upgrades: { ...fresh.upgrades, ...saved.upgrades },
       craftsmen: { ...fresh.craftsmen, ...saved.craftsmen },
       belts: { ...fresh.belts, ...saved.belts },
+      priority: { ...fresh.priority, ...saved.priority },
       // Customers from before they paid per potion go home; new ones come along soon.
       orders: (saved.orders ?? []).filter((o) => o.pay),
     };

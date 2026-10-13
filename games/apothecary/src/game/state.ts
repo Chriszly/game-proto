@@ -119,6 +119,14 @@ export const upgradeCost = (id: UpgradeId, level: number) => UPGRADES[id].cost *
 
 /** Every station a craftsman can be hired for. */
 export const STATIONS: StationId[] = ['refiner', 'cauldron', 'refiner2', 'cauldron2', 'counter'];
+/** The stations that craft, and so have a priority: the refining tables and cauldrons. */
+export type CraftingId = RefinerId | CauldronId;
+/**
+ * What a crafting station makes first whenever it can, chosen by the player: a plant for a refining
+ * table to refine, a potion for a cauldron to brew. Null leaves it to the station: a table takes
+ * plants in the order they came, a cauldron brews what the shop is shortest of.
+ */
+export type Priority = { [id in RefinerId]: PlantId | null } & { [id in CauldronId]: PotionId | null };
 /** Up to two craftsmen work each station; the first costs 30 coins, the second 60. */
 export const MAX_CRAFTSMEN = 2;
 export const craftsmanCost = (hired: number) => 30 * 2 ** hired;
@@ -141,6 +149,7 @@ export interface GameState {
   /** Craftsmen hired at each station (`level`), and coins paid towards the next one. */
   craftsmen: Record<StationId, Upgrade>;
   belts: Record<BeltId, Belt>;
+  priority: Priority;
   orders: Order[];
   nextOrderIn: number;
   nextOrderId: number;
@@ -263,6 +272,7 @@ export function createInitialState(): GameState {
     upgrades: Object.fromEntries(UPGRADE_IDS.map((id) => [id, { level: 0, paid: 0 }])) as Record<UpgradeId, Upgrade>,
     craftsmen: Object.fromEntries(STATIONS.map((id) => [id, { level: 0, paid: 0 }])) as Record<StationId, Upgrade>,
     belts: Object.fromEntries(BELTS.map((id) => [id, { ...unbuilt(), items: [] }])) as unknown as Record<BeltId, Belt>,
+    priority: { refiner: null, refiner2: null, cauldron: null, cauldron2: null },
     orders: [],
     nextOrderIn: 3_000,
     nextOrderId: 1,
