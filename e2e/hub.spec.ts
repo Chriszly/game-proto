@@ -3,6 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 // The hub lists every game and each card opens its game.
 const GAMES = [
   { name: 'Apothecary', path: '/games/apothecary/' },
+  { name: 'Horde Defense', path: '/games/horde/' },
   { name: 'Rampart', path: '/games/rampart/' },
 ];
 

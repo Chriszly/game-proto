@@ -8,6 +8,7 @@ start page lists the games; each one lives in its own folder under `games/`.
 | Game | What it is |
 | --- | --- |
 | [Apothecary](games/apothecary/README.md) | Run a medieval apothecary as a plague doctor: grow herbs, refine them, brew potions and sell them to customers. |
+| [Horde Defense](games/horde/README.md) | Hold the bottom of a road against growing waves of zombies: move left and right, shoot automatically, and shoot crates open for upgrades. |
 | [Rampart](games/rampart/README.md) | Hold a barricade against waves of goblins, orcs and dark knights as a ranger, picking one of three upgrades each level, with a boss every ten waves. |
 
 ## Running locally
@@ -38,8 +39,10 @@ npm run test:e2e                       # the hub test and every game's playthrou
 npx playwright test --project apothecary   # one game only
 ```
 
-The Playthrough workflow runs them on every PR and push to main and uploads videos and screenshots
-as the `playthrough` artifact. Each CI run also uploads a `game-build` artifact: download it from
+Each game has its own playthrough workflow (`.github/workflows/playthrough-<name>.yml`) that runs
+only when that game's folder or a shared file changes, and uploads videos and screenshots as the
+`playthrough-<name>` artifact. The Hub workflow runs the hub test when the hub page or a game's
+card changes. Each CI run also uploads a `game-build` artifact: download it from
 the run's summary page, unzip it and serve the folder (for example with `npx serve`) to play.
 
 ## Container image

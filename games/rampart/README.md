@@ -78,7 +78,10 @@ picked. Once fewer than three upgrades are left, "Mend the Barricade" fills the 
 for the wave to come on and the ranger to shoot, checks that kills fill the experience bar by each
 foe's experience, that the battle waits on the level-up, taps the first card and checks its
 upgrade was taken, then plays on until the wave is cleared with the barricade standing. Like the
-Apothecary test it owns the game clock and plays at 4x speed (`PLAYTHROUGH_SPEED`).
+Apothecary test it owns the game clock and plays at 4x speed (`PLAYTHROUGH_SPEED`). The
+**Playthrough Rampart** workflow (`.github/workflows/playthrough-rampart.yml`) runs it on every PR
+and push to main that touches this folder or a shared build file, and uploads the video and
+screenshots as the `playthrough-rampart` artifact.
 
 ```sh
 npx playwright test --project rampart

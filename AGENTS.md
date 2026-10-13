@@ -3,8 +3,8 @@
 This repo is a hub of small Phaser 4 + TypeScript + Vite games. The hub page (`index.html`) links to
 each game, and each game lives in its own folder, `games/<name>/`, with its own `index.html`, `src/`,
 `e2e/`, `docs/screenshots/` and `README.md` (how to play and its code layout). The build, tsconfig,
-Playwright config, CI workflows and PR template are shared. The games so far are Apothecary, in
-`games/apothecary/`, and Rampart, in `games/rampart/`.
+Playwright config, CI workflows and PR template are shared. The games are Apothecary, in
+`games/apothecary/`, Horde Defense, in `games/horde/`, and Rampart, in `games/rampart/`.
 
 ## Work on one game at a time
 
@@ -14,7 +14,9 @@ Playwright config, CI workflows and PR template are shared. The games so far are
   `docs/screenshots/`.
 - **Add a game** by creating `games/<name>/` with an `index.html` that loads `./src/main.ts`, a
   `README.md`, a `cover.png` (a 16:9 screenshot) and an `e2e/playthrough.spec.ts` that plays its
-  first round. Give it a `favicon.svg` linked from its `index.html`: the orange bear from the hub's
+  first round, plus its own `.github/workflows/playthrough-<name>.yml`: copy Apothecary's and change
+  the name, the `games/<name>/**` path, the workflow's own path, the concurrency group, the
+  `--project` and the artifact name. Give it a `favicon.svg` linked from its `index.html`: the orange bear from the hub's
   `favicon.svg` (same ears, head, dot eyes and muzzle, 32x32 viewBox) with one prop for the game,
   like Apothecary's plague doctor hat and beak. Then add a card for it in the hub's `index.html` and in `e2e/hub.spec.ts`, a
   Playwright project in `playwright.config.ts`, and a row in the README's table of games. Vite picks
@@ -27,9 +29,14 @@ the same rules with its own first round, files and state.
 ## Keep the playthrough test working
 
 `games/apothecary/e2e/playthrough.spec.ts` plays one round of the loop in headless Chromium: it opens the recipes,
-harvests, refines, brews and sells potions to a customer. The **Playthrough** workflow
-(`.github/workflows/playthrough.yml`) runs it, along with the hub test in `e2e/hub.spec.ts`, on every PR and every push to main. It is the check
-that the core loop can still be played, so it has to stay accurate.
+harvests, refines, brews and sells potions to a customer. The **Playthrough Apothecary** workflow
+(`.github/workflows/playthrough-apothecary.yml`) runs it on every PR and push to main that changes
+`games/apothecary/` or a shared file the game builds and tests with (`package.json`,
+`package-lock.json`, `tsconfig.json`, `vite.config.ts`, `playwright.config.ts`) or the workflow
+itself. Each game has its own playthrough workflow like it, so a PR for one game only plays that
+game. The **Hub** workflow (`.github/workflows/hub.yml`) runs `e2e/hub.spec.ts` when the hub page,
+its test, a game's `index.html`, `cover.png` or `favicon.svg`, or a shared file changes. The
+playthrough is the check that the core loop can still be played, so it has to stay accurate.
 
 - **Change the test in the same PR as the game.** A change to gameplay, layout, input or balance
   that the playthrough depends on goes in together with its test update. That includes rules and
@@ -42,7 +49,8 @@ that the core loop can still be played, so it has to stay accurate.
   step a first round goes through) gets a step in the test that asserts its effect on the game
   state. Upgrades, expansions, craftsmen, belts and other purchases stay out of it.
 - **Never skip or loosen the test to get green.** No `test.skip`, `test.fixme`, `.only`, removed
-  assertions, `continue-on-error`, path filters that stop the workflow from running, or retries.
+  assertions, `continue-on-error`, retries, or narrowing a workflow's paths so it stops running on
+  changes to its game or the shared files.
   Don't raise timeouts or tolerances unless the failure is shown to come from a slow runner rather
   than the game, and say so in the PR. If the test is wrong, fix the test; if the game broke, fix
   the game.
@@ -82,7 +90,7 @@ npx playwright test --project apothecary   # one game only
 
 1. Read the error. Every wait has a name (for example `walk to 645,262` or `potions brewed`), and a
    failed wait prints where the doctor's feet were and the game state at that moment.
-2. Open the run's `playthrough` artifact on the workflow run's summary page. It has `video.webm`, the
+2. Open the run's `playthrough-<name>` artifact on the workflow run's summary page. It has `video.webm`, the
    milestone screenshots, `trace.zip` on failure and the HTML report (`playwright-report/index.html`).
    Open a trace with `npx playwright show-trace trace.zip` to see each step, the page and the console.
 3. Reproduce locally with `npm run test:e2e`. Because the clock is controlled, a CI failure should
