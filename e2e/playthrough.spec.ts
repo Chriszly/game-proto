@@ -1,11 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
-// Plays the whole loop with real inputs (clicks to walk, as on a phone): harvest both gardens,
-// refine, brew, sell at the counter until there are enough coins, then buy an upgrade. Sell more to
-// buy the expansion's land, a field, a refining table and a cauldron, and play a round on that
-// second line. Then kit the doctor out with a bigger pack, faster boots and a longer sickle, hire a
-// craftsman for the refining table, buy the conveyor belt that carries plants from the gardens to the
-// table and watch the craftsman refine them, and last drop everything carried with Drop all.
+// Plays one round of the loop with real inputs (clicks to walk, as on a phone): open and close the
+// recipes, harvest both gardens, refine, brew, sell potions to a customer and collect the coins.
 // Game state is only read, through the `game` object the dev build puts on window.
 
 type Point = { x: number; y: number };
@@ -15,14 +11,14 @@ interface GameState {
   carrying: ItemId[];
   plots: { plant: string; grown: number }[];
   refiner: { queue: ItemId[]; output: ItemId[] };
-  cauldron: { contents: ItemId[]; brewing: unknown; output: ItemId[] };
+  cauldron: { contents: ItemId[]; brewing: { out: ItemId } | null; output: ItemId[] };
   refiner2: { queue: ItemId[]; output: ItemId[] };
   cauldron2: { contents: ItemId[]; brewing: unknown; output: ItemId[] };
   expansion: Record<'land' | 'refiner' | 'cauldron', { built: boolean; paid: number }> & { fields: { built: boolean; paid: number }[] };
   counter: { shelf: ItemId[]; till: number };
   upgrades: Record<string, { level: number; paid: number }>;
   craftsmen: Record<string, { level: number; paid: number }>;
-  orders: { id: number; wants: ItemId[]; reward: number }[];
+  orders: { id: number; wants: ItemId[]; pay: Record<string, number>; patience: number }[];
   nextOrderId: number;
   belts: Record<string, { built: boolean; paid: number; items: { id: ItemId; at: number }[] }>;
 }
@@ -37,10 +33,7 @@ const REFINER = {
   drop: { x: 330, y: 468 },
   work: { x: 430, y: 540 },
   pickUp: { x: 330, y: 612 },
-  hire: { x: 500, y: 470, cost: 30 },
 };
-/** From the table's hire marker, a way past its upgrade marker, work spot and drop-off to its left. */
-const BELOW_REFINER_MARKERS = [{ x: 470, y: 510 }, { x: 250, y: 510 }];
 const CAULDRON = { drop: { x: 380, y: 728 }, work: { x: 450, y: 650 }, pickUp: { x: 540, y: 728 } };
 const SHOP_DOOR = { x: 600, y: 420 };
 /** On the way out from the coins, a step towards the door that keeps clear of the upgrade marker. */
@@ -50,41 +43,12 @@ const LEAVE_SHOP = { x: 650, y: 330 };
  * keeps clear of the cauldrons' upgrade markers.
  */
 const LEAVE_CAULDRONS = { x: 600, y: 690 };
-const COUNTER = { drop: { x: 472, y: 282 }, work: { x: 520, y: 340 }, coins: { x: 728, y: 282 }, upgrade: { x: 710, y: 346 } };
-const GARDEN_BELT = { x: 170, y: 500, cost: 60 };
-// The expansion's second line on the right arm, mirroring the first.
-const LAND = { x: 820, y: 430, cost: 100 };
-// The outfitter's stall right of the shop, with the doctor's upgrades top to bottom.
-const OUTFITTER = {
-  pack: { x: 830, y: 140, cost: 30 },
-  boots: { x: 830, y: 230, cost: 25 },
-  sickle: { x: 830, y: 320, cost: 25 },
-};
-const MANDRAKE_XS = [162, 252, 72];
-const WHEAT2_XS = [1038, 1128, 948];
-const WHEAT2_FIELD = { x: 1038, y: 152, cost: 25 };
-const REFINER2 = { drop: { x: 870, y: 468 }, work: { x: 770, y: 540 }, pickUp: { x: 870, y: 612 }, cost: 50 };
-const CAULDRON2 = { drop: { x: 820, y: 728 }, work: { x: 750, y: 650 }, pickUp: { x: 660, y: 728 }, cost: 75 };
+const COUNTER = { drop: { x: 472, y: 282 }, work: { x: 520, y: 340 }, coins: { x: 728, y: 282 } };
+/** The Recipes button in the top bar, on screen rather than in the world. */
+const RECIPES_BUTTON = { x: 219, y: 22 };
 
-/** The Drop all button in the top bar, on screen rather than in the world. */
-const DROP_ALL = { x: 296, y: 22 };
-
-/**
- * The guild in the bottom-left corner of the yard: garden growth, belt speed, potion prices and an
- * extra order slot. It is reached along the bottom of the yard, clear of the cauldron's markers, and
- * left between its two rows of markers.
- */
-const GUILD = {
-  growth: { x: 190, y: 700, cost: 20 },
-  belts: { x: 190, y: 800, cost: 30 },
-  prices: { x: 90, y: 800, cost: 20 },
-  slots: { x: 90, y: 700, cost: 30 },
-};
-const TO_GUILD = [{ x: 600, y: 690 }, { x: 240, y: 690 }];
-const FROM_GUILD = [{ x: 90, y: 750 }, { x: 240, y: 750 }, { x: 240, y: 690 }, { x: 600, y: 690 }];
 const POTION_PRICE: Record<string, number> = { healingDraught: 8, sleepingTonic: 15 };
 
-const UPGRADE_COST = 20;
 /**
  * Game time per animation frame, every frame the same length. Longer frames mean fewer to draw, so
  * the game can play at SPEED on a CI runner without a GPU.
@@ -102,6 +66,18 @@ const ARRIVED_PX = 4 + (WALK_SPEED * FRAME_MS) / 1000 + 2;
  * speed it reached.
  */
 const SPEED = Number(process.env.PLAYTHROUGH_SPEED ?? 4);
+
+/**
+ * How many more of a potion customers want than the shop has ready, as the cauldron counts it when
+ * it picks a recipe: on the shelf, in the doctor's hands and on the cauldrons' pallets.
+ */
+const shortfall = (s: GameState, potion: ItemId) =>
+  s.orders.flatMap((o) => o.wants).filter((p) => p === potion).length -
+  [...s.counter.shelf, ...s.carrying, ...s.cauldron.output, ...s.cauldron2.output].filter((p) => p === potion).length;
+
+/** What a customer coming in now pays for a potion: its price with the guild's upgrade, and a tip. */
+const potionPay = (s: GameState, potion: string) =>
+  Math.round(POTION_PRICE[potion] * (1 + 0.25 * s.upgrades.prices.level)) + 2 * (s.upgrades.counter.level + 1);
 
 const count = (items: ItemId[]) =>
   items.reduce<Record<string, number>>((acc, id) => ({ ...acc, [id]: (acc[id] ?? 0) + 1 }), {});
@@ -126,10 +102,12 @@ function scene(page: Page) {
         },
         station,
       ) as Promise<{ in: Record<string, number>; out: Record<string, number> }>,
+    /** Whether the recipe overview is open, and its lines. */
+    recipes: () => read<{ open: boolean; lines: string[] }>((s) => ({ open: s.recipes.visible, lines: s.recipes.lines })),
   };
 }
 
-test('plays the whole game loop', async ({ page }, testInfo) => {
+test('plays a round of the game loop', async ({ page }, testInfo) => {
   // A seeded Math.random keeps customer orders the same from run to run.
   await page.addInitScript(() => {
     let seed = 1234567;
@@ -257,329 +235,132 @@ test('plays the whole game loop', async ({ page }, testInfo) => {
   expect(fresh.coins).toBe(0);
   expect(fresh.carrying).toEqual([]);
 
-  /** One round of the loop: harvest, refine, brew, sell and collect the coins. */
-  let cycle = 0;
-  async function playRound() {
-    cycle++;
-    // Gardens: walk along the wheat row, then past one mandrake, until both hands are full.
-    await until('a ripe wheat row', (s) => s.plots.slice(0, 3).every((p) => p.grown >= 8_000), 20_000);
-    // Stop at each plant in turn, so a slow frame rate can't carry the doctor past one.
-    for (const [i, x] of WHEAT_XS.entries()) {
-      await walkTo({ x, y: WHEAT_Y });
-      await until(`wheat ${i + 1} harvested`, (s) => (count(s.carrying).wheat ?? 0) >= i + 1);
-    }
-    expect(count((await game.state()).carrying)).toEqual({ wheat: 3 });
-    // The camera followed the doctor up to the wheat field, at the top-left corner of the world.
-    expect(await game.view()).toEqual({ x: 0, y: 0 });
-    await until('a ripe mandrake', (s) => s.plots[4].grown >= 14_000, 20_000);
-    await walkTo(MANDRAKE);
-    let s = await until('one mandrake harvested', (s) => s.carrying.length === 4);
-    expect(count(s.carrying)).toEqual({ wheat: 3, mandrake: 1 });
-    if (cycle === 1) await snap('1-harvested');
+  // The Recipes button opens an overview of what each station makes from what; tapping it closes it.
+  // Neither tap walks the doctor.
+  const box = (await canvas.boundingBox())!;
+  const tapScreen = (p: Point) => page.mouse.click(box.x + (p.x * box.width) / VIEW.w, box.y + (p.y * box.width) / VIEW.w);
+  await tapScreen(RECIPES_BUTTON);
+  await play(STEP_MS, async () => false);
+  expect(await game.recipes()).toEqual({
+    open: true,
+    lines: [
+      'Wheat = Wheat Flour',
+      'Mandrake = Mandrake Seeds',
+      'Wheat Flour + Mandrake Seeds = Sleeping Tonic',
+      'Wheat Flour + Wheat Flour = Healing Draught',
+    ],
+  });
+  await snap('0-recipes');
+  await tapScreen({ x: VIEW.w / 2, y: VIEW.h / 2 });
+  await play(STEP_MS, async () => false);
+  expect((await game.recipes()).open).toBe(false);
+  expect((await game.feet()).moving).toBe(false);
 
-    // Refining table: drop the plants, work until they are refined, pick the goods up.
-    await walkTo(REFINER.drop);
-    s = await until('plants dropped at the refining table', (s) => s.carrying.length === 0);
-    expect(s.refiner.queue.length + s.refiner.output.length).toBe(4);
-    // Each kind of plant goes on its own pallet beside the table.
-    if (cycle === 1) {
-      expect(await game.pallets('refiner')).toEqual({ in: { wheat: 3, mandrake: 1 }, out: { flour: 0, mandrakeSeeds: 0 } });
-    }
-    await walkTo(REFINER.work);
-    if (cycle === 1) await snap('2-refining');
-    await until('plants refined', (s) => s.refiner.output.length === 4);
-    if (cycle === 1) {
-      expect(await game.pallets('refiner')).toEqual({ in: { wheat: 0, mandrake: 0 }, out: { flour: 3, mandrakeSeeds: 1 } });
-    }
-    await walkTo(REFINER.pickUp);
-    s = await until('refined goods picked up', (s) => s.carrying.length === 4);
-    expect(count(s.carrying)).toEqual({ flour: 3, mandrakeSeeds: 1 });
-
-    // Cauldron: flour and seeds brew a Sleeping Tonic, two flour a Healing Draught.
-    await walkTo(CAULDRON.drop);
-    await until('goods in the cauldron', (s) => s.carrying.length === 0);
-    await walkTo(CAULDRON.work);
-    if (cycle === 1) await snap('3-brewing');
-    await until('potions brewed', (s) => s.cauldron.output.length === 2);
-    if (cycle === 1) {
-      expect(await game.pallets('cauldron')).toEqual({
-        in: { flour: 0, mandrakeSeeds: 0 },
-        out: { healingDraught: 1, sleepingTonic: 1 },
-      });
-    }
-    await walkTo(CAULDRON.pickUp);
-    s = await until('potions picked up', (s) => s.carrying.length === 2);
-    // Down at the cauldron, the bottom of the U, the view has scrolled to the bottom edge of the world.
-    expect((await game.view()).y).toBe(880 - VIEW.h);
-    expect(count(s.carrying)).toEqual({ sleepingTonic: 1, healingDraught: 1 });
-
-    await walkTo(LEAVE_CAULDRONS);
-    await sell();
-  }
-
-  /** Storefront: stock the shelf and serve customers until the shelf is empty, then take the coins. */
-  async function sell() {
-    await walkTo(SHOP_DOOR, COUNTER.drop);
-    let s = await until('potions on the shelf', (s) => s.carrying.length === 0);
-    // The potions stand on their pallets behind the counter.
-    const shelf = count(s.counter.shelf);
-    expect((await game.pallets('counter')).in).toEqual({ healingDraught: shelf.healingDraught ?? 0, sleepingTonic: shelf.sleepingTonic ?? 0 });
-    await walkTo(COUNTER.work);
-    if (cycle === 1) await snap('4-serving');
-    s = await until('customers served', (s) => s.counter.shelf.length === 0 || s.counter.till > 0, 45_000);
-    if (s.counter.till > 0) {
-      // Step off the work spot first, so no customer pays in while the doctor heads for the coins.
-      await walkTo(LEAVE_SHOP);
-      s = await game.state();
-      const before = s.coins + s.counter.till;
-      await walkTo(COUNTER.coins);
-      s = await until('coins collected', (s) => s.counter.till === 0);
-      expect(s.coins).toBe(before);
-    }
-  }
-
-  /**
-   * Plays rounds until there are `coins`, at most `max` of them. Rounds end in the shop; the first
-   * starts from the shop too unless the doctor is out in the yard.
-   */
-  async function earn(coins: number, what: string, max: number, inShop = true) {
-    const from = cycle;
-    while ((await game.state()).coins < coins) {
-      expect(cycle - from, `rounds needed to earn ${what}`).toBeLessThan(max);
-      await walkTo(...(inShop || cycle > from ? [LEAVE_SHOP, SHOP_DOOR] : [SHOP_DOOR]));
-      await playRound();
-    }
-  }
-
-  /** Stands on a build marker until `built` holds, and checks it cost exactly `cost` coins. */
-  async function buy(what: string, at: Point, cost: number, built: (s: GameState) => boolean) {
-    const before = await game.state();
-    expect(built(before), `${what} not built yet`).toBe(false);
-    await walkTo(at);
-    const s = await until(`${what} built`, built);
-    expect(s.coins, `coins after buying ${what}`).toBe(before.coins - cost);
-  }
-
-  while ((await game.state()).coins < UPGRADE_COST) {
-    expect(cycle, 'rounds needed to earn an upgrade').toBeLessThan(4);
-    await playRound();
-    // Back to the gardens for the next round, if needed.
-    if ((await game.state()).coins < UPGRADE_COST) await walkTo(LEAVE_SHOP, SHOP_DOOR);
-  }
-
-  // Upgrade: stand on the counter's upgrade marker until the next level is paid for.
-  const rich = await game.state();
-  expect(rich.upgrades.counter).toEqual({ level: 0, paid: 0 });
-  await walkTo(COUNTER.upgrade);
-  await until('counter upgraded', (s) => s.upgrades.counter.level === 1);
-  await snap('5-upgraded');
-  // The next level isn't paid for until the doctor steps off the marker and back on.
-  await play(1_000, async () => false);
-  await walkTo({ x: COUNTER.upgrade.x - 90, y: COUNTER.upgrade.y });
-  const done = await game.state();
-  expect(done.upgrades.counter).toEqual({ level: 1, paid: 0 });
-  expect(done.coins).toBe(rich.coins - UPGRADE_COST);
-
-  // Expansion: buy the land on the grass right of the shop, which lays the right arm's yard.
-  await earn(LAND.cost, 'the land', 6);
-  await walkTo(LEAVE_SHOP, SHOP_DOOR);
-  await buy('land', LAND, LAND.cost, (s) => s.expansion.land.built);
-  await snap('6-land');
-
-  // Then a cauldron, a refining table and a wheat field for the second line, each on its own marker.
-  await earn(CAULDRON2.cost + REFINER2.cost + WHEAT2_FIELD.cost, 'the second line', 8, false);
-  await walkTo(LEAVE_SHOP, SHOP_DOOR);
-  await buy('cauldron', CAULDRON2.work, CAULDRON2.cost, (s) => s.expansion.cauldron.built);
-  await buy('refining table', REFINER2.work, REFINER2.cost, (s) => s.expansion.refiner.built);
-  await buy('wheat field', WHEAT2_FIELD, WHEAT2_FIELD.cost, (s) => s.expansion.fields[0].built);
-  let s = await game.state();
-  expect(s.expansion.fields[1].built).toBe(false);
-
-  // A round on the second line: the new field starts ripe. Three wheat refine to three flour, two
-  // of which brew a Healing Draught in the new cauldron.
-  for (const [i, x] of WHEAT2_XS.entries()) {
-    await walkTo({ x, y: WHEAT_Y });
-    await until(`second line wheat ${i + 1} harvested`, (s) => (count(s.carrying).wheat ?? 0) >= i + 1);
-  }
-  // Up at the new field, the view has scrolled to the right edge of the world.
-  expect((await game.view()).x).toBe(1200 - VIEW.w);
-  await snap('7-second-field');
-  await walkTo(REFINER2.drop);
-  s = await until('wheat dropped at the second table', (s) => s.carrying.length === 0);
-  expect(s.refiner2.queue).toEqual(['wheat', 'wheat', 'wheat']);
-  await walkTo(REFINER2.work);
-  await until('wheat refined at the second table', (s) => s.refiner2.output.length === 3);
-  await walkTo(REFINER2.pickUp);
-  await until('flour picked up', (s) => s.carrying.length === 3);
-  await walkTo(CAULDRON2.drop);
-  await until('flour in the second cauldron', (s) => s.carrying.length === 0);
-  await walkTo(CAULDRON2.work);
-  await snap('8-second-cauldron');
-  s = await until('a potion brewed in the second cauldron', (s) => s.cauldron2.output.length === 1);
-  expect(s.cauldron2.contents).toEqual(['flour']);
-  await walkTo(CAULDRON2.pickUp);
-  s = await until('potion picked up', (s) => s.carrying.length === 1);
-  expect(s.carrying).toEqual(['healingDraught']);
-  // The first line's stations stayed as they were.
-  expect(s.refiner.queue.length + s.refiner.output.length + s.cauldron.output.length).toBe(0);
-  await walkTo(LEAVE_CAULDRONS);
-  await sell();
-
-  // Outfitter, a craftsman and the conveyor belt: sell more rounds until all are affordable.
-  const { pack, boots, sickle } = OUTFITTER;
-  const guildCost = GUILD.growth.cost + GUILD.belts.cost + GUILD.prices.cost + GUILD.slots.cost;
-  await earn(
-    sickle.cost + boots.cost + pack.cost + guildCost + REFINER.hire.cost + GARDEN_BELT.cost,
-    'the guild, the outfitter, a craftsman and the garden belt',
-    14,
-  );
-
-  // The guild: faster growth, faster belts, higher prices and a fourth customer. Each is checked once
-  // the belt runs at the end.
-  await walkTo(LEAVE_SHOP, SHOP_DOOR, ...TO_GUILD);
-  await buy('growth', GUILD.growth, GUILD.growth.cost, (s) => s.upgrades.growth.level === 1);
-  await buy('belt speed', GUILD.belts, GUILD.belts.cost, (s) => s.upgrades.belts.level === 1);
-  await buy('prices', GUILD.prices, GUILD.prices.cost, (s) => s.upgrades.prices.level === 1);
-  // Customers who come in from here on pay the higher prices.
-  const pricedFrom = (await game.state()).nextOrderId;
-  await buy('order slot', GUILD.slots, GUILD.slots.cost, (s) => s.upgrades.slots.level === 1);
-
-  // A longer sickle harvests from a quarter further away.
-  await walkTo(...FROM_GUILD, SHOP_DOOR, { x: sickle.x, y: SHOP_DOOR.y });
-  expect(await game.reach()).toBe(72);
-  await buy('sickle', sickle, sickle.cost, (s) => s.upgrades.sickle.level === 1);
-  expect(await game.reach()).toBe(90);
-
-  await buy('boots', boots, boots.cost, (s) => s.upgrades.boots.level === 1);
-  await buy('pack', pack, pack.cost, (s) => s.upgrades.pack.level === 1);
-  // Down the gap between the shop wall and the outfitter's markers into the yard.
-  await walkTo({ x: 785, y: pack.y }, { x: 785, y: SHOP_DOOR.y });
-
-  // Faster boots: the doctor covers a fifth more ground in the same time. Head off along the top of
-  // the yard and, once under way, measure how far five steps of game time take them.
-  const strideBox = (await canvas.boundingBox())!;
-  const view = await game.view();
-  const away = { x: 400, y: SHOP_DOOR.y };
-  await page.mouse.click(
-    strideBox.x + ((away.x - view.x) * strideBox.width) / VIEW.w,
-    strideBox.y + ((away.y - view.y) * strideBox.width) / VIEW.w,
-  );
-  await play(0, async () => false);
-  const from = await game.feet();
-  const ms = STEP_MS * 5;
-  await play(ms - STEP_MS, async () => false); // one step per STEP_MS, and one more at the end
-  const to = await game.feet();
-  expect(to.moving).toBe(true);
-  // Physics moves in its own fixed ticks, so allow a few pixels either way; without the boots it
-  // would be 30 pixels short.
-  const moved = Math.hypot(to.x - from.x, to.y - from.y);
-  expect(moved).toBeGreaterThan((WALK_SPEED * 1.2 * ms) / 1000 - 5);
-  expect(moved).toBeLessThan((WALK_SPEED * 1.2 * ms) / 1000 + 5);
-  await walkTo(SHOP_DOOR);
-
-  // A bigger pack carries five: the wheat row and two mandrakes, with no room for the third.
-  await until('a ripe wheat row and mandrake patch', (s) => s.plots.slice(0, 6).every((p, i) => p.grown >= (i < 3 ? 8_000 : 14_000)), 20_000);
+  // One round of the loop: harvest, refine, brew, sell and collect the coins.
+  // Gardens: walk along the wheat row, then past one mandrake, until both hands are full.
+  await until('a ripe wheat row', (s) => s.plots.slice(0, 3).every((p) => p.grown >= 8_000), 20_000);
+  // Stop at each plant in turn, so a slow frame rate can't carry the doctor past one.
   for (const [i, x] of WHEAT_XS.entries()) {
     await walkTo({ x, y: WHEAT_Y });
-    await until(`wheat ${i + 1} harvested into the bigger pack`, (s) => (count(s.carrying).wheat ?? 0) >= i + 1);
+    await until(`wheat ${i + 1} harvested`, (s) => (count(s.carrying).wheat ?? 0) >= i + 1);
   }
-  for (const [i, x] of MANDRAKE_XS.slice(0, 2).entries()) {
-    await walkTo({ x, y: MANDRAKE.y });
-    await until(`mandrake ${i + 1} harvested into the bigger pack`, (s) => (count(s.carrying).mandrake ?? 0) >= i + 1);
-  }
-  await walkTo({ x: MANDRAKE_XS[2], y: MANDRAKE.y });
-  await play(1_000, async () => false);
-  s = await game.state();
-  expect(count(s.carrying)).toEqual({ wheat: 3, mandrake: 2 });
-  expect(s.plots[3].grown).toBeGreaterThanOrEqual(14_000);
-  await snap('9-outfitted');
+  expect(count((await game.state()).carrying)).toEqual({ wheat: 3 });
+  // The camera followed the doctor up to the wheat field, at the top-left corner of the world.
+  expect(await game.view()).toEqual({ x: 0, y: 0 });
+  await until('a ripe mandrake', (s) => s.plots[4].grown >= 14_000, 20_000);
+  await walkTo(MANDRAKE);
+  let s = await until('one mandrake harvested', (s) => s.carrying.length === 4);
+  expect(count(s.carrying)).toEqual({ wheat: 3, mandrake: 1 });
+  await snap('1-harvested');
 
-  // A craftsman for the refining table, hired on the marker beside its upgrade marker, reached from
-  // above so the walk keeps clear of the upgrade marker.
-  await walkTo({ x: REFINER.hire.x - 20, y: REFINER.hire.y - 40 });
-  await buy('craftsman', REFINER.hire, REFINER.hire.cost, (s) => s.craftsmen.refiner.level === 1);
-  // Round the table's markers, keeping the plants in hand, to the garden belt's build marker.
-  await walkTo(...BELOW_REFINER_MARKERS);
-
-  // Conveyor belt: pay for it on its build marker. From then on ripe plants ride from the gardens to
-  // the refining table by themselves, so the plants the doctor carries are cleared from their hands.
-  const saved = await game.state();
-  expect(saved.belts.garden).toEqual({ built: false, paid: 0, items: [] });
-  expect(count(saved.carrying)).toEqual({ wheat: 3, mandrake: 2 });
-  await walkTo(GARDEN_BELT);
-  s = await until('garden belt built', (s) => s.belts.garden.built);
-  expect(s.coins).toBe(saved.coins - GARDEN_BELT.cost);
-  expect(s.carrying).toEqual([]);
-  // Wait where the table's drop marker was, out of the mandrakes' reach, while the belt brings in the
-  // plants; anything that reaches the table from here on came by belt. The doctor's hands stay empty:
-  // the drop marker went away with the belt.
-  const queued = s.refiner.queue.length + s.refiner.output.length;
-  const refined = s.refiner.output.length;
+  // Refining table: drop the plants, work until they are refined, pick the goods up.
   await walkTo(REFINER.drop);
-  s = await until('a plant on the garden belt', (s) => s.belts.garden.items.length > 0, 20_000);
-  // The faster belt carries it half again as far in the same time. Physics and frames run in their own
-  // steps, so allow a little either way; at the old speed it would be 480 short.
-  const span = STEP_MS * 5;
-  const along = s.belts.garden.items[0].at;
-  await play(span - STEP_MS, async () => false);
-  s = await game.state();
-  expect(s.belts.garden.items[0].at - along).toBeGreaterThan(span * 1.5 - 100);
-  expect(s.belts.garden.items[0].at - along).toBeLessThan(span * 1.5 + 100);
-  await snap('10-belt');
-  s = await until('the belt delivered to the refining table', (s) => s.refiner.queue.length + s.refiner.output.length > queued, 20_000);
-  expect(s.carrying).toEqual([]);
-  // The craftsman refines what the belt brings while the doctor stays away from the work spot.
-  s = await until('the craftsman refined a plant', (s) => s.refiner.output.length > refined, 20_000);
-  const feet = await game.feet();
-  expect(Math.hypot(feet.x - REFINER.drop.x, feet.y - REFINER.drop.y)).toBeLessThan(ARRIVED_PX);
-
-  // Drop all: pick up refined goods, then tap the button in the top bar to empty the doctor's hands.
-  await until('goods refined at the table', (s) => s.refiner.output.length >= 2, 20_000);
-  await walkTo(REFINER.work, REFINER.pickUp);
-  await until('refined goods in hand', (s) => s.carrying.length >= 2);
+  s = await until('plants dropped at the refining table', (s) => s.carrying.length === 0);
+  expect(s.refiner.queue.length + s.refiner.output.length).toBe(4);
+  // Each kind of plant goes on its own pallet beside the table.
+  expect(await game.pallets('refiner')).toEqual({ in: { wheat: 3, mandrake: 1 }, out: { flour: 0, mandrakeSeeds: 0 } });
   await walkTo(REFINER.work);
-  const box = (await canvas.boundingBox())!;
-  await page.mouse.click(box.x + (DROP_ALL.x * box.width) / VIEW.w, box.y + (DROP_ALL.y * box.width) / VIEW.w);
-  s = await until('hands emptied', (s) => s.carrying.length === 0, 1_000);
-  // Tapping the top bar doesn't walk the doctor.
-  expect((await game.feet()).moving).toBe(false);
-  // Faster growth: a plot the belt picked grows a quarter faster than before.
-  const growMs: Record<string, number> = { wheat: 8_000, mandrake: 14_000 };
-  const regrowing = (p: { plant: string; grown: number }) => p.grown + span * 1.5 < growMs[p.plant];
-  s = await until('a plot regrowing after the belt picked it', (s) => s.plots.slice(0, 6).some(regrowing));
-  const plot = s.plots.findIndex((p, i) => i < 6 && regrowing(p));
-  const grown = s.plots[plot].grown;
-  await play(span - STEP_MS, async () => false);
-  const regrown = (await game.state()).plots[plot].grown - grown;
-  expect(regrown).toBeGreaterThan(span * 1.25 - 100);
-  expect(regrown).toBeLessThan(span * 1.25 + 100);
-  // Higher prices: customers since then pay a quarter more per potion, plus their tips.
-  s = await until('a customer at the new prices', (s) => s.orders.some((o) => o.id >= pricedFrom), 30_000);
-  for (const order of s.orders.filter((o) => o.id >= pricedFrom)) {
-    const potions = order.wants.reduce((sum, p) => sum + Math.round(POTION_PRICE[p] * 1.25), 0);
-    expect(order.reward).toBe(potions + order.wants.length * 2 * (s.upgrades.counter.level + 1));
-  }
-  // The extra order slot: with nobody serving, a fourth customer comes in to wait.
-  s = await until('a fourth customer', (s) => s.orders.length === 4, 60_000);
+  await snap('2-refining');
+  await until('plants refined', (s) => s.refiner.output.length === 4);
+  expect(await game.pallets('refiner')).toEqual({ in: { wheat: 0, mandrake: 0 }, out: { flour: 3, mandrakeSeeds: 1 } });
+  await walkTo(REFINER.pickUp);
+  s = await until('refined goods picked up', (s) => s.carrying.length === 4);
+  expect(count(s.carrying)).toEqual({ flour: 3, mandrakeSeeds: 1 });
 
-  // Only what the playthrough meant to buy was paid for; no walk clipped another purple marker.
-  const unpaid = { level: 0, paid: 0 };
-  const bought = { level: 1, paid: 0 };
-  expect(s.upgrades).toEqual({
-    refiner: unpaid,
-    cauldron: unpaid,
-    refiner2: unpaid,
-    cauldron2: unpaid,
-    counter: bought,
-    pack: bought,
-    boots: bought,
-    sickle: bought,
-    growth: bought,
-    belts: bought,
-    prices: bought,
-    slots: bought,
+  // Cauldron: flour and seeds brew a Sleeping Tonic, two flour a Healing Draught.
+  await walkTo(CAULDRON.drop);
+  await until('goods in the cauldron', (s) => s.carrying.length === 0);
+  // The cauldron picks its first recipe when work starts: the potion the shop is shortest of,
+  // Sleeping Tonic on a tie. Three flour and a seed could make either.
+  s = await game.state();
+  expect(s.cauldron.brewing).toBeNull();
+  const short = { healingDraught: shortfall(s, 'healingDraught'), sleepingTonic: shortfall(s, 'sleepingTonic') };
+  await walkTo(CAULDRON.work);
+  s = await until('a brew started', (s) => s.cauldron.brewing !== null);
+  expect(s.cauldron.brewing!.out, `first brew with shortfalls ${JSON.stringify(short)}`).toBe(
+    short.healingDraught > short.sleepingTonic ? 'healingDraught' : 'sleepingTonic',
+  );
+  await snap('3-brewing');
+  await until('potions brewed', (s) => s.cauldron.output.length === 2);
+  expect(await game.pallets('cauldron')).toEqual({
+    in: { flour: 0, mandrakeSeeds: 0 },
+    out: { healingDraught: 1, sleepingTonic: 1 },
   });
-  expect(s.craftsmen).toEqual({ refiner: bought, cauldron: unpaid, refiner2: unpaid, cauldron2: unpaid, counter: unpaid });
+  await walkTo(CAULDRON.pickUp);
+  s = await until('potions picked up', (s) => s.carrying.length === 2);
+  // Down at the cauldron, the bottom of the U, the view has scrolled to the bottom edge of the world.
+  expect((await game.view()).y).toBe(880 - VIEW.h);
+  expect(count(s.carrying)).toEqual({ sleepingTonic: 1, healingDraught: 1 });
+  await walkTo(LEAVE_CAULDRONS);
+
+  // Storefront: stock the shelf, serve customers until one has paid, then take the coins.
+  await walkTo(SHOP_DOOR, COUNTER.drop);
+  s = await until('potions on the shelf', (s) => s.carrying.length === 0);
+  // The potions stand on their pallets behind the counter.
+  const shelf = count(s.counter.shelf);
+  expect((await game.pallets('counter')).in).toEqual({ healingDraught: shelf.healingDraught ?? 0, sleepingTonic: shelf.sleepingTonic ?? 0 });
+  await walkTo(COUNTER.work);
+  await snap('4-serving');
+  // Each customer pays for every potion they get, at the price they came in with. A customer who
+  // came in and was served between two looks pays today's price.
+  let prev = s;
+  let owed = s.counter.till;
+  s = await until(
+    'customers served',
+    (s) => {
+      const served = count(prev.counter.shelf);
+      for (const [p, n] of Object.entries(count(s.counter.shelf))) served[p] -= n;
+      for (const order of prev.orders) {
+        const now = s.orders.find((o) => o.id === order.id);
+        // An order that is gone was filled, unless the customer ran out of patience.
+        if (!now && order.patience < 5_000) continue;
+        const left = [...(now?.wants ?? [])];
+        for (const want of order.wants) {
+          const i = left.indexOf(want);
+          if (i >= 0) left.splice(i, 1);
+          else {
+            owed += order.pay[want];
+            served[want]--;
+          }
+        }
+      }
+      for (const [p, n] of Object.entries(served)) owed += n * potionPay(s, p);
+      prev = s;
+      return s.counter.shelf.length === 0 || s.counter.till > 0;
+    },
+    45_000,
+  );
+  expect(s.counter.till, 'a customer paid').toBeGreaterThan(0);
+  expect(s.counter.till, 'paid per potion').toBe(owed);
+  // Step off the work spot first, so no customer pays in while the doctor heads for the coins.
+  await walkTo(LEAVE_SHOP);
+  s = await game.state();
+  const earned = s.counter.till;
+  await walkTo(COUNTER.coins);
+  s = await until('coins collected', (s) => s.counter.till === 0);
+  expect(s.coins).toBe(earned);
+  // Nothing was bought along the way; no walk clipped a purple marker.
+  for (const level of [...Object.values(s.upgrades), ...Object.values(s.craftsmen)]) expect(level).toEqual({ level: 0, paid: 0 });
 
   const speed = gameMs / (Date.now() - startedAt);
   console.log(`Played ${Math.round(gameMs / 1000)}s of game time at ${speed.toFixed(1)}x (target ${SPEED}x).`);
