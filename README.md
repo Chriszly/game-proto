@@ -52,6 +52,9 @@ npx playwright install chromium   # once
 npm run test:e2e                  # starts the dev server and plays; CPU_THROTTLE=4 simulates a slow machine
 ```
 
+Changes to gameplay, layout or controls update the test in the same PR; see `AGENTS.md` for the
+rules and for how to debug a failing run.
+
 Each CI run also uploads a `game-build` artifact: download it from the run's summary page,
 unzip it and serve the folder (for example with `npx serve`) to play.
 
