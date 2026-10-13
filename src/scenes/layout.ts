@@ -1,17 +1,26 @@
 import { PLOTS_PER_GARDEN, type BeltId } from '../game/state';
 
 // World positions for the U-shaped apothecary. Goods flow down the left arm (gardens, refining
-// table), along the bottom (cauldron) and up the middle into the shop at the top. The right arm,
-// which will mirror the left for a second production line, is plain grass until that expansion is
-// bought. The world is bigger than the 960x540 view, so the camera follows the doctor.
+// table), along the bottom (cauldron) and up the middle into the shop at the top. The right arm is
+// plain grass until the expansion is bought; its second production line mirrors the first, so
+// goods flow down the right arm and join the first line at the bottom of the U. The world is bigger
+// than the 960x540 view, so the camera follows the doctor.
 
 export const HUD_HEIGHT = 44;
 export const WORLD = { w: 1200, h: 810 };
 
-/** Fenced garden areas, top to bottom, matching the order of GARDENS in the game state. */
+/** The second line mirrors the first across the middle of the map. */
+const mirror = (p: { x: number; y: number }) => ({ x: WORLD.w - p.x, y: p.y });
+
+/**
+ * Fenced garden areas, matching the order of GARDENS in the game state: the first line's top to
+ * bottom, then the second line's fields on the right.
+ */
 export const GARDEN_AREAS = [
   { x: 24, y: 64, w: 276, h: 176, name: 'Wheat field' },
   { x: 24, y: 256, w: 276, h: 176, name: 'Mandrake patch' },
+  { x: 900, y: 64, w: 276, h: 176, name: 'Wheat field' },
+  { x: 900, y: 256, w: 276, h: 176, name: 'Mandrake patch' },
 ];
 /** Plot i is slot i % 3 of garden i / 3, the slots spread across the garden in one row. */
 export const plotPosition = (i: number) => {
@@ -27,6 +36,13 @@ export const YARDS = [
   { x: 24, y: 448, w: 736, h: 344 },
   { x: 316, y: 400, w: 444, h: 60 },
 ];
+/** The right arm's yard, laid once the expansion's land is bought. */
+export const EXPANSION_YARDS = [
+  { x: 760, y: 448, w: 416, h: 344 },
+  { x: 760, y: 400, w: 124, h: 60 },
+];
+/** Where the doctor stands to buy the expansion's land: on the grass just right of the shop door. */
+export const EXPANSION_LAND = { x: 820, y: 430 };
 
 /** The refining table stands below the gardens; goods run through it from top to bottom. */
 export const REFINER = { x: 330, y: 540 };
@@ -58,6 +74,18 @@ export const CAULDRON_MARKERS: StationMarkers = {
   upgrade: { x: CAULDRON.x + 70, y: CAULDRON.y - 70 },
 };
 
+/** The second line's stations and markers, mirrored onto the right arm. */
+export const REFINER2 = mirror(REFINER);
+export const CAULDRON2 = mirror(CAULDRON);
+const mirrorMarkers = (m: StationMarkers): StationMarkers => ({
+  drop: mirror(m.drop),
+  pickUp: mirror(m.pickUp),
+  work: mirror(m.work),
+  upgrade: mirror(m.upgrade),
+});
+export const REFINER2_MARKERS = mirrorMarkers(REFINER_MARKERS);
+export const CAULDRON2_MARKERS = mirrorMarkers(CAULDRON_MARKERS);
+
 /** The shop sits at the top of the U, between the two arms, with its door facing the courtyard. */
 export const SHOP = { x: 440, y: 64, w: 320, h: 336 };
 export const SHOP_DOOR = { from: 560, to: 640 };
@@ -76,6 +104,8 @@ export const customerPosition = (i: number) => ({ x: COUNTER.x - 60 + i * 60, y:
 export const LABELS = {
   refiner: { x: 170, y: 540 },
   cauldron: { x: 330, y: 770 },
+  refiner2: mirror({ x: 170, y: 540 }),
+  cauldron2: mirror({ x: 330, y: 770 }),
 };
 
 /**
@@ -92,10 +122,21 @@ export const BELT_PATHS: Record<BeltId, { x: number; y: number }[][]> = {
   refiner: [[{ x: 330, y: 566 }, { x: 330, y: 720 }, { x: 424, y: 720 }]],
   // Out of the cauldron, up through the shop door into the counter.
   cauldron: [[{ x: 496, y: 720 }, { x: 600, y: 720 }, { x: 600, y: 292 }]],
+  // The second line mirrors the first; its cauldron belt meets the first's at a T at the bottom of
+  // the U and shares the run up to the counter.
+  garden2: [
+    [{ x: 900, y: 152 }, { x: 870, y: 152 }, { x: 870, y: 514 }],
+    [{ x: 900, y: 344 }, { x: 870, y: 344 }],
+  ],
+  refiner2: [[{ x: 870, y: 566 }, { x: 870, y: 720 }, { x: 776, y: 720 }]],
+  cauldron2: [[{ x: 704, y: 720 }, { x: 600, y: 720 }, { x: 600, y: 292 }]],
 };
-/** Where the doctor stands to pay for each belt. */
+/** Where the doctor stands to pay for each belt; the cauldron belts' markers face the courtyard. */
 export const BELT_BUILD: Record<BeltId, { x: number; y: number }> = {
   garden: { x: 230, y: 468 },
   refiner: { x: 230, y: 612 },
-  cauldron: { x: 680, y: 728 },
+  cauldron: { x: 520, y: 576 },
+  garden2: mirror({ x: 230, y: 468 }),
+  refiner2: mirror({ x: 230, y: 612 }),
+  cauldron2: mirror({ x: 520, y: 576 }),
 };
