@@ -12,6 +12,7 @@ import {
 } from './items';
 import {
   BELT_COST,
+  BELT_ENDS,
   BELT_GAP_MS,
   BELT_JOIN_MS,
   BELT_LANES,
@@ -191,7 +192,7 @@ function runBelt(state: GameState, id: BeltId, dt: number) {
     const front = !ahead.has(item.id);
     if (front && item.at >= length && giveFromBelt(state, id, item.id)) return false;
     let room = front ? length : ahead.get(item.id)!.at - BELT_GAP_MS;
-    for (const other of item.at >= BELT_JOIN_MS - BELT_GAP_MS ? merging : []) {
+    for (const other of item.at + step >= BELT_JOIN_MS - BELT_GAP_MS ? merging : []) {
       // The first line's belt goes first when two items reach the join together.
       const first = other.at > item.at || (other.at === item.at && id === 'cauldron2');
       if (other.id === item.id && first) room = Math.min(room, other.at - BELT_GAP_MS);
@@ -206,11 +207,12 @@ function runBelt(state: GameState, id: BeltId, dt: number) {
 
 /**
  * How many more of a potion customers want than the apothecary has ready: on the counter's shelf,
- * on the cauldrons' pallets and in the doctor's hands.
+ * on the cauldrons' pallets and belts, and in the doctor's hands.
  */
 export function shortfall(state: GameState, potion: PotionId) {
   const wanted = state.orders.reduce((n, o) => n + o.wants.filter((p) => p === potion).length, 0);
-  const ready = [state.counter.shelf, state.carrying, ...CAULDRONS.map((id) => state[id].output)].reduce(
+  const riding = [...state.belts.cauldron.items, ...state.belts.cauldron2.items].map((item) => item.id);
+  const ready = [state.counter.shelf, state.carrying, riding, ...CAULDRONS.map((id) => state[id].output)].reduce(
     (n, items) => n + items.filter((p) => p === potion).length,
     0,
   );
@@ -424,17 +426,13 @@ const OTHER_LINE: Record<BeltId, BeltId> = {
 };
 
 /**
- * The station that has to stand for a belt's step to be done by hand: the table or cauldron the goods
- * are taken to, or for a cauldron belt the cauldron whose potions are carried to the counter.
+ * Whether a belt's step is still done by hand: it isn't built, while a station at its ends stands
+ * (not counting the counter both lines share), or for the second line's garden belt, a field.
  */
-const HAND_STATION: Record<BeltId, StationId> = {
-  garden: 'refiner',
-  refiner: 'cauldron',
-  cauldron: 'cauldron',
-  garden2: 'refiner2',
-  refiner2: 'cauldron2',
-  cauldron2: 'cauldron2',
-};
+const doneByHand = (state: GameState, id: BeltId) =>
+  !state.belts[id].built &&
+  (BELT_ENDS[id].some((station) => station !== 'counter' && stationBuilt(state, station)) ||
+    (id === 'garden2' && state.expansion.fields.some((f) => f.built)));
 
 /**
  * Pays a handful of coins towards building a belt, which starts running once fully paid. The belt
@@ -445,8 +443,7 @@ export function payBelt(state: GameState, id: BeltId): Feedback | null {
   if (!beltBuildable(state, id)) return null;
   const feedback = payToward(state, state.belts[id], BELT_COST[id], `${BELT_NAMES[id]} built!`);
   if (!feedback || !state.belts[id].built) return feedback;
-  const other = OTHER_LINE[id];
-  if (!state.belts[other].built && stationBuilt(state, HAND_STATION[other])) return feedback;
+  if (doneByHand(state, OTHER_LINE[id])) return feedback;
   const carried = (item: ItemId) => BELT_LANES[id].includes(item);
   const cleared = state.carrying.filter(carried).length;
   state.carrying = state.carrying.filter((item) => !carried(item));

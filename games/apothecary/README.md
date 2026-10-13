@@ -79,7 +79,8 @@ markers, a handful of coins at a time: gardens to refining table (60 coins), tab
 and cauldron to counter (150). A belt picks ripe plants or finished goods up at its start and
 hands them to the next station when it has room; the drop and pick-up markers it replaces go away,
 though a drop marker comes back while the doctor carries goods it takes, such as goods from the
-other line, and the goods it carries are cleared from the doctor's hands when it is built. Each belt has a
+other line. The goods it carries are cleared from the doctor's hands when it is built, unless the
+other line still moves them by hand. Each belt has a
 narrow lane for every kind of goods it carries (wheat and mandrake, flour and seeds, or the two
 potions), so when one kind waits for room at the next station the other keeps moving. The lanes
 run at half speed, so a belt carries as many goods a second as a one-lane belt would.

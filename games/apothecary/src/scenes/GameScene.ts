@@ -101,6 +101,11 @@ type Point = { x: number; y: number };
 
 /** Walking speed in pixels per second, before the doctor's boots are upgraded. */
 const SPEED = 160;
+/**
+ * Most the doctor walks in one physics step. A long frame walks slower instead, so its one step can't
+ * carry the feet through a station.
+ */
+const MAX_WALK_STEP_PX = 20;
 const PLAYER_SCALE = 2;
 /** Longest simulated step, so a backgrounded tab doesn't jump the world forward. */
 const MAX_STEP_MS = 250;
@@ -181,6 +186,9 @@ export class GameScene extends Phaser.Scene {
     this.waypoint = null;
     this.blockedAreas = [];
     this.physics.world.setBounds(0, HUD_HEIGHT, WORLD.w, WORLD.h - HUD_HEIGHT);
+    // Restarting the scene for a new game keeps its event listeners, so this one is added once.
+    this.events.off(Phaser.Scenes.Events.PRE_UPDATE, this.limitWalkStep, this);
+    this.events.on(Phaser.Scenes.Events.PRE_UPDATE, this.limitWalkStep, this);
     this.obstacles = this.physics.add.staticGroup();
 
     this.drawGrounds();
@@ -769,7 +777,7 @@ export class GameScene extends Phaser.Scene {
         this.settings.toggle(false);
         return;
       }
-      this.pointerTarget = new Phaser.Math.Vector2(p.worldX, p.worldY);
+      this.pointerTarget = this.reachable(new Phaser.Math.Vector2(p.worldX, p.worldY));
       this.heading = null;
       this.waypoint = this.routeAround(this.pointerTarget);
     });
@@ -880,16 +888,14 @@ export class GameScene extends Phaser.Scene {
       // overshoot it back and forth.
       const passed = this.heading !== null && dir.dot(this.heading) <= 0;
       if (this.waypoint && (dir.length() < 6 || passed)) {
-        // Settle the feet on the corner, so the next leg starts clear of the station, and head on from
-        // there. (Arcade's reset leaves the body's centre off until the next step, so it isn't read.)
-        const corner = this.waypoint;
-        this.player.body!.reset(corner.x, this.player.y + dir.y);
-        this.waypoint = this.routeAround(this.pointerTarget, corner);
+        // Settle the feet on the corner, so the next leg starts clear of the station, and head on.
+        this.settleFeet(this.waypoint);
+        this.waypoint = this.routeAround(this.pointerTarget);
         const next = this.waypoint ?? this.pointerTarget;
-        dir.set(next.x - corner.x, next.y - corner.y);
+        dir.set(next.x - this.player.x, next.y - this.feetY());
       } else if (!this.waypoint && (dir.length() < 4 || passed)) {
         // Settle the feet on the spot itself, a step back if the last frame carried them past it.
-        if (passed) this.player.body!.reset(target.x, this.player.y + dir.y);
+        if (passed) this.settleFeet(target);
         this.pointerTarget = null;
         dir.set(0, 0);
       }
@@ -903,16 +909,17 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * When a station blocks the straight line from the doctor's feet, or `from`, to `to`, returns the
-   * corner of that station to walk to first (the one making the shorter trip); otherwise null.
+   * When a station blocks the straight line from the doctor's feet to `to`, returns the corner of
+   * that station to walk to first (the one making the shorter trip); otherwise null.
    */
-  private routeAround(to: Phaser.Math.Vector2, from = new Phaser.Math.Vector2(this.player.x, this.feetY())): Phaser.Math.Vector2 | null {
+  private routeAround(to: Phaser.Math.Vector2): Phaser.Math.Vector2 | null {
+    const from = new Phaser.Math.Vector2(this.player.x, this.feetY());
     const blocks = (a: Phaser.Math.Vector2, b: Phaser.Math.Vector2, area: Phaser.Geom.Rectangle) =>
       Phaser.Geom.Intersects.LineToRectangle(new Phaser.Geom.Line(a.x, a.y, b.x, b.y), area);
     for (const area of this.blockedAreas) {
       // Test against a slightly smaller area so lines along an edge or from a corner count as clear.
       const inner = new Phaser.Geom.Rectangle(area.x + 2, area.y + 2, area.width - 4, area.height - 4);
-      if (inner.contains(from.x, from.y) || area.contains(to.x, to.y) || !blocks(from, to, inner)) continue;
+      if (inner.contains(from.x, from.y) || inner.contains(to.x, to.y) || !blocks(from, to, inner)) continue;
       const corners = [
         new Phaser.Math.Vector2(area.left, area.top),
         new Phaser.Math.Vector2(area.right, area.top),
@@ -927,6 +934,49 @@ export class GameScene extends Phaser.Scene {
 
   private feetY() {
     return this.player.body!.center.y;
+  }
+
+  /**
+   * Physics steps once per frame (see main.ts), right after this, with the frame's whole delta; a
+   * long frame slows the doctor down to MAX_WALK_STEP_PX for that step.
+   */
+  private limitWalkStep(_time: number, delta: number) {
+    const body = this.player?.body;
+    if (body && body.velocity.length() * (delta / 1000) > MAX_WALK_STEP_PX) body.velocity.setLength((MAX_WALK_STEP_PX * 1000) / delta);
+  }
+
+  /** Stops the doctor with their feet on a spot. */
+  private settleFeet(at: Point) {
+    const body = this.player.body as Phaser.Physics.Arcade.Body;
+    body.stop();
+    // The body has already stepped this frame and the sprite follows it after the update, so place the
+    // sprite and take the body from it, rather than Arcade's reset, which also drops the body's offset.
+    this.player.x = at.x;
+    body.updateFromGameObject();
+    this.player.y += at.y - body.center.y;
+    body.updateFromGameObject();
+    body.prev.copy(body.position);
+    body.prevFrame.copy(body.position);
+  }
+
+  /**
+   * A tapped spot the feet can't stand on, inside a station, moves out to the nearest edge of the
+   * station's blocked area, so the doctor walks up to the station instead of into it.
+   */
+  private reachable(to: Phaser.Math.Vector2) {
+    for (const area of this.blockedAreas) {
+      // The feet can't get closer to the station's body than half their size: 15 by 7.5 pixels.
+      if (!new Phaser.Geom.Rectangle(area.x + 3, area.y + 2.5, area.width - 6, area.height - 5).contains(to.x, to.y)) continue;
+      const edges = [
+        { d: to.x - area.left, x: area.left, y: to.y },
+        { d: area.right - to.x, x: area.right, y: to.y },
+        { d: to.y - area.top, x: to.x, y: area.top },
+        { d: area.bottom - to.y, x: to.x, y: area.bottom },
+      ];
+      const nearest = edges.reduce((a, b) => (b.d < a.d ? b : a));
+      return to.set(nearest.x, nearest.y);
+    }
+    return to;
   }
 
   private animatePlayer(velocity: Phaser.Math.Vector2) {

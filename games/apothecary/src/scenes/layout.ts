@@ -181,10 +181,11 @@ export const BELT_PATHS: Record<BeltId, { x: number; y: number }[][]> = {
   cauldron2: [[{ x: 704, y: 720 }, { x: 600, y: 720 }, { x: 600, y: 292 }]],
 };
 
-// The game spaces the two cauldron belts' items from where they meet; check it still matches the paths.
+// The game spaces the two cauldron belts' items from where they meet; the dev build (and so the
+// playthrough) checks it still matches the paths.
 const pathLength = (path: { x: number; y: number }[]) =>
   path.slice(1).reduce((n, p, i) => n + Math.hypot(p.x - path[i].x, p.y - path[i].y), 0);
-for (const id of ['cauldron', 'cauldron2'] as const) {
+for (const id of import.meta.env.DEV ? (['cauldron', 'cauldron2'] as const) : []) {
   const [run] = BELT_PATHS[id];
   const join = (BELT_MS[id] * pathLength(run.slice(0, 2))) / pathLength(run);
   if (Math.abs(join - BELT_JOIN_MS) > 1) throw new Error(`BELT_JOIN_MS should be ${Math.round(join)} for the ${id} belt`);
