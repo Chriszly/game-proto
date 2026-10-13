@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { itemTexture } from '../art/placeholders';
+import { itemTexture } from '../art/items';
 import type { ItemId } from '../game/items';
 
 /** A horizontal row of item icons, centred on (x, y), that reuses its images as the list changes. */

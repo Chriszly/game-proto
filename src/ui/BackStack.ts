@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { itemTexture } from '../art/placeholders';
+import { itemTexture } from '../art/items';
 import type { ItemId } from '../game/items';
 
 const ICON_SCALE = 1.25;

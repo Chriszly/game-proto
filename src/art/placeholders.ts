@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ITEMS, type ItemId, type PlantId } from '../game/items';
+import { ITEMS, type PlantId } from '../game/items';
 
 // Placeholder art drawn with simple shapes. Swap for real sprites later; keys stay the same.
 
@@ -11,7 +11,6 @@ function bake(scene: Phaser.Scene, key: string, w: number, h: number, draw: (g: 
 }
 
 export const plantTexture = (plant: PlantId, stage: number) => `plant-${plant}-${stage}`;
-export const itemTexture = (id: ItemId) => `item-${id}`;
 
 export function bakePlaceholders(scene: Phaser.Scene) {
   bake(scene, 'plot', 56, 44, (g) => {
@@ -97,30 +96,4 @@ export function bakePlaceholders(scene: Phaser.Scene) {
     g.fillRect(24, 8, 5, 18);
     g.fillRect(11, 26, 22, 8);
   });
-  bake(scene, 'coin', 12, 12, (g) => {
-    g.fillStyle(0xb8862f).fillCircle(6, 6, 6);
-    g.fillStyle(0xe8c25a).fillCircle(6, 6, 4);
-  });
-
-  for (const [id, def] of Object.entries(ITEMS) as [ItemId, (typeof ITEMS)[ItemId]][]) {
-    bake(scene, itemTexture(id), 16, 16, (g) => {
-      g.fillStyle(def.color);
-      if (id === 'wheat') {
-        // Sheaf: stalks tied in the middle with grain heads on top.
-        g.fillStyle(0xc9a040).fillRect(4, 6, 2, 10).fillRect(7, 5, 2, 11).fillRect(10, 6, 2, 10);
-        g.fillStyle(def.color).fillEllipse(5, 4, 4, 7).fillEllipse(8, 3, 4, 7).fillEllipse(11, 4, 4, 7);
-        g.fillStyle(0x8a6239).fillRect(3, 10, 10, 2);
-      } else if (def.kind === 'plant') {
-        g.fillEllipse(8, 9, 10, 13);
-        g.fillStyle(0x3f7a35).fillRect(7, 1, 2, 5);
-      } else if (def.kind === 'refined') {
-        g.fillStyle(0xd8cfa8).fillRect(1, 9, 14, 6); // little paper sack
-        g.fillStyle(def.color).fillTriangle(3, 10, 8, 2, 13, 10);
-      } else {
-        g.fillStyle(0xcfd8e0).fillRect(6, 1, 4, 5); // neck
-        g.fillStyle(def.color).fillCircle(8, 10, 6);
-        g.fillStyle(0xffffff, 0.6).fillCircle(6, 8, 2);
-      }
-    });
-  }
 }
