@@ -16,6 +16,19 @@ export default defineConfig({
   projects: [
     { name: 'hub', testDir: 'e2e' },
     { name: 'apothecary', testDir: 'games/apothecary/e2e' },
+    // Deadline is a portrait game, played on an upright phone-sized screen.
+    {
+      name: 'deadline',
+      testDir: 'games/deadline/e2e',
+      use: { viewport: { width: 540, height: 960 }, video: { mode: 'on', size: { width: 540, height: 960 } } },
+    },
+    { name: 'palisade', testDir: 'games/palisade/e2e' },
+    { name: 'tiny-kingdom', testDir: 'games/tiny-kingdom/e2e' },
+    { name: 'hotfoot', testDir: 'games/hotfoot/e2e' },
+    { name: 'anvilheart', testDir: 'games/anvilheart/e2e' },
+    { name: 'broadside', testDir: 'games/broadside/e2e' },
+    { name: 'tincture-tinker', testDir: 'games/tincture-tinker/e2e' },
+    { name: 'catacomb', testDir: 'games/catacomb/e2e' },
   ],
   webServer: {
     command: 'npm run dev -- --port 5173 --strictPort',

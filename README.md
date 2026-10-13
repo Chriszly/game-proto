@@ -8,6 +8,40 @@ start page lists the games; each one lives in its own folder under `games/`.
 | Game | What it is |
 | --- | --- |
 | [Apothecary](games/apothecary/README.md) | Run a medieval apothecary as a plague doctor: grow herbs, refine them, brew potions and sell them to customers. |
+| [Deadline](games/deadline/README.md) | Hold the bottom of a road against growing waves of zombies: move left and right, shoot automatically, and shoot crates open for upgrades. |
+| [Palisade](games/palisade/README.md) | Hold a barricade against waves of goblins, orcs and dark knights as a ranger, picking one of three upgrades each level, with a boss every ten waves. |
+| [Tiny Kingdom](games/tiny-kingdom/README.md) | Place farms, houses and towers on a small island grid, each scoring against its neighbours, and reach each round's goal before the tiles run out. |
+| [Hotfoot](games/hotfoot/README.md) | Run as a knight who never stops: jump spikes and pits, slide under blades, and pick one of two boons at each checkpoint. |
+| [Anvilheart](games/anvilheart/README.md) | Run a smithy: forge swords, drag two matching ones together to merge them into a better blade, and sell them to adventurers as their orders come in. |
+| [Broadside](games/broadside/README.md) | Captain a pirate ship: steer left and right to bring your broadsides to bear on enemy ships, sail over their loot, and upgrade hull and cannons at the harbor between waves. |
+| [TinctureTinker](games/tincture-tinker/README.md) | A match-3 board of Apothecary's ingredients: swap tiles to gather what each potion order asks for before the moves run out, and sell the potion for coins. |
+| [Catacomb](games/catacomb/README.md) | Fight through a short dungeon with a deck of cards: a hand of five each turn against foes who show what they will do next, and a new card after every fight. |
+
+## Settings
+
+The hub's **Settings** button opens the settings every game shares. They are saved in the browser
+(`shared/settings.ts`) and apply to a game the next time it opens.
+
+![The hub's settings](docs/screenshots/hub-settings.png)
+
+- **Difficulty**: Easy, Normal or Hard. Normal is each game as designed; each game picks what it scales:
+
+  | Game | Easy | Hard |
+  | --- | --- | --- |
+  | Apothecary | customers wait 50% longer | customers wait 30% less |
+  | Deadline | zombies have 25% less health | zombies have 30% more health |
+  | Palisade | foes have 25% less health | foes have 30% more health |
+  | Tiny Kingdom | round goals 20% lower | round goals 20% higher |
+  | Hotfoot | 5 hearts | 2 hearts |
+  | Anvilheart | adventurers wait 50% longer | adventurers wait 30% less |
+  | Broadside | enemy ships have 25% less health | enemy ships have 30% more health |
+  | TinctureTinker | 5 more moves per order | 3 fewer moves per order |
+  | Catacomb | foes have 25% less health | foes have 30% more health |
+
+- **Frame rate (FPS)**: the most frames per second a game draws, 30 to 320 (60 by default).
+- **Show FPS**: a readout of the frame rate in each game's corner.
+- **Reduce motion**: turns off screen shake, flashes and blinking hit effects.
+- **Restore defaults** and **Reset all progress**, which erases every game's save and keeps the settings.
 
 ## Running locally
 
@@ -23,7 +57,11 @@ npm run preview   # serve the production build
 - `index.html`: the hub page, one card per game.
 - `games/<name>/`: one game, with its own `index.html`, `src/`, `e2e/` playthrough test, `docs/`
   screenshots and `README.md`. Games don't import from each other.
-- `e2e/hub.spec.ts`: checks that the hub lists every game and that each card opens it.
+- `shared/`: the settings every game shares (`settings.ts`), the hub's Settings panel
+  (`settingsPanel.ts`) and `setupGame.ts`, which each game calls to apply the frame cap, the FPS
+  readout and reduced motion.
+- `e2e/hub.spec.ts`: checks that the hub lists every game, that each card opens it, and that the
+  settings are saved and reach a game.
 - `package.json`, `tsconfig.json`, `vite.config.ts` and `playwright.config.ts` are shared. Vite
   builds every `games/*/index.html` next to the hub; Playwright runs one project per game.
 
@@ -37,8 +75,10 @@ npm run test:e2e                       # the hub test and every game's playthrou
 npx playwright test --project apothecary   # one game only
 ```
 
-The Playthrough workflow runs them on every PR and push to main and uploads videos and screenshots
-as the `playthrough` artifact. Each CI run also uploads a `game-build` artifact: download it from
+Each game has its own playthrough workflow (`.github/workflows/playthrough-<name>.yml`) that runs
+only when that game's folder or a shared file changes, and uploads videos and screenshots as the
+`playthrough-<name>` artifact. The Hub workflow runs the hub test when the hub page or a game's
+card changes. Each CI run also uploads a `game-build` artifact: download it from
 the run's summary page, unzip it and serve the folder (for example with `npx serve`) to play.
 
 ## Container image

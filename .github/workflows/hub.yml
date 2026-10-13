@@ -1,0 +1,53 @@
+name: Hub
+
+# Checks that the hub lists every game and each card opens it. Runs when the hub page, its test,
+# a game's entry page, cover or favicon, or a shared file changes.
+on:
+  push:
+    branches: [main]
+    paths: &paths
+      - index.html
+      - favicon.svg
+      - e2e/**
+      - games/*/index.html
+      - games/*/cover.png
+      - games/*/favicon.svg
+      - shared/**
+      - package.json
+      - package-lock.json
+      - tsconfig.json
+      - vite.config.ts
+      - playwright.config.ts
+      - .github/workflows/hub.yml
+  pull_request:
+    paths: *paths
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hub-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hub:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test --project hub
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hub
+          path: |
+            test-results
+            playwright-report
+          retention-days: 14

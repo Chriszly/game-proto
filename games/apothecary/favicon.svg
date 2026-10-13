@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>Apothecary</title>
+  <circle cx="7" cy="9" r="5" fill="#e37100"/>
+  <circle cx="25" cy="9" r="5" fill="#e37100"/>
+  <circle cx="7" cy="9" r="2.4" fill="#ffb787"/>
+  <circle cx="25" cy="9" r="2.4" fill="#ffb787"/>
+  <ellipse cx="16" cy="19.5" rx="13" ry="12" fill="#e37100"/>
+  <ellipse cx="16" cy="8" rx="15" ry="3" fill="#311300"/>
+  <path d="M9 8 L10.2 1 H21.8 L23 8 Z" fill="#311300"/>
+  <rect x="9.8" y="4.8" width="12.4" height="1.6" fill="#964900"/>
+  <circle cx="10.5" cy="17.5" r="2.3" fill="#0d1117"/>
+  <circle cx="21.5" cy="17.5" r="2.3" fill="#0d1117"/>
+  <circle cx="11.3" cy="16.7" r="0.8" fill="#ffffff"/>
+  <circle cx="22.3" cy="16.7" r="0.8" fill="#ffffff"/>
+  <path d="M11.5 21 C13 19 19 19 20.5 21 L17 30.8 C16.6 31.6 15.4 31.6 15 30.8 Z" fill="#ffdcc7"/>
+  <path d="M16 22 V28.5" stroke="#ffb787" stroke-width="1.2" stroke-linecap="round"/>
+  <circle cx="14.3" cy="22.3" r="0.6" fill="#964900"/>
+  <circle cx="17.7" cy="22.3" r="0.6" fill="#964900"/>
+</svg>

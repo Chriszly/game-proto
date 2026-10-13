@@ -177,7 +177,7 @@ export class GameScene extends Phaser.Scene {
   private atCounter = new Set<number>();
   /** The recipe overview opened from the top bar. */
   private recipes!: RecipeBook;
-  /** The settings panel opened from the top bar: frame rate and a new game. */
+  /** The settings panel opened from the top bar: the hub's settings and a new game. */
   private settings!: Settings;
   /** Set once a new game is confirmed, so nothing saves the old one before the scene restarts. */
   private startingOver = false;

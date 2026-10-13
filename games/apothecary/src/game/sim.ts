@@ -1,3 +1,4 @@
+import { byDifficulty } from '../../../../shared/settings';
 import {
   GROW_MS,
   ITEMS,
@@ -273,10 +274,10 @@ function newOrder(state: GameState, rand: () => number) {
   const count = rand() < 0.35 ? 2 : 1;
   const wants = Array.from({ length: count }, () => POTIONS[Math.floor(rand() * POTIONS.length)]);
   // Customers pay for each potion as they get it, with a tip that is more generous, and patience
-  // that lasts longer, at a better counter.
+  // that lasts longer, at a better counter and on an easier difficulty.
   const level = state.upgrades.counter.level;
   const pay = Object.fromEntries(wants.map((p) => [p, potionPrice(state, p) + 2 * (level + 1)]));
-  const maxPatience = (60_000 + rand() * 30_000) * (1 + 0.25 * level);
+  const maxPatience = (60_000 + rand() * 30_000) * (1 + 0.25 * level) * byDifficulty(1.5, 1, 0.7);
   return { id: state.nextOrderId++, wants, pay, patience: maxPatience, maxPatience };
 }
 
