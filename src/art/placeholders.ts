@@ -1,5 +1,4 @@
 import Phaser from 'phaser';
-import { ITEMS, type PlantId } from '../game/items';
 
 // Placeholder art drawn with simple shapes. Swap for real sprites later; keys stay the same.
 
@@ -10,42 +9,8 @@ function bake(scene: Phaser.Scene, key: string, w: number, h: number, draw: (g: 
   g.destroy();
 }
 
-export const plantTexture = (plant: PlantId, stage: number) => `plant-${plant}-${stage}`;
 
 export function bakePlaceholders(scene: Phaser.Scene) {
-  bake(scene, 'plot', 56, 44, (g) => {
-    g.fillStyle(0x4a3222).fillRoundedRect(0, 0, 56, 44, 6);
-    g.fillStyle(0x3a2618);
-    for (let y = 8; y < 44; y += 10) g.fillRect(4, y, 48, 3);
-  });
-
-  // Three growth stages per plant: sprout, growing, ripe.
-  for (const stage of [0, 1, 2]) {
-    bake(scene, plantTexture('wheat', stage), 48, 44, (g) => {
-      // A row of stalks: short green shoots, then taller green, then golden with grain heads.
-      const h = [8, 22, 34][stage];
-      const stalk = stage === 2 ? 0xc9a040 : 0x6f9a3e;
-      for (let i = 0; i < 6; i++) {
-        const x = 5 + i * 7.5;
-        const top = 44 - h + (i % 2) * 3;
-        g.fillStyle(stalk).fillRect(x, top, 2, 44 - top);
-        if (stage === 2) {
-          g.fillStyle(ITEMS.wheat.color);
-          for (let k = 0; k < 4; k++) g.fillEllipse(x + (k % 2 ? 2.5 : -0.5), top + 2 + k * 2.5, 3, 4);
-        }
-      }
-    });
-    bake(scene, plantTexture('mandrake', stage), 40, 40, (g) => {
-      const h = 8 + stage * 7;
-      g.fillStyle(0x3f7a35);
-      g.fillTriangle(20, 40 - h - 8, 12, 40, 20, 34);
-      g.fillTriangle(20, 40 - h - 8, 28, 40, 20, 34);
-      g.fillTriangle(8, 40 - h, 20, 38, 16, 40);
-      g.fillTriangle(32, 40 - h, 20, 38, 24, 40);
-      if (stage === 2) g.fillStyle(ITEMS.mandrake.color).fillEllipse(20, 36, 18, 10);
-    });
-  }
-
   bake(scene, 'table', 88, 52, (g) => {
     g.fillStyle(0x6b4a2c).fillRect(0, 8, 88, 36);
     g.fillStyle(0x8a6239).fillRect(0, 4, 88, 8);

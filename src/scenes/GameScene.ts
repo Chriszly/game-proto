@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { plantTexture } from '../art/placeholders';
+import { plantTexture } from '../art/garden';
 import { GROW_MS, ITEMS, REFINE } from '../game/items';
 import {
   collectTill,
