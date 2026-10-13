@@ -16,13 +16,13 @@ export default defineConfig({
   projects: [
     { name: 'hub', testDir: 'e2e' },
     { name: 'apothecary', testDir: 'games/apothecary/e2e' },
-    // Horde Defense is a portrait game, played on an upright phone-sized screen.
+    // Deadline is a portrait game, played on an upright phone-sized screen.
     {
-      name: 'horde',
-      testDir: 'games/horde/e2e',
+      name: 'deadline',
+      testDir: 'games/deadline/e2e',
       use: { viewport: { width: 540, height: 960 }, video: { mode: 'on', size: { width: 540, height: 960 } } },
     },
-    { name: 'rampart', testDir: 'games/rampart/e2e' },
+    { name: 'palisade', testDir: 'games/palisade/e2e' },
   ],
   webServer: {
     command: 'npm run dev -- --port 5173 --strictPort',

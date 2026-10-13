@@ -97,7 +97,7 @@ test('plays the first wave', async ({ page }, testInfo) => {
       return /webgl/i.test(id) ? null : getContext.call(this, id, ...rest);
     } as typeof HTMLCanvasElement.prototype.getContext;
   }, FRAME_MS);
-  await page.goto('/games/rampart/');
+  await page.goto('/games/palisade/');
   const game = scene(page);
   const canvas = page.locator('canvas');
 

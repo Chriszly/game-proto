@@ -1,4 +1,4 @@
-# Horde Defense
+# Deadline
 
 A wave defense prototype built with [Phaser 4](https://phaser.io), TypeScript and Vite, part of the
 [game hub](../../README.md). It plays on an upright, phone-shaped screen.
