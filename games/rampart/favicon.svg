@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>Rampart</title>
+  <circle cx="7" cy="9" r="5" fill="#e37100"/>
+  <circle cx="25" cy="9" r="5" fill="#e37100"/>
+  <circle cx="7" cy="9" r="2.4" fill="#ffb787"/>
+  <circle cx="25" cy="9" r="2.4" fill="#ffb787"/>
+  <ellipse cx="16" cy="19.5" rx="13" ry="12" fill="#e37100"/>
+  <path d="M4.5 10 C6 4 11 1.5 17 2 C22 2.5 26 5.5 28.5 10 C24 8.5 9 8.5 4.5 10 Z" fill="#3f7a35"/>
+  <path d="M4.5 10 C9 8.5 24 8.5 28.5 10 L28 11.4 C23.5 10 9.5 10 5 11.4 Z" fill="#2a4a26"/>
+  <path d="M20 4.5 C23 1 27.5 0.5 30.5 1 C28 2.5 25 4.5 21.5 6 Z" fill="#b8343f"/>
+  <circle cx="10.5" cy="17.5" r="2.3" fill="#0d1117"/>
+  <circle cx="21.5" cy="17.5" r="2.3" fill="#0d1117"/>
+  <circle cx="11.3" cy="16.7" r="0.8" fill="#ffffff"/>
+  <circle cx="22.3" cy="16.7" r="0.8" fill="#ffffff"/>
+  <ellipse cx="16" cy="23.5" rx="4.6" ry="3.3" fill="#ffdcc7"/>
+  <ellipse cx="16" cy="22.5" rx="2.2" ry="1.4" fill="#311300"/>
+</svg>
