@@ -25,8 +25,11 @@ that the game can still be played from start to finish, so it has to stay accura
 - **Drive the game through real inputs.** The test walks by clicking, like a tap on a phone, and
   only reads state through `window.game` (exposed by the dev build in `src/main.ts`). Don't write to
   game state from the test or add shortcuts that bypass the real controls.
-- **Keep it deterministic.** `Math.random` is seeded in the test so customer orders repeat. Keep any
-  new randomness behind `Math.random` (or make it seedable) so runs stay reproducible.
+- **Keep it deterministic.** The test owns the game clock (`page.clock`): game time only moves when
+  the test advances it, in 16ms animation frames, so a slow runner plays exactly like a fast one.
+  `Math.random` is seeded so customer orders repeat. Keep game timing on `requestAnimationFrame`,
+  Phaser's clock or `performance.now`, and new randomness behind `Math.random`, so runs stay
+  reproducible. Waits are measured in game time, not real time.
 - **Keep the PR screenshots honest.** The test saves milestone screenshots; when the look of the
   loop changes, refresh the `docs/screenshots/playthrough-*.png` files from a fresh run.
 
@@ -39,8 +42,8 @@ npm run test:e2e                  # starts the dev server on port 5173 and plays
 ```
 
 - It reuses a dev server already running on port 5173, so you can keep `npm run dev` open.
-- `CPU_THROTTLE=4 npm run test:e2e` slows the browser's CPU to simulate a slow CI runner. Run it
-  after changing walking routes, timings or anything the test waits on.
+- `CPU_THROTTLE=4 npm run test:e2e` slows the browser's CPU to simulate a slow CI runner. The run
+  takes longer but must play out the same; if it doesn't, something escaped the test's clock.
 - `npx playwright test --headed` shows the browser while it plays; `--debug` steps through it.
 - Also run `npm run build` (typecheck and build) before pushing.
 
@@ -51,7 +54,9 @@ npm run test:e2e                  # starts the dev server on port 5173 and plays
 2. Open the run's `playthrough` artifact on the workflow run's summary page. It has `video.webm`, the
    milestone screenshots, `trace.zip` on failure and the HTML report (`playwright-report/index.html`).
    Open a trace with `npx playwright show-trace trace.zip` to see each step, the page and the console.
-3. Reproduce locally with `npm run test:e2e`, then with `CPU_THROTTLE=4` if it only fails in CI.
+3. Reproduce locally with `npm run test:e2e`. Because the clock is controlled, a CI failure should
+   reproduce locally; if it only fails in CI, try `CPU_THROTTLE=4` and look for timing that does
+   not go through the browser's clock.
 4. Decide whose fault it is. A walking target that moved or a marker that changed means the test
    needs the new coordinates from `src/scenes/layout.ts`. Changed counts, recipes or prices mean the
    test's expectations need updating. A step that never completes in the game itself is a game bug.

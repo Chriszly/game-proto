@@ -28,6 +28,8 @@ const SHOP_DOOR = { x: 600, y: 335 };
 const COUNTER = { drop: { x: 645, y: 262 }, work: { x: 773, y: 302 }, coins: { x: 901, y: 262 }, upgrade: { x: 896, y: 468 } };
 
 const UPGRADE_COST = 20;
+/** Game time advanced between checks: a few animation frames. */
+const STEP_MS = 50;
 
 const count = (items: ItemId[]) =>
   items.reduce<Record<string, number>>((acc, id) => ({ ...acc, [id]: (acc[id] ?? 0) + 1 }), {});
@@ -59,10 +61,29 @@ test('plays the whole game loop', async ({ page }, testInfo) => {
     const cdp = await page.context().newCDPSession(page);
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: Number(process.env.CPU_THROTTLE) });
   }
+  // The test owns the clock: game time only moves when the test advances it, one 16ms animation
+  // frame at a time, so walking, timers and customers behave the same on a slow runner as on a fast
+  // one, and waiting on a timer costs no real time.
+  const start = new Date('2026-01-01T00:00:00Z');
+  await page.clock.install({ time: start });
+  await page.clock.pauseAt(new Date(start.getTime() + 1_000));
   await page.goto('/');
-  await page.waitForFunction(() => (window as any).game?.scene.getScene('Game')?.player);
   const game = scene(page);
   const canvas = page.locator('canvas');
+
+  /** Advances game time in small steps until `done` holds; returns false if `ms` ran out first. */
+  async function play(ms: number, done: () => Promise<boolean>) {
+    for (let t = 0; t <= ms; t += STEP_MS) {
+      if (await done()) return true;
+      await page.clock.runFor(STEP_MS);
+    }
+    return done();
+  }
+
+  expect(
+    await play(10_000, () => page.evaluate(() => !!(window as any).game?.scene.getScene('Game')?.player)),
+    'game started',
+  ).toBe(true);
 
   const snap = async (name: string) =>
     testInfo.attach(name, { body: await page.screenshot({ path: testInfo.outputPath(`${name}.png`) }), contentType: 'image/png' });
@@ -70,47 +91,34 @@ test('plays the whole game loop', async ({ page }, testInfo) => {
   /** Clicks the spot, like a tap, and waits for the doctor's feet to arrive. */
   async function walkTo(...route: Point[]) {
     for (const to of route) {
-      const tap = async () => {
-        const box = (await canvas.boundingBox())!;
-        const scale = box.width / 960;
-        await page.mouse.click(box.x + to.x * scale, box.y + to.y * scale);
-      };
-      await tap();
-      // The doctor stops once the feet are within a few pixels, but at a low frame rate a step can
-      // overshoot, stopping farther off or stepping back and forth over the spot. Floor markers are
-      // 44px across, so close by counts as arrived, and a stop farther off gets another tap.
-      let taps = 1;
-      await expect
-        .poll(async () => {
-          const f = await game.feet();
-          const d = Math.round(Math.hypot(f.x - to.x, f.y - to.y));
-          if (d < 12 || (!f.moving && d < 16)) return 'arrived';
-          if (f.moving) return `${d}px away, walking`;
-          if (taps < 4) {
-            taps++;
-            await tap();
-          }
-          return `stopped ${d}px away after ${taps} taps`;
-        }, { message: `walk to ${to.x},${to.y}`, timeout: 15_000 })
-        .toBe('arrived');
+      const box = (await canvas.boundingBox())!;
+      const scale = box.width / 960;
+      await page.mouse.click(box.x + to.x * scale, box.y + to.y * scale);
+      let at = await game.feet();
+      const arrived = await play(15_000, async () => {
+        at = await game.feet();
+        return !at.moving && Math.hypot(at.x - to.x, at.y - to.y) < 6;
+      });
+      expect(arrived, `walk to ${to.x},${to.y}; the doctor's feet are at ${JSON.stringify(at)}`).toBe(true);
     }
   }
 
-  async function until(what: string, check: (s: GameState) => boolean, timeout = 30_000) {
-    try {
-      await expect.poll(async () => check(await game.state()), { message: what, timeout }).toBe(true);
-    } catch (e) {
-      // Name where the doctor stood and what the world looked like, to tell a slow runner from a bug.
-      const { orders, plots, ...s } = await game.state();
-      const at = await game.feet();
-      throw new Error(`${(e as Error).message}\nDoctor at ${JSON.stringify(at)}, state ${JSON.stringify(s)}`);
+  /** Plays on until `check` holds, for up to `ms` of game time. */
+  async function until(what: string, check: (s: GameState) => boolean, ms = 30_000) {
+    let state = await game.state();
+    const ok = await play(ms, async () => check((state = await game.state())));
+    if (!ok) {
+      // Name where the doctor stood and what the world looked like when it gave up.
+      const { orders, plots, ...rest } = state;
+      throw new Error(`Timed out after ${ms}ms of game time waiting for: ${what}\n` +
+        `Doctor at ${JSON.stringify(await game.feet())}, state ${JSON.stringify(rest)}`);
     }
-    return game.state();
+    return state;
   }
 
-  const start = await game.state();
-  expect(start.coins).toBe(0);
-  expect(start.carrying).toEqual([]);
+  const fresh = await game.state();
+  expect(fresh.coins).toBe(0);
+  expect(fresh.carrying).toEqual([]);
 
   let cycle = 0;
   while ((await game.state()).coins < UPGRADE_COST) {
