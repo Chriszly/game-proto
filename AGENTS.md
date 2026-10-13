@@ -3,8 +3,8 @@
 This repo is a hub of small Phaser 4 + TypeScript + Vite games. The hub page (`index.html`) links to
 each game, and each game lives in its own folder, `games/<name>/`, with its own `index.html`, `src/`,
 `e2e/`, `docs/screenshots/` and `README.md` (how to play and its code layout). The build, tsconfig,
-Playwright config, CI workflows and PR template are shared. The only game so far is Apothecary, in
-`games/apothecary/`.
+Playwright config, CI workflows and PR template are shared. The games are Apothecary, in
+`games/apothecary/`, and Horde Defense, in `games/horde/`.
 
 ## Work on one game at a time
 
