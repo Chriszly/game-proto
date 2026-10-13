@@ -78,9 +78,11 @@ export function tick(state: GameState, dt: number, workingAt: StationId | null, 
 
   for (const id of CAULDRONS) {
     const cauldron = state[id];
-    if (!cauldron.brewing) startBrew(cauldron);
     const hands = crew(state, id, workingAt);
-    if (hands === 0 || !cauldron.brewing) continue;
+    if (hands === 0) continue;
+    // The recipe is picked when work starts, from everything in the cauldron by then.
+    if (!cauldron.brewing) startBrew(state, cauldron);
+    if (!cauldron.brewing) continue;
     cauldron.brewing.progress += dt * hands * speedAt(state.upgrades[id].level);
     if (cauldron.brewing.progress >= cauldron.brewing.ms) {
       cauldron.output.push(cauldron.brewing.out);
@@ -167,8 +169,26 @@ function runBelt(state: GameState, id: BeltId, dt: number) {
 }
 
 /** Starts the first recipe the cauldron holds the goods for and has room on the potion's pallet for. */
-function startBrew(cauldron: Cauldron) {
-  for (const recipe of RECIPES) {
+/**
+ * How many more of a potion customers want than the apothecary has ready: on the counter's shelf,
+ * on the cauldrons' pallets and in the doctor's hands.
+ */
+export function shortfall(state: GameState, potion: PotionId) {
+  const wanted = state.orders.reduce((n, o) => n + o.wants.filter((p) => p === potion).length, 0);
+  const ready = [state.counter.shelf, state.carrying, ...CAULDRONS.map((id) => state[id].output)].reduce(
+    (n, items) => n + items.filter((p) => p === potion).length,
+    0,
+  );
+  return wanted - ready;
+}
+
+/**
+ * Starts the recipe the shop is shortest of among those the cauldron has the ingredients and room
+ * for, so the potion customers are waiting for gets brewed first. Ties go in recipe order.
+ */
+function startBrew(state: GameState, cauldron: Cauldron) {
+  const byNeed = [...RECIPES].sort((a, b) => shortfall(state, b.out) - shortfall(state, a.out));
+  for (const recipe of byNeed) {
     if (!palletHasRoom(cauldron.output, recipe.out)) continue;
     const left = [...cauldron.contents];
     const ok = recipe.inputs.every((input) => {
