@@ -1,5 +1,5 @@
 import { byDifficulty } from '../../../../shared/settings';
-import { BUILDINGS, isBuilding, startingGrid, type Building, type Cell } from './tiles';
+import { BUILDINGS, isBuilding, randomIsland, startingGrid, type Building, type Cell } from './tiles';
 
 // The rules in plain TypeScript, with no Phaser. The score is always the whole board's score:
 // each building's points depend on its neighbours, so a placement can also raise the buildings
@@ -16,6 +16,8 @@ export interface GameState {
   pouch: Pouch;
   /** The building the next tap places, if any. */
   selected: Building | null;
+  /** Which island this kingdom is built on; `islandMap` lays it out. */
+  island: number;
   /** The board by row, then column. */
   grid: Cell[][];
   placed: number;
@@ -35,14 +37,16 @@ export const ROUND_POUCH: Pouch = { farm: 3, house: 3, tower: 2 };
  */
 export const goalFor = (round: number) => Math.round(((5 * round * round + 35 * round) / 2) * byDifficulty(0.8, 1, 1.2));
 
-export function newGame(best = 0): GameState {
+/** A new kingdom on island `island`, a random one unless given. */
+export function newGame(best = 0, island = randomIsland()): GameState {
   return {
     round: 1,
     goal: goalFor(1),
     score: 0,
     pouch: { ...FIRST_POUCH },
     selected: null,
-    grid: startingGrid(),
+    island,
+    grid: startingGrid(island),
     placed: 0,
     phase: 'playing',
     best,
