@@ -76,7 +76,7 @@ npx playwright test --project apothecary   # one game only
 ```
 
 Each game has its own playthrough workflow (`.github/workflows/playthrough-<name>.yml`) that runs
-only when that game's folder or a shared file changes, and uploads videos and screenshots as the
+on pull requests only, when that game's folder changes, and uploads videos and screenshots as the
 `playthrough-<name>` artifact. The Hub workflow runs the hub test when the hub page or a game's
 card changes. Each CI run also uploads a `game-build` artifact: download it from
 the run's summary page, unzip it and serve the folder (for example with `npx serve`) to play.
