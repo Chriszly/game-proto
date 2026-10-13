@@ -5,7 +5,7 @@ import { GameScene } from './scenes/GameScene';
 export const GAME_WIDTH = 960;
 export const GAME_HEIGHT = 540;
 
-new Phaser.Game({
+const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'game',
   width: GAME_WIDTH,
@@ -22,3 +22,6 @@ new Phaser.Game({
   },
   scene: [BootScene, GameScene],
 });
+
+// Handy for poking at state from the browser console during development.
+if (import.meta.env.DEV) Object.assign(window, { game });
