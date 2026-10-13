@@ -1,13 +1,36 @@
 import Phaser from 'phaser';
 import { plantTexture } from '../art/placeholders';
 import { GROW_MS, ITEMS, REFINE } from '../game/items';
-import { harvest, serveOrders, tick, useCauldron, useRefiner, type Feedback } from '../game/sim';
+import {
+  collectTill,
+  dropAtRefiner,
+  dropInCauldron,
+  harvest,
+  payUpgrade,
+  pickUpFromCauldron,
+  pickUpFromRefiner,
+  stockShelf,
+  tick,
+  type Feedback,
+} from '../game/sim';
 import { clearSave, loadState, saveState } from '../game/save';
-import { CARRY_CAPACITY, MAX_ORDERS, type GameState } from '../game/state';
+import { CARRY_CAPACITY, MAX_LEVEL, MAX_ORDERS, upgradeCost, type GameState, type StationId } from '../game/state';
 import { BackStack } from '../ui/BackStack';
 import { IconRow } from '../ui/IconRow';
 import { ProgressBar } from '../ui/ProgressBar';
-import { CAULDRON, COUNTER, GARDEN_AREAS, HUD_HEIGHT, REFINER, SHOP, customerPosition, plotPosition } from './layout';
+import {
+  CAULDRON,
+  CAULDRON_MARKERS,
+  COUNTER,
+  COUNTER_MARKERS,
+  GARDEN_AREAS,
+  HUD_HEIGHT,
+  REFINER,
+  REFINER_MARKERS,
+  SHOP,
+  customerPosition,
+  plotPosition,
+} from './layout';
 
 const SPEED = 160;
 const PLAYER_SCALE = 3;
@@ -15,7 +38,15 @@ const PLAYER_SCALE = 3;
 const MAX_STEP_MS = 250;
 const UI_DEPTH = 10_000;
 const AUTOSAVE_MS = 3_000;
+/** How often a floor marker moves the next item while the doctor stands on it. */
+const MARKER_INTERVAL_MS = 200;
 const CUSTOMER_TINTS = [0x8f5a9e, 0x4d7aa8, 0xa8584d, 0x5e8f62, 0xb8934a];
+
+/** A floor marker that acts by itself, one step at a time, while the doctor stands on it. */
+interface Marker {
+  zone: Phaser.Geom.Rectangle;
+  act: () => Feedback | null;
+}
 
 /** Something the doctor can use when their feet are inside `zone`. */
 interface Interactable {
@@ -32,6 +63,8 @@ export class GameScene extends Phaser.Scene {
   private pointerTarget: Phaser.Math.Vector2 | null = null;
   private obstacles!: Phaser.Physics.Arcade.StaticGroup;
   private interactables: Interactable[] = [];
+  private markers: Marker[] = [];
+  private nextMarkerAt = 0;
   /** Set when the player taps a station: walk there, then use it on arrival. */
   private pendingUse: Interactable | null = null;
   private prompt!: Phaser.GameObjects.Text;
@@ -46,6 +79,7 @@ export class GameScene extends Phaser.Scene {
   create() {
     this.state = loadState();
     this.interactables = [];
+    this.markers = [];
     this.views = [];
     this.pendingUse = null;
     this.pointerTarget = null;
@@ -137,31 +171,79 @@ export class GameScene extends Phaser.Scene {
     const { refiner, cauldron } = this.state;
 
     this.addObstacle(REFINER.x, REFINER.y, 'table', 84, 30);
-    const refinerQueue = new IconRow(this, REFINER.x, REFINER.y - 36, UI_DEPTH);
-    const refined = new IconRow(this, REFINER.x, REFINER.y - 4, REFINER.y + 1);
+    const refinerQueue = new IconRow(this, REFINER.x, REFINER.y - 4, REFINER.y + 1);
     const refining = new ProgressBar(this, REFINER.x, REFINER.y + 30, 60, 0xd8cfa8, UI_DEPTH);
+    const refined = this.addMarker(REFINER_MARKERS.pickUp, 'pad-out', 'Pick up', () => pickUpFromRefiner(this.state));
+    this.addMarker(REFINER_MARKERS.drop, 'pad-in', 'Drop', () => dropAtRefiner(this.state));
+    this.addUpgradeMarker(REFINER_MARKERS.upgrade, 'refiner');
     this.views.push(() => {
       refinerQueue.set(refiner.queue);
       refined.set(refiner.output);
       refining.set(refiner.queue.length > 0 ? refiner.progress / REFINE[refiner.queue[0]].ms : null);
     });
-    this.addInteractable(REFINER.x, REFINER.y + 10, 160, 150, () => 'Refine / collect', () => useRefiner(this.state));
 
     this.addObstacle(CAULDRON.x, CAULDRON.y, 'cauldron', 60, 28);
     const pot = new IconRow(this, CAULDRON.x, CAULDRON.y - 40, UI_DEPTH);
-    const brewed = new IconRow(this, CAULDRON.x + 72, CAULDRON.y + 10, UI_DEPTH);
     const brewing = new ProgressBar(this, CAULDRON.x, CAULDRON.y + 34, 60, 0x58a35a, UI_DEPTH);
+    const brewed = this.addMarker(CAULDRON_MARKERS.pickUp, 'pad-out', 'Pick up', () => pickUpFromCauldron(this.state));
+    this.addMarker(CAULDRON_MARKERS.drop, 'pad-in', 'Drop', () => dropInCauldron(this.state));
+    this.addUpgradeMarker(CAULDRON_MARKERS.upgrade, 'cauldron');
     this.views.push(() => {
       pot.set(cauldron.contents);
       brewed.set(cauldron.output);
       brewing.set(cauldron.brewing ? cauldron.brewing.progress / cauldron.brewing.ms : null);
     });
-    this.addInteractable(CAULDRON.x, CAULDRON.y + 10, 150, 150, () => 'Brew / collect', () => useCauldron(this.state));
+  }
+
+  /** Lays a floor marker with a caption; returns an icon row on the marker for showing what waits there. */
+  private addMarker(at: { x: number; y: number }, texture: string, caption: string, act: () => Feedback | null) {
+    this.add.image(at.x, at.y, texture).setDepth(-400);
+    this.add
+      .text(at.x, at.y + 26, caption, { fontFamily: 'monospace', fontSize: '10px', color: '#f3e9d2' })
+      .setOrigin(0.5, 0)
+      .setDepth(-400);
+    this.markers.push({ zone: new Phaser.Geom.Rectangle(at.x - 22, at.y - 22, 44, 44), act });
+    return new IconRow(this, at.x, at.y, -300, 8);
+  }
+
+  private addUpgradeMarker(at: { x: number; y: number }, station: StationId) {
+    this.addMarker(at, 'pad-up', '', () => payUpgrade(this.state, station));
+    const caption = this.add
+      .text(at.x, at.y + 26, '', { fontFamily: 'monospace', fontSize: '10px', color: '#e6d3f5' })
+      .setOrigin(0.5, 0)
+      .setDepth(-400);
+    const paid = new ProgressBar(this, at.x, at.y + 38, 40, 0xe0b84a, -400);
+    this.views.push(() => {
+      const { level, paid: sofar } = this.state.upgrades[station];
+      const maxed = level >= MAX_LEVEL;
+      caption.setText(maxed ? `Lv ${level + 1} max` : `Lv ${level + 2}: ${upgradeCost(level)}c`);
+      paid.set(maxed ? null : sofar / upgradeCost(level));
+    });
   }
 
   private createShopfront() {
     this.addObstacle(COUNTER.x, COUNTER.y, 'counter', 200, 30);
-    this.addInteractable(COUNTER.x, COUNTER.y + 40, 240, 120, () => 'Serve customers', () => serveOrders(this.state));
+    const shelf = new IconRow(this, COUNTER.x, COUNTER.y - 6, COUNTER.y + 1);
+    this.addMarker(COUNTER_MARKERS.drop, 'pad-in', 'Drop', () => stockShelf(this.state));
+    this.addMarker(COUNTER_MARKERS.pickUp, 'pad-out', 'Coins', () => collectTill(this.state));
+    this.addUpgradeMarker(COUNTER_MARKERS.upgrade, 'counter');
+    const tillCoin = this.add.image(COUNTER_MARKERS.pickUp.x - 8, COUNTER_MARKERS.pickUp.y, 'coin').setDepth(-300);
+    const till = this.add
+      .text(COUNTER_MARKERS.pickUp.x - 1, COUNTER_MARKERS.pickUp.y, '', {
+        fontFamily: 'monospace',
+        fontSize: '12px',
+        color: '#fff4c2',
+        stroke: '#1b1410',
+        strokeThickness: 3,
+      })
+      .setOrigin(0, 0.5)
+      .setDepth(-300);
+    this.views.push(() => {
+      const { counter } = this.state;
+      shelf.set(counter.shelf);
+      tillCoin.setVisible(counter.till > 0);
+      till.setText(counter.till > 0 ? `${counter.till}` : '');
+    });
 
     // One customer slot per possible order; slot i shows the i-th open order.
     for (let i = 0; i < MAX_ORDERS; i++) {
@@ -188,7 +270,7 @@ export class GameScene extends Phaser.Scene {
     const coins = this.add.text(16, HUD_HEIGHT / 2, '', style).setOrigin(0, 0.5).setDepth(UI_DEPTH);
     this.add.text(width / 2 - 92, HUD_HEIGHT / 2, 'Hands', style).setOrigin(1, 0.5).setDepth(UI_DEPTH);
     this.add
-      .text(width - 110, HUD_HEIGHT / 2, 'Walk: WASD / tap\nUse: E / Space / tap', { ...style, fontSize: '11px' })
+      .text(width - 110, HUD_HEIGHT / 2, 'Walk: WASD / tap\nHarvest: E / Space / tap', { ...style, fontSize: '11px' })
       .setOrigin(1, 0.5)
       .setDepth(UI_DEPTH);
     this.add
@@ -310,6 +392,8 @@ export class GameScene extends Phaser.Scene {
     tick(this.state, Math.min(delta, MAX_STEP_MS));
     this.movePlayer();
 
+    this.standOnMarkers();
+
     const near = this.nearest();
     if (this.pendingUse && near === this.pendingUse) {
       this.pendingUse = null;
@@ -323,6 +407,14 @@ export class GameScene extends Phaser.Scene {
     this.state.player.x = this.player.x;
     this.state.player.y = this.player.y;
     for (const view of this.views) view();
+  }
+
+  private standOnMarkers() {
+    const marker = this.markers.find((m) => m.zone.contains(this.player.x, this.feetY()));
+    if (!marker || this.time.now < this.nextMarkerAt) return;
+    this.nextMarkerAt = this.time.now + MARKER_INTERVAL_MS;
+    const feedback = marker.act();
+    if (feedback) this.showFeedback(feedback);
   }
 
   private movePlayer() {
