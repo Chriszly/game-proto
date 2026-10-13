@@ -12,11 +12,13 @@ import {
   harvest,
   isRipe,
   payBelt,
+  payExpansion,
   payUpgrade,
   pickUpFromCauldron,
   pickUpFromRefiner,
   stockShelf,
   tick,
+  type ExpansionPart,
   type Feedback,
 } from '../game/sim';
 import { clearSave, loadState, saveState } from '../game/save';
@@ -25,11 +27,20 @@ import {
   BELT_COST,
   BELT_MS,
   CARRY_CAPACITY,
+  EXPANSION_COST,
+  LINE2_GARDEN,
   MAX_LEVEL,
   MAX_ORDERS,
+  beltBuildable,
+  gardenBuilt,
+  gardenOf,
+  stationBuilt,
   upgradeCost,
   type BeltId,
+  type Build,
+  type CauldronId,
   type GameState,
+  type RefinerId,
   type StationId,
 } from '../game/state';
 import { BackStack } from '../ui/BackStack';
@@ -39,13 +50,19 @@ import {
   BELT_BUILD,
   BELT_PATHS,
   CAULDRON,
+  CAULDRON2,
+  CAULDRON2_MARKERS,
   CAULDRON_MARKERS,
   COUNTER,
   COUNTER_MARKERS,
+  EXPANSION_LAND,
+  EXPANSION_YARDS,
   GARDEN_AREAS,
   HUD_HEIGHT,
   LABELS,
   REFINER,
+  REFINER2,
+  REFINER2_MARKERS,
   REFINER_MARKERS,
   SHOP,
   SHOP_DOOR,
@@ -53,7 +70,10 @@ import {
   YARDS,
   customerPosition,
   plotPosition,
+  type StationMarkers,
 } from './layout';
+
+type Point = { x: number; y: number };
 
 const SPEED = 160;
 const PLAYER_SCALE = 2;
@@ -126,6 +146,7 @@ export class GameScene extends Phaser.Scene {
     this.drawGrounds();
     this.createPlots();
     this.createStations();
+    this.createExpansion();
     this.createBelts();
     this.createPlayer();
     this.followPlayer();
@@ -160,22 +181,56 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.setBounds(0, 0, WORLD.w, WORLD.h).startFollow(this.player, true);
   }
 
+  private ground(x: number, y: number, w: number, h: number, texture: string, depth = -1000) {
+    return this.add.tileSprite(x, y, w, h, texture).setOrigin(0).setDepth(depth);
+  }
+
+  /** A garden: meadow inside a picket fence, with its name on a sign. */
+  private drawGarden(garden: number) {
+    const area = GARDEN_AREAS[garden];
+    this.ground(area.x, area.y, area.w, area.h, 'tile-meadow');
+    this.ground(area.x - 12, area.y, 32, area.h, 'fence-v', -990);
+    this.ground(area.x + area.w - 20, area.y, 32, area.h, 'fence-v', -990);
+    this.ground(area.x, area.y - 4, area.w, 32, 'fence-h', -980);
+    this.ground(area.x, area.y + area.h - 28, area.w, 32, 'fence-h', -980);
+    this.label(area.x + area.w / 2, area.y + 10, area.name);
+  }
+
+  /** A place name on a wooden sign. */
+  private label(x: number, y: number, text: string) {
+    const name = this.add
+      .text(x, y, text, { fontFamily: 'monospace', fontSize: '13px', color: '#f3e9d2', stroke: '#3b2416', strokeThickness: 2 })
+      .setOrigin(0.5)
+      .setDepth(-900);
+    this.add.image(x, y, signTexture(this, name.width + 16)).setDepth(-910);
+  }
+
+  /** Runs `create` once, on the first frame `ready` holds: for things bought during play, or loaded built. */
+  private once(ready: () => boolean, create: () => void) {
+    let done = false;
+    this.views.push(() => {
+      if (done || !ready()) return;
+      done = true;
+      create();
+    });
+  }
+
   private drawGrounds() {
-    const ground = (x: number, y: number, w: number, h: number, texture: string, depth = -1000) =>
-      this.add.tileSprite(x, y, w, h, texture).setOrigin(0).setDepth(depth);
+    const ground = this.ground.bind(this);
     ground(0, 0, WORLD.w, WORLD.h, 'tile-grass');
 
-    // Workshop yard of packed earth around the courtyard, with a strip up to the shop door.
+    // Workshop yard of packed earth around the courtyard, with a strip up to the shop door; the
+    // right arm gets its yard once the expansion's land is bought.
     for (const yard of YARDS) ground(yard.x, yard.y, yard.w, yard.h, 'tile-dirt', -999);
+    this.once(
+      () => this.state.expansion.land.built,
+      () => {
+        for (const yard of EXPANSION_YARDS) ground(yard.x, yard.y, yard.w, yard.h, 'tile-dirt', -999);
+      },
+    );
 
-    // Gardens: meadow inside a picket fence.
-    for (const area of GARDEN_AREAS) {
-      ground(area.x, area.y, area.w, area.h, 'tile-meadow');
-      ground(area.x - 12, area.y, 32, area.h, 'fence-v', -990);
-      ground(area.x + area.w - 20, area.y, 32, area.h, 'fence-v', -990);
-      ground(area.x, area.y - 4, area.w, 32, 'fence-h', -980);
-      ground(area.x, area.y + area.h - 28, area.w, 32, 'fence-h', -980);
-    }
+    // The second line's fields appear as they are built.
+    GARDEN_AREAS.forEach((_, garden) => this.once(() => gardenBuilt(this.state, garden), () => this.drawGarden(garden)));
 
     // Shop: plank floor inside stone walls, with a doorway in the bottom wall facing the courtyard.
     ground(SHOP.x, SHOP.y, SHOP.w, SHOP.h, 'tile-planks');
@@ -187,58 +242,72 @@ export class GameScene extends Phaser.Scene {
     ground(SHOP.x - wall / 2, SHOP.y, wall, SHOP.h, 'tile-wall', -990);
     ground(SHOP.x + SHOP.w - wall / 2, SHOP.y, wall, SHOP.h, 'tile-wall', -990);
 
-    // Place names on wooden signs.
-    const label = (x: number, y: number, text: string) => {
-      const name = this.add
-        .text(x, y, text, { fontFamily: 'monospace', fontSize: '13px', color: '#f3e9d2', stroke: '#3b2416', strokeThickness: 2 })
-        .setOrigin(0.5)
-        .setDepth(-900);
-      this.add.image(x, y, signTexture(this, name.width + 16)).setDepth(-910);
-    };
-    for (const area of GARDEN_AREAS) label(area.x + area.w / 2, area.y + 10, area.name);
-    label(LABELS.refiner.x, LABELS.refiner.y, 'Refining table');
-    label(LABELS.cauldron.x, LABELS.cauldron.y, 'Cauldron');
-    label(SHOP.x + SHOP.w / 2, SHOP.y, 'Storefront');
+    this.label(SHOP.x + SHOP.w / 2, SHOP.y, 'Storefront');
   }
 
   private createPlots() {
     this.state.plots.forEach((plot, i) => {
       const { x, y } = plotPosition(i);
-      this.add.image(x, y, 'plot').setDepth(-500);
-      const plant = this.add.image(x, y + 10, plantTexture(plot.plant, 2)).setOrigin(0.5, 1).setDepth(y);
-      const growth = new ProgressBar(this, x, y + 26, 44, 0x9ccf6a, UI_DEPTH);
-      this.views.push(() => {
-        const grown = plot.grown / GROW_MS[plot.plant];
-        plant.setTexture(plantTexture(plot.plant, grown >= 1 ? 2 : grown >= 0.5 ? 1 : 0));
-        growth.set(grown >= 1 ? null : grown);
-      });
       this.plotCentres[i] = new Phaser.Math.Vector2(x, y);
+      this.once(
+        () => gardenBuilt(this.state, gardenOf(i)),
+        () => {
+          this.add.image(x, y, 'plot').setDepth(-500);
+          const plant = this.add.image(x, y + 10, plantTexture(plot.plant, 2)).setOrigin(0.5, 1).setDepth(y);
+          const growth = new ProgressBar(this, x, y + 26, 44, 0x9ccf6a, UI_DEPTH);
+          this.views.push(() => {
+            const grown = plot.grown / GROW_MS[plot.plant];
+            plant.setTexture(plantTexture(plot.plant, grown >= 1 ? 2 : grown >= 0.5 ? 1 : 0));
+            growth.set(grown >= 1 ? null : grown);
+          });
+        },
+      );
     });
   }
 
+  /** Both lines' refining tables and cauldrons; the second line's stand once built. */
   private createStations() {
-    const { refiner, cauldron } = this.state;
+    this.addRefiner('refiner', REFINER, REFINER_MARKERS, LABELS.refiner, 'garden', 'refiner');
+    this.addCauldron('cauldron', CAULDRON, CAULDRON_MARKERS, LABELS.cauldron, 'refiner', 'cauldron');
+    this.once(
+      () => stationBuilt(this.state, 'refiner2'),
+      () => this.addRefiner('refiner2', REFINER2, REFINER2_MARKERS, LABELS.refiner2, 'garden2', 'refiner2'),
+    );
+    this.once(
+      () => stationBuilt(this.state, 'cauldron2'),
+      () => this.addCauldron('cauldron2', CAULDRON2, CAULDRON2_MARKERS, LABELS.cauldron2, 'refiner2', 'cauldron2'),
+    );
+  }
 
-    this.addObstacle(REFINER.x, REFINER.y, 'table', 84, 30);
-    const refinerQueue = new IconRow(this, REFINER.x, REFINER.y - 4, REFINER.y + 1);
-    const refining = new ProgressBar(this, REFINER.x, REFINER.y + 30, 60, 0xd8cfa8, UI_DEPTH);
-    const refined = this.addMarker(REFINER_MARKERS.pickUp, 'pad-out', 'Pick up', () => pickUpFromRefiner(this.state), 'refiner');
-    this.addMarker(REFINER_MARKERS.drop, 'pad-in', 'Drop', () => dropAtRefiner(this.state), 'garden');
-    this.addWorkSpot(REFINER_MARKERS.work, 'refiner');
-    this.addUpgradeMarker(REFINER_MARKERS.upgrade, 'refiner');
+  /** A refining table, fed by belt `beltIn` and emptied by belt `beltOut` once those are built. */
+  private addRefiner(id: RefinerId, at: Point, m: StationMarkers, label: Point, beltIn: BeltId, beltOut: BeltId) {
+    const refiner = this.state[id];
+    this.label(label.x, label.y, 'Refining table');
+    this.addObstacle(at.x, at.y, 'table', 84, 30);
+    const queue = new IconRow(this, at.x, at.y - 4, at.y + 1);
+    const refining = new ProgressBar(this, at.x, at.y + 30, 60, 0xd8cfa8, UI_DEPTH);
+    const refined = this.addMarker(m.pickUp, 'pad-out', 'Pick up', () => pickUpFromRefiner(this.state, id), () => this.state.belts[beltOut].built);
+    this.addMarker(m.drop, 'pad-in', 'Drop', () => dropAtRefiner(this.state, id), () => this.state.belts[beltIn].built);
+    this.addWorkSpot(m.work, id);
+    this.addUpgradeMarker(m.upgrade, id);
     this.views.push(() => {
-      refinerQueue.set(refiner.queue);
+      queue.set(refiner.queue);
       refined.set(refiner.output);
       refining.set(refiner.queue.length > 0 ? refiner.progress / REFINE[refiner.queue[0]].ms : null);
     });
+  }
 
-    this.addObstacle(CAULDRON.x, CAULDRON.y, 'cauldron', 60, 28).play('cauldron-boil');
-    const pot = new IconRow(this, CAULDRON.x, CAULDRON.y - 40, UI_DEPTH);
-    const brewing = new ProgressBar(this, CAULDRON.x, CAULDRON.y + 34, 60, 0x58a35a, UI_DEPTH);
-    const brewed = this.addMarker(CAULDRON_MARKERS.pickUp, 'pad-out', 'Pick up', () => pickUpFromCauldron(this.state), 'cauldron');
-    this.addMarker(CAULDRON_MARKERS.drop, 'pad-in', 'Drop', () => dropInCauldron(this.state), 'refiner');
-    this.addWorkSpot(CAULDRON_MARKERS.work, 'cauldron');
-    this.addUpgradeMarker(CAULDRON_MARKERS.upgrade, 'cauldron');
+  /** A cauldron, fed by belt `beltIn` and emptied by belt `beltOut` once those are built. */
+  private addCauldron(id: CauldronId, at: Point, m: StationMarkers, label: Point, beltIn: BeltId, beltOut: BeltId) {
+    const cauldron = this.state[id];
+    this.label(label.x, label.y, 'Cauldron');
+    this.addObstacle(at.x, at.y, 'cauldron', 60, 28).play('cauldron-boil');
+    const pot = new IconRow(this, at.x, at.y - 40, UI_DEPTH);
+    const brewing = new ProgressBar(this, at.x, at.y + 34, 60, 0x58a35a, UI_DEPTH);
+    const brewed = this.addMarker(m.pickUp, 'pad-out', 'Pick up', () => pickUpFromCauldron(this.state, id), () => this.state.belts[beltOut].built);
+    this.addMarker(m.drop, 'pad-in', 'Drop', () => dropInCauldron(this.state, id), () => this.state.belts[beltIn].built);
+    this.addWorkSpot(m.work, id);
+    this.addUpgradeMarker(m.upgrade, id);
     this.views.push(() => {
       pot.set(cauldron.contents);
       brewed.set(cauldron.output);
@@ -248,17 +317,17 @@ export class GameScene extends Phaser.Scene {
 
   /**
    * Lays a floor marker with a caption; returns an icon row on the marker for showing what waits
-   * there. A marker that `replacedBy` a belt goes away once that belt is built.
+   * there. A marker a belt replaces goes away once `gone` holds.
    */
-  private addMarker(at: { x: number; y: number }, texture: string, caption: string, act: () => Feedback | null, replacedBy?: BeltId) {
+  private addMarker(at: Point, texture: string, caption: string, act: () => Feedback | null, gone?: () => boolean) {
     const pad = this.add.image(at.x, at.y, texture).setDepth(-400);
     const text = this.add
       .text(at.x, at.y + 26, caption, { fontFamily: 'monospace', fontSize: '10px', color: '#f3e9d2' })
       .setOrigin(0.5, 0)
       .setDepth(-400);
-    const shown = () => !replacedBy || !this.state.belts[replacedBy].built;
+    const shown = () => !gone?.();
     this.markers.push({ zone: new Phaser.Geom.Rectangle(at.x - 22, at.y - 22, 44, 44), act, shown });
-    if (replacedBy) {
+    if (gone) {
       this.views.push(() => {
         pad.setVisible(shown());
         text.setVisible(shown());
@@ -290,36 +359,78 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * Conveyor belts: a build marker for each until it is paid off, then the belt itself with the goods
-   * riding along it.
+   * A purple build marker with a price and how much is paid, shown while `shown` holds; standing on
+   * it pays towards the build.
+   */
+  private addBuildMarker(at: Point, caption: string, cost: number, build: Build, shown: () => boolean, act: () => Feedback | null) {
+    const pad = this.add.image(at.x, at.y, 'pad-up').setDepth(-400);
+    const text = this.add
+      .text(at.x, at.y + 26, `${caption}: ${cost}c`, { fontFamily: 'monospace', fontSize: '10px', color: '#e6d3f5' })
+      .setOrigin(0.5, 0)
+      .setDepth(-400);
+    const paid = new ProgressBar(this, at.x, at.y + 38, 40, 0xe0b84a, -400);
+    this.markers.push({ zone: new Phaser.Geom.Rectangle(at.x - 22, at.y - 22, 44, 44), act, shown });
+    this.views.push(() => {
+      const show = shown();
+      pad.setVisible(show);
+      text.setVisible(show);
+      paid.set(show ? build.paid / cost : null);
+    });
+  }
+
+  /**
+   * The expansion: a marker to buy the land on the grass right of the shop, then one for each field,
+   * the refining table and the cauldron of the second line, where each will go.
+   */
+  private createExpansion() {
+    const { expansion } = this.state;
+    this.addBuildMarker(EXPANSION_LAND, 'Land', EXPANSION_COST.land, expansion.land, () => !expansion.land.built, () =>
+      payExpansion(this.state, 'land'),
+    );
+    const parts: { part: ExpansionPart; at: Point; caption: string; cost: number; build: Build }[] = [
+      ...expansion.fields.map((build, i) => {
+        const area = GARDEN_AREAS[LINE2_GARDEN + i];
+        return {
+          part: (i === 0 ? 'field1' : 'field2') as ExpansionPart,
+          at: { x: area.x + area.w / 2, y: area.y + area.h / 2 },
+          caption: area.name,
+          cost: EXPANSION_COST.field,
+          build,
+        };
+      }),
+      // The stations are bought from where their work spots will be, clear of where they will stand.
+      { part: 'refiner', at: REFINER2_MARKERS.work, caption: 'Table', cost: EXPANSION_COST.refiner, build: expansion.refiner },
+      { part: 'cauldron', at: CAULDRON2_MARKERS.work, caption: 'Cauldron', cost: EXPANSION_COST.cauldron, build: expansion.cauldron },
+    ];
+    for (const { part, at, caption, cost, build } of parts) {
+      this.addBuildMarker(at, caption, cost, build, () => expansion.land.built && !build.built, () => payExpansion(this.state, part));
+    }
+  }
+
+  /**
+   * Conveyor belts: a build marker for each once the stations at its ends stand, until it is paid
+   * off; then the belt itself with the goods riding along it. All built belts are drawn as one
+   * network, so where the two lines' cauldron belts meet becomes a T.
    */
   private createBelts() {
+    let network: Phaser.GameObjects.Graphics | null = null;
+    let drawn = '';
+    this.views.push(() => {
+      const built = BELTS.filter((id) => this.state.belts[id].built);
+      if (built.join() === drawn) return;
+      drawn = built.join();
+      network?.destroy();
+      network = built.length > 0 ? drawBelts(this, built.flatMap((id) => BELT_PATHS[id]), -600) : null;
+    });
+
     for (const id of BELTS) {
       const belt = this.state.belts[id];
-      const at = BELT_BUILD[id];
-      const pad = this.add.image(at.x, at.y, 'pad-up').setDepth(-400);
-      const caption = this.add
-        .text(at.x, at.y + 26, `Belt: ${BELT_COST[id]}c`, { fontFamily: 'monospace', fontSize: '10px', color: '#e6d3f5' })
-        .setOrigin(0.5, 0)
-        .setDepth(-400);
-      const paid = new ProgressBar(this, at.x, at.y + 38, 40, 0xe0b84a, -400);
-      this.markers.push({
-        zone: new Phaser.Geom.Rectangle(at.x - 22, at.y - 22, 44, 44),
-        act: () => payBelt(this.state, id),
-        shown: () => !belt.built,
-      });
-
-      let drawn = false;
+      this.addBuildMarker(BELT_BUILD[id], 'Belt', BELT_COST[id], belt, () => !belt.built && beltBuildable(this.state, id), () =>
+        payBelt(this.state, id),
+      );
       const riding: Phaser.GameObjects.Image[] = [];
       const main = BELT_PATHS[id][0];
       this.views.push(() => {
-        pad.setVisible(!belt.built);
-        caption.setVisible(!belt.built);
-        paid.set(belt.built ? null : belt.paid / BELT_COST[id]);
-        if (belt.built && !drawn) {
-          drawBelts(this, BELT_PATHS[id], -600);
-          drawn = true;
-        }
         while (riding.length < belt.items.length) riding.push(this.add.image(0, 0, itemTexture(belt.items[0].id)).setDepth(-550));
         riding.forEach((icon, i) => {
           const item = belt.items[i];
@@ -335,7 +446,10 @@ export class GameScene extends Phaser.Scene {
   private createShopfront() {
     this.addObstacle(COUNTER.x, COUNTER.y, 'counter', 200, 30);
     const shelf = new IconRow(this, COUNTER.x, COUNTER.y - 6, COUNTER.y + 1);
-    this.addMarker(COUNTER_MARKERS.drop, 'pad-in', 'Drop', () => stockShelf(this.state), 'cauldron');
+    // Potions are stocked by hand until every cauldron standing has its belt to the counter.
+    const allBelted = () =>
+      this.state.belts.cauldron.built && (!stationBuilt(this.state, 'cauldron2') || this.state.belts.cauldron2.built);
+    this.addMarker(COUNTER_MARKERS.drop, 'pad-in', 'Drop', () => stockShelf(this.state), allBelted);
     this.addMarker(COUNTER_MARKERS.pickUp, 'pad-out', 'Coins', () => collectTill(this.state));
     this.addWorkSpot(COUNTER_MARKERS.work, 'counter');
     this.addUpgradeMarker(COUNTER_MARKERS.upgrade, 'counter');
