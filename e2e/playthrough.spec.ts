@@ -1,7 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 
 // Plays the whole loop with real inputs (clicks to walk, as on a phone): harvest both gardens,
-// refine, brew, sell at the counter until there are enough coins, then buy an upgrade.
+// refine, brew, sell at the counter until there are enough coins, then buy an upgrade, sell some
+// more and buy the conveyor belt that carries plants from the gardens to the refining table.
 // Game state is only read, through the `game` object the dev build puts on window.
 
 type Point = { x: number; y: number };
@@ -15,6 +16,7 @@ interface GameState {
   counter: { shelf: ItemId[]; till: number };
   upgrades: Record<'refiner' | 'cauldron' | 'counter', { level: number; paid: number }>;
   orders: { wants: ItemId[] }[];
+  belts: Record<'garden' | 'refiner' | 'cauldron', { built: boolean; paid: number; items: { id: ItemId; at: number }[] }>;
 }
 
 // Floor spots in the 1200x810 world, from src/scenes/layout.ts. Walking targets the doctor's feet.
@@ -26,7 +28,10 @@ const MANDRAKE = { x: 162, y: 370 };
 const REFINER = { drop: { x: 330, y: 468 }, work: { x: 430, y: 540 }, pickUp: { x: 330, y: 612 } };
 const CAULDRON = { drop: { x: 380, y: 728 }, work: { x: 450, y: 650 }, pickUp: { x: 540, y: 728 } };
 const SHOP_DOOR = { x: 600, y: 420 };
+/** On the way out from the coins, a step towards the door that keeps clear of the upgrade marker. */
+const LEAVE_SHOP = { x: 650, y: 330 };
 const COUNTER = { drop: { x: 472, y: 282 }, work: { x: 520, y: 340 }, coins: { x: 728, y: 282 }, upgrade: { x: 710, y: 346 } };
+const GARDEN_BELT = { x: 230, y: 468, cost: 60 };
 
 const UPGRADE_COST = 20;
 /**
@@ -189,11 +194,10 @@ test('plays the whole game loop', async ({ page }, testInfo) => {
   expect(fresh.coins).toBe(0);
   expect(fresh.carrying).toEqual([]);
 
+  /** One round of the loop: harvest, refine, brew, sell and collect the coins. */
   let cycle = 0;
-  while ((await game.state()).coins < UPGRADE_COST) {
+  async function playRound() {
     cycle++;
-    expect(cycle, 'cycles needed to earn an upgrade').toBeLessThanOrEqual(4);
-
     // Gardens: walk along the wheat row, then past one mandrake, until both hands are full.
     await until('a ripe wheat row', (s) => s.plots.slice(0, 3).every((p) => p.grown >= 8_000), 20_000);
     // Stop at each plant in turn, so a slow frame rate can't carry the doctor past one.
@@ -245,8 +249,13 @@ test('plays the whole game loop', async ({ page }, testInfo) => {
       s = await until('coins collected', (s) => s.counter.till === 0);
       expect(s.coins).toBe(before);
     }
+  }
+
+  while ((await game.state()).coins < UPGRADE_COST) {
+    expect(cycle, 'rounds needed to earn an upgrade').toBeLessThan(4);
+    await playRound();
     // Back to the gardens for the next round, if needed.
-    if (s.coins < UPGRADE_COST) await walkTo(SHOP_DOOR);
+    if ((await game.state()).coins < UPGRADE_COST) await walkTo(LEAVE_SHOP, SHOP_DOOR);
   }
 
   // Upgrade: stand on the counter's upgrade marker until the next level is paid for.
@@ -260,6 +269,31 @@ test('plays the whole game loop', async ({ page }, testInfo) => {
   const done = await game.state();
   expect(done.upgrades.counter.level).toBe(1);
   expect(done.coins + done.upgrades.counter.paid).toBe(rich.coins - UPGRADE_COST);
+
+  // Conveyor belt: sell more rounds until the garden belt is affordable, then pay for it on its
+  // build marker. From then on ripe plants ride from the gardens to the refining table by themselves.
+  const upgradedAt = cycle;
+  while ((await game.state()).coins < GARDEN_BELT.cost) {
+    expect(cycle - upgradedAt, 'rounds needed to earn the garden belt').toBeLessThan(6);
+    await walkTo(LEAVE_SHOP, SHOP_DOOR);
+    await playRound();
+  }
+  const saved = await game.state();
+  expect(saved.belts.garden).toEqual({ built: false, paid: 0, items: [] });
+  // Along the top of the yard, above the refining table's markers.
+  await walkTo(LEAVE_SHOP, SHOP_DOOR, { x: 380, y: SHOP_DOOR.y }, GARDEN_BELT);
+  let s = await until('garden belt built', (s) => s.belts.garden.built);
+  expect(s.coins).toBe(saved.coins - GARDEN_BELT.cost);
+  // Wait by the table while the belt brings in the plants. Whatever the doctor picked up passing the
+  // mandrakes stays in hand: the table's drop marker went away with the belt.
+  // Anything that reaches the table from here on came by belt.
+  const inHand = s.carrying;
+  const queued = s.refiner.queue.length + s.refiner.output.length;
+  await walkTo(REFINER.drop, REFINER.work);
+  await until('a plant on the garden belt', (s) => s.belts.garden.items.length > 0, 20_000);
+  await snap('6-belt');
+  s = await until('the belt delivered to the refining table', (s) => s.refiner.queue.length + s.refiner.output.length > queued, 20_000);
+  expect(s.carrying).toEqual(inHand);
 
   const speed = gameMs / (Date.now() - startedAt);
   console.log(`Played ${Math.round(gameMs / 1000)}s of game time at ${speed.toFixed(1)}x (target ${SPEED}x).`);
