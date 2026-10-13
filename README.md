@@ -71,8 +71,6 @@ Every push to main also builds the game into a container image (`Dockerfile`: th
 by nginx on port 8080) for arm64 and amd64, and publishes it as `ghcr.io/chriszly/game-proto:latest`
 (and `:sha-<commit>`). Pull requests only check that the image builds.
 
-To try it locally: `npm run build && docker build -t game-proto . && docker run --rm -p 8080:8080 game-proto`.
-
 ## Code layout
 
 - `src/game/`: the rules (items, recipes, state, simulation tick and player actions) in plain
