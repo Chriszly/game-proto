@@ -370,6 +370,9 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
   // The potions stand on their pallets in front of the counter.
   const shelf = count(s.counter.shelf);
   expect((await game.pallets('counter')).in).toEqual({ healingDraught: shelf.healingDraught ?? 0, sleepingTonic: shelf.sleepingTonic ?? 0 });
+  // One of each potion: a customer pays less for a potion while more of its kind stay stocked,
+  // so with no others left behind each one sells at full pay.
+  expect(Math.max(...Object.values(shelf)), 'no stock to lower the pay').toBe(1);
   await walkTo(COUNTER.work);
   await snap('4-serving');
   // Each customer pays for every potion they get, at the price they came in with. A customer who

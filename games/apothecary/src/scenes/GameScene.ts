@@ -48,6 +48,7 @@ import {
   craftsmanCost,
   harvestReach,
   stationBuilt,
+  stockFactor,
   upgradeCost,
   type BeltId,
   type Build,
@@ -715,6 +716,20 @@ export class GameScene extends Phaser.Scene {
   private createShopfront() {
     this.addObstacle(COUNTER.x, COUNTER.y, 'counter', 200, 30);
     this.addPallets('counter', PALLETS.counter, [POTIONS, []], [() => this.state.counter.shelf, () => []]);
+    // Under each potion pallet, how much less the next one sells for while the shop is well stocked.
+    POTIONS.forEach((potion, i) => {
+      const at = PALLETS.counter.in[i];
+      if (!at) return;
+      const cut = this.add
+        .text(at.x, at.y + 8, '', { fontFamily: 'monospace', fontSize: '10px', color: '#f3c06a', stroke: '#3b2416', strokeThickness: 2 })
+        .setOrigin(0.5, 0)
+        .setDepth(WORLD_UI_DEPTH);
+      this.views.push(() => {
+        const others = this.state.counter.shelf.filter((p) => p === potion).length - 1;
+        const off = Math.round(100 * (1 - stockFactor(Math.max(0, others))));
+        cut.setText(off > 0 ? `-${off}%` : '');
+      });
+    });
     // Potions are stocked by hand until every cauldron standing has its belt to the counter, and
     // whenever the doctor carries one.
     const allBelted = () => !doneByHand(this.state, 'cauldron') && !doneByHand(this.state, 'cauldron2');

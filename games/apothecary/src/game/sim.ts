@@ -29,6 +29,7 @@ import {
   maxOrders,
   orderInterval,
   potionPrice,
+  stockedPay,
   REFINERS,
   LINE2_GARDEN,
   UPGRADES,
@@ -348,7 +349,7 @@ function serveCustomers(state: GameState, dt: number, workingAt: StationId | nul
 
 /**
  * Customers take what they ordered from the counter shelf, at most `limit` potions, and pay into
- * the till. Orders the shelf can fill completely go first (oldest first); leftover matching potions
+ * the till, less for each potion of the kind still stocked after theirs (`stockedPay`). Orders the shelf can fill completely go first (oldest first); leftover matching potions
  * go towards the rest.
  */
 function serveFromShelf(state: GameState, atCounter: (order: Order) => boolean, limit = Infinity) {
@@ -359,7 +360,8 @@ function serveFromShelf(state: GameState, atCounter: (order: Order) => boolean, 
       const i = counter.shelf.indexOf(want);
       if (i < 0 || limit <= 0) return true;
       counter.shelf.splice(i, 1);
-      counter.till += order.pay[want] ?? 0;
+      const others = counter.shelf.filter((p) => p === want).length;
+      counter.till += stockedPay(order.pay[want] ?? 0, others);
       limit--;
       return false;
     });
