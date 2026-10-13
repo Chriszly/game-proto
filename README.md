@@ -19,6 +19,7 @@ map is bigger than the screen, so the camera follows the doctor.
 | --- | --- |
 | WASD / arrow keys, or tap | Walk |
 | Walk past ripe plants | Harvest every ripe plant within one character height of the doctor; the spinning sickle marks the edge |
+| Drop all (top bar) | Throw away everything the doctor carries |
 | Stand on a floor marker | Green: drop off items. Blue: work the station. Gold: pick up products or coins. Purple: pay coins to upgrade or build something |
 
 1. **Gardens**: each garden grows one kind of plant. Harvest ripe wheat in the wheat field and
@@ -52,7 +53,8 @@ a longer sickle harvests from a quarter further away (25, then 50 coins each).
 **Conveyor belts** take the walking out of the loop. Three can be bought on their own purple build
 markers, a handful of coins at a time: gardens to refining table (60 coins), table to cauldron (100)
 and cauldron to counter (150). A belt picks ripe plants or finished goods up at its start and
-hands them to the next station when it has room; the drop and pick-up markers it replaces go away.
+hands them to the next station when it has room; the drop and pick-up markers it replaces go away,
+and the goods it carries are cleared from the doctor's hands when it is built.
 The belts are steampunk machinery, brass rails over leather slats, in an otherwise medieval world.
 
 ![All three belts built](docs/screenshots/belts-map.png)
@@ -84,8 +86,9 @@ npm run preview   # serve the production build
 both gardens, refines, brews, sells to customers until it has 20 coins and buys a counter upgrade.
 It sells more to buy the expansion's land, a wheat field, a refining table and a cauldron, and
 plays a round on that second line. It buys the outfitter's pack, boots and sickle and checks each
-one works. Last it buys the garden belt and watches the belt bring plants
-to the refining table, checking items, coins, upgrades and purchases along the way. It plays at 4x
+one works. It buys the garden belt, which clears the plants from the doctor's hands, and watches
+the belt bring plants to the refining table. Last it picks up refined goods and empties its hands
+with the Drop all button, checking items, coins, upgrades and purchases along the way. It plays at 4x
 speed (`PLAYTHROUGH_SPEED`), so the run takes about three minutes. The Playthrough workflow runs it on every PR
 and push to main and uploads a video and milestone screenshots as the `playthrough` artifact.
 
