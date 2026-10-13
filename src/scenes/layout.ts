@@ -1,4 +1,4 @@
-import { PLOTS_PER_GARDEN } from '../game/state';
+import { PLOTS_PER_GARDEN, type BeltId } from '../game/state';
 
 // World positions for the U-shaped apothecary. Goods flow down the left arm (gardens, refining
 // table), along the bottom (cauldron) and up the middle into the shop at the top. The right arm,
@@ -76,4 +76,26 @@ export const customerPosition = (i: number) => ({ x: COUNTER.x - 60 + i * 60, y:
 export const LABELS = {
   refiner: { x: 170, y: 540 },
   cauldron: { x: 330, y: 770 },
+};
+
+/**
+ * Conveyor belt routes. The first run of each is the main line goods ride along; further runs are
+ * feeders that join it at a T. Each belt replaces the markers at its two ends once it is built.
+ */
+export const BELT_PATHS: Record<BeltId, { x: number; y: number }[][]> = {
+  // From both gardens down the left arm into the top of the refining table.
+  garden: [
+    [{ x: 300, y: 152 }, { x: 330, y: 152 }, { x: 330, y: 514 }],
+    [{ x: 300, y: 344 }, { x: 330, y: 344 }],
+  ],
+  // Out of the bottom of the table and along to the cauldron.
+  refiner: [[{ x: 330, y: 566 }, { x: 330, y: 720 }, { x: 424, y: 720 }]],
+  // Out of the cauldron, up through the shop door into the counter.
+  cauldron: [[{ x: 496, y: 720 }, { x: 600, y: 720 }, { x: 600, y: 292 }]],
+};
+/** Where the doctor stands to pay for each belt. */
+export const BELT_BUILD: Record<BeltId, { x: number; y: number }> = {
+  garden: { x: 230, y: 468 },
+  refiner: { x: 230, y: 612 },
+  cauldron: { x: 680, y: 728 },
 };
