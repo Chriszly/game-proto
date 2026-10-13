@@ -46,10 +46,12 @@ const AUTOSAVE_MS = 3_000;
 const MARKER_INTERVAL_MS = 200;
 /** Pause between plants when several in reach are ripe, so each pickup can be seen. */
 const HARVEST_INTERVAL_MS = 150;
-/** Sickle spin speed in radians per millisecond, its distance from the doctor's centre, and how
- * long it keeps spinning after the last ripe plant in reach. */
-const SICKLE_SPIN = 0.014;
-const SICKLE_ORBIT = 26;
+/** Harvest radius around the doctor's centre, in character heights. */
+const HARVEST_REACH = 1.5;
+/** Sickle spin speed in radians per millisecond, its size, and how long it keeps spinning after the
+ * last ripe plant in reach. It circles on the edge of the harvest radius, tracing the area. */
+const SICKLE_SPIN = 0.008;
+const SICKLE_SCALE = 1;
 const SICKLE_LINGER_MS = 400;
 
 /** A floor marker that acts by itself, one step at a time, while the doctor stands on it. */
@@ -347,7 +349,7 @@ export class GameScene extends Phaser.Scene {
     this.player.body!.setSize(15, 7.5).setOffset(4.5, 28.5);
     this.player.setCollideWorldBounds(true);
     this.physics.add.collider(this.player, this.obstacles);
-    this.sickle = this.add.image(x, y, 'sickle').setScale(PLAYER_SCALE).setVisible(false);
+    this.sickle = this.add.image(x, y, 'sickle').setScale(SICKLE_SCALE).setVisible(false);
   }
 
   private createControls() {
@@ -369,11 +371,15 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * Harvests ripe plants within one character height of the doctor's centre, one plant at a time
+   * Harvests ripe plants within HARVEST_REACH character heights of the doctor's centre, one at a time
    * so each pickup can be seen. Returns whether a ripe plant is in reach with room to carry it.
    */
+  private harvestReach() {
+    return this.player.displayHeight * HARVEST_REACH;
+  }
+
   private autoHarvest() {
-    const reach = this.player.displayHeight;
+    const reach = this.harvestReach();
     const centre = new Phaser.Math.Vector2(this.player.x, this.player.y);
     const inReach = this.plotCentres
       .map((at, i) => ({ i, d: at.distance(centre) }))
@@ -387,21 +393,22 @@ export class GameScene extends Phaser.Scene {
     return true;
   }
 
-  /** Swings the sickle in circles around the doctor while harvesting, and a moment after. */
+  /** Swings the sickle around the edge of the harvest radius while harvesting, and a moment after. */
   private spinSickle(harvesting: boolean, delta: number) {
     if (harvesting) this.lastHarvestingAt = this.time.now;
     const show = this.time.now - this.lastHarvestingAt < SICKLE_LINGER_MS;
     this.sickle.setVisible(show);
     if (!show) return;
     this.sickleAngle = (this.sickleAngle + delta * SICKLE_SPIN) % (Math.PI * 2);
+    const orbit = this.harvestReach();
     this.sickle
       .setPosition(
-        this.player.x + Math.cos(this.sickleAngle) * SICKLE_ORBIT,
-        this.player.y + Math.sin(this.sickleAngle) * SICKLE_ORBIT,
+        this.player.x + Math.cos(this.sickleAngle) * orbit,
+        this.player.y + Math.sin(this.sickleAngle) * orbit,
       )
-      .setRotation(this.sickleAngle + Math.PI / 2)
-      // In front of the doctor on the lower half of the circle, behind on the upper half.
-      .setDepth(this.player.depth + Math.sin(this.sickleAngle));
+      .setRotation(this.sickleAngle + Math.PI / 2);
+    // Sorted by its own position like the plants it passes, in front of what stands above it.
+    this.sickle.setDepth(this.sickle.y + this.sickle.displayHeight / 2);
   }
 
   private showFeedback(lines: Feedback) {
