@@ -29,6 +29,7 @@ import {
   REFINERS,
   LINE2_GARDEN,
   UPGRADES,
+  anyFieldBuilt,
   beltBuildable,
   carryCapacity,
   stationBuilt,
@@ -166,12 +167,13 @@ function giveFromBelt(state: GameState, belt: BeltId, id: ItemId) {
 /**
  * The two cauldron belts share their run up to the counter, so in each lane an item from a gap
  * before the join on keeps a gap behind the other belt's items there as well. Returns the other
- * belt's items near or past the join, by lane, which only matter to a cauldron belt.
+ * belt's items near or past the join, by lane, or null for a belt that joins none.
  */
 function mergingItems(state: GameState, id: BeltId) {
+  if (id !== 'cauldron' && id !== 'cauldron2') return null;
   const byLane = new Map<ItemId, BeltItem[]>();
   const other = state.belts[OTHER_LINE[id]];
-  if ((id !== 'cauldron' && id !== 'cauldron2') || !other.built) return byLane;
+  if (!other.built) return byLane;
   for (const item of other.items) {
     if (item.at < BELT_JOIN_MS - BELT_GAP_MS) continue;
     const lane = byLane.get(item.id);
@@ -196,12 +198,11 @@ function runBelt(state: GameState, id: BeltId, dt: number) {
   // The item last seen in each lane: the one ahead of the next in that lane, and in the end the rearmost.
   const ahead = new Map<ItemId, BeltItem>();
   const merging = mergingItems(state, id);
-  const joining = (item: BeltItem) => item.at + step >= BELT_JOIN_MS - BELT_GAP_MS;
   belt.items = belt.items.filter((item) => {
     const front = !ahead.has(item.id);
     if (front && item.at >= length && giveFromBelt(state, id, item.id)) return false;
     let room = front ? length : ahead.get(item.id)!.at - BELT_GAP_MS;
-    if (joining(item)) {
+    if (merging && item.at + step >= BELT_JOIN_MS - BELT_GAP_MS) {
       for (const other of merging.get(item.id) ?? []) {
         // The first line's belt goes first when two items reach the join together.
         const first = other.at > item.at || (other.at === item.at && id === 'cauldron2');
@@ -222,7 +223,8 @@ function runBelt(state: GameState, id: BeltId, dt: number) {
  */
 export function shortfall(state: GameState, potion: PotionId) {
   const wanted = state.orders.reduce((n, o) => n + o.wants.filter((p) => p === potion).length, 0);
-  const riding = [...state.belts.cauldron.items, ...state.belts.cauldron2.items].map((item) => item.id);
+  // Each cauldron's belt is named after it.
+  const riding = CAULDRONS.flatMap((id) => state.belts[id].items.map((item) => item.id));
   const ready = [state.counter.shelf, state.carrying, riding, ...CAULDRONS.map((id) => state[id].output)].reduce(
     (n, items) => n + items.filter((p) => p === potion).length,
     0,
@@ -444,7 +446,7 @@ const OTHER_LINE: Record<BeltId, BeltId> = {
 export const doneByHand = (state: GameState, id: BeltId) =>
   !state.belts[id].built &&
   (BELT_ENDS[id].some((station) => station !== 'counter' && stationBuilt(state, station)) ||
-    (id === 'garden2' && state.expansion.fields.some((f) => f.built)));
+    (id === 'garden2' && anyFieldBuilt(state)));
 
 /**
  * Pays a handful of coins towards building a belt, which starts running once fully paid. The belt

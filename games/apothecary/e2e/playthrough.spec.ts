@@ -83,7 +83,8 @@ const shortfall = (s: GameState, potion: ItemId) =>
     ...s.carrying,
     ...s.cauldron.output,
     ...s.cauldron2.output,
-    ...[...s.belts.cauldron.items, ...s.belts.cauldron2.items].map((item) => item.id),
+    ...s.belts.cauldron.items.map((item) => item.id),
+    ...s.belts.cauldron2.items.map((item) => item.id),
   ].filter((p) => p === potion).length;
 
 /** What a customer coming in now pays for a potion: its price with the guild's upgrade, and a tip. */
@@ -98,7 +99,9 @@ function scene(page: Page) {
     page.evaluate(`(${fn.toString()})(window.game.scene.getScene('Game'))`) as Promise<T>;
   return {
     state: () => read<GameState>((s) => JSON.parse(JSON.stringify(s.state))),
-    feet: () => read<Point & { moving: boolean }>((s) => ({ x: s.player.x, y: s.player.body.center.y, moving: !!s.pointerTarget })),
+    feet: () => read<Point & { moving: boolean }>((s) => ({ x: s.player.body.center.x, y: s.player.body.center.y, moving: !!s.pointerTarget })),
+    /** Where the doctor walks to: the tapped spot, or the edge of a station tapped inside it. */
+    target: () => read<Point | null>((s) => s.pointerTarget && { x: s.pointerTarget.x, y: s.pointerTarget.y }),
     /** The top-left corner of the view in the world, which moves as the camera follows the doctor. */
     view: () => read<Point>((s) => ({ x: s.cameras.main.scrollX, y: s.cameras.main.scrollY })),
     /** How far from the doctor's centre ripe plants are harvested, in pixels. */
@@ -188,12 +191,16 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
   const snap = async (name: string) =>
     testInfo.attach(name, { body: await page.screenshot({ path: testInfo.outputPath(`${name}.png`) }), contentType: 'image/png' });
 
-  /** Taps a spot on screen, as a player would, and waits for the doctor's feet to arrive there. */
-  async function tapAndWalk(to: Point) {
+  /**
+   * Taps a spot on screen, as a player would, and waits for the doctor's feet to arrive there. A hop
+   * on the way to a spot can land inside a station, so it waits for where the game walks to instead.
+   */
+  async function tapAndWalk(tapped: Point, hop = false) {
     const box = (await canvas.boundingBox())!;
     const scale = box.width / VIEW.w;
     const view = await game.view();
-    await page.mouse.click(box.x + (to.x - view.x) * scale, box.y + (to.y - view.y) * scale);
+    await page.mouse.click(box.x + (tapped.x - view.x) * scale, box.y + (tapped.y - view.y) * scale);
+    const to = (hop && (await game.target())) || tapped;
     let at = await game.feet();
     const arrived = await play(15_000, async () => {
       at = await game.feet();
@@ -226,7 +233,7 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
         if (dx < 0) t = Math.min(t, (left - from.x) / dx);
         if (dy > 0) t = Math.min(t, (bottom - from.y) / dy);
         if (dy < 0) t = Math.min(t, (top - from.y) / dy);
-        await tapAndWalk({ x: Math.round(from.x + dx * t), y: Math.round(from.y + dy * t) });
+        await tapAndWalk({ x: Math.round(from.x + dx * t), y: Math.round(from.y + dy * t) }, true);
       }
     }
   }

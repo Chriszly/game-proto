@@ -910,11 +910,11 @@ export class GameScene extends Phaser.Scene {
 
   /**
    * Each station's blocked area slightly shrunk, which walking is tested against so lines along an
-   * edge or from a corner count as clear. It stays wider than where feet touching the station stand,
-   * half the feet's size (15 by 7.5 pixels) from it, so they still route around it.
+   * edge or from a corner count as clear. It stays clear of where feet touching the station stand,
+   * half the feet's size (15 by 7 pixels) from it, so they still route around it.
    */
   private innerArea(area: Phaser.Geom.Rectangle) {
-    return new Phaser.Geom.Rectangle(area.x + 4, area.y + 3, area.width - 8, area.height - 6);
+    return new Phaser.Geom.Rectangle(area.x + 4, area.y + 4, area.width - 8, area.height - 8);
   }
 
   /**

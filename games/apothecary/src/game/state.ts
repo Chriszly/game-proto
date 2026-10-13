@@ -209,10 +209,11 @@ export const BELT_ENDS: Record<BeltId, StationId[]> = {
   refiner2: ['refiner2', 'cauldron2'],
   cauldron2: ['cauldron2', 'counter'],
 };
+/** Whether any of the second line's fields is built, for its garden belt to pick from. */
+export const anyFieldBuilt = (state: GameState) => state.expansion.fields.some((f) => f.built);
 /** The second line's garden belt also needs one of its fields to pick from. */
 export const beltBuildable = (state: GameState, id: BeltId) =>
-  BELT_ENDS[id].every((station) => stationBuilt(state, station)) &&
-  (id !== 'garden2' || state.expansion.fields.some((f) => f.built));
+  BELT_ENDS[id].every((station) => stationBuilt(state, station)) && (id !== 'garden2' || anyFieldBuilt(state));
 /** Coins needed for the expansion's land, each field, the refining table and the cauldron. */
 export const EXPANSION_COST = { land: 100, field: 25, refiner: 50, cauldron: 75 };
 /** How long a craftsman takes to hand a customer one potion; the doctor hands them over at once. */
