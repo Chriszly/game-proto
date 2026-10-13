@@ -169,3 +169,15 @@ export const BELT_BUILD: Record<BeltId, { x: number; y: number }> = {
   refiner2: mirror({ x: 170, y: 612 }),
   cauldron2: mirror({ x: 520, y: 576 }),
 };
+
+/**
+ * Craftsmen: the marker where each station's are hired, beside its upgrade marker or work spot, and
+ * where the two of them stand once hired (their feet), by the station.
+ */
+export const CRAFTSMEN = {
+  refiner: { hire: { x: 500, y: 470 }, stand: [{ x: 392, y: 575 }, { x: 468, y: 575 }] },
+  cauldron: { hire: { x: 570, y: 600 }, stand: [{ x: 376, y: 688 }, { x: 414, y: 702 }] },
+  refiner2: { hire: mirror({ x: 500, y: 470 }), stand: [mirror({ x: 392, y: 575 }), mirror({ x: 468, y: 575 })] },
+  cauldron2: { hire: mirror({ x: 570, y: 600 }), stand: [mirror({ x: 376, y: 688 }), mirror({ x: 414, y: 702 })] },
+  counter: { hire: { x: 725, y: 180 }, stand: [{ x: 560, y: 330 }, { x: 650, y: 330 }] },
+};

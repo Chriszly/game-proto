@@ -40,6 +40,14 @@ the doctor keeps the item and a belt waits until there is room.
 
 ![Pallets at the refining tables and cauldrons](docs/screenshots/pallets-map.png)
 
+**Craftsmen** work a station so the doctor doesn't have to stand on its work spot. Each station
+takes up to two, hired one at a time on the purple marker beside it (30, then 60 coins); they
+stand by the station once hired. Every pair of hands counts: a refining table or cauldron works
+as fast again for each craftsman, and the doctor on the work spot adds one more. At the counter
+the first craftsman serves customers, and the second also brings the coins from the till.
+
+![Craftsmen at the stations](docs/screenshots/craftsmen-map.png)
+
 Every station has an upgrade marker and goes up to level 5. Upgrades cost 20, 40, 80 and 160
 coins: the refining table and cauldron work faster, and customers at an upgraded counter tip more
 and wait longer. Once a level is paid off, step off the marker and back on to start on the next.
@@ -86,10 +94,11 @@ npm run preview   # serve the production build
 both gardens, refines, brews, sells to customers until it has 20 coins and buys a counter upgrade.
 It sells more to buy the expansion's land, a wheat field, a refining table and a cauldron, and
 plays a round on that second line. It buys the outfitter's pack, boots and sickle and checks each
-one works. It buys the garden belt, which clears the plants from the doctor's hands, and watches
-the belt bring plants to the refining table. Last it picks up refined goods and empties its hands
-with the Drop all button, checking items, coins, upgrades and purchases along the way. It plays at 4x
-speed (`PLAYTHROUGH_SPEED`), so the run takes about three minutes. The Playthrough workflow runs it on every PR
+one works. It hires a craftsman for the refining table and buys the garden belt, which clears the
+plants from the doctor's hands, then watches the belt bring plants to the table, where the
+craftsman refines them. Last it picks up refined goods and empties its hands with the Drop all
+button, checking items, coins, upgrades and purchases along the way. It plays at 4x speed
+(`PLAYTHROUGH_SPEED`), so the run takes about three minutes. The Playthrough workflow runs it on every PR
 and push to main and uploads a video and milestone screenshots as the `playthrough` artifact.
 
 ```sh

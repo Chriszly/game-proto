@@ -3,9 +3,9 @@ import { expect, test, type Page } from '@playwright/test';
 // Plays the whole loop with real inputs (clicks to walk, as on a phone): harvest both gardens,
 // refine, brew, sell at the counter until there are enough coins, then buy an upgrade. Sell more to
 // buy the expansion's land, a field, a refining table and a cauldron, and play a round on that
-// second line. Then kit the doctor out with a bigger pack, faster boots and a longer sickle, buy
-// the conveyor belt that carries plants from the gardens to the table, and last drop everything
-// carried with the Drop all button.
+// second line. Then kit the doctor out with a bigger pack, faster boots and a longer sickle, hire a
+// craftsman for the refining table, buy the conveyor belt that carries plants from the gardens to the
+// table and watch the craftsman refine them, and last drop everything carried with Drop all.
 // Game state is only read, through the `game` object the dev build puts on window.
 
 type Point = { x: number; y: number };
@@ -21,6 +21,7 @@ interface GameState {
   expansion: Record<'land' | 'refiner' | 'cauldron', { built: boolean; paid: number }> & { fields: { built: boolean; paid: number }[] };
   counter: { shelf: ItemId[]; till: number };
   upgrades: Record<string, { level: number; paid: number }>;
+  craftsmen: Record<string, { level: number; paid: number }>;
   orders: { wants: ItemId[] }[];
   belts: Record<string, { built: boolean; paid: number; items: { id: ItemId; at: number }[] }>;
 }
@@ -31,7 +32,14 @@ const VIEW = { w: 960, h: 540, hud: 44 };
 const WHEAT_XS = [252, 162, 72];
 const WHEAT_Y = 178;
 const MANDRAKE = { x: 162, y: 370 };
-const REFINER = { drop: { x: 330, y: 468 }, work: { x: 430, y: 540 }, pickUp: { x: 330, y: 612 } };
+const REFINER = {
+  drop: { x: 330, y: 468 },
+  work: { x: 430, y: 540 },
+  pickUp: { x: 330, y: 612 },
+  hire: { x: 500, y: 470, cost: 30 },
+};
+/** From the table's hire marker, a way past its upgrade marker, work spot and drop-off to its left. */
+const BELOW_REFINER_MARKERS = [{ x: 470, y: 510 }, { x: 250, y: 510 }];
 const CAULDRON = { drop: { x: 380, y: 728 }, work: { x: 450, y: 650 }, pickUp: { x: 540, y: 728 } };
 const SHOP_DOOR = { x: 600, y: 420 };
 /** On the way out from the coins, a step towards the door that keeps clear of the upgrade marker. */
@@ -304,6 +312,9 @@ test('plays the whole game loop', async ({ page }, testInfo) => {
     if (cycle === 1) await snap('4-serving');
     s = await until('customers served', (s) => s.counter.shelf.length === 0 || s.counter.till > 0, 45_000);
     if (s.counter.till > 0) {
+      // Step off the work spot first, so no customer pays in while the doctor heads for the coins.
+      await walkTo(LEAVE_SHOP);
+      s = await game.state();
       const before = s.coins + s.counter.till;
       await walkTo(COUNTER.coins);
       s = await until('coins collected', (s) => s.counter.till === 0);
@@ -398,9 +409,9 @@ test('plays the whole game loop', async ({ page }, testInfo) => {
   await walkTo(LEAVE_CAULDRONS);
   await sell();
 
-  // Outfitter and conveyor belt: sell more rounds until both are affordable.
+  // Outfitter, a craftsman and the conveyor belt: sell more rounds until all are affordable.
   const { pack, boots, sickle } = OUTFITTER;
-  await earn(sickle.cost + boots.cost + pack.cost + GARDEN_BELT.cost, 'the outfitter and the garden belt', 8);
+  await earn(sickle.cost + boots.cost + pack.cost + REFINER.hire.cost + GARDEN_BELT.cost, 'the outfitter, a craftsman and the garden belt', 8);
 
   // A longer sickle harvests from a quarter further away.
   await walkTo(LEAVE_SHOP, SHOP_DOOR, { x: sickle.x, y: SHOP_DOOR.y });
@@ -452,32 +463,45 @@ test('plays the whole game loop', async ({ page }, testInfo) => {
   expect(s.plots[3].grown).toBeGreaterThanOrEqual(14_000);
   await snap('9-outfitted');
 
+  // A craftsman for the refining table, hired on the marker beside its upgrade marker, reached from
+  // above so the walk keeps clear of the upgrade marker.
+  await walkTo({ x: REFINER.hire.x - 20, y: REFINER.hire.y - 40 });
+  await buy('craftsman', REFINER.hire, REFINER.hire.cost, (s) => s.craftsmen.refiner.level === 1);
+  // Round the table's markers, keeping the plants in hand, to the garden belt's build marker.
+  await walkTo(...BELOW_REFINER_MARKERS);
+
   // Conveyor belt: pay for it on its build marker. From then on ripe plants ride from the gardens to
   // the refining table by themselves, so the plants the doctor carries are cleared from their hands.
   const saved = await game.state();
   expect(saved.belts.garden).toEqual({ built: false, paid: 0, items: [] });
-  expect(saved.carrying.length).toBeGreaterThan(0);
+  expect(count(saved.carrying)).toEqual({ wheat: 3, mandrake: 2 });
   await walkTo(GARDEN_BELT);
   s = await until('garden belt built', (s) => s.belts.garden.built);
   expect(s.coins).toBe(saved.coins - GARDEN_BELT.cost);
   expect(s.carrying).toEqual([]);
-  // Wait by the table while the belt brings in the plants; anything that reaches the table from here
-  // on came by belt. The doctor's hands stay empty: the table's drop marker went away with the belt.
+  // Wait where the table's drop marker was, out of the mandrakes' reach, while the belt brings in the
+  // plants; anything that reaches the table from here on came by belt. The doctor's hands stay empty:
+  // the drop marker went away with the belt.
   const queued = s.refiner.queue.length + s.refiner.output.length;
-  await walkTo(REFINER.drop, REFINER.work);
+  const refined = s.refiner.output.length;
+  await walkTo(REFINER.drop);
   await until('a plant on the garden belt', (s) => s.belts.garden.items.length > 0, 20_000);
   await snap('10-belt');
   s = await until('the belt delivered to the refining table', (s) => s.refiner.queue.length + s.refiner.output.length > queued, 20_000);
   expect(s.carrying).toEqual([]);
+  // The craftsman refines what the belt brings while the doctor stays away from the work spot.
+  s = await until('the craftsman refined a plant', (s) => s.refiner.output.length > refined, 20_000);
+  const feet = await game.feet();
+  expect(Math.hypot(feet.x - REFINER.drop.x, feet.y - REFINER.drop.y)).toBeLessThan(ARRIVED_PX);
 
   // Drop all: pick up refined goods, then tap the button in the top bar to empty the doctor's hands.
   await until('goods refined at the table', (s) => s.refiner.output.length >= 2, 20_000);
-  await walkTo(REFINER.pickUp);
+  await walkTo(REFINER.work, REFINER.pickUp);
   await until('refined goods in hand', (s) => s.carrying.length >= 2);
   await walkTo(REFINER.work);
   const box = (await canvas.boundingBox())!;
   await page.mouse.click(box.x + (DROP_ALL.x * box.width) / VIEW.w, box.y + (DROP_ALL.y * box.width) / VIEW.w);
-  await until('hands emptied', (s) => s.carrying.length === 0, 1_000);
+  s = await until('hands emptied', (s) => s.carrying.length === 0, 1_000);
   // Tapping the top bar doesn't walk the doctor.
   expect((await game.feet()).moving).toBe(false);
   // Only what the playthrough meant to buy was paid for; no walk clipped another purple marker.
@@ -493,6 +517,7 @@ test('plays the whole game loop', async ({ page }, testInfo) => {
     boots: bought,
     sickle: bought,
   });
+  expect(s.craftsmen).toEqual({ refiner: bought, cauldron: unpaid, refiner2: unpaid, cauldron2: unpaid, counter: unpaid });
 
   const speed = gameMs / (Date.now() - startedAt);
   console.log(`Played ${Math.round(gameMs / 1000)}s of game time at ${speed.toFixed(1)}x (target ${SPEED}x).`);

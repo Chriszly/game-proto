@@ -106,6 +106,12 @@ export const UPGRADE_IDS = Object.keys(UPGRADES) as UpgradeId[];
 /** Coins needed to take an upgrade from `level` to the next: stations 20, 40, 80, 160. */
 export const upgradeCost = (id: UpgradeId, level: number) => UPGRADES[id].cost * 2 ** level;
 
+/** Every station a craftsman can be hired for. */
+export const STATIONS: StationId[] = ['refiner', 'cauldron', 'refiner2', 'cauldron2', 'counter'];
+/** Up to two craftsmen work each station; the first costs 30 coins, the second 60. */
+export const MAX_CRAFTSMEN = 2;
+export const craftsmanCost = (hired: number) => 30 * 2 ** hired;
+
 export interface GameState {
   version: 3;
   /** Which world layout the save was made in; a save from another layout starts the doctor at the start spot. */
@@ -121,6 +127,8 @@ export interface GameState {
   counter: Counter;
   expansion: Expansion;
   upgrades: Record<UpgradeId, Upgrade>;
+  /** Craftsmen hired at each station (`level`), and coins paid towards the next one. */
+  craftsmen: Record<StationId, Upgrade>;
   belts: Record<BeltId, Belt>;
   orders: Order[];
   nextOrderIn: number;
@@ -211,6 +219,7 @@ export function createInitialState(): GameState {
     counter: { shelf: [], till: 0 },
     expansion: { land: unbuilt(), fields: [unbuilt(), unbuilt()], refiner: unbuilt(), cauldron: unbuilt() },
     upgrades: Object.fromEntries(UPGRADE_IDS.map((id) => [id, { level: 0, paid: 0 }])) as Record<UpgradeId, Upgrade>,
+    craftsmen: Object.fromEntries(STATIONS.map((id) => [id, { level: 0, paid: 0 }])) as Record<StationId, Upgrade>,
     belts: Object.fromEntries(BELTS.map((id) => [id, { ...unbuilt(), items: [] }])) as unknown as Record<BeltId, Belt>,
     orders: [],
     nextOrderIn: 3_000,

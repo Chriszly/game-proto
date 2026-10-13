@@ -17,12 +17,14 @@ import {
   BELTS,
   CAULDRONS,
   EXPANSION_COST,
+  MAX_CRAFTSMEN,
   MAX_ORDERS,
   REFINERS,
   LINE2_GARDEN,
   UPGRADES,
   beltBuildable,
   carryCapacity,
+  craftsmanCost,
   gardenBuilt,
   gardenOf,
   speedAt,
@@ -37,14 +39,20 @@ import {
   type Order,
   type Refiner,
   type StationId,
+  type Upgrade,
   type UpgradeId,
 } from './state';
 
 // Pure game rules, kept free of Phaser so later automation can drive the same functions.
 
+/** How many work a station: its craftsmen, and the doctor when standing on its work spot. */
+const crew = (state: GameState, id: StationId, workingAt: StationId | null) => state.craftsmen[id].level + (workingAt === id ? 1 : 0);
+
 /**
- * Advances the world by `dt` ms. Stations only work while the doctor stands at their work spot,
- * given as `workingAt`: the refining table and cauldron make progress, and customers are served.
+ * Advances the world by `dt` ms. Stations only work while someone works them: the doctor standing
+ * at their work spot, given as `workingAt`, or their craftsmen. The refining table and cauldron make
+ * progress, faster with each extra pair of hands, and customers are served. A counter's second
+ * craftsman also takes the coins from the till.
  */
 export function tick(state: GameState, dt: number, workingAt: StationId | null, rand: () => number = Math.random) {
   for (const plot of state.plots) {
@@ -54,8 +62,9 @@ export function tick(state: GameState, dt: number, workingAt: StationId | null, 
   for (const id of REFINERS) {
     const refiner = state[id];
     const next = refining(refiner);
-    if (workingAt !== id || next < 0) continue;
-    refiner.progress += dt * speedAt(state.upgrades[id].level);
+    const hands = crew(state, id, workingAt);
+    if (hands === 0 || next < 0) continue;
+    refiner.progress += dt * hands * speedAt(state.upgrades[id].level);
     const recipe = REFINE[refiner.queue[next]];
     if (refiner.progress >= recipe.ms) {
       refiner.queue.splice(next, 1);
@@ -67,8 +76,9 @@ export function tick(state: GameState, dt: number, workingAt: StationId | null, 
   for (const id of CAULDRONS) {
     const cauldron = state[id];
     if (!cauldron.brewing) startBrew(cauldron);
-    if (workingAt !== id || !cauldron.brewing) continue;
-    cauldron.brewing.progress += dt * speedAt(state.upgrades[id].level);
+    const hands = crew(state, id, workingAt);
+    if (hands === 0 || !cauldron.brewing) continue;
+    cauldron.brewing.progress += dt * hands * speedAt(state.upgrades[id].level);
     if (cauldron.brewing.progress >= cauldron.brewing.ms) {
       cauldron.output.push(cauldron.brewing.out);
       cauldron.brewing = null;
@@ -77,7 +87,8 @@ export function tick(state: GameState, dt: number, workingAt: StationId | null, 
 
   for (const id of BELTS) runBelt(state, id, dt);
 
-  if (workingAt === 'counter') serveFromShelf(state);
+  if (crew(state, 'counter', workingAt) > 0) serveFromShelf(state);
+  if (state.craftsmen.counter.level >= 2) collectTill(state);
   for (const order of state.orders) order.patience -= dt;
   state.orders = state.orders.filter((o) => o.patience > 0);
 
@@ -272,18 +283,28 @@ export function dropInCauldron(state: GameState, id: CauldronId = 'cauldron'): F
 export const pickUpFromCauldron = (state: GameState, id: CauldronId = 'cauldron') => pickUpOne(state, state[id].output);
 
 const UPGRADE_STEP = 5;
-/** Pays a handful of coins towards an upgrade's next level, levelling it up once fully paid. */
-export function payUpgrade(state: GameState, id: UpgradeId): Feedback | null {
-  const upgrade = state.upgrades[id];
-  if (upgrade.level >= UPGRADES[id].max || state.coins === 0) return null;
-  const cost = upgradeCost(id, upgrade.level);
+/** Pays a handful of coins towards the next of something bought in levels, going up once fully paid. */
+function payLevel(state: GameState, upgrade: Upgrade, max: number, cost: number, done: () => string): Feedback | null {
+  if (upgrade.level >= max || state.coins === 0) return null;
   const pay = Math.min(UPGRADE_STEP, state.coins, cost - upgrade.paid);
   state.coins -= pay;
   upgrade.paid += pay;
   if (upgrade.paid < cost) return [`-${pay} coins`];
   upgrade.level++;
   upgrade.paid = 0;
-  return [`${UPGRADES[id].name} level ${upgrade.level + 1}!`];
+  return [done()];
+}
+
+/** Pays a handful of coins towards an upgrade's next level, levelling it up once fully paid. */
+export function payUpgrade(state: GameState, id: UpgradeId): Feedback | null {
+  const upgrade = state.upgrades[id];
+  return payLevel(state, upgrade, UPGRADES[id].max, upgradeCost(id, upgrade.level), () => `${UPGRADES[id].name} level ${upgrade.level + 1}!`);
+}
+
+/** Pays a handful of coins towards hiring a station's next craftsman, who starts work once fully paid. */
+export function payCraftsman(state: GameState, id: StationId): Feedback | null {
+  const hired = state.craftsmen[id];
+  return payLevel(state, hired, MAX_CRAFTSMEN, craftsmanCost(hired.level), () => 'Craftsman hired!');
 }
 
 /** Pays a handful of coins towards a build, which is done once fully paid. */

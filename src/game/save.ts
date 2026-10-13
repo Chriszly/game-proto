@@ -11,12 +11,13 @@ export function loadState(): GameState {
     const saved = JSON.parse(raw) as Partial<GameState>;
     if (saved.version !== fresh.version || !saved.plots) return fresh;
     // Fields added after the save was written fall back to their defaults, including new plots,
-    // stations' upgrades and belts.
+    // stations' upgrades, craftsmen and belts.
     const state: GameState = {
       ...fresh,
       ...saved,
       plots: [...saved.plots, ...fresh.plots.slice(saved.plots.length)],
       upgrades: { ...fresh.upgrades, ...saved.upgrades },
+      craftsmen: { ...fresh.craftsmen, ...saved.craftsmen },
       belts: { ...fresh.belts, ...saved.belts },
     };
     // The stations have moved since this save; start the doctor somewhere clear of them.
