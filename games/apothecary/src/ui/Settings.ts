@@ -43,9 +43,9 @@ export class Settings {
     parts.push(scene.add.text(cx, top + 14, 'Settings', { ...TEXT, fontSize: '14px', color: '#e6c766' }).setOrigin(0.5, 0));
     const difficulty = settings.difficulty[0].toUpperCase() + settings.difficulty.slice(1);
     parts.push(scene.add.text(cx, top + 44, `Difficulty: ${difficulty}   Frame rate: ${settings.fps} FPS`, TEXT).setOrigin(0.5, 0));
-    parts.push(scene.add.text(cx, top + 64, 'Change these on the hub page', { ...TEXT, fontSize: '11px', color: '#bfae8e' }).setOrigin(0.5, 0));
+    parts.push(scene.add.text(cx, top + 64, 'Change these on the hub page', { ...TEXT, fontSize: '12px', color: '#cdbd9c' }).setOrigin(0.5, 0));
     button(0, 108, 'New game', onNewGame);
-    parts.push(scene.add.text(cx, top + 146, 'Tap outside to close', { ...TEXT, fontSize: '11px', color: '#bfae8e' }).setOrigin(0.5, 0));
+    parts.push(scene.add.text(cx, top + 146, 'Tap outside to close', { ...TEXT, fontSize: '12px', color: '#cdbd9c' }).setOrigin(0.5, 0));
 
     for (const part of parts) (part as unknown as Phaser.GameObjects.Image).setScrollFactor(0).setDepth(depth).setVisible(false);
     this.parts = parts;
