@@ -2,15 +2,40 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-    <title>Apothecary</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Game hub</title>
     <style>
-      html, body { margin: 0; padding: 0; height: 100%; background: #1b1410; overflow: hidden; }
-      #game { width: 100%; height: 100%; }
+      :root { color-scheme: dark; }
+      html, body { margin: 0; min-height: 100%; background: #1b1410; color: #f1e3c6; }
+      body { font: 16px/1.4 ui-monospace, 'Courier New', monospace; }
+      main { max-width: 960px; margin: 0 auto; padding: 32px 16px 48px; }
+      h1 { margin: 0 0 4px; font-size: 32px; letter-spacing: 1px; color: #f3c64e; }
+      .lede { margin: 0 0 28px; color: #c9b48f; }
+      .games { list-style: none; margin: 0; padding: 0; display: grid; gap: 20px;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+      .game a { display: block; height: 100%; color: inherit; text-decoration: none; background: #2c2018;
+        border: 3px solid #5a3f2a; box-shadow: 0 4px 0 #0e0a08; transition: transform 0.1s, border-color 0.1s; }
+      .game a:hover, .game a:focus-visible { border-color: #f3c64e; transform: translateY(-2px); outline: none; }
+      .game img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover;
+        border-bottom: 3px solid #5a3f2a; }
+      .game h2 { margin: 12px 14px 4px; font-size: 20px; color: #f3c64e; }
+      .game p { margin: 0 14px 16px; color: #d8c7a6; }
     </style>
   </head>
   <body>
-    <div id="game"></div>
-    <script type="module" src="/src/main.ts"></script>
+    <main>
+      <h1>Game hub</h1>
+      <p class="lede">Small game prototypes. Pick one to play.</p>
+      <!-- One entry per game in games/<name>; see AGENTS.md for adding a game. -->
+      <ul class="games">
+        <li class="game">
+          <a href="games/apothecary/">
+            <img src="./games/apothecary/cover.png" alt="The apothecary shop with a customer at the counter" />
+            <h2>Apothecary</h2>
+            <p>Run a medieval apothecary as a plague doctor: grow herbs, refine them, brew potions and sell them.</p>
+          </a>
+        </li>
+      </ul>
+    </main>
   </body>
 </html>
