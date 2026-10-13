@@ -1,7 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 
 // Plays one round of the loop with real inputs (clicks to walk, as on a phone): open and close the
-// recipes, harvest both gardens, refine, brew, sell potions to a customer and collect the coins.
+// recipes, watch the first customer walk in, harvest both gardens, refine, brew, sell potions to a
+// customer and collect the coins.
 // Game state is only read, through the `game` object the dev build puts on window.
 
 type Point = { x: number; y: number };
@@ -46,6 +47,9 @@ const LEAVE_CAULDRONS = { x: 600, y: 690 };
 const COUNTER = { drop: { x: 472, y: 282 }, work: { x: 520, y: 340 }, coins: { x: 728, y: 282 } };
 /** The Recipes button in the top bar, on screen rather than in the world. */
 const RECIPES_BUTTON = { x: 219, y: 22 };
+/** Customers come in from the street door in the shop's back wall and line up behind the counter. */
+const STREET = { x: 480, y: 40 };
+const FIRST_CUSTOMER = { x: 525, y: 210 };
 
 const POTION_PRICE: Record<string, number> = { healingDraught: 8, sleepingTonic: 15 };
 
@@ -104,6 +108,8 @@ function scene(page: Page) {
       ) as Promise<{ in: Record<string, number>; out: Record<string, number> }>,
     /** Whether the recipe overview is open, and its lines. */
     recipes: () => read<{ open: boolean; lines: string[] }>((s) => ({ open: s.recipes.visible, lines: s.recipes.lines })),
+    /** Where each customer in the shop stands, and whether they have reached their spot at the counter. */
+    customers: () => read<{ id: number; x: number; y: number; arrived: boolean }[]>((s) => s.customers),
   };
 }
 
@@ -255,6 +261,14 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
   await play(STEP_MS, async () => false);
   expect((await game.recipes()).open).toBe(false);
   expect((await game.feet()).moving).toBe(false);
+
+  // The first customer comes in by the street door and walks up to their spot at the counter.
+  let customers = await game.customers();
+  expect(await play(10_000, async () => (customers = await game.customers()).length > 0), 'a customer came in').toBe(true);
+  expect(customers[0]).toMatchObject({ x: STREET.x, arrived: false });
+  expect(customers[0].y).toBeLessThan(FIRST_CUSTOMER.y);
+  expect(await play(10_000, async () => (customers = await game.customers())[0].arrived), 'the customer reached the counter').toBe(true);
+  expect(customers[0]).toMatchObject(FIRST_CUSTOMER);
 
   // One round of the loop: harvest, refine, brew, sell and collect the coins.
   // Gardens: walk along the wheat row, then past one mandrake, until both hands are full.

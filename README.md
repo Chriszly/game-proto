@@ -30,7 +30,8 @@ map is bigger than the screen, so the camera follows the doctor.
 3. **Cauldron**: drop in refined goods. Two wheat flour brew a Healing Draught, wheat flour and
    mandrake seeds brew a Sleeping Tonic. Stand on the work spot while it brews. When work starts,
    the cauldron brews whichever potion customers are waiting for that the shop has least of.
-4. **Storefront**: customers show the potions they want and how long they will wait. Drop potions
+4. **Storefront**: customers come in by the street door in the shop's back wall, walk up to the
+   counter and show the potions they want and how long they will wait. Drop potions
    on the counter and stand on the work spot behind it; customers pay for each potion as they get
    it and leave the coins on the pick-up marker.
 
