@@ -153,6 +153,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private swap(a: Cell, b: Cell) {
+    // A held second tap of a tap-tap swap must not drag a second swap once the board settles.
+    this.dragFrom = null;
     this.selected = null;
     this.clearHint();
     const idA = this.state.board[a.row][a.col].id;

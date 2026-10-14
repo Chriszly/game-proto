@@ -64,7 +64,9 @@ and some of its pixel art, but shares no code with it (the art is copied).
   whose tap calls `begin`), so the same tap doesn't also pick a tile. `pointerDown` maps the pointer
   to a cell with `cellAt`. The first tap sets `selected`,
   a tap on a neighbour calls `swap`, a tap on the same tile clears it. `pointerMove` swaps once a
-  drag goes half a cell. Input is ignored while `busy` or when `state.phase` is not `play`.
+  drag goes half a cell. `swap` clears the drag start, so a held second tap of a tap-tap swap that
+  drags after the board settles does not swap again. Input is ignored while `busy` or when
+  `state.phase` is not `play`.
 - **Rules then animation:** `swap` calls `trySwap`, which mutates `state` right away (board, moves,
   `got`, phase, coins). The scene then queues `Anim`s: a slide, the slide back if there was no
   match, or for each `Step` a pop of the cleared tiles and a `moveTo` of the new board, then
