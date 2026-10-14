@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { settings as hubSettings } from '../../../../shared/settings';
 import { drawBelts, laneOffset, pointAlong } from '../art/belts';
 import { plantTexture } from '../art/garden';
 import { itemTexture } from '../art/items';
@@ -378,6 +379,12 @@ export class GameScene extends Phaser.Scene {
     const icon = this.add.image(choiceX + 8, at.y, 'pallet').setDepth(-900);
     sign.setInteractive({ useHandCursor: true }).on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
       e.stopPropagation();
+      // With a panel open, a tap anywhere closes it, a sign's included, without changing the sign.
+      if (this.recipes.visible || this.settings.visible) {
+        this.recipes.toggle(false);
+        this.settings.toggle(false);
+        return;
+      }
       cyclePriority(this.state, id);
     });
     this.views.push(() => {
@@ -483,7 +490,9 @@ export class GameScene extends Phaser.Scene {
     const cauldron = this.state[id];
     this.label(label.x, label.y, 'Cauldron');
     this.addPrioritySign(id, PRIORITY_SIGNS[id]);
-    this.addObstacle(at.x, at.y, 'cauldron', 60, 28).play('cauldron-boil');
+    const pot = this.addObstacle(at.x, at.y, 'cauldron', 60, 28);
+    // The boil flickers its flames and bubbles, so reduced motion holds it on the still frame.
+    if (!hubSettings.reduceMotion) pot.play('cauldron-boil');
     this.addPallets(id, PALLETS[id], [REFINED, POTIONS], [() => cauldron.contents, () => cauldron.output]);
     const brewing = new ProgressBar(this, at.x, at.y + 34, 60, 0x58a35a, WORLD_UI_DEPTH);
     this.addMarker(m.pickUp, 'pad-out', 'Pick up', () => pickUpFromCauldron(this.state, id), () => this.state.belts[beltOut].built);
@@ -840,7 +849,13 @@ export class GameScene extends Phaser.Scene {
   private createHud() {
     const { width } = this.scale;
     const first = this.children.list.length;
-    this.add.tileSprite(0, 0, width, HUD_HEIGHT, 'hud-bar').setOrigin(0).setDepth(UI_DEPTH);
+    // Taps on the bar stop here rather than falling through to a priority sign in the world below.
+    this.add
+      .tileSprite(0, 0, width, HUD_HEIGHT, 'hud-bar')
+      .setOrigin(0)
+      .setDepth(UI_DEPTH)
+      .setInteractive()
+      .on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => e.stopPropagation());
     const style = { fontFamily: 'monospace', fontSize: '16px', color: '#f3e9d2' };
     this.add.image(26, HUD_HEIGHT / 2 - 1, 'coin').setScale(2).setDepth(UI_DEPTH);
     const coins = this.add.text(44, HUD_HEIGHT / 2 - 1, '', style).setOrigin(0, 0.5).setDepth(UI_DEPTH);

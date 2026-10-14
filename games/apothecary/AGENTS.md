@@ -80,7 +80,11 @@ counter. Coins buy upgrades, craftsmen, conveyor belts and a mirrored second pro
 - Taps: `reachable` moves a tapped spot out of any station or wall area into `pointerTarget`;
   `routeAround` picks a `waypoint`: the back door (`SHOP_DOORWAY`) into or out of the shop,
   otherwise a corner of the nearest `blockedAreas` rectangle (or the whole shop) in the way. Taps
-  close an open panel instead of walking; HUD buttons stop propagation. The tapped spot comes from
+  close an open panel instead of walking; HUD buttons, the top bar itself and the Recipes and
+  Settings panels' backgrounds stop propagation (Phaser falls through to the main camera when
+  nothing under the tap on the UI camera is interactive, which would reach a priority sign), and
+  a tap on the Recipes panel closes it. A priority sign tapped while a panel is open only closes
+  the panel. The tapped spot comes from
   `cameras.main.getWorldPoint`, since the pointer's own `worldX/Y` may be the UI camera's.
 - Zoom: two cameras. The main camera follows the doctor and zooms (`MIN_ZOOM` 0.62 to `MAX_ZOOM`
   2, by the mouse wheel, + and - keys, or a two-finger pinch on `pointer1`/`pointer2`, which also
@@ -171,9 +175,10 @@ null), `guild` (a `Build`: entry to the guild), `expansion` (land, two fields, r
   differs or that lack `plots`, shallow-merges top-level fields, merges `upgrades`, `craftsmen`,
   `belts` and `priority` per key, appends new plots and drops orders without `pay`. A save without
   `guild` counts as having joined if it bought or paid into any guild upgrade. A save from before
-  `FEEDERS_LAYOUT` (3) gets `ontoOwnRuns`, which moves belt items up to their run's join; a save
-  from before `COLUMNS_LAYOUT` (5) gets `ontoColumns`, which scales each belt item's `at` by its
-  belt's new `BELT_MS` over the old `U_BELT_MS`, so it keeps its place along the shorter run; a save
+  `COLUMNS_LAYOUT` (5) first gets `ontoColumns`, which scales each belt item's `at` by its belt's
+  new `BELT_MS` over the old `U_BELT_MS`, so it keeps its place along the shorter run; then a save
+  from before `FEEDERS_LAYOUT` (3) gets `ontoOwnRuns`, which moves belt items up to their run's
+  join on today's belts; a save
   whose `layout` differs from `LAYOUT` (5, the columns) gets the fresh `player` spot.
 - `apothecary-zoom`: the main camera's zoom, a view preference that "New game" keeps.
 - "New game" (`clearSave` + `scene.restart`) removes only `apothecary-save`. The old
@@ -208,8 +213,9 @@ null), `guild` (a `Build`: entry to the guild), `expansion` (land, two fields, r
 - Difficulty scales one number, customer patience: `newOrder` in `src/game/sim.ts` multiplies
   `maxPatience` by `byDifficulty(1.5, 1, 0.7)` from `shared/settings.ts` (Easy 1.5, Normal 1,
   Hard 0.7). Keep Normal exactly as designed: the playthrough runs on Normal.
-- Reduced motion needs nothing beyond `setupGame`: the game has no camera shake, flash or
-  blinking, so nothing in the game checks `settings.reduceMotion`.
+- Reduced motion: the game has no camera shake or flash. `addCauldron` reads
+  `settings.reduceMotion` (imported as `hubSettings`, since the scene has its own `settings`
+  panel) and leaves the cauldron on its still frame instead of playing the `cauldron-boil` flicker.
 - The game's Settings panel only shows the difficulty and frame rate ("Change these on the hub
   page") and has "New game". Settings are read once at page load.
 - A change to what the difficulty scales updates the Apothecary row of the difficulty table in the
@@ -224,7 +230,8 @@ null), `guild` (a `Build`: entry to the guild), `expansion` (land, two fields, r
   `count`), `recipes.visible` and `recipes.lines`, `customers` (id, x, y, `arrived`) and
   `cameras.main.scrollX/Y`. Several of these are private in TypeScript; renaming them breaks the
   test without a type error.
-- Inputs: canvas clicks only (walking, the Recipes button at screen 219,22, a tap to close it). It
+- Inputs: canvas clicks only (walking, the Recipes button at screen 219,22, a tap on the panel to
+  close it). It
   watches the first customer walk in from `STREET`, and walks into the shop by the door routing.
 - It seeds `Math.random`, owns `page.clock`, makes `requestAnimationFrame` a 64ms timer and forces
   the canvas renderer. It starts with empty storage, so it expects a fresh state on Normal, with

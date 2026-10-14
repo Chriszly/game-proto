@@ -11,7 +11,8 @@ const TEXT = { fontFamily: 'monospace', fontSize: '12px', color: '#f3e9d2' };
 /**
  * A panel over the middle of the screen listing what each station makes from what: the refining
  * table's plants and the cauldron's recipes with what a potion sells for. It is built from the
- * recipe tables, so new plants and potions show up on their own. The scene closes it on the next tap.
+ * recipe tables, so new plants and potions show up on their own. The next tap closes it: on the panel
+ * itself here, so it doesn't reach the world behind, and anywhere else in the scene's tap handler.
  */
 export class RecipeBook {
   private panel: Phaser.GameObjects.Container;
@@ -63,7 +64,14 @@ export class RecipeBook {
     y += 18;
 
     const h = y + 28;
-    const bg = scene.add.rectangle(0, h / 2 - 14, WIDTH, h, WOOD.dark).setStrokeStyle(3, INK);
+    const bg = scene.add
+      .rectangle(0, h / 2 - 14, WIDTH, h, WOOD.dark)
+      .setStrokeStyle(3, INK)
+      .setInteractive()
+      .on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
+        e.stopPropagation();
+        this.toggle(false);
+      });
     const inner = scene.add.rectangle(0, h / 2 - 14, WIDTH - 10, h - 10).setStrokeStyle(1, WOOD.light);
     this.panel = scene.add
       .container(width / 2, (height - h) / 2 + 14, [bg, inner, ...parts])

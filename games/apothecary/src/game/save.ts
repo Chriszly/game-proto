@@ -29,8 +29,9 @@ export function loadState(): GameState {
     if (!saved.guild && GUILD_UPGRADES.some((id) => state.upgrades[id].level > 0 || state.upgrades[id].paid > 0)) {
       state.guild = { built: true, paid: 0 };
     }
-    if ((saved.layout ?? 0) < FEEDERS_LAYOUT) ontoOwnRuns(state);
+    // Rescale first: the joins `ontoOwnRuns` moves goods up to are on today's shorter belts.
     if ((saved.layout ?? 0) < COLUMNS_LAYOUT) ontoColumns(state);
+    if ((saved.layout ?? 0) < FEEDERS_LAYOUT) ontoOwnRuns(state);
     // The stations have moved since this save; start the doctor somewhere clear of them.
     if (saved.layout !== fresh.layout) return { ...state, layout: fresh.layout, player: fresh.player };
     return state;
