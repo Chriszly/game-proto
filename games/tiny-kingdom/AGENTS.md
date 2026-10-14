@@ -34,7 +34,6 @@ Missing or rough:
   `line` and `outline` are unused here.
 - The comment at the top of `src/art/tiles.ts` mentions a small icon per building, but none is
   baked; the tile buttons reuse the `tile-<kind>` texture scaled to 0.875.
-- Picking a building does not redraw the hover until the pointer moves again.
 - `restart` does not clear running popups or the round banner tween.
 - `docs/screenshots/game-over.png` is not produced by the test; refresh it by hand if the overlay
   changes.
@@ -181,6 +180,6 @@ Data tables:
 - Texture keys are `tile-${cell}`, so every `Cell` value needs a `TILE_ART` entry or the image
   shows Phaser's missing texture.
 - `state.best` is updated in `place` but only written to storage by the scene in `tapAt`;
-  `restart` reloads it from storage.
+  `restart` keeps the higher of the stored best and the current one, so it survives blocked storage.
 - `previewScore` returns null when the pouch for that kind is empty, so the hover outline shows
   but no ghost.

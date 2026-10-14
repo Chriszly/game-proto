@@ -124,7 +124,10 @@ export class GameScene extends Phaser.Scene {
         wordWrap: { width: w - 84 },
       });
       bg.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
-        if (select(this.state, kind)) this.refresh();
+        if (!select(this.state, kind)) return;
+        this.refresh();
+        // The hover follows the new pick right away, without waiting for the pointer to move.
+        this.hoverAt(this.input.activePointer.x, this.input.activePointer.y);
       });
       this.buttons.set(kind, { bg, icon, count });
       this.tileButtons.push({ kind, x, y, w, h });
@@ -242,7 +245,8 @@ export class GameScene extends Phaser.Scene {
 
   /** A new kingdom on a fresh random island. */
   private restart() {
-    this.state = newGame(loadBest());
+    // The best score carries over even when storage is blocked and loadBest() comes back empty.
+    this.state = newGame(Math.max(loadBest(), this.state.best));
     this.state.grid.forEach((cells, row) => cells.forEach((cell, col) => this.cells[row][col].setTexture(`tile-${cell}`)));
     this.preview = null;
     this.drawHover(null);
