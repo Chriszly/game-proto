@@ -9,6 +9,7 @@
   <circle cx="21.5" cy="12.0" r="2.3" fill="#0d1117"/>
   <circle cx="11.3" cy="11.2" r="0.8" fill="#ffffff"/>
   <circle cx="22.3" cy="11.2" r="0.8" fill="#ffffff"/>
+  <ellipse cx="16" cy="19.4" rx="4.6" ry="3.3" fill="#ffdcc7"/>
   <ellipse cx="16" cy="18.4" rx="2.4" ry="1.6" fill="#311300"/>
   <path d="M3.5 23 H25.5 C27.5 23 30.5 23.6 31.5 25 H25.5 V25.6 H3.5 Z" fill="#8e8b9c" stroke="#24222a" stroke-width="0.7" stroke-linejoin="round"/>
   <rect x="9" y="25.6" width="11" height="2.6" fill="#5d5a6a" stroke="#24222a" stroke-width="0.7"/>
