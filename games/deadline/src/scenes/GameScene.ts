@@ -140,7 +140,7 @@ export class GameScene extends Phaser.Scene {
       () => ({
         alive: false, id: 0, upgrade: 'rate', hp: 0, maxHp: 0, x: 0, y: 0,
         sprite: this.add.image(0, 0, 'crate-rate').setDepth(DEPTH.pickups),
-        label: this.add.text(0, 0, '', { ...TEXT, fontSize: '13px', fontStyle: 'bold', stroke: '#15110e', strokeThickness: 4 }).setOrigin(0.5, 0).setDepth(DEPTH.bars),
+        label: this.add.text(0, 0, '', { ...TEXT, fontSize: '14px', fontStyle: 'bold', stroke: '#15110e', strokeThickness: 4 }).setOrigin(0.5, 0).setDepth(DEPTH.bars),
         hpText: this.add.text(0, 0, '', { ...TEXT, fontSize: '16px', fontStyle: 'bold', stroke: '#15110e', strokeThickness: 4 }).setOrigin(0.5).setDepth(DEPTH.bars),
       }),
       (p) => [p.sprite, p.label, p.hpText].forEach((o) => o.setVisible(false)),
@@ -181,7 +181,7 @@ export class GameScene extends Phaser.Scene {
     this.hud = {
       wave: this.add.text(14, 8, '', { ...TEXT, fontSize: '20px', fontStyle: 'bold', color: '#f3c64e' }).setDepth(DEPTH.hud),
       kills: this.add.text(VIEW.w - 14, 8, '', { ...TEXT, fontSize: '20px', fontStyle: 'bold' }).setOrigin(1, 0).setDepth(DEPTH.hud),
-      stats: this.add.text(14, 33, '', { ...TEXT, fontSize: '13px', color: '#c9b48f' }).setDepth(DEPTH.hud),
+      stats: this.add.text(14, 33, '', { ...TEXT, fontSize: '14px', color: '#d8c7a6', stroke: '#15110e', strokeThickness: 3 }).setDepth(DEPTH.hud),
     };
     this.banner = this.add
       .text(VIEW.w / 2, VIEW.h * 0.38, '', { ...TEXT, fontSize: '40px', fontStyle: 'bold', color: '#f3c64e', stroke: '#15110e', strokeThickness: 8, align: 'center' })
