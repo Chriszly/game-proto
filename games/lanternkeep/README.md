@@ -7,9 +7,15 @@ Dusk is falling on the keep. Its lanterns are dark, and the only way to light th
 moths: tap a lantern and a moth flies out, catches its wick and flies home. A lantern only burns
 for so long on its oil, so light them too early and they are out again before night. Have enough
 of them burning when the sun is gone and they pay coins; too few and one of the keep's hearths
-goes out. Spend the coins between nights on better wicks, more oil and more, faster moths.
+goes out. Each night the herald orders a bonus, gusts come for the lanterns, and a refill that
+saves a nearly dry lantern pays on the spot. Spend the coins between nights on better wicks, more
+oil and more, faster moths.
 
-![Every lantern lit as night falls](cover.png)
+It is played as a shadow-puppet theatre: the keep is black cut card in front of a backlit paper
+screen that turns from saffron to indigo as dusk falls, light shows through its arrow slits and
+stone joints, the lanterns have coloured-glass panes and the moths are lace-winged puppets.
+
+![A gust coming for the right tower, a close call paid and a nearly dry lantern to save](cover.png)
 
 ## How to play
 
@@ -32,13 +38,38 @@ goes out. Spend the coins between nights on better wicks, more oil and more, fas
    ring on their lanterns, and the next moth to come home takes the oldest. A tap on a lantern a
    moth is already flying to is ignored, and the queue empties at nightfall.
 4. **Oil**: a lit lantern burns for 20 seconds (the bar under it), then goes dark. Sending a moth
-   to a lit lantern fills it up again.
-5. **Nightfall** counts the lanterns still lit. Each pays 5 coins, and all of them lit pays 10
-   more. Fewer than three in five lit puts out one of the three hearths; when the last goes out,
-   the keep is lost. The most nights kept is saved in the browser.
-6. **Each night** adds one more lantern, up to ten.
+   to a lit lantern fills it up again; while the moth sits on it, it burns no oil. Queued taps
+   show their place in line on a small badge.
+5. **Herald's order**: each night the card under the HUD names a bonus goal, with a pip for each
+   part of it. Meet it by nightfall for 15 more coins. The orders take turns, one a night:
+   - Both towers and the keep lit at nightfall (night 1, 6, ...).
+   - The west wall lit at nightfall: left tower, left wall and far left (night 2, ...).
+   - Save two lanterns in a close call (night 3, ...).
+   - The east wall lit at nightfall: right tower, right wall and far right (night 4, ...).
+   - Shield a lantern from a gust (night 5, ...).
+6. **Gusts**: five seconds before a gust, a plaque counts down ("Gust in 4s") beside the lantern
+   it will blow out, with wind curling in from the nearer edge and a dashed ring round it. The
+   gust goes for the lit lantern with the most oil left. A moth sitting on that lantern when the
+   gust hits shields it: a moth that finishes lighting or refilling the warned lantern stays on it
+   (a pale blue ring) until the gust has passed, then flies home. Otherwise the lantern goes dark.
+   Night 1 has one gust (34 seconds before nightfall), nights 2 and 3 two (also 22), and every
+   night after three (also 10). With no lantern lit, the wind passes harmlessly.
+7. **Close calls**: a lit lantern with under 15% of its oil left shows an orange ring and a
+   "Save it +2c" tag. A moth that reaches it before it goes dark refills it as a close call and
+   pays 2 coins at once ("+2c close call!", with a flare of sparks).
+8. **Nightfall** counts the lanterns still lit. Each pays 5 coins, all of them lit pays 10 more,
+   and the herald's order its reward. Fewer than three in five lit puts out one of the three
+   hearths; when the last goes out, the keep is lost. The most nights kept is saved in the
+   browser.
+9. **Each night** adds one more lantern, up to ten.
 
 ![The first lantern lit](docs/screenshots/playthrough-1-first-lantern.png)
+
+![The herald's order: two close calls asked, one made](docs/screenshots/loop-herald-order.png)
+
+![A heavy moth sitting on the left wall's lantern to shield it from a gust](docs/screenshots/loop-gust-shield.png)
+
+![A close call just paid on the keep's sconce, and the far left lantern waiting to be saved](docs/screenshots/loop-close-call.png)
 
 ### Upgrades
 
@@ -49,7 +80,7 @@ goes out. Spend the coins between nights on better wicks, more oil and more, fas
 | Moths | One more moth in the jar (kinds keep cycling fast, slow, heavy) | 15, 30, 50 |
 | Wings | Moths fly 20% faster | 10, 20, 35 |
 
-![Nightfall and the upgrades](docs/screenshots/playthrough-3-night.png)
+![Nightfall and the upgrades](docs/screenshots/playthrough-4-night.png)
 
 The difficulty, set on the hub page's Settings, changes one thing: lanterns burn 26 seconds on
 Easy and 16 on Hard, instead of 20. (A heavy moth's lanterns burn 50% longer on every setting.)
@@ -61,11 +92,13 @@ page).
 
 ## Playthrough test
 
-`e2e/playthrough.spec.ts` plays the first night in headless Chromium: it taps a lantern and checks
-one moth (and only one) flies out and lights it, waits for its oil to run dry, then late in the
-dusk taps three lanterns at once and two more, checking the last two wait in the queue and are lit
-as moths come home. Night
-falls with every lantern lit, and it checks the pay, the hearths and the night panel. Like the
+`e2e/playthrough.spec.ts` plays the first night in headless Chromium: it checks the herald's order
+and the night's one gust, taps a lantern and checks one moth (and only one) flies out and lights
+it, sends a moth to sit on it when the gust is warned for it and checks the gust is shielded,
+waits until its oil is nearly gone, then taps it and two more lanterns at once and two more after,
+checking the last two wait in the queue and are lit as moths come home and that saving the first
+pays a close call. Night falls with every lantern lit, and it checks the pay (with the order's
+reward), the hearths and the night panel. Like the
 other games' tests it owns the game clock and plays at 4x speed (`PLAYTHROUGH_SPEED`). The
 **Playthrough Lanternkeep** workflow (`.github/workflows/playthrough.yml`) runs it on
 every PR that touches this folder, and uploads the video and screenshots as the
@@ -80,13 +113,15 @@ npx playwright test --project lanternkeep
 All paths are inside `games/lanternkeep/`.
 
 - `src/game/`: the rules in plain TypeScript with no Phaser dependency. `state.ts` has dusk, moths,
-  oil, nightfall and the upgrades, `places.ts` where the lanterns and the jar are, and `save.ts`
+  oil, gusts, close calls, the herald's orders, nightfall and the upgrades, `places.ts` where the lanterns and the jar are, and `save.ts`
   the best score.
-- `src/scenes/`: `BootScene` bakes textures, `GameScene` draws the sky, castle, lanterns, moths,
-  HUD and panels and wires taps to the rules, `layout.ts` says where the HUD and panels go.
-- `src/art/`: the castle, lanterns, moths, jar and icons, drawn in code as flat low-poly polygons
-  (`lowpoly.ts`), plus the glow texture baked at startup (`sprites.ts`).
+- `src/scenes/`: `BootScene` bakes textures, `GameScene` draws the screen, castle, lanterns,
+  moths, the order card, gust warnings, close-call tags, HUD and panels and wires taps to the
+  rules, `layout.ts` says where the HUD and panels go.
+- `src/art/puppet.ts`: every texture (paper screens, the cut-card castle, lanterns, moth puppets,
+  plaques, icons), painted on 2D canvases at startup.
 - `src/ui/`: the button.
 
 Retuning a night is the constants at the top of `src/game/state.ts`; an upgrade is its row in
-`UPGRADES` there, and a moth kind its row in `MOTH_KINDS`.
+`UPGRADES` there, a moth kind its row in `MOTH_KINDS`, an order its row in `ORDERS`, and the gusts
+`gustsFor` and `GUST_WARN_MS`.

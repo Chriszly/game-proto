@@ -1,17 +1,22 @@
 import { byDifficulty } from '../../../../shared/settings';
-import { BUILDINGS, isBuilding, randomIsland, startingGrid, type Building, type Cell } from './tiles';
+import { DECREE_BONUS, decreeFor, decreeMarks, type Decree } from './decree';
+import { GIFT_INFO, giftsFor, type Gift } from './gifts';
+import { AROUND, BUILDINGS, SIDES, isBuilding, randomIsland, startingGrid, type Building, type Cell } from './tiles';
 
-// The rules in plain TypeScript, with no Phaser. The score is always the whole board's score:
-// each building's points depend on its neighbours, so a placement can also raise the buildings
-// next to it.
+// The rules in plain TypeScript, with no Phaser. The score is the whole board's score plus the
+// decree bonuses won: each building's points depend on its neighbours, so a placement can also
+// raise the buildings next to it.
 
 export type Pouch = Record<Building, number>;
 
 export interface GameState {
   round: number;
-  /** The score that ends this round and brings the next round's tiles. */
+  /** The score that ends this round and brings the next round's tiles and a gift. */
   goal: number;
+  /** `boardScore(grid)` plus `bonus`. */
   score: number;
+  /** Points won from fulfilled decrees. */
+  bonus: number;
   /** Tiles left to place. */
   pouch: Pouch;
   /** The building the next tap places, if any. */
@@ -21,9 +26,20 @@ export interface GameState {
   /** The board by row, then column. */
   grid: Cell[][];
   placed: number;
-  phase: 'playing' | 'over';
+  /** 'gift' while a reached goal's gift waits to be chosen; nothing can be placed then. */
+  phase: 'playing' | 'gift' | 'over';
   /** The best final score of any finished game, saved in the browser. */
   best: number;
+  /** Crowns won from decrees, in every kingdom so far; saved in the browser. */
+  crowns: number;
+  /** This round's royal decree, or null when no side goal fits the board. */
+  decree: Decree | null;
+  /** The two gifts on offer for reaching `goal` (or, in the 'gift' phase, the goal just reached). */
+  gifts: [Gift, Gift];
+  /** Gifts still to choose: one per goal reached. */
+  giftsDue: number;
+  /** Whether the windmill has been won, which adds its tile button. */
+  hasWindmill: boolean;
   /** The board as it was before the last placement, if that placement can be undone. */
   undo: Snapshot | null;
   /** The round in which the undo was last used; 0 if none yet. One undo per round. */
@@ -40,9 +56,9 @@ export interface Snapshot {
 }
 
 /** The first round's tiles. */
-export const FIRST_POUCH: Pouch = { farm: 4, house: 4, tower: 2 };
+export const FIRST_POUCH: Pouch = { farm: 4, house: 4, tower: 2, windmill: 0 };
 /** The tiles each later round adds to whatever is left. */
-export const ROUND_POUCH: Pouch = { farm: 3, house: 3, tower: 2 };
+export const ROUND_POUCH: Pouch = { farm: 3, house: 3, tower: 2, windmill: 0 };
 
 /**
  * The score that ends round `round`: 20, 45, 75, 110, ... (each round asks 5 more than the last),
@@ -51,50 +67,75 @@ export const ROUND_POUCH: Pouch = { farm: 3, house: 3, tower: 2 };
 export const goalFor = (round: number) => Math.round(((5 * round * round + 35 * round) / 2) * byDifficulty(0.8, 1, 1.2));
 
 /** A new kingdom on island `island`, a random one unless given. */
-export function newGame(best = 0, island = randomIsland()): GameState {
+export function newGame(best = 0, crowns = 0, island = randomIsland()): GameState {
+  const grid = startingGrid(island);
   return {
     round: 1,
     goal: goalFor(1),
     score: 0,
+    bonus: 0,
     pouch: { ...FIRST_POUCH },
     selected: null,
     island,
-    grid: startingGrid(island),
+    grid,
     placed: 0,
     phase: 'playing',
     best,
+    crowns,
+    decree: decreeFor(island, 1, grid),
+    gifts: giftsFor(island, 1, false),
+    giftsDue: 0,
+    hasWindmill: false,
     undo: null,
     undoneIn: 0,
   };
 }
 
-const SIDES = [
-  [1, 0],
-  [-1, 0],
-  [0, 1],
-  [0, -1],
-];
-const AROUND = [...SIDES, [1, 1], [1, -1], [-1, 1], [-1, -1]];
+/** One neighbour's share of a building's points. */
+export interface Share {
+  col: number;
+  row: number;
+  pts: number;
+}
 
-function neighbours(grid: Cell[][], col: number, row: number, dirs: number[][]) {
-  return dirs.map(([dc, dr]) => grid[row + dr]?.[col + dc]).filter((c): c is Cell => c !== undefined);
+/**
+ * What the building at (col, row) is worth, split into a base and each neighbour's share; empty
+ * for land. `cellScore` is their sum, so the hover's neighbour links always add up.
+ */
+export function cellParts(grid: Cell[][], col: number, row: number): { base: number; from: Share[] } {
+  const cell = grid[row][col];
+  const from: Share[] = [];
+  /** Adds `pts` from each cell in `dirs` that `count` accepts. */
+  const add = (dirs: readonly (readonly [number, number])[], count: (c: Cell) => number) => {
+    for (const [dc, dr] of dirs) {
+      const c = grid[row + dr]?.[col + dc];
+      const pts = c === undefined ? 0 : count(c);
+      if (pts) from.push({ col: col + dc, row: row + dr, pts });
+    }
+  };
+  switch (cell) {
+    case 'farm':
+      add(SIDES, (c) => (c === 'lake' || c === 'windmill' ? 1 : 0));
+      return { base: 1, from };
+    case 'house':
+      add(SIDES, (c) => (c === 'farm' ? 2 : c === 'house' || c === 'forest' ? 1 : 0));
+      return { base: 0, from };
+    case 'tower':
+      if (SIDES.some(([dc, dr]) => grid[row + dr]?.[col + dc] === 'tower')) return { base: 0, from };
+      add(AROUND, (c) => (c === 'house' ? 2 : 0));
+      return { base: 0, from };
+    case 'windmill':
+      add(AROUND, (c) => (c === 'farm' ? 1 : 0));
+      return { base: 0, from };
+    default:
+      return { base: 0, from };
+  }
 }
 
 /** What the building at (col, row) is worth where it stands; 0 for land. */
 export function cellScore(grid: Cell[][], col: number, row: number) {
-  const cell = grid[row][col];
-  const beside = neighbours(grid, col, row, SIDES);
-  const n = (kind: Cell, cells = beside) => cells.filter((c) => c === kind).length;
-  switch (cell) {
-    case 'farm':
-      return 1 + n('lake');
-    case 'house':
-      return 2 * n('farm') + n('house') + n('forest');
-    case 'tower':
-      return n('tower') > 0 ? 0 : 2 * n('house', neighbours(grid, col, row, AROUND));
-    default:
-      return 0;
-  }
+  const { base, from } = cellParts(grid, col, row);
+  return from.reduce((t, s) => t + s.pts, base);
 }
 
 export function boardScore(grid: Cell[][]) {
@@ -105,12 +146,43 @@ export function boardScore(grid: Cell[][]) {
 
 export const canPlace = (s: GameState, col: number, row: number) => s.phase === 'playing' && s.grid[row]?.[col] === 'grass';
 
-/** What placing `kind` at (col, row) would add to the score, or null where it can't go. */
-export function previewScore(s: GameState, kind: Building, col: number, row: number) {
+/** What placing a building would bring: points in all, its own base, and each neighbour's share. */
+export interface Preview {
+  gained: number;
+  base: number;
+  /** One link per neighbour whose share is not 0: what it adds to the new building plus what it gains itself. */
+  links: Share[];
+}
+
+/** What placing `kind` at (col, row) would add to the score, split by neighbour, or null where it can't go. */
+export function previewPlacement(s: GameState, kind: Building, col: number, row: number): Preview | null {
   if (!canPlace(s, col, row) || s.pouch[kind] <= 0) return null;
   const grid = s.grid.map((cells) => [...cells]);
   grid[row][col] = kind;
-  return boardScore(grid) - s.score;
+  const own = cellParts(grid, col, row);
+  const shares = new Map<string, Share>();
+  const give = (c: number, r: number, pts: number) => {
+    const k = `${c},${r}`;
+    const share = shares.get(k) ?? { col: c, row: r, pts: 0 };
+    share.pts += pts;
+    shares.set(k, share);
+  };
+  for (const f of own.from) give(f.col, f.row, f.pts);
+  // Only the eight cells around can change worth, as no rule reaches further.
+  for (const [dc, dr] of AROUND) {
+    const c = col + dc;
+    const r = row + dr;
+    if (!grid[r]?.[c] || !isBuilding(grid[r][c])) continue;
+    const change = cellScore(grid, c, r) - cellScore(s.grid, c, r);
+    if (change) give(c, r, change);
+  }
+  const links = [...shares.values()].filter((l) => l.pts !== 0);
+  return { gained: boardScore(grid) - boardScore(s.grid), base: own.base, links };
+}
+
+/** What placing `kind` at (col, row) would add to the score, or null where it can't go. */
+export function previewScore(s: GameState, kind: Building, col: number, row: number) {
+  return previewPlacement(s, kind, col, row)?.gained ?? null;
 }
 
 export function select(s: GameState, kind: Building) {
@@ -120,15 +192,17 @@ export function select(s: GameState, kind: Building) {
 }
 
 export interface Placed {
-  /** Points gained, in all. */
+  /** Points gained, in all, the decree's bonus included. */
   gained: number;
   /** What each building whose worth changed gained, the new one included. */
   changes: { col: number; row: number; gained: number }[];
-  /** True when the placement reached the goal and a new round began. */
+  /** True when the placement fulfilled the round's decree. */
+  decree: boolean;
+  /** True when the placement reached the goal: a new round began and a gift waits. */
   newRound: boolean;
 }
 
-/** Whether the last placement can be taken back: once per round, and not one that began a round. */
+/** Whether the last placement can be taken back: once per round, and not one that began a round or fulfilled a decree. */
 export const canUndo = (s: GameState) => s.phase === 'playing' && s.undo !== null && s.undoneIn !== s.round;
 
 /** Takes back the last placement, once per round. Returns false if that is not allowed now. */
@@ -136,6 +210,16 @@ export function undo(s: GameState) {
   if (!s.undo || !canUndo(s)) return false;
   Object.assign(s, s.undo, { undo: null, undoneIn: s.round });
   return true;
+}
+
+/** Ends the kingdom when no tiles or no grass are left. */
+function checkEnd(s: GameState) {
+  const tilesLeft = BUILDINGS.some((b) => s.pouch[b] > 0);
+  const roomLeft = s.grid.some((cells) => cells.includes('grass'));
+  if (!tilesLeft || !roomLeft) {
+    s.phase = 'over';
+    s.best = Math.max(s.best, s.score);
+  }
 }
 
 /** Places the selected building at (col, row); null if it can't go there. */
@@ -160,7 +244,16 @@ export function place(s: GameState, col: number, row: number): Placed | null {
       if (isBuilding(cell) && (gained !== 0 || (c === col && r === row))) changes.push({ col: c, row: r, gained });
     }),
   );
-  const score = boardScore(s.grid);
+
+  // The decree pays once, the first time the board fulfils it.
+  let decree = false;
+  if (s.decree && !s.decree.done && decreeMarks(s.grid, s.decree).have >= s.decree.need) {
+    s.decree.done = true;
+    s.bonus += DECREE_BONUS;
+    s.crowns++;
+    decree = true;
+  }
+  const score = boardScore(s.grid) + s.bonus;
   const gained = score - s.score;
   s.score = score;
 
@@ -169,16 +262,35 @@ export function place(s: GameState, col: number, row: number): Placed | null {
     s.round++;
     s.goal = goalFor(s.round);
     for (const b of BUILDINGS) s.pouch[b] += ROUND_POUCH[b];
+    s.giftsDue++;
     newRound = true;
   }
-  // A placement that began a round is kept: undoing it would hand back a round already paid for.
-  s.undo = newRound ? null : prior;
-  if (s.pouch[kind] <= 0) s.selected = BUILDINGS.find((b) => s.pouch[b] > 0) ?? null;
-  const tilesLeft = BUILDINGS.some((b) => s.pouch[b] > 0);
-  const roomLeft = s.grid.some((cells) => cells.includes('grass'));
-  if (!tilesLeft || !roomLeft) {
-    s.phase = 'over';
-    s.best = Math.max(s.best, s.score);
+  if (newRound) {
+    s.decree = decreeFor(s.island, s.round, s.grid, s.decree);
+    s.phase = 'gift';
   }
-  return { gained, changes, newRound };
+  // A placement that began a round or won a crown is kept: undoing it would hand back what was paid.
+  s.undo = newRound || decree ? null : prior;
+  if (s.pouch[kind] <= 0) s.selected = BUILDINGS.find((b) => s.pouch[b] > 0) ?? null;
+  // A goal reached carries on to its gift, even with the pouch empty, unless the island is full.
+  if (s.phase === 'gift' && !s.grid.some((cells) => cells.includes('grass'))) s.giftsDue = 0;
+  if (s.phase === 'playing' || s.giftsDue === 0) checkEnd(s);
+  return { gained, changes, decree, newRound };
+}
+
+/** Takes one of the gifts on offer while one is due. Returns false if that is not allowed now. */
+export function chooseGift(s: GameState, gift: Gift) {
+  if (s.phase !== 'gift' || s.giftsDue <= 0 || !s.gifts.includes(gift)) return false;
+  const tiles = GIFT_INFO[gift].tiles;
+  for (const b of BUILDINGS) s.pouch[b] += tiles[b] ?? 0;
+  if (tiles.windmill) s.hasWindmill = true;
+  s.giftsDue--;
+  // The next offer is for the goal ahead (or the next one still due).
+  s.gifts = giftsFor(s.island, s.round - s.giftsDue, s.hasWindmill);
+  if (s.giftsDue === 0) {
+    s.phase = 'playing';
+    if (!s.selected || s.pouch[s.selected] <= 0) s.selected = BUILDINGS.find((b) => s.pouch[b] > 0) ?? null;
+    checkEnd(s);
+  }
+  return true;
 }

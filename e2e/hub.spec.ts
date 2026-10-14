@@ -54,7 +54,8 @@ test('hub opens each game', async ({ page }, testInfo) => {
     await page.goto('/');
     await page.getByRole('link', { name }).click();
     await expect(page).toHaveURL(new RegExp(`${path}$`));
-    await expect(page.locator('canvas')).toBeVisible();
+    // The game's own canvas; a page may also paint a decorative backdrop canvas, marked data-backdrop.
+    await expect(page.locator('canvas:not([data-backdrop])')).toBeVisible();
     await expectFavicon(page);
   }
 });

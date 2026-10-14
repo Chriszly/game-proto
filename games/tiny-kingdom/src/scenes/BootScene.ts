@@ -1,14 +1,14 @@
 import Phaser from 'phaser';
-import { bakeTiles } from '../art/tiles';
+import { bakeTextures } from '../art/textures';
 
-// Generates all textures at runtime so the prototype needs no asset files yet.
+// Paints all textures at runtime, so the game needs no asset files.
 export class BootScene extends Phaser.Scene {
   constructor() {
     super('Boot');
   }
 
   create() {
-    bakeTiles(this);
+    bakeTextures(this);
     this.scene.start('Game');
   }
 }

@@ -1,12 +1,13 @@
 import { expect, test, type Page } from '@playwright/test';
 
-// Plays the first order with real inputs: a swap that makes no match slides back for free, then
-// matches are made by tapping one tile and then its neighbour, as on a phone, until the order's
-// ingredients are gathered and the potion is sold.
+// Plays the first order with real inputs: a swap that makes no match slides back for free, a tap on
+// Stir with no coins buys nothing, then matches are made by tapping one tile and then its
+// neighbour, as on a phone, until the order's ingredients are gathered and the potion is sold for
+// its price and its stars.
 // Game state is only read, through the `game` object the dev build puts on window.
 
 type Kind = 'wheat' | 'mandrake' | 'sage' | 'ember' | 'moonpetal';
-interface Tile { id: number; kind: Kind }
+interface Tile { id: number; kind: Kind; catalyst?: boolean }
 interface Cell { row: number; col: number }
 interface GameState {
   order: number;
@@ -17,6 +18,10 @@ interface GameState {
   moves: number;
   phase: 'play' | 'sold' | 'failed';
   earned: number;
+  stars: number;
+  orderStars: number;
+  brewed: number;
+  fired: number;
   board: Tile[][];
 }
 interface Scene { state: GameState; busy: boolean; selected: Cell | null }
@@ -24,6 +29,10 @@ interface Scene { state: GameState; busy: boolean; selected: Cell | null }
 /** The first order, from src/game/orders.ts, and the bonus for each move left. */
 const ORDER_1 = { potion: 'healingDraught', needs: { ember: 12, sage: 12 }, moves: 15, price: 30 };
 const MOVE_BONUS = 5;
+/** Stars for the moves left at a sale, from src/game/ranks.ts. */
+const starsFor = (movesLeft: number) => (movesLeft >= 8 ? 3 : movesLeft >= 4 ? 2 : 1);
+/** The Stir bench tool's button and price, from src/scenes/layout.ts (TOOL) and src/game/sim.ts. */
+const STIR = { x: 560, y: 393, w: 168, h: 43, cost: 40 };
 /** The board and its cells, from src/scenes/layout.ts. */
 const VIEW = { w: 960, h: 540 };
 const BOARD = { x: 46, y: 46, cell: 56, size: 8 };
@@ -47,9 +56,9 @@ function swapKinds(grid: Kind[][], a: Cell, b: Cell) {
   return next;
 }
 
-/** The cells in a row or column of three or more of a kind: what a swap would match first. */
-function matched(grid: Kind[][]): Cell[] {
-  const hit = new Map<string, Cell>();
+/** Every row or column of three or more of a kind, as its cells. */
+function runs(grid: Kind[][]): Cell[][] {
+  const found: Cell[][] = [];
   const n = BOARD.size;
   for (let i = 0; i < n; i++) {
     for (const line of [grid[i].map((_, j) => ({ row: i, col: j })), grid.map((_, j) => ({ row: j, col: i }))]) {
@@ -57,11 +66,18 @@ function matched(grid: Kind[][]): Cell[] {
         let end = start + 1;
         const kind = (c: Cell) => grid[c.row][c.col];
         while (end < n && kind(line[end]) === kind(line[start])) end++;
-        if (end - start >= 3) line.slice(start, end).forEach((c) => hit.set(`${c.row},${c.col}`, c));
+        if (end - start >= 3) found.push(line.slice(start, end));
         start = end;
       }
     }
   }
+  return found;
+}
+
+/** The cells in a row or column of three or more of a kind: what a swap would match first. */
+function matched(grid: Kind[][]): Cell[] {
+  const hit = new Map<string, Cell>();
+  for (const run of runs(grid)) run.forEach((c) => hit.set(`${c.row},${c.col}`, c));
   return [...hit.values()];
 }
 
@@ -69,7 +85,7 @@ function matched(grid: Kind[][]): Cell[] {
 function bestSwap(s: GameState) {
   const grid = kinds(s.board);
   const wanted = (k: Kind) => (s.got[k] < (s.current.needs[k] ?? 0) ? 1 : 0);
-  let best: { a: Cell; b: Cell; cells: (Cell & { kind: Kind })[]; score: number } | null = null;
+  let best: { a: Cell; b: Cell; cells: (Cell & { kind: Kind })[]; long: Kind[]; catalyst: boolean; score: number } | null = null;
   for (let row = 0; row < BOARD.size; row++) {
     for (let col = 0; col < BOARD.size; col++) {
       const a = { row, col };
@@ -78,7 +94,14 @@ function bestSwap(s: GameState) {
         const after = swapKinds(grid, a, b);
         const cells = matched(after);
         const score = cells.reduce((sum, c) => sum + 10 * wanted(after[c.row][c.col]) + 1, 0);
-        if (cells.length > 0 && (!best || score > best.score)) best = { a, b, cells: cells.map((c) => ({ ...c, kind: after[c.row][c.col] })), score };
+        if (cells.length > 0 && (!best || score > best.score)) {
+          // A run of four or more keeps one of its tiles on the board as a Catalyst instead of gathering it.
+          const long = runs(after).filter((run) => run.length >= 4).map((run) => after[run[0].row][run[0].col]);
+          // A Catalyst in the match clears its row as well; swapping moves a tile, so look where each one lands.
+          const tileAt = (c: Cell) => (c.row === a.row && c.col === a.col ? s.board[b.row][b.col] : c.row === b.row && c.col === b.col ? s.board[a.row][a.col] : s.board[c.row][c.col]);
+          const catalyst = cells.some((c) => tileAt(c).catalyst);
+          best = { a, b, cells: cells.map((c) => ({ ...c, kind: after[c.row][c.col] })), long, catalyst, score };
+        }
       }
     }
   }
@@ -208,6 +231,18 @@ test('sells the first potion', async ({ page }, testInfo) => {
   expect(after.moves).toBe(ORDER_1.moves);
   expect((await game.get()).selected).toBeNull();
 
+  // The Stir bench tool costs coins the first order hasn't earned yet: a tap on it buys nothing.
+  {
+    const box = (await canvas.boundingBox())!;
+    const scale = box.width / VIEW.w;
+    expect(after.coins).toBeLessThan(STIR.cost);
+    await page.mouse.click(box.x + (STIR.x + STIR.w / 2) * scale, box.y + (STIR.y + STIR.h / 2) * scale);
+    await play(STEP_MS, async () => false);
+    const g = await game.get();
+    expect(g.state, 'Stir without the coins').toMatchObject({ moves: ORDER_1.moves, coins: 0, phase: 'play' });
+    expect(g.selected, 'a tap on a tool picks no tile').toBeNull();
+  }
+
   // Swaps that match gather the matched ingredients (and any cascade after), a move each.
   for (let move = 1; s.phase === 'play'; move++) {
     expect(move, 'moves for the first order').toBeLessThanOrEqual(ORDER_1.moves);
@@ -220,9 +255,12 @@ test('sells the first potion', async ({ page }, testInfo) => {
     after = await settled(`swap ${move}`);
     expect(after.moves).toBe(s.moves - 1);
     for (const kind of Object.keys(s.got) as Kind[]) {
-      const first = swap!.cells.filter((c) => c.kind === kind).length;
+      const first = swap!.cells.filter((c) => c.kind === kind).length - swap!.long.filter((k) => k === kind).length;
       expect(after.got[kind], `${kind} gathered on swap ${move}`).toBeGreaterThanOrEqual(s.got[kind] + first);
     }
+    // A match of four or more brews a Catalyst (unless a Catalyst in it clears the row it lies on).
+    if (!swap!.catalyst) expect(after.brewed, `catalysts brewed on swap ${move}`).toBeGreaterThanOrEqual(s.brewed + swap!.long.length);
+    if (swap!.long.length > 0) console.log(`Swap ${move} matched four or more (${after.brewed} Catalysts brewed, ${after.fired} fired so far).`);
     s = after;
   }
 
@@ -233,6 +271,9 @@ test('sells the first potion', async ({ page }, testInfo) => {
   expect(s.moves).toBeGreaterThan(0);
   expect(s.earned).toBe(ORDER_1.price + s.moves * MOVE_BONUS);
   expect(s).toMatchObject({ coins: s.earned, sold: 1, order: 2 });
+  // The sale earns one to three stars by the moves left, the first towards the tinker's rank.
+  expect(s.orderStars).toBe(starsFor(s.moves));
+  expect(s.stars).toBe(s.orderStars);
   await play(1_000, async () => false);
   await snap('2-sold');
 
