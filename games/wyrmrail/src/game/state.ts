@@ -16,6 +16,10 @@ export const DEADLINE_BASE_MS = 20_000;
 export const DEADLINE_PER_TILE_MS = 5_000;
 /** How long the wyrm takes to load cargo at a village. */
 export const LOAD_MS = 800;
+/** How many orders the wyrm can carry at once: one in each wagon. */
+export const WAGONS = 2;
+/** How long the wyrm stops to throw a switch that is set against it. */
+export const SWITCH_MS = 1_000;
 /** The wyrm's speed in tiles per second, and what each Swift wings level adds. */
 export const BASE_SPEED = 2;
 export const WINGS_SPEED = 0.6;
@@ -52,9 +56,13 @@ export interface Wyrm {
   path: Tile[];
   /** How far it is from `at` towards `path[0]`, 0 to 1. */
   progress: number;
-  /** The order it is working on, and whether it is going to fetch or to deliver it. */
+  /** The tile it stood on before `at`, so a switch knows which arm it came in by. */
+  from: Tile | null;
+  /** The stop it is heading for: an order, and whether it is going to fetch or to deliver it. */
   job: { order: number; leg: 'pickup' | 'drop' } | null;
   loadMs: number;
+  /** Time left throwing a switch before it can go on. */
+  switchMs: number;
 }
 
 export interface Pop {
@@ -78,8 +86,10 @@ export interface GameState {
   /** Tiles with track, as "c,r" keys. */
   track: string[];
   orders: Order[];
-  /** Order ids sent to the wyrm and waiting their turn, first first. */
+  /** Order ids sent to the wyrm and not yet loaded, first first. */
   queue: number[];
+  /** The switch on each junction (track with three or four arms): its key, and the arm it is set against. */
+  switches: Record<string, string>;
   wyrm: Wyrm;
   upgrades: Record<Upgrade, number>;
   /** Time until the next order comes in. */

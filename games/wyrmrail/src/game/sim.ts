@@ -25,7 +25,9 @@ import {
   POP_MS,
   START_COINS,
   START_HEARTS,
+  SWITCH_MS,
   UPGRADE_COSTS,
+  WAGONS,
   WINGS_SPEED,
   roundGoal,
   type GameState,
@@ -46,7 +48,8 @@ export function newGame(): GameState {
     track: [],
     orders: [],
     queue: [],
-    wyrm: { at: { ...ROOST }, path: [], progress: 0, job: null, loadMs: 0 },
+    switches: {},
+    wyrm: { at: { ...ROOST }, path: [], progress: 0, from: null, job: null, loadMs: 0, switchMs: 0 },
     upgrades: { wings: 0, hoard: 0 },
     orderTimerMs: ORDER_EVERY_MS,
     banner: { text: 'Lay track from the Roost to Millbrook and Ashford', ms: BANNER_MS * 1.5 },
@@ -91,6 +94,7 @@ export function buildTrack(s: GameState, t: Tile) {
   const cost = trackCost(s, t)!;
   s.coins -= cost;
   s.track.push(key(t));
+  syncSwitches(s, t);
   pop(s, `-${cost}`, t, '#f0c070');
   return true;
 }
@@ -105,10 +109,55 @@ export function canRemove(s: GameState, t: Tile) {
 export function removeTrack(s: GameState, t: Tile) {
   if (!canRemove(s, t)) return false;
   s.track = s.track.filter((k) => k !== key(t));
+  syncSwitches(s);
   const refund = Math.floor(TRACK_COST[terrainAt(t.c, t.r) as keyof typeof TRACK_COST] / 2);
   s.coins += refund;
   pop(s, `+${refund}`, t, '#f3c64e');
   return true;
+}
+
+/** The tiles next to `t` that are on the line. */
+function arms(s: GameState, t: Tile) {
+  return neighbours(t).filter((n) => onLine(s, n));
+}
+
+/**
+ * Gives every junction (track with three or four arms) a switch and drops the switches that are no
+ * longer on one. A new switch is set against `newest` when that is one of its arms (the branch just
+ * laid), else against its last arm.
+ */
+function syncSwitches(s: GameState, newest?: Tile) {
+  const next: Record<string, string> = {};
+  for (const k of s.track) {
+    const [c, r] = k.split(',').map(Number);
+    const a = arms(s, { c, r }).map(key);
+    if (a.length < 3) continue;
+    const old = s.switches[k];
+    next[k] = old && a.includes(old) ? old : newest && a.includes(key(newest)) ? key(newest) : a[a.length - 1];
+  }
+  s.switches = next;
+}
+
+/** Throws the switch on a junction: it is set against the next of its arms. */
+export function throwSwitch(s: GameState, t: Tile) {
+  const closed = s.switches[key(t)];
+  if (s.phase !== 'play' || !closed) return false;
+  const a = arms(s, t).map(key);
+  s.switches[key(t)] = a[(a.indexOf(closed) + 1) % a.length];
+  return true;
+}
+
+/** Whether going from `at` to `next`, having come in from `from`, uses the arm the switch on `at` is set against. */
+function againstSwitch(s: GameState, from: Tile | null, at: Tile, next: Tile) {
+  const closed = s.switches[key(at)];
+  return !!closed && (closed === key(next) || (!!from && closed === key(from)));
+}
+
+/** The wyrm throws the switch on `at` itself: set against an arm this move doesn't use. */
+function setSwitchFor(s: GameState, from: Tile | null, at: Tile, next: Tile) {
+  const used = [key(next), from ? key(from) : ''];
+  const free = arms(s, at).map(key).filter((k) => !used.includes(k));
+  if (s.switches[key(at)] && free.length) s.switches[key(at)] = free[0];
 }
 
 /** The shortest way along the line from `a` to `b`, without `a`; null if there is none. */
@@ -137,7 +186,7 @@ export function routable(s: GameState, o: Order) {
   return route(s, s.wyrm.at, from) !== null && route(s, from, VILLAGES[o.to]) !== null;
 }
 
-/** Sends the wyrm for a waiting order; it works through them in the order they were sent. */
+/** Sends the wyrm for a waiting order; it fetches and delivers sent orders nearest stop first. */
 export function dispatch(s: GameState, id: number) {
   const o = s.orders.find((o) => o.id === id);
   if (s.phase !== 'play' || !o || o.status !== 'waiting' || !routable(s, o)) return false;
@@ -181,38 +230,65 @@ export function tick(s: GameState, dt: number) {
 
 function moveWyrm(s: GameState, dt: number) {
   const w = s.wyrm;
+  if (w.switchMs > 0) {
+    if ((w.switchMs -= dt) > 0) return;
+    w.switchMs = 0;
+    if (w.path.length) setSwitchFor(s, w.from, w.at, w.path[0]);
+  }
   if (w.loadMs > 0) {
     if ((w.loadMs -= dt) > 0) return;
     w.loadMs = 0;
     const o = s.orders.find((o) => o.id === w.job?.order);
-    if (!o) return void (w.job = null);
-    o.status = 'carrying';
-    const path = route(s, w.at, VILLAGES[o.to]);
-    // The way was cut while loading: the cargo goes back on the board.
-    if (!path) return void dropJob(s, o);
-    w.job = { order: o.id, leg: 'drop' };
-    w.path = path;
+    if (o) o.status = 'carrying';
+    w.job = null;
   }
-  // A new job starts once the wyrm stands still on a tile.
-  if (!w.job && !w.path.length) {
-    const id = s.queue.shift();
-    const o = s.orders.find((o) => o.id === id);
-    if (!o) return;
-    const path = route(s, w.at, VILLAGES[o.from]);
-    if (!path) return void (o.status = 'waiting');
-    w.job = { order: o.id, leg: 'pickup' };
-    w.path = path;
-  }
+  // A new stop is picked once the wyrm stands still on a tile.
+  if (!w.job && !w.path.length) nextStop(s);
   if (w.path.length) {
+    if (w.progress === 0 && againstSwitch(s, w.from, w.at, w.path[0])) return void stopForSwitch(s);
     w.progress += (wyrmSpeed(s) * dt) / 1000;
     while (w.progress >= 1 && w.path.length) {
+      w.from = w.at;
       w.at = w.path.shift()!;
       w.progress -= 1;
+      if (w.path.length && againstSwitch(s, w.from, w.at, w.path[0])) return void stopForSwitch(s);
     }
     if (w.path.length) return;
     w.progress = 0;
   }
   if (w.job) arrive(s);
+}
+
+/** The switch ahead is set against the wyrm: it stops on the junction to throw it. */
+function stopForSwitch(s: GameState) {
+  s.wyrm.progress = 0;
+  s.wyrm.switchMs = SWITCH_MS;
+  pop(s, 'Switch!', s.wyrm.at, '#f0c070');
+}
+
+/**
+ * Picks the wyrm's next stop: the nearest of the villages its cargo is going to and, while a wagon
+ * is free, the villages with sent orders to fetch.
+ */
+function nextStop(s: GameState) {
+  const w = s.wyrm;
+  const carrying = s.orders.filter((o) => o.status === 'carrying');
+  const stops: { order: Order; leg: 'pickup' | 'drop' }[] = carrying.map((order) => ({ order, leg: 'drop' }));
+  if (carrying.length < WAGONS) {
+    for (const id of s.queue) {
+      const order = s.orders.find((o) => o.id === id);
+      if (order) stops.push({ order, leg: 'pickup' });
+    }
+  }
+  let best: { order: Order; leg: 'pickup' | 'drop'; path: Tile[] } | null = null;
+  for (const stop of stops) {
+    const path = route(s, w.at, VILLAGES[stop.leg === 'pickup' ? stop.order.from : stop.order.to]);
+    if (path && (!best || path.length < best.path.length)) best = { ...stop, path };
+  }
+  if (!best) return;
+  if (best.leg === 'pickup') s.queue = s.queue.filter((id) => id !== best.order.id);
+  w.job = { order: best.order.id, leg: best.leg };
+  w.path = best.path;
 }
 
 /** The wyrm has reached the end of its path. */
@@ -239,6 +315,7 @@ function arrive(s: GameState) {
 function nextRound(s: GameState) {
   s.round++;
   s.delivered = 0;
+  syncSwitches(s);
   const joining = VILLAGES.find((v) => v.round === s.round);
   s.banner = { text: joining ? `Round ${s.round}: ${joining.name} joins the line` : `Round ${s.round}`, ms: BANNER_MS };
 }
@@ -256,11 +333,6 @@ function failOrder(s: GameState, o: Order) {
   s.hearts--;
   pop(s, `${CARGO_NAMES[o.cargo]} late!`, VILLAGES[o.to], '#f08a6a');
   if (s.hearts <= 0) s.phase = 'over';
-}
-
-function dropJob(s: GameState, o: Order) {
-  o.status = 'waiting';
-  s.wyrm.job = null;
 }
 
 function addOrder(s: GameState, from: number, to: number) {

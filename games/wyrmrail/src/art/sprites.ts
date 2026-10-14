@@ -1,16 +1,15 @@
 import Phaser from 'phaser';
 import type { Cargo } from '../game/map';
-import { DRAGON, GOLD, INK, ROCK, WOOD } from './palette';
-import { PixelCanvas, bakePixelArt } from './pixelArt';
+import { ISO } from '../scenes/layout';
+import { GOLD, INK, WOOD } from './palette';
+import { bakeCanvas, ellipse, poly, shadow, sphere, type Ctx, type Pt } from './canvas';
+import { bakePixelArt } from './pixelArt';
 
-// Everything on the map besides the land: the villages and the Roost, the wyrm and its wagon
-// (seen from above, facing right, so they turn with the track), the cargo icons and the HUD icons.
-
-const SCALE = 4;
+// The wyrm and its wagons in the isometric style, and the pixel icons for cargo, coins and hearts.
+// Each wyrm part is a texture whose origin (`PART_ORIGIN`) is the point on the ground under it, so
+// the scene places it on the track and sorts it by that point; the part floats above it.
 
 export function bakeSprites(scene: Phaser.Scene) {
-  bakeRoost(scene);
-  for (const [name, roof] of Object.entries(ROOFS)) bakeVillage(scene, `village-${name}`, roof);
   bakeWyrm(scene);
   for (const [cargo, rows] of Object.entries(CARGO_ICONS)) bakePixelArt(scene, `cargo-${cargo}`, rows, ICON_COLORS, 3, INK);
   bakePixelArt(scene, 'coin', COIN, ICON_COLORS, 3, INK);
@@ -18,125 +17,162 @@ export function bakeSprites(scene: Phaser.Scene) {
   bakePixelArt(scene, 'heart-empty', HEART.map((r) => r.replace(/[rp]/g, 'x')), ICON_COLORS, 3, INK);
 }
 
-/** Each village's roof colour, by name. */
-const ROOFS: Record<string, number> = {
-  Millbrook: 0xd9a94a,
-  Ashford: 0x8a8494,
-  Fernhollow: 0x4f9a52,
-  Stonereach: 0xa0603a,
-  Saltmere: 0x4a7ac0,
-};
+/** Every wyrm texture is this size, with the ground point under the part at `x`, `y`. */
+export const PART = { w: 120, h: 90, x: 60, y: 76 };
+export const PART_ORIGIN = { x: PART.x / PART.w, y: PART.y / PART.h };
 
-/** Two cottages and a well-trodden yard, filling one tile. */
-function bakeVillage(scene: Phaser.Scene, key: string, roof: number) {
-  const c = new PixelCanvas(16, 16);
-  c.ellipse(1, 6, 14, 10, 0xb89a68);
-  cottage(c, 1, 5, 8, roof);
-  cottage(c, 8, 8, 7, roof);
-  c.outline(INK);
-  c.bake(scene, key, SCALE);
-}
-
-function cottage(c: PixelCanvas, x: number, y: number, w: number, roof: number) {
-  const wall = 0xe9dcc0;
-  c.rect(x, y + 3, w, 4, wall);
-  c.rect(x + Math.floor(w / 2) - 1, y + 5, 2, 2, WOOD.dark);
-  c.px(x + 1, y + 4, 0x7fb0d8);
-  for (let j = 0; j < 4; j++) c.rect(x - 1 + j, y + j - 1, w + 2 - 2 * j, 1, j === 0 ? shade(roof, 0.75) : roof);
-}
-
-const shade = (color: number, f: number) => {
-  const r = Math.round(((color >> 16) & 255) * f);
-  const g = Math.round(((color >> 8) & 255) * f);
-  const b = Math.round((color & 255) * f);
-  return (r << 16) | (g << 8) | b;
-};
-
-/** The wyrm's Roost: a rocky hill with a cave, and a glint of hoard inside. */
-function bakeRoost(scene: Phaser.Scene) {
-  const c = new PixelCanvas(16, 16);
-  c.ellipse(0, 2, 16, 15, ROCK.base);
-  c.ellipse(1, 2, 9, 8, ROCK.light);
-  c.ellipse(10, 6, 5, 6, ROCK.dark);
-  c.ellipse(4, 7, 9, 10, INK);
-  c.rect(4, 12, 9, 4, INK);
-  c.rect(6, 13, 4, 2, GOLD);
-  c.px(7, 12, 0xfff2b0);
-  c.outline(INK);
-  c.bake(scene, 'roost', SCALE);
-}
-
-const WYRM_COLORS = {
-  g: DRAGON.base,
-  d: DRAGON.dark,
-  l: DRAGON.light,
-  h: DRAGON.horn,
-  e: DRAGON.eye,
-  k: INK,
-  s: DRAGON.spine,
-  w: DRAGON.wing,
-  m: DRAGON.membrane,
-};
-
-/** The head from above, snout to the right. */
-const HEAD = [
-  'hh............',
-  '.hh...........',
-  '..dgggd.......',
-  '.dgggggggd....',
-  'dggekglgggggd.',
-  'dsgggglggggggd',
-  'dsgggglgggggkd',
-  'dggekglgggggd.',
-  '.dgggggggd....',
-  '..dgggd.......',
-  '.hh...........',
-  'hh............',
-];
-
-/** A body coil from above, with the spine down its middle. */
-const COIL = [
-  '...dddd...',
-  '.ddggggdd.',
-  '.dggllggd.',
-  'dggggggggd',
-  'dsssssssss',
-  'dggggggggd',
-  '.dggllggd.',
-  '.ddggggdd.',
-  '...dddd...',
-];
-
-/** The wings, spread to both sides of the first coil. */
-const WINGS = [
-  '..w.w.w...',
-  '.wmwmwmw..',
-  '.wmmmmmmw.',
-  '..wmmmmmw.',
-  '...wwmmw..',
-  '..........',
-  '..........',
-  '..........',
-  '...wwmmw..',
-  '..wmmmmmw.',
-  '.wmmmmmmw.',
-  '.wmwmwmw..',
-  '..w.w.w...',
-];
+/** The mockups drew the wyrm for 150-pixel tiles; it is drawn a little larger than that scale here. */
+const SCALE = (ISO.tw / 150) * 1.4;
+const GREEN = { base: '#4fbf5a', light: '#9be883', dark: '#2b7c39' };
 
 function bakeWyrm(scene: Phaser.Scene) {
-  bakePixelArt(scene, 'wyrm-head', HEAD, WYRM_COLORS, 3, INK);
-  bakePixelArt(scene, 'wyrm-coil', COIL, WYRM_COLORS, 3, INK);
-  bakePixelArt(scene, 'wyrm-wings', WINGS, WYRM_COLORS, 3, INK);
-  // The wagon it pulls, from above: a plank bed in a frame, with a hitch at the front.
-  const c = new PixelCanvas(15, 11);
-  c.rect(0, 0, 13, 11, WOOD.dark);
-  c.rect(1, 1, 11, 9, WOOD.base);
-  for (let x = 3; x < 12; x += 3) c.rect(x, 1, 1, 9, WOOD.light);
-  c.rect(13, 5, 2, 1, WOOD.dark);
-  c.outline(INK);
-  c.bake(scene, 'wagon', 3);
+  const part = (key: string, draw: (ctx: Ctx, x: number, y: number) => void) => bakeCanvas(scene, key, PART.w, PART.h, (ctx) => draw(ctx, PART.x, PART.y));
+  part('wyrm-head', (ctx, x, y) => {
+    shadow(ctx, x + 3, y + 3, 18, 7, 0.25);
+    head(ctx, x, y - 38);
+  });
+  for (const [i, size] of [0.9, 0.8, 0.7].entries()) {
+    part(`wyrm-coil-${i}`, (ctx, x, y) => {
+      shadow(ctx, x + 3, y + 2, 13 * size, 5, 0.22);
+      const r = 27 * SCALE * size;
+      const cy = y - (20 + i * 3) * SCALE;
+      sphere(ctx, x, cy, r, GREEN.base, GREEN.light, GREEN.dark);
+      poly(ctx, [{ x: x - 2, y: cy - r + 1 }, { x: x + 1, y: cy - r - 6 * size }, { x: x + 3, y: cy - r + 2 }], '#e9dfb8');
+    });
+  }
+  part('wyrm-wings', (ctx, x, y) => {
+    const w = { x, y: y - 40 * SCALE };
+    const k = SCALE;
+    poly(ctx, [w, { x: w.x - 74 * k, y: w.y - 44 * k }, { x: w.x - 50 * k, y: w.y - 6 * k }, { x: w.x - 66 * k, y: w.y + 10 * k }], '#3fa04d', '#25623a', 1);
+    poly(ctx, [w, { x: w.x + 66 * k, y: w.y - 52 * k }, { x: w.x + 50 * k, y: w.y - 10 * k }, { x: w.x + 68 * k, y: w.y + 4 * k }], '#2f8a3f', '#25623a', 1);
+  });
+  // The wagons, lengthwise along the columns (`wagon-u`) or along the rows (`wagon-v`).
+  for (const along of ['u', 'v'] as const) part(`wagon-${along}`, (ctx, x, y) => wagon(ctx, x, y, along));
 }
+
+/**
+ * The head in profile, facing right (the scene flips it to face left), around the middle of its
+ * skull: a long snout with a nostril and teeth, a slightly open jaw, a slit-pupil eye under a brow
+ * ridge, swept-back horns, spines and a frill down the neck.
+ */
+function head(ctx: Ctx, hx: number, hy: number) {
+  type Step = [number, number] | [number, number, number, number];
+  const path = (steps: Step[], close = true) => {
+    ctx.beginPath();
+    ctx.moveTo(hx + steps[0][0], hy + steps[0][1]);
+    for (const p of steps.slice(1)) {
+      if (p.length === 4) ctx.quadraticCurveTo(hx + p[0], hy + p[1], hx + p[2], hy + p[3]);
+      else ctx.lineTo(hx + p[0], hy + p[1]);
+    }
+    if (close) ctx.closePath();
+  };
+  const fill = (color: string | CanvasGradient, stroke?: string, width = 0.8) => {
+    ctx.fillStyle = color;
+    ctx.fill();
+    if (stroke) {
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = width;
+      ctx.stroke();
+    }
+  };
+  const ink = '#1f4a2a';
+  // The neck, running down and back to the first coil.
+  const ng = ctx.createLinearGradient(hx - 20, hy - 6, hx - 8, hy + 18);
+  ng.addColorStop(0, '#4fbf5a');
+  ng.addColorStop(1, GREEN.dark);
+  path([[-12, -6], [-22, 2, -21, 16], [-8, 18], [-6, 10, 0, 6]]);
+  fill(ng, ink);
+  // The far horn, behind the skull.
+  path([[-5, -9], [-14, -20, -27, -21], [-16, -16, -9, -6]]);
+  fill('#b9ab88');
+  // The frill down the neck.
+  for (const [fx, fy, l] of [
+    [-15, -3, 9],
+    [-18, 3, 8],
+    [-19, 9, 7],
+  ]) {
+    path([[fx + 3, fy - 3], [fx - l, fy + 1], [fx + 3, fy + 3]]);
+    fill('#2f8a3f');
+  }
+  // The lower jaw, a little open, with a pale throat.
+  path([[-8, 5], [6, 8, 18, 10], [20, 12], [15, 14, 2, 14], [-6, 13, -10, 9]]);
+  fill('#3b9a48', ink);
+  path([[-6, 11], [6, 13, 17, 12], [15, 14, 2, 14], [-6, 13, -6, 11]]);
+  fill('#c8e6a0');
+  path([[-4, 5], [10, 6, 21, 9], [10, 9, -4, 7]]);
+  fill('#5a1e22');
+  // The skull and the long snout.
+  const g = ctx.createLinearGradient(hx, hy - 14, hx, hy + 8);
+  g.addColorStop(0, '#8fe07e');
+  g.addColorStop(0.45, '#4fbf5a');
+  g.addColorStop(1, GREEN.dark);
+  path([[-14, 2], [-16, -10, -4, -12], [3, -13, 7, -9], [15, -7, 24, -4], [29, -2.5, 27, 1], [25, 4.5, 19, 5.5], [6, 6, -8, 6], [-13, 5, -14, 2]]);
+  fill(g, ink, 0.9);
+  // Teeth along the upper jaw.
+  for (const tx of [4, 9, 14, 19]) {
+    path([[tx - 1.4, 5.8], [tx, 9.3], [tx + 1.4, 5.9]]);
+    fill('#fbf6e2');
+  }
+  // Scale ridges along the snout, and a cheek plate.
+  ctx.strokeStyle = 'rgba(31,74,42,0.55)';
+  ctx.lineWidth = 0.7;
+  for (const sx of [10, 15, 20]) {
+    path([[sx - 2, -6 + (sx - 10) * 0.2], [sx, -4 + (sx - 10) * 0.2, sx + 2, -6 + (sx - 10) * 0.22]], false);
+    ctx.stroke();
+  }
+  path([[-10, 0], [-4, 3, 2, 2]], false);
+  ctx.stroke();
+  ellipse(ctx, hx + 24, hy - 1.8, 1.6, 0.9, '#163a20', -0.4);
+  // The brow ridge over a gold, slit-pupil eye.
+  path([[-4, -8], [2, -11, 8, -8], [3, -7.5, -4, -6.5]]);
+  fill(GREEN.dark);
+  ctx.beginPath();
+  ctx.ellipse(hx + 2, hy - 5, 3.2, 1.9, -0.15, 0, Math.PI * 2);
+  fill('#f6c945', '#163a20', 0.6);
+  ellipse(ctx, hx + 2.4, hy - 5, 0.6, 1.7, '#111111');
+  ctx.fillStyle = 'rgba(255,255,255,0.8)';
+  ctx.fillRect(hx + 0.6, hy - 6.2, 0.9, 0.9);
+  // The near horn, swept back over the neck, and the spines behind it.
+  const hg = ctx.createLinearGradient(hx - 26, hy - 24, hx - 4, hy - 8);
+  hg.addColorStop(0, '#fff6dc');
+  hg.addColorStop(1, '#c9b78c');
+  path([[-3, -10], [-12, -22, -28, -24], [-14, -18, -9, -6]]);
+  fill(hg, '#7a6a48', 0.7);
+  for (const [sx, sy] of [
+    [-10, -9],
+    [-15, -4],
+    [-19, 2],
+  ]) {
+    path([[sx + 2, sy], [sx - 2, sy - 6], [sx - 3, sy + 1]]);
+    fill('#e9dfb8');
+  }
+}
+
+function wagon(ctx: Ctx, x: number, y: number, along: 'u' | 'v') {
+  const P = (u: number, v: number, z = 0): Pt => ({ x: x + ((u - v) * ISO.tw) / 2, y: y + ((u + v) * ISO.th) / 2 - z });
+  const [hu, hv] = along === 'v' ? [0.14, 0.19] : [0.19, 0.14];
+  const h = 22 * SCALE;
+  const z = 6 * SCALE;
+  const [u0, u1, v0, v1] = [-hu, hu, -hv, hv];
+  shadow(ctx, x + 3, y + 3, 22, 9, 0.3);
+  const wheels = along === 'v' ? [[u0, v0 + 0.06], [u0, v1 - 0.06]] : [[u0 + 0.06, v1], [u1 - 0.06, v1]];
+  for (const [wu, wv] of wheels) {
+    const p = P(wu, wv, 8 * SCALE);
+    ellipse(ctx, p.x, p.y, 4, 6, '#3b2a1c', along === 'v' ? 0.5 : -0.5);
+  }
+  poly(ctx, [P(u0, v1, z), P(u1, v1, z), P(u1, v1, z + h), P(u0, v1, z + h)], '#a8703f', '#4a3220', 1);
+  poly(ctx, [P(u1, v1, z), P(u1, v0, z), P(u1, v0, z + h), P(u1, v1, z + h)], '#8a5a31', '#4a3220', 1);
+  poly(ctx, [P(u0, v0, z + h), P(u1, v0, z + h), P(u1, v1, z + h), P(u0, v1, z + h)], '#5c3d22', '#4a3220', 1);
+  const front = along === 'v' ? [[u1, v0 + 0.06], [u1, v1 - 0.06]] : [[u0 + 0.06, v1], [u1 - 0.06, v1]];
+  for (const [wu, wv] of front) {
+    const p = P(wu + (along === 'u' ? 0 : 0), wv, 8 * SCALE);
+    ellipse(ctx, p.x, p.y, 4.5, 6.5, '#2a1d12', along === 'v' ? 0.5 : -0.5);
+    ellipse(ctx, p.x, p.y, 1.6, 2.4, '#b08850', along === 'v' ? 0.5 : -0.5);
+  }
+}
+
+/** How high above the ground point a wagon's load sits. */
+export const LOAD_LIFT = 28 * SCALE + 6;
 
 const ICON_COLORS = {
   y: 0xe8c45a, // grain
