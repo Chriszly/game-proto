@@ -122,8 +122,9 @@ Data tables (where to tune):
 - Difficulty scales one number: foe health. `startFight` in `src/game/sim.ts` sets each foe's `hp`
   and `maxHp` to `Math.round(ENEMIES[kind].hp * byDifficulty(0.75, 1, 1.3))`, so Easy 0.75x,
   Normal 1x, Hard 1.3x. Damage, block and the hero are not scaled.
-- `settings.reduceMotion` also stops the hero's hit shake, the hero's red hit tint and the foes'
-  white hit flash in `GameScene.drawFight`.
+- `settings.reduceMotion` also stops the hero's hit shake, the hero's red hit tint, the foes'
+  white hit flash and the foes' idle bob in `GameScene.drawFight`, and holds the enterable rooms'
+  gold ring pulse still (full brightness, no outer ring) in `GameScene.drawMap`.
 - Keep Normal exactly as designed (multiplier 1): the playthrough runs on Normal and expects the
   slime's 24 health.
 - Keep the Catacomb row of the difficulty table in the root `README.md` (and the difficulty line

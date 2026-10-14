@@ -174,9 +174,10 @@ export class GameScene extends Phaser.Scene {
     for (const i of reachable(null)) dots(ENTRANCE.x, ENTRANCE.y, ROOMS[i].x, ROOMS[i].y, walked.has(`-1>${i}`));
     ROOMS.forEach((room, i) => room.next.forEach((j) => dots(room.x, room.y, ROOMS[j].x, ROOMS[j].y, walked.has(`${i}>${j}`))));
 
-    // Each room in a ring: gold and pulsing when it can be entered, dim once passed by.
+    // Each room in a ring: gold and pulsing when it can be entered (held still when motion is
+    // reduced), dim once passed by.
     const r = this.roomRings.clear();
-    const pulse = 0.5 + 0.5 * Math.sin(this.clock / 200);
+    const pulse = settings.reduceMotion ? 1 : 0.5 + 0.5 * Math.sin(this.clock / 200);
     ROOMS.forEach((room, i) => {
       const done = s.cleared.includes(i);
       const open = next.includes(i);
@@ -252,7 +253,7 @@ export class GameScene extends Phaser.Scene {
       // Slide into place when the one in front falls.
       foe.x += (xs[i] - foe.x) * 0.2;
       const lunge = e.actMs > 0 ? -Math.sin((e.actMs / 300) * Math.PI) * 30 : 0;
-      const bob = Math.sin(this.clock / 400 + e.id) * 2;
+      const bob = settings.reduceMotion ? 0 : Math.sin(this.clock / 400 + e.id) * 2;
       foe.sprite.setPosition(foe.x + lunge, FOE_FEET_Y + bob);
       if (e.hitMs > 0 && !settings.reduceMotion) foe.sprite.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
       else foe.sprite.clearTint();
