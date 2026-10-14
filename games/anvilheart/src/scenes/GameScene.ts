@@ -5,11 +5,12 @@ import { swordTexture } from '../art/swords';
 import { clearProgress, loadProgress, saveProgress } from '../game/save';
 import { buy, drop, forge, sell, tick, toggleAutoForge } from '../game/sim';
 import { DESKS, GRID, SLOTS, forgeMs, freshProgress, newShop, progressOf, type Adventurer, type GameState } from '../game/state';
-import { swordOf } from '../game/swords';
+import { MAX_TIER, swordOf } from '../game/swords';
 import { UPGRADES, UPGRADE_IDS, locked, nextPrice, type UpgradeId } from '../game/upgrades';
 import { Button } from '../ui/Button';
 import {
   BOARD,
+  DISCOVERED,
   FONT,
   FORGE_BUTTON,
   FURNACE,
@@ -21,6 +22,7 @@ import {
   deskAt,
   deskBox,
   deskCentre,
+  discoveredCentre,
   slotAt,
   slotCentre,
 } from './layout';
@@ -64,6 +66,8 @@ export class GameScene extends Phaser.Scene {
   private coinsText!: Phaser.GameObjects.Text;
   private statsText!: Phaser.GameObjects.Text;
   private hint!: Phaser.GameObjects.Text;
+  /** The picture of each sword tier in the discovered row, shown once that tier has been made. */
+  private discovered: Phaser.GameObjects.Image[] = [];
   private clock = 0;
   private lastFrame: number | null = null;
 
@@ -104,13 +108,14 @@ export class GameScene extends Phaser.Scene {
       this.upgradeButtons.set(id, new Button(this, b.x, b.ys[i], b.w, b.h, '', () => this.buy(id)));
     });
     this.add
-      .text(BOARD.x + 2 * BOARD.cell, BOARD.y + 4 * BOARD.cell + 32, 'Drag two matching swords together to merge them,\nand a sword onto an adventurer to sell it.', {
+      .text(BOARD.x + 2 * BOARD.cell, BOARD.y + 4 * BOARD.cell + 14, 'Merge matching swords, then sell them to adventurers.', {
         fontFamily: FONT,
-        fontSize: '13px',
+        fontSize: '12px',
         color: '#c9b48f',
         align: 'center',
       })
       .setOrigin(0.5);
+    this.createDiscovered();
     this.createHud();
     this.createReset();
 
@@ -309,12 +314,24 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** The row of discovered swords under the board: an empty frame per tier, filled once it is made. */
+  private createDiscovered() {
+    this.discovered = [];
+    for (let tier = 1; tier <= MAX_TIER; tier++) {
+      const c = discoveredCentre(tier, MAX_TIER);
+      this.add.rectangle(c.x, c.y, DISCOVERED.size, DISCOVERED.size, 0x1d1418, 0.7).setStrokeStyle(2, 0x5a3f2a);
+      this.discovered.push(this.add.image(c.x, c.y, swordTexture(tier)).setScale(0.5).setVisible(false));
+    }
+  }
+
   private createHud() {
     this.hud = this.add.graphics().setDepth(UI_DEPTH);
     this.add.text(16, 10, 'Anvilheart', textStyle(18, '#f3c64e')).setDepth(UI_DEPTH + 1);
     this.coinsText = this.add.text(200, 11, '', textStyle(16, '#f3c64e')).setDepth(UI_DEPTH + 1);
     this.statsText = this.add.text(VIEW.w - 16, 12, '', textStyle(14)).setOrigin(1, 0).setDepth(UI_DEPTH + 1);
-    this.hint = this.add.text(VIEW.w / 2, VIEW.h - 14, '', textStyle(12, '#c9b48f')).setOrigin(0.5).setDepth(UI_DEPTH + 1);
+    // In the first desk, which is empty while the hint shows.
+    const desk = deskCentre(0);
+    this.hint = this.add.text(desk.x, desk.y, '', textStyle(12, '#c9b48f')).setOrigin(0.5).setDepth(UI_DEPTH + 1);
   }
 
   private drawHud() {
@@ -327,6 +344,7 @@ export class GameScene extends Phaser.Scene {
     const best = s.bestTier > 0 ? swordOf(s.bestTier).name : 'none yet';
     this.statsText.setText(`Sold ${s.sold}   Best sword: ${best}`);
     this.hint.setText(s.adventurers.length === 0 && s.sold === 0 ? 'An adventurer is on the way...' : '');
+    this.discovered.forEach((image, i) => image.setVisible(i + 1 <= s.bestTier));
   }
 
   /** A small button in the corner that throws the board and coins away for a fresh smithy. */
