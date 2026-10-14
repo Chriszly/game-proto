@@ -60,7 +60,7 @@ The hub's **Settings** button opens the settings every game shares. They are sav
 ```sh
 npm install
 npm run dev       # dev server with hot reload; the hub is at /, each game at /games/<name>/
-npm run build     # typecheck + production build of the hub and every game into dist/
+npm run build     # typecheck (games, tests and configs) + production build of the hub and every game into dist/
 npm run preview   # serve the production build
 ```
 
@@ -74,8 +74,10 @@ npm run preview   # serve the production build
   readout and reduced motion.
 - `e2e/hub.spec.ts`: checks that the hub lists every game, that each card opens it, and that the
   settings are saved and reach a game.
-- `package.json`, `tsconfig.json`, `vite.config.ts` and `playwright.config.ts` are shared. Vite
-  builds every `games/*/index.html` next to the hub; Playwright runs one project per game.
+- `package.json`, `tsconfig.json`, `tsconfig.e2e.json`, `vite.config.ts` and `playwright.config.ts`
+  are shared. `tsconfig.json` typechecks the games and `shared/`; `tsconfig.e2e.json` typechecks
+  the Playwright tests and the two configs, with Node's types. Vite builds every
+  `games/*/index.html` next to the hub; Playwright runs one project per game.
 
 See `AGENTS.md` for adding a game and for the playthrough rules.
 

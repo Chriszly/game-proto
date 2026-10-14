@@ -126,7 +126,8 @@ npx playwright test --project apothecary   # one game only
   takes longer but must play out the same; if it doesn't, something escaped the test's clock.
 - `PLAYTHROUGH_SPEED=1 npm run test:e2e` plays at normal speed, handy with `--headed` to watch it.
 - `npx playwright test --headed` shows the browser while it plays; `--debug` steps through it.
-- Also run `npm run build` (typecheck and build) before pushing.
+- Also run `npm run build` before pushing. It typechecks the games and `shared/` (`tsconfig.json`),
+  then the e2e tests and the Vite and Playwright configs (`tsconfig.e2e.json`), then builds.
 
 ## Debug a failure
 

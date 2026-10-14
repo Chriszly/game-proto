@@ -16,6 +16,7 @@ on:
       - package.json
       - package-lock.json
       - tsconfig.json
+      - tsconfig.e2e.json
       - vite.config.ts
       - playwright.config.ts
       - .github/workflows/hub.yml
