@@ -211,9 +211,9 @@ export class GameScene extends Phaser.Scene {
     orb.fillStyle(GOLD.mid).fillCircle(ENERGY_ORB.x - 3, ENERGY_ORB.y - 3, ENERGY_ORB.r - 6);
     orb.fillStyle(0xffffff, 0.35).fillCircle(ENERGY_ORB.x - 12, ENERGY_ORB.y - 14, 7);
     this.energyText = this.add.text(ENERGY_ORB.x, ENERGY_ORB.y, '', textStyle(24)).setOrigin(0.5);
-    this.drawText = this.add.text(ENERGY_ORB.x, PILES_Y, '', textStyle(14, '#c9b48f')).setOrigin(0.5);
-    this.discardText = this.add.text(END_TURN.x, PILES_Y, '', textStyle(14, '#c9b48f')).setOrigin(0.5);
-    this.endTurnButton = makeButton(this, END_TURN.x, END_TURN.y, 'End turn', () => endTurn(this.state));
+    this.drawText = this.add.text(ENERGY_ORB.x, PILES_Y, '', textStyle(14, '#d8c7a6')).setOrigin(0.5);
+    this.discardText = this.add.text(END_TURN.x, PILES_Y, '', textStyle(14, '#d8c7a6')).setOrigin(0.5);
+    this.endTurnButton = makeButton(this, END_TURN.x, END_TURN.y, 'End turn', () => endTurn(this.state), END_TURN.w);
     this.turnBanner = this.add.text(VIEW.w / 2, 150, '', textStyle(30, '#e6c766')).setOrigin(0.5);
     this.fightLayer = this.add.container(0, 0, [bg, this.hero, this.bars, this.heroHp, orb, this.energyText, this.endTurnButton, this.handLayer, this.drawText, this.discardText, this.turnBanner]);
   }
@@ -270,8 +270,8 @@ export class GameScene extends Phaser.Scene {
     // Hand, energy and piles.
     this.drawHand();
     this.energyText.setText(f ? `${f.energy}/3` : '');
-    this.drawText.setText(f ? `Draw ${f.draw.length}` : '');
-    this.discardText.setText(f ? `Discard ${f.discard.length}` : '');
+    this.drawText.setText(f ? `Draw pile ${f.draw.length}` : '');
+    this.discardText.setText(f ? `Discard pile ${f.discard.length}` : '');
     this.endTurnButton.setVisible(s.phase === 'player').setAlpha(s.phase === 'player' ? 1 : 0.4);
     const banner = s.phase === 'enemy' ? 'Foes’ turn' : s.phase === 'cleared' ? 'Victory!' : f && f.turn === 1 && s.phase === 'player' && f.energy === 3 && f.hand.length === 5 ? 'Your turn' : '';
     this.turnBanner.setText(banner);
