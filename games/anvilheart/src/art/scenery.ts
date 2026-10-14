@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { DESKS, SLOTS } from '../game/state';
 import { BOARD, FORGE_BUTTON, FURNACE_WINDOW, HUD_HEIGHT, VIEW, deskBox, slotCentre } from '../scenes/layout';
-import { ART, LEAD, PI, bake, ctx, diamond, glass, glow, hex, mix, panel, path, rect, reseed, ring, rnd, type Pt } from './glass';
+import { ART, LEAD, PI, bake, ctx, diamond, glass, glow, mix, panel, path, rect, reseed, ring, rnd, type Pt } from './glass';
 
 // The smithy as one great window: a mosaic of glass behind everything, glowing orange round the
 // furnace, cobalt panes under the anvils and amber behind the counter. Painted once into the
@@ -13,7 +13,7 @@ const a = (n: number) => n * ART;
 
 export function bakeScenery(scene: Phaser.Scene) {
   bake(scene, 'background', VIEW.w, VIEW.h, () => {
-    mosaic();
+    lancets();
     furnaceStones();
     board();
     counter();
@@ -28,79 +28,25 @@ export function bakeScenery(scene: Phaser.Scene) {
   }
 }
 
-/** The colour of the mosaic piece around a point (in art units), with a little random shade. */
-function regionCol(x: number, y: number, r: number) {
-  const desk = deskBox(0);
-  if (y < a(HUD_HEIGHT)) return mix('#2a2238', '#352a46', r);
-  if (x >= a(desk.x) - 28) return mix('#7a4a1e', '#9a5e24', r);
-  const bx = a(BOARD.x) - 16;
-  const by = a(BOARD.y) - 16;
-  const bw = a(BOARD.cell * 4) + 32;
-  if (x >= bx && x < bx + bw && y >= by && y < by + bw) return mix('#1c2450', '#2a2a62', r);
-  if (x < bx) {
-    const d = Math.hypot(x - 260, y - 420);
-    return d < 300 ? mix('#8a3a1c', '#b85a24', r * 0.6 + (1 - d / 300) * 0.4) : mix('#3a4660', '#4a5672', r);
-  }
-  return mix('#30304a', '#3c3a58', r);
-}
-
-/** Voronoi glass over the whole view, with lead where two cells meet. Painted pixel by pixel. */
-function mosaic() {
-  const w = VIEW.w;
-  const h = VIEW.h;
-  const sp = 32;
+/** Gothic lancets: six tall panes of amber, rose and violet glass, each with a dark arched window. */
+function lancets() {
   reseed(3);
-  const gw = Math.ceil(w / sp) + 1;
-  const gh = Math.ceil(h / sp) + 1;
-  const seeds: { x: number; y: number; c: [number, number, number] }[] = [];
-  for (let j = 0; j < gh; j++) {
-    for (let i = 0; i < gw; i++) {
-      const x = (i + 0.15 + rnd() * 0.7) * sp;
-      const y = (j + 0.15 + rnd() * 0.7) * sp;
-      seeds.push({ x, y, c: hex(regionCol(a(x), a(y), rnd())) });
-    }
+  const cols = ['#b8562a', '#d88a3a', '#8a2a3a', '#e0b04a', '#6a2a4a'];
+  for (let i = 0; i < 6; i++) glass(rect(a(i * 160), 0, a(160), a(VIEW.h)), cols[i % 5], { lw: 8, hi: 0.2, lo: 0.2 });
+  for (let i = 0; i < 6; i++) {
+    const x = i * 160 + 20;
+    ctx.beginPath();
+    ctx.moveTo(a(x), a(VIEW.h));
+    ctx.lineTo(a(x), a(200));
+    ctx.quadraticCurveTo(a(x + 60), a(60), a(x + 120), a(200));
+    ctx.lineTo(a(x + 120), a(VIEW.h));
+    ctx.closePath();
+    ctx.fillStyle = '#2a1a2e';
+    ctx.fill();
+    ctx.strokeStyle = LEAD;
+    ctx.lineWidth = 8;
+    ctx.stroke();
   }
-  const img = ctx.createImageData(w, h);
-  const d = img.data;
-  const ld = hex(LEAD);
-  for (let y = 0; y < h; y++) {
-    const gj = Math.floor(y / sp);
-    for (let x = 0; x < w; x++) {
-      const gi = Math.floor(x / sp);
-      let d1 = 1e9;
-      let d2 = 1e9;
-      let best = seeds[0];
-      for (let dj = -1; dj <= 1; dj++) {
-        for (let di = -1; di <= 1; di++) {
-          const ii = gi + di;
-          const jj = gj + dj;
-          if (ii < 0 || jj < 0 || ii >= gw || jj >= gh) continue;
-          const s = seeds[jj * gw + ii];
-          const dd = (s.x - x) * (s.x - x) + (s.y - y) * (s.y - y);
-          if (dd < d1) {
-            d2 = d1;
-            d1 = dd;
-            best = s;
-          } else if (dd < d2) d2 = dd;
-        }
-      }
-      const edge = Math.sqrt(d2) - Math.sqrt(d1);
-      const o = (y * w + x) * 4;
-      if (edge < 2.2) {
-        d[o] = ld[0];
-        d[o + 1] = ld[1];
-        d[o + 2] = ld[2];
-      } else {
-        const k = 1.18 - (Math.sqrt(d1) / (sp * 1.1)) * 0.45 + Math.sin(x * 0.1 + y * 0.06) * 0.03;
-        d[o] = Math.min(255, best.c[0] * k);
-        d[o + 1] = Math.min(255, best.c[1] * k);
-        d[o + 2] = Math.min(255, best.c[2] * k);
-      }
-      d[o + 3] = 255;
-    }
-  }
-  // putImageData ignores the canvas transform, so it takes view pixels.
-  ctx.putImageData(img, 0, 0);
 }
 
 /** The arch of the furnace window, shared by the stones and the flame frames. */
@@ -163,12 +109,21 @@ function flames(frame: number) {
 function board() {
   const size = a(BOARD.cell * 4);
   glass(rect(a(BOARD.x) - 16, a(BOARD.y) - 16, size + 32, size + 32), '#000000', { empty: true, lw: 10 });
-  const tiles = ['#1e2a5c', '#24306a', '#1a2452', '#28336e'];
+  const tiles = ['#1e5a46', '#24684f', '#1a4e3e', '#28705a'];
   reseed(20);
   const half = a(BOARD.cell) / 2 - 4;
   for (let i = 0; i < SLOTS; i++) {
     const c = slotCentre(i);
     glass(rect(a(c.x) - half, a(c.y) - half, half * 2, half * 2), tiles[(i + Math.floor(i / 4)) % 4], { hi: 0.25, lo: 0.25, lw: 6 });
+  }
+  // A warm light pooled on each pane, clipped to it, so the swords and anvils stand out from the cobalt.
+  for (let i = 0; i < SLOTS; i++) {
+    const c = slotCentre(i);
+    ctx.save();
+    path(rect(a(c.x) - half, a(c.y) - half, half * 2, half * 2));
+    ctx.clip();
+    glow(a(c.x), a(c.y) - a(8), half, '#ffe6a8', 0.32);
+    ctx.restore();
   }
   for (let i = 0; i < SLOTS; i++) {
     const c = slotCentre(i);
@@ -183,11 +138,11 @@ function board() {
 /** A leaded steel anvil: horn, face, waist, foot. */
 function anvil(cx: number, cy: number) {
   const top = -16;
-  glass([[cx - 94, cy + top + 4], [cx - 64, cy + top - 8], [cx - 64, cy + top + 16]], '#7c88a8', { lw: 4 });
-  glass([[cx - 64, cy + top - 8], [cx + 78, cy + top - 8], [cx + 80, cy + top + 6], [cx - 64, cy + top + 6]], '#b4bed6', { lw: 4 });
-  glass([[cx - 64, cy + top + 6], [cx + 80, cy + top + 6], [cx + 62, cy + 20], [cx - 48, cy + 20]], '#6a7696', { lw: 4 });
-  glass([[cx - 30, cy + 20], [cx + 30, cy + 20], [cx + 42, cy + 48], [cx - 42, cy + 48]], '#56607e', { lw: 4 });
-  glass([[cx - 62, cy + 48], [cx + 62, cy + 48], [cx + 70, cy + 70], [cx - 70, cy + 70]], '#454e6a', { lw: 4 });
+  glass([[cx - 94, cy + top + 4], [cx - 64, cy + top - 8], [cx - 64, cy + top + 16]], '#9a6a3a', { lw: 4 });
+  glass([[cx - 64, cy + top - 8], [cx + 78, cy + top - 8], [cx + 80, cy + top + 6], [cx - 64, cy + top + 6]], '#e0b070', { lw: 4 });
+  glass([[cx - 64, cy + top + 6], [cx + 80, cy + top + 6], [cx + 62, cy + 20], [cx - 48, cy + 20]], '#8a5a2a', { lw: 4 });
+  glass([[cx - 30, cy + 20], [cx + 30, cy + 20], [cx + 42, cy + 48], [cx - 42, cy + 48]], '#6a4420', { lw: 4 });
+  glass([[cx - 62, cy + 48], [cx + 62, cy + 48], [cx + 70, cy + 70], [cx - 70, cy + 70]], '#4a2e14', { lw: 4 });
 }
 
 /** The counter: a window frame per desk with an empty lancet, which an adventurer's figure fills. */
@@ -198,8 +153,8 @@ function counter() {
     const y = a(b.y);
     const h = a(b.h);
     reseed(40 + desk);
-    panel(x, y, a(b.w), h, '#6a4a2a', '#24203a', 10);
-    glass([[x + 14, y + h - 12], [x + 14, y + 80], [x + 94, y + 16], [x + 174, y + 80], [x + 174, y + h - 12]], '#1a2040', { hi: 0.15, lo: 0.2, lw: 5 });
+    panel(x, y, a(b.w), h, '#8a5e30', '#3a3266', 10);
+    glass([[x + 14, y + h - 12], [x + 14, y + 80], [x + 94, y + 16], [x + 174, y + 80], [x + 174, y + h - 12]], '#2e4a8a', { hi: 0.3, lo: 0.15, lw: 5 });
   }
 }
 

@@ -143,7 +143,7 @@ export class GameScene extends Phaser.Scene {
     });
     this.add
       .text(BOARD.x + 2 * BOARD.cell, BOARD.y + 4 * BOARD.cell + 16, 'Merge matching swords, then sell them to adventurers.', {
-        ...textStyle(13, '#ffe9c0', 2.5),
+        ...textStyle(13, '#fff4d8', 3.5),
         fontStyle: 'normal',
       })
       .setOrigin(0.5);
@@ -478,11 +478,11 @@ export class GameScene extends Phaser.Scene {
     const { x, y, w, h } = BANNER;
     const small = (s: string, tx: number, ty: number, col: string) =>
       this.add.text(tx, ty, s, { ...textStyle(9.5, col, 2), fontStyle: 'normal' }).setOrigin(0, 0.5);
-    const kicker = this.add.text(36, 10.5, 'ROYAL COMMISSION', textStyle(7.5, '#f6d58a', 2)).setOrigin(0, 0.5);
+    const kicker = this.add.text(36, 10.5, 'ROYAL COMMISSION', textStyle(8, '#ffe7a8', 3)).setOrigin(0, 0.5);
     kicker.setLetterSpacing(1);
     const title = this.add.text(36, 22.5, '', textStyle(13, '#fff2dc', 2.5)).setOrigin(0, 0.5);
     const sword = this.add.image(165, h / 2, swordTexture(6)).setScale(swordScale(0.42));
-    const progress = small('', 192, 10, '#e8d8f8');
+    const progress = small('', 192, 10, '#ffffff');
     const pips = [...Array(4).keys()].map((k) => this.add.image(198 + k * 17, 23, 'pip-off'));
     const reward = this.add.text(w - 9, 22.5, '', textStyle(13.5, '#ffe27a', 2.5)).setOrigin(1, 0.5);
     const star = this.add.image(w - 9, 22, 'star').setScale(0.65);
@@ -538,7 +538,7 @@ export class GameScene extends Phaser.Scene {
   /** A small button in the corner that throws the board and coins away for a fresh smithy. */
   private createReset() {
     const text = this.add
-      .text(VIEW.w - 17, VIEW.h - 13, 'New smithy', { ...textStyle(12, '#e8d8b8', 2.5), fontStyle: 'normal' })
+      .text(VIEW.w - 17, VIEW.h - 13, 'New smithy', { ...textStyle(12, '#fff6e0', 3.5), fontStyle: 'normal' })
       .setOrigin(1, 0.5)
       .setDepth(UI_DEPTH + 1)
       .setInteractive({ useHandCursor: true });

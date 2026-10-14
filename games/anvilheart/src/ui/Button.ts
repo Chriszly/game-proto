@@ -56,6 +56,6 @@ export class Button {
   private paint() {
     const state: ButtonState = !this.enabled ? 'off' : this.over ? 'over' : 'on';
     this.bg.setTexture(buttonTexture(this.style, state));
-    this.text.setColor(this.enabled ? '#fff1d0' : '#a89cb8');
+    this.text.setColor(this.enabled ? '#fff1d0' : '#c8bcd8');
   }
 }
