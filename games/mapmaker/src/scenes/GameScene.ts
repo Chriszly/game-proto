@@ -409,7 +409,10 @@ export class GameScene extends Phaser.Scene {
     const caption = islandCharted(s) ? 'Sail to a new isle' : 'Set sail';
     c.add(
       makeButton(this, OVERLAY_BUTTON.x, OVERLAY_BUTTON.y, caption, () => {
-        if (setSail(this.state)) saveGame(this.state);
+        if (!setSail(this.state)) return;
+        saveGame(this.state);
+        // The surveyor starts the voyage at the port, not walking back from the last tile.
+        this.walker = tileCentre(this.state.port.x, this.state.port.y);
       }),
     );
     this.spots.sail = { ...OVERLAY_BUTTON };

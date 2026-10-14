@@ -68,7 +68,7 @@ nothing more can be surveyed, the next voyage goes to a new island.
 - `update(time)` computes `dt` from the frame time (clamped to 100 ms) and only animates:
   `syncTiles` swaps textures when tiles are revealed (fading them in and floating their value),
   adds or removes compass stars; `moveSurveyor` walks the sprite toward `state.surveyor` at 260 px/s
-  (snapping when more than 6 tiles away, as after sailing home); `drawGlow` outlines `frontier`;
+  (snapping when more than 6 tiles away; Set sail also snaps it to the port); `drawGlow` outlines `frontier`;
   `updatePanel` refreshes the texts; `syncOverlay` rebuilds the chart or harbor overlay when its
   key (phase, coins, ranks) changes.
 - The rules never depend on time: everything happens on taps.
@@ -86,15 +86,16 @@ nothing more can be surveyed, the next voyage goes to a new island.
 - `survey` ends the voyage (`returnToPort`) as soon as supplies hit 0 or `frontier` is empty.
 - `ranks` maps upgrade ids to ranks; `maxSupplies`, `inkBonus` and `sightOf` derive their effects.
   The compass is read by `GameScene` only.
-- `commission` is rolled on `newGame` and `setSail` from terrains the fog still hides enough of;
-  it can be null.
+- `commission` is rolled on `newGame` and `setSail` from terrains the fog still hides enough of
+  (for sea, only fogged sea beside land, since open sea can't be surveyed); it can be null.
 - All mutation is in `src/game/sim.ts`. `GameScene` only calls those functions.
 
 ### Persistence
 
 `localStorage` key `mapmaker-save` holds the whole `GameState` as JSON, written after every
 successful action and read once in `GameScene.create`. A save whose tile count doesn't match
-`GRID` is ignored. The hub's settings live under the shared `hub-settings` key.
+`GRID` is ignored, and saved supplies are clamped to `maxSupplies` (a save from an easier
+difficulty can hold more). The hub's settings live under the shared `hub-settings` key.
 
 ### Randomness and timing
 
