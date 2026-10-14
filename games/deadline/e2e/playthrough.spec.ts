@@ -1,8 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
 
-// Plays the first wave with real inputs (a tap to move, as on a phone): the horde comes in and is
-// shot down, the hero moves under the wave's pickup and shoots it open for an upgrade, and the wave
-// is cleared without the horde reaching the hero.
+// Plays the first wave with real inputs (a tap to move, as on a phone): the art style switch is
+// tapped to night vision and back, the horde comes in and is shot down while the progress strip
+// fills, the hero moves under the wave's pickup and shoots it open for an upgrade, then under the
+// wave's fuel drum and blows it up among the horde, and the wave is cleared without the horde
+// reaching the hero. Kills in quick succession build the frenzy streak along the way.
 // Game state is only read, through the `game` object the dev build puts on window.
 
 type Point = { x: number; y: number };
@@ -14,13 +16,28 @@ interface GameState {
   kills: number;
   stats: Stats;
   collected: Record<UpgradeKind, number>;
+  best: number;
+  fallen: number;
+  waveTotal: number;
+  streak: number;
+  frenzyMs: number;
+  frenzies: number;
+  drumsBlown: number;
+  lastBlast: { caught: number; killed: number } | null;
 }
 interface Pickup { id: number; upgrade: UpgradeKind; hp: number; maxHp: number; x: number; y: number }
+interface Drum { id: number; hp: number; maxHp: number; x: number; y: number; caught: number }
 
 // From src/game/rules.ts: the 540x960 portrait view, the hero's line, wave 1's size.
 const VIEW = { w: 540, h: 960 };
 const HERO_Y = 880;
 const WAVE_1_ENEMIES = 12;
+/** The art style switch in the top bar (STYLE_SWITCH in src/scenes/Hud.ts): its two halves. */
+const SWITCH = { comic: { x: 456, y: 42 }, nv: { x: 506, y: 42 } };
+/** From FRENZY in src/game/rules.ts: kills this close together build the streak. */
+const STREAK_GAP_MS = 1500;
+/** While no zombie is lower than this, the test may leave the front to shoot a drum. */
+const FRONT_SAFE_Y = 600;
 const BASE_STATS: Stats = { damage: 1, fireInterval: 340, companions: 0, pierce: 0 };
 /** What each pickup does to the hero's starting stats. */
 const UPGRADED: Record<UpgradeKind, Stats> = {
@@ -52,6 +69,8 @@ function scene(page: Page) {
     hero: () => read<{ x: number; y: number; moving: boolean }>((s) => ({ x: s.player.x, y: s.player.y, moving: s.pointerTarget !== null })),
     enemies: () => read<{ id: number; kind: string; x: number; y: number }[]>((s) => s.liveEnemies()),
     pickups: () => read<Pickup[]>((s) => s.livePickups()),
+    drums: () => read<Drum[]>((s) => s.liveDrums()),
+    style: () => read<string>((s) => s.style),
   };
 }
 
@@ -90,7 +109,8 @@ test('plays the first wave', async ({ page }, testInfo) => {
   }, FRAME_MS);
   await page.goto('/games/deadline/');
   const game = scene(page);
-  const canvas = page.locator('canvas');
+  // The game's canvas; the page behind it has a canvas of its own for the side panels.
+  const canvas = page.locator('#game canvas');
 
   let gameMs = 0;
   let startedAt = 0;
@@ -157,19 +177,77 @@ test('plays the first wave', async ({ page }, testInfo) => {
   ).toBe(true);
   startedAt = Date.now();
 
-  // Wave 1 starts at once, with the hero in the middle of their line and the starting stats.
+  // Wave 1 starts at once, with the hero in the middle of their line and the starting stats. It is
+  // the best wave reached so far (nothing was saved before), and the record is saved at once.
   let s = await game.state();
-  expect(s).toMatchObject({ wave: 1, phase: 'wave', kills: 0, stats: BASE_STATS });
+  expect(s).toMatchObject({ wave: 1, phase: 'wave', kills: 0, stats: BASE_STATS, best: 1, fallen: 0, waveTotal: WAVE_1_ENEMIES, streak: 0, frenzies: 0, drumsBlown: 0 });
   expect(await game.hero()).toEqual({ x: VIEW.w / 2, y: HERO_Y, moving: false });
+  expect(await page.evaluate(() => localStorage.getItem('deadline-best'))).toBe('1');
+
+  // The game is drawn as a comic by default. Tapping the switch in the top bar changes it to the
+  // night-vision feed (saved), without moving the hero; tapping it again changes it back.
+  expect(await game.style()).toBe('comic');
+  await tap(SWITCH.nv);
+  await play(300, async () => false);
+  expect(await game.style()).toBe('nv');
+  expect(await page.evaluate(() => localStorage.getItem('deadline-style'))).toBe('nv');
+  expect(await game.hero()).toEqual({ x: VIEW.w / 2, y: HERO_Y, moving: false });
+  await snap('0-night-vision');
+  await tap(SWITCH.comic);
+  await play(300, async () => false);
+  expect(await game.style()).toBe('comic');
+  expect(await page.evaluate(() => localStorage.getItem('deadline-style'))).toBe('comic');
+  expect((await game.hero()).moving).toBe(false);
 
   // The horde comes in at the top and walks down; the hero shoots on their own.
   let enemies = await game.enemies();
   expect(await play(5_000, async () => (enemies = await game.enemies()).length >= 3), 'the horde came in').toBe(true);
   expect(enemies.every((e) => e.kind === 'grunt' && e.y < HERO_Y)).toBe(true);
-  await snap('0-horde');
+  await snap('1-horde');
   s = await until('the first kill', (s) => s.kills > 0);
+  // The progress strip counts the wave's zombies down as they fall.
+  expect(s.fallen).toBe(s.kills);
+  expect(s.streak).toBeGreaterThan(0);
 
-  // A pickup comes in among the enemies. Tap above it: the hero moves along their line below it.
+  // A fuel drum rolls down among the horde, its ring showing how many zombies its blast would catch.
+  let drums = await game.drums();
+  expect(await play(10_000, async () => (drums = await game.drums()).length > 0), 'a drum came in').toBe(true);
+  expect(drums[0].hp).toBe(drums[0].maxHp);
+  // Play on as a player would: stay below the zombie closest to the line, but once the drum's ring
+  // has caught some of the horde and the front is not too close, stand below the drum instead.
+  // Shooting it open blows it up, and every zombie in the ring goes down with it.
+  let underDrum = false;
+  const aimAtDrum = async () => {
+    const [hero, enemies] = [await game.hero(), await game.enemies()];
+    drums = await game.drums();
+    if (hero.moving || enemies.length === 0) return;
+    const front = enemies.reduce((a, b) => (b.y > a.y ? b : a));
+    const drum = drums.find((d) => d.caught > 0);
+    const target = drum && front.y < FRONT_SAFE_Y ? drum : front;
+    if (Math.abs(target.x - hero.x) > 8) {
+      await tap({ x: Math.round(target.x), y: VIEW.h / 2 });
+      if (target === drum && !underDrum) {
+        underDrum = true;
+        await play(600, async () => false);
+        await snap('2-drum');
+      }
+    }
+  };
+  const before = await game.state();
+  s = await until('the drum blown up', (s) => s.drumsBlown === 1, 30_000, aimAtDrum);
+  expect(underDrum, 'the hero went below the drum').toBe(true);
+  expect(await game.drums()).toEqual([]);
+  expect(s.lastBlast!.caught).toBeGreaterThan(0);
+  // On wave 1 the blast is far stronger than a grunt: everyone it caught went down.
+  expect(s.lastBlast!.killed).toBe(s.lastBlast!.caught);
+  expect(s.kills).toBeGreaterThanOrEqual(before.kills + s.lastBlast!.killed);
+  expect(s.fallen).toBe(s.kills);
+  // A blast's kills come all at once, so they count towards the frenzy streak together.
+  expect(s.streak).toBeGreaterThanOrEqual(s.lastBlast!.killed);
+  await play(300, async () => false);
+  await snap('3-blast');
+
+  // A pickup came in among the enemies too. Tap above it: the hero moves along their line below it.
   let pickups = await game.pickups();
   expect(await play(10_000, async () => (pickups = await game.pickups()).length > 0), 'a pickup came in').toBe(true);
   const pickup = pickups[0];
@@ -177,13 +255,13 @@ test('plays the first wave', async ({ page }, testInfo) => {
   await tapAndMove({ x: heroX, y: VIEW.h / 2 });
   expect((await game.hero()).y).toBe(HERO_Y);
   await play(1_000, async () => false);
-  await snap('1-pickup');
+  await snap('4-pickup');
 
   // Shooting the crate open collects its upgrade.
   s = await until(`the ${pickup.upgrade} pickup opened`, (s) => s.collected[pickup.upgrade] === 1);
   expect(s.stats).toEqual(UPGRADED[pickup.upgrade]);
   expect((await game.pickups()).find((p) => p.id === pickup.id)).toBeUndefined();
-  await snap('2-upgrade');
+  await snap('5-upgrade');
 
   // Play the rest of the wave as a player would: whenever the hero is not below the enemy closest to
   // their line, tap above it. Every enemy falls before any reaches the hero, and the wave is cleared.
@@ -194,10 +272,15 @@ test('plays the first wave', async ({ page }, testInfo) => {
     if (Math.abs(front.x - hero.x) > 8) await tap({ x: Math.round(front.x), y: VIEW.h / 2 });
   };
   s = await until('wave 1 cleared', (s) => s.phase === 'break', 60_000, aimAtFront);
-  expect(s).toMatchObject({ wave: 1, kills: WAVE_1_ENEMIES });
+  expect(s).toMatchObject({ wave: 1, kills: WAVE_1_ENEMIES, fallen: WAVE_1_ENEMIES, waveTotal: WAVE_1_ENEMIES });
   expect(await game.enemies()).toEqual([]);
-  await snap('3-cleared');
-  await until('wave 2 started', (s) => s.wave === 2 && s.phase === 'wave', 5_000);
+  await snap('6-cleared');
+  s = await until('wave 2 started', (s) => s.wave === 2 && s.phase === 'wave', 5_000);
+  // A new wave starts the strip again, and reaching it is a new best wave, saved.
+  expect(s).toMatchObject({ best: 2, fallen: 0 });
+  expect(await page.evaluate(() => localStorage.getItem('deadline-best'))).toBe('2');
+  // A streak breaks once no kill comes for a moment.
+  s = await until('the streak broken', (s) => s.streak === 0, STREAK_GAP_MS + 1_000);
 
   const speed = gameMs / (Date.now() - startedAt);
   console.log(`Played ${Math.round(gameMs / 1000)}s of game time at ${speed.toFixed(1)}x (target ${SPEED}x).`);

@@ -1,14 +1,13 @@
 import Phaser from 'phaser';
-import { bakeSprites } from '../art/sprites';
 
-// Generates all textures at runtime so the prototype needs no asset files yet.
+// Nothing to load: every texture is painted on canvases by the art modules, which `GameScene`
+// calls when it starts (the comic at once, night vision the first time it is switched to).
 export class BootScene extends Phaser.Scene {
   constructor() {
     super('Boot');
   }
 
   create() {
-    bakeSprites(this);
     this.scene.start('Game');
   }
 }
