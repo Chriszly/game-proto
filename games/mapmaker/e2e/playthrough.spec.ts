@@ -2,8 +2,10 @@ import { expect, test, type Page } from '@playwright/test';
 
 // Plays the first voyage with real inputs: the test taps fogged tiles next to the charted part of
 // the island, as on a phone, nearest the surveyor first, until the supplies run out. Back at port it
-// checks the chart adds up, taps Sell chart and checks the coins, then taps Set sail and checks the
-// second voyage starts with full supplies on the same island. Nothing is bought at the harbor.
+// checks the chart adds up (with no unused supplies to sell back, and any isle milestone the
+// voyage reached), taps Sell chart and checks the coins and the isle goal, then taps Set sail and
+// checks the second voyage starts with full supplies on the same island. Nothing is bought at the
+// harbor.
 // Game state is only read, through the `game` object the dev build puts on window.
 
 type Terrain = 'sea' | 'beach' | 'grass' | 'forest' | 'hills' | 'mountain' | 'village' | 'ruins' | 'port';
@@ -23,8 +25,22 @@ interface GameState {
   ranks: Record<string, number>;
   surveyed: Point[];
   commission: { terrain: Terrain; need: number; bonus: number } | null;
-  chart: { counts: Partial<Record<Terrain, number>>; base: number; ink: number; bonus: number; total: number } | null;
+  chart: {
+    counts: Partial<Record<Terrain, number>>;
+    base: number;
+    ink: number;
+    bonus: number;
+    unused: number;
+    sellBack: number;
+    milestones: number;
+    milestoneCoins: number;
+    atlas: boolean;
+    total: number;
+  } | null;
   lastSale: number;
+  milestones: number;
+  isleStart: number;
+  atlas: { island: number; voyages: number; tiles: number }[];
 }
 
 const VIEW = { w: 960, h: 540 };
@@ -35,6 +51,12 @@ const MAP = { x: 24, y: 64, tile: 40 };
 const SUPPLIES = 12;
 /** What each tile adds to a chart (TERRAIN in src/game/terrain.ts). */
 const VALUE: Record<Terrain, number> = { sea: 1, beach: 2, grass: 2, forest: 3, hills: 4, mountain: 6, village: 10, ruins: 12, port: 0 };
+/** The isle goal's milestones (MILESTONES in state.ts): percent charted and the coins each pays. */
+const MILESTONES = [
+  { pct: 50, coins: 20 },
+  { pct: 75, coins: 40 },
+  { pct: 100, coins: 0 },
+];
 
 /**
  * Game time per animation frame, every frame the same length. Longer frames mean fewer to draw, so
@@ -79,6 +101,24 @@ function frontier(s: GameState): Point[] {
 }
 
 const revealedCount = (s: GameState) => s.tiles.filter((t) => t.revealed).length;
+
+/** How much of the isle is charted, in whole percent: of its land and the sea beside land. */
+function islePercent(s: GameState) {
+  let all = 0;
+  let done = 0;
+  for (let y = 0; y < GRID.h; y++) {
+    for (let x = 0; x < GRID.w; x++) {
+      const t = at(s, x, y);
+      const byLand = [[0, -1], [1, 0], [0, 1], [-1, 0]].some(
+        ([dx, dy]) => inGrid(x + dx, y + dy) && at(s, x + dx, y + dy).terrain !== 'sea',
+      );
+      if (t.terrain === 'sea' && !byLand) continue;
+      all += 1;
+      if (t.revealed) done += 1;
+    }
+  }
+  return done === all ? 100 : Math.min(99, Math.floor((100 * done) / all));
+}
 
 test('plays the first voyage', async ({ page }, testInfo) => {
   // A seeded Math.random keeps the island and the commission the same from run to run.
@@ -155,7 +195,19 @@ test('plays the first voyage', async ({ page }, testInfo) => {
 
   // A new game: the first island under fog but for its port, with full supplies and no coins.
   let s = await game.state();
-  expect(s).toMatchObject({ island: 1, voyage: 1, phase: 'survey', supplies: SUPPLIES, coins: 0, ranks: {}, surveyed: [], chart: null });
+  expect(s).toMatchObject({
+    island: 1,
+    voyage: 1,
+    phase: 'survey',
+    supplies: SUPPLIES,
+    coins: 0,
+    ranks: {},
+    surveyed: [],
+    chart: null,
+    milestones: 0,
+    isleStart: 1,
+    atlas: [],
+  });
   expect(at(s, s.port.x, s.port.y)).toEqual({ terrain: 'port', revealed: true });
   expect(revealedCount(s), 'only the port is charted').toBe(1);
   expect(s.surveyor).toEqual(s.port);
@@ -205,7 +257,24 @@ test('plays the first voyage', async ({ page }, testInfo) => {
   const c = s.commission!;
   expect(c, 'the first voyage has a commission').not.toBeNull();
   const bonus = (counts[c.terrain] ?? 0) >= c.need ? c.bonus : 0;
-  expect(s.chart).toEqual({ counts, base, ink: 0, bonus, total: base + bonus });
+  // Every supply was spent, so nothing sells back; the voyage pays any isle milestones it reached.
+  const pct = islePercent(s);
+  expect(pct, 'the first voyage charts part of the isle').toBeGreaterThan(0);
+  expect(pct).toBeLessThan(100);
+  const reached = MILESTONES.filter((m) => pct >= m.pct);
+  const milestoneCoins = reached.reduce((sum, m) => sum + m.coins, 0);
+  expect(s.chart).toEqual({
+    counts,
+    base,
+    ink: 0,
+    bonus,
+    unused: 0,
+    sellBack: 0,
+    milestones: reached.length,
+    milestoneCoins,
+    atlas: false,
+    total: base + bonus + milestoneCoins,
+  });
   expect(s.chart!.total).toBeGreaterThan(SUPPLIES);
   await play(500, async () => false);
   await snap('2-chart');
@@ -215,7 +284,7 @@ test('plays the first voyage', async ({ page }, testInfo) => {
   let spots = await game.spots();
   await tap(spots.sell);
   expect(await play(1_000, async () => (s = await game.state()).phase === 'harbor'), 'chart sold').toBe(true);
-  expect(s).toMatchObject({ coins: total, lastSale: total, chart: null, surveyed: [] });
+  expect(s).toMatchObject({ coins: total, lastSale: total, chart: null, surveyed: [], milestones: reached.length, atlas: [] });
   await play(500, async () => false);
   await snap('3-harbor');
 
@@ -224,7 +293,7 @@ test('plays the first voyage', async ({ page }, testInfo) => {
   spots = await game.spots();
   await tap(spots.sail);
   expect(await play(1_000, async () => (s = await game.state()).phase === 'survey'), 'set sail').toBe(true);
-  expect(s).toMatchObject({ island: 1, voyage: 2, supplies: SUPPLIES, coins: total, ranks: {} });
+  expect(s).toMatchObject({ island: 1, voyage: 2, supplies: SUPPLIES, coins: total, ranks: {}, isleStart: 1 });
   expect(s.surveyor).toEqual(s.port);
   expect(revealedCount(s), 'the chart so far is kept').toBe(charted);
   await play(500, async () => false);

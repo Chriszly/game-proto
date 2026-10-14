@@ -10,6 +10,32 @@ export const BASE_SUPPLIES = byDifficulty(16, 12, 9);
 export const PROVISIONS_STEP = 3;
 /** How much each rank of Fine Ink adds to a chart's price. */
 export const INK_STEP = 0.25;
+/** Coins each unused supply sells back for on Return to port, up to the chart's own tile value. */
+export const SELL_BACK = 3;
+/**
+ * The isle completion goal: how much of the isle has been charted, in percent, pays these once
+ * each, on the voyage that reaches them. The last one binds the isle into the atlas.
+ */
+export const MILESTONES: Milestone[] = [
+  { pct: 50, coins: 20, atlas: false },
+  { pct: 75, coins: 40, atlas: false },
+  { pct: 100, coins: 0, atlas: true },
+];
+
+export interface Milestone {
+  pct: number;
+  coins: number;
+  atlas: boolean;
+}
+
+/** A finished isle, bound into the atlas when its last tile is charted. */
+export interface AtlasPage {
+  island: number;
+  /** Voyages it took. */
+  voyages: number;
+  /** Tiles charted on it. */
+  tiles: number;
+}
 
 export interface Tile {
   terrain: Terrain;
@@ -32,6 +58,13 @@ export interface Chart {
   ink: number;
   /** The commission's bonus, if the chart meets it. */
   bonus: number;
+  /** Supplies left when the voyage ended, and what they sell back for (`SELL_BACK` each, capped at `base`). */
+  unused: number;
+  sellBack: number;
+  /** How many isle milestones this voyage reached, what they pay, and whether it finished the isle. */
+  milestones: number;
+  milestoneCoins: number;
+  atlas: boolean;
   total: number;
 }
 
@@ -68,6 +101,12 @@ export interface GameState {
   chart: Chart | null;
   /** What the last chart sold for, shown at the harbor. */
   lastSale: number;
+  /** How many of `MILESTONES` this isle has paid out. */
+  milestones: number;
+  /** The voyage this isle was first sailed to. */
+  isleStart: number;
+  /** Every isle charted to the last tile, in order. */
+  atlas: AtlasPage[];
 }
 
 export const rankOf = (s: GameState, id: UpgradeId) => s.ranks[id] ?? 0;

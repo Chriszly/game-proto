@@ -4,6 +4,8 @@ import {
   indexOf,
   inkBonus,
   maxSupplies,
+  MILESTONES,
+  SELL_BACK,
   neighbours,
   rankOf,
   tileAt,
@@ -42,6 +44,9 @@ export function newGame(): GameState {
     commission: null,
     chart: null,
     lastSale: 0,
+    milestones: 0,
+    isleStart: 1,
+    atlas: [],
   };
   s.supplies = maxSupplies(s);
   s.commission = rollCommission(s);
@@ -111,9 +116,16 @@ function reveal(s: GameState, x: number, y: number) {
   s.surveyed.push({ x, y });
 }
 
+/** What a list of revealed tiles adds to the chart, before Fine Ink: a lookout's tally. */
+export const valueOf = (s: GameState, tiles: Point[]) =>
+  tiles.reduce((sum, p) => sum + TERRAIN[s.tiles[indexOf(p.x, p.y)].terrain].value, 0);
+
 const dist = (a: Point, b: Point) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 
-/** Ends the voyage: the surveyor sails home and the voyage's tiles are drawn into a chart. */
+/**
+ * Ends the voyage: the surveyor sails home and the voyage's tiles are drawn into a chart. Supplies
+ * left over sell back with it (see `sellBackOf`).
+ */
 export function returnToPort(s: GameState) {
   if (s.phase !== 'survey') return false;
   s.chart = chartOf(s);
@@ -121,7 +133,10 @@ export function returnToPort(s: GameState) {
   return true;
 }
 
-/** How many tiles of each terrain the voyage revealed, and what the chart sells for. */
+/**
+ * How many tiles of each terrain the voyage revealed, and what the chart sells for: the tiles,
+ * Fine Ink, the commission, the unused supplies sold back and any isle milestones reached.
+ */
 export function chartOf(s: GameState): Chart {
   const counts: Partial<Record<Terrain, number>> = {};
   for (const p of s.surveyed) {
@@ -132,7 +147,57 @@ export function chartOf(s: GameState): Chart {
   const ink = Math.round(base * inkBonus(s));
   const c = s.commission;
   const bonus = c && (counts[c.terrain] ?? 0) >= c.need ? c.bonus : 0;
-  return { counts, base, ink, bonus, total: base + ink + bonus };
+  const unused = s.supplies;
+  const sellBack = sellBackOf(s, base);
+  const due = milestonesDue(s);
+  const milestoneCoins = due.reduce((sum, m) => sum + m.coins, 0);
+  const atlas = due.some((m) => m.atlas);
+  return {
+    counts,
+    base,
+    ink,
+    bonus,
+    unused,
+    sellBack,
+    milestones: due.length,
+    milestoneCoins,
+    atlas,
+    total: base + ink + bonus + sellBack + milestoneCoins,
+  };
+}
+
+/** What the unused supplies sell back for: `SELL_BACK` each, never more than the chart's tiles are worth. */
+export function sellBackOf(s: GameState, base = chartOf(s).base) {
+  return Math.min(s.supplies * SELL_BACK, base);
+}
+
+/**
+ * The tiles of this isle that can ever be charted: every land tile (the land is one patch the
+ * surveyor can walk) and every sea tile beside land.
+ */
+export function chartable(s: GameState): Point[] {
+  const out: Point[] = [];
+  for (let y = 0; y < GRID.h; y++) {
+    for (let x = 0; x < GRID.w; x++) {
+      const t = tileAt(s, x, y)!;
+      if (t.terrain !== 'sea' || neighbours(x, y).some((n) => tileAt(s, n.x, n.y)!.terrain !== 'sea')) out.push({ x, y });
+    }
+  }
+  return out;
+}
+
+/** How much of the isle is charted: tiles done, out of how many, and the whole percent (100 only when all are). */
+export function isleProgress(s: GameState) {
+  const all = chartable(s);
+  const done = all.filter((p) => tileAt(s, p.x, p.y)!.revealed).length;
+  const pct = done === all.length ? 100 : Math.min(99, Math.floor((100 * done) / all.length));
+  return { done, total: all.length, pct };
+}
+
+/** The isle milestones reached but not paid yet. */
+export function milestonesDue(s: GameState) {
+  const { pct } = isleProgress(s);
+  return MILESTONES.slice(s.milestones).filter((m) => pct >= m.pct);
 }
 
 /** Sells the chart at the port for its total, and opens the harbor. */
@@ -140,6 +205,8 @@ export function sellChart(s: GameState) {
   if (s.phase !== 'chart' || !s.chart) return false;
   s.coins += s.chart.total;
   s.lastSale = s.chart.total;
+  s.milestones += s.chart.milestones;
+  if (s.chart.atlas) s.atlas.push({ island: s.island, voyages: s.voyage - s.isleStart + 1, tiles: isleProgress(s).total });
   s.chart = null;
   s.surveyed = [];
   s.phase = 'harbor';
@@ -169,6 +236,8 @@ export function setSail(s: GameState) {
     const { tiles, port } = makeIsland(s.island);
     s.tiles = tiles;
     s.port = port;
+    s.milestones = 0;
+    s.isleStart = s.voyage + 1;
   }
   s.voyage += 1;
   s.surveyor = { ...s.port };
