@@ -1,58 +1,78 @@
 import Phaser from 'phaser';
-import { BAT, GOBLIN, GOLD, INK, IRON, WOOD } from './palette';
-import { PixelCanvas } from './pixelArt';
+import { MAT, bake, disk, edge, limb, poly, ring, type Canvas } from './facets';
 
-// The things that move on the course: a goblin with a club, walking towards the knight, and a bat
-// flapping in at head height. Both face left, towards the knight; GameScene flips a goblin walking
-// the other way. Each has two frames.
+// The things that move on the course, in low-poly: a goblin with a club, walking towards the knight,
+// and a bat flapping in at head height. Both face left, towards the knight; GameScene flips a goblin
+// walking the other way. Each has two frames. Art is drawn in units of `K` screen pixels.
 
-const S = 2;
+const K = 2;
 
-/** A goblin, 14x18 art pixels: `goblin-0` and `goblin-1` are the two steps of its walk. */
+/** A goblin, 14x18 units: `goblin-0` and `goblin-1` are the two steps of its walk. */
 function goblin(scene: Phaser.Scene) {
   for (const frame of [0, 1]) {
-    const c = new PixelCanvas(14, 18);
-    // Legs and feet.
-    if (frame === 0) c.rect(6, 13, 2, 4, GOBLIN.dark).rect(9, 13, 2, 4, GOBLIN.dark);
-    else c.line(6, 13, 4, 16, GOBLIN.dark).line(7, 13, 5, 16, GOBLIN.dark).line(9, 13, 11, 16, GOBLIN.dark).line(10, 13, 12, 16, GOBLIN.dark);
-    const feet = frame === 0 ? [5, 9] : [3, 11];
-    for (const x of feet) c.rect(x, 17, 3, 1, WOOD.dark);
-    // A ragged tunic and belt.
-    c.rect(5, 8, 7, 6, WOOD.mid).rect(5, 8, 1, 6, WOOD.light).px(6, 13, WOOD.dark).px(9, 13, WOOD.dark);
-    c.rect(5, 11, 7, 1, WOOD.dark).px(8, 11, GOLD.mid);
-    // Head with long ears, a big nose and yellow eyes, looking left.
-    c.ellipse(4, 1, 8, 7, GOBLIN.mid).rect(5, 1, 5, 1, GOBLIN.light);
-    c.line(4, 3, 1, 1, GOBLIN.mid).px(2, 2, GOBLIN.light).line(11, 3, 13, 1, GOBLIN.dark);
-    c.rect(3, 4, 2, 2, GOBLIN.mid).px(3, 5, GOBLIN.dark);
-    c.px(5, 3, GOLD.light).px(7, 3, GOLD.light).px(5, 4, INK).px(7, 4, INK);
-    c.rect(5, 6, 3, 1, GOBLIN.dark).px(6, 6, IRON.shine);
-    // An arm raising a club in front.
-    const clubY = frame === 0 ? 4 : 5;
-    c.line(5, 9, 3, 10, GOBLIN.mid).rect(1, clubY, 2, 7, WOOD.light).rect(0, clubY, 4, 3, WOOD.mid).px(0, clubY, IRON.light);
-    c.outline(INK);
-    c.bake(scene, `goblin-${frame}`, S);
+    bake(scene, `goblin-${frame}`, 14 * K, 18 * K, (g: Canvas) => {
+      // Legs, the far one shaded; in step 1 they stride apart.
+      const far = frame ? 4 : 5;
+      const near = frame ? 11 : 9;
+      limb(g, MAT.goblin.shade, [6, 13], [far, 16.5], 2.2, K);
+      limb(g, MAT.goblin.mid, [9, 13], [near, 16.5], 2.2, K);
+      for (const x of [far, near]) poly(g, [[x - 1.8, 16.2], [x + 1.8, 16.2], [x + 1.8, 17.6], [x - 1.8, 17.6]], MAT.wood.dark, K);
+      // A ragged tunic, lit on the left and shaded on the right, with a belt and buckle.
+      poly(g, [[4.5, 8], [8, 8], [8, 14], [4.5, 14]], MAT.wood.mid, K);
+      poly(g, [[8, 8], [11.5, 8], [11.5, 14], [8, 14]], MAT.wood.shade, K);
+      poly(g, [[4.5, 11], [11.5, 11], [11.5, 12], [4.5, 12]], MAT.wood.dark, K);
+      poly(g, [[7.6, 10.6], [8.4, 10.6], [8.4, 12.4], [7.6, 12.4]], MAT.gold.mid, K);
+      // The arm that holds the club, in front of the tunic.
+      limb(g, MAT.goblin.mid, [5, 9], [3, 10.5], 1.8, K);
+      // Head with long ears, a big nose, yellow eyes and tusks, looking left.
+      poly(g, [[3, 3.5], [0.5, 1.5], [3.2, 5.2]], MAT.goblin.shade, K);
+      poly(g, [[10, 3.4], [12.6, 1.4], [10.4, 5.2]], MAT.goblin.shade, K);
+      disk(g, MAT.goblin, 6.5, 4.5, 4, 3.8, K, 8);
+      poly(g, [[2.6, 4.6], [0.6, 5.8], [2.8, 6.4]], MAT.goblin.lit, K);
+      poly(g, [[4.3, 3.2], [5.6, 3.2], [5.6, 4.6], [4.3, 4.6]], MAT.gold.lit, K);
+      poly(g, [[7.3, 3.2], [8.6, 3.2], [8.6, 4.6], [7.3, 4.6]], MAT.gold.lit, K);
+      poly(g, [[4.8, 3.5], [5.2, 3.5], [5.2, 4.2], [4.8, 4.2]], 0x1a1216, K);
+      poly(g, [[7.7, 3.5], [8.1, 3.5], [8.1, 4.2], [7.7, 4.2]], 0x1a1216, K);
+      poly(g, [[4.5, 6.2], [5.2, 7.2], [5.6, 6.2]], MAT.steel.lit, K);
+      poly(g, [[7.4, 6.2], [8, 7.2], [8.4, 6.2]], MAT.steel.lit, K);
+      // The club, raised in front: a wooden haft with an iron-banded head.
+      const clubY = frame ? 5 : 4;
+      limb(g, MAT.wood.mid, [2, clubY + 6], [2, clubY + 1.5], 1.4, K);
+      poly(g, [[0.6, clubY], [3.6, clubY + 0.4], [3.2, clubY + 3.6], [0.6, clubY + 3.4]], MAT.wood.lit, K);
+      poly(g, [[0.6, clubY + 1.4], [3.4, clubY + 1.6], [3.4, clubY + 2.2], [0.6, clubY + 2.0]], MAT.steel.mid, K);
+      edge(g, [[0.6, clubY], [3.6, clubY + 0.4], [3.2, clubY + 3.6], [0.6, clubY + 3.4]], K, 1);
+    });
   }
 }
 
-/** A bat, 20x11 art pixels: `bat-0` with its wings up and `bat-1` with them down. */
+/** A bat, 20x11 units: `bat-0` with its wings up and `bat-1` with them down. */
 function bat(scene: Phaser.Scene) {
   for (const frame of [0, 1]) {
-    const c = new PixelCanvas(20, 11);
-    const tip = frame === 0 ? 0 : 10;
-    for (const side of [-1, 1]) {
-      const root = side < 0 ? 8 : 11;
-      for (let i = 0; i <= 8; i++) {
-        const x = root + side * i;
-        // The wing's leading edge runs out to the tip; its trailing edge is scalloped.
-        const edge = Math.round(4 + ((tip - 4) * i) / 8);
-        const back = tip === 0 ? Math.min(6, edge + 2 + (i % 3 === 1 ? 1 : 0)) : Math.max(4, edge - 3);
-        c.line(x, Math.min(edge, back), x, Math.max(edge, back), BAT.mid).px(x, edge, BAT.light);
-      }
-    }
-    c.ellipse(7, 2, 6, 7, BAT.dark).px(8, 1, BAT.dark).px(11, 1, BAT.dark).px(8, 0, BAT.mid).px(11, 0, BAT.mid);
-    c.px(8, 4, GOLD.light).px(11, 4, GOLD.light).px(9, 6, IRON.shine).px(10, 6, IRON.shine);
-    c.outline(INK);
-    c.bake(scene, `bat-${frame}`, S);
+    bake(scene, `bat-${frame}`, 20 * K, 11 * K, (g: Canvas) => {
+      // Each wing is two flat facets, lit on the leading edge and shaded behind it; the far wing is
+      // mirrored on the body's other side.
+      const wing = (side: 1 | -1) => {
+        const m = (x: number) => 10 + side * (x - 10);
+        if (frame === 0) {
+          poly(g, [[m(8.5), 4.2], [m(0.5), 0], [m(3.5), 5.2]], MAT.bat.lit, K);
+          poly(g, [[m(8.5), 4.2], [m(3.5), 5.2], [m(5), 7], [m(8), 6.8]], MAT.bat.shade, K);
+        } else {
+          poly(g, [[m(8.5), 4.8], [m(0.5), 10.5], [m(3.5), 6.2]], MAT.bat.lit, K);
+          poly(g, [[m(8.5), 4.8], [m(3.5), 6.2], [m(5.5), 7.2], [m(8.2), 6.6]], MAT.bat.shade, K);
+        }
+      };
+      wing(1);
+      wing(-1);
+      // Body and ears, with two gold eyes and fangs.
+      disk(g, MAT.bat, 10, 5.5, 3.5, 3, K, 8);
+      poly(g, [[8.5, 3], [9, 0.5], [10, 2.8]], MAT.bat.mid, K);
+      poly(g, [[10, 2.8], [11, 0.5], [11.5, 3]], MAT.bat.mid, K);
+      poly(g, [[8.4, 4], [9.2, 4], [9.2, 4.8], [8.4, 4.8]], MAT.gold.lit, K);
+      poly(g, [[10.8, 4], [11.6, 4], [11.6, 4.8], [10.8, 4.8]], MAT.gold.lit, K);
+      poly(g, [[9, 6.4], [9.5, 7.3], [10, 6.4]], MAT.steel.lit, K);
+      poly(g, [[10.5, 6.4], [11, 7.3], [11.5, 6.4]], MAT.steel.lit, K);
+      edge(g, ring(10, 5.5, 3.5, 3, 8), K, 1);
+    });
   }
 }
 

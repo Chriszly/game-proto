@@ -1,14 +1,14 @@
 import Phaser from 'phaser';
-import { bakeSprites } from '../art/sprites';
+import { bakeGlow } from '../art/sprites';
 
-// Generates all textures at runtime so the prototype needs no asset files yet.
+// Bakes the one texture the scene needs, the lantern glow, then starts the game.
 export class BootScene extends Phaser.Scene {
   constructor() {
     super('Boot');
   }
 
   create() {
-    bakeSprites(this);
+    bakeGlow(this);
     this.scene.start('Game');
   }
 }

@@ -38,6 +38,20 @@ export const BASE_LIGHT_MS = 1500;
 /** How long a lantern burns on a full fill of oil, before upgrades: longer on Easy, shorter on Hard. */
 export const baseBurnMs = () => byDifficulty(26_000, 20_000, 16_000);
 
+/**
+ * The three kinds of moth. The jar holds them in KIND_ORDER (fast, slow, heavy, fast, ...), so
+ * the first night's three moths are one of each. Each multiplies the base speed, wick time and oil.
+ */
+export const MOTH_KINDS = {
+  fast: { name: 'Fast', speed: 1.5, wick: 1.3, oil: 1 },
+  slow: { name: 'Slow', speed: 0.75, wick: 0.7, oil: 1 },
+  heavy: { name: 'Heavy', speed: 0.8, wick: 1, oil: 1.5 },
+} as const;
+export type MothKind = keyof typeof MOTH_KINDS;
+export const KIND_ORDER: readonly MothKind[] = ['fast', 'slow', 'heavy'];
+/** Taps kept while every moth is busy; a tap past this is lost. */
+export const QUEUE_MAX = 2;
+
 /** Lanterns to light on night `night`: five on the first, one more each night after. */
 export const lanternsFor = (night: number) => Math.min(4 + night, LANTERN_SPOTS.length);
 /** Lanterns that must be lit at nightfall to keep every hearth: three in five. */
@@ -49,11 +63,14 @@ export interface Lantern {
   lit: boolean;
   /** Oil left while lit, in milliseconds of burning. */
   oilMs: number;
+  /** The oil it was filled to, so the bar shows how much is left. */
+  oilMaxMs: number;
   /** True while a moth is on its way to it or lighting it, so a second tap sends no other moth. */
   claimed: boolean;
 }
 
 export interface Moth {
+  kind: MothKind;
   x: number;
   y: number;
   /** Waiting in the jar, flying out, lighting a wick, or flying home. */
@@ -88,6 +105,8 @@ export interface GameState {
   kept: number;
   /** The most nights kept in any game, saved in the browser. */
   best: number;
+  /** Lantern taps kept while every moth was busy, oldest first, at most QUEUE_MAX. */
+  queue: number[];
 }
 
 /** Moth count, flight speed, wick time and burn time with the bought upgrades. */
@@ -100,12 +119,23 @@ export function stats(s: GameState) {
   };
 }
 
+/** How fast moth `m` flies, in pixels per second. */
+export const mothSpeed = (s: GameState, m: Moth) => stats(s).speed * MOTH_KINDS[m.kind].speed;
+/** How long moth `m` takes to catch a wick, in milliseconds. */
+export const mothLightMs = (s: GameState, m: Moth) => Math.round(stats(s).lightMs * MOTH_KINDS[m.kind].wick);
+
 function makeLanterns(night: number): Lantern[] {
-  return LANTERN_SPOTS.slice(0, lanternsFor(night)).map(({ x, y }) => ({ x, y, lit: false, oilMs: 0, claimed: false }));
+  return LANTERN_SPOTS.slice(0, lanternsFor(night)).map(({ x, y }) => ({ x, y, lit: false, oilMs: 0, oilMaxMs: 0, claimed: false }));
 }
 
 function makeMoths(n: number): Moth[] {
-  return Array.from({ length: n }, (_, i) => ({ ...mothRest(i, n), task: 'idle' as const, target: -1, lightingMs: 0 }));
+  return Array.from({ length: n }, (_, i) => ({
+    kind: KIND_ORDER[i % KIND_ORDER.length],
+    ...mothRest(i, n),
+    task: 'idle' as const,
+    target: -1,
+    lightingMs: 0,
+  }));
 }
 
 export function newGame(best = 0): GameState {
@@ -121,23 +151,35 @@ export function newGame(best = 0): GameState {
     report: null,
     kept: 0,
     best,
+    queue: [],
   };
   s.moths = makeMoths(stats(s).moths);
   return s;
 }
 
+/** Sends moth `moth` to light lantern `i`, or to refill it if it is already lit. */
+function dispatch(s: GameState, moth: Moth, i: number) {
+  moth.task = 'out';
+  moth.target = i;
+  s.lanterns[i].claimed = true;
+}
+
 /**
- * Sends the first idle moth to light lantern `i`, or to refill it if it is already lit. False when
- * no moth is free, another moth already has it, or it is not dusk.
+ * Taps lantern `i`. The first idle moth goes to light it, or refill it if it is already lit. When
+ * every moth is busy the tap waits in the queue (up to QUEUE_MAX) and a moth takes it when one
+ * comes home. False when the tap was lost: another moth already has the lantern, the queue is full,
+ * or it is not dusk.
  */
 export function send(s: GameState, i: number) {
   const lantern = s.lanterns[i];
-  if (s.phase !== 'dusk' || !lantern || lantern.claimed) return false;
+  if (s.phase !== 'dusk' || !lantern || lantern.claimed || s.queue.includes(i)) return false;
   const moth = s.moths.find((m) => m.task === 'idle');
-  if (!moth) return false;
-  moth.task = 'out';
-  moth.target = i;
-  lantern.claimed = true;
+  if (moth) {
+    dispatch(s, moth, i);
+    return true;
+  }
+  if (s.queue.length >= QUEUE_MAX) return false;
+  s.queue.push(i);
   return true;
 }
 
@@ -159,7 +201,7 @@ function flyTo(m: Moth, x: number, y: number, step: number) {
 /** Advances dusk by `dt` milliseconds: oil burns, moths fly and light, and night falls at the end. */
 export function tick(s: GameState, dt: number) {
   if (s.phase !== 'dusk') return;
-  const { speed, lightMs, burnMs } = stats(s);
+  const { burnMs } = stats(s);
   for (const lantern of s.lanterns) {
     if (!lantern.lit) continue;
     lantern.oilMs -= dt;
@@ -168,8 +210,8 @@ export function tick(s: GameState, dt: number) {
       lantern.oilMs = 0;
     }
   }
-  const step = (speed * dt) / 1000;
   s.moths.forEach((m, i) => {
+    const step = (mothSpeed(s, m) * dt) / 1000;
     if (m.task === 'out') {
       const lantern = s.lanterns[m.target];
       if (flyTo(m, lantern.x, lantern.y - 4, step)) {
@@ -178,10 +220,11 @@ export function tick(s: GameState, dt: number) {
       }
     } else if (m.task === 'lighting') {
       m.lightingMs += dt;
-      if (m.lightingMs >= lightMs) {
+      if (m.lightingMs >= mothLightMs(s, m)) {
         const lantern = s.lanterns[m.target];
         lantern.lit = true;
-        lantern.oilMs = burnMs;
+        lantern.oilMs = burnMs * MOTH_KINDS[m.kind].oil;
+        lantern.oilMaxMs = lantern.oilMs;
         lantern.claimed = false;
         m.task = 'home';
         m.target = -1;
@@ -191,6 +234,12 @@ export function tick(s: GameState, dt: number) {
       if (flyTo(m, rest.x, rest.y, step)) m.task = 'idle';
     }
   });
+  // A moth that has just come home takes the oldest queued tap.
+  for (const moth of s.moths) {
+    if (moth.task !== 'idle' || s.queue.length === 0) continue;
+    const i = s.queue.shift()!;
+    if (!s.lanterns[i].claimed) dispatch(s, moth, i);
+  }
   s.duskMs = Math.max(0, s.duskMs - dt);
   if (s.duskMs === 0) nightfall(s);
 }
@@ -201,6 +250,7 @@ function nightfall(s: GameState) {
   const required = requiredFor(count);
   const earned = lit * PAY_PER_LANTERN + (lit === count ? ALL_LIT_BONUS : 0);
   const lostHearth = lit < required;
+  s.queue = [];
   s.coins += earned;
   if (lostHearth) s.lives--;
   else s.kept++;
@@ -229,6 +279,7 @@ export function nextDusk(s: GameState) {
   s.duskMs = DUSK_MS;
   s.lanterns = makeLanterns(s.night);
   s.moths = makeMoths(stats(s).moths);
+  s.queue = [];
   s.report = null;
   return true;
 }

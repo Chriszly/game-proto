@@ -24,6 +24,19 @@ export interface GameState {
   phase: 'playing' | 'over';
   /** The best final score of any finished game, saved in the browser. */
   best: number;
+  /** The board as it was before the last placement, if that placement can be undone. */
+  undo: Snapshot | null;
+  /** The round in which the undo was last used; 0 if none yet. One undo per round. */
+  undoneIn: number;
+}
+
+/** What `undo` puts back: everything a placement changes, as it stood before it. */
+export interface Snapshot {
+  grid: Cell[][];
+  pouch: Pouch;
+  score: number;
+  selected: Building | null;
+  placed: number;
 }
 
 /** The first round's tiles. */
@@ -50,6 +63,8 @@ export function newGame(best = 0, island = randomIsland()): GameState {
     placed: 0,
     phase: 'playing',
     best,
+    undo: null,
+    undoneIn: 0,
   };
 }
 
@@ -113,10 +128,27 @@ export interface Placed {
   newRound: boolean;
 }
 
+/** Whether the last placement can be taken back: once per round, and not one that began a round. */
+export const canUndo = (s: GameState) => s.phase === 'playing' && s.undo !== null && s.undoneIn !== s.round;
+
+/** Takes back the last placement, once per round. Returns false if that is not allowed now. */
+export function undo(s: GameState) {
+  if (!s.undo || !canUndo(s)) return false;
+  Object.assign(s, s.undo, { undo: null, undoneIn: s.round });
+  return true;
+}
+
 /** Places the selected building at (col, row); null if it can't go there. */
 export function place(s: GameState, col: number, row: number): Placed | null {
   const kind = s.selected;
   if (!kind || !canPlace(s, col, row) || s.pouch[kind] <= 0) return null;
+  const prior: Snapshot = {
+    grid: s.grid.map((cells) => [...cells]),
+    pouch: { ...s.pouch },
+    score: s.score,
+    selected: s.selected,
+    placed: s.placed,
+  };
   const before = s.grid.map((cells, r) => cells.map((_, c) => cellScore(s.grid, c, r)));
   s.grid[row][col] = kind;
   s.pouch[kind]--;
@@ -139,6 +171,8 @@ export function place(s: GameState, col: number, row: number): Placed | null {
     for (const b of BUILDINGS) s.pouch[b] += ROUND_POUCH[b];
     newRound = true;
   }
+  // A placement that began a round is kept: undoing it would hand back a round already paid for.
+  s.undo = newRound ? null : prior;
   if (s.pouch[kind] <= 0) s.selected = BUILDINGS.find((b) => s.pouch[b] > 0) ?? null;
   const tilesLeft = BUILDINGS.some((b) => s.pouch[b] > 0);
   const roomLeft = s.grid.some((cells) => cells.includes('grass'));

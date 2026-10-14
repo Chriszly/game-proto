@@ -8,7 +8,8 @@ road, spiked logs hang over it on chains, goblins walk it and bats swoop along i
 walls raise stretches of it into ledges: jump the spikes, pits, flames and goblins and up onto the
 ledges, slide under the logs and bats, and pick up the coins on the way. Every stage ends at a checkpoint, a banner by a campfire, where the run waits on a choice
 of two boons. The knight keeps every boon until they fall, and each stage after runs a little faster
-with the traps a little closer together.
+with the traps a little closer together. Coins are banked when the knight falls, and can buy back
+the boon you missed at the last checkpoint to start the next run with it.
 
 ![The knight jumping, with a blade ahead](docs/screenshots/playthrough-0-jump.png)
 
@@ -19,7 +20,7 @@ with the traps a little closer together.
 | Tap the top half of the screen, or Space / Up / W | Jump (again in the air with Second Leap) |
 | Tap the bottom half of the screen, or Down / S | Slide; in the air, drop fast and slide on landing |
 | Tap a card | Take that boon at a checkpoint |
-| Run again | After a fall: a new run from the start, with no boons |
+| Run again | After a fall: a new run from the start, with no boons (or the one bought on the game-over panel) |
 
 A hint on the first stretch of the run shows where to tap.
 
@@ -44,7 +45,7 @@ A hint on the first stretch of the run shows where to tap.
 7. **Checkpoints** come every 100 m. The run waits while two different boons are offered.
 8. **Stages** speed up from 260 to at most 480 pixels a second, the room between obstacles shrinks,
    and goblins and bats get quicker.
-   Only the best distance is saved between runs.
+   The best distance, the banked coins and any boon bought are saved between runs.
 
 ![Sliding under a blade, with a pit ahead](docs/screenshots/slide.png)
 
@@ -62,7 +63,7 @@ A hint on the first stretch of the run shows where to tap.
 
 ![The checkpoint](docs/screenshots/checkpoint-flag.png)
 
-### Boons
+### Boons and the coin shop
 
 | Boon | Ranks | What it does |
 | --- | --- | --- |
@@ -81,6 +82,11 @@ A hint on the first stretch of the run shows where to tap.
 ![A hit](docs/screenshots/hit.png)
 
 ![After a fall](docs/screenshots/game-over.png)
+
+**The coin shop.** Coins collected in a run are banked when the knight falls. On the game-over panel,
+the boon you missed at the last checkpoint (the card you did not tap) is for sale for 30 coins. Buy
+it and the next run starts with it at one rank and full hearts. One purchase at a time, and Field
+Dressing is never for sale. Nothing is for sale until the run has reached a checkpoint.
 
 The difficulty, set on the hub page's Settings, changes one thing: the knight starts with 5 hearts on Easy and 2 on Hard.
 With Reduce motion on, the knight fades instead of blinking after a hit and the shield ring holds still.
@@ -115,12 +121,13 @@ All paths are inside `games/hotfoot/`.
 - `src/game/`: the rules in plain TypeScript with no Phaser dependency. `state.ts` holds the run,
   the knight's and the traps' sizes and works out the knight's numbers from the boons taken,
   `course.ts` lays out each stage's traps, foes, ledges and coins, `boons.ts` is the table of boons, `sim.ts`
-  moves the run on (foes, ledges and stomps included), jumps, slides and takes boons, and `save.ts` keeps the best distance.
+  moves the run on (foes, ledges and stomps included), jumps, slides, takes boons and sells the missed one, and `save.ts` keeps the best distance, the banked coins and any boon bought.
 - `src/scenes/`: `BootScene` bakes textures, `GameScene` draws the run and wires taps and keys to
   the rules, `layout.ts` says where things are drawn.
-- `src/art/`: all the pixel art, drawn in code and baked into textures at startup: the knight's
-  poses, the scrolling sky, hills and road, the ledges, the traps, the goblin and bat (`foes.ts`),
-  coins, checkpoint and boon icons.
+- `src/art/`: all the art, drawn in code and baked into textures at startup. The world is low-poly:
+  flat polygons with a lit and a shaded face each, drawn with `facets.ts`, for the knight's poses
+  (`knight.ts`), the sky, hills and road, the ledges, the traps (`scenery.ts`), the goblin and bat
+  (`foes.ts`), and the coins and checkpoint. The boon and heart icons are still pixel art (`icons.ts`).
 - `src/ui/`: the boon cards and buttons.
 
 Adding a boon is an entry in `src/game/boons.ts`, its effect in `stats` in `src/game/state.ts`, and

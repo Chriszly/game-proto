@@ -22,18 +22,24 @@ Implemented today:
   for every building whose worth changed, a "Round N" banner, and a game-over overlay with a
   "New kingdom" button.
 - Rounds with goals from `goalFor` and pouch refills from `ROUND_POUCH`, without end.
+- One undo per round: the "Undo last tile" button under the tile buttons takes back the last
+  placement. `state.undo` holds a snapshot taken in `place` before it changes anything; `undo`
+  restores it and records the round in `undoneIn`, so a second undo in the same round is refused.
+  A placement that starts a new round clears the snapshot, so it cannot be undone. Undo is only
+  offered while `phase` is `'playing'`.
+- Art: every cell is a low-poly slab (a lit top split into two facets, a shaded front edge and a
+  soft drop shadow), and each building is a few flat faces (lit and shaded sides, roofs, a
+  battlemented keep, pines), drawn with Phaser Graphics and baked to a 64px texture.
 - The game ends when the pouch is empty or no grass is left. Only the best final score persists.
 
 Missing or rough:
 
-- No title screen, menu, sound or undo. There is no way to pick or replay an island number.
+- No title screen, menu or sound. There is no way to type, read or share an island number; the
+  panel only shows it.
 - Islands are not checked for winnability. A beam search over 271 island numbers spread over the
   range found the first pouch reaching at least 28 on each (the first goal is 20), but nothing
   enforces it if `islandMap` changes.
-- `src/art/pixelArt.ts` is a general helper; `bakePixelArt`, `padRows`, `PixelCanvas.ellipse`,
-  `line` and `outline` are unused here.
-- The comment at the top of `src/art/tiles.ts` mentions a small icon per building, but none is
-  baked; the tile buttons reuse the `tile-<kind>` texture scaled to 0.875.
+- The tile buttons reuse the `tile-<kind>` texture scaled to 0.875; no separate icon is drawn.
 - `restart` does not clear running popups or the round banner tween.
 - `docs/screenshots/game-over.png` is not produced by the test; refresh it by hand if the overlay
   changes.
@@ -48,19 +54,18 @@ File map (`src/`):
 - `scenes/BootScene.ts`: calls `bakeTiles`, then starts `Game`.
 - `scenes/GameScene.ts`: builds the board, panel, banner and game-over overlay; turns pointer
   events into `select` and `place` calls; draws popups, hover and panel.
-- `scenes/layout.ts`: `VIEW`, `GRID`, `PANEL`, `GOAL_BAR`, `TILE_BUTTONS`, `BUTTON`, `UI_DEPTH`,
-  `FONT` and `cellCentre`.
+- `scenes/layout.ts`: `VIEW`, `GRID`, `PANEL`, `GOAL_BAR`, `TILE_BUTTONS`, `UNDO_BUTTON`,
+  `BUTTON`, `UI_DEPTH`, `FONT` and `cellCentre`.
 - `game/tiles.ts`: `BUILDINGS`, the `Building`, `Terrain` and `Cell` types, `INFO` (name and rule
   text for each button), `isBuilding`, `MAP_SIZE`, `ISLANDS`, `islandMap` (an island number to
   its rows, with a private mulberry32 `seeded`), `randomIsland` and `startingGrid(island)`.
-- `game/state.ts`: `GameState`, `FIRST_POUCH`, `ROUND_POUCH`, `goalFor`, `newGame`, `cellScore`,
-  `boardScore`, `canPlace`, `previewScore`, `select` and `place`. No Phaser; `goalFor` reads
+- `game/state.ts`: `GameState`, `Snapshot`, `FIRST_POUCH`, `ROUND_POUCH`, `goalFor`, `newGame`,
+  `cellScore`, `boardScore`, `canPlace`, `previewScore`, `select`, `place`, `canUndo` and `undo`. No Phaser; `goalFor` reads
   `byDifficulty` from `shared/settings.ts`.
 - `game/save.ts`: `loadBest` and `saveBest`.
-- `art/tiles.ts`: draws grass, lake, forest, farm, house and tower on 32x32 `PixelCanvas`es and
-  bakes them at 2x as `tile-<cell>` textures (64px, one cell).
-- `art/pixelArt.ts`: `PixelCanvas` (paint, then `bake` into a texture) and `seeded`, a xorshift
-  generator for grass speckle.
+- `art/tiles.ts`: draws grass, lake, forest, farm, house and tower as flat low-poly faces with
+  Phaser Graphics (the `Art` helper: `poly`, `rect`, `ellipse`, then `bake`) and bakes each as a
+  `tile-<cell>` texture (64px, one cell). `shade` lightens or darkens a colour for the faces.
 - `ui/Button.ts`: `makeButton`, the wooden captioned button used by the game-over overlay.
 
 Shared code it imports (outside the game folder): `shared/setupGame.ts` (`setupGame`) and
@@ -78,8 +83,8 @@ How it runs:
   point to a cell with `cellAt` and calls `place`. Each tile button's background calls `select`.
   The game-over dim rectangle is interactive so it swallows taps to the board below.
 - Rendering is diffed objects, not a per-frame redraw: `cells` holds one image per cell whose
-  texture is swapped on placement or restart, and `refresh` rewrites the panel texts, goal bar
-  and button highlights after each change.
+  texture is swapped on placement, undo or restart (`redrawCells`), and `refresh` rewrites the
+  panel texts, goal bar, button highlights and the undo button after each change.
 
 State model (`GameState` in `src/game/state.ts`):
 
@@ -89,11 +94,14 @@ State model (`GameState` in `src/game/state.ts`):
   next to another tower is worth 0, so a placement's gain or preview can be negative.
 - `island` is the island number the grid was laid out from.
 - `round`, `goal`, `placed`, `phase` (`'playing'` or `'over'`) and `best`.
+- `undo` (the `Snapshot` of grid, pouch, score, selected and placed before the last placement, or
+  null) and `undoneIn` (the round the undo was last used in, 0 for none).
 - The pure functions in `state.ts` mutate it (`select`, `place`); the scene only replaces it
   with `newGame` (a new random island) on create and restart and calls `saveBest` when `phase` turns `'over'`.
-- `place` order matters: it scores, then loops rounds while `score >= goal` (one placement can
-  jump several rounds), refills the pouch, reselects the first building left if the placed kind
-  ran out, and only then checks for the end. So a placement that empties the pouch but reaches
+- `place` order matters: it takes its snapshot first, scores, then loops rounds while
+  `score >= goal` (one placement can jump several rounds), refills the pouch, keeps the snapshot
+  only if no round began, reselects the first building left if the placed kind ran out, and only
+  then checks for the end. So a placement that empties the pouch but reaches
   the goal carries on.
 - Buildings only go on `'grass'`; `canPlace` also requires `phase === 'playing'`.
 
@@ -103,8 +111,8 @@ shared `hub-settings` key, not from this game's save.
 
 Randomness and timing: `randomIsland` makes the game's only `Math.random` call, once per kingdom;
 everything else about the island follows from that number. The game calls no `Date.now` or
-`performance.now`. Art uses its own `seeded`, so textures are identical every load. Only Phaser
-tweens use time.
+`performance.now`. The art is drawn from fixed coordinates, so textures are identical every load.
+Only Phaser tweens use time.
 
 Data tables:
 
@@ -115,8 +123,8 @@ Data tables:
 - The islands: `islandMap` in `src/game/tiles.ts` (lake and wood counts and sizes), `MAP_SIZE`
   and `ISLANDS`.
 - Popup and banner timings: `POPUP_MS` and `BANNER_MS` in `src/scenes/GameScene.ts`.
-- Positions and sizes: `src/scenes/layout.ts`. Colours: `C` in `src/art/tiles.ts`, and inline
-  hex values in `GameScene.ts`.
+- Positions and sizes: `src/scenes/layout.ts`. Colours: `C` in `src/art/tiles.ts`, the face
+  shades `SIDE` and `FACET` there, and inline hex values in `GameScene.ts`.
 
 ### Hub settings
 
@@ -138,9 +146,11 @@ Data tables:
 
 - `src/main.ts` exposes `window.game` in dev builds. The test reads
   `game.scene.getScene('Game')` and its `state` (copied through JSON), `preview` (`{ col, row,
-  gained }` or null) and `tileButtons` (`{ kind, x, y, w, h }` per button, in view pixels).
-- Inputs: it clicks tile buttons at the centres from `tileButtons`, moves the mouse over a cell
-  to check `preview`, and clicks cell centres, scaling view pixels by the canvas bounding box.
+  gained }` or null), `tileButtons` (`{ kind, x, y, w, h }` per button, in view pixels) and
+  `undoButton` (`{ x, y, w, h }`).
+- Inputs: it clicks tile buttons at the centres from `tileButtons`, clicks the undo button at its
+  centre from `undoButton`, moves the mouse over a cell to check `preview`, and clicks cell
+  centres, scaling view pixels by the canvas bounding box.
 - The test mirrors these, so change them together: the `GameState` shape, `GRID` (as its own
   `GRID` constant), `VIEW`, `islandMap` (as `ISLAND` and `MAP`), `FIRST_POUCH`, `ROUND_POUCH`, the goals 20 and 45 (`GOALS`), the
   scene key `'Game'` and its public fields `state`, `preview` and `tileButtons`.
@@ -152,9 +162,10 @@ Data tables:
 - `PLAN` in the test is six placements on `MAP` with the exact points each adds under
   `cellScore`, ending with the tower that reaches the goal of 20 and starts round 2. Editing the
   island, a scoring rule, `FIRST_POUCH` or `goalFor(1)` needs `PLAN` re-derived. The test also
-  taps cell (0, 2) expecting a lake.
-- It saves `playthrough-0-start`, `-1-preview` and `-2-round-2` screenshots; copy them into
-  `docs/screenshots/` when the look changes.
+  taps cell (0, 2) expecting a lake. After the second farm it tests undo: the undo takes that farm
+  back, a second undo does nothing, and the farm is placed again.
+- It saves `0-start`, `1-preview` and `2-round-2` screenshots (under `test-results/`); copy them
+  into `docs/screenshots/` as `playthrough-*.png` when the look changes.
 
 ## Making common changes
 
@@ -169,6 +180,8 @@ Data tables:
 - **Retune rounds**: `FIRST_POUCH`, `ROUND_POUCH` and `goalFor` (keep its `byDifficulty` factor
   and the README difficulty rows in step); the round banner text reads `ROUND_POUCH` itself.
   Update the test's constants and check the plan still reaches goal 1.
+- **Change the art**: edit the faces in `src/art/tiles.ts`; a building's footprint sits on the
+  slab's top face (x 2 to 62, y 2 to 54), so keep its parts inside that box.
 - **Change the board size or islands**: `GRID` in `src/scenes/layout.ts` must match
   `MAP_SIZE`, and `PANEL` sits right of the board; mirror `GRID` in the test.
 
@@ -179,6 +192,8 @@ Data tables:
 - `TILE_BUTTONS.ys` is indexed in `BUILDINGS` order.
 - Texture keys are `tile-${cell}`, so every `Cell` value needs a `TILE_ART` entry or the image
   shows Phaser's missing texture.
+- `undo` restores the snapshot with `Object.assign`, so any field added to `GameState` must be
+  added to `Snapshot` too if it changes with a placement.
 - `state.best` is updated in `place` but only written to storage by the scene in `tapAt`;
   `restart` keeps the higher of the stored best and the current one, so it survives blocked storage.
 - `previewScore` returns null when the pouch for that kind is empty, so the hover outline shows

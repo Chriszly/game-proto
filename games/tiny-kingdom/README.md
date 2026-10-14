@@ -22,6 +22,7 @@ tiles or room first and the kingdom is finished.
 | Tap or click a tile button | Pick the building to place |
 | Hover a cell | See what the picked building would score there |
 | Tap or click a grass cell | Place the building there |
+| Undo last tile | Take back the last placement; once per round |
 | New kingdom | After the game ends: start again on a new random island |
 
 1. **Buildings go on grass.** Lakes and forests stay as they are, but buildings score from them.
@@ -32,7 +33,9 @@ tiles or room first and the kingdom is finished.
    ...).
 4. **Islands** are random: two or three lakes and two or three woods scattered over the grass, so
    every kingdom is a new puzzle.
-5. **The end** comes when the pouch is empty or the island has no grass left. The best final score
+5. **Undo** takes back the last tile placed, once per round. A tile that reached the goal and
+   started a new round cannot be taken back.
+6. **The end** comes when the pouch is empty or the island has no grass left. The best final score
    is saved in the browser.
 
 ![Hovering a cell shows what the farm would score](docs/screenshots/playthrough-1-preview.png)
@@ -63,8 +66,9 @@ page).
 `e2e/playthrough.spec.ts` plays the first round in headless Chromium: it seeds `Math.random` so
 the game always picks the same island (1990), checks the new kingdom and its map,
 picks the farm and hovers a cell to check the preview, checks a tap on a lake places nothing, then
-places six buildings by tapping, checking the score each adds against the rules, until the goal
-brings round 2 and its tiles. Like the other games' tests it owns the game clock and plays at 4x
+places six buildings by tapping, checking the score each adds against the rules. After the second
+farm it tests undo: the undo takes that farm back, a second undo in the round does nothing, and the
+farm goes back down. The goal then brings round 2 and its tiles. Like the other games' tests it owns the game clock and plays at 4x
 speed (`PLAYTHROUGH_SPEED`). The **Playthrough Tiny Kingdom** workflow
 (`.github/workflows/playthrough-tiny-kingdom.yml`) runs it on every PR that changes
 this folder or the workflow, and uploads the video and screenshots as the
@@ -83,7 +87,7 @@ All paths are inside `games/tiny-kingdom/`.
   the best score.
 - `src/scenes/`: `BootScene` bakes textures, `GameScene` draws the board and the side panel and
   wires taps to the rules, `layout.ts` says where things are drawn.
-- `src/art/`: the land and building tiles, drawn in code and baked into textures at startup.
+- `src/art/`: the land and building tiles, low-poly faces drawn in code and baked into textures at startup.
 - `src/ui/`: the button.
 
 Changing a building's rule is its case in `cellScore` in `src/game/state.ts` and its line in
