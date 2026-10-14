@@ -30,6 +30,8 @@ import {
   orderInterval,
   potionPrice,
   stockedPay,
+  unlocked,
+  GUILD_COST,
   REFINERS,
   LINE2_GARDEN,
   UPGRADES,
@@ -449,6 +451,7 @@ function payLevel(state: GameState, upgrade: Upgrade, max: number, cost: number,
 
 /** Pays a handful of coins towards an upgrade's next level, levelling it up once fully paid. */
 export function payUpgrade(state: GameState, id: UpgradeId): Feedback | null {
+  if (!unlocked(state, `level-${id}`)) return null;
   const upgrade = state.upgrades[id];
   return payLevel(state, upgrade, UPGRADES[id].max, upgradeCost(id, upgrade.level), () => `${UPGRADES[id].name} level ${upgrade.level + 1}!`);
 }
@@ -466,8 +469,15 @@ export function cyclePriority(state: GameState, id: CraftingId): Feedback {
 
 /** Pays a handful of coins towards hiring a station's next craftsman, who starts work once fully paid. */
 export function payCraftsman(state: GameState, id: StationId): Feedback | null {
+  if (!unlocked(state, `hire-${id}`)) return null;
   const hired = state.craftsmen[id];
   return payLevel(state, hired, MAX_CRAFTSMEN, craftsmanCost(hired.level), () => 'Craftsman hired!');
+}
+
+/** Pays towards entry to the guild, which puts its upgrades up for sale. */
+export function joinGuild(state: GameState): Feedback | null {
+  if (!unlocked(state, 'guild')) return null;
+  return payToward(state, state.guild, GUILD_COST, 'Welcome to the guild!');
 }
 
 /** Pays towards a build, which is done once fully paid. */
@@ -514,7 +524,7 @@ export const doneByHand = (state: GameState, id: BeltId) =>
  * lane, so those waiting their turn stand just before the start, out of sight.
  */
 export function payBelt(state: GameState, id: BeltId): Feedback | null {
-  if (!beltBuildable(state, id)) return null;
+  if (!beltBuildable(state, id) || !unlocked(state, `belt-${id}`)) return null;
   const belt = state.belts[id];
   const feedback = payToward(state, belt, BELT_COST[id], `${BELT_NAMES[id]} built!`);
   if (!feedback || !belt.built) return feedback;
@@ -543,7 +553,7 @@ export type ExpansionPart = 'land' | 'field1' | 'field2' | 'refiner' | 'cauldron
 /** Pays a handful of coins towards part of the expansion; everything but the land needs the land first. */
 export function payExpansion(state: GameState, part: ExpansionPart): Feedback | null {
   const { expansion } = state;
-  if (part === 'land') return payToward(state, expansion.land, EXPANSION_COST.land, 'New land bought!');
+  if (part === 'land') return unlocked(state, 'land') ? payToward(state, expansion.land, EXPANSION_COST.land, 'New land bought!') : null;
   if (!expansion.land.built) return null;
   if (part === 'refiner') return payToward(state, expansion.refiner, EXPANSION_COST.refiner, 'Refining table built!');
   if (part === 'cauldron') return payToward(state, expansion.cauldron, EXPANSION_COST.cauldron, 'Cauldron built!');

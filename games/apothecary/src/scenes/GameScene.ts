@@ -16,6 +16,7 @@ import {
   payBelt,
   payCraftsman,
   payExpansion,
+  joinGuild,
   payUpgrade,
   pickUpFromCauldron,
   pickUpFromRefiner,
@@ -49,6 +50,8 @@ import {
   harvestReach,
   stationBuilt,
   stockFactor,
+  unlocked,
+  GUILD_COST,
   upgradeCost,
   type BeltId,
   type Build,
@@ -549,8 +552,14 @@ export class GameScene extends Phaser.Scene {
 
   /** An upgrade marker, captioned with the next level and its price, after `name` if given. */
   private addUpgradeMarker(at: Point, id: UpgradeId, name = 'Lv') {
-    this.addLevelMarker(at, () => this.state.upgrades[id], UPGRADES[id].max, (level) => upgradeCost(id, level), () => payUpgrade(this.state, id), (level, maxed, left) =>
-      maxed ? `${name} ${level + 1} max` : `${name} ${level + 2}: ${left}c`,
+    this.addLevelMarker(
+      at,
+      () => this.state.upgrades[id],
+      UPGRADES[id].max,
+      (level) => upgradeCost(id, level),
+      () => payUpgrade(this.state, id),
+      (level, maxed, left) => (maxed ? `${name} ${level + 1} max` : `${name} ${level + 2}: ${left}c`),
+      () => unlocked(this.state, `level-${id}`),
     );
   }
 
@@ -601,8 +610,14 @@ export class GameScene extends Phaser.Scene {
   private addCraftsmen(id: StationId) {
     const { hire, stand } = CRAFTSMEN[id];
     const hired = () => this.state.craftsmen[id];
-    this.addLevelMarker(hire, hired, MAX_CRAFTSMEN, craftsmanCost, () => payCraftsman(this.state, id), (level, maxed, left) =>
-      maxed ? `Crew ${level}/${MAX_CRAFTSMEN}` : `Hire ${left}c`,
+    this.addLevelMarker(
+      hire,
+      hired,
+      MAX_CRAFTSMEN,
+      craftsmanCost,
+      () => payCraftsman(this.state, id),
+      (level, maxed, left) => (maxed ? `Crew ${level}/${MAX_CRAFTSMEN}` : `Hire ${left}c`),
+      () => unlocked(this.state, `hire-${id}`),
     );
     stand.forEach((at, i) => {
       const craftsman = this.add.image(at.x, at.y, craftsmanTexture(i)).setOrigin(0.5, 1).setScale(2).setDepth(at.y).setFlipX(i === 1);
@@ -634,7 +649,7 @@ export class GameScene extends Phaser.Scene {
    */
   private createExpansion() {
     const { expansion } = this.state;
-    this.addBuildMarker(EXPANSION_LAND, 'Land', EXPANSION_COST.land, expansion.land, () => !expansion.land.built, () =>
+    this.addBuildMarker(EXPANSION_LAND, 'Land', EXPANSION_COST.land, expansion.land, () => !expansion.land.built && unlocked(this.state, 'land'), () =>
       payExpansion(this.state, 'land'),
     );
     const parts: { part: ExpansionPart; at: Point; caption: string; cost: number; build: Build }[] = [
@@ -676,7 +691,7 @@ export class GameScene extends Phaser.Scene {
 
     for (const id of BELTS) {
       const belt = this.state.belts[id];
-      this.addBuildMarker(BELT_BUILD[id], 'Belt', BELT_COST[id], belt, () => !belt.built && beltBuildable(this.state, id), () =>
+      this.addBuildMarker(BELT_BUILD[id], 'Belt', BELT_COST[id], belt, () => !belt.built && beltBuildable(this.state, id) && unlocked(this.state, `belt-${id}`), () =>
         payBelt(this.state, id),
       );
       const riding: Phaser.GameObjects.Image[] = [];
@@ -723,6 +738,10 @@ export class GameScene extends Phaser.Scene {
   /** The guild in the corner of the yard: upgrades for the gardens, the belts and the shop. */
   private createGuild() {
     this.label(GUILD.sign.x, GUILD.sign.y, 'Guild');
+    // Its upgrades go up for sale once the doctor has paid to join; the entry marker stands where
+    // the customers upgrade will, so only one of them is ever shown.
+    const { guild } = this.state;
+    this.addBuildMarker(GUILD.customers, 'Join guild', GUILD_COST, guild, () => !guild.built && unlocked(this.state, 'guild'), () => joinGuild(this.state));
     for (const id of GUILD_UPGRADES) this.addUpgradeMarker(GUILD[id], id, UPGRADES[id].name);
   }
 
