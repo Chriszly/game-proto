@@ -13,6 +13,7 @@ const GAMES = [
   { name: 'Catacomb', path: '/games/catacomb/' },
   { name: 'Golem Garden', path: '/games/golem-garden/' },
   { name: 'Beehive Baron', path: '/games/beehive-baron/' },
+  { name: 'Wyrmrail', path: '/games/wyrmrail/' },
 ];
 
 // Every page links a favicon that loads.

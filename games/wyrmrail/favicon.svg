@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>Wyrmrail</title>
+  <circle cx="7" cy="5" r="5" fill="#e37100"/>
+  <circle cx="25" cy="5" r="5" fill="#e37100"/>
+  <circle cx="7" cy="5" r="2.4" fill="#ffb787"/>
+  <circle cx="25" cy="5" r="2.4" fill="#ffb787"/>
+  <ellipse cx="16" cy="14.5" rx="13" ry="12" fill="#e37100"/>
+  <circle cx="10.5" cy="11.5" r="2.3" fill="#0d1117"/>
+  <circle cx="21.5" cy="11.5" r="2.3" fill="#0d1117"/>
+  <circle cx="11.3" cy="10.7" r="0.8" fill="#ffffff"/>
+  <circle cx="22.3" cy="10.7" r="0.8" fill="#ffffff"/>
+  <ellipse cx="16" cy="17.6" rx="4.6" ry="3.3" fill="#ffdcc7"/>
+  <ellipse cx="16" cy="16.6" rx="2.2" ry="1.4" fill="#311300"/>
+  <path d="M9.5 6.6 C9.5 1.6 22.5 1.6 22.5 6.6 Z" fill="#2c4f8a" stroke="#0d1117" stroke-width="0.7"/>
+  <path d="M8 6.4 H24.6 C25.4 6.4 25.4 8.2 24.6 8.2 H8 C7.2 8.2 7.2 6.4 8 6.4 Z" fill="#1d3866" stroke="#0d1117" stroke-width="0.7"/>
+  <circle cx="16" cy="4.4" r="1.3" fill="#f3c64e"/>
+  <rect x="2" y="25.2" width="28" height="6" rx="1" fill="#8c6a43"/>
+  <rect x="4" y="25.2" width="2.2" height="6" fill="#5c3a21"/>
+  <rect x="10" y="25.2" width="2.2" height="6" fill="#5c3a21"/>
+  <rect x="15.9" y="25.2" width="2.2" height="6" fill="#5c3a21"/>
+  <rect x="21.8" y="25.2" width="2.2" height="6" fill="#5c3a21"/>
+  <rect x="27.6" y="25.2" width="2.2" height="6" fill="#5c3a21"/>
+  <rect x="1" y="26.2" width="30" height="1.3" fill="#b9b4c2"/>
+  <rect x="1" y="29" width="30" height="1.3" fill="#b9b4c2"/>
+</svg>
