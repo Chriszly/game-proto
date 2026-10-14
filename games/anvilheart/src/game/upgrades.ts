@@ -15,10 +15,11 @@ export interface Upgrade {
 export const UPGRADES: Record<UpgradeId, Upgrade> = {
   // Each rank takes 20% off the forge's heat-up time.
   bellows: { name: 'Bellows', blurb: 'forge faster', prices: [40, 110, 260, 600] },
-  // Each rank gives a 20% chance that the forge makes an Iron Shortsword instead of a dagger.
-  ore: { name: 'Fine Ore', blurb: 'better blades', prices: [90, 250, 700] },
+  // Each rank gives a 20% chance that the forge makes an Iron Shortsword instead of a dagger, so at
+  // the fifth rank it only makes Shortswords.
+  ore: { name: 'Fine Ore', blurb: 'better blades', prices: [90, 250, 700, 1500, 3000] },
   // The last forge upgrade: the forge makes a sword by itself whenever it is hot and an anvil is free.
-  auto: { name: 'Auto Forge', blurb: 'forges by itself', prices: [1200], after: ['bellows', 'ore'] },
+  auto: { name: 'Auto Forge', blurb: 'forges by itself', prices: [1200], after: ['bellows'] },
 };
 
 export const UPGRADE_IDS = Object.keys(UPGRADES) as UpgradeId[];

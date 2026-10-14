@@ -15,9 +15,10 @@ Implemented today:
 - The full loop: forge with a heat-up cooldown, drag to move, swap or merge, drag onto an
   adventurer to sell, adventurers arriving on a timer and leaving when their patience runs out.
 - Progression: `bestTier` raises the tier adventurers may ask for; upgrades Bellows (faster forge),
-  Fine Ore (chance the forge makes a tier 2 sword) and, last, Auto Forge (one rank, locked until
-  Bellows and Fine Ore are maxed): the forge then makes a sword by itself whenever it is hot and an
-  anvil is free, so the player only merges and sells. Once bought, its button switches it on and
+  Fine Ore (five ranks of 20% chance the forge makes a tier 2 sword, so rank 5 always does) and,
+  last, Auto Forge (one rank, locked until
+  Bellows is maxed; Fine Ore is not needed): the forge then makes a sword by itself whenever it is
+  hot and an anvil is free, so the player only merges and sells. Once bought, its button switches it on and
   off (`autoForge`).
 - One screen (`GameScene`) with a HUD, drag highlights, patience and heat bars, a row of
   discovered swords under the board (one frame per tier, showing the sword's picture only, no
