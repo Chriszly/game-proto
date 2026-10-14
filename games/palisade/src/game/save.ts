@@ -30,3 +30,22 @@ export function clearProgress() {
     // Nothing to clear.
   }
 }
+
+// The battle speed (1 or 2) is a setting, kept apart from the hero so "New hero" keeps it.
+const SPEED_KEY = 'palisade-speed';
+
+export function loadSpeed(): number {
+  try {
+    return localStorage.getItem(SPEED_KEY) === '2' ? 2 : 1;
+  } catch {
+    return 1;
+  }
+}
+
+export function saveSpeed(speed: number) {
+  try {
+    localStorage.setItem(SPEED_KEY, String(speed));
+  } catch {
+    // Storage can be blocked; the speed then only lasts until a reload.
+  }
+}

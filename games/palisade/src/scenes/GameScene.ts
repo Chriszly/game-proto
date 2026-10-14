@@ -3,7 +3,7 @@ import Phaser from 'phaser';
 import { foeTexture } from '../art/characters';
 import { BAR, BOSS_BARS, FIRE, STORM } from '../art/palette';
 import { ENEMIES } from '../game/enemies';
-import { clearProgress, loadProgress, saveProgress } from '../game/save';
+import { clearProgress, loadProgress, loadSpeed, saveProgress, saveSpeed } from '../game/save';
 import { fightAgain, offer, pick, tick } from '../game/sim';
 import { freshProgress, newRun, progressOf, stats, xpToNext, type Enemy, type GameState } from '../game/state';
 import type { UpgradeId } from '../game/upgrades';
@@ -11,7 +11,7 @@ import { isBossWave } from '../game/waves';
 import { makeButton } from '../ui/Button';
 import { LevelUp } from '../ui/LevelUp';
 import { UpgradeList } from '../ui/UpgradeList';
-import { BOSS_BAR, FONT, HERO_FEET, HUD_HEIGHT, UI_DEPTH, VIEW, BARRICADE, XP_BAR } from './layout';
+import { BOSS_BAR, FONT, HERO_FEET, HUD_HEIGHT, UI_DEPTH, VIEW, BARRICADE, SPEED, XP_BAR } from './layout';
 
 /** Longest simulated step, so a backgrounded tab doesn't jump the battle forward. */
 const MAX_STEP_MS = 250;
@@ -54,6 +54,10 @@ export class GameScene extends Phaser.Scene {
   private lastArrowCooldown = 0;
   private clock = 0;
   private lastFrame: number | null = null;
+  /** How many times faster than real time the battle plays: 1 or 2, switched in the bottom bar. */
+  speed = 1;
+  private speedBg!: Phaser.GameObjects.Rectangle;
+  private speedText!: Phaser.GameObjects.Text;
 
   constructor() {
     super('Game');
@@ -75,6 +79,7 @@ export class GameScene extends Phaser.Scene {
     this.createGameOver();
     this.levelUp = new LevelUp(this, (id) => this.pick(id));
     this.upgradeList = new UpgradeList(this);
+    this.createSpeedSwitch();
   }
 
   update(time: number) {
@@ -88,8 +93,10 @@ export class GameScene extends Phaser.Scene {
     const levelUps = s.levelUps;
     // Everything, the auto-pick countdown included, waits while the list of upgrades is open.
     if (!this.upgradeList.open) {
-      tick(s, dt);
-      if (!s.choices && s.phase !== 'over') this.clock += dt;
+      // The battle plays at the chosen speed; the auto-pick countdown stays in real seconds.
+      const game = s.choices ? dt : dt * this.speed;
+      tick(s, game);
+      if (!s.choices && s.phase !== 'over') this.clock += game;
     }
     if (s.phase !== phase || s.wave !== wave || s.levelUps !== levelUps) saveProgress(progressOf(s));
 
@@ -314,6 +321,30 @@ export class GameScene extends Phaser.Scene {
     const again = makeButton(this, VIEW.w / 2 - 100, VIEW.h / 2 + 100, 'Fight again', () => this.restart(false));
     const reset = makeButton(this, VIEW.w / 2 + 100, VIEW.h / 2 + 100, 'New hero', () => this.restart(true));
     this.gameOver = this.add.container(0, 0, [dim, panel, title, this.gameOverText, again, reset]).setDepth(UI_DEPTH + 20).setVisible(false);
+  }
+
+  /** The 1x/2x switch in the bottom bar; the choice is kept in its own storage key. */
+  private createSpeedSwitch() {
+    this.speed = loadSpeed();
+    const { x, y, w, h } = SPEED;
+    this.speedBg = this.add.rectangle(x, y, w, h, 0x5c3a21).setStrokeStyle(2, 0xc9a040).setDepth(UI_DEPTH + 1);
+    this.speedText = this.add.text(x, y, '', textStyle(14)).setOrigin(0.5).setDepth(UI_DEPTH + 2);
+    this.speedBg
+      .setInteractive({ useHandCursor: true })
+      .on('pointerover', () => this.speedBg.setStrokeStyle(2, 0xf3c64e))
+      .on('pointerout', () => this.speedBg.setStrokeStyle(2, 0xc9a040))
+      .on('pointerdown', () => {
+        this.speed = this.speed === 2 ? 1 : 2;
+        saveSpeed(this.speed);
+        this.showSpeed();
+      });
+    this.showSpeed();
+  }
+
+  /** The switch reads the speed it plays at, lit gold at 2x. */
+  private showSpeed() {
+    this.speedText.setText(`${this.speed}x`).setColor(this.speed === 2 ? '#f3c64e' : '#f3e9d2');
+    this.speedBg.setFillStyle(this.speed === 2 ? 0x8a5a32 : 0x5c3a21);
   }
 
   /** A new run from wave 1: with the hero's level and upgrades, or with a new hero from scratch. */

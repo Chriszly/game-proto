@@ -15,6 +15,7 @@ the experience bar, and every level-up pauses the battle on three upgrades to pi
 | Control | Action |
 | --- | --- |
 | Tap or click a card | Take that upgrade when a level-up comes up (after 10 seconds one is taken at random) |
+| 1x / 2x (bottom right) | Switch the battle between normal and double speed; the level-up countdown stays 10 real seconds |
 | Upgrades (in the top bar) | List the upgrades taken so far, with their ranks; the battle waits until Back |
 | Fight again / New hero | After a fall: start again from wave 1 keeping the hero, or with a new one |
 
@@ -73,6 +74,11 @@ them, each with its rank and what a rank does. It works during a level-up too, t
 hero has before choosing.
 
 ![The list of upgrades taken](docs/screenshots/upgrade-list.png)
+
+The switch at the right end of the experience bar plays the battle at double speed. It lights up
+gold at 2x and is remembered in the browser, separately from the hero.
+
+![The speed switch at 2x](docs/screenshots/speed-switch.png)
 
 ![After a fall](docs/screenshots/game-over.png)
 
