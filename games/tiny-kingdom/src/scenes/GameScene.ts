@@ -1,9 +1,9 @@
 import Phaser from 'phaser';
 import { loadBest, saveBest } from '../game/save';
-import { canPlace, goalFor, newGame, place, previewScore, ROUND_POUCH, select, type GameState } from '../game/state';
+import { canPlace, canUndo, goalFor, newGame, place, previewScore, ROUND_POUCH, select, undo, type GameState } from '../game/state';
 import { BUILDINGS, INFO, type Building } from '../game/tiles';
 import { makeButton } from '../ui/Button';
-import { cellCentre, FONT, GOAL_BAR, GRID, PANEL, TILE_BUTTONS, UI_DEPTH, VIEW } from './layout';
+import { cellCentre, FONT, GOAL_BAR, GRID, PANEL, TILE_BUTTONS, UI_DEPTH, UNDO_BUTTON, VIEW } from './layout';
 
 /** How long a score popup floats up before it fades out, in milliseconds. */
 const POPUP_MS = 900;
@@ -38,8 +38,12 @@ export class GameScene extends Phaser.Scene {
   /** The cell under the pointer with the selected building, and what placing it there would add. */
   preview: { col: number; row: number; gained: number } | null = null;
   tileButtons: TileButton[] = [];
+  /** Where the undo button is on screen; read by the playthrough test. */
+  undoButton = { x: UNDO_BUTTON.x, y: UNDO_BUTTON.y, w: UNDO_BUTTON.w, h: UNDO_BUTTON.h };
   private cells: Phaser.GameObjects.Image[][] = [];
   private buttons = new Map<Building, ButtonParts>();
+  private undoBg!: Phaser.GameObjects.Rectangle;
+  private undoText!: Phaser.GameObjects.Text;
   private hover!: Phaser.GameObjects.Graphics;
   private ghost!: Phaser.GameObjects.Image;
   private ghostText!: Phaser.GameObjects.Text;
@@ -107,7 +111,17 @@ export class GameScene extends Phaser.Scene {
     this.scoreText = this.add.text(PANEL.x + 16, PANEL.y + 74, '', textStyle(20));
     this.goalText = this.add.text(GOAL_BAR.x + GOAL_BAR.w / 2, GOAL_BAR.y + GOAL_BAR.h / 2, '', textStyle(12)).setOrigin(0.5).setDepth(1);
     this.bar = this.add.graphics();
-    this.bestText = this.add.text(PANEL.x + PANEL.w / 2, PANEL.y + PANEL.h - 22, '', textStyle(14, '#d8c7a6')).setOrigin(0.5);
+    this.bestText = this.add.text(PANEL.x + PANEL.w / 2, PANEL.y + PANEL.h - 12, '', textStyle(14, '#d8c7a6')).setOrigin(0.5);
+
+    const { x, y, w, h } = UNDO_BUTTON;
+    this.undoBg = this.add.rectangle(x, y, w, h, 0x3a2a1c).setStrokeStyle(3, 0x5a3f2a);
+    this.undoText = this.add.text(x, y, '', textStyle(16, '#f3e9d2')).setOrigin(0.5);
+    this.undoBg.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+      if (!undo(this.state)) return;
+      this.redrawCells();
+      this.refresh();
+      this.hoverAt(this.input.activePointer.x, this.input.activePointer.y);
+    });
 
     BUILDINGS.forEach((kind, i) => {
       const x = TILE_BUTTONS.x;
@@ -237,6 +251,12 @@ export class GameScene extends Phaser.Scene {
       parts.count.setText(`x${left}`).setColor(left > 0 ? '#f3e9d2' : '#7a6a5a');
     }
 
+    const undoable = canUndo(s);
+    const usedHere = s.undoneIn === s.round;
+    this.undoText.setText(usedHere && !undoable ? 'Undo used this round' : 'Undo last tile');
+    this.undoBg.setAlpha(undoable ? 1 : 0.4);
+    this.undoText.setAlpha(undoable ? 1 : 0.4);
+
     this.gameOver.setVisible(s.phase === 'over');
     if (s.phase === 'over') {
       this.gameOverText.setText(`Final score ${s.score} on island ${s.island}, reaching round ${s.round}.\n${s.placed} buildings placed.\n\nBest score ${s.best}.`);
@@ -247,9 +267,14 @@ export class GameScene extends Phaser.Scene {
   private restart() {
     // The best score carries over even when storage is blocked and loadBest() comes back empty.
     this.state = newGame(Math.max(loadBest(), this.state.best));
-    this.state.grid.forEach((cells, row) => cells.forEach((cell, col) => this.cells[row][col].setTexture(`tile-${cell}`)));
+    this.redrawCells();
     this.preview = null;
     this.drawHover(null);
     this.refresh();
+  }
+
+  /** Shows each cell's current terrain or building, after a placement was undone or a new kingdom started. */
+  private redrawCells() {
+    this.state.grid.forEach((cells, row) => cells.forEach((cell, col) => this.cells[row][col].setTexture(`tile-${cell}`)));
   }
 }

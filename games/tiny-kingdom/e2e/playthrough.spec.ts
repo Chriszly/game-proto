@@ -80,6 +80,8 @@ function scene(page: Page) {
     preview: () => read<{ col: number; row: number; gained: number } | null>((s) => s.preview),
     /** Where the tile buttons are on screen. */
     buttons: () => read<TileButton[]>((s) => s.tileButtons),
+    /** Where the undo button is on screen. */
+    undoButton: () => read<{ x: number; y: number; w: number; h: number }>((s) => s.undoButton),
   };
 }
 
@@ -202,6 +204,30 @@ test('plays the first round', async ({ page }, testInfo) => {
     expect(s.score, `score after the ${step.kind} at ${step.col},${step.row}: ${step.why}`).toBe(score);
     expect(s.placed).toBe(i + 1);
     if (score < GOALS[0]) expect(s).toMatchObject({ round: 1, pouch });
+
+    // One undo per round: after the second farm it takes that farm back, and a second undo in the
+    // same round does nothing. Placing the farm again then restores the score the plan expects.
+    if (i === 1) {
+      const undoAt = async () => {
+        const b = await game.undoButton();
+        return onPage(b.x, b.y);
+      };
+      await tap(await undoAt());
+      s = await game.state();
+      expect(s.grid[step.row][step.col], 'the undone farm is gone').toBe('grass');
+      expect(s, 'undo takes back the farm').toMatchObject({
+        score: score - step.gained,
+        placed: 1,
+        selected: step.kind,
+        pouch: { ...pouch, [step.kind]: pouch[step.kind] + 1 },
+      });
+      await tap(await undoAt());
+      expect(await game.state(), 'a second undo in the same round does nothing').toEqual(s);
+      await tap(await cellPoint(step.col, step.row));
+      s = await game.state();
+      expect(s, 'the farm placed again').toMatchObject({ score, placed: i + 1, pouch });
+      expect(s.grid[step.row][step.col]).toBe(step.kind);
+    }
   }
 
   // The tower reached the goal: round 2 begins with a higher goal and its tiles added to what is left.

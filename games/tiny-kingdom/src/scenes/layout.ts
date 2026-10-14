@@ -9,6 +9,8 @@ export const PANEL = { x: 688, y: 24, w: 252, h: 492 };
 export const GOAL_BAR = { x: 704, y: 128, w: 220, h: 16 };
 /** The three tile buttons, by their centres, in the order of BUILDINGS. */
 export const TILE_BUTTONS = { x: 814, ys: [218, 314, 410], w: 228, h: 84 };
+/** The undo button under the tile buttons, by its centre. */
+export const UNDO_BUTTON = { x: 814, y: 474, w: 228, h: 28 };
 export const BUTTON = { w: 200, h: 40 };
 
 export const UI_DEPTH = 10_000;

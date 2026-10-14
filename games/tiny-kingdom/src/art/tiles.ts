@@ -1,123 +1,337 @@
 import Phaser from 'phaser';
-import { PixelCanvas, seeded } from './pixelArt';
+import { GRID } from '../scenes/layout';
 
-// The land and building tiles, 32x32 art pixels baked at 2x into the board's 64px cells. Each
-// building also gets a small icon for its button.
+// The land and building tiles, drawn as low-poly solids: each cell is a slab with a lit top, a
+// shaded front edge and a soft drop shadow, and each building is a few flat faces, lit on the
+// side that faces the light and shaded on the other. Everything is flat polygons drawn with
+// Phaser Graphics and baked once into a 64px `tile-<cell>` texture.
 
-const SIZE = 32;
-const SCALE = 2;
+type Pt = readonly [number, number];
 
 const C = {
-  grass: 0x5f9e3c,
-  grassLight: 0x76b64a,
-  grassDark: 0x4a8430,
+  grass: 0x6aa84a,
+  dirt: 0x6b4a2b,
+  tuft: 0x86c05a,
   water: 0x3a7bc8,
-  waterLight: 0x6aa6e8,
   waterDeep: 0x2c5f9e,
-  shore: 0xd8c78a,
-  pine: 0x2f6b34,
-  pineLight: 0x3f8a42,
+  waterGlint: 0x8cc4f2,
+  shore: 0xe3d193,
+  shoreSide: 0xa8945a,
+  pine: 0x2f7a3a,
   trunk: 0x6b4423,
-  soil: 0x8a5a32,
-  soilDark: 0x6b4423,
-  wheat: 0xe8c45a,
-  wheatLight: 0xf6e08a,
-  wall: 0xe8d3a8,
-  wallShade: 0xc9b083,
-  roof: 0xb5452f,
-  roofDark: 0x8a3020,
+  soil: 0x9a6638,
+  soilSide: 0x6b4423,
+  wheat: 0xf0cd62,
+  wall: 0xf1e4c0,
+  roof: 0xc2492f,
   door: 0x5c3a21,
-  window: 0xf3c64e,
-  stone: 0x9a9a9a,
-  stoneLight: 0xbdbdbd,
-  stoneDark: 0x6e6e6e,
+  window: 0xffd65a,
+  stone: 0xb4b4b8,
+  stoneDark: 0x7a7a82,
   flag: 0x3a7bc8,
-  outline: 0x1a1216,
+  shadow: 0x0e0a08,
+  dark: 0x1a1216,
 };
 
-function grass(seed: number) {
-  const c = new PixelCanvas(SIZE, SIZE).rect(0, 0, SIZE, SIZE, C.grass);
-  const rnd = seeded(seed);
-  for (let i = 0; i < 26; i++) {
-    const x = Math.floor(rnd() * SIZE);
-    const y = Math.floor(rnd() * SIZE);
-    c.px(x, y, rnd() < 0.5 ? C.grassLight : C.grassDark);
-    if (rnd() < 0.4) c.px(x, y - 1, C.grassLight);
+/** Multiplies a colour's channels by `k`: above 1 lightens, below 1 shades. */
+function shade(color: number, k: number) {
+  const ch = (shift: number) => Math.min(255, Math.round(((color >> shift) & 255) * k));
+  return (ch(16) << 16) | (ch(8) << 8) | ch(0);
+}
+
+/** The side faces are shaded; a lit top faces the light, its second facet is a touch darker. */
+const SIDE = 0.68;
+const FACET = 0.93;
+
+/** The slab's top face, inset so neighbouring cells read as separate blocks. */
+const TOP = { x: 2, y: 2, w: 60, h: 52 };
+/** How tall the slab's front edge is, below its top face. */
+const EDGE = 6;
+/** A building's depth: its roof and far walls run this far up and to the right. */
+const DEPTH = { dx: 7, dy: -5 };
+
+class Art {
+  private g: Phaser.GameObjects.Graphics;
+
+  constructor(private scene: Phaser.Scene) {
+    this.g = scene.add.graphics();
   }
-  return c;
-}
 
-function lake() {
-  const c = grass(7);
-  c.rect(0, 0, SIZE, SIZE, C.shore);
-  c.rect(1, 1, SIZE - 2, SIZE - 2, C.water);
-  c.rect(3, 3, SIZE - 6, SIZE - 6, C.waterDeep);
-  c.rect(5, 5, SIZE - 10, SIZE - 10, C.water);
-  for (const [x, y] of [[8, 9], [18, 14], [11, 21], [21, 24]]) c.rect(x, y, 4, 1, C.waterLight).px(x + 1, y - 1, C.waterLight);
-  return c;
-}
+  poly(pts: readonly Pt[], color: number, alpha = 1) {
+    this.g.fillStyle(color, alpha).fillPoints(
+      pts.map(([x, y]) => new Phaser.Math.Vector2(x, y)),
+      true,
+    );
+    return this;
+  }
 
-function pine(c: PixelCanvas, x: number, y: number, h: number) {
-  // A stacked triangle tree with its trunk's foot at (x, y).
-  c.rect(x - 1, y - 3, 2, 3, C.trunk);
-  for (let j = 0; j < h; j++) {
-    const half = 1 + Math.floor(j * 0.45);
-    const color = j % 3 === 0 ? C.pineLight : C.pine;
-    c.rect(x - half, y - 3 - h + j, half * 2, 1, color);
+  rect(x: number, y: number, w: number, h: number, color: number, alpha = 1) {
+    return this.poly(
+      [
+        [x, y],
+        [x + w, y],
+        [x + w, y + h],
+        [x, y + h],
+      ],
+      color,
+      alpha,
+    );
+  }
+
+  ellipse(x: number, y: number, w: number, h: number, color: number, alpha = 1) {
+    this.g.fillStyle(color, alpha).fillEllipse(x, y, w, h);
+    return this;
+  }
+
+  /** Turns the faces drawn so far into the texture `key`, dropping any earlier one. */
+  bake(key: string) {
+    if (this.scene.textures.exists(key)) this.scene.textures.remove(key);
+    this.g.generateTexture(key, GRID.cell, GRID.cell);
+    this.g.destroy();
   }
 }
 
-function forest() {
-  const c = grass(11);
-  pine(c, 9, 15, 12);
-  pine(c, 23, 13, 11);
-  pine(c, 15, 28, 13);
-  pine(c, 27, 29, 10);
-  pine(c, 5, 30, 9);
-  return c;
+/**
+ * The slab every cell stands on: a soft shadow, the shaded front edge, then the top face split
+ * along its diagonal into two facets.
+ */
+function slab(a: Art, top: number, edge: number) {
+  const { x, y, w, h } = TOP;
+  a.rect(x + 2, y + 3, w + 1, h + EDGE + 1, C.shadow, 0.14);
+  a.rect(x + 1, y + 2, w + 1, h + EDGE, C.shadow, 0.16);
+  a.rect(x, y + h, w, EDGE, edge);
+  a.rect(x, y + h + EDGE - 2, w, 2, shade(edge, 0.8));
+  a.poly(
+    [
+      [x, y],
+      [x + w, y],
+      [x, y + h],
+    ],
+    top,
+  );
+  a.poly(
+    [
+      [x + w, y],
+      [x + w, y + h],
+      [x, y + h],
+    ],
+    shade(top, FACET),
+  );
+  return a;
 }
 
-function farm() {
-  const c = grass(13);
-  c.rect(2, 3, 28, 26, C.soil);
-  c.frame(2, 3, 28, 26, C.soilDark);
-  for (let y = 6; y < 27; y += 4) {
-    c.rect(4, y, 24, 2, C.wheat);
-    for (let x = 5; x < 28; x += 3) c.px(x, y - 1, C.wheatLight);
+/** A soft shadow on the ground to the lower right of a building standing at (cx, baseY). */
+function buildingShadow(a: Art, cx: number, baseY: number, width: number) {
+  a.ellipse(cx + 5, baseY + 1, width + 6, 9, C.shadow, 0.16);
+  a.ellipse(cx + 4, baseY, width, 6, C.shadow, 0.22);
+}
+
+function grass(a: Art) {
+  slab(a, C.grass, C.dirt);
+  // A few lit tufts, each a flat triangle, so the field is not a single colour.
+  for (const [x, y] of [
+    [12, 14],
+    [46, 12],
+    [22, 40],
+    [52, 36],
+    [10, 44],
+    [38, 46],
+  ]) {
+    a.poly(
+      [
+        [x, y],
+        [x + 4, y],
+        [x + 2, y - 4],
+      ],
+      C.tuft,
+    );
   }
-  return c;
+  return a;
 }
 
-function house() {
-  const c = grass(17);
-  // Walls, roof, door and a lit window.
-  c.rect(7, 15, 18, 13, C.wall);
-  c.rect(7, 25, 18, 3, C.wallShade);
-  for (let j = 0; j < 10; j++) c.rect(5 + j, 15 - j, 22 - 2 * j, 1, j < 2 ? C.roofDark : C.roof);
-  c.rect(14, 20, 4, 8, C.door);
-  c.rect(9, 18, 3, 3, C.window).rect(20, 18, 3, 3, C.window);
-  c.rect(21, 4, 3, 6, C.stoneDark);
-  return c;
+function lake(a: Art) {
+  slab(a, C.shore, C.shoreSide);
+  // The water sits inside a sand rim, split into a lit and a deeper facet.
+  const { x, y, w, h } = TOP;
+  const left = x + 5;
+  const top = y + 5;
+  const right = x + w - 5;
+  const bottom = y + h - 5;
+  a.poly(
+    [
+      [left, top],
+      [right, top],
+      [left, bottom],
+    ],
+    C.water,
+  );
+  a.poly(
+    [
+      [right, top],
+      [right, bottom],
+      [left, bottom],
+    ],
+    C.waterDeep,
+  );
+  for (const [gx, gy] of [
+    [14, 18],
+    [40, 30],
+    [24, 40],
+  ]) {
+    a.poly(
+      [
+        [gx, gy],
+        [gx + 7, gy - 1],
+        [gx + 2, gy + 2],
+      ],
+      C.waterGlint,
+      0.8,
+    );
+  }
+  return a;
 }
 
-function tower() {
-  const c = grass(19);
-  // A stone keep with battlements and a banner.
-  c.rect(9, 9, 14, 21, C.stone);
-  c.rect(9, 9, 3, 21, C.stoneLight);
-  c.rect(20, 9, 3, 21, C.stoneDark);
-  for (let x = 8; x < 24; x += 4) c.rect(x, 5, 3, 4, C.stone);
-  c.rect(8, 8, 16, 2, C.stoneDark);
-  for (const [x, y] of [[13, 14], [17, 20], [12, 24]]) c.rect(x, y, 3, 1, C.stoneDark);
-  c.rect(14, 24, 4, 6, C.door);
-  c.rect(15, 13, 2, 4, C.outline);
-  c.rect(15, 0, 1, 6, C.outline);
-  c.rect(16, 0, 6, 4, C.flag);
-  return c;
+/** A pine: a shaded trunk and two stacked cones, each lit on its left and shaded on its right. */
+function pine(a: Art, cx: number, baseY: number, height: number) {
+  buildingShadow(a, cx, baseY, height * 0.7);
+  a.rect(cx - 1.5, baseY - 4, 3, 4, C.trunk);
+  const cone = (y0: number, w: number, h: number) => {
+    const apex: Pt = [cx, y0 - h];
+    a.poly(
+      [apex, [cx - w / 2, y0], [cx, y0]],
+      shade(C.pine, 1.15),
+    );
+    a.poly(
+      [apex, [cx, y0], [cx + w / 2, y0]],
+      shade(C.pine, SIDE + 0.1),
+    );
+  };
+  cone(baseY - 3, height * 0.7, height * 0.6);
+  cone(baseY - 3 - height * 0.3, height * 0.5, height * 0.5);
 }
 
-export const TILE_ART: Record<string, () => PixelCanvas> = {
-  grass: () => grass(3),
+function forest(a: Art) {
+  grass(a);
+  // Back trees first, so the nearer ones overlap them.
+  pine(a, 33, 28, 13);
+  pine(a, 19, 46, 17);
+  pine(a, 44, 44, 19);
+  return a;
+}
+
+function farm(a: Art) {
+  slab(a, C.soil, C.soilSide);
+  // Furrows of wheat: each a lit strip with a shaded lip beneath it.
+  for (let y = 9; y <= 45; y += 9) {
+    a.rect(8, y, 48, 4, C.wheat);
+    a.rect(8, y + 4, 48, 2, shade(C.wheat, SIDE));
+  }
+  return a;
+}
+
+function house(a: Art) {
+  grass(a);
+  const x0 = 18;
+  const x1 = 38;
+  const y0 = 32;
+  const yb = 50;
+  const cx = (x0 + x1) / 2;
+  const apexY = 20;
+  buildingShadow(a, cx, yb, x1 - x0 + DEPTH.dx);
+  // The walls: the lit front, and the shaded side that turns away from the light.
+  a.rect(x0, y0, x1 - x0, yb - y0, C.wall);
+  a.poly(
+    [
+      [x1, y0],
+      [x1 + DEPTH.dx, y0 + DEPTH.dy],
+      [x1 + DEPTH.dx, yb + DEPTH.dy],
+      [x1, yb],
+    ],
+    shade(C.wall, SIDE),
+  );
+  // The gable, then the two roof slopes meeting at the ridge.
+  a.poly(
+    [
+      [cx, apexY],
+      [x0 - 2, y0],
+      [x1 + 2, y0],
+    ],
+    C.wall,
+  );
+  const ridge: Pt = [cx + DEPTH.dx, apexY + DEPTH.dy];
+  a.poly(
+    [
+      [cx, apexY],
+      [x0 - 2, y0],
+      [x0 - 2 + DEPTH.dx, y0 + DEPTH.dy],
+      ridge,
+    ],
+    C.roof,
+  );
+  a.poly(
+    [
+      [cx, apexY],
+      [x1 + 2, y0],
+      [x1 + 2 + DEPTH.dx, y0 + DEPTH.dy],
+      ridge,
+    ],
+    shade(C.roof, SIDE),
+  );
+  // A lit window, a door and a second window on the front.
+  a.rect(x0 + 3, y0 + 6, 4, 4, C.window);
+  a.rect(x1 - 7, y0 + 6, 4, 4, C.window);
+  a.rect(cx - 2.5, yb - 9, 5, 9, C.door);
+  return a;
+}
+
+function tower(a: Art) {
+  grass(a);
+  const x0 = 20;
+  const x1 = 44;
+  const y0 = 22;
+  const yb = 50;
+  const cx = (x0 + x1) / 2;
+  buildingShadow(a, cx, yb, x1 - x0 + DEPTH.dx);
+  // The keep: a lit front in two facets, a shaded side and a lit top.
+  a.rect(x0, y0, (x1 - x0) / 2, yb - y0, C.stone);
+  a.rect(cx, y0, (x1 - x0) / 2, yb - y0, shade(C.stone, 0.9));
+  a.poly(
+    [
+      [x1, y0],
+      [x1 + DEPTH.dx, y0 + DEPTH.dy],
+      [x1 + DEPTH.dx, yb + DEPTH.dy],
+      [x1, yb],
+    ],
+    shade(C.stone, SIDE),
+  );
+  a.poly(
+    [
+      [x0, y0],
+      [x0 + DEPTH.dx, y0 + DEPTH.dy],
+      [x1 + DEPTH.dx, y0 + DEPTH.dy],
+      [x1, y0],
+    ],
+    shade(C.stone, 1.12),
+  );
+  // Battlements along the top, a door arch and a slit window.
+  for (const mx of [x0, cx - 2, x1 - 6]) a.rect(mx, y0 - 6, 6, 6, C.stone);
+  a.rect(cx - 3, yb - 10, 6, 10, C.door);
+  a.rect(cx - 1, y0 + 6, 2, 6, C.dark);
+  // A flag on a thin pole.
+  a.rect(cx - 0.5, 2, 1.5, 16, C.dark);
+  a.poly(
+    [
+      [cx + 1, 2],
+      [cx + 10, 5],
+      [cx + 1, 8],
+    ],
+    C.flag,
+  );
+  return a;
+}
+
+export const TILE_ART: Record<string, (a: Art) => Art> = {
+  grass,
   lake,
   forest,
   farm,
@@ -126,5 +340,5 @@ export const TILE_ART: Record<string, () => PixelCanvas> = {
 };
 
 export function bakeTiles(scene: Phaser.Scene) {
-  for (const [key, draw] of Object.entries(TILE_ART)) draw().bake(scene, `tile-${key}`, SCALE);
+  for (const [key, draw] of Object.entries(TILE_ART)) draw(new Art(scene)).bake(`tile-${key}`);
 }
