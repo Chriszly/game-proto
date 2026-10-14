@@ -410,6 +410,8 @@ export class GameScene extends Phaser.Scene {
       const gap = SEGMENT_GAPS[i];
       const p = i === 0 ? head : this.trail[Math.min(gap, this.trail.length - 1)];
       seg.setPosition(p.x, p.y).setDepth(groundDepth(p.y) + (i === 0 ? 0.5 : 0));
+      // The head is drawn in profile: it looks the way the wyrm is going across the screen.
+      if (i === 0 && w.path.length && Math.abs(b.x - a.x) > 0.5) seg.setFlipX(b.x < a.x);
       if (i < 4) return;
       // A wagon turns to lie along the track it is on: down-right is along the columns.
       const ahead = this.trail[Math.max(0, gap - 6)];
