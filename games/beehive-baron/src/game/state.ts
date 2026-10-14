@@ -83,8 +83,10 @@ function cellOf(saved: unknown): Cell | null {
   if (!saved || typeof saved !== 'object') return null;
   const c = saved as Partial<Cell>;
   const nectar = typeof c.nectar === 'number' ? Math.max(0, Math.min(CELL_CAP, Math.floor(c.nectar))) : 0;
-  const phase = c.phase === 'ripening' || c.phase === 'capped' ? c.phase : 'filling';
-  const ripenMs = phase === 'ripening' && typeof c.ripenMs === 'number' ? Math.max(0, Math.min(RIPEN_MS, c.ripenMs)) : 0;
+  let phase: Cell['phase'] = c.phase === 'ripening' || c.phase === 'capped' ? c.phase : 'filling';
+  let ripenMs = phase === 'ripening' && typeof c.ripenMs === 'number' ? Math.max(0, Math.min(RIPEN_MS, c.ripenMs)) : 0;
+  // A full cell still marked filling has no room left, so it starts ripening.
+  if (phase === 'filling' && nectar >= CELL_CAP) [phase, ripenMs] = ['ripening', RIPEN_MS];
   return { nectar: phase === 'filling' ? nectar : CELL_CAP, phase, ripenMs };
 }
 

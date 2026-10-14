@@ -155,7 +155,10 @@ export class GameScene extends Phaser.Scene {
       if (!cell) {
         // An empty spot: a faint outline, and the price of building there.
         g.lineStyle(2, WAX.light, 0.35).strokePoints(hexPoints(slot, 3), true);
-        label.setText(price === 0 ? 'free' : `${price}c`).setColor(s.coins >= price ? '#f8e6a0' : '#a08860');
+        label.setText(price === 0 ? 'free' : `${price}c`);
+        // setColor always redraws the text, so only set it when it changes.
+        const colour = s.coins >= price ? '#f8e6a0' : '#a08860';
+        if (label.style.color !== colour) label.setColor(colour);
         return;
       }
       label.setText('');
