@@ -16,9 +16,10 @@ pauses the battle on a pick of three upgrades, taking one at random after 10 sec
 - **Progression:** level, experience, upgrade ranks, pending level-ups, best wave and run count
   carry over between runs. Every run restarts at wave 1. A boss (the troll) closes every tenth
   wave with stacked health bars.
-- **Screens:** there is one scene with the battle and HUD, plus two overlays drawn over it: the
-  level-up cards (`LevelUp`) and the game-over panel with "Fight again" and "New hero". There is
-  no title or menu screen.
+- **Screens:** there is one scene with the battle and HUD, plus three overlays drawn over it: the
+  level-up cards (`LevelUp`), the list of upgrades taken (`UpgradeList`, opened by the "Upgrades"
+  button in the top bar) and the game-over panel with "Fight again" and "New hero". There is no
+  title or menu screen.
 - **Rough edges seen in the code:**
   - `rollChoices` adds at most one `mend` filler, so with fewer than two upgrades left the level-up
     shows fewer than three cards. The README says the filler "fills the gaps".
@@ -27,7 +28,7 @@ pauses the battle on a pick of three upgrades, taking one at random after 10 sec
   - Progress is only saved when the phase or wave changes, on a level-up and on a pick (tapped or
     auto). Experience and kills gained mid-wave are lost on a reload.
   - `HERO` in `src/game/state.ts` is unused (the scene draws the hero at `HERO_FEET`).
-  - There is no sound, pause or in-game settings panel (only the hub's shared settings, see Hub
+  - There is no sound, pause button or in-game settings panel (the upgrade list pauses, though) (only the hub's shared settings, see Hub
     settings), and the hero has a single frame.
 
 ## Architecture
@@ -53,9 +54,12 @@ pauses the battle on a pick of three upgrades, taking one at random after 10 sec
 - `src/scenes/GameScene.ts`: owns the `GameState`, ticks it each frame, draws it, saves progress
   and handles restart.
 - `src/scenes/layout.ts`: screen positions (`HERO_FEET`, `BARRICADE`, `XP_BAR`, `BOSS_BAR`,
-  `CARDS`, `COUNTDOWN`, `BUTTON`), `HUD_HEIGHT`, `UI_DEPTH`, `FONT`.
+  `CARDS`, `COUNTDOWN`, `UPGRADE_LIST`, `BUTTON`), `HUD_HEIGHT`, `UI_DEPTH`, `FONT`.
 - `src/ui/LevelUp.ts`: the level-up overlay, its cards and the auto-pick countdown (seconds left
   over an emptying bar, at `COUNTDOWN`). It records each card's spot in `cards`.
+- `src/ui/UpgradeList.ts`: the "Upgrades (N)" button in the top bar and the panel it opens, a grid
+  of every upgrade with a rank (icon, name, rank of max, `text`) in `UPGRADE_IDS` order. Its
+  `open` flag tells the scene to hold everything still.
 - `src/ui/Button.ts`: `makeButton`, the wooden button used on the game-over panel.
 - `src/art/`: pixel art drawn in code. `pixelArt.ts` has `bakePixelArt`, `PixelCanvas` and the
   seeded generator `seeded`. `characters.ts` has the hero, foes (two walk frames, `foeTexture`)
@@ -84,12 +88,16 @@ pauses the battle on a pick of three upgrades, taking one at random after 10 sec
   towards their target every substep.
 - **Input:** the only input is a tap. A tap on a level-up card calls `GameScene.pick`, which calls
   `pick` in `sim.ts`. Without a tap, `tick` picks after `AUTO_PICK_MS` (10 s). "Fight again" and
-  "New hero" call `restart`. Shooting is automatic. A dimming rectangle under each overlay is
+  "New hero" call `restart`. The "Upgrades" button opens `UpgradeList`; Back or a tap beside the
+  panel closes it. While it is open `GameScene.update` skips `tick` and its `clock`, so the battle,
+  effects and the auto-pick countdown all wait. The button sits above the level-up overlay (depth
+  `UI_DEPTH + 15`) so it works while choosing, and hides after a fall. Shooting is automatic. A dimming rectangle under each overlay is
   interactive, so taps on the battle are swallowed.
 - **Rendering:** sprites are diffed by id. `foes` and `missiles` are `Map`s of images, and crit
   texts are `crits`. Each is created, updated or destroyed to match the state every frame.
   Health bars, flames, blasts, bolts and the HUD are `Graphics` that are cleared and redrawn every
-  frame. `LevelUp.show` only rebuilds its cards when the choices change.
+  frame. `LevelUp.show` only rebuilds its cards when the choices change, and `UpgradeList.show`
+  only rebuilds its rows when the ranks change.
 
 ### State model
 
@@ -162,7 +170,9 @@ Missile speeds, `LEAP_RANGE`, `BARRICADE_REPAIR` and effect durations (`EFFECT_M
   `game.scene.getScene('Game').state` (JSON-cloned) and `.levelUp.cards` (`CardSpot` id, x, y,
   w, h). It never writes to the game.
 - **Inputs:** the test only advances the clock and clicks the centre of a card, scaled from the
-  960-wide view to the canvas box.
+  960-wide view to the canvas box. It never opens the upgrade list (not part of the first
+  round's loop); `.upgradeList.open` is there to read if a test ever does. Keep the "Upgrades"
+  button clear of the cards, since it sits above the level-up overlay.
 - **What it checks:**
   - A fresh hero: level 1, no ranks, wave 1, phase `'break'`, a full barricade.
   - Wave 1 is exactly 3 goblins and 3 orcs, with an orc first.
