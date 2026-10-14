@@ -1,39 +1,63 @@
 import Phaser from 'phaser';
-import { BUILDINGS, FACTION_IDS, TILE, UNITS, type BuildingId, type FactionId } from '../game/data';
-import { bakeBuilding, bakeBush, bakeMine, bakeTree, bakeUnit } from '../art/sprites';
+import { BUILDINGS, FACTION_IDS, UNITS, type BuildingId, type FactionId } from '../game/data';
+import { bakeFigureSheet, FRAME, WOOL } from '../art/figures';
+import { bakeBuilding, bakeBush, bakeFogPattern, bakeMine, bakeNeedle, bakeTree } from '../art/scenery';
+import { bakeBackdrop, bakeButton, bakeCard, bakeIcon, bakePanel, bakeTopBar, type IconKind } from '../art/ui';
+import { BOON, DEED_CARD, TOAST } from './layout';
+import { T } from '../art/stitch';
 
-/** Texture keys: `unit-<type>`, `bld-<faction>-<building>`, `tree-0`, `tree-1`, `bush`, `mine`. The terrain is baked by the game, since each match has its own map. */
-export const unitKey = (type: string) => `unit-${type}`;
+/**
+ * Texture keys. Figures: `fig-<unit type>` for soldiers and `fig-villager-<faction>` for villagers,
+ * one strip each with frames named `<pose>-<n>` (see figures.ts). Buildings: `bld-<faction>-<type>`.
+ * Nodes: `tree-0`..`tree-3`, `bush`, `mine`. The ground is painted by the game in chunks, since
+ * each match has its own map.
+ */
+export const figKey = (type: string, faction: FactionId) => (type === 'villager' ? `fig-villager-${faction}` : `fig-${type}`);
 export const buildingKey = (faction: FactionId, type: BuildingId) => `bld-${faction}-${type}`;
+export const TREE_VARIANTS = 4;
 
-/** Bakes every texture once, so the game itself only places sprites. */
+/** Paints every texture once, so the game itself only places sprites. */
 export class BootScene extends Phaser.Scene {
   constructor() {
     super('Boot');
   }
 
   create() {
-    for (const v of [0, 1]) this.bakeCanvas(`tree-${v}`, TILE, TILE, (ctx) => bakeTree(ctx, v));
-    this.bakeCanvas('bush', TILE, TILE, bakeBush);
-    this.bakeCanvas('mine', TILE * 2, TILE * 2, bakeMine);
-    this.bakeCanvas(unitKey('villager'), 48, 48, (ctx) => bakeUnit(ctx, 'villager', 'neutral'));
+    for (let v = 0; v < TREE_VARIANTS; v++) this.bake(`tree-${v}`, bakeTree(v));
+    this.bake('bush', bakeBush());
+    this.bake('mine', bakeMine());
+    this.bake('fog-pattern', bakeFogPattern(256));
+    this.bake('needle', bakeNeedle());
     for (const faction of FACTION_IDS) {
-      for (const role of ['melee', 'ranged', 'cavalry'] as const) {
-        const type = Object.values(UNITS).find((u) => u.faction === faction && u.role === role)!.id;
-        this.bakeCanvas(unitKey(type), 48, 48, (ctx) => bakeUnit(ctx, role, faction));
+      for (const def of Object.values(UNITS)) {
+        if (def.faction !== faction && def.faction !== 'neutral') continue;
+        const { cv, frames } = bakeFigureSheet(def.id, def.role, faction);
+        const tex = this.bake(figKey(def.id, faction), cv);
+        frames.forEach(([pose, i], k) => tex.add(`${pose}-${i}`, 0, k * FRAME, 0, FRAME, FRAME));
       }
-      for (const type of Object.keys(BUILDINGS) as BuildingId[]) {
-        const def = BUILDINGS[type];
-        this.bakeCanvas(buildingKey(faction, type), def.w * TILE, def.h * TILE, (ctx) => bakeBuilding(ctx, type, faction));
-      }
+      for (const type of Object.keys(BUILDINGS) as BuildingId[]) this.bake(buildingKey(faction, type), bakeBuilding(type, faction));
+      this.bake(`icon-banner-${faction}`, bakeIcon('banner', 20, WOOL[faction].cloth));
     }
+    for (const kind of ['wood', 'food', 'ore', 'pop', 'clock', 'horn', 'wheat'] as IconKind[]) this.bake(`icon-${kind}`, bakeIcon(kind));
+    this.bake('icon-shield', bakeIcon('shield', 22, T.red));
+    this.bake('topbar', bakeTopBar());
+    this.bake('panel', bakePanel());
+    for (const s of ['on', 'off', 'hot'] as const) this.bake(`btn-${s}`, bakeButton(s));
+    this.bake('card-deeds', bakeCard(DEED_CARD.w, DEED_CARD.h, { lw: 1.1 }));
+    this.bake('card-toast', bakeCard(TOAST.w, TOAST.h, { pill: true }));
+    this.bake('card-boon', bakeCard(BOON.w, BOON.h));
+    this.bake('card-boon-hot', bakeCard(BOON.w, BOON.h, { fill: '#f3e2b0', lw: 1.4, hot: true }));
+    this.bake('card-pop', bakeCard(56, 18, { pill: true }));
+    this.bake('card-faction', bakeCard(280, 230));
+    this.bake('card-faction-hot', bakeCard(280, 230, { fill: '#f3e2b0', lw: 1.4, hot: true }));
+    this.bake('card-end', bakeCard(420, 170, { lw: 1.4 }));
+    this.bake('backdrop', bakeBackdrop());
     this.scene.start('Menu');
   }
 
-  private bakeCanvas(key: string, w: number, h: number, paint: (ctx: CanvasRenderingContext2D) => void) {
-    const tex = this.textures.createCanvas(key, w, h);
-    if (!tex) return;
-    paint(tex.getContext());
-    tex.refresh();
+  private bake(key: string, cv: HTMLCanvasElement) {
+    if (this.textures.exists(key)) this.textures.remove(key);
+    return this.textures.addCanvas(key, cv)!;
   }
 }
+
