@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
+import { bakePanel } from '../art/hud';
 import { iconTexture } from '../art/icons';
+import { C, N } from '../art/ink';
 import { BOONS, type BoonId } from '../game/boons';
 import { CARDS, FONT, UI_DEPTH, VIEW } from '../scenes/layout';
 
@@ -12,7 +14,10 @@ export interface CardSpot {
   h: number;
 }
 
-/** The checkpoint choice: the run dims and two boon cards come up. Tapping one takes it. */
+/**
+ * The checkpoint choice: the run dims and two boon cards come up, vellum leaves ruled in gold with a
+ * painted icon. Tapping one takes it.
+ */
 export class BoonCards {
   private root: Phaser.GameObjects.Container;
   private shown: BoonId[] | null = null;
@@ -23,11 +28,13 @@ export class BoonCards {
     private scene: Phaser.Scene,
     private onPick: (id: BoonId) => void,
   ) {
-    const dim = scene.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x0e0a08, 0.6).setInteractive();
-    this.title = scene.add
-      .text(VIEW.w / 2, CARDS.y - CARDS.h / 2 - 40, '', { fontFamily: FONT, fontSize: '28px', color: '#f3c64e', stroke: '#1a1216', strokeThickness: 5 })
-      .setOrigin(0.5);
-    this.root = scene.add.container(0, 0, [dim, this.title]).setDepth(UI_DEPTH + 10).setVisible(false);
+    if (!scene.textures.exists('card')) bakePanel(scene, 'card', CARDS.w, CARDS.h);
+    if (!scene.textures.exists('title-strip')) bakePanel(scene, 'title-strip', 440, 50);
+    const dim = scene.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, N.ink, 0.55).setInteractive();
+    const y = CARDS.y - CARDS.h / 2 - 40;
+    const strip = scene.add.image(VIEW.w / 2, y, 'title-strip');
+    this.title = scene.add.text(VIEW.w / 2, y, '', { fontFamily: FONT, fontSize: '24px', fontStyle: 'bold', color: C.madder }).setOrigin(0.5);
+    this.root = scene.add.container(0, 0, [dim, strip, this.title]).setDepth(UI_DEPTH + 10).setVisible(false);
   }
 
   /** Shows these choices, or hides the panel for null. Rebuilds the cards only when they change. */
@@ -48,23 +55,23 @@ export class BoonCards {
     const b = BOONS[id];
     const { y, w, h } = CARDS;
     const scene = this.scene;
-    const bg = scene.add.rectangle(0, 0, w, h, 0x2c2018).setStrokeStyle(4, 0x8a5a32);
-    const inner = scene.add.rectangle(0, 0, w - 16, h - 16, 0x3b2a1e);
+    const bg = scene.add.image(0, 0, 'card');
+    const glow = scene.add.rectangle(0, 0, w + 4, h + 4).setStrokeStyle(4, N.madder).setVisible(false);
     const icon = scene.add.image(0, -h / 2 + 62, iconTexture(id));
     const name = scene.add
-      .text(0, -h / 2 + 122, b.name, { fontFamily: FONT, fontSize: '20px', color: '#f3c64e', align: 'center' })
+      .text(0, -h / 2 + 122, b.name, { fontFamily: FONT, fontSize: '22px', fontStyle: 'bold', color: C.madder, align: 'center' })
       .setOrigin(0.5);
     const rankText = b.filler ? 'Heal' : rank === 0 ? (b.maxRank === 1 ? 'New' : `New, ${b.maxRank} ranks`) : `Rank ${rank + 1} of ${b.maxRank}`;
     const ranked = scene.add
-      .text(0, -h / 2 + 146, rankText, { fontFamily: FONT, fontSize: '13px', color: rank === 0 ? '#8cc35a' : '#c9b48f' })
+      .text(0, -h / 2 + 148, rankText, { fontFamily: FONT, fontSize: '14px', fontStyle: 'italic', color: rank === 0 ? '#2f7a4a' : C.lapis })
       .setOrigin(0.5);
     const text = scene.add
-      .text(0, -h / 2 + 172, b.text, { fontFamily: FONT, fontSize: '16px', color: '#f1e3c6', align: 'center', wordWrap: { width: w - 40 } })
+      .text(0, -h / 2 + 172, b.text, { fontFamily: FONT, fontSize: '17px', color: C.ink, align: 'center', wordWrap: { width: w - 44 } })
       .setOrigin(0.5, 0);
-    const card = scene.add.container(x, y, [bg, inner, icon, name, ranked, text]).setData('card', true);
+    const card = scene.add.container(x, y, [bg, glow, icon, name, ranked, text]).setData('card', true);
     bg.setInteractive({ useHandCursor: true })
-      .on('pointerover', () => bg.setStrokeStyle(4, 0xf3c64e))
-      .on('pointerout', () => bg.setStrokeStyle(4, 0x8a5a32))
+      .on('pointerover', () => glow.setVisible(true))
+      .on('pointerout', () => glow.setVisible(false))
       .on('pointerdown', () => this.onPick(id));
     this.root.add(card);
     this.cards.push({ id, x, y, w, h });
