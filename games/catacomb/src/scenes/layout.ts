@@ -15,7 +15,8 @@ export const HP_BAR = { w: 112, h: 18, dy: 8 };
 export const HAND = { x: 480, y: 450, w: 124, h: 172, gap: 130, span: 620 };
 /** The energy orb, bottom left. */
 export const ENERGY_ORB = { x: 72, y: 430, r: 36 };
-export const END_TURN = { x: 884, y: 420 };
+/** The End turn button, narrower than other buttons so it stays inside the view's right edge. */
+export const END_TURN = { x: 884, y: 420, w: 140 };
 /** The draw pile's count under the energy orb, the discard's under End turn. */
 export const PILES_Y = 492;
 
