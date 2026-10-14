@@ -64,7 +64,8 @@ How it runs:
 - Time: `GameScene.update(time)` takes `dt` from the frame timestamp, clamped to `MAX_STEP_MS`,
   and calls `tick(state, dt)`. `tick` moves the swinging stone (bouncing at `TOWER_X ± SWING`) or
   makes the falling one fall under `GRAVITY` until it reaches the temple's top, then `land` runs.
-- `land` decides perfect (snap to the stone below, keep the full width), cut (keep the overlap,
+- `land` decides perfect (within `perfectPx`, and only when the overlap would also reach
+  `MIN_W`: snap to the stone below, keep the full width), cut (keep the overlap,
   centred on it) or miss (overlap under `MIN_W`), adds favor, marks the tier wobbly when the share
   kept is under `BALANCE`, and on the third stone of a tier finishes it: `tier` goes up, and a
   balanced tier adds `TIER_FAVOR` and moves to the `blessing` phase with `offer` set. Then it

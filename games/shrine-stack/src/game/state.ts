@@ -184,7 +184,9 @@ function land(s: GameState) {
   s.dropped++;
   let x = m.x;
   let kept: number;
-  const perfect = Math.abs(m.x - top.x) <= s.perfectPx;
+  // Only a drop that would also overlap enough to stand counts as perfect, so a wide window
+  // can't save a narrow stone that misses.
+  const perfect = Math.abs(m.x - top.x) <= Math.min(s.perfectPx, (top.w + m.w) / 2 - MIN_W);
   const cut: { x: number; w: number }[] = [];
   if (perfect) {
     x = top.x;
