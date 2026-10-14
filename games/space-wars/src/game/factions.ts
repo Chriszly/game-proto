@@ -11,6 +11,25 @@ export interface Weapon {
   cooldownMs: number;
 }
 
+/**
+ * A faction's signature ability, carried by one unit or building. The world applies it:
+ * - `cloak`: the unit is hidden from enemies until it fires; `revealMs` is how long a shot shows it.
+ * - `decoy`: every `everyMs` the unit drops a copy that lives `lifeMs` and draws fire.
+ * - `hack`: a turret it hits goes dark for `disableMs`.
+ * - `shield`: friendly units within `range` take `share` of the damage (the rest is blocked).
+ * - `brood`: every `everyMs` the unit spawns a scout, up to `cap` scouts of its faction.
+ * - `splash`: its shots also hit enemies within `radius` of the target, for `share` of the damage.
+ * - `salvage`: a building that pays `pay` crystal for each enemy unit destroyed within `range`.
+ */
+export type Ability =
+  | { kind: 'cloak'; revealMs: number }
+  | { kind: 'decoy'; everyMs: number; lifeMs: number }
+  | { kind: 'hack'; disableMs: number }
+  | { kind: 'shield'; range: number; share: number }
+  | { kind: 'brood'; everyMs: number; cap: number }
+  | { kind: 'splash'; radius: number; share: number }
+  | { kind: 'salvage'; range: number; pay: number };
+
 export interface UnitDef {
   name: string;
   cost: number;
@@ -19,6 +38,7 @@ export interface UnitDef {
   speed: number;
   sight: number;
   weapon?: Weapon;
+  ability?: Ability;
   shape: Poly;
 }
 
@@ -32,6 +52,7 @@ export interface BuildingDef {
   /** A dome or core drawn in the accent colour at the centre. */
   dome?: number;
   weapon?: Weapon;
+  ability?: Ability;
 }
 
 export interface Faction {
@@ -56,7 +77,7 @@ export const FACTIONS: readonly Faction[] = [
     units: {
       harvester: { name: 'Prism Hauler', cost: 45, trainMs: 4000, hp: 40, speed: 55, sight: 0, shape: [[0, -7], [6, 0], [3, 6], [-3, 6], [-6, 0]] },
       scout: { name: 'Lancer', cost: 35, trainMs: 4000, hp: 60, speed: 95, sight: 150, weapon: { damage: 8, range: 90, cooldownMs: 800 }, shape: [[0, -9], [4, 4], [0, 2], [-4, 4]] },
-      gunship: { name: 'Halo Cruiser', cost: 60, trainMs: 6000, hp: 110, speed: 60, sight: 170, weapon: { damage: 10, range: 120, cooldownMs: 900 }, shape: [[-8, -3], [0, -8], [8, -3], [8, 4], [0, 8], [-8, 4]] },
+      gunship: { name: 'Halo Cruiser', cost: 60, trainMs: 6000, hp: 110, speed: 60, sight: 170, weapon: { damage: 10, range: 120, cooldownMs: 900 }, ability: { kind: 'shield', range: 70, share: 0.5 }, shape: [[-8, -3], [0, -8], [8, -3], [8, 4], [0, 8], [-8, 4]] },
       heavy: { name: 'Aegis', cost: 100, trainMs: 9000, hp: 230, speed: 40, sight: 150, weapon: { damage: 16, range: 80, cooldownMs: 1200 }, shape: [[-6, -6], [0, -9], [6, -6], [9, 0], [6, 6], [0, 9], [-6, 6], [-9, 0]] },
     },
     buildings: {
@@ -74,7 +95,7 @@ export const FACTIONS: readonly Faction[] = [
     units: {
       harvester: { name: 'Tick', cost: 40, trainMs: 3500, hp: 35, speed: 60, sight: 0, shape: [[-6, -4], [0, -1], [6, -4], [4, 4], [0, 2], [-4, 4]] },
       scout: { name: 'Stinger', cost: 30, trainMs: 3500, hp: 55, speed: 100, sight: 150, weapon: { damage: 7, range: 85, cooldownMs: 650 }, shape: [[0, -9], [2, -2], [7, 0], [2, 2], [0, 9], [-2, 2], [-7, 0], [-2, -2]] },
-      gunship: { name: 'Brood Carrier', cost: 55, trainMs: 5500, hp: 105, speed: 58, sight: 170, weapon: { damage: 9, range: 115, cooldownMs: 950 }, shape: [[-7, -5], [0, -9], [7, -5], [6, 6], [-6, 6]] },
+      gunship: { name: 'Brood Carrier', cost: 55, trainMs: 5500, hp: 105, speed: 58, sight: 170, weapon: { damage: 9, range: 115, cooldownMs: 950 }, ability: { kind: 'brood', everyMs: 12000, cap: 6 }, shape: [[-7, -5], [0, -9], [7, -5], [6, 6], [-6, 6]] },
       heavy: { name: 'Carapace', cost: 90, trainMs: 8000, hp: 240, speed: 38, sight: 150, weapon: { damage: 15, range: 80, cooldownMs: 1200 }, shape: [[-10, 0], [-5, -6], [5, -6], [10, 0], [5, 6], [-5, 6]] },
     },
     buildings: {
@@ -92,7 +113,7 @@ export const FACTIONS: readonly Faction[] = [
     units: {
       harvester: { name: 'Crane Hauler', cost: 50, trainMs: 4500, hp: 50, speed: 50, sight: 0, shape: [[-7, -6], [7, -6], [7, 6], [-7, 6]] },
       scout: { name: 'Ram Skiff', cost: 40, trainMs: 4500, hp: 70, speed: 80, sight: 140, weapon: { damage: 9, range: 90, cooldownMs: 850 }, shape: [[-8, -4], [2, -8], [8, 0], [2, 8], [-8, 4]] },
-      gunship: { name: 'Siege Barge', cost: 70, trainMs: 6500, hp: 130, speed: 45, sight: 180, weapon: { damage: 12, range: 135, cooldownMs: 1100 }, shape: [[-10, -5], [10, -5], [10, 5], [2, 5], [0, 8], [-2, 5], [-10, 5]] },
+      gunship: { name: 'Siege Barge', cost: 70, trainMs: 6500, hp: 130, speed: 45, sight: 180, weapon: { damage: 12, range: 135, cooldownMs: 1100 }, ability: { kind: 'splash', radius: 28, share: 0.5 }, shape: [[-10, -5], [10, -5], [10, 5], [2, 5], [0, 8], [-2, 5], [-10, 5]] },
       heavy: { name: 'Bulwark', cost: 115, trainMs: 9500, hp: 300, speed: 32, sight: 150, weapon: { damage: 18, range: 85, cooldownMs: 1400 }, shape: [[-9, -9], [-3, -9], [-3, -12], [3, -12], [3, -9], [9, -9], [9, 9], [-9, 9]] },
     },
     buildings: {
@@ -109,9 +130,9 @@ export const FACTIONS: readonly Faction[] = [
     tune: { hp: 0.9, damage: 1.15, speed: 1.2, cost: 1, carry: 10 },
     units: {
       harvester: { name: 'Shade Skimmer', cost: 40, trainMs: 3800, hp: 38, speed: 62, sight: 0, shape: [[0, -7], [6, 4], [0, 2], [-6, 4]] },
-      scout: { name: 'Phantom Blade', cost: 35, trainMs: 4000, hp: 55, speed: 115, sight: 160, weapon: { damage: 9, range: 80, cooldownMs: 700 }, shape: [[0, -10], [3, 6], [0, 3], [-3, 6]] },
-      gunship: { name: 'Hack Frigate', cost: 60, trainMs: 6000, hp: 100, speed: 66, sight: 170, weapon: { damage: 10, range: 120, cooldownMs: 950 }, shape: [[-8, 0], [-3, -6], [6, -6], [9, 0], [6, 6], [-3, 6]] },
-      heavy: { name: 'Decoy Wraith', cost: 105, trainMs: 9000, hp: 210, speed: 44, sight: 150, weapon: { damage: 15, range: 85, cooldownMs: 1200 }, shape: [[0, -10], [8, -3], [8, 5], [0, 10], [-8, 5], [-8, -3]] },
+      scout: { name: 'Phantom Blade', cost: 35, trainMs: 4000, hp: 55, speed: 115, sight: 160, weapon: { damage: 9, range: 80, cooldownMs: 700 }, ability: { kind: 'cloak', revealMs: 2000 }, shape: [[0, -10], [3, 6], [0, 3], [-3, 6]] },
+      gunship: { name: 'Hack Frigate', cost: 60, trainMs: 6000, hp: 100, speed: 66, sight: 170, weapon: { damage: 10, range: 120, cooldownMs: 950 }, ability: { kind: 'hack', disableMs: 6000 }, shape: [[-8, 0], [-3, -6], [6, -6], [9, 0], [6, 6], [-3, 6]] },
+      heavy: { name: 'Decoy Wraith', cost: 105, trainMs: 9000, hp: 210, speed: 44, sight: 150, weapon: { damage: 15, range: 85, cooldownMs: 1200 }, ability: { kind: 'decoy', everyMs: 15000, lifeMs: 12000 }, shape: [[0, -10], [8, -3], [8, 5], [0, 10], [-8, 5], [-8, -3]] },
     },
     buildings: {
       hub: { name: 'Shroud Node', cost: 0, buildMs: 0, hp: 760, radius: 20, dome: 6, shape: [[0, -18], [6, -6], [18, 0], [6, 6], [0, 18], [-6, 6], [-18, 0], [-6, -6]] },
@@ -134,7 +155,7 @@ export const FACTIONS: readonly Faction[] = [
     buildings: {
       hub: { name: 'Trade Hub', cost: 0, buildMs: 0, hp: 820, radius: 21, dome: 7, shape: [[-14, -14], [14, -14], [20, 0], [14, 14], [-14, 14], [-20, 0]] },
       depot: { name: 'Cargo Pod', cost: 50, buildMs: 5000, hp: 260, radius: 13, shape: [[-12, -4], [-4, -12], [4, -12], [12, -4], [12, 4], [4, 12], [-4, 12], [-12, 4]] },
-      barracks: { name: 'Salvage Yard', cost: 90, buildMs: 7000, hp: 360, radius: 16, shape: [[-16, -12], [16, -12], [16, 12], [-16, 12]] },
+      barracks: { name: 'Salvage Yard', cost: 90, buildMs: 7000, hp: 360, radius: 16, ability: { kind: 'salvage', range: 200, pay: 8 }, shape: [[-16, -12], [16, -12], [16, 12], [-16, 12]] },
       turret: { name: 'Flak Tower', cost: 75, buildMs: 5500, hp: 280, radius: 12, weapon: { damage: 11, range: 140, cooldownMs: 900 }, shape: [[0, -15], [5, -5], [12, -4], [8, 4], [10, 12], [0, 8], [-10, 12], [-8, 4], [-12, -4], [-5, -5]] },
     },
   },

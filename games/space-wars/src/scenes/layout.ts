@@ -5,11 +5,25 @@ export const VIEW = { w: 960, h: 540 };
 export const TOP = { h: 34 };
 /** The command bar along the bottom: build and train buttons, and the messages. */
 export const BAR = { y: 440, h: 100 };
+/** The window of the battlefield on screen, between the bars; the camera scrolls inside it. */
+export const MAP_VIEW = { x: 0, y: TOP.h, w: VIEW.w, h: BAR.y - TOP.h };
 export const FONT = 'monospace';
 
 export const BUTTON = { w: 112, h: 30 };
 
 export type ButtonKey = Role | UnitId;
+
+/** The generic role of each building and unit type, as the buttons and hover labels name it. */
+export const ROLE_LABEL: Record<ButtonKey, string> = {
+  hub: 'Hub',
+  depot: 'Depot',
+  barracks: 'Barracks',
+  turret: 'Turret',
+  harvester: 'Harvester',
+  scout: 'Scout',
+  gunship: 'Gunship',
+  heavy: 'Heavy',
+};
 
 export interface Button {
   kind: 'build' | 'train';
