@@ -35,6 +35,8 @@ export default defineConfig({
     { name: 'shrine-stack', testDir: 'games/shrine-stack/e2e' },
     { name: 'mapmaker', testDir: 'games/mapmaker/e2e' },
     { name: 'lanternkeep', testDir: 'games/lanternkeep/e2e' },
+    { name: 'space-wars', testDir: 'games/space-wars/e2e' },
+    { name: 'lane-brawl', testDir: 'games/lane-brawl/e2e' },
   ],
   webServer: {
     command: 'npm run dev -- --port 5173 --strictPort',

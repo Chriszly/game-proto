@@ -10,7 +10,8 @@ Playwright config, CI workflows and PR template are shared. The games are Apothe
 Broadside, in `games/broadside/`, TinctureTinker, in `games/tincture-tinker/`, Catacomb, in
 `games/catacomb/`, Golem Garden, in `games/golem-garden/`, Beehive Baron, in
 `games/beehive-baron/`, Wyrmrail, in `games/wyrmrail/`, Shrine Stack, in `games/shrine-stack/`,
-Mapmaker, in `games/mapmaker/`, and Lanternkeep, in `games/lanternkeep/`.
+Mapmaker, in `games/mapmaker/`, Lanternkeep, in `games/lanternkeep/`, Space Wars, in
+`games/space-wars/`, and Lane Brawl, in `games/lane-brawl/`.
 
 Each game's guide for agents, to read before changing it:
 
@@ -31,6 +32,8 @@ Each game's guide for agents, to read before changing it:
 | Shrine Stack | [games/shrine-stack/AGENTS.md](games/shrine-stack/AGENTS.md) |
 | Mapmaker | [games/mapmaker/AGENTS.md](games/mapmaker/AGENTS.md) |
 | Lanternkeep | [games/lanternkeep/AGENTS.md](games/lanternkeep/AGENTS.md) |
+| Space Wars | [games/space-wars/AGENTS.md](games/space-wars/AGENTS.md) |
+| Lane Brawl | [games/lane-brawl/AGENTS.md](games/lane-brawl/AGENTS.md) |
 
 ## Work on one game at a time
 

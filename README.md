@@ -22,6 +22,8 @@ start page lists the games; each one lives in its own folder under `games/`.
 | [Shrine Stack](games/shrine-stack/README.md) | Stack a temple from swinging stones: tap to drop each one, overhangs break off, and every balanced tier of three stones earns a blessing. |
 | [Mapmaker](games/mapmaker/README.md) | Reveal a fog-covered island tile by tile on a voyage's supplies, climb hills and peaks to see further, and sell your charts at port for upgrades. |
 | [Lanternkeep](games/lanternkeep/README.md) | Send moths from their jar to light a castle's lanterns before night falls, keep them burning on scarce oil, and upgrade wicks, oil and the moths between nights. |
+| [Space Wars](games/space-wars/README.md) | Command a fleet on a random star map: build a base, raise units and fight rival factions, each with its own buildings and ships. |
+| [Lane Brawl](games/lane-brawl/README.md) | Lead a team of five heroes down the lanes in a MOBA against NPC teams: farm, level up, push the lanes and destroy the enemy base. |
 
 ## Settings
 
