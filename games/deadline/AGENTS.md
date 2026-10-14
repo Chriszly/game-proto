@@ -65,7 +65,8 @@ fuel drums roll down and blow up the zombies round them when shot.
 - `src/art/theme.ts`: `UPGRADE_COLORS` and the per-style `Theme` (fonts, text colours, accent,
   warning, hp bar) in `THEMES`. System font stacks only.
 - `src/art/backdrop.ts`: `Backdrop`, the page canvas behind the game (comic panels or the overwatch
-  console), and `BackdropInfo`, what the scene feeds it.
+  console), and `BackdropInfo`, what the scene feeds it. Its canvas carries `data-backdrop` (and
+  `aria-hidden`), which the hub test uses to tell it from the game's canvas.
 - `shared/setupGame.ts` and `shared/settings.ts` (outside the game folder, shared by every game):
   the hub's settings, applied in `src/main.ts`, read for difficulty in `src/game/rules.ts` and for
   reduced motion in `src/scenes/GameScene.ts`.
