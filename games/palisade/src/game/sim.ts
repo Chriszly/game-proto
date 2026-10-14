@@ -33,15 +33,25 @@ const HIT_FLASH_MS = 90;
 const VIEW_RIGHT = 950;
 /** How long each kind of effect plays, in milliseconds. */
 const EFFECT_MS = { blast: 260, fireblast: 360, bolt: 220, death: 320, crit: 400 } as const;
+/** How long a level-up waits for a tap before it takes one of the offered upgrades at random. */
+export const AUTO_PICK_MS = 10_000;
 
 export function tick(state: GameState, ms: number) {
-  // The battle waits while the hero picks an upgrade, and once the run is over.
-  while (ms > 0 && !state.choices && state.phase !== 'over') {
+  while (ms > 0 && state.phase !== 'over') {
+    if (state.choices) {
+      // The battle waits while the hero picks an upgrade, until the time to pick runs out.
+      const dt = Math.min(ms, state.pickMs);
+      state.pickMs -= dt;
+      ageEffects(state, dt);
+      ms -= dt;
+      if (state.pickMs <= 0) pick(state, state.choices[Math.floor(Math.random() * state.choices.length)]);
+      continue;
+    }
     const dt = Math.min(ms, SUBSTEP_MS);
     step(state, dt);
     ms -= dt;
   }
-  // Effects still play out while the battle waits.
+  // Effects still play out once the run is over.
   if (ms > 0) ageEffects(state, ms);
 }
 
@@ -283,7 +293,13 @@ function gainXp(state: GameState, xp: number) {
     state.level++;
     state.levelUps++;
   }
-  if (state.levelUps > 0 && !state.choices) state.choices = rollChoices(state);
+  if (state.levelUps > 0 && !state.choices) offer(state);
+}
+
+/** Puts three upgrades up for the next pending level-up and starts the time to pick one. */
+export function offer(state: GameState) {
+  state.choices = rollChoices(state);
+  state.pickMs = AUTO_PICK_MS;
 }
 
 /** Three different upgrades to choose from, with fillers once fewer than three are left. */
@@ -303,7 +319,8 @@ export function pick(state: GameState, id: UpgradeId) {
   if (id === 'timber') state.barricade = { hp: barricadeMax, max: barricadeMax };
   if (id === 'mend') state.barricade.hp = Math.min(state.barricade.max, state.barricade.hp + state.barricade.max / 2);
   state.levelUps--;
-  state.choices = state.levelUps > 0 ? rollChoices(state) : null;
+  state.choices = null;
+  if (state.levelUps > 0) offer(state);
   return true;
 }
 
@@ -325,7 +342,11 @@ function gameOver(state: GameState) {
 /** After a fall, a new run from wave 1 with the hero's level and upgrades kept. */
 export function fightAgain(state: GameState): GameState {
   const next = newRun(progressOf(state));
-  if (next.levelUps > 0) next.choices = state.choices ?? rollChoices(next);
+  if (next.levelUps > 0) {
+    // The same cards stay up, with the full time to pick again.
+    next.choices = state.choices ?? rollChoices(next);
+    next.pickMs = AUTO_PICK_MS;
+  }
   return next;
 }
 

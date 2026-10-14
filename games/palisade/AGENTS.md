@@ -8,7 +8,7 @@ root AGENTS.md asks.
 
 Palisade is a one-screen wave defense game. A ranger who cannot move shoots on their own from
 behind a barricade at foes walking in from the right. Each kill gives experience, and each level-up
-pauses the battle on a pick of three upgrades.
+pauses the battle on a pick of three upgrades, taking one at random after 10 seconds without a tap.
 
 - **Loop:** a break with the wave's banner, then the wave's foes come on one by one. Clearing it
   repairs a tenth of the barricade and starts the next break. Foes hack at the barricade, and once
@@ -24,8 +24,8 @@ pauses the battle on a pick of three upgrades.
     shows fewer than three cards. The README says the filler "fills the gaps".
   - `GameState.version` (`VERSION`) is never read, and the save holds no version, so there is no
     migration path.
-  - Progress is only saved when the phase or wave changes, on a level-up and on a pick. Experience
-    and kills gained mid-wave are lost on a reload.
+  - Progress is only saved when the phase or wave changes, on a level-up and on a pick (tapped or
+    auto). Experience and kills gained mid-wave are lost on a reload.
   - `HERO` in `src/game/state.ts` is unused (the scene draws the hero at `HERO_FEET`).
   - There is no sound, pause or in-game settings panel (only the hub's shared settings, see Hub
     settings), and the hero has a single frame.
@@ -41,8 +41,9 @@ pauses the battle on a pick of three upgrades.
   - `state.ts`: `GameState` and its parts, field geometry (`FIELD`, `SPAWN_X`, `BOW`,
     `HERO_FRONT`, `BARRICADE_FRONT`), `xpToNext`, `stats` (all upgrade effects), `newRun`,
     `Progress`, `progressOf`, `offerable`.
-  - `sim.ts`: `tick` (the battle), `pick`, `rollChoices`, `fightAgain`, and the private steps:
-    spawning, shooting, missiles, damage, foe movement, experience, wave clear, game over.
+  - `sim.ts`: `tick` (the battle and the auto-pick countdown), `pick`, `offer`, `rollChoices`,
+    `fightAgain`, `AUTO_PICK_MS`, and the private steps: spawning, shooting, missiles, damage, foe
+    movement, experience, wave clear, game over.
   - `enemies.ts`: the `ENEMIES` table of wave 1 stats per `EnemyKind`.
   - `upgrades.ts`: the `UPGRADES` table, `UpgradeId`, `Icon` and `UPGRADE_IDS`.
   - `waves.ts`: `waveFoes`, `foeHp` (scaled by difficulty), `hpScale`, `bossBars`,
@@ -52,8 +53,9 @@ pauses the battle on a pick of three upgrades.
 - `src/scenes/GameScene.ts`: owns the `GameState`, ticks it each frame, draws it, saves progress
   and handles restart.
 - `src/scenes/layout.ts`: screen positions (`HERO_FEET`, `BARRICADE`, `XP_BAR`, `BOSS_BAR`,
-  `CARDS`, `BUTTON`), `HUD_HEIGHT`, `UI_DEPTH`, `FONT`.
-- `src/ui/LevelUp.ts`: the level-up overlay and its cards. It records each card's spot in `cards`.
+  `CARDS`, `COUNTDOWN`, `BUTTON`), `HUD_HEIGHT`, `UI_DEPTH`, `FONT`.
+- `src/ui/LevelUp.ts`: the level-up overlay, its cards and the auto-pick countdown (seconds left
+  over an emptying bar, at `COUNTDOWN`). It records each card's spot in `cards`.
 - `src/ui/Button.ts`: `makeButton`, the wooden button used on the game-over panel.
 - `src/art/`: pixel art drawn in code. `pixelArt.ts` has `bakePixelArt`, `PixelCanvas` and the
   seeded generator `seeded`. `characters.ts` has the hero, foes (two walk frames, `foeTexture`)
@@ -72,14 +74,18 @@ pauses the battle on a pick of three upgrades.
 - **Tick:** `GameScene.update(time)` takes `dt` from the frame timestamp (not Phaser's smoothed
   delta), clamped to `MAX_STEP_MS` (250). It calls `tick(state, dt)`, which runs `step` in
   substeps of at most `SUBSTEP_MS` (16) and stops while `choices` is set or the run is over. Only
-  effects keep ageing then. The scene keeps its own `clock`, used only for animation phases and
-  blinking, and it stops during a pick and after a fall.
+  effects keep ageing then. While `choices` is set, `tick` counts `pickMs` down instead, and when
+  it reaches 0 it calls `pick` with one of `choices` chosen by `Math.random`; any time left in the
+  frame then goes on to the battle (or the next level-up's countdown). The scene keeps its own
+  `clock`, used only for animation phases and blinking, and it stops during a pick and after a
+  fall.
 - **Order inside `step`:** age effects, then the break countdown or spawning, then `shoot`,
   `moveMissiles`, `moveEnemies`, and finally the wave-clear check. Arrows home, turning fully
   towards their target every substep.
 - **Input:** the only input is a tap. A tap on a level-up card calls `GameScene.pick`, which calls
-  `pick` in `sim.ts`. "Fight again" and "New hero" call `restart`. Shooting is automatic. A dimming
-  rectangle under each overlay is interactive, so taps on the battle are swallowed.
+  `pick` in `sim.ts`. Without a tap, `tick` picks after `AUTO_PICK_MS` (10 s). "Fight again" and
+  "New hero" call `restart`. Shooting is automatic. A dimming rectangle under each overlay is
+  interactive, so taps on the battle are swallowed.
 - **Rendering:** sprites are diffed by id. `foes` and `missiles` are `Map`s of images, and crit
   texts are `crits`. Each is created, updated or destroyed to match the state every frame.
   Health bars, flames, blasts, bolts and the HUD are `Graphics` that are cleared and redrawn every
@@ -90,14 +96,17 @@ pauses the battle on a pick of three upgrades.
 - `GameState` (`src/game/state.ts`) has two halves. The progress fields (`level`, `xp`, `ranks`,
   `levelUps`, `bestWave`, `runs`) form `Progress`. The run fields are `wave`, `phase`
   (`'break' | 'fighting' | 'over'`), `breakMs`, `toSpawn`, `spawnMs`, `barricade`, `enemies`,
-  `missiles`, `effects`, `cooldown`, `choices`, `kills` and `nextId`.
+  `missiles`, `effects`, `cooldown`, `choices`, `pickMs` (time left to pick before the auto-pick),
+  `kills` and `nextId`.
 - `Enemy` holds its position, `hp`/`maxHp`, boss `bars`, slow and burn timers, `attacking` and
   `hitMs`. `Missile` is an arrow or a fireball with a homing `target`, a `hit` list and `pierce`.
   `Effect` is a short-lived visual with `ms`/`total`.
 - Hero stats are never stored. `stats(state)` derives them from `ranks` each time.
 - Only `sim.ts` mutates state during play. The scene only replaces it wholesale (`newRun`,
-  `fightAgain`) and sets `choices` on load when level-ups are pending.
-- **Invariants:** `choices` is set while `levelUps > 0`, and the battle is frozen then. Foe,
+  `fightAgain`) and calls `offer` on load when level-ups are pending.
+- **Invariants:** `choices` is set while `levelUps > 0`, and the battle is frozen then. Every
+  place that sets `choices` (`offer`, `fightAgain`) also resets `pickMs` to `AUTO_PICK_MS`, so
+  each level-up gets the full 10 seconds. The countdown also stops while the run is over. Foe,
   missile and effect ids share the one `nextId` counter. A boss's `maxHp` is its per-bar health
   times `bars`. Foes spawn at `SPAWN_X` plus their radius and are only targeted once
   `x < VIEW_RIGHT` (950).
@@ -110,8 +119,9 @@ The run itself (wave, foes, barricade) is never saved, so a reload starts at wav
 
 ### Randomness and timing
 
-- `Math.random` is used in exactly four places, all in `src/game/`. In `sim.ts`: `spawn` (a foe's
-  y), `arrowHit` (crit roll, called on every arrow hit even at 0% crit) and `rollChoices`. In
+- `Math.random` is used in exactly five places, all in `src/game/`. In `sim.ts`: `spawn` (a foe's
+  y), `arrowHit` (crit roll, called on every arrow hit even at 0% crit), `rollChoices` and the
+  auto-pick in `tick` (only when the countdown runs out). In
   `waves.ts`: `waveFoes` (shuffle). Art uses its own `seeded` generator, so it does not touch the
   sequence.
 - Time comes only from Phaser's frame timestamp in `GameScene.update`. There are no timers or
@@ -159,12 +169,13 @@ Missile speeds, `LEAP_RANGE`, `BARRICADE_REPAIR` and effect durations (`EFFECT_M
   - An arrow is fired and hits.
   - Earned experience equals the summed foe `xp`.
   - The first level-up lands at level 2 with three distinct choices that match the card ids, and
-    the foes do not move while it waits.
+    the foes do not move while it waits. `pickMs` counts down (by more than 0.9 s over the 1 s
+    wait) and stays above 0, so the tap beats the auto-pick; the auto-pick itself is not played.
   - Tapping the first card sets that rank to 1.
   - At most two more level-ups in wave 1, then wave 2 in `'break'` with `bestWave` 1, 6 kills,
     18 experience earned and the barricade above 0.
 - **Mirrored in the test:** `VIEW`, each foe's `xp`, `xpToNext`, the wave 1 makeup and the field
-  names of `GameState`. A change to `ENEMIES` xp, `xpToNext`, `waveFoes` for wave 1, `VIEW`,
+  names of `GameState`, and `AUTO_PICK_MS`. A change to `ENEMIES` xp, `xpToNext`, `waveFoes` for wave 1, `VIEW`,
   `CARDS` or those state fields needs a test update in the same PR.
 - **Seeded random:** the test seeds `Math.random`. The upgrades offered, and so the card tapped,
   depend on the exact sequence of random calls. The exact-experience checks only hold if no

@@ -98,6 +98,8 @@ export interface GameState {
   cooldown: { arrow: number; fireball: number; storm: number };
   /** The three upgrades offered for the next level-up; the battle waits until one is picked. */
   choices: UpgradeId[] | null;
+  /** Time left before one of `choices` is taken at random, if none is tapped. */
+  pickMs: number;
   kills: number;
   nextId: number;
 }
@@ -156,6 +158,7 @@ export function newRun(progress: Progress): GameState {
     effects: [],
     cooldown: { arrow: 0, fireball: 0, storm: 0 },
     choices: null,
+    pickMs: 0,
     kills: 0,
     nextId: 1,
   };

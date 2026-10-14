@@ -11,6 +11,8 @@ export const XP_BAR = { x: 112, y: 514, w: 832, h: 16 };
 export const BOSS_BAR = { x: 480, y: 66, w: 420, h: 14 };
 /** The three upgrade cards on a level-up, by their centres. */
 export const CARDS = { xs: [240, 480, 720], y: 300, w: 220, h: 250 };
+/** The auto-pick countdown under the cards: its text's centre, and the width and height of its bar. */
+export const COUNTDOWN = { x: 480, y: 450, w: 160, h: 6 };
 export const BUTTON = { w: 180, h: 40 };
 
 export const UI_DEPTH = 10_000;
