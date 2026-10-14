@@ -142,7 +142,7 @@ Data tables (where to tune):
 
 ### Hub settings
 
-- `src/main.ts` calls `setupGame(game)` from `shared/setupGame.ts`, which applies the frame cap, the FPS readout, reduced motion and full screen for camera shake and flash (the game uses neither).
+- `src/main.ts` calls `setupGame(game)` from `shared/setupGame.ts`, which applies the frame cap, the FPS readout, reduced motion (camera shake and flash, which the game doesn't use) and full screen.
 - Difficulty scales one number: each order's time. `addOrder` in `src/game/sim.ts` multiplies it
   by `byDifficulty(1.5, 1, 0.7)`, so Easy 1.5x, Normal 1x, Hard 0.7x.
 - `settings.reduceMotion` holds the wyrm's wings still and stops the blink of an order's time bar

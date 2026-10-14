@@ -94,6 +94,18 @@ test('hub settings reach the games', async ({ page }, testInfo) => {
   await page.goto('/games/apothecary/');
   await expect(page.locator('.fps-readout')).toHaveText(/^\d+ FPS$/);
 
+  // Every game has full screen: F toggles it, and so does the button, which then lets Enter and Space
+  // through to the game instead of clicking itself again.
+  const fullscreen = () => page.evaluate(() => document.fullscreenElement !== null);
+  await page.keyboard.press('f');
+  await expect.poll(fullscreen).toBe(true);
+  await page.keyboard.press('f');
+  await expect.poll(fullscreen).toBe(false);
+  await page.locator('.fullscreen-button').click();
+  await expect.poll(fullscreen).toBe(true);
+  await page.keyboard.press('Enter');
+  await expect.poll(fullscreen).toBe(true);
+
   // Reset all progress clears the games' saves and keeps the settings.
   await page.goto('/');
   await page.evaluate(() => localStorage.setItem('apothecary-save', '{}'));

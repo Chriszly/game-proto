@@ -45,7 +45,11 @@ function addFullscreen() {
     // A refused request (no user gesture, or the browser says no) just leaves the page as it is.
     request.catch(() => {});
   };
-  button.addEventListener('click', toggle);
+  button.addEventListener('click', () => {
+    toggle();
+    // A focused button is clicked by Space and Enter, which games use, so let go of the focus.
+    button.blur();
+  });
   window.addEventListener('keydown', (e) => {
     if (e.key.toLowerCase() !== 'f' || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
     toggle();
