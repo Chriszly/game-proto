@@ -55,6 +55,48 @@ const STYLES = {
     radius: 6,
     font: '"Patrick Hand", "Comic Sans MS", cursive',
   },
+  pixel: {
+    key: 'pixel',
+    label: 'Chunky pixel',
+    bg: '#2a2d3e',
+    bar: '#1d2032',
+    panel: '#1d2032',
+    ink: '#0c0d14',
+    text: '#f4f0e4',
+    muted: '#a9a6b8',
+    stroke: 3,
+    radius: 0,
+    crisp: true,
+    font: '"Press Start 2P", "Courier New", monospace',
+  },
+  neon: {
+    key: 'neon',
+    label: 'Neon glow',
+    bg: '#07081a',
+    bar: '#0f1230',
+    panel: '#0f1230',
+    ink: '#5ff0ff',
+    text: '#e6fbff',
+    muted: '#7aa2b8',
+    stroke: 2,
+    radius: 6,
+    filter: 'glow',
+    font: 'Inter, Arial, Helvetica, sans-serif',
+  },
+  paper: {
+    key: 'paper',
+    label: 'Paper cut-out',
+    bg: '#d9d4c7',
+    bar: '#fbfaf6',
+    panel: '#fbfaf6',
+    ink: '#ffffff',
+    text: '#2b2b2b',
+    muted: '#6e6a60',
+    stroke: 4,
+    radius: 14,
+    filter: 'drop',
+    font: 'Inter, Arial, Helvetica, sans-serif',
+  },
 };
 
 const DIRECTIONS = {
@@ -316,6 +358,14 @@ function text(st, x, y, s, size, fill, weight = 400, anchor = 'start') {
   return `<text x="${x}" y="${y}" font-family="${st.font}" font-size="${size}" font-weight="${weight}" fill="${fill}" text-anchor="${anchor}" dominant-baseline="middle">${esc(s)}</text>`;
 }
 
+// Attributes for the flat shapes: the hand-drawn wobble, the glow or drop-shadow filter, or crisp pixel edges.
+function extra(st) {
+  if (st.key === 'handdrawn') return ' filter="url(#wob)"';
+  if (st.filter) return ` filter="url(#${st.filter})"`;
+  if (st.crisp) return ' shape-rendering="crispEdges"';
+  return '';
+}
+
 function box(st, x, y, w, h, fill, r = st.radius) {
   if (st.key === 'lowpoly') {
     return `<g filter="url(#drop)">` +
@@ -323,8 +373,7 @@ function box(st, x, y, w, h, fill, r = st.radius) {
       `<polygon points="${x},${y} ${x + w},${y} ${x},${y + h}" fill="${mix(fill, '#ffffff', 0.18)}"/>` +
       `<rect x="${x + w * 0.1}" y="${y + h * 0.1}" width="${w * 0.8}" height="${h * 0.8}" rx="${r}" fill="${fill}"/></g>`;
   }
-  const wob = st.key === 'handdrawn' ? ' filter="url(#wob)"' : '';
-  return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${r}" fill="${fill}" stroke="${st.ink}" stroke-width="${st.stroke}"${wob}/>`;
+  return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${r}" fill="${fill}" stroke="${st.ink}" stroke-width="${st.stroke}"${extra(st)}/>`;
 }
 
 function dot(st, cx, cy, rad, fill) {
@@ -332,8 +381,7 @@ function dot(st, cx, cy, rad, fill) {
     return `<g filter="url(#drop)"><circle cx="${cx}" cy="${cy}" r="${rad}" fill="${mix(fill, '#000000', 0.35)}"/>` +
       `<circle cx="${cx - rad * 0.2}" cy="${cy - rad * 0.2}" r="${rad * 0.7}" fill="${mix(fill, '#ffffff', 0.2)}"/></g>`;
   }
-  const wob = st.key === 'handdrawn' ? ' filter="url(#wob)"' : '';
-  return `<circle cx="${cx}" cy="${cy}" r="${rad}" fill="${fill}" stroke="${st.ink}" stroke-width="${st.stroke}"${wob}/>`;
+  return `<circle cx="${cx}" cy="${cy}" r="${rad}" fill="${fill}" stroke="${st.ink}" stroke-width="${st.stroke}"${extra(st)}/>`;
 }
 
 function poly(st, pts, fill) {
@@ -342,8 +390,7 @@ function poly(st, pts, fill) {
     return `<g filter="url(#drop)"><polygon points="${p}" fill="${mix(fill, '#000000', 0.3)}"/>` +
       `<polygon points="${pts[0][0]},${pts[0][1]} ${pts[1][0]},${pts[1][1]} ${pts[2][0]},${pts[2][1]}" fill="${mix(fill, '#ffffff', 0.2)}"/></g>`;
   }
-  const wob = st.key === 'handdrawn' ? ' filter="url(#wob)"' : '';
-  return `<polygon points="${p}" fill="${fill}" stroke="${st.ink}" stroke-width="${st.stroke}" stroke-linejoin="round"${wob}/>`;
+  return `<polygon points="${p}" fill="${fill}" stroke="${st.ink}" stroke-width="${st.stroke}" stroke-linejoin="round"${extra(st)}/>`;
 }
 
 function line(st, x1, y1, x2, y2, color, width, opacity = 1) {
@@ -560,6 +607,7 @@ const SCENES = { grid: gridScene, lanes: lanesScene, runner: runnerScene, stack:
 function defs() {
   return `<defs>` +
     `<filter id="wob" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="2" seed="7"/><feDisplacementMap in="SourceGraphic" scale="8"/></filter>` +
+    `<filter id="glow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>` +
     `<filter id="drop" x="-10%" y="-10%" width="130%" height="140%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.35"/></filter>` +
     `</defs>`;
 }
@@ -637,13 +685,33 @@ function directionBoard(key) {
   return svgDoc(1700, 820, parts.join('\n'));
 }
 
+// Style sheet: one game drawn in every style, for comparing art directions.
+function styleSheet(gameId) {
+  const g = GAMES.find((x) => x.id === gameId);
+  const order = ['pixel', 'vector', 'lowpoly', 'handdrawn', 'neon', 'paper'];
+  const parts = [];
+  parts.push(`<rect x="0" y="0" width="1700" height="960" fill="#ffffff"/>`);
+  parts.push(text(STYLES.vector, 48, 60, `${g.title}: six art styles`, 40, '#1f2933', 700));
+  parts.push(text(STYLES.vector, 48, 104, 'Same screen and proposed loop change, drawn in each style. Concept mockups, not game code.', 20, '#5b6670', 400));
+  order.forEach((key, i) => {
+    const col = i % 3;
+    const row = Math.floor(i / 3);
+    const x = 40 + col * 552;
+    const y = 150 + row * 380;
+    parts.push(`<g transform="translate(${x},${y}) scale(0.4)">${mockup(STYLES[key], g)}</g>`);
+    parts.push(text(STYLES.vector, x, y + 300, STYLES[key].label, 22, '#1f2933', 700));
+  });
+  return svgDoc(1700, 960, parts.join('\n'));
+}
+
 // Write files
 import { mkdirSync } from 'node:fs';
 const OUT = here;
 for (const g of GAMES) {
   writeFileSync(join(OUT, `${g.id}.svg`), svgDoc(W, H, mockup(STYLES.vector, g)));
 }
-for (const key of Object.keys(STYLES)) {
+for (const key of Object.keys(DIRECTIONS)) {
   writeFileSync(join(OUT, `direction-${key}.svg`), directionBoard(key));
 }
-console.log(`wrote ${GAMES.length} game mockups and ${Object.keys(STYLES).length} direction boards to ${OUT}`);
+writeFileSync(join(OUT, 'styles-tiny-kingdom.svg'), styleSheet('tiny-kingdom'));
+console.log(`wrote ${GAMES.length} game mockups and ${Object.keys(DIRECTIONS).length} direction boards to ${OUT}`);
