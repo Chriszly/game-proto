@@ -1,13 +1,11 @@
 name: Playthrough Apothecary
 
-# Plays Apothecary's first round. Runs only when the game's own folder (or this
-# workflow) changes; every game has its own playthrough-<name>.yml like this one.
-# It runs on pull requests only, not on pushes to main, so a merge doesn't replay it.
+# Plays Apothecary's first round. Every PR runs this workflow, but the play step only runs when the
+# game's own folder (or this workflow) changes; an unchanged game's "play" check passes without playing.
+# Every game has its own playthrough-<name>.yml like this one. It runs on pull requests only, not on
+# pushes to main, so a merge doesn't replay it.
 on:
   pull_request:
-    paths:
-      - games/apothecary/**
-      - .github/workflows/playthrough-apothecary.yml
   workflow_dispatch:
 
 permissions:
@@ -22,19 +20,43 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      # Decides whether this game changed. The job always runs, so the "play" check always
+      # reports: an unchanged game passes without playing, and a failing check here fails it.
+      - id: watch
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            if (!context.payload.pull_request) {
+              core.setOutput('game', 'true'); // workflow_dispatch: always play
+              return;
+            }
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              ...context.repo,
+              pull_number: context.payload.pull_request.number,
+              per_page: 100
+            });
+            const watched = /^(games\/apothecary\/|\.github\/workflows\/playthrough-apothecary\.yml$)/;
+            const changed = files.some(f => watched.test(f.filename));
+            console.log(changed ? 'Game changed: playing.' : 'Game unchanged: not playing.');
+            core.setOutput('game', changed ? 'true' : 'false');
       - uses: actions/checkout@v4
+        if: steps.watch.outputs.game == 'true'
       - uses: actions/setup-node@v4
+        if: steps.watch.outputs.game == 'true'
         with:
           node-version: 22
           cache: npm
       - run: npm ci
+        if: steps.watch.outputs.game == 'true'
       - run: npx playwright install --with-deps chromium
+        if: steps.watch.outputs.game == 'true'
       # Plays the first round in headless Chromium at 4x speed.
       - run: npx playwright test --project apothecary
+        if: steps.watch.outputs.game == 'true'
         env:
           PLAYTHROUGH_SPEED: 4
       # Video and milestone screenshots of the run, pass or fail; open the report's index.html to browse them.
-      - if: always()
+      - if: always() && steps.watch.outputs.game == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: playthrough-apothecary

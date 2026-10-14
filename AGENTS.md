@@ -78,8 +78,9 @@ the same rules with its own first round, files and state.
 
 `games/apothecary/e2e/playthrough.spec.ts` plays one round of the loop in headless Chromium: it opens the recipes,
 harvests, refines, brews and sells potions to a customer. The **Playthrough Apothecary** workflow
-(`.github/workflows/playthrough-apothecary.yml`) runs it on every PR (not on pushes to main) that changes
-`games/apothecary/` or the workflow itself. Each game has its own playthrough workflow like it,
+(`.github/workflows/playthrough-apothecary.yml`) runs on every PR (not on pushes to main). Its `play` check
+plays only when `games/apothecary/` or the workflow itself changes; otherwise it passes without playing, so
+the check can be required on `main`. Each game has its own playthrough workflow like it,
 so a PR for one game only plays that game, and a PR that only changes shared files plays none. The **Hub** workflow (`.github/workflows/hub.yml`) runs `e2e/hub.spec.ts` when the hub page,
 its test, a game's `index.html`, `cover.png` or `favicon.svg`, or a shared file changes. The
 playthrough is the check that the core loop can still be played, so it has to stay accurate.
