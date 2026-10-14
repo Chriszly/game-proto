@@ -1,0 +1,125 @@
+import Phaser from 'phaser';
+import type { ArtStyle } from '../game/save';
+
+// Shared tools for painting textures on 2D canvases, and the size of every sprite. Both art styles
+// paint each sprite into the same box with the same origin, so switching style only swaps textures:
+// nothing moves, and hit boxes (which come from rules.ts, not from the art) stay the same.
+
+export type Ctx = CanvasRenderingContext2D;
+export type Pt = [number, number];
+export const TAU = Math.PI * 2;
+
+/** Textures are painted at twice the game's pixels and shown at half scale, so they stay sharp. */
+export const HI = 2;
+
+/**
+ * Each sprite's box in game pixels and where its origin is inside it (the entity's x, y). The
+ * soldier's origin is the rifle, so bullets leave from where the hero's x says.
+ */
+export const GEOM = {
+  hero: { w: 42, h: 64, ox: 30, oy: 34 },
+  companion: { w: 42, h: 64, ox: 30, oy: 34 },
+  grunt: { w: 46, h: 62, ox: 23, oy: 34 },
+  runner: { w: 46, h: 62, ox: 23, oy: 34 },
+  brute: { w: 68, h: 70, ox: 34, oy: 28 },
+  boss: { w: 136, h: 140, ox: 68, oy: 58 },
+  crate: { w: 64, h: 86, ox: 32, oy: 58 },
+  drum: { w: 40, h: 46, ox: 20, oy: 22 },
+  bullet: { w: 14, h: 34, ox: 7, oy: 7 },
+  muzzle: { w: 28, h: 28, ox: 14, oy: 16 },
+  splat: { w: 52, h: 34, ox: 26, oy: 17 },
+  blast: { w: 220, h: 220, ox: 110, oy: 110 },
+  streak: { w: 92, h: 70, ox: 46, oy: 35 },
+  label: { w: 132, h: 24, ox: 66, oy: 0 },
+  sandbags: { w: 540, h: 36, ox: 0, oy: 18 },
+  ground: { w: 540, h: 960, ox: 0, oy: 0 },
+  sfx: { w: 150, h: 70, ox: 75, oy: 35 },
+  hudbar: { w: 540, h: 56, ox: 0, oy: 0 },
+  ring: { w: 192, h: 192, ox: 96, oy: 96 },
+} as const;
+export type SpriteName = keyof typeof GEOM;
+
+/** The texture key of a sprite in a style, e.g. `comic-grunt` or `nv-crate-rate`. */
+export const tex = (style: ArtStyle, name: string) => `${style}-${name}`;
+
+/** A small seeded random, so the art is the same every time and never touches Math.random. */
+export function rng(seed: number) {
+  let s = seed;
+  return () => {
+    s = (s * 16807) % 2147483647;
+    return s / 2147483647;
+  };
+}
+
+export function canvas(w: number, h: number) {
+  const c = document.createElement('canvas');
+  c.width = Math.ceil(w);
+  c.height = Math.ceil(h);
+  return c;
+}
+
+/** Screen-sized layers are painted at 1x: drawing them unscaled every frame is much cheaper. */
+export const FULL_SCREEN = new Set<string>(['ground', 'sandbags', 'scan']);
+
+/**
+ * Paints a texture into the box of `geom` (in game pixels, at `scale`, `HI` unless it is a
+ * full-screen layer), with the drawing's (0, 0) at the box's origin. `post` can rework the
+ * finished canvas (the night-vision look does). Show it at `geom.w / width` scale.
+ */
+export function bake(
+  scene: Phaser.Scene,
+  key: string,
+  geom: { w: number; h: number; ox: number; oy: number },
+  draw: (ctx: Ctx) => void,
+  post?: (c: HTMLCanvasElement, scale: number) => void,
+) {
+  const scale = FULL_SCREEN.has(key.slice(key.indexOf('-') + 1)) ? 1 : HI;
+  const c = canvas(geom.w * scale, geom.h * scale);
+  const ctx = c.getContext('2d')!;
+  ctx.scale(scale, scale);
+  ctx.translate(geom.ox, geom.oy);
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  draw(ctx);
+  post?.(c, scale);
+  if (scene.textures.exists(key)) scene.textures.remove(key);
+  scene.textures.addCanvas(key, c);
+}
+
+export function path(ctx: Ctx, pts: Pt[]) {
+  ctx.beginPath();
+  pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+  ctx.closePath();
+}
+
+export function circle(ctx: Ctx, x: number, y: number, r: number, fill?: string, stroke?: string, lw = 2) {
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, TAU);
+  if (fill) {
+    ctx.fillStyle = fill;
+    ctx.fill();
+  }
+  if (stroke) {
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = lw;
+    ctx.stroke();
+  }
+}
+
+const hex = (c: string) => {
+  const p = parseInt(c.slice(1), 16);
+  return [(p >> 16) & 255, (p >> 8) & 255, p & 255];
+};
+/** Mixes two #rrggbb colours: t = 0 is a, 1 is b. */
+export function mix(a: string, b: string, t: number) {
+  const A = hex(a), B = hex(b);
+  return '#' + A.map((v, i) => Math.round(v * (1 - t) + B[i] * t).toString(16).padStart(2, '0')).join('');
+}
+/** Lighter towards white for k > 0, darker towards black for k < 0. */
+export const lit = (c: string, k: number) => (k >= 0 ? mix(c, '#ffffff', k) : mix(c, '#000000', -k));
+export function rgba(c: string, a: number) {
+  const [r, g, b] = hex(c);
+  return `rgba(${r},${g},${b},${a})`;
+}
+/** A #rrggbb colour as the number Phaser's Graphics wants. */
+export const num = (c: string) => parseInt(c.slice(1), 16);

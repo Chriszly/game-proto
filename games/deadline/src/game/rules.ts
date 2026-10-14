@@ -57,6 +57,19 @@ export const UPGRADE_KINDS = Object.keys(UPGRADES) as UpgradeKind[];
 /** Pickups drift down slower than the horde, so there is time to shoot them open. */
 export const PICKUP = { speed: 40, halfSize: 22 };
 
+/**
+ * Fuel drums roll down the road slower still, so the horde walks past and through them. A single
+ * hit blows one up: every zombie within `blastRadius` of it takes `blastDamage(wave)`.
+ */
+export const DRUM = { speed: 30, halfSize: 14, blastRadius: 88, hp: 1 };
+export const blastDamage = (wave: number) => 6 + 3 * wave;
+
+/**
+ * Kills that come within `gapMs` of the last one build a streak. A streak of `kills` sets off a
+ * frenzy: for `ms` the squad fires `rate` times as fast. The streak starts over once it ends.
+ */
+export const FRENZY = { gapMs: 1500, kills: 12, ms: 5000, rate: 2 };
+
 export interface Stats {
   /** Hit points a bullet takes off. */
   damage: number;
@@ -88,7 +101,8 @@ export function applyUpgrade(stats: Stats, kind: UpgradeKind): Stats {
 /** Something that comes in during a wave: `at` ms after the wave starts, `x` across the screen. */
 export type Spawn =
   | { at: number; x: number; type: 'enemy'; kind: EnemyKind; hp: number }
-  | { at: number; x: number; type: 'pickup'; upgrade: UpgradeKind; hp: number };
+  | { at: number; x: number; type: 'pickup'; upgrade: UpgradeKind; hp: number }
+  | { at: number; x: number; type: 'drum'; hp: number };
 
 /** Every fifth wave ends with a boss. */
 export const isBossWave = (wave: number) => wave % 5 === 0;
@@ -96,9 +110,15 @@ export const isBossWave = (wave: number) => wave % 5 === 0;
 /** How many enemies a wave sends, not counting its boss. */
 export const waveSize = (wave: number) => 12 + 6 * (wave - 1);
 
+/** Every zombie that must fall to clear the wave, its boss included: the progress strip's total. */
+export const waveTotal = (wave: number) => waveSize(wave) + (isBossWave(wave) ? 1 : 0);
+
+/** How many fuel drums roll down in a wave. */
+export const drumCount = (wave: number) => 1 + Math.floor(wave / 4);
+
 /**
  * Plans a wave: who comes in, when and where. Waves grow in size and toughness (scaled by the hub's difficulty), bring runners from
- * wave 2 and brutes from wave 3, and carry a pickup or more in among the enemies.
+ * wave 2 and brutes from wave 3, and carry a pickup or more and a fuel drum or more in among the enemies.
  */
 export function planWave(wave: number, rand: () => number = Math.random): Spawn[] {
   const toughness = (1 + 0.3 * (wave - 1)) * byDifficulty(0.75, 1, 1.3);
@@ -120,6 +140,14 @@ export function planWave(wave: number, rand: () => number = Math.random): Spawn[
     const upgrade = UPGRADE_KINDS[Math.floor(rand() * UPGRADE_KINDS.length)];
     const at = 2500 + Math.round((i * size * gap) / pickups);
     spawns.push({ at, x: Math.round(VIEW.w * (0.25 + rand() * 0.5)), type: 'pickup', upgrade, hp: 10 + 6 * wave });
+  }
+  // Fuel drums come in early and spread over the wave, so the zombies behind them catch up and walk
+  // through their blast rings. Their draws come last, so a wave's enemies and crates are the same
+  // as without them.
+  const drums = drumCount(wave);
+  for (let i = 0; i < drums; i++) {
+    const at = 2000 + Math.round((i * size * gap) / drums);
+    spawns.push({ at, x: Math.round(VIEW.w * (0.3 + rand() * 0.4)), type: 'drum', hp: DRUM.hp });
   }
   return spawns.sort((a, b) => a.at - b.at);
 }

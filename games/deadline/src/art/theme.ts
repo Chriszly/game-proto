@@ -1,0 +1,63 @@
+import type { UpgradeKind } from '../game/rules';
+import type { ArtStyle } from '../game/save';
+
+// The colours and type of each art style's HUD, labels and overlays. System font stacks only: no
+// web fonts to load.
+
+/** Each upgrade's colour: the crate's band in the comic, its chemlight in night vision. */
+export const UPGRADE_COLORS: Record<UpgradeKind, string> = {
+  rate: '#ffd23f',
+  damage: '#ff6a3a',
+  companion: '#4ab0ff',
+  pierce: '#6ae06a',
+};
+
+export interface Theme {
+  /** Font family for Phaser text, and its style ('italic bold' or 'bold'). */
+  font: string;
+  fontStyle: string;
+  /** The same family for painting on canvases. */
+  canvasFont: string;
+  ink: string;
+  /** Main text, numbers that matter, quieter text. */
+  text: string;
+  value: string;
+  muted: string;
+  /** The highlight: frenzy, the drum's ring, the best wave chip. */
+  accent: string;
+  /** Warnings: the boss coming, game over. */
+  warn: string;
+  /** The fill of an enemy's health bar and the boss bar. */
+  hp: string;
+}
+
+const COMIC_FONT = '"Arial Black", "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif';
+const MONO_FONT = 'ui-monospace, "DejaVu Sans Mono", Menlo, Consolas, "Courier New", monospace';
+
+export const COMIC: Theme = {
+  font: COMIC_FONT,
+  fontStyle: 'italic bold',
+  canvasFont: COMIC_FONT,
+  ink: '#15121a',
+  text: '#15121a',
+  value: '#ffe04a',
+  muted: '#d8d0e8',
+  accent: '#ff8a2a',
+  warn: '#c03a1a',
+  hp: '#e2593f',
+};
+
+export const NV: Theme = {
+  font: MONO_FONT,
+  fontStyle: 'bold',
+  canvasFont: MONO_FONT,
+  ink: '#020a05',
+  text: '#d8ffd0',
+  value: '#d8ffd0',
+  muted: '#8fc896',
+  accent: '#ffb43a',
+  warn: '#ff8a5a',
+  hp: '#ffb43a',
+};
+
+export const THEMES: Record<ArtStyle, Theme> = { comic: COMIC, nv: NV };
