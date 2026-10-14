@@ -45,6 +45,9 @@ export class Backdrop {
   constructor(private frame: () => HTMLCanvasElement | undefined) {
     this.el = document.createElement('canvas');
     this.el.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none';
+    // Decoration only: marked so the hub test can tell it from the game's canvas.
+    this.el.dataset.backdrop = '';
+    this.el.setAttribute('aria-hidden', 'true');
     document.body.prepend(this.el);
     window.addEventListener('resize', () => requestAnimationFrame(() => this.paint()));
   }
