@@ -380,7 +380,7 @@ export class GameScene extends Phaser.Scene {
     sign.setInteractive({ useHandCursor: true }).on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
       e.stopPropagation();
       // A second finger landing on a sign starts a pinch, not a priority change.
-      if (this.input.pointer1.isDown && this.input.pointer2.isDown) return;
+      if (this.pinching()) return;
       // With a panel open, a tap anywhere closes it, a sign's included, without changing the sign.
       if (this.recipes.visible || this.settings.visible) {
         this.recipes.toggle(false);
@@ -857,7 +857,10 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0)
       .setDepth(UI_DEPTH)
       .setInteractive()
-      .on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => e.stopPropagation());
+      .on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
+        e.stopPropagation();
+        this.pinching();
+      });
     const style = { fontFamily: 'monospace', fontSize: '16px', color: '#f3e9d2' };
     this.add.image(26, HUD_HEIGHT / 2 - 1, 'coin').setScale(2).setDepth(UI_DEPTH);
     const coins = this.add.text(44, HUD_HEIGHT / 2 - 1, '', style).setOrigin(0, 0.5).setDepth(UI_DEPTH);
@@ -923,8 +926,18 @@ export class GameScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
         e.stopPropagation();
+        // A second finger landing on a button starts a pinch, not a tap.
+        if (this.pinching()) return;
         onTap();
       });
+  }
+
+  /** True while two fingers are down, which starts a pinch; it also cancels the walk. */
+  private pinching() {
+    if (!this.input.pointer1.isDown || !this.input.pointer2.isDown) return false;
+    this.pointerTarget = null;
+    this.waypoint = null;
+    return true;
   }
 
   /** A station image whose lower part blocks walking, so the doctor can pass behind its top edge. */
@@ -960,13 +973,9 @@ export class GameScene extends Phaser.Scene {
 
     // Touch / click to walk, so the same controls work on phones.
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
-      if (p.y < HUD_HEIGHT) return;
       // A second finger starts a pinch: stop walking instead of heading for it.
-      if (this.input.pointer1.isDown && this.input.pointer2.isDown) {
-        this.pointerTarget = null;
-        this.waypoint = null;
-        return;
-      }
+      if (this.pinching()) return;
+      if (p.y < HUD_HEIGHT) return;
       // While a panel is open, a tap anywhere below the top bar closes it instead of walking.
       if (this.recipes.visible || this.settings.visible) {
         this.recipes.toggle(false);

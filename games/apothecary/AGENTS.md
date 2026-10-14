@@ -88,11 +88,13 @@ counter. Coins buy upgrades, craftsmen, conveyor belts and a mirrored second pro
   `cameras.main.getWorldPoint`, since the pointer's own `worldX/Y` may be the UI camera's.
 - Zoom: two cameras. The main camera follows the doctor and zooms (`MIN_ZOOM` 0.62 to `MAX_ZOOM`
   2, by the mouse wheel, + and - keys, or a two-finger pinch on `pointer1`/`pointer2`, which also
-  cancels the walk the second finger's tap would start and leaves a priority sign under the second
-  finger as it is). `uiCamera` never moves and draws
-  everything from `UI_DEPTH` up: `splitCameras` sets each object's `cameraFilter` by its depth every
-  frame, so later objects sort themselves. `setZoom` clamps, widens the camera bounds evenly when the
-  view is wider than the world, and stores the zoom under `apothecary-zoom`.
+  cancels the walk when the second finger lands on the map, the top bar, a top-bar button or a
+  priority sign; `pinching` checks it, so that finger doesn't change the sign or press the button.
+  The open Recipes and Settings panels stop taps without this check). `uiCamera`
+  never moves and draws everything from `UI_DEPTH` up: `splitCameras` sets each object's
+  `cameraFilter` by its depth every frame, so later objects sort themselves. `setZoom` clamps,
+  widens the camera bounds evenly when the view is wider than the world, and stores the zoom
+  under `apothecary-zoom`.
 - Map: two columns of production (line one on the left, line two mirrored on the right with
   `mirror`), each running straight down from its gardens through `REFINER` and `CAULDRON` at
   `LINE_X`. A station's drop, work and pick-up markers stand in a row at `INNER_X` (the market side)
