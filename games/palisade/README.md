@@ -15,6 +15,7 @@ the experience bar, and every level-up pauses the battle on three upgrades to pi
 | Control | Action |
 | --- | --- |
 | Tap or click a card | Take that upgrade when a level-up comes up (after 10 seconds one is taken at random) |
+| Upgrades (in the top bar) | List the upgrades taken so far, with their ranks; the battle waits until Back |
 | Fight again / New hero | After a fall: start again from wave 1 keeping the hero, or with a new one |
 
 1. **Waves**: each wave brings more foes than the last, with more health. A short break with the
@@ -67,6 +68,12 @@ picked. Once fewer than three upgrades are left, "Mend the Barricade" fills the 
 
 ![Fire arrows, a fireball and burning foes](docs/screenshots/upgrades.png)
 
+The "Upgrades" button in the top bar shows how many upgrades the hero has and opens a list of
+them, each with its rank and what a rank does. It works during a level-up too, to check what the
+hero has before choosing.
+
+![The list of upgrades taken](docs/screenshots/upgrade-list.png)
+
 ![After a fall](docs/screenshots/game-over.png)
 
 The difficulty, set on the hub page's Settings, changes one thing: foes have 25% less health on Easy and 30% more on Hard.
@@ -102,7 +109,7 @@ All paths are inside `games/palisade/`.
   rules, `layout.ts` says where things are drawn.
 - `src/art/`: all the pixel art, drawn in code and baked into textures at startup: the ranger and
   the foes, the battlefield, the barricade (which breaks up in stages), missiles and upgrade icons.
-- `src/ui/`: the level-up cards and buttons.
+- `src/ui/`: the level-up cards, the list of upgrades taken and buttons.
 
 Adding an upgrade is an entry in `src/game/upgrades.ts` and its effect in `stats` in
 `src/game/state.ts` (and, for a new kind of missile, `shoot` in `src/game/sim.ts`).

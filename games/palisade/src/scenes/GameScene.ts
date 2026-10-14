@@ -10,6 +10,7 @@ import type { UpgradeId } from '../game/upgrades';
 import { isBossWave } from '../game/waves';
 import { makeButton } from '../ui/Button';
 import { LevelUp } from '../ui/LevelUp';
+import { UpgradeList } from '../ui/UpgradeList';
 import { BOSS_BAR, FONT, HERO_FEET, HUD_HEIGHT, UI_DEPTH, VIEW, BARRICADE, XP_BAR } from './layout';
 
 /** Longest simulated step, so a backgrounded tab doesn't jump the battle forward. */
@@ -31,6 +32,8 @@ export class GameScene extends Phaser.Scene {
   state!: GameState;
   /** The level-up cards; the playthrough test reads where they are to tap one. */
   levelUp!: LevelUp;
+  /** The upgrades taken so far, behind a button in the top bar. */
+  upgradeList!: UpgradeList;
   private foes = new Map<number, Phaser.GameObjects.Image>();
   private missiles = new Map<number, Phaser.GameObjects.Image>();
   private crits = new Map<number, Phaser.GameObjects.Text>();
@@ -71,6 +74,7 @@ export class GameScene extends Phaser.Scene {
     this.createHud();
     this.createGameOver();
     this.levelUp = new LevelUp(this, (id) => this.pick(id));
+    this.upgradeList = new UpgradeList(this);
   }
 
   update(time: number) {
@@ -82,8 +86,11 @@ export class GameScene extends Phaser.Scene {
     const phase = s.phase;
     const wave = s.wave;
     const levelUps = s.levelUps;
-    tick(s, dt);
-    if (!s.choices && s.phase !== 'over') this.clock += dt;
+    // Everything, the auto-pick countdown included, waits while the list of upgrades is open.
+    if (!this.upgradeList.open) {
+      tick(s, dt);
+      if (!s.choices && s.phase !== 'over') this.clock += dt;
+    }
     if (s.phase !== phase || s.wave !== wave || s.levelUps !== levelUps) saveProgress(progressOf(s));
 
     this.drawFoes();
@@ -92,6 +99,7 @@ export class GameScene extends Phaser.Scene {
     this.drawHero();
     this.drawHud();
     this.levelUp.show(s.phase === 'over' ? null : s.choices, s.ranks, s.level - s.levelUps + 1, s.levelUps, s.pickMs);
+    this.upgradeList.show(s.ranks, s.phase === 'over');
     this.gameOver.setVisible(s.phase === 'over');
     if (s.phase === 'over') {
       this.gameOverText.setText(
