@@ -70,7 +70,7 @@ places six buildings by tapping, checking the score each adds against the rules.
 farm it tests undo: the undo takes that farm back, a second undo in the round does nothing, and the
 farm goes back down. The goal then brings round 2 and its tiles. Like the other games' tests it owns the game clock and plays at 4x
 speed (`PLAYTHROUGH_SPEED`). The **Playthrough Tiny Kingdom** workflow
-(`.github/workflows/playthrough-tiny-kingdom.yml`) runs it on every PR that changes
+(`.github/workflows/playthrough.yml`) runs it on every PR that changes
 this folder or the workflow, and uploads the video and screenshots as the
 `playthrough-tiny-kingdom` artifact.
 

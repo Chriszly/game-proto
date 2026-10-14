@@ -1,5 +1,6 @@
 import { byDifficulty } from '../../../../shared/settings';
-import { CELL_CAP, FLOWERS, HONEY_PRICE, RIPEN_MS, TRIP_MS, beePrice, carry, cellPrice, room, type Bee, type GameState } from './state';
+import { MEADOWS } from './meadows';
+import { AWAY_CAP, AWAY_MS_PER_DROP, CELL_CAP, FLOWERS, TRIP_MS, beePrice, carry, cellPrice, jarPrice, ripenTime, room, touching, type Bee, type GameState } from './state';
 import { nextPrice, type UpgradeId } from './upgrades';
 
 /** A forager's trip time with the clover planted so far. Easier difficulties have the flowers closer. */
@@ -36,7 +37,7 @@ function deliver(s: GameState, drops: number) {
     s.events.push({ kind: 'nectar', slot });
     if (c.nectar === CELL_CAP) {
       c.phase = 'ripening';
-      c.ripenMs = RIPEN_MS;
+      c.ripenMs = ripenTime(s);
     }
   }
   if (drops > 0) {
@@ -52,7 +53,7 @@ export function build(s: GameState, slot: number) {
   if (s.cells[slot] !== null || s.coins < price) return false;
   s.coins -= price;
   s.cells[slot] = { nectar: 0, phase: 'filling', ripenMs: 0 };
-  s.events.push({ kind: 'built', slot });
+  s.events.push({ kind: 'built', slot, touching: touching(s, slot) });
   return true;
 }
 
@@ -80,15 +81,31 @@ export function harvest(s: GameState, slot: number) {
   return true;
 }
 
-/** Sells every jar of honey. */
+/** Sells every jar of honey at `jarPrice`, and unlocks each meadow whose goal that reaches. */
 export function sell(s: GameState) {
   if (s.jars === 0) return false;
-  const coins = s.jars * HONEY_PRICE;
+  const coins = s.jars * jarPrice(s);
   s.events.push({ kind: 'sold', jars: s.jars, coins });
   s.coins += coins;
   s.sold += s.jars;
   s.jars = 0;
+  while (s.meadows < MEADOWS.length && s.sold >= MEADOWS[s.meadows].need) {
+    s.events.push({ kind: 'unlocked', meadow: s.meadows });
+    s.meadows++;
+  }
   return true;
+}
+
+/**
+ * The nectar the bees gathered while the page was closed for `awayMs`: one drop per bee per
+ * `AWAY_MS_PER_DROP`, at most `AWAY_CAP` and never more than the comb has room for, delivered
+ * into the filling cells like a forager's. Returns the drops added.
+ */
+export function gatherAway(s: GameState, awayMs: number) {
+  if (!(awayMs > 0)) return 0;
+  const drops = Math.min(AWAY_CAP, room(s), Math.floor((awayMs * s.bees.length) / AWAY_MS_PER_DROP));
+  if (drops > 0) deliver(s, drops);
+  return drops;
 }
 
 /** Buys one more bee, which starts at home. */

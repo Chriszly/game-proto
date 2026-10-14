@@ -106,7 +106,7 @@ up coins on the way. There it checks that the run waits on two different
 boons, taps the first card, and checks that the boon was taken and the faster second stage has
 begun. Like the other games' tests it owns the game clock and plays at 4x speed
 (`PLAYTHROUGH_SPEED`). The **Playthrough Hotfoot** workflow
-(`.github/workflows/playthrough-hotfoot.yml`) runs it on every PR that touches this folder or its
+(`.github/workflows/playthrough.yml`) runs it on every PR that touches this folder or its
 workflow, and uploads the video and screenshots as the
 `playthrough-hotfoot` artifact.
 

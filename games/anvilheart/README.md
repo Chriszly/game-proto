@@ -74,7 +74,7 @@ waits for the first adventurer and their Iron Shortsword order, taps Forge twice
 forge must heat up in between), drags one dagger onto the other and checks they merged, then drags
 the Shortsword onto the adventurer and checks the coins and the sale. Like the other games' tests
 it owns the game clock and plays at 4x speed (`PLAYTHROUGH_SPEED`). The **Playthrough Anvilheart**
-workflow (`.github/workflows/playthrough-anvilheart.yml`) runs it on every pull request
+workflow (`.github/workflows/playthrough.yml`) runs it on every pull request
 that changes `games/anvilheart/` or the workflow itself, and uploads the video and screenshots as the
 `playthrough-anvilheart` artifact.
 
