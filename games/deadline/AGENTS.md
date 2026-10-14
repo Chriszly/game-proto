@@ -10,8 +10,8 @@ straight up on a timer, and the player only moves them left and right. Zombies w
 towards the soldier; upgrade crates drift down among them and are shot open for a stat upgrade.
 
 - **Implemented:** endless waves that grow in size and toughness, runners from wave 2, brutes from
-  wave 3, a boss at the end of every fifth wave, four crate upgrades (fire rate, damage, bullets,
-  pierce), a HUD, a wave banner, health bars, a boss bar and an "Overrun!" game over screen.
+  wave 3, a boss at the end of every fifth wave, four crate upgrades (fire rate, damage, companion,
+  pierce), a squad of up to eight companions in three staggered rows of three, a HUD, a wave banner, health bars, a boss bar and an "Overrun!" game over screen.
 - **Progression** is only the crates: no XP, levels, currency or shop. Stats reset on restart.
 - **Screens:** there is no title or menu. `BootScene` bakes textures and starts `GameScene`, which
   begins wave 1 at once. Game over is an overlay in the same scene; a tap calls `scene.restart()`.
@@ -37,7 +37,7 @@ towards the soldier; upgrade crates drift down among them and are shot open for 
 - `src/scenes/BootScene.ts`: scene `'Boot'`; calls `bakeSprites` and starts `'Game'`.
 - `src/scenes/GameScene.ts`: scene `'Game'`; all runtime logic: state, input, spawning, firing,
   movement, collisions, waves, HUD, bars, game over.
-- `src/game/rules.ts`: pure numbers and rules: `VIEW`, `HERO`, `REACH_Y`, `ENEMIES`, `UPGRADES`,
+- `src/game/rules.ts`: pure numbers and rules: `VIEW`, `HERO`, `REACH_Y`, `SQUAD_SLOTS`, `MAX_COMPANIONS`, `ENEMIES`, `UPGRADES`,
   `Stats`, `BASE_STATS`, `applyUpgrade`, `planWave`, `isBossWave`, `waveSize`. No Phaser import;
   its only import is `byDifficulty` from `shared/settings.ts`.
 - `src/game/pool.ts`: generic `Pool<T>` with `take`, `release`, `live` and `all`, to reuse sprites.
@@ -49,7 +49,7 @@ towards the soldier; upgrade crates drift down among them and are shot open for 
 ### How it runs
 
 - **Boot:** `bakeSprites` draws each grid into a `Graphics` and calls `generateTexture`. Texture
-  keys: `hero`, `grunt`, `runner`, `brute`, `boss`, `bullet`, `crate-<UpgradeKind>`, `sandbag`,
+  keys: `hero`, `companion` (the hero grid in a tan palette), `grunt`, `runner`, `brute`, `boss`, `bullet`, `crate-<UpgradeKind>`, `sandbag`,
   `splat`, `ground`. Enemy sprites use the `EnemyKind` as the texture key, so the two must match.
 - **Tick:** `GameScene.update` clamps `delta` to 100ms and, unless the phase is `'over'`, runs in
   order: scroll ground, `moveHero`, `spawn`, `fire`, `moveBullets`, `moveEnemies`, `movePickups`,
@@ -60,9 +60,18 @@ towards the soldier; upgrade crates drift down among them and are shot open for 
   shifts entries off the front once `waveClock` passes their `at`. `checkWave` moves to `'break'`
   when `enemiesToCome()` is 0 and no enemy is live (crates do not count), then after `BREAK_MS`
   calls `startWave(wave + 1)`.
-- **Input:** `createInput` sets `pointerTarget` (clamped to `HERO.minX..HERO.maxX`) on
+- **Squad:** `stats.companions` companions stand at `SQUAD_SLOTS[1..]`, offsets from the hero
+  (`SQUAD_SLOTS[0]`): the front row beside the hero, then two rows behind it, 24px apart, each row
+  shifted 20px so all nine rifles are in different columns 20px apart. `collect` calls
+  `addCompanions`, which makes the `squad` images; `moveHero` places them every frame and `fire`
+  sends one bullet from each slot (from its own row's y). Depth grows with the row, so back rows draw
+  on top. `heroRange()` narrows the hero's x range so every squad rifle stays in
+  `HERO.minX..HERO.maxX`. Once the squad is full (`MAX_COMPANIONS` = 8), `spawn` turns a companion
+  crate into a damage crate; `applyUpgrade` also caps the count.
+- **Input:** `createInput` sets `pointerTarget` (clamped to `heroRange()`) on
   `pointerdown`, and on `pointermove` while held. `moveHero` walks towards it at `HERO.speed` and
-  clears it on arrival. Held A/D or arrow keys move directly and clear `pointerTarget`. A tap in
+  clears it on arrival; it re-clamps `pointerTarget` to `heroRange()` first, since a new companion
+  can narrow it. Held A/D or arrow keys move directly and clear `pointerTarget`. A tap in
   the `'over'` phase restarts the scene instead.
 - **Rendering:** objects are long-lived and updated in place: pooled images for enemies, crates
   (with two text labels each), bullets and splats are repositioned each frame and hidden on
@@ -89,14 +98,15 @@ towards the soldier; upgrade crates drift down among them and are shot open for 
 ### State model
 
 - `GameState` (exported from `GameScene.ts`, there is no `state.ts`): `wave`, `phase`
-  (`'wave' | 'break' | 'over'`), `kills`, `stats` (a `Stats` from `rules.ts`) and `collected`
-  (count per `UpgradeKind`).
+  (`'wave' | 'break' | 'over'`), `kills`, `stats` (a `Stats` from `rules.ts`: `damage`,
+  `fireInterval`, `companions`, `pierce`) and `collected` (count per `UpgradeKind`). The scene's
+  public `squad` holds the companion images, one per `stats.companions`.
 - Entities (`Enemy`, `Pickup`, `Bullet`, `Splat`) are private interfaces in `GameScene.ts`, held in
   `Pool`s, not in `GameState`. Each has `alive`; enemies and pickups share the `id` counter `nextId`
   so a bullet's `hit` list can hold both.
 - Mutation: the scene mutates everything. The only pure function on state is `applyUpgrade`, which
   returns a new `Stats` (called from `collect`). `planWave` is pure given its `rand`.
-- Invariants: `player.x` is always in `HERO.minX..HERO.maxX`, and it is the rifle's x, not the
+- Invariants: `player.x` is always in `heroRange()` (inside `HERO.minX..HERO.maxX`), and it is the rifle's x, not the
   sprite's centre (origin is `HERO_RIFLE_X`). A bullet's `hitsLeft` starts at `1 + pierce` and is
   spent on enemies first, then crates, in the same frame. Wave 1 is all grunts.
 - Game over: `moveEnemies` calls `gameOver` as soon as any enemy's `y + radius >= REACH_Y`, and
@@ -113,7 +123,7 @@ towards the soldier; upgrade crates drift down among them and are shot open for 
 ### Data tables
 
 - All tuning is in `src/game/rules.ts`: hero line and speed (`HERO`), `REACH_Y`, `BULLET`,
-  `BREAK_MS`, enemy hp/speed/steer/radius (`ENEMIES`), crate speed and size (`PICKUP`), starting
+  `BREAK_MS`, the squad formation (`SQUAD_SLOTS`, `MAX_COMPANIONS`), enemy hp/speed/steer/radius (`ENEMIES`), crate speed and size (`PICKUP`), starting
   stats (`BASE_STATS`), `MIN_FIRE_INTERVAL`, the upgrade effects (`applyUpgrade`), and wave growth
   in `waveSize` and `planWave` (toughness `1 + 0.3 * (wave - 1)` times the difficulty multiplier,
   spawn gap, kind odds, boss delay, crate count `1 + floor(wave / 3)` and crate hp `10 + 6 * wave`).
@@ -134,7 +144,7 @@ towards the soldier; upgrade crates drift down among them and are shot open for 
   12 kills; then waits for wave 2.
 - Kept in sync by hand in `e2e/playthrough.spec.ts`: `VIEW`, `HERO_Y = 880`,
   `WAVE_1_ENEMIES = 12` (from `waveSize(1)`), `BASE_STATS`, and `UPGRADED` (each upgrade applied
-  once to the base stats, e.g. fire interval 272). Changing those, the `GameState` shape, the
+  once to the base stats, e.g. fire interval 272 or one companion). Changing those, the `GameState` shape, the
   scene key `'Game'`, the public fields above, or `planWave`'s random draws for wave 1 means
   updating the test in the same PR, and refreshing `docs/screenshots/playthrough-*.png`.
 - The test runs on Normal difficulty (no `hub-settings` saved), so enemy hp is unscaled.
@@ -148,6 +158,9 @@ towards the soldier; upgrade crates drift down among them and are shot open for 
 - **Add an enemy kind:** add it to `EnemyKind` and `ENEMIES` in `rules.ts`, add its odds in
   `planWave`, add a grid and palette in `src/art/sprites.ts` and `bake` it under the same key in
   `bakeSprites`. Give it a splat scale in `GameScene.kill` if it is big.
+- **Change the squad's shape:** edit `SQUAD_SLOTS` in `rules.ts` (`MAX_COMPANIONS` follows its
+  length). Keep every slot's `dx` distinct so no rifle is behind another, and the back row's `dy`
+  small enough that its sprite (54px tall, centred) stays above `VIEW.h`.
 - **Add an upgrade:** add it to `UpgradeKind` and `UPGRADES`, a case in `applyUpgrade` (and a
   `Stats` field plus use in `GameScene.fire` or `hitTargets` if it is a new stat), a colour in
   `UPGRADE_COLORS` (the crate texture bakes from it), and a line in `updateHud`. Adding a kind
@@ -163,6 +176,7 @@ towards the soldier; upgrade crates drift down among them and are shot open for 
 - The hero's x is the rifle, not the sprite centre (`HERO_RIFLE_X` origin). Editing the `HERO`
   grid in `sprites.ts` moves the rifle column; `HERO_RIFLE_X` is derived from column 11 by hand.
 - `HERO` exists twice: tuning in `rules.ts` and the sprite grid in `sprites.ts`. Same for `BULLET`.
+- The boss bar is drawn under the HUD at the top, as the squad's back rows fill the bottom.
 - `REACH_Y` drives both the game over line and the sandbag row, and crates are lost past it.
 - Crates do not block wave clear: a wave can end with a crate still falling, and it keeps falling
   into the break.

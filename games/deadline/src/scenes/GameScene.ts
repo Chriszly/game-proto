@@ -8,9 +8,11 @@ import {
   ENEMIES,
   HERO,
   HUD_HEIGHT,
+  MAX_COMPANIONS,
   PICKUP,
   REACH_Y,
   SPAWN_Y,
+  SQUAD_SLOTS,
   UPGRADE_KINDS,
   UPGRADES,
   VIEW,
@@ -85,6 +87,8 @@ export class GameScene extends Phaser.Scene {
   player!: Phaser.GameObjects.Image;
   /** Where on the line the hero is walking to after a tap or drag, or null when standing. */
   pointerTarget: number | null = null;
+  /** The companions at the hero's side, in the order of their `SQUAD_SLOTS` after the hero's. */
+  squad: Phaser.GameObjects.Image[] = [];
 
   private enemies!: Pool<Enemy>;
   private pickups!: Pool<Pickup>;
@@ -119,12 +123,13 @@ export class GameScene extends Phaser.Scene {
     this.nextId = 1;
     this.fireClock = 0;
     this.overlay = [];
+    this.squad = [];
 
     this.ground = this.add.tileSprite(0, 0, VIEW.w, VIEW.h, 'ground').setOrigin(0).setDepth(DEPTH.ground);
     // Sandbags mark the hero's line: an enemy that gets to them has reached the hero.
     for (let x = 12; x < VIEW.w; x += 28) this.add.image(x, REACH_Y + 6, 'sandbag').setDepth(DEPTH.sandbags);
     // The hero's x is where their rifle is, so the bullets go up from under the spot that was tapped.
-    this.player = this.add.image(VIEW.w / 2, HERO.y, 'hero').setOrigin(HERO_RIFLE_X, 0.5).setDepth(DEPTH.hero);
+    this.player = this.add.image(VIEW.w / 2, HERO.y, 'hero').setOrigin(HERO_RIFLE_X, 0.5).setDepth(this.squadDepth(0));
     this.bars = this.add.graphics().setDepth(DEPTH.bars);
 
     this.enemies = new Pool<Enemy>(
@@ -195,7 +200,8 @@ export class GameScene extends Phaser.Scene {
     // Tap or drag anywhere: the hero walks along their line to below that spot.
     const aim = (p: Phaser.Input.Pointer) => {
       if (this.state.phase === 'over') return;
-      this.pointerTarget = Phaser.Math.Clamp(p.worldX, HERO.minX, HERO.maxX);
+      const [minX, maxX] = this.heroRange();
+      this.pointerTarget = Phaser.Math.Clamp(p.worldX, minX, maxX);
     };
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       if (this.state.phase === 'over') this.scene.restart();
@@ -235,9 +241,25 @@ export class GameScene extends Phaser.Scene {
     this.updateHud();
   }
 
+  /**
+   * How far left and right the hero can go: as far as `HERO.minX..HERO.maxX` allows for every rifle
+   * in the squad, so companions never walk off the road or bunch up against its edge.
+   */
+  private heroRange(): [number, number] {
+    const slots = SQUAD_SLOTS.slice(0, 1 + this.squad.length);
+    return [HERO.minX - Math.min(...slots.map((s) => s.dx)), HERO.maxX - Math.max(...slots.map((s) => s.dx))];
+  }
+
+  /** Rows further back draw on top of the ones ahead of them, as they are closer to the camera. */
+  private squadDepth(slot: number) {
+    return DEPTH.hero + SQUAD_SLOTS[slot].dy / 100;
+  }
+
   private moveHero(dt: number) {
     const left = this.keys.left.some((k) => k.isDown), right = this.keys.right.some((k) => k.isDown);
     const step = (HERO.speed * dt) / 1000;
+    const [minX, maxX] = this.heroRange();
+    if (this.pointerTarget !== null) this.pointerTarget = Phaser.Math.Clamp(this.pointerTarget, minX, maxX);
     if (left !== right) {
       this.pointerTarget = null;
       this.player.x += left ? -step : step;
@@ -248,7 +270,8 @@ export class GameScene extends Phaser.Scene {
         this.pointerTarget = null;
       } else this.player.x += Math.sign(dx) * step;
     }
-    this.player.x = Phaser.Math.Clamp(this.player.x, HERO.minX, HERO.maxX);
+    this.player.x = Phaser.Math.Clamp(this.player.x, minX, maxX);
+    this.squad.forEach((c, i) => c.setPosition(this.player.x + SQUAD_SLOTS[i + 1].dx, HERO.y + SQUAD_SLOTS[i + 1].dy));
   }
 
   private spawn(dt: number) {
@@ -261,26 +284,28 @@ export class GameScene extends Phaser.Scene {
         Object.assign(e, { id: this.nextId++, kind: s.kind, hp: s.hp, maxHp: s.hp, x: s.x, y: SPAWN_Y });
         e.sprite.setTexture(s.kind).setPosition(e.x, e.y).setVisible(true);
       } else {
+        // Once every slot in the squad is filled, a companion crate brings extra damage instead.
+        const upgrade = s.upgrade === 'companion' && this.state.stats.companions >= MAX_COMPANIONS ? 'damage' : s.upgrade;
         const p = this.pickups.take();
-        Object.assign(p, { id: this.nextId++, upgrade: s.upgrade, hp: s.hp, maxHp: s.hp, x: s.x, y: SPAWN_Y });
-        p.sprite.setTexture(`crate-${s.upgrade}`).setVisible(true);
-        const color = `#${UPGRADE_COLORS[s.upgrade].toString(16).padStart(6, '0')}`;
-        p.label.setText(UPGRADES[s.upgrade].label).setColor(color).setVisible(true);
+        Object.assign(p, { id: this.nextId++, upgrade, hp: s.hp, maxHp: s.hp, x: s.x, y: SPAWN_Y });
+        p.sprite.setTexture(`crate-${upgrade}`).setVisible(true);
+        const color = `#${UPGRADE_COLORS[upgrade].toString(16).padStart(6, '0')}`;
+        p.label.setText(UPGRADES[upgrade].label).setColor(color).setVisible(true);
         p.hpText.setVisible(true);
       }
     }
   }
 
-  /** Fires a volley straight up every so often: the hero's bullets side by side. */
+  /** Fires a volley straight up every so often: one bullet from the hero and from each companion. */
   private fire(dt: number) {
     this.fireClock += dt;
-    const { fireInterval, shots, pierce } = this.state.stats;
+    const { fireInterval, pierce } = this.state.stats;
     while (this.fireClock >= fireInterval) {
       this.fireClock -= fireInterval;
-      for (let i = 0; i < shots; i++) {
+      for (let i = 0; i <= this.squad.length; i++) {
         const b = this.bullets.take();
-        b.x = this.player.x + (i - (shots - 1) / 2) * BULLET.spacing;
-        b.y = HERO.y - 30;
+        b.x = this.player.x + SQUAD_SLOTS[i].dx;
+        b.y = HERO.y + SQUAD_SLOTS[i].dy - 30;
         b.hitsLeft = 1 + pierce;
         b.hit.length = 0;
         b.sprite.setPosition(b.x, b.y).setVisible(true);
@@ -372,6 +397,7 @@ export class GameScene extends Phaser.Scene {
   private collect(p: Pickup) {
     this.state.stats = applyUpgrade(this.state.stats, p.upgrade);
     this.state.collected[p.upgrade]++;
+    if (p.upgrade === 'companion') this.addCompanions();
     const color = `#${UPGRADE_COLORS[p.upgrade].toString(16).padStart(6, '0')}`;
     const pop = this.add
       .text(this.player.x, HERO.y - 50, UPGRADES[p.upgrade].label, { ...TEXT, fontSize: '18px', fontStyle: 'bold', color, stroke: '#15110e', strokeThickness: 5 })
@@ -379,6 +405,21 @@ export class GameScene extends Phaser.Scene {
       .setDepth(DEPTH.hud);
     this.tweens.add({ targets: pop, y: pop.y - 60, alpha: 0, duration: 1200, onComplete: () => pop.destroy() });
     this.pickups.release(p);
+  }
+
+  /** Brings in companions until the squad matches the stats, each in the next free slot. */
+  private addCompanions() {
+    while (this.squad.length < this.state.stats.companions) {
+      const slot = SQUAD_SLOTS[this.squad.length + 1];
+      const c = this.add
+        .image(this.player.x + slot.dx, HERO.y + slot.dy, 'companion')
+        .setOrigin(HERO_RIFLE_X, 0.5)
+        .setDepth(this.squadDepth(this.squad.length + 1));
+      this.squad.push(c);
+    }
+    // A companion that joins near the road's edge pushes the squad back onto it.
+    const [minX, maxX] = this.heroRange();
+    this.player.x = Phaser.Math.Clamp(this.player.x, minX, maxX);
   }
 
   private fadeSplats(dt: number) {
@@ -413,10 +454,10 @@ export class GameScene extends Phaser.Scene {
       g.fillStyle(0x15110e).fillRect(e.x - r - 1, top - 1, w + 2, 6);
       g.fillStyle(0xe2593f).fillRect(e.x - r, top, (w * e.hp) / e.maxHp, 4);
     }
-    // A boss also gets a big bar along the bottom of the screen, below the hero.
+    // A boss also gets a big bar along the top of the screen, under the HUD, clear of the squad.
     const boss = this.enemies.all.find((e) => e.alive && e.kind === 'boss');
     if (boss) {
-      const y = VIEW.h - 30;
+      const y = HUD_HEIGHT + 8;
       g.fillStyle(0x15110e).fillRect(40, y, VIEW.w - 80, 14);
       g.fillStyle(0xb34a3a).fillRect(42, y + 2, ((VIEW.w - 84) * boss.hp) / boss.maxHp, 10);
     }
@@ -427,7 +468,7 @@ export class GameScene extends Phaser.Scene {
     this.hud.wave.setText(`WAVE ${wave}`);
     this.hud.kills.setText(`Kills ${kills}`);
     const perSecond = (1000 / stats.fireInterval).toFixed(1);
-    this.hud.stats.setText(`Damage ${stats.damage}   Rate ${perSecond}/s   Bullets ${stats.shots}   Pierce ${stats.pierce}`);
+    this.hud.stats.setText(`Damage ${stats.damage}   Rate ${perSecond}/s   Squad ${stats.companions + 1}   Pierce ${stats.pierce}`);
   }
 
   private gameOver() {
