@@ -10,7 +10,11 @@ export function loadProgress(): Progress {
     const raw = localStorage.getItem(KEY);
     if (!raw) return fresh;
     const saved = JSON.parse(raw) as Partial<Progress>;
-    return { ...fresh, ...saved, ranks: { ...saved.ranks } };
+    // Ranks of upgrades that no longer exist are dropped, so the skill book never counts them.
+    const ranks = Object.fromEntries(
+      Object.entries(saved.ranks ?? {}).filter(([id]) => id in UPGRADES),
+    ) as Progress['ranks'];
+    return { ...fresh, ...saved, ranks };
   } catch {
     return fresh;
   }
