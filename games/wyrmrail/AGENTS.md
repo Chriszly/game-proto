@@ -98,6 +98,8 @@ How it runs:
   between `wyrm.at` and `wyrm.path[0]`; the three coils and two wagons follow a trail of the
   head's past screen positions, one point per pixel, at `SEGMENT_GAPS`. A wagon shows `wagon-u`
   or `wagon-v` by the way the trail runs under it, and carries the icon of a loaded order.
+  The head is drawn in profile facing right; it is flipped to face left while the wyrm moves left
+  across the screen.
 
 State model (`src/game/state.ts`):
 
