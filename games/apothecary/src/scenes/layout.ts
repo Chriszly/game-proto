@@ -1,79 +1,89 @@
 import type { ItemId, PlantId } from '../game/items';
 import { BELT_MS, BELTS, GARDENS, LINE2_GARDEN, PLOTS_PER_GARDEN, type BeltId } from '../game/state';
 
-// World positions for the U-shaped apothecary. Goods flow down the left arm (gardens, refining
-// table), along the bottom (cauldron) and up the middle into the shop at the top. At every station
-// they come in on one pair of pallets and leave from another, and the belts run from pallets to
-// pallets. The right arm is
-// plain grass until the expansion is bought; its second production line mirrors the first, so
-// goods flow down the right arm and join the first line at the bottom of the U. The world is bigger
+// World positions for the two-column apothecary. Each production line runs straight down its own
+// column: two gardens side by side at the top, the refining table below them, then the cauldron,
+// and its belt turns in along the bottom to the shop between the columns. The market, with the
+// outfitter's and the guild's upgrades, fills the middle above the shop; the doctor goes into the
+// shop by its back door from the market, and customers come in from the street below. At every
+// station goods come in on one pair of pallets and leave from another, and the belts run straight
+// from pallets to pallets. The doctor's drop, work and pick-up markers stand on each station's inner
+// side, towards the market, and its upgrade and hire markers on the outer side. The right column is
+// plain grass until the expansion is bought; its second line mirrors the first. The world is bigger
 // than the 960x540 view, so the camera follows the doctor.
 
 export const HUD_HEIGHT = 44;
-export const WORLD = { w: 1200, h: 880 };
+export const WORLD = { w: 1400, h: 1110 };
 
 /** The second line mirrors the first across the middle of the map. */
 const mirror = (p: { x: number; y: number }) => ({ x: WORLD.w - p.x, y: p.y });
+/** The middle of the first line's column, where its goods run down. */
+const LINE_X = 252;
+/** The columns of markers either side of a line: drop, work and pick up inside, buying outside. */
+const INNER_X = LINE_X + 100;
+const OUTER_X = LINE_X - 122;
+/** Belt build markers stand at the outer edge of the column. */
+const EDGE_X = 44;
 
 /**
- * Fenced garden areas, matching the order of GARDENS in the game state: the first line's top to
- * bottom, then the second line's fields on the right.
+ * Fenced garden areas, matching the order of GARDENS in the game state: the first line's wheat
+ * field and mandrake patch side by side, then the second line's, mirrored.
  */
+const LINE1_GARDENS = [
+  { x: 24, y: 64, w: 220, h: 176, name: 'Wheat field' },
+  { x: 260, y: 64, w: 220, h: 176, name: 'Mandrake patch' },
+];
 export const GARDEN_AREAS = [
-  { x: 24, y: 64, w: 276, h: 176, name: 'Wheat field' },
-  { x: 24, y: 256, w: 276, h: 176, name: 'Mandrake patch' },
-  { x: 900, y: 64, w: 276, h: 176, name: 'Wheat field' },
-  { x: 900, y: 256, w: 276, h: 176, name: 'Mandrake patch' },
+  ...LINE1_GARDENS,
+  ...LINE1_GARDENS.map((g) => ({ ...g, x: WORLD.w - g.x - g.w })),
 ];
 /** Plot i is slot i % 3 of garden i / 3, the slots spread across the garden in one row. */
 export const plotPosition = (i: number) => {
   const area = GARDEN_AREAS[Math.floor(i / PLOTS_PER_GARDEN)];
-  return { x: area.x + 48 + (i % PLOTS_PER_GARDEN) * 90, y: area.y + 100 };
+  return { x: area.x + 40 + (i % PLOTS_PER_GARDEN) * 70, y: area.y + 100 };
 };
 
 /**
- * Packed earth below the gardens and up to the shop door. Everything right of the shop stays grass
- * until an expansion for the second line is bought.
+ * Packed earth: the first line's column below its gardens, and the market in the middle down to the
+ * shop. The second line's column stays grass until the expansion's land is bought.
  */
-export const YARDS = [
-  { x: 24, y: 448, w: 736, h: 414 },
-  { x: 316, y: 400, w: 444, h: 60 },
-];
-/** The right arm's yard, laid once the expansion's land is bought. */
-export const EXPANSION_YARDS = [
-  { x: 760, y: 448, w: 416, h: 414 },
-  { x: 760, y: 400, w: 124, h: 60 },
-];
+const LINE1_YARD = { x: 24, y: 256, w: 476, h: 600 };
+export const YARDS = [LINE1_YARD, { x: 500, y: 256, w: 400, h: 524 }];
+/** The right column's yard, laid once the expansion's land is bought. */
+export const EXPANSION_YARDS = [{ ...LINE1_YARD, x: WORLD.w - LINE1_YARD.x - LINE1_YARD.w }];
+/** The outfitter's stall on the left of the market: its sign and its upgrade markers below it. */
+export const OUTFITTER = {
+  sign: { x: 580, y: 290 },
+  pack: { x: 580, y: 360 },
+  boots: { x: 580, y: 440 },
+  sickle: { x: 580, y: 520 },
+};
 /**
- * The outfitter's sign on the grass right of the shop; its upgrade markers run down below it, their
- * captions clear of the second line's garden belt.
- */
-export const OUTFITTER = { x: 810, y: 80 };
-/**
- * The guild's sign and its upgrade markers in the empty bottom-left corner of the yard, away from
- * the doctor's rounds: the shop's extra order slot, customers and prices on the left and in the
- * middle, garden growth and belt speed on the right, and the sign at the bottom in the middle.
+ * The guild on the right of the market: garden growth and belt speed in one column, prices,
+ * customers and the extra order slot in the other, each unlocking the next, and the marker to join
+ * the guild below growth and belts.
  */
 export const GUILD = {
-  sign: { x: 155, y: 800 },
-  slots: { x: 60, y: 700 },
-  customers: { x: 155, y: 700 },
-  growth: { x: 250, y: 700 },
-  prices: { x: 60, y: 800 },
-  belts: { x: 250, y: 800 },
+  sign: { x: 760, y: 290 },
+  growth: { x: 700, y: 360 },
+  belts: { x: 700, y: 440 },
+  join: { x: 700, y: 520 },
+  prices: { x: 820, y: 360 },
+  customers: { x: 820, y: 440 },
+  slots: { x: 820, y: 520 },
 };
-/** Where the doctor stands to buy the expansion's land: on the grass just right of the shop door. */
-export const EXPANSION_LAND = { x: 820, y: 430 };
+/** Where the doctor stands to buy the expansion's land: at the bottom of the market. */
+export const EXPANSION_LAND = { x: 700, y: 640 };
 
 /** The refining table stands below the gardens; goods run through it from top to bottom. */
-export const REFINER = { x: 330, y: 540 };
-/** The cauldron stands at the bottom of the U; goods run through it from left to right. */
-export const CAULDRON = { x: 460, y: 740 };
+export const REFINER = { x: LINE_X, y: 400 };
+/** The cauldron stands below the table; goods run through it from top to bottom too. */
+export const CAULDRON = { x: LINE_X, y: 640 };
 
 /**
- * Markers around a station: drop-off beside the pallets goods come in on and pick-up beside the
- * pallets they leave from, clear of the belts that run between them. The work spot, where the doctor
- * stands to craft, and the upgrade marker face the open courtyard inside the U.
+ * Markers around a station: drop-off beside the pallets goods come in on, the work spot beside the
+ * station and pick-up beside the pallets they leave from, all on the inner side; the upgrade marker on
+ * the outer side, above the hire marker.
  */
 export interface StationMarkers {
   drop: { x: number; y: number };
@@ -82,24 +92,16 @@ export interface StationMarkers {
   upgrade: { x: number; y: number };
 }
 
-export const REFINER_MARKERS: StationMarkers = {
-  // Left of the pallets above and below the table.
-  drop: { x: REFINER.x - 78, y: REFINER.y - 52 },
-  pickUp: { x: REFINER.x - 78, y: REFINER.y + 84 },
-  work: { x: REFINER.x + 100, y: REFINER.y },
-  // High enough that its caption clears the heads of the craftsmen standing by the table.
-  upgrade: { x: REFINER.x + 100, y: REFINER.y - 74 },
-};
-export const CAULDRON_MARKERS: StationMarkers = {
-  // Below the pallets left and right of the cauldron, either side of the belt down to the shop.
-  drop: { x: CAULDRON.x - 80, y: CAULDRON.y + 64 },
-  pickUp: { x: CAULDRON.x + 30, y: CAULDRON.y + 64 },
-  work: { x: CAULDRON.x - 20, y: CAULDRON.y - 80 },
-  // Left enough that the hire marker's caption above it clears it.
-  upgrade: { x: CAULDRON.x + 60, y: CAULDRON.y - 80 },
-};
+const columnMarkers = (at: { x: number; y: number }): StationMarkers => ({
+  drop: { x: INNER_X, y: at.y - 60 },
+  work: { x: INNER_X, y: at.y + 20 },
+  pickUp: { x: INNER_X, y: at.y + 100 },
+  upgrade: { x: OUTER_X, y: at.y },
+});
+export const REFINER_MARKERS = columnMarkers(REFINER);
+export const CAULDRON_MARKERS = columnMarkers(CAULDRON);
 
-/** The second line's stations and markers, mirrored onto the right arm. */
+/** The second line's stations and markers, mirrored onto the right column. */
 export const REFINER2 = mirror(REFINER);
 export const CAULDRON2 = mirror(CAULDRON);
 const mirrorMarkers = (m: StationMarkers): StationMarkers => ({
@@ -111,97 +113,106 @@ const mirrorMarkers = (m: StationMarkers): StationMarkers => ({
 export const REFINER2_MARKERS = mirrorMarkers(REFINER_MARKERS);
 export const CAULDRON2_MARKERS = mirrorMarkers(CAULDRON_MARKERS);
 
-/** The shop sits at the top of the U, between the two arms, with its door facing the courtyard. */
-export const SHOP = { x: 440, y: 64, w: 320, h: 336 };
-export const SHOP_DOOR = { from: 560, to: 640 };
-export const COUNTER = { x: 600, y: 270 };
+/**
+ * The shop sits between the columns below the market. Its storefront faces the street at the bottom,
+ * where customers come in; the doctor goes in by the back door at the top, from the market. Both
+ * cauldron belts come in through its side walls and meet above the counter.
+ */
+export const SHOP = { x: 500, y: 780, w: 400, h: 280 };
+/** The back door in the top wall, the doctor's way in from the market. */
+export const SHOP_DOOR = { from: 660, to: 740 };
+export const COUNTER = { x: 700, y: 940 };
+/** The doctor's markers left of the counter, its upgrade marker right of it. */
 export const COUNTER_MARKERS: StationMarkers = {
-  drop: { x: COUNTER.x - 128, y: COUNTER.y + 12 },
-  pickUp: { x: COUNTER.x + 128, y: COUNTER.y + 12 },
-  // Behind the counter, left of the pallets where goods come in.
-  work: { x: COUNTER.x - 104, y: COUNTER.y + 76 },
-  upgrade: { x: COUNTER.x + 110, y: COUNTER.y + 76 },
+  drop: { x: COUNTER.x - 140, y: COUNTER.y - 80 },
+  work: { x: COUNTER.x - 140, y: COUNTER.y },
+  pickUp: { x: COUNTER.x - 140, y: COUNTER.y + 75 },
+  upgrade: { x: COUNTER.x + 140, y: COUNTER.y - 80 },
 };
+/** Where waiting customer i stands, on the street side of the counter. */
+export const customerPosition = (i: number) => ({ x: COUNTER.x - 56 + i * 45, y: COUNTER.y + 70 });
 /**
- * Where waiting customer i stands, on the far side of the counter: right of its pallets and left of
- * its hire marker.
+ * The street door in the shop's bottom wall, below the customers, and the spot outside it where
+ * customers come from and go back to.
  */
-export const customerPosition = (i: number) => ({ x: COUNTER.x - 56 + i * 45, y: COUNTER.y - 60 });
-/**
- * The street door in the shop's back wall, left of its sign and above the counter's pallets, and the
- * spot outside it where customers come from and go back to. They keep clear of the counter's hire
- * marker on the right.
- */
-export const SHOP_BACK_DOOR = { from: 460, to: 500 };
-export const STREET = { x: 480, y: 40 };
+export const SHOP_STREET_DOOR = { from: 680, to: 720 };
+export const STREET = { x: 700, y: WORLD.h - 16 };
+/** The shop's sign, on its top wall left of the back door. */
+export const SHOP_SIGN = { x: SHOP.x + 80, y: SHOP.y };
 
 /** How thick the shop's stone walls are; each runs along an edge of the shop, half inside and half out. */
 const WALL = 16;
-/** The shop's stone walls, with gaps for its two doors. */
+/** Where the cauldron belts run in along the bottom of the map and through the shop's side walls. */
+const BELT_IN_Y = 820;
+/** The gap a belt leaves in a side wall it runs through. */
+const BELT_GAP = { from: BELT_IN_Y - 16, to: BELT_IN_Y + 16 };
+const TOP = SHOP.y - WALL / 2;
+const BOTTOM = SHOP.y + SHOP.h - WALL / 2;
+const LEFT = SHOP.x - WALL / 2;
+const RIGHT = SHOP.x + SHOP.w - WALL / 2;
+/** The shop's stone walls as drawn, with gaps for its two doors and the belts. */
 export const SHOP_WALLS = [
-  // The back wall, either side of the street door.
-  { x: SHOP.x - WALL / 2, y: SHOP.y - WALL / 2, w: SHOP_BACK_DOOR.from - SHOP.x + WALL / 2, h: WALL },
-  { x: SHOP_BACK_DOOR.to, y: SHOP.y - WALL / 2, w: SHOP.x + SHOP.w + WALL / 2 - SHOP_BACK_DOOR.to, h: WALL },
-  // The front wall, either side of the door.
-  { x: SHOP.x - WALL / 2, y: SHOP.y + SHOP.h - WALL / 2, w: SHOP_DOOR.from - SHOP.x + WALL / 2, h: WALL },
-  { x: SHOP_DOOR.to, y: SHOP.y + SHOP.h - WALL / 2, w: SHOP.x + SHOP.w + WALL / 2 - SHOP_DOOR.to, h: WALL },
-  // The side walls.
-  { x: SHOP.x - WALL / 2, y: SHOP.y, w: WALL, h: SHOP.h },
-  { x: SHOP.x + SHOP.w - WALL / 2, y: SHOP.y, w: WALL, h: SHOP.h },
+  // The top wall, either side of the back door.
+  { x: LEFT, y: TOP, w: SHOP_DOOR.from - LEFT, h: WALL },
+  { x: SHOP_DOOR.to, y: TOP, w: RIGHT + WALL - SHOP_DOOR.to, h: WALL },
+  // The bottom wall, either side of the street door.
+  { x: LEFT, y: BOTTOM, w: SHOP_STREET_DOOR.from - LEFT, h: WALL },
+  { x: SHOP_STREET_DOOR.to, y: BOTTOM, w: RIGHT + WALL - SHOP_STREET_DOOR.to, h: WALL },
+  // The side walls, above and below where the belts come through.
+  ...[LEFT, RIGHT].flatMap((x) => [
+    { x, y: SHOP.y, w: WALL, h: BELT_GAP.from - SHOP.y },
+    { x, y: BELT_GAP.to, w: WALL, h: SHOP.y + SHOP.h - BELT_GAP.to },
+  ]),
 ];
 /**
- * Where the doctor can't walk: the shop's front and side walls, and its back wall with the street
- * behind it, which only customers use.
+ * Where the doctor can't walk: the top wall either side of the back door, the side walls whole, and
+ * the bottom wall with the street below it, which only customers use.
  */
 export const SHOP_BLOCKS = [
-  { x: SHOP.x - WALL / 2, y: 0, w: SHOP.w + WALL, h: SHOP.y + WALL / 2 },
-  ...SHOP_WALLS.slice(2),
+  { x: LEFT, y: BOTTOM, w: SHOP.w + WALL, h: WORLD.h - BOTTOM },
+  ...SHOP_WALLS.slice(0, 2),
+  { x: LEFT, y: SHOP.y, w: WALL, h: SHOP.h },
+  { x: RIGHT, y: SHOP.y, w: WALL, h: SHOP.h },
 ];
-/** Where the doctor lines up to walk through the front door: just inside it and just outside it. */
-export const SHOP_DOORWAY = { inside: SHOP.y + SHOP.h - WALL / 2 - 8, outside: SHOP.y + SHOP.h + WALL / 2 + 8 };
+/** The street customers walk up to the street door on. */
+export const STREET_PATH = { x: SHOP_STREET_DOOR.from, y: BOTTOM, w: SHOP_STREET_DOOR.to - SHOP_STREET_DOOR.from, h: WORLD.h - BOTTOM };
+/** Where the doctor lines up to walk through the back door: just inside it and just outside it. */
+export const SHOP_DOORWAY = { inside: SHOP.y + WALL / 2 + 8, outside: SHOP.y - WALL / 2 - 8 };
 
-/** Labels for the stations, placed clear of their markers and pallets. */
+/** Labels for the stations, on the outer side above their upgrade markers. */
 export const LABELS = {
-  refiner: { x: 110, y: 560 },
-  cauldron: { x: 460, y: 860 },
-  refiner2: mirror({ x: 110, y: 560 }),
-  cauldron2: mirror({ x: 460, y: 860 }),
+  refiner: { x: OUTER_X, y: REFINER.y - 66 },
+  cauldron: { x: OUTER_X, y: CAULDRON.y - 66 },
+  refiner2: mirror({ x: OUTER_X, y: REFINER.y - 66 }),
+  cauldron2: mirror({ x: OUTER_X, y: CAULDRON.y - 66 }),
 };
-/**
- * The sign under or beside each crafting station's label that shows, and on a tap changes, what it
- * makes first: below the refining table's label, and on the outer side of the cauldron's.
- */
+/** The sign under each crafting station's label that shows, and on a tap changes, what it makes first. */
 export const PRIORITY_SIGNS = {
-  refiner: { x: 110, y: 588 },
-  cauldron: { x: 358, y: 860 },
-  refiner2: mirror({ x: 110, y: 588 }),
-  cauldron2: mirror({ x: 358, y: 860 }),
+  refiner: { x: OUTER_X, y: REFINER.y - 38 },
+  cauldron: { x: OUTER_X, y: CAULDRON.y - 38 },
+  refiner2: mirror({ x: OUTER_X, y: REFINER.y - 38 }),
+  cauldron2: mirror({ x: OUTER_X, y: CAULDRON.y - 38 }),
 };
 
 /**
  * Where each station's pallets stand, given by the middle of their bottom edge: one for each kind
  * of goods coming in and one for each kind going out, in the order of PLANTS, REFINED and POTIONS.
  * Each pair stands side by side across the end of the belt that brings or takes its goods, every
- * pallet at the end of its kind's lane: the refining table's plants above it and
- * refined goods below it, the cauldron's refined goods on its left and potions on its right, and the
- * counter's potions in front of it, where the belt comes in through the door.
+ * pallet at the end of its kind's lane: each station's goods come in on pallets above it and leave
+ * from pallets below it, and the counter's potions stand behind it, where the belts come in.
  */
 export interface StationPallets {
   in: { x: number; y: number }[];
   out: { x: number; y: number }[];
 }
-const REFINER_PALLETS: StationPallets = {
-  in: [{ x: 348, y: 504 }, { x: 312, y: 504 }],
-  out: [{ x: 348, y: 624 }, { x: 312, y: 624 }],
-};
-const CAULDRON_PALLETS: StationPallets = {
-  in: [{ x: 398, y: 756 }, { x: 362, y: 756 }],
-  out: [{ x: 558, y: 756 }, { x: 522, y: 756 }],
-};
+/** A pair of pallets across a belt heading down, whose first lane is on the east side. */
+const acrossBelt = (x: number, y: number) => [{ x: x + 18, y }, { x: x - 18, y }];
+const REFINER_PALLETS: StationPallets = { in: acrossBelt(LINE_X, REFINER.y - 36), out: acrossBelt(LINE_X, REFINER.y + 84) };
+const CAULDRON_PALLETS: StationPallets = { in: acrossBelt(LINE_X, CAULDRON.y - 44), out: acrossBelt(LINE_X, CAULDRON.y + 84) };
 /**
  * The second line's pallets, mirrored. Its belts' lanes are not mirrored (a belt heading south keeps
- * its first lane on its right on both lines), so each pair also swaps over to keep every kind at the
- * end of its own lane.
+ * its first lane on its east side on both lines), so each pair also swaps over to keep every kind at
+ * the end of its own lane.
  */
 const mirrorPallets = (p: StationPallets): StationPallets => ({
   in: p.in.map(mirror).reverse(),
@@ -212,38 +223,48 @@ export const PALLETS = {
   cauldron: CAULDRON_PALLETS,
   refiner2: mirrorPallets(REFINER_PALLETS),
   cauldron2: mirrorPallets(CAULDRON_PALLETS),
-  counter: { in: [{ x: 582, y: 316 }, { x: 618, y: 316 }], out: [] } as StationPallets,
+  counter: { in: acrossBelt(COUNTER.x, COUNTER.y - 30), out: [] } as StationPallets,
 };
+
+/** Where a belt ending on pallets from above stops, at their back edge, and where one leaving them below starts. */
+const endAbove = (pallets: { y: number }[]) => pallets[0].y - 32;
+const startBelow = (pallets: { y: number }[]) => pallets[0].y + 16;
+const mirrorRun = (run: { x: number; y: number }[]) => run.map(mirror);
 
 /**
  * Conveyor belt routes, each from a station's out pallets to the next station's in pallets. The
  * first run of each is the main line goods ride along; further runs are feeders that join it at a
- * T. Each belt replaces the markers at its two ends once it is built. A belt that ends behind its
- * pallets stops at their back edge, so their stacks stand on its end; one that starts or ends in
- * front of them starts or stops at their front edge.
+ * T. Each belt replaces the markers at its two ends once it is built.
  */
-export const BELT_PATHS: Record<BeltId, { x: number; y: number }[][]> = {
-  // From both gardens down the left arm to the plants' pallets above the refining table.
+const LINE1_BELTS = {
+  // From the wheat field and the mandrake patch along below them, then straight down to the table.
   garden: [
-    [{ x: 300, y: 152 }, { x: 330, y: 152 }, { x: 330, y: 472 }],
-    [{ x: 300, y: 344 }, { x: 330, y: 344 }],
+    [{ x: 134, y: 240 }, { x: 134, y: 264 }, { x: LINE_X, y: 264 }, { x: LINE_X, y: endAbove(REFINER_PALLETS.in) }],
+    [{ x: 370, y: 240 }, { x: 370, y: 264 }, { x: LINE_X, y: 264 }],
   ],
-  // From the refined goods' pallets below the table, round to the cauldron's pallets on its left.
-  refiner: [[{ x: 330, y: 640 }, { x: 330, y: 688 }, { x: 380, y: 688 }, { x: 380, y: 724 }]],
-  // From the potions' pallets right of the cauldron, along the bottom and up through the shop door
-  // to the counter's pallets.
-  cauldron: [[{ x: 540, y: 772 }, { x: 540, y: 820 }, { x: 600, y: 820 }, { x: 600, y: 332 }]],
-  // The second line mirrors the first; its cauldron belt meets the first's at a T at the bottom of
-  // the U and shares the run up to the counter.
-  garden2: [
-    [{ x: 900, y: 152 }, { x: 870, y: 152 }, { x: 870, y: 472 }],
-    [{ x: 900, y: 344 }, { x: 870, y: 344 }],
+  // Straight down from below the table to above the cauldron.
+  refiner: [[{ x: LINE_X, y: startBelow(REFINER_PALLETS.out) }, { x: LINE_X, y: endAbove(CAULDRON_PALLETS.in) }]],
+  // Down from below the cauldron, along to the shop and in through its side wall, meeting the
+  // second line's above the counter and down onto its pallets.
+  cauldron: [
+    [
+      { x: LINE_X, y: startBelow(CAULDRON_PALLETS.out) },
+      { x: LINE_X, y: BELT_IN_Y },
+      { x: COUNTER.x, y: BELT_IN_Y },
+      { x: COUNTER.x, y: endAbove(PALLETS.counter.in) },
+    ],
   ],
-  refiner2: [[{ x: 870, y: 640 }, { x: 870, y: 688 }, { x: 820, y: 688 }, { x: 820, y: 724 }]],
-  cauldron2: [[{ x: 660, y: 772 }, { x: 660, y: 820 }, { x: 600, y: 820 }, { x: 600, y: 332 }]],
 };
-/** Where the two cauldron belts meet, at the bottom of the run up to the counter. */
-const CAULDRON_BELTS_MEET = { x: 600, y: 820 };
+export const BELT_PATHS: Record<BeltId, { x: number; y: number }[][]> = {
+  ...LINE1_BELTS,
+  // The second line mirrors the first; its cauldron belt meets the first's above the counter and
+  // shares the run down onto its pallets.
+  garden2: LINE1_BELTS.garden.map(mirrorRun),
+  refiner2: LINE1_BELTS.refiner.map(mirrorRun),
+  cauldron2: LINE1_BELTS.cauldron.map(mirrorRun),
+};
+/** Where the two cauldron belts meet, at the top of the run down onto the counter's pallets. */
+const CAULDRON_BELTS_MEET = { x: COUNTER.x, y: BELT_IN_Y };
 
 /** The length of a belt run in pixels. */
 export const runLength = (run: { x: number; y: number }[]) =>
@@ -307,27 +328,38 @@ export const beltSpan = (id: BeltId, kind: ItemId) => {
 export const BELT_JOIN_MS =
   (BELT_MS.cauldron * distanceTo(BELT_PATHS.cauldron[0], CAULDRON_BELTS_MEET)) / runLength(BELT_PATHS.cauldron[0]);
 /**
- * Where the doctor stands to pay for each belt; the cauldron belts' markers face the courtyard. The
- * garden belts' markers stand out of a long sickle's reach of the mandrakes, so the hands the belt
- * empties onto itself don't fill up again from the patch.
+ * Where the doctor stands to pay for each belt: at the outer edge of its column, beside where the
+ * belt starts. The garden belt's marker stands out of a long sickle's reach of the plots, so the
+ * hands the belt empties onto itself don't fill up again from the gardens.
  */
+const LINE1_BELT_BUILD = {
+  garden: { x: EDGE_X, y: 330 },
+  refiner: { x: EDGE_X, y: 520 },
+  cauldron: { x: EDGE_X, y: 760 },
+};
 export const BELT_BUILD: Record<BeltId, { x: number; y: number }> = {
-  garden: { x: 170, y: 500 },
-  refiner: { x: 170, y: 612 },
-  cauldron: { x: 514, y: 576 },
-  garden2: mirror({ x: 170, y: 500 }),
-  refiner2: mirror({ x: 170, y: 612 }),
-  cauldron2: mirror({ x: 514, y: 576 }),
+  ...LINE1_BELT_BUILD,
+  garden2: mirror(LINE1_BELT_BUILD.garden),
+  refiner2: mirror(LINE1_BELT_BUILD.refiner),
+  cauldron2: mirror(LINE1_BELT_BUILD.cauldron),
 };
 
 /**
- * Craftsmen: the marker where each station's are hired, beside its upgrade marker or work spot, and
- * where the two of them stand once hired (their feet), by the station.
+ * Craftsmen: the marker where each station's are hired, on the outer side below its upgrade marker,
+ * and where the two of them stand once hired (their feet), either side of the station.
  */
+const columnCraftsmen = (at: { x: number; y: number }, apart: number) => ({
+  hire: { x: OUTER_X, y: at.y + 80 },
+  stand: [{ x: at.x - apart, y: at.y + 30 }, { x: at.x + apart, y: at.y + 30 }],
+});
+const mirrorCraftsmen = (c: ReturnType<typeof columnCraftsmen>) => ({ hire: mirror(c.hire), stand: c.stand.map(mirror) });
+const REFINER_CRAFTSMEN = columnCraftsmen(REFINER, 62);
+const CAULDRON_CRAFTSMEN = columnCraftsmen(CAULDRON, 56);
 export const CRAFTSMEN = {
-  refiner: { hire: { x: 500, y: 466 }, stand: [{ x: 392, y: 575 }, { x: 468, y: 575 }] },
-  cauldron: { hire: { x: 570, y: 600 }, stand: [{ x: 430, y: 712 }, { x: 466, y: 712 }] },
-  refiner2: { hire: mirror({ x: 500, y: 466 }), stand: [mirror({ x: 392, y: 575 }), mirror({ x: 468, y: 575 })] },
-  cauldron2: { hire: mirror({ x: 570, y: 600 }), stand: [mirror({ x: 430, y: 712 }), mirror({ x: 466, y: 712 })] },
-  counter: { hire: { x: 725, y: 180 }, stand: [{ x: 544, y: 334 }, { x: 658, y: 334 }] },
+  refiner: REFINER_CRAFTSMEN,
+  cauldron: CAULDRON_CRAFTSMEN,
+  refiner2: mirrorCraftsmen(REFINER_CRAFTSMEN),
+  cauldron2: mirrorCraftsmen(CAULDRON_CRAFTSMEN),
+  // Behind the counter either side of its pallets, hired at a marker below its upgrade marker.
+  counter: { hire: { x: COUNTER.x + 140, y: COUNTER.y }, stand: [{ x: COUNTER.x - 60, y: COUNTER.y - 24 }, { x: COUNTER.x + 60, y: COUNTER.y - 24 }] },
 };

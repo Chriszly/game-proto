@@ -215,14 +215,18 @@ export const PALLET_SIZE = PALLET_BASE * PALLET_LAYERS;
 export const palletHasRoom = (tray: readonly ItemId[], item: ItemId) => tray.filter((id) => id === item).length < PALLET_SIZE;
 
 /** Bumped whenever stations or walls move, so a loaded save doesn't put the doctor inside one. */
-export const LAYOUT = 4;
+export const LAYOUT = 5;
 /** The layout from which goods get on a belt at the start of their own run, such as a feeder. */
 export const FEEDERS_LAYOUT = 3;
+/** The layout from which the map has two columns, with shorter belts. */
+export const COLUMNS_LAYOUT = 5;
 
 /** Coins needed to build each belt. */
 export const BELT_COST: Record<BeltId, number> = { garden: 60, refiner: 100, cauldron: 150, garden2: 60, refiner2: 100, cauldron2: 150 };
 /** How long an item takes from one end of each belt to the other in a one-lane belt: about 100 pixels a second. */
-export const BELT_MS: Record<BeltId, number> = { garden: 3_500, refiner: 1_500, cauldron: 6_000, garden2: 3_500, refiner2: 1_500, cauldron2: 6_000 };
+export const BELT_MS: Record<BeltId, number> = { garden: 2_100, refiner: 640, cauldron: 5_900, garden2: 2_100, refiner2: 640, cauldron2: 5_900 };
+/** `BELT_MS` before the map went to two columns, for moving goods saved on a belt then. */
+export const U_BELT_MS: Record<BeltId, number> = { garden: 3_500, refiner: 1_500, cauldron: 6_000, garden2: 3_500, refiner2: 1_500, cauldron2: 6_000 };
 /** The stations a belt joins, which must both stand before it can be built. */
 export const BELT_ENDS: Record<BeltId, StationId[]> = {
   garden: ['refiner'],
@@ -321,9 +325,8 @@ export function createInitialState(): GameState {
     layout: LAYOUT,
     coins: 0,
     carrying: [],
-    // The middle of the courtyard inside the U (see src/scenes/layout.ts), standing above the
-    // cauldrons' hire markers rather than on them.
-    player: { x: 600, y: 520 },
+    // In the market (see src/scenes/layout.ts), between the outfitter's markers and the land's.
+    player: { x: 630, y: 620 },
     // Start ripe so the first harvest can happen right away.
     plots: GARDENS.flatMap((plant) => Array.from({ length: PLOTS_PER_GARDEN }, () => ripe(plant))),
     refiner: { queue: [], progress: 0, output: [] },

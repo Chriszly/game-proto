@@ -1,5 +1,5 @@
 import type { ItemId } from './items';
-import { BELT_GAP_MS, BELTS, FEEDERS_LAYOUT, GUILD_UPGRADES, createInitialState, type GameState } from './state';
+import { BELT_GAP_MS, BELT_MS, BELTS, COLUMNS_LAYOUT, FEEDERS_LAYOUT, GUILD_UPGRADES, U_BELT_MS, createInitialState, type GameState } from './state';
 import { beltSpan } from '../scenes/layout';
 
 const KEY = 'apothecary-save';
@@ -30,6 +30,7 @@ export function loadState(): GameState {
       state.guild = { built: true, paid: 0 };
     }
     if ((saved.layout ?? 0) < FEEDERS_LAYOUT) ontoOwnRuns(state);
+    if ((saved.layout ?? 0) < COLUMNS_LAYOUT) ontoColumns(state);
     // The stations have moved since this save; start the doctor somewhere clear of them.
     if (saved.layout !== fresh.layout) return { ...state, layout: fresh.layout, player: fresh.player };
     return state;
@@ -53,6 +54,14 @@ function ontoOwnRuns(state: GameState) {
       ahead.set(item.id, item.at);
     }
   }
+}
+
+/**
+ * Belts got shorter when the map went to two columns, so goods saved on one keep the same share of
+ * the way along it.
+ */
+function ontoColumns(state: GameState) {
+  for (const id of BELTS) for (const item of state.belts[id].items) item.at *= BELT_MS[id] / U_BELT_MS[id];
 }
 
 export function saveState(state: GameState) {

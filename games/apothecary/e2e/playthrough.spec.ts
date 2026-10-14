@@ -24,31 +24,27 @@ interface GameState {
   belts: Record<string, { built: boolean; paid: number; items: { id: ItemId; at: number }[] }>;
 }
 
-// Floor spots in the 1200x880 world, from src/scenes/layout.ts. Walking targets the doctor's feet.
+// Floor spots in the 1400x1110 world, from src/scenes/layout.ts. Walking targets the doctor's feet.
 // The world is bigger than the 960x540 view; the camera follows the doctor.
 const VIEW = { w: 960, h: 540, hud: 44 };
-const WHEAT_XS = [252, 162, 72];
+/** The wheat plots, left to right, and the mandrake patch's first plot right of them. */
+const WHEAT_XS = [64, 134, 204];
 const WHEAT_Y = 178;
-const MANDRAKE = { x: 162, y: 370 };
-const REFINER = {
-  drop: { x: 252, y: 488 },
-  work: { x: 430, y: 540 },
-  pickUp: { x: 252, y: 624 },
-};
-const CAULDRON = { drop: { x: 380, y: 804 }, work: { x: 440, y: 660 }, pickUp: { x: 490, y: 804 } };
-/** On the way out from the coins, a step towards the door that keeps clear of the upgrade marker. */
-const LEAVE_SHOP = { x: 650, y: 330 };
-/**
- * From either cauldron's pick-up, a step onto the belt's run below the door, so the walk up to the door
- * keeps clear of the cauldrons' upgrade markers.
- */
-const LEAVE_CAULDRONS = { x: 600, y: 690 };
-const COUNTER = { drop: { x: 472, y: 282 }, work: { x: 496, y: 346 }, coins: { x: 728, y: 282 } };
+const MANDRAKE = { x: 300, y: 178 };
+/** Each station's drop, work and pick-up markers stand in a column on its inner side. */
+const REFINER = { drop: { x: 352, y: 340 }, work: { x: 352, y: 420 }, pickUp: { x: 352, y: 500 } };
+const CAULDRON = { drop: { x: 352, y: 580 }, work: { x: 352, y: 660 }, pickUp: { x: 352, y: 740 } };
+/** Off the counter's work spot, left of the coins, so the walk to them doesn't cross it. */
+const LEAVE_SHOP = { x: 525, y: 985 };
+/** From the cauldron's pick-up, a step towards the shop's back door, clear of every marker. */
+const LEAVE_CAULDRONS = { x: 460, y: 740 };
+/** The counter's markers, left of it: drop and work on the doctor's side, the coins on the street side. */
+const COUNTER = { drop: { x: 560, y: 860 }, work: { x: 560, y: 940 }, coins: { x: 560, y: 1015 } };
 /** The Recipes button in the top bar, on screen rather than in the world. */
 const RECIPES_BUTTON = { x: 219, y: 22 };
-/** Customers come in from the street door in the shop's back wall and line up behind the counter. */
-const STREET = { x: 480, y: 40 };
-const FIRST_CUSTOMER = { x: 544, y: 210 };
+/** Customers come in from the street door in the storefront at the bottom and line up below the counter. */
+const STREET = { x: 700, y: 1094 };
+const FIRST_CUSTOMER = { x: 644, y: 1010 };
 
 const POTION_PRICE: Record<string, number> = { healingDraught: 8, sleepingTonic: 15 };
 
@@ -288,7 +284,7 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
   let customers = await game.customers();
   expect(await play(10_000, async () => (customers = await game.customers()).length > 0), 'a customer came in').toBe(true);
   expect(customers[0]).toMatchObject({ x: STREET.x, arrived: false });
-  expect(customers[0].y).toBeLessThan(FIRST_CUSTOMER.y);
+  expect(customers[0].y).toBeGreaterThan(FIRST_CUSTOMER.y);
   // All the way to the counter, they don't lose patience.
   let patient = true;
   const reached = await play(10_000, async () => {
@@ -317,7 +313,7 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
   expect(count((await game.state()).carrying)).toEqual({ wheat: 3 });
   // The camera followed the doctor up to the wheat field, at the top-left corner of the world.
   expect(await game.view()).toEqual({ x: 0, y: 0 });
-  await until('a ripe mandrake', (s) => s.plots[4].grown >= 14_000, 20_000);
+  await until('a ripe mandrake', (s) => s.plots[3].grown >= 14_000, 20_000);
   await walkTo(MANDRAKE);
   let s = await until('one mandrake harvested', (s) => s.carrying.length === 4);
   expect(count(s.carrying)).toEqual({ wheat: 3, mandrake: 1 });
@@ -358,8 +354,8 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
   });
   await walkTo(CAULDRON.pickUp);
   s = await until('potions picked up', (s) => s.carrying.length === 2);
-  // Down at the cauldron, the bottom of the U, the view has scrolled to the bottom edge of the world.
-  expect((await game.view()).y).toBe(880 - VIEW.h);
+  // Down at the cauldron, the view has scrolled down the column with the doctor.
+  expect((await game.view()).y).toBeGreaterThan(0);
   expect(count(s.carrying)).toEqual({ sleepingTonic: 1, healingDraught: 1 });
   await walkTo(LEAVE_CAULDRONS);
 

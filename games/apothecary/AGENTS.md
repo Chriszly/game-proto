@@ -6,13 +6,13 @@ to the game, as the root AGENTS.md asks.
 
 ## Current state
 
-Apothecary is a top-down automation game: a plague doctor walks a U-shaped yard, harvests wheat and
+Apothecary is a top-down automation game: a plague doctor walks a yard laid out in columns, harvests wheat and
 mandrake, refines them at a table, brews potions in a cauldron and sells them to customers at a
 counter. Coins buy upgrades, craftsmen, conveyor belts and a mirrored second production line.
 
 - Implemented: the full loop on both lines, auto-harvest with a spinning sickle, floor markers
   (drop, work, pick up, pay), pallets that show station stock, customers served only at the
-  counter, a walled shop entered by its front door, station upgrades (5 levels), outfitter and
+  counter, a walled shop that faces the street at the bottom and that the doctor enters by a back door from the market, station upgrades (5 levels), outfitter and
   guild upgrades, two craftsmen per station, a priority choice per crafting station, six belts
   with one lane per item kind, the expansion,
   a Recipes panel and a Settings panel. Progress autosaves to localStorage.
@@ -31,15 +31,16 @@ counter. Coins buy upgrades, craftsmen, conveyor belts and a mirrored second pro
 - `src/game/items.ts`: item ids and defs (`ITEMS`), `GROW_MS`, `REFINE`, `RECIPES`,
   `POTION_PRICE`, the `isPlant`/`isRefined`/`isPotion` guards and the ordered lists `PLANTS`,
   `REFINED`, `POTIONS`.
-- `src/game/state.ts`: every state type, `createInitialState`, `LAYOUT` and `FEEDERS_LAYOUT`, the
-  upgrade, belt, expansion and pallet tables, and small derived helpers (`carryCapacity`,
+- `src/game/state.ts`: every state type, `createInitialState`, `LAYOUT`, `FEEDERS_LAYOUT` and
+  `COLUMNS_LAYOUT`, the
+  upgrade, belt (`BELT_MS`, and `U_BELT_MS` from before the columns), expansion and pallet tables, and small derived helpers (`carryCapacity`,
   `walkSpeed`, `potionPrice`, `stationBuilt`, `anyFieldBuilt`, `beltBuildable`, ...).
 - `src/game/sim.ts`: the rules, free of Phaser. `tick` advances the world; marker actions
   (`dropAtRefiner`, `pickUpFromCauldron`, `stockShelf`, `collectTill`, `payUpgrade`,
   `payCraftsman`, `payBelt`, `payExpansion`, `joinGuild`, `dropAll`, `cyclePriority`) and `harvest` each change
   state and return `Feedback` lines. Also `shortfall`, `refining` and `doneByHand`.
 - `src/game/save.ts`: `loadState`, `saveState`, `clearSave` (key `apothecary-save`), and the
-  `ontoOwnRuns` belt migration.
+  `ontoOwnRuns` and `ontoColumns` belt migrations.
 - `src/scenes/BootScene.ts`: bakes all textures and animations, then starts `Game`.
 - `src/scenes/GameScene.ts`: builds the world, markers and HUD, reads input, walks the doctor
   around stations and through the shop door, calls the sim each frame and updates views. Also
@@ -77,7 +78,7 @@ counter. Coins buy upgrades, craftsmen, conveyor belts and a mirrored second pro
   `limitWalkStep` (on `PRE_UPDATE`) caps a step at `MAX_WALK_STEP_PX` (20) so a long frame can't
   carry the feet through a station or wall (static obstacles from `addObstacle` and `SHOP_BLOCKS`).
 - Taps: `reachable` moves a tapped spot out of any station or wall area into `pointerTarget`;
-  `routeAround` picks a `waypoint`: the front door (`SHOP_DOORWAY`) into or out of the shop,
+  `routeAround` picks a `waypoint`: the back door (`SHOP_DOORWAY`) into or out of the shop,
   otherwise a corner of the nearest `blockedAreas` rectangle (or the whole shop) in the way. Taps
   close an open panel instead of walking; HUD buttons stop propagation. The tapped spot comes from
   `cameras.main.getWorldPoint`, since the pointer's own `worldX/Y` may be the UI camera's.
@@ -87,9 +88,17 @@ counter. Coins buy upgrades, craftsmen, conveyor belts and a mirrored second pro
   everything from `UI_DEPTH` up: `splitCameras` sets each object's `cameraFilter` by its depth every
   frame, so later objects sort themselves. `setZoom` clamps, widens the camera bounds evenly when the
   view is wider than the world, and stores the zoom under `apothecary-zoom`.
-- Shop walls: `SHOP_WALLS` are drawn, with gaps for `SHOP_DOOR` and `SHOP_BACK_DOOR`.
-  `SHOP_BLOCKS` are what the doctor collides with: the front and side walls, and the back wall with
-  the street behind it as one block, so only customers use the street door.
+- Map: two columns of production (line one on the left, line two mirrored on the right with
+  `mirror`), each running straight down from its gardens through `REFINER` and `CAULDRON` at
+  `LINE_X`. A station's drop, work and pick-up markers stand in a row at `INNER_X` (the market side)
+  and its upgrade, craftsman, belt, label and priority spots at `OUTER_X`. The market between the
+  columns holds `OUTFITTER`, `GUILD` and `EXPANSION_LAND`; the shop sits at the bottom of it, facing
+  the street (`STREET`) along the bottom edge of the world (1400x1110).
+- Shop walls: `SHOP_WALLS` are drawn, with gaps for `SHOP_DOOR` (the back door in the top wall,
+  the doctor's), `SHOP_STREET_DOOR` (in the bottom wall, the customers') and the belt holes in the
+  side walls at `BELT_IN_Y`. `SHOP_BLOCKS` are what the doctor collides with: the top wall pieces,
+  the side walls, and the bottom wall with the street below it as one block, so only customers use
+  the street door. `measureShop` and `inShop` read the shop's bounds from them.
 - Markers: `addMarker`, `addLevelMarker` and `addBuildMarker` push a `Marker` (44x44 zone, `act`,
   `shown`). `standOnMarkers` runs the first shown marker under the feet once every
   `MARKER_INTERVAL_MS` (200); each call moves one item or pays at most 5 coins (`UPGRADE_STEP`).
@@ -103,7 +112,7 @@ counter. Coins buy upgrades, craftsmen, conveyor belts and a mirrored second pro
   `unlocked` also holds once the thing itself has a level or coins paid in, so old saves keep what
   they started. The pay functions in the sim refuse a locked thing, and the scene's purple markers
   are shown only while it is unlocked. Entry to the guild is `state.guild` (a `Build`, `GUILD_COST`
-  50), paid by `joinGuild` at a marker on `GUILD.customers`, which shows until the customers
+  50), paid by `joinGuild` at a marker on `GUILD.join`, which shows until the customers
   upgrade can.
 - Belts: each belt starts at the front edge of a station's out pallets (or in the gardens) and ends
   at the edge of the next station's in pallets, which stand side by side across its end, each at the
@@ -131,7 +140,7 @@ counter. Coins buy upgrades, craftsmen, conveyor belts and a mirrored second pro
 ### State model
 
 `GameState` in `src/game/state.ts` is plain JSON (`version: 3`, `layout`). Key parts: `carrying`
-(bottom to top), `player` (starts at 600,520), `plots` (3 per garden, gardens in `GARDENS` order,
+(bottom to top), `player` (starts at 630,620, in the market), `plots` (3 per garden, gardens in `GARDENS` order,
 two per line), `refiner`/`refiner2` (`queue`, `progress`, `output`), `cauldron`/`cauldron2`
 (`contents`, `brewing`, `output`), `counter` (`shelf`, `till`, `serving`), `orders` (each with fixed
 per-potion `pay`, and `patience` that counts down only at the counter), `upgrades`, `craftsmen` (an
@@ -162,8 +171,9 @@ null), `guild` (a `Build`: entry to the guild), `expansion` (land, two fields, r
   `belts` and `priority` per key, appends new plots and drops orders without `pay`. A save without
   `guild` counts as having joined if it bought or paid into any guild upgrade. A save from before
   `FEEDERS_LAYOUT` (3) gets `ontoOwnRuns`, which moves belt items up to their run's join; a save
-  whose `layout` differs from `LAYOUT` (4, since belts end at pallets) gets the fresh `player`
-  spot. Belt items keep their `at`; the belts kept their runs and order, so no migration moves them.
+  from before `COLUMNS_LAYOUT` (5) gets `ontoColumns`, which scales each belt item's `at` by its
+  belt's new `BELT_MS` over the old `U_BELT_MS`, so it keeps its place along the shorter run; a save
+  whose `layout` differs from `LAYOUT` (5, the columns) gets the fresh `player` spot.
 - `apothecary-zoom`: the main camera's zoom, a view preference that "New game" keeps.
 - "New game" (`clearSave` + `scene.restart`) removes only `apothecary-save`. The old
   `apothecary-fps` key is no longer used; the frame rate comes from the hub.
@@ -223,7 +233,7 @@ null), `guild` (a `Build`: entry to the guild), `expansion` (land, two fields, r
   `LEAVE_CAULDRONS`, `STREET`, `FIRST_CUSTOMER` = `customerPosition(0)`), `WALK_SPEED`,
   `POTION_PRICE`, the tip formula in `potionPay` (it assumes one of each potion on the shelf, so
   no stock cut, and asserts it), `shortfall`, grow times 8000/14000, the recipe
-  line text and order, carry capacity 4, the world size 1200x880 (camera asserts), and which pallets
+  line text and order, carry capacity 4, the world size 1400x1110 (camera asserts), and which pallets
   each station shows.
 
 ## Making common changes

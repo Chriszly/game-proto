@@ -95,7 +95,8 @@ import {
   REFINER2_MARKERS,
   REFINER_MARKERS,
   SHOP,
-  SHOP_BACK_DOOR,
+  SHOP_SIGN,
+  STREET_PATH,
   SHOP_DOOR,
   SHOP_BLOCKS,
   SHOP_DOORWAY,
@@ -414,14 +415,14 @@ export class GameScene extends Phaser.Scene {
     // The second line's fields appear as they are built.
     GARDEN_AREAS.forEach((_, garden) => this.once(() => gardenBuilt(this.state, garden), () => this.drawGarden(garden)));
 
-    // Shop: plank floor inside stone walls, with a doorway in the bottom wall facing the courtyard.
+    // Shop: plank floor inside stone walls, with a back door in the top wall facing the market.
     ground(SHOP.x, SHOP.y, SHOP.w, SHOP.h, 'tile-planks');
-    // The back wall has a street door that customers come and go by.
-    ground(SHOP_BACK_DOOR.from, 0, SHOP_BACK_DOOR.to - SHOP_BACK_DOOR.from, SHOP.y, 'tile-planks', -995);
+    // The storefront's street door, at the bottom, is the customers' way in and out.
+    ground(STREET_PATH.x, STREET_PATH.y, STREET_PATH.w, STREET_PATH.h, 'tile-planks', -995);
     for (const wall of SHOP_WALLS) ground(wall.x, wall.y, wall.w, wall.h, 'tile-wall', -990);
     for (const block of SHOP_BLOCKS) this.obstacles.add(this.add.zone(block.x + block.w / 2, block.y + block.h / 2, block.w, block.h));
 
-    this.label(SHOP.x + SHOP.w / 2, SHOP.y, 'Storefront');
+    this.label(SHOP_SIGN.x, SHOP_SIGN.y, 'Storefront');
   }
 
   private createPlots() {
@@ -731,17 +732,16 @@ export class GameScene extends Phaser.Scene {
 
   /** The outfitter's stall right of the shop: upgrades for the doctor's pack, boots and sickle. */
   private createOutfitter() {
-    this.label(OUTFITTER.x, OUTFITTER.y, 'Outfitter');
-    DOCTOR_UPGRADES.forEach((id, i) => this.addUpgradeMarker({ x: OUTFITTER.x, y: OUTFITTER.y + 60 + i * 90 }, id, UPGRADES[id].name));
+    this.label(OUTFITTER.sign.x, OUTFITTER.sign.y, 'Outfitter');
+    for (const id of DOCTOR_UPGRADES) this.addUpgradeMarker(OUTFITTER[id], id, UPGRADES[id].name);
   }
 
   /** The guild in the corner of the yard: upgrades for the gardens, the belts and the shop. */
   private createGuild() {
     this.label(GUILD.sign.x, GUILD.sign.y, 'Guild');
-    // Its upgrades go up for sale once the doctor has paid to join; the entry marker stands where
-    // the customers upgrade will, so only one of them is ever shown.
+    // Its upgrades go up for sale once the doctor has paid to join.
     const { guild } = this.state;
-    this.addBuildMarker(GUILD.customers, 'Join guild', GUILD_COST, guild, () => !guild.built && unlocked(this.state, 'guild'), () => joinGuild(this.state));
+    this.addBuildMarker(GUILD.join, 'Join guild', GUILD_COST, guild, () => !guild.built && unlocked(this.state, 'guild'), () => joinGuild(this.state));
     for (const id of GUILD_UPGRADES) this.addUpgradeMarker(GUILD[id], id, UPGRADES[id].name);
   }
 
@@ -1111,13 +1111,13 @@ export class GameScene extends Phaser.Scene {
   private measureShop(halfWidth: number, halfHeight: number) {
     const walls = SHOP_BLOCKS.map((w) => new Phaser.Geom.Rectangle(w.x - halfWidth, w.y - halfHeight, w.w + 2 * halfWidth, w.h + 2 * halfHeight));
     const left = Math.min(...walls.map((w) => w.left)), right = Math.max(...walls.map((w) => w.right));
-    const bottom = Math.max(...walls.map((w) => w.bottom));
+    const top = Math.min(...walls.map((w) => w.top)), bottom = Math.max(...walls.map((w) => w.bottom));
     return {
       halfWidth,
       halfHeight,
       walls,
-      area: new Phaser.Geom.Rectangle(left - 3, 0, right - left + 6, bottom + 3),
-      inside: new Phaser.Geom.Rectangle(left + halfWidth, 0, right - left - 2 * halfWidth, bottom),
+      area: new Phaser.Geom.Rectangle(left - 3, top - 3, right - left + 6, bottom - top + 6),
+      inside: new Phaser.Geom.Rectangle(left + halfWidth, top, right - left - 2 * halfWidth, bottom - top),
     };
   }
 
@@ -1132,7 +1132,7 @@ export class GameScene extends Phaser.Scene {
   /** Whether feet at a spot are in the shop. */
   private inShop(p: Point) {
     const { inside } = this.shop();
-    return p.x > inside.left && p.x < inside.right && p.y < inside.bottom;
+    return p.x > inside.left && p.x < inside.right && p.y > inside.top && p.y < inside.bottom;
   }
 
   /**
