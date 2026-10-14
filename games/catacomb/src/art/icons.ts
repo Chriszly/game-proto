@@ -2,10 +2,11 @@ import Phaser from 'phaser';
 import type { Icon } from '../game/cards';
 import type { RoomKind } from '../game/map';
 import { BLUE, BONE, FIRE, GOLD, GREEN, INK, IRON, RED, WOOD } from './palette';
-import { bakePixelArt, type Palette } from './pixelArt';
+import { bakePainted } from './paint';
+import { type Palette } from './pixelArt';
 
 // Small pictures: one per kind of card for its face, the foes' intents, the rooms on the map and
-// the hero's heart. All 12 x 12 character grids.
+// the hero's heart. All 12 x 12 character grids, repainted with small brushes when baked.
 
 const PALETTE: Palette = {
   e: INK,
@@ -270,10 +271,10 @@ const ROOMS: Record<RoomKind, string[]> = {
 };
 
 export function bakeIcons(scene: Phaser.Scene) {
-  for (const [id, rows] of Object.entries(CARD_ICONS)) bakePixelArt(scene, `card-${id}`, rows, PALETTE, 4);
-  for (const [id, rows] of Object.entries(INTENTS)) bakePixelArt(scene, `intent-${id}`, rows, PALETTE, 2, INK);
-  for (const [id, rows] of Object.entries(ROOMS)) bakePixelArt(scene, `room-${id}`, rows, PALETTE, 3);
-  bakePixelArt(scene, 'heart', CARD_ICONS.heart, PALETTE, 2, INK);
+  for (const [id, rows] of Object.entries(CARD_ICONS)) bakePainted(scene, `card-${id}`, rows, PALETTE, 4, undefined, 2.4);
+  for (const [id, rows] of Object.entries(INTENTS)) bakePainted(scene, `intent-${id}`, rows, PALETTE, 2, INK, 1.4);
+  for (const [id, rows] of Object.entries(ROOMS)) bakePainted(scene, `room-${id}`, rows, PALETTE, 3, undefined, 2);
+  bakePainted(scene, 'heart', CARD_ICONS.heart, PALETTE, 2, INK, 1.4);
 }
 
 export const cardIcon = (icon: Icon) => `card-${icon}`;

@@ -23,7 +23,7 @@ export function padRows(rows: string[]) {
 
 /**
  * A small grid of art pixels to paint on with simple shapes, then bake into a texture. Used for
- * the larger pieces (stations, tiles) where a character grid would be unwieldy.
+ * the larger pieces where a character grid would be unwieldy.
  */
 export class PixelCanvas {
   private color: (number | null)[];
@@ -115,6 +115,24 @@ export class PixelCanvas {
     }
     for (const [x, y] of edge) this.px(x, y, color);
     return this;
+  }
+
+  /** Draws onto a new 2D canvas of (w * scale) x (h * scale) pixels, for the painterly pass. */
+  toCanvas(scale = 1) {
+    const canvas = document.createElement('canvas');
+    canvas.width = this.w * scale;
+    canvas.height = this.h * scale;
+    const ctx = canvas.getContext('2d')!;
+    for (let y = 0; y < this.h; y++) {
+      for (let x = 0; x < this.w; x++) {
+        const c = this.color[y * this.w + x];
+        if (c === null) continue;
+        ctx.globalAlpha = this.alpha[y * this.w + x];
+        ctx.fillStyle = `#${c.toString(16).padStart(6, '0')}`;
+        ctx.fillRect(x * scale, y * scale, scale, scale);
+      }
+    }
+    return canvas;
   }
 
   /** Bakes into a texture of (w * scale) x (h * scale) pixels, merging runs of equal pixels. */

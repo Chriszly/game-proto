@@ -1,78 +1,219 @@
 import Phaser from 'phaser';
-import { FIRE, FLOOR, INK, STONE, WOOD } from './palette';
-import { PixelCanvas, seeded } from './pixelArt';
+import { addTexture, paint, sketch } from './paint';
+import { seeded } from './pixelArt';
 
-// The two backdrops, painted at a quarter size and baked at four times that: a dungeon room for
-// the fights, a brick wall with torches over a flagstone floor, and the dark stone the map is
-// laid out on.
+// The two backdrops in the painterly style, drawn plainly at twice the screen's size, shrunk to
+// it and repainted with brush strokes: a crypt for the fights (a stone wall with two torches
+// and an arch over a flagstone floor in perspective), and the dark flagstones the map is laid
+// out on.
 
-const BG_SCALE = 4;
-const W = 240;
-const H = 135;
-/** Where the floor meets the wall, in backdrop pixels. */
-const FLOOR_Y = 68;
+const W = 1920;
+const H = 1080;
+const WALL_TOP = 0;
+/** Where the floor meets the wall, at twice the screen's size. */
+const FLOOR_Y = 545;
+const TORCHES = [
+  [355, 205],
+  [1570, 205],
+];
 
 export function bakeScenery(scene: Phaser.Scene) {
-  bakeFightRoom(scene);
-  bakeMapBackground(scene);
+  addTexture(scene, 'room-bg', painted(drawCrypt, 11));
+  addTexture(scene, 'map-bg', painted(drawFlagstones, 5));
 }
 
-function bakeFightRoom(scene: Phaser.Scene) {
-  const c = new PixelCanvas(W, H);
-  const rnd = seeded(11);
-  // Brick wall, in staggered rows, each brick a slightly different shade.
-  c.rect(0, 0, W, FLOOR_Y, STONE.dark);
-  for (let row = 0; row * 7 < FLOOR_Y; row++) {
-    const y = row * 7;
-    for (let x = row % 2 ? -7 : 0; x < W; x += 14) {
-      const shade = rnd() < 0.2 ? STONE.light : rnd() < 0.5 ? STONE.mid : 0x48414f;
-      c.rect(x + 1, y + 1, 13, 6, shade);
-      c.rect(x + 1, y + 1, 13, 1, STONE.shine, 0.35);
-    }
-  }
-  // An arched doorway at the back, dark inside.
-  const dx = 104;
-  c.rect(dx, 22, 32, FLOOR_Y - 22, STONE.shine);
-  c.ellipse(dx, 10, 32, 26, STONE.shine);
-  c.rect(dx + 3, 24, 26, FLOOR_Y - 24, INK);
-  c.ellipse(dx + 3, 13, 26, 22, INK);
-  // Torches in iron brackets, the bricks round them lit warm.
-  for (const tx of [44, 196]) {
-    for (let y = 8; y < 44; y++) for (let x = tx - 18; x < tx + 19; x++) {
-      const near = Math.hypot(x - tx, (y - 22) * 1.2);
-      const here = c.get(x, y);
-      if (near < 13 && here !== null && here !== STONE.dark) c.px(x, y, near < 8 ? 0x8a6a5a : 0x6a5560);
-    }
-    c.rect(tx - 1, 28, 3, 10, WOOD.mid).rect(tx - 3, 37, 7, 2, 0x2c2a34);
-    c.ellipse(tx - 3, 20, 7, 9, FIRE.mid).ellipse(tx - 2, 23, 5, 6, FIRE.light).rect(tx, 25, 1, 3, FIRE.white);
-  }
-  // A shadow along the foot of the wall, then the flagstone floor, darker towards the front.
-  c.rect(0, FLOOR_Y, W, 2, INK);
-  for (let y = FLOOR_Y + 2; y < H; y++) {
-    const t = (y - FLOOR_Y) / (H - FLOOR_Y);
-    c.rect(0, y, W, 1, t < 0.35 ? FLOOR.light : t < 0.7 ? FLOOR.mid : FLOOR.dark);
-  }
-  for (let y = FLOOR_Y + 8; y < H; y += 10) {
-    c.rect(0, y, W, 1, FLOOR.dark);
-    for (let x = (y / 10) % 2 ? 6 : 16; x < W; x += 22) c.rect(x, y - 9, 1, 9, FLOOR.dark);
-  }
-  // Scattered pebbles.
-  for (let i = 0; i < 40; i++) c.px(rnd() * W, FLOOR_Y + 3 + rnd() * (H - FLOOR_Y - 3), STONE.light);
-  c.bake(scene, 'room-bg', BG_SCALE);
+type Draw = (ctx: CanvasRenderingContext2D, rnd: () => number) => void;
+
+function painted(draw: Draw, seed: number) {
+  const { canvas, ctx } = sketch(W / 2, H / 2);
+  ctx.scale(0.5, 0.5);
+  draw(ctx, seeded(seed));
+  return paint(canvas, { sizes: [10, 5, 2.5, 1.3], seed, grain: 0.13, vignette: 0.5 });
 }
 
-function bakeMapBackground(scene: Phaser.Scene) {
-  const c = new PixelCanvas(W, H);
-  const rnd = seeded(5);
-  c.rect(0, 0, W, H, FLOOR.dark);
-  // Big rough flagstones.
-  for (let y = 0; y < H; y += 12) {
-    for (let x = (y / 12) % 2 ? -10 : 0; x < W; x += 20) {
-      c.rect(x + 1, y + 1, 19, 11, rnd() < 0.5 ? FLOOR.mid : 0x2b252d);
+/** A hex colour with its brightness jittered by up to `amt` either way. */
+const jitter = (rnd: () => number, hex: string, amt: number) => {
+  const n = parseInt(hex.slice(1), 16);
+  const f = 1 + (rnd() - 0.5) * amt;
+  const ch = (s: number) => Math.max(0, Math.min(255, Math.round(((n >> s) & 255) * f)));
+  return `rgb(${ch(16)},${ch(8)},${ch(0)})`;
+};
+
+function tools(ctx: CanvasRenderingContext2D) {
+  return {
+    poly(pts: number[][], fill: string) {
+      ctx.beginPath();
+      pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.fill();
+    },
+    ell(x: number, y: number, rx: number, ry: number, fill: string) {
+      ctx.beginPath();
+      ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+      ctx.fillStyle = fill;
+      ctx.fill();
+    },
+    rrect(x: number, y: number, w: number, h: number, r: number, fill: string) {
+      ctx.beginPath();
+      ctx.roundRect(x, y, w, h, r);
+      ctx.fillStyle = fill;
+      ctx.fill();
+    },
+    /** A soft round light; `color` holds `A` where its alpha goes. */
+    glow(x: number, y: number, r: number, color: string, alpha: number) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, color.replace('A', String(alpha)));
+      g.addColorStop(1, color.replace('A', '0'));
+      ctx.fillStyle = g;
+      ctx.fillRect(x - r, y - r, r * 2, r * 2);
+      ctx.restore();
+    },
+  };
+}
+
+const drawCrypt: Draw = (ctx, rnd) => {
+  const { poly, ell, rrect, glow } = tools(ctx);
+  const jit = (hex: string, amt: number) => jitter(rnd, hex, amt);
+  const wg = ctx.createLinearGradient(0, WALL_TOP, 0, FLOOR_Y);
+  wg.addColorStop(0, '#231d2b');
+  wg.addColorStop(1, '#2c2533');
+  ctx.fillStyle = wg;
+  ctx.fillRect(0, WALL_TOP, W, FLOOR_Y - WALL_TOP);
+  // Stone blocks, a little irregular, with lit tops and shadowed bottoms, a crack or moss now and then.
+  for (let row = 0, y = WALL_TOP - 30; y < FLOOR_Y; row++, y += 92) {
+    for (let x = row % 2 ? -90 : -10; x < W; ) {
+      const w = 150 + rnd() * 90;
+      const h = Math.min(86, FLOOR_Y - y - 4);
+      const j = () => (rnd() - 0.5) * 8;
+      poly([[x + 4 + j(), y + 4 + j()], [x + w - 4 + j(), y + 4 + j()], [x + w - 4 + j(), y + h + j()], [x + 4 + j(), y + h + j()]], jit('#4a4357', 0.22));
+      ctx.fillStyle = 'rgba(255,240,220,0.08)';
+      ctx.fillRect(x + 8, y + 6, w - 16, 10);
+      ctx.fillStyle = 'rgba(0,0,0,0.22)';
+      ctx.fillRect(x + 8, y + h - 12, w - 16, 10);
+      if (rnd() < 0.18) {
+        ctx.strokeStyle = 'rgba(20,16,24,0.7)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        let cx = x + 20 + rnd() * (w - 40);
+        let cy = y + 10;
+        ctx.moveTo(cx, cy);
+        for (let i = 0; i < 4; i++) {
+          cx += (rnd() - 0.5) * 30;
+          cy += h / 5;
+          ctx.lineTo(cx, cy);
+        }
+        ctx.stroke();
+      }
+      if (rnd() < 0.12) ell(x + rnd() * w, y + h - 8, 30 + rnd() * 30, 9, 'rgba(70,110,60,0.55)');
+      x += w;
     }
   }
-  for (let i = 0; i < 70; i++) c.px(rnd() * W, rnd() * H, STONE.mid);
-  // A dark border all round, like the edge of a lantern's light.
-  for (let ring = 0; ring < 14; ring++) c.frame(ring, ring, W - 2 * ring, H - 2 * ring, INK, 0.75 - ring * 0.05);
-  c.bake(scene, 'map-bg', BG_SCALE);
-}
+
+  // The arch: a dark passage going down, with a cool light far inside.
+  const AX = 960;
+  const IN = 108;
+  const OUT = 140;
+  const SPRING = 205;
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(AX - IN, FLOOR_Y);
+  ctx.lineTo(AX - IN, SPRING);
+  ctx.arc(AX, SPRING, IN, Math.PI, 0);
+  ctx.lineTo(AX + IN, FLOOR_Y);
+  ctx.closePath();
+  const pg = ctx.createLinearGradient(0, SPRING - IN, 0, FLOOR_Y);
+  pg.addColorStop(0, '#0b0910');
+  pg.addColorStop(0.7, '#141019');
+  pg.addColorStop(1, '#1f1a28');
+  ctx.fillStyle = pg;
+  ctx.fill();
+  ctx.clip();
+  for (let i = 0; i < 6; i++) {
+    ctx.fillStyle = `rgba(110,120,170,${0.16 - i * 0.022})`;
+    ctx.fillRect(AX - IN + i * 10, FLOOR_Y - 18 - i * 34, (IN - i * 10) * 2, 6);
+  }
+  glow(AX, SPRING + 120, 200, 'rgba(110,130,210,A)', 0.18);
+  ctx.restore();
+  const N = 11;
+  const at = (a: number, r: number) => [AX + Math.cos(a) * r, SPRING + Math.sin(a) * r];
+  for (let i = 0; i < N; i++) {
+    const a0 = Math.PI + (i / N) * Math.PI + 0.01;
+    const a1 = Math.PI + ((i + 1) / N) * Math.PI - 0.01;
+    poly([at(a0, IN), at(a0, OUT), at(a1, OUT), at(a1, IN)], jit('#6a6177', 0.15));
+  }
+  for (const x0 of [AX - OUT, AX + IN]) {
+    for (let y = SPRING; y < FLOOR_Y; y += 64) poly([[x0 + 2, y + 2], [x0 + OUT - IN - 2, y + 2], [x0 + OUT - IN - 2, y + 60], [x0 + 2, y + 60]], jit('#635a70', 0.15));
+  }
+
+  // Torches in iron brackets, their warm light on the stones.
+  for (const [tx, ty] of TORCHES) {
+    glow(tx, ty - 10, 520, 'rgba(255,140,50,A)', 0.42);
+    glow(tx, ty - 10, 220, 'rgba(255,200,120,A)', 0.35);
+    rrect(tx - 30, ty + 92, 60, 14, 4, '#2a2224');
+    poly([[tx - 10, ty + 4], [tx + 10, ty + 4], [tx + 7, ty + 100], [tx - 7, ty + 100]], '#6b4423');
+    rrect(tx - 18, ty - 6, 36, 18, 6, '#3a2f30');
+    const flame = (s: number, fill: string) => {
+      ctx.beginPath();
+      ctx.moveTo(tx, ty - 70 * s);
+      ctx.bezierCurveTo(tx + 26 * s, ty - 34 * s, tx + 30 * s, ty - 4, tx, ty);
+      ctx.bezierCurveTo(tx - 30 * s, ty - 4, tx - 26 * s, ty - 34 * s, tx, ty - 70 * s);
+      ctx.fillStyle = fill;
+      ctx.fill();
+    };
+    flame(1.15, '#e9682a');
+    flame(0.9, '#ffa63d');
+    flame(0.6, '#ffe39a');
+    flame(0.3, '#fffbe8');
+  }
+
+  // The floor: flagstones in perspective towards a point behind the arch.
+  const fg = ctx.createLinearGradient(0, FLOOR_Y, 0, H);
+  fg.addColorStop(0, '#2c2632');
+  fg.addColorStop(1, '#1b1720');
+  ctx.fillStyle = fg;
+  ctx.fillRect(0, FLOOR_Y, W, H - FLOOR_Y);
+  const VX = 960;
+  const VY = 330;
+  const rows: number[] = [];
+  for (let k = 0, y = FLOOR_Y; y < H + 80; k++) {
+    rows.push(y);
+    y += 26 + k * 16;
+  }
+  const toward = (xb: number, y: number) => VX + (xb - VX) * ((y - VY) / (H - VY));
+  for (let i = 0; i + 1 < rows.length; i++) {
+    const [y0, y1] = [rows[i], rows[i + 1]];
+    for (let c = -9; c <= 9; c++) {
+      const xb0 = VX + (c - 0.5) * 230 + (i % 2) * 115;
+      const xb1 = xb0 + 230;
+      poly([[toward(xb0, y0) + 3, y0 + 3], [toward(xb1, y0) - 3, y0 + 3], [toward(xb1, y1) - 3, y1 - 3], [toward(xb0, y1) + 3, y1 - 3]], jit('#3b3442', 0.25));
+    }
+  }
+  ctx.fillStyle = '#17131b';
+  ctx.fillRect(0, FLOOR_Y - 6, W, 12);
+  glow(460, 650, 360, 'rgba(255,160,80,A)', 0.3);
+  glow(1450, 650, 360, 'rgba(255,160,80,A)', 0.26);
+  glow(960, 600, 260, 'rgba(120,140,220,A)', 0.08);
+};
+
+const drawFlagstones: Draw = (ctx, rnd) => {
+  const { poly, ell, glow } = tools(ctx);
+  ctx.fillStyle = '#16121a';
+  ctx.fillRect(0, 0, W, H);
+  // Big rough flagstones in staggered rows, each a slightly different shade.
+  for (let row = 0, y = -20; y < H; row++, y += 110) {
+    for (let x = row % 2 ? -100 : -20; x < W; ) {
+      const w = 160 + rnd() * 80;
+      const j = () => (rnd() - 0.5) * 10;
+      poly([[x + 5 + j(), y + 5 + j()], [x + w - 5 + j(), y + 5 + j()], [x + w - 5 + j(), y + 104 + j()], [x + 5 + j(), y + 104 + j()]], jitter(rnd, '#272029', 0.25));
+      ctx.fillStyle = 'rgba(255,240,220,0.05)';
+      ctx.fillRect(x + 10, y + 8, w - 20, 10);
+      if (rnd() < 0.1) ell(x + rnd() * w, y + 90, 30 + rnd() * 30, 9, 'rgba(70,110,60,0.4)');
+      x += w;
+    }
+  }
+  // Lantern light in the middle, falling off into the dark at the edges.
+  glow(W / 2, H / 2, 900, 'rgba(255,170,90,A)', 0.14);
+};
