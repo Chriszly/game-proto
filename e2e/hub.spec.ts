@@ -105,3 +105,14 @@ test('hub settings reach the games', async ({ page }, testInfo) => {
   await expect(choice('Difficulty', 'Normal')).toHaveAttribute('aria-pressed', 'true');
   await expect(choice('Show FPS', 'Off')).toHaveAttribute('aria-pressed', 'true');
 });
+
+// The game grid fills the width: wide screens get more than three columns, a phone gets one and nothing scrolls sideways.
+test('hub grid fills the screen width', async ({ page }) => {
+  const columns = () => page.locator('.games').evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(' ').length);
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.goto('/');
+  expect(await columns()).toBeGreaterThan(3);
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await columns()).toBe(1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(0);
+});

@@ -3,6 +3,8 @@ import { expect, test, type Page } from '@playwright/test';
 // Plays the first sale with real inputs: the first adventurer comes in for an Iron Shortsword, the
 // forge makes two Rusty Daggers, one is dragged onto the other to merge them into a Shortsword,
 // and the Shortsword is dragged onto the adventurer to sell it, as a player would with a finger.
+// The merge starts a hammer streak, and the Shortsword is exactly what was asked for, so it pays a
+// tip. The royal commission stands in the top bar throughout, untouched by the first round.
 // Game state is only read, through the `game` object the dev build puts on window.
 
 interface Adventurer {
@@ -20,6 +22,11 @@ interface GameState {
   walkedOff: number;
   bestTier: number;
   ranks: Record<string, number>;
+  commission: { level: number; made: number };
+  stars: number;
+  streak: number;
+  streakSlot: number;
+  streakMs: number;
 }
 type Spot = { x: number; y: number };
 
@@ -27,6 +34,10 @@ const VIEW = { w: 960, h: 540 };
 /** The first adventurer always wants an Iron Shortsword (tier 2), worth 10 coins: src/game/state.ts and swords.ts. */
 const FIRST_ORDER = 2;
 const SHORTSWORD_PRICE = 10;
+/** The exact sword asked for pays 50% on top, rounded down (`EXACT_TIP`): 15 coins for the Shortsword. */
+const EXACT_FIT_PAY = Math.floor(SHORTSWORD_PRICE * 1.5);
+/** How long after a merge the next one still chains into a hammer streak (`STREAK_MS`). */
+const STREAK_MS = 4000;
 
 /**
  * Game time per animation frame, every frame the same length. Longer frames mean fewer to draw, so
@@ -159,6 +170,8 @@ test('plays the first sale', async ({ page }, testInfo) => {
   let s = await game.state();
   expect(s).toMatchObject({ coins: 0, sold: 0, bestTier: 0, adventurers: [] });
   expect(s.slots.every((t) => t === null)).toBe(true);
+  // The first royal commission (a Golden Claymore) stands from the start, with no stars and no streak.
+  expect(s).toMatchObject({ commission: { level: 0, made: 0 }, stars: 0, streak: 0, streakMs: 0 });
   const spots = await game.spots();
 
   // The first adventurer walks up to the counter and asks for an Iron Shortsword.
@@ -185,17 +198,27 @@ test('plays the first sale', async ({ page }, testInfo) => {
   s = await game.state();
   expect(s.slots.slice(0, 2)).toEqual([FIRST_ORDER, null]);
   expect(s.bestTier).toBe(FIRST_ORDER);
+  // The merge starts a hammer streak on that anvil; a lone merge pays no bonus.
+  expect(s).toMatchObject({ streak: 1, streakSlot: 0, coins: 0 });
+  expect(s.streakMs).toBeGreaterThan(0);
+  expect(s.streakMs).toBeLessThanOrEqual(STREAK_MS);
   await wait(500);
   await snap('2-merged');
 
-  // Dragging the Shortsword onto the adventurer sells it: they pay its price and leave.
-  await drag(spots.slots[0], spots.desks[buyer.desk]);
+  // Dragging the Shortsword onto the adventurer sells it: it is exactly what they asked for, so they
+  // pay its price and a 50% tip, and leave.
+  // Midway the adventurer's tag shows the tipped price.
+  await drag(spots.slots[0], spots.desks[buyer.desk], () => snap('3-exact-fit'));
   s = await game.state();
   expect(s.slots[0]).toBeNull();
-  expect(s).toMatchObject({ coins: SHORTSWORD_PRICE, sold: 1, walkedOff: 0 });
+  expect(s).toMatchObject({ coins: EXACT_FIT_PAY, sold: 1, walkedOff: 0 });
   expect(s.adventurers.some((a) => a.id === buyer.id)).toBe(false);
   await wait(400);
-  await snap('3-sold');
+  await snap('4-sold');
+
+  // With no second merge the streak runs out, and the commission is still the first one.
+  s = await until('the hammer streak runs out', (s) => s.streak === 0, STREAK_MS + 1_000);
+  expect(s).toMatchObject({ streakMs: 0, coins: EXACT_FIT_PAY, commission: { level: 0, made: 0 }, stars: 0 });
 
   const speed = gameMs / (Date.now() - startedAt);
   console.log(`Played ${Math.round(gameMs / 1000)}s of game time at ${speed.toFixed(1)}x (target ${SPEED}x).`);
