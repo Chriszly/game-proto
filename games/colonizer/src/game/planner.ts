@@ -14,11 +14,17 @@ import {
 import { AI, PLAYER, affordable, chooseBoon, hasBuildingFor, startRaid, issue, placeBuilding, popCap, popUsed, research, train, type Building, type GameState, type Unit } from './sim';
 import { inMap, idx, type Node } from './map';
 
-const THINK_MS = 1500;
+/**
+ * The AI plays at a human pace: it looks at its side every THINK_MS and gives at most
+ * ACTIONS_PER_THINK commands each time (30 a minute), in priority order, so villagers can stand idle
+ * and production can stall for a while, as they do for a player with one mouse.
+ */
+const THINK_MS = 4000;
+const ACTIONS_PER_THINK = 2;
 const TARGET_VILLAGERS = 18;
 const ARMY_TO_ATTACK = 14;
 const ARMY_CAP = 40;
-const RESEARCH_ORDER = ['axes', 'baskets', 'ironworks', 'fletching', 'age2', 'stirrups', 'bodkin', 'picks'];
+const RESEARCH_ORDER = ['axes', 'baskets', 'ironworks', 'fletching', 'age2', 'stirrups', 'bodkin', 'picks', 'age3'];
 const BUILD_PLAN: BuildingId[] = ['farm', 'lumber', 'mine', 'barracks', 'academy', 'range', 'stable', 'watchtower'];
 
 /** Runs the planner once every THINK_MS of game time. */
@@ -30,7 +36,18 @@ export function think(s: GameState, dt: number) {
   plan(s);
 }
 
+/** Commands left in this think. */
+let budget = 0;
+/** Runs one command if the budget allows; a command that does nothing costs nothing. */
+function act(fn: () => boolean): boolean {
+  if (budget <= 0) return false;
+  const done = fn();
+  if (done) budget--;
+  return done;
+}
+
 function plan(s: GameState) {
+  budget = ACTIONS_PER_THINK;
   const town = [...s.buildings.values()].find((b) => b.owner === AI && b.type === 'town' && b.built);
   if (!town) return;
   const p = s.players[AI];
@@ -44,32 +61,32 @@ function plan(s: GameState) {
     const working = [...s.units.values()].some((u) => u.owner === AI && u.order.t === 'build' && u.order.b === b.id);
     if (working) continue;
     const builder = nearestUnit(idleVillagers, b.tx, b.ty) ?? nearestVillager(s, AI, b.tx, b.ty);
-    if (builder) issue(s, AI, [builder.id], { t: 'build', b: b.id });
+    if (builder) act(() => (issue(s, AI, [builder.id], { t: 'build', b: b.id }), true));
   }
 
   // 1. Economy: villagers from the Town Center until the target, when it's idle.
   if (town.queue.length === 0 && villagers.length < TARGET_VILLAGERS && affordable(p, UNITS.villager.cost)) {
-    train(s, AI, town.id, 'villager');
+    act(() => train(s, AI, town.id, 'villager'));
   }
 
   // 2. Population: a house before the cap is hit.
   const houseQueued = [...s.buildings.values()].some((b) => b.owner === AI && b.type === 'house' && !b.built);
   if (popUsed(s, AI) >= popCap(s, AI) - 3 && !houseQueued) {
-    buildNear(s, AI, 'house', town, idleVillagers);
+    act(() => buildNear(s, AI, 'house', town, idleVillagers));
   }
 
   // 3. Buildings in plan order, one at a time, as soon as the AI can pay for each.
   const under = [...s.buildings.values()].some((b) => b.owner === AI && !b.built);
-  if (!under) {
+  if (!under && budget > 0) {
     for (const type of BUILD_PLAN) {
       if (hasBuildingFor(s, AI, type) && type !== 'farm') continue;
       if (type === 'farm' && farmCount(s) >= 4) continue;
       if (!affordable(p, BUILDINGS[type].cost)) break;
       if (type === 'lumber' || type === 'mine') {
-        if (buildAtResource(s, type === 'lumber' ? 'wood' : 'ore', idleVillagers)) break;
+        if (act(() => buildAtResource(s, type === 'lumber' ? 'wood' : 'ore', idleVillagers))) break;
         continue;
       }
-      if (buildNear(s, AI, type, town, idleVillagers)) break;
+      if (act(() => buildNear(s, AI, type, town, idleVillagers))) break;
     }
   }
 
@@ -83,7 +100,7 @@ function plan(s: GameState) {
       const done = id === 'age2' ? p.age >= 2 : p.techs.includes(id);
       return def.at === at && !done && (!def.age2 || p.age >= 2) && affordable(p, def.cost);
     });
-    if (tech) research(s, AI, b.id, tech);
+    if (tech) act(() => research(s, AI, b.id, tech));
   }
 
   // 5. Military: train from each production building in turn, while the army is under the cap.
@@ -95,28 +112,28 @@ function plan(s: GameState) {
       if (!producer) continue;
       const cost = UNITS[type].cost;
       if (!affordable(p, cost)) continue;
-      train(s, AI, producer.id, type);
+      act(() => train(s, AI, producer.id, type));
     }
   }
 
-  // 6. Gather: idle villagers go to the resource the AI is shortest of.
-  for (const u of idleVillagers) {
-    const res = neediest(s);
-    const src = nearestNode(s, res, u);
-    if (src) issue(s, AI, [u.id], { t: 'gather', node: src });
-  }
-
-  // 7. Attack: once the army is big enough, attack-move on the player's Town Center, and keep
-  // sending idle soldiers after a fight.
+  // 6. Attack, ahead of idle villagers, as a player would: once the army is big enough, attack-move
+  // on the player's Town Center, and keep sending idle soldiers after a fight.
   const army = military.filter((u) => u.hp > 0);
   const target = [...s.buildings.values()].find((b) => b.owner === PLAYER && b.type === 'town');
   if (army.length >= ARMY_TO_ATTACK && target) {
     const idleArmy = army.filter((u) => u.order.t === 'idle');
-    if (idleArmy.length >= army.length / 2) {
+    if (idleArmy.length >= army.length / 2 && act(() => true)) {
       issue(s, AI, army.map((u) => u.id), { t: 'attackMove', x: target.tx + 2, y: target.ty + 2 });
       // The player is told about each new raid; the one under way keeps its raiders.
       startRaid(s, AI, PLAYER, army.map((u) => u.id));
     }
+  }
+
+  // 7. Gather: idle villagers go to the resource the AI is shortest of.
+  for (const u of idleVillagers) {
+    const res = neediest(s);
+    const src = nearestNode(s, res, u);
+    if (src) act(() => (issue(s, AI, [u.id], { t: 'gather', node: src }), true));
   }
 
   // 8. The Age II boon: the AI always holds a shieldwall.
