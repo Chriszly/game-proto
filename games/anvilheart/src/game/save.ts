@@ -1,6 +1,7 @@
 import { freshProgress, type Progress } from './state';
 
-// The board, the coins and the upgrades are saved; adventurers come afresh on every visit.
+// The board, the coins, the upgrades and the royal commission are saved; adventurers come afresh
+// on every visit.
 const KEY = 'anvilheart-progress';
 
 export function loadProgress(): Progress {
@@ -9,7 +10,7 @@ export function loadProgress(): Progress {
     const raw = localStorage.getItem(KEY);
     if (!raw) return fresh;
     const saved = JSON.parse(raw) as Partial<Progress>;
-    return { ...fresh, ...saved, slots: Array.isArray(saved.slots) ? saved.slots : fresh.slots, ranks: { ...fresh.ranks, ...saved.ranks } };
+    return { ...fresh, ...saved, slots: Array.isArray(saved.slots) ? saved.slots : fresh.slots, ranks: { ...fresh.ranks, ...saved.ranks }, commission: { ...fresh.commission, ...saved.commission } };
   } catch {
     return fresh;
   }

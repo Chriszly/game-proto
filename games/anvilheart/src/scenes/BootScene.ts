@@ -2,8 +2,10 @@ import Phaser from 'phaser';
 import { bakeAdventurers } from '../art/characters';
 import { bakeScenery } from '../art/scenery';
 import { bakeSwords } from '../art/swords';
+import { bakeUi } from '../art/ui';
+import { FORGE_BUTTON, UPGRADE_BUTTONS } from './layout';
 
-// Generates all textures at runtime so the prototype needs no asset files yet.
+// Paints all textures on canvases at startup, so the game needs no asset files.
 export class BootScene extends Phaser.Scene {
   constructor() {
     super('Boot');
@@ -13,6 +15,7 @@ export class BootScene extends Phaser.Scene {
     bakeScenery(this);
     bakeSwords(this);
     bakeAdventurers(this);
+    bakeUi(this, { forge: FORGE_BUTTON, upgrade: UPGRADE_BUTTONS });
     this.scene.start('Game');
   }
 }

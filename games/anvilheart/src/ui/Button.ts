@@ -1,18 +1,39 @@
 import Phaser from 'phaser';
+import { buttonTexture, type ButtonState, type ButtonStyle } from '../art/ui';
 import { FONT } from '../scenes/layout';
 
-/** A wooden button with a caption, lit while the pointer is over it and greyed out when disabled. */
+/**
+ * A leaded-glass button with a caption: lit while the pointer is over it, dimmed when disabled.
+ * Fires on `pointerdown`. Its textures are baked by `bakeUi` for its style and size.
+ */
 export class Button {
   readonly root: Phaser.GameObjects.Container;
-  private bg: Phaser.GameObjects.Rectangle;
+  private bg: Phaser.GameObjects.Image;
   private text: Phaser.GameObjects.Text;
   private enabled = true;
   private over = false;
 
-  constructor(scene: Phaser.Scene, x: number, y: number, w: number, h: number, caption: string, onClick: () => void) {
-    this.bg = scene.add.rectangle(0, 0, w, h, 0x5c3a21).setStrokeStyle(3, 0xc9a040);
+  constructor(
+    scene: Phaser.Scene,
+    x: number,
+    y: number,
+    private style: ButtonStyle,
+    caption: string,
+    onClick: () => void,
+    /** How far right of the centre the caption sits, to leave room for an emblem. */
+    textX = 0,
+  ) {
+    this.bg = scene.add.image(0, 0, buttonTexture(style, 'on'));
     this.text = scene.add
-      .text(0, 0, caption, { fontFamily: FONT, fontSize: '18px', color: '#f3e9d2', align: 'center' })
+      .text(textX, 0, caption, {
+        fontFamily: FONT,
+        fontStyle: 'bold',
+        fontSize: '18px',
+        color: '#fff1d0',
+        align: 'center',
+        stroke: '#17131c',
+        strokeThickness: 3,
+      })
       .setOrigin(0.5);
     this.root = scene.add.container(x, y, [this.bg, this.text]);
     this.bg
@@ -24,7 +45,7 @@ export class Button {
 
   set(caption: string, enabled: boolean, fontSize = 18) {
     if (this.text.text !== caption) this.text.setText(caption);
-    this.text.setFontSize(fontSize);
+    if (this.text.style.fontSize !== `${fontSize}px`) this.text.setFontSize(fontSize);
     if (this.enabled !== enabled) {
       this.enabled = enabled;
       this.paint();
@@ -33,8 +54,8 @@ export class Button {
   }
 
   private paint() {
-    this.bg.setFillStyle(!this.enabled ? 0x3b2a20 : this.over ? 0x8a5a32 : 0x5c3a21);
-    this.bg.setStrokeStyle(3, this.enabled ? 0xc9a040 : 0x6a5a40);
-    this.text.setColor(this.enabled ? '#f3e9d2' : '#bcac8c');
+    const state: ButtonState = !this.enabled ? 'off' : this.over ? 'over' : 'on';
+    this.bg.setTexture(buttonTexture(this.style, state));
+    this.text.setColor(this.enabled ? '#fff1d0' : '#a89cb8');
   }
 }
