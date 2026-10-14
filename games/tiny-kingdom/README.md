@@ -66,8 +66,8 @@ picks the farm and hovers a cell to check the preview, checks a tap on a lake pl
 places six buildings by tapping, checking the score each adds against the rules, until the goal
 brings round 2 and its tiles. Like the other games' tests it owns the game clock and plays at 4x
 speed (`PLAYTHROUGH_SPEED`). The **Playthrough Tiny Kingdom** workflow
-(`.github/workflows/playthrough-tiny-kingdom.yml`) runs it on every PR and push to main that
-touches this folder or a shared build file, and uploads the video and screenshots as the
+(`.github/workflows/playthrough-tiny-kingdom.yml`) runs it on every PR that changes
+this folder or the workflow, and uploads the video and screenshots as the
 `playthrough-tiny-kingdom` artifact.
 
 ```sh
