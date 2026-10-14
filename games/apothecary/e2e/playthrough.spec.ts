@@ -14,7 +14,7 @@ interface GameState {
   refiner: { queue: ItemId[]; output: ItemId[] };
   cauldron: { contents: ItemId[]; brewing: { out: ItemId } | null; output: ItemId[] };
   refiner2: { queue: ItemId[]; output: ItemId[] };
-  cauldron2: { contents: ItemId[]; brewing: unknown; output: ItemId[] };
+  cauldron2: { contents: ItemId[]; brewing: { out: ItemId } | null; output: ItemId[] };
   expansion: Record<'land' | 'refiner' | 'cauldron', { built: boolean; paid: number }> & { fields: { built: boolean; paid: number }[] };
   counter: { shelf: ItemId[]; till: number };
   upgrades: Record<string, { level: number; paid: number }>;

@@ -33,7 +33,12 @@ test('hub opens each game', async ({ page }, testInfo) => {
   await page.goto('/');
   await expect(page.locator('.game')).toHaveCount(GAMES.length);
   await expectFavicon(page);
-  await expect(page.locator('.game .cover').first()).toHaveJSProperty('complete', true);
+  // Every card's cover loads.
+  const covers = page.locator('.game .cover');
+  await expect(covers).toHaveCount(GAMES.length);
+  for (const cover of await covers.all()) {
+    await expect.poll(() => cover.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
+  }
   // Each card shows its game's favicon next to the name.
   const icons = page.locator('.game h2 .icon');
   await expect(icons).toHaveCount(GAMES.length);
