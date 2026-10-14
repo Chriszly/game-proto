@@ -1,6 +1,6 @@
 import { freshProgress, type Progress } from './state';
 
-// Only the progress between orders is saved: which order is next, the coins and potions sold.
+// Only the progress between orders is saved: which order is next, the coins, potions sold and stars.
 const KEY = 'tincture-tinker-progress';
 
 export function loadProgress(): Progress {
@@ -14,6 +14,7 @@ export function loadProgress(): Progress {
     if (!ok(saved.order, 1) || !Number.isInteger(saved.order)) saved.order = fresh.order;
     if (!ok(saved.coins, 0)) saved.coins = fresh.coins;
     if (!ok(saved.sold, 0)) saved.sold = fresh.sold;
+    if (!ok(saved.stars, 0) || !Number.isInteger(saved.stars)) saved.stars = fresh.stars;
     return saved;
   } catch {
     return fresh;

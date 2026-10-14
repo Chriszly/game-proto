@@ -11,10 +11,12 @@
   <circle cx="22.3" cy="10.7" r="0.8" fill="#ffffff"/>
   <ellipse cx="16" cy="17.6" rx="4.6" ry="3.3" fill="#ffdcc7"/>
   <ellipse cx="16" cy="16.6" rx="2.2" ry="1.4" fill="#311300"/>
-  <rect x="5" y="21" width="22" height="10.4" rx="0.8" fill="#ead6a6" stroke="#311300" stroke-width="0.8"/>
-  <rect x="3.4" y="20.4" width="3" height="11.6" rx="1.5" fill="#d9c08a" stroke="#311300" stroke-width="0.8"/>
-  <rect x="25.6" y="20.4" width="3" height="11.6" rx="1.5" fill="#d9c08a" stroke="#311300" stroke-width="0.8"/>
-  <path d="M8.4 24 C10 22.4 13.6 22.6 14.6 24.4 C15.6 26.2 14 28.8 11.4 29 C9 29.2 7.4 27.4 8.4 24 Z" fill="#5a8f3a" stroke="#2a68a4" stroke-width="0.9"/>
-  <path d="M13.4 26.4 Q17 23.4 20 25.6 T23.4 24.2" stroke="#5c3a21" stroke-width="0.9" stroke-dasharray="1.2 1" fill="none"/>
-  <path d="M23.4 22.4 L24 23.8 L25.4 24 L24.3 24.9 L24.6 26.3 L23.4 25.6 L22.2 26.3 L22.5 24.9 L21.4 24 L22.8 23.8 Z" fill="#c9a040"/>
+  <rect x="4.5" y="20.6" width="23" height="10.8" rx="0.6" fill="#fbfaf6" stroke="#1d2329" stroke-width="0.9"/>
+  <path d="M5 27.4 C7.4 26.2 8.6 28.8 11 28.2 C13 27.7 13.2 30.2 15 31 L5 31 Z" fill="#bcdff1"/>
+  <path d="M5 27.4 C7.4 26.2 8.6 28.8 11 28.2 C13 27.7 13.2 30.2 15 31" fill="none" stroke="#2f7fb8" stroke-width="0.7"/>
+  <ellipse cx="19.5" cy="25.8" rx="6.2" ry="3.6" fill="#ead39f" stroke="#a8693a" stroke-width="0.6"/>
+  <ellipse cx="19.8" cy="25.8" rx="3.8" ry="2.1" fill="#e2bf8e" stroke="#a8693a" stroke-width="0.6"/>
+  <ellipse cx="20" cy="25.8" rx="1.6" ry="0.9" fill="none" stroke="#a8693a" stroke-width="0.6"/>
+  <path d="M9.6 22.4 L12.2 26.6 L7 26.6 Z" fill="#fbfaf6" stroke="#d6247f" stroke-width="0.9" stroke-linejoin="round"/>
+  <circle cx="9.6" cy="25.1" r="0.6" fill="#d6247f"/>
 </svg>

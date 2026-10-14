@@ -9,6 +9,8 @@ export const COLS = 8;
 export interface Tile {
   id: number;
   kind: Kind;
+  /** A Catalyst, brewed by a match of four or more: it matches like its kind and clears its whole row. */
+  catalyst?: boolean;
 }
 export type Board = Tile[][];
 export interface Cell {
@@ -28,15 +30,20 @@ export function swapped(board: Board, a: Cell, b: Cell): Board {
   return next;
 }
 
-/** Every cell in a row or column of three or more of the same kind. */
-export function findMatches(board: Board): Cell[] {
-  const hit = new Set<number>();
-  const mark = (row: number, col: number) => hit.add(row * COLS + col);
+/** A line of three or more of a kind, across or down, its cells from the left or the top. */
+export interface Run {
+  kind: Kind;
+  cells: Cell[];
+}
+
+/** Every row or column of three or more of the same kind, rows first. */
+export function findRuns(board: Board): Run[] {
+  const runs: Run[] = [];
   for (let row = 0; row < ROWS; row++) {
     for (let col = 0; col < COLS; ) {
       let end = col + 1;
       while (end < COLS && board[row][end].kind === board[row][col].kind) end++;
-      if (end - col >= 3) for (let c = col; c < end; c++) mark(row, c);
+      if (end - col >= 3) runs.push({ kind: board[row][col].kind, cells: Array.from({ length: end - col }, (_, i) => ({ row, col: col + i })) });
       col = end;
     }
   }
@@ -44,11 +51,31 @@ export function findMatches(board: Board): Cell[] {
     for (let row = 0; row < ROWS; ) {
       let end = row + 1;
       while (end < ROWS && board[end][col].kind === board[row][col].kind) end++;
-      if (end - row >= 3) for (let r = row; r < end; r++) mark(r, col);
+      if (end - row >= 3) runs.push({ kind: board[row][col].kind, cells: Array.from({ length: end - row }, (_, i) => ({ row: row + i, col })) });
       row = end;
     }
   }
+  return runs;
+}
+
+/** Every cell in a row or column of three or more of the same kind. */
+export function findMatches(board: Board): Cell[] {
+  const hit = new Set<number>();
+  for (const run of findRuns(board)) for (const c of run.cells) hit.add(c.row * COLS + c.col);
   return [...hit].sort((a, b) => a - b).map((i) => ({ row: Math.floor(i / COLS), col: i % COLS }));
+}
+
+/** True if the tile at `cell` is part of a line of three. */
+export function matchesAt(board: Board, { row, col }: Cell): boolean {
+  const kind = board[row][col].kind;
+  const same = (r: number, c: number) => inBoard({ row: r, col: c }) && board[r][c].kind === kind;
+  let across = 1;
+  for (let c = col - 1; same(row, c); c--) across++;
+  for (let c = col + 1; same(row, c); c++) across++;
+  let down = 1;
+  for (let r = row - 1; same(r, col); r--) down++;
+  for (let r = row + 1; same(r, col); r++) down++;
+  return across >= 3 || down >= 3;
 }
 
 /** Every swap of neighbours that makes a match. */

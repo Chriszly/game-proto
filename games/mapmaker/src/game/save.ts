@@ -11,6 +11,14 @@ export function loadGame(): GameState | null {
     if (!s || !Array.isArray(s.tiles) || s.tiles.length !== GRID.w * GRID.h || !s.port || !s.phase) return null;
     // Supplies saved on an easier difficulty can exceed this one's maximum.
     s.supplies = Math.min(s.supplies, maxSupplies(s));
+    // Saves from before the isle goal and the sell-back start with none of either.
+    s.milestones ??= 0;
+    s.isleStart ??= s.voyage;
+    s.atlas ??= [];
+    if (s.chart) {
+      const old: Partial<typeof s.chart> = s.chart;
+      s.chart = { ...s.chart, unused: old.unused ?? 0, sellBack: old.sellBack ?? 0, milestones: old.milestones ?? 0, milestoneCoins: old.milestoneCoins ?? 0, atlas: old.atlas ?? false };
+    }
     return s;
   } catch {
     return null;
