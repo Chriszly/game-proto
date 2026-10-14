@@ -12,9 +12,9 @@ export interface BuildingInfo {
 }
 
 export const INFO: Record<Building, BuildingInfo> = {
-  farm: { name: 'Farm', rule: '1, +1 per lake beside it' },
+  farm: { name: 'Farm', rule: '1 point, +1 per lake beside it' },
   house: { name: 'House', rule: '+2 per farm, +1 per house or forest beside it' },
-  tower: { name: 'Tower', rule: '+2 per house around it, 0 beside another tower' },
+  tower: { name: 'Tower', rule: '+2 per house around it, 0 next to a tower' },
 };
 
 export const isBuilding = (cell: Cell): cell is Building => (BUILDINGS as readonly string[]).includes(cell);
