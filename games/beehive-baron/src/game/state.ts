@@ -1,3 +1,4 @@
+import { MEADOWS, SUNFLOWER_COINS } from './meadows';
 import type { UpgradeId } from './upgrades';
 
 /** The comb's spots for cells: a hex grid of 5 x 4, numbered row by row from the top left. */
@@ -8,13 +9,19 @@ export const CELL_CAP = 4;
 export const RIPEN_MS = 2500;
 /** How long a forager's trip to the flowers and back takes, before any clover. */
 export const TRIP_MS = 3000;
-/** Each jar of honey sells for this many coins. */
+/** Each jar of honey sells for this many coins, before the comb bonus and the Sunflower Ridge. */
 export const HONEY_PRICE = 15;
 /** A new hive starts with this many bees, and can hold up to `MAX_BEES`. */
 export const START_BEES = 2;
 export const MAX_BEES = 12;
 /** How many flowers the bees can fly to. */
 export const FLOWERS = 6;
+/**
+ * Nectar gathered while the page is closed: each bee brings one drop per `AWAY_MS_PER_DROP` away,
+ * up to `AWAY_CAP` drops a visit (and never more than the filling cells have room for).
+ */
+export const AWAY_MS_PER_DROP = 30_000;
+export const AWAY_CAP = 20;
 
 /** One comb cell: filling with nectar, ripening once full, then capped honey ready to harvest. */
 export interface Cell {
@@ -45,21 +52,24 @@ export interface GameState {
   sold: number;
   spilled: number;
   ranks: Record<UpgradeId, number>;
+  /** How many meadows of `MEADOWS` are unlocked, in order; each goal reached unlocks the next. */
+  meadows: number;
   nextId: number;
   /** Things that just happened, for the scene to animate; it empties the list as it draws them. */
   events: GameEvent[];
 }
 
 export type GameEvent =
-  | { kind: 'built'; slot: number }
+  | { kind: 'built'; slot: number; touching: number }
   | { kind: 'nectar'; slot: number }
   | { kind: 'capped'; slot: number }
   | { kind: 'harvested'; slot: number }
   | { kind: 'spilled'; drops: number }
   | { kind: 'sold'; jars: number; coins: number }
-  | { kind: 'bee'; id: number };
+  | { kind: 'bee'; id: number }
+  | { kind: 'unlocked'; meadow: number };
 
-/** What is kept between visits: the comb, the coins, the bees and the upgrades. */
+/** What is kept between visits: the comb, the coins, the bees, the upgrades and the meadows. */
 export interface Progress {
   coins: number;
   cells: (Cell | null)[];
@@ -67,6 +77,9 @@ export interface Progress {
   jars: number;
   sold: number;
   ranks: Record<UpgradeId, number>;
+  meadows: number;
+  /** When the hive was last seen (`Date.now()`), for the nectar gathered while away; 0 if never. */
+  seen: number;
 }
 
 export const freshProgress = (): Progress => ({
@@ -76,6 +89,8 @@ export const freshProgress = (): Progress => ({
   jars: 0,
   sold: 0,
   ranks: { baskets: 0, clover: 0, dance: 0 },
+  meadows: 0,
+  seen: 0,
 });
 
 /** A saved cell, checked, or null if it is not a valid one. */
@@ -100,6 +115,7 @@ export function newHive(progress: Progress): GameState {
     sold: progress.sold,
     spilled: 0,
     ranks: { ...progress.ranks },
+    meadows: Math.max(0, Math.min(MEADOWS.length, Math.floor(progress.meadows) || 0)),
     nextId: count + 1,
     events: [],
   };
@@ -112,10 +128,14 @@ export const progressOf = (s: GameState): Progress => ({
   jars: s.jars,
   sold: s.sold,
   ranks: { ...s.ranks },
+  meadows: s.meadows,
+  seen: Date.now(),
 });
 
-/** How many drops each forager brings home. */
-export const carry = (s: GameState) => 1 + s.ranks.baskets;
+/** How many drops each forager brings home: one, plus the baskets, plus one with the Lavender Field. */
+export const carry = (s: GameState) => 1 + s.ranks.baskets + (s.meadows >= 1 ? 1 : 0);
+/** How long a full cell takes to ripen: half as long once the Heather Moor is unlocked. */
+export const ripenTime = (s: GameState) => (s.meadows >= 3 ? RIPEN_MS / 2 : RIPEN_MS);
 /** The price of the next comb cell: the first is free, then each costs more. */
 export const cellPrice = (s: GameState) => {
   const built = s.cells.filter((c) => c !== null).length;
@@ -125,3 +145,27 @@ export const cellPrice = (s: GameState) => {
 export const beePrice = (s: GameState) => (s.bees.length >= MAX_BEES ? null : Math.round(25 * Math.pow(1.5, s.bees.length - START_BEES)));
 /** Drops of nectar the comb can still take. */
 export const room = (s: GameState) => s.cells.reduce((n, c) => n + (c?.phase === 'filling' ? CELL_CAP - c.nectar : 0), 0);
+
+/** The spots next to a spot on the comb (odd rows sit half a cell to the right). */
+export function neighbours(slot: number) {
+  const col = slot % GRID.cols;
+  const row = Math.floor(slot / GRID.cols);
+  const out: number[] = [];
+  const add = (c: number, r: number) => {
+    if (c >= 0 && c < GRID.cols && r >= 0 && r < GRID.rows) out.push(r * GRID.cols + c);
+  };
+  add(col - 1, row);
+  add(col + 1, row);
+  const shift = row % 2 ? [0, 1] : [-1, 0];
+  for (const r of [row - 1, row + 1]) for (const k of shift) add(col + k, r);
+  return out;
+}
+/** How many built cells a spot shares an edge with. */
+export const touching = (s: GameState, slot: number) => neighbours(slot).filter((n) => s.cells[n] !== null).length;
+/** Every edge two built cells share, as pairs of spots (lower spot first). */
+export const sharedEdges = (s: GameState) =>
+  s.cells.flatMap((c, a) => (c ? neighbours(a).filter((b) => b > a && s.cells[b] !== null).map((b) => [a, b] as const) : []));
+/** The comb bonus: one coin more a jar for every edge two built cells share. */
+export const combBonus = (s: GameState) => sharedEdges(s).length;
+/** What one jar of honey sells for now: the base price, plus the Sunflower Ridge, plus the comb bonus. */
+export const jarPrice = (s: GameState) => HONEY_PRICE + (s.meadows >= 2 ? SUNFLOWER_COINS : 0) + combBonus(s);
