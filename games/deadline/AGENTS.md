@@ -22,9 +22,6 @@ towards the soldier; upgrade crates drift down among them and are shot open for 
   - `GameScene.overlay` collects the game over objects but nothing ever reads it; restart relies on
     the scene shutdown to destroy them.
   - The comment on `liveEnemies` says "for the HUD", but only the test calls it.
-  - Bullet hits are point-in-circle checks at each frame's position, not swept. A bullet moves
-    `BULLET.speed * dt` (46px in a 64ms frame), more than a runner's hit diameter, so it can pass
-    through small targets on long frames.
   - The boss has no special behaviour beyond stats; it just walks straight down the middle.
 
 ## Architecture
@@ -67,7 +64,8 @@ towards the soldier; upgrade crates drift down among them and are shot open for 
   sends one bullet from each slot (from its own row's y). Depth grows with the row, so back rows draw
   on top. `heroRange()` narrows the hero's x range so every squad rifle stays in
   `HERO.minX..HERO.maxX`. Once the squad is full (`MAX_COMPANIONS` = 8), `spawn` turns a companion
-  crate into a damage crate; `applyUpgrade` also caps the count.
+  crate into a damage crate, and `collect` does the same for a companion crate that was already
+  falling when the squad filled; `applyUpgrade` also caps the count.
 - **Input:** `createInput` sets `pointerTarget` (clamped to `heroRange()`) on
   `pointerdown`, and on `pointermove` while held. `moveHero` walks towards it at `HERO.speed` and
   clears it on arrival; it re-clamps `pointerTarget` to `heroRange()` first, since a new companion
@@ -180,6 +178,9 @@ towards the soldier; upgrade crates drift down among them and are shot open for 
 - `REACH_Y` drives both the game over line and the sandbag row, and crates are lost past it.
 - Crates do not block wave clear: a wave can end with a crate still falling, and it keeps falling
   into the break.
-- Crate hit boxes are squares (`PICKUP.halfSize`), enemy hit boxes are circles (`radius`).
+- Crate hit boxes are squares (`PICKUP.halfSize`), enemy hit boxes are circles (`radius`). Hits are
+  swept: `hitTargets` tests each bullet's whole move this frame, from `prevY` up to `y`, so a long
+  frame can't carry it through a target, and a piercing bullet hits the nearest enemies first.
 - Pools never shrink; `Pool.live()` allocates a new array each call, so avoid it in hot loops.
 - The repo forbids red crosses: the favicon's aiming mark is a green crosshair. Keep it non-red.
+  The favicon is the hub bear (ears, head, dot eyes, muzzle) with a helmet set between its ears.
