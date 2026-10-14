@@ -576,7 +576,7 @@ export class GameScene extends Phaser.Scene {
       const name = GOLEM_INFO[hovered.kind].name;
       const combo = hovered.growMs === 0 ? comboAt(s, hovered.kind, hovered.col, hovered.row) : null;
       const level = hovered.growMs > 0 ? `${name}, still growing` : `${name}, level ${hovered.level}`;
-      if (combo) return `${level}. Moss combo: ${combo === 'slowed' ? 'hits slowed pests harder' : 'pricks twice'}`;
+      if (combo) return `${name} lv ${hovered.level}: moss combo, ${combo === 'slowed' ? 'harder on slowed pests' : 'pricks twice'}`;
       return picked ? `${level}. Tap it again to close` : `${level}. Tap it to raise, move or uproot`;
     }
     if (s.phase === 'build' && nextWave(s) % BOSS_EVERY === 0) return 'The Queen Slug slimes golems beside her trail';

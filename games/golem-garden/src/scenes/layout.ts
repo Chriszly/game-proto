@@ -9,7 +9,7 @@ export const VIEW = { w: 960, h: 540 };
 export const HUD = {
   y: 32,
   title: { x: 16, y: 22 },
-  garden: { x: 82, y: 45, w: 132, h: 18 },
+  garden: { x: 95, y: 45, w: 158, h: 18 },
   wave: { x: 235, w: 105 },
   leaf: { x: 370, w: 75, icon: 392, text: 410 },
   sap: { x: 490, w: 80, icon: 512, text: 528 },

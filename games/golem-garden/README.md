@@ -7,7 +7,9 @@ Pests are coming down the garden path to eat the Heartwood, the great tree at it
 in the soil beside the path: each one grows into a golem that throws rocks or moss at the pests
 within reach. Squashed pests drop sap, which buys more seeds and raises your golems' levels. Every
 wave you clear opens a bud on the Heartwood, and a tree in full bloom gives you a third seed, the
-Thorn golem. Hold out as many waves as you can.
+Thorn golem. Golems side by side with a moss golem combo, moles tunnel, snails wear armour, aphids
+swarm, and every tenth wave the Queen Slug slimes the garden. Clear enough waves and new gardens
+with forked paths open up. Hold out as many waves as you can.
 
 Everything is claymation: hand-rolled plasticine on a studio table, with fingerprint smudges and
 soft highlights, lumpy golems with bead eyes, a pressed clay path, soil pads with tool-cut furrows
@@ -22,10 +24,14 @@ and pressed lettering on clay tags. It is all painted in code at startup; there 
 | Tap or click a seed card | Pick the seed to plant (the Thorn golem's once it is unlocked) |
 | Hover a soil cell | See how far the golem would reach |
 | Tap or click a soil cell | Plant the picked seed there, if you have the sap |
-| Tap or click a golem | Raise it a level (up to 3), if you have the sap |
+| Tap or click a golem | Open its menu: Raise (a level, up to 3), Move or Uproot; tap it again to close |
+| Move, then tap soil | Move the golem there for 10 sap, as it is (level and all) |
+| Uproot | Pull the golem up for 70% of the sap spent on it (its seed and levels) |
+| 1x / 2x (top right) | Play at double speed, or back to normal |
+| Garden tag (under the title) | Pick a garden to plant: the Meadow, or one your best wave has unlocked |
 | Start wave | Send the next wave of pests down the path |
 | Call wave N now | Once the current wave has all come in, send the next one early for bonus sap |
-| Replant | After the Heartwood falls: start a new garden |
+| A garden card | After the Heartwood falls: plant that garden afresh |
 
 1. **Seeds grow first.** A seed takes a few seconds to grow into a golem, and only a grown golem
    fights. You can plant between waves and during them.
@@ -38,26 +44,56 @@ and pressed lettering on clay tags. It is all painted in code at startup; there 
    | Thorn golem | 60 sap | 4s | 5 | 80px | 0.6s | pricks every pest within reach at once; locked until the Heartwood blooms |
 
    Raising a golem to level 2 costs 40 sap and to level 3 costs 70; each level adds 60% damage and
-   12px of reach.
-3. **Pests**: beetles (20 health, drop 5 sap), slugs from wave 2 (50 health, slow, drop 9, take 2
-   off the Heartwood) and crows from wave 3 (14 health, fast, drop 6). Each wave brings more of
-   them, with 12% more health per wave.
-4. **The Heartwood** has 10 leaves. A pest that reaches it eats one (a slug two), and the garden is
-   lost when none are left. Clearing a wave adds 10 + 5 x the wave's number in sap. The most waves
-   ever cleared is saved in the browser.
-5. **Heartwood bloom.** Each wave you clear (or call early, below) opens one of the five buds on the
+   12px of reach. A tapped golem opens a little menu: **Raise**, **Move** (10 sap, to any free soil
+   cell) and **Uproot** (gives back 70% of the sap spent on it, rounded down).
+3. **Combos.** Golems side by side (up, down, left or right, both grown) with a moss golem help
+   each other, shown by a clay vine between them:
+
+   | Pair | Combo |
+   | --- | --- |
+   | Pebble golem next to a moss golem | its rocks do 50% more damage to slowed pests |
+   | Thorn golem next to a moss golem | it pricks twice with every throw |
+
+4. **Pests**: each wave brings more of them, with 12% more health per wave.
+
+   | Pest | From wave | Health | Speed | Sap | Bites | Also |
+   | --- | --- | --- | --- | --- | --- | --- |
+   | Beetle | 1 | 20 | 40 | 5 | 1 | |
+   | Slug | 2 | 50 | 24 | 9 | 2 | |
+   | Crow | 3 | 14 | 72 | 6 | 1 | |
+   | Mole | 4 | 34 | 34 | 8 | 1 | tunnels under the middle of the path (30% to 60% of the way), out of reach, as a moving heap of earth |
+   | Armoured snail | 5 | 36 | 20 | 11 | 2 | shrugs off small hits: 4 off every hit, down to 1 |
+   | Aphid | 6 | 5 | 46 | 1 | 1 | comes in a swarm of 6 + half the wave's number, two swarms from wave 12 |
+   | Queen Slug | 10, 20, ... | 620 | 13 | 80 | 5 | a boss every tenth wave; her slime trail halves the throwing speed of golems on and beside the cells she crosses for 6s |
+
+5. **The Heartwood** has 10 leaves. A pest that reaches it eats as many as it bites, and the garden
+   is lost when none are left. Clearing a wave adds 10 + 5 x the wave's number in sap. The most
+   waves ever cleared is saved in the browser.
+6. **Heartwood bloom.** Each wave you clear (or call early, below) opens one of the five buds on the
    Heartwood, shown on the tree and in the top bar (for example 3/5). With all five open the tree is
    in bloom and the Thorn golem's seed card unlocks; until then it shows a padlock and the buds
-   still to go. The bloom belongs to one garden: a new garden after Replant starts with closed buds
-   and the Thorn golem locked again.
-6. **Call the next wave early.** Once every pest of the current wave has come onto the path, the
+   still to go. The bloom is kept from garden to garden (it is saved in the browser), so once the
+   Heartwood has bloomed the Thorn golem stays unlocked.
+7. **Gardens.** Tap the garden tag under the title to pick a garden; a new garden starts from wave 1,
+   and your best and the bloom carry over. When the Heartwood falls, the same picker lets you plant
+   again. Pests take a forked garden's ways in turn.
+
+   | Garden | Unlocked at | Path |
+   | --- | --- | --- |
+   | Meadow | from the start | one winding path |
+   | Forked Brook | best 5 waves | splits round a soil bed and meets again before the Heartwood |
+   | Two Gates | best 10 waves | two entrances whose paths meet halfway |
+
+8. **Speed.** The 1x button at the top right doubles the game's speed (2x) and back, at any time.
+9. **Call the next wave early.** Once every pest of the current wave has come onto the path, the
    wave button turns into "Call wave N now, +15 early". Tapping it counts the current wave as done
    at once (its clearing bonus and its bud) plus 15 sap, and the next wave starts coming in while the
-   last pests are still walking. The card above the button previews the next wave's beetles, slugs
-   and crows, counted from the game's own wave list, so you can weigh the sap against the crowd.
-7. **Sap you can see.** A squashed pest leaves an orange splat and a "+N" pop, and its sap
-   droplets fly in an arc to the sap counter, which glows as they land. With reduced motion on (hub
-   Settings) the splat and "+N" stay put and fade, without the flying droplets or the glow.
+   last pests are still walking. The card above the button previews the next wave's pests, counted
+   from the game's own wave list (in two rows once there are more than three kinds, with the Queen
+   Slug named in its title), so you can weigh the sap against the crowd.
+10. **Sap you can see.** A squashed pest leaves an orange splat and a "+N" pop, and its sap
+    droplets fly in an arc to the sap counter, which glows as they land. With reduced motion on (hub
+    Settings) the splat and "+N" stay put and fade, without the flying droplets or the glow.
 
 ![A seed just planted, growing](docs/screenshots/playthrough-1-sprout.png)
 
@@ -68,6 +104,20 @@ and pressed lettering on clay tags. It is all painted in code at startup; there 
 ![Wave 2's last pests on the path, with the button offering to call wave 3 early and its preview](docs/screenshots/call-early.png)
 
 ![Squashed pests leave splats and "+5" pops while sap droplets fly to the counter](docs/screenshots/sap-pops.png)
+
+![A tapped pebble golem's menu, Raise, Move and Uproot, with combo vines to its moss neighbours](docs/screenshots/golem-menu.png)
+
+![Moving a golem: the ghost and its reach on the soil it would move to](docs/screenshots/golem-move.png)
+
+![A mole and its tunnel mound, armoured snails and an aphid swarm](docs/screenshots/new-pests.png)
+
+![The Queen Slug on wave 10 and her slime trail](docs/screenshots/queen-slug.png)
+
+![The garden picker](docs/screenshots/garden-picker.png)
+
+![Forked Brook at 2x speed](docs/screenshots/forked-brook.png)
+
+![Two Gates](docs/screenshots/two-gates.png)
 
 The difficulty, set on the hub page's Settings, changes one thing: pests have 25% less health on
 Easy and 30% more on Hard.
@@ -98,10 +148,12 @@ npx playwright test --project golem-garden
 All paths are inside `games/golem-garden/`.
 
 - `src/game/`: the rules in plain TypeScript with no Phaser dependency. `board.ts` has the grid
-  and the path, `data.ts` the golems, pests and waves, `state.ts` planting, upgrading, calling
-  waves and the tick that moves pests and makes golems throw, and `save.ts` the best wave.
-- `src/scenes/`: `BootScene` bakes textures, `GameScene` draws the garden, the HUD and the seed
-  panel and wires taps to the rules, `layout.ts` says where things are drawn.
+  and the gardens with their paths, `data.ts` the golems, combos, pests and waves, `state.ts`
+  planting, upgrading, moving, uprooting, calling waves and the tick that moves pests and makes
+  golems throw, and `save.ts` the best wave, the bloom and the garden last picked.
+- `src/scenes/`: `BootScene` bakes textures, `GameScene` draws the garden, the HUD, the seed
+  panel, the golem menu and the garden picker and wires taps to the rules, `layout.ts` says where
+  things are drawn.
 - `src/art/`: `clay.ts` is the plasticine toolkit and the golem, pest, sprout and flower painters;
   `textures.ts` paints the table, garden, HUD, panel, cards and icons into textures at startup.
 - `src/ui/`: the clay button.
