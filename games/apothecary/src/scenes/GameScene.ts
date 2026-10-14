@@ -840,7 +840,13 @@ export class GameScene extends Phaser.Scene {
   private createHud() {
     const { width } = this.scale;
     const first = this.children.list.length;
-    this.add.tileSprite(0, 0, width, HUD_HEIGHT, 'hud-bar').setOrigin(0).setDepth(UI_DEPTH);
+    // Taps on the bar stop here rather than falling through to a priority sign in the world below.
+    this.add
+      .tileSprite(0, 0, width, HUD_HEIGHT, 'hud-bar')
+      .setOrigin(0)
+      .setDepth(UI_DEPTH)
+      .setInteractive()
+      .on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => e.stopPropagation());
     const style = { fontFamily: 'monospace', fontSize: '16px', color: '#f3e9d2' };
     this.add.image(26, HUD_HEIGHT / 2 - 1, 'coin').setScale(2).setDepth(UI_DEPTH);
     const coins = this.add.text(44, HUD_HEIGHT / 2 - 1, '', style).setOrigin(0, 0.5).setDepth(UI_DEPTH);

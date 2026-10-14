@@ -136,8 +136,8 @@ The belts are steampunk machinery, brass rails over leather slats, in an otherwi
 marker in the market below the guild (100 coins), which lays the yard and puts a build marker where each
 part will go: a wheat field and a mandrake patch (25 coins each), a refining table (50) and a
 cauldron (75). The second line works like the first and has its own belts, buildable once the
-stations at both ends stand; its cauldron belt meets the first line's at a T above the shop and
-shares the run down to the counter. The counter's drop marker stays until every cauldron has its belt, and comes back whenever the
+stations at both ends stand; its cauldron belt meets the first line's at a T inside the shop, above
+the counter, and shares the run down to it. The counter's drop marker stays until every cauldron has its belt, and comes back whenever the
 doctor carries a potion.
 
 ![Both lines with all their belts](docs/screenshots/expansion-map.png)
@@ -160,8 +160,9 @@ before they leave, on Hard 30% less.
 clicks: it opens and closes the recipes, harvests both gardens, refines, brews, sells potions to a
 customer and collects the coins, checking items, pallets, the recipe the cauldron picks and what
 each potion is paid along the way. It plays at 4x speed (`PLAYTHROUGH_SPEED`), so the run takes
-under a minute. The Playthrough workflow runs it on every PR
-and push to main and uploads a video and milestone screenshots as the `playthrough` artifact.
+under a minute. The Playthrough Apothecary workflow runs it on every PR
+that changes `games/apothecary/` and uploads a video and milestone screenshots as the
+`playthrough-apothecary` artifact.
 
 ```sh
 npx playwright install chromium        # once
