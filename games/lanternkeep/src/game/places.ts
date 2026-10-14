@@ -1,5 +1,5 @@
 // Where the lanterns hang on the castle and where the moths live, in view pixels. The castle art in
-// src/art/castle.ts is drawn around these spots.
+// src/art/sprites.ts is drawn around these spots.
 
 /** The moth jar in front of the gate, where idle moths wait and return to. */
 export const JAR = { x: 480, y: 500 };

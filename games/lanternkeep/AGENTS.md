@@ -79,8 +79,8 @@ State model (`GameState` in `src/game/state.ts`):
 - `levels` per upgrade; `stats(s)` turns them into moth count, speed, wick time and burn time.
 - `report` is the last nightfall's tally; `kept` counts nights that met the quota, `best` the most.
 
-Persistence: one `localStorage` key, `lanternkeep-best`, holding the most nights kept, written on
-every phase change. The hub's settings are read from the shared `hub-settings` key.
+Persistence: one `localStorage` key, `lanternkeep-best`, holding the most nights kept, written when
+nightfall ends a dusk (to night or game over). The hub's settings are read from the shared `hub-settings` key.
 
 Randomness and timing: no `Math.random`, `Date.now` or `performance.now` in the rules. Game time is
 the frame timestamps `update` receives. Art and stars use `seeded`.

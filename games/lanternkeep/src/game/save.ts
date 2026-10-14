@@ -3,7 +3,8 @@ const KEY = 'lanternkeep-best';
 
 export function loadBest() {
   try {
-    return Number(localStorage.getItem(KEY)) || 0;
+    const best = Math.floor(Number(localStorage.getItem(KEY)));
+    return Number.isFinite(best) && best > 0 ? best : 0;
   } catch {
     return 0;
   }
