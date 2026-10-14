@@ -107,7 +107,7 @@ export class GameScene extends Phaser.Scene {
     this.scoreText = this.add.text(PANEL.x + 16, PANEL.y + 74, '', textStyle(20));
     this.goalText = this.add.text(GOAL_BAR.x + GOAL_BAR.w / 2, GOAL_BAR.y + GOAL_BAR.h / 2, '', textStyle(12)).setOrigin(0.5).setDepth(1);
     this.bar = this.add.graphics();
-    this.bestText = this.add.text(PANEL.x + PANEL.w / 2, PANEL.y + PANEL.h - 22, '', textStyle(14, '#c9b48f')).setOrigin(0.5);
+    this.bestText = this.add.text(PANEL.x + PANEL.w / 2, PANEL.y + PANEL.h - 22, '', textStyle(14, '#d8c7a6')).setOrigin(0.5);
 
     BUILDINGS.forEach((kind, i) => {
       const x = TILE_BUTTONS.x;
@@ -117,10 +117,10 @@ export class GameScene extends Phaser.Scene {
       const icon = this.add.image(x - w / 2 + 38, y, `tile-${kind}`).setScale(0.875);
       this.add.text(x - w / 2 + 76, y - h / 2 + 8, INFO[kind].name, textStyle(18, '#f3c64e'));
       const count = this.add.text(x + w / 2 - 12, y - h / 2 + 8, '', textStyle(18)).setOrigin(1, 0);
-      this.add.text(x - w / 2 + 76, y - h / 2 + 34, INFO[kind].rule, {
+      this.add.text(x - w / 2 + 76, y - h / 2 + 32, INFO[kind].rule, {
         fontFamily: FONT,
-        fontSize: '11px',
-        color: '#d8c7a6',
+        fontSize: '12px',
+        color: '#e8dcc2',
         wordWrap: { width: w - 84 },
       });
       bg.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
@@ -216,7 +216,7 @@ export class GameScene extends Phaser.Scene {
     this.islandText.setText(`Island ${s.island}`);
     this.scoreText.setText(`Score ${s.score}`);
     this.goalText.setText(`${s.score} / ${s.goal} for round ${s.round + 1}`);
-    this.bestText.setText(`Best ${s.best}`);
+    this.bestText.setText(`Best score ${s.best}`);
 
     // The goal bar fills from the last round's goal to this one's.
     const from = s.round === 1 ? 0 : goalFor(s.round - 1);
