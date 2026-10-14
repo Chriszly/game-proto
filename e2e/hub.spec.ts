@@ -15,6 +15,7 @@ const GAMES = [
   { name: 'Beehive Baron', path: '/games/beehive-baron/' },
   { name: 'Wyrmrail', path: '/games/wyrmrail/' },
   { name: 'Shrine Stack', path: '/games/shrine-stack/' },
+  { name: 'Mapmaker', path: '/games/mapmaker/' },
 ];
 
 // Every page links a favicon that loads.
