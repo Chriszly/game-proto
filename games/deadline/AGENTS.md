@@ -41,7 +41,8 @@ towards the soldier; upgrade crates drift down among them and are shot open for 
 - `src/art/sprites.ts`: character-grid sprites and palettes, `bake` (adds an outline), `bakeGround`,
   `bakeSprites`, plus exports `HERO_RIFLE_X` and `UPGRADE_COLORS` used by the scene.
 - `shared/setupGame.ts` and `shared/settings.ts` (outside the game folder, shared by every game):
-  the hub's settings, applied in `src/main.ts` and read for difficulty in `src/game/rules.ts`.
+  the hub's settings, applied in `src/main.ts`, read for difficulty in `src/game/rules.ts` and for
+  reduced motion in `src/scenes/GameScene.ts`.
 
 ### How it runs
 
@@ -84,8 +85,9 @@ towards the soldier; upgrade crates drift down among them and are shot open for 
 - Difficulty scales one number: enemy toughness in `planWave` in `src/game/rules.ts`, multiplied
   by `byDifficulty(0.75, 1, 1.3)` (easy, normal, hard). It applies to every enemy's hp, the boss
   included, but not to crate hp.
-- `settings.reduceMotion` needs nothing more here: there is no shake, flash or blinking effect;
-  the only tweens fade the wave banner and the upgrade pop-up text.
+- `settings.reduceMotion` also stops the zombies' side-to-side sway in `GameScene.moveEnemies`
+  (they still walk and steer). There is no shake, flash or blinking effect; the only tweens fade
+  the wave banner and the upgrade pop-up text.
 - Normal (multiplier 1) must stay exactly as designed, since the playthrough runs on Normal.
 - Keep the Deadline row of the difficulty table in the root `README.md` (and the sentence in this
   game's `README.md`) in sync: zombies have 25% less health on Easy and 30% more on Hard.

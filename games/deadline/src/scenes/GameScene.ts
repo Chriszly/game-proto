@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { settings } from '../../../../shared/settings';
 import { HERO_RIFLE_X, UPGRADE_COLORS } from '../art/sprites';
 import { Pool } from '../game/pool';
 import {
@@ -337,8 +338,8 @@ export class GameScene extends Phaser.Scene {
       const aside = e.kind === 'boss' ? 0 : ((e.id * 53) % 81) - 40;
       const dx = this.player.x + aside - e.x, maxStep = (steer * dt) / 1000;
       e.x += Phaser.Math.Clamp(dx, -maxStep, maxStep);
-      // A little shamble from side to side, the same for every frame rate.
-      const sway = Math.sin((e.y + e.id * 37) / 9) * 1.5;
+      // A little shamble from side to side, the same for every frame rate (none when motion is reduced).
+      const sway = settings.reduceMotion ? 0 : Math.sin((e.y + e.id * 37) / 9) * 1.5;
       e.sprite.setPosition(e.x + sway, e.y).setDepth(DEPTH.enemies + e.y / VIEW.h);
       if (e.y + ENEMIES[e.kind].radius >= REACH_Y) return this.gameOver();
     }
