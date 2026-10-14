@@ -2,11 +2,12 @@ import Phaser from 'phaser';
 import { settings } from '../../../../shared/settings';
 import { iconTexture } from '../art/icons';
 import type { KnightPose } from '../art/knight';
-import { CLOTH, FROST, GOBLIN, GOLD, INK, RED } from '../art/palette';
+import { MAT, softShadow } from '../art/facets';
+import { CLOTH, FROST, GOBLIN, GOLD, RED } from '../art/palette';
 import { BOONS, type BoonId } from '../game/boons';
-import { loadBest, saveBest } from '../game/save';
-import { jump, newRun, pick, slide, tick } from '../game/sim';
-import { RUNNER, flameOf, floorAt, metres, stats, type GameState, type Trap } from '../game/state';
+import { loadProgress, saveProgress } from '../game/save';
+import { buyMissed, jump, newRun, pick, slide, tick } from '../game/sim';
+import { BOON_PRICE, RUNNER, flameOf, floorAt, metres, stats, type GameState, type Trap } from '../game/state';
 import { BoonCards } from '../ui/BoonCards';
 import { makeButton } from '../ui/Button';
 import { FONT, GROUND_Y, HUD_HEIGHT, RUNNER_X, TAP_SPLIT_Y, UI_DEPTH, VIEW } from './layout';
@@ -39,6 +40,8 @@ export class GameScene extends Phaser.Scene {
   private ledges = new Map<number, Phaser.GameObjects.TileSprite>();
   /** The dark sides of the ledges, redrawn every frame. */
   private ledgeSides!: Phaser.GameObjects.Graphics;
+  /** The soft shadows on the ground under the knight, the traps, the foes and the coins. */
+  private shadows!: Phaser.GameObjects.Graphics;
   private far!: Phaser.GameObjects.TileSprite;
   private near!: Phaser.GameObjects.TileSprite;
   private ground!: Phaser.GameObjects.TileSprite;
@@ -52,6 +55,8 @@ export class GameScene extends Phaser.Scene {
   private hint!: Phaser.GameObjects.Container;
   private gameOver!: Phaser.GameObjects.Container;
   private gameOverText!: Phaser.GameObjects.Text;
+  private shopText!: Phaser.GameObjects.Text;
+  private buyButton!: Phaser.GameObjects.Container;
   private clock = 0;
   private lastFrame: number | null = null;
 
@@ -63,7 +68,9 @@ export class GameScene extends Phaser.Scene {
     this.traps.clear();
     this.coins.clear();
     this.ledges.clear();
-    this.state = newRun(loadBest());
+    const saved = loadProgress();
+    this.state = newRun(saved.best, saved.bank, saved.pending);
+    this.persist();
 
     this.add.image(0, 0, 'sky').setOrigin(0);
     const farH = this.textures.get('far').getSourceImage().height;
@@ -71,6 +78,7 @@ export class GameScene extends Phaser.Scene {
     this.far = this.add.tileSprite(0, GROUND_Y - farH + 20, VIEW.w, farH, 'far').setOrigin(0);
     this.near = this.add.tileSprite(0, GROUND_Y - nearH + 6, VIEW.w, nearH, 'near').setOrigin(0);
     this.ground = this.add.tileSprite(0, GROUND_Y, VIEW.w, VIEW.h - GROUND_Y, 'ground').setOrigin(0).setDepth(1);
+    this.shadows = this.add.graphics().setDepth(1.8);
     this.ledgeSides = this.add.graphics().setDepth(2);
     this.flag = this.add.image(0, GROUND_Y + 2, 'checkpoint').setOrigin(7 / 36, 1).setDepth(3);
     this.knight = this.add.image(RUNNER_X, GROUND_Y, 'knight-run0').setDepth(5);
@@ -104,21 +112,44 @@ export class GameScene extends Phaser.Scene {
     const phase = s.phase;
     tick(s, dt);
     this.clock += dt;
-    if (s.phase !== phase && s.phase !== 'running') saveBest(s.best);
+    if (s.phase !== phase && s.phase !== 'running') this.persist();
 
     this.drawWorld();
+    this.drawShadows();
     this.drawKnight();
     this.drawEffects();
     this.drawHud();
     this.boonCards.show(s.phase === 'checkpoint' ? s.choices : null, s.ranks, s.stage);
     this.gameOver.setVisible(s.phase === 'over');
-    if (s.phase === 'over') {
-      const boons = (Object.entries(s.ranks) as [BoonId, number][]).map(([id, n]) => (n > 1 ? `${BOONS[id].name} x${n}` : BOONS[id].name));
-      this.gameOverText.setText(
-        `Fell at ${metres(s.distance)} m on stage ${s.stage}, with ${s.coins} coins.\nBest run: ${s.best} m.\n\n` +
-          `Boons: ${boons.length ? boons.join(', ') : 'none'}`,
-      );
+    if (s.phase === 'over') this.drawGameOver();
+  }
+
+  private persist() {
+    const { best, bank, pending } = this.state;
+    saveProgress({ best, bank, pending });
+  }
+
+  /** The game-over panel: the run's result, the boon missed at the last checkpoint, and the shop. */
+  private drawGameOver() {
+    const s = this.state;
+    const boons = (Object.entries(s.ranks) as [BoonId, number][]).map(([id, n]) => (n > 1 ? `${BOONS[id].name} x${n}` : BOONS[id].name));
+    const missed = s.missed ? `\nMissed at the last checkpoint: ${BOONS[s.missed].name}.` : '';
+    this.gameOverText.setText(
+      `Fell at ${metres(s.distance)} m on stage ${s.stage}, with ${s.coins} coins (${s.bank} banked).\nBest run: ${s.best} m.\n\n` +
+        `Boons: ${boons.length ? boons.join(', ') : 'none'}${missed}`,
+    );
+    const missedName = s.missed ? BOONS[s.missed].name : '';
+    let line: string;
+    let canBuy = false;
+    if (s.pending) line = `The next run starts with ${BOONS[s.pending].name}.`;
+    else if (!s.missed || BOONS[s.missed].filler) line = 'Reach a checkpoint to be offered a boon for sale.';
+    else if (s.bank < BOON_PRICE) line = `${missedName} is for sale for ${BOON_PRICE} coins; you have ${s.bank}.`;
+    else {
+      line = `Start the next run with ${missedName} for ${BOON_PRICE} coins.`;
+      canBuy = true;
     }
+    this.shopText.setText(line);
+    this.buyButton.setVisible(canBuy);
   }
 
   /** Screen x of a point on the course. */
@@ -145,8 +176,9 @@ export class GameScene extends Phaser.Scene {
       }
       const x = this.sx(l.x);
       sprite.setX(x).setTilePosition(l.x, 0);
-      sides.fillStyle(INK, 0.9).fillRect(x, GROUND_Y - l.h, 2, l.h + 2).fillRect(x + l.w - 2, GROUND_Y - l.h, 2, l.h + 2);
-      sides.fillStyle(INK, 0.25).fillRect(x + 2, GROUND_Y - l.h + 8, 4, l.h - 6);
+      // The stone's faces turned away from the light: the wall at each end and a band of shade.
+      sides.fillStyle(MAT.stone.dark).fillRect(x, GROUND_Y - l.h, 3, l.h + 2).fillRect(x + l.w - 3, GROUND_Y - l.h, 3, l.h + 2);
+      sides.fillStyle(MAT.stone.shade).fillRect(x + 3, GROUND_Y - l.h, 3, l.h + 2);
     }
     for (const [id, sprite] of this.ledges) {
       if (seen.has(id)) continue;
@@ -192,6 +224,33 @@ export class GameScene extends Phaser.Scene {
       if (seen.has(id)) continue;
       sprite.destroy();
       this.coins.delete(id);
+    }
+  }
+
+  /**
+   * Soft shadows on the ground under what stands or flies on the course. A shadow lies on the road,
+   * or on the top of a ledge, and fades as the thing above it rises.
+   */
+  private drawShadows() {
+    const s = this.state;
+    const g = this.shadows.clear();
+    const onScreen = (x: number) => x > -60 && x < VIEW.w + 60;
+    const floor = floorAt(s, s.distance - RUNNER.w / 2, s.distance + RUNNER.w / 2);
+    const lift = Math.max(0, s.runner.h - floor);
+    softShadow(g, RUNNER_X, GROUND_Y - floor, 16 - Math.min(6, lift * 0.06), 0.6 - Math.min(0.35, lift * 0.004));
+    for (const t of s.traps) {
+      const x = this.sx(t.x + t.w / 2);
+      if (!onScreen(x)) continue;
+      if (t.kind === 'spikes') softShadow(g, x, GROUND_Y, t.w / 2 + 4, 0.5);
+      else if (t.kind === 'flames') softShadow(g, x, GROUND_Y, 18, 0.5);
+      else if (t.kind === 'goblin') softShadow(g, x, GROUND_Y, 12, 0.5);
+      else if (t.kind === 'bat') softShadow(g, x, GROUND_Y, 12, 0.25);
+    }
+    for (const c of s.course) {
+      const x = this.sx(c.x);
+      const above = c.h - floorAt(s, c.x);
+      if (!onScreen(x) || above < 0) continue;
+      softShadow(g, x, GROUND_Y - floorAt(s, c.x), Math.max(3, 6 - above * 0.03), 0.3);
     }
   }
 
@@ -300,22 +359,39 @@ export class GameScene extends Phaser.Scene {
 
   private createGameOver() {
     const dim = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x0e0a08, 0.7).setInteractive();
-    const panel = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, 600, 300, 0x2c2018).setStrokeStyle(4, 0x8a5a32);
-    const title = this.add.text(VIEW.w / 2, VIEW.h / 2 - 110, 'The knight has fallen', textStyle(30, '#e0584f')).setOrigin(0.5);
+    const panel = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, 600, 400, 0x2c2018).setStrokeStyle(4, 0x8a5a32);
+    const title = this.add.text(VIEW.w / 2, VIEW.h / 2 - 160, 'The knight has fallen', textStyle(30, '#e0584f')).setOrigin(0.5);
     this.gameOverText = this.add
-      .text(VIEW.w / 2, VIEW.h / 2 - 10, '', { fontFamily: FONT, fontSize: '16px', color: '#f1e3c6', align: 'center', wordWrap: { width: 540 } })
+      .text(VIEW.w / 2, VIEW.h / 2 - 70, '', { fontFamily: FONT, fontSize: '16px', color: '#f1e3c6', align: 'center', wordWrap: { width: 540 } })
+      .setOrigin(0.5, 0.5);
+    this.shopText = this.add
+      .text(VIEW.w / 2, VIEW.h / 2 + 32, '', { fontFamily: FONT, fontSize: '16px', color: '#f3c64e', align: 'center', wordWrap: { width: 540 } })
       .setOrigin(0.5);
-    const again = makeButton(this, VIEW.w / 2, VIEW.h / 2 + 100, 'Run again', () => this.restart());
-    this.gameOver = this.add.container(0, 0, [dim, panel, title, this.gameOverText, again]).setDepth(UI_DEPTH + 20).setVisible(false);
+    this.buyButton = makeButton(this, VIEW.w / 2, VIEW.h / 2 + 80, `Buy for ${BOON_PRICE} coins`, () => this.buy(), 400);
+    const again = makeButton(this, VIEW.w / 2, VIEW.h / 2 + 150, 'Run again', () => this.restart());
+    this.gameOver = this.add
+      .container(0, 0, [dim, panel, title, this.gameOverText, this.shopText, this.buyButton, again])
+      .setDepth(UI_DEPTH + 20)
+      .setVisible(false);
   }
 
   private pick(id: BoonId) {
     pick(this.state, id);
   }
 
-  /** A new run from the start, with no boons; only the best distance carries over. */
+  /** Spends the coins on the boon missed at the last checkpoint, for the next run. */
+  private buy() {
+    if (buyMissed(this.state)) {
+      this.persist();
+      this.drawGameOver();
+    }
+  }
+
+  /** A new run from the start, with no boons, except a boon bought at the game over; the bank and best carry over. */
   private restart() {
-    this.state = newRun(this.state.best);
+    const s = this.state;
+    this.state = newRun(s.best, s.bank, s.pending);
+    this.persist();
     for (const sprite of [...this.traps.values(), ...this.coins.values(), ...this.ledges.values()]) sprite.destroy();
     this.traps.clear();
     this.coins.clear();

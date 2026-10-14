@@ -16,14 +16,21 @@ in.
   kinds (spikes, pit, blade, timed fire vent), two moving foes (a goblin pacing its beat, a bat
   flying at the knight) that can be stomped from above, raised ledges and two-step stairs the knight
   climbs and drops off, hearts with a hurt blink, coins with lodestone pull, checkpoints with two
-  boon cards, eight boons plus the Field Dressing filler, a game-over panel with "Run again", a fading controls hint on
-  stage 1, and a best-distance save.
+  boon cards, eight boons plus the Field Dressing filler, a game-over panel with a coin shop and
+  "Run again", a fading controls hint on stage 1, and progress saved between runs (best distance,
+  banked coins and a bought boon). The art is low-poly: flat polygons with lit and shaded faces and
+  soft ground shadows.
 - One scene does everything: there is no title screen, pause, settings, audio or menu. The run
   starts as soon as `GameScene` loads. The hub's shared settings (difficulty, frame cap, FPS
   readout, reduced motion) apply; see Hub settings below.
-- Coins are counted but buy nothing; they only show in the HUD and the game-over text.
-- Only the best distance persists. A run in progress is lost on reload.
-- `bakePixelArt` in `src/art/pixelArt.ts` is unused (the art all draws through `PixelCanvas`).
+- Coins are counted during a run and banked when the knight falls. On the game-over panel they buy
+  the boon missed at the last checkpoint (the card not taken), for `BOON_PRICE` (30) coins. The next
+  run starts with that boon at one rank, with full hearts. One purchase at a time; Field Dressing is
+  never for sale, and no boon is for sale before the first checkpoint.
+- The best distance, the banked coins and a bought boon persist. A run in progress is lost on
+  reload; a bought boon waits in storage until a run starts with it.
+- `bakePixelArt` in `src/art/pixelArt.ts` is unused. `PixelCanvas` draws only the boon and heart
+  icons; the world's art is low-poly (`src/art/facets.ts`).
 - No TODOs or FIXMEs in the code.
 
 ## Architecture
@@ -33,10 +40,10 @@ in.
 - `src/main.ts`: creates the `Phaser.Game` (960x540, `Scale.FIT`, `pixelArt`) with `BootScene`
   then `GameScene`, calls `setupGame(game)`, and puts `game` on `window` in dev builds.
 - `src/game/state.ts`: `GameState` and its parts (`Trap`, `Ledge`, `Coin`, `Effect`, `Runner`),
-  the physics and size constants, `FOES`, `TRAP_SPAN`, `FLAMES` and `flameOf` (a vent's burn),
+  the physics and size constants, `BOON_PRICE`, `FOES`, `TRAP_SPAN`, `FLAMES` and `flameOf` (a vent's burn),
   `AWAKE`, `floorAt` (ground height under a stretch of course), `speedOf`, `stats` (the knight's
   numbers from boon ranks), `canTake`, `freshState`, `metres`.
-- `src/game/sim.ts`: the rules. `newRun`, `jump`, `slide`, `tick`, `rollChoices`, `pick`, plus
+- `src/game/sim.ts`: the rules. `newRun`, `jump`, `slide`, `tick`, `rollChoices`, `pick`, `buyMissed`, plus
   `runnerBox` and the private helpers: collision (`touches`), foe movement (`moveFoes`), stomping
   (`stomp`) and damage (`hurt`, which also takes `'wall'` for a ledge's side).
 - `src/game/course.ts`: `buildStage` lays out a stage's pieces (`Piece`: each trap kind, `ledge`
@@ -44,27 +51,32 @@ in.
   stage, `OPENING` is stage 1's fixed first four, `gapsOf` gives spacing per stage, `nextStage`
   moves to the next stage.
 - `src/game/boons.ts`: the `BOONS` table (name, text, `maxRank`, `filler`) and `BOON_IDS`.
-- `src/game/save.ts`: `loadBest` and `saveBest`.
+- `src/game/save.ts`: `loadProgress` and `saveProgress` (best distance, banked coins, the bought boon).
 - `src/scenes/BootScene.ts`: bakes every texture, then starts `Game`.
 - `src/scenes/GameScene.ts`: owns the `GameState`, wires input, ticks the sim and draws everything.
 - `src/scenes/layout.ts`: screen constants (`VIEW`, `GROUND_Y`, `RUNNER_X`, `TAP_SPLIT_Y`,
   `CARDS`, `BUTTON`, `HUD_HEIGHT`, `UI_DEPTH`, `FONT`).
 - `src/ui/BoonCards.ts`: the checkpoint overlay and its two cards; exposes `cards: CardSpot[]`.
-- `src/ui/Button.ts`: `makeButton`, the wooden button used for "Run again".
-- `src/art/pixelArt.ts`: `PixelCanvas` (shape painting, outline, bake to texture) and `seeded`.
-- `src/art/scenery.ts`: sky, parallax hills, road, ledge stone, spikes, pits, blade, fire vent,
-  coin and checkpoint art.
+- `src/ui/Button.ts`: `makeButton`, the wooden button used for "Run again" and the shop's buy button.
+- `src/art/facets.ts`: the low-poly toolkit. `MAT` (a material's lit, mid, shade and dark tones),
+  `toneOf`, `poly`, `edge`, `ring`, `disk` (a faceted round shape), `slab` (a lit and a shaded box),
+  `limb`, `softShadow` and `bake` (draws into a texture of a given size).
+- `src/art/scenery.ts`: low-poly sky, far and near ridges, road, ledge stone, spikes, pits, blade,
+  fire vent, coin and checkpoint art.
 - `src/art/foes.ts`: the goblin (`goblin-0`, `goblin-1`) and bat (`bat-0`, `bat-1`), facing left.
 - `src/art/knight.ts`: the knight's poses (`KnightPose`), baked as `knight-<pose>`.
-- `src/art/icons.ts`: one icon per boon plus `heart-empty`, baked large and `-small`.
-- `src/art/palette.ts`: shared colour ramps.
+- `src/art/pixelArt.ts`: `PixelCanvas` and `seeded`. `PixelCanvas` is for the icons; `seeded` is
+  used by the scenery.
+- `src/art/icons.ts`: one pixel icon per boon plus `heart-empty`, baked large and `-small`.
+- `src/art/palette.ts`: the pixel-art colour ramps (icons, and the few colours `GameScene` uses).
 - `shared/setupGame.ts` and `shared/settings.ts` (outside the game folder): the hub's settings.
   `main.ts` imports `setupGame`; `state.ts` imports `byDifficulty`.
 
 ### How it runs
 
 - Boot: `BootScene.create` calls `bakeScenery`, `bakeFoes`, `bakeKnight` and `bakeIcons`, which
-  draw into `PixelCanvas` grids and generate textures. There are no asset files.
+  draw flat polygons (`facets.ts`) or `PixelCanvas` grids (icons) and generate textures. There are
+  no asset files. Art is in screen pixels: a texture is as big as it appears on screen.
 - Tick: `GameScene.update(time)` computes `dt` from the frame timestamp (not Phaser's smoothed
   delta), clamped to `MAX_STEP_MS` (100), with 0 on the first frame. It calls `tick(state, dt)`
   once per frame (no fixed substeps) and advances its own `clock`, used only for animation.
@@ -85,10 +97,12 @@ in.
   sight, destroyed when gone from state), and ledges into `Map<id, TileSprite>` of the `ledge`
   texture cropped to each ledge's height; their dark sides are a `Graphics` redrawn every frame.
   `drawTrap` animates fire vents (by `flameOf`), goblin steps (by x, flipped when walking right)
-  and bat flaps (with a bob that is only drawn, not collided). Effects, the shield ring and the HUD
-  bar are `Graphics` cleared and redrawn every frame. The knight is one image whose texture and origin change by pose.
+  and bat flaps (with a bob that is only drawn, not collided). Soft shadows (`drawShadows`, depth
+  1.8) sit under the knight, spikes, fire vents, goblins, bats and coins, and fade as a thing rises.
+  Effects, the shield ring and the HUD bar are `Graphics` cleared and redrawn every frame. The knight is one image whose texture and origin change by pose.
   `BoonCards.show` rebuilds only when the choices change.
-- Saving happens in `update` whenever the phase changes away from `running` (checkpoint or fall).
+- Saving (`persist`) happens in `update` whenever the phase changes away from `running` (checkpoint
+  or fall), on each run's start (`create` and `restart`) and when a boon is bought.
 
 ### State model
 
@@ -115,7 +129,14 @@ in.
   no other state except `shields` (Aegis charges, reset from `stats` on each `pick`).
 - `nextId` hands out ids for traps, coins and effects; sprite caches key on them.
 - All mutation is in `src/game/` (`sim.ts`, `course.ts`). `GameScene` only calls those functions,
-  except `restart`, which replaces `state` with `newRun(best)`.
+  except `restart`, which replaces `state` with `newRun(best, bank, pending)`, and `buy`, which
+  calls `buyMissed`.
+- Progress across runs: `best` (the best distance in metres), `bank` (coins banked from finished
+  runs, added in `hurt` when the knight falls), `pending` (the boon bought at game over, applied and
+  cleared by the next `newRun`) and `missed` (the boon offered at the last checkpoint and not taken,
+  set by `pick`; null before any checkpoint). `buyMissed` takes `BOON_PRICE` from `bank` into
+  `pending`, and refuses unless the run is over, `missed` is a non-filler boon, nothing is pending and
+  the bank covers the price.
 - Invariants: `distance <= checkpointX`; `choices` is non-null only at a checkpoint and holds two
   ids; `hearts` is clamped to `stats().maxHearts` on `pick`; a pit only hurts when grounded over
   its middle; one hit per frame, and none while `hurtMs > 0`; pieces never overlap, so pits, blades
@@ -123,9 +144,11 @@ in.
 
 ### Persistence
 
-`localStorage` key `hotfoot-best` holds the best distance in metres. Read once in
-`GameScene.create` via `loadBest`; both calls are wrapped in try/catch. Nothing else is saved by
-the game; the hub's settings live under the shared `hub-settings` key (see Hub settings).
+`localStorage` keys: `hotfoot-best` (the best distance in metres), `hotfoot-bank` (banked coins) and
+`hotfoot-start` (the boon bought for the next run; removed once a run starts with it). Read once in
+`GameScene.create` via `loadProgress`, written by `saveProgress`; every access is wrapped in
+try/catch. Nothing else is saved by the game; the hub's settings live under the shared `hub-settings`
+key (see Hub settings).
 
 ### Randomness and timing
 
@@ -140,7 +163,7 @@ the game; the hub's settings live under the shared `hub-settings` key (see Hub s
 ### Data tables
 
 - `src/game/state.ts`: `RUNNER` box, `GRAVITY`, `JUMP_V`, `DROP_V`, `SLIDE_MS`, `HURT_MS`,
-  `START_HEARTS`, `COIN_REACH`, `STAGE_LEN`, `LEAD_IN`, `PX_PER_M`, `speedOf`, `TRAP_SPAN`,
+  `START_HEARTS`, `COIN_REACH`, `STAGE_LEN`, `LEAD_IN`, `BOON_PRICE`, `PX_PER_M`, `speedOf`, `TRAP_SPAN`,
   `FLAMES`, `AWAKE`, and the per-rank boon multipliers inside `stats`.
 - `src/game/course.ts`: `CLEAR_BEFORE_CHECKPOINT`, `gapsOf`, `piecesOf` (the pool and its weights
   per stage: fire vents and bats from stage 2, steps, tall ledges and a second goblin entry from
@@ -204,13 +227,24 @@ the game; the hub's settings live under the shared `hub-settings` key (see Hub s
   README's difficulty line.
 - Move the screen layout: edit `src/scenes/layout.ts`; then check the test's tap points and the art
   that reads `GROUND_Y` and `VIEW` (pit depth and blade length in `scenery.ts`).
-- Save more between runs: extend `src/game/save.ts`, keep keys prefixed `hotfoot-`.
+- Save more between runs: extend `src/game/save.ts`, keep keys prefixed `hotfoot-`, and carry the
+  new field through `newRun`, `persist` and the game-over panel.
+- Change the shop: `buyMissed` in `src/game/sim.ts` (price, what can be bought) and `drawGameOver`
+  in `GameScene` (its wording and button). The shop is off the playthrough's path on purpose.
+- Restyle an object: its sprite is baked in `scenery.ts`, `foes.ts` or `knight.ts` from `facets.ts`
+  helpers. Keep the texture's size and its origin in `GameScene` (feet on the road; see Gotchas).
 
 ## Gotchas
 
 - Trap widths must have a baked texture: `planOf` makes spikes 36/48/60 and pits 80/96/112 wide, and `scenery.ts` bakes `spikes-<w>` and `pit-<w>` for exactly those widths.
-- The blade art hangs to 34 px above the road, hard-coded in `blade()` in `scenery.ts`; it must
-  match `TRAP_SPAN.blade.lo`, which must stay above `RUNNER.slideH` (26) and below `RUNNER.h` (60).
+- The blade art hangs to 34 px above the road (`blade()` in `scenery.ts` ends at `GROUND_Y - 34`); it
+  must match `TRAP_SPAN.blade.lo`, which must stay above `RUNNER.slideH` (26) and below `RUNNER.h` (60).
+- The knight's texture origins are fixed in `GameScene` (`FEET`): the standing poses are 60x72 px
+  with the feet on row 66, and the slide is 78x33 px with the feet on row 27. Redraw them to the
+  same sizes, or the knight floats or sinks.
+- A new sprite's origin is part of its look: spikes and fire vents stand on the road by their
+  bottom-left, a pit hangs from the road by its top-left, the goblin stands centred on its feet,
+  and the blade hangs centred from the top of the screen.
 - `buildStage` relies on `nextId` and `stageStart`/`checkpointX` being set first; `nextStage` sets
   them before calling it. Traps and coins of the next stage are appended, not replaced.
 - A collected coin gets `x = NaN` and is filtered out at the end of the same `tick`.

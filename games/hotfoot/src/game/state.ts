@@ -22,6 +22,8 @@ export const COIN_REACH = 14;
 /** Length of a stage, from one checkpoint to the next, and the clear run at its start. */
 export const STAGE_LEN = 3200;
 export const LEAD_IN = 700;
+/** Coins to buy the boon missed at the last checkpoint, to start the next run with it. */
+export const BOON_PRICE = 30;
 
 /** Running speed on a stage, in pixels per second. */
 export const speedOf = (stage: number) => Math.min(480, 260 + 30 * (stage - 1));
@@ -147,6 +149,12 @@ export interface GameState {
   effects: Effect[];
   /** Best distance reached in any run, in metres. */
   best: number;
+  /** Coins banked from finished runs, to spend between runs. */
+  bank: number;
+  /** A boon bought at the game-over screen, which the next run starts with. */
+  pending: BoonId | null;
+  /** The boon offered at the last checkpoint and not taken, or null before any checkpoint. */
+  missed: BoonId | null;
   nextId: number;
 }
 
@@ -175,7 +183,7 @@ export function rankOf(s: Pick<GameState, 'ranks'>, id: BoonId) {
 
 export const canTake = (s: Pick<GameState, 'ranks'>, id: BoonId) => rankOf(s, id) < BOONS[id].maxRank;
 
-export function freshState(best = 0): GameState {
+export function freshState(best = 0, bank = 0): GameState {
   return {
     stage: 1,
     phase: 'running',
@@ -197,6 +205,9 @@ export function freshState(best = 0): GameState {
     course: [],
     effects: [],
     best,
+    bank,
+    pending: null,
+    missed: null,
     nextId: 1,
   };
 }

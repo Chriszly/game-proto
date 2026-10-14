@@ -2,6 +2,7 @@ import { BOONS, BOON_IDS, type BoonId } from './boons';
 import { buildStage, nextStage } from './course';
 import {
   AWAKE,
+  BOON_PRICE,
   COIN_REACH,
   DROP_V,
   FOES,
@@ -34,8 +35,13 @@ const STOMP_BOUNCE = 0.65;
 /** Feet this little below a ledge's top as the knight reaches it still climb up it unhurt. */
 const STEP_UP = 16;
 
-export function newRun(best = 0): GameState {
-  const s = freshState(best);
+/** A new run. A boon bought at the last game over starts it with one rank of that boon. */
+export function newRun(best = 0, bank = 0, pending: BoonId | null = null): GameState {
+  const s = freshState(best, bank);
+  if (pending) s.ranks[pending] = 1;
+  const st = stats(s);
+  s.hearts = st.maxHearts;
+  s.shields = st.shields;
   buildStage(s);
   return s;
 }
@@ -156,6 +162,7 @@ function hurt(s: GameState, kind: TrapKind | 'wall') {
     s.hearts = 0;
     s.phase = 'over';
     s.best = Math.max(s.best, metres(s.distance));
+    s.bank += s.coins;
   }
 }
 
@@ -248,6 +255,7 @@ export function rollChoices(s: GameState): BoonId[] {
 /** Takes a boon at a checkpoint and starts the next stage. */
 export function pick(s: GameState, id: BoonId) {
   if (s.phase !== 'checkpoint' || !s.choices?.includes(id)) return false;
+  s.missed = s.choices.find((c) => c !== id) ?? null;
   s.ranks[id] = (s.ranks[id] ?? 0) + 1;
   const st = stats(s);
   if (id === 'heart') s.hearts = Math.min(st.maxHearts, s.hearts + 1);
@@ -257,5 +265,17 @@ export function pick(s: GameState, id: BoonId) {
   s.shields = st.shields;
   nextStage(s);
   s.speed = speedOf(s.stage);
+  return true;
+}
+
+/**
+ * At the game-over screen, buys the boon missed at the last checkpoint for `BOON_PRICE` coins, so
+ * the next run starts with it. One purchase at a time; Field Dressing is never for sale.
+ */
+export function buyMissed(s: GameState) {
+  const id = s.missed;
+  if (s.phase !== 'over' || !id || BOONS[id].filler || s.pending || s.bank < BOON_PRICE) return false;
+  s.bank -= BOON_PRICE;
+  s.pending = id;
   return true;
 }

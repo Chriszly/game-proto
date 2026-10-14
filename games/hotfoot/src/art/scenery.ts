@@ -1,153 +1,198 @@
 import Phaser from 'phaser';
 import { GROUND_Y, VIEW } from '../scenes/layout';
-import { DIRT, FIRE, GOLD, GRASS, HILLS, INK, IRON, RED, SKY, STONE, TABARD, WOOD } from './palette';
-import { PixelCanvas, seeded } from './pixelArt';
+import { MAT, bake, disk, edge, poly, ring, slab, type Canvas, type Tones } from './facets';
+import { seeded } from './pixelArt';
 
-// The world the knight runs through: a dusk sky, far hills and a ruined castle and near trees that
-// scroll slower than the ground, the ground strip itself, the stone of raised ledges, and the
-// traps, coins and checkpoint flag.
+// The world the knight runs through, in low-poly: a dusk sky in flat bands, far hills with a ruined
+// keep and near pines (both scroll slower than the road), the road strip, the stone of raised ledges,
+// and the traps, coins and checkpoint flag. Every object is flat polygons, lit on the upper left.
 // The scrolling layers wrap around, so they tile seamlessly.
 
-/** Art pixels are drawn this many screen pixels wide. */
-const S = 2;
+const W = VIEW.w;
 
-/** The dusk sky, which stays put. */
+/** Mixes two colours by `t` from 0 to 1. */
+function mix(a: number, b: number, t: number) {
+  const ch = (c: number, s: number) => (c >> s) & 0xff;
+  const lerp = (s: number) => Math.round(ch(a, s) + (ch(b, s) - ch(a, s)) * t);
+  return (lerp(16) << 16) | (lerp(8) << 8) | lerp(0);
+}
+
+const SKY_STOPS = [0x1c1838, 0x3d2c5c, 0x8a4a6a, 0xe08a5a];
+/** The sky colour at `t` from the top (0) to the horizon (1). */
+function skyAt(t: number) {
+  const at = t * (SKY_STOPS.length - 1);
+  const i = Math.min(SKY_STOPS.length - 2, Math.floor(at));
+  return mix(SKY_STOPS[i], SKY_STOPS[i + 1], at - i);
+}
+
+/** The dusk sky in flat bands, with a lit moon and a few stars. */
 function sky(scene: Phaser.Scene) {
-  const g = scene.add.graphics();
-  const bands = [SKY.top, SKY.mid, SKY.low, SKY.glow];
   const h = GROUND_Y;
-  for (let y = 0; y < h; y += 4) {
-    const t = (y / h) * (bands.length - 1);
-    const i = Math.min(bands.length - 2, Math.floor(t));
-    const c = Phaser.Display.Color.Interpolate.ColorWithColor(
-      Phaser.Display.Color.ValueToColor(bands[i]),
-      Phaser.Display.Color.ValueToColor(bands[i + 1]),
-      100,
-      Math.round((t - i) * 100),
-    );
-    g.fillStyle(Phaser.Display.Color.GetColor(c.r, c.g, c.b)).fillRect(0, y, VIEW.w, 4);
-  }
-  // A low moon and a few stars.
-  g.fillStyle(0xf4e8d0).fillCircle(760, 120, 34);
-  g.fillStyle(SKY.mid, 0.5).fillCircle(776, 112, 30);
-  const rand = seeded(7);
-  for (let i = 0; i < 60; i++) g.fillStyle(0xffffff, 0.3 + rand() * 0.6).fillRect(Math.floor(rand() * VIEW.w), Math.floor(rand() * 200), 2, 2);
-  g.generateTexture('sky', VIEW.w, h);
-  g.destroy();
-}
-
-/** Far hills with a ruined castle on them; wraps around every VIEW.w pixels. */
-function far(scene: Phaser.Scene) {
-  const w = VIEW.w / S;
-  const h = 140;
-  const c = new PixelCanvas(w, h);
-  for (let x = 0; x < w; x++) {
-    const top = 70 + Math.round(18 * Math.sin((x / w) * Math.PI * 4) + 8 * Math.sin((x / w) * Math.PI * 10));
-    c.rect(x, top, 1, h - top, HILLS.far);
-  }
-  // A ruined keep with broken towers.
-  const keep = (x: number, base: number, tw: number, th: number) => {
-    c.rect(x, base - th, tw, th, HILLS.mid);
-    for (let i = 0; i < tw; i += 3) c.rect(x + i, base - th - 2, 2, 2, HILLS.mid);
-    c.rect(x + Math.floor(tw / 2), base - th + 6, 1, 3, SKY.glow);
-  };
-  keep(120, 80, 12, 40);
-  keep(136, 80, 26, 22);
-  keep(166, 80, 10, 50);
-  keep(360, 74, 9, 30);
-  c.bake(scene, 'far', S);
-}
-
-/** Dark trees and broken walls nearer the road; wraps around every VIEW.w pixels. */
-function near(scene: Phaser.Scene) {
-  const w = VIEW.w / S;
-  const h = 110;
-  const c = new PixelCanvas(w, h);
-  const rand = seeded(21);
-  for (let x = 0; x < w; x++) {
-    const top = 78 + Math.round(6 * Math.sin((x / w) * Math.PI * 6));
-    c.rect(x, top, 1, h - top, HILLS.near);
-  }
-  // Pines, drawn as stacked triangles, wrapping at the edges.
-  for (let i = 0; i < 9; i++) {
-    const x = Math.floor((i / 9) * w + rand() * 30);
-    const th = 40 + Math.floor(rand() * 30);
-    for (let y = 0; y < th; y++) {
-      const half = Math.floor((y % 14) * 0.6 + y * 0.18) + 1;
-      for (let dx = -half; dx <= half; dx++) c.px((x + dx + w) % w, h - 20 - th + y, HILLS.near);
+  bake(scene, 'sky', W, h, (g) => {
+    const bands = 16;
+    for (let b = 0; b < bands; b++) {
+      const y0 = (b * h) / bands;
+      g.fillStyle(skyAt((b + 0.5) / bands)).fillRect(0, y0, W, h / bands + 1);
     }
-    c.rect(x % w, h - 22, 2, 22, HILLS.near);
+    disk(g, MAT.cloth, 760, 120, 34, 34, 1, 12);
+    const rand = seeded(7);
+    for (let i = 0; i < 60; i++) {
+      const x = Math.floor(rand() * W);
+      const y = Math.floor(rand() * 200);
+      poly(g, [[x, y - 1.5], [x + 1.5, y], [x, y + 1.5], [x - 1.5, y]], 0xf4efff, 1, 0.3 + rand() * 0.6);
+    }
+  });
+}
+
+/** A ridge of flat facets from `base` up to the height `top(x)`, one lit and one shaded facet per slope. */
+function ridge(g: Canvas, base: number, top: (x: number) => number, n: number, t: Tones) {
+  for (let i = 0; i < n; i++) {
+    const x0 = (i * W) / n;
+    const x1 = ((i + 1) * W) / n;
+    const y0 = top(x0);
+    const y1 = top(x1);
+    // A slope that climbs to the right faces the light; one that falls away does not.
+    poly(g, [[x0, y0], [x1, y1], [x0, base]], y1 < y0 ? t.lit : t.shade);
+    poly(g, [[x1, y1], [x1, base], [x0, base]], t.mid);
   }
-  c.bake(scene, 'near', S);
+}
+
+const FAR_TONES: Tones = { lit: 0x4e4580, mid: 0x3c3366, shade: 0x2c2552, dark: 0x221c40 };
+/** Far hills, which wrap every W pixels: sin waves with whole periods across the width. */
+const farTop = (x: number) => 62 + 20 * Math.sin((x / W) * Math.PI * 4) + 9 * Math.sin((x / W) * Math.PI * 10 + 1);
+
+/** Far hills with a ruined castle on them. */
+function far(scene: Phaser.Scene) {
+  const h = 150;
+  bake(scene, 'far', W, h, (g) => {
+    ridge(g, h, farTop, 48, FAR_TONES);
+    // A ruined keep: towers of flat stone, each standing a little above the hill beneath it.
+    const tower = (x: number, w: number, above: number) => {
+      const top = farTop(x) - above;
+      slab(g, MAT.stone, x, top, w, h - top);
+      for (let cx = x; cx < x + w; cx += 4) poly(g, [[cx, top - 4], [cx + 2, top - 4], [cx + 2, top], [cx, top]], MAT.stone.mid);
+    };
+    tower(120, 12, 38);
+    tower(136, 26, 22);
+    tower(166, 10, 52);
+    tower(360, 9, 40);
+  });
+}
+
+const NEAR_TONES: Tones = { lit: 0x2a2a4e, mid: 0x23233f, shade: 0x1b1b31, dark: 0x121224 };
+const PINE_TONES: Tones = { lit: 0x36427a, mid: 0x2a3462, shade: 0x1e2648, dark: 0x141a34 };
+
+/** Dark pines and a broken wall nearer the road; wraps every W pixels. */
+function near(scene: Phaser.Scene) {
+  const h = 110;
+  bake(scene, 'near', W, h, (g) => {
+    ridge(g, h, (x) => 80 + 6 * Math.sin((x / W) * Math.PI * 6), 48, NEAR_TONES);
+    const rand = seeded(21);
+    for (let i = 0; i < 9; i++) {
+      const cx = Math.floor((i / 9) * W + rand() * 30);
+      const th = 40 + Math.floor(rand() * 30);
+      const base = h - 18;
+      // Three stacked tiers, each lit on the left and shaded on the right.
+      for (const dx of [-W, 0, W]) {
+        const x = cx + dx;
+        for (const [k, hw] of [[0, 7], [0.25, 10], [0.5, 13]] as const) {
+          const apex = base - th + k * th;
+          const bottom = apex + th * 0.5;
+          poly(g, [[x, apex], [x - hw, bottom], [x, bottom]], PINE_TONES.lit);
+          poly(g, [[x, apex], [x, bottom], [x + hw, bottom]], PINE_TONES.shade);
+        }
+        poly(g, [[x - 2, base - 6], [x + 2, base - 6], [x + 2, h], [x - 2, h]], PINE_TONES.dark);
+      }
+    }
+  });
 }
 
 /** One 64-pixel strip of road: grass on top, packed earth and stones below. */
 function ground(scene: Phaser.Scene) {
-  const w = 32;
-  const h = (VIEW.h - GROUND_Y) / S;
-  const c = new PixelCanvas(w, h);
-  c.rect(0, 0, w, h, DIRT.mid);
-  c.rect(0, 0, w, 3, GRASS.mid).rect(0, 0, w, 1, GRASS.shine).rect(0, 3, w, 1, GRASS.dark);
-  for (const x of [3, 9, 17, 24, 29]) c.px(x, 4, GRASS.dark);
-  const rand = seeded(5);
-  for (let i = 0; i < 14; i++) {
-    const x = Math.floor(rand() * w);
-    const y = 7 + Math.floor(rand() * (h - 9));
-    c.rect(x, y, 3, 2, rand() < 0.5 ? STONE.mid : DIRT.light).px(x, y, STONE.light);
-  }
-  for (let x = 0; x < w; x++) if (rand() < 0.4) c.px(x, 6 + Math.floor(rand() * (h - 6)), DIRT.dark);
-  c.bake(scene, 'ground', S);
+  const w = 64;
+  const h = VIEW.h - GROUND_Y;
+  bake(scene, 'ground', w, h, (g) => {
+    poly(g, [[0, 0], [w, 0], [w, h], [0, h]], MAT.earth.mid);
+    // Grass: a lit lip, a zigzag top and a shaded underside.
+    poly(g, [[0, 0], [w, 0], [w, 6], [56, 9], [48, 5], [40, 9], [32, 5], [24, 9], [16, 5], [8, 9], [0, 5]], MAT.grass.mid);
+    poly(g, [[0, 0], [w, 0], [w, 2], [0, 2]], MAT.grass.lit);
+    poly(g, [[0, 9], [w, 9], [w, 12], [0, 12]], MAT.grass.shade);
+    const rand = seeded(5);
+    for (let i = 0; i < 7; i++) {
+      const x = Math.floor(rand() * (w - 8));
+      const y = 16 + Math.floor(rand() * (h - 24));
+      poly(g, [[x, y + 4], [x + 3, y], [x + 6, y + 4]], MAT.stone.lit);
+      poly(g, [[x + 3, y], [x + 6, y + 4], [x + 3, y + 4]], MAT.stone.shade);
+    }
+    for (let i = 0; i < 6; i++) {
+      const x = Math.floor(rand() * w);
+      const y = 14 + Math.floor(rand() * (h - 18));
+      poly(g, [[x, y], [x + 8, y], [x + 4, y + 3]], MAT.earth.shade);
+    }
+  });
 }
 
-/** A row of iron spikes on a board, for each width a spike trap can be. */
+/** Iron spikes on a plank, for each width a spike trap can be: tips reach 24 px above the road. */
 function spikes(scene: Phaser.Scene) {
   for (const width of [36, 48, 60]) {
-    const w = width / S;
-    const c = new PixelCanvas(w, 13);
-    c.rect(0, 10, w, 3, WOOD.mid).rect(0, 10, w, 1, WOOD.light);
-    for (let x = 0; x + 5 <= w; x += 6) {
-      for (let y = 0; y < 10; y++) {
-        const half = Math.floor(y / 4);
-        c.rect(x + 3 - half - 1, y, 2 * half + 2, 1, IRON.mid);
+    bake(scene, `spikes-${width}`, width, 26, (g) => {
+      slab(g, MAT.wood, 0, 21, width, 5);
+      for (let cx = 6; cx + 4 <= width; cx += 12) {
+        poly(g, [[cx - 5, 21], [cx, 2], [cx, 21]], MAT.steel.lit);
+        poly(g, [[cx, 2], [cx + 5, 21], [cx, 21]], MAT.steel.shade);
       }
-      c.px(x + 2, 1, IRON.shine).line(x + 2, 2, x + 1, 9, IRON.light);
-    }
-    c.outline(INK);
-    c.bake(scene, `spikes-${width}`, S);
+    });
   }
 }
 
 /** A pit in the road with stakes at the bottom, for each width a pit can be. */
 function pits(scene: Phaser.Scene) {
-  const h = (VIEW.h - GROUND_Y) / S;
+  const h = VIEW.h - GROUND_Y;
   for (const width of [80, 96, 112]) {
-    const w = width / S;
-    const c = new PixelCanvas(w, h);
-    c.rect(0, 0, w, h, 0x0b0810);
-    c.rect(0, 0, 2, h, DIRT.dark).rect(w - 2, 0, 2, h, DIRT.dark);
-    c.rect(2, 0, w - 4, 4, 0x1a1420);
-    for (let x = 4; x + 3 < w; x += 6) c.line(x + 1, h - 1, x + 1, h - 12, WOOD.mid).px(x + 1, h - 13, IRON.light);
-    c.bake(scene, `pit-${width}`, S);
+    bake(scene, `pit-${width}`, width, h, (g) => {
+      poly(g, [[0, 0], [width, 0], [width, h], [0, h]], 0x0d0a12);
+      // The pit's walls: the near one lit, the far one in shade, and the back wall in dark stone.
+      poly(g, [[0, 0], [4, 0], [4, h], [0, h]], MAT.earth.mid);
+      poly(g, [[width - 4, 0], [width, 0], [width, h], [width - 4, h]], MAT.earth.shade);
+      poly(g, [[4, 0], [width - 4, 0], [width - 4, 4], [4, 4]], MAT.stone.dark);
+      poly(g, [[width - 4, 4], [width - 4, 60], [width - 24, 4]], 0x1f1a2a);
+      for (let x = 10; x + 8 <= width - 6; x += 16) {
+        poly(g, [[x - 4, h], [x, h - 18], [x, h]], MAT.iron.lit);
+        poly(g, [[x, h - 18], [x + 4, h], [x, h]], MAT.iron.shade);
+      }
+    });
   }
 }
 
 /**
  * A spiked log hanging on a chain from above the screen, down to 34 pixels over the road: too
- * low to run under, so the knight slides.
+ * low to run under, so the knight slides. Its art is 30 pixels wide (two more than the trap's own
+ * width, for the spikes on its sides) and reaches the road's height minus 34.
  */
 function blade(scene: Phaser.Scene) {
-  const w = 13;
-  const bottom = (GROUND_Y - 34) / S;
-  const c = new PixelCanvas(w + 2, bottom + 1);
-  const logTop = bottom - 42;
-  for (let y = 0; y < logTop; y += 4) c.rect(6, y, 3, 3, IRON.mid).px(7, y + 1, IRON.dark).px(6, y, IRON.light);
-  c.rect(1, logTop, w, 34, WOOD.mid).rect(1, logTop, 2, 34, WOOD.light).rect(w - 1, logTop, 2, 34, WOOD.dark);
-  for (const y of [logTop + 4, logTop + 26]) c.rect(1, y, w, 3, IRON.mid).rect(1, y, w, 1, IRON.light);
-  // Spikes out of the sides and the bottom.
-  for (const y of [logTop + 12, logTop + 18]) c.px(0, y, IRON.light).px(w + 1, y, IRON.light);
-  for (let x = 2; x < w; x += 4) c.rect(x, logTop + 34, 2, 4, IRON.light).px(x, bottom - 4, IRON.shine).rect(x, bottom - 3, 1, 3, IRON.mid);
-  c.outline(INK);
-  c.bake(scene, 'blade', S);
+  const w = 30;
+  const bottom = GROUND_Y - 34;
+  const logTop = bottom - 84;
+  bake(scene, 'blade', w, bottom, (g) => {
+    // The chain: diamond links, lit on the left.
+    for (let y = 0; y < logTop; y += 10) {
+      poly(g, [[15, y], [15, y + 8], [13, y + 4]], MAT.iron.lit);
+      poly(g, [[15, y], [15, y + 8], [17, y + 4]], MAT.iron.shade);
+    }
+    // The log, with two iron bands and spikes poking out of its sides and foot.
+    slab(g, MAT.wood, 2, logTop, 26, 68);
+    for (const y of [logTop + 6, logTop + 38]) {
+      poly(g, [[1, y], [29, y], [29, y + 4], [1, y + 4]], MAT.iron.mid);
+      poly(g, [[1, y], [29, y], [29, y + 1], [1, y + 1]], MAT.iron.lit);
+    }
+    poly(g, [[2, logTop + 18], [0, logTop + 24], [2, logTop + 30]], MAT.iron.lit);
+    poly(g, [[28, logTop + 18], [30, logTop + 24], [28, logTop + 30]], MAT.iron.shade);
+    for (const x of [6, 15, 24]) {
+      poly(g, [[x - 3, bottom - 16], [x, bottom], [x, bottom - 16]], MAT.iron.lit);
+      poly(g, [[x, bottom - 16], [x, bottom], [x + 3, bottom - 16]], MAT.iron.shade);
+    }
+    edge(g, [[2, logTop], [28, logTop], [28, logTop + 68], [2, logTop + 68]], 1, 1);
+  });
 }
 
 /**
@@ -155,80 +200,108 @@ function blade(scene: Phaser.Scene) {
  * ledge plus the road below it. It tiles sideways; GameScene crops it to each ledge's height.
  */
 function ledge(scene: Phaser.Scene) {
-  const w = 32;
-  const h = 64;
-  const c = new PixelCanvas(w, h);
-  c.rect(0, 0, w, h, STONE.mid);
-  for (let row = 0; row * 5 + 4 < h; row++) {
-    const y = 4 + row * 5;
-    c.rect(0, y, w, 1, STONE.dark);
-    for (let x = row % 2 ? 4 : 0; x < w; x += 8) c.rect(x, y + 1, 1, 4, STONE.dark).rect(x + 1, y + 1, 6, 1, STONE.light);
-  }
-  const rand = seeded(11);
-  for (let i = 0; i < 10; i++) c.px(Math.floor(rand() * w), 6 + Math.floor(rand() * (h - 6)), rand() < 0.5 ? STONE.shine : GRASS.dark);
-  c.rect(0, 0, w, 3, GRASS.mid).rect(0, 0, w, 1, GRASS.shine).rect(0, 3, w, 1, GRASS.dark);
-  for (const x of [2, 7, 13, 20, 26]) c.rect(x, 4, 1, 2, GRASS.dark);
-  c.bake(scene, 'ledge', S);
+  const w = 64;
+  const h = 128;
+  bake(scene, 'ledge', w, h, (g) => {
+    poly(g, [[0, 0], [w, 0], [w, h], [0, h]], MAT.stone.mid);
+    // Blocks in staggered courses: each lit along its top, shaded along its right and mortar below.
+    for (let row = 0; 9 + row * 10 < h; row++) {
+      const y = 9 + row * 10;
+      for (let x = row % 2 ? -16 : 0; x < w; x += 32) {
+        poly(g, [[x, y], [x + 31, y], [x + 31, y + 9], [x, y + 9]], MAT.stone.mid);
+        poly(g, [[x, y], [x + 31, y], [x + 31, y + 2], [x, y + 2]], MAT.stone.lit);
+        poly(g, [[x + 27, y + 2], [x + 31, y + 2], [x + 31, y + 9], [x + 27, y + 9]], MAT.stone.shade);
+        poly(g, [[x, y + 9], [x + 31, y + 9], [x + 31, y + 10], [x, y + 10]], MAT.stone.dark);
+      }
+    }
+    // The grass cap, lit along its lip.
+    poly(g, [[0, 0], [w, 0], [w, 6], [56, 9], [48, 6], [40, 9], [32, 6], [24, 9], [16, 6], [8, 9], [0, 6]], MAT.grass.mid);
+    poly(g, [[0, 0], [w, 0], [w, 2], [0, 2]], MAT.grass.lit);
+  });
 }
 
 /**
- * A fire vent: an iron grate in the road that flares into a column of flame. Baked as `flames-off`,
- * `flames-warn` (sputtering just before it flares) and two flickering `flames-lit<n>` frames, all
- * the same size with the grate at the bottom; the column is as tall as `TRAP_SPAN.flames.hi`.
+ * A fire vent: an iron grate in the road that flares into a column of flame. Baked as `flames-off`
+ * (embers on the grate), `flames-warn` (small flames sputtering just before it flares) and two
+ * flickering `flames-lit<n>` frames, all the same size with the grate at the bottom. The column is
+ * as tall as `TRAP_SPAN.flames.hi`.
  */
 function flames(scene: Phaser.Scene) {
-  const w = 16;
-  const h = 36;
-  const grate = (c: PixelCanvas) => {
-    c.rect(0, h - 4, w, 4, IRON.dark).rect(0, h - 4, w, 1, IRON.light);
-    for (let x = 2; x < w - 1; x += 3) c.rect(x, h - 3, 1, 2, INK);
+  const w = 32;
+  const h = 72;
+  const grate = (g: Canvas) => {
+    poly(g, [[0, 66], [w, 66], [w, h], [0, h]], MAT.iron.dark);
+    poly(g, [[0, 66], [w, 66], [w, 68], [0, 68]], MAT.iron.lit);
+    for (const x of [3, 9, 15, 21, 27]) poly(g, [[x, 68], [x + 2, 68], [x + 2, h], [x, h]], MAT.iron.shade);
   };
-  const off = new PixelCanvas(w, h);
-  grate(off);
-  off.px(5, h - 6, STONE.light, 0.6).px(9, h - 8, STONE.light, 0.4);
-  off.bake(scene, 'flames-off', S);
 
-  const warn = new PixelCanvas(w, h);
-  for (const x of [3, 7, 11]) warn.rect(x, h - 7, 2, 3, FIRE.mid).px(x, h - 8, FIRE.light);
-  grate(warn);
-  warn.bake(scene, 'flames-warn', S);
+  bake(scene, 'flames-off', w, h, (g) => {
+    grate(g);
+    poly(g, [[7, 63], [9, 60], [11, 63]], MAT.stone.lit);
+    poly(g, [[18, 64], [20, 61], [22, 64]], MAT.stone.mid);
+    poly(g, [[12, 65], [14, 63], [16, 65]], 0xc0503a, 1, 0.6);
+  });
+
+  bake(scene, 'flames-warn', w, h, (g) => {
+    const tongue = (base: [number, number], tip: [number, number], tone: Tones) => {
+      poly(g, [[base[0] - 6, 66], tip, [base[0], 66]], tone.mid);
+      poly(g, [[base[0], 66], tip, [base[0] + 6, 66]], tone.shade);
+    };
+    tongue([10, 66], [10, 56], MAT.fire);
+    tongue([22, 66], [22, 52], MAT.fire);
+    grate(g);
+  });
 
   for (const frame of [0, 1]) {
-    const c = new PixelCanvas(w, h);
-    const sway = frame ? 1 : -1;
-    c.ellipse(1, 6, 14, 28, FIRE.dark).ellipse(3 + sway, 2, 10, 26, FIRE.dark);
-    c.ellipse(3, 12, 10, 22, FIRE.mid).ellipse(5 - sway, 8, 6, 18, FIRE.mid);
-    c.ellipse(5, 20, 6, 14, FIRE.light).ellipse(6 + sway, 26, 4, 7, FIRE.white);
-    c.px(4 + sway * 2, frame ? 1 : 3, FIRE.mid).px(11 - sway, frame ? 4 : 2, FIRE.light);
-    grate(c);
-    c.bake(scene, `flames-lit${frame}`, S);
+    bake(scene, `flames-lit${frame}`, w, h, (g) => {
+      const sway = frame ? 1 : -1;
+      const tip = frame ? 6 : 10;
+      // Outer tongue, a lit half and a shaded half, with side tongues.
+      poly(g, [[3, 66], [16 + sway, tip], [16, 66]], MAT.fire.mid);
+      poly(g, [[16, 66], [16 + sway, tip], [29, 66]], MAT.fire.shade);
+      poly(g, [[3, 66], [0, 40 + sway], [10, 66]], MAT.fire.shade);
+      poly(g, [[22, 66], [32, 38 - sway], [29, 66]], MAT.fire.shade);
+      // Inner tongue, brighter.
+      poly(g, [[8, 66], [16 - sway, 26], [16, 66]], MAT.fire.lit);
+      poly(g, [[16, 66], [16 - sway, 26], [24, 66]], MAT.fire.mid);
+      // Core.
+      poly(g, [[12, 66], [16, 42], [20, 66]], MAT.fire.lit);
+      grate(g);
+    });
   }
 }
 
+/** A coin: a faceted gold disc, and an edge-on one for its spin. */
 function coin(scene: Phaser.Scene) {
-  const full = new PixelCanvas(8, 8);
-  full.ellipse(0, 0, 8, 8, GOLD.mid).ellipse(1, 1, 6, 6, GOLD.light).rect(3, 2, 1, 4, GOLD.dark).px(2, 2, GOLD.shine);
-  full.outline(INK);
-  full.bake(scene, 'coin-0', S);
-  const edge = new PixelCanvas(8, 8);
-  edge.rect(3, 0, 2, 8, GOLD.mid).px(3, 1, GOLD.shine);
-  edge.outline(INK);
-  edge.bake(scene, 'coin-1', S);
+  bake(scene, 'coin-0', 16, 16, (g) => {
+    disk(g, MAT.gold, 8, 8, 7, 7, 1, 10);
+    edge(g, ring(8, 8, 7, 7, 10), 1, 1, MAT.gold.dark, 0.9);
+    edge(g, ring(8, 8, 4, 4, 8), 1, 1, MAT.gold.dark, 0.5);
+  });
+  bake(scene, 'coin-1', 16, 16, (g) => {
+    disk(g, MAT.gold, 8, 8, 2.5, 7, 1, 8);
+    edge(g, ring(8, 8, 2.5, 7, 8), 1, 1, MAT.gold.dark, 0.9);
+  });
 }
 
 /** The checkpoint: a banner on a pole by a campfire. */
 function checkpoint(scene: Phaser.Scene) {
-  const c = new PixelCanvas(36, 64);
-  c.rect(6, 2, 2, 62, WOOD.mid).px(6, 2, WOOD.light).rect(5, 0, 4, 2, GOLD.mid);
-  c.rect(8, 4, 14, 18, TABARD.mid).rect(8, 4, 14, 2, TABARD.light);
-  c.rect(14, 7, 2, 12, GOLD.mid).rect(11, 10, 8, 2, GOLD.light);
-  for (let x = 8; x < 22; x += 3) c.px(x + 1, 22, TABARD.dark);
-  // The campfire: logs and flames.
-  c.rect(18, 61, 14, 3, WOOD.dark).line(18, 63, 31, 59, WOOD.mid);
-  c.ellipse(20, 50, 10, 12, FIRE.dark).ellipse(21, 53, 8, 9, FIRE.mid).ellipse(23, 56, 4, 5, FIRE.light);
-  c.px(25, 47, FIRE.mid).px(22, 46, RED.mid);
-  c.outline(INK);
-  c.bake(scene, 'checkpoint', S);
+  bake(scene, 'checkpoint', 36, 64, (g) => {
+    slab(g, MAT.wood, 6, 4, 3, 60);
+    disk(g, MAT.gold, 7.5, 2.5, 2.5, 2.5, 1, 6);
+    // The banner: a lit half and a shaded half, with a notched foot and a gold cross.
+    poly(g, [[9, 5], [15, 5], [15, 21], [12, 18], [9, 21]], MAT.tabard.lit);
+    poly(g, [[15, 5], [23, 5], [23, 21], [20, 18], [15, 21]], MAT.tabard.shade);
+    edge(g, [[9, 5], [23, 5], [23, 21], [20, 18], [12, 18], [9, 21]], 1, 1);
+    poly(g, [[14.5, 8], [16.5, 8], [16.5, 16], [14.5, 16]], MAT.gold.mid);
+    poly(g, [[11, 10], [21, 10], [21, 12], [11, 12]], MAT.gold.lit);
+    // The campfire: logs, and flames in three tones.
+    poly(g, [[16, 62], [32, 62], [32, 64], [16, 64]], MAT.wood.dark);
+    poly(g, [[16, 63], [31, 58], [33, 60], [18, 64]], MAT.wood.mid);
+    poly(g, [[18, 60], [22, 46], [26, 60]], MAT.fire.shade);
+    poly(g, [[21, 60], [24, 50], [27, 60]], MAT.fire.mid);
+    poly(g, [[22, 60], [24, 55], [26, 60]], MAT.fire.lit);
+  });
 }
 
 export function bakeScenery(scene: Phaser.Scene) {
