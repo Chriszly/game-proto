@@ -379,6 +379,8 @@ export class GameScene extends Phaser.Scene {
     const icon = this.add.image(choiceX + 8, at.y, 'pallet').setDepth(-900);
     sign.setInteractive({ useHandCursor: true }).on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
       e.stopPropagation();
+      // A second finger landing on a sign starts a pinch, not a priority change.
+      if (this.input.pointer1.isDown && this.input.pointer2.isDown) return;
       // With a panel open, a tap anywhere closes it, a sign's included, without changing the sign.
       if (this.recipes.visible || this.settings.visible) {
         this.recipes.toggle(false);
