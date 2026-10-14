@@ -8,15 +8,18 @@ import {
   offerable,
   progressOf,
   newRun,
+  rainNeed,
   stats,
+  streakBonus,
   xpToNext,
   type Effect,
   type Enemy,
   type GameState,
   type Stats,
 } from './state';
+import { RELIC_IDS } from './relics';
 import type { UpgradeId } from './upgrades';
-import { BREAK_MS, bossBars, foeHp, spawnInterval, waveFoes } from './waves';
+import { BREAK_MS, bossBars, foeHp, isBossWave, spawnInterval, waveFoes } from './waves';
 
 // The rules of a run, in plain TypeScript: `tick` moves the battle on, `pick` takes an upgrade.
 
@@ -32,7 +35,13 @@ const HIT_FLASH_MS = 90;
 /** Foes are shot once their middle has come into the 960px view. */
 const VIEW_RIGHT = 950;
 /** How long each kind of effect plays, in milliseconds. */
-const EFFECT_MS = { blast: 260, fireblast: 360, bolt: 220, death: 320, crit: 400 } as const;
+const EFFECT_MS = { blast: 260, fireblast: 360, bolt: 220, death: 320, crit: 400, rain: 520, xp: 900, orb: 750 } as const;
+/** How long an Arrow Rain volley takes to come down after it is loosed. */
+export const RAIN_FALL_MS = 450;
+/** The ring Arrow Rain lands on: half its width and height (it lies flat on the road). */
+export const RAIN_RING = { rx: 80, ry: 50 };
+/** Arrow Rain hits every foe in the ring for this many times an arrow's damage. */
+const RAIN_DAMAGE = 4;
 /** How long a level-up waits for a tap before it takes one of the offered upgrades at random. */
 export const AUTO_PICK_MS = 10_000;
 
@@ -58,10 +67,20 @@ export function tick(state: GameState, ms: number) {
 function step(state: GameState, dt: number) {
   const s = stats(state);
   ageEffects(state, dt);
+  // A streak ends when no kill follows in time.
+  const streak = state.streak;
+  if (streak.ms > 0) {
+    streak.ms = Math.max(0, streak.ms - dt);
+    if (streak.ms === 0) streak.count = 0;
+  }
+  state.rain.need = rainNeed(state.wave, s);
+  state.rain.charge = Math.min(state.rain.charge, state.rain.need);
+  landVolleys(state, s, dt);
   if (state.phase === 'break') {
     state.breakMs -= dt;
     if (state.breakMs <= 0) {
       state.phase = 'fighting';
+      state.relicFound = null;
       state.toSpawn = waveFoes(state.wave);
       state.spawnMs = 0;
     }
@@ -283,10 +302,68 @@ function removeDead(state: GameState) {
   if (dead.length === 0) return;
   state.enemies = state.enemies.filter((e) => e.hp > 0);
   for (const e of dead) {
+    const s = stats(state);
     state.kills++;
-    addEffect(state, { kind: 'death', x: e.x, y: e.y, radius: ENEMIES[e.kind].radius });
-    gainXp(state, ENEMIES[e.kind].xp * stats(state).xpGain);
+    // Each kill charges Arrow Rain and carries the streak on (or starts a new one).
+    state.rain.charge = Math.min(state.rain.need, state.rain.charge + 1);
+    const streak = state.streak;
+    streak.count = streak.ms > 0 ? streak.count + 1 : 1;
+    streak.ms = s.streakMs;
+    streak.best = Math.max(streak.best, streak.count);
+    const base = ENEMIES[e.kind].xp * s.xpGain;
+    const bonus = base * streakBonus(streak.count);
+    streak.bonusXp += bonus;
+    const radius = ENEMIES[e.kind].radius;
+    addEffect(state, { kind: 'death', x: e.x, y: e.y, radius });
+    addEffect(state, { kind: 'xp', x: e.x, y: e.y - radius * 1.6, amount: base + bonus, streak: streak.count });
+    addEffect(state, { kind: 'orb', x: e.x, y: e.y - radius, amount: base + bonus });
+    gainXp(state, base + bonus);
   }
+}
+
+/**
+ * Looses Arrow Rain on the ring around (x, y), kept on the road in front of the barricade, once
+ * kills have charged it. Returns whether it was loosed.
+ */
+export function loose(state: GameState, x: number, y: number) {
+  if (state.phase === 'over' || state.choices || state.rain.charge < state.rain.need) return false;
+  state.rain.charge = 0;
+  state.rain.volleys.push({
+    id: state.nextId++,
+    x: Math.round(Math.min(VIEW_RIGHT - 10, Math.max(BARRICADE_FRONT + 30, x))),
+    y: Math.round(Math.min(FIELD.bottom, Math.max(FIELD.top, y))),
+    ms: RAIN_FALL_MS,
+  });
+  return true;
+}
+
+/** Whether a foe at (x, y) with this radius stands in the Arrow Rain ring around (cx, cy). */
+export const inRing = (cx: number, cy: number, x: number, y: number, radius: number) =>
+  ((x - cx) / (RAIN_RING.rx + radius / 2)) ** 2 + ((y - cy) / (RAIN_RING.ry + radius / 2)) ** 2 <= 1;
+
+/** Where Arrow Rain hits the most foes in view: on the one with the most others in its ring. */
+export function crowdSpot(state: GameState) {
+  const foes = targets(state);
+  if (foes.length === 0) return null;
+  const crowd = (e: Enemy) => foes.filter((o) => inRing(e.x, e.y, o.x, o.y, ENEMIES[o.kind].radius)).length;
+  const best = foes.reduce((a, e) => (crowd(e) > crowd(a) ? e : a), foes[0]);
+  return { x: best.x, y: best.y };
+}
+
+/** Brings Arrow Rain volleys down: each hurts every foe in its ring when it lands. */
+function landVolleys(state: GameState, s: Stats, dt: number) {
+  const volleys = state.rain.volleys;
+  if (volleys.length === 0) return;
+  for (const v of volleys) {
+    v.ms -= dt;
+    if (v.ms > 0) continue;
+    addEffect(state, { kind: 'rain', x: v.x, y: v.y });
+    for (const e of state.enemies) {
+      if (inRing(v.x, v.y, e.x, e.y, ENEMIES[e.kind].radius)) hurt(e, s.damage * RAIN_DAMAGE, true);
+    }
+  }
+  state.rain.volleys = volleys.filter((v) => v.ms > 0);
+  removeDead(state);
 }
 
 function gainXp(state: GameState, xp: number) {
@@ -330,10 +407,19 @@ export function pick(state: GameState, id: UpgradeId) {
 
 function clearWave(state: GameState) {
   state.bestWave = Math.max(state.bestWave, state.wave);
+  // The relic chest at the end of the road: a lasting bonus for beating the boss.
+  if (isBossWave(state.wave)) {
+    const id = RELIC_IDS[Math.floor(Math.random() * RELIC_IDS.length)];
+    state.relics[id] = (state.relics[id] ?? 0) + 1;
+    state.relicFound = id;
+  }
   state.wave++;
   state.phase = 'break';
   state.breakMs = BREAK_MS;
   state.missiles = [];
+  // An Oakheart Charm from the chest makes the barricade bigger at once.
+  const max = stats(state).barricadeMax;
+  if (max > state.barricade.max) state.barricade = { hp: state.barricade.hp + max - state.barricade.max, max };
   state.barricade.hp = Math.min(state.barricade.max, state.barricade.hp + state.barricade.max * BARRICADE_REPAIR);
 }
 
