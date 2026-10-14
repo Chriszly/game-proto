@@ -59,8 +59,7 @@ Each game's guide for agents, to read before changing it:
   up `games/*/index.html` on its own. Keep save keys and other browser storage prefixed with the
   game's name, since every game shares the hub's origin.
 - **Honour the hub's settings.** Every game calls `setupGame(game)` from `shared/setupGame.ts`
-  right after creating its `Phaser.Game`, which applies the frame cap, the FPS readout and reduced
-  motion. Each game also implements the difficulty itself: scale one or two of its own balance
+  right after creating its `Phaser.Game`, which applies the frame cap, the FPS readout, reduced motion and full screen. Each game also implements the difficulty itself: scale one or two of its own balance
   numbers with `byDifficulty(easy, normal, hard)` from `shared/settings.ts`, keep Normal exactly as
   designed (the playthrough runs on Normal), and add the game's row to the difficulty table in the
   README. Skip camera shake and flashes, and hold blinking or jittering effects still, when

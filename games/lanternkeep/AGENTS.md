@@ -137,8 +137,7 @@ seeded generator in `puppet.ts`. Popups, flares and sparks are cosmetic Phaser t
 
 ### Hub settings
 
-- `src/main.ts` calls `setupGame(game)` right after creating the game (frame cap, FPS readout,
-  reduced motion).
+- `src/main.ts` calls `setupGame(game)` right after creating the game (frame cap, FPS readout, reduced motion and full screen).
 - Difficulty scales one number: the burn time, `baseBurnMs()` = `byDifficulty(26_000, 20_000,
   16_000)`. Keep Normal at 20 s: the playthrough expects it. The moth kinds, the queue, the gusts,
   the close-call share and the orders are not scaled by difficulty.

@@ -142,8 +142,7 @@ Data tables (where to tune):
 
 ### Hub settings
 
-- `src/main.ts` calls `setupGame(game)` from `shared/setupGame.ts`, which applies the frame cap,
-  the FPS readout and reduced motion for camera shake and flash.
+- `src/main.ts` calls `setupGame(game)` from `shared/setupGame.ts`, which applies the frame cap, the FPS readout, reduced motion (camera shake and flash) and full screen.
 - Difficulty scales one number: foe health. `startFight` in `src/game/sim.ts` sets each foe's `hp`
   and `maxHp` to `Math.round(ENEMIES[kind].hp * byDifficulty(0.75, 1, 1.3))`, so Easy 0.75x,
   Normal 1x, Hard 1.3x. Damage, block and the hero are not scaled.

@@ -159,8 +159,7 @@ shared `hub-settings` key.
 
 ### Hub settings
 
-- `src/main.ts` calls `setupGame(game)` right after creating the game (frame cap, FPS readout,
-  reduced motion; Mapmaker uses no camera shake or flash).
+- `src/main.ts` calls `setupGame(game)` right after creating the game (frame cap, FPS readout, reduced motion and full screen; Mapmaker uses no camera shake or flash).
 - Difficulty scales one number: `BASE_SUPPLIES` in `src/game/state.ts` is `byDifficulty(16, 12, 9)`,
   read at module load. Normal must stay 12: the playthrough expects it.
 - With `settings.reduceMotion` on, the survey stations stop pulsing, value chips don't float, and

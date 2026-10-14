@@ -163,7 +163,7 @@ settings are stored separately under `hub-settings`.
 ### Hub settings
 
 - `src/main.ts` calls `setupGame(game)` from `shared/setupGame.ts` right after creating the game,
-  which applies the frame cap, the FPS readout and reduced motion (camera shake and flash become
+  which applies the frame cap, the FPS readout, reduced motion and full screen (camera shake and flash become
   no-ops; this game uses neither).
 - Difficulty scales one number: the moves of every order. `orderFor` in `src/game/orders.ts` adds
   `byDifficulty(5, 0, -3)` to the order's `moves`, so Easy gives 5 more, Normal the table's value

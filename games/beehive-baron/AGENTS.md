@@ -157,7 +157,7 @@ Data tables: balance constants (`CELL_CAP`, `RIPEN_MS`, `TRIP_MS`, `HONEY_PRICE`
 ### Hub settings
 
 - `src/main.ts` calls `setupGame(game)` from `shared/setupGame.ts` right after creating the game.
-  It applies the frame cap, the FPS readout and reduced motion (camera shake and flash become
+  It applies the frame cap, the FPS readout, reduced motion and full screen (camera shake and flash become
   no-ops; this game uses neither).
 - Difficulty scales one number: trip length. `tripMs` in `src/game/sim.ts` multiplies
   `TRIP_MS * 0.8^clover` by `byDifficulty(0.75, 1, 1.3)` (easy, normal, hard) from

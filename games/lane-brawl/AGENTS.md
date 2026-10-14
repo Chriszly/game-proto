@@ -165,8 +165,7 @@ generator (`seeded` in `lowpoly.ts`); `performance.now` only times the bake for 
 
 ### Hub settings
 
-- `main.ts` calls `setupGame(game)` right after creating the game (frame cap, FPS readout, reduced
-  motion).
+- `main.ts` calls `setupGame(game)` right after creating the game (frame cap, FPS readout, reduced motion and full screen).
 - Difficulty scales red's damage: `ENEMY_DAMAGE = byDifficulty(0.8, 1, 1.25)` in `GameScene.ts`,
   applied through `dealt` in `sim.ts`. Normal stays 1, which the playthrough expects.
 - `settings.reduceMotion` skips the effect rings and attack lines (`collectFx`) but keeps the

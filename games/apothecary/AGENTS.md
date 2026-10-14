@@ -248,7 +248,7 @@ save or load, 0 in a new game). Each order also has `tip`, its full tip (`maxTip
 ### Hub settings
 
 - `src/main.ts` calls `setupGame(game)` from `shared/setupGame.ts` right after creating the game,
-  which applies the hub's frame cap, the FPS readout and reduced motion.
+  which applies the hub's frame cap, the FPS readout, reduced motion and full screen.
 - Difficulty scales one number, customer patience: `newOrder` in `src/game/sim.ts` multiplies
   `maxPatience` by `byDifficulty(1.5, 1, 0.7)` from `shared/settings.ts` (Easy 1.5, Normal 1,
   Hard 0.7). Keep Normal exactly as designed: the playthrough runs on Normal.
