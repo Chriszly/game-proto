@@ -350,7 +350,7 @@ export class GameScene extends Phaser.Scene {
   /** A small button in the corner that throws the board and coins away for a fresh smithy. */
   private createReset() {
     const text = this.add
-      .text(VIEW.w - 16, VIEW.h - 6, 'New smithy', { fontFamily: FONT, fontSize: '12px', color: '#8a7a60' })
+      .text(VIEW.w - 16, VIEW.h - 6, 'New smithy', { fontFamily: FONT, fontSize: '13px', color: '#bcac8c' })
       .setOrigin(1, 1)
       .setDepth(UI_DEPTH + 1)
       .setInteractive({ useHandCursor: true });

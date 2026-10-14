@@ -35,6 +35,6 @@ export class Button {
   private paint() {
     this.bg.setFillStyle(!this.enabled ? 0x3b2a20 : this.over ? 0x8a5a32 : 0x5c3a21);
     this.bg.setStrokeStyle(3, this.enabled ? 0xc9a040 : 0x6a5a40);
-    this.text.setColor(this.enabled ? '#f3e9d2' : '#9a8a70');
+    this.text.setColor(this.enabled ? '#f3e9d2' : '#bcac8c');
   }
 }
