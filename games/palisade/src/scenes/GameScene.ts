@@ -3,14 +3,14 @@ import Phaser from 'phaser';
 import { foeTexture } from '../art/characters';
 import { BAR, BOSS_BARS, FIRE, STORM } from '../art/palette';
 import { ENEMIES } from '../game/enemies';
-import { clearProgress, loadProgress, loadSpeed, saveProgress, saveSpeed } from '../game/save';
+import { clearProgress, loadFound, loadProgress, loadSpeed, saveFound, saveProgress, saveSpeed } from '../game/save';
 import { fightAgain, offer, pick, tick } from '../game/sim';
 import { freshProgress, newRun, progressOf, stats, xpToNext, type Enemy, type GameState } from '../game/state';
 import type { UpgradeId } from '../game/upgrades';
 import { isBossWave } from '../game/waves';
 import { makeButton } from '../ui/Button';
 import { LevelUp } from '../ui/LevelUp';
-import { UpgradeList } from '../ui/UpgradeList';
+import { SkillBook } from '../ui/SkillBook';
 import { BOSS_BAR, FONT, HERO_FEET, HUD_HEIGHT, UI_DEPTH, VIEW, BARRICADE, SPEED, XP_BAR } from './layout';
 
 /** Longest simulated step, so a backgrounded tab doesn't jump the battle forward. */
@@ -32,8 +32,10 @@ export class GameScene extends Phaser.Scene {
   state!: GameState;
   /** The level-up cards; the playthrough test reads where they are to tap one. */
   levelUp!: LevelUp;
-  /** The upgrades taken so far, behind a button in the top bar. */
-  upgradeList!: UpgradeList;
+  /** The skill book, behind a button in the top bar. */
+  skillBook!: SkillBook;
+  /** Every upgrade a level-up has offered at least once: the skill book's filled pages. */
+  found = new Set<UpgradeId>();
   private foes = new Map<number, Phaser.GameObjects.Image>();
   private missiles = new Map<number, Phaser.GameObjects.Image>();
   private crits = new Map<number, Phaser.GameObjects.Text>();
@@ -78,7 +80,8 @@ export class GameScene extends Phaser.Scene {
     this.createHud();
     this.createGameOver();
     this.levelUp = new LevelUp(this, (id) => this.pick(id));
-    this.upgradeList = new UpgradeList(this);
+    this.found = new Set(loadFound());
+    this.skillBook = new SkillBook(this);
     this.createSpeedSwitch();
   }
 
@@ -92,7 +95,7 @@ export class GameScene extends Phaser.Scene {
     const wave = s.wave;
     const levelUps = s.levelUps;
     // Everything, the auto-pick countdown included, waits while the list of upgrades is open.
-    if (!this.upgradeList.open) {
+    if (!this.skillBook.open) {
       // The battle plays at the chosen speed; the auto-pick countdown stays in real seconds.
       const game = s.choices ? dt : dt * this.speed;
       tick(s, game);
@@ -106,7 +109,8 @@ export class GameScene extends Phaser.Scene {
     this.drawHero();
     this.drawHud();
     this.levelUp.show(s.phase === 'over' ? null : s.choices, s.ranks, s.level - s.levelUps + 1, s.levelUps, s.pickMs);
-    this.upgradeList.show(s.ranks, s.phase === 'over');
+    this.discover();
+    this.skillBook.show(this.found, s.ranks, s.phase === 'over');
     this.gameOver.setVisible(s.phase === 'over');
     if (s.phase === 'over') {
       this.gameOverText.setText(
@@ -114,6 +118,16 @@ export class GameScene extends Phaser.Scene {
           `The hero keeps level ${s.level} and every upgrade picked.`,
       );
     }
+  }
+
+  /** Fills the skill book's page for each upgrade offered (or held) for the first time. */
+  private discover() {
+    const s = this.state;
+    const seen = [...(s.choices ?? []), ...(Object.keys(s.ranks) as UpgradeId[])];
+    const fresh = seen.filter((id) => !this.found.has(id));
+    if (fresh.length === 0) return;
+    for (const id of fresh) this.found.add(id);
+    saveFound([...this.found]);
   }
 
   private pick(id: UpgradeId) {

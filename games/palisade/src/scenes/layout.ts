@@ -15,15 +15,15 @@ export const BOSS_BAR = { x: 480, y: 66, w: 420, h: 14 };
 export const CARDS = { xs: [240, 480, 720], y: 300, w: 220, h: 250 };
 /** The auto-pick countdown under the cards: its text's centre, and the width and height of its bar. */
 export const COUNTDOWN = { x: 480, y: 450, w: 160, h: 6 };
-/** The "Upgrades" button in the top bar, and the panel it opens: its size and the grid of upgrades. */
-export const UPGRADE_LIST = {
-  button: { x: 525, y: 20, w: 130, h: 26 },
-  panel: { w: 840, h: 460 },
+/** The "Skill book" button in the top bar, and the book it opens: its size and the grid of slots. */
+export const SKILL_BOOK = {
+  button: { x: 520, y: 20, w: 150, h: 26 },
+  panel: { w: 900, h: 500 },
   cols: 3,
-  colW: 270,
-  rowH: 50,
+  colW: 290,
+  rowH: 62,
   /** The top of the first row. */
-  top: 120,
+  top: 92,
 };
 export const BUTTON = { w: 180, h: 40 };
 
