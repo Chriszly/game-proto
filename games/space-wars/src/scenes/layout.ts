@@ -7,9 +7,10 @@ export const TOP = { h: 34 };
 export const BAR = { y: 440, h: 100 };
 /** The window of the battlefield on screen, between the bars; the camera scrolls inside it. */
 export const MAP_VIEW = { x: 0, y: TOP.h, w: VIEW.w, h: BAR.y - TOP.h };
-export const FONT = 'monospace';
+/** The cover's lettering: a geometric sans, bold italic for headings. System fonts only. */
+export const FONT = '"Avenir Next", Futura, "Century Gothic", "Trebuchet MS", "Segoe UI", Inter, system-ui, sans-serif';
 
-export const BUTTON = { w: 112, h: 30 };
+export const BUTTON = { w: 116, h: 30 };
 
 export type ButtonKey = Role | UnitId;
 
@@ -34,7 +35,7 @@ export interface Button {
   h: number;
 }
 
-const COLUMN = 118;
+const COLUMN = 120;
 const BUILD_ROW = 468;
 const TRAIN_ROW = 504;
 const BUILD_KEYS: Role[] = ['depot', 'barracks', 'turret'];

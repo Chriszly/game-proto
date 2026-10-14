@@ -22,7 +22,7 @@ start page lists the games; each one lives in its own folder under `games/`.
 | [Shrine Stack](games/shrine-stack/README.md) | Stack a temple from swinging stones: tap to drop each one, overhangs break off, and every balanced tier of three stones earns a blessing. |
 | [Mapmaker](games/mapmaker/README.md) | Reveal a fog-covered island tile by tile on a voyage's supplies, climb hills and peaks to see further, and sell your charts at port for upgrades. |
 | [Lanternkeep](games/lanternkeep/README.md) | Send moths from their jar to light a castle's lanterns before night falls, keep them burning on scarce oil, and upgrade wicks, oil and the moths between nights. |
-| [Space Wars](games/space-wars/README.md) | Command a fleet on a random star map: build a base, raise units and fight rival factions, each with its own buildings and ships. |
+| [Space Wars](games/space-wars/README.md) | Command a fleet of 3D ships on a 70s paperback star map: build a base, raise units, work through a chain of contracts, hold the relay beacon and salvage wrecks while you fight rival factions, each with its own buildings and ships. |
 | [Lane Brawl](games/lane-brawl/README.md) | Lead a team of five heroes down the lanes in a MOBA against NPC teams: farm, level up, push the lanes and destroy the enemy base. |
 | [Colonizer](games/colonizer/README.md) | An Age-of-Empires-style pixel RTS: gather wood, food and ore, build, research techs and raise armies of three factions, then destroy the enemy Town Center. |
 

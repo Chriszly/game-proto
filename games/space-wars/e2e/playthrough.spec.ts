@@ -1,8 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
 
 // Plays the first round with real inputs: the crystal harvesters mine and carry crystal home, the
-// player raises a Barracks beside the hub, trains a Lancer from it, and sends the Lancer to attack
-// the nearest enemy base. The map is bigger than the screen, so the test pans it with the arrow
+// player raises a Barracks beside the hub (the first contract, which pays its reward and rank
+// perk), trains a wing of three Lancers from it, box-selects them, takes the relay beacon until it
+// pays, picks off a rival harvester and collects its salvage shard, then attacks the nearest enemy
+// base. The map is bigger than the screen, so the test pans it with the arrow
 // keys to reach what it needs to tap. Game state is only read, through the `game` object the dev
 // build puts on window.
 
@@ -27,6 +29,7 @@ interface Side {
   crystal: number;
   alive: boolean;
   def: { name: string };
+  perks: { train: number };
 }
 interface Button {
   kind: 'build' | 'train';
@@ -42,6 +45,11 @@ interface GameState {
   units: Unit[];
   buildings: Building[];
   sides: Side[];
+  beacon: { x: number; y: number; owner: number; capture: number; held: boolean; paid: number };
+  shards: { id: number; x: number; y: number; value: number }[];
+  contract: { index: number; progress: number };
+  salvaged: number;
+  kills: number;
 }
 
 const VIEW = { w: 960, h: 540 };
@@ -64,6 +72,13 @@ const PLAYER = 0;
 /** The Lancer is the first combat unit of the Solar Concord, and the Barracks is 100 crystal. */
 const START_CRYSTAL = 120;
 const SCOUT_COST = 35;
+/** The first contract (raise the Barracks) pays 60 crystal and makes ships train 20% faster. */
+const FIRST_REWARD = 60;
+/** The relay beacon pays 3 crystal a second; a salvage shard is worth 8. */
+const BEACON_PAY = 3;
+const SHARD_VALUE = 8;
+/** The player trains a wing of three Lancers. */
+const WING = 3;
 
 function scene(page: Page) {
   const read = <T>(fn: (s: any) => T) =>
@@ -76,6 +91,8 @@ function scene(page: Page) {
       JSON.parse(JSON.stringify(s.pickCards)),
     ),
     /** Where the map camera is scrolled to, in battlefield pixels. */
+    /** The ids of the units the player has selected. */
+    selected: () => read<number[]>((s) => [...s.selected]),
     scroll: () => read<{ x: number; y: number }>((s) => ({ x: s.camera.scrollX, y: s.camera.scrollY })),
     /** Where a battlefield point sits in view pixels, from the scene's own conversion. */
     toScreen: (x: number, y: number) =>
@@ -158,8 +175,12 @@ test('plays the first round', async ({ page }, testInfo) => {
   ).toBe(true);
   startedAt = Date.now();
 
-  const snap = async (name: string) =>
-    testInfo.attach(name, { body: await page.screenshot({ path: testInfo.outputPath(`${name}.png`) }), contentType: 'image/png' });
+  /** Saves a milestone screenshot, with the pointer moved off the map so no tooltip covers it. */
+  const snap = async (name: string) => {
+    await page.mouse.move(2, 2);
+    await play(FRAME_MS, async () => false);
+    await testInfo.attach(name, { body: await page.screenshot({ path: testInfo.outputPath(`${name}.png`) }), contentType: 'image/png' });
+  };
 
   /** Where a point in the 960x540 view is on the page. */
   async function onPage(x: number, y: number) {
@@ -209,22 +230,6 @@ test('plays the first round', async ({ page }, testInfo) => {
     const at = await game.toScreen(x, y);
     await tap(at.x, at.y);
   }
-  /**
-   * Taps a unit where it is at that moment, panning to it first. Units keep moving while the game
-   * plays, so the position is read from the state right before the tap, not kept from earlier.
-   */
-  async function tapUnit(id: number) {
-    for (let i = 0; i < 10; i++) {
-      const u = (await game.state()).units.find((x) => x.id === id)!;
-      if (await onMap(u.x, u.y)) {
-        const at = await game.toScreen(u.x, u.y);
-        await tap(at.x, at.y);
-        return;
-      }
-      await reveal(u.x, u.y);
-    }
-    throw new Error(`unit ${id} never came on screen`);
-  }
   const mine = (s: GameState, type: string) => s.units.filter((u) => u.faction === PLAYER && u.type === type);
   const barracks = (s: GameState) => s.buildings.find((b) => b.faction === PLAYER && b.type === 'barracks');
 
@@ -233,6 +238,9 @@ test('plays the first round', async ({ page }, testInfo) => {
   expect(s.phase).toBe('playing');
   expect(s.sides[PLAYER].crystal).toBe(START_CRYSTAL);
   expect(mine(s, 'harvester')).toHaveLength(2);
+  // The contract chain starts at its first contract, and the relay beacon is unclaimed.
+  expect(s.contract).toEqual({ index: 0, progress: 0 });
+  expect(s.beacon.owner).toBe(-1);
   // A dozen frames first, so the start screenshot shows the map drawn.
   await play(FRAME_MS * 12, async () => false);
   await snap('playthrough-0-start');
@@ -265,30 +273,74 @@ test('plays the first round', async ({ page }, testInfo) => {
   expect(spot, 'a clear spot for a Barracks beside the hub').not.toBeNull();
   await tapWorld(spot!.x, spot!.y);
   await until('barracks built', 30_000, (st) => !!barracks(st)?.done);
+  // Finishing the Barracks completes the first contract: its reward is paid, the rank perk applies
+  // and the second contract starts.
+  await until('first contract paid', 1_000, (st) => st.contract.index === 1);
+  s = await game.state();
+  expect(s.sides[PLAYER].perks.train, 'rank I perk: ships train faster').toBeCloseTo(0.8);
+  expect(s.sides[PLAYER].crystal).toBeGreaterThanOrEqual(FIRST_REWARD);
+  expect(s.contract.progress).toBe(0);
   await snap('playthrough-2-barracks');
 
-  // Train a Lancer from the Barracks.
+  // Train a wing of three Lancers from the Barracks; with the contract's reward the bank covers them.
   s = await game.state();
-  expect(s.sides[PLAYER].crystal).toBeGreaterThanOrEqual(SCOUT_COST);
-  await tap(...(Object.values(await button('train', 'scout')) as [number, number]));
-  await until('lancer trained', 20_000, (st) => mine(st, 'scout').length > 0);
-  // The trained Lancer comes out of the Barracks, so the production line works.
+  expect(s.sides[PLAYER].crystal).toBeGreaterThanOrEqual(SCOUT_COST * WING);
+  for (let i = 0; i < WING; i++) await tap(...(Object.values(await button('train', 'scout')) as [number, number]));
+  await until('lancers trained', 30_000, (st) => mine(st, 'scout').length >= WING);
+  // The trained Lancers come out of the Barracks, so the production line works.
   s = await game.state();
-  expect(mine(s, 'scout')).toHaveLength(1);
+  expect(mine(s, 'scout')).toHaveLength(WING);
 
-  // Select the Lancer, then tap the nearest enemy base to attack it.
-  const lancer = mine(s, 'scout')[0];
-  await tapUnit(lancer.id);
+  // Select the wing with a box drawn round the Barracks' launch point, as a player would.
+  const wing = mine(s, 'scout');
+  const box = { x0: Math.min(...wing.map((u) => u.x)) - 24, y0: Math.min(...wing.map((u) => u.y)) - 24, x1: Math.max(...wing.map((u) => u.x)) + 24, y1: Math.max(...wing.map((u) => u.y)) + 24 };
+  await reveal((box.x0 + box.x1) / 2, (box.y0 + box.y1) / 2);
+  const from = await onPage(...(Object.values(await game.toScreen(box.x0, box.y0)) as [number, number]));
+  const to = await onPage(...(Object.values(await game.toScreen(box.x1, box.y1)) as [number, number]));
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(to.x, to.y, { steps: 4 });
+  await page.mouse.up();
+  await play(FRAME_MS, async () => false);
+  expect(await game.selected(), 'the box selects the whole wing').toHaveLength(WING);
+
+  // Take the relay beacon: alone in its ring the wing captures it, then the beacon pays 3 crystal
+  // a second while the wing holds it.
+  s = await game.state();
+  await tapWorld(s.beacon.x, s.beacon.y);
+  await until('relay beacon captured', 30_000, (st) => st.beacon.owner === PLAYER);
+  const bank = (await game.state()).sides[PLAYER].crystal;
+  await until('relay beacon pays', 5_000, (st) => st.beacon.paid >= BEACON_PAY * 2);
+  s = await game.state();
+  expect(s.beacon.held).toBe(true);
+  expect(s.sides[PLAYER].crystal, 'the beacon pays into the bank').toBeGreaterThanOrEqual(bank + BEACON_PAY);
+  await snap('playthrough-3-beacon');
+
+  // The rival nearest the beacon sends a warship to contest it. The wing, holding the ring, fights
+  // it off: the wreck leaves a salvage shard that flies to the nearest Lancer and pays 8 crystal,
+  // and the kill counts toward the second contract.
+  await until('rival picket destroyed', 60_000, (st) => st.kills >= 1);
+  s = await game.state();
+  expect(s.contract.index, 'still on the second contract').toBe(1);
+  expect(s.contract.progress, 'the kill counts toward breaking the raid').toBeGreaterThanOrEqual(1);
+  await until('salvage shard collected', 10_000, (st) => st.salvaged >= SHARD_VALUE && st.shards.length === 0);
+  await snap('playthrough-4-salvage');
+
+  // Then tap the nearest enemy base to attack it.
+  s = await game.state();
+  expect(mine(s, 'scout').length, 'the wing is still flying').toBeGreaterThan(0);
+  const now = mine(s, 'scout')[0];
+  const far = (p: { x: number; y: number }, q: { x: number; y: number }) => Math.hypot(p.x - q.x, p.y - q.y);
   const enemyHub = s.buildings
     .filter((b) => b.faction !== PLAYER)
-    .reduce((best, b) => (Math.hypot(b.x - lancer.x, b.y - lancer.y) < Math.hypot(best.x - lancer.x, best.y - lancer.y) ? b : best));
+    .reduce((best, b) => (far(b, now) < far(best, now) ? b : best));
   const enemyStart = enemyHub.hp;
   await tapWorld(enemyHub.x, enemyHub.y);
   await until('the enemy base takes damage', 120_000, (st) => {
     const b = st.buildings.find((x) => x.id === enemyHub.id);
     return !b || b.hp < enemyStart;
   });
-  await snap('playthrough-3-attack');
+  await snap('playthrough-5-attack');
 
   s = await game.state();
   expect(s.phase, `battle still on; state: ${JSON.stringify(s)}`).toBe('playing');

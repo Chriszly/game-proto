@@ -2,6 +2,7 @@ import { byDifficulty } from '../../../../shared/settings';
 import { ARENA, BUILD_RANGE, NODE_CLEARANCE } from './arena';
 import { COMBAT_UNITS, FACTIONS, type Ability, type Faction, type Role, type UnitId } from './factions';
 import type { MapLayout, Point } from './map';
+import { CONTRACTS, NO_PERKS, type Perks } from './contracts';
 
 /** The faction the player commands. */
 export const PLAYER = 0;
@@ -17,11 +18,29 @@ const AI_THINK_MS = 1000;
 const AI_ATTACK_MS = 12000;
 /** No AI faction attacks before this much game time, so every economy gets going first. */
 const AI_GRACE_MS = 75000;
+/** After this much game time, the rival nearest the relay beacon sends one warship (a picket) to contest it. */
+const AI_PICKET_MS = 30000;
 /** Game time a harvester takes to mine one crystal, in ms. */
 const MINE_MS = 500;
 const UNIT_RADIUS = 10;
 const BEAM_MS = 140;
 const BOOM_MS = 450;
+/** The relay beacon: how close a ship must be to hold it, how long a lone faction takes to capture it, and its pay. */
+export const BEACON_RADIUS = 70;
+export const CAPTURE_MS = 5000;
+export const BEACON_PAY = 3;
+const BEACON_PAY_MS = 1000;
+/** Where the relay beacon goes: the loose crystal node nearest this share of the way from the player's start to the map's centre. */
+const BEACON_TOWARD = 0.5;
+/** How far the relay beacon stays from every rival's start, so it sits in open space. */
+const BEACON_RIVAL_GAP = 300;
+/** Salvage: what a shard is worth, how far a ship pulls it in from, how fast it flies, and how long it lasts. */
+export const SHARD_VALUE = 8;
+export const SHARD_MAGNET = 260;
+const SHARD_SPEED = 220;
+const SHARD_LIFE_MS = 45000;
+/** How long a floating number (+8, +3) shows, in ms. */
+export const POP_MS = 1400;
 
 /** Where a unit is going: a point to move to, or an entity to attack. */
 export type Order = { kind: 'move'; x: number; y: number } | { kind: 'attack'; id: number; auto: boolean };
@@ -52,6 +71,8 @@ export interface Unit {
   revealMs: number;
   /** For a decoy: the time it has left, in ms; null for everything else. */
   decoyMs: number | null;
+  /** The faction whose shot hit it last, or -1: who gets the kill. */
+  lastHit: number;
 }
 
 export interface Building {
@@ -70,6 +91,8 @@ export interface Building {
   cooldown: number;
   /** Time a hack has left before a turret fires again, in ms. */
   disabledMs: number;
+  /** The faction whose shot hit it last, or -1. */
+  lastHit: number;
 }
 
 export interface Node extends Point {
@@ -93,7 +116,50 @@ export interface Side {
   alive: boolean;
   thinkMs: number;
   attackMs: number;
+  /** Rank perks from finished contracts (the player's only). */
+  perks: Perks;
+  /** The warship this rival has sent to contest the relay beacon, or -1. */
+  picket: number;
 }
+
+/**
+ * The relay beacon, on a crystal node in mid-map. A faction alone in its ring fills `capture`
+ * (draining a rival's first); at 1 it owns the beacon, which pays BEACON_PAY crystal a second
+ * while one of its ships is in the ring (`held`).
+ */
+export interface Beacon extends Point {
+  owner: number;
+  /** Who the capture progress belongs to, or -1. */
+  capturer: number;
+  capture: number;
+  held: boolean;
+  payMs: number;
+  /** Crystal the beacon has paid the player so far. */
+  paid: number;
+}
+
+/** A glowing salvage shard left by an enemy ship the player destroyed; the nearest player ship pulls it in. */
+export interface Shard extends Point {
+  id: number;
+  value: number;
+  life: number;
+}
+
+/** A floating number over the map (+8 salvage, +3 relay), for the scene to show. */
+export interface Pop extends Point {
+  text: string;
+  color: number;
+  life: number;
+}
+
+/** The current contract: its index in CONTRACTS (CONTRACTS.length once all are done) and progress. */
+export interface ContractState {
+  index: number;
+  progress: number;
+}
+
+/** Things the scene shows once: a notice on the command bar, or crystal gained (flashed by the count). */
+export type WorldEvent = { kind: 'notice'; text: string } | { kind: 'gain'; amount: number };
 
 export interface Target {
   kind: 'unit' | 'building';
@@ -108,14 +174,15 @@ const AI_ARMY_TO_ATTACK = byDifficulty(9, 6, 4);
 export function unitStats(side: Side, type: UnitId) {
   const d = side.def.units[type];
   const t = side.def.tune;
+  const p = side.perks;
   return {
     name: d.name,
     cost: Math.round(d.cost * t.cost),
-    trainMs: d.trainMs,
-    hp: Math.round(d.hp * t.hp),
-    speed: d.speed * t.speed,
+    trainMs: Math.round(d.trainMs * p.train),
+    hp: Math.round(d.hp * t.hp * p.hp),
+    speed: d.speed * t.speed * p.speed,
     sight: d.sight,
-    weapon: d.weapon && { damage: Math.round(d.weapon.damage * t.damage), range: d.weapon.range, cooldownMs: d.weapon.cooldownMs },
+    weapon: d.weapon && { damage: Math.round(d.weapon.damage * t.damage * p.damage), range: d.weapon.range, cooldownMs: d.weapon.cooldownMs },
   };
 }
 
@@ -128,7 +195,7 @@ export function buildingStats(side: Side, role: Role) {
     cost: Math.round(d.cost * t.cost),
     hp: Math.round(d.hp * t.hp),
     radius: d.radius,
-    weapon: d.weapon && { damage: Math.round(d.weapon.damage * t.damage), range: d.weapon.range, cooldownMs: d.weapon.cooldownMs },
+    weapon: d.weapon && { damage: Math.round(d.weapon.damage * t.damage), range: Math.round(d.weapon.range * side.perks.turretRange), cooldownMs: d.weapon.cooldownMs },
   };
 }
 
@@ -149,6 +216,17 @@ export class World {
   booms: Effect[] = [];
   phase: 'playing' | 'won' | 'lost' = 'playing';
   elapsedMs = 0;
+  readonly beacon: Beacon;
+  shards: Shard[] = [];
+  pops: Pop[] = [];
+  /** The contract chain's place: which contract is current and how far along it is. */
+  contract: ContractState = { index: 0, progress: 0 };
+  /** Crystal the player has collected from salvage shards. */
+  salvaged = 0;
+  /** Enemy ships the player has destroyed. */
+  kills = 0;
+  /** One-off things for the scene to show; it empties the list as it reads them. */
+  events: WorldEvent[] = [];
   private nextId = 1;
 
   /**
@@ -157,14 +235,23 @@ export class World {
    */
   constructor(readonly layout: MapLayout, pick = 0) {
     const order = [pick, ...FACTIONS.map((_, i) => i).filter((i) => i !== pick)];
-    this.sides = order.map((f, index) => ({ index, def: FACTIONS[f], crystal: START_CRYSTAL, alive: true, thinkMs: 0, attackMs: 0 }));
-    this.nodes = layout.nodes.map((n) => ({ id: this.id(), x: n.x, y: n.y, amount: n.amount }));
+    this.sides = order.map((f, index) => ({
+      index, def: FACTIONS[f], crystal: START_CRYSTAL, alive: true, thinkMs: 0, attackMs: 0, perks: { ...NO_PERKS }, picket: -1,
+    }));
+    const nodes = layout.nodes.map((n) => ({ id: this.id(), x: n.x, y: n.y, amount: n.amount }));
+    // One loose crystal node partway to the centre becomes the relay beacon and is no longer mined.
+    const home = layout.homes[0];
+    const toward = { x: home.x + (ARENA.x + ARENA.w / 2 - home.x) * BEACON_TOWARD, y: home.y + (ARENA.y + ARENA.h / 2 - home.y) * BEACON_TOWARD };
+    const loose = nodes.slice(layout.homes.length * 3).filter((n) => layout.homes.every((h, i) => dist(h, n) > (i === 0 ? 200 : BEACON_RIVAL_GAP)));
+    const spot = (loose.length ? loose : nodes).reduce((a, b) => (dist(b, toward) < dist(a, toward) ? b : a));
+    this.nodes = nodes.filter((n) => n !== spot);
+    this.beacon = { x: spot.x, y: spot.y, owner: -1, capturer: -1, capture: 0, held: false, payMs: 0, paid: 0 };
     this.sides.forEach((side, index) => {
       const home = layout.homes[index];
       const hp = buildingStats(side, 'hub').hp;
       this.buildings.push({
         kind: 'building', id: this.id(), faction: index, type: 'hub', x: home.x, y: home.y,
-        hp, maxHp: hp, done: true, buildLeft: 0, queue: [], trainLeft: 0, cooldown: 0, disabledMs: 0,
+        hp, maxHp: hp, done: true, buildLeft: 0, queue: [], trainLeft: 0, cooldown: 0, disabledMs: 0, lastHit: -1,
       });
       this.spawn(index, 'harvester', home.x - 30, home.y + 34);
       this.spawn(index, 'harvester', home.x + 30, home.y + 34);
@@ -207,6 +294,7 @@ export class World {
     }
     if (this.layout.rocks.some((k) => dist(k, { x, y }) < k.r + r + 4)) return 'Blocked by rocks';
     if (this.nodes.some((n) => n.amount > 0 && dist(n, { x, y }) < NODE_CLEARANCE + r)) return 'Too close to crystal';
+    if (dist(this.beacon, { x, y }) < NODE_CLEARANCE + r + 10) return 'Too close to the relay beacon';
     return null;
   }
 
@@ -221,7 +309,7 @@ export class World {
     side.crystal -= stats.cost;
     this.buildings.push({
       kind: 'building', id: this.id(), faction, type: role, x, y, hp: stats.hp, maxHp: stats.hp, done: false,
-      buildLeft: side.def.buildings[role].buildMs, queue: [], trainLeft: 0, cooldown: 0, disabledMs: 0,
+      buildLeft: side.def.buildings[role].buildMs, queue: [], trainLeft: 0, cooldown: 0, disabledMs: 0, lastHit: -1,
     });
     return null;
   }
@@ -306,6 +394,7 @@ export class World {
   update(dt: number) {
     this.beams = this.beams.filter((b) => (b.life -= dt) > 0);
     this.booms = this.booms.filter((b) => (b.life -= dt) > 0);
+    this.pops = this.pops.filter((p) => (p.life -= dt) > 0);
     if (this.phase !== 'playing') return;
     this.elapsedMs += dt;
 
@@ -320,6 +409,9 @@ export class World {
       }
     }
     this.removeDead();
+    this.updateBeacon(dt);
+    this.updateShards(dt);
+    this.updateContract();
     if (!this.sides[PLAYER].alive) this.phase = 'lost';
     else if (this.sides.every((s) => s.index === PLAYER || !s.alive)) this.phase = 'won';
   }
@@ -454,6 +546,7 @@ export class World {
   private shoot(from: Unit | Building, damage: number, target: Unit | Building) {
     const dealt = Math.round(damage * this.shieldShare(target));
     target.hp -= dealt;
+    target.lastHit = from.faction;
     this.beams.push({ x: from.x, y: from.y, x2: target.x, y2: target.y, color: this.sides[from.faction].def.color, life: BEAM_MS });
     if (from.kind === 'unit') {
       const ability = this.abilityOf(from);
@@ -468,6 +561,7 @@ export class World {
       for (const e of [...this.units, ...this.buildings]) {
         if (e === target || e.faction === from.faction || dist(e, target) > ability.radius) continue;
         e.hp -= Math.round(damage * ability.share);
+        e.lastHit = from.faction;
       }
     }
   }
@@ -555,7 +649,7 @@ export class World {
       x: Math.min(ARENA.x + ARENA.w - 12, Math.max(ARENA.x + 12, x)),
       y: Math.min(ARENA.y + ARENA.h - 12, Math.max(ARENA.y + 12, y)),
       angle: -Math.PI / 2, hp: stats.hp, maxHp: stats.hp, cooldown: 0, order: null, mining: null, carry: 0,
-      timer: 0, revealMs: 0, decoyMs,
+      timer: 0, revealMs: 0, decoyMs, lastHit: -1,
     };
     this.units.push(unit);
     return unit;
@@ -575,6 +669,7 @@ export class World {
     for (const type of [...COMBAT_UNITS].sort(() => Math.random() - 0.5)) {
       if (this.train(type, f) === null) break;
     }
+    this.contestBeacon(side);
     side.attackMs += AI_THINK_MS;
     const army = this.units.filter((u) => u.faction === f && u.type !== 'harvester' && u.decoyMs === null);
     if (this.elapsedMs < AI_GRACE_MS || army.length < AI_ARMY_TO_ATTACK || side.attackMs < AI_ATTACK_MS) return;
@@ -582,6 +677,28 @@ export class World {
     const target = this.nearestEnemyBuilding(hub, f);
     if (!target) return;
     for (const u of army) u.order = { kind: 'attack', id: target.id, auto: false };
+  }
+
+  /**
+   * The rival whose hub is nearest the relay beacon keeps one idle warship on it (a picket), once
+   * the opening is over, unless it already owns the beacon. A lost picket is replaced.
+   */
+  private contestBeacon(side: Side) {
+    const f = side.index;
+    const bc = this.beacon;
+    if (this.elapsedMs < AI_PICKET_MS || bc.owner === f) return;
+    const hubs = this.sides
+      .filter((s) => s.index !== PLAYER && s.alive)
+      .map((s) => ({ f: s.index, hub: this.hubOf(s.index) }))
+      .filter((h): h is { f: number; hub: Building } => !!h.hub);
+    const nearest = hubs.reduce<{ f: number; hub: Building } | null>((a, b) => (!a || dist(b.hub, bc) < dist(a.hub, bc) ? b : a), null);
+    if (nearest?.f !== f) return;
+    const current = this.unit(side.picket);
+    if (current && current.faction === f) return;
+    const idle = this.units.find((u) => u.faction === f && u.type !== 'harvester' && u.decoyMs === null && !u.order);
+    if (!idle) return;
+    side.picket = idle.id;
+    idle.order = { kind: 'move', x: bc.x, y: bc.y };
   }
 
   private placeNear(role: Role, faction: number) {
@@ -615,11 +732,21 @@ export class World {
       if (b.hp > 0) continue;
       this.wreck(b);
       if (b.type === 'hub') fallen.add(b.faction);
+      if (b.faction !== PLAYER && b.lastHit === PLAYER) {
+        this.score('razes');
+        if (b.type === 'hub') this.score('hubs');
+      }
     }
     for (const u of this.units) {
       if (u.hp > 0) continue;
       this.salvage(u);
       this.wreck(u);
+      // An enemy ship the player destroys counts as a kill and leaves a salvage shard.
+      if (u.faction !== PLAYER && u.decoyMs === null && u.lastHit === PLAYER) {
+        this.kills += 1;
+        this.score('kills');
+        this.shards.push({ id: this.id(), x: u.x, y: u.y, value: SHARD_VALUE, life: SHARD_LIFE_MS });
+      }
     }
     // The rest of a fallen faction's ships and buildings go up with its hub.
     for (const b of this.buildings) if (fallen.has(b.faction) && b.hp > 0) this.wreck(b);
@@ -641,6 +768,106 @@ export class World {
         this.sides[b.faction].crystal += ability.pay;
       }
     }
+  }
+
+  /** Counts one more toward the current contract when it is of `goal`. */
+  private score(goal: 'kills' | 'razes' | 'hubs') {
+    const c = CONTRACTS[this.contract.index];
+    if (c?.goal === goal) this.contract.progress += 1;
+  }
+
+  /**
+   * The relay beacon: a faction alone in the ring fills its capture (after draining a rival's),
+   * owns the beacon once full, and is paid every second it keeps a ship in the ring.
+   */
+  private updateBeacon(dt: number) {
+    const bc = this.beacon;
+    const present = new Set<number>();
+    for (const u of this.units) {
+      if (u.type !== 'harvester' && u.decoyMs === null && dist(u, bc) <= BEACON_RADIUS) present.add(u.faction);
+    }
+    if (bc.owner >= 0 && !this.sides[bc.owner].alive) {
+      bc.owner = -1;
+      bc.capturer = -1;
+      bc.capture = 0;
+    }
+    if (present.size === 1) {
+      const f = [...present][0];
+      const step = dt / CAPTURE_MS;
+      if (bc.capturer === f || bc.capturer < 0) {
+        bc.capturer = f;
+        bc.capture = Math.min(1, bc.capture + step);
+        if (bc.capture >= 1 && bc.owner !== f) {
+          bc.owner = f;
+          if (f === PLAYER) this.events.push({ kind: 'notice', text: `Relay beacon captured: +${BEACON_PAY} crystal a second while your ships hold it` });
+        }
+      } else {
+        bc.capture = Math.max(0, bc.capture - step);
+        if (bc.capture <= 0) {
+          if (bc.owner === PLAYER) this.events.push({ kind: 'notice', text: 'The relay beacon was lost' });
+          bc.owner = -1;
+          bc.capturer = f;
+        }
+      }
+    }
+    bc.held = bc.owner >= 0 && present.has(bc.owner);
+    if (!bc.held) {
+      bc.payMs = 0;
+      return;
+    }
+    if (bc.owner === PLAYER && CONTRACTS[this.contract.index]?.goal === 'hold') this.contract.progress += dt / 1000;
+    bc.payMs += dt;
+    while (bc.payMs >= BEACON_PAY_MS) {
+      bc.payMs -= BEACON_PAY_MS;
+      this.sides[bc.owner].crystal += BEACON_PAY;
+      if (bc.owner === PLAYER) {
+        bc.paid += BEACON_PAY;
+        this.pops.push({ x: bc.x, y: bc.y - 30, text: `+${BEACON_PAY}`, color: 0xffd36a, life: POP_MS });
+      }
+    }
+  }
+
+  /** Salvage shards drift to the nearest player ship in reach and pay out when it picks them up. */
+  private updateShards(dt: number) {
+    const side = this.sides[PLAYER];
+    this.shards = this.shards.filter((s) => {
+      s.life -= dt;
+      let near: Unit | null = null;
+      for (const u of this.units) {
+        if (u.faction !== PLAYER || u.decoyMs !== null) continue;
+        if (!near || dist(u, s) < dist(near, s)) near = u;
+      }
+      if (near && dist(near, s) <= SHARD_MAGNET) {
+        const d = dist(near, s);
+        if (d <= 8) {
+          side.crystal += s.value;
+          this.salvaged += s.value;
+          this.pops.push({ x: s.x, y: s.y - 12, text: `+${s.value}`, color: 0x8dff9a, life: POP_MS });
+          this.events.push({ kind: 'gain', amount: s.value });
+          return false;
+        }
+        const step = Math.min(d, (SHARD_SPEED * dt) / 1000);
+        s.x += ((near.x - s.x) / d) * step;
+        s.y += ((near.y - s.y) / d) * step;
+      }
+      return s.life > 0;
+    });
+  }
+
+  /** Checks the current contract; when it is met, pays its reward and perk and starts the next one. */
+  private updateContract() {
+    const c = CONTRACTS[this.contract.index];
+    if (!c) return;
+    if (c.goal === 'barracks') {
+      this.contract.progress = this.buildings.some((b) => b.faction === PLAYER && b.type === 'barracks' && b.done) ? 1 : 0;
+    }
+    if (this.contract.progress < c.target) return;
+    const side = this.sides[PLAYER];
+    side.crystal += c.reward;
+    c.apply(side.perks);
+    this.events.push({ kind: 'gain', amount: c.reward });
+    this.events.push({ kind: 'notice', text: `Contract done: +${c.reward} crystal and ${c.perk(side.def)}` });
+    this.contract = { index: this.contract.index + 1, progress: 0 };
   }
 
   private wreck(e: Unit | Building) {

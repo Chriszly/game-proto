@@ -10,6 +10,8 @@ Space Wars is an RTS on a random star map, played with taps, box selection and a
 The battlefield is 1600 by 1000 pixels; the screen shows a 960 by 406 window of it between the top
 and command bars. Five factions each start with a hub and two harvesters at a fixed start point.
 The player picks one of the five factions on a picker before each battle; the other four are AI.
+The art is a 1970s sci-fi paperback cover: low-poly 3D models baked into sprites at boot (see
+`art/` below), an airbrushed backdrop and a chocolate-and-mustard HUD with cream pill buttons.
 
 Implemented today:
 
@@ -36,6 +38,28 @@ Implemented today:
   Carrier spawns a scout every 12 s up to 6 scouts), `splash` (Siege Barge hits enemies within 28 px
   of its target for half damage), `salvage` (Nomad Salvage Yard pays 8 crystal per enemy unit
   destroyed within 200 px).
+- Contract chain (`game/contracts.ts`, progress in `World.updateContract` and `World.score`): five
+  contracts in a row (raise the Barracks; destroy 7 enemy ships; hold the relay beacon 60 s;
+  destroy 3 enemy buildings; destroy a rival hub). Each pays its crystal reward and applies its
+  rank perk to `sides[PLAYER].perks` (train time, turret range, ship speed, ship hit points, ship
+  damage), which `unitStats` and `buildingStats` multiply in, then the next one starts. Progress
+  counts only while a contract is current. Kills and razes count when the player's shot (`lastHit`
+  on every unit and building) landed last. The top bar's pill and the command bar's panel show the
+  current contract, its progress, reward and perk, and the next one.
+- Relay beacon (`World.beacon`, `World.updateBeacon`): the loose crystal node nearest the point
+  halfway from the player's start to the map's centre, at least 300 px from every rival start, is
+  taken out of `nodes` and becomes the beacon. A faction alone in its 70 px ring with warships
+  fills `capture` in 5 s (draining a rival's first) and then owns it; the owner gets 3 crystal a
+  second while one of its warships is in the ring (`held`). `paid` counts what it paid the player.
+  Buildings keep clear of it. The rival whose hub is nearest the beacon sends one idle warship
+  (`Side.picket`) to contest it from 30 s on (`World.contestBeacon`), unless it owns the beacon; a
+  lost picket is replaced.
+- Salvage (`World.shards`, `World.updateShards`): an enemy ship the player destroys (not a decoy)
+  leaves a shard worth 8; the nearest player unit within 260 px pulls it in at 220 px/s and banks
+  it on contact (`salvaged` counts it). Shards fade after 45 s.
+- Floating numbers and one-off notices: `World.pops` (+8 and +3 over the map, aged in `update`) and
+  `World.events` (`notice` for the command bar, `gain` for the flash by the crystal count), which
+  the scene empties each frame.
 - Win: every rival hub gone. Lose: the player's hub gone. A fallen hub takes its faction's
   remaining units and buildings with it. A battle ends with a Victory or Defeat overlay; a tap starts
   a new map.
@@ -55,20 +79,26 @@ Missing or rough:
   collision, no sound and no save.
 - No minimap and no edge scrolling: the map scrolls with the keys only.
 - The rivals' Barracks and Turrets are placed at random within 60 to 150 px of their hub.
-- The playthrough covers only the first round (harvest, raise a Barracks, train a Lancer, attack a
-  base). Purchases beyond that round, the other buildings and the other units are not played.
+- Ships of a type spawn on the same spot and stack (no collision), so a fresh wing looks like one
+  ship until it moves.
+- The AI ignores contracts and salvage; only the beacon picket reacts to the new loop.
+- The playthrough covers only the first round (harvest, raise a Barracks for the first contract,
+  train three Lancers, take the beacon, fight off its picket for salvage, attack a base). Purchases
+  beyond that round, the other buildings and the other units are not played.
 
 ## Architecture
 
 File map (`src/`):
 
-- `main.ts`: creates the `Phaser.Game` (960x540, `Phaser.Scale.FIT`, `pixelArt: true`) with
+- `main.ts`: creates the `Phaser.Game` (960x540, `Phaser.Scale.FIT`, `pixelArt: false`) with
   `GameScene`, calls `setupGame(game)` from `shared/setupGame.ts`, and in dev builds puts `game`
   on `window`.
 - `game/factions.ts`: the `FACTIONS` list (name, colours, `tune` multipliers, and the `units` and
   `buildings` definitions with their outlines and optional `ability`), `COMBAT_UNITS`, and the types
-  `UnitId`, `Role`, `Poly`, `Weapon`, `Ability`, `UnitDef`, `BuildingDef`. Outlines are polygons in local units, y down, with
-  the front at the top (-y).
+  `UnitId`, `Role`, `Poly`, `Weapon`, `Ability`, `UnitDef`, `BuildingDef`. The outlines (`shape`) are
+  no longer drawn; the art comes from `art/models.ts`.
+- `game/contracts.ts`: `CONTRACTS` (goal, target, reward, rank, title, brief and perk text from the
+  faction, and `apply` for the perk), `Perks`, `NO_PERKS`, `Goal`. No Phaser.
 - `game/arena.ts`: `ARENA` (the 1600 by 1000 battlefield in world pixels), `START_POINTS` (the five
   fixed hub spots, player first), `NODE_AMOUNT`, `NODE_CLEARANCE` and `BUILD_RANGE`.
 - `game/map.ts`: `generateMap(count)` returns a `MapLayout` (homes, nodes, rocks, nebulae, stars).
@@ -77,31 +107,64 @@ File map (`src/`):
   `factionLines`, `abilityText`), built from the faction data. No Phaser.
 - `game/world.ts`: `World`, the whole battle. `new World(layout, pick)` puts faction `pick` in the
   player's slot. `PLAYER` (0), `unitStats` and `buildingStats`
-  (faction numbers with multipliers applied). Methods the scene and test use: `update(dt)`,
+  (faction numbers with the faction's multipliers and the side's perks applied), the beacon and
+  salvage constants (`BEACON_RADIUS`, `CAPTURE_MS`, `BEACON_PAY`, `SHARD_VALUE`, `SHARD_MAGNET`,
+  `POP_MS`) and the types `Beacon`, `Shard`, `Pop`, `ContractState`, `WorldEvent`. Methods the scene and test use: `update(dt)`,
   `build`, `train`, `command`, `selectableIn`, `selectable`, `entityAt`, `placementProblem`,
   `count`, `hubOf`, `unit`, `building`. No Phaser import.
 - `scenes/GameScene.ts`: `GameScene` (key `'Game'`). Holds `state` (the `World`), `layout`, `camera`
   (the map camera), `buttons`, `selected`, `placing`, `picking` (the faction picker is up) and
   `pickCards` (the picker's card rectangles, in view pixels). `update(time)` steps the world by the frame
-  gap (clamped to 100 ms), pans the camera from the keys and draws everything. Two cameras: the
-  main `camera` shows the battlefield in the `MAP_VIEW` viewport and ignores the UI objects; a
-  second, fixed camera covers the whole 960 by 540 view and ignores the map objects, so the bars and
-  text never scroll. `toWorld(x, y)` and `toScreen(x, y)` convert between view pixels and
+  gap (clamped to 100 ms), reads `World.events`, pans the camera from the keys and draws everything.
+  Two cameras: the main `camera` shows the battlefield in the `MAP_VIEW` viewport; a second, fixed
+  camera (`fixed`) covers the whole 960 by 540 view. Every object is made through `onMap` (the
+  fixed camera ignores it) or `onUi` (the map camera ignores it), so the bars and text never
+  scroll. Ships, buildings, crystals and shards are Images kept in maps by entity id, made when an
+  entity appears and destroyed when it goes (`drawShips`, `drawBuildings`, `drawShards`); each
+  ship shows the baked frame nearest its heading (`facing`), rotated by the few degrees left over,
+  with an exhaust flame Image behind it while it moves. Beams, fireballs, rings and health pills
+  are Graphics redrawn each frame (`underGfx` under the sprites, `gfx` over them). `toWorld(x, y)` and `toScreen(x, y)` convert between view pixels and
   battlefield pixels from the camera's scroll. Input: `onDown`, `onMove`, `onUp` (box or tap),
   `tapMap`, `press` (buttons). Bars and drag boxes use view pixels; placement and commands use
   battlefield pixels, converted with `toWorld`.
-- `scenes/layout.ts`: `VIEW`, `TOP`, `BAR`, `MAP_VIEW` (the map's window on screen), `BUTTON`,
-  `BUTTONS` (each button's kind, key and top-left corner), `ROLE_LABEL` (the generic name of each
-  building and unit type, shown under the faction's own name), `FONT`.
-- `art/draw.ts`: `drawShape` (neon outline with glow and tint), `drawDome`, `drawHealth`.
+- `scenes/layout.ts`: `VIEW`, `TOP`, `BAR`, `MAP_VIEW` (the map's window on screen), `BUTTON`
+  (116 by 30), `BUTTONS` (each button's kind, key and top-left corner), `ROLE_LABEL` (the generic
+  name of each building and unit type, shown under the faction's own name), `FONT` (a system sans
+  stack, bold italic for headings).
+- `art/mesh.ts`: the modelling kit. `Mesh` (vertex and face lists, each face with a material key),
+  primitives `box`, `tube` (and cones), `ellipsoid` (and domes), `slab` (an extruded outline),
+  `plate`, `crystal`, `band` and `ring` (curved strips), `rock`; transforms `move`, `scale`,
+  `turn`, `mirrorY`, `pair`, `merge`, `xform`; `hashRandom` (never `Math.random`). Models face
+  +x, +z is up, in display pixels.
+- `art/render3d.ts`: `renderMesh` turns a mesh to a heading, tilts it toward the viewer (`TILT`),
+  culls back faces, sorts by depth (painter's order) and fills each face with a top-left to
+  bottom-right gradient. Materials are `paint` (Lambert plus a highlight), `chrome` (reflects a
+  painted sky, horizon and desert), `glass` and `glow` (unlit, blooms with a canvas shadow).
+  Also `sparkle` (the four-pointed glint) and `reach`.
+- `art/models.ts`: `FACTION_ART` (by faction name: materials, the four ship and four building
+  meshes, and the flame colours) and the props (`crystalCluster`, `beaconModel`, `shardModel`,
+  `rockModel`, `PROP_MATS`).
+- `art/textures.ts`: `bakeAll` (once per page) bakes each faction's ships as sheets of `FACINGS`
+  (16) frames (`shipKey(faction, type)`, frame k faces k x 22.5 degrees clockwise from east), its
+  buildings (`buildingKey`), flames (`flameKey`), crystals, the beacon, the shard and two glows,
+  at `RES` (2) canvas pixels per display pixel with a dark ink outline; `bakeBackdrop` paints
+  each map's 1600 by 1000 backdrop (sky, nebulae, ringed planet, moon, stars, rocks). `facing`
+  picks a frame for a heading. Faction keys index `FACTIONS`, not the battle's sides; the scene
+  maps sides with `art(side)`.
+- `art/draw.ts`: `drawHealth`, `drawProgress`, `dashedCircle`, `progressArc`, `stripes`.
+- `art/palette.ts`: `INK` and `INK_CSS`, the HUD's chocolate, tangerine, mustard and cream.
 
 How it runs:
 
 - Each frame `update(time)` computes `dt` from the frame timestamp (clamped to 100 ms), calls
   `World.update(dt)` and redraws everything with `Graphics` from the world's state.
-- `World.update` runs, in order: beams and wrecks age; buildings progress (construction, training,
-  turret fire); units act (harvesters `harvest`, others follow their order or acquire a target);
-  each rival `think`s once a second; dead entities are removed; the phase becomes `won` or `lost`.
+- `World.update` runs, in order: beams, wrecks and pops age; buildings progress (construction,
+  training, turret fire); units act (harvesters `harvest`, others follow their order or acquire a
+  target); each rival `think`s once a second (including `contestBeacon`); dead entities are
+  removed (kills, razes and shards are recorded here); the beacon, shards and contract update; the
+  phase becomes `won` or `lost`.
+- Boot bakes all sprites in `create` (320 ship frames and the rest); a new map only repaints the
+  backdrop.
 - Time is simulated, not read from the clock: `elapsedMs` is game time, used for the AI grace and
   the HUD clock.
 
@@ -114,6 +177,10 @@ Test hooks (read by `e2e/playthrough.spec.ts`):
   `elapsedMs`, `units`, `buildings`, `nodes`, `sides` (crystal, alive), `layout`.
 - `scene.buttons`: the command bar's buttons with their positions, read to click them.
 - `scene.pickCards`: the picker's cards. The test taps the first one to play the Solar Concord.
+- `scene.state.beacon` (`owner`, `capture`, `held`, `paid`), `shards`, `salvaged`, `kills`,
+  `contract` (`index`, `progress`) and `sides[0].perks`: the test asserts the first contract's
+  reward and perk, the beacon's capture and pay, and a kill and its salvage.
+- `scene.selected`: the ids of the selected units; the test checks that its box selected the wing.
 - `scene.camera.scrollX` and `scrollY`: the map's scroll, which the test reads to see whether a pan
   moved. `scene.toScreen(x, y)` gives where a battlefield point is in view pixels.
 - `scene.state.placementProblem(role, x, y)` answers whether a building can go somewhere. The test
@@ -129,7 +196,7 @@ Test hooks (read by `e2e/playthrough.spec.ts`):
   on it (the Barracks cost, the Lancer's cost, the harvest rate), and the README's numbers.
 - **A new faction**: add an entry to `FACTIONS` with all four units and four buildings and a
   `tune`. The map, HUD and AI pick it up by index, so `FACTIONS.length` sets the number of hubs.
-  Keep every outline distinct and use neon colours; no red cross on any art.
+  Give it models in `FACTION_ART` (`art/models.ts`, keyed by its name) in a look of its own with its colour on a stripe or glow; no red cross on any art.
 - **A new building or unit type**: add it to the `Role` or `UnitId` types and to each faction's
   definitions, then the command bar's `BUTTON`s in `scenes/layout.ts` (and its `ROLE_LABEL`) and
   any `World` rules that name it (`train`, `updateBuilding`, `harvest` for drop-offs).
@@ -140,6 +207,16 @@ Test hooks (read by `e2e/playthrough.spec.ts`):
 - **A new command**: add a method on `World` that the scene calls from `tapMap` or `press`. Keep
   the rule in `World` so the AI can use it too.
 - **A new setting**: add it to `shared/settings.ts` and honour it here; `reduceMotion` already
-  skips the wreck rings and steadies the beams in `GameScene.draw`.
+  skips the fireballs, steadies the beams, flames, shard and beacon glows, keeps pops from rising
+  and stops the Solar Concord's pylons bobbing in `GameScene`.
+- **A ship or building's look**: edit its mesh in `art/models.ts` (models face +x, in display
+  pixels before `SHIP_ZOOM` 1.25 or the building zoom 1.35). Keep the faction's colour on a
+  stripe or glow material, keep it distinct at phone size, and never a red cross. Check it with a
+  sheet of the baked textures (`scene.textures.get(shipKey(f, type))`).
+- **A contract**: add or change an entry in `CONTRACTS`. A new `Goal` needs counting in
+  `World` (`score` for events, or a check in `updateContract`). The first contract is part of
+  the first round, so changing it means updating the playthrough.
+- **Beacon or salvage numbers**: the constants at the top of `game/world.ts`; the playthrough
+  waits on the beacon paying 3 a second and a shard worth 8.
 - **Anything the playthrough depends on** (button positions, the first-round numbers, the hub or
   harvester behaviour): change it in the same PR as its test update.
