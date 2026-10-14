@@ -16,6 +16,7 @@ const GAMES = [
   { name: 'Wyrmrail', path: '/games/wyrmrail/' },
   { name: 'Shrine Stack', path: '/games/shrine-stack/' },
   { name: 'Mapmaker', path: '/games/mapmaker/' },
+  { name: 'Lanternkeep', path: '/games/lanternkeep/' },
 ];
 
 // Every page links a favicon that loads.
