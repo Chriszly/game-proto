@@ -22,7 +22,15 @@ interface Row {
   cost: Phaser.GameObjects.Text;
 }
 
-/** The harbor between waves: spend the plunder on the ship, patch the hull, and set sail. */
+const ROW = 0xf6ecd2;
+const ROW_LIT = 0xebd29a;
+const INK = 0x2b2118;
+const style = (size: number, color: string, fontStyle = 'normal') => ({ fontFamily: FONT, fontSize: `${size}px`, color, fontStyle, resolution: 2 });
+
+/**
+ * The harbor between waves, as a ledger on a sheet of parchment: spend the plunder on the ship,
+ * patch the hull, and set sail.
+ */
 export class Harbor {
   /** Where each button is on screen; the playthrough test reads it to tap one. */
   readonly buttons: HarborButton[] = [];
@@ -32,25 +40,26 @@ export class Harbor {
   private rows: Row[] = [];
 
   constructor(scene: Phaser.Scene, onAction: (id: HarborAction) => void) {
-    const dim = scene.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x081420, 0.6).setInteractive();
-    const panel = scene.add.rectangle(HARBOR.x, HARBOR.y, HARBOR.w, HARBOR.h, 0x2c2018).setStrokeStyle(4, 0x8a5a32);
+    const dim = scene.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x3a2a18, 0.45).setInteractive();
+    const panel = scene.add.image(HARBOR.x, HARBOR.y, 'panel-harbor');
     const top = HARBOR.y - HARBOR.h / 2;
-    this.title = scene.add.text(HARBOR.x, top + 26, '', { fontFamily: FONT, fontSize: '26px', color: '#f3c64e' }).setOrigin(0.5);
-    this.gold = scene.add.text(HARBOR.x, top + 60, '', { fontFamily: FONT, fontSize: '16px', color: '#f1e3c6' }).setOrigin(0.5);
-    const parts: Phaser.GameObjects.GameObject[] = [dim, panel, this.title, this.gold];
+    this.title = scene.add.text(HARBOR.x, top + 32, '', style(26, '#2b2118', 'bold')).setOrigin(0.5);
+    this.gold = scene.add.text(HARBOR.x, top + 64, '', style(16, '#6a4410', 'italic')).setOrigin(0.5);
+    const rule = scene.add.rectangle(HARBOR.x, top + 82, HARBOR.rowW, 1, INK, 0.6);
+    const parts: Phaser.GameObjects.GameObject[] = [dim, panel, this.title, this.gold, rule];
 
     const ids: (UpgradeId | 'repair')[] = [...UPGRADE_IDS, 'repair'];
     ids.forEach((id, i) => {
       const y = HARBOR.firstRowY + i * HARBOR.rowGap;
       const left = HARBOR.x - HARBOR.rowW / 2;
-      const bg = scene.add.rectangle(HARBOR.x, y, HARBOR.rowW, HARBOR.rowH, 0x4a3020).setStrokeStyle(2, 0x8a5a32);
+      const bg = scene.add.rectangle(HARBOR.x, y, HARBOR.rowW, HARBOR.rowH, ROW, 0.9).setStrokeStyle(1.5, INK);
       bg.setInteractive({ useHandCursor: true })
-        .on('pointerover', () => bg.setFillStyle(0x6a4428))
-        .on('pointerout', () => bg.setFillStyle(0x4a3020))
+        .on('pointerover', () => bg.setFillStyle(ROW_LIT, 0.95))
+        .on('pointerout', () => bg.setFillStyle(ROW, 0.9))
         .on('pointerdown', () => onAction(id));
-      const name = scene.add.text(left + 12, y - 9, '', { fontFamily: FONT, fontSize: '16px', color: '#f3e9d2' }).setOrigin(0, 0.5);
-      const desc = scene.add.text(left + 12, y + 10, '', { fontFamily: FONT, fontSize: '12px', color: '#c9b48f' }).setOrigin(0, 0.5);
-      const cost = scene.add.text(left + HARBOR.rowW - 12, y, '', { fontFamily: FONT, fontSize: '16px', color: '#f3c64e' }).setOrigin(1, 0.5);
+      const name = scene.add.text(left + 14, y - 9, '', style(16, '#2b2118', 'bold')).setOrigin(0, 0.5);
+      const desc = scene.add.text(left + 14, y + 10, '', style(12, '#5a4a38', 'italic')).setOrigin(0, 0.5);
+      const cost = scene.add.text(left + HARBOR.rowW - 14, y, '', style(17, '#6a4410', 'bold italic')).setOrigin(1, 0.5);
       this.rows.push({ id, bg, name, desc, cost });
       this.buttons.push({ id, x: HARBOR.x, y, w: HARBOR.rowW, h: HARBOR.rowH });
       parts.push(bg, name, desc, cost);
@@ -67,7 +76,7 @@ export class Harbor {
     this.container.setVisible(!!s);
     if (!s) return;
     this.title.setText(`Harbor: wave ${s.wave} beaten`);
-    this.gold.setText(`Gold ${s.gold}    Hull ${Math.ceil(s.player.hp)} / ${s.player.maxHp}`);
+    this.gold.setText(`Gold ${s.gold}   ❦   Hull ${Math.ceil(s.player.hp)} / ${s.player.maxHp}`);
     for (const row of this.rows) {
       if (row.id === 'repair') {
         const needed = s.player.hp < s.player.maxHp;
@@ -80,7 +89,7 @@ export class Harbor {
       const u = UPGRADES[row.id];
       const r = rank(s, row.id);
       const cost = costOf(row.id, r);
-      row.name.setText(`${u.name}  ${r}/${u.maxRank}`);
+      row.name.setText(`${u.name}   ${r}/${u.maxRank}`);
       row.desc.setText(u.desc);
       row.cost.setText(cost === null ? 'Maxed' : `${cost} gold`);
       row.bg.setAlpha(cost !== null && s.gold >= cost ? 1 : 0.5);
