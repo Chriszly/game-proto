@@ -1,11 +1,13 @@
 import { expect, test, type Page } from '@playwright/test';
 
-// Plays the first wave with real inputs: picks the pebble seed, taps soil to plant two seeds,
-// waits for them to grow into golems, checks a tap on the path plants nothing, sends wave 1 in
-// and lets the golems squash every beetle before it reaches the Heartwood.
+// Plays the first wave with real inputs: picks the pebble seed, checks the Thorn golem's card is
+// still locked, taps soil to plant two seeds, waits for them to grow into golems, checks a tap on
+// the path plants nothing, sends wave 1 in, sees the wave button offer to call wave 2 early once
+// every beetle is in, and lets the golems squash every beetle before it reaches the Heartwood,
+// which opens the Heartwood's first bud.
 // Game state is only read, through the `game` object the dev build puts on window.
 
-type GolemKind = 'pebble' | 'moss';
+type GolemKind = 'pebble' | 'moss' | 'thorn';
 interface Golem { id: number; kind: GolemKind; col: number; row: number; level: number; growMs: number }
 interface GameState {
   wave: number;
@@ -17,6 +19,7 @@ interface GameState {
   pests: { kind: string; hp: number }[];
   queue: unknown[];
   kills: number;
+  bloom: number;
 }
 type Rect = { x: number; y: number; w: number; h: number };
 
@@ -28,6 +31,8 @@ const START = { sap: 60, heart: 10 };
 const PEBBLE = { cost: 30, growMs: 3000 };
 /** Wave 1: eight beetles worth 5 sap each, and 15 sap for clearing it. */
 const WAVE_1 = { beetles: 8, bounty: 5, bonus: 15 };
+/** Sap for calling the next wave early, from src/game/data.ts (EARLY_BONUS). */
+const EARLY_BONUS = 15;
 /**
  * Where the two pebble golems go: soil cells inside the path's bends, so each reaches two stretches
  * of it. The path runs along row 1, down column 3, along row 5 and up column 7.
@@ -57,6 +62,7 @@ function scene(page: Page) {
     state: () => read<GameState>((s) => JSON.parse(JSON.stringify(s.state))),
     seedButtons: () => read<(Rect & { kind: GolemKind })[]>((s) => s.seedButtons),
     waveButton: () => read<Rect>((s) => s.waveButton),
+    waveLabel: () => read<string>((s) => s.waveLabel),
   };
 }
 
@@ -145,7 +151,8 @@ test('plays the first wave', async ({ page }, testInfo) => {
 
   // A new garden: wave 1 waiting, the starting sap and a whole Heartwood, nothing planted.
   let s = await game.state();
-  expect(s).toMatchObject({ wave: 1, phase: 'build', heart: START.heart, sap: START.sap, golems: [], pests: [], kills: 0 });
+  expect(s).toMatchObject({ wave: 1, phase: 'build', heart: START.heart, sap: START.sap, golems: [], pests: [], kills: 0, bloom: 0 });
+  expect(await game.waveLabel()).toBe('Start wave 1');
   await snap('0-start');
 
   // Pick the pebble seed (picked already in a new garden, so tap the moss seed first and back).
@@ -154,6 +161,9 @@ test('plays the first wave', async ({ page }, testInfo) => {
   await tap(await onPage(button('moss').x, button('moss').y));
   expect((await game.state()).selected).toBe('moss');
   await tap(await onPage(button('pebble').x, button('pebble').y));
+  expect((await game.state()).selected).toBe('pebble');
+  // The Thorn golem's seed stays locked until the Heartwood has bloomed: tapping its card picks nothing.
+  await tap(await onPage(button('thorn').x, button('thorn').y));
   expect((await game.state()).selected).toBe('pebble');
 
   // Seeds only go on soil: a tap on the path plants nothing.
@@ -184,6 +194,9 @@ test('plays the first wave', async ({ page }, testInfo) => {
   expect((await game.state()).phase).toBe('wave');
   await waitFor('beetles in the garden', 5_000, (s) => s.pests.length >= 3);
   await snap('2-wave');
+  // Once all of wave 1 has come in, the wave button offers to call wave 2 early (not taken here).
+  await waitFor('all of wave 1 in', 15_000, (s) => s.queue.length === 0 && s.pests.length > 0);
+  expect(await game.waveLabel()).toBe(`Call wave 2 now, +${EARLY_BONUS} early`);
   await waitFor('wave 1 cleared', 60_000, (s) => s.phase === 'build' && s.wave === 2);
 
   // No beetle reached the Heartwood; each one dropped its sap, and clearing the wave adds a bonus.
@@ -195,7 +208,9 @@ test('plays the first wave', async ({ page }, testInfo) => {
     kills: WAVE_1.beetles,
     sap: START.sap - 2 * PEBBLE.cost + WAVE_1.beetles * WAVE_1.bounty + WAVE_1.bonus,
     pests: [],
+    bloom: 1,
   });
+  expect(await game.waveLabel()).toBe('Start wave 2');
   await snap('3-cleared');
 
   const speed = gameMs / (Date.now() - startedAt);

@@ -1,7 +1,7 @@
 // The golems you can grow, the pests that come for the Heartwood, and the waves they come in.
 import { byDifficulty } from '../../../../shared/settings';
 
-export const GOLEMS = ['pebble', 'moss'] as const;
+export const GOLEMS = ['pebble', 'moss', 'thorn'] as const;
 export type GolemKind = (typeof GOLEMS)[number];
 
 export interface GolemInfo {
@@ -18,6 +18,10 @@ export interface GolemInfo {
   cooldownMs: number;
   /** For a slowing golem: how much it slows a pest it hits (0.5 halves its speed) and for how long. */
   slow?: { factor: number; ms: number };
+  /** Hits every pest within reach at once, instead of the one furthest along. */
+  area?: boolean;
+  /** Can only be planted once the Heartwood is in full bloom (`BLOOM_GOAL` buds open). */
+  locked?: boolean;
   blurb: string;
 }
 
@@ -33,7 +37,23 @@ export const GOLEM_INFO: Record<GolemKind, GolemInfo> = {
     slow: { factor: 0.5, ms: 1500 },
     blurb: 'Slows pests',
   },
+  thorn: {
+    name: 'Thorn golem',
+    cost: 60,
+    growMs: 4000,
+    damage: 5,
+    range: 80,
+    cooldownMs: 600,
+    area: true,
+    locked: true,
+    blurb: 'Pricks all near',
+  },
 };
+
+/** Buds the Heartwood opens, one per cleared wave, before the Thorn golem's seed unlocks. */
+export const BLOOM_GOAL = 5;
+/** Extra sap for calling the next wave while the current one is still on the path. */
+export const EARLY_BONUS = 15;
 
 /** The highest level a golem reaches. */
 export const MAX_LEVEL = 3;
@@ -87,6 +107,13 @@ export function waveFor(n: number): { spawns: Spawn[]; hpScale: number } {
   for (let i = 0; i < 2 * (n - 2); i++) spawns.push({ kind: 'crow', atMs: 4000 + i * 1500 });
   spawns.sort((a, b) => a.atMs - b.atMs);
   return { spawns, hpScale: (1 + 0.12 * (n - 1)) * PEST_HP_SCALE };
+}
+
+/** How many of each pest wave `n` brings, counted from `waveFor`; shown in the wave preview. */
+export function waveCounts(n: number): Record<PestKind, number> {
+  const counts = { beetle: 0, slug: 0, crow: 0 };
+  for (const spawn of waveFor(n).spawns) counts[spawn.kind]++;
+  return counts;
 }
 
 /** Sap for clearing wave `n`. */
