@@ -49,12 +49,12 @@ pauses the battle on a pick of three upgrades, taking one at random after 10 sec
   - `upgrades.ts`: the `UPGRADES` table, `UpgradeId`, `Icon` and `UPGRADE_IDS`.
   - `waves.ts`: `waveFoes`, `foeHp` (scaled by difficulty), `hpScale`, `bossBars`,
     `spawnInterval`, break lengths.
-  - `save.ts`: `loadProgress`, `saveProgress`, `clearProgress`.
+  - `save.ts`: `loadProgress`, `saveProgress`, `clearProgress`, `loadSpeed`, `saveSpeed`.
 - `src/scenes/BootScene.ts`: bakes every texture, then starts `Game`.
-- `src/scenes/GameScene.ts`: owns the `GameState`, ticks it each frame, draws it, saves progress
-  and handles restart.
+- `src/scenes/GameScene.ts`: owns the `GameState`, ticks it each frame, draws it, saves progress,
+  handles restart and draws the 1x/2x speed switch (`speed`, at `SPEED` in the bottom bar).
 - `src/scenes/layout.ts`: screen positions (`HERO_FEET`, `BARRICADE`, `XP_BAR`, `BOSS_BAR`,
-  `CARDS`, `COUNTDOWN`, `UPGRADE_LIST`, `BUTTON`), `HUD_HEIGHT`, `UI_DEPTH`, `FONT`.
+  `CARDS`, `COUNTDOWN`, `UPGRADE_LIST`, `SPEED`, `BUTTON`), `HUD_HEIGHT`, `UI_DEPTH`, `FONT`.
 - `src/ui/LevelUp.ts`: the level-up overlay, its cards and the auto-pick countdown (seconds left
   over an emptying bar, at `COUNTDOWN`). It records each card's spot in `cards`.
 - `src/ui/UpgradeList.ts`: the "Upgrades (N)" button in the top bar and the panel it opens, a grid
@@ -76,12 +76,13 @@ pauses the battle on a pick of three upgrades, taking one at random after 10 sec
   `foe-<kind>-<frame>`, `arrow`, `arrow-fire`, `arrow-frost`, `fireball` and `icon-<icon>`. There
   are no asset files.
 - **Tick:** `GameScene.update(time)` takes `dt` from the frame timestamp (not Phaser's smoothed
-  delta), clamped to `MAX_STEP_MS` (250). It calls `tick(state, dt)`, which runs `step` in
-  substeps of at most `SUBSTEP_MS` (16) and stops while `choices` is set or the run is over. Only
-  effects keep ageing then. While `choices` is set, `tick` counts `pickMs` down instead, and when
-  it reaches 0 it calls `pick` with one of `choices` chosen by `Math.random`; any time left in the
-  frame then goes on to the battle (or the next level-up's countdown). The scene keeps its own
-  `clock`, used only for animation phases and blinking, and it stops during a pick and after a
+  delta), clamped to `MAX_STEP_MS` (250), then multiplies it by `speed` (1 or 2) unless a level-up
+  is up, so the auto-pick countdown stays in real seconds. It calls `tick(state, dt)`, which runs
+  `step` in substeps of at most `SUBSTEP_MS` (16) and stops while `choices` is set or the run is
+  over. Only effects keep ageing then. While `choices` is set, `tick` counts `pickMs` down instead,
+  and when it reaches 0 it calls `pick` with one of `choices` chosen by `Math.random`; any time left
+  in the frame then goes on to the battle (or the next level-up's countdown). The scene keeps its
+  own `clock`, used only for animation phases and blinking, and it stops during a pick and after a
   fall.
 - **Order inside `step`:** age effects, then the break countdown or spawning, then `shoot`,
   `moveMissiles`, `moveEnemies`, and finally the wave-clear check. Arrows home, turning fully
@@ -121,7 +122,9 @@ pauses the battle on a pick of three upgrades, taking one at random after 10 sec
 
 ### Persistence
 
-One `localStorage` key, `palisade-progress`, holds JSON of `Progress`. `loadProgress` merges it
+Two `localStorage` keys. `palisade-speed` holds the battle speed (`'1'` or `'2'`, through
+`loadSpeed`/`saveSpeed`), kept apart so "New hero" leaves it alone. `palisade-progress` holds JSON
+of `Progress`. `loadProgress` merges it
 over `freshProgress()` and falls back to fresh on any error. "New hero" calls `clearProgress`.
 The run itself (wave, foes, barricade) is never saved, so a reload starts at wave 1.
 
@@ -171,7 +174,8 @@ Missile speeds, `LEAP_RANGE`, `BARRICADE_REPAIR` and effect durations (`EFFECT_M
   w, h). It never writes to the game.
 - **Inputs:** the test only advances the clock and clicks the centre of a card, scaled from the
   960-wide view to the canvas box. It never opens the upgrade list (not part of the first
-  round's loop); `.upgradeList.open` is there to read if a test ever does. Keep the "Upgrades"
+  round's loop); `.upgradeList.open` is there to read if a test ever does. Nor does it touch
+  the speed switch: with no `palisade-speed` saved the game plays at 1x. Keep the "Upgrades"
   button clear of the cards, since it sits above the level-up overlay.
 - **What it checks:**
   - A fresh hero: level 1, no ranks, wave 1, phase `'break'`, a full barricade.
