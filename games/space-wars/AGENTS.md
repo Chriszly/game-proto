@@ -210,7 +210,10 @@ Test hooks (read by `e2e/playthrough.spec.ts`):
   skips the fireballs, steadies the beams, flames, shard and beacon glows, keeps pops from rising
   and stops the Solar Concord's pylons bobbing in `GameScene`.
 - **A ship or building's look**: edit its mesh in `art/models.ts` (models face +x, in display
-  pixels before `SHIP_ZOOM` 1.25 or the building zoom 1.35). Keep the faction's colour on a
+  pixels before `SHIP_ZOOM` 1.25 or the building zoom 1.35; Iron Dominion's ships also go through
+  its `big` scale of 1.12,
+  and its heavy a scale of 1.6; `bakeAll` then scales every faction's heavy to the battleship's
+  reach, so all heavies are the same size and the biggest ships in the game). Give each class of a faction its own silhouette, not one ship at four sizes. Keep the faction's colour on a
   stripe or glow material, keep it distinct at phone size, and never a red cross. Check it with a
   sheet of the baked textures (`scene.textures.get(shipKey(f, type))`).
 - **A contract**: add or change an entry in `CONTRACTS`. A new `Goal` needs counting in
