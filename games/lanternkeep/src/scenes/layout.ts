@@ -13,8 +13,13 @@ export const SHOP = { xs: [345, 615], ys: [270, 350], w: 250, h: 66 };
 /** The panel's "Next dusk" button, and the game-over "New keep" button. */
 export const NEXT_BUTTON = { x: 480, y: 432 };
 export const BUTTON = { w: 200, h: 40 };
+/** The herald's order card, pinned under the HUD on the left. */
+export const ORDER = { x: 12, y: 50, w: 256, h: 58 };
+/** The gust warning plaque, beside the lantern the gust is coming for. */
+export const GUST_TAG = { w: 132, h: 40 };
 /** The tap area around each lantern. */
 export const LANTERN_HIT = { w: 64, h: 72 };
 
 export const UI_DEPTH = 10_000;
-export const FONT = 'monospace';
+/** A system serif stack (no web fonts): the lettering of a carved puppet-theatre plaque. */
+export const FONT = 'Georgia, "DejaVu Serif", "Times New Roman", serif';

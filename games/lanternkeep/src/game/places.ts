@@ -23,5 +23,5 @@ export const LANTERN_SPOTS: readonly { x: number; y: number }[] = [
 
 /** Where idle moth `i` of `n` rests on the jar's rim. */
 export function mothRest(i: number, n: number) {
-  return { x: JAR.x + (i - (n - 1) / 2) * 20, y: JAR.y - 30 };
+  return { x: JAR.x + (i - (n - 1) / 2) * 30, y: JAR.y - 30 };
 }
