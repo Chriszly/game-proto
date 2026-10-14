@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { settings } from '../../../../shared/settings';
 import { HERO_RIFLE_X, UPGRADE_COLORS } from '../art/sprites';
 import { Pool } from '../game/pool';
 import {
@@ -58,6 +59,8 @@ interface Bullet {
   alive: boolean;
   x: number;
   y: number;
+  /** Where it was last frame: hits are tested along the whole stretch it moved. */
+  prevY: number;
   /** Targets it can still hit, and the ids of those it already went through. */
   hitsLeft: number;
   hit: number[];
@@ -146,7 +149,7 @@ export class GameScene extends Phaser.Scene {
       (p) => [p.sprite, p.label, p.hpText].forEach((o) => o.setVisible(false)),
     );
     this.bullets = new Pool<Bullet>(
-      () => ({ alive: false, x: 0, y: 0, hitsLeft: 0, hit: [], sprite: this.add.image(0, 0, 'bullet').setDepth(DEPTH.bullets) }),
+      () => ({ alive: false, x: 0, y: 0, prevY: 0, hitsLeft: 0, hit: [], sprite: this.add.image(0, 0, 'bullet').setDepth(DEPTH.bullets) }),
       (b) => b.sprite.setVisible(false),
     );
     this.splats = new Pool<Splat>(
@@ -305,7 +308,7 @@ export class GameScene extends Phaser.Scene {
       for (let i = 0; i <= this.squad.length; i++) {
         const b = this.bullets.take();
         b.x = this.player.x + SQUAD_SLOTS[i].dx;
-        b.y = HERO.y + SQUAD_SLOTS[i].dy - 30;
+        b.y = b.prevY = HERO.y + SQUAD_SLOTS[i].dy - 30;
         b.hitsLeft = 1 + pierce;
         b.hit.length = 0;
         b.sprite.setPosition(b.x, b.y).setVisible(true);
@@ -316,6 +319,7 @@ export class GameScene extends Phaser.Scene {
   private moveBullets(dt: number) {
     for (const b of this.bullets.all) {
       if (!b.alive) continue;
+      b.prevY = b.y;
       b.y -= (BULLET.speed * dt) / 1000;
       if (b.y < HUD_HEIGHT - 10) this.bullets.release(b);
       else b.sprite.y = b.y;
@@ -334,8 +338,8 @@ export class GameScene extends Phaser.Scene {
       const aside = e.kind === 'boss' ? 0 : ((e.id * 53) % 81) - 40;
       const dx = this.player.x + aside - e.x, maxStep = (steer * dt) / 1000;
       e.x += Phaser.Math.Clamp(dx, -maxStep, maxStep);
-      // A little shamble from side to side, the same for every frame rate.
-      const sway = Math.sin((e.y + e.id * 37) / 9) * 1.5;
+      // A little shamble from side to side, the same for every frame rate (none when motion is reduced).
+      const sway = settings.reduceMotion ? 0 : Math.sin((e.y + e.id * 37) / 9) * 1.5;
       e.sprite.setPosition(e.x + sway, e.y).setDepth(DEPTH.enemies + e.y / VIEW.h);
       if (e.y + ENEMIES[e.kind].radius >= REACH_Y) return this.gameOver();
     }
@@ -360,10 +364,16 @@ export class GameScene extends Phaser.Scene {
     const damage = this.state.stats.damage;
     for (const b of this.bullets.all) {
       if (!b.alive) continue;
-      for (const e of this.enemies.all) {
-        if (!e.alive || b.hit.includes(e.id)) continue;
+      // Swept along the stretch from prevY up to y, so a long frame can't carry a bullet through a
+      // target; the nearest ones (largest y) are hit first.
+      const hits = this.enemies.all.filter((e) => {
+        if (!e.alive || b.hit.includes(e.id)) return false;
         const r = ENEMIES[e.kind].radius + BULLET.radius;
-        if ((b.x - e.x) ** 2 + (b.y - e.y) ** 2 > r * r) continue;
+        const nearY = Phaser.Math.Clamp(e.y, b.y, b.prevY);
+        return (b.x - e.x) ** 2 + (nearY - e.y) ** 2 <= r * r;
+      });
+      hits.sort((a, c) => c.y - a.y);
+      for (const e of hits) {
         b.hit.push(e.id);
         e.hp -= damage;
         if (e.hp <= 0) this.kill(e);
@@ -376,7 +386,7 @@ export class GameScene extends Phaser.Scene {
       for (const p of this.pickups.all) {
         if (!p.alive || b.hit.includes(p.id)) continue;
         const reach = PICKUP.halfSize + BULLET.radius;
-        if (Math.abs(b.x - p.x) > reach || Math.abs(b.y - p.y) > reach) continue;
+        if (Math.abs(b.x - p.x) > reach || b.y > p.y + reach || b.prevY < p.y - reach) continue;
         b.hit.push(p.id);
         p.hp -= damage;
         if (p.hp <= 0) this.collect(p);
@@ -395,12 +405,14 @@ export class GameScene extends Phaser.Scene {
   }
 
   private collect(p: Pickup) {
-    this.state.stats = applyUpgrade(this.state.stats, p.upgrade);
-    this.state.collected[p.upgrade]++;
-    if (p.upgrade === 'companion') this.addCompanions();
-    const color = `#${UPGRADE_COLORS[p.upgrade].toString(16).padStart(6, '0')}`;
+    // A companion crate that was already falling when the squad filled up brings damage instead.
+    const upgrade = p.upgrade === 'companion' && this.state.stats.companions >= MAX_COMPANIONS ? 'damage' : p.upgrade;
+    this.state.stats = applyUpgrade(this.state.stats, upgrade);
+    this.state.collected[upgrade]++;
+    if (upgrade === 'companion') this.addCompanions();
+    const color = `#${UPGRADE_COLORS[upgrade].toString(16).padStart(6, '0')}`;
     const pop = this.add
-      .text(this.player.x, HERO.y - 50, UPGRADES[p.upgrade].label, { ...TEXT, fontSize: '18px', fontStyle: 'bold', color, stroke: '#15110e', strokeThickness: 5 })
+      .text(this.player.x, HERO.y - 50, UPGRADES[upgrade].label, { ...TEXT, fontSize: '18px', fontStyle: 'bold', color, stroke: '#15110e', strokeThickness: 5 })
       .setOrigin(0.5)
       .setDepth(DEPTH.hud);
     this.tweens.add({ targets: pop, y: pop.y - 60, alpha: 0, duration: 1200, onComplete: () => pop.destroy() });

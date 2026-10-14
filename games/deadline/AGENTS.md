@@ -22,9 +22,6 @@ towards the soldier; upgrade crates drift down among them and are shot open for 
   - `GameScene.overlay` collects the game over objects but nothing ever reads it; restart relies on
     the scene shutdown to destroy them.
   - The comment on `liveEnemies` says "for the HUD", but only the test calls it.
-  - Bullet hits are point-in-circle checks at each frame's position, not swept. A bullet moves
-    `BULLET.speed * dt` (46px in a 64ms frame), more than a runner's hit diameter, so it can pass
-    through small targets on long frames.
   - The boss has no special behaviour beyond stats; it just walks straight down the middle.
 
 ## Architecture
@@ -44,7 +41,8 @@ towards the soldier; upgrade crates drift down among them and are shot open for 
 - `src/art/sprites.ts`: character-grid sprites and palettes, `bake` (adds an outline), `bakeGround`,
   `bakeSprites`, plus exports `HERO_RIFLE_X` and `UPGRADE_COLORS` used by the scene.
 - `shared/setupGame.ts` and `shared/settings.ts` (outside the game folder, shared by every game):
-  the hub's settings, applied in `src/main.ts` and read for difficulty in `src/game/rules.ts`.
+  the hub's settings, applied in `src/main.ts`, read for difficulty in `src/game/rules.ts` and for
+  reduced motion in `src/scenes/GameScene.ts`.
 
 ### How it runs
 
@@ -67,7 +65,8 @@ towards the soldier; upgrade crates drift down among them and are shot open for 
   sends one bullet from each slot (from its own row's y). Depth grows with the row, so back rows draw
   on top. `heroRange()` narrows the hero's x range so every squad rifle stays in
   `HERO.minX..HERO.maxX`. Once the squad is full (`MAX_COMPANIONS` = 8), `spawn` turns a companion
-  crate into a damage crate; `applyUpgrade` also caps the count.
+  crate into a damage crate, and `collect` does the same for a companion crate that was already
+  falling when the squad filled; `applyUpgrade` also caps the count.
 - **Input:** `createInput` sets `pointerTarget` (clamped to `heroRange()`) on
   `pointerdown`, and on `pointermove` while held. `moveHero` walks towards it at `HERO.speed` and
   clears it on arrival; it re-clamps `pointerTarget` to `heroRange()` first, since a new companion
@@ -86,8 +85,9 @@ towards the soldier; upgrade crates drift down among them and are shot open for 
 - Difficulty scales one number: enemy toughness in `planWave` in `src/game/rules.ts`, multiplied
   by `byDifficulty(0.75, 1, 1.3)` (easy, normal, hard). It applies to every enemy's hp, the boss
   included, but not to crate hp.
-- `settings.reduceMotion` needs nothing more here: there is no shake, flash or blinking effect;
-  the only tweens fade the wave banner and the upgrade pop-up text.
+- `settings.reduceMotion` also stops the zombies' side-to-side sway in `GameScene.moveEnemies`
+  (they still walk and steer). There is no shake, flash or blinking effect; the only tweens fade
+  the wave banner and the upgrade pop-up text.
 - Normal (multiplier 1) must stay exactly as designed, since the playthrough runs on Normal.
 - Keep the Deadline row of the difficulty table in the root `README.md` (and the sentence in this
   game's `README.md`) in sync: zombies have 25% less health on Easy and 30% more on Hard.
@@ -180,6 +180,9 @@ towards the soldier; upgrade crates drift down among them and are shot open for 
 - `REACH_Y` drives both the game over line and the sandbag row, and crates are lost past it.
 - Crates do not block wave clear: a wave can end with a crate still falling, and it keeps falling
   into the break.
-- Crate hit boxes are squares (`PICKUP.halfSize`), enemy hit boxes are circles (`radius`).
+- Crate hit boxes are squares (`PICKUP.halfSize`), enemy hit boxes are circles (`radius`). Hits are
+  swept: `hitTargets` tests each bullet's whole move this frame, from `prevY` up to `y`, so a long
+  frame can't carry it through a target, and a piercing bullet hits the nearest enemies first.
 - Pools never shrink; `Pool.live()` allocates a new array each call, so avoid it in hot loops.
 - The repo forbids red crosses: the favicon's aiming mark is a green crosshair. Keep it non-red.
+  The favicon is the hub bear (ears, head, dot eyes, muzzle) with a helmet set between its ears.
