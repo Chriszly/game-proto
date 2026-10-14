@@ -109,7 +109,7 @@ function flames(frame: number) {
 function board() {
   const size = a(BOARD.cell * 4);
   glass(rect(a(BOARD.x) - 16, a(BOARD.y) - 16, size + 32, size + 32), '#000000', { empty: true, lw: 10 });
-  const tiles = ['#2a4a8e', '#33548f', '#274a86', '#3a5a9a'];
+  const tiles = ['#1e5a46', '#24684f', '#1a4e3e', '#28705a'];
   reseed(20);
   const half = a(BOARD.cell) / 2 - 4;
   for (let i = 0; i < SLOTS; i++) {
@@ -138,11 +138,11 @@ function board() {
 /** A leaded steel anvil: horn, face, waist, foot. */
 function anvil(cx: number, cy: number) {
   const top = -16;
-  glass([[cx - 94, cy + top + 4], [cx - 64, cy + top - 8], [cx - 64, cy + top + 16]], '#7c88a8', { lw: 4 });
-  glass([[cx - 64, cy + top - 8], [cx + 78, cy + top - 8], [cx + 80, cy + top + 6], [cx - 64, cy + top + 6]], '#b4bed6', { lw: 4 });
-  glass([[cx - 64, cy + top + 6], [cx + 80, cy + top + 6], [cx + 62, cy + 20], [cx - 48, cy + 20]], '#6a7696', { lw: 4 });
-  glass([[cx - 30, cy + 20], [cx + 30, cy + 20], [cx + 42, cy + 48], [cx - 42, cy + 48]], '#56607e', { lw: 4 });
-  glass([[cx - 62, cy + 48], [cx + 62, cy + 48], [cx + 70, cy + 70], [cx - 70, cy + 70]], '#454e6a', { lw: 4 });
+  glass([[cx - 94, cy + top + 4], [cx - 64, cy + top - 8], [cx - 64, cy + top + 16]], '#9a6a3a', { lw: 4 });
+  glass([[cx - 64, cy + top - 8], [cx + 78, cy + top - 8], [cx + 80, cy + top + 6], [cx - 64, cy + top + 6]], '#e0b070', { lw: 4 });
+  glass([[cx - 64, cy + top + 6], [cx + 80, cy + top + 6], [cx + 62, cy + 20], [cx - 48, cy + 20]], '#8a5a2a', { lw: 4 });
+  glass([[cx - 30, cy + 20], [cx + 30, cy + 20], [cx + 42, cy + 48], [cx - 42, cy + 48]], '#6a4420', { lw: 4 });
+  glass([[cx - 62, cy + 48], [cx + 62, cy + 48], [cx + 70, cy + 70], [cx - 70, cy + 70]], '#4a2e14', { lw: 4 });
 }
 
 /** The counter: a window frame per desk with an empty lancet, which an adventurer's figure fills. */
