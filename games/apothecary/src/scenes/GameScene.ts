@@ -2,9 +2,12 @@ import Phaser from 'phaser';
 import { settings as hubSettings } from '../../../../shared/settings';
 import { drawBelts, laneOffset, pointAlong } from '../art/belts';
 import { plantTexture } from '../art/garden';
+import { EXPANSION_IMAGE, GARDEN_MARGIN, gardenTexture, sceneryLayout } from '../art/ground';
 import { itemTexture } from '../art/items';
+import { INK, SERIF, TEXT_HALO, fit, resOf } from '../art/paint';
 import { craftsmanTexture, customerTexture } from '../art/townsfolk';
-import { signTexture } from '../art/ui';
+import { BUBBLE_TAIL, cardInset, cardTexture, signTexture, type CardKind } from '../art/ui';
+import { catchUp, type AwaySummary } from '../game/away';
 import { GROW_MS, PLANTS, POTIONS, REFINE, REFINED, isPlant, isPotion, isRefined, type ItemId } from '../game/items';
 import {
   collectTill,
@@ -64,6 +67,9 @@ import {
   type Upgrade,
   type UpgradeId,
   walkSpeed,
+  DAY_MS,
+  tipLeft,
+  tipNow,
 } from '../game/state';
 import { BackStack } from '../ui/BackStack';
 import { IconRow } from '../ui/IconRow';
@@ -83,7 +89,6 @@ import {
   COUNTER_MARKERS,
   CRAFTSMEN,
   EXPANSION_LAND,
-  EXPANSION_YARDS,
   GARDEN_AREAS,
   GUILD,
   HUD_HEIGHT,
@@ -95,16 +100,12 @@ import {
   REFINER2,
   REFINER2_MARKERS,
   REFINER_MARKERS,
-  SHOP,
   SHOP_SIGN,
-  STREET_PATH,
   SHOP_DOOR,
   SHOP_BLOCKS,
   SHOP_DOORWAY,
-  SHOP_WALLS,
   STREET,
   WORLD,
-  YARDS,
   customerPosition,
   plotPosition,
   type StationMarkers,
@@ -120,7 +121,6 @@ const SPEED = 160;
  * carry the feet through a station.
  */
 const MAX_WALK_STEP_PX = 20;
-const PLAYER_SCALE = 2;
 /** Longest simulated step, so a backgrounded tab doesn't jump the world forward. */
 const MAX_STEP_MS = 250;
 const UI_DEPTH = 10_000;
@@ -147,13 +147,24 @@ const STILL_MS = 400;
  * long one doesn't run into its neighbour's.
  */
 const CAPTION = {
-  fontFamily: 'monospace',
-  fontSize: '11px',
-  stroke: '#1b1410',
+  fontFamily: SERIF,
+  fontSize: '12px',
+  fontStyle: 'bold',
+  stroke: TEXT_HALO,
   strokeThickness: 3,
   align: 'center',
   wordWrap: { width: 92 },
 };
+/** Caption colours: ink for the doctor's markers, violet for the ones that take coins. */
+const CAPTION_INK = INK;
+const CAPTION_PAY = '#5a2c80';
+/** The top bar's text: ink on parchment. */
+const HUD_TEXT = { fontFamily: SERIF, fontSize: '17px', fontStyle: 'bold', color: INK };
+/** Where the contract card and the away chip sit on screen, below the top bar. */
+const CONTRACT_CARD = { x: 313, y: 50, w: 300, h: 44 };
+const AWAY_CHIP = { x: 650, y: 51, w: 290, h: 30 };
+/** The order bubble over a waiting customer: its height, how far above the customer's middle its middle is, the spacing of its icons, and its tip ring's radius. */
+const BUBBLE = { h: 30, above: 58, icon: 15, ring: 6 };
 
 /** Closest and farthest the view zooms: out until the whole yard is tall enough to fit, in to double size. */
 const MIN_ZOOM = 0.62;
@@ -224,6 +235,8 @@ export class GameScene extends Phaser.Scene {
   private uiCamera!: Phaser.Cameras.Scene2D.Camera;
   /** The finger spread and zoom when a two-finger pinch began, or null while there is no pinch. */
   private pinch: { spread: number; zoom: number } | null = null;
+  /** What the craftsmen and belts earned while the player was away, shown on a chip until tapped. */
+  away: AwaySummary | null = null;
 
   constructor() {
     super('Game');
@@ -231,6 +244,8 @@ export class GameScene extends Phaser.Scene {
 
   create() {
     this.state = loadState();
+    // Play through the time away, before anything is drawn from the state.
+    this.away = catchUp(this.state, Date.now());
     this.startingOver = false;
     this.plotCentres = [];
     this.markers = [];
@@ -259,6 +274,8 @@ export class GameScene extends Phaser.Scene {
     this.followPlayer();
     this.createShopfront();
     this.createHud();
+    this.createContract();
+    this.createAwayChip();
     this.createUiCamera();
     this.createControls();
     this.createZoom();
@@ -341,28 +358,34 @@ export class GameScene extends Phaser.Scene {
     writeZoom(clamped);
   }
 
-  private ground(x: number, y: number, w: number, h: number, texture: string, depth = -1000) {
-    return this.add.tileSprite(x, y, w, h, texture).setOrigin(0).setDepth(depth);
+  /** A painted piece of ground laid flat, its top-left corner at (x, y). */
+  private ground(x: number, y: number, texture: string, depth = -1000) {
+    return fit(this.add.image(x, y, texture).setOrigin(0).setDepth(depth));
   }
 
   /** A garden: meadow inside a picket fence, with its name on a sign. */
   private drawGarden(garden: number) {
     const area = GARDEN_AREAS[garden];
-    this.ground(area.x, area.y, area.w, area.h, 'tile-meadow');
-    this.ground(area.x - 12, area.y, 32, area.h, 'fence-v', -990);
-    this.ground(area.x + area.w - 20, area.y, 32, area.h, 'fence-v', -990);
-    this.ground(area.x, area.y - 4, area.w, 32, 'fence-h', -980);
-    this.ground(area.x, area.y + area.h - 28, area.w, 32, 'fence-h', -980);
+    this.ground(area.x - GARDEN_MARGIN, area.y - GARDEN_MARGIN, gardenTexture(garden), -990);
     this.label(area.x + area.w / 2, area.y + 10, area.name);
   }
 
-  /** A place name on a wooden sign. */
+  /** A place name on a parchment sign. */
   private label(x: number, y: number, text: string) {
     const name = this.add
-      .text(x, y, text, { fontFamily: 'monospace', fontSize: '13px', color: '#f3e9d2', stroke: '#3b2416', strokeThickness: 2 })
+      .text(x, y, text, { fontFamily: SERIF, fontSize: '13px', fontStyle: 'bold', color: INK })
       .setOrigin(0.5)
       .setDepth(-900);
-    this.add.image(x, y, signTexture(this, name.width + 16)).setDepth(-910);
+    this.card(x, y, 'sign', signTexture(this, name.width + 16)).setDepth(-910);
+  }
+
+  /** A card image centred on (x, y) by its card, not by its shadow or a bubble's tail. */
+  private card(x: number, y: number, kind: CardKind, key: string) {
+    const img = fit(this.add.image(x, y, key));
+    const inset = cardInset(kind);
+    const h = img.height / resOf(key);
+    const cardH = h - 2 * inset - (kind === 'bubble' ? BUBBLE_TAIL : 0);
+    return img.setOrigin(0.5, (inset + cardH / 2) / h);
   }
 
   /**
@@ -370,13 +393,13 @@ export class GameScene extends Phaser.Scene {
    * left to the station. Tapping it moves on to the next choice and doesn't walk the doctor.
    */
   private addPrioritySign(id: CraftingId, at: Point) {
-    const sign = this.add.image(at.x, at.y, signTexture(this, PRIORITY_SIGN_W)).setDepth(-910);
-    const left = at.x - sign.width / 2 + 8;
-    const style = { fontFamily: 'monospace', fontSize: '12px', color: '#f3e9d2', stroke: '#3b2416', strokeThickness: 2 };
+    const sign = this.card(at.x, at.y, 'small', signTexture(this, PRIORITY_SIGN_W, true)).setDepth(-910);
+    const left = at.x - PRIORITY_SIGN_W / 2 + 10;
+    const style = { fontFamily: SERIF, fontSize: '12px', fontStyle: 'bold', color: INK };
     const caption = this.add.text(left, at.y, 'First:', style).setOrigin(0, 0.5).setDepth(-900);
     const choiceX = left + caption.width + 6;
     const any = this.add.text(choiceX, at.y, 'any', style).setOrigin(0, 0.5).setDepth(-900);
-    const icon = this.add.image(choiceX + 8, at.y, 'pallet').setDepth(-900);
+    const icon = fit(this.add.image(choiceX + 8, at.y, itemTexture('wheat')).setDepth(-900));
     sign.setInteractive({ useHandCursor: true }).on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
       e.stopPropagation();
       // A second finger landing on a sign starts a pinch, not a priority change.
@@ -408,27 +431,24 @@ export class GameScene extends Phaser.Scene {
   }
 
   private drawGrounds() {
-    const ground = this.ground.bind(this);
-    ground(0, 0, WORLD.w, WORLD.h, 'tile-grass');
-
-    // Workshop yard of packed earth around the courtyard, with a strip up to the shop door; the
-    // right arm gets its yard once the expansion's land is bought.
-    for (const yard of YARDS) ground(yard.x, yard.y, yard.w, yard.h, 'tile-dirt', -999);
+    // One painted page: grass, the yard and market of packed earth, the street, and the shop's plank
+    // floor inside its stone walls, with a back door in the top wall facing the market and the
+    // customers' street door in the bottom one (see src/art/ground.ts).
+    this.ground(0, 0, 'ground-world');
+    // The right column gets its yard once the expansion's land is bought.
     this.once(
       () => this.state.expansion.land.built,
-      () => {
-        for (const yard of EXPANSION_YARDS) ground(yard.x, yard.y, yard.w, yard.h, 'tile-dirt', -999);
-      },
+      () => this.ground(EXPANSION_IMAGE.x, EXPANSION_IMAGE.y, 'ground-expansion', -999),
     );
 
     // The second line's fields appear as they are built.
     GARDEN_AREAS.forEach((_, garden) => this.once(() => gardenBuilt(this.state, garden), () => this.drawGarden(garden)));
 
-    // Shop: plank floor inside stone walls, with a back door in the top wall facing the market.
-    ground(SHOP.x, SHOP.y, SHOP.w, SHOP.h, 'tile-planks');
-    // The storefront's street door, at the bottom, is the customers' way in and out.
-    ground(STREET_PATH.x, STREET_PATH.y, STREET_PATH.w, STREET_PATH.h, 'tile-planks', -995);
-    for (const wall of SHOP_WALLS) ground(wall.x, wall.y, wall.w, wall.h, 'tile-wall', -990);
+    // Trees and bushes in the grass, in front of or behind the doctor by their feet.
+    for (const { key, x, y } of sceneryLayout()) {
+      fit(this.add.image(x, y, key)).setOrigin(0.5, key.startsWith('tree') ? 84 / 88 : 28 / 32).setDepth(y);
+    }
+
     for (const block of SHOP_BLOCKS) this.obstacles.add(this.add.zone(block.x + block.w / 2, block.y + block.h / 2, block.w, block.h));
 
     this.label(SHOP_SIGN.x, SHOP_SIGN.y, 'Storefront');
@@ -441,8 +461,8 @@ export class GameScene extends Phaser.Scene {
       this.once(
         () => gardenBuilt(this.state, gardenOf(i)),
         () => {
-          this.add.image(x, y, 'plot').setDepth(-500);
-          const plant = this.add.image(x, y + 10, plantTexture(plot.plant, 2)).setOrigin(0.5, 1).setDepth(y);
+          fit(this.add.image(x, y, 'plot').setDepth(-500));
+          const plant = fit(this.add.image(x, y + 10, plantTexture(plot.plant, 2)).setOrigin(0.5, 1).setDepth(y));
           const growth = new ProgressBar(this, x, y + 26, 44, 0x9ccf6a, WORLD_UI_DEPTH);
           this.views.push(() => {
             const grown = plot.grown / GROW_MS[plot.plant];
@@ -533,9 +553,9 @@ export class GameScene extends Phaser.Scene {
 
   /** Lays a floor marker with a caption. A marker a belt replaces goes away once `gone` holds. */
   private addMarker(at: Point, texture: string, caption: string, act: () => Feedback | null, gone?: () => boolean) {
-    const pad = this.add.image(at.x, at.y, texture).setDepth(-400);
+    const pad = fit(this.add.image(at.x, at.y, texture).setDepth(-400));
     const text = this.add
-      .text(at.x, at.y + 26, caption, { ...CAPTION, color: '#f3e9d2' })
+      .text(at.x, at.y + 26, caption, { ...CAPTION, color: CAPTION_INK })
       .setOrigin(0.5, 0)
       .setDepth(-400);
     const shown = () => !gone?.();
@@ -606,7 +626,7 @@ export class GameScene extends Phaser.Scene {
     const marker = this.markers.length - 1;
     this.markers[marker].pays = true;
     const text = this.add
-      .text(at.x, at.y + 26, '', { ...CAPTION, color: '#e6d3f5' })
+      .text(at.x, at.y + 26, '', { ...CAPTION, color: CAPTION_PAY })
       .setOrigin(0.5, 0)
       .setDepth(-400);
     this.views.push(() => {
@@ -633,7 +653,7 @@ export class GameScene extends Phaser.Scene {
       () => unlocked(this.state, `hire-${id}`),
     );
     stand.forEach((at, i) => {
-      const craftsman = this.add.image(at.x, at.y, craftsmanTexture(i)).setOrigin(0.5, 1).setScale(2).setDepth(at.y).setFlipX(i === 1);
+      const craftsman = fit(this.add.image(at.x, at.y, craftsmanTexture(i)).setOrigin(0.5, 1).setDepth(at.y).setFlipX(i === 1));
       this.views.push(() => craftsman.setVisible(hired().level > i));
     });
   }
@@ -643,9 +663,9 @@ export class GameScene extends Phaser.Scene {
    * holds; standing still on it pays towards the build.
    */
   private addBuildMarker(at: Point, caption: string, cost: number, build: Build, shown: () => boolean, act: () => Feedback | null) {
-    const pad = this.add.image(at.x, at.y, 'pad-up').setDepth(-400);
+    const pad = fit(this.add.image(at.x, at.y, 'pad-up').setDepth(-400));
     const text = this.add
-      .text(at.x, at.y + 26, '', { ...CAPTION, color: '#e6d3f5' })
+      .text(at.x, at.y + 26, '', { ...CAPTION, color: CAPTION_PAY })
       .setOrigin(0.5, 0)
       .setDepth(-400);
     this.markers.push({ zone: new Phaser.Geom.Rectangle(at.x - 22, at.y - 22, 44, 44), act, shown, pays: true });
@@ -691,7 +711,7 @@ export class GameScene extends Phaser.Scene {
    * network, so where the two lines' cauldron belts meet becomes a T.
    */
   private createBelts() {
-    let network: Phaser.GameObjects.Graphics | null = null;
+    let network: Phaser.GameObjects.Image | null = null;
     let drawn = '';
     this.views.push(() => {
       const built = BELTS.filter((id) => this.state.belts[id].built);
@@ -715,7 +735,7 @@ export class GameScene extends Phaser.Scene {
       const spans = new Map(lanes.map((kind, lane) => [kind, { ...beltSpan(id, kind), off: laneOffset(lane, lanes.length) }]));
       this.views.push(() => {
         while (riding.length < belt.items.length) {
-          riding.push(this.add.image(0, 0, itemTexture(belt.items[0].id)).setDepth(-550));
+          riding.push(fit(this.add.image(0, 0, itemTexture(belt.items[0].id)).setDepth(-550)));
         }
         riding.forEach((icon, i) => {
           const item = belt.items[i];
@@ -765,8 +785,9 @@ export class GameScene extends Phaser.Scene {
       const at = PALLETS.counter.in[i];
       if (!at) return;
       const cut = this.add
-        .text(at.x, at.y + 8, '', { fontFamily: 'monospace', fontSize: '10px', color: '#f3c06a', stroke: '#3b2416', strokeThickness: 2 })
-        .setOrigin(0.5, 0)
+        // Beside its pallet on the outer side, clear of the order bubbles below the counter.
+        .text(at.x + (at.x < COUNTER.x ? -20 : 20), at.y - 6, '', { fontFamily: SERIF, fontSize: '11px', fontStyle: 'bold', color: '#8a3a10', stroke: TEXT_HALO, strokeThickness: 3 })
+        .setOrigin(at.x < COUNTER.x ? 1 : 0, 0.5)
         .setDepth(WORLD_UI_DEPTH);
       this.views.push(() => {
         const others = this.state.counter.shelf.filter((p) => p === potion).length - 1;
@@ -782,13 +803,14 @@ export class GameScene extends Phaser.Scene {
     this.addWorkSpot(COUNTER_MARKERS.work, 'counter');
     this.addUpgradeMarker(COUNTER_MARKERS.upgrade, 'counter');
     this.addCraftsmen('counter');
-    const tillCoin = this.add.image(COUNTER_MARKERS.pickUp.x - 8, COUNTER_MARKERS.pickUp.y, 'coin').setDepth(-300);
+    const tillCoin = fit(this.add.image(COUNTER_MARKERS.pickUp.x - 8, COUNTER_MARKERS.pickUp.y, 'coin').setDepth(-300), 1.2);
     const till = this.add
       .text(COUNTER_MARKERS.pickUp.x - 1, COUNTER_MARKERS.pickUp.y, '', {
-        fontFamily: 'monospace',
-        fontSize: '12px',
-        color: '#fff4c2',
-        stroke: '#1b1410',
+        fontFamily: SERIF,
+        fontSize: '13px',
+        fontStyle: 'bold',
+        color: INK,
+        stroke: TEXT_HALO,
         strokeThickness: 3,
       })
       .setOrigin(0, 0.5)
@@ -809,17 +831,7 @@ export class GameScene extends Phaser.Scene {
     // One customer slot per possible order; slot i shows the i-th open order once its customer has
     // walked up to it.
     const customers = new Map<number, Phaser.GameObjects.Image>();
-    for (let i = 0; i < MAX_ORDER_SLOTS; i++) {
-      const { x, y } = customerPosition(i);
-      const wants = new IconRow(this, x, y - 52, WORLD_UI_DEPTH);
-      const patience = new ProgressBar(this, x, y - 40, 40, 0xe0b84a, WORLD_UI_DEPTH);
-      this.views.push(() => {
-        const order = this.state.orders[i];
-        const there = order && customers.get(order.id)?.getData('arrived');
-        wants.set(there ? order.wants : []);
-        patience.set(there ? order.patience / order.maxPatience : null);
-      });
-    }
+    for (let i = 0; i < MAX_ORDER_SLOTS; i++) this.addOrderBubble(i, customers);
     // Customers walk in by the street door to their spot at the counter, move along as those ahead
     // leave, and walk back out once served or out of patience.
     this.views.push(() => {
@@ -827,7 +839,7 @@ export class GameScene extends Phaser.Scene {
       const waiting = new Set(this.state.orders.map((o) => o.id));
       this.state.orders.forEach((order, i) => {
         if (!customers.has(order.id)) {
-          const sprite = this.add.image(STREET.x, STREET.y, customerTexture(order.id)).setScale(2);
+          const sprite = fit(this.add.image(STREET.x, STREET.y, customerTexture(order.id)));
           customers.set(order.id, sprite);
         }
         const sprite = customers.get(order.id)!;
@@ -848,12 +860,171 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * The order bubble over waiting customer `i`, once they stand at the counter: the potions they
+   * want, a coin in a ring that shrinks as their tip decays, the tip it would pay now above it, and
+   * their patience along the bottom.
+   */
+  private addOrderBubble(i: number, customers: Map<number, Phaser.GameObjects.Image>) {
+    const { x, y } = customerPosition(i);
+    const cy = y - BUBBLE.above;
+    const top = cy - BUBBLE.h / 2;
+    // Later customers' bubbles sit over earlier ones' where two wide ones meet.
+    const depth = WORLD_UI_DEPTH - 1 + i * 0.1;
+    const bubbles = [1, 2, 3].map((n) => this.card(x, cy, 'bubble', cardTexture(this, 'bubble', bubbleWidth(n), BUBBLE.h)).setDepth(depth).setVisible(false));
+    const wants = new IconRow(this, x, cy - 4, depth + 0.02, BUBBLE.icon);
+    const patience = new ProgressBar(this, x, cy + 5, 10, 0xd9a032, depth + 0.02);
+    const ring = this.add.graphics().setDepth(depth + 0.03);
+    const coin = fit(this.add.image(x, top + 1, 'coin'), 0.8).setDepth(depth + 0.04).setVisible(false);
+    const tipText = this.add
+      .text(x, top - 7, '', { fontFamily: SERIF, fontSize: '11px', fontStyle: 'bold', color: '#7a4a00', stroke: TEXT_HALO, strokeThickness: 3 })
+      .setOrigin(0.5, 1)
+      .setDepth(depth + 0.04);
+    let drawn = '';
+    this.views.push(() => {
+      const order = this.state.orders[i];
+      const there = !!order && !!customers.get(order.id)?.getData('arrived');
+      const n = there ? Math.min(order.wants.length, 3) : 0;
+      bubbles.forEach((b, k) => b.setVisible(k === n - 1));
+      wants.set(there ? order.wants.slice(0, 3) : []);
+      // The tip ring sits on the bubble's top right corner, like a badge.
+      const ringX = x + bubbleWidth(Math.max(1, n)) / 2 - 2;
+      coin.setVisible(there).setX(ringX);
+      tipText.setVisible(there);
+      if (!there) {
+        patience.set(null);
+        ring.clear();
+        drawn = '';
+        return;
+      }
+      patience.resize(bubbleWidth(n) - 10);
+      patience.set(order.patience / order.maxPatience);
+      const left01 = tipLeft(order);
+      const tip = tipNow(order);
+      tipText.setText(tip > 0 ? `tip +${tip}` : 'no tip').setColor(left01 < 0.4 ? '#b04a10' : '#7a4a00');
+      // Redraw the ring only when it has visibly shrunk.
+      const key = `${n}:${Math.round(left01 * 48)}`;
+      if (key === drawn) return;
+      drawn = key;
+      ring.clear();
+      ring.fillStyle(0xfffaf0, 1).fillCircle(ringX, top + 1, BUBBLE.ring + 2);
+      ring.lineStyle(1, 0x2a1d14, 0.9).strokeCircle(ringX, top + 1, BUBBLE.ring + 2.5);
+      ring.lineStyle(2.4, 0x2a1d14, 0.15).strokeCircle(ringX, top + 1, BUBBLE.ring);
+      if (left01 > 0) {
+        ring.lineStyle(2.4, left01 < 0.4 ? 0xe98a2e : 0xe8b830, 1);
+        ring.beginPath();
+        ring.arc(ringX, top + 1, BUBBLE.ring, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * left01, false);
+        ring.strokePath();
+      }
+    });
+  }
+
+  /**
+   * Today's contract on a parchment card under the top bar: the potion and how many by dusk, a pip
+   * for each (filled once sold), the reward, and a sun that sinks towards the horizon as the day
+   * passes. A kept or missed contract says so under the card as the next one comes in.
+   */
+  private createContract() {
+    const { x, y, w, h } = CONTRACT_CARD;
+    const d = UI_DEPTH;
+    const first = this.children.list.length;
+    this.card(x + w / 2, y + h / 2, 'contract', cardTexture(this, 'contract', w, h)).setDepth(d);
+    const icon = fit(this.add.image(x + 22, y + h / 2 + 1, itemTexture('sleepingTonic')), 1.8).setDepth(d + 0.1);
+    const title = this.add.text(x + 42, y + 13, '', { ...HUD_TEXT, fontSize: '13px' }).setOrigin(0, 0.5).setDepth(d + 0.1);
+    const pips = this.add.graphics().setDepth(d + 0.1);
+    const count = this.add.text(0, y + 31, '', { ...HUD_TEXT, fontSize: '12px' }).setOrigin(0, 0.5).setDepth(d + 0.1);
+    const reward = this.add.text(x + w - 10, y + 31, '', { ...HUD_TEXT, fontSize: '12px' }).setOrigin(1, 0.5).setDepth(d + 0.1);
+    const rewardCoin = fit(this.add.image(0, y + 31, 'coin'), 1.1).setDepth(d + 0.1);
+    const dial = this.add.graphics().setDepth(d + 0.1);
+    const note = this.add
+      .text(x + w / 2, y + h + 12, '', { ...HUD_TEXT, fontSize: '13px', stroke: TEXT_HALO, strokeThickness: 4 })
+      .setOrigin(0.5)
+      .setDepth(d + 0.1)
+      .setAlpha(0);
+    for (const obj of this.children.list.slice(first)) (obj as unknown as Phaser.GameObjects.Components.ScrollFactor).setScrollFactor(0);
+    let drawn = '';
+    let day = this.state.contract.day;
+    let kept = this.state.contract.kept;
+    this.views.push(() => {
+      const c = this.state.contract;
+      if (c.day !== day) {
+        // A new day's contract: say how the last one went.
+        const paid = c.kept > kept;
+        note.setText(paid ? 'Contract kept!' : 'Dusk: contract missed').setColor(paid ? '#2f6a1a' : '#8a3a10').setAlpha(1);
+        this.tweens.killTweensOf(note);
+        this.tweens.add({ targets: note, alpha: 0, delay: 2_500, duration: 800 });
+        day = c.day;
+        kept = c.kept;
+      }
+      const name = c.potion === 'sleepingTonic' ? 'Sleeping Tonic' : 'Healing Draught';
+      const key = `${c.day}:${c.made}:${Math.floor((1 - c.dayLeft / DAY_MS) * 60)}`;
+      if (key === drawn) return;
+      drawn = key;
+      icon.setTexture(itemTexture(c.potion));
+      title.setText(`Contract: ${c.need} ${name}${c.need === 1 ? '' : 's'} by dusk`);
+      const gap = c.need > 8 ? 11 : 15;
+      const r = c.need > 8 ? 4.5 : 5.5;
+      pips.clear();
+      for (let k = 0; k < c.need; k++) {
+        const px = x + 48 + k * gap;
+        if (k < c.made) pips.fillStyle(c.potion === 'sleepingTonic' ? 0x6a5bd6 : 0xd9434b, 0.9).fillCircle(px, y + 31, r);
+        pips.lineStyle(1.1, 0x2a1d14, k < c.made ? 0.95 : 0.5).strokeCircle(px, y + 31, r);
+      }
+      count.setText(`${c.made}/${c.need}`).setX(x + 48 + c.need * gap - gap / 2 + 4);
+      reward.setText(`Reward ${c.reward}`);
+      rewardCoin.setX(x + w - 10 - reward.width - 9);
+      // The dusk dial: a sun sinking to the horizon over the day, gone at dusk.
+      const dx = x + w - 22, hy = y + 15, sr = 7;
+      const sunY = hy - sr - 1 + (2 * sr + 1) * (1 - c.dayLeft / DAY_MS);
+      dial.clear();
+      const s01 = Phaser.Math.Clamp((hy - sunY) / sr, -1, 1);
+      if (s01 > -1) {
+        const a = Math.asin(s01);
+        dial.fillStyle(0xf0a040, 1).lineStyle(1, 0x2a1d14, 0.9);
+        dial.beginPath();
+        dial.arc(dx, sunY, sr, Math.PI - a, 2 * Math.PI + a, false);
+        dial.closePath();
+        dial.fillPath();
+        dial.strokePath();
+      }
+      dial.lineStyle(1.4, 0x2a1d14, 0.9).lineBetween(dx - 11, hy, dx + 11, hy);
+    });
+  }
+
+  /**
+   * "While you were away: +32 coins, 9 potions" on a violet chip under the top bar, after the
+   * automation caught up on the time away; tapping it puts it away.
+   */
+  private createAwayChip() {
+    const away = this.away;
+    if (!away) return;
+    // The chip keeps its right edge and grows to the left when the numbers are long.
+    const { y, h } = AWAY_CHIP;
+    const d = UI_DEPTH;
+    const potions = `${away.potions} potion${away.potions === 1 ? '' : 's'}`;
+    const lead = this.add.text(0, y + h / 2, 'While you were away:', { ...HUD_TEXT, fontSize: '13px', fontStyle: 'normal' }).setOrigin(0, 0.5).setDepth(d + 0.1);
+    const sum = this.add.text(0, y + h / 2, `+${away.coins} coins, ${potions}`, { ...HUD_TEXT, fontSize: '13px', color: '#6a2c90' }).setOrigin(0, 0.5).setDepth(d + 0.1);
+    const w = Math.max(AWAY_CHIP.w, Math.ceil(lead.width + sum.width + 46));
+    const x = AWAY_CHIP.x + AWAY_CHIP.w - w;
+    lead.setX(x + 28);
+    sum.setX(lead.x + lead.width + 6);
+    const chip = this.card(x + w / 2, y + h / 2, 'chip', cardTexture(this, 'chip', w, h)).setDepth(d);
+    const parts: (Phaser.GameObjects.Components.Visible & Phaser.GameObjects.GameObject)[] = [chip, lead, sum];
+    parts.push(fit(this.add.image(x + 15, y + h / 2, 'hourglass')).setDepth(d + 0.1));
+    for (const part of parts) (part as unknown as Phaser.GameObjects.Components.ScrollFactor).setScrollFactor(0);
+    chip.setInteractive({ useHandCursor: true }).on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
+      e.stopPropagation();
+      if (this.pinching()) return;
+      for (const part of parts) part.destroy();
+      this.away = null;
+    });
+  }
+
   private createHud() {
     const { width } = this.scale;
     const first = this.children.list.length;
     // Taps on the bar stop here rather than falling through to a priority sign in the world below.
-    this.add
-      .tileSprite(0, 0, width, HUD_HEIGHT, 'hud-bar')
+    fit(this.add.image(0, 0, cardTexture(this, 'bar', width, HUD_HEIGHT)))
       .setOrigin(0)
       .setDepth(UI_DEPTH)
       .setInteractive()
@@ -861,13 +1032,13 @@ export class GameScene extends Phaser.Scene {
         e.stopPropagation();
         this.pinching();
       });
-    const style = { fontFamily: 'monospace', fontSize: '16px', color: '#f3e9d2' };
-    this.add.image(26, HUD_HEIGHT / 2 - 1, 'coin').setScale(2).setDepth(UI_DEPTH);
-    const coins = this.add.text(44, HUD_HEIGHT / 2 - 1, '', style).setOrigin(0, 0.5).setDepth(UI_DEPTH);
+    const style = HUD_TEXT;
+    fit(this.add.image(26, HUD_HEIGHT / 2 - 1, 'coin'), 1.6).setDepth(UI_DEPTH);
+    const coins = this.add.text(42, HUD_HEIGHT / 2 - 1, '', style).setOrigin(0, 0.5).setDepth(UI_DEPTH);
     this.add.text(width / 2 - 92, HUD_HEIGHT / 2, 'Hands', style).setOrigin(1, 0.5).setDepth(UI_DEPTH);
     this.add
-      .text(width - 110, HUD_HEIGHT / 2, 'Walk: WASD / tap\nHarvest: walk past ripe plants', { ...style, fontSize: '12px' })
-      .setOrigin(1, 0.5)
+      .text(620, HUD_HEIGHT / 2, 'Walk: WASD / tap\nHarvest: walk past ripe plants', { ...style, fontSize: '12px', fontStyle: 'normal', color: '#4a3424' })
+      .setOrigin(0, 0.5)
       .setDepth(UI_DEPTH);
     this.hudButton(width - 16, 'Settings', () => {
       this.recipes.toggle(false);
@@ -888,8 +1059,8 @@ export class GameScene extends Phaser.Scene {
     const frames: Phaser.GameObjects.Image[] = [];
     const slots = Array.from({ length: MAX_CARRY }, (_, i) => {
       const x = width / 2 - 60 + i * 40;
-      frames.push(this.add.image(x, HUD_HEIGHT / 2 - 1, 'slot').setDepth(UI_DEPTH));
-      return this.add.image(x, HUD_HEIGHT / 2 - 1, itemTexture('wheat')).setScale(1.5).setDepth(UI_DEPTH);
+      frames.push(fit(this.add.image(x, HUD_HEIGHT / 2 - 1, 'slot').setDepth(UI_DEPTH)));
+      return fit(this.add.image(x, HUD_HEIGHT / 2 - 1, itemTexture('wheat')), 1.5).setDepth(UI_DEPTH);
     });
     // Everything in the top bar stays put while the camera follows the doctor.
     for (const obj of this.children.list.slice(first)) (obj as unknown as Phaser.GameObjects.Components.ScrollFactor).setScrollFactor(0);
@@ -899,7 +1070,7 @@ export class GameScene extends Phaser.Scene {
 
     this.views.push(() => {
       coins.setText(`Coins: ${this.state.coins}`);
-      drop.setAlpha(this.state.carrying.length > 0 ? 1 : 0.5);
+      for (const part of drop) part.setAlpha(this.state.carrying.length > 0 ? 1 : 0.5);
       frames.forEach((frame, i) => frame.setVisible(i < carryCapacity(this.state)));
       slots.forEach((slot, i) => {
         const item = this.state.carrying[i];
@@ -911,17 +1082,18 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  /** A button in the top bar, right-aligned at `x`; tapping it doesn't walk the doctor. */
+  /**
+   * A parchment button in the top bar, right-aligned at `x`; tapping it doesn't walk the doctor.
+   * Returns its card and its label, to dim together.
+   */
   private hudButton(x: number, label: string, onTap: () => void) {
-    return this.add
-      .text(x, HUD_HEIGHT / 2, label, {
-        fontFamily: 'monospace',
-        fontSize: '12px',
-        color: '#f3e9d2',
-        backgroundColor: '#5c3a21',
-        padding: { x: 6, y: 4 },
-      })
-      .setOrigin(1, 0.5)
+    const text = this.add
+      .text(0, HUD_HEIGHT / 2, label, { ...HUD_TEXT, fontSize: '14px' })
+      .setOrigin(0.5)
+      .setDepth(UI_DEPTH + 0.5);
+    const w = Math.round(text.width + 22);
+    text.setX(x - w / 2);
+    const button = this.card(x - w / 2, HUD_HEIGHT / 2, 'button', cardTexture(this, 'button', w, 28))
       .setDepth(UI_DEPTH)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
@@ -930,6 +1102,7 @@ export class GameScene extends Phaser.Scene {
         if (this.pinching()) return;
         onTap();
       });
+    return [button, text] as const;
   }
 
   /** True while two fingers are down, which starts a pinch; it also cancels the walk. */
@@ -942,8 +1115,8 @@ export class GameScene extends Phaser.Scene {
 
   /** A station image whose lower part blocks walking, so the doctor can pass behind its top edge. */
   private addObstacle(x: number, y: number, texture: string, bodyW: number, bodyH: number) {
-    const img = this.add.sprite(x, y, texture).setDepth(y);
-    const block = this.add.zone(x, y + img.height / 2 - bodyH / 2, bodyW, bodyH);
+    const img = fit(this.add.sprite(x, y, texture).setDepth(y));
+    const block = this.add.zone(x, y + img.displayHeight / 2 - bodyH / 2, bodyW, bodyH);
     this.obstacles.add(block);
     this.blockedAreas.push(new Phaser.Geom.Rectangle(x - bodyW / 2 - 18, block.y - bodyH / 2 - 10, bodyW + 36, bodyH + 20));
     return img;
@@ -951,14 +1124,14 @@ export class GameScene extends Phaser.Scene {
 
   private createPlayer() {
     const { x, y } = this.state.player;
-    this.player = this.physics.add.sprite(x, y, 'doctor-idle');
-    this.player.setScale(PLAYER_SCALE);
-    // Collide with the feet only, so the hat and beak can overlap things behind the doctor.
-    // In texture pixels: a 30x15 box at (9, 57) once scaled, as before the art was redrawn.
-    this.player.body!.setSize(15, 7.5).setOffset(4.5, 28.5);
+    this.player = fit(this.physics.add.sprite(x, y, 'doctor-idle'));
+    // Collide with the feet only, so the hat and beak can overlap things behind the doctor: a 30x15
+    // box at (9, 57) of the 48x72 doctor as shown, given in the painting's own pixels.
+    const res = resOf('doctor-idle');
+    this.player.body!.setSize(30 * res, 15 * res).setOffset(9 * res, 57 * res);
     this.player.setCollideWorldBounds(true);
     this.physics.add.collider(this.player, this.obstacles);
-    this.sickle = this.add.image(x, y, 'sickle').setScale(SICKLE_SCALE).setVisible(false);
+    this.sickle = fit(this.add.image(x, y, 'sickle'), SICKLE_SCALE).setVisible(false);
   }
 
   private createControls() {
@@ -1038,11 +1211,12 @@ export class GameScene extends Phaser.Scene {
       this.time.delayedCall(start - this.time.now + i * 180, () => {
         const text = this.add
           .text(this.player.x, this.player.y - 60, line, {
-            fontFamily: 'monospace',
-            fontSize: '13px',
-            color: '#fff4c2',
-            stroke: '#1b1410',
-            strokeThickness: 3,
+            fontFamily: SERIF,
+            fontSize: '14px',
+            fontStyle: 'bold',
+            color: INK,
+            stroke: TEXT_HALO,
+            strokeThickness: 4,
           })
           .setOrigin(0.5)
           .setDepth(WORLD_UI_DEPTH);
@@ -1323,4 +1497,9 @@ function writeZoom(zoom: number) {
   } catch {
     // Without storage the zoom just isn't remembered.
   }
+}
+
+/** How wide an order bubble is for `n` potions: their icons and a margin. */
+function bubbleWidth(n: number) {
+  return 11 + n * BUBBLE.icon;
 }

@@ -15,18 +15,22 @@ counter. Coins buy upgrades, craftsmen, conveyor belts and a mirrored second pro
   counter, a walled shop that faces the street at the bottom and that the doctor enters by a back door from the market, station upgrades (5 levels), outfitter and
   guild upgrades, two craftsmen per station, a priority choice per crafting station, six belts
   with one lane per item kind, the expansion,
-  a Recipes panel and a Settings panel. Progress autosaves to localStorage.
+  a Recipes panel and a Settings panel, a daily contract card, tips that shrink while a customer
+  waits (a coin ring on each order bubble), and an autopilot that plays the time away (up to 2h)
+  on load and shows a "While you were away" chip. Progress autosaves to localStorage.
+- Look: an ink-and-watercolour herbalist's almanac. Every texture is painted on a canvas at load
+  (`textures.addCanvas`), with no image files; `pixelArt` is off; all text is serif (`SERIF`).
 - There is one scene with no title, win or lose screen, and no audio. A customer who runs out of
   patience just leaves; there is no penalty.
-- Leftovers: `bakePixelArt` in `src/art/pixelArt.ts` is never called. `GAME_WIDTH`/`GAME_HEIGHT` in
-  `src/main.ts` are only used there.
+- Leftovers: `GAME_WIDTH`/`GAME_HEIGHT` in `src/main.ts` are only used there. `DOCTOR_W`/`DOCTOR_H`
+  in `src/art/doctor.ts` are exported but unused.
 
 ## Architecture
 
 ### File map
 
 - `src/main.ts`: creates the `Phaser.Game` (960x540, FIT scaling, arcade physics with
-  `fixedStep: false`, `pixelArt`), registers `BootScene` and `GameScene`, calls `setupGame(game)`
+  `fixedStep: false`, `pixelArt: false`, cream background), registers `BootScene` and `GameScene`, calls `setupGame(game)`
   from `shared/setupGame.ts`, and puts `game` on window in dev.
 - `src/game/items.ts`: item ids and defs (`ITEMS`), `GROW_MS`, `REFINE`, `RECIPES`,
   `POTION_PRICE`, the `isPlant`/`isRefined`/`isPotion` guards and the ordered lists `PLANTS`,
@@ -34,13 +38,19 @@ counter. Coins buy upgrades, craftsmen, conveyor belts and a mirrored second pro
 - `src/game/state.ts`: every state type, `createInitialState`, `LAYOUT`, `FEEDERS_LAYOUT` and
   `COLUMNS_LAYOUT`, the
   upgrade, belt (`BELT_MS`, and `U_BELT_MS` from before the columns), expansion and pallet tables, and small derived helpers (`carryCapacity`,
-  `walkSpeed`, `potionPrice`, `stationBuilt`, `anyFieldBuilt`, `beltBuildable`, ...).
+  `walkSpeed`, `potionPrice`, `stationBuilt`, `anyFieldBuilt`, `beltBuildable`, ...). Also the tip
+  rules (`TIP_SHARE`, `maxTip`, `tipLeft`, `tipNow`) and the contract (`Contract`, `DAY_MS`,
+  `MAX_CONTRACT`, `contractFor`).
 - `src/game/sim.ts`: the rules, free of Phaser. `tick` advances the world; marker actions
   (`dropAtRefiner`, `pickUpFromCauldron`, `stockShelf`, `collectTill`, `payUpgrade`,
   `payCraftsman`, `payBelt`, `payExpansion`, `joinGuild`, `dropAll`, `cyclePriority`) and `harvest` each change
   state and return `Feedback` lines. Also `shortfall`, `refining` and `doneByHand`.
-- `src/game/save.ts`: `loadState`, `saveState`, `clearSave` (key `apothecary-save`), and the
-  `ontoOwnRuns` and `ontoColumns` belt migrations.
+- `src/game/save.ts`: `loadState`, `saveState` (stamps `lastSeen` with `Date.now()`), `clearSave`
+  (key `apothecary-save`), and the `ontoOwnRuns` and `ontoColumns` belt migrations.
+- `src/game/away.ts`: the autopilot. `catchUp(state, now, rand)` plays the time since `lastSeen`
+  (capped at `AWAY_CAP_MS`, 2h; nothing under `AWAY_MIN_MS`, 60s) through `tick` in 500ms steps
+  with nobody on a work spot and every customer at the counter, and returns an `AwaySummary`
+  (`ms`, `coins`, `potions`) or null. `hasAutomation`: any craftsman hired or belt built.
 - `src/scenes/BootScene.ts`: bakes all textures and animations, then starts `Game`.
 - `src/scenes/GameScene.ts`: builds the world, markers and HUD, reads input, walks the doctor
   around stations and through the shop door, calls the sim each frame and updates views. Also
@@ -50,10 +60,16 @@ counter. Coins buy upgrades, craftsmen, conveyor belts and a mirrored second pro
   `BELT_PATHS` (main run first, then feeders; each runs from a station's out pallets to the next
   station's in pallets), `runLength`, `beltSpan`, `BELT_JOIN_MS` and `BELT_BUILD`. It imports no
   Phaser, since `sim.ts` and `save.ts` use it.
-- `src/art/`: pixel art painted on `PixelCanvas` (`pixelArt.ts`) with the shared `palette.ts`, baked
-  by one `bake*` function per file. `belts.ts` is the exception: `drawBelts` draws the belt network
-  into a Graphics object at runtime, and `pointAlong`/`laneOffset` place items on it.
-  `signTexture` in `ui.ts` bakes sign widths lazily.
+- `src/art/`: canvas-painted art, one `bake*` function per file. `paint.ts` holds the shared kit:
+  the ink and paper colours (`INK`, `PAPER`, `WASH`, `ITEM_COL`), `SERIF`, the seeded art random
+  (`seeded`, `reseed`, `rr`, `chance`), `paint(scene, key, w, h, draw, res)` which paints a texture at
+  `res` times its size, `fit(image, scale)` which shows it at its logical size, and the brushes
+  (`wash`, `ink`, `hatch`, `wob`, `both`, `shadow`, `paper`, `itemIcon`, `coinIcon`). `ground.ts`
+  paints the whole world as one `ground-world` texture, plus the expansion yard, each garden and
+  the scattered trees and bushes (`sceneryLayout`). `ui.ts` paints parchment cards on demand
+  (`cardTexture(scene, kind, w, h)`: bar, button, contract, chip, bubble, sign, small, panel) and
+  `signTexture`. `belts.ts` paints the built belt network into one image (`drawBelts`, re-painted
+  when the set of built belts changes), and `pointAlong`/`laneOffset` place items on it.
 - `src/ui/`: `BackStack` (items piled on the doctor), `IconRow` (customer wants), `Pallet` (crate
   stacks, exposes `item` and `count`), `ProgressBar` (redraws only when its fill changes),
   `RecipeBook` (exposes `lines`), `Settings` (read-only view of the hub's settings, and New game).
@@ -71,9 +87,10 @@ counter. Coins buy upgrades, craftsmen, conveyor belts and a mirrored second pro
   pushes a closure onto `views` that syncs them from `state` every frame. `once(ready, create)`
   defers creating things that appear when bought (second-line stations, fields, expansion yard).
   The belt network is redrawn only when the set of built belts changes.
-- Depths: ground -1000 to -990, signs -910, belts -600, riding goods -550, plots -500, markers
+- Depths: ground -1000 to -990 (scenery sorts by y like standing things), signs -910, belts -600, riding goods -550, plots -500, markers
   -400, till -300; standing things sort by y (the doctor by his feet); `WORLD_UI_DEPTH` (9999) for
-  bars and feedback, `UI_DEPTH` (10000) for the top bar, `UI_DEPTH + 1` for panels.
+  bars, order bubbles and feedback, `UI_DEPTH` (10000) for the top bar, the contract card and the
+  away chip, `UI_DEPTH + 1` for panels.
 - Walking: arcade physics steps once per drawn frame; WASD/arrows set velocity directly, and
   `limitWalkStep` (on `PRE_UPDATE`) caps a step at `MAX_WALK_STEP_PX` (20) so a long frame can't
   carry the feet through a station or wall (static obstacles from `addObstacle` and `SHOP_BLOCKS`).
@@ -155,8 +172,20 @@ per-potion `pay`, and `patience` that counts down only at the counter), `upgrade
 `Upgrade` whose `level` is the number hired), `belts` (a `Build` plus riding `items`, each `at` ms
 along the main run), `priority` (per `CraftingId`, a `PlantId` or `PotionId` to make first, or
 null), `guild` (a `Build`: entry to the guild), `expansion` (land, two fields, refiner, cauldron as
-`Build`s).
+`Build`s), `contract` (`day`, `potion`, `need`, `made`, `reward`, `dayLeft`, `kept`), `sold` (potions
+handed over at the counter, ever), `tips` (tip coins ever) and `lastSeen` (wall-clock ms of the last
+save or load, 0 in a new game). Each order also has `tip`, its full tip (`maxTip` of its size).
 
+- Tips: when an order's last potion is handed over, `serveFromShelf` adds `tipNow(order)` to the
+  till and `state.tips`: `tip` scaled by `tipLeft`, which falls from 1 at the counter to 0 once
+  `TIP_SHARE` (60%) of its patience is gone. `pay` (price plus the counter bonus, `2 * (counter
+  level + 1)`) is unchanged and paid per potion as before.
+- Contract: `tick` counts `contract.dayLeft` down by `dt` and at 0 rolls to `contractFor(day + 1,
+  kept)`. Each potion of `contract.potion` handed over calls `deliverForContract`, which at `need`
+  pays `reward` into `coins` and rolls to `contractFor(day + 1, kept + 1)` at once. Odd days ask for
+  Sleeping Tonics, even days Healing Draughts; `need` is `3 + kept` up to 12; `reward` is 45% of
+  what they sell for, rounded to 5. The scene's card notes "Contract kept!" or "Dusk: contract
+  missed" when `contract.day` changes under it.
 - Only `src/game/sim.ts` changes rules state, mutating in place. The scene writes only
   `state.player` and passes `workingAt` and `atCounter`; it never edits stock directly.
 - Every tray holds at most `PALLET_SIZE` (40) of each item kind; `palletHasRoom` guards every add.
@@ -173,7 +202,7 @@ null), `guild` (a `Build`: entry to the guild), `expansion` (land, two fields, r
 
 ### Persistence
 
-- `apothecary-save`: the whole `GameState`, saved every `AUTOSAVE_MS` (3s), on tab hide and on
+- `apothecary-save`: the whole `GameState` (with `lastSeen` stamped by `saveState`), saved every `AUTOSAVE_MS` (3s), on tab hide and on
   `pagehide` (not after "New game" is confirmed). `loadState` discards saves whose `version`
   differs or that lack `plots`, shallow-merges top-level fields, merges `upgrades`, `craftsmen`,
   `belts` and `priority` per key, appends new plots and drops orders without `pay`. A save without
@@ -183,6 +212,10 @@ null), `guild` (a `Build`: entry to the guild), `expansion` (land, two fields, r
   from before `FEEDERS_LAYOUT` (3) gets `ontoOwnRuns`, which moves belt items up to their run's
   join on today's belts; a save
   whose `layout` differs from `LAYOUT` (5, the columns) gets the fresh `player` spot.
+- Away: `GameScene.create` calls `catchUp(state, Date.now())` right after `loadState` and keeps the
+  result in the public `away` field; `createAwayChip` shows it (top right, `AWAY_CHIP`) until tapped.
+  The new fields (`contract`, `sold`, `tips`, `lastSeen`) come from `fresh` through the shallow
+  merge, so `version` was not bumped; old orders without `tip` tip nothing.
 - `apothecary-zoom`: the main camera's zoom, a view preference that "New game" keeps.
 - "New game" (`clearSave` + `scene.restart`) removes only `apothecary-save`. The old
   `apothecary-fps` key is no longer used; the frame rate comes from the hub.
@@ -190,8 +223,11 @@ null), `guild` (a `Build`: entry to the guild), `expansion` (land, two fields, r
 ### Randomness and timing
 
 - `Math.random` is used only by `tick` (its default `rand`, now the fifth argument): `orderInterval`
-  and `newOrder` (one or two potions, which ones, patience). Art noise uses `seeded` from
-  `src/art/pixelArt.ts`.
+  and `newOrder` (one or two potions, which ones, patience), also when `catchUp` plays time away.
+  Art noise uses `seeded`/`reseed` from `src/art/paint.ts`, reseeded per texture, so painting never
+  touches `Math.random`.
+- `Date.now()` is used only for `lastSeen` and `catchUp`; the test starts with empty storage, so
+  `catchUp` returns null before using any randomness.
 - Sim time and customer walking use `frameMs`, the clamped Phaser `delta`. Marker, harvest and
   feedback pacing use `this.time.now` and `delayedCall`; autosave uses `this.time.addEvent`. The
   sickle spins with the raw `delta`.
@@ -229,7 +265,7 @@ null), `guild` (a `Build`: entry to the guild), `expansion` (land, two fields, r
 ## Testing hooks
 
 - The dev build sets `window.game`. The test reads the `Game` scene's `state`,
-  `player.body.center` (feet), `pointerTarget`, `pallets[id].in/out` (each `Pallet`'s `item` and
+  `player.body.center` (feet), `pointerTarget`, `away` (null on a fresh game), `pallets[id].in/out` (each `Pallet`'s `item` and
   `count`), `recipes.visible` and `recipes.lines`, `customers` (id, x, y, `arrived`) and
   `cameras.main.scrollX/Y`. Several of these are private in TypeScript; renaming them breaks the
   test without a type error.
@@ -242,9 +278,10 @@ null), `guild` (a `Build`: entry to the guild), `expansion` (land, two fields, r
 - Mirrored in `e2e/playthrough.spec.ts` (update together): every spot in its constants block
   (wheat plot x's and row, mandrake spot, refiner, cauldron and counter markers, `LEAVE_SHOP`,
   `LEAVE_CAULDRONS`, `STREET`, `FIRST_CUSTOMER` = `customerPosition(0)`), `WALK_SPEED`,
-  `POTION_PRICE`, the tip formula in `potionPay` (it assumes one of each potion on the shelf, so
+  `POTION_PRICE`, the counter bonus in `potionPay` (it assumes one of each potion on the shelf, so
   no stock cut, and asserts it), `shortfall`, grow times 8000/14000, the recipe
-  line text and order, carry capacity 4, the world size 1400x1110 (camera asserts), and which pallets
+  line text and order, the tip rules (`maxTip`, `TIP_SHARE`, `tipNow`), `DAY_MS` and the first
+  contract (`FIRST_CONTRACT`: 3 Sleeping Tonics for 20), carry capacity 4, the world size 1400x1110 (camera asserts), and which pallets
   each station shows.
 
 ## Making common changes
@@ -295,3 +332,8 @@ null), `guild` (a `Build`: entry to the guild), `expansion` (land, two fields, r
   objects must stay below it (`WORLD_UI_DEPTH` is the highest).
 - `tick` runs before `movePlayer`, so `workingAt` uses last frame's feet position.
 - Healing Draught art is red; keep any cross shapes off red (root rule on red crosses).
+- Textures are painted at `res` times their logical size (the `RES` map in `paint.ts`, per key), so
+  show them with `fit(image, scale)` rather than `setScale`, and give arcade bodies on them
+  (`setSize`/`setOffset`, in texture pixels) sizes multiplied by `resOf(key)`.
+- `cardTexture` keys cards by kind and size; a card of a new size paints a new texture, so build
+  cards once rather than every frame. The away chip widens to the left to fit its text.

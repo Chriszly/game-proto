@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { itemTexture } from '../art/items';
-import { INK } from '../art/palette';
+import { INK_NUM as INK, fit } from '../art/paint';
 import { ITEMS, type ItemId } from '../game/items';
 import { PALLET_BASE, PALLET_SIZE } from '../game/state';
 
@@ -34,9 +34,9 @@ export class Pallet {
     private y: number,
     readonly item: ItemId,
   ) {
-    scene.add.image(x, y, 'pallet').setOrigin(0.5, 1).setDepth(y);
+    fit(scene.add.image(x, y, 'pallet').setOrigin(0.5, 1).setDepth(y));
     this.crates = scene.add.graphics().setDepth(y + 0.01);
-    this.icon = scene.add.image(x, y - DECK - 8, itemTexture(item)).setAlpha(0.4).setDepth(y + 0.02);
+    this.icon = fit(scene.add.image(x, y - DECK - 8, itemTexture(item)).setAlpha(0.4).setDepth(y + 0.02));
   }
 
   set(count: number) {
@@ -55,9 +55,10 @@ export class Pallet {
       const left = this.x - CRATE_W + (slot % 2) * CRATE_W;
       const bottom = deck - layer * CRATE_FRONT - (back ? CRATE_TOP : 0);
       const top = bottom - CRATE_FRONT - CRATE_TOP;
-      g.fillStyle(INK).fillRect(left, top, CRATE_W, CRATE_FRONT + CRATE_TOP + 1);
-      g.fillStyle(color).fillRect(left + 1, top + 1, CRATE_W - 2, CRATE_TOP);
-      g.fillStyle(front).fillRect(left + 1, top + 1 + CRATE_TOP, CRATE_W - 2, CRATE_FRONT - 1);
+      // Washed in the item's colour, its front a shade darker, outlined in thin ink.
+      g.fillStyle(color, 0.92).fillRect(left, top, CRATE_W, CRATE_TOP);
+      g.fillStyle(front, 0.92).fillRect(left, top + CRATE_TOP, CRATE_W, CRATE_FRONT);
+      g.lineStyle(0.8, INK, 0.85).strokeRect(left + 0.4, top + 0.4, CRATE_W - 0.8, CRATE_FRONT + CRATE_TOP - 0.4);
     }
     const layers = Math.ceil(count / PALLET_BASE);
     const stackTop = deck - layers * CRATE_FRONT - (count > 0 ? CRATE_TOP * 2 : 0);

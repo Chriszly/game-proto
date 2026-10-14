@@ -13,7 +13,8 @@ export function loadState(): GameState {
     const saved = JSON.parse(raw) as Partial<GameState>;
     if (saved.version !== fresh.version || !saved.plots) return fresh;
     // Fields added after the save was written fall back to their defaults, including new plots,
-    // stations' upgrades, craftsmen and belts.
+    // stations' upgrades, craftsmen and belts, and the contract, sales and tips counts and the
+    // last-seen time (0, so a save from before them catches up on nothing).
     const state: GameState = {
       ...fresh,
       ...saved,
@@ -65,7 +66,9 @@ function ontoColumns(state: GameState) {
   for (const id of BELTS) for (const item of state.belts[id].items) item.at *= BELT_MS[id] / U_BELT_MS[id];
 }
 
+/** Saves the game, stamped with the wall-clock time, so the next load can catch up on the time away. */
 export function saveState(state: GameState) {
+  state.lastSeen = Date.now();
   try {
     localStorage.setItem(KEY, JSON.stringify(state));
   } catch {

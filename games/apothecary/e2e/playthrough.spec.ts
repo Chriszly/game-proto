@@ -2,11 +2,19 @@ import { expect, test, type Page } from '@playwright/test';
 
 // Plays one round of the loop with real inputs (clicks to walk, as on a phone): open and close the
 // recipes, watch the first customer walk in, harvest both gardens, refine, brew, sell potions to a
-// customer and collect the coins.
+// customer, with the tip they have left, towards the day's contract, and collect the coins.
 // Game state is only read, through the `game` object the dev build puts on window.
 
 type Point = { x: number; y: number };
 type ItemId = string;
+interface Order {
+  id: number;
+  wants: ItemId[];
+  pay: Record<string, number>;
+  patience: number;
+  maxPatience: number;
+  tip: number;
+}
 interface GameState {
   coins: number;
   carrying: ItemId[];
@@ -19,8 +27,12 @@ interface GameState {
   counter: { shelf: ItemId[]; till: number };
   upgrades: Record<string, { level: number; paid: number }>;
   craftsmen: Record<string, { level: number; paid: number }>;
-  orders: { id: number; wants: ItemId[]; pay: Record<string, number>; patience: number; maxPatience: number }[];
+  orders: Order[];
   nextOrderId: number;
+  contract: { day: number; potion: ItemId; need: number; made: number; reward: number; dayLeft: number; kept: number };
+  sold: number;
+  tips: number;
+  lastSeen: number;
   belts: Record<string, { built: boolean; paid: number; items: { id: ItemId; at: number }[] }>;
 }
 
@@ -47,6 +59,14 @@ const STREET = { x: 700, y: 1094 };
 const FIRST_CUSTOMER = { x: 644, y: 1010 };
 
 const POTION_PRICE: Record<string, number> = { healingDraught: 8, sleepingTonic: 15 };
+/** A day, dawn to dusk, and the first day's contract, from src/game/state.ts. */
+const DAY_MS = 240_000;
+const FIRST_CONTRACT = { day: 1, potion: 'sleepingTonic', need: 3, made: 0, reward: 20, kept: 0 };
+/** A customer's tip: a coin and two per potion, shrinking to nothing once 60% of their patience is gone. */
+const maxTip = (potions: number) => 1 + 2 * potions;
+const TIP_SHARE = 0.6;
+const tipNow = (o: Order, patience = o.patience) =>
+  Math.round(o.tip * Math.max(0, Math.min(1, 1 - (o.maxPatience - patience) / (o.maxPatience * TIP_SHARE))));
 
 /**
  * Game time per animation frame, every frame the same length. Longer frames mean fewer to draw, so
@@ -112,6 +132,8 @@ function scene(page: Page) {
       ) as Promise<{ in: Record<string, number>; out: Record<string, number> }>,
     /** Whether the recipe overview is open, and its lines. */
     recipes: () => read<{ open: boolean; lines: string[] }>((s) => ({ open: s.recipes.visible, lines: s.recipes.lines })),
+    /** The away summary chip's numbers, or null when it isn't shown. */
+    away: () => read<unknown>((s) => s.away),
     /** Where each customer in the shop stands, and whether they have reached their spot at the counter. */
     customers: () => read<{ id: number; x: number; y: number; arrived: boolean }[]>((s) => s.customers),
     /**
@@ -256,8 +278,16 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
   }
 
   const fresh = await game.state();
+  const freshAt = gameMs;
   expect(fresh.coins).toBe(0);
   expect(fresh.carrying).toEqual([]);
+  // The first day's contract, with dusk still to come; a new game has been away nowhere, so there is
+  // no away summary.
+  expect(fresh.contract).toMatchObject(FIRST_CONTRACT);
+  expect(fresh.contract.dayLeft).toBeGreaterThan(DAY_MS - 5_000);
+  expect(fresh.contract.dayLeft).toBeLessThanOrEqual(DAY_MS);
+  expect(fresh.sold).toBe(0);
+  expect(await game.away()).toBeNull();
 
   // The Recipes button opens an overview of what each station makes from what; tapping it closes it.
   // Neither tap walks the doctor.
@@ -301,6 +331,9 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
     return !!first && first.patience < first.maxPatience;
   });
   expect(waiting, 'patience counts down once at the counter').toBe(true);
+  // Their order carries a tip for quick service: a coin and two per potion.
+  const firstOrder = (await game.state()).orders.find((o) => o.id === customers[0].id)!;
+  expect(firstOrder.tip).toBe(maxTip(firstOrder.wants.length));
 
   // One round of the loop: harvest, refine, brew, sell and collect the coins.
   // Gardens: walk along the wheat row, then past one mandrake, until both hands are full.
@@ -372,18 +405,32 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
   await walkTo(COUNTER.work);
   await snap('4-serving');
   // Each customer pays for every potion they get, at the price they came in with. A customer who
-  // came in and was served between two looks pays today's price.
+  // came in and was served between two looks pays today's price. A customer whose order is filled
+  // also tips what is left of their tip, which shrank while they waited: between what it was at the
+  // last look and what it was at this one. The day and the waiting customers' patience run on the
+  // same clock. Every Sleeping Tonic sold counts towards the contract.
   let prev = s;
   let owed = s.counter.till;
+  let tonics = 0;
+  const contractBefore = s.contract.made;
   s = await until(
     'customers served',
     (s) => {
+      const tipped = s.tips - prev.tips;
+      const passed = prev.contract.dayLeft - s.contract.dayLeft;
+      let tipLow = 0, tipHigh = 0;
       const served = count(prev.counter.shelf);
       for (const [p, n] of Object.entries(count(s.counter.shelf))) served[p] -= n;
       for (const order of prev.orders) {
         const now = s.orders.find((o) => o.id === order.id);
         // An order that is gone was filled, unless the customer ran out of patience.
         if (!now && order.patience < 5_000) continue;
+        if (!now) {
+          tipLow += tipNow(order, order.patience - passed);
+          tipHigh += tipNow(order);
+        }
+        // A customer already waiting at the counter loses as much patience as the day goes by.
+        if (now && order.patience < order.maxPatience) expect(order.patience - now.patience, `patience of order ${order.id}`).toBeCloseTo(passed, 6);
         const left = [...(now?.wants ?? [])];
         for (const want of order.wants) {
           const i = left.indexOf(want);
@@ -395,13 +442,20 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
         }
       }
       for (const [p, n] of Object.entries(served)) owed += n * potionPay(s, p);
+      tonics += (count(prev.counter.shelf).sleepingTonic ?? 0) - (count(s.counter.shelf).sleepingTonic ?? 0);
+      expect(tipped, `tips paid between looks, from ${JSON.stringify(prev.orders)}`).toBeGreaterThanOrEqual(tipLow);
+      expect(tipped, `tips paid between looks, from ${JSON.stringify(prev.orders)}`).toBeLessThanOrEqual(tipHigh);
+      owed += tipped;
       prev = s;
       return s.counter.shelf.length === 0 || s.counter.till > 0;
     },
     45_000,
   );
   expect(s.counter.till, 'a customer paid').toBeGreaterThan(0);
-  expect(s.counter.till, 'paid per potion').toBe(owed);
+  expect(s.counter.till, 'paid per potion, and tips').toBe(owed);
+  // The Sleeping Tonics sold count towards today's contract, which needs more than one round's worth.
+  expect(s.contract).toMatchObject({ ...FIRST_CONTRACT, made: contractBefore + tonics });
+  expect(s.sold).toBe(2 - s.counter.shelf.length);
   // Step off the work spot first, so no customer pays in while the doctor heads for the coins.
   await walkTo(LEAVE_SHOP);
   s = await game.state();
@@ -411,6 +465,9 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
   expect(s.coins).toBe(earned);
   // Nothing was bought along the way; no walk clipped a purple marker.
   for (const level of [...Object.values(s.upgrades), ...Object.values(s.craftsmen)]) expect(level).toEqual({ level: 0, paid: 0 });
+  // The day went by, still short of dusk: the contract is the first day's.
+  expect(s.contract.day).toBe(1);
+  expect(s.contract.dayLeft).toBeLessThan(fresh.contract.dayLeft - (gameMs - freshAt) / 2);
 
   const speed = gameMs / (Date.now() - startedAt);
   console.log(`Played ${Math.round(gameMs / 1000)}s of game time at ${speed.toFixed(1)}x (target ${SPEED}x).`);

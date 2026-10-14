@@ -1,112 +1,91 @@
 import Phaser from 'phaser';
-import { INK } from './palette';
-import { PixelCanvas, type Palette } from './pixelArt';
+import { both, ellPts, hatch, ink, paint, rectPts, shadow, type Ctx, type Pt } from './paint';
 
-// Customers: townsfolk seen from the front, 22x34 art pixels shown at 2x. Each look is a head
-// (hooded or bare) on a shared tunic body, with its own colours.
+// Customers and craftsmen: townsfolk seen from the front, 44x68 as shown with their feet at the
+// bottom. Each look has its own tunic, hair and skin, and a hood or bare head.
 
 export const CUSTOMER_LOOKS = 5;
 export const customerTexture = (id: number) => `customer-${id % CUSTOMER_LOOKS}`;
 
-const HOODED = [
-  '......................',
-  '........HHHHHH........',
-  '.......HHHHHHHH.......',
-  '......HHhhhhhhHH......',
-  '......HhSSSSSShH......',
-  '.....HHhSSSSSShHH.....',
-  '.....HHSeSSSSeSHH.....',
-  '.....HHSSSSSSSSHH.....',
-  '.....HHSSSmmSSSHH.....',
-  '.....HHHsSSSSsHHH.....',
-  '....HHHHHssssHHHHH....',
-  '....HHHHHHHHHHHHHH....',
-];
+interface Look {
+  shirt: string;
+  hair: string;
+  skin: string;
+  hood?: boolean;
+  belt?: string;
+  apron?: boolean;
+}
 
-const BARE = [
-  '......................',
-  '......................',
-  '........hhhhhh........',
-  '.......hHHHHHHh.......',
-  '......hHHHHHHHHh......',
-  '......HHSSSSSSHH......',
-  '......HSSSSSSSSH......',
-  '......HSeSSSSeSH......',
-  '......HSSSSSSSSH......',
-  '.......SSSmmSSS.......',
-  '.......sSSSSSSs.......',
-  '.........ssss.........',
-];
+const SKIN = ['#f0c49a', '#d9a070', '#9c6a48'];
 
-const BODY = [
-  '...tTTTTTTTTTTTTTTt...',
-  '...tTTTTTTTTTTTTTTt...',
-  '...TTTtTTTTTTTTtTTT...',
-  '...TTTtTTTTTTTTtTTT...',
-  '...TTTtTTTTTTTTtTTT...',
-  '...TTTtTTTTTTTTtTTT...',
-  '...TTTtBBBBkBBBtTTT...',
-  '...SSStTTTTTTTTtSSS...',
-  '...sSStTTTTTTTTtSSs...',
-  '......TTTTTTTTTT......',
-  '......TTTTTTTTTT......',
-  '......tTTTTTTTTt......',
-  '......tTTTTTTTTt......',
-  '......tTTTTTTTTt......',
-  '......tttttttttt......',
-  '.......PP....PP.......',
-  '.......PP....PP.......',
-  '.......PP....PP.......',
-  '.......PP....PP.......',
-  '......FFF....FFF......',
-  '......FFF....FFF......',
-  '......................',
-];
-
-const SKIN = [
-  { S: 0xe8c49a, s: 0xc89f74, m: 0xb07a5a },
-  { S: 0xc68e5e, s: 0xa06e44, m: 0x7a4a30 },
-  { S: 0x8d5a3a, s: 0x6e4228, m: 0x4e2c1a },
-];
-
-const LOOKS: { head: string[]; palette: Palette }[] = [
+const LOOKS: Look[] = [
   // A monk in a brown habit.
-  { head: HOODED, palette: { ...SKIN[0], H: 0x6b4a2c, h: 0x4a321d, T: 0x7a5a3a, t: 0x5c3a21, B: 0xd8cfa8, k: 0xd8cfa8 } },
+  { shirt: '#8a6a44', hair: '#6b4a2c', skin: SKIN[0], hood: true, belt: '#e8dcb8' },
   // A woman in a red dress with auburn hair.
-  { head: BARE, palette: { ...SKIN[1], H: 0x8a4a22, h: 0x5e2e14, T: 0xb8343f, t: 0x7a2230, B: 0x3b2416, k: 0xc9a040 } },
+  { shirt: '#b8323a', hair: '#8a4a22', skin: SKIN[1] },
   // A farmer in blue with straw-blond hair.
-  { head: BARE, palette: { ...SKIN[0], H: 0xd9b24a, h: 0x9a7428, T: 0x4d7aa8, t: 0x33557a, B: 0x5c3a21, k: 0x8a8794 } },
+  { shirt: '#3f6fb0', hair: '#e8c45a', skin: SKIN[0] },
   // A woodsman in a green hood.
-  { head: HOODED, palette: { ...SKIN[2], H: 0x3f6a3a, h: 0x2a4a28, T: 0x5e8f62, t: 0x3f6a42, B: 0x3b2416, k: 0xc9a040 } },
+  { shirt: '#5e8f62', hair: '#3f6a3a', skin: SKIN[2], hood: true },
   // A merchant in violet with dark hair.
-  { head: BARE, palette: { ...SKIN[1], H: 0x2a2020, h: 0x16100f, T: 0x8f5a9e, t: 0x5f3a6a, B: 0xc9a040, k: 0xf5e3a0 } },
+  { shirt: '#8f5a9e', hair: '#2a2020', skin: SKIN[1], belt: '#d4a84a' },
 ];
 
 /** Craftsmen hired to work the stations: bare-headed, in work shirts under a leather apron. */
 export const CRAFTSMAN_LOOKS = 2;
 export const craftsmanTexture = (i: number) => `craftsman-${i % CRAFTSMAN_LOOKS}`;
-const CRAFTSMEN: Palette[] = [
-  { ...SKIN[0], H: 0x5c3a21, h: 0x3b2416, T: 0xd8cfa8, t: 0xa89c7c, B: 0x3b2416, k: 0xc9a040 },
-  { ...SKIN[2], H: 0x16100f, h: 0x0c0808, T: 0x8a8794, t: 0x5d5a66, B: 0x3b2416, k: 0xc9a040 },
+const CRAFTSMEN: Look[] = [
+  { shirt: '#e0d4b0', hair: '#5c3a21', skin: SKIN[0], apron: true },
+  { shirt: '#8a8f9a', hair: '#1a1210', skin: SKIN[2], apron: true },
 ];
-const APRON = { light: 0x9c6a3e, dark: 0x6b4426 };
+
+function drawPerson(c: Ctx, look: Look) {
+  const x = 22, y = 66;
+  shadow(c, x + 4, y + 0.5, 12, 3, 0.2);
+  // Legs.
+  for (const dx of [-6.5, 1.5]) both(c, rectPts(x + dx, y - 13, 5, 14, 1.5), '#4a3a32', { layers: 2 }, { w: 0.9 });
+  // Tunic, with its shaded side hatched.
+  const body: Pt[] = [[x - 10.5, y - 10], [x - 10.5, y - 25], [x - 6, y - 32], [x + 6, y - 32], [x + 10.5, y - 25], [x + 10.5, y - 10]];
+  both(c, body, look.shirt, { layers: 3 }, { w: 1.1 });
+  hatch(c, body.map(([a, b]) => [a + 8, b] as Pt), { gap: 2.4, alpha: 0.3, w: 0.5 });
+  if (look.apron) {
+    const apron: Pt[] = [[x - 5, y - 27], [x + 5, y - 27], [x + 6, y - 9], [x - 6, y - 9]];
+    both(c, apron, '#9c6a3e', { layers: 2 }, { w: 0.9 });
+    ink(c, [[x - 5, y - 27], [x - 4, y - 32]], { closed: false, w: 0.7 });
+    ink(c, [[x + 5, y - 27], [x + 4, y - 32]], { closed: false, w: 0.7 });
+  } else {
+    ink(c, [[x - 10, y - 17], [x + 10, y - 17]], { closed: false, w: 1.6, col: look.belt ?? '#3b2416' });
+  }
+  // Arms at the sides.
+  for (const side of [-1, 1]) {
+    both(c, rectPts(x + side * 11 - 2.5, y - 30, 5, 15, 2.2), look.shirt, { layers: 2 }, { w: 0.9 });
+    both(c, ellPts(x + side * 11, y - 14, 2.4, 2.4, 10), look.skin, { layers: 1 }, { w: 0.7 });
+  }
+  // Head, hair or hood.
+  const hy = y - 40;
+  if (look.hood) {
+    both(c, ellPts(x, hy - 1, 10, 10, 20), look.hair, { layers: 3 }, { w: 1.1 });
+    both(c, ellPts(x, hy + 1, 6.5, 7, 18), look.skin, { layers: 2 }, { w: 0.9 });
+  } else {
+    both(c, ellPts(x, hy, 8, 8.6, 20), look.skin, { layers: 2 }, { w: 1 });
+    const hair: Pt[] = [];
+    for (let i = 0; i <= 12; i++) {
+      const a = Math.PI + (i / 12) * Math.PI;
+      hair.push([x + Math.cos(a) * 8.8, hy - 1.5 + Math.sin(a) * 7.6]);
+    }
+    hair.push([x + 8.8, hy + 1], [x - 8.8, hy + 1]);
+    both(c, hair, look.hair, { layers: 2 }, { w: 1 });
+  }
+  // Dot eyes.
+  c.fillStyle = '#2a1d14';
+  for (const dx of [-3, 3]) {
+    c.beginPath();
+    c.arc(x + dx, hy + 2.5, 0.9, 0, Math.PI * 2);
+    c.fill();
+  }
+}
 
 export function bakeTownsfolk(scene: Phaser.Scene) {
-  LOOKS.forEach(({ head, palette }, i) => {
-    const rows = [...head, ...BODY];
-    new PixelCanvas(22, rows.length)
-      .grid(0, 0, rows, { ...palette, e: INK, P: 0x3a3040, F: 0x3b2416 })
-      .outline(INK)
-      .bake(scene, `customer-${i}`);
-  });
-  CRAFTSMEN.forEach((palette, i) => {
-    const rows = [...BARE, ...BODY];
-    const top = BARE.length;
-    const c = new PixelCanvas(22, rows.length).grid(0, 0, rows, { ...palette, e: INK, P: 0x3a3040, F: 0x3b2416 });
-    // A leather apron from the chest to the knees, on a strap round the neck.
-    c.rect(7, top + 1, 8, 13, APRON.light).rect(7, top + 13, 8, 1, APRON.dark);
-    c.rect(7, top, 1, 1, APRON.dark).rect(14, top, 1, 1, APRON.dark);
-    c.rect(9, top + 6, 4, 2, APRON.dark);
-    c.outline(INK).bake(scene, craftsmanTexture(i));
-  });
+  LOOKS.forEach((look, i) => paint(scene, `customer-${i}`, 44, 68, (c) => drawPerson(c, look), 3));
+  CRAFTSMEN.forEach((look, i) => paint(scene, craftsmanTexture(i), 44, 68, (c) => drawPerson(c, look), 3));
 }

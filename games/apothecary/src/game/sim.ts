@@ -45,6 +45,9 @@ import {
   speedAt,
   palletHasRoom,
   upgradeCost,
+  contractFor,
+  maxTip,
+  tipNow,
   type BeltId,
   type CraftingId,
   type BeltItem,
@@ -135,6 +138,10 @@ export function tick(
   if (state.craftsmen.counter.level >= 2) collectTill(state);
   for (const order of state.orders) if (atCounter(order)) order.patience -= dt;
   state.orders = state.orders.filter((o) => o.patience > 0);
+
+  // At dusk a contract still open is missed and the next day's comes in.
+  state.contract.dayLeft -= dt;
+  if (state.contract.dayLeft <= 0) state.contract = contractFor(state, state.contract.day + 1, state.contract.kept);
 
   state.nextOrderIn -= dt;
   if (state.nextOrderIn <= 0) {
@@ -299,13 +306,14 @@ function newOrder(state: GameState, rand: () => number) {
   const busy = state.upgrades.customers.level;
   const count = rand() < 0.35 + 0.2 * busy ? 2 : 1;
   const wants = Array.from({ length: count }, () => POTIONS[Math.floor(rand() * POTIONS.length)]);
-  // Customers pay for each potion as they get it, with a tip that is more generous, and patience
-  // that lasts longer, at a better counter and on an easier difficulty.
+  // Customers pay for each potion as they get it, with a counter bonus that is more generous, and
+  // patience that lasts longer, at a better counter and on an easier difficulty. The decaying tip
+  // comes on top, once the order is filled.
   const level = state.upgrades.counter.level;
   const pay = Object.fromEntries(wants.map((p) => [p, potionPrice(state, p) + 2 * (level + 1)]));
   const maxPatience =
     ((60_000 + rand() * 30_000) * (1 + 0.25 * level) * byDifficulty(1.5, 1, 0.7)) / (1 + 0.5 * busy);
-  return { id: state.nextOrderId++, wants, pay, patience: maxPatience, maxPatience };
+  return { id: state.nextOrderId++, wants, pay, patience: maxPatience, maxPatience, tip: maxTip(count) };
 }
 
 /** Whether a plot can be harvested: grown, in a garden that is there. */
@@ -364,15 +372,35 @@ function serveFromShelf(state: GameState, atCounter: (order: Order) => boolean, 
       counter.shelf.splice(i, 1);
       const others = counter.shelf.filter((p) => p === want).length;
       counter.till += stockedPay(order.pay[want] ?? 0, others);
+      state.sold++;
+      if (want === state.contract.potion) deliverForContract(state);
       limit--;
       return false;
     });
+    // A filled order tips what is left of its tip, which shrank while the customer waited.
+    if (order.wants.length === 0) {
+      const tip = tipNow(order);
+      counter.till += tip;
+      state.tips += tip;
+    }
   };
   // Only customers standing at the counter get served.
   const waiting = state.orders.filter(atCounter);
   for (const order of waiting) if (canFill(counter.shelf, order)) give(order);
   for (const order of waiting) if (order.wants.length > 0) give(order);
   state.orders = state.orders.filter((o) => o.wants.length > 0);
+}
+
+/**
+ * Counts a potion of today's contract as delivered. Once enough are, the reward goes straight into
+ * the purse and the next day's contract comes in at once.
+ */
+function deliverForContract(state: GameState) {
+  const contract = state.contract;
+  contract.made++;
+  if (contract.made < contract.need) return;
+  state.coins += contract.reward;
+  state.contract = contractFor(state, contract.day + 1, contract.kept + 1);
 }
 
 function canFill(carrying: readonly ItemId[], order: Order) {
