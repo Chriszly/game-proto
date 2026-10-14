@@ -158,9 +158,9 @@ the game; the hub's settings live under the shared `hub-settings` key (see Hub s
   `byDifficulty(5, 3, 2)` (easy, normal, hard), from `shared/settings.ts`. It is read once at
   module load, so a change takes effect on the next page load. It sets the hearts of a new run
   (`freshState`) and the base of `maxHearts` in `stats`.
-- Hotfoot does not read `settings.reduceMotion` itself: the knight's hurt blink (alpha toggled
-  every 80 ms in `GameScene`) still blinks with reduced motion on. The root `AGENTS.md` asks for
-  blinking effects to be held still, so this is a gap to fix.
+- `GameScene` reads `settings.reduceMotion` itself: with it on, the knight's hurt blink (alpha
+  toggled every 80 ms) is held at a steady 0.6 alpha, and the shield ring's pulse is held at a
+  fixed 0.6 alpha.
 - Normal must stay exactly as designed: the playthrough runs on Normal and its `STAGE_1` expects 3
   hearts.
 - Keep the README's difficulty line (5 hearts on Easy, 2 on Hard) in sync with `byDifficulty`.

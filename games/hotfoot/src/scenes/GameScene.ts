@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { settings } from '../../../../shared/settings';
 import { iconTexture } from '../art/icons';
 import type { KnightPose } from '../art/knight';
 import { CLOTH, FROST, GOBLIN, GOLD, INK, RED } from '../art/palette';
@@ -225,8 +226,9 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5, pose === 'slide' ? FEET.slide : FEET.stand)
       .setPosition(RUNNER_X, GROUND_Y - r.h)
       .setAngle(s.phase === 'over' ? -8 : 0);
-    // Blinks while it can't be hurt after a hit; greyed once fallen.
-    this.knight.setAlpha(r.hurtMs > 0 && s.phase === 'running' && Math.floor(this.clock / 80) % 2 === 0 ? 0.35 : 1);
+    // Blinks while it can't be hurt after a hit (held faded with reduced motion); greyed once fallen.
+    const hurt = r.hurtMs > 0 && s.phase === 'running';
+    this.knight.setAlpha(!hurt ? 1 : settings.reduceMotion ? 0.6 : Math.floor(this.clock / 80) % 2 === 0 ? 0.35 : 1);
     if (s.phase === 'over') this.knight.setTint(0x8a8090).setTintMode(Phaser.TintModes.MULTIPLY);
     else this.knight.clearTint();
   }
@@ -262,7 +264,7 @@ export class GameScene extends Phaser.Scene {
       }
     }
     if (s.shields > 0 && s.phase === 'running') {
-      g.lineStyle(2, FROST.mid, 0.5 + 0.2 * Math.sin(this.clock / 150)).strokeCircle(RUNNER_X, GROUND_Y - s.runner.h - 30, 38);
+      g.lineStyle(2, FROST.mid, settings.reduceMotion ? 0.6 : 0.5 + 0.2 * Math.sin(this.clock / 150)).strokeCircle(RUNNER_X, GROUND_Y - s.runner.h - 30, 38);
     }
   }
 

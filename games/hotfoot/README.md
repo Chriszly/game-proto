@@ -83,6 +83,7 @@ A hint on the first stretch of the run shows where to tap.
 ![After a fall](docs/screenshots/game-over.png)
 
 The difficulty, set on the hub page's Settings, changes one thing: the knight starts with 5 hearts on Easy and 2 on Hard.
+With Reduce motion on, the knight fades instead of blinking after a hit and the shield ring holds still.
 
 ## Running locally
 
