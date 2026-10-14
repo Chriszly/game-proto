@@ -1,14 +1,19 @@
 // The low-poly models of every faction's ships and buildings, and of the props on the map. Each
 // faction has its own design language and materials, and keeps its faction colour on a stripe or
 // a glow so it reads apart at phone size:
-// - Nomad Freight: off-white rebel-style fighters (X-wing and Y-wing silhouettes), a saucer-cockpit
-//   light freighter and a hammerhead blockade runner, with amber stripes; rounded modular bases.
-// - Veil Syndicate: saucer sections, secondary hulls and warp nacelles on pylons with glowing blue
-//   strips and violet hull bands; mushroom starbases and an open spacedock.
+// - Nomad Freight: off-white fighters (an X-winged fighter and a twin-nacelle bomber), a saucer-cockpit
+//   light freighter and a dagger-wedge destroyer with twin bridge towers, with amber stripes;
+//   rounded modular bases.
+// - Veil Syndicate: pale starships with glowing blue nacelle strips and violet bands, a different
+//   silhouette per class: a boxy shuttle, a saucerless arrowhead escort, a saucer frigate with its
+//   nacelles slung below and a rollbar, and a mobile ringed space station with warp nacelles;
+//   mushroom starbases and an open spacedock.
 // - Solar Concord: curved gold hulls round glowing blue crystal cores, arched carriers; pylons are
 //   floating crystals.
-// - Iron Dominion: dark iron cathedral ships with long armoured prows, spires and buttresses, gold
-//   trim and ice-blue windows.
+// - Iron Dominion: dark iron warships with gold trim and ice-blue windows, each class from another
+//   arm of the empire: a squat forge hauler with a cog crest and cranes, a winged assault gunship,
+//   a rounded strike cruiser with flight bays and a dorsal cannon, and a vast cathedral battleship
+//   with a ram prow, gun decks and spires, drawn a little larger than the other factions' ships.
 // - Ferrox Hive: teal-and-bronze insects with glowing sacs.
 // Models face +x, in display pixels; see mesh.ts.
 
@@ -39,7 +44,27 @@ function legs(m: string, at: [number, number][], reachY: number, drop: number): 
   return pair(merge(...at.map(([x, y]) => tube(m, [x, y, 0], [x + (x > 0 ? 3 : -3), reachY, -drop], 0.7, 0.4, 4))));
 }
 
-// ---------------------------------------------------------------- Nomad Freight (rebel fighters)
+/**
+ * A hull section between two outlines with the same number of points: `lower` at height z0 and
+ * `upper` at z1, joined by sloping side faces. Only the caps asked for are closed, so stacked
+ * sections leave no hidden face between them for the painter's sort to get wrong.
+ */
+function loft(m: string, lower: [number, number][], z0: number, upper: [number, number][], z1: number, caps: { bottom?: boolean; top?: boolean } = {}): Mesh {
+  let area = 0;
+  lower.forEach((a, k) => {
+    const b = lower[(k + 1) % lower.length];
+    area += a[0] * b[1] - b[0] * a[1];
+  });
+  const [lo, up] = area < 0 ? [[...lower].reverse(), [...upper].reverse()] : [lower, upper];
+  const n = lo.length;
+  const v: V3[] = [...lo.map(([x, y]): V3 => [x, y, z0]), ...up.map(([x, y]): V3 => [x, y, z1])];
+  const f = Array.from({ length: n }, (_, k) => ({ i: [k, (k + 1) % n, n + ((k + 1) % n), n + k], m }));
+  if (caps.bottom) f.push({ i: Array.from({ length: n }, (_, k) => n - 1 - k), m });
+  if (caps.top) f.push({ i: Array.from({ length: n }, (_, k) => n + k), m });
+  return { v, f };
+}
+
+// ---------------------------------------------------------------- Nomad Freight (wing fighters)
 
 function nomad(): FactionArt {
   const mats: Materials = {
@@ -52,7 +77,7 @@ function nomad(): FactionArt {
     glow: { kind: 'glow', color: 0xff9a5a },
     glow2: { kind: 'glow', color: 0x9fdcff },
   };
-  // X-wing style: square fuselage, four wings in an X, wingtip cannons, amber wing stripes.
+  // Fighter: square fuselage, four wings in an X, wingtip cannons, amber wing stripes.
   const wing = merge(
     plate('hull', [[-9, 2.2], [-2, 2.2], [-4.6, 12], [-8.6, 12]], 0, 0.8),
     plate('stripe', [[-7.8, 5.5], [-4.2, 5.5], [-4.9, 8.6], [-8.2, 8.6]], 0.55, 0.3),
@@ -78,26 +103,45 @@ function nomad(): FactionArt {
     plate('stripe', [[3, -8], [7.5, -4.4], [6.4, -3.2], [1.8, -6.8]], 2.5, 0.4),
     band('glow2', -2, 0, 12.2, 1.4, Math.PI - 0.75, Math.PI + 0.75, 6, 0, 2.2),
   );
-  // A hammerhead blockade runner: long cockpit nose, thin neck, big round engine block.
+  // A dagger-wedge destroyer: a long flat arrowhead hull, a dorsal flight deck split down the
+  // forward centre line, twin bridge towers side by side on a raised stern superstructure, a row of
+  // engine bells across the flat stern and amber stripes along the wedge's edges.
+  const half = (pts: [number, number][]): [number, number][] => [...pts, ...pts.slice(1, -1).reverse().map(([x, y]): [number, number] => [x, -y])];
+  const waist = half([[24, 0], [-15, 10.2], [-20.5, 9.6], [-20.5, 0]]);
+  const deck = half([[20.5, 0], [-14, 7.2], [-19.5, 6.8], [-19.5, 0]]);
+  const keel = half([[21, 0], [-14, 6.4], [-20, 5.8], [-20, 0]]);
+  const deckEdge = (x: number) => (7.2 * (20.5 - x)) / 34.5;
+  const edgeStripe: [number, number][] = [[19.6, 0.15], [-1, deckEdge(-1) - 0.3], [-1, deckEdge(-1) - 1.6], [17.4, 0.15]];
   const engines = merge(
-    ...[0, 1, 2, 3, 4, 5].map((k) => {
-      const a = (k / 6) * Math.PI * 2;
-      return tube('glow', [-23, Math.cos(a) * 4.4, Math.sin(a) * 4.4], [-22, Math.cos(a) * 4.4, Math.sin(a) * 4.4], 1.4, 1.4, 6);
-    }),
-    tube('glow', [-23, 0, 0], [-22, 0, 0], 1.6, 1.6, 6),
+    ...([[2.5, 0.4, 2.1], [6.6, 0.2, 1.5]] as const).map(([y, z, r]) =>
+      pair(merge(
+        tube('chrome', [-23.4, y, z], [-20, y, z], r * 1.12, r * 0.85, 8),
+        tube('glow', [-23.8, y, z], [-23.4, y, z], r * 0.9, r * 0.9, 8),
+      )),
+    ),
+  );
+  const tower = (y: number) => merge(
+    box('dark', [-15, y, 7.2], [2.2, 1.1, 4.2], 0.8),
+    box('hull', [-14.6, y, 9.9], [5, 2.3, 1.5], 0.9),
+    box('glass', [-12.1, y, 10], [0.3, 2, 0.7]),
+    box('stripe', [-16.2, y, 10.7], [1.6, 2.1, 0.2]),
   );
   const heavy = merge(
-    tube('hull', [6, 0, 0], [19, 0, 0], 4.2, 3.6, 8),
-    tube('hull', [19, 0, 0], [23, 0, 0], 3.6, 1.4, 8),
-    box('glass', [19.5, 0, 3.3], [3, 4, 0.6]),
-    pair(box('stripe', [13, 3.2, 2.4], [8, 1.4, 0.5])),
-    tube('hull2', [-6, 0, 0], [6, 0, 0], 2.6, 2.6, 6),
-    tube('hull', [-22, 0, 0], [-6, 0, 0], 7.6, 6.4, 10),
-    tube('stripe', [-13, 0, 0], [-10, 0, 0], 7.9, 7.7, 10),
-    box('dark', [-15, 0, 7.4], [4.5, 2.2, 1.6]),
+    loft('hull2', keel, -2.2, waist, 0, { bottom: true }),
+    loft('hull', waist, 0, deck, 3, { top: true }),
+    // The flight deck: a dark recessed strip down the forward centre line between two armoured doors.
+    plate('dark', [[19, 0.3], [-6, 1.3], [-6, -1.3], [19, -0.3]], 3.05, 0.1),
+    pair(plate('hull2', [[18, 0.4], [-6, 1.4], [-6, 2.5], [16.5, 0.9]], 3.15, 0.3)),
+    pair(plate('stripe', edgeStripe, 3.1, 0.2)),
+    pair(plate('stripe', [[-8, 6], [-14, 7.0], [-14, 5.8], [-8, 4.9]], 3.1, 0.2)),
+    // The raised superstructure at the stern and its twin command towers.
+    box('hull', [-14, 0, 4], [11, 9, 2.4], 0.85),
+    box('hull2', [-10, 0, 5.4], [3.5, 5.5, 0.8]),
+    tower(2.9),
+    tower(-2.9),
     engines,
   );
-  // Y-wing style hauler: cockpit nose, cross spar and two long engine nacelles, cargo on its back.
+  // Twin-nacelle hauler: cockpit nose, cross spar and two long engine nacelles, cargo on its back.
   const harvester = merge(
     tube('hull', [0, 0, 0], [10, 0, 0], 2.6, 2.0, 6),
     tube('hull', [10, 0, 0], [13.5, 0, 0], 2.0, 0.7, 6),
@@ -180,31 +224,78 @@ function veil(): FactionArt {
       ring('stripe', x, 0, rx * 0.7, rx * 0.12, z + rx * 0.15, 0.4, 14),
       ellipsoid('hull2', [x, 0, z + rx * 0.16], [rx * 0.28, ry * 0.28, rx * 0.16], 8, 2, { dome: true }),
     );
+  // Every class has its own silhouette. Scout: a compact arrowhead escort with no saucer and two
+  // short nacelles tucked under its flanks.
   const scout = merge(
-    saucer(5, 7, 7, 1.5),
-    box('hull2', [0, 0, 0.6], [4, 1.6, 2]),
-    tube('hull', [-9, 0, -0.4], [1, 0, -0.4], 1.8, 1.3, 6),
-    tube('glow2', [1, 0, -0.4], [1.6, 0, -0.4], 1.2, 1.2, 6),
-    pair(nacelle(-12, -1, 5.4, 2.2, 1.3)),
+    slab('hull', [[11, 0], [3, 3.2], [-5, 4.6], [-8, 3.6], [-8, -3.6], [-5, -4.6], [3, -3.2]], -1.2, 1.6, 0.72),
+    ellipsoid('glass', [2.5, 0, 1.6], [2, 1.2, 0.8], 6, 2, { dome: true }),
+    pair(plate('stripe', [[9, 0.2], [3.4, 2.3], [2, 1.6], [7.2, 0.2]], 1.7, 0.25)),
+    tube('glow2', [10.4, 0, -0.2], [11.2, 0, -0.2], 0.9, 0.5, 6),
+    pair(merge(
+      tube('hull2', [-9.5, 4.4, -0.8], [1, 4.4, -0.8], 1.3, 1.1, 6),
+      box('glow', [-4.5, 5.6, -0.6], [8, 0.4, 0.8]),
+      tube('bussard', [1, 4.4, -0.8], [2, 4.4, -0.8], 1.05, 0.5, 6),
+    )),
+    box('glow', [-8.1, 0, 0.2], [0.4, 5, 1]),
   );
+  // Gunship: a frigate with a round saucer, the nacelles slung low beneath it and a weapons rollbar
+  // arching over its back.
   const gunship = merge(
-    saucer(6, 9, 9, 2),
-    box('hull2', [0, 0, 0.6], [5, 2, 2.6]),
-    tube('hull', [-12, 0, -2], [2, 0, -2], 3, 2.4, 8),
-    ellipsoid('glow2', [2.4, 0, -2], [0.8, 2, 2], 6, 2),
-    pair(nacelle(-17, -3, 7, 2.4, 1.6)),
+    saucer(4, 10, 10, 2.2),
+    box('hull2', [-6, 0, 1.4], [6, 4.6, 2.2], 0.8),
+    pair(merge(
+      nacelle(-17, -3, 7.2, -3.4, 1.6),
+      box('hull2', [-8, 4.6, -0.8], [3.2, 3.8, 0.8]),
+    )),
+    pair(move(turn(box('hull2', [0, 0, 0], [1.6, 1.2, 6]), 'x', -0.25), [-4.5, 5.2, 5.4])),
+    box('hull2', [-4.5, 0, 8.4], [2.4, 14, 1.4]),
+    box('stripe', [-4.5, 0, 9.4], [2.6, 5, 1.1], 0.8),
+    pair(tube('glow2', [-3.6, 4.2, 9.3], [-2.6, 4.2, 9.3], 0.7, 0.7, 6)),
   );
+  // Heavy: a mobile space station: a central core with an inner habitat ring, an outer docking
+  // ring on three spokes with curved docking pylons rising and falling from it, and a pair of warp
+  // nacelles on short pylons and glowing impulse engines at the back so it reads as a ship.
+  const around = (k: number, n: number, offset = 0) => offset + (k / n) * Math.PI * 2;
+  const spokes = [0, 1, 2].map((k) => turn(box('hull2', [10, 0, 0], [8.6, 1.5, 1.1]), 'z', around(k, 3)));
+  const pylonArc = (a: number, up: number) => {
+    const at = (r: number, z: number): V3 => [Math.cos(a) * r, Math.sin(a) * r, z * up];
+    return merge(
+      tube('hull', at(14.8, 0.4), at(17, 3.6), 0.95, 0.85, 5),
+      tube('hull', at(17, 3.6), at(15.8, 8), 0.85, 0.6, 5),
+      tube('glow2', at(15.8, 8), at(15.6, 8.8), 0.6, 0.3, 5),
+    );
+  };
   const heavy = merge(
-    saucer(7, 14, 12, 1.6),
-    scale(tube('hull', [-16, 0, -1.6], [0, 0, -1.6], 4.4, 3.4, 8), [1, 1.3, 1]),
-    ellipsoid('glow2', [0.5, 0, -1.6], [0.8, 3, 2.2], 6, 2),
-    pair(nacelle(-21, -5, 10, 0.2, 2)),
+    tube('hull2', [0, 0, -5.5], [0, 0, 5.5], 2.4, 2.4, 8),
+    tube('hull', [0, 0, 5.5], [0, 0, 7.5], 2.4, 0.8, 8),
+    tube('hull', [0, 0, -5.5], [0, 0, -7], 2.4, 0.8, 8),
+    ellipsoid('hull', [0, 0, 0], [6.2, 6.2, 2.6], 14, 2),
+    ring('hull', 0, 0, 9.4, 2.6, 0, 1.8, 18, 'hull'),
+    ring('stripe', 0, 0, 8.6, 1, 1, 0.3, 18),
+    ring('glow2', 0, 0, 9.5, 0.4, 0, 0.9, 18),
+    ...spokes,
+    ring('hull', 0, 0, 15.4, 1.8, 0, 1.4, 24),
+    ring('glow', 0, 0, 15.5, 0.35, 0, 0.7, 24),
+    ...[0, 1, 2].flatMap((k) => [pylonArc(around(k, 3, Math.PI / 3), 1), pylonArc(around(k, 3, Math.PI / 3), -1)]),
+    // Warp nacelles and impulse engines at the back (-x).
+    pair(merge(
+      tube('hull2', [-27, 8.6, 1.6], [-11, 8.6, 1.6], 1.8, 1.8, 6),
+      box('glow', [-19.5, 8.6, 3.2], [13, 1.3, 0.5]),
+      tube('bussard', [-11, 8.6, 1.6], [-9.6, 8.6, 1.6], 1.7, 0.9, 6),
+      move(turn(box('hull2', [0, 0, 0], [3, 5.2, 0.8]), 'z', -0.5), [-15.5, 6.6, 0.8]),
+      box('glow', [-16.4, 3.2, 0], [0.5, 2.4, 1]),
+    )),
+    box('hull2', [-12.6, 0, 0], [7, 4.4, 2.2], 0.8),
+    box('glow', [-16.2, 0, 0], [0.5, 3.6, 1.6]),
   );
+  // Harvester: a boxy shuttlecraft with a sloped nose, side warp pods and a cargo pallet.
   const harvester = merge(
-    slab('hull', [[-6, -3], [4, -3], [7, -1.6], [7, 1.6], [4, 3], [-6, 3]], -1.5, 2, 0.8),
-    box('stripe', [0, 0, 2.1], [6, 3.6, 0.4]),
-    box('glass', [5.4, 0, 1.6], [1.6, 3, 0.6]),
-    pair(merge(tube('hull2', [-6, 4.3, 0.4], [4, 4.3, 0.4], 1.1, 1.1, 6), box('glow', [-1, 4.3, 1.4], [8, 0.8, 0.4]))),
+    box('hull', [0, 0, 0.4], [11, 6.4, 4.2], 0.82),
+    slab('hull', [[5.5, -3.2], [8.4, -2.2], [8.4, 2.2], [5.5, 3.2]], -1.7, 1.2, 0.85),
+    box('glass', [7.4, 0, 1.3], [1.6, 3.6, 0.6]),
+    box('stripe', [-0.5, 0, 2.6], [5, 5, 0.4]),
+    box('glow', [-5.6, 0, 0.6], [0.4, 4.8, 2.4]),
+    pair(merge(tube('hull2', [-6.5, 4.4, -0.8], [3.5, 4.4, -0.8], 1.2, 1.2, 6), box('glow', [-1.5, 4.4, 0.3], [8, 0.8, 0.4]))),
   );
 
   // Starbases: a mushroom station on a stalk, a relay disc, an open spacedock, a mine lattice.
@@ -331,49 +422,125 @@ function iron(): FactionArt {
     gold: { kind: 'chrome', color: 0xe8b450 },
     glow: { kind: 'glow', color: 0x7fd4ff },
     stripe: { kind: 'paint', color: 0x6cc8ff, spec: 0.4 },
+    glass: { kind: 'glass', color: 0x1c2a44 },
   };
   const spire = (x: number, y: number, z: number, r: number, h: number) =>
     merge(tube('iron2', [x, y, z], [x, y, z + h * 0.4], r, r * 0.8, 4, { spin: 0 }), tube('gold', [x, y, z + h * 0.4], [x, y, z + h], r * 0.85, 0, 4, { spin: 0 }));
   const buttress = (x: number, y: number) => move(turn(box('iron2', [0, 0, 0], [2, 1.2, 6.5], 0.8), 'x', -0.55), [x, y, 2.2]);
+  /** A row of broadside gun decks along both flanks: an armoured strip, lit gun ports and barrels. */
+  const broadside = (x0: number, x1: number, y: number, z: number, h: number) => {
+    const guns: Mesh[] = [];
+    for (let x = x0 + 1.5; x < x1 - 0.5; x += 3) guns.push(tube('gold', [x, y + 0.8, z], [x, y + 2.4, z], 0.45, 0.4, 4));
+    return pair(merge(
+      box('iron2', [(x0 + x1) / 2, y, z], [x1 - x0, 1.8, h]),
+      box('glow', [(x0 + x1) / 2, y + 0.92, z + h * 0.18], [x1 - x0 - 1, 0.15, h * 0.32]),
+      box('gold', [(x0 + x1) / 2, y + 0.4, z + h / 2 + 0.1], [x1 - x0, 1, 0.25]),
+      ...guns,
+    ));
+  };
+  /** A stepped cathedral castle at the stern: tiers narrowing upward, lit windows, a spire on top. */
+  const castle = (x: number, w: number, z: number, tiers: number, spireH: number) => {
+    const parts: Mesh[] = [];
+    let zz = z;
+    for (let k = 0; k < tiers; k++) {
+      const s = 1 - k * 0.24;
+      const h = 3.4 - k * 0.45;
+      parts.push(box(k % 2 ? 'iron' : 'iron2', [x - k * 0.6, 0, zz + h / 2], [w * 1.25 * s, w * s, h], 0.86));
+      parts.push(pair(box('glow', [x - k * 0.6, (w * s) / 2 + 0.05, zz + h * 0.55], [w * 1.25 * s * 0.7, 0.15, h * 0.3])));
+      zz += h;
+    }
+    parts.push(spire(x - tiers * 0.6, 0, zz, w * 0.18 + 0.6, spireH));
+    return merge(...parts);
+  };
+  /** An armoured ram prow: a gold wedge, flat beneath, sloping up to the hull. */
+  const ram = (x0: number, x1: number, w: number, z0: number, z1: number) =>
+    merge(
+      slab('gold', [[x1, 0], [x0 + (x1 - x0) * 0.35, w * 0.7], [x0, w], [x0, -w], [x0 + (x1 - x0) * 0.35, -w * 0.7]], z0, z1, 0.55),
+      box('iron2', [x0 + 0.6, 0, (z0 + z1) / 2 + 0.6], [1.2, w * 2.1, z1 - z0 + 1.4]),
+    );
+  const engines = (x: number, ys: number[], z: number, r: number) =>
+    merge(...ys.map((y) => merge(tube('iron2', [x - 1.2, y, z], [x + 0.5, y, z], r * 1.15, r, 6), tube('glow', [x - 1.6, y, z], [x - 1.2, y, z], r * 0.9, r * 0.9, 6))));
+
+  // Scout: a stubby assault gunship with broad straight wings, a cockpit, a tail fin and twin
+  // engines on its back.
   const scout = merge(
-    slab('iron', [[13, 0], [4, 4], [-9, 4], [-11, 2], [-11, -2], [-9, -4], [4, -4]], -1.5, 2, 0.7),
-    slab('gold', [[14, 0], [8, 1.6], [8, -1.6]], 1, 2.6, 0.5),
-    box('stripe', [-2, 0, 2.2], [6, 2.4, 0.4]),
-    spire(-5, 0, 1.5, 1.6, 6.5),
-    pair(tube('glow', [-12, 2, 0], [-11, 2, 0], 1.2, 1.2, 6)),
+    box('iron', [0, 0, 0], [16, 4.6, 3.6], 0.8),
+    slab('iron', [[8, -2.3], [11.5, -1.2], [11.5, 1.2], [8, 2.3]], -1.6, 1.4, 0.8),
+    box('glass', [9.2, 0, 1.6], [2, 2.6, 0.6]),
+    pair(merge(
+      plate('iron2', [[3, 2], [3, 10.5], [-3, 10.5], [-4.5, 2]], -0.4, 0.9),
+      plate('gold', [[3.1, 2], [3.1, 10.5], [2.1, 10.5], [2.1, 2]], 0.15, 0.3),
+      box('iron', [-0.8, 10.5, -0.4], [6.4, 1, 1.8]),
+      box('glow', [-4, 10.5, -0.4], [0.4, 0.7, 1]),
+      tube('iron2', [-9, 1.9, 2.4], [-1, 1.9, 2.4], 1.3, 1.3, 6),
+      tube('glow', [-9.6, 1.9, 2.4], [-9, 1.9, 2.4], 1.1, 1.1, 6),
+    )),
+    box('stripe', [3, 0, 1.9], [4, 2.8, 0.3]),
+    box('iron2', [-6, 0, 3.6], [3.6, 0.8, 4], 0.7),
+    box('gold', [-6.4, 0, 5.7], [2.6, 0.9, 0.4]),
   );
+  // Gunship: a bulky rounded armoured cruiser with a short blunt prow, lit flight bays in its flanks,
+  // a big bombardment cannon on its back and a low bridge at the stern.
   const gunship = merge(
-    slab('iron', [[16, 0], [10, 4.6], [-14, 5], [-16, 3], [-16, -3], [-14, -5], [10, -4.6]], -2, 2.5, 0.8),
-    slab('gold', [[18, 0], [11, 3.2], [11, -3.2]], 0.8, 3.2, 0.55),
-    box('iron2', [-9, 0, 4.4], [6.5, 6, 4], 0.8),
-    box('iron', [-9, 0, 7.6], [4.2, 4, 3], 0.8),
-    spire(-9, 0, 9, 1.8, 7),
-    box('stripe', [2, 0, 2.6], [10, 2.4, 0.4]),
-    pair(merge(box('iron2', [0, 5.5, 0.5], [10, 2, 2.2]), box('glow', [0, 6.6, 0.8], [8, 0.3, 0.7]))),
-    pair(tube('glow', [-17, 2.4, 0], [-16, 2.4, 0], 1.4, 1.4, 6)),
+    scale(tube('iron', [-15, 0, 0], [9, 0, 0], 5.4, 4.8, 10), [1, 1, 0.8]),
+    scale(ellipsoid('iron', [9, 0, 0], [4, 4.8, 3.8], 10, 2), [1, 1, 1]),
+    slab('gold', [[16, -1.8], [16, 1.8], [11, 3.4], [11, -3.4]], -1.6, 1.8, 0.7),
+    pair(merge(
+      box('iron2', [-3, 4.9, 0], [10, 1.6, 3.2]),
+      box('glow', [-3, 5.72, -0.2], [8, 0.1, 2]),
+      box('gold', [-3, 5.2, 1.8], [10.4, 1, 0.3]),
+    )),
+    box('iron2', [2, 0, 4.4], [6, 4.6, 2], 0.8),
+    tube('iron2', [2, 0, 5.8], [16, 0, 5.8], 1.5, 1.2, 8),
+    tube('gold', [16, 0, 5.8], [17.6, 0, 5.8], 1.6, 1.6, 8),
+    box('stripe', [-6, 0, 4.4], [5, 3, 0.3]),
+    box('iron2', [-11, 0, 5], [5, 4.4, 3], 0.8),
+    pair(box('glow', [-11, 2.05, 5.4], [3.4, 0.15, 0.8])),
+    spire(-11.5, 0, 6.5, 1, 3.5),
+    engines(-15.5, [-2.6, 0, 2.6], 0, 1.4),
   );
+  // Heavy: a vast battleship-cathedral, a massive ram prow, three gun decks a side, a spine of
+  // chapels and spires, buttresses and a towering stepped cathedral at the stern.
   const heavy = merge(
-    slab('iron', [[22, 0], [14, 6.4], [-16, 7], [-20, 4], [-20, -4], [-16, -7], [14, -6.4]], -2, 3, 0.82),
-    slab('gold', [[25, 0], [15, 5], [12, 0], [15, -5]], -1, 4.2, 0.45),
-    box('iron2', [-6, 0, 5.2], [15, 8, 4.4], 0.85),
-    box('iron', [-8, 0, 8.6], [8, 5, 3], 0.8),
-    spire(-8, 0, 10, 2.2, 9),
-    pair(merge(spire(-1, 3, 6.5, 1, 5), spire(-12, 3, 6.5, 1, 4.5))),
-    pair(merge(buttress(-12, 6), buttress(-4, 6), buttress(4, 5.6))),
-    pair(box('glow', [-6, 4.1, 5.2], [11, 0.3, 1])),
-    box('stripe', [8, 0, 3.2], [10, 3, 0.4]),
-    tube('glow', [-21, 0, 0.5], [-20, 0, 0.5], 3, 3, 8),
-    pair(tube('glow', [-21, 4.6, 0.5], [-20, 4.6, 0.5], 1.6, 1.6, 6)),
+    slab('iron', [[17, 0], [12, 6.4], [-20, 7], [-24, 4.6], [-24, -4.6], [-20, -7], [12, -6.4]], -2.6, 3, 0.88),
+    slab('iron2', [[12, 0], [8, 4.6], [-18, 5], [-18, -5], [8, -4.6]], 3, 4.4, 0.9),
+    ram(15, 32, 4.6, -2.4, 2.6),
+    box('stripe', [20, 0, 2.1], [6, 1.4, 0.3]),
+    broadside(-19, 11, 6.6, 0.2, 3),
+    broadside(-15, 6, 5, 4.3, 1.6),
+    // Chapels and spires along the spine.
+    box('iron', [4, 0, 5.4], [5, 3.4, 2], 0.8),
+    spire(4, 0, 6.4, 1.3, 8),
+    box('iron', [-4, 0, 5.6], [5, 4, 2.4], 0.8),
+    pair(merge(spire(-4, 1.8, 6.8, 0.8, 6), spire(-21, 4.2, 4.4, 1, 8))),
+    pair(merge(buttress(-9, 5.6), buttress(-17, 5.6), buttress(-1, 5.4))),
+    castle(-14, 9, 4.4, 4, 13),
+    box('stripe', [-14, 0, 4.6], [12, 11.4, 0.3]),
+    engines(-24, [-3.2, 0, 3.2], 0.4, 1.7),
+    pair(engines(-24, [5.4], 0.2, 1.1)),
   );
+  // Harvester: a squat forge-priest hauler with a great cog crest standing on its back, manipulator
+  // cranes and smoking stacks; no prow.
+  const teeth = Array.from({ length: 10 }, (_, k) => turn(box('gold', [5.6, 0, 0], [1.6, 1.4, 1]), 'z', (k / 10) * Math.PI * 2));
+  const cog = xform(merge(ring('gold', 0, 0, 5, 1.8, 0, 1, 14), ...teeth, tube('iron2', [0, 0, -0.8], [0, 0, 0.8], 1.6, 1.6, 8), box('glow', [0, 0, 0], [3.4, 0.5, 1.2])), ([x, y, z]) => [z, x, y]);
   const harvester = merge(
-    box('iron', [0, 0, 0], [13, 8, 4], 0.8),
-    box('iron2', [-2, 0, 3], [5, 5, 2.4], 0.8),
-    tube('iron2', [3, 0, 2], [3, 0, 6], 0.8, 0.8, 4),
-    box('gold', [7, 0, 6], [11, 1.1, 1.1]),
-    box('glow', [6.6, 0, 1.4], [0.4, 5, 1]),
-    box('stripe', [-4, 0, 2.1], [3, 8.2, 0.4]),
-    pair(tube('glow', [-7.5, 2.4, 0], [-6.5, 2.4, 0], 1.1, 1.1, 6)),
+    box('iron', [0, 0, 0], [14, 9, 4.2], 0.85),
+    box('iron2', [0, 0, 2.6], [10, 7, 1.2], 0.9),
+    move(cog, [-1, 0, 8.4]),
+    box('iron2', [-1, 0, 3.6], [2, 3, 1.4]),
+    pair(merge(
+      tube('gold', [5, 3.4, 2.6], [8.5, 5.4, 5], 0.45, 0.4, 4),
+      tube('gold', [8.5, 5.4, 5], [10.5, 5.4, 1.5], 0.4, 0.35, 4),
+      box('iron2', [10.5, 5.4, 1], [1.4, 1.4, 1]),
+      tube('iron2', [-5.5, 3, 2], [-5.5, 3, 7.5], 0.9, 0.8, 6),
+      tube('glow', [-5.5, 3, 7.5], [-5.5, 3, 8], 0.8, 0.8, 6),
+      box('glow', [7.02, 3.3, 0.4], [0.1, 1.6, 1.2]),
+    )),
+    box('stripe', [3.5, 0, 3.3], [3, 6, 0.3]),
+    engines(-7, [-2.6, 2.6], 0, 1.2),
   );
+  // Iron Dominion ships are drawn a little larger than the others for their hit circles.
+  const big = (m: Mesh) => scale(m, [1.12, 1.12, 1.12]);
 
   // A gothic fortress, a gantry yard, a forge hall with chimneys and a bastion with a big gun.
   const tower = (x: number, y: number, h: number) =>
@@ -417,7 +584,7 @@ function iron(): FactionArt {
     box('glow', [4.1, 0, 6], [0.4, 4, 1.2]),
     ring('stripe', 0, 0, 10, 1.2, 4.2, 0.4, 8),
   );
-  return { mats, units: { harvester, scout, gunship, heavy }, buildings: { hub, depot, barracks, turret }, flame: [0x4aa8ff, 0xe0f6ff] };
+  return { mats, units: { harvester: big(harvester), scout: big(scout), gunship: big(gunship), heavy: scale(heavy, [1.6, 1.6, 1.6]) }, buildings: { hub, depot, barracks, turret }, flame: [0x4aa8ff, 0xe0f6ff] };
 }
 
 // ---------------------------------------------------------------- Ferrox Hive (insects)

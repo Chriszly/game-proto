@@ -102,14 +102,22 @@ smoothly, and keep the faction's colour on a stripe or a glow.
 | --- | --- | --- | --- | --- |
 | Solar Concord | Curved gold hulls round glowing blue crystals; arched carriers; pylons are floating crystals | Orbital Dock | Lancer (35), Halo Cruiser (60), Aegis (100) | Halo Cruiser's shield: friends within 70 px take half the damage |
 | Ferrox Hive | Teal and bronze insects with glowing sacs; domed hives and spines | Brood Pit | Stinger (30), Brood Carrier (55), Carapace (90) | Brood Carrier spawns a Stinger every 12 s, up to 6 scouts |
-| Iron Dominion | Dark iron cathedral ships with long gold prows, spires, buttresses and ice-blue windows | Forge Works | Ram Skiff (40), Siege Barge (70), Bulwark (115) | Siege Barge's shells splash enemies within 28 px of the target |
-| Veil Syndicate | Saucer sections, secondary hulls and warp nacelles with glowing blue strips; mushroom starbases and a spacedock | Cloak Works | Phantom Blade (35), Hack Frigate (60), Decoy Wraith (105) | Phantom Blade is hidden until it fires; Hack Frigate's hits disable a turret for 6 s; Decoy Wraith drops a decoy every 15 s |
-| Nomad Freight | Off-white rebel fighters with amber stripes (X-wing and Y-wing shapes, a saucer-cockpit freighter, a hammerhead blockade runner); rounded modular bases | Salvage Yard | Courier Skiff (30), Escort Gunship (55), Siege Hauler (105) | Salvage Yard pays 8 crystal for each enemy unit destroyed within 200 px; Nomad carries 14 crystal a trip |
+| Iron Dominion | Dark iron warships with gold trim and ice-blue windows (a forge hauler with a cog crest and cranes, a winged assault gunship, a rounded strike cruiser with flight bays and a dorsal cannon, and a vast cathedral battleship with a ram prow and spires) | Forge Works | Ram Skiff (40), Siege Barge (70), Bulwark (115) | Siege Barge's shells splash enemies within 28 px of the target |
+| Veil Syndicate | Pale starships with glowing blue nacelles (a boxy shuttle, a saucerless arrowhead escort, a saucer frigate with low nacelles and a rollbar, a ringed space station under way on warp nacelles); mushroom starbases and a spacedock | Cloak Works | Phantom Blade (35), Hack Frigate (60), Decoy Wraith (105) | Phantom Blade is hidden until it fires; Hack Frigate's hits disable a turret for 6 s; Decoy Wraith drops a decoy every 15 s |
+| Nomad Freight | Off-white fighters with amber stripes (a fighter with four wings in an X, a twin-nacelle hauler, a saucer-cockpit freighter, a dagger-wedge destroyer with twin bridge towers); rounded modular bases | Salvage Yard | Courier Skiff (30), Escort Gunship (55), Siege Hauler (105) | Salvage Yard pays 8 crystal for each enemy unit destroyed within 200 px; Nomad carries 14 crystal a trip |
 
 Each faction's stats are a few multipliers on the base game (hit points, damage, speed, cost, and
 how much a harvester carries).
 
 ![All five factions' warships clashing in open space, with beams, shield rings and exhaust flames](docs/screenshots/abilities.png)
+
+Every faction's four ships and four buildings:
+
+![A grid of each faction's harvester, scout, gunship and heavy, then its hub, depot, barracks and turret](docs/screenshots/fleets.png)
+
+The same ships side by side at their true sizes; every faction's heavy is the same size, the biggest ships in the game:
+
+![Every faction's four ships at one scale, with the five heavies all the same size and larger than the rest](docs/screenshots/fleets-scale.png)
 
 ## Difficulty
 

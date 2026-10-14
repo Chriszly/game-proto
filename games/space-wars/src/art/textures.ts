@@ -153,9 +153,14 @@ function bakeGlow(scene: Phaser.Scene) {
 /** Bakes every faction's ships and buildings and the props, once per page. */
 export function bakeAll(scene: Phaser.Scene) {
   if (scene.textures.exists(SHARD_KEY)) return;
+  // Every faction's heavy is drawn at the same size: as long as the Iron Dominion battleship.
+  const heavyReach = reach(FACTION_ART['Iron Dominion']().units.heavy).r;
   FACTIONS.forEach((def, f) => {
     const art = FACTION_ART[def.name]();
-    for (const type of UNIT_TYPES) bakeShip(scene, shipKey(f, type), grow(art.units[type], SHIP_ZOOM), art.mats);
+    for (const type of UNIT_TYPES) {
+      const k = type === 'heavy' ? heavyReach / reach(art.units.heavy).r : 1;
+      bakeShip(scene, shipKey(f, type), grow(art.units[type], SHIP_ZOOM * k), art.mats);
+    }
     for (const role of ROLES) bakeStill(scene, buildingKey(f, role), grow(art.buildings[role], BUILDING_ZOOM), art.mats);
     bakeFlame(scene, flameKey(f), art.flame[0], art.flame[1]);
   });
