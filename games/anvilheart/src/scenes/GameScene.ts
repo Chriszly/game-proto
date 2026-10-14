@@ -308,7 +308,7 @@ export class GameScene extends Phaser.Scene {
         continue;
       }
       const name = u.prices.length > 1 ? `${u.name} ${rank + 1}` : u.name;
-      const blurb = locked(id, s.ranks) ? 'max the others first' : u.blurb;
+      const blurb = locked(id, s.ranks) ? 'max Bellows first' : u.blurb;
       const caption = price === null ? `${u.name} (max)\n${u.blurb}` : `${name}: ${price}c\n${blurb}`;
       button.set(caption, price !== null && s.coins >= price && !locked(id, s.ranks), 14);
     }
