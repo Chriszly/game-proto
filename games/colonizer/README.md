@@ -1,7 +1,7 @@
 # Colonizer
 
 A small real-time strategy prototype built with [Phaser 4](https://phaser.io), TypeScript and Vite,
-part of the [game hub](../../README.md). It is in the style of Age of Empires and StarCraft, and is
+part of the [game hub](../../README.md). It is a classic base-building RTS with villagers, ages and armies, and is
 drawn as the Bayeux tapestry: the skirmish embroidered in eight wool colours on natural linen, every
 figure in profile with a kite shield, buildings in elevation, fog as unworked linen with the needle
 still at its edge, and the HUD as the tapestry's borders with slanted bars and stitched lettering.
