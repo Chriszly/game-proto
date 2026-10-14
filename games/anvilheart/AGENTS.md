@@ -96,7 +96,7 @@ State model (`src/game/state.ts`):
   numbered row by row from the top left. Swords are only ever stored as tier numbers.
 - `adventurers` holds at most `DESKS` (3); each has a unique `desk`, `wants` (minimum tier),
   `patienceMs` counting down from `patience`, and `look`.
-- `heatMs` is 0 when the forge is ready. `nextVisitorMs` only counts down while a desk is free.
+- `heatMs` is 0 when the forge is ready; buying a Bellows rank caps it at the new `forgeMs`. `nextVisitorMs` only counts down while a desk is free.
 - `autoForge` is the Auto Forge's on/off switch; it only matters once `ranks.auto` is 1. `buy`
   turns it on when the Auto Forge is bought. `buy` refuses an upgrade while `locked` says one of
   its `after` upgrades still has ranks left.
@@ -134,7 +134,9 @@ patience in `arrive`.
   `PATIENCE_MS + PATIENCE_PER_TIER_MS * wants` by `byDifficulty(1.5, 1, 0.7)` (easy, normal, hard)
   from `shared/settings.ts`. The base constants in `src/game/state.ts` are unchanged.
 - Reduced motion: `GameScene.drawEvents` skips the white flash circle on a merge when
-  `settings.reduceMotion` is on. The pop tween on the merged sword still plays.
+  `settings.reduceMotion` is on. With it on, `drawMarks` also holds the pulsing outlines on the
+  matching swords and desks at full alpha, and `drawForge` holds the furnace on its
+  `furnace-0` frame instead of flickering. The pop tween on the merged sword still plays.
 - Normal must stay exactly as designed, since the playthrough runs on Normal.
 - Keep the README's difficulty line in sync ("adventurers wait 50% longer on Easy and 30% less on
   Hard"), and the game's row in the root README's difficulty table.

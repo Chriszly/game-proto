@@ -271,7 +271,8 @@ export class GameScene extends Phaser.Scene {
     if (!held) return;
     const tier = this.state.slots[held.slot];
     if (tier === null) return;
-    const pulse = 0.75 + 0.25 * Math.sin(this.clock / 120);
+    // The outlines pulse, or hold steady with reduce motion.
+    const pulse = settings.reduceMotion ? 1 : 0.75 + 0.25 * Math.sin(this.clock / 120);
     g.lineStyle(4, 0xf8d460, pulse);
     this.state.slots.forEach((t, slot) => {
       if (slot === held.slot || t !== tier) return;
@@ -290,12 +291,13 @@ export class GameScene extends Phaser.Scene {
   private drawForge() {
     const s = this.state;
     const hot = s.heatMs <= 0;
-    this.furnace.setTexture(`furnace-${Math.floor(this.clock / 180) % 2}`);
+    // The fire flickers between two frames, held on the first with reduce motion.
+    this.furnace.setTexture(`furnace-${settings.reduceMotion ? 0 : Math.floor(this.clock / 180) % 2}`);
     this.furnace.setTint(hot ? 0xffffff : 0xb8a8a0);
     const full = !s.slots.includes(null);
     this.forgeButton.set(full ? 'Board full' : hot ? 'Forge' : 'Heating...', hot && !full, 20);
     const g = this.hud;
-    const fill = 1 - s.heatMs / forgeMs(s);
+    const fill = Phaser.Math.Clamp(1 - s.heatMs / forgeMs(s), 0, 1);
     g.fillStyle(0x1d1418).fillRect(HEAT_BAR.x, HEAT_BAR.y, HEAT_BAR.w, HEAT_BAR.h);
     g.fillStyle(hot ? 0xf8d460 : 0xf09a3a).fillRect(HEAT_BAR.x + 2, HEAT_BAR.y + 2, Math.round((HEAT_BAR.w - 4) * fill), HEAT_BAR.h - 4);
     for (const id of UPGRADE_IDS) {
