@@ -1,0 +1,510 @@
+// The low-poly models of Lane Brawl: five champions, minions, the jungle boar, towers, the Nexus,
+// pines and rocks. Each builder returns a fresh `Model` for one pose; `bake.ts` renders them into
+// sprite frames from eight directions. Units: one model unit is one screen pixel.
+
+import { Model, RGB, Rx, Rz, S, T, box, chain, gem, ico, prism, rgb, slab, swing } from './lowpoly';
+
+export type PoseName = 'idle' | 'w0' | 'w1' | 'w2' | 'w3' | 'a0' | 'a1' | 'c0';
+export const POSES: PoseName[] = ['idle', 'w0', 'w1', 'w2', 'w3', 'a0', 'a1', 'c0'];
+export type TeamName = 'blue' | 'red';
+
+/** Team cloth for tunics, cloaks and robes. */
+export const TEAM_CLOTH: Record<TeamName, string> = { blue: '#3b7be8', red: '#d6463a' };
+/** Team crystals on towers and the Nexus. */
+export const TEAM_GLOW: Record<TeamName, string> = { blue: '#4aa3ff', red: '#ff5a48' };
+
+const SKIN = rgb('#f1c9a0');
+const EYE = rgb('#1d1a22');
+const PANTS = rgb('#4b4038');
+const BOOT = rgb('#3a2c24');
+const LEATHER = rgb('#7a5434');
+const WOOD = rgb('#8a5d36');
+const STEEL = rgb('#b9c3cf');
+const DARK_STEEL = rgb('#6c7684');
+const GOLD = rgb('#f2c14e');
+const CREAM = rgb('#efe6cf');
+const STONE = rgb('#9aa0a8');
+const STONE_D = rgb('#7d838c');
+const STONE_L = rgb('#b4b9c0');
+
+/** Joint angles of a figure: limbs swing forward (+) and back (-), in radians. */
+interface Pose {
+  legL: number;
+  legR: number;
+  armL: number;
+  armR: number;
+  /** Arms spread outwards (radians), left and right. */
+  outL: number;
+  outR: number;
+  /** Torso lean forward. */
+  lean: number;
+  /** Body lift for the walk. */
+  bob: number;
+}
+
+const WALK = [0.55, 0, -0.55, 0];
+const BOB = [0, 1.2, 0, 1.2];
+
+function basePose(name: PoseName): Pose {
+  const p: Pose = { legL: 0, legR: 0, armL: 0.08, armR: 0.08, outL: 0.12, outR: 0.12, lean: 0, bob: 0 };
+  if (name[0] === 'w') {
+    const k = Number(name[1]);
+    p.legL = WALK[k];
+    p.legR = -WALK[k];
+    p.armL = -WALK[k] * 0.8;
+    p.armR = WALK[k] * 0.8;
+    p.bob = BOB[k];
+  }
+  return p;
+}
+
+type ChampId = 'warden' | 'blade' | 'archer' | 'mage' | 'priest';
+
+/** Attack and cast poses differ by class: a hammer swings, a bow draws, a staff points. */
+function classPose(id: ChampId | 'minion', name: PoseName): Pose {
+  const p = basePose(name);
+  if (name === 'c0') {
+    p.armL = 2.3;
+    p.armR = 2.3;
+    p.outL = 0.35;
+    p.outR = 0.35;
+    p.lean = -0.08;
+    return p;
+  }
+  if (name !== 'a0' && name !== 'a1') return p;
+  const wind = name === 'a0';
+  switch (id) {
+    case 'archer':
+      p.armL = Math.PI / 2;
+      p.outL = 0;
+      p.armR = wind ? 1.35 : 1.55;
+      p.outR = wind ? -0.55 : -0.25;
+      break;
+    case 'blade':
+      p.armL = wind ? 2.5 : 1.0;
+      p.armR = wind ? 2.5 : 1.0;
+      p.outL = wind ? 0.5 : -0.25;
+      p.outR = wind ? 0.5 : -0.25;
+      p.lean = wind ? -0.05 : 0.25;
+      p.legL = 0.35;
+      p.legR = -0.3;
+      break;
+    case 'mage':
+    case 'priest':
+      p.armR = wind ? 2.4 : 1.45;
+      p.armL = wind ? 0.6 : 1.1;
+      p.lean = wind ? -0.06 : 0.12;
+      break;
+    default:
+      // Warden and minions: an overhead swing of the weapon arm, shield held forward.
+      p.armR = wind ? 2.7 : 1.1;
+      p.outR = wind ? 0.2 : -0.1;
+      p.armL = 0.9;
+      p.lean = wind ? -0.08 : 0.22;
+      p.legL = 0.35;
+      p.legR = -0.3;
+  }
+  return p;
+}
+
+interface Kit {
+  cloth: RGB;
+  accent: RGB;
+  /** 'robe' swaps the legs for a long skirt. */
+  robe: boolean;
+  /** Wider shoulders and thicker limbs. */
+  heavy: boolean;
+  head: (md: Model) => void;
+  rightHand?: (md: Model, arm: number) => void;
+  leftHand?: (md: Model, arm: number) => void;
+  back?: (md: Model) => void;
+  over?: (md: Model) => void;
+}
+
+/** A standing figure, feet at the origin, facing +z. About 54 units tall. */
+function figure(kit: Kit, pose: Pose): Model {
+  const md = new Model();
+  const w = kit.heavy ? 1.15 : 1;
+  md.at(T(0, pose.bob, 0), () => {
+    // Legs (or the hem of a robe), pivoting at the hips.
+    const hip = 17;
+    for (const side of [-1, 1]) {
+      const a = side < 0 ? pose.legR : pose.legL;
+      md.at(chain(T(side * 3.4 * w, hip, 0), swing(a)), () => {
+        if (!kit.robe) box(md, -2.6 * w, -hip + 4, -2.6, 2.6 * w, 0, 2.6, PANTS, 0.95);
+        box(md, -2.8 * w, -hip, -2.8, 2.8 * w, -hip + 5, 3.6, BOOT);
+      });
+    }
+    md.at(chain(T(0, hip, 0), Rx(pose.lean), T(0, -hip, 0)), () => {
+      if (kit.robe) {
+        md.at(T(0, 1.5, 0), () => prism(md, 9.5, 7.4, 0, hip + 1, 8, kit.cloth, Math.PI / 8));
+      }
+      // Torso: a tunic in the team's cloth, wider at the shoulders, with a belt.
+      box(md, -6.8 * w, hip, -4, 6.8 * w, hip + 15, 4, kit.cloth, 1.18);
+      box(md, -7.1 * w, hip, -4.3, 7.1 * w, hip + 2.6, 4.3, LEATHER);
+      kit.back?.(md);
+      // Head.
+      md.at(T(0, 40, 0), () => {
+        ico(md, 6.6, SKIN);
+        box(md, -3.1, -1.4, 5.5, -1.5, 0.6, 6.5, EYE);
+        box(md, 1.5, -1.4, 5.5, 3.1, 0.6, 6.5, EYE);
+        kit.head(md);
+      });
+      // Arms from the shoulders, sleeves in cloth, hands bare.
+      for (const side of [-1, 1]) {
+        const a = side < 0 ? pose.armR : pose.armL;
+        const out = side < 0 ? pose.outR : pose.outL;
+        md.at(chain(T(side * 9.6 * w, 31, 0), Rz(side * out), swing(a)), () => {
+          box(md, -2.3 * w, -7, -2.3 * w, 2.3 * w, 1.5, 2.3 * w, kit.cloth);
+          box(md, -2 * w, -12, -2 * w, 2 * w, -7, 2 * w, SKIN, 0.9);
+          md.at(T(0, -13.5, 0), () => {
+            if (side < 0) kit.rightHand?.(md, a);
+            else kit.leftHand?.(md, a);
+          });
+        });
+      }
+      kit.over?.(md);
+    });
+  });
+  return md;
+}
+
+/** Holds a prop upright whatever the arm is doing, tipped forward by `tip`. */
+const upright = (arm: number, tip = 0) => Rx(arm + tip);
+/** Holds a weapon out in front of the hand, so it swings with the arm. */
+const grip = (tip = 0.3) => Rx(Math.PI / 2 - tip);
+
+const KITS: Record<ChampId, (cloth: RGB) => Kit> = {
+  warden: (cloth) => {
+    const bronze = rgb('#c98b3b');
+    return {
+      cloth,
+      accent: bronze,
+      robe: false,
+      heavy: true,
+      head: (md) => {
+        // A bronze helm with a nose guard and a crest.
+        prism(md, 7.4, 6.1, 1.6, 8.4, 8, bronze, Math.PI / 8);
+        gem(md, 6.1, 8.3, 8.4, 11.6, 8, bronze, 0, Math.PI / 8);
+        box(md, -0.7, -0.6, 6.2, 0.7, 3.5, 7.6, bronze);
+        box(md, -0.9, 9, -5, 0.9, 13.5, 4, cloth, 0.9);
+      },
+      over: (md) => {
+        // Pauldrons on both shoulders.
+        for (const side of [-1, 1]) md.at(T(side * 10.2, 32.5, 0), () => gem(md, 4.6, -2.6, 0.6, 3.6, 6, bronze));
+      },
+      rightHand: (md) => {
+        // A war hammer.
+        md.at(grip(0.35), () => {
+          prism(md, 1.2, 1.2, -4, 20, 5, WOOD);
+          box(md, -5.5, 16, -3.2, 5.5, 23, 3.2, DARK_STEEL);
+          box(md, -6, 17, -2.6, -5.4, 22, 2.6, STEEL);
+          box(md, 5.4, 17, -2.6, 6, 22, 2.6, STEEL);
+        });
+      },
+      leftHand: (md, arm) => {
+        // A kite shield on the forearm: a bronze rim and a field in the team's colour.
+        md.at(chain(T(-1.5, 6, 3.5), upright(arm)), () => {
+          const kite = (k: number): [number, number][] => [[0, 11 * k], [8 * k, 6 * k], [7 * k, -5 * k], [0, -13 * k], [-7 * k, -5 * k], [-8 * k, 6 * k]];
+          slab(md, kite(1), 0, 2.2, bronze);
+          md.at(T(0, -0.5, 0), () => slab(md, kite(0.72), 2, 3.1, cloth));
+          md.at(T(0, 0, 0), () => gem(md, 1.9, 3, 3.1, 4.4, 6, bronze));
+        });
+      },
+    };
+  },
+  blade: (cloth) => {
+    const violet = rgb('#8e6cf0');
+    const dagger = (md: Model) =>
+      md.at(grip(0.2), () => {
+        box(md, -1, -2, -1, 1, 3, 1, LEATHER);
+        box(md, -2.6, 3, -1.2, 2.6, 4.2, 1.2, DARK_STEEL);
+        slab(md, [[-1.4, 4], [1.4, 4], [0.6, 15], [0, 17], [-0.6, 15]], -0.5, 0.5, STEEL);
+      });
+    return {
+      cloth,
+      accent: violet,
+      robe: false,
+      heavy: false,
+      head: (md) => {
+        // A deep hood and a dark mask over the mouth.
+        prism(md, 7.6, 3.2, -3, 10.5, 7, violet, Math.PI / 2);
+        box(md, -5.4, -5.6, 3.4, 5.4, -0.6, 6.9, rgb('#2a2440'));
+      },
+      back: (md) => {
+        // A short violet cape.
+        md.at(chain(T(0, 31, -4.2), Rx(-0.12)), () => slab(md, [[-7.5, 0], [7.5, 0], [6, -17], [0, -20], [-6, -17]], -1, 0, violet));
+      },
+      rightHand: dagger,
+      leftHand: dagger,
+    };
+  },
+  archer: (cloth) => {
+    const yellow = rgb('#e6c03a');
+    return {
+      cloth,
+      accent: yellow,
+      robe: false,
+      heavy: false,
+      head: (md) => {
+        // A peaked cap with a feather.
+        prism(md, 7.2, 4.6, 1.8, 7.6, 8, yellow, Math.PI / 8);
+        box(md, -4.8, 1.8, 4.5, 4.8, 2.8, 9, yellow);
+        md.at(chain(T(5, 5, -1), Rz(-0.5)), () => slab(md, [[0, 0], [1.6, 4], [1, 12], [-0.6, 5]], -0.4, 0.4, rgb('#e2553a')));
+      },
+      back: (md) => {
+        // A quiver of arrows across the back.
+        md.at(chain(T(3, 27, -6), Rz(-0.35)), () => {
+          prism(md, 2.6, 2.6, -8, 6, 6, LEATHER);
+          for (const dx of [-1.2, 1.2]) md.at(T(dx, 0, 0), () => prism(md, 0.5, 0.5, 6, 10, 4, CREAM));
+        });
+      },
+      leftHand: (md, arm) => {
+        // The bow: a curved stave and a string, held upright.
+        md.at(upright(arm), () => {
+          const pts: [number, number][] = [];
+          for (let i = 0; i <= 6; i++) {
+            const t = -1 + i / 3;
+            pts.push([t * 17, Math.cos(t * 1.25) * 5.5]);
+          }
+          for (let i = 0; i < 6; i++) {
+            const [y0, z0] = pts[i];
+            const [y1, z1] = pts[i + 1];
+            const ang = Math.atan2(z1 - z0, y1 - y0);
+            md.at(chain(T(0, y0, z0), Rx(ang)), () => box(md, -1.1, 0, -1.1, 1.1, Math.hypot(y1 - y0, z1 - z0) + 0.4, 1.1, WOOD));
+          }
+          box(md, -0.3, -17, -0.3 + pts[0][1], 0.3, 17, 0.3 + pts[0][1], CREAM);
+        });
+      },
+      rightHand: (md, arm) => {
+        md.at(upright(arm, Math.PI / 2), () => slab(md, [[-0.4, -2], [0.4, -2], [0.4, 14], [0, 16], [-0.4, 14]], -0.4, 0.4, CREAM));
+      },
+    };
+  },
+  mage: (cloth) => {
+    const cyan = rgb('#3fd0d9');
+    return {
+      cloth,
+      accent: cyan,
+      robe: true,
+      heavy: false,
+      head: (md) => {
+        // A wide brim and a tall pointed hat, bent at the tip.
+        prism(md, 11.5, 11, 3.2, 4.6, 10, cyan, 0);
+        md.at(Rx(-0.12), () => prism(md, 7.4, 0, 4.6, 21, 8, cyan, 0));
+        box(md, -3.4, -5.6, 5, 3.4, -2.6, 6.2, rgb('#ece6dc'));
+      },
+      rightHand: (md, arm) => {
+        // A staff topped by a glowing crystal.
+        md.at(upright(arm, 0.15), () => {
+          prism(md, 1.2, 1.1, -12, 26, 5, WOOD);
+          md.at(T(0, 30, 0), () => gem(md, 3.8, -5, 0, 6, 6, cyan, 0.55));
+        });
+      },
+    };
+  },
+  priest: (cloth) => {
+    const green = rgb('#6fe07f');
+    return {
+      cloth: CREAM,
+      accent: green,
+      robe: true,
+      heavy: false,
+      head: (md) => {
+        // Short hair and a golden halo of small gems.
+        md.at(chain(T(0, 0, -0.8), Rx(-0.25)), () => prism(md, 6.9, 5, 1.6, 6.8, 8, rgb('#7a5236'), Math.PI / 8));
+        for (let i = 0; i < 10; i++) {
+          const a = (i * Math.PI * 2) / 10;
+          md.at(T(Math.cos(a) * 8, 12, Math.sin(a) * 8), () => gem(md, 1.6, -1, 0, 1, 4, GOLD, 0.6, a));
+        }
+      },
+      back: (md) => {
+        // A long cloak in the team's colour.
+        md.at(chain(T(0, 32, -4.4), Rx(-0.1)), () => slab(md, [[-9, 0], [9, 0], [11.5, -27], [0, -29], [-11.5, -27]], -1.2, 0, cloth));
+      },
+      over: (md) => {
+        // A stole down the front in the team's colour.
+        for (const side of [-1, 1]) box(md, side * 3.2 - 1.3, 4, 4.6, side * 3.2 + 1.3, 32, 5.6, cloth);
+      },
+      rightHand: (md, arm) => {
+        // A staff with a golden sunburst and a green orb.
+        md.at(upright(arm, 0.15), () => {
+          prism(md, 1.1, 1, -12, 25, 5, rgb('#d9c79a'));
+          md.at(T(0, 29, 0), () => {
+            for (let i = 0; i < 8; i++) md.at(Rz((i * Math.PI) / 4), () => gem(md, 1.1, 2.5, 4, 7, 4, GOLD, 0.4));
+            ico(md, 3.2, green, 0.55);
+          });
+        });
+      },
+      leftHand: (md) => md.at(T(0, 0, 1.5), () => ico(md, 2.2, green, 0.7)),
+    };
+  },
+};
+
+/** A champion of class `id` in a team's cloth, in one pose. */
+export function championModel(id: string, team: TeamName, pose: PoseName): Model {
+  const kit = (KITS[id as ChampId] ?? KITS.warden)(rgb(TEAM_CLOTH[team]));
+  return figure(kit, classPose(id as ChampId, pose));
+}
+
+/** A minion: a small soldier with a helmet, a sword and a round shield in the team's colour. */
+export function minionModel(team: TeamName, pose: PoseName): Model {
+  const cloth = rgb(TEAM_CLOTH[team]);
+  const kit: Kit = {
+    cloth,
+    accent: STEEL,
+    robe: false,
+    heavy: true,
+    head: (md) => {
+      prism(md, 7.5, 5.6, 1.4, 7.4, 7, DARK_STEEL, 0);
+      gem(md, 5.6, 7.3, 7.4, 10, 7, DARK_STEEL);
+      box(md, -6.6, 1.4, 5.6, 6.6, 2.6, 7.4, STEEL);
+    },
+    rightHand: (md) =>
+      md.at(grip(0.3), () => {
+        box(md, -1, -2, -1, 1, 3, 1, LEATHER);
+        box(md, -3, 3, -1.2, 3, 4.4, 1.2, DARK_STEEL);
+        slab(md, [[-1.8, 4], [1.8, 4], [1.4, 19], [0, 22], [-1.4, 19]], -0.6, 0.6, STEEL);
+      }),
+    leftHand: (md, arm) =>
+      md.at(chain(T(-1.5, 5, 3.4), upright(arm)), () => {
+        const disc = (r: number): [number, number][] => Array.from({ length: 8 }, (_, i) => [Math.cos((i * Math.PI) / 4 + Math.PI / 8) * r, Math.sin((i * Math.PI) / 4 + Math.PI / 8) * r]);
+        slab(md, disc(8.5), 0, 2, DARK_STEEL);
+        slab(md, disc(6.4), 2, 3, cloth);
+        gem(md, 2, 3, 3, 4.6, 6, STEEL);
+      }),
+  };
+  return scaled(figure(kit, classPose('minion', pose)), 0.62);
+}
+
+/** Scales a finished model's points (a model's builder can't scale after the fact). */
+function scaled(md: Model, k: number): Model {
+  const out = new Model();
+  out.polys = md.polys.map((p) => ({ ...p, pts: p.pts.map(([x, y, z]) => [x * k, y * k, z * k] as [number, number, number]) }));
+  out.normals = md.normals;
+  return out;
+}
+
+/** The jungle boar: a bristly quadruped with tusks. Attack poses lower the head and lunge. */
+export function boarModel(pose: PoseName): Model {
+  const md = new Model();
+  const hide = rgb('#7d5a3a');
+  const dark = rgb('#4f3826');
+  const snout = rgb('#c58b6c');
+  const tusk = rgb('#f3ecd9');
+  const k = pose[0] === 'w' ? WALK[Number(pose[1])] : 0;
+  const bob = pose[0] === 'w' ? BOB[Number(pose[1])] * 0.6 : 0;
+  const lunge = pose === 'a1' ? 4 : pose === 'a0' ? -2 : 0;
+  const dip = pose === 'a1' ? 0.35 : pose === 'a0' ? -0.2 : 0;
+  md.at(T(0, bob, lunge), () => {
+    // Four short legs, diagonal pairs moving together.
+    for (const [x, z, ph] of [[-6.5, 10, 1], [6.5, 10, -1], [-6.5, -11, -1], [6.5, -11, 1]] as const) {
+      md.at(chain(T(x, 11, z), swing(k * ph * 0.8)), () => {
+        box(md, -2.6, -11, -2.6, 2.6, 0, 2.6, dark, 0.9);
+        box(md, -2.8, -11, -2.9, 2.8, -9.5, 3, rgb('#2b2019'));
+      });
+    }
+    // Body: a heavy barrel, high at the shoulders.
+    box(md, -10, 9, -16, 10, 25, 13, hide, 0.82);
+    box(md, -9, 10, 10, 9, 26.5, 16, hide, 0.85);
+    // Bristles along the spine.
+    for (let i = 0; i < 6; i++) md.at(T(0, 24.5 - i * 0.6, 12 - i * 5), () => prism(md, 2.6, 0, 0, 5 - i * 0.4, 4, dark, Math.PI / 4));
+    // A short tail.
+    md.at(chain(T(0, 20, -16), Rx(-0.7)), () => prism(md, 1, 0.3, 0, 6, 4, dark));
+    // Head, dipping on the attack.
+    md.at(chain(T(0, 18, 15), Rx(dip)), () => {
+      box(md, -7, -7, 0, 7, 6, 10, hide, 0.85);
+      md.at(chain(T(0, -2.5, 10), Rx(Math.PI / 2)), () => prism(md, 4.4, 4, 0, 4, 6, snout, Math.PI / 6));
+      box(md, -2.8, -1.6, 14.1, -1, 0.2, 14.6, dark);
+      box(md, 1, -1.6, 14.1, 2.8, 0.2, 14.6, dark);
+      for (const side of [-1, 1]) {
+        md.at(chain(T(side * 4.6, -4, 11), Rx(-0.6), Rz(side * 0.35)), () => prism(md, 1.2, 0, 0, 7, 4, tusk));
+        md.at(chain(T(side * 5, 5.5, 3), Rz(side * -0.5)), () => slab(md, [[-2, 0], [2, 0], [0, 6]], -0.8, 0.8, dark));
+        box(md, side * 3.6 - 1, 1, 9.6, side * 3.6 + 1, 3, 10.4, rgb('#120c08'));
+      }
+    });
+  });
+  return md;
+}
+
+/** A stone tower on an octagonal base, crenellated, with a crystal and a banner in the team's colour. */
+export function towerModel(team: TeamName): Model {
+  const md = new Model();
+  const glow = rgb(TEAM_GLOW[team]);
+  const cloth = rgb(TEAM_CLOTH[team]);
+  prism(md, 27, 25, 0, 12, 8, STONE_D, Math.PI / 8);
+  // The shaft in courses of stone, each a slightly different grey.
+  const course = [STONE, STONE_L, STONE, STONE_D, STONE_L, STONE];
+  course.forEach((c, i) => prism(md, 20 - i * 0.5, 19.5 - i * 0.5, 12 + i * 9, 21 + i * 9, 8, c, Math.PI / 8 + (i % 2) * 0.08));
+  prism(md, 24, 24, 66, 72, 8, STONE_L, Math.PI / 8);
+  for (let i = 0; i < 8; i++) {
+    const a = Math.PI / 8 + (i * Math.PI) / 4;
+    md.at(chain(T(Math.cos(a) * 21, 72, Math.sin(a) * 21), Rx(0)), () => box(md, -3.4, 0, -3.4, 3.4, 6, 3.4, STONE));
+  }
+  // A window slit and a door.
+  box(md, -2, 42, 18.4, 2, 52, 19.6, rgb('#2a2e36'));
+  box(md, -5, 12, 19.2, 5, 25, 20.6, rgb('#5a3f2a'));
+  // The crystal floats over the top.
+  md.at(T(0, 88, 0), () => gem(md, 8, -10, 0, 14, 6, glow, 0.45));
+  // The banner on a pole.
+  md.at(T(14, 72, -8), () => {
+    prism(md, 0.8, 0.8, 0, 26, 4, WOOD);
+    slab(md, [[0.6, 25.5], [13, 22.5], [0.6, 18]], -0.6, 0.6, cloth);
+  });
+  return md;
+}
+
+/** The rubble of a fallen tower. */
+export function rubbleModel(): Model {
+  const md = new Model();
+  prism(md, 27, 25, 0, 8, 8, STONE_D, Math.PI / 8);
+  prism(md, 20, 18, 8, 16, 8, STONE, Math.PI / 8);
+  const rocks: [number, number, number, number][] = [[-14, 10, 10, 6], [12, 9, 12, 7], [3, 16, -6, 6], [-8, 9, -14, 5], [16, 6, -4, 5], [-2, 18, 6, 4]];
+  for (const [x, y, z, r] of rocks) md.at(T(x, y, z), () => ico(md, r, (i) => (i % 3 === 0 ? STONE_L : STONE)));
+  return md;
+}
+
+/** The Nexus: a great crystal on a stepped hexagonal plinth, with smaller shards around it. */
+export function nexusModel(team: TeamName): Model {
+  const md = new Model();
+  const glow = rgb(TEAM_GLOW[team]);
+  prism(md, 50, 46, 0, 9, 6, STONE_D, Math.PI / 6);
+  prism(md, 38, 34, 9, 18, 6, STONE, Math.PI / 6);
+  prism(md, 24, 22, 18, 24, 6, STONE_L, Math.PI / 6);
+  for (let i = 0; i < 6; i++) {
+    const a = (i * Math.PI) / 3;
+    md.at(chain(T(Math.cos(a) * 31, 18, Math.sin(a) * 31), Rz(Math.cos(a) * 0.3), Rx(-Math.sin(a) * 0.3)), () => gem(md, 4, -2, 2, 16, 5, glow, 0.35));
+  }
+  md.at(T(0, 30, 0), () => gem(md, 16, -6, 28, 82, 6, glow, 0.35, Math.PI / 6));
+  return md;
+}
+
+/** A pine: a trunk and three tiers of needles, in one of a few greens. */
+export function pineModel(shade: number): Model {
+  const md = new Model();
+  const greens = ['#2f6b3a', '#356f3c', '#2a5f37', '#3b7841'];
+  const g = rgb(greens[shade % greens.length]);
+  prism(md, 2.4, 2, 0, 9, 5, rgb('#6b4a2e'));
+  prism(md, 15, 0, 7, 28, 7, g, shade * 0.4);
+  prism(md, 12, 0, 18, 38, 7, g, shade * 0.4 + 0.3);
+  prism(md, 8.5, 0, 29, 48, 7, g, shade * 0.4 + 0.6);
+  return md;
+}
+
+/** A rock: a squashed icosahedron in greys. */
+export function rockModel(r: number, shade: number): Model {
+  const md = new Model();
+  const greys = [STONE, STONE_L, STONE_D];
+  md.at(S(1, 0.7, 1), () => ico(md, r, (i) => greys[(i + shade) % 3]));
+  return md;
+}
+
+/** A low-poly coin, seen from the front. */
+export function coinModel(): Model {
+  const md = new Model();
+  md.at(Rx(Math.PI / 2 - 0.4), () => {
+    prism(md, 9, 9, -1.6, 1.6, 8, GOLD, Math.PI / 8, 0.2);
+    prism(md, 6, 5, 1.6, 2.6, 8, rgb('#ffd977'), Math.PI / 8, 0.3);
+  });
+  return md;
+}

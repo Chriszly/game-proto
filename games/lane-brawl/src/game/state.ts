@@ -23,6 +23,7 @@ import {
   XP_FOR_LEVEL,
   MAX_LEVEL,
   WAVE_MS,
+  ObjectiveKind,
 } from './data';
 
 export type Phase = 'pick' | 'playing' | 'won' | 'lost';
@@ -61,6 +62,10 @@ export interface Unit {
   swing: number;
   /** Time left on the hit flash, in ms. */
   flash: number;
+  /** Time left on the cast pose after an ability, in ms (animation only). */
+  castMs: number;
+  /** Time left on a stun, in ms: a stunned unit neither moves nor attacks. */
+  stunMs: number;
   /** Percent shorter ability cooldowns, from items. */
   cdr: number;
   dead: boolean;
@@ -83,6 +88,8 @@ export interface Unit {
   gold: number;
   items: string[];
   cds: Record<AbilityKey, number>;
+  /** Ids of the upgrades the player's champion chose on its level ups (see `UPGRADES`). */
+  upgrades: string[];
 }
 
 export interface Projectile {
@@ -100,6 +107,8 @@ export interface Projectile {
   pierce: boolean;
   hit: number[];
   color: string;
+  /** Stun in ms on whatever it hits. */
+  stun: number;
 }
 
 /** A short-lived visual the view turns into shapes: a ring, or a line between two points. */
@@ -107,7 +116,26 @@ export type Fx =
   | { kind: 'ring'; x: number; y: number; r: number; color: string; ms: number }
   | { kind: 'line'; x: number; y: number; x2: number; y2: number; color: string; ms: number }
   /** A slash: an arc of radius r around (x, y), centred on the angle a. */
-  | { kind: 'arc'; x: number; y: number; r: number; a: number; color: string; ms: number };
+  | { kind: 'arc'; x: number; y: number; r: number; a: number; color: string; ms: number }
+  /** A coin that pops out of a minion the player last-hit, showing the gold it paid. */
+  | { kind: 'coin'; x: number; y: number; gold: number; color: string; ms: number };
+
+/** The goal the player's team is chasing now. `target` is the unit to bring down. */
+export interface Objective {
+  kind: ObjectiveKind;
+  target: number;
+  title: string;
+  gold: number;
+  banner: 'siege' | null;
+  startAt: number;
+  endsAt: number;
+}
+
+/** Two upgrades on offer after the player's champion reached `level`. */
+export interface UpgradeOffer {
+  level: number;
+  options: [string, string];
+}
 
 export interface GameState {
   phase: Phase;
@@ -123,6 +151,24 @@ export interface GameState {
   enemyDamage: number;
   /** The player's champion's unit id. */
   player: number;
+  /** The objective in progress, or null between two. */
+  objective: Objective | null;
+  /** Index into `OBJECTIVES` of the next objective to start, and when it starts. */
+  objectiveIndex: number;
+  nextObjectiveAt: number;
+  objectivesDone: number;
+  /** How the last objective ended, for the card's message. */
+  lastObjective: { title: string; done: boolean; gold: number; at: number } | null;
+  /** The siege banner lasts until this game time. */
+  siegeUntil: number;
+  /** The enemy minion the player's next hit would kill, outlined in gold. */
+  lastHitMark: number | null;
+  /** Last hits the player landed, the unbroken run of them now, and the best run. */
+  lastHits: number;
+  streak: number;
+  bestStreak: number;
+  /** Level-up upgrade choices still waiting for the player, the first one shown. */
+  upgradeOffers: UpgradeOffer[];
 }
 
 export function pathFor(lane: LaneId, team: Team): Vec[] {
@@ -161,6 +207,8 @@ export function blankUnit(
     walk: 0,
     swing: 0,
     flash: 0,
+    castMs: 0,
+    stunMs: 0,
     cdr: 0,
     dead: false,
     respawnAt: 0,
@@ -176,6 +224,7 @@ export function blankUnit(
     gold: 0,
     items: [],
     cds: { Q: 0, W: 0, E: 0, R: 0 },
+    upgrades: [],
   };
 }
 
@@ -235,6 +284,17 @@ export function createGame(pick: ChampionDef, enemyDamage: number): GameState {
     winner: null,
     enemyDamage,
     player: 0,
+    objective: null,
+    objectiveIndex: 0,
+    nextObjectiveAt: 0,
+    objectivesDone: 0,
+    lastObjective: null,
+    siegeUntil: 0,
+    lastHitMark: null,
+    lastHits: 0,
+    streak: 0,
+    bestStreak: 0,
+    upgradeOffers: [],
   };
 
   for (const team of ['blue', 'red'] as Team[]) {

@@ -11,7 +11,7 @@ import {
   type Role,
   unitFor,
 } from './data';
-import { AI, PLAYER, affordable, hasBuildingFor, issue, placeBuilding, popCap, popUsed, research, train, type Building, type GameState, type Unit } from './sim';
+import { AI, PLAYER, affordable, chooseBoon, hasBuildingFor, startRaid, issue, placeBuilding, popCap, popUsed, research, train, type Building, type GameState, type Unit } from './sim';
 import { inMap, idx, type Node } from './map';
 
 const THINK_MS = 1500;
@@ -114,8 +114,13 @@ function plan(s: GameState) {
     const idleArmy = army.filter((u) => u.order.t === 'idle');
     if (idleArmy.length >= army.length / 2) {
       issue(s, AI, army.map((u) => u.id), { t: 'attackMove', x: target.tx + 2, y: target.ty + 2 });
+      // The player is told about each new raid; the one under way keeps its raiders.
+      startRaid(s, AI, PLAYER, army.map((u) => u.id));
     }
   }
+
+  // 8. The Age II boon: the AI always holds a shieldwall.
+  if (p.boonPending) chooseBoon(s, AI, 'shieldwall');
 }
 
 function farmCount(s: GameState) {

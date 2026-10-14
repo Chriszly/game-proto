@@ -21,6 +21,15 @@ import {
   XP_RANGE,
   GOLD_PER_SEC,
   SIDE_COLOR,
+  CAMPS,
+  LAST_HIT_LOOK,
+  OBJECTIVES,
+  OBJECTIVE_GAP_MS,
+  SIEGE,
+  STREAK,
+  TOWERS,
+  UPGRADES,
+  upgradeById,
 } from './data';
 import { GameState, Unit, dist, getUnit, levelFor, refreshStats, spawnWave } from './state';
 
@@ -36,6 +45,110 @@ export function tick(s: GameState, dt: number) {
   updateProjectiles(s, dt);
   // Dead minions are gone for good; their slots are cleaned up here.
   s.units = s.units.filter((u) => !(u.dead && u.kind === 'minion'));
+  if (s.phase !== 'playing') return;
+  updateObjective(s);
+  updateLastHitMark(s);
+}
+
+/** An ability as the champion casts it now: its definition with the upgrades it chose applied. */
+export function abilityFor(u: Unit, key: AbilityKey): AbilityDef | undefined {
+  const base = u.champ?.abilities.find((a) => a.key === key);
+  if (!base || u.upgrades.length === 0) return base;
+  const ab: AbilityDef = { ...base };
+  const pct = (v: number | undefined, p: number | undefined) => (v === undefined || !p ? v : v * (1 + p / 100));
+  for (const id of u.upgrades) {
+    const up = upgradeById(id);
+    if (!up || up.key !== key) continue;
+    ab.radius = pct(ab.radius, up.radius);
+    ab.damage = pct(ab.damage, up.damage);
+    ab.heal = pct(ab.heal, up.heal);
+    ab.shield = pct(ab.shield, up.shield);
+    ab.range = pct(ab.range, up.range) ?? ab.range;
+    if (up.cd) ab.cd *= 1 + up.cd / 100;
+    if (up.stun) ab.stun = (ab.stun ?? 0) + up.stun;
+    if (up.slow) ab.slow = Math.max(ab.slow ?? 0, up.slow);
+    if (up.count) ab.count = (ab.count ?? 1) + up.count;
+  }
+  return ab;
+}
+
+/** The player keeps one of the two upgrades on offer (0 or 1). Returns false if none is on offer. */
+export function chooseUpgrade(s: GameState, choice: number): boolean {
+  const p = getUnit(s, s.player);
+  const offer = s.upgradeOffers[0];
+  if (!p || !offer || (choice !== 0 && choice !== 1)) return false;
+  p.upgrades.push(offer.options[choice]);
+  s.upgradeOffers.shift();
+  return true;
+}
+
+/** Starts the next objective when it is due, and settles the current one when it is done or late. */
+function updateObjective(s: GameState) {
+  const o = s.objective;
+  if (o) {
+    const t = getUnit(s, o.target);
+    const done = !t || t.dead;
+    if (!done && s.time < o.endsAt) return;
+    const p = getUnit(s, s.player);
+    if (done && p) {
+      p.gold += o.gold;
+      if (o.banner === 'siege') s.siegeUntil = s.time + SIEGE.ms;
+      s.objectivesDone++;
+      if (t) s.fx.push({ kind: 'ring', x: t.x, y: t.y, r: 80, color: '#f2c14e', ms: 700 });
+    }
+    s.lastObjective = { title: o.title, done, gold: o.gold, at: s.time };
+    s.objective = null;
+    s.nextObjectiveAt = s.time + OBJECTIVE_GAP_MS;
+    return;
+  }
+  if (s.time < s.nextObjectiveAt) return;
+  const p = getUnit(s, s.player);
+  const from = p && !p.dead ? p : BASE.blue;
+  for (let n = 0; n < OBJECTIVES.length; n++) {
+    const def = OBJECTIVES[(s.objectiveIndex + n) % OBJECTIVES.length];
+    let target: Unit | null = null;
+    let title = '';
+    if (def.kind === 'tower') {
+      // The red tower closest to the blue Nexus: the next one in the way.
+      target = closest(s.units.filter((u) => u.kind === 'tower' && u.side === 'red' && !u.dead), BASE.blue);
+      const spot = target && TOWERS.find((t) => t.x === target!.x && t.y === target!.y);
+      title = `Topple the red ${spot ? spot.lane : ''} tower`.replace('  ', ' ');
+    } else if (def.kind === 'camp') {
+      target = closest(s.units.filter((u) => u.kind === 'camp' && !u.dead && CAMPS.some((c) => c.x === u.spawnX && c.y === u.spawnY)), from);
+      title = 'Clear the jungle camp';
+    } else {
+      target = closest(s.units.filter((u) => u.kind === 'champion' && u.side === 'red' && !u.dead), from);
+      title = `Defeat the red ${target?.champ?.name ?? 'champion'}`;
+    }
+    if (!target) continue;
+    s.objective = { kind: def.kind, target: target.id, title, gold: def.gold, banner: def.banner ?? null, startAt: s.time, endsAt: s.time + def.ms };
+    s.objectiveIndex = (s.objectiveIndex + n + 1) % OBJECTIVES.length;
+    return;
+  }
+  s.nextObjectiveAt = s.time + OBJECTIVE_GAP_MS;
+}
+
+function closest(units: Unit[], to: Vec): Unit | null {
+  let best: Unit | null = null;
+  for (const u of units) if (!best || dist(u, to) < dist(best, to)) best = u;
+  return best;
+}
+
+/** Marks the nearest enemy minion near the player that the player's next hit would kill. */
+function updateLastHitMark(s: GameState) {
+  s.lastHitMark = null;
+  const p = getUnit(s, s.player);
+  if (!p || p.dead) return;
+  let bestD = Infinity;
+  for (const e of s.units) {
+    if (e.dead || e.kind !== 'minion' || e.side === p.side) continue;
+    const d = dist(p, e) - e.radius;
+    if (d > p.range + LAST_HIT_LOOK || d >= bestD) continue;
+    const hit = (p.dmg * 100) / (100 + e.armor);
+    if (e.hp + e.shield > hit) continue;
+    s.lastHitMark = e.id;
+    bestD = d;
+  }
 }
 
 /** Sends a player's champion to a point on the ground. */
@@ -68,9 +181,11 @@ export function buy(u: Unit, id: string): boolean {
 /** Casts an ability at a point. Returns false if it is not ready or not yet learned. */
 export function cast(s: GameState, caster: Unit, key: AbilityKey, aim: Vec): boolean {
   if (s.phase !== 'playing' || caster.dead || !caster.champ) return false;
-  const ab = caster.champ.abilities.find((a) => a.key === key);
+  const ab = abilityFor(caster, key);
   if (!ab || caster.level < ab.level || caster.cds[key] > 0) return false;
   caster.cds[key] = ab.cd * (1 - caster.cdr / 100);
+  caster.castMs = 300;
+  if (dist(caster, aim) > 1) caster.facing = Math.atan2(aim.y - caster.y, aim.x - caster.x);
   const color = caster.champ.color;
 
   switch (ab.kind) {
@@ -82,6 +197,7 @@ export function cast(s: GameState, caster: Unit, key: AbilityKey, aim: Vec): boo
         if (e.dead || e.side === caster.side || dist(e, c) > r + e.radius) continue;
         if (ab.damage) damage(s, e, dealt(s, caster, ab.damage), caster.id);
         if (ab.slow && (e.kind === 'champion' || e.kind === 'minion')) e.slowMs = Math.max(e.slowMs, ab.slow);
+        if (ab.stun && (e.kind === 'champion' || e.kind === 'minion')) e.stunMs = Math.max(e.stunMs, ab.stun);
       }
       break;
     }
@@ -108,6 +224,7 @@ export function cast(s: GameState, caster: Unit, key: AbilityKey, aim: Vec): boo
           pierce: !!ab.pierce,
           hit: [],
           color,
+          stun: ab.stun ?? 0,
         });
       }
       break;
@@ -147,6 +264,8 @@ export function cast(s: GameState, caster: Unit, key: AbilityKey, aim: Vec): boo
 /** Hurts a unit after its armor and any shield. A unit reduced to 0 health dies. */
 export function damage(s: GameState, t: Unit, amount: number, sourceId: number) {
   if (t.dead || amount <= 0) return;
+  // The siege banner, an objective's reward, makes the player's champion hit structures harder.
+  if (sourceId === s.player && s.time < s.siegeUntil && (t.kind === 'tower' || t.kind === 'nexus')) amount *= SIEGE.mult;
   let rest = (amount * 100) / (100 + t.armor);
   if (t.shield > 0) {
     const soak = Math.min(t.shield, rest);
@@ -173,6 +292,8 @@ function updateUnit(s: GameState, u: Unit, dt: number) {
   u.swing = Math.max(0, u.swing - dt);
   u.flash = Math.max(0, u.flash - dt);
   u.slowMs = Math.max(0, u.slowMs - dt);
+  u.castMs = Math.max(0, u.castMs - dt);
+  u.stunMs = Math.max(0, u.stunMs - dt);
   if (u.shieldMs > 0) {
     u.shieldMs -= dt;
     if (u.shieldMs <= 0) u.shield = 0;
@@ -181,6 +302,8 @@ function updateUnit(s: GameState, u: Unit, dt: number) {
     for (const k of ABILITY_KEYS) u.cds[k] = Math.max(0, u.cds[k] - dt);
     u.gold += (GOLD_PER_SEC * dt) / 1000;
   }
+  // A stunned champion or minion stands still and holds its attack.
+  if (u.stunMs > 0) return;
   switch (u.kind) {
     case 'nexus':
       return;
@@ -212,6 +335,7 @@ function revive(u: Unit) {
   u.target = null;
   u.moveTo = null;
   u.slowMs = 0;
+  u.stunMs = 0;
   u.shield = 0;
   u.lastHitBy = null;
   if (u.path) u.wp = 1;
@@ -226,7 +350,19 @@ function kill(s: GameState, t: Unit, killerId: number) {
   const champKiller = killer && killer.kind === 'champion' ? killer : null;
   switch (t.kind) {
     case 'minion':
-      if (champKiller) champKiller.gold += MINION.gold;
+      if (champKiller && champKiller.player) {
+        // A last hit by the player: the streak grows, and a long one pays more.
+        s.streak++;
+        s.lastHits++;
+        s.bestStreak = Math.max(s.bestStreak, s.streak);
+        const gold = Math.round(MINION.gold * (s.streak >= STREAK.at ? 1 + STREAK.bonus : 1));
+        champKiller.gold += gold;
+        s.fx.push({ kind: 'coin', x: t.x, y: t.y, gold, color: '#f2c14e', ms: 900 });
+      } else {
+        if (champKiller) champKiller.gold += MINION.gold;
+        // The minion the player could have finished fell to someone else: the streak breaks.
+        if (s.lastHitMark === t.id) s.streak = 0;
+      }
       for (const c of s.units) {
         if (c.kind === 'champion' && !c.dead && c.side !== t.side && c.side !== 'neutral' && dist(c, t) <= XP_RANGE) {
           gainXp(s, c, MINION.xp);
@@ -263,6 +399,12 @@ function gainXp(s: GameState, c: Unit, amount: number) {
   c.xp += amount;
   const level = Math.min(levelFor(c.xp), MAX_LEVEL);
   if (level > c.level) {
+    if (c.player && c.champ) {
+      for (let l = c.level + 1; l <= level; l++) {
+        const pair = UPGRADES[c.champ.id]?.[l - 2];
+        if (pair) s.upgradeOffers.push({ level: l, options: [pair[0].id, pair[1].id] });
+      }
+    }
     c.level = level;
     refreshStats(c);
     s.fx.push({ kind: 'ring', x: c.x, y: c.y, r: 40, color: '#ffffff', ms: 500 });
@@ -419,6 +561,7 @@ function updateProjectiles(s: GameState, dt: number) {
       if (e.dead || e.side === p.side || p.hit.includes(e.id)) continue;
       if (Math.hypot(e.x - p.x, e.y - p.y) > p.width + e.radius) continue;
       p.hit.push(e.id);
+      if (p.stun && (e.kind === 'champion' || e.kind === 'minion')) e.stunMs = Math.max(e.stunMs, p.stun);
       damage(s, e, p.damage, p.owner);
       if (!p.pierce) {
         p.left = 0;

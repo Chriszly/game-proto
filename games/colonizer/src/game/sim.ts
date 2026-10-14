@@ -2,8 +2,13 @@
 // The scene and the planner change the world only through `issue`, `placeBuilding`, `train` and
 // `research`; `tick` moves everything forward.
 import {
+  AGE3_DAMAGE,
+  ARMY_DEED,
   BUILDINGS,
   CARRY,
+  HARVEST_RITES,
+  SHIELDWALL_TAKEN,
+  type BoonId,
   GATHER_MS,
   START,
   START_VILLAGERS,
@@ -47,6 +52,35 @@ export interface Unit {
   home: number | null;
   /** The resource this villager last gathered, so it can find more when its node runs out. */
   lastRes: Resource | null;
+  /** What the unit did this tick, for its animation: idle, walk, gather, build or fight. */
+  act: 'idle' | 'walk' | 'gather' | 'build' | 'fight';
+  /** Which way it faces: 1 right, -1 left. */
+  face: 1 | -1;
+  /** Game time of its last blow or shot. */
+  struck: number;
+}
+
+/** Things that happened this tick, for the scene's effects; the scene empties the list each frame. */
+export type SimEvent =
+  | { t: 'hit'; x: number; y: number; fromX: number; fromY: number; dmg: number; ranged: boolean; owner: number }
+  | { t: 'drop'; x: number; y: number; res: Resource; n: number; owner: number };
+
+/** A raid: the AI's army sent at the player's Town Center. Repelling it is a deed for Age III. */
+export interface Raid {
+  /** Counts up with each raid, so the scene can tell a new one. */
+  n: number;
+  by: number;
+  target: number;
+  ids: number[];
+  size: number;
+  /** Raiders killed so far. */
+  routed: number;
+  /** Where the raiders are now: the middle of the living ones. */
+  x: number;
+  y: number;
+  /** Compass point it comes from, seen from the target's Town Center, such as 'south-east'. */
+  from: string;
+  started: number;
 }
 
 export type QueueItem = { kind: 'unit'; key: string; left: number } | { kind: 'tech'; key: string; left: number };
@@ -70,9 +104,14 @@ export interface Player {
   faction: FactionId;
   res: Record<Resource, number>;
   techs: string[];
-  age: 1 | 2;
+  age: 1 | 2 | 3;
   /** Multiplies how fast a player gathers; the AI's depends on difficulty. */
   gatherMul: number;
+  /** Progress on the deeds for Age III: Age II reached, most soldiers alive at once, a raid repelled. */
+  deeds: { age2: boolean; army: number; raid: boolean };
+  /** The Age II boon, once picked; `boonPending` while the pick is open. */
+  boon: BoonId | null;
+  boonPending: boolean;
 }
 
 export interface GameState {
@@ -92,6 +131,11 @@ export interface GameState {
   noticeMs: number;
   /** Time since the planner last thought; see planner.ts. */
   aiClock: number;
+  /** The raid under way, if any, and how many raids have been launched and repelled. */
+  raid: Raid | null;
+  raids: number;
+  repelled: number;
+  events: SimEvent[];
 }
 
 export type Command =
@@ -120,13 +164,17 @@ export function createGame(faction: FactionId, aiFaction: FactionId, aiGatherMul
     units: new Map(),
     buildings: new Map(),
     players: [
-      { id: PLAYER, faction, res: { ...START }, techs: [], age: 1, gatherMul: 1 },
-      { id: AI, faction: aiFaction, res: { ...START }, techs: [], age: 1, gatherMul: aiGatherMul },
+      { id: PLAYER, faction, res: { ...START }, techs: [], age: 1, gatherMul: 1, deeds: { age2: false, army: 0, raid: false }, boon: null, boonPending: false },
+      { id: AI, faction: aiFaction, res: { ...START }, techs: [], age: 1, gatherMul: aiGatherMul, deeds: { age2: false, army: 0, raid: false }, boon: null, boonPending: false },
     ],
     nextId: 1000,
     notice: '',
     noticeMs: 0,
     aiClock: 0,
+    raid: null,
+    raids: 0,
+    repelled: 0,
+    events: [],
   };
   for (const n of map.nodes) s.nodes.set(n.id, n);
   // Node ids come from the map, so units and buildings count on from the largest of them.
@@ -285,6 +333,9 @@ function spawnUnit(s: GameState, owner: number, type: string, near: Building): U
     gatherMs: 0,
     home: null,
     lastRes: null,
+    act: 'idle',
+    face: owner === PLAYER ? 1 : -1,
+    struck: -1e9,
   };
   s.units.set(u.id, u);
   return u;
@@ -395,6 +446,8 @@ function stepAlong(u: Unit, speed: number, dt: number) {
   const dy = next.y - u.y;
   const d = Math.hypot(dx, dy);
   const step = (speed * dt) / 1000;
+  if (d > 0.001) u.act = 'walk';
+  faceTo(u, next.x);
   if (d <= step) {
     u.x = next.x;
     u.y = next.y;
@@ -503,11 +556,100 @@ export function research(s: GameState, owner: number, bid: number, techId: strin
   const p = s.players[owner];
   if (!b || !tech || b.owner !== owner || !b.built || b.type !== (tech.at === 'town' ? 'town' : 'academy')) return false;
   if (tech.age2 && p.age < 2) return false;
+  if (tech.advance && p.age !== tech.advance - 1) return false;
+  if (tech.advance === 3 && !deedsDone(p)) return false;
   if (p.techs.includes(techId) || b.queue.some((q) => q.key === techId)) return false;
   if (!affordable(p, tech.cost)) return false;
   pay(p, tech.cost);
   b.queue.push({ kind: 'tech', key: techId, left: tech.time });
   return true;
+}
+
+/** How many of the three Age III deeds a player has done. */
+export function deedCount(p: Player) {
+  return (p.deeds.age2 ? 1 : 0) + (p.deeds.army >= ARMY_DEED ? 1 : 0) + (p.deeds.raid ? 1 : 0);
+}
+export const deedsDone = (p: Player) => deedCount(p) === 3;
+
+/** Takes the Age II boon a player was offered. */
+export function chooseBoon(s: GameState, owner: number, boon: BoonId): boolean {
+  const p = s.players[owner];
+  if (!p.boonPending) return false;
+  p.boon = boon;
+  p.boonPending = false;
+  return true;
+}
+
+/** Soldiers a player has alive. */
+export function soldierCount(s: GameState, owner: number) {
+  let n = 0;
+  for (const u of s.units.values()) if (u.owner === owner && u.hp > 0 && unitDef(u).role !== 'villager') n++;
+  return n;
+}
+
+const COMPASS = ['east', 'south-east', 'south', 'south-west', 'west', 'north-west', 'north', 'north-east'];
+
+/** Records a raid: `ids` sent by `by` at `target`'s Town Center. One raid is tracked at a time. */
+export function startRaid(s: GameState, by: number, target: number, ids: number[]) {
+  if (s.raid || ids.length === 0) return;
+  const town = [...s.buildings.values()].find((b) => b.owner === target && b.type === 'town');
+  const live = ids.map((id) => s.units.get(id)).filter((u): u is Unit => !!u);
+  const x = live.reduce((a, u) => a + u.x, 0) / Math.max(1, live.length);
+  const y = live.reduce((a, u) => a + u.y, 0) / Math.max(1, live.length);
+  const cx = town ? town.tx + 2 : x;
+  const cy = town ? town.ty + 2 : y;
+  const a = Math.atan2(y - cy, x - cx);
+  const from = COMPASS[(Math.round(a / (Math.PI / 4)) + 8) % 8];
+  s.raids++;
+  s.raid = { n: s.raids, by, target, ids: [...ids], size: ids.length, routed: 0, x, y, from, started: s.time };
+}
+
+/** Keeps the raid's count and position, and marks the deed when every raider has fallen. */
+function updateRaid(s: GameState) {
+  const r = s.raid;
+  if (!r) return;
+  let alive = 0;
+  let sx = 0;
+  let sy = 0;
+  for (const id of r.ids) {
+    const u = s.units.get(id);
+    if (!u || u.hp <= 0) continue;
+    alive++;
+    sx += u.x;
+    sy += u.y;
+  }
+  r.routed = r.size - alive;
+  if (alive > 0) {
+    r.x = sx / alive;
+    r.y = sy / alive;
+    return;
+  }
+  s.players[r.target].deeds.raid = true;
+  s.repelled++;
+  s.raid = null;
+  if (r.target === PLAYER) say(s, 'The raid is repelled');
+}
+
+function updateDeeds(s: GameState) {
+  for (const p of s.players) {
+    if (p.age >= 2) p.deeds.age2 = true;
+    p.deeds.army = Math.max(p.deeds.army, soldierCount(s, p.id));
+  }
+}
+
+function emit(s: GameState, e: SimEvent) {
+  s.events.push(e);
+  // Nobody may be draining the list (a test reading the sim without a scene): keep it short.
+  if (s.events.length > 400) s.events.splice(0, s.events.length - 400);
+}
+
+function centre(f: { x0: number; y0: number; x1: number; y1: number }) {
+  return { x: (f.x0 + f.x1) / 2, y: (f.y0 + f.y1) / 2 };
+}
+
+/** Turns a unit towards a point. */
+function faceTo(u: Unit, x: number) {
+  if (Math.abs(x - u.x) > 0.05) u.face = x > u.x ? 1 : -1;
 }
 
 export function say(s: GameState, text: string) {
@@ -524,6 +666,8 @@ export function tick(s: GameState, dt: number) {
   for (const b of [...s.buildings.values()]) updateBuilding(s, b, dt);
   for (const u of [...s.units.values()]) if (u.hp > 0) updateUnit(s, u, dt);
   reap(s);
+  updateDeeds(s);
+  updateRaid(s);
   updateSight(s);
   checkWinner(s);
 }
@@ -536,8 +680,11 @@ function updateBuilding(s: GameState, b: Building, dt: number) {
     if (b.cool <= 0) {
       const target = nearestEnemy(s, b.owner, b.tx + 0.5 * def.w, b.ty + 0.5 * def.h, def.tower.range);
       if (target) {
-        target.hp -= def.tower.dmg;
+        const dmg = takenBy(s, target, def.tower.dmg);
+        target.hp -= dmg;
         b.cool = def.tower.cooldown;
+        const at = centre(footprint(target));
+        emit(s, { t: 'hit', x: at.x, y: at.y, fromX: b.tx + def.w / 2, fromY: b.ty + 0.5, dmg, ranged: true, owner: b.owner });
       }
     }
   }
@@ -548,8 +695,12 @@ function updateBuilding(s: GameState, b: Building, dt: number) {
   if (head.left > 0) return;
   if (head.kind === 'tech') {
     b.queue.shift();
-    if (head.key === 'age2') p.age = 2;
-    else p.techs.push(head.key);
+    const advance = TECHS[head.key].advance;
+    if (advance) {
+      p.age = advance;
+      // Reaching Age II opens the one-time boon pick.
+      if (advance === 2 && !p.boon) p.boonPending = true;
+    } else p.techs.push(head.key);
     return;
   }
   // A unit that can't leave yet (no room around the building) waits in the queue.
@@ -573,6 +724,7 @@ function updateBuilding(s: GameState, b: Building, dt: number) {
 function updateUnit(s: GameState, u: Unit, dt: number) {
   const def = unitDef(u);
   u.cool = Math.max(0, u.cool - dt);
+  u.act = 'idle';
   if (def.role === 'villager') villagerUpdate(s, u, def, dt);
   else militaryUpdate(s, u, def, dt);
 }
@@ -610,6 +762,8 @@ function militaryUpdate(s: GameState, u: Unit, def: UnitDef, dt: number) {
     if (!f) return;
     if (gap(u.x, u.y, f) <= def.range + 0.5) {
       u.path = [];
+      u.act = 'fight';
+      faceTo(u, centre(f).x);
       if (u.cool <= 0) {
         strike(s, u, def, target);
         u.cool = def.cooldown;
@@ -642,6 +796,8 @@ function villagerUpdate(s: GameState, u: Unit, def: UnitDef, dt: number) {
     if (!f) return;
     if (gap(u.x, u.y, f) <= 0.6) {
       u.path = [];
+      u.act = 'build';
+      faceTo(u, centre(f).x);
       b.buildLeft -= dt;
       b.hp = Math.min(BUILDINGS[b.type].hp, b.hp + (BUILDINGS[b.type].hp * dt) / BUILDINGS[b.type].time);
       if (b.buildLeft <= 0) {
@@ -681,7 +837,11 @@ function villagerUpdate(s: GameState, u: Unit, def: UnitDef, dt: number) {
       if (u.carry && u.carry !== res) return void (u.order = { t: 'return' });
       u.carry = res;
       u.lastRes = res;
-      u.gatherMs += dt * gatherBonus(s, u.owner, res) * s.players[u.owner].gatherMul;
+      u.act = 'gather';
+      faceTo(u, centre(f).x);
+      // Harvest Rites, the Age II boon, speeds up work on farms.
+      const rites = !node && s.players[u.owner].boon === 'harvest' ? HARVEST_RITES : 1;
+      u.gatherMs += dt * gatherBonus(s, u.owner, res) * s.players[u.owner].gatherMul * rites;
       if (u.gatherMs >= GATHER_MS[res]) {
         u.gatherMs -= GATHER_MS[res];
         u.amount++;
@@ -715,6 +875,7 @@ function villagerUpdate(s: GameState, u: Unit, def: UnitDef, dt: number) {
       u.path = [];
       const p = s.players[u.owner];
       if (u.carry) p.res[u.carry] += u.amount;
+      if (u.carry && u.amount > 0) emit(s, { t: 'drop', x: u.x, y: u.y, res: u.carry, n: u.amount, owner: u.owner });
       u.amount = 0;
       u.carry = null;
       u.gatherMs = 0;
@@ -814,7 +975,17 @@ function nearestEnemy(s: GameState, owner: number, x: number, y: number, range: 
 function strike(s: GameState, u: Unit, def: UnitDef, target: Unit | Building) {
   let dmg = def.dmg + ownBonus(s, u, def);
   if (def.vsCavalry && 'type' in target && UNITS[target.type].role === 'cavalry') dmg *= def.vsCavalry;
+  dmg = takenBy(s, target, dmg);
   target.hp -= dmg;
+  u.struck = s.time;
+  const at = centre(footprint(target));
+  emit(s, { t: 'hit', x: at.x, y: at.y, fromX: u.x, fromY: u.y, dmg, ranged: def.range > 1, owner: u.owner });
+}
+
+/** The damage a target really takes: Shieldwall, the Age II boon, shields melee infantry. */
+function takenBy(s: GameState, target: Unit | Building, dmg: number) {
+  if ('order' in target && UNITS[target.type].role === 'melee' && s.players[target.owner].boon === 'shieldwall') return dmg * SHIELDWALL_TAKEN;
+  return dmg;
 }
 
 function ownBonus(s: GameState, u: Unit, def: UnitDef) {
@@ -823,6 +994,7 @@ function ownBonus(s: GameState, u: Unit, def: UnitDef) {
   if (def.role === 'melee' && techs.includes('ironworks')) bonus += 2;
   if (def.role === 'ranged' && techs.includes('fletching')) bonus += 2;
   if (def.role === 'ranged' && techs.includes('bodkin')) bonus += 2;
+  if (def.role !== 'villager' && s.players[u.owner].age >= 3) bonus += AGE3_DAMAGE;
   return bonus;
 }
 
