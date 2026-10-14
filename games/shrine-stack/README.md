@@ -71,7 +71,7 @@ over the stone below (checking that a second tap while it falls drops nothing), 
 tier's favor and its three blessings, taps Reroll and checks it cost 5 favor and brought three new
 cards, and takes the first one, checking its effect as tier 2 starts. Like the other games' tests it owns the game clock and plays at 4x speed
 (`PLAYTHROUGH_SPEED`). The **Playthrough Shrine Stack** workflow
-(`.github/workflows/playthrough-shrine-stack.yml`) runs it on every PR that touches this folder or
+(`.github/workflows/playthrough.yml`) runs it on every PR that touches this folder or
 the workflow, and uploads the video and screenshots as the `playthrough-shrine-stack` artifact.
 
 ```sh

@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { bakeBees } from '../art/bees';
 import { bakeScenery } from '../art/scenery';
 
-// Generates all textures at runtime so the prototype needs no asset files yet.
+// Paints all the cut-paper textures on canvases at startup, so the game needs no asset files.
 export class BootScene extends Phaser.Scene {
   constructor() {
     super('Boot');

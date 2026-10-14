@@ -1,7 +1,9 @@
 import { freshProgress, type Progress } from './state';
+import { MEADOWS } from './meadows';
 import { UPGRADES, UPGRADE_IDS } from './upgrades';
 
-// The comb, the coins, the bees and the upgrades are saved; bees out foraging come home on load.
+// The comb, the coins, the bees, the upgrades, the meadows unlocked and when the hive was last seen
+// are saved; bees out foraging come home on load.
 const KEY = 'beehive-baron-progress';
 
 export function loadProgress(): Progress {
@@ -20,6 +22,8 @@ export function loadProgress(): Progress {
       ranks: Object.fromEntries(
         UPGRADE_IDS.map((id) => [id, Math.min(UPGRADES[id].prices.length, num(saved.ranks?.[id], 0))]),
       ) as Progress['ranks'],
+      meadows: Math.min(MEADOWS.length, num(saved.meadows, fresh.meadows)),
+      seen: num(saved.seen, fresh.seen),
     };
   } catch {
     return fresh;

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { itemTexture } from '../art/items';
+import { fit } from '../art/paint';
 import type { ItemId } from '../game/items';
 
 const ICON_SCALE = 1.25;
@@ -14,7 +15,7 @@ export class BackStack {
 
   update(carrier: Phaser.GameObjects.Sprite, items: readonly ItemId[]) {
     while (this.icons.length < items.length) {
-      this.icons.push(this.scene.add.image(0, 0, itemTexture(items[0])).setScale(ICON_SCALE));
+      this.icons.push(fit(this.scene.add.image(0, 0, itemTexture(items[0])), ICON_SCALE));
     }
     // The sprite faces right unflipped, so its back is on the left.
     const backX = carrier.x + (carrier.flipX ? 22 : -22);

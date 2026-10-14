@@ -4,7 +4,9 @@ A small automation game prototype built with [Phaser 4](https://phaser.io), Type
 the [game hub](../../README.md).
 
 You play a plague doctor running a medieval apothecary. Grow herbs in the backyard, refine them,
-brew potions in the cauldron and sell them to customers at the storefront.
+brew potions in the cauldron and sell them to customers at the storefront. It looks like a page
+from a herbalist's almanac: watercolour washes on cream paper, wobbly ink outlines and hatched
+shadows, with the interface in dark ink on parchment cards and a serif type.
 
 ![The whole map with both production lines built](docs/screenshots/columns-map.png)
 
@@ -45,9 +47,37 @@ camera follows the doctor.
    on the counter and stand on the work spot behind it; customers pay for each potion as they get
    it and leave the coins on the pick-up marker. A well-stocked shop sells cheaper: a customer pays
    2.5% less for a potion for each other one of its kind still on the counter's pallets, down to
-   half price, and the cut for the next sale shows under each pallet ("-30%").
+   half price, and the cut for the next sale shows beside each pallet ("-30%").
 
 ![The recipes](docs/screenshots/playthrough-0-recipes.png)
+
+**Tips**: on top of the price, a customer whose order is filled leaves a tip: a coin, plus two
+for each potion they asked for (3 for one potion, 5 for two). The tip shrinks while they wait at
+the counter and is gone once they have used up 60% of their patience, so a quick shop earns more.
+The coin ring on the corner of each order bubble shows it: the ring empties as the tip shrinks,
+and the label above it says what they would tip right now ("tip +4", or "no tip"). The bar under
+the potions is their patience, as before.
+
+![Order bubbles: the coin rings show what is left of each tip](docs/screenshots/tip-rings.png)
+
+**Daily contract**: the card at the top of the screen asks for a number of one potion by dusk,
+"Contract: 3 Sleeping Tonics by dusk" on the first day. Each potion of that kind sold at the
+counter fills a pip. Fill them all and the reward goes straight into the purse and the next day's
+contract comes in at once; at dusk an unkept contract lapses and the next day starts. A day lasts
+four minutes, and the little sun on the right of the card sinks towards the horizon as dusk nears.
+Days alternate Sleeping Tonics and Healing Draughts, each kept contract asks for one more potion
+than the last (up to 12), and the reward is a little under half of what the potions sell for.
+
+![The daily contract: four of six Sleeping Tonics sold, 40 coins when the last two go](docs/screenshots/contract.png)
+
+**While you were away**: once anything runs without the doctor (a craftsman hired or a belt
+built), the apothecary keeps going while the game is closed. On the next visit the time away, up
+to two hours, is played through the same rules with the doctor off his work spots, and a chip in
+the top right says what it earned: "While you were away: +32 coins, 9 potions". Tap the chip to
+dismiss it. The coins land where they would have: in the till, or in the purse when a craftsman
+carries them or a contract pays.
+
+![The chip after time away, with a belt and craftsmen running](docs/screenshots/away-chip.png)
 
 **Pallets**: every station keeps each kind of goods coming in or going out on its own pallet: two
 by two on the base, stacked up to ten layers high, so 40 of each kind. The refining table and
@@ -89,8 +119,9 @@ station stands.
 ![After the garden belt, the shop branches out, with entry to the guild](docs/screenshots/unlock-branches.png)
 
 Every station has an upgrade marker and goes up to level 5. Upgrades cost 20, 40, 80 and 160
-coins: the refining table and cauldron work faster, and customers at an upgraded counter tip more
-and wait longer. Once a level is paid off, step off the marker and back on to start on the next. An upgrade
+coins: the refining table and cauldron work faster, and customers at an upgraded counter pay
+more for each potion (2 coins over the price per counter level, counting level 1) and wait
+longer. Once a level is paid off, step off the marker and back on to start on the next. An upgrade
 marker goes away once its last level is bought, and a hire marker once both craftsmen are hired.
 
 The **outfitter** in the left half of the market kits the doctor out, two levels each: a bigger
@@ -158,8 +189,8 @@ before they leave, on Hard 30% less.
 
 `e2e/playthrough.spec.ts` plays the first round of the loop in headless Chromium with real
 clicks: it opens and closes the recipes, harvests both gardens, refines, brews, sells potions to a
-customer and collects the coins, checking items, pallets, the recipe the cauldron picks and what
-each potion is paid along the way. It plays at 4x speed (`PLAYTHROUGH_SPEED`), so the run takes
+customer and collects the coins, checking items, pallets, the recipe the cauldron picks, what
+each potion is paid and tipped, and the first day's contract along the way. It plays at 4x speed (`PLAYTHROUGH_SPEED`), so the run takes
 under a minute. The Playthrough Apothecary workflow runs it on every PR
 that changes `games/apothecary/` and uploads a video and milestone screenshots as the
 `playthrough-apothecary` artifact.
@@ -180,7 +211,7 @@ All paths are inside `games/apothecary/`.
   TypeScript with no Phaser dependency, plus saving.
 - `src/scenes/`: Phaser scenes. `BootScene` bakes textures, `GameScene` draws the world and wires
   input to the rules.
-- `src/art/`: all the pixel art, drawn in code on a shared palette and baked into textures at
-  startup: the plague doctor, townsfolk, items, gardens, stations, conveyor belts, floor markers, ground tiles and
-  interface pieces.
+- `src/art/`: all the art, painted in code on canvases at startup with the watercolour and ink
+  helpers in `paint.ts` (no image files): the plague doctor, townsfolk, items, gardens, stations,
+  conveyor belts, floor markers, the ground and the parchment interface cards.
 - `src/ui/`: small reusable display pieces (icon rows, progress bars) and the recipe and settings panels.

@@ -36,6 +36,29 @@ export interface Order {
   /** Milliseconds the customer waits at the counter before leaving. */
   patience: number;
   maxPatience: number;
+  /**
+   * The most the customer tips, paid when their whole order is filled: it shrinks as they wait (see
+   * `tipLeft`). Missing on orders saved before tips decayed, which tip nothing.
+   */
+  tip?: number;
+}
+
+/**
+ * Today's contract: deliver `need` of one potion to customers before dusk for `reward` coins, paid
+ * straight into the purse. A kept or missed contract rolls over to the next day's.
+ */
+export interface Contract {
+  /** Which day it is, from 1. */
+  day: number;
+  potion: PotionId;
+  need: number;
+  /** How many of the potion customers have been sold today. */
+  made: number;
+  reward: number;
+  /** Milliseconds until dusk. */
+  dayLeft: number;
+  /** Contracts kept so far; each one kept asks for one more potion the next day. */
+  kept: number;
 }
 
 /** The refining tables and cauldrons: one of each on the first production line, and on the second. */
@@ -155,6 +178,13 @@ export interface GameState {
   orders: Order[];
   nextOrderIn: number;
   nextOrderId: number;
+  contract: Contract;
+  /** Potions sold to customers, all game long. */
+  sold: number;
+  /** Tip coins customers have paid, all game long. */
+  tips: number;
+  /** Wall-clock time (Date.now) the game was last saved, for catching up on the automation while away; 0 for a new game. */
+  lastSeen: number;
 }
 
 /**
@@ -297,6 +327,36 @@ export function unlocked(state: GameState, key: Unlock): boolean {
 export const EXPANSION_COST = { land: 100, field: 25, refiner: 50, cauldron: 75 };
 /** How long a craftsman takes to hand a customer one potion; the doctor hands them over at once. */
 export const SERVE_MS = 1_500;
+
+/**
+ * Tips decay: a customer tips their whole `tip` when served at once, less the longer they wait at the
+ * counter, down to nothing once `TIP_SHARE` of their patience is gone.
+ */
+export const TIP_SHARE = 0.6;
+/** A customer's most generous tip: a coin, and two more per potion in their order. */
+export const maxTip = (potions: number) => 1 + 2 * potions;
+/** How much of its tip an order still pays, from 1 when the customer reaches the counter down to 0. */
+export const tipLeft = (order: Order) => Math.max(0, Math.min(1, 1 - (order.maxPatience - order.patience) / (order.maxPatience * TIP_SHARE)));
+/** The tip an order pays if its last potion is handed over now. */
+export const tipNow = (order: Order) => Math.round((order.tip ?? 0) * tipLeft(order));
+
+/** A day lasts four minutes of play, dawn to dusk; the contract rolls over at dusk. */
+export const DAY_MS = 240_000;
+/** The most potions a contract asks for. */
+export const MAX_CONTRACT = 12;
+/** Rounds to the nearest 5 coins, at least 5. */
+const roundFive = (n: number) => Math.max(5, Math.round(n / 5) * 5);
+
+/**
+ * The contract for `day`: Sleeping Tonics on odd days and Healing Draughts on even ones, three of
+ * them and one more for each contract kept before (up to `MAX_CONTRACT`), for a reward of about
+ * nine twentieths of what the potions sell for: 3 Sleeping Tonics for 20 coins on day one.
+ */
+export function contractFor(state: GameState, day: number, kept: number): Contract {
+  const potion: PotionId = day % 2 === 1 ? 'sleepingTonic' : 'healingDraught';
+  const need = Math.min(MAX_CONTRACT, 3 + kept);
+  return { day, potion, need, made: 0, reward: roundFive(need * potionPrice(state, potion) * 0.45), dayLeft: DAY_MS, kept };
+}
 /** Least time between two items in a belt's lane, so they don't overlap. */
 export const BELT_GAP_MS = 600;
 /**
@@ -320,7 +380,7 @@ const unbuilt = (): Build => ({ built: false, paid: 0 });
 
 export function createInitialState(): GameState {
   const ripe = (plant: PlantId): Plot => ({ plant, grown: GROW_MS[plant] });
-  return {
+  const state: GameState = {
     version: 3,
     layout: LAYOUT,
     coins: 0,
@@ -343,5 +403,12 @@ export function createInitialState(): GameState {
     orders: [],
     nextOrderIn: 3_000,
     nextOrderId: 1,
+    // Filled in below, once the state it prices from exists.
+    contract: null as unknown as Contract,
+    sold: 0,
+    tips: 0,
+    lastSeen: 0,
   };
+  state.contract = contractFor(state, 1, 0);
+  return state;
 }

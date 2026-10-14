@@ -100,7 +100,7 @@ of five and three energy, then plays cards by tapping them (attacks first, then 
 turns until the slime falls, checking each card's cost and effect, that the slime opens with its
 first move and never repeats a move twice in a row, and each of its turns against its intent. Then it takes the first reward card and checks it joined the deck and the next
 rooms opened. Like the other games' tests it owns the game clock and plays at 4x speed
-(`PLAYTHROUGH_SPEED`). The **Playthrough Catacomb** workflow (`.github/workflows/playthrough-catacomb.yml`)
+(`PLAYTHROUGH_SPEED`). The **Playthrough Catacomb** workflow (`.github/workflows/playthrough.yml`)
 runs it on every pull request that touches this folder or that workflow (not on pushes to main), and uploads
 the video and screenshots as the `playthrough-catacomb` artifact.
 

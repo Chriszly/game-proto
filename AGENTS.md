@@ -50,9 +50,8 @@ Each game's guide for agents, to read before changing it:
 - **Add a game** by creating `games/<name>/` with an `index.html` that loads `./src/main.ts`, a
   `README.md`, an `AGENTS.md` (current state and architecture) with a `CLAUDE.md` that imports it,
   a `cover.png` (a 16:9 screenshot) and an `e2e/playthrough.spec.ts` that plays its first round,
-  plus its own `.github/workflows/playthrough-<name>.yml`: copy Apothecary's and change
-  the name, the `games/<name>/**` path, the workflow's own path, the concurrency group, the
-  `--project` and the artifact name. It runs on pull requests only, with no `push` trigger. Give it a `favicon.svg` linked from its `index.html`: the orange bear from the hub's
+  and it is played by the shared `.github/workflows/playthrough.yml`, which finds every
+  `games/<name>/e2e/playthrough.spec.ts` on its own, so a new game needs no workflow of its own. Give it a `favicon.svg` linked from its `index.html`: the orange bear from the hub's
   `favicon.svg` (same ears, head, dot eyes and muzzle, 32x32 viewBox) with one prop for the game,
   like Apothecary's plague doctor hat and beak. Then add a card for it in the hub's `index.html` and in `e2e/hub.spec.ts`, a
   Playwright project in `playwright.config.ts`, a row in the README's table of games and a row in
@@ -78,9 +77,10 @@ the same rules with its own first round, files and state.
 
 `games/apothecary/e2e/playthrough.spec.ts` plays one round of the loop in headless Chromium: it opens the recipes,
 harvests, refines, brews and sells potions to a customer. The **Playthrough Apothecary** workflow
-(`.github/workflows/playthrough-apothecary.yml`) runs it on every PR (not on pushes to main) that changes
-`games/apothecary/` or the workflow itself. Each game has its own playthrough workflow like it,
-so a PR for one game only plays that game, and a PR that only changes shared files plays none. The **Hub** workflow (`.github/workflows/hub.yml`) runs `e2e/hub.spec.ts` when the hub page,
+(`.github/workflows/playthrough.yml`) runs on every PR (not on pushes to main) and reports one
+required check, `Playthrough`. It plays each game whose `games/<name>/` folder changed, so a PR for
+one game only plays that game, and a PR that only changes shared files plays none. If the workflow
+itself changes, every game is played. A game that did not change is not played, and the check still passes. The **Hub** workflow (`.github/workflows/hub.yml`) runs `e2e/hub.spec.ts` when the hub page,
 its test, a game's `index.html`, `cover.png` or `favicon.svg`, or a shared file changes. The
 playthrough is the check that the core loop can still be played, so it has to stay accurate.
 

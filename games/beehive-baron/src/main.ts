@@ -9,8 +9,9 @@ const game = new Phaser.Game({
   parent: 'game',
   width: VIEW.w,
   height: VIEW.h,
-  backgroundColor: '#1d1a10',
-  pixelArt: true,
+  backgroundColor: '#4a2e16',
+  // The cut-paper art is smooth, so textures are filtered rather than kept pixel-sharp.
+  pixelArt: false,
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
