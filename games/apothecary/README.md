@@ -6,13 +6,18 @@ the [game hub](../../README.md).
 You play a plague doctor running a medieval apothecary. Grow herbs in the backyard, refine them,
 brew potions in the cauldron and sell them to customers at the storefront.
 
-![The whole map](docs/screenshots/u-layout-map.png)
+![The whole map with both production lines built](docs/screenshots/columns-map.png)
 
-The apothecary is laid out as a U: goods go down the left arm (the wheat field and mandrake patch,
-then the refining table), along the bottom (the cauldron) and up the middle into the shop at the
-top. The right arm is grass until the expansion is bought, which opens it up for a second
-production line that mirrors the left. The courtyard inside the U is where the doctor works. The
-map is bigger than the screen, so the camera follows the doctor.
+The apothecary is laid out in columns. The first production line runs straight down the left
+column: the wheat field and mandrake patch at the top, then the refining table, then the cauldron,
+each with its drop, work and pick-up markers in a row on the side facing the market and its upgrade,
+craftsman and belt markers on the outer side. The market in the middle holds the outfitter and the
+guild, and the shop sits at the bottom of it. The right column is grass until the expansion is
+bought, which opens it up for a second production line that mirrors the first. Belts run straight
+down each column and along the bottom into the shop. The map is bigger than the screen, so the
+camera follows the doctor.
+
+![A new game: one line, the market and the shop](docs/screenshots/columns-new-game.png)
 
 ## How to play
 
@@ -32,10 +37,11 @@ map is bigger than the screen, so the camera follows the doctor.
 3. **Cauldron**: drop in refined goods. Two wheat flour brew a Healing Draught, wheat flour and
    mandrake seeds brew a Sleeping Tonic. Stand on the work spot while it brews. When work starts,
    the cauldron brews whichever potion customers are waiting for that the shop has least of.
-4. **Storefront**: customers come in by the street door in the shop's back wall, walk up to the
-   counter and show the potions they want and how long they will wait; they are only served, and
-   only lose patience, once they stand at the counter. The doctor goes in and out by the front door,
-   since the shop's walls are solid and the street door is the customers' own. Drop potions
+4. **Storefront**: the storefront faces the street at the bottom of the map. Customers come in
+   by the street door in the shop's bottom wall, walk up to the counter and show the potions they want and how long they will wait; they are only served, and
+   only lose patience, once they stand at the counter. The doctor goes in and out by the back door
+   in the top wall, from the market, since the shop's walls are solid and the street door is the
+   customers' own. Drop potions
    on the counter and stand on the work spot behind it; customers pay for each potion as they get
    it and leave the coins on the pick-up marker. A well-stocked shop sells cheaper: a customer pays
    2.5% less for a potion for each other one of its kind still on the counter's pallets, down to
@@ -44,10 +50,9 @@ map is bigger than the screen, so the camera follows the doctor.
 ![The recipes](docs/screenshots/playthrough-0-recipes.png)
 
 **Pallets**: every station keeps each kind of goods coming in or going out on its own pallet: two
-by two on the base, stacked up to ten layers high, so 40 of each kind. The refining table keeps
-its plants on a pair of pallets above it and its flour and seeds on a pair below it, the cauldron
-keeps flour and seeds on its left and potions on its right, and the counter keeps its potions in
-front of it. The drop and pick-up markers stand beside the pallets they fill and empty. A full
+by two on the base, stacked up to ten layers high, so 40 of each kind. The refining table and
+the cauldron keep what comes in on a pair of pallets above them and what goes out on a pair below
+them, and the counter keeps its potions behind it. The drop and pick-up markers stand beside the pallets they fill and empty. A full
 pallet takes nothing more: the doctor keeps the item and a belt waits until there is room.
 
 ![Pallets at the refining tables and cauldrons](docs/screenshots/pallets-map.png)
@@ -85,15 +90,16 @@ station stands.
 
 Every station has an upgrade marker and goes up to level 5. Upgrades cost 20, 40, 80 and 160
 coins: the refining table and cauldron work faster, and customers at an upgraded counter tip more
-and wait longer. Once a level is paid off, step off the marker and back on to start on the next.
+and wait longer. Once a level is paid off, step off the marker and back on to start on the next. An upgrade
+marker goes away once its last level is bought, and a hire marker once both craftsmen are hired.
 
-The **outfitter** on the grass right of the shop kits the doctor out, two levels each: a bigger
+The **outfitter** in the left half of the market kits the doctor out, two levels each: a bigger
 pack carries one more item per level (30, then 60 coins), boots walk a fifth faster per level and
 a longer sickle harvests from a quarter further away (25, then 50 coins each).
 
 ![The outfitter](docs/screenshots/outfitter.png)
 
-The **guild** in the bottom-left corner of the yard sells upgrades for the rest of the apothecary:
+The **guild** in the right half of the market sells upgrades for the rest of the apothecary:
 growth makes every garden grow a quarter faster per level (20, then 40 coins), belts run half again
 as fast per level, carrying more goods a second (30, then 60), prices make customers pay a quarter
 more per potion per level (20, then 40), an extra order slot lets a fourth customer wait at the
@@ -126,12 +132,12 @@ The belts are steampunk machinery, brass rails over leather slats, in an otherwi
 
 ![The cauldron belt ending at the counter's potion pallets](docs/screenshots/belts-to-pallets-counter.png)
 
-**The expansion** opens the right arm for a second production line. Its land is bought on a marker
-on the grass right of the shop (100 coins), which lays the yard and puts a build marker where each
+**The expansion** opens the right column for a second production line. Its land is bought on a
+marker in the market below the guild (100 coins), which lays the yard and puts a build marker where each
 part will go: a wheat field and a mandrake patch (25 coins each), a refining table (50) and a
 cauldron (75). The second line works like the first and has its own belts, buildable once the
-stations at both ends stand; its cauldron belt meets the first line's at a T and shares the run up
-to the counter. The counter's drop marker stays until every cauldron has its belt, and comes back whenever the
+stations at both ends stand; its cauldron belt meets the first line's at a T above the shop and
+shares the run down to the counter. The counter's drop marker stays until every cauldron has its belt, and comes back whenever the
 doctor carries a potion.
 
 ![Both lines with all their belts](docs/screenshots/expansion-map.png)
