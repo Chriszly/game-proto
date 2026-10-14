@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>Lane Brawl</title>
+  <circle cx="7" cy="5" r="5" fill="#e37100"/>
+  <circle cx="25" cy="5" r="5" fill="#e37100"/>
+  <circle cx="7" cy="5" r="2.4" fill="#ffb787"/>
+  <circle cx="25" cy="5" r="2.4" fill="#ffb787"/>
+  <ellipse cx="16" cy="14.5" rx="13" ry="12" fill="#e37100"/>
+  <circle cx="10.5" cy="11.5" r="2.3" fill="#0d1117"/>
+  <circle cx="21.5" cy="11.5" r="2.3" fill="#0d1117"/>
+  <circle cx="11.3" cy="10.7" r="0.8" fill="#ffffff"/>
+  <circle cx="22.3" cy="10.7" r="0.8" fill="#ffffff"/>
+  <ellipse cx="16" cy="17.6" rx="4.6" ry="3.3" fill="#ffdcc7"/>
+  <ellipse cx="16" cy="16.6" rx="2.2" ry="1.4" fill="#311300"/>
+  <path d="M22.5 22.5 L28.5 21 V26.5 C28.5 29.2 26.6 30.6 25.5 31 C24.4 30.6 22.5 29.2 22.5 26.5 Z" fill="#3d8bfd" stroke="#ffffff" stroke-width="1"/>
+  <path d="M25.5 24 V29" stroke="#ffffff" stroke-width="1.2"/>
+</svg>

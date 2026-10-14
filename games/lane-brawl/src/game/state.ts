@@ -1,0 +1,322 @@
+// The world of a match: its units, projectiles and what the view should show. No Phaser here.
+
+import {
+  AbilityKey,
+  BASE,
+  CAMPS,
+  CAMP,
+  CHAMPIONS,
+  ChampionDef,
+  ENEMY_LANES,
+  ALLY_LANES,
+  ITEMS,
+  LANES,
+  LaneId,
+  MINION,
+  NEXUS_HP,
+  NEXUS_RADIUS,
+  START_GOLD,
+  Team,
+  TOWER,
+  TOWERS,
+  Vec,
+  XP_FOR_LEVEL,
+  MAX_LEVEL,
+  WAVE_MS,
+} from './data';
+
+export type Phase = 'pick' | 'playing' | 'won' | 'lost';
+export type UnitKind = 'champion' | 'minion' | 'tower' | 'nexus' | 'camp';
+/** Camps belong to no team: every team's units may attack them. */
+export type Side = Team | 'neutral';
+
+export interface Unit {
+  id: number;
+  kind: UnitKind;
+  side: Side;
+  x: number;
+  y: number;
+  spawnX: number;
+  spawnY: number;
+  radius: number;
+  hp: number;
+  maxHp: number;
+  shield: number;
+  /** Time left on the shield, in ms; it is lost when this runs out. */
+  shieldMs: number;
+  dmg: number;
+  armor: number;
+  range: number;
+  speed: number;
+  attackMs: number;
+  /** Time until this unit may attack again, in ms. */
+  attackCd: number;
+  /** Time left on a slow, in ms. */
+  slowMs: number;
+  dead: boolean;
+  /** When a dead champion, minion or camp returns, in game time. */
+  respawnAt: number;
+  /** The unit this one attacks, or the one the player clicked. */
+  target: number | null;
+  /** The last unit to hurt this one; a camp fights back against it. */
+  lastHitBy: number | null;
+  /** Where a player's champion is walking to, if it was sent to a point. */
+  moveTo: Vec | null;
+  /** Lane walk: the points this unit follows, and the index it is walking toward. */
+  path: Vec[] | null;
+  wp: number;
+  // Champions only.
+  champ: ChampionDef | null;
+  player: boolean;
+  level: number;
+  xp: number;
+  gold: number;
+  items: string[];
+  cds: Record<AbilityKey, number>;
+}
+
+export interface Projectile {
+  x: number;
+  y: number;
+  /** Pixels per ms. */
+  vx: number;
+  vy: number;
+  /** Distance it can still fly, in pixels. */
+  left: number;
+  side: Side;
+  owner: number;
+  damage: number;
+  width: number;
+  pierce: boolean;
+  hit: number[];
+  color: string;
+}
+
+/** A short-lived visual the view turns into shapes: a ring, or a line between two points. */
+export type Fx =
+  | { kind: 'ring'; x: number; y: number; r: number; color: string; ms: number }
+  | { kind: 'line'; x: number; y: number; x2: number; y2: number; color: string; ms: number };
+
+export interface GameState {
+  phase: Phase;
+  time: number;
+  nextWave: number;
+  nextId: number;
+  units: Unit[];
+  projectiles: Projectile[];
+  /** Visuals raised since the view last drained this list. */
+  fx: Fx[];
+  winner: Team | null;
+  /** Multiplies the damage red's units deal, to make the match harder or easier. */
+  enemyDamage: number;
+  /** The player's champion's unit id. */
+  player: number;
+}
+
+export function pathFor(lane: LaneId, team: Team): Vec[] {
+  return team === 'blue' ? LANES[lane] : [...LANES[lane]].reverse();
+}
+
+export function blankUnit(
+  s: GameState,
+  kind: UnitKind,
+  side: Side,
+  x: number,
+  y: number,
+  stats: { hp: number; dmg: number; armor: number; range: number; speed: number; attackMs: number; radius: number },
+): Unit {
+  return {
+    id: s.nextId++,
+    kind,
+    side,
+    x,
+    y,
+    spawnX: x,
+    spawnY: y,
+    radius: stats.radius,
+    hp: stats.hp,
+    maxHp: stats.hp,
+    shield: 0,
+    shieldMs: 0,
+    dmg: stats.dmg,
+    armor: stats.armor,
+    range: stats.range,
+    speed: stats.speed,
+    attackMs: stats.attackMs,
+    attackCd: 0,
+    slowMs: 0,
+    dead: false,
+    respawnAt: 0,
+    target: null,
+    lastHitBy: null,
+    moveTo: null,
+    path: null,
+    wp: 0,
+    champ: null,
+    player: false,
+    level: 1,
+    xp: 0,
+    gold: 0,
+    items: [],
+    cds: { Q: 0, W: 0, E: 0, R: 0 },
+  };
+}
+
+/** Recomputes a champion's stats from its level and items. Healing covers any new max health. */
+export function refreshStats(u: Unit) {
+  const c = u.champ;
+  if (!c) return;
+  const owned = ITEMS.filter((i) => u.items.includes(i.id));
+  const sum = (key: 'hp' | 'dmg' | 'armor' | 'speed') => owned.reduce((n, i) => n + (i[key] ?? 0), 0);
+  const levels = u.level - 1;
+  const maxHp = c.hp + levels * c.hpPerLevel + sum('hp');
+  u.hp += maxHp - u.maxHp;
+  u.maxHp = maxHp;
+  u.dmg = c.dmg + levels * c.dmgPerLevel + sum('dmg');
+  u.armor = c.armor + sum('armor');
+  u.speed = c.speed + sum('speed');
+}
+
+export function spawnChampion(s: GameState, def: ChampionDef, side: Team, x: number, y: number, player: boolean, lane: LaneId | null) {
+  const u = blankUnit(s, 'champion', side, x, y, {
+    hp: 0,
+    dmg: def.dmg,
+    armor: def.armor,
+    range: def.range,
+    speed: def.speed,
+    attackMs: def.attackMs,
+    radius: 22,
+  });
+  u.hp = 0;
+  u.maxHp = 0;
+  u.champ = def;
+  u.player = player;
+  u.level = 1;
+  u.gold = START_GOLD;
+  if (lane) {
+    u.path = pathFor(lane, side);
+    u.wp = 1;
+  }
+  refreshStats(u);
+  u.hp = u.maxHp;
+  s.units.push(u);
+  return u;
+}
+
+/** A fresh match: the player's champion and four allies on blue, five champions on red, and the map. */
+export function createGame(pick: ChampionDef, enemyDamage: number): GameState {
+  const s: GameState = {
+    phase: 'playing',
+    time: 0,
+    nextWave: 2000,
+    nextId: 1,
+    units: [],
+    projectiles: [],
+    fx: [],
+    winner: null,
+    enemyDamage,
+    player: 0,
+  };
+
+  for (const team of ['blue', 'red'] as Team[]) {
+    const nexus = blankUnit(s, 'nexus', team, BASE[team].x, BASE[team].y, {
+      hp: NEXUS_HP,
+      dmg: 0,
+      armor: 0,
+      range: 0,
+      speed: 0,
+      attackMs: 1000,
+      radius: NEXUS_RADIUS,
+    });
+    s.units.push(nexus);
+  }
+  for (const t of TOWERS) {
+    s.units.push(
+      blankUnit(s, 'tower', t.team, t.x, t.y, {
+        hp: TOWER.hp,
+        dmg: TOWER.dmg,
+        armor: 0,
+        range: TOWER.range,
+        speed: 0,
+        attackMs: TOWER.attackMs,
+        radius: TOWER.radius,
+      }),
+    );
+  }
+  for (const c of CAMPS) {
+    s.units.push(
+      blankUnit(s, 'camp', 'neutral', c.x, c.y, {
+        hp: CAMP.hp,
+        dmg: CAMP.dmg,
+        armor: 0,
+        range: CAMP.range,
+        speed: 0,
+        attackMs: CAMP.attackMs,
+        radius: CAMP.radius,
+      }),
+    );
+  }
+
+  const others = CHAMPIONS.filter((c) => c.id !== pick.id);
+  const offsets: Vec[] = [
+    { x: 70, y: -40 },
+    { x: 40, y: -90 },
+    { x: 110, y: -10 },
+    { x: 70, y: 40 },
+    { x: 40, y: 90 },
+  ];
+  const blueAt = (i: number) => ({ x: BASE.blue.x + offsets[i].x, y: BASE.blue.y + offsets[i].y });
+  const redAt = (i: number) => ({ x: BASE.red.x - offsets[i].x, y: BASE.red.y - offsets[i].y });
+
+  const player = spawnChampion(s, pick, 'blue', blueAt(0).x, blueAt(0).y, true, null);
+  s.player = player.id;
+  others.slice(0, 4).forEach((def, i) => {
+    spawnChampion(s, def, 'blue', blueAt(i + 1).x, blueAt(i + 1).y, false, ALLY_LANES[i]);
+  });
+  CHAMPIONS.forEach((def, i) => {
+    spawnChampion(s, def, 'red', redAt(i).x, redAt(i).y, false, ENEMY_LANES[i]);
+  });
+
+  return s;
+}
+
+/** Puts a wave of minions on each lane from both Nexuses. */
+export function spawnWave(s: GameState) {
+  for (const team of ['blue', 'red'] as Team[]) {
+    for (const lane of ['top', 'mid', 'bottom'] as LaneId[]) {
+      for (let i = 0; i < 3; i++) {
+        const jitter = i * 12;
+        const x = BASE[team].x + (team === 'blue' ? 1 : -1) * (30 + jitter);
+        const y = BASE[team].y + (team === 'blue' ? -1 : 1) * (30 + jitter);
+        const m = blankUnit(s, 'minion', team, x, y, {
+          hp: MINION.hp,
+          dmg: MINION.dmg,
+          armor: 0,
+          range: MINION.range,
+          speed: MINION.speed,
+          attackMs: MINION.attackMs,
+          radius: MINION.radius,
+        });
+        m.path = pathFor(lane, team);
+        m.wp = 1;
+        s.units.push(m);
+      }
+    }
+  }
+  s.nextWave = s.time + WAVE_MS;
+}
+
+export function getUnit(s: GameState, id: number | null): Unit | null {
+  if (id === null) return null;
+  return s.units.find((u) => u.id === id) ?? null;
+}
+
+export function levelFor(xp: number): number {
+  let level = 1;
+  for (let i = 1; i < XP_FOR_LEVEL.length; i++) if (xp >= XP_FOR_LEVEL[i]) level = i + 1;
+  return Math.min(level, MAX_LEVEL);
+}
+
+export function dist(a: Vec, b: Vec): number {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
