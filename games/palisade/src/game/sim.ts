@@ -15,7 +15,7 @@ import {
   type GameState,
   type Stats,
 } from './state';
-import { UPGRADES, type UpgradeId } from './upgrades';
+import type { UpgradeId } from './upgrades';
 import { BREAK_MS, bossBars, foeHp, spawnInterval, waveFoes } from './waves';
 
 // The rules of a run, in plain TypeScript: `tick` moves the battle on, `pick` takes an upgrade.
@@ -260,14 +260,17 @@ function moveEnemies(state: GameState, dt: number) {
       if (e.slowMs === 0) e.slow = 0;
     }
     const stop = (barricadeUp ? BARRICADE_FRONT : HERO_FRONT) + type.radius;
-    e.attacking = barricadeUp && e.x <= stop;
+    // Only a foe at the barricade's face hacks at it: one that got behind it while it was down
+    // (and was then repaired) keeps walking to the hero. A foe walking up oversteps the face by
+    // at most one substep's walk, so that is how far behind it still counts as at the face.
+    e.attacking = barricadeUp && e.x <= stop && e.x >= stop - (type.speed * SUBSTEP_MS) / 1000;
     if (e.attacking) {
       e.x = stop;
       state.barricade.hp = Math.max(0, state.barricade.hp - (type.dps * pace * dt) / 1000);
     } else {
       e.x -= (type.speed * pace * dt) / 1000;
     }
-    if (!barricadeUp && e.x - type.radius <= HERO_FRONT) {
+    if (e.x - type.radius <= HERO_FRONT) {
       gameOver(state);
       return;
     }
@@ -314,7 +317,8 @@ export function rollChoices(state: GameState): UpgradeId[] {
 /** Takes one of the offered upgrades; the battle goes on once no level-ups are left to pick. */
 export function pick(state: GameState, id: UpgradeId) {
   if (!state.choices?.includes(id)) return false;
-  if (!UPGRADES[id].filler) state.ranks[id] = (state.ranks[id] ?? 0) + 1;
+  // Fillers count too, so the skill book can show how often the barricade was mended.
+  state.ranks[id] = (state.ranks[id] ?? 0) + 1;
   const barricadeMax = stats(state).barricadeMax;
   if (id === 'timber') state.barricade = { hp: barricadeMax, max: barricadeMax };
   if (id === 'mend') state.barricade.hp = Math.min(state.barricade.max, state.barricade.hp + state.barricade.max / 2);

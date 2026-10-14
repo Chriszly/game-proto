@@ -61,7 +61,7 @@ pauses the battle on a pick of three upgrades, taking one at random after 10 sec
 - `src/ui/SkillBook.ts`: the "Skill book found/total" button in the top bar and the book it opens,
   a 3x6 grid with a slot for every id in `UPGRADE_IDS` order. A slot not yet in `found` is an empty
   placeholder (a "?" frame and blank lines); a found one shows icon, name, rank of max (`Nx` for
-  the `mend` filler) and `text`, dimmed at rank 0. Its `open` flag tells the scene to hold
+  the `mend` filler, how many times it was picked) and `text`, dimmed at rank 0. Its `open` flag tells the scene to hold
   everything still.
 - `src/ui/Button.ts`: `makeButton`, the wooden button used on the game-over panel.
 - `src/art/`: pixel art drawn in code. `pixelArt.ts` has `bakePixelArt`, `PixelCanvas` and the
@@ -115,12 +115,17 @@ pauses the battle on a pick of three upgrades, taking one at random after 10 sec
 - `Enemy` holds its position, `hp`/`maxHp`, boss `bars`, slow and burn timers, `attacking` and
   `hitMs`. `Missile` is an arrow or a fireball with a homing `target`, a `hit` list and `pierce`.
   `Effect` is a short-lived visual with `ms`/`total`.
-- Hero stats are never stored. `stats(state)` derives them from `ranks` each time.
+- Hero stats are never stored. `stats(state)` derives them from `ranks` each time. `pick` counts
+  the `mend` filler in `ranks` too (for the skill book); `stats` ignores it and `offerable` never
+  offers a filler, so its rank changes nothing else.
 - Only `sim.ts` mutates state during play. The scene only replaces it wholesale (`newRun`,
   `fightAgain`) and calls `offer` on load when level-ups are pending.
 - **Invariants:** `choices` is set while `levelUps > 0`, and the battle is frozen then. Every
   place that sets `choices` (`offer`, `fightAgain`) also resets `pickMs` to `AUTO_PICK_MS`, so
-  each level-up gets the full 10 seconds. The countdown also stops while the run is over. Foe,
+  each level-up gets the full 10 seconds. The countdown also stops while the run is over. In
+  `moveEnemies` a foe hacks at the standing barricade only when it is at the face (at most one
+  substep's walk past it); a foe that got behind it while it was down keeps walking after a repair
+  (Stout Timber or Mend), and any foe reaching `HERO_FRONT` ends the run. Foe,
   missile and effect ids share the one `nextId` counter. A boss's `maxHp` is its per-bar health
   times `bars`. Foes spawn at `SPAWN_X` plus their radius and are only targeted once
   `x < VIEW_RIGHT` (950).
