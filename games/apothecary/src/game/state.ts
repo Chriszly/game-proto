@@ -185,6 +185,15 @@ export const beltSpeed = (state: GameState) => 1 + 0.5 * state.upgrades.belts.le
 /** What customers pay for a potion: a quarter more per price level, rounded. */
 export const potionPrice = (state: GameState, potion: PotionId) => Math.round(POTION_PRICE[potion] * (1 + 0.25 * state.upgrades.prices.level));
 
+/**
+ * What share of a potion's pay a customer gives when `others` more of it stay stocked in the shop:
+ * a well-stocked shop sells cheaper, 2.5% less per other potion of the kind, down to half.
+ */
+export const stockFactor = (others: number) => Math.max(0.5, 1 - 0.025 * others);
+
+/** What a customer agreed to pay for a potion, lowered by the stock of it left in the shop; at least a coin. */
+export const stockedPay = (pay: number, others: number) => Math.max(1, Math.round(pay * stockFactor(others)));
+
 /** How many items the doctor carries: four, and one more per pack level. */
 export const carryCapacity = (state: GameState) => 4 + state.upgrades.pack.level;
 /** The most a pack can hold, for laying out the carry slots. */

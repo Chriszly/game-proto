@@ -110,6 +110,10 @@ counter. Coins buy upgrades, craftsmen, conveyor belts and a mirrored second pro
   table's and cauldron's label; a tap calls `cyclePriority` (none, then each plant or potion in
   `PLANTS`/`POTIONS` order) and stops propagation so the doctor doesn't walk. The sign shows the
   item's icon, or "any".
+- Stock pricing: `serveFromShelf` pays `stockedPay(order.pay[want], others)`, where `others` is
+  how many of that potion stay on the shelf after the one sold; `stockFactor` (2.5% off each, at
+  least half) is in `src/game/state.ts`. The scene shows the next sale's cut under each counter
+  pallet.
 - Customers: the scene walks each order's sprite from `STREET` to `customerPosition(i)` and adds
   the order to its `atCounter` set once it arrives. `tick` serves, and counts down patience for,
   only orders `atCounter` accepts (default: all). Wants and patience show only once arrived.
@@ -207,7 +211,8 @@ null), `expansion` (land, two fields, refiner, cauldron as `Build`s).
 - Mirrored in `e2e/playthrough.spec.ts` (update together): every spot in its constants block
   (wheat plot x's and row, mandrake spot, refiner, cauldron and counter markers, `LEAVE_SHOP`,
   `LEAVE_CAULDRONS`, `STREET`, `FIRST_CUSTOMER` = `customerPosition(0)`), `WALK_SPEED`,
-  `POTION_PRICE`, the tip formula in `potionPay`, `shortfall`, grow times 8000/14000, the recipe
+  `POTION_PRICE`, the tip formula in `potionPay` (it assumes one of each potion on the shelf, so
+  no stock cut, and asserts it), `shortfall`, grow times 8000/14000, the recipe
   line text and order, carry capacity 4, the world size 1200x880 (camera asserts), and which pallets
   each station shows.
 

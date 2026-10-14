@@ -37,7 +37,9 @@ map is bigger than the screen, so the camera follows the doctor.
    only lose patience, once they stand at the counter. The doctor goes in and out by the front door,
    since the shop's walls are solid and the street door is the customers' own. Drop potions
    on the counter and stand on the work spot behind it; customers pay for each potion as they get
-   it and leave the coins on the pick-up marker.
+   it and leave the coins on the pick-up marker. A well-stocked shop sells cheaper: a customer pays
+   2.5% less for a potion for each other one of its kind still on the counter's pallets, down to
+   half price, and the cut for the next sale shows under each pallet ("-30%").
 
 ![The recipes](docs/screenshots/playthrough-0-recipes.png)
 
