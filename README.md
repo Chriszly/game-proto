@@ -24,6 +24,7 @@ start page lists the games; each one lives in its own folder under `games/`.
 | [Lanternkeep](games/lanternkeep/README.md) | Send moths from their jar to light a castle's lanterns before night falls, keep them burning on scarce oil, and upgrade wicks, oil and the moths between nights. |
 | [Space Wars](games/space-wars/README.md) | Command a fleet on a random star map: build a base, raise units and fight rival factions, each with its own buildings and ships. |
 | [Lane Brawl](games/lane-brawl/README.md) | Lead a team of five heroes down the lanes in a MOBA against NPC teams: farm, level up, push the lanes and destroy the enemy base. |
+| [Colonizer](games/colonizer/README.md) | An Age-of-Empires-style pixel RTS: gather wood, food and ore, build, research techs and raise armies of three factions, then destroy the enemy Town Center. |
 
 ## Settings
 
@@ -52,6 +53,7 @@ The hub's **Settings** button opens the settings every game shares. They are sav
   | Shrine Stack | stones swing 20% slower | stones swing 25% faster |
   | Mapmaker | 16 supplies a voyage | 9 supplies a voyage |
   | Lanternkeep | lanterns burn 30% longer | lanterns burn 20% shorter |
+  | Colonizer | the AI gathers 25% slower | the AI gathers 25% faster |
 
 - **Frame rate (FPS)**: the most frames per second a game draws, 30 to 320 (60 by default).
 - **Show FPS**: a readout of the frame rate in each game's corner.
