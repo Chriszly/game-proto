@@ -270,7 +270,7 @@ function moveEnemies(state: GameState, dt: number) {
     } else {
       e.x -= (type.speed * pace * dt) / 1000;
     }
-    if (e.x - type.radius <= HERO_FRONT) {
+    if (e.hp > 0 && e.x - type.radius <= HERO_FRONT) {
       gameOver(state);
       return;
     }

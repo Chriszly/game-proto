@@ -19,7 +19,7 @@ export interface CardSpot {
  */
 export class LevelUp {
   private root: Phaser.GameObjects.Container;
-  private shown: UpgradeId[] | null = null;
+  private shown: string | null = null;
   private title: Phaser.GameObjects.Text;
   private countdown: Phaser.GameObjects.Text;
   private timer: Phaser.GameObjects.Graphics;
@@ -42,12 +42,13 @@ export class LevelUp {
 
   /**
    * Shows these choices with `pickMs` left to pick, or hides the panel for null. Rebuilds the cards
-   * only when they change.
+   * only when the choices, their ranks, the level or the picks left change.
    */
   show(choices: UpgradeId[] | null, ranks: Partial<Record<UpgradeId, number>>, level: number, more: number, pickMs: number) {
     if (choices) this.drawCountdown(pickMs);
-    if (choices?.join() === this.shown?.join()) return;
-    this.shown = choices ? [...choices] : null;
+    const key = choices ? `${choices.join()}|${choices.map((id) => ranks[id] ?? 0).join()}|${level}|${more}` : null;
+    if (key === this.shown) return;
+    this.shown = key;
     this.root.each((child: Phaser.GameObjects.GameObject) => {
       if (child.getData('card')) child.destroy();
     });

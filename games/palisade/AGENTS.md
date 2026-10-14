@@ -102,7 +102,8 @@ pauses the battle on a pick of three upgrades, taking one at random after 10 sec
 - **Rendering:** sprites are diffed by id. `foes` and `missiles` are `Map`s of images, and crit
   texts are `crits`. Each is created, updated or destroyed to match the state every frame.
   Health bars, flames, blasts, bolts and the HUD are `Graphics` that are cleared and redrawn every
-  frame. `LevelUp.show` only rebuilds its cards when the choices change, and `SkillBook.show`
+  frame. `LevelUp.show` only rebuilds its cards when the choices, their ranks, the level or the
+  picks left change, and `SkillBook.show`
   only rebuilds its slots when what is found or taken changes.
 
 ### State model
@@ -125,7 +126,7 @@ pauses the battle on a pick of three upgrades, taking one at random after 10 sec
   each level-up gets the full 10 seconds. The countdown also stops while the run is over. In
   `moveEnemies` a foe hacks at the standing barricade only when it is at the face (at most one
   substep's walk past it); a foe that got behind it while it was down keeps walking after a repair
-  (Stout Timber or Mend), and any foe reaching `HERO_FRONT` ends the run. Foe,
+  (Stout Timber or Mend), and any live foe reaching `HERO_FRONT` ends the run (one that burns to death on that substep does not). Foe,
   missile and effect ids share the one `nextId` counter. A boss's `maxHp` is its per-bar health
   times `bars`. Foes spawn at `SPAWN_X` plus their radius and are only targeted once
   `x < VIEW_RIGHT` (950).
@@ -242,7 +243,5 @@ Missile speeds, `LEAP_RANGE`, `BARRICADE_REPAIR` and effect durations (`EFFECT_M
   fraction.
 - `fightAgain` keeps any pending `choices`. `GameScene.create` rolls choices on load when
   `levelUps > 0`, so a saved hero can open on a level-up overlay.
-- `LevelUp.show` diffs on `choices.join()`. Two picks in a row that roll the same ids in the same
-  order would not rebuild the cards.
 - Storage is shared with the other games on the hub's origin. Keep any new key prefixed
   `palisade-`.
