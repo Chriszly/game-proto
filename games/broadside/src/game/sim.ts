@@ -69,6 +69,10 @@ function effect(s: GameState, kind: Effect['kind'], x: number, y: number, total:
 export function tick(s: GameState, dt: number) {
   for (const e of s.effects) e.ms -= dt;
   s.effects = s.effects.filter((e) => e.ms > 0);
+  for (const ship of [s.player, ...s.enemies]) {
+    ship.hitMs = Math.max(0, ship.hitMs - dt);
+    ship.agroundMs = Math.max(0, ship.agroundMs - dt);
+  }
   if (s.phase === 'harbor' || s.phase === 'over') return;
 
   if (s.phase === 'break') {
@@ -165,8 +169,6 @@ function steer(ship: Ship, heading: number, turn: number, speed: number, dt: num
   ship.x += (Math.cos(ship.heading) * speed * dt) / 1000;
   ship.y += (Math.sin(ship.heading) * speed * dt) / 1000;
   wrapPoint(ship);
-  ship.hitMs = Math.max(0, ship.hitMs - dt);
-  ship.agroundMs = Math.max(0, ship.agroundMs - dt);
 }
 
 function spawn(s: GameState, dt: number) {

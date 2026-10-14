@@ -108,7 +108,8 @@ State model (`src/game/state.ts`):
   ranks, absent means 0), `bestWave` and `nextId`.
 - `Ship` has a heading in radians (0 is east, positive is clockwise on screen), `hp`/`maxHp`,
   per-side `reload` timers, `hitMs` and `agroundMs` (the cooldown before an island can damage it
-  again). The player is always id 1 with kind `player`.
+  again), which `tick` counts down for every ship in every phase, so a ship hit just before the
+  game ends doesn't stay orange behind the panel. The player is always id 1 with kind `player`.
 - `Ball` carries its velocity, remaining `ms`, `damage` and `fromPlayer`. `Loot` has `gold` and
   `ms` to live. An `Effect` is visual only (`splash`, `smoke`, `hit`, `sink`, `coins`).
 - Only `sim.ts` functions mutate state, plus the scene writing `helm` each frame. The player's
