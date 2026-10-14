@@ -67,7 +67,7 @@ the best match it can see, a tap on a tile and a tap on its neighbour, checking 
 move and gathers at least what it matched, until the Healing Draught is sold for its price plus the
 bonus for the moves left. Like the other games' tests it owns the game clock and plays at 4x speed
 (`PLAYTHROUGH_SPEED`). The **Playthrough TinctureTinker** workflow
-(`.github/workflows/playthrough-tincture-tinker.yml`) runs it on pull requests that change this
+(`.github/workflows/playthrough.yml`) runs it on pull requests that change this
 folder or the workflow itself (not on pushes to main), and uploads the video and screenshots as the
 `playthrough-tincture-tinker` artifact.
 

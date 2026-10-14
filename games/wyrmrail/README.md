@@ -92,7 +92,7 @@ follows the wyrm as it loads the grain at Millbrook. It taps the junction until 
 against the Roost's arm, checks the wyrm then reaches Ashford without stopping, and that the
 delivery pays 22 coins and starts round 2. Like the other
 games' tests it owns the game clock and plays at 4x speed (`PLAYTHROUGH_SPEED`). The **Playthrough
-Wyrmrail** workflow (`.github/workflows/playthrough-wyrmrail.yml`) runs it on every pull request that
+Wyrmrail** workflow (`.github/workflows/playthrough.yml`) runs it on every pull request that
 touches this folder or the workflow, and uploads the video and screenshots as the
 `playthrough-wyrmrail` artifact.
 

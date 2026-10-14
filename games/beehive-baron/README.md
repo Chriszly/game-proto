@@ -88,7 +88,7 @@ foragers out twice until the cell is full, waits for it to ripen and be capped, 
 sells the jar for 15 coins (a lone cell touches nothing, so no comb bonus, and one jar is short of
 the first goal, so no meadow unlocks). Like the other games' tests it owns the game clock and plays
 at 4x speed (`PLAYTHROUGH_SPEED`). The **Playthrough Beehive Baron** workflow
-(`.github/workflows/playthrough-beehive-baron.yml`) runs it on every PR that touches this folder or
+(`.github/workflows/playthrough.yml`) runs it on every PR that touches this folder or
 the workflow, and uploads the video and screenshots as the `playthrough-beehive-baron` artifact.
 
 ```sh

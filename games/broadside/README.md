@@ -84,7 +84,7 @@ to close on each sloop and turn side-on until a broadside fires, hits and sinks 
 gold from the loot (sailed over, or hauled in when the wave ends), waits for the harbor, buys Heavy Shot with the plunder and sets sail
 for wave 2. Like the other games' tests it owns the game clock and plays at 4x speed
 (`PLAYTHROUGH_SPEED`). The **Playthrough Broadside** workflow
-(`.github/workflows/playthrough-broadside.yml`) runs it on every pull request that changes
+(`.github/workflows/playthrough.yml`) runs it on every pull request that changes
 `games/broadside/` or the workflow itself, and uploads the video and screenshots as the
 `playthrough-broadside` artifact.
 

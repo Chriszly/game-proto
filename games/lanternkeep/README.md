@@ -67,7 +67,7 @@ dusk taps three lanterns at once and two more, checking the last two wait in the
 as moths come home. Night
 falls with every lantern lit, and it checks the pay, the hearths and the night panel. Like the
 other games' tests it owns the game clock and plays at 4x speed (`PLAYTHROUGH_SPEED`). The
-**Playthrough Lanternkeep** workflow (`.github/workflows/playthrough-lanternkeep.yml`) runs it on
+**Playthrough Lanternkeep** workflow (`.github/workflows/playthrough.yml`) runs it on
 every PR that touches this folder, and uploads the video and screenshots as the
 `playthrough-lanternkeep` artifact.
 

@@ -99,7 +99,7 @@ for the wave to come on and the ranger to shoot, checks that kills fill the expe
 foe's experience, that the battle waits on the level-up, taps the first card and checks its
 upgrade was taken, then plays on until the wave is cleared with the barricade standing. Like the
 Apothecary test it owns the game clock and plays at 4x speed (`PLAYTHROUGH_SPEED`). The
-**Playthrough Palisade** workflow (`.github/workflows/playthrough-palisade.yml`) runs it on every PR
+**Playthrough Palisade** workflow (`.github/workflows/playthrough.yml`) runs it on every PR
 that changes this folder or the workflow, and uploads the video and
 screenshots as the `playthrough-palisade` artifact.
 
