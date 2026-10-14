@@ -31,6 +31,7 @@ export default defineConfig({
     { name: 'catacomb', testDir: 'games/catacomb/e2e' },
     { name: 'golem-garden', testDir: 'games/golem-garden/e2e' },
     { name: 'beehive-baron', testDir: 'games/beehive-baron/e2e' },
+    { name: 'wyrmrail', testDir: 'games/wyrmrail/e2e' },
   ],
   webServer: {
     command: 'npm run dev -- --port 5173 --strictPort',
