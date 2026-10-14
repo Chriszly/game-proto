@@ -275,45 +275,88 @@ function near(scene: Phaser.Scene) {
 
 /** The turf road strewn with flowers: one 63 px strip that tiles, from 9 px above the road's top. */
 export const GROUND_TOP = 9;
+
+/**
+ * How each stage's ground is painted: the old road's turf and flowers, the frozen pass's frosted
+ * blades on pale ice with white crystals, the fen's dark reeds on mud with lapis puddles, and the
+ * windy pass's turf with its grass blown flat.
+ */
+const GROUNDS = {
+  ground: { blade: C.leaf, turf: C.turf, lean: 0, flowers: ['#ffffff', C.verm, C.goldLight, '#8fb4ff'], puddles: false, ice: false },
+  'ground-ice': { blade: '#e9eefb', turf: '#b9c9e8', lean: 0, flowers: ['#ffffff'], puddles: false, ice: true },
+  'ground-marsh': { blade: '#3e5a2c', turf: '#7a7442', lean: 0, flowers: [C.goldLight], puddles: true, ice: false },
+  'ground-wind': { blade: C.leaf, turf: C.turf, lean: -7, flowers: ['#ffffff', C.goldLight], puddles: false, ice: false },
+};
+
 function ground(scene: Phaser.Scene) {
   const w = 63;
   const h = GROUND_TOP + 13;
-  paint(scene, 'ground', w, h, (ctx) => {
-    half(ctx);
-    const top = GROUND_TOP * U;
-    // Grass blades over the top edge, then the turf band, inked only along its top and bottom.
-    ctx.fillStyle = C.leaf;
-    for (let x = 0; x < w * U; x += 9) {
-      ctx.beginPath();
-      ctx.moveTo(x, top - 2);
-      ctx.lineTo(x + 3, top - 12 - ((x * 7) % 6));
-      ctx.lineTo(x + 5, top - 2);
-      ctx.fill();
-    }
-    ctx.fillStyle = C.turf;
-    ctx.fillRect(0, top - 4, w * U, 30);
-    ctx.strokeStyle = C.ink;
-    ctx.lineWidth = 3;
-    for (const y of [top - 4, top + 25]) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(w * U, y);
-      ctx.stroke();
-    }
-    const rand = seeded(31);
-    for (let i = 0; i < 5; i++) {
-      const x = 10 + rand() * (w * U - 20);
-      const y = top + 6 + rand() * 14;
-      ctx.fillStyle = ['#ffffff', C.verm, C.goldLight, '#8fb4ff'][i % 4];
-      for (let k = 0; k < 5; k++) {
-        const a = k * Math.PI * 0.4;
+  for (const [key, look] of Object.entries(GROUNDS)) {
+    paint(scene, key, w, h, (ctx) => {
+      half(ctx);
+      const top = GROUND_TOP * U;
+      // Grass blades (or reeds, or frosted blades) over the top edge, then the band, inked only
+      // along its top and bottom.
+      ctx.fillStyle = look.blade;
+      for (let x = 0; x < w * U; x += 9) {
+        const tall = look.puddles && x % 27 === 0 ? 8 : 0;
         ctx.beginPath();
-        ctx.arc(x + Math.cos(a) * 3, y + Math.sin(a) * 3, 2, 0, Math.PI * 2);
+        ctx.moveTo(x, top - 2);
+        ctx.lineTo(x + 3 + look.lean, top - 12 - tall - ((x * 7) % 6));
+        ctx.lineTo(x + 5, top - 2);
         ctx.fill();
+        if (look.ice || tall) {
+          ctx.strokeStyle = C.ink;
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
+        if (tall) {
+          // A bulrush head on the tallest reeds.
+          ctx.fillStyle = C.woodDark;
+          ctx.fillRect(x + 1.5, top - 22 - ((x * 7) % 6), 3, 7);
+          ctx.fillStyle = look.blade;
+        }
       }
-      circle(ctx, x, y, 1.5, C.goldLight, 0);
-    }
-  });
+      ctx.fillStyle = look.turf;
+      ctx.fillRect(0, top - 4, w * U, 30);
+      if (look.ice) hl(ctx, [[0, top + 1], [w * U, top + 1]], 2);
+      ctx.strokeStyle = C.ink;
+      ctx.lineWidth = 3;
+      for (const y of [top - 4, top + 25]) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w * U, y);
+        ctx.stroke();
+      }
+      const rand = seeded(31);
+      if (look.puddles) oval(ctx, 70, top + 15, 22, 5, C.lapis, 1.5);
+      for (let i = 0; i < 5; i++) {
+        const x = 10 + rand() * (w * U - 20);
+        const y = top + 6 + rand() * 14;
+        if (look.ice) {
+          // A frost crystal: three crossed white strokes.
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1.5;
+          for (let k = 0; k < 3; k++) {
+            const a = (k * Math.PI) / 3;
+            ctx.beginPath();
+            ctx.moveTo(x - Math.cos(a) * 4, y - Math.sin(a) * 4);
+            ctx.lineTo(x + Math.cos(a) * 4, y + Math.sin(a) * 4);
+            ctx.stroke();
+          }
+          continue;
+        }
+        ctx.fillStyle = look.flowers[i % look.flowers.length];
+        for (let k = 0; k < 5; k++) {
+          const a = k * Math.PI * 0.4;
+          ctx.beginPath();
+          ctx.arc(x + Math.cos(a) * 3, y + Math.sin(a) * 3, 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        circle(ctx, x, y, 1.5, C.goldLight, 0);
+      }
+    });
+  }
 }
 
 /** Silver points on a plank, for each width a spike trap can be: tips reach 24 px above the road. */

@@ -1,4 +1,5 @@
 import { byDifficulty } from '../../../../shared/settings';
+import { ARMOURY_EACH, noArmoury, type Armoury } from './armoury';
 import { BOONS, type BoonId } from './boons';
 
 // The run in plain numbers. The course runs left to right along x in world pixels; heights are
@@ -42,7 +43,34 @@ export const SHRINE = { from: 2, price: 15, w: 46 };
 /** Running speed on a stage, in pixels per second. */
 export const speedOf = (stage: number) => Math.min(480, 260 + 30 * (stage - 1));
 
-export type TrapKind = 'spikes' | 'pit' | 'blade' | 'flames' | 'goblin' | 'bat';
+/**
+ * The ground a stage is run on, each with its own rule: the old road (no rule), an icy pass where
+ * slides run longer and landings skid, a fen where jumps are lower, and a windy pass whose headwind
+ * pushes jumps back.
+ */
+export type Terrain = 'road' | 'ice' | 'marsh' | 'wind';
+export const TERRAIN: Record<Terrain, { name: string; rule: string }> = {
+  road: { name: 'The Old Road', rule: '' },
+  ice: { name: 'The Frozen Pass', rule: 'Slides run long, and landings skid' },
+  marsh: { name: 'The Fen', rule: 'The mire drags at the boots: jumps are lower' },
+  wind: { name: 'The Windy Pass', rule: 'A headwind pushes every jump back' },
+};
+/** The terrains' numbers: ice slides longer and skids on landing (jumps wait out the skid), the fen jumps lower, the wind slows the knight in the air. */
+export const ICE = { slide: 1.6, skidMs: 220 };
+export const MARSH = { jump: 0.8 };
+export const WIND = { air: 0.7 };
+
+/** A Gatekeeper bars the road on every `BOSS_EVERY`th stage. */
+export const BOSS_EVERY = 5;
+export const isBossStage = (stage: number) => stage % BOSS_EVERY === 0;
+
+/** Stage 1 and Gatekeeper stages run on the old road; the others go ice, fen, wind, ice and so on. */
+export function terrainOf(stage: number): Terrain {
+  if (stage === 1 || isBossStage(stage)) return 'road';
+  return (['ice', 'marsh', 'wind'] as const)[(stage - 2) % 3];
+}
+
+export type TrapKind = 'spikes' | 'pit' | 'blade' | 'flames' | 'goblin' | 'bat' | 'barrel' | 'axe';
 /** The traps that move along the course and can be stomped on from above. */
 export const FOES: readonly TrapKind[] = ['goblin', 'bat'];
 
@@ -54,7 +82,7 @@ export interface Trap {
   w: number;
   /** Height of the ground it stands on, up from the road; a bat's is where it flies. */
   h: number;
-  /** Speed along the course: a goblin's walk, a bat's flight (negative is towards the knight). */
+  /** Speed along the course: a goblin's walk, a bat's flight, a thrown barrel or axe (negative is towards the knight). */
   vx: number;
   /** A goblin walks back and forth between these; a fire vent starts its burn this far in. */
   from?: number;
@@ -72,6 +100,8 @@ export const TRAP_SPAN: Record<Exclude<TrapKind, 'pit'>, { lo: number; hi: numbe
   flames: { lo: 0, hi: 64 },
   goblin: { lo: 0, hi: 34 },
   bat: { lo: 0, hi: 20 },
+  barrel: { lo: 0, hi: 26 },
+  axe: { lo: 0, hi: 18 },
 };
 
 /** Goblins and bats start moving once they are this close ahead, just off the right of the screen. */
@@ -112,6 +142,25 @@ export interface Shrine {
   tried: boolean;
 }
 
+/**
+ * The Gatekeeper on a boss stage: it waits on the road, then keeps ahead of the knight throwing
+ * barrels and axes, tires and stands still to be stomped, and flees ahead after a stomp or a hit.
+ */
+export interface Boss {
+  /** Left edge along the course, and width. */
+  x: number;
+  w: number;
+  /** Stomps left to beat it. */
+  hp: number;
+  mode: 'wait' | 'throw' | 'tired' | 'flee' | 'down';
+  /** Time to the next throw while throwing; time since the last throw for its pose. */
+  ms: number;
+  /** Things thrown since it last started throwing. */
+  thrown: number;
+  /** Time left flashing after a stomp. */
+  hurtMs: number;
+}
+
 export interface Coin {
   id: number;
   x: number;
@@ -122,7 +171,7 @@ export interface Coin {
 
 export interface Effect {
   id: number;
-  kind: 'coin' | 'hit' | 'block' | 'dust' | 'stomp' | 'pop' | 'heal' | 'refuse';
+  kind: 'coin' | 'hit' | 'block' | 'dust' | 'skid' | 'stomp' | 'pop' | 'heal' | 'refuse';
   x: number;
   h: number;
   ms: number;
@@ -143,10 +192,15 @@ export interface Runner {
   jumps: number;
   /** Time left unhurtable after a hit. */
   hurtMs: number;
+  /** Time left skidding after landing on ice, and a jump waiting for the skid to end. */
+  skidMs: number;
+  jumpQueued: boolean;
 }
 
 export interface GameState {
   stage: number;
+  /** The ground this stage is run on (`terrainOf(stage)`). */
+  terrain: Terrain;
   phase: 'running' | 'checkpoint' | 'over';
   /** Where the knight is along the course: the middle of their box. */
   distance: number;
@@ -173,6 +227,12 @@ export interface GameState {
   traps: Trap[];
   ledges: Ledge[];
   shrines: Shrine[];
+  /** The Gatekeeper on a boss stage, until it is beaten and left behind. */
+  boss: Boss | null;
+  /** Gatekeepers beaten this run. */
+  bosses: number;
+  /** Where each checkpoint passed this run stood, in metres, for the run track. */
+  banners: number[];
   course: Coin[];
   effects: Effect[];
   /** Best distance reached in any run, in metres. */
@@ -183,6 +243,12 @@ export interface GameState {
   pending: BoonId | null;
   /** The boon offered at the last checkpoint and not taken, or null before any checkpoint. */
   missed: BoonId | null;
+  /** Levels bought in the armoury, kept between runs. */
+  armoury: Armoury;
+  /** The date of the daily course being run (`YYYY-MM-DD`), or null for an ordinary run. */
+  daily: string | null;
+  /** The daily course's random state; its course and boons are drawn from it instead of Math.random. */
+  seed: number;
   nextId: number;
 }
 
@@ -194,27 +260,35 @@ export const metres = (distance: number) => Math.floor(distance / PX_PER_M);
  * The run track under the HUD, in metres: where the knight is, the best run to chase, a banner at
  * every checkpoint (every 100 m) up to the track's end, and how far the next banner is.
  */
-export function trackOf(s: Pick<GameState, 'distance' | 'checkpointX' | 'best'>) {
+export function trackOf(s: Pick<GameState, 'distance' | 'checkpointX' | 'best' | 'banners'>) {
   const at = metres(s.distance);
   const banner = metres(s.checkpointX);
   const length = Math.ceil((Math.max(s.best, at, banner) + 30) / 50) * 50;
-  const banners: number[] = [];
-  for (let m = 100; m <= length; m += 100) banners.push(m);
+  // The banners passed, the next one, and the ones after it every 100 m (a Gatekeeper's stage is
+  // longer, so they don't always fall on hundreds).
+  const banners = [...s.banners, banner];
+  for (let m = banner + 100; m <= length; m += 100) banners.push(m);
   return { at, best: s.best, length, banners, next: banner - at };
 }
 
-/** The knight's numbers with the boons taken so far. */
-export function stats(s: Pick<GameState, 'ranks'>) {
+/**
+ * The knight's numbers with the boons taken so far (cursed ones included), the armoury bought, and
+ * the rule of the ground underfoot.
+ */
+export function stats(s: Pick<GameState, 'ranks' | 'armoury' | 'terrain'>) {
   const r = (id: BoonId) => s.ranks[id] ?? 0;
+  const a = s.armoury;
+  // Jump height goes with the square of the speed off the ground.
+  const height = (1 + 0.12 * r('boots') - 0.15 * r('oath')) * (s.terrain === 'marsh' ? MARSH.jump : 1);
   return {
-    maxHearts: START_HEARTS + r('heart'),
-    jumpV: JUMP_V * Math.sqrt(1 + 0.12 * r('boots')),
+    maxHearts: Math.max(1, START_HEARTS + r('heart') + a.heart * ARMOURY_EACH.heart - r('gilt')),
+    jumpV: JUMP_V * Math.sqrt(height),
     jumps: 1 + r('double'),
-    slideMs: SLIDE_MS * (1 + 0.3 * r('greaves')),
-    hurtMs: HURT_MS * (1 + 0.5 * r('cloak')),
-    reach: COIN_REACH + 45 * r('magnet'),
-    coinValue: 1 + r('greed'),
-    shields: r('aegis'),
+    slideMs: SLIDE_MS * (1 + 0.3 * r('greaves')) * (1 + 0.6 * r('glass')) * (s.terrain === 'ice' ? ICE.slide : 1),
+    hurtMs: HURT_MS * (1 + 0.5 * r('cloak')) * (r('glass') ? 0.5 : 1),
+    reach: COIN_REACH + 45 * r('magnet') + a.magnet * ARMOURY_EACH.magnet,
+    coinValue: (1 + r('greed')) * (r('gilt') ? 2 : 1),
+    shields: r('aegis') + 2 * r('oath'),
   };
 }
 
@@ -224,13 +298,40 @@ export function rankOf(s: Pick<GameState, 'ranks'>, id: BoonId) {
 
 export const canTake = (s: Pick<GameState, 'ranks'>, id: BoonId) => rankOf(s, id) < BOONS[id].maxRank;
 
-export function freshState(best = 0, bank = 0): GameState {
+/**
+ * The next draw from the run's randomness: Math.random on an ordinary run, so a seeded test repeats,
+ * and the daily course's own seeded sequence on a daily run, so everyone gets the same course.
+ */
+export function rand(s: Pick<GameState, 'daily' | 'seed'>) {
+  if (!s.daily) return Math.random();
+  // mulberry32
+  s.seed = (s.seed + 0x6d2b79f5) | 0;
+  let t = Math.imul(s.seed ^ (s.seed >>> 15), 1 | s.seed);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+
+/** The daily course's seed from its date. */
+export function seedOf(date: string) {
+  let h = 2166136261;
+  for (const ch of date) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+  return h | 0;
+}
+
+/** Today's date as `YYYY-MM-DD`, in the player's own time zone: the daily course's key. */
+export function today(now = new Date()) {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+export function freshState(best = 0, bank = 0, armoury: Armoury = noArmoury(), daily: string | null = null): GameState {
   return {
     stage: 1,
+    terrain: terrainOf(1),
     phase: 'running',
     distance: 0,
     speed: speedOf(1),
-    runner: { h: 0, vh: 0, slideMs: 0, slideQueued: false, jumps: 1, hurtMs: 0 },
+    runner: { h: 0, vh: 0, slideMs: 0, slideQueued: false, jumps: 1, hurtMs: 0, skidMs: 0, jumpQueued: false },
     hearts: START_HEARTS,
     coins: 0,
     streak: 0,
@@ -245,12 +346,18 @@ export function freshState(best = 0, bank = 0): GameState {
     traps: [],
     ledges: [],
     shrines: [],
+    boss: null,
+    bosses: 0,
+    banners: [],
     course: [],
     effects: [],
     best,
     bank,
     pending: null,
     missed: null,
+    armoury: { ...armoury },
+    daily,
+    seed: daily ? seedOf(daily) : 0,
     nextId: 1,
   };
 }

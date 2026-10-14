@@ -1,4 +1,6 @@
-import { BOONS, BOON_IDS, type BoonId } from './boons';
+import { ARMOURY_EACH, nextPrice, noArmoury, type Armoury, type ArmouryId } from './armoury';
+import { BOONS, BOON_IDS, CURSE, forSale, type BoonId } from './boons';
+import { BOSS, bossStands, moveBoss } from './boss';
 import { buildStage, nextStage } from './course';
 import {
   AWAKE,
@@ -7,6 +9,7 @@ import {
   DROP_V,
   FOES,
   GRAVITY,
+  ICE,
   RUNNER,
   SHRINE,
   TRAP_SPAN,
@@ -15,18 +18,22 @@ import {
   floorAt,
   freshState,
   metres,
+  rand,
   speedOf,
   stats,
   streakMult,
   type GameState,
   type Trap,
   type TrapKind,
+  WIND,
 } from './state';
 
 // Moves the run on: the knight runs, jumps, slides and lands, climbs onto ledges and drops off
 // them, goblins and bats move and can be stomped on, traps hurt, coins are picked up (worth more
-// on a streak), wayside shrines trade coins for a heart, and each checkpoint stops the run on a
-// choice of two boons.
+// on a streak), wayside shrines trade coins for a heart, the stage's ground bends the rules (ice,
+// fen, wind), a Gatekeeper is fought on every fifth stage, and each checkpoint stops the run on a
+// choice of two boons, sometimes a cursed one. Between runs the bank buys the missed boon or the
+// armoury's lasting upgrades.
 
 /** A pulled coin's speed towards the knight. */
 const PULL_SPEED = 700;
@@ -38,13 +45,26 @@ const STOMP_BOUNCE = 0.65;
 /** Feet this little below a ledge's top as the knight reaches it still climb up it unhurt. */
 const STEP_UP = 16;
 
-/** A new run. A boon bought at the last game over starts it with one rank of that boon. */
-export function newRun(best = 0, bank = 0, pending: BoonId | null = null): GameState {
-  const s = freshState(best, bank);
+/** What a new run carries over from the runs before it. */
+export interface Carry {
+  /** The best distance this run chases: the overall best, or the daily course's. */
+  best: number;
+  bank: number;
+  pending: BoonId | null;
+  armoury: Armoury;
+}
+
+/**
+ * A new run: an ordinary one, or the daily course of the date given. A boon bought at the last
+ * game over starts it with one rank of that boon, and the armoury's levels apply.
+ */
+export function newRun({ best, bank, pending, armoury }: Carry = { best: 0, bank: 0, pending: null, armoury: noArmoury() }, daily: string | null = null): GameState {
+  const s = freshState(best, bank, armoury, daily);
   if (pending) s.ranks[pending] = 1;
   const st = stats(s);
   s.hearts = st.maxHearts;
   s.shields = st.shields;
+  s.coins = armoury.purse * ARMOURY_EACH.purse;
   buildStage(s);
   return s;
 }
@@ -53,10 +73,14 @@ export function newRun(best = 0, bank = 0, pending: BoonId | null = null): GameS
 const floorOf = (s: GameState) => floorAt(s, s.distance - RUNNER.w / 2, s.distance + RUNNER.w / 2);
 const grounded = (s: GameState) => s.runner.h <= floorOf(s) && s.runner.vh <= 0;
 
-/** Jump: off the ground, or again in the air with Second Leap. A jump ends a slide. */
+/** Jump: off the ground, or again in the air with Second Leap. A jump ends a slide. On ice, a jump during a landing's skid waits for it to end. */
 export function jump(s: GameState) {
   if (s.phase !== 'running') return false;
   const r = s.runner;
+  if (r.skidMs > 0 && grounded(s)) {
+    r.jumpQueued = true;
+    return true;
+  }
   if (r.jumps <= 0) return false;
   r.jumps -= 1;
   r.vh = stats(s).jumpV;
@@ -175,8 +199,8 @@ function visitShrines(s: GameState) {
   }
 }
 
-/** A hit from a trap, or from running into the side of a ledge (`'wall'`). */
-function hurt(s: GameState, kind: TrapKind | 'wall') {
+/** A hit from a trap, from running into the side of a ledge (`'wall'`), or from running into the Gatekeeper. */
+function hurt(s: GameState, kind: TrapKind | 'wall' | 'boss') {
   const st = stats(s);
   const r = s.runner;
   s.hits += 1;
@@ -214,8 +238,13 @@ export function tick(s: GameState, dt: number) {
   const r = s.runner;
   s.time += dt;
   moveFoes(s, sec);
+  // The checkpoint stays out of reach while the Gatekeeper stands.
+  if (bossStands(s)) s.checkpointX = Math.max(s.checkpointX, Math.round(s.distance + BOSS.holdBack));
 
-  s.distance = Math.min(s.checkpointX, s.distance + s.speed * sec);
+  // In the windy pass a headwind slows the knight while they are off the ground.
+  const pace = s.terrain === 'wind' && !grounded(s) ? WIND.air : 1;
+  s.distance = Math.min(s.checkpointX, s.distance + s.speed * pace * sec);
+  moveBoss(s, dt);
   // Running into the side of a ledge hurts, and the knight scrambles up onto it. A jump that only
   // just falls short climbs up unhurt.
   const floor = floorOf(s);
@@ -234,12 +263,25 @@ export function tick(s: GameState, dt: number) {
       effect(s, 'dust', s.distance, floor, 300);
       if (r.slideQueued) r.slideMs = st.slideMs;
       r.slideQueued = false;
+      // On ice a landing skids: a jump has to wait it out.
+      if (s.terrain === 'ice') {
+        r.skidMs = ICE.skidMs;
+        effect(s, 'skid', s.distance, floor, ICE.skidMs + 120);
+      }
     }
   }
   stomp(s, prevH);
+  bossContact(s, prevH);
   if (grounded(s)) r.jumps = st.jumps;
   r.slideMs = Math.max(0, r.slideMs - dt);
   r.hurtMs = Math.max(0, r.hurtMs - dt);
+  if (r.skidMs > 0) {
+    r.skidMs = Math.max(0, r.skidMs - dt);
+    if (r.skidMs === 0 && r.jumpQueued) {
+      r.jumpQueued = false;
+      if (grounded(s)) jump(s);
+    }
+  }
 
   if (r.hurtMs <= 0 && s.phase === 'running') {
     const hit = s.traps.find((t) => touches(s, t));
@@ -274,21 +316,29 @@ export function tick(s: GameState, dt: number) {
   s.traps = s.traps.filter((t) => t.x + t.w > s.distance - BEHIND);
   s.ledges = s.ledges.filter((l) => l.x + l.w > s.distance - BEHIND);
   s.shrines = s.shrines.filter((sh) => sh.x + sh.w > s.distance - BEHIND);
+  if (s.boss && !bossStands(s) && s.boss.x + s.boss.w < s.distance - BEHIND) s.boss = null;
 
   if (s.phase === 'running' && s.distance >= s.checkpointX) {
     s.phase = 'checkpoint';
+    s.banners.push(metres(s.checkpointX));
     s.best = Math.max(s.best, metres(s.distance));
     s.choices = rollChoices(s);
     r.slideMs = 0;
   }
 }
 
-/** Two different boons the knight can still take; Field Dressing fills in when few are left. */
+/**
+ * Two different boons the knight can still take; Field Dressing fills in when few are left. From
+ * the second checkpoint, a cursed boon may take the second card. (The first checkpoint draws no
+ * curse, so its draws are the same as before curses were added.)
+ */
 export function rollChoices(s: GameState): BoonId[] {
-  const pool = BOON_IDS.filter((id) => !BOONS[id].filler && canTake(s, id));
+  const pool = BOON_IDS.filter((id) => !BOONS[id].filler && !BOONS[id].cursed && canTake(s, id));
   const picks: BoonId[] = [];
-  while (picks.length < 2 && pool.length > 0) picks.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+  while (picks.length < 2 && pool.length > 0) picks.push(pool.splice(Math.floor(rand(s) * pool.length), 1)[0]);
   while (picks.length < 2) picks.push('mend');
+  const curses = BOON_IDS.filter((id) => BOONS[id].cursed && canTake(s, id));
+  if (s.stage >= CURSE.from && curses.length > 0 && rand(s) < CURSE.chance) picks[1] = curses[Math.floor(rand(s) * curses.length)];
   return picks;
 }
 
@@ -300,6 +350,8 @@ export function pick(s: GameState, id: BoonId) {
   const st = stats(s);
   if (id === 'heart') s.hearts = Math.min(st.maxHearts, s.hearts + 1);
   if (id === 'mend') s.hearts = Math.min(st.maxHearts, s.hearts + 2);
+  // Cursed Gold takes a heart away.
+  s.hearts = Math.max(1, Math.min(st.maxHearts, s.hearts));
   s.choices = null;
   s.phase = 'running';
   s.shields = st.shields;
@@ -308,14 +360,58 @@ export function pick(s: GameState, id: BoonId) {
   return true;
 }
 
+/** Landing on the Gatekeeper's head stomps it; running into it hurts. Either way it flees ahead. */
+function bossContact(s: GameState, prevH: number) {
+  const b = s.boss;
+  const r = s.runner;
+  if (!b || !bossStands(s) || b.mode === 'wait') return;
+  const box = runnerBox(s);
+  if (box.x1 <= b.x || box.x0 >= b.x + b.w || box.lo >= BOSS.h) return;
+  const st = stats(s);
+  if (r.h < prevH && prevH >= BOSS.h - STOMP_REACH && b.hurtMs <= 0) {
+    b.hp -= 1;
+    b.hurtMs = BOSS.hurtMs;
+    s.stomps += 1;
+    effect(s, 'stomp', b.x + b.w / 2, BOSS.h, 450);
+    r.h = BOSS.h;
+    r.vh = st.jumpV * STOMP_BOUNCE;
+    r.jumps = st.jumps;
+    r.slideMs = 0;
+    r.slideQueued = false;
+    if (b.hp > 0) {
+      b.mode = 'flee';
+      return;
+    }
+    // Beaten: it falls where it stands, pays out, and the checkpoint comes up a little way on.
+    b.mode = 'down';
+    s.bosses += 1;
+    s.coins += BOSS.reward;
+    effect(s, 'pop', b.x + b.w / 2, BOSS.h + 30, 1400, `Gatekeeper beaten! +${BOSS.reward}`);
+    s.checkpointX = Math.round(s.distance + BOSS.after);
+    for (let i = 0; i < 6; i++) s.course.push({ id: s.nextId++, x: s.distance + 500 + i * 40, h: 12, pulled: false });
+    return;
+  }
+  if (r.hurtMs <= 0) hurt(s, 'boss');
+  if (s.phase === 'running') b.mode = 'flee';
+}
+
 /**
  * At the game-over screen, buys the boon missed at the last checkpoint for `BOON_PRICE` coins, so
  * the next run starts with it. One purchase at a time; Field Dressing is never for sale.
  */
 export function buyMissed(s: GameState) {
   const id = s.missed;
-  if (s.phase !== 'over' || !id || BOONS[id].filler || s.pending || s.bank < BOON_PRICE) return false;
+  if (s.phase !== 'over' || !id || !forSale(id) || s.pending || s.bank < BOON_PRICE) return false;
   s.bank -= BOON_PRICE;
   s.pending = id;
+  return true;
+}
+
+/** At the game-over screen, buys the next level of an armoury item with banked coins, for every run after. */
+export function buyArmoury(s: GameState, id: ArmouryId) {
+  const price = nextPrice(s.armoury, id);
+  if (s.phase !== 'over' || price === null || s.bank < price) return false;
+  s.bank -= price;
+  s.armoury[id] += 1;
   return true;
 }
