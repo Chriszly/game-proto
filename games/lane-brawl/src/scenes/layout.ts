@@ -19,10 +19,13 @@ export const SHOP_BUTTON = { x: 508, y: 428, w: 96, h: 58 };
 /** The minimap, showing the whole map in the bottom right corner. */
 export const MINIMAP = { x: 790, y: 420, w: 158, h: 106 };
 
-/** The shop panel, opened with the button or the B key. */
-export const SHOP_PANEL = { x: 260, y: 96, w: 440, h: 240 };
+/** The shop panel, opened with the button or the B key: items in two columns. */
+export const SHOP_PANEL = { x: 180, y: 46, w: 600, h: 300 };
+const SHOP_COL_W = (SHOP_PANEL.w - 28 - 10) / 2;
 export function shopRow(i: number) {
-  return { x: SHOP_PANEL.x + 16, y: SHOP_PANEL.y + 58 + i * 60, w: SHOP_PANEL.w - 32, h: 52 };
+  const col = i % 2;
+  const row = Math.floor(i / 2);
+  return { x: SHOP_PANEL.x + 14 + col * (SHOP_COL_W + 10), y: SHOP_PANEL.y + 56 + row * 62, w: SHOP_COL_W, h: 54 };
 }
 
 /** The five champion cards on the pick screen. */

@@ -53,6 +53,16 @@ export interface Unit {
   attackCd: number;
   /** Time left on a slow, in ms. */
   slowMs: number;
+  /** Direction the unit faces, in radians. */
+  facing: number;
+  /** Distance walked, to drive the walk cycle. */
+  walk: number;
+  /** Time left on the attack swing animation, in ms. */
+  swing: number;
+  /** Time left on the hit flash, in ms. */
+  flash: number;
+  /** Percent shorter ability cooldowns, from items. */
+  cdr: number;
   dead: boolean;
   /** When a dead champion, minion or camp returns, in game time. */
   respawnAt: number;
@@ -95,7 +105,9 @@ export interface Projectile {
 /** A short-lived visual the view turns into shapes: a ring, or a line between two points. */
 export type Fx =
   | { kind: 'ring'; x: number; y: number; r: number; color: string; ms: number }
-  | { kind: 'line'; x: number; y: number; x2: number; y2: number; color: string; ms: number };
+  | { kind: 'line'; x: number; y: number; x2: number; y2: number; color: string; ms: number }
+  /** A slash: an arc of radius r around (x, y), centred on the angle a. */
+  | { kind: 'arc'; x: number; y: number; r: number; a: number; color: string; ms: number };
 
 export interface GameState {
   phase: Phase;
@@ -145,6 +157,11 @@ export function blankUnit(
     attackMs: stats.attackMs,
     attackCd: 0,
     slowMs: 0,
+    facing: 0,
+    walk: 0,
+    swing: 0,
+    flash: 0,
+    cdr: 0,
     dead: false,
     respawnAt: 0,
     target: null,
@@ -167,7 +184,7 @@ export function refreshStats(u: Unit) {
   const c = u.champ;
   if (!c) return;
   const owned = ITEMS.filter((i) => u.items.includes(i.id));
-  const sum = (key: 'hp' | 'dmg' | 'armor' | 'speed') => owned.reduce((n, i) => n + (i[key] ?? 0), 0);
+  const sum = (key: 'hp' | 'dmg' | 'armor' | 'speed' | 'atk' | 'cdr') => owned.reduce((n, i) => n + (i[key] ?? 0), 0);
   const levels = u.level - 1;
   const maxHp = c.hp + levels * c.hpPerLevel + sum('hp');
   u.hp += maxHp - u.maxHp;
@@ -175,6 +192,8 @@ export function refreshStats(u: Unit) {
   u.dmg = c.dmg + levels * c.dmgPerLevel + sum('dmg');
   u.armor = c.armor + sum('armor');
   u.speed = c.speed + sum('speed');
+  u.attackMs = c.attackMs / (1 + sum('atk') / 100);
+  u.cdr = sum('cdr');
 }
 
 export function spawnChampion(s: GameState, def: ChampionDef, side: Team, x: number, y: number, player: boolean, lane: LaneId | null) {

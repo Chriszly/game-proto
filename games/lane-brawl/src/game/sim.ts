@@ -70,7 +70,7 @@ export function cast(s: GameState, caster: Unit, key: AbilityKey, aim: Vec): boo
   if (s.phase !== 'playing' || caster.dead || !caster.champ) return false;
   const ab = caster.champ.abilities.find((a) => a.key === key);
   if (!ab || caster.level < ab.level || caster.cds[key] > 0) return false;
-  caster.cds[key] = ab.cd;
+  caster.cds[key] = ab.cd * (1 - caster.cdr / 100);
   const color = caster.champ.color;
 
   switch (ab.kind) {
@@ -154,6 +154,7 @@ export function damage(s: GameState, t: Unit, amount: number, sourceId: number) 
     rest -= soak;
   }
   t.hp -= rest;
+  t.flash = 120;
   t.lastHitBy = sourceId;
   if (t.hp <= 0) kill(s, t, sourceId);
 }
@@ -169,6 +170,8 @@ function updateUnit(s: GameState, u: Unit, dt: number) {
     return;
   }
   u.attackCd = Math.max(0, u.attackCd - dt);
+  u.swing = Math.max(0, u.swing - dt);
+  u.flash = Math.max(0, u.flash - dt);
   u.slowMs = Math.max(0, u.slowMs - dt);
   if (u.shieldMs > 0) {
     u.shieldMs -= dt;
@@ -345,8 +348,15 @@ function aimFor(s: GameState, u: Unit, t: Unit, ab: AbilityDef): Vec | null {
 function attack(s: GameState, u: Unit, t: Unit) {
   if (u.attackCd > 0 || t.dead) return;
   u.attackCd = u.attackMs;
-  if (u.range > 80) s.fx.push({ kind: 'line', x: u.x, y: u.y, x2: t.x, y2: t.y, color: SIDE_COLOR[u.side], ms: 160 });
-  else s.fx.push({ kind: 'ring', x: t.x, y: t.y, r: 12, color: '#ffffff', ms: 120 });
+  u.swing = 180;
+  u.facing = Math.atan2(t.y - u.y, t.x - u.x);
+  if (u.range > 80) {
+    s.fx.push({ kind: 'line', x: u.x, y: u.y, x2: t.x, y2: t.y, color: SIDE_COLOR[u.side], ms: 160 });
+    s.fx.push({ kind: 'ring', x: t.x, y: t.y, r: 10, color: '#ffffff', ms: 120 });
+  } else {
+    s.fx.push({ kind: 'arc', x: u.x, y: u.y, r: u.radius + 14, a: u.facing, color: '#ffffff', ms: 180 });
+    s.fx.push({ kind: 'ring', x: t.x, y: t.y, r: 12, color: '#ffffff', ms: 120 });
+  }
   damage(s, t, dealt(s, u, u.dmg), u.id);
 }
 
@@ -377,6 +387,8 @@ function moveToward(u: Unit, goal: Vec, dt: number) {
   const step = Math.min(d, (speed * dt) / 1000);
   u.x += ((goal.x - u.x) / d) * step;
   u.y += ((goal.y - u.y) / d) * step;
+  u.walk += step;
+  u.facing = Math.atan2(goal.y - u.y, goal.x - u.x);
 }
 
 /** The next point on a lane walk; the last point is the enemy Nexus. */
