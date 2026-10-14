@@ -6,14 +6,18 @@ the root AGENTS.md.
 
 ## Current state
 
-Tiny Kingdom is a turn-based tile-placing puzzle on a fixed 10x7 island. The player picks a farm,
+Tiny Kingdom is a turn-based tile-placing puzzle on a random 10x7 island. The player picks a farm,
 house or tower from a pouch and places it on grass; each building scores from its neighbours and
 the score is always the whole board's. Reaching the round's goal refills the pouch and raises the
 goal.
 
 Implemented today:
 
-- One screen (`GameScene`): the board, a side panel with round, score, goal bar, three tile
+- Random islands: each kingdom (the first and every "New kingdom") draws an island number from
+  1 to `ISLANDS` (9999) with `Math.random`, and `islandMap` lays it out from that number with its
+  own seeded generator: two or three lakes of 2 to 4 cells, then two or three woods of 1 to 3,
+  each grown from a random grass cell. The same number always gives the same island.
+- One screen (`GameScene`): the board, a side panel with round, island number, score, goal bar, three tile
   buttons and the best score, a hover preview with a ghost tile and "+N", floating score popups
   for every building whose worth changed, a "Round N" banner, and a game-over overlay with a
   "New kingdom" button.
@@ -22,8 +26,10 @@ Implemented today:
 
 Missing or rough:
 
-- No title screen, menu, sound, undo, or randomness: the island is always `MAP` in
-  `src/game/tiles.ts`, so every kingdom is the same puzzle.
+- No title screen, menu, sound or undo. There is no way to pick or replay an island number.
+- Islands are not checked for winnability. A beam search over 271 island numbers spread over the
+  range found the first pouch reaching at least 28 on each (the first goal is 20), but nothing
+  enforces it if `islandMap` changes.
 - `src/art/pixelArt.ts` is a general helper; `bakePixelArt`, `padRows`, `PixelCanvas.ellipse`,
   `line` and `outline` are unused here.
 - The comment at the top of `src/art/tiles.ts` mentions a small icon per building, but none is
@@ -46,7 +52,8 @@ File map (`src/`):
 - `scenes/layout.ts`: `VIEW`, `GRID`, `PANEL`, `GOAL_BAR`, `TILE_BUTTONS`, `BUTTON`, `UI_DEPTH`,
   `FONT` and `cellCentre`.
 - `game/tiles.ts`: `BUILDINGS`, the `Building`, `Terrain` and `Cell` types, `INFO` (name and rule
-  text for each button), `isBuilding`, the island `MAP` and `startingGrid`.
+  text for each button), `isBuilding`, `MAP_SIZE`, `ISLANDS`, `islandMap` (an island number to
+  its rows, with a private mulberry32 `seeded`), `randomIsland` and `startingGrid(island)`.
 - `game/state.ts`: `GameState`, `FIRST_POUCH`, `ROUND_POUCH`, `goalFor`, `newGame`, `cellScore`,
   `boardScore`, `canPlace`, `previewScore`, `select` and `place`. No Phaser; `goalFor` reads
   `byDifficulty` from `shared/settings.ts`.
@@ -81,9 +88,10 @@ State model (`GameState` in `src/game/state.ts`):
 - `pouch` counts tiles left per building; `selected` is the building the next tap places.
 - `score` is always `boardScore(grid)`, recomputed after each placement. It can fall: a tower
   next to another tower is worth 0, so a placement's gain or preview can be negative.
+- `island` is the island number the grid was laid out from.
 - `round`, `goal`, `placed`, `phase` (`'playing'` or `'over'`) and `best`.
 - The pure functions in `state.ts` mutate it (`select`, `place`); the scene only replaces it
-  with `newGame` on create and restart and calls `saveBest` when `phase` turns `'over'`.
+  with `newGame` (a new random island) on create and restart and calls `saveBest` when `phase` turns `'over'`.
 - `place` order matters: it scores, then loops rounds while `score >= goal` (one placement can
   jump several rounds), refills the pouch, reselects the first building left if the placed kind
   ran out, and only then checks for the end. So a placement that empties the pouch but reaches
@@ -94,8 +102,10 @@ Persistence: one `localStorage` key, `tiny-kingdom-best`, holding the best final
 written only at game over. Board and round are never saved. The hub's settings are read from the
 shared `hub-settings` key, not from this game's save.
 
-Randomness and timing: the game calls no `Math.random`, `Date.now` or `performance.now`. Art uses
-`seeded`, so textures are identical every load. Only Phaser tweens use time.
+Randomness and timing: `randomIsland` makes the game's only `Math.random` call, once per kingdom;
+everything else about the island follows from that number. The game calls no `Date.now` or
+`performance.now`. Art uses its own `seeded`, so textures are identical every load. Only Phaser
+tweens use time.
 
 Data tables:
 
@@ -103,7 +113,8 @@ Data tables:
 - Button rule text: `INFO` in `src/game/tiles.ts` (keep it matching `cellScore`).
 - Pouches and goals: `FIRST_POUCH`, `ROUND_POUCH` and `goalFor` in `src/game/state.ts`
   (`goalFor` scales by difficulty; see Hub settings).
-- The island: `MAP` in `src/game/tiles.ts` ('.' grass, '~' lake, 'T' forest).
+- The islands: `islandMap` in `src/game/tiles.ts` (lake and wood counts and sizes), `MAP_SIZE`
+  and `ISLANDS`.
 - Popup and banner timings: `POPUP_MS` and `BANNER_MS` in `src/scenes/GameScene.ts`.
 - Positions and sizes: `src/scenes/layout.ts`. Colours: `C` in `src/art/tiles.ts`, and inline
   hex values in `GameScene.ts`.
@@ -132,12 +143,17 @@ Data tables:
 - Inputs: it clicks tile buttons at the centres from `tileButtons`, moves the mouse over a cell
   to check `preview`, and clicks cell centres, scaling view pixels by the canvas bounding box.
 - The test mirrors these, so change them together: the `GameState` shape, `GRID` (as its own
-  `GRID` constant), `VIEW`, `FIRST_POUCH`, `ROUND_POUCH`, the goals 20 and 45 (`GOALS`), the
+  `GRID` constant), `VIEW`, `islandMap` (as `ISLAND` and `MAP`), `FIRST_POUCH`, `ROUND_POUCH`, the goals 20 and 45 (`GOALS`), the
   scene key `'Game'` and its public fields `state`, `preview` and `tileButtons`.
-- `PLAN` in the test is seven placements on `MAP` with the exact points each adds under
-  `cellScore`, ending with the tower that reaches the goal of 20 and starts round 2. Editing
-  `MAP`, a scoring rule, `FIRST_POUCH` or `goalFor(1)` needs `PLAN` re-derived. The test also taps
-  cell (3, 2) expecting a lake.
+- The test seeds `Math.random`, so the game always picks island 1990; the test checks
+  `state.island` is `ISLAND` and the grid matches its `MAP`. Changing `islandMap`, `ISLANDS`,
+  `randomIsland`, or anything that calls `Math.random` before `GameScene.create` (Phaser itself
+  draws some at boot) changes the island: take the new number and rows from the failure message
+  and re-derive `PLAN`.
+- `PLAN` in the test is six placements on `MAP` with the exact points each adds under
+  `cellScore`, ending with the tower that reaches the goal of 20 and starts round 2. Editing the
+  island, a scoring rule, `FIRST_POUCH` or `goalFor(1)` needs `PLAN` re-derived. The test also
+  taps cell (0, 2) expecting a lake.
 - It saves `playthrough-0-start`, `-1-preview` and `-2-round-2` screenshots; copy them into
   `docs/screenshots/` when the look changes.
 
@@ -149,17 +165,17 @@ Data tables:
   `ROUND_POUCH`; draw it in `src/art/tiles.ts` and add it to `TILE_ART`; add a y to
   `TILE_BUTTONS.ys` (the panel fits three buttons now, so shrink `h` or move things); update the
   test's `Building` type, pouches and plan.
-- **Add a terrain**: extend `Terrain`, the `TERRAIN` character map and `MAP` in
+- **Add a terrain**: extend `Terrain`, the `TERRAIN` character map and `islandMap` in
   `src/game/tiles.ts`, add art to `TILE_ART`, and decide which `cellScore` rules count it.
 - **Retune rounds**: `FIRST_POUCH`, `ROUND_POUCH` and `goalFor` (keep its `byDifficulty` factor
   and the README difficulty rows in step); the round banner text reads `ROUND_POUCH` itself.
   Update the test's constants and check the plan still reaches goal 1.
-- **Change the board size or island**: `GRID` in `src/scenes/layout.ts` must match `MAP`'s
-  dimensions, and `PANEL` sits right of the board; mirror `GRID` in the test.
+- **Change the board size or islands**: `GRID` in `src/scenes/layout.ts` must match
+  `MAP_SIZE`, and `PANEL` sits right of the board; mirror `GRID` in the test.
 
 ## Gotchas
 
-- `GRID.cols` and `GRID.rows` must equal `MAP`'s width and height; nothing checks it, and
+- `GRID.cols` and `GRID.rows` must equal `MAP_SIZE`; nothing checks it, and
   `cellAt` uses `GRID` while the scene builds cell images from `state.grid`.
 - `TILE_BUTTONS.ys` is indexed in `BUILDINGS` order.
 - Texture keys are `tile-${cell}`, so every `Cell` value needs a `TILE_ART` entry or the image

@@ -45,6 +45,7 @@ export class GameScene extends Phaser.Scene {
   private ghostText!: Phaser.GameObjects.Text;
   private bar!: Phaser.GameObjects.Graphics;
   private roundText!: Phaser.GameObjects.Text;
+  private islandText!: Phaser.GameObjects.Text;
   private scoreText!: Phaser.GameObjects.Text;
   private goalText!: Phaser.GameObjects.Text;
   private bestText!: Phaser.GameObjects.Text;
@@ -102,6 +103,7 @@ export class GameScene extends Phaser.Scene {
     this.add.rectangle(PANEL.x, PANEL.y, PANEL.w, PANEL.h, 0x2c2018).setOrigin(0).setStrokeStyle(3, 0x5a3f2a);
     this.add.text(PANEL.x + PANEL.w / 2, PANEL.y + 22, 'Tiny Kingdom', textStyle(24, '#f3c64e')).setOrigin(0.5);
     this.roundText = this.add.text(PANEL.x + 16, PANEL.y + 50, '', textStyle(16, '#c9b48f'));
+    this.islandText = this.add.text(PANEL.x + PANEL.w - 16, PANEL.y + 50, '', textStyle(16, '#c9b48f')).setOrigin(1, 0);
     this.scoreText = this.add.text(PANEL.x + 16, PANEL.y + 74, '', textStyle(20));
     this.goalText = this.add.text(GOAL_BAR.x + GOAL_BAR.w / 2, GOAL_BAR.y + GOAL_BAR.h / 2, '', textStyle(12)).setOrigin(0.5).setDepth(1);
     this.bar = this.add.graphics();
@@ -211,6 +213,7 @@ export class GameScene extends Phaser.Scene {
   private refresh() {
     const s = this.state;
     this.roundText.setText(`Round ${s.round}`);
+    this.islandText.setText(`Island ${s.island}`);
     this.scoreText.setText(`Score ${s.score}`);
     this.goalText.setText(`${s.score} / ${s.goal} for round ${s.round + 1}`);
     this.bestText.setText(`Best ${s.best}`);
@@ -233,10 +236,11 @@ export class GameScene extends Phaser.Scene {
 
     this.gameOver.setVisible(s.phase === 'over');
     if (s.phase === 'over') {
-      this.gameOverText.setText(`Final score ${s.score}, reaching round ${s.round}.\n${s.placed} buildings placed.\n\nBest score ${s.best}.`);
+      this.gameOverText.setText(`Final score ${s.score} on island ${s.island}, reaching round ${s.round}.\n${s.placed} buildings placed.\n\nBest score ${s.best}.`);
     }
   }
 
+  /** A new kingdom on a fresh random island. */
   private restart() {
     this.state = newGame(loadBest());
     this.state.grid.forEach((cells, row) => cells.forEach((cell, col) => this.cells[row][col].setTexture(`tile-${cell}`)));

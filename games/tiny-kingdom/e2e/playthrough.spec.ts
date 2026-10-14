@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-// Plays the first round with real inputs: taps a tile button to pick a building, hovers a cell to
+// Plays the first round on the island the seeded Math.random picks, with real inputs: taps a tile button to pick a building, hovers a cell to
 // see what it would score, taps cells to place farms, houses and a tower, and reaches the round's
 // goal, which brings round 2 and its tiles.
 // Game state is only read, through the `game` object the dev build puts on window.
@@ -17,6 +17,7 @@ interface GameState {
   placed: number;
   phase: 'playing' | 'over';
   best: number;
+  island: number;
 }
 type TileButton = { kind: Building; x: number; y: number; w: number; h: number };
 
@@ -29,19 +30,34 @@ const ROUND_POUCH = { farm: 3, house: 3, tower: 2 };
 const GOALS = [20, 45];
 
 /**
- * The first round's plan, as (col, row) cells on the starting map in src/game/tiles.ts, with what
- * each placement adds to the score under the rules in src/game/state.ts:
+ * The island the seeded Math.random below picks, as islandMap in src/game/tiles.ts lays it out:
+ * '.' grass, '~' lake, 'T' forest. Islands are random; the seed makes this run's the same each time.
+ */
+const ISLAND = 1990;
+const MAP = [
+  '.......TT.',
+  '........T.',
+  '~~...T....',
+  '.~...T....',
+  'TT...~~~..',
+  '...~~.~...',
+  '...~......',
+];
+const TERRAIN: Record<string, Cell> = { '.': 'grass', '~': 'lake', T: 'forest' };
+
+/**
+ * The first round's plan, as (col, row) cells on MAP, with what each placement adds to the score
+ * under the rules in src/game/state.ts:
  * a farm scores 1 and 1 per lake beside it; a house 2 per farm, 1 per house or forest beside it;
  * a tower 2 per house in the eight cells around it.
  */
 const PLAN: { kind: Building; col: number; row: number; gained: number; why: string }[] = [
-  { kind: 'farm', col: 4, row: 2, gained: 3, why: 'two lakes beside it' },
-  { kind: 'farm', col: 2, row: 3, gained: 2, why: 'one lake beside it' },
-  { kind: 'house', col: 5, row: 2, gained: 2, why: 'one farm beside it' },
-  { kind: 'farm', col: 5, row: 3, gained: 4, why: 'a lake beside it, and the house above gains a farm' },
-  { kind: 'house', col: 4, row: 1, gained: 2, why: 'the farm below it' },
-  { kind: 'house', col: 5, row: 1, gained: 4, why: 'two houses beside it, which each gain a house' },
-  { kind: 'tower', col: 6, row: 2, gained: 4, why: 'two houses around it' },
+  { kind: 'farm', col: 5, row: 5, gained: 4, why: 'three lakes beside it' },
+  { kind: 'farm', col: 4, row: 4, gained: 3, why: 'two lakes beside it' },
+  { kind: 'house', col: 4, row: 3, gained: 3, why: 'the farm below it and the forest beside it' },
+  { kind: 'house', col: 3, row: 4, gained: 2, why: 'the farm beside it' },
+  { kind: 'house', col: 3, row: 3, gained: 4, why: 'two houses beside it, which each gain a house' },
+  { kind: 'tower', col: 2, row: 4, gained: 4, why: 'two houses around it' },
 ];
 
 /** Game time per animation frame, every frame the same length. */
@@ -68,7 +84,7 @@ function scene(page: Page) {
 }
 
 test('plays the first round', async ({ page }, testInfo) => {
-  // Seeded like the other games' tests, so any randomness added later repeats from run to run.
+  // Seeded like the other games' tests, so the game picks the same island (ISLAND) on every run.
   await page.addInitScript(() => {
     let seed = 1234567;
     Math.random = () => {
@@ -150,10 +166,11 @@ test('plays the first round', async ({ page }, testInfo) => {
     expect((await game.state()).selected, `${kind} picked`).toBe(kind);
   }
 
-  // A new kingdom: round 1, no score, the first round's tiles and nothing built yet.
+  // A new kingdom on a random island: round 1, no score, the first round's tiles and nothing built yet.
   let s = await game.state();
   expect(s).toMatchObject({ round: 1, goal: GOALS[0], score: 0, pouch: FIRST_POUCH, selected: null, placed: 0, phase: 'playing' });
-  expect(s.grid.flat().filter((c) => c === 'farm' || c === 'house' || c === 'tower')).toEqual([]);
+  expect(s.island, 'the island the seeded Math.random picks').toBe(ISLAND);
+  expect(s.grid, `island ${ISLAND} laid out as MAP`).toEqual(MAP.map((row) => [...row].map((c) => TERRAIN[c])));
   await snap('0-start');
 
   // Picking the farm and hovering a cell shows what it would score there, without placing it.
@@ -167,9 +184,9 @@ test('plays the first round', async ({ page }, testInfo) => {
   await snap('1-preview');
 
   // Buildings only go on grass: a tap on a lake places nothing.
-  await tap(await cellPoint(3, 2));
+  await tap(await cellPoint(0, 2));
   s = await game.state();
-  expect(s.grid[2][3]).toBe('lake');
+  expect(s.grid[2][0]).toBe('lake');
   expect(s).toMatchObject({ score: 0, placed: 0, pouch: FIRST_POUCH });
 
   // Each placement adds what its neighbours are worth, and takes a tile from the pouch.
