@@ -1,37 +1,61 @@
 import { expect, test, type Page } from '@playwright/test';
 
-// Plays the first round on the island the seeded Math.random picks, with real inputs: taps a tile button to pick a building, hovers a cell to
-// see what it would score, taps cells to place farms, houses and a tower, and reaches the round's
-// goal, which brings round 2 and its tiles.
+// Plays the first round on the island the seeded Math.random picks, with real inputs: taps a tile
+// button to pick a building, hovers a cell to see what it would score and which neighbours pay into
+// it, taps cells to place farms, a tower and a house, fulfils the royal decree, reaches the round's
+// goal and takes a gift, which brings round 2 and its tiles.
 // Game state is only read, through the `game` object the dev build puts on window.
 
-type Building = 'farm' | 'house' | 'tower';
+type Building = 'farm' | 'house' | 'tower' | 'windmill';
 type Cell = 'grass' | 'lake' | 'forest' | Building;
+type Gift = 'towers' | 'houses' | 'farms' | 'windmill' | 'windmills';
+interface Decree {
+  kind: 'shore' | 'wood' | 'watch';
+  text: string;
+  place: string;
+  need: number;
+  done: boolean;
+}
 interface GameState {
   round: number;
   goal: number;
   score: number;
+  bonus: number;
   pouch: Record<Building, number>;
   selected: Building | null;
   grid: Cell[][];
   placed: number;
-  phase: 'playing' | 'over';
+  phase: 'playing' | 'gift' | 'over';
   best: number;
+  crowns: number;
   island: number;
+  decree: Decree | null;
+  gifts: [Gift, Gift];
+  giftsDue: number;
+  hasWindmill: boolean;
 }
-type TileButton = { kind: Building; x: number; y: number; w: number; h: number };
+type Box = { x: number; y: number; w: number; h: number };
+type Share = { col: number; row: number; pts: number };
+type Preview = { col: number; row: number; gained: number; base: number; links: Share[] };
 
 const VIEW = { w: 960, h: 540 };
 /** The board, from src/scenes/layout.ts. */
 const GRID = { x: 24, y: 46, cols: 10, rows: 7, cell: 64 };
 /** The first round's tiles and goal, and what round 2 adds and asks, from src/game/state.ts. */
-const FIRST_POUCH = { farm: 4, house: 4, tower: 2 };
-const ROUND_POUCH = { farm: 3, house: 3, tower: 2 };
+const FIRST_POUCH = { farm: 4, house: 4, tower: 2, windmill: 0 };
+const ROUND_POUCH = { farm: 3, house: 3, tower: 2, windmill: 0 };
 const GOALS = [20, 45];
+/** What a fulfilled decree pays, from src/game/decree.ts. */
+const DECREE_BONUS = 8;
+/** Round 1's gifts and what the windmill gift adds, from src/game/gifts.ts. */
+const FIRST_GIFTS = ['towers', 'windmill'];
+const WINDMILLS = 2;
 
 /**
  * The island the seeded Math.random below picks, as islandMap in src/game/tiles.ts lays it out:
  * '.' grass, '~' lake, 'T' forest. Islands are random; the seed makes this run's the same each time.
+ * Its lakes are named by where they lie: Westmere (0,2), Eastmere (5..7,4 and 6,5) and Southmere
+ * (3..4,5 and 3,6). Eastmere has the most open shore, so round 1's decree asks for 3 farms on it.
  */
 const ISLAND = 1990;
 const MAP = [
@@ -44,21 +68,23 @@ const MAP = [
   '...~......',
 ];
 const TERRAIN: Record<string, Cell> = { '.': 'grass', '~': 'lake', T: 'forest' };
+const FIRST_DECREE = { kind: 'shore', place: 'Eastmere', need: 3, done: false, text: '3 farms on the shore of Eastmere' };
 
 /**
- * The first round's plan, as (col, row) cells on MAP, with what each placement adds to the score
- * under the rules in src/game/state.ts:
- * a farm scores 1 and 1 per lake beside it; a house 2 per farm, 1 per house or forest beside it;
- * a tower 2 per house in the eight cells around it.
+ * The first round's plan, as (col, row) cells on MAP, with what each placement adds to the board
+ * under the rules in src/game/state.ts: a farm scores 1 and 1 per lake beside it; a house 2 per
+ * farm, 1 per house or forest beside it; a tower 2 per house in the eight cells around it.
+ * `decree` marks the placement that fulfils the decree (and adds DECREE_BONUS on top).
  */
-const PLAN: { kind: Building; col: number; row: number; gained: number; why: string }[] = [
-  { kind: 'farm', col: 5, row: 5, gained: 4, why: 'three lakes beside it' },
-  { kind: 'farm', col: 4, row: 4, gained: 3, why: 'two lakes beside it' },
-  { kind: 'house', col: 4, row: 3, gained: 3, why: 'the farm below it and the forest beside it' },
-  { kind: 'house', col: 3, row: 4, gained: 2, why: 'the farm beside it' },
-  { kind: 'house', col: 3, row: 3, gained: 4, why: 'two houses beside it, which each gain a house' },
-  { kind: 'tower', col: 2, row: 4, gained: 4, why: 'two houses around it' },
+const PLAN: { kind: Building; col: number; row: number; gained: number; why: string; decree?: boolean }[] = [
+  { kind: 'farm', col: 5, row: 5, gained: 4, why: 'three lakes beside it, on the shore of Eastmere and Southmere' },
+  { kind: 'farm', col: 4, row: 4, gained: 3, why: 'two lakes beside it, on the shore of Eastmere' },
+  { kind: 'farm', col: 7, row: 5, gained: 3, why: 'two lakes beside it, the third farm on the shore of Eastmere', decree: true },
+  { kind: 'tower', col: 2, row: 4, gained: 0, why: 'no houses around it yet' },
+  { kind: 'house', col: 3, row: 4, gained: 4, why: 'the farm beside it, and the tower around it gains 2' },
 ];
+/** Before the house goes down, hovering its cell links the farm and the tower to it, +2 each. */
+const LINKED = { step: 4, links: [{ col: 4, row: 4, pts: 2 }, { col: 2, row: 4, pts: 2 }] };
 
 /** Game time per animation frame, every frame the same length. */
 const FRAME_MS = 64;
@@ -76,12 +102,14 @@ function scene(page: Page) {
     page.evaluate(`(${fn.toString()})(window.game.scene.getScene('Game'))`) as Promise<T>;
   return {
     state: () => read<GameState>((s) => JSON.parse(JSON.stringify(s.state))),
-    /** The cell the pointer is over and what the selected building would add there. */
-    preview: () => read<{ col: number; row: number; gained: number } | null>((s) => s.preview),
+    /** The cell the pointer is over, what the selected building would add there, and each neighbour's share. */
+    preview: () => read<Preview | null>((s) => JSON.parse(JSON.stringify(s.preview))),
     /** Where the tile buttons are on screen. */
-    buttons: () => read<TileButton[]>((s) => s.tileButtons),
+    buttons: () => read<(Box & { kind: Building })[]>((s) => s.tileButtons),
     /** Where the undo button is on screen. */
-    undoButton: () => read<{ x: number; y: number; w: number; h: number }>((s) => s.undoButton),
+    undoButton: () => read<Box>((s) => s.undoButton),
+    /** Where the gift card's buttons are while a gift is due. */
+    giftButtons: () => read<(Box & { gift: Gift })[]>((s) => s.giftButtons),
   };
 }
 
@@ -167,21 +195,32 @@ test('plays the first round', async ({ page }, testInfo) => {
     await tap(await onPage(button.x, button.y));
     expect((await game.state()).selected, `${kind} picked`).toBe(kind);
   }
+  async function hover(col: number, row: number) {
+    const at = await cellPoint(col, row);
+    await page.mouse.move(at.x, at.y);
+    await play(STEP_MS, async () => false);
+  }
+  const sorted = (links: Share[]) => [...links].sort((a, b) => a.col - b.col || a.row - b.row);
 
-  // A new kingdom on a random island: round 1, no score, the first round's tiles and nothing built yet.
+  // A new kingdom on a random island: round 1, no score, the first round's tiles, nothing built yet,
+  // a decree to fulfil and the two gifts on offer for reaching the goal.
   let s = await game.state();
-  expect(s).toMatchObject({ round: 1, goal: GOALS[0], score: 0, pouch: FIRST_POUCH, selected: null, placed: 0, phase: 'playing' });
+  expect(s).toMatchObject({ round: 1, goal: GOALS[0], score: 0, bonus: 0, pouch: FIRST_POUCH, selected: null, placed: 0, phase: 'playing' });
   expect(s.island, 'the island the seeded Math.random picks').toBe(ISLAND);
   expect(s.grid, `island ${ISLAND} laid out as MAP`).toEqual(MAP.map((row) => [...row].map((c) => TERRAIN[c])));
+  expect(s.decree, 'round 1 decree').toMatchObject(FIRST_DECREE);
+  expect(s, 'the gifts for goal 1').toMatchObject({ gifts: FIRST_GIFTS, giftsDue: 0, hasWindmill: false, crowns: 0 });
+  expect((await game.buttons()).map((b) => b.kind), 'three tile buttons, no windmill yet').toEqual(['farm', 'house', 'tower']);
   await snap('0-start');
 
-  // Picking the farm and hovering a cell shows what it would score there, without placing it.
+  // Picking the farm and hovering a cell shows what it would score there, without placing it: its
+  // own point and a link from each of the three lakes beside it.
   const first = PLAN[0];
   await pick(first.kind);
-  const firstCell = await cellPoint(first.col, first.row);
-  await page.mouse.move(firstCell.x, firstCell.y);
-  await play(STEP_MS, async () => false);
-  expect(await game.preview(), 'preview of the first farm').toEqual({ col: first.col, row: first.row, gained: first.gained });
+  await hover(first.col, first.row);
+  const firstPreview = (await game.preview())!;
+  expect(firstPreview, 'preview of the first farm').toMatchObject({ col: first.col, row: first.row, gained: first.gained, base: 1 });
+  expect(sorted(firstPreview.links), 'a lake links +1 each').toEqual(sorted([{ col: 4, row: 5, pts: 1 }, { col: 5, row: 4, pts: 1 }, { col: 6, row: 5, pts: 1 }]));
   expect((await game.state()).score).toBe(0);
   await snap('1-preview');
 
@@ -196,14 +235,23 @@ test('plays the first round', async ({ page }, testInfo) => {
   const pouch = { ...FIRST_POUCH };
   for (const [i, step] of PLAN.entries()) {
     if ((await game.state()).selected !== step.kind) await pick(step.kind);
+    if (i === LINKED.step) {
+      // Neighbour links: the house would gain 2 from the farm beside it, and the tower around it 2.
+      await hover(step.col, step.row);
+      const p = (await game.preview())!;
+      expect(p, 'preview of the house').toMatchObject({ col: step.col, row: step.row, gained: step.gained, base: 0 });
+      expect(sorted(p.links), 'the farm and the tower each link +2').toEqual(sorted(LINKED.links));
+      expect(p.links.reduce((t, l) => t + l.pts, p.base), 'the links add up to the preview').toBe(p.gained);
+      await snap('3-links');
+    }
     await tap(await cellPoint(step.col, step.row));
     s = await game.state();
-    score += step.gained;
+    score += step.gained + (step.decree ? DECREE_BONUS : 0);
     pouch[step.kind]--;
     expect(s.grid[step.row][step.col], `placement ${i + 1}`).toBe(step.kind);
     expect(s.score, `score after the ${step.kind} at ${step.col},${step.row}: ${step.why}`).toBe(score);
     expect(s.placed).toBe(i + 1);
-    if (score < GOALS[0]) expect(s).toMatchObject({ round: 1, pouch });
+    if (score < GOALS[0]) expect(s).toMatchObject({ round: 1, pouch, phase: 'playing' });
 
     // One undo per round: after the second farm it takes that farm back, and a second undo in the
     // same round does nothing. Placing the farm again then restores the score the plan expects.
@@ -228,17 +276,39 @@ test('plays the first round', async ({ page }, testInfo) => {
       expect(s, 'the farm placed again').toMatchObject({ score, placed: i + 1, pouch });
       expect(s.grid[step.row][step.col]).toBe(step.kind);
     }
+
+    // The third farm on Eastmere's shore fulfils the decree: +8 and a crown, saved in the browser.
+    if (step.decree) {
+      expect(s.decree, 'the decree is fulfilled').toMatchObject({ ...FIRST_DECREE, done: true });
+      expect(s).toMatchObject({ bonus: DECREE_BONUS, crowns: 1 });
+      expect(await page.evaluate(() => localStorage.getItem('tiny-kingdom-crowns')), 'the crown is saved').toBe('1');
+      await snap('2-decree');
+    } else if (i < 2) expect(s.decree?.done, 'decree not yet fulfilled').toBe(false);
   }
 
-  // The tower reached the goal: round 2 begins with a higher goal and its tiles added to what is left.
+  // The house reached the goal: round 2 begins with a higher goal and its tiles added to what is
+  // left, and the gift for goal 1 waits to be chosen. Nothing can be placed meanwhile.
   expect(score).toBeGreaterThanOrEqual(GOALS[0]);
-  expect(s).toMatchObject({
-    round: 2,
-    goal: GOALS[1],
-    phase: 'playing',
-    pouch: { farm: pouch.farm + ROUND_POUCH.farm, house: pouch.house + ROUND_POUCH.house, tower: pouch.tower + ROUND_POUCH.tower },
-  });
-  await snap('2-round-2');
+  const roundPouch = { farm: pouch.farm + ROUND_POUCH.farm, house: pouch.house + ROUND_POUCH.house, tower: pouch.tower + ROUND_POUCH.tower, windmill: 0 };
+  expect(s).toMatchObject({ round: 2, goal: GOALS[1], phase: 'gift', giftsDue: 1, gifts: FIRST_GIFTS, pouch: roundPouch });
+  const offered = await game.giftButtons();
+  expect(offered.map((b) => b.gift), 'the gift card offers the two gifts').toEqual(FIRST_GIFTS);
+  await tap(await cellPoint(9, 6));
+  expect((await game.state()).grid[6][9], 'no placing while the gift waits').toBe('grass');
+  await snap('4-gift');
+
+  // Taking the windmill adds its tiles and its tile button, and play goes on in round 2 with a new decree.
+  const windmill = offered.find((b) => b.gift === 'windmill')!;
+  await tap(await onPage(windmill.x, windmill.y));
+  s = await game.state();
+  expect(s).toMatchObject({ round: 2, goal: GOALS[1], phase: 'playing', giftsDue: 0, hasWindmill: true, score, pouch: { ...roundPouch, windmill: WINDMILLS } });
+  expect(s.gifts, 'round 2 offers two new gifts, not the windmill again').not.toContain('windmill');
+  expect(s.decree, 'round 2 has a decree of its own').toMatchObject({ done: false });
+  expect(s.decree!.text).not.toBe(FIRST_DECREE.text);
+  expect((await game.buttons()).map((b) => b.kind), 'the windmill button appears').toEqual(['farm', 'house', 'tower', 'windmill']);
+  // Let the round's banner fade (BANNER_MS) before the screenshot.
+  await play(2_600, async () => false);
+  await snap('5-round-2');
 
   const speed = gameMs / (Date.now() - startedAt);
   console.log(`Played ${Math.round(gameMs / 1000)}s of game time at ${speed.toFixed(1)}x (target ${SPEED}x).`);
