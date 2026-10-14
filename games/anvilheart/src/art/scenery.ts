@@ -163,12 +163,21 @@ function flames(frame: number) {
 function board() {
   const size = a(BOARD.cell * 4);
   glass(rect(a(BOARD.x) - 16, a(BOARD.y) - 16, size + 32, size + 32), '#000000', { empty: true, lw: 10 });
-  const tiles = ['#1e2a5c', '#24306a', '#1a2452', '#28336e'];
+  const tiles = ['#2a4a8e', '#33548f', '#274a86', '#3a5a9a'];
   reseed(20);
   const half = a(BOARD.cell) / 2 - 4;
   for (let i = 0; i < SLOTS; i++) {
     const c = slotCentre(i);
     glass(rect(a(c.x) - half, a(c.y) - half, half * 2, half * 2), tiles[(i + Math.floor(i / 4)) % 4], { hi: 0.25, lo: 0.25, lw: 6 });
+  }
+  // A warm light pooled on each pane, clipped to it, so the swords and anvils stand out from the cobalt.
+  for (let i = 0; i < SLOTS; i++) {
+    const c = slotCentre(i);
+    ctx.save();
+    path(rect(a(c.x) - half, a(c.y) - half, half * 2, half * 2));
+    ctx.clip();
+    glow(a(c.x), a(c.y) - a(8), half, '#ffe6a8', 0.32);
+    ctx.restore();
   }
   for (let i = 0; i < SLOTS; i++) {
     const c = slotCentre(i);
@@ -198,8 +207,8 @@ function counter() {
     const y = a(b.y);
     const h = a(b.h);
     reseed(40 + desk);
-    panel(x, y, a(b.w), h, '#6a4a2a', '#24203a', 10);
-    glass([[x + 14, y + h - 12], [x + 14, y + 80], [x + 94, y + 16], [x + 174, y + 80], [x + 174, y + h - 12]], '#1a2040', { hi: 0.15, lo: 0.2, lw: 5 });
+    panel(x, y, a(b.w), h, '#8a5e30', '#3a3266', 10);
+    glass([[x + 14, y + h - 12], [x + 14, y + 80], [x + 94, y + 16], [x + 174, y + 80], [x + 174, y + h - 12]], '#2e4a8a', { hi: 0.3, lo: 0.15, lw: 5 });
   }
 }
 
