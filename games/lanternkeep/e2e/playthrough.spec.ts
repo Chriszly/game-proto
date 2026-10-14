@@ -13,6 +13,7 @@ interface Lantern {
   claimed: boolean;
 }
 interface Moth {
+  kind: 'fast' | 'slow' | 'heavy';
   x: number;
   y: number;
   task: 'idle' | 'out' | 'lighting' | 'home';
@@ -26,6 +27,7 @@ interface GameState {
   lives: number;
   lanterns: Lantern[];
   moths: Moth[];
+  queue: number[];
   report: { lit: number; count: number; required: number; earned: number; lostHearth: boolean } | null;
   kept: number;
 }
@@ -153,6 +155,8 @@ test('plays the first night', async ({ page }, testInfo) => {
   expect(s.lanterns).toHaveLength(LANTERNS);
   expect(s.lanterns.every((l) => !l.lit)).toBe(true);
   expect(s.moths).toHaveLength(MOTHS);
+  expect(s.moths.map((m) => m.kind)).toEqual(['fast', 'slow', 'heavy']);
+  expect(s.queue).toEqual([]);
   expect(busy(s)).toBe(0);
   await snap('0-dusk');
 
@@ -174,19 +178,23 @@ test('plays the first night', async ({ page }, testInfo) => {
   s = await game.state();
   expect(s.phase).toBe('dusk');
 
-  // Late in the dusk, light them all so they still burn at nightfall: three moths go at once, and
-  // the last two lanterns wait for the moths to come home.
+  // Late in the dusk, light them all so they still burn at nightfall: three moths go at once. The
+  // taps for lanterns 3 and 4 find every moth busy, so they wait in the queue, and a moth takes
+  // each one as it comes home. A tap on a lantern a moth is already flying to is ignored.
   await until('16s of dusk left', DUSK_MS, (s) => s.duskMs <= 16_000);
   for (const i of [0, 1, 2]) await tapLantern(i);
   expect(busy(await game.state()), 'every moth out').toBe(MOTHS);
   await tapLantern(3);
-  expect((await game.state()).lanterns[3].claimed, 'no moth free for lantern 3').toBe(false);
-  await until('moths home', 10_000, (s) => busy(s) === 0);
   s = await game.state();
-  expect(s.lanterns.slice(0, 3).every((l) => l.lit), 'first three lit').toBe(true);
-  for (const i of [3, 4]) await tapLantern(i);
-  await until('every lantern lit', 10_000, (s) => s.lanterns.every((l) => l.lit));
+  expect(s.queue, 'tap kept in the queue').toEqual([3]);
+  expect(s.lanterns[3].claimed, 'not claimed until a moth takes it').toBe(false);
+  await tapLantern(4);
+  expect((await game.state()).queue, 'second tap kept').toEqual([3, 4]);
+  await tapLantern(2);
+  expect((await game.state()).queue, 'tap on a claimed lantern ignored').toEqual([3, 4]);
+  await until('every lantern lit', 12_000, (s) => s.lanterns.every((l) => l.lit));
   s = await game.state();
+  expect(s.queue, 'queue emptied').toEqual([]);
   expect(s.phase).toBe('dusk');
   await snap('2-all-lit');
 

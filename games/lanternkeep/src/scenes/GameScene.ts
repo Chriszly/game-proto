@@ -1,21 +1,20 @@
 import Phaser from 'phaser';
 import { settings } from '../../../../shared/settings';
-import { CASTLE_TOP } from '../art/sprites';
-import { seeded } from '../art/pixelArt';
-import { JAR, LANTERN_SPOTS } from '../game/places';
+import { drawCastle, drawCoin, drawHearth, drawJar, drawLantern, drawMoth, mix, poly, seeded, type Pt } from '../art/lowpoly';
+import { LANTERN_SPOTS } from '../game/places';
 import { loadBest, saveBest } from '../game/save';
 import {
   ALL_LIT_BONUS,
   buy,
   DUSK_MS,
   LIVES,
+  mothLightMs,
   newGame,
   nextCost,
   nextDusk,
   PAY_PER_LANTERN,
   requiredFor,
   send,
-  stats,
   tick,
   UPGRADE_IDS,
   UPGRADES,
@@ -49,22 +48,12 @@ const textStyle = (size: number, color = '#f3e9d2') => ({
   strokeThickness: 3,
 });
 
-const lerpColor = (a: number, b: number, t: number) => {
-  const ch = (shift: number) => Math.round(((a >> shift) & 0xff) + (((b >> shift) & 0xff) - ((a >> shift) & 0xff)) * t);
-  return (ch(16) << 16) | (ch(8) << 8) | ch(0);
-};
-
 /** Where a button is on screen; read by the playthrough test. */
 export interface ButtonSpot {
   x: number;
   y: number;
   w: number;
   h: number;
-}
-
-interface LanternParts {
-  glow: Phaser.GameObjects.Image;
-  lamp: Phaser.GameObjects.Image;
 }
 
 interface ShopParts {
@@ -86,12 +75,17 @@ export class GameScene extends Phaser.Scene {
   private lastFrame: number | null = null;
   private sky!: Phaser.GameObjects.Graphics;
   private stars!: Phaser.GameObjects.Graphics;
-  private sun!: Phaser.GameObjects.Arc;
+  private sun!: Phaser.GameObjects.Graphics;
   private dark!: Phaser.GameObjects.Rectangle;
-  private lanterns: LanternParts[] = [];
+  private glows: Phaser.GameObjects.Image[] = [];
+  /** Lanterns, the lit ones and the dark ones, drawn each frame. */
+  private lamps!: Phaser.GameObjects.Graphics;
+  /** Oil bars, waiting rings and the moth's lighting ring, drawn each frame over the lanterns. */
   private marks!: Phaser.GameObjects.Graphics;
-  private moths: Phaser.GameObjects.Image[] = [];
-  private hearths: Phaser.GameObjects.Image[] = [];
+  /** The moths, drawn each frame. */
+  private mothG!: Phaser.GameObjects.Graphics;
+  /** The HUD's hearths and coin icon, drawn each frame. */
+  private hudIcons!: Phaser.GameObjects.Graphics;
   private nightText!: Phaser.GameObjects.Text;
   private coinsText!: Phaser.GameObjects.Text;
   private litText!: Phaser.GameObjects.Text;
@@ -114,7 +108,6 @@ export class GameScene extends Phaser.Scene {
     this.createHud();
     this.createNightPanel();
     this.createGameOver();
-    this.syncMoths();
   }
 
   private createWorld() {
@@ -125,28 +118,28 @@ export class GameScene extends Phaser.Scene {
       const size = rnd() < 0.2 ? 3 : 2;
       this.stars.fillStyle(0xf6f0d8, 0.5 + rnd() * 0.5).fillRect(Math.floor(rnd() * VIEW.w), HUD.h + Math.floor(rnd() * 300), size, size);
     }
-    this.sun = this.add.circle(760, 0, 34, 0xffc46a);
-    this.add.image(0, CASTLE_TOP, 'castle').setOrigin(0);
+    this.sun = this.add.graphics();
+    drawCastle(this.add.graphics());
     this.dark = this.add.rectangle(0, 0, VIEW.w, VIEW.h, 0x060818, 0).setOrigin(0).setDepth(3);
-    this.add.image(JAR.x, JAR.y - 20, 'jar').setDepth(6);
+    const jar = this.add.graphics().setDepth(6);
+    drawJar(jar);
 
     LANTERN_SPOTS.forEach(({ x, y }, i) => {
-      const glow = this.add.image(x, y, 'glow').setDepth(4).setScale(1.3);
-      const lamp = this.add.image(x, y, 'lantern-dark').setDepth(5);
-      this.lanterns.push({ glow, lamp });
+      this.glows.push(this.add.image(x, y, 'glow').setDepth(4).setScale(1.3));
       this.add
         .zone(x, y, LANTERN_HIT.w, LANTERN_HIT.h)
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => send(this.state, i));
     });
+    this.lamps = this.add.graphics().setDepth(5);
     this.marks = this.add.graphics().setDepth(6);
+    this.mothG = this.add.graphics().setDepth(7);
   }
 
   private createHud() {
     this.add.rectangle(0, 0, VIEW.w, HUD.h, 0x0b0c18, 0.75).setOrigin(0).setDepth(UI_DEPTH);
     this.nightText = this.add.text(14, 10, '', textStyle(18, '#f3c64e')).setDepth(UI_DEPTH);
-    for (let i = 0; i < LIVES; i++) this.hearths.push(this.add.image(130 + i * 22, 20, 'hearth-lit').setDepth(UI_DEPTH));
-    this.add.image(222, 20, 'coin').setDepth(UI_DEPTH);
+    this.hudIcons = this.add.graphics().setDepth(UI_DEPTH);
     this.coinsText = this.add.text(236, 10, '', textStyle(18)).setDepth(UI_DEPTH);
     this.duskBar = this.add.graphics().setDepth(UI_DEPTH);
     this.duskText = this.add
@@ -178,11 +171,7 @@ export class GameScene extends Phaser.Scene {
       this.shopButtons.push({ id, x: bx, y: by, w: SHOP.w, h: SHOP.h });
       parts.push(bg, name, level, blurb, cost);
     });
-    parts.push(
-      makeButton(this, NEXT_BUTTON.x, NEXT_BUTTON.y, 'Next dusk', () => {
-        if (nextDusk(this.state)) this.syncMoths();
-      }),
-    );
+    parts.push(makeButton(this, NEXT_BUTTON.x, NEXT_BUTTON.y, 'Next dusk', () => nextDusk(this.state)));
     this.nightPanel = this.add.container(0, 0, parts).setDepth(UI_DEPTH + 10).setVisible(false);
   }
 
@@ -195,12 +184,6 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5);
     const again = makeButton(this, VIEW.w / 2, VIEW.h / 2 + 72, 'New keep', () => this.restart());
     this.gameOver = this.add.container(0, 0, [dim, panel, title, this.gameOverText, again]).setDepth(UI_DEPTH + 20).setVisible(false);
-  }
-
-  /** Makes one moth image per moth in the jar, after a new dusk or a new game. */
-  private syncMoths() {
-    for (const m of this.moths) m.destroy();
-    this.moths = this.state.moths.map((m) => this.add.image(m.x, m.y, 'moth-0').setDepth(7));
   }
 
   update(time: number) {
@@ -231,61 +214,81 @@ export class GameScene extends Phaser.Scene {
 
   private drawSky() {
     const p = this.dusk();
-    const top = lerpColor(SKY.duskTop, SKY.nightTop, p);
-    const bottom = lerpColor(SKY.duskBottom, SKY.nightBottom, p);
+    const top = mix(SKY.duskTop, SKY.nightTop, p);
+    const bottom = mix(SKY.duskBottom, SKY.nightBottom, p);
     const g = this.sky.clear();
     const bands = 24;
     const h = Math.ceil((VIEW.h - HUD.h) / bands);
-    for (let i = 0; i < bands; i++) g.fillStyle(lerpColor(top, bottom, i / (bands - 1))).fillRect(0, HUD.h + i * h, VIEW.w, h);
+    for (let i = 0; i < bands; i++) g.fillStyle(mix(top, bottom, i / (bands - 1))).fillRect(0, HUD.h + i * h, VIEW.w, h);
     this.stars.setAlpha(Math.max(0, p * 1.4 - 0.4));
-    this.sun.setPosition(760, 90 + p * 420).setFillStyle(lerpColor(0xffd27a, 0xe0584f, p));
+    this.drawSun(760, 90 + p * 420, 34, mix(0xffd27a, 0xe0584f, p));
     this.dark.setFillStyle(0x060818, NIGHT_DARKNESS * p);
+  }
+
+  /** The low-poly sun: a 14-sided disc with a lit upper-left half and a shaded lower-right half. */
+  private drawSun(x: number, y: number, r: number, color: number) {
+    const ring = (rad: number, from: number, to: number): Pt[] => {
+      const pts: Pt[] = [];
+      for (let i = 0; i <= 7; i++) {
+        const a = from + ((to - from) * i) / 7;
+        pts.push([x + Math.cos(a) * rad, y + Math.sin(a) * rad]);
+      }
+      return pts;
+    };
+    const g = this.sun.clear();
+    poly(g, ring(r, 0, Math.PI * 2).slice(0, -1), mix(color, 0x000000, 0.12));
+    // The lit half is the left side of the disc, the shaded half the right.
+    poly(g, [[x, y], ...ring(r * 0.94, -Math.PI / 2, -Math.PI * 1.5)], mix(color, 0xffffff, 0.18));
+    poly(g, [[x, y], ...ring(r * 0.94, -Math.PI / 2, Math.PI / 2)], color);
   }
 
   private drawLanterns() {
     const s = this.state;
-    const { burnMs, lightMs } = stats(s);
+    const lamps = this.lamps.clear();
     const g = this.marks.clear();
-    this.lanterns.forEach(({ glow, lamp }, i) => {
+    this.glows.forEach((glow, i) => {
       const lantern = s.lanterns[i];
-      lamp.setVisible(!!lantern);
       glow.setVisible(!!lantern?.lit);
       if (!lantern) return;
-      lamp.setTexture(lantern.lit ? 'lantern-lit' : 'lantern-dark');
+      // The flicker wavers the flame and the glow; reduce motion holds them still.
+      const flicker = settings.reduceMotion ? 0 : Math.sin(this.clock / 90 + i * 1.7);
+      drawLantern(lamps, lantern.x, lantern.y, lantern.lit, flicker);
       if (lantern.lit) {
-        const flicker = settings.reduceMotion ? 0 : Math.sin(this.clock / 90 + i * 1.7) * 0.06;
-        glow.setScale(1.3 + flicker).setAlpha(0.55 + 0.4 * Math.min(1, lantern.oilMs / 4000));
+        glow.setScale(1.3 + flicker * 0.06).setAlpha(0.55 + 0.4 * Math.min(1, lantern.oilMs / 4000));
         // The oil left, under the lantern.
-        const f = Phaser.Math.Clamp(lantern.oilMs / burnMs, 0, 1);
+        const f = Phaser.Math.Clamp(lantern.oilMs / lantern.oilMaxMs, 0, 1);
         g.fillStyle(0x0b0c18, 0.85).fillRect(lantern.x - 18, lantern.y + 22, 36, 6);
         g.fillStyle(f < 0.25 ? 0xe08a3c : 0xf3c64e).fillRect(lantern.x - 17, lantern.y + 23, Math.round(34 * f), 4);
       } else if (!lantern.claimed && s.phase === 'dusk') {
-        // A faint ring marks a dark lantern waiting for a moth.
-        g.lineStyle(2, 0xf3e9d2, 0.35).strokeCircle(lantern.x, lantern.y, 22);
+        // A faint ring marks a dark lantern waiting for a moth; an amber one marks a queued tap.
+        const queued = s.queue.includes(i);
+        g.lineStyle(2, queued ? 0xf3c64e : 0xf3e9d2, queued ? 0.9 : 0.35).strokeCircle(lantern.x, lantern.y, 22);
       }
       const moth = s.moths.find((m) => m.target === i && m.task === 'lighting');
       if (moth) {
-        const f = Math.min(1, moth.lightingMs / lightMs);
+        const f = Math.min(1, moth.lightingMs / mothLightMs(s, moth));
         g.lineStyle(3, 0xfff1b0, 0.95).beginPath().arc(lantern.x, lantern.y, 22, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * f).strokePath();
       }
     });
   }
 
   private drawMoths() {
+    const g = this.mothG.clear();
     this.state.moths.forEach((m, i) => {
-      const img = this.moths[i];
-      if (!img) return;
+      // Wings up on the even flap frames; reduce motion holds them up and stops the bobbing.
       const still = settings.reduceMotion;
-      const flap = still ? 0 : Math.floor(this.clock / 90 + i) % 2;
+      const wingsUp = still || Math.floor(this.clock / 90 + i) % 2 === 0;
       const bob = still || m.task === 'lighting' ? 0 : Math.sin(this.clock / 260 + i * 2) * 3;
-      img.setTexture(`moth-${flap}`).setPosition(m.x, m.y + bob);
+      drawMoth(g, m.x, m.y + bob, m.kind, wingsUp);
     });
   }
 
   private drawHud() {
     const s = this.state;
     this.nightText.setText(`Night ${s.night}`);
-    this.hearths.forEach((h, i) => h.setTexture(i < s.lives ? 'hearth-lit' : 'hearth-out'));
+    const icons = this.hudIcons.clear();
+    for (let i = 0; i < LIVES; i++) drawHearth(icons, 130 + i * 22, 20, i < s.lives);
+    drawCoin(icons, 222, 20, 8);
     this.coinsText.setText(String(s.coins));
     const lit = s.lanterns.filter((l) => l.lit).length;
     this.litText.setText(`Lit ${lit}/${s.lanterns.length}  need ${requiredFor(s.lanterns.length)}`);
@@ -299,7 +302,8 @@ export class GameScene extends Phaser.Scene {
     this.duskBar.fillStyle(0x05060e).fillRect(x, y, w, h);
     this.duskBar.fillStyle(0x2a2c4a).fillRect(x + 2, y + 2, w - 4, h - 4);
     this.duskBar.fillStyle(0xe8a050).fillRect(x + 2, y + 2, Math.round((w - 4) * f), h - 4);
-    this.duskText.setText(s.phase === 'dusk' ? `Nightfall in ${Math.ceil(s.duskMs / 1000)}s` : 'Night');
+    const queued = s.queue.length ? ` · ${s.queue.length} queued` : '';
+    this.duskText.setText(s.phase === 'dusk' ? `Nightfall in ${Math.ceil(s.duskMs / 1000)}s${queued}` : 'Night');
   }
 
   /** True once the night panel or the game-over panel is open; read by the playthrough test. */
@@ -351,6 +355,5 @@ export class GameScene extends Phaser.Scene {
 
   private restart() {
     this.state = newGame(loadBest());
-    this.syncMoths();
   }
 }
