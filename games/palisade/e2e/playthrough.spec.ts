@@ -1,15 +1,26 @@
 import { expect, test, type Page } from '@playwright/test';
 
 // Plays the first wave with real inputs: the hero shoots the foes on their own, the first kills
-// fill the experience bar, the level-up cards come up and one is tapped, as on a phone, and the
-// wave is cleared with the barricade still standing.
+// fill the experience bar and charge Arrow Rain, the level-up cards come up and one is tapped, as on
+// a phone, Arrow Rain is dragged from its button onto a foe and let go, kills in quick succession
+// build a streak that adds experience, and the wave is cleared with the barricade still standing,
+// one step further along the road to the Troll King.
 // Game state is only read, through the `game` object the dev build puts on window.
 
-type Kind = 'goblin' | 'orc' | 'knight' | 'troll';
+type Kind = 'goblin' | 'orc' | 'knight' | 'troll' | 'ogre' | 'giant';
+interface Effect {
+  id: number;
+  kind: string;
+  x: number;
+  y: number;
+  amount?: number;
+  streak?: number;
+}
 interface GameState {
   level: number;
   xp: number;
   ranks: Record<string, number>;
+  relics: Record<string, number>;
   levelUps: number;
   bestWave: number;
   wave: number;
@@ -18,18 +29,27 @@ interface GameState {
   barricade: { hp: number; max: number };
   enemies: { id: number; kind: Kind; x: number; y: number; hp: number; maxHp: number }[];
   missiles: { id: number; kind: string }[];
+  effects: Effect[];
   choices: string[] | null;
   pickMs: number;
   kills: number;
+  rain: { charge: number; need: number; volleys: { id: number; x: number; y: number; ms: number }[] };
+  streak: { count: number; ms: number; best: number; bonusXp: number };
+  relicFound: string | null;
 }
 type Card = { id: string; x: number; y: number; w: number; h: number };
+type Track = { first: number; last: number; boss: Kind; step: number };
 
 const VIEW = { w: 960, h: 540 };
 /** Experience for each kind of foe, from src/game/enemies.ts, and what each level costs, from state.ts. */
-const XP: Record<Kind, number> = { goblin: 2, orc: 4, knight: 10, troll: 60 };
+const XP: Record<Kind, number> = { goblin: 2, orc: 4, knight: 10, troll: 60, ogre: 70, giant: 80 };
 const xpToNext = (level: number) => 8 + 6 * (level - 1);
+/** A kill streak's experience bonus, from state.ts: 5% a kill from two kills on, up to 50%. */
+const streakBonus = (count: number) => (count >= 2 ? Math.min(0.5, 0.05 * count) : 0);
 /** Wave 1 is three goblins and three orcs, from src/game/waves.ts; an orc always comes first. */
 const WAVE_1 = { goblin: 3, orc: 3 };
+/** Kills that charge Arrow Rain on wave 1, from state.ts. */
+const RAIN_KILLS = 4;
 /** How long a level-up waits for a tap before taking a card at random, from src/game/sim.ts. */
 const AUTO_PICK_MS = 10_000;
 
@@ -64,6 +84,12 @@ function scene(page: Page) {
     state: () => read<GameState>((s) => JSON.parse(JSON.stringify(s.state))),
     /** Where the level-up cards are on screen, and the upgrade each offers. */
     cards: () => read<Card[]>((s) => s.levelUp.cards),
+    /** The road of ten waves on the wave track. */
+    track: () => read<Track>((s) => ({ ...s.track })),
+    /** Where the Arrow Rain button is, to drag it from. */
+    rainSpot: () => read<{ x: number; y: number }>((s) => ({ ...s.rainSpot })),
+    /** Where Arrow Rain is being dragged to, or null. */
+    aim: () => read<{ x: number; y: number } | null>((s) => (s.aim ? { ...s.aim } : null)),
   };
 }
 
@@ -94,7 +120,7 @@ test('plays the first wave', async ({ page }, testInfo) => {
     window.requestAnimationFrame = (cb) => window.setTimeout(() => cb(performance.now()), frameMs);
     window.cancelAnimationFrame = (id) => window.clearTimeout(id);
     // Phaser falls back to its canvas renderer. CI has no GPU, and WebGL in software is too slow to
-    // play at SPEED; the game, its rules and the pixel art are the same either way.
+    // play at SPEED; the game, its rules and the art are the same either way.
     const getContext = HTMLCanvasElement.prototype.getContext as (this: HTMLCanvasElement, id: string, ...rest: unknown[]) => unknown;
     HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, id: string, ...rest: unknown[]) {
       return /webgl/i.test(id) ? null : getContext.call(this, id, ...rest);
@@ -137,25 +163,53 @@ test('plays the first wave', async ({ page }, testInfo) => {
     let state = await game.state();
     const ok = await play(ms, async () => check((state = await game.state())));
     if (!ok) {
-      const { enemies, ...rest } = state;
+      const { enemies, effects, ...rest } = state;
       throw new Error(`Timed out after ${ms}ms of game time waiting for: ${what}\n` +
         `Foes ${JSON.stringify(enemies.map((e) => [e.kind, Math.round(e.x), Math.round(e.hp)]))}, state ${JSON.stringify(rest)}`);
     }
     return state;
   }
 
-  /** Taps the middle of a level-up card, as a player would. */
-  async function tapCard(card: Card) {
+  /** A point in the 960x540 view as a point on the page. */
+  async function onPage(x: number, y: number) {
     const box = (await canvas.boundingBox())!;
     const scale = box.width / VIEW.w;
-    await page.mouse.click(box.x + card.x * scale, box.y + card.y * scale);
+    return { x: box.x + x * scale, y: box.y + y * scale };
+  }
+
+  /** Taps the middle of a level-up card, as a player would. */
+  async function tapCard(card: Card) {
+    const at = await onPage(card.x, card.y);
+    await page.mouse.click(at.x, at.y);
     await play(STEP_MS, async () => false);
   }
 
-  // A new hero: level 1, no upgrades, the barricade whole, and a short break before the first wave.
+  // Each kill fills the experience bar by that foe's experience, plus the streak's bonus.
+  const killedXp = (s: GameState) => {
+    const left = count([...s.toSpawn, ...s.enemies.map((e) => e.kind)]);
+    return Object.entries(WAVE_1).reduce((sum, [kind, n]) => sum + (n - (left[kind] ?? 0)) * XP[kind as Kind], 0);
+  };
+  /** Checks every "+N XP" pop on the field: a wave 1 foe's experience times its streak's bonus. */
+  const checkPops = (s: GameState) => {
+    for (const e of s.effects.filter((e) => e.kind === 'xp')) {
+      const base = e.amount! / (1 + streakBonus(e.streak!));
+      expect([XP.goblin, XP.orc], `the +${e.amount} XP pop at streak x${e.streak}`).toContainEqual(Math.round(base * 1e6) / 1e6);
+    }
+  };
+  let bestStreakSeen = 0;
+  const watchStreak = (s: GameState) => {
+    bestStreakSeen = Math.max(bestStreakSeen, s.streak.count);
+    checkPops(s);
+  };
+
+  // A new hero: level 1, no upgrades or relics, the barricade whole, Arrow Rain empty, no streak,
+  // and a short break before the first wave, the first step on the road to the Troll King.
   let s = await game.state();
-  expect(s).toMatchObject({ level: 1, xp: 0, ranks: {}, levelUps: 0, wave: 1, phase: 'break', kills: 0, choices: null });
+  expect(s).toMatchObject({ level: 1, xp: 0, ranks: {}, relics: {}, levelUps: 0, wave: 1, phase: 'break', kills: 0, choices: null });
   expect(s.barricade.hp).toBe(s.barricade.max);
+  expect(s.rain).toEqual({ charge: 0, need: RAIN_KILLS, volleys: [] });
+  expect(s.streak).toEqual({ count: 0, ms: 0, best: 0, bonusXp: 0 });
+  expect(await game.track()).toEqual({ first: 1, last: 10, boss: 'troll', step: 1 });
 
   // The first wave comes on, an orc first, and the hero shoots at the foes without being told to.
   s = await until('the first wave came on', (s) => s.phase === 'fighting' && s.enemies.length > 0, 5_000);
@@ -165,24 +219,30 @@ test('plays the first wave', async ({ page }, testInfo) => {
   await snap('0-battle');
   await until('an arrow hit', (s) => s.enemies.some((e) => e.hp < e.maxHp) || s.kills > 0, 5_000);
 
-  // Each kill fills the experience bar by that foe's experience.
-  const killedXp = (s: GameState) => {
-    const left = count([...s.toSpawn, ...s.enemies.map((e) => e.kind)]);
-    return Object.entries(WAVE_1).reduce((sum, [kind, n]) => sum + (n - (left[kind] ?? 0)) * XP[kind as Kind], 0);
-  };
+  // The first kill starts a streak of one, with no bonus yet: it gives just the foe's experience,
+  // pops "+N XP" where the foe fell, sends orbs to the bar and charges Arrow Rain by one.
   s = await until('the first foe slain', (s) => s.kills > 0);
+  expect(s.kills).toBe(1);
   expect(earned(s)).toBe(killedXp(s));
+  expect(s.streak).toMatchObject({ count: 1, best: 1, bonusXp: 0 });
+  expect(s.streak.ms).toBeGreaterThan(0);
+  expect(s.rain.charge).toBe(1);
+  const pop = s.effects.find((e) => e.kind === 'xp')!;
+  expect(pop.amount).toBe(killedXp(s));
+  expect(pop.streak).toBe(1);
+  expect(s.effects.filter((e) => e.kind === 'orb').map((e) => e.amount)).toEqual([killedXp(s)]);
 
   // A full bar is a level-up: the battle waits while three different upgrades are offered.
-  s = await until('a level-up', (s) => s.choices !== null);
+  s = await until('a level-up', (s) => (watchStreak(s), s.choices !== null));
   expect(s.level).toBe(2);
-  expect(earned(s)).toBe(killedXp(s));
+  expect(earned(s)).toBeCloseTo(killedXp(s) + s.streak.bonusXp, 6);
   expect(new Set(s.choices).size).toBe(3);
   const cards = await game.cards();
   expect(cards.map((c) => c.id)).toEqual(s.choices);
   await play(1_000, async () => false);
   const waited = await game.state();
   expect(waited.enemies, 'the battle waits for the pick').toEqual(s.enemies);
+  expect(waited.streak, 'the streak waits too').toEqual(s.streak);
   // A countdown runs while the cards are up, after which one is taken at random; this tap beats it.
   expect(s.pickMs).toBeLessThanOrEqual(AUTO_PICK_MS);
   expect(waited.pickMs).toBeLessThan(s.pickMs - 900);
@@ -197,17 +257,57 @@ test('plays the first wave', async ({ page }, testInfo) => {
   expect(s.choices).toBeNull();
   expect(s.levelUps).toBe(0);
 
+  // Kills charge Arrow Rain. Once it is ready, drag it from its button above the ranger onto a
+  // foe, along the dashed arc to the gold ring, and let go.
+  s = await until('Arrow Rain charged', (s) => (watchStreak(s), s.rain.charge === s.rain.need && s.enemies.some((e) => e.x < 900)));
+  expect(s.rain.need).toBe(RAIN_KILLS);
+  expect(s.choices).toBeNull();
+  const target = s.enemies.filter((e) => e.x < 900).sort((a, b) => a.x - b.x)[0];
+  const from = await game.rainSpot();
+  const grab = await onPage(from.x, from.y);
+  await page.mouse.move(grab.x, grab.y);
+  await page.mouse.down();
+  for (let i = 1; i <= 3; i++) {
+    const at = await onPage(from.x + ((target.x - 12 - from.x) * i) / 3, from.y + ((target.y - from.y) * i) / 3);
+    await page.mouse.move(at.x, at.y, { steps: 4 });
+    await play(STEP_MS, async () => false);
+  }
+  expect(await game.aim(), 'Arrow Rain is being aimed').not.toBeNull();
+  await snap('2-arrow-rain-aim');
+  const kills = (await game.state()).kills;
+  await page.mouse.up();
+  s = await game.state();
+  expect(await game.aim()).toBeNull();
+  expect(s.rain.charge, 'loosing spends the charge').toBe(0);
+  expect(s.rain.volleys).toHaveLength(1);
+  const volley = s.rain.volleys[0];
+  expect(Math.abs(volley.x - (target.x - 12))).toBeLessThan(2);
+  expect(Math.abs(volley.y - target.y)).toBeLessThan(2);
+  // The volley comes down on the ring and fells the foe it was dropped on.
+  s = await until('the volley landed', (s) => (watchStreak(s), s.rain.volleys.length === 0), 2_000);
+  expect(s.effects.some((e) => e.kind === 'rain')).toBe(true);
+  expect(s.enemies.map((e) => e.id), 'the foe under the volley fell').not.toContain(target.id);
+  expect(s.kills).toBeGreaterThan(kills);
+  await snap('3-arrow-rain');
+
   // Clear the wave, taking the first card of any further level-up. The barricade holds.
   for (let picks = 0; ; picks++) {
     expect(picks, 'level-ups in wave 1').toBeLessThan(2);
-    s = await until('wave 1 cleared or a level-up', (s) => s.wave === 2 || s.choices !== null, 60_000);
+    s = await until('wave 1 cleared or a level-up', (s) => (watchStreak(s), s.wave === 2 || s.choices !== null), 60_000);
     if (s.wave === 2) break;
     await tapCard((await game.cards())[0]);
   }
-  expect(s).toMatchObject({ phase: 'break', bestWave: 1, kills: 6 });
-  expect(earned(s)).toBe(3 * XP.goblin + 3 * XP.orc);
+  expect(s).toMatchObject({ phase: 'break', bestWave: 1, kills: 6, relics: {}, relicFound: null });
   expect(s.barricade.hp).toBeGreaterThan(0);
-  await snap('2-wave-cleared');
+  // Kills in quick succession built a streak, and its bonus is all the experience on top of the
+  // foes' own.
+  expect(s.streak.best, 'a kill streak of two or more').toBeGreaterThanOrEqual(2);
+  expect(s.streak.best).toBeGreaterThanOrEqual(bestStreakSeen);
+  expect(s.streak.bonusXp).toBeGreaterThan(0);
+  expect(earned(s)).toBeCloseTo(3 * XP.goblin + 3 * XP.orc + s.streak.bonusXp, 6);
+  // The road moves on a step towards the Troll King's wave and its relic chest.
+  expect(await game.track()).toEqual({ first: 1, last: 10, boss: 'troll', step: 2 });
+  await snap('4-wave-cleared');
 
   const speed = gameMs / (Date.now() - startedAt);
   console.log(`Played ${Math.round(gameMs / 1000)}s of game time at ${speed.toFixed(1)}x (target ${SPEED}x).`);

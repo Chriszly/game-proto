@@ -9,6 +9,21 @@ export const FIRST_BREAK_MS = 2_000;
 
 export const isBossWave = (wave: number) => wave % BOSS_EVERY === 0;
 
+/** The bosses at the end of each road of ten waves, in turn. */
+export const BOSSES: EnemyKind[] = ['troll', 'ogre', 'giant'];
+
+/** The boss that closes the road `wave` is on. */
+export const bossOf = (wave: number) => BOSSES[Math.floor((wave - 1) / BOSS_EVERY) % BOSSES.length];
+
+/**
+ * The road of ten waves `wave` is on, shown as a track under the top bar: its first wave, its last
+ * (the boss's, with the relic chest after it), the boss and how far along the hero is.
+ */
+export function waveTrack(wave: number) {
+  const first = Math.floor((wave - 1) / BOSS_EVERY) * BOSS_EVERY + 1;
+  return { first, last: first + BOSS_EVERY - 1, boss: bossOf(wave), step: wave - first + 1 };
+}
+
 /** How much more health foes have in a wave than in wave 1. */
 export const hpScale = (wave: number) => 1 + 0.18 * (wave - 1) + 0.012 * (wave - 1) ** 2;
 
@@ -38,7 +53,7 @@ export function waveFoes(wave: number): EnemyKind[] {
   }
   foes.splice(foes.indexOf('orc'), 1);
   foes.unshift('orc');
-  if (isBossWave(wave)) foes.push('troll');
+  if (isBossWave(wave)) foes.push(bossOf(wave));
   return foes;
 }
 

@@ -1,132 +1,380 @@
 import Phaser from 'phaser';
-import { CLOTH, DIRT, GOLD, GRASS, INK, RED, SKY, STONE, WOOD } from './palette';
-import { PixelCanvas, seeded } from './pixelArt';
+import { facet, line, mix, ngon, paint, poly, rect, seeded, shade, softShadow, type Pt } from './lowpoly';
 
-// The battlefield behind everything: an evening sky over far mountains and a castle on the hills,
-// a grassy meadow and the trampled road the foes march along. Plus the barricade in front of the
-// hero, which breaks up in stages as it loses health. Painted at half size and baked at twice that.
+// The battlefield in low-poly 3D: a faceted sky, snowy peaks and a castle on the far hill, rows of
+// pines, and the road the foes march along as a jittered triangle mesh of packed earth. Plus the
+// slate-and-gold top and bottom bars, and the barricade, which breaks up in stages.
+//
+// Everything here is painted in "double" units (1920x1080 for the 960x540 view) and scaled down
+// by half, so the shapes keep their fine facets.
 
-const BG_SCALE = 2;
+const W = 1920;
 
 export function bakeScenery(scene: Phaser.Scene) {
-  bakeBackground(scene);
-  for (const stage of [0, 1, 2, 3]) bakeBarricade(scene, stage);
+  paint(scene, 'background', 960, 540, (ctx) => {
+    ctx.scale(0.5, 0.5);
+    drawBackground(ctx);
+  });
+  paint(scene, 'hud-top', 960, 42, (ctx) => {
+    ctx.scale(0.5, 0.5);
+    slateBar(ctx, 0, 80, 'bottom');
+  });
+  paint(scene, 'hud-bottom', 960, 36, (ctx) => {
+    ctx.scale(0.5, 0.5);
+    slateBar(ctx, 2, 72, 'top');
+  });
+  for (const stage of [0, 1, 2, 3]) {
+    paint(scene, `barricade-${stage}`, BARRICADE_TEX.w, BARRICADE_TEX.h, (ctx) => {
+      ctx.scale(0.5, 0.5);
+      ctx.translate(-(LOG_X - BARRICADE_TEX.logX * 2), -(LOG_TOP - BARRICADE_TEX.top * 2));
+      drawBarricade(ctx, stage);
+    });
+  }
 }
 
-function bakeBackground(scene: Phaser.Scene) {
-  const W = 480;
-  const H = 270;
-  const c = new PixelCanvas(W, H);
-  const rnd = seeded(7);
-  // Sky in bands, darkest at the top.
-  const bands = [SKY.top, 0x34467a, 0x3e5590, SKY.mid, 0x6680b2, SKY.low, 0xb0b8c8, SKY.haze];
-  const horizon = 126;
-  for (let y = 0; y < horizon; y++) c.rect(0, y, W, 1, bands[Math.min(bands.length - 1, Math.floor((y / horizon) * bands.length))]);
-  // Clouds.
-  for (const [x, y, w] of [[60, 30, 50], [210, 18, 70], [360, 40, 44], [430, 22, 36]]) {
-    c.ellipse(x, y, w, 9, 0xe8e4f0, 0.55).ellipse(x + w / 4, y - 4, w / 2, 9, 0xf4f0f8, 0.55);
+/** A slate bar with faceted bevels and a gold trim on its inner edge. */
+function slateBar(ctx: CanvasRenderingContext2D, y: number, h: number, trim: 'top' | 'bottom') {
+  poly(ctx, rect(0, y, W, h), '#262b36');
+  for (let x = 0; x < W; x += 160) {
+    poly(ctx, [[x, y], [x + 160, y], [x + 80, y + h / 2]], '#2c3240');
+    poly(ctx, [[x + 80, y + h / 2], [x + 160, y + h], [x, y + h]], '#22262f');
   }
-  // Far mountains, then nearer hills.
-  for (let x = 0; x < W; x++) {
-    const peak = 78 + 14 * Math.sin(x / 31) + 9 * Math.sin(x / 11 + 2) + 5 * Math.sin(x / 5.3);
-    c.rect(x, peak, 1, horizon - peak, 0x5a6890);
-    if (peak < 74) c.rect(x, peak, 1, 3, 0xd8dcea);
-    const hill = 104 + 8 * Math.sin(x / 47 + 1) + 4 * Math.sin(x / 17);
-    c.rect(x, hill, 1, horizon - hill, 0x3c5a48);
-  }
-  // A castle on the far hills, its banner flying.
-  const cx = 300;
-  c.rect(cx, 86, 44, 22, 0x4a5466).rect(cx - 6, 74, 10, 34, 0x4a5466).rect(cx + 40, 74, 10, 34, 0x4a5466).rect(cx + 16, 66, 12, 42, 0x4a5466);
-  for (const tx of [cx - 6, cx + 40, cx + 16]) for (let i = 0; i < 5; i += 2) c.rect(tx + i * 2, tx === cx + 16 ? 63 : 71, 2, 3, 0x4a5466);
-  c.rect(cx + 21, 56, 1, 10, INK).rect(cx + 22, 56, 6, 4, RED.mid);
-  for (const [wx, wy] of [[cx + 20, 76], [cx - 3, 82], [cx + 43, 82]]) c.rect(wx, wy, 2, 3, GOLD.light);
-  // Meadow.
-  for (let y = horizon; y < H; y++) c.rect(0, y, W, 1, y < horizon + 6 ? GRASS.light : GRASS.mid);
-  // The road the foes march along, with ruts and stones.
-  const top = 141;
-  const bottom = 246;
-  c.rect(0, top, W, bottom - top, DIRT.mid);
-  for (let x = 0; x < W; x++) {
-    const edge = Math.round(2 * Math.sin(x / 9));
-    c.rect(x, top + edge - 1, 1, 2, DIRT.dark).rect(x, bottom + edge - 1, 1, 2, DIRT.dark);
-  }
-  for (let i = 0; i < 900; i++) {
-    const x = Math.floor(rnd() * W);
-    const y = top + 2 + Math.floor(rnd() * (bottom - top - 4));
-    c.px(x, y, rnd() < 0.5 ? DIRT.light : DIRT.dark);
-  }
-  for (let i = 0; i < 60; i++) {
-    const x = Math.floor(rnd() * W);
-    const y = top + 4 + Math.floor(rnd() * (bottom - top - 8));
-    c.rect(x, y, 2, 1, STONE.light).px(x, y + 1, STONE.dark);
-  }
-  // Grass tufts off the road.
-  for (let i = 0; i < 500; i++) {
-    const x = Math.floor(rnd() * W);
-    const y = horizon + Math.floor(rnd() * (H - horizon));
-    if (y > top - 3 && y < bottom + 3) continue;
-    c.px(x, y, rnd() < 0.5 ? GRASS.shine : GRASS.dark).px(x, y - 1, GRASS.light);
-  }
-  c.bake(scene, 'background', BG_SCALE);
+  const ty = trim === 'bottom' ? y + h - 4 : y;
+  poly(ctx, rect(0, ty, W, 4), '#b8862c');
+  poly(ctx, rect(0, trim === 'bottom' ? ty : ty + 2, W, 2), '#e5b53a');
 }
 
-/**
- * The cheval de frise seen from above and the side, running the length of the field: a heavy log
- * with pairs of sharpened stakes driven crosswise through it, their points towards the foes.
- * Stage 0 is whole; 1 and 2 have stakes snapped off and then knocked out; 3 is the splintered
- * wreck left when it falls. 32 x 124, baked at 2x.
- */
-function bakeBarricade(scene: Phaser.Scene, stage: number) {
-  const W = 32;
-  const H = 124;
-  const c = new PixelCanvas(W, H);
-  const rnd = seeded(23);
-  if (stage === 3) {
-    for (let i = 0; i < 46; i++) {
-      const x = 2 + Math.floor(rnd() * (W - 12));
-      const y = 2 + Math.floor(rnd() * (H - 6));
-      const len = 4 + Math.floor(rnd() * 6);
-      const dy = rnd() < 0.5 ? 2 : -2;
-      c.line(x, y, x + len, y + dy, WOOD.light).line(x, y + 1, x + len, y + dy + 1, WOOD.dark).px(x + len, y + dy, CLOTH.dark);
+function drawBackground(ctx: CanvasRenderingContext2D) {
+  // Sky: a triangle mesh from cool blue overhead to warm haze at the horizon.
+  let rnd = seeded(4);
+  {
+    const SP = 120;
+    const rows = 7;
+    const cols = 19;
+    const pts: Pt[][] = [];
+    for (let r = 0; r <= rows; r++) {
+      pts.push([]);
+      for (let c = 0; c <= cols; c++) {
+        pts[r].push([c * SP - 120 + (r % 2) * 50 + (rnd() - 0.5) * 50, r * 80 + (rnd() - 0.5) * 30 * (r > 0 && r < rows ? 1 : 0)]);
+      }
     }
-    c.outline(INK);
-    c.bake(scene, 'barricade-3', 2);
+    const skyCol = (y: number) => {
+      const t = Math.max(0, Math.min(1, (y - 80) / 380));
+      return t < 0.6 ? mix('#6f9fcf', '#a9c9e2', t / 0.6) : mix('#a9c9e2', '#f2d9b4', (t - 0.6) / 0.4);
+    };
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const a = pts[r][c];
+        const b = pts[r][c + 1];
+        const d = pts[r + 1][c];
+        const e = pts[r + 1][c + 1];
+        for (const tri of [[a, b, e], [a, e, d]]) {
+          const y = (tri[0][1] + tri[1][1] + tri[2][1]) / 3;
+          const col = mix(skyCol(y), '#ffffff', rnd() * 0.06);
+          poly(ctx, tri, col, col, 1);
+        }
+      }
+    }
+  }
+  // Sun glow and clouds.
+  ctx.save();
+  const sg = ctx.createRadialGradient(330, 200, 10, 330, 200, 420);
+  sg.addColorStop(0, 'rgba(255,240,200,0.55)');
+  sg.addColorStop(1, 'rgba(255,240,200,0)');
+  ctx.fillStyle = sg;
+  ctx.fillRect(0, 0, W, 500);
+  ctx.restore();
+  const cloud = (x: number, y: number, s: number) => {
+    rnd = seeded(Math.round(x));
+    softShadow(ctx, () => poly(ctx, ngon(x + 14, y + 18, s * 1.7, s * 0.45, 9), '#5b7fa8'), 10, 0.25);
+    for (const [dx, dy, r] of [[-1.1, 0.15, 0.55], [-0.45, -0.25, 0.75], [0.35, -0.1, 0.65], [1.0, 0.2, 0.5]]) {
+      facet(ctx, ngon(x + dx * s, y + dy * s, r * s, r * s * 0.8, 7, rnd()), '#eef3f8', { edge: false, k: 1.3 });
+    }
+    poly(ctx, [[x - s * 1.6, y + s * 0.3], [x + s * 1.5, y + s * 0.35], [x + s * 1.2, y + s * 0.5], [x - s * 1.3, y + s * 0.5]], '#c9d6e6');
+  };
+  cloud(340, 150, 58);
+  cloud(980, 104, 66);
+  cloud(1530, 170, 58);
+  cloud(1790, 112, 48);
+
+  // Mountains: faceted peaks with snow, the far range bluish and the near one darker.
+  const range = (peaks: number[][], base: number, col: string, snow: boolean, seed: number) => {
+    rnd = seeded(seed);
+    for (const [px, py, hw] of peaks) {
+      const lx = px - hw;
+      const rx = px + hw * (0.9 + rnd() * 0.3);
+      const ridgeL: Pt = [px - hw * 0.45, py + (base - py) * 0.42 + (rnd() - 0.5) * 20];
+      const ridgeR: Pt = [px + hw * 0.5, py + (base - py) * 0.38];
+      const mid: Pt = [px + hw * 0.08, base];
+      poly(ctx, [[px, py], [lx, base], ridgeL], shade(col, 0.82));
+      poly(ctx, [[px, py], ridgeL, mid], shade(col, 0.62));
+      poly(ctx, [[px, py], mid, ridgeR], shade(col, 0.4));
+      poly(ctx, [[px, py], ridgeR, [rx, base]], shade(col, 0.24));
+      if (snow) {
+        const s = 0.26;
+        const a: Pt = [px + (lx - px) * s, py + (base - py) * s];
+        const b: Pt = [px + (ridgeL[0] - px) * s * 1.5, py + (ridgeL[1] - py) * s * 1.4];
+        const c: Pt = [px + (mid[0] - px) * s, py + (mid[1] - py) * s * 0.9];
+        const d: Pt = [px + (rx - px) * s, py + (base - py) * s];
+        poly(ctx, [[px, py], a, b], '#ffffff');
+        poly(ctx, [[px, py], b, c], '#e3ebf5');
+        poly(ctx, [[px, py], c, d], '#b9c7dc');
+      }
+    }
+  };
+  range([[120, 300, 260], [640, 214, 300], [1010, 300, 220], [1450, 236, 280], [1880, 300, 260]], 470, '#7d92b8', true, 11);
+  range([[380, 330, 240], [860, 340, 220], [1230, 330, 200], [1700, 350, 240]], 470, '#5d7a9a', false, 12);
+
+  // The castle on the far hill: blocky prisms in the haze, with a gold pennant.
+  {
+    const x0 = 1176;
+    const w = 224;
+    const base = 432;
+    const haze = '#7488a8';
+    const tower = (x: number, tw: number, top: number) => {
+      poly(ctx, rect(x, top, tw, base - top), shade(haze, 0.62));
+      poly(ctx, rect(x + tw * 0.7, top, tw * 0.3, base - top), shade(haze, 0.38));
+      for (let k = 0; k < 3; k++) poly(ctx, rect(x + k * (tw / 3) + 2, top - 12, tw / 3 - 8, 12), shade(haze, 0.6));
+      poly(ctx, [[x - 6, top - 12], [x + tw / 2, top - 70], [x + tw * 0.62, top - 12]], '#8d6f8c');
+      poly(ctx, [[x + tw * 0.62, top - 12], [x + tw / 2, top - 70], [x + tw + 6, top - 12]], '#5e4a63');
+      poly(ctx, rect(x + tw * 0.42, top + 26, 8, 14), '#ffd27a');
+    };
+    poly(ctx, rect(x0 + 30, 340, w - 60, base - 340), shade(haze, 0.55));
+    for (let k = 0; k < 8; k++) poly(ctx, rect(x0 + 34 + k * 20, 328, 12, 12), shade(haze, 0.55));
+    tower(x0, 48, 286);
+    tower(x0 + w - 48, 48, 286);
+    tower(x0 + 88, 48, 250);
+    line(ctx, [[x0 + 112, 180], [x0 + 112, 228]], '#4a3a3a', 3);
+    poly(ctx, [[x0 + 114, 182], [x0 + 146, 190], [x0 + 114, 200]], '#e8b33a');
+    poly(ctx, [[x0 + 114, 190], [x0 + 146, 190], [x0 + 114, 200]], '#c08a22');
+    poly(ctx, rect(x0 + 98, 408, 28, 24), '#3d4660');
+  }
+
+  // Hills and a row of pines.
+  rnd = seeded(5);
+  const ridge = (y0: number, amp: number, f: number, ph: number): Pt[] =>
+    [...Array(41).keys()].map((i) => {
+      const x = (i / 40) * (W + 80) - 40;
+      return [x, y0 + amp * Math.sin(x / f + ph) + amp * 0.4 * Math.sin(x / (f * 0.37) + ph * 2)];
+    });
+  const hill = (r: Pt[], bottom: number, col: string) => {
+    for (let i = 0; i < r.length - 1; i++) {
+      const a = r[i];
+      const b = r[i + 1];
+      const slope = (b[1] - a[1]) / (b[0] - a[0]);
+      const l = 0.55 - slope * 1.6 + (rnd() - 0.5) * 0.12;
+      const m: Pt = [(a[0] + b[0]) / 2 + (rnd() - 0.5) * 20, (a[1] + bottom) / 2 + 10];
+      poly(ctx, [a, b, m], shade(col, Math.max(0.1, Math.min(0.95, l))));
+      poly(ctx, [a, m, [a[0], bottom]], shade(col, 0.42 + rnd() * 0.08));
+      poly(ctx, [b, m, [b[0], bottom]], shade(col, 0.36 + rnd() * 0.08));
+      poly(ctx, [[a[0], bottom], m, [b[0], bottom]], shade(col, 0.4));
+    }
+  };
+  hill(ridge(430, 22, 260, 0.4), 520, '#5f8f55');
+  const pine = (x: number, y: number, s: number) => {
+    softShadow(ctx, () => poly(ctx, [[x, y], [x + s * 1.2, y + s * 0.3], [x + s * 0.9, y + s * 0.45], [x - s * 0.2, y + s * 0.15]], '#1d3a1f'), 3, 0.35);
+    poly(ctx, rect(x - s * 0.08, y - s * 0.2, s * 0.16, s * 0.25), '#5a3a22');
+    for (let k = 0; k < 3; k++) {
+      const yy = y - s * 0.15 - k * s * 0.42;
+      const ww = s * (0.55 - k * 0.12);
+      const tip = yy - s * 0.62;
+      poly(ctx, [[x, tip], [x - ww, yy], [x, yy + s * 0.04]], '#4f8f3e');
+      poly(ctx, [[x, tip], [x, yy + s * 0.04], [x + ww, yy]], '#2d5e2c');
+    }
+  };
+  rnd = seeded(8);
+  for (let x = 20; x < W; x += 46 + rnd() * 60) {
+    const y = 470 + 20 * Math.sin(x / 260 + 0.4) + 10;
+    if (x > 1150 && x < 1420) continue;
+    pine(x, y + rnd() * 12, 26 + rnd() * 16);
+  }
+  hill(ridge(500, 8, 200, 1.2), 580, '#6aa84f');
+
+  // The road: a jittered triangle mesh in packed-earth browns, with ruts and stones.
+  {
+    const top = 560;
+    const bottom = 990;
+    const SP = 64;
+    const rows = Math.ceil((bottom - top) / SP) + 3;
+    const cols = Math.ceil(W / SP) + 4;
+    const pts: [number, number, number][][] = [];
+    rnd = seeded(17);
+    for (let r = 0; r < rows; r++) {
+      pts.push([]);
+      for (let c = 0; c < cols; c++) {
+        const x = (c - 1.5) * SP + (r % 2) * SP * 0.5 + (rnd() - 0.5) * SP * 0.6;
+        const y = top - 24 + r * SP * 0.92 + (rnd() - 0.5) * SP * 0.5;
+        pts[r].push([x, y, (rnd() - 0.5) * 18 + 6 * Math.sin(x / 140)]);
+      }
+    }
+    const ramp = ['#5e3f24', '#77522f', '#8d643a', '#a07446', '#b48a58'];
+    const tri = (a: number[], b: number[], c: number[]) => {
+      const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+      const v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+      let n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+      if (n[2] < 0) n = n.map((k) => -k);
+      const nl = Math.hypot(n[0], n[1], n[2]);
+      const l = Math.max(0, Math.min(1, 0.55 + ((n[0] * -0.55 + n[1] * -0.55 + n[2] * 0.62) / nl - 0.62) * 2.2));
+      const t = l * (ramp.length - 1.001);
+      const i = Math.floor(t);
+      const col = mix(ramp[i], ramp[i + 1], t - i);
+      poly(ctx, [a, b, c].map((p) => [p[0], p[1]] as Pt), col, col, 1);
+    };
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, top, W, bottom - top);
+    ctx.clip();
+    for (let r = 0; r < rows - 1; r++) {
+      for (let c = 0; c < cols - 1; c++) {
+        tri(pts[r][c], pts[r][c + 1], pts[r + 1][c + 1]);
+        tri(pts[r][c], pts[r + 1][c + 1], pts[r + 1][c]);
+      }
+    }
+    // Two worn ruts.
+    ctx.globalAlpha = 0.18;
+    for (const y of [700, 880]) {
+      for (let x = -20; x < W; x += 90) {
+        const s = (xx: number) => 6 * Math.sin(xx / 300);
+        poly(ctx, [[x, y - 6 + s(x)], [x + 92, y - 4 + s(x + 92)], [x + 92, y + 8 + s(x + 92)], [x, y + 6 + s(x)]], '#3a2414');
+      }
+    }
+    ctx.globalAlpha = 1;
+    rnd = seeded(23);
+    for (let i = 0; i < 90; i++) {
+      const x = rnd() * W;
+      const y = top + 10 + rnd() * (bottom - top - 20);
+      const s = 4 + rnd() * 7;
+      poly(ctx, [[x - s, y + s * 0.3], [x - s * 0.2, y - s * 0.6], [x + s * 0.4, y + s * 0.4]], '#c9b7a0');
+      poly(ctx, [[x - s * 0.2, y - s * 0.6], [x + s, y], [x + s * 0.4, y + s * 0.4]], '#7d6a58');
+    }
+    ctx.restore();
+    // Grass lips over both edges, in toothy triangles, and the verge below the road.
+    rnd = seeded(31);
+    for (const [y0, dir] of [[top, 1], [bottom, -1]]) {
+      for (let x = -10; x < W; x += 26) {
+        const h = 10 + rnd() * 16;
+        const yy = y0 + 4 * Math.sin(x / 90);
+        poly(ctx, [[x, yy - dir * 6], [x + 26, yy - dir * 6], [x + 13 + (rnd() - 0.5) * 8, yy + dir * h]], rnd() < 0.5 ? '#5f9a45' : '#4a8238');
+      }
+    }
+    poly(ctx, rect(0, bottom + 4, W, 1080 - bottom - 4), '#3f7432');
+    rnd = seeded(37);
+    for (let x = 0; x < W; x += 30) poly(ctx, [[x, bottom + 6], [x + 30, bottom + 6], [x + 15, 1012]], rnd() < 0.5 ? '#4b8a3b' : '#356a2c');
+  }
+}
+
+// ---- The barricade: a faceted upright log with sharpened stakes through it (a cheval de frise).
+
+/** The log's centre and top in double units, where the mockup drew it. */
+const LOG_X = 365;
+const LOG_TOP = 528;
+const LOG_BOTTOM = 1008;
+/** The barricade texture's size, and where in it the log's centre and top are (view pixels). */
+export const BARRICADE_TEX = { w: 140, h: 266, logX: 70, top: 14 };
+
+/** Stake pairs crossing the log, from the top down. */
+const STAKES = [...Array(8).keys()].map((i) => LOG_TOP + 34 + i * 60);
+
+/** Which stakes are splintered at each stage: 'L' or 'R' for one tip, 'X' for gone. */
+const BROKEN: Record<number, Record<number, string>> = {
+  0: {},
+  1: { 2: 'R', 5: 'R' },
+  2: { 1: 'L', 2: 'X', 4: 'R', 5: 'R', 6: 'L' },
+};
+
+function drawBarricade(ctx: CanvasRenderingContext2D, stage: number) {
+  const x = LOG_X;
+  if (stage === 3) {
+    drawWreck(ctx);
     return;
   }
-  // The log along the field, with its bark.
-  const log = (y: number, h: number) => {
-    c.rect(12, y, 8, h, WOOD.mid).rect(12, y, 1, h, WOOD.dark).rect(19, y, 1, h, WOOD.dark).rect(15, y, 1, h, WOOD.light).rect(16, y, 1, h, WOOD.shine, 0.5);
+  const broken = BROKEN[stage];
+  const lean = stage === 2 ? 0.04 : 0;
+  ctx.save();
+  ctx.translate(x, LOG_BOTTOM);
+  ctx.rotate(lean);
+  ctx.translate(-x, -LOG_BOTTOM);
+  softShadow(ctx, () => poly(ctx, [[x + 10, LOG_TOP + 60], [x + 70, LOG_TOP + 90], [x + 90, LOG_BOTTOM], [x + 10, LOG_BOTTOM]], '#2a1808'), 6, 0.4);
+  const rod = (y: number, dir: number, cut: string | undefined) => {
+    if (cut === 'X') return;
+    const ang = dir > 0 ? -0.5 : 0.5;
+    const L = 70;
+    const ca = Math.cos(ang);
+    const sa = Math.sin(ang);
+    const nx = -sa * 6;
+    const ny = ca * 6;
+    const A: Pt = [x - ca * (cut === 'L' ? 26 : L), y - sa * (cut === 'L' ? 26 : L)];
+    const B: Pt = [x + ca * (cut === 'R' ? 26 : L), y + sa * (cut === 'R' ? 26 : L)];
+    poly(ctx, [[A[0] - nx, A[1] - ny], [B[0] - nx, B[1] - ny], B, A], '#c99260');
+    poly(ctx, [A, B, [B[0] + nx, B[1] + ny], [A[0] + nx, A[1] + ny]], '#7a5230');
+    const tip = (P: Pt, s: number, splintered: boolean) => {
+      if (splintered) {
+        poly(ctx, [[P[0] - nx, P[1] - ny], [P[0] + s * ca * 8 + 3, P[1] + s * sa * 8 - 4], [P[0] + s * ca * 3, P[1] + s * sa * 3 + 2], [P[0] + s * ca * 9, P[1] + s * sa * 9 + 5], [P[0] + nx, P[1] + ny]], '#e6c89a');
+        return;
+      }
+      const T: Pt = [P[0] + s * ca * 22, P[1] + s * sa * 22];
+      poly(ctx, [[P[0] - nx, P[1] - ny], T, P], '#f3d7aa');
+      poly(ctx, [P, T, [P[0] + nx, P[1] + ny]], '#b48b5a');
+    };
+    tip(A, -1, cut === 'L');
+    tip(B, 1, cut === 'R');
   };
-  log(1, H - 2);
-  for (let y = 3; y < H; y += 5) c.px(13 + (y % 4), y, WOOD.dark);
-  // Pairs of crossed stakes driven through the log, sharpened at both ends.
-  for (let y = 9; y < H - 8; y += 15) {
-    // Damaged stages snap the points off some stakes and knock others out altogether.
-    const roll = rnd();
-    const gone = stage === 2 && roll < 0.4;
-    const snapped = (stage === 1 && roll < 0.4) || (stage === 2 && roll < 0.85);
-    if (gone) {
-      c.rect(13, y - 1, 6, 3, WOOD.dark).px(15, y, INK);
-      continue;
-    }
-    const reach = snapped ? 22 : 30;
-    for (const dir of [1, -1]) {
-      const y0 = y + dir * 7;
-      const slope = (-dir * 14) / 29;
-      const yAt = (x: number) => Math.round(y0 + slope * (x - 1));
-      for (let x = 1; x <= reach; x++) c.px(x, yAt(x), WOOD.light).px(x, yAt(x) + 1, WOOD.mid);
-      if (!snapped) c.px(reach, yAt(reach), CLOTH.light).px(reach - 1, yAt(reach - 1), CLOTH.mid).px(reach - 1, yAt(reach - 1) + 1, CLOTH.dark);
-      else c.px(reach, yAt(reach), CLOTH.dark).px(reach, yAt(reach) + 1, CLOTH.dark);
-      c.px(1, yAt(1), CLOTH.dark).px(2, yAt(2) + 1, WOOD.dark);
-    }
-    // The log over the stakes where they cross it, with an iron band.
-    log(y - 3, 7);
-    c.rect(12, y - 1, 8, 2, 0x3c3946).rect(12, y - 1, 8, 1, 0x5d5a6a);
+  STAKES.forEach((y, i) => rod(y, -1, i % 2 ? broken[i] : undefined));
+  const w = 15;
+  poly(ctx, [[x - w, LOG_TOP], [x - 4, LOG_TOP - 8], [x - 4, LOG_BOTTOM], [x - w, LOG_BOTTOM]], '#c48c56');
+  poly(ctx, [[x - 4, LOG_TOP - 8], [x + 6, LOG_TOP - 6], [x + 6, LOG_BOTTOM], [x - 4, LOG_BOTTOM]], '#9a6a3c');
+  poly(ctx, [[x + 6, LOG_TOP - 6], [x + w, LOG_TOP + 2], [x + w, LOG_BOTTOM], [x + 6, LOG_BOTTOM]], '#6a4426');
+  poly(ctx, [[x - w, LOG_TOP], [x - 4, LOG_TOP - 8], [x + 6, LOG_TOP - 6], [x + w, LOG_TOP + 2], [x + 2, LOG_TOP + 6]], '#e0b47e');
+  if (stage === 2) {
+    // A split down the log.
+    line(ctx, [[x - 2, LOG_TOP + 140], [x + 3, LOG_TOP + 190], [x - 1, LOG_TOP + 240], [x + 2, LOG_TOP + 300]], '#3a2414', 3);
   }
-  if (stage > 0) for (let i = 0; i < stage * 6; i++) {
-    const y = 4 + Math.floor(rnd() * (H - 12));
-    c.line(13, y, 17, y + 4, INK);
+  for (let y = LOG_TOP + 60; y < LOG_BOTTOM; y += 140) {
+    poly(ctx, rect(x - w - 1, y, 10, 10), '#8a9098');
+    poly(ctx, rect(x - 6, y, 12, 10), '#5c6068');
+    poly(ctx, rect(x + 6, y, 10, 10), '#3a3d44');
   }
-  c.outline(INK);
-  c.bake(scene, `barricade-${stage}`, 2);
+  STAKES.forEach((y, i) => rod(y, 1, i % 2 ? undefined : broken[i]));
+  ctx.restore();
+  if (stage > 0) {
+    // Splinters on the ground.
+    const bits = stage === 1 ? 3 : 7;
+    const rnd = seeded(60 + stage);
+    for (let i = 0; i < bits; i++) {
+      const sx = x + 20 + rnd() * 80;
+      const sy = LOG_BOTTOM - 40 + rnd() * 40;
+      const a = rnd() * 3;
+      poly(ctx, [[sx, sy], [sx + Math.cos(a) * 18, sy + Math.sin(a) * 18], [sx + Math.cos(a) * 18 + 3, sy + Math.sin(a) * 18 + 4], [sx + 3, sy + 4]], '#b9864f');
+    }
+  }
+}
+
+/** The fallen barricade: the log down on the road among broken stakes and splinters. */
+function drawWreck(ctx: CanvasRenderingContext2D) {
+  const x = LOG_X;
+  const y = LOG_BOTTOM - 40;
+  softShadow(ctx, () => poly(ctx, [[x - 100, y + 10], [x + 120, y + 4], [x + 130, y + 40], [x - 90, y + 40]], '#2a1808'), 6, 0.4);
+  const rnd = seeded(77);
+  for (let i = 0; i < 9; i++) {
+    const sx = x - 90 + rnd() * 140;
+    const sy = LOG_BOTTOM - 200 + rnd() * 170;
+    const a = rnd() * Math.PI;
+    const L = 24 + rnd() * 26;
+    const nx = -Math.sin(a) * 5;
+    const ny = Math.cos(a) * 5;
+    const B: Pt = [sx + Math.cos(a) * L, sy + Math.sin(a) * L];
+    poly(ctx, [[sx - nx, sy - ny], [B[0] - nx, B[1] - ny], B, [sx, sy]], '#c99260');
+    poly(ctx, [[sx, sy], B, [B[0] + nx, B[1] + ny], [sx + nx, sy + ny]], '#7a5230');
+  }
+  // The log, lying across the road.
+  const top: Pt[] = [[x - 110, y - 14], [x + 110, y - 22], [x + 116, y - 10], [x - 104, y - 2]];
+  facet(ctx, top, '#a8743f', { k: 1.3 });
+  poly(ctx, [[x - 104, y - 2], [x + 116, y - 10], [x + 112, y + 12], [x - 108, y + 18]], '#6a4426');
+  poly(ctx, ngon(x - 108, y + 6, 10, 14, 6), '#e0b47e', '#8a5a32', 2);
+  for (let i = 0; i < 10; i++) {
+    const sx = x - 110 + rnd() * 210;
+    const sy = LOG_BOTTOM - 20 + rnd() * 20;
+    const a = rnd() * 3;
+    poly(ctx, [[sx, sy], [sx + Math.cos(a) * 16, sy + Math.sin(a) * 16], [sx + Math.cos(a) * 16 + 3, sy + Math.sin(a) * 16 + 4], [sx + 3, sy + 4]], '#b9864f');
+  }
 }
