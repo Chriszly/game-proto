@@ -289,7 +289,9 @@ export class GameScene extends Phaser.Scene {
     this.coinsText.setText(String(s.coins));
     const lit = s.lanterns.filter((l) => l.lit).length;
     this.litText.setText(`Lit ${lit}/${s.lanterns.length}  need ${requiredFor(s.lanterns.length)}`);
-    this.litText.setColor(lit >= requiredFor(s.lanterns.length) ? '#f3c64e' : '#f3e9d2');
+    // setColor always redraws the text, so only set it when it changes.
+    const litColour = lit >= requiredFor(s.lanterns.length) ? '#f3c64e' : '#f3e9d2';
+    if (this.litText.style.color !== litColour) this.litText.setColor(litColour);
 
     const f = s.phase === 'dusk' ? s.duskMs / DUSK_MS : 0;
     const { x, y, w, h } = DUSK_BAR;
@@ -323,7 +325,9 @@ export class GameScene extends Phaser.Scene {
         const affordable = cost !== null && s.coins >= cost;
         parts.bg.setFillStyle(affordable ? 0x3a3d66 : 0x22243c).setStrokeStyle(3, affordable ? 0xf3c64e : 0x4d5080);
         parts.level.setText(`Lv ${s.levels[id]}/${UPGRADES[id].costs.length}`);
-        parts.cost.setText(cost === null ? 'Maxed' : `${cost} coins`).setColor(affordable ? '#f3c64e' : '#8a8aa0');
+        parts.cost.setText(cost === null ? 'Maxed' : `${cost} coins`);
+        const costColour = affordable ? '#f3c64e' : '#8a8aa0';
+        if (parts.cost.style.color !== costColour) parts.cost.setColor(costColour);
       }
     }
     if (s.phase === 'over') {
