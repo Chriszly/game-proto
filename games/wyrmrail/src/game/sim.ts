@@ -158,6 +158,9 @@ export function buyUpgrade(s: GameState, u: Upgrade) {
 
 export const wyrmSpeed = (s: GameState) => BASE_SPEED + WINGS_SPEED * s.upgrades.wings;
 
+/** What delivering an order pays, with the Golden hoard. */
+export const orderPay = (s: GameState, o: Order) => Math.round(o.pay * (1 + HOARD_BONUS * s.upgrades.hoard));
+
 /** Moves the game on by `dt` milliseconds of game time. */
 export function tick(s: GameState, dt: number) {
   for (const p of s.pops) p.ms -= dt;
@@ -171,8 +174,9 @@ export function tick(s: GameState, dt: number) {
   }
   for (const o of [...s.orders]) {
     if ((o.timeLeftMs -= dt) <= 0) failOrder(s, o);
+    if (s.phase !== 'play') return;
   }
-  if (s.phase === 'play') moveWyrm(s, dt);
+  moveWyrm(s, dt);
 }
 
 function moveWyrm(s: GameState, dt: number) {
@@ -222,7 +226,7 @@ function arrive(s: GameState) {
     return;
   }
   // Delivered.
-  const pay = Math.round(o.pay * (1 + HOARD_BONUS * s.upgrades.hoard));
+  const pay = orderPay(s, o);
   s.coins += pay;
   s.orders = s.orders.filter((x) => x !== o);
   w.job = null;

@@ -41,7 +41,8 @@ File map (all under `src/` unless it starts with `shared/`):
   `Upgrade`, `GameState`.
 - `game/sim.ts`: all rules. `newGame`, `openVillages`, `trackCost`, `canBuild`, `buildTrack`,
   `canRemove`, `removeTrack`, `route`, `routable`, `dispatch`, `upgradeCost`, `buyUpgrade`,
-  `wyrmSpeed`, `tick`. No Phaser import.
+  `wyrmSpeed`, `orderPay` (pay with the Golden hoard, shown on the cards and paid on delivery),
+  `tick`. No Phaser import.
 - `scenes/BootScene.ts`: bakes every texture (`bakeScenery`, `bakeSprites`), then starts `Game`.
 - `scenes/GameScene.ts`: draws the valley, track, build hints, stations, cargo markers, the wyrm,
   pops, HUD, the orders and upgrades panel, the banner and the game over panel, and wires input
@@ -67,7 +68,7 @@ How it runs:
 - **Time:** `GameScene.update(time)` computes `dt` from the frame timestamp, clamped to
   `MAX_STEP_MS` (250), and calls `tick(state, dt)`. `tick` ages pops and the banner, spawns an
   order every `ORDER_EVERY_MS` while there are fewer than `MAX_ORDERS`, counts deadlines down
-  (failing late orders), and moves the wyrm (`moveWyrm`: loading, starting the next queued job
+  (failing late orders, and stopping as soon as the last heart is gone), and moves the wyrm (`moveWyrm`: loading, starting the next queued job
   once it stands on a tile, advancing `progress` by `wyrmSpeed` tiles a second, `arrive`).
 - **Input:** a scene-wide `pointerdown` (and `pointermove` while held) on the grid calls
   `buildTrack`, or `removeTrack` while `removeMode` is on; dragging acts once per new tile. Order
@@ -76,8 +77,8 @@ How it runs:
   is not allowed.
 - **Rendering:** the rails are redrawn only when the track or the round changes (`trackKey`), in
   three passes (bed, sleepers, rails), with bends drawn on corners and bridges on river tiles; the
-  build hints every frame. Order cards are rebuilt when `cardKey` (ids, statuses, routability)
-  changes; their time bars are redrawn every frame. The wyrm's head is placed between `wyrm.at` and
+  build hints every frame. Order cards are rebuilt when `cardKey` (hoard rank, ids, statuses,
+  routability) changes; their time bars are redrawn every frame. The wyrm's head is placed between `wyrm.at` and
   `wyrm.path[0]`; the coils and the wagon follow a trail of the head's past positions, one point per
   pixel, `SEGMENT_GAP` apart.
 

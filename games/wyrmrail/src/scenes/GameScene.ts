@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { settings } from '../../../../shared/settings';
 import { CARGO_NAMES, COLS, ROOST, ROWS, VILLAGES, key, neighbours, terrainAt, type Tile } from '../game/map';
-import { buildTrack, buyUpgrade, canRemove, dispatch, newGame, openVillages, removeTrack, routable, tick, trackCost, upgradeCost } from '../game/sim';
+import { buildTrack, buyUpgrade, canRemove, dispatch, newGame, openVillages, orderPay, removeTrack, routable, tick, trackCost, upgradeCost } from '../game/sim';
 import { POP_MS, roundGoal, type GameState, type Order } from '../game/state';
 import { RAIL, WOOD } from '../art/palette';
 import { makeButton } from '../ui/Button';
@@ -394,7 +394,7 @@ export class GameScene extends Phaser.Scene {
 
   private drawPanel() {
     const s = this.state;
-    const k = s.orders.map((o) => `${o.id}:${o.status}:${o.status === 'waiting' && routable(s, o)}`).join(';');
+    const k = `${s.upgrades.hoard}|` + s.orders.map((o) => `${o.id}:${o.status}:${o.status === 'waiting' && routable(s, o)}`).join(';');
     if (k !== this.cardKey) {
       this.cardKey = k;
       for (const c of this.cards) c.destroy();
@@ -432,7 +432,7 @@ export class GameScene extends Phaser.Scene {
     const left = -PANEL.w / 2 + 8;
     const icon = this.add.image(left + 12, -22, `cargo-${o.cargo}`);
     const title = this.add.text(left + 28, -30, CARGO_NAMES[o.cargo], textStyle(14, '#f3e9d2'));
-    const pay = this.add.text(PANEL.w / 2 - 8, -30, `${o.pay}c`, textStyle(14, '#f3c64e')).setOrigin(1, 0);
+    const pay = this.add.text(PANEL.w / 2 - 8, -30, `${orderPay(s, o)}c`, textStyle(14, '#f3c64e')).setOrigin(1, 0);
     const route = this.add.text(left, -10, `${VILLAGES[o.from].name} > ${VILLAGES[o.to].name}`, textStyle(11, '#d8c7a6'));
     const status = this.add.text(left, 6, ok ? STATUS_TEXT[o.status] : 'No track there yet', textStyle(11, ok ? '#c9e8c0' : '#a8957a'));
     const card = this.add.container(PANEL.x, y, [bg, icon, title, pay, route, status]).setDepth(UI_DEPTH + 1);
