@@ -96,6 +96,8 @@ export function buy(s: GameState, id: UpgradeId) {
   s.ranks[id]++;
   // A new Auto Forge starts switched on.
   if (id === 'auto') s.autoForge = true;
+  // Faster Bellows also shorten a heat-up already under way.
+  if (id === 'bellows') s.heatMs = Math.min(s.heatMs, forgeMs(s));
   return true;
 }
 
