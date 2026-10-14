@@ -1,14 +1,16 @@
 import Phaser from 'phaser';
-import { BUTTON, FONT } from '../scenes/layout';
+import { SERIF } from '../scenes/layout';
 
-/** A wooden button with a caption, lit while the pointer is over it. */
+/** A bottle-green cartouche button with a cream italic caption; it sinks a little while held. */
 export function makeButton(scene: Phaser.Scene, x: number, y: number, caption: string, onClick: () => void) {
-  const bg = scene.add.rectangle(0, 0, BUTTON.w, BUTTON.h, 0x5c3a21).setStrokeStyle(3, 0xc9a040);
-  const text = scene.add.text(0, 0, caption, { fontFamily: FONT, fontSize: '20px', color: '#f3e9d2' }).setOrigin(0.5);
+  const bg = scene.add.image(0, 0, 'button');
+  const text = scene.add
+    .text(0, -2, caption, { fontFamily: SERIF, fontSize: '19px', fontStyle: 'italic bold', color: '#f1e6c8', resolution: 2 })
+    .setOrigin(0.5);
   const button = scene.add.container(x, y, [bg, text]);
   bg.setInteractive({ useHandCursor: true })
-    .on('pointerover', () => bg.setFillStyle(0x8a5a32))
-    .on('pointerout', () => bg.setFillStyle(0x5c3a21))
+    .on('pointerover', () => bg.setAlpha(0.9))
+    .on('pointerout', () => bg.setAlpha(1))
     .on('pointerdown', onClick);
   return button;
 }
