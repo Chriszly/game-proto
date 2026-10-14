@@ -7,6 +7,7 @@ import {
   BUILDINGS,
   CARRY,
   HARVEST_RITES,
+  STIRRUPS_SPEED,
   SHIELDWALL_TAKEN,
   type BoonId,
   GATHER_MS,
@@ -739,7 +740,7 @@ function militaryUpdate(s: GameState, u: Unit, def: UnitDef, dt: number) {
   if (o.t === 'move') {
     if (u.path.length === 0 && Math.hypot(u.x - o.x, u.y - o.y) < 0.9) return void (u.order = { t: 'idle' });
     const goal = goalNear(s, o.x, o.y);
-    if (!pursue(s, u, def.speed, dt, goal)) u.order = { t: 'idle' };
+    if (!pursue(s, u, speedOf(s, u, def), dt, goal)) u.order = { t: 'idle' };
     return;
   }
   if (o.t === 'attackMove') {
@@ -749,7 +750,7 @@ function militaryUpdate(s: GameState, u: Unit, def: UnitDef, dt: number) {
       return;
     }
     if (u.path.length === 0 && Math.hypot(u.x - o.x, u.y - o.y) < 0.9) return void (u.order = { t: 'idle' });
-    if (!pursue(s, u, def.speed, dt, goalNear(s, o.x, o.y))) u.order = { t: 'idle' };
+    if (!pursue(s, u, speedOf(s, u, def), dt, goalNear(s, o.x, o.y))) u.order = { t: 'idle' };
     return;
   }
   if (o.t === 'attack') {
@@ -771,7 +772,7 @@ function militaryUpdate(s: GameState, u: Unit, def: UnitDef, dt: number) {
       return;
     }
     const range = def.range;
-    if (!pursue(s, u, def.speed, dt, (tx, ty) => !s.solid[idx(tx, ty)] && gap(tx + 0.5, ty + 0.5, f) <= range)) {
+    if (!pursue(s, u, speedOf(s, u, def), dt, (tx, ty) => !s.solid[idx(tx, ty)] && gap(tx + 0.5, ty + 0.5, f) <= range)) {
       u.order = o.resume ? { t: 'attackMove', ...o.resume } : { t: 'idle' };
     }
     return;
@@ -893,6 +894,12 @@ function villagerUpdate(s: GameState, u: Unit, def: UnitDef, dt: number) {
   }
 }
 
+/** Move speed: cavalry go faster under Stirrups. */
+function speedOf(s: GameState, u: Unit, def: UnitDef) {
+  const stirrups = def.role === 'cavalry' && s.players[u.owner].techs.includes('stirrups');
+  return stirrups ? def.speed * STIRRUPS_SPEED : def.speed;
+}
+
 /** Gather speed from researched techs. */
 function gatherBonus(s: GameState, owner: number, res: Resource) {
   const techs = s.players[owner].techs;
@@ -974,7 +981,7 @@ function nearestEnemy(s: GameState, owner: number, x: number, y: number, range: 
 
 function strike(s: GameState, u: Unit, def: UnitDef, target: Unit | Building) {
   let dmg = def.dmg + ownBonus(s, u, def);
-  if (def.vsCavalry && 'type' in target && UNITS[target.type].role === 'cavalry') dmg *= def.vsCavalry;
+  if (def.vsCavalry && 'order' in target && UNITS[target.type].role === 'cavalry') dmg *= def.vsCavalry;
   dmg = takenBy(s, target, dmg);
   target.hp -= dmg;
   u.struck = s.time;

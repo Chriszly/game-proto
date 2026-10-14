@@ -53,7 +53,7 @@ charge with a lowered lance.
 
 - **Age I** is where every match starts.
 - **Age II** is researched at the Town Center (400 food, 200 wood). It unlocks Stirrups and Bodkin
-  at the Academy, and offers the **Age II boon**: a one-time pick between two cards in the panel,
+  at the Academy (Stirrups makes cavalry 20% faster), and offers the **Age II boon**: a one-time pick between two cards in the panel,
   which stand in for the panel's buttons until you choose.
   - **Shieldwall**: your melee infantry (Militia, Spearmen or Brutes) take 20% less damage.
   - **Harvest Rites**: farms gather 20% faster.
@@ -96,4 +96,7 @@ minimap's raid rings stand still.
 - There is no save yet: each match starts fresh.
 - Units can walk over each other.
 - The map is the same for a given seed, and the seed is fixed in the playthrough test.
-- The AI picks Shieldwall when it reaches Age II, and does not go for Age III.
+- The AI picks Shieldwall when it reaches Age II, and researches Age III once it has the three deeds.
+- The AI plays at a human pace: about 30 commands a minute, so it can leave villagers idle too.
+- The Town Center and Watchtowers shoot hard enough to hold off a small raid on their own; a
+  Watchtower costs 125 wood and 50 ore.

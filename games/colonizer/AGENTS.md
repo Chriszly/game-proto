@@ -30,7 +30,7 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   Barracks, Archery Range, Stable, Academy, Watchtower.
 - Techs (`TECHS`): Axes, Baskets and Picks (+25% wood, food and ore gathering), Ironworks (+2 melee
   damage), Fletching (+2 ranged damage), Age II and Age III (at the Town Center), Bodkin (+2 ranged
-  damage, Age II). Stirrups is researchable in Age II but has no effect yet.
+  damage, Age II) and Stirrups (+20% move speed for cavalry, Age II).
 - Ages: Age II opens the one-time boon pick (`BOONS`: Shieldwall, own melee units take 20% less
   damage; Harvest Rites, farms gather 20% faster). Age III needs the three deeds (`DEEDS`: reach
   Age II, 14 soldiers alive at once, repel a raid) before it can be researched, and gives every
@@ -43,10 +43,10 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   rise, and every load the player drops off pops a "+N" badge with the resource's icon.
 - The AI is a rule-based planner (`src/game/planner.ts`), not a full build-order search: it keeps
   villagers coming, builds houses before the cap, a farm, camps, barracks, range, stable, academy
-  and watchtower, researches in a fixed order, trains an army, attack-moves once it has 14 units
-  (starting a raid), and picks Shieldwall at Age II. It never researches Age III.
-- Not implemented yet: unit collisions (units overlap), saves, sound, rally points, Stirrups'
-  effect, and any win or loss other than a Town Center falling.
+  and watchtower, researches in a fixed order (Age III last, once its deeds are done), trains an
+  army, attack-moves once it has 14 units (starting a raid), and picks Shieldwall at Age II.
+- Not implemented yet: unit collisions (units overlap), saves, sound, rally points, and any win or
+  loss other than a Town Center falling.
 
 ## Architecture
 
@@ -68,8 +68,10 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   `chooseBoon` takes the Age II boon, `startRaid` records a raid, `deedCount` and `deedsDone` read
   the deeds, `findPath` is a breadth-first search on the tile grid, `updateSight` computes the
   player's sight, and `entityAt` finds what is under a point.
-- `src/game/planner.ts`: `think(state, dt)` runs the AI every 1.5 s of game time. It issues the same
-  commands a player would, through the sim's functions.
+- `src/game/planner.ts`: `think(state, dt)` runs the AI every 4 s of game time (`THINK_MS`). It issues
+  the same commands a player would, through the sim's functions, and at most `ACTIONS_PER_THINK`
+  (2) of them each time, about 30 a minute, so it can't out-click a player. Each command goes
+  through `act`, which spends the budget only when the command did something.
 - `src/art/stitch.ts`: the embroidery kit: wool palette `T`, `SERIF` font stack, a private seeded
   generator (`reseed`, `rnd`), `linen`, `sew` (laid-and-couched fill), `outline` (stem stitch),
   `thread`, `knot`, `stext`, `bar` and `band` (border pieces), `card`, `canvas`.
@@ -133,13 +135,15 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   head for trees boxed in by other trees.
 - A building under construction blocks walking (it is solid) and is an enemy target. Its hp grows
   as it is built. A finished farm gives endless food to gather.
-- The Town Center and Watchtowers shoot anything in range; soldiers fight on their own when idle and
+- The Town Center (10 damage every 1.5 s, range 6, 2000 hp) and Watchtowers (12 damage every 1.5 s,
+  range 7, 900 hp) shoot anything in range; soldiers fight on their own when idle and
   an enemy is within sight.
 - `research` refuses an age tech unless the player is in the age before it, and Age III unless
   `deedsDone`. Shieldwall is applied in `takenBy` (towers and soldiers alike), Harvest Rites in the
   gather step for farms, Age III in `ownBonus`. Hit points can be fractional under Shieldwall.
 - One raid is tracked at a time: the planner calls `startRaid` each time it attack-moves, which does
   nothing while a raid is under way.
+- `speedOf` in `sim.ts` gives cavalry the Stirrups speed (`STIRRUPS_SPEED`) when they move.
 - The AI's gather rate is the only difficulty number: `byDifficulty(0.75, 1, 1.25)` in `GameScene`.
 
 ## Save keys

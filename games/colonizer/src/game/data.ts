@@ -102,12 +102,12 @@ export const UNITS: Record<string, UnitDef> = {
   },
   'tide-spearman': {
     id: 'tide-spearman', faction: 'tide', role: 'melee', name: 'Spearman',
-    cost: { food: 50, wood: 35 }, time: 9000, hp: 55, dmg: 5, range: 1, speed: 2, sight: 5, cooldown: 1000, trainer: 'barracks',
+    cost: { food: 50, wood: 35 }, time: 9000, hp: 55, dmg: 6, range: 1, speed: 2, sight: 5, cooldown: 1000, trainer: 'barracks',
     vsCavalry: 2,
   },
   'tide-slinger': {
     id: 'tide-slinger', faction: 'tide', role: 'ranged', name: 'Slinger',
-    cost: { food: 30, wood: 50 }, time: 10000, hp: 30, dmg: 5, range: 5, speed: 2.1, sight: 6, cooldown: 1100, trainer: 'range',
+    cost: { food: 30, wood: 50 }, time: 10000, hp: 30, dmg: 6, range: 5, speed: 2.1, sight: 6, cooldown: 1100, trainer: 'range',
   },
   'tide-rider': {
     id: 'tide-rider', faction: 'tide', role: 'cavalry', name: 'Rider',
@@ -123,7 +123,7 @@ export const UNITS: Record<string, UnitDef> = {
   },
   'thorn-stalker': {
     id: 'thorn-stalker', faction: 'thorn', role: 'cavalry', name: 'Stalker',
-    cost: { food: 60, ore: 30 }, time: 13000, hp: 60, dmg: 9, range: 1, speed: 3.4, sight: 6, cooldown: 1000, trainer: 'stable',
+    cost: { food: 60, ore: 30 }, time: 13000, hp: 60, dmg: 8, range: 1, speed: 3.4, sight: 6, cooldown: 1000, trainer: 'stable',
   },
 };
 
@@ -157,7 +157,7 @@ export interface BuildingDef {
 }
 
 export const BUILDINGS: Record<BuildingId, BuildingDef> = {
-  town: { id: 'town', name: 'Town Center', cost: {}, time: 0, w: 4, h: 4, hp: 1200, sight: 8, pop: 10, drops: 'all', trains: ['villager'], tower: { dmg: 4, range: 5, cooldown: 1500 } },
+  town: { id: 'town', name: 'Town Center', cost: {}, time: 0, w: 4, h: 4, hp: 2000, sight: 8, pop: 10, drops: 'all', trains: ['villager'], tower: { dmg: 10, range: 6, cooldown: 1500 } },
   house: { id: 'house', name: 'House', cost: { wood: 50 }, time: 25000, w: 2, h: 2, hp: 400, sight: 3, pop: 6 },
   farm: { id: 'farm', name: 'Farm', cost: { wood: 60 }, time: 15000, w: 2, h: 2, hp: 300, sight: 2, farm: true },
   lumber: { id: 'lumber', name: 'Lumber Camp', cost: { wood: 80 }, time: 20000, w: 2, h: 2, hp: 300, sight: 3, drops: ['wood'] },
@@ -166,7 +166,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
   range: { id: 'range', name: 'Archery Range', cost: { wood: 170 }, time: 40000, w: 3, h: 3, hp: 650, sight: 4, trains: ['ranged'] },
   stable: { id: 'stable', name: 'Stable', cost: { wood: 180 }, time: 45000, w: 3, h: 3, hp: 650, sight: 4, trains: ['cavalry'] },
   academy: { id: 'academy', name: 'Academy', cost: { wood: 150, food: 100 }, time: 40000, w: 3, h: 3, hp: 700, sight: 4, research: true },
-  watchtower: { id: 'watchtower', name: 'Watchtower', cost: { wood: 100 }, time: 30000, w: 2, h: 2, hp: 500, sight: 6, tower: { dmg: 5, range: 6, cooldown: 1200 } },
+  watchtower: { id: 'watchtower', name: 'Watchtower', cost: { wood: 125, ore: 50 }, time: 30000, w: 2, h: 2, hp: 900, sight: 7, tower: { dmg: 12, range: 7, cooldown: 1500 } },
 };
 
 export const BUILD_ORDER: BuildingId[] = ['house', 'farm', 'lumber', 'mine', 'barracks', 'range', 'stable', 'academy', 'watchtower'];
@@ -224,6 +224,8 @@ export const BOONS = {
   harvest: { id: 'harvest', name: 'Harvest Rites', text: 'Farms gather 20% faster' },
 } as const;
 export type BoonId = keyof typeof BOONS;
+/** Move speed for cavalry under Stirrups (Academy tech, after Age II). */
+export const STIRRUPS_SPEED = 1.2;
 /** Damage a melee unit takes under Shieldwall. */
 export const SHIELDWALL_TAKEN = 0.8;
 /** Gather speed on farms under Harvest Rites. */
