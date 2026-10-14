@@ -22,6 +22,7 @@ interface GameState {
   sold: number;
   spilled: number;
   ranks: Record<string, number>;
+  meadows: number;
 }
 type Spot = { x: number; y: number };
 
@@ -146,9 +147,9 @@ test('plays the first jar of honey', async ({ page }, testInfo) => {
 
   const home = (s: GameState) => s.bees.every((b) => b.tripMs === 0);
 
-  // A new hive: no coins, no comb yet, two bees resting at the entrance.
+  // A new hive: no coins, no comb yet, no meadow unlocked, two bees resting at the entrance.
   let s = await game.state();
-  expect(s).toMatchObject({ coins: 0, jars: 0, sold: 0, spilled: 0 });
+  expect(s).toMatchObject({ coins: 0, jars: 0, sold: 0, spilled: 0, meadows: 0 });
   expect(s.cells.every((c) => c === null)).toBe(true);
   expect(s.bees).toHaveLength(START_BEES);
   expect(home(s)).toBe(true);
@@ -191,10 +192,11 @@ test('plays the first jar of honey', async ({ page }, testInfo) => {
   await wait(400);
   await snap('3-harvested');
 
-  // Selling the jar pays its price.
+  // Selling the jar pays its price: a lone cell shares no edges, so there is no comb bonus, and one
+  // jar sold is still short of the first goal (10 jars), so no meadow unlocks yet.
   await tap(spots.sell);
   s = await game.state();
-  expect(s).toMatchObject({ coins: HONEY_PRICE, jars: 0, sold: 1, spilled: 0 });
+  expect(s).toMatchObject({ coins: HONEY_PRICE, jars: 0, sold: 1, spilled: 0, meadows: 0 });
   await wait(400);
   await snap('4-sold');
 
