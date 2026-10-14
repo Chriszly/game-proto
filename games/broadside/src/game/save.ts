@@ -3,7 +3,9 @@ const KEY = 'broadside-best-wave';
 
 export function loadBestWave() {
   try {
-    return Number(localStorage.getItem(KEY)) || 0;
+    const wave = Number(localStorage.getItem(KEY));
+    // A hand-edited or broken value starts over at 0 rather than showing nonsense.
+    return Number.isFinite(wave) && wave > 0 ? Math.floor(wave) : 0;
   } catch {
     return 0;
   }
