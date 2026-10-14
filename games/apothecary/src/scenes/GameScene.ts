@@ -559,7 +559,7 @@ export class GameScene extends Phaser.Scene {
       UPGRADES[id].max,
       (level) => upgradeCost(id, level),
       () => payUpgrade(this.state, id),
-      (level, maxed, left) => (maxed ? `${name} ${level + 1} max` : `${name} ${level + 2}: ${left}c`),
+      (level, left) => `${name} ${level + 2}: ${left}c`,
       () => unlocked(this.state, `level-${id}`),
     );
   }
@@ -567,7 +567,7 @@ export class GameScene extends Phaser.Scene {
   /**
    * A purple marker for something bought a level at a time, like an upgrade or a craftsman: standing
    * still on it pays towards the next level, captioned by `caption` with the coins still to pay for
-   * it. It is shown while `shown` holds.
+   * it. It is shown while `shown` holds and goes away once the last level is bought.
    */
   private addLevelMarker(
     at: Point,
@@ -575,7 +575,7 @@ export class GameScene extends Phaser.Scene {
     max: number,
     cost: (level: number) => number,
     pay: () => Feedback | null,
-    caption: (level: number, maxed: boolean, left: number) => string,
+    caption: (level: number, left: number) => string,
     shown: () => boolean = () => true,
   ) {
     this.addMarker(
@@ -589,8 +589,9 @@ export class GameScene extends Phaser.Scene {
         if (get().level > level) this.markers[marker].paused = true;
         return feedback;
       },
-      () => !shown(),
+      () => !open(),
     );
+    const open = () => shown() && get().level < max;
     const marker = this.markers.length - 1;
     this.markers[marker].pays = true;
     const text = this.add
@@ -599,8 +600,8 @@ export class GameScene extends Phaser.Scene {
       .setDepth(-400);
     this.views.push(() => {
       const { level, paid } = get();
-      const maxed = level >= max;
-      text.setVisible(shown()).setText(caption(level, maxed, maxed ? 0 : cost(level) - paid));
+      text.setVisible(open());
+      if (level < max) text.setText(caption(level, cost(level) - paid));
     });
   }
 
@@ -617,7 +618,7 @@ export class GameScene extends Phaser.Scene {
       MAX_CRAFTSMEN,
       craftsmanCost,
       () => payCraftsman(this.state, id),
-      (level, maxed, left) => (maxed ? `Crew ${level}/${MAX_CRAFTSMEN}` : `Hire ${left}c`),
+      (_level, left) => `Hire ${left}c`,
       () => unlocked(this.state, `hire-${id}`),
     );
     stand.forEach((at, i) => {

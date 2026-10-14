@@ -105,7 +105,8 @@ counter. Coins buy upgrades, craftsmen, conveyor belts and a mirrored second pro
   Purple markers (`pays`) take coins only once the doctor's body has stood still for `STILL_MS`
   (400, tracked in `stillSince`), so walking over one buys nothing; their captions show the coins
   still to pay (cost minus `paid`), with no bar.
-  A level marker sets `paused` after a level completes until the doctor steps off.
+  A level marker sets `paused` after a level completes until the doctor steps off, and is hidden
+  (marker and caption) once its last level is bought.
 - Unlocks: every purchase has an `Unlock` key (`level-<upgrade>`, `hire-<station>`,
   `belt-<belt>`, `guild`, `land`). `UNLOCKED_BY` in `src/game/state.ts` names what must be bought
   first (its first level or build): one chain at the start, then branches from the garden belt.

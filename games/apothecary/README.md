@@ -90,7 +90,8 @@ station stands.
 
 Every station has an upgrade marker and goes up to level 5. Upgrades cost 20, 40, 80 and 160
 coins: the refining table and cauldron work faster, and customers at an upgraded counter tip more
-and wait longer. Once a level is paid off, step off the marker and back on to start on the next.
+and wait longer. Once a level is paid off, step off the marker and back on to start on the next. An upgrade
+marker goes away once its last level is bought, and a hire marker once both craftsmen are hired.
 
 The **outfitter** in the left half of the market kits the doctor out, two levels each: a bigger
 pack carries one more item per level (30, then 60 coins), boots walk a fifth faster per level and
