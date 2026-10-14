@@ -15,10 +15,3 @@ export const GREEN = { dark: 0x2a5a2a, mid: 0x4a9a3a, light: 0x8cd060, shine: 0x
 export const BONE = { dark: 0x8a8070, mid: 0xc8bea8, light: 0xece4d0 };
 export const PURPLE = { dark: 0x3a1e4a, mid: 0x6a3a8a, light: 0x9a6ac0 };
 export const SKIN = { mid: 0xe0b888, shade: 0xb88a60 };
-
-/** Card frames: red for attacks, blue for skills. */
-export const CARD = {
-  attack: { frame: 0xb8343f, face: 0x3a2228 },
-  skill: { frame: 0x4a7ac0, face: 0x22283a },
-  paper: 0xf1e3c6,
-};

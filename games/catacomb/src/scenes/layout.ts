@@ -27,7 +27,11 @@ export const SKIP = { x: 480, y: 476 };
 export const PANEL_BUTTON = { x: 480, y: 360 };
 
 export const BUTTON = { w: 160, h: 44 };
+/** At the campfire, Rest and Remove a card sit either side of the middle. */
+export const REST_BUTTONS = { dx: 110, w: 200 };
+/** The deck laid out to pick a card to burn at the campfire, by the cards' centres. */
+export const REMOVE = { y: 210, rowGap: 170, gap: 120, perRow: 7, scale: 0.8 };
 export const ROOM_RADIUS = 32;
 
 export const UI_DEPTH = 10_000;
-export const FONT = 'monospace';
+export const FONT = 'Georgia, "Times New Roman", serif';

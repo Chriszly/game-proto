@@ -6,7 +6,8 @@ import { expect, test, type Page } from '@playwright/test';
 // Game state is only read, through the `game` object the dev build puts on window.
 
 type CardId = string;
-interface Enemy { id: number; kind: string; hp: number; maxHp: number; block: number; strength: number; step: number }
+type Intent = { kind: 'attack'; damage: number; hits?: number } | { kind: 'block'; block: number } | { kind: 'buff'; strength: number };
+interface Enemy { id: number; kind: string; hp: number; maxHp: number; block: number; strength: number; step: number; intent: Intent }
 interface Fight { draw: CardId[]; hand: CardId[]; discard: CardId[]; energy: number; block: number; turn: number; enemies: Enemy[] }
 interface GameState {
   phase: 'map' | 'walk' | 'player' | 'enemy' | 'cleared' | 'reward' | 'rest' | 'over' | 'won';
@@ -32,7 +33,8 @@ const STARTER: Record<string, { cost: number; damage?: number; block?: number }>
 };
 const STARTER_DECK = { strike: 5, defend: 4, bash: 1 };
 /** The slime in the first room and what it does each turn, from src/game/enemies.ts. */
-const SLIME = { hp: 24, pattern: [{ attack: 6 }, { block: 5 }, { attack: 8 }] as { attack?: number; block?: number }[] };
+/** The slime's health on Normal and its moves: it opens with the first, then draws one of the others at random. */
+const SLIME = { hp: 24, moves: [{ kind: 'attack', damage: 6 }, { kind: 'block', block: 5 }, { kind: 'attack', damage: 8 }] as Intent[] };
 
 /** Game time per animation frame, every frame the same length. */
 const FRAME_MS = 64;
@@ -200,14 +202,20 @@ test('plays the first room', async ({ page }, testInfo) => {
     // Out of energy or cards: end the turn, and the slime does what its intent said.
     expect(++turns, 'turns to fell the slime').toBeLessThan(8);
     const slime = f.enemies[0];
-    const intent = SLIME.pattern[slime.step % SLIME.pattern.length];
+    // The intent shown over the slime is what it does; it opens with its first move.
+    const intent = slime.intent;
+    expect(SLIME.moves, 'the slime only makes its own moves').toContainEqual(intent);
+    if (slime.step === 0) expect(intent).toEqual(SLIME.moves[0]);
+    const attack = intent.kind === 'attack' ? intent.damage : 0;
+    const block = intent.kind === 'block' ? intent.block : 0;
     const hpBefore = s.hp;
     await tap(END_TURN);
     s = await until('the slime acted', (s) => s.phase === 'player' || s.phase === 'over', 5_000);
     expect(s.phase, 'the hero survives the slime').toBe('player');
-    expect(s.hp, 'the slime hits through block').toBe(hpBefore - Math.max(0, (intent.attack ?? 0) - f.block));
+    expect(s.hp, 'the slime hits through block').toBe(hpBefore - Math.max(0, attack - f.block));
     const next = s.fight!;
-    expect(next.enemies[0]).toMatchObject({ hp: slime.hp, step: slime.step + 1, block: intent.block ?? 0 });
+    expect(next.enemies[0]).toMatchObject({ hp: slime.hp, step: slime.step + 1, block });
+    expect(next.enemies[0].intent, 'the slime never makes the same move twice in a row').not.toEqual(intent);
     expect(next).toMatchObject({ turn: f.turn + 1, energy: 3, block: 0 });
     expect(next.hand).toHaveLength(5);
     expect(count([...next.hand, ...next.draw, ...next.discard])).toEqual(STARTER_DECK);

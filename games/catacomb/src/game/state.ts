@@ -1,5 +1,6 @@
 import type { CardId } from './cards';
-import type { EnemyKind } from './enemies';
+import type { EnemyKind, Intent } from './enemies';
+import type { Room } from './map';
 
 // Everything about a run, as plain data: the hero, the deck, where on the map they are, and the
 // fight in progress. The playthrough test reads it through `window.game`.
@@ -7,8 +8,10 @@ import type { EnemyKind } from './enemies';
 export const MAX_HP = 50;
 export const ENERGY = 3;
 export const HAND_SIZE = 5;
-/** A rest heals this share of the hero's health. */
+/** Resting at a campfire heals this share of the hero's health. */
 export const REST_HEAL = 0.3;
+/** A campfire can only take a card out of a deck bigger than this. */
+export const MIN_DECK = 5;
 /** How many cards a reward offers. */
 export const REWARD_CHOICES = 3;
 
@@ -35,7 +38,7 @@ export type Phase =
   | 'cleared'
   /** Picking a card to add to the deck, after a fight or in a treasure room. */
   | 'reward'
-  /** At a campfire, healed. */
+  /** At a campfire: rest to heal, or take a card out of the deck. */
   | 'rest'
   | 'over'
   | 'won';
@@ -48,8 +51,10 @@ export interface Enemy {
   block: number;
   /** Added to the damage of each of its hits. */
   strength: number;
-  /** How far through its pattern it is; its next intent is pattern[step % length]. */
+  /** How many times it has acted. */
   step: number;
+  /** What it will do when it next acts, shown over its head. */
+  intent: Intent;
   hitMs: number;
   /** Counts down while it lunges at the hero. */
   actMs: number;
@@ -80,6 +85,8 @@ export interface Pop {
 
 export interface GameState {
   phase: Phase;
+  /** This run's map, drawn by makeMap. */
+  rooms: Room[];
   hp: number;
   maxHp: number;
   /** Every card the hero owns; each fight shuffles a copy into the draw pile. */

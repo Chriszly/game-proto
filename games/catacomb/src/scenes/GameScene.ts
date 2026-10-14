@@ -3,13 +3,14 @@ import Phaser from 'phaser';
 import { foeTexture } from '../art/characters';
 import { BLUE, GOLD, INK, RED, STONE } from '../art/palette';
 import { ENEMIES } from '../game/enemies';
-import { ENTRANCE, ROOMS, reachable } from '../game/map';
-import { canPlay, endTurn, intentOf, leaveRest, newRun, playCard, takeReward, tick, walkTo } from '../game/sim';
+import { ENTRANCE, reachable } from '../game/map';
+import { canPlay, canRemove, endTurn, intentOf, newRun, playCard, removeCard, rest, restHeal, takeReward, tick, walkTo } from '../game/sim';
 import { POP_MS, WALK_MS, type Enemy, type GameState } from '../game/state';
 import type { CardId } from '../game/cards';
 import { makeButton } from '../ui/Button';
 import { makeCard } from '../ui/CardView';
 import {
+  BUTTON,
   END_TURN,
   ENERGY_ORB,
   FOE_FEET_Y,
@@ -21,6 +22,8 @@ import {
   HUD_HEIGHT,
   PANEL_BUTTON,
   PILES_Y,
+  REMOVE,
+  REST_BUTTONS,
   REWARD,
   ROOM_RADIUS,
   SKIP,
@@ -94,6 +97,12 @@ export class GameScene extends Phaser.Scene {
   private panelText!: Phaser.GameObjects.Text;
   private panelButton!: Phaser.GameObjects.Container;
   private panelAction: () => void = () => {};
+  /** The campfire's second choice, next to Rest. */
+  private removeButton!: Phaser.GameObjects.Container;
+  /** The deck laid out to pick a card to take out, at the campfire. */
+  private removeLayer!: Phaser.GameObjects.Container;
+  private removing = false;
+  private removeKey = '';
 
   private hud!: Phaser.GameObjects.Graphics;
   private hpText!: Phaser.GameObjects.Text;
@@ -113,10 +122,13 @@ export class GameScene extends Phaser.Scene {
     this.pops.clear();
     this.handKey = '';
     this.rewardKey = '';
+    this.removing = false;
+    this.removeKey = '';
     this.createMap();
     this.createFight();
     this.createReward();
     this.createPanel();
+    this.createRemove();
     this.createHud();
   }
 
@@ -128,7 +140,7 @@ export class GameScene extends Phaser.Scene {
     tick(this.state, dt);
 
     const s = this.state;
-    const onMap = s.phase === 'map' || s.phase === 'walk' || s.phase === 'rest' || (s.phase === 'reward' && !s.fight && ROOMS[s.at!]?.kind === 'treasure');
+    const onMap = s.phase === 'map' || s.phase === 'walk' || s.phase === 'rest' || (s.phase === 'reward' && !s.fight && s.rooms[s.at!]?.kind === 'treasure');
     this.mapLayer.setVisible(onMap);
     this.fightLayer.setVisible(!onMap);
     // Pops first, so a killing blow's number still finds its foe before drawFight drops it.
@@ -146,7 +158,7 @@ export class GameScene extends Phaser.Scene {
     const bg = this.add.image(0, 0, 'map-bg').setOrigin(0);
     this.paths = this.add.graphics();
     this.roomRings = this.add.graphics();
-    const icons = ROOMS.map((room, i) => {
+    const icons = this.state.rooms.map((room, i) => {
       const icon = this.add.image(room.x, room.y, `room-${room.kind}`);
       // Taps land anywhere in the room's circle.
       const hit = this.add.circle(room.x, room.y, ROOM_RADIUS, 0xffffff, 0.001).setInteractive({ useHandCursor: true });
@@ -160,7 +172,8 @@ export class GameScene extends Phaser.Scene {
 
   private drawMap() {
     const s = this.state;
-    const next = s.phase === 'map' ? reachable(s.at) : [];
+    const rooms = s.rooms;
+    const next = s.phase === 'map' ? reachable(rooms, s.at) : [];
     const g = this.paths.clear();
     // Dotted paths between rooms; the ones walked are lit.
     const walked = new Set(s.cleared.map((r, i) => `${i === 0 ? -1 : s.cleared[i - 1]}>${r}`));
@@ -171,14 +184,14 @@ export class GameScene extends Phaser.Scene {
         g.fillStyle(lit ? GOLD.light : STONE.shine, lit ? 1 : 0.6).fillRect(ax + (bx - ax) * t - 2, ay + (by - ay) * t - 2, 4, 4);
       }
     };
-    for (const i of reachable(null)) dots(ENTRANCE.x, ENTRANCE.y, ROOMS[i].x, ROOMS[i].y, walked.has(`-1>${i}`));
-    ROOMS.forEach((room, i) => room.next.forEach((j) => dots(room.x, room.y, ROOMS[j].x, ROOMS[j].y, walked.has(`${i}>${j}`))));
+    for (const i of reachable(rooms, null)) dots(ENTRANCE.x, ENTRANCE.y, rooms[i].x, rooms[i].y, walked.has(`-1>${i}`));
+    rooms.forEach((room, i) => room.next.forEach((j) => dots(room.x, room.y, rooms[j].x, rooms[j].y, walked.has(`${i}>${j}`))));
 
     // Each room in a ring: gold and pulsing when it can be entered (held still when motion is
     // reduced), dim once passed by.
     const r = this.roomRings.clear();
     const pulse = settings.reduceMotion ? 1 : 0.5 + 0.5 * Math.sin(this.clock / 200);
-    ROOMS.forEach((room, i) => {
+    rooms.forEach((room, i) => {
       const done = s.cleared.includes(i);
       const open = next.includes(i);
       r.fillStyle(INK, 0.85).fillCircle(room.x, room.y, ROOM_RADIUS);
@@ -187,7 +200,7 @@ export class GameScene extends Phaser.Scene {
     });
 
     // The hero stands beside their room, or walks along the path to the next one.
-    const spot = (at: number | null) => (at === null ? ENTRANCE : { x: ROOMS[at].x, y: ROOMS[at].y });
+    const spot = (at: number | null) => (at === null ? ENTRANCE : { x: rooms[at].x, y: rooms[at].y });
     let pos = spot(s.at);
     if (s.walk) {
       const a = spot(s.walk.from);
@@ -350,7 +363,7 @@ export class GameScene extends Phaser.Scene {
     });
     this.rewards = [];
     if (!choices) return;
-    const treasure = ROOMS[s.at!]?.kind === 'treasure';
+    const treasure = s.rooms[s.at!]?.kind === 'treasure';
     this.rewardTitle.setText(treasure ? 'Treasure! Take a rare card' : 'Choose a card for your deck');
     choices.forEach((id, i) => {
       const x = REWARD.xs[i];
@@ -373,20 +386,29 @@ export class GameScene extends Phaser.Scene {
       .text(VIEW.w / 2, VIEW.h / 2 - 20, '', { fontFamily: FONT, fontSize: '16px', color: '#f1e3c6', align: 'center', wordWrap: { width: 500 } })
       .setOrigin(0.5);
     this.panelButton = makeButton(this, PANEL_BUTTON.x, PANEL_BUTTON.y, 'Continue', () => this.panelAction());
-    this.panel = this.add.container(0, 0, [dim, box, this.panelTitle, this.panelText, this.panelButton]).setDepth(UI_DEPTH + 20).setVisible(false);
+    this.removeButton = makeButton(this, PANEL_BUTTON.x + REST_BUTTONS.dx, PANEL_BUTTON.y, 'Remove a card', () => canRemove(this.state) && (this.removing = true), REST_BUTTONS.w);
+    this.panel = this.add.container(0, 0, [dim, box, this.panelTitle, this.panelText, this.panelButton, this.removeButton]).setDepth(UI_DEPTH + 20).setVisible(false);
   }
 
   private drawPanel() {
     const s = this.state;
-    const show = s.phase === 'rest' || s.phase === 'over' || s.phase === 'won';
+    if (s.phase !== 'rest') this.removing = false;
+    const show = (s.phase === 'rest' && !this.removing) || s.phase === 'over' || s.phase === 'won';
     this.panel.setVisible(show);
+    this.drawRemove();
     if (!show) return;
     const caption = this.panelButton.list[1] as Phaser.GameObjects.Text;
-    if (s.phase === 'rest') {
+    const camp = s.phase === 'rest';
+    this.removeButton.setVisible(camp).setAlpha(canRemove(s) ? 1 : 0.45);
+    this.panelButton.setX(camp ? PANEL_BUTTON.x - REST_BUTTONS.dx : PANEL_BUTTON.x);
+    (this.panelButton.list[0] as Phaser.GameObjects.Rectangle).setSize(camp ? REST_BUTTONS.w : BUTTON.w, BUTTON.h).setOrigin(0.5);
+    if (camp) {
       this.panelTitle.setText('A quiet campfire').setColor('#f09a3a');
-      this.panelText.setText(`You rest by the fire and heal ${s.healed}.\nHealth ${s.hp} of ${s.maxHp}.`);
-      caption.setText('Continue');
-      this.panelAction = () => leaveRest(this.state);
+      this.panelText.setText(
+        `Rest by the fire to heal ${restHeal(s)}, or burn a card you no longer want.\nHealth ${s.hp} of ${s.maxHp}, deck of ${s.deck.length} cards.`,
+      );
+      caption.setText(`Rest (+${restHeal(s)})`);
+      this.panelAction = () => rest(this.state);
     } else {
       const won = s.phase === 'won';
       this.panelTitle.setText(won ? 'The Bone King falls!' : 'You have fallen').setColor(won ? '#e6c766' : '#e0584f');
@@ -398,6 +420,40 @@ export class GameScene extends Phaser.Scene {
       caption.setText('Delve again');
       this.panelAction = () => this.scene.restart();
     }
+  }
+
+  private createRemove() {
+    const dim = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x0e0a08, 0.8).setInteractive();
+    const title = this.add.text(VIEW.w / 2, 80, 'Burn a card: it leaves your deck for good', textStyle(24, '#f09a3a')).setOrigin(0.5);
+    const back = makeButton(this, SKIP.x, SKIP.y, 'Back', () => (this.removing = false));
+    this.removeLayer = this.add.container(0, 0, [dim, title, back]).setDepth(UI_DEPTH + 21).setVisible(false);
+  }
+
+  /** The deck's different cards, one of each, to pick the one to burn. */
+  private drawRemove() {
+    const s = this.state;
+    this.removeLayer.setVisible(this.removing);
+    const ids = this.removing ? [...new Set(s.deck)] : [];
+    const key = ids.join();
+    if (key === this.removeKey) return;
+    this.removeKey = key;
+    this.removeLayer.each((child: Phaser.GameObjects.GameObject) => {
+      if (child.getData('card')) child.destroy();
+    });
+    const perRow = Math.min(ids.length, REMOVE.perRow);
+    ids.forEach((id, i) => {
+      const row = Math.floor(i / REMOVE.perRow);
+      const inRow = Math.min(perRow, ids.length - row * REMOVE.perRow);
+      const x = VIEW.w / 2 + (i % REMOVE.perRow - (inRow - 1) / 2) * REMOVE.gap;
+      const y = REMOVE.y + row * REMOVE.rowGap;
+      const { view, bg } = makeCard(this, id, x, y, REMOVE.scale);
+      const copies = s.deck.filter((d) => d === id).length;
+      const count = this.add.text(x, y + (HAND.h * REMOVE.scale) / 2 + 12, `x${copies}`, textStyle(14, '#e6c766')).setOrigin(0.5);
+      view.setData('card', true);
+      count.setData('card', true);
+      bg.setInteractive({ useHandCursor: true }).on('pointerdown', () => removeCard(this.state, id));
+      this.removeLayer.add([view, count]);
+    });
   }
 
   // Floating numbers and the top bar
@@ -443,7 +499,7 @@ export class GameScene extends Phaser.Scene {
     g.fillStyle(0x5a5366).fillRect(0, HUD_HEIGHT - 3, VIEW.w, 3);
     this.hpText.setText(`${s.hp}/${s.maxHp}`);
     this.deckText.setText(`Deck ${s.deck.length} cards`);
-    const room = s.at === null ? null : ROOMS[s.at];
+    const room = s.at === null ? null : s.rooms[s.at];
     const depth = room ? room.col + 1 : 0;
     const name = room?.foes ? room.foes.map((k) => ENEMIES[k].name).join(' and ') : room?.kind === 'rest' ? 'Campfire' : room?.kind === 'treasure' ? 'Treasure' : 'Entrance';
     const where = s.phase === 'map' || s.phase === 'walk' ? '' : name;

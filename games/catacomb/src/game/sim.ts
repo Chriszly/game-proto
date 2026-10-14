@@ -1,7 +1,7 @@
 import { byDifficulty } from '../../../../shared/settings';
 import { COMMON, RARE, STARTER_DECK, card, type CardId } from './cards';
 import { ENEMIES, type EnemyKind, type Intent } from './enemies';
-import { ROOMS, reachable } from './map';
+import { makeMap, reachable } from './map';
 import {
   CLEARED_MS,
   ENEMY_ACT_MS,
@@ -9,6 +9,7 @@ import {
   HAND_SIZE,
   HIT_MS,
   MAX_HP,
+  MIN_DECK,
   POP_MS,
   REST_HEAL,
   REWARD_CHOICES,
@@ -24,6 +25,7 @@ import {
 export function newRun(): GameState {
   return {
     phase: 'map',
+    rooms: makeMap(),
     hp: MAX_HP,
     maxHp: MAX_HP,
     deck: [...STARTER_DECK],
@@ -52,19 +54,18 @@ export function shuffle<T>(items: T[]) {
 
 /** Sets off towards a room next to the hero's; false if it isn't one. */
 export function walkTo(s: GameState, room: number) {
-  if (s.phase !== 'map' || !reachable(s.at).includes(room)) return false;
+  if (s.phase !== 'map' || !reachable(s.rooms, s.at).includes(room)) return false;
   s.walk = { from: s.at, to: room, ms: 0 };
   s.phase = 'walk';
   return true;
 }
 
 function enterRoom(s: GameState, i: number) {
-  const room = ROOMS[i];
+  const room = s.rooms[i];
   s.at = i;
   s.walk = null;
   if (room.kind === 'rest') {
-    s.healed = Math.min(s.maxHp - s.hp, Math.round(s.maxHp * REST_HEAL));
-    s.hp += s.healed;
+    s.healed = 0;
     s.phase = 'rest';
   } else if (room.kind === 'treasure') {
     s.reward = pickSome(RARE, REWARD_CHOICES);
@@ -85,7 +86,7 @@ function startFight(s: GameState, foes: EnemyKind[]) {
     enemies: foes.map((kind) => {
       // Foes are a quarter weaker on Easy and 30% tougher on Hard.
       const hp = Math.round(ENEMIES[kind].hp * byDifficulty(0.75, 1, 1.3));
-      return { id: s.nextId++, kind, hp, maxHp: hp, block: 0, strength: 0, step: 0, hitMs: 0, actMs: 0 };
+      return { id: s.nextId++, kind, hp, maxHp: hp, block: 0, strength: 0, step: 0, intent: ENEMIES[kind].moves[0], hitMs: 0, actMs: 0 };
     }),
     acted: 0,
   };
@@ -163,9 +164,13 @@ function damageEnemy(s: GameState, e: Enemy, amount: number) {
   if (e.hp <= 0) f.enemies.splice(f.enemies.indexOf(e), 1);
 }
 
-export function intentOf(e: Enemy): Intent {
-  const pattern = ENEMIES[e.kind].pattern;
-  return pattern[e.step % pattern.length];
+export const intentOf = (e: Enemy): Intent => e.intent;
+
+/** Draws a foe's next move at random from its list, never the one it just made. */
+function nextIntent(e: Enemy) {
+  const moves = ENEMIES[e.kind].moves;
+  const choices = moves.length > 1 ? moves.filter((m) => m !== e.intent) : moves;
+  e.intent = choices[Math.floor(Math.random() * choices.length)];
 }
 
 /** Ends the hero's turn: the hand is discarded and the foes act, one at a time. */
@@ -183,8 +188,9 @@ export function endTurn(s: GameState) {
 
 function act(s: GameState, e: Enemy) {
   const f = s.fight!;
-  const intent = intentOf(e);
+  const intent = e.intent;
   e.step++;
+  nextIntent(e);
   e.actMs = HIT_MS;
   if (intent.kind === 'attack') {
     for (let hit = 0; hit < (intent.hits ?? 1); hit++) {
@@ -232,7 +238,7 @@ export function tick(s: GameState, dt: number) {
     s.timerMs -= dt;
     if (s.timerMs > 0) return;
     s.fight = null;
-    if (ROOMS[s.at!].kind === 'boss') {
+    if (s.rooms[s.at!].kind === 'boss') {
       s.cleared.push(s.at!);
       s.phase = 'won';
     } else {
@@ -256,12 +262,34 @@ export function takeReward(s: GameState, index: number | null) {
   return true;
 }
 
-/** Leaves the campfire for the map. */
-export function leaveRest(s: GameState) {
+/** What resting at the campfire would heal. */
+export const restHeal = (s: GameState) => Math.min(s.maxHp - s.hp, Math.round(s.maxHp * REST_HEAL));
+
+/** Rests at the campfire: heals, then goes back to the map. */
+export function rest(s: GameState) {
   if (s.phase !== 'rest') return false;
+  s.healed = restHeal(s);
+  s.hp += s.healed;
+  if (s.healed > 0) pop(s, 'hero', `+${s.healed}`, 'heal');
+  leaveRest(s);
+  return true;
+}
+
+/** Whether the campfire can take a card out of the deck. */
+export const canRemove = (s: GameState) => s.phase === 'rest' && s.deck.length > MIN_DECK;
+
+/** Takes one copy of a card out of the deck at the campfire, then goes back to the map. */
+export function removeCard(s: GameState, id: CardId) {
+  const i = s.deck.indexOf(id);
+  if (!canRemove(s) || i < 0) return false;
+  s.deck.splice(i, 1);
+  leaveRest(s);
+  return true;
+}
+
+function leaveRest(s: GameState) {
   s.cleared.push(s.at!);
   s.phase = 'map';
-  return true;
 }
 
 function pickSome(pool: CardId[], n: number) {

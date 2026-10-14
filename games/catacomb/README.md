@@ -5,9 +5,10 @@ of the [game hub](../../README.md).
 
 A knight walks a short dungeon, the Crypt, from the entrance on the left to the Bone King on the
 right. Each room on the way is a fight, a campfire or a treasure chest, and the paths fork, so the
-route is the player's to pick. Fights are played with a deck of cards: a hand of five each turn,
+route is the player's to pick. The Crypt is laid out anew for every run. Fights are played with a deck of cards: a hand of five each turn,
 three energy to spend on them, and foes who show what they will do on their next turn. Every fight
-won adds a new card to the deck.
+won adds a new card to the deck. Everything is painted in a painterly style, with brush strokes
+drawn in code.
 
 ![The map of the Crypt](docs/screenshots/playthrough-0-map.png)
 
@@ -19,32 +20,42 @@ won adds a new card to the deck.
 | Tap a card in hand | Play it, if there is energy for it |
 | End turn | Discard the hand and let the foes act |
 | Tap a reward card | Add it to the deck (or Skip to take none) |
+| Rest or Remove a card | At a campfire: heal, or tap a card to burn it from the deck |
 
 1. **The map**: rooms are in six columns, and from each room the dotted paths lead on to one or
-   two rooms in the next. The rooms that can be entered next are lit gold.
+   two rooms in the next. The rooms that can be entered next are lit gold. The first room is always
+   a lone slime and the last the Bone King; between them the foes, where the campfire and the
+   chest sit, and which paths cross change from run to run.
 2. **Turns**: each turn the hero draws five cards and has three energy. A card's cost is in its
    corner. Attacks (red) hit the foe in front, or every foe; skills (blue) give block, health,
    energy or more cards. When the draw pile runs out, the discard pile is shuffled into it.
 3. **Block** soaks up damage until the start of the hero's next turn. Health carries over from
    room to room, and the run is over when it reaches zero.
 4. **Intents**: a sword over a foe is the damage it will deal on its turn, a shield the block it
-   will gain, and an arrow that it grows stronger, adding to every hit after.
+   will gain, and an arrow that it grows stronger, adding to every hit after. Each foe opens with
+   the same move, then picks its next one at random from its moves, never the same one twice in a
+   row.
 5. **Rewards**: after each fight, pick one of three cards to add to the deck. A treasure chest
-   offers three rare cards; a campfire heals 30% of the hero's health.
+   offers three rare cards. At a campfire, either rest to heal 30% of the hero's health or burn a
+   card to thin the deck (down to no fewer than five cards).
 6. **The Bone King** waits in the last room. Beat him to clear the dungeon.
 
 ![A fight with the slime](docs/screenshots/playthrough-1-fight.png)
 
 ![Picking a card after the fight](docs/screenshots/playthrough-2-reward.png)
 
+![Resting or burning a card at a campfire](docs/screenshots/campfire.png)
+
+![Picking the card to burn](docs/screenshots/campfire-remove.png)
+
 ### Foes
 
-| Foe | Health | What it does, in turn |
+| Foe | Health | Moves (the first is its opening move) |
 | --- | --- | --- |
 | Slime | 24 | Attack 6, block 5, attack 8 |
 | Giant Rat | 13 | Attack 3 twice, attack 5 |
 | Skeleton | 30 | Block 6, attack 9, attack 4 twice |
-| Cultist | 26 | Grow 2 stronger, attack 6, attack 6 |
+| Cultist | 26 | Grow 2 stronger, attack 6, attack 6 (so attacks come twice as often) |
 | Bone King | 90 | Attack 10, block 12, attack 4 three times, grow 3 stronger |
 
 ![The Bone King](docs/screenshots/boss.png)
@@ -86,8 +97,8 @@ The difficulty, set on the hub page's Settings, changes one thing: foes have 25%
 `e2e/playthrough.spec.ts` plays the first room in headless Chromium: it checks the new run (full
 health and the starter deck), taps the first room on the map, checks the fight starts with a hand
 of five and three energy, then plays cards by tapping them (attacks first, then defends) and ends
-turns until the slime falls, checking each card's cost and effect and each of the slime's turns
-against its intent. Then it takes the first reward card and checks it joined the deck and the next
+turns until the slime falls, checking each card's cost and effect, that the slime opens with its
+first move and never repeats a move twice in a row, and each of its turns against its intent. Then it takes the first reward card and checks it joined the deck and the next
 rooms opened. Like the other games' tests it owns the game clock and plays at 4x speed
 (`PLAYTHROUGH_SPEED`). The **Playthrough Catacomb** workflow (`.github/workflows/playthrough-catacomb.yml`)
 runs it on every pull request that touches this folder or that workflow (not on pushes to main), and uploads
@@ -101,14 +112,16 @@ npx playwright test --project catacomb
 
 All paths are inside `games/catacomb/`.
 
-- `src/game/`: the rules in plain TypeScript with no Phaser dependency. `cards.ts`, `enemies.ts`
-  and `map.ts` are data tables (the cards, the foes and their intent patterns, the rooms and their
-  paths), `state.ts` describes a run, and `sim.ts` moves it on: walking the map, playing cards, the
-  foes' turn and the rewards. Randomness (shuffles, rewards) goes through `Math.random`.
+- `src/game/`: the rules in plain TypeScript with no Phaser dependency. `cards.ts` and `enemies.ts`
+  are data tables (the cards, the foes and their moves), `map.ts` lays out a new Crypt for each run,
+  `state.ts` describes a run, and `sim.ts` moves it on: walking the map, playing cards, the foes'
+  turn, the campfire and the rewards. Randomness (the map, shuffles, rewards, foes' next moves)
+  goes through `Math.random`.
 - `src/scenes/`: `BootScene` bakes textures, `GameScene` draws the map, the fights and the panels
   and wires taps to the rules, `layout.ts` says where things are drawn.
-- `src/art/`: all the pixel art, drawn in code and baked into textures at startup: the knight and
-  the foes, the dungeon room and the map, and the icons for cards, intents and rooms.
+- `src/art/`: all the art, drawn in code and baked into textures at startup, then repainted with
+  brush strokes by `paint.ts`: the knight and the foes, the crypt and the map, the parchment card
+  faces, and the icons for cards, intents and rooms.
 - `src/ui/`: the card faces and buttons.
 
 Adding a card is an entry in `src/game/cards.ts` (and, for a new kind of effect, `playCard` in
