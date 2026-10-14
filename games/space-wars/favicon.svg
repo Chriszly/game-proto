@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>Space Wars</title>
+  <circle cx="7" cy="7" r="5" fill="#e37100"/>
+  <circle cx="25" cy="7" r="5" fill="#e37100"/>
+  <circle cx="7" cy="7" r="2.4" fill="#ffb787"/>
+  <circle cx="25" cy="7" r="2.4" fill="#ffb787"/>
+  <ellipse cx="16" cy="16.5" rx="13" ry="12" fill="#e37100"/>
+  <circle cx="10.5" cy="14.0" r="2.3" fill="#0d1117"/>
+  <circle cx="21.5" cy="14.0" r="2.3" fill="#0d1117"/>
+  <circle cx="11.3" cy="13.2" r="0.8" fill="#ffffff"/>
+  <circle cx="22.3" cy="13.2" r="0.8" fill="#ffffff"/>
+  <ellipse cx="16" cy="20.5" rx="4.6" ry="3.3" fill="#ffdcc7"/>
+  <ellipse cx="16" cy="19.5" rx="2.2" ry="1.4" fill="#311300"/>
+  <path d="M7 24 H25 C29 24 31 26.5 31 29 C31 31 29.5 31.5 28 31.5 C26.5 31.5 25.5 30.5 24.5 29.5 H7.5 C6.5 30.5 5.5 31.5 4 31.5 C2.5 31.5 1 31 1 29 C1 26.5 3 24 7 24 Z" fill="#311300"/>
+  <path d="M5 27.3 H9 M7 25.3 V29.3" stroke="#ffb787" stroke-width="1.4" stroke-linecap="round"/>
+  <circle cx="24.2" cy="26.4" r="1" fill="#ffb787"/>
+  <circle cx="26.6" cy="28.2" r="1" fill="#ffb787"/>
+  <g transform="translate(26 21) rotate(22) scale(0.85)">
+    <path d="M0 -7 C2.6 -3.5 2.6 3 1.9 5.4 H-1.9 C-2.6 3 -2.6 -3.5 0 -7 Z" fill="#e8eef8" stroke="#26262e" stroke-width="0.8"/>
+    <circle cx="0" cy="-1.4" r="1.2" fill="#7fd4ff"/>
+    <path d="M-1.9 2 L-3.6 5 L-1.2 5.2 Z" fill="#ffd36a"/>
+    <path d="M1.9 2 L3.6 5 L1.2 5.2 Z" fill="#ffd36a"/>
+    <path d="M-1 5.6 L0 9 L1 5.6 Z" fill="#ff9a2e"/>
+  </g>
+</svg>
