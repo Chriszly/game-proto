@@ -1,106 +1,101 @@
 import Phaser from 'phaser';
 import type { PlantId } from '../game/items';
-import { GOLD, INK, LEAF, ROOT, SOIL, VIOLET, WOOD } from './palette';
-import { PixelCanvas, seeded } from './pixelArt';
+import { INK, WASH, both, ellPts, hatch, ink, paint, rectPts, rr, shadow, wash, type Ctx, type Pt } from './paint';
 
-// Garden beds and the plants growing in them. All drawn at 2x: one art pixel is two screen pixels.
-
-const SCALE = 2;
-/** Plants get a softer outline than ink, so a full bed doesn't turn into a dark tangle. */
-const LEAF_OUTLINE = 0x1e3418;
-const STALK_OUTLINE = 0x5a3c14;
+// Garden beds and the plants growing in them, in ink and watercolour.
 
 export const plantTexture = (plant: PlantId, stage: number) => `plant-${plant}-${stage}`;
 
-/** A raised bed: tilled furrows inside a plank edging. 56x44 on screen. */
-function bakePlot(scene: Phaser.Scene) {
-  const c = new PixelCanvas(28, 22);
-  const rand = seeded(7);
-  c.rect(0, 0, 28, 22, WOOD.mid);
-  c.rect(0, 0, 28, 1, WOOD.shine).rect(0, 1, 28, 1, WOOD.light);
-  c.rect(0, 20, 28, 2, WOOD.dark);
-  c.rect(2, 2, 24, 18, SOIL.mid);
-  for (let y = 4; y < 20; y += 4) {
-    c.rect(2, y, 24, 1, SOIL.dark);
-    c.rect(2, y - 1, 24, 1, SOIL.light);
+/** A raised bed: dark tilled furrows inside a plank edging. 56x44 as shown. */
+function drawPlot(c: Ctx) {
+  shadow(c, 31, 40, 25, 4, 0.16);
+  both(c, rectPts(2, 2, 52, 38, 4), WASH.wood, { layers: 2 }, { w: 1.2 });
+  both(c, rectPts(6, 6, 44, 30, 2), '#8a6040', { layers: 3 }, { w: 0.9 });
+  for (let y = 11; y < 36; y += 6) {
+    ink(c, [[8, y], [48, y]], { closed: false, w: 0.6, alpha: 0.55 });
   }
-  for (let i = 0; i < 14; i++) c.px(2 + Math.floor(rand() * 24), 2 + Math.floor(rand() * 18), rand() < 0.5 ? SOIL.shine : SOIL.dark);
-  // Nail heads at the corners of the edging.
-  for (const [x, y] of [[1, 1], [26, 1], [1, 19], [26, 19]]) c.px(x, y, WOOD.dark);
-  c.frame(0, 0, 28, 22, INK);
-  for (const [x, y] of [[0, 0], [27, 0], [0, 21], [27, 21]]) c.clear(x, y);
-  c.bake(scene, 'plot', SCALE);
+  hatch(c, rectPts(6, 6, 44, 6), { gap: 2.5, alpha: 0.3, w: 0.5 });
+  c.save();
+  for (let i = 0; i < 18; i++) {
+    c.fillStyle = 'rgba(42,29,20,0.35)';
+    c.beginPath();
+    c.arc(rr(8, 48), rr(8, 34), rr(0.4, 0.9), 0, Math.PI * 2);
+    c.fill();
+  }
+  c.restore();
 }
 
-/** Six stalks across the bed: green shoots, then tall green stalks, then golden ears. 48x44 on screen. */
-function bakeWheat(scene: Phaser.Scene, stage: number) {
-  const c = new PixelCanvas(24, 22);
-  const heights = [3, 11, 17][stage];
+/** Six stalks across the bed: green shoots, then tall green stalks, then golden ears. 48x44 as shown. */
+function drawWheat(c: Ctx, stage: number) {
+  const height = [7, 22, 34][stage];
+  const ripe = stage === 2;
   for (let i = 0; i < 6; i++) {
-    const x = 2 + i * 4;
-    const h = heights - (i % 2) * (stage === 0 ? 1 : 2);
-    const top = 22 - h;
-    if (stage === 0) {
-      c.rect(x, top, 1, h, LEAF.light).px(x + 1, top + 1, LEAF.mid).px(x - 1, top + 1, LEAF.shine);
-      continue;
+    const x = 5 + i * 7.6 + rr(-1, 1);
+    const h = height - (i % 2) * (stage === 0 ? 2 : 4);
+    const top = 43 - h;
+    const lean = rr(-2, 2) + 1.5;
+    c.save();
+    c.lineCap = 'round';
+    c.strokeStyle = ripe ? '#c9a040' : '#77b04c';
+    c.lineWidth = 1.6;
+    c.beginPath();
+    c.moveTo(x, 43);
+    c.quadraticCurveTo(x, top + h * 0.4, x + lean, top + 4);
+    c.stroke();
+    c.strokeStyle = INK;
+    c.lineWidth = 0.45;
+    c.globalAlpha = 0.7;
+    c.stroke();
+    c.restore();
+    if (stage > 0) {
+      // A leaf off each stalk.
+      const leaf: Pt[] = [[x, top + h * 0.6], [x + 5, top + h * 0.45], [x + 1, top + h * 0.52]];
+      both(c, leaf, ripe ? '#b7a040' : '#77b04c', { layers: 1, edge: 0 }, { w: 0.5 });
     }
-    const ripe = stage === 2;
-    c.rect(x, top, 1, h, ripe ? GOLD.mid : LEAF.mid);
-    c.px(x + 1, top + 5, ripe ? GOLD.dark : LEAF.light).px(x - 1, top + 8, ripe ? GOLD.dark : LEAF.dark);
-    c.px(x + 1, top + 6, ripe ? GOLD.mid : LEAF.light);
     if (ripe) {
-      // Ear of grain, nodding to the right.
-      c.rect(x, top - 1, 2, 5, GOLD.light);
-      c.px(x, top - 1, GOLD.shine).px(x, top + 1, GOLD.shine).px(x + 1, top, GOLD.mid).px(x + 1, top + 2, GOLD.mid);
-      c.px(x + 2, top - 2, GOLD.shine).px(x - 1, top - 2, GOLD.light);
+      // An ear of grain, nodding a little.
+      both(c, ellPts(x + lean, top + 3, 2.6, 5.5, 14), '#e6c04a', { layers: 2, edge: 0 }, { w: 0.7 });
+      for (let k = -1; k <= 1; k++) ink(c, [[x + lean - 2, top + 3 + k * 2.5], [x + lean + 2, top + 2 + k * 2.5]], { closed: false, w: 0.4, alpha: 0.6 });
     } else {
-      c.px(x, top, LEAF.shine);
+      both(c, ellPts(x + lean, top + 3, 1.6, 3, 10), '#8cc35a', { layers: 1, edge: 0 }, { w: 0.5 });
     }
   }
-  c.outline(stage === 2 ? STALK_OUTLINE : LEAF_OUTLINE);
-  c.bake(scene, plantTexture('wheat', stage), SCALE);
 }
 
-/** A leafy rosette that grows, flowers, and finally shows the root's face poking out. 40x40 on screen. */
-function bakeMandrake(scene: Phaser.Scene, stage: number) {
-  const c = new PixelCanvas(20, 20);
-  const leaf = (x0: number, y0: number, x1: number, y1: number) => {
-    c.line(x0, y0, x1, y1, LEAF.mid);
-    c.line(x0 + 1, y0, x1 + 1, y1, LEAF.light);
-    c.px(x1, y1, LEAF.shine);
-  };
-  if (stage === 0) {
-    leaf(9, 19, 7, 15);
-    leaf(10, 19, 12, 15);
-  } else {
-    const h = stage === 1 ? 8 : 11;
-    leaf(9, 19, 4, 19 - h + 3);
-    leaf(10, 19, 15, 19 - h + 3);
-    leaf(9, 19, 7, 19 - h);
-    leaf(10, 19, 12, 19 - h);
-    leaf(9, 19, 1, 16);
-    leaf(10, 19, 17, 16);
-    c.rect(9, 19 - h, 2, h, LEAF.dark);
-  }
+/** A leafy rosette that grows, flowers, and finally shows the root's face poking out. 40x40 as shown. */
+function drawMandrake(c: Ctx, stage: number) {
+  const x = 20, y = 39;
+  const size = [7, 13, 16][stage];
   if (stage === 2) {
-    // Purple flowers on top, and the root's head with its face showing through the soil.
-    for (const [x, y] of [[9, 6], [5, 9], [14, 9]]) {
-      c.rect(x, y, 2, 2, VIOLET.light).px(x, y, VIOLET.shine).px(x + 1, y + 1, VIOLET.mid);
-    }
-    c.ellipse(6, 14, 8, 7, ROOT.mid);
-    c.rect(7, 15, 6, 3, ROOT.light);
-    c.px(7, 15, ROOT.shine);
-    c.px(8, 16, ROOT.dark).px(11, 16, ROOT.dark).px(9, 18, ROOT.dark).px(10, 18, ROOT.dark);
-    c.rect(4, 19, 12, 1, SOIL.dark);
+    // The root's grumpy face, peeking out of the soil.
+    both(c, ellPts(x, y - 4, 8, 5.5, 18), '#b07a4a', { layers: 2 }, { w: 1 });
+    c.fillStyle = INK;
+    c.fillRect(x - 4, y - 6, 1.6, 1.6);
+    c.fillRect(x + 2.4, y - 6, 1.6, 1.6);
+    c.fillRect(x - 1.5, y - 2.5, 3, 0.9);
   }
-  c.outline(LEAF_OUTLINE);
-  c.bake(scene, plantTexture('mandrake', stage), SCALE);
+  const leaves = stage === 0 ? [-0.4, 0.4] : [-1.1, -0.55, 0, 0.55, 1.1];
+  for (const a of leaves) {
+    const tipX = x + Math.sin(a) * size, tipY = y - 6 - Math.cos(a) * size;
+    const nx = Math.cos(a) * 3.2, ny = Math.sin(a) * 3.2;
+    const mid = [(x + tipX) / 2, (y - 6 + tipY) / 2];
+    const leaf: Pt[] = [[x, y - 6], [mid[0] + nx, mid[1] + ny], [tipX, tipY], [mid[0] - nx, mid[1] - ny]];
+    both(c, leaf, a < 0 ? '#5c9a3c' : '#77b04c', { layers: 2, edge: 0 }, { w: 0.7 });
+    ink(c, [[x, y - 6], [tipX, tipY]], { closed: false, w: 0.4, alpha: 0.5 });
+  }
+  if (stage >= 1) {
+    // Small violet flowers among the leaves.
+    for (const [dx, dy] of [[-5, -18], [6, -16], [0, -21]].slice(0, stage === 1 ? 1 : 3)) {
+      wash(c, ellPts(x + dx, y + dy, 2.2, 2.2, 10), '#8a7ad8', { layers: 1, edge: 0 });
+      ink(c, ellPts(x + dx, y + dy, 2.2, 2.2, 10), { w: 0.5 });
+    }
+  }
 }
 
 export function bakeGarden(scene: Phaser.Scene) {
-  bakePlot(scene);
+  paint(scene, 'plot', 56, 44, drawPlot, 2);
   for (const stage of [0, 1, 2]) {
-    bakeWheat(scene, stage);
-    bakeMandrake(scene, stage);
+    paint(scene, plantTexture('wheat', stage), 48, 44, (c) => drawWheat(c, stage), 3, 51);
+    paint(scene, plantTexture('mandrake', stage), 40, 40, (c) => drawMandrake(c, stage), 3, 61);
   }
 }

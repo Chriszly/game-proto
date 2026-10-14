@@ -1,104 +1,62 @@
 import Phaser from 'phaser';
-import { GOLD, INK, MARKER, STONE } from './palette';
-import { PixelCanvas } from './pixelArt';
+import { INK, both, ink, paint, pathOf, rectPts, type Ctx } from './paint';
 
-// Floor markers: a flagstone with a coloured inlay and a symbol. 44x44 on screen, drawn at 2x.
+// Floor markers: an inked tile washed in its marker's colour, with a white symbol. 44x44 as shown.
 
-const SCALE = 2;
+/** Marker colours, one per kind of marker. */
+export const MARKER = { drop: '#6fb85e', pickUp: '#e9be48', work: '#6aa6dc', upgrade: '#a77fd8' };
 
-/** Scales each channel of `color` by `f`, for a darker or lighter shade of a marker colour. */
-function shade(color: number, f: number) {
-  const ch = (shift: number) => Math.min(255, Math.round(((color >> shift) & 0xff) * f));
-  return (ch(16) << 16) | (ch(8) << 8) | ch(0);
+type Symbol = 'drop' | 'pickUp' | 'work' | 'upgrade';
+
+function symbol(c: Ctx, kind: Symbol) {
+  const x = 22, y = 21;
+  c.save();
+  c.fillStyle = '#fffaf0';
+  c.strokeStyle = INK;
+  c.lineWidth = 1.3;
+  c.lineJoin = 'round';
+  c.lineCap = 'round';
+  if (kind === 'work') {
+    // Mortar and pestle: stand here to work.
+    c.lineWidth = 3.6;
+    c.beginPath();
+    c.moveTo(x + 2, y - 3);
+    c.lineTo(x + 8, y - 11);
+    c.stroke();
+    c.lineWidth = 1.3;
+    c.beginPath();
+    c.moveTo(x - 10, y - 2);
+    c.lineTo(x + 10, y - 2);
+    c.quadraticCurveTo(x + 8, y + 9, x, y + 9);
+    c.quadraticCurveTo(x - 8, y + 9, x - 10, y - 2);
+    c.closePath();
+    c.fill();
+    c.stroke();
+  } else {
+    // An arrow: down to drop things off, up to pick them up or to pay towards an upgrade.
+    const d = kind === 'drop' ? 1 : -1;
+    pathOf(c, [[x - 4, y - 9 * d], [x + 4, y - 9 * d], [x + 4, y], [x + 9, y], [x, y + 9 * d], [x - 9, y], [x - 4, y]]);
+    c.fill();
+    c.stroke();
+  }
+  c.restore();
 }
 
-// Symbols: X is the marker colour, x its shadow, h a highlight; G, g and H are the upgrade coin's gold.
-const SYMBOLS: Record<string, string[]> = {
-  // Arrow down: put things here.
-  drop: [
-    '...XXXX...',
-    '...XhXx...',
-    '...XhXx...',
-    '...XhXx...',
-    'XXXXhXXXXx',
-    '.XXhXXXXx.',
-    '..XXXXXx..',
-    '...XXXx...',
-    '....Xx....',
-  ],
-  // Arrow up: take things from here.
-  pickUp: [
-    '....Xx....',
-    '...XhXx...',
-    '..XhXXXx..',
-    '.XhXXXXXx.',
-    'XXXXhXXXXx',
-    '...XhXx...',
-    '...XhXx...',
-    '...XhXx...',
-    '...XXXx...',
-  ],
-  // Mortar and pestle: stand here to work.
-  work: [
-    '.......Xx.',
-    '......Xx..',
-    '.....Xx...',
-    '....Xx....',
-    'XXXXXXXXXx',
-    'XhhXXXXXXx',
-    '.XhXXXXXx.',
-    '..XXXXXx..',
-    '...xxxx...',
-  ],
-  // A coin with an arrow over it: pay here to upgrade.
-  upgrade: [
-    '....Xx....',
-    '...XXXx...',
-    '..XXXXXx..',
-    '...gggg...',
-    '..gGGGGg..',
-    '.gGHGGGGg.',
-    '.gGHGGGGg.',
-    '..gGGGGg..',
-    '...gggg...',
-  ],
-};
-
-function bakePad(scene: Phaser.Scene, key: string, color: number, symbol: string[]) {
-  const c = new PixelCanvas(22, 22);
-  // Flagstone with chipped corners.
-  c.rect(0, 0, 22, 22, STONE.mid);
-  c.rect(0, 0, 22, 1, STONE.light).rect(0, 0, 1, 22, STONE.light);
-  c.rect(0, 21, 22, 1, STONE.dark).rect(21, 0, 1, 22, STONE.dark);
-  // Coloured inlay.
-  c.frame(2, 2, 18, 18, shade(color, 0.6));
-  c.frame(3, 3, 16, 16, color);
-  c.rect(4, 4, 14, 14, shade(color, 0.35));
-  for (const [x, y] of [[3, 3], [18, 3], [3, 18], [18, 18]]) c.px(x, y, shade(color, 1.3));
-  // Symbol, outlined so it stands out from the inlay.
-  const art = new PixelCanvas(12, 11).grid(1, 1, symbol, {
-    X: color,
-    x: shade(color, 0.7),
-    h: shade(color, 1.35),
-    G: GOLD.light,
-    g: GOLD.dark,
-    H: GOLD.shine,
-  });
-  art.outline(INK);
-  for (let y = 0; y < 11; y++) {
-    for (let x = 0; x < 12; x++) {
-      const p = art.get(x, y);
-      if (p !== null) c.px(5 + x, 6 + y, p);
-    }
-  }
-  c.frame(0, 0, 22, 22, INK);
-  for (const [x, y] of [[0, 0], [21, 0], [0, 21], [21, 21]]) c.clear(x, y);
-  c.bake(scene, key, SCALE);
+function drawPad(c: Ctx, color: string, kind: Symbol) {
+  // Its shadow, down and right, then the tile.
+  c.save();
+  c.fillStyle = 'rgba(42,29,20,0.2)';
+  pathOf(c, rectPts(5, 6, 36, 36, 6));
+  c.fill();
+  c.restore();
+  both(c, rectPts(3, 3, 36, 36, 6), color, { layers: 3, spread: 0.8, bloom: 2, cx: 14, cy: 12 }, { w: 1.3 });
+  ink(c, rectPts(6, 6, 30, 30, 4), { w: 0.5, alpha: 0.35 });
+  symbol(c, kind);
 }
 
 export function bakeMarkers(scene: Phaser.Scene) {
-  bakePad(scene, 'pad-in', MARKER.drop, SYMBOLS.drop);
-  bakePad(scene, 'pad-out', MARKER.pickUp, SYMBOLS.pickUp);
-  bakePad(scene, 'pad-work', MARKER.work, SYMBOLS.work);
-  bakePad(scene, 'pad-up', MARKER.upgrade, SYMBOLS.upgrade);
+  paint(scene, 'pad-in', 44, 44, (c) => drawPad(c, MARKER.drop, 'drop'), 3);
+  paint(scene, 'pad-out', 44, 44, (c) => drawPad(c, MARKER.pickUp, 'pickUp'), 3);
+  paint(scene, 'pad-work', 44, 44, (c) => drawPad(c, MARKER.work, 'work'), 3);
+  paint(scene, 'pad-up', 44, 44, (c) => drawPad(c, MARKER.upgrade, 'upgrade'), 3);
 }

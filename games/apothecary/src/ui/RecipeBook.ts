@@ -1,12 +1,13 @@
 import Phaser from 'phaser';
 import { itemTexture } from '../art/items';
-import { INK, WOOD } from '../art/palette';
+import { INK, SERIF, fit } from '../art/paint';
+import { cardTexture } from '../art/ui';
 import { ITEMS, PLANTS, RECIPES, REFINE, type ItemId } from '../game/items';
 import { potionPrice, type GameState } from '../game/state';
 
 const ROW = 30;
 const WIDTH = 360;
-const TEXT = { fontFamily: 'monospace', fontSize: '12px', color: '#f3e9d2' };
+const TEXT = { fontFamily: SERIF, fontSize: '13px', color: INK };
 
 /**
  * A panel over the middle of the screen listing what each station makes from what: the refining
@@ -26,7 +27,7 @@ export class RecipeBook {
     let y = 0;
 
     const heading = (label: string) => {
-      parts.push(scene.add.text(0, y, label, { ...TEXT, fontSize: '14px', color: '#e6c766' }).setOrigin(0.5, 0));
+      parts.push(scene.add.text(0, y, label, { ...TEXT, fontSize: '15px', fontStyle: 'bold', color: '#7a4a10' }).setOrigin(0.5, 0));
       y += 24;
     };
     // Ingredient icons joined with "+", an "=", then the product's icon and name.
@@ -38,11 +39,11 @@ export class RecipeBook {
           parts.push(scene.add.text(x - 4, cy, '+', TEXT).setOrigin(0.5));
           x += 8;
         }
-        parts.push(scene.add.image(x + 8, cy, itemTexture(item)).setScale(1.5));
+        parts.push(fit(scene.add.image(x + 8, cy, itemTexture(item)), 1.5));
         x += 28;
       });
       parts.push(scene.add.text(x, cy, '=', TEXT).setOrigin(0.5));
-      parts.push(scene.add.image(x + 22, cy, itemTexture(out)).setScale(1.5));
+      parts.push(fit(scene.add.image(x + 22, cy, itemTexture(out)), 1.5));
       parts.push(scene.add.text(x + 40, cy, ITEMS[out].name, TEXT).setOrigin(0, 0.5));
       this.lines.push(`${inputs.map((i) => ITEMS[i].name).join(' + ')} = ${ITEMS[out].name}`);
       y += ROW;
@@ -55,26 +56,23 @@ export class RecipeBook {
     heading('Cauldron');
     for (const recipe of RECIPES) {
       const cy = row(recipe.inputs, recipe.out);
-      const text = scene.add.text(WIDTH / 2 - 20, cy, '', { ...TEXT, color: '#e6c766' }).setOrigin(1, 0.5);
+      const text = scene.add.text(WIDTH / 2 - 20, cy, '', { ...TEXT, fontStyle: 'bold', color: '#7a4a10' }).setOrigin(1, 0.5);
       parts.push(text);
       this.prices.push({ text, potion: recipe.out });
     }
     y += 6;
-    parts.push(scene.add.text(0, y, 'Tap to close', { ...TEXT, fontSize: '12px', color: '#cdbd9c' }).setOrigin(0.5, 0));
+    parts.push(scene.add.text(0, y, 'Tap to close', { ...TEXT, fontSize: '12px', fontStyle: 'italic', color: '#6a5440' }).setOrigin(0.5, 0));
     y += 18;
 
     const h = y + 28;
-    const bg = scene.add
-      .rectangle(0, h / 2 - 14, WIDTH, h, WOOD.dark)
-      .setStrokeStyle(3, INK)
+    const bg = fit(scene.add.image(0, h / 2 - 14, cardTexture(scene, 'panel', WIDTH, h)))
       .setInteractive()
       .on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
         e.stopPropagation();
         this.toggle(false);
       });
-    const inner = scene.add.rectangle(0, h / 2 - 14, WIDTH - 10, h - 10).setStrokeStyle(1, WOOD.light);
     this.panel = scene.add
-      .container(width / 2, (height - h) / 2 + 14, [bg, inner, ...parts])
+      .container(width / 2, (height - h) / 2 + 14, [bg, ...parts])
       .setDepth(depth)
       .setScrollFactor(0, 0, true)
       .setVisible(false);
