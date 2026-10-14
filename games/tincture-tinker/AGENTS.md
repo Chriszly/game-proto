@@ -12,7 +12,7 @@ and some of its pixel art, but shares no code with it (the art is copied).
 
 - **Implemented:** tap-tap and drag swaps, invalid swaps sliding back for free, matches in rows and
   columns, gravity and refill, free cascades, an automatic shuffle when no move is left, an idle
-  hint that wiggles two tiles, an order panel with progress bars, a result overlay ("Next order" or
+  hint that wiggles two tiles (or tilts them, with reduced motion), an order panel with progress bars, a result overlay ("Next order" or
   "Try again"), and five orders that repeat with growing needs and prices.
 - **Progression:** only `order`, `coins` and `sold` carry over. Coins have nothing to spend them on.
 - **Screens:** one scene (`GameScene`) with the board on the left, the order panel on the right and
@@ -51,7 +51,7 @@ and some of its pixel art, but shares no code with it (the art is copied).
 - `src/art/palette.ts`: colour constants, including `TABLE` and `PARCHMENT` for the board and panel.
 - `src/ui/Button.ts`: `makeButton`, the wooden button used on the result overlay.
 - `shared/setupGame.ts` and `shared/settings.ts` (outside the game folder): the hub's settings,
-  imported by `src/main.ts` and `src/game/orders.ts`.
+  imported by `src/main.ts`, `src/game/orders.ts` and `src/scenes/GameScene.ts`.
 
 ### How it runs
 
@@ -60,7 +60,9 @@ and some of its pixel art, but shares no code with it (the art is copied).
 - **Start:** `GameScene.create` draws the static table, then `begin(startOrder(loadProgress()))`.
   `begin` replaces `state`, destroys and recreates one image per tile (keyed by tile `id` in
   `sprites`), rebuilds the order panel and hides the overlay.
-- **Input:** `pointerDown` maps the pointer to a cell with `cellAt`. The first tap sets `selected`,
+- **Input:** the scene's `pointerdown` listener skips taps on a game object (the result button,
+  whose tap calls `begin`), so the same tap doesn't also pick a tile. `pointerDown` maps the pointer
+  to a cell with `cellAt`. The first tap sets `selected`,
   a tap on a neighbour calls `swap`, a tap on the same tile clears it. `pointerMove` swaps once a
   drag goes half a cell. Input is ignored while `busy` or when `state.phase` is not `play`.
 - **Rules then animation:** `swap` calls `trySwap`, which mutates `state` right away (board, moves,
@@ -91,7 +93,9 @@ and some of its pixel art, but shares no code with it (the art is copied).
 ### Persistence
 
 One key of its own, `tincture-tinker-progress`, holding the JSON `Progress`. `loadProgress` merges
-it over `freshProgress()` and falls back to a fresh start on any error. The hub's settings are
+it over `freshProgress()`, puts back the default of any field that is out of range (`order` must be
+a whole number from 1, `coins` and `sold` finite numbers from 0) and falls back to a fresh start on
+any error. The hub's settings are
 stored separately under `hub-settings`.
 
 ### Randomness and timing
@@ -120,7 +124,8 @@ stored separately under `hub-settings`.
 - Difficulty scales one number: the moves of every order. `orderFor` in `src/game/orders.ts` adds
   `byDifficulty(5, 0, -3)` to the order's `moves`, so Easy gives 5 more, Normal the table's value
   and Hard 3 fewer. `ORDERS` itself is unchanged.
-- `settings.reduceMotion` is not read anywhere else; the idle hint still wiggles two tiles.
+- `settings.reduceMotion` is also read by `updateHint` in `GameScene`: the two hint tiles hold a
+  fixed tilt instead of wiggling.
 - Keep Normal exactly as designed: the playthrough runs on Normal and expects `ORDER_1.moves`.
 - Keep the TinctureTinker row of the difficulty table in the root `README.md` and the difficulty
   sentence in this game's `README.md` in sync with the values.
@@ -158,7 +163,7 @@ stored separately under `hub-settings`.
   lost. Extend it (or add a sibling) in `src/game/board.ts`, record the effect in `Step` in
   `src/game/sim.ts`, and animate it in `GameScene.playStep`.
 - **Spend coins:** add fields to `Progress` in `src/game/state.ts` (they save automatically through
-  `progressOf` and merge over defaults in `loadProgress`), plus UI in `GameScene`. Keep purchases
+  `progressOf` and merge over defaults in `loadProgress`; add a range check there too), plus UI in `GameScene`. Keep purchases
   out of the playthrough.
 - **Move or resize the board:** change `BOARD` in `src/scenes/layout.ts` and the test's `BOARD`; the
   panel is placed by `PANEL` and `NEEDS` independently.
@@ -169,6 +174,8 @@ stored separately under `hub-settings`.
   plays. Wait for `busy` to be false before reading the result, as the test does.
 - `moveTo` and the pop animation look sprites up by tile id when they start, because cascades clear
   tiles that only appear in an earlier step. Don't resolve sprites when queueing.
+  `moveTo` also destroys sprites whose ids are not on its board, which only happens when `shuffle`
+  gives up and returns a fresh board with new ids.
 - Any change to how often `Math.random` is called (board generation, refills, shuffle) changes the
   seeded boards. The test plays a greedy `bestSwap`, so a different board might not fill order 1
   in 15 moves. Rerun the playthrough after such a change.

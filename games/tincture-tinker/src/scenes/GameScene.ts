@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { settings } from '../../../../shared/settings';
 import { kindTexture, potionTexture, TILE_SCALE } from '../art/items';
 import { GOLD, LEAF, PARCHMENT, TABLE } from '../art/palette';
 import { adjacent, COLS, inBoard, ROWS, validMoves, type Board, type Cell } from '../game/board';
@@ -79,7 +80,10 @@ export class GameScene extends Phaser.Scene {
     this.createResult();
     this.begin(startOrder(loadProgress()));
 
-    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => this.pointerDown(p));
+    // A tap on a button (the result overlay's) is the button's alone, not also a tap on the tile under it.
+    this.input.on('pointerdown', (p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
+      if (over.length === 0) this.pointerDown(p);
+    });
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => this.pointerMove(p));
     this.input.on('pointerup', () => (this.dragFrom = null));
   }
@@ -136,7 +140,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Dragging a tile half a cell towards a neighbour swaps them too. */
   private pointerMove(p: Phaser.Input.Pointer) {
-    if (!this.dragFrom || !p.isDown || this.busy) return;
+    if (!this.dragFrom || !p.isDown || this.busy || this.state.phase !== 'play') return;
     const dx = p.x - this.dragFrom.x;
     const dy = p.y - this.dragFrom.y;
     if (Math.max(Math.abs(dx), Math.abs(dy)) < BOARD.cell / 2) return;
@@ -209,6 +213,9 @@ export class GameScene extends Phaser.Scene {
     return {
       ms,
       start: () => {
+        // A shuffle that falls back to a fresh board replaces every tile, so drop the old sprites.
+        const ids = new Set(board.flat().map((t) => t.id));
+        for (const [id, sprite] of this.sprites) if (!ids.has(id)) (sprite.destroy(), this.sprites.delete(id));
         for (let col = 0; col < COLS; col++) {
           const fresh = board.filter((row) => !this.sprites.has(row[col].id)).length;
           for (let row = 0; row < ROWS; row++) {
@@ -284,7 +291,8 @@ export class GameScene extends Phaser.Scene {
       if (!a) return;
       this.hint = [this.state.board[a.row][a.col].id, this.state.board[b.row][b.col].id];
     }
-    const wobble = Math.sin(this.clock / 90) * 0.12;
+    // With reduced motion the two tiles hold still at a tilt instead of wiggling.
+    const wobble = settings.reduceMotion ? 0.12 : Math.sin(this.clock / 90) * 0.12;
     for (const id of this.hint) this.sprites.get(id)?.setRotation(wobble);
   }
 
