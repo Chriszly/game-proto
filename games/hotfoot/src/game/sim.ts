@@ -8,6 +8,7 @@ import {
   FOES,
   GRAVITY,
   RUNNER,
+  SHRINE,
   TRAP_SPAN,
   canTake,
   flameOf,
@@ -16,14 +17,16 @@ import {
   metres,
   speedOf,
   stats,
+  streakMult,
   type GameState,
   type Trap,
   type TrapKind,
 } from './state';
 
 // Moves the run on: the knight runs, jumps, slides and lands, climbs onto ledges and drops off
-// them, goblins and bats move and can be stomped on, traps hurt, coins are picked up, and each
-// checkpoint stops the run on a choice of two boons.
+// them, goblins and bats move and can be stomped on, traps hurt, coins are picked up (worth more
+// on a streak), wayside shrines trade coins for a heart, and each checkpoint stops the run on a
+// choice of two boons.
 
 /** A pulled coin's speed towards the knight. */
 const PULL_SPEED = 700;
@@ -125,7 +128,7 @@ function stomp(s: GameState, prevH: number) {
   const top = foe.h + TRAP_SPAN[foe.kind as Exclude<TrapKind, 'pit'>].hi;
   s.traps = s.traps.filter((t) => t !== foe);
   s.stomps += 1;
-  s.coins += st.coinValue;
+  gainCoin(s, foe.x + foe.w / 2, top);
   effect(s, 'stomp', foe.x + foe.w / 2, top, 450);
   r.h = Math.max(r.h, top);
   r.vh = st.jumpV * STOMP_BOUNCE;
@@ -134,8 +137,42 @@ function stomp(s: GameState, prevH: number) {
   r.slideQueued = false;
 }
 
-function effect(s: GameState, kind: GameState['effects'][number]['kind'], x: number, h: number, total: number) {
-  s.effects.push({ id: s.nextId++, kind, x, h, ms: total, total });
+function effect(s: GameState, kind: GameState['effects'][number]['kind'], x: number, h: number, total: number, text?: string) {
+  s.effects.push({ id: s.nextId++, kind, x, h, ms: total, total, ...(text ? { text } : {}) });
+}
+
+/**
+ * One coin taken (picked up, or knocked out of a stomped foe): worth its value times the streak's
+ * multiplier, and one more on the streak. A coin worth more than one pops its value over the knight.
+ */
+function gainCoin(s: GameState, x: number, h: number) {
+  const value = stats(s).coinValue * streakMult(s.streak);
+  s.streak += 1;
+  s.coins += value;
+  if (value > 1) effect(s, 'pop', x, h + 40, 700, `+${value}`);
+}
+
+/**
+ * Sliding into a wayside shrine trades `SHRINE.price` coins for a heart, if the knight has the
+ * coins and is hurt; otherwise it says why not, once.
+ */
+function visitShrines(s: GameState) {
+  const r = s.runner;
+  if (r.slideMs <= 0 || !grounded(s) || r.h > 0) return;
+  const box = runnerBox(s);
+  for (const sh of s.shrines) {
+    if (sh.used || sh.tried || box.x1 <= sh.x || box.x0 >= sh.x + sh.w) continue;
+    const max = stats(s).maxHearts;
+    if (s.hearts < max && s.coins >= SHRINE.price) {
+      s.coins -= SHRINE.price;
+      s.hearts += 1;
+      sh.used = true;
+      effect(s, 'heal', sh.x + sh.w / 2, 60, 900);
+    } else {
+      sh.tried = true;
+      effect(s, 'refuse', sh.x + sh.w / 2, 90, 1100, s.hearts >= max ? 'Hearts full' : `Needs ${SHRINE.price} coins`);
+    }
+  }
 }
 
 /** A hit from a trap, or from running into the side of a ledge (`'wall'`). */
@@ -143,6 +180,7 @@ function hurt(s: GameState, kind: TrapKind | 'wall') {
   const st = stats(s);
   const r = s.runner;
   s.hits += 1;
+  s.streak = 0;
   r.hurtMs = st.hurtMs;
   if (kind === 'pit') {
     // Thrown back up out of the pit, high enough to clear it.
@@ -207,6 +245,7 @@ export function tick(s: GameState, dt: number) {
     const hit = s.traps.find((t) => touches(s, t));
     if (hit) hurt(s, hit.kind);
   }
+  if (s.phase === 'running') visitShrines(s);
 
   // Coins: picked up on touch, and drawn in from further off with a lodestone.
   const box = runnerBox(s);
@@ -217,7 +256,7 @@ export function tick(s: GameState, dt: number) {
     const near = Math.hypot(dx, dh);
     if (near < COIN_REACH) {
       c.x = Number.NaN;
-      s.coins += st.coinValue;
+      gainCoin(s, s.distance, midH);
       effect(s, 'coin', s.distance, midH, 400);
       continue;
     }
@@ -234,6 +273,7 @@ export function tick(s: GameState, dt: number) {
   s.course = s.course.filter((c) => !Number.isNaN(c.x) && c.x > s.distance - BEHIND);
   s.traps = s.traps.filter((t) => t.x + t.w > s.distance - BEHIND);
   s.ledges = s.ledges.filter((l) => l.x + l.w > s.distance - BEHIND);
+  s.shrines = s.shrines.filter((sh) => sh.x + sh.w > s.distance - BEHIND);
 
   if (s.phase === 'running' && s.distance >= s.checkpointX) {
     s.phase = 'checkpoint';

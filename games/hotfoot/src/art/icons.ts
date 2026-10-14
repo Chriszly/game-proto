@@ -1,76 +1,129 @@
 import Phaser from 'phaser';
 import type { BoonId } from '../game/boons';
-import { CLOTH, FROST, GOLD, HEAL, INK, IRON, RED, TABARD, WOOD } from './palette';
-import { PixelCanvas } from './pixelArt';
+import { C, bezant, circle, gold, heartPath, hl, oval, paint, poly, type Ctx } from './ink';
 
-// Small pictures for the boon cards and the hearts in the top bar, drawn on a 16x16 grid.
+// Small paintings for the boon cards (64x64, in page units of 128 scaled by half) and the hearts in
+// the top band, in the same flat colours and ink as the world. Healing is a green cross, never red.
 
-type Draw = (c: PixelCanvas) => void;
+type Draw = (ctx: Ctx) => void;
 
-const heart: Draw = (c) => {
-  c.ellipse(1, 2, 7, 7, RED.mid).ellipse(7, 2, 7, 7, RED.mid);
-  for (let y = 6; y < 14; y++) c.rect(1 + (y - 6), y, 13 - 2 * (y - 6), 1, RED.mid);
-  c.rect(3, 4, 2, 2, RED.shine);
+const heart: Draw = (ctx) => {
+  heartPath(ctx, 64, 66, 92);
+  ctx.fillStyle = C.verm;
+  ctx.fill();
+  ctx.strokeStyle = C.ink;
+  ctx.lineWidth = 5;
+  ctx.stroke();
+  hl(ctx, [[34, 48], [46, 36]], 5);
 };
 
-const ICONS: Record<BoonId | 'heart-empty', Draw> = {
+const ICONS: Record<BoonId, Draw> = {
   heart,
-  'heart-empty': (c) => {
-    heart(c);
-    c.ellipse(3, 4, 4, 4, 0x2a1d1e).ellipse(9, 4, 4, 4, 0x2a1d1e);
-    for (let y = 7; y < 12; y++) c.rect(3 + (y - 7), y, 9 - 2 * (y - 7), 1, 0x2a1d1e);
+  boots: (ctx) => {
+    // A boot with a gold wing at its heel.
+    poly(ctx, [[46, 18], [76, 18], [76, 78], [104, 92], [104, 110], [40, 110], [40, 78]], C.wood, 4);
+    hl(ctx, [[52, 24], [52, 84]], 3);
+    poly(ctx, [[40, 96], [104, 96], [104, 110], [40, 110]], C.woodDark, 4);
+    for (const [i, y] of [[0, 34], [1, 50], [2, 66]] as const) poly(ctx, [[46, y], [12 + i * 6, y - 18], [8 + i * 8, y - 4], [46, y + 12]], gold(ctx, 8, y - 18, 46, y + 12), 3);
   },
-  boots: (c) => {
-    c.rect(4, 4, 5, 8, WOOD.mid).rect(4, 11, 9, 3, WOOD.mid).rect(4, 4, 5, 1, WOOD.light).rect(4, 13, 9, 1, WOOD.dark);
-    c.line(9, 6, 14, 3, CLOTH.light).line(9, 7, 15, 5, CLOTH.mid).line(9, 8, 14, 8, CLOTH.light);
+  double: (ctx) => {
+    // Two lapis chevrons pointing up: a leap and a leap again.
+    for (const y of [20, 62]) poly(ctx, [[64, y], [104, y + 34], [86, y + 44], [64, y + 26], [42, y + 44], [24, y + 34]], C.lapis, 4);
+    hl(ctx, [[34, 52], [62, 28]], 3);
   },
-  double: (c) => {
-    for (const y of [2, 8]) {
-      for (let i = 0; i < 4; i++) c.rect(8 - i, y + i, 2 * i + 1, 1, FROST.light);
-      c.rect(7, y + 4, 3, 2, FROST.mid);
-    }
+  aegis: (ctx) => {
+    // A lapis shield with a gold cross and a gold rim.
+    const pts: [number, number][] = [[22, 20], [106, 20], [106, 62], [64, 112], [22, 62]];
+    poly(ctx, pts, gold(ctx, 20, 20, 108, 112), 4);
+    poly(ctx, [[30, 28], [98, 28], [98, 60], [64, 100], [30, 60]], C.lapis, 3);
+    poly(ctx, [[58, 34], [70, 34], [70, 52], [88, 52], [88, 62], [70, 62], [70, 90], [58, 90], [58, 62], [40, 62], [40, 52], [58, 52]], gold(ctx, 40, 34, 88, 90), 2.5);
   },
-  aegis: (c) => {
-    c.rect(3, 2, 10, 7, TABARD.mid);
-    for (let y = 9; y < 15; y++) c.rect(3 + Math.floor((y - 8) * 0.8), y, 10 - 2 * Math.floor((y - 8) * 0.8), 1, TABARD.mid);
-    c.rect(7, 4, 2, 8, GOLD.mid).rect(5, 6, 6, 2, GOLD.light).rect(3, 2, 10, 1, TABARD.light);
+  magnet: (ctx) => {
+    // A horseshoe lodestone with silver tips, drawing in a coin.
+    ctx.beginPath();
+    ctx.arc(52, 70, 34, Math.PI * 0.5, Math.PI * 1.5, false);
+    ctx.lineTo(80, 36);
+    ctx.lineTo(80, 54);
+    ctx.lineTo(52, 54);
+    ctx.arc(52, 70, 16, Math.PI * 1.5, Math.PI * 0.5, true);
+    ctx.lineTo(80, 86);
+    ctx.lineTo(80, 104);
+    ctx.closePath();
+    ctx.fillStyle = C.madder;
+    ctx.fill();
+    ctx.strokeStyle = C.ink;
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    poly(ctx, [[80, 36], [94, 36], [94, 54], [80, 54]], C.silver, 3);
+    poly(ctx, [[80, 86], [94, 86], [94, 104], [80, 104]], C.silver, 3);
+    bezant(ctx, 112, 70, 12, 1, 3);
   },
-  magnet: (c) => {
-    c.rect(3, 3, 3, 9, RED.mid).rect(10, 3, 3, 9, RED.mid).rect(3, 11, 10, 3, RED.mid);
-    c.rect(3, 2, 3, 2, IRON.light).rect(10, 2, 3, 2, IRON.light).rect(4, 12, 8, 1, RED.light);
+  greed: (ctx) => {
+    bezant(ctx, 46, 74, 30, 1, 4);
+    bezant(ctx, 82, 50, 30, 1, 4);
   },
-  greed: (c) => {
-    c.ellipse(1, 4, 10, 10, GOLD.mid).ellipse(2, 5, 8, 8, GOLD.light).rect(5, 7, 2, 4, GOLD.dark);
-    c.ellipse(6, 1, 9, 9, GOLD.mid).ellipse(7, 2, 7, 7, GOLD.light).rect(10, 4, 1, 3, GOLD.dark).px(8, 3, GOLD.shine);
+  greaves: (ctx) => {
+    // A steel greave with a gold knee cop, oiled to a shine.
+    poly(ctx, [[42, 20], [86, 20], [80, 100], [48, 100]], C.steel, 4);
+    hl(ctx, [[50, 28], [54, 92]], 4);
+    circle(ctx, 64, 28, 16, gold(ctx, 48, 12, 80, 44), 4);
+    poly(ctx, [[40, 100], [92, 100], [104, 116], [40, 116]], C.iron, 4);
+    oval(ctx, 98, 54, 8, 12, C.goldLight, 3);
   },
-  greaves: (c) => {
-    c.rect(5, 1, 6, 10, IRON.mid).rect(5, 1, 2, 10, IRON.light).rect(4, 11, 9, 3, WOOD.dark);
-    c.ellipse(11, 7, 4, 5, 0xc9a040).px(12, 8, GOLD.shine);
+  cloak: (ctx) => {
+    // A madder hooded cloak with a shadowed face and two pale eyes.
+    poly(ctx, [[64, 10], [92, 30], [100, 70], [116, 116], [12, 116], [28, 70], [36, 30]], C.madder, 4);
+    oval(ctx, 64, 44, 18, 20, C.ink, 0);
+    circle(ctx, 57, 44, 3, C.frost, 0);
+    circle(ctx, 71, 44, 3, C.frost, 0);
+    hl(ctx, [[40, 40], [32, 108]], 3);
   },
-  cloak: (c) => {
-    c.rect(5, 1, 6, 4, 0x3a2c58);
-    for (let y = 5; y < 15; y++) c.rect(5 - Math.floor((y - 5) / 2), y, 6 + 2 * Math.floor((y - 5) / 2), 1, 0x3a2c58);
-    c.rect(6, 2, 4, 3, INK).px(7, 3, FROST.light).px(9, 3, FROST.light).line(5, 6, 2, 14, 0x5a4a88);
-  },
-  mend: (c) => {
-    c.rect(2, 5, 12, 6, CLOTH.light).rect(2, 5, 12, 1, CLOTH.mid).rect(2, 10, 12, 1, CLOTH.dark);
-    c.rect(7, 6, 2, 4, HEAL.mid).rect(6, 7, 4, 2, HEAL.mid).px(7, 6, HEAL.light);
+  mend: (ctx) => {
+    // A rolled linen bandage with a green cross.
+    poly(ctx, [[14, 40], [102, 40], [102, 92], [14, 92]], C.vellumLight, 4);
+    oval(ctx, 102, 66, 14, 26, C.vellumDark, 4);
+    poly(ctx, [[50, 46], [66, 46], [66, 58], [78, 58], [78, 74], [66, 74], [66, 86], [50, 86], [50, 74], [38, 74], [38, 58], [50, 58]], C.heal, 3);
   },
 };
 
-export const iconTexture = (id: BoonId | 'heart-empty') => `icon-${id}`;
+export const iconTexture = (id: BoonId) => `icon-${id}`;
 
 export function bakeIcons(scene: Phaser.Scene) {
   for (const [id, draw] of Object.entries(ICONS)) {
-    const c = new PixelCanvas(18, 18);
-    const inner = new PixelCanvas(16, 16);
-    draw(inner);
-    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
-      const color = inner.get(x, y);
-      if (color !== null) c.px(x + 1, y + 1, color);
-    }
-    c.outline(INK);
-    c.bake(scene, `icon-${id}`, 4);
-    c.bake(scene, `icon-${id}-small`, 2);
+    paint(scene, `icon-${id}`, 64, 64, (ctx) => {
+      ctx.scale(0.5, 0.5);
+      draw(ctx);
+    });
+  }
+  // The hearts in the top band: vermilion when full, bare vellum with hatching when lost.
+  for (const full of [true, false]) {
+    paint(scene, full ? 'heart-full' : 'heart-empty', 28, 26, (ctx) => {
+      heartPath(ctx, 14, 13.5, 24);
+      ctx.fillStyle = full ? C.verm : C.vellum;
+      ctx.fill();
+      ctx.strokeStyle = C.ink;
+      ctx.lineWidth = 1.6;
+      ctx.stroke();
+      if (full) {
+        hl(ctx, [[7, 9], [10, 6]], 1.6);
+      } else {
+        ctx.save();
+        heartPath(ctx, 14, 13.5, 24);
+        ctx.clip();
+        ctx.strokeStyle = 'rgba(43,27,18,0.35)';
+        ctx.lineWidth = 0.8;
+        for (let k = -3; k <= 3; k++) {
+          ctx.beginPath();
+          ctx.moveTo(14 + k * 4 - 4, 21);
+          ctx.lineTo(14 + k * 4 + 4, 5);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+      heartPath(ctx, 14, 13.5, 24);
+      ctx.strokeStyle = C.goldDot;
+      ctx.lineWidth = 0.5;
+      ctx.stroke();
+    });
   }
 }

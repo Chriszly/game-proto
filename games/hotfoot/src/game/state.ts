@@ -25,6 +25,20 @@ export const LEAD_IN = 700;
 /** Coins to buy the boon missed at the last checkpoint, to start the next run with it. */
 export const BOON_PRICE = 30;
 
+/**
+ * The coin streak: every `step` coins taken in a row without a hit raise the multiplier by one, up
+ * to `max`. A coin is worth its value times the multiplier reached before it.
+ */
+export const STREAK = { step: 10, max: 5 };
+/** The coin multiplier after `streak` coins in a row. */
+export const streakMult = (streak: number) => Math.min(STREAK.max, 1 + Math.floor(streak / STREAK.step));
+
+/**
+ * A wayside shrine: one stands on the road once a stage from stage `from`. Sliding into it trades
+ * `price` run coins for one heart, when the knight has the coins and is below full hearts.
+ */
+export const SHRINE = { from: 2, price: 15, w: 46 };
+
 /** Running speed on a stage, in pixels per second. */
 export const speedOf = (stage: number) => Math.min(480, 260 + 30 * (stage - 1));
 
@@ -89,6 +103,15 @@ export function floorAt(s: Pick<GameState, 'ledges'>, x0: number, x1 = x0) {
   return h;
 }
 
+/** A wayside shrine on the road: `used` once it has traded a heart, `tried` once slid into without one. */
+export interface Shrine {
+  id: number;
+  x: number;
+  w: number;
+  used: boolean;
+  tried: boolean;
+}
+
 export interface Coin {
   id: number;
   x: number;
@@ -99,11 +122,13 @@ export interface Coin {
 
 export interface Effect {
   id: number;
-  kind: 'coin' | 'hit' | 'block' | 'dust' | 'stomp';
+  kind: 'coin' | 'hit' | 'block' | 'dust' | 'stomp' | 'pop' | 'heal' | 'refuse';
   x: number;
   h: number;
   ms: number;
   total: number;
+  /** The words of a `pop` ("+3") or a `refuse` ("Hearts full"). */
+  text?: string;
 }
 
 export interface Runner {
@@ -129,6 +154,8 @@ export interface GameState {
   runner: Runner;
   hearts: number;
   coins: number;
+  /** Coins taken in a row since the last hit; sets the coin multiplier (`streakMult`). */
+  streak: number;
   /** Hits taken this run, blocked ones included. */
   hits: number;
   /** Goblins and bats stomped on this run. */
@@ -145,6 +172,7 @@ export interface GameState {
   checkpointX: number;
   traps: Trap[];
   ledges: Ledge[];
+  shrines: Shrine[];
   course: Coin[];
   effects: Effect[];
   /** Best distance reached in any run, in metres. */
@@ -161,6 +189,19 @@ export interface GameState {
 /** Pixels to a metre, for the distance shown. */
 export const PX_PER_M = 32;
 export const metres = (distance: number) => Math.floor(distance / PX_PER_M);
+
+/**
+ * The run track under the HUD, in metres: where the knight is, the best run to chase, a banner at
+ * every checkpoint (every 100 m) up to the track's end, and how far the next banner is.
+ */
+export function trackOf(s: Pick<GameState, 'distance' | 'checkpointX' | 'best'>) {
+  const at = metres(s.distance);
+  const banner = metres(s.checkpointX);
+  const length = Math.ceil((Math.max(s.best, at, banner) + 30) / 50) * 50;
+  const banners: number[] = [];
+  for (let m = 100; m <= length; m += 100) banners.push(m);
+  return { at, best: s.best, length, banners, next: banner - at };
+}
 
 /** The knight's numbers with the boons taken so far. */
 export function stats(s: Pick<GameState, 'ranks'>) {
@@ -192,6 +233,7 @@ export function freshState(best = 0, bank = 0): GameState {
     runner: { h: 0, vh: 0, slideMs: 0, slideQueued: false, jumps: 1, hurtMs: 0 },
     hearts: START_HEARTS,
     coins: 0,
+    streak: 0,
     hits: 0,
     stomps: 0,
     time: 0,
@@ -202,6 +244,7 @@ export function freshState(best = 0, bank = 0): GameState {
     checkpointX: STAGE_LEN,
     traps: [],
     ledges: [],
+    shrines: [],
     course: [],
     effects: [],
     best,
