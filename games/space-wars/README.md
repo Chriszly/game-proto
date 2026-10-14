@@ -14,6 +14,7 @@ your hub, train a fleet and take down the four rival hubs before they take down 
 
 | Control | Action |
 | --- | --- |
+| Tap a faction card (before the battle) | Command that faction. The other four are AI |
 | Tap a combat unit | Select it (replaces the selection) |
 | Drag a box over combat units | Select every combat unit in the box |
 | Tap empty space | Move the selected units there |
@@ -23,9 +24,12 @@ your hub, train a fleet and take down the four rival hubs before they take down 
 | Right-click | Cancel a placement and clear the selection |
 | Arrow keys or WASD | Scroll the map |
 | H | Centre the map on your hub |
-| Hover over a unit or building | Its name, role and hit points |
+| Hover over a unit or building | Its name, role, hit points and stats |
+| Hover over a command button | What it is: cost, stats and ability |
 | Tap after the battle ends | Start a new battle on a new map |
 
+0. **Pick a faction** on the first screen. Each card shows its barracks, ships and signature
+   ability. Your faction always starts at the bottom left of the map.
 1. **Crystal** is the only currency. Harvesters work on their own: each one mines the crystal
    nearest its hub, fills up and carries it back to the hub or a Depot.
 2. **Buildings** cost crystal and take time to finish. Each must go within 240 pixels of your hub,
@@ -67,6 +71,10 @@ attacks.
 The map is 1600 by 1000 pixels. Each faction's hub starts at its own spot, the Solar Concord's at
 the bottom left, the other four at the other corners and in the middle, nudged a little at random.
 
+![The faction picker, with the five cards and their barracks, ships and abilities](docs/screenshots/playthrough-0-start.png)
+
+![A command button's tooltip above the bar: the Lancer's cost, hit points, speed, damage, range and reload](docs/screenshots/tooltips.png)
+
 ![The first round, with the Barracks going up beside the hub](docs/screenshots/playthrough-2-barracks.png)
 
 With Reduce motion on, the explosions in the battle are left out and shots stay at a steady
@@ -89,6 +97,7 @@ nearest enemy base. It pans the map with the arrow keys to reach what it taps. R
 - `src/game/factions.ts`: the five factions, their ship and building outlines and stats.
 - `src/game/map.ts`: random star maps: hub spots, crystal nodes, rock fields, nebulae and stars.
 - `src/game/world.ts`: the battle (economy, production, orders, combat and the AI), with no Phaser.
+- `src/game/describe.ts`: the tooltip and faction-card text, from the faction data.
 - `src/game/arena.ts`: the battlefield, the fixed start points and the placement and crystal distances.
 - `src/scenes/GameScene.ts`: draws the battle each frame, scrolls the map and turns clicks into commands.
 - `src/scenes/layout.ts`: the top bar, the command bar, its buttons and the role names.

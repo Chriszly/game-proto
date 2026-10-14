@@ -26,6 +26,7 @@ interface Building {
 interface Side {
   crystal: number;
   alive: boolean;
+  def: { name: string };
 }
 interface Button {
   kind: 'build' | 'train';
@@ -70,6 +71,10 @@ function scene(page: Page) {
   return {
     state: () => read<GameState>((s) => JSON.parse(JSON.stringify(s.state))),
     buttons: () => read<Button[]>((s) => JSON.parse(JSON.stringify(s.buttons))),
+    /** The faction picker's cards, in view pixels. */
+    pickCards: () => read<{ x: number; y: number; w: number; h: number; faction: number }[]>((s) =>
+      JSON.parse(JSON.stringify(s.pickCards)),
+    ),
     /** Where the map camera is scrolled to, in battlefield pixels. */
     scroll: () => read<{ x: number; y: number }>((s) => ({ x: s.camera.scrollX, y: s.camera.scrollY })),
     /** Where a battlefield point sits in view pixels, from the scene's own conversion. */
@@ -231,6 +236,12 @@ test('plays the first round', async ({ page }, testInfo) => {
   // A dozen frames first, so the start screenshot shows the map drawn.
   await play(FRAME_MS * 12, async () => false);
   await snap('playthrough-0-start');
+
+  // The battle waits on the faction picker: pick the Solar Concord, the first card, as a player would.
+  const card = (await game.pickCards())[0];
+  await tap(card.x + card.w / 2, card.y + card.h / 2);
+  s = await game.state();
+  expect(s.sides[PLAYER].def.name, 'the picked faction commands the battle').toBe('Solar Concord');
 
   // The harvesters mine the nearest crystal and carry it home, so the bank grows past the start.
   await until('crystal harvested and carried home', 60_000, (st) => st.sides[PLAYER].crystal >= START_CRYSTAL + 30);

@@ -151,8 +151,13 @@ export class World {
   elapsedMs = 0;
   private nextId = 1;
 
-  constructor(readonly layout: MapLayout) {
-    this.sides = FACTIONS.map((def, index) => ({ index, def, crystal: START_CRYSTAL, alive: true, thinkMs: 0, attackMs: 0 }));
+  /**
+   * `pick` is the faction the player commands, an index into `FACTIONS`. It takes the player's start
+   * point (slot 0); the other factions fill the rest in their usual order.
+   */
+  constructor(readonly layout: MapLayout, pick = 0) {
+    const order = [pick, ...FACTIONS.map((_, i) => i).filter((i) => i !== pick)];
+    this.sides = order.map((f, index) => ({ index, def: FACTIONS[f], crystal: START_CRYSTAL, alive: true, thinkMs: 0, attackMs: 0 }));
     this.nodes = layout.nodes.map((n) => ({ id: this.id(), x: n.x, y: n.y, amount: n.amount }));
     this.sides.forEach((side, index) => {
       const home = layout.homes[index];
