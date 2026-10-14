@@ -1,18 +1,21 @@
 import { expect, test } from '@playwright/test';
 
 // Plays one round of Colonizer with real inputs (clicks, as a player would): pick a faction, send a
-// villager to chop wood and bring it back, train a villager, build a house and an Academy, and
-// research Axes. Game state is only read, through the `game` object the dev build puts on window.
+// villager to chop wood and bring it back (its drop-off pops a +10 badge), train a villager, build a
+// house and an Academy, research Axes, then advance to Age II, which ticks the first deed for Age III
+// and offers the Age II boon, and pick Harvest Rites. Game state is only read, through the `game`
+// object the dev build puts on window.
 
 type Point = { x: number; y: number };
 interface Unit { id: number; owner: number; type: string; x: number; y: number; order: { t: string } }
+interface Deeds { age2: boolean; army: number; raid: boolean }
 interface Building { id: number; owner: number; type: string; tx: number; ty: number; built: boolean; queue: { key: string }[] }
 interface GameState {
   time: number;
   winner: number | null;
   units: Unit[];
   buildings: Building[];
-  players: { res: Record<string, number>; techs: string[]; age: number }[];
+  players: { res: Record<string, number>; techs: string[]; age: number; deeds: Deeds; boon: string | null; boonPending: boolean }[];
 }
 interface Hud {
   label: string;
@@ -162,6 +165,10 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
   const startVillagers = me(await state()).filter((u) => u.type === 'villager').length;
   expect(startVillagers, 'villagers at the start').toBe(4);
   const town = myBuildings(await state(), 'town')[0];
+  // The match opens in Age I with the three deeds for Age III still to do.
+  const opening = (await state()).players[0];
+  expect(opening.age, 'Age I at the start').toBe(1);
+  expect(opening.deeds, 'no deeds done yet').toEqual({ age2: false, army: 0, raid: false });
 
   // 1. Harvest: a villager gathers wood from the nearest tree and brings it back.
   const s0 = await state();
@@ -180,6 +187,8 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
   await clickTile(tree.tx, tree.ty, 'right');
   await until('wood brought back', (s) => s.players[0].res.wood > START_WOOD);
   expect(await read((g) => [...g.selected].length), 'villager still selected').toBe(1);
+  // The drop-off pops a +10 wood badge over the villager.
+  expect(await read<string[]>((g) => g.popLog), 'drop-off badge').toContain('+10 wood');
   await snap('harvest');
 
   // 2. Economy: the Town Center trains a villager.
@@ -239,6 +248,23 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
   await click(await pageXY(town.tx + 2, town.ty + 2));
   await click(await hudButton('Villager'));
   await until('the villager is trained', (s) => me(s).filter((u) => u.type === 'villager').length > before);
+
+  // 6. Age II at the Town Center: the first deed for Age III is done and the boon pick opens.
+  await until('food and wood for Age II', (s) => s.players[0].res.food >= 400 && s.players[0].res.wood >= 200);
+  await click(await pageXY(town.tx + 2, town.ty + 2));
+  await click(await hudButton('Age II'));
+  const aged = await until('Age II reached', (s) => s.players[0].age === 2, 90_000);
+  expect(aged.players[0].deeds.age2, 'the Age II deed is done').toBe(true);
+  expect(aged.players[0].boonPending, 'the boon pick is open').toBe(true);
+  const cards = await read<string[]>((g) => g.hud.map((h: Hud) => h.label));
+  expect(cards, 'the two boon cards replace the buttons').toEqual(['Shieldwall', 'Harvest Rites']);
+  await snap('boon');
+  await click(await hudButton('Harvest Rites'));
+  const picked = await until('Harvest Rites picked', (s) => s.players[0].boon === 'harvest' && !s.players[0].boonPending, 5_000);
+  expect(picked.players[0].age, 'still Age II: Age III needs all three deeds').toBe(2);
+  // The Town Center now offers Age III, which waits on the other two deeds.
+  await click(await hudButton('Age III'));
+  expect((await state()).buildings.find((b) => b.id === town.id)!.queue.map((q) => q.key), 'Age III is not queued yet').not.toContain('age3');
 
   expect(errors, 'page errors').toEqual([]);
   const end = await state();

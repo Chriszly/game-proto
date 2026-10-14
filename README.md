@@ -24,7 +24,7 @@ start page lists the games; each one lives in its own folder under `games/`.
 | [Lanternkeep](games/lanternkeep/README.md) | Send moths from their jar to light a castle's lanterns before night falls, keep them burning on scarce oil, and upgrade wicks, oil and the moths between nights. |
 | [Space Wars](games/space-wars/README.md) | Command a fleet on a random star map: build a base, raise units and fight rival factions, each with its own buildings and ships. |
 | [Lane Brawl](games/lane-brawl/README.md) | Lead a team of five heroes down the lanes in a MOBA against NPC teams: farm, level up, push the lanes and destroy the enemy base. |
-| [Colonizer](games/colonizer/README.md) | An Age-of-Empires-style pixel RTS: gather wood, food and ore, build, research techs and raise armies of three factions, then destroy the enemy Town Center. |
+| [Colonizer](games/colonizer/README.md) | An Age-of-Empires-style RTS embroidered like the Bayeux tapestry: gather wood, food and ore, build, research techs and raise armies of three factions, pick an Age II boon, earn Age III with three deeds, then destroy the enemy Town Center. |
 
 ## Settings
 
