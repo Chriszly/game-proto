@@ -196,8 +196,8 @@ Missile speeds, `LEAP_RANGE`, `BARRICADE_REPAIR` and effect durations (`EFFECT_M
   - At most two more level-ups in wave 1, then wave 2 in `'break'` with `bestWave` 1, 6 kills,
     18 experience earned and the barricade above 0.
 - **Mirrored in the test:** `VIEW`, each foe's `xp`, `xpToNext`, the wave 1 makeup and the field
-  names of `GameState`, and `AUTO_PICK_MS`. A change to `ENEMIES` xp, `xpToNext`, `waveFoes` for wave 1, `VIEW`,
-  `CARDS` or those state fields needs a test update in the same PR.
+  names of `GameState`, and `AUTO_PICK_MS`. A change to `ENEMIES` xp, `xpToNext`, `waveFoes` for wave 1, `VIEW`
+  or those state fields needs a test update in the same PR.
 - **Seeded random:** the test seeds `Math.random`. The upgrades offered, and so the card tapped,
   depend on the exact sequence of random calls. The exact-experience checks only hold if no
   tapped card is Battle Lore (`lore` changes `xpGain`). Adding a random call, or reordering

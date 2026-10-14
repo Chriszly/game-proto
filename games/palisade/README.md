@@ -37,7 +37,7 @@ the experience bar, and every level-up pauses the battle on three upgrades to pi
 | --- | --- | --- |
 | Goblin | wave 1 | Quick and weak |
 | Orc | wave 1 | The steady grunt; every wave opens with one |
-| Dark Knight | wave 4 | Slow and tough, and its armour takes 5 off every arrow and fireball hit |
+| Dark Knight | wave 4 | Slow and tough, and its armour takes 5 off every arrow, burst and fireball hit |
 | Troll King | every 10th wave | The boss: three health bars on wave 10 and one more every ten waves, shown stacked at the top of the screen, each a different colour |
 
 ![The Troll King and his health bars](docs/screenshots/boss.png)
@@ -99,7 +99,7 @@ foe's experience, that the battle waits on the level-up, taps the first card and
 upgrade was taken, then plays on until the wave is cleared with the barricade standing. Like the
 Apothecary test it owns the game clock and plays at 4x speed (`PLAYTHROUGH_SPEED`). The
 **Playthrough Palisade** workflow (`.github/workflows/playthrough-palisade.yml`) runs it on every PR
-and push to main that touches this folder or a shared build file, and uploads the video and
+that changes this folder or the workflow, and uploads the video and
 screenshots as the `playthrough-palisade` artifact.
 
 ```sh

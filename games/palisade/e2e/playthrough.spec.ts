@@ -199,7 +199,7 @@ test('plays the first wave', async ({ page }, testInfo) => {
 
   // Clear the wave, taking the first card of any further level-up. The barricade holds.
   for (let picks = 0; ; picks++) {
-    expect(picks, 'level-ups in wave 1').toBeLessThan(3);
+    expect(picks, 'level-ups in wave 1').toBeLessThan(2);
     s = await until('wave 1 cleared or a level-up', (s) => s.wave === 2 || s.choices !== null, 60_000);
     if (s.wave === 2) break;
     await tapCard((await game.cards())[0]);
