@@ -2,8 +2,9 @@ import { expect, test, type Page } from '@playwright/test';
 
 // Plays the first round with real inputs: the crystal harvesters mine and carry crystal home, the
 // player raises a Barracks beside the hub, trains a Lancer from it, and sends the Lancer to attack
-// the nearest enemy base. Game state is only read, through the `game` object the dev build puts on
-// window.
+// the nearest enemy base. The map is bigger than the screen, so the test pans it with the arrow
+// keys to reach what it needs to tap. Game state is only read, through the `game` object the dev
+// build puts on window.
 
 interface Unit {
   id: number;
@@ -43,6 +44,10 @@ interface GameState {
 }
 
 const VIEW = { w: 960, h: 540 };
+/** The map's window on screen, between the top and command bars, from src/scenes/layout.ts. */
+const MAP_VIEW = { x: 0, y: 34, w: 960, h: 406 };
+/** How close to the map's edge a target may sit before the test pans toward it. */
+const EDGE = 60;
 /** Game time per animation frame, every frame the same length. */
 const FRAME_MS = 64;
 /** Game time advanced between checks: a few animation frames. */
@@ -65,6 +70,14 @@ function scene(page: Page) {
   return {
     state: () => read<GameState>((s) => JSON.parse(JSON.stringify(s.state))),
     buttons: () => read<Button[]>((s) => JSON.parse(JSON.stringify(s.buttons))),
+    /** Where the map camera is scrolled to, in battlefield pixels. */
+    scroll: () => read<{ x: number; y: number }>((s) => ({ x: s.camera.scrollX, y: s.camera.scrollY })),
+    /** Where a battlefield point sits in view pixels, from the scene's own conversion. */
+    toScreen: (x: number, y: number) =>
+      page.evaluate(
+        ({ x, y }) => (window as any).game.scene.getScene('Game').toScreen(x, y),
+        { x, y },
+      ) as Promise<{ x: number; y: number }>,
     /** Whether a Barracks can go at (x, y) for the player, from the game's own placement rule. */
     canPlace: (x: number, y: number) =>
       page.evaluate(
@@ -159,6 +172,54 @@ test('plays the first round', async ({ page }, testInfo) => {
     const b = (await game.buttons()).find((btn) => btn.kind === kind && btn.key === key)!;
     return { x: b.x + b.w / 2, y: b.y + b.h / 2 };
   };
+  /** Whether a battlefield point is on the map's part of the screen, clear of the edges. */
+  async function onMap(x: number, y: number) {
+    const at = await game.toScreen(x, y);
+    return at.x >= EDGE && at.x <= MAP_VIEW.w - EDGE && at.y >= MAP_VIEW.y + EDGE && at.y <= MAP_VIEW.y + MAP_VIEW.h - EDGE;
+  }
+  /**
+   * Pans the map with the arrow keys, as a player would, until a battlefield point is on screen.
+   * Stops early at the battlefield's edge, where the view can't go further.
+   */
+  async function reveal(x: number, y: number) {
+    for (let i = 0; i < 60 && !(await onMap(x, y)); i++) {
+      const at = await game.toScreen(x, y);
+      const keys: string[] = [];
+      if (at.x < EDGE) keys.push('ArrowLeft');
+      else if (at.x > MAP_VIEW.w - EDGE) keys.push('ArrowRight');
+      if (at.y < MAP_VIEW.y + EDGE) keys.push('ArrowUp');
+      else if (at.y > MAP_VIEW.y + MAP_VIEW.h - EDGE) keys.push('ArrowDown');
+      const before = await game.scroll();
+      for (const k of keys) await page.keyboard.down(k);
+      await play(FRAME_MS * 4, async () => false);
+      for (const k of keys) await page.keyboard.up(k);
+      const after = await game.scroll();
+      if (after.x === before.x && after.y === before.y) break;
+    }
+    expect(await onMap(x, y), `(${x}, ${y}) on screen after panning; scroll ${JSON.stringify(await game.scroll())}`).toBe(true);
+  }
+  /** Taps a battlefield point, panning to it first. */
+  async function tapWorld(x: number, y: number) {
+    await reveal(x, y);
+    const at = await game.toScreen(x, y);
+    await tap(at.x, at.y);
+  }
+  /**
+   * Taps a unit where it is at that moment, panning to it first. Units keep moving while the game
+   * plays, so the position is read from the state right before the tap, not kept from earlier.
+   */
+  async function tapUnit(id: number) {
+    for (let i = 0; i < 10; i++) {
+      const u = (await game.state()).units.find((x) => x.id === id)!;
+      if (await onMap(u.x, u.y)) {
+        const at = await game.toScreen(u.x, u.y);
+        await tap(at.x, at.y);
+        return;
+      }
+      await reveal(u.x, u.y);
+    }
+    throw new Error(`unit ${id} never came on screen`);
+  }
   const mine = (s: GameState, type: string) => s.units.filter((u) => u.faction === PLAYER && u.type === type);
   const barracks = (s: GameState) => s.buildings.find((b) => b.faction === PLAYER && b.type === 'barracks');
 
@@ -167,8 +228,8 @@ test('plays the first round', async ({ page }, testInfo) => {
   expect(s.phase).toBe('playing');
   expect(s.sides[PLAYER].crystal).toBe(START_CRYSTAL);
   expect(mine(s, 'harvester')).toHaveLength(2);
-  // A few frames first, so the start screenshot shows the map drawn.
-  await play(FRAME_MS * 4, async () => false);
+  // A dozen frames first, so the start screenshot shows the map drawn.
+  await play(FRAME_MS * 12, async () => false);
   await snap('playthrough-0-start');
 
   // The harvesters mine the nearest crystal and carry it home, so the bank grows past the start.
@@ -191,7 +252,7 @@ test('plays the first round', async ({ page }, testInfo) => {
     }
   }
   expect(spot, 'a clear spot for a Barracks beside the hub').not.toBeNull();
-  await tap(spot!.x, spot!.y);
+  await tapWorld(spot!.x, spot!.y);
   await until('barracks built', 30_000, (st) => !!barracks(st)?.done);
   await snap('playthrough-2-barracks');
 
@@ -206,12 +267,12 @@ test('plays the first round', async ({ page }, testInfo) => {
 
   // Select the Lancer, then tap the nearest enemy base to attack it.
   const lancer = mine(s, 'scout')[0];
-  await tap(lancer.x, lancer.y);
+  await tapUnit(lancer.id);
   const enemyHub = s.buildings
     .filter((b) => b.faction !== PLAYER)
     .reduce((best, b) => (Math.hypot(b.x - lancer.x, b.y - lancer.y) < Math.hypot(best.x - lancer.x, best.y - lancer.y) ? b : best));
   const enemyStart = enemyHub.hp;
-  await tap(enemyHub.x, enemyHub.y);
+  await tapWorld(enemyHub.x, enemyHub.y);
   await until('the enemy base takes damage', 120_000, (st) => {
     const b = st.buildings.find((x) => x.id === enemyHub.id);
     return !b || b.hp < enemyStart;

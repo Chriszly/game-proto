@@ -1,11 +1,11 @@
 import Phaser from 'phaser';
-import { ARENA, NODE_AMOUNT } from '../game/arena';
+import { ARENA, BUILD_RANGE, NODE_AMOUNT } from '../game/arena';
 import { generateMap, type MapLayout } from '../game/map';
 import { FACTIONS, type Role, type UnitId } from '../game/factions';
 import { PLAYER, World, buildingStats, unitStats, type Building, type Unit } from '../game/world';
 import { drawDome, drawHealth, drawShape } from '../art/draw';
 import { settings } from '../../../../shared/settings';
-import { BAR, BUTTONS, FONT, TOP, VIEW, type Button } from './layout';
+import { BAR, BUTTONS, FONT, MAP_VIEW, ROLE_LABEL, TOP, VIEW, type Button } from './layout';
 
 // Game time for one step at most, so a hidden tab doesn't jump the battle ahead.
 const MAX_STEP_MS = 100;
@@ -15,6 +15,10 @@ const DRAG_MIN = 6;
 const UNIT_SCALE = 1.4;
 const BEAM_MS = 140;
 const BOOM_MS = 450;
+/** How fast the arrow keys and WASD scroll the map, in view pixels a second. */
+const PAN_SPEED = 360;
+/** How far above an entity the hover label sits. */
+const LABEL_LIFT = 26;
 
 interface Drag {
   x0: number;
@@ -28,22 +32,29 @@ export class GameScene extends Phaser.Scene {
   /** The battle itself; the playthrough test reads it. */
   state!: World;
   layout!: MapLayout;
+  /** The map's camera: it shows a window of the battlefield between the bars. The test reads its scroll. */
+  camera!: Phaser.Cameras.Scene2D.Camera;
   /** The command bar's buttons, in view pixels. */
   readonly buttons: Button[] = BUTTONS;
   /** Units the player has selected. */
   selected = new Set<number>();
   /** The building the player is about to place, once its button is pressed. */
   placing: Role | null = null;
+  /** The last pointer position, in view pixels. */
   private pointer = { x: 0, y: 0 };
   private drag: Drag | null = null;
   private message = '';
   private lastFrame: number | null = null;
+  private keys!: Record<string, Phaser.Input.Keyboard.Key>;
+  private chromeGfx!: Phaser.GameObjects.Graphics;
   private staticGfx!: Phaser.GameObjects.Graphics;
   private gfx!: Phaser.GameObjects.Graphics;
+  private uiGfx!: Phaser.GameObjects.Graphics;
   private hud!: Phaser.GameObjects.Text;
   private rivals!: Phaser.GameObjects.Text;
   private bar!: Phaser.GameObjects.Text;
   private overlay!: Phaser.GameObjects.Text;
+  private hoverLabel!: Phaser.GameObjects.Text;
   private captions!: { name: Phaser.GameObjects.Text; cost: Phaser.GameObjects.Text }[];
 
   constructor() {
@@ -51,22 +62,47 @@ export class GameScene extends Phaser.Scene {
   }
 
   create() {
+    this.chromeGfx = this.add.graphics();
     this.staticGfx = this.add.graphics();
     this.gfx = this.add.graphics();
+    this.uiGfx = this.add.graphics();
     const text = (x: number, y: number, size: string, color = '#f3e9d2') =>
       this.add.text(x, y, '', { fontFamily: FONT, fontSize: size, color });
     this.hud = text(10, 9, '14px');
     this.rivals = text(VIEW.w - 10, 9, '14px').setOrigin(1, 0);
     this.bar = text(500, BAR.y + 8, '13px', '#d8e0ff').setWordWrapWidth(440);
-    this.overlay = text(VIEW.w / 2, ARENA.y + ARENA.h / 2, '36px', '#ffffff').setOrigin(0.5).setAlign('center');
+    this.overlay = text(MAP_VIEW.x + MAP_VIEW.w / 2, MAP_VIEW.y + MAP_VIEW.h / 2, '36px', '#ffffff')
+      .setOrigin(0.5)
+      .setAlign('center');
+    this.hoverLabel = text(0, 0, '12px').setOrigin(0.5, 1).setVisible(false);
     this.captions = BUTTONS.map((b) => ({
       name: text(b.x + 6, b.y + 3, '12px').setText(''),
       cost: text(b.x + 6, b.y + 16, '10px', '#d8c98a'),
     }));
+
+    // The map scrolls in its own camera; the bars and the text sit on a second one that never moves.
+    this.camera = this.cameras.main;
+    this.camera.setViewport(MAP_VIEW.x, MAP_VIEW.y, MAP_VIEW.w, MAP_VIEW.h);
+    const fixed = this.cameras.add(0, 0, VIEW.w, VIEW.h);
+    fixed.ignore([this.staticGfx, this.gfx, this.hoverLabel]);
+    this.camera.ignore([
+      this.chromeGfx,
+      this.uiGfx,
+      this.hud,
+      this.rivals,
+      this.bar,
+      this.overlay,
+      ...this.captions.flatMap((c) => [c.name, c.cost]),
+    ]);
+    this.drawChrome();
+
     this.input.mouse?.disableContextMenu();
     this.input.on('pointerdown', this.onDown, this);
     this.input.on('pointermove', this.onMove, this);
     this.input.on('pointerup', this.onUp, this);
+    // Arrow keys scroll the map; keep the browser from scrolling the page with them too.
+    this.keys = this.input.keyboard!.addKeys('UP,DOWN,LEFT,RIGHT,W,A,S,D,H') as Record<string, Phaser.Input.Keyboard.Key>;
+    this.input.keyboard!.addCapture('UP,DOWN,LEFT,RIGHT');
     this.newGame();
   }
 
@@ -80,6 +116,7 @@ export class GameScene extends Phaser.Scene {
     this.message = '';
     this.lastFrame = null;
     this.drawStatic();
+    this.centreOnHub();
   }
 
   update(time: number) {
@@ -88,15 +125,62 @@ export class GameScene extends Phaser.Scene {
     this.lastFrame = time;
     this.state.update(dt);
     this.selected = new Set([...this.selected].filter((id) => this.state.selectable(id)));
+    this.pan(dt);
     this.draw();
   }
 
-  /** Nebulae, stars, rock fields and the bars: drawn once per map. */
+  /** The battlefield point under a view pixel, from the map camera's scroll and viewport. */
+  toWorld(x: number, y: number) {
+    return { x: x - MAP_VIEW.x + this.camera.scrollX, y: y - MAP_VIEW.y + this.camera.scrollY };
+  }
+
+  /** Where a battlefield point is in view pixels, from the map camera's scroll and viewport. */
+  toScreen(x: number, y: number) {
+    return { x: x - this.camera.scrollX + MAP_VIEW.x, y: y - this.camera.scrollY + MAP_VIEW.y };
+  }
+
+  /** Whether a view pixel is over the map, rather than the top or command bar. */
+  private inMap(x: number, y: number) {
+    return x >= MAP_VIEW.x && x < MAP_VIEW.x + MAP_VIEW.w && y >= MAP_VIEW.y && y < MAP_VIEW.y + MAP_VIEW.h;
+  }
+
+  /** Scrolls the map so its top-left corner is at (left, top), keeping the view inside the battlefield. */
+  private scrollTo(left: number, top: number) {
+    this.camera.setScroll(
+      Phaser.Math.Clamp(left, ARENA.x, ARENA.x + ARENA.w - MAP_VIEW.w),
+      Phaser.Math.Clamp(top, ARENA.y, ARENA.y + ARENA.h - MAP_VIEW.h),
+    );
+  }
+
+  /** Centres the map on (x, y). */
+  private centreOn(x: number, y: number) {
+    this.scrollTo(x - MAP_VIEW.w / 2, y - MAP_VIEW.h / 2);
+  }
+
+  /** Centres the map on the player's hub, where the battle starts and H brings the view back. */
+  private centreOnHub() {
+    const hub = this.state.hubOf(PLAYER);
+    if (hub) this.centreOn(hub.x, hub.y);
+  }
+
+  /** Arrow keys and WASD scroll the map; H centres it on the hub. */
+  private pan(dt: number) {
+    const k = this.keys;
+    const dx = (k.RIGHT.isDown || k.D.isDown ? 1 : 0) - (k.LEFT.isDown || k.A.isDown ? 1 : 0);
+    const dy = (k.DOWN.isDown || k.S.isDown ? 1 : 0) - (k.UP.isDown || k.W.isDown ? 1 : 0);
+    if (dx || dy) {
+      const step = (PAN_SPEED * dt) / 1000;
+      this.scrollTo(this.camera.scrollX + dx * step, this.camera.scrollY + dy * step);
+    }
+    if (Phaser.Input.Keyboard.JustDown(k.H)) this.centreOnHub();
+  }
+
+  /** Nebulae, stars and rock fields on the battlefield: drawn once per map. */
   private drawStatic() {
     const g = this.staticGfx;
     g.clear();
     g.fillStyle(0x070a1c, 1);
-    g.fillRect(0, 0, VIEW.w, VIEW.h);
+    g.fillRect(ARENA.x, ARENA.y, ARENA.w, ARENA.h);
     for (const n of this.layout.nebulae) {
       g.fillStyle(n.color, 0.22);
       g.fillCircle(n.x, n.y, n.r);
@@ -113,6 +197,11 @@ export class GameScene extends Phaser.Scene {
       g.lineStyle(1.5, 0x6f78a0, 1);
       g.strokeCircle(k.x, k.y, k.r);
     }
+  }
+
+  /** The top and command bars: drawn once, as they stay put while the map scrolls. */
+  private drawChrome() {
+    const g = this.chromeGfx;
     g.fillStyle(0x0b0f22, 1);
     g.fillRect(0, 0, VIEW.w, TOP.h);
     g.fillRect(0, BAR.y, VIEW.w, BAR.h);
@@ -125,6 +214,7 @@ export class GameScene extends Phaser.Scene {
     const s = this.state;
     const g = this.gfx;
     g.clear();
+    this.uiGfx.clear();
 
     for (const n of s.nodes) {
       if (n.amount <= 0) continue;
@@ -160,6 +250,7 @@ export class GameScene extends Phaser.Scene {
 
     this.drawSelection();
     this.drawPlacement();
+    this.drawHover();
     this.drawBar();
     this.drawText();
   }
@@ -201,31 +292,60 @@ export class GameScene extends Phaser.Scene {
     if (u.hp < maxHp) drawHealth(this.gfx, u.x, u.y - 14, 22, u.hp / maxHp);
   }
 
+  /** The box being dragged, in view pixels. */
   private drawSelection() {
     if (this.drag) {
       const d = this.drag;
-      this.gfx.lineStyle(1, 0xffffff, 0.8);
-      this.gfx.strokeRect(Math.min(d.x0, d.x1), Math.min(d.y0, d.y1), Math.abs(d.x1 - d.x0), Math.abs(d.y1 - d.y0));
+      this.uiGfx.lineStyle(1, 0xffffff, 0.8);
+      this.uiGfx.strokeRect(Math.min(d.x0, d.x1), Math.min(d.y0, d.y1), Math.abs(d.x1 - d.x0), Math.abs(d.y1 - d.y0));
     }
   }
 
   /** The building being placed follows the pointer: green where it can go, orange where it can't. */
   private drawPlacement() {
-    if (!this.placing || this.pointer.y >= BAR.y) return;
-    const { x, y } = this.pointer;
+    if (!this.placing || !this.inMap(this.pointer.x, this.pointer.y)) return;
+    const { x, y } = this.toWorld(this.pointer.x, this.pointer.y);
     const ok = this.state.placementProblem(this.placing, x, y) === null;
     const side = this.state.sides[PLAYER];
     const def = side.def.buildings[this.placing];
     const hub = this.state.hubOf(PLAYER);
     if (hub) {
       this.gfx.lineStyle(1, 0xffffff, 0.25);
-      this.gfx.strokeCircle(hub.x, hub.y, 240);
+      this.gfx.strokeCircle(hub.x, hub.y, BUILD_RANGE);
     }
     drawShape(this.gfx, x, y, 0, def.shape, 1, ok ? 0x7dffb0 : 0xffa94d, side.def.accent, 0.6);
   }
 
+  /** Names the unit or building under the pointer, with its role and hit points. */
+  private drawHover() {
+    const label = this.hoverLabel;
+    const hit = this.inMap(this.pointer.x, this.pointer.y) && !this.placing
+      ? this.toWorld(this.pointer.x, this.pointer.y)
+      : null;
+    const target = hit ? this.state.entityAt(hit.x, hit.y) : null;
+    if (!target) {
+      label.setVisible(false);
+      return;
+    }
+    const side = this.state.sides[target.faction];
+    let text: string;
+    let at: { x: number; y: number };
+    if (target.kind === 'unit') {
+      const u = this.state.unit(target.id)!;
+      text = `${side.def.units[u.type].name} · ${ROLE_LABEL[u.type]} · ${Math.ceil(u.hp)}/${unitStats(side, u.type).hp}`;
+      at = u;
+    } else {
+      const b = this.state.building(target.id)!;
+      text = `${side.def.buildings[b.type].name} · ${ROLE_LABEL[b.type]} · ${Math.ceil(b.hp)}/${b.maxHp}`;
+      at = b;
+    }
+    if (label.text !== text) label.setText(text);
+    label.setPosition(at.x, at.y - LABEL_LIFT).setVisible(true);
+  }
+
+  /** Each button: its name, its role and crystal cost. Lit when armed; dimmed when unaffordable. */
   private drawBar() {
-    const g = this.gfx;
+    const g = this.uiGfx;
     BUTTONS.forEach((b, i) => {
       const { name, cost } = this.buttonInfo(b);
       const affordable = this.state.sides[PLAYER].crystal >= cost;
@@ -236,8 +356,8 @@ export class GameScene extends Phaser.Scene {
       g.strokeRect(b.x, b.y, b.w, b.h);
       const caption = this.captions[i];
       if (caption.name.text !== name) caption.name.setText(name);
-      const costText = `${cost} crystal`;
-      if (caption.cost.text !== costText) caption.cost.setText(costText);
+      const roleLine = `${ROLE_LABEL[b.key]} · ${cost}`;
+      if (caption.cost.text !== roleLine) caption.cost.setText(roleLine);
       caption.name.setColor(affordable ? '#f3e9d2' : '#7d8398');
     });
   }
@@ -271,7 +391,15 @@ export class GameScene extends Phaser.Scene {
     } else if (!bar) {
       bar = 'Tap a unit to select it, or drag a box. Tap the ground to move, tap an enemy to attack. Harvesters work on their own.';
     }
-    if (this.selected.size) bar = `Selected: ${this.selected.size}\n${bar}`;
+    if (this.selected.size === 1) {
+      const u = s.unit([...this.selected][0]);
+      if (u) {
+        const us = s.sides[u.faction];
+        bar = `Selected: ${us.def.units[u.type].name} (${ROLE_LABEL[u.type]}), hp ${Math.ceil(u.hp)}/${unitStats(us, u.type).hp}\n${bar}`;
+      }
+    } else if (this.selected.size) {
+      bar = `Selected: ${this.selected.size} units\n${bar}`;
+    }
     if (this.bar.text !== bar) this.bar.setText(bar);
 
     const end = s.phase === 'won' ? 'Victory\nTap to play again' : s.phase === 'lost' ? 'Defeat\nTap to try again' : '';
@@ -294,8 +422,10 @@ export class GameScene extends Phaser.Scene {
       if (b) this.press(b);
       return;
     }
+    if (!this.inMap(p.x, p.y)) return;
     if (this.placing) {
-      const problem = this.state.build(this.placing, p.x, p.y);
+      const at = this.toWorld(p.x, p.y);
+      const problem = this.state.build(this.placing, at.x, at.y);
       if (problem) {
         this.message = problem;
       } else {
@@ -320,23 +450,26 @@ export class GameScene extends Phaser.Scene {
     this.drag = null;
     if (!d || this.state.phase !== 'playing') return;
     if (Math.hypot(p.x - d.x0, p.y - d.y0) >= DRAG_MIN) {
-      this.selected = new Set(this.state.selectableIn(d.x0, d.y0, p.x, p.y));
+      const a = this.toWorld(d.x0, d.y0);
+      const b = this.toWorld(p.x, p.y);
+      this.selected = new Set(this.state.selectableIn(a.x, a.y, b.x, b.y));
       this.message = '';
       return;
     }
-    this.tapMap(p.x, p.y);
+    if (this.inMap(p.x, p.y)) this.tapMap(p.x, p.y);
   }
 
-  /** A tap on the map: select a combat unit, or command the selection to attack or move. */
+  /** A tap on the map, in view pixels: select a combat unit, or command the selection to attack or move. */
   private tapMap(x: number, y: number) {
-    const hit = this.state.entityAt(x, y);
+    const at = this.toWorld(x, y);
+    const hit = this.state.entityAt(at.x, at.y);
     if (hit?.kind === 'unit' && hit.faction === PLAYER && this.state.selectable(hit.id)) {
       this.selected = new Set([hit.id]);
       this.message = '';
       return;
     }
     if (!this.selected.size) return;
-    if (!this.state.command([...this.selected], x, y)) {
+    if (!this.state.command([...this.selected], at.x, at.y)) {
       this.message = 'Harvesters work on their own';
       return;
     }

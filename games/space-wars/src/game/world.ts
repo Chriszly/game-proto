@@ -230,7 +230,9 @@ export class World {
     const producers = this.buildings.filter(
       (b) => b.faction === faction && b.done && b.type === (type === 'harvester' ? 'hub' : 'barracks'),
     );
-    if (!producers.length) return type === 'harvester' ? 'No hub' : 'Build a Barracks first';
+    if (!producers.length) {
+      return type === 'harvester' ? 'No hub' : `Build the ${side.def.buildings.barracks.name} (barracks) first`;
+    }
     const producer = producers.reduce((a, b) => (b.queue.length < a.queue.length ? b : a));
     if (producer.queue.length >= MAX_QUEUE) return 'Queue full';
     side.crystal -= cost;
@@ -385,7 +387,8 @@ export class World {
     }
     if (!stats.weapon) return;
     const stop = stats.weapon.range + this.radiusOf(target) - 4;
-    if (dist(u, target) <= stop) {
+    // Same slack as `approach`, so a unit that stopped at its range can always fire.
+    if (dist(u, target) <= stop + 0.5) {
       if (u.cooldown <= 0) {
         this.shoot(u, stats.weapon.damage, target);
         u.cooldown = stats.weapon.cooldownMs;
