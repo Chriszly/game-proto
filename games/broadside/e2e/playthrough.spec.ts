@@ -1,20 +1,34 @@
 import { expect, test, type Page } from '@playwright/test';
 
 // Plays the first wave with real inputs: the helm buttons are held down to steer, as a thumb would
-// on a phone, the broadsides fire on their own when an enemy is off either side, sunk ships leave
-// loot to sail over, and the harbor opens once the wave is beaten, where one upgrade is bought
-// before setting sail for wave 2.
+// on a phone, and a fire control is held to aim and charge a broadside and let go to fire it once
+// an enemy is off that side. Sunk ships leave loot to sail over, and the harbor opens once the
+// wave is beaten, where one upgrade is bought before setting sail for wave 2.
 // Game state is only read, through the `game` object the dev build puts on window.
 
-interface Ship { id: number; kind: string; x: number; y: number; heading: number; hp: number; maxHp: number }
+type Side = 'port' | 'starboard';
+interface Ship {
+  id: number;
+  kind: string;
+  x: number;
+  y: number;
+  heading: number;
+  hp: number;
+  maxHp: number;
+  reload: Record<Side, number>;
+  slowMs: number;
+}
 interface GameState {
   phase: 'break' | 'fighting' | 'harbor' | 'over';
   wave: number;
   toSpawn: string[];
   player: Ship;
   helm: number;
+  aim: Record<Side, boolean>;
+  charge: Record<Side, number | null>;
+  order: string;
   enemies: Ship[];
-  balls: { fromPlayer: boolean }[];
+  balls: { fromPlayer: boolean; shot: string }[];
   loot: { x: number; y: number; gold: number }[];
   gold: number;
   plundered: number;
@@ -27,16 +41,30 @@ type Button = { id: string; x: number; y: number; w: number; h: number };
 const VIEW = { w: 960, h: 540 };
 /** The size of the sea, from src/game/state.ts; it wraps around at its edges. */
 const WORLD = { w: 1920, h: 1200 };
-/** The helm buttons' centres, from src/scenes/layout.ts. */
+/** The helm buttons' and fire controls' centres, from src/scenes/layout.ts. */
 const HELM = { port: { x: 86, y: 456 }, starboard: { x: 874, y: 456 } };
+const FIRE = { port: { x: 86, y: 314 }, starboard: { x: 874, y: 314 } };
 /** Wave 1 is two sloops, from src/game/waves.ts; each leaves 10 gold, from src/game/ships.ts. */
 const WAVE_1 = ['sloop', 'sloop'];
 const SLOOP_LOOT = 10;
 /** The player's hull and Heavy Shot's first price, from src/game/state.ts and upgrades.ts. */
 const HULL = 120;
 const HEAVY_SHOT = 15;
-/** How close a broadside's target must be, from PLAYER in state.ts, less a margin. */
+/** How close to sail to an enemy before turning side-on, from PLAYER.range in state.ts, less a margin. */
 const CLOSE_IN = 220;
+/**
+ * A fully charged broadside reaches PLAYER.range (260); fire at enemies a little inside it, and
+ * within ARC (32 degrees, from state.ts) of straight out from the side, less a margin.
+ */
+const FIRE_WITHIN = 210;
+const RANGE = 260;
+const REACH_MIN = 0.65;
+const ARC = (28 * Math.PI) / 180;
+/** Start aiming only when an enemy is this close to straight out from the side. */
+const AIM_ARC = (12 * Math.PI) / 180;
+/** The first wave's captain's order, from FIRST_ORDER in src/game/state.ts. */
+const FIRST_ORDER = 'chain';
+const SIDES: Side[] = ['port', 'starboard'];
 
 /**
  * Game time per animation frame, every frame the same length. Longer frames mean fewer to draw, so
@@ -85,6 +113,31 @@ function course(s: GameState): number | null {
   }
   const loot = nearest(p, s.loot);
   return loot ? bearing(p, loot) : null;
+}
+
+/**
+ * The enemies off one side of the player's ship: in reach of a full charge and within `arc` of
+ * straight out from that side.
+ */
+function offSide(s: GameState, side: Side, arc = ARC) {
+  const p = s.player;
+  const out = p.heading + (side === 'starboard' ? Math.PI / 2 : -Math.PI / 2);
+  return s.enemies.filter((e) => distance(p, e) <= FIRE_WITHIN && Math.abs(wrap(bearing(p, e) - out)) < arc);
+}
+
+/**
+ * The side of the player's ship, if any, with an enemy right off it, near the middle of the arc,
+ * so it stays in the arc while the broadside charges.
+ */
+const sideToFire = (s: GameState): Side | null => SIDES.find((side) => offSide(s, side, AIM_ARC).length > 0) ?? null;
+
+/**
+ * Enough charge for a broadside to reach the nearest enemy off that side, with a margin: an
+ * uncharged one reaches REACH_MIN of RANGE, a full one all of it (from state.ts).
+ */
+function chargeNeeded(s: GameState, side: Side) {
+  const d = Math.min(...offSide(s, side).map((e) => distance(s.player, e)));
+  return Math.min(1, Math.max(0, ((d + 30) / RANGE - REACH_MIN) / (1 - REACH_MIN)));
 }
 
 function scene(page: Page) {
@@ -169,34 +222,63 @@ test('plays the first wave', async ({ page }, testInfo) => {
     return { x: box.x + x * scale, y: box.y + y * scale };
   }
 
-  /** Holds down a helm button (or lets go, for 0), as a thumb on a phone would. */
-  let held = 0;
-  async function helm(dir: -1 | 0 | 1) {
-    if (dir === held) return;
+  /**
+   * Holds down one control with the mouse (or lets go of it, for null), as a thumb on a phone
+   * would: a helm button or a fire control. Letting go of a fire control fires its broadside.
+   */
+  type Control = `helm-${Side}` | `fire-${Side}` | null;
+  let held: Control = null;
+  async function hold(control: Control) {
+    if (control === held) return;
     if (held) await page.mouse.up();
-    held = dir;
-    if (!dir) return;
-    const at = await onPage(...(Object.values(dir < 0 ? HELM.port : HELM.starboard) as [number, number]));
+    held = control;
+    if (!control) return;
+    const [kind, side] = control.split('-') as ['helm' | 'fire', Side];
+    const at = await onPage(...(Object.values((kind === 'helm' ? HELM : FIRE)[side]) as [number, number]));
     await page.mouse.move(at.x, at.y);
     await page.mouse.down();
   }
+  const helm = (dir: -1 | 0 | 1) => hold(dir < 0 ? 'helm-port' : dir > 0 ? 'helm-starboard' : null);
+
+  /** Puts the helm over toward the heading `want`, or lets it go once on course. */
+  async function steerFor(s: GameState, want: number | null) {
+    if (want === null) return helm(0);
+    const diff = wrap(want - s.player.heading);
+    return helm(Math.abs(diff) < 0.12 ? 0 : diff < 0 ? -1 : 1);
+  }
+
+  /** Sails along `course`, steering by the helm buttons. */
+  const sail = (s: GameState) => steerFor(s, course(s));
+
+  /** Whether to let go of a held fire control: charged enough to reach, or the enemy got away. */
+  const letGo = (s: GameState, side: Side) => !offSide(s, side).length || (s.charge[side] ?? 0) >= chargeNeeded(s, side);
 
   /**
-   * Plays on until `check` holds, for up to `ms` of game time, steering by the helm buttons along
-   * `course` when given one.
+   * Fights: holds a fire control while an enemy is off that side, lets go to fire once the
+   * broadside is charged enough to reach it, and otherwise sails along `course` to close in and
+   * turn side-on.
    */
-  async function until(what: string, check: (s: GameState) => boolean, ms = 30_000, steer?: (s: GameState) => number | null) {
+  async function fight(s: GameState) {
+    for (const side of SIDES) {
+      if (held !== `fire-${side}`) continue;
+      if (s.charge[side] !== null && letGo(s, side)) await hold(null);
+      return;
+    }
+    const side = sideToFire(s);
+    if (side && s.player.reload[side] <= 0) return hold(`fire-${side}`);
+    return sail(s);
+  }
+
+  /**
+   * Plays on until `check` holds, for up to `ms` of game time, doing `act` (steering, firing) at
+   * every step when given it.
+   */
+  async function until(what: string, check: (s: GameState) => boolean, ms = 30_000, act?: (s: GameState) => Promise<unknown>) {
     let state = await game.state();
     const ok = await play(ms, async () => {
       state = await game.state();
       if (check(state)) return true;
-      if (!steer) return false;
-      const want = steer(state);
-      if (want === null) await helm(0);
-      else {
-        const diff = wrap(want - state.player.heading);
-        await helm(Math.abs(diff) < 0.12 ? 0 : diff < 0 ? -1 : 1);
-      }
+      if (act) await act(state);
       return false;
     });
     if (!ok) {
@@ -216,7 +298,9 @@ test('plays the first wave', async ({ page }, testInfo) => {
 
   // A new voyage: wave 1 of two sloops on its way, a sound hull and an empty hold.
   let s = await game.state();
-  expect(s).toMatchObject({ phase: 'break', wave: 1, gold: 0, sunk: 0, ranks: {}, helm: 0, enemies: [] });
+  expect(s).toMatchObject({ phase: 'break', wave: 1, gold: 0, sunk: 0, ranks: {}, helm: 0, enemies: [], charge: { port: null, starboard: null } });
+  // The captain's order for the first wave is always chain shot.
+  expect(s.order).toBe(FIRST_ORDER);
   expect(s.toSpawn).toEqual(WAVE_1);
   expect(s.player.hp).toBe(HULL);
 
@@ -237,26 +321,46 @@ test('plays the first wave', async ({ page }, testInfo) => {
   s = await until('turning to port', (s) => wrap(s.player.heading - heading1) < -0.5, 2_000);
   await helm(0);
 
-  // The first enemy sloop comes over the horizon; close on it and turn side-on so a broadside bears.
+  // The first enemy sloop comes over the horizon; close on it and turn side-on so it is off one
+  // side, in reach of a full charge.
   s = await until('the first sloop sighted', (s) => s.phase === 'fighting' && s.enemies.length > 0, 5_000);
   expect(s.enemies[0]).toMatchObject({ kind: 'sloop' });
-  s = await until('a broadside fired', (s) => s.balls.some((b) => b.fromPlayer), 30_000, course);
-  await snap('0-broadside');
-  s = await until('an enemy hit', (s) => s.enemies.some((e) => e.hp < e.maxHp) || s.sunk > 0, 10_000, course);
+  s = await until('a sloop off a loaded side', (s) => sideToFire(s) !== null, 30_000, sail);
+  const side = sideToFire(s)!;
+
+  // Holding that side's fire control charges its broadside without firing it.
+  await hold(`fire-${side}`);
+  s = await until('the broadside half charged', (s) => (s.charge[side] ?? 0) >= 0.5, 2_000);
+  expect(s.aim[side], 'the fire control is held').toBe(true);
+  expect(s.balls.filter((b) => b.fromPlayer), 'nothing fired while held').toEqual([]);
+  await snap('0-aim');
+  s = await until('charged enough to reach the sloop', (s) => letGo(s, side), 2_000);
+
+  // Letting go fires it: chain shot, under this wave's order, and the side starts to reload.
+  await hold(null);
+  s = await until('a broadside fired', (s) => s.balls.some((b) => b.fromPlayer), 1_000);
+  expect(s.charge[side]).toBeNull();
+  expect(s.player.reload[side]).toBeGreaterThan(0);
+  expect(s.balls.filter((b) => b.fromPlayer).map((b) => b.shot)).toEqual(['chain', 'chain']);
+  await snap('1-broadside');
+
+  // A chain shot hit slows the sloop. Keep fighting until a broadside hits.
+  s = await until('a sloop hit', (s) => s.enemies.some((e) => e.hp < e.maxHp) || s.sunk > 0, 30_000, fight);
+  expect(s.enemies.some((e) => e.hp < e.maxHp && e.slowMs > 0), 'the sloop hit is slowed').toBe(true);
 
   // A sunk ship leaves a barrel of loot floating behind; sailing over it adds its gold to the hold.
-  s = await until('a sloop sunk', (s) => s.sunk > 0, 60_000, course);
+  s = await until('a sloop sunk', (s) => s.sunk > 0, 60_000, fight);
   expect(s.loot.length + s.gold / SLOOP_LOOT).toBe(1);
-  await snap('1-loot');
+  await snap('2-loot');
 
   // Sink the other. Once the last ship of the wave goes down, the crew hauls in every barrel still
   // afloat and the harbor opens.
-  s = await until('wave 1 beaten', (s) => s.phase === 'harbor', 90_000, course);
-  await helm(0);
+  s = await until('wave 1 beaten', (s) => s.phase === 'harbor', 90_000, fight);
+  await hold(null);
   expect(s).toMatchObject({ wave: 1, sunk: 2, gold: 2 * SLOOP_LOOT, plundered: 2 * SLOOP_LOOT, bestWave: 1, enemies: [], loot: [] });
   expect(s.player.hp).toBeGreaterThan(0);
   await play(STEP_MS, async () => false);
-  await snap('2-harbor');
+  await snap('3-harbor');
 
   // At the harbor, buy Heavy Shot with the plunder, then set sail for wave 2.
   const buttons = await game.harbor();

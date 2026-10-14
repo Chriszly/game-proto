@@ -9,8 +9,10 @@ const game = new Phaser.Game({
   parent: 'game',
   width: VIEW.w,
   height: VIEW.h,
-  backgroundColor: '#10283a',
-  pixelArt: true,
+  backgroundColor: '#ead9b2',
+  pixelArt: false,
+  // Two thumbs at once on a phone: one on the helm, one on a fire control.
+  input: { activePointers: 3 },
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
