@@ -1,41 +1,49 @@
 import Phaser from 'phaser';
-import type { Poly } from '../game/factions';
+import { INK } from './palette';
 
-/** Draws a flat neon outline: a faint glow under a bright line, filled with a dim tint of the colour. */
-export function drawShape(
-  g: Phaser.GameObjects.Graphics,
-  x: number,
-  y: number,
-  rotation: number,
-  shape: Poly,
-  scale: number,
-  color: number,
-  accent: number,
-  alpha: number,
-) {
-  const c = Math.cos(rotation);
-  const s = Math.sin(rotation);
-  const pts = shape.map(([px, py]) => new Phaser.Math.Vector2(x + (px * c - py * s) * scale, y + (px * s + py * c) * scale));
-  g.fillStyle(color, 0.18 * alpha);
-  g.fillPoints(pts, true);
-  g.lineStyle(4, color, 0.3 * alpha);
-  g.strokePoints(pts, true);
-  g.lineStyle(1.5, accent, alpha);
-  g.strokePoints(pts, true);
-}
-
-/** A dome or core at the centre of a building, drawn in the faction's accent colour. */
-export function drawDome(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, accent: number, alpha: number) {
-  g.fillStyle(accent, 0.35 * alpha);
-  g.fillCircle(x, y, r);
-  g.lineStyle(1.5, accent, alpha);
-  g.strokeCircle(x, y, r);
-}
-
-/** A small bar over an entity showing its hit points, drawn only once it is hurt. */
+/** A small pill over an entity showing its hit points, drawn only once it is hurt. */
 export function drawHealth(g: Phaser.GameObjects.Graphics, x: number, y: number, width: number, ratio: number) {
-  g.fillStyle(0x000000, 0.6);
-  g.fillRect(x - width / 2, y, width, 3);
-  g.fillStyle(ratio > 0.5 ? 0x7dffb0 : 0xffb347, 1);
-  g.fillRect(x - width / 2, y, width * Math.max(0, ratio), 3);
+  g.fillStyle(INK.chocolate, 0.85);
+  g.fillRoundedRect(x - width / 2 - 1, y - 1, width + 2, 5, 2.5);
+  g.fillStyle(ratio > 0.5 ? 0x7ee07a : 0xf2a33d, 1);
+  g.fillRoundedRect(x - width / 2, y, Math.max(2, width * Math.max(0, ratio)), 3, 1.5);
+}
+
+/** A progress pill under a building going up, in the faction's colour. */
+export function drawProgress(g: Phaser.GameObjects.Graphics, x: number, y: number, width: number, ratio: number, color: number) {
+  g.fillStyle(INK.chocolate, 0.85);
+  g.fillRoundedRect(x - width / 2 - 1, y - 1, width + 2, 6, 3);
+  g.fillStyle(color, 1);
+  g.fillRoundedRect(x - width / 2, y, Math.max(3, width * Math.min(1, ratio)), 4, 2);
+}
+
+/** A dashed circle, the selection mark of the cover's diagrams. */
+export function dashedCircle(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, dashes: number, color: number, alpha: number, width = 1.5) {
+  g.lineStyle(width, color, alpha);
+  const step = (Math.PI * 2) / dashes;
+  for (let k = 0; k < dashes; k++) {
+    g.beginPath();
+    g.arc(x, y, r, k * step, k * step + step * 0.6);
+    g.strokePath();
+  }
+}
+
+/** An arc from the top, clockwise, covering `ratio` of the circle (a capture ring). */
+export function progressArc(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, ratio: number, color: number, width: number) {
+  if (ratio <= 0) return;
+  g.lineStyle(width, color, 1);
+  g.beginPath();
+  g.arc(x, y, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, ratio));
+  g.strokePath();
+}
+
+/** Bands of the cover's stripes across the screen: tangerine, mustard and cream. */
+export function stripes(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number) {
+  const band = h / 3;
+  g.fillStyle(INK.tangerine, 1);
+  g.fillRect(x, y, w, band);
+  g.fillStyle(INK.mustard, 1);
+  g.fillRect(x, y + band, w, band);
+  g.fillStyle(INK.cream, 1);
+  g.fillRect(x, y + band * 2, w, band);
 }

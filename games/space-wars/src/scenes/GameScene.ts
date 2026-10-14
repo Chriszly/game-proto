@@ -2,9 +2,16 @@ import Phaser from 'phaser';
 import { ARENA, BUILD_RANGE, NODE_AMOUNT } from '../game/arena';
 import { generateMap, type MapLayout } from '../game/map';
 import { FACTIONS, type Role, type UnitId } from '../game/factions';
-import { PLAYER, World, buildingStats, unitStats, type Building, type Unit } from '../game/world';
+import { CONTRACTS } from '../game/contracts';
+import {
+  BEACON_PAY, BEACON_RADIUS, PLAYER, POP_MS, World, buildingStats, unitStats,
+} from '../game/world';
 import { buildingLines, factionLines, unitLines } from '../game/describe';
-import { drawDome, drawHealth, drawShape } from '../art/draw';
+import { dashedCircle, drawHealth, drawProgress, progressArc, stripes } from '../art/draw';
+import { INK, INK_CSS, hex } from '../art/palette';
+import {
+  BACKDROP_KEY, BEACON_KEY, CRYSTAL_KEYS, GLOW_BLUE_KEY, GLOW_KEY, RES, SHARD_KEY, SHIP_ZOOM, bakeAll, bakeBackdrop, buildingKey, facing, flameKey, shipKey,
+} from '../art/textures';
 import { settings } from '../../../../shared/settings';
 import { BAR, BUTTONS, FONT, MAP_VIEW, ROLE_LABEL, TOP, VIEW, type Button } from './layout';
 
@@ -12,8 +19,6 @@ import { BAR, BUTTONS, FONT, MAP_VIEW, ROLE_LABEL, TOP, VIEW, type Button } from
 const MAX_STEP_MS = 100;
 /** How far a press must travel before it counts as a box selection rather than a tap. */
 const DRAG_MIN = 6;
-/** Units are drawn bigger than their outlines, to read at a glance. */
-const UNIT_SCALE = 1.4;
 const BEAM_MS = 140;
 const BOOM_MS = 450;
 /** The faction picker's cards: their size and the gaps between them, in view pixels. */
@@ -24,12 +29,26 @@ const CARD_GAP = 8;
 const PAN_SPEED = 360;
 /** How far above an entity the hover label sits. */
 const LABEL_LIFT = 26;
+/** How long the gain flash by the crystal count stays up, in ms. */
+const FLASH_MS = 1600;
+/** Where each ship's engines sit behind its centre, and how long its exhaust flame is, in pixels. */
+const TAIL: Record<UnitId, number> = { harvester: 11, scout: 10, gunship: 12, heavy: 20 };
+const FLAME: Record<UnitId, number> = { harvester: 16, scout: 24, gunship: 26, heavy: 36 };
+/** Draw order on the map. */
+const DEPTH = { backdrop: 0, under: 1, node: 2, building: 3, shard: 4, flame: 5, ship: 6, over: 7, pop: 8, label: 9 };
 
 interface Drag {
   x0: number;
   y0: number;
   x1: number;
   y1: number;
+}
+
+interface ShipSprite {
+  ship: Phaser.GameObjects.Image;
+  flame: Phaser.GameObjects.Image;
+  lastX: number;
+  lastY: number;
 }
 
 /** The battle: draws the `World` every frame and turns the player's clicks into commands. */
@@ -60,71 +79,114 @@ export class GameScene extends Phaser.Scene {
   private drag: Drag | null = null;
   private message = '';
   private lastFrame: number | null = null;
+  /** Game time the scene has drawn, for the flicker of flames and the bob of floating pylons. */
+  private clock = 0;
+  private flash = { amount: 0, ms: 0 };
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
-  private chromeGfx!: Phaser.GameObjects.Graphics;
-  private staticGfx!: Phaser.GameObjects.Graphics;
+  private fixed!: Phaser.Cameras.Scene2D.Camera;
+  private backdrop!: Phaser.GameObjects.Image;
+  private underGfx!: Phaser.GameObjects.Graphics;
   private gfx!: Phaser.GameObjects.Graphics;
+  private chromeGfx!: Phaser.GameObjects.Graphics;
   private uiGfx!: Phaser.GameObjects.Graphics;
-  private hud!: Phaser.GameObjects.Text;
-  private rivals!: Phaser.GameObjects.Text;
-  private bar!: Phaser.GameObjects.Text;
+  private pickGfx!: Phaser.GameObjects.Graphics;
+  private ships = new Map<number, ShipSprite>();
+  private houses = new Map<number, Phaser.GameObjects.Image>();
+  private crystals = new Map<number, { gem: Phaser.GameObjects.Image; glow: Phaser.GameObjects.Image }>();
+  private shardSprites = new Map<number, { glow: Phaser.GameObjects.Image; gem: Phaser.GameObjects.Image }>();
+  private popTexts: Phaser.GameObjects.Text[] = [];
+  private beaconGlow!: Phaser.GameObjects.Image;
+  private beaconImg!: Phaser.GameObjects.Image;
+  private beaconLabel!: Phaser.GameObjects.Text;
+  private ghost!: Phaser.GameObjects.Image;
+  private hud!: Record<'faction' | 'crystal' | 'gain' | 'harvesters' | 'army' | 'clock' | 'tag' | 'title' | 'count' | 'rivals' | 'rivalCount', Phaser.GameObjects.Text>;
+  private panel!: Record<'line' | 'head' | 'next' | 'brief' | 'count' | 'reward' | 'perk' | 'build', Phaser.GameObjects.Text>;
   private overlay!: Phaser.GameObjects.Text;
   private hoverLabel!: Phaser.GameObjects.Text;
   private tip!: Phaser.GameObjects.Text;
   private pickTitle!: Phaser.GameObjects.Text;
-  private pickTexts!: Phaser.GameObjects.Text[];
-  private captions!: { name: Phaser.GameObjects.Text; cost: Phaser.GameObjects.Text }[];
+  private pickTexts!: { name: Phaser.GameObjects.Text; body: Phaser.GameObjects.Text }[];
+  private pickImages: Phaser.GameObjects.Image[] = [];
+  private captions!: { name: Phaser.GameObjects.Text; cost: Phaser.GameObjects.Text; icon: Phaser.GameObjects.Image }[];
 
   constructor() {
     super('Game');
   }
 
   create() {
-    this.chromeGfx = this.add.graphics();
-    this.staticGfx = this.add.graphics();
-    this.gfx = this.add.graphics();
-    this.uiGfx = this.add.graphics();
-    const text = (x: number, y: number, size: string, color = '#f3e9d2') =>
-      this.add.text(x, y, '', { fontFamily: FONT, fontSize: size, color });
-    this.hud = text(10, 9, '14px');
-    this.rivals = text(VIEW.w - 10, 9, '14px').setOrigin(1, 0);
-    this.bar = text(500, BAR.y + 8, '13px', '#d8e0ff').setWordWrapWidth(440);
-    this.overlay = text(MAP_VIEW.x + MAP_VIEW.w / 2, MAP_VIEW.y + MAP_VIEW.h / 2, '36px', '#ffffff')
-      .setOrigin(0.5)
-      .setAlign('center');
-    // Tooltips: the hover label names a unit or building on the map; the tip describes a command button.
-    this.hoverLabel = text(0, 0, '12px').setOrigin(0.5, 1).setPadding(5).setBackgroundColor('#0b0f22')
-      .setVisible(false);
-    this.tip = text(0, 0, '12px').setOrigin(0, 1).setPadding(6).setBackgroundColor('#0b0f22')
-      .setWordWrapWidth(300).setVisible(false);
-    this.pickTitle = text(VIEW.w / 2, MAP_VIEW.y + 16, '18px').setOrigin(0.5, 0).setText('Choose your faction');
-    this.pickTexts = this.pickCards.map((c) => {
-      const def = FACTIONS[c.faction];
-      const t = text(c.x + 12, c.y + 44, '12px', `#${def.color.toString(16).padStart(6, '0')}`);
-      return t.setWordWrapWidth(c.w - 24).setText([def.name, '', ...factionLines(def)].join('\n'));
-    });
-    this.captions = BUTTONS.map((b) => ({
-      name: text(b.x + 6, b.y + 3, '12px').setText(''),
-      cost: text(b.x + 6, b.y + 16, '10px', '#d8c98a'),
-    }));
-
+    bakeAll(this);
     // The map scrolls in its own camera; the bars and the text sit on a second one that never moves.
     this.camera = this.cameras.main;
     this.camera.setViewport(MAP_VIEW.x, MAP_VIEW.y, MAP_VIEW.w, MAP_VIEW.h);
-    const fixed = this.cameras.add(0, 0, VIEW.w, VIEW.h);
-    fixed.ignore([this.staticGfx, this.gfx, this.hoverLabel]);
-    this.camera.ignore([
-      this.chromeGfx,
-      this.uiGfx,
-      this.hud,
-      this.rivals,
-      this.bar,
-      this.overlay,
-      this.tip,
-      this.pickTitle,
-      ...this.pickTexts,
-      ...this.captions.flatMap((c) => [c.name, c.cost]),
-    ]);
+    this.camera.setBackgroundColor('#1c0f36');
+    this.fixed = this.cameras.add(0, 0, VIEW.w, VIEW.h);
+
+    this.backdrop = this.onMap(this.add.image(0, 0, '__WHITE').setOrigin(0).setDepth(DEPTH.backdrop));
+    this.underGfx = this.onMap(this.add.graphics().setDepth(DEPTH.under));
+    this.gfx = this.onMap(this.add.graphics().setDepth(DEPTH.over));
+    this.beaconGlow = this.onMap(this.add.image(0, 0, GLOW_KEY).setDepth(DEPTH.under).setAlpha(0.5).setBlendMode(Phaser.BlendModes.ADD));
+    this.beaconImg = this.onMap(this.add.image(0, 0, BEACON_KEY).setScale(1 / RES).setDepth(DEPTH.building));
+    this.beaconLabel = this.onMap(this.text(0, 0, 10, INK_CSS.chocolate, true).setBackgroundColor(INK_CSS.cream).setPadding(6, 3, 6, 3).setDepth(DEPTH.label));
+    this.ghost = this.onMap(this.add.image(0, 0, SHARD_KEY).setScale(1 / RES).setAlpha(0.6).setDepth(DEPTH.over).setVisible(false));
+    this.hoverLabel = this.onMap(this.text(0, 0, 11, INK_CSS.chocolate).setOrigin(0.5, 1).setPadding(6, 4, 6, 4)
+      .setBackgroundColor(INK_CSS.cream).setDepth(DEPTH.label).setVisible(false));
+
+    this.chromeGfx = this.onUi(this.add.graphics().setDepth(10));
+    this.uiGfx = this.onUi(this.add.graphics().setDepth(11));
+    this.pickGfx = this.onUi(this.add.graphics().setDepth(20));
+    const t = (x: number, y: number, size: number, color: string, bold = false, depth = 12) =>
+      this.onUi(this.text(x, y, size, color, bold).setDepth(depth));
+    this.hud = {
+      faction: t(32, 8, 14, INK_CSS.cream, true),
+      crystal: t(182, 5, 18, INK_CSS.cream, true),
+      gain: t(0, 8, 11, '#ffffff', true).setBackgroundColor('#3d9a4a').setPadding(5, 1, 5, 1),
+      harvesters: t(286, 9, 12, INK_CSS.cream),
+      army: t(378, 9, 12, INK_CSS.cream),
+      clock: t(436, 6, 16, INK_CSS.mustard, true),
+      tag: t(490, 10, 10, INK_CSS.cream, true),
+      title: t(578, 9, 11, INK_CSS.chocolate, true),
+      count: t(782, 9, 11, INK_CSS.chocolate, true).setOrigin(1, 0),
+      rivals: t(806, 10, 10, INK_CSS.mustard, true).setText('RIVALS'),
+      rivalCount: t(950, 5, 17, INK_CSS.cream, true).setOrigin(1, 0),
+    };
+    const px = 494;
+    this.panel = {
+      line: t(px, 445, 11, INK_CSS.cream).setWordWrapWidth(VIEW.w - px - 10),
+      head: t(px + 8, 476, 10, INK_CSS.cream, true),
+      next: t(VIEW.w - 16, 476, 10, INK_CSS.cream).setOrigin(1, 0),
+      brief: t(px + 8, 492, 12, INK_CSS.chocolate, true),
+      count: t(px + 214, 506, 11, INK_CSS.green, true),
+      reward: t(px + 262, 506, 11, INK_CSS.rust, true),
+      perk: t(px + 8, 521, 10, INK_CSS.cocoa),
+      build: t(14, 448, 10, INK_CSS.mustard, true).setText('BUILD'),
+    };
+    this.overlay = t(MAP_VIEW.x + MAP_VIEW.w / 2, MAP_VIEW.y + MAP_VIEW.h / 2, 44, INK_CSS.mustard, true, 30)
+      .setOrigin(0.5).setAlign('center').setStroke(INK_CSS.chocolate, 8);
+    // Tooltips: the hover label names a unit or building on the map; the tip describes a command button.
+    this.tip = t(0, 0, 11, INK_CSS.chocolate, false, 25).setOrigin(0, 1).setPadding(7, 5, 7, 5).setBackgroundColor(INK_CSS.cream)
+      .setWordWrapWidth(300).setVisible(false);
+    this.pickTitle = t(VIEW.w / 2, MAP_VIEW.y + 18, 22, INK_CSS.mustard, true, 21).setOrigin(0.5, 0).setText('CHOOSE YOUR FACTION')
+      .setStroke(INK_CSS.chocolate, 5);
+    this.pickTexts = this.pickCards.map((c) => {
+      const def = FACTIONS[c.faction];
+      const name = t(c.x + 12, c.y + 8, 13, INK_CSS.cream, true, 21).setText(def.name.toUpperCase());
+      const body = t(c.x + 12, c.y + 150, 10, INK_CSS.chocolate, false, 21).setWordWrapWidth(c.w - 22)
+        .setText(factionLines(def).join('\n')).setLineSpacing(1);
+      return { name, body };
+    });
+    this.pickCards.forEach((c) => {
+      const f = c.faction;
+      this.pickImages.push(this.onUi(this.add.image(c.x + c.w / 2, c.y + 80, buildingKey(f, 'hub')).setScale(1.25 / RES).setDepth(21)));
+      (['scout', 'gunship', 'heavy'] as const).forEach((type, k) => {
+        this.pickImages.push(this.onUi(this.add.image(c.x + 36 + k * 54, c.y + 126, shipKey(f, type), facing(-Math.PI / 4).frame)
+          .setScale(0.9 / RES).setDepth(21)));
+      });
+    });
+    this.captions = BUTTONS.map((b) => ({
+      icon: this.onUi(this.add.image(b.x + 14, b.y + b.h / 2, '__WHITE').setDepth(12)),
+      name: t(b.x + 33, b.y + 3, 12, INK_CSS.chocolate, true),
+      cost: t(b.x + 33, b.y + 16, 10, INK_CSS.rust),
+    }));
     this.drawChrome();
 
     this.input.mouse?.disableContextMenu();
@@ -137,30 +199,85 @@ export class GameScene extends Phaser.Scene {
     this.newGame();
   }
 
+  private text(x: number, y: number, size: number, color: string, bold = false) {
+    return this.add.text(x, y, '', { fontFamily: FONT, fontSize: `${size}px`, color, fontStyle: bold ? 'italic bold' : '' });
+  }
+
+  /** Puts an object on the scrolling map only. */
+  private onMap<T extends Phaser.GameObjects.GameObject>(o: T): T {
+    this.fixed.ignore(o);
+    return o;
+  }
+
+  /** Puts an object on the fixed bars only. */
+  private onUi<T extends Phaser.GameObjects.GameObject>(o: T): T {
+    this.camera.ignore(o);
+    return o;
+  }
+
   /** Makes a new random map and shows the faction picker over it. */
   private newGame() {
     this.layout = generateMap(FACTIONS.length);
     this.picking = true;
     this.state = new World(this.layout);
-    this.selected.clear();
-    this.placing = null;
-    this.drag = null;
-    this.message = '';
-    this.lastFrame = null;
-    this.drawStatic();
-    this.centreOnHub();
+    bakeBackdrop(this, this.layout);
+    this.backdrop.setTexture(BACKDROP_KEY);
+    this.reset();
   }
 
   /** Starts the battle with the chosen faction under the player's command. */
   private startBattle(faction: number) {
     this.state = new World(this.layout, faction);
     this.picking = false;
+    this.reset();
+  }
+
+  private reset() {
     this.selected.clear();
     this.placing = null;
     this.drag = null;
     this.message = '';
     this.lastFrame = null;
+    this.flash = { amount: 0, ms: 0 };
+    for (const s of this.ships.values()) {
+      s.ship.destroy();
+      s.flame.destroy();
+    }
+    this.ships.clear();
+    for (const o of this.houses.values()) o.destroy();
+    this.houses.clear();
+    for (const c of this.crystals.values()) {
+      c.gem.destroy();
+      c.glow.destroy();
+    }
+    this.crystals.clear();
+    for (const s of this.shardSprites.values()) {
+      s.glow.destroy();
+      s.gem.destroy();
+    }
+    this.shardSprites.clear();
+    for (const n of this.state.nodes) {
+      this.crystals.set(n.id, {
+        glow: this.onMap(this.add.image(n.x, n.y - 4, GLOW_BLUE_KEY).setDepth(DEPTH.under).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.55)),
+        gem: this.onMap(this.add.image(n.x, n.y, CRYSTAL_KEYS[n.id % CRYSTAL_KEYS.length]).setDepth(DEPTH.node)),
+      });
+    }
+    const bc = this.state.beacon;
+    this.beaconImg.setPosition(bc.x, bc.y - 4);
+    this.beaconGlow.setPosition(bc.x, bc.y - 10);
+    const art = this.art(PLAYER);
+    this.captions.forEach((c, i) => {
+      const b = BUTTONS[i];
+      if (b.kind === 'build') c.icon.setTexture(buildingKey(art, b.key as Role));
+      else c.icon.setTexture(shipKey(art, b.key as UnitId), facing(-Math.PI / 2).frame);
+      c.icon.setScale(Math.min(24 / c.icon.width, 24 / c.icon.height) * (b.kind === 'build' ? 1.5 : 1.25));
+    });
     this.centreOnHub();
+  }
+
+  /** The art (an index into FACTIONS) a side of the battle is drawn with. */
+  private art(side: number) {
+    return FACTIONS.indexOf(this.state.sides[side].def);
   }
 
   update(time: number) {
@@ -170,7 +287,13 @@ export class GameScene extends Phaser.Scene {
     if (!this.picking) {
       this.state.update(dt);
       this.selected = new Set([...this.selected].filter((id) => this.state.selectable(id)));
+      this.clock += dt;
     }
+    for (const e of this.state.events.splice(0)) {
+      if (e.kind === 'notice') this.message = e.text;
+      else this.flash = { amount: (this.flash.ms > 0 ? this.flash.amount : 0) + e.amount, ms: FLASH_MS };
+    }
+    this.flash.ms = Math.max(0, this.flash.ms - dt);
     this.pan(dt);
     this.draw();
   }
@@ -221,165 +344,267 @@ export class GameScene extends Phaser.Scene {
     if (Phaser.Input.Keyboard.JustDown(k.H)) this.centreOnHub();
   }
 
-  /** Nebulae, stars and rock fields on the battlefield: drawn once per map. */
-  private drawStatic() {
-    const g = this.staticGfx;
-    g.clear();
-    g.fillStyle(0x070a1c, 1);
-    g.fillRect(ARENA.x, ARENA.y, ARENA.w, ARENA.h);
-    for (const n of this.layout.nebulae) {
-      g.fillStyle(n.color, 0.22);
-      g.fillCircle(n.x, n.y, n.r);
-    }
-    for (const s of this.layout.stars) {
-      g.fillStyle(0xffffff, s.a);
-      g.fillCircle(s.x, s.y, 1);
-    }
-    g.lineStyle(1, 0x3b4670, 0.6);
-    g.strokeRect(ARENA.x, ARENA.y, ARENA.w, ARENA.h);
-    for (const k of this.layout.rocks) {
-      g.fillStyle(0x2b3150, 1);
-      g.fillCircle(k.x, k.y, k.r);
-      g.lineStyle(1.5, 0x6f78a0, 1);
-      g.strokeCircle(k.x, k.y, k.r);
-    }
-  }
-
-  /** The top and command bars: drawn once, as they stay put while the map scrolls. */
+  /** The top and command bars: chocolate panels edged with the cover's stripes, drawn once. */
   private drawChrome() {
     const g = this.chromeGfx;
-    g.fillStyle(0x0b0f22, 1);
+    g.fillStyle(INK.chocolate, 1);
     g.fillRect(0, 0, VIEW.w, TOP.h);
     g.fillRect(0, BAR.y, VIEW.w, BAR.h);
-    g.lineStyle(1, 0x3b4670, 1);
-    g.lineBetween(0, BAR.y, VIEW.w, BAR.y);
-    g.lineBetween(0, TOP.h, VIEW.w, TOP.h);
+    stripes(g, 0, TOP.h - 6, VIEW.w, 6);
+    stripes(g, 0, BAR.y, VIEW.w, 6);
+    // The faction's planet badge, the crystal and the harvester marks on the top bar.
+    g.lineStyle(2, INK.tangerine, 1);
+    g.strokeEllipse(17, 15, 26, 8);
+    g.fillStyle(INK.mustard, 1);
+    g.fillCircle(17, 15, 7);
+    g.fillStyle(INK.tangerine, 1);
+    g.fillRect(10, 13, 14, 2);
+    const diamond = (x: number, y: number, r: number, color: number) => {
+      g.fillStyle(color, 1);
+      g.fillTriangle(x, y - r, x + r * 0.75, y, x - r * 0.75, y);
+      g.fillStyle(0x2a6ad8, 1);
+      g.fillTriangle(x, y + r, x + r * 0.75, y, x - r * 0.75, y);
+    };
+    diamond(172, 15, 8, INK.sky);
+    g.fillStyle(INK.mustard, 1);
+    g.fillTriangle(276, 8, 281, 22, 271, 22);
+    g.fillTriangle(368, 8, 373, 22, 363, 22);
   }
 
   private draw() {
     const s = this.state;
-    const g = this.gfx;
-    g.clear();
+    this.gfx.clear();
+    this.underGfx.clear();
     this.uiGfx.clear();
+    this.pickGfx.clear();
 
     for (const n of s.nodes) {
-      if (n.amount <= 0) continue;
-      const r = 6 + 4 * (n.amount / NODE_AMOUNT);
-      const diamond = [
-        new Phaser.Math.Vector2(n.x, n.y - r),
-        new Phaser.Math.Vector2(n.x + r, n.y),
-        new Phaser.Math.Vector2(n.x, n.y + r),
-        new Phaser.Math.Vector2(n.x - r, n.y),
-      ];
-      g.fillStyle(0x9be7ff, 0.25);
-      g.fillPoints(diamond, true);
-      g.lineStyle(1.5, 0x9be7ff, 1);
-      g.strokePoints(diamond, true);
+      const c = this.crystals.get(n.id);
+      if (!c) continue;
+      const k = 0.55 + 0.45 * (n.amount / NODE_AMOUNT);
+      c.gem.setVisible(n.amount > 0).setScale(k / RES);
+      c.glow.setVisible(n.amount > 0).setScale(k * 0.9);
     }
-
-    for (const b of s.buildings) this.drawBuilding(b);
-    for (const u of s.units) if (u.faction === PLAYER || !s.hidden(u, PLAYER)) this.drawUnit(u);
-
-    for (const b of s.beams) {
-      const a = settings.reduceMotion ? 0.9 : b.life / BEAM_MS;
-      g.lineStyle(2, b.color, a);
-      g.lineBetween(b.x, b.y, b.x2!, b.y2!);
-    }
-    // Wrecks are not drawn under reduced motion, where the ring's growth is the motion.
-    if (!settings.reduceMotion) {
-      for (const b of s.booms) {
-        const t = 1 - b.life / BOOM_MS;
-        g.lineStyle(2, b.color, 1 - t);
-        g.strokeCircle(b.x, b.y, b.r! * (1 + t * 1.5));
-      }
-    }
-
+    this.drawBeacon();
+    this.drawBuildings();
+    this.drawShips();
+    this.drawShards();
+    this.drawEffects();
+    this.drawPops();
     this.drawSelection();
     this.drawPlacement();
     this.drawHover();
     this.drawBar();
+    this.drawTop();
     this.drawText();
     this.drawPicker();
   }
 
-  /** The faction picker: a dark veil over the map and a card for each faction. */
-  private drawPicker() {
-    const show = this.picking;
-    this.pickTitle.setVisible(show);
-    this.pickTexts.forEach((t) => t.setVisible(show));
-    if (!show) return;
-    const g = this.uiGfx;
-    g.fillStyle(0x070a1c, 0.72);
-    g.fillRect(MAP_VIEW.x, MAP_VIEW.y, MAP_VIEW.w, MAP_VIEW.h);
-    for (const c of this.pickCards) {
-      const def = FACTIONS[c.faction];
-      g.fillStyle(0x0b0f22, 0.96);
-      g.fillRect(c.x, c.y, c.w, c.h);
-      g.lineStyle(2, def.color, 1);
-      g.strokeRect(c.x, c.y, c.w, c.h);
-      drawShape(g, c.x + c.w - 26, c.y + 24, 0, def.buildings.hub.shape, 1, def.color, def.accent, 1);
+  /** The relay beacon: its capture ring, the owner's glow and its label. */
+  private drawBeacon() {
+    const bc = this.state.beacon;
+    const g = this.underGfx;
+    const color = (f: number) => (f >= 0 ? this.state.sides[f].def.color : INK.cream);
+    g.fillStyle(color(bc.owner), bc.owner >= 0 ? 0.12 : 0.05);
+    g.fillCircle(bc.x, bc.y, BEACON_RADIUS);
+    dashedCircle(g, bc.x, bc.y, BEACON_RADIUS, 24, INK.cream, 0.45, 1.5);
+    progressArc(g, bc.x, bc.y, BEACON_RADIUS, bc.capture, color(bc.capturer), 5);
+    const pulse = settings.reduceMotion ? 1 : 0.9 + 0.1 * Math.sin(this.clock / 300);
+    this.beaconGlow.setScale((bc.held ? 1.4 : 0.9) * pulse).setAlpha(bc.held ? 0.7 : 0.4);
+    const pct = Math.round(bc.capture * 100);
+    const status = bc.owner === PLAYER
+      ? bc.held ? `Yours: +${BEACON_PAY} crystal/s` : 'Yours: keep a ship here to earn'
+      : bc.owner >= 0 ? `Held by ${this.state.sides[bc.owner].def.name}` : `Hold it: +${BEACON_PAY} crystal/s`;
+    const label = `RELAY BEACON  ${pct}%\n${status}`;
+    if (this.beaconLabel.text !== label) this.beaconLabel.setText(label);
+    this.beaconLabel.setPosition(bc.x + BEACON_RADIUS * 0.72, bc.y + BEACON_RADIUS * 0.55).setVisible(!this.picking);
+  }
+
+  private drawBuildings() {
+    const seen = new Set<number>();
+    for (const b of this.state.buildings) {
+      seen.add(b.id);
+      const side = this.state.sides[b.faction];
+      const def = side.def.buildings[b.type];
+      let img = this.houses.get(b.id);
+      if (!img) {
+        img = this.onMap(this.add.image(b.x, b.y, buildingKey(this.art(b.faction), b.type)).setScale(1 / RES).setDepth(DEPTH.building));
+        this.houses.set(b.id, img);
+      }
+      const floats = side.def.name === 'Solar Concord' && b.type === 'turret' && !settings.reduceMotion;
+      img.setPosition(b.x, b.y + (floats ? Math.sin(this.clock / 500 + b.id) * 1.6 : 0));
+      img.setAlpha(!b.done ? 0.5 : b.disabledMs > 0 ? 0.45 : 1);
+      const r = def.radius;
+      // A soft faction-coloured pad under every building, so a base reads as its faction's at a glance.
+      this.underGfx.fillStyle(side.def.color, 0.16);
+      this.underGfx.fillEllipse(b.x, b.y + 2, r * 2.6, r * 1.7);
+      if (!b.done) {
+        drawProgress(this.gfx, b.x, b.y + r + 6, 34, 1 - b.buildLeft / def.buildMs, side.def.color);
+      } else if (b.hp < b.maxHp) {
+        drawHealth(this.gfx, b.x, b.y - r - 14, 32, b.hp / b.maxHp);
+      }
+    }
+    for (const [id, img] of this.houses) {
+      if (!seen.has(id)) {
+        img.destroy();
+        this.houses.delete(id);
+      }
     }
   }
 
-  private drawBuilding(b: Building) {
-    const side = this.state.sides[b.faction];
-    const def = side.def.buildings[b.type];
-    const alpha = !b.done ? 0.45 : b.disabledMs > 0 ? 0.4 : 1;
-    drawShape(this.gfx, b.x, b.y, 0, def.shape, 1, side.def.color, side.def.accent, alpha);
-    if (def.dome) drawDome(this.gfx, b.x, b.y, def.dome, side.def.accent, alpha);
-    if (!b.done) {
-      const progress = 1 - b.buildLeft / def.buildMs;
-      this.gfx.fillStyle(0x000000, 0.6);
-      this.gfx.fillRect(b.x - 16, b.y + def.radius + 4, 32, 3);
-      this.gfx.fillStyle(side.def.accent, 1);
-      this.gfx.fillRect(b.x - 16, b.y + def.radius + 4, 32 * progress, 3);
-    } else if (b.hp < b.maxHp) {
-      drawHealth(this.gfx, b.x, b.y - def.radius - 8, 32, b.hp / b.maxHp);
+  /** Ships: the baked frame nearest each heading, turned the last few degrees, with exhaust while moving. */
+  private drawShips() {
+    const s = this.state;
+    const seen = new Set<number>();
+    for (const u of s.units) {
+      if (u.faction !== PLAYER && s.hidden(u, PLAYER)) continue;
+      seen.add(u.id);
+      const art = this.art(u.faction);
+      let sp = this.ships.get(u.id);
+      if (!sp) {
+        sp = {
+          flame: this.onMap(this.add.image(u.x, u.y, flameKey(art)).setOrigin(1, 0.5).setDepth(DEPTH.flame)),
+          ship: this.onMap(this.add.image(u.x, u.y, shipKey(art, u.type), 0).setScale(1 / RES).setDepth(DEPTH.ship)),
+          lastX: u.x,
+          lastY: u.y,
+        };
+        this.ships.set(u.id, sp);
+      }
+      const def = s.sides[u.faction].def.units[u.type];
+      const { frame, rest } = facing(u.angle);
+      // A cloaked ship of the player's own shows faintly; a decoy is a dimmer copy of its ship.
+      const cloaked = u.faction === PLAYER && def.ability?.kind === 'cloak' && u.revealMs <= 0;
+      const alpha = cloaked ? 0.4 : u.decoyMs !== null ? 0.6 : 1;
+      sp.ship.setFrame(frame).setPosition(u.x, u.y).setRotation(rest).setAlpha(alpha);
+      const moving = Math.hypot(u.x - sp.lastX, u.y - sp.lastY) > 0.01;
+      sp.lastX = u.x;
+      sp.lastY = u.y;
+      sp.flame.setVisible(moving && !this.picking);
+      if (moving) {
+        const flicker = settings.reduceMotion ? 1 : 0.85 + 0.15 * Math.sin(this.clock / 40 + u.id * 1.7);
+        const len = FLAME[u.type] * SHIP_ZOOM * flicker;
+        const tail = TAIL[u.type] * SHIP_ZOOM;
+        sp.flame
+          .setPosition(u.x - Math.cos(u.angle) * tail, u.y - Math.sin(u.angle) * tail)
+          .setRotation(u.angle)
+          .setScale(len / sp.flame.width, (u.type === 'heavy' ? 12 : 8) / sp.flame.height)
+          .setAlpha(alpha * 0.95);
+      }
+      if (def.ability?.kind === 'shield') {
+        this.underGfx.fillStyle(s.sides[u.faction].def.accent, 0.06);
+        this.underGfx.fillCircle(u.x, u.y, def.ability.range);
+        this.underGfx.lineStyle(1.5, s.sides[u.faction].def.color, 0.3);
+        this.underGfx.strokeCircle(u.x, u.y, def.ability.range);
+      }
+      if (this.selected.has(u.id)) dashedCircle(this.gfx, u.x, u.y, u.type === 'heavy' ? 22 : 16, 10, INK.tangerine, 1, 2);
+      if (u.hp < u.maxHp) drawHealth(this.gfx, u.x, u.y - 18, 22, u.hp / u.maxHp);
+    }
+    for (const [id, sp] of this.ships) {
+      if (!seen.has(id)) {
+        sp.ship.destroy();
+        sp.flame.destroy();
+        this.ships.delete(id);
+      }
     }
   }
 
-  private drawUnit(u: Unit) {
-    const side = this.state.sides[u.faction];
-    const def = side.def.units[u.type];
-    const rotation = u.angle + Math.PI / 2;
-    // A cloaked ship of the player's own shows faintly; a decoy is a dimmer copy of its ship.
-    const cloaked = u.faction === PLAYER && def.ability?.kind === 'cloak' && u.revealMs <= 0;
-    const alpha = cloaked ? 0.4 : u.decoyMs !== null ? 0.6 : 1;
-    drawShape(this.gfx, u.x, u.y, rotation, def.shape, UNIT_SCALE, side.def.color, side.def.accent, alpha);
-    if (def.ability?.kind === 'shield') {
-      this.gfx.lineStyle(1, side.def.accent, 0.25);
-      this.gfx.strokeCircle(u.x, u.y, def.ability.range);
+  /** Salvage shards: glowing gold crystals that fly to the nearest of the player's ships. */
+  private drawShards() {
+    const seen = new Set<number>();
+    for (const sh of this.state.shards) {
+      seen.add(sh.id);
+      let sp = this.shardSprites.get(sh.id);
+      if (!sp) {
+        sp = {
+          glow: this.onMap(this.add.image(sh.x, sh.y, GLOW_KEY).setDepth(DEPTH.shard).setBlendMode(Phaser.BlendModes.ADD)),
+          gem: this.onMap(this.add.image(sh.x, sh.y, SHARD_KEY).setScale(1 / RES).setDepth(DEPTH.shard)),
+        };
+        this.shardSprites.set(sh.id, sp);
+      }
+      const pulse = settings.reduceMotion ? 1 : 0.85 + 0.15 * Math.sin(this.clock / 160 + sh.id);
+      sp.glow.setPosition(sh.x, sh.y).setScale(0.75 * pulse).setAlpha(0.85);
+      sp.gem.setPosition(sh.x, sh.y - 2);
     }
-    if (this.selected.has(u.id)) {
-      this.gfx.lineStyle(1.5, 0xffffff, 0.9);
-      this.gfx.strokeCircle(u.x, u.y, 14);
+    for (const [id, sp] of this.shardSprites) {
+      if (!seen.has(id)) {
+        sp.glow.destroy();
+        sp.gem.destroy();
+        this.shardSprites.delete(id);
+      }
     }
-    const maxHp = unitStats(side, u.type).hp;
-    if (u.hp < maxHp) drawHealth(this.gfx, u.x, u.y - 14, 22, u.hp / maxHp);
+  }
+
+  /** Laser beams with a cream core, and airbrushed fireballs where things blow up. */
+  private drawEffects() {
+    const g = this.gfx;
+    for (const b of this.state.beams) {
+      const a = settings.reduceMotion ? 0.9 : b.life / BEAM_MS;
+      g.lineStyle(5, b.color, 0.35 * a);
+      g.lineBetween(b.x, b.y, b.x2!, b.y2!);
+      g.lineStyle(1.8, 0xfff4d8, a);
+      g.lineBetween(b.x, b.y, b.x2!, b.y2!);
+    }
+    // Fireballs are not drawn under reduced motion, where their growth is the motion.
+    if (!settings.reduceMotion) {
+      for (const b of this.state.booms) {
+        const t = 1 - b.life / BOOM_MS;
+        const r = b.r! * (0.6 + t * 1.4);
+        g.fillStyle(0xe8742a, 0.45 * (1 - t));
+        g.fillCircle(b.x, b.y, r);
+        g.fillStyle(0xfff0c0, 0.7 * (1 - t));
+        g.fillCircle(b.x, b.y, r * 0.45);
+        g.lineStyle(2, b.color, 1 - t);
+        g.strokeCircle(b.x, b.y, r * 1.25);
+      }
+    }
+  }
+
+  /** Floating numbers over the map: +8 where a shard is picked up, +3 over the beacon. */
+  private drawPops() {
+    const pops = this.state.pops;
+    while (this.popTexts.length < pops.length) {
+      this.popTexts.push(this.onMap(this.text(0, 0, 16, '#ffffff', true).setOrigin(0.5, 1).setStroke(INK_CSS.chocolate, 4).setDepth(DEPTH.pop)));
+    }
+    this.popTexts.forEach((t, k) => {
+      const p = pops[k];
+      t.setVisible(!!p);
+      if (!p) return;
+      const age = 1 - p.life / POP_MS;
+      if (t.text !== p.text) t.setText(p.text);
+      t.setColor(hex(p.color));
+      t.setPosition(p.x, p.y - (settings.reduceMotion ? 0 : age * 22));
+      t.setAlpha(age < 0.6 ? 1 : 1 - (age - 0.6) / 0.4);
+    });
   }
 
   /** The box being dragged, in view pixels. */
   private drawSelection() {
     if (this.drag) {
       const d = this.drag;
-      this.uiGfx.lineStyle(1, 0xffffff, 0.8);
+      this.uiGfx.fillStyle(INK.mustard, 0.08);
+      this.uiGfx.fillRect(Math.min(d.x0, d.x1), Math.min(d.y0, d.y1), Math.abs(d.x1 - d.x0), Math.abs(d.y1 - d.y0));
+      this.uiGfx.lineStyle(1.5, INK.mustard, 0.9);
       this.uiGfx.strokeRect(Math.min(d.x0, d.x1), Math.min(d.y0, d.y1), Math.abs(d.x1 - d.x0), Math.abs(d.y1 - d.y0));
     }
   }
 
   /** The building being placed follows the pointer: green where it can go, orange where it can't. */
   private drawPlacement() {
-    if (!this.placing || !this.inMap(this.pointer.x, this.pointer.y)) return;
+    if (!this.placing || !this.inMap(this.pointer.x, this.pointer.y)) {
+      this.ghost.setVisible(false);
+      return;
+    }
     const { x, y } = this.toWorld(this.pointer.x, this.pointer.y);
     const ok = this.state.placementProblem(this.placing, x, y) === null;
     const side = this.state.sides[PLAYER];
     const def = side.def.buildings[this.placing];
     const hub = this.state.hubOf(PLAYER);
-    if (hub) {
-      this.gfx.lineStyle(1, 0xffffff, 0.25);
-      this.gfx.strokeCircle(hub.x, hub.y, BUILD_RANGE);
-    }
-    drawShape(this.gfx, x, y, 0, def.shape, 1, ok ? 0x7dffb0 : 0xffa94d, side.def.accent, 0.6);
+    if (hub) dashedCircle(this.underGfx, hub.x, hub.y, BUILD_RANGE, 48, INK.cream, 0.35, 1.5);
+    this.underGfx.fillStyle(ok ? 0x7dffb0 : 0xffa94d, 0.25);
+    this.underGfx.fillCircle(x, y, def.radius + 4);
+    this.underGfx.lineStyle(2, ok ? 0x7dffb0 : 0xffa94d, 0.9);
+    this.underGfx.strokeCircle(x, y, def.radius + 4);
+    this.ghost.setTexture(buildingKey(this.art(PLAYER), this.placing)).setPosition(x, y).setVisible(true);
   }
 
   /** Names the unit or building under the pointer, with its role and hit points. */
@@ -398,7 +623,7 @@ export class GameScene extends Phaser.Scene {
     let at: { x: number; y: number };
     if (target.kind === 'unit') {
       const u = this.state.unit(target.id)!;
-      const head = `${side.def.units[u.type].name} · ${ROLE_LABEL[u.type]} · ${Math.ceil(u.hp)}/${unitStats(side, u.type).hp} hp`;
+      const head = `${side.def.units[u.type].name} · ${ROLE_LABEL[u.type]} · ${Math.ceil(u.hp)}/${u.maxHp} hp`;
       text = [head, ...unitLines(side, u.type)].join('\n');
       at = u;
     } else {
@@ -411,22 +636,32 @@ export class GameScene extends Phaser.Scene {
     label.setPosition(at.x, at.y - LABEL_LIFT).setVisible(true);
   }
 
-  /** Each button: its name, its role and crystal cost. Lit when armed; dimmed when unaffordable. */
+  /** Each button: a cream pill with the ship or building, its name, role and crystal cost. */
   private drawBar() {
     const g = this.uiGfx;
     BUTTONS.forEach((b, i) => {
       const { name, cost } = this.buttonInfo(b);
       const affordable = this.state.sides[PLAYER].crystal >= cost;
       const active = b.kind === 'build' && this.placing === b.key;
-      g.fillStyle(active ? 0x3d5a80 : affordable ? 0x1c2540 : 0x12172a, 1);
-      g.fillRect(b.x, b.y, b.w, b.h);
-      g.lineStyle(1.5, active ? 0x7dffb0 : affordable ? 0x6f78a0 : 0x3b4670, 1);
-      g.strokeRect(b.x, b.y, b.w, b.h);
+      g.fillStyle(0x000000, 0.35);
+      g.fillRoundedRect(b.x + 2, b.y + 3, b.w, b.h, 15);
+      g.fillStyle(active ? INK.mustard : affordable ? INK.cream : INK.creamDim, 1);
+      g.fillRoundedRect(b.x, b.y, b.w, b.h, 15);
+      g.fillStyle(INK.tangerine, 1);
+      g.fillRect(b.x + 26, b.y, 3, b.h);
+      g.fillStyle(INK.mustard, 1);
+      g.fillRect(b.x + 29, b.y, 2, b.h);
+      g.lineStyle(1.5, active ? INK.tangerine : INK.cocoa, 1);
+      g.strokeRoundedRect(b.x, b.y, b.w, b.h, 15);
       const caption = this.captions[i];
-      if (caption.name.text !== name) caption.name.setText(name);
-      const roleLine = `${ROLE_LABEL[b.key]} · ${cost}`;
+      caption.icon.setAlpha(affordable ? 1 : 0.55);
+      if (caption.name.text !== name) {
+        caption.name.setText(name).setFontSize(12);
+        for (let size = 11; caption.name.width > b.w - 36 && size >= 9; size--) caption.name.setFontSize(size);
+      }
+      const roleLine = `${ROLE_LABEL[b.key]} · ◆${cost}`;
       if (caption.cost.text !== roleLine) caption.cost.setText(roleLine);
-      caption.name.setColor(affordable ? '#f3e9d2' : '#7d8398');
+      caption.name.setColor(affordable ? INK_CSS.chocolate : INK_CSS.creamDim);
     });
     this.drawTip();
   }
@@ -460,40 +695,145 @@ export class GameScene extends Phaser.Scene {
     return { name: stats.name, cost: stats.cost };
   }
 
-  /** Writes the top bar, the rivals line, the command messages and the end-of-battle overlay. */
+  private setText(t: Phaser.GameObjects.Text, value: string) {
+    if (t.text !== value) t.setText(value);
+  }
+
+  /** The top bar: faction, crystal (with the gain flash), counts, clock, the contract pill and the rivals. */
+  private drawTop() {
+    const s = this.state;
+    const side = s.sides[PLAYER];
+    const h = this.hud;
+    const g = this.uiGfx;
+    const sec = Math.floor(s.elapsedMs / 1000);
+    this.setText(h.faction, this.picking ? 'SPACE WARS' : side.def.name.toUpperCase());
+    this.setText(h.crystal, String(side.crystal));
+    this.setText(h.gain, `+${this.flash.amount}`);
+    h.gain.setVisible(this.flash.ms > 0).setX(h.crystal.x + h.crystal.width + 6);
+    this.setText(h.harvesters, `${s.count(PLAYER, 'harvester')} harvesters`);
+    this.setText(h.army, `${s.units.filter((u) => u.faction === PLAYER && u.type !== 'harvester').length} army`);
+    this.setText(h.clock, `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`);
+
+    // The contract pill: a tangerine tag, then the contract's title, progress and reward on cream.
+    const c = CONTRACTS[s.contract.index];
+    g.fillStyle(INK.cream, 1);
+    g.fillRoundedRect(482, 4, 308, 21, 10.5);
+    g.fillStyle(INK.tangerine, 1);
+    g.fillRoundedRect(482, 4, 90, 21, 10.5);
+    g.lineStyle(1.5, INK.mustard, 1);
+    g.strokeRoundedRect(482, 4, 308, 21, 10.5);
+    if (c) {
+      this.setText(h.tag, `CONTRACT ${s.contract.index + 1}/${CONTRACTS.length}`);
+      this.setText(h.title, c.title(side.def));
+      this.setText(h.count, `${Math.floor(s.contract.progress)}/${c.target}  ◆+${c.reward}`);
+    } else {
+      this.setText(h.tag, 'CONTRACTS ✓');
+      this.setText(h.title, 'Every contract done: Rank V');
+      this.setText(h.count, '');
+    }
+    h.title.setFontSize(11);
+    if (h.title.x + h.title.width > h.count.x - h.count.width - 6) h.title.setFontSize(10);
+
+    // Rivals: a dot in each rival's colour, hollow once it has fallen.
+    s.sides.forEach((r, k) => {
+      if (r.index === PLAYER) return;
+      const x = 862 + (k - 1) * 15;
+      g.fillStyle(r.def.color, r.alive ? 1 : 0.15);
+      g.fillCircle(x, 15, 5.5);
+      g.lineStyle(1.5, INK.cream, r.alive ? 0.9 : 0.4);
+      g.strokeCircle(x, 15, 5.5);
+    });
+    this.setText(h.rivalCount, String(s.sides.filter((f) => f.index !== PLAYER && f.alive).length));
+  }
+
+  /** The command bar's right side: the selection or the latest message, and the contract panel. */
   private drawText() {
     const s = this.state;
     const side = s.sides[PLAYER];
-    const sec = Math.floor(s.elapsedMs / 1000);
-    const clock = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
-    const hud = this.picking ? 'Choose a faction' : `${side.def.name}   crystal ${side.crystal}   harvesters ${s.count(PLAYER, 'harvester')}   army ${s.units.filter((u) => u.faction === PLAYER && u.type !== 'harvester').length}   ${clock}`;
-    if (this.hud.text !== hud) this.hud.setText(hud);
-    const alive = s.sides.filter((f) => f.index !== PLAYER && f.alive).length;
-    const rivals = `rival factions left: ${alive}`;
-    if (this.rivals.text !== rivals) this.rivals.setText(rivals);
-
-    let bar = this.message;
+    let line = this.message;
     if (this.picking) {
-      bar = 'Tap a faction above to command it. The other four factions are AI.';
+      line = 'Tap a faction above to command it. The other four factions are AI.';
     } else if (this.placing) {
-      bar = `Tap the map to place ${s.sides[PLAYER].def.buildings[this.placing].name}. Right-click to cancel.`;
-    } else if (!bar) {
-      bar = 'Tap a unit to select it, or drag a box. Tap the ground to move, tap an enemy to attack. Harvesters work on their own.';
+      line = `Tap the map to place the ${side.def.buildings[this.placing].name}. Right-click to cancel.`;
+    } else if (!line) {
+      line = 'Tap or drag to select ships. Tap the ground to move, an enemy to attack. Harvesters work on their own.';
     }
     if (this.selected.size === 1) {
       const u = s.unit([...this.selected][0]);
-      if (u) {
-        const us = s.sides[u.faction];
-        bar = `Selected: ${us.def.units[u.type].name} (${ROLE_LABEL[u.type]}), hp ${Math.ceil(u.hp)}/${unitStats(us, u.type).hp}\n${bar}`;
-      }
+      if (u) line = `Selected: ${side.def.units[u.type].name} (${ROLE_LABEL[u.type]}), hp ${Math.ceil(u.hp)}/${u.maxHp} · ${line}`;
     } else if (this.selected.size) {
-      bar = `Selected: ${this.selected.size} units\n${bar}`;
+      line = `Selected: ${this.selected.size} ships · ${line}`;
     }
-    if (this.bar.text !== bar) this.bar.setText(bar);
+    this.setText(this.panel.line, line);
 
-    const end = s.phase === 'won' ? 'Victory\nTap to play again' : s.phase === 'lost' ? 'Defeat\nTap to try again' : '';
-    if (this.overlay.text !== end) this.overlay.setText(end);
+    // The contract panel: a tangerine header, then the goal, a progress bar, the reward and the perk.
+    const g = this.uiGfx;
+    const x = 494;
+    const w = VIEW.w - x - 8;
+    g.fillStyle(INK.cream, 1);
+    g.fillRoundedRect(x, 473, w, 62, 6);
+    g.fillStyle(INK.tangerine, 1);
+    g.fillRoundedRect(x, 473, w, 16, { tl: 6, tr: 6, bl: 0, br: 0 });
+    g.fillStyle(INK.mustard, 1);
+    g.fillRect(x, 489, w, 2);
+    const c = CONTRACTS[s.contract.index];
+    const next = CONTRACTS[s.contract.index + 1];
+    const p = this.panel;
+    if (c) {
+      this.setText(p.head, `CONTRACT ${s.contract.index + 1} OF ${CONTRACTS.length}`);
+      this.setText(p.next, next ? `Next: ${next.title(side.def)}` : 'Last contract');
+      this.setText(p.brief, c.brief(side.def));
+      const ratio = Math.min(1, s.contract.progress / c.target);
+      g.fillStyle(INK.creamDim, 1);
+      g.fillRoundedRect(x + 8, 509, 200, 8, 4);
+      g.fillStyle(INK.green, 1);
+      g.fillRoundedRect(x + 8, 509, Math.max(8, 200 * ratio), 8, 4);
+      this.setText(p.count, `${Math.floor(s.contract.progress)} / ${c.target}`);
+      this.setText(p.reward, `Reward ◆ +${c.reward}`);
+      this.setText(p.perk, `+ ${c.perk(side.def)}`);
+    } else {
+      this.setText(p.head, 'CONTRACTS COMPLETE');
+      this.setText(p.next, '');
+      this.setText(p.brief, 'All five contracts done. Finish the rival hubs.');
+      this.setText(p.count, '');
+      this.setText(p.reward, '');
+      this.setText(p.perk, 'Rank V');
+    }
+
+    const end = s.phase === 'won' ? 'VICTORY\nTap to play again' : s.phase === 'lost' ? 'DEFEAT\nTap to try again' : '';
+    this.setText(this.overlay, end);
     this.overlay.setVisible(end !== '');
+  }
+
+  /** The faction picker: a dark veil over the map and a cream card for each faction. */
+  private drawPicker() {
+    const show = this.picking;
+    this.pickTitle.setVisible(show);
+    this.pickTexts.forEach((t) => {
+      t.name.setVisible(show);
+      t.body.setVisible(show);
+    });
+    this.pickImages.forEach((i) => i.setVisible(show));
+    if (!show) return;
+    const g = this.pickGfx;
+    g.fillStyle(0x140a1c, 0.72);
+    g.fillRect(MAP_VIEW.x, MAP_VIEW.y, MAP_VIEW.w, MAP_VIEW.h);
+    for (const c of this.pickCards) {
+      const def = FACTIONS[c.faction];
+      g.fillStyle(0x000000, 0.4);
+      g.fillRoundedRect(c.x + 3, c.y + 4, c.w, c.h, 12);
+      g.fillStyle(INK.cream, 1);
+      g.fillRoundedRect(c.x, c.y, c.w, c.h, 12);
+      g.fillStyle(INK.chocolate, 1);
+      g.fillRoundedRect(c.x, c.y, c.w, 30, { tl: 12, tr: 12, bl: 0, br: 0 });
+      stripes(g, c.x, c.y + 30, c.w, 6);
+      g.fillStyle(def.color, 1);
+      g.fillCircle(c.x + c.w - 16, c.y + 15, 6);
+      g.fillStyle(def.color, 0.2);
+      g.fillEllipse(c.x + c.w / 2, c.y + 86, 110, 52);
+      g.lineStyle(2, INK.cocoa, 1);
+      g.strokeRoundedRect(c.x, c.y, c.w, c.h, 12);
+    }
   }
 
   private onDown(p: Phaser.Input.Pointer) {
@@ -567,7 +907,10 @@ export class GameScene extends Phaser.Scene {
       this.message = 'Harvesters work on their own';
       return;
     }
-    this.message = hit && hit.faction !== PLAYER ? 'Attacking' : 'Moving';
+    const bc = this.state.beacon;
+    this.message = hit && hit.faction !== PLAYER
+      ? 'Attacking'
+      : Math.hypot(at.x - bc.x, at.y - bc.y) <= BEACON_RADIUS ? 'Moving to the relay beacon' : 'Moving';
   }
 
   /** A press on a command bar button: arm a building, or queue a unit. */
