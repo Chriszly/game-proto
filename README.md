@@ -60,6 +60,8 @@ The hub's **Settings** button opens the settings every game shares. They are sav
 - **Reduce motion**: turns off screen shake, flashes and blinking hit effects.
 - **Restore defaults** and **Reset all progress**, which erases every game's save and keeps the settings.
 
+Every game also has a full screen button in its bottom left corner, and the **F** key toggles full screen. Browsers that cannot take a page full screen, such as iPhones, don't show the button.
+
 ## Running locally
 
 ```sh
@@ -75,8 +77,7 @@ npm run preview   # serve the production build
 - `games/<name>/`: one game, with its own `index.html`, `src/`, `e2e/` playthrough test, `docs/`
   screenshots and `README.md`. Games don't import from each other.
 - `shared/`: the settings every game shares (`settings.ts`), the hub's Settings panel
-  (`settingsPanel.ts`) and `setupGame.ts`, which each game calls to apply the frame cap, the FPS
-  readout and reduced motion.
+  (`settingsPanel.ts`) and `setupGame.ts`, which each game calls to apply the frame cap, the FPS readout, reduced motion and full screen.
 - `e2e/hub.spec.ts`: checks that the hub lists every game, that each card opens it, and that the
   settings are saved and reach a game.
 - `package.json`, `tsconfig.json`, `tsconfig.e2e.json`, `vite.config.ts` and `playwright.config.ts`

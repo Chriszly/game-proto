@@ -125,8 +125,7 @@ Phaser passes to `update`; the pops' tweens run on Phaser's clock and are cosmet
 
 ### Hub settings
 
-- `src/main.ts` calls `setupGame(game)` right after creating the game: frame cap, FPS readout and
-  reduced motion (the camera shake when a pest reaches the Heartwood becomes a no-op).
+- `src/main.ts` calls `setupGame(game)` right after creating the game: frame cap, FPS readout, reduced motion and full screen (the camera shake when a pest reaches the Heartwood becomes a no-op).
 - Difficulty scales pest health: `PEST_HP_SCALE = byDifficulty(0.75, 1, 1.3)` in
   `src/game/data.ts`, folded into each wave's `hpScale`. Keep the Golem Garden row of the root
   README's difficulty table and the README's line in step.

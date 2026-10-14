@@ -181,7 +181,7 @@ Data tables:
 ### Hub settings
 
 - `src/main.ts` calls `setupGame(game)` from `shared/setupGame.ts` right after creating the game,
-  which applies the frame cap, the FPS readout and reduced motion (camera shake and flash become
+  which applies the frame cap, the FPS readout, reduced motion and full screen (camera shake and flash become
   no-ops; this game uses neither).
 - Difficulty scales one number: the round goals. `goalFor` in `src/game/state.ts` multiplies the
   base goal by `byDifficulty(0.8, 1, 1.2)` (Easy, Normal, Hard) and rounds it, so the goals are

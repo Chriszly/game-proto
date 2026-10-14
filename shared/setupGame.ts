@@ -6,12 +6,52 @@ const SLACK_MS = 1;
 
 /**
  * Applies the hub's settings that work the same in every game: the frame cap, the FPS readout and
- * reduced motion. Every game calls this right after creating its `Phaser.Game`.
+ * reduced motion. Every game calls this right after creating its `Phaser.Game`. Full screen is
+ * here too, as a button in the bottom left corner and the F key, in every game.
  */
 export function setupGame(game: Phaser.Game) {
   capFrameRate(game, settings.fps);
   if (settings.showFps) showFps(game);
   if (settings.reduceMotion) reduceMotion();
+  addFullscreen();
+}
+
+/**
+ * A button in the bottom left corner, and the F key, that take the page into full screen and back.
+ * Browsers that cannot do full screen on the page (iPhones, for one) get neither.
+ */
+function addFullscreen() {
+  if (!document.fullscreenEnabled) return;
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'fullscreen-button';
+  button.style.cssText =
+    'position:fixed;bottom:4px;left:4px;z-index:10;width:30px;height:30px;padding:5px;cursor:pointer;' +
+    'color:#f3e9d2;background:rgba(0,0,0,0.55);border:1px solid rgba(243,233,210,0.35);border-radius:3px';
+  button.innerHTML =
+    '<svg viewBox="0 0 16 16" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">' +
+    '<path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg>';
+  const label = (on: boolean) => {
+    const text = on ? 'Exit full screen (F)' : 'Full screen (F)';
+    button.title = text;
+    button.setAttribute('aria-label', text);
+    button.setAttribute('aria-pressed', String(on));
+  };
+  label(false);
+  const toggle = () => {
+    const request = document.fullscreenElement
+      ? document.exitFullscreen()
+      : document.documentElement.requestFullscreen();
+    // A refused request (no user gesture, or the browser says no) just leaves the page as it is.
+    request.catch(() => {});
+  };
+  button.addEventListener('click', toggle);
+  window.addEventListener('keydown', (e) => {
+    if (e.key.toLowerCase() !== 'f' || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+    toggle();
+  });
+  document.addEventListener('fullscreenchange', () => label(document.fullscreenElement !== null));
+  document.body.append(button);
 }
 
 /**

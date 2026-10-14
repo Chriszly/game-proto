@@ -116,8 +116,7 @@ from `tick`; tweens are cosmetic only.
 
 ### Hub settings
 
-- `src/main.ts` calls `setupGame(game)` right after creating the game, which applies the frame
-  cap, the FPS readout and reduced motion (camera shake and flash become no-ops; the miss shake is
+- `src/main.ts` calls `setupGame(game)` right after creating the game, which applies the frame cap, the FPS readout, reduced motion and full screen (camera shake and flash become no-ops; the miss shake is
   the only one here).
 - Difficulty scales one number: the swing speed. `speedFor` multiplies `BASE_SPEED` by
   `byDifficulty(0.8, 1, 1.25)` (Easy, Normal, Hard). Nothing else changes.

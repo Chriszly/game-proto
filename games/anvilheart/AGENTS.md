@@ -166,7 +166,7 @@ patience in `arrive`.
 ### Hub settings
 
 - `src/main.ts` calls `setupGame(game)` from `shared/setupGame.ts` right after creating the game.
-  It applies the frame cap, the FPS readout and reduced motion (camera shake and flash become
+  It applies the frame cap, the FPS readout, reduced motion and full screen (camera shake and flash become
   no-ops; this game uses neither).
 - Difficulty scales one number: adventurer patience. `arrive` in `src/game/sim.ts` multiplies
   `PATIENCE_MS + PATIENCE_PER_TIER_MS * wants` by `byDifficulty(1.5, 1, 0.7)` (easy, normal, hard)

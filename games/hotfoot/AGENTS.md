@@ -30,8 +30,7 @@ in.
   HUD band with an illuminated initial on the stage's name, and a vellum margin of acanthus
   scrollwork under the road with a rubric caption that names what is ahead. No cast shadows.
 - One scene does everything: there is no title screen, pause, settings, audio or menu. The run
-  starts as soon as `GameScene` loads. The hub's shared settings (difficulty, frame cap, FPS
-  readout, reduced motion) apply; see Hub settings below.
+  starts as soon as `GameScene` loads. The hub's shared settings (difficulty, frame cap, FPS readout, reduced motion and full screen) apply; see Hub settings below.
 - Coins are counted during a run and banked when the knight falls. On the game-over panel they buy
   the boon missed at the last checkpoint (the card not taken), for `BOON_PRICE` (30) coins. The next
   run starts with that boon at one rank, with full hearts. One purchase at a time; Field Dressing is
@@ -217,7 +216,7 @@ key (see Hub settings).
 ### Hub settings
 
 - `src/main.ts` calls `setupGame(game)` from `shared/setupGame.ts` right after creating the game.
-  It applies the frame cap, the FPS readout and reduced motion (camera shake and flash become
+  It applies the frame cap, the FPS readout, reduced motion and full screen (camera shake and flash become
   no-ops; Hotfoot uses neither).
 - Difficulty scales one number: `START_HEARTS` in `src/game/state.ts` is
   `byDifficulty(5, 3, 2)` (easy, normal, hard), from `shared/settings.ts`. It is read once at

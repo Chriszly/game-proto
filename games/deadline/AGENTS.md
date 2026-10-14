@@ -151,7 +151,7 @@ fuel drums roll down and blow up the zombies round them when shot.
 ### Hub settings
 
 - `src/main.ts` calls `setupGame(game)` from `shared/setupGame.ts` right after creating the game.
-  It applies the frame cap, the FPS readout and reduced motion (camera shake and flash become
+  It applies the frame cap, the FPS readout, reduced motion and full screen (camera shake and flash become
   no-ops; Deadline uses neither).
 - Difficulty scales one number: enemy toughness in `planWave` in `src/game/rules.ts`, multiplied
   by `byDifficulty(0.75, 1, 1.3)` (easy, normal, hard). It applies to every enemy's hp, the boss

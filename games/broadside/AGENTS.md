@@ -31,7 +31,7 @@ Sunk enemies drop loot barrels, and gold buys upgrades at a harbor between waves
   pushed off, glances away and takes `AGROUND_DAMAGE`.
 - **Screens:** there is only `GameScene`. The wave banner, the captain's order card, the harbor
   panel and the game-over panel are overlays drawn on top of it. There is no title screen, pause
-  or in-game settings; the shared settings (difficulty, frame cap, FPS readout, reduced motion)
+  or in-game settings; the shared settings (difficulty, frame cap, FPS readout, reduced motion and full screen)
   are set on the hub page.
 - **Persistence:** only the best wave beaten is saved. Each run starts fresh at wave 1.
 - **Rough or unused:** there is no sound. Enemy captains still run aground now and then (pushed by
@@ -207,7 +207,7 @@ Data tables, where to tune:
 ### Hub settings
 
 - `src/main.ts` calls `setupGame(game)` from `shared/setupGame.ts` right after creating the game.
-  It applies the frame cap, the FPS readout and reduced motion (camera shake and flash become
+  It applies the frame cap, the FPS readout, reduced motion and full screen (camera shake and flash become
   no-ops; this game uses neither).
 - Difficulty scales one number: enemy hp. `spawn` in `game/sim.ts` multiplies
   `ENEMIES[kind].hp * hpScale(wave)` by `byDifficulty(0.75, 1, 1.3)` (Easy 0.75, Normal 1, Hard
