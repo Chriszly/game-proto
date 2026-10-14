@@ -140,7 +140,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Dragging a tile half a cell towards a neighbour swaps them too. */
   private pointerMove(p: Phaser.Input.Pointer) {
-    if (!this.dragFrom || !p.isDown || this.busy) return;
+    if (!this.dragFrom || !p.isDown || this.busy || this.state.phase !== 'play') return;
     const dx = p.x - this.dragFrom.x;
     const dy = p.y - this.dragFrom.y;
     if (Math.max(Math.abs(dx), Math.abs(dy)) < BOARD.cell / 2) return;
