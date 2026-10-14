@@ -2,16 +2,18 @@ import { expect, test, type Page } from '@playwright/test';
 
 // Plays the first round with real inputs: watches the first stone swing, taps to drop each of the
 // first tier's three stones while it is over the stone below, checks a tap while a stone falls
-// drops nothing more, spends favor to reroll the balanced tier's blessings, and takes one, which
-// starts tier 2.
+// drops nothing more, checks the break between tiers also offers a curse and the favor shop (which
+// it leaves alone), spends favor to reroll the balanced tier's blessings, and takes one, which
+// starts tier 2 with a trial.
 // Game state is only read, through the `game` object the dev build puts on window.
 
 type BlessingId = 'broad' | 'calm' | 'steady' | 'golden' | 'grace';
-interface Stone { x: number; w: number; tier: number; perfect: boolean }
+type StoneKind = 'normal' | 'heavy' | 'light';
+interface Stone { x: number; w: number; tier: number; perfect: boolean; kind: StoneKind }
 interface GameState {
   phase: 'swinging' | 'falling' | 'blessing' | 'over' | 'crowned';
   stones: Stone[];
-  moving: { x: number; w: number; h: number; dir: 1 | -1; vy: number };
+  moving: { x: number; w: number; h: number; dir: 1 | -1; vy: number; kind: StoneKind };
   tier: number;
   inTier: number;
   wobbly: boolean;
@@ -27,6 +29,15 @@ interface GameState {
   dropped: number;
   lastDrop: { x: number; w: number; kept: number; share: number; perfect: boolean; missed: boolean } | null;
   best: number;
+  nextKind: StoneKind;
+  slow: boolean;
+  bought: string[];
+  trial: { id: 'perfect' | 'keep'; done: number; failed: boolean } | null;
+  curseOffer: 'haste' | 'brittle' | 'dim' | null;
+  cursed: boolean;
+  curse: { id: string; tier: number } | null;
+  endless: boolean;
+  wind: number;
 }
 type Spot = { x: number; y: number; w: number; h: number };
 type Card = Spot & { id: BlessingId };
@@ -70,6 +81,9 @@ function scene(page: Page) {
     cards: () => read<Card[]>((s) => s.blessingCards),
     /** Where the reroll button is while choosing. */
     reroll: () => read<Spot | null>((s) => s.rerollButton),
+    /** The favor shop's buttons and the curse toggle while choosing. */
+    shop: () => read<(Spot & { id: string })[]>((s) => s.shopButtons),
+    curse: () => read<Spot | null>((s) => s.curseToggle),
   };
 }
 
@@ -157,6 +171,9 @@ test('plays the first round', async ({ page }, testInfo) => {
   expect(s).toMatchObject({ phase: 'swinging', tier: 1, inTier: 0, stones: [], favor: 0, blessings: [], tiersBuilt: 0 });
   expect(s.moving.w).toBe(START_W);
   expect(s.speed).toBeCloseTo(SPEED_NORMAL);
+  // The first tier is all ordinary stones, with no trial, curse or wind.
+  expect(s).toMatchObject({ nextKind: 'normal', trial: null, curse: null, endless: false, wind: 0, slow: false });
+  expect(s.moving.kind).toBe('normal');
   await snap('0-start');
 
   // The stone swings on its own.
@@ -189,7 +206,7 @@ test('plays the first round', async ({ page }, testInfo) => {
     const d = s.lastDrop!;
     expect(d.missed).toBe(false);
     expect(d.share, `stone ${i + 1} kept ${Math.round(d.kept)} of ${d.w}`).toBeGreaterThanOrEqual(BALANCE);
-    expect(s.stones[i]).toMatchObject({ tier: 1, perfect: d.perfect });
+    expect(s.stones[i]).toMatchObject({ tier: 1, perfect: d.perfect, kind: 'normal' });
     expect(s.stones[i].w).toBeCloseTo(d.kept);
     expect(s.dropped).toBe(i + 1);
     favor += 1 + (d.perfect ? PERFECT_FAVOR : 0);
@@ -216,6 +233,12 @@ test('plays the first round', async ({ page }, testInfo) => {
   expect(s.moving.x).toBe(waiting);
   const cards = await game.cards();
   expect(cards.map((c) => c.id)).toEqual(s.offer);
+  // The break also offers a curse to take with the blessing, and the favor shop; the first round
+  // takes neither.
+  expect(s).toMatchObject({ cursed: false, bought: [] });
+  expect(s.curseOffer).not.toBeNull();
+  expect(await game.curse()).not.toBeNull();
+  expect((await game.shop()).map((b) => b.id)).toEqual(['slow', 'wider', 'grace']);
   await snap('2-blessing');
 
   // Rerolling spends favor on three new blessings; the cards follow on the next frame.
@@ -236,7 +259,9 @@ test('plays the first round', async ({ page }, testInfo) => {
   const card = rerolled[0];
   await tap(await onPage(card.x, card.y));
   s = await game.state();
-  expect(s).toMatchObject({ phase: 'swinging', tier: 2, offer: [], blessings: [card.id] });
+  expect(s).toMatchObject({ phase: 'swinging', tier: 2, offer: [], blessings: [card.id], curse: null, curseOffer: null, bought: [] });
+  // Tier 2 sets a trial for extra favor.
+  expect(s.trial).toMatchObject({ done: 0, failed: false });
   const top = before.stones[2];
   switch (card.id) {
     case 'broad':
