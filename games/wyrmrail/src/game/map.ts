@@ -50,6 +50,10 @@ export const VILLAGES: readonly Village[] = [
   { name: 'Fernhollow', cargo: 'timber', c: 8, r: 1, round: 2 },
   { name: 'Stonereach', cargo: 'ore', c: 10, r: 5, round: 3 },
   { name: 'Saltmere', cargo: 'fish', c: 11, r: 2, round: 4 },
+  { name: 'Brackenly', cargo: 'timber', c: 2, r: 0, round: 5 },
+  { name: 'Dunmoor', cargo: 'grain', c: 7, r: 6, round: 6 },
+  { name: 'Wyndle', cargo: 'fish', c: 11, r: 0, round: 7 },
+  { name: 'Kettlecross', cargo: 'tools', c: 7, r: 3, round: 8 },
 ];
 
 export const CARGO_NAMES: Record<Cargo, string> = { grain: 'Grain', tools: 'Tools', timber: 'Timber', ore: 'Ore', fish: 'Fish' };

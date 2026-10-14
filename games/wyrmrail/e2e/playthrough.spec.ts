@@ -2,7 +2,9 @@ import { expect, test, type Page } from '@playwright/test';
 
 // Plays the first round with real inputs: lays track from the Roost to Millbrook and Ashford by
 // tapping tiles, as on a phone, taps the first order on the panel to send the wyrm, and watches it
-// fetch the grain from Millbrook and deliver it to Ashford, which finishes the round.
+// fetch the grain from Millbrook. The branch to Ashford makes a junction with a switch; the test
+// taps the switch over so the wyrm can go on without stopping, and watches it deliver the grain to
+// Ashford, which finishes the round.
 // Game state is only read, through the `game` object the dev build puts on window.
 
 type Tile = { c: number; r: number };
@@ -17,19 +19,23 @@ interface GameState {
   track: string[];
   orders: Order[];
   queue: number[];
-  wyrm: { at: Tile; path: Tile[]; job: { order: number; leg: 'pickup' | 'drop' } | null };
+  switches: Record<string, string>;
+  wyrm: { at: Tile; path: Tile[]; job: { order: number; leg: 'pickup' | 'drop' } | null; switchMs: number };
 }
 type Spot = { id: number; x: number; y: number };
 
 const VIEW = { w: 960, h: 540 };
-/** The grid's top left corner and tile size, from src/scenes/layout.ts. */
-const GRID = { x: 0, y: 48, tile: 64 };
-const center = (t: Tile) => ({ x: GRID.x + (t.c + 0.5) * GRID.tile, y: GRID.y + (t.r + 0.5) * GRID.tile });
+/** The isometric grid, from src/scenes/layout.ts: the screen point of its top corner and a tile's diamond. */
+const ISO = { ox: 288, oy: 84, tw: 76, th: 38 };
+const center = (t: Tile) => ({ x: ISO.ox + ((t.c - t.r) * ISO.tw) / 2, y: ISO.oy + ((t.c + t.r + 1) * ISO.th) / 2 });
 /** The Roost and the first two villages, from src/game/map.ts. */
 const ROOST = { c: 1, r: 3 };
 const MILLBROOK = { c: 4, r: 1 };
 const ASHFORD = { c: 4, r: 5 };
-/** The track the test lays, all on grass: east from the Roost, then up to Millbrook and down to Ashford. */
+/**
+ * The track the test lays, all on grass: east from the Roost, then up to Millbrook and down to
+ * Ashford. Laying the last piece makes (4,3) a junction, its switch set against the new branch.
+ */
 const TRACK: Tile[] = [
   { c: 2, r: 3 },
   { c: 3, r: 3 },
@@ -41,6 +47,7 @@ const TRACK: Tile[] = [
 const START_COINS = 40;
 const GRASS_COST = 2;
 const FIRST_PAY = 22;
+const JUNCTION = { c: 4, r: 3 };
 
 /** Game time per animation frame, every frame the same length. */
 const FRAME_MS = 64;
@@ -175,6 +182,8 @@ test('plays the first round', async ({ page }, testInfo) => {
     coins = s.coins;
   }
   expect(s.track).toHaveLength(TRACK.length);
+  // The junction's switch is set against the branch just laid, towards Ashford.
+  expect(s.switches).toEqual({ '4,3': '4,4' });
   // A tap on a tile away from the line lays nothing.
   await tap(center({ c: 0, r: 6 }));
   s = await game.state();
@@ -191,12 +200,25 @@ test('plays the first round', async ({ page }, testInfo) => {
   await play(300, async () => false);
   await snap('2-loading');
 
+  // Set the junction's switch against the Roost's arm, so the way from Millbrook down to Ashford is
+  // open: each tap sets it against the next arm.
+  for (let taps = 0; s.switches['4,3'] !== '3,3'; taps++) {
+    expect(taps, 'the switch comes round to the Roost arm').toBeLessThan(3);
+    const before = s.switches['4,3'];
+    await tap(center(JUNCTION));
+    s = await game.state();
+    expect(s.switches['4,3'], 'a tap throws the switch').not.toBe(before);
+    expect(s.track, 'a tap on the junction lays nothing').toHaveLength(TRACK.length);
+  }
+
   // It carries the grain down to Ashford.
   s = await until('the wyrm carries the grain', (s) => s.orders.find((o) => o.id === 1)?.status === 'carrying', 2_000);
   expect(s.wyrm.job).toMatchObject({ order: 1, leg: 'drop' });
 
   // Delivered: the order pays and leaves the board, and the round's one delivery finishes round 1.
-  s = await until('the grain delivered to Ashford', (s) => !s.orders.some((o) => o.id === 1), 6_000);
+  let stopped = false;
+  s = await until('the grain delivered to Ashford', (s) => ((stopped ||= s.wyrm.switchMs > 0), !s.orders.some((o) => o.id === 1)), 6_000);
+  expect(stopped, 'the switch was set for the wyrm, so it never stopped').toBe(false);
   expect(s.wyrm.at).toEqual(ASHFORD);
   expect(s).toMatchObject({ phase: 'play', coins: coins + FIRST_PAY, hearts: 3, round: 2, delivered: 0, totalDelivered: 1 });
   expect(s.wyrm.job).toBeNull();
