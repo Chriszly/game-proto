@@ -144,6 +144,8 @@ export interface GameState {
   refiner2: Refiner;
   cauldron2: Cauldron;
   counter: Counter;
+  /** Entry to the guild, bought once before any of its upgrades are for sale. */
+  guild: Build;
   expansion: Expansion;
   upgrades: Record<UpgradeId, Upgrade>;
   /** Craftsmen hired at each station (`level`), and coins paid towards the next one. */
@@ -235,6 +237,58 @@ export const anyFieldBuilt = (state: GameState) => state.expansion.fields.some((
 /** The second line's garden belt also needs one of its fields to pick from. */
 export const beltBuildable = (state: GameState, id: BeltId) =>
   BELT_ENDS[id].every((station) => stationBuilt(state, station)) && (id !== 'garden2' || anyFieldBuilt(state));
+/** Coins for entry to the guild, which puts its upgrades up for sale. */
+export const GUILD_COST = 50;
+
+/**
+ * Everything bought with coins, as one key each: an upgrade's levels, a station's craftsmen, a belt,
+ * the guild's entry and the expansion's land.
+ */
+export type Unlock = `level-${UpgradeId}` | `hire-${StationId}` | `belt-${BeltId}` | 'guild' | 'land';
+
+/**
+ * What must be bought first before each thing goes up for sale. The first steps are one chain, a
+ * thing at a time; from the garden belt on, the shop branches out. Unlisted things (the second
+ * line's, which wait for their station) are for sale from the start.
+ */
+export const UNLOCKED_BY: Partial<Record<Unlock, Unlock>> = {
+  'level-pack': 'level-refiner',
+  'level-cauldron': 'level-pack',
+  'hire-counter': 'level-cauldron',
+  'belt-garden': 'hire-counter',
+  'level-boots': 'belt-garden',
+  'level-sickle': 'belt-garden',
+  'level-counter': 'belt-garden',
+  'hire-refiner': 'belt-garden',
+  'hire-cauldron': 'belt-garden',
+  'belt-refiner': 'belt-garden',
+  guild: 'belt-garden',
+  'belt-cauldron': 'belt-refiner',
+  land: 'belt-cauldron',
+  'level-growth': 'guild',
+  'level-prices': 'guild',
+  'level-belts': 'guild',
+  'level-customers': 'level-prices',
+  'level-slots': 'level-customers',
+};
+
+/** The coins paid towards a thing so far, and whether at least its first level or build is done. */
+function progress(state: GameState, key: Unlock): { done: boolean; paid: number } {
+  if (key === 'guild') return { done: state.guild.built, paid: state.guild.paid };
+  if (key === 'land') return { done: state.expansion.land.built, paid: state.expansion.land.paid };
+  const [kind, id] = key.split(/-(.+)/) as [string, string];
+  if (kind === 'belt') return { done: state.belts[id as BeltId].built, paid: state.belts[id as BeltId].paid };
+  const upgrade = kind === 'hire' ? state.craftsmen[id as StationId] : state.upgrades[id as UpgradeId];
+  return { done: upgrade.level > 0, paid: upgrade.paid };
+}
+
+/** Whether a thing is for sale: what unlocks it is bought, or it was started before it was locked. */
+export function unlocked(state: GameState, key: Unlock): boolean {
+  const own = progress(state, key);
+  const by = UNLOCKED_BY[key];
+  return !by || own.done || own.paid > 0 || progress(state, by).done;
+}
+
 /** Coins needed for the expansion's land, each field, the refining table and the cauldron. */
 export const EXPANSION_COST = { land: 100, field: 25, refiner: 50, cauldron: 75 };
 /** How long a craftsman takes to hand a customer one potion; the doctor hands them over at once. */
@@ -277,6 +331,7 @@ export function createInitialState(): GameState {
     refiner2: { queue: [], progress: 0, output: [] },
     cauldron2: { contents: [], brewing: null, output: [] },
     counter: { shelf: [], till: 0 },
+    guild: unbuilt(),
     expansion: { land: unbuilt(), fields: [unbuilt(), unbuilt()], refiner: unbuilt(), cauldron: unbuilt() },
     upgrades: Object.fromEntries(UPGRADE_IDS.map((id) => [id, { level: 0, paid: 0 }])) as Record<UpgradeId, Upgrade>,
     craftsmen: Object.fromEntries(STATIONS.map((id) => [id, { level: 0, paid: 0 }])) as Record<StationId, Upgrade>,

@@ -70,6 +70,19 @@ than wait.
 
 ![Priority signs: wheat first at the table, Sleeping Tonic first at the cauldron](docs/screenshots/station-priority.png)
 
+**What's for sale** opens up as you buy things. At first only one purple marker shows, and each
+purchase puts the next one out, in this order: refining table level 2, pack 2, cauldron level 2, a
+craftsman at the counter, then the garden belt. From the garden belt on it branches out: boots,
+sickle, the counter's upgrade, craftsmen at the table and cauldron, the table's belt, and entry to
+the guild (50 coins), which puts the guild's growth, belts and prices upgrades up for sale. The
+cauldron's belt follows the table's, the land follows the cauldron's belt, customers follows
+prices and the extra slot follows customers. The second line's things are for sale once their
+station stands.
+
+![A new game: only the refining table's level 2 is for sale](docs/screenshots/unlock-start.png)
+
+![After the garden belt, the shop branches out, with entry to the guild](docs/screenshots/unlock-branches.png)
+
 Every station has an upgrade marker and goes up to level 5. Upgrades cost 20, 40, 80 and 160
 coins: the refining table and cauldron work faster, and customers at an upgraded counter tip more
 and wait longer. Once a level is paid off, step off the marker and back on to start on the next.

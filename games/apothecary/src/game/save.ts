@@ -1,5 +1,5 @@
 import type { ItemId } from './items';
-import { BELT_GAP_MS, BELTS, FEEDERS_LAYOUT, createInitialState, type GameState } from './state';
+import { BELT_GAP_MS, BELTS, FEEDERS_LAYOUT, GUILD_UPGRADES, createInitialState, type GameState } from './state';
 import { beltSpan } from '../scenes/layout';
 
 const KEY = 'apothecary-save';
@@ -25,6 +25,10 @@ export function loadState(): GameState {
       // Customers from before they paid per potion go home; new ones come along soon.
       orders: (saved.orders ?? []).filter((o) => o.pay),
     };
+    // A save from before the guild took members has already joined if it bought any guild upgrade.
+    if (!saved.guild && GUILD_UPGRADES.some((id) => state.upgrades[id].level > 0 || state.upgrades[id].paid > 0)) {
+      state.guild = { built: true, paid: 0 };
+    }
     if ((saved.layout ?? 0) < FEEDERS_LAYOUT) ontoOwnRuns(state);
     // The stations have moved since this save; start the doctor somewhere clear of them.
     if (saved.layout !== fresh.layout) return { ...state, layout: fresh.layout, player: fresh.player };

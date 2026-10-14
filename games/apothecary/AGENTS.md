@@ -36,7 +36,7 @@ counter. Coins buy upgrades, craftsmen, conveyor belts and a mirrored second pro
   `walkSpeed`, `potionPrice`, `stationBuilt`, `anyFieldBuilt`, `beltBuildable`, ...).
 - `src/game/sim.ts`: the rules, free of Phaser. `tick` advances the world; marker actions
   (`dropAtRefiner`, `pickUpFromCauldron`, `stockShelf`, `collectTill`, `payUpgrade`,
-  `payCraftsman`, `payBelt`, `payExpansion`, `dropAll`, `cyclePriority`) and `harvest` each change
+  `payCraftsman`, `payBelt`, `payExpansion`, `joinGuild`, `dropAll`, `cyclePriority`) and `harvest` each change
   state and return `Feedback` lines. Also `shortfall`, `refining` and `doneByHand`.
 - `src/game/save.ts`: `loadState`, `saveState`, `clearSave` (key `apothecary-save`), and the
   `ontoOwnRuns` belt migration.
@@ -97,6 +97,14 @@ counter. Coins buy upgrades, craftsmen, conveyor belts and a mirrored second pro
   (400, tracked in `stillSince`), so walking over one buys nothing; their captions show the coins
   still to pay (cost minus `paid`), with no bar.
   A level marker sets `paused` after a level completes until the doctor steps off.
+- Unlocks: every purchase has an `Unlock` key (`level-<upgrade>`, `hire-<station>`,
+  `belt-<belt>`, `guild`, `land`). `UNLOCKED_BY` in `src/game/state.ts` names what must be bought
+  first (its first level or build): one chain at the start, then branches from the garden belt.
+  `unlocked` also holds once the thing itself has a level or coins paid in, so old saves keep what
+  they started. The pay functions in the sim refuse a locked thing, and the scene's purple markers
+  are shown only while it is unlocked. Entry to the guild is `state.guild` (a `Build`, `GUILD_COST`
+  50), paid by `joinGuild` at a marker on `GUILD.customers`, which shows until the customers
+  upgrade can.
 - Belts: each belt starts at the front edge of a station's out pallets (or in the gardens) and ends
   at the edge of the next station's in pallets, which stand side by side across its end, each at the
   end of its kind's lane. The sim still takes from the station's `output` and hands to its tray;
@@ -129,7 +137,8 @@ two per line), `refiner`/`refiner2` (`queue`, `progress`, `output`), `cauldron`/
 per-potion `pay`, and `patience` that counts down only at the counter), `upgrades`, `craftsmen` (an
 `Upgrade` whose `level` is the number hired), `belts` (a `Build` plus riding `items`, each `at` ms
 along the main run), `priority` (per `CraftingId`, a `PlantId` or `PotionId` to make first, or
-null), `expansion` (land, two fields, refiner, cauldron as `Build`s).
+null), `guild` (a `Build`: entry to the guild), `expansion` (land, two fields, refiner, cauldron as
+`Build`s).
 
 - Only `src/game/sim.ts` changes rules state, mutating in place. The scene writes only
   `state.player` and passes `workingAt` and `atCounter`; it never edits stock directly.
@@ -150,7 +159,8 @@ null), `expansion` (land, two fields, refiner, cauldron as `Build`s).
 - `apothecary-save`: the whole `GameState`, saved every `AUTOSAVE_MS` (3s), on tab hide and on
   `pagehide` (not after "New game" is confirmed). `loadState` discards saves whose `version`
   differs or that lack `plots`, shallow-merges top-level fields, merges `upgrades`, `craftsmen`,
-  `belts` and `priority` per key, appends new plots and drops orders without `pay`. A save from before
+  `belts` and `priority` per key, appends new plots and drops orders without `pay`. A save without
+  `guild` counts as having joined if it bought or paid into any guild upgrade. A save from before
   `FEEDERS_LAYOUT` (3) gets `ontoOwnRuns`, which moves belt items up to their run's join; a save
   whose `layout` differs from `LAYOUT` (4, since belts end at pallets) gets the fresh `player`
   spot. Belt items keep their `at`; the belts kept their runs and order, so no migration moves them.
@@ -230,8 +240,9 @@ null), `expansion` (land, two fields, refiner, cauldron as `Build`s).
   feeder run in each garden belt's `BELT_PATHS` (runs follow the line's gardens in order). New
   plots append, so old saves keep working.
 - Add an upgrade: an `UpgradeId` and `UPGRADES` entry, add it to `DOCTOR_UPGRADES` or
-  `GUILD_UPGRADES` (the guild also needs a spot in `GUILD` in layout), and apply its level in a
-  helper in `src/game/state.ts` used by the sim or scene.
+  `GUILD_UPGRADES` (the guild also needs a spot in `GUILD` in layout), give it a row in
+  `UNLOCKED_BY` unless it is for sale from the start, and apply its level in a helper in
+  `src/game/state.ts` used by the sim or scene.
 - Move a station, marker or wall: edit `src/scenes/layout.ts` (a station's pallets and the belt
   ends at them move with it, and `BELT_MS` stays about 100 pixels a second), bump `LAYOUT` in
   `src/game/state.ts`, update the test's coordinates, and refresh
