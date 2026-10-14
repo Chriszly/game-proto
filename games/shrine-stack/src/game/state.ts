@@ -1,7 +1,8 @@
 // The rules of Shrine Stack, in plain TypeScript with no Phaser. A stone swings above the temple;
 // a tap drops it. What hangs over the stone below breaks off, so the temple narrows unless the
 // drops line up. Every three stones make a tier, and a tier whose stones all landed well is
-// balanced and offers a blessing.
+// balanced and offers a blessing, which favor can reroll. Tier 10 is gilded for double favor, and
+// finishing tier 12 crowns the shrine and wins the run.
 
 import { byDifficulty } from '../../../../shared/settings';
 import { BLESSINGS, type BlessingId } from './blessings';
@@ -39,8 +40,16 @@ export const TIER_FAVOR = 5;
 export const OFFER_SIZE = 3;
 /** A stone that would keep less than this is lost instead. */
 export const MIN_W = 6;
+/** What a new set of three blessings costs, in favor. */
+export const REROLL_COST = 5;
+/** The tier whose stones, and whose balance, earn double favor. */
+export const GILDED_TIER = 10;
+export const GILDED_MULT = 2;
+/** Finishing this tier crowns the shrine and wins the run. */
+export const GOAL_TIER = 12;
 
-export type Phase = 'swinging' | 'falling' | 'blessing' | 'over';
+/** `crowned` is the win: the goal tier is finished. */
+export type Phase = 'swinging' | 'falling' | 'blessing' | 'over' | 'crowned';
 
 /** A stone in the temple, by its middle and width. `tier` counts from 1. */
 export interface Stone {
@@ -72,9 +81,10 @@ export interface Drop {
 
 /** Something for the scene to show once: a stone landing or falling, or a tier finished. */
 export type GameEvent =
-  | { type: 'placed'; drop: Drop; cut: { x: number; w: number }[] }
+  | { type: 'placed'; drop: Drop; cut: { x: number; w: number }[]; favor: number }
   | { type: 'missed'; drop: Drop }
-  | { type: 'tier'; tier: number; balanced: boolean };
+  | { type: 'tier'; tier: number; balanced: boolean }
+  | { type: 'rerolled' };
 
 export interface GameState {
   phase: Phase;
@@ -219,10 +229,11 @@ function land(s: GameState) {
   const d: Drop = { x, w: m.w, kept, share, perfect, missed: false, caught: false };
   s.lastDrop = d;
   s.stones.push({ x, w: kept, tier: s.tier, perfect });
-  s.favor += s.favorPerStone + (perfect ? PERFECT_FAVOR : 0);
+  const favor = stoneFavor(s, perfect);
+  s.favor += favor;
   if (share < BALANCE) s.wobbly = true;
   s.inTier++;
-  s.events.push({ type: 'placed', drop: d, cut });
+  s.events.push({ type: 'placed', drop: d, cut, favor });
   s.phase = 'swinging';
 
   if (s.inTier === STONES_PER_TIER) {
@@ -236,12 +247,36 @@ function land(s: GameState) {
     s.speed = speedFor(s.tier, s.blessings.filter((b) => b === 'calm').length);
     if (balanced) {
       s.balancedTiers++;
-      s.favor += TIER_FAVOR;
+      s.favor += TIER_FAVOR * gild(s.tier - 1);
+    }
+    if (s.tiersBuilt >= GOAL_TIER) {
+      s.phase = 'crowned';
+      return;
+    }
+    if (balanced) {
       s.offer = pickOffer();
       s.phase = 'blessing';
     }
   }
   spawn(s);
+}
+
+/** How much a tier's favor is multiplied by: double on the gilded tier. */
+export const gild = (tier: number) => (tier === GILDED_TIER ? GILDED_MULT : 1);
+
+/** The favor a stone placed now earns. */
+export const stoneFavor = (s: GameState, perfect: boolean) => (s.favorPerStone + (perfect ? PERFECT_FAVOR : 0)) * gild(s.tier);
+
+/** Whether the blessings on offer can be swapped for three new ones. */
+export const canReroll = (s: GameState) => s.phase === 'blessing' && s.favor >= REROLL_COST;
+
+/** Spends `REROLL_COST` favor on a new offer of three blessings. */
+export function reroll(s: GameState) {
+  if (!canReroll(s)) return false;
+  s.favor -= REROLL_COST;
+  s.offer = pickOffer();
+  s.events.push({ type: 'rerolled' });
+  return true;
 }
 
 /** Three different blessings, drawn with `Math.random`. */
