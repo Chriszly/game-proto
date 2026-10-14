@@ -23,6 +23,7 @@ the experience bar, and every level-up pauses the battle on three upgrades to pi
    wave's banner comes before each, and the barricade gets a tenth of its health back.
 2. **The barricade** stops the foes, who hack at it until it breaks, losing stakes as it goes. Once
    it is splinters they walk on to the hero, and **the run is over when a foe reaches the hero**.
+   Repairing it then only stops the foes still in front of it: one already past keeps walking.
 3. **Experience and level-ups**: each foe gives experience when it falls. A full bar is a level,
    and the battle waits while three different upgrades are offered. A countdown under the cards
    shows the time left: after 10 seconds without a tap, one of them is taken at random.
@@ -72,7 +73,7 @@ picked. Once fewer than three upgrades are left, "Mend the Barricade" fills the 
 The skill book (its button in the top bar shows how many skills are found, such as "Skill book
 8/18") has a page for every upgrade. The pages start as empty placeholders, and each fills in the
 first time a level-up offers that upgrade, with its icon, what a rank does and the hero's rank
-(dimmed while it has none). The book stays filled for a new hero. It opens during a level-up too,
+(dimmed while it has none; for "Mend the Barricade", how many times it was picked, such as "2x"). The book stays filled for a new hero. It opens during a level-up too,
 to check what the hero has before choosing.
 
 ![The empty skill book of a new hero](docs/screenshots/skill-book-empty.png)
