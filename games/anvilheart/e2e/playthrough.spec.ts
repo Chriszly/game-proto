@@ -4,7 +4,8 @@ import { expect, test, type Page } from '@playwright/test';
 // forge makes two Rusty Daggers, one is dragged onto the other to merge them into a Shortsword,
 // and the Shortsword is dragged onto the adventurer to sell it, as a player would with a finger.
 // The merge starts a hammer streak, and the Shortsword is exactly what was asked for, so it pays a
-// tip. The royal commission stands in the top bar throughout, untouched by the first round.
+// tip and raises the guild's renown. The royal commission stands in the top bar throughout,
+// untouched by the first round.
 // Game state is only read, through the `game` object the dev build puts on window.
 
 interface Adventurer {
@@ -24,6 +25,7 @@ interface GameState {
   ranks: Record<string, number>;
   commission: { level: number; made: number };
   stars: number;
+  renown: number;
   streak: number;
   streakSlot: number;
   streakMs: number;
@@ -38,6 +40,9 @@ const SHORTSWORD_PRICE = 10;
 const EXACT_FIT_PAY = Math.floor(SHORTSWORD_PRICE * 1.5);
 /** How long after a merge the next one still chains into a hammer streak (`STREAK_MS`). */
 const STREAK_MS = 4000;
+/** The guild's renown starts at 50 and an exact fit raises it by 4 (`RENOWN_START`, `RENOWN_EXACT`). */
+const RENOWN_START = 50;
+const RENOWN_EXACT = 4;
 
 /**
  * Game time per animation frame, every frame the same length. Longer frames mean fewer to draw, so
@@ -171,7 +176,7 @@ test('plays the first sale', async ({ page }, testInfo) => {
   expect(s).toMatchObject({ coins: 0, sold: 0, bestTier: 0, adventurers: [] });
   expect(s.slots.every((t) => t === null)).toBe(true);
   // The first royal commission (a Golden Claymore) stands from the start, with no stars and no streak.
-  expect(s).toMatchObject({ commission: { level: 0, made: 0 }, stars: 0, streak: 0, streakMs: 0 });
+  expect(s).toMatchObject({ commission: { level: 0, made: 0 }, stars: 0, streak: 0, streakMs: 0, renown: RENOWN_START });
   const spots = await game.spots();
 
   // The first adventurer walks up to the counter and asks for an Iron Shortsword.
@@ -206,12 +211,12 @@ test('plays the first sale', async ({ page }, testInfo) => {
   await snap('2-merged');
 
   // Dragging the Shortsword onto the adventurer sells it: it is exactly what they asked for, so they
-  // pay its price and a 50% tip, and leave.
+  // pay its price and a 50% tip, and leave. The exact fit raises the guild's renown.
   // Midway the adventurer's tag shows the tipped price.
   await drag(spots.slots[0], spots.desks[buyer.desk], () => snap('3-exact-fit'));
   s = await game.state();
   expect(s.slots[0]).toBeNull();
-  expect(s).toMatchObject({ coins: EXACT_FIT_PAY, sold: 1, walkedOff: 0 });
+  expect(s).toMatchObject({ coins: EXACT_FIT_PAY, sold: 1, walkedOff: 0, renown: RENOWN_START + RENOWN_EXACT });
   expect(s.adventurers.some((a) => a.id === buyer.id)).toBe(false);
   await wait(400);
   await snap('4-sold');

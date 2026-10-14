@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
-import { BANNER, BOARD, DESK, DISCOVERED, ORDER, TAG } from '../scenes/layout';
-import { ART, PI, bake, ctx, diamond, glass, glow, glowFrame, label, lit, mix, panel, reseed, ring, type Pt } from './glass';
+import { BANNER, BOARD, DESK, DISCOVERED, ORDER, TAG, WIN_PANEL } from '../scenes/layout';
+import { ART, PI, bake, ctx, diamond, glass, glow, glowFrame, label, lit, mix, panel, rect, reseed, ring, type Pt } from './glass';
+import { drawGem } from './swords';
 
 // The leaded-glass interface: buttons, the order cards, the fit tags, the commission banner, the
 // merge and buyer frames, the discovered row's frames, and the streak's burst and sparks.
@@ -117,5 +118,57 @@ export function bakeUi(scene: Phaser.Scene, sizes: Record<ButtonStyle, { w: numb
 
   // A soft light for the commission's completion.
   bake(scene, 'halo', 120, 120, () => glow(120, 120, 120, '#ffe7a0', 0.8));
+
+  // A loose gem on an anvil, and the small one set in a sword's corner.
+  bake(scene, 'gem', 44, 44, () => {
+    glow(44, 44, 44, '#7af0c0', 0.35);
+    drawGem(44, 44, 26);
+  });
+  bake(scene, 'gem-badge', 20, 20, () => drawGem(20, 20, 15));
+
+  // The glow round the banner while a sword the crown wants is held.
+  const bm = 24;
+  bake(scene, 'frame-banner', BANNER.w + bm, BANNER.h + bm, () => glowFrame(bm, bm, a(BANNER.w), a(BANNER.h), '#f0b830', 8));
+
+  // The quench barrel: oak staves in iron hoops, with dark water at the top.
+  const cell = BOARD.cell;
+  bake(scene, 'barrel', cell, cell, () => {
+    reseed(17);
+    const c = a(cell) / 2;
+    const w = a(cell) * 0.62;
+    const top = 26;
+    const bottom = a(cell) - 10;
+    const staves = 5;
+    for (let k = 0; k < staves; k++) {
+      const x0 = c - w / 2 + (k * w) / staves;
+      const x1 = x0 + w / staves;
+      const bulge = (k === 0 ? -6 : 0) + (k === staves - 1 ? 6 : 0);
+      glass([[x0 + (k === 0 ? 6 : 0), top + 14], [x1, top + 14], [x1 + bulge * 0.5, (top + bottom) / 2], [x1, bottom], [x0 + (k === 0 ? 6 : 0), bottom], [x0 + bulge, (top + bottom) / 2]], k % 2 ? '#8a5a2a' : '#9a6a36', { lw: 4 });
+    }
+    for (const y of [top + 30, bottom - 22]) glass(rect(c - w / 2 - 4, y, w + 8, 10), '#5a5a6a', { lw: 3, flat: true });
+    const rim: Pt[] = [];
+    for (let k = 0; k < 16; k++) rim.push([c + Math.cos((k / 16) * PI * 2) * (w / 2 + 2), top + 14 + Math.sin((k / 16) * PI * 2) * 12]);
+    glass(rim, '#2a4a7a', { lw: 4, hi: 0.4 });
+  });
+
+  // A locked spot: dark glass over the anvil or barrel, with a padlock.
+  bake(scene, 'lock-cell', cell, cell, () => {
+    const s = a(cell);
+    panel(6, 6, s - 12, s - 12, '#3a3446', '#1a1824', 6, true);
+    glass([[s / 2 - 16, s / 2 - 6], [s / 2 + 16, s / 2 - 6], [s / 2 + 16, s / 2 + 20], [s / 2 - 16, s / 2 + 20]], '#c8962e', { lw: 3, flat: true });
+    ctx.strokeStyle = '#c8962e';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.arc(s / 2, s / 2 - 8, 11, PI, 0);
+    ctx.stroke();
+  });
+
+  // The Royal Smith panel, when the Crown Blade is delivered.
+  bake(scene, 'win-panel', WIN_PANEL.w, WIN_PANEL.h, () => {
+    reseed(19);
+    panel(0, 0, a(WIN_PANEL.w), a(WIN_PANEL.h), '#c8962e', '#3a2a5a', 14);
+    glow(a(WIN_PANEL.w) / 2, 90, 160, '#ffe7a0', 0.5);
+    glass([[a(WIN_PANEL.w) / 2 - 60, 120], [a(WIN_PANEL.w) / 2 - 54, 50], [a(WIN_PANEL.w) / 2 - 24, 86], [a(WIN_PANEL.w) / 2, 40], [a(WIN_PANEL.w) / 2 + 24, 86], [a(WIN_PANEL.w) / 2 + 54, 50], [a(WIN_PANEL.w) / 2 + 60, 120]], '#ffd36a', { lw: 5, hi: 0.5 });
+  });
 
 }

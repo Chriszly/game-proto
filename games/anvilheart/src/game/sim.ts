@@ -1,7 +1,32 @@
 import { byDifficulty } from '../../../../shared/settings';
 import { commissionAt } from './commissions';
-import { DESKS, FIRST_ORDER, LOOKS, PATIENCE_MS, PATIENCE_PER_TIER_MS, STREAK_COINS, STREAK_MS, VISITOR_EVERY_MS, autoForging, fitOf, forgeMs, oreChance, payFor, type GameState } from './state';
-import { MAX_TIER } from './swords';
+import {
+  DESKS,
+  FIRST_ORDER,
+  GEM_CHANCE,
+  GEM_ORDER_CHANCE,
+  LOOKS,
+  PATIENCE_MS,
+  PATIENCE_PER_TIER_MS,
+  RENOWN_EXACT,
+  RENOWN_OVERKILL,
+  RENOWN_WALKED_OFF,
+  STREAK_COINS,
+  STREAK_MS,
+  VISITOR_EVERY_MS,
+  autoForging,
+  fitOf,
+  forgeMs,
+  freeAnvil,
+  gemsOpen,
+  offerFor,
+  oreChance,
+  patienceFactor,
+  slotOpen,
+  visitorFactor,
+  type GameState,
+} from './state';
+import { GEM, MAX_ORDER, MAX_TIER } from './swords';
 import { locked, nextPrice, type UpgradeId } from './upgrades';
 
 /**
@@ -18,16 +43,23 @@ export function tick(s: GameState, dt: number) {
   for (const a of s.adventurers.filter((a) => a.patienceMs <= 0)) {
     s.adventurers.splice(s.adventurers.indexOf(a), 1);
     s.walkedOff++;
-    s.events.push({ kind: 'left', desk: a.desk });
+    renown(s, RENOWN_WALKED_OFF);
+    s.events.push({ kind: 'left', desk: a.desk, renown: RENOWN_WALKED_OFF });
   }
 
   if (s.adventurers.length < DESKS) {
     s.nextVisitorMs -= dt;
     if (s.nextVisitorMs <= 0) {
       arrive(s);
-      s.nextVisitorMs = VISITOR_EVERY_MS;
+      // Renown brings the next one sooner or later.
+      s.nextVisitorMs = VISITOR_EVERY_MS * visitorFactor(s.renown);
     }
   }
+}
+
+/** Raises or lowers the guild's renown, kept between 0 and 100. */
+function renown(s: GameState, by: number) {
+  s.renown = Math.max(0, Math.min(100, s.renown + by));
 }
 
 /** An adventurer walks up to the first free spot at the counter with an order. */
@@ -36,21 +68,27 @@ function arrive(s: GameState) {
   const desk = [...Array(DESKS).keys()].find((d) => !taken.has(d));
   if (desk === undefined) return;
   // After the first order, they ask for anything up to one better than the best sword made yet.
-  const top = Math.min(MAX_TIER, Math.max(3, s.bestTier + 1));
+  const top = Math.min(MAX_ORDER, Math.max(3, s.bestTier + 1));
   const wants = s.orders === 0 ? FIRST_ORDER : 1 + Math.floor(Math.random() * top);
-  // Easier difficulties give adventurers more patience.
-  const patience = (PATIENCE_MS + PATIENCE_PER_TIER_MS * wants) * byDifficulty(1.5, 1, 0.7);
-  s.adventurers.push({ id: s.nextId++, desk, wants, patience, patienceMs: patience, look: Math.floor(Math.random() * LOOKS) });
+  // Easier difficulties and a renowned guild give adventurers more patience.
+  const patience = (PATIENCE_MS + PATIENCE_PER_TIER_MS * wants) * byDifficulty(1.5, 1, 0.7) * patienceFactor(s.renown);
+  const look = Math.floor(Math.random() * LOOKS);
+  // Once gems are made, some adventurers want one set in their sword. The roll is only made then,
+  // so the first orders draw the same random numbers as before gems.
+  const gem = gemsOpen(s) && Math.random() < GEM_ORDER_CHANCE;
+  s.adventurers.push({ id: s.nextId++, desk, wants, gem, patience, patienceMs: patience, look });
   s.orders++;
 }
 
-/** Forges a new sword onto the first empty anvil, if the forge is hot and there is room. */
+/** Forges a new sword (or, once gems are made, sometimes a gem) onto the first free anvil. */
 export function forge(s: GameState) {
   if (s.heatMs > 0) return false;
-  const slot = s.slots.indexOf(null);
+  const slot = freeAnvil(s);
   if (slot < 0) return false;
-  const tier = Math.random() < oreChance(s) ? 2 : 1;
+  let tier = Math.random() < oreChance(s) ? 2 : 1;
+  if (gemsOpen(s) && Math.random() < GEM_CHANCE) tier = GEM;
   s.slots[slot] = tier;
+  s.gemmed[slot] = false;
   s.bestTier = Math.max(s.bestTier, tier);
   s.heatMs = forgeMs(s);
   s.events.push({ kind: 'forged', slot, tier });
@@ -58,24 +96,30 @@ export function forge(s: GameState) {
 }
 
 /**
- * Drops the sword from anvil `from` onto anvil `to`: onto an empty anvil it moves, onto a sword of
- * the same tier the two merge into one of the next tier, and onto any other sword they swap.
- * A merge soon after the last one chains a hammer streak, and may fulfil the royal commission.
+ * Drops what lies on slot `from` onto slot `to`: onto an empty slot it moves, onto a sword of the
+ * same tier the two merge into one of the next tier, a gem onto a sword without one is set in it,
+ * and anything else swaps. A merge soon after the last one chains a hammer streak.
  */
 export function drop(s: GameState, from: number, to: number) {
   const tier = s.slots[from];
-  if (tier === null || from === to) return false;
+  if (tier === null || from === to || !slotOpen(s, to)) return false;
   const there = s.slots[to];
-  if (there === tier && tier < MAX_TIER) {
+  if (tier !== GEM && there === tier && tier < MAX_TIER) {
     s.slots[from] = null;
     s.slots[to] = tier + 1;
+    // A gem in either sword carries over to the merged one.
+    s.gemmed[to] = s.gemmed[to] || s.gemmed[from];
+    s.gemmed[from] = false;
     s.bestTier = Math.max(s.bestTier, tier + 1);
     s.events.push({ kind: 'merged', slot: to, tier: tier + 1 });
     hammer(s, to);
-    commissioned(s, to, tier + 1);
+  } else if (tier === GEM && there !== null && there !== GEM && !s.gemmed[to]) {
+    s.slots[from] = null;
+    s.gemmed[to] = true;
+    s.events.push({ kind: 'set', slot: to });
   } else {
-    s.slots[from] = there;
-    s.slots[to] = tier;
+    [s.slots[from], s.slots[to]] = [there, tier];
+    [s.gemmed[from], s.gemmed[to]] = [s.gemmed[to], s.gemmed[from]];
   }
   return true;
 }
@@ -91,32 +135,56 @@ function hammer(s: GameState, slot: number) {
   s.events.push({ kind: 'streak', slot, streak: s.streak, coins });
 }
 
-/** Counts a new sword of `tier` towards the royal commission, and pays it out once it is done. */
-function commissioned(s: GameState, slot: number, tier: number) {
+/** Whether the sword on `slot` is one the standing royal commission asks for. */
+export function wanted(s: GameState, slot: number) {
   const c = commissionAt(s.commission.level);
-  if (tier !== c.tier) return;
+  return c !== null && s.slots[slot] === c.tier;
+}
+
+/**
+ * Hands the sword on `slot` to the crown, if the standing commission asks for it. It leaves the
+ * board; once enough are delivered the commission pays its reward and a guild star, and the last
+ * one (the Crown Blade) names the smith Royal Smith.
+ */
+export function deliver(s: GameState, slot: number) {
+  const c = commissionAt(s.commission.level);
+  const tier = s.slots[slot];
+  if (!c || tier !== c.tier) return false;
+  s.slots[slot] = null;
+  s.gemmed[slot] = false;
   s.commission.made++;
-  if (s.commission.made < c.count) return;
+  s.events.push({ kind: 'delivered', slot, tier, made: s.commission.made, count: c.count });
+  if (s.commission.made < c.count) return true;
   s.coins += c.reward;
   s.stars++;
   s.commission = { level: s.commission.level + 1, made: 0 };
   s.events.push({ kind: 'commission', slot, tier, reward: c.reward });
+  if (c.final) {
+    s.won = true;
+    s.events.push({ kind: 'crowned' });
+  }
+  return true;
 }
 
 /**
- * Sells the sword on anvil `from` to the adventurer `id`, if it is at least what they asked for.
- * The exact sword asked for pays a tip on top; a better one pays only the price asked.
+ * Sells the sword on slot `from` to the adventurer `id`, if it is at least what they asked for (and
+ * set with a gem, for a gem order). The exact sword asked for pays a tip on top; a better one pays
+ * only the price asked; a gem order pays double. A good sale raises the guild's renown.
  */
 export function sell(s: GameState, from: number, id: number) {
   const tier = s.slots[from];
   const a = s.adventurers.find((a) => a.id === id);
   if (tier === null || !a || tier < a.wants) return false;
-  const coins = payFor(tier, a.wants);
+  const coins = offerFor(tier, s.gemmed[from], a);
+  if (coins === 0) return false;
+  const fit = fitOf(tier, a.wants);
   s.slots[from] = null;
+  s.gemmed[from] = false;
   s.coins += coins;
   s.sold++;
+  renown(s, fit === 'exact' ? RENOWN_EXACT : RENOWN_OVERKILL);
   s.adventurers.splice(s.adventurers.indexOf(a), 1);
-  s.events.push({ kind: 'sold', desk: a.desk, tier, coins, fit: fitOf(tier, a.wants) });
+  s.events.push({ kind: 'sold', desk: a.desk, tier, coins, fit, gem: a.gem });
   return true;
 }
 
@@ -130,6 +198,7 @@ export function buy(s: GameState, id: UpgradeId) {
   if (id === 'auto') s.autoForge = true;
   // Faster Bellows also shorten a heat-up already under way.
   if (id === 'bellows') s.heatMs = Math.min(s.heatMs, forgeMs(s));
+  s.events.push({ kind: 'bought', id });
   return true;
 }
 

@@ -17,8 +17,14 @@ export const SWORDS: Sword[] = [
   { name: 'Golden Claymore', price: 320 },
   { name: 'Runeblade', price: 720 },
   { name: 'Dragonslayer', price: 1600 },
+  // The legendary ninth tier, merged from two Dragonslayers. The crown's last commission asks for it.
+  { name: 'Anvilheart', price: 4000 },
 ];
 
 export const MAX_TIER = SWORDS.length;
+/** The best sword an adventurer will ask for; only the crown asks for an Anvilheart. */
+export const MAX_ORDER = MAX_TIER - 1;
+/** A loose gem from the forge, stored on an anvil like a sword of tier 0. It never merges. */
+export const GEM = 0;
 
 export const swordOf = (tier: number) => SWORDS[tier - 1];

@@ -24,6 +24,7 @@ const SHAPES: Shape[] = [
   { blade: [134, 20, 0], guard: [36, 9], grip: 34, pommel: 9 },
   { blade: [130, 17, 0], guard: [32, 8], grip: 30, pommel: 8 },
   { blade: [146, 24, 0], guard: [40, 10], grip: 36, pommel: 10 },
+  { blade: [146, 26, 0], guard: [44, 12], grip: 34, pommel: 11 },
 ];
 
 /** Blade, guard, grip and pommel glass for each tier. */
@@ -36,6 +37,7 @@ const COLOURS = [
   { b: '#f6d470', g: '#d08a2a', h: '#6a2a1a', p: '#ffe58a' },
   { b: '#c4b0ff', g: '#5a3a9a', h: '#2a2048', p: '#d080ff' },
   { b: '#4a3a58', g: '#c0402a', h: '#2a1a1a', p: '#ff8a3a' },
+  { b: '#fff0c0', g: '#2a9a7a', h: '#3a1a4a', p: '#7af0d0' },
 ];
 
 /** The size of a sword texture, in view pixels: one anvil cell. */
@@ -93,13 +95,38 @@ export function drawSword(tier: number, x: number, y: number, s: number, light =
   glass(bh.lower, lit(c.b, -0.18), { lw, flat: true, hi: 0.1, lo: 0.2 });
   // The Runeblade's runes: little panes of pale glass down the ridge.
   if (tier === 7) for (let k = 0; k < 4; k++) glass(rect(16 + k * 24, -3, 10, 6), '#f0e0ff', { lw: 1.5 / s, flat: true });
+  // The Anvilheart's molten core down the blade.
+  if (tier === 9) glass([[8, -3], [sh.blade[0] * 0.85, -2], [sh.blade[0] * 0.85, 2], [8, 3]], '#ffb030', { lw: 1.5 / s, flat: true, hi: 0.6 });
   // The Dragonslayer's ember vein.
   if (tier === 8) glass([[10, -2], [sh.blade[0] * 0.8, -1.5], [sh.blade[0] * 0.8, 1.5], [10, 2]], '#ff7a2a', { lw: 1.5 / s, flat: true });
   const [gs, gt] = sh.guard;
   glass([[-gt, -gs], [0, -gs], [0, gs], [-gt, gs]], c.g, { lw, flat: true });
   glass([[-gt - sh.grip, -5], [-gt, -5], [-gt, 5], [-gt - sh.grip, 5]], c.h, { lw, flat: true });
   glass(ring(-gt - sh.grip - sh.pommel * 0.6, 0, sh.pommel, 8), c.p, { lw, flat: true, hi: 0.5 });
+  // The Anvilheart's heart of amber glass, set in the guard.
+  if (tier === 9) glass(heart(-gt / 2, 0, 11), '#ffb030', { lw, flat: true, hi: 0.5 });
   ctx.restore();
+}
+
+/** A heart, pointing along +x (towards the blade), centred on (x, y). */
+function heart(x: number, y: number, r: number): Pt[] {
+  const pts: Pt[] = [];
+  for (let k = 0; k < 24; k++) {
+    const t = (k / 24) * PI * 2;
+    const hx = 16 * Math.sin(t) ** 3;
+    const hy = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+    pts.push([x - (hy / 16) * r, y + (hx / 16) * r]);
+  }
+  return pts;
+}
+
+/** A cut gem of green glass: a table on top and facets round it, centred on (x, y) in art units. */
+export function drawGem(x: number, y: number, r: number) {
+  const rim: Pt[] = [];
+  for (let k = 0; k < 8; k++) rim.push([x + Math.cos((k / 8) * PI * 2 + PI / 8) * r, y + Math.sin((k / 8) * PI * 2 + PI / 8) * r]);
+  glass(rim, '#1e9a6a', { lw: Math.max(2, r / 6), flat: true, hi: 0.4 });
+  const table: Pt[] = rim.map(([px, py]) => [x + (px - x) * 0.5, y + (py - y) * 0.5]);
+  glass(table, '#7af0c0', { lw: Math.max(1.5, r / 10), flat: true, hi: 0.6 });
 }
 
 /** Scales a sword image from its size on an anvil to `paintScale` in the mockup's terms. */

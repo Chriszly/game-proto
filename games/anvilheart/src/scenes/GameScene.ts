@@ -1,14 +1,33 @@
 import { settings } from '../../../../shared/settings';
 import Phaser from 'phaser';
 import { ADVENTURER, adventurerTexture } from '../art/characters';
-import { swordScale, swordTexture } from '../art/swords';
+import { SWORD_SIZE, swordScale, swordTexture } from '../art/swords';
 import { EMBLEMS, emblemTexture } from '../art/ui';
 import { commissionAt } from '../game/commissions';
 import { clearProgress, loadProgress, saveProgress } from '../game/save';
-import { buy, drop, forge, sell, tick, toggleAutoForge } from '../game/sim';
-import { DESKS, SLOTS, STREAK_MS, fitOf, forgeMs, freshProgress, newShop, payFor, progressOf, type Adventurer, type GameState } from '../game/state';
-import { MAX_TIER, swordOf } from '../game/swords';
-import { UPGRADES, UPGRADE_IDS, locked, nextPrice, type UpgradeId } from '../game/upgrades';
+import { buy, deliver, drop, forge, sell, tick, toggleAutoForge, wanted } from '../game/sim';
+import {
+  BARREL,
+  DESKS,
+  GEM_PAY,
+  GRID,
+  OPEN_COLS,
+  SLOTS,
+  STREAK_MS,
+  fitOf,
+  forgeMs,
+  freeAnvil,
+  freshProgress,
+  newShop,
+  offerFor,
+  progressOf,
+  renownBand,
+  slotOpen,
+  type Adventurer,
+  type GameState,
+} from '../game/state';
+import { GEM, MAX_TIER, swordOf } from '../game/swords';
+import { BUTTON_UPGRADES, UPGRADES, locked, nextPrice, type UpgradeId } from '../game/upgrades';
 import { Button } from '../ui/Button';
 import {
   BANNER,
@@ -21,12 +40,16 @@ import {
   PATIENCE,
   TAG,
   UI_DEPTH,
+  WIN_PANEL,
+  HINT_SPOT,
+  RENOWN_BAR,
   UPGRADE_BUTTONS,
   VIEW,
   deskAt,
   deskBox,
   deskCentre,
   discoveredCentre,
+  onBanner,
   slotAt,
   slotCentre,
 } from './layout';
@@ -34,7 +57,11 @@ import {
 /** Longest simulated step, so a backgrounded tab doesn't jump the shop forward. */
 const MAX_STEP_MS = 250;
 /** How far up from an anvil's centre a sword lies on it. */
-const SWORD_LIFT = 11;
+const SWORD_LIFT = 10;
+/** Sword textures are painted for 100px anvils; on the board they are scaled to its cells. */
+const SWORD_FIT = BOARD.cell / SWORD_SIZE;
+/** Where a gem set in a sword shows: its hilt's corner, from the sword's centre. */
+const BADGE = { x: -24, y: 22 };
 const LEAD = 0x17131c;
 
 const textStyle = (size: number, color = '#fff1d0', stroke = 3): Phaser.Types.GameObjects.Text.TextStyle => ({
@@ -55,7 +82,6 @@ interface Held {
 /** What is drawn for one adventurer at the counter, and the tag that shows what they would pay. */
 interface Visitor {
   root: Phaser.GameObjects.Container;
-  adventurer: Adventurer;
   tag: Phaser.GameObjects.Container;
   tagImage: Phaser.GameObjects.Image;
   tagTop: Phaser.GameObjects.Text;
@@ -78,6 +104,16 @@ export class GameScene extends Phaser.Scene {
   /** The shop being played; read by the playthrough test. */
   state!: GameState;
   private swords: (Phaser.GameObjects.Image | null)[] = [];
+  /** The gem drawn in the corner of each gemmed sword, by slot. */
+  private badges: Phaser.GameObjects.Image[] = [];
+  /** The padlocks over the fifth column's anvils and the barrel until they are bought, with their prices. */
+  private locks: { slot: number; image: Phaser.GameObjects.Image; price: Phaser.GameObjects.Text }[] = [];
+  /** The glow round the banner while a sword the crown wants is held. */
+  private bannerFrame!: Phaser.GameObjects.Image;
+  private renownText!: Phaser.GameObjects.Text;
+  /** The Royal Smith panel, shown once when the Crown Blade is delivered. */
+  private winPanel!: Phaser.GameObjects.Container;
+  private winStats!: Phaser.GameObjects.Text;
   private visitors = new Map<number, Visitor>();
   private held: Held | null = null;
   private furnace!: Phaser.GameObjects.Image;
@@ -91,7 +127,6 @@ export class GameScene extends Phaser.Scene {
   private buyerFrames: Phaser.GameObjects.Image[] = [];
   private coinsText!: Phaser.GameObjects.Text;
   private soldText!: Phaser.GameObjects.Text;
-  private bestText!: Phaser.GameObjects.Text;
   private star!: Phaser.GameObjects.Image;
   private starsText!: Phaser.GameObjects.Text;
   private banner!: Banner;
@@ -111,6 +146,7 @@ export class GameScene extends Phaser.Scene {
       forge: { x: FORGE_BUTTON.x, y: FORGE_BUTTON.y },
       slots: [...Array(SLOTS).keys()].map((slot) => ({ x: slotCentre(slot).x, y: slotCentre(slot).y - SWORD_LIFT })),
       desks: [...Array(DESKS).keys()].map(deskCentre),
+      banner: { x: BANNER.x + BANNER.w / 2, y: BANNER.y + BANNER.h / 2 },
     };
   }
 
@@ -122,6 +158,10 @@ export class GameScene extends Phaser.Scene {
 
     this.add.image(0, 0, 'background').setOrigin(0);
     this.furnace = this.add.image(FURNACE_WINDOW.x, FURNACE_WINDOW.y, 'furnace-0').setOrigin(0);
+    const barrel = slotCentre(BARREL);
+    this.add.image(barrel.x, barrel.y, 'barrel');
+    this.badges = [...Array(SLOTS).keys()].map(() => this.add.image(0, 0, 'gem-badge').setDepth(11).setVisible(false));
+    this.createLocks();
     this.marks = this.add.graphics().setDepth(5);
     this.mergeFrames = [...Array(SLOTS).keys()].map((slot) => {
       const c = slotCentre(slot);
@@ -133,7 +173,7 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.forgeButton = new Button(this, FORGE_BUTTON.x, FORGE_BUTTON.y, 'forge', 'Forge', () => this.forge());
-    UPGRADE_IDS.forEach((id, i) => {
+    BUTTON_UPGRADES.forEach((id, i) => {
       const b = UPGRADE_BUTTONS;
       const button = new Button(this, b.x, b.ys[i], 'upgrade', '', () => this.buy(id), 13);
       const emblem = this.add.image(-b.w / 2 + 22, 0, emblemTexture(i));
@@ -142,13 +182,15 @@ export class GameScene extends Phaser.Scene {
       this.upgradeButtons.set(id, button);
     });
     this.add
-      .text(BOARD.x + 2 * BOARD.cell, BOARD.y + 4 * BOARD.cell + 16, 'Merge matching swords, then sell them to adventurers.', {
+      .text(HINT_SPOT.x, HINT_SPOT.y, 'Merge matching swords, then sell them\nto adventurers. Drag a sword the crown\nwants onto the royal banner.', {
         ...textStyle(13, '#fff4d8', 3.5),
         fontStyle: 'normal',
+        align: 'center',
       })
       .setOrigin(0.5);
     this.createDiscovered();
     this.createHud();
+    this.createWinPanel();
     this.createReset();
 
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => this.pickUp(p));
@@ -191,11 +233,16 @@ export class GameScene extends Phaser.Scene {
 
   private pickUp(p: Phaser.Input.Pointer) {
     const slot = slotAt(p.x, p.y);
-    if (this.held || slot === null) return;
+    if (this.held || slot === null || this.winPanel.visible) return;
+    if (!slotOpen(this.state, slot)) {
+      this.unlock(slot);
+      return;
+    }
     const tier = this.state.slots[slot];
     if (tier === null) return;
     this.swords[slot]?.setVisible(false);
-    const sprite = this.add.image(p.x, p.y, swordTexture(tier)).setDepth(UI_DEPTH - 1).setScale(swordScale(1.35));
+    this.badges[slot].setVisible(false);
+    const sprite = this.add.image(p.x, p.y, tier === GEM ? 'gem' : swordTexture(tier)).setDepth(UI_DEPTH - 1).setScale(tier === GEM ? 1.3 : swordScale(1.35));
     this.held = { slot, sprite };
   }
 
@@ -213,7 +260,18 @@ export class GameScene extends Phaser.Scene {
     let done = false;
     if (slot !== null) done = drop(this.state, held.slot, slot);
     else if (buyer) done = sell(this.state, held.slot, buyer.id);
+    else if (onBanner(p.x, p.y)) done = deliver(this.state, held.slot);
     if (done) this.save();
+  }
+
+  /** A tap on a locked anvil or the locked barrel buys it, if there are coins enough. */
+  private unlock(slot: number) {
+    const id: UpgradeId = slot === BARREL ? 'barrel' : 'anvils';
+    const price = nextPrice(id, this.state.ranks[id]);
+    if (price === null) return;
+    const c = slotCentre(slot);
+    if (buy(this.state, id)) this.save();
+    else this.float(c.x, c.y, `${UPGRADES[id].name}: ${price} coins`, '#d8d0e0');
   }
 
   private drawSwords() {
@@ -225,13 +283,23 @@ export class GameScene extends Phaser.Scene {
         return;
       }
       const c = slotCentre(slot);
+      const key = tier === GEM ? 'gem' : swordTexture(tier);
       if (!sprite) {
-        sprite = this.add.image(c.x, c.y - SWORD_LIFT, swordTexture(tier)).setDepth(10);
+        sprite = this.add.image(c.x, c.y - SWORD_LIFT, key).setDepth(10).setScale(SWORD_FIT);
         this.swords[slot] = sprite;
       }
-      if (sprite.texture.key !== swordTexture(tier)) sprite.setTexture(swordTexture(tier));
+      if (sprite.texture.key !== key) sprite.setTexture(key);
       sprite.setVisible(this.held?.slot !== slot);
     });
+    this.badges.forEach((badge, slot) => {
+      const c = slotCentre(slot);
+      badge.setPosition(c.x + BADGE.x, c.y - SWORD_LIFT + BADGE.y).setVisible(this.state.gemmed[slot] && this.swords[slot] !== null && this.held?.slot !== slot);
+    });
+    for (const lock of this.locks) {
+      const open = slotOpen(this.state, lock.slot);
+      lock.image.setVisible(!open);
+      lock.price.setVisible(!open);
+    }
   }
 
   private drawVisitors() {
@@ -252,17 +320,20 @@ export class GameScene extends Phaser.Scene {
     const mid = ORDER.x + ORDER.w / 2;
     const body = this.add.image(ADVENTURER.x, ADVENTURER.y, adventurerTexture(a.look)).setOrigin(0);
     const card = this.add.image(ORDER.x - 13, ORDER.y - 2, 'order-card').setOrigin(0);
-    const price = this.add.text(mid, ORDER.y + 17, `${sword.price} coins`, { fontFamily: FONT, fontStyle: 'bold', fontSize: '14px', color: '#9a5a10' }).setOrigin(0.5);
+    // A gem order pays double, and shows the gem by the sword.
+    const ask = a.gem ? `${sword.price * GEM_PAY} coins, gemmed` : `${sword.price} coins`;
+    const price = this.add.text(mid, ORDER.y + 17, ask, { fontFamily: FONT, fontStyle: 'bold', fontSize: '14px', color: a.gem ? '#1e7a52' : '#9a5a10' }).setOrigin(0.5);
     const wants = this.add.image(mid, ORDER.y + 49, swordTexture(a.wants)).setScale(swordScale(0.82));
+    const gem = this.add.image(mid - 22, ORDER.y + 62, 'gem-badge').setVisible(a.gem);
     const name = this.add.text(mid, ORDER.y + 86, sword.name, { fontFamily: FONT, fontStyle: 'bold', fontSize: '13px', color: '#2a1a14' }).setOrigin(0.5);
     const tagImage = this.add.image(0, 0, 'tag-exact').setOrigin(0);
     const tagTop = this.add.text(TAG.w / 2 + 1, 11.5, '', textStyle(10, '#eaffd8', 2)).setOrigin(0.5);
     const tagBottom = this.add.text(TAG.w / 2 + 1, 23.5, '', textStyle(11, '#ffe27a', 2)).setOrigin(0.5);
     const tag = this.add.container(TAG.x, TAG.y, [tagImage, tagTop, tagBottom]).setVisible(false);
-    const root = this.add.container(b.x, b.y, [body, card, price, wants, name, tag]).setDepth(20);
+    const root = this.add.container(b.x, b.y, [body, card, price, wants, gem, name, tag]).setDepth(20);
     root.setAlpha(0);
     this.tweens.add({ targets: root, alpha: 1, duration: 300 });
-    return { root, adventurer: a, tag, tagImage, tagTop, tagBottom };
+    return { root, tag, tagImage, tagTop, tagBottom };
   }
 
   /**
@@ -275,11 +346,27 @@ export class GameScene extends Phaser.Scene {
         const sprite = this.swords[e.slot];
         const c = slotCentre(e.slot);
         if (!sprite) continue;
-        sprite.setScale(e.kind === 'merged' ? 1.5 : 0.4);
-        this.tweens.add({ targets: sprite, scale: 1, duration: 250, ease: 'Back.Out' });
+        sprite.setScale((e.kind === 'merged' ? 1.5 : 0.4) * SWORD_FIT);
+        this.tweens.add({ targets: sprite, scale: SWORD_FIT, duration: 250, ease: 'Back.Out' });
         if (e.kind === 'merged' && !settings.reduceMotion) {
           const flash = this.add.image(c.x, c.y - SWORD_LIFT, 'halo').setDepth(9).setScale(0.6);
           this.tweens.add({ targets: flash, scale: 1.2, alpha: 0, duration: 350, onComplete: () => flash.destroy() });
+        }
+      } else if (e.kind === 'set') {
+        const c = slotCentre(e.slot);
+        this.float(c.x, c.y - 20, 'Gem set!', '#8af0c8');
+        if (!settings.reduceMotion) {
+          const flash = this.add.image(c.x, c.y - SWORD_LIFT, 'halo').setDepth(9).setScale(0.5);
+          this.tweens.add({ targets: flash, scale: 1, alpha: 0, duration: 350, onComplete: () => flash.destroy() });
+        }
+      } else if (e.kind === 'delivered') {
+        this.delivered(e.slot, e.tier, e.made, e.count);
+      } else if (e.kind === 'crowned') {
+        this.crowned();
+      } else if (e.kind === 'bought') {
+        if (e.id === 'barrel' || e.id === 'anvils') {
+          const c = e.id === 'barrel' ? slotCentre(BARREL) : slotCentre(2 * GRID.cols + OPEN_COLS);
+          this.float(c.x, c.y, `${UPGRADES[e.id].name}!`, '#ffd36a');
         }
       } else if (e.kind === 'streak') {
         this.hammerStreak(e.slot, e.streak, e.coins);
@@ -287,11 +374,12 @@ export class GameScene extends Phaser.Scene {
         this.commissionDone(e.slot, e.reward);
       } else if (e.kind === 'sold') {
         const c = deskCentre(e.desk);
-        const message = e.fit === 'exact' ? `Exact fit! +${e.coins} coins` : `+${e.coins} coins (overkill)`;
-        this.float(c.x + 40, c.y, message, e.fit === 'exact' ? '#ffd36a' : '#d8d0e0');
+        const fit = e.fit === 'exact' ? `Exact fit! +${e.coins} coins` : `+${e.coins} coins (overkill)`;
+        const message = e.gem ? `Gemmed! +${e.coins} coins` : fit;
+        this.float(c.x + 40, c.y, message, e.gem ? '#8af0c8' : e.fit === 'exact' ? '#ffd36a' : '#d8d0e0');
       } else if (e.kind === 'left') {
         const c = deskCentre(e.desk);
-        this.float(c.x, c.y, 'Left without a sword', '#ff8a6a');
+        this.float(c.x, c.y, `Left without a sword\nRenown ${e.renown}`, '#ff8a6a', 1800);
       }
     }
   }
@@ -331,6 +419,16 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: tag, y: tagY - 16, alpha: 0, delay: 900, duration: 500, onComplete: () => tag.destroy() });
   }
 
+  /** The sword flies up into the banner, which says how many the crown still wants. */
+  private delivered(slot: number, tier: number, made: number, count: number) {
+    const c = slotCentre(slot);
+    const bx = BANNER.x + BANNER.w / 2;
+    const by = BANNER.y + BANNER.h / 2;
+    const sword = this.add.image(bx, by + 20, swordTexture(tier)).setDepth(UI_DEPTH + 2).setScale(swordScale(0.9));
+    this.tweens.add({ targets: sword, y: by, scale: swordScale(0.4), alpha: 0, duration: 500, ease: 'Cubic.In', onComplete: () => sword.destroy() });
+    if (made < count) this.float(c.x, c.y - 30, `Delivered to the crown: ${made} of ${count}`, '#ffe7a8', 1800);
+  }
+
   /** The banner lights up and the purse and star float off it. */
   private commissionDone(slot: number, reward: number) {
     const bx = BANNER.x + BANNER.w / 2;
@@ -340,6 +438,14 @@ export class GameScene extends Phaser.Scene {
     if (!settings.reduceMotion) this.tweens.add({ targets: this.banner.root, scale: 1.06, duration: 160, yoyo: true });
     const c = slotCentre(slot);
     this.float(c.x, c.y - 30, `Royal commission done! +${reward}c and a guild star`, '#ffd36a', 2400);
+  }
+
+  /** The Crown Blade is delivered: the Royal Smith panel shows over the board. */
+  private crowned() {
+    const s = this.state;
+    this.winStats.setText(`${s.sold} swords sold, ${s.stars} guild stars,\nrenown ${s.renown}: ${renownBand(s.renown).name}`);
+    this.winPanel.setVisible(true).setAlpha(0);
+    this.tweens.add({ targets: this.winPanel, alpha: 1, duration: 500 });
   }
 
   private float(x: number, y: number, message: string, color: string, duration = 1200) {
@@ -385,22 +491,32 @@ export class GameScene extends Phaser.Scene {
 
     const held = this.held;
     const tier = held ? s.slots[held.slot] : null;
+    const gemmed = held ? s.gemmed[held.slot] : false;
     // The outlines pulse, or hold steady with reduce motion.
     const pulse = settings.reduceMotion ? 1 : 0.8 + 0.2 * Math.sin(this.clock / 120);
-    this.mergeFrames.forEach((frame, slot) => frame.setVisible(tier !== null && slot !== held?.slot && s.slots[slot] === tier).setAlpha(pulse));
+    // A held sword lights the swords it merges with; a held gem lights the swords it can be set in.
+    const lights = (slot: number) => {
+      const there = s.slots[slot];
+      if (tier === null || slot === held?.slot || there === null) return false;
+      if (tier === GEM) return there !== GEM && !s.gemmed[slot];
+      return there === tier && tier < MAX_TIER;
+    };
+    this.mergeFrames.forEach((frame, slot) => frame.setVisible(lights(slot)).setAlpha(pulse));
+    this.bannerFrame.setVisible(held !== null && wanted(s, held.slot)).setAlpha(pulse);
     const buyers = new Set<number>();
     for (const a of s.adventurers) {
       const v = this.visitors.get(a.id);
-      const buys = tier !== null && tier >= a.wants;
+      const pay = offerFor(tier, gemmed, a);
+      const buys = pay > 0;
       if (buys) buyers.add(a.desk);
       if (!v) continue;
       v.tag.setVisible(buys);
-      if (!buys) continue;
+      if (!buys || tier === null) continue;
       const exact = fitOf(tier, a.wants) === 'exact';
-      const pay = payFor(tier, a.wants);
-      v.tagImage.setTexture(exact ? 'tag-exact' : 'tag-overkill');
-      v.tagTop.setText(exact ? 'Exact fit +50%' : 'Overkill').setColor(exact ? '#eaffd8' : '#d8d0e0');
-      v.tagBottom.setText(exact ? `${pay}c` : `pays ${pay}c`).setColor(exact ? '#ffe27a' : '#b8acc4');
+      v.tagImage.setTexture(exact || a.gem ? 'tag-exact' : 'tag-overkill');
+      const top = a.gem ? `Gemmed ×${GEM_PAY}` : exact ? 'Exact fit +50%' : 'Overkill';
+      v.tagTop.setText(top).setColor(exact || a.gem ? '#eaffd8' : '#d8d0e0');
+      v.tagBottom.setText(exact || a.gem ? `${pay}c` : `pays ${pay}c`).setColor(exact || a.gem ? '#ffe27a' : '#b8acc4');
     }
     this.buyerFrames.forEach((frame, desk) => frame.setVisible(buyers.has(desk)).setAlpha(pulse));
   }
@@ -411,7 +527,7 @@ export class GameScene extends Phaser.Scene {
     // The fire flickers between two frames, held on the first with reduce motion, and dims while it heats.
     this.furnace.setTexture(`furnace-${settings.reduceMotion ? 0 : Math.floor(this.clock / 180) % 2}`);
     this.furnace.setAlpha(hot ? 1 : 0.6);
-    const full = !s.slots.includes(null);
+    const full = freeAnvil(s) < 0;
     this.forgeButton.set(full ? 'Board full' : hot ? 'Forge' : 'Heating...', hot && !full, full || !hot ? 20 : 25);
     // The heat bar: six jewel panes that light up as the forge gets hot again.
     const g = this.hud;
@@ -427,7 +543,7 @@ export class GameScene extends Phaser.Scene {
       g.lineStyle(1.5, LEAD).strokeRect(x, HEAT_BAR.y, w, HEAT_BAR.h);
     }
     g.lineStyle(2, LEAD).strokeRect(HEAT_BAR.x - 2, HEAT_BAR.y - 2, HEAT_BAR.w + 4, HEAT_BAR.h + 4);
-    UPGRADE_IDS.forEach((id, i) => {
+    BUTTON_UPGRADES.forEach((id, i) => {
       const rank = s.ranks[id];
       const price = nextPrice(id, rank);
       const u = UPGRADES[id];
@@ -453,7 +569,7 @@ export class GameScene extends Phaser.Scene {
     for (let tier = 1; tier <= MAX_TIER; tier++) {
       const c = discoveredCentre(tier, MAX_TIER);
       const frame = this.add.image(c.x, c.y, 'disc-off');
-      const sword = this.add.image(c.x, c.y, swordTexture(tier)).setScale(swordScale(0.5)).setVisible(false);
+      const sword = this.add.image(c.x, c.y, swordTexture(tier)).setScale(swordScale(0.45)).setVisible(false);
       this.discovered.push({ frame, sword });
     }
   }
@@ -463,12 +579,13 @@ export class GameScene extends Phaser.Scene {
     const top = (n: number) => this.add.text(0, 21, '', textStyle(n, '#efe2c4')).setOrigin(0, 0.5).setDepth(UI_DEPTH + 1);
     top(21).setText('Anvilheart').setColor('#ffd36a').setX(17);
     this.coinsText = top(16).setColor('#ffd36a').setX(220);
-    // Right to left from the corner: the best sword, the swords sold and the guild stars.
-    this.bestText = top(14.5).setOrigin(1, 0.5).setX(VIEW.w - 17);
+    // Right to left from the corner: the renown meter with its name, the swords sold and the guild stars.
+    this.renownText = top(14.5).setOrigin(1, 0.5).setX(VIEW.w - 17 - RENOWN_BAR.w - 10);
     this.soldText = top(14.5).setOrigin(1, 0.5);
     this.starsText = top(15).setOrigin(1, 0.5);
     this.star = this.add.image(0, 20, 'star').setDepth(UI_DEPTH + 1);
     this.createBanner();
+    this.bannerFrame = this.add.image(BANNER.x + BANNER.w / 2, BANNER.y + BANNER.h / 2, 'frame-banner').setDepth(UI_DEPTH + 2).setVisible(false);
     // In the first desk, which is empty while the hint shows.
     const desk = deskCentre(0);
     this.hint = this.add.text(desk.x, desk.y, '', textStyle(13, '#e8d8b8')).setOrigin(0.5).setDepth(UI_DEPTH + 1);
@@ -497,8 +614,18 @@ export class GameScene extends Phaser.Scene {
     const s = this.state;
     this.hud.clear();
     this.coinsText.setText(`Coins ${s.coins}`);
-    this.bestText.setText(`Best sword: ${s.bestTier > 0 ? swordOf(s.bestTier).name : 'none yet'}`);
-    this.soldText.setText(`Sold ${s.sold}`).setX(this.bestText.x - this.bestText.width - 16);
+    // Renown: its name and a bar of ten jewel panes in the band's colour.
+    const band = renownBand(s.renown);
+    this.renownText.setText(band.name).setColor(`#${band.color.toString(16).padStart(6, '0')}`);
+    const rx = VIEW.w - 17 - RENOWN_BAR.w;
+    const pane = RENOWN_BAR.w / 10;
+    this.hud.fillStyle(0x2a2436).fillRect(rx, RENOWN_BAR.y, RENOWN_BAR.w, RENOWN_BAR.h);
+    for (let k = 0; k < 10; k++) {
+      const lit = Phaser.Math.Clamp(s.renown / 10 - k, 0, 1);
+      if (lit > 0) this.hud.fillStyle(band.color).fillRect(rx + k * pane, RENOWN_BAR.y, pane * lit, RENOWN_BAR.h);
+      this.hud.lineStyle(1.5, LEAD).strokeRect(rx + k * pane, RENOWN_BAR.y, pane, RENOWN_BAR.h);
+    }
+    this.soldText.setText(`Sold ${s.sold}`).setX(this.renownText.x - this.renownText.width - 16);
     this.starsText.setText(s.stars > 0 ? `${s.stars}` : '').setX(this.soldText.x - this.soldText.width - 12);
     this.star.setVisible(s.stars > 0).setX(this.starsText.x - this.starsText.width - 12);
     this.hint.setText(s.adventurers.length === 0 && s.sold === 0 ? 'An adventurer is on the way...' : '');
@@ -508,22 +635,33 @@ export class GameScene extends Phaser.Scene {
       if (frame.texture.key !== (made ? 'disc-on' : 'disc-off')) frame.setTexture(made ? 'disc-on' : 'disc-off');
     });
 
-    // The commission: one great sword needs two of the tier below; past that, a count of Dragonslayers.
+    // The commission: one great sword needs two of the tier below; two Dragonslayers count deliveries.
+    // Once a sword it wants lies on the board, the banner asks for it to be dragged up.
     const c = commissionAt(s.commission.level);
     const b = this.banner;
-    const target = swordOf(c.tier).name;
+    if (!c) {
+      b.title.setText('Royal Smith');
+      b.progress.setText('Every commission done');
+      b.pips.forEach((pip) => pip.setVisible(false));
+      b.reward.setText('');
+      b.star.setX(BANNER.w / 2 - 20);
+      if (b.sword.texture.key !== swordTexture(MAX_TIER)) b.sword.setTexture(swordTexture(MAX_TIER));
+      return;
+    }
+    const target = c.final ? 'The Crown Blade' : swordOf(c.tier).name;
+    const ready = s.slots.some((t) => t === c.tier);
     let have: number;
     let need: number;
     if (c.count === 1) {
       need = 2;
-      have = Math.min(need, s.slots.filter((t) => t === c.tier - 1).length);
+      have = ready ? need : Math.min(need, s.slots.filter((t) => t === c.tier - 1).length);
       b.title.setText(target);
-      b.progress.setText(`${swordOf(c.tier - 1).name}s ${have}/${need}`);
+      b.progress.setText(ready ? 'Ready! Drag it here' : `${swordOf(c.tier - 1).name}s ${have}/${need}`);
     } else {
       need = c.count;
       have = s.commission.made;
       b.title.setText(`${c.count} ${target}s`);
-      b.progress.setText(`Made ${have}/${need}`);
+      b.progress.setText(ready ? `Sent ${have}/${need}: drag one here` : `Sent ${have}/${need}`);
     }
     if (b.sword.texture.key !== swordTexture(c.tier)) b.sword.setTexture(swordTexture(c.tier));
     b.pips.forEach((pip, k) => {
@@ -533,6 +671,32 @@ export class GameScene extends Phaser.Scene {
     });
     b.reward.setText(`+${c.reward}c`);
     b.star.setX(b.reward.x - b.reward.width - 11);
+  }
+
+  /** Padlocks over the fifth column's anvils and the barrel, each with the price that opens it. */
+  private createLocks() {
+    const spots = [...Array(GRID.rows).keys()].map((row) => row * GRID.cols + OPEN_COLS).concat(BARREL);
+    this.locks = spots.map((slot) => {
+      const c = slotCentre(slot);
+      const id: UpgradeId = slot === BARREL ? 'barrel' : 'anvils';
+      const image = this.add.image(c.x, c.y, 'lock-cell').setDepth(7);
+      const caption = slot === BARREL ? `Barrel ${UPGRADES[id].prices[0]}c` : `4 for ${UPGRADES[id].prices[0]}c`;
+      const price = this.add.text(c.x, c.y + 28, caption, textStyle(12, '#ffd36a', 3)).setOrigin(0.5).setDepth(7);
+      return { slot, image, price };
+    });
+  }
+
+  /** The Royal Smith panel over the board, hidden until the Crown Blade is delivered. */
+  private createWinPanel() {
+    const { x, y, w } = WIN_PANEL;
+    const title = this.add.text(w / 2, 92, 'Royal Smith', textStyle(30, '#ffd36a', 4)).setOrigin(0.5);
+    const line = this.add
+      .text(w / 2, 136, 'The crown has its Crown Blade, and names\nyour smithy the finest in the realm.', { ...textStyle(14, '#fff1d0', 3), fontStyle: 'normal', align: 'center' })
+      .setOrigin(0.5);
+    this.winStats = this.add.text(w / 2, 184, '', { ...textStyle(13, '#e8d8b8', 3), fontStyle: 'normal', align: 'center' }).setOrigin(0.5);
+    const button = new Button(this, w / 2, 240, 'forge', 'Keep smithing', () => this.winPanel.setVisible(false));
+    this.winPanel = this.add.container(x, y, [this.add.image(0, 0, 'win-panel').setOrigin(0), title, line, this.winStats, button.root]);
+    this.winPanel.setDepth(UI_DEPTH + 5).setVisible(false);
   }
 
   /** A small button in the corner that throws the board and coins away for a fresh smithy. */
@@ -548,6 +712,7 @@ export class GameScene extends Phaser.Scene {
       for (const sprite of this.swords) sprite?.destroy();
       this.visitors.clear();
       this.swords.fill(null);
+      this.winPanel.setVisible(false);
       this.state = newShop(freshProgress());
     });
   }

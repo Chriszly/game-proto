@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { DESKS, SLOTS } from '../game/state';
+import { ANVILS, DESKS, GRID } from '../game/state';
 import { BOARD, FORGE_BUTTON, FURNACE_WINDOW, HUD_HEIGHT, VIEW, deskBox, slotCentre } from '../scenes/layout';
 import { ART, LEAD, PI, bake, ctx, diamond, glass, glow, mix, panel, path, rect, reseed, ring, rnd, type Pt } from './glass';
 
@@ -105,19 +105,20 @@ function flames(frame: number) {
   for (const [x, y] of [[194, 552], [226, 556], [262, 552], [298, 556], [330, 552]]) glass(ring(x, y, 12, 6, 0.3), '#2a1a1a', { lw: 3, flat: true });
 }
 
-/** The sixteen cobalt panes of the board with gold quarries at their corners, and an anvil on each. */
+/** The cobalt panes of the board (five columns of four) with gold quarries at their corners, and an anvil on each. */
 function board() {
-  const size = a(BOARD.cell * 4);
-  glass(rect(a(BOARD.x) - 16, a(BOARD.y) - 16, size + 32, size + 32), '#000000', { empty: true, lw: 10 });
+  glass(rect(a(BOARD.x) - 16, a(BOARD.y) - 16, a(BOARD.cell * GRID.cols) + 32, a(BOARD.cell * GRID.rows) + 32), '#000000', { empty: true, lw: 10 });
   const tiles = ['#1e5a46', '#24684f', '#1a4e3e', '#28705a'];
   reseed(20);
   const half = a(BOARD.cell) / 2 - 4;
-  for (let i = 0; i < SLOTS; i++) {
+  /** The anvils and quarries were drawn for 100px cells; they shrink with the cell. */
+  const k = BOARD.cell / 100;
+  for (let i = 0; i < ANVILS; i++) {
     const c = slotCentre(i);
-    glass(rect(a(c.x) - half, a(c.y) - half, half * 2, half * 2), tiles[(i + Math.floor(i / 4)) % 4], { hi: 0.25, lo: 0.25, lw: 6 });
+    glass(rect(a(c.x) - half, a(c.y) - half, half * 2, half * 2), tiles[(i + Math.floor(i / GRID.cols)) % 4], { hi: 0.25, lo: 0.25, lw: 6 });
   }
   // A warm light pooled on each pane, clipped to it, so the swords and anvils stand out from the cobalt.
-  for (let i = 0; i < SLOTS; i++) {
+  for (let i = 0; i < ANVILS; i++) {
     const c = slotCentre(i);
     ctx.save();
     path(rect(a(c.x) - half, a(c.y) - half, half * 2, half * 2));
@@ -125,13 +126,17 @@ function board() {
     glow(a(c.x), a(c.y) - a(8), half, '#ffe6a8', 0.32);
     ctx.restore();
   }
-  for (let i = 0; i < SLOTS; i++) {
+  for (let i = 0; i < ANVILS; i++) {
     const c = slotCentre(i);
-    for (const [qx, qy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) glass(diamond(a(c.x) + qx * half, a(c.y) + qy * half, 14), '#c8962e', { lw: 3, flat: true });
+    for (const [qx, qy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) glass(diamond(a(c.x) + qx * half, a(c.y) + qy * half, 14 * k), '#c8962e', { lw: 3, flat: true });
   }
-  for (let i = 0; i < SLOTS; i++) {
+  for (let i = 0; i < ANVILS; i++) {
     const c = slotCentre(i);
-    anvil(a(c.x), a(c.y));
+    ctx.save();
+    ctx.translate(a(c.x), a(c.y));
+    ctx.scale(k, k);
+    anvil(0, 0);
+    ctx.restore();
   }
 }
 
