@@ -1,14 +1,18 @@
 import Phaser from 'phaser';
+import { PAD, RES } from '../art/puppet';
 import { BUTTON, FONT } from '../scenes/layout';
 
-/** A wooden button with a caption, lit while the pointer is over it. */
+/** A carved black card button with a glowing amber rim and a caption, brighter under the pointer. */
 export function makeButton(scene: Phaser.Scene, x: number, y: number, caption: string, onClick: () => void) {
-  const bg = scene.add.rectangle(0, 0, BUTTON.w, BUTTON.h, 0x5c3a21).setStrokeStyle(3, 0xc9a040);
-  const text = scene.add.text(0, 0, caption, { fontFamily: FONT, fontSize: '18px', color: '#f3e9d2' }).setOrigin(0.5);
-  const button = scene.add.container(x, y, [bg, text]);
-  bg.setInteractive({ useHandCursor: true })
-    .on('pointerover', () => bg.setFillStyle(0x8a5a32))
-    .on('pointerout', () => bg.setFillStyle(0x5c3a21))
+  const bg = scene.add.image(-BUTTON.w / 2 - PAD, -BUTTON.h / 2 - PAD, 'btn').setOrigin(0).setScale(1 / RES);
+  const text = scene.add
+    .text(0, 0, caption, { fontFamily: FONT, fontSize: '19px', fontStyle: 'bold', color: '#ffd08a', resolution: 2 })
+    .setOrigin(0.5)
+    .setShadow(0, 0, 'rgba(255,150,70,0.8)', 6, false, true);
+  const hit = scene.add.zone(0, 0, BUTTON.w, BUTTON.h).setInteractive({ useHandCursor: true });
+  hit
+    .on('pointerover', () => bg.setTexture('btn-hover'))
+    .on('pointerout', () => bg.setTexture('btn'))
     .on('pointerdown', onClick);
-  return button;
+  return scene.add.container(x, y, [bg, text, hit]);
 }

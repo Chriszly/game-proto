@@ -1,14 +1,14 @@
 import Phaser from 'phaser';
-import { bakeGlow } from '../art/sprites';
+import { bakeTextures } from '../art/puppet';
 
-// Bakes the one texture the scene needs, the lantern glow, then starts the game.
+// Paints every texture once (src/art/puppet.ts), then starts the game.
 export class BootScene extends Phaser.Scene {
   constructor() {
     super('Boot');
   }
 
   create() {
-    bakeGlow(this);
+    bakeTextures(this);
     this.scene.start('Game');
   }
 }
