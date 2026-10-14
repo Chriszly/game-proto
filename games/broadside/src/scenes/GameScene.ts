@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { settings } from '../../../../shared/settings';
 import { SHIP_LOOKS } from '../art/art';
 import { loadBestWave, saveBestWave } from '../game/save';
 import { buy, repair, setSail, tick } from '../game/sim';
@@ -173,7 +174,8 @@ export class GameScene extends Phaser.Scene {
       const roll = Math.sin(this.clock / 420 + ship.id) * 0.03;
       const at = this.place(ship);
       sprite.setPosition(at.x, at.y).setRotation(ship.heading + roll);
-      if (ship.hitMs > 0) sprite.setTint(0xff8060).setTintMode(Phaser.TintModes.FILL);
+      // Reduce motion holds the hull still rather than flashing it on a hit.
+      if (ship.hitMs > 0 && !settings.reduceMotion) sprite.setTint(0xff8060).setTintMode(Phaser.TintModes.FILL);
       else sprite.clearTint();
       if (ship.kind !== 'player') this.drawHpBar(ship);
     }
@@ -238,8 +240,9 @@ export class GameScene extends Phaser.Scene {
         sprite = this.add.image(0, 0, 'loot').setDepth(3);
         this.loot.set(l.id, sprite);
       }
-      // Bobbing on the water, and blinking in its last few seconds before it sinks.
-      const fading = l.ms < 4000 && Math.floor(this.clock / 200) % 2 === 0;
+      // Bobbing on the water, and blinking in its last few seconds before it sinks (held faded
+      // instead with reduce motion).
+      const fading = l.ms < 4000 && (settings.reduceMotion || Math.floor(this.clock / 200) % 2 === 0);
       const at = this.place(l);
       sprite.setPosition(at.x, at.y + Math.sin(this.clock / 300 + l.id) * 2).setAlpha(fading ? 0.4 : 1);
     }
@@ -341,7 +344,7 @@ export class GameScene extends Phaser.Scene {
     g.fillStyle(0x5cb85c).fillRect(hx + 2, 12, Math.round((hw - 4) * Phaser.Math.Clamp(s.player.hp / s.player.maxHp, 0, 1)), 10);
     const reload = stats(s).reloadMs;
     for (const [i, side] of (['port', 'starboard'] as const).entries()) {
-      const loaded = 1 - s.player.reload[side] / reload;
+      const loaded = Phaser.Math.Clamp(1 - s.player.reload[side] / reload, 0, 1);
       g.fillStyle(0x3a3a40).fillRect(hx + i * (hw / 2 + 2), 27, hw / 2 - 2, 5);
       g.fillStyle(loaded >= 1 ? 0xf3c64e : 0xa08850).fillRect(hx + i * (hw / 2 + 2), 27, Math.round((hw / 2 - 2) * loaded), 5);
     }

@@ -69,6 +69,10 @@ function effect(s: GameState, kind: Effect['kind'], x: number, y: number, total:
 export function tick(s: GameState, dt: number) {
   for (const e of s.effects) e.ms -= dt;
   s.effects = s.effects.filter((e) => e.ms > 0);
+  for (const ship of [s.player, ...s.enemies]) {
+    ship.hitMs = Math.max(0, ship.hitMs - dt);
+    ship.agroundMs = Math.max(0, ship.agroundMs - dt);
+  }
   if (s.phase === 'harbor' || s.phase === 'over') return;
 
   if (s.phase === 'break') {
@@ -165,8 +169,6 @@ function steer(ship: Ship, heading: number, turn: number, speed: number, dt: num
   ship.x += (Math.cos(ship.heading) * speed * dt) / 1000;
   ship.y += (Math.sin(ship.heading) * speed * dt) / 1000;
   wrapPoint(ship);
-  ship.hitMs = Math.max(0, ship.hitMs - dt);
-  ship.agroundMs = Math.max(0, ship.agroundMs - dt);
 }
 
 function spawn(s: GameState, dt: number) {
@@ -228,12 +230,14 @@ function fireBroadsides(s: GameState, dt: number) {
   for (const side of ['port', 'starboard'] as Side[]) {
     player.reload[side] = Math.max(0, player.reload[side] - dt);
     if (player.reload[side] > 0) continue;
-    const target = s.enemies.find((e) => distance(player, e) < p.range && sideFacing(player, e) === side);
+    const target = s.enemies.find((e) => e.hp > 0 && distance(player, e) < p.range && sideFacing(player, e) === side);
     if (!target) continue;
     fire(s, player, side, target, ENEMIES[target.kind as keyof typeof ENEMIES].speed, p.guns, p.damage, p.range, 0);
     player.reload[side] = p.reloadMs;
   }
+  // A ship already sunk this tick (on a beach) neither fires nor soaks up a broadside.
   for (const e of s.enemies) {
+    if (e.hp <= 0) continue;
     const type = ENEMIES[e.kind as keyof typeof ENEMIES];
     for (const side of ['port', 'starboard'] as Side[]) {
       e.reload[side] = Math.max(0, e.reload[side] - dt);

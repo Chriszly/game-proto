@@ -58,7 +58,8 @@ File map (all under `src/`, plus the shared files it imports):
 - `ui/Button.ts`: `makeButton`, a wooden caption button.
 - `ui/screen.ts`: `pinToScreen`, which sets scroll factor 0 on a container and every child.
 - `shared/setupGame.ts` (imported by `main.ts`) and `shared/settings.ts` (`byDifficulty`, imported
-  by `game/sim.ts`): the hub's settings, shared by every game. See "Hub settings" below.
+  by `game/sim.ts`, and `settings`, read by `scenes/GameScene.ts` for reduce motion): the hub's
+  settings, shared by every game. See "Hub settings" below.
 
 How it runs:
 
@@ -107,7 +108,8 @@ State model (`src/game/state.ts`):
   ranks, absent means 0), `bestWave` and `nextId`.
 - `Ship` has a heading in radians (0 is east, positive is clockwise on screen), `hp`/`maxHp`,
   per-side `reload` timers, `hitMs` and `agroundMs` (the cooldown before an island can damage it
-  again). The player is always id 1 with kind `player`.
+  again), which `tick` counts down for every ship in every phase, so a ship hit just before the
+  game ends doesn't stay orange behind the panel. The player is always id 1 with kind `player`.
 - `Ball` carries its velocity, remaining `ms`, `damage` and `fromPlayer`. `Loot` has `gold` and
   `ms` to live. An `Effect` is visual only (`splash`, `smoke`, `hit`, `sink`, `coins`).
 - Only `sim.ts` functions mutate state, plus the scene writing `helm` each frame. The player's
@@ -117,7 +119,8 @@ State model (`src/game/state.ts`):
   maps by id.
 
 Persistence: `localStorage` key `broadside-best-wave` stores one number. The scene saves it when
-the phase changes to `harbor` or `over`. Reads and writes are wrapped in try/catch.
+the phase changes to `harbor` or `over`. Reads and writes are wrapped in try/catch, and a stored
+value that is not a finite positive number loads as 0 (rounded down otherwise).
 
 Randomness and timing: `Math.random` is used in `spawn` (the angle at which an enemy appears) and
 in `fire` (one call per gun, even for the player, whose spread is 0). Adding guns or shots
@@ -147,9 +150,9 @@ Data tables, where to tune:
 - Difficulty scales one number: enemy hp. `spawn` in `game/sim.ts` multiplies
   `ENEMIES[kind].hp * hpScale(wave)` by `byDifficulty(0.75, 1, 1.3)` (Easy 0.75, Normal 1, Hard
   1.3) from `shared/settings.ts`, before rounding. The player's stats are not scaled.
-- The game does not read `settings.reduceMotion` itself. The only flash is the orange hit tint
-  while `hitMs > 0` in `GameScene` (from a cannonball or running aground), which stays on with
-  reduced motion.
+- `GameScene` reads `settings.reduceMotion` itself: with it on, a ship is not tinted orange while
+  `hitMs > 0` (from a cannonball or running aground), and loot in its last 4s holds faded at
+  alpha 0.4 instead of blinking.
 - Normal must stay exactly as designed: the playthrough runs on Normal and relies on wave 1 sloop
   hp. Keep the Broadside row of the difficulty table in the root `README.md` (and the sentence in
   this game's `README.md`) in sync with the multipliers.
