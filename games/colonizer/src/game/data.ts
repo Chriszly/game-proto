@@ -180,6 +180,8 @@ export interface TechDef {
   time: number;
   /** Needs Age II first. */
   age2?: boolean;
+  /** An age advance: Age II needs nothing more, Age III also needs the three deeds (DEEDS). */
+  advance?: 2 | 3;
 }
 
 export const TECHS: Record<string, TechDef> = {
@@ -188,7 +190,8 @@ export const TECHS: Record<string, TechDef> = {
   picks: { id: 'picks', name: 'Picks', at: 'academy', cost: { wood: 150, food: 100 }, time: 30000 },
   ironworks: { id: 'ironworks', name: 'Ironworks', at: 'academy', cost: { food: 150, ore: 50 }, time: 35000 },
   fletching: { id: 'fletching', name: 'Fletching', at: 'academy', cost: { food: 100, wood: 100 }, time: 35000 },
-  age2: { id: 'age2', name: 'Age II', at: 'town', cost: { food: 400, wood: 200 }, time: 50000 },
+  age2: { id: 'age2', name: 'Age II', at: 'town', cost: { food: 400, wood: 200 }, time: 50000, advance: 2 },
+  age3: { id: 'age3', name: 'Age III', at: 'town', cost: { food: 500, wood: 300, ore: 200 }, time: 60000, advance: 3 },
   stirrups: { id: 'stirrups', name: 'Stirrups', at: 'academy', cost: { ore: 100, food: 100 }, time: 40000, age2: true },
   bodkin: { id: 'bodkin', name: 'Bodkin', at: 'academy', cost: { wood: 150, ore: 50 }, time: 40000, age2: true },
 };
@@ -199,3 +202,29 @@ export const CARRY = 10;
 
 export const START = { wood: 200, food: 200, ore: 100 } as const;
 export const START_VILLAGERS = 4;
+
+/**
+ * Age III is earned, not only bought: the Town Center can research it once these three deeds are
+ * done. The sim keeps each player's progress in `Player.deeds`.
+ */
+export const DEEDS = [
+  { id: 'age2', name: 'Reach Age II' },
+  { id: 'army', name: 'Field 14 soldiers' },
+  { id: 'raid', name: 'Repel a raid' },
+] as const;
+export type DeedId = (typeof DEEDS)[number]['id'];
+/** Soldiers alive at once for the army deed (the AI raids with as many). */
+export const ARMY_DEED = 14;
+/** What Age III gives: extra damage for every soldier. */
+export const AGE3_DAMAGE = 2;
+
+/** The one-time pick offered when a player reaches Age II. */
+export const BOONS = {
+  shieldwall: { id: 'shieldwall', name: 'Shieldwall', text: 'Your melee infantry take 20% less damage' },
+  harvest: { id: 'harvest', name: 'Harvest Rites', text: 'Farms gather 20% faster' },
+} as const;
+export type BoonId = keyof typeof BOONS;
+/** Damage a melee unit takes under Shieldwall. */
+export const SHIELDWALL_TAKEN = 0.8;
+/** Gather speed on farms under Harvest Rites. */
+export const HARVEST_RITES = 1.2;
