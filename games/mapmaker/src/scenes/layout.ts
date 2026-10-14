@@ -16,7 +16,7 @@ export const BUTTON = { w: 200, h: 40 };
 export const SMALL_BUTTON = { w: 96, h: 34 };
 
 export const UI_DEPTH = 10_000;
-export const FONT = 'monospace';
+export const FONT = "Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
 
 /** The screen centre of tile (x, y). */
 export const tileCentre = (x: number, y: number) => ({

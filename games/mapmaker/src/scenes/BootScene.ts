@@ -1,16 +1,15 @@
 import Phaser from 'phaser';
 import { bakeIcons } from '../art/icons';
 import { bakeSurveyor } from '../art/surveyor';
-import { bakeTiles } from '../art/tiles';
 
-// Generates all textures at runtime so the prototype needs no asset files yet.
+// Paints the surveyor and the icons at runtime, so the game needs no asset files. The island
+// itself is painted by GameScene, since it changes with every new isle.
 export class BootScene extends Phaser.Scene {
   constructor() {
     super('Boot');
   }
 
   create() {
-    bakeTiles(this);
     bakeSurveyor(this);
     bakeIcons(this);
     this.scene.start('Game');
