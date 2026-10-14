@@ -26,11 +26,11 @@ function capFrameRate(game: Phaser.Game, fps: number) {
   const step = loop.step.bind(loop);
   const interval = 1000 / fps;
   // While starting up, after a refocus and while out of focus, Phaser cuts each delta down to its
-  // target frame time (1000/60ms by default). Raise that to twice the cap's frame time for a low cap,
-  // so it or an uneven display doesn't slow the game down, but never lower it for a high cap: a
-  // 60Hz display set to 320 would then play at a third of the speed in those frames.
+  // target frame time (1000/60ms by default). Raise that to twice the cap's frame time, and never
+  // below twice Phaser's own, so a low cap, a high cap on a slower display or a hitch in those
+  // frames doesn't slow the game down.
   const target = loop as unknown as { _target: number };
-  target._target = Math.max(2 * interval, target._target);
+  target._target = Math.max(2 * interval, 2 * target._target);
   loop.targetFps = 1000 / target._target;
   let next = -Infinity;
   loop.step = (time: number) => {
