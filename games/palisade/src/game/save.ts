@@ -1,7 +1,9 @@
 import { freshProgress, type Progress } from './state';
+import { RELICS } from './relics';
 import { UPGRADES, type UpgradeId } from './upgrades';
 
-// Only the hero's progress is saved: level, experience and upgrades. A run always starts at wave 1.
+// Only the hero's progress is saved: level, experience, upgrades and relics. A run always starts at
+// wave 1.
 const KEY = 'palisade-progress';
 
 export function loadProgress(): Progress {
@@ -14,7 +16,11 @@ export function loadProgress(): Progress {
     const ranks = Object.fromEntries(
       Object.entries(saved.ranks ?? {}).filter(([id]) => id in UPGRADES),
     ) as Progress['ranks'];
-    return { ...fresh, ...saved, ranks };
+    // Relics came later: an older save has none, and unknown ones are dropped too.
+    const relics = Object.fromEntries(
+      Object.entries(saved.relics ?? {}).filter(([id]) => id in RELICS),
+    ) as Progress['relics'];
+    return { ...fresh, ...saved, ranks, relics };
   } catch {
     return fresh;
   }
