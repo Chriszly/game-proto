@@ -97,6 +97,8 @@ export interface AbilityDef {
   shield?: number;
   /** Slow in ms for champions and minions hit. */
   slow?: number;
+  /** Stun in ms for champions and minions hit (only from upgrades). */
+  stun?: number;
   /** Bolt speed in pixels per second. */
   speed?: number;
   /** Hit distance around a bolt. */
@@ -274,3 +276,98 @@ export const ENEMY_LANES: LaneId[] = ['top', 'mid', 'bottom', 'mid', 'top'];
 
 /** The colour of each side's rings, bolts and lines. */
 export const SIDE_COLOR = { blue: '#3d8bfd', red: '#e0553f', neutral: '#f4d35e' } as const;
+
+// ---------------------------------------------------------------------------------------------
+// Match objectives: one goal at a time for the player's team, with a time limit and a reward.
+
+export type ObjectiveKind = 'tower' | 'camp' | 'champion';
+export interface ObjectiveDef {
+  kind: ObjectiveKind;
+  /** Time to finish it, in ms. */
+  ms: number;
+  /** Gold paid to the player's champion when it is done. */
+  gold: number;
+  /** A perk that comes with it: the siege banner adds damage against towers and the Nexus for a while. */
+  banner?: 'siege';
+}
+/** The goals in the order they come; the list repeats. */
+export const OBJECTIVES: ObjectiveDef[] = [
+  { kind: 'tower', ms: 150_000, gold: 200, banner: 'siege' },
+  { kind: 'camp', ms: 90_000, gold: 120 },
+  { kind: 'champion', ms: 120_000, gold: 150 },
+];
+/** The pause between one objective ending and the next one starting. */
+export const OBJECTIVE_GAP_MS = 4000;
+/** The siege banner: the player's champion deals this much more damage to towers and the Nexus. */
+export const SIEGE = { mult: 1.25, ms: 60_000 };
+
+// ---------------------------------------------------------------------------------------------
+// Upgrades: each new level offers the player two upgrades to its abilities, and it keeps one.
+
+export interface UpgradeDef {
+  id: string;
+  key: AbilityKey;
+  name: string;
+  desc: string;
+  /** Percent changes to the ability's numbers (cd is negative for a shorter cooldown). */
+  radius?: number;
+  damage?: number;
+  range?: number;
+  heal?: number;
+  shield?: number;
+  cd?: number;
+  /** Stun in ms for champions and minions hit. */
+  stun?: number;
+  /** Slow in ms for champions and minions hit. */
+  slow?: number;
+  /** More bolts. */
+  count?: number;
+}
+
+const up = (id: string, key: AbilityKey, name: string, desc: string, fx: Partial<UpgradeDef>): UpgradeDef => ({ ...fx, id, key, name, desc });
+
+/** Per champion, the two upgrades offered at levels 2, 3, 4 and 5 (index 0 is level 2). */
+export const UPGRADES: Record<string, [UpgradeDef, UpgradeDef][]> = {
+  warden: [
+    [up('wide-slam', 'Q', 'Wide Slam', 'Slam radius +30%', { radius: 30 }), up('stun-slam', 'Q', 'Stun Slam', 'Slam stuns for 0.6s', { stun: 600 })],
+    [up('iron-bulwark', 'W', 'Iron Bulwark', 'Bulwark shield +40%', { shield: 40 }), up('long-charge', 'E', 'Long Charge', 'Charge range +30%', { range: 30 })],
+    [up('titan-stand', 'R', 'Titan Stand', 'Last Stand damage +25%', { damage: 25 }), up('quick-slam', 'Q', 'Quick Slam', 'Slam cooldown -25%', { cd: -25 })],
+    [up('crushing-charge', 'E', 'Crushing Charge', 'Charge damage +40%', { damage: 40 }), up('wide-bulwark', 'W', 'Wide Bulwark', 'Bulwark radius +40%', { radius: 40 })],
+  ],
+  blade: [
+    [up('deep-strike', 'Q', 'Deep Strike', 'Dash Strike range +30%', { range: 30 }), up('keen-strike', 'Q', 'Keen Strike', 'Dash Strike damage +30%', { damage: 30 })],
+    [up('wide-whirl', 'W', 'Wide Whirl', 'Whirl radius +30%', { radius: 30 }), up('quick-step', 'E', 'Quick Step', 'Shadow Step cooldown -30%', { cd: -30 })],
+    [up('brutal-execute', 'R', 'Brutal Execute', 'Execute damage +25%', { damage: 25 }), up('crippling-whirl', 'W', 'Crippling Whirl', 'Whirl slows for 1.2s', { slow: 1200 })],
+    [up('swift-strike', 'Q', 'Swift Strike', 'Dash Strike cooldown -25%', { cd: -25 }), up('long-step', 'E', 'Long Step', 'Shadow Step range +30%', { range: 30 })],
+  ],
+  archer: [
+    [up('heavy-arrow', 'Q', 'Heavy Arrow', 'Piercing Arrow damage +30%', { damage: 30 }), up('wide-volley', 'W', 'Wide Volley', 'Volley fires 2 more arrows', { count: 2 })],
+    [up('long-roll', 'E', 'Long Roll', 'Roll range +40%', { range: 40 }), up('quick-arrow', 'Q', 'Quick Arrow', 'Piercing Arrow cooldown -25%', { cd: -25 })],
+    [up('wide-rain', 'R', 'Wide Rain', 'Arrow Rain radius +30%', { radius: 30 }), up('hard-volley', 'W', 'Hard Volley', 'Volley damage +30%', { damage: 30 })],
+    [up('pinning-arrow', 'Q', 'Pinning Arrow', 'Piercing Arrow stuns for 0.5s', { stun: 500 }), up('heavy-rain', 'R', 'Heavy Rain', 'Arrow Rain damage +25%', { damage: 25 })],
+  ],
+  mage: [
+    [up('big-fireball', 'Q', 'Big Fireball', 'Fireball damage +30%', { damage: 30 }), up('swift-fireball', 'Q', 'Swift Fireball', 'Fireball cooldown -25%', { cd: -25 })],
+    [up('deep-freeze', 'W', 'Deep Freeze', 'Frost Nova stuns for 0.6s', { stun: 600 }), up('far-blink', 'E', 'Far Blink', 'Blink range +30%', { range: 30 })],
+    [up('huge-meteor', 'R', 'Huge Meteor', 'Meteor radius +30%', { radius: 30 }), up('wide-nova', 'W', 'Wide Nova', 'Frost Nova radius +30%', { radius: 30 })],
+    [up('long-fireball', 'Q', 'Long Fireball', 'Fireball range +30%', { range: 30 }), up('heavy-meteor', 'R', 'Heavy Meteor', 'Meteor damage +25%', { damage: 25 })],
+  ],
+  priest: [
+    [up('deep-mend', 'W', 'Deep Mend', 'Mend heals +30%', { heal: 30 }), up('wide-mend', 'W', 'Wide Mend', 'Mend radius +30%', { radius: 30 })],
+    [up('holy-smite', 'Q', 'Holy Smite', 'Smite damage +30%', { damage: 30 }), up('strong-ward', 'E', 'Strong Ward', 'Ward shield +40%', { shield: 40 })],
+    [up('wide-sanctuary', 'R', 'Wide Sanctuary', 'Sanctuary radius +25%', { radius: 25 }), up('quick-ward', 'E', 'Quick Ward', 'Ward cooldown -25%', { cd: -25 })],
+    [up('binding-smite', 'Q', 'Binding Smite', 'Smite stuns for 0.5s', { stun: 500 }), up('quick-mend', 'W', 'Quick Mend', 'Mend cooldown -25%', { cd: -25 })],
+  ],
+};
+
+export function upgradeById(id: string): UpgradeDef | undefined {
+  for (const pairs of Object.values(UPGRADES)) for (const pair of pairs) for (const u of pair) if (u.id === id) return u;
+  return undefined;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Last hits: the player's unbroken run of last hits on minions pays more from this streak on.
+
+export const STREAK = { at: 4, bonus: 0.25 };
+/** How far past its reach the player's champion looks for a minion its next hit would kill. */
+export const LAST_HIT_LOOK = 140;

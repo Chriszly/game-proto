@@ -1,0 +1,136 @@
+// Bakes the low-poly models into sprite sheets at boot: every champion in both teams' colours,
+// minions, the boar, towers, rubble, the Nexus and a coin, each from eight directions and in eight
+// poses where it moves. Frames are named `${dir}:${pose}`; dir 0 faces right (east) and each step
+// turns 45 degrees clockwise on screen, so dir 2 faces the viewer.
+
+import Phaser from 'phaser';
+import { Model, render } from './lowpoly';
+import { POSES, PoseName, TeamName, boarModel, championModel, coinModel, minionModel, nexusModel, rubbleModel, towerModel } from './models';
+
+/** Canvas pixels per screen pixel in the sheets; sprites are drawn at 1 / RES scale. */
+export const RES = 2;
+export const DIRS = 8;
+
+export interface SheetInfo {
+  key: string;
+  /** Cell size and where the feet sit inside it, in screen pixels. */
+  w: number;
+  h: number;
+  footY: number;
+}
+
+export const CHAMP_CELL = { w: 76, h: 84, footY: 66 };
+export const MINION_CELL = { w: 48, h: 56, footY: 42 };
+export const BOAR_CELL = { w: 84, h: 72, footY: 44 };
+export const TOWER_CELL = { w: 76, h: 124, footY: 104 };
+export const RUBBLE_CELL = { w: 76, h: 56, footY: 36 };
+export const NEXUS_CELL = { w: 120, h: 134, footY: 100 };
+export const COIN_CELL = { w: 26, h: 26, footY: 13 };
+
+/** The screen angle a direction faces, in radians (0 is right, pi/2 is down). */
+export function dirAngle(dir: number) {
+  return (dir * Math.PI * 2) / DIRS;
+}
+/** The nearest of the eight directions to a facing angle in radians. */
+export function dirFor(facing: number) {
+  const d = Math.round(facing / (Math.PI / 4));
+  return ((d % DIRS) + DIRS) % DIRS;
+}
+export const frameName = (dir: number, pose: PoseName | 'idle') => `${dir}:${pose}`;
+
+interface Cell {
+  name: string;
+  model: () => Model;
+  yaw: number;
+}
+
+function makeCanvas(w: number, h: number) {
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  return c;
+}
+
+/** Renders the cells of one sheet in a grid and registers each as a named frame. */
+function bake(scene: Phaser.Scene, key: string, cell: { w: number; h: number; footY: number }, cells: Cell[], post?: (canvas: HTMLCanvasElement) => HTMLCanvasElement) {
+  const cols = Math.min(cells.length, 8);
+  const rows = Math.ceil(cells.length / cols);
+  const cw = cell.w * RES;
+  const ch = cell.h * RES;
+  let canvas = makeCanvas(cols * cw, rows * ch);
+  const ctx = canvas.getContext('2d')!;
+  cells.forEach((c, i) => {
+    const x = (i % cols) * cw;
+    const y = Math.floor(i / cols) * ch;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x, y, cw, ch);
+    ctx.clip();
+    render(ctx, c.model(), x + cw / 2, y + cell.footY * RES, RES, { yaw: c.yaw });
+    ctx.restore();
+  });
+  if (post) canvas = post(canvas);
+  if (scene.textures.exists(key)) scene.textures.remove(key);
+  const tex = scene.textures.addCanvas(key, canvas)!;
+  cells.forEach((c, i) => tex.add(c.name, 0, (i % cols) * cw, Math.floor(i / cols) * ch, cw, ch));
+  return canvas;
+}
+
+/** Eight directions times every pose of a moving unit. */
+function movingCells(model: (pose: PoseName) => Model): Cell[] {
+  const cells: Cell[] = [];
+  for (let dir = 0; dir < DIRS; dir++) {
+    for (const pose of POSES) cells.push({ name: frameName(dir, pose), model: () => model(pose), yaw: Math.PI / 2 - dirAngle(dir) });
+  }
+  return cells;
+}
+
+/** A gold silhouette two and a half pixels wider than each frame of a sheet, for the last-hit outline. */
+function outlineOf(src: HTMLCanvasElement): HTMLCanvasElement {
+  const out = makeCanvas(src.width, src.height);
+  const ctx = out.getContext('2d')!;
+  const r = 2.5 * RES;
+  for (let i = 0; i < 12; i++) {
+    const a = (i * Math.PI * 2) / 12;
+    ctx.drawImage(src, Math.round(Math.cos(a) * r), Math.round(Math.sin(a) * r));
+  }
+  ctx.globalCompositeOperation = 'source-in';
+  ctx.fillStyle = '#ffd34d';
+  ctx.fillRect(0, 0, out.width, out.height);
+  return out;
+}
+
+export const CHAMPION_IDS = ['warden', 'blade', 'archer', 'mage', 'priest'];
+export const TEAMS: TeamName[] = ['blue', 'red'];
+
+export const champKey = (id: string, team: TeamName) => `lb-champ-${id}-${team}`;
+export const minionKey = (team: TeamName) => `lb-minion-${team}`;
+export const MINION_OUTLINE = 'lb-minion-outline';
+export const BOAR = 'lb-boar';
+export const towerKey = (team: TeamName) => `lb-tower-${team}`;
+export const nexusKey = (team: TeamName) => `lb-nexus-${team}`;
+export const RUBBLE = 'lb-rubble';
+export const COIN = 'lb-coin';
+
+/** Bakes every unit sheet once; later calls do nothing. Returns the time it took, in ms. */
+export function bakeUnits(scene: Phaser.Scene): number {
+  if (scene.textures.exists(COIN)) return 0;
+  const t0 = performance.now();
+  for (const team of TEAMS) {
+    for (const id of CHAMPION_IDS) bake(scene, champKey(id, team), CHAMP_CELL, movingCells((p) => championModel(id, team, p)));
+    const sheet = bake(scene, minionKey(team), MINION_CELL, movingCells((p) => minionModel(team, p)));
+    if (team === 'red') {
+      const cells = movingCells((p) => minionModel(team, p));
+      const tex = scene.textures.addCanvas(MINION_OUTLINE, outlineOf(sheet))!;
+      const cw = MINION_CELL.w * RES;
+      const ch = MINION_CELL.h * RES;
+      cells.forEach((c, i) => tex.add(c.name, 0, (i % 8) * cw, Math.floor(i / 8) * ch, cw, ch));
+    }
+    bake(scene, towerKey(team), TOWER_CELL, [{ name: 'idle', model: () => towerModel(team), yaw: 0.2 }]);
+    bake(scene, nexusKey(team), NEXUS_CELL, [{ name: 'idle', model: () => nexusModel(team), yaw: 0.25 }]);
+  }
+  bake(scene, BOAR, BOAR_CELL, movingCells(boarModel));
+  bake(scene, RUBBLE, RUBBLE_CELL, [{ name: 'idle', model: rubbleModel, yaw: 0.2 }]);
+  bake(scene, COIN, COIN_CELL, [{ name: 'idle', model: coinModel, yaw: 0.3 }]);
+  return performance.now() - t0;
+}

@@ -2,7 +2,10 @@ import { expect, test, type Page } from '@playwright/test';
 
 // Plays the first round of a match with real inputs: picks the Warden, buys a Long Sword at the
 // shop, walks down the middle lane, casts Slam at the first red tower on that lane and brings it
-// down. Game state is only read, through the `game` object the dev build puts on window.
+// down, which is the match's first objective. Then it clears the jungle camp the next objective
+// marks, last-hits a gold-outlined minion in the middle lane and, on reaching level 2, picks the
+// first upgrade card. Game state is only read, through the `game` object the dev build puts on
+// window.
 
 interface Unit {
   id: number;
@@ -17,8 +20,10 @@ interface Unit {
   dead: boolean;
   player: boolean;
   level: number;
+  xp: number;
   gold: number;
   items: string[];
+  upgrades: string[];
   target: number | null;
   moveTo: { x: number; y: number } | null;
   cds: Record<'Q' | 'W' | 'E' | 'R', number>;
@@ -28,12 +33,25 @@ interface GameState {
   time: number;
   winner: 'blue' | 'red' | null;
   units: Unit[];
+  objective: { kind: 'tower' | 'camp' | 'champion'; target: number; title: string; gold: number; banner: string | null; startAt: number; endsAt: number } | null;
+  objectivesDone: number;
+  lastObjective: { title: string; done: boolean; gold: number; at: number } | null;
+  siegeUntil: number;
+  lastHitMark: number | null;
+  lastHits: number;
+  streak: number;
+  bestStreak: number;
+  upgradeOffers: { level: number; options: [string, string] }[];
 }
 
 const VIEW = { w: 960, h: 540 };
 /** The map area between the top and bottom bars, in view pixels. */
 const MAP_TOP = 34;
 const MAP_BOTTOM = 412;
+/** The objective card at the top left of the map, which takes clicks (layout.ts OBJECTIVE_CARD). */
+const OBJECTIVE_CARD = { x: 10, y: 42, w: 236, h: 62 };
+/** The first upgrade card in the bottom bar (the centre of layout.ts upgradeCard(0)). */
+const UPGRADE_CARD_1 = { x: 698, y: 461 };
 /** The Warden's card on the pick screen (its centre). */
 const WARDEN_CARD = { x: 120, y: 263 };
 /** The Long Sword's row in the shop, opened from the B key. */
@@ -145,7 +163,9 @@ test('plays the first round', async ({ page }, testInfo) => {
   /** Whether a world point is in the map area, where a click reaches the map and not a bar. */
   async function onMap(x: number, y: number) {
     const v = await onView(x, y);
-    return v.x >= 0 && v.x <= VIEW.w && v.y >= MAP_TOP && v.y <= MAP_BOTTOM;
+    const c = OBJECTIVE_CARD;
+    const onCard = v.x >= c.x - 4 && v.x <= c.x + c.w + 4 && v.y >= c.y - 4 && v.y <= c.y + c.h + 4;
+    return v.x >= 0 && v.x <= VIEW.w && v.y >= MAP_TOP && v.y <= MAP_BOTTOM && !onCard;
   }
   async function clickView(x: number, y: number) {
     const at = await onPage(x, y);
@@ -172,6 +192,14 @@ test('plays the first round', async ({ page }, testInfo) => {
   const tower = () => s.units.find((u) => u.kind === 'tower' && u.side === 'red' && u.x === RED_MID_TOWER.x && u.y === RED_MID_TOWER.y)!;
   expect(me().items, 'no items at the start').toEqual([]);
 
+  // The match opens with an objective: topple the red mid tower within 2:30 for 200 gold and the
+  // siege banner. Its target is the tower this round brings down.
+  expect(s.objective?.kind, 'first objective is a tower').toBe('tower');
+  expect(s.objective?.title).toBe('Topple the red mid tower');
+  expect(s.objective?.target, 'objective marks the red mid tower').toBe(tower().id);
+  expect(s.objective!.endsAt - s.objective!.startAt).toBe(150_000);
+  expect(s.objective?.gold).toBe(200);
+
   // The shop: a Long Sword from the base, opened and closed with B.
   await page.keyboard.press('b');
   await tick(FRAME_MS);
@@ -182,6 +210,18 @@ test('plays the first round', async ({ page }, testInfo) => {
   expect(me().items, 'Long Sword bought').toEqual(['sword']);
   await page.keyboard.press('b');
   await tick(FRAME_MS);
+
+  /** Clicks the ground at a point along the way from `p` to `t` that is on the map. */
+  async function walkToward(p: { x: number; y: number }, t: { x: number; y: number }) {
+    const len = Math.max(dist(p, t), 1);
+    for (const reach of [200, 150, 100, 60]) {
+      const c = { x: p.x + ((t.x - p.x) / len) * Math.min(reach, len), y: p.y + ((t.y - p.y) / len) * Math.min(reach, len) };
+      if (await onMap(c.x, c.y)) {
+        await clickWorld(c.x, c.y);
+        return;
+      }
+    }
+  }
 
   // Walk down the middle lane toward the red tower, clicking the ground on the way and the tower
   // once in reach. Slam is cast when it is ready and the tower is inside its radius.
@@ -206,17 +246,7 @@ test('plays the first round', async ({ page }, testInfo) => {
         usedSlam = usedSlam || (await state()).units.find((u) => u.player)!.cds.Q > 0;
       }
     } else if (p.moveTo === null && p.target === null) {
-      // A point along the way to the tower that is on the map, so the click lands on the ground.
-      const len = dist(p, t);
-      let point: { x: number; y: number } | null = null;
-      for (const reach of [200, 150, 100, 60]) {
-        const c = { x: p.x + ((t.x - p.x) / len) * reach, y: p.y + ((t.y - p.y) / len) * reach };
-        if (await onMap(c.x, c.y)) {
-          point = c;
-          break;
-        }
-      }
-      if (point) await clickWorld(point.x, point.y);
+      await walkToward(p, t);
     }
     await tick(STEP_MS);
   }
@@ -225,7 +255,76 @@ test('plays the first round', async ({ page }, testInfo) => {
   expect(tower().dead, `red mid tower down; state: ${JSON.stringify(me())}`).toBe(true);
   expect(usedSlam, 'Slam cast on the tower').toBe(true);
   expect(s.phase, 'match not over yet').toBe('playing');
+  await tick(STEP_MS);
+  s = await state();
+  // The objective is done: 200 gold paid and the siege banner raised.
+  expect(s.objectivesDone, 'tower objective done').toBe(1);
+  expect(s.lastObjective, 'tower objective paid').toMatchObject({ title: 'Topple the red mid tower', done: true, gold: 200 });
+  expect(s.siegeUntil, 'siege banner up').toBeGreaterThan(s.time);
   await snap('2-tower-down');
+
+  // The next objective comes a few seconds later: clear the jungle camp nearest the Warden.
+  expect(await play(10_000, async () => (await state()).objective !== null), 'second objective').toBe(true);
+  s = await state();
+  expect(s.objective?.kind, 'second objective is a camp').toBe('camp');
+  const campId = s.objective!.target;
+  const camp = () => s.units.find((u) => u.id === campId)!;
+  const goldBeforeCamp = me().gold;
+  while ((await state()).time < ROUND_LIMIT_MS && !camp().dead) {
+    s = await state();
+    const p = me();
+    const c = camp();
+    if (p.dead) {
+      await tick(STEP_MS);
+      continue;
+    }
+    if (p.target !== c.id && dist(p, c) < 330 && (await onMap(c.x, c.y))) await clickWorld(c.x, c.y);
+    else if (p.target !== c.id && p.moveTo === null) await walkToward(p, c);
+    await tick(STEP_MS);
+  }
+  await tick(STEP_MS);
+  s = await state();
+  expect(camp().dead, `camp cleared; state: ${JSON.stringify(me())}`).toBe(true);
+  expect(s.objectivesDone, 'camp objective done').toBe(2);
+  expect(me().gold - goldBeforeCamp, 'camp and objective gold').toBeGreaterThanOrEqual(80 + 120);
+
+  // Farm the nearest lane: walk to the nearest red minion and click whichever one is outlined in
+  // gold, the one the Warden's next hit kills, until a last hit lands and the Warden reaches level 2.
+  while ((await state()).time < ROUND_LIMIT_MS) {
+    s = await state();
+    if (s.lastHits > 0 && s.upgradeOffers.length > 0) break;
+    const p = me();
+    if (p.dead) {
+      await tick(STEP_MS);
+      continue;
+    }
+    const mark = s.lastHitMark === null ? undefined : s.units.find((u) => u.id === s.lastHitMark);
+    if (mark && p.target !== mark.id && (await onMap(mark.x, mark.y))) {
+      await clickWorld(mark.x, mark.y);
+    } else if (!mark && p.moveTo === null) {
+      const foes = s.units.filter((u) => u.kind === 'minion' && u.side === 'red' && !u.dead);
+      const near = foes.sort((a, b) => dist(p, a) - dist(p, b))[0];
+      // Wait in reach of the nearest red minion, or walk up the middle lane toward the next wave.
+      const goal = near ?? { x: 1700, y: 520 };
+      if (dist(p, goal) > p.range + 40) await walkToward(p, goal);
+    }
+    await tick(STEP_MS);
+  }
+  s = await state();
+  expect(s.lastHits, `a last hit; state: ${JSON.stringify({ time: s.time, me: me() })}`).toBeGreaterThanOrEqual(1);
+  // Each last hit grows the streak the chip by the gold counter shows.
+  expect(s.bestStreak, 'last-hit streak').toBeGreaterThanOrEqual(1);
+  expect(me().level, 'level 2').toBe(2);
+
+  // Level 2 offers two upgrades to Slam in the bottom bar: Wide Slam is the first card.
+  expect(s.upgradeOffers[0], 'upgrade offer at level 2').toEqual({ level: 2, options: ['wide-slam', 'stun-slam'] });
+  await snap('3-upgrade');
+  await clickView(UPGRADE_CARD_1.x, UPGRADE_CARD_1.y);
+  await tick(FRAME_MS);
+  s = await state();
+  expect(me().upgrades, 'Wide Slam chosen').toEqual(['wide-slam']);
+  expect(s.upgradeOffers, 'no offer left').toEqual([]);
+  expect(s.phase, 'match still playing').toBe('playing');
 
   const speed = gameMs / (Date.now() - startedAt);
   console.log(`Played ${Math.round(gameMs / 1000)}s of game time at ${speed.toFixed(1)}x (target ${SPEED}x).`);
