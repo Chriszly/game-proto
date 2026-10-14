@@ -1,6 +1,7 @@
-// The three buildings and the land they go on. How each building scores is in state.ts.
+// The buildings and the land they go on. How each building scores is in state.ts.
 
-export const BUILDINGS = ['farm', 'house', 'tower'] as const;
+/** Every building, in the order of the panel's tile buttons. The windmill is a gift: its button shows once it is won. */
+export const BUILDINGS = ['farm', 'house', 'tower', 'windmill'] as const;
 export type Building = (typeof BUILDINGS)[number];
 export type Terrain = 'grass' | 'lake' | 'forest';
 export type Cell = Terrain | Building;
@@ -15,6 +16,7 @@ export const INFO: Record<Building, BuildingInfo> = {
   farm: { name: 'Farm', rule: '1 point, +1 per lake beside it' },
   house: { name: 'House', rule: '+2 per farm, +1 per house or forest beside it' },
   tower: { name: 'Tower', rule: '+2 per house around it, 0 next to a tower' },
+  windmill: { name: 'Windmill', rule: '+1 per farm around it, and +1 to each farm beside it' },
 };
 
 export const isBuilding = (cell: Cell): cell is Building => (BUILDINGS as readonly string[]).includes(cell);
@@ -23,6 +25,16 @@ export const isBuilding = (cell: Cell): cell is Building => (BUILDINGS as readon
 export const MAP_SIZE = { cols: 10, rows: 7 };
 /** The highest island number; each kingdom draws one from 1 to this. */
 export const ISLANDS = 9999;
+
+/** The four cells sharing an edge, as [dcol, drow]. */
+export const SIDES = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+] as const;
+/** The eight cells around a cell. */
+export const AROUND = [...SIDES, [1, 1], [1, -1], [-1, 1], [-1, -1]] as const;
 
 /**
  * Lays out island number `island`, one string per row and one character per cell: '.' grass,
@@ -54,15 +66,8 @@ export function islandMap(island: number): string[] {
   return map.map((cells) => cells.join(''));
 }
 
-const SIDES = [
-  [1, 0],
-  [-1, 0],
-  [0, 1],
-  [0, -1],
-];
-
 /** A small seeded random generator (mulberry32), so an island number always lays out the same. */
-function seeded(seed: number) {
+export function seeded(seed: number) {
   let s = seed | 0;
   return () => {
     s = (s + 0x6d2b79f5) | 0;
