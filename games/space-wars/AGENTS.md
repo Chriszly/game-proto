@@ -9,7 +9,7 @@ the root AGENTS.md.
 Space Wars is an RTS on a random star map, played with taps, box selection and a scrolling camera.
 The battlefield is 1600 by 1000 pixels; the screen shows a 960 by 406 window of it between the top
 and command bars. Five factions each start with a hub and two harvesters at a fixed start point.
-The player is the Solar Concord; the other four are AI.
+The player picks one of the five factions on a picker before each battle; the other four are AI.
 
 Implemented today:
 
@@ -40,9 +40,12 @@ Implemented today:
   remaining units and buildings with it. A battle ends with a Victory or Defeat overlay; a tap starts
   a new map.
 
+- Faction picker: a new map opens on a picker with a card per faction. Tapping a card starts the
+  battle with that faction under the player's command (`World(layout, pick)`: it takes slot 0, the
+  bottom-left start, and the others fill the rest in order). The world does not update while picking.
 - Camera and hover: arrow keys and WASD scroll the map, H centres it on the hub, and hovering a unit
-  or building shows its name, role and hit points. Selecting one unit shows its name and hit points
-  on the command bar.
+  or building shows its name, role, hit points and stats. Hovering a command button shows what it is
+  (cost, stats, ability). Selecting one unit shows its name and hit points on the command bar.
 
 Missing or rough:
 
@@ -70,12 +73,16 @@ File map (`src/`):
   fixed hub spots, player first), `NODE_AMOUNT`, `NODE_CLEARANCE` and `BUILD_RANGE`.
 - `game/map.ts`: `generateMap(count)` returns a `MapLayout` (homes, nodes, rocks, nebulae, stars).
   Uses `Math.random` only.
-- `game/world.ts`: `World`, the whole battle. `PLAYER` (0), `unitStats` and `buildingStats`
+- `game/describe.ts`: the text for tooltips and faction cards (`unitLines`, `buildingLines`,
+  `factionLines`, `abilityText`), built from the faction data. No Phaser.
+- `game/world.ts`: `World`, the whole battle. `new World(layout, pick)` puts faction `pick` in the
+  player's slot. `PLAYER` (0), `unitStats` and `buildingStats`
   (faction numbers with multipliers applied). Methods the scene and test use: `update(dt)`,
   `build`, `train`, `command`, `selectableIn`, `selectable`, `entityAt`, `placementProblem`,
   `count`, `hubOf`, `unit`, `building`. No Phaser import.
 - `scenes/GameScene.ts`: `GameScene` (key `'Game'`). Holds `state` (the `World`), `layout`, `camera`
-  (the map camera), `buttons`, `selected`, `placing`. `update(time)` steps the world by the frame
+  (the map camera), `buttons`, `selected`, `placing`, `picking` (the faction picker is up) and
+  `pickCards` (the picker's card rectangles, in view pixels). `update(time)` steps the world by the frame
   gap (clamped to 100 ms), pans the camera from the keys and draws everything. Two cameras: the
   main `camera` shows the battlefield in the `MAP_VIEW` viewport and ignores the UI objects; a
   second, fixed camera covers the whole 960 by 540 view and ignores the map objects, so the bars and
@@ -106,6 +113,7 @@ Test hooks (read by `e2e/playthrough.spec.ts`):
 - `window.game.scene.getScene('Game')` (dev builds only). `scene.state` is the `World`: `phase`,
   `elapsedMs`, `units`, `buildings`, `nodes`, `sides` (crystal, alive), `layout`.
 - `scene.buttons`: the command bar's buttons with their positions, read to click them.
+- `scene.pickCards`: the picker's cards. The test taps the first one to play the Solar Concord.
 - `scene.camera.scrollX` and `scrollY`: the map's scroll, which the test reads to see whether a pan
   moved. `scene.toScreen(x, y)` gives where a battlefield point is in view pixels.
 - `scene.state.placementProblem(role, x, y)` answers whether a building can go somewhere. The test
@@ -125,6 +133,7 @@ Test hooks (read by `e2e/playthrough.spec.ts`):
 - **A new building or unit type**: add it to the `Role` or `UnitId` types and to each faction's
   definitions, then the command bar's `BUTTON`s in `scenes/layout.ts` (and its `ROLE_LABEL`) and
   any `World` rules that name it (`train`, `updateBuilding`, `harvest` for drop-offs).
+- **A tooltip or card text**: add the line in `game/describe.ts`; the scene shows whatever it returns.
 - **A map-clicked command**: convert the view pixel with `toWorld` first; the bars take view pixels.
 - **Shooting and approach** share a half-pixel slack (`approach` and `updateUnit`), so a unit that
   stops at its range can always fire.

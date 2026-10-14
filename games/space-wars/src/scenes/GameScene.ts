@@ -3,6 +3,7 @@ import { ARENA, BUILD_RANGE, NODE_AMOUNT } from '../game/arena';
 import { generateMap, type MapLayout } from '../game/map';
 import { FACTIONS, type Role, type UnitId } from '../game/factions';
 import { PLAYER, World, buildingStats, unitStats, type Building, type Unit } from '../game/world';
+import { buildingLines, factionLines, unitLines } from '../game/describe';
 import { drawDome, drawHealth, drawShape } from '../art/draw';
 import { settings } from '../../../../shared/settings';
 import { BAR, BUTTONS, FONT, MAP_VIEW, ROLE_LABEL, TOP, VIEW, type Button } from './layout';
@@ -15,6 +16,10 @@ const DRAG_MIN = 6;
 const UNIT_SCALE = 1.4;
 const BEAM_MS = 140;
 const BOOM_MS = 450;
+/** The faction picker's cards: their size and the gaps between them, in view pixels. */
+const CARD_W = 180;
+const CARD_H = 250;
+const CARD_GAP = 8;
 /** How fast the arrow keys and WASD scroll the map, in view pixels a second. */
 const PAN_SPEED = 360;
 /** How far above an entity the hover label sits. */
@@ -40,6 +45,16 @@ export class GameScene extends Phaser.Scene {
   selected = new Set<number>();
   /** The building the player is about to place, once its button is pressed. */
   placing: Role | null = null;
+  /** Whether the faction picker is up: nothing moves until the player picks a faction. */
+  picking = true;
+  /** The picker's cards, one per faction, in view pixels; the playthrough taps one to begin. */
+  readonly pickCards = FACTIONS.map((_, faction) => ({
+    x: (VIEW.w - FACTIONS.length * CARD_W - (FACTIONS.length - 1) * CARD_GAP) / 2 + faction * (CARD_W + CARD_GAP),
+    y: MAP_VIEW.y + 62,
+    w: CARD_W,
+    h: CARD_H,
+    faction,
+  }));
   /** The last pointer position, in view pixels. */
   private pointer = { x: 0, y: 0 };
   private drag: Drag | null = null;
@@ -55,6 +70,9 @@ export class GameScene extends Phaser.Scene {
   private bar!: Phaser.GameObjects.Text;
   private overlay!: Phaser.GameObjects.Text;
   private hoverLabel!: Phaser.GameObjects.Text;
+  private tip!: Phaser.GameObjects.Text;
+  private pickTitle!: Phaser.GameObjects.Text;
+  private pickTexts!: Phaser.GameObjects.Text[];
   private captions!: { name: Phaser.GameObjects.Text; cost: Phaser.GameObjects.Text }[];
 
   constructor() {
@@ -74,7 +92,17 @@ export class GameScene extends Phaser.Scene {
     this.overlay = text(MAP_VIEW.x + MAP_VIEW.w / 2, MAP_VIEW.y + MAP_VIEW.h / 2, '36px', '#ffffff')
       .setOrigin(0.5)
       .setAlign('center');
-    this.hoverLabel = text(0, 0, '12px').setOrigin(0.5, 1).setVisible(false);
+    // Tooltips: the hover label names a unit or building on the map; the tip describes a command button.
+    this.hoverLabel = text(0, 0, '12px').setOrigin(0.5, 1).setPadding(5).setBackgroundColor('#0b0f22')
+      .setVisible(false);
+    this.tip = text(0, 0, '12px').setOrigin(0, 1).setPadding(6).setBackgroundColor('#0b0f22')
+      .setWordWrapWidth(300).setVisible(false);
+    this.pickTitle = text(VIEW.w / 2, MAP_VIEW.y + 16, '18px').setOrigin(0.5, 0).setText('Choose your faction');
+    this.pickTexts = this.pickCards.map((c) => {
+      const def = FACTIONS[c.faction];
+      const t = text(c.x + 12, c.y + 44, '12px', `#${def.color.toString(16).padStart(6, '0')}`);
+      return t.setWordWrapWidth(c.w - 24).setText([def.name, '', ...factionLines(def)].join('\n'));
+    });
     this.captions = BUTTONS.map((b) => ({
       name: text(b.x + 6, b.y + 3, '12px').setText(''),
       cost: text(b.x + 6, b.y + 16, '10px', '#d8c98a'),
@@ -92,6 +120,9 @@ export class GameScene extends Phaser.Scene {
       this.rivals,
       this.bar,
       this.overlay,
+      this.tip,
+      this.pickTitle,
+      ...this.pickTexts,
       ...this.captions.flatMap((c) => [c.name, c.cost]),
     ]);
     this.drawChrome();
@@ -106,9 +137,10 @@ export class GameScene extends Phaser.Scene {
     this.newGame();
   }
 
-  /** Starts a fresh battle on a new random map. */
+  /** Makes a new random map and shows the faction picker over it. */
   private newGame() {
     this.layout = generateMap(FACTIONS.length);
+    this.picking = true;
     this.state = new World(this.layout);
     this.selected.clear();
     this.placing = null;
@@ -119,12 +151,26 @@ export class GameScene extends Phaser.Scene {
     this.centreOnHub();
   }
 
+  /** Starts the battle with the chosen faction under the player's command. */
+  private startBattle(faction: number) {
+    this.state = new World(this.layout, faction);
+    this.picking = false;
+    this.selected.clear();
+    this.placing = null;
+    this.drag = null;
+    this.message = '';
+    this.lastFrame = null;
+    this.centreOnHub();
+  }
+
   update(time: number) {
     // Game time from the frame's own timestamp, the same as the other games.
     const dt = this.lastFrame === null ? 0 : Phaser.Math.Clamp(time - this.lastFrame, 0, MAX_STEP_MS);
     this.lastFrame = time;
-    this.state.update(dt);
-    this.selected = new Set([...this.selected].filter((id) => this.state.selectable(id)));
+    if (!this.picking) {
+      this.state.update(dt);
+      this.selected = new Set([...this.selected].filter((id) => this.state.selectable(id)));
+    }
     this.pan(dt);
     this.draw();
   }
@@ -253,6 +299,26 @@ export class GameScene extends Phaser.Scene {
     this.drawHover();
     this.drawBar();
     this.drawText();
+    this.drawPicker();
+  }
+
+  /** The faction picker: a dark veil over the map and a card for each faction. */
+  private drawPicker() {
+    const show = this.picking;
+    this.pickTitle.setVisible(show);
+    this.pickTexts.forEach((t) => t.setVisible(show));
+    if (!show) return;
+    const g = this.uiGfx;
+    g.fillStyle(0x070a1c, 0.72);
+    g.fillRect(MAP_VIEW.x, MAP_VIEW.y, MAP_VIEW.w, MAP_VIEW.h);
+    for (const c of this.pickCards) {
+      const def = FACTIONS[c.faction];
+      g.fillStyle(0x0b0f22, 0.96);
+      g.fillRect(c.x, c.y, c.w, c.h);
+      g.lineStyle(2, def.color, 1);
+      g.strokeRect(c.x, c.y, c.w, c.h);
+      drawShape(g, c.x + c.w - 26, c.y + 24, 0, def.buildings.hub.shape, 1, def.color, def.accent, 1);
+    }
   }
 
   private drawBuilding(b: Building) {
@@ -319,7 +385,7 @@ export class GameScene extends Phaser.Scene {
   /** Names the unit or building under the pointer, with its role and hit points. */
   private drawHover() {
     const label = this.hoverLabel;
-    const hit = this.inMap(this.pointer.x, this.pointer.y) && !this.placing
+    const hit = this.inMap(this.pointer.x, this.pointer.y) && !this.placing && !this.picking
       ? this.toWorld(this.pointer.x, this.pointer.y)
       : null;
     const target = hit ? this.state.entityAt(hit.x, hit.y) : null;
@@ -332,11 +398,13 @@ export class GameScene extends Phaser.Scene {
     let at: { x: number; y: number };
     if (target.kind === 'unit') {
       const u = this.state.unit(target.id)!;
-      text = `${side.def.units[u.type].name} · ${ROLE_LABEL[u.type]} · ${Math.ceil(u.hp)}/${unitStats(side, u.type).hp}`;
+      const head = `${side.def.units[u.type].name} · ${ROLE_LABEL[u.type]} · ${Math.ceil(u.hp)}/${unitStats(side, u.type).hp} hp`;
+      text = [head, ...unitLines(side, u.type)].join('\n');
       at = u;
     } else {
       const b = this.state.building(target.id)!;
-      text = `${side.def.buildings[b.type].name} · ${ROLE_LABEL[b.type]} · ${Math.ceil(b.hp)}/${b.maxHp}`;
+      const head = `${side.def.buildings[b.type].name} · ${ROLE_LABEL[b.type]} · ${Math.ceil(b.hp)}/${b.maxHp} hp`;
+      text = [head, ...buildingLines(side, b.type)].join('\n');
       at = b;
     }
     if (label.text !== text) label.setText(text);
@@ -360,6 +428,25 @@ export class GameScene extends Phaser.Scene {
       if (caption.cost.text !== roleLine) caption.cost.setText(roleLine);
       caption.name.setColor(affordable ? '#f3e9d2' : '#7d8398');
     });
+    this.drawTip();
+  }
+
+  /** Describes the command button under the pointer: its name, role, cost and stats. */
+  private drawTip() {
+    const b = this.picking
+      ? undefined
+      : BUTTONS.find((btn) => this.pointer.x >= btn.x && this.pointer.x < btn.x + btn.w && this.pointer.y >= btn.y && this.pointer.y < btn.y + btn.h);
+    if (!b) {
+      this.tip.setVisible(false);
+      return;
+    }
+    const side = this.state.sides[PLAYER];
+    const { name } = this.buttonInfo(b);
+    const lines = b.kind === 'build' ? buildingLines(side, b.key as Role) : unitLines(side, b.key as UnitId);
+    const text = [`${name} · ${ROLE_LABEL[b.key]}`, ...lines].join('\n');
+    if (this.tip.text !== text) this.tip.setText(text);
+    // Above the command bar, so the tip never covers the buttons it describes.
+    this.tip.setPosition(Phaser.Math.Clamp(b.x, 4, VIEW.w - this.tip.width - 4), BAR.y - 6).setVisible(true);
   }
 
   /** The caption and crystal cost a button shows for the player's faction. */
@@ -379,14 +466,16 @@ export class GameScene extends Phaser.Scene {
     const side = s.sides[PLAYER];
     const sec = Math.floor(s.elapsedMs / 1000);
     const clock = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
-    const hud = `${side.def.name}   crystal ${side.crystal}   harvesters ${s.count(PLAYER, 'harvester')}   army ${s.units.filter((u) => u.faction === PLAYER && u.type !== 'harvester').length}   ${clock}`;
+    const hud = this.picking ? 'Choose a faction' : `${side.def.name}   crystal ${side.crystal}   harvesters ${s.count(PLAYER, 'harvester')}   army ${s.units.filter((u) => u.faction === PLAYER && u.type !== 'harvester').length}   ${clock}`;
     if (this.hud.text !== hud) this.hud.setText(hud);
     const alive = s.sides.filter((f) => f.index !== PLAYER && f.alive).length;
     const rivals = `rival factions left: ${alive}`;
     if (this.rivals.text !== rivals) this.rivals.setText(rivals);
 
     let bar = this.message;
-    if (this.placing) {
+    if (this.picking) {
+      bar = 'Tap a faction above to command it. The other four factions are AI.';
+    } else if (this.placing) {
       bar = `Tap the map to place ${s.sides[PLAYER].def.buildings[this.placing].name}. Right-click to cancel.`;
     } else if (!bar) {
       bar = 'Tap a unit to select it, or drag a box. Tap the ground to move, tap an enemy to attack. Harvesters work on their own.';
@@ -410,6 +499,11 @@ export class GameScene extends Phaser.Scene {
   private onDown(p: Phaser.Input.Pointer) {
     if (this.state.phase !== 'playing') {
       this.newGame();
+      return;
+    }
+    if (this.picking) {
+      const card = this.pickCards.find((c) => p.x >= c.x && p.x < c.x + c.w && p.y >= c.y && p.y < c.y + c.h);
+      if (card) this.startBattle(card.faction);
       return;
     }
     if (p.rightButtonDown()) {
