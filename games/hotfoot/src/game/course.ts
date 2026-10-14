@@ -1,8 +1,9 @@
-import { AWAKE, FLAMES, LEAD_IN, STAGE_LEN, speedOf, type GameState, type TrapKind } from './state';
+import { AWAKE, FLAMES, LEAD_IN, SHRINE, STAGE_LEN, speedOf, type GameState, type TrapKind } from './state';
 
 // Lays out a stage's obstacles and coins between its start and its checkpoint: traps, goblins and
-// bats, and raised ledges to climb. New kinds join on later stages, and obstacles come closer
-// together; every random pick goes through Math.random so a seeded run repeats.
+// bats, and raised ledges to climb, and from stage 2 a wayside shrine in the gap nearest the
+// stage's middle. New kinds join on later stages, and obstacles come closer together; every random
+// pick goes through Math.random so a seeded run repeats (the shrine takes no random draws).
 
 /** No obstacle this close before the checkpoint, so the knight lands before reaching it. */
 const CLEAR_BEFORE_CHECKPOINT = 420;
@@ -125,6 +126,9 @@ export function buildStage(s: GameState) {
   const opening = s.stage === 1 ? [...OPENING] : [];
   // A row of coins on the clear run, to show the way.
   for (let i = 0; i < 5; i++) s.course.push({ id: s.nextId++, x: s.stageStart + 300 + i * 40, h: 12, pulled: false });
+  /** The open road between one piece and the next, where a shrine can stand. */
+  const gaps: [number, number][] = [];
+  let lastEnd: number | null = null;
   while (x < end) {
     // Nothing but spikes comes twice in a row. The opening is evenly spaced, so it always fits.
     const first = opening.shift();
@@ -132,9 +136,22 @@ export function buildStage(s: GameState) {
     const plan = planOf(s, piece);
     if (x + plan.span > end) break;
     plan.place(x);
+    if (lastEnd !== null) gaps.push([lastEnd, x]);
+    lastEnd = x + plan.span;
     last = piece;
     x += plan.span + (first ? min : min + Math.random() * (max - min));
   }
+  if (s.stage >= SHRINE.from) placeShrine(s, gaps);
+}
+
+/** Stands the stage's shrine in the middle of the gap nearest the middle of the stage. */
+function placeShrine(s: GameState, gaps: [number, number][]) {
+  const mid = (s.stageStart + s.checkpointX) / 2;
+  const centre = ([a, b]: [number, number]) => (a + b) / 2;
+  const fits = gaps.filter(([a, b]) => b - a >= SHRINE.w + 160);
+  if (fits.length === 0) return;
+  const gap = fits.reduce((best, g) => (Math.abs(centre(g) - mid) < Math.abs(centre(best) - mid) ? g : best));
+  s.shrines.push({ id: s.nextId++, x: Math.round(centre(gap) - SHRINE.w / 2), w: SHRINE.w, used: false, tried: false });
 }
 
 /** Starts the stage after a checkpoint, right where the last one ended. */

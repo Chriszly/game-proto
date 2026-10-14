@@ -1,16 +1,31 @@
 import Phaser from 'phaser';
 import { settings } from '../../../../shared/settings';
-import { iconTexture } from '../art/icons';
-import type { KnightPose } from '../art/knight';
-import { MAT, softShadow } from '../art/facets';
-import { CLOTH, FROST, GOBLIN, GOLD, RED } from '../art/palette';
+import { GOBLIN_ART } from '../art/foes';
+import { bakePanel } from '../art/hud';
+import { C, N } from '../art/ink';
+import { KNIGHT_FEET, type KnightPose } from '../art/knight';
+import { FAR_H, GROUND_TOP, NEAR_H } from '../art/scenery';
 import { BOONS, type BoonId } from '../game/boons';
 import { loadProgress, saveProgress } from '../game/save';
 import { buyMissed, jump, newRun, pick, slide, tick } from '../game/sim';
-import { BOON_PRICE, RUNNER, flameOf, floorAt, metres, stats, type GameState, type Trap } from '../game/state';
+import {
+  BOON_PRICE,
+  RUNNER,
+  SHRINE,
+  STREAK,
+  flameOf,
+  floorAt,
+  metres,
+  stats,
+  streakMult,
+  trackOf,
+  type GameState,
+  type Shrine,
+  type Trap,
+} from '../game/state';
 import { BoonCards } from '../ui/BoonCards';
 import { makeButton } from '../ui/Button';
-import { FONT, GROUND_Y, HUD_HEIGHT, RUNNER_X, TAP_SPLIT_Y, UI_DEPTH, VIEW } from './layout';
+import { FONT, FRAME, GROUND_Y, MARGIN, RUNNER_X, STREAK_CHIP, TAP_SPLIT_Y, TRACK, UI_DEPTH, VIEW } from './layout';
 
 /** Longest simulated step, so a backgrounded tab doesn't jump the run forward. */
 const MAX_STEP_MS = 100;
@@ -18,17 +33,23 @@ const MAX_STEP_MS = 100;
 const STRIDE_PX = 22;
 /** How far into the first stage the controls hint shows. */
 const HINT_UNTIL = 640;
+/** The sparkle trail behind the knight on a streak: how many stars, and how often one is laid. */
+const TRAIL = { stars: 7, everyMs: 45 };
 
-const textStyle = (size: number, color = '#f3e9d2') => ({
+const textStyle = (size: number, color: string = C.goldPale, stroke = 3): Phaser.Types.GameObjects.Text.TextStyle => ({
   fontFamily: FONT,
   fontSize: `${size}px`,
+  fontStyle: 'bold',
   color,
-  stroke: '#1a1216',
-  strokeThickness: 3,
+  stroke: C.ink,
+  strokeThickness: stroke,
 });
 
-/** Where the knight's feet are in each texture, as a fraction of its size. */
-const FEET = { stand: 22 / 24, slide: 9 / 11 };
+/** A shrine's sprite and its banderole label. */
+interface ShrineArt {
+  image: Phaser.GameObjects.Image;
+  label: Phaser.GameObjects.Container;
+}
 
 export class GameScene extends Phaser.Scene {
   /** The run being played; read by the playthrough test. */
@@ -38,20 +59,32 @@ export class GameScene extends Phaser.Scene {
   private traps = new Map<number, Phaser.GameObjects.Image>();
   private coins = new Map<number, Phaser.GameObjects.Image>();
   private ledges = new Map<number, Phaser.GameObjects.TileSprite>();
-  /** The dark sides of the ledges, redrawn every frame. */
+  private shrines = new Map<number, ShrineArt>();
+  /** Words over the road: coin pops, a shrine's heart and its refusals, by effect id. */
+  private words = new Map<number, Phaser.GameObjects.Text>();
+  /** The inked ends and arched doors of the ledges, redrawn every frame. */
   private ledgeSides!: Phaser.GameObjects.Graphics;
-  /** The soft shadows on the ground under the knight, the traps, the foes and the coins. */
-  private shadows!: Phaser.GameObjects.Graphics;
   private far!: Phaser.GameObjects.TileSprite;
   private near!: Phaser.GameObjects.TileSprite;
   private ground!: Phaser.GameObjects.TileSprite;
   private knight!: Phaser.GameObjects.Image;
   private flag!: Phaser.GameObjects.Image;
   private fx!: Phaser.GameObjects.Graphics;
+  /** Points along the course the knight passed on a streak, newest first, for the sparkle trail. */
+  private trail: { x: number; h: number }[] = [];
+  private trailAt = 0;
   private hud!: Phaser.GameObjects.Graphics;
   private hearts: Phaser.GameObjects.Image[] = [];
   private stageText!: Phaser.GameObjects.Text;
-  private statsText!: Phaser.GameObjects.Text;
+  private distText!: Phaser.GameObjects.Text;
+  private coinText!: Phaser.GameObjects.Text;
+  private bestText!: Phaser.GameObjects.Text;
+  private medalText!: Phaser.GameObjects.Text;
+  private streakText!: Phaser.GameObjects.Text;
+  private streakNext!: Phaser.GameObjects.Text;
+  private trackNext!: Phaser.GameObjects.Text;
+  private trackBest!: Phaser.GameObjects.Text;
+  private caption!: Phaser.GameObjects.Text;
   private hint!: Phaser.GameObjects.Container;
   private gameOver!: Phaser.GameObjects.Container;
   private gameOverText!: Phaser.GameObjects.Text;
@@ -68,21 +101,26 @@ export class GameScene extends Phaser.Scene {
     this.traps.clear();
     this.coins.clear();
     this.ledges.clear();
+    this.shrines.clear();
+    this.words.clear();
     const saved = loadProgress();
     this.state = newRun(saved.best, saved.bank, saved.pending);
     this.persist();
 
-    this.add.image(0, 0, 'sky').setOrigin(0);
-    const farH = this.textures.get('far').getSourceImage().height;
-    const nearH = this.textures.get('near').getSourceImage().height;
-    this.far = this.add.tileSprite(0, GROUND_Y - farH + 20, VIEW.w, farH, 'far').setOrigin(0);
-    this.near = this.add.tileSprite(0, GROUND_Y - nearH + 6, VIEW.w, nearH, 'near').setOrigin(0);
-    this.ground = this.add.tileSprite(0, GROUND_Y, VIEW.w, VIEW.h - GROUND_Y, 'ground').setOrigin(0).setDepth(1);
-    this.shadows = this.add.graphics().setDepth(1.8);
-    this.ledgeSides = this.add.graphics().setDepth(2);
-    this.flag = this.add.image(0, GROUND_Y + 2, 'checkpoint').setOrigin(7 / 36, 1).setDepth(3);
+    this.add.image(0, 0, 'page').setOrigin(0).setDepth(-10);
+    this.add.image(FRAME.x, FRAME.y, 'sky').setOrigin(0).setDepth(-5);
+    this.far = this.add.tileSprite(0, GROUND_Y - FAR_H, VIEW.w, FAR_H, 'far').setOrigin(0).setDepth(-4);
+    this.near = this.add.tileSprite(0, GROUND_Y - NEAR_H, VIEW.w, NEAR_H, 'near').setOrigin(0).setDepth(-3);
+    this.ground = this.add.tileSprite(0, GROUND_Y - GROUND_TOP, VIEW.w, GROUND_TOP + 13, 'ground').setOrigin(0).setDepth(1);
+    this.ledgeSides = this.add.graphics().setDepth(1.6);
+    this.flag = this.add.image(0, GROUND_Y + 2, 'checkpoint').setOrigin(8 / 48, 1).setDepth(3);
+    this.add.image(0, 0, 'frame').setOrigin(0).setDepth(4.5);
     this.knight = this.add.image(RUNNER_X, GROUND_Y, 'knight-run0').setDepth(5);
     this.fx = this.add.graphics().setDepth(6);
+    this.caption = this.add
+      .text(MARGIN.captionX, MARGIN.captionY, '', { fontFamily: FONT, fontSize: '13px', fontStyle: 'italic', color: C.madder })
+      .setOrigin(0, 0.5)
+      .setDepth(0);
     this.createHud();
     this.createHint();
     this.createGameOver();
@@ -115,10 +153,10 @@ export class GameScene extends Phaser.Scene {
     if (s.phase !== phase && s.phase !== 'running') this.persist();
 
     this.drawWorld();
-    this.drawShadows();
     this.drawKnight();
     this.drawEffects();
     this.drawHud();
+    this.drawCaption();
     this.boonCards.show(s.phase === 'checkpoint' ? s.choices : null, s.ranks, s.stage);
     this.gameOver.setVisible(s.phase === 'over');
     if (s.phase === 'over') this.drawGameOver();
@@ -170,15 +208,25 @@ export class GameScene extends Phaser.Scene {
       seen.add(l.id);
       let sprite = this.ledges.get(l.id);
       if (!sprite) {
-        // The stone reaches a little below the road's top so it sits on the road.
-        sprite = this.add.tileSprite(0, GROUND_Y - l.h, l.w, l.h + 6, 'ledge').setOrigin(0).setDepth(1.5);
+        // The wall reaches a little below the road's top so it sits on the road.
+        sprite = this.add.tileSprite(0, GROUND_Y - l.h, l.w, l.h + 10, 'ledge').setOrigin(0).setDepth(1.5);
         this.ledges.set(l.id, sprite);
       }
       const x = this.sx(l.x);
       sprite.setX(x).setTilePosition(l.x, 0);
-      // The stone's faces turned away from the light: the wall at each end and a band of shade.
-      sides.fillStyle(MAT.stone.dark).fillRect(x, GROUND_Y - l.h, 3, l.h + 2).fillRect(x + l.w - 3, GROUND_Y - l.h, 3, l.h + 2);
-      sides.fillStyle(MAT.stone.shade).fillRect(x + 3, GROUND_Y - l.h, 3, l.h + 2);
+      // Inked ends, and an arched lapis door in a long wall.
+      sides.lineStyle(1.5, N.ink).lineBetween(x, GROUND_Y - l.h, x, GROUND_Y + 10).lineBetween(x + l.w, GROUND_Y - l.h, x + l.w, GROUND_Y + 10);
+      if (l.w >= 160 && l.h >= 40) {
+        const d = x + 56;
+        const door = [
+          new Phaser.Math.Vector2(d, GROUND_Y + 2),
+          new Phaser.Math.Vector2(d, GROUND_Y - 22),
+          new Phaser.Math.Vector2(d + 9, GROUND_Y - 32),
+          new Phaser.Math.Vector2(d + 18, GROUND_Y - 22),
+          new Phaser.Math.Vector2(d + 18, GROUND_Y + 2),
+        ];
+        sides.fillStyle(N.lapis).fillPoints(door, true).lineStyle(1.25, N.ink).strokePoints(door, true);
+      }
     }
     for (const [id, sprite] of this.ledges) {
       if (seen.has(id)) continue;
@@ -187,16 +235,33 @@ export class GameScene extends Phaser.Scene {
     }
 
     seen.clear();
+    for (const sh of s.shrines) {
+      seen.add(sh.id);
+      let art = this.shrines.get(sh.id);
+      if (!art) {
+        art = this.makeShrine();
+        this.shrines.set(sh.id, art);
+      }
+      this.drawShrine(sh, art);
+    }
+    for (const [id, art] of this.shrines) {
+      if (seen.has(id)) continue;
+      art.image.destroy();
+      art.label.destroy();
+      this.shrines.delete(id);
+    }
+
+    seen.clear();
     for (const t of s.traps) {
       seen.add(t.id);
       let sprite = this.traps.get(t.id);
       if (!sprite) {
         if (t.kind === 'spikes') sprite = this.add.image(0, GROUND_Y - t.h + 2, `spikes-${t.w}`).setOrigin(0, 1).setDepth(4);
-        else if (t.kind === 'pit') sprite = this.add.image(0, GROUND_Y, `pit-${t.w}`).setOrigin(0, 0).setDepth(2);
-        // The blade hangs from above the screen, so it is lifted whole over raised ground.
+        else if (t.kind === 'pit') sprite = this.add.image(0, GROUND_Y - 2, `pit-${t.w}`).setOrigin(0, 0).setDepth(2);
+        // The log hangs from above the screen, so it is lifted whole over raised ground.
         else if (t.kind === 'blade') sprite = this.add.image(0, -t.h, 'blade').setOrigin(0.5, 0).setDepth(4);
         else if (t.kind === 'flames') sprite = this.add.image(0, GROUND_Y - t.h + 2, 'flames-off').setOrigin(0, 1).setDepth(4);
-        else if (t.kind === 'goblin') sprite = this.add.image(0, GROUND_Y - t.h + 2, 'goblin-0').setOrigin(0.5, 1).setDepth(4);
+        else if (t.kind === 'goblin') sprite = this.add.image(0, GROUND_Y - t.h, 'goblin-0').setOrigin(0.5, GOBLIN_ART.feetY / GOBLIN_ART.h).setDepth(4);
         else sprite = this.add.image(0, 0, 'bat-0').setOrigin(0.5, 0.5).setDepth(4);
         this.traps.set(t.id, sprite);
       }
@@ -216,7 +281,7 @@ export class GameScene extends Phaser.Scene {
         sprite = this.add.image(0, 0, 'coin-0').setDepth(4);
         this.coins.set(c.id, sprite);
       }
-      // Coins spin, each a little out of step with the next.
+      // Coins turn, each a little out of step with the next.
       const spin = Math.floor(this.clock / 160 + c.id * 0.5) % 4 === 3 ? 'coin-1' : 'coin-0';
       sprite.setTexture(spin).setPosition(this.sx(c.x), GROUND_Y - c.h);
     }
@@ -227,31 +292,23 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /**
-   * Soft shadows on the ground under what stands or flies on the course. A shadow lies on the road,
-   * or on the top of a ledge, and fades as the thing above it rises.
-   */
-  private drawShadows() {
-    const s = this.state;
-    const g = this.shadows.clear();
-    const onScreen = (x: number) => x > -60 && x < VIEW.w + 60;
-    const floor = floorAt(s, s.distance - RUNNER.w / 2, s.distance + RUNNER.w / 2);
-    const lift = Math.max(0, s.runner.h - floor);
-    softShadow(g, RUNNER_X, GROUND_Y - floor, 16 - Math.min(6, lift * 0.06), 0.6 - Math.min(0.35, lift * 0.004));
-    for (const t of s.traps) {
-      const x = this.sx(t.x + t.w / 2);
-      if (!onScreen(x)) continue;
-      if (t.kind === 'spikes') softShadow(g, x, GROUND_Y, t.w / 2 + 4, 0.5);
-      else if (t.kind === 'flames') softShadow(g, x, GROUND_Y, 18, 0.5);
-      else if (t.kind === 'goblin') softShadow(g, x, GROUND_Y, 12, 0.5);
-      else if (t.kind === 'bat') softShadow(g, x, GROUND_Y, 12, 0.25);
-    }
-    for (const c of s.course) {
-      const x = this.sx(c.x);
-      const above = c.h - floorAt(s, c.x);
-      if (!onScreen(x) || above < 0) continue;
-      softShadow(g, x, GROUND_Y - floorAt(s, c.x), Math.max(3, 6 - above * 0.03), 0.3);
-    }
+  /** A shrine on the road and its banderole: "Wayside shrine / Slide in: 15 coins = 1 heart". */
+  private makeShrine(): ShrineArt {
+    const image = this.add.image(0, GROUND_Y + 2, 'shrine').setOrigin(0.5, 1).setDepth(3);
+    const y = GROUND_Y - 150;
+    const line = this.add.graphics();
+    for (let dy = 22; dy < 150 - 80 - 8; dy += 5) line.lineStyle(1, N.ink).lineBetween(0, dy, 0, dy + 2.5);
+    const scroll = this.add.image(0, 0, 'banderole');
+    const title = this.add.text(0, -7, 'Wayside shrine', { fontFamily: FONT, fontSize: '13px', fontStyle: 'bold', color: '#2f7a4a' }).setOrigin(0.5);
+    const rule = this.add.text(0, 8, `Slide in: ${SHRINE.price} coins = 1 heart`, { fontFamily: FONT, fontSize: '11.5px', fontStyle: 'italic', color: C.ink }).setOrigin(0.5);
+    const label = this.add.container(0, y, [line, scroll, title, rule]).setDepth(4.2);
+    return { image, label };
+  }
+
+  private drawShrine(sh: Shrine, art: ShrineArt) {
+    const x = this.sx(sh.x + sh.w / 2);
+    art.image.setX(x).setTexture(sh.used ? 'shrine-used' : 'shrine');
+    art.label.setX(x).setVisible(!sh.used && x > -100 && x < VIEW.w + 100);
   }
 
   /** Places a trap's sprite, and animates the ones that move or burn. */
@@ -280,22 +337,35 @@ export class GameScene extends Phaser.Scene {
     else if (r.h > floorAt(s, s.distance - RUNNER.w / 2, s.distance + RUNNER.w / 2)) pose = r.vh > 0 ? 'jump' : 'fall';
     else if (s.phase === 'checkpoint') pose = 'run1';
     else pose = `run${Math.floor(s.distance / STRIDE_PX) % 4}` as KnightPose;
+    const feet = pose === 'slide' ? KNIGHT_FEET.slide : KNIGHT_FEET.stand;
     this.knight
       .setTexture(`knight-${pose}`)
-      .setOrigin(0.5, pose === 'slide' ? FEET.slide : FEET.stand)
+      .setOrigin(feet.x / feet.w, feet.y / feet.h)
       .setPosition(RUNNER_X, GROUND_Y - r.h)
       .setAngle(s.phase === 'over' ? -8 : 0);
     // Blinks while it can't be hurt after a hit (held faded with reduced motion); greyed once fallen.
     const hurt = r.hurtMs > 0 && s.phase === 'running';
     this.knight.setAlpha(!hurt ? 1 : settings.reduceMotion ? 0.6 : Math.floor(this.clock / 80) % 2 === 0 ? 0.35 : 1);
-    if (s.phase === 'over') this.knight.setTint(0x8a8090).setTintMode(Phaser.TintModes.MULTIPLY);
+    if (s.phase === 'over') this.knight.setTint(0x9a8f88).setTintMode(Phaser.TintModes.MULTIPLY);
     else this.knight.clearTint();
+  }
+
+  /** A gold six-pointed star, inked, for the sparkles. */
+  private star(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, alpha: number) {
+    const pts = Array.from({ length: 12 }, (_, i) => {
+      const a = (i * Math.PI) / 6;
+      const q = i % 2 ? r * 0.45 : r;
+      return new Phaser.Math.Vector2(x + Math.cos(a) * q, y + Math.sin(a) * q);
+    });
+    g.fillStyle(N.goldLight, alpha).fillPoints(pts, true).lineStyle(1, N.ink, alpha).strokePoints(pts, true);
   }
 
   private drawEffects() {
     const g = this.fx;
     g.clear();
     const s = this.state;
+    const still = settings.reduceMotion;
+    const seen = new Set<number>();
     for (const e of s.effects) {
       const t = 1 - e.ms / e.total;
       const x = this.sx(e.x);
@@ -303,69 +373,221 @@ export class GameScene extends Phaser.Scene {
       if (e.kind === 'coin') {
         for (let i = 0; i < 4; i++) {
           const a = (i / 4) * Math.PI * 2 + 0.6;
-          g.fillStyle(i % 2 ? GOLD.shine : GOLD.light, 1 - t).fillRect(x + Math.cos(a) * 18 * t - 2, y + Math.sin(a) * 18 * t - 2 - 10 * t, 4, 4);
+          this.star(g, x + Math.cos(a) * 18 * t, y + Math.sin(a) * 18 * t - 10 * t, 3.5, 1 - t);
         }
       } else if (e.kind === 'hit') {
-        g.lineStyle(4, RED.light, 1 - t).strokeCircle(x, y, 16 + 30 * t);
+        g.lineStyle(5, N.ink, 0.8 * (1 - t)).strokeCircle(x, y, 16 + 30 * t);
+        g.lineStyle(3, N.madder, 1 - t).strokeCircle(x, y, 16 + 30 * t);
       } else if (e.kind === 'block') {
-        g.fillStyle(FROST.light, 0.35 * (1 - t)).fillCircle(x, y, 40);
-        g.lineStyle(3, FROST.mid, 1 - t).strokeCircle(x, y, 40);
+        g.fillStyle(N.frost, 0.3 * (1 - t)).fillCircle(x, y, 40);
+        g.lineStyle(5, N.ink, 1 - t).strokeCircle(x, y, 40);
+        g.lineStyle(3, N.gold, 1 - t).strokeCircle(x, y, 40);
       } else if (e.kind === 'stomp') {
         // A puff of dust and a few stars where a goblin or bat was knocked out.
-        g.fillStyle(CLOTH.mid, 0.6 * (1 - t)).fillCircle(x - 12, y + 4 - 8 * t, 8 + 8 * t).fillCircle(x + 12, y + 4 - 8 * t, 8 + 8 * t);
-        g.fillStyle(GOBLIN.light, 0.6 * (1 - t)).fillCircle(x, y - 4 - 10 * t, 6 + 6 * t);
+        g.fillStyle(N.vellumDark, 0.8 * (1 - t)).fillCircle(x - 12, y + 4 - 8 * t, 8 + 8 * t).fillCircle(x + 12, y + 4 - 8 * t, 8 + 8 * t);
+        g.lineStyle(1, N.ink, 0.6 * (1 - t)).strokeCircle(x - 12, y + 4 - 8 * t, 8 + 8 * t).strokeCircle(x + 12, y + 4 - 8 * t, 8 + 8 * t);
         for (let i = 0; i < 3; i++) {
           const a = -Math.PI / 2 + (i - 1) * 0.9;
-          g.fillStyle(GOLD.shine, 1 - t).fillRect(x + Math.cos(a) * 26 * t - 2, y - 6 + Math.sin(a) * 26 * t - 2, 4, 4);
+          this.star(g, x + Math.cos(a) * 26 * t, y - 6 + Math.sin(a) * 26 * t, 5, 1 - t);
         }
+      } else if (e.kind === 'dust') {
+        g.fillStyle(N.vellum, 0.7 * (1 - t)).fillCircle(x - 10 - 16 * t, y - 4 - 6 * t, 5 + 4 * t).fillCircle(x - 22 - 20 * t, y - 3 - 4 * t, 4 + 3 * t);
       } else {
-        g.fillStyle(0xd8cfa8, 0.5 * (1 - t)).fillCircle(x - 10 - 16 * t, y - 4 - 6 * t, 5 + 4 * t).fillCircle(x - 22 - 20 * t, y - 3 - 4 * t, 4 + 3 * t);
+        // Words: a "+3" coin pop that rises (held still with reduced motion), a heart from a shrine,
+        // or why a shrine gave none.
+        seen.add(e.id);
+        let word = this.words.get(e.id);
+        if (!word) {
+          const style =
+            e.kind === 'pop' ? textStyle(24, C.goldLight, 4) : e.kind === 'heal' ? textStyle(18, '#7fd08a', 4) : { ...textStyle(15, C.goldPale, 4), fontStyle: 'bold italic' };
+          word = this.add.text(0, 0, e.kind === 'heal' ? '+1 heart' : e.text ?? '', style).setOrigin(0.5).setDepth(6.5);
+          this.words.set(e.id, word);
+        }
+        const rise = still || e.kind === 'refuse' ? 0 : 30 * t;
+        // A pop sits up by the knight's sword hand, clear of the helm.
+        const lift = e.kind === 'pop' ? 34 : 0;
+        word.setPosition(x + lift, y - lift - rise).setAlpha(t < 0.7 ? 1 : (1 - t) / 0.3);
+        if (e.kind === 'heal') {
+          g.lineStyle(4, N.ink, 1 - t).strokeCircle(x, GROUND_Y - 40, 20 + 20 * t);
+          g.lineStyle(2, N.heal, 1 - t).strokeCircle(x, GROUND_Y - 40, 20 + 20 * t);
+        }
       }
     }
-    if (s.shields > 0 && s.phase === 'running') {
-      g.lineStyle(2, FROST.mid, settings.reduceMotion ? 0.6 : 0.5 + 0.2 * Math.sin(this.clock / 150)).strokeCircle(RUNNER_X, GROUND_Y - s.runner.h - 30, 38);
+    for (const [id, word] of this.words) {
+      if (seen.has(id)) continue;
+      word.destroy();
+      this.words.delete(id);
+    }
+
+    // The sparkle trail: gold stars left behind the knight while a streak pays x2 or more.
+    const running = s.phase === 'running';
+    if (!still && running && streakMult(s.streak) >= 2) {
+      if (this.clock - this.trailAt >= TRAIL.everyMs) {
+        this.trailAt = this.clock;
+        this.trail.unshift({ x: s.distance - 18, h: s.runner.h + 34 });
+        this.trail.length = Math.min(this.trail.length, TRAIL.stars);
+      }
+      this.trail.forEach((p, i) => this.star(g, this.sx(p.x) - i * 4, GROUND_Y - p.h, 5.5 - i * 0.5, 1 - i / (TRAIL.stars + 1)));
+    } else if (running || s.phase === 'over') {
+      this.trail.length = 0;
+    }
+
+    if (s.shields > 0 && running) {
+      // The Aegis: a gold-ruled nimbus round the knight.
+      const cy = GROUND_Y - s.runner.h - 30;
+      const a = still ? 0.8 : 0.7 + 0.2 * Math.sin(this.clock / 150);
+      g.fillStyle(0x8cb4ff, 0.15).fillCircle(RUNNER_X, cy, 39);
+      g.lineStyle(4.5, N.ink, a).strokeCircle(RUNNER_X, cy, 39);
+      g.lineStyle(2.5, N.gold, a).strokeCircle(RUNNER_X, cy, 39);
+      g.fillStyle(0xfff2c0, a);
+      for (let k = 0; k < 16; k++) {
+        const ang = (k * Math.PI) / 8;
+        g.fillCircle(RUNNER_X + Math.cos(ang) * 34, cy + Math.sin(ang) * 34, 1);
+      }
     }
   }
 
   private createHud() {
-    this.hud = this.add.graphics().setDepth(UI_DEPTH);
-    this.stageText = this.add.text(VIEW.w / 2, 10, '', textStyle(18, '#f3c64e')).setOrigin(0.5, 0).setDepth(UI_DEPTH + 1);
-    this.statsText = this.add.text(VIEW.w - 16, 12, '', textStyle(14)).setOrigin(1, 0).setDepth(UI_DEPTH + 1);
+    const d = UI_DEPTH;
+    this.add.image(0, 0, 'hud-band').setOrigin(0).setDepth(d);
+    this.hud = this.add.graphics().setDepth(d + 1);
+    this.add.image(457, 20, 'initial').setDepth(d + 1);
+    this.stageText = this.add.text(474, 21, '', textStyle(19, C.goldPale, 0)).setOrigin(0, 0.5).setDepth(d + 1);
+    this.distText = this.add.text(719, 21, '', textStyle(17, C.goldPale, 0)).setOrigin(0.5).setDepth(d + 1);
+    this.add.image(765, 21, 'coin-0').setDepth(d + 1);
+    this.coinText = this.add.text(794, 21, '', textStyle(17, C.goldLight, 0)).setOrigin(0.5).setDepth(d + 1);
+    this.add.text(815, 22, 'Coins', { fontFamily: FONT, fontSize: '13px', fontStyle: 'italic', color: C.frost }).setOrigin(0, 0.5).setDepth(d + 1);
+    this.bestText = this.add.text(905, 21, '', textStyle(16, C.frost, 0)).setOrigin(0.5).setDepth(d + 1);
+
+    // The streak chip: a gold medallion with the multiplier, its name, and a bar to the next one.
+    const c = STREAK_CHIP;
+    this.add.image(c.x, c.y, 'streak-chip').setOrigin(0).setDepth(d + 1);
+    this.add.image(c.x + 13, c.y + 12, 'medallion').setDepth(d + 2);
+    this.medalText = this.add.text(c.x + 13, c.y + 12.5, '', { fontFamily: FONT, fontSize: '9px', fontStyle: 'bold', color: C.ink }).setOrigin(0.5).setDepth(d + 3);
+    this.streakText = this.add.text(c.x + 25, c.y + 8.5, '', { fontFamily: FONT, fontSize: '10.5px', fontStyle: 'bold', color: C.madder }).setOrigin(0, 0.5).setDepth(d + 2);
+    this.streakNext = this.add.text(c.x + c.w - 5, c.y + 17.5, '', { fontFamily: FONT, fontSize: '8px', fontStyle: 'italic', color: C.ink }).setOrigin(1, 0.5).setDepth(d + 2);
+
+    // The run track: a vellum strip with the ruled road, its banners, the knight and the best run.
+    this.add.image(TRACK.left, TRACK.y - TRACK.h / 2, 'track-strip').setOrigin(0).setDepth(d);
+    this.trackNext = this.add.text(TRACK.x0 - 7, TRACK.y + 0.5, '', { fontFamily: FONT, fontSize: '10px', fontStyle: 'italic', color: C.ink }).setOrigin(1, 0.5).setDepth(d + 2);
+    this.trackBest = this.add.text(TRACK.x1 + 7, TRACK.y + 1, '', { fontFamily: FONT, fontSize: '9px', fontStyle: 'bold italic', color: C.madder }).setOrigin(0, 0.5).setDepth(d + 2);
   }
 
   private drawHud() {
     const s = this.state;
-    const g = this.hud;
-    g.clear();
-    g.fillStyle(0x2c2018, 0.92).fillRect(0, 0, VIEW.w, HUD_HEIGHT);
-    g.fillStyle(0x5a3f2a).fillRect(0, HUD_HEIGHT - 3, VIEW.w, 3);
+    const g = this.hud.clear();
+    const d = UI_DEPTH;
     const max = stats(s).maxHearts;
-    while (this.hearts.length < max) this.hearts.push(this.add.image(24 + this.hearts.length * 36, 19, 'icon-heart-small').setDepth(UI_DEPTH + 1));
-    this.hearts.forEach((h, i) => h.setVisible(i < max).setTexture(`${iconTexture(i < s.hearts ? 'heart' : 'heart-empty')}-small`));
-    this.stageText.setText(`Stage ${s.stage}`);
-    this.statsText.setText(`${metres(s.distance)} m   Coins ${s.coins}   Best ${s.best} m`);
+    while (this.hearts.length < max) this.hearts.push(this.add.image(23 + this.hearts.length * 36, 19, 'heart-full').setDepth(d + 1));
+    this.hearts.forEach((h, i) => h.setVisible(i < max).setTexture(i < s.hearts ? 'heart-full' : 'heart-empty'));
+    this.stageText.setText(`tage ${s.stage}`);
+    this.distText.setText(`${metres(s.distance)} m`);
+    this.coinText.setText(`${s.coins}`);
+    this.bestText.setText(`Best ${s.best} m`);
+
+    // The coin streak.
+    const mult = streakMult(s.streak);
+    const c = STREAK_CHIP;
+    const maxed = mult >= STREAK.max;
+    const into = maxed ? STREAK.step : s.streak % STREAK.step;
+    this.medalText.setText(`x${mult}`);
+    this.streakText.setText(`Streak x${mult}`);
+    this.streakNext.setText(maxed ? 'max' : `${STREAK.step - into} to x${mult + 1}`);
+    const bar = { x: c.x + 25, y: c.y + 15, w: 42, h: 4 };
+    g.fillStyle(N.vellumDark).fillRect(bar.x, bar.y, bar.w, bar.h);
+    g.fillStyle(N.verm).fillRect(bar.x, bar.y, (bar.w * into) / STREAK.step, bar.h);
+    g.lineStyle(0.75, N.ink).strokeRect(bar.x, bar.y, bar.w, bar.h);
+
+    // The run track.
+    const tr = trackOf(s);
+    const at = (m: number) => TRACK.x0 + ((TRACK.x1 - TRACK.x0) * Math.min(m, tr.length)) / tr.length;
+    const ly = TRACK.y + 3;
+    g.lineStyle(2, N.ink).lineBetween(TRACK.x0, ly, TRACK.x1, ly);
+    g.lineStyle(1, N.vellumDark).lineBetween(TRACK.x0, ly, TRACK.x1, ly);
+    g.lineStyle(1, N.verm).lineBetween(TRACK.x0, ly, at(tr.at), ly);
+    for (const m of tr.banners) {
+      const x = at(m);
+      g.lineStyle(1, N.ink).lineBetween(x, ly + 1, x, ly - 10);
+      const flag = [
+        new Phaser.Math.Vector2(x, ly - 10),
+        new Phaser.Math.Vector2(x + 9, ly - 8),
+        new Phaser.Math.Vector2(x + 5, ly - 6.5),
+        new Phaser.Math.Vector2(x + 9, ly - 4.5),
+        new Phaser.Math.Vector2(x, ly - 4.5),
+      ];
+      g.fillStyle(m <= tr.at ? N.gold : N.lapis).fillPoints(flag, true).lineStyle(0.75, N.ink).strokePoints(flag, true);
+    }
+    if (tr.best > 0) {
+      // The ghost flag at the best run, to chase.
+      const x = at(tr.best);
+      g.lineStyle(1, N.ink).lineBetween(x, ly + 2, x, ly - 11);
+      const flag = [new Phaser.Math.Vector2(x, ly - 11), new Phaser.Math.Vector2(x + 10, ly - 8.5), new Phaser.Math.Vector2(x, ly - 5.5)];
+      g.fillStyle(N.madder, 0.85).fillPoints(flag, true).lineStyle(0.75, N.ink).strokePoints(flag, true);
+    }
+    g.fillStyle(N.lapis).fillCircle(at(tr.at), ly, 4).lineStyle(1, N.ink).strokeCircle(at(tr.at), ly, 4);
+    g.fillStyle(N.goldLight).fillCircle(at(tr.at), ly, 1.5);
+    this.trackNext.setText(tr.next > 0 ? `Next banner ${tr.next} m` : 'At the banner');
+    this.trackBest.setText(tr.best === 0 ? 'First run' : tr.at > tr.best ? 'New best!' : `Best ${tr.best} m`);
+
     // The controls hint fades out a little way into the first stage.
     const hint = s.stage === 1 && s.phase === 'running' ? (HINT_UNTIL - s.distance) / 200 : 0;
     this.hint.setAlpha(Phaser.Math.Clamp(hint, 0, 1));
   }
 
+  /** The rubric in the margin under the road, saying what the knight is about. */
+  private drawCaption() {
+    const s = this.state;
+    let line: string;
+    if (s.phase === 'over') line = 'Here the knight falleth, and the goblins make merry.';
+    else if (s.phase === 'checkpoint') line = 'Here the knight resteth by the banner, and chooseth a boon.';
+    else if (s.stage === 1 && s.distance < HINT_UNTIL) line = 'Here the knight setteth out upon the old road at dusk.';
+    else {
+      const ahead = (x: number) => x > s.distance && x < s.distance + 700;
+      const trap = s.traps.find((t) => t.x + t.w > s.distance - 20 && t.x < s.distance + 700);
+      const wall = s.ledges.find((l) => ahead(l.x));
+      const shrine = s.shrines.find((sh) => !sh.used && ahead(sh.x));
+      const next = [
+        trap && { x: trap.x, kind: trap.kind as string },
+        wall && { x: wall.x, kind: 'wall' },
+        shrine && { x: shrine.x, kind: 'shrine' },
+      ]
+        .filter((n): n is { x: number; kind: string } => !!n)
+        .sort((a, b) => a.x - b.x)[0];
+      const lines: Record<string, string> = {
+        spikes: 'Here the knight leapeth the spikes.',
+        pit: 'Here the knight leapeth the pit.',
+        blade: 'Here the knight stoopeth under the hanging log.',
+        flames: 'Here the knight leapeth the flame.',
+        goblin: 'Here the knight leapeth the goblin, that awaiteth him.',
+        bat: 'Here the bat flieth at the knight.',
+        wall: 'Here the knight climbeth the old wall.',
+        shrine: 'Here standeth a wayside shrine, where a knight may be healed.',
+      };
+      line = next ? lines[next.kind] : 'Here the knight runneth on toward the next banner.';
+    }
+    if (this.caption.text !== line) this.caption.setText(line);
+  }
+
   private createHint() {
     const g = this.add.graphics();
-    g.lineStyle(2, 0xf3e9d2, 0.25).lineBetween(0, TAP_SPLIT_Y, VIEW.w, TAP_SPLIT_Y);
-    const up = this.add.text(VIEW.w / 2 + 100, TAP_SPLIT_Y - 70, 'Tap up here to jump\n(Space / Up)', textStyle(18)).setOrigin(0.5).setAlign('center');
-    const down = this.add.text(VIEW.w / 2 + 100, TAP_SPLIT_Y + 70, 'Tap down here to slide\n(Down / S)', textStyle(18)).setOrigin(0.5).setAlign('center');
+    g.lineStyle(2, N.goldPale, 0.5).lineBetween(FRAME.x, TAP_SPLIT_Y, FRAME.x + FRAME.w, TAP_SPLIT_Y);
+    const up = this.add.text(VIEW.w / 2 + 100, TAP_SPLIT_Y - 70, 'Tap up here to jump\n(Space / Up)', textStyle(19, C.goldPale, 4)).setOrigin(0.5).setAlign('center');
+    const down = this.add.text(VIEW.w / 2 + 100, TAP_SPLIT_Y + 70, 'Tap down here to slide\n(Down / S)', textStyle(19, C.goldPale, 4)).setOrigin(0.5).setAlign('center');
     this.hint = this.add.container(0, 0, [g, up, down]).setDepth(UI_DEPTH - 5);
   }
 
   private createGameOver() {
-    const dim = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x0e0a08, 0.7).setInteractive();
-    const panel = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, 600, 400, 0x2c2018).setStrokeStyle(4, 0x8a5a32);
-    const title = this.add.text(VIEW.w / 2, VIEW.h / 2 - 160, 'The knight has fallen', textStyle(30, '#e0584f')).setOrigin(0.5);
+    bakePanel(this, 'over-panel', 600, 400);
+    const dim = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, N.ink, 0.6).setInteractive();
+    const panel = this.add.image(VIEW.w / 2, VIEW.h / 2, 'over-panel');
+    const title = this.add
+      .text(VIEW.w / 2, VIEW.h / 2 - 160, 'The knight has fallen', { fontFamily: FONT, fontSize: '30px', fontStyle: 'bold', color: C.madder })
+      .setOrigin(0.5);
     this.gameOverText = this.add
-      .text(VIEW.w / 2, VIEW.h / 2 - 70, '', { fontFamily: FONT, fontSize: '16px', color: '#f1e3c6', align: 'center', wordWrap: { width: 540 } })
+      .text(VIEW.w / 2, VIEW.h / 2 - 70, '', { fontFamily: FONT, fontSize: '16px', color: C.ink, align: 'center', wordWrap: { width: 540 } })
       .setOrigin(0.5, 0.5);
     this.shopText = this.add
-      .text(VIEW.w / 2, VIEW.h / 2 + 32, '', { fontFamily: FONT, fontSize: '16px', color: '#f3c64e', align: 'center', wordWrap: { width: 540 } })
+      .text(VIEW.w / 2, VIEW.h / 2 + 32, '', { fontFamily: FONT, fontSize: '16px', fontStyle: 'italic', color: C.lapis, align: 'center', wordWrap: { width: 540 } })
       .setOrigin(0.5);
     this.buyButton = makeButton(this, VIEW.w / 2, VIEW.h / 2 + 80, `Buy for ${BOON_PRICE} coins`, () => this.buy(), 400);
     const again = makeButton(this, VIEW.w / 2, VIEW.h / 2 + 150, 'Run again', () => this.restart());
@@ -392,9 +614,16 @@ export class GameScene extends Phaser.Scene {
     const s = this.state;
     this.state = newRun(s.best, s.bank, s.pending);
     this.persist();
-    for (const sprite of [...this.traps.values(), ...this.coins.values(), ...this.ledges.values()]) sprite.destroy();
+    for (const sprite of [...this.traps.values(), ...this.coins.values(), ...this.ledges.values(), ...this.words.values()]) sprite.destroy();
+    for (const art of this.shrines.values()) {
+      art.image.destroy();
+      art.label.destroy();
+    }
     this.traps.clear();
     this.coins.clear();
     this.ledges.clear();
+    this.shrines.clear();
+    this.words.clear();
+    this.trail.length = 0;
   }
 }

@@ -1,91 +1,165 @@
 import Phaser from 'phaser';
-import { MAT, bake, disk, edge, limb, poly, ring, slab, type Canvas, type Pt } from './facets';
+import { C, gold, hl, paint, poly, type Ctx, type Pt } from './ink';
 
-// The knight, side on and facing right, in low-poly so the running, jumping and sliding poses share
-// one body. Each pose is baked into its own texture. Art is drawn in units of `K` screen pixels; the
-// standing poses are 20x24 units with the feet on row 22, and the slide is 26x11 with the feet on 9.
+// The knight as a figure from a miniature: a lapis surcoat with a gold cross (never red), mail and
+// plate in silver, a great helm with a vermilion plume, and a sword held forward. Each pose is painted
+// into its own texture. Poses are written in page units with the feet at (0, 0), scaled by `S`.
+// The standing poses are 104x100 px with the feet at (52, 94); the slide is 108x42 with the feet at
+// (66, 38). GameScene sets the origins from `KNIGHT_FEET`.
 
-export const KNIGHT_SCALE = 3;
 export type KnightPose = 'run0' | 'run1' | 'run2' | 'run3' | 'jump' | 'fall' | 'slide';
 
-const K = KNIGHT_SCALE;
+const S = 0.5;
+export const KNIGHT_FEET = {
+  stand: { w: 104, h: 100, x: 52, y: 94 },
+  slide: { w: 108, h: 42, x: 66, y: 38 },
+};
 
-/** A leg from the hip to the foot, with a boot at the foot; the far leg is in shade. */
-function leg(g: Canvas, hip: Pt, foot: Pt, front: boolean) {
-  limb(g, front ? MAT.steel.mid : MAT.steel.shade, hip, foot, 2.2, K);
+type Leg = [Pt, Pt, Pt];
+interface Pose {
+  /** Lift of the body, in page units (negative is up). */
+  bob: number;
+  back: Leg;
+  front: Leg;
+  /** The free arm's hand, from its shoulder at (-16, -94). */
+  hand: Pt;
+  /** The sword hand, from its shoulder at (18, -94), and the sword's angle (radians, 0 is forward). */
+  grip: Pt;
+  sword: number;
+}
+
+const POSES: Record<Exclude<KnightPose, 'slide'>, Pose> = {
+  run0: { bob: 0, back: [[-8, -52], [-20, -30], [-36, -12]], front: [[6, -52], [20, -30], [24, -4]], hand: [-26, -66], grip: [40, -74], sword: -0.75 },
+  run1: { bob: -4, back: [[-6, -52], [-2, -28], [-18, -18]], front: [[6, -52], [8, -28], [2, -4]], hand: [-18, -64], grip: [42, -76], sword: -0.7 },
+  run2: { bob: 0, back: [[-6, -52], [10, -30], [18, -4]], front: [[6, -52], [-8, -30], [-26, -12]], hand: [-6, -64], grip: [40, -72], sword: -0.8 },
+  run3: { bob: -4, back: [[-6, -52], [0, -28], [-4, -4]], front: [[6, -52], [4, -28], [-10, -18]], hand: [-18, -64], grip: [42, -76], sword: -0.7 },
+  jump: { bob: 0, back: [[-11, -51], [-18, -24], [-21, -10]], front: [[10, -51], [23, -32], [30, -19]], hand: [-43, -122], grip: [44, -68], sword: -0.62 },
+  fall: { bob: 0, back: [[-8, -52], [-14, -28], [-16, -4]], front: [[8, -52], [16, -28], [14, -2]], hand: [-40, -120], grip: [42, -104], sword: -1.0 },
+};
+
+/** A limb segment as an inked quad of width `w` from `a` to `b`. */
+function limb(ctx: Ctx, a: Pt, b: Pt, w: number, fill: string) {
+  const dx = b[0] - a[0];
+  const dy = b[1] - a[1];
+  const len = Math.hypot(dx, dy) || 1;
+  const ox = (-dy / len) * (w / 2);
+  const oy = (dx / len) * (w / 2);
+  poly(ctx, [[a[0] + ox, a[1] + oy], [b[0] + ox, b[1] + oy], [b[0] - ox, b[1] - oy], [a[0] - ox, a[1] - oy]], fill, 2.5);
+}
+
+/** A leg in plate: thigh, shin and a pointed sabaton facing forward. */
+function leg(ctx: Ctx, [hip, knee, foot]: Leg, near: boolean) {
+  const fill = near ? C.steel : C.iron;
+  limb(ctx, hip, knee, 16, fill);
+  limb(ctx, knee, foot, 14, fill);
   const [fx, fy] = foot;
-  poly(g, [[fx - 1.5, fy - 0.6], [fx + 2, fy - 0.6], [fx + 2, fy + 0.6], [fx - 1.5, fy + 0.6]], MAT.wood.dark, K);
+  poly(ctx, [[fx - 8, fy - 6], [fx + 6, fy - 6], [fx + 16, fy], [fx - 8, fy + 2]], near ? C.iron : '#6e7388', 2.5);
 }
 
-/** An arm from the shoulder to a gauntlet. */
-function arm(g: Canvas, shoulder: Pt, hand: Pt, front: boolean) {
-  limb(g, front ? MAT.steel.mid : MAT.steel.shade, shoulder, hand, 2, K);
-  const [hx, hy] = hand;
-  poly(g, [[hx - 1, hy - 1], [hx + 1, hy - 1], [hx + 1, hy + 1], [hx - 1, hy + 1]], front ? MAT.steel.shade : MAT.steel.dark, K);
+/** An arm from `shoulder` to `hand`, with a mailed fist. */
+function arm(ctx: Ctx, shoulder: Pt, hand: Pt, near: boolean) {
+  limb(ctx, shoulder, hand, 12, near ? C.steel : C.iron);
+  poly(ctx, [[hand[0] - 6, hand[1] - 6], [hand[0] + 6, hand[1] - 6], [hand[0] + 6, hand[1] + 6], [hand[0] - 6, hand[1] + 6]], near ? C.iron : '#6e7388', 2);
 }
 
-/** Helmet with a plume and a visor slit, centred at (cx, cy). */
-function helmet(g: Canvas, cx: number, cy: number, rx: number, ry: number, plumeX: number, plumeY: number) {
-  // The plume leans back over the helmet.
-  poly(g, [[plumeX, plumeY + 2], [plumeX + 3, plumeY - 1], [plumeX + 3.5, plumeY + 2]], MAT.red.mid, K);
-  poly(g, [[plumeX + 1.5, plumeY + 1.4], [plumeX + 3, plumeY - 1], [plumeX + 2.6, plumeY + 0.8]], MAT.red.lit, K);
-  disk(g, MAT.steel, cx, cy, rx, ry, K, 10);
-  edge(g, ring(cx, cy, rx, ry, 10), K, 1);
-  poly(g, [[cx + 1, cy - 0.5], [cx + 3.6, cy - 0.5], [cx + 3.6, cy + 0.5], [cx + 1, cy + 0.5]], 0x1a1216, K);
+/** A sword held at `hand`, pointing along `angle`: a silver blade, gold crossguard and pommel. */
+function sword(ctx: Ctx, hand: Pt, angle: number) {
+  const [x, y] = hand;
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+  const at = (along: number, across: number): Pt => [x + c * along - s * across, y + s * along + c * across];
+  poly(ctx, [at(8, -4), at(62, -3), at(70, 0), at(62, 3), at(8, 4)], '#e4e8f0', 2);
+  hl(ctx, [at(12, -1.5), at(58, -1.5)], 1.5);
+  poly(ctx, [at(4, -12), at(9, -12), at(9, 12), at(4, 12)], C.gold, 2);
+  poly(ctx, [at(-10, -3), at(4, -3), at(4, 3), at(-10, 3)], C.woodDark, 1.5);
+  const [px, py] = at(-12, 0);
+  ctx.beginPath();
+  ctx.arc(px, py, 4, 0, Math.PI * 2);
+  ctx.fillStyle = C.gold;
+  ctx.fill();
+  ctx.strokeStyle = C.ink;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
 }
 
-/** The tabard over the mail: blue, lit on the left, with a gold cross and a belt. */
-function torso(g: Canvas, x: number, y: number, w: number, h: number) {
-  slab(g, MAT.tabard, x, y, w, h, K);
-  const cx = x + w / 2;
-  poly(g, [[cx - 0.5, y + 1], [cx + 0.5, y + 1], [cx + 0.5, y + h - 2], [cx - 0.5, y + h - 2]], MAT.gold.mid, K);
-  poly(g, [[cx - 1.5, y + 2], [cx + 1.5, y + 2], [cx + 1.5, y + 3], [cx - 1.5, y + 3]], MAT.gold.lit, K);
-  poly(g, [[x, y + h], [x + w, y + h], [x + w, y + h + 1], [x, y + h + 1]], MAT.wood.mid, K);
-  poly(g, [[x - 1, y], [x + 1, y], [x + 1, y + 2], [x - 1, y + 2]], MAT.steel.lit, K);
-  poly(g, [[x + w - 1, y], [x + w + 1, y], [x + w + 1, y + 2], [x + w - 1, y + 2]], MAT.steel.mid, K);
+/** The surcoat with its gold cross and belt, the helm and its plume, around the hips at (0, -52). */
+function body(ctx: Ctx) {
+  poly(ctx, [[-22, -100], [22, -100], [28, -50], [12, -44], [0, -50], [-12, -44], [-30, -50]], C.lapis, 3);
+  hl(ctx, [[-18, -96], [-24, -54]], 2);
+  // The cross is gold leaf, never red.
+  poly(ctx, [[-3, -92], [3, -92], [3, -82], [13, -82], [13, -76], [3, -76], [3, -58], [-3, -58], [-3, -76], [-13, -76], [-13, -82], [-3, -82]], gold(ctx, -12, -92, 12, -58), 1.5);
+  poly(ctx, [[-24, -54], [24, -54], [24, -48], [-24, -48]], C.woodDark, 2);
+  // The great helm with its eye slit.
+  ctx.beginPath();
+  ctx.moveTo(-22, -100);
+  ctx.lineTo(-22, -126);
+  ctx.quadraticCurveTo(-20, -146, 0, -146);
+  ctx.quadraticCurveTo(24, -146, 26, -122);
+  ctx.lineTo(24, -100);
+  ctx.closePath();
+  ctx.fillStyle = C.silver;
+  ctx.fill();
+  ctx.strokeStyle = C.ink;
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  poly(ctx, [[4, -126], [25, -126], [25, -120], [4, -120]], C.ink, 1);
+  hl(ctx, [[-16, -104], [-16, -128], [-6, -140]], 2.5);
+  // The plume streams back from the crest.
+  ctx.beginPath();
+  ctx.moveTo(-2, -144);
+  ctx.bezierCurveTo(-20, -180, -50, -172, -62, -150);
+  ctx.bezierCurveTo(-40, -160, -22, -152, 4, -140);
+  ctx.fillStyle = C.verm;
+  ctx.fill();
+  ctx.strokeStyle = C.ink;
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
 }
 
-function draw(g: Canvas, pose: KnightPose) {
-  if (pose === 'slide') {
-    // Feet first along the ground, leaning back on one elbow.
-    helmet(g, 5.5, 5.5, 3.5, 3, 2, 2);
-    slab(g, MAT.tabard, 8, 5, 7, 4, K);
-    poly(g, [[11, 6], [12, 6], [12, 9], [11, 9]], MAT.gold.mid, K);
-    arm(g, [9, 8], [6, 9], false);
-    limb(g, MAT.steel.mid, [15, 7.5], [22, 7.5], 2.6, K);
-    poly(g, [[22, 6], [24, 6], [24, 9], [22, 9]], MAT.wood.dark, K);
-    return;
-  }
-  const up = pose === 'jump' || pose === 'fall';
-  const bob = pose === 'run1' || pose === 'run3' ? -1 : 0;
-  const top = 3 + bob;
-  // Legs behind the body first, then the near leg in front.
-  if (pose === 'run0') {
-    leg(g, [7, 16], [4, 21], false);
-    leg(g, [9, 16], [12, 21], true);
-  } else if (pose === 'run2') {
-    leg(g, [7, 16], [11, 21], false);
-    leg(g, [9, 16], [5, 21], true);
-  } else if (pose === 'run1' || pose === 'run3') {
-    leg(g, [7, 15], pose === 'run1' ? [6, 20] : [10, 20], false);
-    leg(g, [9, 15], pose === 'run1' ? [11, 18] : [7, 18], true);
-  } else {
-    // Knees tucked in a jump; reaching down for the ground on the way down.
-    leg(g, [7, 16], pose === 'jump' ? [10, 19] : [6, 21], false);
-    leg(g, [9, 16], pose === 'jump' ? [13, 18] : [10, 21], true);
-  }
-  // The far arm swings opposite the near leg.
-  const swing = pose === 'run0' ? -1 : pose === 'run2' ? 1 : 0;
-  arm(g, [7, top + 8], [7 + swing * 3, top + 12], false);
-  torso(g, 6, top + 7, 7, 6);
-  helmet(g, 9.5, top + 3, 3.8, 3.2, 5, top - 3);
-  if (up) arm(g, [12, top + 8], [15, top + 4], true);
-  else arm(g, [12, top + 8], [12 - swing * 3, top + 12], true);
+function standing(ctx: Ctx, p: Pose) {
+  leg(ctx, p.back, false);
+  arm(ctx, [-16, -94 + p.bob], [p.hand[0], p.hand[1] + p.bob], false);
+  leg(ctx, p.front, true);
+  ctx.save();
+  ctx.translate(0, p.bob);
+  body(ctx);
+  ctx.restore();
+  const grip: Pt = [p.grip[0], p.grip[1] + p.bob];
+  sword(ctx, grip, p.sword);
+  arm(ctx, [18, -94 + p.bob], grip, true);
+}
+
+/** Feet first along the road, leaning far back, the sword still held forward. */
+function sliding(ctx: Ctx) {
+  const hip: Pt = [0, -18];
+  const lean = -1.15;
+  leg(ctx, [[-4, -20], [26, -18], [54, -14]], false);
+  ctx.save();
+  ctx.translate(hip[0], hip[1]);
+  ctx.rotate(lean);
+  ctx.translate(0, 52);
+  arm(ctx, [-16, -94], [-30, -60], false);
+  body(ctx);
+  ctx.restore();
+  leg(ctx, [[2, -16], [32, -12], [62, -8]], true);
+  const sh: Pt = [hip[0] + 18 * Math.cos(lean) + 42 * Math.sin(lean), hip[1] + 18 * Math.sin(lean) - 42 * Math.cos(lean)];
+  const grip: Pt = [6, -40];
+  sword(ctx, grip, -0.25);
+  arm(ctx, sh, grip, true);
 }
 
 export function bakeKnight(scene: Phaser.Scene) {
-  for (const pose of ['run0', 'run1', 'run2', 'run3', 'jump', 'fall'] as KnightPose[]) {
-    bake(scene, `knight-${pose}`, 20 * K, 24 * K, (g) => draw(g, pose));
+  const { stand, slide } = KNIGHT_FEET;
+  for (const pose of Object.keys(POSES) as Exclude<KnightPose, 'slide'>[]) {
+    paint(scene, `knight-${pose}`, stand.w, stand.h, (ctx) => {
+      ctx.translate(stand.x, stand.y);
+      ctx.scale(S, S);
+      standing(ctx, POSES[pose]);
+    });
   }
-  bake(scene, 'knight-slide', 26 * K, 11 * K, (g) => draw(g, 'slide'));
+  paint(scene, 'knight-slide', slide.w, slide.h, (ctx) => {
+    ctx.translate(slide.x, slide.y);
+    ctx.scale(S, S);
+    sliding(ctx);
+  });
 }

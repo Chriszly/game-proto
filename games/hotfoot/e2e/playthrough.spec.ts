@@ -2,8 +2,9 @@ import { expect, test, type Page } from '@playwright/test';
 
 // Plays the first stage with real inputs: the knight runs on their own, and the test taps the top
 // half of the screen to jump the spikes, pits and goblins and up onto ledges, and the bottom half to
-// slide under the blades, as on a phone, picking up coins on the way. At the checkpoint the run waits on two boons; the test
-// taps the first and checks it was taken and the second stage has begun.
+// slide under the blades, as on a phone, picking up coins on the way. Coins taken in a row build a
+// streak that multiplies their worth. At the checkpoint the run waits on two boons; the test taps
+// the first and checks it was taken and the second stage, with its wayside shrine, has begun.
 // Game state is only read, through the `game` object the dev build puts on window.
 
 type TrapKind = 'spikes' | 'pit' | 'blade' | 'flames' | 'goblin' | 'bat';
@@ -15,6 +16,7 @@ interface GameState {
   runner: { h: number; vh: number; slideMs: number; jumps: number; hurtMs: number };
   hearts: number;
   coins: number;
+  streak: number;
   hits: number;
   stomps: number;
   ranks: Record<string, number>;
@@ -22,6 +24,7 @@ interface GameState {
   checkpointX: number;
   traps: { id: number; kind: TrapKind; x: number; w: number; h: number; vx: number }[];
   ledges: { id: number; x: number; w: number; h: number }[];
+  shrines: { id: number; x: number; w: number; used: boolean }[];
   course: { id: number; x: number; h: number }[];
 }
 type Card = { id: string; x: number; y: number; w: number; h: number };
@@ -39,6 +42,10 @@ const STAGE_1 = { hearts: 3, speed: 260, checkpointX: 3200 };
  * ledges a little way out, and slide just before a blade.
  */
 const REACT = { jump: 60, slide: 40 };
+/** The coin streak, from STREAK in state.ts: every 10 coins in a row raise the multiplier by one, up to x5. */
+const STREAK = { step: 10, max: 5 };
+/** Coins earned by a streak of `n` coins with no hit: each coin pays the multiplier reached before it. */
+const coinsFor = (n: number) => Array.from({ length: n }, (_, i) => Math.min(STREAK.max, 1 + Math.floor(i / STREAK.step))).reduce((a, b) => a + b, 0);
 
 /** Something in the knight's way: a trap or foe, or the side of a ledge (`wall`) to jump up onto. */
 interface Obstacle {
@@ -161,7 +168,8 @@ test('plays the first stage', async ({ page }, testInfo) => {
 
   // A new run: stage 1, full hearts, no coins or boons, the knight running from the start.
   let s = await game.state();
-  expect(s).toMatchObject({ stage: 1, phase: 'running', hearts: STAGE_1.hearts, coins: 0, hits: 0, ranks: {}, choices: null });
+  expect(s).toMatchObject({ stage: 1, phase: 'running', hearts: STAGE_1.hearts, coins: 0, streak: 0, hits: 0, ranks: {}, choices: null });
+  expect(s.shrines, 'no shrine on stage 1').toEqual([]);
   expect(s.speed).toBe(STAGE_1.speed);
   expect(s.checkpointX).toBe(STAGE_1.checkpointX);
   const kinds = new Set(s.traps.map((t) => t.kind));
@@ -222,6 +230,10 @@ test('plays the first stage', async ({ page }, testInfo) => {
   expect(passed.wall, 'ledges jumped up onto').toBeGreaterThan(0);
   expect(onLedge, 'the knight ran along a ledge').toBe(true);
   expect(s.coins, 'coins picked up on the way').toBeGreaterThan(0);
+  // With no hit, every coin taken (and every foe stomped) is on one streak, and the coins past each
+  // tenth paid one more each.
+  expect(s.streak, 'a streak past x2').toBeGreaterThan(STREAK.step);
+  expect(s.coins, `coins paid by a streak of ${s.streak}`).toBe(coinsFor(s.streak));
 
   // At the checkpoint the run waits on a choice of two different boons.
   expect(s.distance).toBe(STAGE_1.checkpointX);
@@ -244,6 +256,7 @@ test('plays the first stage', async ({ page }, testInfo) => {
   expect(s.speed).toBeGreaterThan(STAGE_1.speed);
   expect(s.checkpointX).toBeGreaterThan(STAGE_1.checkpointX);
   expect(s.traps.some((t) => t.x > STAGE_1.checkpointX), 'stage 2 laid out').toBe(true);
+  expect(s.shrines.filter((sh) => sh.x > STAGE_1.checkpointX && !sh.used), 'a wayside shrine on stage 2').toHaveLength(1);
   await play(1_000, async () => false);
   s = await game.state();
   expect(s.distance, 'running again').toBeGreaterThan(STAGE_1.checkpointX + 200);
