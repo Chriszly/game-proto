@@ -28,14 +28,14 @@ const SHAPES: Shape[] = [
 
 /** Blade, guard, grip and pommel glass for each tier. */
 const COLOURS = [
-  { b: '#e89a5e', g: '#8a5a32', h: '#5a3424', p: '#f0b070' },
-  { b: '#c8d2e6', g: '#8a92a8', h: '#7a4a2a', p: '#a0a8c0' },
-  { b: '#f2f8ff', g: '#9aa4bc', h: '#b02a44', p: '#ff4a6a' },
-  { b: '#f4f8ff', g: '#f0c04a', h: '#2a3a7a', p: '#5aa0ff' },
-  { b: '#ffffff', g: '#a8d8ff', h: '#2a3a5a', p: '#8fe0ff' },
-  { b: '#ffe08a', g: '#e09a30', h: '#6a2a1a', p: '#ffe58a' },
-  { b: '#d8c8ff', g: '#7a4ab8', h: '#3a2a60', p: '#e090ff' },
-  { b: '#8a5aa0', g: '#e8602a', h: '#2a1a1a', p: '#ffa04a' },
+  { b: '#c47a44', g: '#7a4a2a', h: '#5a3424', p: '#8a5a3a' },
+  { b: '#a4aec4', g: '#5a6278', h: '#5a3a26', p: '#7a8298' },
+  { b: '#dfe8f4', g: '#7a8298', h: '#8a2a3a', p: '#c03050' },
+  { b: '#e4ecf6', g: '#e0aa3a', h: '#2a3a7a', p: '#3a7ae0' },
+  { b: '#eef6ff', g: '#90c0f0', h: '#2a3a5a', p: '#8fe0ff' },
+  { b: '#f6d470', g: '#d08a2a', h: '#6a2a1a', p: '#ffe58a' },
+  { b: '#c4b0ff', g: '#5a3a9a', h: '#2a2048', p: '#d080ff' },
+  { b: '#4a3a58', g: '#c0402a', h: '#2a1a1a', p: '#ff8a3a' },
 ];
 
 /** The size of a sword texture, in view pixels: one anvil cell. */
@@ -80,7 +80,7 @@ function bladeHalves(tier: number) {
 export function drawSword(tier: number, x: number, y: number, s: number, light = 1) {
   const sh = SHAPES[tier - 1];
   const c = COLOURS[tier - 1];
-  if (light) glow(x, y, 70 * s, mix(c.b, '#ffffff', 0.3), 0.3 * light);
+  if (light) glow(x, y, 70 * s, mix(c.b, '#ffffff', 0.3), 0.18 * light);
   reseed(tier * 31);
   ctx.save();
   ctx.translate(x, y);
