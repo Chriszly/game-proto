@@ -25,14 +25,21 @@ Implemented today:
 - AI (`World.think`, once a second per rival): keeps four harvesters, builds a Depot, a Barracks
   and up to two Turrets, trains combat units, and after the opening 75 seconds sends its whole army
   at the nearest enemy building every 12 seconds once the army reaches the difficulty's size.
+- Faction abilities (`Ability` in `game/factions.ts`, applied in `game/world.ts`): `cloak`
+  (Phantom Blade, hidden from enemies until it fires for 2 s), `decoy` (Decoy Wraith drops a copy
+  every 15 s that draws fire for 12 s and never acts), `hack` (Hack Frigate's hits disable a turret
+  for 6 s), `shield` (Halo Cruiser: friends within 70 px take half of each shot), `brood` (Brood
+  Carrier spawns a scout every 12 s up to 6 scouts), `splash` (Siege Barge hits enemies within 28 px
+  of its target for half damage), `salvage` (Nomad Salvage Yard pays 8 crystal per enemy unit
+  destroyed within 200 px).
 - Win: every rival hub gone. Lose: the player's hub gone. A fallen hub takes its faction's
   remaining units and buildings with it. A battle ends with a Victory or Defeat overlay; a tap starts
   a new map.
 
 Missing or rough:
 
-- Only the look and the stat multipliers set the factions apart. The cloaking, decoy, hacking,
-  capture and mine abilities from the faction ideas are not built.
+- The factions' abilities are one signature each (above). The Mine Lattice turret does not lay
+  mines, and hacking disables a turret rather than capturing it.
 - No fog of war, no pathfinding (units move in straight lines and pass over rocks), no unit
   collision, no sound and no save.
 - No camera: the whole map fits on screen.
@@ -48,8 +55,8 @@ File map (`src/`):
   `GameScene`, calls `setupGame(game)` from `shared/setupGame.ts`, and in dev builds puts `game`
   on `window`.
 - `game/factions.ts`: the `FACTIONS` list (name, colours, `tune` multipliers, and the `units` and
-  `buildings` definitions with their outlines), `COMBAT_UNITS`, and the types `UnitId`, `Role`,
-  `Poly`, `Weapon`, `UnitDef`, `BuildingDef`. Outlines are polygons in local units, y down, with
+  `buildings` definitions with their outlines and optional `ability`), `COMBAT_UNITS`, and the types
+  `UnitId`, `Role`, `Poly`, `Weapon`, `Ability`, `UnitDef`, `BuildingDef`. Outlines are polygons in local units, y down, with
   the front at the top (-y).
 - `game/arena.ts`: `ARENA` (the field, below the top bar and above the command bar), `NODE_AMOUNT`,
   `NODE_CLEARANCE` and `BUILD_RANGE`.

@@ -1,6 +1,6 @@
 import { byDifficulty } from '../../../../shared/settings';
 import { ARENA, BUILD_RANGE, NODE_CLEARANCE } from './arena';
-import { COMBAT_UNITS, FACTIONS, type Faction, type Role, type UnitId } from './factions';
+import { COMBAT_UNITS, FACTIONS, type Ability, type Faction, type Role, type UnitId } from './factions';
 import type { MapLayout, Point } from './map';
 
 /** The faction the player commands. */
@@ -46,6 +46,12 @@ export interface Unit {
   order: Order | null;
   mining: Mining | null;
   carry: number;
+  /** Counts toward an ability's cadence (a brood or a decoy), in ms. */
+  timer: number;
+  /** Time left before a shot shows a cloaked unit again, in ms. */
+  revealMs: number;
+  /** For a decoy: the time it has left, in ms; null for everything else. */
+  decoyMs: number | null;
 }
 
 export interface Building {
@@ -62,6 +68,8 @@ export interface Building {
   queue: UnitId[];
   trainLeft: number;
   cooldown: number;
+  /** Time a hack has left before a turret fires again, in ms. */
+  disabledMs: number;
 }
 
 export interface Node extends Point {
@@ -151,7 +159,7 @@ export class World {
       const hp = buildingStats(side, 'hub').hp;
       this.buildings.push({
         kind: 'building', id: this.id(), faction: index, type: 'hub', x: home.x, y: home.y,
-        hp, maxHp: hp, done: true, buildLeft: 0, queue: [], trainLeft: 0, cooldown: 0,
+        hp, maxHp: hp, done: true, buildLeft: 0, queue: [], trainLeft: 0, cooldown: 0, disabledMs: 0,
       });
       this.spawn(index, 'harvester', home.x - 30, home.y + 34);
       this.spawn(index, 'harvester', home.x + 30, home.y + 34);
@@ -208,7 +216,7 @@ export class World {
     side.crystal -= stats.cost;
     this.buildings.push({
       kind: 'building', id: this.id(), faction, type: role, x, y, hp: stats.hp, maxHp: stats.hp, done: false,
-      buildLeft: side.def.buildings[role].buildMs, queue: [], trainLeft: 0, cooldown: 0,
+      buildLeft: side.def.buildings[role].buildMs, queue: [], trainLeft: 0, cooldown: 0, disabledMs: 0,
     });
     return null;
   }
@@ -266,7 +274,7 @@ export class World {
     let bestD = Infinity;
     for (const u of this.units) {
       const d = dist(u, { x, y });
-      if (d < UNIT_RADIUS + 2 && d < bestD) {
+      if (d < UNIT_RADIUS + 2 && d < bestD && !this.hidden(u, PLAYER)) {
         best = { kind: 'unit', id: u.id, faction: u.faction };
         bestD = d;
       }
@@ -284,7 +292,7 @@ export class World {
   }
 
   private commandable(u: Unit) {
-    return u.faction === PLAYER && u.type !== 'harvester';
+    return u.faction === PLAYER && u.type !== 'harvester' && u.decoyMs === null;
   }
 
   /** Advances the battle by `dt` milliseconds of game time. */
@@ -327,8 +335,9 @@ export class World {
     }
     const weapon = buildingStats(side, b.type).weapon;
     if (!weapon) return;
+    b.disabledMs = Math.max(0, b.disabledMs - dt);
     b.cooldown -= dt;
-    if (b.cooldown > 0) return;
+    if (b.cooldown > 0 || b.disabledMs > 0) return;
     const target = this.nearestEnemy(b, b.faction, weapon.range);
     if (target) {
       this.shoot(b, weapon.damage, target);
@@ -338,7 +347,22 @@ export class World {
 
   private updateUnit(u: Unit, dt: number) {
     const stats = unitStats(this.sides[u.faction], u.type);
+    const ability = this.abilityOf(u);
     u.cooldown -= dt;
+    u.revealMs = Math.max(0, u.revealMs - dt);
+    if (u.decoyMs !== null) {
+      // A decoy only draws fire: it never acts, and it fades when its time runs out.
+      u.decoyMs -= dt;
+      if (u.decoyMs <= 0) u.hp = 0;
+      return;
+    }
+    if (ability?.kind === 'decoy' || ability?.kind === 'brood') {
+      u.timer += dt;
+      if (u.timer >= ability.everyMs) {
+        u.timer = 0;
+        this.ability(u, ability);
+      }
+    }
     if (u.type === 'harvester') {
       this.harvest(u, dt, stats.speed);
       return;
@@ -351,7 +375,7 @@ export class World {
       return;
     }
     const target = this.unit(order.id) ?? this.building(order.id);
-    if (!target || target.hp <= 0) {
+    if (!target || target.hp <= 0 || this.hidden(target, u.faction)) {
       u.order = null;
       return;
     }
@@ -371,6 +395,28 @@ export class World {
     }
   }
 
+  /** The ability a unit or building carries, from its faction's definition. */
+  private abilityOf(e: Unit | Building): Ability | undefined {
+    const def = this.sides[e.faction].def;
+    return e.kind === 'unit' ? def.units[e.type].ability : def.buildings[e.type].ability;
+  }
+
+  /** Whether `e` is hidden from `faction`: a cloaked unit that has not fired lately, seen only by its own side. */
+  hidden(e: Unit | Building, faction: number) {
+    return e.faction !== faction && e.kind === 'unit' && e.revealMs <= 0 && this.abilityOf(e)?.kind === 'cloak';
+  }
+
+  /** Carries out a unit's cadenced ability: a decoy copy of itself, or a scout from a brood carrier. */
+  private ability(u: Unit, ability: Ability) {
+    if (ability.kind === 'decoy') {
+      const copy = this.spawn(u.faction, u.type, u.x + 14, u.y + 14, ability.lifeMs);
+      copy.hp = Math.round(copy.maxHp / 2);
+      copy.maxHp = copy.hp;
+    } else if (ability.kind === 'brood' && this.count(u.faction, 'scout') < ability.cap) {
+      this.spawn(u.faction, 'scout', u.x, u.y + 16);
+    }
+  }
+
   /** Units with no order pick the nearest enemy in sight. */
   private acquire(u: Unit, sight: number) {
     if (sight <= 0) return;
@@ -384,7 +430,7 @@ export class World {
       let best: Unit | Building | null = null;
       let bestD = range;
       for (const e of pool) {
-        if (e.faction === faction) continue;
+        if (e.faction === faction || this.hidden(e, faction)) continue;
         const d = dist(from, e);
         if (d <= bestD) {
           best = e;
@@ -396,9 +442,36 @@ export class World {
     return null;
   }
 
-  private shoot(from: { x: number; y: number; faction: number }, damage: number, target: Unit | Building) {
-    target.hp -= Math.round(damage);
+  /** One shot from `from` at `target`: shields soak part of it, and the shot's own ability acts. */
+  private shoot(from: Unit | Building, damage: number, target: Unit | Building) {
+    const dealt = Math.round(damage * this.shieldShare(target));
+    target.hp -= dealt;
     this.beams.push({ x: from.x, y: from.y, x2: target.x, y2: target.y, color: this.sides[from.faction].def.color, life: BEAM_MS });
+    if (from.kind === 'unit') {
+      const ability = this.abilityOf(from);
+      if (ability?.kind === 'cloak') from.revealMs = ability.revealMs;
+    }
+    const ability = this.abilityOf(from);
+    if (ability?.kind === 'hack' && target.kind === 'building' && this.sides[target.faction].def.buildings[target.type].weapon) {
+      target.disabledMs = ability.disableMs;
+    }
+    if (ability?.kind === 'splash') {
+      this.booms.push({ x: target.x, y: target.y, color: this.sides[from.faction].def.color, life: BOOM_MS, r: ability.radius });
+      for (const e of [...this.units, ...this.buildings]) {
+        if (e === target || e.faction === from.faction || dist(e, target) > ability.radius) continue;
+        e.hp -= Math.round(damage * ability.share);
+      }
+    }
+  }
+
+  /** The share of a shot that reaches a unit: a Halo Cruiser's shield lets through half, from friends in range. */
+  private shieldShare(target: Unit | Building) {
+    if (target.kind !== 'unit') return 1;
+    for (const s of this.units) {
+      const ability = this.abilityOf(s);
+      if (s.faction === target.faction && ability?.kind === 'shield' && dist(s, target) <= ability.range) return ability.share;
+    }
+    return 1;
   }
 
   private radiusOf(e: Unit | Building) {
@@ -466,14 +539,18 @@ export class World {
     }
   }
 
-  private spawn(faction: number, type: UnitId, x: number, y: number) {
+  /** Makes a unit of `faction` at (x, y), kept on the field; a decoy when `decoyMs` is given. */
+  private spawn(faction: number, type: UnitId, x: number, y: number, decoyMs: number | null = null): Unit {
     const stats = unitStats(this.sides[faction], type);
-    this.units.push({
+    const unit: Unit = {
       kind: 'unit', id: this.id(), faction, type,
       x: Math.min(ARENA.x + ARENA.w - 12, Math.max(ARENA.x + 12, x)),
       y: Math.min(ARENA.y + ARENA.h - 12, Math.max(ARENA.y + 12, y)),
       angle: -Math.PI / 2, hp: stats.hp, maxHp: stats.hp, cooldown: 0, order: null, mining: null, carry: 0,
-    });
+      timer: 0, revealMs: 0, decoyMs,
+    };
+    this.units.push(unit);
+    return unit;
   }
 
   /** One AI round: keep harvesting, raise a base, train an army and send it at the nearest enemy building. */
@@ -491,7 +568,7 @@ export class World {
       if (this.train(type, f) === null) break;
     }
     side.attackMs += AI_THINK_MS;
-    const army = this.units.filter((u) => u.faction === f && u.type !== 'harvester');
+    const army = this.units.filter((u) => u.faction === f && u.type !== 'harvester' && u.decoyMs === null);
     if (this.elapsedMs < AI_GRACE_MS || army.length < AI_ARMY_TO_ATTACK || side.attackMs < AI_ATTACK_MS) return;
     side.attackMs = 0;
     const target = this.nearestEnemyBuilding(hub, f);
@@ -531,7 +608,11 @@ export class World {
       this.wreck(b);
       if (b.type === 'hub') fallen.add(b.faction);
     }
-    for (const u of this.units) if (u.hp <= 0) this.wreck(u);
+    for (const u of this.units) {
+      if (u.hp > 0) continue;
+      this.salvage(u);
+      this.wreck(u);
+    }
     // The rest of a fallen faction's ships and buildings go up with its hub.
     for (const b of this.buildings) if (fallen.has(b.faction) && b.hp > 0) this.wreck(b);
     for (const u of this.units) if (fallen.has(u.faction) && u.hp > 0) this.wreck(u);
@@ -540,6 +621,17 @@ export class World {
     for (const f of fallen) {
       this.sides[f].alive = false;
       this.sides[f].crystal = 0;
+    }
+  }
+
+  /** A salvage yard pays its faction for each enemy unit destroyed within its range. */
+  private salvage(u: Unit) {
+    if (u.decoyMs !== null) return;
+    for (const b of this.buildings) {
+      const ability = this.abilityOf(b);
+      if (b.done && b.faction !== u.faction && ability?.kind === 'salvage' && dist(b, u) <= ability.range) {
+        this.sides[b.faction].crystal += ability.pay;
+      }
     }
   }
 

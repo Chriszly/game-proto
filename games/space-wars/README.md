@@ -35,13 +35,13 @@ your hub, train a fleet and take down the four rival hubs before they take down 
 
 ### The factions
 
-| Faction | Look | Ships (cost) | Playstyle |
+| Faction | Look | Ships (cost) | Signature ability |
 | --- | --- | --- | --- |
-| Solar Concord | Gold rings and dock | Lancer (35), Halo Cruiser (60), Aegis (100) | The base game: balanced stats |
-| Ferrox Hive | Teal and bronze, spiked hive pods | Stinger (30), Brood Carrier (55), Carapace (90) | Cheap and fast, but fragile |
-| Iron Dominion | Blocky steel and cranes | Ram Skiff (40), Siege Barge (70), Bulwark (115) | Tough and slow, with long-range guns |
-| Veil Syndicate | Violet and teal, angular hulls | Phantom Blade (35), Hack Frigate (60), Decoy Wraith (105) | Fast, hard-hitting raids |
-| Nomad Freight | Amber trade hulls | Courier Skiff (30), Escort Gunship (55), Siege Hauler (105) | Hauls more crystal per trip; weaker guns |
+| Solar Concord | Gold rings and dock | Lancer (35), Halo Cruiser (60), Aegis (100) | Halo Cruiser's shield: friends within 70 px take half the damage |
+| Ferrox Hive | Teal and bronze, spiked hive pods | Stinger (30), Brood Carrier (55), Carapace (90) | Brood Carrier spawns a Stinger every 12 s, up to 6 scouts |
+| Iron Dominion | Blocky steel and cranes | Ram Skiff (40), Siege Barge (70), Bulwark (115) | Siege Barge's shells splash enemies within 28 px of the target |
+| Veil Syndicate | Violet and teal, angular hulls | Phantom Blade (35), Hack Frigate (60), Decoy Wraith (105) | Phantom Blade is hidden until it fires; Hack Frigate's hits disable a turret for 6 s; Decoy Wraith drops a decoy every 15 s |
+| Nomad Freight | Amber trade hulls | Courier Skiff (30), Escort Gunship (55), Siege Hauler (105) | Salvage Yard pays 8 crystal for each enemy unit destroyed within 200 px; Nomad carries 14 crystal a trip |
 
 Each faction's outlines, colours and building shapes are its own; its stats are a few multipliers
 on the base game (hit points, damage, speed, cost, and how much a harvester carries).

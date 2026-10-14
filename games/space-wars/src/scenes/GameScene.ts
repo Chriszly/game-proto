@@ -142,7 +142,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     for (const b of s.buildings) this.drawBuilding(b);
-    for (const u of s.units) this.drawUnit(u);
+    for (const u of s.units) if (u.faction === PLAYER || !s.hidden(u, PLAYER)) this.drawUnit(u);
 
     for (const b of s.beams) {
       const a = settings.reduceMotion ? 0.9 : b.life / BEAM_MS;
@@ -167,7 +167,7 @@ export class GameScene extends Phaser.Scene {
   private drawBuilding(b: Building) {
     const side = this.state.sides[b.faction];
     const def = side.def.buildings[b.type];
-    const alpha = b.done ? 1 : 0.45;
+    const alpha = !b.done ? 0.45 : b.disabledMs > 0 ? 0.4 : 1;
     drawShape(this.gfx, b.x, b.y, 0, def.shape, 1, side.def.color, side.def.accent, alpha);
     if (def.dome) drawDome(this.gfx, b.x, b.y, def.dome, side.def.accent, alpha);
     if (!b.done) {
@@ -185,7 +185,14 @@ export class GameScene extends Phaser.Scene {
     const side = this.state.sides[u.faction];
     const def = side.def.units[u.type];
     const rotation = u.angle + Math.PI / 2;
-    drawShape(this.gfx, u.x, u.y, rotation, def.shape, UNIT_SCALE, side.def.color, side.def.accent, 1);
+    // A cloaked ship of the player's own shows faintly; a decoy is a dimmer copy of its ship.
+    const cloaked = u.faction === PLAYER && def.ability?.kind === 'cloak' && u.revealMs <= 0;
+    const alpha = cloaked ? 0.4 : u.decoyMs !== null ? 0.6 : 1;
+    drawShape(this.gfx, u.x, u.y, rotation, def.shape, UNIT_SCALE, side.def.color, side.def.accent, alpha);
+    if (def.ability?.kind === 'shield') {
+      this.gfx.lineStyle(1, side.def.accent, 0.25);
+      this.gfx.strokeCircle(u.x, u.y, def.ability.range);
+    }
     if (this.selected.has(u.id)) {
       this.gfx.lineStyle(1.5, 0xffffff, 0.9);
       this.gfx.strokeCircle(u.x, u.y, 14);
