@@ -7,7 +7,14 @@ export function loadProgress(): Progress {
   const fresh = freshProgress();
   try {
     const raw = localStorage.getItem(KEY);
-    return raw ? { ...fresh, ...(JSON.parse(raw) as Partial<Progress>) } : fresh;
+    if (!raw) return fresh;
+    const saved: Progress = { ...fresh, ...(JSON.parse(raw) as Partial<Progress>) };
+    // A save edited by hand or from a broken build falls back to the defaults field by field.
+    const ok = (n: unknown, min: number) => typeof n === 'number' && Number.isFinite(n) && n >= min;
+    if (!ok(saved.order, 1) || !Number.isInteger(saved.order)) saved.order = fresh.order;
+    if (!ok(saved.coins, 0)) saved.coins = fresh.coins;
+    if (!ok(saved.sold, 0)) saved.sold = fresh.sold;
+    return saved;
   } catch {
     return fresh;
   }

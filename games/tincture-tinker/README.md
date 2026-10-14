@@ -26,7 +26,8 @@ everything on the order before the moves run out and the potion sells.
 3. **Orders** list the ingredients the potion needs, the moves allowed and what it pays. Filling one
    pays its price plus 5 coins for every move left; running out of moves means trying it again on a
    new board.
-4. **Hints**: after a few idle seconds, two tiles that would match wiggle.
+4. **Hints**: after a few idle seconds, two tiles that would match wiggle (with the hub's reduced
+   motion on, they tilt and hold still).
 5. If the board is left with no move to make, its tiles are shuffled.
 
 Progress (the next order, coins and potions sold) is saved in the browser.
@@ -66,8 +67,8 @@ the best match it can see, a tap on a tile and a tap on its neighbour, checking 
 move and gathers at least what it matched, until the Healing Draught is sold for its price plus the
 bonus for the moves left. Like the other games' tests it owns the game clock and plays at 4x speed
 (`PLAYTHROUGH_SPEED`). The **Playthrough TinctureTinker** workflow
-(`.github/workflows/playthrough-tincture-tinker.yml`) runs it on every PR and push to main that
-touches this folder or a shared build file, and uploads the video and screenshots as the
+(`.github/workflows/playthrough-tincture-tinker.yml`) runs it on pull requests that change this
+folder or the workflow itself (not on pushes to main), and uploads the video and screenshots as the
 `playthrough-tincture-tinker` artifact.
 
 ```sh
