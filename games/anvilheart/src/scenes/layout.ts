@@ -6,10 +6,12 @@ import { DESKS, GRID } from '../game/state';
 export const VIEW = { w: 960, h: 540 };
 export const HUD_HEIGHT = 40;
 
-/** The furnace's centre, and the Forge button with its heat bar below it. */
-export const FURNACE = { x: 130, y: 196 };
+/** The furnace's flame window (its texture's top left corner and size), and the Forge button with its heat bar below it. */
+export const FURNACE_WINDOW = { x: 80, y: 160, w: 100, h: 130 };
 export const FORGE_BUTTON = { x: 130, y: 344, w: 180, h: 48 };
 export const HEAT_BAR = { x: 40, y: 374, w: 180, h: 10 };
+/** The royal commission's banner in the top bar, by its top left corner. */
+export const BANNER = { x: 316, y: 4, w: 330, h: 32 };
 /** The upgrade buttons, by their centres. */
 export const UPGRADE_BUTTONS = { x: 130, ys: [410, 458, 506], w: 200, h: 42 };
 
@@ -47,5 +49,10 @@ export function deskAt(x: number, y: number) {
   return desk >= 0 && desk < DESKS && y - deskBox(desk).y < DESK.h ? desk : null;
 }
 
+/** Inside a desk, relative to its top left corner: the order card, its patience bar and the fit tag. */
+export const ORDER = { x: 89, y: 8, w: 162, h: 100 };
+export const PATIENCE = { x: 89, y: 125, w: 162, h: 12, segments: 12 };
+export const TAG = { x: 9, y: 9, w: 75, h: 33 };
+
 export const UI_DEPTH = 10_000;
-export const FONT = 'monospace';
+export const FONT = 'Georgia, "Times New Roman", serif';

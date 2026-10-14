@@ -1,4 +1,4 @@
-import { MAX_TIER } from './swords';
+import { MAX_TIER, swordOf } from './swords';
 import type { UpgradeId } from './upgrades';
 
 /** The anvils the swords sit on: a 4 x 4 board, numbered row by row from the top left. */
@@ -6,6 +6,8 @@ export const GRID = { cols: 4, rows: 4 };
 export const SLOTS = GRID.cols * GRID.rows;
 /** How many adventurers fit at the counter at once. */
 export const DESKS = 3;
+/** How many adventurer pictures there are: a knight, a ranger, a viking and a mage. */
+export const LOOKS = 4;
 
 /** How long the forge takes to heat up for the next sword, before any bellows. */
 export const FORGE_MS = 1200;
@@ -17,6 +19,12 @@ export const PATIENCE_MS = 45_000;
 export const PATIENCE_PER_TIER_MS = 6_000;
 /** The first adventurer always wants this tier, so the first sale takes one merge. */
 export const FIRST_ORDER = 2;
+/** Selling exactly the sword asked for pays this much on top of its price, rounded down. */
+export const EXACT_TIP = 0.5;
+/** How long after a merge the next one still chains into a hammer streak. */
+export const STREAK_MS = 4000;
+/** Bonus coins per merge in a streak, times the streak's length, from its second merge on. */
+export const STREAK_COINS = 5;
 
 export interface Adventurer {
   id: number;
@@ -48,6 +56,14 @@ export interface GameState {
   autoForge: boolean;
   orders: number;
   nextId: number;
+  /** The standing royal commission (see `commissionAt`) and how many of its sword were made for it. */
+  commission: { level: number; made: number };
+  /** Guild stars, one per royal commission completed. */
+  stars: number;
+  /** Merges in the current hammer streak (0 when none), the anvil of the last one and time left to chain. */
+  streak: number;
+  streakSlot: number;
+  streakMs: number;
   /** Things that just happened, for the scene to animate; it empties the list as it draws them. */
   events: GameEvent[];
 }
@@ -55,7 +71,9 @@ export interface GameState {
 export type GameEvent =
   | { kind: 'forged'; slot: number; tier: number }
   | { kind: 'merged'; slot: number; tier: number }
-  | { kind: 'sold'; desk: number; tier: number; coins: number }
+  | { kind: 'streak'; slot: number; streak: number; coins: number }
+  | { kind: 'commission'; slot: number; tier: number; reward: number }
+  | { kind: 'sold'; desk: number; tier: number; coins: number; fit: Fit }
   | { kind: 'left'; desk: number };
 
 /** What is kept between visits: the board, the coins and the upgrades. */
@@ -66,6 +84,8 @@ export interface Progress {
   bestTier: number;
   ranks: Record<UpgradeId, number>;
   autoForge: boolean;
+  commission: { level: number; made: number };
+  stars: number;
 }
 
 export const freshProgress = (): Progress => ({
@@ -75,6 +95,8 @@ export const freshProgress = (): Progress => ({
   bestTier: 0,
   ranks: { bellows: 0, ore: 0, auto: 0 },
   autoForge: false,
+  commission: { level: 0, made: 0 },
+  stars: 0,
 });
 
 export function newShop(progress: Progress): GameState {
@@ -95,6 +117,11 @@ export function newShop(progress: Progress): GameState {
     autoForge: progress.autoForge === true,
     orders: progress.sold,
     nextId: 1,
+    commission: { level: count(progress.commission?.level), made: count(progress.commission?.made) },
+    stars: count(progress.stars),
+    streak: 0,
+    streakSlot: 0,
+    streakMs: 0,
     events: [],
   };
 }
@@ -106,7 +133,25 @@ export const progressOf = (s: GameState): Progress => ({
   bestTier: s.bestTier,
   ranks: { ...s.ranks },
   autoForge: s.autoForge,
+  commission: { ...s.commission },
+  stars: s.stars,
 });
+
+/** A whole number of at least 0 from a save, or 0. */
+const count = (n: unknown) => (typeof n === 'number' && Number.isFinite(n) && n > 0 ? Math.floor(n) : 0);
+
+/** How a sword fits an order: exactly the one asked for, better than asked, or not good enough. */
+export type Fit = 'exact' | 'overkill' | 'short';
+export const fitOf = (tier: number, wants: number): Fit => (tier === wants ? 'exact' : tier > wants ? 'overkill' : 'short');
+/**
+ * What an adventurer pays for a sword: the asked-for sword's price with a tip for an exact fit, and
+ * only the asked-for price for a better one. A worse one is not bought.
+ */
+export function payFor(tier: number, wants: number) {
+  const fit = fitOf(tier, wants);
+  const price = swordOf(wants).price;
+  return fit === 'exact' ? Math.floor(price * (1 + EXACT_TIP)) : fit === 'overkill' ? price : 0;
+}
 
 /** The forge's heat-up time with the bellows bought so far. */
 export const forgeMs = (s: GameState) => Math.round(FORGE_MS * Math.pow(0.8, s.ranks.bellows));
