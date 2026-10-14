@@ -58,7 +58,8 @@ File map (all under `src/`, plus the shared files it imports):
 - `ui/Button.ts`: `makeButton`, a wooden caption button.
 - `ui/screen.ts`: `pinToScreen`, which sets scroll factor 0 on a container and every child.
 - `shared/setupGame.ts` (imported by `main.ts`) and `shared/settings.ts` (`byDifficulty`, imported
-  by `game/sim.ts`): the hub's settings, shared by every game. See "Hub settings" below.
+  by `game/sim.ts`, and `settings`, read by `scenes/GameScene.ts` for reduce motion): the hub's
+  settings, shared by every game. See "Hub settings" below.
 
 How it runs:
 
