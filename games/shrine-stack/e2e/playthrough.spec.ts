@@ -2,13 +2,14 @@ import { expect, test, type Page } from '@playwright/test';
 
 // Plays the first round with real inputs: watches the first stone swing, taps to drop each of the
 // first tier's three stones while it is over the stone below, checks a tap while a stone falls
-// drops nothing more, and takes a blessing from the balanced tier, which starts tier 2.
+// drops nothing more, spends favor to reroll the balanced tier's blessings, and takes one, which
+// starts tier 2.
 // Game state is only read, through the `game` object the dev build puts on window.
 
 type BlessingId = 'broad' | 'calm' | 'steady' | 'golden' | 'grace';
 interface Stone { x: number; w: number; tier: number; perfect: boolean }
 interface GameState {
-  phase: 'swinging' | 'falling' | 'blessing' | 'over';
+  phase: 'swinging' | 'falling' | 'blessing' | 'over' | 'crowned';
   stones: Stone[];
   moving: { x: number; w: number; h: number; dir: 1 | -1; vy: number };
   tier: number;
@@ -27,7 +28,8 @@ interface GameState {
   lastDrop: { x: number; w: number; kept: number; share: number; perfect: boolean; missed: boolean } | null;
   best: number;
 }
-type Card = { id: BlessingId; x: number; y: number; w: number; h: number };
+type Spot = { x: number; y: number; w: number; h: number };
+type Card = Spot & { id: BlessingId };
 
 const VIEW = { w: 960, h: 540 };
 /** The rules the first round goes through, from src/game/state.ts. */
@@ -44,6 +46,7 @@ const BROAD_PX = 40;
 const CALM = 0.85;
 const TIER_SPEEDUP = 0.05;
 const STEADY_PX = 6;
+const REROLL_COST = 5;
 /** A tap drops the stone when its middle is this close to the middle of what it lands on. */
 const AIM_PX = 12;
 
@@ -65,6 +68,8 @@ function scene(page: Page) {
     state: () => read<GameState>((s) => JSON.parse(JSON.stringify({ ...s.state, events: undefined }))),
     /** Where the blessing cards are on screen while choosing. */
     cards: () => read<Card[]>((s) => s.blessingCards),
+    /** Where the reroll button is while choosing. */
+    reroll: () => read<Spot | null>((s) => s.rerollButton),
   };
 }
 
@@ -213,9 +218,22 @@ test('plays the first round', async ({ page }, testInfo) => {
   expect(cards.map((c) => c.id)).toEqual(s.offer);
   await snap('2-blessing');
 
+  // Rerolling spends favor on three new blessings; the cards follow on the next frame.
+  const button = (await game.reroll())!;
+  expect(button).not.toBeNull();
+  expect(favor).toBeGreaterThanOrEqual(REROLL_COST);
+  await tap(await onPage(button.x, button.y));
+  favor -= REROLL_COST;
+  s = await game.state();
+  expect(s).toMatchObject({ phase: 'blessing', favor, stones: { length: 3 } });
+  expect(new Set(s.offer).size).toBe(3);
+  await play(FRAME_MS * 2, async () => false, FRAME_MS);
+  const rerolled = await game.cards();
+  expect(rerolled.map((c) => c.id)).toEqual(s.offer);
+
   // Taking the first blessing applies it and starts tier 2.
   const before = s;
-  const card = cards[0];
+  const card = rerolled[0];
   await tap(await onPage(card.x, card.y));
   s = await game.state();
   expect(s).toMatchObject({ phase: 'swinging', tier: 2, offer: [], blessings: [card.id] });

@@ -3,10 +3,16 @@ import { settings } from '../../../../shared/settings';
 import { BLESSING_INFO, BLESSINGS, type BlessingId } from '../game/blessings';
 import { loadBest, saveBest } from '../game/save';
 import {
+  canReroll,
   chooseBlessing,
   drop,
+  GILDED_MULT,
+  GILDED_TIER,
+  GOAL_TIER,
   newGame,
   PLINTH_W,
+  REROLL_COST,
+  reroll,
   stackHeight,
   STONE_H,
   STONES_PER_TIER,
@@ -16,7 +22,7 @@ import {
   type GameState,
 } from '../game/state';
 import { makeButton } from '../ui/Button';
-import { CARDS, FONT, PANEL, PLINTH_Y, TOP_SCREEN_Y, UI_DEPTH, VIEW } from './layout';
+import { CARDS, FONT, GOAL, OFFER_TITLE, PANEL, PLINTH_Y, REROLL, TOP_SCREEN_Y, UI_DEPTH, VIEW } from './layout';
 
 /** The longest step of game time one frame may take, so a hidden tab doesn't drop a stone through the temple. */
 const MAX_STEP_MS = 100;
@@ -25,11 +31,15 @@ const CAMERA_MS = 180;
 const POPUP_MS = 900;
 const DEBRIS_MS = 1100;
 const BANNER_MS = 2200;
+/** How long the crowned shrine shows on its own before the win panel comes up. */
+const CROWN_MS = 2400;
 
 /** Stone colours, one per tier, repeating. */
 const TIER_COLORS = [0xd8b58a, 0xb9c3cc, 0xe3c98f, 0xa9c49a, 0xd6a7a0, 0xc2b0dc];
 const OUTLINE = 0x2a2036;
 const GOLD = 0xf3c64e;
+/** The gilded tier's stones are leaf gold whatever the tier colours say. */
+const GILT = 0xe9b949;
 
 const textStyle = (size: number, color = '#f3e9d2') => ({
   fontFamily: FONT,
@@ -39,13 +49,17 @@ const textStyle = (size: number, color = '#f3e9d2') => ({
   strokeThickness: 3,
 });
 
-/** Where a blessing card is on screen; read by the playthrough test. */
-export interface BlessingCard {
-  id: BlessingId;
+/** Where something to tap is on screen, by its centre and size; read by the playthrough test. */
+export interface Spot {
   x: number;
   y: number;
   w: number;
   h: number;
+}
+
+/** Where a blessing card is on screen; read by the playthrough test. */
+export interface BlessingCard extends Spot {
+  id: BlessingId;
 }
 
 /** Shifts a colour lighter (amount > 0) or darker (amount < 0). */
@@ -72,9 +86,11 @@ function pin(container: Phaser.GameObjects.Container) {
   return container;
 }
 
+const tierColor = (tier: number) => (tier === GILDED_TIER ? GILT : TIER_COLORS[(tier - 1) % TIER_COLORS.length]);
+
 /** Draws a stone `w` wide with its bottom middle at the graphics' origin. */
 function drawStone(g: Phaser.GameObjects.Graphics, w: number, tier: number, perfect: boolean) {
-  const color = TIER_COLORS[(tier - 1) % TIER_COLORS.length];
+  const color = tierColor(tier);
   const x = -w / 2;
   const y = -STONE_H;
   g.fillStyle(OUTLINE).fillRect(x, y, w, STONE_H);
@@ -85,6 +101,11 @@ function drawStone(g: Phaser.GameObjects.Graphics, w: number, tier: number, perf
   // Brick seams, offset on every other tier like courses of masonry.
   g.fillStyle(shade(color, -0.4));
   for (let sx = x + (tier % 2 ? 30 : 52); sx < x + w - 8; sx += 46) g.fillRect(Math.round(sx), y + 4, 2, STONE_H - 9);
+  if (tier === GILDED_TIER && w > 12) {
+    // Gilding: a bright leaf along the top and a glint near either end.
+    g.fillStyle(0xfff1b8).fillRect(x + 1, y + 1, w - 2, 2);
+    g.fillStyle(0xfff8dc).fillRect(x + 6, y + 6, 3, 3).fillRect(x + w - 10, y + 9, 2, 2);
+  }
   if (perfect) {
     // A gold rune in the middle of a stone that snapped on whole.
     g.fillStyle(GOLD).fillTriangle(-5, y + STONE_H / 2, 0, y + 7, 5, y + STONE_H / 2);
@@ -97,6 +118,8 @@ export class GameScene extends Phaser.Scene {
   state!: GameState;
   /** The blessing cards on screen while choosing; read by the playthrough test. */
   blessingCards: BlessingCard[] = [];
+  /** The reroll button while choosing a blessing, or null; read by the playthrough test. */
+  rerollButton: Spot | null = null;
   private lastFrame: number | null = null;
   private stoneViews: Phaser.GameObjects.Graphics[] = [];
   /** The gold trim and lanterns on each balanced tier, by tier. */
@@ -116,7 +139,11 @@ export class GameScene extends Phaser.Scene {
   private offerLayer!: Phaser.GameObjects.Container;
   private offerKey = '';
   private gameOver!: Phaser.GameObjects.Container;
+  private gameOverTitle!: Phaser.GameObjects.Text;
   private gameOverText!: Phaser.GameObjects.Text;
+  private goalPips!: Phaser.GameObjects.Graphics;
+  /** Game time since the shrine was crowned. */
+  private crownedMs = 0;
 
   constructor() {
     super('Game');
@@ -128,6 +155,8 @@ export class GameScene extends Phaser.Scene {
     this.stoneViews = [];
     this.ornaments = new Map();
     this.blessingCards = [];
+    this.rerollButton = null;
+    this.crownedMs = 0;
     this.movingKey = '';
     this.offerKey = '';
     this.cameras.main.setScroll(0, 0);
@@ -168,6 +197,7 @@ export class GameScene extends Phaser.Scene {
     this.lastFrame = time;
     const s = this.state;
     tick(s, dt);
+    if (s.phase === 'crowned') this.crownedMs += dt;
     for (const e of s.events.splice(0)) this.show(e);
 
     // The camera follows the temple's top up, easing so each new stone slides the view gently.
@@ -260,8 +290,14 @@ export class GameScene extends Phaser.Scene {
     this.blessingsText = fixed(
       this.add.text(PANEL.x + 16, PANEL.y + 212, '', { fontFamily: FONT, fontSize: '13px', color: '#f3e9d2', lineSpacing: 6 }),
     );
+    // The run's goal: a pip per tier up to the crown, the gilded one framed in gold.
+    const goal = PANEL.y + GOAL.y;
+    fixed(this.add.rectangle(PANEL.x + 10, goal, PANEL.w - 20, 76, 0x2c2446).setOrigin(0).setStrokeStyle(2, 0x6a5a9a));
+    fixed(this.add.text(PANEL.x + 18, goal + 6, `Goal: crown tier ${GOAL_TIER}`, textStyle(14, '#f3c64e')));
+    this.goalPips = fixed(this.add.graphics());
+    fixed(this.add.text(PANEL.x + 18, goal + 52, `Tier ${GILDED_TIER} gilded: x${GILDED_MULT} favor`, { fontFamily: FONT, fontSize: '12px', color: '#e9b949' }));
     fixed(
-      this.add.text(PANEL.x + 16, PANEL.y + PANEL.h - 112, 'Tap to drop a stone.\nOverhangs break off.\nThree stones make a\ntier; land each one\nthree quarters on to\nbalance it.', {
+      this.add.text(PANEL.x + 16, PANEL.y + PANEL.h - 76, 'Tap to drop a stone.\nOverhangs break off.\nLand each stone 3/4\non to balance a tier.', {
         fontFamily: FONT,
         fontSize: '12px',
         color: '#a99cc0',
@@ -273,7 +309,7 @@ export class GameScene extends Phaser.Scene {
   private createGameOver() {
     const dim = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x0c0916, 0.7).setInteractive();
     const panel = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, 520, 260, 0x231c38).setStrokeStyle(4, 0x6a5a9a);
-    const title = this.add.text(VIEW.w / 2, VIEW.h / 2 - 90, 'The stone has fallen', textStyle(30, '#f3c64e')).setOrigin(0.5);
+    const title = (this.gameOverTitle = this.add.text(VIEW.w / 2, VIEW.h / 2 - 90, '', textStyle(30, '#f3c64e')).setOrigin(0.5));
     this.gameOverText = this.add
       .text(VIEW.w / 2, VIEW.h / 2 - 10, '', { fontFamily: FONT, fontSize: '16px', color: '#f1e3c6', align: 'center' })
       .setOrigin(0.5);
@@ -298,20 +334,39 @@ export class GameScene extends Phaser.Scene {
       drawStone(g, stone.w, stone.tier, stone.perfect);
       this.stoneViews.push(g);
       for (const piece of e.cut) this.debris(piece.x, this.worldY(i * STONE_H), piece.w, stone.tier);
-      const gained = s.favorPerStone + (e.drop.perfect ? 2 : 0);
-      this.popup(stone.x, this.worldY((i + 1) * STONE_H) - 6, e.drop.perfect ? `Perfect! +${gained}` : `+${gained}`, e.drop.perfect);
+      this.popup(stone.x, this.worldY((i + 1) * STONE_H) - 6, e.drop.perfect ? `Perfect! +${e.favor}` : `+${e.favor}`, e.drop.perfect);
       if (e.drop.perfect) this.glow(stone.x, this.worldY(i * STONE_H), stone.w);
     } else if (e.type === 'missed') {
       this.debris(e.drop.x, this.worldY(stackHeight(s)), e.drop.w, s.tier);
       this.cameras.main.shake(200, 0.006);
       if (e.drop.caught) this.announce(["Mason's Grace", 'The stone is caught: try again']);
       if (s.phase === 'over') saveBest(s.best);
+    } else if (e.type === 'rerolled') {
+      this.popup(PANEL.x + 150, PANEL.y + 126, `-${REROLL_COST}`, false);
     } else {
       if (e.balanced) this.ornament(e.tier);
+      if (s.phase === 'crowned') this.crownTemple();
       // A balanced tier's cards say so themselves.
-      if (!e.balanced) this.announce([`Tier ${e.tier} is wobbly`, 'No blessing this time']);
+      else if (!e.balanced) this.announce([`Tier ${e.tier} is wobbly`, e.tier + 1 === GILDED_TIER ? `Tier ${GILDED_TIER} is gilded: x${GILDED_MULT} favor` : 'No blessing this time']);
+      else if (e.tier + 1 === GILDED_TIER && s.phase !== 'blessing') this.announce([`Tier ${GILDED_TIER} is gilded`, `x${GILDED_MULT} favor`]);
       saveBest(s.best);
     }
+  }
+
+  /** A gold crown with three points and gems on top of the finished shrine. */
+  private crownTemple() {
+    const top = this.state.stones.at(-1)!;
+    const y = this.worldY(stackHeight(this.state));
+    const g = this.add.graphics().setDepth(3.6).setPosition(top.x, y);
+    g.fillStyle(OUTLINE).fillRect(-30, -12, 60, 12);
+    g.fillTriangle(-32, -10, -22, -40, -12, -10).fillTriangle(-12, -10, 0, -48, 12, -10).fillTriangle(12, -10, 22, -40, 32, -10);
+    g.fillStyle(GOLD).fillRect(-28, -11, 56, 10);
+    g.fillTriangle(-29, -10, -22, -36, -15, -10).fillTriangle(-9, -10, 0, -44, 9, -10).fillTriangle(15, -10, 22, -36, 29, -10);
+    g.fillStyle(0xfff1b8).fillRect(-28, -11, 56, 2);
+    g.fillStyle(0x6ac0e8).fillCircle(0, -6, 3);
+    g.fillStyle(0x8ad06a).fillCircle(-18, -6, 2.5).fillCircle(18, -6, 2.5);
+    this.glow(top.x, y, top.w);
+    this.announce(['The shrine is crowned!', `Tier ${GOAL_TIER} stands`]);
   }
 
   /** A broken piece or a missed stone, tumbling down off the temple. */
@@ -393,12 +448,21 @@ export class GameScene extends Phaser.Scene {
 
   private refresh() {
     const s = this.state;
-    this.tierText.setText(`Tier ${s.tier}`);
+    this.tierText.setText(`Tier ${Math.min(s.tier, GOAL_TIER)}`);
     this.pips.clear();
     for (let i = 0; i < STONES_PER_TIER; i++) {
       const x = PANEL.x + 16 + i * 30;
       this.pips.fillStyle(OUTLINE).fillRect(x, PANEL.y + 78, 24, 14);
       this.pips.fillStyle(i < s.inTier ? (s.wobbly ? 0xb08a6a : TIER_COLORS[(s.tier - 1) % TIER_COLORS.length]) : 0x3a3052).fillRect(x + 2, PANEL.y + 80, 20, 10);
+    }
+    this.goalPips.clear();
+    for (let t = 1; t <= GOAL_TIER; t++) {
+      const x = PANEL.x + 18 + (t - 1) * (GOAL.pip + GOAL.gap);
+      const y = PANEL.y + GOAL.y + 30;
+      const built = t <= s.tiersBuilt;
+      this.goalPips.fillStyle(built ? tierColor(t) : 0x3a3052).fillRect(x, y, GOAL.pip, GOAL.pip);
+      if (t === GILDED_TIER) this.goalPips.lineStyle(2, GILT).strokeRect(x - 1, y - 1, GOAL.pip + 2, GOAL.pip + 2);
+      if (t === s.tier && s.phase !== 'crowned') this.goalPips.fillStyle(0xf3e9d2).fillRect(x, y + GOAL.pip + 2, GOAL.pip, 2);
     }
     this.favorText.setText(`Favor ${s.favor}`);
     this.builtText.setText(`Tiers built ${s.tiersBuilt}`);
@@ -418,12 +482,17 @@ export class GameScene extends Phaser.Scene {
       this.buildOffer();
     }
 
-    this.gameOver.setVisible(s.phase === 'over');
+    const ended = s.phase === 'over' || (s.phase === 'crowned' && this.crownedMs >= CROWN_MS);
+    this.gameOver.setVisible(ended);
     if (s.phase === 'over') {
+      this.gameOverTitle.setText('The stone has fallen');
       this.gameOverText.setText(
         `Your shrine stood ${s.tiersBuilt} tier${s.tiersBuilt === 1 ? '' : 's'} tall,\n` +
           `${s.balancedTiers} of them balanced, for ${s.favor} favor.\n\nBest ${s.best} tiers.`,
       );
+    } else if (s.phase === 'crowned') {
+      this.gameOverTitle.setText('The shrine is crowned!');
+      this.gameOverText.setText(`All ${GOAL_TIER} tiers stand,\n${s.balancedTiers} of them balanced, for ${s.favor} favor.`);
     }
   }
 
@@ -431,11 +500,12 @@ export class GameScene extends Phaser.Scene {
   private buildOffer() {
     this.offerLayer.removeAll(true);
     this.blessingCards = [];
+    this.rerollButton = null;
     const s = this.state;
     if (s.phase !== 'blessing') return;
     const dim = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x0c0916, 0.55).setInteractive();
-    const title = this.add.text(CARDS.xs[1], CARDS.y - CARDS.h / 2 - 34, `Tier ${s.tier - 1} is balanced: choose a blessing`, textStyle(20, '#f3c64e')).setOrigin(0.5);
-    this.offerLayer.add([dim, title]);
+    const title = this.add.text(OFFER_TITLE.x, OFFER_TITLE.y, `Tier ${s.tier - 1} balanced: choose a blessing`, textStyle(20, '#f3c64e')).setOrigin(0.5);
+    this.offerLayer.add([dim, title, this.makeReroll()]);
     s.offer.forEach((id, i) => {
       const info = BLESSING_INFO[id];
       const x = CARDS.xs[i];
@@ -457,6 +527,34 @@ export class GameScene extends Phaser.Scene {
     pin(this.offerLayer);
   }
 
+  /** The button that spends favor on three new blessings, dimmed when there isn't enough. */
+  private makeReroll() {
+    const { x, y, w, h } = REROLL;
+    const afford = canReroll(this.state);
+    const bg = this.add.rectangle(0, 0, w, h, 0x2c2446).setStrokeStyle(3, afford ? GOLD : 0x4a3a6a);
+    const coin = this.add.graphics();
+    coin.fillStyle(GOLD).fillCircle(-w / 2 + 20, 0, 10);
+    coin.fillStyle(shade(GOLD, -0.35)).fillCircle(-w / 2 + 20, 0, 6);
+    coin.fillStyle(GOLD).fillRect(-w / 2 + 19, -4, 2, 8);
+    const label = this.add.text(-w / 2 + 38, 0, 'Reroll', textStyle(17)).setOrigin(0, 0.5);
+    const cost = this.add.text(w / 2 - 12, 0, String(REROLL_COST), textStyle(17, '#f3c64e')).setOrigin(1, 0.5);
+    const button = this.add.container(x, y, [bg, coin, label, cost]).setAlpha(afford ? 1 : 0.5);
+    bg.setInteractive({ useHandCursor: afford })
+      .on('pointerover', () => afford && bg.setFillStyle(0x3a3060))
+      .on('pointerout', () => bg.setFillStyle(0x2c2446))
+      .on('pointerdown', () => reroll(this.state) && this.rebuildOffer());
+    this.rerollButton = { x, y, w, h };
+    return button;
+  }
+
+  /**
+   * Has `refresh` rebuild the cards on the next frame after a reroll, even when the new offer
+   * happens to match the old, and not while the tapped button is still handling its tap.
+   */
+  private rebuildOffer() {
+    this.offerKey = '';
+  }
+
   private onChosen(id: BlessingId) {
     if (id === 'broad') {
       const i = this.state.stones.length - 1;
@@ -467,7 +565,8 @@ export class GameScene extends Phaser.Scene {
       // Blessings only follow a balanced tier, so the top stone carries its lanterns.
       this.ornament(top.tier);
     }
-    this.announce([BLESSING_INFO[id].name, 'is yours']);
+    const gilded = this.state.tier === GILDED_TIER;
+    this.announce(gilded ? [`${BLESSING_INFO[id].name} is yours`, `Tier ${GILDED_TIER} is gilded: x${GILDED_MULT} favor`] : [BLESSING_INFO[id].name, 'is yours']);
   }
 
   /** A small emblem for each blessing, centred on the graphics' origin. */

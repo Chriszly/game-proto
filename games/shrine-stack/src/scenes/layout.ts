@@ -11,6 +11,11 @@ export const PANEL = { x: 16, y: 16, w: 214, h: 508 };
 /** The three blessing cards, by their centres. */
 export const CARDS = { xs: [350, 590, 830], y: 300, w: 220, h: 220 };
 export const BUTTON = { w: 200, h: 40 };
+/** The offer's title, and the reroll button beside it, by their centres. */
+export const OFFER_TITLE = { x: 520, y: 156 };
+export const REROLL = { x: 842, y: 156, w: 156, h: 36 };
+/** The goal box in the side panel: its top, and the size and gap of its tier pips. */
+export const GOAL = { y: 334, pip: 13, gap: 2 };
 
 export const UI_DEPTH = 10_000;
 export const FONT = 'monospace';
