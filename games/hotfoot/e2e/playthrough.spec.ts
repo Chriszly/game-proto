@@ -1,12 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
 
 // Plays the first stage with real inputs: the knight runs on their own, and the test taps the top
-// half of the screen to jump the spikes and pits and the bottom half to slide under the blades, as
-// on a phone, picking up coins on the way. At the checkpoint the run waits on two boons; the test
+// half of the screen to jump the spikes, pits and goblins and up onto ledges, and the bottom half to
+// slide under the blades, as on a phone, picking up coins on the way. At the checkpoint the run waits on two boons; the test
 // taps the first and checks it was taken and the second stage has begun.
 // Game state is only read, through the `game` object the dev build puts on window.
 
-type TrapKind = 'spikes' | 'pit' | 'blade';
+type TrapKind = 'spikes' | 'pit' | 'blade' | 'flames' | 'goblin' | 'bat';
 interface GameState {
   stage: number;
   phase: 'running' | 'checkpoint' | 'over';
@@ -16,10 +16,12 @@ interface GameState {
   hearts: number;
   coins: number;
   hits: number;
+  stomps: number;
   ranks: Record<string, number>;
   choices: string[] | null;
   checkpointX: number;
-  traps: { id: number; kind: TrapKind; x: number; w: number }[];
+  traps: { id: number; kind: TrapKind; x: number; w: number; h: number; vx: number }[];
+  ledges: { id: number; x: number; w: number; h: number }[];
   course: { id: number; x: number; h: number }[];
 }
 type Card = { id: string; x: number; y: number; w: number; h: number };
@@ -33,10 +35,35 @@ const HALF_W = 14;
 /** Stage 1: 3 hearts, running at 260 px/s, 3200 px to the checkpoint (state.ts). */
 const STAGE_1 = { hearts: 3, speed: 260, checkpointX: 3200 };
 /**
- * How close a trap's edge has to come before the test reacts: jump spikes and pits a little way
- * out, and slide just before a blade.
+ * How close an obstacle's edge has to come before the test reacts: jump spikes, pits, goblins and
+ * ledges a little way out, and slide just before a blade.
  */
 const REACT = { jump: 60, slide: 40 };
+
+/** Something in the knight's way: a trap or foe, or the side of a ledge (`wall`) to jump up onto. */
+interface Obstacle {
+  id: string;
+  kind: TrapKind | 'wall';
+  x: number;
+  end: number;
+  slide: boolean;
+}
+
+/** The traps and the rising sides of ledges, left to right. */
+function obstaclesOf(s: GameState): Obstacle[] {
+  const list: Obstacle[] = s.traps.map((t) => ({
+    id: `trap ${t.id}`,
+    kind: t.kind,
+    x: t.x,
+    end: t.x + t.w,
+    slide: t.kind === 'blade' || t.kind === 'bat',
+  }));
+  for (const l of s.ledges) {
+    const before = s.ledges.find((o) => Math.abs(o.x + o.w - l.x) < 1)?.h ?? 0;
+    if (l.h > before) list.push({ id: `ledge ${l.id}`, kind: 'wall', x: l.x, end: l.x + 1, slide: false });
+  }
+  return list.sort((a, b) => a.x - b.x);
+}
 
 /**
  * Game time per animation frame, every frame the same length. Longer frames mean fewer to draw, so
@@ -138,35 +165,43 @@ test('plays the first stage', async ({ page }, testInfo) => {
   expect(s.speed).toBe(STAGE_1.speed);
   expect(s.checkpointX).toBe(STAGE_1.checkpointX);
   const kinds = new Set(s.traps.map((t) => t.kind));
-  expect(kinds, 'stage 1 has spikes, pits and blades').toEqual(new Set(['spikes', 'pit', 'blade']));
+  for (const kind of ['spikes', 'blade', 'goblin'] as const) expect(kinds.has(kind), `stage 1 has ${kind}`).toBe(true);
+  expect(s.ledges.length, 'stage 1 has a ledge').toBeGreaterThan(0);
   await play(1_000, async () => false);
   s = await game.state();
   expect(s.distance, 'the knight runs on their own').toBeGreaterThan(200);
 
-  // Run the stage: jump each spike row and pit, slide under each blade. Every trap is passed
-  // without a hit, and each jump and slide shows in the knight's state.
-  const passed = { spikes: 0, pit: 0, blade: 0 };
+  // Run the stage: jump each spike row, pit and goblin and up onto each ledge, and slide under each
+  // blade. Every obstacle is passed without a hit (a goblin landed on is stomped, which is no hit),
+  // and each jump, slide and climb shows in the knight's state.
+  const passed: Record<Obstacle['kind'], number> = { spikes: 0, pit: 0, blade: 0, flames: 0, goblin: 0, bat: 0, wall: 0 };
   let highest = 0;
   let slid = false;
+  let onLedge = false;
   let snapped = false;
-  const acted = new Set<number>();
+  const acted = new Map<string, Obstacle['kind']>();
   const ok = await play(20_000, async () => {
     s = await game.state();
     if (s.phase !== 'running') return true;
+    const grounded = s.runner.vh === 0;
     highest = Math.max(highest, s.runner.h);
     slid ||= s.runner.slideMs > 0;
+    onLedge ||= grounded && s.runner.h > 0;
     const front = s.distance + HALF_W;
-    const next = s.traps.find((t) => t.x + t.w > s.distance - HALF_W);
-    for (const t of s.traps) if (t.x + t.w < s.distance - HALF_W && acted.has(t.id)) {
-      passed[t.kind] += 1;
-      acted.delete(t.id);
+    const obstacles = obstaclesOf(s);
+    // An obstacle acted on is passed once it is behind the knight, or gone (a stomped goblin).
+    for (const [id, kind] of acted) {
+      const o = obstacles.find((o) => o.id === id);
+      if (o && o.end >= s.distance - HALF_W) continue;
+      passed[kind] += 1;
+      acted.delete(id);
     }
+    const next = obstacles.find((o) => o.end > s.distance - HALF_W);
     if (!next || acted.has(next.id)) return false;
     const gap = next.x - front;
-    const grounded = s.runner.h <= 0;
-    if (next.kind === 'blade' ? gap <= REACT.slide && grounded : gap <= REACT.jump && grounded) {
-      acted.add(next.id);
-      await tap(next.kind === 'blade' ? SLIDE_AT : JUMP_AT);
+    if (grounded && gap <= (next.slide ? REACT.slide : REACT.jump)) {
+      acted.set(next.id, next.kind);
+      await tap(next.slide ? SLIDE_AT : JUMP_AT);
     }
     if (!snapped && s.runner.h > 60) {
       snapped = true;
@@ -174,14 +209,18 @@ test('plays the first stage', async ({ page }, testInfo) => {
     }
     return false;
   });
-  expect(ok, `reached the checkpoint; state ${JSON.stringify({ ...s, traps: undefined, course: undefined })}`).toBe(true);
+  const brief = { ...s, traps: undefined, course: undefined, ledges: undefined };
+  expect(ok, `reached the checkpoint; state ${JSON.stringify(brief)}`).toBe(true);
   expect(s.phase).toBe('checkpoint');
-  expect(s.hits, 'every trap dodged').toBe(0);
+  expect(s.hits, `every obstacle dodged; passed ${JSON.stringify(passed)}`).toBe(0);
   expect(s.hearts).toBe(STAGE_1.hearts);
   expect(highest, 'a jump lifts the knight clear of the spikes').toBeGreaterThan(100);
   expect(slid, 'the knight slid').toBe(true);
   expect(passed.spikes + passed.pit, 'spikes and pits jumped').toBeGreaterThan(0);
   expect(passed.blade, 'blades slid under').toBeGreaterThan(0);
+  expect(passed.goblin, 'goblins jumped or stomped').toBeGreaterThan(0);
+  expect(passed.wall, 'ledges jumped up onto').toBeGreaterThan(0);
+  expect(onLedge, 'the knight ran along a ledge').toBe(true);
   expect(s.coins, 'coins picked up on the way').toBeGreaterThan(0);
 
   // At the checkpoint the run waits on a choice of two different boons.

@@ -1,14 +1,38 @@
 import { BOONS, BOON_IDS, type BoonId } from './boons';
 import { buildStage, nextStage } from './course';
-import { COIN_REACH, DROP_V, GRAVITY, RUNNER, TRAP_SPAN, canTake, freshState, metres, speedOf, stats, type GameState, type Trap } from './state';
+import {
+  AWAKE,
+  COIN_REACH,
+  DROP_V,
+  FOES,
+  GRAVITY,
+  RUNNER,
+  TRAP_SPAN,
+  canTake,
+  flameOf,
+  floorAt,
+  freshState,
+  metres,
+  speedOf,
+  stats,
+  type GameState,
+  type Trap,
+  type TrapKind,
+} from './state';
 
-// Moves the run on: the knight runs, jumps, slides and lands, traps hurt, coins are picked up,
-// and each checkpoint stops the run on a choice of two boons.
+// Moves the run on: the knight runs, jumps, slides and lands, climbs onto ledges and drops off
+// them, goblins and bats move and can be stomped on, traps hurt, coins are picked up, and each
+// checkpoint stops the run on a choice of two boons.
 
 /** A pulled coin's speed towards the knight. */
 const PULL_SPEED = 700;
-/** How far behind the knight traps and coins are dropped. */
+/** How far behind the knight traps, ledges and coins are dropped. */
 const BEHIND = 600;
+/** A stomp: how far below a foe's top the feet may have been last frame, and the bounce off it. */
+const STOMP_REACH = 8;
+const STOMP_BOUNCE = 0.65;
+/** Feet this little below a ledge's top as the knight reaches it still climb up it unhurt. */
+const STEP_UP = 16;
 
 export function newRun(best = 0): GameState {
   const s = freshState(best);
@@ -16,7 +40,9 @@ export function newRun(best = 0): GameState {
   return s;
 }
 
-const grounded = (s: GameState) => s.runner.h <= 0 && s.runner.vh <= 0;
+/** Height of the ground under the knight's feet. */
+const floorOf = (s: GameState) => floorAt(s, s.distance - RUNNER.w / 2, s.distance + RUNNER.w / 2);
+const grounded = (s: GameState) => s.runner.h <= floorOf(s) && s.runner.vh <= 0;
 
 /** Jump: off the ground, or again in the air with Second Leap. A jump ends a slide. */
 export function jump(s: GameState) {
@@ -25,7 +51,7 @@ export function jump(s: GameState) {
   if (r.jumps <= 0) return false;
   r.jumps -= 1;
   r.vh = stats(s).jumpV;
-  r.h = Math.max(r.h, 0.01);
+  r.h = Math.max(r.h, floorOf(s) + 0.01);
   r.slideMs = 0;
   r.slideQueued = false;
   return true;
@@ -56,20 +82,63 @@ function touches(s: GameState, t: Trap) {
     // The knight falls in when standing over the middle of the pit.
     return grounded(s) && s.distance > t.x + 8 && s.distance < t.x + t.w - 8;
   }
+  if (t.kind === 'flames' && flameOf(s, t) !== 'lit') return false;
   const span = TRAP_SPAN[t.kind];
-  return box.x1 > t.x && box.x0 < t.x + t.w && box.hi > span.lo && box.lo < span.hi;
+  return box.x1 > t.x && box.x0 < t.x + t.w && box.hi > t.h + span.lo && box.lo < t.h + span.hi;
+}
+
+/** Walks goblins back and forth and flies bats on, once they are close enough to wake. */
+function moveFoes(s: GameState, sec: number) {
+  for (const t of s.traps) {
+    if (t.vx === 0 || t.x - s.distance > AWAKE) continue;
+    t.x += t.vx * sec;
+    if (t.kind !== 'goblin') continue;
+    if (t.from !== undefined && t.x <= t.from) {
+      t.x = t.from;
+      t.vx = Math.abs(t.vx);
+    }
+    if (t.to !== undefined && t.x + t.w >= t.to) {
+      t.x = t.to - t.w;
+      t.vx = -Math.abs(t.vx);
+    }
+  }
+}
+
+/** Landing on a goblin or bat from above knocks it out and bounces the knight back up. */
+function stomp(s: GameState, prevH: number) {
+  const r = s.runner;
+  if (r.h >= prevH) return;
+  const box = runnerBox(s);
+  const foe = s.traps.find((t) => {
+    if (!FOES.includes(t.kind) || box.x1 <= t.x || box.x0 >= t.x + t.w) return false;
+    const top = t.h + TRAP_SPAN[t.kind as Exclude<TrapKind, 'pit'>].hi;
+    return prevH >= top - STOMP_REACH && r.h <= top;
+  });
+  if (!foe) return;
+  const st = stats(s);
+  const top = foe.h + TRAP_SPAN[foe.kind as Exclude<TrapKind, 'pit'>].hi;
+  s.traps = s.traps.filter((t) => t !== foe);
+  s.stomps += 1;
+  s.coins += st.coinValue;
+  effect(s, 'stomp', foe.x + foe.w / 2, top, 450);
+  r.h = Math.max(r.h, top);
+  r.vh = st.jumpV * STOMP_BOUNCE;
+  r.jumps = st.jumps;
+  r.slideMs = 0;
+  r.slideQueued = false;
 }
 
 function effect(s: GameState, kind: GameState['effects'][number]['kind'], x: number, h: number, total: number) {
   s.effects.push({ id: s.nextId++, kind, x, h, ms: total, total });
 }
 
-function hurt(s: GameState, t: Trap) {
+/** A hit from a trap, or from running into the side of a ledge (`'wall'`). */
+function hurt(s: GameState, kind: TrapKind | 'wall') {
   const st = stats(s);
   const r = s.runner;
   s.hits += 1;
   r.hurtMs = st.hurtMs;
-  if (t.kind === 'pit') {
+  if (kind === 'pit') {
     // Thrown back up out of the pit, high enough to clear it.
     r.vh = st.jumpV;
     r.h = 0.01;
@@ -98,26 +167,38 @@ export function tick(s: GameState, dt: number) {
   const sec = dt / 1000;
   const st = stats(s);
   const r = s.runner;
+  s.time += dt;
+  moveFoes(s, sec);
 
   s.distance = Math.min(s.checkpointX, s.distance + s.speed * sec);
-  if (r.h > 0 || r.vh > 0) {
+  // Running into the side of a ledge hurts, and the knight scrambles up onto it. A jump that only
+  // just falls short climbs up unhurt.
+  const floor = floorOf(s);
+  if (r.h < floor) {
+    if (r.hurtMs <= 0 && floor - r.h > STEP_UP) hurt(s, 'wall');
+    r.h = floor;
+    r.vh = Math.max(0, r.vh);
+  }
+  const prevH = r.h;
+  if (r.h > floor || r.vh > 0) {
     r.vh -= GRAVITY * sec;
     r.h += r.vh * sec;
-    if (r.h <= 0) {
-      r.h = 0;
+    if (r.h <= floor) {
+      r.h = floor;
       r.vh = 0;
-      effect(s, 'dust', s.distance, 0, 300);
+      effect(s, 'dust', s.distance, floor, 300);
       if (r.slideQueued) r.slideMs = st.slideMs;
       r.slideQueued = false;
     }
   }
+  stomp(s, prevH);
   if (grounded(s)) r.jumps = st.jumps;
   r.slideMs = Math.max(0, r.slideMs - dt);
   r.hurtMs = Math.max(0, r.hurtMs - dt);
 
-  if (r.hurtMs <= 0) {
+  if (r.hurtMs <= 0 && s.phase === 'running') {
     const hit = s.traps.find((t) => touches(s, t));
-    if (hit) hurt(s, hit);
+    if (hit) hurt(s, hit.kind);
   }
 
   // Coins: picked up on touch, and drawn in from further off with a lodestone.
@@ -145,6 +226,7 @@ export function tick(s: GameState, dt: number) {
   }
   s.course = s.course.filter((c) => !Number.isNaN(c.x) && c.x > s.distance - BEHIND);
   s.traps = s.traps.filter((t) => t.x + t.w > s.distance - BEHIND);
+  s.ledges = s.ledges.filter((l) => l.x + l.w > s.distance - BEHIND);
 
   if (s.phase === 'running' && s.distance >= s.checkpointX) {
     s.phase = 'checkpoint';
