@@ -14,7 +14,7 @@ the experience bar, and every level-up pauses the battle on three upgrades to pi
 
 | Control | Action |
 | --- | --- |
-| Tap or click a card | Take that upgrade when a level-up comes up |
+| Tap or click a card | Take that upgrade when a level-up comes up (after 10 seconds one is taken at random) |
 | Fight again / New hero | After a fall: start again from wave 1 keeping the hero, or with a new one |
 
 1. **Waves**: each wave brings more foes than the last, with more health. A short break with the
@@ -22,7 +22,8 @@ the experience bar, and every level-up pauses the battle on three upgrades to pi
 2. **The barricade** stops the foes, who hack at it until it breaks, losing stakes as it goes. Once
    it is splinters they walk on to the hero, and **the run is over when a foe reaches the hero**.
 3. **Experience and level-ups**: each foe gives experience when it falls. A full bar is a level,
-   and the battle waits while three different upgrades are offered.
+   and the battle waits while three different upgrades are offered. A countdown under the cards
+   shows the time left: after 10 seconds without a tap, one of them is taken at random.
 4. **The hero is kept**: level, experience and every upgrade picked carry over to the next run,
    which starts again at wave 1. They are saved in the browser. "New hero" starts from scratch.
 

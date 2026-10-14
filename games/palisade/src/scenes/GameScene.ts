@@ -4,7 +4,7 @@ import { foeTexture } from '../art/characters';
 import { BAR, BOSS_BARS, FIRE, STORM } from '../art/palette';
 import { ENEMIES } from '../game/enemies';
 import { clearProgress, loadProgress, saveProgress } from '../game/save';
-import { fightAgain, pick, rollChoices, tick } from '../game/sim';
+import { fightAgain, offer, pick, tick } from '../game/sim';
 import { freshProgress, newRun, progressOf, stats, xpToNext, type Enemy, type GameState } from '../game/state';
 import type { UpgradeId } from '../game/upgrades';
 import { isBossWave } from '../game/waves';
@@ -61,7 +61,7 @@ export class GameScene extends Phaser.Scene {
     this.missiles.clear();
     this.crits.clear();
     this.state = newRun(loadProgress());
-    if (this.state.levelUps > 0) this.state.choices = rollChoices(this.state);
+    if (this.state.levelUps > 0) offer(this.state);
 
     this.add.image(0, 0, 'background').setOrigin(0);
     this.hero = this.add.image(HERO_FEET.x, HERO_FEET.y, 'hero').setOrigin(0.5, 1).setDepth(HERO_FEET.y);
@@ -84,14 +84,14 @@ export class GameScene extends Phaser.Scene {
     const levelUps = s.levelUps;
     tick(s, dt);
     if (!s.choices && s.phase !== 'over') this.clock += dt;
-    if (s.phase !== phase || s.wave !== wave || s.levelUps > levelUps) saveProgress(progressOf(s));
+    if (s.phase !== phase || s.wave !== wave || s.levelUps !== levelUps) saveProgress(progressOf(s));
 
     this.drawFoes();
     this.drawMissiles();
     this.drawEffects();
     this.drawHero();
     this.drawHud();
-    this.levelUp.show(s.phase === 'over' ? null : s.choices, s.ranks, s.level - s.levelUps + 1, s.levelUps);
+    this.levelUp.show(s.phase === 'over' ? null : s.choices, s.ranks, s.level - s.levelUps + 1, s.levelUps, s.pickMs);
     this.gameOver.setVisible(s.phase === 'over');
     if (s.phase === 'over') {
       this.gameOverText.setText(

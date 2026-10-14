@@ -19,6 +19,7 @@ interface GameState {
   enemies: { id: number; kind: Kind; x: number; y: number; hp: number; maxHp: number }[];
   missiles: { id: number; kind: string }[];
   choices: string[] | null;
+  pickMs: number;
   kills: number;
 }
 type Card = { id: string; x: number; y: number; w: number; h: number };
@@ -29,6 +30,8 @@ const XP: Record<Kind, number> = { goblin: 2, orc: 4, knight: 10, troll: 60 };
 const xpToNext = (level: number) => 8 + 6 * (level - 1);
 /** Wave 1 is three goblins and three orcs, from src/game/waves.ts; an orc always comes first. */
 const WAVE_1 = { goblin: 3, orc: 3 };
+/** How long a level-up waits for a tap before taking a card at random, from src/game/sim.ts. */
+const AUTO_PICK_MS = 10_000;
 
 /**
  * Game time per animation frame, every frame the same length. Longer frames mean fewer to draw, so
@@ -180,6 +183,10 @@ test('plays the first wave', async ({ page }, testInfo) => {
   await play(1_000, async () => false);
   const waited = await game.state();
   expect(waited.enemies, 'the battle waits for the pick').toEqual(s.enemies);
+  // A countdown runs while the cards are up, after which one is taken at random; this tap beats it.
+  expect(s.pickMs).toBeLessThanOrEqual(AUTO_PICK_MS);
+  expect(waited.pickMs).toBeLessThan(s.pickMs - 900);
+  expect(waited.pickMs).toBeGreaterThan(0);
   await snap('1-level-up');
 
   // Tapping a card takes its upgrade and the battle goes on.
