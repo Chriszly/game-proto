@@ -17,8 +17,8 @@ pauses the battle on a pick of three upgrades, taking one at random after 10 sec
   carry over between runs. Every run restarts at wave 1. A boss (the troll) closes every tenth
   wave with stacked health bars.
 - **Screens:** there is one scene with the battle and HUD, plus three overlays drawn over it: the
-  level-up cards (`LevelUp`), the list of upgrades taken (`UpgradeList`, opened by the "Upgrades"
-  button in the top bar) and the game-over panel with "Fight again" and "New hero". There is no
+  level-up cards (`LevelUp`), the skill book (`SkillBook`, opened by the "Skill book" button in the
+  top bar) and the game-over panel with "Fight again" and "New hero". There is no
   title or menu screen.
 - **Rough edges seen in the code:**
   - `rollChoices` adds at most one `mend` filler, so with fewer than two upgrades left the level-up
@@ -49,17 +49,20 @@ pauses the battle on a pick of three upgrades, taking one at random after 10 sec
   - `upgrades.ts`: the `UPGRADES` table, `UpgradeId`, `Icon` and `UPGRADE_IDS`.
   - `waves.ts`: `waveFoes`, `foeHp` (scaled by difficulty), `hpScale`, `bossBars`,
     `spawnInterval`, break lengths.
-  - `save.ts`: `loadProgress`, `saveProgress`, `clearProgress`, `loadSpeed`, `saveSpeed`.
+  - `save.ts`: `loadProgress`, `saveProgress`, `clearProgress`, `loadSpeed`, `saveSpeed`,
+    `loadFound`, `saveFound`.
 - `src/scenes/BootScene.ts`: bakes every texture, then starts `Game`.
 - `src/scenes/GameScene.ts`: owns the `GameState`, ticks it each frame, draws it, saves progress,
   handles restart and draws the 1x/2x speed switch (`speed`, at `SPEED` in the bottom bar).
 - `src/scenes/layout.ts`: screen positions (`HERO_FEET`, `BARRICADE`, `XP_BAR`, `BOSS_BAR`,
-  `CARDS`, `COUNTDOWN`, `UPGRADE_LIST`, `SPEED`, `BUTTON`), `HUD_HEIGHT`, `UI_DEPTH`, `FONT`.
+  `CARDS`, `COUNTDOWN`, `SKILL_BOOK`, `SPEED`, `BUTTON`), `HUD_HEIGHT`, `UI_DEPTH`, `FONT`.
 - `src/ui/LevelUp.ts`: the level-up overlay, its cards and the auto-pick countdown (seconds left
   over an emptying bar, at `COUNTDOWN`). It records each card's spot in `cards`.
-- `src/ui/UpgradeList.ts`: the "Upgrades (N)" button in the top bar and the panel it opens, a grid
-  of every upgrade with a rank (icon, name, rank of max, `text`) in `UPGRADE_IDS` order. Its
-  `open` flag tells the scene to hold everything still.
+- `src/ui/SkillBook.ts`: the "Skill book found/total" button in the top bar and the book it opens,
+  a 3x6 grid with a slot for every id in `UPGRADE_IDS` order. A slot not yet in `found` is an empty
+  placeholder (a "?" frame and blank lines); a found one shows icon, name, rank of max (`Nx` for
+  the `mend` filler) and `text`, dimmed at rank 0. Its `open` flag tells the scene to hold
+  everything still.
 - `src/ui/Button.ts`: `makeButton`, the wooden button used on the game-over panel.
 - `src/art/`: pixel art drawn in code. `pixelArt.ts` has `bakePixelArt`, `PixelCanvas` and the
   seeded generator `seeded`. `characters.ts` has the hero, foes (two walk frames, `foeTexture`)
@@ -89,16 +92,18 @@ pauses the battle on a pick of three upgrades, taking one at random after 10 sec
   towards their target every substep.
 - **Input:** the only input is a tap. A tap on a level-up card calls `GameScene.pick`, which calls
   `pick` in `sim.ts`. Without a tap, `tick` picks after `AUTO_PICK_MS` (10 s). "Fight again" and
-  "New hero" call `restart`. The "Upgrades" button opens `UpgradeList`; Back or a tap beside the
-  panel closes it. While it is open `GameScene.update` skips `tick` and its `clock`, so the battle,
+  "New hero" call `restart`. The "Skill book" button opens `SkillBook`; Back or a tap beside the
+  book closes it. While it is open `GameScene.update` skips `tick` and its `clock`, so the battle,
   effects and the auto-pick countdown all wait. The button sits above the level-up overlay (depth
   `UI_DEPTH + 15`) so it works while choosing, and hides after a fall. Shooting is automatic. A dimming rectangle under each overlay is
   interactive, so taps on the battle are swallowed.
+- **Skill book:** after each `tick`, `GameScene.discover` adds every id in `choices` and `ranks`
+  to `found` (so an old save's upgrades count as found) and saves it when it grew.
 - **Rendering:** sprites are diffed by id. `foes` and `missiles` are `Map`s of images, and crit
   texts are `crits`. Each is created, updated or destroyed to match the state every frame.
   Health bars, flames, blasts, bolts and the HUD are `Graphics` that are cleared and redrawn every
-  frame. `LevelUp.show` only rebuilds its cards when the choices change, and `UpgradeList.show`
-  only rebuilds its rows when the ranks change.
+  frame. `LevelUp.show` only rebuilds its cards when the choices change, and `SkillBook.show`
+  only rebuilds its slots when what is found or taken changes.
 
 ### State model
 
@@ -122,11 +127,13 @@ pauses the battle on a pick of three upgrades, taking one at random after 10 sec
 
 ### Persistence
 
-Two `localStorage` keys. `palisade-speed` holds the battle speed (`'1'` or `'2'`, through
-`loadSpeed`/`saveSpeed`), kept apart so "New hero" leaves it alone. `palisade-progress` holds JSON
-of `Progress`. `loadProgress` merges it
-over `freshProgress()` and falls back to fresh on any error. "New hero" calls `clearProgress`.
-The run itself (wave, foes, barricade) is never saved, so a reload starts at wave 1.
+Three `localStorage` keys. `palisade-skill-book` holds a JSON array of the upgrade ids found
+(offered on a level-up, or held), read by `loadFound` (unknown ids dropped) and written by
+`GameScene.discover` whenever one is new; "New hero" leaves it alone. `palisade-speed` holds the
+battle speed (`'1'` or `'2'`, through `loadSpeed`/`saveSpeed`), kept apart so "New hero" leaves it
+alone. `palisade-progress` holds JSON of `Progress`. `loadProgress` merges it over `freshProgress()`
+and falls back to fresh on any error. "New hero" calls `clearProgress`. The run itself (wave, foes,
+barricade) is never saved, so a reload starts at wave 1.
 
 ### Randomness and timing
 
@@ -174,8 +181,8 @@ Missile speeds, `LEAP_RANGE`, `BARRICADE_REPAIR` and effect durations (`EFFECT_M
   w, h). It never writes to the game.
 - **Inputs:** the test only advances the clock and clicks the centre of a card, scaled from the
   960-wide view to the canvas box. It never opens the upgrade list (not part of the first
-  round's loop); `.upgradeList.open` is there to read if a test ever does. Nor does it touch
-  the speed switch: with no `palisade-speed` saved the game plays at 1x. Keep the "Upgrades"
+  round's loop); `.skillBook.open` and `.found` are there to read if a test ever does. Nor does it touch
+  the speed switch: with no `palisade-speed` saved the game plays at 1x. Keep the "Skill book"
   button clear of the cards, since it sits above the level-up overlay.
 - **What it checks:**
   - A fresh hero: level 1, no ranks, wave 1, phase `'break'`, a full barricade.

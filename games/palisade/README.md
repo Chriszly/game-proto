@@ -16,7 +16,7 @@ the experience bar, and every level-up pauses the battle on three upgrades to pi
 | --- | --- |
 | Tap or click a card | Take that upgrade when a level-up comes up (after 10 seconds one is taken at random) |
 | 1x / 2x (bottom right) | Switch the battle between normal and double speed; the level-up countdown stays 10 real seconds |
-| Upgrades (in the top bar) | List the upgrades taken so far, with their ranks; the battle waits until Back |
+| Skill book (in the top bar) | Open the skill book; the battle waits until Back |
 | Fight again / New hero | After a fall: start again from wave 1 keeping the hero, or with a new one |
 
 1. **Waves**: each wave brings more foes than the last, with more health. A short break with the
@@ -69,11 +69,14 @@ picked. Once fewer than three upgrades are left, "Mend the Barricade" fills the 
 
 ![Fire arrows, a fireball and burning foes](docs/screenshots/upgrades.png)
 
-The "Upgrades" button in the top bar shows how many upgrades the hero has and opens a list of
-them, each with its rank and what a rank does. It works during a level-up too, to check what the
-hero has before choosing.
+The skill book (its button in the top bar shows how many skills are found, such as "Skill book
+8/18") has a page for every upgrade. The pages start as empty placeholders, and each fills in the
+first time a level-up offers that upgrade, with its icon, what a rank does and the hero's rank
+(dimmed while it has none). The book stays filled for a new hero. It opens during a level-up too,
+to check what the hero has before choosing.
 
-![The list of upgrades taken](docs/screenshots/upgrade-list.png)
+![The empty skill book of a new hero](docs/screenshots/skill-book-empty.png)
+![A skill book part filled in](docs/screenshots/skill-book.png)
 
 The switch at the right end of the experience bar plays the battle at double speed. It lights up
 gold at 2x and is remembered in the browser, separately from the hero.
@@ -115,7 +118,7 @@ All paths are inside `games/palisade/`.
   rules, `layout.ts` says where things are drawn.
 - `src/art/`: all the pixel art, drawn in code and baked into textures at startup: the ranger and
   the foes, the battlefield, the barricade (which breaks up in stages), missiles and upgrade icons.
-- `src/ui/`: the level-up cards, the list of upgrades taken and buttons.
+- `src/ui/`: the level-up cards, the skill book and buttons.
 
 Adding an upgrade is an entry in `src/game/upgrades.ts` and its effect in `stats` in
 `src/game/state.ts` (and, for a new kind of missile, `shoot` in `src/game/sim.ts`).
