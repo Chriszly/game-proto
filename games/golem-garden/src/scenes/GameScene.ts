@@ -58,6 +58,9 @@ export class GameScene extends Phaser.Scene {
   create() {
     this.state = newGame(loadBest());
     this.lastFrame = null;
+    // A restart (Replant) reuses this scene object, so start these afresh.
+    this.hover = null;
+    this.seedBgs = [];
     this.golems.clear();
     this.pests.clear();
     this.shots.clear();
