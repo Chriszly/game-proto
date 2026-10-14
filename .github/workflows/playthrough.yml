@@ -1,0 +1,92 @@
+name: Playthrough
+
+# One required check for every game's playthrough (games/<name>/e2e/playthrough.spec.ts). Each game
+# whose folder changed in the PR is played; a game that did not change is not played. If this workflow
+# changes, every game is played. The "Playthrough" check passes when none failed, so it can be required
+# on main. It runs on pull requests only, not on pushes to main, so a merge doesn't replay it.
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: playthrough-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      games: ${{ steps.pick.outputs.games }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: pick
+        shell: bash
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          all=$(cd games && for d in */; do d=${d%/}; if [ -f "$d/e2e/playthrough.spec.ts" ]; then echo "$d"; fi; done)
+          if [ -z "$BASE" ]; then
+            changed=$all # workflow_dispatch: play every game
+          else
+            files=$(git diff --name-only "$BASE" HEAD)
+            if echo "$files" | grep -qx '.github/workflows/playthrough.yml'; then
+              changed=$all
+            else
+              changed=$(for g in $all; do if echo "$files" | grep -q "^games/$g/"; then echo "$g"; fi; done)
+            fi
+          fi
+          json=$(printf '%s\n' $changed | jq -R . | jq -sc 'map(select(length > 0))')
+          echo "Playing: $json"
+          echo "games=$json" >> "$GITHUB_OUTPUT"
+
+  play:
+    needs: changes
+    if: needs.changes.outputs.games != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        game: ${{ fromJSON(needs.changes.outputs.games) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      # Plays the game's first round in headless Chromium at 4x speed.
+      - run: npx playwright test --project "$GAME"
+        env:
+          GAME: ${{ matrix.game }}
+          PLAYTHROUGH_SPEED: 4
+      # Video and milestone screenshots of the run, pass or fail; open the report's index.html to browse them.
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playthrough-${{ matrix.game }}
+          path: |
+            test-results
+            playwright-report
+          retention-days: 14
+
+  playthrough:
+    name: Playthrough
+    needs: [changes, play]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check that no played game failed
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          PLAY: ${{ needs.play.result }}
+        run: |
+          if [ "$CHANGES" != success ]; then echo "Choosing the games to play failed."; exit 1; fi
+          if [ "$PLAY" != success ] && [ "$PLAY" != skipped ]; then echo "A playthrough failed; see the play jobs."; exit 1; fi
+          echo "Playthrough passed."

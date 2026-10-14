@@ -58,7 +58,7 @@ checks a tap on the path plants nothing, plants two seeds by tapping soil, waits
 starts wave 1 and checks the golems squash all eight beetles before any reaches the Heartwood, with
 the sap they drop and the wave's bonus. Like the other games' tests it owns the game clock and plays
 at 4x speed (`PLAYTHROUGH_SPEED`). The **Playthrough Golem Garden** workflow
-(`.github/workflows/playthrough-golem-garden.yml`) runs it on pull requests that touch this folder
+(`.github/workflows/playthrough.yml`) runs it on pull requests that touch this folder
 and uploads the video and screenshots as the `playthrough-golem-garden` artifact.
 
 ```sh
