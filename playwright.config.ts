@@ -37,6 +37,7 @@ export default defineConfig({
     { name: 'lanternkeep', testDir: 'games/lanternkeep/e2e' },
     { name: 'space-wars', testDir: 'games/space-wars/e2e' },
     { name: 'lane-brawl', testDir: 'games/lane-brawl/e2e' },
+    { name: 'colonizer', testDir: 'games/colonizer/e2e' },
   ],
   webServer: {
     command: 'npm run dev -- --port 5173 --strictPort',

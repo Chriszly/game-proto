@@ -19,6 +19,7 @@ const GAMES = [
   { name: 'Lanternkeep', path: '/games/lanternkeep/' },
   { name: 'Space Wars', path: '/games/space-wars/' },
   { name: 'Lane Brawl', path: '/games/lane-brawl/' },
+  { name: 'Colonizer', path: '/games/colonizer/' },
 ];
 
 // Every page links a favicon that loads.

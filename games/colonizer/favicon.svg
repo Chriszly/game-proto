@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>Colonizer</title>
+  <circle cx="7" cy="7" r="5" fill="#e37100"/>
+  <circle cx="25" cy="7" r="5" fill="#e37100"/>
+  <circle cx="7" cy="7" r="2.4" fill="#ffb787"/>
+  <circle cx="25" cy="7" r="2.4" fill="#ffb787"/>
+  <ellipse cx="16" cy="16.5" rx="13" ry="12" fill="#e37100"/>
+  <circle cx="10.5" cy="14.0" r="2.3" fill="#0d1117"/>
+  <circle cx="21.5" cy="14.0" r="2.3" fill="#0d1117"/>
+  <circle cx="11.3" cy="13.2" r="0.8" fill="#ffffff"/>
+  <circle cx="22.3" cy="13.2" r="0.8" fill="#ffffff"/>
+  <ellipse cx="16" cy="20.5" rx="4.6" ry="3.3" fill="#ffdcc7"/>
+  <ellipse cx="16" cy="19.5" rx="2.2" ry="1.4" fill="#311300"/>
+  <path d="M7 24 H25 C29 24 31 26.5 31 29 C31 31 29.5 31.5 28 31.5 C26.5 31.5 25.5 30.5 24.5 29.5 H7.5 C6.5 30.5 5.5 31.5 4 31.5 C2.5 31.5 1 31 1 29 C1 26.5 3 24 7 24 Z" fill="#311300"/>
+  <path d="M26 22 V6" stroke="#311300" stroke-width="1.2" stroke-linecap="round"/>
+  <path d="M26 6 L31 8 L26 10 Z" fill="#3f8a3a"/>
+</svg>
