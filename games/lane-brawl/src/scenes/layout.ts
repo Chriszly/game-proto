@@ -1,7 +1,7 @@
 // Where things sit on the 960x540 screen. The map itself is drawn in world pixels and scrolls.
 
 export const VIEW = { w: 960, h: 540 };
-export const FONT = 'monospace';
+export const FONT = 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
 
 export const TOP_BAR = { x: 0, y: 0, w: VIEW.w, h: 34 };
 export const BOTTOM_BAR = { x: 0, y: 412, w: VIEW.w, h: 128 };
@@ -18,6 +18,17 @@ export function abilityBox(i: number) {
 export const SHOP_BUTTON = { x: 508, y: 428, w: 96, h: 58 };
 /** The minimap, showing the whole map in the bottom right corner. */
 export const MINIMAP = { x: 790, y: 420, w: 158, h: 106 };
+
+/** The objective card under the top bar, at the top left of the map. It blocks clicks. */
+export const OBJECTIVE_CARD = { x: 10, y: 42, w: 236, h: 62 };
+/** The last-hit streak chip, right of the gold counter. */
+export const STREAK_CHIP = { x: 96, y: 6, w: 118, h: 22 };
+
+/** The upgrade choice in the bottom bar, between the shop button and the minimap: two cards. */
+export const UPGRADE_PANEL = { x: 614, y: 420, w: 168, h: 112 };
+export function upgradeCard(i: number) {
+  return { x: UPGRADE_PANEL.x + 6, y: UPGRADE_PANEL.y + 20 + i * 46, w: UPGRADE_PANEL.w - 12, h: 42 };
+}
 
 /** The shop panel, opened with the button or the B key: items in two columns. */
 export const SHOP_PANEL = { x: 180, y: 46, w: 600, h: 300 };
