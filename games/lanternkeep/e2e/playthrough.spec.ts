@@ -23,6 +23,8 @@ interface Moth {
 }
 interface GameState {
   night: number;
+  kind: 'clear' | 'fog' | 'festival' | 'storm';
+  bats: unknown[];
   phase: 'dusk' | 'night' | 'over';
   duskMs: number;
   coins: number;
@@ -30,7 +32,16 @@ interface GameState {
   lanterns: Lantern[];
   moths: Moth[];
   queue: number[];
-  report: { lit: number; count: number; required: number; earned: number; lostHearth: boolean; orderMet: boolean } | null;
+  report: {
+    lit: number;
+    count: number;
+    required: number;
+    earned: number;
+    lostHearth: boolean;
+    orderMet: boolean;
+    chains: number;
+    reachedFestival: boolean;
+  } | null;
   kept: number;
   order: { text: string; goal: { kind: string; lanterns?: number[] }; reward: number };
   gusts: number[];
@@ -51,7 +62,12 @@ const BURN_MS = 20_000;
 const ORDER_LANTERNS = [0, 1, 2];
 const ORDER_REWARD = 15;
 /** Every lantern lit pays 5 coins each and a 10 coin bonus, and the order its reward. */
-const NIGHTFALL_PAY = LANTERNS * 5 + 10 + ORDER_REWARD;
+const PAY_PER_LANTERN = 5;
+const ALL_LIT_BONUS = 10;
+/** Night 1's two chains, lanterns 0 with 3 and 1 with 4, are both lit at nightfall: 4 coins each. */
+const CHAINS_LIT = 2;
+const CHAIN_PAY = 4;
+const NIGHTFALL_PAY = LANTERNS * PAY_PER_LANTERN + ALL_LIT_BONUS + ORDER_REWARD + CHAINS_LIT * CHAIN_PAY;
 /** Night 1's one gust hits with 34s of dusk left, warned 5s before. */
 const GUST_AT_MS = 34_000;
 const GUST_WARN_MS = 5_000;
@@ -167,7 +183,7 @@ test('plays the first night', async ({ page }, testInfo) => {
   // The first dusk: five dark lanterns, three moths in the jar, three hearths and no coins, the
   // herald's order and one gust to come.
   let s = await game.state();
-  expect(s).toMatchObject({ night: 1, phase: 'dusk', coins: 0, lives: LIVES, kept: 0, closeCalls: 0, shields: 0, gust: null });
+  expect(s).toMatchObject({ night: 1, kind: 'clear', phase: 'dusk', coins: 0, lives: LIVES, kept: 0, closeCalls: 0, shields: 0, gust: null, bats: [] });
   expect(s.duskMs).toBeGreaterThan(DUSK_MS - 1_000);
   expect(s.lanterns).toHaveLength(LANTERNS);
   expect(s.lanterns.every((l) => !l.lit)).toBe(true);
@@ -240,11 +256,20 @@ test('plays the first night', async ({ page }, testInfo) => {
   expect(s.phase).toBe('dusk');
   await snap('3-all-lit');
 
-  // Night falls with every lantern lit: they pay, the bonus and the herald's order too, and no
+  // Night falls with every lantern lit: they pay, the bonus, the herald's order and the chains too, and no
   // hearth goes out.
   await until('night falls', 20_000, (s) => s.phase === 'night');
   s = await game.state();
-  expect(s.report).toEqual({ lit: LANTERNS, count: LANTERNS, required: REQUIRED, earned: NIGHTFALL_PAY, lostHearth: false, orderMet: true });
+  expect(s.report).toEqual({
+    lit: LANTERNS,
+    count: LANTERNS,
+    required: REQUIRED,
+    earned: NIGHTFALL_PAY,
+    lostHearth: false,
+    orderMet: true,
+    chains: CHAINS_LIT,
+    reachedFestival: false,
+  });
   expect(s).toMatchObject({ coins: NIGHTFALL_PAY + CLOSE_CALL_PAY, lives: LIVES, kept: 1 });
   expect(await play(3_000, () => game.panelOpen()), 'night panel opens').toBe(true);
   await snap('4-night');

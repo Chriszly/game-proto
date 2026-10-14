@@ -320,7 +320,64 @@ export const MOTH_LOOK = {
   fast: { s: 1.15, gel: '#8cc8ff' },
   slow: { s: 1.4, gel: '#b8e690' },
   heavy: { s: 1.6, gel: '#f0c27a' },
+  firefly: { s: 1, gel: '#e6ff8a' },
 } as const satisfies Record<MothKind, { s: number; gel: string }>;
+
+/**
+ * A bat puppet centred on (0, 0): black card wings with a scalloped trailing edge and a pale rim,
+ * two ears and two glowing eyes. `up` raises the wings, down lowers them.
+ */
+function paintBat(up: boolean) {
+  const sp = up ? 1 : 0.45;
+  for (const side of [-1, 1]) {
+    const Q = (px: number, py: number): [number, number] => [px * side, py];
+    ctx.beginPath();
+    ctx.moveTo(...Q(2, -2));
+    ctx.quadraticCurveTo(...Q(12, -17 * sp), ...Q(24, -6 * sp - 2));
+    ctx.quadraticCurveTo(...Q(20, 0), ...Q(22, 4));
+    ctx.quadraticCurveTo(...Q(15, 2), ...Q(13, 7));
+    ctx.quadraticCurveTo(...Q(10, 3), ...Q(7, 8));
+    ctx.quadraticCurveTo(...Q(4, 3), ...Q(2, 4));
+    ctx.closePath();
+    ctx.save();
+    ctx.shadowColor = 'rgba(214,190,255,0.9)';
+    ctx.shadowBlur = 4 * RES;
+    ctx.strokeStyle = 'rgba(232,216,255,0.9)';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    ctx.restore();
+    ctx.fillStyle = INK;
+    ctx.fill();
+  }
+  poly(
+    [
+      [0, -6],
+      [2.6, 0],
+      [2, 8],
+      [-2, 8],
+      [-2.6, 0],
+    ],
+    INK,
+  );
+  poly(
+    [
+      [-1.6, -5],
+      [-3, -11],
+      [-0.4, -7],
+    ],
+    INK,
+  );
+  poly(
+    [
+      [1.6, -5],
+      [3, -11],
+      [0.4, -7],
+    ],
+    INK,
+  );
+  dot(-1.1, -2.5, 0.9, '#ffd27a');
+  dot(1.1, -2.5, 0.9, '#ffd27a');
+}
 
 /**
  * A moth puppet centred on (0, 0): black lace wings with a pale lit rim (so it reads against the
@@ -561,6 +618,8 @@ export function bakeTextures(scene: Phaser.Scene) {
     bake(scene, `moth-${kind}-up`, 56, 52, () => paintMoth(kind, true), 28, 26);
     bake(scene, `moth-${kind}-down`, 56, 52, () => paintMoth(kind, false), 28, 26);
   }
+  bake(scene, 'bat-up', 60, 52, () => paintBat(true), 30, 26);
+  bake(scene, 'bat-down', 60, 52, () => paintBat(false), 30, 26);
   bake(scene, 'hud', W, 48, paintHud, 0, 0);
   bake(scene, 'dusk-fill', DUSK.w, DUSK.h, paintDuskFill);
   bake(scene, 'dusk-rim', DUSK.w + 2, DUSK.h + 2, paintDuskRim);
@@ -581,7 +640,7 @@ export function bakeTextures(scene: Phaser.Scene) {
     glow(6, 6, 6, '#ffe8b0', 0.9);
     dot(6, 6, 1.4, '#fff6dc');
   });
-  padded('panel', 600, 400, () => paintPanel(600, 400));
+  padded('panel', 600, 430, () => paintPanel(600, 430));
   padded('panel-small', 520, 240, () => paintPanel(520, 240));
   padded('card-on', 250, 66, () => paintCard(250, 66, true));
   padded('card-off', 250, 66, () => paintCard(250, 66, false));

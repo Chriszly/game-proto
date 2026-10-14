@@ -21,6 +21,19 @@ export const LANTERN_SPOTS: readonly { x: number; y: number }[] = [
   { x: 480, y: 392 }, // over the gate
 ];
 
+/**
+ * Chains of lanterns that hang next to each other. A chain pays when every lantern in it is lit at
+ * nightfall, and it only counts on nights that have all of its lanterns.
+ */
+export const CHAINS: readonly (readonly number[])[] = [
+  [0, 3],
+  [1, 4],
+  [2, 7, 8],
+];
+
+/** Where a bat comes in from: above the castle, on the edge nearer its lantern. */
+export const batEntry = (x: number) => (x < JAR.x ? { x: -24, y: 90 } : { x: 984, y: 90 });
+
 /** Where idle moth `i` of `n` rests on the jar's rim. */
 export function mothRest(i: number, n: number) {
   return { x: JAR.x + (i - (n - 1) / 2) * 30, y: JAR.y - 30 };

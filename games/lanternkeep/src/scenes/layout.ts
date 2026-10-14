@@ -7,11 +7,14 @@ export const HUD = { h: 40 };
 /** The dusk bar, which empties as night comes. */
 export const DUSK_BAR = { x: 330, y: 12, w: 300, h: 16 };
 /** The panel shown between nights, with the night's tally and the upgrades. */
-export const NIGHT_PANEL = { x: 480, y: 280, w: 600, h: 400 };
-/** The upgrade buttons in that panel, by their centres, in the order of UPGRADE_IDS (two by two). */
-export const SHOP = { xs: [345, 615], ys: [270, 350], w: 250, h: 66 };
+export const NIGHT_PANEL = { x: 480, y: 276, w: 600, h: 430 };
+/**
+ * The upgrade buttons in that panel, by their centres, in the order of UPGRADE_IDS: two by two, and
+ * the last one (the firefly) alone in the centre of the bottom row.
+ */
+export const SHOP = { xs: [345, 615], ys: [252, 326, 400], w: 250, h: 66 };
 /** The panel's "Next dusk" button, and the game-over "New keep" button. */
-export const NEXT_BUTTON = { x: 480, y: 432 };
+export const NEXT_BUTTON = { x: 480, y: 462 };
 export const BUTTON = { w: 200, h: 40 };
 /** The herald's order card, pinned under the HUD on the left. */
 export const ORDER = { x: 12, y: 50, w: 256, h: 58 };

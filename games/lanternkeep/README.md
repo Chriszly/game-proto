@@ -62,6 +62,17 @@ stone joints, the lanterns have coloured-glass panes and the moths are lace-wing
    hearths; when the last goes out, the keep is lost. The most nights kept is saved in the
    browser.
 9. **Each night** adds one more lantern, up to ten.
+10. **Night kinds**: each night after the first has a kind, named under the HUD. A **fog** burns oil
+    half as fast again. A **festival** pays double: the night's coins, its bonus and the order's
+    reward. A **storm** brings one more gust.
+11. **Bats** (from night 2): a bat flies in from the edge of the screen to a lit lantern, ringed in
+    violet, to snuff it. Send a moth there before the bat arrives and the moth chases it off
+    ("Chased off!"). A bat that reaches a lantern no moth is headed to snuffs it ("Snuffed!").
+12. **Chains**: the left tower and left wall, the right tower and right wall, and the keep's top and
+    its two sconces are joined by ropes. Each chain pays 4 coins at nightfall when all of its
+    lanterns are lit.
+13. **The Great Festival**: keep ten nights (meet each night's quota) to win. The keep goes on after
+    that, with endless nights.
 
 ![The first lantern lit](docs/screenshots/playthrough-1-first-lantern.png)
 
@@ -71,6 +82,16 @@ stone joints, the lanterns have coloured-glass panes and the moths are lace-wing
 
 ![A close call just paid on the keep's sconce, and the far left lantern waiting to be saved](docs/screenshots/loop-close-call.png)
 
+![A bat coming for the right tower's lantern, ringed in violet](docs/screenshots/loop-bat-raid.png)
+
+![A firefly lighting the left wall's lantern, with its next stop ahead](docs/screenshots/loop-firefly.png)
+
+![Both chains lit on a festival night, their ropes bright](docs/screenshots/loop-chains.png)
+
+![Nightfall on a festival night: the tally with its chains, and the five upgrades](docs/screenshots/loop-night-shop.png)
+
+![The tenth night kept: the Great Festival](docs/screenshots/loop-festival.png)
+
 ### Upgrades
 
 | Upgrade | Each level | Costs |
@@ -79,6 +100,7 @@ stone joints, the lanterns have coloured-glass panes and the moths are lace-wing
 | Oil | Lanterns burn 6 seconds longer | 10, 20, 35 |
 | Moths | One more moth in the jar (kinds keep cycling fast, slow, heavy) | 15, 30, 50 |
 | Wings | Moths fly 20% faster | 10, 20, 35 |
+| Firefly | A firefly joins the jar: it lights the tapped lantern, then the nearest free one, on one flight | 40 |
 
 ![Nightfall and the upgrades](docs/screenshots/playthrough-4-night.png)
 
@@ -98,7 +120,7 @@ it, sends a moth to sit on it when the gust is warned for it and checks the gust
 waits until its oil is nearly gone, then taps it and two more lanterns at once and two more after,
 checking the last two wait in the queue and are lit as moths come home and that saving the first
 pays a close call. Night falls with every lantern lit, and it checks the pay (with the order's
-reward), the hearths and the night panel. Like the
+reward and the two chains), the hearths and the night panel. Like the
 other games' tests it owns the game clock and plays at 4x speed (`PLAYTHROUGH_SPEED`). The
 **Playthrough Lanternkeep** workflow (`.github/workflows/playthrough.yml`) runs it on
 every PR that touches this folder, and uploads the video and screenshots as the
