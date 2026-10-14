@@ -178,10 +178,20 @@ export function setSail(s: GameState) {
   return true;
 }
 
-/** Picks a commission the fogged part of the island can still fill. */
+/**
+ * Picks a commission the fogged part of the island can still fill. Only sea beside land counts:
+ * open sea can never be surveyed.
+ */
 function rollCommission(s: GameState): Commission | null {
   const fogged: Partial<Record<Terrain, number>> = {};
-  for (const t of s.tiles) if (!t.revealed) fogged[t.terrain] = (fogged[t.terrain] ?? 0) + 1;
+  for (let y = 0; y < GRID.h; y++) {
+    for (let x = 0; x < GRID.w; x++) {
+      const t = tileAt(s, x, y)!;
+      if (t.revealed) continue;
+      if (t.terrain === 'sea' && !neighbours(x, y).some((n) => tileAt(s, n.x, n.y)!.terrain !== 'sea')) continue;
+      fogged[t.terrain] = (fogged[t.terrain] ?? 0) + 1;
+    }
+  }
   const open = COMMISSIONS.filter((c) => (fogged[c.terrain] ?? 0) >= c.need);
   if (open.length === 0) return null;
   return { ...open[Math.floor(Math.random() * open.length)] };
