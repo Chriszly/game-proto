@@ -1,8 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 
-// Plays the first night with real inputs: taps a lantern so a moth flies out and lights it, watches
-// its oil run dry, then taps the lanterns again late in the dusk so they are all lit when night
-// falls, which pays coins and opens the night panel.
+// Plays the first night with real inputs: taps a lantern so a moth flies out and lights it, sends a
+// moth to sit on it when a gust is coming for it (shielding it), saves it with a close-call refill
+// when its oil is nearly gone, then lights the rest late in the dusk so they are all lit when night
+// falls, which keeps the herald's order, pays coins and opens the night panel.
 // Game state is only read, through the `game` object the dev build puts on window.
 
 interface Lantern {
@@ -10,13 +11,14 @@ interface Lantern {
   y: number;
   lit: boolean;
   oilMs: number;
+  oilMaxMs: number;
   claimed: boolean;
 }
 interface Moth {
   kind: 'fast' | 'slow' | 'heavy';
   x: number;
   y: number;
-  task: 'idle' | 'out' | 'lighting' | 'home';
+  task: 'idle' | 'out' | 'lighting' | 'guard' | 'home';
   target: number;
 }
 interface GameState {
@@ -28,8 +30,13 @@ interface GameState {
   lanterns: Lantern[];
   moths: Moth[];
   queue: number[];
-  report: { lit: number; count: number; required: number; earned: number; lostHearth: boolean } | null;
+  report: { lit: number; count: number; required: number; earned: number; lostHearth: boolean; orderMet: boolean } | null;
   kept: number;
+  order: { text: string; goal: { kind: string; lanterns?: number[] }; reward: number };
+  gusts: number[];
+  gust: { target: number; atMs: number } | null;
+  closeCalls: number;
+  shields: number;
 }
 
 const VIEW = { w: 960, h: 540 };
@@ -40,8 +47,17 @@ const REQUIRED = 3;
 const MOTHS = 3;
 const LIVES = 3;
 const BURN_MS = 20_000;
-/** Every lantern lit pays 5 coins each and a 10 coin bonus. */
-const ALL_LIT_PAY = LANTERNS * 5 + 10;
+/** Night 1's herald's order: both towers and the keep (lanterns 0, 1 and 2) lit at nightfall, for 15. */
+const ORDER_LANTERNS = [0, 1, 2];
+const ORDER_REWARD = 15;
+/** Every lantern lit pays 5 coins each and a 10 coin bonus, and the order its reward. */
+const NIGHTFALL_PAY = LANTERNS * 5 + 10 + ORDER_REWARD;
+/** Night 1's one gust hits with 34s of dusk left, warned 5s before. */
+const GUST_AT_MS = 34_000;
+const GUST_WARN_MS = 5_000;
+/** A refill of a lantern with under 15% of its oil left is a close call and pays 2 at once. */
+const CLOSE_CALL = 0.15;
+const CLOSE_CALL_PAY = 2;
 
 /** Game time per animation frame, every frame the same length. */
 const FRAME_MS = 64;
@@ -148,9 +164,10 @@ test('plays the first night', async ({ page }, testInfo) => {
   }
   const busy = (s: GameState) => s.moths.filter((m) => m.task !== 'idle').length;
 
-  // The first dusk: five dark lanterns, three moths in the jar, three hearths and no coins.
+  // The first dusk: five dark lanterns, three moths in the jar, three hearths and no coins, the
+  // herald's order and one gust to come.
   let s = await game.state();
-  expect(s).toMatchObject({ night: 1, phase: 'dusk', coins: 0, lives: LIVES, kept: 0 });
+  expect(s).toMatchObject({ night: 1, phase: 'dusk', coins: 0, lives: LIVES, kept: 0, closeCalls: 0, shields: 0, gust: null });
   expect(s.duskMs).toBeGreaterThan(DUSK_MS - 1_000);
   expect(s.lanterns).toHaveLength(LANTERNS);
   expect(s.lanterns.every((l) => !l.lit)).toBe(true);
@@ -158,6 +175,9 @@ test('plays the first night', async ({ page }, testInfo) => {
   expect(s.moths.map((m) => m.kind)).toEqual(['fast', 'slow', 'heavy']);
   expect(s.queue).toEqual([]);
   expect(busy(s)).toBe(0);
+  expect(s.order.goal).toEqual({ kind: 'lit', lanterns: ORDER_LANTERNS });
+  expect(s.order.reward).toBe(ORDER_REWARD);
+  expect(s.gusts).toEqual([GUST_AT_MS]);
   await snap('0-dusk');
 
   // A tap on a lantern sends one moth; a second tap on it sends no other.
@@ -173,15 +193,33 @@ test('plays the first night', async ({ page }, testInfo) => {
   await snap('1-first-lantern');
   await until('moth flies home', 10_000, (s) => busy(s) === 0);
 
-  // Its oil runs dry and it goes out well before night falls.
-  await until('lantern 0 burns out', BURN_MS + 1_000, (s) => !s.lanterns[0].lit);
+  // A gust is warned for the only lit lantern. A moth sent to it stays sitting on it until the gust
+  // has passed, so it shields the lantern, then flies home.
+  await until('gust warned', DUSK_MS, (s) => s.gust !== null);
   s = await game.state();
-  expect(s.phase).toBe('dusk');
+  expect(s.gust).toEqual({ target: 0, atMs: GUST_AT_MS });
+  expect(s.duskMs).toBeGreaterThan(GUST_AT_MS + GUST_WARN_MS - 500);
+  await tapLantern(0);
+  await until('moth guards lantern 0', GUST_WARN_MS, (s) => s.moths.some((m) => m.task === 'guard' && m.target === 0));
+  s = await game.state();
+  expect(s.gust, 'gust still coming').not.toBeNull();
+  await snap('2-gust-shield');
+  await until('gust passes', GUST_WARN_MS, (s) => s.gust === null);
+  s = await game.state();
+  expect(s.shields, 'gust shielded').toBe(1);
+  expect(s.lanterns[0].lit, 'lantern 0 still lit').toBe(true);
+  await until('guard flies home', 10_000, (s) => busy(s) === 0);
 
-  // Late in the dusk, light them all so they still burn at nightfall: three moths go at once. The
-  // taps for lanterns 3 and 4 find every moth busy, so they wait in the queue, and a moth takes
-  // each one as it comes home. A tap on a lantern a moth is already flying to is ignored.
-  await until('16s of dusk left', DUSK_MS, (s) => s.duskMs <= 16_000);
+  // Its oil runs low: a refill now is a close call, which pays at once.
+  await until('lantern 0 nearly dry', BURN_MS, (s) => s.lanterns[0].oilMs < s.lanterns[0].oilMaxMs * CLOSE_CALL);
+  s = await game.state();
+  expect(s.lanterns[0].lit).toBe(true);
+  const coins = s.coins;
+
+  // Late in the dusk, light them all so they still burn at nightfall: three moths go at once, the
+  // first to save lantern 0. The taps for lanterns 3 and 4 find every moth busy, so they wait in
+  // the queue, and a moth takes each one as it comes home. A tap on a lantern a moth is already
+  // flying to is ignored.
   for (const i of [0, 1, 2]) await tapLantern(i);
   expect(busy(await game.state()), 'every moth out').toBe(MOTHS);
   await tapLantern(3);
@@ -192,19 +230,24 @@ test('plays the first night', async ({ page }, testInfo) => {
   expect((await game.state()).queue, 'second tap kept').toEqual([3, 4]);
   await tapLantern(2);
   expect((await game.state()).queue, 'tap on a claimed lantern ignored').toEqual([3, 4]);
+  await until('close call paid', 5_000, (s) => s.closeCalls === 1);
+  s = await game.state();
+  expect(s.coins, 'close call pays at once').toBe(coins + CLOSE_CALL_PAY);
+  expect(s.lanterns[0].oilMs, 'lantern 0 refilled').toBeGreaterThan(BURN_MS - 1_000);
   await until('every lantern lit', 12_000, (s) => s.lanterns.every((l) => l.lit));
   s = await game.state();
   expect(s.queue, 'queue emptied').toEqual([]);
   expect(s.phase).toBe('dusk');
-  await snap('2-all-lit');
+  await snap('3-all-lit');
 
-  // Night falls with every lantern lit: they pay, the bonus too, and no hearth goes out.
-  await until('night falls', 16_000, (s) => s.phase === 'night');
+  // Night falls with every lantern lit: they pay, the bonus and the herald's order too, and no
+  // hearth goes out.
+  await until('night falls', 20_000, (s) => s.phase === 'night');
   s = await game.state();
-  expect(s.report).toEqual({ lit: LANTERNS, count: LANTERNS, required: REQUIRED, earned: ALL_LIT_PAY, lostHearth: false });
-  expect(s).toMatchObject({ coins: ALL_LIT_PAY, lives: LIVES, kept: 1 });
+  expect(s.report).toEqual({ lit: LANTERNS, count: LANTERNS, required: REQUIRED, earned: NIGHTFALL_PAY, lostHearth: false, orderMet: true });
+  expect(s).toMatchObject({ coins: NIGHTFALL_PAY + CLOSE_CALL_PAY, lives: LIVES, kept: 1 });
   expect(await play(3_000, () => game.panelOpen()), 'night panel opens').toBe(true);
-  await snap('3-night');
+  await snap('4-night');
 
   const speed = gameMs / (Date.now() - startedAt);
   console.log(`Played ${Math.round(gameMs / 1000)}s of game time at ${speed.toFixed(1)}x (target ${SPEED}x).`);
