@@ -1,18 +1,21 @@
 import Phaser from 'phaser';
-import { GRID, MAP, PATH_CORNERS, cellCentre, pathPoint } from '../game/board';
-import { HUD, PANEL, PREVIEW, SEED_BUTTONS, WAVE_BUTTON, BUTTON } from '../scenes/layout';
+import { GARDENS, GRID, cellCentre, pathPoint, type Garden } from '../game/board';
+import { BUTTON, GARDEN_CARD, GOLEM_MENU, HUD, PANEL, PREVIEW, SEED_BUTTONS, SPEED_BUTTON, WAVE_BUTTON } from '../scenes/layout';
 import { C, E, PI, Pp, R, bake, blur, ctx, drop, ellipse, flower, golem, pest, reseed, rnd, sprout, type ClayOptions } from './clay';
 
 // Every texture, painted in clay at startup. Sizes and anchors are in view pixels; painters work in
 // art units (2 per view pixel) around their anchor.
 //
-// bg              the studio table, the garden slab with its pressed path and soil beds, the HUD
-//                 strip with its tags, the side panel and the wave preview's dark pad
+// bg-<n>          garden n's whole static scene: the studio table, the garden slab with its pressed
+//                 paths and soil beds, the HUD strip with its tags, the side panel and the wave
+//                 preview's dark pad
 // edge            the strip of table left of the board, drawn over pests coming in
 // tree            the Heartwood without its flowers; bud and bloom are its flowers
 // golem-<kind>    a golem standing, anchored at its feet
 // sprout          a seed growing, anchored at its mound's foot
-// pest-<kind>     a pest facing right, anchored where it stands on the path
+// pest-<kind>     a pest facing right, anchored where it stands on the path (the queen is bigger)
+// mound           the heap of earth over a mole tunnelling under the path
+// slime           the Queen Slug's slime on a cell
 // slow            the moss clumps over a slowed pest
 // shot-<kind>     a thrown pellet
 // sap, glow       a sap drop and the glow behind the sap counter
@@ -20,7 +23,11 @@ import { C, E, PI, Pp, R, bake, blur, ctx, drop, ellipse, flower, golem, pest, r
 // leaf            the Heartwood's leaf in the HUD
 // card-<h>[-dim]  a seed card, h 84 or 68 view pixels tall; rim-<h> is the gold rim of the picked one
 // card-locked     the Thorn golem's card before the Heartwood blooms, with its padlock
-// btn-wave[-off]  the wave button, lit or waiting; btn is the game-over button
+// btn-wave[-off]  the wave button, lit or waiting; btn is the overlays' button
+// menu, chip[-off] the golem menu's slab and its buttons (Raise, Move, Uproot), usable or not
+// speed[-on]      the speed button in the HUD, off or on
+// pill            the garden tag under the title, which opens the garden picker
+// gcard[-rim|-locked] a garden card in the garden picker, its gold rim, and a locked one
 
 const A = 2; // art units per view pixel
 const G = { x: GRID.x * A, y: GRID.y * A, cell: GRID.cell * A, cols: GRID.cols, rows: GRID.rows };
@@ -30,11 +37,18 @@ const cc = (col: number, row: number) => {
   const p = cellCentre(col, row);
   return { x: p.x * A, y: p.y * A };
 };
-const PTS = PATH_CORNERS.map(([c, r]) => cc(c, r));
 const shade = { print: false, sb: 2, sx: 2, sy: 2, rim: 2 } satisfies ClayOptions;
 
+/** Garden n's background texture key; baked the first time a garden is planted (see `bakeGarden`). */
+export const gardenBg = (n: number) => `bg-${n}`;
+
+/** Bakes garden n's background, unless it is baked already. */
+export function bakeGarden(scene: Phaser.Scene, n: number) {
+  bake(scene, gardenBg(n), 960, 540, () => paintBackground(GARDENS[n]));
+}
+
 export function bakeTextures(scene: Phaser.Scene) {
-  const bg = bake(scene, 'bg', 960, 540, paintBackground);
+  const bg = bake(scene, gardenBg(0), 960, 540, () => paintBackground(GARDENS[0]));
   if (bg && !scene.textures.exists('edge')) {
     const edge = document.createElement('canvas');
     edge.width = GRID.x - 3;
@@ -52,7 +66,10 @@ export function bakeTextures(scene: Phaser.Scene) {
     bake(scene, `golem-${kind}`, 100, 88, () => golem(0, 0, kind), 50, 78);
   }
   bake(scene, 'sprout', 70, 50, () => sprout(0, 0), 35, 40);
-  for (const kind of ['beetle', 'slug', 'crow'] as const) bake(scene, `pest-${kind}`, 100, 60, () => pest(kind), 50, 34);
+  for (const kind of ['beetle', 'slug', 'crow', 'mole', 'snail', 'aphid'] as const) bake(scene, `pest-${kind}`, 100, 60, () => pest(kind), 50, 34);
+  bake(scene, 'pest-queen', 160, 90, () => pest('queen'), 84, 62);
+  bake(scene, 'mound', 70, 36, paintMound, 35, 26);
+  bake(scene, 'slime', 64, 64, paintSlime, 32, 32);
   bake(scene, 'slow', 50, 22, () => {
     for (let k = -1; k <= 1; k++) E(k * 18, k ? 0 : -6, 8, 6, '#8cd05a', shade);
   }, 25, 13);
@@ -93,7 +110,50 @@ export function bakeTextures(scene: Phaser.Scene) {
   bake(scene, 'card-locked', 150, 84, paintLockedCard, 75, 40);
   bake(scene, 'btn-wave', 150, 64, () => R(-WAVE_BUTTON.w, -WAVE_BUTTON.h, WAVE_BUTTON.w * A, WAVE_BUTTON.h * A, 30, '#e0a23a', { sb: 8, sx: 5, sy: 9, rim: 8 }), 72, 28);
   bake(scene, 'btn-wave-off', 150, 64, () => R(-WAVE_BUTTON.w, -WAVE_BUTTON.h, WAVE_BUTTON.w * A, WAVE_BUTTON.h * A, 30, '#9c8a68', { sb: 8, sx: 5, sy: 9, rim: 8 }), 72, 28);
+  const { w: mw, h: mh, chip } = GOLEM_MENU;
+  bake(scene, 'menu', mw + 16, mh + 16, () => R(-mw, -mh, mw * A, mh * A, 26, C.hud, { sb: 8, sx: 5, sy: 8, rim: 8, spec: false }), mw / 2 + 6, mh / 2 + 6);
+  bake(scene, 'chip', chip.w + 12, chip.h + 12, () => R(-chip.w, -chip.h, chip.w * A, chip.h * A, 18, C.card, { sb: 4, sx: 3, sy: 5, rim: 5 }), chip.w / 2 + 5, chip.h / 2 + 5);
+  bake(scene, 'chip-off', chip.w + 12, chip.h + 12, () => R(-chip.w, -chip.h, chip.w * A, chip.h * A, 18, '#9c9078', { sb: 4, sx: 3, sy: 5, rim: 5 }), chip.w / 2 + 5, chip.h / 2 + 5);
+  for (const on of [false, true]) bake(scene, on ? 'speed-on' : 'speed', SPEED_BUTTON.w + 12, SPEED_BUTTON.h + 12, () => paintSpeed(on), SPEED_BUTTON.w / 2 + 5, SPEED_BUTTON.h / 2 + 5);
+  bake(scene, 'pill', HUD.garden.w + 12, HUD.garden.h + 10, () => R(-HUD.garden.w, -HUD.garden.h, HUD.garden.w * A, HUD.garden.h * A, 14, C.tag, { sb: 3, sx: 2, sy: 4, rim: 4, print: false }), HUD.garden.w / 2 + 5, HUD.garden.h / 2 + 4);
+  const { w: gw, h: gh } = GARDEN_CARD;
+  bake(scene, 'gcard', gw + 16, gh + 16, () => R(-gw, -gh, gw * A, gh * A, 26, C.card, { sb: 8, sa: 0.5, rim: 7 }), gw / 2 + 6, gh / 2 + 6);
+  bake(scene, 'gcard-locked', gw + 16, gh + 16, () => R(-gw, -gh, gw * A, gh * A, 26, '#a89c84', { sb: 8, sa: 0.5, rim: 7 }), gw / 2 + 6, gh / 2 + 6);
+  bake(scene, 'gcard-rim', gw + 24, gh + 24, () => R(-gw - 8, -gh - 8, gw * A + 16, gh * A + 16, 32, C.gold, { sb: 8, rim: 7 }), gw / 2 + 10, gh / 2 + 10);
   bake(scene, 'btn', BUTTON.w + 16, BUTTON.h + 16, () => R(-BUTTON.w, -BUTTON.h, BUTTON.w * A, BUTTON.h * A, 30, '#e0a23a', { sb: 8, sx: 5, sy: 9, rim: 8 }), BUTTON.w / 2 + 6, BUTTON.h / 2 + 6);
+}
+
+/** A heap of crumbly earth, the mole's tunnel showing above it. */
+function paintMound() {
+  reseed(61);
+  Pp([[-44, 14], [-30, -12], [-6, -26], [18, -22], [40, -4], [46, 14]], '#7a4c2c', { sb: 4, sx: 3, sy: 5, rim: 4 });
+  for (let k = 0; k < 7; k++) E(-34 + k * 11 + rnd() * 4, 10 - rnd() * 22, 5 + rnd() * 3, 4 + rnd() * 2, k % 2 ? '#8e5c36' : '#5e3a20', { print: false, sb: 2, sx: 1, sy: 2, rim: 1.5 });
+}
+
+/** The Queen Slug's slime: a glossy yellow-green smear. */
+function paintSlime() {
+  reseed(71);
+  ctx.save();
+  ctx.globalAlpha = 0.7;
+  Pp(
+    Array.from({ length: 10 }, (_, k) => {
+      const a = (k / 10) * PI * 2;
+      const r = k % 2 ? 40 : 54 + rnd() * 8;
+      return [Math.cos(a) * r, Math.sin(a) * r * 0.8] as [number, number];
+    }),
+    '#c8dc6a',
+    { print: false, shadow: false, rim: 3 },
+  );
+  ctx.restore();
+  ellipse(-16, -14, 12, 6, 'rgba(255,255,230,0.55)', -0.5);
+  ellipse(18, 12, 6, 4, 'rgba(255,255,230,0.45)', -0.5);
+}
+
+/** The speed button: two pressed play triangles on a clay tag, gold when the game runs fast. */
+function paintSpeed(on: boolean) {
+  const { w, h } = SPEED_BUTTON;
+  R(-w, -h, w * A, h * A, 18, on ? C.gold : C.tag, { sb: 4, sx: 3, sy: 5, rim: 5 });
+  for (const dx of [-36, -20]) Pp([[dx - 8, -12], [dx + 10, 0], [dx - 8, 12]], on ? '#8a4a10' : '#7a5a34', { print: false, shadow: false, rim: 1.5 });
 }
 
 function paintLeaf() {
@@ -162,7 +222,8 @@ function paintLockedCard() {
   ellipse(tx, ty + 7, 4, 4, '#6a4a10');
 }
 
-function paintBackground() {
+function paintBackground(garden: Garden) {
+  const routes = garden.routes.map((r) => r.points.map((p) => ({ x: p.x * A, y: p.y * A })));
   // The studio table: warm wood with a vignette.
   ctx.fillStyle = C.table;
   ctx.fillRect(0, 0, W, H);
@@ -202,8 +263,10 @@ function paintBackground() {
   // The path: a flattened ribbon of tan clay.
   const pathLine = () => {
     ctx.beginPath();
-    ctx.moveTo(G.x - 6, PTS[0].y);
-    PTS.slice(1).forEach((p) => ctx.lineTo(p.x, p.y));
+    for (const pts of routes) {
+      ctx.moveTo(G.x - 6, pts[0].y);
+      pts.slice(1).forEach((p) => ctx.lineTo(p.x, p.y));
+    }
   };
   ctx.save();
   ctx.lineJoin = 'round';
@@ -235,17 +298,19 @@ function paintBackground() {
   ctx.restore();
   // Pressed tool marks along the path.
   reseed(8);
-  for (let d = 20; d < 1210; d += 22) {
-    const p = pathPoint(d);
-    const q = pathPoint(d + 1);
-    const along = Math.abs(q.x - p.x) > Math.abs(q.y - p.y);
-    const ox = (rnd() - 0.5) * 80;
-    const oy = (rnd() - 0.5) * 80;
-    const x = along ? p.x * A : p.x * A + ox;
-    const y = along ? p.y * A + oy : p.y * A;
-    if (x < G.x + 8) continue;
-    ellipse(x + 1.5, y + 1.5, 5, 3, 'rgba(255,240,200,0.35)');
-    ellipse(x, y, 5, 3, 'rgba(90,60,30,0.35)');
+  for (const route of garden.routes) {
+    for (let d = 20; d < route.length - 6; d += 22) {
+      const p = pathPoint(route, d);
+      const q = pathPoint(route, d + 1);
+      const along = Math.abs(q.x - p.x) > Math.abs(q.y - p.y);
+      const ox = (rnd() - 0.5) * 80;
+      const oy = (rnd() - 0.5) * 80;
+      const x = along ? p.x * A : p.x * A + ox;
+      const y = along ? p.y * A + oy : p.y * A;
+      if (x < G.x + 8) continue;
+      ellipse(x + 1.5, y + 1.5, 5, 3, 'rgba(255,240,200,0.35)');
+      ellipse(x, y, 5, 3, 'rgba(90,60,30,0.35)');
+    }
   }
   // The table again left of the board, where pests come in.
   ctx.fillStyle = C.table;
@@ -257,7 +322,7 @@ function paintBackground() {
   reseed(12);
   for (let r = 0; r < G.rows; r++) {
     for (let c = 0; c < G.cols; c++) {
-      if (MAP[r][c] !== 'soil') continue;
+      if (garden.map[r][c] !== 'soil') continue;
       const { x, y } = cc(c, r);
       const jx = (rnd() - 0.5) * 6;
       const jy = (rnd() - 0.5) * 6;
@@ -284,7 +349,7 @@ function paintBackground() {
   reseed(14);
   for (let r = 0; r < G.rows; r++) {
     for (let c = 0; c < G.cols; c++) {
-      if (MAP[r][c] !== 'soil' || rnd() < 0.4) continue;
+      if (garden.map[r][c] !== 'soil' || rnd() < 0.4) continue;
       const x = G.x + c * G.cell + 14 + rnd() * 100;
       const y = G.y + r * G.cell + (rnd() < 0.5 ? 14 : 112);
       for (let k = -1; k <= 1; k++) {
