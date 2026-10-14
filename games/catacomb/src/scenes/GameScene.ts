@@ -131,11 +131,12 @@ export class GameScene extends Phaser.Scene {
     const onMap = s.phase === 'map' || s.phase === 'walk' || s.phase === 'rest' || (s.phase === 'reward' && !s.fight && ROOMS[s.at!]?.kind === 'treasure');
     this.mapLayer.setVisible(onMap);
     this.fightLayer.setVisible(!onMap);
+    // Pops first, so a killing blow's number still finds its foe before drawFight drops it.
+    this.drawPops();
     if (onMap) this.drawMap();
     else this.drawFight();
     this.drawReward();
     this.drawPanel();
-    this.drawPops();
     this.drawHud();
   }
 
@@ -224,10 +225,10 @@ export class GameScene extends Phaser.Scene {
     const enemies = f?.enemies ?? [];
     const xs = FOE_XS[Math.max(1, enemies.length)] ?? FOE_XS[3];
 
-    // The hero shakes when hit, unless motion is reduced.
+    // The hero shakes and flashes red when hit, unless motion is reduced.
     const shake = s.heroHitMs > 0 && !settings.reduceMotion ? Math.sin(this.clock / 20) * 4 : 0;
     this.hero.setPosition(HERO_FEET.x + shake, HERO_FEET.y);
-    if (s.heroHitMs > 0) this.hero.setTint(0xff8080);
+    if (s.heroHitMs > 0 && !settings.reduceMotion) this.hero.setTint(0xff8080);
     else this.hero.clearTint();
 
     this.bars.clear();
@@ -253,7 +254,7 @@ export class GameScene extends Phaser.Scene {
       const lunge = e.actMs > 0 ? -Math.sin((e.actMs / 300) * Math.PI) * 30 : 0;
       const bob = Math.sin(this.clock / 400 + e.id) * 2;
       foe.sprite.setPosition(foe.x + lunge, FOE_FEET_Y + bob);
-      if (e.hitMs > 0) foe.sprite.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
+      if (e.hitMs > 0 && !settings.reduceMotion) foe.sprite.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
       else foe.sprite.clearTint();
       this.drawHpBar(foe.x, e.hp, e.maxHp, e.block, foe.hp);
       this.drawIntent(e, foe, foe.x, FOE_FEET_Y - foe.sprite.height - 22);

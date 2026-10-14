@@ -140,7 +140,7 @@ export function playCard(s: GameState, index: number) {
   if (c.heal) {
     const healed = Math.min(c.heal, s.maxHp - s.hp);
     s.hp += healed;
-    pop(s, 'hero', `+${healed}`, 'heal');
+    if (healed > 0) pop(s, 'hero', `+${healed}`, 'heal');
   }
   if (c.energy) f.energy += c.energy;
   if (c.draw) drawCards(s, c.draw);

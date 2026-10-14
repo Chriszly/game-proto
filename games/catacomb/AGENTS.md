@@ -75,7 +75,9 @@ How it runs:
   and return false when the action is not allowed.
 - **Rendering:** each frame, `update` picks the map or fight layer (the treasure reward is shown
   over the map) and redraws. Graphics (paths, room rings, health bars, HUD) are cleared and
-  redrawn every frame. Foe sprites and pop texts are diffed by id in `this.foes` and `this.pops`.
+  redrawn every frame. Foe sprites and pop texts are diffed by id in `this.foes` and `this.pops`;
+  pops are drawn before the fight, so a killing blow's number still finds its foe before the foe is
+  dropped.
   The hand and reward cards are rebuilt only when a key changes (`handKey` is the hand plus
   energy, `rewardKey` the offered ids).
 
@@ -120,8 +122,8 @@ Data tables (where to tune):
 - Difficulty scales one number: foe health. `startFight` in `src/game/sim.ts` sets each foe's `hp`
   and `maxHp` to `Math.round(ENEMIES[kind].hp * byDifficulty(0.75, 1, 1.3))`, so Easy 0.75x,
   Normal 1x, Hard 1.3x. Damage, block and the hero are not scaled.
-- `settings.reduceMotion` also stops the hero's hit shake in `GameScene.drawFight`; the red hit tint
-  and the foes' white hit flash still show.
+- `settings.reduceMotion` also stops the hero's hit shake, the hero's red hit tint and the foes'
+  white hit flash in `GameScene.drawFight`.
 - Keep Normal exactly as designed (multiplier 1): the playthrough runs on Normal and expects the
   slime's 24 health.
 - Keep the Catacomb row of the difficulty table in the root `README.md` (and the difficulty line

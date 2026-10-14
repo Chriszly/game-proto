@@ -90,7 +90,7 @@ turns until the slime falls, checking each card's cost and effect and each of th
 against its intent. Then it takes the first reward card and checks it joined the deck and the next
 rooms opened. Like the other games' tests it owns the game clock and plays at 4x speed
 (`PLAYTHROUGH_SPEED`). The **Playthrough Catacomb** workflow (`.github/workflows/playthrough-catacomb.yml`)
-runs it on every PR and push to main that touches this folder or a shared build file, and uploads
+runs it on every pull request that touches this folder or that workflow (not on pushes to main), and uploads
 the video and screenshots as the `playthrough-catacomb` artifact.
 
 ```sh
