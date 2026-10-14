@@ -20,7 +20,8 @@ Implemented today:
   `bolt` (projectiles, optionally piercing), `dash` (move, hit where it lands) and `ally` (heal and
   shield allied champions). R unlocks at level 3; levels run 1 to 5.
 - Gold (passive plus last hits and kills), XP shared by nearby champions, respawns that scale with
-  level, and three shop items bought once each near the Nexus.
+  level, and eight shop items bought once each near the Nexus, in two columns. Items add flat
+  damage, armor, health and speed, plus percent attack speed (`atk`) and cooldown reduction (`cdr`).
 - AI for allies and red: attack the nearest champion, then minion, then structure in reach, retreat
   at low health, cast abilities when they have a use, otherwise walk the lane. Towers shoot
   champions first, then minions.
@@ -34,6 +35,7 @@ Missing or rough:
 
 - No pathing or collisions: units overlap and walk straight lines.
 - No sound, pause, title or save. Nothing is persisted.
+- Art is flat vector drawn in code (`src/art/units.ts`); there are no sprite sheets.
 - No vision or fog; the camera follows the player's champion.
 - Only the first round (see the playthrough) is covered by the test; the Warden is the only champion
   the test plays.
@@ -50,9 +52,12 @@ File map (`src/`):
   with text objects it keeps in a map.
 - `scenes/layout.ts`: screen rectangles for the bars, the ability boxes, the shop, the minimap, the
   pick cards and the end panel, plus `VIEW` and `FONT`.
+- `art/units.ts`: draws champions (body, face, class gear that swings on attacks), minions, towers,
+  the Nexus, camps and projectiles with Phaser's Graphics. Reads each unit's `facing`, `walk`,
+  `swing` and `flash` timers; it holds no state of its own.
 - `game/data.ts`: plain data. `LANES`, `BASE`, `TOWERS`, `CAMPS`, the balance constants (`TOWER`,
   `CAMP`, `MINION`, `KILL`, `XP_FOR_LEVEL`, respawn times), `CHAMPIONS` with their `AbilityDef`s,
-  `ITEMS`, `ALLY_LANES`, `ENEMY_LANES` and `SIDE_COLOR`.
+  `ITEMS` (with `atk` and `cdr` stats), `ALLY_LANES`, `ENEMY_LANES` and `SIDE_COLOR`.
 - `game/state.ts`: the types (`GameState`, `Unit`, `Projectile`, `Fx`), `createGame`, `spawnWave`,
   `spawnChampion`, `refreshStats` (level and items into stats), `pathFor` (red walks lanes
   backwards) and small helpers. No Phaser.
@@ -72,6 +77,8 @@ State model:
 - `Unit.side` is `'blue'`, `'red'` or `'neutral'` (camps). Hostile means a different side.
 - Champions keep `champ` (the `ChampionDef`), `level`, `xp`, `gold`, `items` and `cds` (cooldowns
   per key). `refreshStats` recomputes `maxHp`, `dmg`, `armor` and `speed` from the level and items.
+- Animation timers: `swing` (180 ms after an attack, drives the gear), `flash` (120 ms after a hit,
+  whitens the unit), `walk` (distance walked, drives the bob) and `facing` (radians).
 - `Unit.path` and `wp` are a lane walk. The last point of each path is the enemy Nexus.
 - A player's champion has `player: true`; `moveTo` is a walk to a point, `target` an enemy to attack.
 
@@ -111,7 +118,8 @@ advances only through `tick`, which the scene drives from frame deltas.
   `playthrough.spec.ts` (`WARDEN_CARD`, `SWORD_ROW`, `RED_MID_TOWER`) against `layout.ts` and
   `TOWERS`, the Warden's stats and Slam radius (`CHAMPIONS`), the Long Sword cost and damage
   (`ITEMS`), and the 240 s game-time budget.
-- It saves `0-pick`, `1-shop` and `2-tower-down` screenshots. Copy them into `docs/screenshots/` when
+- It saves `0-pick`, `1-shop` and `2-tower-down` screenshots. `SWORD_ROW` is the Long Sword's place in the
+  two-column shop (`shopRow(0)`'s centre). Copy them into `docs/screenshots/` when
   the look changes. `cover.png` is `playthrough-3-tower-down`.
 
 ## Making common changes
@@ -125,7 +133,8 @@ advances only through `tick`, which the scene drives from frame deltas.
   red's under the 180-degree rotation of the map, and check the playthrough still reaches the red mid
   tower at (1576, 584).
 - **Add an item**: add it to `ITEMS` with its stats. `refreshStats` applies the stat fields it knows
-  (`dmg`, `armor`, `hp`, `speed`).
+  (`dmg`, `armor`, `hp`, `speed`, `atk`, `cdr`). The shop lays items out in two columns, so the panel
+  height in `layout.ts` (`SHOP_PANEL`) must still fit the rows.
 
 ## Gotchas
 

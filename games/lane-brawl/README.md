@@ -31,8 +31,18 @@ buy items at your Nexus, and push the lanes until the red Nexus falls. There is 
 5. **Jungle camps**: four neutral camps, two a side. Attack one to take its 80 gold and 120 XP; it
    fights back and returns after a minute.
 6. **Champions** level from 1 to 5 on XP. R unlocks at level 3. Each level adds health and damage.
-7. **Items**: Long Sword (+12 damage), Chain Mail (+6 armor, +90 health) and Swift Boots (+25
-   speed). Each costs 300 to 350 gold and can be bought once. Buy them within reach of your Nexus.
+7. **Items**: eight of them, each bought once within reach of your Nexus.
+
+   | Item | Cost | Stats |
+   | --- | --- | --- |
+   | Long Sword | 350 | +12 damage |
+   | Brutal Edge | 650 | +24 damage |
+   | Chain Mail | 350 | +6 armor, +90 health |
+   | Thornmail | 420 | +14 armor |
+   | Giant's Belt | 400 | +200 health |
+   | Swift Boots | 300 | +25 speed |
+   | Rapid Bow | 400 | +25% attack speed |
+   | Cloak of Haste | 350 | -15% ability cooldowns |
 8. **Dying** sends the champion back to its Nexus after a short wait that grows with its level.
 9. **Winning** destroys the red Nexus. Losing means your Nexus falls first.
 

@@ -242,10 +242,15 @@ export interface ItemDef {
   id: string;
   name: string;
   cost: number;
+  /** Flat bonuses to a champion's stats. */
   dmg?: number;
   armor?: number;
   hp?: number;
   speed?: number;
+  /** Percent faster attacks. */
+  atk?: number;
+  /** Percent shorter ability cooldowns. */
+  cdr?: number;
 }
 
 /** Bought at the shop by a champion standing near its Nexus. Each item can be bought once. */
@@ -253,6 +258,11 @@ export const ITEMS: ItemDef[] = [
   { id: 'sword', name: 'Long Sword', cost: 350, dmg: 12 },
   { id: 'mail', name: 'Chain Mail', cost: 350, armor: 6, hp: 90 },
   { id: 'boots', name: 'Swift Boots', cost: 300, speed: 25 },
+  { id: 'belt', name: "Giant's Belt", cost: 400, hp: 200 },
+  { id: 'thorns', name: 'Thornmail', cost: 420, armor: 14 },
+  { id: 'bow', name: 'Rapid Bow', cost: 400, atk: 25 },
+  { id: 'cloak', name: 'Cloak of Haste', cost: 350, cdr: 15 },
+  { id: 'blade', name: 'Brutal Edge', cost: 650, dmg: 24 },
 ];
 
 /** How close a champion must stand to its Nexus to shop. */

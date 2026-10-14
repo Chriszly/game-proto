@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { ABILITY_KEYS, AbilityKey, BASE, CAMPS, CHAMPIONS, ChampionDef, ITEMS, ItemDef, LANES, SIDE_COLOR, Shape, Team, Vec, WORLD, XP_FOR_LEVEL, MAX_LEVEL, TOWERS } from '../game/data';
 import { Fx, GameState, Phase, Unit, createGame, getUnit, dist } from '../game/state';
 import { buy, cast, commandAttack, commandMove, tick } from '../game/sim';
+import { drawCamp, drawChampion, drawMinion, drawNexus, drawProjectile, drawTower } from '../art/units';
 import { byDifficulty, settings } from '../../../../shared/settings';
 import {
   BOTTOM_BAR,
@@ -51,6 +52,8 @@ function describe(item: ItemDef): string {
   if (item.armor) parts.push(`+${item.armor} armor`);
   if (item.hp) parts.push(`+${item.hp} health`);
   if (item.speed) parts.push(`+${item.speed} speed`);
+  if (item.atk) parts.push(`+${item.atk}% attack speed`);
+  if (item.cdr) parts.push(`-${item.cdr}% cooldowns`);
   return parts.join(', ');
 }
 
@@ -275,15 +278,13 @@ export class GameScene extends Phaser.Scene {
     const me = this.player();
     for (const u of s.units) {
       if (u.dead) continue;
-      this.drawUnit(g, u);
+      this.drawUnit(g, u, s.time);
     }
     for (const u of s.units) {
       if (u.dead) continue;
       this.drawBar(g, u, me);
     }
-    for (const p of s.projectiles) {
-      g.fillStyle(col(p.color), 1).fillCircle(p.x, p.y, 6);
-    }
+    for (const p of s.projectiles) drawProjectile(g, p);
 
     const fx = this.fxG;
     fx.clear();
@@ -291,47 +292,28 @@ export class GameScene extends Phaser.Scene {
       const alpha = Math.max(0, left / f.ms);
       if (f.kind === 'ring') {
         fx.lineStyle(4, col(f.color), alpha).strokeCircle(f.x, f.y, f.r);
-      } else {
+      } else if (f.kind === 'line') {
         fx.lineStyle(4, col(f.color), alpha).lineBetween(f.x, f.y, f.x2, f.y2);
+      } else {
+        fx.lineStyle(6, col(f.color), alpha).beginPath();
+        fx.arc(f.x, f.y, f.r, f.a - 0.9, f.a + 0.9, false);
+        fx.strokePath();
       }
     }
   }
 
-  private drawUnit(g: Phaser.GameObjects.Graphics, u: Unit) {
-    const outline = col(SIDE_COLOR[u.side]);
+  private drawUnit(g: Phaser.GameObjects.Graphics, u: Unit, time: number) {
     switch (u.kind) {
       case 'nexus':
-        g.fillStyle(outline, 1).fillCircle(u.x, u.y, u.radius);
-        g.fillStyle(0xffffff, 0.25).fillCircle(u.x, u.y, u.radius * 0.55);
-        return;
+        return drawNexus(g, u, time);
       case 'tower':
-        g.fillStyle(outline, 1).fillRect(u.x - u.radius, u.y - u.radius, u.radius * 2, u.radius * 2);
-        g.lineStyle(3, 0x1d2430, 1).strokeRect(u.x - u.radius, u.y - u.radius, u.radius * 2, u.radius * 2);
-        g.fillStyle(0xffffff, 0.8).fillCircle(u.x, u.y, 6);
-        return;
+        return drawTower(g, u);
       case 'minion':
-        g.fillStyle(outline, 1).fillCircle(u.x, u.y, u.radius);
-        g.lineStyle(2, 0x1d2430, 1).strokeCircle(u.x, u.y, u.radius);
-        return;
+        return drawMinion(g, u);
       case 'camp':
-        g.fillStyle(col('#7a5c3a'), 1).fillCircle(u.x, u.y, u.radius);
-        g.lineStyle(3, col(SIDE_COLOR.neutral), 1).strokeCircle(u.x, u.y, u.radius);
-        return;
-      case 'champion': {
-        const c = u.champ!;
-        const pts = shapePoints(c.shape, u.x, u.y, u.radius);
-        g.fillStyle(col(c.color), 1);
-        g.lineStyle(4, outline, 1);
-        if (pts) {
-          g.fillPoints(pts, true);
-          g.strokePoints(pts, true, true);
-        } else {
-          g.fillCircle(u.x, u.y, u.radius);
-          g.strokeCircle(u.x, u.y, u.radius);
-        }
-        if (u.player) g.lineStyle(2, 0xffffff, 1).strokeCircle(u.x, u.y, u.radius + 6);
-        return;
-      }
+        return drawCamp(g, u);
+      case 'champion':
+        return drawChampion(g, u, time);
     }
   }
 
