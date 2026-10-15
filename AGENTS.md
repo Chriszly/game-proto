@@ -36,6 +36,16 @@ Each game's guide for agents, to read before changing it:
 | Lane Brawl | [games/lane-brawl/AGENTS.md](games/lane-brawl/AGENTS.md) |
 | Colonizer | [games/colonizer/AGENTS.md](games/colonizer/AGENTS.md) |
 
+## Feedback and issues
+
+Feedback comes in as issues filed through the forms in `.github/ISSUE_TEMPLATE/` (bug report,
+gameplay feedback, feature wish). Every issue carries one `game:` label and one `type:` label
+(`type: bug`, `type: gameplay` or `type: feature`); `prio:` and `status:` labels are optional. The
+form sets the type label and `.github/workflows/issue-labels.yml` adds the game label from the
+form's Game dropdown. Labels are defined in `.github/labels.json` and the Labels workflow
+(`.github/workflows/labels.yml`) syncs them on main, deleting any label not in that file, so add
+or change labels there rather than on GitHub. A PR that fixes an issue says `Fixes #<number>`.
+
 ## Work on one game at a time
 
 - **Keep games apart.** A game's code stays in its folder and never imports from another game.
@@ -55,7 +65,10 @@ Each game's guide for agents, to read before changing it:
   `favicon.svg` (same ears, head, dot eyes and muzzle, 32x32 viewBox) with one prop for the game,
   like Apothecary's plague doctor hat and beak. Then add a card for it in the hub's `index.html` and in `e2e/hub.spec.ts`, a
   Playwright project in `playwright.config.ts`, a row in the README's table of games and a row in
-  the table of guides above. Vite picks
+  the table of guides above. Add its `game: <name>` label to `.github/labels.json` (the Labels
+  workflow creates it on main), its name to the Game dropdown of the three issue forms in
+  `.github/ISSUE_TEMPLATE/`, and its name and label to the map in
+  `.github/workflows/issue-labels.yml`. Vite picks
   up `games/*/index.html` on its own. Keep save keys and other browser storage prefixed with the
   game's name, since every game shares the hub's origin.
 - **Honour the hub's settings.** Every game calls `setupGame(game)` from `shared/setupGame.ts`
