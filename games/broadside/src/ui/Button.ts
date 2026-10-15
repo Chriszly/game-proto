@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { renderScale } from '../../../../shared/scaling';
 import { BUTTON, FONT } from '../scenes/layout';
 
 const CREAM = 0xf6ecd2;
@@ -10,7 +11,7 @@ export function makeButton(scene: Phaser.Scene, x: number, y: number, caption: s
   const bg = scene.add.rectangle(0, 0, w, h, CREAM).setStrokeStyle(2, INK);
   const rule = scene.add.rectangle(0, 0, w - 8, h - 8).setStrokeStyle(1, INK, 0.5);
   const text = scene.add
-    .text(0, 0, caption, { fontFamily: FONT, fontSize: '19px', fontStyle: 'bold italic', color: '#2b2118', resolution: 2 })
+    .text(0, 0, caption, { fontFamily: FONT, fontSize: '19px', fontStyle: 'bold italic', color: '#2b2118', resolution: Math.max(2, renderScale) })
     .setOrigin(0.5);
   const button = scene.add.container(x, y, [bg, rule, text]);
   bg.setInteractive({ useHandCursor: true })
