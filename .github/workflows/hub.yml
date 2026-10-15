@@ -36,9 +36,7 @@ concurrency:
 jobs:
   hub:
     runs-on: ubuntu-latest
-    # Each game on shared/scaling.ts adds five screen checks, about a minute and a half, and more
-    # games move over one PR at a time.
-    timeout-minutes: 30
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

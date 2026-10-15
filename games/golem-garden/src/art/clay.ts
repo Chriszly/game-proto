@@ -1,10 +1,12 @@
 import Phaser from 'phaser';
+import { sharpRes } from '../../../../shared/scaling';
 
 // The claymation toolkit every texture is painted with: soft plasticine shapes shaded from the
 // top left, with a rolled rim, a fingerprint smudge, a specular glint and a warm studio shadow.
 // Textures are painted on 2D canvases and added with `textures.addCanvas`. The painters work in
-// "art units", twice the game's 960x540 view, and each canvas is scaled by a half, so its texture
-// is drawn at the view's own size.
+// "art units", twice the game's 960x540 view. Each canvas has `res` canvas pixels per view pixel
+// (more on a big screen, see `sharpRes`, up to `MAX_RES`), and its texture is marked with that resolution, so it is
+// drawn at the view's own size and every image keeps its view-pixel width, height and origin.
 
 export const PI = Math.PI;
 /** Art units per view pixel. */
@@ -34,6 +36,14 @@ export const C = {
 
 /** The canvas being painted; set by `bake` for the duration of one painter. */
 export let ctx: CanvasRenderingContext2D;
+/** Canvas pixels per view pixel of the canvas being painted. */
+let res = 1;
+/**
+ * The most canvas pixels per view pixel the clay is painted at. Its soft shadows are blur filters,
+ * which cost about the cube of the resolution: on a 4K screen without a GPU the game starts in
+ * about as long as Apothecary at 2, and four times as long at 4. Text and Graphics are still drawn at the full `renderScale`.
+ */
+const MAX_RES = 2;
 
 let seed = 7;
 /** A seeded random number, so the clay looks the same on every visit and never touches Math.random. */
@@ -53,19 +63,34 @@ export const reseed = (s: number) => {
  */
 export function bake(scene: Phaser.Scene, key: string, w: number, h: number, paint: () => void, ox = 0, oy = 0) {
   if (scene.textures.exists(key)) return;
+  res = Math.min(sharpRes(w, h), MAX_RES);
   const canvas = document.createElement('canvas');
-  canvas.width = Math.ceil(w);
-  canvas.height = Math.ceil(h);
+  canvas.width = Math.ceil(w * res);
+  canvas.height = Math.ceil(h * res);
   ctx = canvas.getContext('2d')!;
+  ctx.scale(res, res);
   ctx.translate(ox, oy);
   ctx.scale(1 / ART, 1 / ART);
   paint();
-  scene.textures.addCanvas(key, canvas);
+  addSharp(scene, key, canvas, res);
   return canvas;
 }
 
+/**
+ * Adds a canvas painted at `res` canvas pixels per view pixel as a texture shown in view pixels,
+ * so images of it need no scaling of their own.
+ */
+export function addSharp(scene: Phaser.Scene, key: string, canvas: HTMLCanvasElement, res: number) {
+  const texture = scene.textures.addCanvas(key, canvas)!;
+  // Phaser draws a frame `resolution` times smaller than its canvas pixels, and sizes and anchors
+  // an image by the frame's untrimmed size, which the trim sets to the size shown.
+  texture.source[0].resolution = res;
+  const [w, h] = [canvas.width / res, canvas.height / res];
+  texture.get().setTrim(w, h, 0, 0, w, h);
+}
+
 /** A blur filter of `n` art units (canvas filters work in canvas pixels). */
-export const blur = (n: number) => `blur(${n / ART}px)`;
+export const blur = (n: number) => `blur(${(n / ART) * res}px)`;
 
 export function rrect(x: number, y: number, w: number, h: number, r: number) {
   ctx.beginPath();
