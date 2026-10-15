@@ -39,8 +39,8 @@ jobs:
               console.log('PR template validation passed.');
             }
 
-  # Every PR needs at least one "type:" label (what kind of change) and at least one
-  # "game:" label (which game, or hub / shared), and only labels listed in the PR's
+  # Every PR needs at least one Type label (what kind of change) and at least one
+  # Game label (which game, or hub / shared), and only labels listed in the PR's
   # .github/labels.json, so a PR that adds a game can carry its new game label.
   type-and-game:
     runs-on: ubuntu-latest
@@ -64,12 +64,14 @@ jobs:
               per_page: 100
             });
             const names = labels.map(l => l.name);
-            const known = new Set(
-              JSON.parse(require('fs').readFileSync('.github/labels.json', 'utf8')).map(l => l.name));
-            const unknown = names.filter(n => !known.has(n));
-            const missing = ['type: ', 'game: ']
-              .filter(prefix => !names.some(n => n.startsWith(prefix)))
-              .map(prefix => `a "${prefix.trim()}" label`);
+            // A label's group is the start of its description in labels.json, e.g. "Type: ...".
+            const groupOf = new Map(
+              JSON.parse(require('fs').readFileSync('.github/labels.json', 'utf8'))
+                .map(l => [l.name, l.description.split(':')[0]]));
+            const unknown = names.filter(n => !groupOf.has(n));
+            const missing = ['Type', 'Game']
+              .filter(group => !names.some(n => groupOf.get(n) === group))
+              .map(group => `a ${group} label`);
             const problems = [];
             if (missing.length > 0) {
               problems.push(`PR needs ${missing.join(' and ')}. Pick them under Labels; ` +

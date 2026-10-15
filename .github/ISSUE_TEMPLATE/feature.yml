@@ -1,7 +1,7 @@
 name: Feature wish
 description: An idea or wish for something new in a game.
 title: "[Wish] "
-labels: ["type: feature"]
+labels: ["feature"]
 body:
   - type: dropdown
     id: game
