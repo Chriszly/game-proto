@@ -17,8 +17,12 @@ export const SWORDS: Sword[] = [
   { name: 'Golden Claymore', price: 320 },
   { name: 'Runeblade', price: 720 },
   { name: 'Dragonslayer', price: 1600 },
+  // Two Dragonslayers merge into the legendary Anvilheart, made for the crown.
+  { name: 'Anvilheart', price: 4000 },
 ];
 
 export const MAX_TIER = SWORDS.length;
+/** Adventurers ask for swords up to the Dragonslayer; the Anvilheart is for the crown. */
+export const ORDER_TOP = MAX_TIER - 1;
 
 export const swordOf = (tier: number) => SWORDS[tier - 1];

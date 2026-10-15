@@ -1,6 +1,6 @@
 import { freshProgress, type Progress } from './state';
 
-// The board, the coins, the upgrades and the royal commission are saved; adventurers come afresh
+// The board and barrel, the coins, the upgrades, the royal commission and reputation are saved; adventurers come afresh
 // on every visit.
 const KEY = 'anvilheart-progress';
 

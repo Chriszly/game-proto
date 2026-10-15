@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
-import { DESKS, SLOTS } from '../game/state';
-import { BOARD, FORGE_BUTTON, FURNACE_WINDOW, HUD_HEIGHT, VIEW, deskBox, slotCentre } from '../scenes/layout';
+import { DESKS, GRID, MAX_SLOTS } from '../game/state';
+import { BOARD, CELL_SCALE, FORGE_BUTTON, FURNACE_WINDOW, HUD_HEIGHT, REPUTATION, VIEW, deskBox, slotCentre } from '../scenes/layout';
 import { ART, LEAD, PI, bake, ctx, diamond, glass, glow, mix, panel, path, rect, reseed, ring, rnd, type Pt } from './glass';
 
 // The smithy as one great window: a mosaic of glass behind everything, glowing orange round the
@@ -16,6 +16,7 @@ export function bakeScenery(scene: Phaser.Scene) {
     lancets();
     furnaceStones();
     board();
+    reputationPanel();
     counter();
     hudBar();
   });
@@ -105,10 +106,15 @@ function flames(frame: number) {
   for (const [x, y] of [[194, 552], [226, 556], [262, 552], [298, 556], [330, 552]]) glass(ring(x, y, 12, 6, 0.3), '#2a1a1a', { lw: 3, flat: true });
 }
 
-/** The sixteen cobalt panes of the board with gold quarries at their corners, and an anvil on each. */
+/**
+ * The twenty green panes of the board (the fifth row's are covered until it is bought) with gold
+ * quarries at their corners, and an anvil on each.
+ */
 function board() {
-  const size = a(BOARD.cell * 4);
-  glass(rect(a(BOARD.x) - 16, a(BOARD.y) - 16, size + 32, size + 32), '#000000', { empty: true, lw: 10 });
+  const SLOTS = MAX_SLOTS;
+  const w = a(BOARD.cell * GRID.cols);
+  const h = a(BOARD.cell * GRID.maxRows);
+  glass(rect(a(BOARD.x) - 16, a(BOARD.y) - 16, w + 32, h + 32), '#000000', { empty: true, lw: 10 });
   const tiles = ['#1e5a46', '#24684f', '#1a4e3e', '#28705a'];
   reseed(20);
   const half = a(BOARD.cell) / 2 - 4;
@@ -127,12 +133,23 @@ function board() {
   }
   for (let i = 0; i < SLOTS; i++) {
     const c = slotCentre(i);
-    for (const [qx, qy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) glass(diamond(a(c.x) + qx * half, a(c.y) + qy * half, 14), '#c8962e', { lw: 3, flat: true });
+    for (const [qx, qy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) glass(diamond(a(c.x) + qx * half, a(c.y) + qy * half, 12), '#c8962e', { lw: 3, flat: true });
   }
   for (let i = 0; i < SLOTS; i++) {
     const c = slotCentre(i);
-    anvil(a(c.x), a(c.y));
+    ctx.save();
+    ctx.translate(a(c.x), a(c.y));
+    ctx.scale(CELL_SCALE, CELL_SCALE);
+    anvil(0, 0);
+    ctx.restore();
   }
+}
+
+/** The guild reputation meter's dark pane, top left; the scene draws its label and jewels on it. */
+function reputationPanel() {
+  reseed(30);
+  const r = REPUTATION;
+  panel(a(r.x), a(r.y), a(r.w), a(r.h), '#8a5e30', '#2a2238', 8);
 }
 
 /** A leaded steel anvil: horn, face, waist, foot. */

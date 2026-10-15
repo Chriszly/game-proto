@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
-import { BANNER, BOARD, DESK, DISCOVERED, ORDER, TAG } from '../scenes/layout';
-import { ART, PI, bake, ctx, diamond, glass, glow, glowFrame, label, lit, mix, panel, reseed, ring, type Pt } from './glass';
+import { BANNER, BARREL, BOARD, DESK, DISCOVERED, ORDER, ROW_BOX, TAG, WIN } from '../scenes/layout';
+import { ART, PI, bake, ctx, diamond, glass, glow, glowFrame, label, lit, mix, panel, rect, reseed, ring, type Pt } from './glass';
 
 // The leaded-glass interface: buttons, the order cards, the fit tags, the commission banner, the
 // merge and buyer frames, the discovered row's frames, and the streak's burst and sparks.
@@ -16,6 +16,7 @@ export const buttonTexture = (style: string, state: ButtonState) => `button-${st
 export const BUTTON_STYLES = {
   forge: { frame: '#c8962e', pane: '#a8381c', border: 12, diamonds: true },
   upgrade: { frame: '#6a5a3a', pane: '#2a3a5a', border: 8, diamonds: false },
+  row: { frame: '#6a5a3a', pane: '#2a3a5a', border: 7, diamonds: false },
 };
 export type ButtonStyle = keyof typeof BUTTON_STYLES;
 
@@ -118,4 +119,60 @@ export function bakeUi(scene: Phaser.Scene, sizes: Record<ButtonStyle, { w: numb
   // A soft light for the commission's completion.
   bake(scene, 'halo', 120, 120, () => glow(120, 120, 120, '#ffe7a0', 0.8));
 
+  // The delivery outline round the banner while a sword the crown wants is held.
+  bake(scene, 'frame-banner', BANNER.w + gm, BANNER.h + gm, () => glowFrame(gm, gm, a(BANNER.w), a(BANNER.h), '#f0b830', 8));
+  // The barrel's merge outline.
+  bake(scene, 'frame-barrel', BARREL.w + gm, BARREL.h + gm, () => glowFrame(gm, gm, a(BARREL.w), a(BARREL.h), '#f0b830', 8));
+
+  // The fifth row before it is bought: smoky glass over its panes.
+  bake(scene, 'row-locked', ROW_BOX.w, ROW_BOX.h, () => {
+    reseed(15);
+    panel(4, 4, a(ROW_BOX.w) - 8, a(ROW_BOX.h) - 8, '#4a3e30', '#1e1a2a', 8);
+  });
+
+  // The quench barrel, bought and not yet bought.
+  for (const off of [false, true]) bake(scene, off ? 'barrel-off' : 'barrel', BARREL.w, BARREL.h, () => barrel(off));
+
+  // The win window: purple glass in a gold frame, with a crowned ruby seal like the banner's.
+  bake(scene, 'win-panel', WIN.w, WIN.h, () => {
+    reseed(16);
+    const w = a(WIN.w);
+    panel(0, 0, w, a(WIN.h), '#c8962e', '#3a1e5a', 14);
+    glass(ring(w / 2, 70, 40, 14), '#c03050', { lw: 5, hi: 0.5 });
+    glass([[w / 2 - 22, 84], [w / 2 - 18, 52], [w / 2, 68], [w / 2 + 18, 52], [w / 2 + 22, 84]], '#ffd36a', { lw: 3, flat: true });
+  });
+}
+
+/** A barrel of leaded staves and iron bands, with dark quench water at its mouth; dim before it is bought. */
+function barrel(off: boolean) {
+  reseed(17);
+  const dim = (c: string) => (off ? mix(c, '#2a2636', 0.65) : c);
+  const w = a(BARREL.w);
+  const h = a(BARREL.h);
+  const staves = 5;
+  const top = 26;
+  const bottom = h - 6;
+  for (let k = 0; k < staves; k++) {
+    const x0 = 10 + ((w - 20) * k) / staves;
+    const x1 = 10 + ((w - 20) * (k + 1)) / staves;
+    // The staves bulge out at the middle.
+    const bulge = (x: number) => (x - w / 2) * 0.1;
+    glass([[x0, top], [x1, top], [x1 + bulge(x1), h / 2], [x1, bottom], [x0, bottom], [x0 + bulge(x0), h / 2]], dim(k % 2 ? '#8a5a2a' : '#a06a34'), { lw: 4 });
+  }
+  for (const y of [top + 24, bottom - 26]) glass(rect(6, y, w - 12, 12), dim('#5a6278'), { lw: 3, flat: true });
+  ctx.save();
+  ctx.beginPath();
+  ctx.ellipse(w / 2, top, w / 2 - 8, 18, 0, 0, PI * 2);
+  ctx.fillStyle = dim('#8a5a2a');
+  ctx.fill();
+  ctx.lineWidth = 5;
+  ctx.strokeStyle = '#17131c';
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.ellipse(w / 2, top, w / 2 - 18, 11, 0, 0, PI * 2);
+  ctx.fillStyle = dim('#2a4a7a');
+  ctx.fill();
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  ctx.restore();
 }

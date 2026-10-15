@@ -1,40 +1,67 @@
 import { settings } from '../../../../shared/settings';
 import Phaser from 'phaser';
 import { ADVENTURER, adventurerTexture } from '../art/characters';
-import { swordScale, swordTexture } from '../art/swords';
+import { itemTexture, swordScale, swordTexture } from '../art/swords';
 import { EMBLEMS, emblemTexture } from '../art/ui';
 import { commissionAt } from '../game/commissions';
+import { combine, isGem, tierOf } from '../game/items';
 import { clearProgress, loadProgress, saveProgress } from '../game/save';
-import { buy, drop, forge, sell, tick, toggleAutoForge } from '../game/sim';
-import { DESKS, SLOTS, STREAK_MS, fitOf, forgeMs, freshProgress, newShop, payFor, progressOf, type Adventurer, type GameState } from '../game/state';
+import { buy, deliver, deliverable, drop, forge, itemAt, sell, tick, toggleAutoForge } from '../game/sim';
+import {
+  BARREL as BARREL_PLACE,
+  DESKS,
+  MAX_SLOTS,
+  REP_MAX,
+  STREAK_MS,
+  fitOf,
+  forgeMs,
+  freshProgress,
+  newShop,
+  orderPrice,
+  payFor,
+  progressOf,
+  type Adventurer,
+  type GameState,
+} from '../game/state';
 import { MAX_TIER, swordOf } from '../game/swords';
-import { UPGRADES, UPGRADE_IDS, locked, nextPrice, type UpgradeId } from '../game/upgrades';
+import { FORGE_UPGRADES, UPGRADES, locked, nextPrice, type UpgradeId } from '../game/upgrades';
 import { Button } from '../ui/Button';
 import {
   BANNER,
-  BOARD,
+  BARREL,
+  CELL_SCALE,
   FONT,
   FORGE_BUTTON,
   FURNACE_WINDOW,
   HEAT_BAR,
   ORDER,
   PATIENCE,
+  REPUTATION,
+  ROW_BOX,
+  ROW_BUTTON,
   TAG,
   UI_DEPTH,
   UPGRADE_BUTTONS,
   VIEW,
+  WIN,
   deskAt,
   deskBox,
   deskCentre,
   discoveredCentre,
-  slotAt,
+  onBanner,
+  placeAt,
   slotCentre,
 } from './layout';
 
 /** Longest simulated step, so a backgrounded tab doesn't jump the shop forward. */
 const MAX_STEP_MS = 250;
 /** How far up from an anvil's centre a sword lies on it. */
-const SWORD_LIFT = 11;
+const SWORD_LIFT = Math.round(11 * CELL_SCALE);
+/** How a sword lies on the barrel's mouth. */
+const BARREL_LIFT = 24;
+const BARREL_SCALE = 0.72;
+/** What guild reputation reads as, from the bottom up, a word per fifth of the meter. */
+const STANDING = ['Shunned', 'Doubted', 'Known', 'Respected', 'Renowned'];
 const LEAD = 0x17131c;
 
 const textStyle = (size: number, color = '#fff1d0', stroke = 3): Phaser.Types.GameObjects.Text.TextStyle => ({
@@ -46,7 +73,7 @@ const textStyle = (size: number, color = '#fff1d0', stroke = 3): Phaser.Types.Ga
   strokeThickness: stroke,
 });
 
-/** Where the player picked a sword up, and the sword following the pointer. */
+/** Where the player picked a sword up (an anvil or `BARREL_PLACE`), and the sword following the pointer. */
 interface Held {
   slot: number;
   sprite: Phaser.GameObjects.Image;
@@ -55,7 +82,6 @@ interface Held {
 /** What is drawn for one adventurer at the counter, and the tag that shows what they would pay. */
 interface Visitor {
   root: Phaser.GameObjects.Container;
-  adventurer: Adventurer;
   tag: Phaser.GameObjects.Container;
   tagImage: Phaser.GameObjects.Image;
   tagTop: Phaser.GameObjects.Text;
@@ -83,6 +109,17 @@ export class GameScene extends Phaser.Scene {
   private furnace!: Phaser.GameObjects.Image;
   private forgeButton!: Button;
   private upgradeButtons = new Map<UpgradeId, Button>();
+  /** The fifth row's smoky cover, its line of instructions and build button, until it is bought. */
+  private rowCover!: Phaser.GameObjects.Container;
+  private rowButton!: Button;
+  /** The quench barrel, its price before it is bought, the sword in it and its merge outline. */
+  private barrel!: Phaser.GameObjects.Image;
+  private barrelPrice!: Phaser.GameObjects.Text;
+  private barrelSword: Phaser.GameObjects.Image | null = null;
+  private barrelFrame!: Phaser.GameObjects.Image;
+  private bannerFrame!: Phaser.GameObjects.Image;
+  private repWord!: Phaser.GameObjects.Text;
+  private win!: Phaser.GameObjects.Container;
   private emblems = new Map<UpgradeId, Phaser.GameObjects.Image>();
   private marks!: Phaser.GameObjects.Graphics;
   private hud!: Phaser.GameObjects.Graphics;
@@ -109,13 +146,17 @@ export class GameScene extends Phaser.Scene {
   spots() {
     return {
       forge: { x: FORGE_BUTTON.x, y: FORGE_BUTTON.y },
-      slots: [...Array(SLOTS).keys()].map((slot) => ({ x: slotCentre(slot).x, y: slotCentre(slot).y - SWORD_LIFT })),
+      slots: [...Array(MAX_SLOTS).keys()].map((slot) => ({ x: slotCentre(slot).x, y: slotCentre(slot).y - SWORD_LIFT })),
       desks: [...Array(DESKS).keys()].map(deskCentre),
+      banner: { x: BANNER.x + BANNER.w / 2, y: BANNER.y + BANNER.h / 2 },
+      barrel: { x: BARREL.x, y: BARREL.y },
+      row: { x: ROW_BUTTON.x, y: ROW_BUTTON.y },
     };
   }
 
   create() {
-    this.swords = new Array(SLOTS).fill(null);
+    this.swords = new Array(MAX_SLOTS).fill(null);
+    this.barrelSword = null;
     this.visitors.clear();
     this.held = null;
     this.state = newShop(loadProgress());
@@ -123,17 +164,24 @@ export class GameScene extends Phaser.Scene {
     this.add.image(0, 0, 'background').setOrigin(0);
     this.furnace = this.add.image(FURNACE_WINDOW.x, FURNACE_WINDOW.y, 'furnace-0').setOrigin(0);
     this.marks = this.add.graphics().setDepth(5);
-    this.mergeFrames = [...Array(SLOTS).keys()].map((slot) => {
+    this.mergeFrames = [...Array(MAX_SLOTS).keys()].map((slot) => {
       const c = slotCentre(slot);
       return this.add.image(c.x, c.y, 'frame-gold').setDepth(6).setVisible(false);
     });
+    this.barrel = this.add.image(BARREL.x, BARREL.y, 'barrel').setDepth(4);
+    this.barrelFrame = this.add.image(BARREL.x, BARREL.y, 'frame-barrel').setDepth(6).setVisible(false);
+    this.barrelPrice = this.add
+      .text(BARREL.x, BARREL.y + 8, '', { ...textStyle(12.5, '#fff1d0', 3.5), align: 'center' })
+      .setOrigin(0.5)
+      .setDepth(7);
+    this.createRowCover();
     this.buyerFrames = [...Array(DESKS).keys()].map((desk) => {
       const c = deskCentre(desk);
       return this.add.image(c.x, c.y, 'frame-green').setDepth(25).setVisible(false);
     });
 
     this.forgeButton = new Button(this, FORGE_BUTTON.x, FORGE_BUTTON.y, 'forge', 'Forge', () => this.forge());
-    UPGRADE_IDS.forEach((id, i) => {
+    FORGE_UPGRADES.forEach((id, i) => {
       const b = UPGRADE_BUTTONS;
       const button = new Button(this, b.x, b.ys[i], 'upgrade', '', () => this.buy(id), 13);
       const emblem = this.add.image(-b.w / 2 + 22, 0, emblemTexture(i));
@@ -141,15 +189,10 @@ export class GameScene extends Phaser.Scene {
       this.emblems.set(id, emblem);
       this.upgradeButtons.set(id, button);
     });
-    this.add
-      .text(BOARD.x + 2 * BOARD.cell, BOARD.y + 4 * BOARD.cell + 16, 'Merge matching swords, then sell them to adventurers.', {
-        ...textStyle(13, '#fff4d8', 3.5),
-        fontStyle: 'normal',
-      })
-      .setOrigin(0.5);
     this.createDiscovered();
     this.createHud();
     this.createReset();
+    this.createWin();
 
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => this.pickUp(p));
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => this.held?.sprite.setPosition(p.x, p.y));
@@ -179,8 +222,16 @@ export class GameScene extends Phaser.Scene {
     if (forge(this.state)) this.save();
   }
 
+  /** Where a place's sword lies on screen: on its anvil, or on the barrel's mouth. */
+  private placeSpot(place: number) {
+    if (place === BARREL_PLACE) return { x: BARREL.x, y: BARREL.y - BARREL_LIFT };
+    const c = slotCentre(place);
+    return { x: c.x, y: c.y - SWORD_LIFT };
+  }
+
   /** Buys an upgrade; a bought Auto Forge's button switches it on and off instead. */
   private buy(id: UpgradeId) {
+    if (this.state.won && this.win.visible) return;
     const done = id === 'auto' && this.state.ranks.auto > 0 ? toggleAutoForge(this.state) : buy(this.state, id);
     if (done) this.save();
   }
@@ -190,13 +241,19 @@ export class GameScene extends Phaser.Scene {
   }
 
   private pickUp(p: Phaser.Input.Pointer) {
-    const slot = slotAt(p.x, p.y);
-    if (this.held || slot === null) return;
-    const tier = this.state.slots[slot];
-    if (tier === null) return;
-    this.swords[slot]?.setVisible(false);
-    const sprite = this.add.image(p.x, p.y, swordTexture(tier)).setDepth(UI_DEPTH - 1).setScale(swordScale(1.35));
-    this.held = { slot, sprite };
+    const place = placeAt(p.x, p.y);
+    if (this.held || place === null || this.win.visible) return;
+    // Tapping the barrel before it is bought buys it.
+    if (place === BARREL_PLACE && this.state.ranks.barrel === 0) return this.buy('barrel');
+    const item = itemAt(this.state, place);
+    if (item === null) return;
+    this.spriteAt(place)?.setVisible(false);
+    const sprite = this.add.image(p.x, p.y, itemTexture(item)).setDepth(UI_DEPTH - 1).setScale(swordScale(1.35));
+    this.held = { slot: place, sprite };
+  }
+
+  private spriteAt(place: number) {
+    return place === BARREL_PLACE ? this.barrelSword : this.swords[place];
   }
 
   /** Lets go of the held sword: onto an anvil, onto an adventurer, or back where it came from. */
@@ -205,33 +262,35 @@ export class GameScene extends Phaser.Scene {
     if (!held) return;
     this.held = null;
     held.sprite.destroy();
-    this.swords[held.slot]?.setVisible(true);
+    this.spriteAt(held.slot)?.setVisible(true);
     if (!p) return;
-    const slot = slotAt(p.x, p.y);
+    const place = placeAt(p.x, p.y);
     const desk = deskAt(p.x, p.y);
     const buyer = desk === null ? undefined : this.state.adventurers.find((a) => a.desk === desk);
     let done = false;
-    if (slot !== null) done = drop(this.state, held.slot, slot);
+    if (place !== null) done = drop(this.state, held.slot, place);
+    else if (onBanner(p.x, p.y)) done = deliver(this.state, held.slot);
     else if (buyer) done = sell(this.state, held.slot, buyer.id);
     if (done) this.save();
   }
 
   private drawSwords() {
-    this.state.slots.forEach((tier, slot) => {
-      let sprite = this.swords[slot];
-      if (tier === null) {
-        sprite?.destroy();
-        this.swords[slot] = null;
-        return;
-      }
-      const c = slotCentre(slot);
-      if (!sprite) {
-        sprite = this.add.image(c.x, c.y - SWORD_LIFT, swordTexture(tier)).setDepth(10);
-        this.swords[slot] = sprite;
-      }
-      if (sprite.texture.key !== swordTexture(tier)) sprite.setTexture(swordTexture(tier));
-      sprite.setVisible(this.held?.slot !== slot);
-    });
+    const s = this.state;
+    for (let slot = 0; slot < MAX_SLOTS; slot++) this.swords[slot] = this.drawItem(this.swords[slot], s.slots[slot] ?? null, slot, CELL_SCALE);
+    this.barrelSword = this.drawItem(this.barrelSword, s.barrel, BARREL_PLACE, BARREL_SCALE);
+  }
+
+  /** Keeps one place's sprite in step with what lies there: made, changed, hidden while held or gone. */
+  private drawItem(sprite: Phaser.GameObjects.Image | null, item: number | null, place: number, scale: number) {
+    if (item === null) {
+      sprite?.destroy();
+      return null;
+    }
+    const at = this.placeSpot(place);
+    if (!sprite) sprite = this.add.image(at.x, at.y, itemTexture(item)).setDepth(10).setScale(scale);
+    if (sprite.texture.key !== itemTexture(item)) sprite.setTexture(itemTexture(item));
+    sprite.setVisible(this.held?.slot !== place);
+    return sprite;
   }
 
   private drawVisitors() {
@@ -252,54 +311,68 @@ export class GameScene extends Phaser.Scene {
     const mid = ORDER.x + ORDER.w / 2;
     const body = this.add.image(ADVENTURER.x, ADVENTURER.y, adventurerTexture(a.look)).setOrigin(0);
     const card = this.add.image(ORDER.x - 13, ORDER.y - 2, 'order-card').setOrigin(0);
-    const price = this.add.text(mid, ORDER.y + 17, `${sword.price} coins`, { fontFamily: FONT, fontStyle: 'bold', fontSize: '14px', color: '#9a5a10' }).setOrigin(0.5);
-    const wants = this.add.image(mid, ORDER.y + 49, swordTexture(a.wants)).setScale(swordScale(0.82));
-    const name = this.add.text(mid, ORDER.y + 86, sword.name, { fontFamily: FONT, fontStyle: 'bold', fontSize: '13px', color: '#2a1a14' }).setOrigin(0.5);
+    // A gem order shows the gemmed sword, a loose gem beside it and the doubled price.
+    const price = this.add
+      .text(mid, ORDER.y + 17, `${orderPrice(a)} coins${a.gem ? ' (×2)' : ''}`, { fontFamily: FONT, fontStyle: 'bold', fontSize: '14px', color: '#9a5a10' })
+      .setOrigin(0.5);
+    const wants = this.add.image(mid, ORDER.y + 49, swordTexture(a.wants, a.gem)).setScale(swordScale(0.82));
+    const gem = this.add.image(mid + 50, ORDER.y + 52, 'gem').setScale(0.5).setVisible(a.gem);
+    const name = this.add
+      .text(mid, ORDER.y + 86, a.gem ? `${sword.name} + gem` : sword.name, { fontFamily: FONT, fontStyle: 'bold', fontSize: a.gem ? '12px' : '13px', color: '#2a1a14' })
+      .setOrigin(0.5);
     const tagImage = this.add.image(0, 0, 'tag-exact').setOrigin(0);
     const tagTop = this.add.text(TAG.w / 2 + 1, 11.5, '', textStyle(10, '#eaffd8', 2)).setOrigin(0.5);
     const tagBottom = this.add.text(TAG.w / 2 + 1, 23.5, '', textStyle(11, '#ffe27a', 2)).setOrigin(0.5);
     const tag = this.add.container(TAG.x, TAG.y, [tagImage, tagTop, tagBottom]).setVisible(false);
-    const root = this.add.container(b.x, b.y, [body, card, price, wants, name, tag]).setDepth(20);
+    const root = this.add.container(b.x, b.y, [body, card, price, wants, gem, name, tag]).setDepth(20);
     root.setAlpha(0);
     this.tweens.add({ targets: root, alpha: 1, duration: 300 });
-    return { root, adventurer: a, tag, tagImage, tagTop, tagBottom };
+    return { root, tag, tagImage, tagTop, tagBottom };
   }
 
   /**
-   * Little flourishes for what just happened: a pop for a new sword, a flash for a merge, a burst
-   * of sparks for a hammer streak, coins for a sale and a halo for a finished commission.
+   * Little flourishes for what just happened: a pop for a new sword, a flash for a merge or a set
+   * gem, a burst of sparks for a hammer streak, coins for a sale and a halo for a delivery and a
+   * finished commission.
    */
   private drawEvents() {
-    for (const e of this.state.events.splice(0)) {
-      if (e.kind === 'forged' || e.kind === 'merged') {
-        const sprite = this.swords[e.slot];
-        const c = slotCentre(e.slot);
+    const events = this.state.events.splice(0);
+    // A delivery that completes the commission only shows the commission's message.
+    const done = events.some((e) => e.kind === 'commission');
+    for (const e of events) {
+      if (e.kind === 'forged' || e.kind === 'merged' || e.kind === 'set') {
+        const sprite = this.spriteAt(e.slot);
+        const at = this.placeSpot(e.slot);
         if (!sprite) continue;
-        sprite.setScale(e.kind === 'merged' ? 1.5 : 0.4);
-        this.tweens.add({ targets: sprite, scale: 1, duration: 250, ease: 'Back.Out' });
-        if (e.kind === 'merged' && !settings.reduceMotion) {
-          const flash = this.add.image(c.x, c.y - SWORD_LIFT, 'halo').setDepth(9).setScale(0.6);
+        const scale = e.slot === BARREL_PLACE ? BARREL_SCALE : CELL_SCALE;
+        sprite.setScale(scale * (e.kind === 'forged' ? 0.4 : 1.5));
+        this.tweens.add({ targets: sprite, scale, duration: 250, ease: 'Back.Out' });
+        if (e.kind !== 'forged' && !settings.reduceMotion) {
+          const flash = this.add.image(at.x, at.y, 'halo').setDepth(9).setScale(0.6);
           this.tweens.add({ targets: flash, scale: 1.2, alpha: 0, duration: 350, onComplete: () => flash.destroy() });
         }
+        if (e.kind === 'set') this.float(at.x, at.y - 20, 'Gem set!', '#8af0c8');
       } else if (e.kind === 'streak') {
         this.hammerStreak(e.slot, e.streak, e.coins);
+      } else if (e.kind === 'delivered') {
+        if (!done) this.float(BANNER.x + BANNER.w / 2, BANNER.y + 80, `${swordOf(e.tier).name} delivered to the crown`, '#ffe7a8');
       } else if (e.kind === 'commission') {
-        this.commissionDone(e.slot, e.reward);
+        this.commissionDone(e.reward, e.won);
       } else if (e.kind === 'sold') {
         const c = deskCentre(e.desk);
         const message = e.fit === 'exact' ? `Exact fit! +${e.coins} coins` : `+${e.coins} coins (overkill)`;
         this.float(c.x + 40, c.y, message, e.fit === 'exact' ? '#ffd36a' : '#d8d0e0');
       } else if (e.kind === 'left') {
         const c = deskCentre(e.desk);
-        this.float(c.x, c.y, 'Left without a sword', '#ff8a6a');
+        this.float(c.x, c.y, 'Left unhappy: reputation down', '#ff8a6a');
       }
     }
   }
 
   /** A rose of amber shards and flying sparks round the anvil, and the streak's tag above it. */
   private hammerStreak(slot: number, streak: number, coins: number) {
-    const c = slotCentre(slot);
-    const y = c.y - SWORD_LIFT;
+    const c = this.placeSpot(slot);
+    const y = c.y;
     const burst = this.add.image(c.x, y, 'burst').setDepth(8);
     if (settings.reduceMotion) {
       this.tweens.add({ targets: burst, alpha: 0, delay: 500, duration: 500, onComplete: () => burst.destroy() });
@@ -322,7 +395,7 @@ export class GameScene extends Phaser.Scene {
         });
       }
     }
-    const tagY = c.y - 59;
+    const tagY = c.y - 48;
     const tag = this.add.container(c.x, tagY, [
       this.add.image(0, 0, 'streak-tag'),
       this.add.text(0, 0, `Hammer streak ×${streak}  +${coins}c`, textStyle(13, '#fff1d0', 2.5)).setOrigin(0.5),
@@ -331,15 +404,15 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: tag, y: tagY - 16, alpha: 0, delay: 900, duration: 500, onComplete: () => tag.destroy() });
   }
 
-  /** The banner lights up and the purse and star float off it. */
-  private commissionDone(slot: number, reward: number) {
+  /** The banner lights up and the purse and star float off it; the Crown Blade opens the win window. */
+  private commissionDone(reward: number, won: boolean) {
     const bx = BANNER.x + BANNER.w / 2;
     const by = BANNER.y + BANNER.h / 2;
     const halo = this.add.image(bx, by, 'halo').setDepth(UI_DEPTH + 1).setScale(2.4, 0.8);
     this.tweens.add({ targets: halo, alpha: 0, delay: 400, duration: 900, onComplete: () => halo.destroy() });
     if (!settings.reduceMotion) this.tweens.add({ targets: this.banner.root, scale: 1.06, duration: 160, yoyo: true });
-    const c = slotCentre(slot);
-    this.float(c.x, c.y - 30, `Royal commission done! +${reward}c and a guild star`, '#ffd36a', 2400);
+    this.float(bx, by + 70, `Royal commission done! +${reward}c and a guild star`, '#ffd36a', 2400);
+    if (won) this.win.setVisible(true);
   }
 
   private float(x: number, y: number, message: string, color: string, duration = 1200) {
@@ -374,30 +447,37 @@ export class GameScene extends Phaser.Scene {
     }
     if (s.streakMs > 0) {
       // The streak's timer ring round the anvil of the last merge, draining until the chain breaks.
-      const c = slotCentre(s.streakSlot);
+      const c = this.placeSpot(s.streakSlot);
+      const r = 40;
       const start = -Math.PI / 2;
-      g.lineStyle(8, LEAD).strokeCircle(c.x, c.y - 6, 46);
+      g.lineStyle(8, LEAD).strokeCircle(c.x, c.y + 4, r);
       g.lineStyle(4.5, 0xff8a2a);
       g.beginPath();
-      g.arc(c.x, c.y - 6, 46, start, start + Math.PI * 2 * (s.streakMs / STREAK_MS));
+      g.arc(c.x, c.y + 4, r, start, start + Math.PI * 2 * (s.streakMs / STREAK_MS));
       g.strokePath();
     }
 
     const held = this.held;
-    const tier = held ? s.slots[held.slot] : null;
+    const item = held ? itemAt(s, held.slot) : null;
     // The outlines pulse, or hold steady with reduce motion.
     const pulse = settings.reduceMotion ? 1 : 0.8 + 0.2 * Math.sin(this.clock / 120);
-    this.mergeFrames.forEach((frame, slot) => frame.setVisible(tier !== null && slot !== held?.slot && s.slots[slot] === tier).setAlpha(pulse));
+    const joins = (place: number) => {
+      const there = itemAt(s, place);
+      return item !== null && there !== null && place !== held?.slot && combine(item, there) !== null;
+    };
+    this.mergeFrames.forEach((frame, slot) => frame.setVisible(joins(slot)).setAlpha(pulse));
+    this.barrelFrame.setVisible(s.ranks.barrel > 0 && joins(BARREL_PLACE)).setAlpha(pulse);
+    this.bannerFrame.setVisible(deliverable(s, item)).setAlpha(pulse);
     const buyers = new Set<number>();
     for (const a of s.adventurers) {
       const v = this.visitors.get(a.id);
-      const buys = tier !== null && tier >= a.wants;
+      const buys = item !== null && fitOf(item, a) !== 'short';
       if (buys) buyers.add(a.desk);
       if (!v) continue;
       v.tag.setVisible(buys);
       if (!buys) continue;
-      const exact = fitOf(tier, a.wants) === 'exact';
-      const pay = payFor(tier, a.wants);
+      const exact = fitOf(item, a) === 'exact';
+      const pay = payFor(item, a);
       v.tagImage.setTexture(exact ? 'tag-exact' : 'tag-overkill');
       v.tagTop.setText(exact ? 'Exact fit +50%' : 'Overkill').setColor(exact ? '#eaffd8' : '#d8d0e0');
       v.tagBottom.setText(exact ? `${pay}c` : `pays ${pay}c`).setColor(exact ? '#ffe27a' : '#b8acc4');
@@ -412,6 +492,7 @@ export class GameScene extends Phaser.Scene {
     this.furnace.setTexture(`furnace-${settings.reduceMotion ? 0 : Math.floor(this.clock / 180) % 2}`);
     this.furnace.setAlpha(hot ? 1 : 0.6);
     const full = !s.slots.includes(null);
+    this.drawReputation();
     this.forgeButton.set(full ? 'Board full' : hot ? 'Forge' : 'Heating...', hot && !full, full || !hot ? 20 : 25);
     // The heat bar: six jewel panes that light up as the forge gets hot again.
     const g = this.hud;
@@ -427,7 +508,7 @@ export class GameScene extends Phaser.Scene {
       g.lineStyle(1.5, LEAD).strokeRect(x, HEAT_BAR.y, w, HEAT_BAR.h);
     }
     g.lineStyle(2, LEAD).strokeRect(HEAT_BAR.x - 2, HEAT_BAR.y - 2, HEAT_BAR.w + 4, HEAT_BAR.h + 4);
-    UPGRADE_IDS.forEach((id, i) => {
+    FORGE_UPGRADES.forEach((id, i) => {
       const rank = s.ranks[id];
       const price = nextPrice(id, rank);
       const u = UPGRADES[id];
@@ -445,6 +526,58 @@ export class GameScene extends Phaser.Scene {
       const caption = price === null ? `${u.name} (max)\n${u.blurb}` : `${name}: ${price}c\n${blurb}`;
       button.set(caption, price !== null && s.coins >= price && !isLocked, 14);
     });
+    // The fifth row and the barrel are bought where they go.
+    const rowPrice = nextPrice('row', s.ranks.row);
+    this.rowCover.setVisible(rowPrice !== null);
+    if (rowPrice !== null) this.rowButton.set(`Build a fifth row of anvils: ${rowPrice}c`, s.coins >= rowPrice, 14);
+    const barrelPrice = nextPrice('barrel', s.ranks.barrel);
+    const barrelKey = barrelPrice === null ? 'barrel' : 'barrel-off';
+    if (this.barrel.texture.key !== barrelKey) this.barrel.setTexture(barrelKey);
+    this.barrelPrice.setText(barrelPrice === null ? '' : `Quench\nbarrel\n${barrelPrice}c`).setColor(barrelPrice !== null && s.coins >= barrelPrice ? '#ffe27a' : '#c8bcd8');
+  }
+
+  /** The guild reputation meter: its word and ten jewels, green when high, amber, then red when low. */
+  private drawReputation() {
+    const g = this.hud;
+    const r = REPUTATION;
+    const rep = this.state.reputation;
+    this.repWord.setText(STANDING[Math.min(STANDING.length - 1, Math.floor((rep / REP_MAX) * STANDING.length))]);
+    const n = r.segments;
+    const w = (r.w - 24) / n;
+    const x0 = r.x + 12;
+    const y = r.y + 27;
+    const on = Math.round((rep / REP_MAX) * n);
+    const col = rep >= 60 ? 0x4ac060 : rep >= 30 ? 0xf0c040 : 0xe05040;
+    for (let k = 0; k < n; k++) {
+      const x = x0 + k * w;
+      g.fillStyle(k < on ? col : 0x2a2436).fillRect(x, y, w, 11);
+      if (k < on) g.fillStyle(0xffffff, 0.25).fillRect(x + 1, y + 1, w - 2, 3);
+      g.lineStyle(1.5, LEAD).strokeRect(x, y, w, 11);
+    }
+  }
+
+  /** Smoky glass over the fifth row until it is bought, with the instructions and the build button. */
+  private createRowCover() {
+    const b = ROW_BOX;
+    const cover = this.add.image(b.x, b.y, 'row-locked').setOrigin(0);
+    const text = this.add
+      .text(b.x + b.w / 2, b.y + 22, 'Merge matching swords, then sell them to adventurers.', { ...textStyle(12.5, '#fff4d8', 3.5), fontStyle: 'normal' })
+      .setOrigin(0.5);
+    this.rowButton = new Button(this, ROW_BUTTON.x, ROW_BUTTON.y, 'row', '', () => this.buy('row'));
+    this.rowCover = this.add.container(0, 0, [cover, text, this.rowButton.root]).setDepth(12);
+  }
+
+  /** The window that opens when the Crown Blade is delivered, with a button to keep smithing. */
+  private createWin() {
+    const items = [
+      this.add.image(0, 0, 'win-panel'),
+      this.add.text(0, -36, 'The Crown Blade is delivered!', textStyle(24, '#ffd36a', 4)).setOrigin(0.5),
+      this.add
+        .text(0, 6, 'The Anvilheart hangs in the throne room, and\nyours is the crown\'s own smithy.', { ...textStyle(15, '#fff1d0', 3), align: 'center', fontStyle: 'normal' })
+        .setOrigin(0.5),
+    ];
+    const button = new Button(this, 0, 70, 'forge', 'Keep smithing', () => this.win.setVisible(false));
+    this.win = this.add.container(WIN.x, WIN.y, [...items, button.root]).setDepth(UI_DEPTH + 5).setVisible(false);
   }
 
   /** The row of discovered swords under the board: a dark frame per tier, lit with its sword once it is made. */
@@ -469,6 +602,10 @@ export class GameScene extends Phaser.Scene {
     this.starsText = top(15).setOrigin(1, 0.5);
     this.star = this.add.image(0, 20, 'star').setDepth(UI_DEPTH + 1);
     this.createBanner();
+    this.bannerFrame = this.add.image(BANNER.x + BANNER.w / 2, BANNER.y + BANNER.h / 2, 'frame-banner').setDepth(UI_DEPTH + 2).setVisible(false);
+    const r = REPUTATION;
+    this.add.text(r.x + 12, r.y + 14, 'Guild reputation', textStyle(13, '#efe2c4')).setOrigin(0, 0.5).setDepth(UI_DEPTH + 1);
+    this.repWord = this.add.text(r.x + r.w - 12, r.y + 14, '', textStyle(12, '#ffe27a')).setOrigin(1, 0.5).setDepth(UI_DEPTH + 1);
     // In the first desk, which is empty while the hint shows.
     const desk = deskCentre(0);
     this.hint = this.add.text(desk.x, desk.y, '', textStyle(13, '#e8d8b8')).setOrigin(0.5).setDepth(UI_DEPTH + 1);
@@ -508,22 +645,34 @@ export class GameScene extends Phaser.Scene {
       if (frame.texture.key !== (made ? 'disc-on' : 'disc-off')) frame.setTexture(made ? 'disc-on' : 'disc-off');
     });
 
-    // The commission: one great sword needs two of the tier below; past that, a count of Dragonslayers.
+    // The commission: one great sword needs two of the tier below, or is ready once it is made;
+    // past that, a count of Dragonslayers delivered.
     const c = commissionAt(s.commission.level);
     const b = this.banner;
+    if (!c) {
+      b.title.setText("The crown's smithy");
+      b.progress.setText('Every commission done');
+      b.pips.forEach((pip) => pip.setVisible(false));
+      b.reward.setText('');
+      b.star.setX(b.reward.x - 8);
+      if (b.sword.texture.key !== swordTexture(MAX_TIER)) b.sword.setTexture(swordTexture(MAX_TIER));
+      return;
+    }
     const target = swordOf(c.tier).name;
+    const items = [...s.slots, s.barrel];
+    const ready = items.some((item) => item !== null && !isGem(item) && tierOf(item) === c.tier);
     let have: number;
     let need: number;
     if (c.count === 1) {
       need = 2;
-      have = Math.min(need, s.slots.filter((t) => t === c.tier - 1).length);
-      b.title.setText(target);
-      b.progress.setText(`${swordOf(c.tier - 1).name}s ${have}/${need}`);
+      have = ready ? need : Math.min(need, items.filter((item) => item !== null && !isGem(item) && tierOf(item) === c.tier - 1).length);
+      b.title.setText(c.title ?? target);
+      b.progress.setText(ready ? 'Ready: drag it here' : `${swordOf(c.tier - 1).name}s ${have}/${need}`);
     } else {
       need = c.count;
       have = s.commission.made;
       b.title.setText(`${c.count} ${target}s`);
-      b.progress.setText(`Made ${have}/${need}`);
+      b.progress.setText(ready ? `Given ${have}/${need}: drag here` : `Given ${have}/${need}`);
     }
     if (b.sword.texture.key !== swordTexture(c.tier)) b.sword.setTexture(swordTexture(c.tier));
     b.pips.forEach((pip, k) => {
@@ -546,8 +695,11 @@ export class GameScene extends Phaser.Scene {
       clearProgress();
       for (const v of this.visitors.values()) v.root.destroy();
       for (const sprite of this.swords) sprite?.destroy();
+      this.barrelSword?.destroy();
+      this.barrelSword = null;
       this.visitors.clear();
       this.swords.fill(null);
+      this.win.setVisible(false);
       this.state = newShop(freshProgress());
     });
   }
