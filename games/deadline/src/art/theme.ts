@@ -1,4 +1,4 @@
-import type { UpgradeKind } from '../game/rules';
+import type { CrateKind, UpgradeKind } from '../game/rules';
 import type { ArtStyle } from '../game/save';
 
 // The colours and type of each art style's HUD, labels and overlays. System font stacks only: no
@@ -11,6 +11,11 @@ export const UPGRADE_COLORS: Record<UpgradeKind, string> = {
   companion: '#4ab0ff',
   pierce: '#6ae06a',
 };
+/** Every crate's colour: the upgrades', and sandbag tan for a sandbag crate. */
+export const CRATE_COLORS: Record<CrateKind, string> = { ...UPGRADE_COLORS, sandbag: '#e0c088' };
+/** The acid of spitters and bosses, and the riot shield's bar. */
+export const ACID_COLOR = '#a6e03a';
+export const SHIELD_COLOR = '#7ab8e8';
 
 export interface Theme {
   /** Font family for Phaser text, and its style ('italic bold' or 'bold'). */

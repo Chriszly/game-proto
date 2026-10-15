@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
-import { DRUM, HUD_HEIGHT, REACH_Y, UPGRADES, UPGRADE_KINDS, VIEW, type UpgradeKind } from '../game/rules';
+import { CRATES, CRATE_KINDS, DRUM, HUD_HEIGHT, REACH_Y, SUPPLY_KINDS, VIEW, type CrateKind, type SupplyKind } from '../game/rules';
 import { GEOM, TAU, bake, canvas, rgba, rng, tex, type Ctx } from './paint';
-import { NV, UPGRADE_COLORS } from './theme';
+import { CRATE_COLORS, NV } from './theme';
 
 // Deadline through a night-vision camera: everything is painted in greys (how bright it shows up in
 // infrared), then `phosphor` maps the greys onto the green of a phosphor screen and blooms the
@@ -216,8 +216,8 @@ function crate(ctx: Ctx) {
 }
 
 /** The chemlight taped to a crate, in the upgrade's colour, glowing. */
-function chemlight(ctx: Ctx, kind: UpgradeKind) {
-  const col = UPGRADE_COLORS[kind];
+function chemlight(ctx: Ctx, kind: CrateKind) {
+  const col = CRATE_COLORS[kind];
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   const gr = ctx.createRadialGradient(17, 3, 0, 17, 3, 22);
@@ -254,15 +254,15 @@ function brackets(ctx: Ctx, x: number, y: number, w: number, h: number, color: s
   ctx.restore();
 }
 
-function crateLabel(ctx: Ctx, kind: UpgradeKind) {
-  const label = UPGRADES[kind].label.toUpperCase();
+function crateLabel(ctx: Ctx, kind: CrateKind) {
+  const label = CRATES[kind].label.toUpperCase();
   ctx.font = `800 10px ${NV.canvasFont}`;
   const w = ctx.measureText(label).width + 18;
   ctx.beginPath();
   ctx.roundRect(-w / 2, 3, w, 15, 2);
   ctx.fillStyle = 'rgba(2,10,5,0.78)';
   ctx.fill();
-  ctx.fillStyle = UPGRADE_COLORS[kind];
+  ctx.fillStyle = CRATE_COLORS[kind];
   ctx.fillRect(-w / 2 + 4, 6, 3, 9);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -283,6 +283,136 @@ function drum(ctx: Ctx) {
   ctx.ellipse(x, y - 12, 12, 4.5, 0, 0, TAU);
   ctx.fillStyle = g(0.7);
   ctx.fill();
+}
+
+/** A spitter: its acid sac is warm, so it glows bright under the jaw. */
+function spitter(ctx: Ctx) {
+  shade(ctx, 0, 19, 12, 4);
+  limb(ctx, [-4, 7], [-6, 19], 4.5, 0.22);
+  limb(ctx, [4, 7], [5, 18], 4.5, 0.2);
+  vol(ctx, 0, 3, 11, 9.5, 0.3);
+  limb(ctx, [-9, -2], [-12, 8], 4.2, 0.42);
+  limb(ctx, [9, -2], [12, 8], 4.2, 0.38);
+  vol(ctx, 0, -12, 8, 7.5, 0.46);
+  ctx.save();
+  ctx.shadowColor = '#fff';
+  ctx.shadowBlur = 8;
+  vol(ctx, 0, -3, 8.5, 6.5, 0.8, 0.12);
+  ctx.restore();
+  eyeshine(ctx, 0, -13, 3);
+}
+
+function riot(ctx: Ctx, shield: boolean) {
+  shade(ctx, 0, 21, 14, 5);
+  limb(ctx, [-5, 8], [-6, 21], 5, 0.16);
+  limb(ctx, [5, 8], [6, 21], 5, 0.14);
+  vol(ctx, 0, 2, 13, 11, 0.26);
+  vol(ctx, -11, -3, 5, 4, 0.34);
+  vol(ctx, 11, -3, 5, 4, 0.3);
+  if (!shield) {
+    limb(ctx, [-11, -1], [-14, 12], 4.6, 0.42);
+    limb(ctx, [11, -1], [13, 11], 4.6, 0.38);
+  }
+  vol(ctx, 0, -11, 8.5, 8, 0.44);
+  ctx.beginPath();
+  ctx.ellipse(0, -13, 10, 8, 0, Math.PI, TAU);
+  ctx.closePath();
+  ctx.fillStyle = g(0.22);
+  ctx.fill();
+  box(ctx, -9, -21, 18, 4, 0.6);
+  eyeshine(ctx, 0, -11, 3);
+  if (shield) {
+    // The shield's plastic reflects the illuminator: a pale slab with a dark viewport.
+    box(ctx, -19, 0, 38, 24, 0.62, 4);
+    box(ctx, -19, 0, 38, 4, 0.76, 2);
+    box(ctx, -11, 3, 22, 6, 0.3, 2);
+  }
+}
+
+function crawler(ctx: Ctx) {
+  shade(ctx, 0, 11, 11, 4);
+  vol(ctx, 0, -5, 9, 7.5, 0.28);
+  limb(ctx, [-7, -2], [-12, 6], 3.8, 0.42);
+  limb(ctx, [-12, 6], [-9, 12], 3.8, 0.42);
+  limb(ctx, [7, -2], [12, 4], 3.8, 0.38);
+  limb(ctx, [12, 4], [10, 11], 3.8, 0.38);
+  vol(ctx, 0, 4, 6.5, 6, 0.5);
+  eyeshine(ctx, 0, 4, 2.4, 1.3);
+}
+
+/** Acid is warm: a bright, hazy pool that blooms on the feed. */
+function acid(ctx: Ctx) {
+  const rnd = rng(41);
+  ctx.beginPath();
+  for (let i = 0; i < 18; i++) {
+    const t = (i / 18) * TAU, r = 78 * (0.86 + rnd() * 0.14);
+    ctx.lineTo(Math.cos(t) * r, Math.sin(t) * r * 0.36);
+  }
+  ctx.closePath();
+  const gr = ctx.createRadialGradient(0, 0, 0, 0, 0, 80);
+  gr.addColorStop(0, g(0.82));
+  gr.addColorStop(1, g(0.5));
+  ctx.fillStyle = gr;
+  ctx.fill();
+  for (let k = 0; k < 7; k++) {
+    ctx.beginPath();
+    ctx.arc((rnd() - 0.5) * 110, (rnd() - 0.5) * 30, 2.5 + rnd() * 3, 0, TAU);
+    ctx.fillStyle = g(0.95);
+    ctx.fill();
+  }
+}
+
+function wall(ctx: Ctx) {
+  for (let x = -78; x <= 78; x += 26) {
+    shade(ctx, x, 12, 14, 4);
+    vol(ctx, x, 5, 13, 7, 0.46, 0.12);
+  }
+  for (let x = -65; x <= 65; x += 26) vol(ctx, x, -6, 12, 6.5, 0.52, 0.12);
+}
+
+function flame(ctx: Ctx) {
+  // Flame is the hottest thing on the feed: near white at the base, still bright at the tips.
+  const gr = ctx.createLinearGradient(0, 0, 0, -170);
+  gr.addColorStop(0, 'rgba(255,255,255,1)');
+  gr.addColorStop(0.6, 'rgba(235,235,235,0.9)');
+  gr.addColorStop(1, 'rgba(200,200,200,0.35)');
+  ctx.fillStyle = gr;
+  const rnd = rng(19);
+  for (let x = -260; x <= 260; x += 30) {
+    const h = 110 + rnd() * 60, w = 26;
+    ctx.beginPath();
+    ctx.moveTo(x - w, 0);
+    ctx.quadraticCurveTo(x - w * 0.9, -h * 0.5, x + (rnd() - 0.5) * 20, -h);
+    ctx.quadraticCurveTo(x + w * 0.9, -h * 0.5, x + w, 0);
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
+function supplyIcon(ctx: Ctx, kind: SupplyKind) {
+  if (kind === 'shotgun') {
+    for (const a of [-0.45, 0, 0.45]) {
+      ctx.save();
+      ctx.rotate(a);
+      box(ctx, -6, -26, 12, 28, 0.42);
+      box(ctx, -6.5, 2, 13, 9, 0.75, 1);
+      ctx.restore();
+    }
+  } else if (kind === 'flamer') {
+    ctx.save();
+    ctx.shadowColor = '#fff';
+    ctx.shadowBlur = 10;
+    vol(ctx, 8, -12, 10, 12, 0.95, 0.05);
+    ctx.restore();
+    box(ctx, -20, -6, 16, 30, 0.36, 6);
+    limb(ctx, [-4, 10], [6, 4], 4, 0.5);
+    limb(ctx, [6, 4], [8, -4], 4, 0.5);
+  } else if (kind === 'medkit') {
+    box(ctx, -24, -16, 48, 34, 0.7, 4);
+    box(ctx, -8, -24, 16, 9, 0.5, 3);
+  } else {
+    for (const [x, y] of [[-14, 10], [14, 10], [0, -4]]) vol(ctx, x, y, 14, 7.5, y < 0 ? 0.56 : 0.46, 0.12);
+  }
 }
 
 function ground(ctx: Ctx) {
@@ -378,7 +508,31 @@ export function bakeNightVision(scene: Phaser.Scene) {
     c.scale(1.9, 1.9);
     brute(c, true);
   });
-  for (const kind of UPGRADE_KINDS) {
+  nvBake(scene, 'spitter', GEOM.spitter, spitter);
+  nvBake(scene, 'riot', GEOM.riot, (c) => riot(c, true));
+  nvBake(scene, 'riot-bare', GEOM.riot, (c) => riot(c, false));
+  nvBake(scene, 'crawler', GEOM.crawler, crawler);
+  nvBake(scene, 'acid', GEOM.acid, acid, { bloom: 5 });
+  nvBake(scene, 'glob', GEOM.glob, (c) => {
+    c.save();
+    c.shadowColor = '#fff';
+    c.shadowBlur = 6;
+    vol(c, 0, 0, 6, 7, 0.9, 0.08);
+    c.restore();
+  });
+  nvBake(scene, 'wall', GEOM.wall, wall, { bloom: 0 }, (c) => brackets(c, -90, -20, 180, 38, AMB, 8));
+  nvBake(scene, 'flame', GEOM.flame, flame, { bloom: 8 });
+  for (const kind of SUPPLY_KINDS) {
+    // The medkit's green cross is painted after the phosphor pass, as a crisp mark on the box.
+    nvBake(scene, `supply-${kind}`, GEOM.supply, (c) => supplyIcon(c, kind), {}, kind === 'medkit' ? (c) => {
+      c.fillStyle = '#6ae06a';
+      c.shadowColor = '#6ae06a';
+      c.shadowBlur = 6;
+      c.fillRect(-4, -11, 8, 24);
+      c.fillRect(-12, -3, 24, 8);
+    } : undefined);
+  }
+  for (const kind of CRATE_KINDS) {
     nvBake(scene, `crate-${kind}`, GEOM.crate, crate, {}, (c) => chemlight(c, kind));
     bake(scene, key(`label-${kind}`), GEOM.label, (c) => crateLabel(c, kind));
   }

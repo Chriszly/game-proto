@@ -4,7 +4,8 @@ import { expect, test, type Page } from '@playwright/test';
 // tapped to night vision and back, the horde comes in and is shot down while the progress strip
 // fills, the hero moves under the wave's pickup and shoots it open for an upgrade, then under the
 // wave's fuel drum and blows it up among the horde, and the wave is cleared without the horde
-// reaching the hero. Kills in quick succession build the frenzy streak along the way.
+// reaching the hero. Kills in quick succession build the frenzy streak along the way, and every kill
+// earns scrap, banked when the wave is cleared.
 // Game state is only read, through the `game` object the dev build puts on window.
 
 type Point = { x: number; y: number };
@@ -12,7 +13,7 @@ type UpgradeKind = 'rate' | 'damage' | 'companion' | 'pierce';
 interface Stats { damage: number; fireInterval: number; companions: number; pierce: number }
 interface GameState {
   wave: number;
-  phase: 'wave' | 'break' | 'over';
+  phase: 'wave' | 'break' | 'supply' | 'over';
   kills: number;
   stats: Stats;
   collected: Record<UpgradeKind, number>;
@@ -24,6 +25,10 @@ interface GameState {
   frenzies: number;
   drumsBlown: number;
   lastBlast: { caught: number; killed: number } | null;
+  scrap: number;
+  bank: number;
+  startKit: string[];
+  sandbags: number;
 }
 interface Pickup { id: number; upgrade: UpgradeKind; hp: number; maxHp: number; x: number; y: number }
 interface Drum { id: number; hp: number; maxHp: number; x: number; y: number; caught: number }
@@ -32,6 +37,8 @@ interface Drum { id: number; hp: number; maxHp: number; x: number; y: number; ca
 const VIEW = { w: 540, h: 960 };
 const HERO_Y = 880;
 const WAVE_1_ENEMIES = 12;
+/** From SCRAP in src/game/rules.ts: scrap for a grunt, wave 1's only zombie. */
+const GRUNT_SCRAP = 1;
 /** The art style switch in the top bar (STYLE_SWITCH in src/scenes/Hud.ts): its two halves. */
 const SWITCH = { comic: { x: 456, y: 42 }, nv: { x: 506, y: 42 } };
 /** From FRENZY in src/game/rules.ts: kills this close together build the streak. */
@@ -181,6 +188,8 @@ test('plays the first wave', async ({ page }, testInfo) => {
   // the best wave reached so far (nothing was saved before), and the record is saved at once.
   let s = await game.state();
   expect(s).toMatchObject({ wave: 1, phase: 'wave', kills: 0, stats: BASE_STATS, best: 1, fallen: 0, waveTotal: WAVE_1_ENEMIES, streak: 0, frenzies: 0, drumsBlown: 0 });
+  // A first run has no scrap banked, so it starts without starting crates or sandbags.
+  expect(s).toMatchObject({ scrap: 0, bank: 0, startKit: [], sandbags: 0 });
   expect(await game.hero()).toEqual({ x: VIEW.w / 2, y: HERO_Y, moving: false });
   expect(await page.evaluate(() => localStorage.getItem('deadline-best'))).toBe('1');
 
@@ -208,6 +217,8 @@ test('plays the first wave', async ({ page }, testInfo) => {
   // The progress strip counts the wave's zombies down as they fall.
   expect(s.fallen).toBe(s.kills);
   expect(s.streak).toBeGreaterThan(0);
+  // Every kill earns scrap.
+  expect(s.scrap).toBe(s.kills * GRUNT_SCRAP);
 
   // A fuel drum rolls down among the horde, its ring showing how many zombies its blast would catch.
   let drums = await game.drums();
@@ -274,6 +285,9 @@ test('plays the first wave', async ({ page }, testInfo) => {
   s = await until('wave 1 cleared', (s) => s.phase === 'break', 60_000, aimAtFront);
   expect(s).toMatchObject({ wave: 1, kills: WAVE_1_ENEMIES, fallen: WAVE_1_ENEMIES, waveTotal: WAVE_1_ENEMIES });
   expect(await game.enemies()).toEqual([]);
+  // The wave's scrap is banked as it is cleared, for starting crates on a later run.
+  expect(s.scrap).toBe(WAVE_1_ENEMIES * GRUNT_SCRAP);
+  expect(await page.evaluate(() => localStorage.getItem('deadline-scrap'))).toBe(String(WAVE_1_ENEMIES * GRUNT_SCRAP));
   await snap('6-cleared');
   s = await until('wave 2 started', (s) => s.wave === 2 && s.phase === 'wave', 5_000);
   // A new wave starts the strip again, and reaching it is a new best wave, saved.
