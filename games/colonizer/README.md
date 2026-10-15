@@ -159,7 +159,7 @@ minimap's raid rings stand still.
 
 ## Watch AI
 
-The **Watch AI** link on the hub card (or `?watch` after the game's URL) skips the menu and starts a
+Add `?watch` to the game's URL (`/games/colonizer/?watch`) to skip the menu and start a
 match between two random factions, both played by the AI, with the whole map in view. Scroll with the
 arrow keys or the minimap and click a unit to see what it is doing. The panel in the top right
 pauses (**P**), sets the speed from 1x to 8x (**[** and **]**) and opens a log of every build,
