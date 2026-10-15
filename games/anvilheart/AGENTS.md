@@ -84,7 +84,8 @@ Missing or rough:
 File map (`src/`):
 
 - `main.ts`: creates the `Phaser.Game` (960x540, `Scale.FIT`, `pixelArt: false`) with `BootScene` and
-  `GameScene`, calls `setupGame(game)`, and exposes `game` on window in dev builds.
+  `GameScene`, calls `setupGame(game)` and then `setupScaling(game)` from `shared/scaling.ts`, and
+  exposes `game` on window in dev builds.
 - `game/state.ts`: types (`GameState`, `Adventurer`, `GameEvent`, `Progress`, `Fit`), board
   (`GRID`, `SLOTS`, `MAX_SLOTS`, `BARREL`, `anvilsOf`), timing, tip, streak, reputation and gem
   constants (`EXACT_TIP`, `STREAK_MS`, `STREAK_COINS`, `LOOKS`, `REP_*`, `GEM_*`), `freshProgress`,
@@ -112,8 +113,9 @@ File map (`src/`):
   `placeAt` (anvil or barrel), `onBanner` and `deskAt`.
 - `ui/Button.ts`: a leaded-glass caption button (style `forge`, `upgrade` or `row`, textures from
   `bakeUi`) that fires on `pointerdown` and can be disabled.
-- `art/glass.ts`: the painting kit: `bake` (paints a canvas in art units, twice the view's, and
-  adds it with `textures.addCanvas`), `glass` (a gradient, mottled piece in lead), `panel`,
+- `art/glass.ts`: the painting kit: `bake` (paints a canvas in art units, twice the view's, at
+  `sharpRes` canvas pixels per view pixel, and adds it with `textures.addCanvas`), `fit` and
+  `shown` (the scale that shows a baked texture at its size in view pixels), `glass` (a gradient, mottled piece in lead), `panel`,
   `glowFrame`, `glow`, `paint`, `label`, shape helpers and the seeded `rnd`.
   `art/scenery.ts`: `background` (Voronoi mosaic wall, furnace stones, all twenty board panes and
   anvils, the reputation pane, counter frames, top bar) and `furnace-0/1`. `art/swords.ts`:
@@ -124,21 +126,23 @@ File map (`src/`):
   green, banner, barrel), discovered frame, burst, spark, halo, `row-locked`, `barrel`/`barrel-off`
   and `win-panel` textures.
 
-Shared code the game imports (repo root, outside `src/`): `shared/setupGame.ts` (`setupGame`) and
-`shared/settings.ts` (`settings`, `byDifficulty`). See "Hub settings" below.
+Shared code the game imports (repo root, outside `src/`): `shared/setupGame.ts` (`setupGame`),
+`shared/scaling.ts` (`setupScaling`, `sharpRes`) and `shared/settings.ts` (`settings`,
+`byDifficulty`). See "Hub settings" and "Screens" below.
 
 How it runs:
 
 - Boot: `BootScene.create` calls `bakeScenery`, `bakeSwords`, `bakeAdventurers` and `bakeUi`,
-  which paint stained glass on 2D canvases (in art units, scaled by a half so each texture is at
-  the view's size) and add them with `textures.addCanvas`. There are no asset files. The
+  which paint stained glass on 2D canvases (in art units, scaled to `sharpRes` canvas pixels per
+  view pixel, which matches the screen's `renderScale`) and add them with `textures.addCanvas`. There are no asset files. The
   background's mosaic is computed pixel by pixel once at boot.
 - Tick: `GameScene.update(time)` takes `dt` from the frame timestamp (clamped to `MAX_STEP_MS`,
   250ms), adds it to `clock`, and calls `tick(state, dt)`, which cools the forge, forges when
   `autoForging`, drains the hammer streak and patience (a walk-off costs reputation) and brings
   adventurers. If that pushed a `forged` event the scene
   saves. Then it draws.
-- Input: scene `pointerdown` picks up a sword or gem from an anvil or the barrel (`pickUp`; on an
+- Input: pointers are read through `pointer.worldX/worldY` (game pixels; `pointer.x/y` are canvas
+  pixels once `setupScaling` runs). Scene `pointerdown` picks up a sword or gem from an anvil or the barrel (`pickUp`; on an
   unbought barrel it buys it), `pointermove` moves the held sprite, `pointerup` calls `putDown`,
   which calls `drop` if over an anvil or the barrel, `deliver` if over the banner, or `sell` if over
   a desk with an adventurer. `gameout` puts the sword back. Pick-ups are ignored while the win
@@ -228,6 +232,19 @@ the difficulty and reputation multipliers on patience in `arrive`.
 - The settings are read once at load from the `hub-settings` storage key, which the hub owns. They
   are not part of `anvilheart-progress`, and "New smithy" does not touch them.
 
+### Screens
+
+- `setupScaling` gives the canvas `renderScale` canvas pixels per game pixel (up to 4 on a 4K
+  screen, 2 with the canvas renderer) and zooms the camera to match from its top-left corner. The
+  camera never scrolls, so the layout in `layout.ts` stays in 960x540 game pixels.
+- Every texture is baked at `sharpRes` canvas pixels per view pixel, so an image showing one must
+  be sized with `fit(image, scale)` (in `GameScene`, `this.image(x, y, key, scale)`), and a tween
+  on its `scale` targets `shown(key, scale)`. A bare `this.add.image` or `setScale` draws the art
+  `renderScale` times too big. Containers (the banner, tags, buttons) scale as usual.
+- Texts are drawn at `renderScale` by `shared/scaling.ts`; Graphics are sharp on their own.
+- `index.html` has the shared `100dvh` and `touch-action: none` styles. A phone held upright gets
+  the shared hint to turn it. `e2e/screens.spec.ts` at the root opens the game on five screens.
+
 ## Testing hooks
 
 - `src/main.ts` puts `game` (the `Phaser.Game`) on window in dev builds only.
@@ -276,7 +293,8 @@ the difficulty and reputation multipliers on patience in `arrive`.
   `src/art/characters.ts`.
 - Add an effect for a new rule: push a new `GameEvent` kind from `src/game/sim.ts` and handle it
   in `GameScene.drawEvents`.
-- Change the art: all textures are painted in `src/art/`, in art units (twice the view's pixels).
+- Change the art: all textures are painted in `src/art/`, in art units (twice the view's pixels),
+  and shown with `fit` (see "Screens").
   Positions inside the background follow `layout.ts` through `a(n)`; a texture that must line up
   with a layout box (the order card, tags, frames) takes its size from `layout.ts` too.
 
