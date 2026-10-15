@@ -130,7 +130,7 @@ shade gardens and a mirrored second production line.
   `followPlayer` gives it back Phaser's middle origin with `scrollingCamera`. `uiCamera`
   never moves or zooms beyond `renderScale` and draws everything from `UI_DEPTH` up: `splitCameras` sets each object's
   `cameraFilter` by its depth every frame, so later objects sort themselves. `setZoom` clamps,
-  widens the camera bounds evenly when the view is wider than the world, and stores the zoom
+  never zooming out past the world's width (so no paper shows at the sides), and stores the zoom
   under `apothecary-zoom`.
 - Map: two columns of production (line one on the left, line two mirrored on the right with
   `mirror`), each running straight down from its gardens through `REFINER` and `CAULDRON` at

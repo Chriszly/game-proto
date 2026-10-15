@@ -177,7 +177,10 @@ const AWAY_CHIP = { x: 652, y: 102, w: 290, h: 30 };
 /** The order bubble over a waiting customer: its height, how far above the customer's middle its middle is, the spacing of its icons, and its tip ring's radius. */
 const BUBBLE = { h: 30, above: 58, icon: 15, ring: 6 };
 
-/** Closest and farthest the view zooms: out until the whole yard is tall enough to fit, in to double size. */
+/**
+ * Closest and farthest the view zooms: out until the whole yard is tall enough to fit, but never past
+ * the world's width (see `setZoom`), in to double size.
+ */
 const MIN_ZOOM = 0.62;
 const MAX_ZOOM = 2;
 /** How much one mouse wheel notch or key press zooms. */
@@ -368,8 +371,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   private setZoom(zoom: number) {
-    const clamped = Phaser.Math.Clamp(zoom, MIN_ZOOM, MAX_ZOOM);
-    // Zoomed out past the world's width, the bounds widen evenly on both sides so the yard stays centred.
+    // Never out past the world's width, so the map always fills the view from side to side.
+    const clamped = Phaser.Math.Clamp(zoom, Math.max(MIN_ZOOM, viewSize(this).width / WORLD.w), MAX_ZOOM);
+    // A view wider than the world even at the closest zoom (never at 960x540) widens the bounds evenly on both sides.
     const w = Math.max(WORLD.w, viewSize(this).width / clamped);
     this.cameras.main.setZoom(clamped * renderScale).setBounds((WORLD.w - w) / 2, 0, w, WORLD.h);
     writeZoom(clamped);
