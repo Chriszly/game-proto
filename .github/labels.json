@@ -1,167 +1,200 @@
 [
   {
-    "name": "game: apothecary",
+    "name": "apothecary",
     "color": "5b7a99",
-    "description": "Feedback for Apothecary"
+    "description": "Game: Apothecary",
+    "previous": "game: apothecary"
   },
   {
-    "name": "game: deadline",
+    "name": "deadline",
     "color": "5b7a99",
-    "description": "Feedback for Deadline"
+    "description": "Game: Deadline",
+    "previous": "game: deadline"
   },
   {
-    "name": "game: palisade",
+    "name": "palisade",
     "color": "5b7a99",
-    "description": "Feedback for Palisade"
+    "description": "Game: Palisade",
+    "previous": "game: palisade"
   },
   {
-    "name": "game: tiny-kingdom",
+    "name": "tiny-kingdom",
     "color": "5b7a99",
-    "description": "Feedback for Tiny Kingdom"
+    "description": "Game: Tiny Kingdom",
+    "previous": "game: tiny-kingdom"
   },
   {
-    "name": "game: hotfoot",
+    "name": "hotfoot",
     "color": "5b7a99",
-    "description": "Feedback for Hotfoot"
+    "description": "Game: Hotfoot",
+    "previous": "game: hotfoot"
   },
   {
-    "name": "game: anvilheart",
+    "name": "anvilheart",
     "color": "5b7a99",
-    "description": "Feedback for Anvilheart"
+    "description": "Game: Anvilheart",
+    "previous": "game: anvilheart"
   },
   {
-    "name": "game: broadside",
+    "name": "broadside",
     "color": "5b7a99",
-    "description": "Feedback for Broadside"
+    "description": "Game: Broadside",
+    "previous": "game: broadside"
   },
   {
-    "name": "game: tincture-tinker",
+    "name": "tincture-tinker",
     "color": "5b7a99",
-    "description": "Feedback for TinctureTinker"
+    "description": "Game: TinctureTinker",
+    "previous": "game: tincture-tinker"
   },
   {
-    "name": "game: catacomb",
+    "name": "catacomb",
     "color": "5b7a99",
-    "description": "Feedback for Catacomb"
+    "description": "Game: Catacomb",
+    "previous": "game: catacomb"
   },
   {
-    "name": "game: golem-garden",
+    "name": "golem-garden",
     "color": "5b7a99",
-    "description": "Feedback for Golem Garden"
+    "description": "Game: Golem Garden",
+    "previous": "game: golem-garden"
   },
   {
-    "name": "game: beehive-baron",
+    "name": "beehive-baron",
     "color": "5b7a99",
-    "description": "Feedback for Beehive Baron"
+    "description": "Game: Beehive Baron",
+    "previous": "game: beehive-baron"
   },
   {
-    "name": "game: wyrmrail",
+    "name": "wyrmrail",
     "color": "5b7a99",
-    "description": "Feedback for Wyrmrail"
+    "description": "Game: Wyrmrail",
+    "previous": "game: wyrmrail"
   },
   {
-    "name": "game: shrine-stack",
+    "name": "shrine-stack",
     "color": "5b7a99",
-    "description": "Feedback for Shrine Stack"
+    "description": "Game: Shrine Stack",
+    "previous": "game: shrine-stack"
   },
   {
-    "name": "game: mapmaker",
+    "name": "mapmaker",
     "color": "5b7a99",
-    "description": "Feedback for Mapmaker"
+    "description": "Game: Mapmaker",
+    "previous": "game: mapmaker"
   },
   {
-    "name": "game: lanternkeep",
+    "name": "lanternkeep",
     "color": "5b7a99",
-    "description": "Feedback for Lanternkeep"
+    "description": "Game: Lanternkeep",
+    "previous": "game: lanternkeep"
   },
   {
-    "name": "game: space-wars",
+    "name": "space-wars",
     "color": "5b7a99",
-    "description": "Feedback for Space Wars"
+    "description": "Game: Space Wars",
+    "previous": "game: space-wars"
   },
   {
-    "name": "game: lane-brawl",
+    "name": "lane-brawl",
     "color": "5b7a99",
-    "description": "Feedback for Lane Brawl"
+    "description": "Game: Lane Brawl",
+    "previous": "game: lane-brawl"
   },
   {
-    "name": "game: colonizer",
+    "name": "colonizer",
     "color": "5b7a99",
-    "description": "Feedback for Colonizer"
+    "description": "Game: Colonizer",
+    "previous": "game: colonizer"
   },
   {
-    "name": "game: hub",
+    "name": "hub",
     "color": "5b7a99",
-    "description": "The hub page and its settings"
+    "description": "Game: The hub page and its settings",
+    "previous": "game: hub"
   },
   {
-    "name": "game: shared",
+    "name": "shared",
     "color": "5b7a99",
-    "description": "Shared code, build or CI used by every game"
+    "description": "Game: Shared code, build or CI used by every game",
+    "previous": "game: shared"
   },
   {
-    "name": "type: bug",
+    "name": "bug",
     "color": "e4572e",
-    "description": "Something is broken (issue) or a bug fix (PR)"
+    "description": "Type: something is broken (issue) or a bug fix (PR)",
+    "previous": "type: bug"
   },
   {
-    "name": "type: gameplay",
+    "name": "gameplay",
     "color": "8250df",
-    "description": "Balance, difficulty, rules or feel of play"
+    "description": "Type: balance, difficulty, rules or feel of play",
+    "previous": "type: gameplay"
   },
   {
-    "name": "type: feature",
+    "name": "feature",
     "color": "2da44e",
-    "description": "A wish or idea (issue) or a new feature (PR)"
+    "description": "Type: a wish or idea (issue) or a new feature (PR)",
+    "previous": "type: feature"
   },
   {
-    "name": "type: refactor",
+    "name": "refactor",
     "color": "0e8a8a",
-    "description": "Cleanup or restructuring with no change in behaviour (PR)"
+    "description": "Type: cleanup or restructuring with no change in behaviour (PR)",
+    "previous": "type: refactor"
   },
   {
-    "name": "type: assets",
+    "name": "assets",
     "color": "d4a72c",
-    "description": "Art, sound or other assets (PR)"
+    "description": "Type: art, sound or other assets (PR)",
+    "previous": "type: assets"
   },
   {
-    "name": "type: docs",
+    "name": "docs",
     "color": "0075ca",
-    "description": "Documentation only (PR)"
+    "description": "Type: documentation only (PR)",
+    "previous": "type: docs"
   },
   {
-    "name": "type: ci",
+    "name": "ci",
     "color": "57606a",
-    "description": "Build, CI or tooling (PR)"
+    "description": "Type: build, CI or tooling (PR)",
+    "previous": "type: ci"
   },
   {
-    "name": "prio: high",
+    "name": "high",
     "color": "c2410c",
-    "description": "Do this first"
+    "description": "Priority: do this first",
+    "previous": "prio: high"
   },
   {
-    "name": "prio: medium",
+    "name": "medium",
     "color": "f97316",
-    "description": "Do this soon"
+    "description": "Priority: do this soon",
+    "previous": "prio: medium"
   },
   {
-    "name": "prio: low",
+    "name": "low",
     "color": "fed7aa",
-    "description": "Do this when there is time"
+    "description": "Priority: do this when there is time",
+    "previous": "prio: low"
   },
   {
-    "name": "status: needs-info",
+    "name": "needs-info",
     "color": "6e7781",
-    "description": "Waiting for more details from the reporter"
+    "description": "Status: waiting for more details from the reporter",
+    "previous": "status: needs-info"
   },
   {
-    "name": "status: duplicate",
+    "name": "duplicate",
     "color": "8c959f",
-    "description": "Already reported in another issue"
+    "description": "Status: already reported in another issue",
+    "previous": "status: duplicate"
   },
   {
-    "name": "status: wontfix",
+    "name": "wontfix",
     "color": "afb8c1",
-    "description": "Will not be changed"
+    "description": "Status: will not be changed",
+    "previous": "status: wontfix"
   }
 ]
