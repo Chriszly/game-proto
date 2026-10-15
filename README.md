@@ -101,6 +101,13 @@ screenshots as the `playthrough-<name>` artifact. The Hub workflow runs the hub 
 card changes. Each CI run also uploads a `game-build` artifact: download it from
 the run's summary page, unzip it and serve the folder (for example with `npx serve`) to play.
 
+## Play online
+
+Every push to main builds the hub and its games and publishes them on GitHub Pages, at
+[chriszly.github.io/game-proto](https://chriszly.github.io/game-proto/), with the hub as the start
+page (`.github/workflows/deploy.yml`). Paths in the build are relative, so it works under the
+`/game-proto/` subpath.
+
 ## Container image
 
 Every push to main also builds the hub and its games into a container image (`Dockerfile`: the
