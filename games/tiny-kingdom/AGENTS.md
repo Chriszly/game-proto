@@ -96,7 +96,8 @@ Implemented today:
   the snapshot, so it cannot be undone. Undo is only offered while `phase` is `'playing'`.
 - Art: a wooden toy set painted on 2D canvases at boot (`src/art/`), in art units twice the view
   (the approved mockup's scale, `.../next5/tiny-kingdom/style-wooden-toy.png` and its `woodtoy.js`),
-  baked at view size. Fonts are the system sans stack (`FONT`), weights 700 to 900.
+  baked at `RES` texture pixels per view pixel (the screen's `renderScale`, up to 4 on a 4K
+  screen) and shown at view size by `addArt`. Fonts are the system sans stack (`FONT`), weights 700 to 900.
 - The game ends when the pouch is empty, or when no tile has room (`anyPlace`) and no two houses
   could merge. When only a merge is left, the undo button reads "No room: merge houses or finish"
   and calls `finish`. A reached goal first gets its gift, unless the island is full. The best
@@ -127,8 +128,8 @@ Missing or rough:
 File map (`src/`):
 
 - `main.ts`: creates the `Phaser.Game` (960x540, `Phaser.Scale.FIT`, `pixelArt: false`) with
-  `BootScene` and `GameScene`, calls `setupGame(game)` from `shared/setupGame.ts`, and in dev
-  builds puts `game` on `window`.
+  `BootScene` and `GameScene`, calls `setupGame(game)` from `shared/setupGame.ts` and
+  `setupScaling(game)` from `shared/scaling.ts`, and in dev builds puts `game` on `window`.
 - `scenes/BootScene.ts`: calls `bakeTextures`, then starts `Game`.
 - `scenes/GameScene.ts`: builds the board (tile and prop images per cell), the decree banner, the
   panel (island button, season strip), the gift card, the islands card, the round banner and the
@@ -159,8 +160,10 @@ File map (`src/`):
   `newSpecial`.
 - `game/save.ts`: `loadBest`, `saveBest`, `loadCrowns`, `saveCrowns`, `loadDailyBest`,
   `saveDailyBest`, `loadStars` and `saveStars`.
-- `art/wood.ts`: the toolkit: `bake` (a view-sized canvas painted in art units, added with
-  `textures.addCanvas`), `shadow` (canvas shadows halved to canvas pixels), `rrect`, `poly`,
+- `art/wood.ts`: the toolkit: `RES` and `setArtRes` (texture pixels per view pixel, from
+  `sharpRes`), `bake` (a canvas `RES` times its view size, painted in art units, added with
+  `textures.addCanvas`), `addArt` (an image of a baked texture scaled by `1 / RES`, so it shows at
+  view size), `shadow` (canvas shadows turned from art units into canvas pixels), `rrect`, `poly`,
   `circle`, `grain`, `tile` (a painted block), `walnut`, `shadowBlob`, `ball`, the palette `T`, the
   seeded `rnd` / `reseed`, and the painters `peg`, `house`, `tower`, `windmill`, `stripes` and
   `crown`, ported from the mockup's `woodtoy.js`, plus `manor`, `market`, `harbor` and `lumber`
@@ -172,8 +175,9 @@ File map (`src/`):
   `bg` texture.
 - `ui/Button.ts`: `makeButton`, the beech plaque button used by the game-over overlay.
 
-Shared code it imports (outside the game folder): `shared/setupGame.ts` (`setupGame`) and
-`shared/settings.ts` (`byDifficulty`, `settings`).
+Shared code it imports (outside the game folder): `shared/setupGame.ts` (`setupGame`),
+`shared/scaling.ts` (`setupScaling`, `sharpRes`, `viewPoint`) and `shared/settings.ts`
+(`byDifficulty`, `settings`).
 
 How it runs:
 
@@ -182,7 +186,8 @@ How it runs:
 - There is no `update` method and no tick. The game is event driven: state only changes on a
   tap. Phaser's tweens animate the popups (`POPUP_MS`), the decree's "+8" and the round banner
   (`BANNER_MS`), so the only time-dependent part is cosmetic.
-- Input: one interactive zone covers the board. `pointermove` calls `hoverAt`, which sets
+- Input: one interactive zone covers the board. `pointermove` calls `hoverPointer`, which turns
+  the pointer into view pixels with `viewPoint` and calls `hoverAt`, which sets
   `preview` from `previewPlacement` and redraws the hover; `pointerdown` calls `tapAt`, which maps
   the point to a cell with `cellAt` and calls `merge` (second tap of a merge), picks a house to
   merge, or calls `place`. Each tile button's plaque calls `select`;
@@ -250,7 +255,12 @@ Data tables:
 
 - `src/main.ts` calls `setupGame(game)` from `shared/setupGame.ts` right after creating the game,
   which applies the frame cap, the FPS readout, reduced motion and full screen (camera shake and flash become
-  no-ops; this game uses neither).
+  no-ops; this game uses neither), and then `setupScaling(game)` from `shared/scaling.ts`, which
+  draws the canvas at the screen's resolution (`renderScale` canvas pixels per view pixel, every
+  camera zoomed to match) and asks to turn a phone held upright. The one camera never scrolls, so
+  layout stays in view pixels (`VIEW`); pointers go through `viewPoint`, since `pointer.x/y` are
+  canvas pixels, and the art is baked at `RES` (see Art). `e2e/screens.spec.ts` at the root checks
+  the game on five screens.
 - Difficulty scales one number: the round goals. `goalFor` in `src/game/state.ts` multiplies the
   base goal by `byDifficulty(0.8, 1, 1.2)` (Easy, Normal, Hard) and rounds it, so the goals are
   16, 36, 60, 88, ... on Easy, 20, 45, 75, 110, ... on Normal and 24, 54, 90, 132, ... on Hard.
@@ -330,7 +340,12 @@ Data tables:
 - Season bonuses are banked into `bonus` at placement, so they are in the undo `Snapshot`; a
   manor's merge never gets one.
 - `checkEnd` counts a possible merge as a reason to go on; `finish` is the way out then.
-- Canvas shadows ignore the canvas transform: use `shadow()` in `wood.ts`, which halves art units.
+- Canvas shadows ignore the canvas transform: use `shadow()` in `wood.ts`, which converts art
+  units to canvas pixels (`RES / ART`).
+- Show baked textures with `addArt`, never `this.add.image`: a texture is `RES` times its view
+  size, so a plain image comes out up to 4 times too big on a big screen. An extra `setScale` on
+  one is divided by `RES` (the tile button's tower icon is `0.85 / RES`); containers scale as usual.
+- Read pointers with `viewPoint` (or `worldX/Y`), never `pointer.x/y`, which are canvas pixels.
 - `undo` restores the snapshot with `Object.assign`, so any field added to `GameState` must be
   added to `Snapshot` too if an undoable placement changes it. Decree payouts are never undoable
   for that reason (`bonus` and `crowns` are not in the snapshot).
