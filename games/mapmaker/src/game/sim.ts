@@ -1,6 +1,12 @@
 import { makeIsland } from './island';
 import {
+  ARTIFACT_VALUE,
+  CAMP_COST,
+  CAMP_REACH,
+  DIG_COST,
   GRID,
+  TREASURE_VALUE,
+  WRECK_SUPPLIES,
   indexOf,
   inkBonus,
   maxSupplies,
@@ -29,9 +35,10 @@ const COMMISSIONS: Commission[] = [
 
 /** A new game: the first island, the first voyage under way from its port. */
 export function newGame(): GameState {
-  const { tiles, port } = makeIsland(1);
+  const { kind, tiles, port, riddle } = makeIsland(1);
   const s: GameState = {
     island: 1,
+    kind,
     voyage: 1,
     phase: 'survey',
     tiles,
@@ -47,28 +54,53 @@ export function newGame(): GameState {
     milestones: 0,
     isleStart: 1,
     atlas: [],
+    camps: [],
+    storms: [],
+    artifacts: 0,
+    treasure: 0,
+    riddle,
+    dug: [],
   };
   s.supplies = maxSupplies(s);
   s.commission = rollCommission(s);
   return s;
 }
 
-/** A fogged tile can be surveyed from a revealed land tile next to it (sea leads nowhere). */
+const dist = (a: Point, b: Point) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+const has = (list: Point[], x: number, y: number) => list.some((p) => p.x === x && p.y === y);
+
+/** Land, or sea beside land: the tiles that count toward the isle and that a camp can reach. */
+function isChartable(s: GameState, x: number, y: number) {
+  const t = tileAt(s, x, y);
+  return !!t && (t.terrain !== 'sea' || neighbours(x, y).some((n) => tileAt(s, n.x, n.y)!.terrain !== 'sea'));
+}
+
+/**
+ * A fogged tile can be surveyed from a charted land tile next to it (sea leads nowhere), or from a
+ * base camp up to `CAMP_REACH` steps away; never while a storm sits on it.
+ */
 export function canSurvey(s: GameState, x: number, y: number) {
   const tile = tileAt(s, x, y);
-  if (!tile || tile.revealed) return false;
-  return neighbours(x, y).some((n) => {
+  if (!tile || tile.revealed || has(s.storms, x, y)) return false;
+  const beside = neighbours(x, y).some((n) => {
     const t = tileAt(s, n.x, n.y)!;
     return t.revealed && t.terrain !== 'sea';
   });
+  return beside || (isChartable(s, x, y) && s.camps.some((c) => dist(c, { x, y }) <= CAMP_REACH));
 }
 
-/** Every tile that can be surveyed now. */
+/** Every tile that can be surveyed now, whatever it costs. */
 export function frontier(s: GameState): Point[] {
   const out: Point[] = [];
   for (let y = 0; y < GRID.h; y++) for (let x = 0; x < GRID.w; x++) if (canSurvey(s, x, y)) out.push({ x, y });
   return out;
 }
+
+/** Supplies it costs to survey a tile: 2 for forests and peaks, nothing for rivers and roads. */
+export const costOf = (s: GameState, x: number, y: number) => TERRAIN[tileAt(s, x, y)!.terrain].cost;
+
+/** True while a survey can still be paid for. */
+export const canAfford = (s: GameState, p: Point) => costOf(s, p.x, p.y) <= s.supplies;
 
 /** How far and in what shape the surveyor sees from a tile, with the Spyglass. */
 export function sightOf(s: GameState, terrain: Terrain) {
@@ -77,22 +109,25 @@ export function sightOf(s: GameState, terrain: Terrain) {
 }
 
 /**
- * Surveys the fogged tile (x, y) for one supply: reveals it, walks the surveyor there (or to the
+ * Surveys the fogged tile (x, y) for its cost: reveals it, walks the surveyor there (or to the
  * shore beside it, for sea), and from hills and peaks also reveals the tiles in sight for free.
- * The voyage ends when the supplies run out or nothing is left to survey.
+ * Finds under the revealed tiles turn up at once. The voyage ends when nothing more can be done.
  */
 export function survey(s: GameState, x: number, y: number) {
-  if (s.phase !== 'survey' || s.supplies <= 0 || !canSurvey(s, x, y)) return false;
-  s.supplies -= 1;
+  if (s.phase !== 'survey' || !canSurvey(s, x, y) || !canAfford(s, { x, y })) return false;
+  s.supplies -= costOf(s, x, y);
   const tile = tileAt(s, x, y)!;
-  reveal(s, x, y);
+  const storms: Point[] = [];
+  reveal(s, x, y, storms);
   if (tile.terrain === 'sea') {
     const shore = neighbours(x, y).filter((n) => {
       const t = tileAt(s, n.x, n.y)!;
       return t.revealed && t.terrain !== 'sea';
     });
-    shore.sort((a, b) => dist(a, s.surveyor) - dist(b, s.surveyor));
-    s.surveyor = { ...shore[0] };
+    // Surveyed from a camp out of reach of the shore: the surveyor stays at the camp.
+    const from = shore.length ? shore : s.camps.filter((c) => dist(c, { x, y }) <= CAMP_REACH);
+    from.sort((a, b) => dist(a, s.surveyor) - dist(b, s.surveyor));
+    if (from.length) s.surveyor = { ...from[0] };
   } else {
     s.surveyor = { x, y };
   }
@@ -101,26 +136,97 @@ export function survey(s: GameState, x: number, y: number) {
   for (let dy = -range; dy <= range; dy++) {
     for (let dx = -range; dx <= range; dx++) {
       const inSight = shape === 'ring' ? true : Math.abs(dx) + Math.abs(dy) <= range;
-      if (inSight) reveal(s, x + dx, y + dy);
+      if (inSight) reveal(s, x + dx, y + dy, storms);
     }
   }
+  // Each storm settles on the nearest fogged tile within two steps, once the lookout has seen what
+  // it can.
+  for (const p of storms) {
+    const near: Point[] = [];
+    for (let dy = -2; dy <= 2; dy++) {
+      for (let dx = -2; dx <= 2; dx++) {
+        const q = { x: p.x + dx, y: p.y + dy };
+        const t = tileAt(s, q.x, q.y);
+        if (t && !t.revealed && dist(p, q) <= 2 && isChartable(s, q.x, q.y) && !has(s.storms, q.x, q.y)) near.push(q);
+      }
+    }
+    near.sort((a, b) => dist(a, p) - dist(b, p));
+    if (near.length) s.storms.push(near[0]);
+  }
 
-  if (s.supplies <= 0 || frontier(s).length === 0) returnToPort(s);
+  endIfDone(s);
   return true;
 }
 
-function reveal(s: GameState, x: number, y: number) {
+/**
+ * Charts a tile, and turns up what it hides: stores from a wreck, an artifact, the riddle chart. A
+ * storm's tile goes on `storms`, for `survey` to settle it beside.
+ */
+function reveal(s: GameState, x: number, y: number, storms: Point[]) {
   const tile = tileAt(s, x, y);
   if (!tile || tile.revealed) return;
   tile.revealed = true;
   s.surveyed.push({ x, y });
+  if (tile.terrain === 'ruins' && s.riddle) s.riddle.known = true;
+  if (tile.find === 'wreck') s.supplies += WRECK_SUPPLIES;
+  if (tile.find === 'cave') s.artifacts += 1;
+  if (tile.find === 'storm') storms.push({ x, y });
+}
+
+/** True while the surveyor can still survey something they can pay for, or dig for the treasure. */
+export const canAct = (s: GameState) => frontier(s).some((p) => canAfford(s, p)) || diggable(s).length > 0;
+
+function endIfDone(s: GameState) {
+  if (!canAct(s)) returnToPort(s);
+}
+
+/** A base camp can go on the surveyor's tile (not the port, not twice) for `CAMP_COST` supplies. */
+export function canCamp(s: GameState) {
+  const t = tileAt(s, s.surveyor.x, s.surveyor.y)!;
+  return s.phase === 'survey' && s.supplies >= CAMP_COST && t.terrain !== 'port' && t.terrain !== 'sea' && !has(s.camps, s.surveyor.x, s.surveyor.y);
+}
+
+/** Pitches a base camp where the surveyor stands; it lasts as long as the isle. */
+export function pitchCamp(s: GameState) {
+  if (!canCamp(s)) return false;
+  s.supplies -= CAMP_COST;
+  s.camps.push({ ...s.surveyor });
+  endIfDone(s);
+  return true;
+}
+
+/** The charted tiles that can still be dug for the riddle's treasure, once the riddle is known. */
+export function diggable(s: GameState): Point[] {
+  const r = s.riddle;
+  if (s.phase !== 'survey' || !r || !r.known || r.found || s.supplies < DIG_COST) return [];
+  const out: Point[] = [];
+  for (let y = 0; y < GRID.h; y++) {
+    for (let x = 0; x < GRID.w; x++) {
+      const t = tileAt(s, x, y)!;
+      if (t.revealed && t.terrain !== 'sea' && t.terrain !== 'port' && !has(s.dug, x, y)) out.push({ x, y });
+    }
+  }
+  return out;
+}
+
+/** Digs a charted tile for `DIG_COST`: on the riddle's tile, the treasure goes on this voyage's chart. */
+export function dig(s: GameState, x: number, y: number) {
+  if (!has(diggable(s), x, y)) return false;
+  s.supplies -= DIG_COST;
+  s.dug.push({ x, y });
+  s.surveyor = { x, y };
+  const r = s.riddle!;
+  if (r.at.x === x && r.at.y === y) {
+    r.found = true;
+    s.treasure += TREASURE_VALUE;
+  }
+  endIfDone(s);
+  return true;
 }
 
 /** What a list of revealed tiles adds to the chart, before Fine Ink: a lookout's tally. */
 export const valueOf = (s: GameState, tiles: Point[]) =>
   tiles.reduce((sum, p) => sum + TERRAIN[s.tiles[indexOf(p.x, p.y)].terrain].value, 0);
-
-const dist = (a: Point, b: Point) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 
 /**
  * Ends the voyage: the surveyor sails home and the voyage's tiles are drawn into a chart. Supplies
@@ -130,12 +236,14 @@ export function returnToPort(s: GameState) {
   if (s.phase !== 'survey') return false;
   s.chart = chartOf(s);
   s.phase = 'chart';
+  s.storms = [];
   return true;
 }
 
 /**
  * How many tiles of each terrain the voyage revealed, and what the chart sells for: the tiles,
- * Fine Ink, the commission, the unused supplies sold back and any isle milestones reached.
+ * Fine Ink, the commission, artifacts and treasure, the unused supplies sold back and any isle
+ * milestones reached.
  */
 export function chartOf(s: GameState): Chart {
   const counts: Partial<Record<Terrain, number>> = {};
@@ -152,17 +260,21 @@ export function chartOf(s: GameState): Chart {
   const due = milestonesDue(s);
   const milestoneCoins = due.reduce((sum, m) => sum + m.coins, 0);
   const atlas = due.some((m) => m.atlas);
+  const artifactCoins = s.artifacts * ARTIFACT_VALUE;
   return {
     counts,
     base,
     ink,
     bonus,
+    artifacts: s.artifacts,
+    artifactCoins,
+    treasure: s.treasure,
     unused,
     sellBack,
     milestones: due.length,
     milestoneCoins,
     atlas,
-    total: base + ink + bonus + sellBack + milestoneCoins,
+    total: base + ink + bonus + artifactCoins + s.treasure + sellBack + milestoneCoins,
   };
 }
 
@@ -177,12 +289,7 @@ export function sellBackOf(s: GameState, base = chartOf(s).base) {
  */
 export function chartable(s: GameState): Point[] {
   const out: Point[] = [];
-  for (let y = 0; y < GRID.h; y++) {
-    for (let x = 0; x < GRID.w; x++) {
-      const t = tileAt(s, x, y)!;
-      if (t.terrain !== 'sea' || neighbours(x, y).some((n) => tileAt(s, n.x, n.y)!.terrain !== 'sea')) out.push({ x, y });
-    }
-  }
+  for (let y = 0; y < GRID.h; y++) for (let x = 0; x < GRID.w; x++) if (isChartable(s, x, y)) out.push({ x, y });
   return out;
 }
 
@@ -206,9 +313,11 @@ export function sellChart(s: GameState) {
   s.coins += s.chart.total;
   s.lastSale = s.chart.total;
   s.milestones += s.chart.milestones;
-  if (s.chart.atlas) s.atlas.push({ island: s.island, voyages: s.voyage - s.isleStart + 1, tiles: isleProgress(s).total });
+  if (s.chart.atlas) s.atlas.push({ island: s.island, kind: s.kind, voyages: s.voyage - s.isleStart + 1, tiles: isleProgress(s).total });
   s.chart = null;
   s.surveyed = [];
+  s.artifacts = 0;
+  s.treasure = 0;
   s.phase = 'harbor';
   return true;
 }
@@ -233,9 +342,13 @@ export function setSail(s: GameState) {
   if (s.phase !== 'harbor') return false;
   if (islandCharted(s)) {
     s.island += 1;
-    const { tiles, port } = makeIsland(s.island);
+    const { kind, tiles, port, riddle } = makeIsland(s.island);
+    s.kind = kind;
     s.tiles = tiles;
     s.port = port;
+    s.riddle = riddle;
+    s.camps = [];
+    s.dug = [];
     s.milestones = 0;
     s.isleStart = s.voyage + 1;
   }

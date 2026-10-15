@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { KINDS, type IsleKind } from '../game/kinds';
 import type { Terrain } from '../game/terrain';
 import type { UpgradeId } from '../game/upgrades';
 import { TINT } from './map';
@@ -61,7 +62,7 @@ const UPGRADE_ICONS: Record<UpgradeId, (ctx: Ctx) => void> = {
 
 /** A tile's flat tint with its map symbol, for chart rows and the commission. */
 function swatch(ctx: Ctx, t: Terrain) {
-  ctx.fillStyle = t === 'village' || t === 'port' || t === 'ruins' ? '#dcebc8' : TINT[t];
+  ctx.fillStyle = ['village', 'port', 'ruins', 'river', 'road'].includes(t) ? '#dcebc8' : TINT[t];
   ctx.fillRect(0, 0, 16, 16);
   ctx.strokeStyle = 'rgba(29,35,41,0.35)';
   ctx.lineWidth = 1;
@@ -109,8 +110,174 @@ function swatch(ctx: Ctx, t: Terrain) {
   } else if (t === 'port') {
     ctx.fillStyle = INK;
     ctx.fillRect(7, 2, 2, 12);
+  } else if (t === 'river') {
+    ctx.strokeStyle = BLUE;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(3, 3);
+    ctx.quadraticCurveTo(12, 6, 7, 9);
+    ctx.quadraticCurveTo(3, 12, 13, 14);
+    ctx.stroke();
+  } else if (t === 'road') {
+    for (const [col, lw] of [[INK, 4], ['#f6ecd2', 2]] as const) {
+      ctx.strokeStyle = col;
+      ctx.lineWidth = lw;
+      ctx.beginPath();
+      ctx.moveTo(2, 13);
+      ctx.lineTo(8, 8);
+      ctx.lineTo(14, 4);
+      ctx.stroke();
+    }
   }
 }
+
+/**
+ * The map's marks for what tiles hold, each 24 px: `find-wreck`, `find-cave`, `artifact`,
+ * `storm`, `camp`, `dug`, `treasure` and `riddle`. Ink symbols like the rest of the sheet; the
+ * camp is magenta survey overprint like the stations, and the treasure gold like the compass.
+ */
+const MARKS: Record<string, (ctx: Ctx) => void> = {
+  // A wrecked hull on its side with a broken mast.
+  'find-wreck': (ctx) => {
+    ctx.save();
+    ctx.translate(12, 13);
+    ctx.rotate(-0.25);
+    ctx.beginPath();
+    ctx.moveTo(-9, -1);
+    ctx.lineTo(9, -1);
+    ctx.quadraticCurveTo(7, 6, 0, 6);
+    ctx.quadraticCurveTo(-7, 6, -9, -1);
+    ctx.fillStyle = BROWN;
+    ctx.fill();
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1.3;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-1, -1);
+    ctx.lineTo(-1, -9);
+    ctx.lineTo(4, -6);
+    ctx.stroke();
+    ctx.restore();
+    ctx.strokeStyle = BLUE;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(3, 21);
+    ctx.quadraticCurveTo(7.5, 18.5, 12, 21);
+    ctx.quadraticCurveTo(16.5, 23.5, 21, 21);
+    ctx.stroke();
+  },
+  // A cave mouth: a dark arch in a rock face.
+  'find-cave': (ctx) => {
+    poly(ctx, [[2, 20], [7, 7], [12, 4], [18, 8], [22, 20]], '#d9c3a0', INK, 1.2);
+    ctx.beginPath();
+    ctx.moveTo(7.5, 20);
+    ctx.lineTo(7.5, 15);
+    ctx.arc(12, 15, 4.5, Math.PI, 0);
+    ctx.lineTo(16.5, 20);
+    ctx.closePath();
+    ctx.fillStyle = INK;
+    ctx.fill();
+  },
+  // An old urn, for the chart's artifact row.
+  artifact: (ctx) => {
+    ctx.beginPath();
+    ctx.moveTo(9, 3);
+    ctx.lineTo(15, 3);
+    ctx.lineTo(14, 6);
+    ctx.quadraticCurveTo(20, 10, 16, 18);
+    ctx.lineTo(16, 21);
+    ctx.lineTo(8, 21);
+    ctx.lineTo(8, 18);
+    ctx.quadraticCurveTo(4, 10, 10, 6);
+    ctx.closePath();
+    ctx.fillStyle = GOLD;
+    ctx.fill();
+    ctx.strokeStyle = GOLD_DARK;
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    ctx.fillStyle = GOLD_DARK;
+    ctx.fillRect(7, 11, 10, 1.5);
+  },
+  // A storm cloud with slanting rain.
+  storm: (ctx) => {
+    ctx.strokeStyle = BLUE;
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    for (const x of [7, 11.5, 16]) {
+      ctx.moveTo(x, 15);
+      ctx.lineTo(x - 2.5, 21);
+    }
+    ctx.stroke();
+    ctx.fillStyle = '#5b6670';
+    ctx.beginPath();
+    ctx.arc(8, 11, 4.5, 0, Math.PI * 2);
+    ctx.arc(13, 8, 5.5, 0, Math.PI * 2);
+    ctx.arc(17.5, 11.5, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillRect(8, 11, 10, 4.5);
+  },
+  // A base camp: a magenta tent with a pennant.
+  camp: (ctx) => {
+    poly(ctx, [[3, 20], [12, 6], [21, 20]], MAGENTA, INK, 1.2);
+    poly(ctx, [[12, 11], [15.5, 20], [8.5, 20]], SHEET);
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(12, 6);
+    ctx.lineTo(12, 1.5);
+    ctx.stroke();
+    poly(ctx, [[12, 1.5], [17, 3], [12, 4.5]], MAGENTA);
+  },
+  // A dug tile: a dotted ring of spoil round a hole.
+  dug: (ctx) => {
+    ctx.fillStyle = BROWN;
+    for (let k = 0; k < 10; k++) {
+      const a = (k / 10) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.arc(12 + Math.cos(a) * 7, 12 + Math.sin(a) * 5.5, 1.1, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.beginPath();
+    ctx.ellipse(12, 12, 3.5, 2.5, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(29,35,41,0.55)';
+    ctx.fill();
+  },
+  // The treasure: a gold-banded chest.
+  treasure: (ctx) => {
+    rrect(ctx, 4, 8, 16, 12, 2);
+    ctx.fillStyle = BROWN;
+    ctx.fill();
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    ctx.fillStyle = GOLD;
+    ctx.fillRect(4, 12, 16, 2);
+    ctx.fillRect(10.5, 11, 3, 5);
+    ctx.strokeStyle = GOLD_DARK;
+    ctx.lineWidth = 0.8;
+    ctx.strokeRect(10.5, 11, 3, 5);
+    ctx.beginPath();
+    ctx.moveTo(4, 8);
+    ctx.quadraticCurveTo(12, 2, 20, 8);
+    ctx.fillStyle = '#8a5a30';
+    ctx.fill();
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+  },
+  // The riddle chart: a curled sheet with a dotted magenta trail to a gold star.
+  riddle: (ctx) => {
+    rrect(ctx, 3, 4, 18, 16, 2);
+    ctx.fillStyle = '#efe3c4';
+    ctx.fill();
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    ctx.fillStyle = MAGENTA;
+    for (const [x, y] of [[6, 16], [8, 13.5], [10.5, 12], [13, 11]]) ctx.fillRect(x - 0.8, y - 0.8, 1.6, 1.6);
+    star(ctx, 16.5, 9, 3.5, 1.4, 5, GOLD, GOLD_DARK, 0.6);
+  },
+};
 
 export function bakeIcons(scene: Phaser.Scene) {
   for (const [id, draw] of Object.entries(UPGRADE_ICONS)) bake(scene, `icon-${id}`, 24, 24, draw);
@@ -125,10 +292,12 @@ export function bakeIcons(scene: Phaser.Scene) {
     circle(ctx, 11, 11, 9.5, null, MAGENTA, 1.6);
     poly(ctx, [[11, 4], [17, 14.5], [5, 14.5]], null, MAGENTA, 1.6);
   });
-  // An atlas: a bound book with a station on its cover.
-  for (const filled of [true, false]) {
-    bake(scene, filled ? 'atlas' : 'atlas-empty', 16, 16, (ctx) => {
-      const c = filled ? INK : '#b9c0c6';
+  for (const [key, draw] of Object.entries(MARKS)) bake(scene, key, 24, 24, draw);
+  // An atlas: a bound book with a station on its cover, one cover colour per kind of isle.
+  for (const kind of [...(Object.keys(KINDS) as IsleKind[]), null]) {
+    const filled = kind !== null;
+    bake(scene, kind ? `atlas-${kind}` : 'atlas-empty', 16, 16, (ctx) => {
+      const c = kind ? KINDS[kind].page : '#b9c0c6';
       ctx.fillStyle = c;
       ctx.fillRect(2, 2, 12, 12);
       ctx.fillStyle = filled ? SHEET : '#eef0f1';

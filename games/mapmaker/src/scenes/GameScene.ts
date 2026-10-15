@@ -6,30 +6,52 @@ import { SURVEYOR_ORIGIN } from '../art/surveyor';
 import { loadGame, saveGame } from '../game/save';
 import {
   buy,
+  canAfford,
+  canCamp,
   chartOf,
+  costOf,
+  dig,
+  diggable,
   frontier,
   isleProgress,
   islandCharted,
   milestonesDue,
   newGame,
+  pitchCamp,
   returnToPort,
   sellChart,
   setSail,
   survey,
   valueOf,
 } from '../game/sim';
-import { GRID, MILESTONES, SELL_BACK, indexOf, maxSupplies, rankOf, type GameState, type Point, type Tile } from '../game/state';
+import { kindOf, KINDS } from '../game/kinds';
+import {
+  ARTIFACT_VALUE,
+  CAMP_COST,
+  DIG_COST,
+  GRID,
+  MILESTONES,
+  SELL_BACK,
+  TREASURE_VALUE,
+  WRECK_SUPPLIES,
+  indexOf,
+  maxSupplies,
+  rankOf,
+  type GameState,
+  type Point,
+  type Tile,
+} from '../game/state';
 import { CHART_ORDER, TERRAIN, isLandmark } from '../game/terrain';
 import { UPGRADES, UPGRADE_IDS, nextCost } from '../game/upgrades';
 import { makeButton } from '../ui/Button';
 import {
+  CAMP_BUTTON,
   FONT,
   MAP,
   OVERLAY,
   OVERLAY_BUTTON,
   PANEL,
   RETURN_BUTTON,
-  BUTTON,
   SHOP,
   SMALL_BUTTON,
   UI_DEPTH,
@@ -44,6 +66,8 @@ const WALK_SPEED = 260;
 /** How long a newly charted tile's blank paper takes to fade, and a value chip to float up. */
 const REVEAL_MS = 300;
 const POPUP_MS = 900;
+/** How long a find's or a dig's notice stays up. */
+const NOTICE_MS = 2200;
 /** How long the panel's live chart inks new tiles in magenta. */
 const FRESH_MS = 1800;
 /**
@@ -82,6 +106,7 @@ export interface Spot {
 interface Popup {
   chip: Phaser.GameObjects.Container;
   age: number;
+  life: number;
 }
 
 /** A lookout's reveal: the ring, a chip per tile and the tally they gather into. */
@@ -100,7 +125,7 @@ interface Sweep {
 export class GameScene extends Phaser.Scene {
   /** The game being played; read by the playthrough test. */
   state!: GameState;
-  /** Where each button on screen is, by name (`return`, `sell`, `sail`, `buy-<upgrade>`). */
+  /** Where each button on screen is, by name (`return`, `camp`, `sell`, `sail`, `buy-<upgrade>`). */
   spots: Record<string, Spot> = {};
   private terrainTex!: Phaser.Textures.CanvasTexture;
   private fogTex!: Phaser.Textures.CanvasTexture;
@@ -113,6 +138,12 @@ export class GameScene extends Phaser.Scene {
   /** When each tile was charted, by the scene's clock, for the panel's live chart. */
   private freshAt = new Map<number, number>();
   private glow!: Phaser.GameObjects.Graphics;
+  /** Cost labels under the survey stations, reused frame to frame. */
+  private costLabels: Phaser.GameObjects.Text[] = [];
+  /** The map's marks (finds, storms, camps, dug tiles, the treasure), by what and where. */
+  private marks = new Map<string, Phaser.GameObjects.Image>();
+  private campButton: Phaser.GameObjects.Container | null = null;
+  private campEnabled: boolean | null = null;
   private ring!: Phaser.GameObjects.Graphics;
   private hoverPill!: Phaser.GameObjects.Container;
   private surveyor!: Phaser.GameObjects.Image;
@@ -126,6 +157,8 @@ export class GameScene extends Phaser.Scene {
     atlasIcon: Phaser.GameObjects.Image;
     supplies: Phaser.GameObjects.Text;
     max: Phaser.GameObjects.Text;
+    riddle: Phaser.GameObjects.Text;
+    riddleTag: Phaser.GameObjects.Text;
     unused: Phaser.GameObjects.Text;
     coins: Phaser.GameObjects.Text;
     tiles: Phaser.GameObjects.Text;
@@ -161,6 +194,10 @@ export class GameScene extends Phaser.Scene {
     this.hints.clear();
     this.freshAt.clear();
     this.popups = [];
+    this.costLabels = [];
+    this.marks.clear();
+    this.campButton = null;
+    this.campEnabled = null;
     this.sweep = null;
     this.overlay = null;
     this.overlayKey = '';
@@ -182,20 +219,30 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(SURVEYOR_ORIGIN.x, SURVEYOR_ORIGIN.y)
       .setScale(1 / HI)
       .setDepth(6);
-    this.hoverPill = this.pill(0, 0, '−1 supply', 58, 13, 7.5).setDepth(8).setVisible(false);
+    this.hoverPill = this.pill(0, 0, '−1 supply', 64, 13, 7.5).setDepth(8).setVisible(false);
     this.createPanel();
     this.syncIsland();
 
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => (this.hover = this.tileAtScreen(p.x, p.y)));
-    // A tap on a survey station surveys it. Taps on a button or the overlay are theirs alone.
+    // A tap on a survey station surveys it, and a tap on charted ground digs there once the riddle is
+    // known. Taps on a button or the overlay are theirs alone.
     this.input.on('pointerdown', (p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
       if (over.length > 0) return;
       const t = this.tileAtScreen(p.x, p.y);
       if (!t) return;
-      const before = this.state.surveyed.length;
-      if (!survey(this.state, t.x, t.y)) return;
-      saveGame(this.state);
-      this.announce(t, this.state.surveyed.slice(before));
+      const s = this.state;
+      const before = { surveyed: s.surveyed.length, storms: s.storms.length, known: !!s.riddle?.known };
+      if (survey(s, t.x, t.y)) {
+        saveGame(s);
+        const fresh = s.surveyed.slice(before.surveyed);
+        this.announce(t, fresh);
+        this.announceFinds(fresh, before.storms, before.known);
+      } else if (dig(s, t.x, t.y)) {
+        saveGame(s);
+        const c = tileCentre(t.x, t.y);
+        if (s.riddle?.found) this.notice(c.x, c.y - 14, `Treasure! +${TREASURE_VALUE}c`, true);
+        else this.notice(c.x, c.y - 14, 'Nothing here');
+      }
     });
   }
 
@@ -208,6 +255,7 @@ export class GameScene extends Phaser.Scene {
     this.ageFades(dt);
     this.moveSurveyor(dt);
     this.drawGlow();
+    this.syncMarks();
     this.agePopups(dt);
     this.ageSweep(dt);
     this.updatePanel();
@@ -421,18 +469,51 @@ export class GameScene extends Phaser.Scene {
       const v = TERRAIN[this.state.tiles[indexOf(p.x, p.y)].terrain].value;
       if (v <= 0) continue;
       const c = tileCentre(p.x, p.y);
-      this.popups.push({ chip: this.chip(c.x, c.y - 4, `+${v}`), age: 0 });
+      this.popups.push({ chip: this.chip(c.x, c.y - 4, `+${v}`), age: 0, life: POPUP_MS });
     }
+  }
+
+  /** Notices for what the survey turned up: a wreck's stores, an artifact, a storm, the riddle chart. */
+  private announceFinds(fresh: Point[], stormsBefore: number, knewRiddle: boolean) {
+    const s = this.state;
+    // Several notices from one survey (a lookout can turn up more than one find) stack upward.
+    let n = 0;
+    const say = (p: Point, caption: string, strong = false) => {
+      const c = tileCentre(p.x, p.y);
+      this.notice(c.x, c.y - 16 - 18 * n++, caption, strong);
+    };
+    for (const p of fresh) {
+      const find = s.tiles[indexOf(p.x, p.y)].find;
+      if (find === 'wreck') say(p, `Shipwreck: +${WRECK_SUPPLIES} supplies`, true);
+      if (find === 'cave') say(p, `Cave: an artifact (${ARTIFACT_VALUE}c)`, true);
+      if (find === 'storm' && s.storms.length === stormsBefore) say(p, 'A storm blows over');
+    }
+    for (const st of s.storms.slice(stormsBefore)) say(st, 'Storm: blocked this voyage');
+    if (!knewRiddle && s.riddle?.known) {
+      say(fresh.find((p) => s.tiles[indexOf(p.x, p.y)].terrain === 'ruins')!, 'A riddle chart in the ruins!', true);
+    }
+  }
+
+  /** A notice on the map: a magenta pill (or a white one with magenta type) that floats up and fades. */
+  private notice(x: number, y: number, caption: string, strong = false) {
+    const t = this.text(0, 0, caption, { size: 8.5, weight: 800, color: strong ? '#ffffff' : MAGENTA }).setOrigin(0.5);
+    const w = t.width + 14;
+    const g = this.add.graphics();
+    g.fillStyle(strong ? hex(MAGENTA) : hex(SHEET)).fillRoundedRect(-w / 2, -8, w, 16, 8);
+    if (!strong) g.lineStyle(1, hex(MAGENTA)).strokeRoundedRect(-w / 2, -8, w, 16, 8);
+    const cx = Phaser.Math.Clamp(x, MAP.x + w / 2 + 2, MAP.x + MAP_W - w / 2 - 2);
+    const chip = this.add.container(cx, Math.max(MAP.y + 10, y), [g, t]).setDepth(9);
+    this.popups.push({ chip, age: 0, life: NOTICE_MS });
   }
 
   private agePopups(dt: number) {
     for (const p of this.popups) {
       p.age += dt;
-      if (!settings.reduceMotion) p.chip.y -= (dt / POPUP_MS) * 12;
-      p.chip.setAlpha(Math.max(0, Math.min(1, 2 - (2 * p.age) / POPUP_MS)));
-      if (p.age >= POPUP_MS) p.chip.destroy();
+      if (!settings.reduceMotion) p.chip.y -= (dt / p.life) * 12;
+      p.chip.setAlpha(Math.max(0, Math.min(1, 2 - (2 * p.age) / p.life)));
+      if (p.age >= p.life) p.chip.destroy();
     }
-    this.popups = this.popups.filter((p) => p.age < POPUP_MS);
+    this.popups = this.popups.filter((p) => p.age < p.life);
   }
 
   private startSweep(tapped: Point, fresh: Point[]) {
@@ -549,30 +630,101 @@ export class GameScene extends Phaser.Scene {
     this.surveyor.setVisible(this.state.phase === 'survey');
   }
 
-  /** Marks every tile that can be surveyed as a magenta survey station; the one under the pointer is lit. */
+  /**
+   * Marks every tile that can be surveyed as a magenta survey station with its cost under it (grey
+   * when the supplies can't pay it); the one under the pointer is lit with a pill. Once the riddle is
+   * known, charted ground under the pointer shows where a dig would go.
+   */
   private drawGlow() {
     const g = this.glow.clear();
+    const s = this.state;
     this.hoverPill.setVisible(false);
-    if (this.state.phase !== 'survey' || this.state.supplies <= 0) return;
-    const pulse = settings.reduceMotion ? 0.5 : 0.5 + 0.5 * Math.sin(this.clock / 300);
-    const m = hex(MAGENTA);
-    for (const p of frontier(this.state)) {
-      const x = MAP.x + p.x * MAP.tile + 3;
-      const y = MAP.y + p.y * MAP.tile + 3;
-      const w = MAP.tile - 6;
-      const lit = this.hover?.x === p.x && this.hover?.y === p.y;
-      g.fillStyle(m, lit ? 0.16 : 0.04 + 0.05 * pulse).fillRect(x, y, w, w);
-      if (lit) {
-        g.lineStyle(1.75, m).strokeRect(x, y, w, w);
-      } else {
-        g.lineStyle(1, m);
-        dashedRect(g, x, y, w, w, 5, 3);
+    let used = 0;
+    if (s.phase === 'survey') {
+      const pulse = settings.reduceMotion ? 0.5 : 0.5 + 0.5 * Math.sin(this.clock / 300);
+      for (const p of frontier(s)) {
+        const can = canAfford(s, p);
+        const m = can ? hex(MAGENTA) : hex(GREY);
+        const x = MAP.x + p.x * MAP.tile + 3;
+        const y = MAP.y + p.y * MAP.tile + 3;
+        const w = MAP.tile - 6;
+        const lit = can && this.hover?.x === p.x && this.hover?.y === p.y;
+        g.fillStyle(m, lit ? 0.16 : can ? 0.04 + 0.05 * pulse : 0.05).fillRect(x, y, w, w);
+        if (lit) {
+          g.lineStyle(1.75, m).strokeRect(x, y, w, w);
+        } else {
+          g.lineStyle(1, m, can ? 1 : 0.6);
+          dashedRect(g, x, y, w, w, 5, 3);
+        }
+        const c = tileCentre(p.x, p.y);
+        const cy = c.y - 3;
+        g.fillStyle(lit ? m : hex(SHEET)).fillTriangle(c.x, cy - 5, c.x + 5, cy + 3.5, c.x - 5, cy + 3.5);
+        g.lineStyle(1, m).strokeTriangle(c.x, cy - 5, c.x + 5, cy + 3.5, c.x - 5, cy + 3.5);
+        g.fillStyle(lit ? 0xffffff : m).fillCircle(c.x, cy + 0.75, 1);
+        const cost = costOf(s, p.x, p.y);
+        if (!lit && cost !== 1) {
+          const label = this.costLabel(used++);
+          const caption = cost === 0 ? 'FREE' : `−${cost}`;
+          if (label.text !== caption) label.setText(caption);
+          label.setPosition(c.x, c.y + 10).setColor(can ? MAGENTA : GREY).setVisible(true);
+        }
+        if (lit) this.showPill(c, cost === 0 ? 'free to follow' : `−${cost} ${cost === 1 ? 'supply' : 'supplies'}`);
       }
-      const c = tileCentre(p.x, p.y);
-      g.fillStyle(lit ? m : hex(SHEET)).fillTriangle(c.x, c.y - 5, c.x + 5, c.y + 3.5, c.x - 5, c.y + 3.5);
-      g.lineStyle(1, m).strokeTriangle(c.x, c.y - 5, c.x + 5, c.y + 3.5, c.x - 5, c.y + 3.5);
-      g.fillStyle(lit ? 0xffffff : m).fillCircle(c.x, c.y + 0.75, 1);
-      if (lit) this.hoverPill.setPosition(c.x, c.y + 15.5).setVisible(true);
+      const h = this.hover;
+      if (h && diggable(s).some((p) => p.x === h.x && p.y === h.y)) {
+        const c = tileCentre(h.x, h.y);
+        g.lineStyle(1.25, hex(MAGENTA));
+        dashedRect(g, c.x - 12, c.y - 12, 24, 24, 3, 3);
+        this.showPill(c, `dig here −${DIG_COST}`);
+      }
+    }
+    for (let k = used; k < this.costLabels.length; k++) this.costLabels[k].setVisible(false);
+  }
+
+  private showPill(c: Spot, caption: string) {
+    const t = this.hoverPill.list[1] as Phaser.GameObjects.Text;
+    if (t.text !== caption) {
+      t.setText(caption);
+      const w = t.width + 12;
+      (this.hoverPill.list[0] as Phaser.GameObjects.Graphics).clear().fillStyle(hex(MAGENTA)).fillRoundedRect(-w / 2, -6.5, w, 13, 6.5);
+    }
+    this.hoverPill.setPosition(c.x, c.y + 15.5).setVisible(true);
+  }
+
+  private costLabel(k: number) {
+    while (this.costLabels.length <= k) {
+      this.costLabels.push(this.text(0, 0, '', { size: 6.5, weight: 800, color: MAGENTA, ls: 0.5 }).setOrigin(0.5).setDepth(4));
+    }
+    return this.costLabels[k];
+  }
+
+  /**
+   * Keeps the map's marks in step with the state: wrecks and caves on charted tiles, storms on the
+   * tiles they block, base camps, dug tiles and the treasure once found.
+   */
+  private syncMarks() {
+    const s = this.state;
+    const want = new Map<string, { key: string; x: number; y: number; scale: number }>();
+    const at = (p: Point, dx: number, dy: number) => ({ x: tileCentre(p.x, p.y).x + dx, y: tileCentre(p.x, p.y).y + dy });
+    s.tiles.forEach((t, i) => {
+      if (!t.revealed || (t.find !== 'wreck' && t.find !== 'cave')) return;
+      const c = at({ x: i % GRID.w, y: Math.floor(i / GRID.w) }, -11, -11);
+      want.set(`${t.find}:${i}`, { key: `find-${t.find}`, ...c, scale: 0.75 });
+    });
+    if (s.phase === 'survey') {
+      for (const p of s.storms) if (!s.tiles[indexOf(p.x, p.y)].revealed) want.set(`storm:${indexOf(p.x, p.y)}`, { key: 'storm', ...at(p, 0, 0), scale: 1.2 });
+    }
+    for (const p of s.dug) want.set(`dug:${indexOf(p.x, p.y)}`, { key: 'dug', ...at(p, 0, 6), scale: 0.9 });
+    if (s.riddle?.found) want.set(`treasure`, { key: 'treasure', ...at(s.riddle.at, 0, 4), scale: 0.9 });
+    for (const p of s.camps) want.set(`camp:${indexOf(p.x, p.y)}`, { key: 'camp', ...at(p, 9, -9), scale: 1 });
+    for (const [id, img] of this.marks) {
+      if (want.has(id)) continue;
+      img.destroy();
+      this.marks.delete(id);
+    }
+    for (const [id, m] of want) {
+      if (this.marks.has(id)) continue;
+      this.marks.set(id, this.add.image(m.x, m.y, m.key).setScale(m.scale / HI).setDepth(m.key === 'camp' ? 5.5 : 3.5));
     }
   }
 
@@ -582,44 +734,51 @@ export class GameScene extends Phaser.Scene {
     const label = (x: number, y: number, s: string) => this.text(x, y, s, { size: 8.5, weight: 700, color: GREY, ls: 1.5 }).setOrigin(0, 0.5);
     const g = this.add.graphics();
     const rule = (y: number) => g.fillStyle(hex(RULE)).fillRect(PL, y, PR - PL, 1);
-    this.text(PL, 52, 'MAPMAKER', { size: 24, weight: 900, ls: 1 }).setOrigin(0, 0.5);
-    this.add.image(PR - 9, 52, 'logo').setScale(1 / HI);
-    const isle = this.text(PL, 76, '', { size: 9, weight: 700, color: GREY, ls: 1.5 }).setOrigin(0, 0.5);
-    const atlas = this.text(PR, 76, '', { size: 8.5, weight: 700, color: GREY, ls: 1 }).setOrigin(1, 0.5);
-    const atlasIcon = this.add.image(PR - 60, 76, 'atlas-empty').setScale(1 / HI);
-    rule(91);
-    label(PL, 107, 'SUPPLIES');
-    const supplies = this.text(PL, 129, '', { size: 22, weight: 800 }).setOrigin(0, 0.5);
-    const max = this.text(PL + 15, 132, '', { size: 12, weight: 600, color: GREY }).setOrigin(0, 0.5);
-    const unused = this.text(PL + 55, 152, `unused: ${SELL_BACK}c each on return`, { size: 8, weight: 600, color: MAGENTA }).setOrigin(0, 0.5);
-    rule(163);
-    label(PL, 178, 'COINS');
-    const coins = this.text(PL, 199, '', { size: 22, weight: 800 }).setOrigin(0, 0.5);
-    label(PL + 95, 178, 'THIS CHART');
-    const tiles = this.text(PL + 95, 196, '', { size: 13, weight: 700 }).setOrigin(0, 0.5);
-    const worth = this.text(PL + 95, 212, '', { size: 11, weight: 600, color: SLATE }).setOrigin(0, 0.5);
-    rule(230);
+    this.text(PL, 50, 'MAPMAKER', { size: 24, weight: 900, ls: 1 }).setOrigin(0, 0.5);
+    this.add.image(PR - 9, 50, 'logo').setScale(1 / HI);
+    const isle = this.text(PL, 72, '', { size: 9, weight: 700, color: GREY, ls: 1.5 }).setOrigin(0, 0.5);
+    const atlas = this.text(PR, 72, '', { size: 8.5, weight: 700, color: GREY, ls: 1 }).setOrigin(1, 0.5);
+    const atlasIcon = this.add.image(PR - 60, 72, 'atlas-empty').setScale(1 / HI);
+    rule(85);
+    label(PL, 99, 'SUPPLIES');
+    const supplies = this.text(PL, 120, '', { size: 22, weight: 800 }).setOrigin(0, 0.5);
+    const max = this.text(PL + 15, 123, '', { size: 12, weight: 600, color: GREY }).setOrigin(0, 0.5);
+    const unused = this.text(PL + 55, 143, `unused: ${SELL_BACK}c each on return`, { size: 8, weight: 600, color: MAGENTA }).setOrigin(0, 0.5);
+    rule(154);
+    label(PL, 167, 'COINS');
+    const coins = this.text(PL, 187, '', { size: 22, weight: 800 }).setOrigin(0, 0.5);
+    label(PL + 95, 167, 'THIS CHART');
+    const tiles = this.text(PL + 95, 184, '', { size: 13, weight: 700 }).setOrigin(0, 0.5);
+    const worth = this.text(PL + 95, 199, '', { size: 11, weight: 600, color: SLATE }).setOrigin(0, 0.5);
+    rule(212);
     // The commission: a work order.
     const bw = PR - PL;
-    g.lineStyle(1, hex(INK)).strokeRect(PL, 246, bw, 112);
-    g.fillStyle(hex(INK)).fillRect(PL, 246, bw, 20);
-    this.text(PL + 9, 256.5, 'COMMISSION', { size: 8.5, weight: 800, color: '#ffffff', ls: 2 }).setOrigin(0, 0.5);
-    const order = this.text(PR - 9, 256.5, '', { size: 7.5, weight: 600, color: '#aab3ba', ls: 1 }).setOrigin(1, 0.5);
-    const commission = this.text(PL + 9, 274, '', { size: 12, weight: 600, wrap: 180 });
-    const swatches = [0, 1, 2, 3].map((k) => this.add.image(PL + 16.5 + k * 19, 327, 'swatch-forest').setScale(0.94 / HI));
-    const soFar = this.text(PL + 70, 327, '', { size: 12, weight: 700 }).setOrigin(0, 0.5);
-    const done = this.text(PR - 51, 327, 'Done!', { size: 12, weight: 800, color: GREEN }).setOrigin(0, 0.5);
+    g.lineStyle(1, hex(INK)).strokeRect(PL, 220, bw, 72);
+    g.fillStyle(hex(INK)).fillRect(PL, 220, bw, 18);
+    this.text(PL + 9, 229, 'COMMISSION', { size: 8.5, weight: 800, color: '#ffffff', ls: 2 }).setOrigin(0, 0.5);
+    const order = this.text(PR - 9, 229, '', { size: 7.5, weight: 600, color: '#aab3ba', ls: 1 }).setOrigin(1, 0.5);
+    const commission = this.text(PL + 9, 251, '', { size: 11.5, weight: 600 }).setOrigin(0, 0.5);
+    const swatches = [0, 1, 2, 3].map((k) => this.add.image(PL + 16.5 + k * 19, 274, 'swatch-forest').setScale(0.94 / HI));
+    const soFar = this.text(PL + 70, 274, '', { size: 12, weight: 700 }).setOrigin(0, 0.5);
+    const done = this.text(PR - 51, 274, 'Done!', { size: 12, weight: 800, color: GREEN }).setOrigin(0, 0.5);
+    // The riddle chart.
+    g.lineStyle(1, hex(INK)).strokeRect(PL, 300, bw, 62);
+    g.fillStyle(hex(MAGENTA)).fillRect(PL, 300, bw, 18);
+    this.add.image(PL + 10, 309, 'riddle').setScale(0.62 / HI);
+    this.text(PL + 21, 309, 'RIDDLE CHART', { size: 8.5, weight: 800, color: '#ffffff', ls: 2 }).setOrigin(0, 0.5);
+    const riddleTag = this.text(PR - 9, 309, '', { size: 7.5, weight: 700, color: '#ffd9ec', ls: 1 }).setOrigin(1, 0.5);
+    const riddle = this.text(PL + 9, 323, '', { size: 10.5, weight: 600, wrap: bw - 18 });
     // The isle goal.
-    const isleLabel = label(PL, 375, '');
-    const pct = this.text(PR, 376, '', { size: 17, weight: 800 }).setOrigin(1, 0.5);
+    const isleLabel = label(PL, 377, '');
+    const pct = this.text(PR, 378, '', { size: 17, weight: 800 }).setOrigin(1, 0.5);
     const marks = MILESTONES.map((m) =>
       this.text(PL + (bw * m.pct) / 100, 411, m.atlas ? 'Atlas page' : `+${m.coins}c`, { size: 8.5, weight: 700, color: MAGENTA }).setOrigin(
         m.pct === 100 ? 1 : 0.5,
         0.5,
       ),
     );
-    rule(425);
-    const turnBack = this.text(RETURN_BUTTON.x, 442, '', { size: 9, weight: 600, color: SLATE }).setOrigin(0.5);
+    rule(423);
+    const turnBack = this.text(PANEL.x + PANEL.w / 2, 439, '', { size: 9, weight: 600, color: SLATE }).setOrigin(0.5);
     makeButton(
       this,
       RETURN_BUTTON.x,
@@ -628,13 +787,13 @@ export class GameScene extends Phaser.Scene {
       () => {
         if (returnToPort(this.state)) saveGame(this.state);
       },
-      BUTTON,
-      true,
-      'left',
+      RETURN_BUTTON,
     );
-    const tag = this.pill(RETURN_BUTTON.x + BUTTON.w / 2 - 32, RETURN_BUTTON.y, '', 48, 22, 12);
+    // The sell-back tag sits on the button's top-right corner, like a badge.
+    const tag = this.pill(RETURN_BUTTON.x + RETURN_BUTTON.w / 2 - 22, RETURN_BUTTON.y - RETURN_BUTTON.h / 2, '', 44, 18, 10.5);
     const tagText = tag.list[1] as Phaser.GameObjects.Text;
-    this.spots.return = { ...RETURN_BUTTON };
+    this.spots.return = { x: RETURN_BUTTON.x, y: RETURN_BUTTON.y };
+    this.spots.camp = { x: CAMP_BUTTON.x, y: CAMP_BUTTON.y };
     const live = this.add.graphics();
     this.panel = {
       isle,
@@ -642,6 +801,8 @@ export class GameScene extends Phaser.Scene {
       atlasIcon,
       supplies,
       max,
+      riddle,
+      riddleTag,
       unused,
       coins,
       tiles,
@@ -661,6 +822,25 @@ export class GameScene extends Phaser.Scene {
     };
   }
 
+  /** The Camp button, rebuilt when it turns on or off. */
+  private syncCampButton() {
+    const on = canCamp(this.state);
+    if (on === this.campEnabled) return;
+    this.campEnabled = on;
+    this.campButton?.destroy();
+    this.campButton = makeButton(
+      this,
+      CAMP_BUTTON.x,
+      CAMP_BUTTON.y,
+      `Camp −${CAMP_COST}`,
+      () => {
+        if (pitchCamp(this.state)) saveGame(this.state);
+      },
+      CAMP_BUTTON,
+      on,
+    );
+  }
+
   private updatePanel() {
     const s = this.state;
     const p = this.panel;
@@ -668,42 +848,44 @@ export class GameScene extends Phaser.Scene {
     const set = (t: Phaser.GameObjects.Text, v: string) => t.text !== v && t.setText(v);
     set(this.header.isle, `ISLE ${s.island}`);
     this.header.sheet.setX(24 + this.header.isle.width + 14);
-    set(this.header.sheet, `SURVEY SHEET ${s.voyage - s.isleStart + 1}  ·  SCALE 1 : 40`);
+    set(this.header.sheet, `${KINDS[s.kind].name.toUpperCase()}  ·  SURVEY SHEET ${s.voyage - s.isleStart + 1}  ·  SCALE 1 : 40`);
     set(p.isle, `ISLE ${s.island} · VOYAGE ${s.voyage}`);
     const pages = s.atlas.length;
     set(p.atlas, pages === 0 ? 'ATLAS 0' : `ATLAS ${pages}`);
     p.atlas.setColor(pages ? INK : GREY);
-    p.atlasIcon.setTexture(pages ? 'atlas' : 'atlas-empty').setX(PR - p.atlas.width - 10);
+    p.atlasIcon.setTexture(pages ? `atlas-${s.atlas[pages - 1].kind}` : 'atlas-empty').setX(PR - p.atlas.width - 10);
     set(p.supplies, `${s.supplies}`);
     set(p.max, `/ ${max}`);
     p.max.setX(PL + p.supplies.width + 3);
     set(p.coins, `${s.coins}`);
     const chart = s.chart ?? chartOf(s);
     set(p.tiles, `${s.surveyed.length} tiles`);
-    set(p.worth, `worth ${chart.base + chart.ink}c`);
+    set(p.worth, `worth ${chart.base + chart.ink + chart.artifactCoins + chart.treasure}c`);
 
     const g = p.live.clear();
-    // Supply pips, with the unused ones bracketed in magenta while they can still sell back.
+    // Supply pips, with the unused ones bracketed in magenta while they can still sell back. A
+    // wreck's stores can take the supplies past the most a voyage starts with.
+    const pips = Math.max(max, s.supplies);
     const pipX = PL + 55;
-    const pitch = (PR - pipX + 3) / max;
+    const pitch = (PR - pipX + 3) / pips;
     const pw = Math.max(2, pitch - 3);
-    for (let k = 0; k < max; k++) g.fillStyle(k < s.supplies ? hex(INK) : hex(TRACK)).fillRect(pipX + k * pitch, 120, pw, 15);
+    for (let k = 0; k < pips; k++) g.fillStyle(k < s.supplies ? hex(k < max ? INK : MAGENTA) : hex(TRACK)).fillRect(pipX + k * pitch, 113, pw, 15);
     const selling = s.phase === 'survey' && s.supplies > 0;
     p.unused.setVisible(selling);
     if (selling) {
       const end = pipX + (s.supplies - 1) * pitch + pw;
       g.lineStyle(1, hex(MAGENTA));
       g.beginPath();
-      g.moveTo(pipX, 140);
-      g.lineTo(pipX, 144);
-      g.lineTo(end, 144);
-      g.lineTo(end, 140);
+      g.moveTo(pipX, 131);
+      g.lineTo(pipX, 135);
+      g.lineTo(end, 135);
+      g.lineTo(end, 131);
       g.strokePath();
     }
     // The live chart: every charted tile, the newest inked in magenta.
     const cs = 3;
     const ox = PR - GRID.w * cs;
-    const oy = 176;
+    const oy = 166;
     g.fillStyle(hex(VELLUM)).fillRect(ox - 2, oy - 2, GRID.w * cs + 4, GRID.h * cs + 4);
     s.tiles.forEach((t, i) => {
       if (!t.revealed) return;
@@ -720,7 +902,7 @@ export class GameScene extends Phaser.Scene {
     if (c) {
       const have = Math.min(chart.counts[c.terrain] ?? 0, c.need);
       const name = c.need === 1 ? TERRAIN[c.terrain].name.toLowerCase() : TERRAIN[c.terrain].plural;
-      set(p.commission, `Chart ${c.need} ${name} on this voyage for +${c.bonus} coins.`);
+      set(p.commission, `Chart ${c.need} ${name} this voyage: +${c.bonus}c`);
       p.swatches.forEach((img, k) => {
         img.setVisible(k < c.need);
         if (img.texture.key !== `swatch-${c.terrain}`) img.setTexture(`swatch-${c.terrain}`);
@@ -732,11 +914,11 @@ export class GameScene extends Phaser.Scene {
       p.done.setVisible(met);
       if (met) {
         const bx = PR - 70;
-        g.lineStyle(1.5, hex(GREEN)).strokeRect(bx, 320.5, 13, 13);
+        g.lineStyle(1.5, hex(GREEN)).strokeRect(bx, 267.5, 13, 13);
         g.beginPath();
-        g.moveTo(bx + 2.5, 327);
-        g.lineTo(bx + 5.5, 330.5);
-        g.lineTo(bx + 11, 323);
+        g.moveTo(bx + 2.5, 274);
+        g.lineTo(bx + 5.5, 277.5);
+        g.lineTo(bx + 11, 270);
         g.strokePath();
       }
     } else {
@@ -746,12 +928,26 @@ export class GameScene extends Phaser.Scene {
       p.done.setVisible(false);
     }
 
+    // The riddle chart: hidden in the ruins, then its clues, then the treasure.
+    const r = s.riddle;
+    const clue = r ? `“${r.clues.join(', ')}.”` : '';
+    const riddle = !r
+      ? 'No riddle on this isle.'
+      : r.found
+        ? `Treasure dug up: +${TREASURE_VALUE}c ${s.treasure ? 'on this chart' : 'sold'}.`
+        : r.known
+          ? clue
+          : 'The ruins on this isle hold a riddle chart. Chart them to read it.';
+    set(p.riddle, riddle);
+    p.riddle.setColor(r?.known && !r.found ? INK : r?.found ? GREEN : SLATE).setFontStyle(r?.known && !r.found ? 'italic 600' : '600');
+    set(p.riddleTag, r?.known && !r.found ? `DIG −${DIG_COST} SUPPLY` : '');
+
     // The isle goal: the share charted, with its milestones.
     const { pct } = isleProgress(s);
     set(p.isleLabel, `ISLE ${s.island} SURVEYED`);
     set(p.pct, `${pct}%`);
     const bw = PR - PL;
-    const by = 390;
+    const by = 389;
     g.fillStyle(hex(TRACK)).fillRect(PL, by, bw, 8);
     g.fillStyle(hex(BLUE)).fillRect(PL, by, (bw * pct) / 100, 8);
     for (let k = 0; k <= 20; k++) g.fillStyle(hex(INK)).fillRect(PL + (bw * k) / 20 - 0.25, by + 8, 0.5, k % 5 ? 2.5 : 4.5);
@@ -788,6 +984,7 @@ export class GameScene extends Phaser.Scene {
           ? `Turn back now: ${s.supplies} unused × ${SELL_BACK}c, up to the chart's ${chart.base}c`
           : `Turn back now: ${s.supplies} unused × ${SELL_BACK}c`,
     );
+    this.syncCampButton();
   }
 
   // ---- Overlays.
@@ -839,6 +1036,10 @@ export class GameScene extends Phaser.Scene {
       rows.push({ icon: `swatch-${t}`, label: `${TERRAIN[t].name}   ${n} × ${TERRAIN[t].value}`, value: `${n * TERRAIN[t].value}` });
     }
     if (chart.ink > 0) rows.push({ label: 'Fine Ink', value: `+${chart.ink}` });
+    if (chart.artifacts > 0) {
+      rows.push({ icon: 'artifact', label: `Artifacts from caves   ${chart.artifacts} × ${ARTIFACT_VALUE}`, value: `+${chart.artifactCoins}`, color: GOLD_DARK });
+    }
+    if (chart.treasure > 0) rows.push({ icon: 'treasure', label: 'Treasure from the riddle', value: `+${chart.treasure}`, color: GOLD_DARK });
     const com = s.commission;
     if (com) {
       const name = com.need === 1 ? TERRAIN[com.terrain].name.toLowerCase() : TERRAIN[com.terrain].plural;
@@ -859,7 +1060,7 @@ export class GameScene extends Phaser.Scene {
     MILESTONES.slice(s.milestones, s.milestones + chart.milestones).forEach((m) =>
       rows.push(
         m.atlas
-          ? { icon: 'atlas', label: `Atlas page: Isle ${s.island} charted in full`, value: 'bound', color: MAGENTA }
+          ? { icon: `atlas-${s.kind}`, label: `Atlas page: ${KINDS[s.kind].name} ${s.island} charted in full`, value: 'bound', color: MAGENTA }
           : { label: `Isle ${s.island} ${m.pct}% surveyed`, value: `+${m.coins}`, color: MAGENTA },
       ),
     );
@@ -868,7 +1069,7 @@ export class GameScene extends Phaser.Scene {
     let y = top + 62;
     for (const r of rows) {
       const color = r.color ?? INK;
-      if (r.icon) c.add(this.add.image(left + 8, y + rowH / 2, r.icon).setScale(1 / HI));
+      if (r.icon) c.add(this.add.image(left + 8, y + rowH / 2, r.icon).setScale((r.icon.startsWith('swatch') || r.icon.startsWith('atlas') ? 1 : 0.7) / HI));
       c.add(this.text(left + 24, y + rowH / 2, r.label, { size: 11.5, weight: 600, color }).setOrigin(0, 0.5));
       c.add(this.text(right, y + rowH / 2, r.value, { size: 11.5, weight: 700, color }).setOrigin(1, 0.5));
       y += rowH;
@@ -937,14 +1138,15 @@ export class GameScene extends Phaser.Scene {
     if (pages === 0) {
       c.add(this.text(left, by + 7, 'Chart an isle in full', { size: 9.5, weight: 500, color: SLATE }).setOrigin(0, 0.5));
     } else {
-      s.atlas.slice(-6).forEach((_, k) => c.add(this.add.image(left + 8 + k * 14, by + 8, 'atlas').setScale(1 / HI)));
+      s.atlas.slice(-6).forEach((page, k) => c.add(this.add.image(left + 8 + k * 14, by + 8, `atlas-${page.kind}`).setScale(1 / HI)));
       const shown = Math.min(pages, 6);
       c.add(this.text(left + 4 + shown * 14, by + 8, `${pages} page${pages > 1 ? 's' : ''}`, { size: 10, weight: 700 }).setOrigin(0, 0.5));
     }
     const { pct } = isleProgress(s);
     c.add(this.text(right, by - 8, `ISLE ${s.island}`, { size: 8.5, weight: 700, color: GREY, ls: 1.5 }).setOrigin(1, 0.5));
     c.add(this.text(right, by + 7, `${pct}% surveyed`, { size: 10, weight: 700, color: pct === 100 ? MAGENTA : INK }).setOrigin(1, 0.5));
-    const caption = islandCharted(s) ? 'Sail to a new isle' : 'Set sail';
+    const next = KINDS[kindOf(s.island + 1)].name.toLowerCase();
+    const caption = islandCharted(s) ? `Sail to ${/^[aeiou]/.test(next) ? 'an' : 'a'} ${next}` : 'Set sail';
     c.add(
       makeButton(this, OVERLAY_BUTTON.x, OVERLAY_BUTTON.y, caption, () => {
         if (!setSail(this.state)) return;

@@ -3,9 +3,11 @@
 export const VIEW = { w: 960, h: 540 };
 /** The top-left corner of the island map and the size of a tile, in screen pixels. */
 export const MAP = { x: 24, y: 64, tile: 40 };
-/** The side panel with the supplies, coins, commission and the Return to port button. */
+/** The side panel with the supplies, coins, commission, riddle and the Camp and Return to port buttons. */
 export const PANEL = { x: 652, y: 24, w: 284, h: 492 };
-export const RETURN_BUTTON = { x: PANEL.x + PANEL.w / 2, y: 476 };
+/** The panel's bottom row: Camp on the left, Return to port on the right. */
+export const CAMP_BUTTON = { x: PANEL.x + 18 + 41, y: 476, w: 82, h: 40 };
+export const RETURN_BUTTON = { x: PANEL.x + PANEL.w - 18 - 80, y: 476, w: 160, h: 40 };
 /** The chart and harbor overlay, centred over the map. */
 export const OVERLAY = { x: 324, y: 284, w: 560, h: 420 };
 /** The overlay's main button: Sell chart, then Set sail. */

@@ -1,4 +1,5 @@
 import { byDifficulty } from '../../../../shared/settings';
+import type { IsleKind } from './kinds';
 import type { Terrain } from './terrain';
 import type { UpgradeId } from './upgrades';
 
@@ -22,6 +23,17 @@ export const MILESTONES: Milestone[] = [
   { pct: 100, coins: 0, atlas: true },
 ];
 
+/** Supplies a shipwreck's stores add to the voyage. */
+export const WRECK_SUPPLIES = 3;
+/** What an artifact from a cave sells for at the port. */
+export const ARTIFACT_VALUE = 15;
+/** What a base camp costs in supplies, and how far (in steps along the grid) it lets you survey. */
+export const CAMP_COST = 3;
+export const CAMP_REACH = 2;
+/** What digging a charted tile for the riddle's treasure costs, and what the treasure pays. */
+export const DIG_COST = 1;
+export const TREASURE_VALUE = 60;
+
 export interface Milestone {
   pct: number;
   coins: number;
@@ -31,15 +43,34 @@ export interface Milestone {
 /** A finished isle, bound into the atlas when its last tile is charted. */
 export interface AtlasPage {
   island: number;
+  kind: IsleKind;
   /** Voyages it took. */
   voyages: number;
   /** Tiles charted on it. */
   tiles: number;
 }
 
+/**
+ * What a tile can hide, found when it is charted: a shipwreck's stores (+supplies), a cave with an
+ * artifact that sells at the port, or a storm that blocks a tile near it for the rest of the voyage.
+ */
+export type Find = 'wreck' | 'cave' | 'storm';
+
 export interface Tile {
   terrain: Terrain;
   revealed: boolean;
+  find?: Find;
+}
+
+/**
+ * The isle's treasure riddle: its clues point at one hidden tile. The ruins hold the riddle chart
+ * (`known` once they are charted); digging the right charted tile finds the treasure.
+ */
+export interface Riddle {
+  at: Point;
+  clues: string[];
+  known: boolean;
+  found: boolean;
 }
 
 /** A buyer at the port pays a bonus for a chart that shows enough of one terrain. */
@@ -58,6 +89,10 @@ export interface Chart {
   ink: number;
   /** The commission's bonus, if the chart meets it. */
   bonus: number;
+  /** Artifacts brought back from caves, and what they sell for; the riddle's treasure, if dug up. */
+  artifacts: number;
+  artifactCoins: number;
+  treasure: number;
   /** Supplies left when the voyage ended, and what they sell back for (`SELL_BACK` each, capped at `base`). */
   unused: number;
   sellBack: number;
@@ -83,6 +118,7 @@ export interface Point {
 export interface GameState {
   /** The island being charted, from 1; a new one comes once every tile you can reach is charted. */
   island: number;
+  kind: IsleKind;
   /** Voyages made, from 1. */
   voyage: number;
   phase: Phase;
@@ -107,6 +143,16 @@ export interface GameState {
   isleStart: number;
   /** Every isle charted to the last tile, in order. */
   atlas: AtlasPage[];
+  /** Base camps on this isle: each lets the surveyor survey `CAMP_REACH` tiles out from it. */
+  camps: Point[];
+  /** Tiles a storm blocks until the voyage ends. */
+  storms: Point[];
+  /** Artifacts found on this voyage, and the treasure (in coins) dug up on it. */
+  artifacts: number;
+  treasure: number;
+  riddle: Riddle | null;
+  /** Charted tiles already dug for the treasure on this isle. */
+  dug: Point[];
 }
 
 export const rankOf = (s: GameState, id: UpgradeId) => s.ranks[id] ?? 0;
