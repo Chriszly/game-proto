@@ -4,7 +4,10 @@ import { readdirSync, readFileSync } from 'node:fs';
 // Every game that uses `shared/scaling.ts` is opened on a range of screens, from an upright phone
 // to a 4K monitor, and must be sharp and fill the screen on each, or ask to turn a phone that is
 // held the wrong way. A game is picked up on its own once its `src/main.ts` calls `setupScaling`.
+// `SCREENS_GAME` checks just that game, as the Screens workflow does with one job per changed game.
+const ONLY = process.env.SCREENS_GAME;
 const GAMES = readdirSync('games').filter((name) => {
+  if (ONLY && name !== ONLY) return false;
   try {
     return readFileSync(`games/${name}/src/main.ts`, 'utf8').includes('setupScaling(game)');
   } catch {

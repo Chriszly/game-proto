@@ -32,7 +32,7 @@ async function expectFavicon(page: Page) {
   expect(icon.headers()['content-type'], `favicon ${href}`).toContain('image/svg+xml');
 }
 
-test('hub opens each game', async ({ page }, testInfo) => {
+test('hub lists every game', async ({ page }, testInfo) => {
   await page.goto('/');
   await expect(page.locator('.game')).toHaveCount(GAMES.length);
   await expectFavicon(page);
@@ -49,16 +49,21 @@ test('hub opens each game', async ({ page }, testInfo) => {
     await expect.poll(() => icon.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
   }
   testInfo.attach('hub', { body: await page.screenshot({ path: testInfo.outputPath('hub.png') }), contentType: 'image/png' });
+});
 
-  for (const { name, path } of GAMES) {
+// Each card opens its game, one test per game. `HUB_GAME` (a game's folder name) checks just that
+// game, as the Hub workflow does with one job per changed game.
+const ONLY = process.env.HUB_GAME;
+for (const { name, path } of GAMES.filter((g) => !ONLY || g.path === `/games/${ONLY}/`)) {
+  test(`hub opens ${name}`, async ({ page }) => {
     await page.goto('/');
     await page.getByRole('link', { name }).click();
     await expect(page).toHaveURL(new RegExp(`${path}$`));
     // The game's own canvas; a page may also paint a decorative backdrop canvas, marked data-backdrop.
     await expect(page.locator('canvas:not([data-backdrop])')).toBeVisible();
     await expectFavicon(page);
-  }
-});
+  });
+}
 
 // The hub's Settings panel saves the shared settings, and a game opened afterwards honours them.
 test('hub settings reach the games', async ({ page }, testInfo) => {
