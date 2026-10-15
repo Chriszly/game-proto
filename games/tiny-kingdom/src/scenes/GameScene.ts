@@ -3,11 +3,53 @@ import { settings } from '../../../../shared/settings';
 import { propKey, PROP_ORIGIN, tileKey } from '../art/textures';
 import { DECREE_BONUS, decreeMarks, type At } from '../game/decree';
 import { GIFT_INFO, type Gift } from '../game/gifts';
-import { loadBest, loadCrowns, saveBest, saveCrowns } from '../game/save';
-import { canPlace, canUndo, chooseGift, goalFor, newGame, place, previewPlacement, ROUND_POUCH, select, undo, type GameState, type Share } from '../game/state';
-import { BUILDINGS, INFO, type Building } from '../game/tiles';
+import { dailyIsland, LEVELS, levelOpen, parseIsland, starsFor, today, type Kingdom } from '../game/islands';
+import { loadBest, loadCrowns, loadDailyBest, loadStars, saveBest, saveCrowns, saveDailyBest, saveStars } from '../game/save';
+import { SEASON_INFO } from '../game/seasons';
+import {
+  canMerge,
+  canPlace,
+  anyPlace,
+  canUndo,
+  chooseGift,
+  finish,
+  goalFor,
+  merge,
+  mergeable,
+  newGame,
+  place,
+  previewMerge,
+  previewPlacement,
+  ROUND_POUCH,
+  season,
+  select,
+  shownKinds,
+  undo,
+  type GameState,
+  type Placed,
+  type Share,
+} from '../game/state';
+import { BUILDINGS, INFO, ISLANDS, randomIsland, type Building } from '../game/tiles';
 import { makeButton } from '../ui/Button';
-import { cellCentre, DECREE, FONT, GIFT_CARD, GIFT_ROW, GOAL_BAR, GRID, PANEL, TILE_BUTTONS, TITLE, TRAY, UI_DEPTH, UNDO_BUTTON, VIEW } from './layout';
+import {
+  cellCentre,
+  DECREE,
+  FONT,
+  GIFT_CARD,
+  GIFT_ROW,
+  GOAL_BAR,
+  GRID,
+  ISLAND_BUTTON,
+  ISLANDS_CARD,
+  PANEL,
+  SEASON,
+  TILE_BUTTONS,
+  TITLE,
+  TRAY,
+  UI_DEPTH,
+  UNDO_BUTTON,
+  VIEW,
+} from './layout';
 
 /** How long a score popup floats up before it fades out, in milliseconds. */
 const POPUP_MS = 900;
@@ -23,6 +65,7 @@ const YELLOW = 0xf2c33a;
 const NAVY = 0x27406e;
 const BLUE = 0x3b86d6;
 const CORAL = 0xe0785f;
+const TEAL = 0x2f9c95;
 
 /** Board depths: tiles, decree marks and the hover outline, props (by row), ghost, then links and labels. */
 const D = { tile: 1, outline: 2, spots: 2.5, prop: 3, ghost: 3.9, ticks: 4, links: 5, label: 6 };
@@ -66,8 +109,12 @@ interface ButtonParts {
 export class GameScene extends Phaser.Scene {
   /** The game being played; read by the playthrough test. */
   state!: GameState;
-  /** The cell under the pointer with the selected building: what placing it there would add, and each neighbour's share. */
-  preview: { col: number; row: number; gained: number; base: number; links: Share[] } | null = null;
+  /** The cell under the pointer with the selected building: what placing it there would add, each neighbour's share and the season's bonus. */
+  preview: { col: number; row: number; gained: number; base: number; links: Share[]; season: number } | null = null;
+  /** The house picked to merge into a house beside it, while one is picked. */
+  mergeFrom: { col: number; row: number } | null = null;
+  /** Where the island button is on screen. */
+  islandButton = { x: ISLAND_BUTTON.x, y: ISLAND_BUTTON.y, w: ISLAND_BUTTON.w, h: ISLAND_BUTTON.h };
   tileButtons: TileButton[] = [];
   /** Where the undo button is on screen; read by the playthrough test. */
   undoButton = { x: UNDO_BUTTON.x, y: UNDO_BUTTON.y, w: UNDO_BUTTON.w, h: UNDO_BUTTON.h };
@@ -89,6 +136,11 @@ export class GameScene extends Phaser.Scene {
   private bar!: Phaser.GameObjects.Graphics;
   private roundText!: Phaser.GameObjects.Text;
   private islandText!: Phaser.GameObjects.Text;
+  private seasonStrip!: Phaser.GameObjects.Graphics;
+  private seasonText!: Phaser.GameObjects.Text;
+  private ruleText: Phaser.GameObjects.Text | null = null;
+  private seasonBadge!: Phaser.GameObjects.Text;
+  private mergeHint!: Phaser.GameObjects.Text;
   private scoreText!: Phaser.GameObjects.Text;
   private goalText!: Phaser.GameObjects.Text;
   private bestText!: Phaser.GameObjects.Text;
@@ -113,6 +165,16 @@ export class GameScene extends Phaser.Scene {
   private giftParts: { plaque: Phaser.GameObjects.Image; icon: Phaser.GameObjects.Image; label: Phaser.GameObjects.Text; desc: Phaser.GameObjects.Text }[] = [];
   private gameOver!: Phaser.GameObjects.Container;
   private gameOverText!: Phaser.GameObjects.Text;
+  private islandsCard!: Phaser.GameObjects.Container;
+  private levelParts: { plaque: Phaser.GameObjects.Image; num: Phaser.GameObjects.Text; stars: Phaser.GameObjects.Image[] }[] = [];
+  private levelInfo!: Phaser.GameObjects.Text;
+  private dailyText!: Phaser.GameObjects.Text;
+  private codeText!: Phaser.GameObjects.Text;
+  private codeHint!: Phaser.GameObjects.Text;
+  /** The island number typed on the islands card's keypad. */
+  private code = '';
+  /** The campaign's best stars per level, loaded when the card opens. */
+  private stars: number[] = [];
 
   constructor() {
     super('Game');
@@ -126,6 +188,7 @@ export class GameScene extends Phaser.Scene {
     this.createPanel();
     this.createGiftCard();
     this.createGameOver();
+    this.createIslandsCard();
     const backdrop = this.add.image(0, 0, 'walnut-440x96');
     this.bannerText = this.add.text(0, -2, '', style(15, CREAM, '900', { align: 'center', lineSpacing: 4 })).setOrigin(0.5);
     this.banner = this.add
@@ -157,6 +220,8 @@ export class GameScene extends Phaser.Scene {
     this.links = this.add.graphics().setDepth(D.links);
     for (let i = 0; i < 8; i++) this.linkTexts.push(this.add.text(0, 0, '', style(12, INK, '900')).setOrigin(0.5).setDepth(D.label).setVisible(false));
     this.bubbleText = this.add.text(0, 0, '', style(19, INK, '900')).setOrigin(0.5).setDepth(D.label + 0.1).setVisible(false);
+    this.seasonBadge = this.add.text(0, 0, 'x2', style(11, CREAM, '900')).setOrigin(0.5).setDepth(D.label + 0.2).setVisible(false);
+    this.mergeHint = this.add.text(0, 0, '', style(11, CREAM, '900')).setOrigin(0.5).setDepth(D.label + 0.2).setVisible(false);
 
     // One zone over the whole board: hovering previews, a tap places.
     const zone = this.add.zone(GRID.x, GRID.y, GRID.cols * GRID.cell, GRID.rows * GRID.cell).setOrigin(0).setInteractive({ useHandCursor: true });
@@ -180,9 +245,15 @@ export class GameScene extends Phaser.Scene {
     this.add
       .text(TITLE.x + TITLE.w / 2, TITLE.y + TITLE.h / 2 - 1, 'Tiny Kingdom', style(21, CREAM, '900', { shadow: { offsetX: 1, offsetY: 1.5, color: 'rgba(80,20,10,0.6)', fill: true } }))
       .setOrigin(0.5);
-    this.roundText = this.add.text(PANEL.x + 16, 85, '', style(14, LABEL)).setOrigin(0, 0.5);
-    this.islandText = this.add.text(PANEL.x + PANEL.w - 16, 85, '', style(14, LABEL)).setOrigin(1, 0.5);
-    this.scoreText = this.add.text(PANEL.x + 16, 111, '', style(20, CREAM, '900', { shadow: { offsetX: 1, offsetY: 1.5, color: 'rgba(0,0,0,0.45)', fill: true } })).setOrigin(0, 0.5);
+    this.roundText = this.add.text(PANEL.x + 16, ISLAND_BUTTON.y, '', style(14, LABEL)).setOrigin(0, 0.5);
+    // The island button: shows which island this is and opens the islands card.
+    const ib = ISLAND_BUTTON;
+    const islandBg = this.add.image(ib.x, ib.y, `plaque-${ib.w}x${ib.h}`).setInteractive({ useHandCursor: true });
+    islandBg.on('pointerover', () => islandBg.setTexture(`plaque-${ib.w}x${ib.h}-sel`));
+    islandBg.on('pointerout', () => islandBg.setTexture(`plaque-${ib.w}x${ib.h}`));
+    islandBg.on('pointerdown', () => this.openIslands());
+    this.islandText = this.add.text(ib.x, ib.y - 1, '', style(12, INK, '900')).setOrigin(0.5);
+    this.scoreText = this.add.text(PANEL.x + 16, 104, '', style(20, CREAM, '900', { shadow: { offsetX: 1, offsetY: 1.5, color: 'rgba(0,0,0,0.45)', fill: true } })).setOrigin(0, 0.5);
     this.bar = this.add.graphics();
     this.goalText = this.add
       .text(GOAL_BAR.x + GOAL_BAR.w / 2, GOAL_BAR.y + GOAL_BAR.h / 2, '', style(10, CREAM, '900', { stroke: 'rgba(30,20,10,0.6)', strokeThickness: 2 }))
@@ -203,11 +274,22 @@ export class GameScene extends Phaser.Scene {
       });
     }
 
+    // The season strip: the round's season and which buildings it doubles.
+    this.seasonStrip = this.add.graphics();
+    this.seasonText = this.add.text(SEASON.x + SEASON.w / 2, SEASON.y + SEASON.h / 2, '', style(10.5, CREAM, '800')).setOrigin(0.5);
+
     const { x, y, w, h } = UNDO_BUTTON;
     this.undoBg = this.add.image(x, y, `plaque-${w}x${h}`);
     this.undoText = this.add.text(x, y - 1, '', style(13, INK)).setOrigin(0.5);
     this.undoBg.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+      // With no room for any tile, the button finishes the kingdom instead (merging could still make room).
+      if (finish(this.state)) {
+        this.gameEnded();
+        this.refresh();
+        return;
+      }
       if (!undo(this.state)) return;
+      this.mergeFrom = null;
       this.redrawCells();
       this.refresh();
       this.hoverAt(this.input.activePointer.x, this.input.activePointer.y);
@@ -215,45 +297,90 @@ export class GameScene extends Phaser.Scene {
     this.bestText = this.add.text(PANEL.x + PANEL.w / 2, PANEL.y + PANEL.h - 12, '', style(12, LABEL)).setOrigin(0.5);
   }
 
-  /** Builds the tile buttons for the kinds on show: three big plaques, or four slimmer ones once the windmill is won. */
+  /**
+   * Builds the tile buttons for the kinds on show: three big plaques, four slimmer ones once the
+   * windmill is won, then two columns of slim ones with the picked building's rule under them.
+   */
   private buildButtons(kinds: Building[]) {
     for (const o of this.buttonObjects) o.destroy();
     this.buttonObjects = [];
     this.buttons.clear();
     this.tileButtons = [];
+    this.ruleText = null;
+    if (kinds.length > 4) {
+      this.buildGrid(kinds);
+      return;
+    }
     const four = kinds.length > 3;
     const { ys, h } = four ? TILE_BUTTONS.four : TILE_BUTTONS.three;
     const w = TILE_BUTTONS.w;
     const x = TILE_BUTTONS.x;
-    const key = `plaque-${w}x${h}`;
     kinds.forEach((kind, i) => {
       const y = ys[i];
       const left = x - w / 2;
       const top = y - h / 2;
-      const glow = this.add.image(x, y + 1, `glow-${w}x${h}`).setVisible(false);
-      const plaque = this.add.image(x, y, key);
-      const scale = four ? 0.66 : 0.875;
-      const iconX = left + (four ? 31 : 37);
-      const iconY = four ? y - 1 : top + 39;
-      const parts: Phaser.GameObjects.Image[] = [this.add.image(0, 0, tileKey(kind === 'farm' ? 'farm' : 'plain', 0, 0))];
-      const prop = propKey(kind);
-      if (prop) parts.push(this.add.image(0, 0, prop).setOrigin(PROP_ORIGIN.x, PROP_ORIGIN.y));
-      const icon = this.add.container(iconX, iconY, parts).setScale(scale);
+      const icon = this.tileIcon(kind, left + (four ? 31 : 37), four ? y - 1 : top + 38, four ? 0.62 : 0.84);
       const textX = left + (four ? 60 : 74);
-      const name = this.add.text(textX, top + (four ? 13 : 15), INFO[kind].name, style(four ? 15 : 17, INK, '900')).setOrigin(0, 0.5);
-      const pill = this.add.image(x + w / 2 - 22, top + (four ? 13 : 16), 'count');
-      const count = this.add.text(pill.x, pill.y, '', style(12, CREAM, '900')).setOrigin(0.5);
-      const rule = this.add.text(textX, top + (four ? 23 : 28), INFO[kind].rule, style(four ? 9.5 : 10.5, RULE, '700', { wordWrap: { width: four ? 152 : 148 }, lineSpacing: four ? 0 : 2 }));
-      plaque.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
-        if (!select(this.state, kind)) return;
-        this.refresh();
-        // The hover follows the new pick right away, without waiting for the pointer to move.
-        this.hoverAt(this.input.activePointer.x, this.input.activePointer.y);
-      });
-      this.buttonObjects.push(glow, plaque, icon, name, pill, count, rule);
-      this.buttons.set(kind, { glow, plaque, icon, name, count, key });
-      this.tileButtons.push({ kind, x, y, w, h });
+      const name = this.add.text(textX, top + (four ? 12 : 14), INFO[kind].name, style(four ? 15 : 17, INK, '900')).setOrigin(0, 0.5);
+      const rule = this.add.text(textX, top + (four ? 22 : 27), INFO[kind].rule, style(four ? 9.5 : 10.5, RULE, '700', { wordWrap: { width: four ? 152 : 148 }, lineSpacing: four ? 0 : 2 }));
+      this.addTileButton(kind, x, y, w, h, top + (four ? 12 : 15), icon, name, [rule]);
     });
+  }
+
+  /** Two columns of slim buttons, for five to seven kinds, and a line for the picked one's rule. */
+  private buildGrid(kinds: Building[]) {
+    const G = TILE_BUTTONS.grid;
+    kinds.forEach((kind, i) => {
+      const x = G.xs[i % 2];
+      const y = G.ys[Math.floor(i / 2)];
+      const left = x - G.w / 2;
+      const icon = this.tileIcon(kind, left + 22, y, 0.5);
+      const name = this.add.text(left + 42, y - 8, INFO[kind].short, style(12.5, INK, '900')).setOrigin(0, 0.5);
+      this.addTileButton(kind, x, y, G.w, G.h, y + 10, icon, name, [], left + 54);
+    });
+    this.ruleText = this.add.text(TILE_BUTTONS.x, G.ruleY, '', style(10.5, LABEL, '700', { align: 'center', wordWrap: { width: TILE_BUTTONS.w - 8 } })).setOrigin(0.5, 0);
+    this.buttonObjects.push(this.ruleText);
+  }
+
+  /** A building's tile and what stands on it, scaled into a button. */
+  private tileIcon(kind: Building, x: number, y: number, scale: number) {
+    const parts: Phaser.GameObjects.Image[] = [this.add.image(0, 0, tileKey(kind === 'farm' ? 'farm' : 'plain', 0, 0))];
+    const prop = propKey(kind);
+    if (prop) parts.push(this.add.image(0, 0, prop).setOrigin(PROP_ORIGIN.x, PROP_ORIGIN.y));
+    return this.add.container(x, y, parts).setScale(scale);
+  }
+
+  /** The plaque, glow and count of a tile button around its icon and name; `countX` puts the count pill, by default at the right. */
+  private addTileButton(
+    kind: Building,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    countY: number,
+    icon: Phaser.GameObjects.Container,
+    name: Phaser.GameObjects.Text,
+    extra: Phaser.GameObjects.GameObject[],
+    countX = x + w / 2 - 22,
+  ) {
+    const key = `plaque-${w}x${h}`;
+    const glow = this.add.image(x, y + 1, `glow-${w}x${h}`).setVisible(false);
+    const plaque = this.add.image(x, y, key);
+    // The plaque goes under the icon and the text, which were added first.
+    glow.setDepth(-0.2);
+    plaque.setDepth(-0.1);
+    const pill = this.add.image(countX, countY, 'count');
+    const count = this.add.text(pill.x, pill.y, '', style(12, CREAM, '900')).setOrigin(0.5);
+    plaque.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+      if (!select(this.state, kind)) return;
+      this.mergeFrom = null;
+      this.refresh();
+      // The hover follows the new pick right away, without waiting for the pointer to move.
+      this.hoverAt(this.input.activePointer.x, this.input.activePointer.y);
+    });
+    this.buttonObjects.push(glow, plaque, icon, name, pill, count, ...extra);
+    this.buttons.set(kind, { glow, plaque, icon, name, count, key });
+    this.tileButtons.push({ kind, x, y, w, h });
   }
 
   private createGiftCard() {
@@ -288,8 +415,151 @@ export class GameScene extends Phaser.Scene {
       .text(VIEW.w / 2, VIEW.h / 2 - 90, 'The kingdom is built', style(28, CREAM, '900', { shadow: { offsetX: 1, offsetY: 2, color: 'rgba(0,0,0,0.45)', fill: true } }))
       .setOrigin(0.5);
     this.gameOverText = this.add.text(VIEW.w / 2, VIEW.h / 2 - 8, '', style(15, LABEL, '700', { align: 'center', lineSpacing: 4 })).setOrigin(0.5);
-    const again = makeButton(this, VIEW.w / 2, VIEW.h / 2 + 82, 'New kingdom', () => this.restart());
-    this.gameOver = this.add.container(0, 0, [dim, panel, title, this.gameOverText, again]).setDepth(UI_DEPTH + 20).setVisible(false);
+    const islands = makeButton(this, VIEW.w / 2 - 110, VIEW.h / 2 + 88, 'Islands', () => this.openIslands());
+    const again = makeButton(this, VIEW.w / 2 + 110, VIEW.h / 2 + 88, 'New kingdom', () => this.start(randomIsland()));
+    this.gameOver = this.add.container(0, 0, [dim, panel, title, this.gameOverText, islands, again]).setDepth(UI_DEPTH + 20).setVisible(false);
+  }
+
+  /** A beech plaque button of a baked size, lighter while the pointer is over it. */
+  private plaque(x: number, y: number, w: number, h: number, onClick: () => void) {
+    const key = `plaque-${w}x${h}`;
+    const bg = this.add.image(x, y, key).setInteractive({ useHandCursor: true });
+    bg.on('pointerover', () => bg.setTexture(`${key}-sel`));
+    bg.on('pointerout', () => bg.setTexture(key));
+    bg.on('pointerdown', onClick);
+    return bg;
+  }
+
+  /**
+   * The islands card: the campaign's levels with their stars, the island of the day, a random
+   * island, and a keypad to type an island number (the keyboard's digits work too).
+   */
+  private createIslandsCard() {
+    const C = ISLANDS_CARD;
+    const left = C.x - C.w / 2;
+    const top = C.y - C.h / 2;
+    const dim = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x2a170a, 0.55).setInteractive();
+    const objects: Phaser.GameObjects.GameObject[] = [dim, this.add.image(C.x, C.y, `walnut-${C.w}x${C.h}`)];
+    const heading = (x: number, y: number, text: string) => objects.push(this.add.text(x, y, text, style(10, '#f2c33a', '900', { letterSpacing: 1 } as never)).setOrigin(0, 0.5));
+    objects.push(
+      this.add.text(left + 30, C.close.y, 'Choose an island', style(22, CREAM, '900', { shadow: { offsetX: 1, offsetY: 1.5, color: 'rgba(0,0,0,0.45)', fill: true } })).setOrigin(0, 0.5),
+      this.plaque(C.close.x, C.close.y, C.close.w, C.close.h, () => this.closeIslands()),
+      this.add.text(C.close.x, C.close.y - 1, 'Close', style(13, INK, '900')).setOrigin(0.5),
+    );
+
+    // The campaign: one plaque per level with its number and stars.
+    heading(left + 30, top + 66, 'CAMPAIGN');
+    objects.push(this.add.text(left + 110, top + 66, 'Earn up to three stars on each island. A star opens the next.', style(11, LABEL, '700')).setOrigin(0, 0.5));
+    const L = C.level;
+    const rowW = LEVELS.length * L.w + (LEVELS.length - 1) * L.gap;
+    LEVELS.forEach((_, i) => {
+      const x = C.x - rowW / 2 + L.w / 2 + i * (L.w + L.gap);
+      const plaque = this.plaque(x, L.y, L.w, L.h, () => this.playLevel(i + 1));
+      plaque.on('pointerover', () => this.showLevel(i + 1));
+      const num = this.add.text(x, L.y - 9, String(i + 1), style(22, INK, '900')).setOrigin(0.5);
+      const stars = [-1, 0, 1].map((k) => this.add.image(x + k * 16, L.y + 17, 'star-off'));
+      objects.push(plaque, num, ...stars);
+      this.levelParts.push({ plaque, num, stars });
+    });
+    this.levelInfo = this.add.text(C.x, L.y + 48, '', style(12, LABEL, '700')).setOrigin(0.5);
+    objects.push(this.levelInfo);
+    const rule = this.add.graphics();
+    rule.fillStyle(0x000000, 0.25).fillRect(left + 24, L.y + 66, C.w - 48, 2);
+    objects.push(rule);
+
+    // The island of the day and a random island.
+    const D2 = C.daily;
+    heading(D2.x - D2.w / 2, D2.y - D2.h / 2 - 16, 'ISLAND OF THE DAY');
+    objects.push(this.plaque(D2.x, D2.y, D2.w, D2.h, () => this.playDaily()));
+    this.dailyText = this.add.text(D2.x, D2.y - 1, '', style(15, INK, '900', { align: 'center', lineSpacing: 4 })).setOrigin(0.5);
+    objects.push(this.dailyText);
+    const R = C.random;
+    objects.push(this.plaque(R.x, R.y, R.w, R.h, () => this.start(randomIsland())), this.add.text(R.x, R.y - 1, 'Random island', style(15, INK, '900')).setOrigin(0.5));
+
+    // The keypad for an island number.
+    const K = C.key;
+    const box = C.code;
+    heading(box.x - box.w / 2, box.y - box.h / 2 - 16, 'ISLAND NUMBER');
+    const field = this.add.graphics();
+    field.fillStyle(0x2e1a0c, 1).fillRoundedRect(box.x - box.w / 2, box.y - box.h / 2, box.w, box.h, 10);
+    field.lineStyle(2, 0xf2c33a, 0.8).strokeRoundedRect(box.x - box.w / 2, box.y - box.h / 2, box.w, box.h, 10);
+    this.codeText = this.add.text(box.x, box.y, '', style(20, CREAM, '900', { letterSpacing: 3 } as never)).setOrigin(0.5);
+    this.codeHint = this.add.text(box.x + box.w / 2, box.y - box.h / 2 - 16, `1 to ${ISLANDS}`, style(10, LABEL, '700')).setOrigin(1, 0.5);
+    objects.push(field, this.codeText, this.codeHint);
+    const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'Del', '0', 'Play'];
+    keys.forEach((label, i) => {
+      const x = K.x + ((i % 3) - 1) * (K.w + K.gap);
+      const y = K.y + Math.floor(i / 3) * (K.h + K.gap);
+      objects.push(this.plaque(x, y, K.w, K.h, () => this.keyIn(label)), this.add.text(x, y - 1, label, style(label.length > 1 ? 13 : 16, INK, '900')).setOrigin(0.5));
+    });
+    this.islandsCard = this.add.container(0, 0, objects).setDepth(UI_DEPTH + 30).setVisible(false);
+
+    this.input.keyboard?.on('keydown', (e: KeyboardEvent) => {
+      if (!this.islandsCard.visible) return;
+      if (/^\d$/.test(e.key)) this.keyIn(e.key);
+      else if (e.key === 'Backspace') this.keyIn('Del');
+      else if (e.key === 'Enter') this.keyIn('Play');
+      else if (e.key === 'Escape') this.closeIslands();
+    });
+  }
+
+  /** A key on the islands card's keypad: a digit, Del or Play. */
+  private keyIn(key: string) {
+    if (key === 'Del') this.code = this.code.slice(0, -1);
+    else if (key === 'Play') {
+      const island = parseIsland(this.code);
+      if (island) this.start(island, { mode: 'code' });
+      return;
+    } else if (this.code.length < 4) this.code = (this.code + key).replace(/^0+/, '');
+    this.refreshCode();
+  }
+
+  private refreshCode() {
+    this.codeText.setText(this.code || '-');
+    this.codeHint.setColor(this.code && !parseIsland(this.code) ? '#e0785f' : LABEL);
+  }
+
+  private openIslands() {
+    this.stars = loadStars();
+    this.code = '';
+    this.refreshCode();
+    LEVELS.forEach((_, i) => {
+      const p = this.levelParts[i];
+      const open = levelOpen(i + 1, this.stars);
+      p.plaque.setAlpha(open ? 1 : 0.45);
+      if (p.plaque.input) p.plaque.input.enabled = open;
+      p.num.setAlpha(open ? 1 : 0.45);
+      p.stars.forEach((star, k) => star.setTexture(k < (this.stars[i] ?? 0) ? 'star-on' : 'star-off').setAlpha(open ? 1 : 0.45));
+    });
+    const next = LEVELS.findIndex((_, i) => levelOpen(i + 1, this.stars) && !(this.stars[i] ?? 0));
+    this.showLevel(next < 0 ? 1 : next + 1);
+    const day = today();
+    const best = loadDailyBest(day);
+    this.dailyText.setText([`Island ${dailyIsland(day)}`, best ? `Today's best ${best}` : 'Not played yet today']);
+    this.islandsCard.setVisible(true);
+    this.mergeFrom = null;
+    this.drawHover(null);
+  }
+
+  private closeIslands() {
+    this.islandsCard.setVisible(false);
+  }
+
+  /** The line under the levels: a level's island and the scores its stars need. */
+  private showLevel(level: number) {
+    const L = LEVELS[level - 1];
+    const lock = levelOpen(level, this.stars) ? '' : '   (win a star on the level before)';
+    this.levelInfo.setText(`Level ${level}, island ${L.island}:   1 star ${L.stars[0]}   2 stars ${L.stars[1]}   3 stars ${L.stars[2]}${lock}`);
+  }
+
+  private playLevel(level: number) {
+    if (!levelOpen(level, loadStars())) return;
+    this.start(LEVELS[level - 1].island, { mode: 'campaign', level });
+  }
+
+  private playDaily() {
+    const day = today();
+    this.start(dailyIsland(day), { mode: 'daily', day });
   }
 
   private cellAt(x: number, y: number) {
@@ -302,31 +572,53 @@ export class GameScene extends Phaser.Scene {
   private hoverAt(x: number, y: number) {
     const at = this.cellAt(x, y);
     const kind = this.state.selected;
-    const p = at && kind ? previewPlacement(this.state, kind, at.col, at.row) : null;
+    const p = at && kind && !this.mergeFrom ? previewPlacement(this.state, kind, at.col, at.row) : null;
     this.preview = at && p ? { ...at, ...p } : null;
     this.drawHover(at);
   }
 
+  /**
+   * A tap on the board: on a house with a house beside it, picks it to merge (a second tap on the
+   * house beside it merges them into a manor); anywhere else, places the picked building.
+   */
   private tapAt(x: number, y: number) {
     const at = this.cellAt(x, y);
     if (!at) return;
-    const placed = place(this.state, at.col, at.row);
-    if (!placed) return;
-    if (placed.decree) saveCrowns(this.state.crowns);
-    if (this.state.phase === 'over') saveBest(this.state.best);
-    this.redrawCells();
-    for (const change of placed.changes) this.popup(change.col, change.row, change.gained, change.col === at.col && change.row === at.row);
-    if (placed.decree) this.decreePaid();
+    const from = this.mergeFrom;
+    this.mergeFrom = null;
+    let placed: Placed | null = null;
+    if (from && canMerge(this.state, from, at)) placed = merge(this.state, from, at);
+    else if ((!from || from.col !== at.col || from.row !== at.row) && mergeable(this.state, at.col, at.row)) this.mergeFrom = at;
+    else if (!from) placed = place(this.state, at.col, at.row);
+    if (placed) {
+      if (placed.decree) saveCrowns(this.state.crowns);
+      if (this.state.phase === 'over') this.gameEnded();
+      this.redrawCells();
+      for (const change of placed.changes) this.popup(change.col, change.row, change.gained, change.col === at.col && change.row === at.row);
+      if (placed.decree) this.decreePaid();
+    }
     this.refresh();
     this.hoverAt(x, y);
   }
 
   private takeGift(gift: Gift) {
     if (!chooseGift(this.state, gift)) return;
-    if (this.state.phase === 'over') saveBest(this.state.best);
+    if (this.state.phase === 'over') this.gameEnded();
     if (this.state.phase === 'playing') this.announceRound(gift);
     this.refresh();
     this.hoverAt(this.input.activePointer.x, this.input.activePointer.y);
+  }
+
+  /** Saves what a finished kingdom won: the best score, the island of the day's best and campaign stars. */
+  private gameEnded() {
+    const s = this.state;
+    saveBest(s.best);
+    if (s.mode === 'daily' && s.score > loadDailyBest(s.day)) saveDailyBest(s.day, s.score);
+    if (s.mode === 'campaign') {
+      const stars = loadStars();
+      stars[s.level - 1] = Math.max(stars[s.level - 1] ?? 0, starsFor(s.level, s.score));
+      saveStars(stars);
+    }
   }
 
   /** A "+N" that floats up from a cell and fades; it only fades with reduced motion. */
@@ -358,7 +650,8 @@ export class GameScene extends Phaser.Scene {
     const tiles = BUILDINGS.filter((b) => ROUND_POUCH[b] > 0)
       .map((b) => `+${ROUND_POUCH[b]} ${INFO[b].name.toLowerCase()}s`)
       .join('  ');
-    this.bannerText.setText([`Round ${s.round}`, tiles, `Royal gift: ${GIFT_INFO[gift].label}`]);
+    const info = SEASON_INFO[season(s)];
+    this.bannerText.setText([`Round ${s.round}: ${info.name}`, `${info.rule}.  ${tiles}`, `Royal gift: ${GIFT_INFO[gift].label}`]);
     this.banner.setAlpha(1);
     this.tweens.killTweensOf(this.banner);
     this.tweens.add({ targets: this.banner, alpha: 0, delay: BANNER_MS / 2, duration: BANNER_MS / 2 });
@@ -370,14 +663,39 @@ export class GameScene extends Phaser.Scene {
     const kind = this.state.selected;
     this.ghost.setVisible(false);
     this.bubbleText.setVisible(false);
+    this.seasonBadge.setVisible(false);
+    this.mergeHint.setVisible(false);
     for (const t of this.linkTexts) t.setVisible(false);
-    if (!at || this.state.phase !== 'playing') return;
-    const ok = canPlace(this.state, at.col, at.row);
+    if (this.state.phase !== 'playing') return;
+    const box = (c: number, r: number, color: number) =>
+      g.lineStyle(3.5, color, 1).strokeRoundedRect(GRID.x + c * GRID.cell + 1, GRID.y + r * GRID.cell + 1, GRID.cell - 2, GRID.cell - 4, 8);
+    if (this.mergeFrom) box(this.mergeFrom.col, this.mergeFrom.row, TEAL);
+    if (!at) return;
     const x = GRID.x + at.col * GRID.cell;
     const y = GRID.y + at.row * GRID.cell;
+    const { x: cx, y: cy } = cellCentre(at.col, at.row);
+    if (this.mergeFrom || mergeable(this.state, at.col, at.row)) {
+      // Merging: a teal outline on a house that can merge, and over the house beside the picked one, a manor's ghost and what it would add.
+      const gained = this.mergeFrom ? previewMerge(this.state, this.mergeFrom, at) : null;
+      if (gained === null) {
+        if (!this.mergeFrom || mergeable(this.state, at.col, at.row)) {
+          const picked = this.mergeFrom?.col === at.col && this.mergeFrom.row === at.row;
+          box(at.col, at.row, TEAL);
+          this.hint(cx, y + GRID.cell - 12, picked ? 'Tap to cancel' : this.mergeFrom ? 'Pick this house' : 'Tap to merge');
+          return;
+        }
+        box(at.col, at.row, CORAL);
+        return;
+      }
+      box(at.col, at.row, TEAL);
+      this.ghost.setTexture('prop-manor').setOrigin(PROP_ORIGIN.x, PROP_ORIGIN.y).setPosition(cx, cy).setAlpha(0.7).setVisible(true);
+      this.bubble(cx, y - 4, gained);
+      this.hint(cx, y + GRID.cell - 12, 'Manor');
+      return;
+    }
+    const ok = canPlace(this.state, at.col, at.row, kind);
     g.lineStyle(3.5, ok && kind ? YELLOW : CORAL, 1).strokeRoundedRect(x + 1, y + 1, GRID.cell - 2, GRID.cell - 4, 8);
     if (!this.preview || !kind) return;
-    const { x: cx, y: cy } = cellCentre(at.col, at.row);
     if (kind === 'farm') this.ghost.setTexture('tile-farm').setOrigin(0.5).setPosition(cx, cy).setAlpha(0.65);
     else this.ghost.setTexture(`prop-${kind}`).setOrigin(PROP_ORIGIN.x, PROP_ORIGIN.y).setPosition(cx, cy).setAlpha(0.6);
     this.ghost.setVisible(true);
@@ -407,9 +725,19 @@ export class GameScene extends Phaser.Scene {
       l.fillStyle(link.pts > 0 ? YELLOW : CORAL, 1).fillRoundedRect(start.x - pw / 2, start.y - 9.5, pw, 19, 9.5);
       this.linkTexts[i].setText(label).setColor(link.pts > 0 ? INK : CREAM).setPosition(start.x, start.y).setVisible(true);
     });
-    // The total in a bubble over the ghost.
-    const gained = this.preview.gained;
-    const by = y - 4;
+    // The total in a bubble over the ghost, and the season's "x2" when it doubles this building.
+    this.bubble(cx, y - 4, this.preview.gained);
+    if (this.preview.season > 0) {
+      const color = SEASON_INFO[season(this.state)].color;
+      l.fillStyle(0x000000, 0.3).fillRoundedRect(cx + 16, y - 21, 26, 16, 8);
+      l.fillStyle(color, 1).fillRoundedRect(cx + 16, y - 22.5, 26, 16, 8);
+      this.seasonBadge.setPosition(cx + 29, y - 14.5).setVisible(true);
+    }
+  }
+
+  /** The total in a yellow bubble (coral when it loses points) centred at (cx, by). */
+  private bubble(cx: number, by: number, gained: number) {
+    const l = this.links;
     l.fillStyle(0x000000, 0.35).fillRoundedRect(cx - 21, by - 10.5, 42, 25, 12.5);
     l.fillStyle(gained < 0 ? CORAL : YELLOW, 1).fillRoundedRect(cx - 21, by - 12.5, 42, 25, 12.5);
     l.lineStyle(1.5, 0xfff6c8, 1).strokeRoundedRect(cx - 21, by - 12.5, 42, 25, 12.5);
@@ -418,6 +746,13 @@ export class GameScene extends Phaser.Scene {
       .setColor(gained < 0 ? CREAM : INK)
       .setPosition(cx, by)
       .setVisible(true);
+  }
+
+  /** A small teal label on the board, for the merge. */
+  private hint(x: number, y: number, text: string) {
+    this.mergeHint.setText(text).setPosition(x, y).setVisible(true);
+    const w = this.mergeHint.width + 12;
+    this.links.fillStyle(TEAL, 1).fillRoundedRect(x - w / 2, y - 8, w, 16, 8);
   }
 
   /** The decree's banner text and progress, and its marks on the board. */
@@ -563,16 +898,30 @@ export class GameScene extends Phaser.Scene {
 
   private refresh() {
     const s = this.state;
-    const kinds = BUILDINGS.filter((b) => b !== 'windmill' || s.hasWindmill);
+    const kinds = shownKinds(s);
     if (kinds.join() !== this.shownKinds) {
       this.shownKinds = kinds.join();
       this.buildButtons(kinds);
     }
     this.roundText.setText(`Round ${s.round}`);
-    this.islandText.setText(`Island ${s.island}`);
+    this.islandText.setText(s.mode === 'campaign' ? `Level ${s.level}` : s.mode === 'daily' ? `Daily ${s.island}` : `Island ${s.island}`);
     this.scoreText.setText(`Score ${s.score}`);
     this.goalText.setText(`${s.score} / ${s.goal} for round ${s.round + 1}`);
-    this.bestText.setText(`Best score ${s.best}`);
+    if (s.mode === 'campaign') {
+      const [one, two, three] = LEVELS[s.level - 1].stars;
+      this.bestText.setText(`Stars at ${one}, ${two} and ${three}`);
+    } else if (s.mode === 'daily') this.bestText.setText(`Today's best ${loadDailyBest(s.day)}`);
+    else this.bestText.setText(`Best score ${s.best}`);
+
+    // The season strip.
+    const info = SEASON_INFO[season(s)];
+    const S = SEASON;
+    this.seasonStrip.clear();
+    this.seasonStrip.fillStyle(0x000000, 0.3).fillRoundedRect(S.x, S.y + 1.5, S.w, S.h, S.h / 2);
+    this.seasonStrip.fillStyle(info.color, 1).fillRoundedRect(S.x, S.y, S.w, S.h, S.h / 2);
+    this.seasonStrip.fillStyle(0xffffff, 0.16).fillRoundedRect(S.x + 1, S.y + 1, S.w - 2, S.h / 2, S.h / 4);
+    this.seasonText.setText(`${info.name}: ${info.short}`);
+    if (this.ruleText) this.ruleText.setText(s.selected ? `${INFO[s.selected].name}: ${INFO[s.selected].rule}` : '');
 
     // The goal bar is a groove filled with green from the last round's goal to this one's.
     const from = s.round === 1 ? 0 : goalFor(s.round - 1);
@@ -596,9 +945,10 @@ export class GameScene extends Phaser.Scene {
       parts.count.setText(`x${left}`).setColor(left > 0 ? CREAM : '#9aa3b8');
     }
 
-    const undoable = canUndo(s);
+    const stuck = s.phase === 'playing' && !anyPlace(s);
+    const undoable = canUndo(s) || stuck;
     const usedHere = s.undoneIn === s.round;
-    this.undoText.setText(usedHere && !undoable ? 'Undo used this round' : 'Undo last tile');
+    this.undoText.setText(stuck ? 'No room: merge houses or finish' : usedHere && !undoable ? 'Undo used this round' : 'Undo last tile');
     this.undoBg.setAlpha(undoable ? 1 : 0.5);
     this.undoText.setAlpha(undoable ? 1 : 0.5);
 
@@ -607,18 +957,25 @@ export class GameScene extends Phaser.Scene {
 
     this.gameOver.setVisible(s.phase === 'over');
     if (s.phase === 'over') {
-      this.gameOverText.setText(
-        `Final score ${s.score} on island ${s.island}, reaching round ${s.round}.\n${s.placed} buildings placed.\n\nBest score ${s.best}.  Crowns ${s.crowns}.`,
-      );
+      let won = `Best score ${s.best}.  Crowns ${s.crowns}.`;
+      if (s.mode === 'campaign') {
+        const stars = starsFor(s.level, s.score);
+        won = `Level ${s.level}: ${stars} ${stars === 1 ? 'star' : 'stars'}${stars < 3 ? ` (next at ${LEVELS[s.level - 1].stars[stars]})` : ''}.  Crowns ${s.crowns}.`;
+      } else if (s.mode === 'daily') won = `Island of the day: today's best ${loadDailyBest(s.day)}.  Crowns ${s.crowns}.`;
+      this.gameOverText.setText(`Final score ${s.score} on island ${s.island}, reaching round ${s.round}.\n${s.placed} buildings placed.\n\n${won}`);
     }
   }
 
-  /** A new kingdom on a fresh random island. */
-  private restart() {
+  /** A new kingdom on island `island`, chosen as `kingdom` says. */
+  private start(island: number, kingdom: Kingdom = { mode: 'random' }) {
     // The best score and crowns carry over even when storage is blocked and comes back empty.
-    this.state = newGame(Math.max(loadBest(), this.state.best), Math.max(loadCrowns(), this.state.crowns));
+    this.state = newGame(Math.max(loadBest(), this.state.best), Math.max(loadCrowns(), this.state.crowns), island, kingdom);
+    this.closeIslands();
+    this.tweens.killTweensOf(this.banner);
+    this.banner.setAlpha(0);
     this.redrawCells();
     this.preview = null;
+    this.mergeFrom = null;
     this.drawHover(null);
     this.refresh();
   }

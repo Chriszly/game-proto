@@ -1,25 +1,42 @@
 // The buildings and the land they go on. How each building scores is in state.ts.
 
-/** Every building, in the order of the panel's tile buttons. The windmill is a gift: its button shows once it is won. */
-export const BUILDINGS = ['farm', 'house', 'tower', 'windmill'] as const;
+/**
+ * Every building the pouch holds, in the order of the panel's tile buttons. The first three are
+ * there from the start; the rest are gifts, and each one's button shows once it is won.
+ */
+export const BUILDINGS = ['farm', 'house', 'tower', 'windmill', 'market', 'harbor', 'lumber'] as const;
 export type Building = (typeof BUILDINGS)[number];
+/** The buildings won as gifts, in the order they join the panel. */
+export const SPECIALS = ['windmill', 'market', 'harbor', 'lumber'] as const;
+export type Special = (typeof SPECIALS)[number];
+/** Everything that can stand on a cell: the pouch's buildings, and the manor two houses merge into. */
+export type Structure = Building | 'manor';
 export type Terrain = 'grass' | 'lake' | 'forest';
-export type Cell = Terrain | Building;
+export type Cell = Terrain | Structure;
 
 export interface BuildingInfo {
   name: string;
+  /** A short name for the slim two-column buttons. */
+  short: string;
   /** The rule in a sentence, shown on the tile's button. */
   rule: string;
 }
 
-export const INFO: Record<Building, BuildingInfo> = {
-  farm: { name: 'Farm', rule: '1 point, +1 per lake beside it' },
-  house: { name: 'House', rule: '+2 per farm, +1 per house or forest beside it' },
-  tower: { name: 'Tower', rule: '+2 per house around it, 0 next to a tower' },
-  windmill: { name: 'Windmill', rule: '+1 per farm around it, and +1 to each farm beside it' },
+export const INFO: Record<Structure, BuildingInfo> = {
+  farm: { name: 'Farm', short: 'Farm', rule: '1 point, +1 per lake beside it' },
+  house: { name: 'House', short: 'House', rule: '+2 per farm, +1 per house, manor, forest or camp beside it' },
+  tower: { name: 'Tower', short: 'Tower', rule: '+2 per house or manor around it, 0 next to a tower' },
+  windmill: { name: 'Windmill', short: 'Mill', rule: '+1 per farm around it, and +1 to each farm beside it' },
+  market: { name: 'Market', short: 'Market', rule: '+1 for each different building around it' },
+  harbor: { name: 'Harbor', short: 'Harbor', rule: "Only on a lake's shore: +2 per lake, +1 per house beside it" },
+  lumber: { name: 'Lumber camp', short: 'Lumber', rule: 'Only beside a forest: +2 per forest beside it, +1 to each house beside it' },
+  manor: { name: 'Manor', short: 'Manor', rule: 'Two houses merged: 4 points, +3 per farm, +1 per house, manor or forest beside it' },
 };
 
-export const isBuilding = (cell: Cell): cell is Building => (BUILDINGS as readonly string[]).includes(cell);
+const STRUCTURES: readonly string[] = [...BUILDINGS, 'manor'];
+export const isBuilding = (cell: Cell): cell is Structure => STRUCTURES.includes(cell);
+/** Houses and manors: what towers, decrees and other houses count as homes. */
+export const isHome = (cell: Cell | undefined) => cell === 'house' || cell === 'manor';
 
 /** The island's size in cells; GRID in src/scenes/layout.ts must match. */
 export const MAP_SIZE = { cols: 10, rows: 7 };
