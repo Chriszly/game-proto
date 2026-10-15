@@ -1,6 +1,6 @@
 // What the coins buy besides comb cells and bees: hive upgrades, each with a few ranks.
 
-export type UpgradeId = 'baskets' | 'clover' | 'dance';
+export type UpgradeId = 'baskets' | 'clover' | 'dance' | 'guards';
 
 export interface Upgrade {
   name: string;
@@ -17,6 +17,8 @@ export const UPGRADES: Record<UpgradeId, Upgrade> = {
   clover: { name: 'Clover Patch', blurb: 'shorter trips', prices: [60, 180, 480] },
   // The idle upgrade: bees fly out by themselves whenever the comb has room.
   dance: { name: 'Waggle Dance', blurb: 'bees forage alone', prices: [250] },
+  // Guards wait at the entrance and drive off every wasp as it lands, before it steals a thing.
+  guards: { name: 'Guard Bees', blurb: 'drive off wasps', prices: [150] },
 };
 
 export const UPGRADE_IDS = Object.keys(UPGRADES) as UpgradeId[];

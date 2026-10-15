@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import { smooth } from '../art/paper';
+import type { Kind } from '../game/honey';
 import { FLOWERS, GRID } from '../game/state';
 
 // Where things are drawn in the 960x540 view: the hive with its comb on the left, the meadow the
@@ -52,6 +54,16 @@ export const homeSpot = (i: number) => ({ x: ENTRANCE.x - 105 + (i % 8) * 30, y:
 export const flowerSpot = (i: number) => ({ x: 590 + (i % FLOWERS) * 66, y: i % 2 ? 196 : 160 });
 export const FLOWER_GROUND = 274;
 
+/** The far hill's ridge, which the goal meadows lie along, and its height at x. */
+export const FAR_RIDGE = smooth([[-10, 260], [430, 235], [500, 210], [580, 220], [665, 190], [750, 165], [840, 145], [900, 135], [970, 142]]);
+export function farY(x: number) {
+  for (let i = 0; i < FAR_RIDGE.length - 1; i++) {
+    const [a, b] = [FAR_RIDGE[i], FAR_RIDGE[i + 1]];
+    if (x >= a[0] && x <= b[0]) return a[1] + ((b[1] - a[1]) * (x - a[0])) / (b[0] - a[0] || 1);
+  }
+  return FAR_RIDGE[FAR_RIDGE.length - 1][1];
+}
+
 /** The goal card on the top right, naming the next meadow and how far along its goal is. */
 export const GOAL = { x: 530, y: 50, w: 410, h: 50 };
 /**
@@ -64,20 +76,45 @@ export const MEADOW_SPOTS = [
   { x0: 428, x1: 598, tag: { x: 498, y: 188 } },
 ];
 export const MEADOW_TAG = { w: 128, h: 22 };
+/** The meadow strip each kind of nectar comes from, by `MEADOW_SPOTS` index (clover grows by the hive). */
+const KIND_MEADOW: Record<Exclude<Kind, 'clover'>, number> = { lavender: 0, heather: 2 };
+/** Where a forager gathers its nectar: a flower by the hive for clover, else a spot along that kind's meadow. */
+export function forageSpot(kind: Kind, flower: number) {
+  if (kind === 'clover') {
+    const f = flowerSpot(flower);
+    return { x: f.x, y: f.y - 16 };
+  }
+  const m = MEADOW_SPOTS[KIND_MEADOW[kind]];
+  const x = m.x0 + 24 + (flower / (FLOWERS - 1)) * (m.x1 - m.x0 - 48);
+  return { x, y: farY(x) + 18 };
+}
 
 /** The chip under the hive that says how much nectar the bees gathered while the page was closed. */
 export const AWAY = { x: 56, y: 384, w: 359, h: 38 };
 /** The hint line for a new player, in the same place (it hides while the chip shows). */
 export const HINT = { x: 233, y: 403 };
+/**
+ * The market board, in the same place once the first jar is sold: a title column of `MARKET.label`
+ * and an entry per kind of honey, `MARKET.entry` wide, that sends the foragers there when tapped.
+ */
+export const MARKET = { ...AWAY, label: 66, entry: 97 };
+export const marketEntry = (i: number) => ({ x: MARKET.x + MARKET.label + i * MARKET.entry, y: MARKET.y, w: MARKET.entry - 2, h: MARKET.h });
 
 /** The shelf of honey jars waiting to be sold, under the hive. */
 export const SHELF = { x: 80, y: 468, jarGap: 34, jars: 10 };
 
 /** The board under the meadow with the buttons, by their centres. */
 export const BOARD = { x: 530, y: 294, w: 420, h: 212 };
-export const SEND_BUTTON = { x: 635, y: 330, w: 190, h: 48 };
-export const SELL_BUTTON = { x: 845, y: 330, w: 190, h: 48 };
-export const SHOP_BUTTONS = { xs: [635, 845], ys: [400, 462], w: 190, h: 52 };
+export const SEND_BUTTON = { x: 635, y: 322, w: 190, h: 44 };
+export const SELL_BUTTON = { x: 845, y: 322, w: 190, h: 44 };
+/** The shop: two columns of three rows, filled row by row; the last spot holds the village order card. */
+export const SHOP_BUTTONS = { xs: [635, 845], ys: [372, 418, 464], w: 190, h: 40 };
+export const shopSpot = (i: number) => ({ x: SHOP_BUTTONS.xs[i % 2], y: SHOP_BUTTONS.ys[Math.floor(i / 2)] });
+export const ORDER = { ...shopSpot(5), w: SHOP_BUTTONS.w, h: SHOP_BUTTONS.h };
+
+/** Where raiding wasps come in from and fly off to, beyond the right edge. */
+export const WASP_FROM = { x: VIEW.w + 30, y: 150 };
+export const WASP_TO = { x: VIEW.w + 40, y: 70 };
 
 export const UI_DEPTH = 10_000;
 /** A system font stack (no web fonts), drawn bold like the cut-paper lettering of the mockup. */

@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { bakeBees } from '../art/bees';
+import { bakeBees, bakeWasps } from '../art/bees';
 import { bakeScenery } from '../art/scenery';
 
 // Paints all the cut-paper textures on canvases at startup, so the game needs no asset files.
@@ -11,6 +11,7 @@ export class BootScene extends Phaser.Scene {
   create() {
     bakeScenery(this);
     bakeBees(this);
+    bakeWasps(this);
     this.scene.start('Game');
   }
 }

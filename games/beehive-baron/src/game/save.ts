@@ -1,9 +1,11 @@
+import { KINDS, type Kind } from './honey';
 import { freshProgress, type Progress } from './state';
 import { MEADOWS } from './meadows';
 import { UPGRADES, UPGRADE_IDS } from './upgrades';
 
-// The comb, the coins, the bees, the upgrades, the meadows unlocked and when the hive was last seen
-// are saved; bees out foraging come home on load.
+// The comb, the coins, the jars, the wax, the bees, the upgrades, the meadows unlocked, where the
+// bees forage and when the hive was last seen are saved; bees out foraging come home on load, and
+// wasps, the market and village orders start afresh.
 const KEY = 'beehive-baron-progress';
 
 export function loadProgress(): Progress {
@@ -17,12 +19,18 @@ export function loadProgress(): Progress {
       coins: num(saved.coins, fresh.coins),
       cells: Array.isArray(saved.cells) ? saved.cells : fresh.cells,
       bees: num(saved.bees, fresh.bees),
-      jars: num(saved.jars, fresh.jars),
+      // Saves from before honey kinds hold one number of jars, all clover.
+      jars:
+        typeof saved.jars === 'number'
+          ? { ...fresh.jars, clover: num(saved.jars, 0) }
+          : (Object.fromEntries(KINDS.map((k) => [k, num((saved.jars as Partial<Record<Kind, unknown>> | undefined)?.[k], 0)])) as Progress['jars']),
+      wax: num(saved.wax, fresh.wax),
       sold: num(saved.sold, fresh.sold),
       ranks: Object.fromEntries(
         UPGRADE_IDS.map((id) => [id, Math.min(UPGRADES[id].prices.length, num(saved.ranks?.[id], 0))]),
       ) as Progress['ranks'],
       meadows: Math.min(MEADOWS.length, num(saved.meadows, fresh.meadows)),
+      forage: KINDS.includes(saved.forage as Kind) ? (saved.forage as Kind) : fresh.forage,
       seen: num(saved.seen, fresh.seen),
     };
   } catch {

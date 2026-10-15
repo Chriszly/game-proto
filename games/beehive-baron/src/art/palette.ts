@@ -18,16 +18,12 @@ export const CARD = {
   plaque: '#fff1c8',
   wax: '#c98a3a',
   well: '#3f230c',
-  nectar: '#f2a92e',
-  ripe: ['#f29a26', '#f7b444'],
-  capped: ['#f6dc94', '#fff0c2', '#fbe6a8'],
   preview: '#bfe8a0',
   previewLine: '#3f8a2e',
   stem: '#3e8a34',
   leaf: '#58a845',
   middle: '#f2b01e',
   middleShine: '#f8c84a',
-  jar: '#f2a226',
   lid: '#a8743e',
   label: '#fff4d8',
   shelf: '#c98a4a',
@@ -53,6 +49,22 @@ export const MEADOW_CARD = [
   { rows: ['#dca3c9', '#c886b4'], bloom: ['#a2508a', '#f2c6e6'] },
 ];
 
+/**
+ * Each kind of honey's card: the nectar in a filling cell, a ripening cell's two layers, a capped
+ * cell's three layers of wax and the jar. Clover keeps the original golden honey.
+ */
+export const KIND_CARD = {
+  clover: { nectar: '#f2a92e', ripe: ['#f29a26', '#f7b444'], capped: ['#f6dc94', '#fff0c2', '#fbe6a8'], jar: '#f2a226' },
+  lavender: { nectar: '#b48ae0', ripe: ['#9f74d2', '#bf9cea'], capped: ['#ddd0f4', '#f3edfc', '#e8def8'], jar: '#a982d6' },
+  heather: { nectar: '#df7aa6', ripe: ['#cc6294', '#e68ab4'], capped: ['#f4d0e0', '#fdeef4', '#f8e0ea'], jar: '#d9739e' },
+};
+
+/** The wasp: a brighter yellow than the bee, near-black stripes and smoky wings; the order card and its pin; brood. */
+export const WASP_CARD = { body: '#ffd21f', dark: '#1d1a16', wing: 'rgba(214,224,236,0.9)' };
+export const NOTE_CARD = { paper: '#fff8e4', edge: '#c9a46a', pin: '#4f9a42' };
+export const BROOD_CARD = { cap: '#c98f4a', dome: '#dba560', larva: '#fff4e0' };
+export const WAX_CARD = { cake: '#f3d98c', shine: '#fff0c0' };
+
 export const LIVE = {
   edgeGlow: 0xffd640,
   edge: 0xffe070,
@@ -65,4 +77,9 @@ export const LIVE = {
   bar: 0xf2b01e,
   awayTrack: 0x203448,
   trail: 0xffffff,
+  broodArc: 0xc8f0a8,
+  stealBar: 0xf08a1c,
+  stealTrack: 0x3a2410,
+  marketPick: 0xffd25a,
+  marketLine: 0xd9b880,
 };
