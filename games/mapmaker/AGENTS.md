@@ -42,7 +42,8 @@ next voyage goes to a new island, of the next kind (green, archipelago, volcanic
 ### File map
 
 - `src/main.ts`: creates the `Phaser.Game` (960x540, `Scale.FIT`, smooth art) with `BootScene`
-  then `GameScene`, calls `setupGame(game)`, and puts `game` on `window` in dev builds.
+  then `GameScene`, calls `setupGame(game)` and `setupScaling(game)`, and puts `game` on `window`
+  in dev builds.
 - `src/game/state.ts`: `GameState`, `Tile`, `Find`, `Riddle`, `Commission`, `Chart`, `Milestone`,
   `AtlasPage`, `Phase`, `Point`; `GRID`, `BASE_SUPPLIES`, `PROVISIONS_STEP`, `INK_STEP`,
   `SELL_BACK`, `WRECK_SUPPLIES`, `ARTIFACT_VALUE`, `CAMP_COST`, `CAMP_REACH`, `DIG_COST`,
@@ -67,7 +68,8 @@ next voyage goes to a new island, of the next kind (green, archipelago, volcanic
   `sellChart`, `buy`, `islandCharted`, `setSail`, and the private `reveal` (turns up finds) and
   `rollCommission` with its `COMMISSIONS` table.
 - `src/game/save.ts`: `loadGame` (fills the new fields on older saves) and `saveGame`.
-- `src/scenes/BootScene.ts`: bakes the surveyor and the icons, then starts `Game`.
+- `src/scenes/BootScene.ts`: sets the art's resolution (`sharpenArt`), bakes the surveyor and the
+  icons, then starts `Game`.
 - `src/scenes/GameScene.ts`: owns the `GameState`, takes taps, paints the island into two canvas
   textures, draws the sheet, survey stations with their costs, the map marks, surveyor, value chips
   and notices, the viewshed, the side panel (with the riddle box and the Camp button) and the chart
@@ -77,13 +79,15 @@ next voyage goes to a new island, of the next kind (green, archipelago, volcanic
 - `src/ui/Button.ts`: `makeButton`, a flat ink button with an optional size, disabled look and
   left-aligned caption.
 - `src/art/paint.ts`: the palette (`INK`, `MAGENTA`, `BLUE`, `SHEET`, `VELLUM`...), `HI` (textures
-  are painted at 2x and shown at half size), `bake` (paint a canvas and add it as a texture),
+  are painted at HI times their size and shown at 1 / HI; 2, or `renderScale` when that is bigger,
+  set by `sharpenArt`), `bake` (paint a canvas and add it as a texture),
   `rng`, `hex` and drawing helpers.
 - `src/art/map.ts`: `paintTerrain` (tints, hillshade, contours by marching squares, coastline,
   rivers, roads and symbols for the whole island), `paintFog` (blank paper over uncharted tiles, UNSURVEYED lettering
   and the dashed survey limit), `placeNames` (village, ruin, wood, bay and harbour names and peak
   heights, picked from the island number and tile spots), `TINT` (a flat colour per terrain for the
-  live chart and swatches), `CANVAS` and `TS` (80 px tiles on the canvases).
+  live chart and swatches), `CANVAS` and `TS` (80 units a tile; both painters draw in these units
+  onto a canvas `HI / 2` times CANVAS, and paint the tints pixel by pixel at the canvas's own size).
 - `src/art/surveyor.ts`: `surveyor` and `surveyor-step`, the bear in a pith helmet behind a
   theodolite; `SURVEYOR_ORIGIN`.
 - `src/art/icons.ts`: `icon-<upgrade>`, `swatch-<terrain>`, `landmark-hint` (the compass rose),
@@ -97,10 +101,11 @@ next voyage goes to a new island, of the next kind (green, archipelago, volcanic
 
 - Boot: `BootScene.create` calls `bakeSurveyor` and `bakeIcons`. No asset files.
 - `GameScene.create` loads the save or calls `newGame`, draws the sheet (table, header, scale bar,
-  north arrow, grid labels), creates the `island-terrain` and `island-fog` canvas textures (1200x880,
-  shown at half size over `MAP`), the station graphics, the viewshed graphics, the surveyor and the
+  north arrow, grid labels), creates the `island-terrain` and `island-fog` canvas textures (CANVAS
+  times `HI / 2`, 1200x880 at HI 2, shown at 1 / HI over `MAP`), the station graphics, the viewshed graphics, the surveyor and the
   side panel.
-- Input: a `pointerdown` with nothing interactive under it is turned into a tile and passed to
+- Input: a `pointerdown` with nothing interactive under it is turned into a tile (from
+  `pointer.worldX/Y`, since `pointer.x/y` are canvas pixels) and passed to
   `survey`, or else to `dig`; the scene slices `state.surveyed` before and after to know which
   tiles the survey charted and calls `announce` and `announceFinds` (notices for wrecks, caves,
   storms and the riddle chart; a dig gets "Nothing here" or "Treasure!"). Buttons call
@@ -211,6 +216,11 @@ shared `hub-settings` key.
 ### Hub settings
 
 - `src/main.ts` calls `setupGame(game)` right after creating the game (frame cap, FPS readout, reduced motion and full screen; Mapmaker uses no camera shake or flash).
+- `setupScaling(game)` from `shared/scaling.ts` draws the canvas at the screen's resolution
+  (`renderScale` canvas pixels per game pixel, every camera zoomed to match) and asks to turn a
+  phone held upright. The camera never scrolls or zooms, so no `scrollingCamera` is needed. Art is
+  painted at `HI` (at least `renderScale`) and texts at `Math.max(2, renderScale)`.
+  `e2e/screens.spec.ts` at the root checks the game on five screens.
 - Difficulty scales one number: `BASE_SUPPLIES` in `src/game/state.ts` is `byDifficulty(16, 12, 9)`,
   read at module load. Normal must stay 12: the playthrough expects it.
 - With `settings.reduceMotion` on, the survey stations stop pulsing, value chips and notices don't float, and
@@ -266,7 +276,9 @@ shared `hub-settings` key.
 - Riddle clues only hold if the terrain they name stays put: rivers, roads, landmarks and finds are
   all placed before `makeRiddle` runs.
 - Landmarks fall back to any meadow, forest or beach tile when no tile fits their rule.
-- The island art is painted once per isle (about a million pixels); keep per-frame work in
+- Read taps through `pointer.worldX/Y` and lay out in game pixels (`VIEW`), never `this.scale`
+  or `pointer.x/y`, which are canvas pixels once `renderScale` is above 1.
+- The island art is painted once per isle (about a million pixels at HI 2, four million at 4K); keep per-frame work in
   `update` to graphics and texts, and repaint the fog canvas only when tiles are charted.
 - The compass rose is gold, and the survey overprint is magenta triangles and dashed squares, never
   a cross; the treasure is a chest, never an X; never draw a red cross (root `AGENTS.md`).
