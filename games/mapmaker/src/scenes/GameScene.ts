@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { settings } from '../../../../shared/settings';
-import { CANVAS, NAME_COLOR, TINT, paintFog, paintTerrain, placeNames } from '../art/map';
+import { renderScale } from '../../../../shared/scaling';
+import { CANVAS, NAME_COLOR, TINT, TS, paintFog, paintTerrain, placeNames } from '../art/map';
 import { BLUE, GOLD_DARK, GREEN, GREY, HI, INK, MAGENTA, RULE, SHEET, SLATE, TRACK, VELLUM, hex } from '../art/paint';
 import { SURVEYOR_ORIGIN } from '../art/surveyor';
 import { loadGame, saveGame } from '../game/save';
@@ -223,12 +224,12 @@ export class GameScene extends Phaser.Scene {
     this.createPanel();
     this.syncIsland();
 
-    this.input.on('pointermove', (p: Phaser.Input.Pointer) => (this.hover = this.tileAtScreen(p.x, p.y)));
+    this.input.on('pointermove', (p: Phaser.Input.Pointer) => (this.hover = this.tileAtScreen(p.worldX, p.worldY)));
     // A tap on a survey station surveys it, and a tap on charted ground digs there once the riddle is
     // known. Taps on a button or the overlay are theirs alone.
     this.input.on('pointerdown', (p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
       if (over.length > 0) return;
-      const t = this.tileAtScreen(p.x, p.y);
+      const t = this.tileAtScreen(p.worldX, p.worldY);
       if (!t) return;
       const s = this.state;
       const before = { surveyed: s.surveyed.length, storms: s.storms.length, known: !!s.riddle?.known };
@@ -270,7 +271,7 @@ export class GameScene extends Phaser.Scene {
       fontSize: `${o.size}px`,
       fontStyle: `${o.italic ? 'italic ' : ''}${o.weight ?? 600}`,
       color: o.color ?? INK,
-      resolution: 2,
+      resolution: Math.max(2, renderScale),
     };
     if (o.stroke) {
       style.stroke = SHEET;
@@ -301,7 +302,7 @@ export class GameScene extends Phaser.Scene {
 
   private canvasTexture(key: string) {
     if (this.textures.exists(key)) this.textures.remove(key);
-    return this.textures.createCanvas(key, CANVAS.w, CANVAS.h)!;
+    return this.textures.createCanvas(key, (CANVAS.w * HI) / 2, (CANVAS.h * HI) / 2)!;
   }
 
   /** One tile of blank drafting paper, laid over a tile as it is charted and faded out. */
@@ -310,15 +311,17 @@ export class GameScene extends Phaser.Scene {
     const c = document.createElement('canvas');
     c.width = c.height = MAP.tile * HI;
     const ctx = c.getContext('2d')!;
+    // Drawn on a tile of TS, like the fog it matches.
+    ctx.scale(HI / 2, HI / 2);
     ctx.fillStyle = VELLUM;
-    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.fillRect(0, 0, TS, TS);
     ctx.strokeStyle = 'rgba(120,130,140,0.16)';
     ctx.beginPath();
-    for (let k = 0; k <= c.width; k += 20) {
+    for (let k = 0; k <= TS; k += 20) {
       ctx.moveTo(k + 0.5, 0);
-      ctx.lineTo(k + 0.5, c.height);
+      ctx.lineTo(k + 0.5, TS);
       ctx.moveTo(0, k + 0.5);
-      ctx.lineTo(c.width, k + 0.5);
+      ctx.lineTo(TS, k + 0.5);
     }
     ctx.stroke();
     this.textures.addCanvas('vellum', c);
