@@ -18,8 +18,26 @@ const TORCHES = [
 ];
 
 export function bakeScenery(scene: Phaser.Scene) {
-  addTexture(scene, 'room-bg', painted(drawCrypt, 11));
-  addTexture(scene, 'map-bg', painted(drawFlagstones, 5));
+  const crypt = painted(drawCrypt, 11);
+  const flagstones = painted(drawFlagstones, 5);
+  addTexture(scene, 'room-bg', crypt);
+  addTexture(scene, 'map-bg', flagstones);
+  // The second act, the Sunken Tombs, is the same stone washed in a cold, drowned green.
+  addTexture(scene, 'room-bg-2', washed(crypt, '#6fa496'));
+  addTexture(scene, 'map-bg-2', washed(flagstones, '#6fa496'));
+}
+
+/** The backdrop for an act. */
+export const backdrop = (kind: 'room' | 'map', act: number) => (act > 1 ? `${kind}-bg-${act}` : `${kind}-bg`);
+
+/** A copy of a painted canvas with a colour multiplied over it. */
+function washed(src: HTMLCanvasElement, color: string) {
+  const { canvas, ctx } = sketch(src.width, src.height);
+  ctx.drawImage(src, 0, 0);
+  ctx.globalCompositeOperation = 'multiply';
+  ctx.fillStyle = color;
+  ctx.fillRect(0, 0, src.width, src.height);
+  return canvas;
 }
 
 type Draw = (ctx: CanvasRenderingContext2D, rnd: () => number) => void;

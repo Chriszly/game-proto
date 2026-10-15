@@ -1,6 +1,7 @@
-import type { CardId } from './cards';
-import type { EnemyKind, Intent } from './enemies';
+import type { BaseId, CardId } from './cards';
+import type { EnemyKind, Intent, StatusKind } from './enemies';
 import type { Room } from './map';
+import type { RelicId } from './relics';
 
 // Everything about a run, as plain data: the hero, the deck, where on the map they are, and the
 // fight in progress. The playthrough test reads it through `window.game`.
@@ -14,6 +15,21 @@ export const REST_HEAL = 0.3;
 export const MIN_DECK = 5;
 /** How many cards a reward offers. */
 export const REWARD_CHOICES = 3;
+
+/** Gold at the start of a run. */
+export const START_GOLD = 0;
+/** What the merchant asks for a card, by rarity, a relic and taking a card out of the deck. */
+export const CARD_PRICE = { common: 30, rare: 65 };
+export const RELIC_PRICE = 80;
+export const REMOVE_PRICE = 40;
+/** How many cards of each rarity, and how many relics, the merchant lays out. */
+export const SHOP_CARDS = { common: 2, rare: 1 };
+export const SHOP_RELICS = 2;
+/** Gold found instead of a relic once every relic is owned. */
+export const RELIC_GOLD = 50;
+/** An attack by someone Weak, and an attack on someone Vulnerable, has its damage multiplied by these (rounded down). */
+export const WEAK_MULT = 0.75;
+export const VULNERABLE_MULT = 1.5;
 
 /** Game time, in milliseconds, between one foe's action and the next on their turn. */
 export const ENEMY_ACT_MS = 600;
@@ -38,10 +54,36 @@ export type Phase =
   | 'cleared'
   /** Picking a card to add to the deck, after a fight or in a treasure room. */
   | 'reward'
-  /** At a campfire: rest to heal, or take a card out of the deck. */
+  /** At a campfire: rest to heal, temper a card or take a card out of the deck. */
   | 'rest'
+  /** At the merchant's: buy cards, relics or a card's removal, then leave. */
+  | 'shop'
+  /** In a mystery room: pick one of two choices. */
+  | 'event'
+  /** The first act's boss fell: descend to the next act. */
+  | 'descend'
   | 'over'
   | 'won';
+
+/** Statuses on the hero or a foe, in turns (Weak, Vulnerable) or in damage (Poison); 0 is none. */
+export type Status = Record<StatusKind, number>;
+
+export const noStatus = (): Status => ({ weak: 0, vulnerable: 0, poison: 0 });
+
+/** One of the merchant's wares and whether it is sold. */
+export interface Ware<T> {
+  id: T;
+  price: number;
+  sold: boolean;
+}
+
+export interface Shop {
+  cards: Ware<BaseId>[];
+  relics: Ware<RelicId>[];
+  removePrice: number;
+  /** The merchant takes one card out of the deck per visit. */
+  removed: boolean;
+}
 
 export interface Enemy {
   id: number;
@@ -51,6 +93,7 @@ export interface Enemy {
   block: number;
   /** Added to the damage of each of its hits. */
   strength: number;
+  status: Status;
   /** How many times it has acted. */
   step: number;
   /** What it will do when it next acts, shown over its head. */
@@ -71,6 +114,10 @@ export interface Fight {
   enemies: Enemy[];
   /** How many foes have acted so far on their turn. */
   acted: number;
+  /** The hero's statuses. */
+  status: Status;
+  /** The gold the foes leave behind once they all fall. */
+  gold: number;
 }
 
 /** A number that floats up from the hero or a foe: damage, block or healing. */
@@ -79,18 +126,23 @@ export interface Pop {
   /** A foe's id, or 'hero'. */
   on: number | 'hero';
   text: string;
-  kind: 'damage' | 'block' | 'heal';
+  kind: 'damage' | 'block' | 'heal' | 'status';
   ms: number;
 }
 
 export interface GameState {
   phase: Phase;
-  /** This run's map, drawn by makeMap. */
+  /** Which act the hero is in, from 1. */
+  act: number;
+  /** This act's map, drawn by makeMap. */
   rooms: Room[];
   hp: number;
   maxHp: number;
   /** Every card the hero owns; each fight shuffles a copy into the draw pile. */
   deck: CardId[];
+  gold: number;
+  /** The relics owned, in the order found. */
+  relics: RelicId[];
   /** The room the hero is in, or null at the entrance. */
   at: number | null;
   /** Rooms done, in the order visited. */
@@ -99,6 +151,14 @@ export interface GameState {
   fight: Fight | null;
   /** The cards offered, while picking a reward. */
   reward: CardId[] | null;
+  /** Whether the reward offers rare cards (a treasure chest, an elite or the altar) or common ones. */
+  rewardRare: boolean;
+  /** The gold the last fight left behind, shown with its reward. */
+  goldWon: number;
+  /** The merchant's wares, while in a shop. */
+  shop: Shop | null;
+  /** What the last event, purchase or descent did, shown on the map until the hero walks on. */
+  notice: string;
   /** Counts down the foes' turn and the pause after a fight. */
   timerMs: number;
   heroHitMs: number;
