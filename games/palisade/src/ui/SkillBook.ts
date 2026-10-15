@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { iconTexture, relicTexture } from '../art/icons';
+import { fit } from '../art/lowpoly';
 import { GOLD, SLATE } from '../art/palette';
 import { SKILL_BOOK, UI_DEPTH, VIEW } from '../scenes/layout';
 import { RELIC_IDS, RELICS, SETS, setComplete, type RelicId } from '../game/relics';
@@ -30,7 +31,7 @@ export class SkillBook {
       drawPanel(bg, -w / 2, -h / 2, w, h, { c: 6, fill: hover ? 0x4a4260 : SLATE.light, alpha: 1, edge: hover ? GOLD.light : GOLD.mid });
     };
     draw(false);
-    const icon = scene.add.image(-w / 2 + 18, 0, 'hud-book');
+    const icon = fit(scene.add.image(-w / 2 + 18, 0, 'hud-book'));
     this.buttonText = scene.add.text(9, 0, '', textStyle(14, '#ffe7a0')).setOrigin(0.5);
     const hit = scene.add.zone(0, 0, w, h);
     hit
@@ -108,7 +109,7 @@ export class SkillBook {
     for (const id of owned) {
       const n = relics[id] ?? 0;
       const done = setComplete(relics, RELICS[id].set);
-      this.relics.add(scene.add.image(x + 12, y, relicTexture(id)).setScale(0.45));
+      this.relics.add(fit(scene.add.image(x + 12, y, relicTexture(id)), 0.45));
       const name = scene.add
         .text(x + 28, y, n > 1 ? `${RELICS[id].name} x${n}` : RELICS[id].name, { ...textStyle(11, done ? '#8fdc6a' : '#e9e4d8'), fontStyle: done ? 'bold' : 'normal' })
         .setOrigin(0, 0.5);
@@ -146,7 +147,7 @@ export class SkillBook {
     this.slots.add([
       back,
       iconBack,
-      scene.add.image(x + 22, y + 18, iconTexture(u.icon)).setScale(0.58).setAlpha(taken ? 1 : 0.55),
+      fit(scene.add.image(x + 22, y + 18, iconTexture(u.icon)), 0.58).setAlpha(taken ? 1 : 0.55),
       scene.add.text(x + 46, y, u.name, textStyle(14, taken ? '#ffcf4a' : '#c9c3b6')),
       scene.add
         .text(x + colW - 14, y + 1, rankText, textStyle(13, !u.filler && rank === u.maxRank ? '#8fdc6a' : taken ? '#e9e4d8' : '#7a8294'))
