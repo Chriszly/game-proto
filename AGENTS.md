@@ -46,6 +46,12 @@ form's Game dropdown. Labels are defined in `.github/labels.json` and the Labels
 (`.github/workflows/labels.yml`) syncs them on main, deleting any label not in that file, so add
 or change labels there rather than on GitHub. A PR that fixes an issue says `Fixes #<number>`.
 
+Every PR carries at least one `type:` label for what it changes (`type: bug` for a fix,
+`type: feature`, `type: gameplay`, `type: refactor`, `type: assets`, `type: docs`, `type: ci`) and at
+least one `game:` label for where (a game, `game: hub` or `game: shared`). The **PR Labels**
+workflow (`.github/workflows/pr-labels.yml`) fails until both are set, so add them right after
+opening the PR.
+
 ## Work on one game at a time
 
 - **Keep games apart.** A game's code stays in its folder and never imports from another game.

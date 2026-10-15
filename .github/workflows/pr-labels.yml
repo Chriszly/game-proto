@@ -1,0 +1,37 @@
+name: PR Labels
+
+# Every PR needs at least one "type:" label (what kind of change) and at least one
+# "game:" label (which game, or hub / shared). Labels are listed in .github/labels.json.
+on:
+  pull_request:
+    types: [opened, reopened, labeled, unlabeled, synchronize]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  type-and-game:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the PR has a type and a game label
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            // The labels are fetched fresh, as a re-run of an older run would
+            // otherwise check the labels it started with.
+            const { data: labels } = await github.rest.issues.listLabelsOnIssue({
+              ...context.repo,
+              issue_number: context.payload.pull_request.number,
+              per_page: 100
+            });
+            const names = labels.map(l => l.name);
+            const missing = ['type: ', 'game: ']
+              .filter(prefix => !names.some(n => n.startsWith(prefix)))
+              .map(prefix => `a "${prefix.trim()}" label`);
+            if (missing.length > 0) {
+              core.setFailed(`PR needs ${missing.join(' and ')}. Pick them under Labels; ` +
+                'the type says what changed (bug, feature, gameplay, refactor, assets, docs, ci) ' +
+                'and the game says where (a game, hub or shared).');
+            } else {
+              console.log(`PR labels: ${names.join(', ')}`);
+            }

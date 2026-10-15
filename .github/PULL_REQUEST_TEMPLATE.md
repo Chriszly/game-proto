@@ -4,7 +4,7 @@
 
 ## Type of change
 
-<!-- Check all that apply -->
+<!-- Check all that apply, and add the matching "type:" label plus a "game:" label (a game, hub or shared); the PR Labels check needs both. -->
 
 - [ ] Bug fix
 - [ ] New feature / gameplay

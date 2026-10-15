@@ -102,17 +102,37 @@
   {
     "name": "type: bug",
     "color": "e4572e",
-    "description": "Something is broken: a crash, an error, controls or performance"
+    "description": "Something is broken (issue) or a bug fix (PR)"
   },
   {
     "name": "type: gameplay",
     "color": "8250df",
-    "description": "Balance, difficulty, unclear rules or not fun"
+    "description": "Balance, difficulty, rules or feel of play"
   },
   {
     "name": "type: feature",
     "color": "2da44e",
-    "description": "A wish or idea for something new"
+    "description": "A wish or idea (issue) or a new feature (PR)"
+  },
+  {
+    "name": "type: refactor",
+    "color": "0e8a8a",
+    "description": "Cleanup or restructuring with no change in behaviour (PR)"
+  },
+  {
+    "name": "type: assets",
+    "color": "d4a72c",
+    "description": "Art, sound or other assets (PR)"
+  },
+  {
+    "name": "type: docs",
+    "color": "0075ca",
+    "description": "Documentation only (PR)"
+  },
+  {
+    "name": "type: ci",
+    "color": "57606a",
+    "description": "Build, CI or tooling (PR)"
   },
   {
     "name": "prio: high",
