@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { sharpRes } from '../../../../shared/scaling';
 
 // Cut-paper craft: every shape is a piece of card stock with a slightly wobbly hand-cut edge, a
 // soft drop shadow under it, a multiplied paper grain and a faint light rim along its cut. Pieces
@@ -49,18 +50,38 @@ function grainTile() {
   return grain;
 }
 
-/** A new canvas of this size and its context. */
+/** How many canvas pixels each sketch has per game pixel, by canvas. */
+const resOf = new WeakMap<HTMLCanvasElement, number>();
+
+/**
+ * A new canvas of this size in game pixels and its context, which draws in game pixels. The canvas
+ * itself has more pixels on a big screen (`sharpRes`), so the art stays as sharp as the screen.
+ */
 export function sketch(w: number, h: number) {
+  const res = sharpRes(w, h);
   const canvas = document.createElement('canvas');
-  canvas.width = Math.ceil(w);
-  canvas.height = Math.ceil(h);
-  return { canvas, ctx: canvas.getContext('2d')! };
+  canvas.width = Math.ceil(w * res);
+  canvas.height = Math.ceil(h * res);
+  resOf.set(canvas, res);
+  const ctx = canvas.getContext('2d')!;
+  ctx.scale(res, res);
+  return { canvas, ctx };
 }
 
-/** Adds a canvas as the texture `key`, replacing any texture of that name. */
+/**
+ * Adds a sketch's canvas as the texture `key`, replacing any texture of that name. The texture
+ * shows at the sketch's size in game pixels however many pixels its canvas has: Phaser draws a
+ * frame at its canvas size over the source's `resolution`, and the trim gives game objects the
+ * game-pixel size for origins, hit areas and `realWidth`.
+ */
 export function addTexture(scene: Phaser.Scene, key: string, canvas: HTMLCanvasElement) {
   if (scene.textures.exists(key)) scene.textures.remove(key);
-  scene.textures.addCanvas(key, canvas);
+  const texture = scene.textures.addCanvas(key, canvas)!;
+  const res = resOf.get(canvas) ?? 1;
+  if (res === 1) return;
+  const [w, h] = [canvas.width / res, canvas.height / res];
+  texture.source[0].resolution = res;
+  texture.get().setTrim(w, h, 0, 0, w, h);
 }
 
 // Shapes, as point lists.

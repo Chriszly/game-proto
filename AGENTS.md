@@ -107,7 +107,7 @@ the `project` scope).
   `SETTING_FIELDS` row, which the hub panel shows on its own) and then into every game.
 - **Fit every screen.** A game stays sharp and fills the screen from an upright phone to a 4K
   monitor by calling `setupScaling(game)` from `shared/scaling.ts` right after `setupGame(game)`
-  (Apothecary and Colonizer do so far; bring the others over one game per PR). The canvas then has
+  (Apothecary, Colonizer and Beehive Baron do so far; bring the others over one game per PR). The canvas then has
   `renderScale` canvas pixels per game pixel and every camera is zoomed to match, so: lay out with
   `viewSize(scene)` rather than `scene.scale`, read the world through `pointer.worldX/Y`,
   `getWorldPoint` and `worldView` rather than `pointer.x/y` or `scrollX/Y`, give a camera that

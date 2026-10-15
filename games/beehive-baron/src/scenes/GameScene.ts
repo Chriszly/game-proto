@@ -225,8 +225,8 @@ export class GameScene extends Phaser.Scene {
     this.add.image(0, 0, 'bg-front').setOrigin(0).setDepth(0.05);
     for (let i = 0; i < FLOWERS; i++) {
       const f = flowerSpot(i);
-      const tex = this.textures.get(`flower-${i}`).getSourceImage();
-      this.add.image(f.x, f.y, `flower-${i}`).setOrigin(0.5, FLOWER_TEX.head / tex.height).setDepth(0.1 + f.y / 10_000);
+      const tex = this.textures.getFrame(`flower-${i}`);
+      this.add.image(f.x, f.y, `flower-${i}`).setOrigin(0.5, FLOWER_TEX.head / tex.realHeight).setDepth(0.1 + f.y / 10_000);
     }
     this.add.image(HIVE.x, HIVE.y, 'hive').setOrigin(0).setDepth(1);
     this.plaque = this.add.text(PLAQUE.x, PLAQUE.y, '', textStyle(11, '#7a4410')).setOrigin(0.5).setDepth(1.5);
@@ -272,7 +272,7 @@ export class GameScene extends Phaser.Scene {
     this.save();
 
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => this.tapComb(p));
-    this.input.on('pointermove', (p: Phaser.Input.Pointer) => (this.hover = cellAt(p.x, p.y)));
+    this.input.on('pointermove', (p: Phaser.Input.Pointer) => (this.hover = cellAt(p.worldX, p.worldY)));
     this.input.on('gameout', () => (this.hover = null));
     const keep = () => this.save();
     const onHide = () => document.visibilityState === 'hidden' && keep();
@@ -328,9 +328,9 @@ export class GameScene extends Phaser.Scene {
    */
   private tapComb(p: Phaser.Input.Pointer) {
     for (const [id, at] of this.waspAt) {
-      if (Math.hypot(p.x - at.x, p.y - at.y) <= SWAT_RADIUS && swat(this.state, id)) return;
+      if (Math.hypot(p.worldX - at.x, p.worldY - at.y) <= SWAT_RADIUS && swat(this.state, id)) return;
     }
-    const slot = cellAt(p.x, p.y);
+    const slot = cellAt(p.worldX, p.worldY);
     if (slot === null) return;
     const cell = this.state.cells[slot];
     if (cell !== null) return this.act(harvest(this.state, slot));
