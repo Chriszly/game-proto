@@ -43,14 +43,19 @@ gameplay feedback, feature wish). Every issue carries one `game:` label and one 
 (`type: bug`, `type: gameplay` or `type: feature`); `prio:` and `status:` labels are optional. The
 form sets the type label and `.github/workflows/issue-labels.yml` adds the game label from the
 form's Game dropdown. Labels are defined in `.github/labels.json` and the Labels workflow
-(`.github/workflows/labels.yml`) syncs them on main, deleting any label not in that file, so add
-or change labels there rather than on GitHub. A PR that fixes an issue says `Fixes #<number>`.
+(`.github/workflows/labels.yml`) syncs them on main, deleting any label not in that file, so labels
+are never edited on GitHub. A PR that fixes an issue says `Fixes #<number>`.
 
-Every PR carries at least one `type:` label for what it changes (`type: bug` for a fix,
-`type: feature`, `type: gameplay`, `type: refactor`, `type: assets`, `type: docs`, `type: ci`) and at
-least one `game:` label for where (a game, `game: hub` or `game: shared`). The **PR Labels**
-workflow (`.github/workflows/pr-labels.yml`) fails until both are set, so add them right after
-opening the PR.
+- **Every PR needs labels.** It carries at least one `type:` label for what it changes
+  (`type: bug` for a fix, `type: feature`, `type: gameplay`, `type: refactor`, `type: assets`,
+  `type: docs`, `type: ci`) and at least one `game:` label for where (a game, `game: hub` or
+  `game: shared`). The **PR Labels** workflow (`.github/workflows/pr-labels.yml`) fails until both
+  are set, so add them right after opening the PR.
+- **Never create a new label.** Use only the labels in `.github/labels.json`, and never add one
+  on GitHub or apply a label name that isn't in that file (GitHub creates it silently). The PR
+  Labels check fails on any label not in the file. The one exception is a PR that adds a new game:
+  it adds that game's `game: <name>` label to `.github/labels.json` (see "Add a game" below) and
+  carries it.
 
 ## Work on one game at a time
 
