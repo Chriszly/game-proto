@@ -1,7 +1,8 @@
 name: Labels
 
 # Keeps the repo's labels in line with .github/labels.json: creates or updates
-# every label listed there and deletes every label that isn't.
+# every label listed there and deletes every label that isn't. A label's group
+# (Game, Type, Priority, Status) is the start of its description.
 on:
   push:
     branches: [main]
@@ -32,26 +33,31 @@ jobs:
               per_page: 100
             });
             const byName = new Map(existing.map(l => [l.name.toLowerCase(), l]));
-            for (const label of wanted) {
-              const current = byName.get(label.name.toLowerCase());
+            const handled = new Set();
+            for (const { name, color, description, previous } of wanted) {
+              // "previous" is a label's old name, so a rename keeps it on its issues and PRs.
+              const current = byName.get(name.toLowerCase()) ||
+                (previous && byName.get(previous.toLowerCase()));
               if (!current) {
-                await github.rest.issues.createLabel({ ...context.repo, ...label });
-                console.log(`Created ${label.name}`);
-              } else if (current.name !== label.name || current.color !== label.color ||
-                  (current.description || '') !== label.description) {
+                await github.rest.issues.createLabel({ ...context.repo, name, color, description });
+                console.log(`Created ${name}`);
+                continue;
+              }
+              handled.add(current.id);
+              if (current.name !== name || current.color !== color ||
+                  (current.description || '') !== description) {
                 await github.rest.issues.updateLabel({
                   ...context.repo,
                   name: current.name,
-                  new_name: label.name,
-                  color: label.color,
-                  description: label.description
+                  new_name: name,
+                  color,
+                  description
                 });
-                console.log(`Updated ${label.name}`);
+                console.log(`Updated ${current.name} -> ${name}`);
               }
             }
-            const keep = new Set(wanted.map(l => l.name.toLowerCase()));
             for (const label of existing) {
-              if (!keep.has(label.name.toLowerCase())) {
+              if (!handled.has(label.id)) {
                 await github.rest.issues.deleteLabel({ ...context.repo, name: label.name });
                 console.log(`Deleted ${label.name}`);
               }
