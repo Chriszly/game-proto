@@ -21,7 +21,7 @@ shade gardens and a mirrored second production line.
   waits (a coin ring on each order bubble), and an autopilot that plays the time away (up to 2h)
   on load and shows a "While you were away" chip. Progress autosaves to localStorage.
 - Gardens have nine beds each, three by three edge to edge (`PLOTS_PER_GARDEN`, `plotPosition`).
-  Two shade gardens grow nightshade for the Shadow Elixir (extract + flour). A brew's last quarter
+  Two shade gardens grow nightshade for the Shadow Elixir (extract + mandrake seeds). A brew's last quarter
   is its fine window: picked up then by hand, it becomes a Fine potion (its own item kind) worth
   `FINE_BONUS` times as much. Customers can come back as regulars, the street keeps a reputation,
   each day has almanac weather, and every fourth day is a market day with a crowd at midday. The

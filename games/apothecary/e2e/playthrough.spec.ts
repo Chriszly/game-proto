@@ -326,7 +326,7 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
       'Wheat = Wheat Flour',
       'Mandrake = Mandrake Seeds',
       'Nightshade = Nightshade Extract',
-      'Nightshade Extract + Wheat Flour = Shadow Elixir',
+      'Nightshade Extract + Mandrake Seeds = Shadow Elixir',
       'Wheat Flour + Mandrake Seeds = Sleeping Tonic',
       'Wheat Flour + Wheat Flour = Healing Draught',
     ],

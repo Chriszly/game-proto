@@ -50,7 +50,7 @@ export interface Recipe {
 
 // A cauldron brews whichever of these the shop is shortest of; ties go in this order, rarer ingredient first.
 export const RECIPES: Recipe[] = [
-  { out: 'shadowElixir', inputs: ['nightshadeExtract', 'flour'], ms: 6_000 },
+  { out: 'shadowElixir', inputs: ['nightshadeExtract', 'mandrakeSeeds'], ms: 6_000 },
   { out: 'sleepingTonic', inputs: ['flour', 'mandrakeSeeds'], ms: 5_000 },
   { out: 'healingDraught', inputs: ['flour', 'flour'], ms: 4_000 },
 ];

@@ -39,7 +39,7 @@ camera follows the doctor.
    and nightshade becomes nightshade extract.
    Stand on the work spot while it refines; pick the finished goods up on the pick-up marker.
 3. **Cauldron**: drop in refined goods. Two wheat flour brew a Healing Draught, wheat flour and
-   mandrake seeds brew a Sleeping Tonic, and nightshade extract and wheat flour brew a Shadow
+   mandrake seeds brew a Sleeping Tonic, and nightshade extract and mandrake seeds brew a Shadow
    Elixir. Stand on the work spot while it brews. When work starts, the cauldron brews whichever
    potion customers are waiting for that the shop has least of. The last quarter of each brew is
    its fine window, gold on the brewing bar: step off the work spot then (which stops the brew
