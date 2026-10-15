@@ -3,7 +3,7 @@ import { settings } from '../../../../shared/settings';
 import { Backdrop, type BackdropInfo } from '../art/backdrop';
 import { bakeComic } from '../art/comic';
 import { bakeNightVision } from '../art/nightvision';
-import { GEOM, HI, num, tex, type SpriteName } from '../art/paint';
+import { GEOM, GRAIN_TILE, geomOf, num, tex } from '../art/paint';
 import { ACID_COLOR, CRATE_COLORS, SHIELD_COLOR, THEMES, UPGRADE_COLORS, type Theme } from '../art/theme';
 import { Pool } from '../game/pool';
 import {
@@ -343,7 +343,7 @@ export class GameScene extends Phaser.Scene {
     this.scan = this.add.image(0, 0, '__DEFAULT').setOrigin(0).setDepth(DEPTH.overlay);
     this.grain = this.add.tileSprite(0, 0, VIEW.w, VIEW.h, '__DEFAULT').setOrigin(0).setDepth(DEPTH.overlay + 1);
 
-    const text = (depth: number) => this.add.text(0, 0, '', { resolution: 2 }).setOrigin(0.5).setDepth(depth).setVisible(false);
+    const text = (depth: number) => this.add.text(0, 0, '').setOrigin(0.5).setDepth(depth).setVisible(false);
     this.enemies = new Pool<Enemy>(
       () => ({ alive: false, id: 0, kind: 'grunt', hp: 0, maxHp: 0, x: 0, y: 0, inBlast: false, shield: 0, maxShield: 0, clock: 0, sprite: this.add.image(0, 0, '__DEFAULT') }),
       (e) => e.sprite.setVisible(false),
@@ -398,9 +398,9 @@ export class GameScene extends Phaser.Scene {
     this.addCompanions();
 
     this.hud = new Hud(this);
-    this.banner = this.add.text(VIEW.w / 2, VIEW.h * 0.38, '', { resolution: 2, align: 'center' }).setOrigin(0.5).setDepth(DEPTH.hud).setAlpha(0);
-    this.bossCall = this.add.text(0, 0, '', { resolution: 2 }).setOrigin(0.5).setDepth(DEPTH.pops).setVisible(false);
-    this.placeHint = this.add.text(VIEW.w / 2, WALL.y - 70, '', { resolution: 2, align: 'center' }).setOrigin(0.5).setDepth(DEPTH.pops).setVisible(false);
+    this.banner = this.add.text(VIEW.w / 2, VIEW.h * 0.38, '', { align: 'center' }).setOrigin(0.5).setDepth(DEPTH.hud).setAlpha(0);
+    this.bossCall = this.add.text(0, 0, '').setOrigin(0.5).setDepth(DEPTH.pops).setVisible(false);
+    this.placeHint = this.add.text(VIEW.w / 2, WALL.y - 70, '', { align: 'center' }).setOrigin(0.5).setDepth(DEPTH.pops).setVisible(false);
     this.createInput();
     this.applyStyle();
     this.startWave(1);
@@ -448,9 +448,15 @@ export class GameScene extends Phaser.Scene {
   /** Shows an image as one of the style's sprites and remembers it, so a switch can swap it. */
   private skin<T extends Phaser.GameObjects.Image>(img: T, name: string): T {
     this.skins.set(img, name);
-    const geom = GEOM[(name.split('-')[0] in GEOM ? name.split('-')[0] : name) as SpriteName];
-    img.setTexture(tex(this.style, name)).setOrigin(geom.ox / geom.w, geom.oy / geom.h).setScale(geom.w / img.frame.width);
+    const geom = geomOf(name);
+    img.setTexture(tex(this.style, name)).setOrigin(geom.ox / geom.w, geom.oy / geom.h).setScale(this.unit(img));
     return img;
+  }
+
+  /** The scale that shows a skinned image's texture at its box's size, however finely it was painted. */
+  private unit(img: Phaser.GameObjects.Image) {
+    const name = this.skins.get(img);
+    return name ? geomOf(name).w / img.frame.width : 1;
   }
 
   /** Switches between the comic and the night-vision feed, and saves the choice. */
@@ -464,11 +470,11 @@ export class GameScene extends Phaser.Scene {
   private applyStyle() {
     const nv = this.style === 'nv', th = this.theme();
     for (const [img, name] of this.skins) {
-      const geom = GEOM[(name.split('-')[0] in GEOM ? name.split('-')[0] : name) as SpriteName];
+      const geom = geomOf(name);
       img.setTexture(tex(this.style, name)).setOrigin(geom.ox / geom.w, geom.oy / geom.h);
     }
     this.scan.setTexture(nv ? tex('nv', 'scan') : '__DEFAULT').setVisible(nv);
-    if (nv) this.grain.setTexture(tex('nv', 'grain')).setTileScale(1 / HI);
+    if (nv) this.grain.setTexture(tex('nv', 'grain')).setTileScale(GRAIN_TILE / this.grain.frame.width);
     this.grain.setVisible(nv).setAlpha(0.9);
     // In the comic the blast ring is painted on the road under the horde; in night vision it is
     // part of the overlay, over the scanlines.
@@ -1057,7 +1063,7 @@ export class GameScene extends Phaser.Scene {
     if (n >= 3 && n % 3 === 0) this.effect('streak', e.x + 12, e.y + 2, { life: 700, text: `x${n}`, grow: 0.1 });
     const s = this.splats.take();
     s.age = 0;
-    s.sprite.setPosition(e.x, e.y).setScale((e.kind === 'boss' ? 3 : e.kind === 'brute' ? 1.6 : e.kind === 'crawler' ? 0.7 : 1) / HI).setAlpha(1).setVisible(true);
+    s.sprite.setPosition(e.x, e.y).setScale(((e.kind === 'boss' ? 3 : e.kind === 'brute' ? 1.6 : e.kind === 'crawler' ? 0.7 : 1) * GEOM.splat.w) / s.sprite.frame.width).setAlpha(1).setVisible(true);
     if (this.style === 'comic' && this.state.kills % SPLUT_EVERY === 0) this.effect('sfx-splut', e.x - 30, e.y + 10, { life: 450, grow: 0.1, angle: -5 });
     this.enemies.release(e);
   }
@@ -1097,7 +1103,7 @@ export class GameScene extends Phaser.Scene {
 
   /** A word that pops up over the squad and floats away. */
   private pop(text: string, color: string) {
-    const pop = this.add.text(this.player.x, HERO.y - 50, text, { resolution: 2 }).setOrigin(0.5).setDepth(DEPTH.hud);
+    const pop = this.add.text(this.player.x, HERO.y - 50, text).setOrigin(0.5).setDepth(DEPTH.hud);
     if (this.style === 'comic') this.font(pop, 18, color, { stroke: THEMES.comic.ink, sw: 5 });
     else this.font(pop, 16, color, { glow: color });
     pop.setX(Phaser.Math.Clamp(this.player.x, pop.width / 2 + 8, VIEW.w - pop.width / 2 - 8));
@@ -1131,7 +1137,7 @@ export class GameScene extends Phaser.Scene {
     Object.assign(f, { age: 0, life: o.life, rise: o.rise ?? 0, grow: o.grow ?? 0, baseScale: o.baseScale ?? 1 });
     if (name) {
       this.skins.delete(f.sprite);
-      this.skin(f.sprite, name).setPosition(x, y).setAngle(o.angle ?? 0).setScale(f.baseScale / HI).setAlpha(1).setVisible(true);
+      this.skin(f.sprite, name).setPosition(x, y).setAngle(o.angle ?? 0).setScale(f.baseScale * this.unit(f.sprite)).setAlpha(1).setVisible(true);
       f.sprite.setDepth(name === 'muzzle' ? DEPTH.muzzle : DEPTH.fx);
     }
     if (o.text) {
@@ -1157,7 +1163,7 @@ export class GameScene extends Phaser.Scene {
         continue;
       }
       const t = f.age / f.life, alpha = t < 0.6 ? 1 : 1 - (t - 0.6) / 0.4;
-      if (f.sprite.visible) f.sprite.setAlpha(alpha).setScale((f.baseScale * (1 + f.grow * t)) / HI);
+      if (f.sprite.visible) f.sprite.setAlpha(alpha).setScale(f.baseScale * (1 + f.grow * t) * this.unit(f.sprite));
       if (f.text.visible) f.text.setAlpha(alpha).setY(f.text.y - (f.rise * dt) / 1000);
     }
   }
@@ -1358,19 +1364,19 @@ export class GameScene extends Phaser.Scene {
   private showGameOver() {
     const th = this.theme(), comic = this.style === 'comic', s = this.state;
     const shade = this.add.rectangle(0, 0, VIEW.w, VIEW.h, comic ? 0x15121a : 0x000000, comic ? 0.6 : 0.65).setOrigin(0).setDepth(DEPTH.hud + 1);
-    const title = this.add.text(VIEW.w / 2, 250, comic ? 'OVERRUN!' : 'FEED LOST: OVERRUN', { resolution: 2 }).setOrigin(0.5).setDepth(DEPTH.hud + 2);
+    const title = this.add.text(VIEW.w / 2, 250, comic ? 'OVERRUN!' : 'FEED LOST: OVERRUN').setOrigin(0.5).setDepth(DEPTH.hud + 2);
     if (comic) this.font(title, 52, '#e8402a', { stroke: th.ink, sw: 9 });
     else this.font(title, 30, th.warn, { glow: th.warn });
     const best = s.wave >= s.best && this.bestAtStart < s.wave ? 'A new best!' : `Best: wave ${s.best}`;
     const info = this.add
-      .text(VIEW.w / 2, 310, `Reached wave ${s.wave} with ${s.kills} kills\n${best}\nScrap +${s.scrap}  ·  banked ${s.bank}`, { resolution: 2, align: 'center' })
+      .text(VIEW.w / 2, 310, `Reached wave ${s.wave} with ${s.kills} kills\n${best}\nScrap +${s.scrap}  ·  banked ${s.bank}`, { align: 'center' })
       .setOrigin(0.5, 0)
       .setDepth(DEPTH.hud + 2);
     const body = (t: Phaser.GameObjects.Text, size: number, color = comic ? '#fff8e8' : th.text) =>
       this.font(t, size, color, comic ? { stroke: th.ink, sw: 5 } : { glow: color });
     body(info, 20);
     // The scrap shop: starting crates for the next run, each bought once, tapped again to refund.
-    const head = this.add.text(VIEW.w / 2, 440, comic ? 'SPEND SCRAP: START THE NEXT RUN WITH...' : 'NEXT RUN LOADOUT (SCRAP)', { resolution: 2 }).setOrigin(0.5).setDepth(DEPTH.hud + 2);
+    const head = this.add.text(VIEW.w / 2, 440, comic ? 'SPEND SCRAP: START THE NEXT RUN WITH...' : 'NEXT RUN LOADOUT (SCRAP)').setOrigin(0.5).setDepth(DEPTH.hud + 2);
     body(head, 14, comic ? '#ffe04a' : th.accent);
     const g = this.add.graphics().setDepth(DEPTH.hud + 2);
     const objs: Phaser.GameObjects.GameObject[] = [shade, title, info, head, g];
@@ -1391,14 +1397,14 @@ export class GameScene extends Phaser.Scene {
         g.fillStyle(num(col)).fillRect(x + 8, y + 10, 5, h - 20);
       }
       const ink = comic ? th.ink : afford ? th.text : th.muted;
-      const name = this.add.text(x + 30, y + 17, UPGRADES[kind].label.toUpperCase(), { resolution: 2 }).setOrigin(0, 0.5).setDepth(DEPTH.hud + 3);
+      const name = this.add.text(x + 30, y + 17, UPGRADES[kind].label.toUpperCase()).setOrigin(0, 0.5).setDepth(DEPTH.hud + 3);
       this.font(name, 14, ink, comic ? {} : { glow: ink });
-      const cost = this.add.text(x + 30, y + 38, bought ? (comic ? 'BOUGHT! TAP TO REFUND' : 'LOADED · TAP TO REFUND') : `${KIT_COSTS[kind]} SCRAP`, { resolution: 2 }).setOrigin(0, 0.5).setDepth(DEPTH.hud + 3);
+      const cost = this.add.text(x + 30, y + 38, bought ? (comic ? 'BOUGHT! TAP TO REFUND' : 'LOADED · TAP TO REFUND') : `${KIT_COSTS[kind]} SCRAP`).setOrigin(0, 0.5).setDepth(DEPTH.hud + 3);
       this.font(cost, 11, comic ? th.ink : afford ? th.accent : th.muted);
       objs.push(name, cost);
       this.shop.push({ kind, x, y, w, h });
     });
-    const again = this.add.text(VIEW.w / 2, 640, 'Tap anywhere else to try again', { resolution: 2 }).setOrigin(0.5).setDepth(DEPTH.hud + 2);
+    const again = this.add.text(VIEW.w / 2, 640, 'Tap anywhere else to try again').setOrigin(0.5).setDepth(DEPTH.hud + 2);
     body(again, 20);
     objs.push(again);
     this.overText = objs;
@@ -1427,7 +1433,7 @@ export class GameScene extends Phaser.Scene {
     this.banner.setAlpha(0);
     const th = this.theme(), comic = this.style === 'comic';
     const shade = this.add.rectangle(0, 0, VIEW.w, VIEW.h, comic ? 0x15121a : 0x000000, comic ? 0.5 : 0.55).setOrigin(0).setDepth(DEPTH.hud + 1);
-    const title = this.add.text(VIEW.w / 2, 300, comic ? 'SUPPLY DROP!\nPICK ONE' : 'SUPPLY DROP\nSELECT ONE', { resolution: 2, align: 'center' }).setOrigin(0.5).setDepth(DEPTH.hud + 2);
+    const title = this.add.text(VIEW.w / 2, 300, comic ? 'SUPPLY DROP!\nPICK ONE' : 'SUPPLY DROP\nSELECT ONE', { align: 'center' }).setOrigin(0.5).setDepth(DEPTH.hud + 2);
     if (comic) this.font(title, 34, '#ffe04a', { stroke: th.ink, sw: 8 });
     else this.font(title, 26, th.accent, { glow: th.accent });
     const g = this.add.graphics().setDepth(DEPTH.hud + 2);
@@ -1445,13 +1451,13 @@ export class GameScene extends Phaser.Scene {
         g.fillStyle(num('#020a05'), 0.85).fillRoundedRect(x, y, w, h, 4);
         g.lineStyle(1.5, num(th.accent)).strokeRoundedRect(x, y, w, h, 4);
       }
-      const key = this.add.text(x + w / 2, y + 15, `${i + 1}`, { resolution: 2 }).setOrigin(0.5).setDepth(DEPTH.hud + 3);
+      const key = this.add.text(x + w / 2, y + 15, `${i + 1}`).setOrigin(0.5).setDepth(DEPTH.hud + 3);
       this.font(key, 14, comic ? th.ink : th.accent, comic ? {} : { glow: th.accent });
       const icon = this.add.image(x + w / 2, y + 82, tex(this.style, `supply-${kind}`)).setDepth(DEPTH.hud + 3);
       icon.setScale((GEOM.supply.w / icon.frame.width) * 1.1);
-      const name = this.add.text(x + w / 2, y + 136, SUPPLIES[kind].label.toUpperCase(), { resolution: 2 }).setOrigin(0.5).setDepth(DEPTH.hud + 3);
+      const name = this.add.text(x + w / 2, y + 136, SUPPLIES[kind].label.toUpperCase()).setOrigin(0.5).setDepth(DEPTH.hud + 3);
       this.font(name, comic ? 17 : 15, comic ? th.ink : th.text, comic ? {} : { glow: th.text });
-      const detail = this.add.text(x + w / 2, y + 156, SUPPLIES[kind].detail, { resolution: 2, align: 'center' }).setOrigin(0.5, 0).setDepth(DEPTH.hud + 3);
+      const detail = this.add.text(x + w / 2, y + 156, SUPPLIES[kind].detail, { align: 'center' }).setOrigin(0.5, 0).setDepth(DEPTH.hud + 3);
       this.font(detail, 11, comic ? th.ink : th.muted);
       this.supplyUi.push(key, icon, name, detail);
       this.cards.push({ kind, x, y, w, h });

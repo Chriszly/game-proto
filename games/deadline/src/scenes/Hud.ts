@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { HUD_HEIGHT, VIEW, type Stats } from '../game/rules';
 import type { ArtStyle } from '../game/save';
-import { HI, num, tex } from '../art/paint';
+import { GEOM, num, tex } from '../art/paint';
 import { ACID_COLOR, CRATE_COLORS, THEMES, UPGRADE_COLORS, type Theme } from '../art/theme';
 
 // The HUD: the top bar (wave, best wave, kills, stats and the art style switch), the wave progress
@@ -65,7 +65,7 @@ export class Hud {
   constructor(scene: Phaser.Scene) {
     this.bar = scene.add.image(0, 0, '__DEFAULT').setOrigin(0).setDepth(HUD_DEPTH);
     this.g = scene.add.graphics().setDepth(HUD_DEPTH + 1);
-    const text = () => scene.add.text(0, 0, '', { resolution: 2 }).setDepth(HUD_DEPTH + 2);
+    const text = () => scene.add.text(0, 0, '').setDepth(HUD_DEPTH + 2);
     this.t = {
       wave: text(), kills: text(), best: text(), comic: text(), nv: text(),
       count: text(), note: text(), frenzy: text(), streak: text(), hint: text(),
@@ -89,7 +89,8 @@ export class Hud {
 
   setStyle(style: ArtStyle) {
     this.style = style;
-    this.bar.setTexture(tex(style, 'hudbar')).setScale(1 / HI);
+    this.bar.setTexture(tex(style, 'hudbar'));
+    this.bar.setScale(GEOM.hudbar.w / this.bar.frame.width);
     this.drawn = '';
   }
 
