@@ -173,8 +173,8 @@ export interface GameState {
   nextId: number;
   notice: string;
   noticeMs: number;
-  /** Time since the planner last thought; see planner.ts. */
-  aiClock: number;
+  /** Each side's planner clock (the player's runs only in watch mode). */
+  aiClock: number[];
   /** The raid under way, if any, and how many raids have been launched and repelled. */
   raid: Raid | null;
   raids: number;
@@ -222,7 +222,7 @@ export function createGame(faction: FactionId, aiFaction: FactionId, aiGatherMul
     nextId: 1000,
     notice: '',
     noticeMs: 0,
-    aiClock: 0,
+    aiClock: [0, 0],
     raid: null,
     raids: 0,
     repelled: 0,

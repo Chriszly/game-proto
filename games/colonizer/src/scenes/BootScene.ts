@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { watching } from '../../../../shared/watch';
 import { BUILDINGS, FACTION_IDS, RELICS, UNITS, type BuildingId, type FactionId, type RelicId } from '../game/data';
 import { bakeFigureSheet, FRAME, WOOL } from '../art/figures';
 import { bakeBuilding, bakeBush, bakeCache, bakeFogPattern, bakeMine, bakeNeedle, bakeRallyFlag, bakeRelic, bakeTree } from '../art/scenery';
@@ -66,7 +67,8 @@ export class BootScene extends Phaser.Scene {
     this.bake('card-faction-hot', bakeCard(280, 230, { fill: '#f3e2b0', lw: 1.4, hot: true }));
     this.bake('card-end', bakeCard(420, 170, { lw: 1.4 }));
     this.bake('backdrop', bakeBackdrop());
-    this.scene.start('Menu');
+    // Watch mode (`?watch`) goes straight to a match between two AIs.
+    this.scene.start(watching ? 'Game' : 'Menu');
   }
 
   private bake(key: string, cv: HTMLCanvasElement) {

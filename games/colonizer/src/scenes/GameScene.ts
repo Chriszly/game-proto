@@ -5,6 +5,7 @@ import {
   BUILD_MORE,
   BUILD_ORDER,
   BUILDINGS,
+  FACTION_IDS,
   FACTIONS,
   MAP_SIZE,
   RELICS,
@@ -21,6 +22,7 @@ import {
 } from '../game/data';
 import { generateMap, idx } from '../game/map';
 import {
+  AI,
   NEUTRAL,
   PLAYER,
   affordable,
@@ -53,6 +55,7 @@ import {
 } from '../game/sim';
 import { think } from '../game/planner';
 import { byDifficulty, settings } from '../../../../shared/settings';
+import { mountWatch, watching, watchSteps } from '../../../../shared/watch';
 import { FEET, FRAME, WOOL } from '../art/figures';
 import { BUILDING_TOP, CAMP_TOP, CHUNK, paintChunk, TREE_TOP } from '../art/scenery';
 import { hexNum, SERIF, T } from '../art/stitch';
@@ -152,6 +155,12 @@ export class GameScene extends Phaser.Scene {
   init(data: { faction?: FactionId; aiFaction?: FactionId }) {
     this.faction = data.faction ?? 'ember';
     this.aiFaction = data.aiFaction ?? 'tide';
+    if (watching) {
+      // Watch mode skips the menu: two different factions, picked at random, both played by the AI.
+      const i = Math.floor(Math.random() * FACTION_IDS.length);
+      this.faction = FACTION_IDS[i];
+      this.aiFaction = FACTION_IDS[(i + 1 + Math.floor(Math.random() * (FACTION_IDS.length - 1))) % FACTION_IDS.length];
+    }
     this.selected = new Set();
     this.groups = new Map();
     this.placing = null;
@@ -180,8 +189,11 @@ export class GameScene extends Phaser.Scene {
   create() {
     const map = generateMap();
     this.terrain = map.terrain;
-    // The difficulty sets how fast the AI gathers; Normal is the game as designed.
-    this.state = createGame(this.faction, this.aiFaction, byDifficulty(0.75, 1, 1.25), map);
+    // The difficulty sets how fast the AI gathers; Normal is the game as designed. Watching, both
+    // sides gather alike.
+    this.state = createGame(this.faction, this.aiFaction, watching ? 1 : byDifficulty(0.75, 1, 1.25), map);
+    const side = (f: FactionId) => ({ name: FACTIONS[f].name, color: WOOL[f].cloth });
+    mountWatch({ sides: { [PLAYER]: side(this.faction), [AI]: side(this.aiFaction) }, time: () => this.state.time });
     const town = [...this.state.buildings.values()].find((b) => b.owner === PLAYER && b.type === 'town')!;
     const world = MAP_SIZE * TILE;
     // The world camera scrolls; the top bar, panel and cards (scroll factor 0) get a fixed camera.
@@ -223,10 +235,14 @@ export class GameScene extends Phaser.Scene {
 
   update(_time: number, delta: number) {
     const dt = Math.min(delta, 250);
-    if (this.state.winner === null) {
+    // Watching, the sim runs once per step of the chosen speed (none while paused), the AI plays both
+    // sides and the whole map is in sight.
+    for (let i = watchSteps(); i > 0 && this.state.winner === null; i--) {
       tick(this.state, dt);
       think(this.state, dt);
+      if (watching) think(this.state, dt, PLAYER);
     }
+    if (watching) this.state.sight.fill(2);
     this.scroll(dt);
     this.paintGround();
     this.syncSprites();
@@ -551,7 +567,7 @@ export class GameScene extends Phaser.Scene {
 
   private onPointerDown(pointer: Phaser.Input.Pointer) {
     const p = Object.assign(viewPoint(pointer), { rightButtonDown: () => pointer.rightButtonDown(), event: pointer.event });
-    if (this.endPanel) return void this.scene.start('Menu');
+    if (this.endPanel) return void this.scene.start(watching ? 'Game' : 'Menu');
     if (this.mini.contains(p.x, p.y)) {
       const t = this.mini.toTile(p.x, p.y);
       this.cameras.main.centerOn(t.x * TILE, t.y * TILE + (540 - PANEL_Y - TOP_H) / 2);
@@ -563,6 +579,8 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     if (p.y < TOP_H || p.y >= PANEL_Y || this.deeds.contains(p.x, p.y) || this.status.contains(p.x, p.y)) return;
+    // Watching, a click only selects, to see what a unit is doing; the AI gives every order.
+    if (watching && p.rightButtonDown()) return;
     const w = this.toWorld(p.x, p.y);
     const tx = w.x;
     const ty = w.y;
@@ -761,7 +779,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private onKey(e: KeyboardEvent) {
-    if (this.endPanel) return;
+    if (this.endPanel || watching) return;
     const digit = /^[1-9]$/.test(e.key) ? Number(e.key) : null;
     if (digit !== null) {
       if (e.ctrlKey) this.groups.set(digit, [...this.selected]);
@@ -910,6 +928,8 @@ export class GameScene extends Phaser.Scene {
     for (const o of this.buttonObjects) o.destroy();
     this.buttonObjects = [];
     this.hud = [];
+    // Watching, the AI picks the boon and gives every order, so the panel shows no buttons.
+    if (watching) return;
     if (this.state.players[PLAYER].boonPending) return this.renderBoon();
     this.actions()
       .slice(0, BUTTONS.cols * BUTTONS.rows)
@@ -1083,6 +1103,7 @@ export class GameScene extends Phaser.Scene {
   // ----------------------------------------------------------- end of the match
 
   private showEnd() {
+    if (watching) return this.showWatchEnd();
     const won = this.state.winner === PLAYER;
     const bg = this.add.rectangle(480, 270, 960, 540, hexNum(T.linen), 0.72).setScrollFactor(0);
     const card = this.add.image(480, 270, 'card-end').setScrollFactor(0);
@@ -1092,6 +1113,19 @@ export class GameScene extends Phaser.Scene {
     const sub = this.add.text(480, 312, 'Click to choose another faction', text(14, T.faded)).setOrigin(0.5).setScrollFactor(0);
     this.endPanel = this.add.container(0, 0, [bg, card, title, why, sub]).setScrollFactor(0).setDepth(11000);
   }
+  /** The end of a watched match: which faction won and how, and a click starts another. */
+  private showWatchEnd() {
+    const winner = this.state.winner === PLAYER ? this.faction : this.aiFaction;
+    const loser = this.state.winner === PLAYER ? this.aiFaction : this.faction;
+    const bg = this.add.rectangle(480, 270, 960, 540, hexNum(T.linen), 0.72).setScrollFactor(0);
+    const card = this.add.image(480, 270, 'card-end').setScrollFactor(0);
+    const title = this.add.text(480, 245, `${FACTIONS[winner].name.toUpperCase()} WINS`, { ...text(34, WOOL[winner].cloth, true) }).setOrigin(0.5).setScrollFactor(0);
+    const how = this.state.winBy === 'monument' ? 'Its Monument stood for three minutes' : `The ${FACTIONS[loser].name} Town Center has fallen`;
+    const why = this.add.text(480, 284, how, { ...text(15, T.ink), fontStyle: 'italic' }).setOrigin(0.5).setScrollFactor(0);
+    const sub = this.add.text(480, 312, 'Click to watch another match', text(14, T.faded)).setOrigin(0.5).setScrollFactor(0);
+    this.endPanel = this.add.container(0, 0, [bg, card, title, why, sub]).setScrollFactor(0).setDepth(11000);
+  }
+
 }
 
 /** A button label is its name and then its cost, such as 'Archery Range 170w'. */

@@ -74,6 +74,12 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   middle across its front in Age II (`buildWall`), sends an army of 8 or more to take the nearest
   relic it doesn't hold between raids, builds a Monument in Age III, and attacks a standing player
   Monument with everything at once.
+- Watch AI (`?watch`, `shared/watch.ts`): Boot skips the menu and starts `Game` with two random
+  different factions; the planner plays both sides (`think(state, dt, PLAYER)` as well), both gather
+  at the Normal rate, the whole map stays in sight (`sight.fill(2)` each frame), the sim runs
+  `watchSteps()` times a frame, the panel shows no buttons, right clicks and hotkeys do nothing, and
+  the end screen names the winning faction and starts another match on a click. The planner reports
+  what it builds, trains and researches, its attacks, relic runs and boon to `aiLog`.
 - Not implemented yet: saves and sound.
 
 ## Architecture
@@ -101,10 +107,11 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   `monumentLeft` reads a Monument's count, `deedCount` and `deedsDone` read
   the deeds, `findPath` is a breadth-first search on the tile grid, `updateSight` computes the
   player's sight, and `entityAt` finds what is under a point.
-- `src/game/planner.ts`: `think(state, dt)` runs the AI every 4 s of game time (`THINK_MS`). It issues
+- `src/game/planner.ts`: `think(state, dt, side = AI)` runs the AI for a side every 4 s of game time (`THINK_MS`). It issues
   the same commands a player would, through the sim's functions, and at most `ACTIONS_PER_THINK`
   (2) of them each time, about 30 a minute, so it can't out-click a player. Each command goes
-  through `act`, which spends the budget only when the command did something.
+  through `act`, which spends the budget only when the command did something. It plays `ME`
+  against `FOE`, which `think` sets from `side`; each side keeps its own clock in `state.aiClock`.
 - `src/art/stitch.ts`: the embroidery kit: wool palette `T`, `SERIF` font stack, a private seeded
   generator (`reseed`, `rnd`), `linen`, `sew` (laid-and-couched fill), `outline` (stem stitch),
   `thread`, `knot`, `stext`, `bar` and `band` (border pieces), `card`, `canvas`.
