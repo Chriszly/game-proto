@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { fit } from '../art/glass';
 import { buttonTexture, type ButtonState, type ButtonStyle } from '../art/ui';
 import { FONT } from '../scenes/layout';
 
@@ -23,7 +24,7 @@ export class Button {
     /** How far right of the centre the caption sits, to leave room for an emblem. */
     textX = 0,
   ) {
-    this.bg = scene.add.image(0, 0, buttonTexture(style, 'on'));
+    this.bg = fit(scene.add.image(0, 0, buttonTexture(style, 'on')));
     this.text = scene.add
       .text(textX, 0, caption, {
         fontFamily: FONT,
