@@ -5,9 +5,11 @@ the [game hub](../../README.md).
 
 You pick one of five champions and lead a team of five down three lanes. Four allies walk the lanes
 with you, and five NPC champions on the red team fight you. Farm minions for gold, level up on XP,
-buy items at your Nexus, and push the lanes until the red Nexus falls. There is no multiplayer.
+build items from parts at your Nexus, fight over the guardian beast, ambush from the tall grass, and
+push the lanes through the towers and an inhibitor until the red Nexus falls. There is no multiplayer.
 
-Everything is low-poly 3D: the champions, minions, the jungle boar, the towers and the Nexus are small
+Everything is low-poly 3D: the champions, minions, the jungle boar, the guardian beast, the towers,
+the inhibitors and the Nexus are small
 faceted models built in code and rendered by a tiny software renderer at start-up into sprites from
 eight directions, with a walk cycle, attack poses and a cast pose. The map has faceted grass, flagstone
 lanes with stone kerbs and pines, lit from the top left, under bevelled slate panels.
@@ -22,6 +24,7 @@ lanes with stone kerbs and pines, lit from the top left, under bevelled slate pa
 | Click the ground | Walk there |
 | Click an enemy | Walk to it and attack it until it dies or you stop it by clicking the ground |
 | Q, W, E, R, or click their boxes | Cast the ability at the cursor |
+| D, H, or click their buttons | Use an item's active: D dashes toward the cursor (Phase Boots), H drinks the Healing Flask |
 | 1 or 2, or click an upgrade card | Keep one of the two upgrades a new level offers |
 | B, or Shop | Open or close the shop; buy an item by clicking it |
 | Esc | Close the shop |
@@ -38,8 +41,22 @@ lanes with stone kerbs and pines, lit from the top left, under bevelled slate pa
    counter. From x4 on, a last hit pays 25% more (24 gold). The streak breaks when a minion you had
    outlined falls to someone else.
 5. **Towers** shoot the nearest champion or minion in reach. Each side has two per lane.
+   Behind them, near each Nexus, stands one **inhibitor** per lane. It is warded (a ring round it
+   and a grey health bar) until both of its lane's towers are down. When it falls, the other team's
+   minions on that lane come out as **super minions**: bigger, gold-ringed, with 60% more health and
+   damage. The Nexus itself is warded until one of its inhibitors has fallen.
 6. **Jungle camps**: four neutral camps, two a side. Attack one to take its 80 gold and 120 XP; it
    fights back and returns after a minute.
+   **The guardian beast** wakes in its pit between the middle and bottom lanes at 1:30, and again
+   2:30 after it falls. It has 3200 health, claws whoever hurt it last (and anyone beside them),
+   hurls rocks at those out of reach, and heals when left alone. The team that slays it gets
+   **empowered minions** for 90 seconds (they hit 50% harder and take 35% less damage; they glow
+   violet, and a chip at the top right shows the time left); the slayer takes 150 gold and 250 XP.
+   Two AI champions from each side go to fight over it while it is awake.
+   **Tall grass**: eight bushes beside the lanes. A champion inside one can't be seen or targeted by
+   enemies unless one of them stands in the same bush or right next to it; your own champion shows
+   through the grass. Attacking or casting shows the champion for 1.5 seconds. A target that slips
+   into a bush is lost.
 7. **Champions** level from 1 to 5 on XP. R unlocks at level 3. Each level adds health and damage.
 8. **Upgrades**: each new level puts two upgrade cards in the bottom bar and marks the ability box
    they change with a gold diamond. Keep one; it changes that ability for the rest of the match (gold
@@ -48,25 +65,50 @@ lanes with stone kerbs and pines, lit from the top left, under bevelled slate pa
    gold marker floats over its target and a star marks it on the minimap. They come in turn: topple
    the nearest red tower (2:30, 200 gold and the siege banner, +25% damage to towers and the Nexus
    for a minute), clear the jungle camp nearest you (1:30, 120 gold), defeat the red champion nearest
-   you (2:00, 150 gold). The goal counts however its target falls; a late one is missed. The next
-   goal comes 4 seconds after one ends.
-10. **Items**: eight of them, each bought once within reach of your Nexus.
+   you (2:00, 150 gold), slay the guardian beast (2:00, 250 gold; only when your team slays it).
+   A goal counts however its target falls; a late one is missed, and one with nothing to aim at
+   (the beast asleep) is skipped. The next goal comes 4 seconds after one ends.
+10. **Items**: twelve of them, bought within reach of your Nexus, at most six in your bag (the slots
+    under your health bar). Cheap parts build into bigger items: buying a big item uses up the parts
+    you own and takes their cost off its price (the shop shows the saving).
 
-   | Item | Cost | Stats |
-   | --- | --- | --- |
-   | Long Sword | 350 | +12 damage |
-   | Brutal Edge | 650 | +24 damage |
-   | Chain Mail | 350 | +6 armor, +90 health |
-   | Thornmail | 420 | +14 armor |
-   | Giant's Belt | 400 | +200 health |
-   | Swift Boots | 300 | +25 speed |
-   | Rapid Bow | 400 | +25% attack speed |
-   | Cloak of Haste | 350 | -15% ability cooldowns |
+   | Item | Cost | Stats | Builds from |
+   | --- | --- | --- | --- |
+   | Long Sword | 350 | +12 damage | |
+   | Dagger | 300 | +15% attack speed | |
+   | Cloth Armor | 300 | +6 armor | |
+   | Ruby Crystal | 300 | +100 health | |
+   | Swift Boots | 300 | +25 speed | |
+   | Sapphire | 300 | -8% ability cooldowns | |
+   | Healing Flask | 150 | Active (H): heal 220, every 40s | |
+   | Brutal Edge | 950 | +30 damage, +20% attack speed | Long Sword + Dagger |
+   | Thornmail | 900 | +16 armor, +180 health | Cloth Armor + Ruby Crystal |
+   | Phase Boots | 600 | +40 speed; active (D): dash 220 px, every 18s | Swift Boots |
+   | Sage's Cloak | 900 | -20% ability cooldowns, +120 health | Sapphire + Ruby Crystal |
+   | Giant's Belt | 700 | +320 health | Ruby Crystal |
 11. **Dying** sends the champion back to its Nexus after a short wait that grows with its level.
 12. **Winning** destroys the red Nexus. Losing means your Nexus falls first.
 
-The bars under the map show the Nexuses' health and your champion's health, experience and
-cooldowns. The minimap in the corner shows every tower, Nexus and champion.
+The bars under the map show the Nexuses' health and your champion's health, experience, items and
+cooldowns, with the D and H buttons under the shop button. Short notices under the top bar say
+when the beast wakes or falls, an inhibitor falls or a champion roams to another lane. The minimap
+in the corner shows every tower, inhibitor, Nexus, bush, the beast and the champions you can see.
+
+### The AI
+
+The AI champions take an upgrade at each level (the one they rate higher: stuns and damage first).
+Every 70 seconds from 1:40, each team sends one healthy champion from another lane to gang up on
+the weakest enemy champion it can see. A champion that is low on health with an enemy champion
+near, or outnumbered by two, falls back to its nearest tower behind it, and its allies near by fall
+back with it (all of them when outnumbered, the hurt ones otherwise).
+
+![The guardian beast in its pit hurls a rock while the Warden and the Mage come to fight it](docs/screenshots/upgrade-beast.png)
+
+![The Warden waits in the tall grass by the middle lane, half see-through: the red Mage walking past can't see him](docs/screenshots/upgrade-bush.png)
+
+![Red's mid inhibitor falls to rubble with a notice; the red Nexus loses its ward while the top inhibitor keeps its ring. The bag shows four items and the Dash button counts down](docs/screenshots/upgrade-inhibitor.png)
+
+![Blue super minions march the middle lane after red's mid inhibitor fell, bigger and ringed in gold](docs/screenshots/upgrade-super-minions.png)
 
 ![The first objective: a card names the red mid tower, a marker floats over it and a star marks it on the minimap](docs/screenshots/loop-objective.png)
 
@@ -74,7 +116,7 @@ cooldowns. The minimap in the corner shows every tower, Nexus and champion.
 
 ![Level 2 offers Wide Slam or Stun Slam in the bottom bar; the Q box carries the gold diamond](docs/screenshots/playthrough-4-upgrade.png)
 
-![Buying a Long Sword from the shop](docs/screenshots/playthrough-2-shop.png)
+![The shop: twelve items in four columns, the parts first, with what each builds into or from](docs/screenshots/playthrough-2-shop.png)
 
 ![Both teams' champions in one brawl: Warden, Blade, Archer, Mage and Priest in blue and red](docs/screenshots/fight-art.png)
 
@@ -98,8 +140,7 @@ cooldowns. The minimap in the corner shows every tower, Nexus and champion.
 | Mage | Big Fireball (Q damage +30%) or Swift Fireball (Q cooldown -25%) | Deep Freeze (W stuns 0.6s) or Far Blink (E range +30%) | Huge Meteor (R radius +30%) or Wide Nova (W radius +30%) | Long Fireball (Q range +30%) or Heavy Meteor (R damage +25%) |
 | Priest | Deep Mend (W heals +30%) or Wide Mend (W radius +30%) | Holy Smite (Q damage +30%) or Strong Ward (E shield +40%) | Wide Sanctuary (R radius +25%) or Quick Ward (E cooldown -25%) | Binding Smite (Q stuns 0.5s) or Quick Mend (W cooldown -25%) |
 
-A stunned champion or minion neither moves nor attacks. Only your champion picks upgrades; the AI
-champions play their abilities as designed.
+A stunned champion or minion neither moves nor attacks. AI champions take upgrades too (see The AI).
 
 ### Difficulty
 
@@ -118,7 +159,8 @@ marks, last-hits a gold-outlined minion and, at level 2, keeps Wide Slam.
 - `src/main.ts`: creates the game and applies the hub's settings.
 - `src/scenes/GameScene.ts`: the pick screen, the match view, the HUD and input; `layout.ts` holds
   where everything sits on screen.
-- `src/game/`: the rules, free of Phaser: `data.ts` (map, champions, items, objectives, upgrades),
+- `src/game/`: the rules, free of Phaser: `data.ts` (map, champions, items, objectives, upgrades,
+  the beast, inhibitors, bushes and AI plans),
   `state.ts` (types and a new match) and `sim.ts` (the rules and the AI).
 - `src/art/`: `lowpoly.ts` (the software renderer), `models.ts` (every low-poly model), `bake.ts`
   (renders the models into sprite sheets at start-up) and `map.ts` (paints the map).
