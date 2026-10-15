@@ -67,6 +67,8 @@ import {
   isMarketDay,
   nudgeReputation,
   orderable,
+  researched,
+  RESEARCH_ORDER,
   type BeltId,
   type CraftingId,
   type BeltItem,
@@ -355,8 +357,8 @@ function brew(state: GameState, cauldron: Cauldron, brewing: Brew | null, ms: nu
 }
 
 /**
- * Starts the recipe the shop is shortest of among those the cauldron has the ingredients and room
- * for, so the potion customers are waiting for gets brewed first. Ties go in recipe order. Takes the
+ * Starts the recipe the shop is shortest of among those the apothecary has learned and the cauldron
+ * has the ingredients and room for, so the potion customers are waiting for gets brewed first. Ties go in recipe order. Takes the
  * ingredients out of the cauldron and returns the brew started, if any, for a pipe to work.
  */
 function startBrew(state: GameState, cauldron: Cauldron, first: PotionId | null = null): Brew | null {
@@ -364,7 +366,7 @@ function startBrew(state: GameState, cauldron: Cauldron, first: PotionId | null 
   // The priority potion goes first whenever its ingredients are in; the rest by need.
   const byNeed = [...RECIPES].sort((a, b) => Number(b.out === first) - Number(a.out === first) || need.get(b.out)! - need.get(a.out)!);
   for (const recipe of byNeed) {
-    if (!palletHasRoom(cauldron.output, recipe.out)) continue;
+    if (!researched(state, recipe.out) || !palletHasRoom(cauldron.output, recipe.out)) continue;
     const left = without(cauldron.contents, recipe.inputs);
     if (left) {
       cauldron.contents = left;
@@ -626,7 +628,10 @@ function payLevel(state: GameState, upgrade: Upgrade, max: number, cost: number,
 export function payUpgrade(state: GameState, id: UpgradeId): Feedback | null {
   if (!unlocked(state, `level-${id}`)) return null;
   const upgrade = state.upgrades[id];
-  return payLevel(state, upgrade, UPGRADES[id].max, upgradeCost(id, upgrade.level), () => `${UPGRADES[id].name} level ${upgrade.level + 1}!`);
+  // A study level teaches a recipe; levels count from 0, so the one just learned is at level - 1.
+  const done = () =>
+    id === 'research' ? `Learned ${ITEMS[RESEARCH_ORDER[upgrade.level - 1]].name}!` : `${UPGRADES[id].name} level ${upgrade.level + 1}!`;
+  return payLevel(state, upgrade, UPGRADES[id].max, upgradeCost(id, upgrade.level), done);
 }
 
 /**
@@ -634,7 +639,9 @@ export function payUpgrade(state: GameState, id: UpgradeId): Feedback | null {
  * each plant or potion it makes in turn, and back to none.
  */
 export function cyclePriority(state: GameState, id: CraftingId): Feedback {
-  const choices: (PlantId | PotionId | null)[] = [null, ...(id === 'refiner' || id === 'refiner2' ? PLANTS : POTIONS)];
+  // A cauldron can put first only the potions the apothecary has learned.
+  const potions = POTIONS.filter((p) => researched(state, p));
+  const choices: (PlantId | PotionId | null)[] = [null, ...(id === 'refiner' || id === 'refiner2' ? PLANTS : potions)];
   const next = choices[(choices.indexOf(state.priority[id]) + 1) % choices.length];
   (state.priority as Record<CraftingId, PlantId | PotionId | null>)[id] = next;
   return [next ? `${ITEMS[next].name} first` : 'Any order'];
@@ -663,12 +670,12 @@ function payToward(state: GameState, build: Build, cost: number, done: string): 
 }
 
 const BELT_NAMES: Record<BeltId, string> = {
-  garden: 'Garden belt',
-  refiner: 'Table belt',
-  cauldron: 'Cauldron belt',
-  garden2: 'Garden belt',
-  refiner2: 'Table belt',
-  cauldron2: 'Cauldron belt',
+  garden: 'Garden pixies',
+  refiner: 'Table pixies',
+  cauldron: 'Cauldron pixies',
+  garden2: 'Garden pixies',
+  refiner2: 'Table pixies',
+  cauldron2: 'Cauldron pixies',
 };
 
 /** Each belt's twin on the other line, which takes the same kind of goods by hand until it is built. */
@@ -699,7 +706,7 @@ export const doneByHand = (state: GameState, id: BeltId) =>
 export function payBelt(state: GameState, id: BeltId): Feedback | null {
   if (!beltBuildable(state, id) || !unlocked(state, `belt-${id}`)) return null;
   const belt = state.belts[id];
-  const feedback = payToward(state, belt, BELT_COST[id], `${BELT_NAMES[id]} built!`);
+  const feedback = payToward(state, belt, BELT_COST[id], `${BELT_NAMES[id]} hired!`);
   if (!feedback || !belt.built) return feedback;
   if (doneByHand(state, OTHER_LINE[id])) return feedback;
   const carried = (item: ItemId) => BELT_LANES[id].includes(item);
@@ -709,7 +716,7 @@ export function payBelt(state: GameState, id: BeltId): Feedback | null {
     const ahead = loaded.slice(0, i).filter((other) => other === item).length;
     belt.items.push({ id: item, at: beltStart(id, item) - ahead * BELT_GAP_MS });
   });
-  return loaded.length > 0 ? [...feedback, `${loaded.length} onto the belt`] : feedback;
+  return loaded.length > 0 ? [...feedback, `${loaded.length} to the pixies`] : feedback;
 }
 
 /** Drops everything the doctor carries; the goods are gone. */

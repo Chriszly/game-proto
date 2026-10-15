@@ -3,7 +3,7 @@ import { itemTexture } from '../art/items';
 import { INK, SERIF, fit } from '../art/paint';
 import { cardTexture } from '../art/ui';
 import { ITEMS, PLANTS, RECIPES, REFINE, type ItemId } from '../game/items';
-import { potionPrice, type GameState } from '../game/state';
+import { potionPrice, researched, type GameState } from '../game/state';
 import { viewSize } from '../../../../shared/scaling';
 
 const ROW = 30;
@@ -18,7 +18,7 @@ const TEXT = { fontFamily: SERIF, fontSize: '13px', color: INK };
  */
 export class RecipeBook {
   private panel: Phaser.GameObjects.Container;
-  private prices: { text: Phaser.GameObjects.Text; potion: (typeof RECIPES)[number]['out'] }[] = [];
+  private prices: { text: Phaser.GameObjects.Text; potion: (typeof RECIPES)[number]['out']; row: Phaser.GameObjects.GameObject[] }[] = [];
   /** One line per recipe, such as `Wheat Flour + Wheat Flour = Healing Draught`, read by the playthrough test. */
   readonly lines: string[] = [];
 
@@ -34,6 +34,7 @@ export class RecipeBook {
     // Ingredient icons joined with "+", an "=", then the product's icon and name.
     const row = (inputs: ItemId[], out: ItemId) => {
       const cy = y + ROW / 2;
+      const from = parts.length;
       let x = -WIDTH / 2 + 24;
       inputs.forEach((item, i) => {
         if (i > 0) {
@@ -48,7 +49,7 @@ export class RecipeBook {
       parts.push(scene.add.text(x + 40, cy, ITEMS[out].name, TEXT).setOrigin(0, 0.5));
       this.lines.push(`${inputs.map((i) => ITEMS[i].name).join(' + ')} = ${ITEMS[out].name}`);
       y += ROW;
-      return cy;
+      return { cy, row: parts.slice(from) };
     };
 
     heading('Refining table');
@@ -56,10 +57,10 @@ export class RecipeBook {
     y += 8;
     heading('Cauldron');
     for (const recipe of RECIPES) {
-      const cy = row(recipe.inputs, recipe.out);
+      const { cy, row: shown } = row(recipe.inputs, recipe.out);
       const text = scene.add.text(WIDTH / 2 - 20, cy, '', { ...TEXT, fontStyle: 'bold', color: '#7a4a10' }).setOrigin(1, 0.5);
       parts.push(text);
-      this.prices.push({ text, potion: recipe.out });
+      this.prices.push({ text, potion: recipe.out, row: shown });
     }
     y += 6;
     parts.push(scene.add.text(0, y, 'Tap to close', { ...TEXT, fontSize: '12px', fontStyle: 'italic', color: '#6a5440' }).setOrigin(0.5, 0));
@@ -87,9 +88,14 @@ export class RecipeBook {
     this.panel.setVisible(open);
   }
 
-  /** Shows what each potion sells for now, with the guild's price upgrade. */
+  /** Shows what each potion sells for now, with the guild's price upgrade, or that it is still to be learned. */
   update(state: GameState) {
     if (!this.panel.visible) return;
-    for (const { text, potion } of this.prices) text.setText(`${potionPrice(state, potion)}c`);
+    // A recipe still to learn is faded, with the study in place of its price.
+    for (const { text, potion, row } of this.prices) {
+      const known = researched(state, potion);
+      text.setText(known ? `${potionPrice(state, potion)}c` : 'Study').setAlpha(known ? 1 : 0.6);
+      for (const part of row) (part as Phaser.GameObjects.Image).setAlpha(known ? 1 : 0.4);
+    }
   }
 }

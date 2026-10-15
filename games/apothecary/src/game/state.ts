@@ -168,7 +168,7 @@ export interface Upgrade {
  * sickle (harvest from further away); and at the guild, the gardens' growth, the belts' speed, the
  * shop's prices, an extra order slot and how often customers come in.
  */
-export type UpgradeId = StationId | 'pack' | 'boots' | 'sickle' | 'growth' | 'belts' | 'prices' | 'slots' | 'customers';
+export type UpgradeId = StationId | 'pack' | 'boots' | 'sickle' | 'growth' | 'belts' | 'prices' | 'slots' | 'customers' | 'research';
 export const DOCTOR_UPGRADES = ['pack', 'boots', 'sickle'] as const;
 export const GUILD_UPGRADES = ['growth', 'belts', 'prices', 'slots', 'customers'] as const;
 
@@ -183,10 +183,12 @@ export const UPGRADES: Record<UpgradeId, { max: number; cost: number; name: stri
   boots: { max: 2, cost: 25, name: 'Boots' },
   sickle: { max: 2, cost: 25, name: 'Sickle' },
   growth: { max: 2, cost: 20, name: 'Growth' },
-  belts: { max: 2, cost: 30, name: 'Belts' },
+  belts: { max: 2, cost: 30, name: 'Pixies' },
   prices: { max: 2, cost: 20, name: 'Prices' },
   slots: { max: 1, cost: 30, name: 'Slots' },
   customers: { max: 2, cost: 25, name: 'Customers' },
+  // Each level learns the next recipe in RESEARCH_ORDER.
+  research: { max: 4, cost: 30, name: 'Study' },
 };
 export const UPGRADE_IDS = Object.keys(UPGRADES) as UpgradeId[];
 /** Coins needed to take an upgrade from `level` to the next: stations 20, 40, 80, 160. */
@@ -278,8 +280,21 @@ export const gardenBuilt = (state: GameState, garden: number) =>
 export const shadeGrown = (state: GameState) => state.shade.some((s) => s.built);
 /** Coins to plant each shade garden: the first line's, then the second's, which needs the expansion's land. */
 export const SHADE_COST = [80, 60];
-/** The potions customers ask for: the Shadow Elixir only once a shade garden grows nightshade. */
-export const orderable = (state: GameState) => POTIONS.filter((p) => p !== 'shadowElixir' || shadeGrown(state));
+/** The recipes the apothecary knows from the start; the others are learned at the study. */
+export const KNOWN_RECIPES: readonly PotionId[] = ['healingDraught', 'sleepingTonic'];
+/** The order the study teaches the other recipes in, one per level of its `research` upgrade. */
+export const RESEARCH_ORDER: readonly PotionId[] = ['vigourTonic', 'shadowElixir', 'moonlightSalve', 'witchsBrew'];
+/** Whether the apothecary can brew a potion: known from the start, or learned at the study. */
+export const researched = (state: GameState, potion: PotionId) =>
+  KNOWN_RECIPES.includes(potion) || RESEARCH_ORDER.indexOf(potion) < state.upgrades.research.level;
+/** The potions brewed with nightshade, which customers ask for only once a shade garden grows it. */
+const NEEDS_NIGHTSHADE: readonly PotionId[] = ['shadowElixir', 'moonlightSalve', 'witchsBrew'];
+/**
+ * The potions customers ask for: those the apothecary has learned, and the ones brewed with
+ * nightshade only once a shade garden grows it.
+ */
+export const orderable = (state: GameState) =>
+  POTIONS.filter((p) => researched(state, p) && (!NEEDS_NIGHTSHADE.includes(p) || shadeGrown(state)));
 /** Whether a refining table or cauldron stands: always on the first line, once built on the second. */
 export const stationBuilt = (state: GameState, id: StationId) =>
   id === 'refiner2' ? state.expansion.refiner.built : id === 'cauldron2' ? state.expansion.cauldron.built : true;
@@ -437,6 +452,7 @@ export const UNLOCKED_BY: Partial<Record<Unlock, Unlock>> = {
   'level-belts': 'guild',
   'level-customers': 'level-prices',
   'level-slots': 'level-customers',
+  'level-research': 'belt-garden',
 };
 
 /** The coins paid towards a thing so far, and whether at least its first level or build is done. */
