@@ -9,7 +9,7 @@ import { INK, SERIF, TEXT_HALO, fit, resOf } from '../art/paint';
 import { craftsmanTexture, customerTexture } from '../art/townsfolk';
 import { BUBBLE_TAIL, cardInset, cardTexture, signTexture, type CardKind } from '../art/ui';
 import { catchUp, type AwaySummary } from '../game/away';
-import { GROW_MS, PLANTS, POTIONS, REFINE, REFINED, isPlant, isPotion, isRefined, type ItemId } from '../game/items';
+import { FINE as FINE_OF, GROW_MS, PLANTS, POTIONS, REFINE, REFINED, isPlant, isRefined, isSellable, plainOf, type ItemId } from '../game/items';
 import {
   collectTill,
   doneByHand,
@@ -23,6 +23,7 @@ import {
   payExpansion,
   joinGuild,
   payUpgrade,
+  payShade,
   pickUpFromCauldron,
   pickUpFromRefiner,
   refining,
@@ -69,8 +70,15 @@ import {
   type UpgradeId,
   walkSpeed,
   DAY_MS,
+  RUSH_BONUS,
   tipLeft,
   tipNow,
+  FINE_SHARE,
+  SHADE_COST,
+  SHADE_GARDEN,
+  WEATHER,
+  isMarketDay,
+  weatherFor,
 } from '../game/state';
 import { BackStack } from '../ui/BackStack';
 import { IconRow } from '../ui/IconRow';
@@ -163,7 +171,9 @@ const CAPTION_PAY = '#5a2c80';
 const HUD_TEXT = { fontFamily: SERIF, fontSize: '17px', fontStyle: 'bold', color: INK };
 /** Where the contract card and the away chip sit on screen, below the top bar. */
 const CONTRACT_CARD = { x: 313, y: 50, w: 300, h: 44 };
-const AWAY_CHIP = { x: 650, y: 51, w: 290, h: 30 };
+/** The town card, right of the contract: the day's weather, the street's reputation and the market day. */
+const TOWN_CARD = { x: 626, y: 50, w: 316, h: 44 };
+const AWAY_CHIP = { x: 652, y: 102, w: 290, h: 30 };
 /** The order bubble over a waiting customer: its height, how far above the customer's middle its middle is, the spacing of its icons, and its tip ring's radius. */
 const BUBBLE = { h: 30, above: 58, icon: 15, ring: 6 };
 
@@ -276,6 +286,7 @@ export class GameScene extends Phaser.Scene {
     this.createShopfront();
     this.createHud();
     this.createContract();
+    this.createTown();
     this.createAwayChip();
     this.createUiCamera();
     this.createControls();
@@ -469,7 +480,8 @@ export class GameScene extends Phaser.Scene {
         () => {
           fit(this.add.image(x, y, 'plot').setDepth(-500));
           const plant = fit(this.add.image(x, y + 10, plantTexture(plot.plant, 2)).setOrigin(0.5, 1).setDepth(y));
-          const growth = new ProgressBar(this, x, y + 26, 44, 0x9ccf6a, WORLD_UI_DEPTH);
+          // Inside the bed's bottom edge, since the next row's bed starts right below it.
+          const growth = new ProgressBar(this, x, y + 14, 40, 0x9ccf6a, WORLD_UI_DEPTH);
           this.views.push(() => {
             const grown = plot.grown / GROW_MS[plot.plant];
             plant.setTexture(plantTexture(plot.plant, grown >= 1 ? 2 : grown >= 0.5 ? 1 : 0));
@@ -522,7 +534,8 @@ export class GameScene extends Phaser.Scene {
     // The boil flickers its flames and bubbles, so reduced motion holds it on the still frame.
     if (!hubSettings.reduceMotion) pot.play('cauldron-boil');
     this.addPallets(id, PALLETS[id], [REFINED, POTIONS], [() => cauldron.contents, () => cauldron.output]);
-    const brewing = new ProgressBar(this, at.x, at.y + 34, 60, 0x58a35a, WORLD_UI_DEPTH);
+    // The end of the bar is the fine window: picked up then, the potion comes out fine.
+    const brewing = new ProgressBar(this, at.x, at.y + 34, 60, 0x58a35a, WORLD_UI_DEPTH).setZone(1 - FINE_SHARE, 0xe8b830);
     this.addMarker(m.pickUp, 'pad-out', 'Pick up', () => pickUpFromCauldron(this.state, id), () => this.state.belts[beltOut].built);
     this.addMarker(m.drop, 'pad-in', 'Drop', () => dropInCauldron(this.state, id), () => this.state.belts[beltIn].built && !this.carries(isRefined));
     this.addWorkSpot(m.work, id);
@@ -709,6 +722,16 @@ export class GameScene extends Phaser.Scene {
     for (const { part, at, caption, cost, build } of parts) {
       this.addBuildMarker(at, caption, cost, build, () => expansion.land.built && !build.built, () => payExpansion(this.state, part));
     }
+    // The shade gardens, bought in the middle of where each will grow: the first line's once the
+    // garden belt is built, the second line's once the expansion's land is bought.
+    const { shade } = this.state;
+    ([0, 1] as const).forEach((line) => {
+      const area = GARDEN_AREAS[SHADE_GARDEN + line];
+      const shown = () => !shade[line].built && (line === 0 ? unlocked(this.state, 'shade') : expansion.land.built);
+      this.addBuildMarker({ x: area.x + area.w / 2, y: area.y + area.h / 2 + 10 }, 'Shade garden', SHADE_COST[line], shade[line], shown, () =>
+        payShade(this.state, line),
+      );
+    });
   }
 
   /**
@@ -785,26 +808,31 @@ export class GameScene extends Phaser.Scene {
 
   private createShopfront() {
     this.addObstacle(COUNTER.x, COUNTER.y, 'counter', 200, 30);
-    this.addPallets('counter', PALLETS.counter, [POTIONS, []], [() => this.state.counter.shelf, () => []]);
-    // Under each potion pallet, how much less the next one sells for while the shop is well stocked.
+    // Fine potions stand on their plain potion's pallet.
+    this.addPallets('counter', PALLETS.counter, [POTIONS, []], [() => this.state.counter.shelf.map(plainOf), () => []]);
+    // Beside each potion pallet, how many fine ones stand on it, and how much less the next one sells
+    // for while the shop is well stocked: on the outer side of the outer pallets and above the middle
+    // one, clear of the order bubbles below the counter.
     POTIONS.forEach((potion, i) => {
       const at = PALLETS.counter.in[i];
       if (!at) return;
-      const cut = this.add
-        // Beside its pallet on the outer side, clear of the order bubbles below the counter.
-        .text(at.x + (at.x < COUNTER.x ? -20 : 20), at.y - 6, '', { fontFamily: SERIF, fontSize: '11px', fontStyle: 'bold', color: '#8a3a10', stroke: TEXT_HALO, strokeThickness: 3 })
-        .setOrigin(at.x < COUNTER.x ? 1 : 0, 0.5)
+      const side = Math.sign(at.x - COUNTER.x);
+      const label = this.add
+        .text(at.x + side * 20, side === 0 ? at.y - 74 : at.y - 10, '', { fontFamily: SERIF, fontSize: '11px', fontStyle: 'bold', color: '#8a3a10', stroke: TEXT_HALO, strokeThickness: 3, align: 'center' })
+        .setOrigin(side < 0 ? 1 : side > 0 ? 0 : 0.5, side === 0 ? 1 : 0.5)
         .setDepth(WORLD_UI_DEPTH);
       this.views.push(() => {
-        const others = this.state.counter.shelf.filter((p) => p === potion).length - 1;
+        const { shelf } = this.state.counter;
+        const fines = shelf.filter((p) => p === FINE_OF[potion]).length;
+        const others = shelf.filter((p) => plainOf(p) === potion).length - 1;
         const off = Math.round(100 * (1 - stockFactor(Math.max(0, others))));
-        cut.setText(off > 0 ? `-${off}%` : '');
+        label.setText([fines > 0 ? `${fines} fine` : '', off > 0 ? `-${off}%` : ''].filter(Boolean).join('\n'));
       });
     });
     // Potions are stocked by hand until every cauldron standing has its belt to the counter, and
     // whenever the doctor carries one.
     const allBelted = () => !doneByHand(this.state, 'cauldron') && !doneByHand(this.state, 'cauldron2');
-    this.addMarker(COUNTER_MARKERS.drop, 'pad-in', 'Drop', () => stockShelf(this.state), () => allBelted() && !this.carries(isPotion));
+    this.addMarker(COUNTER_MARKERS.drop, 'pad-in', 'Drop', () => stockShelf(this.state), () => allBelted() && !this.carries(isSellable));
     this.addMarker(COUNTER_MARKERS.pickUp, 'pad-out', 'Coins', () => collectTill(this.state));
     this.addWorkSpot(COUNTER_MARKERS.work, 'counter');
     this.addUpgradeMarker(COUNTER_MARKERS.upgrade, 'counter');
@@ -845,7 +873,8 @@ export class GameScene extends Phaser.Scene {
       const waiting = new Set(this.state.orders.map((o) => o.id));
       this.state.orders.forEach((order, i) => {
         if (!customers.has(order.id)) {
-          const sprite = fit(this.add.image(STREET.x, STREET.y, customerTexture(order.id)));
+          // A regular comes back looking as they did.
+          const sprite = fit(this.add.image(STREET.x, STREET.y, customerTexture(order.face ?? order.id)));
           customers.set(order.id, sprite);
         }
         const sprite = customers.get(order.id)!;
@@ -882,6 +911,8 @@ export class GameScene extends Phaser.Scene {
     const patience = new ProgressBar(this, x, cy + 5, 10, 0xd9a032, depth + 0.02);
     const ring = this.add.graphics().setDepth(depth + 0.03);
     const coin = fit(this.add.image(x, top + 1, 'coin'), 0.8).setDepth(depth + 0.04).setVisible(false);
+    // A gold star on a regular's bubble, on its top left corner.
+    const regular = fit(this.add.image(x, top + 1, 'regular')).setDepth(depth + 0.04).setVisible(false);
     const tipText = this.add
       .text(x, top - 7, '', { fontFamily: SERIF, fontSize: '11px', fontStyle: 'bold', color: '#7a4a00', stroke: TEXT_HALO, strokeThickness: 3 })
       .setOrigin(0.5, 1)
@@ -896,6 +927,7 @@ export class GameScene extends Phaser.Scene {
       // The tip ring sits on the bubble's top right corner, like a badge.
       const ringX = x + bubbleWidth(Math.max(1, n)) / 2 - 2;
       coin.setVisible(there).setX(ringX);
+      regular.setVisible(there && !!order.regular).setX(x - bubbleWidth(Math.max(1, n)) / 2 + 2);
       tipText.setVisible(there);
       if (!there) {
         patience.set(null);
@@ -994,6 +1026,65 @@ export class GameScene extends Phaser.Scene {
         dial.strokePath();
       }
       dial.lineStyle(1.4, 0x2a1d14, 0.9).lineBetween(dx - 11, hy, dx + 11, hy);
+    });
+  }
+
+  /**
+   * The town card under the top bar, right of the contract: today's weather from the almanac and what
+   * it does, the street's reputation as a bar, and tomorrow's weather, or on a market day how its
+   * crowd is going. When a market day's rush pays its bonus or loses it, a note under the card says so.
+   */
+  private createTown() {
+    const { x, y, w, h } = TOWN_CARD;
+    const d = UI_DEPTH;
+    const first = this.children.list.length;
+    this.card(x + w / 2, y + h / 2, 'town', cardTexture(this, 'town', w, h)).setDepth(d);
+    const icon = fit(this.add.image(x + 19, y + h / 2, 'weather-mild')).setDepth(d + 0.1);
+    const title = this.add.text(x + 36, y + 13, '', { ...HUD_TEXT, fontSize: '13px' }).setOrigin(0, 0.5).setDepth(d + 0.1);
+    const label = this.add.text(x + 36, y + 31, 'Reputation', { ...HUD_TEXT, fontSize: '12px', fontStyle: 'normal' }).setOrigin(0, 0.5).setDepth(d + 0.1);
+    const barW = 70;
+    const reputation = new ProgressBar(this, label.x + label.width + 6 + barW / 2, y + 28, barW, 0x58a35a, d + 0.1);
+    const side = this.add.text(x + w - 10, y + 31, '', { ...HUD_TEXT, fontSize: '12px' }).setOrigin(1, 0.5).setDepth(d + 0.1);
+    const note = this.add
+      .text(x + w / 2, y + h + 12, '', { ...HUD_TEXT, fontSize: '13px', stroke: TEXT_HALO, strokeThickness: 4 })
+      .setOrigin(0.5)
+      .setDepth(d + 0.1)
+      .setAlpha(0);
+    for (const obj of this.children.list.slice(first)) (obj as unknown as Phaser.GameObjects.Components.ScrollFactor).setScrollFactor(0);
+    const say = (text: string, good: boolean) => {
+      note.setText(text).setColor(good ? '#2f6a1a' : '#8a3a10').setAlpha(1);
+      this.tweens.killTweensOf(note);
+      this.tweens.add({ targets: note, alpha: 0, delay: 2_500, duration: 800 });
+    };
+    // What the rush was when last drawn, so a change to it can be told.
+    let rushSeen = JSON.stringify(this.state.rush);
+    let drawn = '';
+    this.views.push(() => {
+      const { contract, rush } = this.state;
+      const day = contract.day;
+      const rushNow = JSON.stringify(rush);
+      if (rushNow !== rushSeen && rush) {
+        const before = rushSeen === 'null' ? null : (JSON.parse(rushSeen) as typeof rush);
+        const sameRush = before?.day === rush.day;
+        if (rush.paid && !(sameRush && before.paid)) say(`Market crowd served: +${RUSH_BONUS * rush.size} coins!`, true);
+        else if (rush.lost && rush.size > 0 && !(sameRush && before.lost)) say('A customer walked off: no market bonus', false);
+        else if (!sameRush) say(rush.size > 0 ? 'Market day: a crowd comes in!' : 'Market day: no room for the crowd', rush.size > 0);
+      }
+      rushSeen = rushNow;
+      const weather = WEATHER[weatherFor(day)];
+      let status: string;
+      if (!isMarketDay(day)) status = `Tomorrow: ${WEATHER[weatherFor(day + 1)].name}`;
+      else if (rush?.day !== day) status = 'Crowd at midday';
+      else if (rush.paid) status = 'Crowd served!';
+      else if (rush.lost) status = 'Crowd: bonus lost';
+      else status = `Crowd: ${rush.served}/${rush.size} served`;
+      reputation.set(this.state.reputation / 100);
+      const key = `${day}:${status}`;
+      if (key === drawn) return;
+      drawn = key;
+      icon.setTexture(`weather-${weatherFor(day)}`);
+      title.setText(`${isMarketDay(day) ? 'Market day' : `Day ${day}`}, ${weather.name.toLowerCase()}: ${weather.effect}`);
+      side.setText(status);
     });
   }
 

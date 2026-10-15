@@ -32,13 +32,19 @@ camera follows the doctor.
 | Drop all (top bar) | Throw away everything the doctor carries |
 | Stand on a floor marker | Green: drop off items. Blue: work the station. Gold: pick up products or coins. Purple: stand still on it to pay coins towards an upgrade or build; its caption shows the coins still to pay |
 
-1. **Gardens**: each garden grows one kind of plant. Harvest ripe wheat in the wheat field and
-   mandrake in the mandrake patch. Plots regrow on their own.
-2. **Refining table**: drop off plants; wheat becomes wheat flour, mandrake becomes mandrake seeds.
+1. **Gardens**: each garden grows one kind of plant in nine beds, three rows of three edge to
+   edge. Harvest ripe wheat in the wheat field and mandrake in the mandrake patch. Beds regrow on
+   their own: wheat in 24 seconds, mandrake in 42 and nightshade in 54.
+2. **Refining table**: drop off plants; wheat becomes wheat flour, mandrake becomes mandrake seeds
+   and nightshade becomes nightshade extract.
    Stand on the work spot while it refines; pick the finished goods up on the pick-up marker.
 3. **Cauldron**: drop in refined goods. Two wheat flour brew a Healing Draught, wheat flour and
-   mandrake seeds brew a Sleeping Tonic. Stand on the work spot while it brews. When work starts,
-   the cauldron brews whichever potion customers are waiting for that the shop has least of.
+   mandrake seeds brew a Sleeping Tonic, and nightshade extract and wheat flour brew a Shadow
+   Elixir. Stand on the work spot while it brews. When work starts, the cauldron brews whichever
+   potion customers are waiting for that the shop has least of. The last quarter of each brew is
+   its fine window, gold on the brewing bar: step off the work spot then (which stops the brew
+   where it is) and onto the pick-up marker, and the potion comes out **Fine**, worth half again
+   as much. Left to finish, it comes out plain onto its pallet, as craftsmen always do.
 4. **Storefront**: the storefront faces the street at the bottom of the map. Customers come in
    by the street door in the shop's bottom wall, walk up to the counter and show the potions they want and how long they will wait; they are only served, and
    only lose patience, once they stand at the counter. The doctor goes in and out by the back door
@@ -47,9 +53,42 @@ camera follows the doctor.
    on the counter and stand on the work spot behind it; customers pay for each potion as they get
    it and leave the coins on the pick-up marker. A well-stocked shop sells cheaper: a customer pays
    2.5% less for a potion for each other one of its kind still on the counter's pallets, down to
-   half price, and the cut for the next sale shows beside each pallet ("-30%").
+   half price, and the cut for the next sale shows beside each pallet ("-30%"). A fine potion
+   stands on its plain potion's pallet ("1 fine" beside it) and goes to the next customer who wants
+   that potion first.
 
 ![The recipes](docs/screenshots/playthrough-0-recipes.png)
+
+![A Shadow Elixir in its fine window, with a Fine one already in hand](docs/screenshots/fine-window.png)
+
+**The shade garden** grows nightshade, for the Shadow Elixir (24 coins), the first potion that
+mixes two lines of goods. It stands at the top of the market, on the left, and is planted on its
+purple marker (80 coins) once the garden belt is built; the second line's stands beside it, on the
+right, and is planted once the expansion's land is bought (60). Customers only ask for Shadow
+Elixirs once a shade garden grows. Its nightshade rides the garden belt on its own feeder, in a
+third lane, to the refining table's third pallet; every belt and station now has a lane and a
+pallet for each of the three kinds.
+
+![The shade garden planted, its nightshade riding the garden belt in a third lane](docs/screenshots/shade-garden.png)
+
+**Regulars and reputation**: a customer served with at least half of their tip left comes back
+another day as a regular, with a gold star on their order bubble, for the same potions as last
+time, and pays 3 coins more for each. The street keeps a reputation, the bar on the town card at
+the top right: it starts halfway, each filled order raises it by 3 and each customer who walks off
+unserved lowers it by 8. A good reputation brings customers more often, up to twice as often at
+the top; a bad one, up to a third less often.
+
+**Weather**: the town card shows today's weather from the almanac and tomorrow's. Rain makes plants
+grow half again as fast, a drought slows them to 60%, a fair day brings customers half again as
+often, and a mild day, like the first, changes nothing. A day ends at dusk or when its contract is
+kept, as before.
+
+**Market day**: every fourth day is a market day. At midday a crowd of up to five customers comes in
+at once, filling every place at the counter and two more. Serve every one of them and the purse
+gets 6 coins for each; if any walks off, the bonus is lost. The town card counts them, and a note
+under it says how it went.
+
+![Market day: a crowd at the counter, a regular with a gold star, and fine potions on the shelf](docs/screenshots/market-day.png)
 
 **Tips**: on top of the price, a customer whose order is filled leaves a tip: a coin, plus two
 for each potion they asked for (3 for one potion, 5 for two). The tip shrinks while they wait at
@@ -97,8 +136,8 @@ at once, and the second makes that twice as fast and also brings the coins from 
 ![Craftsmen at the stations](docs/screenshots/craftsmen-map.png)
 
 **Priority**: each refining table and cauldron has a small "First:" sign by its name. Tap it to
-choose what the station makes first whenever it can: wheat or mandrake at a table, a Healing
-Draught or a Sleeping Tonic at a cauldron, or "any" to leave it to the station (a table takes
+choose what the station makes first whenever it can: wheat, mandrake or nightshade at a table, a
+Healing Draught, a Sleeping Tonic or a Shadow Elixir at a cauldron, or "any" to leave it to the station (a table takes
 plants in the order they came, a cauldron brews what the customers are shortest of). Tapping the
 sign doesn't walk the doctor. A station with nothing for its priority makes something else rather
 than wait.
@@ -108,8 +147,8 @@ than wait.
 **What's for sale** opens up as you buy things. At first only one purple marker shows, and each
 purchase puts the next one out, in this order: refining table level 2, pack 2, cauldron level 2, a
 craftsman at the counter, then the garden belt. From the garden belt on it branches out: boots,
-sickle, the counter's upgrade, craftsmen at the table and cauldron, the table's belt, and entry to
-the guild (50 coins), which puts the guild's growth, belts and prices upgrades up for sale. The
+sickle, the counter's upgrade, craftsmen at the table and cauldron, the table's belt, the shade
+garden, and entry to the guild (50 coins), which puts the guild's growth, belts and prices upgrades up for sale. The
 cauldron's belt follows the table's, the land follows the cauldron's belt, customers follows
 prices and the extra slot follows customers. The second line's things are for sale once their
 station stands.
@@ -146,14 +185,14 @@ everyone at the top level; it takes the second line, more craftsmen or station u
 markers, a handful of coins at a time: gardens to refining table (60 coins), table to cauldron (100)
 and cauldron to counter (150). A belt picks ripe plants up from the gardens, or finished goods
 from a station's out pallets, and runs to the next station's in pallets, where each lane ends at
-its own kind's pallet; it hands goods over when that pallet has room. Mandrakes get on the garden
-belt at their own patch. The drop and pick-up markers it replaces go away,
+its own kind's pallet; it hands goods over when that pallet has room. Mandrakes and nightshade get
+on the garden belt at their own garden. The drop and pick-up markers it replaces go away,
 though a drop marker comes back while the doctor carries goods it takes, such as goods from the
 other line. The goods it carries go from the doctor's hands onto it when it is built, one after
 another, unless the other line still moves them by hand. Each belt has a
-narrow lane for every kind of goods it carries (wheat and mandrake, flour and seeds, or the two
-potions), so when one kind waits for room at the next station the other keeps moving. The lanes
-run at half speed, so a belt carries as many goods a second as a one-lane belt would.
+narrow lane for every kind of goods it carries (the three plants, the three refined goods, or the
+three potions), so when one kind waits for room at the next station the others keep moving. Each
+lane runs at half the belt's speed.
 
 ![The garden belt just built: what the doctor carried gets on it, and a mandrake rides in from its patch](docs/screenshots/garden-belt-loading.png)
 
@@ -165,8 +204,8 @@ The belts are steampunk machinery, brass rails over leather slats, in an otherwi
 
 **The expansion** opens the right column for a second production line. Its land is bought on a
 marker in the market below the guild (100 coins), which lays the yard and puts a build marker where each
-part will go: a wheat field and a mandrake patch (25 coins each), a refining table (50) and a
-cauldron (75). The second line works like the first and has its own belts, buildable once the
+part will go: a wheat field and a mandrake patch (25 coins each), a refining table (50), a
+cauldron (75) and its shade garden (60). The second line works like the first and has its own belts, buildable once the
 stations at both ends stand; its cauldron belt meets the first line's at a T inside the shop, above
 the counter, and shares the run down to it. The counter's drop marker stays until every cauldron has its belt, and comes back whenever the
 doctor carries a potion.
@@ -188,9 +227,10 @@ before they leave, on Hard 30% less.
 ## Playthrough test
 
 `e2e/playthrough.spec.ts` plays the first round of the loop in headless Chromium with real
-clicks: it opens and closes the recipes, harvests both gardens, refines, brews, sells potions to a
-customer and collects the coins, checking items, pallets, the recipe the cauldron picks, what
-each potion is paid and tipped, and the first day's contract along the way. It plays at 4x speed (`PLAYTHROUGH_SPEED`), so the run takes
+clicks: it opens and closes the recipes, harvests both gardens, refines, brews, takes one potion
+out fine in its window, sells potions to a customer and collects the coins, checking items,
+pallets, the recipe the cauldron picks, what each potion is paid and tipped, the reputation and the
+first day's contract along the way. It plays at 4x speed (`PLAYTHROUGH_SPEED`), so the run takes
 under a minute. The Playthrough Apothecary workflow runs it on every PR
 that changes `games/apothecary/` and uploads a video and milestone screenshots as the
 `playthrough-apothecary` artifact.

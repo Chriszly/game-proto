@@ -1,8 +1,9 @@
 import Phaser from 'phaser';
-import { both, ink, paint, paper, pathOf, rectPts, wash, type Ctx, type Pt } from './paint';
+import { both, ellPts, ink, paint, paper, pathOf, rectPts, sparkle, wash, type Ctx, type Pt } from './paint';
 
 // Interface pieces as parchment cards with ink rules: the top bar, buttons, hand slots, the signs
-// behind place names, panels, the contract card, the away chip and customers' order bubbles.
+// behind place names, panels, the contract card, the town card, the away chip and customers' order
+// bubbles, and the town card's weather icons.
 
 /** Each kind of card's paper colour. */
 const CARD = {
@@ -10,6 +11,7 @@ const CARD = {
   button: '#d9b47a',
   contract: '#f7ecd2',
   chip: '#e3d2f0',
+  town: '#e6efd2',
   bubble: '#fffaf0',
   sign: '#ecd3a0',
   small: '#e2c48c',
@@ -109,7 +111,62 @@ function drawSun(c: Ctx) {
   c.restore();
 }
 
+/** A puffy cloud centred on (x, y), `w` wide. */
+function cloud(c: Ctx, x: number, y: number, w: number, col = '#eef2f4') {
+  const r = w / 4;
+  both(c, ellPts(x, y + r * 0.2, w / 2, r * 1.1, 24), col, { layers: 2, edge: 0 }, { w: 0.9 });
+  wash(c, ellPts(x, y - r * 0.2, r * 1.2, r * 1.1, 18), col, { layers: 2, edge: 0 });
+  ink(c, ellPts(x, y - r * 0.2, r * 1.2, r * 1.1, 18), { w: 0.8, alpha: 0.6 });
+}
+
+function sun(c: Ctx, x: number, y: number, r: number, col = '#f0b040') {
+  c.save();
+  c.strokeStyle = '#c47a20';
+  c.lineWidth = 1;
+  for (let k = 0; k < 8; k++) {
+    const a = (k / 8) * Math.PI * 2;
+    c.beginPath();
+    c.moveTo(x + Math.cos(a) * r * 1.25, y + Math.sin(a) * r * 1.25);
+    c.lineTo(x + Math.cos(a) * r * 1.6, y + Math.sin(a) * r * 1.6);
+    c.stroke();
+  }
+  c.restore();
+  both(c, ellPts(x, y, r, r, 18), col, { layers: 2, edge: 0 }, { w: 0.9 });
+}
+
+/** The weather icons on the town card, 22x22 as shown: a sun and cloud, rain, a bright sun and a parched sun over cracked earth. */
+function drawWeather(c: Ctx, kind: string) {
+  if (kind === 'fair') sun(c, 11, 11, 5.5);
+  if (kind === 'mild') {
+    sun(c, 14, 8, 4.2);
+    cloud(c, 9, 14, 14);
+  }
+  if (kind === 'rain') {
+    cloud(c, 11, 8, 18, '#cfd8de');
+    c.save();
+    c.strokeStyle = '#3f6fb0';
+    c.lineWidth = 1.3;
+    c.lineCap = 'round';
+    for (const x of [6, 11, 16]) {
+      c.beginPath();
+      c.moveTo(x, 14);
+      c.lineTo(x - 1.5, 19);
+      c.stroke();
+    }
+    c.restore();
+  }
+  if (kind === 'drought') {
+    sun(c, 11, 8, 4.8, '#e8803a');
+    both(c, rectPts(2, 16, 18, 4, 1), '#c9a06a', { layers: 1, edge: 0 }, { w: 0.8 });
+    ink(c, [[6, 16], [8, 18], [7, 20]], { closed: false, w: 0.6 });
+    ink(c, [[14, 16], [13, 18], [15, 20]], { closed: false, w: 0.6 });
+  }
+}
+
 export function bakeUi(scene: Phaser.Scene) {
+  for (const kind of ['mild', 'rain', 'fair', 'drought']) paint(scene, `weather-${kind}`, 22, 22, (c) => drawWeather(c, kind), 3, 700);
+  // The badge on a regular's order bubble.
+  paint(scene, 'regular', 12, 12, (c) => sparkle(c, 6, 6, 5.5), 4);
   paint(scene, 'slot', 32, 32, drawSlot, 3);
   paint(scene, 'hourglass', 14, 18, drawHourglass, 3);
   paint(scene, 'sun', 16, 16, drawSun, 3);

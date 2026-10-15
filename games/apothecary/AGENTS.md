@@ -6,9 +6,10 @@ to the game, as the root AGENTS.md asks.
 
 ## Current state
 
-Apothecary is a top-down automation game: a plague doctor walks a yard laid out in columns, harvests wheat and
-mandrake, refines them at a table, brews potions in a cauldron and sells them to customers at a
-counter. Coins buy upgrades, craftsmen, conveyor belts and a mirrored second production line.
+Apothecary is a top-down automation game: a plague doctor walks a yard laid out in columns, harvests wheat,
+mandrake and (once a shade garden is planted) nightshade, refines them at a table, brews potions in
+a cauldron and sells them to customers at a counter. Coins buy upgrades, craftsmen, conveyor belts,
+shade gardens and a mirrored second production line.
 
 - Implemented: the full loop on both lines, auto-harvest with a spinning sickle, floor markers
   (drop, work, pick up, pay), pallets that show station stock, customers served only at the
@@ -18,10 +19,16 @@ counter. Coins buy upgrades, craftsmen, conveyor belts and a mirrored second pro
   a Recipes panel and a Settings panel, a daily contract card, tips that shrink while a customer
   waits (a coin ring on each order bubble), and an autopilot that plays the time away (up to 2h)
   on load and shows a "While you were away" chip. Progress autosaves to localStorage.
+- Gardens have nine beds each, three by three edge to edge (`PLOTS_PER_GARDEN`, `plotPosition`).
+  Two shade gardens grow nightshade for the Shadow Elixir (extract + flour). A brew's last quarter
+  is its fine window: picked up then by hand, it becomes a Fine potion (its own item kind) worth
+  `FINE_BONUS` times as much. Customers can come back as regulars, the street keeps a reputation,
+  each day has almanac weather, and every fourth day is a market day with a crowd at midday. The
+  town card right of the contract shows the weather, reputation and the market day.
 - Look: an ink-and-watercolour herbalist's almanac. Every texture is painted on a canvas at load
   (`textures.addCanvas`), with no image files; `pixelArt` is off; all text is serif (`SERIF`).
 - There is one scene with no title, win or lose screen, and no audio. A customer who runs out of
-  patience just leaves; there is no penalty.
+  patience leaves and lowers the reputation.
 - Leftovers: `GAME_WIDTH`/`GAME_HEIGHT` in `src/main.ts` are only used there. `DOCTOR_W`/`DOCTOR_H`
   in `src/art/doctor.ts` are exported but unused.
 
@@ -33,17 +40,24 @@ counter. Coins buy upgrades, craftsmen, conveyor belts and a mirrored second pro
   `fixedStep: false`, `pixelArt: false`, cream background), registers `BootScene` and `GameScene`, calls `setupGame(game)`
   from `shared/setupGame.ts` and `setupScaling(game)` from `shared/scaling.ts`, and puts `game` on window in dev.
 - `src/game/items.ts`: item ids and defs (`ITEMS`), `GROW_MS`, `REFINE`, `RECIPES`,
-  `POTION_PRICE`, the `isPlant`/`isRefined`/`isPotion` guards and the ordered lists `PLANTS`,
-  `REFINED`, `POTIONS`.
+  `POTION_PRICE`, the `isPlant`/`isRefined`/`isPotion`/`isFine`/`isSellable` guards, the ordered
+  lists `PLANTS`, `REFINED`, `POTIONS`, and the fine potions (`FineId`, `FINE`, `plainOf`; a
+  `SellableId` is a plain or fine potion).
 - `src/game/state.ts`: every state type, `createInitialState`, `LAYOUT`, `FEEDERS_LAYOUT` and
   `COLUMNS_LAYOUT`, the
   upgrade, belt (`BELT_MS`, and `U_BELT_MS` from before the columns), expansion and pallet tables, and small derived helpers (`carryCapacity`,
   `walkSpeed`, `potionPrice`, `stationBuilt`, `anyFieldBuilt`, `beltBuildable`, ...). Also the tip
   rules (`TIP_SHARE`, `maxTip`, `tipLeft`, `tipNow`) and the contract (`Contract`, `DAY_MS`,
-  `MAX_CONTRACT`, `contractFor`).
+  `MAX_CONTRACT`, `contractFor`). Also the gardens (`GARDENS`, `GARDEN_LINE`, `SHADE_GARDEN`,
+  `SHADE_COST`, `gardenBuilt`, `shadeGrown`, `orderable`), the fine window (`FINE_SHARE`,
+  `FINE_BONUS`, `inFineWindow`), reputation and regulars (`START_REPUTATION`,
+  `REPUTATION_SERVED`, `REPUTATION_WALKED_OFF`, `reputationFactor`, `nudgeReputation`,
+  `REGULAR_TIP_LEFT`, `MAX_REGULARS`, `REGULAR_CHANCE`, `REGULAR_BONUS`), the weather (`Weather`,
+  `WEATHER`, `weatherFor`) and market days (`MARKET_EVERY`, `isMarketDay`, `RUSH_SIZE`,
+  `RUSH_BONUS`, `RUSH_EXTRA`).
 - `src/game/sim.ts`: the rules, free of Phaser. `tick` advances the world; marker actions
   (`dropAtRefiner`, `pickUpFromCauldron`, `stockShelf`, `collectTill`, `payUpgrade`,
-  `payCraftsman`, `payBelt`, `payExpansion`, `joinGuild`, `dropAll`, `cyclePriority`) and `harvest` each change
+  `payCraftsman`, `payBelt`, `payExpansion`, `payShade`, `joinGuild`, `dropAll`, `cyclePriority`) and `harvest` each change
   state and return `Feedback` lines. Also `shortfall`, `refining` and `doneByHand`.
 - `src/game/save.ts`: `loadState`, `saveState` (stamps `lastSeen` with `Date.now()`), `clearSave`
   (key `apothecary-save`), and the `ontoOwnRuns` and `ontoColumns` belt migrations.
@@ -67,11 +81,13 @@ counter. Coins buy upgrades, craftsmen, conveyor belts and a mirrored second pro
   (`wash`, `ink`, `hatch`, `wob`, `both`, `shadow`, `paper`, `itemIcon`, `coinIcon`). `ground.ts`
   paints the whole world as one `ground-world` texture, plus the expansion yard, each garden and
   the scattered trees and bushes (`sceneryLayout`). `ui.ts` paints parchment cards on demand
-  (`cardTexture(scene, kind, w, h)`: bar, button, contract, chip, bubble, sign, small, panel) and
-  `signTexture`. `belts.ts` paints the built belt network into one image (`drawBelts`, re-painted
+  (`cardTexture(scene, kind, w, h)`: bar, button, contract, town, chip, bubble, sign, small, panel) and
+  `signTexture`, plus the `weather-<kind>` icons and the regular's `regular` star (`sparkle` in
+  `paint.ts`, also on fine potions' icons). `belts.ts` paints the built belt network into one image (`drawBelts`, re-painted
   when the set of built belts changes), and `pointAlong`/`laneOffset` place items on it.
 - `src/ui/`: `BackStack` (items piled on the doctor), `IconRow` (customer wants), `Pallet` (crate
-  stacks, exposes `item` and `count`), `ProgressBar` (redraws only when its fill changes),
+  stacks, exposes `item` and `count`), `ProgressBar` (redraws only when its fill changes;
+  `setZone` marks a golden end zone, used for the cauldron's fine window),
   `RecipeBook` (exposes `lines`), `Settings` (read-only view of the hub's settings, and New game).
 
 ### How it runs
@@ -89,8 +105,8 @@ counter. Coins buy upgrades, craftsmen, conveyor belts and a mirrored second pro
   The belt network is redrawn only when the set of built belts changes.
 - Depths: ground -1000 to -990 (scenery sorts by y like standing things), signs -910, belts -600, riding goods -550, plots -500, markers
   -400, till -300; standing things sort by y (the doctor by his feet); `WORLD_UI_DEPTH` (9999) for
-  bars, order bubbles and feedback, `UI_DEPTH` (10000) for the top bar, the contract card and the
-  away chip, `UI_DEPTH + 1` for panels.
+  bars, order bubbles and feedback, `UI_DEPTH` (10000) for the top bar, the contract card, the town
+  card (`TOWN_CARD`, `createTown`) and the away chip (below the town card), `UI_DEPTH + 1` for panels.
 - Walking: arcade physics steps once per drawn frame; WASD/arrows set velocity directly, and
   `limitWalkStep` (on `PRE_UPDATE`) caps a step at `MAX_WALK_STEP_PX` (20) so a long frame can't
   carry the feet through a station or wall (static obstacles from `addObstacle` and `SHOP_BLOCKS`).
@@ -116,7 +132,9 @@ counter. Coins buy upgrades, craftsmen, conveyor belts and a mirrored second pro
   under `apothecary-zoom`.
 - Map: two columns of production (line one on the left, line two mirrored on the right with
   `mirror`), each running straight down from its gardens through `REFINER` and `CAULDRON` at
-  `LINE_X`. A station's drop, work and pick-up markers stand in a row at `INNER_X` (the market side)
+  `LINE_X`. The two shade gardens sit side by side at the top of the market (garden 4, line one's,
+  on the left; garden 5 mirrored), and each garden belt has a feeder from its line's one, which
+  runs along over the mandrake feeder to the join. A station's drop, work and pick-up markers stand in a row at `INNER_X` (the market side)
   and its upgrade, craftsman, belt, label and priority spots at `OUTER_X`. The market between the
   columns holds `OUTFITTER`, `GUILD` and `EXPANSION_LAND`; the shop sits at the bottom of it, facing
   the street (`STREET`) along the bottom edge of the world (1400x1110).
@@ -155,10 +173,29 @@ counter. Coins buy upgrades, craftsmen, conveyor belts and a mirrored second pro
   `PLANTS`/`POTIONS` order) and stops propagation so the doctor doesn't walk. The sign shows the
   item's icon, or "any".
 - Stock pricing: `serveFromShelf` pays `stockedPay(order.pay[want], others)`, where `others` is
-  how many of that potion stay on the shelf after the one sold; `stockFactor` (2.5% off each, at
-  least half) is in `src/game/state.ts`. The scene shows the next sale's cut under each counter
-  pallet.
-- Customers: the scene walks each order's sprite from `STREET` to `customerPosition(i)` and adds
+  how many of that potion (plain or fine) stay on the shelf after the one sold; `stockFactor` (2.5%
+  off each, at least half) is in `src/game/state.ts`. A fine one of the wanted potion goes first and
+  pays `stockedPay(round(pay * FINE_BONUS), others)`. The scene shows the next sale's cut and the
+  fine count beside the outer counter pallets and above the middle one; the counter's pallets
+  count fine potions as their plain potion.
+- Fine window: `inFineWindow(brew)` holds from `1 - FINE_SHARE` (75%) of a brew to its end.
+  `pickUpFromCauldron` takes such a brew out as its `FINE` potion before anything on the out
+  pallets. A brew only moves while worked, so stepping off the work spot holds it in the window.
+  The brewing bar's zone (`setZone`) and fill turn gold there.
+- Reputation and regulars: `tick` lowers `reputation` by `REPUTATION_WALKED_OFF` for each order
+  whose patience runs out (and marks a running rush lost); `orderFilled` raises it by
+  `REPUTATION_SERVED`, and a customer filled with `tipLeft` at least `REGULAR_TIP_LEFT` joins
+  `regulars` (oldest dropped past `MAX_REGULARS`). `newOrder` rolls `REGULAR_CHANCE` only while
+  there are regulars, so a new game's first orders use the same randomness as before. A regular's
+  order has their `face`, `regular: true`, their old `asked` potions and `REGULAR_BONUS` more pay
+  each. `orderInterval` is scaled by `reputationFactor` (1 at 50).
+- Weather and market days follow `contract.day` (which also rolls when a contract is kept):
+  `weatherFor(day)` is mild on day 1 and then cycles `FORECAST`; `growthSpeed` and
+  `orderInterval` apply it. On a market day, once `dayLeft` is under half, `tick` calls
+  `startRush` once (`rush.day`): up to `RUSH_SIZE` orders flagged `rush`, filling the counter's
+  places and `RUSH_EXTRA` more (`MAX_ORDER_SLOTS` includes them). Filling all of them with none
+  lost pays `RUSH_BONUS` each into `coins`.
+- Customers: the scene walks each order's sprite (`customerTexture(order.face ?? order.id)`) from `STREET` to `customerPosition(i)` and adds
   the order to its `atCounter` set once it arrives. `tick` serves, and counts down patience for,
   only orders `atCounter` accepts (default: all). Wants and patience show only once arrived.
 - Harvest is automatic: plots within `displayHeight * harvestReach(state)` of the doctor's centre,
@@ -174,9 +211,12 @@ per-potion `pay`, and `patience` that counts down only at the counter), `upgrade
 `Upgrade` whose `level` is the number hired), `belts` (a `Build` plus riding `items`, each `at` ms
 along the main run), `priority` (per `CraftingId`, a `PlantId` or `PotionId` to make first, or
 null), `guild` (a `Build`: entry to the guild), `expansion` (land, two fields, refiner, cauldron as
-`Build`s), `contract` (`day`, `potion`, `need`, `made`, `reward`, `dayLeft`, `kept`), `sold` (potions
-handed over at the counter, ever), `tips` (tip coins ever) and `lastSeen` (wall-clock ms of the last
-save or load, 0 in a new game). Each order also has `tip`, its full tip (`maxTip` of its size).
+`Build`s), `shade` (the two shade gardens as `Build`s), `contract` (`day`, `potion`, `need`, `made`, `reward`, `dayLeft`, `kept`), `sold` (potions
+handed over at the counter, ever), `tips` (tip coins ever), `lastSeen` (wall-clock ms of the last
+save or load, 0 in a new game), `reputation` (0 to 100), `regulars` (`face`, `wants`) and `rush`
+(`day`, `size`, `served`, `lost`, `paid`, or null). Each order also has `tip`, its full tip (`maxTip`
+of its size), and may have `asked`, `face`, `regular` and `rush`. `counter.shelf` and `carrying`
+can hold fine potions.
 
 - Tips: when an order's last potion is handed over, `serveFromShelf` adds `tipNow(order)` to the
   till and `state.tips`: `tip` scaled by `tipLeft`, which falls from 1 at the counter to 0 once
@@ -207,7 +247,9 @@ save or load, 0 in a new game). Each order also has `tip`, its full tip (`maxTip
 - `apothecary-save`: the whole `GameState` (with `lastSeen` stamped by `saveState`), saved every `AUTOSAVE_MS` (3s), on tab hide and on
   `pagehide` (not after "New game" is confirmed). `loadState` discards saves whose `version`
   differs or that lack `plots`, shallow-merges top-level fields, merges `upgrades`, `craftsmen`,
-  `belts` and `priority` per key, appends new plots and drops orders without `pay`. A save without
+  `belts` and `priority` per key, appends new plots (or, when a saved plot's plant doesn't match
+  its garden, as in saves from three beds a garden, starts every plot fresh: `keepsPlots`) and
+  drops orders without `pay`. A save without
   `guild` counts as having joined if it bought or paid into any guild upgrade. A save from before
   `COLUMNS_LAYOUT` (5) first gets `ontoColumns`, which scales each belt item's `at` by its belt's
   new `BELT_MS` over the old `U_BELT_MS`, so it keeps its place along the shorter run; then a save
@@ -216,16 +258,19 @@ save or load, 0 in a new game). Each order also has `tip`, its full tip (`maxTip
   whose `layout` differs from `LAYOUT` (5, the columns) gets the fresh `player` spot.
 - Away: `GameScene.create` calls `catchUp(state, Date.now())` right after `loadState` and keeps the
   result in the public `away` field; `createAwayChip` shows it (top right, `AWAY_CHIP`) until tapped.
-  The new fields (`contract`, `sold`, `tips`, `lastSeen`) come from `fresh` through the shallow
-  merge, so `version` was not bumped; old orders without `tip` tip nothing.
+  The new fields (`contract`, `sold`, `tips`, `lastSeen`, `shade`, `reputation`, `regulars`,
+  `rush`) come from `fresh` through the shallow merge, so `version` was not bumped; old orders
+  without `tip` tip nothing.
 - `apothecary-zoom`: the main camera's zoom, a view preference that "New game" keeps.
 - "New game" (`clearSave` + `scene.restart`) removes only `apothecary-save`. The old
   `apothecary-fps` key is no longer used; the frame rate comes from the hub.
 
 ### Randomness and timing
 
-- `Math.random` is used only by `tick` (its default `rand`, now the fifth argument): `orderInterval`
-  and `newOrder` (one or two potions, which ones, patience), also when `catchUp` plays time away.
+- `Math.random` is used only by `tick` (its default `rand`, now the fifth argument): `orderInterval`,
+  `newOrder` (a returning regular, only once there are any; one or two potions, which ones,
+  patience) and `startRush`, also when `catchUp` plays time away. The weather is not random: it
+  comes from the day.
   Art noise uses `seeded`/`reseed` from `src/art/paint.ts`, reseeded per texture, so painting never
   touches `Math.random`.
 - `Date.now()` is used only for `lastSeen` and `catchUp`; the test starts with empty storage, so
@@ -287,10 +332,16 @@ save or load, 0 in a new game). Each order also has `tip`, its full tip (`maxTip
   (wheat plot x's and row, mandrake spot, refiner, cauldron and counter markers, `LEAVE_SHOP`,
   `LEAVE_CAULDRONS`, `STREET`, `FIRST_CUSTOMER` = `customerPosition(0)`), `WALK_SPEED`,
   `POTION_PRICE`, the counter bonus in `potionPay` (it assumes one of each potion on the shelf, so
-  no stock cut, and asserts it), `shortfall`, grow times 8000/14000, the recipe
-  line text and order, the tip rules (`maxTip`, `TIP_SHARE`, `tipNow`), `DAY_MS` and the first
+  no stock cut, and asserts it), `shortfall`, grow times 24000/42000, the bed layout
+  (`WHEAT_SPOT`, `BELOW_GARDENS`, `MANDRAKE`, `WHEAT_COLUMN`, `MANDRAKE_PLOT`: the sickle's 72px
+  reach from the doctor's middle must take exactly the wheat field's right-hand column), the recipe
+  line text and order, the tip rules (`maxTip`, `TIP_SHARE`, `tipNow`), the fine window
+  (`FINE_SHARE`, `FINE_BONUS`, `FINE`), the reputation numbers, `DAY_MS` and the first
   contract (`FIRST_CONTRACT`: 3 Sleeping Tonics for 20), carry capacity 4, the world size 1400x1110 (camera asserts), and which pallets
-  each station shows.
+  each station shows (three each).
+- The first round takes the first brew out in its fine window: it waits for 75% of the brew, walks
+  to the pick-up marker and expects the fine potion; the second brew finishes plain. Day 1 is
+  mild, so the weather changes nothing in it, and it ends long before a market day.
 
 ## Making common changes
 
@@ -301,10 +352,13 @@ save or load, 0 in a new game). Each order also has `tip`, its full tip (`maxTip
   position in `PALLETS` (one per potion, in `POTIONS` order). Belt lanes widen on their own. Update
   the recipe lines in the test.
 - Add a plant: `PlantId`, `ITEMS`, `GROW_MS`, `REFINE` (and its refined item), plant art in
-  `src/art/garden.ts` (`bakeGarden` and `plantTexture`), item art, a garden in `GARDENS` plus
-  `GARDEN_AREAS`, new in and out pallet spots for the tables and cauldrons in `PALLETS`, and a
-  feeder run in each garden belt's `BELT_PATHS` (runs follow the line's gardens in order). New
-  plots append, so old saves keep working.
+  `src/art/garden.ts` (`bakeGarden` and `plantTexture`), item art in `itemIcon`, gardens appended
+  to `GARDENS` and `GARDEN_LINE` plus `GARDEN_AREAS` and `gardenBuilt`, new in and out pallet spots
+  for the tables and cauldrons in `PALLETS` (`acrossBelt`), and a feeder run in each garden belt's
+  `BELT_PATHS` with the plant in `GARDEN_RUNS` (runs follow that list). New plots append, so old
+  saves keep working.
+- Add a potion: also give it a `FineId` in `FINE` and `ITEMS` (kind `fine`); `itemIcon` draws a
+  fine potion as its plain one with a sparkle.
 - Add an upgrade: an `UpgradeId` and `UPGRADES` entry, add it to `DOCTOR_UPGRADES` or
   `GUILD_UPGRADES` (the guild also needs a spot in `GUILD` in layout), give it a row in
   `UNLOCKED_BY` unless it is for sale from the start, and apply its level in a helper in
@@ -340,6 +394,10 @@ save or load, 0 in a new game). Each order also has `tip`, its full tip (`maxTip
   objects must stay below it (`WORLD_UI_DEPTH` is the highest).
 - `tick` runs before `movePlayer`, so `workingAt` uses last frame's feet position.
 - Healing Draught art is red; keep any cross shapes off red (root rule on red crosses).
+- Fine potions are not in `POTIONS`, so they have no pallets, belt lanes or orders of their own.
+  Anything that counts potions on the shelf or in hands goes through `plainOf` (`shortfall`,
+  `canFill`, stock cuts, the counter's pallets).
+- Belt lanes each run at half the belt's speed (`LANE_SHARE` in `runBelt`), however many there are.
 - Lay out the top bar, panels and anything else on screen with `viewSize(this)` or `GAME_WIDTH`,
   never `this.scale.width`: with `renderScale` above 1 that is the canvas size, and the button
   lands off screen. `pointer.x/y` are canvas pixels too; go through `getWorldPoint`.
