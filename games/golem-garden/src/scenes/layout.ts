@@ -2,14 +2,27 @@
 export { GRID, cellCentre } from '../game/board';
 
 export const VIEW = { w: 960, h: 540 };
-/** The clay strip across the top: its centre line, and the x of each tag's icon and number. */
+/**
+ * The clay strip across the top: its centre line, the title and the garden tag under it (which
+ * opens the garden picker), and the x of each tag's icon and number.
+ */
 export const HUD = {
   y: 32,
+  title: { x: 16, y: 22 },
+  garden: { x: 95, y: 45, w: 158, h: 18 },
   wave: { x: 235, w: 105 },
   leaf: { x: 370, w: 75, icon: 392, text: 410 },
   sap: { x: 490, w: 80, icon: 512, text: 528 },
-  bloom: { x: 583, w: 244, flowers: 605, gap: 19, text: 692 },
+  bloom: { x: 583, w: 232, flowers: 603, gap: 17, text: 684 },
+  /** The best wave, right-aligned at x. */
+  best: { x: 878 },
 };
+/** The speed button, at the right end of the HUD strip. */
+export const SPEED_BUTTON = { x: 914, y: 32, w: 54, h: 32 };
+/** The menu a tapped golem opens, above or below it: Raise, Move and Uproot. */
+export const GOLEM_MENU = { w: 204, h: 50, chip: { w: 60, h: 38, gap: 6 } };
+/** The garden picker's cards, side by side. */
+export const GARDEN_CARD = { y: 318, w: 236, h: 196, gap: 20 };
 /** The side panel right of the board. */
 export const PANEL = { x: 800, y: 64, w: 148, h: 448 };
 /** The seed cards, by their centres, in the order of GOLEMS; the third (thorn) card is shorter. */

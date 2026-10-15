@@ -296,7 +296,7 @@ export function sprout(fx: number, fy: number) {
   E(fx + 18, fy - 60, 17, 8, '#8cd05a', { rot: -0.5, sb: 3 });
 }
 
-export type PestArt = 'beetle' | 'slug' | 'crow';
+export type PestArt = 'beetle' | 'slug' | 'crow' | 'mole' | 'snail' | 'aphid' | 'queen';
 
 /** A pest facing right, standing at (0, 0). */
 export function pest(kind: PestArt) {
@@ -326,7 +326,12 @@ export function pest(kind: PestArt) {
     ctx.lineTo(-2, 11);
     ctx.stroke();
     ellipse(25, -7, 3, 3, '#fff');
-  } else if (kind === 'slug') {
+  } else if (kind === 'slug' || kind === 'queen') {
+    if (kind === 'queen') {
+      // The Queen Slug: a slug half again as big, with a gold crown.
+      ctx.save();
+      ctx.scale(1.7, 1.7);
+    }
     Pp([[-44, 12], [-30, -4], [0, -10], [26, -20], [42, -6], [40, 12]], '#e2b24a', { sb: 5 });
     E(18, -18, 16, 13, '#f0cc70', { print: false, sb: 3 });
     ctx.strokeStyle = '#c0902e';
@@ -346,6 +351,67 @@ export function pest(kind: PestArt) {
     ctx.moveTo(-44, 16);
     ctx.lineTo(-80, 16);
     ctx.stroke();
+    if (kind === 'queen') {
+      ctx.restore();
+      Pp([[6, -50], [8, -76], [18, -62], [26, -84], [36, -62], [46, -76], [46, -50]], C.gold, { print: false, sb: 3, rim: 2.5 });
+      for (const [x, y, col] of [[8, -76, '#f2a6c8'], [26, -84, C.eye], [46, -76, '#f2a6c8']] as const) {
+        E(x, y, 5, 5, col, { print: false, shadow: false, rim: 1 });
+      }
+      E(26, -56, 6, 5, '#f2a6c8', { print: false, shadow: false, rim: 1 });
+    }
+  } else if (kind === 'mole') {
+    // A velvet mole with a pink nose and big digging paws.
+    E(-4, -2, 30, 20, '#5a4a56', { sb: 5 });
+    E(24, -2, 14, 12, '#665562', { print: false, sb: 3 });
+    E(40, -2, 6, 5, '#f2a6c8', { print: false, shadow: false, rim: 1.5 });
+    for (const [x, y] of [[14, 16], [-18, 16]] as const) Pp([[x - 10, y - 6], [x + 10, y - 8], [x + 12, y + 4], [x - 8, y + 4]], '#f0b8c0', { print: false, sb: 2, rim: 1.5 });
+    ellipse(28, -8, 2.5, 2.5, '#1e1a1a');
+  } else if (kind === 'snail') {
+    // A snail whose shell is plated with riveted tin: small hits glance off.
+    Pp([[-40, 14], [-24, 2], [20, 2], [36, -10], [46, 2], [42, 14]], '#c8b090', { sb: 5 });
+    ctx.strokeStyle = '#a89070';
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(36, -10);
+    ctx.lineTo(40, -28);
+    ctx.moveTo(42, -6);
+    ctx.lineTo(50, -22);
+    ctx.stroke();
+    E(40, -30, 4, 4, '#1e1a1a', { shadow: false, print: false, rim: 1 });
+    E(51, -24, 4, 4, '#1e1a1a', { shadow: false, print: false, rim: 1 });
+    E(-4, -18, 28, 26, '#9aa0a8', { sb: 5 });
+    ctx.strokeStyle = 'rgba(40,44,52,0.55)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (let t = 0; t < PI * 4; t += 0.2) {
+      const r = 3 + t * 1.6;
+      const x = -4 + Math.cos(t) * r;
+      const y = -18 + Math.sin(t) * r;
+      if (t === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    for (let k = 0; k < 6; k++) {
+      const a = (k / 6) * PI * 2;
+      E(-4 + Math.cos(a) * 21, -18 + Math.sin(a) * 19, 3, 3, '#d8dce2', { print: false, shadow: false, rim: 1 });
+    }
+  } else if (kind === 'aphid') {
+    // A tiny green aphid; they come in swarms.
+    ctx.strokeStyle = '#3e6a24';
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (const k of [-1, 0, 1]) {
+      ctx.moveTo(k * 6, 6);
+      ctx.lineTo(k * 8 - 2, 14);
+    }
+    ctx.moveTo(12, -2);
+    ctx.quadraticCurveTo(18, -14, 24, -12);
+    ctx.stroke();
+    E(0, 2, 13, 10, '#9ad85a', { print: false, sb: 3, rim: 2 });
+    E(12, 0, 6, 6, '#86c84a', { print: false, sb: 2, rim: 1.5 });
+    ellipse(14, -1, 1.8, 1.8, '#1e1a1a');
   } else {
     ctx.save();
     ctx.translate(0, -16);
