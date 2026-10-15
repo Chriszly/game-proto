@@ -1,12 +1,14 @@
-// Paints the whole 2400x1600 map once at boot onto one canvas: faceted grass, flagstone lanes with
-// stone kerbs, paved plazas round the Nexuses, dirt clearings for the camps, the guardian beast's
-// pit, patches of tall grass (the bushes), and low-poly pines and rocks rendered with the same renderer as the units. The same seed paints the same map every time.
+// Paints the whole 2800x2800 map once at boot onto one canvas: faceted grass, the river with its
+// islands for the watchstones, flagstone lanes with stone kerbs, paved plazas round the Nexuses,
+// dirt clearings for the camps, the guardian beast's pit, patches of tall grass (the bushes), flowers,
+// mushrooms and old ruins, and low-poly pines and rocks rendered with the same renderer as the
+// units. The same seed paints the same map every time.
 
 import Phaser from 'phaser';
-import { BASE, BEAST, BUSHES, Bush, CAMPS, LANES, Team, Vec, WORLD } from '../game/data';
+import { BASE, BEAST, BUSHES, Bush, CAMPS, CampSpot, LANES, RIVER, Team, Vec, WATCHSTONES, WORLD } from '../game/data';
 import { sharpRes } from '../../../../shared/scaling';
 import { render, seeded } from './lowpoly';
-import { TEAM_GLOW, pineModel, rockModel } from './models';
+import { TEAM_GLOW, pineModel, rockModel, ruinModel } from './models';
 
 export const MAP_KEY = 'lb-map';
 /** Canvas pixels per world pixel in the map's texture: 1, or more on a big screen (see `sharpRes`). */
@@ -27,6 +29,10 @@ function laneDist(p: Vec): number {
     for (let i = 0; i < lane.length - 1; i++) best = Math.min(best, segDist(p, lane[i], lane[i + 1]));
   }
   return best;
+}
+/** The distance from a point to the river's centre line. */
+function riverDist(p: Vec): number {
+  return segDist(p, RIVER.from, RIVER.to);
 }
 function segDist(p: Vec, a: Vec, b: Vec) {
   const dx = b.x - a.x, dy = b.y - a.y;
@@ -75,7 +81,7 @@ function grass(ctx: CanvasRenderingContext2D, rnd: () => number) {
     }
   }
   // A few grass tufts: small pale triangles.
-  for (let i = 0; i < 900; i++) {
+  for (let i = 0; i < 1800; i++) {
     const x = rnd() * WORLD.w, y = rnd() * WORLD.h;
     if (laneDist({ x, y }) < LANE_HALF + 12) continue;
     ctx.fillStyle = rnd() < 0.5 ? 'rgba(160,210,120,0.55)' : 'rgba(40,90,40,0.45)';
@@ -221,11 +227,15 @@ function plaza(ctx: CanvasRenderingContext2D, team: Team, rnd: () => number) {
   ctx.globalAlpha = 1;
 }
 
-function clearing(ctx: CanvasRenderingContext2D, c: Vec, rnd: () => number) {
+/** How far a camp's clearing reaches, by kind: the brutes' are the widest. */
+const clearingR = (c: CampSpot) => (c.kind === 'ember' || c.kind === 'moss' ? 128 : c.kind === 'wolf' ? 112 : 100);
+
+function clearing(ctx: CanvasRenderingContext2D, c: CampSpot, rnd: () => number) {
   const n = 11;
+  const size = clearingR(c);
   const ring = Array.from({ length: n }, (_, i) => {
     const a = (i / n) * Math.PI * 2;
-    const r = 100 + (rnd() - 0.5) * 22;
+    const r = size + (rnd() - 0.5) * 22;
     return { x: c.x + Math.cos(a) * r, y: c.y + Math.sin(a) * r * 0.9 };
   });
   for (let i = 0; i < n; i++) {
@@ -241,7 +251,177 @@ function clearing(ctx: CanvasRenderingContext2D, c: Vec, rnd: () => number) {
     ctx.stroke();
   }
   for (let i = 0; i < n; i += 2) render(ctx, rockModel(6 + rnd() * 3, i % 3), ring[i].x, ring[i].y, 1, { yaw: rnd() * 6 });
+  // A brute's clearing glows faintly in its colour; a wolf den is strewn with old bones.
+  if (c.kind === 'ember' || c.kind === 'moss') {
+    ctx.strokeStyle = c.kind === 'ember' ? 'rgba(255,138,61,0.45)' : 'rgba(127,224,138,0.45)';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.ellipse(c.x, c.y + 6, 62, 40, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  } else if (c.kind === 'wolf') {
+    ctx.strokeStyle = 'rgba(236,228,206,0.85)';
+    ctx.lineWidth = 2.5;
+    for (let i = 0; i < 6; i++) {
+      const a = rnd() * Math.PI * 2, r = 40 + rnd() * 50, t = rnd() * Math.PI;
+      const x = c.x + Math.cos(a) * r, y = c.y + Math.sin(a) * r * 0.8;
+      ctx.beginPath();
+      ctx.moveTo(x - Math.cos(t) * 7, y - Math.sin(t) * 4);
+      ctx.lineTo(x + Math.cos(t) * 7, y + Math.sin(t) * 4);
+      ctx.stroke();
+    }
+  }
 }
+
+/** The river: a band of faceted water with darker banks, widening into a pool at each end. */
+function river(ctx: CanvasRenderingContext2D, rnd: () => number) {
+  const a = RIVER.from, b = RIVER.to;
+  const len = Math.hypot(b.x - a.x, b.y - a.y);
+  const ux = (b.x - a.x) / len, uy = (b.y - a.y) / len;
+  const nx = -uy, ny = ux;
+  const step = 40;
+  const left: Vec[] = [], right: Vec[] = [];
+  for (let u = 0; u <= len; u += step) {
+    const wob = Math.sin(u / 170) * 14 + Math.sin(u / 61) * 5;
+    const w = RIVER.half + (rnd() - 0.5) * 10;
+    const cx = a.x + ux * u + nx * wob, cy = a.y + uy * u + ny * wob;
+    left.push({ x: cx + nx * w, y: cy + ny * w });
+    right.push({ x: cx - nx * w, y: cy - ny * w });
+  }
+  const outline = (grow: number) => {
+    ctx.beginPath();
+    left.forEach((p, i) => (i ? ctx.lineTo(p.x + nx * grow, p.y + ny * grow) : ctx.moveTo(p.x + nx * grow, p.y + ny * grow)));
+    for (let i = right.length - 1; i >= 0; i--) ctx.lineTo(right[i].x - nx * grow, right[i].y - ny * grow);
+    ctx.closePath();
+    for (const end of [a, b]) {
+      ctx.moveTo(end.x + 120 + grow, end.y);
+      ctx.ellipse(end.x, end.y, 120 + grow, 104 + grow, 0, 0, Math.PI * 2);
+    }
+  };
+  // Muddy banks, then the water in facets, lighter towards the middle of the stream.
+  outline(14);
+  ctx.fillStyle = '#6b5a3c';
+  ctx.fill();
+  outline(5);
+  ctx.fillStyle = '#2f5f7a';
+  ctx.fill();
+  ctx.save();
+  outline(0);
+  ctx.clip();
+  const cell = 34;
+  const x0 = Math.min(a.x, b.x) - 160, x1 = Math.max(a.x, b.x) + 160;
+  const y0 = Math.min(a.y, b.y) - 160, y1 = Math.max(a.y, b.y) + 160;
+  for (let y = y0; y < y1; y += cell) {
+    for (let x = x0; x < x1; x += cell) {
+      const d = riverDist({ x, y });
+      if (d > RIVER.half + 140) continue;
+      const k = 0.92 + rnd() * 0.18 + Math.max(0, 0.18 - d / 400);
+      for (const half of [0, 1]) {
+        ctx.fillStyle = shade(half ? '#3f86ad' : '#3a7ea3', k);
+        ctx.strokeStyle = ctx.fillStyle;
+        ctx.beginPath();
+        if (half) {
+          ctx.moveTo(x, y);
+          ctx.lineTo(x + cell, y);
+          ctx.lineTo(x + cell, y + cell);
+        } else {
+          ctx.moveTo(x, y);
+          ctx.lineTo(x + cell, y + cell);
+          ctx.lineTo(x, y + cell);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+    }
+  }
+  // Glints on the water, running with the stream.
+  ctx.strokeStyle = 'rgba(214,240,255,0.5)';
+  ctx.lineWidth = 2;
+  for (let i = 0; i < 90; i++) {
+    const u = rnd() * len, v = (rnd() - 0.5) * RIVER.half * 1.4;
+    const x = a.x + ux * u + nx * v, y = a.y + uy * u + ny * v;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + ux * 14, y + uy * 14);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/** A small island of flagstones for a watchstone. */
+function island(ctx: CanvasRenderingContext2D, c: Vec, rnd: () => number) {
+  ctx.fillStyle = '#6b5a3c';
+  ctx.beginPath();
+  ctx.ellipse(c.x, c.y + 4, 74, 56, 0, 0, Math.PI * 2);
+  ctx.fill();
+  const n = 10;
+  for (let i = 0; i < n; i++) {
+    const a0 = (i / n) * Math.PI * 2, a1 = ((i + 1) / n) * Math.PI * 2;
+    ctx.fillStyle = shade('#a8a196', 0.86 + rnd() * 0.24);
+    ctx.strokeStyle = ctx.fillStyle;
+    ctx.beginPath();
+    ctx.moveTo(c.x, c.y);
+    ctx.lineTo(c.x + Math.cos(a0) * 64, c.y + Math.sin(a0) * 48);
+    ctx.lineTo(c.x + Math.cos(a1) * 64, c.y + Math.sin(a1) * 48);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+}
+
+/** Little things in the jungle: patches of flowers and rings of mushrooms. */
+function flora(ctx: CanvasRenderingContext2D, rnd: () => number) {
+  const petals = ['#f2e3a0', '#e9a3c9', '#b9d6ff', '#ffffff', '#f6b26b'];
+  for (let i = 0; i < 160; i++) {
+    const c = { x: 60 + rnd() * (WORLD.w - 120), y: 60 + rnd() * (WORLD.h - 120) };
+    if (laneDist(c) < LANE_HALF + 30 || riverDist(c) < RIVER.half + 30) continue;
+    if (rnd() < 0.8) {
+      const col = petals[Math.floor(rnd() * petals.length)];
+      for (let j = 0; j < 9; j++) {
+        const x = c.x + (rnd() - 0.5) * 50, y = c.y + (rnd() - 0.5) * 30;
+        ctx.fillStyle = 'rgba(40,90,40,0.6)';
+        ctx.fillRect(x - 0.5, y, 1, 4);
+        ctx.fillStyle = col;
+        ctx.beginPath();
+        ctx.arc(x, y, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else {
+      for (let j = 0; j < 7; j++) {
+        const a = (j / 7) * Math.PI * 2;
+        const x = c.x + Math.cos(a) * 18, y = c.y + Math.sin(a) * 11;
+        ctx.fillStyle = '#efe6cf';
+        ctx.fillRect(x - 1, y - 3, 2, 4);
+        ctx.fillStyle = j % 2 ? '#c4553b' : '#a8432d';
+        ctx.beginPath();
+        ctx.ellipse(x, y - 3, 4, 2.6, 0, Math.PI, 0);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(x - 1, y - 4.5, 1.2, 1.2);
+      }
+    }
+  }
+}
+
+/** Old ruins in the jungle: a few broken pillars and fallen blocks round a cracked floor. */
+function ruins(ctx: CanvasRenderingContext2D, c: Vec, rnd: () => number) {
+  ctx.fillStyle = 'rgba(30,50,25,0.3)';
+  ctx.beginPath();
+  ctx.ellipse(c.x, c.y, 70, 46, 0, 0, Math.PI * 2);
+  ctx.fill();
+  for (let i = 0; i < 9; i++) {
+    const x = c.x + (rnd() - 0.5) * 100, y = c.y + (rnd() - 0.5) * 60;
+    ctx.fillStyle = shade('#a8a196', 0.8 + rnd() * 0.3);
+    ctx.fillRect(x - 9, y - 6, 18, 12);
+  }
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + 0.4;
+    render(ctx, ruinModel(i), c.x + Math.cos(a) * 52, c.y + Math.sin(a) * 32, 1, { yaw: rnd() * 6 });
+  }
+}
+
+/** Where the ruins stand: one in each quarter of the jungle, mirrored. */
+const RUINS: Vec[] = [{ x: 560, y: 1560 }, { x: 1240, y: 2240 }, { x: 2240, y: 1240 }, { x: 1560, y: 560 }];
 
 /** The guardian beast's pit: a ring of dark flagstones round a sunken floor, with standing stones. */
 function pit(ctx: CanvasRenderingContext2D, rnd: () => number) {
@@ -327,11 +507,13 @@ function bush(ctx: CanvasRenderingContext2D, b: Bush, rnd: () => number) {
 
 function scenery(ctx: CanvasRenderingContext2D, rnd: () => number) {
   const things: { x: number; y: number; kind: 'pine' | 'rock'; s: number; v: number }[] = [];
-  for (let i = 0; i < 1400 && things.length < 260; i++) {
+  for (let i = 0; i < 4000 && things.length < 620; i++) {
     const p = { x: 20 + rnd() * (WORLD.w - 40), y: 30 + rnd() * (WORLD.h - 40) };
-    if (laneDist(p) < LANE_HALF + 48) continue;
+    if (laneDist(p) < LANE_HALF + 48 || riverDist(p) < RIVER.half + 40) continue;
     if (Math.hypot(p.x - BASE.blue.x, p.y - BASE.blue.y) < 290 || Math.hypot(p.x - BASE.red.x, p.y - BASE.red.y) < 290) continue;
-    if (CAMPS.some((c) => Math.hypot(p.x - c.x, p.y - c.y) < 150)) continue;
+    if (CAMPS.some((c) => Math.hypot(p.x - c.x, p.y - c.y) < clearingR(c) + 50)) continue;
+    if (RUINS.some((c) => Math.hypot(p.x - c.x, p.y - c.y) < 110)) continue;
+    if (WATCHSTONES.some((c) => Math.hypot(p.x - c.x, p.y - c.y) < 140)) continue;
     if (Math.hypot(p.x - BEAST.x, p.y - BEAST.y) < 175) continue;
     if (BUSHES.some((b) => ((p.x - b.x) / (b.rx + 40)) ** 2 + ((p.y - b.y) / (b.ry + 40)) ** 2 < 1)) continue;
     if (things.some((t) => Math.hypot(t.x - p.x, t.y - p.y) < 46)) continue;
@@ -358,17 +540,19 @@ export function paintMap(scene: Phaser.Scene) {
   canvas.height = Math.round(WORLD.h * MAP_RES);
   const ctx = canvas.getContext('2d')!;
   ctx.scale(canvas.width / WORLD.w, canvas.height / WORLD.h);
-  const rnd = seeded(20261014);
+  const rnd = seeded(20261015);
   grass(ctx, rnd);
+  flora(ctx, rnd);
+  river(ctx, rnd);
   for (const c of CAMPS) clearing(ctx, c, rnd);
-  // The pit and the bushes draw from their own seed, so the rest of the map stays as it was.
-  const rnd2 = seeded(20261015);
-  pit(ctx, rnd2);
+  for (const r of RUINS) ruins(ctx, r, rnd);
+  pit(ctx, rnd);
+  for (const w of WATCHSTONES) island(ctx, w, rnd);
   lanes(ctx, rnd);
   plaza(ctx, 'blue', rnd);
   plaza(ctx, 'red', rnd);
   kerbs(ctx, rnd);
-  for (const b of BUSHES) bush(ctx, b, rnd2);
+  for (const b of BUSHES) bush(ctx, b, rnd);
   scenery(ctx, rnd);
   // A dark frame round the edge of the world.
   ctx.strokeStyle = 'rgba(15,28,18,0.85)';

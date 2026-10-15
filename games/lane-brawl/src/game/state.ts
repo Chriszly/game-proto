@@ -2,10 +2,13 @@
 
 import {
   GANK,
+  JUNGLE,
   AbilityKey,
   BASE,
+  BuffDef,
   CAMPS,
-  CAMP,
+  CAMP_KINDS,
+  CampKind,
   CHAMPIONS,
   ChampionDef,
   ENEMY_LANES,
@@ -24,16 +27,20 @@ import {
   XP_FOR_LEVEL,
   MAX_LEVEL,
   WAVE_MS,
+  WORLD,
   ObjectiveKind,
   BEAST,
   INHIBITOR,
   INHIBITORS,
   SUPER_MINION,
+  PUPS,
+  WATCHSTONES,
 } from './data';
+import { championName } from './names';
 
 export type Phase = 'pick' | 'playing' | 'won' | 'lost';
-export type UnitKind = 'champion' | 'minion' | 'tower' | 'nexus' | 'camp' | 'beast' | 'inhibitor';
-/** Camps and the beast belong to no team: every team's units may attack them. */
+export type UnitKind = 'champion' | 'minion' | 'tower' | 'nexus' | 'camp' | 'beast' | 'inhibitor' | 'watchstone';
+/** Camps, the beast and untaken watchstones belong to no team: every team's units may attack the first two. */
 export type Side = Team | 'neutral';
 
 export interface Unit {
@@ -91,8 +98,24 @@ export interface Unit {
   power: number;
   /** Time left on being seen while in a bush, after attacking or casting, in ms. */
   revealMs: number;
+  /** Set when this champion hurts an enemy champion: towers near by shoot it first while it lasts. */
+  aggroMs: number;
+  /** An AI champion waits this long after one ability before the next. */
+  aiCastMs: number;
+  /** Whether each team can't see this unit this tick (fog of war, a bush or stealth). */
+  hidden: Record<Team, boolean>;
+  /** Stat changes that last a while: an ability's buff, or a jungle buff. */
+  buffs: Buff[];
+  // Camps only.
+  /** The kind of jungle monster, and the pack it belongs to (the unit id of its alpha or itself). */
+  campKind: CampKind | null;
+  group: number;
+  // Watchstones only: the team taking it and how far along it is, in ms.
+  capture: { team: Team; ms: number } | null;
   // Champions only.
   champ: ChampionDef | null;
+  /** A champion's own name: a first name and a byname, like "Brannoc Ironwall". */
+  name: string;
   player: boolean;
   level: number;
   xp: number;
@@ -108,6 +131,41 @@ export interface Unit {
   /** AI champions: the enemy champion it left its lane to gang up on, and until when. */
   gankTarget: number | null;
   gankUntil: number;
+  /** AI champions: the camp or watchstone it went into the jungle for, and until when. */
+  jungleTarget: number | null;
+  jungleUntil: number;
+  /** Attacks made, for a passive that hits harder every few attacks. */
+  attackCount: number;
+  /** Time since the champion last attacked or cast, in ms (an ambush needs a lull). */
+  lullMs: number;
+  /** Time left on the haste a passive gives after an attack, in ms. */
+  hasteMs: number;
+  kills: number;
+  deaths: number;
+}
+
+export interface Buff {
+  /** What gave it: an ability's name, or 'ember' or 'moss' for a jungle buff. */
+  id: string;
+  ms: number;
+  def: BuffDef;
+  color: string;
+}
+
+/** A patch on the ground from a zone ability: it hurts and slows the other team's units inside. */
+export interface Zone {
+  x: number;
+  y: number;
+  r: number;
+  side: Team;
+  owner: number;
+  /** Damage per second. */
+  dps: number;
+  slow: number;
+  /** Time left and the time it lasts, in ms. */
+  left: number;
+  ms: number;
+  color: string;
 }
 
 export interface Projectile {
@@ -125,8 +183,13 @@ export interface Projectile {
   pierce: boolean;
   hit: number[];
   color: string;
-  /** Stun in ms on whatever it hits. */
+  /** Stun and slow in ms on whatever it hits. */
   stun: number;
+  slow: number;
+  /** Drags the first champion or minion it hits to its owner. */
+  pull: boolean;
+  /** Double damage to a target below this share of its health (0 for none). */
+  executeBelow: number;
 }
 
 /** A short-lived visual the view turns into shapes: a ring, or a line between two points. */
@@ -194,10 +257,11 @@ export interface GameState {
   beastKills: Record<Team, number>;
   /** The AI champions sent to fight over the beast now. */
   contesters: number[];
-  /** Ids of the enemy champions each team can't see this tick (they hide in a bush). */
-  hidden: Record<Team, number[]>;
-  /** When the AI next sends gankers. */
+  /** When the AI next sends gankers, and next sends a champion into the jungle. */
   nextGank: number;
+  nextJungle: number;
+  /** Patches on the ground left by zone abilities. */
+  zones: Zone[];
   /** Short messages for the player (the beast woke, an inhibitor fell), newest last. */
   notices: Notice[];
 }
@@ -257,7 +321,15 @@ export function blankUnit(
     lane: null,
     power: 1,
     revealMs: 0,
+    aggroMs: 0,
+    aiCastMs: 0,
+    hidden: { blue: false, red: false },
+    buffs: [],
+    campKind: null,
+    group: 0,
+    capture: null,
     champ: null,
+    name: '',
     player: false,
     level: 1,
     xp: 0,
@@ -269,6 +341,13 @@ export function blankUnit(
     retreatUntil: 0,
     gankTarget: null,
     gankUntil: 0,
+    jungleTarget: null,
+    jungleUntil: 0,
+    attackCount: 0,
+    lullMs: 0,
+    hasteMs: 0,
+    kills: 0,
+    deaths: 0,
   };
 }
 
@@ -289,7 +368,7 @@ export function refreshStats(u: Unit) {
   u.cdr = sum('cdr');
 }
 
-export function spawnChampion(s: GameState, def: ChampionDef, side: Team, x: number, y: number, player: boolean, lane: LaneId | null) {
+export function spawnChampion(s: GameState, def: ChampionDef, side: Team, x: number, y: number, player: boolean, lane: LaneId | null, name = def.name) {
   const u = blankUnit(s, 'champion', side, x, y, {
     hp: 0,
     dmg: def.dmg,
@@ -302,6 +381,7 @@ export function spawnChampion(s: GameState, def: ChampionDef, side: Team, x: num
   u.hp = 0;
   u.maxHp = 0;
   u.champ = def;
+  u.name = name;
   u.player = player;
   u.level = 1;
   u.gold = START_GOLD;
@@ -316,8 +396,19 @@ export function spawnChampion(s: GameState, def: ChampionDef, side: Team, x: num
   return u;
 }
 
-/** A fresh match: the player's champion and four allies on blue, five champions on red, and the map. */
-export function createGame(pick: ChampionDef, enemyDamage: number): GameState {
+export interface MatchOptions {
+  /** The player's champion's name (the pick card's); one is made up when it is missing. */
+  playerName?: string;
+  /** Draws the rosters and the names: Math.random in the game. */
+  rnd?: () => number;
+}
+
+/**
+ * A fresh match: the player's champion and four allies on blue, five champions on red, every one a
+ * different class drawn at random, each with a name of its own, and the map.
+ */
+export function createGame(pick: ChampionDef, enemyDamage: number, opts: MatchOptions = {}): GameState {
+  const rnd = opts.rnd ?? Math.random;
   const s: GameState = {
     phase: 'playing',
     time: 0,
@@ -344,8 +435,9 @@ export function createGame(pick: ChampionDef, enemyDamage: number): GameState {
     beastBuff: { blue: 0, red: 0 },
     beastKills: { blue: 0, red: 0 },
     contesters: [],
-    hidden: { blue: [], red: [] },
     nextGank: GANK.firstAt,
+    nextJungle: JUNGLE.firstAt,
+    zones: [],
     notices: [],
   };
 
@@ -388,17 +480,13 @@ export function createGame(pick: ChampionDef, enemyDamage: number): GameState {
     s.units.push(inhib);
   }
   for (const c of CAMPS) {
-    s.units.push(
-      blankUnit(s, 'camp', 'neutral', c.x, c.y, {
-        hp: CAMP.hp,
-        dmg: CAMP.dmg,
-        armor: 0,
-        range: CAMP.range,
-        speed: 0,
-        attackMs: CAMP.attackMs,
-        radius: CAMP.radius,
-      }),
-    );
+    const lead = spawnCamp(s, c.kind, c.x, c.y, 0);
+    lead.facing = Math.atan2(WORLD.h / 2 - c.y, WORLD.w / 2 - c.x);
+    // A wolf pack: the alpha and two pups beside it, which fight as one.
+    if (c.kind === 'wolf') for (const d of PUPS) spawnCamp(s, 'pup', c.x + d.x, c.y + d.y, lead.id).facing = lead.facing;
+  }
+  for (const w of WATCHSTONES) {
+    s.units.push(blankUnit(s, 'watchstone', 'neutral', w.x, w.y, { hp: 1, dmg: 0, armor: 0, range: 0, speed: 0, attackMs: 1000, radius: 20 }));
   }
 
   // The guardian beast sleeps until its first waking.
@@ -418,7 +506,18 @@ export function createGame(pick: ChampionDef, enemyDamage: number): GameState {
   s.units.push(beast);
   s.beast = beast.id;
 
+  // The other nine classes, shuffled: four join the player, five fight on red.
   const others = CHAMPIONS.filter((c) => c.id !== pick.id);
+  for (let i = others.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1)) % (i + 1);
+    [others[i], others[j]] = [others[j], others[i]];
+  }
+  const taken: string[] = [];
+  const nameFor = (def: ChampionDef, given?: string) => {
+    const name = given ?? championName(def.id, rnd, taken);
+    taken.push(name);
+    return name;
+  };
   const offsets: Vec[] = [
     { x: 70, y: -40 },
     { x: 40, y: -90 },
@@ -429,16 +528,26 @@ export function createGame(pick: ChampionDef, enemyDamage: number): GameState {
   const blueAt = (i: number) => ({ x: BASE.blue.x + offsets[i].x, y: BASE.blue.y + offsets[i].y });
   const redAt = (i: number) => ({ x: BASE.red.x - offsets[i].x, y: BASE.red.y - offsets[i].y });
 
-  const player = spawnChampion(s, pick, 'blue', blueAt(0).x, blueAt(0).y, true, null);
+  const player = spawnChampion(s, pick, 'blue', blueAt(0).x, blueAt(0).y, true, null, nameFor(pick, opts.playerName));
   s.player = player.id;
   others.slice(0, 4).forEach((def, i) => {
-    spawnChampion(s, def, 'blue', blueAt(i + 1).x, blueAt(i + 1).y, false, ALLY_LANES[i]);
+    spawnChampion(s, def, 'blue', blueAt(i + 1).x, blueAt(i + 1).y, false, ALLY_LANES[i], nameFor(def));
   });
-  CHAMPIONS.forEach((def, i) => {
-    spawnChampion(s, def, 'red', redAt(i).x, redAt(i).y, false, ENEMY_LANES[i]);
+  others.slice(4, 9).forEach((def, i) => {
+    spawnChampion(s, def, 'red', redAt(i).x, redAt(i).y, false, ENEMY_LANES[i], nameFor(def));
   });
 
   return s;
+}
+
+/** A jungle monster of a kind at a spot; `group` is its pack's alpha (0 for itself). */
+export function spawnCamp(s: GameState, kind: CampKind, x: number, y: number, group: number): Unit {
+  const def = CAMP_KINDS[kind];
+  const u = blankUnit(s, 'camp', 'neutral', x, y, { hp: def.hp, dmg: def.dmg, armor: def.armor, range: def.range, speed: 0, attackMs: def.attackMs, radius: def.radius });
+  u.campKind = kind;
+  u.group = group || u.id;
+  s.units.push(u);
+  return u;
 }
 
 /** Puts a wave of minions on each lane from both Nexuses. */
