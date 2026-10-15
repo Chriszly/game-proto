@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { settings as hubSettings } from '../../../../shared/settings';
+import { renderScale, scrollingCamera, viewSize } from '../../../../shared/scaling';
 import { drawBelts, laneOffset, pointAlong } from '../art/belts';
 import { plantTexture } from '../art/garden';
 import { EXPANSION_IMAGE, GARDEN_MARGIN, gardenTexture, sceneryLayout } from '../art/ground';
@@ -318,11 +319,11 @@ export class GameScene extends Phaser.Scene {
 
   /** The world is bigger than the view, so the camera keeps the doctor in sight within its edges. */
   private followPlayer() {
-    this.cameras.main.setBounds(0, 0, WORLD.w, WORLD.h).startFollow(this.player, true);
+    scrollingCamera(this.cameras.main).setBounds(0, 0, WORLD.w, WORLD.h).startFollow(this.player, true);
   }
 
   /**
-   * A second camera, never zoomed or scrolled, draws everything from `UI_DEPTH` up (the top bar and
+   * A second camera, never zoomed or scrolled by the player, draws everything from `UI_DEPTH` up (the top bar and
    * its panels), and the main camera draws the rest, so zooming leaves the top bar as it is.
    * `splitCameras` sorts each object, including ones created later, every frame.
    */
@@ -341,11 +342,11 @@ export class GameScene extends Phaser.Scene {
   private createZoom() {
     this.setZoom(Number(readZoom()) || 1);
     this.input.on('wheel', (_p: Phaser.Input.Pointer, _over: unknown, _dx: number, dy: number) => {
-      if (dy !== 0) this.setZoom(this.cameras.main.zoom * (dy < 0 ? ZOOM_STEP : 1 / ZOOM_STEP));
+      if (dy !== 0) this.setZoom(this.zoom * (dy < 0 ? ZOOM_STEP : 1 / ZOOM_STEP));
     });
     this.input.keyboard!.on('keydown', (e: KeyboardEvent) => {
-      if (e.key === '+' || e.key === '=') this.setZoom(this.cameras.main.zoom * ZOOM_STEP);
-      if (e.key === '-' || e.key === '_') this.setZoom(this.cameras.main.zoom / ZOOM_STEP);
+      if (e.key === '+' || e.key === '=') this.setZoom(this.zoom * ZOOM_STEP);
+      if (e.key === '-' || e.key === '_') this.setZoom(this.zoom / ZOOM_STEP);
     });
     // A second touch pointer, so two fingers can pinch.
     if (this.input.manager.pointersTotal < 3) this.input.addPointer(1);
@@ -353,7 +354,7 @@ export class GameScene extends Phaser.Scene {
       const [a, b] = [this.input.pointer1, this.input.pointer2];
       if (!a.isDown || !b.isDown) return;
       const spread = Phaser.Math.Distance.Between(a.x, a.y, b.x, b.y);
-      if (!this.pinch) this.pinch = { spread, zoom: this.cameras.main.zoom };
+      if (!this.pinch) this.pinch = { spread, zoom: this.zoom };
       else if (this.pinch.spread > 0) this.setZoom((this.pinch.zoom * spread) / this.pinch.spread);
     });
     this.input.on('pointerup', () => {
@@ -361,11 +362,16 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /** The player's zoom; the main camera's own zoom also includes the screen's `renderScale`. */
+  private get zoom() {
+    return this.cameras.main.zoom / renderScale;
+  }
+
   private setZoom(zoom: number) {
     const clamped = Phaser.Math.Clamp(zoom, MIN_ZOOM, MAX_ZOOM);
     // Zoomed out past the world's width, the bounds widen evenly on both sides so the yard stays centred.
-    const w = Math.max(WORLD.w, this.scale.width / clamped);
-    this.cameras.main.setZoom(clamped).setBounds((WORLD.w - w) / 2, 0, w, WORLD.h);
+    const w = Math.max(WORLD.w, viewSize(this).width / clamped);
+    this.cameras.main.setZoom(clamped * renderScale).setBounds((WORLD.w - w) / 2, 0, w, WORLD.h);
     writeZoom(clamped);
   }
 
@@ -1112,7 +1118,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createHud() {
-    const { width } = this.scale;
+    const { width } = viewSize(this);
     const first = this.children.list.length;
     // Taps on the bar stop here rather than falling through to a priority sign in the world below.
     fit(this.add.image(0, 0, cardTexture(this, 'bar', width, HUD_HEIGHT)))

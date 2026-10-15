@@ -4,6 +4,7 @@ import { INK, SERIF, fit } from '../art/paint';
 import { cardTexture } from '../art/ui';
 import { ITEMS, PLANTS, RECIPES, REFINE, type ItemId } from '../game/items';
 import { potionPrice, type GameState } from '../game/state';
+import { viewSize } from '../../../../shared/scaling';
 
 const ROW = 30;
 const WIDTH = 360;
@@ -22,7 +23,7 @@ export class RecipeBook {
   readonly lines: string[] = [];
 
   constructor(scene: Phaser.Scene, depth: number) {
-    const { width, height } = scene.scale;
+    const { width, height } = viewSize(scene);
     const parts: Phaser.GameObjects.GameObject[] = [];
     let y = 0;
 

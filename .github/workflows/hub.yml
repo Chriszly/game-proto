@@ -1,7 +1,8 @@
 name: Hub
 
-# Checks that the hub lists every game and each card opens it. Runs when the hub page, its test,
-# a game's entry page, cover or favicon, or a shared file changes.
+# Checks that the hub lists every game and each card opens it, and that the games using
+# shared/scaling.ts fit every screen. Runs when the hub page, its tests, a game's entry page,
+# main.ts, cover or favicon, or a shared file changes.
 on:
   push:
     branches: [main]
@@ -10,6 +11,7 @@ on:
       - favicon.svg
       - e2e/**
       - games/*/index.html
+      - games/*/src/main.ts
       - games/*/cover.png
       - games/*/favicon.svg
       - shared/**
@@ -43,7 +45,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: npx playwright test --project hub
+      # One at a time: the screen checks draw up to 4K in software and, run alongside, starve the
+      # hub test's dev server so a game page loads too slowly.
+      - run: npx playwright test --project hub --workers 1
       - if: always()
         uses: actions/upload-artifact@v4
         with:

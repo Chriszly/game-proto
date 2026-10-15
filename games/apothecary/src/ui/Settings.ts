@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { INK, SERIF, fit } from '../art/paint';
 import { cardTexture } from '../art/ui';
 import { settings } from '../../../../shared/settings';
+import { viewSize } from '../../../../shared/scaling';
 
 const WIDTH = 360;
 const TEXT = { fontFamily: SERIF, fontSize: '13px', color: INK };
@@ -16,7 +17,7 @@ export class Settings {
   private parts: (Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.Visible)[];
 
   constructor(scene: Phaser.Scene, depth: number, onNewGame: () => void) {
-    const { width, height } = scene.scale;
+    const { width, height } = viewSize(scene);
     const h = 178;
     const cx = width / 2;
     const top = (height - h) / 2;

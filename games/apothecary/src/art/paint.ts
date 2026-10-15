@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { sharpRes } from '../../../../shared/scaling';
 
 // The storybook painting kit: every texture is painted on a 2D canvas in code, like a page of a
 // herbalist's almanac. Shapes get layered watercolour washes whose pigment pools at the edges, wobbly
@@ -88,7 +89,9 @@ export const chance = (p: number) => rnd() < p;
  * Paints a texture `w` x `h` pixels as shown, on a canvas `res` times that, and adds it to the
  * scene's textures under `key`. `draw` paints in shown pixels. Replaces a texture of the same key.
  */
-export function paint(scene: Phaser.Scene, key: string, w: number, h: number, draw: (c: Ctx) => void, res = 2, seed = hash(key)) {
+export function paint(scene: Phaser.Scene, key: string, w: number, h: number, draw: (c: Ctx) => void, baseRes = 2, seed = hash(key)) {
+  // `baseRes` is for a screen the game is shown on at its own size; a bigger screen gets more.
+  const res = sharpRes(w, h, baseRes);
   const canvas = document.createElement('canvas');
   canvas.width = Math.ceil(w * res);
   canvas.height = Math.ceil(h * res);
