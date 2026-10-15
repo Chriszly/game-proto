@@ -211,10 +211,10 @@ export class GameScene extends Phaser.Scene {
     this.add.image(0, 0, 'edge').setOrigin(0).setDepth(UI_DEPTH - 40);
 
     const zone = this.add.zone(GRID.x, GRID.y, GRID.cols * GRID.cell, GRID.rows * GRID.cell).setOrigin(0).setInteractive();
-    zone.on('pointermove', (p: Phaser.Input.Pointer) => (this.hover = cellAt(p.x, p.y)));
+    zone.on('pointermove', (p: Phaser.Input.Pointer) => (this.hover = cellAt(p.worldX, p.worldY)));
     zone.on('pointerout', () => (this.hover = null));
     zone.on('pointerdown', (p: Phaser.Input.Pointer) => {
-      this.hover = cellAt(p.x, p.y);
+      this.hover = cellAt(p.worldX, p.worldY);
       if (this.hover) this.tapCell(this.hover.col, this.hover.row);
     });
   }

@@ -4,6 +4,7 @@ import { bakeGarden } from '../art/garden';
 import { bakeGround } from '../art/ground';
 import { bakeItems } from '../art/items';
 import { bakeMarkers } from '../art/markers';
+import { bakePixies } from '../art/pixies';
 import { bakeStations } from '../art/stations';
 import { bakeTownsfolk } from '../art/townsfolk';
 import { bakeUi } from '../art/ui';
@@ -20,6 +21,7 @@ export class BootScene extends Phaser.Scene {
     bakeGarden(this);
     bakeStations(this);
     bakeMarkers(this);
+    bakePixies(this);
     bakeTownsfolk(this);
     bakeGround(this);
     bakeUi(this);
