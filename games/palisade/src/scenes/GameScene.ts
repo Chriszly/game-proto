@@ -2,6 +2,7 @@ import { settings } from '../../../../shared/settings';
 import Phaser from 'phaser';
 import { FIGURES, foeTexture, guardTexture } from '../art/characters';
 import { bossNodeTexture, relicTexture } from '../art/icons';
+import { fit } from '../art/lowpoly';
 import { BAR, BOSS_BARS, FIRE, GOLD, SLATE, STORM, XP } from '../art/palette';
 import { ENEMIES } from '../game/enemies';
 import { GUARDS, type GuardKind } from '../game/guards';
@@ -137,10 +138,10 @@ export class GameScene extends Phaser.Scene {
     this.state = newRun(loadProgress());
     if (this.state.levelUps > 0) offer(this.state);
 
-    this.add.image(0, 0, 'background').setOrigin(0);
+    fit(this.add.image(0, 0, 'background')).setOrigin(0);
     const hero = FIGURES.hero!;
-    this.hero = this.add.image(HERO_FEET.x, HERO_FEET.y, 'hero').setOrigin(hero.originX, hero.originY).setDepth(HERO_FEET.y);
-    this.barricade = this.add.image(BARRICADE.x, BARRICADE.y, 'barricade-0').setOrigin(0).setDepth(1);
+    this.hero = fit(this.add.image(HERO_FEET.x, HERO_FEET.y, 'hero')).setOrigin(hero.originX, hero.originY).setDepth(HERO_FEET.y);
+    this.barricade = fit(this.add.image(BARRICADE.x, BARRICADE.y, 'barricade-0')).setOrigin(0).setDepth(1);
     this.bars = this.add.graphics().setDepth(UI_DEPTH - 20);
     this.fx = this.add.graphics().setDepth(UI_DEPTH - 30);
     this.glow = this.add.graphics().setDepth(UI_DEPTH - 29).setBlendMode(Phaser.BlendModes.ADD);
@@ -267,7 +268,7 @@ export class GameScene extends Phaser.Scene {
       const key = foeTexture(e.kind, e.attacking ? 0 : frame);
       if (type.flying) this.fx.fillStyle(0x2a1808, 0.22).fillEllipse(e.x + 6, feet + FLY_HEIGHT, 30, 9);
       const fig = FIGURES[key]!;
-      sprite.setTexture(key).setOrigin(fig.originX, fig.originY).setPosition(e.x + lunge, feet + bob).setDepth(feet);
+      fit(sprite.setTexture(key)).setOrigin(fig.originX, fig.originY).setPosition(e.x + lunge, feet + bob).setDepth(feet);
       // A hit flashes white, in blinks so a foe under steady fire still shows; with reduced motion
       // the blinks and the burn's flicker hold still.
       if (e.hitMs > 0 && this.blink(50) === 0) sprite.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
@@ -311,7 +312,7 @@ export class GameScene extends Phaser.Scene {
       seen.add(m.id);
       let sprite = this.missiles.get(m.id);
       if (!sprite) {
-        sprite = this.add.image(m.x, m.y, m.kind === 'arrow' ? arrowKey : m.kind === 'magic' ? 'magic-bolt' : 'fireball').setDepth(UI_DEPTH - 40);
+        sprite = fit(this.add.image(m.x, m.y, m.kind === 'arrow' ? arrowKey : m.kind === 'magic' ? 'magic-bolt' : 'fireball')).setDepth(UI_DEPTH - 40);
         if (m.kind === 'arrow') sprite.setOrigin(30 / 44, 0.5);
         else if (m.kind === 'magic') sprite.setOrigin(28 / 40, 0.5);
         else sprite.setOrigin(34 / 48, 0.5);
@@ -499,14 +500,14 @@ export class GameScene extends Phaser.Scene {
     this.lastArrowCooldown = cd;
     const barricade = this.state.barricade;
     const health = barricade.hp / barricade.max;
-    this.barricade.setTexture(barricade.hp <= 0 ? 'barricade-3' : health > 0.66 ? 'barricade-0' : health > 0.33 ? 'barricade-1' : 'barricade-2');
+    fit(this.barricade.setTexture(barricade.hp <= 0 ? 'barricade-3' : health > 0.66 ? 'barricade-0' : health > 0.33 ? 'barricade-1' : 'barricade-2'));
   }
 
   // ---- The HUD: top bar, experience bar, banners and the boss's bars.
 
   private createHud() {
-    this.add.image(0, 0, 'hud-top').setOrigin(0).setDepth(UI_DEPTH);
-    this.add.image(0, XP_BAR.y - 10, 'hud-bottom').setOrigin(0).setDepth(UI_DEPTH);
+    fit(this.add.image(0, 0, 'hud-top')).setOrigin(0).setDepth(UI_DEPTH);
+    fit(this.add.image(0, XP_BAR.y - 10, 'hud-bottom')).setOrigin(0).setDepth(UI_DEPTH);
     this.hud = this.add.graphics().setDepth(UI_DEPTH);
     const top = (x: number, text: string, color = '#e9e4d8', size = 14) =>
       this.add.text(x, 19, text, textStyle(size, color)).setOrigin(0, 0.5).setDepth(UI_DEPTH + 1);
@@ -514,7 +515,7 @@ export class GameScene extends Phaser.Scene {
     top(140, 'Barricade');
     this.foesText = top(612, '');
     this.slainText = top(716, '');
-    this.add.image(796, 19, 'hud-coin').setDepth(UI_DEPTH + 1);
+    fit(this.add.image(796, 19, 'hud-coin')).setDepth(UI_DEPTH + 1);
     this.coinsText = top(808, '', '#ffe07a');
     this.bestText = top(944, '').setOrigin(1, 0.5);
     this.levelText = this.add.text(18, XP_BAR.y + XP_BAR.h / 2, '', textStyle(16, '#9fd3ff')).setOrigin(0, 0.5).setDepth(UI_DEPTH + 1);
@@ -525,7 +526,7 @@ export class GameScene extends Phaser.Scene {
     this.banner = this.add.text(VIEW.w / 2, 170, '', { ...textStyle(40, '#ffcf4a', 6), align: 'center' }).setOrigin(0.5).setDepth(UI_DEPTH + 1);
     this.bossName = this.add.text(BOSS_BAR.x, BOSS_BAR.y - 3, '', textStyle(14, '#ffb0a0', 3)).setOrigin(0.5, 1).setDepth(UI_DEPTH + 1);
     // The kill streak chip, riding the top edge of the experience bar.
-    this.streakFlame = this.add.image(STREAK.x - STREAK.w / 2 + 14, STREAK.y, 'hud-flame').setDepth(UI_DEPTH + 2);
+    this.streakFlame = fit(this.add.image(STREAK.x - STREAK.w / 2 + 14, STREAK.y, 'hud-flame')).setDepth(UI_DEPTH + 2);
     this.streakText = this.add.text(STREAK.x - STREAK.w / 2 + 26, STREAK.y, '', textStyle(12, '#ffcf8a')).setOrigin(0, 0.5).setDepth(UI_DEPTH + 2);
     this.streakBonusText = this.add.text(STREAK.x + STREAK.w / 2 - 8, STREAK.y, '', textStyle(12, '#ffe07a')).setOrigin(1, 0.5).setDepth(UI_DEPTH + 2);
   }
@@ -617,9 +618,9 @@ export class GameScene extends Phaser.Scene {
     this.relicPanel.setVisible(!!found && s.phase === 'break' && !s.choices);
     if (found) {
       const [a, b] = found;
-      this.relicIcon.setTexture(relicTexture(a)).setPosition(b ? -188 : -168, b ? -14 : -18);
+      fit(this.relicIcon.setTexture(relicTexture(a)), 0.7).setPosition(b ? -188 : -168, b ? -14 : -18);
       this.relicIcon2.setVisible(!!b);
-      if (b) this.relicIcon2.setTexture(relicTexture(b));
+      if (b) fit(this.relicIcon2.setTexture(relicTexture(b)), 0.7);
       this.relicName.setText(b ? `${RELICS[a].name} and ${RELICS[b].name}` : RELICS[a].name);
       this.relicText.setText(b ? 'Two relics from the Hardened Road, from now on.' : `${RELICS[a].text}, from now on.`);
       const set = found.map((id) => RELICS[id].set).find((id) => setComplete(s.relics, id));
@@ -638,8 +639,8 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(1, 0.5)
       .setDepth(depth);
     this.trackNumber = this.add.text(0, 0, '', textStyle(11, '#ffe7a0')).setOrigin(0.5).setDepth(depth + 1);
-    this.trackBoss = this.add.image(0, TRACK.markY, bossNodeTexture('troll')).setScale(0.62).setDepth(depth);
-    this.trackChest = this.add.image(0, TRACK.markY, 'chest').setScale(0.62).setDepth(depth);
+    this.trackBoss = fit(this.add.image(0, TRACK.markY, bossNodeTexture('troll')), 0.62).setDepth(depth);
+    this.trackChest = fit(this.add.image(0, TRACK.markY, 'chest'), 0.62).setDepth(depth);
   }
 
   private drawTrack() {
@@ -686,9 +687,9 @@ export class GameScene extends Phaser.Scene {
     }
     const current = step <= 9;
     this.trackNumber.setVisible(current).setPosition(at(step), y).setText(String(s.wave));
-    this.trackBoss.setTexture(bossNodeTexture(tr.boss)).setPosition(at(10), y).setAlpha(step > 10 ? 0.6 : 1);
+    fit(this.trackBoss.setTexture(bossNodeTexture(tr.boss)), 0.62).setPosition(at(10), y).setAlpha(step > 10 ? 0.6 : 1);
     if (step === 10) g.lineStyle(2, GOLD.light, 0.5 + 0.5 * this.pulse(700)).strokePoints(this.hexPts(at(10), y, 13), true);
-    this.trackChest.setTexture(finished ? 'chest-open' : 'chest').setPosition(at(10) + 30, y - 1);
+    fit(this.trackChest.setTexture(finished ? 'chest-open' : 'chest'), 0.62).setPosition(at(10) + 30, y - 1);
     // A few gold glints round the chest.
     for (const [dx, dy] of [[-13, -9], [12, -10], [14, 3]]) g.fillStyle(0xfff1b0, 0.7).fillTriangle(at(10) + 30 + dx - 2, y + dy, at(10) + 30 + dx, y + dy - 2, at(10) + 30 + dx + 2, y + dy);
   }
@@ -700,9 +701,9 @@ export class GameScene extends Phaser.Scene {
   private createRelicPanel() {
     const g = this.add.graphics();
     drawPanel(g, -240, -58, 480, 116, { c: 14, fill: 0x222630, alpha: 0.95, lw: 2.5 });
-    const chest = this.add.image(-168, 12, 'chest-open').setScale(1.4);
-    this.relicIcon = this.add.image(-168, -18, 'relic-crown').setScale(0.7);
-    this.relicIcon2 = this.add.image(-148, -22, 'relic-crown').setScale(0.7).setVisible(false);
+    const chest = fit(this.add.image(-168, 12, 'chest-open'), 1.4);
+    this.relicIcon = fit(this.add.image(-168, -18, 'relic-crown'), 0.7);
+    this.relicIcon2 = fit(this.add.image(-148, -22, 'relic-crown'), 0.7).setVisible(false);
     const title = this.add.text(-112, -38, 'Relic chest!', textStyle(20, '#ffcf4a', 4)).setOrigin(0, 0.5);
     this.relicName = this.add.text(-112, -12, '', textStyle(15, '#ffe7a0')).setOrigin(0, 0.5);
     this.relicText = this.add.text(-112, 12, '', { ...textStyle(13, '#e9e4d8'), fontStyle: 'normal', wordWrap: { width: 340 } }).setOrigin(0, 0.5);
@@ -717,7 +718,7 @@ export class GameScene extends Phaser.Scene {
 
   private createRain() {
     const depth = UI_DEPTH - 6;
-    this.rainButton = this.add.image(RAIN.x, RAIN.y, 'rain-charging').setDepth(depth);
+    this.rainButton = fit(this.add.image(RAIN.x, RAIN.y, 'rain-charging')).setDepth(depth);
     this.add.text(RAIN.x, RAIN.y - RAIN.r - 17, 'Arrow Rain', textStyle(10, '#ffe7a0')).setOrigin(0.5).setDepth(depth + 1);
     this.rainBadge = this.add.text(RAIN.x + RAIN.r + 27, RAIN.y, '', textStyle(9, '#2b2010')).setOrigin(0.5).setDepth(depth + 1);
     this.rainHint = this.add.text(RAIN_HINT.x, RAIN_HINT.y, 'Drag onto the horde, let go to loose', textStyle(11, '#fff3d0')).setOrigin(0.5).setDepth(depth + 1);
@@ -728,7 +729,7 @@ export class GameScene extends Phaser.Scene {
       this.aim = { x: p.worldX, y: p.worldY };
     });
     // The caltrops button above it is dragged onto the road the same way.
-    this.caltropsButton = this.add.image(CALTROPS.x, CALTROPS.y, 'caltrops-charging').setDepth(depth);
+    this.caltropsButton = fit(this.add.image(CALTROPS.x, CALTROPS.y, 'caltrops-charging')).setDepth(depth);
     this.add.text(CALTROPS.x, CALTROPS.y - CALTROPS.r - 15, 'Caltrops', textStyle(10, '#ffe7a0')).setOrigin(0.5).setDepth(depth + 1);
     this.caltropsBadge = this.add.text(CALTROPS.x + CALTROPS.r + 27, CALTROPS.y, '', textStyle(9, '#2b2010')).setOrigin(0.5).setDepth(depth + 1);
     const hitC = this.add.circle(CALTROPS.x, CALTROPS.y, CALTROPS.r + 6, 0x000000, 0.001).setDepth(depth + 2);
@@ -787,7 +788,7 @@ export class GameScene extends Phaser.Scene {
     g.clear();
     const charge = Math.min(1, s.rain.charge / s.rain.need);
     const grow = ready && !this.aim ? 1 + 0.05 * this.pulse(800) : 1;
-    this.rainButton.setTexture(ready ? 'rain-ready' : 'rain-charging').setScale(grow);
+    fit(this.rainButton.setTexture(ready ? 'rain-ready' : 'rain-charging'), grow);
     // The label above, and a READY badge or the kills still needed beside it.
     drawPanel(g, RAIN.x - 36, RAIN.y - RAIN.r - 25, 72, 16, { c: 4, fill: 0x1e222c, alpha: 0.9, edge: GOLD.mid, lw: 1 });
     drawPanel(g, RAIN.x + RAIN.r + 5, RAIN.y - 8, 44, 16, { c: 4, fill: ready ? GOLD.mid : 0x1e222c, alpha: ready ? 1 : 0.9, edge: GOLD.mid, lw: 1 });
@@ -844,7 +845,7 @@ export class GameScene extends Phaser.Scene {
       this.drawRing(g, vol.x, vol.y, GOLD.light, 1 - fall * 0.5);
       let arrows = this.rainArrows.get(vol.id);
       if (!arrows) {
-        arrows = Array.from({ length: 14 }, () => this.add.image(0, 0, 'rain-arrow').setOrigin(0.5, 1).setDepth(UI_DEPTH - 35));
+        arrows = Array.from({ length: 14 }, () => fit(this.add.image(0, 0, 'rain-arrow')).setOrigin(0.5, 1).setDepth(UI_DEPTH - 35));
         this.rainArrows.set(vol.id, arrows);
       }
       arrows.forEach((img, i) => {
@@ -903,7 +904,7 @@ export class GameScene extends Phaser.Scene {
     const ready = this.caltropsReady();
     const g = this.aimG;
     const grow = ready && !this.aim ? 1 + 0.05 * this.pulse(800) : 1;
-    this.caltropsButton.setTexture(ready ? 'caltrops-ready' : 'caltrops-charging').setScale(grow);
+    fit(this.caltropsButton.setTexture(ready ? 'caltrops-ready' : 'caltrops-charging'), grow);
     drawPanel(g, CALTROPS.x - 32, CALTROPS.y - CALTROPS.r - 23, 64, 16, { c: 4, fill: 0x1e222c, alpha: 0.9, edge: GOLD.mid, lw: 1 });
     drawPanel(g, CALTROPS.x + CALTROPS.r + 5, CALTROPS.y - 8, 44, 16, { c: 4, fill: ready ? GOLD.mid : 0x1e222c, alpha: ready ? 1 : 0.9, edge: GOLD.mid, lw: 1 });
     this.caltropsBadge.setText(ready ? 'READY' : `${c.charge}/${c.need}`).setColor(ready ? '#2b2010' : '#ffe7a0');
@@ -928,7 +929,7 @@ export class GameScene extends Phaser.Scene {
       if (!pieces) {
         pieces = Array.from({ length: 16 }, (_, i) => {
           const [dx, dy] = this.scatter(p.id, i);
-          return this.add.image(p.x + dx * CALTROP_PATCH.rx * 0.9, p.y + dy * CALTROP_PATCH.ry * 0.9, 'caltrop').setDepth(2);
+          return fit(this.add.image(p.x + dx * CALTROP_PATCH.rx * 0.9, p.y + dy * CALTROP_PATCH.ry * 0.9, 'caltrop')).setDepth(2);
         });
         this.caltropPieces.set(p.id, pieces);
       }
@@ -946,7 +947,7 @@ export class GameScene extends Phaser.Scene {
   private createGuards() {
     this.slotG = this.add.graphics().setDepth(3);
     GUARD_SLOTS.forEach((slot, i) => {
-      this.guardSprites.push(this.add.image(slot.x, slot.y, guardTexture('spear')).setVisible(false));
+      this.guardSprites.push(fit(this.add.image(slot.x, slot.y, guardTexture('spear'))).setVisible(false));
       this.slotLabels.push(this.add.text(slot.x, slot.y - 30, '', textStyle(11, '#ffe7a0', 3)).setOrigin(0.5).setDepth(UI_DEPTH - 7));
       this.guardFlash.push(0);
       this.lastGuardCd.push(0);
@@ -993,9 +994,7 @@ export class GameScene extends Phaser.Scene {
       this.lastGuardCd[i] = guard.cd;
       this.guardFlash[i] = Math.max(0, this.guardFlash[i] - 0.08);
       const fig = FIGURES[guardTexture(guard.kind)]!;
-      sprite
-        .setVisible(true)
-        .setTexture(guardTexture(guard.kind))
+      fit(sprite.setVisible(true).setTexture(guardTexture(guard.kind)))
         .setOrigin(fig.originX, fig.originY)
         .setPosition(slot.x + this.guardFlash[i] * 5, slot.y)
         .setDepth(slot.y);
