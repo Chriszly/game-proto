@@ -68,9 +68,17 @@ jobs:
               const { addProjectV2ItemById: { item } } = await github.graphql(`
                 mutation($projectId: ID!, $contentId: ID!) {
                   addProjectV2ItemById(input: { projectId: $projectId, contentId: $contentId }) {
-                    item { id fieldValueByName(name: "Status") { ... on ProjectV2ItemFieldSingleSelectValue { name } } }
+                    item { id isArchived fieldValueByName(name: "Status") { ... on ProjectV2ItemFieldSingleSelectValue { name } } }
                   }
                 }`, { projectId: project.id, contentId: pr.node_id });
+              // Adding an archived item returns it still archived, so bring it back.
+              if (item.isArchived) {
+                await github.graphql(`
+                  mutation($projectId: ID!, $itemId: ID!) {
+                    unarchiveProjectV2Item(input: { projectId: $projectId, itemId: $itemId }) { item { id } }
+                  }`, { projectId: project.id, itemId: item.id });
+                console.log(`Unarchived #${pr.number} in ${project.title}`);
+              }
               // Only move it out of no status or Todo, so a status set by hand stays.
               const current = item.fieldValueByName?.name;
               if (current && current.toLowerCase() !== 'todo') {
