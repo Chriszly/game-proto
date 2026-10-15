@@ -1,5 +1,7 @@
+import { BOONS, type BoonId } from './admiralty';
 import { ORDERS, type OrderId } from './orders';
 import { ENEMIES, type EnemyKind } from './ships';
+import { SHOTS, type ShotKind } from './shot';
 import type { UpgradeId } from './upgrades';
 import { waveShips } from './waves';
 
@@ -59,6 +61,33 @@ export const CHARGE_MS = 1000;
 export const REACH_MIN = 0.65;
 export const CHARGE_DAMAGE = 0.5;
 
+/**
+ * The wind: sailing straight downwind is `WIND_SPEED` faster and straight into it as much slower
+ * (in between, by how square to it the ship sails), and shot fired downwind reaches up to
+ * `WIND_REACH` further. Every ship feels it the same.
+ */
+export const WIND_SPEED = 0.18;
+export const WIND_REACH = 0.25;
+/** The first wave's wind, so the first round plays the same every time: blowing toward the east. */
+export const FIRST_WIND = 0;
+/** How much faster (or slower) a ship sails on `heading` in the wind blowing toward `wind`. */
+export const windSpeed = (wind: number, heading: number) => 1 + WIND_SPEED * Math.cos(heading - wind);
+/** How much further shot fired toward `dir` reaches: further downwind, never shorter. */
+export const windReach = (wind: number, dir: number) => 1 + WIND_REACH * Math.max(0, Math.cos(dir - wind));
+/** Where the wind blows from, as a compass point (wind blowing toward the east comes from the W). */
+export function windFrom(wind: number) {
+  const points = ['E', 'SE', 'S', 'SW', 'W', 'NW', 'N', 'NE'];
+  const k = Math.round((wind + Math.PI) / (Math.PI / 4));
+  return points[((k % 8) + 8) % 8];
+}
+
+/** An enemy at or under this share of its hull can be boarded and taken as a prize. */
+export const BOARD_HP = 0.2;
+/** How close alongside, hull to hull, the player must sail to board. */
+export const BOARD_REACH = 28;
+/** How long the player must stay alongside to take her. */
+export const BOARD_MS = 1200;
+
 export type Side = 'port' | 'starboard';
 
 export interface Ship {
@@ -78,6 +107,10 @@ export interface Ship {
   agroundMs: number;
   /** Time left sailing slowed by a chain shot hit. */
   slowMs: number;
+  /** Time left reloading slowly after a grapeshot hit. */
+  jamMs: number;
+  /** How long the player has been alongside this crippled enemy, boarding her. */
+  boardMs: number;
   /**
    * An enemy sailing round an island that lies between it and the player: which island (an index
    * into `ISLANDS`) and which way round (1 or -1). Null when the way is clear.
@@ -93,9 +126,20 @@ export interface Ball {
   vy: number;
   ms: number;
   damage: number;
+  /** Fired by the player or one of the player's prizes, so it hits enemies. */
   fromPlayer: boolean;
-  /** How the shot looks: round shot, or what the captain's order loaded. */
-  shot: 'round' | 'chain' | 'grape' | 'powder';
+  /** The shot: what it does (chain slows, grape slows reloads) and how it looks; powder is round shot with a flash. */
+  shot: ShotKind | 'powder';
+}
+
+/** A mortar shell in the air, coming down on the spot marked on the sea when `ms` runs out. */
+export interface Shell {
+  id: number;
+  x: number;
+  y: number;
+  ms: number;
+  total: number;
+  damage: number;
 }
 
 export interface Loot {
@@ -108,7 +152,7 @@ export interface Loot {
 
 export interface Effect {
   id: number;
-  kind: 'splash' | 'smoke' | 'hit' | 'sink' | 'coins';
+  kind: 'splash' | 'smoke' | 'hit' | 'sink' | 'coins' | 'blast' | 'prize';
   x: number;
   y: number;
   ms: number;
@@ -116,6 +160,8 @@ export interface Effect {
   heading?: number;
   ship?: EnemyKind;
   gold?: number;
+  /** A blast's radius. */
+  size?: number;
 }
 
 export interface GameState {
@@ -137,7 +183,15 @@ export interface GameState {
   charge: Record<Side, number | null>;
   /** The captain's order for this wave: one bonus that lasts the wave. */
   order: OrderId;
+  /** The way this wave's wind blows toward, in radians like a heading. */
+  wind: number;
+  /** The shot each side is loaded with, chosen at the harbor. */
+  loadout: Record<Side, ShotKind>;
   enemies: Ship[];
+  /** Enemy ships the player boarded and took: they sail with the player until the wave is beaten. */
+  escorts: Ship[];
+  /** Mortar shells in the air. */
+  shells: Shell[];
   balls: Ball[];
   loot: Loot[];
   effects: Effect[];
@@ -145,8 +199,14 @@ export interface GameState {
   /** All the gold picked up this run. */
   plundered: number;
   sunk: number;
+  /** Ships boarded and taken this run. */
+  taken: number;
   ranks: Partial<Record<UpgradeId, number>>;
   bestWave: number;
+  /** The best wave before this run, which a run must beat for the Admiralty's bonus medals. */
+  bestBefore: number;
+  /** Medals the Admiralty awards this run, set when it ends. */
+  medals: number;
   nextId: number;
 }
 
@@ -173,13 +233,20 @@ export function stats(s: GameState) {
 export const reachOf = (range: number, charge: number) => range * (REACH_MIN + (1 - REACH_MIN) * charge);
 
 export function newShip(id: number, kind: Ship['kind'], x: number, y: number, heading: number, hp: number): Ship {
-  return { id, kind, x, y, heading, hp, maxHp: hp, reload: { port: 0, starboard: 0 }, hitMs: 0, agroundMs: 0, slowMs: 0, detour: null };
+  return { id, kind, x, y, heading, hp, maxHp: hp, reload: { port: 0, starboard: 0 }, hitMs: 0, agroundMs: 0, slowMs: 0, jamMs: 0, boardMs: 0, detour: null };
 }
+
+/** The shot one side fires this wave: what the captain's order loads, or else what was loaded at the harbor. */
+export const loadedShot = (s: GameState, side: Side): ShotKind => ORDERS[s.order].load ?? s.loadout[side];
+
+/** The full reach of one side's guns this wave, before the wind: shorter for grapeshot. */
+export const sideRange = (s: GameState, side: Side) => stats(s).range * (SHOTS[loadedShot(s, side)].range ?? 1);
 
 export const FIRST_ORDER: OrderId = 'chain';
 
-export function newRun(bestWave = 0): GameState {
-  return {
+/** A new run; `boons` are the Admiralty's starting upgrades, bought with medals between runs. */
+export function newRun(bestWave = 0, boons: BoonId[] = []): GameState {
+  const s: GameState = {
     phase: 'break',
     wave: 1,
     breakMs: BREAK_MS,
@@ -191,17 +258,31 @@ export function newRun(bestWave = 0): GameState {
     charge: { port: null, starboard: null },
     // The first wave's order is always chain shot, so the first round plays the same every time.
     order: FIRST_ORDER,
+    wind: FIRST_WIND,
+    loadout: { port: 'round', starboard: 'round' },
     enemies: [],
+    escorts: [],
+    shells: [],
     balls: [],
     loot: [],
     effects: [],
     gold: 0,
     plundered: 0,
     sunk: 0,
+    taken: 0,
     ranks: {},
     bestWave,
+    bestBefore: bestWave,
+    medals: 0,
     nextId: 2,
   };
+  for (const id of boons) {
+    const boon = BOONS[id];
+    s.gold += boon.gold ?? 0;
+    if (boon.rank) s.ranks[boon.rank] = 1;
+  }
+  s.player.maxHp = s.player.hp = stats(s).maxHp;
+  return s;
 }
 
 export const radiusOf = (ship: Ship) => (ship.kind === 'player' ? PLAYER.radius : ENEMIES[ship.kind].radius);
