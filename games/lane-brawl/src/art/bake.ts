@@ -1,11 +1,11 @@
 // Bakes the low-poly models into sprite sheets at boot: every champion in both teams' colours,
-// minions, the boar, towers, rubble, the Nexus and a coin, each from eight directions and in eight
-// poses where it moves. Frames are named `${dir}:${pose}`; dir 0 faces right (east) and each step
-// turns 45 degrees clockwise on screen, so dir 2 faces the viewer.
+// minions, the boar, the guardian beast, towers, inhibitors, rubble, the Nexus and a coin, each
+// moving one from eight directions and in eight poses. Frames are named `${dir}:${pose}`; dir 0
+// faces right (east) and each step turns 45 degrees clockwise on screen, so dir 2 faces the viewer.
 
 import Phaser from 'phaser';
 import { Model, render } from './lowpoly';
-import { POSES, PoseName, TeamName, boarModel, championModel, coinModel, minionModel, nexusModel, rubbleModel, towerModel } from './models';
+import { POSES, PoseName, TeamName, beastModel, inhibitorModel, boarModel, championModel, coinModel, minionModel, nexusModel, rubbleModel, towerModel } from './models';
 
 /** Canvas pixels per screen pixel in the sheets; sprites are drawn at 1 / RES scale. */
 export const RES = 2;
@@ -25,6 +25,8 @@ export const BOAR_CELL = { w: 84, h: 72, footY: 44 };
 export const TOWER_CELL = { w: 76, h: 124, footY: 104 };
 export const RUBBLE_CELL = { w: 76, h: 56, footY: 36 };
 export const NEXUS_CELL = { w: 120, h: 134, footY: 100 };
+export const BEAST_CELL = { w: 170, h: 150, footY: 104 };
+export const INHIB_CELL = { w: 72, h: 84, footY: 64 };
 export const COIN_CELL = { w: 26, h: 26, footY: 13 };
 
 /** The screen angle a direction faces, in radians (0 is right, pi/2 is down). */
@@ -110,6 +112,8 @@ export const BOAR = 'lb-boar';
 export const towerKey = (team: TeamName) => `lb-tower-${team}`;
 export const nexusKey = (team: TeamName) => `lb-nexus-${team}`;
 export const RUBBLE = 'lb-rubble';
+export const BEAST_KEY = 'lb-beast';
+export const inhibKey = (team: TeamName) => `lb-inhib-${team}`;
 export const COIN = 'lb-coin';
 
 /** Bakes every unit sheet once; later calls do nothing. Returns the time it took, in ms. */
@@ -127,9 +131,11 @@ export function bakeUnits(scene: Phaser.Scene): number {
       cells.forEach((c, i) => tex.add(c.name, 0, (i % 8) * cw, Math.floor(i / 8) * ch, cw, ch));
     }
     bake(scene, towerKey(team), TOWER_CELL, [{ name: 'idle', model: () => towerModel(team), yaw: 0.2 }]);
+    bake(scene, inhibKey(team), INHIB_CELL, [{ name: 'idle', model: () => inhibitorModel(team), yaw: 0.2 }]);
     bake(scene, nexusKey(team), NEXUS_CELL, [{ name: 'idle', model: () => nexusModel(team), yaw: 0.25 }]);
   }
   bake(scene, BOAR, BOAR_CELL, movingCells(boarModel));
+  bake(scene, BEAST_KEY, BEAST_CELL, movingCells(beastModel));
   bake(scene, RUBBLE, RUBBLE_CELL, [{ name: 'idle', model: rubbleModel, yaw: 0.2 }]);
   bake(scene, COIN, COIN_CELL, [{ name: 'idle', model: coinModel, yaw: 0.3 }]);
   return performance.now() - t0;

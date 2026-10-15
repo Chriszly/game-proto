@@ -1,9 +1,9 @@
 // Paints the whole 2400x1600 map once at boot onto one canvas: faceted grass, flagstone lanes with
-// stone kerbs, paved plazas round the Nexuses, dirt clearings for the camps, and low-poly pines and
-// rocks rendered with the same renderer as the units. The same seed paints the same map every time.
+// stone kerbs, paved plazas round the Nexuses, dirt clearings for the camps, the guardian beast's
+// pit, patches of tall grass (the bushes), and low-poly pines and rocks rendered with the same renderer as the units. The same seed paints the same map every time.
 
 import Phaser from 'phaser';
-import { BASE, CAMPS, LANES, Team, Vec, WORLD } from '../game/data';
+import { BASE, BEAST, BUSHES, Bush, CAMPS, LANES, Team, Vec, WORLD } from '../game/data';
 import { render, seeded } from './lowpoly';
 import { TEAM_GLOW, pineModel, rockModel } from './models';
 
@@ -240,6 +240,88 @@ function clearing(ctx: CanvasRenderingContext2D, c: Vec, rnd: () => number) {
   for (let i = 0; i < n; i += 2) render(ctx, rockModel(6 + rnd() * 3, i % 3), ring[i].x, ring[i].y, 1, { yaw: rnd() * 6 });
 }
 
+/** The guardian beast's pit: a ring of dark flagstones round a sunken floor, with standing stones. */
+function pit(ctx: CanvasRenderingContext2D, rnd: () => number) {
+  const c = { x: BEAST.x, y: BEAST.y };
+  const n = 14;
+  ctx.fillStyle = 'rgba(25,30,40,0.35)';
+  ctx.beginPath();
+  ctx.ellipse(c.x, c.y + 4, 132, 104, 0, 0, Math.PI * 2);
+  ctx.fill();
+  for (const [r, base] of [[124, '#6f6c78'], [96, '#4f4b5c']] as const) {
+    for (let i = 0; i < n; i++) {
+      const a0 = (i / n) * Math.PI * 2, a1 = ((i + 1) / n) * Math.PI * 2;
+      ctx.fillStyle = shade(base, 0.86 + rnd() * 0.26);
+      ctx.strokeStyle = ctx.fillStyle;
+      ctx.beginPath();
+      ctx.moveTo(c.x, c.y);
+      ctx.lineTo(c.x + Math.cos(a0) * r, c.y + Math.sin(a0) * r * 0.8);
+      ctx.lineTo(c.x + Math.cos(a1) * r, c.y + Math.sin(a1) * r * 0.8);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+  }
+  // A faint violet glow in the floor, the colour of the beast's crystals.
+  ctx.strokeStyle = 'rgba(185,140,255,0.45)';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.ellipse(c.x, c.y, 70, 56, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2 + 0.2;
+    render(ctx, rockModel(7 + rnd() * 3, i % 3), c.x + Math.cos(a) * 126, c.y + Math.sin(a) * 101, 1, { yaw: rnd() * 6 });
+  }
+}
+
+/** A patch of tall grass: a dark bed with clumps of faceted blades, lighter at the tips. */
+function bush(ctx: CanvasRenderingContext2D, b: Bush, rnd: () => number) {
+  ctx.fillStyle = 'rgba(20,45,22,0.45)';
+  ctx.beginPath();
+  ctx.ellipse(b.x, b.y, b.rx + 4, b.ry + 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#2f5f2c';
+  ctx.beginPath();
+  ctx.ellipse(b.x, b.y, b.rx, b.ry, 0, 0, Math.PI * 2);
+  ctx.fill();
+  const tufts: Vec[] = [];
+  for (let i = 0; i < 400 && tufts.length < Math.round((b.rx * b.ry) / 110); i++) {
+    const a = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * 0.92;
+    tufts.push({ x: b.x + Math.cos(a) * b.rx * r, y: b.y + Math.sin(a) * b.ry * r });
+  }
+  tufts.sort((p, q) => p.y - q.y);
+  for (const t of tufts) {
+    for (let j = 0; j < 4; j++) {
+      const lean = (j - 1.5) * 3 + (rnd() - 0.5) * 3;
+      const h = 14 + rnd() * 9;
+      const w = 3.2;
+      const x = t.x + (j - 1.5) * 2.6;
+      // Two facets per blade: the left one catches the light from the top left.
+      ctx.fillStyle = shade('#5c9a3e', 0.95 + rnd() * 0.25);
+      ctx.beginPath();
+      ctx.moveTo(x - w, t.y);
+      ctx.lineTo(x + lean, t.y - h);
+      ctx.lineTo(x, t.y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = shade('#3d7430', 0.9 + rnd() * 0.2);
+      ctx.beginPath();
+      ctx.moveTo(x, t.y);
+      ctx.lineTo(x + lean, t.y - h);
+      ctx.lineTo(x + w, t.y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = 'rgba(214,230,140,0.55)';
+      ctx.beginPath();
+      ctx.moveTo(x + lean * 0.75 - 1, t.y - h * 0.75);
+      ctx.lineTo(x + lean, t.y - h);
+      ctx.lineTo(x + lean * 0.75 + 1, t.y - h * 0.75);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+}
+
 function scenery(ctx: CanvasRenderingContext2D, rnd: () => number) {
   const things: { x: number; y: number; kind: 'pine' | 'rock'; s: number; v: number }[] = [];
   for (let i = 0; i < 1400 && things.length < 260; i++) {
@@ -247,6 +329,8 @@ function scenery(ctx: CanvasRenderingContext2D, rnd: () => number) {
     if (laneDist(p) < LANE_HALF + 48) continue;
     if (Math.hypot(p.x - BASE.blue.x, p.y - BASE.blue.y) < 290 || Math.hypot(p.x - BASE.red.x, p.y - BASE.red.y) < 290) continue;
     if (CAMPS.some((c) => Math.hypot(p.x - c.x, p.y - c.y) < 150)) continue;
+    if (Math.hypot(p.x - BEAST.x, p.y - BEAST.y) < 175) continue;
+    if (BUSHES.some((b) => ((p.x - b.x) / (b.rx + 40)) ** 2 + ((p.y - b.y) / (b.ry + 40)) ** 2 < 1)) continue;
     if (things.some((t) => Math.hypot(t.x - p.x, t.y - p.y) < 46)) continue;
     things.push({ ...p, kind: rnd() < 0.85 ? 'pine' : 'rock', s: 0.8 + rnd() * 0.5, v: Math.floor(rnd() * 4) });
   }
@@ -272,10 +356,14 @@ export function paintMap(scene: Phaser.Scene) {
   const rnd = seeded(20261014);
   grass(ctx, rnd);
   for (const c of CAMPS) clearing(ctx, c, rnd);
+  // The pit and the bushes draw from their own seed, so the rest of the map stays as it was.
+  const rnd2 = seeded(20261015);
+  pit(ctx, rnd2);
   lanes(ctx, rnd);
   plaza(ctx, 'blue', rnd);
   plaza(ctx, 'red', rnd);
   kerbs(ctx, rnd);
+  for (const b of BUSHES) bush(ctx, b, rnd2);
   scenery(ctx, rnd);
   // A dark frame round the edge of the world.
   ctx.strokeStyle = 'rgba(15,28,18,0.85)';

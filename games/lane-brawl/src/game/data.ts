@@ -243,6 +243,7 @@ export const CHAMPIONS: ChampionDef[] = [
 export interface ItemDef {
   id: string;
   name: string;
+  /** The full price. A recipe item costs less by the parts it builds from that the buyer owns. */
   cost: number;
   /** Flat bonuses to a champion's stats. */
   dmg?: number;
@@ -253,18 +254,49 @@ export interface ItemDef {
   atk?: number;
   /** Percent shorter ability cooldowns. */
   cdr?: number;
+  /** The parts this item builds from: owned ones are used up and knocked off the price. */
+  from?: string[];
+  /** An active the item adds, cast with its key (see `ACTIVES`). */
+  active?: ActiveId;
 }
 
-/** Bought at the shop by a champion standing near its Nexus. Each item can be bought once. */
+/**
+ * Bought at the shop by a champion standing near its Nexus. Each item can be owned once. The first
+ * seven are parts (cheap, and the flask), the last five build from them.
+ */
 export const ITEMS: ItemDef[] = [
   { id: 'sword', name: 'Long Sword', cost: 350, dmg: 12 },
-  { id: 'mail', name: 'Chain Mail', cost: 350, armor: 6, hp: 90 },
+  { id: 'dagger', name: 'Dagger', cost: 300, atk: 15 },
+  { id: 'cloth', name: 'Cloth Armor', cost: 300, armor: 6 },
+  { id: 'ruby', name: 'Ruby Crystal', cost: 300, hp: 100 },
   { id: 'boots', name: 'Swift Boots', cost: 300, speed: 25 },
-  { id: 'belt', name: "Giant's Belt", cost: 400, hp: 200 },
-  { id: 'thorns', name: 'Thornmail', cost: 420, armor: 14 },
-  { id: 'bow', name: 'Rapid Bow', cost: 400, atk: 25 },
-  { id: 'cloak', name: 'Cloak of Haste', cost: 350, cdr: 15 },
-  { id: 'blade', name: 'Brutal Edge', cost: 650, dmg: 24 },
+  { id: 'sapphire', name: 'Sapphire', cost: 300, cdr: 8 },
+  { id: 'flask', name: 'Healing Flask', cost: 150, active: 'flask' },
+  { id: 'blade', name: 'Brutal Edge', cost: 950, dmg: 30, atk: 20, from: ['sword', 'dagger'] },
+  { id: 'thorns', name: 'Thornmail', cost: 900, armor: 16, hp: 180, from: ['cloth', 'ruby'] },
+  { id: 'phase', name: 'Phase Boots', cost: 600, speed: 40, active: 'dash', from: ['boots'] },
+  { id: 'cloak', name: "Sage's Cloak", cost: 900, cdr: 20, hp: 120, from: ['sapphire', 'ruby'] },
+  { id: 'belt', name: "Giant's Belt", cost: 700, hp: 320, from: ['ruby'] },
+];
+/** A champion carries at most this many items. */
+export const MAX_ITEMS = 6;
+
+export type ActiveId = 'dash' | 'flask';
+export interface ActiveDef {
+  id: ActiveId;
+  /** The key that casts it, and the button's label. */
+  key: 'D' | 'H';
+  name: string;
+  cd: number;
+  /** dash: how far it goes. */
+  range?: number;
+  /** flask: health restored. */
+  heal?: number;
+}
+/** The item actives, each on its own key and button. */
+export const ACTIVES: ActiveDef[] = [
+  { id: 'dash', key: 'D', name: 'Dash', cd: 18_000, range: 220 },
+  { id: 'flask', key: 'H', name: 'Flask', cd: 40_000, heal: 220 },
 ];
 
 /** How close a champion must stand to its Nexus to shop. */
@@ -280,7 +312,7 @@ export const SIDE_COLOR = { blue: '#3d8bfd', red: '#e0553f', neutral: '#f4d35e' 
 // ---------------------------------------------------------------------------------------------
 // Match objectives: one goal at a time for the player's team, with a time limit and a reward.
 
-export type ObjectiveKind = 'tower' | 'camp' | 'champion';
+export type ObjectiveKind = 'tower' | 'camp' | 'champion' | 'beast';
 export interface ObjectiveDef {
   kind: ObjectiveKind;
   /** Time to finish it, in ms. */
@@ -295,6 +327,7 @@ export const OBJECTIVES: ObjectiveDef[] = [
   { kind: 'tower', ms: 150_000, gold: 200, banner: 'siege' },
   { kind: 'camp', ms: 90_000, gold: 120 },
   { kind: 'champion', ms: 120_000, gold: 150 },
+  { kind: 'beast', ms: 120_000, gold: 250 },
 ];
 /** The pause between one objective ending and the next one starting. */
 export const OBJECTIVE_GAP_MS = 4000;
@@ -371,3 +404,105 @@ export function upgradeById(id: string): UpgradeDef | undefined {
 export const STREAK = { at: 4, bonus: 0.25 };
 /** How far past its reach the player's champion looks for a minion its next hit would kill. */
 export const LAST_HIT_LOOK = 140;
+
+// ---------------------------------------------------------------------------------------------
+// The guardian beast: a big neutral monster in a pit between the middle and bottom lanes, the same
+// distance from both Nexuses. The team that slays it gets stronger minions for a while.
+
+export const BEAST = {
+  x: 1340,
+  y: 1040,
+  hp: 3200,
+  dmg: 48,
+  attackMs: 1400,
+  /** Its claws reach this far; past that, up to `leash`, it hurls rocks. */
+  range: 150,
+  radius: 38,
+  /** Units this close to what it strikes take the blow too. */
+  splash: 110,
+  /** It gives up on an attacker this far from its pit, and heals while nobody fights it. */
+  leash: 520,
+  regenPerSec: 160,
+  /** It first wakes at this game time, then this long after it falls. */
+  firstAt: 90_000,
+  respawnMs: 150_000,
+  gold: 150,
+  xp: 250,
+  /** How long the slayers' minions stay empowered. */
+  buffMs: 90_000,
+};
+/** Empowered minions deal this much more damage and take this much of what they would. */
+export const BEAST_BUFF = { dmg: 1.5, taken: 0.65 };
+/** How many AI champions of each team go to fight over the beast while it is awake. */
+export const BEAST_CONTESTERS = 2;
+
+// ---------------------------------------------------------------------------------------------
+// Inhibitors: one per lane per team, behind the lane's towers. It can only be hurt once both of its
+// lane's towers are down; when it falls, the other team's minions on that lane come out as super
+// minions. The Nexus can only be hurt once one of its inhibitors has fallen.
+
+export interface InhibitorSpot {
+  team: Team;
+  lane: LaneId;
+  x: number;
+  y: number;
+}
+export const INHIBITORS: InhibitorSpot[] = [
+  { team: 'blue', lane: 'top', x: 260, y: 1150 },
+  { team: 'blue', lane: 'mid', x: 425, y: 1245 },
+  { team: 'blue', lane: 'bottom', x: 450, y: 1340 },
+  { team: 'red', lane: 'top', x: 1950, y: 260 },
+  { team: 'red', lane: 'mid', x: 1975, y: 355 },
+  { team: 'red', lane: 'bottom', x: 2140, y: 450 },
+];
+export const INHIBITOR = { hp: 1600, radius: 24, gold: 120 };
+/** Super minions have this much more health and damage. */
+export const SUPER_MINION = 1.6;
+
+// ---------------------------------------------------------------------------------------------
+// Bushes: patches of tall grass. A champion inside one can't be seen or targeted by enemies unless
+// one of them stands in the same patch or right next to it. Attacking or casting shows it briefly.
+
+export interface Bush {
+  x: number;
+  y: number;
+  rx: number;
+  ry: number;
+}
+/** Four pairs, each mirrored under the map's 180-degree turn. */
+export const BUSHES: Bush[] = [
+  { x: 1330, y: 506, rx: 78, ry: 48 },
+  { x: 1070, y: 1094, rx: 78, ry: 48 },
+  { x: 880, y: 764, rx: 78, ry: 48 },
+  { x: 1520, y: 836, rx: 78, ry: 48 },
+  { x: 430, y: 560, rx: 60, ry: 62 },
+  { x: 1970, y: 1040, rx: 60, ry: 62 },
+  { x: 560, y: 420, rx: 70, ry: 50 },
+  { x: 1840, y: 1180, rx: 70, ry: 50 },
+];
+/** An enemy this close sees into a bush. */
+export const BUSH_REVEAL = 90;
+/** How long attacking or casting from a bush shows the champion, in ms. */
+export const REVEAL_MS = 1500;
+
+/** The bush a point is in, or -1. */
+export function bushAt(p: Vec): number {
+  return BUSHES.findIndex((b) => ((p.x - b.x) / b.rx) ** 2 + ((p.y - b.y) / b.ry) ** 2 <= 1);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Team plans for the AI: now and then a champion leaves its lane to gang up on a weak enemy, and
+// champions that are hurt or outnumbered fall back together.
+
+export const GANK = { firstAt: 100_000, every: 70_000, ms: 22_000, minHp: 0.6, from: 550 };
+export const RETREAT = {
+  /** Health ratio under which a champion with an enemy champion near falls back. */
+  hp: 0.25,
+  /** Enemy champions are counted this close. */
+  look: 480,
+  /** Fall back when the enemies outnumber the allies near by this many. */
+  outnumber: 2,
+  /** Allied AI champions this close fall back too. */
+  call: 420,
+  ms: 3500,
+};

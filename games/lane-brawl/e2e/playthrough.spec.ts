@@ -55,7 +55,7 @@ const UPGRADE_CARD_1 = { x: 698, y: 461 };
 /** The Warden's card on the pick screen (its centre). */
 const WARDEN_CARD = { x: 120, y: 263 };
 /** The Long Sword's row in the shop, opened from the B key. */
-const SWORD_ROW = { x: 334, y: 129 };
+const SWORD_ROW = { x: 202, y: 146 };
 /** The first red tower on the middle lane. */
 const RED_MID_TOWER = { x: 1576, y: 584 };
 /** Game time the round may take before the test gives up. */

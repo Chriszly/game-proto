@@ -427,6 +427,70 @@ export function boarModel(pose: PoseName): Model {
   return md;
 }
 
+/**
+ * The guardian beast: a hulking horned quadruped of slate hide with violet crystals growing along
+ * its back, built like the boar but heavier, and drawn about twice its size.
+ */
+export function beastModel(pose: PoseName): Model {
+  const md = new Model();
+  const hide = rgb('#5d5a72');
+  const dark = rgb('#3a3850');
+  const belly = rgb('#8a84a0');
+  const horn = rgb('#efe6cf');
+  const crystal = rgb('#b98cff');
+  const k = pose[0] === 'w' ? WALK[Number(pose[1])] : 0;
+  const lunge = pose === 'a1' ? 5 : pose === 'a0' ? -3 : 0;
+  const rear = pose === 'a0' ? -0.18 : pose === 'a1' ? 0.12 : 0;
+  md.at(chain(T(0, 0, lunge), Rx(rear)), () => {
+    // Four thick legs, the front pair longer, like a great ape on its knuckles.
+    for (const [x, z, h, ph] of [[-11, 11, 15, 1], [11, 11, 15, -1], [-9, -12, 12, -1], [9, -12, 12, 1]] as const) {
+      md.at(chain(T(x, h, z), swing(k * ph * 0.6)), () => {
+        box(md, -3.8, -h, -3.8, 3.8, 0, 3.8, dark, 0.85);
+        box(md, -4.2, -h, -4.4, 4.2, -h + 2.6, 4.8, rgb('#25233a'));
+      });
+    }
+    // The body: a broad back rising to great humped shoulders.
+    box(md, -12, 11, -15, 12, 26, 6, hide, 0.82);
+    box(md, -16, 12, 2, 16, 32, 15, hide, 0.8);
+    box(md, -10, 10, -12, 10, 13, 12, belly, 0.9);
+    // Crystals along the spine and the shoulders.
+    for (let i = 0; i < 5; i++) {
+      md.at(chain(T((i % 2 ? 1 : -1) * 2.5, 30 - i * 1.8, 10 - i * 6), Rz((i % 2 ? -1 : 1) * 0.25)), () => gem(md, 2.8 - i * 0.2, -1, 4, 11 - i, 5, crystal, 0.5));
+    }
+    for (const side of [-1, 1]) md.at(chain(T(side * 13, 30, 8), Rz(side * -0.6)), () => gem(md, 2.4, -1, 3, 9, 5, crystal, 0.5));
+    // The head, low and heavy, with two great horns sweeping out and up.
+    md.at(chain(T(0, 22, 16), Rx(pose === 'a1' ? 0.3 : 0)), () => {
+      box(md, -9, -7, 0, 9, 6, 10, hide, 0.86);
+      box(md, -6.5, -8, 8, 6.5, -1, 13.5, belly, 0.9);
+      for (const side of [-1, 1]) {
+        md.at(chain(T(side * 8, 3, 4), Rz(side * -1.25), Rx(-0.3)), () => {
+          prism(md, 2.8, 2, 0, 9, 5, horn);
+          md.at(chain(T(0, 9, 0), Rz(side * 0.9)), () => prism(md, 2, 0.3, 0, 9, 5, horn));
+        });
+        box(md, side * 4.2 - 1.3, 0.5, 9.6, side * 4.2 + 1.3, 3, 10.4, crystal, 1, 0.9);
+      }
+    });
+  });
+  return scaled(md, 2.1);
+}
+
+/** An inhibitor: a crystal in the team's colour held in a ring of stone posts on a low plinth. */
+export function inhibitorModel(team: TeamName): Model {
+  const md = new Model();
+  const glow = rgb(TEAM_GLOW[team]);
+  prism(md, 26, 24, 0, 6, 8, STONE_D, Math.PI / 8);
+  prism(md, 18, 17, 6, 11, 8, STONE, Math.PI / 8);
+  for (let i = 0; i < 4; i++) {
+    const a = Math.PI / 4 + (i * Math.PI) / 2;
+    md.at(T(Math.cos(a) * 19, 6, Math.sin(a) * 19), () => {
+      box(md, -2.6, 0, -2.6, 2.6, 20, 2.6, STONE_L, 0.8);
+      md.at(T(0, 20, 0), () => gem(md, 2.4, 0, 2, 5, 4, glow, 0.4));
+    });
+  }
+  md.at(T(0, 16, 0), () => gem(md, 8, -4, 12, 34, 6, glow, 0.4, Math.PI / 6));
+  return md;
+}
+
 /** A stone tower on an octagonal base, crenellated, with a crystal and a banner in the team's colour. */
 export function towerModel(team: TeamName): Model {
   const md = new Model();

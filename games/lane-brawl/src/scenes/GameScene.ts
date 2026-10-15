@@ -1,6 +1,10 @@
 import Phaser from 'phaser';
 import {
   ABILITY_KEYS,
+  ACTIVES,
+  ActiveDef,
+  BEAST,
+  BUSHES,
   AbilityDef,
   AbilityKey,
   BASE,
@@ -18,11 +22,16 @@ import {
   Vec,
   WORLD,
   XP_FOR_LEVEL,
+  MAX_ITEMS,
   upgradeById,
+  bushAt,
 } from '../game/data';
 import { Fx, GameState, Phase, Unit, createGame, dist, getUnit } from '../game/state';
-import { buy, cast, chooseUpgrade, commandAttack, commandMove, tick } from '../game/sim';
+import { buy, cast, chooseUpgrade, commandAttack, commandMove, hiddenFrom, invulnerable, priceFor, tick, useActive } from '../game/sim';
 import {
+  BEAST_CELL,
+  BEAST_KEY,
+  INHIB_CELL,
   BOAR,
   BOAR_CELL,
   CHAMP_CELL,
@@ -38,6 +47,7 @@ import {
   champKey,
   dirFor,
   frameName,
+  inhibKey,
   minionKey,
   nexusKey,
   towerKey,
@@ -60,6 +70,8 @@ import {
   UPGRADE_PANEL,
   VIEW,
   abilityBox,
+  activeButton,
+  buffChip,
   pickCard,
   shopRow,
   upgradeCard,
@@ -111,9 +123,9 @@ interface UnitSprite {
 }
 
 /** Where a unit's feet are drawn, below the centre of its hitbox, by kind. */
-const FOOT = { champion: 9, minion: 5, camp: 8, tower: 12, nexus: 16 } as const;
+const FOOT = { champion: 9, minion: 5, camp: 8, beast: 10, tower: 12, inhibitor: 10, nexus: 16 } as const;
 /** How far above the feet the top of each kind's figure is, for bars and markers. */
-const HEAD = { champion: 56, minion: 32, camp: 34, tower: 104, nexus: 104 } as const;
+const HEAD = { champion: 56, minion: 32, camp: 34, beast: 84, tower: 104, inhibitor: 62, nexus: 104 } as const;
 
 const noop = () => undefined;
 /** The size of the map's tiles, in pixels. */
@@ -126,13 +138,21 @@ function col(hex: string): number {
 
 function describe(item: ItemDef): string {
   const parts: string[] = [];
+  const active = ACTIVES.find((a) => a.id === item.active);
   if (item.dmg) parts.push(`+${item.dmg} damage`);
   if (item.armor) parts.push(`+${item.armor} armor`);
   if (item.hp) parts.push(`+${item.hp} health`);
   if (item.speed) parts.push(`+${item.speed} speed`);
   if (item.atk) parts.push(`+${item.atk}% attack speed`);
   if (item.cdr) parts.push(`-${item.cdr}% cooldowns`);
+  if (active) parts.push(active.id === 'dash' ? `[${active.key}] dash ${active.range}px` : `[${active.key}] heal ${active.heal}`);
   return parts.join(', ');
+}
+
+/** The gem colour of an item, by what it gives. */
+function itemTint(item: ItemDef): string {
+  if (item.active === 'flask') return '#62d86f';
+  return item.dmg ? '#ff8a5c' : item.armor ? '#b9c3cf' : item.hp ? '#e0556f' : item.speed ? '#7fb6ff' : item.atk ? '#f2c14e' : '#c49bff';
 }
 
 function clock(ms: number) {
@@ -159,7 +179,7 @@ export class GameScene extends Phaser.Scene {
   private pickBg!: Phaser.GameObjects.Image;
   private texts = new Map<string, Phaser.GameObjects.Text>();
   private used = new Set<string>();
-  private keys!: Record<AbilityKey | 'B' | 'ESC' | 'ONE' | 'TWO', Phaser.Input.Keyboard.Key>;
+  private keys!: Record<AbilityKey | 'B' | 'D' | 'H' | 'ESC' | 'ONE' | 'TWO', Phaser.Input.Keyboard.Key>;
 
   constructor() {
     super('Game');
@@ -197,8 +217,9 @@ export class GameScene extends Phaser.Scene {
       );
     });
 
-    this.keys = this.input.keyboard!.addKeys('Q,W,E,R,B,ESC,ONE,TWO') as typeof this.keys;
+    this.keys = this.input.keyboard!.addKeys('Q,W,E,R,B,D,H,ESC,ONE,TWO') as typeof this.keys;
     for (const k of ABILITY_KEYS) this.keys[k].on('down', () => this.castAtCursor(k));
+    for (const a of ACTIVES) this.keys[a.key].on('down', () => this.activeAtCursor(a));
     this.keys.B.on('down', () => this.toggleShop());
     this.keys.ESC.on('down', () => this.setShop(false));
     this.keys.ONE.on('down', () => this.pickUpgrade(0));
@@ -270,6 +291,11 @@ export class GameScene extends Phaser.Scene {
     if (this.state && p) cast(this.state, p, key, this.lastWorld);
   }
 
+  private activeAtCursor(a: ActiveDef) {
+    const p = this.player();
+    if (this.state && p) useActive(this.state, p, a.id, this.lastWorld);
+  }
+
   private pickUpgrade(choice: number) {
     if (this.state && this.phase === 'playing') chooseUpgrade(this.state, choice);
   }
@@ -294,6 +320,7 @@ export class GameScene extends Phaser.Scene {
     this.zones.push({ ...TOP_BAR, run: noop }, { ...BOTTOM_BAR, run: noop }, { ...OBJECTIVE_CARD, run: noop });
     this.zones.push({ ...SHOP_BUTTON, run: () => this.toggleShop() });
     ABILITY_KEYS.forEach((k, i) => this.zones.push({ ...abilityBox(i), run: () => this.castAtCursor(k) }));
+    ACTIVES.forEach((a, i) => this.zones.push({ ...activeButton(i), run: () => this.activeAtCursor(a) }));
     if (offer > 0) [0, 1].forEach((i) => this.zones.push({ ...upgradeCard(i), run: () => this.pickUpgrade(i) }));
     if (this.shopOpen) {
       this.zones.push({ ...SHOP_PANEL, run: noop });
@@ -317,7 +344,7 @@ export class GameScene extends Phaser.Scene {
     let foe: Unit | null = null;
     let best = Infinity;
     for (const u of this.state.units) {
-      if (u.dead || u.side === me.side) continue;
+      if (u.dead || u.side === me.side || hiddenFrom(this.state, me.side, u)) continue;
       const d = dist(u, w);
       if (d <= u.radius + 12 && d < best) {
         foe = u;
@@ -400,12 +427,14 @@ export class GameScene extends Phaser.Scene {
     if (s) {
       const me = this.player();
       for (const u of s.units) {
-        if (u.dead && u.kind !== 'tower') continue;
+        if (u.dead && u.kind !== 'tower' && u.kind !== 'inhibitor') continue;
+        // A red champion hiding in a bush is not drawn at all.
+        if (hiddenFrom(s, 'blue', u)) continue;
         seen.add(u.id);
         this.drawGround(g, u, s);
         this.placeSprite(u, s);
       }
-      for (const u of s.units) if (!u.dead) this.drawBar(top, u, me);
+      for (const u of s.units) if (!u.dead && !hiddenFrom(s, 'blue', u)) this.drawBar(top, u, s, me);
       this.drawObjectiveMarker(top, s);
       for (const p of s.projectiles) {
         const speed = Math.hypot(p.vx, p.vy) || 1;
@@ -430,17 +459,26 @@ export class GameScene extends Phaser.Scene {
   private drawGround(g: Phaser.GameObjects.Graphics, u: Unit, s: GameState) {
     if (u.dead) return;
     const fy = u.y + FOOT[u.kind];
-    const r = u.kind === 'tower' ? 30 : u.kind === 'nexus' ? 54 : u.radius;
+    const r = u.kind === 'tower' ? 30 : u.kind === 'nexus' ? 54 : u.kind === 'inhibitor' ? 26 : u.radius;
     // A soft shadow cast to the bottom right.
     g.fillStyle(0x0b1a0e, 0.18).fillEllipse(u.x + r * 0.35, fy + r * 0.12, r * 2.5, r * 1.2);
     g.fillStyle(0x0b1a0e, 0.18).fillEllipse(u.x + r * 0.25, fy + r * 0.08, r * 1.9, r * 0.9);
-    if (u.kind === 'champion' || u.kind === 'minion' || u.kind === 'camp') {
+    if (u.kind === 'champion' || u.kind === 'minion' || u.kind === 'camp' || u.kind === 'beast') {
       // The team ring under the feet: blue, red, or gold for the jungle.
       const color = col(SIDE_COLOR[u.side]);
+      // Minions the beast empowered glow violet; super minions get a wider gold-trimmed ring.
+      if (u.kind === 'minion' && u.side !== 'neutral' && s.beastBuff[u.side] > s.time) g.fillStyle(0xb98cff, 0.35).fillEllipse(u.x, fy, r * 3.4, r * 1.9);
+      if (u.kind === 'minion' && u.power > 1) g.fillStyle(col(UI.gold), 0.3).fillEllipse(u.x, fy, r * 3.2, r * 1.8).lineStyle(2.5, col(UI.gold), 1).strokeEllipse(u.x, fy, r * 3.2, r * 1.8);
       const w = r * 2.2, h = r * 1.25;
       g.lineStyle(u.kind === 'minion' ? 2 : 3, color, 0.95).strokeEllipse(u.x, fy, w, h);
       g.fillStyle(color, 0.16).fillEllipse(u.x, fy, w, h);
       if (u.player) g.lineStyle(1.5, 0xffffff, 0.9).strokeEllipse(u.x, fy, w + 10, h + 6);
+    }
+    if (invulnerable(s, u)) {
+      // A shimmering ward round a structure that can't be hurt yet.
+      const rr = u.kind === 'nexus' ? 70 : 34;
+      g.lineStyle(2, col(SIDE_COLOR[u.side]), 0.55).strokeEllipse(u.x, fy - 2, rr * 2, rr * 1.15);
+      g.fillStyle(col(SIDE_COLOR[u.side]), 0.08).fillEllipse(u.x, fy - 2, rr * 2, rr * 1.15);
     }
     if (s.lastHitMark === u.id) g.lineStyle(2.5, col(UI.gold), 1).strokeEllipse(u.x, fy, r * 3, r * 1.75);
   }
@@ -488,6 +526,15 @@ export class GameScene extends Phaser.Scene {
         frame = frameName(dirFor(u.facing), pose(10) === 'c0' ? 'idle' : pose(10));
         cell = BOAR_CELL;
         break;
+      case 'beast':
+        key = BEAST_KEY;
+        frame = frameName(dirFor(u.facing), pose(14) === 'c0' ? 'idle' : pose(14));
+        cell = BEAST_CELL;
+        break;
+      case 'inhibitor':
+        key = u.dead ? RUBBLE : inhibKey(team);
+        cell = u.dead ? RUBBLE_CELL : INHIB_CELL;
+        break;
       case 'tower':
         key = u.dead ? RUBBLE : towerKey(team);
         cell = u.dead ? RUBBLE_CELL : TOWER_CELL;
@@ -497,19 +544,22 @@ export class GameScene extends Phaser.Scene {
         cell = NEXUS_CELL;
     }
     const depth = 2 + fy / WORLD.h;
-    sp.main.setTexture(key, frame).setOrigin(0.5, cell.footY / cell.h).setPosition(u.x, fy).setDepth(depth).setVisible(true);
+    // Super minions stand taller; the player's allies in a bush show through the grass.
+    const scale = (u.kind === 'minion' && u.power > 1 ? 1.5 : u.kind === 'inhibitor' && u.dead ? 0.7 : 1) / RES;
+    const inBush = u.kind === 'champion' && u.side === 'blue' && bushAt(u) >= 0;
+    sp.main.setTexture(key, frame).setOrigin(0.5, cell.footY / cell.h).setPosition(u.x, fy).setDepth(depth).setScale(scale).setAlpha(inBush ? 0.6 : 1).setVisible(true);
     const marked = s.lastHitMark === u.id && u.kind === 'minion' && u.side === 'red';
     sp.outline.setVisible(marked);
     if (marked) sp.outline.setTexture(MINION_OUTLINE, frame).setOrigin(0.5, cell.footY / cell.h).setPosition(u.x, fy).setDepth(depth - 0.0001);
     const flash = !settings.reduceMotion && u.flash > 0 && !u.dead;
     sp.flash.setVisible(flash);
-    if (flash) sp.flash.setTexture(key, frame).setOrigin(0.5, cell.footY / cell.h).setPosition(u.x, fy).setDepth(depth + 0.0001).setAlpha(0.4 * (u.flash / 120));
+    if (flash) sp.flash.setTexture(key, frame).setOrigin(0.5, cell.footY / cell.h).setPosition(u.x, fy).setDepth(depth + 0.0001).setScale(scale).setAlpha(0.4 * (u.flash / 120));
   }
 
   /** A health bar above a unit. Shield shows as a pale strip over the health. */
-  private drawBar(g: Phaser.GameObjects.Graphics, u: Unit, me: Unit | null) {
+  private drawBar(g: Phaser.GameObjects.Graphics, u: Unit, s: GameState, me: Unit | null) {
     if (u.kind === 'minion' && u.hp >= u.maxHp) return;
-    const w = u.kind === 'nexus' ? 90 : u.kind === 'tower' ? 64 : u.kind === 'minion' ? 30 : 50;
+    const w = u.kind === 'nexus' ? 90 : u.kind === 'tower' || u.kind === 'beast' ? 64 : u.kind === 'inhibitor' ? 50 : u.kind === 'minion' ? 30 : 50;
     const h = u.kind === 'minion' ? 4 : 6;
     const x = u.x - w / 2;
     const y = u.y + FOOT[u.kind] - HEAD[u.kind] - 10;
@@ -517,7 +567,7 @@ export class GameScene extends Phaser.Scene {
     const own = me !== null && u.side === me.side;
     g.fillStyle(col(UI.edge), 0.9).fillRect(x - 1, y - 1, w + 2, h + 2);
     g.fillStyle(0x2a2f3a, 1).fillRect(x, y, w, h);
-    const fill = own ? '#62d86f' : u.side === 'neutral' ? SIDE_COLOR.neutral : '#ec5a48';
+    const fill = invulnerable(s, u) ? '#8a93a6' : own ? '#62d86f' : u.side === 'neutral' ? SIDE_COLOR.neutral : '#ec5a48';
     g.fillStyle(col(fill), 1).fillRect(x, y, w * ratio, h);
     g.fillStyle(0xffffff, 0.25).fillRect(x, y, w * ratio, 1.5);
     if (u.shield > 0) g.fillStyle(0xd6efff, 1).fillRect(x, y - 3, Math.min(w, (u.shield / u.maxHp) * w), 2);
@@ -533,7 +583,7 @@ export class GameScene extends Phaser.Scene {
   private drawObjectiveMarker(g: Phaser.GameObjects.Graphics, s: GameState) {
     const o = s.objective;
     const t = o && getUnit(s, o.target);
-    if (!o || !t || t.dead) return;
+    if (!o || !t || t.dead || hiddenFrom(s, 'blue', t)) return;
     const fy = t.y + FOOT[t.kind];
     const bob = settings.reduceMotion ? 0 : Math.sin(s.time / 220) * 3;
     const y = fy - HEAD[t.kind] - 18 + bob;
@@ -543,7 +593,7 @@ export class GameScene extends Phaser.Scene {
     g.lineStyle(1.5, col(UI.gold), 1).strokeRect(t.x - w / 2, y - 22, w, 18);
     g.fillStyle(col(UI.gold), 1).fillTriangle(t.x - 6, y - 4, t.x + 6, y - 4, t.x, y + 4);
     this.t('obj-marker', t.x, y - 20, label, 11, UI.gold, 'center', true, true);
-    const r = t.kind === 'tower' ? 44 : t.kind === 'nexus' ? 70 : t.radius + 14;
+    const r = t.kind === 'tower' ? 44 : t.kind === 'nexus' ? 70 : t.kind === 'beast' ? 62 : t.radius + 14;
     const n = 16;
     g.lineStyle(2, col(UI.gold), 0.9);
     for (let i = 0; i < n; i += 1) {
@@ -654,7 +704,8 @@ export class GameScene extends Phaser.Scene {
       });
     });
     this.t('hint', VIEW.w / 2, 404, 'Click a champion to start. Click the ground to walk, an enemy to attack.', 12, UI.dim, 'center');
-    this.t('hint2', VIEW.w / 2, 424, 'Q W E R cast at the cursor. B opens the shop at your Nexus. 1 or 2 picks an upgrade.', 12, UI.dim, 'center');
+    this.t('hint2', VIEW.w / 2, 424, 'Q W E R cast at the cursor, D and H use item actives. B opens the shop at your Nexus. 1 or 2 picks an upgrade.', 12, UI.dim, 'center');
+    this.t('hint3', VIEW.w / 2, 444, 'Hide in tall grass to ambush, slay the guardian beast for stronger minions, and break an inhibitor to reach the Nexus.', 12, UI.dim, 'center');
   }
 
   private drawPlaying(g: Phaser.GameObjects.Graphics, s: GameState) {
@@ -662,7 +713,11 @@ export class GameScene extends Phaser.Scene {
     if (!me || !me.champ) return;
     this.drawTopBar(g, s, me);
     // The shop panel covers the objective card, so the card steps aside while it is open.
-    if (!this.shopOpen) this.drawObjectiveCard(g, s);
+    if (!this.shopOpen) {
+      this.drawObjectiveCard(g, s);
+      this.drawBuffs(g, s);
+      this.drawNotice(g, s);
+    }
     this.drawBottomBar(g, s, me);
     this.drawMinimap(g, s, me);
     if (this.shopOpen) this.drawShop(g, me);
@@ -728,6 +783,38 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** A chip for each team whose minions the guardian beast empowered, with the time left. */
+  private drawBuffs(g: Phaser.GameObjects.Graphics, s: GameState) {
+    let i = 0;
+    for (const team of ['blue', 'red'] as Team[]) {
+      const left = s.beastBuff[team] - s.time;
+      if (left <= 0) continue;
+      const c = buffChip(i++);
+      g.fillStyle(col(UI.edge), 1).fillRect(c.x - 1, c.y - 1, c.w + 2, c.h + 2);
+      g.fillStyle(col('#3b2f5c'), 1).fillRect(c.x, c.y, c.w, c.h);
+      g.lineStyle(1, col(SIDE_COLOR[team]), 1).strokeRect(c.x + 1, c.y + 1, c.w - 2, c.h - 2);
+      // A small violet crystal, the beast's.
+      const cx = c.x + 12, cy = c.y + c.h / 2;
+      g.fillStyle(0xb98cff, 1).fillPoints([new Phaser.Math.Vector2(cx, cy - 7), new Phaser.Math.Vector2(cx + 5, cy), new Phaser.Math.Vector2(cx, cy + 7), new Phaser.Math.Vector2(cx - 5, cy)], true);
+      g.fillStyle(0xffffff, 0.45).fillTriangle(cx, cy - 7, cx - 5, cy, cx, cy);
+      this.t(`buff-${team}`, c.x + 24, c.y + 4, `${team === 'blue' ? 'Your' : 'Red'} minions empowered ${clock(left)}`, 10, team === 'blue' ? UI.blue : UI.red, 'left', true);
+    }
+  }
+
+  /** The newest notice (the beast woke, an inhibitor fell, a gank), for four seconds. */
+  private drawNotice(g: Phaser.GameObjects.Graphics, s: GameState) {
+    const n = s.notices[s.notices.length - 1];
+    if (!n || s.time - n.at > 4000) return;
+    const alpha = Math.min(1, (4000 - (s.time - n.at)) / 500);
+    const w = Math.min(440, 40 + n.text.length * 6.4);
+    const x = VIEW.w / 2 - w / 2, y = 42;
+    g.fillStyle(col(UI.edge), 0.9 * alpha).fillRect(x - 1, y - 1, w + 2, 24);
+    g.fillStyle(col(UI.slateDark), 0.92 * alpha).fillRect(x, y, w, 22);
+    g.fillStyle(col(n.color), alpha).fillRect(x, y, 3, 22);
+    g.fillStyle(col(n.color), alpha).fillRect(x + w - 3, y, 3, 22);
+    this.t('notice', VIEW.w / 2, y + 4, n.text, 12, UI.text, 'center', true, false, alpha);
+  }
+
   private drawBottomBar(g: Phaser.GameObjects.Graphics, s: GameState, me: Unit) {
     const c = me.champ!;
     this.panel(g, BOTTOM_BAR.x, BOTTOM_BAR.y, BOTTOM_BAR.w, BOTTOM_BAR.h);
@@ -756,8 +843,18 @@ export class GameScene extends Phaser.Scene {
     const xpRatio = me.level >= MAX_LEVEL ? 1 : (me.xp - xpFloor) / (xpNext - xpFloor);
     g.fillStyle(0x151a24, 1).fillRect(bx, P.y + 43, bw, 5);
     g.fillStyle(col(UI.gold), 1).fillRect(bx, P.y + 43, bw * Math.max(0, Math.min(1, xpRatio)), 5);
-    const owned = me.items.map((id) => ITEMS.find((i) => i.id === id)?.name ?? id);
-    this.t('items', bx, P.y + 54, owned.length ? owned.slice(0, 2).join(', ') + (owned.length > 2 ? ` +${owned.length - 2}` : '') : 'No items yet', 10, UI.dim);
+    // The bag: six slots, each owned item a gem in its colour.
+    for (let i = 0; i < MAX_ITEMS; i++) {
+      const x = bx + i * 20, y = P.y + 52;
+      g.fillStyle(col(UI.edge), 1).fillRect(x, y, 17, 17);
+      g.fillStyle(col('#1d2330'), 1).fillRect(x + 1, y + 1, 15, 15);
+      const item = ITEMS.find((it) => it.id === me.items[i]);
+      if (!item) continue;
+      const cx = x + 8.5, cy = y + 8.5;
+      g.fillStyle(col(itemTint(item)), 1).fillPoints([new Phaser.Math.Vector2(cx, cy - 6), new Phaser.Math.Vector2(cx + 6, cy), new Phaser.Math.Vector2(cx, cy + 6), new Phaser.Math.Vector2(cx - 6, cy)], true);
+      g.fillStyle(0xffffff, 0.4).fillTriangle(cx, cy - 6, cx - 6, cy, cx, cy);
+      if (item.from) g.lineStyle(1, col(UI.gold), 1).strokeRect(x + 1, y + 1, 15, 15);
+    }
     this.t('dead', bx, P.y + 72, me.dead ? `Respawn in ${Math.ceil((me.respawnAt - s.time) / 1000)}s` : c.role, 11, me.dead ? UI.red : UI.dim, 'left', true);
     this.t('lasthits', bx, P.y + 89, `Last hits ${s.lastHits}  best x${s.bestStreak}`, 10, UI.muted);
 
@@ -795,6 +892,28 @@ export class GameScene extends Phaser.Scene {
     this.coin(g, sb.x + 20, sb.y + 23, 10);
     this.t('shop-label', sb.x + 36, sb.y + 10, 'Shop', 16, UI.text, 'left', true);
     this.t('shop-key', sb.x + 36, sb.y + 31, '[B]', 11, UI.dim, 'left', true);
+
+    // The item actives: Dash (Phase Boots) on D, Flask on H (F is the hub's full screen key).
+    ACTIVES.forEach((a, i) => {
+      const r = activeButton(i);
+      const owned = me.items.some((id) => ITEMS.find((it) => it.id === id)?.active === a.id);
+      const cd = me.activeCds[a.id] ?? 0;
+      this.goldFrame(g, r.x, r.y, r.w, r.h, false);
+      const cx = r.x + r.w / 2 + 6, cy = r.y + r.h / 2 + 2;
+      const alpha = owned ? 1 : 0.3;
+      if (a.id === 'dash') {
+        g.fillStyle(col(UI.blue), alpha).fillPoints([new Phaser.Math.Vector2(cx - 9, cy - 3), new Phaser.Math.Vector2(cx + 1, cy - 3), new Phaser.Math.Vector2(cx + 1, cy - 8), new Phaser.Math.Vector2(cx + 10, cy), new Phaser.Math.Vector2(cx + 1, cy + 8), new Phaser.Math.Vector2(cx + 1, cy + 3), new Phaser.Math.Vector2(cx - 9, cy + 3)], true);
+      } else {
+        // A round flask of green tonic with a cork.
+        g.fillStyle(col('#cfe9ff'), alpha * 0.8).fillCircle(cx, cy + 2, 8);
+        g.fillStyle(col('#62d86f'), alpha).fillCircle(cx, cy + 3, 6.5);
+        g.fillStyle(col('#cfe9ff'), alpha * 0.8).fillRect(cx - 2.5, cy - 9, 5, 6);
+        g.fillStyle(col('#8a5d36'), alpha).fillRect(cx - 3, cy - 11, 6, 3);
+      }
+      if (owned && cd > 0) g.fillStyle(0x000000, 0.6).fillRect(r.x + 3, r.y + 3, r.w - 6, (r.h - 6) * (cd / a.cd));
+      this.t(`act-${a.id}`, r.x + 5, r.y + 3, a.key, 11, owned ? UI.text : UI.muted, 'left', true);
+      if (owned && cd > 0) this.t(`actcd-${a.id}`, r.x + r.w / 2, r.y + 11, `${Math.ceil(cd / 1000)}`, 14, UI.text, 'center', true);
+    });
 
     // The upgrade choice, or what the next level brings.
     const up = UPGRADE_PANEL;
@@ -874,9 +993,19 @@ export class GameScene extends Phaser.Scene {
         g.fillStyle(col(SIDE_COLOR[t.team]), 1).fillRect(mx(t.x) - 2, my(t.y) - 2, 4, 4);
       }
     }
+    // Bushes as dark patches, and the beast's pit.
+    for (const b of BUSHES) g.fillStyle(col('#24481f'), 0.9).fillEllipse(mx(b.x), my(b.y), b.rx * 2 * k, b.ry * 2 * k);
+    g.lineStyle(1, 0xb98cff, 0.6).strokeCircle(mx(BEAST.x), my(BEAST.y), 5);
     for (const u of s.units) {
-      if (u.dead) continue;
-      if (u.kind === 'nexus') g.fillStyle(col(SIDE_COLOR[u.side as Team]), 1).fillCircle(mx(u.x), my(u.y), 5);
+      if (u.dead || hiddenFrom(s, 'blue', u)) continue;
+      if (u.kind === 'beast') {
+        const cx = mx(u.x), cy = my(u.y);
+        g.fillStyle(col(UI.edge), 1).fillPoints([new Phaser.Math.Vector2(cx, cy - 6), new Phaser.Math.Vector2(cx + 6, cy), new Phaser.Math.Vector2(cx, cy + 6), new Phaser.Math.Vector2(cx - 6, cy)], true);
+        g.fillStyle(0xb98cff, 1).fillPoints([new Phaser.Math.Vector2(cx, cy - 4.5), new Phaser.Math.Vector2(cx + 4.5, cy), new Phaser.Math.Vector2(cx, cy + 4.5), new Phaser.Math.Vector2(cx - 4.5, cy)], true);
+      } else if (u.kind === 'inhibitor') {
+        g.fillStyle(col(UI.edge), 1).fillCircle(mx(u.x), my(u.y), 3);
+        g.fillStyle(col(SIDE_COLOR[u.side as Team]), 1).fillCircle(mx(u.x), my(u.y), 2);
+      } else if (u.kind === 'nexus') g.fillStyle(col(SIDE_COLOR[u.side as Team]), 1).fillCircle(mx(u.x), my(u.y), 5);
       else if (u.kind === 'champion') g.fillStyle(col(SIDE_COLOR[u.side as Team]), 1).fillCircle(mx(u.x), my(u.y), u.player ? 3.5 : 2.5);
       else if (u.kind === 'minion') g.fillStyle(col(SIDE_COLOR[u.side as Team]), 0.85).fillRect(mx(u.x) - 0.75, my(u.y) - 0.75, 1.5, 1.5);
       else if (u.kind === 'camp') g.fillStyle(col(SIDE_COLOR.neutral), 0.8).fillCircle(mx(u.x), my(u.y), 2);
@@ -907,22 +1036,36 @@ export class GameScene extends Phaser.Scene {
     g.fillStyle(col(UI.gold), 1).fillRect(p.x + 2, p.y + 2, p.w - 4, 3);
     this.t('shop-title', p.x + 16, p.y + 12, 'Shop', 18, UI.gold, 'left', true);
     const atBase = Math.hypot(me.x - BASE.blue.x, me.y - BASE.blue.y) <= 700;
-    this.t('shop-note', p.x + 16, p.y + 36, atBase ? `Gold ${Math.floor(me.gold)}. Click an item to buy it.` : 'Return to your Nexus to buy items.', 11, atBase ? UI.dim : UI.red);
+    const note = atBase ? `Gold ${Math.floor(me.gold)}. Bag ${me.items.length}/${MAX_ITEMS}. Parts you own build into bigger items and come off their price.` : 'Return to your Nexus to buy items.';
+    this.t('shop-note', p.x + 16, p.y + 36, note, 11, atBase ? UI.dim : UI.red);
     ITEMS.forEach((item, i) => {
       const r = shopRow(i);
       const has = me.items.includes(item.id);
-      const afford = me.gold >= item.cost;
-      this.panel(g, r.x, r.y, r.w, r.h, has ? '#2a3140' : '#3a4660');
-      // A gem icon tinted by what the item gives.
-      const tint = item.dmg ? '#ff8a5c' : item.armor ? '#b9c3cf' : item.hp ? '#62d86f' : item.speed ? '#7fb6ff' : item.atk ? '#f2c14e' : '#c49bff';
-      const cx = r.x + 22, cy = r.y + r.h / 2;
-      g.fillStyle(col(UI.edge), 1).fillPoints([new Phaser.Math.Vector2(cx, cy - 13), new Phaser.Math.Vector2(cx + 12, cy), new Phaser.Math.Vector2(cx, cy + 13), new Phaser.Math.Vector2(cx - 12, cy)], true);
-      g.fillStyle(col(tint), has ? 0.4 : 1).fillPoints([new Phaser.Math.Vector2(cx, cy - 11), new Phaser.Math.Vector2(cx + 10, cy), new Phaser.Math.Vector2(cx, cy + 11), new Phaser.Math.Vector2(cx - 10, cy)], true);
-      g.fillStyle(0xffffff, has ? 0.15 : 0.4).fillTriangle(cx, cy - 11, cx - 10, cy, cx, cy);
-      this.t(`shop-name-${i}`, r.x + 42, r.y + 8, item.name, 14, has ? UI.muted : UI.text, 'left', true);
-      this.t(`shop-desc-${i}`, r.x + 42, r.y + 29, describe(item), 11, UI.dim);
-      const price = has ? 'Owned' : `${item.cost}g`;
-      this.t(`shop-price-${i}`, r.x + r.w - 12, r.y + 16, price, 14, has ? UI.muted : afford ? UI.gold : UI.red, 'right', true);
+      const price = priceFor(me, item);
+      const parts = (item.from ?? []).filter((id) => me.items.includes(id));
+      const fits = me.items.length - parts.length < MAX_ITEMS;
+      const afford = me.gold >= price;
+      this.panel(g, r.x, r.y, r.w, r.h, has ? '#2a3140' : item.from ? '#41496a' : '#3a4660');
+      // Items that build from parts get a gold top edge.
+      if (item.from) g.fillStyle(col(has ? UI.goldDeep : UI.gold), 1).fillRect(r.x + 2, r.y + 2, r.w - 4, 2);
+      const cx = r.x + 18, cy = r.y + 20;
+      g.fillStyle(col(UI.edge), 1).fillPoints([new Phaser.Math.Vector2(cx, cy - 12), new Phaser.Math.Vector2(cx + 11, cy), new Phaser.Math.Vector2(cx, cy + 12), new Phaser.Math.Vector2(cx - 11, cy)], true);
+      g.fillStyle(col(itemTint(item)), has ? 0.4 : 1).fillPoints([new Phaser.Math.Vector2(cx, cy - 10), new Phaser.Math.Vector2(cx + 9, cy), new Phaser.Math.Vector2(cx, cy + 10), new Phaser.Math.Vector2(cx - 9, cy)], true);
+      g.fillStyle(0xffffff, has ? 0.15 : 0.4).fillTriangle(cx, cy - 10, cx - 9, cy, cx, cy);
+      this.t(`shop-name-${i}`, r.x + 34, r.y + 7, item.name, 12, has ? UI.muted : UI.text, 'left', true);
+      const label = has ? 'Owned' : !fits ? 'Bag full' : `${price}g`;
+      this.t(`shop-price-${i}`, r.x + 34, r.y + 23, label, 11, has || !fits ? UI.muted : afford ? UI.gold : UI.red, 'left', true);
+      if (!has && parts.length) this.t(`shop-save-${i}`, r.x + r.w - 8, r.y + 23, `-${item.cost - price}g parts`, 9, UI.green, 'right', true);
+      this.t(`shop-desc-${i}`, r.x + 10, r.y + 44, describe(item), 10, UI.dim);
+      const into = ITEMS.filter((it) => it.from?.includes(item.id));
+      const recipe = item.from
+        ? `From ${item.from.map((id) => ITEMS.find((it) => it.id === id)?.name ?? id).join(' + ')}`
+        : into.length === 1
+          ? `Builds into ${into[0].name}`
+          : into.length
+            ? `Builds into ${into.length} items`
+            : 'Active item';
+      this.t(`shop-recipe-${i}`, r.x + 10, r.y + 64, recipe, 9, item.from ? UI.gold : UI.muted, 'left', !!item.from);
     });
   }
 
@@ -934,7 +1077,7 @@ export class GameScene extends Phaser.Scene {
     const won = s.winner === 'blue';
     this.t('end-title', VIEW.w / 2, p.y + 22, won ? 'Victory' : 'Defeat', 34, won ? UI.green : UI.red, 'center', true);
     this.t('end-sub', VIEW.w / 2, p.y + 72, won ? 'The red Nexus has fallen.' : 'Your Nexus has fallen.', 13, UI.dim, 'center');
-    this.t('end-stats', VIEW.w / 2, p.y + 94, `Objectives ${s.objectivesDone}   Last hits ${s.lastHits}   Best streak x${s.bestStreak}`, 11, UI.muted, 'center');
+    this.t('end-stats', VIEW.w / 2, p.y + 94, `Objectives ${s.objectivesDone}   Last hits ${s.lastHits}   Best streak x${s.bestStreak}   Beasts slain ${s.beastKills.blue}`, 11, UI.muted, 'center');
     this.panel(g, PLAY_AGAIN.x, PLAY_AGAIN.y, PLAY_AGAIN.w, PLAY_AGAIN.h, '#4a5876');
     this.t('again-label', PLAY_AGAIN.x + PLAY_AGAIN.w / 2, PLAY_AGAIN.y + 12, 'Play again', 16, UI.text, 'center', true);
   }

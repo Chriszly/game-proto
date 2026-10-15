@@ -30,13 +30,23 @@ export function upgradeCard(i: number) {
   return { x: UPGRADE_PANEL.x + 6, y: UPGRADE_PANEL.y + 20 + i * 46, w: UPGRADE_PANEL.w - 12, h: 42 };
 }
 
-/** The shop panel, opened with the button or the B key: items in two columns. */
-export const SHOP_PANEL = { x: 180, y: 46, w: 600, h: 300 };
-const SHOP_COL_W = (SHOP_PANEL.w - 28 - 10) / 2;
+/** The item actives (D and H), two buttons under the shop button. */
+export function activeButton(i: number) {
+  return { x: SHOP_BUTTON.x + i * 50, y: 492, w: 46, h: 38 };
+}
+
+/** The shop panel, opened with the button or the B key: twelve item cards in four columns. */
+export const SHOP_PANEL = { x: 100, y: 44, w: 760, h: 362 };
+const SHOP_COL_W = (SHOP_PANEL.w - 28 - 30) / 4;
 export function shopRow(i: number) {
-  const col = i % 2;
-  const row = Math.floor(i / 2);
-  return { x: SHOP_PANEL.x + 14 + col * (SHOP_COL_W + 10), y: SHOP_PANEL.y + 56 + row * 62, w: SHOP_COL_W, h: 54 };
+  const col = i % 4;
+  const row = Math.floor(i / 4);
+  return { x: SHOP_PANEL.x + 14 + col * (SHOP_COL_W + 10), y: SHOP_PANEL.y + 56 + row * 100, w: SHOP_COL_W, h: 92 };
+}
+
+/** The empowered-minion chips at the top right, under the top bar, one per team with the buff. */
+export function buffChip(i: number) {
+  return { x: VIEW.w - 222, y: 40 + i * 24, w: 212, h: 20 };
 }
 
 /** The five champion cards on the pick screen. */

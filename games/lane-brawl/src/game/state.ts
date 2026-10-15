@@ -1,6 +1,7 @@
 // The world of a match: its units, projectiles and what the view should show. No Phaser here.
 
 import {
+  GANK,
   AbilityKey,
   BASE,
   CAMPS,
@@ -24,11 +25,15 @@ import {
   MAX_LEVEL,
   WAVE_MS,
   ObjectiveKind,
+  BEAST,
+  INHIBITOR,
+  INHIBITORS,
+  SUPER_MINION,
 } from './data';
 
 export type Phase = 'pick' | 'playing' | 'won' | 'lost';
-export type UnitKind = 'champion' | 'minion' | 'tower' | 'nexus' | 'camp';
-/** Camps belong to no team: every team's units may attack them. */
+export type UnitKind = 'champion' | 'minion' | 'tower' | 'nexus' | 'camp' | 'beast' | 'inhibitor';
+/** Camps and the beast belong to no team: every team's units may attack them. */
 export type Side = Team | 'neutral';
 
 export interface Unit {
@@ -80,6 +85,12 @@ export interface Unit {
   /** Lane walk: the points this unit follows, and the index it is walking toward. */
   path: Vec[] | null;
   wp: number;
+  /** The lane a minion, a lane champion, a tower or an inhibitor belongs to. */
+  lane: LaneId | null;
+  /** A super minion's health and damage multiplier (1 for a plain one). */
+  power: number;
+  /** Time left on being seen while in a bush, after attacking or casting, in ms. */
+  revealMs: number;
   // Champions only.
   champ: ChampionDef | null;
   player: boolean;
@@ -88,8 +99,15 @@ export interface Unit {
   gold: number;
   items: string[];
   cds: Record<AbilityKey, number>;
-  /** Ids of the upgrades the player's champion chose on its level ups (see `UPGRADES`). */
+  /** Ids of the upgrades the champion chose on its level ups (see `UPGRADES`). AI champions pick too. */
   upgrades: string[];
+  /** Cooldowns of item actives, by active id. */
+  activeCds: Record<string, number>;
+  /** AI champions: falling back until this game time. */
+  retreatUntil: number;
+  /** AI champions: the enemy champion it left its lane to gang up on, and until when. */
+  gankTarget: number | null;
+  gankUntil: number;
 }
 
 export interface Projectile {
@@ -169,6 +187,25 @@ export interface GameState {
   bestStreak: number;
   /** Level-up upgrade choices still waiting for the player, the first one shown. */
   upgradeOffers: UpgradeOffer[];
+  /** The guardian beast's unit id, and until when each team's minions are empowered by it. */
+  beast: number;
+  beastBuff: Record<Team, number>;
+  /** Beasts each team slew. */
+  beastKills: Record<Team, number>;
+  /** The AI champions sent to fight over the beast now. */
+  contesters: number[];
+  /** Ids of the enemy champions each team can't see this tick (they hide in a bush). */
+  hidden: Record<Team, number[]>;
+  /** When the AI next sends gankers. */
+  nextGank: number;
+  /** Short messages for the player (the beast woke, an inhibitor fell), newest last. */
+  notices: Notice[];
+}
+
+export interface Notice {
+  text: string;
+  color: string;
+  at: number;
 }
 
 export function pathFor(lane: LaneId, team: Team): Vec[] {
@@ -217,6 +254,9 @@ export function blankUnit(
     moveTo: null,
     path: null,
     wp: 0,
+    lane: null,
+    power: 1,
+    revealMs: 0,
     champ: null,
     player: false,
     level: 1,
@@ -225,6 +265,10 @@ export function blankUnit(
     items: [],
     cds: { Q: 0, W: 0, E: 0, R: 0 },
     upgrades: [],
+    activeCds: {},
+    retreatUntil: 0,
+    gankTarget: null,
+    gankUntil: 0,
   };
 }
 
@@ -264,6 +308,7 @@ export function spawnChampion(s: GameState, def: ChampionDef, side: Team, x: num
   if (lane) {
     u.path = pathFor(lane, side);
     u.wp = 1;
+    u.lane = lane;
   }
   refreshStats(u);
   u.hp = u.maxHp;
@@ -295,6 +340,13 @@ export function createGame(pick: ChampionDef, enemyDamage: number): GameState {
     streak: 0,
     bestStreak: 0,
     upgradeOffers: [],
+    beast: 0,
+    beastBuff: { blue: 0, red: 0 },
+    beastKills: { blue: 0, red: 0 },
+    contesters: [],
+    hidden: { blue: [], red: [] },
+    nextGank: GANK.firstAt,
+    notices: [],
   };
 
   for (const team of ['blue', 'red'] as Team[]) {
@@ -310,8 +362,7 @@ export function createGame(pick: ChampionDef, enemyDamage: number): GameState {
     s.units.push(nexus);
   }
   for (const t of TOWERS) {
-    s.units.push(
-      blankUnit(s, 'tower', t.team, t.x, t.y, {
+    const tower = blankUnit(s, 'tower', t.team, t.x, t.y, {
         hp: TOWER.hp,
         dmg: TOWER.dmg,
         armor: 0,
@@ -319,8 +370,22 @@ export function createGame(pick: ChampionDef, enemyDamage: number): GameState {
         speed: 0,
         attackMs: TOWER.attackMs,
         radius: TOWER.radius,
-      }),
-    );
+    });
+    tower.lane = t.lane;
+    s.units.push(tower);
+  }
+  for (const spot of INHIBITORS) {
+    const inhib = blankUnit(s, 'inhibitor', spot.team, spot.x, spot.y, {
+      hp: INHIBITOR.hp,
+      dmg: 0,
+      armor: 0,
+      range: 0,
+      speed: 0,
+      attackMs: 1000,
+      radius: INHIBITOR.radius,
+    });
+    inhib.lane = spot.lane;
+    s.units.push(inhib);
   }
   for (const c of CAMPS) {
     s.units.push(
@@ -335,6 +400,23 @@ export function createGame(pick: ChampionDef, enemyDamage: number): GameState {
       }),
     );
   }
+
+  // The guardian beast sleeps until its first waking.
+  const beast = blankUnit(s, 'beast', 'neutral', BEAST.x, BEAST.y, {
+    hp: BEAST.hp,
+    dmg: BEAST.dmg,
+    armor: 10,
+    range: BEAST.range,
+    speed: 0,
+    attackMs: BEAST.attackMs,
+    radius: BEAST.radius,
+  });
+  beast.dead = true;
+  beast.hp = 0;
+  beast.respawnAt = BEAST.firstAt;
+  beast.facing = Math.PI * 0.75;
+  s.units.push(beast);
+  s.beast = beast.id;
 
   const others = CHAMPIONS.filter((c) => c.id !== pick.id);
   const offsets: Vec[] = [
@@ -367,9 +449,11 @@ export function spawnWave(s: GameState) {
         const jitter = i * 12;
         const x = BASE[team].x + (team === 'blue' ? 1 : -1) * (30 + jitter);
         const y = BASE[team].y + (team === 'blue' ? -1 : 1) * (30 + jitter);
+        // A lane whose enemy inhibitor has fallen sends super minions.
+        const power = s.units.some((u) => u.kind === 'inhibitor' && u.dead && u.side !== team && u.lane === lane) ? SUPER_MINION : 1;
         const m = blankUnit(s, 'minion', team, x, y, {
-          hp: MINION.hp,
-          dmg: MINION.dmg,
+          hp: MINION.hp * power,
+          dmg: MINION.dmg * power,
           armor: 0,
           range: MINION.range,
           speed: MINION.speed,
@@ -378,6 +462,8 @@ export function spawnWave(s: GameState) {
         });
         m.path = pathFor(lane, team);
         m.wp = 1;
+        m.lane = lane;
+        m.power = power;
         s.units.push(m);
       }
     }
@@ -398,4 +484,23 @@ export function levelFor(xp: number): number {
 
 export function dist(a: Vec, b: Vec): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+/** The lane whose centre line runs nearest a point. */
+export function laneNear(p: Vec): LaneId {
+  let best: LaneId = 'mid';
+  let bestD = Infinity;
+  for (const [id, pts] of Object.entries(LANES) as [LaneId, Vec[]][]) {
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i], b = pts[i + 1];
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy)));
+      const d = Math.hypot(p.x - (a.x + dx * t), p.y - (a.y + dy * t));
+      if (d < bestD) {
+        bestD = d;
+        best = id;
+      }
+    }
+  }
+  return best;
 }
