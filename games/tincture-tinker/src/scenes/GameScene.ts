@@ -1,14 +1,14 @@
 import Phaser from 'phaser';
 import { settings } from '../../../../shared/settings';
 import { BROWN, MOSS, num, OCHRE, RUST, SEPIA } from '../art/nouveau';
-import { kindTexture, needTexture, POTION_ORIGIN, potionTexture, TOOL_PAD, toolTexture } from '../art/textures';
-import { adjacent, COLS, inBoard, ROWS, validMoves, type Board, type Cell, type Tile } from '../game/board';
+import { needTexture, POTION_ORIGIN, potionTexture, tileTexture, TOOL_PAD, toolTexture } from '../art/textures';
+import { adjacent, COLS, inBoard, ROWS, special, stuck, validMoves, type Board, type Cell, type Tile } from '../game/board';
 import { KIND_NAMES, type Kind } from '../game/kinds';
-import { MOVE_BONUS, POTION_NAMES } from '../game/orders';
+import { MOVE_BONUS, POTION_NAMES, RUSH_COINS, RUSH_MOVES } from '../game/orders';
 import { RANKS, rankOf, starsFor, STARS_2, STARS_3 } from '../game/ranks';
 import { loadProgress, saveProgress } from '../game/save';
-import { canUse, nextOrder, sift, stir, TOOLS, trySwap, type Step, type Tool } from '../game/sim';
-import { progressOf, startOrder, type GameState } from '../game/state';
+import { canUse, funnel, nextOrder, pestle, sift, stir, TOOL_ORDER, TOOLS, trySwap, type Step, type Tool } from '../game/sim';
+import { progressOf, startOrder, wanted, type GameState } from '../game/state';
 import { makeButton } from '../ui/Button';
 import { BOARD, CAPTION, cellX, cellY, NEEDS, PANEL, RIBBON, SERIF, TOOL, UI_DEPTH } from './layout';
 
@@ -23,11 +23,18 @@ const SIFT_MS = 220;
 /** How long the board sits idle before two tiles that would match swell as a hint. */
 const HINT_MS = 6000;
 
-/** Draw order: the table, catalyst row bands, the cursor, catalysts (whose rays sit under their neighbours), tiles, the panel. */
-const DEPTH = { band: 1.5, cursor: 1.8, catalyst: 1.9, tile: 2, panel: 3 };
+/**
+ * Draw order: the table, catalyst row bands, the cursor, specials (whose rays and petals sit under
+ * their neighbours), tiles, the panel, and gathered tiles flying to the label.
+ */
+const DEPTH = { band: 1.5, cursor: 1.8, catalyst: 1.9, tile: 2, resin: 2.1, panel: 3, flying: 4 };
 
-const CAPTION_TIP = 'Catalyst: a match of four brews one; match it to clear its whole row';
+const CAPTION_TIP = 'A match of four brews a Catalyst (clears its row); an L or T brews a Bloom (clears a 3x3)';
+const CAPTION_BLOCKERS = 'A match next to a corked jar opens it; resin holds a tile in place for one match';
 const CAPTION_SIFT = `Sift: tap a row to reroll it for ${TOOLS.sift.cost} coins, or tap Sift again to put it away`;
+const CAPTION_PESTLE = `Pestle: tap a tile to smash it for ${TOOLS.pestle.cost} coins, or tap Pestle again to put it away`;
+const CAPTION_FUNNEL = `Funnel: tap a tile, then any other, to swap them for ${TOOLS.funnel.cost} coins`;
+const CAPTION_FUNNEL_TO = 'Funnel: now tap the tile to swap it with (tap it again to let it go)';
 
 /** A serif text style in the label's inks. */
 const ink = (size: number, color = SEPIA, fontStyle = '') => ({ fontFamily: SERIF, fontSize: `${size}px`, fontStyle, color, resolution: 2 });
@@ -49,8 +56,16 @@ export class GameScene extends Phaser.Scene {
   busy = false;
   /** The tile picked by the first tap of a swap; read by the playthrough test. */
   selected: Cell | null = null;
+  /** The bench tool picked up and waiting for a tap on the board (Sift, Pestle or Funnel), if any. */
+  armed: Tool | null = null;
   /** True while Sift is picked up and waiting for a tap on the row to reroll. */
-  sifting = false;
+  get sifting() {
+    return this.armed === 'sift';
+  }
+  /** The first tile picked for the Funnel. */
+  private funnelFrom: Cell | null = null;
+  /** The bench tool under the pointer, whose tip the caption shows. */
+  private hoverTool: Tool | null = null;
   private sprites = new Map<number, Phaser.GameObjects.Image>();
   private queue: Anim[] = [];
   private animAt = 0;
@@ -128,7 +143,8 @@ export class GameScene extends Phaser.Scene {
     this.queue = [];
     this.busy = false;
     this.selected = null;
-    this.sifting = false;
+    this.armed = null;
+    this.funnelFrom = null;
     this.hint = [];
     this.idleMs = 0;
     this.shown = { ...state.got };
@@ -139,7 +155,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private tileSprite(tile: Tile, x: number, y: number) {
-    return this.add.image(x, y, kindTexture(tile.kind, tile.catalyst)).setDepth(tile.catalyst ? DEPTH.catalyst : DEPTH.tile);
+    // Tiles fall past resin, behind it.
+    return this.add.image(x, y, tileTexture(tile)).setDepth(special(tile) ? DEPTH.catalyst : tile.resin ? DEPTH.resin : DEPTH.tile);
   }
 
   private cellAt(x: number, y: number): Cell | null {
@@ -151,10 +168,9 @@ export class GameScene extends Phaser.Scene {
   private pointerDown(p: Phaser.Input.Pointer) {
     const cell = this.cellAt(p.x, p.y);
     if (!cell || this.busy || this.state.phase !== 'play') return;
-    if (this.sifting) {
-      this.siftRow(cell.row);
-      return;
-    }
+    if (this.armed === 'sift') return this.siftRow(cell.row);
+    if (this.armed === 'pestle') return this.usePestle(cell);
+    if (this.armed === 'funnel') return this.pickFunnel(cell);
     this.dragFrom = { cell, x: p.x, y: p.y };
     const picked = this.selected;
     if (picked && adjacent(picked, cell)) this.swap(picked, cell);
@@ -181,20 +197,67 @@ export class GameScene extends Phaser.Scene {
     this.dragFrom = null;
     this.selected = null;
     this.clearHint();
-    const idA = this.state.board[a.row][a.col].id;
-    const idB = this.state.board[b.row][b.col].id;
+    const ta = this.state.board[a.row][a.col];
+    const tb = this.state.board[b.row][b.col];
+    // Jars and resin hold their tiles: they don't move at all.
+    if (stuck(ta) || stuck(tb)) return this.drawCursor();
     const steps = trySwap(this.state, a, b);
     this.busy = true;
     this.showBands(false);
-    this.queue.push(this.slide([{ id: idA, from: a, to: b }, { id: idB, from: b, to: a }]));
+    this.queue.push(this.slide([{ id: ta.id, from: a, to: b }, { id: tb.id, from: b, to: a }]));
     if (!steps) {
       // No match: the tiles slide back and no move is spent.
-      this.queue.push(this.slide([{ id: idA, from: b, to: a }, { id: idB, from: a, to: b }]));
+      this.queue.push(this.slide([{ id: ta.id, from: b, to: a }, { id: tb.id, from: a, to: b }]));
     } else {
       this.refreshMoves();
+      if (steps.some((st) => st.penalty)) this.pulse(this.movesText);
       for (const step of steps) this.playStep(step);
     }
     this.queue.push({ ms: 0, end: () => this.settle() });
+  }
+
+  /** Plays out what a Pestle or Funnel set off, after its own opening animation. */
+  private playTool(steps: Step[], opening?: Anim) {
+    this.armed = null;
+    this.funnelFrom = null;
+    saveProgress(progressOf(this.state));
+    this.clearHint();
+    this.busy = true;
+    this.showBands(false);
+    this.refresh();
+    if (opening) this.queue.push(opening);
+    if (steps.some((st) => st.penalty)) this.pulse(this.movesText);
+    for (const step of steps) this.playStep(step);
+    this.queue.push({ ms: 0, end: () => this.settle() });
+  }
+
+  /** Pestle: the tapped tile is smashed and the board plays out, without a move. */
+  private usePestle(cell: Cell) {
+    const steps = pestle(this.state, cell);
+    if (!steps) return this.putAway();
+    this.playTool(steps);
+  }
+
+  /** Funnel: the first tap picks a tile, the second swaps it with any other. */
+  private pickFunnel(cell: Cell) {
+    const from = this.funnelFrom;
+    if (!from) {
+      if (!stuck(this.state.board[cell.row][cell.col])) this.funnelFrom = cell;
+    } else if (from.row === cell.row && from.col === cell.col) {
+      this.funnelFrom = null;
+    } else {
+      const ta = this.state.board[from.row][from.col];
+      const tb = this.state.board[cell.row][cell.col];
+      const steps = funnel(this.state, from, cell);
+      if (steps) return this.playTool(steps, this.slide([{ id: ta.id, from, to: cell }, { id: tb.id, from: cell, to: from }]));
+    }
+    this.refresh();
+  }
+
+  private putAway() {
+    this.armed = null;
+    this.funnelFrom = null;
+    this.refresh();
   }
 
   /** Slides tiles from one cell to another, all at once. */
@@ -220,17 +283,36 @@ export class GameScene extends Phaser.Scene {
     if (step.cleared.length > 0) {
       // Looked up when it starts: a cascade can match tiles that only drop in on an earlier step.
       let popping: Phaser.GameObjects.Image[] = [];
+      let flying: { sprite: Phaser.GameObjects.Image; x0: number; y0: number; x1: number; y1: number }[] = [];
       let brewing: Phaser.GameObjects.Image[] = [];
       let flash: Phaser.GameObjects.Image[] = [];
+      const needs = Object.keys(this.state.current.needs);
+      const big = step.rows.length + step.cols.length + step.areas.length > 0;
       this.queue.push({
-        ms: step.rows.length > 0 ? CLEAR_MS * 1.5 : CLEAR_MS,
+        ms: big ? CLEAR_MS * 1.5 : CLEAR_MS,
         start: () => {
-          popping = step.cleared.map((t) => this.sprites.get(t.id)!);
-          brewing = step.brewed.map((t) => this.sprites.get(t.id)!.setTexture(kindTexture(t.kind, true)).setDepth(DEPTH.catalyst));
-          flash = step.rows.map((row) => this.bandAt(row));
+          // Ingredients the order needs fly to their row on the label; the rest just pop.
+          popping = [];
+          flying = [];
+          for (const t of step.cleared) {
+            const sprite = this.sprites.get(t.id)!;
+            const row = needs.indexOf(t.kind);
+            if (row < 0 || !wanted(this.state, t.kind)) popping.push(sprite);
+            else flying.push({ sprite: sprite.setDepth(DEPTH.flying), x0: sprite.x, y0: sprite.y, x1: NEEDS.x, y1: NEEDS.y + row * NEEDS.row });
+          }
+          brewing = [...step.brewed, ...step.melted].map((t) => this.sprites.get(t.id)!.setTexture(tileTexture(t)).setDepth(special(t) ? DEPTH.catalyst : DEPTH.tile));
+          flash = [
+            ...step.rows.map((row) => this.bandAt(row)),
+            ...step.cols.map((col) => this.add.image(BOARD.x + col * BOARD.cell - 1, BOARD.y - 1, 'band-col').setOrigin(0).setDepth(DEPTH.band)),
+            ...step.areas.map((a) => this.add.image(cellX(a.col), cellY(a.row), 'area').setDepth(DEPTH.band)),
+          ];
         },
         step: (k) => {
           popping.forEach((s) => s.setScale(1 + 0.3 * k - 1.3 * k * k).setAlpha(1 - k));
+          for (const f of flying) {
+            f.sprite.setPosition(Phaser.Math.Linear(f.x0, f.x1, ease(k)), Phaser.Math.Linear(f.y0, f.y1, ease(k)));
+            f.sprite.setScale(1 - 0.45 * k).setAlpha(1 - k * k);
+          }
           brewing.forEach((s) => s.setScale(settings.reduceMotion ? 1 : 1 + 0.25 * Math.sin(Math.PI * k)));
           // With reduced motion the lit row holds steady instead of blinking.
           flash.forEach((b) => b.setAlpha(settings.reduceMotion ? 1 : 0.4 + 0.6 * Math.abs(Math.sin(k * Math.PI * 2))));
@@ -240,7 +322,7 @@ export class GameScene extends Phaser.Scene {
           for (const t of step.cleared) {
             this.sprites.get(t.id)?.destroy();
             this.sprites.delete(t.id);
-            this.shown[t.kind] = (this.shown[t.kind] ?? 0) + 1;
+            if (wanted(this.state, t.kind)) this.shown[t.kind] = (this.shown[t.kind] ?? 0) + 1;
           }
           this.refreshNeeds();
         },
@@ -322,8 +404,9 @@ export class GameScene extends Phaser.Scene {
 
   private useTool(tool: Tool) {
     if (this.busy || this.state.phase !== 'play') return;
-    if (tool === 'sift' && this.sifting) {
-      this.sifting = false;
+    if (this.armed === tool) {
+      this.armed = null;
+      this.funnelFrom = null;
     } else if (!canUse(this.state, tool)) {
       return;
     } else if (tool === 'stir') {
@@ -331,7 +414,8 @@ export class GameScene extends Phaser.Scene {
       saveProgress(progressOf(this.state));
       this.pulse(this.movesText);
     } else {
-      this.sifting = true;
+      this.armed = tool;
+      this.funnelFrom = null;
       this.selected = null;
     }
     this.clearHint();
@@ -342,7 +426,7 @@ export class GameScene extends Phaser.Scene {
   private siftRow(row: number) {
     const before = this.state.board.map((r) => r.map((t) => t.id));
     const old = sift(this.state, row);
-    this.sifting = false;
+    this.armed = null;
     if (!old) return this.refresh();
     saveProgress(progressOf(this.state));
     this.clearHint();
@@ -384,7 +468,7 @@ export class GameScene extends Phaser.Scene {
   // ---- Hints ----
 
   private updateHint(dt: number) {
-    if (this.busy || this.sifting || this.state.phase !== 'play') return;
+    if (this.busy || this.armed || this.state.phase !== 'play') return;
     this.idleMs += dt;
     if (this.idleMs < HINT_MS) return;
     if (this.hint.length === 0) {
@@ -424,13 +508,15 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createTools() {
-    (['stir', 'sift'] as Tool[]).forEach((tool, i) => {
+    TOOL_ORDER.forEach((tool, i) => {
       const button = this.add
         .image(TOOL.x + i * TOOL.gap - TOOL_PAD, TOOL.y - TOOL_PAD, toolTexture(tool, 'on'))
         .setOrigin(0)
         .setDepth(DEPTH.panel)
         .setInteractive({ useHandCursor: true, hitArea: new Phaser.Geom.Rectangle(TOOL_PAD, TOOL_PAD, TOOL.w, TOOL.h), hitAreaCallback: Phaser.Geom.Rectangle.Contains });
       button.on('pointerdown', () => this.useTool(tool));
+      button.on('pointerover', () => ((this.hoverTool = tool), this.refreshCaption()));
+      button.on('pointerout', () => ((this.hoverTool = null), this.refreshCaption()));
       this.tools.set(tool, button);
     });
   }
@@ -455,6 +541,13 @@ export class GameScene extends Phaser.Scene {
       this.add.text(666, 152, `Pays ${s.current.price} coins`, ink(15, BROWN)).setOrigin(0, 0.5),
       this.add.text(666, 174, `+${MOVE_BONUS} per move left`, ink(15, BROWN)).setOrigin(0, 0.5),
     ];
+    // The order's twist, if it has one, under the price.
+    const twist = s.current.rush
+      ? `Rush order: ${RUSH_MOVES} fewer moves, +${RUSH_COINS} coins`
+      : s.current.forbid
+        ? `No ${KIND_NAMES[s.current.forbid]}: matching it costs a move`
+        : '';
+    if (twist) items.push(this.add.text(666, 196, twist, ink(13, RUST, 'italic bold')).setOrigin(0, 0.5));
     Object.keys(s.current.needs).forEach((kind, i) => {
       const y = NEEDS.y + i * NEEDS.row;
       items.push(this.add.image(NEEDS.x, y, needTexture(kind as Kind)));
@@ -473,7 +566,7 @@ export class GameScene extends Phaser.Scene {
     this.refreshTools();
     this.coinsText.setText(`${this.state.coins}`);
     this.coinIcon.setX(this.coinsText.x - this.coinsText.width - 18);
-    this.setCaption(this.sifting ? CAPTION_SIFT : CAPTION_TIP);
+    this.refreshCaption();
     this.drawCursor();
     if (!this.busy) this.showBands(true);
   }
@@ -526,9 +619,25 @@ export class GameScene extends Phaser.Scene {
 
   private refreshTools() {
     for (const [tool, button] of this.tools) {
-      const look = tool === 'sift' && this.sifting ? 'armed' : canUse(this.state, tool) ? 'on' : 'off';
+      const look = this.armed === tool ? 'armed' : canUse(this.state, tool) ? 'on' : 'off';
       button.setTexture(toolTexture(tool, look));
     }
+  }
+
+  /** The caption: what a picked-up tool wants, a hovered tool's tip, or a tip for this order. */
+  private refreshCaption() {
+    const s = this.state;
+    const blockers = s.board.some((row) => row.some(stuck));
+    const forbid = s.current.forbid;
+    let text = CAPTION_TIP;
+    if (this.armed === 'sift') text = CAPTION_SIFT;
+    else if (this.armed === 'pestle') text = CAPTION_PESTLE;
+    else if (this.armed === 'funnel') text = this.funnelFrom ? CAPTION_FUNNEL_TO : CAPTION_FUNNEL;
+    else if (this.hoverTool) text = `${TOOLS[this.hoverTool].tip} (${TOOLS[this.hoverTool].cost} coins)`;
+    else if (forbid) text = `No ${KIND_NAMES[forbid]} in this order: a swap that matches it costs a move`;
+    else if (blockers) text = CAPTION_BLOCKERS;
+    else if (s.current.rush) text = `Rush order: ${RUSH_MOVES} fewer moves than usual, and ${RUSH_COINS} more coins`;
+    this.setCaption(text);
   }
 
   private setCaption(text: string) {
@@ -541,7 +650,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private drawCursor() {
-    const cell = this.selected;
+    const cell = this.funnelFrom ?? this.selected;
     this.cursor.setVisible(!!cell);
     if (cell) this.cursor.setPosition(cellX(cell.col), cellY(cell.row));
   }

@@ -7,13 +7,13 @@ import { expect, test, type Page } from '@playwright/test';
 // Game state is only read, through the `game` object the dev build puts on window.
 
 type Kind = 'wheat' | 'mandrake' | 'sage' | 'ember' | 'moonpetal';
-interface Tile { id: number; kind: Kind; catalyst?: boolean }
+interface Tile { id: number; kind: Kind; catalyst?: boolean; bloom?: boolean; jar?: boolean; resin?: boolean }
 interface Cell { row: number; col: number }
 interface GameState {
   order: number;
   coins: number;
   sold: number;
-  current: { number: number; potion: string; needs: Partial<Record<Kind, number>>; moves: number; price: number };
+  current: { number: number; potion: string; needs: Partial<Record<Kind, number>>; moves: number; price: number; jars: number; resin: number; rush?: boolean; forbid?: Kind };
   got: Record<Kind, number>;
   moves: number;
   phase: 'play' | 'sold' | 'failed';
@@ -22,6 +22,7 @@ interface GameState {
   orderStars: number;
   brewed: number;
   fired: number;
+  bloomed: number;
   board: Tile[][];
 }
 interface Scene { state: GameState; busy: boolean; selected: Cell | null }
@@ -32,7 +33,7 @@ const MOVE_BONUS = 5;
 /** Stars for the moves left at a sale, from src/game/ranks.ts. */
 const starsFor = (movesLeft: number) => (movesLeft >= 8 ? 3 : movesLeft >= 4 ? 2 : 1);
 /** The Stir bench tool's button and price, from src/scenes/layout.ts (TOOL) and src/game/sim.ts. */
-const STIR = { x: 560, y: 393, w: 168, h: 43, cost: 40 };
+const STIR = { x: 560, y: 393, w: 80, h: 43, cost: 40 };
 /** The board and its cells, from src/scenes/layout.ts. */
 const VIEW = { w: 960, h: 540 };
 const BOARD = { x: 46, y: 46, cell: 56, size: 8 };
@@ -85,7 +86,7 @@ function matched(grid: Kind[][]): Cell[] {
 function bestSwap(s: GameState) {
   const grid = kinds(s.board);
   const wanted = (k: Kind) => (s.got[k] < (s.current.needs[k] ?? 0) ? 1 : 0);
-  let best: { a: Cell; b: Cell; cells: (Cell & { kind: Kind })[]; long: Kind[]; catalyst: boolean; score: number } | null = null;
+  let best: { a: Cell; b: Cell; cells: (Cell & { kind: Kind })[]; long: Kind[]; blooms: Kind[]; catalyst: boolean; score: number } | null = null;
   for (let row = 0; row < BOARD.size; row++) {
     for (let col = 0; col < BOARD.size; col++) {
       const a = { row, col };
@@ -95,12 +96,24 @@ function bestSwap(s: GameState) {
         const cells = matched(after);
         const score = cells.reduce((sum, c) => sum + 10 * wanted(after[c.row][c.col]) + 1, 0);
         if (cells.length > 0 && (!best || score > best.score)) {
-          // A run of four or more keeps one of its tiles on the board as a Catalyst instead of gathering it.
-          const long = runs(after).filter((run) => run.length >= 4).map((run) => after[run[0].row][run[0].col]);
+          // An L or T of one kind keeps the tile where its lines cross as a Bloom, and any other run
+          // of four or more keeps one of its tiles as a Catalyst, instead of gathering it.
+          const found = runs(after);
+          const crossed = new Set<Cell[]>();
+          const blooms: Kind[] = [];
+          for (const h of found.filter((r) => r[0].row === r[1].row)) {
+            for (const v of found.filter((r) => r[0].col === r[1].col)) {
+              if (crossed.has(h) || crossed.has(v) || after[h[0].row][h[0].col] !== after[v[0].row][v[0].col]) continue;
+              if (!h.some((c) => v.some((d) => d.row === c.row && d.col === c.col))) continue;
+              crossed.add(h).add(v);
+              blooms.push(after[h[0].row][h[0].col]);
+            }
+          }
+          const long = found.filter((run) => run.length >= 4 && !crossed.has(run)).map((run) => after[run[0].row][run[0].col]);
           // A Catalyst in the match clears its row as well; swapping moves a tile, so look where each one lands.
           const tileAt = (c: Cell) => (c.row === a.row && c.col === a.col ? s.board[b.row][b.col] : c.row === b.row && c.col === b.col ? s.board[a.row][a.col] : s.board[c.row][c.col]);
-          const catalyst = cells.some((c) => tileAt(c).catalyst);
-          best = { a, b, cells: cells.map((c) => ({ ...c, kind: after[c.row][c.col] })), long, catalyst, score };
+          const catalyst = cells.some((c) => tileAt(c).catalyst || tileAt(c).bloom);
+          best = { a, b, cells: cells.map((c) => ({ ...c, kind: after[c.row][c.col] })), long, blooms, catalyst, score };
         }
       }
     }
@@ -215,7 +228,11 @@ test('sells the first potion', async ({ page }, testInfo) => {
   // The first order: a Healing Draught, nothing gathered yet, all its moves and no coins.
   let s = (await game.get()).state;
   expect(s).toMatchObject({ order: 1, coins: 0, sold: 0, moves: ORDER_1.moves, phase: 'play' });
-  expect(s.current).toMatchObject({ number: 1, ...ORDER_1 });
+  // The first order is plain: no rush, no forbidden ingredient, no jars or resin on its board.
+  expect(s.current).toMatchObject({ number: 1, ...ORDER_1, jars: 0, resin: 0 });
+  expect(s.current.rush).toBeFalsy();
+  expect(s.current.forbid).toBeFalsy();
+  expect(s.board.flat().some((t) => t.jar || t.resin), 'no blockers on the first board').toBe(false);
   expect(Object.values(s.got).every((n) => n === 0)).toBe(true);
   expect(s.board.length).toBe(BOARD.size);
   expect(matched(kinds(s.board)), 'no matches on a new board').toEqual([]);
@@ -254,13 +271,25 @@ test('sells the first potion', async ({ page }, testInfo) => {
     if (move === 1) await snap('1-match');
     after = await settled(`swap ${move}`);
     expect(after.moves).toBe(s.moves - 1);
+    // Only the ingredients the order needs are counted; the others are gathered but not kept.
     for (const kind of Object.keys(s.got) as Kind[]) {
-      const first = swap!.cells.filter((c) => c.kind === kind).length - swap!.long.filter((k) => k === kind).length;
+      if (!(kind in ORDER_1.needs)) {
+        expect(after.got[kind], `${kind} isn't wanted`).toBe(0);
+        continue;
+      }
+      const kept = swap!.long.filter((k) => k === kind).length + swap!.blooms.filter((k) => k === kind).length;
+      const first = swap!.cells.filter((c) => c.kind === kind).length - kept;
       expect(after.got[kind], `${kind} gathered on swap ${move}`).toBeGreaterThanOrEqual(s.got[kind] + first);
     }
-    // A match of four or more brews a Catalyst (unless a Catalyst in it clears the row it lies on).
-    if (!swap!.catalyst) expect(after.brewed, `catalysts brewed on swap ${move}`).toBeGreaterThanOrEqual(s.brewed + swap!.long.length);
-    if (swap!.long.length > 0) console.log(`Swap ${move} matched four or more (${after.brewed} Catalysts brewed, ${after.fired} fired so far).`);
+    // A match of four or more brews a Catalyst and an L or T a Bloom (unless a special in it clears
+    // the row or square they lie on).
+    if (!swap!.catalyst) {
+      expect(after.brewed, `catalysts brewed on swap ${move}`).toBeGreaterThanOrEqual(s.brewed + swap!.long.length);
+      expect(after.bloomed, `blooms brewed on swap ${move}`).toBeGreaterThanOrEqual(s.bloomed + swap!.blooms.length);
+    }
+    if (swap!.long.length + swap!.blooms.length > 0) {
+      console.log(`Swap ${move} brewed a special (${after.brewed} Catalysts and ${after.bloomed} Blooms brewed, ${after.fired} Catalysts fired so far).`);
+    }
     s = after;
   }
 
