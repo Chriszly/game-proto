@@ -45,13 +45,19 @@ export function watchSteps(): number {
 /**
  * Shows the watch panel: a "Watching AI" title, pause, the speeds and the log button. `sides` names
  * and colours the sides `aiLog` writes for, and `time` gives the match clock in ms for each log
- * line (real time if left out). Does nothing outside watch mode or when already shown.
+ * line (real time if left out). Does nothing outside watch mode; called again for a new match, it
+ * keeps the panel and its log and takes the new sides and clock.
  */
 export function mountWatch(opts: { title?: string; sides?: Record<string, WatchSide>; time?: () => number } = {}) {
-  if (!watching || document.querySelector('.watch-panel')) return;
+  if (!watching) return;
+  // A new match calls this again with its own sides and clock; the panel and its log stay.
   sides.clear();
   for (const [key, side] of Object.entries(opts.sides ?? {})) sides.set(key, side);
   if (opts.time) clock = opts.time;
+  if (log) {
+    aiLog('', '— a new match —');
+    return;
+  }
   addStyles();
 
   const panel = document.createElement('div');
