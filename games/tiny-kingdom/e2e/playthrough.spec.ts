@@ -6,9 +6,9 @@ import { expect, test, type Page } from '@playwright/test';
 // goal and takes a gift, which brings round 2 and its tiles.
 // Game state is only read, through the `game` object the dev build puts on window.
 
-type Building = 'farm' | 'house' | 'tower' | 'windmill';
-type Cell = 'grass' | 'lake' | 'forest' | Building;
-type Gift = 'towers' | 'houses' | 'farms' | 'windmill' | 'windmills';
+type Building = 'farm' | 'house' | 'tower' | 'windmill' | 'market' | 'harbor' | 'lumber';
+type Cell = 'grass' | 'lake' | 'forest' | Building | 'manor';
+type Gift = 'towers' | 'houses' | 'farms' | 'windmill' | 'windmills' | 'market' | 'markets' | 'harbor' | 'harbors' | 'lumber' | 'lumbers';
 interface Decree {
   kind: 'shore' | 'wood' | 'watch';
   text: string;
@@ -32,18 +32,18 @@ interface GameState {
   decree: Decree | null;
   gifts: [Gift, Gift];
   giftsDue: number;
-  hasWindmill: boolean;
+  unlocked: Building[];
 }
 type Box = { x: number; y: number; w: number; h: number };
 type Share = { col: number; row: number; pts: number };
-type Preview = { col: number; row: number; gained: number; base: number; links: Share[] };
+type Preview = { col: number; row: number; gained: number; base: number; links: Share[]; season: number };
 
 const VIEW = { w: 960, h: 540 };
 /** The board, from src/scenes/layout.ts. */
 const GRID = { x: 24, y: 46, cols: 10, rows: 7, cell: 64 };
 /** The first round's tiles and goal, and what round 2 adds and asks, from src/game/state.ts. */
-const FIRST_POUCH = { farm: 4, house: 4, tower: 2, windmill: 0 };
-const ROUND_POUCH = { farm: 3, house: 3, tower: 2, windmill: 0 };
+const FIRST_POUCH = { farm: 4, house: 4, tower: 2, windmill: 0, market: 0, harbor: 0, lumber: 0 };
+const ROUND_POUCH = { farm: 3, house: 3, tower: 2, windmill: 0, market: 0, harbor: 0, lumber: 0 };
 const GOALS = [20, 45];
 /** What a fulfilled decree pays, from src/game/decree.ts. */
 const DECREE_BONUS = 8;
@@ -209,7 +209,7 @@ test('plays the first round', async ({ page }, testInfo) => {
   expect(s.island, 'the island the seeded Math.random picks').toBe(ISLAND);
   expect(s.grid, `island ${ISLAND} laid out as MAP`).toEqual(MAP.map((row) => [...row].map((c) => TERRAIN[c])));
   expect(s.decree, 'round 1 decree').toMatchObject(FIRST_DECREE);
-  expect(s, 'the gifts for goal 1').toMatchObject({ gifts: FIRST_GIFTS, giftsDue: 0, hasWindmill: false, crowns: 0 });
+  expect(s, 'the gifts for goal 1').toMatchObject({ gifts: FIRST_GIFTS, giftsDue: 0, unlocked: [], crowns: 0 });
   expect((await game.buttons()).map((b) => b.kind), 'three tile buttons, no windmill yet').toEqual(['farm', 'house', 'tower']);
   await snap('0-start');
 
@@ -241,7 +241,7 @@ test('plays the first round', async ({ page }, testInfo) => {
       const p = (await game.preview())!;
       expect(p, 'preview of the house').toMatchObject({ col: step.col, row: step.row, gained: step.gained, base: 0 });
       expect(sorted(p.links), 'the farm and the tower each link +2').toEqual(sorted(LINKED.links));
-      expect(p.links.reduce((t, l) => t + l.pts, p.base), 'the links add up to the preview').toBe(p.gained);
+      expect(p.links.reduce((t, l) => t + l.pts, p.base + p.season), 'the links add up to the preview').toBe(p.gained);
       await snap('3-links');
     }
     await tap(await cellPoint(step.col, step.row));
@@ -289,7 +289,7 @@ test('plays the first round', async ({ page }, testInfo) => {
   // The house reached the goal: round 2 begins with a higher goal and its tiles added to what is
   // left, and the gift for goal 1 waits to be chosen. Nothing can be placed meanwhile.
   expect(score).toBeGreaterThanOrEqual(GOALS[0]);
-  const roundPouch = { farm: pouch.farm + ROUND_POUCH.farm, house: pouch.house + ROUND_POUCH.house, tower: pouch.tower + ROUND_POUCH.tower, windmill: 0 };
+  const roundPouch = { ...pouch, farm: pouch.farm + ROUND_POUCH.farm, house: pouch.house + ROUND_POUCH.house, tower: pouch.tower + ROUND_POUCH.tower };
   expect(s).toMatchObject({ round: 2, goal: GOALS[1], phase: 'gift', giftsDue: 1, gifts: FIRST_GIFTS, pouch: roundPouch });
   const offered = await game.giftButtons();
   expect(offered.map((b) => b.gift), 'the gift card offers the two gifts').toEqual(FIRST_GIFTS);
@@ -301,7 +301,7 @@ test('plays the first round', async ({ page }, testInfo) => {
   const windmill = offered.find((b) => b.gift === 'windmill')!;
   await tap(await onPage(windmill.x, windmill.y));
   s = await game.state();
-  expect(s).toMatchObject({ round: 2, goal: GOALS[1], phase: 'playing', giftsDue: 0, hasWindmill: true, score, pouch: { ...roundPouch, windmill: WINDMILLS } });
+  expect(s).toMatchObject({ round: 2, goal: GOALS[1], phase: 'playing', giftsDue: 0, unlocked: ['windmill'], score, pouch: { ...roundPouch, windmill: WINDMILLS } });
   expect(s.gifts, 'round 2 offers two new gifts, not the windmill again').not.toContain('windmill');
   expect(s.decree, 'round 2 has a decree of its own').toMatchObject({ done: false });
   expect(s.decree!.text).not.toBe(FIRST_DECREE.text);
