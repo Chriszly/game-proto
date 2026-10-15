@@ -120,6 +120,14 @@ the `project` scope).
   **Screens** workflow (`.github/workflows/screens.yml`) runs it in one job per game, on a PR only for
   the games whose folder changed (every game when `shared/` or the test changes).
   Give its `index.html` the same `100dvh` and `touch-action: none` styles as Apothecary's.
+- **Watch AI.** A game whose AI can play every side supports `?watch` with `shared/watch.ts`: when
+  `watching` is set, hand the player's side to the AI and lift the fog, call `mountWatch` once the
+  match starts (with each side's name and colour and the match clock), run the sim
+  `watchSteps()` times per frame (0 while the panel holds the match, so pausing and speeding up never change the
+  rules), and report AI decisions with `aiLog(side, text)` (a no-op outside watch mode). Then add a
+  `<a class="watch" href="games/<name>/?watch">Watch AI</a>` to its hub card, after the card's own
+  link, and its row to the Watch AI table in the README. The hub test opens it from that link. A
+  game's playthrough never uses `?watch`.
 - **Never use a red cross.** No game art, icon, button, cover or favicon (the hub's included) may show a
   red cross: no red plus, red-cross health or medic symbol, or red crosshair. Use a green cross (or
   another colour) for healing and aiming marks instead.
