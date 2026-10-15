@@ -18,9 +18,26 @@ Implemented today:
 - Random maps (`game/map.ts`): hubs at the fixed `START_POINTS` (`game/arena.ts`), each nudged up to
   36 px at random; three crystal nodes near each hub and 16 loose ones, 12 rock fields that block
   building, eight nebulae and 480 stars.
-- Harvesting: harvesters seek the crystal nearest their hub, mine it, carry it to the nearest hub
-  or depot of their faction and deposit it. Nomad Freight carries 14 a trip, the others 10.
-- Building: Depot, Barracks and Turret, each placed within 240 px of the hub on clear ground, built
+- Harvesting: harvesters seek the crystal nearest their home hub (`Unit.home`: the hub or outpost
+  that trained them), mine it, carry it to the nearest hub, outpost or depot of their faction and
+  deposit it. Nomad Freight carries 14 a trip, the others 10.
+- Fog of war (`game/fog.ts`, stamped in `World.updateFog`): a 10 px grid of `explored` and
+  `visible` cells for the player only. Ships see `sight` times 1.2 (scouts 1.6), harvesters 80 px,
+  the hub 175 px and other buildings 110 px past their radius. Rival units show only in sight
+  (`seesUnit`); rival buildings once seen stay drawn (`known`, `knowsBuilding`); crystal nodes,
+  the beacon, shards, beams and fireballs show only where explored or in sight; the player can only
+  build on explored ground. `entityAt` skips what the player can't see. The AI is not fogged.
+- Expansions (`Build` = a building role or `'expansion'`, `expansionStats`): an outpost is a
+  `Building` of type `hub` with `expansion: true`, drawn at 0.8 of the hub's size and named after
+  the hub (`Sun Outpost`). 250 crystal, 18 s, 60% of the hub's hp; it goes within 120 px of a
+  crystal node and 400 px or more from the faction's hubs. It trains harvesters and takes crystal,
+  and buildings can go within 240 px of any finished hub (`hubsOf`). `hubOf` is the main hub
+  only; only the main hub's fall ends a faction or counts for the `hubs` contract.
+- Research (`game/research.ts`, `World.research`, `updateResearch`): hull, weapons and engines,
+  three levels each (100, 160, 240 crystal times the faction's cost multiplier, 20 s at the hub,
+  one at a time), each +10% to every ship's hp, damage or speed in `unitStats`. A hull level also
+  scales ships already flying. State in `Side.research` (`levels`, `current`).
+- Building: Depot, Barracks and Turret, each placed within 240 px of a hub on clear ground, built
   over time with a progress bar. A Turret shoots enemies in range. Each faction calls its Barracks
   something else (Solar Concord: Orbital Dock); the command bar shows the role under each name
   (`Barracks · 100`), and train and build messages name the faction's own building.
@@ -28,13 +45,22 @@ Implemented today:
   at a finished Barracks, up to five at a time per building.
 - Orders: move, attack a unit or building, and auto-attack anything in sight when a unit has no
   order. Harvesters are never ordered.
-- AI (`World.think`, once a second per rival): keeps four harvesters, builds a Depot, a Barracks
-  and up to two Turrets, trains combat units, and after the opening 75 seconds sends its whole army
-  at the nearest enemy building every 12 seconds once the army reaches the difficulty's size.
+- AI (`World.think`, once a second per rival): keeps four harvesters (three more per outpost),
+  builds a Depot, a Barracks and up to two Turrets, trains combat units up to 20, and after the
+  opening 75 seconds sends its army (less its picket and two ships kept home) every 12 seconds,
+  once the army reaches the difficulty's size, at the faction that hit it last (`Side.grudge`, set
+  in `shoot`) or else the nearest enemy building, so rivals fight each other. From 120 s it
+  researches its lowest track and from 150 s builds one outpost (`expand`) at a field away from
+  every other hub, saving crystal for both (no training) once its army is big enough. Idle
+  warships fetch their faction's shards within 360 px (`fetchSalvage`).
 - Faction abilities (`Ability` in `game/factions.ts`, applied in `game/world.ts`): `cloak`
   (Phantom Blade, hidden from enemies until it fires for 2 s), `decoy` (Decoy Wraith drops a copy
   every 15 s that draws fire for 12 s and never acts), `hack` (Hack Frigate's hits disable a turret
-  for 6 s), `shield` (Halo Cruiser: friends within 70 px take half of each shot), `brood` (Brood
+  for 6 s, and `takeover` (6) hits in a row while it is dark make it the hacker's own turret, as
+  damaged as it was: `takeOver`, counted in `Building.hacks`), `mines` (Veil Syndicate's Mine
+  Lattice lays a hidden mine within 130 px every 8 s, up to 4, while not hacked: `World.mines`,
+  `layMine`; an enemy ship within 16 px sets it off for 45 damage within 40 px: `updateMines`; a
+  rival's mine is drawn only with a player ship within `MINE_SPOT` 60 px), `shield` (Halo Cruiser: friends within 70 px take half of each shot), `brood` (Brood
   Carrier spawns a scout every 12 s up to 6 scouts), `splash` (Siege Barge hits enemies within 28 px
   of its target for half damage), `salvage` (Nomad Salvage Yard pays 8 crystal per enemy unit
   destroyed within 200 px).
@@ -51,12 +77,14 @@ Implemented today:
   taken out of `nodes` and becomes the beacon. A faction alone in its 70 px ring with warships
   fills `capture` in 5 s (draining a rival's first) and then owns it; the owner gets 3 crystal a
   second while one of its warships is in the ring (`held`). `paid` counts what it paid the player.
-  Buildings keep clear of it. The rival whose hub is nearest the beacon sends one idle warship
-  (`Side.picket`) to contest it from 30 s on (`World.contestBeacon`), unless it owns the beacon; a
-  lost picket is replaced.
-- Salvage (`World.shards`, `World.updateShards`): an enemy ship the player destroys (not a decoy)
-  leaves a shard worth 8; the nearest player unit within 260 px pulls it in at 220 px/s and banks
-  it on contact (`salvaged` counts it). Shards fade after 45 s.
+  It sits at least 200 px from the player's start, outside the hub's sight, so it starts hidden in
+  the fog. Buildings keep clear of it. The two rivals whose hubs are nearest the beacon each send
+  one idle warship (`Side.picket`) to contest or hold it (`World.contestBeacon`), the nearest from
+  30 s on, the next from 120 s; a lost picket is replaced.
+- Salvage (`World.shards`, `World.updateShards`): a ship destroyed by another faction (not a
+  decoy) leaves a shard worth 8 for that faction (`Shard.faction`); the nearest unit of that
+  faction within 260 px pulls it in at 220 px/s and banks it on contact (`salvaged` counts the
+  player's). Shards fade after 45 s, and go with a fallen faction.
 - Floating numbers and one-off notices: `World.pops` (+8 and +3 over the map, aged in `update`) and
   `World.events` (`notice` for the command bar, `gain` for the flash by the crystal count), which
   the scene empties each frame.
@@ -73,17 +101,17 @@ Implemented today:
 
 Missing or rough:
 
-- The factions' abilities are one signature each (above). The Mine Lattice turret does not lay
-  mines, and hacking disables a turret rather than capturing it.
-- No fog of war, no pathfinding (units move in straight lines and pass over rocks), no unit
+- No pathfinding (units move in straight lines and pass over rocks), no unit
   collision, no sound and no save.
 - No minimap and no edge scrolling: the map scrolls with the keys only.
 - The rivals' Barracks and Turrets are placed at random within 60 to 150 px of their hub.
 - Ships of a type spawn on the same spot and stack (no collision), so a fresh wing looks like one
   ship until it moves.
-- The AI ignores contracts and salvage; only the beacon picket reacts to the new loop.
+- The AI ignores contracts and sees through the fog. Rivals left alone wipe each other out fast:
+  the centre faction usually falls first.
 - The playthrough covers only the first round (harvest, raise a Barracks for the first contract,
-  train three Lancers, take the beacon, fight off its picket for salvage, attack a base). Purchases
+  train three Lancers, find the beacon in the fog and take it, fight off its picket for salvage,
+  attack a base). Purchases
   beyond that round, the other buildings and the other units are not played.
 
 ## Architecture
@@ -97,6 +125,11 @@ File map (`src/`):
   `buildings` definitions with their outlines and optional `ability`), `COMBAT_UNITS`, and the types
   `UnitId`, `Role`, `Poly`, `Weapon`, `Ability`, `UnitDef`, `BuildingDef`. The outlines (`shape`) are
   no longer drawn; the art comes from `art/models.ts`.
+- `game/fog.ts`: `Fog` (`explored` and `visible` cells, `stamp`, `sees`, `knows`; `toJSON` gives
+  only the explored share, so the test's state reads stay small), `FOG_CELL` (10), `FOG_COLS`,
+  `FOG_ROWS`. No Phaser.
+- `game/research.ts`: `TRACKS`, `TRACK_DEFS`, `RESEARCH_LEVELS`, `RESEARCH_STEP`, `RESEARCH_COSTS`,
+  `RESEARCH_MS`, `Research`, `noResearch`, `researchBonus`. No Phaser.
 - `game/contracts.ts`: `CONTRACTS` (goal, target, reward, rank, title, brief and perk text from the
   faction, and `apply` for the perk), `Perks`, `NO_PERKS`, `Goal`. No Phaser.
 - `game/arena.ts`: `ARENA` (the 1600 by 1000 battlefield in world pixels), `START_POINTS` (the five
@@ -104,14 +137,18 @@ File map (`src/`):
 - `game/map.ts`: `generateMap(count)` returns a `MapLayout` (homes, nodes, rocks, nebulae, stars).
   Uses `Math.random` only.
 - `game/describe.ts`: the text for tooltips and faction cards (`unitLines`, `buildingLines`,
-  `factionLines`, `abilityText`), built from the faction data. No Phaser.
+  `factionLines`, `abilityText`, `expansionLines`, `researchLines`), built from the faction data.
+  No Phaser.
 - `game/world.ts`: `World`, the whole battle. `new World(layout, pick)` puts faction `pick` in the
   player's slot. `PLAYER` (0), `unitStats` and `buildingStats`
-  (faction numbers with the faction's multipliers and the side's perks applied), the beacon and
+  (faction numbers with the faction's multipliers, the side's perks and research applied),
+  `expansionStats`, `buildInfo` (what a build button costs and is called), `researchCost`, the
+  expansion constants (`EXPANSION_COST`, `EXPANSION_NEAR`, `EXPANSION_GAP`), `MINE_SPOT`, the beacon and
   salvage constants (`BEACON_RADIUS`, `CAPTURE_MS`, `BEACON_PAY`, `SHARD_VALUE`, `SHARD_MAGNET`,
-  `POP_MS`) and the types `Beacon`, `Shard`, `Pop`, `ContractState`, `WorldEvent`. Methods the scene and test use: `update(dt)`,
-  `build`, `train`, `command`, `selectableIn`, `selectable`, `entityAt`, `placementProblem`,
-  `count`, `hubOf`, `unit`, `building`. No Phaser import.
+  `POP_MS`) and the types `Beacon`, `Shard`, `Mine`, `Pop`, `Build`, `ContractState`, `WorldEvent`. Fields
+  `fog`, `known`, `mines`. Methods the scene and test use: `update(dt)`, `build`, `train`,
+  `research`, `command`, `selectableIn`, `selectable`, `entityAt`, `placementProblem`, `count`,
+  `hubOf`, `hubsOf`, `seesUnit`, `knowsBuilding`, `seesMine`, `unit`, `building`. No Phaser import.
 - `scenes/GameScene.ts`: `GameScene` (key `'Game'`). Holds `state` (the `World`), `layout`, `camera`
   (the map camera), `buttons`, `selected`, `placing`, `picking` (the faction picker is up) and
   `pickCards` (the picker's card rectangles, in view pixels). `update(time)` steps the world by the frame
@@ -122,13 +159,18 @@ File map (`src/`):
   scroll. Ships, buildings, crystals and shards are Images kept in maps by entity id, made when an
   entity appears and destroyed when it goes (`drawShips`, `drawBuildings`, `drawShards`); each
   ship shows the baked frame nearest its heading (`facing`), rotated by the few degrees left over,
-  with an exhaust flame Image behind it while it moves. Beams, fireballs, rings and health pills
-  are Graphics redrawn each frame (`underGfx` under the sprites, `gfx` over them). `toWorld(x, y)` and `toScreen(x, y)` convert between view pixels and
+  with an exhaust flame Image behind it while it moves. The fog (`drawFog`) is a canvas texture,
+  one pixel a cell box-blurred and smoothed up 3x, stretched over the battlefield above the ships
+  and repainted every third frame. Mines are drawn on `underGfx` (`drawMines`), a hacked turret
+  fills a cyan ring toward its takeover, and research buttons are drawn by `drawResearchButton`.
+  Beams, fireballs, rings and health pills are Graphics redrawn each frame (`underGfx` under the sprites, `gfx` over them). `toWorld(x, y)` and `toScreen(x, y)` convert between view pixels and
   battlefield pixels from the camera's scroll. Input: `onDown`, `onMove`, `onUp` (box or tap),
   `tapMap`, `press` (buttons). Bars and drag boxes use view pixels; placement and commands use
   battlefield pixels, converted with `toWorld`.
 - `scenes/layout.ts`: `VIEW`, `TOP`, `BAR`, `MAP_VIEW` (the map's window on screen), `BUTTON`
-  (116 by 30), `BUTTONS` (each button's kind, key and top-left corner), `ROLE_LABEL` (the generic
+  (116 by 30), `BUTTONS` (each button's kind, `build`, `train` or `research`, key and top-left
+  corner: four build buttons with Expansion last, four train buttons, and the research column),
+  `RESEARCH_COLUMN`, `PANEL_X` (where the message line and contract panel start), `ROLE_LABEL` (the generic
   name of each building and unit type, shown under the faction's own name), `FONT` (a system sans
   stack, bold italic for headings).
 - `art/mesh.ts`: the modelling kit. `Mesh` (vertex and face lists, each face with a material key),
@@ -161,8 +203,8 @@ How it runs:
 - `World.update` runs, in order: beams, wrecks and pops age; buildings progress (construction,
   training, turret fire); units act (harvesters `harvest`, others follow their order or acquire a
   target); each rival `think`s once a second (including `contestBeacon`); dead entities are
-  removed (kills, razes and shards are recorded here); the beacon, shards and contract update; the
-  phase becomes `won` or `lost`.
+  removed (kills, razes and shards are recorded here, after mines go off); research, the beacon,
+  shards, the contract and the fog update; the phase becomes `won` or `lost`.
 - Boot bakes all sprites in `create` (320 ship frames and the rest); a new map only repaints the
   backdrop.
 - Time is simulated, not read from the clock: `elapsedMs` is game time, used for the AI grace and
@@ -177,7 +219,10 @@ Test hooks (read by `e2e/playthrough.spec.ts`):
   `elapsedMs`, `units`, `buildings`, `nodes`, `sides` (crystal, alive), `layout`.
 - `scene.buttons`: the command bar's buttons with their positions, read to click them.
 - `scene.pickCards`: the picker's cards. The test taps the first one to play the Solar Concord.
-- `scene.state.beacon` (`owner`, `capture`, `held`, `paid`), `shards`, `salvaged`, `kills`,
+- `scene.state.fog`: its JSON is `{ explored }` (the explored share); `state.fog.knows({ x, y })`
+  answers whether the player has seen a point. The test checks the beacon starts hidden and is
+  found, and that flying out explores more.
+- `scene.state.beacon` (`owner`, `capture`, `held`, `paid`), `shards` (with `faction`), `salvaged`, `kills`,
   `contract` (`index`, `progress`) and `sides[0].perks`: the test asserts the first contract's
   reward and perk, the beacon's capture and pay, and a kill and its salvage.
 - `scene.selected`: the ids of the selected units; the test checks that its box selected the wing.
@@ -221,5 +266,10 @@ Test hooks (read by `e2e/playthrough.spec.ts`):
   the first round, so changing it means updating the playthrough.
 - **Beacon or salvage numbers**: the constants at the top of `game/world.ts`; the playthrough
   waits on the beacon paying 3 a second and a shard worth 8.
+- **Sight and fog**: the vision constants at the top of `game/world.ts` and the fog's look at the
+  top of `GameScene.ts`. Keep the beacon out of the hub's sight at the start (`HUB_VISION` below
+  `BEACON_HOME_GAP`): the playthrough asserts it starts hidden.
+- **Research or expansion numbers**: `game/research.ts` and the expansion constants in
+  `game/world.ts`; the tooltips read them, so update the README's numbers.
 - **Anything the playthrough depends on** (button positions, the first-round numbers, the hub or
   harvester behaviour): change it in the same PR as its test update.

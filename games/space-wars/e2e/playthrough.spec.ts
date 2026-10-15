@@ -2,9 +2,9 @@ import { expect, test, type Page } from '@playwright/test';
 
 // Plays the first round with real inputs: the crystal harvesters mine and carry crystal home, the
 // player raises a Barracks beside the hub (the first contract, which pays its reward and rank
-// perk), trains a wing of three Lancers from it, box-selects them, takes the relay beacon until it
-// pays, picks off a rival harvester and collects its salvage shard, then attacks the nearest enemy
-// base. The map is bigger than the screen, so the test pans it with the arrow
+// perk), trains a wing of three Lancers from it, box-selects them, flies them into the fog of war
+// to find the relay beacon and takes it until it pays, fights off the rival picket and collects its
+// salvage shard, then attacks the nearest enemy base. The map is bigger than the screen, so the test pans it with the arrow
 // keys to reach what it needs to tap. Game state is only read, through the `game` object the dev
 // build puts on window.
 
@@ -46,7 +46,8 @@ interface GameState {
   buildings: Building[];
   sides: Side[];
   beacon: { x: number; y: number; owner: number; capture: number; held: boolean; paid: number };
-  shards: { id: number; x: number; y: number; value: number }[];
+  shards: { id: number; faction: number; x: number; y: number; value: number }[];
+  fog: { explored: number };
   contract: { index: number; progress: number };
   salvaged: number;
   kills: number;
@@ -101,6 +102,12 @@ function scene(page: Page) {
         { x, y },
       ) as Promise<{ x: number; y: number }>,
     /** Whether a Barracks can go at (x, y) for the player, from the game's own placement rule. */
+    /** Whether the player has ever seen a battlefield point, from the fog of war. */
+    knows: (x: number, y: number) =>
+      page.evaluate(
+        ({ x, y }) => (window as any).game.scene.getScene('Game').state.fog.knows({ x, y }) as boolean,
+        { x, y },
+      ) as Promise<boolean>,
     canPlace: (x: number, y: number) =>
       page.evaluate(
         ({ x, y }) => (window as any).game.scene.getScene('Game').state.placementProblem('barracks', x, y) === null,
@@ -250,6 +257,9 @@ test('plays the first round', async ({ page }, testInfo) => {
   await tap(card.x + card.w / 2, card.y + card.h / 2);
   s = await game.state();
   expect(s.sides[PLAYER].def.name, 'the picked faction commands the battle').toBe('Solar Concord');
+  // The fog of war hides the map beyond what the base sees, the relay beacon included: it has to be found.
+  expect(await game.knows(s.beacon.x, s.beacon.y), 'the beacon starts hidden in the fog').toBe(false);
+  expect(s.fog.explored, 'only the area round the base is explored').toBeLessThan(0.15);
 
   // The harvesters mine the nearest crystal and carry it home, so the bank grows past the start.
   await until('crystal harvested and carried home', 60_000, (st) => st.sides[PLAYER].crystal >= START_CRYSTAL + 30);
@@ -304,11 +314,14 @@ test('plays the first round', async ({ page }, testInfo) => {
   await play(FRAME_MS, async () => false);
   expect(await game.selected(), 'the box selects the whole wing').toHaveLength(WING);
 
-  // Take the relay beacon: alone in its ring the wing captures it, then the beacon pays 3 crystal
-  // a second while the wing holds it.
+  // Fly the wing out to the relay beacon. Alone in its ring the wing captures it, then the beacon
+  // pays 3 crystal a second while the wing holds it.
   s = await game.state();
+  const explored = s.fog.explored;
   await tapWorld(s.beacon.x, s.beacon.y);
   await until('relay beacon captured', 30_000, (st) => st.beacon.owner === PLAYER);
+  expect(await game.knows(s.beacon.x, s.beacon.y), 'the wing found the beacon').toBe(true);
+  expect((await game.state()).fog.explored, 'flying out explored more of the map').toBeGreaterThan(explored);
   const bank = (await game.state()).sides[PLAYER].crystal;
   await until('relay beacon pays', 5_000, (st) => st.beacon.paid >= BEACON_PAY * 2);
   s = await game.state();
@@ -323,7 +336,7 @@ test('plays the first round', async ({ page }, testInfo) => {
   s = await game.state();
   expect(s.contract.index, 'still on the second contract').toBe(1);
   expect(s.contract.progress, 'the kill counts toward breaking the raid').toBeGreaterThanOrEqual(1);
-  await until('salvage shard collected', 10_000, (st) => st.salvaged >= SHARD_VALUE && st.shards.length === 0);
+  await until('salvage shard collected', 10_000, (st) => st.salvaged >= SHARD_VALUE && !st.shards.some((sh) => sh.faction === PLAYER));
   await snap('playthrough-4-salvage');
 
   // Then tap the nearest enemy base to attack it.
