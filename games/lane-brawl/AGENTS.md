@@ -87,6 +87,14 @@ Implemented today:
   one free champion for a brute's buff on its half or a watchstone it lacks (`updateJungle`).
   Towers shoot a champion with `aggroMs` (it hurt an enemy champion in the last `TOWER.aggroMs`)
   first, then minions, then any champion.
+- Watch AI (`?watch`, `shared/watch.ts`): `GameScene.watchMatch` skips the pick screen and calls
+  `createGame(random, 1, { watch: true })`, which spawns blue's fifth champion as an AI one
+  (`player` false, lane `top`, still `s.player` so the camera and HUD follow it) and sets
+  `s.watch`, which stops `updateObjective`. The scene adds `frameMs * watchSteps()` to its step
+  accumulator, draws with no fog (`hidden` and `updateFog`), ignores keys and clicks but the end
+  screen's Watch another, and hides the objective card and marker. `aiLog` in `sim.ts` reports
+  ganks, jungle trips, outnumbered retreats, AI upgrades, kills, the beast, towers, inhibitors and
+  watchstones, keyed by team.
 - Notices (`s.notices`, `notice` in `sim.ts`): the beast waking or falling, an inhibitor falling,
   ganks, champion kills ("X slew Y"), brute buffs taken by blue and watchstones taken; the newest shows for 4 s in a strip under the top bar.
 - Match objectives: one goal at a time for the player's team (`OBJECTIVES`, in turn): topple the red
@@ -209,8 +217,9 @@ File map (`src/`):
   (`updateGanks`), and the AI (`championPlan`) and player behaviour. No Phaser.
 
 Shared code it imports (outside the game folder): `shared/setupGame.ts` (`setupGame`),
-`shared/settings.ts` (`byDifficulty`, `settings`) and `shared/scaling.ts` (`setupScaling`,
-`sharpRes`, `splitHudCamera`, `viewPoint`).
+`shared/settings.ts` (`byDifficulty`, `settings`), `shared/scaling.ts` (`setupScaling`,
+`sharpRes`, `splitHudCamera`, `viewPoint`) and `shared/watch.ts` (`watching`, `watchSteps`,
+`mountWatch`, `aiLog`).
 
 Screens: `setupScaling` draws the canvas at the screen's resolution (`renderScale` canvas pixels
 per game pixel) and zooms every camera to match. `splitHudCamera` gives the scene a second, fixed
@@ -325,7 +334,7 @@ generator (`seeded` in `lowpoly.ts`); `performance.now` only times the bake for 
   `docs/screenshots/` as `playthrough-1-pick` to `playthrough-4-upgrade` when the look changes.
   `cover.png` (a copy of `new-cast.png`), `new-cast.png` (the shuffle steered with a fixed
   `Math.random` sequence so blue fields the five new classes), `ten-classes.png`, `fog-of-war.png`,
-  `jungle-brute.png`, `watchstone.png`, `loop-objective.png`, `loop-last-hit.png` and
+  `jungle-brute.png`, `watchstone.png`, `watch-ai.png` (a `?watch` match at 8x with the log open), `loop-objective.png`, `loop-last-hit.png` and
   `upgrade-*.png` are staged docs shots (a scratch Playwright script that places units through
   `window.game` and lets the match run), not test output. The `loop-*` and `upgrade-*` ones predate
   the square map.

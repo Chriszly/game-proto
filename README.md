@@ -76,6 +76,7 @@ what each AI decides (**L**).
 | --- | --- |
 | Colonizer | two random factions, both run by the planner, on an open map; a click on the end screen starts another match |
 | Space Wars | all five factions run by the AI on an open map until one is left; contracts don't run; a tap on the end screen starts another battle |
+| Lane Brawl | all ten champions run by the AI, blue's with a random class, with no fog; objectives don't run; the camera follows blue's champion; Watch another on the end screen starts another match |
 
 ## Running locally
 

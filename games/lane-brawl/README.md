@@ -220,6 +220,18 @@ byname that fits its class (a Warden is "the Unbroken" or "Stonehide", a Witch "
 
 A stunned champion or minion neither moves nor attacks. AI champions take upgrades too (see The AI).
 
+### Watch AI
+
+Add `?watch` to the game's URL (`/games/lane-brawl/?watch`) to skip the pick screen and let the AI
+play all ten champions, blue's with a random class, until a Nexus falls. The fog is lifted, the
+camera follows blue's champion, and the keys and clicks play nothing. The panel in the top right
+holds the match still, plays it from 1x to 8x (**[** and **]**) and opens a log (**L**) of each
+team's roams, jungle trips, retreats, upgrades, kills, towers and inhibitors. Objectives don't
+run in a watched match, so blue gets no extra gold or siege banner, and red deals normal damage
+whatever the difficulty. **Watch another** on the end screen starts the next match.
+
+![Watching the AI play, with the log open](docs/screenshots/watch-ai.png)
+
 ### Difficulty
 
 The difficulty, set on the hub page's Settings, changes how hard red hits: Easy has red's champions

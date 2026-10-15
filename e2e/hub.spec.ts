@@ -23,7 +23,7 @@ const GAMES = [
 ];
 
 // The games with a Watch AI mode (`?watch`, see shared/watch.ts); there is no hub link to it.
-const WATCH = ['/games/colonizer/', '/games/space-wars/'];
+const WATCH = ['/games/colonizer/', '/games/space-wars/', '/games/lane-brawl/'];
 
 // Every page links a favicon that loads.
 async function expectFavicon(page: Page) {

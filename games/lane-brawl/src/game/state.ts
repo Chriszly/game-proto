@@ -232,6 +232,8 @@ export interface GameState {
   enemyDamage: number;
   /** The player's champion's unit id. */
   player: number;
+  /** Watch AI: the AI plays the player's champion as well, and no objectives run. */
+  watch: boolean;
   /** The objective in progress, or null between two. */
   objective: Objective | null;
   /** Index into `OBJECTIVES` of the next objective to start, and when it starts. */
@@ -401,6 +403,8 @@ export interface MatchOptions {
   playerName?: string;
   /** Draws the rosters and the names: Math.random in the game. */
   rnd?: () => number;
+  /** Watch AI (`?watch`): the AI plays the player's champion too, in the top lane like red's fifth. */
+  watch?: boolean;
 }
 
 /**
@@ -420,6 +424,7 @@ export function createGame(pick: ChampionDef, enemyDamage: number, opts: MatchOp
     winner: null,
     enemyDamage,
     player: 0,
+    watch: !!opts.watch,
     objective: null,
     objectiveIndex: 0,
     nextObjectiveAt: 0,
@@ -528,7 +533,7 @@ export function createGame(pick: ChampionDef, enemyDamage: number, opts: MatchOp
   const blueAt = (i: number) => ({ x: BASE.blue.x + offsets[i].x, y: BASE.blue.y + offsets[i].y });
   const redAt = (i: number) => ({ x: BASE.red.x - offsets[i].x, y: BASE.red.y - offsets[i].y });
 
-  const player = spawnChampion(s, pick, 'blue', blueAt(0).x, blueAt(0).y, true, null, nameFor(pick, opts.playerName));
+  const player = spawnChampion(s, pick, 'blue', blueAt(0).x, blueAt(0).y, !opts.watch, opts.watch ? 'top' : null, nameFor(pick, opts.playerName));
   s.player = player.id;
   others.slice(0, 4).forEach((def, i) => {
     spawnChampion(s, def, 'blue', blueAt(i + 1).x, blueAt(i + 1).y, false, ALLY_LANES[i], nameFor(def));
