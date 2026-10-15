@@ -1,23 +1,27 @@
 import { expect, test, type Page } from '@playwright/test';
 
 // Plays the first voyage with real inputs: the test taps fogged tiles next to the charted part of
-// the island, as on a phone, nearest the surveyor first, until the supplies run out. Back at port it
-// checks the chart adds up (with no unused supplies to sell back, and any isle milestone the
-// voyage reached), taps Sell chart and checks the coins and the isle goal, then taps Set sail and
-// checks the second voyage starts with full supplies on the same island. Nothing is bought at the
-// harbor.
+// the island, as on a phone, nearest the surveyor first, while the supplies can pay for one (forests
+// and peaks cost 2, rivers and roads are free), checking what each survey costs and what its finds
+// add (a wreck's supplies, a cave's artifact, a storm's blocked tile). When nothing more can be paid
+// for it heads back to port, and checks the chart adds up (tiles, commission, artifacts, unused
+// supplies sold back and any isle milestone the voyage reached), taps Sell chart and checks the
+// coins and the isle goal, then taps Set sail and checks the second voyage starts with full
+// supplies on the same island. It pitches no camp, digs nothing and buys nothing at the harbor.
 // Game state is only read, through the `game` object the dev build puts on window.
 
-type Terrain = 'sea' | 'beach' | 'grass' | 'forest' | 'hills' | 'mountain' | 'village' | 'ruins' | 'port';
+type Terrain = 'sea' | 'beach' | 'grass' | 'forest' | 'hills' | 'mountain' | 'river' | 'road' | 'village' | 'ruins' | 'port';
+type Find = 'wreck' | 'cave' | 'storm';
 interface Point {
   x: number;
   y: number;
 }
 interface GameState {
   island: number;
+  kind: string;
   voyage: number;
   phase: 'survey' | 'chart' | 'harbor';
-  tiles: { terrain: Terrain; revealed: boolean }[];
+  tiles: { terrain: Terrain; revealed: boolean; find?: Find }[];
   port: Point;
   surveyor: Point;
   supplies: number;
@@ -30,6 +34,9 @@ interface GameState {
     base: number;
     ink: number;
     bonus: number;
+    artifacts: number;
+    artifactCoins: number;
+    treasure: number;
     unused: number;
     sellBack: number;
     milestones: number;
@@ -40,7 +47,13 @@ interface GameState {
   lastSale: number;
   milestones: number;
   isleStart: number;
-  atlas: { island: number; voyages: number; tiles: number }[];
+  atlas: { island: number; kind: string; voyages: number; tiles: number }[];
+  camps: Point[];
+  storms: Point[];
+  artifacts: number;
+  treasure: number;
+  riddle: { at: Point; clues: string[]; known: boolean; found: boolean } | null;
+  dug: Point[];
 }
 
 const VIEW = { w: 960, h: 540 };
@@ -50,7 +63,13 @@ const MAP = { x: 24, y: 64, tile: 40 };
 /** Supplies on Normal with no Provisions (BASE_SUPPLIES in state.ts). */
 const SUPPLIES = 12;
 /** What each tile adds to a chart (TERRAIN in src/game/terrain.ts). */
-const VALUE: Record<Terrain, number> = { sea: 1, beach: 2, grass: 2, forest: 3, hills: 4, mountain: 6, village: 10, ruins: 12, port: 0 };
+const VALUE: Record<Terrain, number> = { sea: 1, beach: 2, grass: 2, forest: 3, hills: 4, mountain: 6, river: 1, road: 1, village: 10, ruins: 12, port: 0 };
+/** What each tile costs to survey (TERRAIN in src/game/terrain.ts). */
+const COST: Record<Terrain, number> = { sea: 1, beach: 1, grass: 1, forest: 2, hills: 1, mountain: 2, river: 0, road: 0, village: 1, ruins: 1, port: 0 };
+/** What finds add (WRECK_SUPPLIES, ARTIFACT_VALUE and SELL_BACK in state.ts). */
+const WRECK_SUPPLIES = 3;
+const ARTIFACT_VALUE = 15;
+const SELL_BACK = 3;
 /** The isle goal's milestones (MILESTONES in state.ts): percent charted and the coins each pays. */
 const MILESTONES = [
   { pct: 50, coins: 20 },
@@ -83,12 +102,15 @@ function scene(page: Page) {
 const at = (s: GameState, x: number, y: number) => s.tiles[y * GRID.w + x];
 const inGrid = (x: number, y: number) => x >= 0 && y >= 0 && x < GRID.w && y < GRID.h;
 
-/** The fogged tiles next to a charted land tile: the ones that glow and can be surveyed. */
+/**
+ * The fogged tiles next to a charted land tile that no storm blocks: the ones that glow and can be
+ * surveyed (the test pitches no camps, so none are reached from one).
+ */
 function frontier(s: GameState): Point[] {
   const out: Point[] = [];
   for (let y = 0; y < GRID.h; y++) {
     for (let x = 0; x < GRID.w; x++) {
-      if (at(s, x, y).revealed) continue;
+      if (at(s, x, y).revealed || s.storms.some((p) => p.x === x && p.y === y)) continue;
       const next = [[0, -1], [1, 0], [0, 1], [-1, 0]].some(([dx, dy]) => {
         if (!inGrid(x + dx, y + dy)) return false;
         const t = at(s, x + dx, y + dy);
@@ -207,6 +229,12 @@ test('plays the first voyage', async ({ page }, testInfo) => {
     milestones: 0,
     isleStart: 1,
     atlas: [],
+    kind: 'green',
+    camps: [],
+    storms: [],
+    artifacts: 0,
+    treasure: 0,
+    dug: [],
   });
   expect(at(s, s.port.x, s.port.y)).toEqual({ terrain: 'port', revealed: true });
   expect(revealedCount(s), 'only the port is charted').toBe(1);
@@ -215,29 +243,41 @@ test('plays the first voyage', async ({ page }, testInfo) => {
   await play(500, async () => false);
   await snap('0-start');
 
-  // Survey until the supplies run out: each tap reveals the tile, costs one supply and walks the
-  // surveyor over; hills and peaks reveal more tiles around them for free.
+  // Survey while the supplies can pay: each tap reveals the tile, costs its terrain's supplies and
+  // walks the surveyor over; hills and peaks reveal more tiles around them for free, and finds under
+  // the revealed tiles turn up at once.
   let surveys = 0;
-  while (s.phase === 'survey') {
-    const options = frontier(s);
-    expect(options.length, 'something left to survey').toBeGreaterThan(0);
+  let spent = 0;
+  let wrecks = 0;
+  let caves = 0;
+  const affordable = () => frontier(s).filter((p) => COST[at(s, p.x, p.y).terrain] <= s.supplies);
+  while (s.phase === 'survey' && affordable().length > 0) {
     const d = (p: Point) => Math.abs(p.x - s.surveyor.x) + Math.abs(p.y - s.surveyor.y);
-    const target = options.sort((a, b) => d(a) - d(b) || a.y - b.y || a.x - b.x)[0];
-    const before = { supplies: s.supplies, revealed: revealedCount(s) };
+    const target = affordable().sort((a, b) => d(a) - d(b) || a.y - b.y || a.x - b.x)[0];
+    const before = { supplies: s.supplies, revealed: revealedCount(s), surveyed: s.surveyed.length, artifacts: s.artifacts };
     const fogAround = [[0, -1], [1, 0], [0, 1], [-1, 0]].some(
       ([dx, dy]) => inGrid(target.x + dx, target.y + dy) && !at(s, target.x + dx, target.y + dy).revealed,
     );
     await tap(tileCentre(target));
     expect(
-      await play(1_000, async () => (s = await game.state()).supplies < before.supplies),
+      await play(1_000, async () => (s = await game.state()).surveyed.length > before.surveyed),
       `survey ${target.x},${target.y}; state ${JSON.stringify({ ...s, tiles: undefined })}`,
     ).toBe(true);
     surveys += 1;
-    expect(s.supplies).toBe(before.supplies - 1);
+    const terrain = at(s, target.x, target.y).terrain;
+    const fresh = s.surveyed.slice(before.surveyed);
+    const found = (f: Find) => fresh.filter((p) => at(s, p.x, p.y).find === f).length;
+    spent += COST[terrain];
+    wrecks += found('wreck');
+    caves += found('cave');
+    expect(s.supplies, `${terrain} costs ${COST[terrain]}, a wreck adds ${WRECK_SUPPLIES}`).toBe(
+      before.supplies - COST[terrain] + WRECK_SUPPLIES * found('wreck'),
+    );
+    expect(s.artifacts, 'a cave holds an artifact').toBe(before.artifacts + found('cave'));
+    for (const p of s.storms) expect(frontier(s), 'a storm blocks its tile').not.toContainEqual(p);
     expect(at(s, target.x, target.y).revealed, `tile ${target.x},${target.y} revealed`).toBe(true);
     const gained = revealedCount(s) - before.revealed;
     expect(gained).toBeGreaterThanOrEqual(1);
-    const terrain = at(s, target.x, target.y).terrain;
     const lookout = terrain === 'hills' || terrain === 'mountain';
     if (lookout && fogAround) expect(gained, 'a hill or peak reveals the fog around it').toBeGreaterThan(1);
     if (!lookout) expect(gained, 'only hills and peaks reveal more').toBe(1);
@@ -245,11 +285,17 @@ test('plays the first voyage', async ({ page }, testInfo) => {
     await play(400, async () => false);
     if (surveys === 6) await snap('1-surveying');
   }
-  expect(surveys).toBe(SUPPLIES);
-  expect(s.supplies).toBe(0);
+  expect(surveys, 'surveys made').toBeGreaterThanOrEqual(SUPPLIES / 2);
+  expect(spent, 'the supplies paid for the surveys').toBe(SUPPLIES + WRECK_SUPPLIES * wrecks - s.supplies);
   expect(s.surveyed.length, 'every revealed tile is on the chart').toBe(revealedCount(s) - 1);
+  // Nothing left that the supplies can pay for: unless the voyage already ended on its own (it stays
+  // open while a known riddle can still be dug), the surveyor heads back to port.
+  if (s.phase === 'survey') {
+    await tap((await game.spots()).return);
+    expect(await play(1_000, async () => (s = await game.state()).phase === 'chart'), 'returned to port').toBe(true);
+  }
 
-  // Out of supplies, the surveyor is back at port with a chart: its rows add up to the tiles revealed.
+  // Back at port with a chart: its rows add up to the tiles revealed.
   expect(s.phase).toBe('chart');
   const counts: Partial<Record<Terrain, number>> = {};
   for (const p of s.surveyed) counts[at(s, p.x, p.y).terrain] = (counts[at(s, p.x, p.y).terrain] ?? 0) + 1;
@@ -257,23 +303,30 @@ test('plays the first voyage', async ({ page }, testInfo) => {
   const c = s.commission!;
   expect(c, 'the first voyage has a commission').not.toBeNull();
   const bonus = (counts[c.terrain] ?? 0) >= c.need ? c.bonus : 0;
-  // Every supply was spent, so nothing sells back; the voyage pays any isle milestones it reached.
+  // Supplies too few for the stations left sell back, up to the tiles' worth; the voyage pays any
+  // isle milestones it reached.
   const pct = islePercent(s);
   expect(pct, 'the first voyage charts part of the isle').toBeGreaterThan(0);
   expect(pct).toBeLessThan(100);
   const reached = MILESTONES.filter((m) => pct >= m.pct);
   const milestoneCoins = reached.reduce((sum, m) => sum + m.coins, 0);
+  const unused = s.supplies;
+  expect(unused, 'too few supplies for any station left').toBeLessThan(2);
+  const sellBack = Math.min(unused * SELL_BACK, base);
   expect(s.chart).toEqual({
     counts,
     base,
     ink: 0,
     bonus,
-    unused: 0,
-    sellBack: 0,
+    artifacts: caves,
+    artifactCoins: caves * ARTIFACT_VALUE,
+    treasure: 0,
+    unused,
+    sellBack,
     milestones: reached.length,
     milestoneCoins,
     atlas: false,
-    total: base + bonus + milestoneCoins,
+    total: base + bonus + caves * ARTIFACT_VALUE + sellBack + milestoneCoins,
   });
   expect(s.chart!.total).toBeGreaterThan(SUPPLIES);
   await play(500, async () => false);
@@ -284,7 +337,7 @@ test('plays the first voyage', async ({ page }, testInfo) => {
   let spots = await game.spots();
   await tap(spots.sell);
   expect(await play(1_000, async () => (s = await game.state()).phase === 'harbor'), 'chart sold').toBe(true);
-  expect(s).toMatchObject({ coins: total, lastSale: total, chart: null, surveyed: [], milestones: reached.length, atlas: [] });
+  expect(s).toMatchObject({ coins: total, lastSale: total, chart: null, surveyed: [], artifacts: 0, milestones: reached.length, atlas: [] });
   await play(500, async () => false);
   await snap('3-harbor');
 
@@ -293,7 +346,7 @@ test('plays the first voyage', async ({ page }, testInfo) => {
   spots = await game.spots();
   await tap(spots.sail);
   expect(await play(1_000, async () => (s = await game.state()).phase === 'survey'), 'set sail').toBe(true);
-  expect(s).toMatchObject({ island: 1, voyage: 2, supplies: SUPPLIES, coins: total, ranks: {}, isleStart: 1 });
+  expect(s).toMatchObject({ island: 1, voyage: 2, supplies: SUPPLIES, coins: total, ranks: {}, isleStart: 1, storms: [], camps: [] });
   expect(s.surveyor).toEqual(s.port);
   expect(revealedCount(s), 'the chart so far is kept').toBe(charted);
   await play(500, async () => false);

@@ -23,6 +23,8 @@ const ELEV: Record<Terrain, number> = {
   ruins: 0.2,
   hills: 0.48,
   mountain: 1.0,
+  river: 0.1,
+  road: 0.16,
 };
 
 /** Hypsometric tints: the colour from each height up. */
@@ -41,6 +43,7 @@ const BANDS: [number, string][] = [
   [1.15, '#ffffff'],
 ];
 const FOREST_TINT = '#a7cf8a';
+const ROAD_FILL = '#f6ecd2';
 
 /** One flat colour per terrain, for the panel's live chart and the chart rows. */
 export const TINT: Record<Terrain, string> = {
@@ -53,6 +56,8 @@ export const TINT: Record<Terrain, string> = {
   ruins: '#5b6670',
   hills: '#ead39f',
   mountain: '#d6ab86',
+  river: BLUE,
+  road: '#8d7a5c',
 };
 
 const rgb = (c: string) => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)];
@@ -201,6 +206,39 @@ export function paintTerrain(ctx: Ctx, tiles: Tile[]) {
   contour(-0.06, 'rgba(47,127,184,0.45)', 1.3);
   contour(-0.16, 'rgba(47,127,184,0.45)', 1.3);
   contour(-0.02, BLUE, 2.6);
+
+  // Rivers and roads: lines from each tile's centre to the edges it shares with the next stretch.
+  const links = (kinds: Terrain[], draw: (segments: [number, number, number, number][]) => void, own: Terrain) => {
+    for (let y = 0; y < GRID.h; y++) {
+      for (let x = 0; x < GRID.w; x++) {
+        if (T(x, y) !== own) continue;
+        const cx = (x + 0.5) * TS;
+        const cy = (y + 0.5) * TS;
+        const segs: [number, number, number, number][] = [];
+        for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
+          if (kinds.includes(T(x + dx, y + dy))) segs.push([cx, cy, cx + (dx * TS) / 2, cy + (dy * TS) / 2]);
+        }
+        if (segs.length === 0) segs.push([cx - 12, cy, cx + 12, cy]);
+        draw(segs);
+      }
+    }
+  };
+  const stroke = (segs: [number, number, number, number][], col: string, lw: number) => {
+    ctx.strokeStyle = col;
+    ctx.lineWidth = lw;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (const [x1, y1, x2, y2] of segs) {
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+    }
+    ctx.stroke();
+  };
+  links(['river', 'sea'], (segs) => stroke(segs, 'rgba(188,223,241,0.9)', 12), 'river');
+  links(['river', 'sea'], (segs) => stroke(segs, BLUE, 5), 'river');
+  // A cased road: an ink edge round a pale fill.
+  links(['road', 'village', 'port'], (segs) => stroke(segs, INK, 8), 'road');
+  links(['road', 'village', 'port'], (segs) => stroke(segs, ROAD_FILL, 4), 'road');
 
   // Map symbols.
   const tree = (x: number, y: number) => {
