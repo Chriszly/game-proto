@@ -52,6 +52,7 @@ import {
 } from './data';
 import { GameState, Unit, dist, getUnit, laneNear, levelFor, refreshStats, spawnWave } from './state';
 import { shortName } from './names';
+import { aiLog } from '../../../../shared/watch';
 
 const TEAMS: Team[] = ['blue', 'red'];
 
@@ -80,7 +81,8 @@ export function tick(s: GameState, dt: number) {
   // Dead minions are gone for good; their slots are cleaned up here.
   s.units = s.units.filter((u) => !(u.dead && u.kind === 'minion'));
   if (s.phase !== 'playing') return;
-  updateObjective(s);
+  // Objectives are the player's errands, so a watched match runs none.
+  if (!s.watch) updateObjective(s);
   updateLastHitMark(s);
 }
 
@@ -644,6 +646,7 @@ function kill(s: GameState, t: Unit, killerId: number) {
         champKiller.gold += BEAST.gold;
         gainXp(s, champKiller, BEAST.xp);
         const secs = Math.round(BEAST.buffMs / 1000);
+        aiLog(team, `${shortName(champKiller.name)} slays the guardian beast`);
         notice(s, team === 'blue' ? `Blue slew the guardian beast: your minions are empowered for ${secs}s` : `Red slew the guardian beast: red minions are empowered for ${secs}s`, SIDE_COLOR[team]);
       }
       s.fx.push({ kind: 'ring', x: t.x, y: t.y, r: 90, color: '#c79bff', ms: 800 });
@@ -651,12 +654,14 @@ function kill(s: GameState, t: Unit, killerId: number) {
     case 'inhibitor': {
       if (champKiller) champKiller.gold += INHIBITOR.gold;
       const foe = t.side === 'blue' ? 'red' : 'blue';
+      aiLog(foe, `breaks the ${t.lane} inhibitor`);
       notice(s, t.side === 'red' ? `Red's ${t.lane} inhibitor fell: blue super minions march ${t.lane}` : `Your ${t.lane} inhibitor fell: red super minions march ${t.lane}`, SIDE_COLOR[foe]);
       s.fx.push({ kind: 'ring', x: t.x, y: t.y, r: 70, color: SIDE_COLOR[t.side], ms: 700 });
       break;
     }
     case 'tower':
       if (champKiller) champKiller.gold += TOWER.gold;
+      aiLog(t.side === 'blue' ? 'red' : 'blue', `takes a ${t.lane} tower`);
       s.fx.push({ kind: 'ring', x: t.x, y: t.y, r: 60, color: SIDE_COLOR[t.side], ms: 600 });
       break;
     case 'nexus':
@@ -670,6 +675,7 @@ function kill(s: GameState, t: Unit, killerId: number) {
         champKiller.kills++;
         gainXp(s, champKiller, KILL.xp);
         const who = champKiller.player ? 'You' : shortName(champKiller.name);
+        aiLog(champKiller.side, `${shortName(champKiller.name)} slays ${shortName(t.name)}`);
         notice(s, t.player ? `${who} slew you` : `${who} slew ${shortName(t.name)}`, SIDE_COLOR[champKiller.side as Team]);
       }
       t.respawnAt = s.time + RESPAWN_BASE_MS + t.level * RESPAWN_PER_LEVEL_MS;
@@ -687,7 +693,11 @@ function gainXp(s: GameState, c: Unit, amount: number) {
       if (!pair) continue;
       // The player chooses on the cards; an AI champion takes the one it rates higher.
       if (c.player) s.upgradeOffers.push({ level: l, options: [pair[0].id, pair[1].id] });
-      else c.upgrades.push((aiRate(pair[1]) > aiRate(pair[0]) ? pair[1] : pair[0]).id);
+      else {
+        const up = aiRate(pair[1]) > aiRate(pair[0]) ? pair[1] : pair[0];
+        c.upgrades.push(up.id);
+        aiLog(c.side, `${shortName(c.name)} takes ${up.name} at level ${l}`);
+      }
     }
     c.level = level;
     refreshStats(c);
@@ -771,6 +781,7 @@ function championPlan(s: GameState, u: Unit, dt: number): boolean {
     if (low || outnumbered) {
       // Hurt allies near by (or all of them, when outnumbered) fall back with it.
       u.retreatUntil = s.time + RETREAT.ms;
+      if (outnumbered) aiLog(u.side, `${shortName(u.name)} calls a retreat, ${foes} against ${friends}`);
       for (const a of s.units) {
         if (a === u || a.kind !== 'champion' || a.player || a.dead || a.side !== u.side || dist(a, u) > RETREAT.call) continue;
         if (outnumbered || a.hp < a.maxHp * 0.5) a.retreatUntil = s.time + RETREAT.ms;
@@ -877,6 +888,7 @@ function updateGanks(s: GameState) {
     hunter.gankTarget = prey.id;
     hunter.gankUntil = s.time + GANK.ms;
     const lane = laneNear(prey);
+    aiLog(team, `${shortName(hunter.name)} roams to the ${lane} lane after ${shortName(prey.name)}`);
     if (team === 'red') notice(s, prey.player ? `Red's ${shortName(hunter.name)} is coming for you` : `Red's ${shortName(hunter.name)} roams to the ${lane} lane`, SIDE_COLOR.red);
     else notice(s, `Your ${shortName(hunter.name)} roams to the ${lane} lane`, SIDE_COLOR.blue);
   }
@@ -906,6 +918,8 @@ function updateJungle(s: GameState) {
     if (!best) continue;
     best.u.jungleTarget = best.goal.id;
     best.u.jungleUntil = s.time + JUNGLE.ms;
+    const goal = best.goal;
+    aiLog(team, `${shortName(best.u.name)} heads into the jungle for ${goal.kind === 'camp' ? `the ${CAMP_KINDS[goal.campKind ?? 'boar'].name.toLowerCase()}` : 'a watchstone'}`);
   }
 }
 
@@ -932,6 +946,7 @@ function updateWatchstones(s: GameState, dt: number) {
       w.capture = null;
       s.fx.push({ kind: 'ring', x: w.x, y: w.y, r: 90, color: SIDE_COLOR[team], ms: 700 });
       notice(s, team === 'blue' ? 'Your team took a watchstone' : 'Red took a watchstone', SIDE_COLOR[team]);
+      aiLog(team, 'takes a watchstone');
     }
   }
 }

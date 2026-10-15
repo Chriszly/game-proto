@@ -67,6 +67,7 @@ import { MAP_KEY, MAP_RES, paintMap } from '../art/map';
 import { PoseName } from '../art/models';
 import { byDifficulty, settings } from '../../../../shared/settings';
 import { sharpRes, splitHudCamera, viewPoint } from '../../../../shared/scaling';
+import { mountWatch, watching, watchSteps } from '../../../../shared/watch';
 import {
   BOTTOM_BAR,
   END_PANEL,
@@ -260,12 +261,15 @@ export class GameScene extends Phaser.Scene {
     this.fogMini = this.add.graphics().setScrollFactor(0).setDepth(10.5);
 
     this.keys = this.input.keyboard!.addKeys('Q,W,E,R,B,D,H,ESC,ONE,TWO') as typeof this.keys;
-    for (const k of ABILITY_KEYS) this.keys[k].on('down', () => this.castAtCursor(k));
-    for (const a of ACTIVES) this.keys[a.key].on('down', () => this.activeAtCursor(a));
-    this.keys.B.on('down', () => this.toggleShop());
-    this.keys.ESC.on('down', () => this.setShop(false));
-    this.keys.ONE.on('down', () => this.pickUpgrade(0));
-    this.keys.TWO.on('down', () => this.pickUpgrade(1));
+    // Watching the AI, the keys play no champion.
+    if (!watching) {
+      for (const k of ABILITY_KEYS) this.keys[k].on('down', () => this.castAtCursor(k));
+      for (const a of ACTIVES) this.keys[a.key].on('down', () => this.activeAtCursor(a));
+      this.keys.B.on('down', () => this.toggleShop());
+      this.keys.ESC.on('down', () => this.setShop(false));
+      this.keys.ONE.on('down', () => this.pickUpgrade(0));
+      this.keys.TWO.on('down', () => this.pickUpgrade(1));
+    }
 
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
       this.lastWorld = this.worldAt(p);
@@ -277,6 +281,8 @@ export class GameScene extends Phaser.Scene {
     });
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => this.onPointerDown(p));
     this.cameras.main.centerOn(BASE.blue.x + 300, BASE.blue.y - 200);
+    // Watching the AI skips the pick screen: a random champion plays for blue like the rest.
+    if (watching) this.watchMatch();
     this.refreshZones();
   }
 
@@ -287,7 +293,8 @@ export class GameScene extends Phaser.Scene {
     const frameMs = Math.min(this.game.loop.rawDelta, 250);
     const s = this.state;
     if (s && s.phase === 'playing') {
-      this.acc += frameMs;
+      // Watching the AI, the panel's speed runs more steps per frame (none while it holds the match).
+      this.acc += frameMs * watchSteps();
       while (this.acc >= STEP) {
         tick(s, STEP);
         this.acc -= STEP;
@@ -312,8 +319,20 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /** Watch AI: a new match with a random champion for blue, which the AI plays like the other nine. */
+  private watchMatch() {
+    this.rollNames();
+    this.startMatch(CHAMPIONS[Math.floor(Math.random() * CHAMPIONS.length)]);
+    mountWatch({
+      title: 'Watching AI · Lane Brawl',
+      sides: { blue: { name: 'Blue', color: SIDE_COLOR.blue }, red: { name: 'Red', color: SIDE_COLOR.red } },
+      time: () => this.state?.time ?? 0,
+    });
+  }
+
   private startMatch(def: ChampionDef) {
-    this.state = createGame(def, ENEMY_DAMAGE, { playerName: this.pickNames[CHAMPIONS.indexOf(def)] });
+    // Watching, neither side gets the difficulty's damage, so the match is even.
+    this.state = createGame(def, watching ? 1 : ENEMY_DAMAGE, { playerName: this.pickNames[CHAMPIONS.indexOf(def)], watch: watching });
     // Each champion in the match gets its sheet in its team's colours, once.
     const ms = bakeChampions(
       this,
@@ -332,6 +351,11 @@ export class GameScene extends Phaser.Scene {
     this.shopOpen = false;
     this.liveFx = [];
     this.cameras.main.centerOn(WORLD.w / 2, WORLD.h / 2);
+  }
+
+  /** Whether a unit is hidden from the view: from blue's sight, or never while watching the AI. */
+  private hidden(s: GameState, u: Unit): boolean {
+    return !watching && hiddenFrom(s, 'blue', u);
   }
 
   private get phase(): Phase {
@@ -379,9 +403,11 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     if (phase === 'won' || phase === 'lost') {
-      this.zones.push({ ...PLAY_AGAIN, run: () => this.resetToPick() });
+      this.zones.push({ ...PLAY_AGAIN, run: () => (watching ? this.watchMatch() : this.resetToPick()) });
       return;
     }
+    // Watching the AI, nothing on the HUD takes a press.
+    if (watching) return;
     // The bars and the objective card block presses so a click on the HUD never walks the champion.
     this.zones.push({ ...TOP_BAR, run: noop }, { ...BOTTOM_BAR, run: noop }, { ...OBJECTIVE_CARD, run: noop });
     this.zones.push({ ...SHOP_BUTTON, run: () => this.toggleShop() });
@@ -417,7 +443,7 @@ export class GameScene extends Phaser.Scene {
       this.refreshZones();
       return;
     }
-    if (this.phase !== 'playing' || !this.state) return;
+    if (this.phase !== 'playing' || !this.state || watching) return;
     const w = this.worldAt(pointer);
     this.lastWorld = w;
     const me = this.player();
@@ -451,6 +477,8 @@ export class GameScene extends Phaser.Scene {
    * into the fog's small canvas: one pixel per cell, dark where blue sees nothing, with soft edges.
    */
   private updateFog(s: GameState) {
+    // Watching the AI, the whole map is in view.
+    if (watching) return void this.fog.fill(0);
     const cols = FOG_COLS, rows = FOG_ROWS;
     const edge = new Float32Array(cols * rows).fill(1e9);
     for (const v of viewers(s, 'blue')) {
@@ -587,13 +615,14 @@ export class GameScene extends Phaser.Scene {
       for (const u of s.units) {
         if (u.dead && u.kind !== 'tower' && u.kind !== 'inhibitor') continue;
         // A red champion hiding in a bush is not drawn at all.
-        if (hiddenFrom(s, 'blue', u)) continue;
+        if (this.hidden(s, u)) continue;
         seen.add(u.id);
         this.drawGround(g, u, s);
         this.placeSprite(u, s);
       }
-      for (const u of s.units) if (!u.dead && !hiddenFrom(s, 'blue', u)) this.drawBar(top, u, s, me);
-      this.drawObjectiveMarker(top, s);
+      for (const u of s.units) if (!u.dead && !this.hidden(s, u)) this.drawBar(top, u, s, me);
+      // The objective is the player's own errand, so watching the AI leaves it out.
+      if (!watching) this.drawObjectiveMarker(top, s);
       for (const p of s.projectiles) {
         if (this.fogged(p.x, p.y)) continue;
         const speed = Math.hypot(p.vx, p.vy) || 1;
@@ -780,7 +809,7 @@ export class GameScene extends Phaser.Scene {
   private drawObjectiveMarker(g: Phaser.GameObjects.Graphics, s: GameState) {
     const o = s.objective;
     const t = o && getUnit(s, o.target);
-    if (!o || !t || t.dead || hiddenFrom(s, 'blue', t)) return;
+    if (!o || !t || t.dead || this.hidden(s, t)) return;
     const fy = t.y + FOOT[t.kind];
     const bob = settings.reduceMotion ? 0 : Math.sin(s.time / 220) * 3;
     const y = fy - headOf(t) - (t.kind === 'champion' ? 30 : 18) + bob;
@@ -916,7 +945,7 @@ export class GameScene extends Phaser.Scene {
     this.drawTopBar(g, s, me);
     // The shop panel covers the objective card, so the card steps aside while it is open.
     if (!this.shopOpen) {
-      this.drawObjectiveCard(g, s);
+      if (!watching) this.drawObjectiveCard(g, s);
       this.drawBuffs(g, s);
       this.drawNotice(g, s);
     }
@@ -1235,7 +1264,7 @@ export class GameScene extends Phaser.Scene {
     for (const b of BUSHES) g.fillStyle(col('#24481f'), 0.9).fillEllipse(mx(b.x), my(b.y), b.rx * 2 * k, b.ry * 2 * k);
     g.lineStyle(1, 0xb98cff, 0.6).strokeCircle(mx(BEAST.x), my(BEAST.y), 5);
     for (const u of s.units) {
-      if (u.dead || hiddenFrom(s, 'blue', u)) continue;
+      if (u.dead || this.hidden(s, u)) continue;
       if (u.kind === 'beast') {
         const cx = mx(u.x), cy = my(u.y);
         g.fillStyle(col(UI.edge), 1).fillPoints([new Phaser.Math.Vector2(cx, cy - 6), new Phaser.Math.Vector2(cx + 6, cy), new Phaser.Math.Vector2(cx, cy + 6), new Phaser.Math.Vector2(cx - 6, cy)], true);
@@ -1318,10 +1347,15 @@ export class GameScene extends Phaser.Scene {
     this.panel(g, p.x, p.y, p.w, p.h, UI.slate);
     g.fillStyle(col(UI.gold), 1).fillRect(p.x + 2, p.y + 2, p.w - 4, 3);
     const won = s.winner === 'blue';
-    this.t('end-title', VIEW.w / 2, p.y + 22, won ? 'Victory' : 'Defeat', 34, won ? UI.green : UI.red, 'center', true);
-    this.t('end-sub', VIEW.w / 2, p.y + 72, won ? 'The red Nexus has fallen.' : 'Your Nexus has fallen.', 13, UI.dim, 'center');
+    if (watching) {
+      this.t('end-title', VIEW.w / 2, p.y + 22, won ? 'Blue wins' : 'Red wins', 34, won ? SIDE_COLOR.blue : SIDE_COLOR.red, 'center', true);
+      this.t('end-sub', VIEW.w / 2, p.y + 72, won ? 'The red Nexus has fallen.' : 'The blue Nexus has fallen.', 13, UI.dim, 'center');
+    } else {
+      this.t('end-title', VIEW.w / 2, p.y + 22, won ? 'Victory' : 'Defeat', 34, won ? UI.green : UI.red, 'center', true);
+      this.t('end-sub', VIEW.w / 2, p.y + 72, won ? 'The red Nexus has fallen.' : 'Your Nexus has fallen.', 13, UI.dim, 'center');
+    }
     this.t('end-stats', VIEW.w / 2, p.y + 94, `${this.player()?.kills ?? 0} kills, ${this.player()?.deaths ?? 0} deaths   Objectives ${s.objectivesDone}   Last hits ${s.lastHits}   Best streak x${s.bestStreak}   Beasts ${s.beastKills.blue}`, 11, UI.muted, 'center');
     this.panel(g, PLAY_AGAIN.x, PLAY_AGAIN.y, PLAY_AGAIN.w, PLAY_AGAIN.h, '#4a5876');
-    this.t('again-label', PLAY_AGAIN.x + PLAY_AGAIN.w / 2, PLAY_AGAIN.y + 12, 'Play again', 16, UI.text, 'center', true);
+    this.t('again-label', PLAY_AGAIN.x + PLAY_AGAIN.w / 2, PLAY_AGAIN.y + 12, watching ? 'Watch another' : 'Play again', 16, UI.text, 'center', true);
   }
 }
