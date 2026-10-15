@@ -17,18 +17,18 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
-            // Dropdown option -> label suffix. Keep in step with the forms and .github/labels.json.
+            // Dropdown option -> game label. Keep in step with the forms and .github/labels.json.
             const games = {"Apothecary": "apothecary", "Deadline": "deadline", "Palisade": "palisade", "Tiny Kingdom": "tiny-kingdom", "Hotfoot": "hotfoot", "Anvilheart": "anvilheart", "Broadside": "broadside", "TinctureTinker": "tincture-tinker", "Catacomb": "catacomb", "Golem Garden": "golem-garden", "Beehive Baron": "beehive-baron", "Wyrmrail": "wyrmrail", "Shrine Stack": "shrine-stack", "Mapmaker": "mapmaker", "Lanternkeep": "lanternkeep", "Space Wars": "space-wars", "Lane Brawl": "lane-brawl", "Colonizer": "colonizer", "Hub page": "hub", "Shared / all games": "shared"};
             // The body is read as data from the event; it never reaches a shell.
             const issue = context.payload.issue;
             const match = /^### Game\s*\r?\n\s*\r?\n(.+)$/m.exec(issue.body || '');
-            const slug = match && games[match[1].trim()];
-            if (!slug) {
+            const label = match && games[match[1].trim()];
+            if (!label) {
               console.log('No game picked in the form; nothing to do.');
               return;
             }
-            const label = `game: ${slug}`;
-            const stale = issue.labels.map(l => l.name).filter(n => n.startsWith('game: ') && n !== label);
+            const gameLabels = new Set(Object.values(games));
+            const stale = issue.labels.map(l => l.name).filter(n => gameLabels.has(n) && n !== label);
             for (const name of stale) {
               await github.rest.issues.removeLabel({ ...context.repo, issue_number: issue.number, name });
             }
