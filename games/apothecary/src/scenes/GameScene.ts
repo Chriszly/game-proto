@@ -514,6 +514,8 @@ export class GameScene extends Phaser.Scene {
     this.addObstacle(at.x, at.y, 'table', 84, 30);
     this.addPallets(id, PALLETS[id], [PLANTS, REFINED], [() => refiner.queue, () => refiner.output]);
     const progress = new ProgressBar(this, at.x, at.y + 30, 60, 0xd8cfa8, WORLD_UI_DEPTH);
+    // A second craftsman's pipe shows its own bar just below.
+    const progress2 = new ProgressBar(this, at.x, at.y + 38, 60, 0xd8cfa8, WORLD_UI_DEPTH);
     this.addMarker(m.pickUp, 'pad-out', 'Pick up', () => pickUpFromRefiner(this.state, id), () => this.state.belts[beltOut].built);
     this.addMarker(m.drop, 'pad-in', 'Drop', () => dropAtRefiner(this.state, id), () => this.state.belts[beltIn].built && !this.carries(isPlant));
     this.addWorkSpot(m.work, id);
@@ -522,6 +524,7 @@ export class GameScene extends Phaser.Scene {
     this.views.push(() => {
       // The plant being refined is always the front one (see tick).
       progress.set(refining(refiner) >= 0 ? refiner.progress / REFINE[refiner.queue[0]].ms : null);
+      progress2.set(refiner.second ? refiner.second.progress / REFINE[refiner.second.plant].ms : null);
     });
   }
 
@@ -536,13 +539,18 @@ export class GameScene extends Phaser.Scene {
     this.addPallets(id, PALLETS[id], [REFINED, POTIONS], [() => cauldron.contents, () => cauldron.output]);
     // The end of the bar is the fine window: picked up then, the potion comes out fine.
     const brewing = new ProgressBar(this, at.x, at.y + 34, 60, 0x58a35a, WORLD_UI_DEPTH).setZone(1 - FINE_SHARE, 0xe8b830);
+    const brewing2 = new ProgressBar(this, at.x, at.y + 42, 60, 0x58a35a, WORLD_UI_DEPTH).setZone(1 - FINE_SHARE, 0xe8b830);
     this.addMarker(m.pickUp, 'pad-out', 'Pick up', () => pickUpFromCauldron(this.state, id), () => this.state.belts[beltOut].built);
     this.addMarker(m.drop, 'pad-in', 'Drop', () => dropInCauldron(this.state, id), () => this.state.belts[beltIn].built && !this.carries(isRefined));
     this.addWorkSpot(m.work, id);
     this.addUpgradeMarker(m.upgrade, id);
     this.addCraftsmen(id);
     this.views.push(() => {
-      brewing.set(cauldron.brewing ? cauldron.brewing.progress / cauldron.brewing.ms : null);
+      for (const [bar, brew] of [
+        [brewing, cauldron.brewing],
+        [brewing2, cauldron.brewing2],
+      ] as const)
+        bar.set(brew ? brew.progress / brew.ms : null);
     });
   }
 

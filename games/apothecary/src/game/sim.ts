@@ -71,6 +71,7 @@ import {
   type CraftingId,
   type BeltItem,
   type Build,
+  type Brew,
   type Cauldron,
   type CauldronId,
   type GameState,
@@ -93,13 +94,16 @@ import { BELT_JOIN_MS, beltSpan } from '../scenes/layout';
 const crew = (state: GameState, id: StationId, workingAt: StationId | null) =>
   state.craftsmen[id].level > 0 ? state.craftsmen[id].level : workingAt === id ? 1 : 0;
 
+/** Whether a refining table or cauldron has its second pipe open: a second craftsman works it. */
+const secondPipe = (state: GameState, id: StationId) => state.craftsmen[id].level >= 2;
+
 /**
  * Advances the world by `dt` ms. Stations only work while someone works them: the doctor standing
  * at their work spot, given as `workingAt`, or their craftsmen. The refining table and cauldron make
- * progress, faster with each extra pair of hands, and customers are served. A counter's second
- * craftsman also takes the coins from the till. Customers are served, and lose patience, only once
- * they stand at the counter, as `atCounter` says; without anyone showing them walk in, they are
- * there at once.
+ * progress, a second craftsman working a second pipe alongside the first, and customers are
+ * served. A counter's second craftsman also takes the coins from the till. Customers are served,
+ * and lose patience, only once they stand at the counter, as `atCounter` says; without anyone
+ * showing them walk in, they are there at once.
  */
 export function tick(
   state: GameState,
@@ -114,41 +118,36 @@ export function tick(
 
   for (const id of REFINERS) {
     const refiner = state[id];
+    const speed = dt * speedAt(state.upgrades[id].level);
     const next = refining(refiner, state.priority[id]);
-    const hands = crew(state, id, workingAt);
-    if (hands === 0 || next < 0) continue;
-    // The plant being worked on moves to the front of the queue, so its progress stays its own even
-    // when a plant ahead of it gets room on its pallet again.
-    if (next > 0) refiner.queue.unshift(...refiner.queue.splice(next, 1));
-    refiner.progress += dt * hands * speedAt(state.upgrades[id].level);
-    const recipe = REFINE[refiner.queue[0]];
-    if (refiner.progress >= recipe.ms) {
-      refiner.queue.shift();
-      refiner.output.push(recipe.out);
-      // Work past the end of this plant goes on the next, so a slow frame rate makes no less. The
-      // next is picked now, so the priority applies to it as well.
-      refiner.progress = refiner.queue.length > 0 ? refiner.progress - recipe.ms : 0;
-      const after = firstToRefine(refiner, state.priority[id]);
-      if (after > 0) refiner.queue.unshift(...refiner.queue.splice(after, 1));
+    // Each pair of hands works its own pipe at the same speed: the first the front of the queue, a
+    // second craftsman's a plant of its own (see `refineSecond`).
+    if (crew(state, id, workingAt) > 0 && next >= 0) {
+      // The plant being worked on moves to the front of the queue, so its progress stays its own even
+      // when a plant ahead of it gets room on its pallet again.
+      if (next > 0) refiner.queue.unshift(...refiner.queue.splice(next, 1));
+      refiner.progress += speed;
+      const recipe = REFINE[refiner.queue[0]];
+      if (refiner.progress >= recipe.ms) {
+        refiner.queue.shift();
+        refiner.output.push(recipe.out);
+        // Work past the end of this plant goes on the next, so a slow frame rate makes no less. The
+        // next is picked now, so the priority applies to it as well.
+        refiner.progress = refiner.queue.length > 0 ? refiner.progress - recipe.ms : 0;
+        const after = firstToRefine(refiner, state.priority[id]);
+        if (after > 0) refiner.queue.unshift(...refiner.queue.splice(after, 1));
+      }
     }
+    if (secondPipe(state, id)) refineSecond(refiner, speed, state.priority[id]);
   }
 
   for (const id of CAULDRONS) {
     const cauldron = state[id];
-    const hands = crew(state, id, workingAt);
-    if (hands === 0) continue;
-    // The recipe is picked when work starts, from everything in the cauldron by then.
-    if (!cauldron.brewing) startBrew(state, cauldron, state.priority[id]);
-    if (!cauldron.brewing) continue;
-    cauldron.brewing.progress += dt * hands * speedAt(state.upgrades[id].level);
-    if (cauldron.brewing.progress >= cauldron.brewing.ms) {
-      const over = cauldron.brewing.progress - cauldron.brewing.ms;
-      cauldron.output.push(cauldron.brewing.out);
-      cauldron.brewing = null;
-      // Work past the end of this brew goes on the next, if there is one.
-      const next = startBrew(state, cauldron, state.priority[id]);
-      if (next) next.progress = over;
-    }
+    if (crew(state, id, workingAt) === 0) continue;
+    const speed = dt * speedAt(state.upgrades[id].level);
+    // The first pipe, then a second craftsman's: each brews on its own at the same speed.
+    cauldron.brewing = brew(state, cauldron, cauldron.brewing, speed, state.priority[id]);
+    if (secondPipe(state, id)) cauldron.brewing2 = brew(state, cauldron, cauldron.brewing2 ?? null, speed, state.priority[id]);
   }
 
   for (const id of BELTS) runBelt(state, id, dt);
@@ -198,6 +197,29 @@ function firstToRefine(refiner: Refiner, first: PlantId | null) {
   const fits = (plant: PlantId) => palletHasRoom(refiner.output, REFINE[plant].out);
   const preferred = first ? refiner.queue.findIndex((plant) => plant === first && fits(plant)) : -1;
   return preferred >= 0 ? preferred : refiner.queue.findIndex(fits);
+}
+
+/**
+ * Works a refining table's second pipe for `ms`: takes a plant off the queue when it has none (behind
+ * the front one, which is the first pipe's), refines it and puts it out, then starts on the next with
+ * the work left over. A finished plant waits there while its pallet is full.
+ */
+function refineSecond(refiner: Refiner, ms: number, first: PlantId | null) {
+  if (!refiner.second) {
+    const rest: Refiner = { ...refiner, queue: refiner.queue.slice(1) };
+    const i = firstToRefine(rest, first);
+    if (i < 0) return;
+    refiner.second = { plant: refiner.queue.splice(i + 1, 1)[0], progress: 0 };
+  }
+  const second = refiner.second;
+  const recipe = REFINE[second.plant];
+  const over = second.progress + ms - recipe.ms;
+  second.progress = Math.min(second.progress + ms, recipe.ms);
+  if (over < 0 || !palletHasRoom(refiner.output, recipe.out)) return;
+  refiner.output.push(recipe.out);
+  refiner.second = null;
+  // Work past the end of this plant goes on the next, so a slow frame rate makes no less.
+  if (over > 0) refineSecond(refiner, over, first);
 }
 
 /**
@@ -306,7 +328,7 @@ export function shortfall(state: GameState, potion: PotionId) {
   const wanted = state.orders.reduce((n, o) => n + o.wants.filter((p) => p === potion).length, 0);
   // Each cauldron's belt is named after it.
   const riding = CAULDRONS.flatMap((id) => state.belts[id].items.map((item) => item.id));
-  const brewing = CAULDRONS.flatMap((id) => state[id].brewing?.out ?? []);
+  const brewing = CAULDRONS.flatMap((id) => [state[id].brewing, state[id].brewing2].flatMap((brew) => brew?.out ?? []));
   // Fine potions count as the potion they are.
   const ready = [state.counter.shelf, state.carrying, riding, brewing, ...CAULDRONS.map((id) => state[id].output)].reduce(
     (n, items) => n + items.filter((p) => isSellable(p) && plainOf(p) === potion).length,
@@ -316,11 +338,28 @@ export function shortfall(state: GameState, potion: PotionId) {
 }
 
 /**
- * Starts the recipe the shop is shortest of among those the cauldron has the ingredients and room
- * for, so the potion customers are waiting for gets brewed first. Ties go in recipe order. Returns
- * the brew started, if any.
+ * Works one of a cauldron's pipes for `ms` and returns its brew afterwards: starts one when it has
+ * none, and puts a finished one out, going straight on to the next with the work left over.
  */
-function startBrew(state: GameState, cauldron: Cauldron, first: PotionId | null = null) {
+function brew(state: GameState, cauldron: Cauldron, brewing: Brew | null, ms: number, first: PotionId | null) {
+  // The recipe is picked when work starts, from everything in the cauldron by then.
+  const current = brewing ?? startBrew(state, cauldron, first);
+  if (!current) return null;
+  current.progress += ms;
+  if (current.progress < current.ms) return current;
+  cauldron.output.push(current.out);
+  // Work past the end of this brew goes on the next, if there is one.
+  const next = startBrew(state, cauldron, first);
+  if (next) next.progress = current.progress - current.ms;
+  return next;
+}
+
+/**
+ * Starts the recipe the shop is shortest of among those the cauldron has the ingredients and room
+ * for, so the potion customers are waiting for gets brewed first. Ties go in recipe order. Takes the
+ * ingredients out of the cauldron and returns the brew started, if any, for a pipe to work.
+ */
+function startBrew(state: GameState, cauldron: Cauldron, first: PotionId | null = null): Brew | null {
   const need = new Map(RECIPES.map((r) => [r.out, shortfall(state, r.out)]));
   // The priority potion goes first whenever its ingredients are in; the rest by need.
   const byNeed = [...RECIPES].sort((a, b) => Number(b.out === first) - Number(a.out === first) || need.get(b.out)! - need.get(a.out)!);
@@ -329,8 +368,7 @@ function startBrew(state: GameState, cauldron: Cauldron, first: PotionId | null 
     const left = without(cauldron.contents, recipe.inputs);
     if (left) {
       cauldron.contents = left;
-      cauldron.brewing = { out: recipe.out, ms: recipe.ms, progress: 0 };
-      return cauldron.brewing;
+      return { out: recipe.out, ms: recipe.ms, progress: 0 };
     }
   }
   return null;
@@ -554,9 +592,11 @@ export function dropInCauldron(state: GameState, id: CauldronId = 'cauldron'): F
  */
 export function pickUpFromCauldron(state: GameState, id: CauldronId = 'cauldron'): Feedback | null {
   const cauldron = state[id];
-  if (inFineWindow(cauldron.brewing) && freeHands(state) > 0) {
-    const fine = FINE[cauldron.brewing.out];
-    cauldron.brewing = null;
+  // Either pipe's brew can be taken out fine.
+  const pipe = inFineWindow(cauldron.brewing) ? 'brewing' : inFineWindow(cauldron.brewing2 ?? null) ? 'brewing2' : null;
+  if (pipe && freeHands(state) > 0) {
+    const fine = FINE[cauldron[pipe]!.out];
+    cauldron[pipe] = null;
     state.carrying.push(fine);
     return [`+ ${ITEMS[fine].name}!`];
   }

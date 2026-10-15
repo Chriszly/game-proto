@@ -14,7 +14,8 @@ shade gardens and a mirrored second production line.
 - Implemented: the full loop on both lines, auto-harvest with a spinning sickle, floor markers
   (drop, work, pick up, pay), pallets that show station stock, customers served only at the
   counter, a walled shop that faces the street at the bottom and that the doctor enters by a back door from the market, station upgrades (5 levels), outfitter and
-  guild upgrades, two craftsmen per station, a priority choice per crafting station, six belts
+  guild upgrades, two craftsmen per station (the second opens a second pipe at a table or
+  cauldron), a priority choice per crafting station, six belts
   with one lane per item kind, the expansion,
   a Recipes panel and a Settings panel, a daily contract card, tips that shrink while a customer
   waits (a coin ring on each order bubble), and an autopilot that plays the time away (up to 2h)
@@ -179,9 +180,10 @@ shade gardens and a mirrored second production line.
   fine count beside the outer counter pallets and above the middle one; the counter's pallets
   count fine potions as their plain potion.
 - Fine window: `inFineWindow(brew)` holds from `1 - FINE_SHARE` (75%) of a brew to its end.
-  `pickUpFromCauldron` takes such a brew out as its `FINE` potion before anything on the out
+  `pickUpFromCauldron` takes such a brew (`brewing` first, then `brewing2`) out as its `FINE` potion before anything on the out
   pallets. A brew only moves while worked, so stepping off the work spot holds it in the window.
-  The brewing bar's zone (`setZone`) and fill turn gold there.
+  The brewing bar's zone (`setZone`) and fill turn gold there. Each station has a second bar
+  8px below the first for its second pipe, shown only while that pipe works.
 - Reputation and regulars: `tick` lowers `reputation` by `REPUTATION_WALKED_OFF` for each order
   whose patience runs out (and marks a running rush lost); `orderFilled` raises it by
   `REPUTATION_SERVED`, and a customer filled with `tipLeft` at least `REGULAR_TIP_LEFT` joins
@@ -205,8 +207,9 @@ shade gardens and a mirrored second production line.
 
 `GameState` in `src/game/state.ts` is plain JSON (`version: 3`, `layout`). Key parts: `carrying`
 (bottom to top), `player` (starts at 630,620, in the market), `plots` (3 per garden, gardens in `GARDENS` order,
-two per line), `refiner`/`refiner2` (`queue`, `progress`, `output`), `cauldron`/`cauldron2`
-(`contents`, `brewing`, `output`), `counter` (`shelf`, `till`, `serving`), `orders` (each with fixed
+two per line), `refiner`/`refiner2` (`queue`, `progress`, `output`, and `second`: the second
+pipe's plant and progress, or null), `cauldron`/`cauldron2` (`contents`, `brewing`, `brewing2`,
+the second pipe's brew, and `output`), `counter` (`shelf`, `till`, `serving`), `orders` (each with fixed
 per-potion `pay`, and `patience` that counts down only at the counter), `upgrades`, `craftsmen` (an
 `Upgrade` whose `level` is the number hired), `belts` (a `Build` plus riding `items`, each `at` ms
 along the main run), `priority` (per `CraftingId`, a `PlantId` or `PotionId` to make first, or
@@ -233,11 +236,17 @@ can hold fine potions.
 - Every tray holds at most `PALLET_SIZE` (40) of each item kind; `palletHasRoom` guards every add.
 - Second-line stations and fields exist in state from the start; `stationBuilt` and `gardenBuilt`
   gate them. A station works only with `crew` > 0: its craftsmen, or the doctor on its work spot.
+- Second pipe: with two craftsmen (`secondPipe`) a table or cauldron works two things at once, each
+  at the speed one pair of hands works, rather than one twice as fast. A table's first pipe works
+  the front of `queue` as before; `refineSecond` takes the next plant to start on from behind it
+  (same priority rules) into `second`, and a finished one waits there while its pallet is full. A
+  cauldron runs `brew` on `brewing`, then on `brewing2`. `second` and `brewing2` are optional, so
+  old saves load with both empty.
 - The refiner moves the plant it works on to the front of `queue`; `refining` keeps a started plant
   there and otherwise picks the priority plant first (`firstToRefine`), also right after finishing
   one, so leftover work goes onto the priority plant. Work past the end of a plant,
   brew or served potion carries over to the next, so slow frame rates lose nothing.
-- `startBrew` picks the recipe when work starts: the cauldron's priority potion if its inputs are
+- `startBrew` (called by `brew` for either pipe) picks the recipe when work starts: the cauldron's priority potion if its inputs are
   in and its pallet has room, otherwise by `shortfall` (wanted minus on the shelf, carried, brewing,
   on cauldron pallets and riding cauldron belts); ties go in `RECIPES` order. A priority never makes
   a station wait.

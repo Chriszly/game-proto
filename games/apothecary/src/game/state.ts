@@ -11,6 +11,11 @@ export interface Refiner {
   /** Milliseconds spent on the front of the queue. */
   progress: number;
   output: RefinedId[];
+  /**
+   * The second pipe, opened by a second craftsman: a plant taken off the queue and worked alongside
+   * the front one, with its own progress. Missing in saves from before it, which counts as empty.
+   */
+  second?: { plant: PlantId; progress: number } | null;
 }
 
 export interface Brew {
@@ -22,6 +27,8 @@ export interface Brew {
 export interface Cauldron {
   contents: RefinedId[];
   brewing: Brew | null;
+  /** The second pipe's brew, opened by a second craftsman. Missing in saves from before it. */
+  brewing2?: Brew | null;
   output: PotionId[];
 }
 
@@ -195,7 +202,11 @@ export type CraftingId = RefinerId | CauldronId;
  * plants in the order they came, a cauldron brews what the shop is shortest of.
  */
 export type Priority = { [id in RefinerId]: PlantId | null } & { [id in CauldronId]: PotionId | null };
-/** Up to two craftsmen work each station; the first costs 30 coins, the second 60. */
+/**
+ * Up to two craftsmen work each station; the first costs 30 coins, the second 60. At a refining
+ * table or cauldron the second opens a second pipe, working a second plant or brew alongside the
+ * first at the same speed, rather than making the first faster.
+ */
 export const MAX_CRAFTSMEN = 2;
 export const craftsmanCost = (hired: number) => 30 * 2 ** hired;
 
@@ -512,10 +523,10 @@ export function createInitialState(): GameState {
     player: { x: 630, y: 620 },
     // Start ripe so the first harvest can happen right away.
     plots: GARDENS.flatMap((plant) => Array.from({ length: PLOTS_PER_GARDEN }, () => ripe(plant))),
-    refiner: { queue: [], progress: 0, output: [] },
-    cauldron: { contents: [], brewing: null, output: [] },
-    refiner2: { queue: [], progress: 0, output: [] },
-    cauldron2: { contents: [], brewing: null, output: [] },
+    refiner: { queue: [], progress: 0, output: [], second: null },
+    cauldron: { contents: [], brewing: null, brewing2: null, output: [] },
+    refiner2: { queue: [], progress: 0, output: [], second: null },
+    cauldron2: { contents: [], brewing: null, brewing2: null, output: [] },
     counter: { shelf: [], till: 0 },
     guild: unbuilt(),
     expansion: { land: unbuilt(), fields: [unbuilt(), unbuilt()], refiner: unbuilt(), cauldron: unbuilt() },

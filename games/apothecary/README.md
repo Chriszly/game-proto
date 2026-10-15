@@ -128,12 +128,16 @@ pallet takes nothing more: the doctor keeps the item and a belt waits until ther
 
 **Craftsmen** work a station so the doctor doesn't have to stand on its work spot. Each station
 takes up to two, hired one at a time on the purple marker beside it (30, then 60 coins); they
-stand by the station once hired, and its work spot goes away. A refining table or cauldron works
-as fast again for each craftsman. At the counter
+stand by the station once hired, and its work spot goes away. At a refining table or cauldron the
+first craftsman works as the doctor would, and the second opens a second pipe: a second plant or
+brew on the go alongside the first, at the same speed, with its own bar below the first. Either
+pipe's brew can be taken out fine. At the counter
 the first craftsman serves customers, a potion every 1.5 seconds where the doctor hands them over
 at once, and the second makes that twice as fast and also brings the coins from the till.
 
 ![Craftsmen at the stations](docs/screenshots/craftsmen-map.png)
+
+![Two craftsmen at each station, each table and cauldron working two pipes](docs/screenshots/second-pipe.png)
 
 **Priority**: each refining table and cauldron has a small "First:" sign by its name. Tap it to
 choose what the station makes first whenever it can: wheat, mandrake or nightshade at a table, a
