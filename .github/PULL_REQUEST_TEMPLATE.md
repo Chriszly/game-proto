@@ -5,7 +5,7 @@
 ## Checklist
 
 - [ ] No secrets, passwords or personal info added
-- [ ] No links outside github.com in the description or commit messages
+- [ ] No links outside github.com in the description, commit messages or comments
 - [ ] README updated if setup, controls or behavior changed
 - [ ] Commit messages are clear and concise
 

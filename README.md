@@ -78,7 +78,7 @@ npm run preview   # serve the production build
   screenshots and `README.md`. Games don't import from each other.
 - `shared/`: the settings every game shares (`settings.ts`), the hub's Settings panel
   (`settingsPanel.ts`), `setupGame.ts`, which each game calls to apply the frame cap, the FPS readout, reduced motion and full screen,
-  and `scaling.ts`, which keeps a game sharp from a phone to a 4K screen (Apothecary, Colonizer, Anvilheart, Palisade, Mapmaker, Hotfoot and Wyrmrail use it so far).
+  and `scaling.ts`, which keeps a game sharp from a phone to a 4K screen (`grep -l setupScaling games/*/src/main.ts` lists the games that use it).
 - `e2e/hub.spec.ts`: checks that the hub lists every game, that each card opens it, and that the
   settings are saved and reach a game. `e2e/screens.spec.ts` opens each game that uses
   `shared/scaling.ts` on an upright and a sideways phone, a tablet, a laptop and a 4K screen.
@@ -99,8 +99,9 @@ npx playwright test --project apothecary   # one game only
 
 One playthrough workflow (`.github/workflows/playthrough.yml`) plays each game whose folder
 changed, on pull requests only, under a single required `Playthrough` check, and uploads videos and
-screenshots as the `playthrough-<name>` artifact. The Hub workflow runs the hub test when the hub page or a game's
-card changes. Each CI run also uploads a `game-build` artifact: download it from
+screenshots as the `playthrough-<name>` artifact. The Hub workflow runs the hub test, opening each game from its
+card in one job per game, on pull requests only for the games whose folder changed. The Screens workflow checks each game that uses `shared/scaling.ts` on five screens,
+one job per game, on pull requests only for the games whose folder changed. Each CI run also uploads a `game-build` artifact: download it from
 the run's summary page, unzip it and serve the folder (for example with `npx serve`) to play.
 
 ## Play online

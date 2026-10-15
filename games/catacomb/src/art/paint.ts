@@ -1,13 +1,41 @@
 import Phaser from 'phaser';
+import { renderScale } from '../../../../shared/scaling';
 import { PixelCanvas, padRows, seeded, type Palette } from './pixelArt';
 
 // The painterly look: a picture is drawn plainly on a canvas, then repainted with brush strokes,
 // biggest brush first, each later pass only where the picture still differs from what is painted
 // (after Hertzmann's "painterly rendering with curved brush strokes", with oval dabs). Each dab
 // lies across the light's gradient, so strokes follow the shapes' edges.
+//
+// Every texture is painted `res` times its size as shown, so it stays as sharp as the screen:
+// `sketch` hands out a canvas that big, already scaled so pictures are drawn at their own size,
+// `paint` widens its brushes to match, and `artImage` shows a texture at its own size again.
+// `res` is `ART` unless a texture asks for less.
+
+/** Texture pixels per pixel shown: the screen's `renderScale`, read once the game has booted. */
+export let ART = 1;
+/**
+ * The most the two full-screen backdrops are painted at. Painting them is most of the boot, and
+ * takes about as long again for each step up; soft, grainy and vignetted, they look the same
+ * stretched a little further on a 4K screen.
+ */
+export const BACKDROP_RES = 2;
+
+/** Sets `ART` from the screen; call before baking any texture. */
+export function setArtRes() {
+  ART = renderScale;
+}
+
+/** Each texture's `res`, by key, so `artImage` can show it at its own size. */
+const resOf = new Map<string, number>();
+
+/** An image of a painted texture, scaled down so it shows at its own size (times `scale`). */
+export function artImage(scene: Phaser.Scene, x: number, y: number, key: string, scale = 1) {
+  return scene.add.image(x, y, key).setScale(scale / (resOf.get(key) ?? 1));
+}
 
 export interface PaintOptions {
-  /** Brush radii in pixels, biggest first. */
+  /** Brush radii in pixels of the picture as shown (not of the `ART` times bigger canvas), biggest first. */
   sizes: number[];
   /** Seed for the dabs, so the art comes out the same on every load. */
   seed: number;
@@ -19,6 +47,8 @@ export interface PaintOptions {
   vignette?: number;
   /** For sprites: keep the picture's own outline, softened a little. */
   cutout?: boolean;
+  /** Canvas pixels per pixel shown, as the canvas was sketched; `ART` by default. */
+  res?: number;
 }
 
 const blurredCopy = (src: HTMLCanvasElement, r: number) => {
@@ -36,10 +66,12 @@ const blurredCopy = (src: HTMLCanvasElement, r: number) => {
 export function paint(src: HTMLCanvasElement, opts: PaintOptions) {
   const { width: W, height: H } = src;
   const rnd = seeded(opts.seed);
-  const out = blurredCopy(src, opts.sizes[0] * 0.6);
+  const res = opts.res ?? ART;
+  const sizes = opts.sizes.map((r) => r * res);
+  const out = blurredCopy(src, sizes[0] * 0.6);
   const ctx = out.getContext('2d')!;
   const threshold = opts.threshold ?? 22;
-  for (const R of opts.sizes) {
+  for (const R of sizes) {
     const ref = blurredCopy(src, Math.max(0.4, R * 0.35)).getContext('2d')!.getImageData(0, 0, W, H).data;
     const cur = ctx.getImageData(0, 0, W, H).data;
     const step = Math.max(1, Math.round(R * 0.85));
@@ -49,7 +81,7 @@ export function paint(src: HTMLCanvasElement, opts: PaintOptions) {
         const i = (y * W + x) * 4;
         if (opts.cutout && ref[i + 3] < 110) continue;
         const err = Math.abs(cur[i] - ref[i]) + Math.abs(cur[i + 1] - ref[i + 1]) + Math.abs(cur[i + 2] - ref[i + 2]) + Math.abs(cur[i + 3] - ref[i + 3]);
-        if (R === opts.sizes[0] || err > threshold) dabs.push([x + (rnd() - 0.5) * step, y + (rnd() - 0.5) * step]);
+        if (R === sizes[0] || err > threshold) dabs.push([x + (rnd() - 0.5) * step, y + (rnd() - 0.5) * step]);
       }
     }
     for (let i = dabs.length - 1; i > 0; i--) {
@@ -92,7 +124,9 @@ export function paint(src: HTMLCanvasElement, opts: PaintOptions) {
     ctx.globalCompositeOperation = 'overlay';
     ctx.globalAlpha = opts.grain;
     ctx.fillStyle = ctx.createPattern(grain, 'repeat')!;
-    ctx.fillRect(0, 0, W, H);
+    // The grain keeps its size as shown, however big the canvas.
+    ctx.scale(res, res);
+    ctx.fillRect(0, 0, W / res, H / res);
     ctx.restore();
   }
   if (opts.vignette) {
@@ -106,23 +140,38 @@ export function paint(src: HTMLCanvasElement, opts: PaintOptions) {
     // Keep only what lies inside the picture's own outline, softened by half a pixel.
     ctx.save();
     ctx.globalCompositeOperation = 'destination-in';
-    ctx.filter = 'blur(0.6px)';
+    ctx.filter = `blur(${0.6 * res}px)`;
     ctx.drawImage(src, 0, 0);
     ctx.restore();
   }
   return out;
 }
 
-/** A new canvas of this size, and its context, to draw a picture on before painting it. */
-export function sketch(w: number, h: number) {
+/**
+ * A new canvas `res` times this size, and its context, scaled so a picture is drawn at this size,
+ * to draw on before painting it.
+ */
+export function sketch(w: number, h: number, res = ART) {
+  const canvas = blank(w * res, h * res);
+  const ctx = canvas.getContext('2d')!;
+  ctx.scale(res, res);
+  return { canvas, ctx };
+}
+
+/** A new, empty canvas of this many pixels. */
+export function blank(w: number, h: number) {
   const canvas = document.createElement('canvas');
   canvas.width = Math.ceil(w);
   canvas.height = Math.ceil(h);
-  return { canvas, ctx: canvas.getContext('2d')! };
+  return canvas;
 }
 
-/** Adds a canvas as the texture `key`, replacing any texture of that name. */
-export function addTexture(scene: Phaser.Scene, key: string, canvas: HTMLCanvasElement) {
+/**
+ * Adds a canvas painted at `res` as the texture `key`, replacing any texture of that name. Show it
+ * with `artImage`.
+ */
+export function addTexture(scene: Phaser.Scene, key: string, canvas: HTMLCanvasElement, res = ART) {
+  resOf.set(key, res);
   if (scene.textures.exists(key)) scene.textures.remove(key);
   scene.textures.addCanvas(key, canvas);
 }
@@ -131,7 +180,7 @@ let nextSeed = 101;
 
 /**
  * Bakes a character grid like `bakePixelArt`, then repaints it with small brushes, so the pixel
- * shapes read as dabs of paint: `brush` is the biggest brush radius, in texture pixels. `smooth`
+ * shapes read as dabs of paint: `brush` is the biggest brush radius, in pixels as shown. `smooth`
  * rounds the pixel steps off first, for big figures that should not look blocky.
  */
 export function bakePainted(scene: Phaser.Scene, key: string, rows: string[], palette: Palette, scale: number, outline: number | undefined, brush: number, smooth = false) {
@@ -140,7 +189,7 @@ export function bakePainted(scene: Phaser.Scene, key: string, rows: string[], pa
   const pixels = new PixelCanvas(rows[0].length + 2 * pad, rows.length + 2 * pad);
   pixels.grid(pad, pad, rows, palette);
   if (outline !== undefined) pixels.outline(outline);
-  const src = smooth ? rounded(pixels.toCanvas(scale), scale * 0.45) : pixels.toCanvas(scale);
+  const src = smooth ? rounded(pixels.toCanvas(scale * ART), scale * ART * 0.45) : pixels.toCanvas(scale * ART);
   addTexture(scene, key, paint(src, { sizes: [brush, brush / 2, Math.max(0.8, brush / 3.5)], seed: nextSeed++, cutout: true, threshold: 30 }));
 }
 

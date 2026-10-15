@@ -107,14 +107,16 @@ the `project` scope).
   `SETTING_FIELDS` row, which the hub panel shows on its own) and then into every game.
 - **Fit every screen.** A game stays sharp and fills the screen from an upright phone to a 4K
   monitor by calling `setupScaling(game)` from `shared/scaling.ts` right after `setupGame(game)`
-  (Apothecary, Colonizer, Anvilheart, Palisade, Mapmaker, Hotfoot and Wyrmrail do so far; bring the others over one game per PR). The canvas then has
+  (`grep -l setupScaling games/*/src/main.ts` lists the games that do; bring the others over one game per PR). The canvas then has
   `renderScale` canvas pixels per game pixel and every camera is zoomed to match, so: lay out with
   `viewSize(scene)` rather than `scene.scale`, read the world through `pointer.worldX/Y`,
   `getWorldPoint` and `worldView` rather than `pointer.x/y` or `scrollX/Y`, give a camera that
   follows, scrolls or has bounds `scrollingCamera(camera)` and keep scroll-factor-0 objects off it
   (`splitHudCamera(scene)` draws them with a second, fixed camera; read pointers with `viewPoint`), multiply a game's own camera zoom by `renderScale`, and
   paint canvas art at `sharpRes(w, h, res)`. A phone held the wrong way for the game gets a hint
-  to turn it. `e2e/screens.spec.ts` picks the game up on its own and checks it on five screens.
+  to turn it. `e2e/screens.spec.ts` picks the game up on its own and checks it on five screens; the
+  **Screens** workflow (`.github/workflows/screens.yml`) runs it in one job per game, on a PR only for
+  the games whose folder changed (every game when `shared/` or the test changes).
   Give its `index.html` the same `100dvh` and `touch-action: none` styles as Apothecary's.
 - **Never use a red cross.** No game art, icon, button, cover or favicon (the hub's included) may show a
   red cross: no red plus, red-cross health or medic symbol, or red crosshair. Use a green cross (or
@@ -130,8 +132,9 @@ harvests, refines, brews and sells potions to a customer. The **Playthrough Apot
 (`.github/workflows/playthrough.yml`) runs on every PR (not on pushes to main) and reports one
 required check, `Playthrough`. It plays each game whose `games/<name>/` folder changed, so a PR for
 one game only plays that game, and a PR that only changes shared files plays none. If the workflow
-itself changes, every game is played. A game that did not change is not played, and the check still passes. The **Hub** workflow (`.github/workflows/hub.yml`) runs `e2e/hub.spec.ts` when the hub page,
-its test, a game's `index.html`, `cover.png` or `favicon.svg`, or a shared file changes. The
+itself changes, every game is played. A game that did not change is not played, and the check still passes. The **Hub** workflow (`.github/workflows/hub.yml`) runs `e2e/hub.spec.ts`: the hub's own checks
+in one job, and opening each game from its card in one job per game, on a PR only for the games
+whose folder changed (every game when the hub page, its test or `shared/` changes). The
 playthrough is the check that the core loop can still be played, so it has to stay accurate.
 
 - **Change the test in the same PR as the game.** A change to gameplay, layout, input or balance

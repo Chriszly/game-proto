@@ -118,7 +118,44 @@ function drawPallet(c: Ctx) {
   for (const bx of [3, 15.5, 28]) both(c, rectPts(bx, 10.5, 5, 4), WASH.woodDeep, { layers: 1 }, { w: 0.8 });
 }
 
+/** The study's writing desk: an open book of recipes, an inkwell and quill, and a candle. 64x50 as shown. */
+function drawStudy(c: Ctx) {
+  shadow(c, 32, 46, 28, 4, 0.18);
+  for (const lx of [6, 52]) both(c, rectPts(lx, 30, 6, 16, 1), WASH.woodDeep, { layers: 2 }, { w: 1 });
+  both(c, rectPts(2, 14, 60, 18, 3), WASH.wood, { layers: 3, bloom: 2, cx: 20, cy: 18 }, { w: 1.3 });
+  both(c, rectPts(2, 29, 60, 5, 1.5), WASH.woodDark, { layers: 2 }, { w: 1.1 });
+  // The open book, its pages ruled with lines of recipes.
+  both(c, [[12, 12], [31, 15], [31, 27], [12, 24]], '#f3ead2', { layers: 1 }, { w: 0.9 });
+  both(c, [[31, 15], [50, 12], [50, 24], [31, 27]], '#efe4c8', { layers: 1 }, { w: 0.9 });
+  for (let i = 0; i < 3; i++) {
+    ink(c, [[15, 16 + i * 3], [28, 18.5 + i * 3]], { closed: false, w: 0.5, alpha: 0.5 });
+    ink(c, [[34, 18.5 + i * 3], [47, 16 + i * 3]], { closed: false, w: 0.5, alpha: 0.5 });
+  }
+  // Inkwell and quill.
+  both(c, ellPts(55, 16, 3.5, 3, 12), '#2a2a3a', { layers: 1 }, { w: 0.8 });
+  ink(c, [[55, 15], [60, 2]], { closed: false, w: 1.2 });
+  both(c, [[59, 1], [62, 4], [58, 9], [57, 6]], '#f4f0e6', { layers: 1 }, { w: 0.6 });
+  // A candle with a warm glow.
+  const g = c.createRadialGradient(8, 6, 0, 8, 6, 16);
+  g.addColorStop(0, 'rgba(255,200,90,0.45)');
+  g.addColorStop(1, 'rgba(255,200,90,0)');
+  c.fillStyle = g;
+  c.fillRect(0, 0, 26, 24);
+  both(c, ellPts(8, 13, 4, 1.6, 12), '#9a7a50', { layers: 1 }, { w: 0.7 });
+  both(c, rectPts(6.5, 4, 3, 9), '#fff6e0', { layers: 1 }, { w: 0.7 });
+}
+
+/** A shop shelf for one potion: two boards between side posts, the potions stood on them. 40x46 as shown. */
+function drawShelf(c: Ctx) {
+  shadow(c, 20, 43, 18, 3, 0.16);
+  for (const px of [2, 34]) both(c, rectPts(px, 2, 4, 42, 1), WASH.woodDark, { layers: 2 }, { w: 1 });
+  for (const by of [18, 38]) both(c, rectPts(1, by, 38, 4, 1), WASH.wood, { layers: 2 }, { w: 1 });
+  both(c, rectPts(1, 1, 38, 3, 1), WASH.wood, { layers: 2 }, { w: 1 });
+}
+
 export function bakeStations(scene: Phaser.Scene) {
+  paint(scene, 'study', 64, 50, drawStudy, 3);
+  paint(scene, 'shelf', 40, 46, drawShelf, 3);
   paint(scene, 'pallet', 36, 16, drawPallet, 3);
   paint(scene, 'table', 88, 52, drawTable, 3);
   for (const frame of [0, 1, 2]) paint(scene, frame === 0 ? 'cauldron' : `cauldron-${frame}`, 72, 60, (c) => drawCauldron(c, frame), 3, 404);
