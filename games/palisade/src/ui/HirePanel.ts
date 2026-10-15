@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { guardTexture } from '../art/characters';
+import { fit } from '../art/lowpoly';
 import { GOLD, SLATE } from '../art/palette';
 import { HIRE, UI_DEPTH, VIEW } from '../scenes/layout';
 import { GUARD_KINDS, GUARDS, MAX_GUARD_LEVEL, guardDamage, trainCost, type GuardKind } from '../game/guards';
@@ -54,7 +55,7 @@ export class HirePanel {
     drawPanel(g, left, top, HIRE.w, HIRE.h, { c: 14, fill: SLATE.mid, alpha: 0.98, lw: 2.5 });
     // A little pointer towards the slot.
     g.fillStyle(GOLD.mid).fillTriangle(left, cy - 8, left - 10, cy, left, cy + 8);
-    const coinIcon = scene.add.image(left + HIRE.w - 70, top + 22, 'hud-coin');
+    const coinIcon = fit(scene.add.image(left + HIRE.w - 70, top + 22, 'hud-coin'));
     const coinText = scene.add.text(left + HIRE.w - 58, top + 22, String(coins), textStyle(14, '#ffe07a')).setOrigin(0, 0.5);
     const title = scene.add
       .text(left + 18, top + 22, guard ? `${GUARDS[guard.kind].name}, level ${guard.level}` : 'Hire a guard', textStyle(17, '#ffcf4a', 3))
@@ -83,7 +84,7 @@ export class HirePanel {
     const x0 = at.x + HIRE.dx - HIRE.w / 2;
     const back = scene.add.graphics();
     drawPanel(back, x0 + 10, y, HIRE.w - 20, 62, { c: 6, fill: SLATE.light, alpha: 1, edge: GOLD.dark, lw: 1 });
-    const portrait = scene.add.image(x0 + 38, y + 58, guardTexture(kind)).setOrigin(0.5, 1).setScale(0.82);
+    const portrait = fit(scene.add.image(x0 + 38, y + 58, guardTexture(kind)), 0.82).setOrigin(0.5, 1);
     const name = scene.add.text(x0 + 66, y + 14, GUARDS[kind].name, textStyle(14, '#ffe7a0')).setOrigin(0, 0.5);
     const desc = scene.add.text(x0 + 66, y + 28, text, { ...textStyle(11, '#e9e4d8'), fontStyle: 'normal', wordWrap: { width: 150 } });
     this.body.add([back, portrait, name, desc]);
@@ -104,7 +105,7 @@ export class HirePanel {
     draw(false);
     const color = button.afford ? '#ffe7a0' : '#7a8294';
     const caption = scene.add.text(bx, by - 8, button.caption, textStyle(13, color)).setOrigin(0.5);
-    const coinIcon = scene.add.image(bx - 12, by + 9, 'hud-coin').setScale(0.75).setAlpha(button.afford ? 1 : 0.5);
+    const coinIcon = fit(scene.add.image(bx - 12, by + 9, 'hud-coin'), 0.75).setAlpha(button.afford ? 1 : 0.5);
     const cost = scene.add.text(bx - 3, by + 9, String(button.cost), textStyle(12, color)).setOrigin(0, 0.5);
     const hit = scene.add.zone(bx, by, 80, 40);
     if (button.afford) {
