@@ -1,9 +1,11 @@
 import Phaser from 'phaser';
+import { sharpRes } from '../../../../shared/scaling';
 
 // The stained-glass toolkit every texture is painted with: jewel-toned glass pieces with a light
 // gradient and a little mottling, held in dark lead. Textures are painted on 2D canvases and added
-// with `textures.addCanvas`. The painters work in "art units", twice the game's 960x540 view, and
-// each canvas is scaled by a half, so its texture is drawn at the view's own size.
+// with `textures.addCanvas`. The painters work in "art units", twice the game's 960x540 view. Each
+// canvas has `sharpRes` canvas pixels per view pixel (1 on a screen the size of the view, up to 4 on
+// a 4K screen), so images showing a texture are sized with `fit` to come out at the view's size.
 
 export const LEAD = '#17131c';
 export const SERIF = 'Georgia, "Times New Roman", serif';
@@ -26,19 +28,33 @@ export const reseed = (s: number) => {
   seed = Math.max(1, Math.floor(s));
 };
 
+/** Canvas pixels per view pixel of each baked texture, by key. */
+const RES = new Map<string, number>();
+
 /**
  * Paints a `w` x `h` (view pixels) texture called `key`: the painter draws in art units, so a
- * canvas of 2w x 2h art units. Does nothing if the texture is already there.
+ * canvas of 2w x 2h art units, scaled to the screen's resolution. Does nothing if the texture is
+ * already there.
  */
 export function bake(scene: Phaser.Scene, key: string, w: number, h: number, paint: () => void) {
   if (scene.textures.exists(key)) return;
+  const res = sharpRes(w, h);
   const canvas = document.createElement('canvas');
-  canvas.width = Math.ceil(w);
-  canvas.height = Math.ceil(h);
+  canvas.width = Math.ceil(w * res);
+  canvas.height = Math.ceil(h * res);
   ctx = canvas.getContext('2d')!;
-  ctx.scale(1 / ART, 1 / ART);
+  ctx.scale(res / ART, res / ART);
   paint();
   scene.textures.addCanvas(key, canvas);
+  RES.set(key, res);
+}
+
+/** The scale that shows a baked texture at `scale` times its size in view pixels. */
+export const shown = (key: string, scale = 1) => scale / (RES.get(key) ?? 1);
+
+/** Sizes an image showing a baked texture to `scale` times its size in view pixels. */
+export function fit<T extends Phaser.GameObjects.Components.Transform & { texture: Phaser.Textures.Texture }>(obj: T, scale = 1): T {
+  return obj.setScale(shown(obj.texture.key, scale));
 }
 
 export const hex = (h: string): [number, number, number] => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
