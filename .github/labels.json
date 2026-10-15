@@ -1,0 +1,167 @@
+[
+  {
+    "name": "game: apothecary",
+    "color": "5b7a99",
+    "description": "Feedback for Apothecary"
+  },
+  {
+    "name": "game: deadline",
+    "color": "5b7a99",
+    "description": "Feedback for Deadline"
+  },
+  {
+    "name": "game: palisade",
+    "color": "5b7a99",
+    "description": "Feedback for Palisade"
+  },
+  {
+    "name": "game: tiny-kingdom",
+    "color": "5b7a99",
+    "description": "Feedback for Tiny Kingdom"
+  },
+  {
+    "name": "game: hotfoot",
+    "color": "5b7a99",
+    "description": "Feedback for Hotfoot"
+  },
+  {
+    "name": "game: anvilheart",
+    "color": "5b7a99",
+    "description": "Feedback for Anvilheart"
+  },
+  {
+    "name": "game: broadside",
+    "color": "5b7a99",
+    "description": "Feedback for Broadside"
+  },
+  {
+    "name": "game: tincture-tinker",
+    "color": "5b7a99",
+    "description": "Feedback for TinctureTinker"
+  },
+  {
+    "name": "game: catacomb",
+    "color": "5b7a99",
+    "description": "Feedback for Catacomb"
+  },
+  {
+    "name": "game: golem-garden",
+    "color": "5b7a99",
+    "description": "Feedback for Golem Garden"
+  },
+  {
+    "name": "game: beehive-baron",
+    "color": "5b7a99",
+    "description": "Feedback for Beehive Baron"
+  },
+  {
+    "name": "game: wyrmrail",
+    "color": "5b7a99",
+    "description": "Feedback for Wyrmrail"
+  },
+  {
+    "name": "game: shrine-stack",
+    "color": "5b7a99",
+    "description": "Feedback for Shrine Stack"
+  },
+  {
+    "name": "game: mapmaker",
+    "color": "5b7a99",
+    "description": "Feedback for Mapmaker"
+  },
+  {
+    "name": "game: lanternkeep",
+    "color": "5b7a99",
+    "description": "Feedback for Lanternkeep"
+  },
+  {
+    "name": "game: space-wars",
+    "color": "5b7a99",
+    "description": "Feedback for Space Wars"
+  },
+  {
+    "name": "game: lane-brawl",
+    "color": "5b7a99",
+    "description": "Feedback for Lane Brawl"
+  },
+  {
+    "name": "game: colonizer",
+    "color": "5b7a99",
+    "description": "Feedback for Colonizer"
+  },
+  {
+    "name": "game: hub",
+    "color": "5b7a99",
+    "description": "The hub page and its settings"
+  },
+  {
+    "name": "game: shared",
+    "color": "5b7a99",
+    "description": "Shared code, build or CI used by every game"
+  },
+  {
+    "name": "type: bug",
+    "color": "e4572e",
+    "description": "Something is broken (issue) or a bug fix (PR)"
+  },
+  {
+    "name": "type: gameplay",
+    "color": "8250df",
+    "description": "Balance, difficulty, rules or feel of play"
+  },
+  {
+    "name": "type: feature",
+    "color": "2da44e",
+    "description": "A wish or idea (issue) or a new feature (PR)"
+  },
+  {
+    "name": "type: refactor",
+    "color": "0e8a8a",
+    "description": "Cleanup or restructuring with no change in behaviour (PR)"
+  },
+  {
+    "name": "type: assets",
+    "color": "d4a72c",
+    "description": "Art, sound or other assets (PR)"
+  },
+  {
+    "name": "type: docs",
+    "color": "0075ca",
+    "description": "Documentation only (PR)"
+  },
+  {
+    "name": "type: ci",
+    "color": "57606a",
+    "description": "Build, CI or tooling (PR)"
+  },
+  {
+    "name": "prio: high",
+    "color": "c2410c",
+    "description": "Do this first"
+  },
+  {
+    "name": "prio: medium",
+    "color": "f97316",
+    "description": "Do this soon"
+  },
+  {
+    "name": "prio: low",
+    "color": "fed7aa",
+    "description": "Do this when there is time"
+  },
+  {
+    "name": "status: needs-info",
+    "color": "6e7781",
+    "description": "Waiting for more details from the reporter"
+  },
+  {
+    "name": "status: duplicate",
+    "color": "8c959f",
+    "description": "Already reported in another issue"
+  },
+  {
+    "name": "status: wontfix",
+    "color": "afb8c1",
+    "description": "Will not be changed"
+  }
+]

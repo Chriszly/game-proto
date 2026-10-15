@@ -9,9 +9,10 @@ on:
 permissions:
   contents: read
 
+# Pull requests cancel their own older runs; pushes to main queue so each deploy finishes.
 concurrency:
   group: pages-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
@@ -29,14 +30,15 @@ jobs:
         with:
           name: game-build
           path: dist
-      - if: github.event_name == 'workflow_dispatch'
+      - if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
         with:
           path: dist
 
-  # Manual only: GitHub Pages is unavailable while the repo is private.
+  # Publishes the build to GitHub Pages on every push to main (and on a manual run), with the hub
+  # at the site root and each game under games/<name>/. Pull requests only build.
   deploy:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
     permissions:

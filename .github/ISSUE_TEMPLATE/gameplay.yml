@@ -1,0 +1,58 @@
+name: Gameplay feedback
+description: Something feels off, like balance, difficulty, unclear rules, or it isn't fun.
+title: "[Gameplay] "
+labels: ["type: gameplay"]
+body:
+  - type: dropdown
+    id: game
+    attributes:
+      label: Game
+      description: Which game is this about?
+      options:
+        - Apothecary
+        - Deadline
+        - Palisade
+        - Tiny Kingdom
+        - Hotfoot
+        - Anvilheart
+        - Broadside
+        - TinctureTinker
+        - Catacomb
+        - Golem Garden
+        - Beehive Baron
+        - Wyrmrail
+        - Shrine Stack
+        - Mapmaker
+        - Lanternkeep
+        - Space Wars
+        - Lane Brawl
+        - Colonizer
+        - Hub page
+        - Shared / all games
+    validations:
+      required: true
+  - type: dropdown
+    id: feel
+    attributes:
+      label: What felt off
+      options:
+        - Too hard
+        - Too easy
+        - Unclear or confusing
+        - Boring or repetitive
+        - Unfair
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: where
+    attributes:
+      label: Where in the game
+      description: Which level, wave, screen or moment, and what happened there.
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggestion
+      description: How could it feel better? Optional.

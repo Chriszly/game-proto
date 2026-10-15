@@ -1,0 +1,58 @@
+name: Labels
+
+# Keeps the repo's labels in line with .github/labels.json: creates or updates
+# every label listed there and deletes every label that isn't.
+on:
+  push:
+    branches: [main]
+    paths: [.github/labels.json, .github/workflows/labels.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: labels
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sync labels
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const fs = require('fs');
+            const wanted = JSON.parse(fs.readFileSync('.github/labels.json', 'utf8'));
+            const existing = await github.paginate(github.rest.issues.listLabelsForRepo, {
+              ...context.repo,
+              per_page: 100
+            });
+            const byName = new Map(existing.map(l => [l.name.toLowerCase(), l]));
+            for (const label of wanted) {
+              const current = byName.get(label.name.toLowerCase());
+              if (!current) {
+                await github.rest.issues.createLabel({ ...context.repo, ...label });
+                console.log(`Created ${label.name}`);
+              } else if (current.name !== label.name || current.color !== label.color ||
+                  (current.description || '') !== label.description) {
+                await github.rest.issues.updateLabel({
+                  ...context.repo,
+                  name: current.name,
+                  new_name: label.name,
+                  color: label.color,
+                  description: label.description
+                });
+                console.log(`Updated ${label.name}`);
+              }
+            }
+            const keep = new Set(wanted.map(l => l.name.toLowerCase()));
+            for (const label of existing) {
+              if (!keep.has(label.name.toLowerCase())) {
+                await github.rest.issues.deleteLabel({ ...context.repo, name: label.name });
+                console.log(`Deleted ${label.name}`);
+              }
+            }
