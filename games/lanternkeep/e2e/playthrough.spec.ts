@@ -30,13 +30,25 @@ interface GameState {
   lanterns: Lantern[];
   moths: Moth[];
   queue: number[];
-  report: { lit: number; count: number; required: number; earned: number; lostHearth: boolean; orderMet: boolean } | null;
+  report: {
+    lit: number;
+    count: number;
+    required: number;
+    earned: number;
+    lostHearth: boolean;
+    orderMet: boolean;
+    chains: number;
+    festival: boolean;
+  } | null;
   kept: number;
   order: { text: string; goal: { kind: string; lanterns?: number[] }; reward: number };
   gusts: number[];
   gust: { target: number; atMs: number } | null;
   closeCalls: number;
   shields: number;
+  kind: string;
+  batTimes: number[];
+  bats: unknown[];
 }
 
 const VIEW = { w: 960, h: 540 };
@@ -164,10 +176,11 @@ test('plays the first night', async ({ page }, testInfo) => {
   }
   const busy = (s: GameState) => s.moths.filter((m) => m.task !== 'idle').length;
 
-  // The first dusk: five dark lanterns, three moths in the jar, three hearths and no coins, the
-  // herald's order and one gust to come.
+  // The first dusk: a clear night with five dark lanterns, three moths in the jar, three hearths and
+  // no coins, the herald's order and one gust to come, and no bats.
   let s = await game.state();
-  expect(s).toMatchObject({ night: 1, phase: 'dusk', coins: 0, lives: LIVES, kept: 0, closeCalls: 0, shields: 0, gust: null });
+  expect(s).toMatchObject({ night: 1, phase: 'dusk', coins: 0, lives: LIVES, kept: 0, closeCalls: 0, shields: 0, gust: null, kind: 'clear' });
+  expect(s.batTimes).toEqual([]);
   expect(s.duskMs).toBeGreaterThan(DUSK_MS - 1_000);
   expect(s.lanterns).toHaveLength(LANTERNS);
   expect(s.lanterns.every((l) => !l.lit)).toBe(true);
@@ -244,7 +257,17 @@ test('plays the first night', async ({ page }, testInfo) => {
   // hearth goes out.
   await until('night falls', 20_000, (s) => s.phase === 'night');
   s = await game.state();
-  expect(s.report).toEqual({ lit: LANTERNS, count: LANTERNS, required: REQUIRED, earned: NIGHTFALL_PAY, lostHearth: false, orderMet: true });
+  // The first night has no lantern chain (each needs a lantern from a later night).
+  expect(s.report).toEqual({
+    lit: LANTERNS,
+    count: LANTERNS,
+    required: REQUIRED,
+    earned: NIGHTFALL_PAY,
+    lostHearth: false,
+    orderMet: true,
+    chains: 0,
+    festival: false,
+  });
   expect(s).toMatchObject({ coins: NIGHTFALL_PAY + CLOSE_CALL_PAY, lives: LIVES, kept: 1 });
   expect(await play(3_000, () => game.panelOpen()), 'night panel opens').toBe(true);
   await snap('4-night');

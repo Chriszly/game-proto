@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { JAR, LANTERN_SPOTS } from '../game/places';
-import type { MothKind } from '../game/state';
-import { DUSK_BAR as DUSK, GUST_TAG, ORDER } from '../scenes/layout';
+import type { MothKind, NightKind } from '../game/state';
+import { DUSK_BAR as DUSK, GUST_TAG, KIND_TAG, NIGHT_PANEL, ORDER, SHOP, SMALL_PANEL } from '../scenes/layout';
 
 export { DUSK };
 
@@ -320,6 +320,7 @@ export const MOTH_LOOK = {
   fast: { s: 1.15, gel: '#8cc8ff' },
   slow: { s: 1.4, gel: '#b8e690' },
   heavy: { s: 1.6, gel: '#f0c27a' },
+  firefly: { s: 1.25, gel: '#e6ff86' },
 } as const satisfies Record<MothKind, { s: number; gel: string }>;
 
 /**
@@ -368,6 +369,164 @@ function paintMoth(kind: MothKind, up: boolean) {
   ctx.quadraticCurveTo(...Pt(1, -8), ...Pt(3.5, -9));
   ctx.stroke();
   dot(0, 0, 0.9, '#c9a86a');
+  // A firefly's tail is a lit gel bulb.
+  if (kind === 'firefly') {
+    glow(0, 5 * s, 9 * s, '#e6ff80', 0.9);
+    dot(0, 4.5 * s, 2 * s, '#f2ffb4');
+  }
+}
+
+/**
+ * A bat puppet centred on (0, 0): black card wings with scalloped edges and a pale violet rim of
+ * light (so it reads against the black castle), pointed ears and two amber gel eyes.
+ */
+function paintBat(up: boolean) {
+  const sp = up ? 1 : 0.35;
+  for (const side of [-1, 1]) {
+    const X = (x: number) => x * side;
+    ctx.beginPath();
+    ctx.moveTo(X(3), -3);
+    ctx.quadraticCurveTo(X(12), -12 * sp - 2, X(22), -10 * sp - 1);
+    // The wing's trailing edge, scalloped between the finger bones.
+    ctx.quadraticCurveTo(X(19), 1, X(15), 3 * sp + 2);
+    ctx.quadraticCurveTo(X(12), 0, X(9), 5 * sp + 2);
+    ctx.quadraticCurveTo(X(6), 2, X(3), 5);
+    ctx.closePath();
+    ctx.save();
+    ctx.shadowColor = 'rgba(200,180,255,0.9)';
+    ctx.shadowBlur = 4 * RES;
+    ctx.strokeStyle = 'rgba(214,200,255,0.9)';
+    ctx.lineWidth = 1.1;
+    ctx.stroke();
+    ctx.restore();
+    ctx.fillStyle = INK;
+    ctx.fill();
+    // Finger bones cut thin, so the screen glows through.
+    ctx.strokeStyle = 'rgba(214,190,240,0.45)';
+    ctx.lineWidth = 0.6;
+    for (const [fx, fy] of [[15, 3 * sp + 1], [9, 5 * sp + 1]] as const) {
+      ctx.beginPath();
+      ctx.moveTo(X(4), -2);
+      ctx.lineTo(X(fx), fy);
+      ctx.stroke();
+    }
+    poly([[X(1.5), -5], [X(3.5), -10], [X(4.5), -4]], INK);
+  }
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 4.5, 6, 0, 0, 2 * PI);
+  ctx.fillStyle = INK;
+  ctx.fill();
+  dot(-1.8, -2.5, 1.1, '#ffb050');
+  dot(1.8, -2.5, 1.1, '#ffb050');
+}
+
+/** A paper sky lantern for the Great Festival: a gel shade in a card frame, glowing, centred on (0, 0). */
+function paintSkyLantern() {
+  glow(0, 0, 26, '#ffb050', 0.8);
+  poly([[-9, -12], [9, -12], [12, 10], [-12, 10]], INK);
+  poly([[-7, -10], [7, -10], [9.5, 8], [-9.5, 8]], '#ffc870');
+  poly([[-1, -10], [1, -10], [1, 8], [-1, 8]], INK);
+  poly([[-12, 10], [12, 10], [10, 13], [-10, 13]], INK);
+  dot(0, 9, 2, '#fff2c8');
+}
+
+/** Mist banks drifting across the castle on a foggy night: soft pale bands, full screen at 1x. */
+function paintFog() {
+  reseed(21);
+  for (let i = 0; i < 14; i++) {
+    const x = rnd() * W;
+    const y = 160 + rnd() * 330;
+    const rx = 140 + rnd() * 160;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(1, 0.16 + rnd() * 0.08);
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, rx);
+    g.addColorStop(0, 'rgba(226,214,236,0.5)');
+    g.addColorStop(0.6, 'rgba(210,198,226,0.22)');
+    g.addColorStop(1, 'rgba(210,198,226,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(-rx, -rx, 2 * rx, 2 * rx);
+    ctx.restore();
+  }
+}
+
+/** Feast-night bunting: cut-card pennants with gel windows on cords from the towers to the keep. */
+function paintBunting() {
+  const strings: [P, P][] = [
+    [[TOWERS[0].x + TOWERS[0].w, 196], [KEEP.x, 134]],
+    [[KEEP.x + KEEP.w, 134], [TOWERS[1].x, 196]],
+    [[WALL.x + 6, 324], [TOWERS[0].x, 214]],
+    [[TOWERS[1].x + TOWERS[1].w, 214], [WALL.x + WALL.w - 6, 324]],
+  ];
+  const gels = ['#ffc870', '#ff9a8a', '#9ad8c8', '#c8a8ff'];
+  strings.forEach(([a, b], k) => {
+    const sag = 26;
+    const at = (t: number): P => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t + Math.sin(t * PI) * sag];
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    for (let t = 0; t <= 1.001; t += 0.05) {
+      const [x, y] = at(t);
+      if (t === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    const n = 7;
+    for (let i = 1; i < n; i++) {
+      const [x, y] = at(i / n);
+      poly([[x - 6, y], [x + 6, y], [x, y + 13]], INK);
+      ctx.save();
+      ctx.globalAlpha = 0.85;
+      poly([[x - 3, y + 2], [x + 3, y + 2], [x, y + 8]], gels[(i + k) % gels.length]);
+      ctx.restore();
+    }
+  });
+}
+
+/** The night kind's emblem on its plaque, centred on (0, 0). */
+function paintKindIcon(kind: NightKind) {
+  if (kind === 'clear') {
+    // A crescent moon.
+    glow(0, 0, 14, '#ffe6c0', 0.5);
+    dot(0, 0, 8, '#fff1d8');
+    ctx.save();
+    ctx.globalCompositeOperation = 'destination-out';
+    dot(4, -3, 7, '#000');
+    ctx.restore();
+  } else if (kind === 'fog') {
+    ctx.strokeStyle = '#d8cce8';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    for (const [y, w] of [[-5, 9], [0, 11], [5, 8]] as const) {
+      ctx.beginPath();
+      ctx.moveTo(-w, y);
+      ctx.quadraticCurveTo(-w / 2, y - 3, 0, y);
+      ctx.quadraticCurveTo(w / 2, y + 3, w, y);
+      ctx.stroke();
+    }
+  } else if (kind === 'feast') {
+    // A pennant on a pole.
+    poly([[-7, -10], [-5, -10], [-5, 11], [-7, 11]], '#d89a50');
+    poly([[-5, -9], [9, -5], [3, -2], [9, 1], [-5, 4]], '#ff9a8a');
+    glow(0, -3, 12, '#ffb070', 0.5);
+  } else {
+    // A storm cloud with a bolt.
+    glow(0, 0, 14, '#9ec4ff', 0.4);
+    dot(-4, -1, 5, '#9eb0d0');
+    dot(3, -3, 6, '#9eb0d0');
+    poly([[-9, 0], [9, 0], [9, 3], [-9, 3]], '#9eb0d0');
+    poly([[1, 3], [-3, 9], [0, 9], [-2, 14], [4, 7], [1, 7], [3, 3]], '#ffe27a');
+  }
+}
+
+/** The night kind plaque: a plaque with a ring for the kind's emblem. */
+function paintKindTag() {
+  paintPlaque(KIND_TAG.w, KIND_TAG.h);
+  ctx.strokeStyle = 'rgba(255,190,120,0.55)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(22, KIND_TAG.h / 2, 14, 0, 2 * PI);
+  ctx.stroke();
 }
 
 /**
@@ -561,6 +720,14 @@ export function bakeTextures(scene: Phaser.Scene) {
     bake(scene, `moth-${kind}-up`, 56, 52, () => paintMoth(kind, true), 28, 26);
     bake(scene, `moth-${kind}-down`, 56, 52, () => paintMoth(kind, false), 28, 26);
   }
+  bake(scene, 'bat-up', 56, 40, () => paintBat(true), 28, 20);
+  bake(scene, 'bat-down', 56, 40, () => paintBat(false), 28, 20);
+  bake(scene, 'sky-lantern', 56, 56, paintSkyLantern, 28, 28);
+  bake(scene, 'fog', W, H, paintFog, 0, 0, 1);
+  bake(scene, 'bunting', W, H, paintBunting, 0, 0, 1);
+  for (const kind of ['clear', 'fog', 'feast', 'storm'] as const satisfies readonly NightKind[]) {
+    bake(scene, `kind-${kind}`, 32, 32, () => paintKindIcon(kind), 16, 16);
+  }
   bake(scene, 'hud', W, 48, paintHud, 0, 0);
   bake(scene, 'dusk-fill', DUSK.w, DUSK.h, paintDuskFill);
   bake(scene, 'dusk-rim', DUSK.w + 2, DUSK.h + 2, paintDuskRim);
@@ -576,15 +743,16 @@ export function bakeTextures(scene: Phaser.Scene) {
   bake(scene, 'pip-lit', 20, 20, () => paintPip(true), 10, 10);
   bake(scene, 'pip-dark', 20, 20, () => paintPip(false), 10, 10);
   padded('gust-tag', GUST_TAG.w, GUST_TAG.h, paintGustTag);
+  padded('kind-tag', KIND_TAG.w, KIND_TAG.h, paintKindTag);
   padded('save-tag', SAVE_TAG.w, SAVE_TAG.h, paintSaveTag);
   bake(scene, 'spark', 12, 12, () => {
     glow(6, 6, 6, '#ffe8b0', 0.9);
     dot(6, 6, 1.4, '#fff6dc');
   });
-  padded('panel', 600, 400, () => paintPanel(600, 400));
-  padded('panel-small', 520, 240, () => paintPanel(520, 240));
-  padded('card-on', 250, 66, () => paintCard(250, 66, true));
-  padded('card-off', 250, 66, () => paintCard(250, 66, false));
+  padded('panel', NIGHT_PANEL.w, NIGHT_PANEL.h, () => paintPanel(NIGHT_PANEL.w, NIGHT_PANEL.h));
+  padded('panel-small', SMALL_PANEL.w, SMALL_PANEL.h, () => paintPanel(SMALL_PANEL.w, SMALL_PANEL.h));
+  padded('card-on', SHOP.w, SHOP.h, () => paintCard(SHOP.w, SHOP.h, true));
+  padded('card-off', SHOP.w, SHOP.h, () => paintCard(SHOP.w, SHOP.h, false));
   padded('btn', 200, 40, () => paintCard(200, 40, true));
   padded('btn-hover', 200, 40, () => paintCard(200, 40, true, true));
 }

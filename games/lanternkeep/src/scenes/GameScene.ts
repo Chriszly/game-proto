@@ -1,11 +1,19 @@
 import Phaser from 'phaser';
 import { settings } from '../../../../shared/settings';
 import { DUSK, INK, INK_HEX, PAD, RES, SCREENS } from '../art/puppet';
-import { JAR, LANTERN_SPOTS } from '../game/places';
+import { CHAINS, JAR, LANTERN_SPOTS } from '../game/places';
 import { loadBest, saveBest } from '../game/save';
 import {
+  CHAIN_BONUS,
+  chainLit,
+  chainsFor,
+  carryOn,
+  chase,
   CLOSE_CALL,
   CLOSE_CALL_PAY,
+  FEAST_PAY,
+  FESTIVAL_NIGHTS,
+  NIGHT_KINDS,
   buy,
   DUSK_MS,
   LIVES,
@@ -25,7 +33,20 @@ import {
   type UpgradeId,
 } from '../game/state';
 import { makeButton } from '../ui/Button';
-import { FONT, GUST_TAG, LANTERN_HIT, NEXT_BUTTON, NIGHT_PANEL, ORDER, SHOP, UI_DEPTH, VIEW } from './layout';
+import {
+  BAT_HIT,
+  FONT,
+  GUST_TAG,
+  KIND_TAG,
+  LANTERN_HIT,
+  NEXT_BUTTON,
+  NIGHT_PANEL,
+  ORDER,
+  SHOP,
+  SMALL_PANEL,
+  UI_DEPTH,
+  VIEW,
+} from './layout';
 
 /** The longest step of game time one frame may take, so a stalled tab doesn't skip the dusk. */
 const MAX_STEP_MS = 100;
@@ -64,6 +85,8 @@ export class GameScene extends Phaser.Scene {
   shopButtons: (ButtonSpot & { id: UpgradeId })[] = [];
   /** The night panel's "Next dusk" button; read by the playthrough test. */
   nextButton: ButtonSpot = { x: NEXT_BUTTON.x, y: NEXT_BUTTON.y, w: 200, h: 40 };
+  /** The Great Festival panel's "Keep going" button, for tests that play ten nights. */
+  carryOnButton: ButtonSpot = { x: VIEW.w / 2, y: VIEW.h / 2 + 76, w: 200, h: 40 };
   private clock = 0;
   /** When night fell, on the scene's clock. */
   private nightAt = 0;
@@ -101,6 +124,21 @@ export class GameScene extends Phaser.Scene {
   private shop = new Map<UpgradeId, ShopParts>();
   private gameOver!: Phaser.GameObjects.Container;
   private gameOverText!: Phaser.GameObjects.Text;
+  /** The night kind's layers: mist banks, feast bunting and storm rain. */
+  private fog!: Phaser.GameObjects.Image;
+  private bunting!: Phaser.GameObjects.Image;
+  private rain!: Phaser.GameObjects.Graphics;
+  /** The cords of the lantern chains, under the lanterns. */
+  private cords!: Phaser.GameObjects.Graphics;
+  private kindIcon!: Phaser.GameObjects.Image;
+  private kindName!: Phaser.GameObjects.Text;
+  private kindBlurb!: Phaser.GameObjects.Text;
+  /** Bat puppets and their tap zones, one per bat on screen, by index into `state.bats`. */
+  private bats: { body: Phaser.GameObjects.Image; hit: Phaser.GameObjects.Zone }[] = [];
+  /** Dotted flight lines from the bats to their lanterns, and rings round the bats. */
+  private batMarks!: Phaser.GameObjects.Graphics;
+  private festival!: Phaser.GameObjects.Container;
+  private skyLanterns: Phaser.GameObjects.Image[] = [];
 
   constructor() {
     super('Game');
@@ -110,10 +148,12 @@ export class GameScene extends Phaser.Scene {
     this.state = newGame(loadBest());
     this.createWorld();
     this.createOrderCard();
+    this.createKindTag();
     this.createGustTag();
     this.createHud();
     this.createNightPanel();
     this.createGameOver();
+    this.createFestival();
   }
 
   /** A line of serif lettering: `glow` lights it from behind like light through cut card. */
@@ -140,7 +180,11 @@ export class GameScene extends Phaser.Scene {
     this.stars = this.add.image(0, 0, 'stars').setOrigin(0).setDepth(1);
     this.moon = this.sprite(650, 86, 'moon').setDepth(1);
     this.add.image(0, 0, 'castle').setOrigin(0).setDepth(2);
+    this.bunting = this.add.image(0, 0, 'bunting').setOrigin(0).setDepth(2.5);
     this.wind = this.add.graphics().setDepth(4);
+    this.cords = this.add.graphics().setDepth(4.2);
+    this.fog = this.add.image(0, 0, 'fog').setOrigin(0).setDepth(4.4);
+    this.rain = this.add.graphics().setDepth(4.5);
 
     LANTERN_SPOTS.forEach(({ x, y }, i) => {
       const glow = this.add.image(x, y, 'glow').setDepth(3).setBlendMode(Phaser.BlendModes.ADD);
@@ -158,6 +202,15 @@ export class GameScene extends Phaser.Scene {
     });
     this.marks = this.add.graphics().setDepth(6);
     this.trails = this.add.graphics().setDepth(6);
+    this.batMarks = this.add.graphics().setDepth(6.2);
+  }
+
+  private createKindTag() {
+    const { x, y } = KIND_TAG;
+    this.add.image(x - PAD, y - PAD, 'kind-tag').setOrigin(0).setScale(1 / RES).setDepth(UI_DEPTH);
+    this.kindIcon = this.sprite(x + 22, y + 20, 'kind-clear').setDepth(UI_DEPTH);
+    this.kindName = this.label(x + 44, y + 14, '', { size: 12.5, bold: true, color: '#ffd08a', glow: true }).setOrigin(0, 0.5).setDepth(UI_DEPTH);
+    this.kindBlurb = this.label(x + 44, y + 28, '', { size: 9.5, color: '#e0cfb4' }).setOrigin(0, 0.5).setDepth(UI_DEPTH);
   }
 
   private createOrderCard() {
@@ -199,19 +252,21 @@ export class GameScene extends Phaser.Scene {
     const { x, y, w, h } = NIGHT_PANEL;
     const dim = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x000000, 0.35).setInteractive();
     const panel = this.add.image(x - w / 2 - PAD, y - h / 2 - PAD, 'panel').setOrigin(0).setScale(1 / RES);
-    this.nightTitle = this.label(x, y - h / 2 + 34, '', { size: 26, bold: true, color: '#ffc870', glow: true }).setOrigin(0.5);
-    this.tallyText = this.label(x, y - h / 2 + 104, '', { size: 14 }).setOrigin(0.5).setAlign('center').setLineSpacing(2);
+    this.nightTitle = this.label(x, y - h / 2 + 32, '', { size: 26, bold: true, color: '#ffc870', glow: true }).setOrigin(0.5);
+    this.tallyText = this.label(x, y - h / 2 + 116, '', { size: 13 }).setOrigin(0.5).setAlign('center').setLineSpacing(3);
     const parts: Phaser.GameObjects.GameObject[] = [dim, panel, this.nightTitle, this.tallyText];
     UPGRADE_IDS.forEach((id, i) => {
-      const bx = SHOP.xs[i % 2];
+      // A last card alone on its row sits in the middle.
+      const alone = i === UPGRADE_IDS.length - 1 && i % 2 === 0;
+      const bx = alone ? x : SHOP.xs[i % 2];
       const by = SHOP.ys[Math.floor(i / 2)];
       const left = bx - SHOP.w / 2;
       const top = by - SHOP.h / 2;
       const bg = this.add.image(left - PAD, top - PAD, 'card-off').setOrigin(0).setScale(1 / RES);
-      const name = this.label(left + 14, top + 9, UPGRADES[id].name, { size: 17, bold: true, color: '#ffc870', glow: true });
-      const level = this.label(left + SHOP.w - 14, top + 11, '', { size: 12, color: '#b8a8c8' }).setOrigin(1, 0);
-      const blurb = this.label(left + 14, top + 34, UPGRADES[id].blurb, { size: 12, color: '#e0cfb4' });
-      const cost = this.label(left + SHOP.w - 14, top + SHOP.h - 22, '', { size: 13, bold: true, color: '#ffc870' }).setOrigin(1, 0);
+      const name = this.label(left + 14, top + 6, UPGRADES[id].name, { size: 16, bold: true, color: '#ffc870', glow: true });
+      const level = this.label(left + 22 + name.width, top + 10, '', { size: 11, color: '#b8a8c8' });
+      const blurb = this.label(left + 14, top + 30, UPGRADES[id].blurb, { size: 12, color: '#e0cfb4' });
+      const cost = this.label(left + SHOP.w - 14, top + 9, '', { size: 13, bold: true, color: '#ffc870' }).setOrigin(1, 0);
       const hit = this.add.zone(bx, by, SHOP.w, SHOP.h).setInteractive({ useHandCursor: true }).on('pointerdown', () => buy(this.state, id));
       this.shop.set(id, { bg, level, cost });
       this.shopButtons.push({ id, x: bx, y: by, w: SHOP.w, h: SHOP.h });
@@ -225,11 +280,37 @@ export class GameScene extends Phaser.Scene {
     const cx = VIEW.w / 2;
     const cy = VIEW.h / 2;
     const dim = this.add.rectangle(cx, cy, VIEW.w, VIEW.h, 0x000000, 0.6).setInteractive();
-    const panel = this.add.image(cx - 260 - PAD, cy - 120 - PAD, 'panel-small').setOrigin(0).setScale(1 / RES);
+    const panel = this.add.image(cx - SMALL_PANEL.w / 2 - PAD, cy - SMALL_PANEL.h / 2 - PAD, 'panel-small').setOrigin(0).setScale(1 / RES);
     const title = this.label(cx, cy - 76, 'The keep went dark', { size: 28, bold: true, color: '#ffc870', glow: true }).setOrigin(0.5);
     this.gameOverText = this.label(cx, cy - 10, '', { size: 16 }).setOrigin(0.5).setAlign('center');
     const again = makeButton(this, cx, cy + 72, 'New keep', () => this.restart());
     this.gameOver = this.add.container(0, 0, [dim, panel, title, this.gameOverText, again]).setDepth(UI_DEPTH + 20).setVisible(false);
+  }
+
+  /** The Great Festival's panel, with paper sky lanterns rising behind it. */
+  private createFestival() {
+    const cx = VIEW.w / 2;
+    const cy = VIEW.h / 2;
+    const dim = this.add.rectangle(cx, cy, VIEW.w, VIEW.h, 0x000000, 0.35).setInteractive();
+    for (let k = 0; k < 12; k++) {
+      const sky = this.sprite(40 + ((k * 331) % 880), 0, 'sky-lantern').setScale((0.7 + (k % 3) * 0.2) / RES);
+      this.skyLanterns.push(sky);
+    }
+    const panel = this.add.image(cx - SMALL_PANEL.w / 2 - PAD, cy - SMALL_PANEL.h / 2 - PAD, 'panel-small').setOrigin(0).setScale(1 / RES);
+    const title = this.label(cx, cy - 78, 'The Great Festival!', { size: 28, bold: true, color: '#ffc870', glow: true }).setOrigin(0.5);
+    const text = this.label(
+      cx,
+      cy - 12,
+      `${FESTIVAL_NIGHTS} nights kept: the whole valley comes\nto see the keep's lanterns.\n\nThe nights go on. How long can it hold?`,
+      { size: 15 },
+    )
+      .setOrigin(0.5)
+      .setAlign('center');
+    const go = makeButton(this, this.carryOnButton.x, this.carryOnButton.y, 'Keep going', () => carryOn(this.state));
+    this.festival = this.add
+      .container(0, 0, [dim, ...this.skyLanterns, panel, title, text, go])
+      .setDepth(UI_DEPTH + 15)
+      .setVisible(false);
   }
 
   update(time: number) {
@@ -248,9 +329,12 @@ export class GameScene extends Phaser.Scene {
       this.payout();
     }
     this.drawScreen();
+    this.drawKind();
+    this.drawChains();
     this.drawLanterns();
     this.drawGust();
     this.drawMoths();
+    this.drawBats();
     this.drawOrder();
     this.drawHud();
     this.drawPanels();
@@ -270,6 +354,53 @@ export class GameScene extends Phaser.Scene {
     c.setVisible(p > 0.6).setAlpha(Phaser.Math.Clamp((p - 0.6) / 0.4, 0, 1));
     this.stars.setAlpha(Phaser.Math.Clamp(p * 1.6 - 0.3, 0, 1));
     this.moon.setY(170 - 84 * p).setAlpha(Phaser.Math.Clamp(p * 1.5, 0, 1));
+  }
+
+  /** The night's kind: its plaque, and mist, bunting or rain over the castle. */
+  private drawKind() {
+    const s = this.state;
+    const kind = NIGHT_KINDS[s.kind];
+    this.kindIcon.setTexture(`kind-${s.kind}`);
+    this.kindName.setText(kind.name);
+    this.kindBlurb.setText(kind.blurb);
+    const still = settings.reduceMotion;
+    this.fog.setVisible(s.kind === 'fog').setX(still ? 0 : Math.sin(this.clock / 6000) * 30);
+    this.bunting.setVisible(s.kind === 'feast');
+    const g = this.rain.clear();
+    if (s.kind !== 'storm') return;
+    // Slanted streaks falling across the screen; reduce motion holds them still.
+    const fall = still ? 0 : this.clock * 0.5;
+    for (let k = 0; k < 90; k++) {
+      const x = (k * 137 + fall * 0.4) % (VIEW.w + 40);
+      const y = (((k * 211) % VIEW.h) + fall) % VIEW.h;
+      g.lineStyle(1, 0xc8d4ff, 0.3).lineBetween(x, y, x - 6, y + 15);
+    }
+  }
+
+  /**
+   * The cords of the chains this night has: a dotted line sagging from lantern to lantern, faint
+   * until all of the chain is lit, then amber.
+   */
+  private drawChains() {
+    const s = this.state;
+    const g = this.cords.clear();
+    for (const i of chainsFor(s)) {
+      const lit = chainLit(s, i);
+      const spots = CHAINS[i].lanterns.map((l) => s.lanterns[l]);
+      for (let k = 1; k < spots.length; k++) {
+        const a = spots[k - 1];
+        const b = spots[k];
+        const d = Math.hypot(b.x - a.x, b.y - a.y);
+        const n = Math.floor(d / 7);
+        for (let j = 2; j < n - 1; j++) {
+          const t = j / n;
+          const x = a.x + (b.x - a.x) * t;
+          const y = a.y - 22 + (b.y - a.y) * t + Math.sin(t * Math.PI) * 18;
+          if (lit) g.fillStyle(0xffc870, 0.25).fillCircle(x, y, 3.2);
+          g.fillStyle(lit ? 0xffd890 : 0xfff0c8, lit ? 1 : 0.35).fillCircle(x, y, lit ? 1.5 : 1.1);
+        }
+      }
+    }
   }
 
   private drawLanterns() {
@@ -435,6 +566,46 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /** Bat puppets, the dotted line to the lantern each is after, and a ring that says it can be tapped. */
+  private drawBats() {
+    const s = this.state;
+    while (this.bats.length < s.bats.length) {
+      const k = this.bats.length;
+      const body = this.add.image(0, 0, 'bat-up').setScale(1 / RES).setDepth(7.2);
+      const hit = this.add
+        .zone(0, 0, BAT_HIT.w, BAT_HIT.h)
+        .setDepth(7.5)
+        .setInteractive({ useHandCursor: true })
+        .on('pointerdown', () => {
+          const bat = this.state.bats[k];
+          if (bat) chase(this.state, bat.id);
+        });
+      this.bats.push({ body, hit });
+    }
+    const g = this.batMarks.clear();
+    const still = settings.reduceMotion;
+    this.bats.forEach((parts, k) => {
+      const bat = s.phase === 'dusk' ? s.bats[k] : undefined;
+      parts.body.setVisible(!!bat);
+      parts.hit.setVisible(!!bat).setPosition(bat ? bat.x : -200, bat ? bat.y : -200);
+      if (!bat) return;
+      const wingsUp = still || Math.floor(this.clock / 110 + k) % 2 === 0;
+      const bob = still ? 0 : Math.sin(this.clock / 200 + k) * 2;
+      const lantern = s.lanterns[bat.target];
+      parts.body
+        .setTexture(wingsUp ? 'bat-up' : 'bat-down')
+        .setPosition(bat.x, bat.y + bob)
+        .setFlipX(bat.task === 'fly' ? lantern.x < bat.x : bat.x < VIEW.w / 2);
+      if (bat.task !== 'fly') return;
+      // A dotted violet line to the lantern it is after.
+      const d = Math.hypot(lantern.x - bat.x, lantern.y - bat.y);
+      for (let t = 24; t < d - 26; t += 9) g.fillStyle(0xd6c8ff, 0.55).fillCircle(bat.x + ((lantern.x - bat.x) * t) / d, bat.y + ((lantern.y - bat.y) * t) / d, 1.2);
+      // A ring of holes round the bat: pale blue once a moth is chasing it.
+      const chased = s.moths.some((m) => m.task === 'chase' && m.bat === bat.id);
+      this.holes(g, bat.x, bat.y + bob, 22, chased ? 1 : 0, 0xbcd4ff, 1.4);
+    });
+  }
+
   private drawOrder() {
     const s = this.state;
     const { goal, text, reward } = s.order;
@@ -486,13 +657,31 @@ export class GameScene extends Phaser.Scene {
     const s = this.state;
     this.nightPanel.setVisible(s.phase === 'night' && this.panelOpen);
     this.gameOver.setVisible(s.phase === 'over' && this.panelOpen);
+    this.festival.setVisible(s.phase === 'festival' && this.panelOpen);
+    if (s.phase === 'festival') {
+      // Sky lanterns drift up the screen and come round again; reduce motion holds them still.
+      const rise = settings.reduceMotion ? 0 : this.clock / 40;
+      this.skyLanterns.forEach((sky, k) => sky.setY(VIEW.h + 30 - ((((k * 97) % (VIEW.h + 60)) + rise * (0.6 + (k % 3) * 0.2)) % (VIEW.h + 60))));
+    }
     const r = s.report;
     if (s.phase === 'night' && r) {
       this.nightTitle.setText(`Night ${s.night} falls`);
       const verdict = r.lostHearth ? 'Too dark: one of the hearths went out.' : r.lit === r.count ? 'Every lantern lit: the keep blazes!' : 'The keep holds the dark at bay.';
+      const mult = s.kind === 'feast' ? FEAST_PAY : 1;
       const order = r.orderMet ? `Herald's order kept: +${s.order.reward}` : "Herald's order missed";
+      const chains = r.chains ? `  ·  ${r.chains} chain${r.chains > 1 ? 's' : ''} lit: +${r.chains * CHAIN_BONUS * mult}` : '';
       const calls = s.closeCalls ? `  (+${s.closeCalls * CLOSE_CALL_PAY} in close calls)` : '';
-      this.tallyText.setText([`${r.lit} of ${r.count} lanterns lit (${r.required} needed)`, order, `+${r.earned} coins${calls}`, verdict]);
+      const feast = mult > 1 ? '  ·  the feast pays double' : '';
+      const goal = s.festival ? 'The Great Festival was held: the nights go on.' : `Great Festival: ${s.kept} of ${FESTIVAL_NIGHTS} nights kept`;
+      const next = NIGHT_KINDS[s.nextKind];
+      this.tallyText.setText([
+        `${r.lit} of ${r.count} lanterns lit (${r.required} needed)${feast}`,
+        order + chains,
+        `+${r.earned} coins${calls}`,
+        verdict,
+        goal,
+        `Next: ${next.name} (${next.blurb.toLowerCase()})`,
+      ]);
       for (const [id, parts] of this.shop) {
         const cost = nextCost(s, id);
         const affordable = cost !== null && s.coins >= cost;
@@ -504,7 +693,8 @@ export class GameScene extends Phaser.Scene {
       }
     }
     if (s.phase === 'over') {
-      this.gameOverText.setText(`The last hearth went out on night ${s.night}.\nNights kept: ${s.kept}.\n\nBest: ${s.best} nights.`);
+      const festival = s.festival ? '\nThe Great Festival was held.' : '';
+      this.gameOverText.setText(`The last hearth went out on night ${s.night}.\nNights kept: ${s.kept}.${festival}\n\nBest: ${s.best} nights.`);
     }
   }
 
@@ -516,9 +706,15 @@ export class GameScene extends Phaser.Scene {
   }
 
   private showEvent(e: GameEvent) {
+    if (e.type === 'chased') {
+      this.popup(e.x, e.y - 26, 'Chased off!', '#dbe8ff');
+      return;
+    }
     const l = this.state.lanterns[e.lantern];
     if (!l) return;
-    if (e.type === 'closeCall') {
+    if (e.type === 'bat') {
+      this.popup(l.x, l.y - 40, e.snuffed ? 'Snuffed!' : 'Driven off!', e.snuffed ? '#d8c0ff' : '#dbe8ff');
+    } else if (e.type === 'closeCall') {
       // A flare of light and sparks round the saved lantern.
       const flare = this.add.image(l.x, l.y, 'glow-pale').setBlendMode(Phaser.BlendModes.ADD).setScale(1.1).setDepth(4);
       this.tweens.add({ targets: flare, alpha: 0, duration: 900, onComplete: () => flare.destroy() });
@@ -546,7 +742,14 @@ export class GameScene extends Phaser.Scene {
   private payout() {
     const r = this.state.report;
     if (!r) return;
-    for (const lantern of this.state.lanterns) if (lantern.lit) this.popup(lantern.x, lantern.y - 34, `+${PAY_PER_LANTERN}`, '#ffc870', 18);
+    const s = this.state;
+    const mult = s.kind === 'feast' ? FEAST_PAY : 1;
+    for (const lantern of s.lanterns) if (lantern.lit) this.popup(lantern.x, lantern.y - 34, `+${PAY_PER_LANTERN * mult}`, '#ffc870', 18);
+    for (const i of chainsFor(s)) {
+      if (!chainLit(s, i)) continue;
+      const [a, , b] = CHAINS[i].lanterns.map((l) => s.lanterns[l]);
+      this.popup((a.x + b.x) / 2, (a.y + b.y) / 2 + 4, `+${CHAIN_BONUS * mult} chain`, '#ffd890', 15);
+    }
     if (r.orderMet) this.popup(ORDER.x + ORDER.w - 24, ORDER.y + ORDER.h + 14, `+${this.state.order.reward} order kept`, '#ffc870', 15);
   }
 

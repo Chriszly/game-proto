@@ -25,3 +25,15 @@ export const LANTERN_SPOTS: readonly { x: number; y: number }[] = [
 export function mothRest(i: number, n: number) {
   return { x: JAR.x + (i - (n - 1) / 2) * 30, y: JAR.y - 30 };
 }
+
+/**
+ * Lantern chains: lanterns side by side, joined by a cord. A chain whose lanterns are all lit at
+ * nightfall pays a bonus. A chain only counts on a night that has every one of its lanterns, so
+ * the first night (lanterns 0 to 4) has none. Listed in the order the cord runs.
+ */
+export const CHAINS: readonly { name: string; lanterns: readonly number[] }[] = [
+  { name: 'West wall', lanterns: [5, 0, 3] },
+  { name: 'East wall', lanterns: [4, 1, 6] },
+  { name: 'Keep', lanterns: [7, 2, 8] },
+  { name: 'Gate', lanterns: [3, 9, 4] },
+];
