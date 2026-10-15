@@ -55,7 +55,9 @@ its "Item added to project" workflow, set to Issue only, gives new issues the st
 Auto-add misses the Game label the Issue labels workflow adds, that workflow also adds each issue
 to "All feedback" and its game's Project with the status Todo. The **Project status** workflow (`.github/workflows/project-status.yml`) puts each open PR into its
 Projects with the status In Progress. Both use the `PROJECTS_TOKEN` secret (a classic token with only
-the `project` scope).
+the `project` scope). To see what is on the boards, start the **Project report** workflow
+(`.github/workflows/project-report.yml`) by hand; it prints each Project's items and their Status
+to its log and run summary.
 
 - **Every PR needs labels.** It carries at least one Type label for what it changes (`bug` for a
   fix, `feature`, `gameplay`, `refactor`, `assets`, `docs`, `ci`) and at least one Game label for
