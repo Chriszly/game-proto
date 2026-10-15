@@ -1,4 +1,4 @@
-import { freshBoard, type Board, type Tile } from './board';
+import { addBlockers, freshBoard, type Board, type Tile } from './board';
 import { KINDS, randomKind, type Kind } from './kinds';
 import { orderFor, type Order } from './orders';
 import { unlockedRecipes } from './ranks';
@@ -16,7 +16,7 @@ export interface Progress {
 
 export interface GameState extends Progress {
   current: Order;
-  /** Ingredients gathered for this order, of every kind. */
+  /** Ingredients gathered for this order; only the kinds it needs count. */
   got: Record<Kind, number>;
   moves: number;
   /** `sold` once the order is filled, `failed` when the moves ran out first. */
@@ -28,6 +28,14 @@ export interface GameState extends Progress {
   /** Catalysts brewed by matches of four or more this order, and how many were matched (fired). */
   brewed: number;
   fired: number;
+  /** Blooms brewed by L and T matches this order, and how many were matched. */
+  bloomed: number;
+  bloomsFired: number;
+  /** Jars opened and resin melted this order. */
+  opened: number;
+  melted: number;
+  /** Extra moves spent matching the forbidden ingredient this order. */
+  penalties: number;
   board: Board;
   nextId: number;
 }
@@ -50,12 +58,20 @@ export function startOrder(progress: Progress): GameState {
     orderStars: 0,
     brewed: 0,
     fired: 0,
+    bloomed: 0,
+    bloomsFired: 0,
+    opened: 0,
+    melted: 0,
+    penalties: 0,
     board: [],
     nextId: 1,
   };
-  s.board = freshBoard(tileMaker(s));
+  s.board = addBlockers(freshBoard(tileMaker(s)), current.jars, current.resin);
   return s;
 }
+
+/** True if the order counts `kind`: only the ingredients it asks for are gathered towards it. */
+export const wanted = (s: GameState, kind: Kind) => kind in s.current.needs;
 
 /** True once every ingredient the order asks for has been gathered. */
 export const filled = (s: GameState) =>

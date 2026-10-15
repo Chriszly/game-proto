@@ -11,8 +11,8 @@ export const RIBBON = { x: 46, y: 7, w: 458, h: 23, barX: 191, barW: 85 };
 export const PANEL = { x: 536, y: 30, w: 394, h: 480 };
 /** One row per ingredient the order asks for, from the top. */
 export const NEEDS = { x: 566, y: 236, row: 56, barX: 608, barW: 220, barH: 14 };
-/** The two bench tool buttons in the order panel: Stir, then Sift `gap` to its right. */
-export const TOOL = { x: 560, y: 393, w: 168, h: 43, gap: 176 };
+/** The four bench tool buttons in the order panel, `gap` apart: Stir, Sift, Pestle and Funnel. */
+export const TOOL = { x: 560, y: 393, w: 80, h: 43, gap: 88 };
 /** The caption cartouche under the tray. */
 export const CAPTION = { x: 46, y: 511, h: 21 };
 /** The button on the result card. */

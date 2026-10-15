@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { KINDS, type Kind } from '../game/kinds';
+import type { Tile } from '../game/board';
 import type { PotionId } from '../game/orders';
 import { TOOLS, type Tool } from '../game/sim';
 import { BOARD, BUTTON, PANEL, TOOL, TRAY, VIEW } from '../scenes/layout';
@@ -38,6 +39,9 @@ import {
 // art units (twice that).
 
 export const kindTexture = (kind: Kind, catalyst = false) => (catalyst ? `catalyst-${kind}` : `kind-${kind}`);
+/** The texture of a tile on the board: a jar, a resin-held tile, a Bloom, a Catalyst or a plain ingredient. */
+export const tileTexture = (t: Tile) =>
+  t.jar ? `jar-${t.kind}` : t.resin ? `resin-${t.kind}` : t.bloom ? `bloom-${t.kind}` : kindTexture(t.kind, t.catalyst);
 export const needTexture = (kind: Kind) => `need-${kind}`;
 export const potionTexture = (potion: PotionId) => `potion-${potion}`;
 export const toolTexture = (tool: Tool, look: 'on' | 'off' | 'armed') => `tool-${tool}-${look}`;
@@ -63,6 +67,9 @@ export function bakeTextures(scene: Phaser.Scene) {
   for (const kind of KINDS) {
     bake(scene, kindTexture(kind), BOARD.cell, BOARD.cell, () => ingredient(kind, 56, 56, 39, 7));
     bake(scene, kindTexture(kind, true), 64, 64, () => paintCatalyst(kind));
+    bake(scene, `bloom-${kind}`, 64, 64, () => paintBloom(kind));
+    bake(scene, `jar-${kind}`, BOARD.cell, BOARD.cell, () => paintJar(kind));
+    bake(scene, `resin-${kind}`, BOARD.cell, BOARD.cell, () => paintResin(kind));
     bake(scene, needTexture(kind), 40, 40, () => {
       circle(40, 40, 37, '#f6ecd2', GOLD, 2.5);
       ingredient(kind, 40, 40, 28, 5);
@@ -79,7 +86,9 @@ export function bakeTextures(scene: Phaser.Scene) {
   }
   bake(scene, 'button', BUTTON.w + 4, BUTTON.h + 6, paintButton);
   bake(scene, 'cursor', 70, 70, paintCursor);
-  bake(scene, 'band', BOARD.cell * 8 + 2, BOARD.cell + 2, paintBand);
+  bake(scene, 'band', BOARD.cell * 8 + 2, BOARD.cell + 2, () => paintBand(BOARD.cell * 8, BOARD.cell));
+  bake(scene, 'band-col', BOARD.cell + 2, BOARD.cell * 8 + 2, () => paintBand(BOARD.cell, BOARD.cell * 8));
+  bake(scene, 'area', BOARD.cell * 3 + 2, BOARD.cell * 3 + 2, () => paintBand(BOARD.cell * 3, BOARD.cell * 3, 'rgba(200,120,140,0.22)'));
   bake(scene, 'sun', 18, 18, () => paintSun(18, 18, '#8a6fae'));
   bake(scene, 'result-card', 400, 236, paintResultCard);
 }
@@ -228,6 +237,73 @@ function paintCatalyst(kind: Kind) {
   ingredient(kind, x, y, 32, 6);
 }
 
+/** A Bloom: a rosette of rose petals around a cream disc with its ingredient, smaller, in the middle. */
+function paintBloom(kind: Kind) {
+  const x = 64;
+  const y = 64;
+  for (let k = 0; k < 10; k++) {
+    const a = (k / 10) * PI * 2 - PI / 2;
+    poly(leaf(x + Math.cos(a) * 30, y + Math.sin(a) * 30, a, 32, 22), k % 2 ? '#c98a96' : '#dba5ad', SEPIA, 3);
+  }
+  circle(x, y, 40, '#f6e6dc', SEPIA, 4);
+  circle(x, y, 34, null, '#b0606e', 2);
+  ingredient(kind, x, y, 29, 6);
+}
+
+/** A corked jar of pale glass with its ingredient inside and a twine round the neck. */
+function paintJar(kind: Kind) {
+  const x = 56;
+  const y = 60;
+  rrect(x - 38, y - 30, 76, 72, 18);
+  ctx.fillStyle = '#dfe8de';
+  ctx.fill();
+  ctx.strokeStyle = SEPIA;
+  ctx.lineWidth = 5;
+  ctx.stroke();
+  ingredient(kind, x, y + 8, 24, 5);
+  // The glass: a pale wash over the ingredient and a highlight down the left.
+  rrect(x - 38, y - 30, 76, 72, 18);
+  ctx.fillStyle = 'rgba(225,238,230,0.35)';
+  ctx.fill();
+  line(x - 26, y - 16, x - 26, y + 24, '#fbfdf6', 5);
+  rrect(x - 26, y - 44, 52, 16, 5);
+  ctx.fillStyle = '#e3d3ad';
+  ctx.fill();
+  ctx.strokeStyle = SEPIA;
+  ctx.lineWidth = 4;
+  ctx.stroke();
+  rrect(x - 18, y - 56, 36, 16, 5);
+  ctx.fillStyle = '#a0683c';
+  ctx.fill();
+  ctx.stroke();
+  line(x - 24, y - 36, x + 24, y - 36, RUST, 3);
+}
+
+/** An ingredient caught in amber resin: a glossy drip-edged coat over it. */
+function paintResin(kind: Kind) {
+  const x = 56;
+  const y = 56;
+  ingredient(kind, x, y, 36, 7);
+  ctx.beginPath();
+  ctx.moveTo(x - 42, y - 30);
+  ctx.quadraticCurveTo(x - 42, y - 44, x - 28, y - 44);
+  ctx.lineTo(x + 28, y - 44);
+  ctx.quadraticCurveTo(x + 42, y - 44, x + 42, y - 30);
+  ctx.lineTo(x + 42, y + 22);
+  ctx.quadraticCurveTo(x + 40, y + 42, x + 30, y + 30);
+  ctx.quadraticCurveTo(x + 18, y + 48, x + 8, y + 32);
+  ctx.quadraticCurveTo(x - 6, y + 44, x - 16, y + 34);
+  ctx.quadraticCurveTo(x - 30, y + 46, x - 42, y + 26);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(214,140,48,0.42)';
+  ctx.fill();
+  ctx.strokeStyle = GOLDD;
+  ctx.lineWidth = 3.5;
+  ctx.stroke();
+  line(x - 30, y - 32, x - 8, y - 36, '#fff3d0', 4);
+  circle(x + 28, y - 26, 4, '#fff3d0');
+}
+
 /** A round flask with a cork, half full, and a label ribbon the scene writes the order number on. */
 function paintFlask(brew: string) {
   const x = 80;
@@ -268,7 +344,7 @@ function paintFlask(brew: string) {
   poly([[x - 62, y + 26], [x + 62, y + 26], [x + 56, y + 50], [x - 56, y + 50]], CREAM, SEPIA, 3);
 }
 
-/** A bench tool: a bottle-green cartouche with its icon, name, effect and price. */
+/** A bench tool: a small bottle-green cartouche with its icon, name and price. */
 function paintTool(tool: Tool, look: 'on' | 'off' | 'armed') {
   const pad = TOOL_PAD * ART;
   const x = pad;
@@ -280,45 +356,72 @@ function paintTool(tool: Tool, look: 'on' | 'off' | 'armed') {
   ctx.shadowColor = 'rgba(60,30,10,0.3)';
   ctx.shadowOffsetY = 4;
   ctx.shadowBlur = 6;
-  rrect(x, y, w, h, h / 2);
+  rrect(x, y, w, h, 22);
   ctx.fillStyle = fill;
   ctx.fill();
   ctx.restore();
   ctx.strokeStyle = SEPIA;
   ctx.lineWidth = 3;
   ctx.stroke();
-  rrect(x + 6, y + 6, w - 12, h - 12, h / 2 - 6);
+  rrect(x + 5, y + 5, w - 10, h - 10, 17);
   ctx.strokeStyle = look === 'off' ? '#a8a28a' : GOLDL;
   ctx.lineWidth = look === 'armed' ? 3 : 1.5;
   ctx.stroke();
-  const ix = x + 44;
+  const ix = x + 33;
   const iy = y + h / 2;
-  circle(ix, iy, 30, look === 'off' ? '#d8d0b8' : CREAM, SEPIA, 3);
+  circle(ix, iy, 24, look === 'off' ? '#d8d0b8' : CREAM, SEPIA, 3);
   if (tool === 'stir') {
     ctx.save();
     ctx.translate(ix, iy);
     ctx.rotate(-PI / 4);
-    poly([[-2, -3], [24, -3], [24, 3], [-2, 3]], '#c98f62', SEPIA, 2);
-    poly(ell(-12, 0, 12, 8, 0, 14), '#d9a86c', SEPIA, 2.5);
+    poly([[-2, -2.5], [19, -2.5], [19, 2.5], [-2, 2.5]], '#c98f62', SEPIA, 2);
+    poly(ell(-9, 0, 10, 6.5, 0, 14), '#d9a86c', SEPIA, 2.5);
     ctx.restore();
-  } else {
-    circle(ix, iy, 19, '#d8cfb4', SEPIA, 2.5);
+  } else if (tool === 'sift') {
+    circle(ix, iy, 16, '#d8cfb4', SEPIA, 2.5);
     ctx.save();
     ctx.beginPath();
-    ctx.arc(ix, iy, 16, 0, PI * 2);
+    ctx.arc(ix, iy, 13, 0, PI * 2);
     ctx.clip();
-    for (let a = -16; a <= 16; a += 5) {
-      line(ix + a, iy - 18, ix + a, iy + 18, '#8a7a5a', 1.2);
-      line(ix - 18, iy + a, ix + 18, iy + a, '#8a7a5a', 1.2);
+    for (let a = -14; a <= 14; a += 4.5) {
+      line(ix + a, iy - 15, ix + a, iy + 15, '#8a7a5a', 1.2);
+      line(ix - 15, iy + a, ix + 15, iy + a, '#8a7a5a', 1.2);
     }
     ctx.restore();
+  } else if (tool === 'pestle') {
+    // A mortar bowl with the pestle leaning in it.
+    ctx.save();
+    ctx.translate(ix + 2, iy - 6);
+    ctx.rotate(PI / 5);
+    rrect(-4, -16, 8, 26, 4);
+    ctx.fillStyle = '#c9b48a';
+    ctx.fill();
+    ctx.strokeStyle = SEPIA;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.restore();
+    ctx.beginPath();
+    ctx.moveTo(ix - 17, iy);
+    ctx.lineTo(ix + 17, iy);
+    ctx.quadraticCurveTo(ix + 15, iy + 15, ix, iy + 15);
+    ctx.quadraticCurveTo(ix - 15, iy + 15, ix - 17, iy);
+    ctx.closePath();
+    ctx.fillStyle = '#9a8a6e';
+    ctx.fill();
+    ctx.strokeStyle = SEPIA;
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    line(ix - 18, iy, ix + 18, iy, SEPIA, 3);
+  } else {
+    // A copper funnel.
+    poly([[ix - 16, iy - 13], [ix + 16, iy - 13], [ix + 4, iy + 3], [ix + 4, iy + 15], [ix - 4, iy + 15], [ix - 4, iy + 3]], '#c47a3a', SEPIA, 2.5);
+    line(ix - 12, iy - 9, ix + 12, iy - 9, '#e6b07a', 2);
   }
   const ink = look === 'off' ? '#d6cfb8' : CREAM;
-  txt(TOOLS[tool].name, x + 88, y + 32, `italic 700 30px ${SERIF}`, ink);
-  txt(look === 'armed' ? 'tap a row' : TOOLS[tool].what, x + 88, y + 62, `21px ${SERIF}`, look === 'off' ? '#c9c2aa' : '#d9e6cc');
-  if (look === 'off') coin(x + w - 92, y + h / 2, 13, '#b9b29a', '#8f8a76');
-  else coin(x + w - 92, y + h / 2, 13);
-  txt(`${TOOLS[tool].cost}`, x + w - 72, y + h / 2 + 2, `700 30px ${SERIF}`, look === 'off' ? '#d6cfb8' : GOLDL);
+  txt(TOOLS[tool].name, x + 64, y + 34, `italic 700 24px ${SERIF}`, ink);
+  if (look === 'off') coin(x + 74, y + 61, 10, '#b9b29a', '#8f8a76');
+  else coin(x + 74, y + 61, 10);
+  txt(`${TOOLS[tool].cost}`, x + 90, y + 63, `700 23px ${SERIF}`, look === 'off' ? '#d6cfb8' : GOLDL);
 }
 
 /** The result card's button: a bottle-green cartouche (the scene writes its caption). */
@@ -360,10 +463,10 @@ function paintCursor() {
   }
 }
 
-/** The gold-hatched band behind a Catalyst's row: the row it will clear. */
-function paintBand() {
-  rrect(4, 4, BOARD.cell * 8 * ART - 4, BOARD.cell * ART - 4, 16);
-  ctx.fillStyle = 'rgba(214,170,80,0.22)';
+/** The gold-hatched band behind a Catalyst's row (or a column, or a Bloom's square): what it clears. */
+function paintBand(w: number, h: number, fill = 'rgba(214,170,80,0.22)') {
+  rrect(4, 4, w * ART - 4, h * ART - 4, 16);
+  ctx.fillStyle = fill;
   ctx.fill();
   ctx.setLineDash([2, 9]);
   ctx.lineCap = 'round';

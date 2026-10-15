@@ -2,29 +2,42 @@ import {
   adjacent,
   collapse,
   COLS,
-  findMatches,
   findRuns,
+  findMatches,
+  inBoard,
   matchesAt,
+  ROWS,
   shuffle,
+  special,
+  stuck,
   swapped,
+  swapWorks,
   validMoves,
   type Board,
   type Cell,
+  type Run,
   type Tile,
 } from './board';
 import { randomKind } from './kinds';
 import { MOVE_BONUS } from './orders';
 import { starsFor } from './ranks';
-import { filled, startOrder, tileMaker, type GameState } from './state';
+import { filled, startOrder, tileMaker, wanted, type GameState } from './state';
 
 /** One round of a swap's outcome: the tiles matched, then the board once the rest have fallen. */
 export interface Step {
-  /** Every tile gathered this round, catalyst rows included. */
+  /** Every tile gathered this round: matches, Catalyst rows, Bloom squares and opened jars. */
   cleared: (Cell & Tile)[];
-  /** Tiles a match of four or more turned into Catalysts; they stay on the board. */
+  /** Tiles a match turned into Catalysts (four or more) or Blooms (an L or T); they stay on the board. */
   brewed: (Cell & Tile)[];
-  /** Rows a matched Catalyst cleared. */
+  /** Resin-held tiles a match freed; they stay on the board. */
+  melted: (Cell & Tile)[];
+  /** Rows a matched Catalyst (or a Catalyst pair) cleared, and columns a Catalyst pair cleared. */
   rows: number[];
+  cols: number[];
+  /** The middle of every Bloom that fired: the 3x3 around it was cleared. */
+  areas: Cell[];
+  /** This round matched the forbidden ingredient, which cost a move. */
+  penalty?: boolean;
   board: Board;
   /** The board had no moves left, so its tiles were shuffled. */
   shuffled?: boolean;
@@ -33,28 +46,54 @@ export interface Step {
 /** Runs of this length or longer brew a Catalyst. */
 export const CATALYST_RUN = 4;
 
+/** Tiles cleared on top of the matches: a Catalyst pair's row and column, or a tile a Pestle smashed. */
+interface Extra {
+  cells: Cell[];
+  rows?: number[];
+  cols?: number[];
+  /** Whether a Catalyst or Bloom among `cells` fires. */
+  fire: boolean;
+}
+
+const rowCells = (row: number): Cell[] => Array.from({ length: COLS }, (_, col) => ({ row, col }));
+const colCells = (col: number): Cell[] => Array.from({ length: ROWS }, (_, row) => ({ row, col }));
+
 /**
  * Swaps two neighbouring tiles. A swap that makes no match doesn't count and returns null; one that
  * does spends a move, gathers every match and the cascades after it, and returns them step by step.
+ * Two Catalysts swapped together clear the row and the column where the moved one lands.
  */
 export function trySwap(s: GameState, a: Cell, b: Cell): Step[] | null {
-  if (s.phase !== 'play' || !adjacent(a, b)) return null;
-  let board = swapped(s.board, a, b);
-  if (findMatches(board).length === 0) return null;
-
+  if (s.phase !== 'play' || !adjacent(a, b) || !swapWorks(s.board, a, b)) return null;
+  const pair = s.board[a.row][a.col].catalyst && s.board[b.row][b.col].catalyst;
   s.moves--;
+  const extra = pair ? { cells: [...rowCells(b.row), ...colCells(b.col)], rows: [b.row], cols: [b.col], fire: false } : undefined;
+  // On the swap's own match a Catalyst is brewed where the player moved a tile to, if it can be.
+  return resolve(s, swapped(s.board, a, b), [b, a], extra);
+}
+
+/**
+ * Plays `board` out: gathers its matches (and `extra`) and every cascade after them, shuffles the
+ * board if no move is left, then sells the order once it is filled or fails it when the moves are gone.
+ */
+function resolve(s: GameState, board: Board, prefer: Cell[], extra?: Extra): Step[] {
   const newTile = tileMaker(s);
   const steps: Step[] = [];
-  // On the swap's own match a Catalyst is brewed where the player moved a tile to, if it can be.
-  let prefer: Cell[] = [b, a];
-  for (let step = gather(s, board, prefer); step; step = gather(s, board, prefer)) {
+  let penalty = false;
+  for (let step = gather(s, board, prefer, extra); step; step = gather(s, board, [])) {
+    // The forbidden ingredient costs one move per swap, however many times it is matched.
+    if (step.penalty && penalty) step.penalty = false;
+    penalty ||= !!step.penalty;
     board = collapse(step.board, step.cleared, newTile);
     steps.push({ ...step, board });
-    prefer = [];
+  }
+  if (penalty) {
+    s.moves = Math.max(0, s.moves - 1);
+    s.penalties++;
   }
   if (validMoves(board).length === 0) {
     board = shuffle(board, newTile);
-    steps.push({ cleared: [], brewed: [], rows: [], board, shuffled: true });
+    steps.push({ cleared: [], brewed: [], melted: [], rows: [], cols: [], areas: [], board, shuffled: true });
   }
   s.board = board;
 
@@ -73,51 +112,100 @@ export function trySwap(s: GameState, a: Cell, b: Cell): Step[] | null {
 }
 
 /**
- * The matches on `board`, if any: what they gather (with the whole row of every matched Catalyst)
- * and the Catalysts they brew. `board` in the result has the brewed tiles turned into Catalysts but
- * the cleared ones still in place.
+ * The matches on `board` (and `extra`), if any: what they gather, with the whole row of every
+ * matched Catalyst, the 3x3 around every matched Bloom and the jars beside them, the Catalysts and
+ * Blooms they brew and the resin they melt. `board` in the result has the brewed and melted tiles
+ * changed but the cleared ones still in place.
  */
-function gather(s: GameState, board: Board, prefer: Cell[]): Omit<Step, 'board'> & { board: Board } | null {
+function gather(s: GameState, board: Board, prefer: Cell[], extra?: Extra): Step | null {
   const runs = findRuns(board);
-  if (runs.length === 0) return null;
+  if (runs.length === 0 && !extra) return null;
   const key = (c: Cell) => c.row * COLS + c.col;
+  const cell = (i: number): Cell => ({ row: Math.floor(i / COLS), col: i % COLS });
+  const tile = (i: number) => board[Math.floor(i / COLS)][i % COLS];
   const hit = new Set<number>();
   for (const run of runs) for (const c of run.cells) hit.add(key(c));
-  // A matched Catalyst clears its row.
-  const rows = [...new Set([...hit].filter((i) => board[Math.floor(i / COLS)][i % COLS].catalyst).map((i) => Math.floor(i / COLS)))];
-  for (const row of rows) for (let col = 0; col < COLS; col++) hit.add(row * COLS + col);
-  s.fired += [...hit].filter((i) => board[Math.floor(i / COLS)][i % COLS].catalyst).length;
+  // Matched specials fire: a Catalyst clears its row, a Bloom the 3x3 around it.
+  const firing = new Set(hit);
+  if (extra?.fire) for (const c of extra.cells) firing.add(key(c));
+  const swept = new Set<number>();
+  for (const c of extra?.cells ?? []) swept.add(key(c));
+  const rows = [...new Set([...firing].filter((i) => tile(i).catalyst).map((i) => cell(i).row))];
+  const areas = [...firing].filter((i) => tile(i).bloom).map(cell);
+  for (const row of rows) for (const c of rowCells(row)) swept.add(key(c));
+  for (const a of areas) {
+    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) if (inBoard({ row: a.row + dr, col: a.col + dc })) swept.add(key({ row: a.row + dr, col: a.col + dc }));
+  }
+  for (const i of swept) hit.add(i);
+  s.fired += [...hit].filter((i) => tile(i).catalyst).length;
+  s.bloomsFired += areas.length;
 
-  // A run of four or more leaves one of its tiles behind as a Catalyst of its kind.
+  // An L or T of one kind leaves a Bloom where its lines cross; a run of four or more, a Catalyst.
   const next = board.map((row) => [...row]);
   const brewed: (Cell & Tile)[] = [];
-  for (const run of runs) {
-    if (run.cells.length < CATALYST_RUN) continue;
-    const free = run.cells.filter((c) => hit.has(key(c)) && !rows.includes(c.row) && !board[c.row][c.col].catalyst);
-    const at = free.find((c) => prefer.some((p) => key(p) === key(c))) ?? free[Math.floor((free.length - 1) / 2)];
-    if (!at) continue;
-    hit.delete(key(at));
-    next[at.row][at.col] = { ...board[at.row][at.col], catalyst: true };
-    brewed.push({ ...at, ...next[at.row][at.col] });
+  const free = (c: Cell) => hit.has(key(c)) && !swept.has(key(c)) && !special(board[c.row][c.col]) && !stuck(board[c.row][c.col]);
+  const brew = (c: Cell, mark: 'catalyst' | 'bloom') => {
+    hit.delete(key(c));
+    next[c.row][c.col] = { ...board[c.row][c.col], [mark]: true };
+    brewed.push({ ...c, ...next[c.row][c.col] });
+  };
+  const across = (r: Run) => r.cells[0].row === r.cells[1].row;
+  const used = new Set<Run>();
+  for (const h of runs.filter(across)) {
+    for (const v of runs.filter((r) => !across(r) && r.kind === h.kind)) {
+      const at = h.cells.find((c) => v.cells.some((d) => key(d) === key(c)));
+      if (!at || used.has(h) || used.has(v) || !free(at)) continue;
+      brew(at, 'bloom');
+      used.add(h).add(v);
+    }
   }
-  s.brewed += brewed.length;
+  for (const run of runs) {
+    if (run.cells.length < CATALYST_RUN || used.has(run)) continue;
+    const spots = run.cells.filter(free);
+    const at = spots.find((c) => prefer.some((p) => key(p) === key(c))) ?? spots[Math.floor((spots.length - 1) / 2)];
+    if (at) brew(at, 'catalyst');
+  }
+  s.brewed += brewed.filter((t) => t.catalyst).length;
+  s.bloomed += brewed.filter((t) => t.bloom).length;
 
-  const cleared = [...hit].sort((x, y) => x - y).map((i) => {
-    const c = { row: Math.floor(i / COLS), col: i % COLS };
-    return { ...c, ...board[c.row][c.col] };
-  });
-  for (const { kind } of cleared) s.got[kind]++;
-  return { cleared, brewed, rows, board: next };
+  // Resin melts instead of its tile being gathered; the tile stays where it is.
+  const melted: (Cell & Tile)[] = [];
+  for (const i of [...hit]) {
+    if (!tile(i).resin) continue;
+    hit.delete(i);
+    next[cell(i).row][cell(i).col] = { ...tile(i), resin: false };
+    melted.push({ ...cell(i), ...next[cell(i).row][cell(i).col] });
+  }
+  s.melted += melted.length;
+
+  // A match next to a corked jar opens it, and its ingredient is gathered too.
+  const touched = new Set([...hit, ...brewed.map(key), ...melted.map(key)]);
+  for (let i = 0; i < ROWS * COLS; i++) {
+    if (!tile(i).jar || hit.has(i)) continue;
+    const { row, col } = cell(i);
+    const near = [{ row: row - 1, col }, { row: row + 1, col }, { row, col: col - 1 }, { row, col: col + 1 }];
+    if (near.some((c) => inBoard(c) && touched.has(key(c)))) hit.add(i);
+  }
+  s.opened += [...hit].filter((i) => tile(i).jar).length;
+
+  const cleared = [...hit].sort((x, y) => x - y).map((i) => ({ ...cell(i), ...tile(i) }));
+  // Only the ingredients the order asks for are counted.
+  for (const { kind } of cleared) if (wanted(s, kind)) s.got[kind]++;
+  const penalty = !!s.current.forbid && runs.some((r) => r.kind === s.current.forbid);
+  return { cleared, brewed, melted, rows: [...new Set([...rows, ...(extra?.rows ?? [])])], cols: extra?.cols ?? [], areas, penalty, board: next };
 }
 
 // ---- Bench tools: coins spent during an order ----
 
-export type Tool = 'stir' | 'sift';
-/** Stir buys moves; Sift rerolls one row of the board. */
-export const TOOLS: Record<Tool, { cost: number; name: string; what: string }> = {
-  stir: { cost: 40, name: 'Stir', what: '+3 moves' },
-  sift: { cost: 25, name: 'Sift', what: 'reroll a row' },
+export type Tool = 'stir' | 'sift' | 'pestle' | 'funnel';
+/** Stir buys moves, Sift rerolls one row, Pestle smashes one tile and Funnel swaps any two. */
+export const TOOLS: Record<Tool, { cost: number; name: string; what: string; tip: string }> = {
+  stir: { cost: 40, name: 'Stir', what: '+3 moves', tip: 'Stir: 3 more moves for this order' },
+  sift: { cost: 25, name: 'Sift', what: 'reroll a row', tip: 'Sift: reroll one row of the board' },
+  pestle: { cost: 30, name: 'Pestle', what: 'smash a tile', tip: 'Pestle: smash one tile, a jar or a special, without a move' },
+  funnel: { cost: 35, name: 'Funnel', what: 'swap any two', tip: 'Funnel: swap any two tiles on the board, without a move' },
 };
+export const TOOL_ORDER: Tool[] = ['stir', 'sift', 'pestle', 'funnel'];
 export const STIR_MOVES = 3;
 
 export const canUse = (s: GameState, tool: Tool) => s.phase === 'play' && s.coins >= TOOLS[tool].cost;
@@ -131,18 +219,19 @@ export function stir(s: GameState): boolean {
 }
 
 /**
- * Sift: every tile in `row` but its Catalysts is replaced by a new one, with no match made and a
- * move left on the board. Returns the tiles taken out, or null if it can't be bought.
+ * Sift: every tile in `row` but its specials, jars and resin is replaced by a new one, with no match
+ * made and a move left on the board. Returns the tiles taken out, or null if it can't be bought.
  */
 export function sift(s: GameState, row: number): Tile[] | null {
   if (!canUse(s, 'sift') || row < 0 || row >= s.board.length) return null;
   const newTile = tileMaker(s);
-  const old = s.board[row].filter((t) => !t.catalyst);
+  const keep = (t: Tile) => special(t) || stuck(t);
+  const old = s.board[row].filter((t) => !keep(t));
   let next: Board = s.board;
   for (let attempt = 0; attempt < 30; attempt++) {
     next = s.board.map((r) => [...r]);
     for (let col = 0; col < COLS; col++) {
-      if (s.board[row][col].catalyst) continue;
+      if (keep(s.board[row][col])) continue;
       next[row][col] = newTile();
       for (let k = 0; k < 8 && matchesAt(next, { row, col }); k++) next[row][col] = { ...next[row][col], kind: randomKind() };
     }
@@ -152,6 +241,27 @@ export function sift(s: GameState, row: number): Tile[] | null {
   s.coins -= TOOLS.sift.cost;
   s.board = next;
   return old;
+}
+
+/**
+ * Pestle: smashes the tile at `cell` without spending a move. It is gathered (a jar opens, resin only
+ * melts, a Catalyst or Bloom fires) and the board plays out. Null if it can't be bought.
+ */
+export function pestle(s: GameState, cell: Cell): Step[] | null {
+  if (!canUse(s, 'pestle') || !inBoard(cell)) return null;
+  s.coins -= TOOLS.pestle.cost;
+  return resolve(s, s.board, [], { cells: [cell], fire: true });
+}
+
+/**
+ * Funnel: swaps any two tiles that aren't held by a jar or resin, without spending a move, and plays
+ * out whatever they match. Null if it can't be bought or the tiles can't move.
+ */
+export function funnel(s: GameState, a: Cell, b: Cell): Step[] | null {
+  if (!canUse(s, 'funnel') || !inBoard(a) || !inBoard(b) || (a.row === b.row && a.col === b.col)) return null;
+  if (stuck(s.board[a.row][a.col]) || stuck(s.board[b.row][b.col])) return null;
+  s.coins -= TOOLS.funnel.cost;
+  return resolve(s, swapped(s.board, a, b), [b, a]);
 }
 
 /** After a sale, the next order; after running out of moves, the same order again. */

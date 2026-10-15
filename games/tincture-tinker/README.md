@@ -21,24 +21,40 @@ before the moves run out and the potion sells, for coins and one to three stars.
 | Tap the picked tile again | Let it go |
 | Stir | Spend 40 coins on 3 more moves for this order |
 | Sift, then a tile | Spend 25 coins to reroll that tile's row (tap Sift again to put it away) |
+| Pestle, then a tile | Spend 30 coins to smash that tile, without a move |
+| Funnel, then two tiles | Spend 35 coins to swap any two tiles, without a move |
 | Next order / Try again | After an order: start the next one, or the same one again |
 
 1. **Swaps** only count when they make a match. A swap that doesn't slides back and costs no move.
-2. **Matches** of three or more in a row or column, across or down, are gathered, every tile of
-   every kind. Cascades after a swap are free.
+2. **Matches** of three or more in a row or column, across or down, are gathered. Only the
+   ingredients the order asks for count (they fly to their row on the label); the others just pop,
+   so aim for what the order needs. Cascades after a swap are free.
 3. **Catalysts**: a match of four or more leaves one of its tiles behind as a Catalyst, haloed in a
    sunburst (the tile you moved, when it can). A Catalyst matches like its ingredient, and when it is
    matched it clears its whole row, which is marked with a dotted gold band, and every tile in that
    row counts towards the order.
-4. **Orders** list the ingredients the potion needs, the moves allowed and what it pays. Filling one
+   **Blooms**: an L or T of one kind leaves a Bloom, ringed in rose petals, where its two lines
+   cross. Matched, it clears the 3x3 around it. **Two Catalysts swapped together** clear the row
+   and the column where the moved one lands.
+4. **Blockers**, from the second order on: a **corked jar** holds one ingredient. It can't be
+   swapped and never matches; a match right next to it opens it and gathers what's inside.
+   **Resin** (from the third order) holds a tile in place: it can't be swapped and the other tiles
+   fall past it, and the first match it is in only melts the resin, leaving the tile free.
+5. **Order twists**, from the third order on, in turn: a **rush order** gives 3 fewer moves and pays
+   20 more coins; the next **forbids** one ingredient it doesn't need, and a swap that matches it
+   costs an extra move; the one after is plain. The twist is written under the order's price.
+6. **Orders** list the ingredients the potion needs, the moves allowed and what it pays. Filling one
    pays its price plus 5 coins for every move left; running out of moves means trying it again on a
    new board.
-5. **Bench tools** spend coins during an order: **Stir** gives 3 more moves for 40 coins, and **Sift**
-   rerolls one row of the board for 25 coins (its Catalysts stay, and the new tiles never make a
-   match by themselves). A tool you can't afford is greyed out.
-6. **Stars**: a sold order earns 3 stars with 8 or more moves left, 2 with 4 to 7 and 1 otherwise.
+7. **Bench tools** spend coins during an order: **Stir** gives 3 more moves for 40 coins, **Sift**
+   rerolls one row of the board for 25 coins (its specials, jars and resin stay, and the new tiles
+   never make a match by themselves), **Pestle** smashes one tile for 30 coins (a jar opens, resin
+   melts, a Catalyst or Bloom fires) and **Funnel** swaps any two tiles for 35 coins (not jars or
+   resin), and neither of those spends a move. Hover a tool to read what it does in the caption. A
+   tool you can't afford is greyed out.
+8. **Stars**: a sold order earns 3 stars with 8 or more moves left, 2 with 4 to 7 and 1 otherwise.
    The stars next to the moves show what the order is worth right now.
-7. **Tinker rank**: the stars add up on the ribbon above the board. Each rank unlocks a new recipe,
+9. **Tinker rank**: the stars add up on the ribbon above the board. Each rank unlocks a new recipe,
    which joins the round of orders:
 
    | Rank | Stars | Unlocks |
@@ -48,9 +64,9 @@ before the moves run out and the potion sells, for coins and one to three stars.
    | Master Tinker | 12 | Starlight Elixir |
    | Grand Master Tinker | 24 | Philosopher's Draught |
 
-8. **Hints**: after a few idle seconds, two tiles that would match swell and settle (with the hub's
+10. **Hints**: after a few idle seconds, two tiles that would match swell and settle (with the hub's
    reduced motion on, they hold still, a little larger).
-9. If the board is left with no move to make, its tiles are shuffled.
+11. If the board is left with no move to make, its tiles are shuffled.
 
 Progress (the next order, coins, potions sold and stars) is saved in the browser, after each sale
 and each tool bought.
@@ -61,9 +77,26 @@ A Catalyst on row 7, its row marked with the gold band, and a tile picked to swa
 
 ![A Catalyst and the Journeyman rank](docs/screenshots/catalyst.png)
 
-Sift picked up and waiting for a row; Stir is ready too:
+A rush order on a board with corked jars and resin-held tiles:
 
-![The bench tools](docs/screenshots/bench-tools.png)
+![Jars, resin and a rush order](docs/screenshots/blockers-rush.png)
+
+An order that forbids mandrake:
+
+![A forbidden ingredient](docs/screenshots/forbidden.png)
+
+The four bench tools with the Pestle picked up, and a Bloom (bottom left) next to a Catalyst:
+
+![The bench tools and a Bloom](docs/screenshots/bench-tools.png)
+
+The Bloom smashed with the Pestle clears the 3x3 around it; the mandrake and sage it gathers fly to
+the label, the wheat and moonpetal the order doesn't need just pop:
+
+![A Bloom firing](docs/screenshots/bloom.png)
+
+The Funnel with its first tile picked, waiting for the second:
+
+![The Funnel](docs/screenshots/funnel.png)
 
 A sale that earns three stars and reaches Journeyman Tinker, unlocking the Amber Cordial:
 
@@ -72,7 +105,9 @@ A sale that earns three stars and reaches Journeyman Tinker, unlocking the Amber
 ### Orders
 
 The orders come round again with 3 more of each ingredient and 15 more coins every five orders.
-Recipes unlocked by rank join the round after the first five.
+Recipes unlocked by rank join the round after the first five. The second order has 3 corked jars,
+and from the third on there are 4 resin tiles too; both grow by one every three orders (up to 8
+jars and 10 resin). The first order is always plain.
 
 | Order | Needs | Moves | Pays |
 | --- | --- | --- | --- |
@@ -103,8 +138,9 @@ page).
 `e2e/playthrough.spec.ts` plays the first order in headless Chromium: it checks the new order and
 board, taps a swap that makes no match and checks it slid back without costing a move, taps Stir
 with no coins and checks it bought nothing, then makes the best match it can see, a tap on a tile
-and a tap on its neighbour, checking each one spends a move, gathers at least what it matched (less
-the tile a match of four keeps as a Catalyst) and brews a Catalyst for a match of four, until the
+and a tap on its neighbour, checking each one spends a move, gathers at least what it matched of
+the order's ingredients (less the tile a match of four keeps as a Catalyst, or an L or T as a
+Bloom), counts nothing of the others and brews those specials, until the
 Healing Draught is sold for its price plus the bonus for the moves left and earns its stars. Like
 the other games' tests it owns the game clock and plays at 4x speed (`PLAYTHROUGH_SPEED`). The
 **Playthrough TinctureTinker** workflow (`.github/workflows/playthrough.yml`) runs it on pull
@@ -121,9 +157,10 @@ All paths are inside `games/tincture-tinker/`.
 
 - `src/game/`: the rules in plain TypeScript with no Phaser dependency. `kinds.ts` lists the
   ingredients, `orders.ts` the potion orders and the recipes ranks unlock, `ranks.ts` the stars and
-  ranks, `board.ts` finds runs, matches and moves, lets tiles fall and shuffles, `state.ts` holds the
-  order being played, `sim.ts` plays a swap out step by step (Catalysts included) and runs the bench
-  tools, and `save.ts` keeps the progress.
+  ranks, `board.ts` finds runs, matches and moves, lets tiles fall, shuffles and places jars and
+  resin, `state.ts` holds the order being played, `sim.ts` plays a swap out step by step
+  (Catalysts, Blooms, jars and resin included) and runs the bench tools, and `save.ts` keeps the
+  progress.
 - `src/scenes/`: `BootScene` paints the textures, `GameScene` draws the board, the rank ribbon and
   the order label, animates each step of a swap and wires taps, drags and tools to the rules,
   `layout.ts` says where things are drawn.
