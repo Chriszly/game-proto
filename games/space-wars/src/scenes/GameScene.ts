@@ -4,16 +4,18 @@ import { generateMap, type MapLayout } from '../game/map';
 import { FACTIONS, type Role, type UnitId } from '../game/factions';
 import { CONTRACTS } from '../game/contracts';
 import {
-  BEACON_PAY, BEACON_RADIUS, PLAYER, POP_MS, World, buildingStats, unitStats,
+  BEACON_PAY, BEACON_RADIUS, EXPANSION_GAP, PLAYER, POP_MS, World, buildInfo, researchCost, unitStats, type Build,
 } from '../game/world';
-import { buildingLines, factionLines, unitLines } from '../game/describe';
+import { buildingLines, expansionLines, factionLines, researchLines, unitLines } from '../game/describe';
+import { FOG_CELL, FOG_COLS, FOG_ROWS } from '../game/fog';
+import { RESEARCH_LEVELS, RESEARCH_MS, TRACK_DEFS, type Track } from '../game/research';
 import { dashedCircle, drawHealth, drawProgress, progressArc, stripes } from '../art/draw';
 import { INK, INK_CSS, hex } from '../art/palette';
 import {
   BACKDROP_KEY, BEACON_KEY, CRYSTAL_KEYS, GLOW_BLUE_KEY, GLOW_KEY, RES, SHARD_KEY, SHIP_ZOOM, bakeAll, bakeBackdrop, buildingKey, facing, flameKey, shipKey,
 } from '../art/textures';
 import { settings } from '../../../../shared/settings';
-import { BAR, BUTTONS, FONT, MAP_VIEW, ROLE_LABEL, TOP, VIEW, type Button } from './layout';
+import { BAR, BUTTONS, FONT, MAP_VIEW, PANEL_X, ROLE_LABEL, TOP, VIEW, type Button } from './layout';
 
 // Game time for one step at most, so a hidden tab doesn't jump the battle ahead.
 const MAX_STEP_MS = 100;
@@ -34,8 +36,41 @@ const FLASH_MS = 1600;
 /** Where each ship's engines sit behind its centre, and how long its exhaust flame is, in pixels. */
 const TAIL: Record<UnitId, number> = { harvester: 11, scout: 10, gunship: 12, heavy: 20 };
 const FLAME: Record<UnitId, number> = { harvester: 16, scout: 24, gunship: 26, heavy: 36 };
-/** Draw order on the map. */
-const DEPTH = { backdrop: 0, under: 1, node: 2, building: 3, shard: 4, flame: 5, ship: 6, over: 7, pop: 8, label: 9 };
+/** Draw order on the map; the fog covers everything but floating numbers and labels. */
+const DEPTH = { backdrop: 0, under: 1, node: 2, building: 3, shard: 4, flame: 5, ship: 6, over: 7, fog: 7.5, pop: 8, label: 9 };
+/** The fog's colour (the night sky's deepest violet) and how much it hides where unexplored and where only explored. */
+const FOG_RGB = [20, 9, 34] as const;
+const FOG_UNEXPLORED = 0.93;
+const FOG_EXPLORED = 0.55;
+const FOG_KEY = 'fog';
+const FOG_SMOOTH = 3;
+/** The fog is repainted every few frames, which is plenty for ships' speeds and spares slow devices. */
+const FOG_EVERY = 3;
+/** How many cells the fog's edge is blurred over, each way. */
+const FOG_BLUR = 2;
+
+/** A box blur of a grid of values, across then down, with the edges held (so the map's rim stays fogged). */
+function blur(v: Float32Array, tmp: Float32Array, w: number, h: number, r: number) {
+  const n = 2 * r + 1;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let sum = 0;
+      for (let k = -r; k <= r; k++) sum += v[y * w + Math.min(w - 1, Math.max(0, x + k))];
+      tmp[y * w + x] = sum / n;
+    }
+  }
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let sum = 0;
+      for (let k = -r; k <= r; k++) sum += tmp[Math.min(h - 1, Math.max(0, y + k)) * w + x];
+      v[y * w + x] = sum / n;
+    }
+  }
+}
+/** An expansion is drawn as a smaller copy of its faction's hub. */
+const EXPANSION_SCALE = 0.8;
+/** How many hack hits take a turret over, for the ring that fills on a hacked turret. */
+const TAKEOVER = FACTIONS.map((f) => f.units.gunship.ability).find((a) => a?.kind === 'hack')?.takeover ?? 1;
 
 interface Drag {
   x0: number;
@@ -63,7 +98,7 @@ export class GameScene extends Phaser.Scene {
   /** Units the player has selected. */
   selected = new Set<number>();
   /** The building the player is about to place, once its button is pressed. */
-  placing: Role | null = null;
+  placing: Build | null = null;
   /** Whether the faction picker is up: nothing moves until the player picks a faction. */
   picking = true;
   /** The picker's cards, one per faction, in view pixels; the playthrough taps one to begin. */
@@ -99,6 +134,12 @@ export class GameScene extends Phaser.Scene {
   private beaconImg!: Phaser.GameObjects.Image;
   private beaconLabel!: Phaser.GameObjects.Text;
   private ghost!: Phaser.GameObjects.Image;
+  private fogTex!: Phaser.Textures.CanvasTexture;
+  private fogData!: ImageData;
+  private fogCells!: HTMLCanvasElement;
+  private fogFrame = 0;
+  private fogAlpha = new Float32Array(FOG_COLS * FOG_ROWS);
+  private fogTmp = new Float32Array(FOG_COLS * FOG_ROWS);
   private hud!: Record<'faction' | 'crystal' | 'gain' | 'harvesters' | 'army' | 'clock' | 'tag' | 'title' | 'count' | 'rivals' | 'rivalCount', Phaser.GameObjects.Text>;
   private panel!: Record<'line' | 'head' | 'next' | 'brief' | 'count' | 'reward' | 'perk' | 'build', Phaser.GameObjects.Text>;
   private overlay!: Phaser.GameObjects.Text;
@@ -128,6 +169,15 @@ export class GameScene extends Phaser.Scene {
     this.beaconImg = this.onMap(this.add.image(0, 0, BEACON_KEY).setScale(1 / RES).setDepth(DEPTH.building));
     this.beaconLabel = this.onMap(this.text(0, 0, 10, INK_CSS.chocolate, true).setBackgroundColor(INK_CSS.cream).setPadding(6, 3, 6, 3).setDepth(DEPTH.label));
     this.ghost = this.onMap(this.add.image(0, 0, SHARD_KEY).setScale(1 / RES).setAlpha(0.6).setDepth(DEPTH.over).setVisible(false));
+    // The fog is worked out one pixel a cell, then smoothed up to FOG_SMOOTH pixels a cell so its edges blur.
+    this.fogCells = document.createElement('canvas');
+    this.fogCells.width = FOG_COLS;
+    this.fogCells.height = FOG_ROWS;
+    this.fogData = this.fogCells.getContext('2d')!.createImageData(FOG_COLS, FOG_ROWS);
+    this.fogTex = this.textures.exists(FOG_KEY)
+      ? this.textures.get(FOG_KEY) as Phaser.Textures.CanvasTexture
+      : this.textures.createCanvas(FOG_KEY, FOG_COLS * FOG_SMOOTH, FOG_ROWS * FOG_SMOOTH)!;
+    this.onMap(this.add.image(0, 0, FOG_KEY).setOrigin(0).setScale(FOG_CELL / FOG_SMOOTH).setDepth(DEPTH.fog));
     this.hoverLabel = this.onMap(this.text(0, 0, 11, INK_CSS.chocolate).setOrigin(0.5, 1).setPadding(6, 4, 6, 4)
       .setBackgroundColor(INK_CSS.cream).setDepth(DEPTH.label).setVisible(false));
 
@@ -149,14 +199,14 @@ export class GameScene extends Phaser.Scene {
       rivals: t(806, 10, 10, INK_CSS.mustard, true).setText('RIVALS'),
       rivalCount: t(950, 5, 17, INK_CSS.cream, true).setOrigin(1, 0),
     };
-    const px = 494;
+    const px = PANEL_X;
     this.panel = {
-      line: t(px, 445, 11, INK_CSS.cream).setWordWrapWidth(VIEW.w - px - 10),
+      line: t(px, 445, 10, INK_CSS.cream).setWordWrapWidth(VIEW.w - px - 10).setMaxLines(2),
       head: t(px + 8, 476, 10, INK_CSS.cream, true),
       next: t(VIEW.w - 16, 476, 10, INK_CSS.cream).setOrigin(1, 0),
       brief: t(px + 8, 492, 12, INK_CSS.chocolate, true),
-      count: t(px + 214, 506, 11, INK_CSS.green, true),
-      reward: t(px + 262, 506, 11, INK_CSS.rust, true),
+      count: t(px + 170, 506, 11, INK_CSS.green, true),
+      reward: t(px + 222, 506, 11, INK_CSS.rust, true),
       perk: t(px + 8, 521, 10, INK_CSS.cocoa),
       build: t(14, 448, 10, INK_CSS.mustard, true).setText('BUILD'),
     };
@@ -182,11 +232,18 @@ export class GameScene extends Phaser.Scene {
           .setScale(0.9 / RES).setDepth(21)));
       });
     });
-    this.captions = BUTTONS.map((b) => ({
-      icon: this.onUi(this.add.image(b.x + 14, b.y + b.h / 2, '__WHITE').setDepth(12)),
-      name: t(b.x + 33, b.y + 3, 12, INK_CSS.chocolate, true),
-      cost: t(b.x + 33, b.y + 16, 10, INK_CSS.rust),
-    }));
+    // Research buttons are slimmer and have no icon: their level pips sit on the right instead.
+    this.captions = BUTTONS.map((b) => b.kind === 'research'
+      ? {
+        icon: this.onUi(this.add.image(0, 0, '__WHITE').setVisible(false)),
+        name: t(b.x + 10, b.y + 2, 11, INK_CSS.chocolate, true),
+        cost: t(b.x + 10, b.y + 14, 9, INK_CSS.rust),
+      }
+      : {
+        icon: this.onUi(this.add.image(b.x + 14, b.y + b.h / 2, '__WHITE').setDepth(12)),
+        name: t(b.x + 33, b.y + 3, 12, INK_CSS.chocolate, true),
+        cost: t(b.x + 33, b.y + 16, 10, INK_CSS.rust),
+      });
     this.drawChrome();
 
     this.input.mouse?.disableContextMenu();
@@ -233,6 +290,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private reset() {
+    this.fogFrame = 0;
     this.selected.clear();
     this.placing = null;
     this.drag = null;
@@ -268,7 +326,8 @@ export class GameScene extends Phaser.Scene {
     const art = this.art(PLAYER);
     this.captions.forEach((c, i) => {
       const b = BUTTONS[i];
-      if (b.kind === 'build') c.icon.setTexture(buildingKey(art, b.key as Role));
+      if (b.kind === 'research') return;
+      if (b.kind === 'build') c.icon.setTexture(buildingKey(art, b.key === 'expansion' ? 'hub' : b.key as Role));
       else c.icon.setTexture(shipKey(art, b.key as UnitId), facing(-Math.PI / 2).frame);
       c.icon.setScale(Math.min(24 / c.icon.width, 24 / c.icon.height) * (b.kind === 'build' ? 1.5 : 1.25));
     });
@@ -382,10 +441,13 @@ export class GameScene extends Phaser.Scene {
       const c = this.crystals.get(n.id);
       if (!c) continue;
       const k = 0.55 + 0.45 * (n.amount / NODE_AMOUNT);
-      c.gem.setVisible(n.amount > 0).setScale(k / RES);
-      c.glow.setVisible(n.amount > 0).setScale(k * 0.9);
+      const shown = n.amount > 0 && s.fog.knows(n);
+      c.gem.setVisible(shown).setScale(k / RES);
+      c.glow.setVisible(shown).setScale(k * 0.9);
     }
+    this.drawFog();
     this.drawBeacon();
+    this.drawMines();
     this.drawBuildings();
     this.drawShips();
     this.drawShards();
@@ -400,9 +462,62 @@ export class GameScene extends Phaser.Scene {
     this.drawPicker();
   }
 
-  /** The relay beacon: its capture ring, the owner's glow and its label. */
+  /**
+   * The fog of war: a canvas of one pixel a cell, smoothed onto a bigger one stretched over the
+   * battlefield so its edges blur like airbrush. Unexplored space is near black, explored space is dimmed.
+   */
+  private drawFog() {
+    if (this.fogFrame++ % FOG_EVERY !== 0) return;
+    const fog = this.state.fog;
+    const d = this.fogData.data;
+    const [r, g, b] = FOG_RGB;
+    const alpha = this.fogAlpha;
+    for (let i = 0; i < alpha.length; i++) alpha[i] = fog.visible[i] ? 0 : fog.explored[i] ? FOG_EXPLORED : FOG_UNEXPLORED;
+    blur(alpha, this.fogTmp, FOG_COLS, FOG_ROWS, FOG_BLUR);
+    for (let i = 0; i < alpha.length; i++) {
+      d[i * 4] = r;
+      d[i * 4 + 1] = g;
+      d[i * 4 + 2] = b;
+      d[i * 4 + 3] = Math.round(alpha[i] * 255);
+    }
+    this.fogCells.getContext('2d')!.putImageData(this.fogData, 0, 0);
+    const ctx = this.fogTex.context;
+    ctx.clearRect(0, 0, this.fogTex.width, this.fogTex.height);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(this.fogCells, 0, 0, this.fogTex.width, this.fogTex.height);
+    this.fogTex.refresh();
+  }
+
+  /** Mines: a dark studded disc with a ring in the layer's colour; a rival's only when a ship is close. */
+  private drawMines() {
+    const g = this.underGfx;
+    for (const m of this.state.mines) {
+      if (!this.state.seesMine(m)) continue;
+      const def = this.state.sides[m.faction].def;
+      g.fillStyle(INK.chocolate, 0.95);
+      g.fillCircle(m.x, m.y, 5);
+      for (let k = 0; k < 4; k++) {
+        const a = (k * Math.PI) / 2 + Math.PI / 4;
+        g.fillCircle(m.x + Math.cos(a) * 6, m.y + Math.sin(a) * 6, 1.6);
+      }
+      g.lineStyle(1.5, def.color, m.faction === PLAYER ? 0.55 : 1);
+      g.strokeCircle(m.x, m.y, 8);
+      g.fillStyle(def.accent, 1);
+      g.fillCircle(m.x, m.y, 1.8);
+    }
+  }
+
+  /** The relay beacon: its capture ring, the owner's glow and its label, once the player has found it. */
   private drawBeacon() {
     const bc = this.state.beacon;
+    const found = this.state.fog.knows(bc);
+    this.beaconImg.setVisible(found);
+    this.beaconGlow.setVisible(found);
+    if (!found) {
+      this.beaconLabel.setVisible(false);
+      return;
+    }
     const g = this.underGfx;
     const color = (f: number) => (f >= 0 ? this.state.sides[f].def.color : INK.cream);
     g.fillStyle(color(bc.owner), bc.owner >= 0 ? 0.12 : 0.05);
@@ -423,14 +538,21 @@ export class GameScene extends Phaser.Scene {
   private drawBuildings() {
     const seen = new Set<number>();
     for (const b of this.state.buildings) {
+      // Rival buildings show once the player has seen them; under the fog they show as last seen.
+      if (!this.state.knowsBuilding(b)) continue;
       seen.add(b.id);
       const side = this.state.sides[b.faction];
       const def = side.def.buildings[b.type];
+      // A hacked turret changes faction, and with it its look.
+      const key = buildingKey(this.art(b.faction), b.type);
       let img = this.houses.get(b.id);
       if (!img) {
-        img = this.onMap(this.add.image(b.x, b.y, buildingKey(this.art(b.faction), b.type)).setScale(1 / RES).setDepth(DEPTH.building));
+        img = this.onMap(this.add.image(b.x, b.y, key).setScale((b.expansion ? EXPANSION_SCALE : 1) / RES).setDepth(DEPTH.building));
         this.houses.set(b.id, img);
+      } else if (img.texture.key !== key) {
+        img.setTexture(key);
       }
+      const inSight = b.faction === PLAYER || this.state.fog.sees(b);
       const floats = side.def.name === 'Solar Concord' && b.type === 'turret' && !settings.reduceMotion;
       img.setPosition(b.x, b.y + (floats ? Math.sin(this.clock / 500 + b.id) * 1.6 : 0));
       img.setAlpha(!b.done ? 0.5 : b.disabledMs > 0 ? 0.45 : 1);
@@ -438,11 +560,14 @@ export class GameScene extends Phaser.Scene {
       // A soft faction-coloured pad under every building, so a base reads as its faction's at a glance.
       this.underGfx.fillStyle(side.def.color, 0.16);
       this.underGfx.fillEllipse(b.x, b.y + 2, r * 2.6, r * 1.7);
+      if (!inSight) continue;
       if (!b.done) {
-        drawProgress(this.gfx, b.x, b.y + r + 6, 34, 1 - b.buildLeft / def.buildMs, side.def.color);
+        drawProgress(this.gfx, b.x, b.y + r + 6, 34, 1 - b.buildLeft / b.buildMs, side.def.color);
       } else if (b.hp < b.maxHp) {
         drawHealth(this.gfx, b.x, b.y - r - 14, 32, b.hp / b.maxHp);
       }
+      // A hacked turret fills a ring toward its takeover.
+      if (b.hacks > 0) progressArc(this.gfx, b.x, b.y, r + 9, b.hacks / TAKEOVER, 0x5ff0e6, 3);
     }
     for (const [id, img] of this.houses) {
       if (!seen.has(id)) {
@@ -457,7 +582,7 @@ export class GameScene extends Phaser.Scene {
     const s = this.state;
     const seen = new Set<number>();
     for (const u of s.units) {
-      if (u.faction !== PLAYER && s.hidden(u, PLAYER)) continue;
+      if (!s.seesUnit(u)) continue;
       seen.add(u.id);
       const art = this.art(u.faction);
       let sp = this.ships.get(u.id);
@@ -512,6 +637,7 @@ export class GameScene extends Phaser.Scene {
   private drawShards() {
     const seen = new Set<number>();
     for (const sh of this.state.shards) {
+      if (!this.state.fog.sees(sh)) continue;
       seen.add(sh.id);
       let sp = this.shardSprites.get(sh.id);
       if (!sp) {
@@ -537,7 +663,9 @@ export class GameScene extends Phaser.Scene {
   /** Laser beams with a cream core, and airbrushed fireballs where things blow up. */
   private drawEffects() {
     const g = this.gfx;
+    const fog = this.state.fog;
     for (const b of this.state.beams) {
+      if (!fog.sees(b) && !fog.sees({ x: b.x2!, y: b.y2! })) continue;
       const a = settings.reduceMotion ? 0.9 : b.life / BEAM_MS;
       g.lineStyle(5, b.color, 0.35 * a);
       g.lineBetween(b.x, b.y, b.x2!, b.y2!);
@@ -547,6 +675,7 @@ export class GameScene extends Phaser.Scene {
     // Fireballs are not drawn under reduced motion, where their growth is the motion.
     if (!settings.reduceMotion) {
       for (const b of this.state.booms) {
+        if (!fog.sees(b)) continue;
         const t = 1 - b.life / BOOM_MS;
         const r = b.r! * (0.6 + t * 1.4);
         g.fillStyle(0xe8742a, 0.45 * (1 - t));
@@ -597,14 +726,18 @@ export class GameScene extends Phaser.Scene {
     const { x, y } = this.toWorld(this.pointer.x, this.pointer.y);
     const ok = this.state.placementProblem(this.placing, x, y) === null;
     const side = this.state.sides[PLAYER];
-    const def = side.def.buildings[this.placing];
-    const hub = this.state.hubOf(PLAYER);
-    if (hub) dashedCircle(this.underGfx, hub.x, hub.y, BUILD_RANGE, 48, INK.cream, 0.35, 1.5);
+    const radius = buildInfo(side, this.placing).radius;
+    // Buildings go within reach of a hub; an expansion goes far from them, so the rings show where not to.
+    for (const hub of this.state.hubsOf(PLAYER, this.placing !== 'expansion')) {
+      dashedCircle(this.underGfx, hub.x, hub.y, this.placing === 'expansion' ? EXPANSION_GAP : BUILD_RANGE, 48, INK.cream, 0.35, 1.5);
+    }
     this.underGfx.fillStyle(ok ? 0x7dffb0 : 0xffa94d, 0.25);
-    this.underGfx.fillCircle(x, y, def.radius + 4);
+    this.underGfx.fillCircle(x, y, radius + 4);
     this.underGfx.lineStyle(2, ok ? 0x7dffb0 : 0xffa94d, 0.9);
-    this.underGfx.strokeCircle(x, y, def.radius + 4);
-    this.ghost.setTexture(buildingKey(this.art(PLAYER), this.placing)).setPosition(x, y).setVisible(true);
+    this.underGfx.strokeCircle(x, y, radius + 4);
+    const expansion = this.placing === 'expansion';
+    this.ghost.setTexture(buildingKey(this.art(PLAYER), expansion ? 'hub' : this.placing as Role))
+      .setScale(1 / RES * (expansion ? EXPANSION_SCALE : 1)).setPosition(x, y).setVisible(true);
   }
 
   /** Names the unit or building under the pointer, with its role and hit points. */
@@ -628,8 +761,9 @@ export class GameScene extends Phaser.Scene {
       at = u;
     } else {
       const b = this.state.building(target.id)!;
-      const head = `${side.def.buildings[b.type].name} · ${ROLE_LABEL[b.type]} · ${Math.ceil(b.hp)}/${b.maxHp} hp`;
-      text = [head, ...buildingLines(side, b.type)].join('\n');
+      const name = b.expansion ? buildInfo(side, 'expansion').name : side.def.buildings[b.type].name;
+      const head = `${name} · ${ROLE_LABEL[b.expansion ? 'expansion' : b.type]} · ${Math.ceil(b.hp)}/${b.maxHp} hp`;
+      text = [head, ...(b.expansion ? expansionLines(side) : buildingLines(side, b.type))].join('\n');
       at = b;
     }
     if (label.text !== text) label.setText(text);
@@ -640,19 +774,24 @@ export class GameScene extends Phaser.Scene {
   private drawBar() {
     const g = this.uiGfx;
     BUTTONS.forEach((b, i) => {
+      if (b.kind === 'research') {
+        this.drawResearchButton(b, i);
+        return;
+      }
       const { name, cost } = this.buttonInfo(b);
       const affordable = this.state.sides[PLAYER].crystal >= cost;
       const active = b.kind === 'build' && this.placing === b.key;
+      const round = b.h / 2;
       g.fillStyle(0x000000, 0.35);
-      g.fillRoundedRect(b.x + 2, b.y + 3, b.w, b.h, 15);
+      g.fillRoundedRect(b.x + 2, b.y + 3, b.w, b.h, round);
       g.fillStyle(active ? INK.mustard : affordable ? INK.cream : INK.creamDim, 1);
-      g.fillRoundedRect(b.x, b.y, b.w, b.h, 15);
+      g.fillRoundedRect(b.x, b.y, b.w, b.h, round);
       g.fillStyle(INK.tangerine, 1);
       g.fillRect(b.x + 26, b.y, 3, b.h);
       g.fillStyle(INK.mustard, 1);
       g.fillRect(b.x + 29, b.y, 2, b.h);
       g.lineStyle(1.5, active ? INK.tangerine : INK.cocoa, 1);
-      g.strokeRoundedRect(b.x, b.y, b.w, b.h, 15);
+      g.strokeRoundedRect(b.x, b.y, b.w, b.h, round);
       const caption = this.captions[i];
       caption.icon.setAlpha(affordable ? 1 : 0.55);
       if (caption.name.text !== name) {
@@ -666,6 +805,48 @@ export class GameScene extends Phaser.Scene {
     this.drawTip();
   }
 
+  /**
+   * A research button: a slim cream pill with the track's name, its next level and cost, three
+   * level pips on the right, and a mustard fill while that track is being researched.
+   */
+  private drawResearchButton(b: Button, i: number) {
+    const g = this.uiGfx;
+    const side = this.state.sides[PLAYER];
+    const track = b.key as Track;
+    const r = side.research;
+    const level = r.levels[track];
+    const cost = researchCost(side, track);
+    const busy = r.current?.track === track;
+    const open = level < RESEARCH_LEVELS && !r.current && side.crystal >= cost;
+    const round = b.h / 2;
+    g.fillStyle(0x000000, 0.35);
+    g.fillRoundedRect(b.x + 2, b.y + 3, b.w, b.h, round);
+    g.fillStyle(open || busy ? INK.cream : INK.creamDim, 1);
+    g.fillRoundedRect(b.x, b.y, b.w, b.h, round);
+    if (busy) {
+      const done = 1 - r.current!.left / RESEARCH_MS;
+      g.fillStyle(INK.mustard, 1);
+      g.fillRoundedRect(b.x, b.y, Math.max(b.h, b.w * done), b.h, round);
+    }
+    g.fillStyle(INK.tangerine, 1);
+    g.fillRect(b.x + 4, b.y + 5, 2, b.h - 10);
+    for (let k = 0; k < RESEARCH_LEVELS; k++) {
+      const px = b.x + b.w - 30 + k * 9;
+      g.fillStyle(k < level ? INK.tangerine : INK.creamDim, 1);
+      g.fillCircle(px, b.y + b.h / 2, 3.2);
+      g.lineStyle(1, INK.cocoa, 1);
+      g.strokeCircle(px, b.y + b.h / 2, 3.2);
+    }
+    g.lineStyle(1.5, busy ? INK.tangerine : INK.cocoa, 1);
+    g.strokeRoundedRect(b.x, b.y, b.w, b.h, round);
+    const caption = this.captions[i];
+    this.setText(caption.name, TRACK_DEFS[track].name);
+    const sub = busy ? `Researching · ${Math.ceil(r.current!.left / 1000)} s`
+      : level >= RESEARCH_LEVELS ? 'Fully researched' : `Level ${level + 1} · ◆${cost}`;
+    this.setText(caption.cost, sub);
+    caption.name.setColor(open || busy ? INK_CSS.chocolate : INK_CSS.cocoa);
+  }
+
   /** Describes the command button under the pointer: its name, role, cost and stats. */
   private drawTip() {
     const b = this.picking
@@ -677,7 +858,9 @@ export class GameScene extends Phaser.Scene {
     }
     const side = this.state.sides[PLAYER];
     const { name } = this.buttonInfo(b);
-    const lines = b.kind === 'build' ? buildingLines(side, b.key as Role) : unitLines(side, b.key as UnitId);
+    const lines = b.kind === 'research' ? researchLines(side, b.key as Track)
+      : b.key === 'expansion' ? expansionLines(side)
+      : b.kind === 'build' ? buildingLines(side, b.key as Role) : unitLines(side, b.key as UnitId);
     const text = [`${name} · ${ROLE_LABEL[b.key]}`, ...lines].join('\n');
     if (this.tip.text !== text) this.tip.setText(text);
     // Above the command bar, so the tip never covers the buttons it describes.
@@ -687,8 +870,9 @@ export class GameScene extends Phaser.Scene {
   /** The caption and crystal cost a button shows for the player's faction. */
   buttonInfo(b: Button): { name: string; cost: number } {
     const side = this.state.sides[PLAYER];
+    if (b.kind === 'research') return { name: TRACK_DEFS[b.key as Track].name, cost: researchCost(side, b.key as Track) };
     if (b.kind === 'build') {
-      const stats = buildingStats(side, b.key as Role);
+      const stats = buildInfo(side, b.key as Build);
       return { name: stats.name, cost: stats.cost };
     }
     const stats = unitStats(side, b.key as UnitId);
@@ -753,6 +937,8 @@ export class GameScene extends Phaser.Scene {
     let line = this.message;
     if (this.picking) {
       line = 'Tap a faction above to command it. The other four factions are AI.';
+    } else if (this.placing === 'expansion') {
+      line = `Tap beside a far crystal field you have scouted to place the ${buildInfo(side, 'expansion').name}. Right-click to cancel.`;
     } else if (this.placing) {
       line = `Tap the map to place the ${side.def.buildings[this.placing].name}. Right-click to cancel.`;
     } else if (!line) {
@@ -768,7 +954,7 @@ export class GameScene extends Phaser.Scene {
 
     // The contract panel: a tangerine header, then the goal, a progress bar, the reward and the perk.
     const g = this.uiGfx;
-    const x = 494;
+    const x = PANEL_X;
     const w = VIEW.w - x - 8;
     g.fillStyle(INK.cream, 1);
     g.fillRoundedRect(x, 473, w, 62, 6);
@@ -785,9 +971,9 @@ export class GameScene extends Phaser.Scene {
       this.setText(p.brief, c.brief(side.def));
       const ratio = Math.min(1, s.contract.progress / c.target);
       g.fillStyle(INK.creamDim, 1);
-      g.fillRoundedRect(x + 8, 509, 200, 8, 4);
+      g.fillRoundedRect(x + 8, 509, 156, 8, 4);
       g.fillStyle(INK.green, 1);
-      g.fillRoundedRect(x + 8, 509, Math.max(8, 200 * ratio), 8, 4);
+      g.fillRoundedRect(x + 8, 509, Math.max(8, 156 * ratio), 8, 4);
       this.setText(p.count, `${Math.floor(s.contract.progress)} / ${c.target}`);
       this.setText(p.reward, `Reward ◆ +${c.reward}`);
       this.setText(p.perk, `+ ${c.perk(side.def)}`);
@@ -863,7 +1049,7 @@ export class GameScene extends Phaser.Scene {
       if (problem) {
         this.message = problem;
       } else {
-        this.message = `${this.state.sides[PLAYER].def.buildings[this.placing].name} started`;
+        this.message = `${buildInfo(this.state.sides[PLAYER], this.placing).name} started`;
         this.placing = null;
       }
       return;
@@ -916,13 +1102,18 @@ export class GameScene extends Phaser.Scene {
   /** A press on a command bar button: arm a building, or queue a unit. */
   private press(b: Button) {
     const { name, cost } = this.buttonInfo(b);
+    if (b.kind === 'research') {
+      const reason = this.state.research(b.key as Track);
+      this.message = reason ?? `${name} research started at the hub`;
+      return;
+    }
     if (b.kind === 'build') {
       if (this.placing === b.key) {
         this.placing = null;
       } else if (this.state.sides[PLAYER].crystal < cost) {
         this.message = 'Not enough crystal';
       } else {
-        this.placing = b.key as Role;
+        this.placing = b.key as Build;
         this.message = '';
       }
       return;

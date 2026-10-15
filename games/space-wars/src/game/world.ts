@@ -1,8 +1,13 @@
 import { byDifficulty } from '../../../../shared/settings';
-import { ARENA, BUILD_RANGE, NODE_CLEARANCE } from './arena';
+import { ARENA, BUILD_RANGE, NODE_AMOUNT, NODE_CLEARANCE } from './arena';
 import { COMBAT_UNITS, FACTIONS, type Ability, type Faction, type Role, type UnitId } from './factions';
 import type { MapLayout, Point } from './map';
 import { CONTRACTS, NO_PERKS, type Perks } from './contracts';
+import { Fog } from './fog';
+import {
+  RESEARCH_COSTS, RESEARCH_LEVELS, RESEARCH_MS, RESEARCH_STEP, TRACKS, TRACK_DEFS, noResearch, researchBonus,
+  type Research, type Track,
+} from './research';
 
 /** The faction the player commands. */
 export const PLAYER = 0;
@@ -32,6 +37,8 @@ export const BEACON_PAY = 3;
 const BEACON_PAY_MS = 1000;
 /** Where the relay beacon goes: the loose crystal node nearest this share of the way from the player's start to the map's centre. */
 const BEACON_TOWARD = 0.5;
+/** How far the relay beacon stays from the player's start, beyond what the hub sees (HUB_VISION), so it has to be found. */
+const BEACON_HOME_GAP = 200;
 /** How far the relay beacon stays from every rival's start, so it sits in open space. */
 const BEACON_RIVAL_GAP = 300;
 /** Salvage: what a shard is worth, how far a ship pulls it in from, how fast it flies, and how long it lasts. */
@@ -41,6 +48,44 @@ const SHARD_SPEED = 220;
 const SHARD_LIFE_MS = 45000;
 /** How long a floating number (+8, +3) shows, in ms. */
 export const POP_MS = 1400;
+/**
+ * Fog of war: how far the player's ships and buildings see. A ship sees a share beyond its weapon
+ * sight, a scout furthest of all, so scouts are the ones to send out; a harvester sees a little.
+ */
+const SCOUT_VISION = 1.6;
+const SHIP_VISION = 1.2;
+const HARVESTER_VISION = 80;
+const HUB_VISION = 175;
+/** A building other than a hub sees this far past its own edge. */
+const BUILDING_VISION = 110;
+/** How close a player ship must be to spot a rival's hidden mine. */
+export const MINE_SPOT = 60;
+/**
+ * Expansions: a second hub at a far crystal field. Its cost and build time, its hit points as a
+ * share of the main hub's, how close to a crystal node it must go and how far from the faction's
+ * other hubs.
+ */
+export const EXPANSION_COST = 250;
+const EXPANSION_MS = 18000;
+const EXPANSION_HP = 0.6;
+export const EXPANSION_NEAR = 120;
+export const EXPANSION_GAP = 400;
+/** The AI expands after this much game time, to a field at least this far from every other faction's hubs. */
+const AI_EXPAND_MS = 150000;
+const AI_EXPAND_RIVAL_GAP = 300;
+/** Harvesters an AI faction adds for each expansion. */
+const AI_EXPANSION_HARVESTERS = 3;
+/** The AI starts research after this much game time. */
+const AI_RESEARCH_MS = 120000;
+/** How many rivals contest the beacon, and how much later each one after the nearest joins in. */
+const AI_PICKETS = 2;
+const AI_PICKET_STAGGER_MS = 90000;
+/** The most warships an AI keeps; past it, it saves its crystal. */
+const AI_MAX_ARMY = 20;
+/** Warships an AI keeps home when it attacks, nearest its hub first. */
+const AI_HOME_GUARD = 2;
+/** How far an idle AI warship goes to fetch its faction's salvage shard. */
+const AI_SALVAGE_REACH = 360;
 
 /** Where a unit is going: a point to move to, or an entity to attack. */
 export type Order = { kind: 'move'; x: number; y: number } | { kind: 'attack'; id: number; auto: boolean };
@@ -73,7 +118,12 @@ export interface Unit {
   decoyMs: number | null;
   /** The faction whose shot hit it last, or -1: who gets the kill. */
   lastHit: number;
+  /** For a harvester: the hub (main or expansion) whose crystal it works, by id; -1 for the rest. */
+  home: number;
 }
+
+/** What a faction can build: the buildings beside a hub, and an expansion (a second hub) at a far crystal field. */
+export type Build = Exclude<Role, 'hub'> | 'expansion';
 
 export interface Building {
   kind: 'building';
@@ -91,8 +141,24 @@ export interface Building {
   cooldown: number;
   /** Time a hack has left before a turret fires again, in ms. */
   disabledMs: number;
+  /** Hack hits landed while it was dark; enough of them take it over. */
+  hacks: number;
+  /** Counts toward the next mine a Mine Lattice lays, in ms. */
+  layMs: number;
   /** The faction whose shot hit it last, or -1. */
   lastHit: number;
+  /** A hub built at a far crystal field: it trains harvesters and takes crystal, but its fall does not end the faction. */
+  expansion: boolean;
+  /** Game time the whole construction takes, in ms. */
+  buildMs: number;
+}
+
+/** A hidden mine a Mine Lattice laid; an enemy ship that comes close sets it off. */
+export interface Mine extends Point {
+  id: number;
+  faction: number;
+  /** The lattice that laid it. */
+  from: number;
 }
 
 export interface Node extends Point {
@@ -120,6 +186,10 @@ export interface Side {
   perks: Perks;
   /** The warship this rival has sent to contest the relay beacon, or -1. */
   picket: number;
+  /** Hull, weapons and engines research, bought at the hub. */
+  research: Research;
+  /** The faction that hit this one last, or -1: an AI sends its army after it. */
+  grudge: number;
 }
 
 /**
@@ -138,9 +208,11 @@ export interface Beacon extends Point {
   paid: number;
 }
 
-/** A glowing salvage shard left by an enemy ship the player destroyed; the nearest player ship pulls it in. */
+/** A glowing salvage shard left by a destroyed ship for the faction that destroyed it; its nearest ship pulls it in. */
 export interface Shard extends Point {
   id: number;
+  /** The faction the shard pays. */
+  faction: number;
   value: number;
   life: number;
 }
@@ -175,14 +247,19 @@ export function unitStats(side: Side, type: UnitId) {
   const d = side.def.units[type];
   const t = side.def.tune;
   const p = side.perks;
+  const r = side.research;
   return {
     name: d.name,
     cost: Math.round(d.cost * t.cost),
     trainMs: Math.round(d.trainMs * p.train),
-    hp: Math.round(d.hp * t.hp * p.hp),
-    speed: d.speed * t.speed * p.speed,
+    hp: Math.round(d.hp * t.hp * p.hp * researchBonus(r, 'hull')),
+    speed: d.speed * t.speed * p.speed * researchBonus(r, 'engines'),
     sight: d.sight,
-    weapon: d.weapon && { damage: Math.round(d.weapon.damage * t.damage * p.damage), range: d.weapon.range, cooldownMs: d.weapon.cooldownMs },
+    weapon: d.weapon && {
+      damage: Math.round(d.weapon.damage * t.damage * p.damage * researchBonus(r, 'weapons')),
+      range: d.weapon.range,
+      cooldownMs: d.weapon.cooldownMs,
+    },
   };
 }
 
@@ -197,6 +274,31 @@ export function buildingStats(side: Side, role: Role) {
     radius: d.radius,
     weapon: d.weapon && { damage: Math.round(d.weapon.damage * t.damage), range: Math.round(d.weapon.range * side.perks.turretRange), cooldownMs: d.weapon.cooldownMs },
   };
+}
+
+/** An expansion's numbers in a faction: a smaller copy of its hub. */
+export function expansionStats(side: Side) {
+  const hub = buildingStats(side, 'hub');
+  return {
+    name: `${hub.name.split(' ')[0]} Outpost`,
+    cost: Math.round(EXPANSION_COST * side.def.tune.cost),
+    hp: Math.round(hub.hp * EXPANSION_HP),
+    radius: hub.radius,
+    buildMs: EXPANSION_MS,
+  };
+}
+
+/** What something on the build buttons costs and is called in a faction. */
+export function buildInfo(side: Side, what: Build) {
+  if (what === 'expansion') return expansionStats(side);
+  const s = buildingStats(side, what);
+  return { ...s, buildMs: side.def.buildings[what].buildMs };
+}
+
+/** What the next level of a research track costs a faction (the last level's cost once it is maxed). */
+export function researchCost(side: Side, track: Track) {
+  const level = Math.min(side.research.levels[track], RESEARCH_LEVELS - 1);
+  return Math.round(RESEARCH_COSTS[level] * side.def.tune.cost);
 }
 
 function dist(a: Point, b: Point) {
@@ -218,7 +320,12 @@ export class World {
   elapsedMs = 0;
   readonly beacon: Beacon;
   shards: Shard[] = [];
+  mines: Mine[] = [];
   pops: Pop[] = [];
+  /** What the player can see: cells in sight now and cells explored before. */
+  readonly fog = new Fog();
+  /** Rival buildings the player has seen, which stay drawn under the fog. */
+  readonly known = new Set<number>();
   /** The contract chain's place: which contract is current and how far along it is. */
   contract: ContractState = { index: 0, progress: 0 };
   /** Crystal the player has collected from salvage shards. */
@@ -237,25 +344,29 @@ export class World {
     const order = [pick, ...FACTIONS.map((_, i) => i).filter((i) => i !== pick)];
     this.sides = order.map((f, index) => ({
       index, def: FACTIONS[f], crystal: START_CRYSTAL, alive: true, thinkMs: 0, attackMs: 0, perks: { ...NO_PERKS }, picket: -1,
+      research: noResearch(), grudge: -1,
     }));
     const nodes = layout.nodes.map((n) => ({ id: this.id(), x: n.x, y: n.y, amount: n.amount }));
     // One loose crystal node partway to the centre becomes the relay beacon and is no longer mined.
     const home = layout.homes[0];
     const toward = { x: home.x + (ARENA.x + ARENA.w / 2 - home.x) * BEACON_TOWARD, y: home.y + (ARENA.y + ARENA.h / 2 - home.y) * BEACON_TOWARD };
-    const loose = nodes.slice(layout.homes.length * 3).filter((n) => layout.homes.every((h, i) => dist(h, n) > (i === 0 ? 200 : BEACON_RIVAL_GAP)));
+    const loose = nodes.slice(layout.homes.length * 3).filter((n) => layout.homes.every((h, i) => dist(h, n) > (i === 0 ? BEACON_HOME_GAP : BEACON_RIVAL_GAP)));
     const spot = (loose.length ? loose : nodes).reduce((a, b) => (dist(b, toward) < dist(a, toward) ? b : a));
     this.nodes = nodes.filter((n) => n !== spot);
     this.beacon = { x: spot.x, y: spot.y, owner: -1, capturer: -1, capture: 0, held: false, payMs: 0, paid: 0 };
     this.sides.forEach((side, index) => {
       const home = layout.homes[index];
       const hp = buildingStats(side, 'hub').hp;
-      this.buildings.push({
+      const hub: Building = {
         kind: 'building', id: this.id(), faction: index, type: 'hub', x: home.x, y: home.y,
-        hp, maxHp: hp, done: true, buildLeft: 0, queue: [], trainLeft: 0, cooldown: 0, disabledMs: 0, lastHit: -1,
-      });
-      this.spawn(index, 'harvester', home.x - 30, home.y + 34);
-      this.spawn(index, 'harvester', home.x + 30, home.y + 34);
+        hp, maxHp: hp, done: true, buildLeft: 0, queue: [], trainLeft: 0, cooldown: 0, disabledMs: 0, hacks: 0, layMs: 0,
+        lastHit: -1, expansion: false, buildMs: 0,
+      };
+      this.buildings.push(hub);
+      this.spawn(index, 'harvester', home.x - 30, home.y + 34).home = hub.id;
+      this.spawn(index, 'harvester', home.x + 30, home.y + 34).home = hub.id;
     });
+    this.updateFog();
   }
 
   private id() {
@@ -270,8 +381,30 @@ export class World {
     return this.buildings.find((b) => b.id === id);
   }
 
+  /** A faction's main hub: the one it started with, whose fall ends it. */
   hubOf(faction: number) {
-    return this.buildings.find((b) => b.faction === faction && b.type === 'hub');
+    return this.buildings.find((b) => b.faction === faction && b.type === 'hub' && !b.expansion);
+  }
+
+  /** A faction's hubs, main and expansions; `done` leaves out expansions still being built. */
+  hubsOf(faction: number, done = false) {
+    return this.buildings.filter((b) => b.faction === faction && b.type === 'hub' && (!done || b.done));
+  }
+
+  /** Whether the player sees a unit now: its own, or a rival's in sight and not cloaked. */
+  seesUnit(u: Unit) {
+    return u.faction === PLAYER || (this.fog.sees(u) && !this.hidden(u, PLAYER));
+  }
+
+  /** Whether the player knows a building is there: its own, or a rival's it has seen. */
+  knowsBuilding(b: Building) {
+    return b.faction === PLAYER || this.known.has(b.id);
+  }
+
+  /** Whether the player sees a mine: its own, or a rival's in sight with a player ship close by. */
+  seesMine(m: Mine) {
+    if (m.faction === PLAYER) return true;
+    return this.fog.sees(m) && this.units.some((u) => u.faction === PLAYER && dist(u, m) <= MINE_SPOT);
   }
 
   /** How many units of a faction are alive, or of one type. */
@@ -279,16 +412,25 @@ export class World {
     return this.units.filter((u) => u.faction === faction && (!type || u.type === type)).length;
   }
 
-  /** Why a building of `role` can't go at (x, y) for `faction`, or null when it can. */
-  placementProblem(role: Role, x: number, y: number, faction = PLAYER): string | null {
-    if (role === 'hub') return 'Hubs are not built';
+  /**
+   * Why a building of `role` can't go at (x, y) for `faction`, or null when it can. Buildings go
+   * within BUILD_RANGE of one of the faction's finished hubs; an expansion goes beside a crystal
+   * node far from them. The player can only build where it has explored.
+   */
+  placementProblem(role: Build, x: number, y: number, faction = PLAYER): string | null {
     const side = this.sides[faction];
-    const r = buildingStats(side, role).radius;
+    const r = buildInfo(side, role).radius;
     if (x < ARENA.x + r || x > ARENA.x + ARENA.w - r || y < ARENA.y + r || y > ARENA.y + ARENA.h - r) {
       return 'Off the map';
     }
-    const hub = this.hubOf(faction);
-    if (!hub || dist(hub, { x, y }) > BUILD_RANGE) return 'Too far from your hub';
+    if (faction === PLAYER && !this.fog.knows({ x, y })) return 'Scout there first';
+    if (!this.hubOf(faction)) return 'No hub';
+    if (role === 'expansion') {
+      if (this.hubsOf(faction).some((h) => dist(h, { x, y }) < EXPANSION_GAP)) return 'Too close to your hubs: pick a far crystal field';
+      if (!this.nodes.some((n) => n.amount > 0 && dist(n, { x, y }) <= EXPANSION_NEAR)) return 'Build it beside a crystal field';
+    } else if (!this.hubsOf(faction, true).some((h) => dist(h, { x, y }) <= BUILD_RANGE)) {
+      return 'Too far from your hub';
+    }
     if (this.buildings.some((b) => dist(b, { x, y }) < buildingStats(this.sides[b.faction], b.type).radius + r + 6)) {
       return 'Too close to a building';
     }
@@ -299,18 +441,34 @@ export class World {
   }
 
   /** Starts a building for `faction` at (x, y), paying for it. Returns why not, or null when it started. */
-  build(role: Role, x: number, y: number, faction = PLAYER): string | null {
+  build(role: Build, x: number, y: number, faction = PLAYER): string | null {
     if (this.phase !== 'playing') return 'The battle is over';
     const problem = this.placementProblem(role, x, y, faction);
     if (problem) return problem;
     const side = this.sides[faction];
-    const stats = buildingStats(side, role);
+    const stats = buildInfo(side, role);
     if (side.crystal < stats.cost) return 'Not enough crystal';
     side.crystal -= stats.cost;
     this.buildings.push({
-      kind: 'building', id: this.id(), faction, type: role, x, y, hp: stats.hp, maxHp: stats.hp, done: false,
-      buildLeft: side.def.buildings[role].buildMs, queue: [], trainLeft: 0, cooldown: 0, disabledMs: 0, lastHit: -1,
+      kind: 'building', id: this.id(), faction, type: role === 'expansion' ? 'hub' : role, x, y, hp: stats.hp, maxHp: stats.hp,
+      done: false, buildLeft: stats.buildMs, queue: [], trainLeft: 0, cooldown: 0, disabledMs: 0, hacks: 0, layMs: 0,
+      lastHit: -1, expansion: role === 'expansion', buildMs: stats.buildMs,
     });
+    return null;
+  }
+
+  /** Starts the next level of a research track at `faction`'s hub, paying for it. Returns why not, or null. */
+  research(track: Track, faction = PLAYER): string | null {
+    if (this.phase !== 'playing') return 'The battle is over';
+    const side = this.sides[faction];
+    if (!this.hubOf(faction)) return 'No hub';
+    const r = side.research;
+    if (r.current) return `Already researching ${TRACK_DEFS[r.current.track].name}`;
+    if (r.levels[track] >= RESEARCH_LEVELS) return `${TRACK_DEFS[track].name} is fully researched`;
+    const cost = researchCost(side, track);
+    if (side.crystal < cost) return 'Not enough crystal';
+    side.crystal -= cost;
+    r.current = { track, left: RESEARCH_MS };
     return null;
   }
 
@@ -369,7 +527,7 @@ export class World {
     let bestD = Infinity;
     for (const u of this.units) {
       const d = dist(u, { x, y });
-      if (d < UNIT_RADIUS + 2 && d < bestD && !this.hidden(u, PLAYER)) {
+      if (d < UNIT_RADIUS + 2 && d < bestD && this.seesUnit(u)) {
         best = { kind: 'unit', id: u.id, faction: u.faction };
         bestD = d;
       }
@@ -378,7 +536,7 @@ export class World {
     for (const b of this.buildings) {
       const d = dist(b, { x, y });
       const r = buildingStats(this.sides[b.faction], b.type).radius + 4;
-      if (d < r && d < bestD) {
+      if (d < r && d < bestD && this.knowsBuilding(b)) {
         best = { kind: 'building', id: b.id, faction: b.faction };
         bestD = d;
       }
@@ -408,10 +566,13 @@ export class World {
         this.think(side);
       }
     }
+    this.updateMines();
     this.removeDead();
+    this.updateResearch(dt);
     this.updateBeacon(dt);
     this.updateShards(dt);
     this.updateContract();
+    this.updateFog();
     if (!this.sides[PLAYER].alive) this.phase = 'lost';
     else if (this.sides.every((s) => s.index === PLAYER || !s.alive)) this.phase = 'won';
   }
@@ -429,12 +590,25 @@ export class World {
       if (b.trainLeft <= 0) {
         const type = b.queue.shift()!;
         b.trainLeft = 0;
-        this.spawn(b.faction, type, b.x, b.y + buildingStats(side, b.type).radius + 14);
+        const unit = this.spawn(b.faction, type, b.x, b.y + buildingStats(side, b.type).radius + 14);
+        if (type === 'harvester') unit.home = b.id;
+      }
+    }
+    if (b.disabledMs > 0) {
+      b.disabledMs = Math.max(0, b.disabledMs - dt);
+      // A hack that runs out before the takeover leaves the turret as it was.
+      if (b.disabledMs <= 0) b.hacks = 0;
+    }
+    const ability = this.abilityOf(b);
+    if (ability?.kind === 'mines' && b.disabledMs <= 0) {
+      b.layMs += dt;
+      if (b.layMs >= ability.everyMs) {
+        b.layMs = 0;
+        this.layMine(b, ability.reach, ability.cap);
       }
     }
     const weapon = buildingStats(side, b.type).weapon;
     if (!weapon) return;
-    b.disabledMs = Math.max(0, b.disabledMs - dt);
     b.cooldown -= dt;
     if (b.cooldown > 0 || b.disabledMs > 0) return;
     const target = this.nearestEnemy(b, b.faction, weapon.range);
@@ -474,7 +648,8 @@ export class World {
       return;
     }
     const target = this.unit(order.id) ?? this.building(order.id);
-    if (!target || target.hp <= 0 || this.hidden(target, u.faction)) {
+    // A target can change sides when a hack takes it over.
+    if (!target || target.hp <= 0 || target.faction === u.faction || this.hidden(target, u.faction)) {
       u.order = null;
       return;
     }
@@ -552,9 +727,13 @@ export class World {
       const ability = this.abilityOf(from);
       if (ability?.kind === 'cloak') from.revealMs = ability.revealMs;
     }
+    // Whoever is hit holds a grudge: an AI sends its next attack at that faction.
+    if (from.faction !== target.faction) this.sides[target.faction].grudge = from.faction;
     const ability = this.abilityOf(from);
     if (ability?.kind === 'hack' && target.kind === 'building' && this.sides[target.faction].def.buildings[target.type].weapon) {
       target.disabledMs = ability.disableMs;
+      target.hacks += 1;
+      if (target.hacks >= ability.takeover && target.hp > 0) this.takeOver(target, from.faction);
     }
     if (ability?.kind === 'splash') {
       this.booms.push({ x: target.x, y: target.y, color: this.sides[from.faction].def.color, life: BOOM_MS, r: ability.radius });
@@ -564,6 +743,97 @@ export class World {
         e.lastHit = from.faction;
       }
     }
+  }
+
+  /** A hacked turret changes sides: it becomes the hacker's own turret, as damaged as it was. */
+  private takeOver(b: Building, faction: number) {
+    const from = b.faction;
+    const was = this.sides[from].def.buildings[b.type].name;
+    const stats = buildingStats(this.sides[faction], b.type);
+    b.faction = faction;
+    b.hp = Math.max(1, Math.round((stats.hp * b.hp) / b.maxHp));
+    b.maxHp = stats.hp;
+    b.hacks = 0;
+    b.disabledMs = 0;
+    b.cooldown = 0;
+    b.layMs = 0;
+    b.lastHit = -1;
+    this.booms.push({ x: b.x, y: b.y, color: this.sides[faction].def.color, life: BOOM_MS, r: stats.radius + 10 });
+    if (faction === PLAYER) this.events.push({ kind: 'notice', text: `Hacked: the ${was} is yours now` });
+    else if (from === PLAYER) this.events.push({ kind: 'notice', text: `Your ${was} was hacked and taken over` });
+  }
+
+  /** A Mine Lattice lays a mine at a random spot in its reach, while it has fewer than `cap` out. */
+  private layMine(b: Building, reach: number, cap: number) {
+    if (this.mines.filter((m) => m.from === b.id).length >= cap) return;
+    const angle = Math.random() * Math.PI * 2;
+    const d = 40 + Math.random() * (reach - 40);
+    this.mines.push({
+      id: this.id(), faction: b.faction, from: b.id,
+      x: Math.min(ARENA.x + ARENA.w - 8, Math.max(ARENA.x + 8, b.x + Math.cos(angle) * d)),
+      y: Math.min(ARENA.y + ARENA.h - 8, Math.max(ARENA.y + 8, b.y + Math.sin(angle) * d)),
+    });
+  }
+
+  /** A mine goes off when an enemy ship comes close: it hurts every enemy ship in its blast. */
+  private updateMines() {
+    this.mines = this.mines.filter((m) => {
+      const def = this.sides[m.faction].def.buildings.turret.ability;
+      if (def?.kind !== 'mines' || !this.sides[m.faction].alive) return false;
+      if (!this.units.some((u) => u.faction !== m.faction && u.hp > 0 && dist(u, m) <= def.trigger)) return true;
+      for (const u of this.units) {
+        if (u.faction === m.faction || dist(u, m) > def.radius) continue;
+        u.hp -= Math.round(def.damage * this.shieldShare(u));
+        u.lastHit = m.faction;
+      }
+      this.booms.push({ x: m.x, y: m.y, color: this.sides[m.faction].def.color, life: BOOM_MS, r: def.radius });
+      return false;
+    });
+  }
+
+  /** Research under way at each hub: when a level is done, it applies to every ship of the faction. */
+  private updateResearch(dt: number) {
+    for (const side of this.sides) {
+      const cur = side.research.current;
+      if (!side.alive || !cur) continue;
+      cur.left -= dt;
+      if (cur.left > 0) continue;
+      const before = researchBonus(side.research, cur.track);
+      side.research.levels[cur.track] += 1;
+      side.research.current = null;
+      if (cur.track === 'hull') {
+        // Ships already flying get the new plating too, keeping their share of hit points.
+        const k = researchBonus(side.research, 'hull') / before;
+        for (const u of this.units) {
+          if (u.faction !== side.index || u.decoyMs !== null) continue;
+          u.maxHp = Math.round(u.maxHp * k);
+          u.hp = Math.min(u.maxHp, u.hp * k);
+        }
+      }
+      if (side.index === PLAYER) {
+        this.events.push({
+          kind: 'notice',
+          text: `${TRACK_DEFS[cur.track].name} ${side.research.levels[cur.track]} done: ships +${Math.round(RESEARCH_STEP * 100)}% ${TRACK_DEFS[cur.track].effect}`,
+        });
+      }
+    }
+  }
+
+  /** What the player sees this update: everything within sight of its ships and buildings. */
+  private updateFog() {
+    const fog = this.fog;
+    fog.clear();
+    for (const u of this.units) {
+      if (u.faction !== PLAYER) continue;
+      const sight = this.sides[PLAYER].def.units[u.type].sight;
+      fog.stamp(u.x, u.y, u.type === 'harvester' ? HARVESTER_VISION : sight * (u.type === 'scout' ? SCOUT_VISION : SHIP_VISION));
+    }
+    for (const b of this.buildings) {
+      if (b.faction !== PLAYER) continue;
+      fog.stamp(b.x, b.y, b.type === 'hub' ? HUB_VISION : buildingStats(this.sides[PLAYER], b.type).radius + BUILDING_VISION);
+    }
+    // A rival building, once seen, stays drawn where it was seen.
+    for (const b of this.buildings) if (b.faction !== PLAYER && fog.sees(b)) this.known.add(b.id);
   }
 
   /** The share of a shot that reaches a unit: a Halo Cruiser's shield lets through half, from friends in range. */
@@ -600,7 +870,7 @@ export class World {
     const m = u.mining ?? (u.mining = { node: -1, phase: 'seek', timer: 0 });
     if (m.phase === 'seek') {
       // Work the crystal nearest the hub first, so harvesters stay close to home and out of enemy range.
-      const home = this.hubOf(u.faction) ?? u;
+      const home = this.building(u.home) ?? this.hubOf(u.faction) ?? u;
       const node = this.nodes.filter((n) => n.amount > 0).reduce<Node | null>(
         (best, n) => (!best || dist(n, home) < dist(best, home) ? n : best),
         null,
@@ -649,50 +919,107 @@ export class World {
       x: Math.min(ARENA.x + ARENA.w - 12, Math.max(ARENA.x + 12, x)),
       y: Math.min(ARENA.y + ARENA.h - 12, Math.max(ARENA.y + 12, y)),
       angle: -Math.PI / 2, hp: stats.hp, maxHp: stats.hp, cooldown: 0, order: null, mining: null, carry: 0,
-      timer: 0, revealMs: 0, decoyMs, lastHit: -1,
+      timer: 0, revealMs: 0, decoyMs, lastHit: -1, home: -1,
     };
     this.units.push(unit);
     return unit;
   }
 
-  /** One AI round: keep harvesting, raise a base, train an army and send it at the nearest enemy building. */
+  /**
+   * One AI round: keep harvesting, raise a base, expand and research once the economy is going,
+   * train an army, fetch salvage, contest the beacon, and send the army at the faction that hit it
+   * last (or else the nearest enemy building).
+   */
   private think(side: Side) {
     const f = side.index;
     const hub = this.hubOf(f);
     if (!hub) return;
     const has = (role: Role) => this.buildings.some((b) => b.faction === f && b.type === role);
-    if (this.count(f, 'harvester') < AI_HARVESTERS) this.train('harvester', f);
+    const expansions = this.hubsOf(f).length - 1;
+    if (this.count(f, 'harvester') < AI_HARVESTERS + expansions * AI_EXPANSION_HARVESTERS) this.train('harvester', f);
     if (!has('depot')) this.placeNear('depot', f);
     if (!has('barracks')) this.placeNear('barracks', f);
     const turrets = this.buildings.filter((b) => b.faction === f && b.type === 'turret').length;
     if (turrets < 2 && side.crystal >= buildingStats(side, 'turret').cost + 40) this.placeNear('turret', f);
-    for (const type of [...COMBAT_UNITS].sort(() => Math.random() - 0.5)) {
-      if (this.train(type, f) === null) break;
+    const army = this.units.filter((u) => u.faction === f && u.type !== 'harvester' && u.decoyMs === null);
+    // Once the opening is over, an AI with a fair army saves up to expand and to research.
+    let saving = false;
+    if (this.elapsedMs >= AI_EXPAND_MS && expansions === 0) {
+      if (side.crystal >= expansionStats(side).cost) this.expand(f);
+      else saving = true;
+    }
+    if (this.elapsedMs >= AI_RESEARCH_MS && !side.research.current && has('barracks')) {
+      // The lowest track next, picked at random among equals.
+      const open = TRACKS.filter((t) => side.research.levels[t] < RESEARCH_LEVELS);
+      const low = open.filter((t) => side.research.levels[t] === Math.min(...open.map((o) => side.research.levels[o])));
+      const track = low[Math.floor(Math.random() * low.length)];
+      if (track && side.crystal >= researchCost(side, track)) this.research(track, f);
+      else if (track) saving = true;
+    }
+    if (army.length < AI_MAX_ARMY && !(saving && army.length >= AI_ARMY_TO_ATTACK)) {
+      for (const type of [...COMBAT_UNITS].sort(() => Math.random() - 0.5)) {
+        if (this.train(type, f) === null) break;
+      }
     }
     this.contestBeacon(side);
+    this.fetchSalvage(side);
     side.attackMs += AI_THINK_MS;
-    const army = this.units.filter((u) => u.faction === f && u.type !== 'harvester' && u.decoyMs === null);
     if (this.elapsedMs < AI_GRACE_MS || army.length < AI_ARMY_TO_ATTACK || side.attackMs < AI_ATTACK_MS) return;
     side.attackMs = 0;
-    const target = this.nearestEnemyBuilding(hub, f);
+    const foe = side.grudge >= 0 && this.sides[side.grudge].alive ? side.grudge : -1;
+    const target = this.nearestEnemyBuilding(hub, f, foe);
     if (!target) return;
-    for (const u of army) u.order = { kind: 'attack', id: target.id, auto: false };
+    // The picket stays on the beacon and a few ships stay home; the rest go.
+    const raid = army.filter((u) => u.id !== side.picket).sort((a, b) => dist(b, hub) - dist(a, hub));
+    for (const u of raid.slice(0, Math.max(0, raid.length - AI_HOME_GUARD))) u.order = { kind: 'attack', id: target.id, auto: false };
+  }
+
+  /** Idle AI warships go to fetch their faction's salvage shards when one lies within reach. */
+  private fetchSalvage(side: Side) {
+    const f = side.index;
+    for (const s of this.shards) {
+      if (s.faction !== f) continue;
+      const idle = this.units.find((u) => u.faction === f && u.type !== 'harvester' && u.decoyMs === null && !u.order
+        && u.id !== side.picket && dist(u, s) <= AI_SALVAGE_REACH);
+      if (idle) idle.order = { kind: 'move', x: s.x, y: s.y };
+    }
+  }
+
+  /** An AI expansion: a second hub beside the richest-looking crystal field away from everyone. */
+  private expand(f: number) {
+    const hub = this.hubOf(f)!;
+    const others = this.buildings.filter((b) => b.type === 'hub' && b.faction !== f);
+    const sites = this.nodes
+      .filter((n) => n.amount > NODE_AMOUNT / 3 && dist(n, hub) >= EXPANSION_GAP && dist(n, this.beacon) >= 150
+        && others.every((o) => dist(o, n) >= AI_EXPAND_RIVAL_GAP))
+      .sort((a, b) => dist(a, hub) - dist(b, hub));
+    for (const n of sites.slice(0, 3)) {
+      for (let tries = 0; tries < 8; tries++) {
+        const angle = Math.random() * Math.PI * 2;
+        const d = 50 + Math.random() * 50;
+        const x = n.x + Math.cos(angle) * d;
+        const y = n.y + Math.sin(angle) * d;
+        if (this.placementProblem('expansion', x, y, f) === null) {
+          this.build('expansion', x, y, f);
+          return;
+        }
+      }
+    }
   }
 
   /**
-   * The rival whose hub is nearest the relay beacon keeps one idle warship on it (a picket), once
-   * the opening is over, unless it already owns the beacon. A lost picket is replaced.
+   * The rivals nearest the relay beacon each keep one idle warship on it (a picket): the nearest
+   * once the opening is over, the next one AI_PICKET_STAGGER_MS later. A lost picket is replaced.
    */
   private contestBeacon(side: Side) {
     const f = side.index;
     const bc = this.beacon;
-    if (this.elapsedMs < AI_PICKET_MS || bc.owner === f) return;
-    const hubs = this.sides
-      .filter((s) => s.index !== PLAYER && s.alive)
-      .map((s) => ({ f: s.index, hub: this.hubOf(s.index) }))
-      .filter((h): h is { f: number; hub: Building } => !!h.hub);
-    const nearest = hubs.reduce<{ f: number; hub: Building } | null>((a, b) => (!a || dist(b.hub, bc) < dist(a.hub, bc) ? b : a), null);
-    if (nearest?.f !== f) return;
+    if (this.elapsedMs < AI_PICKET_MS) return;
+    const rank = this.sides
+      .filter((s) => s.index !== PLAYER && s.alive && this.hubOf(s.index))
+      .sort((a, b) => dist(this.hubOf(a.index)!, bc) - dist(this.hubOf(b.index)!, bc))
+      .findIndex((s) => s.index === f);
+    if (rank < 0 || rank >= AI_PICKETS || this.elapsedMs < AI_PICKET_MS + rank * AI_PICKET_STAGGER_MS) return;
     const current = this.unit(side.picket);
     if (current && current.faction === f) return;
     const idle = this.units.find((u) => u.faction === f && u.type !== 'harvester' && u.decoyMs === null && !u.order);
@@ -701,7 +1028,7 @@ export class World {
     idle.order = { kind: 'move', x: bc.x, y: bc.y };
   }
 
-  private placeNear(role: Role, faction: number) {
+  private placeNear(role: Exclude<Role, 'hub'>, faction: number) {
     const hub = this.hubOf(faction);
     if (!hub) return;
     for (let tries = 0; tries < 16; tries++) {
@@ -716,13 +1043,14 @@ export class World {
     }
   }
 
-  private nearestEnemyBuilding(from: Point, faction: number): Building | null {
+  /** The nearest building of another faction, of `only` when it is given and has any. */
+  private nearestEnemyBuilding(from: Point, faction: number, only = -1): Building | null {
     let best: Building | null = null;
     for (const b of this.buildings) {
-      if (b.faction === faction) continue;
+      if (b.faction === faction || (only >= 0 && b.faction !== only)) continue;
       if (!best || dist(b, from) < dist(best, from)) best = b;
     }
-    return best;
+    return best ?? (only >= 0 ? this.nearestEnemyBuilding(from, faction) : null);
   }
 
   /** Removes what has run out of hit points; a fallen hub takes its whole faction with it. */
@@ -731,21 +1059,23 @@ export class World {
     for (const b of this.buildings) {
       if (b.hp > 0) continue;
       this.wreck(b);
-      if (b.type === 'hub') fallen.add(b.faction);
+      const main = b.type === 'hub' && !b.expansion;
+      if (main) fallen.add(b.faction);
       if (b.faction !== PLAYER && b.lastHit === PLAYER) {
         this.score('razes');
-        if (b.type === 'hub') this.score('hubs');
+        if (main) this.score('hubs');
       }
     }
     for (const u of this.units) {
       if (u.hp > 0) continue;
       this.salvage(u);
       this.wreck(u);
-      // An enemy ship the player destroys counts as a kill and leaves a salvage shard.
-      if (u.faction !== PLAYER && u.decoyMs === null && u.lastHit === PLAYER) {
+      // A destroyed ship leaves a salvage shard for whoever destroyed it; the player's count as kills.
+      if (u.decoyMs !== null || u.lastHit < 0 || u.lastHit === u.faction) continue;
+      this.shards.push({ id: this.id(), faction: u.lastHit, x: u.x, y: u.y, value: SHARD_VALUE, life: SHARD_LIFE_MS });
+      if (u.lastHit === PLAYER) {
         this.kills += 1;
         this.score('kills');
-        this.shards.push({ id: this.id(), x: u.x, y: u.y, value: SHARD_VALUE, life: SHARD_LIFE_MS });
       }
     }
     // The rest of a fallen faction's ships and buildings go up with its hub.
@@ -757,6 +1087,7 @@ export class World {
       this.sides[f].alive = false;
       this.sides[f].crystal = 0;
     }
+    this.shards = this.shards.filter((s) => this.sides[s.faction].alive);
   }
 
   /** A salvage yard pays its faction for each enemy unit destroyed within its range. */
@@ -827,23 +1158,24 @@ export class World {
     }
   }
 
-  /** Salvage shards drift to the nearest player ship in reach and pay out when it picks them up. */
+  /** Salvage shards drift to the nearest ship of their faction in reach and pay out when it picks them up. */
   private updateShards(dt: number) {
-    const side = this.sides[PLAYER];
     this.shards = this.shards.filter((s) => {
       s.life -= dt;
       let near: Unit | null = null;
       for (const u of this.units) {
-        if (u.faction !== PLAYER || u.decoyMs !== null) continue;
+        if (u.faction !== s.faction || u.decoyMs !== null) continue;
         if (!near || dist(u, s) < dist(near, s)) near = u;
       }
       if (near && dist(near, s) <= SHARD_MAGNET) {
         const d = dist(near, s);
         if (d <= 8) {
-          side.crystal += s.value;
-          this.salvaged += s.value;
-          this.pops.push({ x: s.x, y: s.y - 12, text: `+${s.value}`, color: 0x8dff9a, life: POP_MS });
-          this.events.push({ kind: 'gain', amount: s.value });
+          this.sides[s.faction].crystal += s.value;
+          if (s.faction === PLAYER) {
+            this.salvaged += s.value;
+            this.pops.push({ x: s.x, y: s.y - 12, text: `+${s.value}`, color: 0x8dff9a, life: POP_MS });
+            this.events.push({ kind: 'gain', amount: s.value });
+          }
           return false;
         }
         const step = Math.min(d, (SHARD_SPEED * dt) / 1000);

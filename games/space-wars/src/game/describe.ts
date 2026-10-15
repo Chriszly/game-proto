@@ -1,5 +1,6 @@
 import type { Ability, Faction, Role, UnitId } from './factions';
-import { buildingStats, unitStats, type Side } from './world';
+import { RESEARCH_LEVELS, RESEARCH_MS, RESEARCH_STEP, TRACK_DEFS, type Track } from './research';
+import { EXPANSION_GAP, buildingStats, expansionStats, researchCost, unitStats, type Side } from './world';
 
 /** A sentence about what an ability does, with its numbers. */
 export function abilityText(a: Ability): string {
@@ -9,7 +10,7 @@ export function abilityText(a: Ability): string {
     case 'decoy':
       return `Drops a decoy every ${a.everyMs / 1000} s that draws fire for ${a.lifeMs / 1000} s and never acts.`;
     case 'hack':
-      return `Its hits disable a turret for ${a.disableMs / 1000} s.`;
+      return `Its hits disable a turret for ${a.disableMs / 1000} s; ${a.takeover} hits in a row take it over.`;
     case 'shield':
       return `Friends within ${a.range} px take only ${Math.round(a.share * 100)}% of each shot.`;
     case 'brood':
@@ -18,6 +19,8 @@ export function abilityText(a: Ability): string {
       return `Shells splash enemies within ${a.radius} px of the target for ${Math.round(a.share * 100)}% damage.`;
     case 'salvage':
       return `Pays ${a.pay} crystal for each enemy unit destroyed within ${a.range} px.`;
+    case 'mines':
+      return `Lays a hidden mine every ${a.everyMs / 1000} s, up to ${a.cap}; each blasts enemy ships for ${a.damage}.`;
   }
 }
 
@@ -44,6 +47,27 @@ export function buildingLines(side: Side, role: Role): string[] {
   if (s.weapon) lines.push(`Damage ${s.weapon.damage} · range ${s.weapon.range} · reload ${s.weapon.cooldownMs / 1000} s`);
   if (def.ability) lines.push(abilityText(def.ability));
   return lines;
+}
+
+/** The lines an expansion's tooltip shows under its name. */
+export function expansionLines(side: Side): string[] {
+  const s = expansionStats(side);
+  return [
+    `${s.cost} crystal · hp ${s.hp} · builds in ${s.buildMs / 1000} s`,
+    `A second hub beside a far crystal field, at least ${EXPANSION_GAP} px from your hubs.`,
+    'Trains harvesters that work its field, takes crystal and lets you build around it.',
+  ];
+}
+
+/** The lines a research button's tooltip shows under its name. */
+export function researchLines(side: Side, track: Track): string[] {
+  const level = side.research.levels[track];
+  const step = `+${Math.round(RESEARCH_STEP * 100)}% ${TRACK_DEFS[track].effect} for every ship`;
+  if (level >= RESEARCH_LEVELS) return [`Level ${level} of ${RESEARCH_LEVELS}: fully researched.`];
+  return [
+    `Level ${level + 1} of ${RESEARCH_LEVELS} · ${researchCost(side, track)} crystal · ${RESEARCH_MS / 1000} s at the hub`,
+    `${step}, ships already flying included. One research at a time.`,
+  ];
 }
 
 /** A faction's card on the picker: its buildings and ships by name, and its signature ability. */

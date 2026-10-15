@@ -15,20 +15,24 @@ export interface Weapon {
  * A faction's signature ability, carried by one unit or building. The world applies it:
  * - `cloak`: the unit is hidden from enemies until it fires; `revealMs` is how long a shot shows it.
  * - `decoy`: every `everyMs` the unit drops a copy that lives `lifeMs` and draws fire.
- * - `hack`: a turret it hits goes dark for `disableMs`.
+ * - `hack`: a turret it hits goes dark for `disableMs`; `takeover` hits in a row while it is dark
+ *   take it over for the hacker's faction.
  * - `shield`: friendly units within `range` take `share` of the damage (the rest is blocked).
  * - `brood`: every `everyMs` the unit spawns a scout, up to `cap` scouts of its faction.
  * - `splash`: its shots also hit enemies within `radius` of the target, for `share` of the damage.
  * - `salvage`: a building that pays `pay` crystal for each enemy unit destroyed within `range`.
+ * - `mines`: a building that lays a hidden mine within `reach` every `everyMs`, up to `cap` at once;
+ *   an enemy ship that comes within `trigger` sets it off for `damage` to enemies within `radius`.
  */
 export type Ability =
   | { kind: 'cloak'; revealMs: number }
   | { kind: 'decoy'; everyMs: number; lifeMs: number }
-  | { kind: 'hack'; disableMs: number }
+  | { kind: 'hack'; disableMs: number; takeover: number }
   | { kind: 'shield'; range: number; share: number }
   | { kind: 'brood'; everyMs: number; cap: number }
   | { kind: 'splash'; radius: number; share: number }
-  | { kind: 'salvage'; range: number; pay: number };
+  | { kind: 'salvage'; range: number; pay: number }
+  | { kind: 'mines'; everyMs: number; cap: number; reach: number; trigger: number; radius: number; damage: number };
 
 export interface UnitDef {
   name: string;
@@ -131,14 +135,14 @@ export const FACTIONS: readonly Faction[] = [
     units: {
       harvester: { name: 'Shade Skimmer', cost: 40, trainMs: 3800, hp: 38, speed: 62, sight: 0, shape: [[0, -7], [6, 4], [0, 2], [-6, 4]] },
       scout: { name: 'Phantom Blade', cost: 35, trainMs: 4000, hp: 55, speed: 115, sight: 160, weapon: { damage: 9, range: 80, cooldownMs: 700 }, ability: { kind: 'cloak', revealMs: 2000 }, shape: [[0, -10], [3, 6], [0, 3], [-3, 6]] },
-      gunship: { name: 'Hack Frigate', cost: 60, trainMs: 6000, hp: 100, speed: 66, sight: 170, weapon: { damage: 10, range: 120, cooldownMs: 950 }, ability: { kind: 'hack', disableMs: 6000 }, shape: [[-8, 0], [-3, -6], [6, -6], [9, 0], [6, 6], [-3, 6]] },
+      gunship: { name: 'Hack Frigate', cost: 60, trainMs: 6000, hp: 100, speed: 66, sight: 170, weapon: { damage: 10, range: 120, cooldownMs: 950 }, ability: { kind: 'hack', disableMs: 6000, takeover: 6 }, shape: [[-8, 0], [-3, -6], [6, -6], [9, 0], [6, 6], [-3, 6]] },
       heavy: { name: 'Decoy Wraith', cost: 105, trainMs: 9000, hp: 210, speed: 44, sight: 150, weapon: { damage: 15, range: 85, cooldownMs: 1200 }, ability: { kind: 'decoy', everyMs: 15000, lifeMs: 12000 }, shape: [[0, -10], [8, -3], [8, 5], [0, 10], [-8, 5], [-8, -3]] },
     },
     buildings: {
       hub: { name: 'Shroud Node', cost: 0, buildMs: 0, hp: 760, radius: 20, dome: 6, shape: [[0, -18], [6, -6], [18, 0], [6, 6], [0, 18], [-6, 6], [-18, 0], [-6, -6]] },
       depot: { name: 'Relay Post', cost: 55, buildMs: 5000, hp: 260, radius: 12, shape: [[-10, -10], [10, -10], [0, 10]] },
       barracks: { name: 'Cloak Works', cost: 95, buildMs: 7000, hp: 360, radius: 16, shape: [[-16, 0], [-8, -12], [8, -12], [16, 0], [8, 12], [-8, 12]] },
-      turret: { name: 'Mine Lattice', cost: 85, buildMs: 6000, hp: 300, radius: 14, dome: 4, weapon: { damage: 12, range: 140, cooldownMs: 800 }, shape: [[-12, -12], [12, -12], [12, 12], [-12, 12]] },
+      turret: { name: 'Mine Lattice', cost: 85, buildMs: 6000, hp: 300, radius: 14, dome: 4, weapon: { damage: 12, range: 140, cooldownMs: 800 }, ability: { kind: 'mines', everyMs: 8000, cap: 4, reach: 130, trigger: 16, radius: 40, damage: 45 }, shape: [[-12, -12], [12, -12], [12, 12], [-12, 12]] },
     },
   },
   {
