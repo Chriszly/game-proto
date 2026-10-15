@@ -59,7 +59,8 @@ in.
 ### File map
 
 - `src/main.ts`: creates the `Phaser.Game` (960x540, `Scale.FIT`, `pixelArt: false`) with `BootScene`
-  then `GameScene`, calls `setupGame(game)`, and puts `game` on `window` in dev builds.
+  then `GameScene`, calls `setupGame(game)` and `setupScaling(game)` (see Screen scaling), and puts
+  `game` on `window` in dev builds.
 - `src/game/state.ts`: `GameState` and its parts (`Trap`, `Ledge`, `Shrine`, `Boss`, `Coin`,
   `Effect`, `Runner`), the terrains (`Terrain`, `TERRAIN` names and rules, `ICE`, `MARSH`, `WIND`,
   `terrainOf`), `BOSS_EVERY` and `isBossStage`, the daily course's randomness (`rand`, `seedOf`,
@@ -99,8 +100,9 @@ in.
 - `src/ui/Button.ts`: `makeButton`, the lapis button ruled in gold used on the game-over panel and
   the armoury (its caption is the container's second child).
 - `src/art/ink.ts`: the manuscript toolkit. `C` (the pigments as CSS colours) and `N` (the same as
-  numbers for Phaser), `SERIF`, `seeded`, `paint` (paints a canvas and adds it with
-  `textures.addCanvas`), `poly`, `circle`, `oval`, `hl` (a white highlight), `gold` (a gold-leaf
+  numbers for Phaser), `SERIF`, `seeded`, `paint` (paints a canvas at `sharpRes` and adds it with
+  `textures.addCanvas`, marked with that resolution), `tileAt` (scrolls a tile sprite of a painted
+  texture in shown pixels), `poly`, `circle`, `oval`, `hl` (a white highlight), `gold` (a gold-leaf
   gradient), `star6`, `heartPath`, `bezant` (a gold coin) and `shade`.
 - `src/art/scenery.ts`: the vellum `page` (stains, acanthus scrollwork, snail), `sky` (diaper,
   sunset clouds, stars, moon), `far` (crags and a castle), `near` (trees and a tower), the road
@@ -119,13 +121,15 @@ in.
   `medallion`, the `track-strip`, the `tag-strip`), `bakePanel` (vellum panels: cards, the title strip, the game-over
   panel) and `bakeButton`.
 - `shared/setupGame.ts` and `shared/settings.ts` (outside the game folder): the hub's settings.
-  `main.ts` imports `setupGame`; `state.ts` imports `byDifficulty`.
+  `main.ts` imports `setupGame`; `state.ts` imports `byDifficulty`. `shared/scaling.ts`:
+  `main.ts` imports `setupScaling`, `ink.ts` imports `sharpRes`, `GameScene` imports `viewPoint`.
 
 ### How it runs
 
 - Boot: `BootScene.create` calls `bakeScenery`, `bakeFoes`, `bakeKnight`, `bakeIcons` and
   `bakeHud`, which paint 2D canvases (`ink.ts`) and add them as textures. There are no asset files.
-  A texture is as big as it appears on screen; most art is written in page units (twice screen size,
+  A texture shows as big as it appears on screen (its canvas has more pixels on a big screen; see
+  Screen scaling); most art is written in page units (twice screen size,
   the mockup's scale) under `ctx.scale(0.5)`, the knight at 0.5 and the foes at 0.46 and 0.45.
 - Tick: `GameScene.update(time)` computes `dt` from the frame timestamp (not Phaser's smoothed
   delta), clamped to `MAX_STEP_MS` (100), with 0 on the first frame. It calls `tick(state, dt)`
@@ -159,8 +163,8 @@ in.
   ("Hearts full" or "Needs 15 coins").
 - Moving the knight forward before gravity is deliberate: a jump that is still above a ledge's top
   as it reaches the side lands on it, even if a long frame takes the feet below the top.
-- Input: a `pointerdown` on the scene with nothing interactive under it calls `jump` above
-  `TAP_SPLIT_Y` and `slide` below it. Keys: Space, Up, W jump; Down, S slide. Card and button taps
+- Input: a `pointerdown` on the scene with nothing interactive under it calls `jump` when
+  `viewPoint(pointer).y` is above `TAP_SPLIT_Y` and `slide` below it. Keys: Space, Up, W jump; Down, S slide. Card and button taps
   are ignored by that handler because they hit interactive objects; the full-screen dims behind the
   cards and the game-over panel are interactive too, so they swallow stray taps.
 - Rendering, back to front: the vellum `page` (depth -10, with the margin's scrollwork), the `sky`
@@ -281,6 +285,23 @@ key (see Hub settings).
   `SHRINE.w + 160`) in `placeShrine`.
 - `src/game/sim.ts`: `PULL_SPEED`, `BEHIND`, `STOMP_REACH`, `STOMP_BOUNCE`, `STEP_UP`.
 - `src/game/boons.ts`: names, card text, max ranks, and `CURSE` (from stage 2, half the time).
+
+### Screen scaling
+
+- `setupScaling(game)` gives the canvas `renderScale` canvas pixels per game pixel (up to 4 on a
+  4K screen, 2 with the canvas renderer) and zooms the one camera to match, so all layout stays in
+  the 960x540 game pixels of `layout.ts`. The camera never scrolls: the course scrolls by moving
+  objects and tile positions, so no `scrollingCamera` or `splitHudCamera` is needed.
+- `paint` in `ink.ts` paints each texture at `sharpRes(w, h)` canvas pixels per shown pixel, sets
+  the texture source's `resolution` to that, and sets the base frame's source size back to `w` x
+  `h`, so images, origins, flips and hit areas stay in shown pixels with no change at the call sites.
+- Tile sprites (`far`, `near`, `ground`, ledges) repeat in texture pixels, so they are scrolled with
+  `tileAt(sprite, x)`, which sets the tile scale to `1 / resolution` and scales the scroll to match.
+  A new tile sprite of a painted texture goes through `tileAt` too.
+- Read a pointer on the screen with `viewPoint(pointer)` (game pixels), never `pointer.x/y`
+  (canvas pixels). Texts are drawn at `renderScale` by the shared module.
+- `index.html` has the shared `100dvh` and `touch-action: none` styles. A phone held upright gets
+  the shared hint to turn it. `e2e/screens.spec.ts` checks the game on five screens.
 
 ### Hub settings
 
