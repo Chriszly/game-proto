@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
+import { renderScale } from '../../../../shared/scaling';
 import { settings } from '../../../../shared/settings';
-import { BROWN, MOSS, num, OCHRE, RUST, SEPIA } from '../art/nouveau';
+import { BROWN, MOSS, num, OCHRE, RES, RUST, SEPIA, shown } from '../art/nouveau';
 import { needTexture, POTION_ORIGIN, potionTexture, tileTexture, TOOL_PAD, toolTexture } from '../art/textures';
 import { adjacent, COLS, inBoard, ROWS, special, stuck, validMoves, type Board, type Cell, type Tile } from '../game/board';
 import { KIND_NAMES, type Kind } from '../game/kinds';
@@ -37,7 +38,7 @@ const CAPTION_FUNNEL = `Funnel: tap a tile, then any other, to swap them for ${T
 const CAPTION_FUNNEL_TO = 'Funnel: now tap the tile to swap it with (tap it again to let it go)';
 
 /** A serif text style in the label's inks. */
-const ink = (size: number, color = SEPIA, fontStyle = '') => ({ fontFamily: SERIF, fontSize: `${size}px`, fontStyle, color, resolution: 2 });
+const ink = (size: number, color = SEPIA, fontStyle = '') => ({ fontFamily: SERIF, fontSize: `${size}px`, fontStyle, color, resolution: Math.max(2, renderScale) });
 
 /** One piece of an animation, played in order: `step` gets 0 to 1 over `ms` of game time. */
 interface Anim {
@@ -106,8 +107,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   create() {
-    this.add.image(0, 0, 'table').setOrigin(0);
-    this.cursor = this.add.image(0, 0, 'cursor').setDepth(DEPTH.cursor).setVisible(false);
+    shown(this.add.image(0, 0, 'table').setOrigin(0));
+    this.cursor = shown(this.add.image(0, 0, 'cursor')).setDepth(DEPTH.cursor).setVisible(false);
     this.bars = this.add.graphics().setDepth(DEPTH.panel);
     this.createRibbon();
     this.createFooter();
@@ -156,7 +157,7 @@ export class GameScene extends Phaser.Scene {
 
   private tileSprite(tile: Tile, x: number, y: number) {
     // Tiles fall past resin, behind it.
-    return this.add.image(x, y, tileTexture(tile)).setDepth(special(tile) ? DEPTH.catalyst : tile.resin ? DEPTH.resin : DEPTH.tile);
+    return shown(this.add.image(x, y, tileTexture(tile))).setDepth(special(tile) ? DEPTH.catalyst : tile.resin ? DEPTH.resin : DEPTH.tile);
   }
 
   private cellAt(x: number, y: number): Cell | null {
@@ -166,12 +167,12 @@ export class GameScene extends Phaser.Scene {
 
   /** A tap picks a tile, and a tap on its neighbour swaps the two. Tapping it again lets it go. */
   private pointerDown(p: Phaser.Input.Pointer) {
-    const cell = this.cellAt(p.x, p.y);
+    const cell = this.cellAt(p.worldX, p.worldY);
     if (!cell || this.busy || this.state.phase !== 'play') return;
     if (this.armed === 'sift') return this.siftRow(cell.row);
     if (this.armed === 'pestle') return this.usePestle(cell);
     if (this.armed === 'funnel') return this.pickFunnel(cell);
-    this.dragFrom = { cell, x: p.x, y: p.y };
+    this.dragFrom = { cell, x: p.worldX, y: p.worldY };
     const picked = this.selected;
     if (picked && adjacent(picked, cell)) this.swap(picked, cell);
     else this.selected = picked && picked.row === cell.row && picked.col === cell.col ? null : cell;
@@ -181,8 +182,8 @@ export class GameScene extends Phaser.Scene {
   /** Dragging a tile half a cell towards a neighbour swaps them too. */
   private pointerMove(p: Phaser.Input.Pointer) {
     if (!this.dragFrom || !p.isDown || this.busy || this.state.phase !== 'play') return;
-    const dx = p.x - this.dragFrom.x;
-    const dy = p.y - this.dragFrom.y;
+    const dx = p.worldX - this.dragFrom.x;
+    const dy = p.worldY - this.dragFrom.y;
     if (Math.max(Math.abs(dx), Math.abs(dy)) < BOARD.cell / 2) return;
     const from = this.dragFrom.cell;
     const to = Math.abs(dx) > Math.abs(dy)
@@ -303,17 +304,17 @@ export class GameScene extends Phaser.Scene {
           brewing = [...step.brewed, ...step.melted].map((t) => this.sprites.get(t.id)!.setTexture(tileTexture(t)).setDepth(special(t) ? DEPTH.catalyst : DEPTH.tile));
           flash = [
             ...step.rows.map((row) => this.bandAt(row)),
-            ...step.cols.map((col) => this.add.image(BOARD.x + col * BOARD.cell - 1, BOARD.y - 1, 'band-col').setOrigin(0).setDepth(DEPTH.band)),
-            ...step.areas.map((a) => this.add.image(cellX(a.col), cellY(a.row), 'area').setDepth(DEPTH.band)),
+            ...step.cols.map((col) => shown(this.add.image(BOARD.x + col * BOARD.cell - 1, BOARD.y - 1, 'band-col').setOrigin(0)).setDepth(DEPTH.band)),
+            ...step.areas.map((a) => shown(this.add.image(cellX(a.col), cellY(a.row), 'area')).setDepth(DEPTH.band)),
           ];
         },
         step: (k) => {
-          popping.forEach((s) => s.setScale(1 + 0.3 * k - 1.3 * k * k).setAlpha(1 - k));
+          popping.forEach((s) => shown(s, 1 + 0.3 * k - 1.3 * k * k).setAlpha(1 - k));
           for (const f of flying) {
             f.sprite.setPosition(Phaser.Math.Linear(f.x0, f.x1, ease(k)), Phaser.Math.Linear(f.y0, f.y1, ease(k)));
-            f.sprite.setScale(1 - 0.45 * k).setAlpha(1 - k * k);
+            shown(f.sprite, 1 - 0.45 * k).setAlpha(1 - k * k);
           }
-          brewing.forEach((s) => s.setScale(settings.reduceMotion ? 1 : 1 + 0.25 * Math.sin(Math.PI * k)));
+          brewing.forEach((s) => shown(s, settings.reduceMotion ? 1 : 1 + 0.25 * Math.sin(Math.PI * k)));
           // With reduced motion the lit row holds steady instead of blinking.
           flash.forEach((b) => b.setAlpha(settings.reduceMotion ? 1 : 0.4 + 0.6 * Math.abs(Math.sin(k * Math.PI * 2))));
         },
@@ -439,7 +440,7 @@ export class GameScene extends Phaser.Scene {
     this.queue.push({
       ms: SIFT_MS,
       start: () => (fading = old.map((t) => this.sprites.get(t.id)!).filter(Boolean)),
-      step: (k) => fading.forEach((s) => s.setScale(1 - 0.6 * k).setAlpha(1 - k)),
+      step: (k) => fading.forEach((s) => shown(s, 1 - 0.6 * k).setAlpha(1 - k)),
       end: () => old.forEach((t) => (this.sprites.get(t.id)?.destroy(), this.sprites.delete(t.id))),
     });
     this.queue.push({
@@ -447,12 +448,12 @@ export class GameScene extends Phaser.Scene {
       start: () => {
         board[row].forEach((tile, col) => {
           if (this.sprites.has(tile.id)) return;
-          const sprite = this.tileSprite(tile, cellX(col), cellY(row)).setScale(0);
+          const sprite = shown(this.tileSprite(tile, cellX(col), cellY(row)), 0);
           this.sprites.set(tile.id, sprite);
           growing.push(sprite);
         });
       },
-      step: (k) => growing.forEach((s) => s.setScale(ease(k))),
+      step: (k) => growing.forEach((s) => shown(s, ease(k))),
     });
     // If the reroll had to shuffle the board to leave a move, the other tiles move too.
     if (board.some((r, i) => i !== row && r.some((t, c) => t.id !== before[i][c]))) this.queue.push(this.moveTo(board, SHUFFLE_MS));
@@ -478,11 +479,17 @@ export class GameScene extends Phaser.Scene {
     }
     // The two tiles swell and settle; with reduced motion they hold still, a little larger.
     const swell = settings.reduceMotion ? 1.14 : 1.08 + Math.sin(this.clock / 110) * 0.08;
-    for (const id of this.hint) this.sprites.get(id)?.setScale(swell);
+    for (const id of this.hint) {
+      const sprite = this.sprites.get(id);
+      if (sprite) shown(sprite, swell);
+    }
   }
 
   private clearHint() {
-    for (const id of this.hint) this.sprites.get(id)?.setScale(1);
+    for (const id of this.hint) {
+      const sprite = this.sprites.get(id);
+      if (sprite) shown(sprite);
+    }
     this.hint = [];
     this.idleMs = 0;
   }
@@ -501,19 +508,18 @@ export class GameScene extends Phaser.Scene {
   /** Moves, the stars they are worth now, and the coins, along the bottom of the order panel. */
   private createFooter() {
     this.movesText = this.add.text(560, 464, '', ink(25, SEPIA, 'bold')).setOrigin(0, 0.5).setDepth(DEPTH.panel);
-    for (let k = 0; k < 3; k++) this.starIcons.push(this.add.image(709 + k * 25, 462, 'star-off').setDepth(DEPTH.panel));
+    for (let k = 0; k < 3; k++) this.starIcons.push(shown(this.add.image(709 + k * 25, 462, 'star-off')).setDepth(DEPTH.panel));
     this.ruleText = this.add.text(560, 490, '', ink(11, RUST, 'italic')).setOrigin(0, 0.5).setDepth(DEPTH.panel);
-    this.coinIcon = this.add.image(852, 465, 'coin').setDepth(DEPTH.panel);
+    this.coinIcon = shown(this.add.image(852, 465, 'coin')).setDepth(DEPTH.panel);
     this.coinsText = this.add.text(906, 466, '', ink(21, SEPIA, 'bold')).setOrigin(1, 0.5).setDepth(DEPTH.panel);
   }
 
   private createTools() {
     TOOL_ORDER.forEach((tool, i) => {
-      const button = this.add
-        .image(TOOL.x + i * TOOL.gap - TOOL_PAD, TOOL.y - TOOL_PAD, toolTexture(tool, 'on'))
+      const button = shown(this.add.image(TOOL.x + i * TOOL.gap - TOOL_PAD, TOOL.y - TOOL_PAD, toolTexture(tool, 'on')))
         .setOrigin(0)
         .setDepth(DEPTH.panel)
-        .setInteractive({ useHandCursor: true, hitArea: new Phaser.Geom.Rectangle(TOOL_PAD, TOOL_PAD, TOOL.w, TOOL.h), hitAreaCallback: Phaser.Geom.Rectangle.Contains });
+        .setInteractive({ useHandCursor: true, hitArea: new Phaser.Geom.Rectangle(TOOL_PAD * RES, TOOL_PAD * RES, TOOL.w * RES, TOOL.h * RES), hitAreaCallback: Phaser.Geom.Rectangle.Contains });
       button.on('pointerdown', () => this.useTool(tool));
       button.on('pointerover', () => ((this.hoverTool = tool), this.refreshCaption()));
       button.on('pointerout', () => ((this.hoverTool = null), this.refreshCaption()));
@@ -523,7 +529,7 @@ export class GameScene extends Phaser.Scene {
 
   private createCaption() {
     this.caption = this.add.graphics().setDepth(DEPTH.panel);
-    this.add.image(CAPTION.x + 13, CAPTION.y + CAPTION.h / 2, 'sun').setDepth(DEPTH.panel);
+    shown(this.add.image(CAPTION.x + 13, CAPTION.y + CAPTION.h / 2, 'sun')).setDepth(DEPTH.panel);
     this.captionText = this.add.text(CAPTION.x + 25, CAPTION.y + CAPTION.h / 2, '', ink(11, SEPIA, 'italic')).setOrigin(0, 0.5).setDepth(DEPTH.panel);
   }
 
@@ -535,7 +541,7 @@ export class GameScene extends Phaser.Scene {
     const mid = PANEL.x + PANEL.w / 2;
     const items: Phaser.GameObjects.GameObject[] = [
       this.add.text(mid, 62, `Order ${s.current.number}`, ink(28, SEPIA, 'bold')).setOrigin(0.5),
-      this.add.image(606, 145, potionTexture(s.current.potion)).setOrigin(POTION_ORIGIN.x, POTION_ORIGIN.y),
+      shown(this.add.image(606, 145, potionTexture(s.current.potion))).setOrigin(POTION_ORIGIN.x, POTION_ORIGIN.y),
       this.add.text(606, 164.5, `No. ${s.current.number}`, ink(9, RUST, 'italic bold')).setOrigin(0.5),
       this.add.text(666, 124, POTION_NAMES[s.current.potion], ink(22, SEPIA, 'italic bold')).setOrigin(0, 0.5),
       this.add.text(666, 152, `Pays ${s.current.price} coins`, ink(15, BROWN)).setOrigin(0, 0.5),
@@ -550,7 +556,7 @@ export class GameScene extends Phaser.Scene {
     if (twist) items.push(this.add.text(666, 196, twist, ink(13, RUST, 'italic bold')).setOrigin(0, 0.5));
     Object.keys(s.current.needs).forEach((kind, i) => {
       const y = NEEDS.y + i * NEEDS.row;
-      items.push(this.add.image(NEEDS.x, y, needTexture(kind as Kind)));
+      items.push(shown(this.add.image(NEEDS.x, y, needTexture(kind as Kind))));
       items.push(this.add.text(NEEDS.barX, y - 17, KIND_NAMES[kind as Kind], ink(13, BROWN, 'italic bold')).setOrigin(0, 0.5));
       const text = this.add.text(906, y + 2, '', ink(18, SEPIA, 'bold')).setOrigin(1, 0.5);
       this.needTexts.set(kind as Kind, text);
@@ -657,7 +663,7 @@ export class GameScene extends Phaser.Scene {
 
   /** A gold band behind a row, the one a Catalyst on it will clear. */
   private bandAt(row: number) {
-    return this.add.image(BOARD.x - 1, BOARD.y + row * BOARD.cell - 1, 'band').setOrigin(0).setDepth(DEPTH.band);
+    return shown(this.add.image(BOARD.x - 1, BOARD.y + row * BOARD.cell - 1, 'band').setOrigin(0)).setDepth(DEPTH.band);
   }
 
   /** Marks every row that holds a Catalyst; hidden while tiles move. */
@@ -673,9 +679,9 @@ export class GameScene extends Phaser.Scene {
 
   private createResult() {
     const size = BOARD.cell * COLS;
-    const card = this.add.image(0, 0, 'result-card');
+    const card = shown(this.add.image(0, 0, 'result-card'));
     this.resultTitle = this.add.text(0, -76, '', ink(24, SEPIA, 'italic bold')).setOrigin(0.5);
-    for (let k = 0; k < 3; k++) this.resultStars.push(this.add.image((k - 1) * 34, -38, 'star-off').setScale(1.15));
+    for (let k = 0; k < 3; k++) this.resultStars.push(shown(this.add.image((k - 1) * 34, -38, 'star-off'), 1.15));
     this.resultText = this.add.text(0, -4, '', ink(14, BROWN)).setOrigin(0.5).setWordWrapWidth(340).setAlign('center');
     this.resultRank = this.add.text(0, 24, '', ink(13, RUST, 'italic bold')).setOrigin(0.5).setWordWrapWidth(340).setAlign('center');
     this.resultButton = makeButton(this, 0, 68, '', () => this.begin(nextOrder(this.state)));
