@@ -4,7 +4,7 @@ import { MEADOWS } from '../game/meadows';
 import { AWAY, BOARD, COMB, FAR_RIDGE, FLOWER_GROUND, GOAL, HIVE, MARKET, MEADOW_SPOTS, ORDER, PLAQUE, MEADOW_TAG, VIEW, farY, flowerSpot } from '../scenes/layout';
 import { KINDS } from '../game/honey';
 import { BROOD_CARD, CARD, KIND_CARD, MEADOW_CARD, NOTE_CARD, PETALS, WAX_CARD } from './palette';
-import { addTexture, circ, cut, hex, outline, rect, reseed, rr, sketch, smooth, type Pt } from './paper';
+import { addTexture, circ, cut, hex, outline, rect, reseed, resOfCtx, rr, sketch, smooth, type Pt } from './paper';
 
 // The meadow and the hive in cut paper: a sky sheet with a paper sun and clouds, layered hills with
 // the goal meadows on the far one, the hive box, petal-cut flowers, the honey jar, the comb cells
@@ -240,8 +240,8 @@ function bakeCells(scene: Phaser.Scene) {
     ctx.lineWidth = 5;
     ctx.lineCap = 'round';
     ctx.shadowColor = 'rgba(42,26,8,0.35)';
-    ctx.shadowBlur = 2;
-    ctx.shadowOffsetY = 1;
+    ctx.shadowBlur = 2 * resOfCtx(ctx);
+    ctx.shadowOffsetY = resOfCtx(ctx);
     ctx.beginPath();
     ctx.arc(c, c, 7, Math.PI * 0.35, Math.PI * 1.75);
     ctx.stroke();

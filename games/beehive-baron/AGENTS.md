@@ -224,6 +224,8 @@ market in `src/game/honey.ts`; raid timings in `src/game/wasps.ts`; order number
 - Textures are painted at `sharpRes` through `sketch`, so the cut-paper art is as sharp as text.
   Read a texture's size from its frame's `realWidth`/`realHeight` (game pixels), never from
   `getSourceImage()` (canvas pixels).
+- Canvas shadows ignore the context's scale, so `cut` and any hand-set `shadowBlur` or
+  `shadowOffset` multiply them by `resOfCtx(ctx)`.
 - `e2e/screens.spec.ts` at the root opens the game on two phones, a tablet, a laptop and a 4K
   screen; an upright phone shows the shared hint to turn it.
 

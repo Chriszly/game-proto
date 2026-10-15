@@ -69,6 +69,12 @@ export function sketch(w: number, h: number) {
 }
 
 /**
+ * Canvas pixels per game pixel of a sketch's context. Shadows ignore the context's scale, so their
+ * blur and offset are multiplied by it.
+ */
+export const resOfCtx = (ctx: Ctx) => resOf.get(ctx.canvas) ?? 1;
+
+/**
  * Adds a sketch's canvas as the texture `key`, replacing any texture of that name. The texture
  * shows at the sketch's size in game pixels however many pixels its canvas has: Phaser draws a
  * frame at its canvas size over the source's `resolution`, and the trim gives game objects the
@@ -168,12 +174,13 @@ export interface CutOptions {
 export function cut(ctx: Ctx, pts: Pt[], color: string, o: CutOptions = {}) {
   const p = wobble(pts, o.wob ?? 0.8);
   const d = o.depth ?? 3;
+  const res = resOfCtx(ctx);
   ctx.save();
   if (d > 0) {
     ctx.shadowColor = `rgba(42,26,8,${o.shadow ?? 0.38})`;
-    ctx.shadowBlur = d * 2.2;
-    ctx.shadowOffsetX = d * 0.5;
-    ctx.shadowOffsetY = d * 0.9;
+    ctx.shadowBlur = d * 2.2 * res;
+    ctx.shadowOffsetX = d * 0.5 * res;
+    ctx.shadowOffsetY = d * 0.9 * res;
   }
   trace(ctx, p);
   ctx.fillStyle = color;
@@ -185,7 +192,7 @@ export function cut(ctx: Ctx, pts: Pt[], color: string, o: CutOptions = {}) {
   ctx.globalCompositeOperation = 'multiply';
   ctx.globalAlpha = o.grain ?? 0.35;
   ctx.fillStyle = ctx.createPattern(grainTile(), 'repeat')!;
-  ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  ctx.fillRect(0, 0, ctx.canvas.width / res, ctx.canvas.height / res);
   ctx.restore();
   ctx.save();
   ctx.globalAlpha = 0.35;
