@@ -176,6 +176,16 @@ The same ships side by side at their true sizes; every faction's heavy is the sa
 
 ![Every faction's four ships at one scale, with the five heavies all the same size and larger than the rest](docs/screenshots/fleets-scale.png)
 
+## Watch AI
+
+The **Watch AI** link on the hub card (or `?watch` after the game's URL) skips the faction picker
+and lets the AI command all five factions on an open map until one is left. Pan with the arrow keys
+or WASD as usual. The panel in the top right holds the battle still, plays it from 1x to 8x
+(**[** and **]**) and opens a log of every build, outpost, research and attack (**L**). Contracts
+don't run in a watched battle, so no faction gets their perks. Tap the end screen to watch another.
+
+![Watching five AIs fight, with the log open](docs/screenshots/watch-ai.png)
+
 ## Difficulty
 
 The difficulty, set on the hub page's Settings, changes how big a rival's army gets before it

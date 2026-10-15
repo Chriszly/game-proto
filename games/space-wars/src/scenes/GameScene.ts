@@ -15,6 +15,7 @@ import {
   BACKDROP_KEY, BEACON_KEY, CRYSTAL_KEYS, GLOW_BLUE_KEY, GLOW_KEY, RES, SHARD_KEY, SHIP_ZOOM, bakeAll, bakeBackdrop, buildingKey, facing, flameKey, shipKey,
 } from '../art/textures';
 import { settings } from '../../../../shared/settings';
+import { mountWatch, watching, watchSteps } from '../../../../shared/watch';
 import { renderScale, viewPoint } from '../../../../shared/scaling';
 import { BAR, BUTTONS, FONT, MAP_VIEW, PANEL_X, ROLE_LABEL, TOP, VIEW, type Button } from './layout';
 
@@ -284,12 +285,18 @@ export class GameScene extends Phaser.Scene {
     const res = bakeBackdrop(this, this.layout);
     this.backdrop.setTexture(BACKDROP_KEY).setScale(1 / res);
     this.reset();
+    // Watch mode (`?watch`) skips the picker: a random faction takes the first slot and the AI plays all five.
+    if (watching) this.startBattle(Math.floor(Math.random() * FACTIONS.length));
   }
 
   /** Starts the battle with the chosen faction under the player's command. */
   private startBattle(faction: number) {
-    this.state = new World(this.layout, faction);
+    this.state = new World(this.layout, faction, watching);
     this.picking = false;
+    if (watching) {
+      const sides = Object.fromEntries(this.state.sides.map((s) => [String(s.index), { name: s.def.name, color: `#${s.def.color.toString(16).padStart(6, '0')}` }]));
+      mountWatch({ sides, time: () => this.state.elapsedMs });
+    }
     this.reset();
   }
 
@@ -348,7 +355,8 @@ export class GameScene extends Phaser.Scene {
     const dt = this.lastFrame === null ? 0 : Phaser.Math.Clamp(time - this.lastFrame, 0, MAX_STEP_MS);
     this.lastFrame = time;
     if (!this.picking) {
-      this.state.update(dt);
+      // Watching, the battle runs once per step of the chosen speed, none while held.
+      for (let i = watchSteps(); i > 0; i--) this.state.update(dt);
       this.selected = new Set([...this.selected].filter((id) => this.state.selectable(id)));
       this.clock += dt;
     }
@@ -990,7 +998,9 @@ export class GameScene extends Phaser.Scene {
       this.setText(p.perk, 'Rank V');
     }
 
-    const end = s.phase === 'won' ? 'VICTORY\nTap to play again' : s.phase === 'lost' ? 'DEFEAT\nTap to try again' : '';
+    const end = s.watch && s.phase === 'won'
+      ? `${s.sides[s.winner]?.def.name.toUpperCase() ?? 'NOBODY'} WINS\nTap to watch another`
+      : s.phase === 'won' ? 'VICTORY\nTap to play again' : s.phase === 'lost' ? 'DEFEAT\nTap to try again' : '';
     this.setText(this.overlay, end);
     this.overlay.setVisible(end !== '');
   }
@@ -1032,6 +1042,8 @@ export class GameScene extends Phaser.Scene {
       this.newGame();
       return;
     }
+    // Watching, the AI gives every order; the map still pans.
+    if (watching) return;
     if (this.picking) {
       const card = this.pickCards.find((c) => p.x >= c.x && p.x < c.x + c.w && p.y >= c.y && p.y < c.y + c.h);
       if (card) this.startBattle(card.faction);
