@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { JAR, LANTERN_SPOTS } from '../game/places';
 import type { MothKind, NightKind } from '../game/state';
+import { sharpRes } from '../../../../shared/scaling';
 import { DUSK_BAR as DUSK, GUST_TAG, KIND_TAG, NIGHT_PANEL, ORDER, SHOP, SMALL_PANEL } from '../scenes/layout';
 
 export { DUSK };
@@ -12,12 +13,15 @@ export { DUSK };
 // black card plaques with punched lace borders.
 //
 // Everything is painted once at startup on 2D canvases and added with `textures.addCanvas`. The
-// painters work in view pixels; small textures are painted at RES times that size and drawn by the
-// scene at 1 / RES, so they stay sharp when the game is scaled up.
+// painters work in view pixels; sprites and plaques are painted at RES times that size and the
+// full-view layers (the screen, castle, stars, fog, bunting) at BACK_RES, and the scene draws them
+// at 1 / RES and 1 / BACK_RES, so they stay sharp on every screen.
 
 export const PI = Math.PI;
-/** Canvas pixels per view pixel for sprites and plaques. */
-export const RES = 2;
+/** Canvas pixels per view pixel for sprites and plaques: 2, or more on a big screen (set by `bakeTextures`). */
+export let RES = 2;
+/** Canvas pixels per view pixel for the full-view layers: 1, or more on a big screen. */
+export let BACK_RES = 1;
 /** The black of the card. */
 export const INK = '#0d0a10';
 export const INK_HEX = 0x0d0a10;
@@ -707,9 +711,12 @@ function paintSaveTag() {
 
 /** Bakes every texture the scene uses. */
 export function bakeTextures(scene: Phaser.Scene) {
-  SCREENS.forEach((key, i) => bake(scene, key, W, H, () => paintScreen(SCREEN_STOPS[i], [0.4, 0.35, 0.18][i]), 0, 0, 1));
-  bake(scene, 'castle', W, H, paintCastle, 0, 0, 1);
-  bake(scene, 'stars', W, 300, paintStars, 0, 0, 1);
+  // Sized by the widest texture of each kind, the full-view layers and the HUD bar.
+  RES = sharpRes(W, 48, 2);
+  BACK_RES = sharpRes(W, H, 1);
+  SCREENS.forEach((key, i) => bake(scene, key, W, H, () => paintScreen(SCREEN_STOPS[i], [0.4, 0.35, 0.18][i]), 0, 0, BACK_RES));
+  bake(scene, 'castle', W, H, paintCastle, 0, 0, BACK_RES);
+  bake(scene, 'stars', W, 300, paintStars, 0, 0, BACK_RES);
   bake(scene, 'moon', 100, 100, paintMoon, 50, 50);
   bake(scene, 'glow', 128, 128, () => glow(64, 64, 64, '#ffbe6a', 1), 0, 0, 1);
   bake(scene, 'glow-pale', 128, 128, () => glow(64, 64, 64, '#ffe0a0', 1), 0, 0, 1);
@@ -723,8 +730,8 @@ export function bakeTextures(scene: Phaser.Scene) {
   bake(scene, 'bat-up', 56, 40, () => paintBat(true), 28, 20);
   bake(scene, 'bat-down', 56, 40, () => paintBat(false), 28, 20);
   bake(scene, 'sky-lantern', 56, 56, paintSkyLantern, 28, 28);
-  bake(scene, 'fog', W, H, paintFog, 0, 0, 1);
-  bake(scene, 'bunting', W, H, paintBunting, 0, 0, 1);
+  bake(scene, 'fog', W, H, paintFog, 0, 0, BACK_RES);
+  bake(scene, 'bunting', W, H, paintBunting, 0, 0, BACK_RES);
   for (const kind of ['clear', 'fog', 'feast', 'storm'] as const satisfies readonly NightKind[]) {
     bake(scene, `kind-${kind}`, 32, 32, () => paintKindIcon(kind), 16, 16);
   }
