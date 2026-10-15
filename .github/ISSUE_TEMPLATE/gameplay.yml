@@ -1,7 +1,7 @@
 name: Gameplay feedback
 description: Something feels off, like balance, difficulty, unclear rules, or it isn't fun.
 title: "[Gameplay] "
-labels: ["type: gameplay"]
+labels: ["gameplay"]
 body:
   - type: dropdown
     id: game
