@@ -44,16 +44,16 @@ interface GameState {
 const VIEW = { w: 960, h: 540, hud: 44 };
 /**
  * Each garden has three rows of three beds edge to edge, and the sickle reaches 72px from the
- * doctor's middle, 28.5px above the feet. Standing here in the wheat field, it reaches exactly the
- * field's right-hand column of three wheat (beds at x 190), and walking straight up from below the
- * gardens to it, nothing else. Beside it, it reaches the mandrake patch's left-hand column (x 314).
+ * doctor's middle, 28.5px above the feet. Walking straight up the gap between the wheat field and
+ * the mandrake patch from below them, it reaches the wheat field's right-hand column (beds at x 190)
+ * and the patch's left-hand one (x 314) alike: first their bottom beds, then their middle ones, and
+ * the hands are full. Standing at the top of the walk, the bottom beds are out of reach again.
  */
-const WHEAT_SPOT = { x: 224, y: 197 };
-const BELOW_GARDENS = [{ x: 450, y: 316 }, { x: 224, y: 316 }];
-const MANDRAKE = { x: 290, y: 197 };
-/** The wheat field's right-hand column, and a mandrake bed of the patch's left-hand one, by plot index. */
-const WHEAT_COLUMN = [2, 5, 8];
-const MANDRAKE_PLOT = 12;
+const BELOW_GARDENS = [{ x: 450, y: 316 }, { x: 252, y: 316 }];
+const BETWEEN_GARDENS = { x: 252, y: 200 };
+/** The beds cut on the way up, by plot index: the bottom and middle ones of each column. */
+const WHEAT_CUT = [5, 8];
+const MANDRAKE_CUT = [12, 15];
 /** How long wheat and mandrake take to grow, from src/game/items.ts. */
 const GROW_MS = { wheat: 24_000, mandrake: 42_000 };
 /** Each station's drop, work and pick-up markers stand in a column on its inner side. */
@@ -63,8 +63,11 @@ const CAULDRON = { drop: { x: 352, y: 580 }, work: { x: 352, y: 660 }, pickUp: {
 const LEAVE_SHOP = { x: 525, y: 985 };
 /** From the cauldron's pick-up, a step towards the shop's back door, clear of every marker. */
 const LEAVE_CAULDRONS = { x: 460, y: 740 };
-/** The counter's markers, left of it: drop and work on the doctor's side, the coins on the street side. */
-const COUNTER = { drop: { x: 560, y: 860 }, work: { x: 560, y: 940 }, coins: { x: 560, y: 1015 } };
+/**
+ * The counter's markers: the drop north of its shelves, just inside the back door; work left of the
+ * counter on the doctor's side and the coins on the street side.
+ */
+const COUNTER = { drop: { x: 700, y: 806 }, work: { x: 560, y: 940 }, coins: { x: 560, y: 1015 } };
 /** The Recipes button in the top bar, on screen rather than in the world. */
 const RECIPES_BUTTON = { x: 219, y: 22 };
 /** Customers come in from the street door in the storefront at the bottom and line up below the counter. */
@@ -326,8 +329,11 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
       'Wheat = Wheat Flour',
       'Mandrake = Mandrake Seeds',
       'Nightshade = Nightshade Extract',
-      'Nightshade Extract + Wheat Flour = Shadow Elixir',
-      'Wheat Flour + Mandrake Seeds = Sleeping Tonic',
+      "Nightshade Extract + Nightshade Extract = Witch's Brew",
+      'Nightshade Extract + Mandrake Seeds = Shadow Elixir',
+      'Nightshade Extract + Wheat Flour = Moonlight Salve',
+      'Mandrake Seeds + Mandrake Seeds = Sleeping Tonic',
+      'Wheat Flour + Mandrake Seeds = Vigour Tonic',
       'Wheat Flour + Wheat Flour = Healing Draught',
     ],
   });
@@ -363,24 +369,21 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
   expect(firstOrder.tip).toBe(maxTip(firstOrder.wants.length));
 
   // One round of the loop: harvest, refine, brew, sell and collect the coins.
-  // Gardens: walk up into the wheat field, where the sickle reaches one column of three wheat, then
-  // over to the mandrake patch until both hands are full.
+  // Gardens: walk up the gap between the wheat field and the mandrake patch, where the sickle cuts
+  // the beds either side until both hands are full.
   let s = await game.state();
   expect(s.plots.length, 'nine beds in each of six gardens').toBe(54);
   expect(s.plots.slice(0, 9).every((p) => p.plant === 'wheat') && s.plots.slice(9, 18).every((p) => p.plant === 'mandrake')).toBe(true);
   // A new game starts every bed ripe.
-  for (const i of WHEAT_COLUMN) expect(s.plots[i].grown).toBe(GROW_MS.wheat);
-  await walkTo(...BELOW_GARDENS, WHEAT_SPOT);
-  s = await until('a column of wheat harvested', (s) => (count(s.carrying).wheat ?? 0) >= 3);
-  expect(count(s.carrying)).toEqual({ wheat: 3 });
-  // Just those three beds were cut, and grow again from nothing.
-  s.plots.slice(0, 9).forEach((p, i) => expect(p.grown >= GROW_MS.wheat, `wheat bed ${i} ripe`).toBe(!WHEAT_COLUMN.includes(i)));
-  // The camera followed the doctor up to the wheat field, at the top-left corner of the world.
+  for (const i of WHEAT_CUT) expect(s.plots[i].grown).toBe(GROW_MS.wheat);
+  for (const i of MANDRAKE_CUT) expect(s.plots[i].grown).toBe(GROW_MS.mandrake);
+  await walkTo(...BELOW_GARDENS, BETWEEN_GARDENS);
+  s = await until('two wheat and two mandrakes harvested', (s) => s.carrying.length === 4);
+  expect(count(s.carrying)).toEqual({ wheat: 2, mandrake: 2 });
+  // Just those four beds were cut, and grow again from nothing.
+  s.plots.slice(0, 18).forEach((p, i) => expect(p.grown >= GROW_MS[p.plant as 'wheat' | 'mandrake'], `bed ${i} ripe`).toBe(![...WHEAT_CUT, ...MANDRAKE_CUT].includes(i)));
+  // The camera followed the doctor up to the gardens, at the top-left corner of the world.
   expect(await game.view()).toEqual({ x: 0, y: 0 });
-  expect(s.plots[MANDRAKE_PLOT].grown).toBe(GROW_MS.mandrake);
-  await walkTo(MANDRAKE);
-  s = await until('one mandrake harvested', (s) => s.carrying.length === 4);
-  expect(count(s.carrying)).toEqual({ wheat: 3, mandrake: 1 });
   await snap('1-harvested');
 
   // Refining table: drop the plants, work until they are refined, pick the goods up.
@@ -388,20 +391,21 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
   s = await until('plants dropped at the refining table', (s) => s.carrying.length === 0);
   expect(s.refiner.queue.length + s.refiner.output.length).toBe(4);
   // Each kind of plant goes on its own pallet above the table.
-  expect(await game.pallets('refiner')).toEqual({ in: { wheat: 3, mandrake: 1, nightshade: 0 }, out: { flour: 0, mandrakeSeeds: 0, nightshadeExtract: 0 } });
+  expect(await game.pallets('refiner')).toEqual({ in: { wheat: 2, mandrake: 2, nightshade: 0 }, out: { flour: 0, mandrakeSeeds: 0, nightshadeExtract: 0 } });
   await walkTo(REFINER.work);
   await snap('2-refining');
   await until('plants refined', (s) => s.refiner.output.length === 4);
-  expect(await game.pallets('refiner')).toEqual({ in: { wheat: 0, mandrake: 0, nightshade: 0 }, out: { flour: 3, mandrakeSeeds: 1, nightshadeExtract: 0 } });
+  expect(await game.pallets('refiner')).toEqual({ in: { wheat: 0, mandrake: 0, nightshade: 0 }, out: { flour: 2, mandrakeSeeds: 2, nightshadeExtract: 0 } });
   await walkTo(REFINER.pickUp);
   s = await until('refined goods picked up', (s) => s.carrying.length === 4);
-  expect(count(s.carrying)).toEqual({ flour: 3, mandrakeSeeds: 1 });
+  expect(count(s.carrying)).toEqual({ flour: 2, mandrakeSeeds: 2 });
 
-  // Cauldron: flour and seeds brew a Sleeping Tonic, two flour a Healing Draught.
+  // Cauldron: two seeds brew a Sleeping Tonic, two flour a Healing Draught. The other potions are
+  // still to be learned at the study.
   await walkTo(CAULDRON.drop);
   await until('goods in the cauldron', (s) => s.carrying.length === 0);
   // The cauldron picks its first recipe when work starts: the potion the shop is shortest of,
-  // Sleeping Tonic on a tie. Three flour and a seed could make either.
+  // Sleeping Tonic on a tie. Two flour and two seeds could make either first.
   s = await game.state();
   expect(s.cauldron.brewing).toBeNull();
   const short = { healingDraught: shortfall(s, 'healingDraught'), sleepingTonic: shortfall(s, 'sleepingTonic') };
@@ -427,7 +431,7 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
   await until('the second potion brewed', (s) => s.cauldron.output.length === 1);
   expect(await game.pallets('cauldron')).toEqual({
     in: { flour: 0, mandrakeSeeds: 0, nightshadeExtract: 0 },
-    out: { healingDraught: 0, sleepingTonic: 0, shadowElixir: 0, [second]: 1 },
+    out: { healingDraught: 0, sleepingTonic: 0, vigourTonic: 0, shadowElixir: 0, moonlightSalve: 0, witchsBrew: 0, [second]: 1 },
   });
   await walkTo(CAULDRON.pickUp);
   s = await until('potions picked up', (s) => s.carrying.length === 2);
@@ -440,12 +444,12 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
   // A tap straight at the counter: the shop's walls are solid, so the doctor finds the way in by the door.
   await walkTo(COUNTER.drop);
   s = await until('potions on the shelf', (s) => s.carrying.length === 0);
-  // The potions stand on their pallets in front of the counter, a fine one on its plain potion's.
+  // The potions stand on the shelves behind the counter, one shelf for each potion learned, a fine
+  // one on its plain potion's.
   const shelf = count(s.counter.shelf.map(plain));
   expect((await game.pallets('counter')).in).toEqual({
     healingDraught: shelf.healingDraught ?? 0,
     sleepingTonic: shelf.sleepingTonic ?? 0,
-    shadowElixir: 0,
   });
   // One of each potion: a customer pays less for a potion while more of its kind stay stocked,
   // so with no others left behind each one sells at full pay.

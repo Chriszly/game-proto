@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import { foeTexture } from '../art/characters';
 import { relicIcon } from '../art/icons';
 import { BLUE, GOLD, INK, RED, STONE } from '../art/palette';
+import { artImage } from '../art/paint';
 import { backdrop } from '../art/scenery';
 import { isTempered, tempered, type CardId } from '../game/cards';
 import { ENEMIES, type StatusKind } from '../game/enemies';
@@ -95,7 +96,7 @@ class StatusRow {
 
   constructor(scene: Phaser.Scene, layer: Phaser.GameObjects.Container) {
     this.parts = STATUS_KINDS.map((kind) => {
-      const icon = scene.add.image(0, 0, `status-${kind}`).setVisible(false);
+      const icon = artImage(scene, 0, 0, `status-${kind}`).setVisible(false);
       const text = scene.add.text(0, 0, '', textStyle(15, STATUS_COLORS[kind])).setOrigin(0, 0.5).setVisible(false);
       layer.add([icon, text]);
       return { kind, icon, text };
@@ -267,11 +268,11 @@ export class GameScene extends Phaser.Scene {
   // The map
 
   private createMap() {
-    this.mapBg = this.add.image(0, 0, 'map-bg').setOrigin(0);
+    this.mapBg = artImage(this, 0, 0, 'map-bg').setOrigin(0);
     this.paths = this.add.graphics();
     this.roomRings = this.add.graphics();
     this.roomLayer = this.add.container(0, 0);
-    this.token = this.add.image(ENTRANCE.x, ENTRANCE.y, 'hero-token').setOrigin(0.5, 1);
+    this.token = artImage(this, ENTRANCE.x, ENTRANCE.y, 'hero-token').setOrigin(0.5, 1);
     this.mapHint = this.add
       .text(VIEW.w / 2, VIEW.h - 34, '', { ...textStyle(18, '#e6c766'), align: 'center', wordWrap: { width: VIEW.w - 80 } })
       .setOrigin(0.5);
@@ -285,7 +286,7 @@ export class GameScene extends Phaser.Scene {
     this.roomsBuilt = s.rooms;
     this.roomLayer.removeAll(true);
     s.rooms.forEach((room, i) => {
-      const icon = this.add.image(room.x, room.y, `room-${room.kind}`);
+      const icon = artImage(this, room.x, room.y, `room-${room.kind}`);
       // Taps land anywhere in the room's circle.
       const hit = this.add.circle(room.x, room.y, ROOM_RADIUS, 0xffffff, 0.001).setInteractive({ useHandCursor: true });
       hit.on('pointerdown', () => walkTo(this.state, i));
@@ -343,8 +344,8 @@ export class GameScene extends Phaser.Scene {
   // The fight
 
   private createFight() {
-    this.roomBg = this.add.image(0, 0, 'room-bg').setOrigin(0);
-    this.hero = this.add.image(HERO_FEET.x, HERO_FEET.y, 'hero').setOrigin(0.5, 1);
+    this.roomBg = artImage(this, 0, 0, 'room-bg').setOrigin(0);
+    this.hero = artImage(this, HERO_FEET.x, HERO_FEET.y, 'hero').setOrigin(0.5, 1);
     this.bars = this.add.graphics();
     this.heroHp = this.add.text(HERO_FEET.x, FOE_FEET_Y + HP_BAR.dy + HP_BAR.h / 2, '', textStyle(13)).setOrigin(0.5);
     this.handLayer = this.add.container(0, 0);
@@ -377,7 +378,7 @@ export class GameScene extends Phaser.Scene {
 
     this.bars.clear();
     this.drawHpBar(HERO_FEET.x, s.hp, s.maxHp, f?.block ?? 0, this.heroHp);
-    this.heroStatuses.draw(f?.status, HERO_FEET.x, HERO_FEET.y - this.hero.height - 16);
+    this.heroStatuses.draw(f?.status, HERO_FEET.x, HERO_FEET.y - this.hero.displayHeight - 16);
 
     // Foes, each with its intent and statuses over its head; one that falls fades away.
     const seen = new Set<number>();
@@ -385,10 +386,10 @@ export class GameScene extends Phaser.Scene {
       seen.add(e.id);
       let foe = this.foes.get(e.id);
       if (!foe) {
-        const sprite = this.add.image(xs[i], FOE_FEET_Y, foeTexture(e.kind)).setOrigin(0.5, 1);
-        const intent = this.add.image(0, 0, 'intent-attack');
+        const sprite = artImage(this, xs[i], FOE_FEET_Y, foeTexture(e.kind)).setOrigin(0.5, 1);
+        const intent = artImage(this, 0, 0, 'intent-attack');
         const intentText = this.add.text(0, 0, '', textStyle(18)).setOrigin(0, 0.5);
-        const intentExtra = this.add.image(0, 0, 'status-weak');
+        const intentExtra = artImage(this, 0, 0, 'status-weak');
         const hp = this.add.text(0, FOE_FEET_Y + HP_BAR.dy + HP_BAR.h / 2, '', textStyle(13)).setOrigin(0.5);
         this.fightLayer.addAt(sprite, 2);
         this.fightLayer.addAt([intent, intentText, intentExtra, hp], this.fightLayer.getIndex(this.bars) + 1);
@@ -403,7 +404,7 @@ export class GameScene extends Phaser.Scene {
       if (e.hitMs > 0 && !settings.reduceMotion) foe.sprite.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
       else foe.sprite.clearTint();
       this.drawHpBar(foe.x, e.hp, e.maxHp, e.block, foe.hp);
-      const top = FOE_FEET_Y - foe.sprite.height;
+      const top = FOE_FEET_Y - foe.sprite.displayHeight;
       this.drawIntent(e, foe, foe.x, top - 22);
       foe.statuses.draw(e.status, foe.x, top - 52);
     });
@@ -555,7 +556,7 @@ export class GameScene extends Phaser.Scene {
       this.shopLayer.add(items);
     };
     const price = (x: number, y: number, amount: number, sold: boolean) => {
-      const coin = this.add.image(x - 22, y, 'coin');
+      const coin = artImage(this, x - 22, y, 'coin');
       const text = this.add
         .text(x - 6, y, sold ? 'Sold' : String(amount), textStyle(17, sold ? '#8a8070' : s.gold >= amount ? '#e6c766' : '#e0584f'))
         .setOrigin(0, 0.5);
@@ -579,7 +580,7 @@ export class GameScene extends Phaser.Scene {
     const box = (y: number, icon: string, name: string, text: string, cost: number, sold: boolean, can: boolean, onBuy: () => void) => {
       const { x, w, h } = SHOP.box;
       const bg = this.add.rectangle(x, y, w, h, 0x2a2632, sold ? 0.5 : 1).setStrokeStyle(3, can ? GOLD.mid : 0x5a5366);
-      const pic = this.add.image(x - w / 2 + 34, y, icon).setAlpha(sold ? 0.3 : 1);
+      const pic = artImage(this, x - w / 2 + 34, y, icon).setAlpha(sold ? 0.3 : 1);
       const title = this.add.text(x - w / 2 + 66, y - 26, name, textStyle(16, '#f3e9d2'));
       const rules = this.add
         .text(x - w / 2 + 66, y - 6, text, { fontFamily: FONT, fontSize: '13px', color: '#d8c7a6', wordWrap: { width: w - 150 } })
@@ -720,7 +721,7 @@ export class GameScene extends Phaser.Scene {
       let text = this.pops.get(p.id);
       const foe = p.on === 'hero' ? null : this.foes.get(p.on);
       const x = p.on === 'hero' ? HERO_FEET.x : foe?.x ?? text?.x ?? VIEW.w / 2;
-      const top = p.on === 'hero' ? HERO_FEET.y - this.hero.height : foe ? FOE_FEET_Y - foe.sprite.height : (text?.getData('top') ?? 200);
+      const top = p.on === 'hero' ? HERO_FEET.y - this.hero.displayHeight : foe ? FOE_FEET_Y - foe.sprite.displayHeight : (text?.getData('top') ?? 200);
       if (!text) {
         // Several numbers on the same target at once fan out a little.
         const spread = (s.pops.filter((q) => q.on === p.on && q.id < p.id).length % 3) * 22;
@@ -740,10 +741,10 @@ export class GameScene extends Phaser.Scene {
 
   private createHud() {
     this.hud = this.add.graphics().setDepth(UI_DEPTH);
-    this.add.image(26, HUD_HEIGHT / 2, 'heart').setDepth(UI_DEPTH + 1);
+    artImage(this, 26, HUD_HEIGHT / 2, 'heart').setDepth(UI_DEPTH + 1);
     this.hpText = this.add.text(46, 10, '', textStyle(18, '#f4a08a')).setDepth(UI_DEPTH + 1);
     this.deckText = this.add.text(HUD.deckX, 12, '', textStyle(15)).setDepth(UI_DEPTH + 1);
-    this.add.image(HUD.coinX, HUD_HEIGHT / 2, 'coin').setDepth(UI_DEPTH + 1);
+    artImage(this, HUD.coinX, HUD_HEIGHT / 2, 'coin').setDepth(UI_DEPTH + 1);
     this.goldText = this.add.text(HUD.goldX, 10, '', textStyle(18, '#e6c766')).setDepth(UI_DEPTH + 1);
     this.relicLayer = this.add.container(0, 0).setDepth(UI_DEPTH + 1);
     this.roomText = this.add.text(VIEW.w - 16, 12, '', textStyle(15, '#e6c766')).setOrigin(1, 0).setDepth(UI_DEPTH + 1);
@@ -773,7 +774,7 @@ export class GameScene extends Phaser.Scene {
       this.relicKey = relicKey;
       this.relicLayer.removeAll(true);
       s.relics.forEach((id, i) => {
-        const icon = this.add.image(HUD.relicX + i * HUD.relicGap, HUD_HEIGHT / 2, relicIcon(id)).setInteractive({ useHandCursor: true });
+        const icon = artImage(this, HUD.relicX + i * HUD.relicGap, HUD_HEIGHT / 2, relicIcon(id)).setInteractive({ useHandCursor: true });
         icon.on('pointerdown', () => this.showTip(id)).on('pointerover', () => this.showTip(id));
         this.relicLayer.add(icon);
       });

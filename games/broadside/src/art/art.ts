@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { sharpRes } from '../../../../shared/scaling';
 import { ORDER_IDS, type OrderId } from '../game/orders';
 import type { EnemyKind } from '../game/ships';
 import { ISLANDS, WORLD } from '../game/state';
@@ -7,14 +8,19 @@ import { FIRE, HARBOR, HELM, HUD_HEIGHT, OVER, VIEW, WIND } from '../scenes/layo
 // The art of an old hand-tinted sea chart: ink on parchment, a compass rose and rhumb lines,
 // engraved hatching for the sea and form lines round the coasts, and ships drawn as engraved
 // miniatures. Everything is painted on 2D canvases at startup and added as textures, so there are
-// no asset files. Small pieces are painted at twice their size (`HI`) and shown at half scale, so
-// they stay crisp when the game is scaled up to fit a large screen.
+// no asset files. Each is painted finer than the game's pixels and shown scaled down, so it stays
+// crisp on a big or high-density screen: small pieces at `HI`, the sea at `SEA_RES` and the frame
+// and panels at `SHEET_RES`. All three are set by `bakeAll` from the screen's `renderScale`.
 
 type Ctx = CanvasRenderingContext2D;
 type Pt = [number, number];
 
 /** How much finer than the game's pixels the small textures are painted; show them at 1 / HI. */
-export const HI = 2;
+export let HI = 2;
+/** How much finer the sea is painted; a whole number, so its copies join without a seam. */
+export let SEA_RES = 1;
+/** How much finer the frame and the panels are painted; show them at 1 / SHEET_RES. */
+export let SHEET_RES = 1;
 
 export const INK = '#2b2118';
 const ink = (a: number) => `rgba(43,33,24,${a})`;
@@ -286,7 +292,7 @@ export const ROSES = [
 
 function bakeSea(scene: Phaser.Scene) {
   const { w: W, h: H } = WORLD;
-  bake(scene, 'sea', W, H, 1, (ctx) => {
+  bake(scene, 'sea', W, H, SEA_RES, (ctx) => {
     parchment(ctx, W, H, 5, 40_000, true);
     // Everything that may cross an edge of the sea is drawn again one sea over, so the chart
     // joins up seamlessly where it wraps.
@@ -360,7 +366,7 @@ function bakeSea(scene: Phaser.Scene) {
 /** Fixed on screen over the sea: browned edges and the chart's neatline with its degree scale. */
 function bakeFrame(scene: Phaser.Scene) {
   const { w: W, h: H } = VIEW;
-  bake(scene, 'frame', W, H, 1, (ctx) => {
+  bake(scene, 'frame', W, H, SHEET_RES, (ctx) => {
     const vg = ctx.createRadialGradient(W / 2, H / 2, H * 0.45, W / 2, H / 2, H * 1.15);
     vg.addColorStop(0, 'rgba(0,0,0,0)');
     vg.addColorStop(1, 'rgba(110,70,25,0.45)');
@@ -721,7 +727,7 @@ function bakeSeal(scene: Phaser.Scene, order: OrderId) {
 
 /** A sheet of parchment with a double ruled border and a little fleuron at each corner. */
 function bakePanel(scene: Phaser.Scene, key: string, w: number, h: number) {
-  bake(scene, key, w, h, 1, (ctx) => {
+  bake(scene, key, w, h, SHEET_RES, (ctx) => {
     parchment(ctx, w, h, w + h, Math.round((w * h) / 30));
     const vg = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.3, w / 2, h / 2, Math.max(w, h) * 0.75);
     vg.addColorStop(0, 'rgba(0,0,0,0)');
@@ -789,6 +795,10 @@ function bakeHudBar(scene: Phaser.Scene) {
 
 /** Paints every texture at startup, so the prototype needs no asset files. */
 export function bakeAll(scene: Phaser.Scene) {
+  // The widest small piece is the top bar, which holds the rest to a texture every device loads.
+  HI = sharpRes(VIEW.w, HUD_HEIGHT + 2, 2);
+  SEA_RES = Math.floor(sharpRes(WORLD.w, WORLD.h, 1));
+  SHEET_RES = sharpRes(VIEW.w, VIEW.h, 1);
   bakeSea(scene);
   bakeFrame(scene);
   for (const kind of Object.keys(SHIP_LOOKS) as (keyof typeof SHIP_LOOKS)[]) bakeShip(scene, kind);

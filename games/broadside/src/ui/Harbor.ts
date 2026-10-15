@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import { renderScale } from '../../../../shared/scaling';
+import { SHEET_RES } from '../art/art';
 import { SHOTS } from '../game/shot';
 import { rank, type GameState, type Side } from '../game/state';
 import { costOf, REPAIR_COST, UPGRADE_IDS, UPGRADES, type UpgradeId } from '../game/upgrades';
@@ -26,7 +28,7 @@ interface Row {
 const ROW = 0xf6ecd2;
 const ROW_LIT = 0xebd29a;
 const INK = 0x2b2118;
-const style = (size: number, color: string, fontStyle = 'normal') => ({ fontFamily: FONT, fontSize: `${size}px`, color, fontStyle, resolution: 2 });
+const style = (size: number, color: string, fontStyle = 'normal') => ({ fontFamily: FONT, fontSize: `${size}px`, color, fontStyle, resolution: Math.max(2, renderScale) });
 
 /**
  * The harbor between waves, as a ledger on a sheet of parchment: spend the plunder on the ship,
@@ -44,7 +46,7 @@ export class Harbor {
 
   constructor(scene: Phaser.Scene, onAction: (id: HarborAction) => void) {
     const dim = scene.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x3a2a18, 0.45).setInteractive();
-    const panel = scene.add.image(HARBOR.x, HARBOR.y, 'panel-harbor');
+    const panel = scene.add.image(HARBOR.x, HARBOR.y, 'panel-harbor').setScale(1 / SHEET_RES);
     const top = HARBOR.y - HARBOR.h / 2;
     this.title = scene.add.text(HARBOR.x, top + 32, '', style(26, '#2b2118', 'bold')).setOrigin(0.5);
     this.gold = scene.add.text(HARBOR.x, top + 64, '', style(16, '#6a4410', 'italic')).setOrigin(0.5);

@@ -72,7 +72,7 @@ File map (all under `src/`, plus the shared files it imports):
 
 - `main.ts`: creates the `Phaser.Game` (960x540, `Scale.FIT`, `pixelArt: false`, three active
   pointers for two-thumb play) with `BootScene` and `GameScene`, calls `setupGame(game)` and
-  exposes `window.game` in dev builds.
+  `setupScaling(game)` (`shared/scaling.ts`) and exposes `window.game` in dev builds.
 - `scenes/BootScene.ts`: calls `bakeAll` and starts `Game`.
 - `scenes/GameScene.ts`: owns the run's `state`, reads input (`readInput`), calls `tick` each
   frame and draws everything (HUD, order card, helm wheels and fire controls with their charge
@@ -118,8 +118,12 @@ File map (all under `src/`, plus the shared files it imports):
   parchment, rhumb lines, hatching, islands with names, soundings and the compass rose, drawn so
   it repeats seamlessly), `frame` (screen vignette and neatline), `ship-<kind>`, `shot-round`,
   `shot-chain`, `shot-grape`, `shot-powder`, `loot`, `helm-<side>[-held]`, `fire-<side>[-held]`,
-  `seal-<order>`, `order-card`, `hud-bar`, `wind-rose`, `panel-harbor` and `panel-over`. Small textures are
-  painted at `HI` (2x) and shown at `1 / HI` scale.
+  `seal-<order>`, `order-card`, `hud-bar`, `wind-rose`, `panel-harbor` and `panel-over`. Every texture is
+  painted finer than game pixels and shown scaled down by the same factor, set by `bakeAll` from
+  `sharpRes` and the screen's `renderScale`: small pieces at `HI` (2 on a screen that needs no
+  scaling, up to about 4 on 4K), `frame` and the panels at `SHEET_RES` (shown at `1 / SHEET_RES`),
+  and `sea` at `SEA_RES`, a whole number so its copies join without a seam. A new texture is
+  baked at one of these and shown at its inverse.
 - `ui/Harbor.ts`: the harbor panel, a ledger on parchment. Its rows are built from `UPGRADE_IDS`
   plus `repair`, followed by the two loading buttons (`load-port`, `load-starboard`) and a "Set
   sail" button. It also records each button's screen rectangle
@@ -180,8 +184,9 @@ How it runs:
   `followPlayer` centres the camera on it with `setScroll`, so the camera never jumps at an edge
   and there are no camera bounds. Everything else is drawn at `place(p)`: its nearest copy around
   the player, which works because the sea is more than twice the view on each axis. The chart is
-  a screen-sized tile sprite of the `sea` texture at scroll factor 0 whose tile position is the
-  camera's scroll; the islands are painted into that texture, so they need no sprites.
+  four images of the `sea` texture in a 2x2 square, which `placeSea` moves each frame to the
+  corners of the sea copy the screen's top-left (`topLeft`) is in, so they always cover the
+  screen; the islands are painted into that texture, so they need no sprites.
 - **Islands:** `runAground` in `sim.ts` treats each island's beach as an ellipse grown by part of
   the ship's radius. A ship inside it is moved out to its edge along the line from the centre,
   its heading is mirrored in the ellipse's normal if it was sailing in, and, unless `agroundMs`
@@ -265,7 +270,14 @@ Data tables, where to tune:
 
 ### Hub settings
 
-- `src/main.ts` calls `setupGame(game)` from `shared/setupGame.ts` right after creating the game.
+- `src/main.ts` calls `setupGame(game)` from `shared/setupGame.ts` right after creating the game,
+  then `setupScaling(game)` from `shared/scaling.ts`: the canvas has `renderScale` canvas pixels
+  per game pixel and the main camera is zoomed to match from its top-left corner, so `setScroll`
+  still names the screen's top-left in the sea (kept as `topLeft`, since `worldView` lags a
+  frame) and HUD objects at scroll factor 0 stay where they are placed, with no second camera.
+  Texts are drawn at `Math.max(2, renderScale)`. Lay out in the 960x540 `VIEW`, never from
+  `this.scale` or `pointer.x/y`, which are canvas pixels. `e2e/screens.spec.ts` at the root opens
+  the game on five screens.
   It applies the frame cap, the FPS readout, reduced motion and full screen (camera shake and flash become
   no-ops; this game uses neither).
 - Difficulty scales one number: enemy hp. `spawn` in `game/sim.ts` multiplies

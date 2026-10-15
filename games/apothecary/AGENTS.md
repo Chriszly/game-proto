@@ -8,19 +8,23 @@ to the game, as the root AGENTS.md asks.
 
 Apothecary is a top-down automation game: a plague doctor walks a yard laid out in columns, harvests wheat,
 mandrake and (once a shade garden is planted) nightshade, refines them at a table, brews potions in
-a cauldron and sells them to customers at a counter. Coins buy upgrades, craftsmen, conveyor belts,
-shade gardens and a mirrored second production line.
+a cauldron and sells them to customers from shelves behind a counter. Coins buy upgrades, craftsmen,
+pixies that carry goods between stations (the sim and code still call them belts), recipes at the
+study, shade gardens and a mirrored second production line.
 
 - Implemented: the full loop on both lines, auto-harvest with a spinning sickle, floor markers
   (drop, work, pick up, pay), pallets that show station stock, customers served only at the
   counter, a walled shop that faces the street at the bottom and that the doctor enters by a back door from the market, station upgrades (5 levels), outfitter and
-  guild upgrades, two craftsmen per station, a priority choice per crafting station, six belts
-  with one lane per item kind, the expansion,
+  guild upgrades, two craftsmen per station (the second opens a second pipe at a table or
+  cauldron; craftsmen rock to and fro while their pipe works), a priority choice per crafting
+  station, six pixie routes (belts) with one lane per item kind, six potions of which two are
+  known from the start and four are learned at the study, one shop shelf per potion learned, the
+  expansion, a row of order cards always on screen, weather drawn over the yard,
   a Recipes panel and a Settings panel, a daily contract card, tips that shrink while a customer
   waits (a coin ring on each order bubble), and an autopilot that plays the time away (up to 2h)
   on load and shows a "While you were away" chip. Progress autosaves to localStorage.
 - Gardens have nine beds each, three by three edge to edge (`PLOTS_PER_GARDEN`, `plotPosition`).
-  Two shade gardens grow nightshade for the Shadow Elixir (extract + flour). A brew's last quarter
+  Two shade gardens grow nightshade for the Shadow Elixir, Moonlight Salve and Witch's Brew. A brew's last quarter
   is its fine window: picked up then by hand, it becomes a Fine potion (its own item kind) worth
   `FINE_BONUS` times as much. Customers can come back as regulars, the street keeps a reputation,
   each day has almanac weather, and every fourth day is a market day with a crowd at midday. The
@@ -49,7 +53,8 @@ shade gardens and a mirrored second production line.
   `walkSpeed`, `potionPrice`, `stationBuilt`, `anyFieldBuilt`, `beltBuildable`, ...). Also the tip
   rules (`TIP_SHARE`, `maxTip`, `tipLeft`, `tipNow`) and the contract (`Contract`, `DAY_MS`,
   `MAX_CONTRACT`, `contractFor`). Also the gardens (`GARDENS`, `GARDEN_LINE`, `SHADE_GARDEN`,
-  `SHADE_COST`, `gardenBuilt`, `shadeGrown`, `orderable`), the fine window (`FINE_SHARE`,
+  `SHADE_COST`, `gardenBuilt`, `shadeGrown`, `orderable`), the study (`KNOWN_RECIPES`,
+  `RESEARCH_ORDER`, `researched`; its level is the `research` upgrade), the fine window (`FINE_SHARE`,
   `FINE_BONUS`, `inFineWindow`), reputation and regulars (`START_REPUTATION`,
   `REPUTATION_SERVED`, `REPUTATION_WALKED_OFF`, `reputationFactor`, `nudgeReputation`,
   `REGULAR_TIP_LEFT`, `MAX_REGULARS`, `REGULAR_CHANCE`, `REGULAR_BONUS`), the weather (`Weather`,
@@ -79,21 +84,25 @@ shade gardens and a mirrored second production line.
   (`seeded`, `reseed`, `rr`, `chance`), `paint(scene, key, w, h, draw, res)` which paints a texture at
   `res` times its size, `fit(image, scale)` which shows it at its logical size, and the brushes
   (`wash`, `ink`, `hatch`, `wob`, `both`, `shadow`, `paper`, `itemIcon`, `coinIcon`). `ground.ts`
-  paints the whole world as one `ground-world` texture, plus the expansion yard, each garden and
+  paints the whole world as one `ground-world` texture, plus the expansion yard, the shop's walls
+  (`ground-walls`, laid above the expansion yard so its edge doesn't cover the right wall), each garden and
   the scattered trees and bushes (`sceneryLayout`). `ui.ts` paints parchment cards on demand
   (`cardTexture(scene, kind, w, h)`: bar, button, contract, town, chip, bubble, sign, small, panel) and
   `signTexture`, plus the `weather-<kind>` icons and the regular's `regular` star (`sparkle` in
-  `paint.ts`, also on fine potions' icons). `belts.ts` paints the built belt network into one image (`drawBelts`, re-painted
-  when the set of built belts changes), and `pointAlong`/`laneOffset` place items on it.
+  `paint.ts`, also on fine potions' icons). `pixies.ts` paints the pixie (`PIXIE_FRAMES`, two wing
+  beats) and the built routes' fairy-dust trails as one image (`drawFairyPaths`, re-painted when the
+  set of built belts changes), and `pointAlong`/`laneOffset` place pixies on them. `stations.ts`
+  also paints the study's desk (`study`) and the shop shelf (`shelf`).
 - `src/ui/`: `BackStack` (items piled on the doctor), `IconRow` (customer wants), `Pallet` (crate
-  stacks, exposes `item` and `count`), `ProgressBar` (redraws only when its fill changes;
+  stacks, exposes `item` and `count`), `Shelf` (a shop shelf of one potion, up to six bottles, fine
+  ones first; exposes `item` and `count`, and `moveTo` as the row grows), `ProgressBar` (redraws only when its fill changes;
   `setZone` marks a golden end zone, used for the cauldron's fine window),
   `RecipeBook` (exposes `lines`), `Settings` (read-only view of the hub's settings, and New game).
 
 ### How it runs
 
 - `BootScene.create` calls the `bake*` functions (doctor, items, garden, stations, markers,
-  townsfolk, ground, ui); none load asset files. Then `GameScene.create` calls `loadState` and the
+  pixies, townsfolk, ground, ui); none load asset files. Then `GameScene.create` calls `loadState` and the
   `create*` builders in order.
 - `GameScene.update(time, delta)`: sets `frameMs` (delta clamped to `MAX_STEP_MS`, 250), finds
   `workingAt` (the work spot under the feet), calls `tick(state, frameMs, workingAt, atCounter)`,
@@ -128,7 +137,7 @@ shade gardens and a mirrored second production line.
   `followPlayer` gives it back Phaser's middle origin with `scrollingCamera`. `uiCamera`
   never moves or zooms beyond `renderScale` and draws everything from `UI_DEPTH` up: `splitCameras` sets each object's
   `cameraFilter` by its depth every frame, so later objects sort themselves. `setZoom` clamps,
-  widens the camera bounds evenly when the view is wider than the world, and stores the zoom
+  never zooming out past the world's width (so no paper shows at the sides), and stores the zoom
   under `apothecary-zoom`.
 - Map: two columns of production (line one on the left, line two mirrored on the right with
   `mirror`), each running straight down from its gardens through `REFINER` and `CAULDRON` at
@@ -136,7 +145,7 @@ shade gardens and a mirrored second production line.
   on the left; garden 5 mirrored), and each garden belt has a feeder from its line's one, which
   runs along over the mandrake feeder to the join. A station's drop, work and pick-up markers stand in a row at `INNER_X` (the market side)
   and its upgrade, craftsman, belt, label and priority spots at `OUTER_X`. The market between the
-  columns holds `OUTFITTER`, `GUILD` and `EXPANSION_LAND`; the shop sits at the bottom of it, facing
+  columns holds `OUTFITTER`, `GUILD`, `STUDY` and `EXPANSION_LAND`; the shop sits at the bottom of it, facing
   the street (`STREET`) along the bottom edge of the world (1400x1110).
 - Shop walls: `SHOP_WALLS` are drawn, with gaps for `SHOP_DOOR` (the back door in the top wall,
   the doctor's), `SHOP_STREET_DOOR` (in the bottom wall, the customers') and the belt holes in the
@@ -159,29 +168,48 @@ shade gardens and a mirrored second production line.
   are shown only while it is unlocked. Entry to the guild is `state.guild` (a `Build`, `GUILD_COST`
   50), paid by `joinGuild` at a marker on `GUILD.join`, which shows until the customers
   upgrade can.
-- Belts: each belt starts at the front edge of a station's out pallets (or in the gardens) and ends
-  at the edge of the next station's in pallets, which stand side by side across its end, each at the
-  end of its kind's lane. The sim still takes from the station's `output` and hands to its tray;
-  the pallets are those trays drawn. A built belt hides its pick-up marker, and its drop marker
+- Belts, shown as pixies: each route starts below a station's out pallets (or in the gardens) and
+  ends above the next station's in pallets, or above the shop's shelves. The sim still takes from
+  the station's `output` and hands to its tray; the pallets are those trays drawn. `createBelts`
+  draws a pixie and the item's icon for each riding item, a lane's `laneOffset` to the side of the
+  route; in its last `PIXIE_APPROACH_MS` the pixie flies over to `dropSpot` (its kind's pallet at
+  `BELT_TARGET`, or its shelf). Wings beat and pixies bob on `this.time.now`, still with reduced
+  motion. Pixies are drawn at `PIXIE_DEPTH`, above everything standing. A built belt hides its pick-up marker, and its drop marker
   unless the doctor carries that kind; the counter's drop stays until `doneByHand` is false for
   both cauldron belts. Goods get on at `beltSpan(id, kind).start` (mandrakes on their patch's
   feeder) and join the main run at `join`. The cauldron belts merge at `BELT_JOIN_MS`
   (`mergingItems`), measured to `CAULDRON_BELTS_MEET`. `payBelt` loads matching goods from the
   doctor's hands, unless `doneByHand` says the other line's twin is still by hand.
 - Priority: `addPrioritySign` puts a tappable "First:" sign at `PRIORITY_SIGNS[id]` by each
-  table's and cauldron's label; a tap calls `cyclePriority` (none, then each plant or potion in
-  `PLANTS`/`POTIONS` order) and stops propagation so the doctor doesn't walk. The sign shows the
+  table's and cauldron's label; a tap calls `cyclePriority` (none, then each plant, or each
+  researched potion, in `PLANTS`/`POTIONS` order) and stops propagation so the doctor doesn't walk. The sign shows the
   item's icon, or "any".
 - Stock pricing: `serveFromShelf` pays `stockedPay(order.pay[want], others)`, where `others` is
   how many of that potion (plain or fine) stay on the shelf after the one sold; `stockFactor` (2.5%
   off each, at least half) is in `src/game/state.ts`. A fine one of the wanted potion goes first and
-  pays `stockedPay(round(pay * FINE_BONUS), others)`. The scene shows the next sale's cut and the
-  fine count beside the outer counter pallets and above the middle one; the counter's pallets
-  count fine potions as their plain potion.
+  pays `stockedPay(round(pay * FINE_BONUS), others)`. The scene shows the next sale's cut under
+  each shelf.
+- Shelves: `createShopfront` builds a `Shelf` per potion and shows those `researched`, side by side
+  at `shelfPosition(i, count)` (`SHELF_Y`, 44 apart, centred on the counter); a newly learned one
+  joins the row and the rest move along. They are not obstacles. `pallets.counter.in` holds the
+  shelves standing, in `POTIONS` order, for the test. The counter's drop marker is north of them,
+  just inside the back door.
+- Study: `createStudy` puts the desk (an obstacle) under its sign at `STUDY` and a level marker for
+  the `research` upgrade, captioned with the next recipe in `RESEARCH_ORDER`; it unlocks with the
+  garden belt. `payUpgrade` says "Learned <potion>!". `startBrew` skips recipes not `researched`,
+  `orderable` leaves them out of orders, and `RecipeBook` fades them with "Study" for a price.
+- Orders: `createOrderStrip` shows a `chip` card per order (`ORDER_STRIP`, up to
+  `MAX_ORDER_SLOTS`) under the top bar on the left, with the wants still owed and, once at the
+  counter, a patience bar.
+- Weather: `createWeather` lays a world-sized tint rectangle and a `Graphics` at `WEATHER_DEPTH`
+  (under the bubbles and bars) and, each frame, draws `RAIN_STREAKS` rain streaks or `HEAT_WAVES`
+  heat waves across `cameras.main.worldView`, placed by a fixed `scatter` so it never calls
+  `Math.random`. Mild days draw nothing; reduced motion keeps only the tint.
 - Fine window: `inFineWindow(brew)` holds from `1 - FINE_SHARE` (75%) of a brew to its end.
-  `pickUpFromCauldron` takes such a brew out as its `FINE` potion before anything on the out
+  `pickUpFromCauldron` takes such a brew (`brewing` first, then `brewing2`) out as its `FINE` potion before anything on the out
   pallets. A brew only moves while worked, so stepping off the work spot holds it in the window.
-  The brewing bar's zone (`setZone`) and fill turn gold there.
+  The brewing bar's zone (`setZone`) and fill turn gold there. Each station has a second bar
+  8px below the first for its second pipe, shown only while that pipe works.
 - Reputation and regulars: `tick` lowers `reputation` by `REPUTATION_WALKED_OFF` for each order
   whose patience runs out (and marks a running rush lost); `orderFilled` raises it by
   `REPUTATION_SERVED`, and a customer filled with `tipLeft` at least `REGULAR_TIP_LEFT` joins
@@ -205,8 +233,9 @@ shade gardens and a mirrored second production line.
 
 `GameState` in `src/game/state.ts` is plain JSON (`version: 3`, `layout`). Key parts: `carrying`
 (bottom to top), `player` (starts at 630,620, in the market), `plots` (3 per garden, gardens in `GARDENS` order,
-two per line), `refiner`/`refiner2` (`queue`, `progress`, `output`), `cauldron`/`cauldron2`
-(`contents`, `brewing`, `output`), `counter` (`shelf`, `till`, `serving`), `orders` (each with fixed
+two per line), `refiner`/`refiner2` (`queue`, `progress`, `output`, and `second`: the second
+pipe's plant and progress, or null), `cauldron`/`cauldron2` (`contents`, `brewing`, `brewing2`,
+the second pipe's brew, and `output`), `counter` (`shelf`, `till`, `serving`), `orders` (each with fixed
 per-potion `pay`, and `patience` that counts down only at the counter), `upgrades`, `craftsmen` (an
 `Upgrade` whose `level` is the number hired), `belts` (a `Build` plus riding `items`, each `at` ms
 along the main run), `priority` (per `CraftingId`, a `PlantId` or `PotionId` to make first, or
@@ -233,11 +262,17 @@ can hold fine potions.
 - Every tray holds at most `PALLET_SIZE` (40) of each item kind; `palletHasRoom` guards every add.
 - Second-line stations and fields exist in state from the start; `stationBuilt` and `gardenBuilt`
   gate them. A station works only with `crew` > 0: its craftsmen, or the doctor on its work spot.
+- Second pipe: with two craftsmen (`secondPipe`) a table or cauldron works two things at once, each
+  at the speed one pair of hands works, rather than one twice as fast. A table's first pipe works
+  the front of `queue` as before; `refineSecond` takes the next plant to start on from behind it
+  (same priority rules) into `second`, and a finished one waits there while its pallet is full. A
+  cauldron runs `brew` on `brewing`, then on `brewing2`. `second` and `brewing2` are optional, so
+  old saves load with both empty.
 - The refiner moves the plant it works on to the front of `queue`; `refining` keeps a started plant
   there and otherwise picks the priority plant first (`firstToRefine`), also right after finishing
   one, so leftover work goes onto the priority plant. Work past the end of a plant,
   brew or served potion carries over to the next, so slow frame rates lose nothing.
-- `startBrew` picks the recipe when work starts: the cauldron's priority potion if its inputs are
+- `startBrew` (called by `brew` for either pipe) picks the recipe when work starts: the cauldron's priority potion if its inputs are
   in and its pallet has room, otherwise by `shortfall` (wanted minus on the shelf, carried, brewing,
   on cauldron pallets and riding cauldron belts); ties go in `RECIPES` order. A priority never makes
   a station wait.
@@ -330,15 +365,19 @@ can hold fine potions.
   every priority left at "any"; its taps must not land on a priority sign, which takes the tap.
 - Mirrored in `e2e/playthrough.spec.ts` (update together): every spot in its constants block
   (wheat plot x's and row, mandrake spot, refiner, cauldron and counter markers, `LEAVE_SHOP`,
-  `LEAVE_CAULDRONS`, `STREET`, `FIRST_CUSTOMER` = `customerPosition(0)`), `WALK_SPEED`,
+  `LEAVE_CAULDRONS`, `STREET`, `FIRST_CUSTOMER` = `customerPosition(0)`, the counter's drop
+  north of the shelves), `WALK_SPEED`,
   `POTION_PRICE`, the counter bonus in `potionPay` (it assumes one of each potion on the shelf, so
   no stock cut, and asserts it), `shortfall`, grow times 24000/42000, the bed layout
-  (`WHEAT_SPOT`, `BELOW_GARDENS`, `MANDRAKE`, `WHEAT_COLUMN`, `MANDRAKE_PLOT`: the sickle's 72px
-  reach from the doctor's middle must take exactly the wheat field's right-hand column), the recipe
-  line text and order, the tip rules (`maxTip`, `TIP_SHARE`, `tipNow`), the fine window
+  (`BELOW_GARDENS`, `BETWEEN_GARDENS`, `WHEAT_CUT`, `MANDRAKE_CUT`: walking up the gap between the
+  wheat field and the mandrake patch, the sickle's 72px reach from the doctor's middle takes the
+  bottom and middle beds of the columns either side, two wheat and two mandrakes), the recipe
+  line text and order (all six, learned or not), the recipes known from the start (Healing Draught
+  and Sleeping Tonic: two flour and two seeds make one of each), the tip rules (`maxTip`, `TIP_SHARE`, `tipNow`), the fine window
   (`FINE_SHARE`, `FINE_BONUS`, `FINE`), the reputation numbers, `DAY_MS` and the first
   contract (`FIRST_CONTRACT`: 3 Sleeping Tonics for 20), carry capacity 4, the world size 1400x1110 (camera asserts), and which pallets
-  each station shows (three each).
+  each station shows (three in and three out at the table, three in and six out at the cauldron,
+  and a shelf for each of the two potions known at the start).
 - The first round takes the first brew out in its fine window: it waits for 75% of the brew, walks
   to the pick-up marker and expects the fine potion; the second brew finishes plain. Day 1 is
   mild, so the weather changes nothing in it, and it ends long before a market day.
@@ -348,9 +387,11 @@ can hold fine potions.
 - Tune a number: edit the table in `src/game/items.ts` or `src/game/state.ts`; if it is a grow
   time, price, tip, carry size or recipe, update the matching expectation in the playthrough.
 - Add a potion recipe: add the `PotionId`, an `ITEMS` entry, a `RECIPES` entry (order breaks ties),
-  `POTION_PRICE`, art in `ITEM_ART` in `src/art/items.ts`, and a counter and cauldron out pallet
-  position in `PALLETS` (one per potion, in `POTIONS` order). Belt lanes widen on their own. Update
-  the recipe lines in the test.
+  `POTION_PRICE`, its colour in `ITEM_COL` and a flask shape in `itemIcon` (`POTION_SHAPES`) in
+  `src/art/paint.ts`, a cauldron out pallet position in `PALLETS` (one per potion, in `POTIONS`
+  order), and either `KNOWN_RECIPES` or a place in `RESEARCH_ORDER` (raising the `research`
+  upgrade's `max`), plus `NEEDS_NIGHTSHADE` if it does. Shelves and pixie lanes follow on their own.
+  Update the recipe lines in the test.
 - Add a plant: `PlantId`, `ITEMS`, `GROW_MS`, `REFINE` (and its refined item), plant art in
   `src/art/garden.ts` (`bakeGarden` and `plantTexture`), item art in `itemIcon`, gardens appended
   to `GARDENS` and `GARDEN_LINE` plus `GARDEN_AREAS` and `gardenBuilt`, new in and out pallet spots
@@ -394,9 +435,9 @@ can hold fine potions.
   objects must stay below it (`WORLD_UI_DEPTH` is the highest).
 - `tick` runs before `movePlayer`, so `workingAt` uses last frame's feet position.
 - Healing Draught art is red; keep any cross shapes off red (root rule on red crosses).
-- Fine potions are not in `POTIONS`, so they have no pallets, belt lanes or orders of their own.
-  Anything that counts potions on the shelf or in hands goes through `plainOf` (`shortfall`,
-  `canFill`, stock cuts, the counter's pallets).
+- Fine potions are not in `POTIONS`, so they have no pallets, shelves, belt lanes or orders of their
+  own. Anything that counts potions on the shelf or in hands goes through `plainOf` (`shortfall`,
+  `canFill`, stock cuts, the shelves).
 - Belt lanes each run at half the belt's speed (`LANE_SHARE` in `runBelt`), however many there are.
 - Lay out the top bar, panels and anything else on screen with `viewSize(this)` or `GAME_WIDTH`,
   never `this.scale.width`: with `renderScale` above 1 that is the canvas size, and the button
