@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import { settings } from '../../../../shared/settings';
+import { viewPoint } from '../../../../shared/scaling';
 import { propKey, PROP_ORIGIN, tileKey } from '../art/textures';
+import { addArt, RES } from '../art/wood';
 import { DECREE_BONUS, decreeMarks, type At } from '../game/decree';
 import { GIFT_INFO, type Gift } from '../game/gifts';
 import { dailyIsland, LEVELS, levelOpen, parseIsland, starsFor, today, type Kingdom } from '../game/islands';
@@ -182,14 +184,14 @@ export class GameScene extends Phaser.Scene {
 
   create() {
     this.state = newGame(loadBest(), loadCrowns());
-    this.add.image(0, 0, 'bg').setOrigin(0).setDepth(-1);
+    addArt(this, 0, 0, 'bg').setOrigin(0).setDepth(-1);
     this.createBoard();
     this.createDecree();
     this.createPanel();
     this.createGiftCard();
     this.createGameOver();
     this.createIslandsCard();
-    const backdrop = this.add.image(0, 0, 'walnut-440x96');
+    const backdrop = addArt(this, 0, 0, 'walnut-440x96');
     this.bannerText = this.add.text(0, -2, '', style(15, CREAM, '900', { align: 'center', lineSpacing: 4 })).setOrigin(0.5);
     this.banner = this.add
       .container(GRID.x + (GRID.cols * GRID.cell) / 2, GRID.y + (GRID.rows * GRID.cell) / 2, [backdrop, this.bannerText])
@@ -202,13 +204,13 @@ export class GameScene extends Phaser.Scene {
     this.tiles = this.state.grid.map((cells, row) =>
       cells.map((cell, col) => {
         const { x, y } = cellCentre(col, row);
-        return this.add.image(x, y, tileKey(cell, col, row)).setDepth(D.tile);
+        return addArt(this, x, y, tileKey(cell, col, row)).setDepth(D.tile);
       }),
     );
     this.props = this.state.grid.map((cells, row) =>
       cells.map((_, col) => {
         const { x, y } = cellCentre(col, row);
-        return this.add.image(x, y, 'prop-house').setOrigin(PROP_ORIGIN.x, PROP_ORIGIN.y).setDepth(D.prop + row * 0.01).setVisible(false);
+        return addArt(this, x, y, 'prop-house').setOrigin(PROP_ORIGIN.x, PROP_ORIGIN.y).setDepth(D.prop + row * 0.01).setVisible(false);
       }),
     );
     this.redrawCells();
@@ -216,7 +218,7 @@ export class GameScene extends Phaser.Scene {
     this.marks = this.add.graphics().setDepth(D.outline);
     this.placeLabel = this.add.text(0, 0, '', style(10, CREAM, '800')).setOrigin(0.5).setDepth(D.label);
     this.hover = this.add.graphics().setDepth(D.outline + 0.1);
-    this.ghost = this.add.image(0, 0, 'tile-farm').setDepth(D.ghost).setVisible(false);
+    this.ghost = addArt(this, 0, 0, 'tile-farm').setDepth(D.ghost).setVisible(false);
     this.links = this.add.graphics().setDepth(D.links);
     for (let i = 0; i < 8; i++) this.linkTexts.push(this.add.text(0, 0, '', style(12, INK, '900')).setOrigin(0.5).setDepth(D.label).setVisible(false));
     this.bubbleText = this.add.text(0, 0, '', style(19, INK, '900')).setOrigin(0.5).setDepth(D.label + 0.1).setVisible(false);
@@ -225,16 +227,19 @@ export class GameScene extends Phaser.Scene {
 
     // One zone over the whole board: hovering previews, a tap places.
     const zone = this.add.zone(GRID.x, GRID.y, GRID.cols * GRID.cell, GRID.rows * GRID.cell).setOrigin(0).setInteractive({ useHandCursor: true });
-    zone.on('pointermove', (p: Phaser.Input.Pointer) => this.hoverAt(p.x, p.y));
+    zone.on('pointermove', (p: Phaser.Input.Pointer) => this.hoverPointer(p));
     zone.on('pointerout', () => this.hoverAt(-1, -1));
-    zone.on('pointerdown', (p: Phaser.Input.Pointer) => this.tapAt(p.x, p.y));
+    zone.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      const at = viewPoint(p);
+      this.tapAt(at.x, at.y);
+    });
   }
 
   private createDecree() {
     const R = DECREE;
     this.add.text(R.x + 44, R.y + 10, 'ROYAL DECREE', style(8, RUST, '900', { letterSpacing: 1 } as never)).setOrigin(0, 0.5);
     this.decreeText = this.add.text(R.x + 44, R.y + 21, '', style(12, INK, '800')).setOrigin(0, 0.5);
-    for (let i = 0; i < 8; i++) this.beads.push(this.add.image(0, R.y + R.h / 2 - 0.5, 'bead-off').setVisible(false));
+    for (let i = 0; i < 8; i++) this.beads.push(addArt(this, 0, R.y + R.h / 2 - 0.5, 'bead-off').setVisible(false));
     this.progressText = this.add.text(0, R.y + R.h / 2, '', style(13, '#3d7a2c', '900')).setOrigin(0, 0.5);
     this.rewardTitle = this.add.text(R.x + 435, R.y + 10, 'REWARD', style(8, RUST, '900', { letterSpacing: 1 } as never)).setOrigin(0, 0.5);
     this.rewardText = this.add.text(R.x + 435, R.y + 21, `+${DECREE_BONUS} and a crown`, style(12, INK, '800')).setOrigin(0, 0.5);
@@ -248,7 +253,7 @@ export class GameScene extends Phaser.Scene {
     this.roundText = this.add.text(PANEL.x + 16, ISLAND_BUTTON.y, '', style(14, LABEL)).setOrigin(0, 0.5);
     // The island button: shows which island this is and opens the islands card.
     const ib = ISLAND_BUTTON;
-    const islandBg = this.add.image(ib.x, ib.y, `plaque-${ib.w}x${ib.h}`).setInteractive({ useHandCursor: true });
+    const islandBg = addArt(this, ib.x, ib.y, `plaque-${ib.w}x${ib.h}`).setInteractive({ useHandCursor: true });
     islandBg.on('pointerover', () => islandBg.setTexture(`plaque-${ib.w}x${ib.h}-sel`));
     islandBg.on('pointerout', () => islandBg.setTexture(`plaque-${ib.w}x${ib.h}`));
     islandBg.on('pointerdown', () => this.openIslands());
@@ -268,7 +273,7 @@ export class GameScene extends Phaser.Scene {
       const zone = this.add.zone(0, midY, 10, GIFT_ROW.h).setInteractive({ useHandCursor: true });
       zone.on('pointerdown', () => this.takeGift(this.state.gifts[i]));
       this.chipParts.push({
-        icon: this.add.image(0, midY, 'icon-tower').setScale(0.85),
+        icon: addArt(this, 0, midY, 'icon-tower').setScale(0.85 / RES),
         text: this.add.text(0, midY + 0.5, '', style(9.5, '#ffffff')).setOrigin(0, 0.5),
         zone,
       });
@@ -279,7 +284,7 @@ export class GameScene extends Phaser.Scene {
     this.seasonText = this.add.text(SEASON.x + SEASON.w / 2, SEASON.y + SEASON.h / 2, '', style(10.5, CREAM, '800')).setOrigin(0.5);
 
     const { x, y, w, h } = UNDO_BUTTON;
-    this.undoBg = this.add.image(x, y, `plaque-${w}x${h}`);
+    this.undoBg = addArt(this, x, y, `plaque-${w}x${h}`);
     this.undoText = this.add.text(x, y - 1, '', style(13, INK)).setOrigin(0.5);
     this.undoBg.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
       // With no room for any tile, the button finishes the kingdom instead (merging could still make room).
@@ -292,7 +297,7 @@ export class GameScene extends Phaser.Scene {
       this.mergeFrom = null;
       this.redrawCells();
       this.refresh();
-      this.hoverAt(this.input.activePointer.x, this.input.activePointer.y);
+      this.hoverPointer();
     });
     this.bestText = this.add.text(PANEL.x + PANEL.w / 2, PANEL.y + PANEL.h - 12, '', style(12, LABEL)).setOrigin(0.5);
   }
@@ -344,9 +349,9 @@ export class GameScene extends Phaser.Scene {
 
   /** A building's tile and what stands on it, scaled into a button. */
   private tileIcon(kind: Building, x: number, y: number, scale: number) {
-    const parts: Phaser.GameObjects.Image[] = [this.add.image(0, 0, tileKey(kind === 'farm' ? 'farm' : 'plain', 0, 0))];
+    const parts: Phaser.GameObjects.Image[] = [addArt(this, 0, 0, tileKey(kind === 'farm' ? 'farm' : 'plain', 0, 0))];
     const prop = propKey(kind);
-    if (prop) parts.push(this.add.image(0, 0, prop).setOrigin(PROP_ORIGIN.x, PROP_ORIGIN.y));
+    if (prop) parts.push(addArt(this, 0, 0, prop).setOrigin(PROP_ORIGIN.x, PROP_ORIGIN.y));
     return this.add.container(x, y, parts).setScale(scale);
   }
 
@@ -364,19 +369,19 @@ export class GameScene extends Phaser.Scene {
     countX = x + w / 2 - 22,
   ) {
     const key = `plaque-${w}x${h}`;
-    const glow = this.add.image(x, y + 1, `glow-${w}x${h}`).setVisible(false);
-    const plaque = this.add.image(x, y, key);
+    const glow = addArt(this, x, y + 1, `glow-${w}x${h}`).setVisible(false);
+    const plaque = addArt(this, x, y, key);
     // The plaque goes under the icon and the text, which were added first.
     glow.setDepth(-0.2);
     plaque.setDepth(-0.1);
-    const pill = this.add.image(countX, countY, 'count');
+    const pill = addArt(this, countX, countY, 'count');
     const count = this.add.text(pill.x, pill.y, '', style(12, CREAM, '900')).setOrigin(0.5);
     plaque.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
       if (!select(this.state, kind)) return;
       this.mergeFrom = null;
       this.refresh();
       // The hover follows the new pick right away, without waiting for the pointer to move.
-      this.hoverAt(this.input.activePointer.x, this.input.activePointer.y);
+      this.hoverPointer();
     });
     this.buttonObjects.push(glow, plaque, icon, name, pill, count, ...extra);
     this.buttons.set(kind, { glow, plaque, icon, name, count, key });
@@ -387,7 +392,7 @@ export class GameScene extends Phaser.Scene {
     const { x, y, w, h, button } = GIFT_CARD;
     // Dims the board and swallows its taps while the gift waits.
     const dim = this.add.rectangle(TRAY.x + TRAY.w / 2, TRAY.y + TRAY.h / 2, TRAY.w, TRAY.h, 0x2a170a, 0.45).setInteractive();
-    const card = this.add.image(x, y, `walnut-${w}x${h}`);
+    const card = addArt(this, x, y, `walnut-${w}x${h}`);
     this.giftTitle = this.add.text(x, y - h / 2 + 30, '', style(20, CREAM, '900', { shadow: { offsetX: 1, offsetY: 1.5, color: 'rgba(0,0,0,0.45)', fill: true } })).setOrigin(0.5);
     this.giftSub = this.add.text(x, y - h / 2 + 56, '', style(12, LABEL, '700')).setOrigin(0.5);
     const objects: Phaser.GameObjects.GameObject[] = [dim, card, this.giftTitle, this.giftSub];
@@ -395,11 +400,11 @@ export class GameScene extends Phaser.Scene {
     [-1, 1].forEach((side, i) => {
       const bx = x + side * button.dx;
       const by = y + button.dy;
-      const plaque = this.add.image(bx, by, key).setInteractive({ useHandCursor: true });
+      const plaque = addArt(this, bx, by, key).setInteractive({ useHandCursor: true });
       plaque.on('pointerover', () => plaque.setTexture(`${key}-sel`));
       plaque.on('pointerout', () => plaque.setTexture(key));
       plaque.on('pointerdown', () => this.takeGift(this.state.gifts[i]));
-      const icon = this.add.image(bx, by - 22, 'icon-tower-big');
+      const icon = addArt(this, bx, by - 22, 'icon-tower-big');
       const label = this.add.text(bx, by + 6, '', style(16, INK, '900')).setOrigin(0.5);
       const desc = this.add.text(bx, by + 26, '', style(10.5, RULE, '700')).setOrigin(0.5);
       objects.push(plaque, icon, label, desc);
@@ -410,7 +415,7 @@ export class GameScene extends Phaser.Scene {
 
   private createGameOver() {
     const dim = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x2a170a, 0.55).setInteractive();
-    const panel = this.add.image(VIEW.w / 2, VIEW.h / 2, 'walnut-520x260');
+    const panel = addArt(this, VIEW.w / 2, VIEW.h / 2, 'walnut-520x260');
     const title = this.add
       .text(VIEW.w / 2, VIEW.h / 2 - 90, 'The kingdom is built', style(28, CREAM, '900', { shadow: { offsetX: 1, offsetY: 2, color: 'rgba(0,0,0,0.45)', fill: true } }))
       .setOrigin(0.5);
@@ -423,7 +428,7 @@ export class GameScene extends Phaser.Scene {
   /** A beech plaque button of a baked size, lighter while the pointer is over it. */
   private plaque(x: number, y: number, w: number, h: number, onClick: () => void) {
     const key = `plaque-${w}x${h}`;
-    const bg = this.add.image(x, y, key).setInteractive({ useHandCursor: true });
+    const bg = addArt(this, x, y, key).setInteractive({ useHandCursor: true });
     bg.on('pointerover', () => bg.setTexture(`${key}-sel`));
     bg.on('pointerout', () => bg.setTexture(key));
     bg.on('pointerdown', onClick);
@@ -439,7 +444,7 @@ export class GameScene extends Phaser.Scene {
     const left = C.x - C.w / 2;
     const top = C.y - C.h / 2;
     const dim = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x2a170a, 0.55).setInteractive();
-    const objects: Phaser.GameObjects.GameObject[] = [dim, this.add.image(C.x, C.y, `walnut-${C.w}x${C.h}`)];
+    const objects: Phaser.GameObjects.GameObject[] = [dim, addArt(this, C.x, C.y, `walnut-${C.w}x${C.h}`)];
     const heading = (x: number, y: number, text: string) => objects.push(this.add.text(x, y, text, style(10, '#f2c33a', '900', { letterSpacing: 1 } as never)).setOrigin(0, 0.5));
     objects.push(
       this.add.text(left + 30, C.close.y, 'Choose an island', style(22, CREAM, '900', { shadow: { offsetX: 1, offsetY: 1.5, color: 'rgba(0,0,0,0.45)', fill: true } })).setOrigin(0, 0.5),
@@ -457,7 +462,7 @@ export class GameScene extends Phaser.Scene {
       const plaque = this.plaque(x, L.y, L.w, L.h, () => this.playLevel(i + 1));
       plaque.on('pointerover', () => this.showLevel(i + 1));
       const num = this.add.text(x, L.y - 9, String(i + 1), style(22, INK, '900')).setOrigin(0.5);
-      const stars = [-1, 0, 1].map((k) => this.add.image(x + k * 16, L.y + 17, 'star-off'));
+      const stars = [-1, 0, 1].map((k) => addArt(this, x + k * 16, L.y + 17, 'star-off'));
       objects.push(plaque, num, ...stars);
       this.levelParts.push({ plaque, num, stars });
     });
@@ -569,6 +574,12 @@ export class GameScene extends Phaser.Scene {
     return { col, row };
   }
 
+  /** Hovers where a pointer is on the screen, in view pixels (the canvas has `renderScale` times as many). */
+  private hoverPointer(p = this.input.activePointer) {
+    const at = viewPoint(p);
+    this.hoverAt(at.x, at.y);
+  }
+
   private hoverAt(x: number, y: number) {
     const at = this.cellAt(x, y);
     const kind = this.state.selected;
@@ -606,7 +617,7 @@ export class GameScene extends Phaser.Scene {
     if (this.state.phase === 'over') this.gameEnded();
     if (this.state.phase === 'playing') this.announceRound(gift);
     this.refresh();
-    this.hoverAt(this.input.activePointer.x, this.input.activePointer.y);
+    this.hoverPointer();
   }
 
   /** Saves what a finished kingdom won: the best score, the island of the day's best and campaign stars. */
@@ -798,13 +809,13 @@ export class GameScene extends Phaser.Scene {
       g.fillStyle(NAVY, 1).fillRoundedRect(x - w / 2, y - 8, w, 16, 8);
     }
     for (const [c, r] of marks.counted) {
-      this.markImages.push(this.add.image(GRID.x + c * GRID.cell + 52, GRID.y + r * GRID.cell + 11, 'tick').setDepth(D.ticks));
+      this.markImages.push(addArt(this, GRID.x + c * GRID.cell + 52, GRID.y + r * GRID.cell + 11, 'tick').setDepth(D.ticks));
     }
     if (s.phase === 'playing') {
       const spot = d.kind === 'shore' ? 'spot-farm' : 'spot-house';
       for (const [c, r] of marks.spots) {
         const { x, y } = cellCentre(c, r);
-        this.markImages.push(this.add.image(x, y - 2, spot).setDepth(D.spots));
+        this.markImages.push(addArt(this, x, y - 2, spot).setDepth(D.spots));
       }
     }
   }

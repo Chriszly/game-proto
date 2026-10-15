@@ -1,14 +1,27 @@
 import Phaser from 'phaser';
+import { sharpRes } from '../../../../shared/scaling';
 
 // The wooden toy set's toolkit: painted beech blocks with rounded edges and grain showing through
 // the paint, peg trees, block houses and towers with flags on dowels. Textures are painted on 2D
 // canvases and added with `textures.addCanvas`. The painters work in "art units", twice the game's
-// 960x540 view (the approved mockup's scale), and each canvas is scaled by a half, so a texture is
-// drawn at the view's own size.
+// 960x540 view (the approved mockup's scale). Each canvas is `RES` texture pixels per view pixel
+// (more on a big screen, see `sharpRes`), and `addArt` shows the textures at the view's own size.
 
 export const PI = Math.PI;
 /** Art units per view pixel. */
 export const ART = 2;
+/** Texture pixels per view pixel, the same for every texture; 1 until `setArtRes`. */
+export let RES = 1;
+
+/** Picks `RES` for this screen: as sharp as the biggest texture, the view-sized `bg`, can be painted. */
+export function setArtRes(viewW: number, viewH: number) {
+  RES = sharpRes(viewW, viewH);
+}
+
+/** An image of a baked texture, shown at its size in view pixels. */
+export function addArt(scene: Phaser.Scene, x: number, y: number, key: string) {
+  return scene.add.image(x, y, key).setScale(1 / RES);
+}
 
 /** The toy set's paints, as CSS colours. */
 export const T = {
@@ -43,15 +56,16 @@ export const reseed = (s: number) => {
 };
 
 /**
- * Paints a `w` x `h` (view pixels) texture called `key`. The painter draws in art units with
+ * Paints a `w` x `h` (view pixels, `RES` times that in texture pixels) texture called `key`. The painter draws in art units with
  * (0, 0) at view pixel (`ox`, `oy`) of the texture, so a shape can be painted around its anchor.
  */
 export function bake(scene: Phaser.Scene, key: string, w: number, h: number, paint: () => void, ox = 0, oy = 0) {
   if (scene.textures.exists(key)) return;
   const canvas = document.createElement('canvas');
-  canvas.width = Math.ceil(w);
-  canvas.height = Math.ceil(h);
+  canvas.width = Math.ceil(w * RES);
+  canvas.height = Math.ceil(h * RES);
   ctx = canvas.getContext('2d')!;
+  ctx.scale(RES, RES);
   ctx.translate(ox, oy);
   ctx.scale(1 / ART, 1 / ART);
   paint();
@@ -67,12 +81,12 @@ const mix = (a: string, b: string, t: number) => {
 export const lit = (c: string, t: number) => mix(c, '#ffffff', t);
 export const dark = (c: string, t: number) => mix(c, '#000000', t);
 
-/** Canvas shadows ignore the transform, so they are given in art units and halved here. */
+/** Canvas shadows ignore the transform, so they are given in art units and turned into canvas pixels here. */
 export function shadow(blur: number, ox: number, oy: number, color: string) {
   ctx.shadowColor = color;
-  ctx.shadowBlur = blur / ART;
-  ctx.shadowOffsetX = ox / ART;
-  ctx.shadowOffsetY = oy / ART;
+  ctx.shadowBlur = (blur * RES) / ART;
+  ctx.shadowOffsetX = (ox * RES) / ART;
+  ctx.shadowOffsetY = (oy * RES) / ART;
 }
 
 export function rrect(x: number, y: number, w: number, h: number, r: number) {

@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { BUTTON, DECREE, GIFT_CARD, ISLAND_BUTTON, ISLANDS_CARD, PANEL, TILE_BUTTONS, TITLE, TRAY, UNDO_BUTTON, VIEW } from '../scenes/layout';
-import { bake, ball, circle, crown, ctx, grain, harbor, house, lumber, manor, market, peg, PI, reseed, rnd, rrect, stripes, T, tile, tower, walnut, windmill } from './wood';
+import { bake, setArtRes, ball, circle, crown, ctx, grain, harbor, house, lumber, manor, market, peg, PI, reseed, rnd, rrect, stripes, T, tile, tower, walnut, windmill } from './wood';
 
 // Every texture the game uses, painted once at boot:
 // - `bg`: the table, the decree sign, the walnut tray and the panel with its title plaque.
@@ -222,6 +222,7 @@ function walnutBoard(scene: Phaser.Scene, w: number, h: number) {
 }
 
 export function bakeTextures(scene: Phaser.Scene) {
+  setArtRes(VIEW.w, VIEW.h);
   bake(scene, 'bg', VIEW.w, VIEW.h, background);
   for (let v = 0; v < GRASS_VARIANTS; v++) bake(scene, `tile-grass-${v}`, 64, 64, () => cellTile('grass', v));
   bake(scene, 'tile-plain', 64, 64, () => cellTile('plain'));
