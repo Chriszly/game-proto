@@ -2,18 +2,25 @@ name: Issue labels
 
 # Adds the game label to issues filed through the forms in .github/ISSUE_TEMPLATE,
 # from the answer to their Game dropdown. The forms set the type label themselves.
+# Then it adds the issue to "All feedback" and that game's Project with the status
+# Todo, using PROJECTS_TOKEN (a classic token with only the "project" scope): the
+# Projects' built-in Auto-add misses labels added by this workflow's own token.
 on:
   issues:
     types: [opened, edited]
 
 permissions:
+  contents: read
   issues: write
 
 jobs:
   game-label:
     runs-on: ubuntu-latest
+    env:
+      HAS_TOKEN: ${{ secrets.PROJECTS_TOKEN != '' }}
     steps:
       - name: Label the issue with its game
+        id: label
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
@@ -27,6 +34,7 @@ jobs:
               console.log('No game picked in the form; nothing to do.');
               return;
             }
+            core.setOutput('label', label);
             const gameLabels = new Set(Object.values(games));
             const stale = issue.labels.map(l => l.name).filter(n => gameLabels.has(n) && n !== label);
             for (const name of stale) {
@@ -34,3 +42,55 @@ jobs:
             }
             await github.rest.issues.addLabels({ ...context.repo, issue_number: issue.number, labels: [label] });
             console.log(`Labelled #${issue.number} with ${label}`);
+      - if: steps.label.outputs.label && env.HAS_TOKEN == 'true'
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          sparse-checkout: .github/projects.json
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Add the issue to its Projects
+        if: steps.label.outputs.label && env.HAS_TOKEN == 'true'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          LABEL: ${{ steps.label.outputs.label }}
+        with:
+          github-token: ${{ secrets.PROJECTS_TOKEN }}
+          script: |
+            const wanted = JSON.parse(require('fs').readFileSync('.github/projects.json', 'utf8'));
+            const titles = new Set(wanted.filter(p => p.label === null || p.label === process.env.LABEL).map(p => p.title));
+            const issue = context.payload.issue;
+
+            const { user } = await github.graphql(`
+              query($owner: String!) {
+                user(login: $owner) {
+                  projectsV2(first: 100) {
+                    nodes {
+                      id title
+                      field(name: "Status") {
+                        ... on ProjectV2SingleSelectField { id options { id name } }
+                      }
+                    }
+                  }
+                }
+              }`, { owner: context.repo.owner });
+
+            for (const project of user.projectsV2.nodes.filter(p => titles.has(p.title))) {
+              // Adding an issue that is already in the Project returns its existing item.
+              const { addProjectV2ItemById: { item } } = await github.graphql(`
+                mutation($projectId: ID!, $contentId: ID!) {
+                  addProjectV2ItemById(input: { projectId: $projectId, contentId: $contentId }) {
+                    item { id fieldValueByName(name: "Status") { ... on ProjectV2ItemFieldSingleSelectValue { name } } }
+                  }
+                }`, { projectId: project.id, contentId: issue.node_id });
+              console.log(`Added #${issue.number} to ${project.title}`);
+              // Give it Todo only when it has no status yet, so a status set by hand stays.
+              const todo = project.field?.options.find(o => o.name.toLowerCase() === 'todo');
+              if (!todo || item.fieldValueByName) continue;
+              await github.graphql(`
+                mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+                  updateProjectV2ItemFieldValue(input: {
+                    projectId: $projectId, itemId: $itemId, fieldId: $fieldId,
+                    value: { singleSelectOptionId: $optionId }
+                  }) { projectV2Item { id } }
+                }`, { projectId: project.id, itemId: item.id, fieldId: project.field.id, optionId: todo.id });
+            }

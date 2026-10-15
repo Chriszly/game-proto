@@ -51,9 +51,10 @@ are never edited on GitHub. A PR that fixes an issue says `Fixes #<number>`. Eac
 own public GitHub Project, plus one "All feedback" Project, with the title, short description and
 README listed in `.github/projects.json`. Each Project's built-in Auto-add workflow files issues
 and PRs into it (filter `is:issue,pr is:open label:<game>`, or no label for "All feedback"), and
-its "Item added to project" workflow, set to Issue only, gives new issues the status Todo. The
-**Project status** workflow (`.github/workflows/project-status.yml`) puts each open PR into its
-Projects with the status In Progress, using the `PROJECTS_TOKEN` secret (a classic token with only
+its "Item added to project" workflow, set to Issue only, gives new issues the status Todo. Since
+Auto-add misses the Game label the Issue labels workflow adds, that workflow also adds each issue
+to "All feedback" and its game's Project with the status Todo. The **Project status** workflow (`.github/workflows/project-status.yml`) puts each open PR into its
+Projects with the status In Progress. Both use the `PROJECTS_TOKEN` secret (a classic token with only
 the `project` scope).
 
 - **Every PR needs labels.** It carries at least one Type label for what it changes (`bug` for a
