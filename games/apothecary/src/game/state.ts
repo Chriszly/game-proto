@@ -1,4 +1,4 @@
-import { GROW_MS, PLANTS, POTION_PRICE, POTIONS, REFINED, type ItemId, type PlantId, type PotionId, type RefinedId } from './items';
+import { GROW_MS, PLANTS, POTION_PRICE, POTIONS, REFINED, type ItemId, type PlantId, type PotionId, type RefinedId, type SellableId } from './items';
 
 export interface Plot {
   plant: PlantId;
@@ -13,15 +13,31 @@ export interface Refiner {
   output: RefinedId[];
 }
 
+export interface Brew {
+  out: PotionId;
+  ms: number;
+  progress: number;
+}
+
 export interface Cauldron {
   contents: RefinedId[];
-  brewing: { out: PotionId; ms: number; progress: number } | null;
+  brewing: Brew | null;
   output: PotionId[];
 }
 
+/**
+ * The last `FINE_SHARE` of a brew is its fine window: a potion taken out of the cauldron by hand
+ * then, before it is done, is a Fine potion that sells for `FINE_BONUS` times as much. Craftsmen
+ * always leave it in until it is done.
+ */
+export const FINE_SHARE = 0.25;
+export const FINE_BONUS = 1.5;
+/** Whether a brew is in its fine window. */
+export const inFineWindow = (brew: Brew | null): brew is Brew => !!brew && brew.progress >= brew.ms * (1 - FINE_SHARE) && brew.progress < brew.ms;
+
 /** Potions put out for customers, and the coins they have paid that wait to be picked up. */
 export interface Counter {
-  shelf: PotionId[];
+  shelf: SellableId[];
   till: number;
   /** How far the craftsmen are with handing over the next potion, towards SERVE_MS. */
   serving?: number;
@@ -41,6 +57,35 @@ export interface Order {
    * `tipLeft`). Missing on orders saved before tips decayed, which tip nothing.
    */
   tip?: number;
+  /** Every potion the customer asked for, served or not; missing on old orders. */
+  asked?: PotionId[];
+  /** Which townsfolk look the customer has; a returning regular keeps theirs. Missing on old orders, which use their id. */
+  face?: number;
+  /** A regular, back for the same potions as last time, paying `REGULAR_BONUS` more for each. */
+  regular?: boolean;
+  /** One of a market day's crowd. */
+  rush?: boolean;
+}
+
+/** A customer who left happy and will come back for the same potions. */
+export interface Regular {
+  face: number;
+  wants: PotionId[];
+}
+
+/**
+ * A market day's rush: a crowd of `size` customers comes in at once at midday, and if every one of
+ * them is served, `RUSH_BONUS` coins each go into the purse.
+ */
+export interface Rush {
+  /** The day it came on. */
+  day: number;
+  size: number;
+  served: number;
+  /** Set once one of the crowd walks off unserved: the bonus is lost. */
+  lost: boolean;
+  /** Set once the bonus is paid. */
+  paid: boolean;
 }
 
 /**
@@ -170,6 +215,8 @@ export interface GameState {
   /** Entry to the guild, bought once before any of its upgrades are for sale. */
   guild: Build;
   expansion: Expansion;
+  /** The shade gardens where nightshade grows: the first line's, then the second's. */
+  shade: Build[];
   upgrades: Record<UpgradeId, Upgrade>;
   /** Craftsmen hired at each station (`level`), and coins paid towards the next one. */
   craftsmen: Record<StationId, Upgrade>;
@@ -185,20 +232,43 @@ export interface GameState {
   tips: number;
   /** Wall-clock time (Date.now) the game was last saved, for catching up on the automation while away; 0 for a new game. */
   lastSeen: number;
+  /** The street's opinion of the shop, 0 to 100: served customers raise it, ones who walk off lower it. */
+  reputation: number;
+  /** Customers who will come back for the same potions, oldest first. */
+  regulars: Regular[];
+  /** The latest market day's rush, or null before the first. */
+  rush: Rush | null;
 }
 
 /**
  * Each garden grows a single kind of plant; the wheat field comes first. The first two gardens are
- * the first line's; the last two are the second line's fields, which grow once built.
+ * the first line's; the next two are the second line's fields, which grow once built. The shade
+ * gardens, where nightshade grows once planted, come last, the first line's and then the second's,
+ * so older saves keep their plots.
  */
-export const GARDENS: PlantId[] = ['wheat', 'mandrake', 'wheat', 'mandrake'];
-export const PLOTS_PER_GARDEN = 3;
-/** Gardens before this one belong to the first line. */
+export const GARDENS: PlantId[] = ['wheat', 'mandrake', 'wheat', 'mandrake', 'nightshade', 'nightshade'];
+/** Which production line each garden belongs to: 1 or 2. */
+export const GARDEN_LINE = [1, 1, 2, 2, 1, 2];
+/** Each garden has nine plots, three by three. */
+export const PLOTS_PER_GARDEN = 9;
+/** The second line's fields are gardens LINE2_GARDEN and the one after it. */
 export const LINE2_GARDEN = 2;
+/** The first line's shade garden; the second line's comes after it. */
+export const SHADE_GARDEN = 4;
 export const gardenOf = (plot: number) => Math.floor(plot / PLOTS_PER_GARDEN);
-/** Whether a garden is there to grow and harvest: always on the first line, once built on the second. */
+/**
+ * Whether a garden is there to grow and harvest: the first line's field and patch always, the
+ * second line's once built, and a shade garden once planted.
+ */
 export const gardenBuilt = (state: GameState, garden: number) =>
-  garden < LINE2_GARDEN || !!state.expansion.fields[garden - LINE2_GARDEN]?.built;
+  garden < LINE2_GARDEN ||
+  (garden >= SHADE_GARDEN ? !!state.shade[garden - SHADE_GARDEN]?.built : !!state.expansion.fields[garden - LINE2_GARDEN]?.built);
+/** Whether any shade garden grows nightshade, so customers start asking for Shadow Elixirs. */
+export const shadeGrown = (state: GameState) => state.shade.some((s) => s.built);
+/** Coins to plant each shade garden: the first line's, then the second's, which needs the expansion's land. */
+export const SHADE_COST = [80, 60];
+/** The potions customers ask for: the Shadow Elixir only once a shade garden grows nightshade. */
+export const orderable = (state: GameState) => POTIONS.filter((p) => p !== 'shadowElixir' || shadeGrown(state));
 /** Whether a refining table or cauldron stands: always on the first line, once built on the second. */
 export const stationBuilt = (state: GameState, id: StationId) =>
   id === 'refiner2' ? state.expansion.refiner.built : id === 'cauldron2' ? state.expansion.cauldron.built : true;
@@ -206,12 +276,63 @@ export const stationBuilt = (state: GameState, id: StationId) =>
 /** Customers who can wait at once: three, and one more with the extra order slot. */
 export const MAX_ORDERS = 3;
 export const maxOrders = (state: GameState) => MAX_ORDERS + state.upgrades.slots.level;
+/** How many more customers than the slots a market day's crowd may bring. */
+export const RUSH_EXTRA = 2;
 /** The most customers there can ever be, for laying out their places. */
-export const MAX_ORDER_SLOTS = MAX_ORDERS + UPGRADES.slots.max;
-/** Time until the next customer comes in: 12 to 20 seconds, one more time as often per customers level. */
-export const orderInterval = (state: GameState, roll: number) => (12_000 + roll * 8_000) / (1 + state.upgrades.customers.level);
-/** How fast plants grow: a quarter faster per growth level. */
-export const growthSpeed = (state: GameState) => 1 + 0.25 * state.upgrades.growth.level;
+export const MAX_ORDER_SLOTS = MAX_ORDERS + UPGRADES.slots.max + RUSH_EXTRA;
+/**
+ * Time until the next customer comes in: 12 to 20 seconds, one more time as often per customers
+ * level, more often with a good reputation and on a fair day.
+ */
+export const orderInterval = (state: GameState, roll: number) =>
+  ((12_000 + roll * 8_000) * reputationFactor(state.reputation)) / (1 + state.upgrades.customers.level) / WEATHER[weatherFor(state.contract.day)].customers;
+/** How fast plants grow: a quarter faster per growth level, and faster in the rain or slower in a drought. */
+export const growthSpeed = (state: GameState) => (1 + 0.25 * state.upgrades.growth.level) * WEATHER[weatherFor(state.contract.day)].growth;
+
+/** Reputation starts in the middle; served customers raise it and ones who walk off lower it. */
+export const START_REPUTATION = 50;
+export const REPUTATION_SERVED = 3;
+export const REPUTATION_WALKED_OFF = 8;
+/**
+ * How much reputation stretches the time between customers: 1 at the start (50), down to half at
+ * 100 and up to one and a half at 0.
+ */
+export const reputationFactor = (reputation: number) => 1.5 - reputation / 100;
+/** Changes the reputation by `by`, kept within 0 to 100. */
+export const nudgeReputation = (state: GameState, by: number) => {
+  state.reputation = Math.max(0, Math.min(100, state.reputation + by));
+};
+/** A customer whose order is filled with at least this share of their tip left comes back as a regular. */
+export const REGULAR_TIP_LEFT = 0.5;
+/** How many regulars the town remembers, and the chance a new customer is one of them. */
+export const MAX_REGULARS = 4;
+export const REGULAR_CHANCE = 0.3;
+/** What a regular pays on top of the price for each potion. */
+export const REGULAR_BONUS = 3;
+
+/**
+ * The weather, one kind a day, from the almanac: rain makes plants grow half again as fast, a
+ * drought slows them to 60%, a fair day brings customers half again as often, and a mild day changes
+ * nothing.
+ */
+export type Weather = 'mild' | 'rain' | 'fair' | 'drought';
+export const WEATHER: Record<Weather, { name: string; effect: string; growth: number; customers: number }> = {
+  mild: { name: 'Mild', effect: 'no change', growth: 1, customers: 1 },
+  rain: { name: 'Rain', effect: 'plants grow faster', growth: 1.5, customers: 1 },
+  fair: { name: 'Fair', effect: 'more customers', growth: 1, customers: 1.5 },
+  drought: { name: 'Drought', effect: 'plants grow slower', growth: 0.6, customers: 1 },
+};
+/** The almanac's week of weather from the second day on, round and round. */
+const FORECAST: Weather[] = ['rain', 'fair', 'drought', 'fair', 'rain', 'mild', 'fair'];
+/** The weather on `day`, the same in every game, like an almanac's forecast: the first day is mild. */
+export const weatherFor = (day: number): Weather => (day <= 1 ? 'mild' : FORECAST[(day - 2) % FORECAST.length]);
+
+/** Every fourth day is a market day, when a crowd comes in at midday. */
+export const MARKET_EVERY = 4;
+export const isMarketDay = (day: number) => day % MARKET_EVERY === 0;
+/** How many customers a market day's crowd brings, and what each pays into the bonus if all are served. */
+export const RUSH_SIZE = 5;
+export const RUSH_BONUS = 6;
 /** How fast belts run, and so how many items they carry a second: half again per belt level. */
 export const beltSpeed = (state: GameState) => 1 + 0.5 * state.upgrades.belts.level;
 /** What customers pay for a potion: a quarter more per price level, rounded. */
@@ -266,8 +387,8 @@ export const BELT_ENDS: Record<BeltId, StationId[]> = {
   refiner2: ['refiner2', 'cauldron2'],
   cauldron2: ['cauldron2', 'counter'],
 };
-/** Whether any of the second line's fields is built, for its garden belt to pick from. */
-export const anyFieldBuilt = (state: GameState) => state.expansion.fields.some((f) => f.built);
+/** Whether any of the second line's fields, its shade garden included, is built, for its garden belt to pick from. */
+export const anyFieldBuilt = (state: GameState) => state.expansion.fields.some((f) => f.built) || !!state.shade[1]?.built;
 /** The second line's garden belt also needs one of its fields to pick from. */
 export const beltBuildable = (state: GameState, id: BeltId) =>
   BELT_ENDS[id].every((station) => stationBuilt(state, station)) && (id !== 'garden2' || anyFieldBuilt(state));
@@ -278,7 +399,7 @@ export const GUILD_COST = 50;
  * Everything bought with coins, as one key each: an upgrade's levels, a station's craftsmen, a belt,
  * the guild's entry and the expansion's land.
  */
-export type Unlock = `level-${UpgradeId}` | `hire-${StationId}` | `belt-${BeltId}` | 'guild' | 'land';
+export type Unlock = `level-${UpgradeId}` | `hire-${StationId}` | `belt-${BeltId}` | 'guild' | 'land' | 'shade';
 
 /**
  * What must be bought first before each thing goes up for sale. The first steps are one chain, a
@@ -297,6 +418,7 @@ export const UNLOCKED_BY: Partial<Record<Unlock, Unlock>> = {
   'hire-cauldron': 'belt-garden',
   'belt-refiner': 'belt-garden',
   guild: 'belt-garden',
+  shade: 'belt-garden',
   'belt-cauldron': 'belt-refiner',
   land: 'belt-cauldron',
   'level-growth': 'guild',
@@ -310,6 +432,7 @@ export const UNLOCKED_BY: Partial<Record<Unlock, Unlock>> = {
 function progress(state: GameState, key: Unlock): { done: boolean; paid: number } {
   if (key === 'guild') return { done: state.guild.built, paid: state.guild.paid };
   if (key === 'land') return { done: state.expansion.land.built, paid: state.expansion.land.paid };
+  if (key === 'shade') return { done: state.shade[0].built, paid: state.shade[0].paid };
   const [kind, id] = key.split(/-(.+)/) as [string, string];
   if (kind === 'belt') return { done: state.belts[id as BeltId].built, paid: state.belts[id as BeltId].paid };
   const upgrade = kind === 'hire' ? state.craftsmen[id as StationId] : state.upgrades[id as UpgradeId];
@@ -396,6 +519,7 @@ export function createInitialState(): GameState {
     counter: { shelf: [], till: 0 },
     guild: unbuilt(),
     expansion: { land: unbuilt(), fields: [unbuilt(), unbuilt()], refiner: unbuilt(), cauldron: unbuilt() },
+    shade: [unbuilt(), unbuilt()],
     upgrades: Object.fromEntries(UPGRADE_IDS.map((id) => [id, { level: 0, paid: 0 }])) as Record<UpgradeId, Upgrade>,
     craftsmen: Object.fromEntries(STATIONS.map((id) => [id, { level: 0, paid: 0 }])) as Record<StationId, Upgrade>,
     belts: Object.fromEntries(BELTS.map((id) => [id, { ...unbuilt(), items: [] }])) as unknown as Record<BeltId, Belt>,
@@ -408,6 +532,9 @@ export function createInitialState(): GameState {
     sold: 0,
     tips: 0,
     lastSeen: 0,
+    reputation: START_REPUTATION,
+    regulars: [],
+    rush: null,
   };
   state.contract = contractFor(state, 1, 0);
   return state;

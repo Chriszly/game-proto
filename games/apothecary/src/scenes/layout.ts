@@ -1,5 +1,5 @@
 import type { ItemId, PlantId } from '../game/items';
-import { BELT_MS, BELTS, GARDENS, LINE2_GARDEN, PLOTS_PER_GARDEN, type BeltId } from '../game/state';
+import { BELT_MS, BELTS, PLOTS_PER_GARDEN, type BeltId } from '../game/state';
 
 // World positions for the two-column apothecary. Each production line runs straight down its own
 // column: two gardens side by side at the top, the refining table below them, then the cauldron,
@@ -27,20 +27,26 @@ const EDGE_X = 44;
 
 /**
  * Fenced garden areas, matching the order of GARDENS in the game state: the first line's wheat
- * field and mandrake patch side by side, then the second line's, mirrored.
+ * field and mandrake patch side by side, then the second line's, mirrored, then the two shade
+ * gardens at the top of the market, the first line's on the left and the second's beside it.
  */
 const LINE1_GARDENS = [
   { x: 24, y: 64, w: 220, h: 176, name: 'Wheat field' },
   { x: 260, y: 64, w: 220, h: 176, name: 'Mandrake patch' },
 ];
-export const GARDEN_AREAS = [
-  ...LINE1_GARDENS,
-  ...LINE1_GARDENS.map((g) => ({ ...g, x: WORLD.w - g.x - g.w })),
-];
-/** Plot i is slot i % 3 of garden i / 3, the slots spread across the garden in one row. */
+const SHADE_GARDEN = { x: 505, y: 64, w: 190, h: 176, name: 'Shade garden' };
+const mirrorArea = <T extends { x: number; w: number }>(g: T) => ({ ...g, x: WORLD.w - g.x - g.w });
+export const GARDEN_AREAS = [...LINE1_GARDENS, ...LINE1_GARDENS.map(mirrorArea), SHADE_GARDEN, mirrorArea(SHADE_GARDEN)];
+/** A plot's bed is 56 by 44, and beds stand edge to edge. */
+const PLOT = { w: 56, h: 44 };
+/**
+ * Plot i is slot i % 9 of garden i / 9: three rows of three beds, edge to edge, in the middle of the
+ * garden below its name, filling it left to right and top to bottom.
+ */
 export const plotPosition = (i: number) => {
   const area = GARDEN_AREAS[Math.floor(i / PLOTS_PER_GARDEN)];
-  return { x: area.x + 40 + (i % PLOTS_PER_GARDEN) * 70, y: area.y + 100 };
+  const slot = i % PLOTS_PER_GARDEN;
+  return { x: area.x + area.w / 2 + ((slot % 3) - 1) * PLOT.w, y: area.y + 104 + (Math.floor(slot / 3) - 1) * PLOT.h };
 };
 
 /**
@@ -129,7 +135,7 @@ export const COUNTER_MARKERS: StationMarkers = {
   pickUp: { x: COUNTER.x - 140, y: COUNTER.y + 75 },
   upgrade: { x: COUNTER.x + 140, y: COUNTER.y - 80 },
 };
-/** Where waiting customer i stands, on the street side of the counter. */
+/** Where waiting customer i stands, on the street side of the counter; a market day's crowd fills the row to the right wall. */
 export const customerPosition = (i: number) => ({ x: COUNTER.x - 56 + i * 45, y: COUNTER.y + 70 });
 /**
  * The street door in the shop's bottom wall, below the customers, and the spot outside it where
@@ -197,7 +203,7 @@ export const PRIORITY_SIGNS = {
 /**
  * Where each station's pallets stand, given by the middle of their bottom edge: one for each kind
  * of goods coming in and one for each kind going out, in the order of PLANTS, REFINED and POTIONS.
- * Each pair stands side by side across the end of the belt that brings or takes its goods, every
+ * Each set stands side by side across the end of the belt that brings or takes its goods, every
  * pallet at the end of its kind's lane: each station's goods come in on pallets above it and leave
  * from pallets below it, and the counter's potions stand behind it, where the belts come in.
  */
@@ -205,8 +211,8 @@ export interface StationPallets {
   in: { x: number; y: number }[];
   out: { x: number; y: number }[];
 }
-/** A pair of pallets across a belt heading down, whose first lane is on the east side. */
-const acrossBelt = (x: number, y: number) => [{ x: x + 18, y }, { x: x - 18, y }];
+/** Three pallets across a belt heading down, whose first lane is on the east side. */
+const acrossBelt = (x: number, y: number) => [{ x: x + 36, y }, { x, y }, { x: x - 36, y }];
 const REFINER_PALLETS: StationPallets = { in: acrossBelt(LINE_X, REFINER.y - 36), out: acrossBelt(LINE_X, REFINER.y + 84) };
 const CAULDRON_PALLETS: StationPallets = { in: acrossBelt(LINE_X, CAULDRON.y - 44), out: acrossBelt(LINE_X, CAULDRON.y + 84) };
 /**
@@ -237,10 +243,12 @@ const mirrorRun = (run: { x: number; y: number }[]) => run.map(mirror);
  * T. Each belt replaces the markers at its two ends once it is built.
  */
 const LINE1_BELTS = {
-  // From the wheat field and the mandrake patch along below them, then straight down to the table.
+  // From the wheat field, the mandrake patch and the shade garden along below them, then straight
+  // down to the table.
   garden: [
     [{ x: 134, y: 240 }, { x: 134, y: 264 }, { x: LINE_X, y: 264 }, { x: LINE_X, y: endAbove(REFINER_PALLETS.in) }],
     [{ x: 370, y: 240 }, { x: 370, y: 264 }, { x: LINE_X, y: 264 }],
+    [{ x: 530, y: 240 }, { x: 530, y: 264 }, { x: LINE_X, y: 264 }],
   ],
   // Straight down from below the table to above the cauldron.
   refiner: [[{ x: LINE_X, y: startBelow(REFINER_PALLETS.out) }, { x: LINE_X, y: endAbove(CAULDRON_PALLETS.in) }]],
@@ -283,10 +291,10 @@ function distanceTo(run: { x: number; y: number }[], p: { x: number; y: number }
   throw new Error(`${p.x},${p.y} is not on the belt`);
 }
 
-/** Each garden belt's line's fields' plants, in the order of the belt's runs. */
+/** The plants of each garden belt's line's gardens, in the order of the belt's runs. */
 const GARDEN_RUNS: Partial<Record<BeltId, readonly PlantId[]>> = {
-  garden: GARDENS.slice(0, LINE2_GARDEN),
-  garden2: GARDENS.slice(LINE2_GARDEN, 2 * LINE2_GARDEN),
+  garden: ['wheat', 'mandrake', 'nightshade'],
+  garden2: ['wheat', 'mandrake', 'nightshade'],
 };
 /**
  * Which of a belt's runs goods of a kind get on at: on the garden belts, the run from the field of
