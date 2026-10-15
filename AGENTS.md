@@ -86,7 +86,11 @@ and files every issue and PR into "All feedback" and its game's Project.
   workflow creates it on main), its Project (title, short description and README) to `.github/projects.json`, its name to the
   Game dropdown of the three issue forms in
   `.github/ISSUE_TEMPLATE/`, and its name and label to the map in
-  `.github/workflows/issue-labels.yml`. Vite picks
+  `.github/workflows/issue-labels.yml`. Then remind **Chriszly** about the game's GitHub Project,
+  in the PR's "Notes for reviewers" and in your reply when the PR is up: the Projects workflow
+  creates it when the PR merges, and if that run fails (for example an expired `PROJECTS_TOKEN`)
+  it has to be created by hand with the title, short description and README from
+  `.github/projects.json` and linked to the repo. Vite picks
   up `games/*/index.html` on its own. Keep save keys and other browser storage prefixed with the
   game's name, since every game shares the hub's origin.
 - **Honour the hub's settings.** Every game calls `setupGame(game)` from `shared/setupGame.ts`
