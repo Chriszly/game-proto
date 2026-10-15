@@ -2,6 +2,7 @@ import { settings } from '../../../../shared/settings';
 import Phaser from 'phaser';
 import { ADVENTURER, adventurerTexture } from '../art/characters';
 import { itemTexture, swordScale, swordTexture } from '../art/swords';
+import { fit, shown } from '../art/glass';
 import { EMBLEMS, emblemTexture } from '../art/ui';
 import { commissionAt } from '../game/commissions';
 import { combine, isGem, tierOf } from '../game/items';
@@ -154,6 +155,11 @@ export class GameScene extends Phaser.Scene {
     };
   }
 
+  /** An image of a baked texture at `scale` times its size in view pixels (see `fit`). */
+  private image(x: number, y: number, key: string, scale = 1) {
+    return fit(this.add.image(x, y, key), scale);
+  }
+
   create() {
     this.swords = new Array(MAX_SLOTS).fill(null);
     this.barrelSword = null;
@@ -161,15 +167,15 @@ export class GameScene extends Phaser.Scene {
     this.held = null;
     this.state = newShop(loadProgress());
 
-    this.add.image(0, 0, 'background').setOrigin(0);
-    this.furnace = this.add.image(FURNACE_WINDOW.x, FURNACE_WINDOW.y, 'furnace-0').setOrigin(0);
+    this.image(0, 0, 'background').setOrigin(0);
+    this.furnace = this.image(FURNACE_WINDOW.x, FURNACE_WINDOW.y, 'furnace-0').setOrigin(0);
     this.marks = this.add.graphics().setDepth(5);
     this.mergeFrames = [...Array(MAX_SLOTS).keys()].map((slot) => {
       const c = slotCentre(slot);
-      return this.add.image(c.x, c.y, 'frame-gold').setDepth(6).setVisible(false);
+      return this.image(c.x, c.y, 'frame-gold').setDepth(6).setVisible(false);
     });
-    this.barrel = this.add.image(BARREL.x, BARREL.y, 'barrel').setDepth(4);
-    this.barrelFrame = this.add.image(BARREL.x, BARREL.y, 'frame-barrel').setDepth(6).setVisible(false);
+    this.barrel = this.image(BARREL.x, BARREL.y, 'barrel').setDepth(4);
+    this.barrelFrame = this.image(BARREL.x, BARREL.y, 'frame-barrel').setDepth(6).setVisible(false);
     this.barrelPrice = this.add
       .text(BARREL.x, BARREL.y + 8, '', { ...textStyle(12.5, '#fff1d0', 3.5), align: 'center' })
       .setOrigin(0.5)
@@ -177,14 +183,14 @@ export class GameScene extends Phaser.Scene {
     this.createRowCover();
     this.buyerFrames = [...Array(DESKS).keys()].map((desk) => {
       const c = deskCentre(desk);
-      return this.add.image(c.x, c.y, 'frame-green').setDepth(25).setVisible(false);
+      return this.image(c.x, c.y, 'frame-green').setDepth(25).setVisible(false);
     });
 
     this.forgeButton = new Button(this, FORGE_BUTTON.x, FORGE_BUTTON.y, 'forge', 'Forge', () => this.forge());
     FORGE_UPGRADES.forEach((id, i) => {
       const b = UPGRADE_BUTTONS;
       const button = new Button(this, b.x, b.ys[i], 'upgrade', '', () => this.buy(id), 13);
-      const emblem = this.add.image(-b.w / 2 + 22, 0, emblemTexture(i));
+      const emblem = this.image(-b.w / 2 + 22, 0, emblemTexture(i));
       button.root.add(emblem);
       this.emblems.set(id, emblem);
       this.upgradeButtons.set(id, button);
@@ -195,7 +201,7 @@ export class GameScene extends Phaser.Scene {
     this.createWin();
 
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => this.pickUp(p));
-    this.input.on('pointermove', (p: Phaser.Input.Pointer) => this.held?.sprite.setPosition(p.x, p.y));
+    this.input.on('pointermove', (p: Phaser.Input.Pointer) => this.held?.sprite.setPosition(p.worldX, p.worldY));
     this.input.on('pointerup', (p: Phaser.Input.Pointer) => this.putDown(p));
     this.input.on('gameout', () => this.putDown(null));
   }
@@ -241,14 +247,14 @@ export class GameScene extends Phaser.Scene {
   }
 
   private pickUp(p: Phaser.Input.Pointer) {
-    const place = placeAt(p.x, p.y);
+    const place = placeAt(p.worldX, p.worldY);
     if (this.held || place === null || this.win.visible) return;
     // Tapping the barrel before it is bought buys it.
     if (place === BARREL_PLACE && this.state.ranks.barrel === 0) return this.buy('barrel');
     const item = itemAt(this.state, place);
     if (item === null) return;
     this.spriteAt(place)?.setVisible(false);
-    const sprite = this.add.image(p.x, p.y, itemTexture(item)).setDepth(UI_DEPTH - 1).setScale(swordScale(1.35));
+    const sprite = this.image(p.worldX, p.worldY, itemTexture(item), swordScale(1.35)).setDepth(UI_DEPTH - 1);
     this.held = { slot: place, sprite };
   }
 
@@ -264,12 +270,12 @@ export class GameScene extends Phaser.Scene {
     held.sprite.destroy();
     this.spriteAt(held.slot)?.setVisible(true);
     if (!p) return;
-    const place = placeAt(p.x, p.y);
-    const desk = deskAt(p.x, p.y);
+    const place = placeAt(p.worldX, p.worldY);
+    const desk = deskAt(p.worldX, p.worldY);
     const buyer = desk === null ? undefined : this.state.adventurers.find((a) => a.desk === desk);
     let done = false;
     if (place !== null) done = drop(this.state, held.slot, place);
-    else if (onBanner(p.x, p.y)) done = deliver(this.state, held.slot);
+    else if (onBanner(p.worldX, p.worldY)) done = deliver(this.state, held.slot);
     else if (buyer) done = sell(this.state, held.slot, buyer.id);
     if (done) this.save();
   }
@@ -287,7 +293,7 @@ export class GameScene extends Phaser.Scene {
       return null;
     }
     const at = this.placeSpot(place);
-    if (!sprite) sprite = this.add.image(at.x, at.y, itemTexture(item)).setDepth(10).setScale(scale);
+    if (!sprite) sprite = this.image(at.x, at.y, itemTexture(item), scale).setDepth(10);
     if (sprite.texture.key !== itemTexture(item)) sprite.setTexture(itemTexture(item));
     sprite.setVisible(this.held?.slot !== place);
     return sprite;
@@ -309,18 +315,18 @@ export class GameScene extends Phaser.Scene {
     const b = deskBox(a.desk);
     const sword = swordOf(a.wants);
     const mid = ORDER.x + ORDER.w / 2;
-    const body = this.add.image(ADVENTURER.x, ADVENTURER.y, adventurerTexture(a.look)).setOrigin(0);
-    const card = this.add.image(ORDER.x - 13, ORDER.y - 2, 'order-card').setOrigin(0);
+    const body = this.image(ADVENTURER.x, ADVENTURER.y, adventurerTexture(a.look)).setOrigin(0);
+    const card = this.image(ORDER.x - 13, ORDER.y - 2, 'order-card').setOrigin(0);
     // A gem order shows the gemmed sword, a loose gem beside it and the doubled price.
     const price = this.add
       .text(mid, ORDER.y + 17, `${orderPrice(a)} coins${a.gem ? ' (×2)' : ''}`, { fontFamily: FONT, fontStyle: 'bold', fontSize: '14px', color: '#9a5a10' })
       .setOrigin(0.5);
-    const wants = this.add.image(mid, ORDER.y + 49, swordTexture(a.wants, a.gem)).setScale(swordScale(0.82));
-    const gem = this.add.image(mid + 50, ORDER.y + 52, 'gem').setScale(0.5).setVisible(a.gem);
+    const wants = this.image(mid, ORDER.y + 49, swordTexture(a.wants, a.gem), swordScale(0.82));
+    const gem = this.image(mid + 50, ORDER.y + 52, 'gem', 0.5).setVisible(a.gem);
     const name = this.add
       .text(mid, ORDER.y + 86, a.gem ? `${sword.name} + gem` : sword.name, { fontFamily: FONT, fontStyle: 'bold', fontSize: a.gem ? '12px' : '13px', color: '#2a1a14' })
       .setOrigin(0.5);
-    const tagImage = this.add.image(0, 0, 'tag-exact').setOrigin(0);
+    const tagImage = this.image(0, 0, 'tag-exact').setOrigin(0);
     const tagTop = this.add.text(TAG.w / 2 + 1, 11.5, '', textStyle(10, '#eaffd8', 2)).setOrigin(0.5);
     const tagBottom = this.add.text(TAG.w / 2 + 1, 23.5, '', textStyle(11, '#ffe27a', 2)).setOrigin(0.5);
     const tag = this.add.container(TAG.x, TAG.y, [tagImage, tagTop, tagBottom]).setVisible(false);
@@ -345,11 +351,11 @@ export class GameScene extends Phaser.Scene {
         const at = this.placeSpot(e.slot);
         if (!sprite) continue;
         const scale = e.slot === BARREL_PLACE ? BARREL_SCALE : CELL_SCALE;
-        sprite.setScale(scale * (e.kind === 'forged' ? 0.4 : 1.5));
-        this.tweens.add({ targets: sprite, scale, duration: 250, ease: 'Back.Out' });
+        fit(sprite, scale * (e.kind === 'forged' ? 0.4 : 1.5));
+        this.tweens.add({ targets: sprite, scale: shown(sprite.texture.key, scale), duration: 250, ease: 'Back.Out' });
         if (e.kind !== 'forged' && !settings.reduceMotion) {
-          const flash = this.add.image(at.x, at.y, 'halo').setDepth(9).setScale(0.6);
-          this.tweens.add({ targets: flash, scale: 1.2, alpha: 0, duration: 350, onComplete: () => flash.destroy() });
+          const flash = this.image(at.x, at.y, 'halo', 0.6).setDepth(9);
+          this.tweens.add({ targets: flash, scale: shown('halo', 1.2), alpha: 0, duration: 350, onComplete: () => flash.destroy() });
         }
         if (e.kind === 'set') this.float(at.x, at.y - 20, 'Gem set!', '#8af0c8');
       } else if (e.kind === 'streak') {
@@ -373,16 +379,16 @@ export class GameScene extends Phaser.Scene {
   private hammerStreak(slot: number, streak: number, coins: number) {
     const c = this.placeSpot(slot);
     const y = c.y;
-    const burst = this.add.image(c.x, y, 'burst').setDepth(8);
+    const burst = this.image(c.x, y, 'burst').setDepth(8);
     if (settings.reduceMotion) {
       this.tweens.add({ targets: burst, alpha: 0, delay: 500, duration: 500, onComplete: () => burst.destroy() });
     } else {
-      burst.setScale(0.5);
-      this.tweens.add({ targets: burst, scale: 1.15, duration: 500, ease: 'Back.Out' });
+      fit(burst, 0.5);
+      this.tweens.add({ targets: burst, scale: shown('burst', 1.15), duration: 500, ease: 'Back.Out' });
       this.tweens.add({ targets: burst, alpha: 0, delay: 450, duration: 450, onComplete: () => burst.destroy() });
       for (let k = 0; k < 12; k++) {
         const t = (k / 12) * Math.PI * 2 + 0.2;
-        const spark = this.add.image(c.x, y, 'spark').setDepth(UI_DEPTH - 2).setRotation(t);
+        const spark = this.image(c.x, y, 'spark').setDepth(UI_DEPTH - 2).setRotation(t);
         const r = 50 + (k % 3) * 12;
         this.tweens.add({
           targets: spark,
@@ -397,7 +403,7 @@ export class GameScene extends Phaser.Scene {
     }
     const tagY = c.y - 48;
     const tag = this.add.container(c.x, tagY, [
-      this.add.image(0, 0, 'streak-tag'),
+      this.image(0, 0, 'streak-tag'),
       this.add.text(0, 0, `Hammer streak ×${streak}  +${coins}c`, textStyle(13, '#fff1d0', 2.5)).setOrigin(0.5),
     ]);
     tag.setDepth(UI_DEPTH + 2);
@@ -408,7 +414,7 @@ export class GameScene extends Phaser.Scene {
   private commissionDone(reward: number, won: boolean) {
     const bx = BANNER.x + BANNER.w / 2;
     const by = BANNER.y + BANNER.h / 2;
-    const halo = this.add.image(bx, by, 'halo').setDepth(UI_DEPTH + 1).setScale(2.4, 0.8);
+    const halo = this.image(bx, by, 'halo').setDepth(UI_DEPTH + 1).setScale(shown('halo', 2.4), shown('halo', 0.8));
     this.tweens.add({ targets: halo, alpha: 0, delay: 400, duration: 900, onComplete: () => halo.destroy() });
     if (!settings.reduceMotion) this.tweens.add({ targets: this.banner.root, scale: 1.06, duration: 160, yoyo: true });
     this.float(bx, by + 70, `Royal commission done! +${reward}c and a guild star`, '#ffd36a', 2400);
@@ -559,7 +565,7 @@ export class GameScene extends Phaser.Scene {
   /** Smoky glass over the fifth row until it is bought, with the instructions and the build button. */
   private createRowCover() {
     const b = ROW_BOX;
-    const cover = this.add.image(b.x, b.y, 'row-locked').setOrigin(0);
+    const cover = this.image(b.x, b.y, 'row-locked').setOrigin(0);
     const text = this.add
       .text(b.x + b.w / 2, b.y + 22, 'Merge matching swords, then sell them to adventurers.', { ...textStyle(12.5, '#fff4d8', 3.5), fontStyle: 'normal' })
       .setOrigin(0.5);
@@ -570,7 +576,7 @@ export class GameScene extends Phaser.Scene {
   /** The window that opens when the Crown Blade is delivered, with a button to keep smithing. */
   private createWin() {
     const items = [
-      this.add.image(0, 0, 'win-panel'),
+      this.image(0, 0, 'win-panel'),
       this.add.text(0, -36, 'The Crown Blade is delivered!', textStyle(24, '#ffd36a', 4)).setOrigin(0.5),
       this.add
         .text(0, 6, 'The Anvilheart hangs in the throne room, and\nyours is the crown\'s own smithy.', { ...textStyle(15, '#fff1d0', 3), align: 'center', fontStyle: 'normal' })
@@ -585,8 +591,8 @@ export class GameScene extends Phaser.Scene {
     this.discovered = [];
     for (let tier = 1; tier <= MAX_TIER; tier++) {
       const c = discoveredCentre(tier, MAX_TIER);
-      const frame = this.add.image(c.x, c.y, 'disc-off');
-      const sword = this.add.image(c.x, c.y, swordTexture(tier)).setScale(swordScale(0.5)).setVisible(false);
+      const frame = this.image(c.x, c.y, 'disc-off');
+      const sword = this.image(c.x, c.y, swordTexture(tier), swordScale(0.5)).setVisible(false);
       this.discovered.push({ frame, sword });
     }
   }
@@ -600,9 +606,9 @@ export class GameScene extends Phaser.Scene {
     this.bestText = top(14.5).setOrigin(1, 0.5).setX(VIEW.w - 17);
     this.soldText = top(14.5).setOrigin(1, 0.5);
     this.starsText = top(15).setOrigin(1, 0.5);
-    this.star = this.add.image(0, 20, 'star').setDepth(UI_DEPTH + 1);
+    this.star = this.image(0, 20, 'star').setDepth(UI_DEPTH + 1);
     this.createBanner();
-    this.bannerFrame = this.add.image(BANNER.x + BANNER.w / 2, BANNER.y + BANNER.h / 2, 'frame-banner').setDepth(UI_DEPTH + 2).setVisible(false);
+    this.bannerFrame = this.image(BANNER.x + BANNER.w / 2, BANNER.y + BANNER.h / 2, 'frame-banner').setDepth(UI_DEPTH + 2).setVisible(false);
     const r = REPUTATION;
     this.add.text(r.x + 12, r.y + 14, 'Guild reputation', textStyle(13, '#efe2c4')).setOrigin(0, 0.5).setDepth(UI_DEPTH + 1);
     this.repWord = this.add.text(r.x + r.w - 12, r.y + 14, '', textStyle(12, '#ffe27a')).setOrigin(1, 0.5).setDepth(UI_DEPTH + 1);
@@ -618,13 +624,13 @@ export class GameScene extends Phaser.Scene {
     const kicker = this.add.text(36, 10.5, 'ROYAL COMMISSION', textStyle(8, '#ffe7a8', 3)).setOrigin(0, 0.5);
     kicker.setLetterSpacing(1);
     const title = this.add.text(36, 22.5, '', textStyle(13, '#fff2dc', 2.5)).setOrigin(0, 0.5);
-    const sword = this.add.image(165, h / 2, swordTexture(6)).setScale(swordScale(0.42));
+    const sword = this.image(165, h / 2, swordTexture(6), swordScale(0.42));
     const progress = small('', 192, 10, '#ffffff');
-    const pips = [...Array(4).keys()].map((k) => this.add.image(198 + k * 17, 23, 'pip-off'));
+    const pips = [...Array(4).keys()].map((k) => this.image(198 + k * 17, 23, 'pip-off'));
     const reward = this.add.text(w - 9, 22.5, '', textStyle(13.5, '#ffe27a', 2.5)).setOrigin(1, 0.5);
-    const star = this.add.image(w - 9, 22, 'star').setScale(0.65);
+    const star = this.image(w - 9, 22, 'star', 0.65);
     // The container's origin is the banner's centre, so it can pulse in place.
-    const items = [this.add.image(0, 0, 'banner').setOrigin(0), kicker, title, sword, progress, ...pips, reward, star];
+    const items = [this.image(0, 0, 'banner').setOrigin(0), kicker, title, sword, progress, ...pips, reward, star];
     for (const item of items) item.setPosition(item.x - w / 2, item.y - h / 2);
     const root = this.add.container(x + w / 2, y + h / 2, items).setDepth(UI_DEPTH + 1);
     this.banner = { root, title, sword, progress, pips, reward, star };
