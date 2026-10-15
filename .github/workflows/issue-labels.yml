@@ -5,9 +5,15 @@ name: Issue labels
 # Then it adds the issue to "All feedback" and that game's Project with the status
 # Todo, using PROJECTS_TOKEN (a classic token with only the "project" scope): the
 # Projects' built-in Auto-add misses labels added by this workflow's own token.
+# Run it by hand with an issue number to file an older issue again.
 on:
   issues:
     types: [opened, edited]
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: Issue number
+        required: true
 
 permissions:
   contents: read
@@ -22,12 +28,15 @@ jobs:
       - name: Label the issue with its game
         id: label
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          ISSUE: ${{ inputs.issue }}
         with:
           script: |
             // Dropdown option -> game label. Keep in step with the forms and .github/labels.json.
             const games = {"Apothecary": "apothecary", "Deadline": "deadline", "Palisade": "palisade", "Tiny Kingdom": "tiny-kingdom", "Hotfoot": "hotfoot", "Anvilheart": "anvilheart", "Broadside": "broadside", "TinctureTinker": "tincture-tinker", "Catacomb": "catacomb", "Golem Garden": "golem-garden", "Beehive Baron": "beehive-baron", "Wyrmrail": "wyrmrail", "Shrine Stack": "shrine-stack", "Mapmaker": "mapmaker", "Lanternkeep": "lanternkeep", "Space Wars": "space-wars", "Lane Brawl": "lane-brawl", "Colonizer": "colonizer", "Hub page": "hub", "Shared / all games": "shared"};
             // The body is read as data from the event; it never reaches a shell.
-            const issue = context.payload.issue;
+            const issue = context.payload.issue
+              || (await github.rest.issues.get({ ...context.repo, issue_number: Number(process.env.ISSUE) })).data;
             const match = /^### Game\s*\r?\n\s*\r?\n(.+)$/m.exec(issue.body || '');
             const label = match && games[match[1].trim()];
             if (!label) {
@@ -35,6 +44,8 @@ jobs:
               return;
             }
             core.setOutput('label', label);
+            core.setOutput('node_id', issue.node_id);
+            core.setOutput('number', issue.number);
             const gameLabels = new Set(Object.values(games));
             const stale = issue.labels.map(l => l.name).filter(n => gameLabels.has(n) && n !== label);
             for (const name of stale) {
@@ -53,12 +64,14 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           LABEL: ${{ steps.label.outputs.label }}
+          NODE_ID: ${{ steps.label.outputs.node_id }}
+          NUMBER: ${{ steps.label.outputs.number }}
         with:
           github-token: ${{ secrets.PROJECTS_TOKEN }}
           script: |
             const wanted = JSON.parse(require('fs').readFileSync('.github/projects.json', 'utf8'));
             const titles = new Set(wanted.filter(p => p.label === null || p.label === process.env.LABEL).map(p => p.title));
-            const issue = context.payload.issue;
+            const issue = { node_id: process.env.NODE_ID, number: process.env.NUMBER };
 
             const { user } = await github.graphql(`
               query($owner: String!) {
