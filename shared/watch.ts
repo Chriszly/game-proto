@@ -7,7 +7,8 @@
  * `mountWatch` once its match starts, runs its sim through `watchSteps`, and reports AI decisions
  * with `aiLog`. Nothing here runs or shows unless the page was opened with `?watch`.
  *
- * Keys: P pauses, `[` and `]` step the speed down and up, L shows or hides the log.
+ * Keys: `[` and `]` step the speed down and up, L shows or hides the log. Its pause button holds the
+ * match still without covering it; P is the shared pause screen's key (`shared/startScreen.ts`).
  */
 
 /** Whether the page was opened to watch the AI play (`?watch` in the URL). */
@@ -63,7 +64,7 @@ export function mountWatch(opts: { title?: string; sides?: Record<string, WatchS
   const bar = document.createElement('div');
   bar.className = 'watch-bar';
 
-  const pause = button('Pause (P)', '❚❚');
+  const pause = button('Hold the match', '❚❚');
   const speeds = WATCH_SPEEDS.map((s) => button(`${s}x speed`, `${s}x`));
   const logButton = button('AI log (L)', 'Log');
   bar.append(pause, ...speeds, logButton);
@@ -78,7 +79,7 @@ export function mountWatch(opts: { title?: string; sides?: Record<string, WatchS
   const show = () => {
     pause.setAttribute('aria-pressed', String(state.paused));
     pause.textContent = state.paused ? '▶' : '❚❚';
-    pause.title = state.paused ? 'Play (P)' : 'Pause (P)';
+    pause.title = state.paused ? 'Play on' : 'Hold the match';
     pause.setAttribute('aria-label', pause.title);
     speeds.forEach((b, i) => b.setAttribute('aria-pressed', String(WATCH_SPEEDS[i] === state.speed)));
     logButton.setAttribute('aria-pressed', String(!log!.hidden));
@@ -104,8 +105,7 @@ export function mountWatch(opts: { title?: string; sides?: Record<string, WatchS
   window.addEventListener('keydown', (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
     const i = WATCH_SPEEDS.indexOf(state.speed as (typeof WATCH_SPEEDS)[number]);
-    if (e.key === 'p' || e.key === 'P') togglePause();
-    else if (e.key === 'l' || e.key === 'L') toggleLog();
+    if (e.key === 'l' || e.key === 'L') toggleLog();
     else if (e.key === ']') setSpeed(WATCH_SPEEDS[Math.min(i + 1, WATCH_SPEEDS.length - 1)]);
     else if (e.key === '[') setSpeed(WATCH_SPEEDS[Math.max(i - 1, 0)]);
   });

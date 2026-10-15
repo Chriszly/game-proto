@@ -142,3 +142,34 @@ test('hub grid fills the screen width', async ({ page }) => {
   expect(await columns()).toBe(1);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(0);
 });
+
+// Every game loads behind a loading screen, waits on a start screen, and pauses with its button or P.
+test('games have start and pause screens', async ({ page }, testInfo) => {
+  // Under automation the start screen is skipped unless a test asks for it.
+  await page.addInitScript(() => Object.assign(window, { showStartScreen: true }));
+  await page.goto('/games/apothecary/');
+  const overlay = page.locator('.game-overlay');
+  const running = () => page.evaluate(() => (window as any).game.scene.getScene('Game')?.sys.isActive() === true);
+  await expect(page.locator('.game-start-button')).toBeVisible();
+  await expect(page.locator('.game-overlay-title')).toHaveText('Apothecary');
+  expect(await running(), 'paused on the start screen').toBe(false);
+  testInfo.attach('start', { body: await page.screenshot({ path: testInfo.outputPath('start.png') }), contentType: 'image/png' });
+
+  await page.locator('.game-start-button').click();
+  await expect(overlay).toBeHidden();
+  expect(await running(), 'playing after Start').toBe(true);
+
+  await page.locator('.pause-button').click();
+  await expect(page.locator('.game-resume-button')).toBeVisible();
+  expect(await running(), 'paused by the button').toBe(false);
+  testInfo.attach('paused', { body: await page.screenshot({ path: testInfo.outputPath('paused.png') }), contentType: 'image/png' });
+  await page.keyboard.press(' ');
+  await expect(overlay).toBeHidden();
+  expect(await running(), 'playing after Space').toBe(true);
+
+  await page.keyboard.press('p');
+  await expect(page.locator('.game-resume-button')).toBeVisible();
+  await page.keyboard.press('p');
+  await expect(overlay).toBeHidden();
+  expect(await running(), 'playing after P twice').toBe(true);
+});

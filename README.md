@@ -62,12 +62,15 @@ The hub's **Settings** button opens the settings every game shares. They are sav
 
 Every game also has a full screen button in its bottom left corner, and the **F** key toggles full screen. Browsers that cannot take a page full screen, such as iPhones, don't show the button.
 
+Every game shows a loading screen while its art is drawn, then waits on a start screen until **Start** is pressed (or Enter or Space). The pause button next to full screen, the **P** key or leaving the tab pauses it; Resume, P, Space or Esc play on, and the pause screen links back to all games.
+
 ## Watch AI
 
 Games whose AI can play every side have a **Watch AI** link on their hub card, which opens the game
 with `?watch` added to its URL (any such game's URL works the same, on `npm run dev` too). The AI then
-plays your side as well, and a panel in the top right pauses the match (**P**), plays it at 1x, 2x,
-4x or 8x (**[** and **]** step the speed) and shows a log of what each AI decides (**L**).
+plays your side as well, and a panel in the top right holds the match still while you look round
+(its pause button), plays it at 1x, 2x, 4x or 8x (**[** and **]** step the speed) and shows a log of
+what each AI decides (**L**).
 
 | Game | What the watch mode does |
 | --- | --- |
@@ -87,11 +90,11 @@ npm run preview   # serve the production build
 - `games/<name>/`: one game, with its own `index.html`, `src/`, `e2e/` playthrough test, `docs/`
   screenshots and `README.md`. Games don't import from each other.
 - `shared/`: the settings every game shares (`settings.ts`), the hub's Settings panel
-  (`settingsPanel.ts`), `setupGame.ts`, which each game calls to apply the frame cap, the FPS readout, reduced motion and full screen,
-  `watch.ts`, the Watch AI panel and its `?watch` flag,
+  (`settingsPanel.ts`), `setupGame.ts`, which each game calls to apply the frame cap, the FPS readout, reduced motion and full screen
+  and to add the loading, start and pause screens (`startScreen.ts`), `watch.ts`, the Watch AI panel and its `?watch` flag,
   and `scaling.ts`, which keeps a game sharp from a phone to a 4K screen (`grep -l setupScaling games/*/src/main.ts` lists the games that use it).
 - `e2e/hub.spec.ts`: checks that the hub lists every game, that each card opens it, and that the
-  settings are saved and reach a game. `e2e/screens.spec.ts` opens each game that uses
+  settings are saved and reach a game, and that a game starts and pauses. `e2e/screens.spec.ts` opens each game that uses
   `shared/scaling.ts` on an upright and a sideways phone, a tablet, a laptop and a 4K screen.
 - `package.json`, `tsconfig.json`, `tsconfig.e2e.json`, `vite.config.ts` and `playwright.config.ts`
   are shared. `tsconfig.json` typechecks the games and `shared/`; `tsconfig.e2e.json` typechecks

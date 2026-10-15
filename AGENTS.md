@@ -99,7 +99,9 @@ the `project` scope).
   up `games/*/index.html` on its own. Keep save keys and other browser storage prefixed with the
   game's name, since every game shares the hub's origin.
 - **Honour the hub's settings.** Every game calls `setupGame(game)` from `shared/setupGame.ts`
-  right after creating its `Phaser.Game`, which applies the frame cap, the FPS readout, reduced motion and full screen. Each game also implements the difficulty itself: scale one or two of its own balance
+  right after creating its `Phaser.Game`, which applies the frame cap, the FPS readout, reduced motion and full screen, and covers
+  the page with the shared loading, start and pause screens (`shared/startScreen.ts`): the game's
+  scenes stand paused until Start is pressed, and the pause button, P or leaving the tab pause them. Each game also implements the difficulty itself: scale one or two of its own balance
   numbers with `byDifficulty(easy, normal, hard)` from `shared/settings.ts`, keep Normal exactly as
   designed (the playthrough runs on Normal), and add the game's row to the difficulty table in the
   README. Skip camera shake and flashes, and hold blinking or jittering effects still, when
@@ -121,7 +123,7 @@ the `project` scope).
 - **Watch AI.** A game whose AI can play every side supports `?watch` with `shared/watch.ts`: when
   `watching` is set, hand the player's side to the AI and lift the fog, call `mountWatch` once the
   match starts (with each side's name and colour and the match clock), run the sim
-  `watchSteps()` times per frame (0 while paused, so pausing and speeding up never change the
+  `watchSteps()` times per frame (0 while the panel holds the match, so pausing and speeding up never change the
   rules), and report AI decisions with `aiLog(side, text)` (a no-op outside watch mode). Then add a
   `<a class="watch" href="games/<name>/?watch">Watch AI</a>` to its hub card, after the card's own
   link, and its row to the Watch AI table in the README. The hub test opens it from that link. A
@@ -161,6 +163,10 @@ playthrough is the check that the core loop can still be played, so it has to st
   Don't raise timeouts or tolerances unless the failure is shown to come from a slow runner rather
   than the game, and say so in the PR. If the test is wrong, fix the test; if the game broke, fix
   the game.
+- **The start screen stays out of the way.** Under browser automation (`navigator.webdriver`) the
+  shared start screen is skipped and the game starts as soon as its first scene has drawn, so a
+  playthrough needs no step for it; `e2e/hub.spec.ts` checks the screen itself by setting
+  `window.showStartScreen` first.
 - **Drive the game through real inputs.** The test walks by clicking, like a tap on a phone, and
   only reads state through `window.game` (exposed by the dev build in the game's `src/main.ts`). Don't write to
   game state from the test or add shortcuts that bypass the real controls.
