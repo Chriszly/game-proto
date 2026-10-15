@@ -75,6 +75,7 @@ what each AI decides (**L**).
 | Game | What the watch mode does |
 | --- | --- |
 | Colonizer | two random factions, both run by the planner, on an open map; a click on the end screen starts another match |
+| Space Wars | all five factions run by the AI on an open map until one is left; contracts don't run; a tap on the end screen starts another battle |
 
 ## Running locally
 

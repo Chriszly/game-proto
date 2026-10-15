@@ -53,6 +53,13 @@ Implemented today:
   researches its lowest track and from 150 s builds one outpost (`expand`) at a field away from
   every other hub, saving crystal for both (no training) once its army is big enough. Idle
   warships fetch their faction's shards within 360 px (`fetchSalvage`).
+- Watch AI (`?watch`, `shared/watch.ts`): `newGame` skips the picker and starts
+  `new World(layout, random pick, true)`. With `World.watch` the AI thinks for slot 0 too (and it
+  can hold the beacon picket), the fog is lifted (`updateFog` fills it and knows every building),
+  contracts don't run, and the battle ends with `phase` `won` once one faction is left
+  (`World.winner`, a side index). The scene runs `update` `watchSteps()` times a frame, ignores
+  taps except on the end overlay (which starts another battle), and the overlay names the winner.
+  `think` reports builds, outposts, research and attacks to `aiLog`.
 - Faction abilities (`Ability` in `game/factions.ts`, applied in `game/world.ts`): `cloak`
   (Phantom Blade, hidden from enemies until it fires for 2 s), `decoy` (Decoy Wraith drops a copy
   every 15 s that draws fire for 12 s and never acts), `hack` (Hack Frigate's hits disable a turret
@@ -140,8 +147,8 @@ File map (`src/`):
 - `game/describe.ts`: the text for tooltips and faction cards (`unitLines`, `buildingLines`,
   `factionLines`, `abilityText`, `expansionLines`, `researchLines`), built from the faction data.
   No Phaser.
-- `game/world.ts`: `World`, the whole battle. `new World(layout, pick)` puts faction `pick` in the
-  player's slot. `PLAYER` (0), `unitStats` and `buildingStats`
+- `game/world.ts`: `World`, the whole battle. `new World(layout, pick, watch)` puts faction `pick` in the
+  player's slot (`watch`: the AI plays it, see Watch AI above). `PLAYER` (0), `unitStats` and `buildingStats`
   (faction numbers with the faction's multipliers, the side's perks and research applied),
   `expansionStats`, `buildInfo` (what a build button costs and is called), `researchCost`, the
   expansion constants (`EXPANSION_COST`, `EXPANSION_NEAR`, `EXPANSION_GAP`), `MINE_SPOT`, the beacon and

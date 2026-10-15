@@ -1,4 +1,5 @@
 import { byDifficulty } from '../../../../shared/settings';
+import { aiLog } from '../../../../shared/watch';
 import { ARENA, BUILD_RANGE, NODE_AMOUNT, NODE_CLEARANCE } from './arena';
 import { COMBAT_UNITS, FACTIONS, type Ability, type Faction, type Role, type UnitId } from './factions';
 import type { MapLayout, Point } from './map';
@@ -336,11 +337,15 @@ export class World {
   events: WorldEvent[] = [];
   private nextId = 1;
 
+  /** The last faction standing in a watched battle (a side index), or -1. */
+  winner = -1;
+
   /**
    * `pick` is the faction the player commands, an index into `FACTIONS`. It takes the player's start
-   * point (slot 0); the other factions fill the rest in their usual order.
+   * point (slot 0); the other factions fill the rest in their usual order. With `watch` the AI plays
+   * slot 0 too, nothing is fogged, and the battle ends when one faction is left (`winner`).
    */
-  constructor(readonly layout: MapLayout, pick = 0) {
+  constructor(readonly layout: MapLayout, pick = 0, readonly watch = false) {
     const order = [pick, ...FACTIONS.map((_, i) => i).filter((i) => i !== pick)];
     this.sides = order.map((f, index) => ({
       index, def: FACTIONS[f], crystal: START_CRYSTAL, alive: true, thinkMs: 0, attackMs: 0, perks: { ...NO_PERKS }, picket: -1,
@@ -559,7 +564,7 @@ export class World {
     for (const b of [...this.buildings]) this.updateBuilding(b, dt);
     for (const u of [...this.units]) this.updateUnit(u, dt);
     for (const side of this.sides) {
-      if (!side.alive || side.index === PLAYER) continue;
+      if (!side.alive || (side.index === PLAYER && !this.watch)) continue;
       side.thinkMs += dt;
       if (side.thinkMs >= AI_THINK_MS) {
         side.thinkMs = 0;
@@ -571,9 +576,16 @@ export class World {
     this.updateResearch(dt);
     this.updateBeacon(dt);
     this.updateShards(dt);
-    this.updateContract();
+    // Contracts are the player's; a watched battle gives nobody their perks.
+    if (!this.watch) this.updateContract();
     this.updateFog();
-    if (!this.sides[PLAYER].alive) this.phase = 'lost';
+    if (this.watch) {
+      const left = this.sides.filter((s) => s.alive);
+      if (left.length <= 1) {
+        this.winner = left[0]?.index ?? -1;
+        this.phase = 'won';
+      }
+    } else if (!this.sides[PLAYER].alive) this.phase = 'lost';
     else if (this.sides.every((s) => s.index === PLAYER || !s.alive)) this.phase = 'won';
   }
 
@@ -822,6 +834,13 @@ export class World {
   /** What the player sees this update: everything within sight of its ships and buildings. */
   private updateFog() {
     const fog = this.fog;
+    if (this.watch) {
+      // Watching, the whole battlefield is in sight.
+      fog.visible.fill(1);
+      fog.explored.fill(1);
+      for (const b of this.buildings) this.known.add(b.id);
+      return;
+    }
     fog.clear();
     for (const u of this.units) {
       if (u.faction !== PLAYER) continue;
@@ -945,7 +964,9 @@ export class World {
     // Once the opening is over, an AI with a fair army saves up to expand and to research.
     let saving = false;
     if (this.elapsedMs >= AI_EXPAND_MS && expansions === 0) {
-      if (side.crystal >= expansionStats(side).cost) this.expand(f);
+      if (side.crystal >= expansionStats(side).cost) {
+        if (this.expand(f)) aiLog(String(f), 'builds an outpost on a new crystal field');
+      }
       else saving = true;
     }
     if (this.elapsedMs >= AI_RESEARCH_MS && !side.research.current && has('barracks')) {
@@ -953,7 +974,9 @@ export class World {
       const open = TRACKS.filter((t) => side.research.levels[t] < RESEARCH_LEVELS);
       const low = open.filter((t) => side.research.levels[t] === Math.min(...open.map((o) => side.research.levels[o])));
       const track = low[Math.floor(Math.random() * low.length)];
-      if (track && side.crystal >= researchCost(side, track)) this.research(track, f);
+      if (track && side.crystal >= researchCost(side, track) && this.research(track, f) === null) {
+        aiLog(String(f), `researches ${TRACK_DEFS[track].name} ${side.research.levels[track] + 1}`);
+      }
       else if (track) saving = true;
     }
     if (army.length < AI_MAX_ARMY && !(saving && army.length >= AI_ARMY_TO_ATTACK)) {
@@ -971,7 +994,12 @@ export class World {
     if (!target) return;
     // The picket stays on the beacon and a few ships stay home; the rest go.
     const raid = army.filter((u) => u.id !== side.picket).sort((a, b) => dist(b, hub) - dist(a, hub));
-    for (const u of raid.slice(0, Math.max(0, raid.length - AI_HOME_GUARD))) u.order = { kind: 'attack', id: target.id, auto: false };
+    const sent = raid.slice(0, Math.max(0, raid.length - AI_HOME_GUARD));
+    for (const u of sent) u.order = { kind: 'attack', id: target.id, auto: false };
+    if (sent.length > 0) {
+      const at = this.sides[target.faction];
+      aiLog(String(f), `sends ${sent.length} ships at the ${at.def.name} ${at.def.buildings[target.type].name}`);
+    }
   }
 
   /** Idle AI warships go to fetch their faction's salvage shards when one lies within reach. */
@@ -986,7 +1014,7 @@ export class World {
   }
 
   /** An AI expansion: a second hub beside the richest-looking crystal field away from everyone. */
-  private expand(f: number) {
+  private expand(f: number): boolean {
     const hub = this.hubOf(f)!;
     const others = this.buildings.filter((b) => b.type === 'hub' && b.faction !== f);
     const sites = this.nodes
@@ -1000,11 +1028,11 @@ export class World {
         const x = n.x + Math.cos(angle) * d;
         const y = n.y + Math.sin(angle) * d;
         if (this.placementProblem('expansion', x, y, f) === null) {
-          this.build('expansion', x, y, f);
-          return;
+          return this.build('expansion', x, y, f) === null;
         }
       }
     }
+    return false;
   }
 
   /**
@@ -1016,7 +1044,7 @@ export class World {
     const bc = this.beacon;
     if (this.elapsedMs < AI_PICKET_MS) return;
     const rank = this.sides
-      .filter((s) => s.index !== PLAYER && s.alive && this.hubOf(s.index))
+      .filter((s) => (s.index !== PLAYER || this.watch) && s.alive && this.hubOf(s.index))
       .sort((a, b) => dist(this.hubOf(a.index)!, bc) - dist(this.hubOf(b.index)!, bc))
       .findIndex((s) => s.index === f);
     if (rank < 0 || rank >= AI_PICKETS || this.elapsedMs < AI_PICKET_MS + rank * AI_PICKET_STAGGER_MS) return;
@@ -1037,7 +1065,7 @@ export class World {
       const x = hub.x + Math.cos(angle) * d;
       const y = hub.y + Math.sin(angle) * d;
       if (this.placementProblem(role, x, y, faction) === null) {
-        this.build(role, x, y, faction);
+        if (this.build(role, x, y, faction) === null) aiLog(String(faction), `builds a ${buildInfo(this.sides[faction], role).name}`);
         return;
       }
     }
