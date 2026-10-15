@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { sharpRes } from '../../../../shared/scaling';
 
 // The illuminated-manuscript look: flat painted colours on vellum, every shape outlined in brown-black
 // ink, with thin white highlights along lit edges and burnished gold leaf for coins, the moon and
@@ -52,17 +53,35 @@ export function seeded(seed: number) {
   };
 }
 
-/** Paints a `w` x `h` texture with a 2D canvas. */
+/**
+ * Paints a `w` x `h` texture with a 2D canvas. On a big or high-density screen the canvas gets more
+ * pixels (`sharpRes`), and the texture is marked with that resolution so it still shows `w` x `h`.
+ */
 export function paint(scene: Phaser.Scene, key: string, w: number, h: number, draw: (ctx: Ctx) => void) {
+  const res = sharpRes(w, h);
   const canvas = document.createElement('canvas');
-  canvas.width = Math.ceil(w);
-  canvas.height = Math.ceil(h);
+  canvas.width = Math.ceil(w * res);
+  canvas.height = Math.ceil(h * res);
   const ctx = canvas.getContext('2d')!;
+  ctx.scale(res, res);
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
   draw(ctx);
   if (scene.textures.exists(key)) scene.textures.remove(key);
-  scene.textures.addCanvas(key, canvas);
+  const texture = scene.textures.addCanvas(key, canvas)!;
+  // Phaser draws a frame at its source's resolution, and sizes images by its source size.
+  texture.source[0].resolution = res;
+  const frame = texture.get() as unknown as { data: { sourceSize: { w: number; h: number } } };
+  Object.assign(frame.data.sourceSize, { w: Math.ceil(w), h: Math.ceil(h) });
+}
+
+/**
+ * Sets a tile sprite of a painted texture to repeat at its shown size, scrolled `x`, `y` shown
+ * pixels. A tile sprite's scroll is in texture pixels, so it is scaled by the resolution too.
+ */
+export function tileAt(sprite: Phaser.GameObjects.TileSprite, x: number, y = 0) {
+  const res = sprite.frame.source.resolution;
+  return sprite.setTileScale(1 / res).setTilePosition(x * res, y * res);
 }
 
 /** A closed path through the points, filled and inked. */
