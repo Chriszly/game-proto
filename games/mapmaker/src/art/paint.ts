@@ -1,14 +1,24 @@
 import Phaser from 'phaser';
+import { renderScale } from '../../../../shared/scaling';
 
 // The look of a modern topographic survey sheet: hypsometric tints, brown contours, hillshade and
 // clean black map symbols, with the survey overprint (stations, values, the viewshed) in magenta.
 // Everything is painted on 2D canvases in code and added as textures; no asset files. Textures are
 // painted at HI times their size and shown at 1 / HI, so they stay smooth when the game is scaled.
+// HI rises with the screen's `renderScale` (`sharpenArt`), so they stay sharp on big screens too.
 
 export type Ctx = CanvasRenderingContext2D;
 
 /** How much finer than the game's pixels textures are painted; show them at 1 / HI. */
-export const HI = 2;
+export let HI = 2;
+
+/**
+ * Paints textures at the screen's resolution once it is bigger than 2x: `renderScale` canvas pixels
+ * per game pixel. No camera zooms in, so the art needs no more than that. Call before baking.
+ */
+export function sharpenArt() {
+  HI = Math.max(2, renderScale);
+}
 
 export const INK = '#1d2329';
 export const MAGENTA = '#d6247f';

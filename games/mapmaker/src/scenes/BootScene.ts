@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { bakeIcons } from '../art/icons';
+import { sharpenArt } from '../art/paint';
 import { bakeSurveyor } from '../art/surveyor';
 
 // Paints the surveyor and the icons at runtime, so the game needs no asset files. The island
@@ -10,6 +11,7 @@ export class BootScene extends Phaser.Scene {
   }
 
   create() {
+    sharpenArt();
     bakeSurveyor(this);
     bakeIcons(this);
     this.scene.start('Game');
