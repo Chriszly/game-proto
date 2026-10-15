@@ -54,7 +54,7 @@ const OBJECTIVE_CARD = { x: 10, y: 42, w: 236, h: 62 };
 /** The first upgrade card in the bottom bar (the centre of layout.ts upgradeCard(0)). */
 const UPGRADE_CARD_1 = { x: 698, y: 461 };
 /** The Warden's card on the pick screen (its centre). */
-const WARDEN_CARD = { x: 120, y: 173 };
+const WARDEN_CARD = { x: 120, y: 133 };
 /** The Long Sword's row in the shop, opened from the B key. */
 const SWORD_ROW = { x: 202, y: 146 };
 /** The first red tower on the middle lane. */
@@ -188,8 +188,8 @@ test('plays the first round', async ({ page }, testInfo) => {
   }
   const dist = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
 
-  // The pick screen: the Warden starts the match.
-  await tick(FRAME_MS);
+  // The pick screen: the Warden starts the match. A few frames let the card portraits draw.
+  await tick(FRAME_MS * 8);
   await snap('0-pick');
   await clickView(WARDEN_CARD.x, WARDEN_CARD.y);
   await tick(FRAME_MS);

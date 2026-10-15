@@ -1,4 +1,4 @@
-// The low-poly models of Lane Brawl: ten champions, minions, the jungle's boar, wolves and brutes,
+// The low-poly models of Lane Brawl: fifteen champions, minions, the jungle's boar, wolves and brutes,
 // the guardian beast, towers, the Nexus, watchstones, pines and rocks. Each builder returns a fresh `Model` for one pose; `bake.ts` renders them into
 // sprite frames from eight directions. Units: one model unit is one screen pixel.
 
@@ -58,7 +58,22 @@ function basePose(name: PoseName): Pose {
   return p;
 }
 
-type ChampId = 'warden' | 'blade' | 'archer' | 'mage' | 'priest' | 'berserker' | 'harpooner' | 'witch' | 'stalker' | 'lancer';
+type ChampId =
+  | 'warden'
+  | 'blade'
+  | 'archer'
+  | 'mage'
+  | 'priest'
+  | 'berserker'
+  | 'harpooner'
+  | 'witch'
+  | 'stalker'
+  | 'lancer'
+  | 'gunslinger'
+  | 'automaton'
+  | 'tinker'
+  | 'wolfkin'
+  | 'bruin';
 
 /** Attack and cast poses differ by class: a hammer swings, a bow draws, a staff points. */
 function classPose(id: ChampId | 'minion', name: PoseName): Pose {
@@ -80,6 +95,13 @@ function classPose(id: ChampId | 'minion', name: PoseName): Pose {
       p.armR = wind ? 1.35 : 1.55;
       p.outR = wind ? -0.55 : -0.25;
       break;
+    case 'gunslinger':
+      // The revolver held out at arm's length, kicking up on the shot.
+      p.armR = wind ? 1.5 : 1.85;
+      p.outR = 0;
+      p.armL = 0.5;
+      p.lean = wind ? 0 : -0.06;
+      break;
     case 'lancer':
     case 'harpooner':
       // A thrust: the weapon arm draws back, then drives straight forward.
@@ -91,6 +113,7 @@ function classPose(id: ChampId | 'minion', name: PoseName): Pose {
       p.legR = -0.35;
       break;
     case 'berserker':
+    case 'bruin':
       // Both hands on the axe, high over the head, then down.
       p.armL = wind ? 2.9 : 1.2;
       p.armR = wind ? 2.9 : 1.2;
@@ -102,6 +125,7 @@ function classPose(id: ChampId | 'minion', name: PoseName): Pose {
       break;
     case 'blade':
     case 'stalker':
+    case 'wolfkin':
       p.armL = wind ? 2.5 : 1.0;
       p.armR = wind ? 2.5 : 1.0;
       p.outL = wind ? 0.5 : -0.25;
@@ -113,6 +137,7 @@ function classPose(id: ChampId | 'minion', name: PoseName): Pose {
     case 'mage':
     case 'priest':
     case 'witch':
+    case 'tinker':
       p.armR = wind ? 2.4 : 1.45;
       p.armL = wind ? 0.6 : 1.1;
       p.lean = wind ? -0.06 : 0.12;
@@ -137,6 +162,13 @@ interface Kit {
   /** Wider shoulders and thicker limbs. */
   heavy: boolean;
   head: (md: Model) => void;
+  /** The head draws its own face and skull (a robot's, a wolf's, a bear's) instead of a person's. */
+  ownHead?: boolean;
+  /** Skin for the hands and forearms (fur, brass); a person's by default. */
+  skin?: RGB;
+  /** Legs and boots, when not trousers and leather. */
+  legs?: RGB;
+  feet?: RGB;
   rightHand?: (md: Model, arm: number) => void;
   leftHand?: (md: Model, arm: number) => void;
   back?: (md: Model) => void;
@@ -153,8 +185,8 @@ function figure(kit: Kit, pose: Pose): Model {
     for (const side of [-1, 1]) {
       const a = side < 0 ? pose.legR : pose.legL;
       md.at(chain(T(side * 3.4 * w, hip, 0), swing(a)), () => {
-        if (!kit.robe) box(md, -2.6 * w, -hip + 4, -2.6, 2.6 * w, 0, 2.6, PANTS, 0.95);
-        box(md, -2.8 * w, -hip, -2.8, 2.8 * w, -hip + 5, 3.6, BOOT);
+        if (!kit.robe) box(md, -2.6 * w, -hip + 4, -2.6, 2.6 * w, 0, 2.6, kit.legs ?? PANTS, 0.95);
+        box(md, -2.8 * w, -hip, -2.8, 2.8 * w, -hip + 5, 3.6, kit.feet ?? BOOT);
       });
     }
     md.at(chain(T(0, hip, 0), Rx(pose.lean), T(0, -hip, 0)), () => {
@@ -167,9 +199,11 @@ function figure(kit: Kit, pose: Pose): Model {
       kit.back?.(md);
       // Head.
       md.at(T(0, 40, 0), () => {
-        ico(md, 6.6, SKIN);
-        box(md, -3.1, -1.4, 5.5, -1.5, 0.6, 6.5, EYE);
-        box(md, 1.5, -1.4, 5.5, 3.1, 0.6, 6.5, EYE);
+        if (!kit.ownHead) {
+          ico(md, 6.6, SKIN);
+          box(md, -3.1, -1.4, 5.5, -1.5, 0.6, 6.5, EYE);
+          box(md, 1.5, -1.4, 5.5, 3.1, 0.6, 6.5, EYE);
+        }
         kit.head(md);
       });
       // Arms from the shoulders, sleeves in cloth, hands bare.
@@ -178,7 +212,7 @@ function figure(kit: Kit, pose: Pose): Model {
         const out = side < 0 ? pose.outR : pose.outL;
         md.at(chain(T(side * 9.6 * w, 31, 0), Rz(side * out), swing(a)), () => {
           box(md, -2.3 * w, -7, -2.3 * w, 2.3 * w, 1.5, 2.3 * w, kit.cloth);
-          box(md, -2 * w, -12, -2 * w, 2 * w, -7, 2 * w, SKIN, 0.9);
+          box(md, -2 * w, -12, -2 * w, 2 * w, -7, 2 * w, kit.skin ?? SKIN, 0.9);
           md.at(T(0, -13.5, 0), () => {
             if (side < 0) kit.rightHand?.(md, a);
             else kit.leftHand?.(md, a);
@@ -539,6 +573,201 @@ const KITS: Record<ChampId, (cloth: RGB) => Kit> = {
           md.at(T(0, 3, 0), () => slab(md, rect(5.8, 1.3), 2.9, 3.3, GOLD));
         });
       },
+    };
+  },
+  gunslinger: (cloth) => {
+    const hat = rgb('#6b4a30');
+    const coat = rgb('#8a6440');
+    const brass = rgb('#d8a24a');
+    return {
+      cloth,
+      accent: rgb('#c9925a'),
+      robe: false,
+      heavy: false,
+      head: (md) => {
+        // A wide-brimmed hat with a band, and a bandana over the mouth.
+        prism(md, 12, 11.4, 3.6, 4.8, 12, hat, 0);
+        prism(md, 6.6, 5.6, 4.8, 10.6, 8, hat, Math.PI / 8);
+        prism(md, 6.7, 6.6, 4.8, 6.2, 8, rgb('#2b2220'), Math.PI / 8);
+        box(md, -5, -5.8, 3.4, 5, -1.8, 6.9, rgb('#b5582b'), 0.9);
+      },
+      back: (md) => {
+        // A long duster coat.
+        md.at(chain(T(0, 32, -4.4), Rx(-0.08)), () => slab(md, [[-8.5, 0], [8.5, 0], [10.5, -26], [0, -27], [-10.5, -26]], -1.2, 0, coat));
+      },
+      over: (md) => {
+        // A gun belt with a holster on the hip.
+        box(md, 6.2, 12, -1.6, 9, 19, 2.2, LEATHER);
+        md.at(T(0, 21, 4.6), () => gem(md, 1.6, -0.6, 0, 0.6, 6, brass));
+      },
+      rightHand: (md) => {
+        // A revolver: wooden grip, brass cylinder, long barrel.
+        md.at(grip(0), () => {
+          box(md, -1, -3.5, -1.3, 1, 1, 1.3, WOOD);
+          prism(md, 2, 2, 1, 4.6, 6, brass);
+          box(md, -0.8, 4.6, -0.8, 0.8, 13, 0.8, DARK_STEEL);
+          box(md, -0.4, 12, 0.8, 0.4, 13, 1.6, DARK_STEEL);
+        });
+      },
+    };
+  },
+  automaton: (cloth) => {
+    const brass = rgb('#d8a24a');
+    const copper = rgb('#b8693a');
+    const eye = rgb('#7ff3ff');
+    return {
+      cloth,
+      accent: brass,
+      robe: false,
+      heavy: true,
+      ownHead: true,
+      skin: brass,
+      legs: DARK_STEEL,
+      feet: brass,
+      head: (md) => {
+        // A riveted brass head with two glowing eyes, a grille for a mouth and an antenna.
+        box(md, -5.6, -5.2, -5.2, 5.6, 5.6, 5.6, brass, 0.92);
+        for (const side of [-1, 1]) md.at(T(side * 2.4, 1, 5.6), () => ico(md, 1.5, eye, 0.9));
+        box(md, -3, -3.8, 5.2, 3, -2, 6, DARK_STEEL);
+        for (const side of [-1, 1]) box(md, side * 5.6 - 0.8, -1.5, -1.5, side * 5.6 + 0.8, 1.5, 1.5, copper);
+        prism(md, 0.5, 0.5, 5.6, 11, 4, DARK_STEEL);
+        md.at(T(0, 11.5, 0), () => ico(md, 1.4, eye, 0.9));
+      },
+      back: (md) => {
+        // A boiler on the back with a smokestack.
+        md.at(T(0, 18, -7.5), () => {
+          prism(md, 4.6, 4.6, 2, 14, 8, copper, Math.PI / 8);
+          md.at(T(2.6, 0, 0), () => prism(md, 1.4, 1.8, 14, 21, 6, DARK_STEEL));
+        });
+      },
+      over: (md) => {
+        // A pressure gauge on the chest and brass shoulder plates.
+        md.at(T(0, 26, 4.6), () => ico(md, 2.2, CREAM));
+        for (const side of [-1, 1]) md.at(T(side * 10.2, 32.5, 0), () => gem(md, 4.6, -2.6, 0.6, 3.6, 6, brass));
+      },
+      rightHand: (md) => box(md, -3.2, -4, -3.2, 3.2, 2.5, 3.2, DARK_STEEL, 0.85),
+      leftHand: (md) => box(md, -3.2, -4, -3.2, 3.2, 2.5, 3.2, DARK_STEEL, 0.85),
+    };
+  },
+  tinker: (cloth) => {
+    const brass = rgb('#d8a24a');
+    const copper = rgb('#b8693a');
+    const spark = rgb('#5fd3f0');
+    return {
+      cloth,
+      accent: spark,
+      robe: false,
+      heavy: false,
+      head: (md) => {
+        // A leather cap with brass goggles pushed up on the brow.
+        prism(md, 7, 5.6, 2, 8.2, 8, LEATHER, Math.PI / 8);
+        box(md, -6.8, 2.2, -6, 6.8, 3.4, 6, rgb('#3a2c24'));
+        for (const side of [-1, 1]) md.at(T(side * 2.6, 3, 5.8), () => {
+          prism(md, 2, 2, -1.2, 1.2, 8, brass, 0);
+          md.at(T(0, 0, 0.6), () => ico(md, 1.5, rgb('#ffcf6a'), 0.6));
+        });
+      },
+      back: (md) => {
+        // A backpack with a crackling tesla coil.
+        box(md, -5, 17, -9, 5, 30, -4, LEATHER);
+        md.at(T(0, 30, -6.5), () => {
+          prism(md, 1, 0.8, 0, 9, 6, copper);
+          for (const y of [2, 4.5, 7]) md.at(T(0, y, 0), () => prism(md, 2.2, 2.2, 0, 0.8, 8, brass));
+          md.at(T(0, 10.5, 0), () => ico(md, 2.4, spark, 0.9));
+        });
+      },
+      over: (md) => box(md, -5.5, 8, 4.2, 5.5, 26, 5.2, LEATHER),
+      rightHand: (md, arm) => {
+        // A spark gun: a brass body, copper coils and a glowing tip.
+        md.at(upright(arm, Math.PI / 2 - 0.2), () => {
+          box(md, -1, -3, -1.2, 1, 1, 1.2, WOOD);
+          prism(md, 2.2, 1.6, 1, 8, 8, brass);
+          for (const y of [3, 5.5]) md.at(T(0, y, 0), () => prism(md, 2.8, 2.8, 0, 0.8, 8, copper));
+          md.at(T(0, 9.5, 0), () => ico(md, 1.8, spark, 0.9));
+        });
+      },
+      leftHand: (md) => md.at(grip(0.5), () => {
+        // A wrench.
+        box(md, -0.8, -2, -0.6, 0.8, 9, 0.6, STEEL);
+        slab(md, [[-2.6, 9], [-1, 9], [-1, 11.5], [1, 11.5], [1, 9], [2.6, 9], [2.6, 13], [-2.6, 13]], -0.7, 0.7, STEEL);
+      }),
+    };
+  },
+  wolfkin: (cloth) => {
+    const fur = rgb('#8d949c');
+    const furD = rgb('#5d636b');
+    const furL = rgb('#c3c8cd');
+    const claw = (md: Model) => {
+      for (const dx of [-1.4, 0, 1.4]) md.at(T(dx, -1, 1.5), () => slab(md, [[-0.5, 0], [0.5, 0], [0, -4]], -0.5, 0.5, CREAM));
+    };
+    return {
+      cloth,
+      accent: rgb('#ffd34a'),
+      robe: false,
+      heavy: false,
+      ownHead: true,
+      skin: fur,
+      legs: furD,
+      feet: furD,
+      head: (md) => {
+        // A wolf's head: grey fur, a long muzzle, pointed ears and yellow eyes.
+        ico(md, 6.6, fur);
+        box(md, -2.6, -3.6, 3.4, 2.6, 0.6, 11.5, furL, 0.75);
+        box(md, -1.2, -0.6, 10.8, 1.2, 1, 12.4, EYE);
+        for (const side of [-1, 1]) {
+          md.at(T(side * 2.5, 1.6, 5.4), () => ico(md, 1.1, rgb('#ffd34a'), 0.8));
+          md.at(chain(T(side * 3.8, 4.6, -0.5), Rz(side * -0.25)), () => gem(md, 2.2, 0, 0.4, 7.5, 4, furD));
+        }
+      },
+      back: (md) => {
+        // A bushy tail.
+        md.at(chain(T(0, 16, -3.8), Rx(-0.9)), () => gem(md, 2.6, 0, 6, 15, 6, fur));
+      },
+      over: (md) => {
+        // A shaggy mane over the shoulders.
+        for (let i = 0; i < 7; i++) {
+          const a = Math.PI * (0.1 + (i / 6) * 0.8);
+          md.at(T(Math.cos(a) * 9, 31.5, -Math.sin(a) * 2 - 1), () => gem(md, 3, -2, 0.5, 3.4, 5, i % 2 ? fur : furL));
+        }
+      },
+      rightHand: claw,
+      leftHand: claw,
+    };
+  },
+  bruin: (cloth) => {
+    const fur = rgb('#8a5a33');
+    const furD = rgb('#5e3c22');
+    const muzzle = rgb('#c99a6a');
+    const claw = (md: Model) => {
+      for (const dx of [-1.6, 0, 1.6]) md.at(T(dx, -1, 1.8), () => slab(md, [[-0.6, 0], [0.6, 0], [0, -3.5]], -0.6, 0.6, CREAM));
+    };
+    return {
+      cloth,
+      accent: rgb('#a0683a'),
+      robe: false,
+      heavy: true,
+      ownHead: true,
+      skin: fur,
+      legs: fur,
+      feet: furD,
+      head: (md) => {
+        // A bear's head: round, with a pale muzzle, a dark nose and small round ears.
+        ico(md, 7.4, fur);
+        md.at(T(0, -2, 5.6), () => ico(md, 3.6, muzzle));
+        box(md, -1.4, -1.2, 8.6, 1.4, 0.8, 9.6, EYE);
+        for (const side of [-1, 1]) {
+          box(md, side * 2.8 - 0.8, 1.2, 6, side * 2.8 + 0.8, 2.6, 7, EYE);
+          md.at(T(side * 5, 5.6, -0.5), () => ico(md, 2.4, furD));
+        }
+      },
+      over: (md) => {
+        // A pale belly under the vest, and a leather strap across it.
+        box(md, -4.4, 19, 4, 4.4, 28, 4.9, muzzle);
+        md.at(chain(T(0, 25, 4.3), Rz(0.7)), () => box(md, -1.2, -11, 0, 1.2, 11, 1.2, LEATHER));
+      },
+      back: (md) => md.at(T(0, 17, -4.4), () => ico(md, 2.2, fur)),
+      rightHand: claw,
+      leftHand: claw,
     };
   },
 };

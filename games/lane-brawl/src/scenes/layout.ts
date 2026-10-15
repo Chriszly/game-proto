@@ -50,7 +50,7 @@ export function buffChip(i: number) {
 }
 
 /** The ten champion cards on the pick screen, in two rows of five. */
-export const PICK_CARD = { w: 168, h: 178, gap: 12, y: 84 };
+export const PICK_CARD = { w: 168, h: 114, gap: 8, y: 76 };
 export function pickCard(i: number) {
   const total = 5 * PICK_CARD.w + 4 * PICK_CARD.gap;
   const col = i % 5;
@@ -58,7 +58,7 @@ export function pickCard(i: number) {
   return { x: (VIEW.w - total) / 2 + col * (PICK_CARD.w + PICK_CARD.gap), y: PICK_CARD.y + row * (PICK_CARD.h + PICK_CARD.gap), w: PICK_CARD.w, h: PICK_CARD.h };
 }
 /** The button under the cards that draws new names for the champions on offer. */
-export const REROLL = { x: VIEW.w / 2 - 70, y: 462, w: 140, h: 24 };
+export const REROLL = { x: VIEW.w / 2 - 70, y: 440, w: 140, h: 24 };
 
 /** The buffs the player's champion carries, as chips in a row above the portrait. */
 export function buffStrip(i: number) {

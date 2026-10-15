@@ -18,6 +18,11 @@ const BYNAMES: Record<string, string[]> = {
   witch: ['Thornmother', 'the Wicked', 'Hexweaver', 'Mirebloom', 'Nightshade', 'Rotroot', 'the Pale', 'Crowsong'],
   stalker: ['Shadowmark', 'the Unseen', 'Ghostfoot', 'Mistwalker', 'Softstep', 'Grimveil', 'Darkmoon', 'Whisperblade'],
   lancer: ['Spearpoint', 'the Bold', 'Longreach', 'Highbanner', 'Swiftlance', 'Ironcrest', 'the Valiant', 'Starspear'],
+  gunslinger: ['Quickdraw', 'Smokebarrel', 'the Drifter', 'Brasscap', 'Deadshot', 'Dustwalker', 'Ironsights', 'the Lone'],
+  automaton: ['the Tireless', 'Ironwork', 'Steamheart', 'Gearbound', 'the Unsleeping', 'Brassjaw', 'Clockheart', 'Boilerplate'],
+  tinker: ['Gearwright', 'Sparkwhistle', 'the Clever', 'Voltwick', 'Boltbender', 'Copperkettle', 'Steamspanner', 'Coilhand'],
+  wolfkin: ['Moonfang', 'the Feral', 'Nighthowl', 'Greymane', 'Ashpelt', 'the Hungry', 'Duskclaw', 'Longtooth'],
+  bruin: ['Honeypaw', 'Stormclaw', 'the Shaggy', 'Oakback', 'Mossfur', 'Riverpaw', 'the Grumbling', 'Bigbelly'],
 };
 
 const pick = <T>(list: T[], rnd: () => number) => list[Math.floor(rnd() * list.length) % list.length];
@@ -29,14 +34,18 @@ export function firstName(rnd: () => number): string {
   return (name.length > 9 ? pick(START, rnd) + pick(END, rnd) : name).replace(/(.)\1\1+/g, '$1$1');
 }
 
+/** A machine's name: a maker's mark and a number, like KR-7. */
+const MARKS = ['AX', 'KR', 'VX', 'BR', 'ZT', 'MK', 'OR', 'TK', 'CG', 'HX'];
+const designation = (rnd: () => number) => `${pick(MARKS, rnd)}-${2 + Math.floor(rnd() * 98)}`;
+
 /** A full name for a champion of a class: a first name and a byname, different from those in `taken`. */
 export function championName(classId: string, rnd: () => number, taken: string[] = []): string {
   for (let i = 0; i < 20; i++) {
-    const first = firstName(rnd);
+    const first = classId === 'automaton' ? designation(rnd) : firstName(rnd);
     if (taken.some((t) => t.split(' ')[0] === first)) continue;
     return `${first} ${pick(BYNAMES[classId] ?? BYNAMES.warden, rnd)}`;
   }
-  return `${firstName(rnd)} ${pick(BYNAMES[classId] ?? BYNAMES.warden, rnd)}`;
+  return `${classId === 'automaton' ? designation(rnd) : firstName(rnd)} ${pick(BYNAMES[classId] ?? BYNAMES.warden, rnd)}`;
 }
 
 /** The first name of a full name, for short labels. */
