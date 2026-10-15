@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { GARDENS, GRID, cellCentre, pathPoint, type Garden } from '../game/board';
 import { BUTTON, GARDEN_CARD, GOLEM_MENU, HUD, PANEL, PREVIEW, SEED_BUTTONS, SPEED_BUTTON, WAVE_BUTTON } from '../scenes/layout';
-import { C, E, PI, Pp, R, bake, blur, ctx, drop, ellipse, flower, golem, pest, reseed, rnd, sprout, type ClayOptions } from './clay';
+import { C, E, PI, Pp, R, addSharp, bake, blur, ctx, drop, ellipse, flower, golem, pest, reseed, rnd, sprout, type ClayOptions } from './clay';
 
 // Every texture, painted in clay at startup. Sizes and anchors are in view pixels; painters work in
 // art units (2 per view pixel) around their anchor.
@@ -51,10 +51,11 @@ export function bakeTextures(scene: Phaser.Scene) {
   const bg = bake(scene, gardenBg(0), 960, 540, () => paintBackground(GARDENS[0]));
   if (bg && !scene.textures.exists('edge')) {
     const edge = document.createElement('canvas');
-    edge.width = GRID.x - 3;
-    edge.height = 540;
+    const res = bg.width / 960;
+    edge.width = Math.round((GRID.x - 3) * res);
+    edge.height = bg.height;
     edge.getContext('2d')!.drawImage(bg, 0, 0);
-    scene.textures.addCanvas('edge', edge);
+    addSharp(scene, 'edge', edge, res);
   }
 
   bake(scene, 'tree', 130, 120, paintTree, 65, 70);

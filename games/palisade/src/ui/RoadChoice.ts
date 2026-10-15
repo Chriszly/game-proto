@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { roadTexture } from '../art/icons';
+import { fit } from '../art/lowpoly';
 import { GOLD, SLATE } from '../art/palette';
 import { ROAD_CARDS, UI_DEPTH, VIEW } from '../scenes/layout';
 import { ROADS, type RoadId } from '../game/roads';
@@ -61,7 +62,7 @@ export class RoadChoice {
       bg.lineStyle(2, hover ? GOLD.light : GOLD.mid).strokeCircle(-w / 2 + 46, -h / 2 + 48, 32);
     };
     draw(false);
-    const icon = scene.add.image(-w / 2 + 46, -h / 2 + 48, roadTexture(id)).setScale(0.9);
+    const icon = fit(scene.add.image(-w / 2 + 46, -h / 2 + 48, roadTexture(id)), 0.9);
     const name = scene.add.text(-w / 2 + 90, -h / 2 + 34, road.name, textStyle(18, '#ffcf4a')).setOrigin(0, 0.5);
     const sub = scene.add.text(-w / 2 + 90, -h / 2 + 58, '10 waves to the next boss', { ...textStyle(11, '#c9c3b6'), fontStyle: 'normal' }).setOrigin(0, 0.5);
     const style = (color: string) => ({ ...textStyle(13, color), fontStyle: 'normal', wordWrap: { width: w - 40 } });

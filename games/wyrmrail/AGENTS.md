@@ -42,7 +42,8 @@ carry orders between villages before their time runs out.
 File map (all under `src/` unless it starts with `shared/`):
 
 - `main.ts`: creates the `Phaser.Game` (960x540 from `VIEW`, `Scale.FIT`, `pixelArt: false`) with
-  `BootScene` then `GameScene`, calls `setupGame(game)`; in dev builds puts `game` on `window`.
+  `BootScene` then `GameScene`, calls `setupGame(game)` and `setupScaling(game)` from
+  `shared/scaling.ts`; in dev builds puts `game` on `window`.
 - `game/map.ts`: `COLS`, `ROWS`, `Terrain`, `TRACK_COST`, `Cargo`, `CARGO_NAMES`, `Tile`,
   `Village`, `Valley`, `ROOST`, `VILLAGE_NAMES`, `WORKSHOPS`, `generateValley`, `terrainAt`, and
   the tile helpers `key`, `sameTile`, `manhattan`, `inGrid`, `neighbours`.
@@ -67,10 +68,12 @@ File map (all under `src/` unless it starts with `shared/`):
   wyrm's parts ride behind the head) and depths.
 - `ui/Button.ts`: `makeButton`, a wooden button with `setCaption`, `setLit` and `setEnabled`.
 - `art/palette.ts`: colour constants for the track, the UI and the pixel icons.
-- `art/canvas.ts`: `bakeCanvas` (paints a 2D canvas and adds it as a texture) and shape helpers
+- `art/canvas.ts`: `bakeCanvas` (paints a 2D canvas `sharpRes` times the shown size and adds it
+  as a texture), `fit` (sizes an image to its texture's shown size) and shape helpers
   (`poly`, `line`, `shadow`, `sphere`, `ellipse`, `mix`, `css`).
-- `art/pixelArt.ts`: `bakePixelArt`, `PixelCanvas` and the `seeded` generator for art noise (a copy
-  of Catacomb's; games don't share code). Only the icons are pixel art now.
+- `art/pixelArt.ts`: `bakePixelArt`, `PixelCanvas` (baked through `bakeCanvas`) and the `seeded`
+  generator for art noise (a copy of Catacomb's; games don't share code). Only the icons are pixel
+  art now.
 - `art/valley.ts`: `bakeValley` (the `valley` texture for a `Valley`: sky, the valley's shadow
   and every tile as a block, river tiles `RIVER_DROP` lower) and `bakeProps`, the props, each the
   size of `PROP` with the tile's middle at (`PROP.x`, `PROP.y`): `forest`, `peak`, `roost`,
@@ -103,8 +106,12 @@ How it runs:
   barred arm, and only turns back at a station, a dead end or where it starts. `planRoute` takes
   the strict way if there is one, else the loose way (the wyrm then stops to throw switches).
   `routable` and `dispatch` use loose routes, since the wyrm can always throw switches itself.
+- **Screens:** `setupScaling` draws the canvas at the screen's resolution (`renderScale` canvas
+  pixels per game pixel) and zooms the camera, which never scrolls, to match. Every texture is
+  baked at `sharpRes` through `bakeCanvas`, so every image showing one is sized with `fit` (a scale
+  of its own goes through `fit` too, like the wings' flap and the small cargo icons).
 - **Input:** a scene-wide `pointerdown` (and `pointermove` while held) on the board finds the
-  tile with `tileAt` and calls `buildTrack`, or `removeTrack` while `removeMode` is on; a
+  tile under `pointer.worldX/Y` with `tileAt` and calls `buildTrack`, or `removeTrack` while `removeMode` is on; a
   `pointerdown` on a junction calls `throwSwitch` instead. Dragging acts once per new tile. Order
   cards call `dispatch`; the upgrade buttons `buyUpgrade`; Remove track flips `removeMode`, which
   lives in the scene, not the state. Sim functions check the phase and return false when the action
@@ -244,6 +251,11 @@ Data tables (where to tune):
   caption in `drawPanel` (and a `BUTTONS` row in layout).
 
 ## Gotchas
+
+- `pointer.x/y` and `this.scale` are canvas pixels, `renderScale` times the 960x540 view: read
+  pointers through `worldX/Y`, and show a new texture with `fit(this.add.image(...))` or it is
+  drawn `renderScale` times too big. `e2e/screens.spec.ts` at the root opens the game on five
+  screens.
 
 - `ISO` and the tile centre are copied into the test; moving the grid breaks the taps silently
   (the wait then times out or the track check fails).

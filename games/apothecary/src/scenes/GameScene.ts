@@ -1,15 +1,15 @@
 import Phaser from 'phaser';
 import { settings as hubSettings } from '../../../../shared/settings';
 import { renderScale, scrollingCamera, viewSize } from '../../../../shared/scaling';
-import { drawBelts, laneOffset, pointAlong } from '../art/belts';
+import { PIXIE_FRAMES, drawFairyPaths, laneOffset, pointAlong } from '../art/pixies';
 import { plantTexture } from '../art/garden';
-import { EXPANSION_IMAGE, GARDEN_MARGIN, gardenTexture, sceneryLayout } from '../art/ground';
+import { EXPANSION_IMAGE, WALLS_IMAGE, GARDEN_MARGIN, gardenTexture, sceneryLayout } from '../art/ground';
 import { itemTexture } from '../art/items';
 import { INK, SERIF, TEXT_HALO, fit, resOf } from '../art/paint';
 import { craftsmanTexture, customerTexture } from '../art/townsfolk';
 import { BUBBLE_TAIL, cardInset, cardTexture, signTexture, type CardKind } from '../art/ui';
 import { catchUp, type AwaySummary } from '../game/away';
-import { FINE as FINE_OF, GROW_MS, PLANTS, POTIONS, REFINE, REFINED, isPlant, isRefined, isSellable, plainOf, type ItemId } from '../game/items';
+import { GROW_MS, ITEMS, PLANTS, POTIONS, REFINE, REFINED, isPlant, isRefined, isSellable, plainOf, type ItemId, type SellableId } from '../game/items';
 import {
   collectTill,
   doneByHand,
@@ -51,6 +51,8 @@ import {
   gardenBuilt,
   gardenOf,
   UPGRADES,
+  RESEARCH_ORDER,
+  researched,
   carryCapacity,
   craftsmanCost,
   harvestReach,
@@ -79,10 +81,12 @@ import {
   WEATHER,
   isMarketDay,
   weatherFor,
+  type Weather,
 } from '../game/state';
 import { BackStack } from '../ui/BackStack';
 import { IconRow } from '../ui/IconRow';
 import { Pallet } from '../ui/Pallet';
+import { Shelf } from '../ui/Shelf';
 import { RecipeBook } from '../ui/RecipeBook';
 import { Settings } from '../ui/Settings';
 import { ProgressBar } from '../ui/ProgressBar';
@@ -119,6 +123,9 @@ import {
   plotPosition,
   type StationMarkers,
   type StationPallets,
+  STUDY,
+  SHELF_Y,
+  shelfPosition,
 } from './layout';
 
 type Point = { x: number; y: number };
@@ -170,6 +177,26 @@ const CAPTION_PAY = '#5a2c80';
 /** The top bar's text: ink on parchment. */
 const HUD_TEXT = { fontFamily: SERIF, fontSize: '17px', fontStyle: 'bold', color: INK };
 /** Where the contract card and the away chip sit on screen, below the top bar. */
+/** Pixies fly above everything standing in the world, under the order bubbles and bars. */
+const PIXIE_DEPTH = 5000;
+/** How long before the end of its route a pixie turns off towards the pallet or shelf its goods go on. */
+const PIXIE_APPROACH_MS = 700;
+/** The station each belt's pixies carry goods to. */
+const BELT_TARGET: Record<BeltId, StationId> = {
+  garden: 'refiner',
+  refiner: 'cauldron',
+  cauldron: 'counter',
+  garden2: 'refiner2',
+  refiner2: 'cauldron2',
+  cauldron2: 'counter',
+};
+/** The row of order cards under the top bar on the left, one per customer. */
+const ORDER_STRIP = { x: 8, y: 50, w: 44, h: 34, gap: 4 };
+/** The weather is drawn over everything standing in the world and the pixies, under the bubbles and bars. */
+const WEATHER_DEPTH = 9990;
+/** How many rain streaks and heat waves are in view at once. */
+const RAIN_STREAKS = 140;
+const HEAT_WAVES = 22;
 const CONTRACT_CARD = { x: 313, y: 50, w: 300, h: 44 };
 /** The town card, right of the contract: the day's weather, the street's reputation and the market day. */
 const TOWN_CARD = { x: 626, y: 50, w: 316, h: 44 };
@@ -177,7 +204,10 @@ const AWAY_CHIP = { x: 652, y: 102, w: 290, h: 30 };
 /** The order bubble over a waiting customer: its height, how far above the customer's middle its middle is, the spacing of its icons, and its tip ring's radius. */
 const BUBBLE = { h: 30, above: 58, icon: 15, ring: 6 };
 
-/** Closest and farthest the view zooms: out until the whole yard is tall enough to fit, in to double size. */
+/**
+ * Closest and farthest the view zooms: out until the whole yard is tall enough to fit, but never past
+ * the world's width (see `setZoom`), in to double size.
+ */
 const MIN_ZOOM = 0.62;
 const MAX_ZOOM = 2;
 /** How much one mouse wheel notch or key press zooms. */
@@ -227,7 +257,7 @@ export class GameScene extends Phaser.Scene {
   private lastHarvestingAt = -Infinity;
   private nextFeedbackAt = 0;
   /** Each standing station's pallets, for goods coming in and going out; read by the playthrough test. */
-  private pallets: Partial<Record<StationId, { in: Pallet[]; out: Pallet[] }>> = {};
+  private pallets: Partial<Record<StationId, { in: { item: ItemId; count: number }[]; out: { item: ItemId; count: number }[] }>> = {};
   /** Game time of the frame being drawn, for things that move on their own. */
   private frameMs = 0;
   /** Where each customer in the shop stands, and whether they have reached their spot; read by the playthrough test. */
@@ -280,6 +310,7 @@ export class GameScene extends Phaser.Scene {
     this.createExpansion();
     this.createOutfitter();
     this.createGuild();
+    this.createStudy();
     this.createBelts();
     this.createPlayer();
     this.followPlayer();
@@ -287,6 +318,8 @@ export class GameScene extends Phaser.Scene {
     this.createHud();
     this.createContract();
     this.createTown();
+    this.createOrderStrip();
+    this.createWeather();
     this.createAwayChip();
     this.createUiCamera();
     this.createControls();
@@ -368,8 +401,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   private setZoom(zoom: number) {
-    const clamped = Phaser.Math.Clamp(zoom, MIN_ZOOM, MAX_ZOOM);
-    // Zoomed out past the world's width, the bounds widen evenly on both sides so the yard stays centred.
+    // Never out past the world's width, so the map always fills the view from side to side.
+    const clamped = Phaser.Math.Clamp(zoom, Math.max(MIN_ZOOM, viewSize(this).width / WORLD.w), MAX_ZOOM);
+    // A view wider than the world even at the closest zoom (never at 960x540) widens the bounds evenly on both sides.
     const w = Math.max(WORLD.w, viewSize(this).width / clamped);
     this.cameras.main.setZoom(clamped * renderScale).setBounds((WORLD.w - w) / 2, 0, w, WORLD.h);
     writeZoom(clamped);
@@ -457,6 +491,8 @@ export class GameScene extends Phaser.Scene {
       () => this.state.expansion.land.built,
       () => this.ground(EXPANSION_IMAGE.x, EXPANSION_IMAGE.y, 'ground-expansion', -999),
     );
+    // The shop's walls lie above both, so the expansion's yard doesn't cover the right one.
+    this.ground(WALLS_IMAGE.x, WALLS_IMAGE.y, 'ground-walls', -998);
 
     // The second line's fields appear as they are built.
     GARDEN_AREAS.forEach((_, garden) => this.once(() => gardenBuilt(this.state, garden), () => this.drawGarden(garden)));
@@ -514,6 +550,8 @@ export class GameScene extends Phaser.Scene {
     this.addObstacle(at.x, at.y, 'table', 84, 30);
     this.addPallets(id, PALLETS[id], [PLANTS, REFINED], [() => refiner.queue, () => refiner.output]);
     const progress = new ProgressBar(this, at.x, at.y + 30, 60, 0xd8cfa8, WORLD_UI_DEPTH);
+    // A second craftsman's pipe shows its own bar just below.
+    const progress2 = new ProgressBar(this, at.x, at.y + 38, 60, 0xd8cfa8, WORLD_UI_DEPTH);
     this.addMarker(m.pickUp, 'pad-out', 'Pick up', () => pickUpFromRefiner(this.state, id), () => this.state.belts[beltOut].built);
     this.addMarker(m.drop, 'pad-in', 'Drop', () => dropAtRefiner(this.state, id), () => this.state.belts[beltIn].built && !this.carries(isPlant));
     this.addWorkSpot(m.work, id);
@@ -522,6 +560,7 @@ export class GameScene extends Phaser.Scene {
     this.views.push(() => {
       // The plant being refined is always the front one (see tick).
       progress.set(refining(refiner) >= 0 ? refiner.progress / REFINE[refiner.queue[0]].ms : null);
+      progress2.set(refiner.second ? refiner.second.progress / REFINE[refiner.second.plant].ms : null);
     });
   }
 
@@ -536,13 +575,18 @@ export class GameScene extends Phaser.Scene {
     this.addPallets(id, PALLETS[id], [REFINED, POTIONS], [() => cauldron.contents, () => cauldron.output]);
     // The end of the bar is the fine window: picked up then, the potion comes out fine.
     const brewing = new ProgressBar(this, at.x, at.y + 34, 60, 0x58a35a, WORLD_UI_DEPTH).setZone(1 - FINE_SHARE, 0xe8b830);
+    const brewing2 = new ProgressBar(this, at.x, at.y + 42, 60, 0x58a35a, WORLD_UI_DEPTH).setZone(1 - FINE_SHARE, 0xe8b830);
     this.addMarker(m.pickUp, 'pad-out', 'Pick up', () => pickUpFromCauldron(this.state, id), () => this.state.belts[beltOut].built);
     this.addMarker(m.drop, 'pad-in', 'Drop', () => dropInCauldron(this.state, id), () => this.state.belts[beltIn].built && !this.carries(isRefined));
     this.addWorkSpot(m.work, id);
     this.addUpgradeMarker(m.upgrade, id);
     this.addCraftsmen(id);
     this.views.push(() => {
-      brewing.set(cauldron.brewing ? cauldron.brewing.progress / cauldron.brewing.ms : null);
+      for (const [bar, brew] of [
+        [brewing, cauldron.brewing],
+        [brewing2, cauldron.brewing2],
+      ] as const)
+        bar.set(brew ? brew.progress / brew.ms : null);
     });
   }
 
@@ -673,8 +717,29 @@ export class GameScene extends Phaser.Scene {
     );
     stand.forEach((at, i) => {
       const craftsman = fit(this.add.image(at.x, at.y, craftsmanTexture(i)).setOrigin(0.5, 1).setDepth(at.y).setFlipX(i === 1));
-      this.views.push(() => craftsman.setVisible(hired().level > i));
+      this.views.push(() => {
+        craftsman.setVisible(hired().level > i);
+        // At work, a craftsman rocks to and fro over the station (grinding, stirring or handing
+        // potions over) and bobs with each stroke; idle, or with reduced motion, they stand still.
+        const busy = hired().level > i && !hubSettings.reduceMotion && this.craftsmanBusy(id, i);
+        const stroke = busy ? Math.sin(this.time.now / 140 + i * 1.3) : 0;
+        craftsman.setRotation(stroke * 0.07 * (i === 1 ? -1 : 1)).setY(at.y - Math.abs(stroke) * 2);
+      });
     });
+  }
+
+  /**
+   * Whether craftsman `i` at a station has work in hand: at a refining table or cauldron the first
+   * works its first pipe and the second its second; at the counter both serve customers.
+   */
+  private craftsmanBusy(id: StationId, i: number) {
+    if (id === 'counter') return (this.state.counter.serving ?? 0) > 0;
+    if (id === 'refiner' || id === 'refiner2') {
+      const refiner = this.state[id];
+      return i === 0 ? refining(refiner, this.state.priority[id]) >= 0 : !!refiner.second;
+    }
+    const cauldron = this.state[id];
+    return !!(i === 0 ? cauldron.brewing : cauldron.brewing2);
   }
 
   /**
@@ -735,9 +800,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * Conveyor belts: a build marker for each once the stations at its ends stand, until it is paid
-   * off; then the belt itself with the goods riding along it. All built belts are drawn as one
-   * network, so where the two lines' cauldron belts meet becomes a T.
+   * Pixies, which carry goods between the stations in place of conveyor belts: a build marker for
+   * each route once the stations at its ends stand, until it is paid off; then a faint trail of fairy
+   * dust along the route and a pixie carrying each item along it. All built routes are drawn as one
+   * image. Near the end of its route a pixie flies over to the pallet or shelf its goods go on, and
+   * waits there while it is full.
    */
   private createBelts() {
     let network: Phaser.GameObjects.Image | null = null;
@@ -747,48 +814,87 @@ export class GameScene extends Phaser.Scene {
       if (built.join() === drawn) return;
       drawn = built.join();
       network?.destroy();
-      const lanes = Math.max(...built.map((id) => BELT_LANES[id].length));
-      network = built.length > 0 ? drawBelts(this, built.flatMap((id) => BELT_PATHS[id]), -600, lanes) : null;
+      network = built.length > 0 ? drawFairyPaths(this, built.flatMap((id) => BELT_PATHS[id]), -600) : null;
     });
 
     for (const id of BELTS) {
       const belt = this.state.belts[id];
-      this.addBuildMarker(BELT_BUILD[id], 'Belt', BELT_COST[id], belt, () => !belt.built && beltBuildable(this.state, id) && unlocked(this.state, `belt-${id}`), () =>
+      this.addBuildMarker(BELT_BUILD[id], 'Pixies', BELT_COST[id], belt, () => !belt.built && beltBuildable(this.state, id) && unlocked(this.state, `belt-${id}`), () =>
         payBelt(this.state, id),
       );
-      const riding: Phaser.GameObjects.Image[] = [];
+      const riding: { pixie: Phaser.GameObjects.Image; icon: Phaser.GameObjects.Image }[] = [];
       const [main, ...feeders] = BELT_PATHS[id];
       // For each kind of goods: the run it gets on at, where on the main run that starts and joins,
-      // and how far across the belt its lane is.
+      // and how far across the route its pixies fly.
       const lanes = BELT_LANES[id];
       const spans = new Map(lanes.map((kind, lane) => [kind, { ...beltSpan(id, kind), off: laneOffset(lane, lanes.length) }]));
+      const approach = BELT_MS[id] - PIXIE_APPROACH_MS;
       this.views.push(() => {
         while (riding.length < belt.items.length) {
-          riding.push(fit(this.add.image(0, 0, itemTexture(belt.items[0].id)).setDepth(-550)));
+          riding.push({
+            pixie: fit(this.add.image(0, 0, PIXIE_FRAMES[0]).setDepth(PIXIE_DEPTH + 0.1)),
+            icon: fit(this.add.image(0, 0, itemTexture(belt.items[0].id)), 0.8).setDepth(PIXIE_DEPTH),
+          });
         }
-        riding.forEach((icon, i) => {
+        riding.forEach(({ pixie, icon }, i) => {
           const item = belt.items[i];
           if (!item) {
+            pixie.setVisible(false);
             icon.setVisible(false);
             return;
           }
-          // Goods loaded from the doctor's hands wait out of sight until their turn to get on.
-          // A kind the belt has no lane for (from an edited save) rides down the middle of the main run.
+          // Goods loaded from the doctor's hands wait out of sight until their turn to set off.
+          // A kind with no lane of its own (from an edited save) flies down the middle of the main run.
           const { run, start, join, off } = spans.get(item.id) ?? { run: 0, start: 0, join: 0, off: 0 };
+          pixie.setVisible(item.at >= start);
           icon.setVisible(item.at >= start);
-          // Along the main run, across the belt into the item's own lane. On a feeder, the item moves
-          // over into that lane as it goes, so it carries straight on where the feeder joins.
-          let { x, y, dx, dy } = pointAlong(main, Math.max(item.at, join) / BELT_MS[id]);
-          let across = off;
-          if (run > 0 && item.at < join) {
-            const along = (item.at - start) / (join - start);
-            ({ x, y } = pointAlong(feeders[run - 1], along));
-            across = off * Math.max(0, along);
+          // Along the main run, off to the side for the item's kind. On a feeder, the pixie drifts over
+          // to that side as it goes, so it carries straight on where the feeder joins.
+          const along = (at: number) => {
+            let { x, y, dx, dy } = pointAlong(main, Math.max(at, join) / BELT_MS[id]);
+            let across = off;
+            if (run > 0 && at < join) {
+              const t = (at - start) / (join - start);
+              ({ x, y } = pointAlong(feeders[run - 1], t));
+              across = off * Math.max(0, t);
+            }
+            return { x: x - dy * across, y: y + dx * across };
+          };
+          let at = along(item.at);
+          // The last stretch: over to its own pallet or shelf at the next station.
+          const to = item.at > approach ? this.dropSpot(id, item.id) : null;
+          if (to) {
+            const from = along(approach);
+            const t = Math.min(1, (item.at - approach) / PIXIE_APPROACH_MS);
+            at = { x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t };
           }
-          icon.setTexture(itemTexture(item.id)).setPosition(x - dy * across, y + dx * across);
+          // Wings beat and the pixie bobs as it flies, each a little out of step with the others;
+          // with reduced motion it glides.
+          const beat = hubSettings.reduceMotion ? 0 : Math.floor(this.time.now / 110 + i) % 2;
+          const bob = hubSettings.reduceMotion ? 0 : Math.sin(this.time.now / 160 + i * 1.7) * 1.5;
+          pixie.setTexture(PIXIE_FRAMES[beat]).setPosition(at.x, at.y - 13 + bob);
+          icon.setTexture(itemTexture(item.id)).setPosition(at.x, at.y + bob);
         });
       });
     }
+  }
+
+  /**
+   * Where a pixie on belt `id` sets goods of a kind down: over that kind's pallet at the next
+   * station, or its shelf in the shop.
+   */
+  private dropSpot(id: BeltId, kind: ItemId): Point | null {
+    const target = BELT_TARGET[id];
+    if (target === 'counter') {
+      const known = POTIONS.filter((p) => researched(this.state, p));
+      const i = known.indexOf(plainOf(kind as SellableId));
+      if (i < 0) return null;
+      const at = shelfPosition(i, known.length);
+      return { x: at.x, y: at.y - 50 };
+    }
+    const kinds: readonly ItemId[] = target === 'refiner' || target === 'refiner2' ? PLANTS : REFINED;
+    const at = PALLETS[target].in[kinds.indexOf(kind)];
+    return at ? { x: at.x, y: at.y - 24 } : null;
   }
 
   /** The outfitter's stall right of the shop: upgrades for the doctor's pack, boots and sickle. */
@@ -806,27 +912,58 @@ export class GameScene extends Phaser.Scene {
     for (const id of GUILD_UPGRADES) this.addUpgradeMarker(GUILD[id], id, UPGRADES[id].name);
   }
 
+  /**
+   * The study in the market: a writing desk and a marker where each level paid teaches the next
+   * recipe in `RESEARCH_ORDER`, captioned with its name.
+   */
+  private createStudy() {
+    this.label(STUDY.sign.x, STUDY.sign.y, 'Study');
+    this.addObstacle(STUDY.desk.x, STUDY.desk.y, 'study', 60, 16);
+    this.addLevelMarker(
+      STUDY.learn,
+      () => this.state.upgrades.research,
+      UPGRADES.research.max,
+      (level) => upgradeCost('research', level),
+      () => payUpgrade(this.state, 'research'),
+      (level, left) => `${ITEMS[RESEARCH_ORDER[level]].name}: ${left}c`,
+      () => unlocked(this.state, 'level-research'),
+    );
+  }
+
   private createShopfront() {
     this.addObstacle(COUNTER.x, COUNTER.y, 'counter', 200, 30);
-    // Fine potions stand on their plain potion's pallet.
-    this.addPallets('counter', PALLETS.counter, [POTIONS, []], [() => this.state.counter.shelf.map(plainOf), () => []]);
-    // Beside each potion pallet, how many fine ones stand on it, and how much less the next one sells
-    // for while the shop is well stocked: on the outer side of the outer pallets and above the middle
-    // one, clear of the order bubbles below the counter.
-    POTIONS.forEach((potion, i) => {
-      const at = PALLETS.counter.in[i];
-      if (!at) return;
-      const side = Math.sign(at.x - COUNTER.x);
-      const label = this.add
-        .text(at.x + side * 20, side === 0 ? at.y - 74 : at.y - 10, '', { fontFamily: SERIF, fontSize: '11px', fontStyle: 'bold', color: '#8a3a10', stroke: TEXT_HALO, strokeThickness: 3, align: 'center' })
-        .setOrigin(side < 0 ? 1 : side > 0 ? 0 : 0.5, side === 0 ? 1 : 0.5)
-        .setDepth(WORLD_UI_DEPTH);
-      this.views.push(() => {
-        const { shelf } = this.state.counter;
-        const fines = shelf.filter((p) => p === FINE_OF[potion]).length;
+    // A shelf for each potion the apothecary has learned, side by side behind the counter; a new
+    // recipe's shelf joins the row and the others make room. Below each, how much less the next one
+    // sells for while the shop is well stocked.
+    const shelves = POTIONS.map((potion) => new Shelf(this, COUNTER.x, SHELF_Y, potion));
+    const cuts = POTIONS.map(() =>
+      this.add
+        .text(0, SHELF_Y + 2, '', { fontFamily: SERIF, fontSize: '10px', fontStyle: 'bold', color: '#8a3a10', stroke: TEXT_HALO, strokeThickness: 3 })
+        .setOrigin(0.5, 0)
+        .setDepth(WORLD_UI_DEPTH),
+    );
+    this.pallets.counter = { in: [], out: [] };
+    let row = '';
+    this.views.push(() => {
+      const { shelf } = this.state.counter;
+      const known = POTIONS.filter((p) => researched(this.state, p));
+      if (known.join() !== row) {
+        row = known.join();
+        shelves.forEach((s, i) => s.setVisible(known.includes(POTIONS[i])));
+        known.forEach((potion, i) => {
+          const at = shelfPosition(i, known.length);
+          shelves[POTIONS.indexOf(potion)].moveTo(at.x, at.y);
+          cuts[POTIONS.indexOf(potion)].setX(at.x);
+        });
+        // The test reads the shelves standing, in POTIONS order.
+        this.pallets.counter!.in = shelves.filter((_, i) => known.includes(POTIONS[i]));
+      }
+      POTIONS.forEach((potion, i) => {
+        if (!known.includes(potion)) return cuts[i].setText('');
+        shelves[i].set(shelf);
         const others = shelf.filter((p) => plainOf(p) === potion).length - 1;
         const off = Math.round(100 * (1 - stockFactor(Math.max(0, others))));
-        label.setText([fines > 0 ? `${fines} fine` : '', off > 0 ? `-${off}%` : ''].filter(Boolean).join('\n'));
+        cuts[i].setText(off > 0 ? `-${off}%` : '');
       });
     });
     // Potions are stocked by hand until every cauldron standing has its belt to the counter, and
@@ -994,12 +1131,15 @@ export class GameScene extends Phaser.Scene {
         day = c.day;
         kept = c.kept;
       }
-      const name = c.potion === 'sleepingTonic' ? 'Sleeping Tonic' : 'Healing Draught';
+      const name = ITEMS[c.potion].name;
       const key = `${c.day}:${c.made}:${Math.floor((1 - c.dayLeft / DAY_MS) * 60)}`;
       if (key === drawn) return;
       drawn = key;
       icon.setTexture(itemTexture(c.potion));
       title.setText(`Contract: ${c.need} ${name}${c.need === 1 ? '' : 's'} by dusk`);
+      // The title stops short of the dusk dial, in a smaller hand when a long one would run into it.
+      title.setFontSize(13);
+      for (let size = 12; title.width > w - 42 - 40 && size >= 10; size--) title.setFontSize(size);
       const gap = c.need > 8 ? 11 : 15;
       const r = c.need > 8 ? 4.5 : 5.5;
       pips.clear();
@@ -1092,6 +1232,88 @@ export class GameScene extends Phaser.Scene {
    * "While you were away: +32 coins, 9 potions" on a violet chip under the top bar, after the
    * automation caught up on the time away; tapping it puts it away.
    */
+  /**
+   * Today's weather over the yard: a grey-blue dusk and falling rain on a rainy day, a warm haze with
+   * heat rising in wavy lines in a drought, a little golden light on a fair day, and nothing on a
+   * mild one. It is drawn in the world over everything standing, under the bubbles and bars, across
+   * what the camera sees. With reduced motion the tint stays and nothing moves.
+   */
+  private createWeather() {
+    const tint = this.add.rectangle(0, 0, WORLD.w, WORLD.h, 0, 0).setOrigin(0).setDepth(WEATHER_DEPTH);
+    const fx = this.add.graphics().setDepth(WEATHER_DEPTH + 0.1);
+    const TINTS: Record<Weather, [number, number]> = { mild: [0, 0], rain: [0x2a3a58, 0.22], fair: [0xffd870, 0.08], drought: [0xe0782a, 0.14] };
+    // Where each streak or wave starts, spread evenly but not in rows: a fixed scatter, so the weather
+    // never touches Math.random.
+    const scatter = (i: number, k: number) => ((Math.sin(i * 12.9898 + k * 78.233) * 43758.5453) % 1 + 1) % 1;
+    this.views.push(() => {
+      const weather = weatherFor(this.state.contract.day);
+      const [color, alpha] = TINTS[weather];
+      tint.setFillStyle(color, alpha);
+      fx.clear();
+      if (hubSettings.reduceMotion || (weather !== 'rain' && weather !== 'drought')) return;
+      const view = this.cameras.main.worldView;
+      const t = this.time.now;
+      if (weather === 'rain') {
+        // Streaks falling fast and slanting a little, wrapping round the view.
+        fx.lineStyle(1.2, 0xc8d8f0, 0.55);
+        for (let i = 0; i < RAIN_STREAKS; i++) {
+          const x = view.x + scatter(i, 1) * (view.width + 40) - 20;
+          const fall = (scatter(i, 2) * view.height + t * (0.55 + scatter(i, 3) * 0.25)) % (view.height + 30);
+          const y = view.y + fall - 15;
+          fx.lineBetween(x, y, x - 3, y + 12);
+        }
+      } else {
+        // Heat: faint wavy lines drifting up from the ground.
+        fx.lineStyle(1.4, 0xfff0c8, 0.3);
+        for (let i = 0; i < HEAT_WAVES; i++) {
+          const x = view.x + scatter(i, 4) * view.width;
+          const rise = (scatter(i, 5) * view.height + t * 0.04) % view.height;
+          const y = view.y + view.height - rise;
+          fx.beginPath();
+          for (let k = 0; k <= 8; k++) {
+            const px = x + k * 5, py = y + Math.sin(k * 0.9 + t / 300 + i) * 2.5;
+            if (k === 0) fx.moveTo(px, py);
+            else fx.lineTo(px, py);
+          }
+          fx.strokePath();
+        }
+      }
+    });
+  }
+
+  /**
+   * Every customer's order, always on screen: a row of small cards under the top bar on the left,
+   * one per customer in the order they came, each with the potions still owed and, once they wait at
+   * the counter, how much patience they have left.
+   */
+  private createOrderStrip() {
+    const { x, y, w, h, gap } = ORDER_STRIP;
+    const d = UI_DEPTH;
+    const first = this.children.list.length;
+    const key = cardTexture(this, 'chip', w, h);
+    const chips = Array.from({ length: MAX_ORDER_SLOTS }, (_, i) => {
+      const cx = x + i * (w + gap) + w / 2;
+      const card = this.card(cx, y + h / 2, 'chip', key).setDepth(d);
+      const icons = [0, 1].map(() => fit(this.add.image(0, y + 12, itemTexture('healingDraught'))).setDepth(d + 0.1));
+      const patience = new ProgressBar(this, cx, y + h - 10, w - 10, 0x58a35a, d + 0.1);
+      return { cx, card, icons, patience };
+    });
+    for (const obj of this.children.list.slice(first)) (obj as unknown as Phaser.GameObjects.Components.ScrollFactor).setScrollFactor(0);
+    this.views.push(() => {
+      const orders = this.state.orders;
+      chips.forEach(({ cx, card, icons, patience }, i) => {
+        const order = orders[i];
+        card.setVisible(!!order);
+        icons.forEach((icon, k) => {
+          const want = order?.wants[k];
+          icon.setVisible(!!want);
+          if (want) icon.setTexture(itemTexture(want)).setX(order.wants.length === 1 ? cx : cx + (k - 0.5) * 17);
+        });
+        patience.set(order && this.atCounter.has(order.id) ? order.patience / order.maxPatience : null);
+      });
+    });
+  }
+
   private createAwayChip() {
     const away = this.away;
     if (!away) return;
@@ -1134,7 +1356,8 @@ export class GameScene extends Phaser.Scene {
     const coins = this.add.text(42, HUD_HEIGHT / 2 - 1, '', style).setOrigin(0, 0.5).setDepth(UI_DEPTH);
     this.add.text(width / 2 - 92, HUD_HEIGHT / 2, 'Hands', style).setOrigin(1, 0.5).setDepth(UI_DEPTH);
     this.add
-      .text(620, HUD_HEIGHT / 2, 'Walk: WASD / tap\nHarvest: walk past ripe plants', { ...style, fontSize: '12px', fontStyle: 'normal', color: '#4a3424' })
+      // Right of the last slot the biggest pack fills, so a full pack never runs into it.
+      .text(width / 2 - 60 + MAX_CARRY * 40 - 12, HUD_HEIGHT / 2, 'Walk: WASD / tap\nHarvest: walk past ripe plants', { ...style, fontSize: '12px', fontStyle: 'normal', color: '#4a3424' })
       .setOrigin(0, 0.5)
       .setDepth(UI_DEPTH);
     this.hudButton(width - 16, 'Settings', () => {

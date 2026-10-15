@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { sharpRes } from '../../../../shared/scaling';
 
 // Drawing helpers for the isometric art: shapes are painted on a 2D canvas, then the canvas is
 // added as a texture.
@@ -6,16 +7,32 @@ import Phaser from 'phaser';
 export type Ctx = CanvasRenderingContext2D;
 export type Pt = { x: number; y: number };
 
-/** Paints a `w` x `h` canvas with `draw` and adds it as the texture `key`. */
+/** Canvas pixels per shown pixel of each baked texture, by key. */
+const RES = new Map<string, number>();
+
+/**
+ * Paints a texture shown `w` x `h` pixels with `draw` and adds it as the texture `key`. The canvas
+ * is `sharpRes` times that, so the art stays sharp on big screens; `draw` paints in shown pixels.
+ * Show it with `fit`.
+ */
 export function bakeCanvas(scene: Phaser.Scene, key: string, w: number, h: number, draw: (ctx: Ctx) => void) {
+  const res = sharpRes(w, h);
   const canvas = document.createElement('canvas');
-  canvas.width = Math.ceil(w);
-  canvas.height = Math.ceil(h);
+  canvas.width = Math.ceil(w * res);
+  canvas.height = Math.ceil(h * res);
   const ctx = canvas.getContext('2d')!;
+  ctx.scale(res, res);
   ctx.lineJoin = 'round';
   draw(ctx);
   if (scene.textures.exists(key)) scene.textures.remove(key);
   scene.textures.addCanvas(key, canvas);
+  RES.set(key, res);
+}
+
+/** Sizes an image showing a baked texture to `sx` x `sy` times the texture's shown size. */
+export function fit<T extends Phaser.GameObjects.Image>(img: T, sx = 1, sy = sx): T {
+  const res = RES.get(img.texture.key) ?? 1;
+  return img.setScale(sx / res, sy / res);
 }
 
 export function poly(ctx: Ctx, pts: Pt[], fill?: string | CanvasGradient, stroke?: string, lineWidth = 1) {

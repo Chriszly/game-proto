@@ -74,8 +74,8 @@ Missing or rough:
 File map (`src/`):
 
 - `main.ts`: creates the `Phaser.Game` (960x540, `Phaser.Scale.FIT`, `pixelArt: false`) with
-  `BootScene` and `GameScene`, calls `setupGame(game)` from `shared/setupGame.ts`, and in dev
-  builds puts `game` on `window`.
+  `BootScene` and `GameScene`, calls `setupGame(game)` from `shared/setupGame.ts` and
+  `setupScaling(game)` from `shared/scaling.ts`, and in dev builds puts `game` on `window`.
 - `scenes/BootScene.ts`: calls `bakeTextures`, then starts `Game`.
 - `scenes/GameScene.ts`: builds the garden, HUD, panel, golem menu, banner and garden picker;
   turns taps into `select`, `plant`, `upgrade`, `move`, `uproot`, `startWave` and the speed
@@ -101,8 +101,9 @@ File map (`src/`):
   `slimed`, `canCallEarly`, `nextWave`, `startWave` (returns `'start'`, `'early'` or null) and
   `tick`. No Phaser.
 - `game/save.ts`: `loadBest`/`saveBest`, `loadBloom`/`saveBloom`, `loadGarden`/`saveGarden`.
-- `art/clay.ts`: the claymation toolkit. `bake` paints a view-sized canvas in art units (2 per
-  view pixel) around an anchor and adds it with `textures.addCanvas`; `clay` shades any path as
+- `art/clay.ts`: the claymation toolkit. `bake` paints a texture in art units (2 per view pixel)
+  around an anchor, on a canvas `sharpRes` times the view size (at most `MAX_RES` = 2), and adds it
+  with `addSharp`, which marks the texture's resolution so images show it at its view size; `clay` shades any path as
   plasticine (shadow, top-left light, rim, fingerprint, glint), with `E`, `R` and `Pp` for
   ellipses, rounded rectangles and blobs; the palette `C`; the seeded `rnd` and `reseed`; and the
   painters `drop`, `flower`, `golem`, `sprout` and `pest` (all seven pests; the queen is the slug
@@ -118,8 +119,18 @@ File map (`src/`):
   is its one `bg-<n>` texture.
 - `ui/Button.ts`: `makeButton`, the clay button used by the garden picker's Back.
 
-Shared code it imports (outside the game folder): `shared/setupGame.ts` (`setupGame`) and
-`shared/settings.ts` (`byDifficulty`, `settings`).
+Shared code it imports (outside the game folder): `shared/setupGame.ts` (`setupGame`),
+`shared/scaling.ts` (`setupScaling`, `sharpRes`) and `shared/settings.ts` (`byDifficulty`,
+`settings`).
+
+Screens: `setupScaling` gives the canvas `renderScale` canvas pixels per game pixel (up to 4 on a
+4K screen) and zooms the one camera to match from its top-left; it never scrolls, so the scene
+keeps working in view pixels and needs no `viewSize` or `viewPoint`. Text and Graphics draw at the
+full `renderScale`. The clay is painted at `sharpRes`, held to `MAX_RES` (2) in `clay.ts`, since
+its blur-filter shadows cost about the cube of the resolution at start-up. `addSharp` sets the
+texture source's `resolution` and trims its frame to the view size, so every `add.image`,
+`setScale` and origin stays in view pixels. `e2e/screens.spec.ts` at the root opens the game on
+five screens.
 
 How it runs:
 
@@ -132,7 +143,7 @@ How it runs:
   share of it) within `golemStats(...).range` and not `under` (a thorn golem hits every pest in
   reach; combos and armour change the damage, which lands at once; the `Shot` is only drawn), squashed pests pay their bounty and push a `Pop`, and an empty
   queue with no pests ends the wave (`finishWave`: `waveBonus`, a bud, `best`).
-- Input: one zone over the board; `pointermove` sets `hover`, `pointerdown` calls `tapCell`,
+- Input: one zone over the board; `pointermove` sets `hover` (from `pointer.worldX/Y`), `pointerdown` calls `tapCell`,
   which moves the golem being moved (`moving`) there, else toggles the menu of the golem on the
   cell (`picked`), else closes an open menu, else plants. The menu's chips call `upgrade`, start a
   move or `uproot`. The seed cards call `select` (refused for a
@@ -217,6 +228,12 @@ Phaser passes to `update`; the pops' tweens run on Phaser's clock and are cosmet
   the sprout's and the tree's origins).
 
 ## Gotchas
+
+- A texture added outside `bake` (like `edge`) goes through `addSharp` with its canvas's
+  resolution, or it shows `res` times too big. A canvas filter works in canvas pixels: build it
+  with `blur`, which scales by the canvas's resolution.
+- `pointer.x/y` and `this.scale` are canvas pixels, `renderScale` times view pixels; read pointers
+  through game objects' own events or `pointer.worldX/Y`, and lay out with `VIEW` or `viewSize`.
 
 - `SEED_BUTTONS.ys` and `hs` are indexed in `GOLEMS` order; a 68px-tall card uses the short card
   layout (the thorn golem's).
