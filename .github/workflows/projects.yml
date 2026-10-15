@@ -61,9 +61,10 @@ jobs:
                   id = created.createProjectV2.projectV2.id;
                   console.log(`Created ${p.title}`);
                 }
+                // Public Projects are view-only for everyone but the owner and invited collaborators.
                 await github.graphql(`
                   mutation($projectId: ID!, $shortDescription: String!, $readme: String!) {
-                    updateProjectV2(input: { projectId: $projectId, shortDescription: $shortDescription, readme: $readme }) {
+                    updateProjectV2(input: { projectId: $projectId, shortDescription: $shortDescription, readme: $readme, public: true }) {
                       projectV2 { id }
                     }
                   }`, { projectId: id, shortDescription: p.shortDescription, readme: p.readme });
