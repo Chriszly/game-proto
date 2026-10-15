@@ -77,7 +77,9 @@ function scene(page: Page) {
     page.evaluate(`(${fn.toString()})(window.game.scene.getScene('Game'))`) as Promise<T>;
   return {
     state: () => read<GameState | null>((s) => JSON.parse(JSON.stringify(s.state))),
-    camera: () => read<{ x: number; y: number }>((s) => ({ x: s.cameras.main.scrollX, y: s.cameras.main.scrollY })),
+    // The top left of what the camera shows, in world pixels (scrollX/Y differ once the screen's
+    // renderScale zooms the camera).
+    camera: () => read<{ x: number; y: number }>((s) => ({ x: s.cameras.main.worldView.x, y: s.cameras.main.worldView.y })),
   };
 }
 

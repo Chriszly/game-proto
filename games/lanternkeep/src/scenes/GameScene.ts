@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { settings } from '../../../../shared/settings';
-import { DUSK, INK, INK_HEX, PAD, RES, SCREENS } from '../art/puppet';
+import { BACK_RES, DUSK, INK, INK_HEX, PAD, RES, SCREENS } from '../art/puppet';
 import { CHAINS, JAR, LANTERN_SPOTS } from '../game/places';
 import { loadBest, saveBest } from '../game/save';
 import {
@@ -163,7 +163,6 @@ export class GameScene extends Phaser.Scene {
       fontSize: `${o.size}px`,
       fontStyle: o.bold ? 'bold' : 'normal',
       color: o.color ?? '#f4e2c8',
-      resolution: 2,
       ...(o.stroke ? { stroke: INK, strokeThickness: 4 } : {}),
     });
     if (o.glow) t.setShadow(0, 0, 'rgba(255,150,70,0.85)', 6, !!o.stroke, true);
@@ -175,15 +174,20 @@ export class GameScene extends Phaser.Scene {
     return this.add.image(x, y, key).setScale(1 / RES);
   }
 
+  /** A full-view layer painted at BACK_RES, drawn over the whole view from its top-left. */
+  private backdrop(key: string) {
+    return this.add.image(0, 0, key).setOrigin(0).setScale(1 / BACK_RES);
+  }
+
   private createWorld() {
-    this.screens = SCREENS.map((key) => this.add.image(0, 0, key).setOrigin(0).setDepth(0));
-    this.stars = this.add.image(0, 0, 'stars').setOrigin(0).setDepth(1);
+    this.screens = SCREENS.map((key) => this.backdrop(key).setDepth(0));
+    this.stars = this.backdrop('stars').setDepth(1);
     this.moon = this.sprite(650, 86, 'moon').setDepth(1);
-    this.add.image(0, 0, 'castle').setOrigin(0).setDepth(2);
-    this.bunting = this.add.image(0, 0, 'bunting').setOrigin(0).setDepth(2.5);
+    this.backdrop('castle').setDepth(2);
+    this.bunting = this.backdrop('bunting').setDepth(2.5);
     this.wind = this.add.graphics().setDepth(4);
     this.cords = this.add.graphics().setDepth(4.2);
-    this.fog = this.add.image(0, 0, 'fog').setOrigin(0).setDepth(4.4);
+    this.fog = this.backdrop('fog').setDepth(4.4);
     this.rain = this.add.graphics().setDepth(4.5);
 
     LANTERN_SPOTS.forEach(({ x, y }, i) => {
