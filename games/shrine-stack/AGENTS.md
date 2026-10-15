@@ -73,8 +73,8 @@ Missing or rough:
 File map (`src/`):
 
 - `main.ts`: creates the `Phaser.Game` (960x540 from `VIEW`, `Phaser.Scale.FIT`,
-  `pixelArt: true`) with `GameScene` only, calls `setupGame(game)` from `shared/setupGame.ts`, and
-  in dev builds puts `game` on `window`.
+  `pixelArt: true`) with `GameScene` only, calls `setupGame(game)` from `shared/setupGame.ts` and
+  then `setupScaling(game)` from `shared/scaling.ts`, and in dev builds puts `game` on `window`.
 - `game/state.ts`: the tuning constants (`TOWER_X`, `PLINTH_W`, `START_W`, `STONE_H`, `DROP_GAP`,
   `SWING`, `BASE_SPEED`, `TIER_SPEEDUP`, `CALM`, `GRAVITY`, `PERFECT_PX`, `STEADY_PX`, `BROAD_PX`,
   `STONES_PER_TIER`, `BALANCE`, `PERFECT_FAVOR`, `TIER_FAVOR`, `OFFER_SIZE`, `MIN_W`,
@@ -99,8 +99,8 @@ File map (`src/`):
   `FONT`.
 - `ui/Button.ts`: `makeButton`, the captioned buttons on the end panel (returned as loose parts).
 
-Shared code it imports (outside the game folder): `shared/setupGame.ts` (`setupGame`) and
-`shared/settings.ts` (`byDifficulty`, `settings`).
+Shared code it imports (outside the game folder): `shared/setupGame.ts` (`setupGame`),
+`shared/scaling.ts` (`setupScaling`) and `shared/settings.ts` (`byDifficulty`, `settings`).
 
 How it runs:
 
@@ -136,6 +136,13 @@ How it runs:
   positioned with `place`) and the end panel's in `gameOver`, `againButton`, `againBeside` and
   `keepBuildingButton`; `makeButton` returns its parts. Only the banner, which takes no taps, is a
   container (fixed with `pin`).
+- Screens: `setupScaling` draws the canvas at the screen's resolution (`renderScale` canvas pixels
+  per game pixel, a whole number, so `pixelArt` stays crisp) and zooms the camera to match from its
+  top-left corner. The scene lays out with `VIEW` and the camera only ever moves by `scrollY`, so it
+  keeps that top-left origin and needs no `splitHudCamera`: scroll-factor-0 objects (panel, hint,
+  banner, the tap zone, break and end layers) stay where they were placed. Anything new that reads
+  `this.scale`, `pointer.x/y` or follows with `startFollow`/`setBounds` must go through the helpers
+  in `shared/scaling.ts` instead. `index.html` has the shared `100dvh` and `touch-action: none` styles.
 - Rendering: placed stones are one `Graphics` each in `stoneViews`, drawn once (redrawn only by
   Broad Stones and the Wider stone, in `redrawTop`); ornaments are one `Graphics` per balanced tier in `ornaments`. The swinging stone
   is redrawn only when its width, tier or kind changes; the drop guide and gust streaks are
