@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { EnemyKind } from '../game/enemies';
 import type { RelicId } from '../game/relics';
+import type { RoadId } from '../game/roads';
 import type { Icon } from '../game/upgrades';
 import { facet, gem, line, ngon, paint, poly, rect, softShadow, type Pt } from './lowpoly';
 
@@ -13,6 +14,22 @@ const S = 56;
 export const iconTexture = (icon: Icon) => `icon-${icon}`;
 export const relicTexture = (id: RelicId) => `relic-${id}`;
 export const bossNodeTexture = (kind: EnemyKind) => `node-${kind}`;
+export const roadTexture = (id: RoadId) => `road-${id}`;
+
+/** A gold coin seen a little from the side. */
+function coin(ctx: Ctx, x: number, y: number, r: number) {
+  poly(ctx, ngon(x + r * 0.15, y + r * 0.12, r, r * 0.9, 10), '#9a6a1a');
+  gem(ctx, x, y, r, 10, 0.2, '#c8901e', '#ffe48a');
+  poly(ctx, ngon(x, y, r * 0.5, r * 0.5, 6, 0.5), null, '#b07a1a', Math.max(1, r * 0.12));
+}
+
+/** A caltrop: four iron spikes, lit from the top left. */
+function caltrop(ctx: Ctx, x: number, y: number, s: number) {
+  poly(ctx, [[x, y - 7 * s], [x - 2 * s, y], [x + 2 * s, y]], '#d8e0e8');
+  poly(ctx, [[x - 7 * s, y + 4 * s], [x, y - 1 * s], [x, y + 2 * s]], '#9aa4ae');
+  poly(ctx, [[x + 7 * s, y + 4 * s], [x, y - 1 * s], [x, y + 2 * s]], '#6a7380');
+  poly(ctx, [[x, y + 6 * s], [x - 2 * s, y], [x + 2 * s, y]], '#4a5260');
+}
 
 /** An arrow from a to b: shaft, fletching and a steel head. */
 function arrow(ctx: Ctx, a: Pt, b: Pt, w = 3, head = '#e2e8ee', headD = '#8e98a4') {
@@ -135,6 +152,22 @@ const ICONS: Record<Icon, (ctx: Ctx) => void> = {
     for (let i = 0; i < 4; i++) line(ctx, [[14, 22 + i * 5], [24, 24 + i * 5]], '#8a7a5a', 1);
     gem(ctx, 37, 28, 5, 4, 0, '#b8862c', '#ffe48a');
   },
+  purse: (ctx) => {
+    // A leather purse spilling coins.
+    facet(ctx, [[14, 24], [22, 18], [34, 18], [42, 24], [46, 40], [38, 50], [18, 50], [10, 40]], '#86522c', { k: 1.4 });
+    poly(ctx, [[20, 18], [36, 18], [32, 10], [24, 10]], '#a8743f');
+    line(ctx, [[18, 20], [38, 20]], '#e5b53a', 2);
+    coin(ctx, 44, 44, 7);
+    coin(ctx, 12, 46, 6);
+    coin(ctx, 28, 36, 6);
+  },
+  wind: (ctx) => {
+    // Gusts curling round a gold spark.
+    for (const [y, w, c] of [[16, 34, '#e8f4ff'], [28, 40, '#bcd6ee'], [40, 30, '#e8f4ff']] as [number, number, string][]) {
+      line(ctx, [[8, y], [8 + w * 0.6, y], [8 + w, y - 4], [8 + w - 6, y - 10], [8 + w - 12, y - 6]], c, 3.5);
+    }
+    gem(ctx, 44, 44, 6, 4, 0, '#b8862c', '#ffe48a');
+  },
   mend: (ctx) => {
     // A plank and a hammer.
     poly(ctx, [[6, 40], [44, 26], [48, 34], [10, 48]], '#c99260');
@@ -242,6 +275,52 @@ export function bakeIcons(scene: Phaser.Scene) {
       }
     });
   }
+  // The caltrops button: the same octagon gem as Arrow Rain's with caltrops on it, and one caltrop
+  // to strew on the road.
+  for (const ready of [false, true]) {
+    paint(scene, ready ? 'caltrops-ready' : 'caltrops-charging', 52, 52, (ctx) => {
+      const c = 26;
+      if (ready) {
+        ctx.save();
+        ctx.shadowColor = '#ffcf4a';
+        ctx.shadowBlur = 8;
+        poly(ctx, ngon(c, c, 22, 22, 8, Math.PI / 8), '#e5b53a');
+        ctx.restore();
+      }
+      gem(ctx, c, c, 22, 8, Math.PI / 8, ready ? '#b07a1a' : '#3a404c', ready ? '#ffe48a' : '#7a8294');
+      facet(ctx, ngon(c, c, 16, 16, 8, Math.PI / 8), '#2b3242', { edge: false, off: 0.05 });
+      ctx.globalAlpha = ready ? 1 : 0.55;
+      caltrop(ctx, c - 6, c + 2, 0.9);
+      caltrop(ctx, c + 6, c - 3, 0.9);
+      caltrop(ctx, c + 4, c + 7, 0.7);
+    });
+  }
+  paint(scene, 'caltrop', 18, 16, (ctx) => {
+    softShadow(ctx, () => poly(ctx, ngon(11, 12, 6, 2.5, 8), '#000000'), 1, 0.45);
+    caltrop(ctx, 9, 8, 1);
+  });
+  // The coin in the top bar and on the hire panel.
+  paint(scene, 'hud-coin', 18, 18, (ctx) => coin(ctx, 8.5, 8.5, 7.5));
+  // The road choice cards: a cracked boulder for the Hardened Road, a crowd of helmets for the
+  // Crowded Road and a heap of coins for the Golden Road.
+  const roads: Record<RoadId, (ctx: Ctx) => void> = {
+    hardened: (ctx) => {
+      facet(ctx, [[8, 44], [12, 22], [26, 10], [42, 14], [50, 32], [46, 48], [24, 52]], '#7d8590', { k: 1.4 });
+      line(ctx, [[26, 14], [24, 26], [32, 32], [28, 46]], '#3a404c', 2);
+      line(ctx, [[42, 18], [38, 28]], '#3a404c', 1.5);
+    },
+    crowded: (ctx) => {
+      for (const [x, y, c] of [[14, 30, '#5a8d36'], [42, 30, '#5a8d36'], [28, 22, '#79b24a'], [20, 42, '#79b24a'], [36, 42, '#79b24a']] as [number, number, string][]) {
+        facet(ctx, ngon(x, y, 9, 9, 6, 0.3), c, { k: 1.3 });
+        poly(ctx, [[x - 9, y - 2], [x - 6, y - 10], [x + 6, y - 10], [x + 9, y - 2]], '#7d8590');
+        poly(ctx, rect(x - 5, y + 1, 3, 2), '#ffd84a');
+      }
+    },
+    golden: (ctx) => {
+      for (const [x, y, r] of [[18, 42, 9], [38, 42, 9], [28, 32, 9], [16, 26, 7], [40, 24, 7], [28, 14, 7]] as [number, number, number][]) coin(ctx, x, y, r);
+    },
+  };
+  for (const [id, draw] of Object.entries(roads)) paint(scene, roadTexture(id as RoadId), S, S, draw);
   // The streak's flame and the skill book's little red book, for the HUD.
   paint(scene, 'hud-flame', 20, 26, (ctx) => flame(ctx, 10, 13, 0.55));
   paint(scene, 'hud-book', 22, 20, (ctx) => {

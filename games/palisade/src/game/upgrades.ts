@@ -20,7 +20,9 @@ export type UpgradeId =
   | 'forked'
   | 'timber'
   | 'lore'
-  | 'mend';
+  | 'mend'
+  | 'purse'
+  | 'wind';
 
 export type Icon =
   | 'bow'
@@ -35,7 +37,9 @@ export type Icon =
   | 'storm'
   | 'barricade'
   | 'book'
-  | 'mend';
+  | 'mend'
+  | 'purse'
+  | 'wind';
 
 export interface Upgrade {
   name: string;
@@ -45,7 +49,7 @@ export interface Upgrade {
   icon: Icon;
   /** Only offered once this upgrade has a rank. */
   requires?: UpgradeId;
-  /** Only offered when fewer than three others are left. */
+  /** Only offered when fewer than three others are left, to fill the empty cards (see `FILLERS`). */
   filler?: boolean;
 }
 
@@ -68,6 +72,13 @@ export const UPGRADES: Record<UpgradeId, Upgrade> = {
   timber: { name: 'Stout Timber', text: 'The barricade gets 25% more health and is repaired', maxRank: 5, icon: 'barricade' },
   lore: { name: 'Battle Lore', text: 'Gain 20% more experience', maxRank: 3, icon: 'book' },
   mend: { name: 'Mend the Barricade', text: 'Repair half of the barricade', maxRank: Infinity, icon: 'mend', filler: true },
+  purse: { name: 'War Chest', text: 'Gain 25 coins to hire guards with', maxRank: Infinity, icon: 'purse', filler: true },
+  wind: { name: 'Second Wind', text: 'Charge Arrow Rain and Caltrops at once', maxRank: Infinity, icon: 'wind', filler: true },
 };
+
+/** The fillers, in the order they fill the empty cards once fewer than three upgrades are left. */
+export const FILLERS: UpgradeId[] = ['mend', 'purse', 'wind'];
+/** Coins a War Chest gives. */
+export const PURSE_COINS = 25;
 
 export const UPGRADE_IDS = Object.keys(UPGRADES) as UpgradeId[];

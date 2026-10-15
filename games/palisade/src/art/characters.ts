@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import type { EnemyKind } from '../game/enemies';
-import { facet, gem, line, ngon, paint, poly, rect, softShadow, type Pt } from './lowpoly';
+import { dark, facet, gem, light, line, ngon, paint, poly, rect, softShadow, type Pt } from './lowpoly';
 
 // The ranger, the foes and the missiles as faceted low-poly figures, each part a flat-shaded
 // pyramid lit from the top left, with a soft shadow on the road to the lower right. A figure is a
@@ -14,9 +14,12 @@ const PAL: Record<string, string> = {
   cloth: '#5e4532', leather: '#86522c', iron: '#7d8590', bone: '#efe5c9', wood: '#93653a', plate: '#4a4f62', plateL: '#5d6379',
   tabard: '#5b2f66', plume: '#b8343c', shield: '#2f4f8a', gold: '#e5b53a', cloakD: '#245c34', cloak: '#3a8a46',
   trousers: '#4f4766', face: '#e3ad84', fletch: '#efe7d4', eyeD: '#2a1c14', gemP: '#9b4fd1',
+  tower: '#3b5578', harpy: '#7a6a9a', harpyD: '#564a74', harpyW: '#9a8ab8', harpyF: '#d8b8a0', hair: '#3a2a4a',
+  robe: '#6a3e7a', robeD: '#4a2a58', gemG: '#5ad07a', teal: '#3a8a8a', blue: '#3a5f9a', mrobe: '#2f6f7a', mrobeD: '#22525c',
+  beard: '#e8e2d8', arcane: '#6fe0d0',
 };
 
-const RIGS: Record<'hero' | 'goblin' | 'orc' | 'knight', Rig> = {
+const RIGS: Record<'hero' | 'goblin' | 'orc' | 'knight' | 'bearer' | 'shaman' | 'spear' | 'mage', Rig> = {
   goblin: [
     { m: 'skinD', p: [[3, 0], [11, 0], [10, -22], [3, -22]] },
     { m: 'skinD', p: [[14, -44], [20, -42], [22, -26], [16, -24]] },
@@ -60,6 +63,74 @@ const RIGS: Record<'hero' | 'goblin' | 'orc' | 'knight', Rig> = {
     { m: 'plume', p: [[2, -102], [10, -116], [24, -114], [31, -100], [15, -97]] },
     { m: 'shield', p: [[-38, -66], [-15, -66], [-15, -38], [-26, -24], [-38, -38]] },
     { m: 'gold', c: [-26.5, -48], r: 6 },
+  ],
+  // An orc in mail behind a tower shield as tall as he is.
+  bearer: [
+    { m: 'boot', p: [[4, 0], [19, 0], [17, -9], [4, -9]] },
+    { m: 'cloth', p: [[4, -8], [16, -8], [15, -30], [4, -30]] },
+    { m: 'boot', p: [[-18, 0], [-3, 0], [-3, -9], [-16, -9]] },
+    { m: 'cloth', p: [[-15, -8], [-3, -8], [-4, -30], [-15, -30]] },
+    { m: 'iron', p: [[-21, -27], [21, -27], [23, -64], [-21, -66]] },
+    { m: 'belt', p: [[-21, -27], [21, -27], [21, -35], [-21, -35]] },
+    { m: 'skin', p: [[-19, -66], [-21, -82], [-12, -92], [6, -92], [13, -82], [11, -66], [-2, -62]] },
+    { m: 'iron', p: [[-23, -82], [-15, -98], [2, -103], [14, -94], [15, -82]] },
+    { m: 'iron', p: [[-17, -84], [-13, -84], [-13, -70], [-17, -70]] },
+    { m: 'bone', p: [[-18, -70], [-15, -78], [-13, -70]] },
+    { m: 'eye', p: [[-12, -84], [-6, -84], [-6, -80], [-12, -80]] },
+    { m: 'skin', p: [[-6, -60], [4, -56], [-20, -44], [-27, -50]] },
+    { m: 'tower', p: [[-46, -98], [-26, -102], [-22, -6], [-42, -2]] },
+    { m: 'gold', p: [[-46, -98], [-26, -102], [-26, -96], [-46, -92]] },
+    { m: 'gold', p: [[-42, -8], [-22, -12], [-22, -6], [-42, -2]] },
+    { m: 'gold', c: [-34, -52], r: 7 },
+  ],
+  // A goblin shaman in a hooded robe and a bone mask, with a staff topped by a green healing stone.
+  shaman: [
+    { m: 'skinD', p: [[3, 0], [11, 0], [10, -22], [3, -22]] },
+    { m: 'skin', p: [[-11, 0], [-2, 0], [-3, -22], [-11, -22]] },
+    { m: 'robe', p: [[-18, -8], [17, -8], [12, -50], [-12, -50]] },
+    { m: 'bone', p: [[-15, -26], [15, -26], [15, -31], [-15, -31]] },
+    { m: 'skinD', p: [[10, -62], [30, -76], [14, -54]] },
+    { m: 'skin', p: [[-17, -52], [-15, -68], [-4, -76], [9, -72], [13, -58], [7, -47], [-8, -45]] },
+    { m: 'skin', p: [[-14, -64], [-34, -74], [-16, -57]] },
+    { m: 'robeD', p: [[-12, -70], [-4, -86], [12, -88], [20, -64], [12, -50], [6, -70]] },
+    { m: 'teal', p: [[8, -86], [18, -100], [16, -82]] },
+    { m: 'bone', p: [[-20, -67], [-6, -70], [-4, -56], [-12, -49], [-19, -56]] },
+    { m: 'eye', p: [[-16, -63], [-11, -63], [-11, -60], [-16, -60]] },
+    { m: 'wood', p: [[-28, -2], [-24, -2], [-26, -94], [-30, -94]] },
+    { m: 'skin', p: [[-10, -44], [-4, -40], [-22, -54], [-27, -50]] },
+    { m: 'gemG', c: [-28, -100], r: 7 },
+  ],
+  // The hired guards face right, like the ranger: a spearman with a round shield on his back...
+  spear: [
+    { m: 'shield', c: [-15, -62], r: 13 },
+    { m: 'boot', p: [[-17, 0], [-2, 0], [-2, -11], [-15, -11]] },
+    { m: 'boot', p: [[4, 0], [20, 0], [17, -11], [4, -11]] },
+    { m: 'trousers', p: [[-15, -10], [-3, -10], [-3, -42], [-15, -42]] },
+    { m: 'trousers', p: [[4, -10], [16, -10], [15, -42], [4, -42]] },
+    { m: 'blue', p: [[-15, -38], [15, -38], [13, -82], [-13, -84]] },
+    { m: 'gold', p: [[-3, -40], [3, -40], [3, -80], [-3, -80]] },
+    { m: 'belt', p: [[-15, -48], [15, -48], [15, -54], [-15, -54]] },
+    { m: 'face', p: [[-8, -82], [-8, -104], [6, -106], [11, -96], [6, -82]] },
+    { m: 'steel', p: [[-12, -96], [-8, -113], [6, -115], [14, -100], [12, -95]] },
+    { m: 'eyeD', p: [[3, -99], [7, -99], [7, -95], [3, -95]] },
+    { m: 'wood', p: [[-22, -60], [60, -74], [60, -70], [-22, -56]] },
+    { m: 'steel', p: [[58, -79], [78, -73], [58, -65]] },
+    { m: 'blue', p: [[0, -76], [8, -79], [26, -66], [20, -61]] },
+  ],
+  // ...and a mage in a long robe and pointed hat, with a staff topped by an arcane stone.
+  mage: [
+    { m: 'mrobeD', p: [[-17, 0], [17, 0], [12, -50], [-12, -50]] },
+    { m: 'mrobe', p: [[-14, -44], [14, -44], [12, -84], [-12, -86]] },
+    { m: 'gold', p: [[-14, -48], [14, -48], [14, -53], [-14, -53]] },
+    { m: 'face', p: [[-6, -84], [-6, -103], [8, -103], [11, -93], [7, -84]] },
+    { m: 'beard', p: [[-4, -92], [11, -92], [6, -68], [-2, -74]] },
+    { m: 'eyeD', p: [[3, -99], [7, -99], [7, -96], [3, -96]] },
+    { m: 'mrobeD', p: [[-17, -97], [19, -97], [17, -103], [-15, -103]] },
+    { m: 'mrobe', p: [[-11, -101], [13, -101], [-6, -140]] },
+    { m: 'gold', c: [1, -106], r: 3 },
+    { m: 'wood', p: [[24, -2], [28, -2], [30, -112], [26, -112]] },
+    { m: 'skin', p: [[4, -80], [10, -80], [29, -70], [25, -64]] },
+    { m: 'arcane', c: [28, -119], r: 8 },
   ],
   hero: [
     { m: 'cloakD', p: [[-28, -28], [-6, -22], [-4, -102], [-24, -98]] },
@@ -136,8 +207,37 @@ function bossRig(kind: 'troll' | 'ogre' | 'giant'): { rig: Rig; pal: Record<stri
   return { rig: [...body, ...head, ...weapon, ...arm], pal: { ...PAL, ...pal } };
 }
 
+/**
+ * The harpy flies, so its two frames beat its wings (up and down) instead of stepping its legs: a
+ * feathered body with gold talons, a pale face and wild dark hair.
+ */
+function harpyRig(frame: number): Rig {
+  const back: Rig =
+    frame === 0
+      ? [{ m: 'harpyD', p: [[0, -44], [18, -92], [36, -98], [28, -70], [12, -40]] }]
+      : [{ m: 'harpyD', p: [[0, -40], [26, -26], [42, -8], [22, -20], [10, -34]] }];
+  const front: Rig =
+    frame === 0
+      ? [{ m: 'harpyW', p: [[-4, -42], [-22, -94], [2, -86], [14, -46]] }]
+      : [{ m: 'harpyW', p: [[-4, -40], [-32, -22], [-38, -2], [-14, -22], [8, -36]] }];
+  return [
+    ...back,
+    { m: 'gold', p: [[-5, 0], [-1, -10], [3, 0]] },
+    { m: 'gold', p: [[5, 0], [8, -10], [12, 0]] },
+    { m: 'harpyD', p: [[-3, -8], [11, -8], [9, -22], [-1, -22]] },
+    { m: 'harpyD', p: [[10, -26], [32, -14], [28, -32]] },
+    { m: 'harpy', p: [[-14, -22], [14, -20], [16, -44], [-6, -54], [-16, -44]] },
+    { m: 'harpyF', p: [[-22, -52], [-20, -66], [-8, -72], [2, -66], [0, -52], [-10, -48]] },
+    { m: 'hair', p: [[-10, -72], [8, -76], [16, -56], [2, -54], [0, -66]] },
+    { m: 'eye', p: [[-18, -63], [-13, -63], [-13, -60], [-18, -60]] },
+    ...front,
+  ];
+}
+
 /** How big each figure is drawn: view pixels per rig unit. */
-const SCALE: Record<'hero' | EnemyKind, number> = { hero: 0.5, goblin: 0.61, orc: 0.57, knight: 0.55, troll: 0.78, ogre: 0.8, giant: 0.84 };
+const SCALE: Record<'hero' | 'spear' | 'mage' | EnemyKind, number> = {
+  hero: 0.5, spear: 0.44, mage: 0.44, goblin: 0.61, orc: 0.57, knight: 0.55, harpy: 0.6, bearer: 0.57, shaman: 0.61, troll: 0.78, ogre: 0.8, giant: 0.84,
+};
 
 /** Where a figure's feet are in its texture (as an origin) and how tall it stands, in view pixels. */
 export interface Figure {
@@ -148,12 +248,16 @@ export interface Figure {
 export const FIGURES: Partial<Record<string, Figure>> = {};
 
 export const foeTexture = (kind: EnemyKind, frame: number) => `foe-${kind}-${frame}`;
+export const guardTexture = (kind: 'spear' | 'mage') => `guard-${kind}`;
 
 export function bakeCharacters(scene: Phaser.Scene) {
   bakeFigure(scene, 'hero', RIGS.hero, PAL, SCALE.hero, drawBow);
-  for (const kind of ['goblin', 'orc', 'knight'] as const) {
+  for (const kind of ['goblin', 'orc', 'knight', 'bearer', 'shaman'] as const) {
     for (const frame of [0, 1]) bakeFigure(scene, foeTexture(kind, frame), stride(RIGS[kind], frame), PAL, SCALE[kind]);
   }
+  // The harpy flies: no shadow at its feet (the scene casts one on the road below it).
+  for (const frame of [0, 1]) bakeFigure(scene, foeTexture('harpy', frame), harpyRig(frame), PAL, SCALE.harpy, undefined, false);
+  for (const kind of ['spear', 'mage'] as const) bakeFigure(scene, guardTexture(kind), RIGS[kind], PAL, SCALE[kind]);
   for (const kind of ['troll', 'ogre', 'giant'] as const) {
     const { rig, pal } = bossRig(kind);
     for (const frame of [0, 1]) bakeFigure(scene, foeTexture(kind, frame), stride(rig, frame), pal, SCALE[kind]);
@@ -171,7 +275,7 @@ function stride(rig: Rig, frame: number): Rig {
   });
 }
 
-function bakeFigure(scene: Phaser.Scene, key: string, rig: Rig, pal: Record<string, string>, k: number, extra?: (ctx: CanvasRenderingContext2D) => void) {
+function bakeFigure(scene: Phaser.Scene, key: string, rig: Rig, pal: Record<string, string>, k: number, extra?: (ctx: CanvasRenderingContext2D) => void, shadow = true) {
   const pts = rig.flatMap((part) => part.p ?? [part.c!]);
   if (extra) pts.push([62, -120], [62, -24]);
   const minX = Math.min(...pts.map((p) => p[0])) - 6;
@@ -185,14 +289,16 @@ function bakeFigure(scene: Phaser.Scene, key: string, rig: Rig, pal: Record<stri
     ctx.translate(-minX, -minY);
     // A soft shadow on the road, falling to the lower right.
     const r = Math.max(28, (maxX - minX - 36) * 0.55);
-    softShadow(ctx, () => poly(ctx, ngon(r * 0.35, 3, r, 9, 12), '#2a1808'), 3 / k, 0.4);
+    if (shadow) softShadow(ctx, () => poly(ctx, ngon(r * 0.35, 3, r, 9, 12), '#2a1808'), 3 / k, 0.4);
     for (const part of rig) {
       const shape = part.c ? ngon(part.c[0], part.c[1], part.r!, part.r!, 8) : part.p!;
-      if (part.m === 'eye') {
+      if (part.m === 'eye' || part.m === 'gemG' || part.m === 'arcane') {
+        // Eyes and magic stones glow.
         ctx.save();
-        ctx.shadowColor = '#ffcf3a';
-        ctx.shadowBlur = 6;
-        poly(ctx, shape, pal.eye);
+        ctx.shadowColor = part.m === 'eye' ? '#ffcf3a' : pal[part.m];
+        ctx.shadowBlur = part.m === 'eye' ? 6 : 10;
+        if (part.m === 'eye') poly(ctx, shape, pal.eye);
+        else gem(ctx, part.c![0], part.c![1], part.r!, 6, 0.3, dark(pal[part.m], 0.35), light(pal[part.m], 0.5));
         ctx.restore();
         continue;
       }
@@ -267,6 +373,18 @@ export function bakeMissiles(scene: Phaser.Scene) {
     poly(ctx, [[-4, 30], [0, 39], [4, 30]], '#ffffff');
     poly(ctx, [[-1, 6], [-5, 0], [-1, 10]], '#ffe08a');
     poly(ctx, [[1, 6], [5, 0], [1, 10]], '#e5b53a');
+  });
+  // The hired mage's arcane bolt: a teal gem with a fading trail.
+  paint(scene, 'magic-bolt', 40, 24, (ctx) => {
+    ctx.translate(28, 12);
+    ctx.shadowColor = '#6fe0d0';
+    ctx.shadowBlur = 10;
+    for (let i = 0; i < 3; i++) {
+      ctx.globalAlpha = 0.7 - i * 0.2;
+      poly(ctx, ngon(-8 - i * 7, 0, 5 - i, 4 - i, 4, 0.5), '#6fe0d0');
+    }
+    ctx.globalAlpha = 1;
+    gem(ctx, 0, 0, 8, 6, 0.3, '#22767a', '#c8fff6');
   });
   // A faceted shard for death puffs and splinters of the Arrow Rain landing.
   paint(scene, 'shard', 16, 14, (ctx) => facet(ctx, ngon(8, 7, 7, 6, 5, 0.4), '#d8d2c8', { edge: false }));
