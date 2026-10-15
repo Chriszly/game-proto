@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { cardIcon } from '../art/icons';
 import { CARD_FRAME, cardFrame } from '../art/cardFrames';
+import { artImage } from '../art/paint';
 import { GOLD, INK } from '../art/palette';
 import { card, describe, isTempered, kindOf, type CardId } from '../game/cards';
 import { FONT, HAND } from '../scenes/layout';
@@ -15,9 +16,9 @@ export function makeCard(scene: Phaser.Scene, id: CardId, x: number, y: number, 
   const { w, h } = HAND;
   const top = -h / 2 + 3;
   const bg = scene.add.rectangle(0, 0, w, h, INK).setStrokeStyle(3, INK);
-  const face = scene.add.image(0, 0, cardFrame(kindOf(id))).setScale(0.5);
+  const face = artImage(scene, 0, 0, cardFrame(kindOf(id)), 0.5);
   const iconY = top + CARD_FRAME.art.y + CARD_FRAME.art.h / 2;
-  const icon = scene.add.image(0, iconY, cardIcon(c.icon));
+  const icon = artImage(scene, 0, iconY, cardIcon(c.icon));
   const name = scene.add
     .text(0, top + CARD_FRAME.header.y + CARD_FRAME.header.h / 2, c.name, { fontFamily: FONT, fontSize: '15px', color: isTempered(id) ? '#c8f0a0' : '#f6ead0', fontStyle: 'bold' })
     .setOrigin(0.5);
