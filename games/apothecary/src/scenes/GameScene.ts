@@ -9,7 +9,7 @@ import { INK, SERIF, TEXT_HALO, fit, resOf } from '../art/paint';
 import { craftsmanTexture, customerTexture } from '../art/townsfolk';
 import { BUBBLE_TAIL, cardInset, cardTexture, signTexture, type CardKind } from '../art/ui';
 import { catchUp, type AwaySummary } from '../game/away';
-import { FINE as FINE_OF, GROW_MS, PLANTS, POTIONS, REFINE, REFINED, isPlant, isRefined, isSellable, plainOf, type ItemId } from '../game/items';
+import { FINE as FINE_OF, GROW_MS, ITEMS, PLANTS, POTIONS, REFINE, REFINED, isPlant, isRefined, isSellable, plainOf, type ItemId } from '../game/items';
 import {
   collectTill,
   doneByHand,
@@ -1004,12 +1004,15 @@ export class GameScene extends Phaser.Scene {
         day = c.day;
         kept = c.kept;
       }
-      const name = c.potion === 'sleepingTonic' ? 'Sleeping Tonic' : 'Healing Draught';
+      const name = ITEMS[c.potion].name;
       const key = `${c.day}:${c.made}:${Math.floor((1 - c.dayLeft / DAY_MS) * 60)}`;
       if (key === drawn) return;
       drawn = key;
       icon.setTexture(itemTexture(c.potion));
       title.setText(`Contract: ${c.need} ${name}${c.need === 1 ? '' : 's'} by dusk`);
+      // The title stops short of the dusk dial, in a smaller hand when a long one would run into it.
+      title.setFontSize(13);
+      for (let size = 12; title.width > w - 42 - 40 && size >= 10; size--) title.setFontSize(size);
       const gap = c.need > 8 ? 11 : 15;
       const r = c.need > 8 ? 4.5 : 5.5;
       pips.clear();
