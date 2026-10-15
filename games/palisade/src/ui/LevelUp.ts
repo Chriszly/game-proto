@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { iconTexture } from '../art/icons';
+import { fit } from '../art/lowpoly';
 import { GOLD, SLATE } from '../art/palette';
 import { CARDS, COUNTDOWN, UI_DEPTH, VIEW } from '../scenes/layout';
 import { UPGRADES, type UpgradeId } from '../game/upgrades';
@@ -86,7 +87,7 @@ export class LevelUp {
       bg.lineStyle(2, hover ? GOLD.light : GOLD.mid).strokeCircle(0, -h / 2 + 62, 40);
     };
     draw(false);
-    const icon = scene.add.image(0, -h / 2 + 62, iconTexture(u.icon)).setScale(1.1);
+    const icon = fit(scene.add.image(0, -h / 2 + 62, iconTexture(u.icon)), 1.1);
     const name = scene.add.text(0, -h / 2 + 122, u.name, { ...textStyle(19, '#ffcf4a'), align: 'center' }).setOrigin(0.5);
     const rankText = u.filler ? FILLER_NOTE[id] ?? 'Filler' : rank === 0 ? (u.maxRank === 1 ? 'New' : `New, ${u.maxRank} ranks`) : `Rank ${rank + 1} of ${u.maxRank}`;
     const ranked = scene.add.text(0, -h / 2 + 146, rankText, textStyle(13, rank === 0 ? '#8fdc6a' : '#c9c3b6')).setOrigin(0.5);
