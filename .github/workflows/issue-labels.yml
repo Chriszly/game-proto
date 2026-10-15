@@ -16,6 +16,9 @@ jobs:
       - name: Label the issue with its game
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
+          # Labels added with the workflow token don't trigger other workflows, so the
+          # Projects workflow would miss the game label; PROJECTS_TOKEN's labels do.
+          github-token: ${{ secrets.PROJECTS_TOKEN || github.token }}
           script: |
             // Dropdown option -> game label. Keep in step with the forms and .github/labels.json.
             const games = {"Apothecary": "apothecary", "Deadline": "deadline", "Palisade": "palisade", "Tiny Kingdom": "tiny-kingdom", "Hotfoot": "hotfoot", "Anvilheart": "anvilheart", "Broadside": "broadside", "TinctureTinker": "tincture-tinker", "Catacomb": "catacomb", "Golem Garden": "golem-garden", "Beehive Baron": "beehive-baron", "Wyrmrail": "wyrmrail", "Shrine Stack": "shrine-stack", "Mapmaker": "mapmaker", "Lanternkeep": "lanternkeep", "Space Wars": "space-wars", "Lane Brawl": "lane-brawl", "Colonizer": "colonizer", "Hub page": "hub", "Shared / all games": "shared"};
