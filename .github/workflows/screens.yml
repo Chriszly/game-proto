@@ -1,0 +1,77 @@
+name: Screens
+
+# Checks that each game using shared/scaling.ts is sharp and fills the screen from an upright phone
+# to a 4K monitor (e2e/screens.spec.ts), one job per game. On a pull request only the games whose
+# folder changed are checked; a change to shared/, the screens test, this workflow or the build setup
+# checks every such game. A push to main checks every such game.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: screens-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      games: ${{ steps.pick.outputs.games }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: pick
+        shell: bash
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          all=$(cd games && for d in */; do d=${d%/}; if grep -qs 'setupScaling(game)' "$d/src/main.ts"; then echo "$d"; fi; done)
+          if [ -z "$BASE" ]; then
+            changed=$all # a push to main or workflow_dispatch: check every game
+          else
+            files=$(git diff --name-only "$BASE" HEAD)
+            if echo "$files" | grep -qE '^(shared/|e2e/screens\.spec\.ts$|\.github/workflows/screens\.yml$|package(-lock)?\.json$|playwright\.config\.ts$|vite\.config\.ts$)'; then
+              changed=$all
+            else
+              changed=$(for g in $all; do if echo "$files" | grep -q "^games/$g/"; then echo "$g"; fi; done)
+            fi
+          fi
+          json=$(printf '%s\n' $changed | jq -R . | jq -sc 'map(select(length > 0))')
+          echo "Checking: $json"
+          echo "games=$json" >> "$GITHUB_OUTPUT"
+
+  screens:
+    needs: changes
+    if: needs.changes.outputs.games != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        game: ${{ fromJSON(needs.changes.outputs.games) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      # One screen at a time: each draws up to 4K in software.
+      - run: npx playwright test --project=hub e2e/screens.spec.ts --workers 1
+        env:
+          SCREENS_GAME: ${{ matrix.game }}
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screens-${{ matrix.game }}
+          path: |
+            test-results
+            playwright-report
+          retention-days: 14

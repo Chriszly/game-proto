@@ -95,8 +95,8 @@ Missing or rough:
 File map (`src/`):
 
 - `main.ts`: creates the `Phaser.Game` (960x540, `Phaser.Scale.FIT`, `pixelArt: false`) with
-  `BootScene` and `GameScene`, calls `setupGame(game)` from `shared/setupGame.ts`, and in dev
-  builds puts `game` on `window`.
+  `BootScene` and `GameScene`, calls `setupGame(game)` from `shared/setupGame.ts` and
+  `setupScaling(game)` from `shared/scaling.ts`, and in dev builds puts `game` on `window`.
 - `scenes/BootScene.ts`: calls `bakeTextures`, then starts `Game`.
 - `scenes/GameScene.ts`: builds the world, order card, gust plaque, HUD and panels once; `update`
   ticks the rules, turns `state.events` into popups and redraws from state.
@@ -115,20 +115,31 @@ File map (`src/`):
   `newGame`, `send`, `chase`, `tick`, `nextCost`, `buy`, `carryOn` and `nextDusk`. No Phaser;
   `baseBurnMs` reads `byDifficulty` from `shared/settings.ts`.
 - `game/save.ts`: `loadBest` and `saveBest`.
-- `art/puppet.ts`: `bakeTextures` and the painters. Full-screen layers are painted at 1x
-  (`screen-0/1/2`, `castle` with the jar, `stars`), sprites and plaques at `RES` = 2 and drawn at
-  scale 1 / `RES`: `moon`, `glow`/`glow-pale` (additive), `lantern-lit`/`-dark`
-  (origin 36/56 down), `flame`, `moth-<kind>-up`/`-down` (`MOTH_LOOK`: size and gel colour),
+- `art/puppet.ts`: `bakeTextures` and the painters. Full-screen layers are painted at `BACK_RES`
+  (1 on a screen that needs no scaling, up to 4 on a 4K screen) and drawn at 1 / `BACK_RES` by
+  `GameScene.backdrop` (`screen-0/1/2`, `castle` with the jar, `stars`, `fog`, `bunting`); sprites
+  and plaques at `RES` (2, up to about 4.3) and drawn at scale 1 / `RES`. `bakeTextures` sets both
+  from `sharpRes` before painting, so read them at run time, never copy them into a constant.
+  Then: `moon`, `glow`/`glow-pale` (additive), `lantern-lit`/`-dark` (origin 36/56 down), `flame`, `moth-<kind>-up`/`-down` (`MOTH_LOOK`: size and gel colour),
   `hud`, `dusk-fill` (cropped to the dusk left), `dusk-rim`, `sun`, `hearth-lit`/`-out`, `coin`,
   `order-card`, `pip-lit`/`-dark`, `gust-tag`, `kind-tag`, `kind-<kind>` (the plaque's emblems),
   `save-tag`, `spark`, `bat-up`/`-down`, `sky-lantern`, `panel`, `panel-small`, `card-on`/`-off`,
-  `btn`/`btn-hover`, and full-screen 1x layers `fog` and `bunting`. Plaques, cards and panels are baked with `PAD` pixels of
-  room for their shadow; place them at (x - `PAD`, y - `PAD`) with origin 0. Also exports `INK`,
+  `btn`/`btn-hover`. The glows stay at 1x, as they are soft anyway. Plaques, cards and panels are
+  baked with `PAD` pixels of room for their shadow; place them at (x - `PAD`, y - `PAD`) with origin 0. Also exports `INK`,
   `INK_HEX`, `DUSK` (layout's `DUSK_BAR`) and `SCREENS`.
 - `ui/Button.ts`: `makeButton`, the carved card button (texture swap on hover, a `Zone` for taps).
 
-Shared code it imports (outside the game folder): `shared/setupGame.ts` (`setupGame`) and
-`shared/settings.ts` (`byDifficulty`, `settings`).
+Shared code it imports (outside the game folder): `shared/setupGame.ts` (`setupGame`),
+`shared/scaling.ts` (`setupScaling`, `sharpRes`) and `shared/settings.ts` (`byDifficulty`,
+`settings`).
+
+Screens: `setupScaling` gives the canvas `renderScale` canvas pixels per game pixel (up to 4 on a
+4K screen) and zooms the one camera to match from its top-left, so the game keeps its 960x540
+coordinates. The camera never scrolls and nothing reads `pointer.x/y` or `this.scale` (every tap
+is a `Zone`), so no `scrollingCamera`, `splitHudCamera` or `viewPoint` is needed; use `viewSize`
+and `viewPoint` if that changes. Texts take `renderScale` as their resolution, so don't set one.
+On a phone held upright a hint asks to turn it. `e2e/screens.spec.ts` at the root opens the game
+on five screens.
 
 How it runs:
 
@@ -277,5 +288,7 @@ seeded generator in `puppet.ts`. Popups, flares and sparks are cosmetic Phaser t
   array when they leave the screen.
 - `report.festival` is true only on the one nightfall that reaches the festival; `state.festival`
   stays true after, so the panel says the festival was held and later nights never reach it again.
+- A new full-view texture goes through `backdrop` (or `setScale(1 / BACK_RES)`), a new sprite
+  through `sprite` (or `setScale(1 / RES)`), or it shows at the wrong size on a big screen.
 - The test forces Phaser's canvas renderer; additive glows (`BlendModes.ADD`) and `setCrop` work
   there, tints do not, so the art swaps textures instead of tinting.

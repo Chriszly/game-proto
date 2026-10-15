@@ -52,9 +52,10 @@ import {
   nexusKey,
   towerKey,
 } from '../art/bake';
-import { MAP_KEY, paintMap } from '../art/map';
+import { MAP_KEY, MAP_RES, paintMap } from '../art/map';
 import { PoseName } from '../art/models';
 import { byDifficulty, settings } from '../../../../shared/settings';
+import { sharpRes, splitHudCamera, viewPoint } from '../../../../shared/scaling';
 import {
   BOTTOM_BAR,
   END_PANEL,
@@ -191,19 +192,23 @@ export class GameScene extends Phaser.Scene {
     paintMap(this);
     if (import.meta.env.DEV) console.info(`Lane Brawl art baked in ${Math.round(performance.now() - t0)} ms (units ${Math.round(unitsMs)} ms)`);
     this.paintPickBackdrop();
+    // The world camera follows the champion; the HUD (scroll factor 0) gets a fixed camera.
+    splitHudCamera(this);
     this.cameras.main.setBounds(0, 0, WORLD.w, WORLD.h);
     // The map in tiles, so only the ones in view are drawn.
     for (let y = 0; y < WORLD.h; y += MAP_TILE) {
       for (let x = 0; x < WORLD.w; x += MAP_TILE) {
         const frame = `${x},${y}`;
-        this.textures.get(MAP_KEY).add(frame, 0, x, y, Math.min(MAP_TILE, WORLD.w - x), Math.min(MAP_TILE, WORLD.h - y));
-        this.mapTiles.push(this.add.image(x, y, MAP_KEY, frame).setOrigin(0, 0).setDepth(0));
+        const w = Math.min(MAP_TILE, WORLD.w - x);
+        const h = Math.min(MAP_TILE, WORLD.h - y);
+        this.textures.get(MAP_KEY).add(frame, 0, Math.round(x * MAP_RES), Math.round(y * MAP_RES), Math.round(w * MAP_RES), Math.round(h * MAP_RES));
+        this.mapTiles.push(this.add.image(x, y, MAP_KEY, frame).setOrigin(0, 0).setDisplaySize(w, h).setDepth(0));
       }
     }
     this.groundG = this.add.graphics().setDepth(1);
     this.topG = this.add.graphics().setDepth(4);
     this.hudG = this.add.graphics().setDepth(10).setScrollFactor(0);
-    this.pickBg = this.add.image(0, 0, 'lb-pick-bg').setOrigin(0, 0).setScrollFactor(0).setDepth(9);
+    this.pickBg = this.add.image(0, 0, 'lb-pick-bg').setOrigin(0, 0).setDisplaySize(VIEW.w, VIEW.h).setScrollFactor(0).setDepth(9);
     this.portrait = this.add.image(0, 0, champKey('warden', 'blue'), frameName(2, 'idle')).setScrollFactor(0).setDepth(11).setVisible(false);
     CHAMPIONS.forEach((c, i) => {
       const r = pickCard(i);
@@ -211,7 +216,7 @@ export class GameScene extends Phaser.Scene {
         this.add
           .image(r.x + r.w / 2, r.y + 100, champKey(c.id, 'blue'), frameName(2, 'idle'))
           .setOrigin(0.5, CHAMP_CELL.footY / CHAMP_CELL.h)
-          .setScale(0.85)
+          .setScale(1.7 / RES)
           .setScrollFactor(0)
           .setDepth(11),
       );
@@ -226,7 +231,7 @@ export class GameScene extends Phaser.Scene {
     this.keys.TWO.on('down', () => this.pickUpgrade(1));
 
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
-      this.lastWorld = { x: p.worldX, y: p.worldY };
+      this.lastWorld = this.worldAt(p);
     });
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => this.onPointerDown(p));
     this.cameras.main.centerOn(BASE.blue.x + 300, BASE.blue.y - 200);
@@ -328,7 +333,22 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private onPointerDown(p: Phaser.Input.Pointer) {
+  /** The world point under a pointer, through the world camera (the HUD camera sits on top). */
+  private worldAt(pointer: Phaser.Input.Pointer) {
+    const w = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    return { x: w.x, y: w.y };
+  }
+
+  /** The part of the world in view, in world pixels, where the camera will show it this frame. */
+  private viewRect() {
+    const mid = this.cameras.main.midPoint;
+    const x = Phaser.Math.Clamp(mid.x - VIEW.w / 2, 0, WORLD.w - VIEW.w);
+    const y = Phaser.Math.Clamp(mid.y - VIEW.h / 2, 0, WORLD.h - VIEW.h);
+    return { x, y, w: VIEW.w, h: VIEW.h };
+  }
+
+  private onPointerDown(pointer: Phaser.Input.Pointer) {
+    const p = viewPoint(pointer);
     // The zones are searched newest first, so a card over a bar wins.
     const hit = [...this.zones].reverse().find((z) => p.x >= z.x && p.x <= z.x + z.w && p.y >= z.y && p.y <= z.y + z.h);
     if (hit) {
@@ -337,7 +357,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     if (this.phase !== 'playing' || !this.state) return;
-    const w = { x: p.worldX, y: p.worldY };
+    const w = this.worldAt(pointer);
     this.lastWorld = w;
     const me = this.player();
     if (!me) return;
@@ -368,8 +388,9 @@ export class GameScene extends Phaser.Scene {
     const me = this.player();
     if (!me) return;
     const cam = this.cameras.main;
-    const cx = cam.scrollX + VIEW.w / 2;
-    const cy = cam.scrollY + VIEW.h / 2;
+    const v = this.viewRect();
+    const cx = v.x + v.w / 2;
+    const cy = v.y + v.h / 2;
     const k = settings.reduceMotion ? 1 : Math.min(1, delta / 120);
     cam.centerOn(cx + (me.x - cx) * k, cy + (me.y - cy) * k);
   }
@@ -377,10 +398,12 @@ export class GameScene extends Phaser.Scene {
   /** The pick screen's backdrop: faceted slate, painted once. */
   private paintPickBackdrop() {
     if (this.textures.exists('lb-pick-bg')) return;
+    const res = sharpRes(VIEW.w, VIEW.h);
     const c = document.createElement('canvas');
-    c.width = VIEW.w;
-    c.height = VIEW.h;
+    c.width = Math.round(VIEW.w * res);
+    c.height = Math.round(VIEW.h * res);
     const ctx = c.getContext('2d')!;
+    ctx.scale(c.width / VIEW.w, c.height / VIEW.h);
     let seed = 7;
     const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
     const cell = 60;
@@ -414,9 +437,9 @@ export class GameScene extends Phaser.Scene {
   // The world: shadows and rings on the ground, figures sorted by depth, bars and effects on top.
 
   private drawWorld() {
-    const cam = this.cameras.main;
+    const v = this.viewRect();
     for (const tile of this.mapTiles) {
-      tile.setVisible(tile.x < cam.scrollX + VIEW.w && tile.x + MAP_TILE > cam.scrollX && tile.y < cam.scrollY + VIEW.h && tile.y + MAP_TILE > cam.scrollY);
+      tile.setVisible(tile.x < v.x + v.w && tile.x + MAP_TILE > v.x && tile.y < v.y + v.h && tile.y + MAP_TILE > v.y);
     }
     const g = this.groundG;
     const top = this.topG;
@@ -827,7 +850,7 @@ export class GameScene extends Phaser.Scene {
       .setTexture(champKey(c.id, 'blue'), frameName(2, me.castMs > 0 ? 'c0' : me.swing > 0 ? 'a1' : 'idle'))
       .setOrigin(0.5, CHAMP_CELL.footY / CHAMP_CELL.h)
       .setPosition(P.x + 40, P.y + 92)
-      .setScale(0.6)
+      .setScale(1.2 / RES)
       .setAlpha(me.dead ? 0.4 : 1)
       .setVisible(true);
     const bx = P.x + 82;
@@ -1011,8 +1034,8 @@ export class GameScene extends Phaser.Scene {
       else if (u.kind === 'camp') g.fillStyle(col(SIDE_COLOR.neutral), 0.8).fillCircle(mx(u.x), my(u.y), 2);
     }
     // The view and the player.
-    const cam = this.cameras.main;
-    g.lineStyle(1, 0xffffff, 0.7).strokeRect(mx(cam.scrollX), my(cam.scrollY), VIEW.w * k, VIEW.h * k);
+    const v = this.viewRect();
+    g.lineStyle(1, 0xffffff, 0.7).strokeRect(mx(v.x), my(v.y), VIEW.w * k, VIEW.h * k);
     g.lineStyle(1, 0xffffff, 0.9).strokeCircle(mx(me.x), my(me.y), 5);
     // A gold star on the objective.
     const o = s.objective;

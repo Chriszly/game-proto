@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { addTexture, paint, sketch } from './paint';
+import { ART, BACKDROP_RES, addTexture, blank, paint, sketch } from './paint';
 import { seeded } from './pixelArt';
 
 // The two backdrops in the painterly style, drawn plainly at twice the screen's size, shrunk to
@@ -18,13 +18,14 @@ const TORCHES = [
 ];
 
 export function bakeScenery(scene: Phaser.Scene) {
-  const crypt = painted(drawCrypt, 11);
-  const flagstones = painted(drawFlagstones, 5);
-  addTexture(scene, 'room-bg', crypt);
-  addTexture(scene, 'map-bg', flagstones);
+  const res = Math.min(ART, BACKDROP_RES);
+  const crypt = painted(drawCrypt, 11, res);
+  const flagstones = painted(drawFlagstones, 5, res);
+  addTexture(scene, 'room-bg', crypt, res);
+  addTexture(scene, 'map-bg', flagstones, res);
   // The second act, the Sunken Tombs, is the same stone washed in a cold, drowned green.
-  addTexture(scene, 'room-bg-2', washed(crypt, '#6fa496'));
-  addTexture(scene, 'map-bg-2', washed(flagstones, '#6fa496'));
+  addTexture(scene, 'room-bg-2', washed(crypt, '#6fa496'), res);
+  addTexture(scene, 'map-bg-2', washed(flagstones, '#6fa496'), res);
 }
 
 /** The backdrop for an act. */
@@ -32,7 +33,8 @@ export const backdrop = (kind: 'room' | 'map', act: number) => (act > 1 ? `${kin
 
 /** A copy of a painted canvas with a colour multiplied over it. */
 function washed(src: HTMLCanvasElement, color: string) {
-  const { canvas, ctx } = sketch(src.width, src.height);
+  const canvas = blank(src.width, src.height);
+  const ctx = canvas.getContext('2d')!;
   ctx.drawImage(src, 0, 0);
   ctx.globalCompositeOperation = 'multiply';
   ctx.fillStyle = color;
@@ -42,11 +44,11 @@ function washed(src: HTMLCanvasElement, color: string) {
 
 type Draw = (ctx: CanvasRenderingContext2D, rnd: () => number) => void;
 
-function painted(draw: Draw, seed: number) {
-  const { canvas, ctx } = sketch(W / 2, H / 2);
+function painted(draw: Draw, seed: number, res: number) {
+  const { canvas, ctx } = sketch(W / 2, H / 2, res);
   ctx.scale(0.5, 0.5);
   draw(ctx, seeded(seed));
-  return paint(canvas, { sizes: [10, 5, 2.5, 1.3], seed, grain: 0.13, vignette: 0.5 });
+  return paint(canvas, { sizes: [10, 5, 2.5, 1.3], seed, grain: 0.13, vignette: 0.5, res });
 }
 
 /** A hex colour with its brightness jittered by up to `amt` either way. */
