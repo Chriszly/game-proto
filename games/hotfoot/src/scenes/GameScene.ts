@@ -1,9 +1,10 @@
 import Phaser from 'phaser';
+import { viewPoint } from '../../../../shared/scaling';
 import { settings } from '../../../../shared/settings';
 import { GATE_ART, GOBLIN_ART } from '../art/foes';
 import { bakePanel } from '../art/hud';
 import { armouryIcon } from '../art/icons';
-import { C, N } from '../art/ink';
+import { C, N, tileAt } from '../art/ink';
 import { KNIGHT_FEET, type KnightPose } from '../art/knight';
 import { FAR_H, GROUND_TOP, NEAR_H } from '../art/scenery';
 import { ARMOURY, ARMOURY_IDS, nextPrice, type ArmouryId } from '../game/armoury';
@@ -164,7 +165,7 @@ export class GameScene extends Phaser.Scene {
     // button are theirs alone.
     this.input.on('pointerdown', (p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
       if (over.length > 0) return;
-      if (p.y < TAP_SPLIT_Y) jump(this.state);
+      if (viewPoint(p).y < TAP_SPLIT_Y) jump(this.state);
       else slide(this.state);
     });
     const keys = this.input.keyboard;
@@ -252,11 +253,11 @@ export class GameScene extends Phaser.Scene {
 
   private drawWorld() {
     const s = this.state;
-    this.far.tilePositionX = s.distance * 0.15;
-    this.near.tilePositionX = s.distance * 0.4;
-    this.ground.tilePositionX = s.distance;
     const groundKey = s.terrain === 'road' ? 'ground' : `ground-${s.terrain}`;
     if (this.ground.texture.key !== groundKey) this.ground.setTexture(groundKey);
+    tileAt(this.far, s.distance * 0.15);
+    tileAt(this.near, s.distance * 0.4);
+    tileAt(this.ground, s.distance);
     this.flag.setX(this.sx(s.checkpointX)).setVisible(this.sx(s.checkpointX) < VIEW.w + 80);
 
     const seen = new Set<number>();
@@ -270,7 +271,7 @@ export class GameScene extends Phaser.Scene {
         this.ledges.set(l.id, sprite);
       }
       const x = this.sx(l.x);
-      sprite.setX(x).setTilePosition(l.x, 0);
+      tileAt(sprite.setX(x), l.x);
       // Inked ends, and an arched lapis door in a long wall.
       sides.lineStyle(1.5, N.ink).lineBetween(x, GROUND_Y - l.h, x, GROUND_Y + 10).lineBetween(x + l.w, GROUND_Y - l.h, x + l.w, GROUND_Y + 10);
       if (l.w >= 160 && l.h >= 40) {
