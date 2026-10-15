@@ -1,7 +1,8 @@
 name: Project report
 
 # Prints every Project listed in .github/projects.json with its items (issue or
-# PR, number, state, title) and their Status, to the log and the run summary.
+# PR, number, state, title) and their Status, then every open issue and PR with
+# the Projects it is in, to the log and the run summary.
 # Started by hand. Uses PROJECTS_TOKEN (a classic token with only the "project"
 # scope), since the workflow token can't read user-owned Projects.
 on:
@@ -74,4 +75,34 @@ jobs:
               console.log(head + table);
               summary += head + table + '\n';
             }
+            // The boards' item lists can lag behind; each open issue and PR's own
+            // Project items are read straight from it, so this part is current.
+            let open = '## Open issues and PRs by Project\n\n| Type | Number | Title | Projects (Status) |\n| --- | --- | --- | --- |\n';
+            for (const kind of ['issues', 'pullRequests']) {
+              const { repository } = await github.graphql(`
+                query($owner: String!, $repo: String!) {
+                  repository(owner: $owner, name: $repo) {
+                    list: ${kind}(first: 100, states: OPEN, orderBy: { field: CREATED_AT, direction: DESC }) {
+                      nodes {
+                        number title
+                        projectItems(first: 30, includeArchived: true) {
+                          nodes {
+                            isArchived
+                            project { title }
+                            status: fieldValueByName(name: "Status") { ... on ProjectV2ItemFieldSingleSelectValue { name } }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }`, { owner: context.repo.owner, repo: context.repo.repo });
+              for (const n of repository.list.nodes) {
+                const where = n.projectItems.nodes
+                  .map(i => `${i.project.title.replace('game-proto: ', '')} (${i.status?.name || 'No Status'}${i.isArchived ? ', archived' : ''})`)
+                  .join(', ') || 'none';
+                open += `| ${kind === 'issues' ? 'issue' : 'PR'} | #${n.number} | ${n.title.replace(/\|/g, '/')} | ${where} |\n`;
+              }
+            }
+            console.log(open);
+            summary += open;
             await core.summary.addRaw(summary).write();
