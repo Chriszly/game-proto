@@ -1,5 +1,6 @@
 import { byDifficulty } from '../../../../shared/settings';
 import { ENEMIES, type EnemyKind } from './enemies';
+import { roadEffects, type RoadId } from './roads';
 
 /** Every tenth wave brings a boss. */
 export const BOSS_EVERY = 10;
@@ -35,16 +36,25 @@ export const spawnInterval = (wave: number) => Math.max(320, 1_300 - 45 * wave);
 
 /**
  * The foes of a wave in the order they come on. More come every wave; orcs join from the start,
- * dark knights from wave 4, and a boss closes every tenth wave.
+ * harpies from wave 3, dark knights from wave 4, shield bearers from wave 5, shamans from wave 7,
+ * and a boss closes every tenth wave. A Crowded Road brings 40% more of each.
  */
-export function waveFoes(wave: number): EnemyKind[] {
-  const goblins = 2 + Math.floor(wave * 1.2);
-  const orcs = 3 + Math.floor(wave * 0.9);
-  const knights = wave >= 4 ? Math.floor((wave - 2) / 2) : 0;
+export function waveFoes(wave: number, road: RoadId | null = null): EnemyKind[] {
+  const more = roadEffects(road).foes;
+  const n = (count: number) => Math.floor(count * more);
+  const goblins = n(2 + Math.floor(wave * 1.2));
+  const orcs = n(3 + Math.floor(wave * 0.9));
+  const knights = n(wave >= 4 ? Math.floor((wave - 2) / 2) : 0);
+  const harpies = n(wave >= 3 ? Math.floor((wave - 1) / 2) : 0);
+  const bearers = n(wave >= 5 ? Math.floor((wave - 3) / 2) : 0);
+  const shamans = n(wave >= 7 ? Math.floor((wave - 3) / 4) : 0);
   const foes: EnemyKind[] = [
     ...Array<EnemyKind>(goblins).fill('goblin'),
     ...Array<EnemyKind>(orcs).fill('orc'),
     ...Array<EnemyKind>(knights).fill('knight'),
+    ...Array<EnemyKind>(harpies).fill('harpy'),
+    ...Array<EnemyKind>(bearers).fill('bearer'),
+    ...Array<EnemyKind>(shamans).fill('shaman'),
   ];
   // Shuffled so the kinds come mixed, but the first foe of a wave is always an orc.
   for (let i = foes.length - 1; i > 0; i--) {
@@ -57,9 +67,12 @@ export function waveFoes(wave: number): EnemyKind[] {
   return foes;
 }
 
-/** A foe's full health in a wave, scaled by the hub's difficulty; a boss's is spread over its bars. */
-export function foeHp(kind: EnemyKind, wave: number) {
+/**
+ * A foe's full health in a wave, scaled by the hub's difficulty and the road's twist; a boss's is
+ * spread over its bars.
+ */
+export function foeHp(kind: EnemyKind, wave: number, road: RoadId | null = null) {
   const type = ENEMIES[kind];
-  const hp = Math.round(type.hp * hpScale(wave) * byDifficulty(0.75, 1, 1.3));
+  const hp = Math.round(type.hp * hpScale(wave) * roadEffects(road).hp * byDifficulty(0.75, 1, 1.3));
   return type.boss ? hp * bossBars(wave) : hp;
 }

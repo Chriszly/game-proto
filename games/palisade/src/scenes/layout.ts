@@ -16,6 +16,14 @@ export const BOSS_BAR = { x: 640, y: 66, w: 400, h: 14 };
 export const TRACK = { x: 12, y: 46, w: 344, h: 46, markX: 22, markY: 77, step: 27 };
 /** The Arrow Rain button above the ranger, by its centre, and its radius for taps and drags. */
 export const RAIN = { x: 66, y: 308, r: 26 };
+/** The caltrops button, above the Arrow Rain button, by its centre, and its radius for taps and drags. */
+export const CALTROPS = { x: 66, y: 196, r: 22 };
+/** The tap area of each guard slot on the barricade, round the guard's feet (`GUARD_SLOTS` in state.ts). */
+export const GUARD_HIT = { w: 56, h: 70 };
+/** The hire panel beside a slot: its size and how far right of the slot its centre is. */
+export const HIRE = { w: 320, h: 212, dx: 200 };
+/** The two road cards after a boss, by their centres. */
+export const ROAD_CARDS = { xs: [330, 630], y: 352, w: 280, h: 150 };
 /** The "Drag onto the horde" hint over the field while Arrow Rain is charged. */
 export const RAIN_HINT = { x: 715, y: 220 };
 /** The kill streak chip over the experience bar, by its centre. */
@@ -30,7 +38,7 @@ export const SKILL_BOOK = {
   panel: { w: 900, h: 500 },
   cols: 3,
   colW: 290,
-  rowH: 62,
+  rowH: 54,
   /** The top of the first row. */
   top: 92,
 };

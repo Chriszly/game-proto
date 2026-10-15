@@ -6,6 +6,9 @@ import { UPGRADES, type UpgradeId } from '../game/upgrades';
 import { AUTO_PICK_MS } from '../game/sim';
 import { drawPanel, textStyle } from './panel';
 
+/** What a filler card says under its name instead of a rank. */
+const FILLER_NOTE: Partial<Record<UpgradeId, string>> = { mend: 'Repair', purse: 'Coins', wind: 'Recharge' };
+
 /** Where a card is on screen and which upgrade it offers; read by the playthrough test. */
 export interface CardSpot {
   id: UpgradeId;
@@ -85,7 +88,7 @@ export class LevelUp {
     draw(false);
     const icon = scene.add.image(0, -h / 2 + 62, iconTexture(u.icon)).setScale(1.1);
     const name = scene.add.text(0, -h / 2 + 122, u.name, { ...textStyle(19, '#ffcf4a'), align: 'center' }).setOrigin(0.5);
-    const rankText = u.filler ? 'Repair' : rank === 0 ? (u.maxRank === 1 ? 'New' : `New, ${u.maxRank} ranks`) : `Rank ${rank + 1} of ${u.maxRank}`;
+    const rankText = u.filler ? FILLER_NOTE[id] ?? 'Filler' : rank === 0 ? (u.maxRank === 1 ? 'New' : `New, ${u.maxRank} ranks`) : `Rank ${rank + 1} of ${u.maxRank}`;
     const ranked = scene.add.text(0, -h / 2 + 146, rankText, textStyle(13, rank === 0 ? '#8fdc6a' : '#c9c3b6')).setOrigin(0.5);
     const text = scene.add
       .text(0, -h / 2 + 170, u.text, { ...textStyle(15, '#e9e4d8'), fontStyle: 'normal', align: 'center', wordWrap: { width: w - 36 } })

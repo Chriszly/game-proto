@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { iconTexture, relicTexture } from '../art/icons';
 import { GOLD, SLATE } from '../art/palette';
 import { SKILL_BOOK, UI_DEPTH, VIEW } from '../scenes/layout';
-import { RELIC_IDS, RELICS, type RelicId } from '../game/relics';
+import { RELIC_IDS, RELICS, SETS, setComplete, type RelicId } from '../game/relics';
 import { UPGRADE_IDS, UPGRADES, type UpgradeId } from '../game/upgrades';
 import { drawPanel, makeButton, textStyle } from './panel';
 
@@ -104,14 +104,21 @@ export class SkillBook {
       this.relics.add(scene.add.text(x, y, none, { ...textStyle(12, '#c9c3b6'), fontStyle: 'normal' }).setOrigin(0, 0.5));
       return;
     }
+    // A relic whose set is complete shows in green, and the set's bonus follows the list.
     for (const id of owned) {
       const n = relics[id] ?? 0;
+      const done = setComplete(relics, RELICS[id].set);
       this.relics.add(scene.add.image(x + 12, y, relicTexture(id)).setScale(0.45));
       const name = scene.add
-        .text(x + 28, y, n > 1 ? `${RELICS[id].name} x${n}` : RELICS[id].name, { ...textStyle(11, '#e9e4d8'), fontStyle: 'normal' })
+        .text(x + 28, y, n > 1 ? `${RELICS[id].name} x${n}` : RELICS[id].name, { ...textStyle(11, done ? '#8fdc6a' : '#e9e4d8'), fontStyle: done ? 'bold' : 'normal' })
         .setOrigin(0, 0.5);
       this.relics.add(name);
       x += 38 + name.width;
+    }
+    const sets = Object.entries(SETS).filter(([id]) => setComplete(relics, id as keyof typeof SETS));
+    if (sets.length > 0) {
+      const line = sets.map(([, set]) => `${set.name}: ${set.text}`).join('   ');
+      this.relics.add(scene.add.text(VIEW.w / 2 - SKILL_BOOK.panel.w / 2 + 24, y - 22, line, textStyle(11, '#8fdc6a')).setOrigin(0, 0.5));
     }
   }
 

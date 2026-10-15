@@ -9,7 +9,7 @@ start page lists the games; each one lives in its own folder under `games/`.
 | --- | --- |
 | [Apothecary](games/apothecary/README.md) | Run a medieval apothecary as a plague doctor: grow herbs, refine them, brew potions and sell them to customers. |
 | [Deadline](games/deadline/README.md) | Hold the bottom of a road against growing waves of zombies: move left and right, shoot automatically, and shoot crates open for upgrades. |
-| [Palisade](games/palisade/README.md) | Hold a barricade against waves of goblins, orcs and dark knights as a ranger, picking one of three upgrades each level, with a boss every ten waves. |
+| [Palisade](games/palisade/README.md) | Hold a barricade against waves of goblins, orcs, harpies, shield bearers and shamans as a ranger, picking one of three upgrades each level, hiring guards with coins, with a boss and a choice of road every ten waves. |
 | [Tiny Kingdom](games/tiny-kingdom/README.md) | Place farms, houses and towers on a small island grid, each scoring against its neighbours, and reach each round's goal before the tiles run out. |
 | [Hotfoot](games/hotfoot/README.md) | Run as a knight who never stops: jump spikes and pits, slide under blades, and pick one of two boons at each checkpoint. |
 | [Anvilheart](games/anvilheart/README.md) | Run a smithy: forge swords, drag two matching ones together to merge them into a better blade, and sell them to adventurers as their orders come in. |

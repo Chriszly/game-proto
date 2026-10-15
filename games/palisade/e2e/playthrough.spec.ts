@@ -3,11 +3,12 @@ import { expect, test, type Page } from '@playwright/test';
 // Plays the first wave with real inputs: the hero shoots the foes on their own, the first kills
 // fill the experience bar and charge Arrow Rain, the level-up cards come up and one is tapped, as on
 // a phone, Arrow Rain is dragged from its button onto a foe and let go, kills in quick succession
-// build a streak that adds experience, and the wave is cleared with the barricade still standing,
-// one step further along the road to the Troll King.
+// build a streak that adds experience, every kill pays coins (for hired guards, not bought here) and
+// charges the caltrops, and the wave is cleared with the barricade still standing, one step further
+// along the road to the Troll King.
 // Game state is only read, through the `game` object the dev build puts on window.
 
-type Kind = 'goblin' | 'orc' | 'knight' | 'troll' | 'ogre' | 'giant';
+type Kind = 'goblin' | 'orc' | 'knight' | 'harpy' | 'bearer' | 'shaman' | 'troll' | 'ogre' | 'giant';
 interface Effect {
   id: number;
   kind: string;
@@ -35,14 +36,20 @@ interface GameState {
   kills: number;
   rain: { charge: number; need: number; volleys: { id: number; x: number; y: number; ms: number }[] };
   streak: { count: number; ms: number; best: number; bonusXp: number };
-  relicFound: string | null;
+  caltrops: { charge: number; need: number; patches: unknown[] };
+  coins: number;
+  guards: (unknown | null)[];
+  road: string | null;
+  relicFound: string[] | null;
 }
 type Card = { id: string; x: number; y: number; w: number; h: number };
 type Track = { first: number; last: number; boss: Kind; step: number };
 
 const VIEW = { w: 960, h: 540 };
 /** Experience for each kind of foe, from src/game/enemies.ts, and what each level costs, from state.ts. */
-const XP: Record<Kind, number> = { goblin: 2, orc: 4, knight: 10, troll: 60, ogre: 70, giant: 80 };
+const XP: Record<Kind, number> = { goblin: 2, orc: 4, knight: 10, harpy: 3, bearer: 5, shaman: 6, troll: 60, ogre: 70, giant: 80 };
+/** Coins for each wave 1 foe, from src/game/enemies.ts. */
+const COINS = { goblin: 1, orc: 2 };
 const xpToNext = (level: number) => 8 + 6 * (level - 1);
 /** A kill streak's experience bonus, from state.ts: 5% a kill from two kills on, up to 50%. */
 const streakBonus = (count: number) => (count >= 2 ? Math.min(0.5, 0.05 * count) : 0);
@@ -50,6 +57,8 @@ const streakBonus = (count: number) => (count >= 2 ? Math.min(0.5, 0.05 * count)
 const WAVE_1 = { goblin: 3, orc: 3 };
 /** Kills that charge Arrow Rain on wave 1, from state.ts. */
 const RAIN_KILLS = 4;
+/** Kills that charge the caltrops, from state.ts. */
+const CALTROP_KILLS = 6;
 /** How long a level-up waits for a tap before taking a card at random, from src/game/sim.ts. */
 const AUTO_PICK_MS = 10_000;
 
@@ -209,6 +218,8 @@ test('plays the first wave', async ({ page }, testInfo) => {
   expect(s.barricade.hp).toBe(s.barricade.max);
   expect(s.rain).toEqual({ charge: 0, need: RAIN_KILLS, volleys: [] });
   expect(s.streak).toEqual({ count: 0, ms: 0, best: 0, bonusXp: 0 });
+  expect(s.caltrops).toEqual({ charge: 0, need: CALTROP_KILLS, patches: [] });
+  expect(s).toMatchObject({ coins: 0, guards: [null, null], road: null });
   expect(await game.track()).toEqual({ first: 1, last: 10, boss: 'troll', step: 1 });
 
   // The first wave comes on, an orc first, and the hero shoots at the foes without being told to.
@@ -227,6 +238,8 @@ test('plays the first wave', async ({ page }, testInfo) => {
   expect(s.streak).toMatchObject({ count: 1, best: 1, bonusXp: 0 });
   expect(s.streak.ms).toBeGreaterThan(0);
   expect(s.rain.charge).toBe(1);
+  expect(s.caltrops.charge).toBe(1);
+  expect(s.coins, 'the first kill pays its coins').toBe(killedXp(s) === XP.orc ? COINS.orc : COINS.goblin);
   const pop = s.effects.find((e) => e.kind === 'xp')!;
   expect(pop.amount).toBe(killedXp(s));
   expect(pop.streak).toBe(1);
@@ -299,6 +312,10 @@ test('plays the first wave', async ({ page }, testInfo) => {
   }
   expect(s).toMatchObject({ phase: 'break', bestWave: 1, kills: 6, relics: {}, relicFound: null });
   expect(s.barricade.hp).toBeGreaterThan(0);
+  // Every kill paid its coins and charged the caltrops; nothing was bought.
+  expect(s.coins).toBe(3 * COINS.goblin + 3 * COINS.orc);
+  expect(s.caltrops.charge).toBe(CALTROP_KILLS);
+  expect(s.guards).toEqual([null, null]);
   // Kills in quick succession built a streak, and its bonus is all the experience on top of the
   // foes' own.
   expect(s.streak.best, 'a kill streak of two or more').toBeGreaterThanOrEqual(2);

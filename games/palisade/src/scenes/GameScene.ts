@@ -1,27 +1,45 @@
 import { settings } from '../../../../shared/settings';
 import Phaser from 'phaser';
-import { FIGURES, foeTexture } from '../art/characters';
+import { FIGURES, foeTexture, guardTexture } from '../art/characters';
 import { bossNodeTexture, relicTexture } from '../art/icons';
 import { BAR, BOSS_BARS, FIRE, GOLD, SLATE, STORM, XP } from '../art/palette';
 import { ENEMIES } from '../game/enemies';
-import { RELICS } from '../game/relics';
+import { GUARDS, type GuardKind } from '../game/guards';
+import { RELICS, SETS, setComplete } from '../game/relics';
+import { ROADS, type RoadId } from '../game/roads';
 import { clearProgress, loadFound, loadProgress, loadSpeed, saveFound, saveProgress, saveSpeed } from '../game/save';
-import { RAIN_FALL_MS, RAIN_RING, crowdSpot, fightAgain, loose, offer, pick, tick } from '../game/sim';
-import { BARRICADE_FRONT, FIELD, freshProgress, newRun, progressOf, stats, streakBonus, xpToNext, type Enemy, type GameState } from '../game/state';
+import { CALTROP_MS, CALTROP_PATCH, RAIN_FALL_MS, RAIN_RING, crowdSpot, fightAgain, hire, loose, offer, pick, pickRoad, strew, tick, train } from '../game/sim';
+import {
+  BARRICADE_FRONT,
+  FIELD,
+  GUARD_SLOTS,
+  freshProgress,
+  newRun,
+  progressOf,
+  stats,
+  streakBonus,
+  xpToNext,
+  type Enemy,
+  type GameState,
+} from '../game/state';
 import type { UpgradeId } from '../game/upgrades';
 import { isBossWave, waveTrack } from '../game/waves';
+import { HirePanel } from '../ui/HirePanel';
 import { LevelUp } from '../ui/LevelUp';
+import { RoadChoice } from '../ui/RoadChoice';
 import { chamferPts, drawPanel, makeButton, textStyle } from '../ui/panel';
 import { SkillBook } from '../ui/SkillBook';
-import { BARRICADE, BOSS_BAR, HERO_FEET, HUD_HEIGHT, RAIN, RAIN_HINT, SPEED, STREAK, TRACK, UI_DEPTH, VIEW, XP_BAR } from './layout';
+import { BARRICADE, BOSS_BAR, CALTROPS, GUARD_HIT, HERO_FEET, HUD_HEIGHT, RAIN, RAIN_HINT, SPEED, STREAK, TRACK, UI_DEPTH, VIEW, XP_BAR } from './layout';
 
 /** Longest simulated step, so a backgrounded tab doesn't jump the battle forward. */
 const MAX_STEP_MS = 250;
 /** How long a foe takes for one stride of its walk, in milliseconds. */
 const STRIDE_MS = 360;
 const HP_BAR_W = 32;
-/** Where Arrow Rain's aiming arc leaves the button. */
-const ARC_FROM = { x: RAIN.x + 20, y: RAIN.y - 16 };
+/** Where the aiming arc leaves each button. */
+const ARC_FROM = { rain: { x: RAIN.x + 20, y: RAIN.y - 16 }, caltrops: { x: CALTROPS.x + 16, y: CALTROPS.y - 12 } };
+/** How high a harpy flies over its shadow on the road. */
+const FLY_HEIGHT = 60;
 
 type V = Phaser.Math.Vector2;
 const v = (x: number, y: number) => new Phaser.Math.Vector2(x, y);
@@ -39,8 +57,16 @@ export class GameScene extends Phaser.Scene {
   track = waveTrack(1);
   /** Where the Arrow Rain button is, to drag it from; read by the playthrough test. */
   rainSpot = { x: RAIN.x, y: RAIN.y };
-  /** Where Arrow Rain is being dragged to, or null while it is not being aimed. */
+  /** Where Arrow Rain (or the caltrops, see `aimKind`) is being dragged to, or null while neither is aimed. */
   aim: { x: number; y: number } | null = null;
+  /** Which active is being dragged. */
+  aimKind: 'rain' | 'caltrops' = 'rain';
+  /** Where the caltrops button is, to drag it from. */
+  caltropsSpot = { x: CALTROPS.x, y: CALTROPS.y };
+  /** The road cards after a boss. */
+  roadChoice!: RoadChoice;
+  /** The panel a guard slot opens to hire or train a guard. */
+  hirePanel!: HirePanel;
   private foes = new Map<number, Phaser.GameObjects.Image>();
   private missiles = new Map<number, Phaser.GameObjects.Image>();
   private pops = new Map<number, Phaser.GameObjects.Text[]>();
@@ -69,6 +95,17 @@ export class GameScene extends Phaser.Scene {
   private rainButton!: Phaser.GameObjects.Image;
   private rainBadge!: Phaser.GameObjects.Text;
   private rainHint!: Phaser.GameObjects.Text;
+  private caltropsButton!: Phaser.GameObjects.Image;
+  private caltropsBadge!: Phaser.GameObjects.Text;
+  private caltropPieces = new Map<number, Phaser.GameObjects.Image[]>();
+  private guardSprites: Phaser.GameObjects.Image[] = [];
+  private slotLabels: Phaser.GameObjects.Text[] = [];
+  private slotG!: Phaser.GameObjects.Graphics;
+  private guardFlash: number[] = [];
+  private lastGuardCd: number[] = [];
+  private coinsText!: Phaser.GameObjects.Text;
+  private relicIcon2!: Phaser.GameObjects.Image;
+  private relicSet!: Phaser.GameObjects.Text;
   private streakText!: Phaser.GameObjects.Text;
   private streakBonusText!: Phaser.GameObjects.Text;
   private streakFlame!: Phaser.GameObjects.Image;
@@ -95,6 +132,7 @@ export class GameScene extends Phaser.Scene {
     this.missiles.clear();
     this.pops.clear();
     this.rainArrows.clear();
+    this.caltropPieces.clear();
     this.aim = null;
     this.state = newRun(loadProgress());
     if (this.state.levelUps > 0) offer(this.state);
@@ -110,9 +148,16 @@ export class GameScene extends Phaser.Scene {
     this.createHud();
     this.createTrack();
     this.createRain();
+    this.createGuards();
     this.createRelicPanel();
     this.createGameOver();
     this.levelUp = new LevelUp(this, (id) => this.pick(id));
+    this.roadChoice = new RoadChoice(this, (id) => this.pickRoad(id));
+    this.hirePanel = new HirePanel(
+      this,
+      (slot, kind) => this.hire(slot, kind),
+      (slot) => this.train(slot),
+    );
     this.found = new Set(loadFound());
     this.skillBook = new SkillBook(this);
     this.createSpeedSwitch();
@@ -127,8 +172,9 @@ export class GameScene extends Phaser.Scene {
     const phase = s.phase;
     const wave = s.wave;
     const levelUps = s.levelUps;
-    // Everything, the auto-pick countdown included, waits while the list of upgrades is open.
-    if (!this.skillBook.open) {
+    // Everything, the auto-pick countdown included, waits while the skill book or a hire panel is open.
+    if (s.choices || s.phase === 'over') this.hirePanel.close();
+    if (!this.skillBook.open && !this.hirePanel.open) {
       // The battle plays at the chosen speed; the auto-pick countdown stays in real seconds.
       const game = s.choices ? dt : dt * this.speed;
       tick(s, game);
@@ -136,7 +182,7 @@ export class GameScene extends Phaser.Scene {
     }
     if (s.phase !== phase || s.wave !== wave || s.levelUps !== levelUps) saveProgress(progressOf(s));
     // A level-up or a fall drops Arrow Rain from the hand.
-    if (s.choices || s.phase === 'over' || this.skillBook.open) this.aim = null;
+    if (s.choices || s.phase === 'over' || this.skillBook.open || this.hirePanel.open) this.aim = null;
 
     this.track = waveTrack(s.wave);
     this.drawFoes();
@@ -146,6 +192,9 @@ export class GameScene extends Phaser.Scene {
     this.drawHud();
     this.drawTrack();
     this.drawRain();
+    this.drawCaltrops();
+    this.drawGuards();
+    this.roadChoice.show(s.phase === 'break' ? s.roadChoices : null, s.roadMs);
     this.levelUp.show(s.phase === 'over' ? null : s.choices, s.ranks, s.level - s.levelUps + 1, s.levelUps, s.pickMs);
     this.discover();
     this.skillBook.show(this.found, s.ranks, s.relics, s.phase === 'over');
@@ -170,6 +219,18 @@ export class GameScene extends Phaser.Scene {
 
   private pick(id: UpgradeId) {
     if (pick(this.state, id)) saveProgress(progressOf(this.state));
+  }
+
+  private pickRoad(id: RoadId) {
+    pickRoad(this.state, id);
+  }
+
+  private hire(slot: number, kind: GuardKind) {
+    if (hire(this.state, slot, kind)) this.hirePanel.close();
+  }
+
+  private train(slot: number) {
+    if (train(this.state, slot)) this.hirePanel.show(slot, this.state.guards[slot], this.state.coins);
   }
 
   /** Blinks on and off every `ms`, or holds still with reduced motion. */
@@ -202,7 +263,9 @@ export class GameScene extends Phaser.Scene {
       const lunge = e.attacking ? -Math.max(0, Math.sin(phase * Math.PI * 2)) * 6 : 0;
       const bob = e.attacking ? 0 : -Math.abs(Math.sin(phase * Math.PI * 2)) * 2;
       const feet = e.y + type.radius * 0.6;
+      // A harpy beats its wings instead of walking, with its shadow on the road below.
       const key = foeTexture(e.kind, e.attacking ? 0 : frame);
+      if (type.flying) this.fx.fillStyle(0x2a1808, 0.22).fillEllipse(e.x + 6, feet + FLY_HEIGHT, 30, 9);
       const fig = FIGURES[key]!;
       sprite.setTexture(key).setOrigin(fig.originX, fig.originY).setPosition(e.x + lunge, feet + bob).setDepth(feet);
       // A hit flashes white, in blinks so a foe under steady fire still shows; with reduced motion
@@ -248,8 +311,9 @@ export class GameScene extends Phaser.Scene {
       seen.add(m.id);
       let sprite = this.missiles.get(m.id);
       if (!sprite) {
-        sprite = this.add.image(m.x, m.y, m.kind === 'arrow' ? arrowKey : 'fireball').setDepth(UI_DEPTH - 40);
+        sprite = this.add.image(m.x, m.y, m.kind === 'arrow' ? arrowKey : m.kind === 'magic' ? 'magic-bolt' : 'fireball').setDepth(UI_DEPTH - 40);
         if (m.kind === 'arrow') sprite.setOrigin(30 / 44, 0.5);
+        else if (m.kind === 'magic') sprite.setOrigin(28 / 40, 0.5);
         else sprite.setOrigin(34 / 48, 0.5);
         this.missiles.set(m.id, sprite);
       }
@@ -311,6 +375,41 @@ export class GameScene extends Phaser.Scene {
           const y = e.y + dy * RAIN_RING.ry * 0.9;
           g.lineStyle(2, 0xfff2c4, 1 - t).lineBetween(x - 3, y - 12, x, y);
         }
+      } else if (e.kind === 'block') {
+        // An arrow glances off a shield: a burst of steel sparks.
+        for (let k = 0; k < 5; k++) {
+          const a = Math.PI * (0.6 + (k / 4) * 0.8) + e.id;
+          const r = 6 + t * 14;
+          glow.lineStyle(2, 0xfff2c4, 1 - t).lineBetween(e.x + Math.cos(a) * r * 0.4, e.y + Math.sin(a) * r * 0.4, e.x + Math.cos(a) * r, e.y + Math.sin(a) * r);
+        }
+        glow.fillStyle(0xd8e8ff, 0.6 * (1 - t)).fillCircle(e.x, e.y, 5);
+      } else if (e.kind === 'heal' && e.points) {
+        // The shaman's healing: a green ring swells round it and motes rise from the foes it mends.
+        const r = (e.radius ?? 100) * (0.3 + 0.7 * t);
+        glow.lineStyle(3, 0x5ad07a, 0.6 * (1 - t)).strokeEllipse(e.x, e.y, r * 2, r * 1.2);
+        for (const p of e.points) {
+          for (let k = 0; k < 3; k++) {
+            const my = p.y - 10 - t * 30 - k * 8;
+            const mx = p.x + Math.sin(e.id + k * 2.3) * 9;
+            g.fillStyle(0x8ff0a8, 0.9 * (1 - t)).fillTriangle(mx - 3, my, mx, my - 4, mx + 3, my);
+            g.fillStyle(0x3a9a5a, 0.9 * (1 - t)).fillTriangle(mx - 3, my, mx, my + 4, mx + 3, my);
+          }
+        }
+      } else if (e.kind === 'stab' && e.points) {
+        // The spearman's thrust: a bright streak along the spear to the foe.
+        const [a, b] = e.points;
+        glow.lineStyle(4, 0xfff2c4, 0.8 * (1 - t)).lineBetween(a.x, a.y, b.x, b.y);
+        glow.fillStyle(0xffffff, 0.8 * (1 - t)).fillCircle(b.x, b.y, 6 * (1 - t) + 2);
+      } else if (e.kind === 'arcane') {
+        // The mage's bolt bursts: a teal starburst.
+        const r = (e.radius ?? 40) * (0.4 + 0.6 * t);
+        const star = Array.from({ length: 12 }, (_, i) => {
+          const a = (i / 12) * Math.PI * 2 + e.id;
+          const rr = i % 2 ? r * 0.55 : r;
+          return v(e.x + Math.cos(a) * rr, e.y + Math.sin(a) * rr * 0.75);
+        });
+        g.fillStyle(0x2a9a9a, 0.5 * (1 - t)).fillPoints(star, true);
+        glow.lineStyle(3, 0x9ffff0, 0.7 * (1 - t)).strokeEllipse(e.x, e.y, r * 2, r * 1.5);
       } else if (e.kind === 'crit' || e.kind === 'xp') {
         seen.add(e.id);
         let texts = this.pops.get(e.id);
@@ -413,8 +512,10 @@ export class GameScene extends Phaser.Scene {
       this.add.text(x, 19, text, textStyle(size, color)).setOrigin(0, 0.5).setDepth(UI_DEPTH + 1);
     this.waveText = top(18, '', '#ffcf4a', 20).setStroke('#141820', 3);
     top(140, 'Barricade');
-    this.foesText = top(630, '');
-    this.slainText = top(757, '');
+    this.foesText = top(612, '');
+    this.slainText = top(716, '');
+    this.add.image(796, 19, 'hud-coin').setDepth(UI_DEPTH + 1);
+    this.coinsText = top(808, '', '#ffe07a');
     this.bestText = top(944, '').setOrigin(1, 0.5);
     this.levelText = this.add.text(18, XP_BAR.y + XP_BAR.h / 2, '', textStyle(16, '#9fd3ff')).setOrigin(0, 0.5).setDepth(UI_DEPTH + 1);
     this.xpText = this.add
@@ -448,6 +549,7 @@ export class GameScene extends Phaser.Scene {
     for (let x = bx + 15; x < bx + fw; x += 22) g.lineBetween(x, 14, x - 4, 26);
     this.foesText.setText(`Foes left ${s.toSpawn.length + s.enemies.length}`);
     this.slainText.setText(`Slain ${s.kills}`);
+    this.coinsText.setText(String(s.coins));
     this.bestText.setText(`Best wave ${s.bestWave}`);
 
     // Experience along the bottom: the blue fill, and a gold preview of the experience still
@@ -487,7 +589,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     // The wave's banner during the break before it.
-    const breaking = s.phase === 'break' && !s.choices && !s.relicFound;
+    const breaking = s.phase === 'break' && !s.choices && !s.relicFound && !s.roadChoices && !this.hirePanel.open;
     this.banner
       .setVisible(breaking)
       .setText(isBossWave(s.wave) ? `Wave ${s.wave}\nThe ${ENEMIES[this.track.boss].name} comes!` : `Wave ${s.wave}`)
@@ -509,13 +611,19 @@ export class GameScene extends Phaser.Scene {
       this.bossName.setText(`${ENEMIES[boss.kind].name}   x${left + 1}`);
     }
 
-    // The relic chest's reward, during the break after a boss.
-    const relic = s.relicFound;
-    this.relicPanel.setVisible(!!relic && s.phase === 'break' && !s.choices);
-    if (relic) {
-      this.relicIcon.setTexture(relicTexture(relic));
-      this.relicName.setText(RELICS[relic].name);
-      this.relicText.setText(`${RELICS[relic].text}, from now on.`);
+    // The relic chest's reward, during the break after a boss: one relic, or two after a Hardened
+    // Road, and the set bonus when a relic completes its set.
+    const found = s.relicFound;
+    this.relicPanel.setVisible(!!found && s.phase === 'break' && !s.choices);
+    if (found) {
+      const [a, b] = found;
+      this.relicIcon.setTexture(relicTexture(a)).setPosition(b ? -188 : -168, b ? -14 : -18);
+      this.relicIcon2.setVisible(!!b);
+      if (b) this.relicIcon2.setTexture(relicTexture(b));
+      this.relicName.setText(b ? `${RELICS[a].name} and ${RELICS[b].name}` : RELICS[a].name);
+      this.relicText.setText(b ? 'Two relics from the Hardened Road, from now on.' : `${RELICS[a].text}, from now on.`);
+      const set = found.map((id) => RELICS[id].set).find((id) => setComplete(s.relics, id));
+      this.relicSet.setText(set ? `${SETS[set].name} complete: ${SETS[set].text}` : '');
     }
   }
 
@@ -537,15 +645,25 @@ export class GameScene extends Phaser.Scene {
   private drawTrack() {
     const s = this.state;
     // During the break after a boss, the road just finished stays up with its chest open.
-    const tr = s.relicFound ? waveTrack(s.wave - 1) : this.track;
+    const tr = s.relicFound || s.roadChoices ? waveTrack(s.wave - 1) : this.track;
     const g = this.trackG;
     g.clear();
     drawPanel(g, TRACK.x, TRACK.y, TRACK.w, TRACK.h, { c: 8, fill: 0x222630, alpha: 0.9, edge: GOLD.mid, lw: 1.5 });
     const boss = ENEMIES[tr.boss].name;
-    this.trackTitle.setText(`Road to the ${boss}`);
-    const step = s.relicFound ? 11 : tr.step;
+    // The road's twist names the road ("Golden Road to the Ogre Warlord").
+    const finished = !!(s.relicFound || s.roadChoices);
+    this.trackTitle.setText(s.road && !finished ? `${ROADS[s.road].name} to the ${boss}` : `Road to the ${boss}`);
+    const step = finished ? 11 : tr.step;
     this.trackNote.setText(
-      s.relicFound ? `Relic chest: ${RELICS[s.relicFound].name}` : tr.step === 10 ? 'Boss wave! Relic chest next' : `Wave ${tr.last}: boss, Relic chest`,
+      s.relicFound
+        ? `Relic chest: ${s.relicFound.length > 1 ? `${s.relicFound.length} relics` : RELICS[s.relicFound[0]].name}`
+        : s.roadChoices
+          ? 'Choose the next road'
+          : tr.step === 10
+            ? 'Boss wave! Relic chest next'
+            : s.road
+              ? `Wave ${tr.last}: boss`
+              : `Wave ${tr.last}: boss, Relic chest`,
     );
     const y = TRACK.markY;
     const x0 = TRACK.x + TRACK.markX;
@@ -570,7 +688,7 @@ export class GameScene extends Phaser.Scene {
     this.trackNumber.setVisible(current).setPosition(at(step), y).setText(String(s.wave));
     this.trackBoss.setTexture(bossNodeTexture(tr.boss)).setPosition(at(10), y).setAlpha(step > 10 ? 0.6 : 1);
     if (step === 10) g.lineStyle(2, GOLD.light, 0.5 + 0.5 * this.pulse(700)).strokePoints(this.hexPts(at(10), y, 13), true);
-    this.trackChest.setTexture(s.relicFound ? 'chest-open' : 'chest').setPosition(at(10) + 30, y - 1);
+    this.trackChest.setTexture(finished ? 'chest-open' : 'chest').setPosition(at(10) + 30, y - 1);
     // A few gold glints round the chest.
     for (const [dx, dy] of [[-13, -9], [12, -10], [14, 3]]) g.fillStyle(0xfff1b0, 0.7).fillTriangle(at(10) + 30 + dx - 2, y + dy, at(10) + 30 + dx, y + dy - 2, at(10) + 30 + dx + 2, y + dy);
   }
@@ -581,13 +699,18 @@ export class GameScene extends Phaser.Scene {
 
   private createRelicPanel() {
     const g = this.add.graphics();
-    drawPanel(g, -210, -52, 420, 104, { c: 14, fill: 0x222630, alpha: 0.95, lw: 2.5 });
-    const chest = this.add.image(-168, 8, 'chest-open').setScale(1.4);
+    drawPanel(g, -240, -58, 480, 116, { c: 14, fill: 0x222630, alpha: 0.95, lw: 2.5 });
+    const chest = this.add.image(-168, 12, 'chest-open').setScale(1.4);
     this.relicIcon = this.add.image(-168, -18, 'relic-crown').setScale(0.7);
-    const title = this.add.text(-112, -30, 'Relic chest!', textStyle(20, '#ffcf4a', 4)).setOrigin(0, 0.5);
-    this.relicName = this.add.text(-112, -2, '', textStyle(16, '#ffe7a0')).setOrigin(0, 0.5);
-    this.relicText = this.add.text(-112, 24, '', { ...textStyle(13, '#e9e4d8'), fontStyle: 'normal', wordWrap: { width: 300 } }).setOrigin(0, 0.5);
-    this.relicPanel = this.add.container(VIEW.w / 2, 170, [g, chest, this.relicIcon, title, this.relicName, this.relicText]).setDepth(UI_DEPTH + 1).setVisible(false);
+    this.relicIcon2 = this.add.image(-148, -22, 'relic-crown').setScale(0.7).setVisible(false);
+    const title = this.add.text(-112, -38, 'Relic chest!', textStyle(20, '#ffcf4a', 4)).setOrigin(0, 0.5);
+    this.relicName = this.add.text(-112, -12, '', textStyle(15, '#ffe7a0')).setOrigin(0, 0.5);
+    this.relicText = this.add.text(-112, 12, '', { ...textStyle(13, '#e9e4d8'), fontStyle: 'normal', wordWrap: { width: 340 } }).setOrigin(0, 0.5);
+    this.relicSet = this.add.text(-112, 36, '', textStyle(12, '#8fdc6a')).setOrigin(0, 0.5);
+    this.relicPanel = this.add
+      .container(VIEW.w / 2, 164, [g, chest, this.relicIcon, this.relicIcon2, title, this.relicName, this.relicText, this.relicSet])
+      .setDepth(UI_DEPTH + 1)
+      .setVisible(false);
   }
 
   // ---- Arrow Rain: the button above the ranger, dragged onto the field along a dashed arc.
@@ -600,7 +723,19 @@ export class GameScene extends Phaser.Scene {
     this.rainHint = this.add.text(RAIN_HINT.x, RAIN_HINT.y, 'Drag onto the horde, let go to loose', textStyle(11, '#fff3d0')).setOrigin(0.5).setDepth(depth + 1);
     const hit = this.add.circle(RAIN.x, RAIN.y, RAIN.r + 6, 0x000000, 0.001).setDepth(depth + 2);
     hit.setInteractive({ useHandCursor: true }).on('pointerdown', (p: Phaser.Input.Pointer) => {
-      if (this.rainReady()) this.aim = { x: p.worldX, y: p.worldY };
+      if (!this.rainReady()) return;
+      this.aimKind = 'rain';
+      this.aim = { x: p.worldX, y: p.worldY };
+    });
+    // The caltrops button above it is dragged onto the road the same way.
+    this.caltropsButton = this.add.image(CALTROPS.x, CALTROPS.y, 'caltrops-charging').setDepth(depth);
+    this.add.text(CALTROPS.x, CALTROPS.y - CALTROPS.r - 15, 'Caltrops', textStyle(10, '#ffe7a0')).setOrigin(0.5).setDepth(depth + 1);
+    this.caltropsBadge = this.add.text(CALTROPS.x + CALTROPS.r + 27, CALTROPS.y, '', textStyle(9, '#2b2010')).setOrigin(0.5).setDepth(depth + 1);
+    const hitC = this.add.circle(CALTROPS.x, CALTROPS.y, CALTROPS.r + 6, 0x000000, 0.001).setDepth(depth + 2);
+    hitC.setInteractive({ useHandCursor: true }).on('pointerdown', (p: Phaser.Input.Pointer) => {
+      if (!this.caltropsReady()) return;
+      this.aimKind = 'caltrops';
+      this.aim = { x: p.worldX, y: p.worldY };
     });
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
       if (this.aim) this.aim = { x: p.worldX, y: p.worldY };
@@ -608,7 +743,10 @@ export class GameScene extends Phaser.Scene {
     const release = (p: Phaser.Input.Pointer) => {
       if (!this.aim) return;
       this.aim = { x: p.worldX, y: p.worldY };
-      if (this.onField(this.aim)) loose(this.state, this.aim.x, this.aim.y);
+      if (this.onField(this.aim)) {
+        if (this.aimKind === 'rain') loose(this.state, this.aim.x, this.aim.y);
+        else strew(this.state, this.aim.x, this.aim.y);
+      }
       this.aim = null;
     };
     this.input.on('pointerup', release);
@@ -620,11 +758,21 @@ export class GameScene extends Phaser.Scene {
     };
     this.input.keyboard?.on('keydown-R', key);
     this.input.keyboard?.on('keydown-SPACE', key);
+    // C strews the caltrops in front of the thickest crowd.
+    this.input.keyboard?.on('keydown-C', () => {
+      const spot = this.caltropsReady() ? crowdSpot(this.state) : null;
+      if (spot) strew(this.state, spot.x - 40, spot.y);
+    });
+  }
+
+  private caltropsReady() {
+    const s = this.state;
+    return s.caltrops.charge >= s.caltrops.need && !s.choices && s.phase !== 'over' && !this.skillBook.open && !this.hirePanel?.open;
   }
 
   private rainReady() {
     const s = this.state;
-    return s.rain.charge >= s.rain.need && !s.choices && s.phase !== 'over' && !this.skillBook.open;
+    return s.rain.charge >= s.rain.need && !s.choices && s.phase !== 'over' && !this.skillBook.open && !this.hirePanel?.open;
   }
 
   /** Whether a release here looses the volley: on the road in front of the barricade. */
@@ -656,18 +804,21 @@ export class GameScene extends Phaser.Scene {
         g.lineStyle(4, GOLD.light, 1).lineBetween(a.x, a.y, a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f);
       }
     }
-    this.rainHint.setVisible(ready);
-    if (ready) drawPanel(g, RAIN_HINT.x - 118, RAIN_HINT.y - 12, 236, 24, { c: 6, fill: 0x1e222c, alpha: 0.88, edge: GOLD.mid, lw: 1.5 });
+    // The hint over the field, for Arrow Rain first, else for the caltrops.
+    const hint = ready || this.caltropsReady();
+    this.rainHint.setVisible(hint).setText(ready ? 'Drag onto the horde, let go to loose' : 'Drag the caltrops onto the road');
+    if (hint) drawPanel(g, RAIN_HINT.x - 118, RAIN_HINT.y - 12, 236, 24, { c: 6, fill: 0x1e222c, alpha: 0.88, edge: GOLD.mid, lw: 1.5 });
 
     // While dragged: a dashed arc from the button up over the field to a gold ring on the road.
     if (this.aim) {
       const on = this.onField(this.aim);
       const to = { x: this.aim.x, y: this.aim.y };
-      const ctrl = { x: (ARC_FROM.x + to.x) / 2, y: Math.min(ARC_FROM.y, to.y) - 150 };
+      const from = ARC_FROM[this.aimKind];
+      const ctrl = { x: (from.x + to.x) / 2, y: Math.min(from.y, to.y) - 150 };
       const pts: V[] = [];
       for (let i = 0; i <= 40; i++) {
         const t = i / 40;
-        pts.push(v((1 - t) * (1 - t) * ARC_FROM.x + 2 * (1 - t) * t * ctrl.x + t * t * to.x, (1 - t) * (1 - t) * ARC_FROM.y + 2 * (1 - t) * t * ctrl.y + t * t * (to.y - 20)));
+        pts.push(v((1 - t) * (1 - t) * from.x + 2 * (1 - t) * t * ctrl.x + t * t * to.x, (1 - t) * (1 - t) * from.y + 2 * (1 - t) * t * ctrl.y + t * t * (to.y - 20)));
       }
       const color = on ? GOLD.light : 0x9aa4ae;
       for (let i = 1; i < pts.length - 1; i += 2) {
@@ -682,7 +833,8 @@ export class GameScene extends Phaser.Scene {
         end.x + Math.cos(ang + 2.5) * 10, end.y + Math.sin(ang + 2.5) * 10,
         end.x + Math.cos(ang - 2.5) * 10, end.y + Math.sin(ang - 2.5) * 10,
       );
-      this.drawRing(g, to.x, to.y, color, 1);
+      if (this.aimKind === 'rain') this.drawRing(g, to.x, to.y, color, 1);
+      else this.drawPatch(g, to.x, to.y, color, 1);
     }
     // Volleys in the air: the ring they will land on, and the shafts coming down.
     const seen = new Set<number>();
@@ -732,6 +884,132 @@ export class GameScene extends Phaser.Scene {
     );
   }
 
+  /** A caltrops patch outline lying on the road: a dashed ellipse with spikes round its rim. */
+  private drawPatch(g: Phaser.GameObjects.Graphics, x: number, y: number, color: number, alpha: number) {
+    const { rx, ry } = CALTROP_PATCH;
+    g.fillStyle(color, 0.16 * alpha).fillEllipse(x, y, rx * 2, ry * 2);
+    for (let k = 0; k < 20; k += 2) {
+      const a0 = (k / 20) * Math.PI * 2;
+      const a1 = ((k + 1) / 20) * Math.PI * 2;
+      g.lineStyle(3, color, alpha).lineBetween(x + Math.cos(a0) * rx, y + Math.sin(a0) * ry, x + Math.cos(a1) * rx, y + Math.sin(a1) * ry);
+    }
+  }
+
+  // ---- Caltrops: the button above Arrow Rain's and the patches strewn on the road.
+
+  private drawCaltrops() {
+    const s = this.state;
+    const c = s.caltrops;
+    const ready = this.caltropsReady();
+    const g = this.aimG;
+    const grow = ready && !this.aim ? 1 + 0.05 * this.pulse(800) : 1;
+    this.caltropsButton.setTexture(ready ? 'caltrops-ready' : 'caltrops-charging').setScale(grow);
+    drawPanel(g, CALTROPS.x - 32, CALTROPS.y - CALTROPS.r - 23, 64, 16, { c: 4, fill: 0x1e222c, alpha: 0.9, edge: GOLD.mid, lw: 1 });
+    drawPanel(g, CALTROPS.x + CALTROPS.r + 5, CALTROPS.y - 8, 44, 16, { c: 4, fill: ready ? GOLD.mid : 0x1e222c, alpha: ready ? 1 : 0.9, edge: GOLD.mid, lw: 1 });
+    this.caltropsBadge.setText(ready ? 'READY' : `${c.charge}/${c.need}`).setColor(ready ? '#2b2010' : '#ffe7a0');
+    if (!ready) {
+      // The charge fills the octagon's rim, edge by edge, as on Arrow Rain's button.
+      const ring = Array.from({ length: 8 }, (_, i) => v(CALTROPS.x + Math.cos(Math.PI / 8 + (i * Math.PI) / 4) * 21, CALTROPS.y + Math.sin(Math.PI / 8 + (i * Math.PI) / 4) * 21));
+      const edges = Math.min(1, c.charge / c.need) * 8;
+      for (let i = 0; i < 8; i++) {
+        const a = ring[(i + 5) % 8];
+        const b = ring[(i + 6) % 8];
+        const f = Phaser.Math.Clamp(edges - i, 0, 1);
+        if (f > 0) g.lineStyle(3, GOLD.light, 1).lineBetween(a.x, a.y, a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f);
+      }
+    }
+    // Each patch: a faint ring and caltrops scattered over it, fading out as it ends.
+    const seen = new Set<number>();
+    for (const p of c.patches) {
+      seen.add(p.id);
+      const fade = Math.min(1, p.ms / 600, (CALTROP_MS - p.ms) / 150 + 0.2);
+      this.fx.fillStyle(0x3a2a1a, 0.18 * fade).fillEllipse(p.x, p.y, CALTROP_PATCH.rx * 2, CALTROP_PATCH.ry * 2);
+      let pieces = this.caltropPieces.get(p.id);
+      if (!pieces) {
+        pieces = Array.from({ length: 16 }, (_, i) => {
+          const [dx, dy] = this.scatter(p.id, i);
+          return this.add.image(p.x + dx * CALTROP_PATCH.rx * 0.9, p.y + dy * CALTROP_PATCH.ry * 0.9, 'caltrop').setDepth(2);
+        });
+        this.caltropPieces.set(p.id, pieces);
+      }
+      for (const img of pieces) img.setAlpha(fade);
+    }
+    for (const [id, pieces] of this.caltropPieces) {
+      if (seen.has(id)) continue;
+      for (const img of pieces) img.destroy();
+      this.caltropPieces.delete(id);
+    }
+  }
+
+  // ---- Hired guards: two slots on the barricade.
+
+  private createGuards() {
+    this.slotG = this.add.graphics().setDepth(3);
+    GUARD_SLOTS.forEach((slot, i) => {
+      this.guardSprites.push(this.add.image(slot.x, slot.y, guardTexture('spear')).setVisible(false));
+      this.slotLabels.push(this.add.text(slot.x, slot.y - 30, '', textStyle(11, '#ffe7a0', 3)).setOrigin(0.5).setDepth(UI_DEPTH - 7));
+      this.guardFlash.push(0);
+      this.lastGuardCd.push(0);
+      this.add
+        .zone(slot.x, slot.y - GUARD_HIT.h / 2 + 8, GUARD_HIT.w, GUARD_HIT.h)
+        .setDepth(UI_DEPTH - 3)
+        .setInteractive({ useHandCursor: true })
+        .on('pointerdown', () => {
+          const s = this.state;
+          if (s.choices || s.phase === 'over' || this.aim) return;
+          this.hirePanel.show(i, s.guards[i], s.coins);
+        });
+    });
+  }
+
+  private drawGuards() {
+    const s = this.state;
+    const g = this.slotG;
+    g.clear();
+    const cheapest = Math.min(...Object.values(GUARDS).map((t) => t.cost));
+    GUARD_SLOTS.forEach((slot, i) => {
+      const guard = s.guards[i];
+      const sprite = this.guardSprites[i];
+      const label = this.slotLabels[i];
+      // A wooden platform lashed to the barricade under each slot.
+      g.fillStyle(0x5e3f24).fillEllipse(slot.x + 2, slot.y + 2, 46, 14);
+      g.fillStyle(0x93653a).fillEllipse(slot.x, slot.y, 44, 12);
+      g.lineStyle(1, 0x4c3020, 0.8).strokeEllipse(slot.x, slot.y, 44, 12);
+      if (!guard) {
+        sprite.setVisible(false);
+        // An empty slot: a dashed gold ring that glows once a guard can be afforded.
+        const afford = s.coins >= cheapest && s.phase !== 'over';
+        const alpha = afford ? 0.55 + 0.45 * this.pulse(900) : 0.45;
+        for (let k = 0; k < 12; k += 2) {
+          const a0 = (k / 12) * Math.PI * 2;
+          const a1 = ((k + 1) / 12) * Math.PI * 2;
+          g.lineStyle(2, afford ? GOLD.light : 0x9aa0ac, alpha).lineBetween(slot.x + Math.cos(a0) * 20, slot.y - 22 + Math.sin(a0) * 20, slot.x + Math.cos(a1) * 20, slot.y - 22 + Math.sin(a1) * 20);
+        }
+        label.setText('Hire').setPosition(slot.x, slot.y - 22).setColor(afford ? '#ffe07a' : '#c9c3b6');
+        return;
+      }
+      // A guard lunges a little each time it strikes.
+      if (guard.cd > this.lastGuardCd[i]) this.guardFlash[i] = 1;
+      this.lastGuardCd[i] = guard.cd;
+      this.guardFlash[i] = Math.max(0, this.guardFlash[i] - 0.08);
+      const fig = FIGURES[guardTexture(guard.kind)]!;
+      sprite
+        .setVisible(true)
+        .setTexture(guardTexture(guard.kind))
+        .setOrigin(fig.originX, fig.originY)
+        .setPosition(slot.x + this.guardFlash[i] * 5, slot.y)
+        .setDepth(slot.y);
+      // Its level as gold pips over its head.
+      label.setText('');
+      for (let k = 0; k < guard.level; k++) {
+        const px = slot.x - (guard.level - 1) * 5 + k * 10;
+        const py = slot.y - fig.height - 8;
+        g.fillStyle(0xffe48a).fillTriangle(px - 4, py, px, py - 4, px + 4, py);
+        g.fillStyle(0xc98f2c).fillTriangle(px - 4, py, px, py + 4, px + 4, py);
+      }
+    });
+  }
+
   // ---- After a fall, and the speed switch.
 
   private createGameOver() {
@@ -778,8 +1056,9 @@ export class GameScene extends Phaser.Scene {
     if (newHero) clearProgress();
     this.state = newHero ? newRun(freshProgress()) : fightAgain(this.state);
     saveProgress(progressOf(this.state));
-    for (const sprite of [...this.foes.values(), ...this.missiles.values()]) sprite.destroy();
+    for (const sprite of [...this.foes.values(), ...this.missiles.values(), ...[...this.caltropPieces.values()].flat()]) sprite.destroy();
     this.foes.clear();
     this.missiles.clear();
+    this.caltropPieces.clear();
   }
 }
