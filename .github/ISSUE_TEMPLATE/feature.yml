@@ -1,0 +1,50 @@
+name: Feature wish
+description: An idea or wish for something new in a game.
+title: "[Wish] "
+labels: ["type: feature"]
+body:
+  - type: dropdown
+    id: game
+    attributes:
+      label: Game
+      description: Which game is this about?
+      options:
+        - Apothecary
+        - Deadline
+        - Palisade
+        - Tiny Kingdom
+        - Hotfoot
+        - Anvilheart
+        - Broadside
+        - TinctureTinker
+        - Catacomb
+        - Golem Garden
+        - Beehive Baron
+        - Wyrmrail
+        - Shrine Stack
+        - Mapmaker
+        - Lanternkeep
+        - Space Wars
+        - Lane Brawl
+        - Colonizer
+        - Hub page
+        - Shared / all games
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: The idea
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why it would make the game better
+  - type: dropdown
+    id: importance
+    attributes:
+      label: How important is it to you
+      options:
+        - Nice to have
+        - Would really like it
