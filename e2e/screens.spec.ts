@@ -3,7 +3,10 @@ import { expect, test, type Browser } from '@playwright/test';
 // Every game that uses `shared/scaling.ts` is opened on a range of screens, from an upright phone
 // to a 4K monitor, and must be sharp and fill the screen on each, or ask to turn a phone that is
 // held the wrong way. Add a game here when it calls `setupScaling`.
-const GAMES = [{ name: 'apothecary', wide: true }];
+const GAMES = [
+  { name: 'apothecary', wide: true },
+  { name: 'colonizer', wide: true },
+];
 
 /** The screens checked: CSS size, device pixels per CSS pixel, and whether it is a touch device. */
 const SCREENS = [

@@ -81,8 +81,8 @@ in code on 2D canvases (no image files), with `pixelArt` off.
 ### File map
 
 - `src/main.ts`: creates the `Phaser.Game` (960x540, FIT scaling, `pixelArt: false`, linen
-  background), registers the three scenes, calls `setupGame(game)` from `shared/setupGame.ts`, and
-  puts `game` on window in dev.
+  background), registers the three scenes, calls `setupGame(game)` from `shared/setupGame.ts` and
+  `setupScaling(game)` from `shared/scaling.ts`, and puts `game` on window in dev.
 - `src/game/data.ts`: every balance number and roster: `FACTIONS`, `UNITS` (cost, time, stats,
   trainer), `unitFor(faction, role)`, `BUILDINGS`, `BUILD_ORDER`, `TECHS` (with `advance: 2 | 3` on
   the age techs), `GATHER_MS`, `CARRY`, `START`, `START_VILLAGERS`, `DEEDS`, `ARMY_DEED`,
@@ -159,6 +159,12 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   a new match starts. Fog is a 256 px canvas: the fog pattern masked by a 128x128 sight mask,
   scaled up smoothly, drawn above the world and below the HUD. The needle sits on the edge of the
   unseen land nearest the middle of the view, rechecked every 1.5 s.
+- Screens: `setupScaling` draws the canvas at the screen's resolution (`renderScale` canvas pixels
+  per game pixel) and zooms every camera to match. `splitHudCamera` gives the Game scene a second,
+  fixed camera for everything with a scroll factor of 0 (top bar, panel, cards, end screen), so the
+  main camera keeps Phaser's middle origin for `setBounds`, `centerOn` and `setScroll`. Handlers
+  turn the pointer into game-space screen points with `viewPoint(pointer)`; `toWorld` and
+  `toScreen` go through the main camera and its `worldView`.
 - Input: `pointerdown` and `pointerup` on the scene. Clicks on the minimap move the camera, on the
   toast jump to the raid, and in the top bar, the deeds card or the panel are left to the HUD. A
   click under 5 px is a click; otherwise it is a box select. Right click calls `commandAt`.
@@ -213,7 +219,8 @@ None: there is no save. Settings come from the hub (`shared/settings.ts`).
   or boon cards, in game-space screen coordinates with `label`, `x`, `y`, `w`, `h`), `popLog` (the
   player's drop-off badges, such as `+10 wood`), `toastLog` (raid toasts shown), `toast.shown`,
   `placing`, `attackMode`, `buildMenu`, `buildPage`, `status.shown` (the Monument line),
-  `cameras.main.scrollX/Y`, and `toScreen(tx, ty)`. `state.camps` lists the camps with `holder`.
+  `cameras.main.worldView.x/y` (not `scrollX/Y`, which differ once `renderScale` zooms the
+  camera), and `toScreen(tx, ty)`. `e2e/screens.spec.ts` at the root opens the game on five screens. `state.camps` lists the camps with `holder`.
 - Inputs are canvas clicks (left and right), so the test drives the real controls. It never writes
   to game state.
 - It seeds `Math.random`, owns `page.clock`, makes `requestAnimationFrame` a 64 ms timer and forces
@@ -264,5 +271,10 @@ None: there is no save. Settings come from the hub (`shared/settings.ts`).
   them that much higher.
 - Don't put a red cross in any sprite or icon (root rule). The raid's minimap rings and the toast's
   arrow are red; keep them rings and a triangle. The Relic of Valor's sword is drawn in ink and grey.
+- `pointer.x/y` and `this.scale` are canvas pixels, `renderScale` times game space: read pointers
+  through `viewPoint`, and give anything new on the HUD a scroll factor of 0 (a container too) so
+  `splitHudCamera` draws it with the fixed camera.
+- Painted textures are still baked at 1x, so on big screens the art is upscaled while text and
+  Graphics are drawn sharp.
 - A new scene needs `this.input.on(...)` handlers that check `this.endPanel` and the HUD bounds,
   or clicks will reach the world under the panel.

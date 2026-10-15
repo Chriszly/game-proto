@@ -12,13 +12,14 @@ import Phaser from 'phaser';
  *
  * A game opts in by calling `setupScaling(game)` right after `setupGame(game)`. Then:
  * - `this.scale.width` and `height`, `pointer.x` and `y` and camera sizes are canvas pixels, which
- *   are `renderScale` times game pixels. Lay out with `viewSize(scene)` instead of `scene.scale`. Read positions in the world through `pointer.worldX` and
+ *   are `renderScale` times game pixels. Lay out with `viewSize(scene)` instead of `scene.scale`,
+ *   and read a pointer on the screen with `viewPoint(pointer)`. Read positions in the world through `pointer.worldX` and
  *   `worldY`, `camera.getWorldPoint` and `camera.worldView` rather than raw scroll values.
  * - Every camera starts zoomed by `renderScale` from its top-left corner (origin 0), so a camera
  *   that never scrolls, and objects with a scroll factor of 0, look as they did unzoomed. A camera
  *   that scrolls, follows or has bounds needs Phaser's usual origin back: `scrollingCamera(camera)`.
- *   Keep objects with a scroll factor of 0 off such a camera (draw them with a second camera that
- *   doesn't scroll), since Phaser zooms them around the middle of the camera.
+ *   Keep objects with a scroll factor of 0 off such a camera, since Phaser zooms them around the
+ *   middle of the camera: `splitHudCamera(scene)` draws them with a second camera that doesn't scroll.
  * - A game that zooms a camera itself multiplies its own zoom by `renderScale`.
  * - Texts are drawn at `renderScale` unless they set their own `resolution`.
  * - Art painted into canvases stays as sharp as its canvas; paint it `renderScale` times bigger to
@@ -91,6 +92,30 @@ export function viewSize(scene: Phaser.Scene) {
  */
 export function scrollingCamera(camera: Phaser.Cameras.Scene2D.Camera) {
   return camera.setOrigin(0.5);
+}
+
+/** A pointer's position in game pixels on the screen (not the world), from the canvas's top-left. */
+export function viewPoint(pointer: { x: number; y: number }) {
+  return { x: pointer.x / renderScale, y: pointer.y / renderScale };
+}
+
+/**
+ * Adds a camera that never scrolls over a scene's main camera and moves every object with a
+ * scroll factor of 0 (a top bar, a panel) onto it, so the main camera can scroll, follow and keep
+ * Phaser's middle origin. Objects are sorted again before every frame, so ones made later follow.
+ */
+export function splitHudCamera(scene: Phaser.Scene) {
+  const world = scrollingCamera(scene.cameras.main);
+  const hud = scene.cameras.add();
+  const sort = () => {
+    for (const obj of scene.children.list) {
+      const fixed = (obj as unknown as { scrollFactorX?: number }).scrollFactorX === 0;
+      obj.cameraFilter = fixed ? world.id : hud.id;
+    }
+  };
+  scene.events.on(Phaser.Scenes.Events.PRE_RENDER, sort);
+  scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => scene.events.off(Phaser.Scenes.Events.PRE_RENDER, sort));
+  return hud;
 }
 
 let patched = false;

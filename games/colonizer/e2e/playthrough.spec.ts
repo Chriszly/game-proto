@@ -110,7 +110,7 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
     }));
   /** Where a world tile sits on the canvas, in page pixels. */
   const pageXY = (tx: number, ty: number) =>
-    read<Point>((g) => ({ x: g.cameras.main.scrollX, y: g.cameras.main.scrollY })).then((cam) => ({
+    read<Point>((g) => ({ x: g.cameras.main.worldView.x, y: g.cameras.main.worldView.y })).then((cam) => ({
       x: box.x + (tx * 32 - cam.x) * scale,
       y: box.y + (ty * 32 - cam.y) * scale,
     }));

@@ -3,6 +3,7 @@ import { BootScene } from './scenes/BootScene';
 import { MenuScene } from './scenes/MenuScene';
 import { GameScene } from './scenes/GameScene';
 import { setupGame } from '../../../shared/setupGame';
+import { setupScaling } from '../../../shared/scaling';
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
@@ -18,6 +19,7 @@ const game = new Phaser.Game({
   scene: [BootScene, MenuScene, GameScene],
 });
 setupGame(game);
+setupScaling(game);
 
 // Handy for poking at state from the browser console during development.
 if (import.meta.env.DEV) Object.assign(window, { game });
