@@ -42,7 +42,8 @@ File map (all under `src/` unless it starts with `shared/`):
 
 - `main.ts`: creates the `Phaser.Game` (960x540 from `VIEW`, `Scale.FIT`, `pixelArt: false`, so
   the painted textures are smoothed) with
-  `BootScene` then `GameScene`, calls `setupGame(game)`; in dev builds puts `game` on `window`.
+  `BootScene` then `GameScene`, calls `setupGame(game)` and `setupScaling(game)` from
+  `shared/scaling.ts`; in dev builds puts `game` on `window`.
 - `game/cards.ts`: the `Card` type (with `up`, what tempering changes), the `CARDS` table,
   `BaseId` (a key of `CARDS`) and `CardId` (a `BaseId`, or `BaseId+` once tempered), `card(id)`
   (the rules, with `up` applied to a tempered id), `isTempered`, `baseOf`, `tempered`,
@@ -69,8 +70,8 @@ File map (all under `src/` unless it starts with `shared/`):
   `buyRemoval`, `leaveShop`, `canChoose`, `chooseEvent`, `eventHere`, `hasRelic`, `actName`,
   `tick`, `intentOf`, `shuffle`; private `act` (a foe's go, poison first), `endRound` (after the
   foes' turn), `winFight`, `grantRelic`, `makeShop` and `nextIntent`. No Phaser import.
-- `scenes/BootScene.ts`: bakes every texture (`bakeScenery`, `bakeCharacters`, `bakeIcons`,
-  `bakeCardFrames`), then starts `Game`.
+- `scenes/BootScene.ts`: reads the screen's resolution (`setArtRes`), bakes every texture
+  (`bakeScenery`, `bakeCharacters`, `bakeIcons`, `bakeCardFrames`), then starts `Game`.
 - `scenes/GameScene.ts`: builds and draws the map (room icons rebuilt by `buildRooms` when a new
   act brings a new map), fight (with a `StatusRow` over each fighter), reward overlay, the
   merchant (`shopLayer`), panel (campfire, mystery room, descent, defeat and victory), the card
@@ -88,8 +89,13 @@ File map (all under `src/` unless it starts with `shared/`):
   for art noise.
 - `art/paint.ts`: the painterly pass. `paint(canvas, opts)` repaints a canvas with oval brush dabs,
   biggest brush first, each smaller one only where the painting still differs (`sizes`, `seed`,
-  `threshold`, `grain`, `vignette`, `cutout` for sprites). Also `sketch`, `addTexture` and
-  `bakePainted` (a pixel grid, optionally rounded off with `smooth`, then painted).
+  `threshold`, `grain`, `vignette`, `cutout` for sprites, `res`). Also `sketch`, `blank`,
+  `addTexture`, `artImage` and `bakePainted` (a pixel grid, optionally rounded off with `smooth`,
+  then painted). Every texture is painted `ART` (the screen's `renderScale`) times its size as
+  shown, the backdrops at most `BACKDROP_RES` (2): `sketch` gives a canvas that big, pre-scaled so
+  pictures are drawn at their own size, `paint` widens brushes, grain and the cutout's blur to
+  match, `addTexture` remembers each key's `res`, and `artImage` shows a texture scaled back to its
+  own size.
 - `art/characters.ts`: the knight (`KNIGHT`) and slime (`SLIME`) drawn as shapes at twice their
   size, and grids for the other foes (`FOES` keyed by `EnemyKind`); textures `hero`, `hero-token`,
   `foe-<kind>`.
@@ -99,16 +105,17 @@ File map (all under `src/` unless it starts with `shared/`):
 - `art/cardFrames.ts`: the parchment card faces `card-attack` and `card-skill`, painted at twice
   the card size, and `CARD_FRAME` (where the header and picture window sit).
 - `art/scenery.ts`: the `room-bg` crypt (wall, arch, two torches, floor in perspective) and the
-  `map-bg` flagstones, drawn at 1920x1080, shrunk to 960x540 and painted, plus `room-bg-2` and
+  `map-bg` flagstones, drawn at 1920x1080, shrunk to 960x540 (times their `res`) and painted, plus `room-bg-2` and
   `map-bg-2` for the second act (the same washed green); `backdrop(kind, act)` names the one to use.
-- `shared/settings.ts` and `shared/setupGame.ts` (repo root, shared by every game): the hub's
-  settings, `byDifficulty` and `setupGame`. `sim.ts` imports `byDifficulty`, `GameScene.ts`
+- `shared/settings.ts`, `shared/setupGame.ts` and `shared/scaling.ts` (repo root, shared by every
+  game): the hub's settings, `byDifficulty`, `setupGame`, and `setupScaling` with `renderScale`. `sim.ts` imports `byDifficulty`, `GameScene.ts`
   imports `settings`.
 
 How it runs:
 
 - **Boot:** all art is drawn in code and baked to textures in `BootScene.create`; there are no
-  asset files. Painting is the slow part of boot (the two backdrops most). `GameScene.create` calls `newRun` and creates every layer once.
+  asset files. Painting is the slow part of boot (the two backdrops most, which is why they stop
+  at `BACKDROP_RES`; each step up in `res` costs about as much again). `GameScene.create` calls `newRun` and creates every layer once.
 - **Time:** `GameScene.update(time)` computes `dt` from the frame timestamp (not Phaser's smoothed
   delta), clamped to `MAX_STEP_MS` (250), and calls `tick(state, dt)`. `tick` counts down pops and
   hit flashes, advances walking (`WALK_MS`), steps the foes' turn one foe per `ENEMY_ACT_MS` (a
@@ -177,6 +184,12 @@ Data tables (where to tune):
 ### Hub settings
 
 - `src/main.ts` calls `setupGame(game)` from `shared/setupGame.ts`, which applies the frame cap, the FPS readout, reduced motion (camera shake and flash) and full screen.
+- It then calls `setupScaling(game)` from `shared/scaling.ts`, which draws the canvas at the
+  screen's resolution (`renderScale` canvas pixels per game pixel, every camera zoomed to match)
+  and asks to turn a phone held upright. No camera scrolls, so nothing else changes: layout stays
+  in the 960x540 `VIEW`, and taps go through Phaser's own hit tests. The art is painted at
+  `renderScale` (see `art/paint.ts`). `e2e/screens.spec.ts` at the root checks the game on five
+  screens.
 - Difficulty scales one number: foe health. `startFight` in `src/game/sim.ts` sets each foe's `hp`
   and `maxHp` to `Math.round(ENEMIES[kind].hp * byDifficulty(0.75, 1, 1.3))`, so Easy 0.75x,
   Normal 1x, Hard 1.3x. Damage, block and the hero are not scaled.
@@ -236,7 +249,8 @@ Data tables (where to tune):
   `rooms[0]` a lone slime at 110,290 or update the test. Draw only
   with `Math.random`, so the seeded test sees the same map each run.
 - **Change the look:** draw on a canvas from `sketch` and pass it through `paint`; bigger
-  `sizes` give looser strokes. Shapes drawn at twice the size (like `KNIGHT`) paint better than
+  `sizes` give looser strokes. Show the texture with `artImage`, never `this.add.image`, and read
+  an image's size from `displayWidth`/`displayHeight`, since the texture is `res` times bigger. Shapes drawn at twice the size (like `KNIGHT`) paint better than
   pixel grids.
 - **Add a room kind:** extend `RoomKind`, handle it in `enterRoom` in `src/game/sim.ts`, add a
   room icon in `src/art/icons.ts`, put it in `COLUMN_KINDS`, and handle its view in
@@ -278,4 +292,8 @@ Data tables (where to tune):
   rebuild the room icons and switch the backdrops.
 - Card text is dark ink on parchment; keep new card text dark, and light text on the header.
 - `scene.restart()` reruns `create`, which resets the run, but `clock` and `lastFrame` carry over.
+- `this.scale.width/height` and `pointer.x/y` are canvas pixels, `renderScale` times the view;
+  lay out with `VIEW` (or `viewSize(this)`), and read pointers through `viewPoint` or
+  `pointer.worldX/Y`. A camera that scrolls or zooms needs `scrollingCamera` and `renderScale`
+  (see the root `AGENTS.md`).
 - Never use a red cross in any art (root `AGENTS.md`); healing pops are already green.
