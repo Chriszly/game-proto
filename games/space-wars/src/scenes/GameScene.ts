@@ -15,6 +15,7 @@ import {
   BACKDROP_KEY, BEACON_KEY, CRYSTAL_KEYS, GLOW_BLUE_KEY, GLOW_KEY, RES, SHARD_KEY, SHIP_ZOOM, bakeAll, bakeBackdrop, buildingKey, facing, flameKey, shipKey,
 } from '../art/textures';
 import { settings } from '../../../../shared/settings';
+import { renderScale, viewPoint } from '../../../../shared/scaling';
 import { BAR, BUTTONS, FONT, MAP_VIEW, PANEL_X, ROLE_LABEL, TOP, VIEW, type Button } from './layout';
 
 // Game time for one step at most, so a hidden tab doesn't jump the battle ahead.
@@ -158,9 +159,12 @@ export class GameScene extends Phaser.Scene {
     bakeAll(this);
     // The map scrolls in its own camera; the bars and the text sit on a second one that never moves.
     this.camera = this.cameras.main;
-    this.camera.setViewport(MAP_VIEW.x, MAP_VIEW.y, MAP_VIEW.w, MAP_VIEW.h);
+    // Viewports are in canvas pixels, renderScale to a view pixel. Both cameras keep the top-left
+    // origin setupScaling gives them, so the map camera's scroll is the battlefield point at its corner.
+    const k = renderScale;
+    this.camera.setViewport(MAP_VIEW.x * k, MAP_VIEW.y * k, MAP_VIEW.w * k, MAP_VIEW.h * k);
     this.camera.setBackgroundColor('#1c0f36');
-    this.fixed = this.cameras.add(0, 0, VIEW.w, VIEW.h);
+    this.fixed = this.cameras.add(0, 0, VIEW.w * k, VIEW.h * k);
 
     this.backdrop = this.onMap(this.add.image(0, 0, '__WHITE').setOrigin(0).setDepth(DEPTH.backdrop));
     this.underGfx = this.onMap(this.add.graphics().setDepth(DEPTH.under));
@@ -277,8 +281,8 @@ export class GameScene extends Phaser.Scene {
     this.layout = generateMap(FACTIONS.length);
     this.picking = true;
     this.state = new World(this.layout);
-    bakeBackdrop(this, this.layout);
-    this.backdrop.setTexture(BACKDROP_KEY);
+    const res = bakeBackdrop(this, this.layout);
+    this.backdrop.setTexture(BACKDROP_KEY).setScale(1 / res);
     this.reset();
   }
 
@@ -1022,7 +1026,8 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private onDown(p: Phaser.Input.Pointer) {
+  private onDown(pointer: Phaser.Input.Pointer) {
+    const p = viewPoint(pointer);
     if (this.state.phase !== 'playing') {
       this.newGame();
       return;
@@ -1032,7 +1037,7 @@ export class GameScene extends Phaser.Scene {
       if (card) this.startBattle(card.faction);
       return;
     }
-    if (p.rightButtonDown()) {
+    if (pointer.rightButtonDown()) {
       this.placing = null;
       this.selected.clear();
       return;
@@ -1057,15 +1062,17 @@ export class GameScene extends Phaser.Scene {
     this.drag = { x0: p.x, y0: p.y, x1: p.x, y1: p.y };
   }
 
-  private onMove(p: Phaser.Input.Pointer) {
-    this.pointer = { x: p.x, y: p.y };
+  private onMove(pointer: Phaser.Input.Pointer) {
+    const p = viewPoint(pointer);
+    this.pointer = p;
     if (this.drag) {
       this.drag.x1 = p.x;
       this.drag.y1 = p.y;
     }
   }
 
-  private onUp(p: Phaser.Input.Pointer) {
+  private onUp(pointer: Phaser.Input.Pointer) {
+    const p = viewPoint(pointer);
     const d = this.drag;
     this.drag = null;
     if (!d || this.state.phase !== 'playing') return;
