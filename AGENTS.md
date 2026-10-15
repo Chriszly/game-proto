@@ -124,10 +124,10 @@ the `project` scope).
   `watching` is set, hand the player's side to the AI and lift the fog, call `mountWatch` once the
   match starts (with each side's name and colour and the match clock), run the sim
   `watchSteps()` times per frame (0 while the panel holds the match, so pausing and speeding up never change the
-  rules), and report AI decisions with `aiLog(side, text)` (a no-op outside watch mode). Then add a
-  `<a class="watch" href="games/<name>/?watch">Watch AI</a>` to its hub card, after the card's own
-  link, and its row to the Watch AI table in the README. The hub test opens it from that link. A
-  game's playthrough never uses `?watch`.
+  rules), and report AI decisions with `aiLog(side, text)` (a no-op outside watch mode). Then add its
+  row to the Watch AI table in the README and its path to `WATCH` in `e2e/hub.spec.ts`, which opens
+  it with `?watch`. The hub has no link to it: it is opened by URL only. A game's playthrough never
+  uses `?watch`.
 - **Never use a red cross.** No game art, icon, button, cover or favicon (the hub's included) may show a
   red cross: no red plus, red-cross health or medic symbol, or red crosshair. Use a green cross (or
   another colour) for healing and aiming marks instead.

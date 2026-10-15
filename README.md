@@ -66,8 +66,8 @@ Every game shows a loading screen while its art is drawn, then waits on a start 
 
 ## Watch AI
 
-Games whose AI can play every side have a **Watch AI** link on their hub card, which opens the game
-with `?watch` added to its URL (any such game's URL works the same, on `npm run dev` too). The AI then
+Games whose AI can play every side have a watch mode: add `?watch` to the game's URL, such as
+`/games/colonizer/?watch` (on `npm run dev` or the published site alike). The AI then
 plays your side as well, and a panel in the top right holds the match still while you look round
 (its pause button), plays it at 1x, 2x, 4x or 8x (**[** and **]** step the speed) and shows a log of
 what each AI decides (**L**).
