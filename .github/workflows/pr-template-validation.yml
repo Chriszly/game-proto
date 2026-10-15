@@ -25,7 +25,6 @@ jobs:
             const body = pr.body || '';
             const requiredSections = [
               '## Summary',
-              '## Type of change',
               '## Checklist',
               '## Testing'
             ];

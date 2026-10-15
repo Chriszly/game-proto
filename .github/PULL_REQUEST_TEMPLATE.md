@@ -1,17 +1,6 @@
 ## Summary
 
-<!-- What does this PR do and why? Keep it short. -->
-
-## Type of change
-
-<!-- Check all that apply, and add the matching Type label (bug, feature, gameplay, refactor, assets, docs, ci) plus a Game label (a game, hub or shared); the PR Template Validation check needs both. -->
-
-- [ ] Bug fix
-- [ ] New feature / gameplay
-- [ ] Art, sound or other assets
-- [ ] Documentation update
-- [ ] Refactor / cleanup
-- [ ] Build / CI / tooling
+<!-- What does this PR do and why? Keep it short. Then add a Type label (bug, feature, gameplay, refactor, assets, docs, ci) and a Game label (a game, hub or shared); the PR Template Validation check needs both. -->
 
 ## Checklist
 
