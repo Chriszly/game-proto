@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { settings } from '../../../../shared/settings';
-import { HI, SHIP_LOOKS } from '../art/art';
+import { HI, SEA_RES, SHEET_RES, SHIP_LOOKS } from '../art/art';
+import { renderScale } from '../../../../shared/scaling';
 import { BOON_IDS, BOONS, costOfBoons, type BoonId } from '../game/admiralty';
 import { ORDERS } from '../game/orders';
 import { loadBestWave, loadMedals, saveBestWave, saveMedals } from '../game/save';
@@ -20,6 +21,7 @@ import {
   stats,
   windFrom,
   windReach,
+  WORLD,
   type GameState,
   type Ship,
   type Side,
@@ -49,7 +51,7 @@ const textStyle = (size: number, color = '#2b2118', fontStyle = 'normal', stroke
   fontSize: `${size}px`,
   fontStyle,
   color,
-  resolution: 2,
+  resolution: Math.max(2, renderScale),
   ...(stroke ? { stroke, strokeThickness } : {}),
 });
 
@@ -67,13 +69,16 @@ export class GameScene extends Phaser.Scene {
   private sinking = new Map<number, Phaser.GameObjects.Image>();
   private floaters = new Map<number, Phaser.GameObjects.Text>();
   private wakes: { x: number; y: number; heading: number; ms: number; size: number }[] = [];
-  private sea!: Phaser.GameObjects.TileSprite;
+  /** Four copies of the sea in a square, moved so they always cover the screen. */
+  private sea: Phaser.GameObjects.Image[] = [];
   /**
    * Where the player's ship is drawn. The sea wraps at its edges but this does not: it follows
    * the ship's every move, so the camera never jumps when the ship crosses an edge. Everything
    * else is drawn at its nearest copy around the player (see `place`).
    */
   private view = { x: 0, y: 0 };
+  /** The point of the sea at the screen's top-left this frame; the camera's `worldView` lags a frame. */
+  private topLeft = { x: 0, y: 0 };
   /** The player's position in the sea last frame, to move `view` by. */
   private lastPlayer = { x: 0, y: 0 };
   private arcs!: Phaser.GameObjects.Graphics;
@@ -144,7 +149,8 @@ export class GameScene extends Phaser.Scene {
 
     // The chart is the whole sea; it fills the screen and scrolls with the camera, repeating where
     // the sea wraps.
-    this.sea = this.add.tileSprite(0, 0, VIEW.w, VIEW.h, 'sea').setOrigin(0).setScrollFactor(0);
+    // Images rather than a tile sprite, so the sea is painted as finely as the screen needs.
+    this.sea = [0, 1, 2, 3].map(() => this.add.image(0, 0, 'sea').setOrigin(0).setScale(1 / SEA_RES));
     this.arcs = this.add.graphics().setDepth(2);
     this.course = this.add.graphics().setDepth(2.5);
     this.wakeLines = this.add.graphics().setDepth(3);
@@ -154,7 +160,7 @@ export class GameScene extends Phaser.Scene {
     this.courseLabel = this.add.text(0, 0, '', textStyle(12, '#2b2118', 'bold italic', '#f0e2c0', 4)).setOrigin(0.5).setDepth(8);
     this.boardLabel = this.add.text(0, 0, '', textStyle(13, '#6a4410', 'bold italic', '#f6ecd2', 4)).setOrigin(0.5).setDepth(8);
     this.bars = this.add.graphics().setDepth(UI_DEPTH - 40);
-    this.add.image(0, 0, 'frame').setOrigin(0).setScrollFactor(0).setDepth(UI_DEPTH - 30);
+    this.add.image(0, 0, 'frame').setOrigin(0).setScale(1 / SHEET_RES).setScrollFactor(0).setDepth(UI_DEPTH - 30);
 
     this.createHud();
     this.createOrderCard();
@@ -191,9 +197,7 @@ export class GameScene extends Phaser.Scene {
     this.clock += dt;
 
     this.followPlayer();
-    const cam = this.cameras.main;
-    this.sea.tilePositionX = cam.scrollX;
-    this.sea.tilePositionY = cam.scrollY;
+    this.placeSea();
     this.drawWakes(dt);
     this.drawCourses();
     this.drawShips();
@@ -229,7 +233,17 @@ export class GameScene extends Phaser.Scene {
     this.view.x += dx;
     this.view.y += dy;
     this.lastPlayer = { x: this.state.player.x, y: this.state.player.y };
-    this.cameras.main.setScroll(Math.round(this.view.x - VIEW.w / 2), Math.round(this.view.y - VIEW.h / 2));
+    this.topLeft = { x: Math.round(this.view.x - VIEW.w / 2), y: Math.round(this.view.y - VIEW.h / 2) };
+    // The camera keeps its top-left origin (see shared/scaling.ts), so its scroll is that corner.
+    this.cameras.main.setScroll(this.topLeft.x, this.topLeft.y);
+  }
+
+  /** Moves the four copies of the sea to the corners of the sea the top-left of the screen is in. */
+  private placeSea() {
+    const v = this.topLeft;
+    const x = Math.floor(v.x / WORLD.w) * WORLD.w;
+    const y = Math.floor(v.y / WORLD.h) * WORLD.h;
+    this.sea.forEach((img, i) => img.setPosition(x + (i % 2) * WORLD.w, y + Math.floor(i / 2) * WORLD.h));
   }
 
   /**
@@ -830,8 +844,7 @@ export class GameScene extends Phaser.Scene {
   /** Arrows at the edge of the screen toward enemy ships (rust) and loot (ochre) out of sight. */
   private drawPointers() {
     const g = this.hud;
-    const cam = this.cameras.main;
-    const view = new Phaser.Geom.Rectangle(cam.scrollX, cam.scrollY, VIEW.w, VIEW.h);
+    const view = new Phaser.Geom.Rectangle(this.topLeft.x, this.topLeft.y, VIEW.w, VIEW.h);
     const cx = view.centerX;
     const cy = view.centerY;
     // Each arrow points the shortest way to its target, which may be over an edge of the sea.
@@ -957,7 +970,7 @@ export class GameScene extends Phaser.Scene {
   private createGameOver() {
     const top = OVER.y - OVER.h / 2;
     const dim = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x3a2a18, 0.5).setInteractive();
-    const panel = this.add.image(OVER.x, OVER.y, 'panel-over');
+    const panel = this.add.image(OVER.x, OVER.y, 'panel-over').setScale(1 / SHEET_RES);
     const title = this.add.text(OVER.x, top + 34, 'Sunk!', textStyle(32, '#2b2118', 'bold')).setOrigin(0.5);
     this.gameOverText = this.add
       .text(OVER.x, top + 96, '', { ...textStyle(15, '#3a2c20', 'italic'), align: 'center', lineSpacing: 5 })
