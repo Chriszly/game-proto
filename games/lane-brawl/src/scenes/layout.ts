@@ -16,8 +16,8 @@ export function abilityBox(i: number) {
 }
 
 export const SHOP_BUTTON = { x: 508, y: 428, w: 96, h: 58 };
-/** The minimap, showing the whole map in the bottom right corner. */
-export const MINIMAP = { x: 790, y: 420, w: 158, h: 106 };
+/** The minimap, showing the whole square map in the bottom right corner. */
+export const MINIMAP = { x: 826, y: 420, w: 112, h: 112 };
 
 /** The objective card under the top bar, at the top left of the map. It blocks clicks. */
 export const OBJECTIVE_CARD = { x: 10, y: 42, w: 236, h: 62 };
@@ -49,11 +49,20 @@ export function buffChip(i: number) {
   return { x: VIEW.w - 222, y: 40 + i * 24, w: 212, h: 20 };
 }
 
-/** The five champion cards on the pick screen. */
-export const PICK_CARD = { w: 168, h: 226, gap: 12, y: 150 };
+/** The ten champion cards on the pick screen, in two rows of five. */
+export const PICK_CARD = { w: 168, h: 178, gap: 12, y: 84 };
 export function pickCard(i: number) {
   const total = 5 * PICK_CARD.w + 4 * PICK_CARD.gap;
-  return { x: (VIEW.w - total) / 2 + i * (PICK_CARD.w + PICK_CARD.gap), y: PICK_CARD.y, w: PICK_CARD.w, h: PICK_CARD.h };
+  const col = i % 5;
+  const row = Math.floor(i / 5);
+  return { x: (VIEW.w - total) / 2 + col * (PICK_CARD.w + PICK_CARD.gap), y: PICK_CARD.y + row * (PICK_CARD.h + PICK_CARD.gap), w: PICK_CARD.w, h: PICK_CARD.h };
+}
+/** The button under the cards that draws new names for the champions on offer. */
+export const REROLL = { x: VIEW.w / 2 - 70, y: 462, w: 140, h: 24 };
+
+/** The buffs the player's champion carries, as chips in a row above the portrait. */
+export function buffStrip(i: number) {
+  return { x: 12 + i * 92, y: 388, w: 88, h: 18 };
 }
 
 /** The panel and button shown when a match is won or lost. */

@@ -4,6 +4,7 @@ import {
   ACTIVES,
   ActiveDef,
   BEAST,
+  BUFFS,
   BUSHES,
   AbilityDef,
   AbilityKey,
@@ -13,6 +14,7 @@ import {
   ITEMS,
   ItemDef,
   LANES,
+  RIVER,
   MAX_LEVEL,
   SIDE_COLOR,
   STREAK,
@@ -27,13 +29,15 @@ import {
   bushAt,
 } from '../game/data';
 import { Fx, GameState, Phase, Unit, createGame, dist, getUnit } from '../game/state';
-import { buy, cast, chooseUpgrade, commandAttack, commandMove, hiddenFrom, invulnerable, priceFor, tick, useActive } from '../game/sim';
+import { buy, cast, chooseUpgrade, commandAttack, commandMove, hiddenFrom, invulnerable, priceFor, stealthed, tick, useActive, viewers } from '../game/sim';
+import { championName, shortName } from '../game/names';
 import {
   BEAST_CELL,
   BEAST_KEY,
   INHIB_CELL,
   BOAR,
   BOAR_CELL,
+  BRUTE_CELL,
   CHAMP_CELL,
   COIN,
   MINION_CELL,
@@ -43,14 +47,21 @@ import {
   RUBBLE,
   RUBBLE_CELL,
   TOWER_CELL,
+  WATCH_CELL,
+  WOLF,
+  WOLF_CELL,
+  bakeChampions,
   bakeUnits,
+  bruteKey,
   champKey,
   dirFor,
   frameName,
   inhibKey,
   minionKey,
   nexusKey,
+  pickKey,
   towerKey,
+  watchKey,
 } from '../art/bake';
 import { MAP_KEY, MAP_RES, paintMap } from '../art/map';
 import { PoseName } from '../art/models';
@@ -64,6 +75,7 @@ import {
   OBJECTIVE_CARD,
   PLAY_AGAIN,
   PORTRAIT,
+  REROLL,
   SHOP_BUTTON,
   SHOP_PANEL,
   STREAK_CHIP,
@@ -73,6 +85,7 @@ import {
   abilityBox,
   activeButton,
   buffChip,
+  buffStrip,
   pickCard,
   shopRow,
   upgradeCard,
@@ -124,9 +137,21 @@ interface UnitSprite {
 }
 
 /** Where a unit's feet are drawn, below the centre of its hitbox, by kind. */
-const FOOT = { champion: 9, minion: 5, camp: 8, beast: 10, tower: 12, inhibitor: 10, nexus: 16 } as const;
+const FOOT = { champion: 9, minion: 5, camp: 8, beast: 10, tower: 12, inhibitor: 10, nexus: 16, watchstone: 10 } as const;
 /** How far above the feet the top of each kind's figure is, for bars and markers. */
-const HEAD = { champion: 56, minion: 32, camp: 34, beast: 84, tower: 104, inhibitor: 62, nexus: 104 } as const;
+const HEAD = { champion: 56, minion: 32, camp: 34, beast: 84, tower: 104, inhibitor: 62, nexus: 104, watchstone: 62 } as const;
+/** The top of a unit's figure above its feet: a brute stands taller than a boar, a pup lower. */
+function headOf(u: Unit): number {
+  if (u.kind !== 'camp') return HEAD[u.kind];
+  return u.campKind === 'ember' || u.campKind === 'moss' ? 70 : u.campKind === 'pup' ? 22 : HEAD.camp;
+}
+/** The fog of war's grid: one cell per this many world pixels. */
+const FOG_CELL = 20;
+const FOG_COLS = Math.ceil(WORLD.w / FOG_CELL);
+const FOG_ROWS = Math.ceil(WORLD.h / FOG_CELL);
+/** How dark the fog is where blue sees nothing (0..1), and the shades it is drawn in. */
+const FOG_ALPHA = 0.72;
+const FOG_STEPS = 10;
 
 const noop = () => undefined;
 /** The size of the map's tiles, in pixels. */
@@ -179,6 +204,12 @@ export class GameScene extends Phaser.Scene {
   private pickImages: Phaser.GameObjects.Image[] = [];
   private pickBg!: Phaser.GameObjects.Image;
   private texts = new Map<string, Phaser.GameObjects.Text>();
+  /** The names on the pick cards, drawn anew each time the pick screen opens. */
+  private pickNames: string[] = [];
+  /** The fog of war: how much each cell is hidden from blue (0 clear, 1 hidden), and its images. */
+  private fog = new Float32Array(FOG_COLS * FOG_ROWS);
+  private fogG!: Phaser.GameObjects.Graphics;
+  private fogMini!: Phaser.GameObjects.Graphics;
   private used = new Set<string>();
   private keys!: Record<AbilityKey | 'B' | 'D' | 'H' | 'ESC' | 'ONE' | 'TWO', Phaser.Input.Keyboard.Key>;
 
@@ -209,18 +240,22 @@ export class GameScene extends Phaser.Scene {
     this.topG = this.add.graphics().setDepth(4);
     this.hudG = this.add.graphics().setDepth(10).setScrollFactor(0);
     this.pickBg = this.add.image(0, 0, 'lb-pick-bg').setOrigin(0, 0).setDisplaySize(VIEW.w, VIEW.h).setScrollFactor(0).setDepth(9);
-    this.portrait = this.add.image(0, 0, champKey('warden', 'blue'), frameName(2, 'idle')).setScrollFactor(0).setDepth(11).setVisible(false);
+    this.portrait = this.add.image(0, 0, pickKey('warden'), frameName(2, 'idle')).setScrollFactor(0).setDepth(11).setVisible(false);
     CHAMPIONS.forEach((c, i) => {
       const r = pickCard(i);
       this.pickImages.push(
         this.add
-          .image(r.x + r.w / 2, r.y + 100, champKey(c.id, 'blue'), frameName(2, 'idle'))
+          .image(r.x + r.w / 2, r.y + 80, pickKey(c.id), frameName(2, 'idle'))
           .setOrigin(0.5, CHAMP_CELL.footY / CHAMP_CELL.h)
-          .setScale(1.7 / RES)
+          .setScale(1.3 / RES)
           .setScrollFactor(0)
           .setDepth(11),
       );
     });
+    this.rollNames();
+    // The fog of war, over the world (above the figures, under the bars) and over the minimap.
+    this.fogG = this.add.graphics().setDepth(3.6);
+    this.fogMini = this.add.graphics().setScrollFactor(0).setDepth(10.5);
 
     this.keys = this.input.keyboard!.addKeys('Q,W,E,R,B,D,H,ESC,ONE,TWO') as typeof this.keys;
     for (const k of ABILITY_KEYS) this.keys[k].on('down', () => this.castAtCursor(k));
@@ -251,6 +286,7 @@ export class GameScene extends Phaser.Scene {
         this.acc -= STEP;
       }
     }
+    if (s) this.updateFog(s);
     if (s) this.collectFx(s, frameMs);
     this.followPlayer(frameMs);
     this.used.clear();
@@ -259,8 +295,24 @@ export class GameScene extends Phaser.Scene {
     this.refreshZones();
   }
 
+  /** New names for the champions on the pick cards. */
+  private rollNames() {
+    const taken: string[] = [];
+    this.pickNames = CHAMPIONS.map((c) => {
+      const name = championName(c.id, Math.random, taken);
+      taken.push(name);
+      return name;
+    });
+  }
+
   private startMatch(def: ChampionDef) {
-    this.state = createGame(def, ENEMY_DAMAGE);
+    this.state = createGame(def, ENEMY_DAMAGE, { playerName: this.pickNames[CHAMPIONS.indexOf(def)] });
+    // Each champion in the match gets its sheet in its team's colours, once.
+    const ms = bakeChampions(
+      this,
+      this.state.units.filter((u) => u.champ).map((u) => ({ id: u.champ!.id, team: u.side === 'red' ? ('red' as const) : ('blue' as const) })),
+    );
+    if (import.meta.env.DEV) console.info(`Lane Brawl champions baked in ${Math.round(ms)} ms`);
     this.shopOpen = false;
     this.liveFx = [];
     this.lastWorld = { x: BASE.blue.x + 70, y: BASE.blue.y - 40 };
@@ -269,6 +321,7 @@ export class GameScene extends Phaser.Scene {
 
   private resetToPick() {
     this.state = null;
+    this.rollNames();
     this.shopOpen = false;
     this.liveFx = [];
     this.cameras.main.centerOn(WORLD.w / 2, WORLD.h / 2);
@@ -315,6 +368,7 @@ export class GameScene extends Phaser.Scene {
     const phase = this.phase;
     if (phase === 'pick') {
       CHAMPIONS.forEach((def, i) => this.zones.push({ ...pickCard(i), run: () => this.startMatch(def) }));
+      this.zones.push({ ...REROLL, run: () => this.rollNames() });
       return;
     }
     if (phase === 'won' || phase === 'lost') {
@@ -378,10 +432,75 @@ export class GameScene extends Phaser.Scene {
   /** Takes the visuals the sim raised this frame and ages the ones on screen. */
   private collectFx(s: GameState, delta: number) {
     // Reduced motion drops the rings and lines but keeps the last-hit coins, which carry the gold.
-    for (const f of s.fx) if (!settings.reduceMotion || f.kind === 'coin') this.liveFx.push({ f, left: f.ms });
+    // Effects out in the fog stay unseen, like the units that raised them.
+    for (const f of s.fx) if ((!settings.reduceMotion || f.kind === 'coin') && !this.fogged(f.x, f.y)) this.liveFx.push({ f, left: f.ms });
     s.fx.length = 0;
     for (const l of this.liveFx) l.left -= delta;
     this.liveFx = this.liveFx.filter((l) => l.left > 0);
+  }
+
+  /**
+   * Works out the fog of war over blue's view from the sight of every blue unit, and paints it
+   * into the fog's small canvas: one pixel per cell, dark where blue sees nothing, with soft edges.
+   */
+  private updateFog(s: GameState) {
+    const cols = FOG_COLS, rows = FOG_ROWS;
+    const edge = new Float32Array(cols * rows).fill(1e9);
+    for (const v of viewers(s, 'blue')) {
+      const c0 = Math.max(0, Math.floor((v.x - v.r) / FOG_CELL) - 1), c1 = Math.min(cols - 1, Math.ceil((v.x + v.r) / FOG_CELL) + 1);
+      const r0 = Math.max(0, Math.floor((v.y - v.r) / FOG_CELL) - 1), r1 = Math.min(rows - 1, Math.ceil((v.y + v.r) / FOG_CELL) + 1);
+      for (let r = r0; r <= r1; r++) {
+        const dy = (r + 0.5) * FOG_CELL - v.y;
+        for (let c = c0; c <= c1; c++) {
+          const dx = (c + 0.5) * FOG_CELL - v.x;
+          const d = Math.sqrt(dx * dx + dy * dy) - v.r;
+          if (d < edge[r * cols + c]) edge[r * cols + c] = d;
+        }
+      }
+    }
+    // Clear inside sight, fully fogged a little past its edge, a soft ramp between.
+    for (let i = 0; i < edge.length; i++) this.fog[i] = Math.max(0, Math.min(1, (edge[i] + 30) / 90));
+  }
+
+  /** The fog at a world point, blended smoothly between the cells around it. */
+  private fogAt(x: number, y: number): number {
+    const fx = Math.max(0, Math.min(FOG_COLS - 1.001, x / FOG_CELL - 0.5));
+    const fy = Math.max(0, Math.min(FOG_ROWS - 1.001, y / FOG_CELL - 0.5));
+    const c = Math.floor(fx), r = Math.floor(fy), tx = fx - c, ty = fy - r;
+    const f = this.fog, i = r * FOG_COLS + c;
+    const top = f[i] + (f[i + 1] - f[i]) * tx;
+    const bottom = f[i + FOG_COLS] + (f[i + FOG_COLS + 1] - f[i + FOG_COLS]) * tx;
+    return top + (bottom - top) * ty;
+  }
+
+  /**
+   * Paints the fog over a rectangle of the world in squares of `step` world pixels, onto `g` at
+   * `scale` px per world pixel from (ox, oy): one rectangle per run of squares of the same shade.
+   */
+  private paintFog(g: Phaser.GameObjects.Graphics, x0: number, y0: number, w: number, h: number, step: number, ox: number, oy: number, scale: number) {
+    const cols = Math.ceil(w / step), rows = Math.ceil(h / step);
+    for (let r = 0; r < rows; r++) {
+      const y = y0 + r * step;
+      let start = 0;
+      let shade = -1;
+      for (let c = 0; c <= cols; c++) {
+        const k = c < cols ? Math.round(this.fogAt(x0 + (c + 0.5) * step, y + step / 2) * FOG_STEPS) : -1;
+        if (k === shade) continue;
+        if (shade > 0) {
+          g.fillStyle(0x0a101c, (shade / FOG_STEPS) * FOG_ALPHA);
+          g.fillRect(ox + (x0 + start * step) * scale, oy + y * scale, (c - start) * step * scale, step * scale);
+        }
+        start = c;
+        shade = k;
+      }
+    }
+  }
+
+  /** Whether a world point lies in the fog for blue. */
+  private fogged(x: number, y: number): boolean {
+    if (!this.state) return false;
+    const c = Math.floor(x / FOG_CELL), r = Math.floor(y / FOG_CELL);
+    return (this.fog[r * FOG_COLS + c] ?? 0) > 0.6;
   }
 
   private followPlayer(delta: number) {
@@ -447,8 +566,17 @@ export class GameScene extends Phaser.Scene {
     top.clear();
     const s = this.state;
     const seen = new Set<number>();
+    this.fogG.clear();
+    this.fogMini.clear();
+    if (s) {
+      const step = 10;
+      const x0 = Math.floor(v.x / step) * step, y0 = Math.floor(v.y / step) * step;
+      this.paintFog(this.fogG, x0, y0, v.x + v.w - x0, v.y + v.h - y0, step, 0, 0, 1);
+      if (s.phase === 'playing') this.paintFog(this.fogMini, 0, 0, WORLD.w, WORLD.h, FOG_CELL, MINIMAP.x, MINIMAP.y, MINIMAP.w / WORLD.w);
+    }
     if (s) {
       const me = this.player();
+      this.drawZones(g, s);
       for (const u of s.units) {
         if (u.dead && u.kind !== 'tower' && u.kind !== 'inhibitor') continue;
         // A red champion hiding in a bush is not drawn at all.
@@ -460,6 +588,7 @@ export class GameScene extends Phaser.Scene {
       for (const u of s.units) if (!u.dead && !hiddenFrom(s, 'blue', u)) this.drawBar(top, u, s, me);
       this.drawObjectiveMarker(top, s);
       for (const p of s.projectiles) {
+        if (this.fogged(p.x, p.y)) continue;
         const speed = Math.hypot(p.vx, p.vy) || 1;
         const dx = p.vx / speed, dy = p.vy / speed;
         const y = p.y - 20;
@@ -479,8 +608,32 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** The patches zone abilities leave on the ground, pulsing in their caster's colour. */
+  private drawZones(g: Phaser.GameObjects.Graphics, s: GameState) {
+    for (const z of s.zones) {
+      if (this.fogged(z.x, z.y)) continue;
+      const fade = Math.min(1, z.left / 400, (z.ms - z.left) / 200 + 0.3);
+      const pulse = settings.reduceMotion ? 0 : Math.sin(s.time / 140) * 0.05;
+      g.fillStyle(col(z.color), (0.2 + pulse) * fade).fillEllipse(z.x, z.y, z.r * 2, z.r * 1.2);
+      g.lineStyle(3, col(z.color), 0.8 * fade).strokeEllipse(z.x, z.y, z.r * 2, z.r * 1.2);
+      g.lineStyle(1.5, col(z.color), 0.5 * fade).strokeEllipse(z.x, z.y, z.r * 1.3, z.r * 0.78);
+    }
+  }
+
   private drawGround(g: Phaser.GameObjects.Graphics, u: Unit, s: GameState) {
     if (u.dead) return;
+    if (u.kind === 'watchstone') {
+      // The ring a team takes it within, and how far along a capture is.
+      const color = u.side === 'neutral' ? SIDE_COLOR.neutral : SIDE_COLOR[u.side];
+      g.lineStyle(2, col(color), 0.5).strokeEllipse(u.x, u.y + 8, 300 * 0.98, 300 * 0.58);
+      if (u.capture) {
+        const k = Math.min(1, u.capture.ms / 3000);
+        g.lineStyle(5, col(SIDE_COLOR[u.capture.team]), 1).beginPath();
+        g.arc(u.x, u.y - 72, 14, -Math.PI / 2, -Math.PI / 2 + k * Math.PI * 2, false);
+        g.strokePath();
+      }
+      return;
+    }
     const fy = u.y + FOOT[u.kind];
     const r = u.kind === 'tower' ? 30 : u.kind === 'nexus' ? 54 : u.kind === 'inhibitor' ? 26 : u.radius;
     // A soft shadow cast to the bottom right.
@@ -496,6 +649,8 @@ export class GameScene extends Phaser.Scene {
       g.lineStyle(u.kind === 'minion' ? 2 : 3, color, 0.95).strokeEllipse(u.x, fy, w, h);
       g.fillStyle(color, 0.16).fillEllipse(u.x, fy, w, h);
       if (u.player) g.lineStyle(1.5, 0xffffff, 0.9).strokeEllipse(u.x, fy, w + 10, h + 6);
+      // A jungle buff or an ability's buff glows round the feet in its colour.
+      u.buffs.forEach((b, i) => g.lineStyle(2, col(b.color), 0.85).strokeEllipse(u.x, fy, w + 16 + i * 8, h + 10 + i * 5));
     }
     if (invulnerable(s, u)) {
       // A shimmering ward round a structure that can't be hurt yet.
@@ -544,10 +699,17 @@ export class GameScene extends Phaser.Scene {
         frame = frameName(dirFor(u.facing), pose(8));
         cell = MINION_CELL;
         break;
-      case 'camp':
-        key = BOAR;
+      case 'camp': {
+        const brute = u.campKind === 'ember' || u.campKind === 'moss';
+        const wolf = u.campKind === 'wolf' || u.campKind === 'pup';
+        key = brute ? bruteKey(u.campKind as 'ember' | 'moss') : wolf ? WOLF : BOAR;
         frame = frameName(dirFor(u.facing), pose(10) === 'c0' ? 'idle' : pose(10));
-        cell = BOAR_CELL;
+        cell = brute ? BRUTE_CELL : wolf ? WOLF_CELL : BOAR_CELL;
+        break;
+      }
+      case 'watchstone':
+        key = watchKey(u.side);
+        cell = WATCH_CELL;
         break;
       case 'beast':
         key = BEAST_KEY;
@@ -568,9 +730,11 @@ export class GameScene extends Phaser.Scene {
     }
     const depth = 2 + fy / WORLD.h;
     // Super minions stand taller; the player's allies in a bush show through the grass.
-    const scale = (u.kind === 'minion' && u.power > 1 ? 1.5 : u.kind === 'inhibitor' && u.dead ? 0.7 : 1) / RES;
+    const scale = (u.kind === 'minion' && u.power > 1 ? 1.5 : u.kind === 'inhibitor' && u.dead ? 0.7 : u.campKind === 'pup' ? 0.72 : 1) / RES;
     const inBush = u.kind === 'champion' && u.side === 'blue' && bushAt(u) >= 0;
-    sp.main.setTexture(key, frame).setOrigin(0.5, cell.footY / cell.h).setPosition(u.x, fy).setDepth(depth).setScale(scale).setAlpha(inBush ? 0.6 : 1).setVisible(true);
+    // Blue's champions in a bush or in stealth show through, half seen.
+    const ghost = u.kind === 'champion' && u.side === 'blue' && stealthed(u) ? 0.38 : inBush ? 0.6 : 1;
+    sp.main.setTexture(key, frame).setOrigin(0.5, cell.footY / cell.h).setPosition(u.x, fy).setDepth(depth).setScale(scale).setAlpha(ghost).setVisible(true);
     const marked = s.lastHitMark === u.id && u.kind === 'minion' && u.side === 'red';
     sp.outline.setVisible(marked);
     if (marked) sp.outline.setTexture(MINION_OUTLINE, frame).setOrigin(0.5, cell.footY / cell.h).setPosition(u.x, fy).setDepth(depth - 0.0001);
@@ -585,7 +749,8 @@ export class GameScene extends Phaser.Scene {
     const w = u.kind === 'nexus' ? 90 : u.kind === 'tower' || u.kind === 'beast' ? 64 : u.kind === 'inhibitor' ? 50 : u.kind === 'minion' ? 30 : 50;
     const h = u.kind === 'minion' ? 4 : 6;
     const x = u.x - w / 2;
-    const y = u.y + FOOT[u.kind] - HEAD[u.kind] - 10;
+    if (u.kind === 'watchstone') return;
+    const y = u.y + FOOT[u.kind] - headOf(u) - 10;
     const ratio = Math.max(0, u.hp / u.maxHp);
     const own = me !== null && u.side === me.side;
     g.fillStyle(col(UI.edge), 0.9).fillRect(x - 1, y - 1, w + 2, h + 2);
@@ -598,8 +763,10 @@ export class GameScene extends Phaser.Scene {
       // The level in a small slate badge at the bar's left.
       g.fillStyle(col(UI.slateDark), 1).fillRect(x - 13, y - 3, 12, 12);
       this.t(`lvl-${u.id}`, x - 7, y - 3, String(u.level), 9, UI.text, 'center', true, true);
+      // The champion's own name over its bar.
+      this.t(`cname-${u.id}`, u.x, y - 15, u.player ? shortName(u.name) : shortName(u.name), 10, u.side === 'red' ? '#ffb4a8' : '#cfe1ff', 'center', true, true);
     }
-    if (u.stunMs > 0) this.t(`stun-${u.id}`, u.x, y - 16, 'STUN', 9, UI.gold, 'center', true, true);
+    if (u.stunMs > 0) this.t(`stun-${u.id}`, u.x, y - (u.kind === 'champion' ? 28 : 16), 'STUN', 9, UI.gold, 'center', true, true);
   }
 
   /** A gold marker over the objective's target, with the reward, and a dashed ring round it. */
@@ -609,7 +776,7 @@ export class GameScene extends Phaser.Scene {
     if (!o || !t || t.dead || hiddenFrom(s, 'blue', t)) return;
     const fy = t.y + FOOT[t.kind];
     const bob = settings.reduceMotion ? 0 : Math.sin(s.time / 220) * 3;
-    const y = fy - HEAD[t.kind] - 18 + bob;
+    const y = fy - headOf(t) - (t.kind === 'champion' ? 30 : 18) + bob;
     const label = `OBJECTIVE · +${o.gold}g`;
     const w = 128;
     g.fillStyle(col(UI.slateDark), 0.92).fillRect(t.x - w / 2, y - 22, w, 18);
@@ -711,24 +878,27 @@ export class GameScene extends Phaser.Scene {
   }
 
   private drawPick(g: Phaser.GameObjects.Graphics) {
-    this.t('title', VIEW.w / 2, 34, 'LANE BRAWL', 40, UI.gold, 'center', true);
-    this.t('sub', VIEW.w / 2, 90, 'Pick your champion. Four allies fill the other roles; five champions fight you on red.', 13, UI.dim, 'center');
+    this.t('title', VIEW.w / 2, 14, 'LANE BRAWL', 34, UI.gold, 'center', true);
+    this.t('sub', VIEW.w / 2, 58, 'Pick your champion. Four others join you at random; five more fight you on red.', 13, UI.dim, 'center');
     CHAMPIONS.forEach((c, i) => {
       const r = pickCard(i);
       this.panel(g, r.x, r.y, r.w, r.h, UI.card);
       g.fillStyle(col(c.color), 1).fillRect(r.x + 2, r.y + 2, r.w - 4, 4);
-      g.fillStyle(col('#3b7be8'), 0.25).fillEllipse(r.x + r.w / 2, r.y + 100, 80, 24);
-      g.lineStyle(2, col('#3b7be8'), 0.9).strokeEllipse(r.x + r.w / 2, r.y + 100, 80, 24);
-      this.t(`pick-name-${i}`, r.x + r.w / 2, r.y + 118, c.name, 17, UI.text, 'center', true);
-      this.t(`pick-role-${i}`, r.x + r.w / 2, r.y + 139, c.role.toUpperCase(), 10, c.color, 'center', true);
-      c.abilities.forEach((ab, j) => {
-        this.t(`pick-key-${i}-${j}`, r.x + 14, r.y + 158 + j * 16, ab.key, 11, UI.gold, 'left', true);
-        this.t(`pick-ab-${i}-${j}`, r.x + 28, r.y + 158 + j * 16, ab.name, 11, UI.dim);
-      });
+      g.fillStyle(col('#3b7be8'), 0.25).fillEllipse(r.x + r.w / 2, r.y + 80, 70, 20);
+      g.lineStyle(2, col('#3b7be8'), 0.9).strokeEllipse(r.x + r.w / 2, r.y + 80, 70, 20);
+      const name = this.pickNames[i] ?? c.name;
+      this.t(`pick-name-${i}`, r.x + r.w / 2, r.y + 92, name, name.length > 18 ? 12 : 14, UI.text, 'center', true);
+      this.t(`pick-role-${i}`, r.x + r.w / 2, r.y + 112, `${c.name} · ${c.role}`.toUpperCase(), 10, c.color, 'center', true);
+      this.t(`pick-pas-${i}`, r.x + r.w / 2, r.y + 130, c.passive.name, 11, UI.gold, 'center', true);
+      this.t(`pick-desc-${i}`, r.x + r.w / 2, r.y + 144, c.passive.desc, 10, UI.dim, 'center');
+      this.t(`pick-blurb-${i}`, r.x + r.w / 2, r.y + 159, c.blurb, 10, UI.muted, 'center');
     });
-    this.t('hint', VIEW.w / 2, 404, 'Click a champion to start. Click the ground to walk, an enemy to attack.', 12, UI.dim, 'center');
-    this.t('hint2', VIEW.w / 2, 424, 'Q W E R cast at the cursor, D and H use item actives. B opens the shop at your Nexus. 1 or 2 picks an upgrade.', 12, UI.dim, 'center');
-    this.t('hint3', VIEW.w / 2, 444, 'Hide in tall grass to ambush, slay the guardian beast for stronger minions, and break an inhibitor to reach the Nexus.', 12, UI.dim, 'center');
+    const b = REROLL;
+    this.panel(g, b.x, b.y, b.w, b.h, '#3a4660');
+    this.t('reroll', b.x + b.w / 2, b.y + 5, 'New names', 12, UI.text, 'center', true);
+    this.t('hint', VIEW.w / 2, 491, 'Click a champion to start. Click the ground to walk, an enemy to attack. Q W E R cast at the cursor, D and H use item actives.', 11, UI.dim, 'center');
+    this.t('hint2', VIEW.w / 2, 506, 'B opens the shop at your Nexus, 1 or 2 picks an upgrade. You only see what your team sees: the rest lies in the fog.', 11, UI.dim, 'center');
+    this.t('hint3', VIEW.w / 2, 521, 'Slay the brutes for buffs, take the watchstones on the river for sight, and the guardian beast for stronger minions.', 11, UI.dim, 'center');
   }
 
   private drawPlaying(g: Phaser.GameObjects.Graphics, s: GameState) {
@@ -855,7 +1025,7 @@ export class GameScene extends Phaser.Scene {
       .setVisible(true);
     const bx = P.x + 82;
     const bw = P.w - 92;
-    this.t('name', bx, P.y + 6, c.name, 15, UI.text, 'left', true);
+    this.t('name', bx, P.y + 6, shortName(me.name), 15, UI.text, 'left', true);
     this.t('lv', P.x + P.w - 10, P.y + 8, `Lv ${me.level}`, 12, UI.gold, 'right', true);
     g.fillStyle(0x151a24, 1).fillRect(bx, P.y + 28, bw, 11);
     g.fillStyle(col('#62d86f'), 1).fillRect(bx, P.y + 28, bw * Math.max(0, me.hp / me.maxHp), 11);
@@ -878,8 +1048,9 @@ export class GameScene extends Phaser.Scene {
       g.fillStyle(0xffffff, 0.4).fillTriangle(cx, cy - 6, cx - 6, cy, cx, cy);
       if (item.from) g.lineStyle(1, col(UI.gold), 1).strokeRect(x + 1, y + 1, 15, 15);
     }
-    this.t('dead', bx, P.y + 72, me.dead ? `Respawn in ${Math.ceil((me.respawnAt - s.time) / 1000)}s` : c.role, 11, me.dead ? UI.red : UI.dim, 'left', true);
-    this.t('lasthits', bx, P.y + 89, `Last hits ${s.lastHits}  best x${s.bestStreak}`, 10, UI.muted);
+    this.t('dead', bx, P.y + 72, me.dead ? `Respawn in ${Math.ceil((me.respawnAt - s.time) / 1000)}s` : `${c.name} · ${c.passive.name}`, 11, me.dead ? UI.red : UI.dim, 'left', true);
+    this.t('lasthits', bx, P.y + 89, `K ${me.kills}  D ${me.deaths}  Last hits ${s.lastHits}`, 10, UI.muted);
+    this.drawBuffStrip(g, me);
 
     // Q, W, E, R.
     const offer = s.upgradeOffers[0];
@@ -964,6 +1135,18 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** The buffs the player's champion carries, as chips above the portrait with the time left. */
+  private drawBuffStrip(g: Phaser.GameObjects.Graphics, me: Unit) {
+    me.buffs.slice(0, 4).forEach((b, i) => {
+      const r = buffStrip(i);
+      g.fillStyle(col(UI.edge), 0.9).fillRect(r.x - 1, r.y - 1, r.w + 2, r.h + 2);
+      g.fillStyle(col(UI.slateDark), 0.92).fillRect(r.x, r.y, r.w, r.h);
+      g.fillStyle(col(b.color), 1).fillRect(r.x, r.y, 4, r.h);
+      const label = b.id === 'ember' || b.id === 'moss' ? BUFFS[b.id].name : b.id;
+      this.t(`bstrip-${i}`, r.x + 8, r.y + 3, `${label.length > 9 ? label.split(' ')[0] : label} ${Math.ceil(b.ms / 1000)}s`, 10, UI.text, 'left', true);
+    });
+  }
+
   /** A small icon for an ability, by what it does. */
   private abilityIcon(g: Phaser.GameObjects.Graphics, ab: AbilityDef, x: number, y: number, alpha: number, color: string) {
     const c = col(color);
@@ -987,7 +1170,29 @@ export class GameScene extends Phaser.Scene {
         g.fillStyle(col(UI.gold), alpha).fillPoints([V(-13, -4), V(2, -4), V(2, -11), V(14, 0), V(2, 11), V(2, 4), V(-13, 4)], true);
         g.fillStyle(c, alpha).fillPoints([V(-13, 0), V(2, 0), V(2, 4), V(-13, 4)], true);
         break;
+      case 'buff':
+        // Three rising chevrons.
+        for (let i = 0; i < 3; i++) {
+          const yy = y + 9 - i * 8;
+          g.fillStyle(i === 2 ? col(UI.gold) : c, alpha).fillPoints([V(-11, yy + 3 - y), V(0, yy - 5 - y), V(11, yy + 3 - y), V(11, yy + 7 - y), V(0, yy - 1 - y), V(-11, yy + 7 - y)], true);
+        }
+        break;
+      case 'zone':
+        // A patch on the ground with motes rising from it.
+        g.fillStyle(c, alpha * 0.45).fillEllipse(x, y + 6, 30, 14);
+        g.lineStyle(2, c, alpha).strokeEllipse(x, y + 6, 30, 14);
+        for (const [dx, dy, r] of [[-6, -4, 2.5], [3, -10, 3], [8, -2, 2], [-1, -15, 2]]) g.fillStyle(dx < 0 ? c : col(UI.gold), alpha).fillCircle(x + dx, y + dy, r);
+        break;
       case 'bolt':
+        if (ab.pull) {
+          // A barbed hook on a line.
+          g.lineStyle(2, col('#d9c79a'), alpha).lineBetween(x - 12, y + 12, x + 4, y - 4);
+          g.lineStyle(3, c, alpha).beginPath();
+          g.arc(x + 4, y + 2, 7, -Math.PI / 2, Math.PI * 0.6, false);
+          g.strokePath();
+          g.fillStyle(c, alpha).fillTriangle(x + 2, y - 11, x + 9, y - 3, x - 1, y - 2);
+          break;
+        }
         g.lineStyle(3, col('#d9c79a'), alpha).lineBetween(x - 11, y + 11, x + 7, y - 7);
         g.fillStyle(c, alpha).fillTriangle(x + 13, y - 13, x + 2, y - 8, x + 8, y - 2);
         g.fillStyle(col(UI.gold), alpha).fillTriangle(x - 12, y + 12, x - 12, y + 5, x - 5, y + 12);
@@ -1002,6 +1207,7 @@ export class GameScene extends Phaser.Scene {
     const mx = (x: number) => m.x + x * k;
     const my = (y: number) => m.y + y * k;
     g.fillStyle(col('#3f7a3a'), 1).fillRect(m.x, m.y, m.w, m.h);
+    g.lineStyle(4, col('#3a7ea3'), 0.95).lineBetween(mx(RIVER.from.x), my(RIVER.from.y), mx(RIVER.to.x), my(RIVER.to.y));
     g.lineStyle(3, col('#d2b483'), 0.95);
     for (const lane of Object.values(LANES)) {
       g.beginPath();
@@ -1031,7 +1237,12 @@ export class GameScene extends Phaser.Scene {
       } else if (u.kind === 'nexus') g.fillStyle(col(SIDE_COLOR[u.side as Team]), 1).fillCircle(mx(u.x), my(u.y), 5);
       else if (u.kind === 'champion') g.fillStyle(col(SIDE_COLOR[u.side as Team]), 1).fillCircle(mx(u.x), my(u.y), u.player ? 3.5 : 2.5);
       else if (u.kind === 'minion') g.fillStyle(col(SIDE_COLOR[u.side as Team]), 0.85).fillRect(mx(u.x) - 0.75, my(u.y) - 0.75, 1.5, 1.5);
-      else if (u.kind === 'camp') g.fillStyle(col(SIDE_COLOR.neutral), 0.8).fillCircle(mx(u.x), my(u.y), 2);
+      else if (u.kind === 'camp' && u.campKind !== 'pup') g.fillStyle(col(u.campKind === 'ember' ? BUFFS.ember.color : u.campKind === 'moss' ? BUFFS.moss.color : SIDE_COLOR.neutral), 0.9).fillCircle(mx(u.x), my(u.y), 2);
+      else if (u.kind === 'watchstone') {
+        const cx = mx(u.x), cy = my(u.y);
+        g.fillStyle(col(UI.edge), 1).fillRect(cx - 3, cy - 3, 6, 6);
+        g.fillStyle(col(u.side === 'neutral' ? SIDE_COLOR.neutral : SIDE_COLOR[u.side]), 1).fillRect(cx - 2, cy - 2, 4, 4);
+      }
     }
     // The view and the player.
     const v = this.viewRect();
@@ -1100,7 +1311,7 @@ export class GameScene extends Phaser.Scene {
     const won = s.winner === 'blue';
     this.t('end-title', VIEW.w / 2, p.y + 22, won ? 'Victory' : 'Defeat', 34, won ? UI.green : UI.red, 'center', true);
     this.t('end-sub', VIEW.w / 2, p.y + 72, won ? 'The red Nexus has fallen.' : 'Your Nexus has fallen.', 13, UI.dim, 'center');
-    this.t('end-stats', VIEW.w / 2, p.y + 94, `Objectives ${s.objectivesDone}   Last hits ${s.lastHits}   Best streak x${s.bestStreak}   Beasts slain ${s.beastKills.blue}`, 11, UI.muted, 'center');
+    this.t('end-stats', VIEW.w / 2, p.y + 94, `${this.player()?.kills ?? 0} kills, ${this.player()?.deaths ?? 0} deaths   Objectives ${s.objectivesDone}   Last hits ${s.lastHits}   Best streak x${s.bestStreak}   Beasts ${s.beastKills.blue}`, 11, UI.muted, 'center');
     this.panel(g, PLAY_AGAIN.x, PLAY_AGAIN.y, PLAY_AGAIN.w, PLAY_AGAIN.h, '#4a5876');
     this.t('again-label', PLAY_AGAIN.x + PLAY_AGAIN.w / 2, PLAY_AGAIN.y + 12, 'Play again', 16, UI.text, 'center', true);
   }

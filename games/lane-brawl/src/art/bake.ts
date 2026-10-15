@@ -1,12 +1,14 @@
-// Bakes the low-poly models into sprite sheets at boot: every champion in both teams' colours,
-// minions, the boar, the guardian beast, towers, inhibitors, rubble, the Nexus and a coin, each
-// moving one from eight directions and in eight poses. Frames are named `${dir}:${pose}`; dir 0
+// Bakes the low-poly models into sprite sheets: at boot the minions, the jungle's boar, wolf and
+// brutes, the guardian beast, towers, inhibitors, watchstones, rubble, the Nexus, a coin and one
+// figure per champion class for the pick cards; at the start of a match the champions in it, in
+// their team's colours (`bakeChampions`). Each moving one is drawn from eight directions in eight poses. Frames are named `${dir}:${pose}`; dir 0
 // faces right (east) and each step turns 45 degrees clockwise on screen, so dir 2 faces the viewer.
 
 import Phaser from 'phaser';
 import { sharpRes } from '../../../../shared/scaling';
 import { Model, render } from './lowpoly';
-import { POSES, PoseName, TeamName, beastModel, inhibitorModel, boarModel, championModel, coinModel, minionModel, nexusModel, rubbleModel, towerModel } from './models';
+import { POSES, PoseName, TeamName, beastModel, bruteModel, inhibitorModel, boarModel, championModel, coinModel, minionModel, nexusModel, rubbleModel, towerModel, watchstoneModel, wolfModel } from './models';
+import { CHAMPIONS } from '../game/data';
 
 /**
  * Canvas pixels per game pixel in the sheets; sprites are drawn at 1 / RES scale. 2 on a screen that
@@ -27,6 +29,9 @@ export interface SheetInfo {
 export const CHAMP_CELL = { w: 76, h: 84, footY: 66 };
 export const MINION_CELL = { w: 48, h: 56, footY: 42 };
 export const BOAR_CELL = { w: 84, h: 72, footY: 44 };
+export const WOLF_CELL = { w: 80, h: 66, footY: 44 };
+export const BRUTE_CELL = { w: 104, h: 112, footY: 84 };
+export const WATCH_CELL = { w: 60, h: 92, footY: 72 };
 export const TOWER_CELL = { w: 76, h: 124, footY: 104 };
 export const RUBBLE_CELL = { w: 76, h: 56, footY: 36 };
 export const NEXUS_CELL = { w: 120, h: 134, footY: 100 };
@@ -107,10 +112,14 @@ function outlineOf(src: HTMLCanvasElement): HTMLCanvasElement {
   return out;
 }
 
-export const CHAMPION_IDS = ['warden', 'blade', 'archer', 'mage', 'priest'];
 export const TEAMS: TeamName[] = ['blue', 'red'];
 
 export const champKey = (id: string, team: TeamName) => `lb-champ-${id}-${team}`;
+/** One idle figure per class, facing the viewer, for the pick cards. */
+export const pickKey = (id: string) => `lb-pick-${id}`;
+export const WOLF = 'lb-wolf';
+export const bruteKey = (kind: 'ember' | 'moss') => `lb-brute-${kind}`;
+export const watchKey = (side: TeamName | 'neutral') => `lb-watch-${side}`;
 export const minionKey = (team: TeamName) => `lb-minion-${team}`;
 export const MINION_OUTLINE = 'lb-minion-outline';
 export const BOAR = 'lb-boar';
@@ -126,8 +135,8 @@ export function bakeUnits(scene: Phaser.Scene): number {
   if (scene.textures.exists(COIN)) return 0;
   const t0 = performance.now();
   RES = Math.floor(sharpRes(BEAST_CELL.w * DIRS, BEAST_CELL.h * DIRS, 2) * 2) / 2;
+  for (const c of CHAMPIONS) bake(scene, pickKey(c.id), CHAMP_CELL, [{ name: frameName(2, 'idle'), model: () => championModel(c.id, 'blue', 'idle'), yaw: Math.PI / 2 - dirAngle(2) }]);
   for (const team of TEAMS) {
-    for (const id of CHAMPION_IDS) bake(scene, champKey(id, team), CHAMP_CELL, movingCells((p) => championModel(id, team, p)));
     const sheet = bake(scene, minionKey(team), MINION_CELL, movingCells((p) => minionModel(team, p)));
     if (team === 'red') {
       const cells = movingCells((p) => minionModel(team, p));
@@ -140,9 +149,21 @@ export function bakeUnits(scene: Phaser.Scene): number {
     bake(scene, inhibKey(team), INHIB_CELL, [{ name: 'idle', model: () => inhibitorModel(team), yaw: 0.2 }]);
     bake(scene, nexusKey(team), NEXUS_CELL, [{ name: 'idle', model: () => nexusModel(team), yaw: 0.25 }]);
   }
+  for (const side of ['neutral', ...TEAMS] as const) bake(scene, watchKey(side), WATCH_CELL, [{ name: 'idle', model: () => watchstoneModel(side), yaw: 0.3 }]);
   bake(scene, BOAR, BOAR_CELL, movingCells(boarModel));
+  bake(scene, WOLF, WOLF_CELL, movingCells(wolfModel));
+  for (const kind of ['ember', 'moss'] as const) bake(scene, bruteKey(kind), BRUTE_CELL, movingCells((p) => bruteModel(kind, p)));
   bake(scene, BEAST_KEY, BEAST_CELL, movingCells(beastModel));
   bake(scene, RUBBLE, RUBBLE_CELL, [{ name: 'idle', model: rubbleModel, yaw: 0.2 }]);
   bake(scene, COIN, COIN_CELL, [{ name: 'idle', model: coinModel, yaw: 0.3 }]);
+  return performance.now() - t0;
+}
+
+/** Bakes the sheets of the champions in a match that are not baked yet. Returns the time it took, in ms. */
+export function bakeChampions(scene: Phaser.Scene, list: { id: string; team: TeamName }[]): number {
+  const t0 = performance.now();
+  for (const { id, team } of list) {
+    if (!scene.textures.exists(champKey(id, team))) bake(scene, champKey(id, team), CHAMP_CELL, movingCells((p) => championModel(id, team, p)));
+  }
   return performance.now() - t0;
 }

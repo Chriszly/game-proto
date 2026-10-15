@@ -6,21 +6,47 @@ the game, per the root AGENTS.md.
 
 ## Current state
 
-Lane Brawl is a single-player MOBA on one 2400x1600 map with three lanes, towers, inhibitors, minion
-waves, jungle camps, a guardian beast, tall grass, two Nexuses, five champions a side and a shop.
-The player picks one of five champions and fights with four AI allies against five AI champions on
-red. The art is low-poly 3D: every unit is a small mesh built in code and rendered at boot by a
+Lane Brawl is a single-player MOBA on one 2800x2800 square map with three lanes, a river, towers,
+inhibitors, minion waves, a jungle of twelve camps, watchstones, a guardian beast, tall grass, fog of
+war, two Nexuses, five champions a side and a shop. The player picks one of ten champion classes
+and fights with four AI allies against five AI champions on red; every champion gets a random name. The art is low-poly 3D: every unit is a small mesh built in code and rendered at boot by a
 software renderer into sprite frames; there are no image assets besides the cover and favicon.
 
 Implemented today:
 
-- Pick screen with the five champions (their 3D figures on cards), then one match (`GameScene`).
-- Map: lanes from the blue Nexus (bottom left) to the red (top right), two towers per team per lane,
-  an inhibitor per team per lane near its Nexus (`INHIBITORS`), four jungle camps, the beast's pit
-  (`BEAST`), eight bushes (`BUSHES`), minion waves every 25 s (three per lane per team).
-- Champions: five, each with Q, W, E, R. Abilities are data: `burst` (around a point or the caster),
-  `bolt` (projectiles, optionally piercing), `dash` (move, hit where it lands) and `ally` (heal and
-  shield allied champions). R unlocks at level 3; levels run 1 to 5.
+- Pick screen with the ten classes in two rows of five cards (3D figure, the champion's random
+  name, class and role, passive and a blurb) and a New names button (`REROLL`), then one match.
+- Map (`WORLD` 2800x2800): the blue Nexus at the bottom left, the red at the top right; top and
+  bottom lanes along the edges, the middle lane on the diagonal. Everything red is blue mirrored
+  through the centre (`mirror`, `both` in `data.ts`), with top and bottom lanes swapped. Two towers
+  per team per lane, an inhibitor per team per lane near its Nexus (`INHIBITORS`), the river
+  (`RIVER`, top left to bottom right, crossing the middle lane), twelve camps (`CAMPS`), three
+  watchstones on river islands (`WATCHSTONES`), the beast's pit by the river (`BEAST`), eighteen
+  bushes (`BUSHES`), four ruins (painted only) and minion waves every 25 s (three per lane per team).
+- Champions: ten classes (`CHAMPIONS`), each with a passive (`PassiveDef`: `tough`, `critEvery` and
+  `critMult`, `haste`, `spellpower`, `aura`, `lifesteal`, `regen`, `slowHit`, `ambush`, `splash`)
+  and Q, W, E, R. Abilities are data: `burst` (around a point or the caster, with optional `knock`),
+  `bolt` (projectiles, optionally piercing, with optional `pull` or `executeBelow`), `dash` (move,
+  hit where it lands), `ally` (heal, shield and optional `buff` for allied champions), `buff` (a
+  timed `BuffDef` on the caster: attack speed, damage, speed, lifesteal, armor, cooldowns, regen,
+  slowing hits or stealth) and `zone` (a lingering circle that hurts enemies by `dps` and slows
+  them, in `s.zones`). R unlocks at level 3; levels run 1 to 5.
+- Names (`names.ts`): `championName(classId, rnd, taken)` joins a syllable first name to a byname
+  for the class; `createGame` names every champion (the player's from the pick card), no two alike.
+  `shortName` drops the byname for the portrait and notices.
+- Jungle (LB6): camps of five kinds (`CAMP_KINDS`): boars, wolf packs (an alpha and two pups, one
+  `group`), and per side one ember and one moss brute, whose slayer gets a 60 s buff (`BUFFS`, in
+  `Unit.buffs`). Hitting one camp wakes its pack; a camp heals 5% a second when left alone and
+  ignores stealthed champions. `damage` spares a camp from a champion that neither targets it nor
+  is already fighting it, so splash and bursts from a lane fight don't steal or wake camps.
+- Watchstones (LB6): `'watchstone'` units, neutral until a team's champions stand within
+  `WATCH.radius` with no enemy champion there for `WATCH.captureMs` (`updateWatchstones`,
+  progress in `Unit.capture`); a held one gives its team `SIGHT.watchstone` of vision.
+- Fog of war (LB6): `updateVision` sets `Unit.hidden[team]` each tick for every unit no unit of that
+  team sees (`viewers`: champions, minions, towers, inhibitors, Nexuses and held watchstones, each
+  with its `SIGHT`), plus champions in a bush or stealthed. Structures and watchstones are never
+  hidden. The view darkens what blue can't see on the map and the minimap (`updateFog`,
+  `paintFog`) and skips hidden units, effects, projectiles and zones there.
 - Gold (passive plus last hits and kills), XP shared by nearby champions, respawns that scale with
   level.
 - Items (LB4): twelve in `ITEMS`, bought near the Nexus, each owned once, at most `MAX_ITEMS` (6) in
@@ -41,8 +67,8 @@ Implemented today:
   forgets an attacker past `BEAST.leash` and heals while nobody fights it. Its slayer's team gets
   `beastBuff[team]` for 90 s: its minions deal 1.5x and take 0.65x (`attack`, `takenMult`), drawn
   with a violet glow, with a chip per team at the top right (`buffChip`).
-- Bushes (LB2): `updateVision` fills `s.hidden[team]` each tick with the enemy champions in a bush
-  (`bushAt`) that no unit of that team sees (in the same bush or within `BUSH_REVEAL`). `nearest`,
+- Bushes (LB2): `updateVision` hides enemy champions in a bush (`bushAt`) that no unit of that team
+  sees in the same bush or within `BUSH_REVEAL`. `nearest`,
   the player's target, AI ganks and clicks skip hidden units; the view draws no sprite, bar, marker
   or minimap dot for red champions hidden from blue and draws blue champions in a bush at 0.6
   alpha. Attacking or casting sets `revealMs` (1.5 s), which shows the champion.
@@ -53,12 +79,16 @@ Implemented today:
   picked as one of its team's two `contesters` (`updateContesters`); walk to a `gankTarget` set by
   `updateGanks` (every 70 s from 100 s, per team: the weakest visible enemy champion, hunted by the
   nearest healthy AI champion more than 550 px away). AI champions take upgrades on level up
-  (`aiRate` picks). Towers shoot champions first, then minions.
-- Notices (`s.notices`, `notice` in `sim.ts`): the beast waking or falling, an inhibitor falling and
-  ganks; the newest shows for 4 s in a strip under the top bar.
+  (`aiRate` picks). AI champions with reach kite melee ones (`KITE`), cast an escape when they
+  fall back, keep R for champions and the beast, and from 2:00 every `JUNGLE.every` each team sends
+  one free champion for a brute's buff on its half or a watchstone it lacks (`updateJungle`).
+  Towers shoot a champion with `aggroMs` (it hurt an enemy champion in the last `TOWER.aggroMs`)
+  first, then minions, then any champion.
+- Notices (`s.notices`, `notice` in `sim.ts`): the beast waking or falling, an inhibitor falling,
+  ganks, champion kills ("X slew Y"), brute buffs taken by blue and watchstones taken; the newest shows for 4 s in a strip under the top bar.
 - Match objectives: one goal at a time for the player's team (`OBJECTIVES`, in turn): topple the red
   tower nearest the blue Nexus (150 s, 200 gold and the siege banner: the player's champion deals
-  +25% to towers and the Nexus for 60 s), clear the camp nearest the player (90 s, 120 gold), defeat
+  +25% to towers and the Nexus for 60 s), clear the boar or wolf pack nearest the player on blue's half (`ownHalf`) (90 s, 120 gold), defeat
   the red champion nearest the player (120 s, 150 gold), slay the guardian beast (120 s, 250 gold;
   done only when blue slew it, read from `beastBuff.blue`; skipped while it sleeps). The goal is
   done when its target is dead, however it fell; when its time runs out it is missed. The next one
@@ -91,9 +121,10 @@ Missing or rough:
 
 - No pathing or collisions: units overlap and walk straight lines.
 - No sound, pause, title or save. Nothing is persisted, so there are no save keys.
-- No fog of war beyond the bushes; the camera follows the player's champion. Bushes hide champions
-  only, not minions.
-- AI champions don't shop (their gold piles up) and don't use bushes on purpose.
+- Bushes hide champions only, not minions. The camera follows the player's champion.
+- AI champions don't shop (their gold piles up) and don't use bushes or the fog on purpose.
+- Balance is tuned with AI-only matches (every class within roughly 35% to 65% wins over 80
+  matches); the player's own champion is not part of that.
 - Only the first round (see the playthrough) is covered by the test; the Warden is the only champion
   the test plays.
 - No tower order within a lane; inhibitors don't come back.
@@ -125,28 +156,37 @@ File map (`src/`):
 - `art/models.ts`: every model as a function of a pose. `figure` builds a humanoid (legs or a robe,
   a tunic in the team's cloth, head, arms on shoulder joints) from a `Kit` per class: the Warden's
   helm, hammer and kite shield, the Blade's hood, cape and daggers, the Archer's cap, quiver and
-  bow, the Mage's hat and crystal staff, the Priest's halo, cloak and sunburst staff. `classPose`
+  bow, the Mage's hat and crystal staff, the Priest's halo, cloak and sunburst staff, the
+  Berserker's horned helm, fur mantle and great axe, the Harpooner's knit cap, beard, rope and
+  harpoon, the Witch's antlered hood, shawl and branch staff, the Stalker's straw hat, scarf, curved
+  sword and throwing star, the Lancer's crested helm, pennant spear and banded shield. Also
+  `wolfModel`, `bruteModel` (ember or moss), `watchstoneModel` (per side or neutral) and
+  `ruinModel`. `classPose`
   gives the joint angles for `idle`, the walk `w0`..`w3`, the attack `a0` (wind-up) and `a1`
   (strike) and the cast `c0`. Also the minion (a scaled soldier with sword and round shield), the
   boar, towers, rubble, the Nexus, an inhibitor (`inhibitorModel`), the guardian beast
   (`beastModel`: a horned quadruped with violet crystals, scaled 2.1), pines, rocks and a coin.
   `TEAM_CLOTH` and `TEAM_GLOW` are the team colours.
-- `art/bake.ts`: renders the models into sheets at boot (`bakeUnits`, once): each champion in both
-  teams' cloth, the minions, the boar and the beast (8 directions x 8 poses each), a gold silhouette
+- `art/bake.ts`: renders the models into sheets at boot (`bakeUnits`, once): one idle frame per
+  class for the pick cards and portrait (`pickKey`), the minions, the boar, wolf, brutes,
+  watchstones and the beast (8 directions x 8 poses each), a gold silhouette
   of the red minion sheet for the last-hit outline, towers, inhibitors, the Nexus, rubble and the
-  coin. Frames are named `${dir}:${pose}` (`frameName`); dir 0 faces right and each step turns 45
+  coin. The ten champions' full sheets (both teams' cloth) are baked when a match starts, only for
+  the classes in it (`bakeChampions`, kept for later matches). Frames are named `${dir}:${pose}` (`frameName`); dir 0 faces right and each step turns 45
   degrees clockwise on screen (`dirFor` maps a facing angle). Sheets render at `RES` and are
   drawn at 1/RES: 2 on a screen that needs no scaling, up to 3 on a big or dense one (`sharpRes`
   in half steps, held to what the beast's sheet can load). Pick cards and the portrait scale by
-  `1.7 / RES` and `1.2 / RES`; each `*_CELL` gives a frame's size and where the feet sit.
+  `1.3 / RES` and `1.2 / RES`; each `*_CELL` gives a frame's size and where the feet sit.
 - `art/map.ts`: `paintMap` paints the world once on one canvas (`MAP_KEY`), `MAP_RES` canvas pixels
   per world pixel (1, up to about 1.7 on big screens; the tiles are sized back with
   `setDisplaySize`): faceted grass, flagstone
   lanes clipped to the lane band, kerb rocks, paved plazas with a team ring round each Nexus, dirt
-  clearings for the camps and about 260 pines and rocks, from a fixed seed; then the beast's pit and
-  the bushes (tall faceted grass) from a second seed, so adding them left the rest of the map as it
-  was.
-- `game/data.ts`: plain data. `LANES`, `BASE`, `TOWERS`, `CAMPS`, the balance constants (`TOWER`,
+  the river (faceted water, banks and glints), clearings for the camps (a glowing ring for the
+  brutes, bones for the wolves), watchstone islands, ruins, flowers and mushrooms and up to 620
+  pines and rocks, from a fixed seed; then the beast's pit and the bushes (tall faceted grass).
+- `game/names.ts`: the random names (`championName`, `firstName`, `shortName`).
+- `game/data.ts`: plain data. `WORLD`, `LANES`, `BASE`, `TOWERS`, `RIVER`, `CAMPS`, `CAMP_KINDS`,
+  `PUPS`, `SIGHT`, `WATCHSTONES`, `WATCH`, `BUFFS`, `JUNGLE`, `KITE`, the balance constants (`TOWER`,
   `CAMP`, `MINION`, `KILL`, `XP_FOR_LEVEL`, respawn times), `CHAMPIONS` with their `AbilityDef`s,
   `ITEMS`, `ALLY_LANES`, `ENEMY_LANES`, `SIDE_COLOR`, and the loop's data: `OBJECTIVES`,
   `OBJECTIVE_GAP_MS`, `SIEGE`, `UPGRADES` (with `upgradeById`), `STREAK` and `LAST_HIT_LOOK`, plus
@@ -155,7 +195,8 @@ File map (`src/`):
 - `game/state.ts`: the types (`GameState`, `Unit`, `Projectile`, `Fx`, `Objective`,
   `UpgradeOffer`), `createGame`, `spawnWave`, `spawnChampion`, `refreshStats` (level and items into
   stats), `pathFor` (red walks lanes backwards), `laneNear` and small helpers. No Phaser.
-- `game/sim.ts`: the rules: `tick`, `cast`, `abilityFor`, `chooseUpgrade`, `buy`, `priceFor`,
+- `game/sim.ts`: the rules: `tick` (vision, watchstones, contesters, ganks, jungle trips, units,
+  projectiles, zones), `cast`, `abilityFor`, `viewers`, `stealthed`, buffs (`addBuff`, `buffSum`), `chooseUpgrade`, `buy`, `priceFor`,
   `useActive`, `invulnerable`, `hiddenFrom`, `commandMove`,
   `commandAttack`, `damage`, the objectives (`updateObjective`), the last-hit mark
   (`updateLastHitMark`), vision (`updateVision`), the beast (`beastAct`, `updateContesters`), ganks
@@ -187,8 +228,11 @@ State model:
   the scene last drained them: rings, lines, arcs and last-hit `coin`s.
 - `Unit.side` is `'blue'`, `'red'` or `'neutral'` (camps and the beast). Hostile means a different
   side.
-- Champions keep `champ` (the `ChampionDef`), `level`, `xp`, `gold`, `items`, `cds` (cooldowns per
-  key) and `upgrades` (ids the player kept). `refreshStats` recomputes `maxHp`, `dmg`, `armor` and
+- Champions keep `champ` (the `ChampionDef`), `name`, `level`, `xp`, `gold`, `items`, `cds`
+  (cooldowns per key), `upgrades` (ids the player kept), `buffs`, `kills`, `deaths`, and for the
+  passives `attackCount` (crits), `lullMs` (ambush) and `hasteMs`. Camps keep `campKind` and
+  `group`; watchstones `capture`. Every unit has `hidden` (per team, set by `updateVision`).
+- `zones` are the lingering circles of `zone` abilities (side, owner, `dps`, slow, time left). `refreshStats` recomputes `maxHp`, `dmg`, `armor` and
   `speed` from the level and items.
 - `stunMs` holds a stunned champion or minion in place (no move, no attack).
 - Animation timers: `swing` (180 ms after an attack: wind-up frame then strike frame), `castMs`
@@ -201,9 +245,9 @@ State model:
   between two, `objectiveIndex`, `nextObjectiveAt`, `objectivesDone`, `lastObjective` (how the last
   one ended), `siegeUntil`; `lastHitMark`, `lastHits`, `streak`, `bestStreak`; `upgradeOffers`
   (queued `{ level, options }`, the first one shown).
-- The upgrades' state: `beast`, `beastBuff`, `beastKills`, `contesters`, `hidden`, `nextGank`,
-  `notices`; per AI champion `retreatUntil`, `gankTarget`, `gankUntil`; per champion `revealMs`,
-  `activeCds`.
+- The upgrades' state: `beast`, `beastBuff`, `beastKills`, `contesters`, `nextGank`, `nextJungle`,
+  `notices`; per AI champion `retreatUntil`, `gankTarget`, `gankUntil`, `jungleTarget`,
+  `jungleUntil`; per champion `revealMs`, `aggroMs`, `activeCds`.
 
 How it runs:
 
@@ -225,7 +269,8 @@ How it runs:
   bottom bar). Anything else is a world click: a
   hostile unit under the cursor becomes the player's target, otherwise the point becomes a move.
 
-Randomness and timing: no `Math.random`, `Date.now` or `performance.now` in the rules. Game time
+Randomness and timing: `Math.random` only draws the rosters and names, in `createGame` and the
+pick screen's `rollNames` (the test seeds it); no `Date.now` or `performance.now` in the rules. Game time
 advances only through `tick`, which the scene drives from frame times. The art uses its own seeded
 generator (`seeded` in `lowpoly.ts`); `performance.now` only times the bake for a dev log.
 
@@ -248,36 +293,47 @@ generator (`seeded` in `lowpoly.ts`); `performance.now` only times the bake for 
   through JSON) and its `cameras.main.worldView` (not `scrollX/Y`, which differ once `renderScale` zooms the camera),
   to turn world positions into view pixels. `e2e/screens.spec.ts` at the root opens the game on
   five screens.
-- Inputs: it clicks the Warden's card at the pick screen, presses B, clicks the Long Sword's card,
+- Inputs: it clicks the Warden's card at the pick screen (top left of the ten), presses B, clicks the Long Sword's card,
   clicks the ground and the red tower, presses Q, clicks the camp the second objective marks, clicks
   gold-outlined minions (`lastHitMark`) and clicks the first upgrade card. Clicks go to the canvas
   through the bounding box, never on the objective card (it blocks clicks).
 - The test mirrors these, so change them together: the card, shop row, tower, objective card and
-  upgrade card coordinates in `playthrough.spec.ts` (`WARDEN_CARD`, `SWORD_ROW`, `RED_MID_TOWER`,
-  `OBJECTIVE_CARD`, `UPGRADE_CARD_1`) against `layout.ts` and `TOWERS`, the Warden's stats and Slam
-  radius (`CHAMPIONS`), the Long Sword cost and damage (`ITEMS`), the first two `OBJECTIVES` (the
-  tower: 150 s and 200 gold with the banner; then a camp, whose 80 gold plus 120 the test checks),
+  upgrade card coordinates in `playthrough.spec.ts` (`WARDEN_CARD` (120, 173), `SWORD_ROW`,
+  `RED_MID_TOWER` (1793, 1007), `OBJECTIVE_CARD`, `UPGRADE_CARD_1`) against `layout.ts` and
+  `TOWERS`, `TOWER_REACH` against `TOWER.range`, `CAMP_GOLD` against `CAMP_KINDS`, the Warden's
+  stats and Slam radius (`CHAMPIONS`), the Long Sword cost and damage (`ITEMS`), the first two
+  `OBJECTIVES` (the tower: 150 s and 200 gold with the banner; then a camp, whose kind's gold plus
+  120 the test checks; with the seeded roster it is the boar at (1280, 1900)),
   the Warden's level 2 `UPGRADES` pair (`wide-slam`, `stun-slam`), and the 240 s game-time budget.
 - It asserts the first objective and its target, the objective paid and the siege banner after
   the tower falls, the camp objective, at least one last hit and a streak, level 2's offer, and
   Wide Slam kept from the card.
+- On the way to the tower the Warden waits out of its reach until a blue minion reaches it (and
+  steps back out when none is left there, until the tower is under 200 health), and hits back (with
+  Slam) at a red champion that comes within 240 px out of the tower's reach. It Slams the camp too.
 - It saves `0-pick`, `1-shop`, `2-tower-down` and `3-upgrade` screenshots. `SWORD_ROW` is the Long
   Sword's card in the four-column shop (`shopRow(0)`'s centre, so the Long Sword stays first in
   `ITEMS`). The round ends near 40 s of game time, before the beast wakes (90 s) and the first gank
   (100 s), so neither touches it; keep `BEAST.firstAt` and `GANK.firstAt` past it, and keep the
   bushes off the middle lane's paving and the path to the camp by the red mid tower. Copy them into
   `docs/screenshots/` as `playthrough-1-pick` to `playthrough-4-upgrade` when the look changes.
-  `cover.png`, `fight-art.png`, `loop-objective.png`, `loop-last-hit.png` and `upgrade-*.png` are
-  staged docs shots (a scratch Playwright script that ticks the sim and places units through
-  `window.game`), not test output.
+  `cover.png` (a copy of `ten-classes.png`), `ten-classes.png`, `fog-of-war.png`,
+  `jungle-brute.png`, `watchstone.png`, `loop-objective.png`, `loop-last-hit.png` and
+  `upgrade-*.png` are staged docs shots (a scratch Playwright script that places units through
+  `window.game` and lets the match run), not test output. The `loop-*` and `upgrade-*` ones predate
+  the square map.
 
 ## Making common changes
 
-- **Add a champion**: add a `ChampionDef` to `CHAMPIONS` with four `AbilityDef`s (keys Q, W, E, R; R
-  at level 3), its four upgrade pairs to `UPGRADES`, a `Kit` in `KITS` (`models.ts`), and its id to
-  `CHAMPION_IDS` (`bake.ts`). Keep the roster at five: `spawnChampion` gives red all five and blue
-  the four others. Update the README's champion and upgrade tables and the pick cards (they read
-  `CHAMPIONS` directly).
+- **Add a champion**: add a `ChampionDef` to `CHAMPIONS` with a blurb (32 characters at most, for
+  the card), a `PassiveDef` (a short desc) and four `AbilityDef`s (keys Q, W, E, R; R at level 3),
+  its four upgrade pairs to `UPGRADES`, bynames in `names.ts`, a `Kit` in `KITS` and its pose in
+  `classPose` (`models.ts`) and its id to `ChampId`. `createGame` shuffles the classes other than the
+  player's, gives blue the first four and red the next five, so any roster of ten or more works;
+  the pick screen lays out `pickCard(i)` in rows of five, so an eleventh needs a new layout. Update
+  the README's champion and upgrade tables. Then run the balance check (see Gotchas).
+- **Add a passive**: add its field to `PassiveDef` and apply it where it acts: `damage` (taken),
+  `attack` (hits), `updateUnit` (over time) or `abilityDamage` (spells).
 - **Add an ability kind**: add it to `AbilityKind`, handle it in `cast` (`sim.ts`) and, for AI use,
   in `aimFor`, and give it an icon in `abilityIcon` (`GameScene.ts`).
 - **Add or change an upgrade**: edit the champion's pair in `UPGRADES`; a new kind of effect needs
@@ -288,9 +344,10 @@ generator (`seeded` in `lowpoly.ts`); `performance.now` only times the bake for 
 - **Change a model**: edit its builder in `models.ts`; the preview is the game itself. Keep the feet
   at the origin and the figure inside its `*_CELL` in `bake.ts` (raise the cell if a pose clips).
   More poses or directions multiply the boot bake (one to two seconds in headless Chrome now).
-- **Tune the map**: edit `LANES`, `TOWERS` and `CAMPS` in `data.ts`; `map.ts` paints from them. Keep
-  blue towers mirrored by red's under the 180-degree rotation of the map, and check the playthrough
-  still reaches the red mid tower at (1576, 584).
+- **Tune the map**: edit `LANES`, `TOWERS`, `CAMPS`, `WATCHSTONES`, `BUSHES` and `RIVER` in
+  `data.ts`; `map.ts` paints from them. Give only blue's half and build red's with `both`/`mirror`,
+  so the map stays fair, and check the playthrough still reaches the red mid tower at (1793, 1007).
+- **Tune the fog**: `SIGHT` in `data.ts` (per unit kind) and `FOG_ALPHA` in `GameScene.ts`.
 - **Add an item**: add it to `ITEMS` with its stats, and `from` for a recipe. `refreshStats` applies
   the stat fields it knows (`dmg`, `armor`, `hp`, `speed`, `atk`, `cdr`). The shop holds twelve
   cards (4x3); a thirteenth needs a taller `SHOP_PANEL` or a fifth column. A new active needs an
@@ -298,7 +355,11 @@ generator (`seeded` in `lowpoly.ts`); `performance.now` only times the bake for 
   bar's active buttons.
 - **Tune the beast or the AI plans**: `BEAST`, `BEAST_BUFF`, `BEAST_CONTESTERS`, `GANK` and
   `RETREAT` in `data.ts`. Move the pit with `BEAST.x`/`y`; `map.ts` paints it there.
-- **Add a bush**: add it to `BUSHES` (and its mirror); `map.ts` paints it and keeps pines out of it.
+- **Add a bush**: add it to `BUSHES` (blue's half; `both` adds the mirror); `map.ts` paints it and
+  keeps pines out of it.
+- **Add a camp kind**: add it to `CampKind` and `CAMP_KINDS`, a model and sheet (`models.ts`,
+  `bake.ts`), its sprite and `headOf` height in `GameScene.ts`, its clearing in `map.ts`, and its
+  gold to `CAMP_GOLD` in the test if the camp objective can pick it.
 
 ## Gotchas
 
@@ -308,7 +369,14 @@ generator (`seeded` in `lowpoly.ts`); `performance.now` only times the bake for 
   inhibitor to the Nexus and wait there; anything new that hurts structures should go through
   `damage`.
 - `hidden` is recomputed at the start of each tick, so a unit placed or moved in between is judged
-  on the next tick.
+  on the next tick. Anything that looks for targets (`nearest`, clicks, AI plans) must skip units
+  `hiddenFrom` its team, or it would see through the fog.
+- The fog is drawn with Graphics rectangles (`paintFog`, one per run of equal shade along a row),
+  not a stretched canvas texture: an image of a CanvasTexture updated every frame did not show on
+  the map in either renderer.
+- Balance: a scratch harness bundles `src/game` with rolldown (`node_modules/.bin/rolldown`) and
+  plays AI-only matches in node (the player's champion turned into an AI on a lane), counting
+  wins, kills and deaths per class; run one after changing a champion, a passive or an ability.
 - `kill` rewards only a champion killer: a tower or camp killed by a minion pays nothing. Minion
   gold for the player goes through the streak branch; AI champions always get the plain 19.
 - Red's damage goes through `dealt`, so a new damage source on red must use it or it ignores the

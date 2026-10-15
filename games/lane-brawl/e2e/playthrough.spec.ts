@@ -9,7 +9,8 @@ import { expect, test, type Page } from '@playwright/test';
 
 interface Unit {
   id: number;
-  kind: 'champion' | 'minion' | 'tower' | 'nexus' | 'camp';
+  kind: 'champion' | 'minion' | 'tower' | 'nexus' | 'camp' | 'inhibitor' | 'beast' | 'watchstone';
+  campKind?: 'boar' | 'wolf' | 'pup' | 'ember' | 'moss';
   side: 'blue' | 'red' | 'neutral';
   x: number;
   y: number;
@@ -53,11 +54,15 @@ const OBJECTIVE_CARD = { x: 10, y: 42, w: 236, h: 62 };
 /** The first upgrade card in the bottom bar (the centre of layout.ts upgradeCard(0)). */
 const UPGRADE_CARD_1 = { x: 698, y: 461 };
 /** The Warden's card on the pick screen (its centre). */
-const WARDEN_CARD = { x: 120, y: 263 };
+const WARDEN_CARD = { x: 120, y: 173 };
 /** The Long Sword's row in the shop, opened from the B key. */
 const SWORD_ROW = { x: 202, y: 146 };
 /** The first red tower on the middle lane. */
-const RED_MID_TOWER = { x: 1576, y: 584 };
+const RED_MID_TOWER = { x: 1793, y: 1007 };
+/** How far a tower shoots (data.ts TOWER.range). */
+const TOWER_REACH = 300;
+/** The gold each kind of camp pays its slayer (data.ts CAMP_KINDS). */
+const CAMP_GOLD = { boar: 80, wolf: 60, pup: 20, ember: 100, moss: 100 } as const;
 /** Game time the round may take before the test gives up. */
 const ROUND_LIMIT_MS = 240_000;
 
@@ -225,8 +230,9 @@ test('plays the first round', async ({ page }, testInfo) => {
     }
   }
 
-  // Walk down the middle lane toward the red tower, clicking the ground on the way and the tower
-  // once in reach. Slam is cast when it is ready and the tower is inside its radius.
+  // Walk down the middle lane toward the red tower, clicking the ground on the way, and wait out of
+  // its reach for a minion wave; then go in with the wave and click the tower once in reach. Slam
+  // is cast when it is ready and the tower is inside its radius.
   let usedSlam = false;
   while ((await state()).time < ROUND_LIMIT_MS && !tower().dead) {
     s = await state();
@@ -237,6 +243,31 @@ test('plays the first round', async ({ page }, testInfo) => {
       continue;
     }
     const d = dist(p, t) - t.radius;
+    // Without a blue minion at the tower for it to shoot, the Warden steps back out of its reach,
+    // unless the tower is nearly down.
+    const wave = s.units.some((u) => u.kind === 'minion' && u.side === 'blue' && !u.dead && dist(u, t) < TOWER_REACH + 40);
+    const len = Math.max(dist(p, t), 1);
+    if (!wave && t.hp > 200 && dist(p, t) < TOWER_REACH + 30) {
+      const back = { x: t.x + ((p.x - t.x) / len) * (TOWER_REACH + 120), y: t.y + ((p.y - t.y) / len) * (TOWER_REACH + 120) };
+      if (p.moveTo === null && (await onMap(back.x, back.y))) await clickWorld(back.x, back.y);
+      await tick(STEP_MS);
+      continue;
+    }
+    // A red champion that comes for the Warden out of the tower's reach gets hit back, with Slam.
+    const foe = s.units
+      .filter((u) => u.kind === 'champion' && u.side === 'red' && !u.dead && dist(u, p) < 240 && dist(u, t) > TOWER_REACH)
+      .sort((a, b) => dist(p, a) - dist(p, b))[0];
+    if (foe && dist(p, t) > TOWER_REACH && (await onMap(foe.x, foe.y))) {
+      if (p.target !== foe.id) await clickWorld(foe.x, foe.y);
+      if (p.cds.Q === 0 && dist(p, foe) <= 160) {
+        const v = await onView(foe.x, foe.y);
+        const at = await onPage(v.x, v.y);
+        await page.mouse.move(at.x, at.y);
+        await page.keyboard.press('q');
+      }
+      await tick(STEP_MS);
+      continue;
+    }
     if (d <= p.range + 20) {
       if (p.target === null && (await onMap(t.x, t.y))) await clickWorld(t.x, t.y);
       if (p.cds.Q === 0 && d <= 170 && (await onMap(t.x, t.y))) {
@@ -248,7 +279,8 @@ test('plays the first round', async ({ page }, testInfo) => {
         usedSlam = usedSlam || (await state()).units.find((u) => u.player)!.cds.Q > 0;
       }
     } else if (p.moveTo === null && p.target === null) {
-      await walkToward(p, t);
+      // Wait outside the tower's reach until a blue minion wave gets to it, then go in with it.
+      if (wave || t.hp <= 200 || dist(p, t) > TOWER_REACH + 200) await walkToward(p, t);
     }
     await tick(STEP_MS);
   }
@@ -265,11 +297,13 @@ test('plays the first round', async ({ page }, testInfo) => {
   expect(s.siegeUntil, 'siege banner up').toBeGreaterThan(s.time);
   await snap('2-tower-down');
 
-  // The next objective comes a few seconds later: clear the jungle camp nearest the Warden.
+  // The next objective comes a few seconds later: clear the boar or wolf pack nearest the Warden
+  // on blue's half of the jungle.
   expect(await play(10_000, async () => (await state()).objective !== null), 'second objective').toBe(true);
   s = await state();
   expect(s.objective?.kind, 'second objective is a camp').toBe('camp');
   const campId = s.objective!.target;
+  const campGold = CAMP_GOLD[s.units.find((u) => u.id === campId)!.campKind!];
   const camp = () => s.units.find((u) => u.id === campId)!;
   const goldBeforeCamp = me().gold;
   while ((await state()).time < ROUND_LIMIT_MS && !camp().dead) {
@@ -281,14 +315,20 @@ test('plays the first round', async ({ page }, testInfo) => {
       continue;
     }
     if (p.target !== c.id && dist(p, c) < 330 && (await onMap(c.x, c.y))) await clickWorld(c.x, c.y);
-    else if (p.target !== c.id && p.moveTo === null) await walkToward(p, c);
+    else if (p.target === c.id && p.cds.Q === 0 && dist(p, c) <= 160 && (await onMap(c.x, c.y))) {
+      // Slam on the camp too, to clear it sooner.
+      const v = await onView(c.x, c.y);
+      const at = await onPage(v.x, v.y);
+      await page.mouse.move(at.x, at.y);
+      await page.keyboard.press('q');
+    } else if (p.target !== c.id && p.moveTo === null) await walkToward(p, c);
     await tick(STEP_MS);
   }
   await tick(STEP_MS);
   s = await state();
   expect(camp().dead, `camp cleared; state: ${JSON.stringify(me())}`).toBe(true);
   expect(s.objectivesDone, 'camp objective done').toBe(2);
-  expect(me().gold - goldBeforeCamp, 'camp and objective gold').toBeGreaterThanOrEqual(80 + 120);
+  expect(me().gold - goldBeforeCamp, 'camp and objective gold').toBeGreaterThanOrEqual(campGold + 120);
 
   // Farm the nearest lane: walk to the nearest red minion and click whichever one is outlined in
   // gold, the one the Warden's next hit kills, until a last hit lands and the Warden reaches level 2.
@@ -307,7 +347,7 @@ test('plays the first round', async ({ page }, testInfo) => {
       const foes = s.units.filter((u) => u.kind === 'minion' && u.side === 'red' && !u.dead);
       const near = foes.sort((a, b) => dist(p, a) - dist(p, b))[0];
       // Wait in reach of the nearest red minion, or walk up the middle lane toward the next wave.
-      const goal = near ?? { x: 1700, y: 520 };
+      const goal = near ?? { x: 2000, y: 800 };
       if (dist(p, goal) > p.range + 40) await walkToward(p, goal);
     }
     await tick(STEP_MS);

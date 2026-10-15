@@ -1,5 +1,5 @@
-// The low-poly models of Lane Brawl: five champions, minions, the jungle boar, towers, the Nexus,
-// pines and rocks. Each builder returns a fresh `Model` for one pose; `bake.ts` renders them into
+// The low-poly models of Lane Brawl: ten champions, minions, the jungle's boar, wolves and brutes,
+// the guardian beast, towers, the Nexus, watchstones, pines and rocks. Each builder returns a fresh `Model` for one pose; `bake.ts` renders them into
 // sprite frames from eight directions. Units: one model unit is one screen pixel.
 
 import { Model, RGB, Rx, Rz, S, T, box, chain, gem, ico, prism, rgb, slab, swing } from './lowpoly';
@@ -58,7 +58,7 @@ function basePose(name: PoseName): Pose {
   return p;
 }
 
-type ChampId = 'warden' | 'blade' | 'archer' | 'mage' | 'priest';
+type ChampId = 'warden' | 'blade' | 'archer' | 'mage' | 'priest' | 'berserker' | 'harpooner' | 'witch' | 'stalker' | 'lancer';
 
 /** Attack and cast poses differ by class: a hammer swings, a bow draws, a staff points. */
 function classPose(id: ChampId | 'minion', name: PoseName): Pose {
@@ -80,7 +80,28 @@ function classPose(id: ChampId | 'minion', name: PoseName): Pose {
       p.armR = wind ? 1.35 : 1.55;
       p.outR = wind ? -0.55 : -0.25;
       break;
+    case 'lancer':
+    case 'harpooner':
+      // A thrust: the weapon arm draws back, then drives straight forward.
+      p.armR = wind ? 0.6 : 1.6;
+      p.outR = wind ? 0.25 : 0;
+      p.armL = 0.9;
+      p.lean = wind ? -0.1 : 0.28;
+      p.legL = 0.45;
+      p.legR = -0.35;
+      break;
+    case 'berserker':
+      // Both hands on the axe, high over the head, then down.
+      p.armL = wind ? 2.9 : 1.2;
+      p.armR = wind ? 2.9 : 1.2;
+      p.outL = wind ? -0.15 : -0.3;
+      p.outR = wind ? -0.15 : -0.3;
+      p.lean = wind ? -0.12 : 0.3;
+      p.legL = 0.4;
+      p.legR = -0.3;
+      break;
     case 'blade':
+    case 'stalker':
       p.armL = wind ? 2.5 : 1.0;
       p.armR = wind ? 2.5 : 1.0;
       p.outL = wind ? 0.5 : -0.25;
@@ -91,6 +112,7 @@ function classPose(id: ChampId | 'minion', name: PoseName): Pose {
       break;
     case 'mage':
     case 'priest':
+    case 'witch':
       p.armR = wind ? 2.4 : 1.45;
       p.armL = wind ? 0.6 : 1.1;
       p.lean = wind ? -0.06 : 0.12;
@@ -339,6 +361,186 @@ const KITS: Record<ChampId, (cloth: RGB) => Kit> = {
       leftHand: (md) => md.at(T(0, 0, 1.5), () => ico(md, 2.2, green, 0.7)),
     };
   },
+  berserker: (cloth) => {
+    const orange = rgb('#ff8a3d');
+    const fur = rgb('#8b6b4a');
+    const furD = rgb('#5e4630');
+    return {
+      cloth,
+      accent: orange,
+      robe: false,
+      heavy: true,
+      head: (md) => {
+        // A wild beard and an iron cap with two great curved horns.
+        box(md, -4.2, -7.5, 3.6, 4.2, -2.4, 7.2, rgb('#b5582b'), 0.8);
+        prism(md, 7.2, 5.6, 1.8, 7.8, 8, DARK_STEEL, Math.PI / 8);
+        for (const side of [-1, 1]) {
+          md.at(chain(T(side * 6.4, 5, 0), Rz(side * -1.1)), () => {
+            prism(md, 2.2, 1.4, 0, 6, 5, CREAM);
+            md.at(chain(T(0, 6, 0), Rz(side * 0.9)), () => prism(md, 1.4, 0.2, 0, 6, 5, CREAM));
+          });
+        }
+      },
+      over: (md) => {
+        // A fur mantle round the shoulders.
+        for (let i = 0; i < 7; i++) {
+          const a = Math.PI * (0.1 + (i / 6) * 0.8);
+          md.at(T(Math.cos(a) * 9.5, 31.5, -Math.sin(a) * 2 - 1), () => gem(md, 3.4, -2, 0.5, 3.2, 5, i % 2 ? fur : furD));
+        }
+      },
+      rightHand: (md) => {
+        // A great axe: a long haft and a broad crescent blade.
+        md.at(grip(0.25), () => {
+          prism(md, 1.3, 1.2, -8, 26, 5, WOOD);
+          md.at(T(0, 21, 0), () => {
+            slab(md, [[0, -6], [6, -8], [10, -2], [10, 4], [6, 9], [0, 6]], -0.9, 0.9, STEEL);
+            box(md, -1.6, -6.5, -1.2, 1.2, 6.5, 1.2, DARK_STEEL);
+          });
+          md.at(T(0, 26, 0), () => gem(md, 1.4, 0, 1, 3, 4, orange, 0.3));
+        });
+      },
+    };
+  },
+  harpooner: (cloth) => {
+    const teal = rgb('#2fb39a');
+    const rope = rgb('#c9ad7a');
+    return {
+      cloth,
+      accent: teal,
+      robe: false,
+      heavy: true,
+      head: (md) => {
+        // A knit cap folded at the brim, and a short brown beard.
+        prism(md, 7, 6.2, 2.4, 9.4, 8, teal, Math.PI / 8);
+        prism(md, 7.4, 7.2, 1.6, 3.6, 8, rgb('#228673'), Math.PI / 8);
+        box(md, -4.4, -7, 3.4, 4.4, -2.6, 6.8, rgb('#6b4a2e'), 0.85);
+      },
+      back: (md) => {
+        // A coil of rope slung on the back.
+        md.at(chain(T(0, 26, -5.6), Rx(Math.PI / 2)), () => {
+          for (let i = 0; i < 8; i++) {
+            const a = (i * Math.PI * 2) / 8;
+            md.at(chain(T(Math.cos(a) * 5, 0, Math.sin(a) * 5), Rz(a)), () => box(md, -1.3, -2.2, -1.3, 1.3, 2.2, 1.3, rope));
+          }
+        });
+      },
+      rightHand: (md) => {
+        // The harpoon: a long shaft, a barbed iron head, and a line tied at its foot.
+        md.at(grip(0.2), () => {
+          prism(md, 1.1, 1, -10, 30, 5, WOOD);
+          md.at(T(0, 30, 0), () => {
+            gem(md, 2.2, 0, 2, 9, 4, STEEL);
+            for (const side of [-1, 1]) md.at(chain(T(side * 1.6, 3, 0), Rz(side * 0.7)), () => prism(md, 0.7, 0, 0, 4, 4, STEEL));
+          });
+          md.at(T(0, -10, 0), () => ico(md, 1.8, rope));
+        });
+      },
+      leftHand: (md) => md.at(T(0, 0, 1.4), () => ico(md, 2.4, SKIN)),
+    };
+  },
+  witch: (cloth) => {
+    const magenta = rgb('#c55fae');
+    const bark = rgb('#5a4130');
+    return {
+      cloth,
+      accent: magenta,
+      robe: true,
+      heavy: false,
+      head: (md) => {
+        // A deep hood with antlers rising from it, and a pale face.
+        prism(md, 7.8, 3.6, -3, 10, 7, rgb('#3b2a40'), Math.PI / 2);
+        for (const side of [-1, 1]) {
+          md.at(chain(T(side * 4, 8, -1), Rz(side * -0.5)), () => {
+            prism(md, 1, 0.7, 0, 9, 4, bark);
+            md.at(chain(T(0, 5, 0), Rz(side * -0.8)), () => prism(md, 0.7, 0.3, 0, 5, 4, bark));
+            md.at(chain(T(0, 9, 0), Rz(side * 0.6)), () => prism(md, 0.7, 0.2, 0, 4, 4, bark));
+          });
+        }
+      },
+      back: (md) => {
+        // A ragged shawl in her own colour.
+        md.at(chain(T(0, 32, -4.4), Rx(-0.1)), () => slab(md, [[-9, 0], [9, 0], [10, -14], [5, -11], [0, -18], [-5, -11], [-10, -14]], -1.2, 0, magenta));
+      },
+      rightHand: (md, arm) => {
+        // A crooked branch staff with a glowing orb caught in its fork.
+        md.at(upright(arm, 0.15), () => {
+          prism(md, 1.3, 1, -12, 14, 5, bark);
+          md.at(chain(T(0, 14, 0), Rz(0.25)), () => prism(md, 1, 0.9, 0, 10, 5, bark));
+          md.at(chain(T(-1.5, 24, 0), Rz(-0.5)), () => prism(md, 0.8, 0.3, 0, 6, 4, bark));
+          md.at(T(1, 28, 0), () => ico(md, 3.4, magenta, 0.7));
+        });
+      },
+      leftHand: (md) => md.at(T(0, 0, 1.5), () => ico(md, 2.2, magenta, 0.6)),
+    };
+  },
+  stalker: (cloth) => {
+    const slate = rgb('#8fa0b8');
+    const straw = rgb('#c9a96a');
+    return {
+      cloth,
+      accent: slate,
+      robe: false,
+      heavy: false,
+      head: (md) => {
+        // A wide conical straw hat over a dark mask.
+        md.at(T(0, 4.5, 0), () => prism(md, 13, 0.5, 0, 6.5, 10, straw, Math.PI / 10));
+        box(md, -5.4, -5.6, 3.6, 5.4, -0.8, 6.9, rgb('#2b3140'));
+      },
+      back: (md) => {
+        // A long scarf streaming behind.
+        md.at(chain(T(1.5, 34, -4.4), Rx(-0.5)), () => slab(md, [[-2.5, 0], [2.5, 0], [3, -22], [0, -26], [-1, -22]], -0.8, 0, slate));
+      },
+      rightHand: (md) => {
+        // A short curved sword.
+        md.at(grip(0.25), () => {
+          box(md, -1, -2, -1, 1, 3, 1, rgb('#2b3140'));
+          box(md, -2.4, 3, -1.2, 2.4, 4, 1.2, GOLD);
+          slab(md, [[-1.3, 4], [1.5, 4], [2.4, 12], [1.6, 19], [0.2, 15]], -0.5, 0.5, STEEL);
+        });
+      },
+      leftHand: (md) => {
+        // A throwing star held flat.
+        md.at(chain(T(0, 0, 2), Rx(Math.PI / 2)), () => slab(md, [[0, 4.5], [1.2, 1.2], [4.5, 0], [1.2, -1.2], [0, -4.5], [-1.2, -1.2], [-4.5, 0], [-1.2, 1.2]], -0.4, 0.4, STEEL));
+      },
+    };
+  },
+  lancer: (cloth) => {
+    const ivory = rgb('#d8cfb4');
+    const plume = rgb('#f2c14e');
+    return {
+      cloth,
+      accent: ivory,
+      robe: false,
+      heavy: true,
+      head: (md) => {
+        // A rounded steel helm with cheek guards and a tall crest.
+        prism(md, 7.4, 6.4, 0.5, 8.6, 8, STEEL, Math.PI / 8);
+        gem(md, 6.4, 8.5, 8.6, 10.8, 8, STEEL, 0, Math.PI / 8);
+        for (const side of [-1, 1]) box(md, side * 5.6 - 1, -4.5, 2, side * 5.6 + 1, 2, 6, DARK_STEEL);
+        box(md, -1, 9, -6.5, 1, 15.5, 5.5, plume, 0.9);
+      },
+      over: (md) => {
+        for (const side of [-1, 1]) md.at(T(side * 10, 32.5, 0), () => gem(md, 4.2, -2.4, 0.4, 3.2, 6, STEEL));
+      },
+      rightHand: (md, arm) => {
+        // A long spear with a pennant in the team's colour.
+        md.at(upright(arm, 0.2), () => {
+          prism(md, 1, 0.9, -14, 36, 5, WOOD);
+          md.at(T(0, 36, 0), () => gem(md, 2.4, 0, 2, 10, 4, STEEL));
+          md.at(T(0, 30, 0), () => slab(md, [[0.6, 0], [10, -2.5], [0.6, -5]], -0.4, 0.4, cloth));
+        });
+      },
+      leftHand: (md, arm) => {
+        // A tall shield: an ivory rim, the team's colour and one gold band.
+        md.at(chain(T(-1.5, 5, 3.5), upright(arm)), () => {
+          const rect = (w: number, h: number): [number, number][] => [[-w, h], [w, h], [w, -h], [-w, -h]];
+          slab(md, rect(7.5, 12), 0, 2.2, ivory);
+          slab(md, rect(5.8, 10.3), 2, 3, cloth);
+          md.at(T(0, 3, 0), () => slab(md, rect(5.8, 1.3), 2.9, 3.3, GOLD));
+        });
+      },
+    };
+  },
 };
 
 /** A champion of class `id` in a team's cloth, in one pose. */
@@ -424,6 +626,92 @@ export function boarModel(pose: PoseName): Model {
       }
     });
   });
+  return md;
+}
+
+/** A wolf: lean and grey, with a long snout, pricked ears and a raised tail. Pups use the same sheet, drawn smaller. */
+export function wolfModel(pose: PoseName): Model {
+  const md = new Model();
+  const fur = rgb('#8d939c');
+  const dark = rgb('#5b6069');
+  const pale = rgb('#c9ccd1');
+  const k = pose[0] === 'w' ? WALK[Number(pose[1])] : 0;
+  const bob = pose[0] === 'w' ? BOB[Number(pose[1])] * 0.7 : 0;
+  const lunge = pose === 'a1' ? 6 : pose === 'a0' ? -2 : 0;
+  const dip = pose === 'a1' ? 0.3 : pose === 'a0' ? -0.35 : 0;
+  md.at(T(0, bob, lunge), () => {
+    for (const [x, z, ph] of [[-4.5, 10, 1], [4.5, 10, -1], [-4.5, -10, -1], [4.5, -10, 1]] as const) {
+      md.at(chain(T(x, 12, z), swing(k * ph)), () => {
+        box(md, -1.8, -12, -1.8, 1.8, 0, 1.8, dark, 0.9);
+        box(md, -2, -12, -2.2, 2, -10.6, 2.6, rgb('#33363c'));
+      });
+    }
+    // A lean body, deeper at the chest, with a pale belly.
+    box(md, -6, 11, -13, 6, 20, 11, fur, 0.85);
+    box(md, -6.6, 12, 4, 6.6, 22.5, 13, fur, 0.85);
+    box(md, -4.5, 10.6, -10, 4.5, 12, 11, pale);
+    // A bushy tail held up.
+    md.at(chain(T(0, 18, -13), Rx(-0.9)), () => prism(md, 2.6, 1, 0, 12, 5, fur));
+    // The head on a raised neck: a long snout, ears, pale cheeks.
+    md.at(chain(T(0, 20, 12), Rx(dip)), () => {
+      box(md, -5, -4, 0, 5, 5, 8, fur, 0.85);
+      md.at(chain(T(0, -1.5, 8), Rx(Math.PI / 2)), () => prism(md, 3, 2, 0, 7, 6, pale, Math.PI / 6));
+      box(md, -1.2, -0.6, 14.6, 1.2, 0.8, 15.2, rgb('#1d1a22'));
+      for (const side of [-1, 1]) {
+        md.at(chain(T(side * 3.2, 4.5, 2), Rz(side * -0.2)), () => slab(md, [[-1.8, 0], [1.8, 0], [0, 6]], -0.7, 0.7, dark));
+        box(md, side * 2.6 - 0.9, 1, 7.6, side * 2.6 + 0.9, 2.4, 8.3, rgb('#f2c14e'), 1, 0.6);
+      }
+    });
+  });
+  return md;
+}
+
+/**
+ * A brute: a hulking stone golem on short legs, its back grown with crystals. The ember brute's
+ * glow orange and the moss brute's green, with moss on its shoulders.
+ */
+export function bruteModel(kind: 'ember' | 'moss', pose: PoseName): Model {
+  const md = new Model();
+  const glow = rgb(kind === 'ember' ? '#ff8a3d' : '#7fe08a');
+  const stone = rgb(kind === 'ember' ? '#6e625c' : '#68705f');
+  const dark = rgb(kind === 'ember' ? '#4a403b' : '#454c3f');
+  const p = classPose('minion', pose);
+  md.at(T(0, p.bob, 0), () => {
+    for (const side of [-1, 1]) {
+      const a = side < 0 ? p.legR : p.legL;
+      md.at(chain(T(side * 6, 12, 0), swing(a * 0.7)), () => box(md, -4, -12, -4, 4, 0, 4.5, dark, 0.9));
+    }
+    md.at(chain(T(0, 12, 0), Rx(p.lean), T(0, -12, 0)), () => {
+      // A boulder of a body, broader at the shoulders, with a small head sunk in front.
+      box(md, -11, 12, -7, 11, 34, 8, stone, 1.15);
+      md.at(T(0, 34, 3), () => {
+        box(md, -4.5, 0, -3, 4.5, 7, 5, stone);
+        for (const side of [-1, 1]) box(md, side * 2.2 - 1, 3, 4.8, side * 2.2 + 1, 4.8, 5.5, glow, 1, 0.9);
+      });
+      // Crystals along the back.
+      for (let i = 0; i < 4; i++) md.at(chain(T((i % 2 ? 4 : -4), 30 - i * 4, -7), Rx(-0.6)), () => gem(md, 2.6, -1, 3, 9, 5, glow, 0.6));
+      if (kind === 'moss') for (const side of [-1, 1]) md.at(T(side * 9, 34, 0), () => ico(md, 4.2, rgb('#4f8d44')));
+      // Long arms with heavy fists.
+      for (const side of [-1, 1]) {
+        const a = side < 0 ? p.armR : p.armL;
+        md.at(chain(T(side * 13.5, 30, 0), Rz(side * 0.15), swing(a)), () => {
+          box(md, -3.4, -14, -3.4, 3.4, 2, 3.4, stone, 0.9);
+          md.at(T(0, -17, 0), () => ico(md, 5, dark));
+        });
+      }
+    });
+  });
+  return scaled(md, 1.2);
+}
+
+/** A watchstone: a carved standing stone on a round step, crowned with a crystal in its team's colour (pale gold while untaken). */
+export function watchstoneModel(team: TeamName | 'neutral'): Model {
+  const md = new Model();
+  const glow = rgb(team === 'neutral' ? '#f4d35e' : TEAM_GLOW[team]);
+  prism(md, 20, 18, 0, 5, 8, STONE_D, Math.PI / 8);
+  prism(md, 7.5, 6, 5, 40, 4, STONE, Math.PI / 4);
+  for (let i = 0; i < 3; i++) box(md, -6.6, 12 + i * 9, 5.5, 6.6, 14 + i * 9, 6.4, glow, 1, 0.5);
+  md.at(T(0, 46, 0), () => gem(md, 6, -6, 1, 12, 6, glow, 0.5));
   return md;
 }
 
@@ -570,5 +858,15 @@ export function coinModel(): Model {
     prism(md, 9, 9, -1.6, 1.6, 8, GOLD, Math.PI / 8, 0.2);
     prism(md, 6, 5, 1.6, 2.6, 8, rgb('#ffd977'), Math.PI / 8, 0.3);
   });
+  return md;
+}
+
+/** A broken pillar of an old ruin, in one of four heights, with moss on its top. */
+export function ruinModel(v: number): Model {
+  const md = new Model();
+  const h = [22, 14, 30, 9][v % 4];
+  prism(md, 9, 8.5, 0, 4, 6, STONE_D, 0.3);
+  prism(md, 6.5, 6, 4, 4 + h, 6, (v % 2 ? STONE : STONE_L), 0.3 + v * 0.2);
+  md.at(T(0, 4 + h, 0), () => gem(md, 5.5, -1, 1, 2.5, 6, rgb('#4f8d44'), 0, 0.3));
   return md;
 }
