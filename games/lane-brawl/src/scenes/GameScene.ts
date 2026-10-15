@@ -206,6 +206,8 @@ export class GameScene extends Phaser.Scene {
   private texts = new Map<string, Phaser.GameObjects.Text>();
   /** The names on the pick cards, drawn anew each time the pick screen opens. */
   private pickNames: string[] = [];
+  /** The pick card under the pointer, or -1. */
+  private hoverPick = -1;
   /** The fog of war: how much each cell is hidden from blue (0 clear, 1 hidden), and its images. */
   private fog = new Float32Array(FOG_COLS * FOG_ROWS);
   private fogG!: Phaser.GameObjects.Graphics;
@@ -245,9 +247,9 @@ export class GameScene extends Phaser.Scene {
       const r = pickCard(i);
       this.pickImages.push(
         this.add
-          .image(r.x + r.w / 2, r.y + 80, pickKey(c.id), frameName(2, 'idle'))
+          .image(r.x + r.w / 2, r.y + 56, pickKey(c.id), frameName(2, 'idle'))
           .setOrigin(0.5, CHAMP_CELL.footY / CHAMP_CELL.h)
-          .setScale(1.3 / RES)
+          .setScale(0.85 / RES)
           .setScrollFactor(0)
           .setDepth(11),
       );
@@ -267,6 +269,11 @@ export class GameScene extends Phaser.Scene {
 
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
       this.lastWorld = this.worldAt(p);
+      const v = viewPoint(p);
+      this.hoverPick = CHAMPIONS.findIndex((_, i) => {
+        const r = pickCard(i);
+        return v.x >= r.x && v.x <= r.x + r.w && v.y >= r.y && v.y <= r.y + r.h;
+      });
     });
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => this.onPointerDown(p));
     this.cameras.main.centerOn(BASE.blue.x + 300, BASE.blue.y - 200);
@@ -878,24 +885,26 @@ export class GameScene extends Phaser.Scene {
   }
 
   private drawPick(g: Phaser.GameObjects.Graphics) {
-    this.t('title', VIEW.w / 2, 14, 'LANE BRAWL', 34, UI.gold, 'center', true);
-    this.t('sub', VIEW.w / 2, 58, 'Pick your champion. Four others join you at random; five more fight you on red.', 13, UI.dim, 'center');
+    this.t('title', VIEW.w / 2, 12, 'LANE BRAWL', 32, UI.gold, 'center', true);
+    this.t('sub', VIEW.w / 2, 52, 'Pick your champion, from knights and witches to gunslingers, automatons and beasts. Four join you; five fight you.', 12, UI.dim, 'center');
     CHAMPIONS.forEach((c, i) => {
       const r = pickCard(i);
-      this.panel(g, r.x, r.y, r.w, r.h, UI.card);
+      const hover = this.hoverPick === i;
+      this.panel(g, r.x, r.y, r.w, r.h, hover ? '#3a4660' : UI.card);
       g.fillStyle(col(c.color), 1).fillRect(r.x + 2, r.y + 2, r.w - 4, 4);
-      g.fillStyle(col('#3b7be8'), 0.25).fillEllipse(r.x + r.w / 2, r.y + 80, 70, 20);
-      g.lineStyle(2, col('#3b7be8'), 0.9).strokeEllipse(r.x + r.w / 2, r.y + 80, 70, 20);
+      g.fillStyle(col('#3b7be8'), 0.25).fillEllipse(r.x + r.w / 2, r.y + 56, 50, 14);
+      g.lineStyle(2, col('#3b7be8'), 0.9).strokeEllipse(r.x + r.w / 2, r.y + 56, 50, 14);
       const name = this.pickNames[i] ?? c.name;
-      this.t(`pick-name-${i}`, r.x + r.w / 2, r.y + 92, name, name.length > 18 ? 12 : 14, UI.text, 'center', true);
-      this.t(`pick-role-${i}`, r.x + r.w / 2, r.y + 112, `${c.name} · ${c.role}`.toUpperCase(), 10, c.color, 'center', true);
-      this.t(`pick-pas-${i}`, r.x + r.w / 2, r.y + 130, c.passive.name, 11, UI.gold, 'center', true);
-      this.t(`pick-desc-${i}`, r.x + r.w / 2, r.y + 144, c.passive.desc, 10, UI.dim, 'center');
-      this.t(`pick-blurb-${i}`, r.x + r.w / 2, r.y + 159, c.blurb, 10, UI.muted, 'center');
+      this.t(`pick-name-${i}`, r.x + r.w / 2, r.y + 60, name, name.length > 18 ? 11 : 12, UI.text, 'center', true);
+      this.t(`pick-role-${i}`, r.x + r.w / 2, r.y + 75, `${c.name} · ${c.role}`.toUpperCase(), 9, c.color, 'center', true);
+      this.t(`pick-pas-${i}`, r.x + r.w / 2, r.y + 87, c.passive.name, 10, UI.gold, 'center', true);
+      this.t(`pick-desc-${i}`, r.x + r.w / 2, r.y + 100, c.passive.desc, 9, UI.dim, 'center');
     });
     const b = REROLL;
     this.panel(g, b.x, b.y, b.w, b.h, '#3a4660');
     this.t('reroll', b.x + b.w / 2, b.y + 5, 'New names', 12, UI.text, 'center', true);
+    const h = CHAMPIONS[this.hoverPick];
+    this.t('pick-blurb', VIEW.w / 2, 471, h ? `${this.pickNames[this.hoverPick] ?? h.name}, ${h.name.toLowerCase()}: ${h.blurb.toLowerCase()}` : 'Point at a card to learn more about its champion.', 12, h ? h.color : UI.muted, 'center', true);
     this.t('hint', VIEW.w / 2, 491, 'Click a champion to start. Click the ground to walk, an enemy to attack. Q W E R cast at the cursor, D and H use item actives.', 11, UI.dim, 'center');
     this.t('hint2', VIEW.w / 2, 506, 'B opens the shop at your Nexus, 1 or 2 picks an upgrade. You only see what your team sees: the rest lies in the fog.', 11, UI.dim, 'center');
     this.t('hint3', VIEW.w / 2, 521, 'Slay the brutes for buffs, take the watchstones on the river for sight, and the guardian beast for stronger minions.', 11, UI.dim, 'center');

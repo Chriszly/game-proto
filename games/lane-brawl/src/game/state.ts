@@ -506,7 +506,7 @@ export function createGame(pick: ChampionDef, enemyDamage: number, opts: MatchOp
   s.units.push(beast);
   s.beast = beast.id;
 
-  // The other nine classes, shuffled: four join the player, five fight on red.
+  // The other classes, shuffled: four join the player, five fight on red.
   const others = CHAMPIONS.filter((c) => c.id !== pick.id);
   for (let i = others.length - 1; i > 0; i--) {
     const j = Math.floor(rnd() * (i + 1)) % (i + 1);

@@ -3,7 +3,9 @@
 A single-player MOBA prototype built with [Phaser 4](https://phaser.io), TypeScript and Vite, part of
 the [game hub](../../README.md).
 
-You pick one of ten champions and lead a team of five down three lanes of a big square map. Four
+You pick one of fifteen champions and lead a team of five down three lanes of a big square map.
+The cast runs from medieval fantasy to steampunk: knights, archers and witches fight beside
+gunslingers, brass automatons, tinkers with tesla coils, wolf-folk and a great bear. Four
 allies walk the lanes with you, and five NPC champions on the red team fight you. Every champion has
 a name of its own, drawn fresh for each match (like Ilmisdor the Unbroken, a Warden, or Fiath
 Thornmother, a Witch), and its class gives it a passive and four abilities. Farm minions for gold,
@@ -18,7 +20,7 @@ eight directions, with a walk cycle, attack poses and a cast pose. The map has f
 lanes with stone kerbs, a river from corner to corner, ruins, flowers and pines, lit from the top
 left, under bevelled slate panels.
 
-![Five blue champions and five red ones clash on the middle lane by the river, each with a name over its health bar, a Witch's zone glowing violet and a notice saying who slew whom](cover.png)
+![A Gunslinger, an Automaton, a Tinker, a Wolfkin and a Bruin on blue clash with red on the middle lane by the river, each with a name over its health bar](cover.png)
 
 ## How to play
 
@@ -35,8 +37,8 @@ left, under bevelled slate panels.
 | Esc | Close the shop |
 | Play again | After a match: pick a champion again |
 
-1. **Your team**: you and four allies drawn at random from the other nine classes; red gets the
-   five left over. Allies walk a lane each and fight what they meet. Each champion's name shows
+1. **Your team**: you and four allies drawn at random from the other fourteen classes; red gets
+   five more of them. Allies walk a lane each and fight what they meet. Each champion's name shows
    over its health bar, and a notice says who slew whom.
 2. **The map** is a 2800 px square: the blue Nexus at the bottom left, the red at the top right,
    the top and bottom lanes along the edges and the middle lane on the diagonal. A river runs from
@@ -143,7 +145,9 @@ each team sends one healthy champion into the jungle for a brute's buff on its h
 watchstone it lacks. Ranged champions keep their distance from melee ones, and every champion keeps
 its finisher (R) for champions and the beast and its escape for when it falls back.
 
-![The pick screen: ten classes in two rows, each card with a random name, class and role, passive and a blurb, and the New names button](docs/screenshots/playthrough-1-pick.png)
+![The pick screen: fifteen classes in three rows, from the Warden to the Gunslinger, the Automaton, the Tinker, the Wolfkin and the Bruin, each card with a random name, class and role and passive; the line under the cards tells about the one under the pointer](docs/screenshots/playthrough-1-pick.png)
+
+![The five steampunk and beast classes in one brawl by the river: Gunslinger, Automaton, Tinker, Wolfkin and Bruin](docs/screenshots/new-cast.png)
 
 ![Fog of war: the Warden by the river sees a circle around him; the far bank and the jungle beyond lie in a dark fog, on the map and the minimap](docs/screenshots/fog-of-war.png)
 
@@ -167,7 +171,7 @@ its finisher (R) for champions and the beast and its escape for when it falls ba
 
 ![The shop: twelve items in four columns, the parts first, with what each builds into or from](docs/screenshots/playthrough-2-shop.png)
 
-![All ten classes in one brawl by the river: Warden, Witch, Stalker, Lancer and Berserker among them, each under its own name](docs/screenshots/ten-classes.png)
+![Ten champions in one brawl by the river: Warden, Witch, Stalker, Lancer and Berserker among them, each under its own name](docs/screenshots/ten-classes.png)
 
 ### Champions
 
@@ -182,11 +186,17 @@ its finisher (R) for champions and the beast and its escape for when it falls ba
 | Harpooner | Catcher | Sea Legs: heals 4 a second | Harpoon: bolt that pulls its target in and stuns | Riptide: burst around self, knocks back | Brace: +20 armor and a shield for 3 s | Maelstrom: zone at the cursor, hurts and slows |
 | Witch | Controller | Hex: attacks slow for 0.6 s | Hex Bolt: bolt, slows | Blight: zone at the cursor, hurts | Bramble Snare: roots foes at the cursor | Plague Field: wide zone, hurts and slows |
 | Stalker | Ambusher | Ambush: the first hit after a 2 s lull or out of Vanish hits 2.3x | Shuriken Fan: three stars in a fan | Vanish: unseen and +30% speed for 3 s | Pounce: dash, hits and stuns | Final Mark: bolt, double under 40% health |
+| Gunslinger | Marksman | Ricochet: shots hit foes beside the target for 35% | Fan the Hammer: three quick shots in a fan | Smoke Bomb: zone at the cursor, slows | Dodge Roll: short dash | Deadeye: very long shot, more than double under 30% health |
+| Automaton | Tank | Iron Hull: takes 12% less damage | Steam Vent: burst around self, slows | Overclock: +40% attack speed and +15 armor for 4 s | Rocket Fist: bolt that pulls its target in and stuns | Overload: big burst around self, stuns |
+| Tinker | Controller | Overcharge: abilities deal 15% more | Spark Bolt: bolt, stuns briefly | Tesla Field: zone at the cursor, hurts and slows | Jetpack: long dash | Lightning Storm: wide zone, hurts and slows |
+| Wolfkin | Hunter | Feral Hunger: heals 12% of attack damage | Lunge: dash, hits and slows | Howl: +30% attack speed and +20% speed for 4 s | Rend: burst around self, slows | Blood Moon: +25 damage, +25% lifesteal, +25% speed for 6 s |
+| Bruin | Brawler | Thick Hide: heals 6 a second | Maul: burst around self | Roar: wide burst, slows | Bull Rush: dash, hits and stuns | Grizzly Wrath: shield, +25 damage, +30% attack speed, +15 armor for 6 s |
 | Lancer | Bruiser | Wide Reach: attacks hit foes beside the target for 40% | Thrust: short bolt through enemies | Sweep: burst around self, knocks back | Vault: dash, hits and stuns | Phalanx: shields allies around and gives +15 armor for 6 s |
 
 Champions are characters, not just classes: each gets a first name drawn from syllables and a
 byname that fits its class (a Warden is "the Unbroken" or "Stonehide", a Witch "Thornmother" or
-"Hexweaver"), so no two matches field the same faces. **New names** on the pick screen draws again.
+"Hexweaver", a Bruin "Honeypaw"), and an Automaton gets a maker's mark and a number instead, like
+"KR-6 Boilerplate", so no two matches field the same faces. **New names** on the pick screen draws again.
 
 ### Upgrades
 
@@ -201,6 +211,11 @@ byname that fits its class (a Warden is "the Unbroken" or "Stonehide", a Witch "
 | Harpooner | Long Harpoon (Q range +25%) or Barbed Harpoon (Q damage +40%) | Deep Riptide (W radius +30%) or Iron Brace (E shield +50%) | Wide Maelstrom (R radius +25%) or Quick Harpoon (Q cooldown -25%) | Stunning Riptide (W stuns 0.5s) or Raging Maelstrom (R damage +30%) |
 | Witch | Cruel Hex (Q damage +30%) or Lasting Blight (W lasts 40% longer) | Wide Snare (E radius +40%) or Quick Hex (Q cooldown -25%) | Wide Plague (R radius +25%) or Foul Blight (W damage +35%) | Deep Roots (E holds 0.5s longer) or Long Plague (R lasts 30% longer) |
 | Stalker | Sharp Shuriken (Q damage +30%) or Wide Fan (Q two more stars) | Long Vanish (W lasts 50% longer) or Far Pounce (E range +30%) | Deadly Mark (R damage +25%) or Quick Vanish (W cooldown -30%) | Stunning Pounce (E stuns 0.4s longer) or Quick Shuriken (Q cooldown -25%) |
+| Gunslinger | Six Shooter (Q two more shots) or Hot Lead (Q damage +30%) | Thick Smoke (W radius +30%) or Quick Roll (E cooldown -30%) | Steady Aim (R damage +25%) or Long Smoke (W lasts 40% longer) | Stunning Shot (Q stuns 0.3s) or Quick Hammer (Q cooldown -25%) |
+| Automaton | Wide Vent (Q radius +30%) or Scalding Vent (Q damage +30%) | Long Overclock (W lasts 50% longer) or Long Fist (E range +25%) | Big Overload (R radius +25%) or Quick Vent (Q cooldown -25%) | Heavy Fist (E damage +40%) or Quick Overclock (W cooldown -30%) |
+| Tinker | Hot Spark (Q damage +30%) or Quick Spark (Q cooldown -25%) | Wide Field (W radius +30%) or Long Jet (E range +30%) | Wide Storm (R radius +25%) or Strong Field (W damage +35%) | Stunning Spark (Q stuns 0.4s longer) or Long Storm (R lasts 30% longer) |
+| Wolfkin | Far Lunge (Q range +30%) or Savage Lunge (Q damage +30%) | Long Howl (W lasts 50% longer) or Wide Rend (E radius +30%) | Long Moon (R lasts 40% longer) or Quick Lunge (Q cooldown -25%) | Deep Rend (E damage +40%) or Quick Howl (W cooldown -30%) |
+| Bruin | Wide Maul (Q radius +30%) or Heavy Maul (Q damage +30%) | Loud Roar (W radius +25%) or Long Rush (E range +30%) | Long Wrath (R lasts 40% longer) or Quick Maul (Q cooldown -25%) | Stunning Roar (W stuns 0.5s) or Crushing Rush (E damage +40%) |
 | Lancer | Long Thrust (Q range +30%) or Hard Thrust (Q damage +30%) | Wide Sweep (W radius +25%) or High Vault (E range +30%) | Iron Phalanx (R shield +40%) or Crippling Sweep (W slows 1.2s) | Stunning Vault (E stuns 0.4s longer) or Quick Thrust (Q cooldown -25%) |
 
 A stunned champion or minion neither moves nor attacks. AI champions take upgrades too (see The AI).

@@ -8,14 +8,16 @@ the game, per the root AGENTS.md.
 
 Lane Brawl is a single-player MOBA on one 2800x2800 square map with three lanes, a river, towers,
 inhibitors, minion waves, a jungle of twelve camps, watchstones, a guardian beast, tall grass, fog of
-war, two Nexuses, five champions a side and a shop. The player picks one of ten champion classes
+war, two Nexuses, five champions a side and a shop. The player picks one of fifteen champion classes,
+from medieval fantasy to steampunk and beasts,
 and fights with four AI allies against five AI champions on red; every champion gets a random name. The art is low-poly 3D: every unit is a small mesh built in code and rendered at boot by a
 software renderer into sprite frames; there are no image assets besides the cover and favicon.
 
 Implemented today:
 
-- Pick screen with the ten classes in two rows of five cards (3D figure, the champion's random
-  name, class and role, passive and a blurb) and a New names button (`REROLL`), then one match.
+- Pick screen with the fifteen classes in three rows of five cards (3D figure, the champion's random
+  name, class and role, passive), a line under them with the blurb of the card under the pointer
+  (`hoverPick`) and a New names button (`REROLL`), then one match.
 - Map (`WORLD` 2800x2800): the blue Nexus at the bottom left, the red at the top right; top and
   bottom lanes along the edges, the middle lane on the diagonal. Everything red is blue mirrored
   through the centre (`mirror`, `both` in `data.ts`), with top and bottom lanes swapped. Two towers
@@ -23,7 +25,8 @@ Implemented today:
   (`RIVER`, top left to bottom right, crossing the middle lane), twelve camps (`CAMPS`), three
   watchstones on river islands (`WATCHSTONES`), the beast's pit by the river (`BEAST`), eighteen
   bushes (`BUSHES`), four ruins (painted only) and minion waves every 25 s (three per lane per team).
-- Champions: ten classes (`CHAMPIONS`), each with a passive (`PassiveDef`: `tough`, `critEvery` and
+- Champions: fifteen classes (`CHAMPIONS`): ten medieval (Warden to Lancer) and five steampunk or
+  beast (Gunslinger, Automaton, Tinker, Wolfkin, Bruin), each with a passive (`PassiveDef`: `tough`, `critEvery` and
   `critMult`, `haste`, `spellpower`, `aura`, `lifesteal`, `regen`, `slowHit`, `ambush`, `splash`)
   and Q, W, E, R. Abilities are data: `burst` (around a point or the caster, with optional `knock`),
   `bolt` (projectiles, optionally piercing, with optional `pull` or `executeBelow`), `dash` (move,
@@ -31,8 +34,8 @@ Implemented today:
   timed `BuffDef` on the caster: attack speed, damage, speed, lifesteal, armor, cooldowns, regen,
   slowing hits or stealth) and `zone` (a lingering circle that hurts enemies by `dps` and slows
   them, in `s.zones`). R unlocks at level 3; levels run 1 to 5.
-- Names (`names.ts`): `championName(classId, rnd, taken)` joins a syllable first name to a byname
-  for the class; `createGame` names every champion (the player's from the pick card), no two alike.
+- Names (`names.ts`): `championName(classId, rnd, taken)` joins a syllable first name (for the
+  Automaton a maker's mark and number, like KR-6) to a byname for the class; `createGame` names every champion (the player's from the pick card), no two alike.
   `shortName` drops the byname for the portrait and notices.
 - Jungle (LB6): camps of five kinds (`CAMP_KINDS`): boars, wolf packs (an alpha and two pups, one
   `group`), and per side one ember and one moss brute, whose slayer gets a 60 s buff (`BUFFS`, in
@@ -159,7 +162,10 @@ File map (`src/`):
   bow, the Mage's hat and crystal staff, the Priest's halo, cloak and sunburst staff, the
   Berserker's horned helm, fur mantle and great axe, the Harpooner's knit cap, beard, rope and
   harpoon, the Witch's antlered hood, shawl and branch staff, the Stalker's straw hat, scarf, curved
-  sword and throwing star, the Lancer's crested helm, pennant spear and banded shield. Also
+  sword and throwing star, the Lancer's crested helm, pennant spear and banded shield, the
+  Gunslinger's wide hat, bandana, duster and revolver, the Automaton's brass head with glowing eyes,
+  boiler and piston fists, the Tinker's goggles, tesla-coil backpack, spark gun and wrench, the
+  Wolfkin's wolf head, mane, tail and claws, and the Bruin's bear head, belly and claws. Also
   `wolfModel`, `bruteModel` (ember or moss), `watchstoneModel` (per side or neutral) and
   `ruinModel`. `classPose`
   gives the joint angles for `idle`, the walk `w0`..`w3`, the attack `a0` (wind-up) and `a1`
@@ -171,7 +177,7 @@ File map (`src/`):
   class for the pick cards and portrait (`pickKey`), the minions, the boar, wolf, brutes,
   watchstones and the beast (8 directions x 8 poses each), a gold silhouette
   of the red minion sheet for the last-hit outline, towers, inhibitors, the Nexus, rubble and the
-  coin. The ten champions' full sheets (both teams' cloth) are baked when a match starts, only for
+  coin. The champions' full sheets (both teams' cloth) are baked when a match starts, only for
   the classes in it (`bakeChampions`, kept for later matches). Frames are named `${dir}:${pose}` (`frameName`); dir 0 faces right and each step turns 45
   degrees clockwise on screen (`dirFor` maps a facing angle). Sheets render at `RES` and are
   drawn at 1/RES: 2 on a screen that needs no scaling, up to 3 on a big or dense one (`sharpRes`
@@ -293,12 +299,12 @@ generator (`seeded` in `lowpoly.ts`); `performance.now` only times the bake for 
   through JSON) and its `cameras.main.worldView` (not `scrollX/Y`, which differ once `renderScale` zooms the camera),
   to turn world positions into view pixels. `e2e/screens.spec.ts` at the root opens the game on
   five screens.
-- Inputs: it clicks the Warden's card at the pick screen (top left of the ten), presses B, clicks the Long Sword's card,
+- Inputs: it clicks the Warden's card at the pick screen (top left of the fifteen), presses B, clicks the Long Sword's card,
   clicks the ground and the red tower, presses Q, clicks the camp the second objective marks, clicks
   gold-outlined minions (`lastHitMark`) and clicks the first upgrade card. Clicks go to the canvas
   through the bounding box, never on the objective card (it blocks clicks).
 - The test mirrors these, so change them together: the card, shop row, tower, objective card and
-  upgrade card coordinates in `playthrough.spec.ts` (`WARDEN_CARD` (120, 173), `SWORD_ROW`,
+  upgrade card coordinates in `playthrough.spec.ts` (`WARDEN_CARD` (120, 133), `SWORD_ROW`,
   `RED_MID_TOWER` (1793, 1007), `OBJECTIVE_CARD`, `UPGRADE_CARD_1`) against `layout.ts` and
   `TOWERS`, `TOWER_REACH` against `TOWER.range`, `CAMP_GOLD` against `CAMP_KINDS`, the Warden's
   stats and Slam radius (`CHAMPIONS`), the Long Sword cost and damage (`ITEMS`), the first two
@@ -317,7 +323,8 @@ generator (`seeded` in `lowpoly.ts`); `performance.now` only times the bake for 
   (100 s), so neither touches it; keep `BEAST.firstAt` and `GANK.firstAt` past it, and keep the
   bushes off the middle lane's paving and the path to the camp by the red mid tower. Copy them into
   `docs/screenshots/` as `playthrough-1-pick` to `playthrough-4-upgrade` when the look changes.
-  `cover.png` (a copy of `ten-classes.png`), `ten-classes.png`, `fog-of-war.png`,
+  `cover.png` (a copy of `new-cast.png`), `new-cast.png` (the shuffle steered with a fixed
+  `Math.random` sequence so blue fields the five new classes), `ten-classes.png`, `fog-of-war.png`,
   `jungle-brute.png`, `watchstone.png`, `loop-objective.png`, `loop-last-hit.png` and
   `upgrade-*.png` are staged docs shots (a scratch Playwright script that places units through
   `window.game` and lets the match run), not test output. The `loop-*` and `upgrade-*` ones predate
@@ -330,7 +337,9 @@ generator (`seeded` in `lowpoly.ts`); `performance.now` only times the bake for 
   its four upgrade pairs to `UPGRADES`, bynames in `names.ts`, a `Kit` in `KITS` and its pose in
   `classPose` (`models.ts`) and its id to `ChampId`. `createGame` shuffles the classes other than the
   player's, gives blue the first four and red the next five, so any roster of ten or more works;
-  the pick screen lays out `pickCard(i)` in rows of five, so an eleventh needs a new layout. Update
+  the pick screen lays out `pickCard(i)` in three rows of five, so a sixteenth needs a new layout.
+  A machine or beast sets `ownHead` on its `Kit` (the head draws its own skull and face) and
+  `skin`, `legs` and `feet` for its hands, legs and feet. Update
   the README's champion and upgrade tables. Then run the balance check (see Gotchas).
 - **Add a passive**: add its field to `PassiveDef` and apply it where it acts: `damage` (taken),
   `attack` (hits), `updateUnit` (over time) or `abilityDamage` (spells).
