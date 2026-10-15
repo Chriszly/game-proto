@@ -104,8 +104,8 @@ Missing or rough:
 File map (`src/`):
 
 - `main.ts`: creates the `Phaser.Game` (960x540, `Phaser.Scale.FIT`, smooth scaling) with
-  `GameScene` only, calls `setupGame(game)` from `shared/setupGame.ts`, and in dev builds puts
-  `game` on `window`.
+  `GameScene` only, calls `setupGame(game)` from `shared/setupGame.ts` and `setupScaling(game)`
+  from `shared/scaling.ts`, and in dev builds puts `game` on `window`.
 - `scenes/GameScene.ts`: the pick screen, the match view and input. `create` bakes the art
   (`bakeUnits`, `paintMap`), shows the map as 400 px tiles (only the ones in view are drawn) and
   keeps one image per unit (figure, gold outline, additive hit flash), depth-sorted by the feet's y.
@@ -135,9 +135,13 @@ File map (`src/`):
   teams' cloth, the minions, the boar and the beast (8 directions x 8 poses each), a gold silhouette
   of the red minion sheet for the last-hit outline, towers, inhibitors, the Nexus, rubble and the
   coin. Frames are named `${dir}:${pose}` (`frameName`); dir 0 faces right and each step turns 45
-  degrees clockwise on screen (`dirFor` maps a facing angle). Sheets render at `RES` (2) and are
-  drawn at 1/RES; each `*_CELL` gives a frame's size and where the feet sit.
-- `art/map.ts`: `paintMap` paints the world once on one canvas (`MAP_KEY`): faceted grass, flagstone
+  degrees clockwise on screen (`dirFor` maps a facing angle). Sheets render at `RES` and are
+  drawn at 1/RES: 2 on a screen that needs no scaling, up to 3 on a big or dense one (`sharpRes`
+  in half steps, held to what the beast's sheet can load). Pick cards and the portrait scale by
+  `1.7 / RES` and `1.2 / RES`; each `*_CELL` gives a frame's size and where the feet sit.
+- `art/map.ts`: `paintMap` paints the world once on one canvas (`MAP_KEY`), `MAP_RES` canvas pixels
+  per world pixel (1, up to about 1.7 on big screens; the tiles are sized back with
+  `setDisplaySize`): faceted grass, flagstone
   lanes clipped to the lane band, kerb rocks, paved plazas with a team ring round each Nexus, dirt
   clearings for the camps and about 260 pines and rocks, from a fixed seed; then the beast's pit and
   the bushes (tall faceted grass) from a second seed, so adding them left the rest of the map as it
@@ -157,8 +161,18 @@ File map (`src/`):
   (`updateLastHitMark`), vision (`updateVision`), the beast (`beastAct`, `updateContesters`), ganks
   (`updateGanks`), and the AI (`championPlan`) and player behaviour. No Phaser.
 
-Shared code it imports (outside the game folder): `shared/setupGame.ts` (`setupGame`) and
-`shared/settings.ts` (`byDifficulty`, `settings`).
+Shared code it imports (outside the game folder): `shared/setupGame.ts` (`setupGame`),
+`shared/settings.ts` (`byDifficulty`, `settings`) and `shared/scaling.ts` (`setupScaling`,
+`sharpRes`, `splitHudCamera`, `viewPoint`).
+
+Screens: `setupScaling` draws the canvas at the screen's resolution (`renderScale` canvas pixels
+per game pixel) and zooms every camera to match. `splitHudCamera` gives the scene a second, fixed
+camera for everything with a scroll factor of 0 (the HUD, its texts, the pick screen and the
+portrait), so the main camera keeps Phaser's middle origin for `setBounds` and `centerOn`. Zones
+are hit with `viewPoint(pointer)`; world points come from `worldAt` (the main camera's
+`getWorldPoint`, not `pointer.worldX`, which the HUD camera on top would give). `viewRect` is the
+part of the world in view this frame (from the camera's `midPoint`, clamped to the world) and
+drives the camera follow, the map tiles drawn and the minimap's view box.
 
 State model:
 
@@ -231,7 +245,9 @@ generator (`seeded` in `lowpoly.ts`); `performance.now` only times the bake for 
 ## Testing hooks
 
 - `window.game` in dev builds. The test reads `game.scene.getScene('Game')`: its `state` (copied
-  through JSON) and its `cameras.main` scroll, to turn world positions into view pixels.
+  through JSON) and its `cameras.main.worldView` (not `scrollX/Y`, which differ once `renderScale` zooms the camera),
+  to turn world positions into view pixels. `e2e/screens.spec.ts` at the root opens the game on
+  five screens.
 - Inputs: it clicks the Warden's card at the pick screen, presses B, clicks the Long Sword's card,
   clicks the ground and the red tower, presses Q, clicks the camp the second objective marks, clicks
   gold-outlined minions (`lastHitMark`) and clicks the first upgrade card. Clicks go to the canvas
@@ -302,5 +318,10 @@ generator (`seeded` in `lowpoly.ts`); `performance.now` only times the bake for 
 - All HUD text sits above all HUD graphics (depth 12 over 10), so a panel drawn over another
   panel's text does not hide it: hide the covered panel instead (as the objective card does while
   the shop is open).
+- `pointer.x/y` and `this.scale` are canvas pixels, `renderScale` times game pixels: read pointers
+  through `viewPoint` or `worldAt`, and give anything new on the HUD a scroll factor of 0 so the
+  fixed camera draws it.
+- A sharper screen bakes bigger sheets and a bigger map, so the boot bake takes longer there (about
+  1.8x at 4K); keep `RES` capped rather than raising it further.
 - Texts re-render their canvas when their string or colour changes; `t()` only sets what changed,
   which keeps the canvas renderer (used by the test) fast.

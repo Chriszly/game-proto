@@ -6,23 +6,36 @@ on:
     # "synchronize" when commits are pushed, so removing the link turns it green
     # again.
     types: [opened, edited, reopened, synchronize]
+  # Comments, reviews and review comments are checked too. Deleting or editing
+  # the comment with the link re-runs the check.
+  issue_comment:
+    types: [created, edited, deleted]
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+  pull_request_review_comment:
+    types: [created, edited, deleted]
 
 permissions:
   contents: read
   pull-requests: read
+  # A comment on the PR runs this workflow on main, not on the PR, so every run
+  # also sets the "PR Links" commit status on the PR's head commit.
+  statuses: write
 
 jobs:
   github-links-only:
+    # issue_comment also fires for comments on issues; only PRs are checked.
+    if: github.event_name != 'issue_comment' || github.event.issue.pull_request
     runs-on: ubuntu-latest
     steps:
-      - name: Check PR title, description and commit messages link only to GitHub
+      - name: Check PR title, description, commits, comments and reviews link only to GitHub
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             // The texts are read as data from the API; they never reach a shell. The
             // PR is fetched fresh, as a re-run of an older run would otherwise
             // check the title and description it started with.
-            const pull_number = context.payload.pull_request.number;
+            const pull_number = (context.payload.pull_request || context.payload.issue).number;
             const { data: pr } = await github.rest.pulls.get({ ...context.repo, pull_number });
             const body = pr.body || '';
             // What GitHub turns into a link: a URL with a scheme, or one starting with www.
@@ -55,16 +68,35 @@ jobs:
               pull_number,
               per_page: 100
             });
+            const page = { ...context.repo, per_page: 100 };
+            const comments = await github.paginate(github.rest.issues.listComments, { ...page, issue_number: pull_number });
+            const reviews = await github.paginate(github.rest.pulls.listReviews, { ...page, pull_number });
+            const reviewComments = await github.paginate(github.rest.pulls.listReviewComments, { ...page, pull_number });
             const hits = [
               ...linksOutside(pr.title, 'title'),
               ...linksOutside(body, 'description'),
-              ...commits.flatMap(c => linksOutside(c.commit.message, `commit ${c.sha.slice(0, 7)}`))
+              ...commits.flatMap(c => linksOutside(c.commit.message, `commit ${c.sha.slice(0, 7)}`)),
+              ...comments.flatMap(c => linksOutside(c.body || '', `comment ${c.id} by ${c.user.login}`)),
+              ...reviews.flatMap(r => linksOutside(r.body || '', `review ${r.id} by ${r.user.login}`)),
+              ...reviewComments.flatMap(c => linksOutside(c.body || '', `review comment ${c.id} by ${c.user.login}`))
             ];
 
+            // The status shows the result on the PR whichever event ran the check.
+            await github.rest.repos.createCommitStatus({
+              ...context.repo,
+              sha: pr.head.sha,
+              context: 'PR Links',
+              state: hits.length > 0 ? 'failure' : 'success',
+              description: hits.length > 0 ? `${hits.length} link(s) outside GitHub` : 'Links only to GitHub',
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+            });
+
+            const checked = `PR title, description, ${commits.length} commit message(s), ` +
+              `${comments.length} comment(s), ${reviews.length} review(s) and ${reviewComments.length} review comment(s)`;
             if (hits.length > 0) {
               // One error annotation per link, shown on the run's summary page.
               for (const hit of hits) core.error(hit, { title: 'Link outside GitHub' });
-              core.setFailed(`PR links outside GitHub; edit the title or description, or reword the commits and the check re-runs:\n${hits.join('\n')}`);
+              core.setFailed(`PR links outside GitHub; edit the title, description or comment, or reword the commits and the check re-runs:\n${hits.join('\n')}`);
             } else {
-              console.log(`PR title, description and ${commits.length} commit message(s) link only to GitHub.`);
+              console.log(`${checked} link only to GitHub.`);
             }
