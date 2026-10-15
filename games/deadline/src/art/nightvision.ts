@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { CRATES, CRATE_KINDS, DRUM, HUD_HEIGHT, REACH_Y, SUPPLY_KINDS, VIEW, type CrateKind, type SupplyKind } from '../game/rules';
-import { GEOM, TAU, bake, canvas, rgba, rng, tex, type Ctx } from './paint';
+import { GEOM, GRAIN_TILE, TAU, bake, canvas, rgba, rng, tex, type Ctx } from './paint';
 import { CRATE_COLORS, NV } from './theme';
 
 // Deadline through a night-vision camera: everything is painted in greys (how bright it shows up in
@@ -491,7 +491,7 @@ function grain(ctx: Ctx) {
   const rnd = rng(77);
   for (let i = 0; i < 900; i++) {
     ctx.fillStyle = `rgba(220,255,210,${0.04 + rnd() * 0.12})`;
-    ctx.fillRect(rnd() * 128, rnd() * 128, 1, 1);
+    ctx.fillRect(rnd() * GRAIN_TILE, rnd() * GRAIN_TILE, 1, 1);
   }
 }
 
@@ -617,5 +617,5 @@ export function bakeNightVision(scene: Phaser.Scene) {
     }
     c.restore();
   });
-  bake(scene, key('grain'), { w: 128, h: 128, ox: 0, oy: 0 }, grain);
+  bake(scene, key('grain'), { w: GRAIN_TILE, h: GRAIN_TILE, ox: 0, oy: 0 }, grain);
 }

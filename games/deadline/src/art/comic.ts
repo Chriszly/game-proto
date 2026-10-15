@@ -12,16 +12,17 @@ const key = (name: string) => tex('comic', name);
 
 /** Halftone dot patterns, cached by colour, spacing and dot size. */
 const patterns = new Map<string, HTMLCanvasElement>();
+// Painted at 8x so the dots stay round in the textures (up to 6x on a 4K screen) and on the page around the game.
+const DOTS_RES = 8;
+
 export function dots(ctx: Ctx, color: string, sp = 3.2, r = 1.05) {
   const id = `${color}|${sp}|${r}`;
   let c = patterns.get(id);
   if (!c) {
-    // Painted at 4x so the dots stay round in the 2x textures and on the page around the game.
-    const k = 4;
     c = document.createElement('canvas');
-    c.width = c.height = Math.round(sp * 2 * k);
+    c.width = c.height = Math.round(sp * 2 * DOTS_RES);
     const g = c.getContext('2d')!;
-    g.scale(k, k);
+    g.scale(DOTS_RES, DOTS_RES);
     g.fillStyle = color;
     for (const [x, y] of [[sp / 2, sp / 2], [sp * 1.5, sp * 1.5]]) {
       g.beginPath();
@@ -31,7 +32,7 @@ export function dots(ctx: Ctx, color: string, sp = 3.2, r = 1.05) {
     patterns.set(id, c);
   }
   const p = ctx.createPattern(c, 'repeat')!;
-  p.setTransform(new DOMMatrix().scale(1 / 4));
+  p.setTransform(new DOMMatrix().scale(1 / DOTS_RES));
   return p;
 }
 

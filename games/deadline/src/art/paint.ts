@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { sharpRes } from '../../../../shared/scaling';
 import type { ArtStyle } from '../game/save';
 
 // Shared tools for painting textures on 2D canvases, and the size of every sprite. Both art styles
@@ -9,7 +10,10 @@ export type Ctx = CanvasRenderingContext2D;
 export type Pt = [number, number];
 export const TAU = Math.PI * 2;
 
-/** Textures are painted at twice the game's pixels and shown at half scale, so they stay sharp. */
+/**
+ * Textures are painted at twice the game's pixels on a screen that needs no scaling, and more on a
+ * bigger one (`sharpRes`), then shown scaled down to their box, so they stay sharp.
+ */
 export const HI = 2;
 
 /**
@@ -50,6 +54,12 @@ export const GEOM = {
 } as const;
 export type SpriteName = keyof typeof GEOM;
 
+/** A texture name's box: its own, or its first part's (`crate-rate` uses `GEOM.crate`). */
+export const geomOf = (name: string) => GEOM[(name.split('-')[0] in GEOM ? name.split('-')[0] : name) as SpriteName];
+
+/** The night-vision grain tile's size in game pixels. */
+export const GRAIN_TILE = 128;
+
 /** The texture key of a sprite in a style, e.g. `comic-grunt` or `nv-crate-rate`. */
 export const tex = (style: ArtStyle, name: string) => `${style}-${name}`;
 
@@ -69,12 +79,17 @@ export function canvas(w: number, h: number) {
   return c;
 }
 
-/** Screen-sized layers are painted at 1x: drawing them unscaled every frame is much cheaper. */
-export const FULL_SCREEN = new Set<string>(['ground', 'sandbags', 'scan']);
+/** Screen-sized layers are painted at 1x (more on a bigger screen): drawing them every frame is much cheaper. */
+export const FULL_SCREEN = new Set<string>(['ground', 'sandbags', 'scan', 'hudbar', 'flame']);
+/**
+ * The most a texture is painted at, however big the screen: painting slows with the square of it,
+ * and night vision reworks every pixel. Big layers are mostly soft shading and grain.
+ */
+const MAX_SCALE = { layer: 2, sprite: 4 };
 
 /**
- * Paints a texture into the box of `geom` (in game pixels, at `scale`, `HI` unless it is a
- * full-screen layer), with the drawing's (0, 0) at the box's origin. `post` can rework the
+ * Paints a texture into the box of `geom` (in game pixels, at `scale`: `HI`, or 1 for a full-screen
+ * layer, times what a bigger screen needs), with the drawing's (0, 0) at the box's origin. `post` can rework the
  * finished canvas (the night-vision look does). Show it at `geom.w / width` scale.
  */
 export function bake(
@@ -84,7 +99,8 @@ export function bake(
   draw: (ctx: Ctx) => void,
   post?: (c: HTMLCanvasElement, scale: number) => void,
 ) {
-  const scale = FULL_SCREEN.has(key.slice(key.indexOf('-') + 1)) ? 1 : HI;
+  const layer = FULL_SCREEN.has(key.slice(key.indexOf('-') + 1));
+  const scale = Math.min(sharpRes(geom.w, geom.h, layer ? 1 : HI), layer ? MAX_SCALE.layer : MAX_SCALE.sprite);
   const c = canvas(geom.w * scale, geom.h * scale);
   const ctx = c.getContext('2d')!;
   ctx.scale(scale, scale);

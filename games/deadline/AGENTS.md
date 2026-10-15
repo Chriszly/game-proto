@@ -43,7 +43,8 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
     an easy target once the soldier walks under it.
   - Supply drop picks and kit panel items are not shown in the wide-screen backdrop.
   - Night-vision textures are baked the first time that style is shown, a hitch of about 0.4s
-    (measured in headless Chromium) on that first switch; later switches take a frame or so.
+    (measured in headless Chromium) on that first switch; later switches take a frame or so. On a
+    big screen the textures are painted finer, and the first switch takes about twice as long.
   - Drums are not blocked by anything and can overlap crates; their labels then overlap too.
 
 ## Architecture
@@ -74,8 +75,9 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
   `loadKit`/`saveKit`, the `ArtStyle` type (`'comic' | 'nv'`) and the key names.
 - `src/game/pool.ts`: generic `Pool<T>` with `take`, `release`, `live` and `all`, to reuse sprites.
 - `src/art/paint.ts`: shared canvas tools (`bake`, `rng`, `circle`, `path`, colour helpers), `HI`
-  (textures are painted at 2x and shown at half scale), `FULL_SCREEN` (layers painted at 1x), `GEOM`
-  (every sprite's box and origin, the same in both styles) and `tex(style, name)` (texture keys).
+  (textures are painted at 2x on a screen that needs no scaling), `FULL_SCREEN` (layers painted at
+  1x), `GEOM` (every sprite's box and origin, the same in both styles), `geomOf(name)` (a texture
+  name's box), `GRAIN_TILE` and `tex(style, name)` (texture keys).
 - `src/art/comic.ts`: `bakeComic` and the comic pen (`ink`: flat fill + halftone + ink outline,
   `dots`, `burst`, `letter`), reused by `backdrop.ts`.
 - `src/art/nightvision.ts`: `bakeNightVision`; sprites are painted in greys, then `phosphor` maps
@@ -361,10 +363,17 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
   circles (`radius`). Hits are swept: `hitTargets` tests each bullet's whole move this frame, from
   `prevY` up to `y`, so a long frame can't carry it through a target, and a piercing bullet hits
   the nearest enemies first. Zombies in the drum's column shield it, which is why drums are one hit.
-- Full-screen textures (`FULL_SCREEN` in `paint.ts`) are painted at 1x so the canvas renderer draws
-  them unscaled; everything else is 2x. `skin` reads the scale from the texture, so don't set a
-  sprite's scale before `skin`; set extra scale (splats, effects) after it, as `1 / HI` times the
-  factor.
+- Screens: `src/main.ts` calls `setupScaling(game)` from `shared/scaling.ts`, so the canvas has
+  `renderScale` canvas pixels per game pixel (up to 4 on a 4K screen) and the camera is zoomed to
+  match. The camera never scrolls, so layout stays in game pixels (`VIEW`) and taps read
+  `pointer.worldX/Y`. Texts take `renderScale` as their resolution (don't set one). `bake` paints
+  at `sharpRes`: full-screen textures (`FULL_SCREEN` in `paint.ts`) at 1x on a screen that needs no
+  scaling and at most 2x, sprites at `HI` (2x) and at most 4x, since painting, and night vision's
+  per-pixel pass, slows with the square of it. On a phone held sideways a hint asks to turn it
+  upright. `e2e/screens.spec.ts` at the root opens the game on five screens.
+- A texture's painted size depends on the screen, so read scales from it: `skin` sets the scale
+  that fits the texture to its box (`unit(img)`), so don't set a sprite's scale before `skin`; set
+  extra scale (splats, effects) after it, as `unit(img)` times the factor.
 - `effect` re-skins its pooled image each time, so `skins` holds the last sprite each one showed;
   `applyStyle` releases all effects so none show a missing texture.
 - Pools never shrink; `Pool.live()` allocates a new array each call, so avoid it in hot loops.
