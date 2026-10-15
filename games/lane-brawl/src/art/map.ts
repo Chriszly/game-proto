@@ -4,10 +4,13 @@
 
 import Phaser from 'phaser';
 import { BASE, BEAST, BUSHES, Bush, CAMPS, LANES, Team, Vec, WORLD } from '../game/data';
+import { sharpRes } from '../../../../shared/scaling';
 import { render, seeded } from './lowpoly';
 import { TEAM_GLOW, pineModel, rockModel } from './models';
 
 export const MAP_KEY = 'lb-map';
+/** Canvas pixels per world pixel in the map's texture: 1, or more on a big screen (see `sharpRes`). */
+export let MAP_RES = 1;
 /** Half the width of a lane's paving, in pixels. */
 const LANE_HALF = 50;
 
@@ -349,10 +352,12 @@ function scenery(ctx: CanvasRenderingContext2D, rnd: () => number) {
 /** Paints the map into a canvas texture once. */
 export function paintMap(scene: Phaser.Scene) {
   if (scene.textures.exists(MAP_KEY)) return;
+  MAP_RES = sharpRes(WORLD.w, WORLD.h);
   const canvas = document.createElement('canvas');
-  canvas.width = WORLD.w;
-  canvas.height = WORLD.h;
+  canvas.width = Math.round(WORLD.w * MAP_RES);
+  canvas.height = Math.round(WORLD.h * MAP_RES);
   const ctx = canvas.getContext('2d')!;
+  ctx.scale(canvas.width / WORLD.w, canvas.height / WORLD.h);
   const rnd = seeded(20261014);
   grass(ctx, rnd);
   for (const c of CAMPS) clearing(ctx, c, rnd);

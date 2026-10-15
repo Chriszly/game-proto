@@ -4,11 +4,16 @@
 // faces right (east) and each step turns 45 degrees clockwise on screen, so dir 2 faces the viewer.
 
 import Phaser from 'phaser';
+import { sharpRes } from '../../../../shared/scaling';
 import { Model, render } from './lowpoly';
 import { POSES, PoseName, TeamName, beastModel, inhibitorModel, boarModel, championModel, coinModel, minionModel, nexusModel, rubbleModel, towerModel } from './models';
 
-/** Canvas pixels per screen pixel in the sheets; sprites are drawn at 1 / RES scale. */
-export const RES = 2;
+/**
+ * Canvas pixels per game pixel in the sheets; sprites are drawn at 1 / RES scale. 2 on a screen that
+ * needs no scaling, more on a big or dense one (set by `bakeUnits`, in half steps, held to what the
+ * beast's sheet, the widest, can load).
+ */
+export let RES = 2;
 export const DIRS = 8;
 
 export interface SheetInfo {
@@ -120,6 +125,7 @@ export const COIN = 'lb-coin';
 export function bakeUnits(scene: Phaser.Scene): number {
   if (scene.textures.exists(COIN)) return 0;
   const t0 = performance.now();
+  RES = Math.floor(sharpRes(BEAST_CELL.w * DIRS, BEAST_CELL.h * DIRS, 2) * 2) / 2;
   for (const team of TEAMS) {
     for (const id of CHAMPION_IDS) bake(scene, champKey(id, team), CHAMP_CELL, movingCells((p) => championModel(id, team, p)));
     const sheet = bake(scene, minionKey(team), MINION_CELL, movingCells((p) => minionModel(team, p)));
