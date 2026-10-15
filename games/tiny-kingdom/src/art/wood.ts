@@ -419,6 +419,174 @@ export function windmill(x: number, y: number, s = 1) {
   ball(hx, hy, 5 * s, T.navy);
 }
 
+/** A prism roof over a block from x0 to x0 + w at y0, `rh` high, with the block's depth `d`. */
+function roof(x0: number, y0: number, w: number, rh: number, d: number, ov: number, col: string) {
+  const front = [
+    [x0 - ov, y0 + 2],
+    [x0 + w + ov, y0 + 2],
+    [x0 + w * 0.82 + ov * 0.2, y0 - rh],
+    [x0 + w * 0.18, y0 - rh],
+  ];
+  poly([[x0 + w + ov, y0 + 2], [x0 + w + ov + d, y0 + 2 - d * 0.8], [front[2][0] + d, front[2][1] - d * 0.8], front[2]], dark(col, 0.3));
+  poly([front[3], front[2], [front[2][0] + d, front[2][1] - d * 0.8], [front[3][0] + d, front[3][1] - d * 0.8]], lit(col, 0.2));
+  ctx.beginPath();
+  front.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)));
+  ctx.closePath();
+  const g = ctx.createLinearGradient(0, y0 - rh, 0, y0);
+  g.addColorStop(0, lit(col, 0.15));
+  g.addColorStop(1, dark(col, 0.08));
+  ctx.fillStyle = g;
+  ctx.fill();
+  ctx.save();
+  ctx.clip();
+  grain(x0 - ov, y0 - rh, w + 2 * ov, rh + 4, dark(col, 0.5), 4, 2, 0.15);
+  ctx.restore();
+}
+
+/** A dowel: a turned wooden rod from (x1, y1) to (x2, y2). */
+function dowel(x1: number, y1: number, x2: number, y2: number, w: number) {
+  ctx.strokeStyle = '#9a6a3a';
+  ctx.lineWidth = w;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+}
+
+/** A manor: a wide two-storey cream block with a red roof, a chimney, a navy door and six windows. */
+export function manor(x: number, y: number, s = 1) {
+  shadowBlob(x + 14 * s, y + 32 * s, 54 * s, 13 * s, 0.4);
+  const w = 72 * s;
+  const h = 44 * s;
+  const d = 12 * s;
+  const x0 = x - w / 2 - 4 * s;
+  const y0 = y - 12 * s;
+  box(x0, y0, w, h, d, T.cream);
+  rrect(x0 + w * 0.62, y0 - 34 * s, 9 * s, 22 * s, 2 * s);
+  ctx.fillStyle = dark(T.red, 0.2);
+  ctx.fill();
+  roof(x0, y0, w, 24 * s, d, 6 * s, T.red);
+  rrect(x - 8 * s, y0 + h - 18 * s, 12 * s, 18 * s, 5 * s);
+  ctx.fillStyle = T.navy;
+  ctx.fill();
+  for (const wx of [x0 + 6 * s, x0 + 22 * s, x0 + w - 32 * s, x0 + w - 16 * s])
+    for (const wy of wx === x0 + 22 * s || wx === x0 + w - 32 * s ? [y0 + 6 * s] : [y0 + 6 * s, y0 + 24 * s]) {
+      rrect(wx, wy, 10 * s, 10 * s, 3 * s);
+      ctx.fillStyle = T.yellow;
+      ctx.fill();
+    }
+  // a blue pennant on a dowel above the ridge
+  dowel(x - 14 * s, y0 - 22 * s, x - 14 * s, y0 - 46 * s, 3 * s);
+  rrect(x - 14 * s, y0 - 47 * s, 20 * s, 12 * s, 3 * s);
+  ctx.fillStyle = T.blue;
+  ctx.fill();
+  ball(x - 14 * s, y0 - 48 * s, 3.5 * s, T.yellow);
+}
+
+/** A market stall: a beech counter with fruit balls under a red and cream striped awning on dowels. */
+export function market(x: number, y: number, s = 1) {
+  shadowBlob(x + 12 * s, y + 30 * s, 46 * s, 12 * s, 0.38);
+  const w = 56 * s;
+  const d = 10 * s;
+  const x0 = x - w / 2 - 3 * s;
+  dowel(x0 + 3 * s, y + 24 * s, x0 + 3 * s, y - 30 * s, 3.5 * s);
+  dowel(x0 + w - 3 * s, y + 24 * s, x0 + w - 3 * s, y - 30 * s, 3.5 * s);
+  box(x0, y + 4 * s, w, 22 * s, d, T.beech);
+  for (const [fx, col] of [
+    [x0 + 10 * s, T.red],
+    [x0 + 22 * s, T.yellow],
+    [x0 + 34 * s, T.green],
+    [x0 + 46 * s, '#e08a2a'],
+  ] as const)
+    ball(fx, y, 6 * s, col);
+  // the awning: a sloped board of stripes with a scalloped edge
+  const top = y - 40 * s;
+  const bottom = y - 22 * s;
+  const n = 6;
+  for (let i = 0; i < n; i++) {
+    const a = x0 - 6 * s + ((w + 12 * s) * i) / n;
+    const b = x0 - 6 * s + ((w + 12 * s) * (i + 1)) / n;
+    const col = i % 2 ? T.cream : T.red;
+    poly([[a + 4 * s, top], [b + 4 * s, top], [b, bottom], [a, bottom]], col);
+    ctx.beginPath();
+    ctx.arc((a + b) / 2, bottom, (b - a) / 2, 0, PI);
+    ctx.fillStyle = col;
+    ctx.fill();
+  }
+  poly([[x0 + w + 10 * s, top], [x0 + w + 10 * s + d, top - d * 0.8], [x0 + w + 6 * s + d, bottom - d * 0.8], [x0 + w + 6 * s, bottom]], dark(T.red, 0.3));
+}
+
+/** A harbor: a plank jetty on posts with a little blue boat and a cream sail. */
+export function harbor(x: number, y: number, s = 1) {
+  shadowBlob(x + 10 * s, y + 26 * s, 48 * s, 12 * s, 0.35);
+  // the jetty
+  for (const px of [-30, -6, 18]) {
+    rrect(x + px * s, y + 4 * s, 7 * s, 22 * s, 3 * s);
+    ctx.fillStyle = '#9a6a3a';
+    ctx.fill();
+  }
+  rrect(x - 36 * s, y - 6 * s, 66 * s, 14 * s, 4 * s);
+  ctx.fillStyle = T.beech;
+  ctx.fill();
+  ctx.strokeStyle = dark(T.beech, 0.35);
+  ctx.lineWidth = 1.5 * s;
+  for (const px of [-20, -4, 12]) {
+    ctx.beginPath();
+    ctx.moveTo(x + px * s, y - 6 * s);
+    ctx.lineTo(x + px * s, y + 8 * s);
+    ctx.stroke();
+  }
+  ball(x - 30 * s, y - 10 * s, 5 * s, T.navy);
+  // the boat, moored alongside
+  const bx = x + 8 * s;
+  const by = y + 22 * s;
+  ctx.beginPath();
+  ctx.moveTo(bx - 30 * s, by - 10 * s);
+  ctx.lineTo(bx + 30 * s, by - 10 * s);
+  ctx.quadraticCurveTo(bx + 24 * s, by + 8 * s, bx, by + 8 * s);
+  ctx.quadraticCurveTo(bx - 24 * s, by + 8 * s, bx - 30 * s, by - 10 * s);
+  ctx.closePath();
+  const g = ctx.createLinearGradient(0, by - 10 * s, 0, by + 8 * s);
+  g.addColorStop(0, lit(T.blue, 0.15));
+  g.addColorStop(1, dark(T.blue, 0.2));
+  ctx.fillStyle = g;
+  ctx.fill();
+  rrect(bx - 30 * s, by - 12 * s, 60 * s, 5 * s, 2 * s);
+  ctx.fillStyle = T.cream;
+  ctx.fill();
+  dowel(bx, by - 10 * s, bx, by - 62 * s, 3 * s);
+  poly([[bx + 3 * s, by - 60 * s], [bx + 3 * s, by - 16 * s], [bx + 30 * s, by - 16 * s]], T.cream);
+  poly([[bx - 3 * s, by - 52 * s], [bx - 3 * s, by - 16 * s], [bx - 22 * s, by - 16 * s]], lit(T.yellow, 0.3));
+  ball(bx, by - 64 * s, 3.5 * s, T.yellow);
+}
+
+/** A lumber camp: a little hut with a green roof and a stack of logs in front. */
+export function lumber(x: number, y: number, s = 1) {
+  shadowBlob(x + 12 * s, y + 30 * s, 46 * s, 12 * s, 0.38);
+  const w = 36 * s;
+  const x0 = x - 6 * s;
+  const y0 = y - 18 * s;
+  box(x0, y0, w, 26 * s, 9 * s, T.beech);
+  roof(x0, y0, w, 20 * s, 9 * s, 5 * s, T.green);
+  rrect(x0 + 12 * s, y0 + 10 * s, 10 * s, 16 * s, 4 * s);
+  ctx.fillStyle = T.navy;
+  ctx.fill();
+  // three logs in a pile, ends towards the viewer
+  for (const [lx, ly] of [
+    [-30, 20],
+    [-12, 20],
+    [6, 20],
+    [-21, 5],
+    [-3, 5],
+    [-12, -10],
+  ]) {
+    circle(x + lx * s, y + ly * s, 10 * s, '#a8743f', '#6e4520', 2 * s);
+    circle(x + lx * s, y + ly * s, 6 * s, '#e8c99a');
+    circle(x + lx * s, y + ly * s, 2.5 * s, '#c79a62');
+  }
+}
+
 /** Painted wheat rows, as on a farm tile. */
 export function stripes(x: number, y: number, w: number, h: number, s = 1) {
   const n = 4;

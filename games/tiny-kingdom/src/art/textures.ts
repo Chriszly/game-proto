@@ -1,17 +1,19 @@
 import Phaser from 'phaser';
-import { BUTTON, DECREE, GIFT_CARD, PANEL, TILE_BUTTONS, TITLE, TRAY, UNDO_BUTTON, VIEW } from '../scenes/layout';
-import { bake, ball, circle, crown, ctx, grain, house, peg, PI, reseed, rnd, rrect, stripes, T, tile, tower, walnut, windmill } from './wood';
+import { BUTTON, DECREE, GIFT_CARD, ISLAND_BUTTON, ISLANDS_CARD, PANEL, TILE_BUTTONS, TITLE, TRAY, UNDO_BUTTON, VIEW } from '../scenes/layout';
+import { bake, ball, circle, crown, ctx, grain, harbor, house, lumber, manor, market, peg, PI, reseed, rnd, rrect, stripes, T, tile, tower, walnut, windmill } from './wood';
 
 // Every texture the game uses, painted once at boot:
 // - `bg`: the table, the decree sign, the walnut tray and the panel with its title plaque.
 // - `tile-grass-0..3` (grass with painted flowers), `tile-plain` (grass under a building or wood),
 //   `tile-lake`, `tile-farm`: one 64px cell each.
-// - `prop-house`, `prop-tower`, `prop-forest`, `prop-windmill`: what stands on a cell, 80x100 with
-//   the cell's centre at PROP_ORIGIN, so roofs and flags reach into the row above.
+// - `prop-<kind>` for every building but the farm (house, tower, windmill, market, harbor, lumber,
+//   manor) and for the forest: what stands on a cell, 80x100 with the cell's centre at
+//   PROP_ORIGIN, so roofs and flags reach into the row above.
 // - `icon-<building>` and `icon-<building>-big`: icons for the gift chips and the gift card; `spot-farm`, `spot-house`: the decree's open
-//   spots; `tick`, `bead-on`, `bead-off`, `crown`, `count`.
+//   spots; `tick`, `bead-on`, `bead-off`, `crown`, `count`, `star-on` and `star-off` (campaign stars).
 // - `plaque-<w>x<h>`, `plaque-<w>x<h>-sel`, `glow-<w>x<h>`: beech plaques for buttons;
-//   `walnut-<w>x<h>`: walnut boards for the gift card, the round banner and the game-over card.
+//   `walnut-<w>x<h>`: walnut boards for the gift card, the islands card, the round banner and the
+//   game-over card.
 
 /** One cell in art units. */
 const CELL = 128;
@@ -74,7 +76,10 @@ function cellTile(kind: 'grass' | 'plain' | 'lake' | 'farm', variant = 0) {
 }
 
 /** A building or wood standing on a cell, around the cell's centre (0, 0). */
-function prop(kind: 'house' | 'tower' | 'forest' | 'windmill') {
+type PropKind = 'house' | 'tower' | 'forest' | 'windmill' | 'market' | 'harbor' | 'lumber' | 'manor';
+const PROPS: PropKind[] = ['house', 'tower', 'forest', 'windmill', 'market', 'harbor', 'lumber', 'manor'];
+
+function prop(kind: PropKind) {
   reseed(500 + kind.length * 13);
   if (kind === 'forest') {
     peg(-24, 2, 0.95);
@@ -82,7 +87,11 @@ function prop(kind: 'house' | 'tower' | 'forest' | 'windmill') {
     peg(2, 30, 1.05);
   } else if (kind === 'house') house(0, -2, 1.15);
   else if (kind === 'tower') tower(0, -4, 1.05);
-  else windmill(0, 0, 1.3);
+  else if (kind === 'windmill') windmill(0, 0, 1.3);
+  else if (kind === 'market') market(0, 0, 1.05);
+  else if (kind === 'harbor') harbor(0, -6, 1);
+  else if (kind === 'lumber') lumber(0, 0, 1.05);
+  else manor(0, 2, 1);
 }
 
 function background() {
@@ -144,7 +153,10 @@ function spot(kind: 'farm' | 'house') {
 }
 
 /** A building on its own, `k` times the size of a gift chip's icon. */
-function icon(kind: 'farm' | 'house' | 'tower' | 'windmill', k = 1) {
+type IconKind = 'farm' | 'house' | 'tower' | 'windmill' | 'market' | 'harbor' | 'lumber';
+const ICONS: IconKind[] = ['farm', 'house', 'tower', 'windmill', 'market', 'harbor', 'lumber'];
+
+function icon(kind: IconKind, k = 1) {
   reseed(77);
   if (kind === 'farm') {
     rrect(-16 * k, -14 * k, 32 * k, 28 * k, 6 * k);
@@ -153,7 +165,27 @@ function icon(kind: 'farm' | 'house' | 'tower' | 'windmill', k = 1) {
     stripes(-12 * k, -11 * k, 24 * k, 22 * k, 0.4 * k);
   } else if (kind === 'house') house(0, 3 * k, 0.4 * k);
   else if (kind === 'tower') tower(0, 6 * k, 0.36 * k);
-  else windmill(0, 2 * k, 0.38 * k);
+  else if (kind === 'windmill') windmill(0, 2 * k, 0.38 * k);
+  else if (kind === 'market') market(0, 4 * k, 0.4 * k);
+  else if (kind === 'harbor') harbor(0, 0, 0.4 * k);
+  else lumber(0, 2 * k, 0.42 * k);
+}
+
+/** A five-pointed star, gold when won and a faint dimple when not. */
+function star(on: boolean) {
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const r = i % 2 ? 6 : 14;
+    const a = -PI / 2 + (i * PI) / 5;
+    ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+  }
+  ctx.closePath();
+  ctx.fillStyle = on ? T.yellow : 'rgba(120,80,40,0.18)';
+  ctx.fill();
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = on ? '#a87a12' : 'rgba(120,80,40,0.5)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
 }
 
 /** Bakes a beech plaque (plain and picked) and its glow for a button of `w` x `h`. */
@@ -195,10 +227,10 @@ export function bakeTextures(scene: Phaser.Scene) {
   bake(scene, 'tile-plain', 64, 64, () => cellTile('plain'));
   bake(scene, 'tile-lake', 64, 64, () => cellTile('lake'));
   bake(scene, 'tile-farm', 64, 64, () => cellTile('farm'));
-  for (const kind of ['house', 'tower', 'forest', 'windmill'] as const) {
+  for (const kind of PROPS) {
     bake(scene, `prop-${kind}`, PROP.w, PROP.h, () => prop(kind), PROP.w * PROP_ORIGIN.x, PROP.h * PROP_ORIGIN.y);
   }
-  for (const kind of ['farm', 'house', 'tower', 'windmill'] as const) {
+  for (const kind of ICONS) {
     bake(scene, `icon-${kind}`, 24, 24, () => icon(kind), 12, 12);
     bake(scene, `icon-${kind}-big`, 44, 44, () => icon(kind, 1.75), 22, 22);
   }
@@ -224,8 +256,15 @@ export function bakeTextures(scene: Phaser.Scene) {
     ctx.fillStyle = T.navy;
     ctx.fill();
   });
+  bake(scene, 'star-on', 16, 16, () => star(true), 8, 8);
+  bake(scene, 'star-off', 16, 16, () => star(false), 8, 8);
   plaques(scene, TILE_BUTTONS.w, TILE_BUTTONS.three.h);
   plaques(scene, TILE_BUTTONS.w, TILE_BUTTONS.four.h);
+  plaques(scene, TILE_BUTTONS.grid.w, TILE_BUTTONS.grid.h, 14);
+  plaques(scene, ISLAND_BUTTON.w, ISLAND_BUTTON.h, 14);
+  const C = ISLANDS_CARD;
+  for (const b of [C.level, C.daily, C.random, C.key, C.close]) plaques(scene, b.w, b.h, 14);
+  walnutBoard(scene, C.w, C.h);
   plaques(scene, UNDO_BUTTON.w, UNDO_BUTTON.h, 20);
   plaques(scene, BUTTON.w, BUTTON.h, 18);
   plaques(scene, GIFT_CARD.button.w, GIFT_CARD.button.h);
@@ -243,7 +282,7 @@ export function tileKey(cell: string, col: number, row: number) {
 
 /** The prop standing on a cell, or null for flat cells. */
 export function propKey(cell: string) {
-  return cell === 'house' || cell === 'tower' || cell === 'forest' || cell === 'windmill' ? `prop-${cell}` : null;
+  return (PROPS as string[]).includes(cell) ? `prop-${cell}` : null;
 }
 
 

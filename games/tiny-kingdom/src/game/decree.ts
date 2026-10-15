@@ -1,4 +1,4 @@
-import { AROUND, MAP_SIZE, SIDES, seeded, type Cell } from './tiles';
+import { AROUND, MAP_SIZE, SIDES, isHome, seeded, type Cell } from './tiles';
 
 // Royal decrees: each round's side goal, such as "3 farms on the shore of Eastmere". Fulfilling it
 // pays DECREE_BONUS points and a crown. Progress is always counted from the board, so undo and the
@@ -98,9 +98,9 @@ export function namedPlaces(grid: Cell[][], kind: 'lake' | 'forest') {
   });
 }
 
-/** How many houses stand in the eight cells around (col, row). */
+/** How many houses (manors included) stand in the eight cells around (col, row). */
 function housesAround(grid: Cell[][], col: number, row: number) {
-  return AROUND.filter(([dc, dr]) => grid[row + dr]?.[col + dc] === 'house').length;
+  return AROUND.filter(([dc, dr]) => isHome(grid[row + dr]?.[col + dc])).length;
 }
 
 /** Where `decree` stands on `grid`. */
@@ -115,13 +115,14 @@ export function decreeMarks(grid: Cell[][], decree: Decree): DecreeMarks {
         if (!best || n > have) [best, have] = [[col, row], n];
       }),
     );
-    const counted = best ? AROUND.map(([dc, dr]): At => [best![0] + dc, best![1] + dr]).filter(([c, r]) => grid[r]?.[c] === 'house') : [];
+    const counted = best ? AROUND.map(([dc, dr]): At => [best![0] + dc, best![1] + dr]).filter(([c, r]) => isHome(grid[r]?.[c])) : [];
     const spots = best ? AROUND.map(([dc, dr]): At => [best![0] + dc, best![1] + dr]).filter(([c, r]) => grid[r]?.[c] === 'grass') : [];
     return { have, counted, spots, tower: best };
   }
-  const want = decree.kind === 'shore' ? 'farm' : 'house';
+  // A manor counts as a house.
+  const counts = (cell: Cell) => (decree.kind === 'shore' ? cell === 'farm' : isHome(cell));
   const around = edge(decree.cells);
-  const counted = around.filter(([c, r]) => grid[r][c] === want);
+  const counted = around.filter(([c, r]) => counts(grid[r][c]));
   return { have: counted.length, counted, spots: around.filter(([c, r]) => grid[r][c] === 'grass'), tower: null };
 }
 

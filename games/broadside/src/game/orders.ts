@@ -1,5 +1,7 @@
 // The captain's orders: one bonus for a whole wave, named on a card under the top bar.
 
+import type { ShotKind } from './shot';
+
 export type OrderId = 'chain' | 'grape' | 'powder' | 'wind' | 'crew';
 
 export interface Order {
@@ -10,26 +12,18 @@ export interface Order {
   range?: number;
   reload?: number;
   sails?: number;
-  /** Chain shot: a hit slows the ship struck to this share of its speed for `SLOW_MS`. */
-  slow?: number;
-  /** Grapeshot: each gun fires this many smaller shots in a fan, each hitting for `pellet` of a ball. */
-  pellets?: number;
-  pellet?: number;
-  /** How the player's shot looks while the order stands. */
-  shot: 'round' | 'chain' | 'grape' | 'powder';
+  /** Loads both sides with this shot for the wave, whatever was loaded at the harbor. */
+  load?: ShotKind;
+  /** Double powder: round shot shows a powder flash. */
+  powder?: boolean;
 }
 
-/** How long a chain shot hit slows a ship. */
-export const SLOW_MS = 4000;
-/** The angle between two pellets of a grapeshot fan, in radians. */
-export const PELLET_FAN = 0.09;
-
 export const ORDERS: Record<OrderId, Order> = {
-  chain: { title: 'Chain shot this wave', desc: 'Hits slow ships by 40%', slow: 0.6, shot: 'chain' },
-  grape: { title: 'Grapeshot this wave', desc: 'Three shots a gun, half as hard each', pellets: 3, pellet: 0.5, shot: 'grape' },
-  powder: { title: 'Double powder this wave', desc: 'Shot flies 30% farther and hits 30% harder', range: 1.3, damage: 1.3, shot: 'powder' },
-  wind: { title: 'Fair wind this wave', desc: 'Sail and turn 25% faster', sails: 1.25, shot: 'round' },
-  crew: { title: 'Rum for the gun crews', desc: 'Reload 30% faster', reload: 0.7, shot: 'round' },
+  chain: { title: 'Chain shot this wave', desc: 'Both sides fire chain: hits slow ships by 40%', load: 'chain' },
+  grape: { title: 'Grapeshot this wave', desc: 'Both sides fire grape: hits slow reloads', load: 'grape' },
+  powder: { title: 'Double powder this wave', desc: 'Shot flies 30% farther and hits 30% harder', range: 1.3, damage: 1.3, powder: true },
+  wind: { title: 'Fair wind this wave', desc: 'Sail and turn 25% faster', sails: 1.25 },
+  crew: { title: 'Rum for the gun crews', desc: 'Reload 30% faster', reload: 0.7 },
 };
 
 export const ORDER_IDS = Object.keys(ORDERS) as OrderId[];

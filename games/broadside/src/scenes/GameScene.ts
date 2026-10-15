@@ -1,15 +1,33 @@
 import Phaser from 'phaser';
 import { settings } from '../../../../shared/settings';
 import { HI, SHIP_LOOKS } from '../art/art';
+import { BOON_IDS, BOONS, costOfBoons, type BoonId } from '../game/admiralty';
 import { ORDERS } from '../game/orders';
-import { loadBestWave, saveBestWave } from '../game/save';
+import { loadBestWave, loadMedals, saveBestWave, saveMedals } from '../game/save';
 import { ENEMIES } from '../game/ships';
-import { buy, detourCourse, repair, setSail, tick } from '../game/sim';
-import { ARC, ISLANDS, newRun, offset, radiusOf, reachOf, stats, type GameState, type Ship, type Side } from '../game/state';
+import { SHOTS } from '../game/shot';
+import { boardable, buy, detourCourse, loadShot, repair, scuttle, scuttleGold, setSail, SHELL_R, tick } from '../game/sim';
+import {
+  ARC,
+  BOARD_MS,
+  ISLANDS,
+  loadedShot,
+  newRun,
+  offset,
+  radiusOf,
+  reachOf,
+  sideRange,
+  stats,
+  windFrom,
+  windReach,
+  type GameState,
+  type Ship,
+  type Side,
+} from '../game/state';
 import { makeButton } from '../ui/Button';
 import { Harbor, type HarborAction } from '../ui/Harbor';
 import { pinToScreen } from '../ui/screen';
-import { FIRE, FONT, HELM, HUD_HEIGHT, ORDER_CARD, UI_DEPTH, VIEW } from './layout';
+import { FIRE, FONT, HELM, HUD_HEIGHT, ORDER_CARD, OVER, SCUTTLE, UI_DEPTH, VIEW, WIND } from './layout';
 
 /** Longest simulated step, so a backgrounded tab doesn't jump the battle forward. */
 const MAX_STEP_MS = 250;
@@ -23,6 +41,8 @@ const INK = 0x2b2118;
 const CREAM = 0xf6ecd2;
 const OCHRE = 0xc9902e;
 const WASH = 0xd6a03c;
+const RUST = 0x9a4a30;
+const GREEN = 0x3f6e48;
 
 const textStyle = (size: number, color = '#2b2118', fontStyle = 'normal', stroke?: string, strokeThickness = 0) => ({
   fontFamily: FONT,
@@ -83,6 +103,18 @@ export class GameScene extends Phaser.Scene {
   private orderDesc!: Phaser.GameObjects.Text;
   private gameOver!: Phaser.GameObjects.Container;
   private gameOverText!: Phaser.GameObjects.Text;
+  private medalText!: Phaser.GameObjects.Text;
+  private boonRows: { id: BoonId; bg: Phaser.GameObjects.Rectangle; cost: Phaser.GameObjects.Text }[] = [];
+  /** The Admiralty's medals banked across runs, once this run's are added at its end. */
+  private medalBank = 0;
+  /** The starting upgrades chosen on the game-over panel for the next run. */
+  private commission: BoonId[] = [];
+  private windText!: Phaser.GameObjects.Text;
+  private windRose!: Phaser.GameObjects.Image;
+  private shotTexts!: Record<Side, Phaser.GameObjects.Text>;
+  private boardLabel!: Phaser.GameObjects.Text;
+  private scuttleButton!: Phaser.GameObjects.Container;
+  private scuttleText!: Phaser.GameObjects.Text;
   private keys!: Record<'left' | 'right' | 'a' | 'd' | 'q' | 'e', Phaser.Input.Keyboard.Key>;
   /** Which control each pointer (finger or mouse) is holding down. */
   private held = new Map<number, Control>();
@@ -96,7 +128,7 @@ export class GameScene extends Phaser.Scene {
     super('Game');
   }
 
-  create() {
+  create(data?: { boons?: BoonId[] }) {
     for (const map of [this.ships, this.balls, this.sinking, this.floaters]) map.clear();
     this.loot.clear();
     this.wakes = [];
@@ -104,7 +136,9 @@ export class GameScene extends Phaser.Scene {
     this.tapped = { port: false, starboard: false };
     this.controlHits = [];
     this.lastFrame = null;
-    this.state = newRun(loadBestWave());
+    this.commission = [];
+    this.boonRows = [];
+    this.state = newRun(loadBestWave(), data?.boons ?? []);
     this.view = { x: this.state.player.x, y: this.state.player.y };
     this.lastPlayer = { ...this.view };
 
@@ -118,12 +152,14 @@ export class GameScene extends Phaser.Scene {
     this.labels = this.add.graphics().setDepth(7);
     this.aimLabel = this.add.text(0, 0, '', textStyle(13, '#6a4410', 'bold italic')).setOrigin(0.5).setDepth(8);
     this.courseLabel = this.add.text(0, 0, '', textStyle(12, '#2b2118', 'bold italic', '#f0e2c0', 4)).setOrigin(0.5).setDepth(8);
+    this.boardLabel = this.add.text(0, 0, '', textStyle(13, '#6a4410', 'bold italic', '#f6ecd2', 4)).setOrigin(0.5).setDepth(8);
     this.bars = this.add.graphics().setDepth(UI_DEPTH - 40);
     this.add.image(0, 0, 'frame').setOrigin(0).setScrollFactor(0).setDepth(UI_DEPTH - 30);
 
     this.createHud();
     this.createOrderCard();
     this.createControls();
+    this.createScuttle();
     this.harbor = new Harbor(this, (id) => this.harborAction(id));
     this.createGameOver();
     const kb = this.input.keyboard!;
@@ -148,6 +184,10 @@ export class GameScene extends Phaser.Scene {
     this.readInput();
     tick(s, dt);
     if (s.phase !== phase && (s.phase === 'harbor' || s.phase === 'over')) saveBestWave(s.bestWave);
+    if (s.phase !== phase && s.phase === 'over') {
+      this.medalBank = loadMedals() + s.medals;
+      saveMedals(this.medalBank);
+    }
     this.clock += dt;
 
     this.followPlayer();
@@ -163,13 +203,10 @@ export class GameScene extends Phaser.Scene {
     this.drawArcs();
     this.drawHud();
     this.drawControls();
+    this.drawScuttle();
     this.harbor.show(s.phase === 'harbor' ? s : null);
     this.gameOver.setVisible(s.phase === 'over');
-    if (s.phase === 'over') {
-      this.gameOverText.setText(
-        `Your ship went down on wave ${s.wave}.\n${s.sunk} ships sunk and ${s.plundered} gold plundered this run.\nBest wave beaten: ${s.bestWave}.`,
-      );
-    }
+    if (s.phase === 'over') this.drawGameOver();
   }
 
   /** Writes the helm and the fire controls into the state, from the keys and the pointers. */
@@ -207,6 +244,7 @@ export class GameScene extends Phaser.Scene {
   private harborAction(id: HarborAction) {
     if (id === 'sail') setSail(this.state);
     else if (id === 'repair') repair(this.state);
+    else if (id === 'load-port' || id === 'load-starboard') loadShot(this.state, id === 'load-port' ? 'port' : 'starboard');
     else buy(this.state, id);
   }
 
@@ -214,7 +252,7 @@ export class GameScene extends Phaser.Scene {
     const s = this.state;
     const seen = new Set<number>();
     this.bars.clear();
-    for (const ship of [s.player, ...s.enemies]) {
+    for (const ship of [s.player, ...s.enemies, ...s.escorts]) {
       seen.add(ship.id);
       let sprite = this.ships.get(ship.id);
       if (!sprite) {
@@ -228,9 +266,13 @@ export class GameScene extends Phaser.Scene {
       // Reduce motion holds the hull still rather than flashing it on a hit.
       if (ship.hitMs > 0 && !settings.reduceMotion) sprite.setTint(0xffc090).setTintMode(Phaser.TintModes.MULTIPLY);
       else sprite.clearTint();
-      if (ship.kind !== 'player') this.drawHpBar(ship);
+      const escort = s.escorts.includes(ship);
+      if (ship.kind !== 'player') this.drawHpBar(ship, escort);
       if (ship.slowMs > 0) this.drawSlowed(ship);
+      if (ship.jamMs > 0) this.drawJammed(ship);
+      if (escort) this.drawPrize(ship);
     }
+    this.drawBoarding();
     for (const [id, sprite] of this.ships) {
       if (seen.has(id)) continue;
       sprite.destroy();
@@ -239,15 +281,16 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** An enemy's hull, as a little scale bar over it once it has been hit. */
-  private drawHpBar(ship: Ship) {
-    if (ship.hp >= ship.maxHp) return;
+  private drawHpBar(ship: Ship, escort: boolean) {
+    // A prize's bar is always shown, in green; the flagship's too, so it reads as the big one.
+    if (ship.hp >= ship.maxHp && !escort && ship.kind !== 'flagship') return;
     const at = this.place(ship);
     const x = Math.round(at.x - HP_BAR_W / 2);
     const y = Math.round(at.y - SHIP_LOOKS[ship.kind].length / 2 - 14);
     const fill = (HP_BAR_W - 2) * Phaser.Math.Clamp(ship.hp / ship.maxHp, 0, 1);
     const g = this.bars;
     g.fillStyle(0xf3e6c4).fillRect(x, y, HP_BAR_W, 5);
-    g.fillStyle(0xb04634, 0.9).fillRect(x + 1, y + 1, fill, 3);
+    g.fillStyle(escort ? 0x5a8c50 : 0xb04634, 0.9).fillRect(x + 1, y + 1, fill, 3);
     g.lineStyle(0.75, INK).strokeRect(x, y, HP_BAR_W, 5);
     for (let k = 1; k < 4; k++) g.lineBetween(x + (k * HP_BAR_W) / 4, y, x + (k * HP_BAR_W) / 4, y + 5);
   }
@@ -265,13 +308,70 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** A ship hit by grapeshot, its gun crews cut up: short ink dashes round it, slowly reloading. */
+  private drawJammed(ship: Ship) {
+    const at = this.place(ship);
+    const r = radiusOf(ship) + 12;
+    const g = this.bars;
+    g.lineStyle(1.2, INK, 0.8);
+    for (let k = 0; k < 10; k++) {
+      const a = (k / 10) * Math.PI * 2;
+      g.lineBetween(at.x + Math.cos(a) * r, at.y + Math.sin(a) * r, at.x + Math.cos(a + 0.18) * r, at.y + Math.sin(a + 0.18) * r);
+    }
+  }
+
+  /** One of the player's prizes: a ring of green dots, and the little pennant of a prize crew. */
+  private drawPrize(ship: Ship) {
+    const at = this.place(ship);
+    const r = radiusOf(ship) + 9;
+    const g = this.bars;
+    g.fillStyle(GREEN, 0.9);
+    for (let k = 0; k < 16; k++) {
+      const a = (k / 16) * Math.PI * 2;
+      g.fillCircle(at.x + Math.cos(a) * r, at.y + Math.sin(a) * r, k % 4 === 0 ? 2 : 1.3);
+    }
+  }
+
+  /**
+   * Crippled enemies that can be boarded: a dashed ochre ring of grappling lines, filled round as
+   * the player stays alongside, and a label on the nearest.
+   */
+  private drawBoarding() {
+    const s = this.state;
+    const g = this.bars;
+    this.boardLabel.setVisible(false);
+    if (s.phase !== 'fighting') return;
+    let nearest: Ship | null = null;
+    let best = Infinity;
+    for (const e of s.enemies) {
+      if (!boardable(e)) continue;
+      const at = this.place(e);
+      const r = radiusOf(e) + 16;
+      g.lineStyle(2, OCHRE, 0.95);
+      for (let k = 0; k < 12; k++) {
+        const a = (k / 12) * Math.PI * 2;
+        g.beginPath().arc(at.x, at.y, r, a, a + 0.3).strokePath();
+      }
+      if (e.boardMs > 0) g.lineStyle(5, OCHRE, 1).beginPath().arc(at.x, at.y, r + 5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, e.boardMs / BOARD_MS)).strokePath();
+      const { dx, dy } = offset(s.player, e);
+      if (Math.hypot(dx, dy) < best) {
+        best = Math.hypot(dx, dy);
+        nearest = e;
+      }
+    }
+    if (!nearest) return;
+    const at = this.place(nearest);
+    const label = nearest.boardMs > 0 ? 'Boarding her...' : 'Crippled: sail alongside to board';
+    this.boardLabel.setText(label).setPosition(at.x, at.y - radiusOf(nearest) - 36).setVisible(true);
+  }
+
   /** Engraved foam lines spreading from each ship's stern. */
   private drawWakes(dt: number) {
     const s = this.state;
     const sailing = s.phase === 'break' || s.phase === 'fighting';
     if (sailing && this.clock - this.lastWake >= WAKE_EVERY_MS) {
       this.lastWake = this.clock;
-      for (const ship of [s.player, ...s.enemies]) {
+      for (const ship of [s.player, ...s.enemies, ...s.escorts]) {
         const back = SHIP_LOOKS[ship.kind].length * 0.45;
         this.wakes.push({
           x: ship.x - Math.cos(ship.heading) * back,
@@ -309,6 +409,7 @@ export class GameScene extends Phaser.Scene {
     let labelled = false;
     this.courseLabel.setVisible(false);
     if (s.phase !== 'fighting') return;
+    this.drawShells();
     for (const e of s.enemies) {
       const pts = detourCourse(s, e);
       if (pts.length < 2) continue;
@@ -346,6 +447,26 @@ export class GameScene extends Phaser.Scene {
           .setPosition(mid.x + Math.cos(away) * 22, mid.y + Math.sin(away) * 16)
           .setVisible(true);
       }
+    }
+  }
+
+  /**
+   * Where mortar shells will land: a dashed rust ring on the sea, the size of the blast, with a
+   * second ring closing in on the middle as the shell comes down.
+   */
+  private drawShells() {
+    const g = this.course;
+    for (const shell of this.state.shells) {
+      const at = this.place(shell);
+      const t = 1 - shell.ms / shell.total;
+      g.fillStyle(RUST, 0.12 + 0.18 * t).fillCircle(at.x, at.y, SHELL_R);
+      g.lineStyle(1.6, RUST, 0.9);
+      for (let k = 0; k < 16; k++) {
+        const a = (k / 16) * Math.PI * 2;
+        g.beginPath().arc(at.x, at.y, SHELL_R, a, a + 0.24).strokePath();
+      }
+      g.lineStyle(1.2, INK, 0.8).strokeCircle(at.x, at.y, Math.max(2, SHELL_R * (1 - t)));
+      g.fillStyle(INK, 0.8).fillCircle(at.x, at.y, 2.5);
     }
   }
 
@@ -452,6 +573,19 @@ export class GameScene extends Phaser.Scene {
         }
         g.fillStyle(OCHRE, a).fillCircle(e.x, e.y, 3.5);
         g.lineStyle(0.75, INK, a).strokeCircle(e.x, e.y, 3.5);
+      } else if (e.kind === 'blast') {
+        // A burst of fire: an ochre and orange flash spreading to the blast's reach, ink rays and smoke.
+        const r = (e.size ?? 40) * Math.min(1, 0.4 + t * 1.2);
+        const a = 1 - t;
+        g.fillStyle(0xe07828, 0.45 * a).fillCircle(e.x, e.y, r);
+        g.fillStyle(0xf0c860, 0.7 * a).fillCircle(e.x, e.y, r * 0.55);
+        g.lineStyle(1.2, INK, a);
+        for (let k = 0; k < 16; k++) {
+          const ang = (k / 16) * Math.PI * 2 + 0.1;
+          g.lineBetween(e.x + Math.cos(ang) * r * 0.6, e.y + Math.sin(ang) * r * 0.6, e.x + Math.cos(ang) * r * (k % 2 ? 1 : 1.15), e.y + Math.sin(ang) * r * (k % 2 ? 1 : 1.15));
+        }
+        g.strokeCircle(e.x, e.y, r);
+        this.cloud(e.x, e.y - t * 14, 6 + t * 10, Math.min(1, a * 1.6));
       } else if (e.kind === 'sink' && e.ship) {
         sinking.add(e.id);
         let sprite = this.sinking.get(e.id);
@@ -463,14 +597,25 @@ export class GameScene extends Phaser.Scene {
         g.lineStyle(1, INK, 0.6 * (1 - t));
         g.strokeEllipse(e.x, e.y, 20 + t * 60, 10 + t * 30);
         g.strokeEllipse(e.x, e.y, 10 + t * 36, 5 + t * 18);
-      } else if (e.kind === 'coins') {
+      } else if (e.kind === 'coins' || e.kind === 'prize') {
         floaters.add(e.id);
         let text = this.floaters.get(e.id);
         if (!text) {
-          text = this.add.text(e.x, e.y, `+${e.gold} gold`, textStyle(15, '#6a4410', 'bold italic', '#f6ecd2', 4)).setOrigin(0.5).setDepth(UI_DEPTH - 50);
+          const caption = e.kind === 'coins' ? `+${e.gold} gold` : 'Prize taken!';
+          text = this.add.text(e.x, e.y, caption, textStyle(e.kind === 'coins' ? 15 : 18, e.kind === 'coins' ? '#6a4410' : '#2f5a3a', 'bold italic', '#f6ecd2', 4)).setOrigin(0.5).setDepth(UI_DEPTH - 50);
           this.floaters.set(e.id, text);
         }
         text.setPosition(e.x, e.y - 16 - t * 22).setAlpha(1 - t);
+      }
+    }
+    // Fireships trail smoke from the pitch burning on their decks.
+    for (const ship of this.state.enemies) {
+      if (ship.kind !== 'fireship') continue;
+      const at = this.place(ship);
+      for (let k = 0; k < 3; k++) {
+        const t = settings.reduceMotion ? k / 3 : (this.clock / 700 + k / 3) % 1;
+        const back = 14 + t * 30;
+        this.cloud(at.x - Math.cos(ship.heading) * back, at.y - Math.sin(ship.heading) * back, 3 + t * 5, (1 - t) * 0.8);
       }
     }
     for (const [map, seen] of [[this.sinking, sinking], [this.floaters, floaters]] as const) {
@@ -496,10 +641,12 @@ export class GameScene extends Phaser.Scene {
     const s = this.state;
     if (s.phase !== 'fighting' && s.phase !== 'break') return;
     const p = { ...s.player, ...this.view };
-    const full = stats(s).range;
     const at = (a: number, r: number) => ({ x: p.x + Math.cos(a) * r, y: p.y + Math.sin(a) * r });
     for (const side of SIDES) {
       const out = p.heading + (side === 'starboard' ? Math.PI / 2 : -Math.PI / 2);
+      // Each side's reach: shorter for grapeshot, and further fired downwind.
+      const wind = windReach(s.wind, out);
+      const full = sideRange(s, side) * wind;
       const a0 = out - ARC;
       const a1 = out + ARC;
       const charge = s.charge[side];
@@ -515,7 +662,7 @@ export class GameScene extends Phaser.Scene {
         continue;
       }
       const c = charge ?? 0;
-      const reach = reachOf(full, c);
+      const reach = reachOf(full / wind, c) * wind;
       g.fillStyle(WASH, 0.1).slice(p.x, p.y, reach * 0.55, a0, a1).fillPath();
       g.fillStyle(WASH, 0.24).slice(p.x, p.y, reach, a0, a1).fillPath();
       g.lineStyle(1.1, INK, 0.9);
@@ -576,6 +723,12 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(UI_DEPTH + 2)
       .setScrollFactor(0);
+    this.windRose = this.add.image(WIND.x, WIND.y, 'wind-rose').setScale(1 / HI).setScrollFactor(0).setDepth(UI_DEPTH - 5);
+    this.windText = this.add
+      .text(WIND.x, WIND.y + WIND.r + 12, '', textStyle(12, '#2b2118', 'bold italic', '#f0e2c0', 4))
+      .setOrigin(0.5)
+      .setDepth(UI_DEPTH - 4)
+      .setScrollFactor(0);
     this.bannerSub = this.add
       .text(VIEW.w / 2, 212, 'Enemy sails sighted!', textStyle(22, '#6a4410', 'bold italic', '#f0e2c0', 6))
       .setOrigin(0.5)
@@ -626,7 +779,8 @@ export class GameScene extends Phaser.Scene {
     const breaking = s.phase === 'break';
     const fade = breaking ? Math.min(1, s.breakMs / 500) : 0;
     this.bannerTitle.setVisible(breaking).setText(`Wave ${s.wave}`).setAlpha(fade);
-    this.bannerSub.setVisible(breaking).setAlpha(fade);
+    const flagship = s.toSpawn.includes('flagship') || s.enemies.some((e) => e.kind === 'flagship');
+    this.bannerSub.setVisible(breaking).setAlpha(fade).setText(flagship ? 'The enemy flagship is sighted!' : 'Enemy sails sighted!');
 
     const sailing = s.phase === 'break' || s.phase === 'fighting';
     this.orderCard.setVisible(sailing);
@@ -635,8 +789,42 @@ export class GameScene extends Phaser.Scene {
     this.orderHead.setText(`Captain's order, wave ${s.wave}`);
     this.orderTitle.setText(order.title);
     this.orderDesc.setText(order.desc);
+    this.drawWind(sailing);
 
     this.drawPointers();
+  }
+
+  /**
+   * The wind rose: an arrow flying the way the wind blows, feathered at the end it blows from, and
+   * under it where the wind is from.
+   */
+  private drawWind(sailing: boolean) {
+    const s = this.state;
+    this.windRose.setVisible(sailing);
+    this.windText.setVisible(sailing).setText(`Wind from ${windFrom(s.wind)}`);
+    if (!sailing) return;
+    const g = this.hud;
+    const { x, y } = WIND;
+    const r = WIND.r - 9;
+    const cx = Math.cos(s.wind);
+    const cy = Math.sin(s.wind);
+    const tip = { x: x + cx * r, y: y + cy * r };
+    const tail = { x: x - cx * r, y: y - cy * r };
+    g.lineStyle(2.2, INK, 1).lineBetween(tail.x, tail.y, tip.x - cx * 6, tip.y - cy * 6);
+    const head = [
+      { x: tip.x, y: tip.y },
+      { x: tip.x - cx * 10 - cy * 6, y: tip.y - cy * 10 + cx * 6 },
+      { x: tip.x - cx * 10 + cy * 6, y: tip.y - cy * 10 - cx * 6 },
+    ];
+    g.fillStyle(OCHRE, 1).fillPoints(head as Phaser.Math.Vector2[], true);
+    g.lineStyle(1, INK, 1).strokePoints(head as Phaser.Math.Vector2[], true);
+    for (const k of [0, 5]) {
+      for (const side of [-1, 1]) {
+        const bx = tail.x + cx * (k + 2);
+        const by = tail.y + cy * (k + 2);
+        g.lineStyle(1.2, INK, 1).lineBetween(bx, by, bx - cx * 5 - cy * 5 * side, by - cy * 5 + cx * 5 * side);
+      }
+    }
   }
 
   /** Arrows at the edge of the screen toward enemy ships (rust) and loot (ochre) out of sight. */
@@ -662,7 +850,8 @@ export class GameScene extends Phaser.Scene {
       g.fillStyle(color, 0.95).fillPoints(pts as Phaser.Math.Vector2[], true);
       g.lineStyle(1, INK, 1).strokePoints(pts as Phaser.Math.Vector2[], true);
     };
-    for (const e of this.state.enemies) mark(e, 0x9a4a30);
+    for (const e of this.state.enemies) mark(e, RUST);
+    for (const e of this.state.escorts) mark(e, GREEN);
     for (const l of this.state.loot) mark(l, OCHRE);
   }
 
@@ -689,6 +878,7 @@ export class GameScene extends Phaser.Scene {
     this.helmImages = {} as Record<Side, Phaser.GameObjects.Image>;
     this.fireImages = {} as Record<Side, Phaser.GameObjects.Image>;
     this.fireCaptions = {} as Record<Side, Phaser.GameObjects.Text>;
+    this.shotTexts = {} as Record<Side, Phaser.GameObjects.Text>;
     for (const side of SIDES) {
       const h = HELM[side];
       this.helmImages[side] = pinned(this.add.image(h.x, h.y, `helm-${side}`).setScale(1 / HI), UI_DEPTH);
@@ -696,6 +886,7 @@ export class GameScene extends Phaser.Scene {
       const f = FIRE[side];
       this.fireImages[side] = pinned(this.add.image(f.x, f.y, `fire-${side}`).setScale(1 / HI), UI_DEPTH);
       this.fireCaptions[side] = pinned(this.add.text(f.x, f.y - FIRE.r - 16, '', textStyle(12, '#6a4410', 'bold italic', '#f0e2c0', 4)).setOrigin(0.5), UI_DEPTH + 2);
+      this.shotTexts[side] = pinned(this.add.text(f.x, f.y + FIRE.r + 12, '', textStyle(11, '#2b2118', 'bold italic', '#f0e2c0', 4)).setOrigin(0.5), UI_DEPTH + 2);
       hit(f.x, f.y, FIRE.r, `fire-${side}`);
     }
     this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => this.held.delete(pointer.id));
@@ -719,6 +910,7 @@ export class GameScene extends Phaser.Scene {
       const loaded = s.player.reload[side] <= 0;
       const caption = !aiming ? 'Hold to fire' : !loaded ? 'Loading...' : (charge ?? 0) >= 1 ? 'Let go!' : `Charge ${Math.round((charge ?? 0) * 100)}%`;
       this.fireCaptions[side].setVisible(sailing).setText(caption);
+      this.shotTexts[side].setVisible(sailing).setText(SHOTS[loadedShot(s, side)].name);
       if (!sailing) continue;
       const { x, y } = FIRE[side];
       const R = FIRE.r + 6;
@@ -739,16 +931,83 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** While the player has a prize in tow, a button under the order card to scuttle the newest for double loot. */
+  private createScuttle() {
+    const b = makeButton(this, SCUTTLE.x, SCUTTLE.y, '', () => {
+      const prize = this.state.escorts[this.state.escorts.length - 1];
+      if (prize) scuttle(this.state, prize.id);
+    }, SCUTTLE.w, SCUTTLE.h);
+    this.scuttleText = b.text.setFontSize(15);
+    this.scuttleButton = pinToScreen(b.button).setDepth(UI_DEPTH - 5).setVisible(false);
+  }
+
+  private drawScuttle() {
+    const s = this.state;
+    const prize = s.escorts[s.escorts.length - 1];
+    this.scuttleButton.setVisible(s.phase === 'fighting' && !!prize);
+    if (!prize) return;
+    const name = ENEMIES[prize.kind as keyof typeof ENEMIES].name.toLowerCase();
+    this.scuttleText.setText(`Scuttle the prize ${name}: +${scuttleGold(s, prize)} gold`);
+  }
+
+  /**
+   * The end of a run, with the Admiralty's reward: medals for the waves beaten, spent on rows of
+   * starting upgrades for the next run.
+   */
   private createGameOver() {
+    const top = OVER.y - OVER.h / 2;
     const dim = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x3a2a18, 0.5).setInteractive();
-    const panel = this.add.image(VIEW.w / 2, VIEW.h / 2, 'panel-over');
-    const title = this.add.text(VIEW.w / 2, VIEW.h / 2 - 98, 'Sunk!', textStyle(34, '#2b2118', 'bold')).setOrigin(0.5);
+    const panel = this.add.image(OVER.x, OVER.y, 'panel-over');
+    const title = this.add.text(OVER.x, top + 34, 'Sunk!', textStyle(32, '#2b2118', 'bold')).setOrigin(0.5);
     this.gameOverText = this.add
-      .text(VIEW.w / 2, VIEW.h / 2 - 18, '', { ...textStyle(16, '#3a2c20', 'italic'), align: 'center', lineSpacing: 6 })
+      .text(OVER.x, top + 96, '', { ...textStyle(15, '#3a2c20', 'italic'), align: 'center', lineSpacing: 5 })
       .setOrigin(0.5);
-    const again = makeButton(this, VIEW.w / 2, VIEW.h / 2 + 88, 'Sail again', () => this.scene.restart());
-    this.gameOver = pinToScreen(this.add.container(0, 0, [dim, panel, title, this.gameOverText, again.button]))
+    this.medalText = this.add
+      .text(OVER.x, top + 160, '', { ...textStyle(14, '#6a4410', 'bold italic'), align: 'center', lineSpacing: 3 })
+      .setOrigin(0.5);
+    const parts: Phaser.GameObjects.GameObject[] = [dim, panel, title, this.gameOverText, this.medalText];
+    BOON_IDS.forEach((id, i) => {
+      const y = OVER.firstRowY + i * OVER.rowGap;
+      const left = OVER.x - OVER.rowW / 2;
+      const boon = BOONS[id];
+      const bg = this.add.rectangle(OVER.x, y, OVER.rowW, OVER.rowH, CREAM, 0.9).setStrokeStyle(1.5, INK);
+      bg.setInteractive({ useHandCursor: true }).on('pointerdown', () => this.toggleBoon(id));
+      const name = this.add.text(left + 12, y, boon.name, textStyle(15, '#2b2118', 'bold')).setOrigin(0, 0.5);
+      const desc = this.add.text(left + 200, y, boon.desc, textStyle(12, '#5a4a38', 'italic')).setOrigin(0, 0.5);
+      const cost = this.add.text(left + OVER.rowW - 12, y, '', textStyle(14, '#6a4410', 'bold italic')).setOrigin(1, 0.5);
+      this.boonRows.push({ id, bg, cost });
+      parts.push(bg, name, desc, cost);
+    });
+    const again = makeButton(this, OVER.x, top + OVER.h - 34, 'Sail again', () => {
+      saveMedals(this.medalBank - costOfBoons(this.commission));
+      this.scene.restart({ boons: this.commission });
+    });
+    parts.push(again.button);
+    this.gameOver = pinToScreen(this.add.container(0, 0, parts))
       .setDepth(UI_DEPTH + 20)
       .setVisible(false);
+  }
+
+  /** Chooses a starting upgrade for the next run, if the medals cover it, or puts it back. */
+  private toggleBoon(id: BoonId) {
+    if (this.commission.includes(id)) this.commission = this.commission.filter((b) => b !== id);
+    else if (costOfBoons(this.commission) + BOONS[id].cost <= this.medalBank) this.commission = [...this.commission, id];
+  }
+
+  private drawGameOver() {
+    const s = this.state;
+    this.gameOverText.setText(
+      `Your ship went down on wave ${s.wave}.\n${s.sunk} ships sunk, ${s.taken} taken as prizes and ${s.plundered} gold plundered.\nBest wave beaten: ${s.bestWave}.`,
+    );
+    const left = this.medalBank - costOfBoons(this.commission);
+    this.medalText.setText(
+      `The Admiralty awards you ${s.medals} medal${s.medals === 1 ? '' : 's'} (${left} to spend).\nChoose starting upgrades for your next run:`,
+    );
+    for (const row of this.boonRows) {
+      const chosen = this.commission.includes(row.id);
+      const cost = BOONS[row.id].cost;
+      row.cost.setText(chosen ? 'Chosen ✓' : `${cost} medals`);
+      row.bg.setFillStyle(chosen ? 0xebd29a : CREAM, 0.95).setAlpha(chosen || cost <= left ? 1 : 0.5);
+    }
   }
 }

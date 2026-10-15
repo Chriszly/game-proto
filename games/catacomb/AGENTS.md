@@ -6,31 +6,34 @@ root `AGENTS.md` asks.
 
 ## Current state
 
-Catacomb is a small dungeon deckbuilder. A knight walks a map, the Crypt, laid out anew for each
-run, through fights, a campfire and a treasure chest to the Bone King, fighting with a deck of
-cards. The art is painterly: shapes and pixel grids drawn in code, repainted with brush strokes.
+Catacomb is a small dungeon deckbuilder. A knight walks two maps, the Crypt and the Sunken Tombs,
+each laid out anew for each run, through fights, elites, campfires, treasure chests, merchants and
+mystery rooms to the Bone King and then the Hollow Queen, fighting with a deck of cards. The art is painterly: shapes and pixel grids drawn in code, repainted with brush strokes.
 
-- **Implemented:** a branching map made per run (`makeMap` in `src/game/map.ts`, nine rooms in six
-  columns, kept in `state.rooms`), turn-based card fights against foes whose next move is drawn at
-  random from their moves (opening with the first, never the same move twice in a row), strength
-  buffs, block, healing, card rewards after fights (common pool) and in the treasure room (rare
-  pool, with Skip), a campfire that either heals 30% or burns one card from the deck, and defeat
-  and victory panels whose button restarts the scene.
-- **Progression** is only within a run: the deck grows by one card per reward, shrinks by one at a
-  campfire, and health carries over between rooms. There is no meta progression, gold, relics or
-  upgrades.
+- **Implemented:** a branching map per act (`makeMap(act)` in `src/game/map.ts`, 12 to 17 rooms
+  in seven columns, kept in `state.rooms`), two acts (`state.act`; the Bone King's fall leaves a
+  relic and a `descend` panel that makes the second map), turn-based card fights against foes whose
+  next move is drawn at random from their moves (opening with the first, never the same move twice
+  in a row), strength buffs, block, healing, the statuses Weak, Vulnerable and Poison on both sides
+  (cards, foe attacks with an `apply` rider, and a `debuff` intent), elites (rare card reward),
+  gold dropped by foes, card rewards after fights (common pool) and in treasure rooms (rare pool,
+  with Skip), a campfire with three choices (heal 30%, temper one card, burn one card), a merchant
+  (cards, relics, one removal per visit), four mystery rooms with two choices each, seven relics
+  (passive bonuses, shown in the top bar with a tap-for-text tip), and defeat and victory panels
+  whose button restarts the scene.
+- **Progression** is only within a run: the deck grows by rewards and purchases, shrinks at a
+  campfire or the merchant, cards can be tempered once each, gold and relics are kept until the
+  run ends, and health carries over between rooms and acts. There is no meta progression.
 - **Persistence:** none. The game writes nothing to browser storage; a reload starts a new run.
   It only reads the hub's shared settings (see Hub settings below).
 - **Rough edges you can see in the code:**
-  - There is only one act, and `makeMap` always makes the same shape (1, 2, 2, 2, 1, 1 rooms per
-    column); only the foes, which row the campfire and chest take, and the crossing paths vary.
-  - `GameScene.drawFight` hard-codes `/3` in the energy text and `f.energy === 3` in the
-    "Your turn" banner check, and `drawHud` hard-codes `Room N of 6`. They do not follow `ENERGY`
-    or the number of columns in `state.rooms`.
-  - "Never the same move twice in a row" compares move objects, so the Cultist's two separate
-    attack-6 entries can follow each other (and make attacks twice as likely).
+  - Card faces show a card's own numbers, not what Whetstone, Weak or Vulnerable make of them; the
+    foes' intents do show the real damage.
+  - The relic tip shows on tap or hover; there is no list of owned relics elsewhere.
   - Most foes are still pixel grids, rounded and repainted; only the knight and the slime are
-    drawn as shapes. The panels and buttons are flat rectangles, not painted.
+    drawn as shapes. The panels, buttons and merchant boxes are flat rectangles, not painted.
+  - The second act's backdrops are the first act's with a green wash (`washed` in
+    `src/art/scenery.ts`), not drawn on their own.
   - The card id `vampBite` is shown as "Leech".
 
 ## Architecture
@@ -40,26 +43,43 @@ File map (all under `src/` unless it starts with `shared/`):
 - `main.ts`: creates the `Phaser.Game` (960x540 from `VIEW`, `Scale.FIT`, `pixelArt: false`, so
   the painted textures are smoothed) with
   `BootScene` then `GameScene`, calls `setupGame(game)`; in dev builds puts `game` on `window`.
-- `game/cards.ts`: the `Card` type, the `CARDS` table, `CardId`, `STARTER_DECK`, the `COMMON` and
-  `RARE` reward pools (derived from `rarity`), `describe` (card text) and `kindOf` (attack
-  or skill).
-- `game/enemies.ts`: `EnemyKind`, the `Intent` union (attack, block, buff) and the `ENEMIES` table
-  of health and `moves` (the first is the opening move).
-- `game/map.ts`: `Room` (kind, column, screen x/y, `next` links, foes), `makeMap` (a new Crypt
-  from the `EARLY`, `DEEPER` and `LATE` foe groups), `ENTRANCE` and `reachable(rooms, at)`.
-- `game/state.ts`: tuning constants (including `MIN_DECK`), `Phase`, `Enemy` (with its `intent`),
-  `Fight`, `Pop`, `GameState`.
-- `game/sim.ts`: all rules. `newRun`, `walkTo`, `playCard`, `canPlay`, `endTurn`, `takeReward`,
-  `rest`, `restHeal`, `canRemove`, `removeCard`, `tick`, `intentOf`, `shuffle`; private
-  `nextIntent` draws a foe's next move. No Phaser import.
+- `game/cards.ts`: the `Card` type (with `up`, what tempering changes), the `CARDS` table,
+  `BaseId` (a key of `CARDS`) and `CardId` (a `BaseId`, or `BaseId+` once tempered), `card(id)`
+  (the rules, with `up` applied to a tempered id), `isTempered`, `baseOf`, `tempered`,
+  `STARTER_DECK`, the `COMMON` and `RARE` pools (derived from `rarity`), `describe` (card text) and
+  `kindOf` (attack or skill).
+- `game/enemies.ts`: `EnemyKind`, `StatusKind`, the `Intent` union (attack with an optional
+  `apply` status, block, buff, debuff) and the `ENEMIES` table of health, `gold`, `elite`/`boss`
+  and `moves` (the first is the opening move).
+- `game/relics.ts`: `RelicId`, `RELICS` (name and text) and `RELIC_IDS`. Their effects live in
+  `sim.ts` (search for `hasRelic`).
+- `game/events.ts`: `EventId`, `EVENTS` (title, text, two choice captions) and their cost
+  constants. Their effects live in `chooseEvent` in `sim.ts`.
+- `game/map.ts`: `RoomKind`, `Room` (kind, column, screen x/y, `next` links, foes, event),
+  `COLUMNS` (7), `ACTS` (2), `ACT_FOES` (each act's name, first fight, early, late and elite foe
+  groups and boss), `COLUMN_KINDS` (what each middle column holds), `makeMap(act)`, `ENTRANCE` and
+  `reachable(rooms, at)`.
+- `game/state.ts`: tuning constants (including `MIN_DECK`, the prices, `SHOP_CARDS`,
+  `SHOP_RELICS`, `WEAK_MULT` and `VULNERABLE_MULT`), `Phase`, `Status` and `noStatus`, `Ware`,
+  `Shop`, `Enemy` (with its `intent` and `status`), `Fight` (with the hero's `status` and the
+  `gold` its foes drop), `Pop`, `GameState`.
+- `game/sim.ts`: all rules. `newRun`, `walkTo`, `playCard`, `canPlay`, `heroHit` and `foeHit`
+  (damage after relics and statuses), `endTurn`, `takeReward`, `descend`, `rest`, `restHeal`,
+  `canRemove`, `removeCard`, `canTemper`, `temperCard`, `buyCard`, `buyRelic`, `canBuyRemoval`,
+  `buyRemoval`, `leaveShop`, `canChoose`, `chooseEvent`, `eventHere`, `hasRelic`, `actName`,
+  `tick`, `intentOf`, `shuffle`; private `act` (a foe's go, poison first), `endRound` (after the
+  foes' turn), `winFight`, `grantRelic`, `makeShop` and `nextIntent`. No Phaser import.
 - `scenes/BootScene.ts`: bakes every texture (`bakeScenery`, `bakeCharacters`, `bakeIcons`,
   `bakeCardFrames`), then starts `Game`.
-- `scenes/GameScene.ts`: builds and draws the map, fight, reward overlay, panel (with Rest and
-  Remove a card at a campfire), the burn-a-card picker (`removeLayer`, shown while `removing`),
-  floating numbers and HUD, and wires taps to sim functions. Exposes `state`, `hand` and
-  `rewards`.
+- `scenes/GameScene.ts`: builds and draws the map (room icons rebuilt by `buildRooms` when a new
+  act brings a new map), fight (with a `StatusRow` over each fighter), reward overlay, the
+  merchant (`shopLayer`), panel (campfire, mystery room, descent, defeat and victory), the card
+  picker (`pickLayer`, shown while `picking` is `burn`, `temper` or `sell`), floating numbers and
+  HUD (gold and relic icons, with a tip), and wires taps to sim functions. Exposes `state`, `hand`
+  and `rewards`.
 - `scenes/layout.ts`: screen positions and sizes for the fight, hand, reward, buttons, campfire
-  buttons (`REST_BUTTONS`), the burn picker (`REMOVE`) and HUD, and `FONT` (a serif).
+  buttons (`REST_BUTTONS`), event choices (`EVENT_BUTTONS`), the card picker (`PICKER`), the
+  merchant (`SHOP`), the top bar (`HUD`) and statuses (`STATUS_GAP`), and `FONT` (a serif).
 - `ui/CardView.ts`: `makeCard`, a card face container: an ink edge (`bg`, the part that takes
   taps), the painted parchment, icon, name, rules and a gold cost seal.
 - `ui/Button.ts`: `makeButton`, a wooden button container.
@@ -73,12 +93,14 @@ File map (all under `src/` unless it starts with `shared/`):
 - `art/characters.ts`: the knight (`KNIGHT`) and slime (`SLIME`) drawn as shapes at twice their
   size, and grids for the other foes (`FOES` keyed by `EnemyKind`); textures `hero`, `hero-token`,
   `foe-<kind>`.
-- `art/icons.ts`: `CARD_ICONS` keyed by `Icon`, `INTENTS`, room icons keyed by `RoomKind`, all
-  through `bakePainted`; textures `card-<icon>`, `intent-<kind>`, `room-<kind>`, `heart`.
+- `art/icons.ts`: `CARD_ICONS` keyed by `Icon`, `INTENTS`, `STATUSES`, `RELIC_ICONS`, `COIN`, room
+  icons keyed by `RoomKind`, all through `bakePainted`; textures `card-<icon>`, `intent-<kind>`,
+  `status-<kind>`, `relic-<id>` and `relic-big-<id>` (`relicIcon`), `room-<kind>`, `coin`, `heart`.
 - `art/cardFrames.ts`: the parchment card faces `card-attack` and `card-skill`, painted at twice
   the card size, and `CARD_FRAME` (where the header and picture window sit).
 - `art/scenery.ts`: the `room-bg` crypt (wall, arch, two torches, floor in perspective) and the
-  `map-bg` flagstones, drawn at 1920x1080, shrunk to 960x540 and painted.
+  `map-bg` flagstones, drawn at 1920x1080, shrunk to 960x540 and painted, plus `room-bg-2` and
+  `map-bg-2` for the second act (the same washed green); `backdrop(kind, act)` names the one to use.
 - `shared/settings.ts` and `shared/setupGame.ts` (repo root, shared by every game): the hub's
   settings, `byDifficulty` and `setupGame`. `sim.ts` imports `byDifficulty`, `GameScene.ts`
   imports `settings`.
@@ -89,41 +111,51 @@ How it runs:
   asset files. Painting is the slow part of boot (the two backdrops most). `GameScene.create` calls `newRun` and creates every layer once.
 - **Time:** `GameScene.update(time)` computes `dt` from the frame timestamp (not Phaser's smoothed
   delta), clamped to `MAX_STEP_MS` (250), and calls `tick(state, dt)`. `tick` counts down pops and
-  hit flashes, advances walking (`WALK_MS`), steps the foes' turn one foe per `ENEMY_ACT_MS`, and
-  after `CLEARED_MS` moves a won fight to the reward (or to `won` for the boss room).
+  hit flashes, advances walking (`WALK_MS`), steps the foes' turn one foe per `ENEMY_ACT_MS` (a
+  foe's poison bites before its move, and can kill it), then `endRound`, and after `CLEARED_MS`
+  `winFight` adds the gold and moves a won fight to the reward (rare after an elite), to
+  `descend` after the first boss or to `won` after the last.
 - **Input:** Phaser `pointerdown` handlers call sim functions directly: room circles call
   `walkTo`, hand cards `playCard(state, i)`, End turn `endTurn`, reward cards and Skip
-  `takeReward`, the campfire's Rest `rest` and its picker's cards `removeCard`, the panel button
-  `scene.restart()`. Sim functions check the phase
+  `takeReward`, the campfire's Rest `rest` and its picker's cards `temperCard` or `removeCard`, the
+  merchant's wares `buyCard`, `buyRelic` and (through the picker) `buyRemoval`, Leave `leaveShop`,
+  a mystery's choices `chooseEvent`, Descend `descend`, Delve again `scene.restart()`. Sim functions check the phase
   and return false when the action is not allowed.
-- **Rendering:** each frame, `update` picks the map or fight layer (the treasure reward is shown
-  over the map) and redraws. Graphics (paths, room rings, health bars, HUD) are cleared and
+- **Rendering:** each frame, `update` picks the map or fight layer (the campfire, merchant,
+  mystery and the rewards of treasure and the altar are shown over the map) and redraws. Graphics (paths, room rings, health bars, HUD) are cleared and
   redrawn every frame. Foe sprites and pop texts are diffed by id in `this.foes` and `this.pops`;
   pops are drawn before the fight, so a killing blow's number still finds its foe before the foe is
   dropped.
   The hand and reward cards are rebuilt only when a key changes (`handKey` is the hand plus
-  energy, `rewardKey` the offered ids).
+  energy, `rewardKey` the offered ids, `shopKey` the wares, gold and deck size, `pickKey` the
+  picker's mode and cards, `relicKey` the relics).
 
 State model (`src/game/state.ts`):
 
-- `GameState` is plain data: `phase`, `hp`/`maxHp`, `deck` (all owned cards), `rooms` (this run's
-  map), `at` (room index into `rooms`, or null at the entrance), `cleared` (rooms done, in order), `walk`, `fight`, `reward`, plus
+- `GameState` is plain data: `phase`, `act`, `hp`/`maxHp`, `deck` (all owned cards), `gold`,
+  `relics`, `rooms` (this act's map), `at` (room index into `rooms`, or null at the entrance),
+  `cleared` (rooms done in this act, in order), `walk`, `fight`, `reward` with `rewardRare` and
+  `goldWon`, `shop`, `notice` (what the last event, temper or descent did, shown on the map), plus
   timers (`timerMs`, `heroHitMs`), `healed`, `pops` and `nextId`.
 - `Phase` runs `map` -> `walk` -> `player` <-> `enemy` -> `cleared` -> `reward` -> `map`, with
-  `rest`, `over` and `won` as side exits.
-- `Fight` holds the `draw`, `hand` and `discard` piles, `energy`, hero `block`, `turn`, `enemies`
-  and `acted`. `enemies[0]` is the one in front and takes single-target damage.
+  `rest`, `shop`, `event` (which can lead to `reward`), `descend` (to the next act's `map`), `over`
+  and `won` as side exits.
+- `Fight` holds the `draw`, `hand` and `discard` piles, `energy`, hero `block`, `turn`, `enemies`,
+  `acted`, the hero's `status` and the `gold` to drop. `enemies[0]` is the one in front and takes
+  single-target damage.
+- Statuses wear off like this: the hero's Weak in `endTurn`, a foe's Weak after it acts, everyone's
+  Vulnerable in `endRound`; a foe's poison bites at the start of its go, the hero's in `endRound`.
 - Only `src/game/sim.ts` mutates state. The scene only reads it and calls sim functions.
 - Invariants: `deck` is never changed by a fight (each fight shuffles a copy into `draw`); a dead
   foe is spliced out of `enemies` at once; the hero's block resets in `startTurn`, foes' block in
   `endTurn`; `nextId` is shared by foes and pops; a room joins `cleared` only when it is left (or
-  the boss falls), so `cleared` drives which map paths are lit.
+  a boss falls), so `cleared` drives which map paths are lit; a relic is owned at most once.
 
 Randomness and timing:
 
-- `Math.random` is used in `makeMap` (once per run, in `newRun`), in `shuffle` in
-  `src/game/sim.ts`, which draws piles, reshuffles the discard and picks rewards (`pickSome`), and
-  in `nextIntent` after each foe acts. The test seeds it, so changing the number or order of these
+- `Math.random` is used in `makeMap` (once per act, in `newRun` and `descend`), in `shuffle` in
+  `src/game/sim.ts`, which draws piles, reshuffles the discard and picks rewards (`pickSome`) and
+  wares, in `grantRelic` and `temperRandom`, and in `nextIntent` after each foe acts. The test seeds it, so changing the number or order of these
   calls changes the map, hands, rewards and foe moves the test sees.
 - Art noise uses `seeded` from `src/art/pixelArt.ts`, not `Math.random`.
 - All timing is game time from `tick`; there is no `Date.now`, `setTimeout` or Phaser timer in
@@ -132,12 +164,14 @@ Randomness and timing:
 Data tables (where to tune):
 
 - Cards and the starter deck: `CARDS` and `STARTER_DECK` in `src/game/cards.ts`.
-- Foe health and moves: `ENEMIES` in `src/game/enemies.ts` (health is the Normal value;
+- Foe health, gold and moves: `ENEMIES` in `src/game/enemies.ts` (health is the Normal value;
   `startFight` scales it by difficulty).
-- Map shape and foes per depth: `makeMap`, `EARLY`, `DEEPER`, `LATE` and `colX` in
-  `src/game/map.ts`.
-- `MAX_HP`, `ENERGY`, `HAND_SIZE`, `REST_HEAL`, `MIN_DECK`, `REWARD_CHOICES` and the `*_MS` timings:
-  `src/game/state.ts`.
+- Map shape and foes per act: `COLUMN_KINDS`, `ACT_FOES`, `ROWS` and `colX` in `src/game/map.ts`.
+- Relics: `RELICS` in `src/game/relics.ts`; events: `EVENTS` and their constants in
+  `src/game/events.ts`.
+- `MAX_HP`, `ENERGY`, `HAND_SIZE`, `REST_HEAL`, `MIN_DECK`, `REWARD_CHOICES`, `START_GOLD`,
+  `CARD_PRICE`, `RELIC_PRICE`, `REMOVE_PRICE`, `SHOP_CARDS`, `SHOP_RELICS`, `RELIC_GOLD`,
+  `WEAK_MULT`, `VULNERABLE_MULT` and the `*_MS` timings: `src/game/state.ts`.
 - Screen positions: `src/scenes/layout.ts`.
 
 ### Hub settings
@@ -165,43 +199,59 @@ Data tables (where to tune):
   spots from `hand`, taps on End turn (`END_TURN`, 884,420) and a tap on the first reward card.
 - Numbers mirrored in `e2e/playthrough.spec.ts` that must change with the game: `MAX_HP` (50), the
   starter deck counts, the costs, damage and block of Strike, Defend and Bash, the slime's health
-  (24, on Normal) and `moves` (`SLIME` in the test), `ENERGY` (3), `HAND_SIZE` (5),
+  (24, on Normal), gold (12) and `moves` (`SLIME` in the test), `START_GOLD` (0, with no relics), `ENERGY` (3), `HAND_SIZE` (5),
   `REWARD_CHOICES` (3, all different), the first room being a lone slime at `rooms[0]`, and the
   `END_TURN` and `VIEW` positions. The test checks each slime turn against its shown `intent`,
   that it opens with its first move and that it never repeats a move twice in a row. The test also expects the slime to fall in under eight turns without killing the hero.
-- Field names the test reads: `phase` values, `hp`, `maxHp`, `deck`, `at`, `cleared`, `reward`,
+- The first round must stay free of statuses and relics: the slime's moves apply none and the
+  starter cards apply none, so the test's damage sums hold.
+- Field names the test reads: `phase` values, `hp`, `maxHp`, `deck`, `gold`, `relics`, `at`,
+  `cleared`, `reward`,
   and in `fight`: `draw`, `hand`, `discard`, `energy`, `block`, `turn`, and each enemy's `kind`,
   `hp`, `block`, `step`, `intent`.
 - Screenshots are saved as `playthrough-0-map` through `playthrough-3-next-room` in
-  `docs/screenshots/`; refresh them when the look of the first room changes. `boss`, `treasure`,
-  `victory`, `campfire` and `campfire-remove` there are taken by hand (not by the test); refresh
-  them too when the look changes. `cover.png` is a copy of `playthrough-1-fight`.
+  `docs/screenshots/`; refresh them when the look of the first room changes. `map`, `boss`,
+  `treasure`, `victory`, `campfire`, `campfire-temper`, `campfire-remove`, `shop`, `event`,
+  `elite-fight`, `descend`, `act2-map`, `tombs-foes` and `hollow-queen` there are taken by hand
+  (not by the test); refresh them too when the look changes. `cover.png` is a copy of `playthrough-1-fight`.
 
 ## Making common changes
 
 - **Add a card:** add an entry to `CARDS` in `src/game/cards.ts` with a `rarity` (common or rare
-  puts it in a reward pool). A new `Icon` needs its grid in `CARD_ICONS` in `src/art/icons.ts`
+  puts it in a reward pool) and an `up` (what tempering changes). A new `Icon` needs its grid in `CARD_ICONS` in `src/art/icons.ts`
   (it is painted on its own). A
   new kind of effect needs a field on `Card`, handling in `playCard` in `src/game/sim.ts` and a
   line in `describe`. Update the README's card table.
 - **Add a foe:** add the kind to `EnemyKind` and `ENEMIES` in `src/game/enemies.ts` and its grid to
   `FOES` in `src/art/characters.ts` (typed by `EnemyKind`, so the build fails until you do), then
-  add it to a foe group (`EARLY`, `DEEPER` or `LATE`) in `src/game/map.ts`. Up to three foes fit (`FOE_XS` in `src/scenes/layout.ts`).
+  add it to a foe group (`early`, `late` or `elites`) of an act in `ACT_FOES` in `src/game/map.ts`. Up to three foes fit (`FOE_XS` in `src/scenes/layout.ts`).
 - **Change a foe's moves:** edit its `moves` in `ENEMIES`; the first is always its opening move.
   The slime's moves are mirrored in the test.
 - **Add a new intent kind:** extend `Intent` in `src/game/enemies.ts`, handle it in `act` in
   `src/game/sim.ts`, add a texture in `INTENTS` in `src/art/icons.ts` (named `intent-<kind>`), and
   its text and colour in `GameScene.drawIntent`.
-- **Change the map:** edit `makeMap` in `src/game/map.ts`; `x`/`y` are screen positions. Keep
-  `next` pointing at the following column, update `Room N of 6` in `GameScene.drawHud` if the
-  column count changes, and keep `rooms[0]` a lone slime at 110,290 or update the test. Draw only
+- **Change the map:** edit `COLUMN_KINDS` or `makeMap` in `src/game/map.ts`; `x`/`y` are screen
+  positions. Keep `next` pointing at the following column, keep `COLUMNS` matching the columns
+  made (the top bar and the defeat text read it), keep every room reachable, and keep act one's
+  `rooms[0]` a lone slime at 110,290 or update the test. Draw only
   with `Math.random`, so the seeded test sees the same map each run.
 - **Change the look:** draw on a canvas from `sketch` and pass it through `paint`; bigger
   `sizes` give looser strokes. Shapes drawn at twice the size (like `KNIGHT`) paint better than
   pixel grids.
 - **Add a room kind:** extend `RoomKind`, handle it in `enterRoom` in `src/game/sim.ts`, add a
-  room icon in `src/art/icons.ts`, and handle its view in `GameScene.update` (`onMap`),
-  `drawPanel` or `drawReward`, and its name in `drawHud`.
+  room icon in `src/art/icons.ts`, put it in `COLUMN_KINDS`, and handle its view in
+  `GameScene.update` (`onMap`), `drawPanel` or `drawReward`, and its name in `drawHud`.
+- **Add a relic:** add it to `RelicId` and `RELICS` in `src/game/relics.ts`, its icon to
+  `RELIC_ICONS` in `src/art/icons.ts`, and its effect where it applies in `src/game/sim.ts`
+  behind `hasRelic`. Update the README's relic table.
+- **Add an event:** add it to `EventId` and `EVENTS` in `src/game/events.ts` and its two choices
+  to `chooseEvent` (and any health cost to `canChoose`) in `src/game/sim.ts`.
+- **Add a status:** extend `StatusKind`, `noStatus`, `STATUS_NAMES` in `sim.ts`, its effect in
+  `heroHit`/`foeHit`, `act` or `endRound`, its icon in `STATUSES` and its colour in
+  `STATUS_COLORS` in `GameScene.ts`.
+- **Add an act:** add an entry to `ACT_FOES`, raise `ACTS`, add the backdrops in
+  `bakeScenery`, and give the descent panel and victory title in `GameScene.drawPanel` the right
+  boss names.
 
 ## Gotchas
 
@@ -214,10 +264,18 @@ Data tables (where to tune):
   is the real damage before the hero's block.
 - `over` is set in `tick` after a foe acts, and the fight object is kept, so the fight layer stays
   behind the defeat panel.
-- The treasure room reuses the `reward` phase with `fight` null; `GameScene.update` and
-  `drawReward` tell it apart by `s.rooms[s.at].kind`.
-- Entering a campfire no longer heals; `rest` does, and `removeCard` leaves without healing. Both
-  call `leaveRest`, which marks the room cleared.
+- The treasure room and the altar reuse the `reward` phase with `fight` null; `GameScene.update`
+  and `drawReward` tell them apart by `s.rooms[s.at].kind`. A fight's reward also has `fight`
+  null (`winFight` drops it), and is shown over the fight backdrop.
+- Entering a campfire no longer heals; `rest` does, and `temperCard` and `removeCard` leave
+  without healing. They, `leaveShop` and `chooseEvent` call `leaveRoom`, which marks the room
+  cleared.
+- Tempered cards are separate ids (`strike+`), so the deck and the pickers count them apart from
+  plain copies; `card(id)` is the only place that applies `up`.
+- A foe killed by its own poison is spliced out during the foes' turn, so `tick` only moves
+  `acted` on when `act` returns true.
+- `descend` swaps `state.rooms` for a new array; `GameScene.buildRooms` compares by reference to
+  rebuild the room icons and switch the backdrops.
 - Card text is dark ink on parchment; keep new card text dark, and light text on the header.
 - `scene.restart()` reruns `create`, which resets the run, but `clock` and `lastFrame` carry over.
 - Never use a red cross in any art (root `AGENTS.md`); healing pops are already green.

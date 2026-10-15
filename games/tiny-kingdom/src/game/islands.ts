@@ -1,0 +1,60 @@
+import { ISLANDS } from './tiles';
+
+// Where a kingdom is built: a random island, one typed in by its number, the island of the day,
+// or a campaign level. The island itself always follows from its number (islandMap).
+
+export type Mode = 'random' | 'code' | 'daily' | 'campaign';
+
+/** How a new kingdom is chosen. `level` is the campaign level (1 and up), `day` the daily island's date. */
+export interface Kingdom {
+  mode: Mode;
+  level?: number;
+  day?: string;
+}
+
+/** A campaign level: its island and the final scores that earn one, two and three stars. */
+export interface Level {
+  island: number;
+  stars: [number, number, number];
+}
+
+/**
+ * The campaign: eight islands, from roomy ones with plenty of shore to cramped ones. Each level
+ * needs a star on the one before it. The star scores were set from a greedy player's final score
+ * on each island on Normal: one star at three quarters of it, two at nine tenths, three above it.
+ */
+export const LEVELS: Level[] = [
+  { island: 75, stars: [280, 330, 390] },
+  { island: 324, stars: [270, 320, 370] },
+  { island: 1990, stars: [260, 310, 360] },
+  { island: 4242, stars: [260, 310, 360] },
+  { island: 6772, stars: [250, 300, 350] },
+  { island: 2718, stars: [230, 270, 320] },
+  { island: 9473, stars: [200, 250, 290] },
+  { island: 5810, stars: [190, 220, 260] },
+];
+
+/** Stars a final score earns on campaign level `level` (1 and up): 0 to 3. */
+export const starsFor = (level: number, score: number) => LEVELS[level - 1].stars.filter((s) => score >= s).length;
+
+/** Whether level `level` can be played, given the best stars won on each level so far. */
+export const levelOpen = (level: number, stars: readonly number[]) => level === 1 || (stars[level - 2] ?? 0) > 0;
+
+/** Today's date as YYYY-MM-DD, in the player's own time zone. */
+export function today(now = new Date()) {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+/** The island of the day for date `day` (YYYY-MM-DD): the same for every player that day. */
+export function dailyIsland(day: string) {
+  let h = 2166136261;
+  for (const ch of day) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+  return 1 + ((h >>> 0) % ISLANDS);
+}
+
+/** A typed island number, or null unless it is a whole number from 1 to ISLANDS. */
+export function parseIsland(text: string) {
+  const n = Number(text);
+  return /^\d+$/.test(text) && n >= 1 && n <= ISLANDS ? n : null;
+}

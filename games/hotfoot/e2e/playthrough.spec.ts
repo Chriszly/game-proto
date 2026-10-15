@@ -4,12 +4,15 @@ import { expect, test, type Page } from '@playwright/test';
 // half of the screen to jump the spikes, pits and goblins and up onto ledges, and the bottom half to
 // slide under the blades, as on a phone, picking up coins on the way. Coins taken in a row build a
 // streak that multiplies their worth. At the checkpoint the run waits on two boons; the test taps
-// the first and checks it was taken and the second stage, with its wayside shrine, has begun.
+// the first and checks it was taken and the second stage, on the frozen pass with its wayside
+// shrine, has begun.
 // Game state is only read, through the `game` object the dev build puts on window.
 
 type TrapKind = 'spikes' | 'pit' | 'blade' | 'flames' | 'goblin' | 'bat';
 interface GameState {
   stage: number;
+  terrain: 'road' | 'ice' | 'marsh' | 'wind';
+  boss: object | null;
   phase: 'running' | 'checkpoint' | 'over';
   distance: number;
   speed: number;
@@ -168,7 +171,7 @@ test('plays the first stage', async ({ page }, testInfo) => {
 
   // A new run: stage 1, full hearts, no coins or boons, the knight running from the start.
   let s = await game.state();
-  expect(s).toMatchObject({ stage: 1, phase: 'running', hearts: STAGE_1.hearts, coins: 0, streak: 0, hits: 0, ranks: {}, choices: null });
+  expect(s).toMatchObject({ stage: 1, terrain: 'road', boss: null, phase: 'running', hearts: STAGE_1.hearts, coins: 0, streak: 0, hits: 0, ranks: {}, choices: null });
   expect(s.shrines, 'no shrine on stage 1').toEqual([]);
   expect(s.speed).toBe(STAGE_1.speed);
   expect(s.checkpointX).toBe(STAGE_1.checkpointX);
@@ -245,14 +248,14 @@ test('plays the first stage', async ({ page }, testInfo) => {
   expect((await game.state()).distance, 'the run waits for the pick').toBe(STAGE_1.checkpointX);
   await snap('1-checkpoint');
 
-  // Tapping a card takes its boon, and stage 2 starts, a little faster.
+  // Tapping a card takes its boon, and stage 2 starts, a little faster, on the frozen pass.
   const choice = cards[0].id;
   const coins = s.coins;
   await tap(cards[0]);
   await play(FRAME_MS, async () => false);
   s = await game.state();
   expect(s.ranks).toEqual({ [choice]: 1 });
-  expect(s).toMatchObject({ stage: 2, phase: 'running', choices: null, coins });
+  expect(s).toMatchObject({ stage: 2, terrain: 'ice', boss: null, phase: 'running', choices: null, coins });
   expect(s.speed).toBeGreaterThan(STAGE_1.speed);
   expect(s.checkpointX).toBeGreaterThan(STAGE_1.checkpointX);
   expect(s.traps.some((t) => t.x > STAGE_1.checkpointX), 'stage 2 laid out').toBe(true);

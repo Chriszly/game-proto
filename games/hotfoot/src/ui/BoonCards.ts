@@ -16,7 +16,7 @@ export interface CardSpot {
 
 /**
  * The checkpoint choice: the run dims and two boon cards come up, vellum leaves ruled in gold with a
- * painted icon. Tapping one takes it.
+ * painted icon. A cursed boon's card is edged in madder and says so. Tapping one takes it.
  */
 export class BoonCards {
   private root: Phaser.GameObjects.Container;
@@ -29,6 +29,7 @@ export class BoonCards {
     private onPick: (id: BoonId) => void,
   ) {
     if (!scene.textures.exists('card')) bakePanel(scene, 'card', CARDS.w, CARDS.h);
+    if (!scene.textures.exists('card-cursed')) bakePanel(scene, 'card-cursed', CARDS.w, CARDS.h, C.madder);
     if (!scene.textures.exists('title-strip')) bakePanel(scene, 'title-strip', 440, 50);
     const dim = scene.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, N.ink, 0.55).setInteractive();
     const y = CARDS.y - CARDS.h / 2 - 40;
@@ -55,15 +56,15 @@ export class BoonCards {
     const b = BOONS[id];
     const { y, w, h } = CARDS;
     const scene = this.scene;
-    const bg = scene.add.image(0, 0, 'card');
+    const bg = scene.add.image(0, 0, b.cursed ? 'card-cursed' : 'card');
     const glow = scene.add.rectangle(0, 0, w + 4, h + 4).setStrokeStyle(4, N.madder).setVisible(false);
     const icon = scene.add.image(0, -h / 2 + 62, iconTexture(id));
     const name = scene.add
       .text(0, -h / 2 + 122, b.name, { fontFamily: FONT, fontSize: '22px', fontStyle: 'bold', color: C.madder, align: 'center' })
       .setOrigin(0.5);
-    const rankText = b.filler ? 'Heal' : rank === 0 ? (b.maxRank === 1 ? 'New' : `New, ${b.maxRank} ranks`) : `Rank ${rank + 1} of ${b.maxRank}`;
+    const rankText = b.cursed ? 'Cursed: a gift with a price' : b.filler ? 'Heal' : rank === 0 ? (b.maxRank === 1 ? 'New' : `New, ${b.maxRank} ranks`) : `Rank ${rank + 1} of ${b.maxRank}`;
     const ranked = scene.add
-      .text(0, -h / 2 + 148, rankText, { fontFamily: FONT, fontSize: '14px', fontStyle: 'italic', color: rank === 0 ? '#2f7a4a' : C.lapis })
+      .text(0, -h / 2 + 148, rankText, { fontFamily: FONT, fontSize: '14px', fontStyle: b.cursed ? 'bold italic' : 'italic', color: b.cursed ? C.madder : rank === 0 ? '#2f7a4a' : C.lapis })
       .setOrigin(0.5);
     const text = scene.add
       .text(0, -h / 2 + 172, b.text, { fontFamily: FONT, fontSize: '17px', color: C.ink, align: 'center', wordWrap: { width: w - 44 } })

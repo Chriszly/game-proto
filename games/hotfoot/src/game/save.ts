@@ -1,41 +1,69 @@
+import { ARMOURY_IDS, ARMOURY, noArmoury, type Armoury } from './armoury';
 import { BOON_IDS, type BoonId } from './boons';
 
-// Progress kept between runs, in the browser's local storage: the best distance, the coins banked
-// and the boon bought for the next run. Every key is prefixed with the game's name, since every game
-// shares the hub's origin. Storage can be blocked or full, so every access is wrapped.
+// Progress kept between runs, in the browser's local storage: the best distance, the coins banked,
+// the boon bought for the next run, the armoury's levels and the daily course's best. Every key is
+// prefixed with the game's name, since every game shares the hub's origin. Storage can be blocked or
+// full, so every access is wrapped.
 
 const BEST = 'hotfoot-best';
 const BANK = 'hotfoot-bank';
 const PENDING = 'hotfoot-start';
+const ARMOURY_KEY = 'hotfoot-armoury';
+const DAILY = 'hotfoot-daily';
 
 export interface Progress {
   best: number;
   bank: number;
   pending: BoonId | null;
+  armoury: Armoury;
+  /** The best distance on the last daily course run, and its date (`YYYY-MM-DD`). */
+  daily: { date: string; best: number } | null;
+}
+
+function read(key: string) {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function parse(raw: string | null): unknown {
+  try {
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
 }
 
 export function loadProgress(): Progress {
-  const read = (key: string) => {
-    try {
-      return localStorage.getItem(key);
-    } catch {
-      return null;
-    }
-  };
   const pending = read(PENDING);
+  const rawArmoury = parse(read(ARMOURY_KEY)) as Partial<Record<string, unknown>> | null;
+  const armoury = noArmoury();
+  for (const id of ARMOURY_IDS) {
+    const level = Number(rawArmoury?.[id]);
+    if (Number.isInteger(level)) armoury[id] = Math.max(0, Math.min(ARMOURY[id].prices.length, level));
+  }
+  const rawDaily = parse(read(DAILY)) as { date?: unknown; best?: unknown } | null;
+  const daily = typeof rawDaily?.date === 'string' && Number.isFinite(Number(rawDaily.best)) ? { date: rawDaily.date, best: Number(rawDaily.best) } : null;
   return {
     best: Number(read(BEST)) || 0,
     bank: Number(read(BANK)) || 0,
     pending: BOON_IDS.find((id) => id === pending) ?? null,
+    armoury,
+    daily,
   };
 }
 
-export function saveProgress({ best, bank, pending }: Progress) {
+export function saveProgress({ best, bank, pending, armoury, daily }: Progress) {
   try {
     localStorage.setItem(BEST, String(best));
     localStorage.setItem(BANK, String(bank));
     if (pending) localStorage.setItem(PENDING, pending);
     else localStorage.removeItem(PENDING);
+    localStorage.setItem(ARMOURY_KEY, JSON.stringify(armoury));
+    if (daily) localStorage.setItem(DAILY, JSON.stringify(daily));
   } catch {
     // Storage can be full or blocked (private mode); the game keeps running unsaved.
   }
