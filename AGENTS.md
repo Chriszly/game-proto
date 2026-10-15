@@ -132,8 +132,9 @@ harvests, refines, brews and sells potions to a customer. The **Playthrough Apot
 (`.github/workflows/playthrough.yml`) runs on every PR (not on pushes to main) and reports one
 required check, `Playthrough`. It plays each game whose `games/<name>/` folder changed, so a PR for
 one game only plays that game, and a PR that only changes shared files plays none. If the workflow
-itself changes, every game is played. A game that did not change is not played, and the check still passes. The **Hub** workflow (`.github/workflows/hub.yml`) runs `e2e/hub.spec.ts` when the hub page,
-its test, a game's `index.html`, `cover.png` or `favicon.svg`, or a shared file changes. The
+itself changes, every game is played. A game that did not change is not played, and the check still passes. The **Hub** workflow (`.github/workflows/hub.yml`) runs `e2e/hub.spec.ts`: the hub's own checks
+in one job, and opening each game from its card in one job per game, on a PR only for the games
+whose folder changed (every game when the hub page, its test or `shared/` changes). The
 playthrough is the check that the core loop can still be played, so it has to stay accurate.
 
 - **Change the test in the same PR as the game.** A change to gameplay, layout, input or balance
