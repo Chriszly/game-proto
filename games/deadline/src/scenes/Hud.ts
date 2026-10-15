@@ -2,10 +2,11 @@ import Phaser from 'phaser';
 import { HUD_HEIGHT, VIEW, type Stats } from '../game/rules';
 import type { ArtStyle } from '../game/save';
 import { HI, num, tex } from '../art/paint';
-import { THEMES, UPGRADE_COLORS, type Theme } from '../art/theme';
+import { ACID_COLOR, CRATE_COLORS, THEMES, UPGRADE_COLORS, type Theme } from '../art/theme';
 
 // The HUD: the top bar (wave, best wave, kills, stats and the art style switch), the wave progress
-// strip under it, and the frenzy meter beside the squad. Drawn as comic caption boxes or as an
+// strip under it, the frenzy meter beside the squad, and the kit panel on the squad's other side
+// (sandbag walls to place, flame bursts, medkits and shotgun pairs). Drawn as comic caption boxes or as an
 // amber overwatch overlay. Its Graphics are only redrawn when something on it changes.
 
 export const HUD_DEPTH = 100;
@@ -15,6 +16,8 @@ export const STYLE_SWITCH = { x: 432, y: 33, w: 98, h: 19 };
 export const PROGRESS = { x: 10, y: HUD_HEIGHT + 4, w: VIEW.w - 20, h: 20 };
 /** The frenzy meter, to the right of the squad. */
 export const FRENZY_PANEL = { x: 384, y: 884, w: 140, h: 50 };
+/** The kit panel, to the left of the squad; tapping it while holding sandbags readies a wall. */
+export const KIT_PANEL = { x: 16, y: 884, w: 140, h: 50 };
 
 export interface HudData {
   wave: number;
@@ -34,6 +37,15 @@ export interface HudData {
   /** 0..1: the streak towards a frenzy, or the frenzy time left while it runs. */
   frenzyFill: number;
   frenzyOn: boolean;
+  /** Sandbag walls in hand, and whether the next tap places one. */
+  sandbags: number;
+  placing: boolean;
+  /** Supplies from the boss drops still in hand. */
+  flames: number;
+  medkits: number;
+  pellets: number;
+  /** The hero stands in acid: the squad fires slower. */
+  inAcid: boolean;
 }
 
 type Text = Phaser.GameObjects.Text;
@@ -42,7 +54,7 @@ export class Hud {
   private bar: Phaser.GameObjects.Image;
   private g: Phaser.GameObjects.Graphics;
   private t: Record<
-    'wave' | 'kills' | 'best' | 'comic' | 'nv' | 'count' | 'note' | 'frenzy' | 'streak' | 'hint',
+    'wave' | 'kills' | 'best' | 'comic' | 'nv' | 'count' | 'note' | 'frenzy' | 'streak' | 'hint' | 'kit' | 'kitHint' | 'kitList' | 'acid',
     Text
   >;
   private statLabels: Text[];
@@ -57,6 +69,7 @@ export class Hud {
     this.t = {
       wave: text(), kills: text(), best: text(), comic: text(), nv: text(),
       count: text(), note: text(), frenzy: text(), streak: text(), hint: text(),
+      kit: text(), kitHint: text(), kitList: text(), acid: text(),
     };
     this.statLabels = [text(), text(), text(), text()];
     this.statValues = [text(), text(), text(), text()];
@@ -66,6 +79,12 @@ export class Hud {
   onSwitch(x: number, y: number) {
     const s = STYLE_SWITCH;
     return x >= s.x - 6 && x <= s.x + s.w + 6 && y >= s.y - 6 && y <= s.y + s.h + 6;
+  }
+
+  /** Whether a tap at x, y lands on the kit panel. */
+  onKit(x: number, y: number) {
+    const k = KIT_PANEL;
+    return x >= k.x - 4 && x <= k.x + k.w + 4 && y >= k.y - 4 && y <= k.y + k.h + 4;
   }
 
   setStyle(style: ArtStyle) {
@@ -83,6 +102,44 @@ export class Hud {
     this.g.clear();
     if (this.style === 'comic') this.drawComic(d, th);
     else this.drawNv(d, th);
+    this.drawKit(d, th);
+  }
+
+  /**
+   * The kit panel: sandbag walls to place (tap the panel, then a lane) and the supplies in hand.
+   * Hidden while the kit is empty. Also the warning that the hero stands in acid.
+   */
+  private drawKit(d: HudData, th: Theme) {
+    const g = this.g, t = this.t, k = KIT_PANEL, comic = this.style === 'comic';
+    const list = [d.flames && `FLAME ${d.flames}`, d.medkits && `MEDKIT ${d.medkits}`, d.pellets && `SPREAD ${d.pellets}`].filter(Boolean).join(' · ');
+    const show = d.sandbags > 0 || d.placing || list !== '';
+    [t.kit, t.kitHint, t.kitList].forEach((o) => o.setVisible(show));
+    if (show) {
+      const bag = CRATE_COLORS.sandbag, ready = d.sandbags > 0;
+      if (comic) {
+        this.caption(k.x, k.y, k.w, k.h, d.placing ? '#ffd23f' : '#fff8e8', th.ink, 2.2);
+        if (ready) {
+          g.fillStyle(num(bag)).fillRoundedRect(k.x + k.w - 30, k.y + 7, 22, 11, 5);
+          g.lineStyle(1.3, num(th.ink)).strokeRoundedRect(k.x + k.w - 30, k.y + 7, 22, 11, 5);
+        }
+        this.font(t.kit, 12, th.ink, th).setText(ready ? `SANDBAGS x${d.sandbags}` : 'KIT').setOrigin(0, 0.5).setPosition(k.x + 8, k.y + 13);
+        this.font(t.kitHint, 8.5, d.placing ? th.warn : th.ink, th).setText(d.placing ? 'NOW TAP A LANE!' : ready ? 'TAP HERE, THEN A LANE' : '').setOrigin(0, 0.5).setPosition(k.x + 8, k.y + 28);
+        this.font(t.kitList, 8, '#5a4a6a', th).setText(list).setOrigin(0, 0.5).setPosition(k.x + 8, k.y + 42);
+      } else {
+        g.fillStyle(num('#040c06'), 0.72).fillRoundedRect(k.x, k.y, k.w, k.h, 3);
+        g.lineStyle(1, num(d.placing ? th.text : th.accent), 0.8).strokeRoundedRect(k.x, k.y, k.w, k.h, 3);
+        if (ready) g.fillStyle(num(bag)).fillRect(k.x + k.w - 20, k.y + 8, 12, 6);
+        this.font(t.kit, 11, th.accent, th, { glow: th.accent, weight: 'bold' }).setText(ready ? `SANDBAGS ${d.sandbags}` : 'KIT').setOrigin(0, 0.5).setPosition(k.x + 8, k.y + 12);
+        this.font(t.kitHint, 8.5, d.placing ? th.text : '#9fd8a4', th, { weight: 'normal' }).setText(d.placing ? 'SELECT LANE' : ready ? 'TAP, THEN A LANE' : '').setOrigin(0, 0.5).setPosition(k.x + 8, k.y + 27);
+        this.font(t.kitList, 8.5, th.muted, th, { weight: 'normal' }).setText(list).setOrigin(0, 0.5).setPosition(k.x + 8, k.y + 41);
+      }
+    }
+    t.acid.setVisible(d.inAcid);
+    if (d.inAcid) {
+      const col = comic ? ACID_COLOR : th.warn;
+      this.font(t.acid, comic ? 13 : 12, col, th, comic ? { stroke: th.ink, sw: 4 } : { glow: col, weight: 'bold' })
+        .setText(comic ? 'IN THE ACID! HALF FIRE' : 'ACID: FIRE RATE HALVED').setOrigin(0.5).setPosition(VIEW.w / 2, 820);
+    }
   }
 
   private font(t: Text, size: number, color: string, th: Theme, o: { stroke?: string; sw?: number; glow?: string; weight?: string; ls?: number } = {}) {

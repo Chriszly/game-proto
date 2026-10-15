@@ -36,6 +36,17 @@ export const GEOM = {
   sfx: { w: 150, h: 70, ox: 75, oy: 35 },
   hudbar: { w: 540, h: 56, ox: 0, oy: 0 },
   ring: { w: 192, h: 192, ox: 96, oy: 96 },
+  spitter: { w: 46, h: 62, ox: 23, oy: 34 },
+  riot: { w: 56, h: 66, ox: 28, oy: 32 },
+  crawler: { w: 38, h: 42, ox: 19, oy: 20 },
+  /** An acid puddle, painted for a radius of 78 and scaled to the pool's size. */
+  acid: { w: 168, h: 64, ox: 84, oy: 32 },
+  glob: { w: 22, h: 22, ox: 11, oy: 11 },
+  /** A sandbag wall across a lane, painted for the widest lane and stretched to the narrow ones. */
+  wall: { w: 184, h: 40, ox: 92, oy: 22 },
+  /** The flamethrower's burst along the sandbags, its origin on the line. */
+  flame: { w: 540, h: 200, ox: 270, oy: 176 },
+  supply: { w: 72, h: 72, ox: 36, oy: 36 },
 } as const;
 export type SpriteName = keyof typeof GEOM;
 

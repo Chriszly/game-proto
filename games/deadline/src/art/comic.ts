@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
-import { DRUM, HUD_HEIGHT, REACH_Y, UPGRADES, UPGRADE_KINDS, VIEW, type UpgradeKind } from '../game/rules';
+import { CRATES, CRATE_KINDS, DRUM, HUD_HEIGHT, REACH_Y, SUPPLY_KINDS, VIEW, type CrateKind, type SupplyKind } from '../game/rules';
 import { GEOM, TAU, bake, circle, lit, path, rng, tex, type Ctx, type Pt } from './paint';
-import { COMIC, UPGRADE_COLORS } from './theme';
+import { ACID_COLOR, COMIC, CRATE_COLORS } from './theme';
 
 // Deadline as a pulp horror comic: inked outlines, flat colours, halftone dots on the side away
 // from the light (top left), and lettered sound effects. Every texture is painted on a canvas.
@@ -244,8 +244,8 @@ function brute(ctx: Ctx, body: string, limbs: string, boss: boolean) {
   ink(ctx, P(ctx, [[x - 4, y - 6], [x + 4, y - 6], [x + 3, y - 3], [x - 3, y - 3]]), '#2b1a14', { sh: 0, lw: 1 });
 }
 
-function crate(ctx: Ctx, kind: UpgradeKind) {
-  const x = 0, y = 0, col = UPGRADE_COLORS[kind];
+function crate(ctx: Ctx, kind: CrateKind) {
+  const x = 0, y = 0, col = CRATE_COLORS[kind];
   shadowBlob(ctx, x + 2, y + 23, 24);
   ctx.strokeStyle = INK;
   ctx.lineWidth = 1.2;
@@ -275,8 +275,8 @@ function crate(ctx: Ctx, kind: UpgradeKind) {
   ink(ctx, R(ctx, x - 13, y - 18, 26, 15, 3), '#fff8e8', { sh: 0, lw: 1.4 });
 }
 
-function crateLabel(ctx: Ctx, kind: UpgradeKind) {
-  const label = UPGRADES[kind].label.toUpperCase();
+function crateLabel(ctx: Ctx, kind: CrateKind) {
+  const label = CRATES[kind].label.toUpperCase();
   ctx.font = `italic 900 10px ${FONT}`;
   const w = ctx.measureText(label).width + 22;
   ctx.save();
@@ -285,7 +285,7 @@ function crateLabel(ctx: Ctx, kind: UpgradeKind) {
   ctx.fillStyle = INK;
   ctx.fillRect(-w / 2 + 2, -7, w, 16);
   ink(ctx, R(ctx, -w / 2, -9, w, 16, 0), '#fff8e8', { sh: 0, lw: 1.4 });
-  ink(ctx, R(ctx, -w / 2 + 5, -4.5, 7, 7, 0), UPGRADE_COLORS[kind], { sh: 0, lw: 1 });
+  ink(ctx, R(ctx, -w / 2 + 5, -4.5, 7, 7, 0), CRATE_COLORS[kind], { sh: 0, lw: 1 });
   ctx.fillStyle = INK;
   ctx.textBaseline = 'middle';
   ctx.fillText(label, -w / 2 + 16, -0.5);
@@ -314,6 +314,169 @@ function drum(ctx: Ctx) {
   circle(ctx, x + 4, y - 12, 1.5, INK);
   // A flame mark: this one goes bang.
   ink(ctx, P(ctx, [[x - 3, y + 11], [x + 3, y + 11], [x + 3.5, y + 8], [x + 1, y + 9], [x, y + 5.5], [x - 1.5, y + 8.5], [x - 3.5, y + 7]]), '#e8402a', { sh: 0, lw: 0.8 });
+}
+
+/** A spitter: a hunched walker with a swollen acid sac under its jaw, drooling green. */
+function spitter(ctx: Ctx) {
+  const skin = '#a8b84a', shirt = '#6a5a7a', pants = '#3e3a52';
+  shadowBlob(ctx, 0, 20, 13);
+  limb(ctx, [[-4, 7], [-6, 19]], 3.5, pants);
+  limb(ctx, [[4, 7], [5, 18]], 3.5, pants);
+  ink(ctx, E(ctx, 0, 3, 11, 9.5), shirt, { sh: 2.5 });
+  limb(ctx, [[-9, -2], [-12, 8]], 3.6, skin);
+  limb(ctx, [[9, -2], [12, 8]], 3.6, skin);
+  ink(ctx, E(ctx, 0, -12, 8, 7.5), skin, { sh: 2.2 });
+  // The sac bulges out under the jaw, lit acid green with a highlight.
+  ink(ctx, E(ctx, 0, -3, 8.5, 6.5), ACID_COLOR, { sh: 2, lw: 1.4 });
+  ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.arc(-2, -4.5, 3.5, Math.PI * 1.1, Math.PI * 1.6);
+  ctx.stroke();
+  eyes(ctx, 0, -13, 3);
+  limb(ctx, [[-5, -17], [-1.2, -15]], 0.9, INK);
+  limb(ctx, [[5, -17], [1.2, -15]], 0.9, INK);
+  // Drips of acid.
+  for (const [dx, dy] of [[-5, 4], [4, 6]]) ink(ctx, E(ctx, dx, dy, 1.6, 2.6), ACID_COLOR, { sh: 0, lw: 0.9 });
+}
+
+/** A riot zombie in a helmet and padded vest, behind a big shield (or without it, once it broke). */
+function riot(ctx: Ctx, shield: boolean) {
+  const skin = '#8cb04e', armour = '#3a4a6e', pads = '#4e5e86';
+  shadowBlob(ctx, 0, 22, 15);
+  limb(ctx, [[-5, 8], [-6, 21]], 4, '#2a2a3c');
+  limb(ctx, [[5, 8], [6, 21]], 4, '#2a2a3c');
+  ink(ctx, E(ctx, 0, 2, 13, 11), armour, { sh: 2.5 });
+  ink(ctx, E(ctx, -11, -3, 5, 4), pads, { sh: 1.5 });
+  ink(ctx, E(ctx, 11, -3, 5, 4), pads, { sh: 1.5 });
+  if (!shield) {
+    limb(ctx, [[-11, -1], [-14, 12]], 4, skin);
+    limb(ctx, [[11, -1], [13, 11]], 4, skin);
+  }
+  ink(ctx, E(ctx, 0, -11, 8.5, 8), skin, { sh: 2.2 });
+  eyes(ctx, 0, -11, 3);
+  // A helmet with a raised visor.
+  ink(ctx, () => {
+    ctx.beginPath();
+    ctx.ellipse(0, -13, 10, 8, 0, Math.PI, TAU);
+    ctx.closePath();
+  }, '#2e3a5a', { sh: 2 });
+  ink(ctx, R(ctx, -9, -21, 18, 4, 2), '#9ab8d8', { sh: 0, lw: 1.1 });
+  if (shield) {
+    // The shield, held in front: clear plastic with a viewport and a dent or two.
+    ink(ctx, R(ctx, -19, 0, 38, 24, 4), '#b8d0e4', { sh: 2.5, lw: 1.8 });
+    ink(ctx, R(ctx, -11, 3, 22, 6, 2), '#5a7a9a', { sh: 0, lw: 1.1 });
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(8, 13);
+    ctx.lineTo(12, 17);
+    ctx.lineTo(10, 20);
+    ctx.moveTo(-12, 15);
+    ctx.lineTo(-8, 18);
+    ctx.stroke();
+    for (const rx of [-15, 15]) circle(ctx, rx, 20, 1.2, INK);
+  } else {
+    // What's left of the shield: a bent handle and a crack across the vest.
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(-6, 0);
+    ctx.lineTo(-1, 5);
+    ctx.lineTo(-4, 9);
+    ctx.stroke();
+  }
+}
+
+/** A crawler: a legless zombie dragging itself along on its arms, small and low. */
+function crawler(ctx: Ctx) {
+  const skin = '#9ab84e', rag = '#7a5a4a';
+  shadowBlob(ctx, 0, 12, 12);
+  ink(ctx, E(ctx, 0, -5, 9, 7.5), rag, { sh: 2 });
+  limb(ctx, [[-7, -2], [-12, 6], [-9, 12]], 3.2, skin);
+  limb(ctx, [[7, -2], [12, 4], [10, 11]], 3.2, skin);
+  ink(ctx, E(ctx, 0, 4, 6.5, 6), skin, { sh: 1.8 });
+  eyes(ctx, 0, 4, 2.4, 1.5);
+  ink(ctx, P(ctx, [[-2.5, 7.5], [2.5, 7.5], [1.8, 9.5], [-1.8, 9.5]]), '#3a0e0e', { sh: 0, lw: 0.8 });
+  // A torn trail behind it.
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(-3, -12);
+  ctx.lineTo(-4, -17);
+  ctx.moveTo(3, -12);
+  ctx.lineTo(4, -16);
+  ctx.stroke();
+}
+
+/** An acid puddle: a lumpy green pool with halftone and bubbles, painted for a radius of 78. */
+function acid(ctx: Ctx) {
+  const rnd = rng(41);
+  const pts: Pt[] = [];
+  for (let i = 0; i < 18; i++) {
+    const t = (i / 18) * TAU, r = 78 * (0.86 + rnd() * 0.14);
+    pts.push([Math.cos(t) * r, Math.sin(t) * r * 0.36]);
+  }
+  ink(ctx, P(ctx, pts), ACID_COLOR, { sh: 4, lw: 2.2, sp: 5, dr: 1.6 });
+  for (let k = 0; k < 7; k++) {
+    const bx = (rnd() - 0.5) * 110, by = (rnd() - 0.5) * 30;
+    circle(ctx, bx, by, 2.5 + rnd() * 3, '#e4ff9a', INK, 1.2);
+  }
+}
+
+function glob(ctx: Ctx) {
+  ink(ctx, E(ctx, 0, 1, 6.5, 7.5), ACID_COLOR, { sh: 1.5, lw: 1.4 });
+  ink(ctx, E(ctx, -1, -7, 2.5, 3), ACID_COLOR, { sh: 0, lw: 1 });
+  circle(ctx, -2, -1, 1.6, '#f4ffc8');
+}
+
+/** A short sandbag wall, two rows high. */
+function wall(ctx: Ctx) {
+  for (let x = -78; x <= 78; x += 26) ink(ctx, R(ctx, x - 13, -2, 26, 14, 7), '#c8ab72', { sh: 2.5, lw: 1.5 });
+  for (let x = -65; x <= 65; x += 26) ink(ctx, R(ctx, x - 12, -12, 24, 12, 6), '#dcc28a', { sh: 2.5, lw: 1.5 });
+}
+
+/** The flamethrower's burst: a wall of flame tongues along the sandbags. */
+function flame(ctx: Ctx) {
+  const rnd = rng(19);
+  for (const [col, hk, wk] of [['#e8402a', 1, 1], ['#ff8a2a', 0.78, 0.8], ['#ffe24a', 0.5, 0.55]] as const) {
+    for (let x = -260; x <= 260; x += 36) {
+      const h = (110 + rnd() * 60) * hk, w = 30 * wk, lean = (rnd() - 0.5) * 20;
+      ink(ctx, () => {
+        ctx.beginPath();
+        ctx.moveTo(x - w, 0);
+        ctx.quadraticCurveTo(x - w * 0.9, -h * 0.5, x + lean, -h);
+        ctx.quadraticCurveTo(x + w * 0.9, -h * 0.5, x + w, 0);
+        ctx.closePath();
+      }, col, { sh: 0, lw: col === '#e8402a' ? 2.2 : 0 });
+    }
+  }
+}
+
+/** The supply drop's pick icons. */
+function supplyIcon(ctx: Ctx, kind: SupplyKind) {
+  if (kind === 'shotgun') {
+    // Three shells fanned out.
+    for (const a of [-0.45, 0, 0.45]) {
+      ctx.save();
+      ctx.rotate(a);
+      ink(ctx, R(ctx, -6, -26, 12, 28, 2), '#e0702a', { sh: 2 });
+      ink(ctx, R(ctx, -6.5, 2, 13, 9, 1), '#e8c050', { sh: 1.5 });
+      ctx.restore();
+    }
+  } else if (kind === 'flamer') {
+    burst(ctx, 8, -12, 9, 18, 8, '#ffe24a', { lw: 1.6, seed: 5 });
+    ink(ctx, R(ctx, -20, -6, 16, 30, 6), '#c03a1a', { sh: 2.5 });
+    ink(ctx, R(ctx, -16, -12, 8, 6, 1), '#5a5a6a', { sh: 0, lw: 1.2 });
+    limb(ctx, [[-4, 10], [6, 4], [8, -4]], 3.4, '#5a5a6a');
+  } else if (kind === 'medkit') {
+    // A first-aid box with a green cross (never a red one).
+    ink(ctx, R(ctx, -24, -16, 48, 34, 4), '#f4ecd8', { sh: 3 });
+    ink(ctx, R(ctx, -8, -24, 16, 9, 3), '#b0a890', { sh: 0, lw: 1.4 });
+    ink(ctx, P(ctx, [[-4, -11], [4, -11], [4, -3], [12, -3], [12, 5], [4, 5], [4, 13], [-4, 13], [-4, 5], [-12, 5], [-12, -3], [-4, -3]]), '#4ac05a', { sh: 0, lw: 1.4 });
+  } else {
+    for (const [x, y] of [[-14, 10], [14, 10], [0, -4]]) ink(ctx, R(ctx, x - 14, y - 7, 28, 15, 7), y < 0 ? '#dcc28a' : '#c8ab72', { sh: 2.5, lw: 1.5 });
+  }
 }
 
 function ground(ctx: Ctx) {
@@ -457,7 +620,16 @@ export function bakeComic(scene: Phaser.Scene) {
     c.scale(1.9, 1.9);
     brute(c, '#5a3a6e', '#74508a', true);
   });
-  for (const kind of UPGRADE_KINDS) {
+  bake(scene, key('spitter'), GEOM.spitter, spitter);
+  bake(scene, key('riot'), GEOM.riot, (c) => riot(c, true));
+  bake(scene, key('riot-bare'), GEOM.riot, (c) => riot(c, false));
+  bake(scene, key('crawler'), GEOM.crawler, crawler);
+  bake(scene, key('acid'), GEOM.acid, acid);
+  bake(scene, key('glob'), GEOM.glob, glob);
+  bake(scene, key('wall'), GEOM.wall, wall);
+  bake(scene, key('flame'), GEOM.flame, flame);
+  for (const kind of SUPPLY_KINDS) bake(scene, key(`supply-${kind}`), GEOM.supply, (c) => supplyIcon(c, kind));
+  for (const kind of CRATE_KINDS) {
     bake(scene, key(`crate-${kind}`), GEOM.crate, (c) => crate(c, kind));
     bake(scene, key(`label-${kind}`), GEOM.label, (c) => crateLabel(c, kind));
   }
