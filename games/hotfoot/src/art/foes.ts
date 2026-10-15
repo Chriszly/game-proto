@@ -94,7 +94,7 @@ function bat(scene: Phaser.Scene) {
   }
 }
 
-/** The Gatekeeper's texture: 100x104 px, centred on its feet at (50, 100). It stands about 92 px tall. */
+/** The Gatekeeper's texture: 100x104 px, centred on its feet at (50, 100). Its helm is 86 px up, where a stomp lands (`BOSS.h`). */
 export const GATE_ART = { w: 100, h: 104, feetY: 100 };
 const SKIN = '#9aa87a';
 
@@ -107,7 +107,7 @@ function gatekeeper(scene: Phaser.Scene) {
   for (const pose of ['ready', 'throw', 'tired'] as const) {
     paint(scene, `gate-${pose}`, GATE_ART.w, GATE_ART.h, (ctx) => {
       ctx.translate(GATE_ART.w / 2, GATE_ART.feetY);
-      ctx.scale(0.5, 0.5);
+      ctx.scale(0.43, 0.43);
       draw(ctx, pose);
     });
   }

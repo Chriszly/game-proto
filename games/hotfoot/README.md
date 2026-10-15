@@ -13,8 +13,11 @@ ledges, slide under the logs and bats, and pick up the coins on the way. Every s
 of two boons. The knight keeps every boon until they fall, and each stage after runs a little faster
 with the traps a little closer together. Coins taken in a row build a streak that multiplies their worth, a wayside shrine on each stage
 from the second trades coins for a heart, and a run track under the top band shows how far the
-knight is from the next banner and from the best run. Coins are banked when the knight falls, and
-can buy back the boon you missed at the last checkpoint to start the next run with it.
+knight is from the next banner and from the best run. Each stage after the first runs on its own
+ground with its own rule (a frozen pass, a fen, a windy pass), and every fifth stage a Gatekeeper
+bars the road. Some checkpoints offer a cursed boon, a gift with a price. Coins are banked when the
+knight falls, and buy back the boon you missed at the last checkpoint or lasting upgrades in the
+armoury. A daily course, the same for everyone on the day, keeps its own best distance.
 
 ![The knight leaping a flame on stage 3, a wayside shrine and a goblin ahead](cover.png)
 
@@ -28,6 +31,8 @@ can buy back the boon you missed at the last checkpoint to start the next run wi
 | Tap the bottom half of the screen, or Down / S | Slide; in the air, drop fast and slide on landing |
 | Tap a card | Take that boon at a checkpoint |
 | Run again | After a fall: a new run from the start, with no boons (or the one bought on the game-over panel) |
+| Daily course | After a fall: a run on the day's own course |
+| Armoury | After a fall: spend banked coins on lasting upgrades |
 
 A hint on the first stretch of the run shows where to tap.
 
@@ -65,7 +70,38 @@ A hint on the first stretch of the run shows where to tap.
 10. **Checkpoints** come every 100 m. The run waits while two different boons are offered.
 11. **Stages** speed up from 260 to at most 480 pixels a second, the room between obstacles shrinks,
    and goblins and bats get quicker.
-   The best distance, the banked coins and any boon bought are saved between runs.
+12. **Ground**: the first stage is the old road. After it each stage has its own ground and rule,
+   named as it begins and in the tag right of the run track:
+
+   | Ground | Rule |
+   | --- | --- |
+   | The Frozen Pass (stages 2, 8, 11...) | Slides last 60% longer, and each landing skids for a moment: a jump tapped during the skid comes as it ends. Snow falls. |
+   | The Fen (stages 3, 6, 9...) | Jumps go 20% lower. |
+   | The Windy Pass (stages 4, 7, 13...) | A headwind slows the knight to 70% while in the air, so jumps fall shorter. |
+
+13. **The Gatekeeper** bars the road on every fifth stage. It keeps ahead of the knight, rolling
+   barrels down the road (jump them) and throwing axes at head height (slide under them), then tires
+   and stands, panting: jump onto its helm to stomp it. Running into it costs a heart. After each
+   stomp it runs ahead and throws faster. Three stomps beat it for 25 coins, and the stage's
+   banner stands a little way past it. Its stomps left show as three diamonds in the tag.
+14. **Cursed boons**: from the second checkpoint, the second card is sometimes cursed, edged in
+   madder. Each gives something big and takes something away (see the table below). They are never
+   for sale in the shop.
+15. **The armoury**: on the game-over panel, "Armoury" opens a list of lasting upgrades bought with
+   banked coins. Every run after starts with them (the daily course too).
+
+   | Upgrade | Levels | Prices | What each level does |
+   | --- | --- | --- | --- |
+   | Iron Heart | 2 | 60, 150 | One more heart |
+   | Lodestone Charm | 3 | 40, 100, 200 | Coins fly in from a little further off |
+   | Squire's Purse | 2 | 30, 80 | Start with 10 more coins |
+
+16. **Daily course**: "Daily course" on the game-over panel starts a run whose course and boon
+   offers are drawn from the date, the same for everyone that day. Its best distance is kept apart
+   from the ordinary best, and the tag says "Daily" while it runs.
+
+   The best distance, the banked coins, any boon bought, the armoury and the day's best on the
+   daily course are saved between runs.
 
 ![A streak at x3: the chip, a "+3" pop and the trail of gold stars](docs/screenshots/streak.png)
 
@@ -91,6 +127,20 @@ A hint on the first stretch of the run shows where to tap.
 
 ![The checkpoint](docs/screenshots/checkpoint-flag.png)
 
+![Stage 2 opens on the Frozen Pass: snow, a pale icy road and its title](docs/screenshots/ice-stage.png)
+
+![The Fen: reeds and puddles on a muddy road](docs/screenshots/fen-stage.png)
+
+![The Windy Pass: gusts blowing in while the knight is in the air](docs/screenshots/wind-stage.png)
+
+![The Gatekeeper rolls a barrel at the knight](docs/screenshots/gatekeeper-throw.png)
+
+![The Gatekeeper tires, and the knight comes down on its helm](docs/screenshots/gatekeeper-stomp.png)
+
+![The Gatekeeper beaten](docs/screenshots/gatekeeper-beaten.png)
+
+![A daily course under way](docs/screenshots/daily-course.png)
+
 ### Boons and the coin shop
 
 | Boon | Ranks | What it does |
@@ -104,21 +154,30 @@ A hint on the first stretch of the run shows where to tap.
 | Oiled Greaves | 2 | Slides last 30% longer |
 | Shadow Cloak | 2 | Stay unhurt 50% longer after a hit |
 | Field Dressing | any | Two hearts back; only offered once fewer than two other boons are left |
+| Cursed Gold (cursed) | 1 | Coins are worth double, but one heart less |
+| Glass Greaves (cursed) | 1 | Slides last 60% longer, but you stay unhurt half as long after a hit |
+| Iron Oath (cursed) | 1 | Shrug off two more hits after each checkpoint, but jump 15% lower |
 
 ![Two boons at a checkpoint](docs/screenshots/playthrough-1-checkpoint.png)
 
+![A cursed boon beside an ordinary one](docs/screenshots/cursed-boon.png)
+
 ![A hit](docs/screenshots/hit.png)
 
-![After a fall](docs/screenshots/game-over.png)
+![After a fall: the shop, the armoury and the daily course](docs/screenshots/game-over.png)
+
+![The armoury](docs/screenshots/armoury.png)
 
 **The coin shop.** Coins collected in a run are banked when the knight falls. On the game-over panel,
 the boon you missed at the last checkpoint (the card you did not tap) is for sale for 30 coins. Buy
 it and the next run starts with it at one rank and full hearts. One purchase at a time, and Field
-Dressing is never for sale. Nothing is for sale until the run has reached a checkpoint.
+Dressing and cursed boons are never for sale. Nothing is for sale until the run has reached a
+checkpoint. The armoury, also on the game-over panel, spends the same bank on lasting upgrades.
 
 The difficulty, set on the hub page's Settings, changes one thing: the knight starts with 5 hearts on Easy and 2 on Hard.
 With Reduce motion on, the knight fades instead of blinking after a hit, the shield ring holds still,
-the coin pops stay where they appear instead of rising, and the streak's trail of stars is not drawn.
+the coin pops stay where they appear instead of rising, the streak's trail of stars is not drawn,
+the Gatekeeper fades instead of flashing when stomped, and the snow and gusts hold still.
 
 ## Running locally
 
@@ -133,7 +192,7 @@ bottom half to slide under each blade, as they come up, and checks that the knig
 checkpoint without a hit, jumping, sliding, getting past a goblin, running along a ledge and picking
 up coins on the way, on one unbroken streak whose multiplier paid out exactly as the rules say.
 There it checks that the run waits on two different boons, taps the first card, and checks that the
-boon was taken and the faster second stage has begun, with a wayside shrine on it. Like the other games' tests it owns the game clock and plays at 4x speed
+boon was taken and the faster second stage has begun on the Frozen Pass, with a wayside shrine on it. Like the other games' tests it owns the game clock and plays at 4x speed
 (`PLAYTHROUGH_SPEED`). The **Playthrough Hotfoot** workflow
 (`.github/workflows/playthrough.yml`) runs it on every PR that touches this folder or its
 workflow, and uploads the video and screenshots as the
@@ -149,17 +208,22 @@ All paths are inside `games/hotfoot/`.
 
 - `src/game/`: the rules in plain TypeScript with no Phaser dependency. `state.ts` holds the run,
   the knight's and the traps' sizes and works out the knight's numbers from the boons taken,
-  `course.ts` lays out each stage's traps, foes, ledges, coins and shrine, `boons.ts` is the table of boons, `sim.ts`
-  moves the run on (foes, ledges, stomps, the coin streak and shrines included), jumps, slides, takes boons and sells the missed one, and `save.ts` keeps the best distance, the banked coins and any boon bought.
+  `course.ts` lays out each stage's traps, foes, ledges, coins and shrine (or the Gatekeeper),
+  `boons.ts` is the table of boons (cursed ones too), `boss.ts` moves the Gatekeeper and its throws,
+  `armoury.ts` is the table of lasting upgrades, `sim.ts` moves the run on (foes, ledges, stomps,
+  the ground's rules, the Gatekeeper, the coin streak and shrines included), jumps, slides, takes
+  boons and sells the missed one and the armoury's levels, and `save.ts` keeps the best distance,
+  the banked coins, any boon bought, the armoury and the daily course's best.
 - `src/scenes/`: `BootScene` bakes textures, `GameScene` draws the run and wires taps and keys to
   the rules, `layout.ts` says where things are drawn.
 - `src/art/`: all the art, painted in code on 2D canvases at startup, in the manner of an
   illuminated manuscript: flat colours with ink outlines, white highlights and gold leaf, using the
   helpers and pigments in `ink.ts`. `scenery.ts` paints the vellum page and its margin, the sky,
-  crags and trees, the road, the ledges, the traps, the coins, the checkpoint banner, the wayside
-  shrine and the miniature's frame; `knight.ts` the knight's poses; `foes.ts` the goblin and bat;
-  `icons.ts` the boon icons and hearts; `hud.ts` the top band, the illuminated initial, the streak
-  chip, the run track's strip, the vellum panels and the buttons.
+  crags and trees, the road on each ground, the ledges, the traps, the coins, the checkpoint
+  banner, the wayside shrine and the miniature's frame; `knight.ts` the knight's poses; `foes.ts`
+  the goblin, bat, Gatekeeper and its barrel and axe; `icons.ts` the boon and armoury icons and
+  hearts; `hud.ts` the top band, the illuminated initial, the streak chip, the run track's strip,
+  the stage's tag, the vellum panels and the buttons.
 - `src/ui/`: the boon cards and buttons.
 
 Adding a boon is an entry in `src/game/boons.ts`, its effect in `stats` in `src/game/state.ts`, and

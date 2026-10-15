@@ -4,13 +4,14 @@ import type { Boss, GameState } from './state';
 // then keeps a fixed way ahead of them throwing things back down the road: barrels that roll along
 // it (jump them) and axes that fly at head height (slide under them). After a volley it tires and
 // stands still, panting, and the knight runs up to it: land on its head to stomp it, run into it to
-// be hurt. Either way it flees ahead and throws again, faster each time it is stomped. Three stomps
+// be hurt. Either way it flees ahead and throws again, faster each time it is stomped (and if the
+// knight leaps clean over it, it runs on past them and starts again). Three stomps
 // beat it; the run goes on to a checkpoint a little way past. Contact (stomps and bumps) is in sim.ts.
 
 export const BOSS = {
   /** Its box: width, and height up from the road (its head, where a stomp lands). */
   w: 60,
-  h: 70,
+  h: 86,
   hp: 3,
   /** How far ahead of the knight it keeps while throwing. */
   station: 400,
@@ -50,7 +51,7 @@ export function moveBoss(s: GameState, dt: number) {
         throwOne(s, b);
         b.thrown += 1;
         b.ms = BOSS.throwEvery(b.hp);
-        if (b.thrown >= BOSS.throws(b.hp)) b.mode = 'tired';
+        if (b.thrown >= BOSS.throws(b.hp)) b.mode = 'tired'; // still holding its distance (ms > 0)
       }
       break;
     case 'flee':
@@ -60,7 +61,17 @@ export function moveBoss(s: GameState, dt: number) {
         startVolley(b);
       }
       break;
-    // Tired and down, it stands where it is.
+    case 'tired':
+      // It keeps its distance until its last throw is past the knight and they are back on the
+      // road, so the stomp never comes in the middle of a dodge; then it stands, panting. If the
+      // knight leaps clean over it, it gets up and runs ahead again.
+      if (b.ms > 0) {
+        b.x = keep;
+        const busy = s.runner.h > 0 || s.traps.some((t) => (t.kind === 'barrel' || t.kind === 'axe') && t.x + t.w > s.distance - t.w);
+        if (!busy) b.ms = 0;
+      } else if (b.x + b.w < s.distance - BOSS.w) b.mode = 'flee';
+      break;
+    // Beaten, it lies where it fell.
   }
 }
 

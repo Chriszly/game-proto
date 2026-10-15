@@ -364,7 +364,8 @@ export function pick(s: GameState, id: BoonId) {
 function bossContact(s: GameState, prevH: number) {
   const b = s.boss;
   const r = s.runner;
-  if (!b || !bossStands(s) || b.mode === 'wait') return;
+  // Waiting, it is still out of reach; fleeing, it runs on past the knight without a blow.
+  if (!b || !bossStands(s) || b.mode === 'wait' || b.mode === 'flee') return;
   const box = runnerBox(s);
   if (box.x1 <= b.x || box.x0 >= b.x + b.w || box.lo >= BOSS.h) return;
   const st = stats(s);
@@ -386,7 +387,7 @@ function bossContact(s: GameState, prevH: number) {
     b.mode = 'down';
     s.bosses += 1;
     s.coins += BOSS.reward;
-    effect(s, 'pop', b.x + b.w / 2, BOSS.h + 30, 1400, `Gatekeeper beaten! +${BOSS.reward}`);
+    effect(s, 'pop', s.distance + 300, BOSS.h + 150, 1400, `Gatekeeper beaten! +${BOSS.reward}`);
     s.checkpointX = Math.round(s.distance + BOSS.after);
     for (let i = 0; i < 6; i++) s.course.push({ id: s.nextId++, x: s.distance + 500 + i * 40, h: 12, pulled: false });
     return;

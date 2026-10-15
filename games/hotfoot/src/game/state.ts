@@ -153,7 +153,7 @@ export interface Boss {
   /** Stomps left to beat it. */
   hp: number;
   mode: 'wait' | 'throw' | 'tired' | 'flee' | 'down';
-  /** Time to the next throw while throwing; time since the last throw for its pose. */
+  /** Time to the next throw while throwing; while tired, above 0 until it has stopped to stand. */
   ms: number;
   /** Things thrown since it last started throwing. */
   thrown: number;
