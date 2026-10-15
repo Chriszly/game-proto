@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { BUTTON, FONT } from '../scenes/layout';
+import { renderScale } from '../../../../shared/scaling';
 
 const INK = 0x1d2329;
 const INK_LIT = 0x38424c;
@@ -26,7 +27,7 @@ export function makeButton(
       fontStyle: '800',
       fontSize: size.h < 38 ? '13px' : '16px',
       color: enabled ? '#ffffff' : '#8a949c',
-      resolution: 2,
+      resolution: Math.max(2, renderScale),
     })
     .setOrigin(align === 'left' ? 0 : 0.5, 0.5);
   const button = scene.add.container(x, y, [bg, text]);

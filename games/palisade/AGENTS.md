@@ -81,8 +81,8 @@ seconds without a tap.
 ### File map
 
 - `src/main.ts`: creates the `Phaser.Game` (960x540 from `VIEW`, `pixelArt: false`, FIT scaling)
-  with `BootScene` and `GameScene`, calls `setupGame(game)`, and puts `game` on `window` in the dev
-  build.
+  with `BootScene` and `GameScene`, calls `setupGame(game)` and `setupScaling(game)`, and puts
+  `game` on `window` in the dev build.
 - `src/game/`: the rules in plain TypeScript, with no Phaser imports.
   - `state.ts`: `GameState` and its parts (`Enemy`, `Missile`, `Effect`, `Volley`, `Patch`,
     `Guard`), field geometry (`FIELD`, `SPAWN_X`, `BOW`, `HERO_FRONT`, `BARRICADE_FRONT`,
@@ -136,7 +136,8 @@ seconds without a tap.
   gold edge, on a `Graphics`), `chamferPts`, `textStyle` and `makeButton`.
 - `src/art/`: low-poly art painted in code on 2D canvases and added with `textures.addCanvas`.
   `lowpoly.ts` has the toolkit (`paint`, `poly`, `facet` for a flat-shaded part lit from the top
-  left, `gem`, `softShadow`, colour helpers and the seeded generator `seeded`). `characters.ts` has
+  left, `gem`, `softShadow`, colour helpers, the seeded generator `seeded`, and `paint` and `fit`,
+  see Screens). `characters.ts` has
   the rigs (parts in local units, feet at 0,0) for the hero, the guards (`guardTexture`), foes and
   bosses, two walk frames per foe (`foeTexture`; the harpy's beat its wings, from `harpyRig`, with
   no baked shadow), `FIGURES` (each texture's feet origin and height) and the missiles, the mage's
@@ -147,8 +148,9 @@ seconds without a tap.
   and caltrops buttons, the `caltrop` piece, the road icons (`roadTexture`) and small HUD icons
   (`hud-coin` among them). `palette.ts` holds the runtime colours, including `BAR` and
   `BOSS_BARS`.
-- `shared/` (repo root, shared by every game): `shared/setupGame.ts` (`setupGame`) and
-  `shared/settings.ts` (`settings`, `byDifficulty`). `waves.ts` and `GameScene` import
+- `shared/` (repo root, shared by every game): `shared/setupGame.ts` (`setupGame`),
+  `shared/scaling.ts` (`setupScaling`, `sharpRes`) and `shared/settings.ts` (`settings`,
+  `byDifficulty`). `waves.ts` and `GameScene` import
   `shared/settings.ts`, and neither file imports Phaser, so `src/game/` stays Phaser-free.
 
 ### How it runs
@@ -284,6 +286,20 @@ Missile speeds, `LEAP_RANGE`, effect durations (`EFFECT_MS`), `RAIN_FALL_MS`, `R
 caltrops' patch, length, slow and damage, `SHIELD_BLOCK` and the shaman's healing numbers are in
 `sim.ts`. Arrow Rain's damage (`rainDamage`) and the barricade's repair after a wave (`repair`)
 are in `stats`.
+
+### Screens
+
+- `setupScaling` gives the canvas `renderScale` canvas pixels per game pixel (up to 4 on a 4K
+  screen, 2 with the canvas renderer) and zooms the one camera to match from its top-left, so the
+  game keeps its 960x540 coordinates. The camera never scrolls, so input reads `pointer.worldX/Y`
+  as before; nothing reads `scene.scale` or `pointer.x/y`.
+- `paint` in `lowpoly.ts` paints each texture on a canvas `sharpRes(w, h)` times its shown size
+  (drawing code still works in shown pixels; blurs and `shadowBlur` are scaled to match), and
+  records that factor per key. Every image showing a painted texture goes through `fit(image,
+  scale)`, which sets its scale to `scale` over that factor; call `fit` again after `setTexture`
+  and use it instead of `setScale`. A bare `add.image` shows the art `renderScale` times too big.
+- Texts are drawn at `renderScale` by `shared/scaling.ts`. An upright phone shows the shared hint
+  to turn it, and `e2e/screens.spec.ts` at the root opens the game on five screens.
 
 ### Hub settings
 
