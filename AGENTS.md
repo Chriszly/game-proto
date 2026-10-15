@@ -114,8 +114,8 @@ the `project` scope).
   follows, scrolls or has bounds `scrollingCamera(camera)` and keep scroll-factor-0 objects off it
   (`splitHudCamera(scene)` draws them with a second, fixed camera; read pointers with `viewPoint`), multiply a game's own camera zoom by `renderScale`, and
   paint canvas art at `sharpRes(w, h, res)`. A phone held the wrong way for the game gets a hint
-  to turn it. Add the game to `e2e/screens.spec.ts`, which checks it on five screens, and give its
-  `index.html` the same `100dvh` and `touch-action: none` styles as Apothecary's.
+  to turn it. `e2e/screens.spec.ts` picks the game up on its own and checks it on five screens.
+  Give its `index.html` the same `100dvh` and `touch-action: none` styles as Apothecary's.
 - **Never use a red cross.** No game art, icon, button, cover or favicon (the hub's included) may show a
   red cross: no red plus, red-cross health or medic symbol, or red crosshair. Use a green cross (or
   another colour) for healing and aiming marks instead.

@@ -1,12 +1,16 @@
 import { expect, test, type Browser } from '@playwright/test';
+import { readdirSync, readFileSync } from 'node:fs';
 
 // Every game that uses `shared/scaling.ts` is opened on a range of screens, from an upright phone
 // to a 4K monitor, and must be sharp and fill the screen on each, or ask to turn a phone that is
-// held the wrong way. Add a game here when it calls `setupScaling`.
-const GAMES = [
-  { name: 'apothecary', wide: true },
-  { name: 'colonizer', wide: true },
-];
+// held the wrong way. A game is picked up on its own once its `src/main.ts` calls `setupScaling`.
+const GAMES = readdirSync('games').filter((name) => {
+  try {
+    return readFileSync(`games/${name}/src/main.ts`, 'utf8').includes('setupScaling(game)');
+  } catch {
+    return false;
+  }
+});
 
 /** The screens checked: CSS size, device pixels per CSS pixel, and whether it is a touch device. */
 const SCREENS = [
@@ -35,10 +39,12 @@ async function open(browser: Browser, game: string, screen: (typeof SCREENS)[num
   return { context, page, errors };
 }
 
-for (const { name: game, wide } of GAMES) {
+for (const game of GAMES) {
   for (const screen of SCREENS) {
     test(`${game} on ${screen.name}`, async ({ browser }, testInfo) => {
       const { context, page, errors } = await open(browser, game, screen);
+      // A wide game (960x540) wants a sideways phone, a tall one (540x960) an upright phone.
+      const wide = await page.evaluate(() => (window as any).game.config.width >= (window as any).game.config.height);
       const hint = page.locator('.turn-hint');
       const wrongWay = screen.touch && screen.height > screen.width === wide;
       if (wrongWay) {
