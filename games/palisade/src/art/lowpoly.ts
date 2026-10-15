@@ -1,8 +1,11 @@
 import Phaser from 'phaser';
+import { sharpRes } from '../../../../shared/scaling';
 
 // The low-poly toolkit every texture is painted with: flat polygons on a 2D canvas, faceted parts
 // shaded by a light from the top left, and soft blurred shadows falling to the lower right. Each
-// texture is painted once at boot onto its own canvas and added with `textures.addCanvas`.
+// texture is painted once at boot onto its own canvas and added with `textures.addCanvas`. The
+// canvas has `sharpRes` pixels per pixel shown, so the art stays sharp on big screens; show it with
+// `fit`, which scales an image back down to its shown size.
 
 export type Pt = [number, number];
 type Ctx = CanvasRenderingContext2D;
@@ -127,22 +130,45 @@ export function gem(ctx: Ctx, x: number, y: number, r: number, n: number, rot: n
   }
 }
 
+/** Canvas pixels per pixel shown of the texture being painted, for blurs, which ignore the transform. */
+let painting = 1;
+
 /** Draws `fn` blurred and faded: a soft shadow. */
 export function softShadow(ctx: Ctx, fn: () => void, blur = 4, alpha = 0.35) {
   ctx.save();
-  ctx.filter = `blur(${blur}px)`;
+  ctx.filter = `blur(${blur * painting}px)`;
   ctx.globalAlpha = alpha;
   fn();
   ctx.restore();
 }
 
-/** Paints a w x h canvas with `draw` and adds it as the texture `key`. */
+/** Canvas pixels per pixel shown, by texture key. */
+const RES = new Map<string, number>();
+
+/**
+ * Paints a texture shown at w x h with `draw`, which paints in shown pixels, on a canvas `sharpRes`
+ * times that, and adds it as the texture `key`. Show it with `fit`.
+ */
 export function paint(scene: Phaser.Scene, key: string, w: number, h: number, draw: (ctx: Ctx) => void) {
+  const res = sharpRes(w, h);
   const canvas = document.createElement('canvas');
-  canvas.width = Math.ceil(w);
-  canvas.height = Math.ceil(h);
+  canvas.width = Math.ceil(w * res);
+  canvas.height = Math.ceil(h * res);
   const ctx = canvas.getContext('2d')!;
+  ctx.scale(res, res);
+  // Glows are blurred in canvas pixels whatever the transform, so scale them with the canvas.
+  const blur = Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, 'shadowBlur')!;
+  Object.defineProperty(ctx, 'shadowBlur', { get: () => blur.get!.call(ctx) / res, set: (v: number) => blur.set!.call(ctx, v * res) });
+  painting = res;
   draw(ctx);
+  painting = 1;
   if (scene.textures.exists(key)) scene.textures.remove(key);
   scene.textures.addCanvas(key, canvas);
+  RES.set(key, res);
+}
+
+/** Scales an image showing a painted texture to `scale` times its shown size. Call it again after `setTexture`. */
+export function fit<T extends Phaser.GameObjects.Components.Transform & { texture: Phaser.Textures.Texture }>(obj: T, scale = 1): T {
+  obj.setScale(scale / (RES.get(obj.texture.key) ?? 1));
+  return obj;
 }
