@@ -1,20 +1,26 @@
-// Only the best wave reached is kept; every run starts afresh at wave 1.
+// The best wave reached and the Admiralty's medals are kept; every run starts afresh at wave 1.
 const KEY = 'broadside-best-wave';
+const MEDALS_KEY = 'broadside-medals';
 
-export function loadBestWave() {
+/** A stored count, or 0 for anything missing, hand-edited or broken. */
+function load(key: string) {
   try {
-    const wave = Number(localStorage.getItem(KEY));
-    // A hand-edited or broken value starts over at 0 rather than showing nonsense.
-    return Number.isFinite(wave) && wave > 0 ? Math.floor(wave) : 0;
+    const n = Number(localStorage.getItem(key));
+    return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
   } catch {
     return 0;
   }
 }
 
-export function saveBestWave(wave: number) {
+function save(key: string, n: number) {
   try {
-    localStorage.setItem(KEY, String(wave));
+    localStorage.setItem(key, String(n));
   } catch {
     // Storage can be full or blocked (private mode); the game keeps running unsaved.
   }
 }
+
+export const loadBestWave = () => load(KEY);
+export const saveBestWave = (wave: number) => save(KEY, wave);
+export const loadMedals = () => load(MEDALS_KEY);
+export const saveMedals = (medals: number) => save(MEDALS_KEY, medals);

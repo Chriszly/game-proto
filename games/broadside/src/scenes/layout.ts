@@ -13,7 +13,13 @@ export const FIRE = { port: { x: 86, y: 314 }, starboard: { x: 874, y: 314 }, r:
 /** The captain's order card under the top bar, by its top-left corner. */
 export const ORDER_CARD = { x: 16, y: 50 };
 /** The harbor panel between waves, by its centre, with one row per thing to buy. */
-export const HARBOR = { x: 480, y: 290, w: 660, h: 440, rowW: 600, rowH: 42, firstRowY: 168, rowGap: 48 };
+export const HARBOR = { x: 480, y: 290, w: 660, h: 460, rowW: 600, rowH: 38, firstRowY: 166, rowGap: 42, loadY: 434 };
+/** The game-over panel, by its centre, with the Admiralty's rewards for the next run as rows. */
+export const OVER = { x: 480, y: 290, w: 620, h: 460, rowW: 520, rowH: 34, firstRowY: 272, rowGap: 38 };
+/** The wind rose under the top bar on the right, by its centre. */
+export const WIND = { x: 904, y: 98, r: 34 };
+/** The button to scuttle a prize, under the captain's order card, by its centre. */
+export const SCUTTLE = { x: 166, y: 146, w: 300, h: 36 };
 export const BUTTON = { w: 200, h: 42 };
 
 export const UI_DEPTH = 10_000;

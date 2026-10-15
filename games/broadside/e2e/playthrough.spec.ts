@@ -3,7 +3,8 @@ import { expect, test, type Page } from '@playwright/test';
 // Plays the first wave with real inputs: the helm buttons are held down to steer, as a thumb would
 // on a phone, and a fire control is held to aim and charge a broadside and let go to fire it once
 // an enemy is off that side. Sunk ships leave loot to sail over, and the harbor opens once the
-// wave is beaten, where one upgrade is bought before setting sail for wave 2.
+// wave is beaten, where one upgrade is bought and a side's guns loaded with chain shot before
+// setting sail for wave 2.
 // Game state is only read, through the `game` object the dev build puts on window.
 
 type Side = 'port' | 'starboard';
@@ -27,6 +28,8 @@ interface GameState {
   aim: Record<Side, boolean>;
   charge: Record<Side, number | null>;
   order: string;
+  wind: number;
+  loadout: Record<Side, string>;
   enemies: Ship[];
   balls: { fromPlayer: boolean; shot: string }[];
   loot: { x: number; y: number; gold: number }[];
@@ -64,6 +67,8 @@ const ARC = (28 * Math.PI) / 180;
 const AIM_ARC = (12 * Math.PI) / 180;
 /** The first wave's captain's order, from FIRST_ORDER in src/game/state.ts. */
 const FIRST_ORDER = 'chain';
+/** The first wave's wind, blowing toward the east, from FIRST_WIND in src/game/state.ts. */
+const FIRST_WIND = 0;
 const SIDES: Side[] = ['port', 'starboard'];
 
 /**
@@ -301,6 +306,10 @@ test('plays the first wave', async ({ page }, testInfo) => {
   expect(s).toMatchObject({ phase: 'break', wave: 1, gold: 0, sunk: 0, ranks: {}, helm: 0, enemies: [], charge: { port: null, starboard: null } });
   // The captain's order for the first wave is always chain shot.
   expect(s.order).toBe(FIRST_ORDER);
+  // The first wave's wind is always the same, and both sides start loaded with round shot (the
+  // order's chain shot overrides it for the wave).
+  expect(s.wind).toBe(FIRST_WIND);
+  expect(s.loadout).toEqual({ port: 'round', starboard: 'round' });
   expect(s.toSpawn).toEqual(WAVE_1);
   expect(s.player.hp).toBe(HULL);
 
@@ -368,6 +377,12 @@ test('plays the first wave', async ({ page }, testInfo) => {
   s = await game.state();
   expect(s.ranks).toEqual({ shot: 1 });
   expect(s.gold).toBe(2 * SLOOP_LOOT - HEAVY_SHOT);
+  // Loading the guns is free: a tap on the starboard row loads chain shot into that side.
+  await tap(buttons.find((b) => b.id === 'load-starboard')!);
+  s = await game.state();
+  expect(s.loadout).toEqual({ port: 'round', starboard: 'chain' });
+  expect(s.gold).toBe(2 * SLOOP_LOOT - HEAVY_SHOT);
+  await snap('4-loadout');
   await tap(buttons.find((b) => b.id === 'sail')!);
   s = await game.state();
   expect(s).toMatchObject({ phase: 'break', wave: 2 });
