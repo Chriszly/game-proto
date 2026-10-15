@@ -22,6 +22,9 @@ const GAMES = [
   { name: 'Colonizer', path: '/games/colonizer/' },
 ];
 
+// The games with a Watch AI mode (`?watch`, see shared/watch.ts); there is no hub link to it.
+const WATCH = ['/games/colonizer/', '/games/space-wars/'];
+
 // Every page links a favicon that loads.
 async function expectFavicon(page: Page) {
   const href = await page.locator('link[rel="icon"]').getAttribute('href');
@@ -62,13 +65,9 @@ for (const { name, path } of GAMES.filter((g) => !ONLY || g.path === `/games/${O
     // The game's own canvas; a page may also paint a decorative backdrop canvas, marked data-backdrop.
     await expect(page.locator('canvas:not([data-backdrop])')).toBeVisible();
     await expectFavicon(page);
-    // A card with a "Watch AI" link opens the game with ?watch, which shows the watch panel.
-    await page.goto('/');
-    const card = page.locator('.game').filter({ has: page.getByRole('link', { name }) });
-    const watch = card.getByRole('link', { name: 'Watch AI' });
-    if ((await watch.count()) === 0) return;
-    await watch.click();
-    await expect(page).toHaveURL(new RegExp(`${path}\\?watch$`));
+    // A game with a watch mode shows the watch panel when opened with ?watch.
+    if (!WATCH.includes(path)) return;
+    await page.goto(`${path}?watch`);
     await expect(page.getByRole('region', { name: 'Watch AI' })).toBeVisible();
   });
 }
