@@ -7,7 +7,6 @@ start page lists the games; each one lives in its own folder under `games/`.
 
 | Game | What it is |
 | --- | --- |
-| Space Wars | all five factions run by the AI on an open map until one is left; contracts don't run; a tap on the end screen starts another battle |
 | [Apothecary](games/apothecary/README.md) | Run a medieval apothecary as a plague doctor: grow herbs, refine them, brew potions and sell them to customers. |
 | [Deadline](games/deadline/README.md) | Hold the bottom of a road against growing waves of zombies: move left and right, shoot automatically, and shoot crates open for upgrades. |
 | [Palisade](games/palisade/README.md) | Hold a barricade against waves of goblins, orcs, harpies, shield bearers and shamans as a ranger, picking one of three upgrades each level, hiring guards with coins, with a boss and a choice of road every ten waves. |
@@ -76,6 +75,7 @@ what each AI decides (**L**).
 | Game | What the watch mode does |
 | --- | --- |
 | Colonizer | two random factions, both run by the planner, on an open map; a click on the end screen starts another match |
+| Space Wars | all five factions run by the AI on an open map until one is left; contracts don't run; a tap on the end screen starts another battle |
 
 ## Running locally
 
