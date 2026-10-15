@@ -162,7 +162,7 @@ minimap's raid rings stand still.
 Add `?watch` to the game's URL (`/games/colonizer/?watch`) to skip the menu and start a
 match between two random factions, both played by the AI, with the whole map in view. Scroll with the
 arrow keys or the minimap and click a unit to see what it is doing. The panel in the top right
-pauses (**P**), sets the speed from 1x to 8x (**[** and **]**) and opens a log of every build,
+holds the match still, sets the speed from 1x to 8x (**[** and **]**) and opens a log of every build,
 unit, tech, attack and relic run (**L**). A click on the end screen starts another match.
 
 ![Watching two AIs play, with the log open](docs/screenshots/watch-ai.png)
