@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { renderScale, splitHudCamera, viewPoint } from '../../../../shared/scaling';
 import {
   BOONS,
   BUILD_MORE,
@@ -183,6 +184,8 @@ export class GameScene extends Phaser.Scene {
     this.state = createGame(this.faction, this.aiFaction, byDifficulty(0.75, 1, 1.25), map);
     const town = [...this.state.buildings.values()].find((b) => b.owner === PLAYER && b.type === 'town')!;
     const world = MAP_SIZE * TILE;
+    // The world camera scrolls; the top bar, panel and cards (scroll factor 0) get a fixed camera.
+    splitHudCamera(this);
     this.cameras.main.setBounds(0, 0, world, world);
     this.cameras.main.setBackgroundColor(T.linen);
     this.cameras.main.centerOn(town.tx * TILE + 64, town.ty * TILE + 64);
@@ -243,14 +246,14 @@ export class GameScene extends Phaser.Scene {
 
   /** Converts a screen point (in the 960x540 game space) to a world point. */
   toWorld(x: number, y: number) {
-    const p = this.cameras.main.getWorldPoint(x, y);
+    const p = this.cameras.main.getWorldPoint(x * renderScale, y * renderScale);
     return { x: p.x / TILE, y: p.y / TILE };
   }
 
   /** The screen point, in game space, of a world tile. */
   toScreen(tx: number, ty: number) {
-    const cam = this.cameras.main;
-    return { x: tx * TILE - cam.scrollX, y: ty * TILE - cam.scrollY };
+    const v = this.cameras.main.worldView;
+    return { x: tx * TILE - v.x, y: ty * TILE - v.y };
   }
 
   // ----------------------------------------------------------- ground, sprites and fog
@@ -506,8 +509,9 @@ export class GameScene extends Phaser.Scene {
     if (k.right.isDown) dx += 1;
     if (k.up.isDown) dy -= 1;
     if (k.down.isDown) dy += 1;
-    const p = this.input.activePointer;
-    if (p.isDown === false && p.x > 0 && p.x < 960 && p.y > 0 && p.y < 540) {
+    const pointer = this.input.activePointer;
+    const p = viewPoint(pointer);
+    if (pointer.isDown === false && p.x > 0 && p.x < 960 && p.y > 0 && p.y < 540) {
       if (p.x < 6) dx -= 1;
       if (p.x > 954) dx += 1;
       if (p.y < 6) dy -= 1;
@@ -545,7 +549,8 @@ export class GameScene extends Phaser.Scene {
     return null;
   }
 
-  private onPointerDown(p: Phaser.Input.Pointer) {
+  private onPointerDown(pointer: Phaser.Input.Pointer) {
+    const p = Object.assign(viewPoint(pointer), { rightButtonDown: () => pointer.rightButtonDown(), event: pointer.event });
     if (this.endPanel) return void this.scene.start('Menu');
     if (this.mini.contains(p.x, p.y)) {
       const t = this.mini.toTile(p.x, p.y);
@@ -598,14 +603,15 @@ export class GameScene extends Phaser.Scene {
     this.dragStart = { x: p.x, y: p.y };
   }
 
-  private onPointerMove(p: Phaser.Input.Pointer) {
-    if (!this.dragStart || !p.isDown) return;
+  private onPointerMove(pointer: Phaser.Input.Pointer) {
+    if (!this.dragStart || !pointer.isDown) return;
+    const p = viewPoint(pointer);
     const g = this.dragBox.clear();
-    const cam = this.cameras.main;
-    const x0 = Math.min(this.dragStart.x, p.x) + cam.scrollX;
-    const y0 = Math.min(this.dragStart.y, p.y) + cam.scrollY;
-    const x1 = Math.max(this.dragStart.x, p.x) + cam.scrollX;
-    const y1 = Math.max(this.dragStart.y, p.y) + cam.scrollY;
+    const v = this.cameras.main.worldView;
+    const x0 = Math.min(this.dragStart.x, p.x) + v.x;
+    const y0 = Math.min(this.dragStart.y, p.y) + v.y;
+    const x1 = Math.max(this.dragStart.x, p.x) + v.x;
+    const y1 = Math.max(this.dragStart.y, p.y) + v.y;
     const ochre = hexNum(T.ochre);
     stitchLine(g, x0, y0, x1, y0, 1.2, ochre);
     stitchLine(g, x1, y0, x1, y1, 1.2, ochre);
@@ -613,7 +619,8 @@ export class GameScene extends Phaser.Scene {
     stitchLine(g, x0, y1, x0, y0, 1.2, ochre);
   }
 
-  private onPointerUp(p: Phaser.Input.Pointer) {
+  private onPointerUp(pointer: Phaser.Input.Pointer) {
+    const p = Object.assign(viewPoint(pointer), { event: pointer.event });
     this.dragBox.clear();
     if (this.wallStart && this.placing === 'wall') {
       const end = this.toWorld(p.x, p.y);
@@ -1047,7 +1054,7 @@ export class GameScene extends Phaser.Scene {
     }
     const type = this.placing;
     const def = BUILDINGS[type];
-    const pointer = this.input.activePointer;
+    const pointer = viewPoint(this.input.activePointer);
     if (type === 'wall' && this.wallStart) {
       // The line being dragged: a stitched square per stake, green where it fits and is paid for.
       this.ghost?.setVisible(false);
@@ -1063,7 +1070,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     if (!this.ghost) this.ghost = this.add.image(0, 0, buildingKey(this.faction, type)).setOrigin(0, 0).setAlpha(0.6).setDepth(5002);
-    const p = this.input.activePointer;
+    const p = pointer;
     if (p.y >= TOP_H && p.y < PANEL_Y) {
       const w = this.toWorld(p.x, p.y);
       const ox = Math.floor(w.x) - Math.floor(def.w / 2);
@@ -1083,7 +1090,7 @@ export class GameScene extends Phaser.Scene {
     const how = this.state.winBy === 'monument' ? (won ? 'Your Monument stood for three minutes' : 'The enemy Monument stood for three minutes') : won ? 'The enemy Town Center has fallen' : 'Your Town Center has fallen';
     const why = this.add.text(480, 284, how, { ...text(15, T.ink), fontStyle: 'italic' }).setOrigin(0.5).setScrollFactor(0);
     const sub = this.add.text(480, 312, 'Click to choose another faction', text(14, T.faded)).setOrigin(0.5).setScrollFactor(0);
-    this.endPanel = this.add.container(0, 0, [bg, card, title, why, sub]).setDepth(11000);
+    this.endPanel = this.add.container(0, 0, [bg, card, title, why, sub]).setScrollFactor(0).setDepth(11000);
   }
 }
 
