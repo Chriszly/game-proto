@@ -1144,7 +1144,8 @@ export class GameScene extends Phaser.Scene {
     const coins = this.add.text(42, HUD_HEIGHT / 2 - 1, '', style).setOrigin(0, 0.5).setDepth(UI_DEPTH);
     this.add.text(width / 2 - 92, HUD_HEIGHT / 2, 'Hands', style).setOrigin(1, 0.5).setDepth(UI_DEPTH);
     this.add
-      .text(620, HUD_HEIGHT / 2, 'Walk: WASD / tap\nHarvest: walk past ripe plants', { ...style, fontSize: '12px', fontStyle: 'normal', color: '#4a3424' })
+      // Right of the last slot the biggest pack fills, so a full pack never runs into it.
+      .text(width / 2 - 60 + MAX_CARRY * 40 - 12, HUD_HEIGHT / 2, 'Walk: WASD / tap\nHarvest: walk past ripe plants', { ...style, fontSize: '12px', fontStyle: 'normal', color: '#4a3424' })
       .setOrigin(0, 0.5)
       .setDepth(UI_DEPTH);
     this.hudButton(width - 16, 'Settings', () => {
