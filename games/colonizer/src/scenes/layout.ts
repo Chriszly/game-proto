@@ -31,6 +31,8 @@ export const AGE_PIPS = { x: 424, y: 15, gap: 16, r: 6.5 };
 
 /** The deeds card under the top bar, at the right. */
 export const DEED_CARD = { x: 716, y: 36, w: 236, h: 92 };
+/** Under the deeds card: who holds each relic, and a standing Monument's count. */
+export const STATUS_CARD = { x: 716, y: 134, w: 236, h: 30, hMonument: 50 };
 /** The horn toast, centred under the top bar. */
 export const TOAST = { x: 480, y: 38, w: 440, h: 24 };
 

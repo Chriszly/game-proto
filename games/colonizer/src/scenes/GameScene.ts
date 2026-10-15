@@ -1,12 +1,16 @@
 import Phaser from 'phaser';
 import {
   BOONS,
+  BUILD_MORE,
   BUILD_ORDER,
   BUILDINGS,
   FACTIONS,
   MAP_SIZE,
+  RELICS,
   TECHS,
   TILE,
+  UNIQUE,
+  UNIQUE_TEXT,
   UNITS,
   unitFor,
   type BoonId,
@@ -16,34 +20,44 @@ import {
 } from '../game/data';
 import { generateMap, idx } from '../game/map';
 import {
+  NEUTRAL,
   PLAYER,
   affordable,
+  campAt,
+  campSpots,
   canPlace,
   chooseBoon,
   createGame,
   deedsDone,
   entityAt,
+  hasBuilt,
   issue,
+  notAllowed,
   placeBuilding,
+  placeWall,
   popCap,
   popUsed,
   research,
   say,
+  setRally,
   tick,
   train,
+  unitCost,
   visible,
+  wallLine,
   type Building,
+  type Camp,
   type GameState,
   type Unit,
 } from '../game/sim';
 import { think } from '../game/planner';
 import { byDifficulty, settings } from '../../../../shared/settings';
 import { FEET, FRAME, WOOL } from '../art/figures';
-import { BUILDING_TOP, CHUNK, paintChunk, TREE_TOP } from '../art/scenery';
+import { BUILDING_TOP, CAMP_TOP, CHUNK, paintChunk, TREE_TOP } from '../art/scenery';
 import { hexNum, SERIF, T } from '../art/stitch';
-import { buildingKey, figKey, TREE_VARIANTS } from './BootScene';
+import { buildingKey, figKey, relicKey, TREE_VARIANTS } from './BootScene';
 import { Effects } from './fx';
-import { DeedCard, Minimap, stitchEllipse, stitchLine, Toast, TopBar } from './hud';
+import { DeedCard, Minimap, StatusCard, stitchEllipse, stitchLine, Toast, TopBar } from './hud';
 import { BOON, BUTTONS, PANEL_Y, SEL, TOP_H } from './layout';
 
 const SCROLL_PX_PER_S = 520;
@@ -78,8 +92,11 @@ export class GameScene extends Phaser.Scene {
   placing: BuildingId | null = null;
   /** The next click attack-moves the selected army. */
   attackMode = false;
-  /** Whether the bottom panel shows the build list. */
+  /** Whether the bottom panel shows the build list, and which of its two pages. */
   buildMenu = false;
+  buildPage = 0;
+  /** The relics and Monument card under the deeds card. */
+  status!: StatusCard;
   /** Buttons in the bottom panel (and the boon cards), in screen coordinates, for the test and for hit-testing. */
   hud: Hud[] = [];
   /** Drop-off badges shown for the player, newest last, such as '+10 wood'. */
@@ -94,6 +111,11 @@ export class GameScene extends Phaser.Scene {
   private unitSprites = new Map<number, Phaser.GameObjects.Image>();
   private buildingSprites = new Map<number, Phaser.GameObjects.Image>();
   private nodeSprites = new Map<number, Phaser.GameObjects.Image>();
+  private campSprites = new Map<number, Phaser.GameObjects.Image>();
+  private rallyFlag!: Phaser.GameObjects.Image;
+  /** Where a palisade drag started, in tiles, while placing a wall. */
+  private wallStart: { tx: number; ty: number } | null = null;
+  private wallGhost!: Phaser.GameObjects.Graphics;
   private chunks = new Set<number>();
   private terrain!: Uint8Array;
   private rings!: Phaser.GameObjects.Graphics;
@@ -134,6 +156,9 @@ export class GameScene extends Phaser.Scene {
     this.placing = null;
     this.attackMode = false;
     this.buildMenu = false;
+    this.buildPage = 0;
+    this.wallStart = null;
+    this.campSprites = new Map();
     this.hud = [];
     this.popLog = [];
     this.toastLog = [];
@@ -177,6 +202,9 @@ export class GameScene extends Phaser.Scene {
     this.needle = this.add.image(0, 0, 'needle').setOrigin(40 / 56, 9 / 56).setDepth(5001).setVisible(false);
     this.rings = this.add.graphics().setDepth(4950);
     this.dragBox = this.add.graphics().setDepth(4960);
+    // Placement ghosts sit above the fog, so a site in explored land still shows clearly.
+    this.wallGhost = this.add.graphics().setDepth(5002);
+    this.rallyFlag = this.add.image(0, 0, 'rally-flag').setOrigin(4 / 28, 38 / 40).setDepth(4955).setVisible(false);
     this.fx = new Effects(this);
 
     this.buildHud();
@@ -205,6 +233,7 @@ export class GameScene extends Phaser.Scene {
     this.renderRings();
     this.top.update(this.state);
     this.deeds.update(this.state);
+    this.status.update(this.state);
     this.mini.update(this.state, dt, this.cameras.main.worldView);
     this.renderToast();
     this.renderPanel();
@@ -304,7 +333,8 @@ export class GameScene extends Phaser.Scene {
         this.buildingSprites.set(b.id, img);
       }
       const def = BUILDINGS[b.type];
-      const seen = b.owner === PLAYER || s.sight[idx(b.tx, b.ty)] >= 1;
+      // A Monument is seen by everyone from the moment it is begun.
+      const seen = b.owner === PLAYER || b.type === 'monument' || s.sight[idx(b.tx, b.ty)] >= 1;
       img.setVisible(seen);
       img.setPosition(b.tx * TILE, b.ty * TILE - BUILDING_TOP);
       img.setDepth((b.ty + def.h) * TILE);
@@ -327,6 +357,28 @@ export class GameScene extends Phaser.Scene {
       }
       img.setVisible(s.sight[idx(n.tx, n.ty)] >= 1);
     }
+
+    for (const c of s.camps) {
+      let img = this.campSprites.get(c.id);
+      if (!img) {
+        img = this.add.image(c.tx * TILE, c.ty * TILE - CAMP_TOP, this.campKey(c)).setOrigin(0, 0).setDepth((c.ty + 2) * TILE - 1);
+        this.campSprites.set(c.id, img);
+      }
+      if (c.claimed) {
+        img.setVisible(false);
+        continue;
+      }
+      const key = this.campKey(c);
+      if (img.texture.key !== key) img.setTexture(key);
+      img.setVisible(s.sight[idx(c.tx, c.ty)] >= 1);
+    }
+  }
+
+  /** A camp's texture: its cache, or its relic with the holder's banner. */
+  private campKey(c: Camp) {
+    if (c.kind === 'cache') return `camp-cache-${c.res}`;
+    const holder = c.holder === null ? null : this.state.players[c.holder].faction;
+    return relicKey(c.relic!, holder);
   }
 
   /** Turns what the sim reported this tick into sparks, numbers and drop-off badges. */
@@ -335,6 +387,7 @@ export class GameScene extends Phaser.Scene {
     for (const e of s.events) {
       if (!visible(s, Math.floor(e.x), Math.floor(e.y))) continue;
       if (e.t === 'hit') this.fx.hit(e.x, e.y, e.fromX, e.fromY, e.dmg, e.ranged);
+      else if (e.t === 'grow') continue;
       else if (e.owner === PLAYER) {
         this.fx.drop(e.x, e.y, e.res, e.n);
         this.popLog.push(`+${e.n} ${e.res}`);
@@ -416,8 +469,19 @@ export class GameScene extends Phaser.Scene {
       if (!this.selected.has(u.id) && u.hp >= max) continue;
       if (!mine && !visible(s, Math.floor(u.x), Math.floor(u.y))) continue;
       const top = u.y * TILE - (UNITS[u.type].role === 'cavalry' ? 48 : 40);
-      this.thread(g, u.x * TILE - 9, top, 18, u.hp / max, mine ? T.green : WOOL[s.players[u.owner].faction].cloth);
+      const foe = u.owner === NEUTRAL ? WOOL.wild.cloth : WOOL[s.players[u.owner].faction].cloth;
+      this.thread(g, u.x * TILE - 9, top, 18, u.hp / max, mine ? T.green : foe);
     }
+    // The selected building's rally flag, with a running thread out to it.
+    const rb = this.selectedBuilding();
+    if (rb?.rally) {
+      const def = BUILDINGS[rb.type];
+      const fx = rb.rally.x * TILE;
+      const fy = rb.rally.y * TILE;
+      stitchLine(g, (rb.tx + def.w / 2) * TILE, (rb.ty + def.h / 2) * TILE, fx, fy, 1.2, ochre, 0.85);
+      stitchEllipse(g, fx, fy, 7, 3, 1.2, ochre);
+      this.rallyFlag.setPosition(fx, fy).setVisible(true);
+    } else this.rallyFlag.setVisible(false);
     for (const b of s.buildings.values()) {
       const def = BUILDINGS[b.type];
       if (b.owner !== PLAYER && !visible(s, b.tx, b.ty)) continue;
@@ -493,7 +557,7 @@ export class GameScene extends Phaser.Scene {
       if (r) this.cameras.main.centerOn(r.x * TILE, r.y * TILE + (540 - PANEL_Y - TOP_H) / 2);
       return;
     }
-    if (p.y < TOP_H || p.y >= PANEL_Y || this.deeds.contains(p.x, p.y)) return;
+    if (p.y < TOP_H || p.y >= PANEL_Y || this.deeds.contains(p.x, p.y) || this.status.contains(p.x, p.y)) return;
     const w = this.toWorld(p.x, p.y);
     const tx = w.x;
     const ty = w.y;
@@ -503,12 +567,24 @@ export class GameScene extends Phaser.Scene {
         this.placing = null;
         this.attackMode = false;
         this.buildMenu = false;
+        this.wallStart = null;
+        return;
+      }
+      // A production building on its own: a right click plants its rally flag.
+      const b = this.selectedBuilding();
+      if (b && this.selectedUnits().length === 0 && BUILDINGS[b.type].trains) {
+        if (setRally(this.state, PLAYER, b.id, tx, ty)) say(this.state, 'Rally flag set');
         return;
       }
       this.commandAt(tx, ty);
       return;
     }
 
+    if (this.placing === 'wall') {
+      // A palisade is dragged out as a line, from here to where the button comes up.
+      this.wallStart = { tx: Math.floor(tx), ty: Math.floor(ty) };
+      return;
+    }
     if (this.placing) {
       this.tryPlace(this.placing, tx, ty, p.event.shiftKey);
       return;
@@ -539,6 +615,12 @@ export class GameScene extends Phaser.Scene {
 
   private onPointerUp(p: Phaser.Input.Pointer) {
     this.dragBox.clear();
+    if (this.wallStart && this.placing === 'wall') {
+      const end = this.toWorld(p.x, p.y);
+      this.tryWall(this.wallStart, { tx: Math.floor(end.x), ty: Math.floor(end.y) }, p.event.shiftKey);
+      this.wallStart = null;
+      return;
+    }
     const start = this.dragStart;
     this.dragStart = null;
     if (!start || p.y < TOP_H || p.y >= PANEL_Y) return;
@@ -550,6 +632,8 @@ export class GameScene extends Phaser.Scene {
       const hit = entityAt(this.state, b.x, b.y);
       if (!hit) {
         if (!additive) this.selectOwn([]);
+        const camp = campAt(this.state, b.x, b.y);
+        if (camp) say(this.state, this.campText(camp));
         return;
       }
       if (hit.owner !== PLAYER && hit.kind !== 'node') {
@@ -575,10 +659,30 @@ export class GameScene extends Phaser.Scene {
     this.panelKey = '';
   }
 
+  /** What a camp is, for the notice shown when it is clicked. */
+  private campText(c: Camp) {
+    const guarded = c.guards.some((id) => this.state.units.has(id));
+    if (c.kind === 'cache') return `A cache of ${c.amount} ${c.res}${guarded ? ', guarded by brigands' : ': stand by it to take it'}`;
+    const r = RELICS[c.relic!];
+    const by = c.holder === null ? (guarded ? 'guarded' : 'nobody holds it') : c.holder === PLAYER ? 'yours' : 'held by the enemy';
+    return `${r.name}: ${r.text.toLowerCase()} (${by})`;
+  }
+
   /** A right click: attack, gather, build, or walk, depending on what is under it. */
   private commandAt(tx: number, ty: number) {
     const units = this.selectedUnits();
     if (units.length === 0) return;
+    const camp = campAt(this.state, tx, ty);
+    if (camp) {
+      // To a camp: stand round it, close enough to take it once its guards are down.
+      const spots = campSpots(this.state, camp);
+      units.forEach((u, i) => {
+        const at = spots[i % Math.max(1, spots.length)];
+        const order = UNITS[u.type].role === 'villager' ? 'move' : 'attackMove';
+        if (at) issue(this.state, PLAYER, [u.id], { t: order, x: at.x, y: at.y });
+      });
+      return;
+    }
     const hit = entityAt(this.state, tx, ty);
     const villagers = units.filter((u) => UNITS[u.type].role === 'villager');
     const army = units.filter((u) => UNITS[u.type].role !== 'villager');
@@ -614,12 +718,17 @@ export class GameScene extends Phaser.Scene {
     const ox = Math.floor(tx) - Math.floor(def.w / 2);
     const oy = Math.floor(ty) - Math.floor(def.h / 2);
     const p = this.state.players[PLAYER];
+    const why = notAllowed(this.state, PLAYER, type);
+    if (why) {
+      say(this.state, why);
+      return;
+    }
     if (!affordable(p, def.cost)) {
       say(this.state, 'Not enough resources');
       return;
     }
-    if (!canPlace(this.state, type, ox, oy)) {
-      say(this.state, "Can't build there");
+    if (!canPlace(this.state, type, ox, oy, PLAYER)) {
+      say(this.state, def.shore ? 'A Dock must stand on the shore' : "Can't build there");
       return;
     }
     const id = placeBuilding(this.state, PLAYER, type, ox, oy);
@@ -627,6 +736,20 @@ export class GameScene extends Phaser.Scene {
     const builders = this.selectedUnits().filter((u) => UNITS[u.type].role === 'villager');
     const builder = builders[0] ?? [...this.state.units.values()].find((u) => u.owner === PLAYER && UNITS[u.type].role === 'villager');
     if (builder) issue(this.state, PLAYER, [builder.id], { t: 'build', b: id });
+    if (!keep) this.placing = null;
+  }
+
+  /** Places a palisade line and sends the selected villagers (or the nearest one) to build it. */
+  private tryWall(from: { tx: number; ty: number }, to: { tx: number; ty: number }, keep: boolean) {
+    const ids = placeWall(this.state, PLAYER, wallLine(from.tx, from.ty, to.tx, to.ty));
+    if (ids.length === 0) {
+      say(this.state, affordable(this.state.players[PLAYER], BUILDINGS.wall.cost) ? "Can't build there" : 'Not enough wood');
+      return;
+    }
+    const builders = this.selectedUnits().filter((u) => UNITS[u.type].role === 'villager');
+    const crew = builders.length > 0 ? builders : [...this.state.units.values()].filter((u) => u.owner === PLAYER && UNITS[u.type].role === 'villager').slice(0, 1);
+    // Each builder starts on its own piece; when done, each goes on to the next one nearby.
+    crew.forEach((u, i) => issue(this.state, PLAYER, [u.id], { t: 'build', b: ids[Math.floor((i * ids.length) / crew.length)] }));
     if (!keep) this.placing = null;
   }
 
@@ -655,6 +778,7 @@ export class GameScene extends Phaser.Scene {
         this.placing = null;
         this.attackMode = false;
         this.buildMenu = false;
+        this.wallStart = null;
         break;
     }
   }
@@ -665,6 +789,7 @@ export class GameScene extends Phaser.Scene {
     this.add.image(0, PANEL_Y, 'panel').setOrigin(0, 0).setScrollFactor(0).setDepth(9990);
     this.top = new TopBar(this, this.faction);
     this.deeds = new DeedCard(this);
+    this.status = new StatusCard(this, WOOL[this.aiFaction].cloth);
     this.toast = new Toast(this);
     this.mini = new Minimap(this, this.terrain, this.aiFaction, this.faction);
     const fix = <O extends Phaser.GameObjects.Image | Phaser.GameObjects.Text | Phaser.GameObjects.Graphics>(o: O, d = 10000) => o.setScrollFactor(0).setDepth(d) as O;
@@ -698,7 +823,17 @@ export class GameScene extends Phaser.Scene {
     this.selBig.setVisible(false);
     if (this.placing || this.attackMode) {
       this.selTitle.setText(this.placing ? `PLACE ${BUILDINGS[this.placing].name.toUpperCase()}` : 'ATTACK-MOVE');
-      this.selInfo.setPosition(SEL.x + 2, SEL.y + 24).setText(this.placing ? 'Click the map where it should stand.\nRight click or Esc to cancel.' : 'Click where the army should go.\nRight click or Esc to cancel.');
+      const how =
+        this.placing === 'wall'
+          ? 'Drag a line on the map: 4 wood a stake.\nRight click or Esc to cancel.'
+          : this.placing === 'gate'
+            ? 'Click a gap or your own palisade.\nOnly your units pass through it.'
+            : this.placing === 'dock'
+              ? 'Click a spot on the shore.\nRight click or Esc to cancel.'
+              : this.placing
+                ? 'Click the map where it should stand.\nRight click or Esc to cancel.'
+                : 'Click where the army should go.\nRight click or Esc to cancel.';
+      this.selInfo.setPosition(SEL.x + 2, SEL.y + 24).setText(how);
       return;
     }
     const units = this.selectedUnits();
@@ -747,6 +882,11 @@ export class GameScene extends Phaser.Scene {
         stitchLine(g, SEL.x + 84, SEL.y + 70, SEL.x + 84 + 116 * (1 - head.left / total), SEL.y + 70, 3, hexNum(T.red));
         if (b.queue.length > 1) lines.push(`and ${b.queue.length - 1} more queued`);
       }
+      const unique = (Object.keys(UNIQUE) as FactionId[]).find((f) => UNIQUE[f] === b.type);
+      if (unique && !head) lines.push(UNIQUE_TEXT[unique].split(': ')[1]);
+      if (b.type === 'monument' && b.built) lines.push('Stands for 3 minutes: victory');
+      if (b.type === 'gate' && b.built) lines.push('Only your units pass');
+      if (def.trains && b.built && !head) lines.push(b.rally ? 'Right click moves the rally flag' : 'Right click sets a rally flag');
       this.selInfo.setPosition(SEL.x + 84, SEL.y + 24).setText(lines.join('\n'));
       return;
     }
@@ -812,7 +952,8 @@ export class GameScene extends Phaser.Scene {
     const b = this.selectedBuilding();
     const q = b ? b.queue.map((x) => x.key).join(',') : '';
     const p = this.state.players[PLAYER];
-    return [...this.selected].join(',') + `|${this.buildMenu}|${this.placing}|${this.attackMode}|${q}|${p.techs.join(',')}|${p.age}|${p.boonPending}|${deedsDone(p)}|${this.resourceKey()}`;
+    const own = [...this.state.buildings.values()].filter((x) => x.owner === PLAYER).length;
+    return [...this.selected].join(',') + `|${this.buildMenu}|${this.buildPage}|${this.placing}|${this.attackMode}|${q}|${p.techs.join(',')}|${p.age}|${p.boonPending}|${deedsDone(p)}|${this.resourceKey()}|${own}|${hasBuilt(this.state, PLAYER, 'forge')}`;
   }
 
   private resourceKey() {
@@ -828,18 +969,23 @@ export class GameScene extends Phaser.Scene {
     const costOf = (cost: Partial<Record<Resource, number>>) => Object.entries(cost).map(([r, n]) => `${n}${r[0]}`).join(' ');
     if (this.placing) return [{ label: 'Cancel', enabled: true, run: () => (this.placing = null) }];
     if (this.buildMenu) {
-      for (const type of BUILD_ORDER) {
+      // Page one: the usual buildings and the faction's own; page two: palisade, gate and Monument.
+      const list = this.buildPage === 0 ? [...BUILD_ORDER, UNIQUE[this.faction]] : BUILD_MORE;
+      for (const type of list) {
         const def = BUILDINGS[type];
+        const why = notAllowed(s, PLAYER, type);
         out.push({
-          label: `${def.name} ${costOf(def.cost)}`,
-          enabled: affordable(p, def.cost),
+          label: why && def.age ? `${def.name} (Age III)` : `${def.name} ${costOf(def.cost)}`,
+          enabled: !why && affordable(p, def.cost),
           run: () => {
             this.buildMenu = false;
+            this.buildPage = 0;
             this.placing = type;
           },
         });
       }
-      out.push({ label: 'Back', enabled: true, run: () => (this.buildMenu = false) });
+      if (this.buildPage === 0) out.push({ label: 'Walls & Monument', enabled: true, run: () => (this.buildPage = 1) });
+      out.push({ label: 'Back', enabled: true, run: () => (this.buildPage === 1 ? (this.buildPage = 0) : (this.buildMenu = false)) });
       return out;
     }
     const units = this.selectedUnits();
@@ -855,9 +1001,10 @@ export class GameScene extends Phaser.Scene {
       const def = BUILDINGS[b.type];
       for (const role of def.trains ?? []) {
         const unit = role === 'villager' ? UNITS.villager : unitFor(this.faction, role);
-        const ok = affordable(p, unit.cost) && popUsed(this.state, PLAYER) < popCap(this.state, PLAYER);
+        const cost = unitCost(s, PLAYER, unit);
+        const ok = affordable(p, cost) && popUsed(this.state, PLAYER) < popCap(this.state, PLAYER);
         out.push({
-          label: `${unit.name} ${costOf(unit.cost)}`,
+          label: `${unit.name} ${costOf(cost)}`,
           enabled: ok,
           run: () => {
             if (!train(this.state, PLAYER, b.id, unit.id)) say(this.state, 'Not enough resources or population');
@@ -892,6 +1039,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private renderGhost() {
+    this.wallGhost.clear();
     if (!this.placing) {
       this.ghost?.destroy();
       this.ghost = null;
@@ -899,14 +1047,29 @@ export class GameScene extends Phaser.Scene {
     }
     const type = this.placing;
     const def = BUILDINGS[type];
-    if (!this.ghost) this.ghost = this.add.image(0, 0, buildingKey(this.faction, type)).setOrigin(0, 0).setAlpha(0.6).setDepth(4970);
+    const pointer = this.input.activePointer;
+    if (type === 'wall' && this.wallStart) {
+      // The line being dragged: a stitched square per stake, green where it fits and is paid for.
+      this.ghost?.setVisible(false);
+      const end = this.toWorld(pointer.x, pointer.y);
+      let wood = this.state.players[PLAYER].res.wood;
+      for (const t of wallLine(this.wallStart.tx, this.wallStart.ty, Math.floor(end.x), Math.floor(end.y))) {
+        const ok = canPlace(this.state, 'wall', t.tx, t.ty, PLAYER) && wood >= (def.cost.wood ?? 0);
+        if (ok) wood -= def.cost.wood ?? 0;
+        const col = ok ? 0x4e8a3a : 0xb4523b;
+        this.wallGhost.fillStyle(col, 0.28).fillRect(t.tx * TILE + 2, t.ty * TILE + 2, TILE - 4, TILE - 4);
+        stitchLine(this.wallGhost, t.tx * TILE + 3, t.ty * TILE + TILE - 3, t.tx * TILE + TILE - 3, t.ty * TILE + TILE - 3, 1.4, col);
+      }
+      return;
+    }
+    if (!this.ghost) this.ghost = this.add.image(0, 0, buildingKey(this.faction, type)).setOrigin(0, 0).setAlpha(0.6).setDepth(5002);
     const p = this.input.activePointer;
     if (p.y >= TOP_H && p.y < PANEL_Y) {
       const w = this.toWorld(p.x, p.y);
       const ox = Math.floor(w.x) - Math.floor(def.w / 2);
       const oy = Math.floor(w.y) - Math.floor(def.h / 2);
       this.ghost.setPosition(ox * TILE, oy * TILE - BUILDING_TOP).setVisible(true);
-      this.ghost.setTint(canPlace(this.state, type, ox, oy) ? 0x9be88a : 0xd88a6a);
+      this.ghost.setTint(canPlace(this.state, type, ox, oy, PLAYER) ? 0x9be88a : 0xd88a6a);
     } else this.ghost.setVisible(false);
   }
 
@@ -917,8 +1080,10 @@ export class GameScene extends Phaser.Scene {
     const bg = this.add.rectangle(480, 270, 960, 540, hexNum(T.linen), 0.72).setScrollFactor(0);
     const card = this.add.image(480, 270, 'card-end').setScrollFactor(0);
     const title = this.add.text(480, 245, won ? 'VICTORY' : 'DEFEAT', { ...text(44, won ? T.green : T.red, true) }).setOrigin(0.5).setScrollFactor(0);
-    const sub = this.add.text(480, 300, 'Click to choose another faction', text(16, T.ink)).setOrigin(0.5).setScrollFactor(0);
-    this.endPanel = this.add.container(0, 0, [bg, card, title, sub]).setDepth(11000);
+    const how = this.state.winBy === 'monument' ? (won ? 'Your Monument stood for three minutes' : 'The enemy Monument stood for three minutes') : won ? 'The enemy Town Center has fallen' : 'Your Town Center has fallen';
+    const why = this.add.text(480, 284, how, { ...text(15, T.ink), fontStyle: 'italic' }).setOrigin(0.5).setScrollFactor(0);
+    const sub = this.add.text(480, 312, 'Click to choose another faction', text(14, T.faded)).setOrigin(0.5).setScrollFactor(0);
+    this.endPanel = this.add.container(0, 0, [bg, card, title, why, sub]).setDepth(11000);
   }
 }
 

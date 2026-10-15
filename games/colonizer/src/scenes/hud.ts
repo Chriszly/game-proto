@@ -2,13 +2,13 @@
 // the deeds card, the horn toast and the minimap. Each is a small class the GameScene updates every
 // frame; all of them are fixed to the screen (scroll factor 0).
 import Phaser from 'phaser';
-import { ARMY_DEED, BUILDINGS, DEEDS, FACTIONS, MAP_SIZE, RESOURCES, TILE, type FactionId } from '../game/data';
+import { ARMY_DEED, BUILDINGS, DEEDS, FACTIONS, MAP_SIZE, RELICS, RESOURCES, TILE, type FactionId, type RelicId } from '../game/data';
 import { DIRT, ROCK, WATER } from '../game/map';
-import { deedCount, PLAYER, popCap, popUsed, type GameState, type Player } from '../game/sim';
+import { AI, deedCount, monumentLeft, NEUTRAL, PLAYER, popCap, popUsed, type GameState, type Player } from '../game/sim';
 import { WOOL } from '../art/figures';
 import { hexNum, mix, SERIF, T } from '../art/stitch';
 import { settings } from '../../../../shared/settings';
-import { AGE_PIPS, DEED_CARD, MINI, TOAST, TOP_SLOTS } from './layout';
+import { AGE_PIPS, DEED_CARD, MINI, STATUS_CARD, TOAST, TOP_SLOTS } from './layout';
 
 const HUD_DEPTH = 9990;
 const ink = (size: number, color: string = T.ink, bold = true): Phaser.Types.GameObjects.Text.TextStyle => ({
@@ -170,6 +170,56 @@ export class DeedCard {
   }
 }
 
+const RELIC_ICON: Record<RelicId, string> = { plenty: 'icon-wheat', valor: 'icon-sword', haste: 'icon-feather' };
+
+/** Who holds each relic (a green ring for yours, the enemy's colour for theirs), and a standing Monument's count. */
+export class StatusCard {
+  private bg: Phaser.GameObjects.Image;
+  private g: Phaser.GameObjects.Graphics;
+  private icons: Phaser.GameObjects.Image[] = [];
+  private held: Phaser.GameObjects.Text;
+  private monument: Phaser.GameObjects.Text;
+  private relics = Object.keys(RELICS) as RelicId[];
+  /** The Monument line on show, for the test and the screenshots. */
+  shown = '';
+
+  constructor(scene: Phaser.Scene, private foeCloth: string) {
+    const { x, y } = STATUS_CARD;
+    this.bg = fixed(scene.add.image(x - 2, y - 2, 'card-status').setOrigin(0, 0), 0);
+    this.g = fixed(scene.add.graphics(), 1);
+    fixed(scene.add.text(x + 9, y + 15, 'RELICS', ink(11.5, T.red)).setOrigin(0, 0.5), 2);
+    this.relics.forEach((r, i) => this.icons.push(fixed(scene.add.image(x + 84 + i * 26, y + 15, RELIC_ICON[r]), 2)));
+    this.held = fixed(scene.add.text(x + STATUS_CARD.w - 9, y + 15.5, '', ink(9, T.faded, false)).setOrigin(1, 0.5), 2);
+    this.monument = fixed(scene.add.text(x + 9, y + 38, '', ink(11, T.red)).setOrigin(0, 0.5), 2);
+  }
+
+  update(s: GameState) {
+    const { x, y } = STATUS_CARD;
+    const g = this.g.clear();
+    let mine = 0;
+    this.relics.forEach((r, i) => {
+      const holder = s.camps.find((c) => c.relic === r)?.holder ?? null;
+      if (holder === PLAYER) mine++;
+      const col = holder === PLAYER ? T.green : holder === null ? '#c8b890' : this.foeCloth;
+      stitchEllipse(g, x + 84 + i * 26, y + 15, 10, 10, holder === null ? 0.9 : 1.8, hexNum(col));
+    });
+    this.held.setText(`${mine} held`);
+    const own = monumentLeft(s, PLAYER);
+    const foe = monumentLeft(s, AI);
+    const clock = (ms: number) => `${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, '0')}`;
+    const line = own !== null && (foe === null || own <= foe) ? `YOUR MONUMENT · ${clock(own)} TO VICTORY` : foe !== null ? `ENEMY MONUMENT · ${clock(foe)} TO DESTROY IT` : '';
+    this.shown = line;
+    this.monument.setText(line).setColor(own !== null && line.startsWith('YOUR') ? T.green : T.red);
+    this.bg.setTexture(line ? 'card-status-tall' : 'card-status');
+    if (line) stitchLine(g, x + 4, y + 28, x + STATUS_CARD.w - 4, y + 28, 0.8, hexNum(T.ochre));
+  }
+
+  contains(px: number, py: number) {
+    const h = this.shown ? STATUS_CARD.hMonument : STATUS_CARD.h;
+    return px >= STATUS_CARD.x && px <= STATUS_CARD.x + STATUS_CARD.w && py >= STATUS_CARD.y && py <= STATUS_CARD.y + h;
+  }
+}
+
 /** The horn toast: names a raid and points towards it; also carries short notices. */
 export class Toast {
   private bg: Phaser.GameObjects.Image;
@@ -319,8 +369,16 @@ export class Minimap {
       if (s.sight[n.ty * MAP_SIZE + n.tx] === 0) continue;
       for (let j = 0; j < n.h; j++) for (let i = 0; i < n.w; i++) put(n.tx + i, n.ty + j, n.kind === 'mine' ? gold : green);
     }
+    const wild: [number, number, number] = [122, 85, 48];
+    const pale: [number, number, number] = [239, 228, 198];
+    for (const c of s.camps) {
+      if (c.claimed || s.sight[c.ty * MAP_SIZE + c.tx] === 0) continue;
+      const col = c.holder === PLAYER ? this.own : c.holder === null ? (c.kind === 'relic' ? pale : gold) : this.foe;
+      for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) put(c.tx + i, c.ty + j, col);
+    }
     for (const b of s.buildings.values()) {
-      if (b.owner !== PLAYER && s.sight[b.ty * MAP_SIZE + b.tx] === 0) continue;
+      // A Monument shows on every map once it is begun, as it does in the fog for everyone.
+      if (b.owner !== PLAYER && b.type !== 'monument' && s.sight[b.ty * MAP_SIZE + b.tx] === 0) continue;
       const def = BUILDINGS[b.type];
       for (let j = 0; j < def.h; j++) for (let i = 0; i < def.w; i++) put(b.tx + i, b.ty + j, b.owner === PLAYER ? this.own : this.foe);
     }
@@ -328,7 +386,7 @@ export class Minimap {
       const tx = Math.floor(u.x);
       const ty = Math.floor(u.y);
       if (u.owner !== PLAYER && s.sight[ty * MAP_SIZE + tx] !== 2) continue;
-      const c = u.owner === PLAYER ? this.own : this.foe;
+      const c = u.owner === PLAYER ? this.own : u.owner === NEUTRAL ? wild : this.foe;
       put(tx, ty, c);
       put(tx + 1, ty, c);
       put(tx, ty + 1, c);

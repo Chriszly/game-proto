@@ -63,11 +63,18 @@ export type BuildingId =
   | 'range'
   | 'stable'
   | 'academy'
-  | 'watchtower';
+  | 'watchtower'
+  | 'forge'
+  | 'dock'
+  | 'grove'
+  | 'wall'
+  | 'gate'
+  | 'monument';
 
 export interface UnitDef {
   id: string;
-  faction: FactionId | 'neutral';
+  /** `neutral` units (villagers) belong to every faction; `wild` ones guard the neutral camps. */
+  faction: FactionId | 'neutral' | 'wild';
   role: Role;
   name: string;
   cost: Cost;
@@ -125,6 +132,15 @@ export const UNITS: Record<string, UnitDef> = {
     id: 'thorn-stalker', faction: 'thorn', role: 'cavalry', name: 'Stalker',
     cost: { food: 60, ore: 30 }, time: 13000, hp: 60, dmg: 8, range: 1, speed: 3.4, sight: 6, cooldown: 1000, trainer: 'stable',
   },
+  // The guards of the neutral camps (see CAMPS); nobody trains them.
+  'wild-brigand': {
+    id: 'wild-brigand', faction: 'wild', role: 'melee', name: 'Brigand',
+    cost: {}, time: 0, hp: 60, dmg: 5, range: 1, speed: 1.9, sight: 5, cooldown: 1100, trainer: 'town',
+  },
+  'wild-poacher': {
+    id: 'wild-poacher', faction: 'wild', role: 'ranged', name: 'Poacher',
+    cost: {}, time: 0, hp: 35, dmg: 5, range: 4.5, speed: 2, sight: 6, cooldown: 1300, trainer: 'town',
+  },
 };
 
 /** The unit a faction trains for each combat role; villagers are shared. */
@@ -154,6 +170,16 @@ export interface BuildingDef {
   /** A farm: an endless food source a villager can gather from. */
   farm?: boolean;
   tower?: { dmg: number; range: number; cooldown: number };
+  /** Only this faction can build it: each faction has one unique building. */
+  faction?: FactionId;
+  /** The age a player needs before placing it. */
+  age?: 2 | 3;
+  /** Must touch water (the Dock). */
+  shore?: boolean;
+  /** At most this many per player. */
+  limit?: number;
+  /** A palisade piece, placed by dragging a line; walls and gates are never auto-targeted. */
+  palisade?: boolean;
 }
 
 export const BUILDINGS: Record<BuildingId, BuildingDef> = {
@@ -167,9 +193,35 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
   stable: { id: 'stable', name: 'Stable', cost: { wood: 180 }, time: 45000, w: 3, h: 3, hp: 650, sight: 4, trains: ['cavalry'] },
   academy: { id: 'academy', name: 'Academy', cost: { wood: 150, food: 100 }, time: 40000, w: 3, h: 3, hp: 700, sight: 4, research: true },
   watchtower: { id: 'watchtower', name: 'Watchtower', cost: { wood: 125, ore: 50 }, time: 30000, w: 2, h: 2, hp: 900, sight: 7, tower: { dmg: 12, range: 7, cooldown: 1500 } },
+  forge: { id: 'forge', name: 'Forge', cost: { wood: 150, ore: 50 }, time: 35000, w: 3, h: 3, hp: 700, sight: 4, faction: 'ember', limit: 1 },
+  dock: { id: 'dock', name: 'Dock', cost: { wood: 140 }, time: 30000, w: 2, h: 2, hp: 500, sight: 5, faction: 'tide', shore: true, limit: 3 },
+  grove: { id: 'grove', name: 'Grove', cost: { wood: 100, food: 50 }, time: 30000, w: 2, h: 2, hp: 500, sight: 4, drops: ['wood'], faction: 'thorn', limit: 2 },
+  wall: { id: 'wall', name: 'Palisade', cost: { wood: 4 }, time: 2500, w: 1, h: 1, hp: 250, sight: 1, palisade: true },
+  gate: { id: 'gate', name: 'Gate', cost: { wood: 25 }, time: 8000, w: 1, h: 1, hp: 450, sight: 2, palisade: true },
+  monument: { id: 'monument', name: 'Monument', cost: { wood: 500, food: 300, ore: 400 }, time: 90000, w: 3, h: 3, hp: 2500, sight: 5, age: 3, limit: 1 },
 };
 
+/** The build list's first page; the faction's own building comes after these. */
 export const BUILD_ORDER: BuildingId[] = ['house', 'farm', 'lumber', 'mine', 'barracks', 'range', 'stable', 'academy', 'watchtower'];
+/** The build list's second page. */
+export const BUILD_MORE: BuildingId[] = ['wall', 'gate', 'monument'];
+/** Each faction's unique building. */
+export const UNIQUE: Record<FactionId, BuildingId> = { ember: 'forge', tide: 'dock', thorn: 'grove' };
+/** What each unique building does, for the menu and the panel. */
+export const UNIQUE_TEXT: Record<FactionId, string> = {
+  ember: 'Forge: soldiers cost 20% less',
+  tide: 'Dock: fishes 10 food every 12 s',
+  thorn: 'Grove: regrows trees, takes wood',
+};
+/** Soldier costs with a finished Forge (Ember Legion). */
+export const FORGE_COST = 0.8;
+/** A finished Dock lands this much food every DOCK_MS (Tide Coven). */
+export const DOCK_FOOD = 10;
+export const DOCK_MS = 12000;
+/** A finished Grove plants a tree within GROVE_RANGE tiles every GROVE_MS, up to GROVE_TREES around it (Thorn Grove). */
+export const GROVE_MS = 15000;
+export const GROVE_RANGE = 4;
+export const GROVE_TREES = 14;
 
 export interface TechDef {
   id: string;
@@ -230,3 +282,28 @@ export const STIRRUPS_SPEED = 1.2;
 export const SHIELDWALL_TAKEN = 0.8;
 /** Gather speed on farms under Harvest Rites. */
 export const HARVEST_RITES = 1.2;
+
+/** Units closer than this, in tiles, push each other apart, so armies don't stack on one spot. */
+export const UNIT_GAP = 0.55;
+
+/**
+ * Neutral camps, guarded by wild Brigands and Poachers. A cache gives its pile once to the first side
+ * that stands at it with its guards dead; a relic gives a small lasting bonus to whichever side holds
+ * it, and changes hands when the other side stands at it alone.
+ */
+export const RELICS = {
+  plenty: { id: 'plenty', name: 'Relic of Plenty', text: 'Villagers gather 10% faster' },
+  valor: { id: 'valor', name: 'Relic of Valor', text: 'Soldiers deal +1 damage' },
+  haste: { id: 'haste', name: 'Relic of Haste', text: 'Every unit moves 10% faster' },
+} as const;
+export type RelicId = keyof typeof RELICS;
+export const RELIC_GATHER = 1.1;
+export const RELIC_DAMAGE = 1;
+export const RELIC_SPEED = 1.1;
+/** How close, in tiles from a camp's middle, a unit must stand to claim it. */
+export const CLAIM_RANGE = 2.6;
+/** A guard walks back to its camp when it strays this far from it. */
+export const LEASH = 7;
+
+/** The Monument (Age III): if it stands this long once built, its owner wins. */
+export const MONUMENT_MS = 180000;

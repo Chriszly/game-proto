@@ -6,7 +6,22 @@ import {
   ARMY_DEED,
   BUILDINGS,
   CARRY,
+  CLAIM_RANGE,
+  DOCK_FOOD,
+  DOCK_MS,
+  FORGE_COST,
+  GROVE_MS,
+  GROVE_RANGE,
+  GROVE_TREES,
   HARVEST_RITES,
+  LEASH,
+  MONUMENT_MS,
+  RELIC_DAMAGE,
+  RELIC_GATHER,
+  RELIC_SPEED,
+  UNIT_GAP,
+  RELICS,
+  type RelicId,
   STIRRUPS_SPEED,
   SHIELDWALL_TAKEN,
   type BoonId,
@@ -22,7 +37,7 @@ import {
   type Resource,
   type UnitDef,
 } from './data';
-import { START_TILES, WATER, ROCK, idx, inMap, type MapData, type Node } from './map';
+import { AMOUNT, START_TILES, WATER, ROCK, idx, inMap, type MapData, type Node } from './map';
 
 export type Order =
   | { t: 'idle' }
@@ -59,12 +74,15 @@ export interface Unit {
   face: 1 | -1;
   /** Game time of its last blow or shot. */
   struck: number;
+  /** A camp guard's post: it never strays more than LEASH tiles from it. */
+  post: { x: number; y: number } | null;
 }
 
 /** Things that happened this tick, for the scene's effects; the scene empties the list each frame. */
 export type SimEvent =
   | { t: 'hit'; x: number; y: number; fromX: number; fromY: number; dmg: number; ranged: boolean; owner: number }
-  | { t: 'drop'; x: number; y: number; res: Resource; n: number; owner: number };
+  | { t: 'drop'; x: number; y: number; res: Resource; n: number; owner: number }
+  | { t: 'grow'; x: number; y: number };
 
 /** A raid: the AI's army sent at the player's Town Center. Repelling it is a deed for Age III. */
 export interface Raid {
@@ -98,6 +116,28 @@ export interface Building {
   buildLeft: number;
   queue: QueueItem[];
   cool: number;
+  /** Where new units walk to (a rally flag); on a resource node, new villagers gather it. */
+  rally: { x: number; y: number } | null;
+  /** Game time it was finished (the Monument counts from it); -1 while unfinished. */
+  doneAt: number;
+  /** Time towards the next catch or sapling, for the Dock and the Grove. */
+  workMs: number;
+}
+
+/** A neutral camp: a cache to take once, or a relic to hold. Its guards are units of NEUTRAL. */
+export interface Camp {
+  id: number;
+  kind: 'cache' | 'relic';
+  tx: number;
+  ty: number;
+  res: Resource | null;
+  amount: number;
+  relic: RelicId | null;
+  /** The side holding the relic, or that took the cache; null while nobody has. */
+  holder: number | null;
+  /** A cache that was taken: it is gone from the map. */
+  claimed: boolean;
+  guards: number[];
 }
 
 export interface Player {
@@ -119,8 +159,11 @@ export interface GameState {
   time: number;
   winner: number | null;
   terrain: Uint8Array;
-  /** 1 where a tile is blocked for walking: terrain, buildings and nodes. */
+  /** 1 where a tile is blocked for walking: terrain, buildings, camps and nodes. */
   solid: Uint8Array;
+  /** The owner of a finished gate on a tile (only its owner walks through), or -1. */
+  gates: Int8Array;
+  camps: Camp[];
   /** 0 unseen, 1 explored, 2 in sight of the player right now. */
   sight: Uint8Array;
   nodes: Map<number, Node>;
@@ -137,6 +180,8 @@ export interface GameState {
   raids: number;
   repelled: number;
   events: SimEvent[];
+  /** How the match was won: the enemy Town Center fell, or a Monument stood long enough. */
+  winBy: 'town' | 'monument' | null;
 }
 
 export type Command =
@@ -149,6 +194,8 @@ export type Command =
 
 export const PLAYER = 0;
 export const AI = 1;
+/** The wild guards of the neutral camps: everyone's enemy, and nobody's to command. */
+export const NEUTRAL = 2;
 
 /**
  * Starts a match. `aiGatherMul` scales how fast the AI gathers (the difficulty's number; 1 is the game
@@ -160,6 +207,8 @@ export function createGame(faction: FactionId, aiFaction: FactionId, aiGatherMul
     winner: null,
     terrain: map.terrain,
     solid: new Uint8Array(MAP_SIZE * MAP_SIZE),
+    gates: new Int8Array(MAP_SIZE * MAP_SIZE).fill(-1),
+    camps: [],
     sight: new Uint8Array(MAP_SIZE * MAP_SIZE),
     nodes: new Map(),
     units: new Map(),
@@ -167,6 +216,8 @@ export function createGame(faction: FactionId, aiFaction: FactionId, aiGatherMul
     players: [
       { id: PLAYER, faction, res: { ...START }, techs: [], age: 1, gatherMul: 1, deeds: { age2: false, army: 0, raid: false }, boon: null, boonPending: false },
       { id: AI, faction: aiFaction, res: { ...START }, techs: [], age: 1, gatherMul: aiGatherMul, deeds: { age2: false, army: 0, raid: false }, boon: null, boonPending: false },
+      // The camp guards' side. Its faction is only a placeholder: wild units have their own colours.
+      { id: NEUTRAL, faction, res: { wood: 0, food: 0, ore: 0 }, techs: [], age: 1, gatherMul: 1, deeds: { age2: false, army: 0, raid: false }, boon: null, boonPending: false },
     ],
     nextId: 1000,
     notice: '',
@@ -176,14 +227,29 @@ export function createGame(faction: FactionId, aiFaction: FactionId, aiGatherMul
     raids: 0,
     repelled: 0,
     events: [],
+    winBy: null,
   };
   for (const n of map.nodes) s.nodes.set(n.id, n);
   // Node ids come from the map, so units and buildings count on from the largest of them.
   s.nextId = Math.max(s.nextId, ...[...s.nodes.keys()]) + 1;
+  for (const spot of map.camps) {
+    s.camps.push({ id: s.nextId++, kind: spot.kind, tx: spot.tx, ty: spot.ty, res: spot.res ?? null, amount: spot.amount ?? 0, relic: spot.relic ?? null, holder: null, claimed: false, guards: [] });
+  }
   START_TILES.forEach((start, owner) => {
     addBuilding(s, owner, 'town', start.tx, start.ty, true);
   });
   rebuildSolid(s);
+  // The guards stand around their camp, spread over the free tiles next to it.
+  s.camps.forEach((camp, k) => {
+    const spots = ringAround(s, camp.tx, camp.ty, 2, 2);
+    map.camps[k].guards.forEach((type, i) => {
+      const at = spots[Math.floor((i * spots.length) / map.camps[k].guards.length)];
+      if (!at) return;
+      const u = spawnAt(s, NEUTRAL, type, at.x, at.y);
+      u.post = { x: at.x, y: at.y };
+      camp.guards.push(u.id);
+    });
+  });
   START_TILES.forEach((_, owner) => {
     const town = [...s.buildings.values()].find((b) => b.owner === owner && b.type === 'town');
     if (!town) return;
@@ -211,6 +277,33 @@ export function affordable(p: Player, cost: Cost) {
 
 function pay(p: Player, cost: Cost) {
   for (const r of Object.keys(cost) as Resource[]) p.res[r] -= cost[r] ?? 0;
+}
+
+/** What a unit costs a player: soldiers are cheaper with a finished Forge (Ember Legion). */
+export function unitCost(s: GameState, owner: number, def: UnitDef): Cost {
+  if (def.role === 'villager' || !hasBuilt(s, owner, 'forge')) return def.cost;
+  const out: Cost = {};
+  for (const r of Object.keys(def.cost) as Resource[]) out[r] = Math.round((def.cost[r] ?? 0) * FORGE_COST);
+  return out;
+}
+
+/** Whether a side holds a relic. */
+export function holds(s: GameState, owner: number, relic: RelicId) {
+  return s.camps.some((c) => c.relic === relic && c.holder === owner);
+}
+
+/** Why a player may not place a building at all (not its faction's, too early, or at its limit), or null. */
+export function notAllowed(s: GameState, owner: number, type: BuildingId): string | null {
+  const def = BUILDINGS[type];
+  const p = s.players[owner];
+  if (def.faction && def.faction !== p.faction) return 'Not your faction';
+  if (def.age && p.age < def.age) return `Needs Age ${def.age === 3 ? 'III' : 'II'}`;
+  if (def.limit !== undefined) {
+    let n = 0;
+    for (const b of s.buildings.values()) if (b.owner === owner && b.type === type) n++;
+    if (n >= def.limit) return def.limit === 1 ? 'You have one already' : `At most ${def.limit}`;
+  }
+  return null;
 }
 
 function footprint(e: Unit | Building | Node): { x0: number; y0: number; x1: number; y1: number } {
@@ -309,6 +402,9 @@ function addBuilding(s: GameState, owner: number, type: BuildingId, tx: number, 
     buildLeft: def.time,
     queue: [],
     cool: 0,
+    rally: null,
+    doneAt: built ? s.time : -1,
+    workMs: 0,
   };
   s.buildings.set(b.id, b);
   return b;
@@ -317,13 +413,17 @@ function addBuilding(s: GameState, owner: number, type: BuildingId, tx: number, 
 function spawnUnit(s: GameState, owner: number, type: string, near: Building): Unit | null {
   const spot = freeSpotNear(s, near);
   if (!spot) return null;
+  return spawnAt(s, owner, type, spot.x, spot.y);
+}
+
+function spawnAt(s: GameState, owner: number, type: string, x: number, y: number): Unit {
   const def = UNITS[type];
   const u: Unit = {
     id: s.nextId++,
     owner,
     type,
-    x: spot.x,
-    y: spot.y,
+    x,
+    y,
     hp: def.hp,
     order: { t: 'idle' },
     path: [],
@@ -337,6 +437,7 @@ function spawnUnit(s: GameState, owner: number, type: string, near: Building): U
     act: 'idle',
     face: owner === PLAYER ? 1 : -1,
     struck: -1e9,
+    post: null,
   };
   s.units.set(u.id, u);
   return u;
@@ -349,23 +450,53 @@ function freeSpotNear(s: GameState, b: Building): { x: number; y: number } | nul
     for (let y = b.ty - r; y < b.ty + def.h + r; y++)
       for (let x = b.tx - r; x < b.tx + def.w + r; x++) {
         const edge = x < b.tx || y < b.ty || x >= b.tx + def.w || y >= b.ty + def.h;
-        if (!edge || !inMap(x, y) || s.solid[idx(x, y)]) continue;
+        if (!edge || !inMap(x, y) || blocked(s, x, y, b.owner)) continue;
         return { x: x + 0.5, y: y + 0.5 };
       }
   }
   return null;
 }
 
-/** Marks every blocked tile: terrain, buildings (even unfinished ones) and nodes. */
+/** The free tile centres in a ring `r` tiles out from a w x h footprint, clockwise from the top-left. */
+function ringAround(s: GameState, tx: number, ty: number, w: number, h: number, r = 1): { x: number; y: number }[] {
+  const out: { x: number; y: number }[] = [];
+  const x0 = tx - r;
+  const y0 = ty - r;
+  const x1 = tx + w - 1 + r;
+  const y1 = ty + h - 1 + r;
+  const push = (x: number, y: number) => {
+    if (inMap(x, y) && !s.solid[idx(x, y)]) out.push({ x: x + 0.5, y: y + 0.5 });
+  };
+  for (let x = x0; x < x1; x++) push(x, y0);
+  for (let y = y0; y < y1; y++) push(x1, y);
+  for (let x = x1; x > x0; x--) push(x, y1);
+  for (let y = y1; y > y0; y--) push(x0, y);
+  return out;
+}
+
+/** Whether a tile stops a unit of `owner`: solid ground, or a gate that isn't its own. */
+export function blocked(s: GameState, x: number, y: number, owner: number) {
+  if (!inMap(x, y)) return true;
+  const i = idx(x, y);
+  return s.solid[i] === 1 || (s.gates[i] >= 0 && s.gates[i] !== owner);
+}
+
+/**
+ * Marks every blocked tile: terrain, buildings (even unfinished ones), camps and nodes. A finished
+ * gate is not solid: it goes in `gates`, so only its owner's units walk through it.
+ */
 export function rebuildSolid(s: GameState) {
   for (let i = 0; i < s.solid.length; i++) s.solid[i] = s.terrain[i] === WATER || s.terrain[i] === ROCK ? 1 : 0;
+  s.gates.fill(-1);
   const mark = (tx: number, ty: number, w: number, h: number) => {
     for (let y = ty; y < ty + h; y++) for (let x = tx; x < tx + w; x++) if (inMap(x, y)) s.solid[idx(x, y)] = 1;
   };
   for (const n of s.nodes.values()) mark(n.tx, n.ty, n.w, n.h);
+  for (const c of s.camps) if (!c.claimed) mark(c.tx, c.ty, 2, 2);
   for (const b of s.buildings.values()) {
     const def = BUILDINGS[b.type];
-    mark(b.tx, b.ty, def.w, def.h);
+    if (b.type === 'gate' && b.built) s.gates[idx(b.tx, b.ty)] = b.owner;
+    else mark(b.tx, b.ty, def.w, def.h);
   }
 }
 
@@ -401,7 +532,7 @@ const NEIGHBOURS = [
  * Breadth-first search from a point to the nearest tile that `goal` accepts. Returns the tile
  * centres to walk through (empty if the start already qualifies), or null when nothing is reachable.
  */
-export function findPath(s: GameState, sx: number, sy: number, goal: (tx: number, ty: number) => boolean) {
+export function findPath(s: GameState, sx: number, sy: number, goal: (tx: number, ty: number) => boolean, owner = -1) {
   const startX = Math.floor(sx);
   const startY = Math.floor(sy);
   if (goal(startX, startY)) return [];
@@ -420,9 +551,10 @@ export function findPath(s: GameState, sx: number, sy: number, goal: (tx: number
       const ny = cy + dy;
       if (!inMap(nx, ny)) continue;
       const ni = idx(nx, ny);
-      if (visited[ni] === stamp || s.solid[ni]) continue;
-      // A diagonal step needs both straight neighbours free, so units never squeeze past a corner.
-      if (dx && dy && (s.solid[idx(cx + dx, cy)] || s.solid[idx(cx, cy + dy)])) continue;
+      if (visited[ni] === stamp || blocked(s, nx, ny, owner)) continue;
+      // A diagonal step needs both straight neighbours free, so units never squeeze past a corner
+      // (and a diagonal palisade has no gaps).
+      if (dx && dy && (blocked(s, cx + dx, cy, owner) || blocked(s, cx, cy + dy, owner))) continue;
       visited[ni] = stamp;
       parent[ni] = cur;
       if (goal(nx, ny)) {
@@ -463,7 +595,7 @@ function stepAlong(u: Unit, speed: number, dt: number) {
 function pursue(s: GameState, u: Unit, speed: number, dt: number, goal: (tx: number, ty: number) => boolean): boolean {
   u.repath -= dt;
   if (u.path.length === 0 || u.repath <= 0) {
-    const path = findPath(s, u.x, u.y, goal);
+    const path = findPath(s, u.x, u.y, goal, u.owner);
     if (path === null) return false;
     // Already on a qualifying tile: still walk to its centre, so the unit is in reach of the goal.
     u.path = path.length > 0 ? path : [{ x: Math.floor(u.x) + 0.5, y: Math.floor(u.y) + 0.5 }];
@@ -511,30 +643,83 @@ export function issue(s: GameState, owner: number, ids: number[], cmd: Command) 
   }
 }
 
-/** Places a building if the footprint is free and the owner can pay. Returns its id, or null. */
+/**
+ * Places a building if the owner may build it, the footprint is free and the owner can pay. Returns
+ * its id, or null. A gate placed on the owner's own palisade replaces that piece of wall.
+ */
 export function placeBuilding(s: GameState, owner: number, type: BuildingId, tx: number, ty: number): number | null {
   const def = BUILDINGS[type];
   const p = s.players[owner];
-  if (!affordable(p, def.cost)) return null;
-  if (!canPlace(s, type, tx, ty)) return null;
+  if (notAllowed(s, owner, type) || !affordable(p, def.cost)) return null;
+  if (!canPlace(s, type, tx, ty, owner)) return null;
   pay(p, def.cost);
+  const old = type === 'gate' ? wallAt(s, owner, tx, ty) : null;
+  if (old) s.buildings.delete(old.id);
   const b = addBuilding(s, owner, type, tx, ty, false);
   rebuildSolid(s);
   return b.id;
 }
 
-/** Whether a building fits: free ground, with no unit standing on any of its tiles. */
-export function canPlace(s: GameState, type: BuildingId, tx: number, ty: number) {
+/** The owner's palisade piece on a tile, if any. */
+function wallAt(s: GameState, owner: number, tx: number, ty: number): Building | null {
+  for (const b of s.buildings.values()) if (b.owner === owner && b.type === 'wall' && b.tx === tx && b.ty === ty) return b;
+  return null;
+}
+
+/**
+ * Whether a building fits: free ground, with no unit standing on any of its tiles, that a builder can
+ * reach. A Dock must also touch water, and a gate may go on the owner's own palisade.
+ */
+export function canPlace(s: GameState, type: BuildingId, tx: number, ty: number, owner = PLAYER) {
   const def = BUILDINGS[type];
-  for (let y = ty; y < ty + def.h; y++)
-    for (let x = tx; x < tx + def.w; x++) if (!inMap(x, y) || s.solid[idx(x, y)]) return false;
+  const onWall = type === 'gate' && wallAt(s, owner, tx, ty) !== null;
+  if (!onWall)
+    for (let y = ty; y < ty + def.h; y++)
+      for (let x = tx; x < tx + def.w; x++) if (!inMap(x, y) || s.solid[idx(x, y)] || s.gates[idx(x, y)] >= 0) return false;
   for (const u of s.units.values()) {
     const ux = Math.floor(u.x);
     const uy = Math.floor(u.y);
     if (ux >= tx && ux < tx + def.w && uy >= ty && uy < ty + def.h) return false;
   }
+  if (def.shore && !nearWater(s, tx, ty, def.w, def.h)) return false;
   // Someone has to be able to reach it to build it.
   return touchable(s, { x0: tx, y0: ty, x1: tx + def.w, y1: ty + def.h });
+}
+
+/** Whether water touches a footprint's edge (the Dock's shore). */
+export function nearWater(s: GameState, tx: number, ty: number, w: number, h: number) {
+  for (let y = ty - 1; y <= ty + h; y++)
+    for (let x = tx - 1; x <= tx + w; x++) if (inMap(x, y) && s.terrain[idx(x, y)] === WATER) return true;
+  return false;
+}
+
+/** The tiles of a palisade line from one tile to another, as a player drags it out (no gaps on diagonals). */
+export function wallLine(x0: number, y0: number, x1: number, y1: number): { tx: number; ty: number }[] {
+  const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0));
+  const out: { tx: number; ty: number }[] = [];
+  for (let i = 0; i <= n; i++) {
+    const t = n === 0 ? 0 : i / n;
+    out.push({ tx: Math.round(x0 + (x1 - x0) * t), ty: Math.round(y0 + (y1 - y0) * t) });
+  }
+  return out.slice(0, 40);
+}
+
+/** Places a line of palisade, as many pieces as fit and the owner can pay for. Returns their ids. */
+export function placeWall(s: GameState, owner: number, tiles: { tx: number; ty: number }[]): number[] {
+  const ids: number[] = [];
+  for (const t of tiles) {
+    const id = placeBuilding(s, owner, 'wall', t.tx, t.ty);
+    if (id !== null) ids.push(id);
+  }
+  return ids;
+}
+
+/** Sets where a production building's new units go. */
+export function setRally(s: GameState, owner: number, bid: number, x: number, y: number): boolean {
+  const b = s.buildings.get(bid);
+  if (!b || b.owner !== owner || !BUILDINGS[b.type].trains) return false;
+  b.rally = { x, y };
+  return true;
 }
 
 /** Queues a unit at a finished building the owner controls. */
@@ -544,8 +729,9 @@ export function train(s: GameState, owner: number, bid: number, type: string): b
   if (!b || b.owner !== owner || !b.built || !def) return false;
   if (!BUILDINGS[b.type].trains?.includes(def.role)) return false;
   const p = s.players[owner];
-  if (!affordable(p, def.cost) || popUsed(s, owner) + 1 > popCap(s, owner)) return false;
-  pay(p, def.cost);
+  const cost = unitCost(s, owner, def);
+  if (!affordable(p, cost) || popUsed(s, owner) + 1 > popCap(s, owner)) return false;
+  pay(p, cost);
   b.queue.push({ kind: 'unit', key: type, left: def.time });
   return true;
 }
@@ -633,6 +819,7 @@ function updateRaid(s: GameState) {
 
 function updateDeeds(s: GameState) {
   for (const p of s.players) {
+    if (p.id === NEUTRAL) continue;
     if (p.age >= 2) p.deeds.age2 = true;
     p.deeds.army = Math.max(p.deeds.army, soldierCount(s, p.id));
   }
@@ -666,7 +853,9 @@ export function tick(s: GameState, dt: number) {
   s.noticeMs = Math.max(0, s.noticeMs - dt);
   for (const b of [...s.buildings.values()]) updateBuilding(s, b, dt);
   for (const u of [...s.units.values()]) if (u.hp > 0) updateUnit(s, u, dt);
+  separate(s, dt);
   reap(s);
+  updateCamps(s);
   updateDeeds(s);
   updateRaid(s);
   updateSight(s);
@@ -676,6 +865,8 @@ export function tick(s: GameState, dt: number) {
 function updateBuilding(s: GameState, b: Building, dt: number) {
   if (b.hp <= 0 || !b.built) return;
   const def = BUILDINGS[b.type];
+  if (b.type === 'dock') fish(s, b, dt);
+  if (b.type === 'grove') grow(s, b, dt);
   if (def.tower) {
     b.cool -= dt;
     if (b.cool <= 0) {
@@ -711,6 +902,7 @@ function updateBuilding(s: GameState, b: Building, dt: number) {
     return;
   }
   b.queue.shift();
+  if (b.rally) return sendToRally(s, b, unit);
   // A new villager goes to work on whichever of wood and food is short.
   if (UNITS[unit.type].role === 'villager') {
     const res: Resource = s.players[b.owner].res.food < s.players[b.owner].res.wood ? 'food' : 'wood';
@@ -722,6 +914,76 @@ function updateBuilding(s: GameState, b: Building, dt: number) {
   }
 }
 
+/** A new unit walks to its building's rally flag; a villager whose flag is on a tree, bush, mine or farm gathers there. */
+function sendToRally(s: GameState, b: Building, u: Unit) {
+  const r = b.rally!;
+  const role = UNITS[u.type].role;
+  if (role === 'villager') {
+    const hit = entityAt(s, r.x, r.y);
+    const farm = hit?.kind === 'building' ? s.buildings.get(hit.id) : undefined;
+    if (hit?.kind === 'node' || (farm && farm.owner === b.owner && farm.built && BUILDINGS[farm.type].farm)) {
+      u.home = hit!.id;
+      u.order = { t: 'gather', node: hit!.id };
+      return;
+    }
+  }
+  // Each newcomer takes the next spot on a ring round the flag, so they don't stack on it.
+  const k = s.units.size % RALLY_SPOTS.length;
+  const [ox, oy] = RALLY_SPOTS[k];
+  u.order = { t: 'move', x: r.x + ox, y: r.y + oy };
+}
+
+const RALLY_SPOTS: [number, number][] = [[1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, 1], [-1, -1], [1, -1], [2, 0], [0, 2], [-2, 0], [0, -2]];
+
+/** The Dock (Tide Coven) lands a catch of food every DOCK_MS. */
+function fish(s: GameState, b: Building, dt: number) {
+  b.workMs += dt;
+  if (b.workMs < DOCK_MS) return;
+  b.workMs -= DOCK_MS;
+  s.players[b.owner].res.food += DOCK_FOOD;
+  emit(s, { t: 'drop', x: b.tx + 1, y: b.ty + 0.5, res: 'food', n: DOCK_FOOD, owner: b.owner });
+}
+
+/**
+ * The Grove (Thorn Grove) plants a tree every GROVE_MS on a free tile within GROVE_RANGE of it, until
+ * GROVE_TREES stand around it. A sapling never goes next to a building, so nothing gets boxed in.
+ */
+function grow(s: GameState, b: Building, dt: number) {
+  b.workMs += dt;
+  if (b.workMs < GROVE_MS) return;
+  b.workMs -= GROVE_MS;
+  const cx = b.tx + 1;
+  const cy = b.ty + 1;
+  let trees = 0;
+  for (const n of s.nodes.values()) if (n.kind === 'tree' && Math.hypot(n.tx + 0.5 - cx, n.ty + 0.5 - cy) <= GROVE_RANGE + 1) trees++;
+  if (trees >= GROVE_TREES) return;
+  const free: { x: number; y: number; d: number }[] = [];
+  for (let y = cy - GROVE_RANGE; y < cy + GROVE_RANGE; y++)
+    for (let x = cx - GROVE_RANGE; x < cx + GROVE_RANGE; x++) {
+      const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
+      if (d > GROVE_RANGE || !inMap(x, y) || s.solid[idx(x, y)] || s.gates[idx(x, y)] >= 0) continue;
+      if ([...s.units.values()].some((u) => Math.floor(u.x) === x && Math.floor(u.y) === y)) continue;
+      if (nextToBuilding(s, x, y)) continue;
+      free.push({ x, y, d });
+    }
+  if (free.length === 0) return;
+  // The same order every time, so a run repeats: the next tile round the circle from the last.
+  free.sort((p, q) => ((p.x * 7 + p.y * 13) % 17) - ((q.x * 7 + q.y * 13) % 17) || p.d - q.d);
+  const at = free[Math.floor(s.time / GROVE_MS) % free.length];
+  const tree: Node = { id: s.nextId++, kind: 'tree', res: 'wood', tx: at.x, ty: at.y, w: 1, h: 1, amount: AMOUNT.tree };
+  s.nodes.set(tree.id, tree);
+  rebuildSolid(s);
+  emit(s, { t: 'grow', x: at.x + 0.5, y: at.y + 0.5 });
+}
+
+function nextToBuilding(s: GameState, x: number, y: number) {
+  for (const b of s.buildings.values()) {
+    const def = BUILDINGS[b.type];
+    if (x >= b.tx - 1 && x <= b.tx + def.w && y >= b.ty - 1 && y <= b.ty + def.h) return true;
+  }
+  return false;
+}
+
 function updateUnit(s: GameState, u: Unit, dt: number) {
   const def = unitDef(u);
   u.cool = Math.max(0, u.cool - dt);
@@ -731,6 +993,7 @@ function updateUnit(s: GameState, u: Unit, dt: number) {
 }
 
 function militaryUpdate(s: GameState, u: Unit, def: UnitDef, dt: number) {
+  if (u.post) return guardUpdate(s, u, def, dt);
   const o = u.order;
   if (o.t === 'idle') {
     const t = nearestEnemy(s, u.owner, u.x, u.y, def.sight);
@@ -750,7 +1013,8 @@ function militaryUpdate(s: GameState, u: Unit, def: UnitDef, dt: number) {
       return;
     }
     if (u.path.length === 0 && Math.hypot(u.x - o.x, u.y - o.y) < 0.9) return void (u.order = { t: 'idle' });
-    if (!pursue(s, u, speedOf(s, u, def), dt, goalNear(s, o.x, o.y))) u.order = { t: 'idle' };
+    // Walled off: break through the nearest enemy palisade or gate instead.
+    if (!pursue(s, u, speedOf(s, u, def), dt, goalNear(s, o.x, o.y)) && !breach(s, u, { x: o.x, y: o.y })) u.order = { t: 'idle' };
     return;
   }
   if (o.t === 'attack') {
@@ -773,10 +1037,54 @@ function militaryUpdate(s: GameState, u: Unit, def: UnitDef, dt: number) {
     }
     const range = def.range;
     if (!pursue(s, u, speedOf(s, u, def), dt, (tx, ty) => !s.solid[idx(tx, ty)] && gap(tx + 0.5, ty + 0.5, f) <= range)) {
-      u.order = o.resume ? { t: 'attackMove', ...o.resume } : { t: 'idle' };
+      const isWall = 'queue' in target && BUILDINGS[target.type].palisade;
+      if (isWall || !breach(s, u, o.resume ?? centre(f))) u.order = o.resume ? { t: 'attackMove', ...o.resume } : { t: 'idle' };
     }
     return;
   }
+}
+
+/** A soldier that can't reach where it is going attacks the nearest enemy palisade or gate, then goes on. */
+function breach(s: GameState, u: Unit, resume: { x: number; y: number }): boolean {
+  const wall = nearestEnemy(s, u.owner, u.x, u.y, 30, 'palisade');
+  if (wall) u.order = { t: 'attack', target: wall.id, resume };
+  return !!wall;
+}
+
+/**
+ * A camp guard: fights anything that comes within its sight of its post, chases it no further than
+ * LEASH tiles from the post, then walks back.
+ */
+function guardUpdate(s: GameState, u: Unit, def: UnitDef, dt: number) {
+  const post = u.post!;
+  const o = u.order;
+  const away = Math.hypot(u.x - post.x, u.y - post.y);
+  if (o.t === 'attack') {
+    const target = getEntity(s, o.target);
+    if (!target || target.hp <= 0 || away > LEASH) return void (u.order = { t: 'move', x: post.x, y: post.y });
+    const f = footprint(target);
+    if (gap(u.x, u.y, f) <= def.range + 0.5) {
+      u.path = [];
+      u.act = 'fight';
+      faceTo(u, centre(f).x);
+      if (u.cool <= 0) {
+        strike(s, u, def, target);
+        u.cool = def.cooldown;
+      }
+      return;
+    }
+    const range = def.range;
+    if (!pursue(s, u, def.speed, dt, (tx, ty) => !s.solid[idx(tx, ty)] && gap(tx + 0.5, ty + 0.5, f) <= range)) u.order = { t: 'move', x: post.x, y: post.y };
+    return;
+  }
+  const t = nearestEnemy(s, u.owner, post.x, post.y, def.sight, 'units');
+  if (t && away <= LEASH) return void (u.order = { t: 'attack', target: t.id, resume: null });
+  if (o.t === 'move') {
+    if (u.path.length === 0 && Math.hypot(u.x - o.x, u.y - o.y) < 0.9) return void (u.order = { t: 'idle' });
+    if (!pursue(s, u, def.speed, dt, goalNear(s, o.x, o.y))) u.order = { t: 'idle' };
+    return;
+  }
+  if (away > 1.5) u.order = { t: 'move', x: post.x, y: post.y };
 }
 
 function villagerUpdate(s: GameState, u: Unit, def: UnitDef, dt: number) {
@@ -787,7 +1095,7 @@ function villagerUpdate(s: GameState, u: Unit, def: UnitDef, dt: number) {
   }
   if (o.t === 'move') {
     if (u.path.length === 0 && Math.hypot(u.x - o.x, u.y - o.y) < 0.9) return void (u.order = { t: 'idle' });
-    if (!pursue(s, u, def.speed, dt, goalNear(s, o.x, o.y))) u.order = { t: 'idle' };
+    if (!pursue(s, u, speedOf(s, u, def), dt, goalNear(s, o.x, o.y))) u.order = { t: 'idle' };
     return;
   }
   if (o.t === 'build') {
@@ -802,16 +1110,21 @@ function villagerUpdate(s: GameState, u: Unit, def: UnitDef, dt: number) {
       b.buildLeft -= dt;
       b.hp = Math.min(BUILDINGS[b.type].hp, b.hp + (BUILDINGS[b.type].hp * dt) / BUILDINGS[b.type].time);
       if (b.buildLeft <= 0) {
-        b.built = true;
-        b.hp = BUILDINGS[b.type].hp;
-        // A builder goes on to work the new farm, or else the nearest wood.
+        finish(s, b);
+        // A builder goes on to work the new farm, or the next unfinished building close by (the
+        // rest of a palisade line), or else the nearest wood.
+        const unbuilt = BUILDINGS[b.type].farm ? null : nearestUnbuilt(s, u.owner, u.x, u.y, 6);
+        if (unbuilt) {
+          u.order = { t: 'build', b: unbuilt.id };
+          return;
+        }
         const next = BUILDINGS[b.type].farm ? { id: b.id } : nearestSource(s, u.owner, 'wood', u.x, u.y);
         u.order = next ? { t: 'gather', node: next.id } : { t: 'idle' };
         u.home = next ? next.id : null;
       }
       return;
     }
-    if (!pursue(s, u, def.speed, dt, (tx, ty) => !s.solid[idx(tx, ty)] && gap(tx + 0.5, ty + 0.5, f) <= 0.5)) {
+    if (!pursue(s, u, speedOf(s, u, def), dt, (tx, ty) => !s.solid[idx(tx, ty)] && gap(tx + 0.5, ty + 0.5, f) <= 0.5)) {
       u.order = { t: 'idle' };
     }
     return;
@@ -842,7 +1155,8 @@ function villagerUpdate(s: GameState, u: Unit, def: UnitDef, dt: number) {
       faceTo(u, centre(f).x);
       // Harvest Rites, the Age II boon, speeds up work on farms.
       const rites = !node && s.players[u.owner].boon === 'harvest' ? HARVEST_RITES : 1;
-      u.gatherMs += dt * gatherBonus(s, u.owner, res) * s.players[u.owner].gatherMul * rites;
+      const relic = holds(s, u.owner, 'plenty') ? RELIC_GATHER : 1;
+      u.gatherMs += dt * gatherBonus(s, u.owner, res) * s.players[u.owner].gatherMul * rites * relic;
       if (u.gatherMs >= GATHER_MS[res]) {
         u.gatherMs -= GATHER_MS[res];
         u.amount++;
@@ -856,7 +1170,7 @@ function villagerUpdate(s: GameState, u: Unit, def: UnitDef, dt: number) {
       }
       return;
     }
-    if (!pursue(s, u, def.speed, dt, (tx, ty) => !s.solid[idx(tx, ty)] && gap(tx + 0.5, ty + 0.5, f) <= 0.5)) {
+    if (!pursue(s, u, speedOf(s, u, def), dt, (tx, ty) => !s.solid[idx(tx, ty)] && gap(tx + 0.5, ty + 0.5, f) <= 0.5)) {
       // Boxed in by other trees or buildings: try the nearest source that can be reached instead.
       const other = nearestSource(s, u.owner, node ? node.res : 'food', u.x, u.y, src.id);
       u.order = other ? { t: 'gather', node: other.id } : { t: 'idle' };
@@ -888,16 +1202,37 @@ function villagerUpdate(s: GameState, u: Unit, def: UnitDef, dt: number) {
       u.home = again ? again.id : null;
       return;
     }
-    if (!pursue(s, u, def.speed, dt, (tx, ty) => !s.solid[idx(tx, ty)] && gap(tx + 0.5, ty + 0.5, f) <= 0.5)) {
+    if (!pursue(s, u, speedOf(s, u, def), dt, (tx, ty) => !s.solid[idx(tx, ty)] && gap(tx + 0.5, ty + 0.5, f) <= 0.5)) {
       u.order = { t: 'idle' };
     }
   }
 }
 
-/** Move speed: cavalry go faster under Stirrups. */
+/** A building is done: full health, and a gate opens to its owner; a finished Monument starts its count. */
+function finish(s: GameState, b: Building) {
+  b.built = true;
+  b.hp = BUILDINGS[b.type].hp;
+  b.doneAt = s.time;
+  if (b.type === 'gate') rebuildSolid(s);
+  if (b.type === 'monument') say(s, b.owner === PLAYER ? 'Your Monument stands: hold it for 3 minutes to win' : 'The enemy Monument stands: destroy it within 3 minutes');
+}
+
+function nearestUnbuilt(s: GameState, owner: number, x: number, y: number, range: number): Building | null {
+  let best: { b: Building; d: number } | null = null;
+  for (const b of s.buildings.values()) {
+    if (b.owner !== owner || b.built || b.hp <= 0) continue;
+    const def = BUILDINGS[b.type];
+    const d = gap(x, y, { x0: b.tx, y0: b.ty, x1: b.tx + def.w, y1: b.ty + def.h });
+    if (d <= range && (!best || d < best.d)) best = { b, d };
+  }
+  return best?.b ?? null;
+}
+
+/** Move speed: cavalry go faster under Stirrups, and everyone with the Relic of Haste. */
 function speedOf(s: GameState, u: Unit, def: UnitDef) {
   const stirrups = def.role === 'cavalry' && s.players[u.owner].techs.includes('stirrups');
-  return stirrups ? def.speed * STIRRUPS_SPEED : def.speed;
+  const haste = holds(s, u.owner, 'haste') ? RELIC_SPEED : 1;
+  return (stirrups ? def.speed * STIRRUPS_SPEED : def.speed) * haste;
 }
 
 /** Gather speed from researched techs. */
@@ -963,13 +1298,17 @@ function nearestDropoff(s: GameState, owner: number, res: Resource | null, x: nu
   return best?.b ?? null;
 }
 
-/** The closest living enemy unit or building within `range` tiles of a point. */
-function nearestEnemy(s: GameState, owner: number, x: number, y: number, range: number): Unit | Building | null {
-  const foes: (Unit | Building)[] = [...s.units.values(), ...s.buildings.values()];
+/**
+ * The closest living enemy within `range` tiles of a point. `auto` (what soldiers and towers pick on
+ * their own) skips palisades and gates, `palisade` looks only at those, `units` only at units.
+ */
+function nearestEnemy(s: GameState, owner: number, x: number, y: number, range: number, pick: 'auto' | 'palisade' | 'units' = 'auto'): Unit | Building | null {
+  const foes: (Unit | Building)[] = pick === 'palisade' ? [...s.buildings.values()] : pick === 'units' ? [...s.units.values()] : [...s.units.values(), ...s.buildings.values()];
   let best: Unit | Building | null = null;
   let bestD = Infinity;
   for (const e of foes) {
     if (e.owner === owner || e.hp <= 0) continue;
+    if ('queue' in e && !!BUILDINGS[e.type].palisade !== (pick === 'palisade')) continue;
     const d = gap(x, y, footprint(e));
     if (d <= range && d < bestD) {
       best = e;
@@ -1002,6 +1341,7 @@ function ownBonus(s: GameState, u: Unit, def: UnitDef) {
   if (def.role === 'ranged' && techs.includes('fletching')) bonus += 2;
   if (def.role === 'ranged' && techs.includes('bodkin')) bonus += 2;
   if (def.role !== 'villager' && s.players[u.owner].age >= 3) bonus += AGE3_DAMAGE;
+  if (def.role !== 'villager' && holds(s, u.owner, 'valor')) bonus += RELIC_DAMAGE;
   return bonus;
 }
 
@@ -1022,10 +1362,115 @@ function reap(s: GameState) {
 
 function checkWinner(s: GameState) {
   for (const p of s.players) {
+    if (p.id === NEUTRAL) continue;
     if (!hasBuildingFor(s, p.id, 'town')) {
       s.winner = p.id === PLAYER ? AI : PLAYER;
+      s.winBy = 'town';
       return;
     }
   }
+  // A Monument that has stood MONUMENT_MS since it was finished wins the match for its owner.
+  for (const b of s.buildings.values()) {
+    if (b.type === 'monument' && b.built && b.hp > 0 && s.time - b.doneAt >= MONUMENT_MS) {
+      s.winner = b.owner;
+      s.winBy = 'monument';
+      return;
+    }
+  }
+}
+
+/** Time left, in ms, before a side's standing Monument wins, or null if it has none finished. */
+export function monumentLeft(s: GameState, owner: number): number | null {
+  for (const b of s.buildings.values()) if (b.type === 'monument' && b.owner === owner && b.built && b.hp > 0) return Math.max(0, MONUMENT_MS - (s.time - b.doneAt));
+  return null;
+}
+
+/**
+ * Pushes units apart where they stand closer than UNIT_GAP, a little each tick, so a group spreads
+ * out instead of stacking on one spot. Villagers at work hold their place and only push others.
+ */
+function separate(s: GameState, dt: number) {
+  const grid = new Map<number, Unit[]>();
+  for (const u of s.units.values()) {
+    const k = idx(Math.floor(u.x), Math.floor(u.y));
+    const cell = grid.get(k);
+    if (cell) cell.push(u);
+    else grid.set(k, [u]);
+  }
+  const maxStep = (1.5 * dt) / 1000;
+  const anchored = (u: Unit) => u.act === 'gather' || u.act === 'build';
+  for (const u of s.units.values()) {
+    if (anchored(u) || u.hp <= 0) continue;
+    let px = 0;
+    let py = 0;
+    const cx = Math.floor(u.x);
+    const cy = Math.floor(u.y);
+    for (let dy = -1; dy <= 1; dy++)
+      for (let dx = -1; dx <= 1; dx++) {
+        const cell = grid.get(idx(cx + dx, cy + dy));
+        if (!cell || !inMap(cx + dx, cy + dy)) continue;
+        for (const o of cell) {
+          if (o === u) continue;
+          const ox = u.x - o.x;
+          const oy = u.y - o.y;
+          const d = Math.hypot(ox, oy);
+          if (d >= UNIT_GAP) continue;
+          // Two units on the very same point split along a direction fixed by their ids.
+          const a = d < 1e-4 ? ((u.id * 2.39996) % (Math.PI * 2)) : Math.atan2(oy, ox);
+          const share = anchored(o) ? 1 : 0.5;
+          px += Math.cos(a) * (UNIT_GAP - d) * share;
+          py += Math.sin(a) * (UNIT_GAP - d) * share;
+        }
+      }
+    const len = Math.hypot(px, py);
+    if (len < 1e-4) continue;
+    const k = Math.min(1, maxStep / len);
+    const nx = u.x + px * k;
+    const ny = u.y + py * k;
+    if (!blocked(s, Math.floor(nx), Math.floor(u.y), u.owner)) u.x = nx;
+    if (!blocked(s, Math.floor(u.x), Math.floor(ny), u.owner)) u.y = ny;
+  }
+}
+
+/**
+ * Neutral camps: once a camp's guards are all dead, a side that has units at it, with none of the
+ * other side's, takes the cache (once) or holds the relic (until the other side takes it the same way).
+ */
+function updateCamps(s: GameState) {
+  for (const c of s.camps) {
+    if (c.claimed || c.guards.some((id) => s.units.has(id))) continue;
+    const cx = c.tx + 1;
+    const cy = c.ty + 1;
+    const present = new Set<number>();
+    for (const u of s.units.values()) if (u.owner !== NEUTRAL && u.hp > 0 && Math.hypot(u.x - cx, u.y - cy) <= CLAIM_RANGE) present.add(u.owner);
+    if (present.size !== 1) continue;
+    const who = [...present][0];
+    if (c.kind === 'cache' && c.res) {
+      s.players[who].res[c.res] += c.amount;
+      c.holder = who;
+      c.claimed = true;
+      rebuildSolid(s);
+      emit(s, { t: 'drop', x: cx, y: cy - 0.5, res: c.res, n: c.amount, owner: who });
+      if (who === PLAYER) say(s, `The cache gives ${c.amount} ${c.res}`);
+      continue;
+    }
+    if (c.holder === who || !c.relic) continue;
+    const had = c.holder;
+    c.holder = who;
+    const name = RELICS[c.relic].name;
+    if (who === PLAYER) say(s, `You hold the ${name}: ${RELICS[c.relic].text.toLowerCase()}`);
+    else if (had === PLAYER) say(s, `The enemy took the ${name}`);
+  }
+}
+
+/** The free tiles next to a camp, where units stand to claim it. */
+export function campSpots(s: GameState, c: Camp) {
+  return ringAround(s, c.tx, c.ty, 2, 2);
+}
+
+/** The camp whose footprint covers a point, if any is still on the map. */
+export function campAt(s: GameState, x: number, y: number): Camp | null {
+  for (const c of s.camps) if (!c.claimed && x >= c.tx && y >= c.ty && x < c.tx + 2 && y < c.ty + 2) return c;
+  return null;
 }
 

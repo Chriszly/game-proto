@@ -1,4 +1,4 @@
-import { MAP_SIZE, type Resource } from './data';
+import { MAP_SIZE, type RelicId, type Resource } from './data';
 
 export const GRASS = 0;
 export const WATER = 1;
@@ -16,10 +16,39 @@ export interface Node {
   amount: number;
 }
 
+/** A neutral camp's spot: a 2x2 footprint, what it holds, and the wild guards around it. */
+export interface CampSpot {
+  kind: 'cache' | 'relic';
+  tx: number;
+  ty: number;
+  /** A cache's pile. */
+  res?: Resource;
+  amount?: number;
+  relic?: RelicId;
+  guards: string[];
+}
+
 export interface MapData {
   terrain: Uint8Array;
   nodes: Node[];
+  camps: CampSpot[];
 }
+
+const B = 'wild-brigand';
+const PO = 'wild-poacher';
+/**
+ * The camps of the first side, by top-left tile; generateMap adds each one's point mirror (with the
+ * mirror's own relic, for the flank pair). The middle relic is its own mirror. Each sits in a patch
+ * cleared of trees, water and rock, so the map around it stays as generated.
+ */
+const CAMP_PLAN: (CampSpot & { mirrorRelic?: RelicId })[] = [
+  { kind: 'relic', tx: MAP_SIZE / 2 - 1, ty: MAP_SIZE / 2 - 1, relic: 'valor', guards: [B, B, B, B, PO, PO] },
+  { kind: 'relic', tx: 100, ty: 26, relic: 'plenty', mirrorRelic: 'haste', guards: [B, B, PO, PO] },
+  { kind: 'cache', tx: 38, ty: 18, res: 'ore', amount: 250, guards: [B, B, B] },
+  { kind: 'cache', tx: 16, ty: 40, res: 'food', amount: 300, guards: [B, B, B] },
+];
+/** Tiles cleared around a camp's footprint, so its guards and visitors can stand there. */
+const CAMP_CLEAR = 3;
 
 /** Top-left tile of each side's Town Center; the second side is the point mirror of the first. */
 export const START_TILES = [
@@ -30,7 +59,7 @@ export const START_TILES = [
 export const idx = (x: number, y: number) => y * MAP_SIZE + x;
 export const inMap = (x: number, y: number) => x >= 0 && y >= 0 && x < MAP_SIZE && y < MAP_SIZE;
 
-const AMOUNT = { tree: 120, bush: 150, mine: 900 } as const;
+export const AMOUNT = { tree: 120, bush: 150, mine: 900 } as const;
 const RESOURCE = { tree: 'wood', bush: 'food', mine: 'ore' } as const;
 
 /**
@@ -138,6 +167,30 @@ export function generateMap(): MapData {
     }
   }
 
+  // Neutral camps: each gets a clear patch (trees, water and rock removed), mirrored like the rest.
+  // This uses no Math.random, so the rest of the map is the same as without camps.
+  const camps: CampSpot[] = [];
+  const cleared = new Uint8Array(MAP_SIZE * MAP_SIZE);
+  for (const plan of CAMP_PLAN) {
+    const { mirrorRelic, ...spot } = plan;
+    const m = mirrorTile({ x: spot.tx, y: spot.ty }, 2);
+    const spots = m.x === spot.tx && m.y === spot.ty ? [spot] : [spot, { ...spot, tx: m.x, ty: m.y, relic: mirrorRelic ?? spot.relic }];
+    for (const c of spots) {
+      camps.push(c);
+      for (let y = c.ty - CAMP_CLEAR; y < c.ty + 2 + CAMP_CLEAR; y++)
+        for (let x = c.tx - CAMP_CLEAR; x < c.tx + 2 + CAMP_CLEAR; x++) {
+          if (!inMap(x, y)) continue;
+          terrain[idx(x, y)] = GRASS;
+          cleared[idx(x, y)] = 1;
+          taken[idx(x, y)] = 1;
+        }
+    }
+  }
+  const kept = nodes.filter((n) => {
+    for (let j = 0; j < n.h; j++) for (let i = 0; i < n.w; i++) if (cleared[idx(n.tx + i, n.ty + j)]) return false;
+    return true;
+  });
+
   // Dirt patches are decoration only.
   for (let n = 0; n < 60; n++) {
     const x = rand(0, MAP_SIZE - 1);
@@ -145,5 +198,5 @@ export function generateMap(): MapData {
     if (terrain[idx(x, y)] === GRASS && !taken[idx(x, y)]) terrain[idx(x, y)] = DIRT;
   }
 
-  return { terrain, nodes };
+  return { terrain, nodes: kept, camps };
 }
