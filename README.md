@@ -62,6 +62,16 @@ The hub's **Settings** button opens the settings every game shares. They are sav
 
 Every game also has a full screen button in its bottom left corner, and the **F** key toggles full screen. Browsers that cannot take a page full screen, such as iPhones, don't show the button.
 
+## Watch AI
+
+Games whose AI can play every side have a **Watch AI** link on their hub card, which opens the game
+with `?watch` added to its URL (any such game's URL works the same, on `npm run dev` too). The AI then
+plays your side as well, and a panel in the top right pauses the match (**P**), plays it at 1x, 2x,
+4x or 8x (**[** and **]** step the speed) and shows a log of what each AI decides (**L**).
+
+| Game | What the watch mode does |
+| --- | --- |
+
 ## Running locally
 
 ```sh
@@ -78,6 +88,7 @@ npm run preview   # serve the production build
   screenshots and `README.md`. Games don't import from each other.
 - `shared/`: the settings every game shares (`settings.ts`), the hub's Settings panel
   (`settingsPanel.ts`), `setupGame.ts`, which each game calls to apply the frame cap, the FPS readout, reduced motion and full screen,
+  `watch.ts`, the Watch AI panel and its `?watch` flag,
   and `scaling.ts`, which keeps a game sharp from a phone to a 4K screen (`grep -l setupScaling games/*/src/main.ts` lists the games that use it).
 - `e2e/hub.spec.ts`: checks that the hub lists every game, that each card opens it, and that the
   settings are saved and reach a game. `e2e/screens.spec.ts` opens each game that uses
