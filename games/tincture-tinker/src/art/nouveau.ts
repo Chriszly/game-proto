@@ -1,11 +1,13 @@
 import Phaser from 'phaser';
 import type { Kind } from '../game/kinds';
-import { SERIF } from '../scenes/layout';
+import { sharpRes } from '../../../../shared/scaling';
+import { SERIF, VIEW } from '../scenes/layout';
 
 // The Art Nouveau label toolkit every texture is painted with: flat muted inks with bold sepia
 // contours, gold whiplash ornament, cream card. Textures are painted on 2D canvases and added with
 // `textures.addCanvas`. Painters work in "art units", twice the game's 960x540 view, and each canvas
-// is scaled by a half, so a texture is the view's own size.
+// is scaled to `RES` canvas pixels per view pixel: 1 on a screen the game fits at its own size, more
+// on a bigger one, so the art stays sharp. Show a texture with `shown`, which undoes `RES`.
 
 export const PI = Math.PI;
 /** Art units per view pixel. */
@@ -28,20 +30,34 @@ export { SERIF };
 
 export type Pt = [number, number];
 
+/**
+ * Canvas pixels per view pixel every texture is painted at, the same for all of them; set by `bake`
+ * from `sharpRes` for the biggest texture (the whole view), once `setupScaling` has picked the scale.
+ */
+export let RES = 1;
+
+/** Sizes an image showing a baked texture to `scale` times its size in view pixels. */
+export function shown<T extends { setScale(x: number): unknown }>(obj: T, scale = 1): T {
+  obj.setScale(scale / RES);
+  return obj;
+}
+
 /** The canvas being painted; set by `bake` for the duration of one painter. */
 export let ctx: CanvasRenderingContext2D;
 
 /**
  * Paints a `w` x `h` (view pixels) texture called `key`: the painter draws in art units, on a
- * canvas of 2w x 2h art units. Does nothing if the texture is already there.
+ * canvas of 2w x 2h art units, `RES` canvas pixels per view pixel. Does nothing if the texture is
+ * already there.
  */
 export function bake(scene: Phaser.Scene, key: string, w: number, h: number, paint: () => void) {
   if (scene.textures.exists(key)) return;
+  RES = sharpRes(VIEW.w, VIEW.h);
   const canvas = document.createElement('canvas');
-  canvas.width = Math.ceil(w);
-  canvas.height = Math.ceil(h);
+  canvas.width = Math.ceil(w * RES);
+  canvas.height = Math.ceil(h * RES);
   ctx = canvas.getContext('2d')!;
-  ctx.scale(1 / ART, 1 / ART);
+  ctx.scale(RES / ART, RES / ART);
   paint();
   scene.textures.addCanvas(key, canvas);
 }

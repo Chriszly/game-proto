@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { BootScene } from './scenes/BootScene';
 import { GameScene } from './scenes/GameScene';
 import { VIEW } from './scenes/layout';
+import { setupScaling } from '../../../shared/scaling';
 import { setupGame } from '../../../shared/setupGame';
 
 const game = new Phaser.Game({
@@ -18,6 +19,7 @@ const game = new Phaser.Game({
   scene: [BootScene, GameScene],
 });
 setupGame(game);
+setupScaling(game);
 
 // Handy for poking at state from the browser console during development, and read by the
 // playthrough test.

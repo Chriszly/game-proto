@@ -44,7 +44,8 @@ bottle green, serif italics), all painted in code on 2D canvases. It shares no c
 ### File map
 
 - `src/main.ts`: creates the `Phaser.Game` (960x540, FIT scaling, `pixelArt: false`) with
-  `BootScene` and `GameScene`, calls `setupGame(game)` and puts `game` on `window` in dev builds.
+  `BootScene` and `GameScene`, calls `setupGame(game)` and `setupScaling(game)` from
+  `shared/scaling.ts`, and puts `game` on `window` in dev builds.
 - `src/game/kinds.ts`: `KINDS`, the `Kind` type, `KIND_NAMES` and `randomKind`.
 - `src/game/orders.ts`: `PotionId`, `POTION_NAMES`, the `Order` type (with `rush`, `forbid`,
   `jars`, `resin`), the `ORDERS` table, `RANK_RECIPES` (the three unlockable recipes),
@@ -71,7 +72,9 @@ bottle green, serif italics), all painted in code on 2D canvases. It shares no c
   `BUTTON`, `UI_DEPTH`, `SERIF`, `cellX`, `cellY`. It matches the approved mockup at half its
   1920x1080 size.
 - `src/art/nouveau.ts`: the painting toolkit: `bake` (paints in art units, twice the view, onto a
-  canvas scaled by a half, and adds it with `textures.addCanvas`), the inks (`SEPIA`, `GOLD`,
+  canvas of `RES` canvas pixels per view pixel, and adds it with `textures.addCanvas`), `RES` (1, or
+  up to 4 on a big screen, from `sharpRes`; the same for every texture), `shown(image, scale)` (sizes
+  an image to `scale` times its texture's view size by setting its scale to `scale / RES`), the inks (`SEPIA`, `GOLD`,
   `CREAM`, `BOTTLE`...), shape helpers (`poly`, `rrect`, `whip`, `cornerOrn`, `doubleRule`,
   `goldStar`, `coin`) and `ingredient(kind, x, y, s)`, the five ingredient silhouettes.
 - `src/art/textures.ts`: `bakeTextures` and the texture keys: `table` (the whole static
@@ -85,6 +88,8 @@ bottle green, serif italics), all painted in code on 2D canvases. It shares no c
 - `src/ui/Button.ts`: `makeButton`, the bottle-green cartouche on the result card.
 - `shared/setupGame.ts` and `shared/settings.ts` (outside the game folder): the hub's settings,
   imported by `src/main.ts`, `src/game/orders.ts` and `src/scenes/GameScene.ts`.
+  `shared/scaling.ts`: `setupScaling` (from `src/main.ts`), `sharpRes` (from `nouveau.ts`) and
+  `renderScale` (text resolution in `GameScene` and `Button.ts`).
 
 ### How it runs
 
@@ -95,7 +100,7 @@ bottle green, serif italics), all painted in code on 2D canvases. It shares no c
   tile (keyed by tile `id` in `sprites`), rebuilds the order label (`buildPanel`) and hides the card.
 - **Input:** the scene's `pointerdown` listener skips taps on a game object (a tool button or the
   result button), so the same tap doesn't also pick a tile. `pointerDown` maps the pointer to a cell
-  with `cellAt`. While a tool is `armed`, the tap goes to it: Sift rerolls the cell's row, Pestle
+  with `cellAt`, from `pointer.worldX/Y` (game pixels; `pointer.x/y` are canvas pixels). While a tool is `armed`, the tap goes to it: Sift rerolls the cell's row, Pestle
   smashes the cell, Funnel picks `funnelFrom` and then swaps it with the next cell. Otherwise the first tap sets
   `selected`, a tap on a neighbour calls `swap`, a tap on the same tile clears it. `pointerMove`
   swaps once a drag goes half a cell. `swap` clears the drag start, so a held second tap of a
@@ -217,6 +222,11 @@ settings are stored separately under `hub-settings`.
   sentence in this game's `README.md` in sync with the values.
 - The settings live under the `hub-settings` storage key, read once at page load, not in the
   game's own save.
+- Screens: `setupScaling` draws the canvas at the screen's resolution (`renderScale` canvas pixels
+  per game pixel, every camera zoomed to match; the one camera never scrolls) and asks to turn a
+  phone held upright. Textures are painted at `RES` (`sharpRes` of the view) and shown with
+  `shown`, texts at `Math.max(2, renderScale)`. `e2e/screens.spec.ts` at the root checks the game
+  on five screens.
 
 ## Testing hooks
 
@@ -274,6 +284,10 @@ settings are stored separately under `hub-settings`.
 
 ## Gotchas
 
+- Every image of a baked texture goes through `shown(image, scale)`, never `setScale` or a bare
+  `add.image`: with `RES` above 1 the texture is that many times bigger than it is meant to look.
+  Hit areas given in texture pixels (the tool buttons') are multiplied by `RES` too. Read pointers
+  through `worldX/Y`, and lay anything new out with `viewSize(scene)`, not `scene.scale`.
 - `trySwap` finishes the whole swap at once, so `state` is ahead of the screen while the animation
   plays. Wait for `busy` to be false before reading the result, as the test does.
 - `moveTo` and the pop animation look sprites up by tile id when they start, because cascades clear
