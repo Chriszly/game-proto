@@ -1,0 +1,88 @@
+name: Project status
+
+# Puts each open PR into "All feedback" and its Game labels' Projects (see
+# .github/projects.json) with the status In Progress. Issues are left to each
+# Project's built-in workflows (Auto-add, and "Item added to project" set to
+# Issue only, which gives them Todo). Needs the repo secret PROJECTS_TOKEN: a
+# classic token with only the "project" scope, since the workflow token can't
+# reach user-owned Projects. Without it the workflow does nothing.
+#
+# pull_request_target runs this file from main with the secret, also for PRs
+# from forks. It never checks out or runs the PR's code; it only reads the
+# event's labels and node id.
+on:
+  pull_request_target:
+    types: [opened, reopened, ready_for_review, labeled]
+
+permissions:
+  contents: read
+
+jobs:
+  in-progress:
+    runs-on: ubuntu-latest
+    env:
+      HAS_TOKEN: ${{ secrets.PROJECTS_TOKEN != '' }}
+    steps:
+      - if: env.HAS_TOKEN != 'true'
+        run: echo "::notice::PROJECTS_TOKEN is not set, so the PR's Project status is left alone."
+      - if: env.HAS_TOKEN == 'true'
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/projects.json
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Set the PR to In Progress
+        if: env.HAS_TOKEN == 'true'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          github-token: ${{ secrets.PROJECTS_TOKEN }}
+          script: |
+            const wanted = JSON.parse(require('fs').readFileSync('.github/projects.json', 'utf8'));
+            const pr = context.payload.pull_request;
+            const labels = new Set(pr.labels.map(l => l.name));
+            const titles = new Set(wanted.filter(p => p.label === null || labels.has(p.label)).map(p => p.title));
+
+            const { user } = await github.graphql(`
+              query($owner: String!) {
+                user(login: $owner) {
+                  projectsV2(first: 100) {
+                    nodes {
+                      id title
+                      field(name: "Status") {
+                        ... on ProjectV2SingleSelectField { id options { id name } }
+                      }
+                    }
+                  }
+                }
+              }`, { owner: context.repo.owner });
+
+            for (const project of user.projectsV2.nodes.filter(p => titles.has(p.title))) {
+              const status = project.field;
+              const inProgress = status?.options.find(o => o.name.toLowerCase() === 'in progress');
+              if (!inProgress) {
+                core.warning(`"${project.title}" has no Status option "In Progress"; skipped.`);
+                continue;
+              }
+              // Adding a PR that is already in the Project returns its existing item.
+              const { addProjectV2ItemById: { item } } = await github.graphql(`
+                mutation($projectId: ID!, $contentId: ID!) {
+                  addProjectV2ItemById(input: { projectId: $projectId, contentId: $contentId }) {
+                    item { id fieldValueByName(name: "Status") { ... on ProjectV2ItemFieldSingleSelectValue { name } } }
+                  }
+                }`, { projectId: project.id, contentId: pr.node_id });
+              // Only move it out of no status or Todo, so a status set by hand stays.
+              const current = item.fieldValueByName?.name;
+              if (current && current.toLowerCase() !== 'todo') {
+                console.log(`#${pr.number} stays ${current} in ${project.title}`);
+                continue;
+              }
+              await github.graphql(`
+                mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+                  updateProjectV2ItemFieldValue(input: {
+                    projectId: $projectId, itemId: $itemId, fieldId: $fieldId,
+                    value: { singleSelectOptionId: $optionId }
+                  }) { projectV2Item { id } }
+                }`, { projectId: project.id, itemId: item.id, fieldId: status.id, optionId: inProgress.id });
+              console.log(`#${pr.number} is In Progress in ${project.title}`);
+            }
