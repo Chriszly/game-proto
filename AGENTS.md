@@ -50,7 +50,11 @@ form's Game dropdown. Labels are defined in `.github/labels.json` and the Labels
 are never edited on GitHub. A PR that fixes an issue says `Fixes #<number>`. Each Game label has its
 own public GitHub Project, plus one "All feedback" Project, with the title, short description and
 README listed in `.github/projects.json`. Each Project's built-in Auto-add workflow files issues
-and PRs into it (filter `is:issue,pr is:open label:<game>`, or no label for "All feedback").
+and PRs into it (filter `is:issue,pr is:open label:<game>`, or no label for "All feedback"), and
+its "Item added to project" workflow, set to Issue only, gives new issues the status Todo. The
+**Project status** workflow (`.github/workflows/project-status.yml`) puts each open PR into its
+Projects with the status In Progress, using the `PROJECTS_TOKEN` secret (a classic token with only
+the `project` scope).
 
 - **Every PR needs labels.** It carries at least one Type label for what it changes (`bug` for a
   fix, `feature`, `gameplay`, `refactor`, `assets`, `docs`, `ci`) and at least one Game label for
@@ -90,7 +94,8 @@ and PRs into it (filter `is:issue,pr is:open label:<game>`, or no label for "All
   `.github/workflows/issue-labels.yml`. Then remind **Chriszly** to create the game's GitHub
   Project by hand, in the PR's "Notes for reviewers" and in your reply when the PR is up: its title,
   short description and README from `.github/projects.json`, public visibility, the Auto-add
-  workflow with the filter `is:issue,pr is:open label:<game>`, and a link to the repo. Vite picks
+  workflow with the filter `is:issue,pr is:open label:<game>`, the "Item added to project"
+  workflow set to Issue only with Status Todo, and a link to the repo. Vite picks
   up `games/*/index.html` on its own. Keep save keys and other browser storage prefixed with the
   game's name, since every game shares the hub's origin.
 - **Honour the hub's settings.** Every game calls `setupGame(game)` from `shared/setupGame.ts`
