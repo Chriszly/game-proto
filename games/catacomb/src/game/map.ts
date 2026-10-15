@@ -1,10 +1,11 @@
 import type { EnemyKind } from './enemies';
+import { EVENT_IDS, type EventId } from './events';
 
-// The dungeon: rooms in columns from the entrance on the left to the Bone King on the right. From
-// each room the paths lead on to one or two rooms in the next column. (x, y) is where the room is
-// drawn on the 960x540 map.
+// The dungeon of each act: rooms in seven columns from the entrance on the left to the act's boss
+// on the right. Every column between holds two or three rooms, and from each room the paths lead
+// on to one or more rooms in the next column. (x, y) is where the room is drawn on the 960x540 map.
 
-export type RoomKind = 'fight' | 'rest' | 'treasure' | 'boss';
+export type RoomKind = 'fight' | 'elite' | 'rest' | 'treasure' | 'shop' | 'event' | 'boss';
 
 export interface Room {
   kind: RoomKind;
@@ -13,58 +14,136 @@ export interface Room {
   y: number;
   /** The rooms in the next column its paths lead to. */
   next: number[];
-  /** Who waits inside, for a fight or the boss, left to right. */
+  /** Who waits inside, for a fight, an elite or the boss, left to right. */
   foes?: EnemyKind[];
+  /** Which mystery waits inside an event room. */
+  event?: EventId;
 }
 
-const colX = (col: number) => 110 + col * 148;
-const TOP = 200;
-const MID = 290;
-const BOTTOM = 380;
+/** How many columns of rooms an act has, the boss's included. */
+export const COLUMNS = 7;
+/** How many acts a run has. */
+export const ACTS = 2;
 
-/** The foes a fight room can hold, by how deep it is. */
-const EARLY: EnemyKind[][] = [['rat', 'rat'], ['skeleton'], ['slime', 'rat']];
-const DEEPER: EnemyKind[][] = [['cultist'], ['skeleton', 'rat'], ['slime', 'slime']];
-const LATE: EnemyKind[][] = [['cultist', 'rat'], ['skeleton', 'cultist'], ['rat', 'rat', 'slime']];
+const colX = (col: number) => 110 + col * 130;
+const MID = 290;
+/** The rows of a column, by how many rooms it holds. */
+const ROWS: Record<number, number[]> = { 1: [MID], 2: [200, 380], 3: [170, 290, 410] };
+
+interface ActFoes {
+  name: string;
+  first: EnemyKind[];
+  early: EnemyKind[][];
+  late: EnemyKind[][];
+  elites: EnemyKind[][];
+  boss: EnemyKind;
+}
+
+/** The foes each act's rooms can hold. Act one always opens on a lone slime. */
+export const ACT_FOES: ActFoes[] = [
+  {
+    name: 'The Crypt',
+    first: ['slime'],
+    early: [['rat', 'rat'], ['skeleton'], ['slime', 'rat'], ['cultist']],
+    late: [['cultist', 'rat'], ['skeleton', 'cultist'], ['rat', 'rat', 'slime'], ['skeleton', 'rat'], ['slime', 'slime']],
+    elites: [['graveKnight'], ['bogWitch']],
+    boss: 'boneKing',
+  },
+  {
+    name: 'The Sunken Tombs',
+    first: ['ghoul'],
+    early: [['spider', 'spider'], ['wraith'], ['ghoul'], ['spider', 'wraith']],
+    late: [['mummy'], ['ghoul', 'spider'], ['wraith', 'wraith'], ['mummy', 'spider'], ['ghoul', 'wraith']],
+    elites: [['gargoyle'], ['bogWitch', 'spider']],
+    boss: 'hollowQueen',
+  },
+];
+
+/** The rooms of columns 1 to 5: one that is always there, and one or two more drawn from the rest. */
+const COLUMN_KINDS: { must: RoomKind; extra: RoomKind[] }[] = [
+  { must: 'fight', extra: ['fight', 'event'] },
+  { must: 'event', extra: ['fight', 'shop'] },
+  { must: 'rest', extra: ['fight', 'elite'] },
+  { must: 'treasure', extra: ['fight', 'event'] },
+  { must: 'shop', extra: ['elite', 'fight'] },
+];
 
 /**
- * A new Crypt for each run, drawn with Math.random: the first room is always a lone slime, then two
- * fights, a campfire and a fight (either way up), a treasure chest and a fight, one last fight and
- * the Bone King. Rooms lead on to the room in the same row of the next column, and some paths cross
- * between rows.
+ * A new map for an act, drawn with Math.random: a lone fight (in act one, always a slime), five
+ * columns of two or three rooms each, and the boss. Every column has its own kind of room that is
+ * always there (an event, a campfire, a treasure chest, a merchant) and one or two drawn from a
+ * few others, in random rows. Each room leads to the rooms facing it in the next column, sometimes
+ * to a neighbour too, and every room can be reached.
  */
-export function makeMap(): Room[] {
-  const pick = <T>(items: T[]) => items.splice(Math.floor(Math.random() * items.length), 1)[0];
-  const coin = () => Math.random() < 0.5;
-  const early = [...EARLY];
-  const deeper = [...DEEPER];
-  const fight = (col: number, y: number, foes: EnemyKind[]): Room => ({ kind: 'fight', col, x: colX(col), y, next: [], foes });
-  // Columns 2 and 3 each hold one special room and one fight; which row each takes is random.
-  const pair = (col: number, kind: RoomKind): Room[] => {
-    const special: Room = { kind, col, x: colX(col), y: TOP, next: [] };
-    const other = fight(col, BOTTOM, pick(deeper));
-    if (coin()) [special.y, other.y] = [BOTTOM, TOP];
-    return special.y === TOP ? [special, other] : [other, special];
+export function makeMap(act = 1): Room[] {
+  const foes = ACT_FOES[act - 1];
+  const rnd = (n: number) => Math.floor(Math.random() * n);
+  const bag = <T>(items: T[]) => {
+    let left: T[] = [];
+    return () => {
+      if (left.length === 0) left = [...items];
+      return left.splice(rnd(left.length), 1)[0];
+    };
   };
-  const rooms: Room[] = [
-    { kind: 'fight', col: 0, x: colX(0), y: MID, next: [1, 2], foes: ['slime'] },
-    fight(1, TOP, pick(early)),
-    fight(1, BOTTOM, pick(early)),
-    ...pair(2, 'rest'),
-    ...pair(3, 'treasure'),
-    fight(4, MID, LATE[Math.floor(Math.random() * LATE.length)]),
-    { kind: 'boss', col: 5, x: colX(5), y: MID, next: [], foes: ['boneKing'] },
-  ];
-  // Between the two-room columns each row leads straight on, and one or both paths cross over.
-  for (const from of [1, 3]) {
-    const [top, bottom] = [from, from + 1];
-    const cross = Math.floor(Math.random() * 3);
-    rooms[top].next = cross === 1 ? [top + 2] : [top + 2, top + 3];
-    rooms[bottom].next = cross === 0 ? [bottom + 2] : [bottom + 1, bottom + 2];
+  const early = bag(foes.early);
+  const late = bag(foes.late);
+  const elite = bag(foes.elites);
+  const event = bag(EVENT_IDS);
+
+  const columns: RoomKind[][] = [['fight']];
+  for (const { must, extra } of COLUMN_KINDS) {
+    const kinds = [must, ...extra];
+    // Two rooms keep one of the extras, three keep both; then the rows are shuffled.
+    if (rnd(2) === 0) kinds.splice(1 + rnd(2), 1);
+    for (let i = kinds.length - 1; i > 0; i--) {
+      const j = rnd(i + 1);
+      [kinds[i], kinds[j]] = [kinds[j], kinds[i]];
+    }
+    columns.push(kinds);
   }
-  rooms[5].next = [7];
-  rooms[6].next = [7];
-  rooms[7].next = [8];
+  columns.push(['boss']);
+
+  const rooms: Room[] = [];
+  const index: number[][] = [];
+  columns.forEach((kinds, col) => {
+    index.push(
+      kinds.map((kind, row) => {
+        const room: Room = { kind, col, x: colX(col), y: ROWS[kinds.length][row], next: [] };
+        if (col === 0) room.foes = foes.first;
+        else if (kind === 'fight') room.foes = col <= 2 ? early() : late();
+        else if (kind === 'elite') room.foes = elite();
+        else if (kind === 'boss') room.foes = [foes.boss];
+        else if (kind === 'event') room.event = event();
+        rooms.push(room);
+        return rooms.length - 1;
+      }),
+    );
+  });
+
+  // Paths: each room leads to the room facing it in the next column, now and then to a neighbour
+  // of that room too, and any room left without a way in gets one from the room facing it.
+  for (let col = 0; col + 1 < columns.length; col++) {
+    const from = index[col];
+    const to = index[col + 1];
+    const facing = (i: number, n: number, m: number) => (n === 1 ? 0 : Math.round((i * (m - 1)) / (n - 1)));
+    from.forEach((r, i) => {
+      if (from.length === 1 || to.length === 1) {
+        rooms[r].next = [...to];
+        return;
+      }
+      const j = facing(i, from.length, to.length);
+      const links = new Set([to[j]]);
+      if (rnd(3) === 0) {
+        const k = j + (rnd(2) ? 1 : -1);
+        if (k >= 0 && k < to.length) links.add(to[k]);
+      }
+      rooms[r].next = [...links];
+    });
+    to.forEach((t, j) => {
+      if (!from.some((r) => rooms[r].next.includes(t))) rooms[from[facing(j, to.length, from.length)]].next.push(t);
+    });
+    for (const r of from) rooms[r].next.sort((a, b) => a - b);
+  }
   return rooms;
 }
 

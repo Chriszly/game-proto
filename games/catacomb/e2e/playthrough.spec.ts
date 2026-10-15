@@ -1,8 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 
 // Plays the first room with real inputs: taps the first room on the map, fights the slime by
-// tapping cards in the hand and the End turn button, as on a phone, then takes a card from the
-// reward and is back on the map with the next rooms open.
+// tapping cards in the hand and the End turn button, as on a phone, picks up the slime's gold,
+// then takes a card from the reward and is back on the map with the next rooms open.
 // Game state is only read, through the `game` object the dev build puts on window.
 
 type CardId = string;
@@ -14,6 +14,8 @@ interface GameState {
   hp: number;
   maxHp: number;
   deck: CardId[];
+  gold: number;
+  relics: string[];
   at: number | null;
   cleared: number[];
   fight: Fight | null;
@@ -33,8 +35,8 @@ const STARTER: Record<string, { cost: number; damage?: number; block?: number }>
 };
 const STARTER_DECK = { strike: 5, defend: 4, bash: 1 };
 /** The slime in the first room and what it does each turn, from src/game/enemies.ts. */
-/** The slime's health on Normal and its moves: it opens with the first, then draws one of the others at random. */
-const SLIME = { hp: 24, moves: [{ kind: 'attack', damage: 6 }, { kind: 'block', block: 5 }, { kind: 'attack', damage: 8 }] as Intent[] };
+/** The slime's health on Normal, the gold it leaves and its moves: it opens with the first, then draws one of the others at random. */
+const SLIME = { hp: 24, gold: 12, moves: [{ kind: 'attack', damage: 6 }, { kind: 'block', block: 5 }, { kind: 'attack', damage: 8 }] as Intent[] };
 
 /** Game time per animation frame, every frame the same length. */
 const FRAME_MS = 64;
@@ -143,9 +145,9 @@ test('plays the first room', async ({ page }, testInfo) => {
     await play(STEP_MS, async () => false);
   }
 
-  // A new run: full health, the starter deck, at the dungeon's entrance.
+  // A new run: full health, the starter deck, no gold or relics, at the dungeon's entrance.
   let s = await until('the map', (s) => s.phase === 'map');
-  expect(s).toMatchObject({ hp: 50, maxHp: 50, at: null, cleared: [], fight: null });
+  expect(s).toMatchObject({ hp: 50, maxHp: 50, gold: 0, relics: [], at: null, cleared: [], fight: null });
   expect(count(s.deck)).toEqual(STARTER_DECK);
   await play(600, async () => false);
   await snap('0-map');
@@ -222,9 +224,10 @@ test('plays the first room', async ({ page }, testInfo) => {
   }
   expect(shotFight, 'an attack was played').toBe(true);
 
-  // The slime fell. Three different cards are offered; tapping one adds it to the deck.
+  // The slime fell and left its gold. Three different cards are offered; tapping one adds it to the deck.
   s = await until('the reward', (s) => s.phase === 'reward', 3_000);
   expect(s.fight).toBeNull();
+  expect(s.gold, 'the slime drops its gold').toBe(SLIME.gold);
   expect(new Set(s.reward).size).toBe(3);
   const rewards = await game.rewards();
   expect(rewards.map((c) => c.id)).toEqual(s.reward);
@@ -233,7 +236,7 @@ test('plays the first room', async ({ page }, testInfo) => {
   const hp = s.hp;
   await tap(rewards[0]);
   s = await game.state();
-  expect(s).toMatchObject({ phase: 'map', at: 0, cleared: [0], reward: null, hp });
+  expect(s).toMatchObject({ phase: 'map', at: 0, cleared: [0], reward: null, hp, gold: SLIME.gold });
   expect(count(s.deck)).toEqual(count([...Object.entries(STARTER_DECK).flatMap(([id, n]) => Array(n).fill(id)), rewards[0].id]));
   await play(600, async () => false);
   await snap('3-next-room');

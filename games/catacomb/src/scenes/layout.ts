@@ -27,10 +27,22 @@ export const SKIP = { x: 480, y: 476 };
 export const PANEL_BUTTON = { x: 480, y: 360 };
 
 export const BUTTON = { w: 160, h: 44 };
-/** At the campfire, Rest and Remove a card sit either side of the middle. */
-export const REST_BUTTONS = { dx: 110, w: 200 };
-/** The deck laid out to pick a card to burn at the campfire, by the cards' centres. */
-export const REMOVE = { y: 210, rowGap: 170, gap: 120, perRow: 7, scale: 0.8 };
+/** At the campfire, Rest, Temper and Remove a card sit in a row across the middle. */
+export const REST_BUTTONS = { dx: 182, w: 172 };
+/** A mystery room's two choices, one above the other. */
+export const EVENT_BUTTONS = { y: 324, gap: 52, w: 440 };
+/** The deck laid out to pick a card to burn, temper or sell, by the cards' centres: roomier while it fits in two rows. */
+export const PICKER = {
+  roomy: { y: 210, rowGap: 170, gap: 120, perRow: 7, scale: 0.8 },
+  tight: { y: 180, rowGap: 128, gap: 86, perRow: 10, scale: 0.58 },
+  back: { x: 860, y: 80 },
+};
+/** The merchant's wares: cards by their centres with prices under them, and relics and the removal in boxes on the right. */
+export const SHOP = { cardXs: [150, 300, 450], cardY: 220, priceDy: 104, box: { x: 720, w: 340, h: 76, ys: [170, 262, 354] }, leave: { x: 480, y: 476 } };
+/** The top bar: health, deck, gold and the relics in a row. */
+export const HUD = { deckX: 128, coinX: 262, goldX: 278, relicX: 344, relicGap: 28 };
+/** The width given to each status on the row over a fighter's head. */
+export const STATUS_GAP = 46;
 export const ROOM_RADIUS = 32;
 
 export const UI_DEPTH = 10_000;
