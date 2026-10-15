@@ -561,7 +561,7 @@ export class GameScene extends Phaser.Scene {
     this.nextText.setText(`Next: ${next.name}`).setColor(next.color);
     const t = s.trial;
     this.trialText
-      .setText(t ? (t.failed ? `Trial failed: ${TRIAL_INFO[t.id].short}` : `Trial: ${TRIAL_INFO[t.id].short} ${t.done}/${STONES_PER_TIER}`) : 'Trials from tier 2')
+      .setText(t ? (t.failed ? `Failed: ${TRIAL_INFO[t.id].short}` : `Trial: ${TRIAL_INFO[t.id].short} ${t.done}/${STONES_PER_TIER}`) : 'Trials from tier 2')
       .setColor(t && !t.failed ? '#9ad46a' : '#8a7ea0');
     const curse = curseNow(s);
     this.curseText.setText(curse ? `Curse: ${CURSE_INFO[curse].name} (x${CURSE_MULT})` : '');

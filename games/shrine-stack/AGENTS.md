@@ -64,7 +64,7 @@ Missing or rough:
 - A tap is ignored while a stone falls; a tap during the blessing choice lands on the dim.
 - The clouds stop about 16000 pixels up (`createBackdrop`), roughly 190 tiers.
 - `docs/screenshots/game-over.png`, `gilded.png`, `crowned.png`, `wobbly-break.png`,
-  `stone-kinds.png`, `endless-gust.png` and `cover.png` (a copy of `gilded.png`) are not produced
+  `shop-bought.png`, `curse-taken.png`, `stone-kinds.png`, `endless-gust.png` and `cover.png` (a copy of `gilded.png`) are not produced
   by the test; refresh them by hand (play several tiers in the dev
   build) if the look changes.
 

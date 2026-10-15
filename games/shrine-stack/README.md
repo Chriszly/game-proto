@@ -71,7 +71,11 @@ Blessings can be taken more than once, and they add up.
 
 ![Choosing a blessing after a balanced tier, with a curse and the favor shop](docs/screenshots/playthrough-2-blessing.png)
 
+![Taking a curse with the blessing](docs/screenshots/curse-taken.png)
+
 ![The shop after a wobbly tier](docs/screenshots/wobbly-break.png)
+
+![A slow drop bought](docs/screenshots/shop-bought.png)
 
 ![Heavy and light stones, and a tier trial](docs/screenshots/stone-kinds.png)
 
