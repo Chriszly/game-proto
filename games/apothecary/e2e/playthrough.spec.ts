@@ -1,8 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 
 // Plays one round of the loop with real inputs (clicks to walk, as on a phone): open and close the
-// recipes, watch the first customer walk in, harvest both gardens, refine, brew, sell potions to a
-// customer, with the tip they have left, towards the day's contract, and collect the coins.
+// recipes, watch the first customer walk in, harvest both gardens, refine, brew, take one potion out
+// in its fine window, sell potions to a customer, with the tip they have left, towards the day's
+// contract, and collect the coins.
 // Game state is only read, through the `game` object the dev build puts on window.
 
 type Point = { x: number; y: number };
@@ -20,7 +21,7 @@ interface GameState {
   carrying: ItemId[];
   plots: { plant: string; grown: number }[];
   refiner: { queue: ItemId[]; output: ItemId[] };
-  cauldron: { contents: ItemId[]; brewing: { out: ItemId } | null; output: ItemId[] };
+  cauldron: { contents: ItemId[]; brewing: { out: ItemId; ms: number; progress: number } | null; output: ItemId[] };
   refiner2: { queue: ItemId[]; output: ItemId[] };
   cauldron2: { contents: ItemId[]; brewing: { out: ItemId } | null; output: ItemId[] };
   expansion: Record<'land' | 'refiner' | 'cauldron', { built: boolean; paid: number }> & { fields: { built: boolean; paid: number }[] };
@@ -33,16 +34,28 @@ interface GameState {
   sold: number;
   tips: number;
   lastSeen: number;
+  reputation: number;
+  shade: { built: boolean; paid: number }[];
   belts: Record<string, { built: boolean; paid: number; items: { id: ItemId; at: number }[] }>;
 }
 
 // Floor spots in the 1400x1110 world, from src/scenes/layout.ts. Walking targets the doctor's feet.
 // The world is bigger than the 960x540 view; the camera follows the doctor.
 const VIEW = { w: 960, h: 540, hud: 44 };
-/** The wheat plots, left to right, and the mandrake patch's first plot right of them. */
-const WHEAT_XS = [64, 134, 204];
-const WHEAT_Y = 178;
-const MANDRAKE = { x: 300, y: 178 };
+/**
+ * Each garden has three rows of three beds edge to edge, and the sickle reaches 72px from the
+ * doctor's middle, 28.5px above the feet. Standing here in the wheat field, it reaches exactly the
+ * field's right-hand column of three wheat (beds at x 190), and walking straight up from below the
+ * gardens to it, nothing else. Beside it, it reaches the mandrake patch's left-hand column (x 314).
+ */
+const WHEAT_SPOT = { x: 224, y: 197 };
+const BELOW_GARDENS = [{ x: 450, y: 316 }, { x: 224, y: 316 }];
+const MANDRAKE = { x: 290, y: 197 };
+/** The wheat field's right-hand column, and a mandrake bed of the patch's left-hand one, by plot index. */
+const WHEAT_COLUMN = [2, 5, 8];
+const MANDRAKE_PLOT = 12;
+/** How long wheat and mandrake take to grow, from src/game/items.ts. */
+const GROW_MS = { wheat: 24_000, mandrake: 42_000 };
 /** Each station's drop, work and pick-up markers stand in a column on its inner side. */
 const REFINER = { drop: { x: 352, y: 340 }, work: { x: 352, y: 420 }, pickUp: { x: 352, y: 500 } };
 const CAULDRON = { drop: { x: 352, y: 580 }, work: { x: 352, y: 660 }, pickUp: { x: 352, y: 740 } };
@@ -58,7 +71,19 @@ const RECIPES_BUTTON = { x: 219, y: 22 };
 const STREET = { x: 700, y: 1094 };
 const FIRST_CUSTOMER = { x: 644, y: 1010 };
 
-const POTION_PRICE: Record<string, number> = { healingDraught: 8, sleepingTonic: 15 };
+const POTION_PRICE: Record<string, number> = { healingDraught: 8, sleepingTonic: 15, shadowElixir: 24 };
+/**
+ * A potion picked up in the last quarter of its brew comes out fine, and sells for half again as
+ * much; from src/game/state.ts and src/game/items.ts.
+ */
+const FINE_SHARE = 0.25;
+const FINE_BONUS = 1.5;
+const FINE: Record<string, string> = { healingDraught: 'fineHealingDraught', sleepingTonic: 'fineSleepingTonic', shadowElixir: 'fineShadowElixir' };
+const plain = (id: ItemId) => Object.keys(FINE).find((p) => FINE[p] === id) ?? id;
+/** The street's reputation: a new game starts at 50, each filled order adds 3 and each customer who walks off takes 8. */
+const START_REPUTATION = 50;
+const REPUTATION_SERVED = 3;
+const REPUTATION_WALKED_OFF = 8;
 /** A day, dawn to dusk, and the first day's contract, from src/game/state.ts. */
 const DAY_MS = 240_000;
 const FIRST_CONTRACT = { day: 1, potion: 'sleepingTonic', need: 3, made: 0, reward: 20, kept: 0 };
@@ -101,7 +126,7 @@ const shortfall = (s: GameState, potion: ItemId) =>
     ...[s.cauldron.brewing?.out, s.cauldron2.brewing?.out].filter((p) => p !== undefined),
     ...s.belts.cauldron.items.map((item) => item.id),
     ...s.belts.cauldron2.items.map((item) => item.id),
-  ].filter((p) => p === potion).length;
+  ].filter((p) => plain(p) === potion).length;
 
 /** What a customer coming in now pays for a potion: its price with the guild's upgrade, and a tip. */
 const potionPay = (s: GameState, potion: string) =>
@@ -300,6 +325,8 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
     lines: [
       'Wheat = Wheat Flour',
       'Mandrake = Mandrake Seeds',
+      'Nightshade = Nightshade Extract',
+      'Nightshade Extract + Wheat Flour = Shadow Elixir',
       'Wheat Flour + Mandrake Seeds = Sleeping Tonic',
       'Wheat Flour + Wheat Flour = Healing Draught',
     ],
@@ -336,19 +363,23 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
   expect(firstOrder.tip).toBe(maxTip(firstOrder.wants.length));
 
   // One round of the loop: harvest, refine, brew, sell and collect the coins.
-  // Gardens: walk along the wheat row, then past one mandrake, until both hands are full.
-  await until('a ripe wheat row', (s) => s.plots.slice(0, 3).every((p) => p.grown >= 8_000), 20_000);
-  // Stop at each plant in turn, so a slow frame rate can't carry the doctor past one.
-  for (const [i, x] of WHEAT_XS.entries()) {
-    await walkTo({ x, y: WHEAT_Y });
-    await until(`wheat ${i + 1} harvested`, (s) => (count(s.carrying).wheat ?? 0) >= i + 1);
-  }
-  expect(count((await game.state()).carrying)).toEqual({ wheat: 3 });
+  // Gardens: walk up into the wheat field, where the sickle reaches one column of three wheat, then
+  // over to the mandrake patch until both hands are full.
+  let s = await game.state();
+  expect(s.plots.length, 'nine beds in each of six gardens').toBe(54);
+  expect(s.plots.slice(0, 9).every((p) => p.plant === 'wheat') && s.plots.slice(9, 18).every((p) => p.plant === 'mandrake')).toBe(true);
+  // A new game starts every bed ripe.
+  for (const i of WHEAT_COLUMN) expect(s.plots[i].grown).toBe(GROW_MS.wheat);
+  await walkTo(...BELOW_GARDENS, WHEAT_SPOT);
+  s = await until('a column of wheat harvested', (s) => (count(s.carrying).wheat ?? 0) >= 3);
+  expect(count(s.carrying)).toEqual({ wheat: 3 });
+  // Just those three beds were cut, and grow again from nothing.
+  s.plots.slice(0, 9).forEach((p, i) => expect(p.grown >= GROW_MS.wheat, `wheat bed ${i} ripe`).toBe(!WHEAT_COLUMN.includes(i)));
   // The camera followed the doctor up to the wheat field, at the top-left corner of the world.
   expect(await game.view()).toEqual({ x: 0, y: 0 });
-  await until('a ripe mandrake', (s) => s.plots[3].grown >= 14_000, 20_000);
+  expect(s.plots[MANDRAKE_PLOT].grown).toBe(GROW_MS.mandrake);
   await walkTo(MANDRAKE);
-  let s = await until('one mandrake harvested', (s) => s.carrying.length === 4);
+  s = await until('one mandrake harvested', (s) => s.carrying.length === 4);
   expect(count(s.carrying)).toEqual({ wheat: 3, mandrake: 1 });
   await snap('1-harvested');
 
@@ -357,11 +388,11 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
   s = await until('plants dropped at the refining table', (s) => s.carrying.length === 0);
   expect(s.refiner.queue.length + s.refiner.output.length).toBe(4);
   // Each kind of plant goes on its own pallet above the table.
-  expect(await game.pallets('refiner')).toEqual({ in: { wheat: 3, mandrake: 1 }, out: { flour: 0, mandrakeSeeds: 0 } });
+  expect(await game.pallets('refiner')).toEqual({ in: { wheat: 3, mandrake: 1, nightshade: 0 }, out: { flour: 0, mandrakeSeeds: 0, nightshadeExtract: 0 } });
   await walkTo(REFINER.work);
   await snap('2-refining');
   await until('plants refined', (s) => s.refiner.output.length === 4);
-  expect(await game.pallets('refiner')).toEqual({ in: { wheat: 0, mandrake: 0 }, out: { flour: 3, mandrakeSeeds: 1 } });
+  expect(await game.pallets('refiner')).toEqual({ in: { wheat: 0, mandrake: 0, nightshade: 0 }, out: { flour: 3, mandrakeSeeds: 1, nightshadeExtract: 0 } });
   await walkTo(REFINER.pickUp);
   s = await until('refined goods picked up', (s) => s.carrying.length === 4);
   expect(count(s.carrying)).toEqual({ flour: 3, mandrakeSeeds: 1 });
@@ -380,25 +411,42 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
     short.healingDraught > short.sleepingTonic ? 'healingDraught' : 'sleepingTonic',
   );
   await snap('3-brewing');
-  await until('potions brewed', (s) => s.cauldron.output.length === 2);
+  const first = s.cauldron.brewing!.out;
+  const second = first === 'sleepingTonic' ? 'healingDraught' : 'sleepingTonic';
+  // The last quarter of a brew is its fine window: step off the work spot then, which stops the
+  // brew where it is, and pick the potion up, and it comes out fine.
+  s = await until('the brew in its fine window', (s) => !!s.cauldron.brewing && s.cauldron.brewing.progress >= s.cauldron.brewing.ms * (1 - FINE_SHARE));
+  expect(s.cauldron.brewing!.progress).toBeLessThan(s.cauldron.brewing!.ms);
+  await walkTo(CAULDRON.pickUp);
+  s = await until('a fine potion picked up', (s) => s.carrying.length === 1);
+  expect(s.carrying).toEqual([FINE[first]]);
+  expect(s.cauldron.output).toEqual([]);
+  await snap('3-fine');
+  // Back on the work spot, the other brew runs to its end and comes out plain, onto its pallet.
+  await walkTo(CAULDRON.work);
+  await until('the second potion brewed', (s) => s.cauldron.output.length === 1);
   expect(await game.pallets('cauldron')).toEqual({
-    in: { flour: 0, mandrakeSeeds: 0 },
-    out: { healingDraught: 1, sleepingTonic: 1 },
+    in: { flour: 0, mandrakeSeeds: 0, nightshadeExtract: 0 },
+    out: { healingDraught: 0, sleepingTonic: 0, shadowElixir: 0, [second]: 1 },
   });
   await walkTo(CAULDRON.pickUp);
   s = await until('potions picked up', (s) => s.carrying.length === 2);
   // Down at the cauldron, the view has scrolled down the column with the doctor.
   expect((await game.view()).y).toBeGreaterThan(0);
-  expect(count(s.carrying)).toEqual({ sleepingTonic: 1, healingDraught: 1 });
+  expect(count(s.carrying)).toEqual({ [FINE[first]]: 1, [second]: 1 });
   await walkTo(LEAVE_CAULDRONS);
 
   // Storefront: stock the shelf, serve customers until one has paid, then take the coins.
   // A tap straight at the counter: the shop's walls are solid, so the doctor finds the way in by the door.
   await walkTo(COUNTER.drop);
   s = await until('potions on the shelf', (s) => s.carrying.length === 0);
-  // The potions stand on their pallets in front of the counter.
-  const shelf = count(s.counter.shelf);
-  expect((await game.pallets('counter')).in).toEqual({ healingDraught: shelf.healingDraught ?? 0, sleepingTonic: shelf.sleepingTonic ?? 0 });
+  // The potions stand on their pallets in front of the counter, a fine one on its plain potion's.
+  const shelf = count(s.counter.shelf.map(plain));
+  expect((await game.pallets('counter')).in).toEqual({
+    healingDraught: shelf.healingDraught ?? 0,
+    sleepingTonic: shelf.sleepingTonic ?? 0,
+    shadowElixir: 0,
+  });
   // One of each potion: a customer pays less for a potion while more of its kind stay stocked,
   // so with no others left behind each one sells at full pay.
   expect(Math.max(...Object.values(shelf)), 'no stock to lower the pay').toBe(1);
@@ -408,11 +456,17 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
   // came in and was served between two looks pays today's price. A customer whose order is filled
   // also tips what is left of their tip, which shrank while they waited: between what it was at the
   // last look and what it was at this one. The day and the waiting customers' patience run on the
-  // same clock. Every Sleeping Tonic sold counts towards the contract.
+  // same clock. Every Sleeping Tonic sold counts towards the contract. A fine potion goes first and
+  // pays half again as much. Each order filled raises the street's reputation; each customer who
+  // walks off lowers it.
   let prev = s;
   let owed = s.counter.till;
   let tonics = 0;
+  let filled = 0;
+  let walkedOff = 0;
   const contractBefore = s.contract.made;
+  const reputationBefore = s.reputation;
+  const finePay = (pay: number) => Math.round(pay * FINE_BONUS);
   s = await until(
     'customers served',
     (s) => {
@@ -424,8 +478,12 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
       for (const order of prev.orders) {
         const now = s.orders.find((o) => o.id === order.id);
         // An order that is gone was filled, unless the customer ran out of patience.
-        if (!now && order.patience < 5_000) continue;
+        if (!now && order.patience < 5_000) {
+          walkedOff++;
+          continue;
+        }
         if (!now) {
+          filled++;
           tipLow += tipNow(order, order.patience - passed);
           tipHigh += tipNow(order);
         }
@@ -435,14 +493,17 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
         for (const want of order.wants) {
           const i = left.indexOf(want);
           if (i >= 0) left.splice(i, 1);
-          else {
+          else if (served[FINE[want]] > 0) {
+            owed += finePay(order.pay[want]);
+            served[FINE[want]]--;
+          } else {
             owed += order.pay[want];
             served[want]--;
           }
         }
       }
-      for (const [p, n] of Object.entries(served)) owed += n * potionPay(s, p);
-      tonics += (count(prev.counter.shelf).sleepingTonic ?? 0) - (count(s.counter.shelf).sleepingTonic ?? 0);
+      for (const [p, n] of Object.entries(served)) owed += n * (p === plain(p) ? potionPay(s, p) : finePay(potionPay(s, plain(p))));
+      tonics += (count(prev.counter.shelf.map(plain)).sleepingTonic ?? 0) - (count(s.counter.shelf.map(plain)).sleepingTonic ?? 0);
       expect(tipped, `tips paid between looks, from ${JSON.stringify(prev.orders)}`).toBeGreaterThanOrEqual(tipLow);
       expect(tipped, `tips paid between looks, from ${JSON.stringify(prev.orders)}`).toBeLessThanOrEqual(tipHigh);
       owed += tipped;
@@ -456,6 +517,11 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
   // The Sleeping Tonics sold count towards today's contract, which needs more than one round's worth.
   expect(s.contract).toMatchObject({ ...FIRST_CONTRACT, made: contractBefore + tonics });
   expect(s.sold).toBe(2 - s.counter.shelf.length);
+  expect(filled, 'an order filled').toBeGreaterThan(0);
+  expect(s.reputation, `${filled} orders filled, ${walkedOff} walked off`).toBe(
+    Math.max(0, Math.min(100, reputationBefore + REPUTATION_SERVED * filled - REPUTATION_WALKED_OFF * walkedOff)),
+  );
+  expect(reputationBefore).toBe(START_REPUTATION);
   // Step off the work spot first, so no customer pays in while the doctor heads for the coins.
   await walkTo(LEAVE_SHOP);
   s = await game.state();
@@ -465,6 +531,7 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
   expect(s.coins).toBe(earned);
   // Nothing was bought along the way; no walk clipped a purple marker.
   for (const level of [...Object.values(s.upgrades), ...Object.values(s.craftsmen)]) expect(level).toEqual({ level: 0, paid: 0 });
+  for (const garden of s.shade) expect(garden).toEqual({ built: false, paid: 0 });
   // The day went by, still short of dusk: the contract is the first day's.
   expect(s.contract.day).toBe(1);
   expect(s.contract.dayLeft).toBeLessThan(fresh.contract.dayLeft - (gameMs - freshAt) / 2);

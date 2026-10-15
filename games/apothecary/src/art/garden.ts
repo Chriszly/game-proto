@@ -92,10 +92,45 @@ function drawMandrake(c: Ctx, stage: number) {
   }
 }
 
+/**
+ * A shade-loving bush: a few dark leaves, then violet star flowers, and once ripe glossy black-violet
+ * berries hanging in clusters. 40x40 as shown.
+ */
+function drawNightshade(c: Ctx, stage: number) {
+  const x = 20, y = 39;
+  const size = [8, 14, 17][stage];
+  const leaves = stage === 0 ? [-0.5, 0.5] : [-1.2, -0.6, 0, 0.6, 1.2];
+  for (const a of leaves) {
+    const tipX = x + Math.sin(a) * size, tipY = y - 4 - Math.cos(a) * size;
+    const nx = Math.cos(a) * 3.6, ny = Math.sin(a) * 3.6;
+    const mid = [(x + tipX) / 2, (y - 4 + tipY) / 2];
+    const leaf: Pt[] = [[x, y - 4], [mid[0] + nx, mid[1] + ny], [tipX, tipY], [mid[0] - nx, mid[1] - ny]];
+    both(c, leaf, a < 0 ? '#3f7a34' : '#4f8a3a', { layers: 2, edge: 0 }, { w: 0.7 });
+    ink(c, [[x, y - 4], [tipX, tipY]], { closed: false, w: 0.4, alpha: 0.5 });
+  }
+  if (stage === 1) {
+    // Star flowers, violet with yellow hearts.
+    for (const [dx, dy] of [[-6, -15], [5, -18]]) {
+      wash(c, ellPts(x + dx, y + dy, 2.6, 2.6, 5), '#9a7ad8', { layers: 1, edge: 0 });
+      ink(c, ellPts(x + dx, y + dy, 2.6, 2.6, 5), { w: 0.5 });
+      c.fillStyle = '#e8c04a';
+      c.fillRect(x + dx - 0.6, y + dy - 0.6, 1.2, 1.2);
+    }
+  }
+  if (stage === 2) {
+    for (const [dx, dy] of [[-7, -12], [-4, -9], [-9, -8], [6, -15], [9, -11], [4, -11], [0, -20], [2, -17]]) {
+      both(c, ellPts(x + dx, y + dy, 2.3, 2.3, 10), '#3a2050', { layers: 2, edge: 0 }, { w: 0.5 });
+      c.fillStyle = 'rgba(255,255,255,0.75)';
+      c.fillRect(x + dx - 1, y + dy - 1, 0.9, 0.9);
+    }
+  }
+}
+
 export function bakeGarden(scene: Phaser.Scene) {
   paint(scene, 'plot', 56, 44, drawPlot, 2);
   for (const stage of [0, 1, 2]) {
     paint(scene, plantTexture('wheat', stage), 48, 44, (c) => drawWheat(c, stage), 3, 51);
     paint(scene, plantTexture('mandrake', stage), 40, 40, (c) => drawMandrake(c, stage), 3, 61);
+    paint(scene, plantTexture('nightshade', stage), 40, 40, (c) => drawNightshade(c, stage), 3, 71);
   }
 }

@@ -1,14 +1,16 @@
 import { byDifficulty } from '../../../../shared/settings';
 import {
+  FINE,
   GROW_MS,
   ITEMS,
   POTIONS,
   RECIPES,
   REFINE,
   isPlant,
-  isPotion,
   isRefined,
+  isSellable,
   PLANTS,
+  plainOf,
   type ItemId,
   type PlantId,
   type PotionId,
@@ -33,7 +35,7 @@ import {
   unlocked,
   GUILD_COST,
   REFINERS,
-  LINE2_GARDEN,
+  GARDEN_LINE,
   UPGRADES,
   anyFieldBuilt,
   beltBuildable,
@@ -48,6 +50,23 @@ import {
   contractFor,
   maxTip,
   tipNow,
+  tipLeft,
+  DAY_MS,
+  FINE_BONUS,
+  MAX_REGULARS,
+  REGULAR_BONUS,
+  REGULAR_CHANCE,
+  REGULAR_TIP_LEFT,
+  REPUTATION_SERVED,
+  REPUTATION_WALKED_OFF,
+  RUSH_BONUS,
+  RUSH_EXTRA,
+  RUSH_SIZE,
+  SHADE_COST,
+  inFineWindow,
+  isMarketDay,
+  nudgeReputation,
+  orderable,
   type BeltId,
   type CraftingId,
   type BeltItem,
@@ -137,11 +156,22 @@ export function tick(
   serveCustomers(state, dt, workingAt, atCounter);
   if (state.craftsmen.counter.level >= 2) collectTill(state);
   for (const order of state.orders) if (atCounter(order)) order.patience -= dt;
+  // A customer who runs out of patience walks off, and the street thinks less of the shop. One of a
+  // market day's crowd walking off loses the rush bonus.
+  for (const order of state.orders) {
+    if (order.patience > 0) continue;
+    nudgeReputation(state, -REPUTATION_WALKED_OFF);
+    if (order.rush && state.rush) state.rush.lost = true;
+  }
   state.orders = state.orders.filter((o) => o.patience > 0);
 
   // At dusk a contract still open is missed and the next day's comes in.
   state.contract.dayLeft -= dt;
   if (state.contract.dayLeft <= 0) state.contract = contractFor(state, state.contract.day + 1, state.contract.kept);
+
+  // On a market day, a crowd comes in at midday.
+  const day = state.contract.day;
+  if (isMarketDay(day) && state.contract.dayLeft <= DAY_MS / 2 && state.rush?.day !== day) startRush(state, rand);
 
   state.nextOrderIn -= dt;
   if (state.nextOrderIn <= 0) {
@@ -176,8 +206,8 @@ function firstToRefine(refiner: Refiner, first: PlantId | null) {
  */
 function takeForBelt(state: GameState, belt: BeltId, fits: (id: ItemId) => boolean): ItemId | null {
   if (belt === 'garden' || belt === 'garden2') {
-    const line2 = belt === 'garden2';
-    const i = state.plots.findIndex((p, i) => gardenOf(i) >= LINE2_GARDEN === line2 && isRipe(state, i) && fits(p.plant));
+    const line = belt === 'garden2' ? 2 : 1;
+    const i = state.plots.findIndex((p, i) => GARDEN_LINE[gardenOf(i)] === line && isRipe(state, i) && fits(p.plant));
     if (i < 0) return null;
     state.plots[i].grown = 0;
     return state.plots[i].plant;
@@ -237,8 +267,9 @@ function runBelt(state: GameState, id: BeltId, dt: number) {
   const belt = state.belts[id];
   if (!belt.built) return;
   const length = BELT_MS[id];
-  // Each lane runs at a share of the belt's speed, so all lanes together carry as much as one did.
-  const step = (dt * beltSpeed(state)) / BELT_LANES[id].length;
+  // Each lane runs at half the belt's speed, as when belts had two lanes, so the nightshade's lane
+  // didn't slow the others down.
+  const step = (dt * beltSpeed(state)) / LANE_SHARE;
   // The item last seen in each lane: the one ahead of the next in that lane, and in the end the rearmost.
   const ahead = new Map<ItemId, BeltItem>();
   const merging = mergingItems(state, id);
@@ -261,6 +292,9 @@ function runBelt(state: GameState, id: BeltId, dt: number) {
   if (item) belt.items.push({ id: item, at: beltStart(id, item) });
 }
 
+/** What share of a belt's speed each of its lanes runs at. */
+const LANE_SHARE = 2;
+
 /** Where goods of a kind get on a belt, in ms along its main run: the start of their own run. */
 const beltStart = (id: BeltId, kind: ItemId) => beltSpan(id, kind).start;
 
@@ -273,8 +307,9 @@ export function shortfall(state: GameState, potion: PotionId) {
   // Each cauldron's belt is named after it.
   const riding = CAULDRONS.flatMap((id) => state.belts[id].items.map((item) => item.id));
   const brewing = CAULDRONS.flatMap((id) => state[id].brewing?.out ?? []);
+  // Fine potions count as the potion they are.
   const ready = [state.counter.shelf, state.carrying, riding, brewing, ...CAULDRONS.map((id) => state[id].output)].reduce(
-    (n, items) => n + items.filter((p) => p === potion).length,
+    (n, items) => n + items.filter((p) => isSellable(p) && plainOf(p) === potion).length,
     0,
   );
   return wanted - ready;
@@ -301,19 +336,50 @@ function startBrew(state: GameState, cauldron: Cauldron, first: PotionId | null 
   return null;
 }
 
-function newOrder(state: GameState, rand: () => number) {
+function newOrder(state: GameState, rand: () => number, regulars = true): Order {
   // A busier town, with more customers, sends more two-potion orders and less patient customers.
   const busy = state.upgrades.customers.level;
-  const count = rand() < 0.35 + 0.2 * busy ? 2 : 1;
-  const wants = Array.from({ length: count }, () => POTIONS[Math.floor(rand() * POTIONS.length)]);
+  const potions = orderable(state);
+  // Now and then a regular comes back, for the same potions as last time.
+  const regular = regulars && state.regulars.length > 0 && rand() < REGULAR_CHANCE ? state.regulars.shift()! : null;
+  const theirs = regular?.wants.filter((p) => potions.includes(p)) ?? [];
+  let wants: PotionId[];
+  if (theirs.length > 0) wants = theirs;
+  else {
+    const count = rand() < 0.35 + 0.2 * busy ? 2 : 1;
+    wants = Array.from({ length: count }, () => potions[Math.floor(rand() * potions.length)]);
+  }
+  const back = theirs.length > 0;
   // Customers pay for each potion as they get it, with a counter bonus that is more generous, and
-  // patience that lasts longer, at a better counter and on an easier difficulty. The decaying tip
-  // comes on top, once the order is filled.
+  // patience that lasts longer, at a better counter and on an easier difficulty. Regulars pay a
+  // little more. The decaying tip comes on top, once the order is filled.
   const level = state.upgrades.counter.level;
-  const pay = Object.fromEntries(wants.map((p) => [p, potionPrice(state, p) + 2 * (level + 1)]));
+  const pay = Object.fromEntries(wants.map((p) => [p, potionPrice(state, p) + 2 * (level + 1) + (back ? REGULAR_BONUS : 0)]));
   const maxPatience =
     ((60_000 + rand() * 30_000) * (1 + 0.25 * level) * byDifficulty(1.5, 1, 0.7)) / (1 + 0.5 * busy);
-  return { id: state.nextOrderId++, wants, pay, patience: maxPatience, maxPatience, tip: maxTip(count) };
+  const id = state.nextOrderId++;
+  return {
+    id,
+    wants,
+    asked: [...wants],
+    pay,
+    patience: maxPatience,
+    maxPatience,
+    tip: maxTip(wants.length),
+    face: back ? regular!.face : id,
+    ...(back ? { regular: true } : {}),
+  };
+}
+
+/**
+ * A market day's crowd: up to `RUSH_SIZE` customers come in at once, filling every free place at the
+ * counter and `RUSH_EXTRA` more. Regulars stay home that day.
+ */
+function startRush(state: GameState, rand: () => number) {
+  const room = Math.max(0, maxOrders(state) + RUSH_EXTRA - state.orders.length);
+  const size = Math.min(RUSH_SIZE, room);
+  state.rush = { day: state.contract.day, size, served: 0, lost: size === 0, paid: false };
+  for (let i = 0; i < size; i++) state.orders.push({ ...newOrder(state, rand, false), rush: true });
 }
 
 /** Whether a plot can be harvested: grown, in a garden that is there. */
@@ -359,19 +425,24 @@ function serveCustomers(state: GameState, dt: number, workingAt: StationId | nul
 
 /**
  * Customers take what they ordered from the counter shelf, at most `limit` potions, and pay into
- * the till, less for each potion of the kind still stocked after theirs (`stockedPay`). Orders the shelf can fill completely go first (oldest first); leftover matching potions
- * go towards the rest.
+ * the till, less for each potion of the kind still stocked after theirs (`stockedPay`). A fine
+ * potion of the kind goes first and pays `FINE_BONUS` times as much. Orders the shelf can fill
+ * completely go first (oldest first); leftover matching potions go towards the rest.
  */
 function serveFromShelf(state: GameState, atCounter: (order: Order) => boolean, limit = Infinity) {
   const { counter } = state;
   if (counter.shelf.length === 0) return;
   const give = (order: Order) => {
     order.wants = order.wants.filter((want) => {
-      const i = counter.shelf.indexOf(want);
-      if (i < 0 || limit <= 0) return true;
+      if (limit <= 0) return true;
+      let i = counter.shelf.indexOf(FINE[want]);
+      const fine = i >= 0;
+      if (!fine) i = counter.shelf.indexOf(want);
+      if (i < 0) return true;
       counter.shelf.splice(i, 1);
-      const others = counter.shelf.filter((p) => p === want).length;
-      counter.till += stockedPay(order.pay[want] ?? 0, others);
+      const others = counter.shelf.filter((p) => plainOf(p) === want).length;
+      const pay = order.pay[want] ?? 0;
+      counter.till += stockedPay(fine ? Math.round(pay * FINE_BONUS) : pay, others);
       state.sold++;
       if (want === state.contract.potion) deliverForContract(state);
       limit--;
@@ -382,6 +453,7 @@ function serveFromShelf(state: GameState, atCounter: (order: Order) => boolean, 
       const tip = tipNow(order);
       counter.till += tip;
       state.tips += tip;
+      orderFilled(state, order);
     }
   };
   // Only customers standing at the counter get served.
@@ -389,6 +461,26 @@ function serveFromShelf(state: GameState, atCounter: (order: Order) => boolean, 
   for (const order of waiting) if (canFill(counter.shelf, order)) give(order);
   for (const order of waiting) if (order.wants.length > 0) give(order);
   state.orders = state.orders.filter((o) => o.wants.length > 0);
+}
+
+/**
+ * A customer leaves served: the street thinks better of the shop, one who was served quickly comes
+ * back as a regular, and one of a market day's crowd counts towards the rush bonus.
+ */
+function orderFilled(state: GameState, order: Order) {
+  nudgeReputation(state, REPUTATION_SERVED);
+  if (tipLeft(order) >= REGULAR_TIP_LEFT) {
+    const asked = order.asked ?? (Object.keys(order.pay) as PotionId[]);
+    if (state.regulars.length >= MAX_REGULARS) state.regulars.shift();
+    state.regulars.push({ face: order.face ?? order.id, wants: asked });
+  }
+  const rush = state.rush;
+  if (!order.rush || !rush) return;
+  rush.served++;
+  if (rush.served >= rush.size && !rush.lost && !rush.paid) {
+    rush.paid = true;
+    state.coins += RUSH_BONUS * rush.size;
+  }
 }
 
 /**
@@ -403,8 +495,8 @@ function deliverForContract(state: GameState) {
   state.contract = contractFor(state, contract.day + 1, contract.kept + 1);
 }
 
-function canFill(carrying: readonly ItemId[], order: Order) {
-  return without(carrying, order.wants) !== null;
+function canFill(shelf: readonly ItemId[], order: Order) {
+  return without(shelf.map((p) => (isSellable(p) ? plainOf(p) : p)), order.wants) !== null;
 }
 
 /** What is left of `items` once one of each of `taken` is taken out, or null if any is missing. */
@@ -456,7 +548,20 @@ export function dropInCauldron(state: GameState, id: CauldronId = 'cauldron'): F
   return [`- ${ITEMS[good].name}`];
 }
 
-export const pickUpFromCauldron = (state: GameState, id: CauldronId = 'cauldron') => pickUpOne(state, state[id].output);
+/**
+ * Picks up a potion at the cauldron: the brew in it while it is in its fine window, taken out early
+ * as a Fine potion, or else a finished one from its pallet.
+ */
+export function pickUpFromCauldron(state: GameState, id: CauldronId = 'cauldron'): Feedback | null {
+  const cauldron = state[id];
+  if (inFineWindow(cauldron.brewing) && freeHands(state) > 0) {
+    const fine = FINE[cauldron.brewing.out];
+    cauldron.brewing = null;
+    state.carrying.push(fine);
+    return [`+ ${ITEMS[fine].name}!`];
+  }
+  return pickUpOne(state, cauldron.output);
+}
 
 const UPGRADE_STEP = 5;
 /** Pays a handful of coins towards `cost`; once it is fully paid, `complete` says what was bought. */
@@ -589,8 +694,14 @@ export function payExpansion(state: GameState, part: ExpansionPart): Feedback | 
   return payToward(state, field, EXPANSION_COST.field, 'Field planted!');
 }
 
+/** Pays a handful of coins towards planting a shade garden: the first line's (`line` 0), or the second's once its land is bought. */
+export function payShade(state: GameState, line: 0 | 1): Feedback | null {
+  if (line === 0 ? !unlocked(state, 'shade') : !state.expansion.land.built) return null;
+  return payToward(state, state.shade[line], SHADE_COST[line], 'Shade garden planted!');
+}
+
 export function stockShelf(state: GameState): Feedback | null {
-  const potion = takeTopFromBack(state, isPotion, state.counter.shelf);
+  const potion = takeTopFromBack(state, isSellable, state.counter.shelf);
   if (!potion) return null;
   state.counter.shelf.push(potion);
   return [`- ${ITEMS[potion].name}`];

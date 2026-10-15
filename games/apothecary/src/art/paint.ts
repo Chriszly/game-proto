@@ -59,6 +59,9 @@ export const ITEM_COL: Record<string, string> = {
   mandrakeSeeds: '#6b4426',
   healingDraught: '#d9434b',
   sleepingTonic: '#6a5bd6',
+  nightshade: '#4a3060',
+  nightshadeExtract: '#5a3a78',
+  shadowElixir: '#2f8a72',
 };
 
 /** How many canvas pixels each texture has per pixel shown, by texture key. */
@@ -354,12 +357,36 @@ export function coinIcon(c: Ctx, x: number, y: number, r: number) {
   c.restore();
 }
 
+/** A four-pointed gold sparkle centred on (x, y), `r` from its middle to a point, for fine potions. */
+export function sparkle(c: Ctx, x: number, y: number, r: number) {
+  c.save();
+  c.beginPath();
+  for (let k = 0; k < 8; k++) {
+    const d = k % 2 === 0 ? r : r * 0.32;
+    const a = (k / 8) * Math.PI * 2 - Math.PI / 2;
+    c.lineTo(x + Math.cos(a) * d, y + Math.sin(a) * d);
+  }
+  c.closePath();
+  c.fillStyle = '#f2c84a';
+  c.fill();
+  c.lineWidth = Math.max(0.6, r * 0.16);
+  c.strokeStyle = INK;
+  c.stroke();
+  c.restore();
+}
+
 /**
  * An item, centred on (x, y) and about `s` pixels tall, washed in its colour with an ink outline:
- * a flask for each potion, a sheaf of wheat, a mandrake root with its leaves, and a sack for flour
- * and seeds.
+ * a flask for each potion, a sheaf of wheat, a mandrake root with its leaves, a sprig of nightshade
+ * berries, and a sack for flour, seeds and extract. A fine potion is its flask with a gold sparkle.
  */
 export function itemIcon(c: Ctx, kind: string, x: number, y: number, s: number) {
+  if (kind.startsWith('fine')) {
+    const plain = kind[4].toLowerCase() + kind.slice(5);
+    itemIcon(c, plain, x, y, s);
+    sparkle(c, x + s * 0.3, y - s * 0.3, s * 0.24);
+    return;
+  }
   const col = ITEM_COL[kind];
   const lw = Math.max(0.7, s * 0.055);
   const out = () => {
@@ -371,8 +398,28 @@ export function itemIcon(c: Ctx, kind: string, x: number, y: number, s: number) 
   c.translate(x, y);
   c.lineJoin = 'round';
   c.lineCap = 'round';
-  if (kind === 'healingDraught' || kind === 'sleepingTonic') {
+  if (kind === 'healingDraught' || kind === 'sleepingTonic' || kind === 'shadowElixir') {
     const round = kind === 'healingDraught';
+    // A round flask, a cone, or for the Shadow Elixir a tall square-shouldered bottle.
+    const body = () => {
+      c.beginPath();
+      if (round) c.arc(0, s * 0.12, s * 0.33, 0, Math.PI * 2);
+      else if (kind === 'shadowElixir') {
+        c.moveTo(-s * 0.1, -s * 0.24);
+        c.lineTo(s * 0.1, -s * 0.24);
+        c.lineTo(s * 0.22, -s * 0.1);
+        c.lineTo(s * 0.22, s * 0.44);
+        c.lineTo(-s * 0.22, s * 0.44);
+        c.lineTo(-s * 0.22, -s * 0.1);
+        c.closePath();
+      } else {
+        c.moveTo(-s * 0.1, -s * 0.24);
+        c.lineTo(s * 0.1, -s * 0.24);
+        c.lineTo(s * 0.34, s * 0.42);
+        c.lineTo(-s * 0.34, s * 0.42);
+        c.closePath();
+      }
+    };
     c.fillStyle = '#d8e6ee';
     c.beginPath();
     c.rect(-s * 0.1, -s * 0.44, s * 0.2, s * 0.22);
@@ -383,15 +430,7 @@ export function itemIcon(c: Ctx, kind: string, x: number, y: number, s: number) 
     c.rect(-s * 0.13, -s * 0.54, s * 0.26, s * 0.11);
     c.fill();
     out();
-    c.beginPath();
-    if (round) c.arc(0, s * 0.12, s * 0.33, 0, Math.PI * 2);
-    else {
-      c.moveTo(-s * 0.1, -s * 0.24);
-      c.lineTo(s * 0.1, -s * 0.24);
-      c.lineTo(s * 0.34, s * 0.42);
-      c.lineTo(-s * 0.34, s * 0.42);
-      c.closePath();
-    }
+    body();
     c.fillStyle = '#eef4f6';
     c.fill();
     c.save();
@@ -408,15 +447,7 @@ export function itemIcon(c: Ctx, kind: string, x: number, y: number, s: number) 
     c.closePath();
     c.fill();
     c.restore();
-    c.beginPath();
-    if (round) c.arc(0, s * 0.12, s * 0.33, 0, Math.PI * 2);
-    else {
-      c.moveTo(-s * 0.1, -s * 0.24);
-      c.lineTo(s * 0.1, -s * 0.24);
-      c.lineTo(s * 0.34, s * 0.42);
-      c.lineTo(-s * 0.34, s * 0.42);
-      c.closePath();
-    }
+    body();
     out();
     c.fillStyle = 'rgba(255,255,255,0.8)';
     c.beginPath();
@@ -452,6 +483,42 @@ export function itemIcon(c: Ctx, kind: string, x: number, y: number, s: number) 
     c.strokeStyle = INK;
     c.lineWidth = lw * 0.8;
     c.strokeRect(-s * 0.16, s * 0.12, s * 0.32, s * 0.08);
+  } else if (kind === 'nightshade') {
+    // A sprig: two leaves, a violet star flower and a cluster of dark berries.
+    c.fillStyle = '#4f8a3a';
+    for (const a of [-0.7, 0.7]) {
+      c.beginPath();
+      c.ellipse(Math.sin(a) * s * 0.2, -s * 0.18, s * 0.1, s * 0.24, a, 0, Math.PI * 2);
+      c.fill();
+      out();
+    }
+    c.strokeStyle = shade('#4f8a3a', 0.6);
+    c.lineWidth = s * 0.05;
+    c.beginPath();
+    c.moveTo(0, -s * 0.1);
+    c.lineTo(0, s * 0.2);
+    c.stroke();
+    for (const [bx, by] of [[-0.13, 0.22], [0.12, 0.24], [0, 0.36], [-0.02, 0.12]]) {
+      c.fillStyle = col;
+      c.beginPath();
+      c.arc(bx * s, by * s, s * 0.11, 0, Math.PI * 2);
+      c.fill();
+      out();
+      c.fillStyle = 'rgba(255,255,255,0.7)';
+      c.beginPath();
+      c.arc(bx * s - s * 0.035, by * s - s * 0.035, s * 0.03, 0, Math.PI * 2);
+      c.fill();
+    }
+    c.fillStyle = '#9a7ad8';
+    c.beginPath();
+    for (let k = 0; k < 10; k++) {
+      const r = k % 2 === 0 ? s * 0.12 : s * 0.05;
+      const a = (k / 10) * Math.PI * 2 - Math.PI / 2;
+      c.lineTo(Math.cos(a) * r, -s * 0.38 + Math.sin(a) * r);
+    }
+    c.closePath();
+    c.fill();
+    out();
   } else if (kind === 'mandrake') {
     c.fillStyle = '#5c9a3c';
     for (const a of [-0.6, 0, 0.6]) {
@@ -514,7 +581,7 @@ export function itemIcon(c: Ctx, kind: string, x: number, y: number, s: number) 
     out();
     c.fillStyle = '#8a5a32';
     c.fillRect(-s * 0.18, -s * 0.31, s * 0.36, s * 0.08);
-    c.fillStyle = kind === 'flour' ? '#c9a24a' : '#e0b070';
+    c.fillStyle = kind === 'flour' ? '#c9a24a' : kind === 'nightshadeExtract' ? '#c8b0f0' : '#e0b070';
     c.beginPath();
     c.arc(0, s * 0.12, s * 0.08, 0, Math.PI * 2);
     c.fill();

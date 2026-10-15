@@ -124,10 +124,19 @@ function drawExpansion(c: Ctx) {
   dirt(c, rectPts(m, m, y.w, y.h), { x: m, y: m, w: y.w, h: y.h });
 }
 
-/** A garden: a meadow wash with flowers, inside a picket fence. */
-function drawGarden(c: Ctx, w: number, h: number) {
+/**
+ * A garden: a meadow wash with flowers, inside a picket fence. A shade garden is a darker, mossy
+ * green under the dappled shadow of the trees round it.
+ */
+function drawGarden(c: Ctx, w: number, h: number, shaded = false) {
   const m = 6;
-  wash(c, rectPts(m, m, w, h, 6), '#a9cc72', { layers: 4, spread: 2, bloom: 4, cx: w / 2, cy: h / 3 });
+  wash(c, rectPts(m, m, w, h, 6), shaded ? '#7fa45a' : '#a9cc72', { layers: 4, spread: 2, bloom: 4, cx: w / 2, cy: h / 3 });
+  if (shaded) {
+    for (let i = 0; i < 9; i++) {
+      wash(c, ellPts(m + rr(10, w - 10), m + rr(10, h - 10), rr(18, 40), rr(12, 26), 16), '#3f5a30', { layers: 3, spread: 6, alpha: 0.22, edge: 0 });
+    }
+    hatch(c, rectPts(m + 4, m + 4, w - 8, 14), { gap: 3, alpha: 0.2, w: 0.5 });
+  }
   for (let i = 0; i < 26; i++) {
     c.fillStyle = ['#e8a33c', '#d97aa0', '#fff8e8', '#8a7ad8'][i % 4];
     c.beginPath();
@@ -214,8 +223,7 @@ export interface Scenery {
 }
 
 /**
- * Trees and bushes in the grass either side of the shop, below the yards, and bushes in the meadow
- * between the gardens at the top. Placed by a seeded scatter, so they stand in the same spots on
+ * Trees and bushes in the grass either side of the shop, below the yards. Placed by a seeded scatter, so they stand in the same spots on
  * every load.
  */
 export function sceneryLayout(): Scenery[] {
@@ -225,7 +233,6 @@ export function sceneryLayout(): Scenery[] {
   const zones = [
     { x0: 30, x1: 460, y0: 945, y1: 1105, trees: 7, bushes: 4 },
     { x0: 940, x1: 1370, y0: 945, y1: 1105, trees: 7, bushes: 4 },
-    { x0: 505, x1: 895, y0: 90, y1: 235, trees: 2, bushes: 4 },
   ];
   for (const z of zones) {
     for (let n = 0, tries = 0; n < z.trees + z.bushes && tries < 400; tries++) {
@@ -243,7 +250,9 @@ export function bakeGround(scene: Phaser.Scene) {
   paint(scene, 'ground-world', WORLD.w, WORLD.h, drawWorld, GROUND_RES);
   const yard = EXPANSION_YARDS[0];
   paint(scene, 'ground-expansion', yard.w + 2 * EXPANSION_MARGIN, yard.h + 2 * EXPANSION_MARGIN, drawExpansion, GROUND_RES);
-  GARDEN_AREAS.forEach((area, i) => paint(scene, gardenTexture(i), area.w + 12, area.h + 12, (c) => drawGarden(c, area.w, area.h), 2, 300 + (i % 2)));
+  GARDEN_AREAS.forEach((area, i) =>
+    paint(scene, gardenTexture(i), area.w + 12, area.h + 12, (c) => drawGarden(c, area.w, area.h, area.name === 'Shade garden'), 2, 300 + (i % 2)),
+  );
   ['#6f9e48', '#7fae52', '#5f8f40'].forEach((tint, i) => paint(scene, `tree-${i}`, 80, 88, (c) => drawTree(c, tint), 2, 500 + i));
   [0, 1].forEach((i) => paint(scene, `bush-${i}`, 48, 32, drawBush, 2, 600 + i));
   reseed(1);
