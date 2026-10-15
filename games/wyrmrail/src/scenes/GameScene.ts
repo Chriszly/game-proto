@@ -23,6 +23,7 @@ import {
 } from '../game/sim';
 import { FESTIVAL_GOAL, FESTIVAL_ROUND, HUNGRY, POP_MS, SECOND_WYRM_ROUND, roundGoal, type GameState, type Order, type Wyrm } from '../game/state';
 import { RAIL, WOOD } from '../art/palette';
+import { fit } from '../art/canvas';
 import { LOAD_LIFT, PART_ORIGIN } from '../art/sprites';
 import { PROP, bakeValley } from '../art/valley';
 import { makeButton } from '../ui/Button';
@@ -151,7 +152,7 @@ export class GameScene extends Phaser.Scene {
 
     // Every game has a new valley, baked here over the last one.
     bakeValley(this, this.state.valley);
-    this.add.image(BOARD.x, BOARD.y, 'valley').setOrigin(0);
+    fit(this.add.image(BOARD.x, BOARD.y, 'valley').setOrigin(0));
     this.rails = this.add.graphics().setDepth(1);
     this.hints = this.add.graphics().setDepth(2);
     this.createScenery();
@@ -179,8 +180,9 @@ export class GameScene extends Phaser.Scene {
    * a junction throws its switch.
    */
   private onGridPointer(p: Phaser.Input.Pointer, down: boolean) {
-    if (p.x < BOARD.x || p.x >= BOARD.x + BOARD.w || p.y < BOARD.y || p.y >= BOARD.y + BOARD.h) return;
-    const t = tileAt(p.x, p.y);
+    // The camera never scrolls, so the world point is the point in the 960x540 view.
+    if (p.worldX < BOARD.x || p.worldX >= BOARD.x + BOARD.w || p.worldY < BOARD.y || p.worldY >= BOARD.y + BOARD.h) return;
+    const t = tileAt(p.worldX, p.worldY);
     if (!inGrid(t)) return;
     if (!down && (this.dragTile === null || this.dragTile === key(t))) return;
     this.dragTile = key(t);
@@ -191,7 +193,7 @@ export class GameScene extends Phaser.Scene {
   /** A prop standing on a tile, sorted with the wyrm by where it touches the ground. */
   private addProp(t: Tile, texture: string) {
     const { x, y } = tileCenter(t);
-    return this.add.image(x, y, texture).setOrigin(PROP.x / PROP.w, PROP.y / PROP.h).setDepth(groundDepth(y));
+    return fit(this.add.image(x, y, texture).setOrigin(PROP.x / PROP.w, PROP.y / PROP.h).setDepth(groundDepth(y)));
   }
 
   /** The pines and the mountains. */
@@ -221,9 +223,9 @@ export class GameScene extends Phaser.Scene {
       // A workshop shows what it takes and what it makes, under its name.
       const { x, y } = tileCenter(v);
       const sign = this.add.container(x, y + 31, [
-        this.add.image(-14, 0, `cargo-${shop.takes}`).setScale(0.55),
+        fit(this.add.image(-14, 0, `cargo-${shop.takes}`), 0.55),
         this.add.text(0, 0, '>', textStyle(11)).setOrigin(0.5),
-        this.add.image(14, 0, `cargo-${shop.makes}`).setScale(0.55),
+        fit(this.add.image(14, 0, `cargo-${shop.makes}`), 0.55),
       ]);
       this.stations[this.stations.length - 1].sign = sign.setDepth(UI_DEPTH - 2);
     }
@@ -242,11 +244,11 @@ export class GameScene extends Phaser.Scene {
     const trail = [];
     const tail = SEGMENT_GAPS[SEGMENT_GAPS.length - 1];
     for (let i = 0; i <= tail; i++) trail.push({ x: x - i * 0.45, y: y - i * 0.22 });
-    const part = (texture: string) => this.add.image(0, 0, texture).setOrigin(PART_ORIGIN.x, PART_ORIGIN.y);
+    const part = (texture: string) => fit(this.add.image(0, 0, texture).setOrigin(PART_ORIGIN.x, PART_ORIGIN.y));
     return {
       segments: [part(`${prefix}-head`), part(`${prefix}-coil-0`), part(`${prefix}-coil-1`), part(`${prefix}-coil-2`), part('wagon-v'), part('wagon-v')],
       wings: part(`${prefix}-wings`),
-      wagonCargo: [0, 1].map(() => this.add.image(0, 0, 'cargo-grain').setScale(0.7).setVisible(false)),
+      wagonCargo: [0, 1].map(() => fit(this.add.image(0, 0, 'cargo-grain'), 0.7).setVisible(false)),
       trail,
       headAngle: 0,
     };
@@ -255,10 +257,10 @@ export class GameScene extends Phaser.Scene {
   private createHud() {
     this.add.rectangle(0, 0, VIEW.w, HUD_HEIGHT, 0x2c2018).setOrigin(0).setDepth(UI_DEPTH);
     this.add.rectangle(0, HUD_HEIGHT, VIEW.w, 4, 0x5a3f2a).setOrigin(0).setDepth(UI_DEPTH);
-    this.add.image(22, 22, 'coin').setDepth(UI_DEPTH);
+    fit(this.add.image(22, 22, 'coin')).setDepth(UI_DEPTH);
     this.coinsText = this.add.text(38, 22, '', textStyle(18, '#f3c64e')).setOrigin(0, 0.5).setDepth(UI_DEPTH);
-    for (let i = 0; i < 3; i++) this.hearts.push(this.add.image(140 + i * 26, 22, 'heart').setDepth(UI_DEPTH));
-    this.add.image(230, 22, 'food').setDepth(UI_DEPTH);
+    for (let i = 0; i < 3; i++) this.hearts.push(fit(this.add.image(140 + i * 26, 22, 'heart')).setDepth(UI_DEPTH));
+    fit(this.add.image(230, 22, 'food')).setDepth(UI_DEPTH);
     this.bellies = this.add.graphics().setDepth(UI_DEPTH);
     this.roundText = this.add.text(440, 22, '', textStyle(16)).setOrigin(0.5).setDepth(UI_DEPTH);
     this.wyrmText = this.add.text(950, 22, '', { ...textStyle(14, '#c9e8c0'), align: 'right' }).setOrigin(1, 0.5).setDepth(UI_DEPTH);
@@ -448,7 +450,7 @@ export class GameScene extends Phaser.Scene {
   private drawMarkers() {
     const s = this.state;
     const waiting = s.orders.filter((o) => o.status !== 'carrying');
-    while (this.markers.length < waiting.length) this.markers.push(this.add.image(0, 0, 'cargo-grain').setDepth(4));
+    while (this.markers.length < waiting.length) this.markers.push(fit(this.add.image(0, 0, 'cargo-grain')).setDepth(4));
     const perVillage = new Map<number, number>();
     this.markers.forEach((m, i) => {
       const o = waiting[i];
@@ -492,7 +494,7 @@ export class GameScene extends Phaser.Scene {
     const coil = segments[1];
     wings.setPosition(coil.x, coil.y).setDepth(coil.depth + 0.2);
     const moving = w.path.length > 0 && w.switchMs <= 0 && w.waitMs <= 0;
-    wings.setScale(1, moving && !settings.reduceMotion ? 0.75 + 0.25 * Math.sin(this.time.now / 90 + index) : 1);
+    fit(wings, 1, moving && !settings.reduceMotion ? 0.75 + 0.25 * Math.sin(this.time.now / 90 + index) : 1);
     // What the wagons carry: the orders this wyrm has loaded, first loaded in the front wagon.
     const carried = s.orders.filter((o) => o.status === 'carrying' && o.wyrm === index);
     wagonCargo.forEach((icon, i) => {
@@ -615,7 +617,7 @@ export class GameScene extends Phaser.Scene {
       .setStrokeStyle(2, o.status === 'waiting' ? (ok ? 0xc9a040 : 0x6a6070) : 0x7bc85a);
     const left = -PANEL.w / 2 + 8;
     const vs = villages(s);
-    const icon = this.add.image(left + 12, -18, `cargo-${o.cargo}`);
+    const icon = fit(this.add.image(left + 12, -18, `cargo-${o.cargo}`));
     // Goods a workshop made have their name in gold.
     const title = this.add.text(left + 28, -26, CARGO_NAMES[o.cargo], textStyle(14, o.made ? '#f3c64e' : '#f3e9d2'));
     const pay = this.add.text(PANEL.w / 2 - 8, -26, `${orderPay(s, o)}c`, textStyle(14, '#f3c64e')).setOrigin(1, 0);

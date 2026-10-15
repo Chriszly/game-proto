@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { bakeCanvas } from './canvas';
 
 export type Palette = Record<string, number>;
 
@@ -119,22 +120,24 @@ export class PixelCanvas {
 
   /** Bakes into a texture of (w * scale) x (h * scale) pixels, merging runs of equal pixels. */
   bake(scene: Phaser.Scene, key: string, scale = 1) {
-    const g = scene.add.graphics();
-    for (let y = 0; y < this.h; y++) {
-      let x = 0;
-      while (x < this.w) {
-        const c = this.color[y * this.w + x];
-        const a = this.alpha[y * this.w + x];
-        let run = 1;
-        while (x + run < this.w && this.color[y * this.w + x + run] === c && this.alpha[y * this.w + x + run] === a) run++;
-        if (c !== null) g.fillStyle(c, a).fillRect(x * scale, y * scale, run * scale, scale);
-        x += run;
+    bakeCanvas(scene, key, this.w * scale, this.h * scale, (ctx) => {
+      for (let y = 0; y < this.h; y++) {
+        let x = 0;
+        while (x < this.w) {
+          const c = this.color[y * this.w + x];
+          const a = this.alpha[y * this.w + x];
+          let run = 1;
+          while (x + run < this.w && this.color[y * this.w + x + run] === c && this.alpha[y * this.w + x + run] === a) run++;
+          if (c !== null) {
+            ctx.fillStyle = `rgba(${c >> 16}, ${(c >> 8) & 255}, ${c & 255}, ${a})`;
+            ctx.fillRect(x * scale, y * scale, run * scale, scale);
+          }
+          x += run;
+        }
       }
-    }
-    if (scene.textures.exists(key)) scene.textures.remove(key);
-    g.generateTexture(key, this.w * scale, this.h * scale);
-    g.destroy();
+    });
   }
+
 }
 
 /** A small seeded random generator, so textured art comes out the same on every load. */
