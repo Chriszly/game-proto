@@ -20,7 +20,7 @@ interface GameState {
   orders: Order[];
   queue: number[];
   switches: Record<string, string>;
-  wyrm: { at: Tile; path: Tile[]; job: { order: number; leg: 'pickup' | 'drop' } | null; switchMs: number };
+  wyrms: { at: Tile; path: Tile[]; job: { order: number; leg: 'pickup' | 'drop' } | { leg: 'feed' } | null; switchMs: number }[];
 }
 type Spot = { id: number; x: number; y: number };
 
@@ -161,7 +161,7 @@ test('plays the first round', async ({ page }, testInfo) => {
   // to Ashford.
   let s = await until('the valley', () => true);
   expect(s).toMatchObject({ phase: 'play', coins: START_COINS, hearts: 3, round: 1, delivered: 0, track: [], queue: [] });
-  expect(s.wyrm.at).toEqual(ROOST);
+  expect(s.wyrms[0].at).toEqual(ROOST);
   expect(s.orders[0]).toMatchObject({ id: 1, cargo: 'grain', from: 0, to: 1, pay: FIRST_PAY, status: 'waiting' });
   await play(600, async () => false);
   await snap('0-valley');
@@ -194,9 +194,9 @@ test('plays the first round', async ({ page }, testInfo) => {
   // Send the wyrm: it flies along the track to Millbrook and loads the grain.
   await tapOrder(1);
   s = await game.state();
-  expect(s.wyrm.job ?? { order: s.queue[0] }, 'the wyrm takes the order').toMatchObject({ order: 1 });
+  expect(s.wyrms[0].job ?? { order: s.queue[0] }, 'the wyrm takes the order').toMatchObject({ order: 1 });
   s = await until('the wyrm loads grain at Millbrook', (s) => s.orders.find((o) => o.id === 1)?.status === 'loading', 6_000);
-  expect(s.wyrm.at).toEqual(MILLBROOK);
+  expect(s.wyrms[0].at).toEqual(MILLBROOK);
   await play(300, async () => false);
   await snap('2-loading');
 
@@ -213,15 +213,15 @@ test('plays the first round', async ({ page }, testInfo) => {
 
   // It carries the grain down to Ashford.
   s = await until('the wyrm carries the grain', (s) => s.orders.find((o) => o.id === 1)?.status === 'carrying', 2_000);
-  expect(s.wyrm.job).toMatchObject({ order: 1, leg: 'drop' });
+  expect(s.wyrms[0].job).toMatchObject({ order: 1, leg: 'drop' });
 
   // Delivered: the order pays and leaves the board, and the round's one delivery finishes round 1.
   let stopped = false;
-  s = await until('the grain delivered to Ashford', (s) => ((stopped ||= s.wyrm.switchMs > 0), !s.orders.some((o) => o.id === 1)), 6_000);
+  s = await until('the grain delivered to Ashford', (s) => ((stopped ||= s.wyrms[0].switchMs > 0), !s.orders.some((o) => o.id === 1)), 6_000);
   expect(stopped, 'the switch was set for the wyrm, so it never stopped').toBe(false);
-  expect(s.wyrm.at).toEqual(ASHFORD);
+  expect(s.wyrms[0].at).toEqual(ASHFORD);
   expect(s).toMatchObject({ phase: 'play', coins: coins + FIRST_PAY, hearts: 3, round: 2, delivered: 0, totalDelivered: 1 });
-  expect(s.wyrm.job).toBeNull();
+  expect(s.wyrms[0].job).toBeNull();
   await play(400, async () => false);
   await snap('3-delivered');
 

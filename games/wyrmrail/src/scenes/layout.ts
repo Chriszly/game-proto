@@ -34,10 +34,11 @@ export const groundDepth = (y: number) => 100 + y;
 
 /** The orders and upgrades panel on the right, by its centre line. */
 export const PANEL = { x: 864, w: 176, top: 48 };
-/** The order cards, by their centres. */
-export const ORDER_CARD = { y: 108, h: 76, gap: 8 };
-/** The upgrade buttons and the Remove track toggle, by their centres. */
-export const BUTTONS = { wings: 356, hoard: 402, remove: 448, h: 40 };
+/** The order cards, by their centres: room for four, three orders and a workshop's goods. */
+export const ORDER_CARD = { y: 106, h: 62, gap: 6 };
+/** The Upgrades heading, the upgrade buttons and the Remove track toggle, by their centres. */
+export const UPGRADES_Y = 354;
+export const BUTTONS = { wings: 380, hoard: 416, second: 452, remove: 492, h: 32 };
 /** The hint line under the grid. */
 export const HINT_Y = 518;
 /** The button on the game over panel. */

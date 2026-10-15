@@ -1,11 +1,11 @@
 import Phaser from 'phaser';
-import { COLS, ROWS, VILLAGES, terrainAt } from '../game/map';
+import { COLS, ROWS, VILLAGE_NAMES, type Terrain, type Valley } from '../game/map';
 import { BOARD, ISO, iso } from '../scenes/layout';
 import { bakeCanvas, mix, poly, shadow, type Ctx, type Pt } from './canvas';
 import { seeded } from './pixelArt';
 
-// The valley in isometric low-poly: a floating block of land under a pale sky, baked once into the
-// `valley` texture, and the things that stand on it, each baked as a texture drawn on its own tile
+// The valley in isometric low-poly: a floating block of land under a pale sky, baked into the
+// `valley` texture for each new game's valley, and the things that stand on it, each baked as a texture drawn on its own tile
 // so it can sit in front of or behind the wyrm: `forest` (a clump of pines), `peak` (a mountain),
 // `roost` and `village-<name>`.
 
@@ -28,21 +28,27 @@ export const ROOFS: Record<string, [string, string]> = {
   Kettlecross: ['#b06a9a', '#8a4a78'],
 };
 
-export function bakeValley(scene: Phaser.Scene) {
+/** Bakes the `valley` texture for a game's valley; it replaces the last game's. */
+export function bakeValley(scene: Phaser.Scene, valley: Valley) {
   bakeCanvas(scene, 'valley', BOARD.w, BOARD.h, (ctx) => {
     ctx.translate(-BOARD.x, -BOARD.y);
     backdrop(ctx);
     for (let s = 0; s < COLS + ROWS - 1; s++) {
       for (let c = 0; c < COLS; c++) {
         const r = s - c;
-        if (r >= 0 && r < ROWS) block(ctx, c, r);
+        if (r >= 0 && r < ROWS) block(ctx, c, r, valley.terrain[r][c]);
       }
     }
   });
+}
+
+/** Bakes the props, which are the same in every valley, once at boot. */
+export function bakeProps(scene: Phaser.Scene) {
   prop(scene, 'forest', forest);
   prop(scene, 'peak', mountain);
   prop(scene, 'roost', roost);
-  for (const v of VILLAGES) prop(scene, `village-${v.name}`, (ctx, L) => village(ctx, L, ROOFS[v.name] ?? ['#c0b090', '#a09070']));
+  for (const name of VILLAGE_NAMES) prop(scene, `village-${name}`, (ctx, L) => village(ctx, L, ROOFS[name] ?? ['#c0b090', '#a09070']));
+  prop(scene, 'bunting', bunting);
 }
 
 /** The size of a prop's texture, and where the middle of its tile is in it. */
@@ -88,8 +94,7 @@ const GRASS = ['#82c45c', '#7bbd56', '#88c962'];
 const FOREST = ['#6eae4f', '#68a84a', '#73b354'];
 
 /** One tile: its top, and the earth under its front faces. */
-function block(ctx: Ctx, c: number, r: number) {
-  const t = terrainAt(c, r);
+function block(ctx: Ctx, c: number, r: number, t: Terrain) {
   const rnd = seeded(c * 31 + r * 7 + 1);
   const drop = t === 'river' ? RIVER_DROP : 0;
   const D = ISO.depth;
@@ -255,4 +260,32 @@ function roost(ctx: Ctx, L: Local) {
   ctx.fill();
   ctx.fillStyle = '#ffe08a';
   ctx.fillRect(x + 32 * s, y + 1 * s, 4 * s, 3 * s);
+}
+
+/** Festival bunting: two poles at the tile's back corners and a string of pennants between them. */
+function bunting(ctx: Ctx, L: Local) {
+  const h = 62 * K;
+  const a = L(0.02, 0.98, 0);
+  const b = L(0.98, 0.02, 0);
+  for (const p of [a, b]) {
+    shadow(ctx, p.x + 3, p.y + 1, 5, 2, 0.25);
+    ctx.fillStyle = '#6b4a2b';
+    ctx.fillRect(p.x - 1.5, p.y - h, 3, h);
+  }
+  const top = (t: number) => ({ x: a.x + (b.x - a.x) * t, y: a.y - h + (b.y - a.y) * t + Math.sin(t * Math.PI) * 10 });
+  ctx.strokeStyle = '#4a3a2a';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let i = 0; i <= 20; i++) {
+    const p = top(i / 20);
+    if (i) ctx.lineTo(p.x, p.y);
+    else ctx.moveTo(p.x, p.y);
+  }
+  ctx.stroke();
+  const colours = ['#f2c14e', '#4f86d0', '#5fae5a', '#b06a9a', '#e8823a'];
+  for (let i = 0; i < 7; i++) {
+    const p = top((i + 0.6) / 8);
+    const q = top((i + 1.4) / 8);
+    poly(ctx, [p, q, { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 + 9 }], colours[i % colours.length], '#4a3a2a', 0.6);
+  }
 }

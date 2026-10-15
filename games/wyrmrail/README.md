@@ -5,9 +5,10 @@ the [game hub](../../README.md).
 
 A green wyrm sleeps in the Roost at the edge of a floating valley, drawn in isometric low-poly. Lay
 track from the Roost to the villages, then send the wyrm along it, pulling two wagons, to carry each
-village's goods to another before the order runs out of time. Where the line branches, set the
-switch ahead of the wyrm or it stops to throw it. Every round a new village joins the line, out to
-round 8.
+village's goods to another before the order runs out of time. Where the line branches, the switches
+decide which way the wyrm goes. Keep it fed at the Roost, bring goods to the workshops that make
+better ones, wake a second wyrm late in the game, and after the eighth village finish with the
+festival. Every game is played in a new valley.
 
 ![The valley at the start](docs/screenshots/playthrough-0-valley.png)
 
@@ -19,27 +20,51 @@ round 8.
 | Tap an order | Send the wyrm to fetch and deliver it |
 | Tap a junction | Throw its switch |
 | Remove track | Toggle: tap track to take it up for half its cost |
-| Swift wings, Golden hoard | Buy an upgrade |
+| Swift wings, Golden hoard, Second wyrm | Buy an upgrade |
 
-1. **Track** grows from the line: a tile can take track when it is next to track, the Roost or a
+1. **The valley** is new every game: a river winds down the middle, mountains rise in the east,
+   forest is scattered about and the villages that join after the first round get new places. The
+   Roost, Millbrook and Ashford always stand in the same spots, with open grass between them.
+2. **Track** grows from the line: a tile can take track when it is next to track, the Roost or a
    village. Lit outlines show where. Grass costs 2 coins, forest 4 and a bridge over the river 6;
    mountains can't be built on. Track joins up with every piece and station next to it. Laying
    track through a forest clears its pines.
-2. **Orders** come in on the panel on the right, up to three at a time: a cargo, the village it
+3. **Orders** come in on the panel on the right, up to three at a time: a cargo, the village it
    comes from, the one it goes to, the pay and a bar of time left. The first is always grain from
    Millbrook to Ashford. Goods waiting for the wyrm show over their village.
-3. **The wyrm** pulls two wagons, so it can carry two orders at once. It always heads for the
+4. **The wyrm** pulls two wagons, so it can carry two orders at once. It always heads for the
    nearest stop: a village its cargo is going to or, while a wagon is free, a village with goods
    it was sent to fetch. It loads the goods and the village they go to pays on arrival. An order
-   it can't reach yet says "No track there yet".
-4. **Switches**: track with three or four arms is a junction, and its switch is set against one
-   arm, shown by a striped barrier and dimmed rails. A new junction's switch is set against the
-   branch just laid. A tap on the junction sets it against the next arm. When the wyrm's way uses
-   the barred arm, it stops for a second to throw the switch itself, so set switches ahead of it.
-5. **Deadlines**: an order that runs out of time leaves the board, cargo and all, and costs one of
+   it can't reach yet says "No track there yet". A dotted line in the wyrm's colour shows the way
+   it is taking and a ring marks its stop.
+5. **Switches steer**: track with three or four arms is a junction, and its switch is set against
+   one arm, shown by a striped barrier and dimmed rails. A new junction's switch is set against the
+   branch just laid, and a tap on the junction sets it against the next arm. The wyrm goes the way
+   the switches send it, never through a barred arm, even when that is the long way round, and it
+   looks at the switches again on every tile, so a switch thrown on the fly changes its way. It
+   only turns back at a village, the Roost or the end of a line. Only when the switches leave it
+   no way at all does it take the shortest way and stop for a second at each junction set against
+   it to throw the switch itself.
+6. **Feeding the wyrm**: the wyrm's belly (the bar by the drumstick at the top) empties a little
+   with every tile it flies, a full belly lasting 36 tiles. When it is down to 30% the bar turns
+   amber, and before its next stop the wyrm flies home to the Roost and eats for 1.2 seconds,
+   cargo and all. On an empty belly it flies at half speed. Where the Roost sits on the line
+   decides how far those trips are.
+7. **Workshops**: Ashford has a forge, Fernhollow a mill and Stonereach a sawmill, shown by a sign
+   under the village's name. Goods a workshop takes (ore, grain and timber) often come in as
+   orders to it, and delivering them there pays as usual and makes the workshop send out the
+   better goods (iron, flour and planks) as a new order, its name in gold, paying 60% more than
+   an ordinary order over the same distance. It can be the board's fourth order.
+8. **A second wyrm**, a copper one, can be woken from round 5 for 150 coins. It shares the track
+   and the orders: each wyrm fetches the sent orders nearest to it and carries its own cargo. A
+   wyrm waits before a junction while the other wyrm is on it or heading into it, for up to 3
+   seconds, then goes on anyway. Each has its own belly.
+9. **Deadlines**: an order that runs out of time leaves the board, cargo and all, and costs one of
    the three hearts. Losing all three ends the game.
-6. **Rounds**: one delivery finishes round 1, then each round asks for one more than its number.
-   A new village joins in each round from 2 to 8 (see below).
+10. **Rounds**: one delivery finishes round 1, then each round asks for one more than its number.
+    A new village joins in each round from 2 to 8 (see below).
+11. **The festival**: round 9 is the last. The festival is held at Kettlecross, under bunting, and
+    every new order goes there. Ten deliveries win the game.
 
 ![Laying track](docs/screenshots/playthrough-1-track.png)
 
@@ -47,17 +72,17 @@ round 8.
 
 ### Villages
 
-| Village | Sends | Joins |
-| --- | --- | --- |
-| Millbrook | Grain | Round 1 |
-| Ashford | Tools | Round 1 |
-| Fernhollow | Timber | Round 2 |
-| Stonereach | Ore | Round 3 |
-| Saltmere | Fish | Round 4 |
-| Brackenly | Timber | Round 5 |
-| Dunmoor | Grain | Round 6 |
-| Wyndle | Fish | Round 7 |
-| Kettlecross | Tools | Round 8 |
+| Village | Sends | Joins | Workshop |
+| --- | --- | --- | --- |
+| Millbrook | Grain | Round 1 | |
+| Ashford | Tools | Round 1 | Forge: ore to iron |
+| Fernhollow | Timber | Round 2 | Mill: grain to flour |
+| Stonereach | Ore | Round 3 | Sawmill: timber to planks |
+| Saltmere | Fish | Round 4 | |
+| Brackenly | Timber | Round 5 | |
+| Dunmoor | Grain | Round 6 | |
+| Wyndle | Fish | Round 7 | |
+| Kettlecross | Tools | Round 8 | |
 
 An order pays 10 coins plus 3 per tile between the two villages (as the crow flies), and allows
 20 seconds plus 5 per tile.
@@ -68,6 +93,17 @@ An order pays 10 coins plus 3 per tile between the two villages (as the crow fli
 | --- | --- | --- | --- |
 | Swift wings | 3 | 30, 60, 100 | The wyrm flies 0.6 tiles a second faster (from 2) |
 | Golden hoard | 3 | 40, 80, 140 | Every order pays 25% more |
+| Second wyrm | 1 | 150, from round 5 | A second, copper wyrm joins the line |
+
+![Two valleys from two games](docs/screenshots/new-valley-1.png)
+
+![A switch sends the wyrm the long way round to Ashford](docs/screenshots/steering.png)
+
+![Round 5: workshop signs, flour from the mill, and both wyrms on the line](docs/screenshots/workshops-two-wyrms.png)
+
+![The festival at Kettlecross](docs/screenshots/festival.png)
+
+![The festival won](docs/screenshots/festival-won.png)
 
 ![Round 2, with the line across the river to Fernhollow](docs/screenshots/round-2.png)
 
@@ -105,13 +141,15 @@ npx playwright test --project wyrmrail
 All paths are inside `games/wyrmrail/`.
 
 - `src/game/`: the rules in plain TypeScript with no Phaser dependency. `map.ts` holds the valley
-  (terrain, track costs, the Roost and the villages), `state.ts` the tuning numbers and the shape of
-  a game, and `sim.ts` moves it on: laying and removing track, switches, routes along it, orders,
-  the wyrm's trips, upgrades and rounds. New orders are picked with `Math.random`.
+  (generating each game's terrain and village places, track costs, the Roost, the villages and
+  their workshops), `state.ts` the tuning numbers and the shape of a game, and `sim.ts` moves it
+  on: laying and removing track, switches, routes along it, orders, the wyrms' trips and meals,
+  workshops, upgrades, rounds and the festival. The valley and new orders are picked with
+  `Math.random`.
 - `src/scenes/`: `BootScene` bakes textures, `GameScene` draws the valley, the track, the wyrm,
   the HUD and the panel and wires taps to the rules, `layout.ts` says where things are drawn.
 - `src/art/`: all the art, drawn in code and baked into textures at startup. `valley.ts` paints the
-  isometric valley and the props standing on it (pines, mountains, the Roost and the villages),
-  `sprites.ts` the wyrm and its wagons and the pixel cargo and HUD icons, with helpers in
+  isometric valley and the props standing on it (pines, mountains, the Roost, the villages and the
+  festival bunting), `sprites.ts` the green and copper wyrms and their wagons and the pixel cargo and HUD icons, with helpers in
   `canvas.ts` and `pixelArt.ts`.
 - `src/ui/`: the buttons.
