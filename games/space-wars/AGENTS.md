@@ -119,8 +119,9 @@ Missing or rough:
 File map (`src/`):
 
 - `main.ts`: creates the `Phaser.Game` (960x540, `Phaser.Scale.FIT`, `pixelArt: false`) with
-  `GameScene`, calls `setupGame(game)` from `shared/setupGame.ts`, and in dev builds puts `game`
-  on `window`.
+  `GameScene`, calls `setupGame(game)` from `shared/setupGame.ts` and `setupScaling(game)` from
+  `shared/scaling.ts`, and in dev builds puts `game` on `window`. The canvas has `renderScale`
+  canvas pixels per view pixel (see "Screen scaling" below).
 - `game/factions.ts`: the `FACTIONS` list (name, colours, `tune` multipliers, and the `units` and
   `buildings` definitions with their outlines and optional `ability`), `COMBAT_UNITS`, and the types
   `UnitId`, `Role`, `Poly`, `Weapon`, `Ability`, `UnitDef`, `BuildingDef`. The outlines (`shape`) are
@@ -154,7 +155,9 @@ File map (`src/`):
   `pickCards` (the picker's card rectangles, in view pixels). `update(time)` steps the world by the frame
   gap (clamped to 100 ms), reads `World.events`, pans the camera from the keys and draws everything.
   Two cameras: the main `camera` shows the battlefield in the `MAP_VIEW` viewport; a second, fixed
-  camera (`fixed`) covers the whole 960 by 540 view. Every object is made through `onMap` (the
+  camera (`fixed`) covers the whole 960 by 540 view. Both viewports are set in canvas pixels
+  (`renderScale` times the view's), and both keep the zoom and top-left origin `setupScaling`
+  gives them, so `scrollX` and `scrollY` stay the battlefield point at the map's top-left corner. Every object is made through `onMap` (the
   fixed camera ignores it) or `onUi` (the map camera ignores it), so the bars and text never
   scroll. Ships, buildings, crystals and shards are Images kept in maps by entity id, made when an
   entity appears and destroyed when it goes (`drawShips`, `drawBuildings`, `drawShards`); each
@@ -164,7 +167,8 @@ File map (`src/`):
   and repainted every third frame. Mines are drawn on `underGfx` (`drawMines`), a hacked turret
   fills a cyan ring toward its takeover, and research buttons are drawn by `drawResearchButton`.
   Beams, fireballs, rings and health pills are Graphics redrawn each frame (`underGfx` under the sprites, `gfx` over them). `toWorld(x, y)` and `toScreen(x, y)` convert between view pixels and
-  battlefield pixels from the camera's scroll. Input: `onDown`, `onMove`, `onUp` (box or tap),
+  battlefield pixels from the camera's scroll. Input: `onDown`, `onMove`, `onUp` (box or tap; each
+  reads the pointer in view pixels through `viewPoint`),
   `tapMap`, `press` (buttons). Bars and drag boxes use view pixels; placement and commands use
   battlefield pixels, converted with `toWorld`.
 - `scenes/layout.ts`: `VIEW`, `TOP`, `BAR`, `MAP_VIEW` (the map's window on screen), `BUTTON`
@@ -189,8 +193,11 @@ File map (`src/`):
 - `art/textures.ts`: `bakeAll` (once per page) bakes each faction's ships as sheets of `FACINGS`
   (16) frames (`shipKey(faction, type)`, frame k faces k x 22.5 degrees clockwise from east), its
   buildings (`buildingKey`), flames (`flameKey`), crystals, the beacon, the shard and two glows,
-  at `RES` (2) canvas pixels per display pixel with a dark ink outline; `bakeBackdrop` paints
-  each map's 1600 by 1000 backdrop (sky, nebulae, ringed planet, moon, stars, rocks). `facing`
+  at `RES` canvas pixels per display pixel with a dark ink outline. `RES` is set by `bakeAll`:
+  `renderScale` held between 2 and `MAX_RES` (3), so draw sprites at `1 / RES`. A ship sheet lays
+  its frames out four to a row. `bakeBackdrop` paints each map's 1600 by 1000 backdrop (sky,
+  nebulae, ringed planet, moon, stars, rocks) at `sharpRes` and returns that resolution, which the
+  scene draws it at `1 /`. `facing`
   picks a frame for a heading. Faction keys index `FACTIONS`, not the battle's sides; the scene
   maps sides with `art(side)`.
 - `art/draw.ts`: `drawHealth`, `drawProgress`, `dashedCircle`, `progressArc`, `stripes`.
@@ -209,6 +216,13 @@ How it runs:
   backdrop.
 - Time is simulated, not read from the clock: `elapsedMs` is game time, used for the AI grace and
   the HUD clock.
+
+Screen scaling (`shared/scaling.ts`): lay out in view pixels from `layout.ts` (never
+`this.scale`, which is canvas pixels), read pointers through `viewPoint`, give a new camera its
+viewport in canvas pixels, and paint new canvas art at `RES` or `sharpRes`. The map camera never
+follows or uses bounds (`scrollTo` clamps it), so it keeps the top-left origin rather than
+`scrollingCamera`. `index.html` has the shared `100dvh` and `touch-action: none` styles.
+`e2e/screens.spec.ts` checks the game on five screens.
 
 Save keys: none. The game keeps nothing between visits and reads only the hub's settings
 (`byDifficulty`, `settings.reduceMotion`) through `shared/`.

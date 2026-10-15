@@ -3,6 +3,7 @@
 // map's painted backdrop, all onto 2D canvases added with textures.addCanvas.
 
 import Phaser from 'phaser';
+import { renderScale, sharpRes } from '../../../../shared/scaling';
 import { FACTIONS, type Role, type UnitId } from '../game/factions';
 import type { MapLayout } from '../game/map';
 import { ARENA } from '../game/arena';
@@ -12,8 +13,15 @@ import { css, reach, renderMesh, rgb, sparkle, type Materials } from './render3d
 
 /** Headings baked per ship; the sprite turns the last few degrees between them. */
 export const FACINGS = 16;
-/** Sprites are baked at this many canvas pixels per display pixel, so they stay crisp when scaled up. */
-export const RES = 2;
+/**
+ * Sprites are baked at this many canvas pixels per display pixel, so they stay crisp when scaled
+ * up: the screen's `renderScale`, held between 2 and MAX_RES (set by `bakeAll`). Draw them at `1 / RES`.
+ */
+export let RES = 2;
+/** Baking 320 ship frames at 4 (a 4K screen) takes about twice as long as at 3 and looks the same. */
+const MAX_RES = 3;
+/** Ship sheets lay their FACINGS frames out in rows of this many, to keep big sheets loadable. */
+const SHEET_COLUMNS = 4;
 /** Buildings are seen turned a little, for a three-quarter look. */
 const BUILDING_YAW = -0.4;
 const OUTLINE = '#2a140c';
@@ -79,14 +87,16 @@ function bakeShip(scene: Phaser.Scene, key: string, mesh: Mesh, mats: Materials)
   const { r, z } = reach(mesh);
   const size = Math.ceil((r + z + 4) * 2 * RES);
   const canvas = document.createElement('canvas');
-  canvas.width = size * FACINGS;
-  canvas.height = size;
+  canvas.width = size * SHEET_COLUMNS;
+  canvas.height = size * Math.ceil(FACINGS / SHEET_COLUMNS);
   const ctx = canvas.getContext('2d')!;
+  const at = (k: number) => [(k % SHEET_COLUMNS) * size, Math.floor(k / SHEET_COLUMNS) * size];
   for (let k = 0; k < FACINGS; k++) {
-    paintModel(ctx, mesh, mats, k * size, 0, size, size, (k / FACINGS) * Math.PI * 2, size / 2, size / 2, k % 2 === 0);
+    const [x, y] = at(k);
+    paintModel(ctx, mesh, mats, x, y, size, size, (k / FACINGS) * Math.PI * 2, size / 2, size / 2, k % 2 === 0);
   }
   const tex = scene.textures.addCanvas(key, canvas)!;
-  for (let k = 0; k < FACINGS; k++) tex.add(k, 0, k * size, 0, size, size);
+  for (let k = 0; k < FACINGS; k++) tex.add(k, 0, at(k)[0], at(k)[1], size, size);
 }
 
 /** Bakes a single-view model (a building or a prop), its ground point at the frame's centre. */
@@ -153,6 +163,7 @@ function bakeGlow(scene: Phaser.Scene) {
 /** Bakes every faction's ships and buildings and the props, once per page. */
 export function bakeAll(scene: Phaser.Scene) {
   if (scene.textures.exists(SHARD_KEY)) return;
+  RES = Phaser.Math.Clamp(renderScale, 2, MAX_RES);
   // Every faction's heavy is drawn at the same size: as long as the Iron Dominion battleship.
   const heavyReach = reach(FACTION_ART['Iron Dominion']().units.heavy).r;
   FACTIONS.forEach((def, f) => {
@@ -173,13 +184,16 @@ export function bakeAll(scene: Phaser.Scene) {
 /**
  * Paints the battlefield's backdrop for one map: an airbrushed violet sky, glowing nebulae, a
  * ringed planet, stars with sparkle glints and the asteroid fields (rendered as 3D rocks).
+ * Returns the canvas pixels it painted per battlefield pixel, to draw it at `1 /` that.
  */
 export function bakeBackdrop(scene: Phaser.Scene, layout: MapLayout) {
   if (scene.textures.exists(BACKDROP_KEY)) scene.textures.remove(BACKDROP_KEY);
+  const res = sharpRes(ARENA.w, ARENA.h);
   const canvas = document.createElement('canvas');
-  canvas.width = ARENA.w;
-  canvas.height = ARENA.h;
+  canvas.width = Math.round(ARENA.w * res);
+  canvas.height = Math.round(ARENA.h * res);
   const ctx = canvas.getContext('2d')!;
+  ctx.scale(res, res);
   const sky = ctx.createLinearGradient(0, 0, ARENA.w * 0.3, ARENA.h);
   sky.addColorStop(0, '#1c0f36');
   sky.addColorStop(0.45, '#33195a');
@@ -217,19 +231,20 @@ export function bakeBackdrop(scene: Phaser.Scene, layout: MapLayout) {
     const mesh = rockModel(k.r, i + 1);
     const size = Math.ceil(k.r * 2.6 + 8) * 2;
     const tmp = document.createElement('canvas');
-    tmp.width = size;
-    tmp.height = size;
-    renderMesh(tmp.getContext('2d')!, mesh, PROP_MATS, { yaw: i * 1.7, scale: 1, cx: size / 2, cy: size / 2 });
+    tmp.width = Math.ceil(size * res);
+    tmp.height = tmp.width;
+    renderMesh(tmp.getContext('2d')!, mesh, PROP_MATS, { yaw: i * 1.7, scale: res, cx: tmp.width / 2, cy: tmp.width / 2 });
     ctx.fillStyle = 'rgba(10,4,20,0.35)';
     ctx.beginPath();
     ctx.ellipse(k.x + k.r * 0.25, k.y + k.r * 0.35, k.r * 0.95, k.r * 0.6, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.drawImage(tmp, k.x - size / 2, k.y - size / 2);
+    ctx.drawImage(tmp, k.x - size / 2, k.y - size / 2, size, size);
   });
   ctx.strokeStyle = 'rgba(255,200,120,0.35)';
   ctx.lineWidth = 2;
   ctx.strokeRect(1, 1, ARENA.w - 2, ARENA.h - 2);
   scene.textures.addCanvas(BACKDROP_KEY, canvas);
+  return res;
 }
 
 /** A banded orange gas giant with a tilted ring, airbrushed, half off the edge of the map. */
