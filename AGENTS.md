@@ -100,6 +100,17 @@ and PRs into it (filter `is:issue,pr is:open label:<game>`, or no label for "All
   README. Skip camera shake and flashes, and hold blinking or jittering effects still, when
   `settings.reduceMotion` is on. A new setting goes into `shared/settings.ts` (its type, default and
   `SETTING_FIELDS` row, which the hub panel shows on its own) and then into every game.
+- **Fit every screen.** A game stays sharp and fills the screen from an upright phone to a 4K
+  monitor by calling `setupScaling(game)` from `shared/scaling.ts` right after `setupGame(game)`
+  (Apothecary does so far; bring the others over one game per PR). The canvas then has
+  `renderScale` canvas pixels per game pixel and every camera is zoomed to match, so: lay out with
+  `viewSize(scene)` rather than `scene.scale`, read the world through `pointer.worldX/Y`,
+  `getWorldPoint` and `worldView` rather than `pointer.x/y` or `scrollX/Y`, give a camera that
+  follows, scrolls or has bounds `scrollingCamera(camera)` and keep scroll-factor-0 objects off it
+  (draw them with a second, fixed camera), multiply a game's own camera zoom by `renderScale`, and
+  paint canvas art at `sharpRes(w, h, res)`. A phone held the wrong way for the game gets a hint
+  to turn it. Add the game to `e2e/screens.spec.ts`, which checks it on five screens, and give its
+  `index.html` the same `100dvh` and `touch-action: none` styles as Apothecary's.
 - **Never use a red cross.** No game art, icon, button, cover or favicon (the hub's included) may show a
   red cross: no red plus, red-cross health or medic symbol, or red crosshair. Use a green cross (or
   another colour) for healing and aiming marks instead.

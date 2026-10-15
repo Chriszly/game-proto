@@ -77,9 +77,11 @@ npm run preview   # serve the production build
 - `games/<name>/`: one game, with its own `index.html`, `src/`, `e2e/` playthrough test, `docs/`
   screenshots and `README.md`. Games don't import from each other.
 - `shared/`: the settings every game shares (`settings.ts`), the hub's Settings panel
-  (`settingsPanel.ts`) and `setupGame.ts`, which each game calls to apply the frame cap, the FPS readout, reduced motion and full screen.
+  (`settingsPanel.ts`), `setupGame.ts`, which each game calls to apply the frame cap, the FPS readout, reduced motion and full screen,
+  and `scaling.ts`, which keeps a game sharp from a phone to a 4K screen (Apothecary uses it so far).
 - `e2e/hub.spec.ts`: checks that the hub lists every game, that each card opens it, and that the
-  settings are saved and reach a game.
+  settings are saved and reach a game. `e2e/screens.spec.ts` opens each game that uses
+  `shared/scaling.ts` on an upright and a sideways phone, a tablet, a laptop and a 4K screen.
 - `package.json`, `tsconfig.json`, `tsconfig.e2e.json`, `vite.config.ts` and `playwright.config.ts`
   are shared. `tsconfig.json` typechecks the games and `shared/`; `tsconfig.e2e.json` typechecks
   the Playwright tests and the two configs, with Node's types. Vite builds every

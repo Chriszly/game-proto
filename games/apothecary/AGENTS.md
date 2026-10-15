@@ -31,7 +31,7 @@ counter. Coins buy upgrades, craftsmen, conveyor belts and a mirrored second pro
 
 - `src/main.ts`: creates the `Phaser.Game` (960x540, FIT scaling, arcade physics with
   `fixedStep: false`, `pixelArt: false`, cream background), registers `BootScene` and `GameScene`, calls `setupGame(game)`
-  from `shared/setupGame.ts`, and puts `game` on window in dev.
+  from `shared/setupGame.ts` and `setupScaling(game)` from `shared/scaling.ts`, and puts `game` on window in dev.
 - `src/game/items.ts`: item ids and defs (`ITEMS`), `GROW_MS`, `REFINE`, `RECIPES`,
   `POTION_PRICE`, the `isPlant`/`isRefined`/`isPotion` guards and the ordered lists `PLANTS`,
   `REFINED`, `POTIONS`.
@@ -107,8 +107,10 @@ counter. Coins buy upgrades, craftsmen, conveyor belts and a mirrored second pro
   2, by the mouse wheel, + and - keys, or a two-finger pinch on `pointer1`/`pointer2`, which also
   cancels the walk when the second finger lands on the map, the top bar, a top-bar button or a
   priority sign; `pinching` checks it, so that finger doesn't change the sign or press the button.
-  The open Recipes and Settings panels stop taps without this check). `uiCamera`
-  never moves and draws everything from `UI_DEPTH` up: `splitCameras` sets each object's
+  The open Recipes and Settings panels stop taps without this check). The camera's own zoom is
+  the player's zoom times `renderScale` (the `zoom` getter reads the player's part back), and
+  `followPlayer` gives it back Phaser's middle origin with `scrollingCamera`. `uiCamera`
+  never moves or zooms beyond `renderScale` and draws everything from `UI_DEPTH` up: `splitCameras` sets each object's
   `cameraFilter` by its depth every frame, so later objects sort themselves. `setZoom` clamps,
   widens the camera bounds evenly when the view is wider than the world, and stores the zoom
   under `apothecary-zoom`.
@@ -248,7 +250,12 @@ save or load, 0 in a new game). Each order also has `tip`, its full tip (`maxTip
 ### Hub settings
 
 - `src/main.ts` calls `setupGame(game)` from `shared/setupGame.ts` right after creating the game,
-  which applies the hub's frame cap, the FPS readout, reduced motion and full screen.
+  which applies the hub's frame cap, the FPS readout, reduced motion and full screen, and then
+  `setupScaling(game)` from `shared/scaling.ts`, which draws the canvas at the screen's resolution
+  (`renderScale` canvas pixels per game pixel, zooming every camera to match) and asks to turn a
+  phone held upright. `paint` multiplies each texture's `res` through `sharpRes`, so art stays
+  crisp on big screens. The top bar and panels lay out with `viewSize(scene)`, not `scene.scale`,
+  which is in canvas pixels. `e2e/screens.spec.ts` at the root checks the game on five screens.
 - Difficulty scales one number, customer patience: `newOrder` in `src/game/sim.ts` multiplies
   `maxPatience` by `byDifficulty(1.5, 1, 0.7)` from `shared/settings.ts` (Easy 1.5, Normal 1,
   Hard 0.7). Keep Normal exactly as designed: the playthrough runs on Normal.
@@ -267,7 +274,8 @@ save or load, 0 in a new game). Each order also has `tip`, its full tip (`maxTip
 - The dev build sets `window.game`. The test reads the `Game` scene's `state`,
   `player.body.center` (feet), `pointerTarget`, `away` (null on a fresh game), `pallets[id].in/out` (each `Pallet`'s `item` and
   `count`), `recipes.visible` and `recipes.lines`, `customers` (id, x, y, `arrived`) and
-  `cameras.main.scrollX/Y`. Several of these are private in TypeScript; renaming them breaks the
+  `cameras.main.worldView.x/y` (not `scrollX/Y`, which differ once `renderScale` zooms the
+  camera). Several of these are private in TypeScript; renaming them breaks the
   test without a type error.
 - Inputs: canvas clicks only (walking, the Recipes button at screen 219,22, a tap on the panel to
   close it). It
@@ -332,7 +340,10 @@ save or load, 0 in a new game). Each order also has `tip`, its full tip (`maxTip
   objects must stay below it (`WORLD_UI_DEPTH` is the highest).
 - `tick` runs before `movePlayer`, so `workingAt` uses last frame's feet position.
 - Healing Draught art is red; keep any cross shapes off red (root rule on red crosses).
-- Textures are painted at `res` times their logical size (the `RES` map in `paint.ts`, per key), so
+- Lay out the top bar, panels and anything else on screen with `viewSize(this)` or `GAME_WIDTH`,
+  never `this.scale.width`: with `renderScale` above 1 that is the canvas size, and the button
+  lands off screen. `pointer.x/y` are canvas pixels too; go through `getWorldPoint`.
+- Textures are painted at `res` times their logical size, `res` raised by `sharpRes` on big screens (the `RES` map in `paint.ts`, per key), so
   show them with `fit(image, scale)` rather than `setScale`, and give arcade bodies on them
   (`setSize`/`setOffset`, in texture pixels) sizes multiplied by `resOf(key)`.
 - `cardTexture` keys cards by kind and size; a card of a new size paints a new texture, so build

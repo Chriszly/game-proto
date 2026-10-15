@@ -119,7 +119,7 @@ function scene(page: Page) {
     /** Where the doctor walks to: the tapped spot, or the edge of a station tapped inside it. */
     target: () => read<Point | null>((s) => s.pointerTarget && { x: s.pointerTarget.x, y: s.pointerTarget.y }),
     /** The top-left corner of the view in the world, which moves as the camera follows the doctor. */
-    view: () => read<Point>((s) => ({ x: s.cameras.main.scrollX, y: s.cameras.main.scrollY })),
+    view: () => read<Point>((s) => ({ x: s.cameras.main.worldView.x, y: s.cameras.main.worldView.y })),
     /** How many items each of a station's pallets shows, by item, for goods coming in and going out. */
     pallets: (station: string) =>
       page.evaluate(
