@@ -86,8 +86,8 @@ Missing or rough:
 File map (`src/`):
 
 - `main.ts`: creates the `Phaser.Game` (960x540, `Scale.FIT`, `pixelArt: false` since the art is
-  smooth) with `BootScene` and `GameScene`, calls `setupGame(game)`, and exposes `game` on window
-  in dev builds.
+  smooth) with `BootScene` and `GameScene`, calls `setupGame(game)` and `setupScaling(game)`, and
+  exposes `game` on window in dev builds.
 - `game/state.ts`: types (`GameState`, `Cell` = `HoneyCell | BroodCell`, `Bee`, `GameEvent`,
   `Progress`), the grid and balance constants, `freshProgress`, `emptyCell`, `newHive` (which also
   checks saved cells and moves old ones to clover), `progressOf` (stamps `seen` with `Date.now()`),
@@ -120,7 +120,9 @@ File map (`src/`):
   with a bold first line and a lighter second line; it bakes its card textures on first use.
 - `art/paper.ts`: the cut-paper toolkit: `cut` (a card shape with a hand-cut wobble, drop shadow,
   multiplied grain and a light rim), shape helpers (`rect`, `rr`, `circ`, `hex`, `smooth`),
-  `outline`, `sketch`, `addTexture` and the `seeded` RNG.
+  `outline`, `sketch`, `addTexture` and the `seeded` RNG. `sketch(w, h)` makes a canvas `sharpRes`
+  times bigger with its context scaled, so art is painted in game pixels; `addTexture` sets the
+  texture's `resolution` and trims its frame to the game-pixel size, so images show at that size.
 - `art/palette.ts`: card colours (`CARD`, `PETALS`, `MEADOW_CARD`, `KIND_CARD` per honey kind,
   `WASP_CARD`, `NOTE_CARD`, `BROOD_CARD`, `WAX_CARD`) and the numbers the scene draws with each
   frame (`LIVE`).
@@ -128,8 +130,9 @@ File map (`src/`):
   `CELL_TEX`, `CARD_PAD`, `meadowOrigin`). `art/bees.ts`: the bee and the wasp in two wing frames
   each (`BEE_TEX`, `WASP_TEX`).
 
-Shared code the game imports (repo root, outside `src/`): `shared/setupGame.ts` (`setupGame`) and
-`shared/settings.ts` (`settings`, `byDifficulty`). See "Hub settings" below.
+Shared code the game imports (repo root, outside `src/`): `shared/setupGame.ts` (`setupGame`),
+`shared/settings.ts` (`settings`, `byDifficulty`) and `shared/scaling.ts` (`setupScaling`,
+`sharpRes`). See "Hub settings" and "Screens" below.
 
 How it runs:
 
@@ -212,6 +215,20 @@ market in `src/game/honey.ts`; raid timings in `src/game/wasps.ts`; order number
 `src/game/upgrades.ts`, with their effects in `carry` (baskets), `tripMs` (clover) and `tick`
 (dance), and `raid` (guards).
 
+### Screens
+
+- `setupScaling` draws the canvas at the screen's resolution (`renderScale` canvas pixels per game
+  pixel, up to 4 on a 4K screen, 2 with the canvas renderer) and zooms the one camera to match. The
+  camera never scrolls, so layout stays in the 960x540 coordinates of `layout.ts`.
+- Pointer handlers read `pointer.worldX/Y`, not `pointer.x/y`, which are canvas pixels.
+- Textures are painted at `sharpRes` through `sketch`, so the cut-paper art is as sharp as text.
+  Read a texture's size from its frame's `realWidth`/`realHeight` (game pixels), never from
+  `getSourceImage()` (canvas pixels).
+- Canvas shadows ignore the context's scale, so `cut` and any hand-set `shadowBlur` or
+  `shadowOffset` multiply them by `resOfCtx(ctx)`.
+- `e2e/screens.spec.ts` at the root opens the game on two phones, a tablet, a laptop and a 4K
+  screen; an upright phone shows the shared hint to turn it.
+
 ### Hub settings
 
 - `src/main.ts` calls `setupGame(game)` from `shared/setupGame.ts` right after creating the game.
@@ -238,7 +255,8 @@ market in `src/game/honey.ts`; raid timings in `src/game/wasps.ts`; order number
   (`cellCentre`), each shop button's centre by item (`brood`, `guards`, `baskets`, `clover`,
   `dance`), each market entry's centre by kind and each flying wasp's position by id. Positions
   therefore follow `layout.ts`. The test uses only Send, Sell and the cells.
-- Inputs: mouse clicks only, mapped from the 960x540 view to the scaled canvas. The click on slot 7
+- Inputs: mouse clicks only, mapped from the 960x540 view to the canvas's size on the page (not
+  its pixels, which are `renderScale` times more). The click on slot 7
   moves the mouse there first, so the build preview shows for a moment before the cell is built.
 - The test mirrors these values; change them together: `VIEW` (960x540), `CELL_CAP` (4),
   `START_BEES` (2), `HONEY_PRICE` (15) and the spot it builds on (slot 7). It also expects: the

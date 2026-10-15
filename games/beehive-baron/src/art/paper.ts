@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { sharpRes } from '../../../../shared/scaling';
 
 // Cut-paper craft: every shape is a piece of card stock with a slightly wobbly hand-cut edge, a
 // soft drop shadow under it, a multiplied paper grain and a faint light rim along its cut. Pieces
@@ -49,18 +50,44 @@ function grainTile() {
   return grain;
 }
 
-/** A new canvas of this size and its context. */
+/** How many canvas pixels each sketch has per game pixel, by canvas. */
+const resOf = new WeakMap<HTMLCanvasElement, number>();
+
+/**
+ * A new canvas of this size in game pixels and its context, which draws in game pixels. The canvas
+ * itself has more pixels on a big screen (`sharpRes`), so the art stays as sharp as the screen.
+ */
 export function sketch(w: number, h: number) {
+  const res = sharpRes(w, h);
   const canvas = document.createElement('canvas');
-  canvas.width = Math.ceil(w);
-  canvas.height = Math.ceil(h);
-  return { canvas, ctx: canvas.getContext('2d')! };
+  canvas.width = Math.ceil(w * res);
+  canvas.height = Math.ceil(h * res);
+  resOf.set(canvas, res);
+  const ctx = canvas.getContext('2d')!;
+  ctx.scale(res, res);
+  return { canvas, ctx };
 }
 
-/** Adds a canvas as the texture `key`, replacing any texture of that name. */
+/**
+ * Canvas pixels per game pixel of a sketch's context. Shadows ignore the context's scale, so their
+ * blur and offset are multiplied by it.
+ */
+export const resOfCtx = (ctx: Ctx) => resOf.get(ctx.canvas) ?? 1;
+
+/**
+ * Adds a sketch's canvas as the texture `key`, replacing any texture of that name. The texture
+ * shows at the sketch's size in game pixels however many pixels its canvas has: Phaser draws a
+ * frame at its canvas size over the source's `resolution`, and the trim gives game objects the
+ * game-pixel size for origins, hit areas and `realWidth`.
+ */
 export function addTexture(scene: Phaser.Scene, key: string, canvas: HTMLCanvasElement) {
   if (scene.textures.exists(key)) scene.textures.remove(key);
-  scene.textures.addCanvas(key, canvas);
+  const texture = scene.textures.addCanvas(key, canvas)!;
+  const res = resOf.get(canvas) ?? 1;
+  if (res === 1) return;
+  const [w, h] = [canvas.width / res, canvas.height / res];
+  texture.source[0].resolution = res;
+  texture.get().setTrim(w, h, 0, 0, w, h);
 }
 
 // Shapes, as point lists.
@@ -147,12 +174,13 @@ export interface CutOptions {
 export function cut(ctx: Ctx, pts: Pt[], color: string, o: CutOptions = {}) {
   const p = wobble(pts, o.wob ?? 0.8);
   const d = o.depth ?? 3;
+  const res = resOfCtx(ctx);
   ctx.save();
   if (d > 0) {
     ctx.shadowColor = `rgba(42,26,8,${o.shadow ?? 0.38})`;
-    ctx.shadowBlur = d * 2.2;
-    ctx.shadowOffsetX = d * 0.5;
-    ctx.shadowOffsetY = d * 0.9;
+    ctx.shadowBlur = d * 2.2 * res;
+    ctx.shadowOffsetX = d * 0.5 * res;
+    ctx.shadowOffsetY = d * 0.9 * res;
   }
   trace(ctx, p);
   ctx.fillStyle = color;
@@ -164,7 +192,7 @@ export function cut(ctx: Ctx, pts: Pt[], color: string, o: CutOptions = {}) {
   ctx.globalCompositeOperation = 'multiply';
   ctx.globalAlpha = o.grain ?? 0.35;
   ctx.fillStyle = ctx.createPattern(grainTile(), 'repeat')!;
-  ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  ctx.fillRect(0, 0, ctx.canvas.width / res, ctx.canvas.height / res);
   ctx.restore();
   ctx.save();
   ctx.globalAlpha = 0.35;
