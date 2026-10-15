@@ -74,6 +74,7 @@ what each AI decides (**L**).
 
 | Game | What the watch mode does |
 | --- | --- |
+| Colonizer | two random factions, both run by the planner, on an open map; a click on the end screen starts another match |
 
 ## Running locally
 

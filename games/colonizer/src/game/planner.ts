@@ -2,8 +2,10 @@
 // same commands a player would (train, place, research, gather, attack), in priority order: keep
 // villagers coming, keep houses ahead of the population cap, feed and wood up, build the production
 // line, research, then train and send the army. Only the AI's own units and buildings are touched.
+// It plays the AI's side, and in watch mode (`?watch`) the player's side too: `think` takes the side.
 import {
   BUILDINGS,
+  RELICS,
   TECHS,
   UNIQUE,
   UNITS,
@@ -39,6 +41,7 @@ import {
   type Unit,
 } from './sim';
 import { WATER, inMap, idx, type Node } from './map';
+import { aiLog } from '../../../../shared/watch';
 
 /**
  * The AI plays at a human pace: it looks at its side every THINK_MS and gives at most
@@ -59,14 +62,23 @@ const WALL_HALF = 4;
 /** The army goes for an unheld relic once it has this many soldiers, between raids. */
 const ARMY_FOR_RELIC = 8;
 
-/** Runs the planner once every THINK_MS of game time. */
-export function think(s: GameState, dt: number) {
+/** The side the planner is thinking for, and the side it plays against; set by `think`. */
+let ME = AI;
+let FOE = PLAYER;
+
+/** Runs the planner for one side (the AI's unless told) once every THINK_MS of game time. */
+export function think(s: GameState, dt: number, side = AI) {
   if (s.winner !== null) return;
-  s.aiClock += dt;
-  if (s.aiClock < THINK_MS) return;
-  s.aiClock = 0;
+  s.aiClock[side] += dt;
+  if (s.aiClock[side] < THINK_MS) return;
+  s.aiClock[side] = 0;
+  ME = side;
+  FOE = side === AI ? PLAYER : AI;
   plan(s);
 }
+
+/** Writes a decision to the watch log (`?watch` only), naming the building or unit's display name. */
+const log = (text: string) => aiLog(String(ME), text);
 
 /** Commands left in this think. */
 let budget = 0;
@@ -80,44 +92,44 @@ function act(fn: () => boolean): boolean {
 
 function plan(s: GameState) {
   budget = ACTIONS_PER_THINK;
-  const town = [...s.buildings.values()].find((b) => b.owner === AI && b.type === 'town' && b.built);
+  const town = [...s.buildings.values()].find((b) => b.owner === ME && b.type === 'town' && b.built);
   if (!town) return;
-  const p = s.players[AI];
-  const villagers = [...s.units.values()].filter((u) => u.owner === AI && UNITS[u.type].role === 'villager');
+  const p = s.players[ME];
+  const villagers = [...s.units.values()].filter((u) => u.owner === ME && UNITS[u.type].role === 'villager');
   const idleVillagers = villagers.filter((u) => u.order.t === 'idle');
-  const military = [...s.units.values()].filter((u) => u.owner === AI && UNITS[u.type].role !== 'villager');
+  const military = [...s.units.values()].filter((u) => u.owner === ME && UNITS[u.type].role !== 'villager');
 
   // 0. Every unfinished building gets a builder, so none is left waiting for one. A palisade gets one
   // builder for the whole line: a builder goes on to the next piece by itself.
-  const onWall = [...s.units.values()].some((u) => u.owner === AI && u.order.t === 'build' && BUILDINGS[s.buildings.get(u.order.b)?.type ?? 'house'].palisade);
+  const onWall = [...s.units.values()].some((u) => u.owner === ME && u.order.t === 'build' && BUILDINGS[s.buildings.get(u.order.b)?.type ?? 'house'].palisade);
   for (const b of s.buildings.values()) {
-    if (b.owner !== AI || b.built) continue;
+    if (b.owner !== ME || b.built) continue;
     if (BUILDINGS[b.type].palisade && onWall) continue;
-    const working = [...s.units.values()].some((u) => u.owner === AI && u.order.t === 'build' && u.order.b === b.id);
+    const working = [...s.units.values()].some((u) => u.owner === ME && u.order.t === 'build' && u.order.b === b.id);
     if (working) continue;
-    const builder = nearestUnit(idleVillagers, b.tx, b.ty) ?? nearestVillager(s, AI, b.tx, b.ty);
-    if (builder) act(() => (issue(s, AI, [builder.id], { t: 'build', b: b.id }), true));
+    const builder = nearestUnit(idleVillagers, b.tx, b.ty) ?? nearestVillager(s, ME, b.tx, b.ty);
+    if (builder) act(() => (issue(s, ME, [builder.id], { t: 'build', b: b.id }), true));
   }
 
   // 1. Economy: villagers from the Town Center until the target, when it's idle.
   if (town.queue.length === 0 && villagers.length < TARGET_VILLAGERS && affordable(p, UNITS.villager.cost)) {
-    act(() => train(s, AI, town.id, 'villager'));
+    if (act(() => train(s, ME, town.id, 'villager'))) log('trains a villager');
   }
 
   // 2. Population: a house before the cap is hit.
-  const houseQueued = [...s.buildings.values()].some((b) => b.owner === AI && b.type === 'house' && !b.built);
-  if (popUsed(s, AI) >= popCap(s, AI) - 3 && !houseQueued) {
-    act(() => buildNear(s, AI, 'house', town, idleVillagers));
+  const houseQueued = [...s.buildings.values()].some((b) => b.owner === ME && b.type === 'house' && !b.built);
+  if (popUsed(s, ME) >= popCap(s, ME) - 3 && !houseQueued) {
+    act(() => buildNear(s, ME, 'house', town, idleVillagers));
   }
 
   // 3. Buildings in plan order, one at a time, as soon as the AI can pay for each.
-  const under = [...s.buildings.values()].some((b) => b.owner === AI && !b.built && !BUILDINGS[b.type].palisade);
+  const under = [...s.buildings.values()].some((b) => b.owner === ME && !b.built && !BUILDINGS[b.type].palisade);
   if (!under && budget > 0) {
     for (const step of BUILD_PLAN) {
       const type = step === 'unique' ? UNIQUE[p.faction] : step;
-      if (hasBuildingFor(s, AI, type) && type !== 'farm') continue;
+      if (hasBuildingFor(s, ME, type) && type !== 'farm') continue;
       if (type === 'farm' && farmCount(s) >= 4) continue;
-      if (notAllowed(s, AI, type)) continue;
+      if (notAllowed(s, ME, type)) continue;
       if (!affordable(p, BUILDINGS[type].cost)) break;
       if (type === 'lumber' || type === 'mine') {
         if (act(() => buildAtResource(s, type === 'lumber' ? 'wood' : 'ore', idleVillagers))) break;
@@ -127,25 +139,25 @@ function plan(s: GameState) {
         if (act(() => buildAtShore(s, town, idleVillagers))) break;
         continue;
       }
-      if (act(() => buildNear(s, AI, type, town, idleVillagers))) break;
+      if (act(() => buildNear(s, ME, type, town, idleVillagers))) break;
     }
   }
 
   // 3b. A short palisade with a gate across the side the player comes from, once in Age II.
-  if (p.age >= 2 && hasBuilt(s, AI, 'barracks') && !hasBuildingFor(s, AI, 'gate') && p.res.wood >= 120) {
-    act(() => buildWall(s, town));
+  if (p.age >= 2 && hasBuilt(s, ME, 'barracks') && !hasBuildingFor(s, ME, 'gate') && p.res.wood >= 120) {
+    if (act(() => buildWall(s, town))) log('lays a palisade with a gate');
   }
 
   // 3c. Rally flags: each production building sends its soldiers to a spot in front of the base.
   for (const b of s.buildings.values()) {
-    if (b.owner !== AI || !b.built || b.rally || b.type === 'town' || !BUILDINGS[b.type].trains) continue;
+    if (b.owner !== ME || !b.built || b.rally || b.type === 'town' || !BUILDINGS[b.type].trains) continue;
     const front = frontOf(s, town, 6);
-    act(() => setRally(s, AI, b.id, front.x, front.y));
+    act(() => setRally(s, ME, b.id, front.x, front.y));
   }
 
   // 4. Research at the Academy and the Town Center, in RESEARCH_ORDER.
   for (const b of s.buildings.values()) {
-    if (b.owner !== AI || !b.built || b.queue.length > 0) continue;
+    if (b.owner !== ME || !b.built || b.queue.length > 0) continue;
     if (b.type !== 'academy' && b.type !== 'town') continue;
     const at = b.type === 'town' ? 'town' : 'academy';
     const tech = RESEARCH_ORDER.find((id) => {
@@ -153,19 +165,19 @@ function plan(s: GameState) {
       const done = id === 'age2' ? p.age >= 2 : p.techs.includes(id);
       return def.at === at && !done && (!def.age2 || p.age >= 2) && affordable(p, def.cost);
     });
-    if (tech) act(() => research(s, AI, b.id, tech));
+    if (tech && act(() => research(s, ME, b.id, tech))) log(`researches ${TECHS[tech].name}`);
   }
 
   // 5. Military: train from each production building in turn, while the army is under the cap.
   const roles: Role[] = ['melee', 'ranged', 'cavalry'];
   if (military.length < ARMY_CAP) {
     for (const role of roles) {
-      const type = unitFor(s.players[AI].faction, role).id;
-      const producer = [...s.buildings.values()].find((b) => b.owner === AI && b.built && b.queue.length === 0 && BUILDINGS[b.type].trains?.includes(role));
+      const type = unitFor(s.players[ME].faction, role).id;
+      const producer = [...s.buildings.values()].find((b) => b.owner === ME && b.built && b.queue.length === 0 && BUILDINGS[b.type].trains?.includes(role));
       if (!producer) continue;
-      const cost = unitCost(s, AI, UNITS[type]);
+      const cost = unitCost(s, ME, UNITS[type]);
       if (!affordable(p, cost)) continue;
-      act(() => train(s, AI, producer.id, type));
+      if (act(() => train(s, ME, producer.id, type))) log(`trains a ${UNITS[type].name}`);
     }
   }
 
@@ -173,46 +185,49 @@ function plan(s: GameState) {
   // on the player's Town Center, and keep sending idle soldiers after a fight. A standing player
   // Monument draws everything the AI has, at once.
   const army = military.filter((u) => u.hp > 0);
-  const monument = [...s.buildings.values()].find((b) => b.owner === PLAYER && b.type === 'monument');
-  const target = monument ?? [...s.buildings.values()].find((b) => b.owner === PLAYER && b.type === 'town');
-  const urgent = monument !== undefined && monumentLeft(s, PLAYER) !== null;
+  const monument = [...s.buildings.values()].find((b) => b.owner === FOE && b.type === 'monument');
+  const target = monument ?? [...s.buildings.values()].find((b) => b.owner === FOE && b.type === 'town');
+  const urgent = monument !== undefined && monumentLeft(s, FOE) !== null;
   const idleArmy = army.filter((u) => u.order.t === 'idle');
   if ((army.length >= ARMY_TO_ATTACK || (urgent && army.length > 0)) && target) {
     if ((urgent || idleArmy.length >= army.length / 2) && idleArmy.length > 0 && act(() => true)) {
       const half = BUILDINGS[target.type].w / 2;
-      issue(s, AI, army.map((u) => u.id), { t: 'attackMove', x: target.tx + half, y: target.ty + half });
+      issue(s, ME, army.map((u) => u.id), { t: 'attackMove', x: target.tx + half, y: target.ty + half });
       // The player is told about each new raid; the one under way keeps its raiders.
-      startRaid(s, AI, PLAYER, army.map((u) => u.id));
+      startRaid(s, ME, FOE, army.map((u) => u.id));
+      log(monument ? `sends all ${army.length} soldiers at the enemy Monument` : `attacks with ${army.length} soldiers`);
     }
   } else if (army.length >= ARMY_FOR_RELIC && idleArmy.length >= army.length / 2) {
     // 6b. Between raids, a fair-sized army goes to take the nearest relic the AI doesn't hold.
     const relic = s.camps
-      .filter((c) => c.kind === 'relic' && !holds(s, AI, c.relic!))
+      .filter((c) => c.kind === 'relic' && !holds(s, ME, c.relic!))
       .sort((a, b) => Math.hypot(a.tx - town.tx, a.ty - town.ty) - Math.hypot(b.tx - town.tx, b.ty - town.ty))[0];
     const spot = relic ? campSpots(s, relic)[0] : undefined;
-    if (spot) act(() => (issue(s, AI, army.map((u) => u.id), { t: 'attackMove', x: spot.x, y: spot.y }), true));
+    if (spot && act(() => (issue(s, ME, army.map((u) => u.id), { t: 'attackMove', x: spot.x, y: spot.y }), true))) {
+      log(`sends ${army.length} soldiers for the ${RELICS[relic.relic!].name}`);
+    }
   }
 
   // 7. Gather: idle villagers go to the resource the AI is shortest of.
   for (const u of idleVillagers) {
     const res = neediest(s);
     const src = nearestNode(s, res, u);
-    if (src) act(() => (issue(s, AI, [u.id], { t: 'gather', node: src }), true));
+    if (src) act(() => (issue(s, ME, [u.id], { t: 'gather', node: src }), true));
   }
 
   // 8. The Age II boon: the AI always holds a shieldwall.
-  if (p.boonPending) chooseBoon(s, AI, 'shieldwall');
+  if (p.boonPending && chooseBoon(s, ME, 'shieldwall')) log('picks the Shieldwall boon');
 }
 
 function farmCount(s: GameState) {
   let n = 0;
-  for (const b of s.buildings.values()) if (b.owner === AI && b.type === 'farm') n++;
+  for (const b of s.buildings.values()) if (b.owner === ME && b.type === 'farm') n++;
   return n;
 }
 
 /** The resource with the least income-relevant stock, weighted to keep food and wood up. */
 function neediest(s: GameState): Resource {
-  const r = s.players[AI].res;
+  const r = s.players[ME].res;
   if (r.food < 100) return 'food';
   if (r.wood < 150) return 'wood';
   return r.ore < 100 ? 'ore' : r.wood <= r.food ? 'wood' : 'food';
@@ -227,7 +242,7 @@ function nearestNode(s: GameState, res: Resource, u: Unit): number | null {
   }
   if (res === 'food') {
     for (const b of s.buildings.values()) {
-      if (b.owner !== AI || !b.built || b.type !== 'farm') continue;
+      if (b.owner !== ME || !b.built || b.type !== 'farm') continue;
       const d = Math.hypot(b.tx + 1 - u.x, b.ty + 1 - u.y);
       if (!best || d < best.d) best = { id: b.id, d };
     }
@@ -245,7 +260,7 @@ function buildNear(s: GameState, owner: number, type: BuildingId, town: Building
 
 /** Places a camp beside the nearest node of a resource, so the villagers drop off close by. */
 function buildAtResource(s: GameState, res: Resource, idle: Unit[]): boolean {
-  const town = [...s.buildings.values()].find((b) => b.owner === AI && b.type === 'town');
+  const town = [...s.buildings.values()].find((b) => b.owner === ME && b.type === 'town');
   if (!town) return false;
   let best: Node | null = null;
   for (const n of s.nodes.values()) {
@@ -256,14 +271,14 @@ function buildAtResource(s: GameState, res: Resource, idle: Unit[]): boolean {
   const camp = type2(res);
   const spot = findSpot(s, best.tx, best.ty, 2, 5, BUILDINGS[camp].w, BUILDINGS[camp].h);
   if (!spot) return false;
-  return startBuild(s, AI, camp, spot, idle);
+  return startBuild(s, ME, camp, spot, idle);
 }
 
 const type2 = (res: Resource): BuildingId => (res === 'wood' ? 'lumber' : 'mine');
 
 /** A point `d` tiles from the Town Center's middle, towards the player's side of the map. */
 function frontOf(s: GameState, town: Building, d: number) {
-  const foe = [...s.buildings.values()].find((b) => b.owner === PLAYER && b.type === 'town');
+  const foe = [...s.buildings.values()].find((b) => b.owner === FOE && b.type === 'town');
   const cx = town.tx + 2;
   const cy = town.ty + 2;
   const ang = foe ? Math.atan2(foe.ty - town.ty, foe.tx - town.tx) : -Math.PI * 0.75;
@@ -280,9 +295,9 @@ function buildAtShore(s: GameState, town: Building, idle: Unit[]): boolean {
       if (d < 30 && (!best || d < best.d)) best = { x, y, d };
     }
   if (!best) return false;
-  const spot = findSpot(s, best.x, best.y, 1, 4, 2, 2, (tx, ty) => canPlace(s, 'dock', tx, ty, AI));
+  const spot = findSpot(s, best.x, best.y, 1, 4, 2, 2, (tx, ty) => canPlace(s, 'dock', tx, ty, ME));
   if (!spot) return false;
-  return startBuild(s, AI, 'dock', spot, idle);
+  return startBuild(s, ME, 'dock', spot, idle);
 }
 
 /** Lays the palisade line across the front of the base, then turns its middle piece into a gate. */
@@ -291,26 +306,27 @@ function buildWall(s: GameState, town: Building): boolean {
   const mx = Math.round(mid.x);
   const my = Math.round(mid.y);
   // Across the line to the player: for a diagonal approach, the other diagonal.
-  const foe = [...s.buildings.values()].find((b) => b.owner === PLAYER && b.type === 'town');
+  const foe = [...s.buildings.values()].find((b) => b.owner === FOE && b.type === 'town');
   const sx = foe && Math.sign(foe.tx - town.tx) === Math.sign(foe.ty - town.ty) ? 1 : -1;
   const tiles: { tx: number; ty: number }[] = [];
   for (let k = -WALL_HALF; k <= WALL_HALF; k++) tiles.push({ tx: mx + k, ty: my - k * sx });
-  const ids = placeWall(s, AI, tiles);
+  const ids = placeWall(s, ME, tiles);
   // The gate goes on the middle piece, or the piece of the line nearest it.
   const pieces = [...s.buildings.values()]
-    .filter((b) => b.owner === AI && b.type === 'wall' && tiles.some((t) => t.tx === b.tx && t.ty === b.ty))
+    .filter((b) => b.owner === ME && b.type === 'wall' && tiles.some((t) => t.tx === b.tx && t.ty === b.ty))
     .sort((a, b) => Math.hypot(a.tx - mx, a.ty - my) - Math.hypot(b.tx - mx, b.ty - my));
-  const gate = pieces[0] ? placeBuilding(s, AI, 'gate', pieces[0].tx, pieces[0].ty) : null;
+  const gate = pieces[0] ? placeBuilding(s, ME, 'gate', pieces[0].tx, pieces[0].ty) : null;
   if (ids.length === 0 && gate === null) return false;
-  const builder = nearestVillager(s, AI, mx, my);
-  const first = [...s.buildings.values()].find((b) => b.owner === AI && !b.built && BUILDINGS[b.type].palisade);
-  if (builder && first) issue(s, AI, [builder.id], { t: 'build', b: first.id });
+  const builder = nearestVillager(s, ME, mx, my);
+  const first = [...s.buildings.values()].find((b) => b.owner === ME && !b.built && BUILDINGS[b.type].palisade);
+  if (builder && first) issue(s, ME, [builder.id], { t: 'build', b: first.id });
   return true;
 }
 
 function startBuild(s: GameState, owner: number, type: BuildingId, spot: { tx: number; ty: number }, idle: Unit[]) {
   const id = placeBuilding(s, owner, type, spot.tx, spot.ty);
   if (id === null) return false;
+  log(`builds a ${BUILDINGS[type].name}`);
   const builder = nearestUnit(idle, spot.tx, spot.ty) ?? nearestVillager(s, owner, spot.tx, spot.ty);
   if (builder) issue(s, owner, [builder.id], { t: 'build', b: id });
   return true;

@@ -157,6 +157,16 @@ With the hub's Reduce motion setting on, every unit holds one still frame for wh
 sparks and arrows in flight are left out, damage numbers and badges fade without rising, and the
 minimap's raid rings stand still.
 
+## Watch AI
+
+Add `?watch` to the game's URL (`/games/colonizer/?watch`) to skip the menu and start a
+match between two random factions, both played by the AI, with the whole map in view. Scroll with the
+arrow keys or the minimap and click a unit to see what it is doing. The panel in the top right
+holds the match still, sets the speed from 1x to 8x (**[** and **]**) and opens a log of every build,
+unit, tech, attack and relic run (**L**). A click on the end screen starts another match.
+
+![Watching two AIs play, with the log open](docs/screenshots/watch-ai.png)
+
 ## Notes
 
 - There is no save yet: each match starts fresh.
