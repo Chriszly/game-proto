@@ -5,8 +5,9 @@ import { BLUE, GREEN, INK, SHEET, TREE, VELLUM, circle, poly, rng, type Ctx } fr
 // The island as a survey sheet. `paintTerrain` paints the whole island once (it is hidden under the
 // fog until surveyed): layered height tints, hillshade from the north-west, brown contours, the blue
 // coastline and black map symbols. `paintFog` paints the blank, gridded drafting paper over every
-// tile not charted yet and the dashed survey limit round the charted land. Both paint at 2x onto a
-// canvas of GRID x TS pixels, shown at half size over the map.
+// tile not charted yet and the dashed survey limit round the charted land. Both paint in units of
+// a CANVAS (TS per tile, twice the screen's pixels) onto a canvas that may be bigger, shown at 1 / HI
+// over the map.
 
 /** A tile's size on the painted canvases (twice its 40 px on screen). */
 export const TS = 80;
@@ -109,9 +110,13 @@ function heightField(tiles: Tile[]) {
   };
 }
 
-/** Paints the whole island (charted or not) onto a CANVAS-sized context. */
+/** How many canvas pixels a CANVAS unit is on `ctx`'s canvas, which is CANVAS times that. */
+const unitOf = (ctx: Ctx) => ctx.canvas.width / CANVAS.w;
+
+/** Paints the whole island (charted or not) onto a context the shape of CANVAS. */
 export function paintTerrain(ctx: Ctx, tiles: Tile[]) {
   const T = terrainOf(tiles);
+  const k = unitOf(ctx);
   const heightAt = heightField(tiles);
   const R = 2;
   const gw = CANVAS.w / R + 1;
@@ -119,28 +124,43 @@ export function paintTerrain(ctx: Ctx, tiles: Tile[]) {
   const H = new Float32Array(gw * gh);
   for (let j = 0; j < gh; j++) for (let i = 0; i < gw; i++) H[j * gw + i] = heightAt(i * R, j * R);
   const hAt = (i: number, j: number) => H[Math.min(gh - 1, Math.max(0, j)) * gw + Math.min(gw - 1, Math.max(0, i))];
+  // The hillshade's light, from the north-west, at each height sample.
+  const L = new Float32Array(gw * gh);
+  for (let j = 0; j < gh; j++) {
+    for (let i = 0; i < gw; i++) L[j * gw + i] = -(hAt(i + 1, j) - hAt(i - 1, j)) - (hAt(i, j + 1) - hAt(i, j - 1));
+  }
+  // A sample grid read between its points, so tint edges stay smooth on a canvas finer than it.
+  const between = (G: Float32Array, fi: number, fj: number) => {
+    const i = Math.min(gw - 2, fi | 0);
+    const j = Math.min(gh - 2, fj | 0);
+    const u = fi - i;
+    const v = fj - j;
+    const o = j * gw + i;
+    return (G[o] * (1 - u) + G[o + 1] * u) * (1 - v) + (G[o + gw] * (1 - u) + G[o + gw + 1] * u) * v;
+  };
 
-  // Tints and hillshade, pixel by pixel.
-  const img = ctx.createImageData(CANVAS.w, CANVAS.h);
+  // Tints and hillshade, pixel by pixel at the canvas's own size.
+  const CW = ctx.canvas.width;
+  const CH = ctx.canvas.height;
+  const img = ctx.createImageData(CW, CH);
   const bandCol = BANDS.map(([, c]) => rgb(c));
   const forest = rgb(FOREST_TINT);
-  for (let y = 0; y < CANVAS.h; y++) {
-    for (let x = 0; x < CANVAS.w; x++) {
-      const i = (x / R) | 0;
-      const j = (y / R) | 0;
-      const h = hAt(i, j);
+  const step = 1 / (R * k);
+  for (let y = 0; y < CH; y++) {
+    for (let x = 0; x < CW; x++) {
+      const fi = x * step;
+      const fj = y * step;
+      const h = between(H, fi, fj);
       let b = 0;
       while (b + 1 < BANDS.length && h >= BANDS[b + 1][0]) b++;
       let [r, g, bl] = bandCol[b];
-      if (T((x / TS) | 0, (y / TS) | 0) === 'forest' && h > -0.02) {
+      if (T((x / (TS * k)) | 0, (y / (TS * k)) | 0) === 'forest' && h > -0.02) {
         r = r * 0.35 + forest[0] * 0.65;
         g = g * 0.35 + forest[1] * 0.65;
         bl = bl * 0.35 + forest[2] * 0.65;
       }
       if (h > -0.02) {
-        const dx = hAt(i + 1, j) - hAt(i - 1, j);
-        const dy = hAt(i, j + 1) - hAt(i, j - 1);
-        const s = Math.max(-0.35, Math.min(0.3, (-dx - dy) * 9));
+        const s = Math.max(-0.35, Math.min(0.3, between(L, fi, fj) * 9));
         if (s < 0) {
           r *= 1 + s * 0.6;
           g *= 1 + s * 0.55;
@@ -151,7 +171,7 @@ export function paintTerrain(ctx: Ctx, tiles: Tile[]) {
           bl += (255 - bl) * s * 0.7;
         }
       }
-      const o = (y * CANVAS.w + x) * 4;
+      const o = (y * CW + x) * 4;
       img.data[o] = r;
       img.data[o + 1] = g;
       img.data[o + 2] = bl;
@@ -159,6 +179,8 @@ export function paintTerrain(ctx: Ctx, tiles: Tile[]) {
     }
   }
   ctx.putImageData(img, 0, 0);
+  // Everything else is drawn in CANVAS units.
+  ctx.setTransform(k, 0, 0, k, 0, 0);
 
   // Contours by marching squares.
   const contour = (lev: number, col: string, lw: number) => {
@@ -303,6 +325,8 @@ export function paintTerrain(ctx: Ctx, tiles: Tile[]) {
 /** Paints the blank drafting paper over every fogged tile, and the dashed survey limit. */
 export function paintFog(ctx: Ctx, tiles: Tile[]) {
   const fogged = (x: number, y: number) => x >= 0 && y >= 0 && x < GRID.w && y < GRID.h && !tiles[indexOf(x, y)].revealed;
+  const k = unitOf(ctx);
+  ctx.setTransform(k, 0, 0, k, 0, 0);
   ctx.clearRect(0, 0, CANVAS.w, CANVAS.h);
   ctx.save();
   ctx.beginPath();
