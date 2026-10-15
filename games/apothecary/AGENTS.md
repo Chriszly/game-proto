@@ -80,7 +80,8 @@ shade gardens and a mirrored second production line.
   (`seeded`, `reseed`, `rr`, `chance`), `paint(scene, key, w, h, draw, res)` which paints a texture at
   `res` times its size, `fit(image, scale)` which shows it at its logical size, and the brushes
   (`wash`, `ink`, `hatch`, `wob`, `both`, `shadow`, `paper`, `itemIcon`, `coinIcon`). `ground.ts`
-  paints the whole world as one `ground-world` texture, plus the expansion yard, each garden and
+  paints the whole world as one `ground-world` texture, plus the expansion yard, the shop's walls
+  (`ground-walls`, laid above the expansion yard so its edge doesn't cover the right wall), each garden and
   the scattered trees and bushes (`sceneryLayout`). `ui.ts` paints parchment cards on demand
   (`cardTexture(scene, kind, w, h)`: bar, button, contract, town, chip, bubble, sign, small, panel) and
   `signTexture`, plus the `weather-<kind>` icons and the regular's `regular` star (`sparkle` in

@@ -3,7 +3,7 @@ import { settings as hubSettings } from '../../../../shared/settings';
 import { renderScale, scrollingCamera, viewSize } from '../../../../shared/scaling';
 import { drawBelts, laneOffset, pointAlong } from '../art/belts';
 import { plantTexture } from '../art/garden';
-import { EXPANSION_IMAGE, GARDEN_MARGIN, gardenTexture, sceneryLayout } from '../art/ground';
+import { EXPANSION_IMAGE, WALLS_IMAGE, GARDEN_MARGIN, gardenTexture, sceneryLayout } from '../art/ground';
 import { itemTexture } from '../art/items';
 import { INK, SERIF, TEXT_HALO, fit, resOf } from '../art/paint';
 import { craftsmanTexture, customerTexture } from '../art/townsfolk';
@@ -457,6 +457,8 @@ export class GameScene extends Phaser.Scene {
       () => this.state.expansion.land.built,
       () => this.ground(EXPANSION_IMAGE.x, EXPANSION_IMAGE.y, 'ground-expansion', -999),
     );
+    // The shop's walls lie above both, so the expansion's yard doesn't cover the right one.
+    this.ground(WALLS_IMAGE.x, WALLS_IMAGE.y, 'ground-walls', -998);
 
     // The second line's fields appear as they are built.
     GARDEN_AREAS.forEach((_, garden) => this.once(() => gardenBuilt(this.state, garden), () => this.drawGarden(garden)));
