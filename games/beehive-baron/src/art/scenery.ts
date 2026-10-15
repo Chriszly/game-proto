@@ -1,27 +1,17 @@
 import Phaser from 'phaser';
 import { CELL_CAP, FLOWERS } from '../game/state';
 import { MEADOWS } from '../game/meadows';
-import { AWAY, BOARD, COMB, FLOWER_GROUND, GOAL, HIVE, MEADOW_SPOTS, PLAQUE, MEADOW_TAG, VIEW, flowerSpot } from '../scenes/layout';
-import { CARD, MEADOW_CARD, PETALS } from './palette';
+import { AWAY, BOARD, COMB, FAR_RIDGE, FLOWER_GROUND, GOAL, HIVE, MARKET, MEADOW_SPOTS, ORDER, PLAQUE, MEADOW_TAG, VIEW, farY, flowerSpot } from '../scenes/layout';
+import { KINDS } from '../game/honey';
+import { BROOD_CARD, CARD, KIND_CARD, MEADOW_CARD, NOTE_CARD, PETALS, WAX_CARD } from './palette';
 import { addTexture, circ, cut, hex, outline, rect, reseed, rr, sketch, smooth, type Pt } from './paper';
 
 // The meadow and the hive in cut paper: a sky sheet with a paper sun and clouds, layered hills with
 // the goal meadows on the far one, the hive box, petal-cut flowers, the honey jar, the comb cells
 // in each of their states and the UI cards. Everything is baked once at boot.
 
-/** The far hill's ridge, which the goal meadows lie along. */
-const FAR_RIDGE = smooth([[-10, 260], [430, 235], [500, 210], [580, 220], [665, 190], [750, 165], [840, 145], [900, 135], [970, 142]]);
 const NEAR_RIDGE = smooth([[-10, 260], [100, 250], [210, 260], [350, 240], [450, 235], [550, 250], [650, 235], [750, 245], [850, 235], [970, 250]]);
 const GROUND_RIDGE = smooth([[-10, 390], [200, 370], [450, 395], [700, 380], [970, 390]]);
-
-/** The far ridge's height at x. */
-function farY(x: number) {
-  for (let i = 0; i < FAR_RIDGE.length - 1; i++) {
-    const [a, b] = [FAR_RIDGE[i], FAR_RIDGE[i + 1]];
-    if (x >= a[0] && x <= b[0]) return a[1] + ((b[1] - a[1]) * (x - a[0])) / (b[0] - a[0] || 1);
-  }
-  return FAR_RIDGE[FAR_RIDGE.length - 1][1];
-}
 
 export function bakeScenery(scene: Phaser.Scene) {
   reseed(29);
@@ -185,15 +175,19 @@ function bakeFlower(scene: Phaser.Scene, i: number) {
 /** The jar texture's size and the point of its foot, for placing it on the shelf. */
 export const JAR_TEX = { w: 36, h: 44, footY: 39 };
 
+/** A honey jar per kind of honey, `jar-<kind>`, coloured by its honey. */
 function bakeJar(scene: Phaser.Scene) {
-  const { canvas, ctx } = sketch(JAR_TEX.w, JAR_TEX.h);
-  ctx.translate(16, 22);
-  cut(ctx, rr(-13.5, -12, 27, 29, 6), CARD.jar, { depth: 3 });
-  cut(ctx, rr(-11, -19, 22, 8, 2.5), CARD.lid, { depth: 1.5 });
-  cut(ctx, rr(-8, -1, 16, 11, 2), CARD.label, { depth: 1 });
-  cut(ctx, hex(0, 4.5, 3.6), CARD.jar, { depth: 0, wob: 0 });
-  cut(ctx, rr(-11, -9, 3, 20, 1.5), 'rgba(255,240,200,0.7)', { depth: 0, wob: 0 });
-  addTexture(scene, 'jar', canvas);
+  for (const kind of KINDS) {
+    const { canvas, ctx } = sketch(JAR_TEX.w, JAR_TEX.h);
+    const honey = KIND_CARD[kind].jar;
+    ctx.translate(16, 22);
+    cut(ctx, rr(-13.5, -12, 27, 29, 6), honey, { depth: 3 });
+    cut(ctx, rr(-11, -19, 22, 8, 2.5), CARD.lid, { depth: 1.5 });
+    cut(ctx, rr(-8, -1, 16, 11, 2), CARD.label, { depth: 1 });
+    cut(ctx, hex(0, 4.5, 3.6), honey, { depth: 0, wob: 0 });
+    cut(ctx, rr(-11, -9, 3, 20, 1.5), 'rgba(255,240,200,0.7)', { depth: 0, wob: 0 });
+    addTexture(scene, `jar-${kind}`, canvas);
+  }
 }
 
 /** The cell textures' size; the hexagon's centre is in the middle. */
@@ -201,8 +195,9 @@ export const CELL_TEX = 84;
 
 /**
  * The comb cells as stacked hexagons of card: `cell-empty` (a dashed outline for a spot not built
- * yet), `cell-fill-<0..4>` (a dark well with that much nectar), `cell-ripe`, `cell-capped` and
- * `cell-preview` (the green spot where a cell would go).
+ * yet), per kind of honey `cell-fill-<0..4>-<kind>` (a dark well with that much nectar),
+ * `cell-ripe-<kind>` and `cell-capped-<kind>`, then `cell-brood` (a domed brood cap with a curled
+ * larva) and `cell-preview` (the green spot where a cell would go).
  */
 function bakeCells(scene: Phaser.Scene) {
   const c = CELL_TEX / 2;
@@ -214,23 +209,44 @@ function bakeCells(scene: Phaser.Scene) {
   };
   make('cell-empty', (ctx) => outline(ctx, hex(c, c, r - 4), 'rgba(240,200,140,0.4)', 1.2, [3.5, 3.5]));
   const base = (ctx: CanvasRenderingContext2D) => cut(ctx, hex(c, c, r - 2.5), CARD.wax, { depth: 3 });
-  for (let n = 0; n <= CELL_CAP; n++) {
-    make(`cell-fill-${n}`, (ctx) => {
+  for (const kind of KINDS) {
+    const k = KIND_CARD[kind];
+    for (let n = 0; n <= CELL_CAP; n++) {
+      make(`cell-fill-${n}-${kind}`, (ctx) => {
+        base(ctx);
+        cut(ctx, hex(c, c, r - 7), CARD.well, { depth: 0 });
+        if (n > 0) cut(ctx, hex(c, c, r - 10 - (CELL_CAP - n) * 4.5), k.nectar, { depth: 2 });
+      });
+    }
+    make(`cell-ripe-${kind}`, (ctx) => {
       base(ctx);
-      cut(ctx, hex(c, c, r - 7), CARD.well, { depth: 0 });
-      if (n > 0) cut(ctx, hex(c, c, r - 10 - (CELL_CAP - n) * 4.5), CARD.nectar, { depth: 2 });
+      cut(ctx, hex(c, c, r - 6), k.ripe[0], { depth: 1.5 });
+      cut(ctx, hex(c, c, r - 12), k.ripe[1], { depth: 1.5 });
+    });
+    make(`cell-capped-${kind}`, (ctx) => {
+      base(ctx);
+      cut(ctx, hex(c, c, r - 5.5), k.capped[0], { depth: 1.5 });
+      cut(ctx, hex(c, c, r - 11), k.capped[1], { depth: 1.5 });
+      cut(ctx, hex(c, c, r - 17), k.capped[2], { depth: 1 });
     });
   }
-  make('cell-ripe', (ctx) => {
+  make('cell-brood', (ctx) => {
     base(ctx);
-    cut(ctx, hex(c, c, r - 6), CARD.ripe[0], { depth: 1.5 });
-    cut(ctx, hex(c, c, r - 12), CARD.ripe[1], { depth: 1.5 });
-  });
-  make('cell-capped', (ctx) => {
-    base(ctx);
-    cut(ctx, hex(c, c, r - 5.5), CARD.capped[0], { depth: 1.5 });
-    cut(ctx, hex(c, c, r - 11), CARD.capped[1], { depth: 1.5 });
-    cut(ctx, hex(c, c, r - 17), CARD.capped[2], { depth: 1 });
+    cut(ctx, hex(c, c, r - 6), BROOD_CARD.cap, { depth: 1.5 });
+    cut(ctx, hex(c, c, r - 12), BROOD_CARD.dome, { depth: 2 });
+    // A curled larva on the cap, like a C, with a round head.
+    ctx.save();
+    ctx.strokeStyle = BROOD_CARD.larva;
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
+    ctx.shadowColor = 'rgba(42,26,8,0.35)';
+    ctx.shadowBlur = 2;
+    ctx.shadowOffsetY = 1;
+    ctx.beginPath();
+    ctx.arc(c, c, 7, Math.PI * 0.35, Math.PI * 1.75);
+    ctx.stroke();
+    ctx.restore();
+    cut(ctx, circ(c + 5.5, c - 4.5, 3.4), BROOD_CARD.larva, { depth: 1, wob: 0 });
   });
   make('cell-preview', (ctx) => {
     ctx.globalAlpha = 0.85;
@@ -265,9 +281,16 @@ function bakeCards(scene: Phaser.Scene) {
     cut(ctx, circ(9, 9, 8), '#f5c33a', { depth: 1.5 });
     cut(ctx, circ(9, 9, 4.5), '#ffd862', { depth: 0.5 });
   });
-  card('honey-icon', 16, 18, (ctx) => {
-    cut(ctx, rr(1, 4, 13, 13, 3), CARD.jar, { depth: 1.5 });
-    cut(ctx, rr(0, 0, 15, 4.5, 1.5), CARD.lid, { depth: 1 });
+  // A little jar per kind of honey (`honey-icon-<kind>`) and a cake of wax.
+  for (const kind of KINDS) {
+    card(`honey-icon-${kind}`, 16, 18, (ctx) => {
+      cut(ctx, rr(1, 4, 13, 13, 3), KIND_CARD[kind].jar, { depth: 1.5 });
+      cut(ctx, rr(0, 0, 15, 4.5, 1.5), CARD.lid, { depth: 1 });
+    });
+  }
+  card('wax-icon', 18, 18, (ctx) => {
+    cut(ctx, hex(9, 9, 8.5), WAX_CARD.cake, { depth: 1.5 });
+    cut(ctx, hex(9, 9, 4.5), WAX_CARD.shine, { depth: 0.5 });
   });
 
   card('goal-card', GOAL.w, GOAL.h, (ctx) => cut(ctx, rr(0, 0, GOAL.w, GOAL.h, 9), CARD.goal, { depth: 4.5 }));
@@ -316,6 +339,14 @@ function bakeCards(scene: Phaser.Scene) {
     ctx.fillStyle = CARD.away;
     ctx.fill();
     ctx.restore();
+  });
+  // The market board under the hive, a cream card like the goal card.
+  card('market-card', MARKET.w, MARKET.h, (ctx) => cut(ctx, rr(0, 0, MARKET.w, MARKET.h, 8), CARD.goal, { depth: 4 }));
+  // The village order: a note pinned to the button board, with a stitched edge and a green pin.
+  card('order-card', ORDER.w, ORDER.h, (ctx) => {
+    cut(ctx, rr(0, 0, ORDER.w, ORDER.h, 4), NOTE_CARD.paper, { depth: 3 });
+    outline(ctx, rr(3.5, 3.5, ORDER.w - 7, ORDER.h - 7, 3), NOTE_CARD.edge, 1, [3, 3]);
+    cut(ctx, circ(ORDER.w / 2, 4, 3.6), NOTE_CARD.pin, { depth: 1.5, wob: 0 });
   });
   // Green tags: the build preview's callout and the "+N touching" pop.
   card('tag-build', 104, 32, (ctx) => cut(ctx, rr(0, 0, 104, 32, 7), CARD.green, { depth: 3 }));

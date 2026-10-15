@@ -2,13 +2,16 @@ import { expect, test, type Page } from '@playwright/test';
 
 // Plays the first jar of honey with real inputs: build the first comb cell, send the two foragers
 // out twice until the cell is full of nectar, let it ripen, harvest the capped cell and sell the
-// jar, as a player would with a finger. Game state is only read, through the `game` object the dev
+// jar, as a player would with a finger. The first jar is clover honey (the only meadow open) and
+// its harvest also gives a piece of wax. Game state is only read, through the `game` object the dev
 // build puts on window.
 
 interface Cell {
+  type: 'honey' | 'brood';
   nectar: number;
   phase: 'filling' | 'ripening' | 'capped';
   ripenMs: number;
+  kind: string | null;
 }
 interface Bee {
   id: number;
@@ -18,11 +21,13 @@ interface GameState {
   coins: number;
   cells: (Cell | null)[];
   bees: Bee[];
-  jars: number;
+  jars: Record<string, number>;
+  wax: number;
   sold: number;
   spilled: number;
   ranks: Record<string, number>;
   meadows: number;
+  forage: string;
 }
 type Spot = { x: number; y: number };
 
@@ -31,6 +36,9 @@ const VIEW = { w: 960, h: 540 };
 const CELL_CAP = 4;
 const START_BEES = 2;
 const HONEY_PRICE = 15;
+const NO_JARS = { clover: 0, lavender: 0, heather: 0 };
+/** An empty honey cell, which takes any kind of nectar. */
+const EMPTY_CELL = { type: 'honey', nectar: 0, phase: 'filling', ripenMs: 0, kind: null };
 /** The comb spot the test builds on: the middle of the second row. */
 const SLOT = 7;
 
@@ -54,7 +62,7 @@ function scene(page: Page) {
   return {
     state: () => read<GameState>((s) => JSON.parse(JSON.stringify({ ...s.state, events: undefined }))),
     /** Where the Send and Sell buttons, each comb cell and the shop buttons are on screen. */
-    spots: () => read<{ send: Spot; sell: Spot; cells: Spot[]; shop: Spot[] }>((s) => s.spots()),
+    spots: () => read<{ send: Spot; sell: Spot; cells: Spot[] }>((s) => s.spots()),
   };
 }
 
@@ -147,9 +155,10 @@ test('plays the first jar of honey', async ({ page }, testInfo) => {
 
   const home = (s: GameState) => s.bees.every((b) => b.tripMs === 0);
 
-  // A new hive: no coins, no comb yet, no meadow unlocked, two bees resting at the entrance.
+  // A new hive: no coins, jars or wax, no comb yet, no meadow unlocked, so the bees forage clover,
+  // and two bees resting at the entrance.
   let s = await game.state();
-  expect(s).toMatchObject({ coins: 0, jars: 0, sold: 0, spilled: 0, meadows: 0 });
+  expect(s).toMatchObject({ coins: 0, jars: NO_JARS, wax: 0, sold: 0, spilled: 0, meadows: 0, forage: 'clover' });
   expect(s.cells.every((c) => c === null)).toBe(true);
   expect(s.bees).toHaveLength(START_BEES);
   expect(home(s)).toBe(true);
@@ -162,7 +171,7 @@ test('plays the first jar of honey', async ({ page }, testInfo) => {
   // Tapping an empty spot builds the first cell, for free.
   await tap(spots.cells[SLOT]);
   s = await game.state();
-  expect(s.cells[SLOT]).toEqual({ nectar: 0, phase: 'filling', ripenMs: 0 });
+  expect(s.cells[SLOT]).toEqual(EMPTY_CELL);
   expect(s.coins).toBe(0);
   await snap('0-built');
 
@@ -173,7 +182,7 @@ test('plays the first jar of honey', async ({ page }, testInfo) => {
   await wait(1_200);
   await snap('1-foraging');
   s = await until('the foragers are home', home, 10_000);
-  expect(s.cells[SLOT]).toMatchObject({ nectar: START_BEES, phase: 'filling' });
+  expect(s.cells[SLOT]).toMatchObject({ nectar: START_BEES, phase: 'filling', kind: 'clover' });
 
   // A second trip fills the cell, which then ripens into honey and is capped.
   await tap(spots.send);
@@ -184,11 +193,12 @@ test('plays the first jar of honey', async ({ page }, testInfo) => {
   await wait(400);
   await snap('2-capped');
 
-  // Tapping the capped cell harvests a jar of honey, and the cell starts over.
+  // Tapping the capped cell harvests a jar of clover honey and a piece of wax, and the cell starts over.
   await tap(spots.cells[SLOT]);
   s = await game.state();
-  expect(s.jars).toBe(1);
-  expect(s.cells[SLOT]).toEqual({ nectar: 0, phase: 'filling', ripenMs: 0 });
+  expect(s.jars).toEqual({ ...NO_JARS, clover: 1 });
+  expect(s.wax).toBe(1);
+  expect(s.cells[SLOT]).toEqual(EMPTY_CELL);
   await wait(400);
   await snap('3-harvested');
 
@@ -196,7 +206,7 @@ test('plays the first jar of honey', async ({ page }, testInfo) => {
   // jar sold is still short of the first goal (10 jars), so no meadow unlocks yet.
   await tap(spots.sell);
   s = await game.state();
-  expect(s).toMatchObject({ coins: HONEY_PRICE, jars: 0, sold: 1, spilled: 0, meadows: 0 });
+  expect(s).toMatchObject({ coins: HONEY_PRICE, jars: NO_JARS, wax: 1, sold: 1, spilled: 0, meadows: 0 });
   await wait(400);
   await snap('4-sold');
 
