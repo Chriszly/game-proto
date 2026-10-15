@@ -78,7 +78,7 @@ npm run preview   # serve the production build
   screenshots and `README.md`. Games don't import from each other.
 - `shared/`: the settings every game shares (`settings.ts`), the hub's Settings panel
   (`settingsPanel.ts`), `setupGame.ts`, which each game calls to apply the frame cap, the FPS readout, reduced motion and full screen,
-  and `scaling.ts`, which keeps a game sharp from a phone to a 4K screen (Apothecary, Colonizer, Anvilheart, Palisade, Mapmaker and TinctureTinker use it so far).
+  and `scaling.ts`, which keeps a game sharp from a phone to a 4K screen (Apothecary, Colonizer, Anvilheart, Palisade, Mapmaker, Hotfoot and TinctureTinker use it so far).
 - `e2e/hub.spec.ts`: checks that the hub lists every game, that each card opens it, and that the
   settings are saved and reach a game. `e2e/screens.spec.ts` opens each game that uses
   `shared/scaling.ts` on an upright and a sideways phone, a tablet, a laptop and a 4K screen.
