@@ -10,11 +10,15 @@ import { canvas, knot, mix, outline, P, reseed, se, sp, T, thread, type Ctx, typ
 export const FRAME = 64;
 export const FEET = { x: 32, y: 56 };
 
+/** Each side that draws figures: the three factions, and the wild guards of the neutral camps. */
+export type Side = FactionId | 'wild';
+
 /** The wool colours of each side: tunic, shield, helm, horse and mane. */
-export const WOOL: Record<FactionId, { cloth: string; trim: string; helm: string; boss: string; horse: string; mane: string; smock: string }> = {
+export const WOOL: Record<Side, { cloth: string; trim: string; helm: string; boss: string; horse: string; mane: string; smock: string }> = {
   ember: { cloth: T.red, trim: T.ochre, helm: T.indigo, boss: T.red, horse: T.buff, mane: T.red, smock: T.sage },
   tide: { cloth: T.indigo, trim: T.teal, helm: T.ochre, boss: T.ochre, horse: T.teal, mane: T.ochre, smock: T.sage },
   thorn: { cloth: T.green, trim: T.ochre, helm: T.brown, boss: T.green, horse: T.sage, mane: T.ochre, smock: T.tan },
+  wild: { cloth: T.brown, trim: T.grey, helm: T.grey, boss: T.ink, horse: T.tan, mane: T.ink, smock: T.tan },
 };
 
 /** The poses and how many frames each has. Villagers have every pose; soldiers idle, walk and attack. */
@@ -32,6 +36,7 @@ function kindOf(type: string, role: Role): Kind {
     militia: 'sword', spearman: 'spear', brute: 'club',
     archer: 'bow', slinger: 'sling', hunter: 'longbow',
     knight: 'lance', rider: 'horsespear', stalker: 'horseaxe',
+    brigand: 'club', poacher: 'bow',
   };
   return kinds[name] ?? 'sword';
 }
@@ -213,7 +218,7 @@ const WALK = [1, 0, -1, 0];
 const BOB = [0, -0.8, 0, -0.8];
 
 /** One frame of a figure, with the feet at (x, y). */
-export function drawFigure(c: Ctx, type: string, role: Role, faction: FactionId, pose: string, f: number, x: number, y: number) {
+export function drawFigure(c: Ctx, type: string, role: Role, faction: Side, pose: string, f: number, x: number, y: number) {
   const w = WOOL[faction];
   const kind = kindOf(type, role);
   reseed(f * 7 + pose.length * 13 + type.length);
@@ -222,7 +227,7 @@ export function drawFigure(c: Ctx, type: string, role: Role, faction: FactionId,
   return footman(c, w, kind, pose, f, x, y);
 }
 
-function villager(c: Ctx, w: (typeof WOOL)[FactionId], pose: string, f: number, x: number, y0: number) {
+function villager(c: Ctx, w: (typeof WOOL)[Side], pose: string, f: number, x: number, y0: number) {
   const walking = pose === 'walk' || pose.startsWith('carry');
   const stride = walking ? WALK[f] : 0;
   const y = y0 + (walking ? BOB[f] : 0);
@@ -271,7 +276,7 @@ function villager(c: Ctx, w: (typeof WOOL)[FactionId], pose: string, f: number, 
   arm(c, sx, sy, x + 4 + swing, y - 14, w.smock);
 }
 
-function footman(c: Ctx, w: (typeof WOOL)[FactionId], kind: Kind, pose: string, f: number, x: number, y0: number) {
+function footman(c: Ctx, w: (typeof WOOL)[Side], kind: Kind, pose: string, f: number, x: number, y0: number) {
   const walking = pose === 'walk';
   const stride = walking ? WALK[f] : 0;
   const y = y0 + (walking ? BOB[f] : 0);
@@ -325,7 +330,7 @@ function footman(c: Ctx, w: (typeof WOOL)[FactionId], kind: Kind, pose: string, 
   if (kind === 'sword' || kind === 'spear') kite(c, x - 3.5 + lean * 0.5, y, w.trim, w.boss);
 }
 
-function rider(c: Ctx, w: (typeof WOOL)[FactionId], kind: Kind, pose: string, f: number, x: number, y0: number) {
+function rider(c: Ctx, w: (typeof WOOL)[Side], kind: Kind, pose: string, f: number, x: number, y0: number) {
   const gallop = pose === 'walk' ? (f * Math.PI) / 2 : pose === 'attack' ? Math.PI / 2 + f * 0.6 : null;
   const y = y0 + (pose === 'walk' ? BOB[f] : 0);
   const rear = pose === 'attack' ? [0, 1.5, 2.5][f] : 0;
@@ -368,7 +373,7 @@ export function framesFor(role: Role): [string, number][] {
 }
 
 /** Paints every frame of one unit type for one side on a strip, FRAME pixels apart. */
-export function bakeFigureSheet(type: string, role: Role, faction: FactionId) {
+export function bakeFigureSheet(type: string, role: Role, faction: Side) {
   const frames = framesFor(role);
   const { cv, c } = canvas(frames.length * FRAME, FRAME);
   frames.forEach(([pose, i], k) => drawFigure(c, type, role, faction, pose, i, k * FRAME + FEET.x, FEET.y));

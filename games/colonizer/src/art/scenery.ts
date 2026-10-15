@@ -207,6 +207,106 @@ const PAINT: Record<BuildingId, Painter> = {
     sp(c, [[x + 16, y + 5], [x + w / 2, y - 14], [x + w - 16, y + 5]], roof, { ang: 0 });
     pennant(c, x + w / 2, y - 14, T.ochre);
   },
+  forge(c, x, y, w, h, roof, trim) {
+    // A smithy: a stone chimney with its fire, a lean-to roof, and an anvil in the yard.
+    wall(c, x + 10, y + 46, x + w - 34, y + h - 4, 3);
+    arch(c, x + 22, y + 58, 22, 30, T.ink);
+    sp(c, [[x + 24, y + h - 8], [x + 30, y + h - 18], [x + 34, y + h - 12], [x + 38, y + h - 22], [x + 42, y + h - 8]], T.ochre, { ang: PI / 2, noCouch: true, lw: 0.5 });
+    sp(c, [[x + 28, y + h - 8], [x + 33, y + h - 15], [x + 38, y + h - 8]], T.red, { ang: PI / 2, noCouch: true, lw: 0.5 });
+    tiles(c, x + 4, y + 26, x + w - 28, y + 48, roof);
+    sr(c, x + w - 34, y + 4, 16, h - 8, T.grey, { ang: 0 });
+    for (let k = 1; k < 6; k++) thread(c, [[x + w - 33, y + 4 + k * 14], [x + w - 19, y + 4 + k * 14]], mix(T.grey, '#000000', 0.3), 0.6);
+    for (const [dx, dy, r] of [[-26, -2, 4], [-22, -10, 3.2], [-16, -15, 2.4]] as [number, number, number][]) se(c, x + w + dx, y + dy, r, r * 0.8, '#cfc6b0', { noCouch: true, lw: 0.5 });
+    // The anvil on its block, with a hammer leaning on it.
+    sr(c, x + w - 16, y + h - 16, 8, 12, T.brown, { line: false, noCouch: true });
+    sp(c, [[x + w - 22, y + h - 22], [x + w - 4, y + h - 22], [x + w - 6, y + h - 17], [x + w - 18, y + h - 17]], T.ink, { ang: 0, noCouch: true, lw: 0.6 });
+    thread(c, [[x + w - 26, y + h - 4], [x + w - 20, y + h - 24]], T.brown, 1.3);
+    thread(c, [[x + w - 23, y + h - 25], [x + w - 17, y + h - 23]], T.grey, 2.6);
+    pennant(c, x + 14, y + 26, trim);
+  },
+  dock(c, x, y, w, h, roof, trim) {
+    // A fishing stage: a plank deck on posts, a net hung to dry, a boat drawn up and a basket of fish.
+    for (let k = 0; k < 6; k++) sr(c, x + 4 + k * 9.5, y + h - 22, 8, 16, k % 2 ? '#b08a56' : '#9c7646', { ang: PI / 2, noCouch: true, lw: 0.5 });
+    for (const px of [x + 6, x + w / 2, x + w - 6]) thread(c, [[px, y + h - 6], [px, y + h - 1]], T.brown, 2);
+    thread(c, [[x + 8, y + 4], [x + 8, y + h - 22]], T.brown, 1.6);
+    thread(c, [[x + 30, y + 10], [x + 30, y + h - 22]], T.brown, 1.6);
+    thread(c, [[x + 6, y + 6], [x + 32, y + 12]], T.brown, 1.1);
+    c.save();
+    c.strokeStyle = mix(T.buff, '#000000', 0.25);
+    c.lineWidth = 0.6;
+    for (let k = 0; k < 6; k++) {
+      c.beginPath();
+      c.moveTo(x + 9 + k * 4, y + 7 + k);
+      c.lineTo(x + 7 + k * 4.5, y + 26);
+      c.stroke();
+    }
+    for (let k = 0; k < 4; k++) {
+      c.beginPath();
+      c.moveTo(x + 8, y + 11 + k * 4);
+      c.lineTo(x + 30, y + 15 + k * 3.5);
+      c.stroke();
+    }
+    c.restore();
+    // The boat, in the Bayeux way: a long hull with a curled prow and a striped sail.
+    sp(c, [[x + 34, y + h - 30], [x + w + 2, y + h - 30], [x + w - 4, y + h - 22], [x + 38, y + h - 22]], roof, { ang: 0, lw: 0.7 });
+    thread(c, [[x + w + 2, y + h - 30], [x + w + 3, y + h - 36], [x + w, y + h - 37]], roof, 1.4);
+    thread(c, [[x + 48, y + h - 30], [x + 48, y + h - 56]], T.brown, 1.2);
+    sp(c, [[x + 49, y + h - 55], [x + 60, y + h - 50], [x + 60, y + h - 34], [x + 49, y + h - 36]], trim, { ang: PI / 2, noCouch: true, lw: 0.6 });
+    thread(c, [[x + 49, y + h - 45], [x + 60, y + h - 42]], T.red, 1);
+    se(c, x + 16, y + h - 28, 7, 5, '#a0703a', { ang: 0, noCouch: true, lw: 0.6 });
+    for (let k = 0; k < 3; k++) se(c, x + 12 + k * 4, y + h - 31, 2.6, 1.2, T.teal, { noCouch: true, lw: 0.4 });
+  },
+  grove(c, x, y, w, h, roof, trim) {
+    // A sacred grove: three young trees inside a wattle fence, with a carved post at the gap.
+    for (const [dx, sc, col] of [[14, 0.8, T.sage], [w / 2, 1, T.green], [w - 14, 0.85, T.sage]] as [number, number, string][]) {
+      const bx = x + dx;
+      const by = y + h - 14;
+      sp(c, [[bx - 1.6, by], [bx + 1.6, by], [bx + 1.2, by - 20 * sc], [bx - 1.2, by - 20 * sc]], T.bark, { ang: PI / 2, noCouch: true, lw: 0.5 });
+      se(c, bx - 5 * sc, by - 22 * sc, 5 * sc, 7 * sc, col, { rot: -0.3, ang: PI / 2, noCouch: true, lw: 0.6 });
+      se(c, bx + 5 * sc, by - 22 * sc, 5 * sc, 7 * sc, col === T.green ? T.sage : T.green, { rot: 0.3, ang: PI / 2, noCouch: true, lw: 0.6 });
+      se(c, bx, by - 30 * sc, 5 * sc, 7 * sc, col, { ang: PI / 2, noCouch: true, lw: 0.6 });
+    }
+    // The fence: stakes with a woven band.
+    for (let k = 0; k < 9; k++) thread(c, [[x + 3 + k * 7.2, y + h - 2], [x + 3 + k * 7.2, y + h - 13]], T.brown, 1.4);
+    sr(c, x + 2, y + h - 10, w - 4, 4, T.tan, { ang: 0, noCouch: true, lw: 0.5 });
+    sr(c, x + w / 2 - 3, y + h - 24, 6, 22, roof, { ang: PI / 2, noCouch: true });
+    knot(c, x + w / 2, y + h - 20, 1.8, trim);
+  },
+  wall(c, x, y, w, h) {
+    // Palisade: sharpened stakes lashed together, standing up into the room above the tile.
+    for (let k = 0; k < 4; k++) {
+      const sx = x + 1 + k * 7.8;
+      const top = y - 10 + (k % 2) * 3;
+      sp(c, [[sx, y + h - 3], [sx + 7, y + h - 3], [sx + 7, top + 4], [sx + 3.5, top], [sx, top + 4]], k % 2 ? '#a0703a' : T.brown, { ang: PI / 2, noCouch: true, lw: 0.6 });
+    }
+    thread(c, [[x, y + 6], [x + w, y + 6]], T.ochre, 1.2);
+    thread(c, [[x, y + h - 10], [x + w, y + h - 10]], T.ochre, 1.2);
+  },
+  gate(c, x, y, w, h, roof, trim) {
+    // Two tall posts under a lintel, with a pair of plank doors banded in iron.
+    for (const px of [x + 1, x + w - 6]) sp(c, [[px, y + h - 2], [px + 5, y + h - 2], [px + 5, y - 12], [px + 2.5, y - 16], [px, y - 12]], T.brown, { ang: PI / 2, noCouch: true, lw: 0.6 });
+    sr(c, x - 1, y - 8, w + 2, 6, roof, { ang: 0, noCouch: true });
+    sp(c, [[x + 6, y + h - 2], [x + w - 6, y + h - 2], [x + w - 6, y + 2], [x + 6, y + 2]], T.tan, { ang: PI / 2, sp: 1.6, noCouch: true, lw: 0.6 });
+    thread(c, [[x + w / 2, y + 2], [x + w / 2, y + h - 2]], T.ink, 0.8);
+    for (const yy of [y + 8, y + h - 9]) thread(c, [[x + 6, yy], [x + w - 6, yy]], T.ink, 1.2);
+    knot(c, x + w / 2 - 2.5, y + h / 2 + 2, 1.1, trim);
+    knot(c, x + w / 2 + 2.5, y + h / 2 + 2, 1.1, trim);
+  },
+  monument(c, x, y, w, h, roof, trim) {
+    // A great stepped tower on a plinth, gold-knotted, with a long banner in the side's colours.
+    sr(c, x + 4, y + h - 14, w - 8, 10, T.buff, { ang: 0 });
+    sr(c, x + 12, y + h - 26, w - 24, 12, T.buff, { ang: 0 });
+    wall(c, x + 24, y + 12, x + w - 24, y + h - 26, 8);
+    for (let k = 0; k < 3; k++) arch(c, x + 30 + k * 13, y + 40, 8, 18, k === 1 ? T.red : T.indigo);
+    arch(c, x + w / 2 - 7, y + h - 46, 14, 20, T.ink);
+    sr(c, x + 20, y + 4, w - 40, 10, T.sage, { ang: 0 });
+    for (let k = 0; k < 5; k++) sr(c, x + 21 + k * 11.5, y - 2, 6, 6, T.sage, { noCouch: true, lw: 0.6 });
+    dome(c, x + w / 2, y - 2, 13, T.ochre);
+    for (const [dx, dy] of [[10, h - 9], [w - 10, h - 9], [18, h - 20], [w - 18, h - 20], [w / 2, h - 9]] as Pt[]) knot(c, x + dx, y + dy, 2, T.ochre);
+    thread(c, [[x + w / 2, y - 16], [x + w / 2, y - 21]], T.ink, 1);
+    sp(c, [[x + w / 2 + 1, y - 21], [x + w / 2 + 20, y - 19], [x + w / 2 + 14, y - 15], [x + w / 2 + 20, y - 11], [x + w / 2 + 1, y - 12]], roof, { ang: 0, noCouch: true, lw: 0.6 });
+    thread(c, [[x + w / 2 + 2, y - 16.5], [x + w / 2 + 15, y - 15.5]], trim, 0.9);
+  },
 };
 
 /** A building for one side, with its footprint's top-left at (0, BUILDING_TOP). */
@@ -282,6 +382,102 @@ export function bakeMine() {
   thread(c, [[41, s - 6], [41, 41]], T.brown, 1.4);
   thread(c, [[22, 40], [42, 40]], T.brown, 1.6);
   for (const [x, y] of [[14, 36], [18, 46], [48, 38], [50, 48], [34, 22], [28, 18], [46, 24]] as Pt[]) knot(c, x, y, 2, T.ochre);
+  return cv;
+}
+
+/** A rally flag: a tall staff with a swallow-tailed pennant, its foot at (4, 38). */
+export function bakeRallyFlag() {
+  const { cv, c } = canvas(28, 40);
+  reseed(5);
+  c.fillStyle = 'rgba(110,90,60,0.18)';
+  c.beginPath();
+  c.ellipse(5, 38, 5, 1.8, 0, 0, PI * 2);
+  c.fill();
+  thread(c, [[4, 38], [4, 3]], T.ink, 1.4);
+  knot(c, 4, 2.5, 1.6, T.ochre);
+  sp(c, [[5, 4], [26, 7], [19, 11], [26, 15], [5, 17]], T.ochre, { ang: 0, noCouch: true, lw: 0.7 });
+  thread(c, [[6, 10.5], [20, 11]], T.sage, 1.4);
+  return cv;
+}
+
+// ---------------------------------------------------------------- neutral camps
+
+/** Room above a camp's 2x2 footprint for its canopy and banner. */
+export const CAMP_TOP = 26;
+
+/** A cache: a laden cart under an awning, heaped with ore or with baskets of food. */
+export function bakeCache(res: 'ore' | 'food' | 'wood') {
+  const s = TILE * 2;
+  const { cv, c } = canvas(s, s + CAMP_TOP);
+  reseed(res.length * 19);
+  const y = CAMP_TOP;
+  c.fillStyle = 'rgba(110,90,60,0.14)';
+  c.beginPath();
+  c.ellipse(s / 2, y + s - 4, s / 2 - 2, 5, 0, 0, PI * 2);
+  c.fill();
+  // The awning on two poles.
+  for (const px of [6, s - 8]) thread(c, [[px, y + s - 6], [px, y - 6]], T.brown, 1.6);
+  sp(c, [[2, y - 2], [s - 2, y - 2], [s - 8, y - 16], [8, y - 16]], T.tan, { ang: 0 });
+  for (let k = 0; k < 4; k++) thread(c, [[10 + k * 13, y - 15], [6 + k * 15, y - 3]], T.red, 0.9);
+  // The cart.
+  sp(c, [[8, y + 36], [s - 8, y + 36], [s - 12, y + 48], [12, y + 48]], '#a0703a', { ang: 0, lw: 0.8 });
+  for (const wx of [18, s - 18]) {
+    se(c, wx, y + 50, 7, 7, T.brown, { noCouch: true, lw: 0.7 });
+    knot(c, wx, y + 50, 1.6, T.ink);
+  }
+  if (res === 'ore') {
+    sp(c, [[12, y + 36], [20, y + 20], [32, y + 14], [44, y + 20], [52, y + 36]], T.grey, { ang: 0.5 });
+    for (const [dx, dy] of [[22, 28], [30, 20], [38, 26], [28, 32], [44, 30], [34, 30]]) knot(c, dx, y + dy, 1.9, T.ochre);
+  } else {
+    for (const [bx, by] of [[18, 30], [32, 28], [46, 30], [25, 20], [39, 20]]) {
+      se(c, bx, y + by, 6.5, 5.5, '#b08a56', { ang: 0, noCouch: true, lw: 0.6 });
+      for (let k = 0; k < 3; k++) knot(c, bx - 3 + k * 3, y + by - 4, 1.4, T.red);
+    }
+  }
+  return cv;
+}
+
+/**
+ * A relic shrine: a gilded reliquary on a stepped plinth under a canopy, with its sign (a wheat sheaf,
+ * a sword or a feather), and a banner in the holder's colour (plain linen while nobody holds it).
+ */
+export function bakeRelic(relic: 'plenty' | 'valor' | 'haste', holder: FactionId | null) {
+  const s = TILE * 2;
+  const { cv, c } = canvas(s, s + CAMP_TOP);
+  reseed(relic.length * 23 + (holder?.length ?? 0));
+  const y = CAMP_TOP;
+  c.fillStyle = 'rgba(110,90,60,0.14)';
+  c.beginPath();
+  c.ellipse(s / 2, y + s - 4, s / 2 - 2, 5, 0, 0, PI * 2);
+  c.fill();
+  sr(c, 4, y + s - 14, s - 8, 10, T.buff, { ang: 0 });
+  sr(c, 12, y + s - 22, s - 24, 8, T.buff, { ang: 0 });
+  // The canopy on four posts.
+  for (const px of [8, 20, s - 22, s - 10]) thread(c, [[px, y + s - 22], [px, y + 2]], T.brown, 1.4);
+  sp(c, [[2, y + 4], [s - 2, y + 4], [s / 2, y - 18]], T.sage, { ang: 0 });
+  knot(c, s / 2, y - 19, 2, T.ochre);
+  // The reliquary: a little gabled house of gold.
+  sp(c, [[20, y + s - 22], [s - 20, y + s - 22], [s - 20, y + 22], [s / 2, y + 12], [20, y + 22]], T.ochre, { ang: PI / 2, lw: 0.8 });
+  for (const [dx, dy] of [[24, 26], [s - 24, 26], [24, s - 26], [s - 24, s - 26]]) knot(c, dx, y + dy, 1.4, T.red);
+  const cx = s / 2;
+  const cy = y + 32;
+  if (relic === 'plenty')
+    for (let k = -1; k <= 1; k++) {
+      thread(c, [[cx + k * 2, cy + 8], [cx + k * 3, cy - 3]], T.brown, 0.9);
+      se(c, cx + k * 3, cy - 5, 1.6, 3.4, T.brown, { noCouch: true, lw: 0.4 });
+    }
+  if (relic === 'valor') {
+    thread(c, [[cx, cy + 8], [cx, cy - 7]], T.ink, 1.6);
+    thread(c, [[cx - 4, cy + 4], [cx + 4, cy + 4]], T.ink, 1.4);
+  }
+  if (relic === 'haste') {
+    se(c, cx, cy, 2.6, 7.5, T.indigo, { rot: 0.5, noCouch: true, lw: 0.5 });
+    thread(c, [[cx - 4, cy + 7], [cx + 3, cy - 6]], T.ink, 0.7);
+  }
+  // The holder's banner on a staff at the side.
+  const col = holder ? WOOL[holder].cloth : T.card;
+  thread(c, [[s - 6, y + s - 6], [s - 6, y - 22]], T.ink, 1);
+  sp(c, [[s - 5, y - 22], [s + 0, y - 21], [s + 0, y - 6], [s - 5, y - 9]], col, { ang: PI / 2, noCouch: true, lw: 0.6 });
   return cv;
 }
 

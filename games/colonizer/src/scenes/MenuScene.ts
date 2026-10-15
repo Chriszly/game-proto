@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { FACTION_IDS, FACTIONS, unitFor, type FactionId } from '../game/data';
+import { FACTION_IDS, FACTIONS, UNIQUE_TEXT, unitFor, type FactionId } from '../game/data';
 import { FEET, FRAME, WOOL } from '../art/figures';
 import { hexNum, SERIF, T } from '../art/stitch';
 import { figKey } from './BootScene';
@@ -45,9 +45,10 @@ export class MenuScene extends Phaser.Scene {
     });
     this.add.text(x, top + 122, f.name.toUpperCase(), { fontFamily: SERIF, fontSize: '21px', fontStyle: 'bold', color: WOOL[id].cloth }).setOrigin(0.5);
     this.add
-      .text(x, top + 162, f.blurb, { fontFamily: SERIF, fontSize: '14px', color: T.ink, wordWrap: { width: 240 }, align: 'center' })
+      .text(x, top + 156, f.blurb, { fontFamily: SERIF, fontSize: '14px', color: T.ink, wordWrap: { width: 240 }, align: 'center' })
       .setOrigin(0.5, 0.5);
-    this.add.text(x, top + 205, `Plays against ${FACTIONS[ai].name}`, { fontFamily: SERIF, fontSize: '12px', fontStyle: 'italic', color: T.faded }).setOrigin(0.5);
+    this.add.text(x, top + 186, UNIQUE_TEXT[id], { fontFamily: SERIF, fontSize: '12.5px', fontStyle: 'bold', color: WOOL[id].cloth }).setOrigin(0.5);
+    this.add.text(x, top + 208, `Plays against ${FACTIONS[ai].name}`, { fontFamily: SERIF, fontSize: '12px', fontStyle: 'italic', color: T.faded }).setOrigin(0.5);
     box.on('pointerover', () => box.setTexture('card-faction-hot'));
     box.on('pointerout', () => box.setTexture('card-faction'));
     box.on('pointerdown', () => this.scene.start('Game', { faction: id, aiFaction: ai }));

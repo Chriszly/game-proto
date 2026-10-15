@@ -1,20 +1,22 @@
 import Phaser from 'phaser';
-import { BUILDINGS, FACTION_IDS, UNITS, type BuildingId, type FactionId } from '../game/data';
+import { BUILDINGS, FACTION_IDS, RELICS, UNITS, type BuildingId, type FactionId, type RelicId } from '../game/data';
 import { bakeFigureSheet, FRAME, WOOL } from '../art/figures';
-import { bakeBuilding, bakeBush, bakeFogPattern, bakeMine, bakeNeedle, bakeTree } from '../art/scenery';
+import { bakeBuilding, bakeBush, bakeCache, bakeFogPattern, bakeMine, bakeNeedle, bakeRallyFlag, bakeRelic, bakeTree } from '../art/scenery';
 import { bakeBackdrop, bakeButton, bakeCard, bakeIcon, bakePanel, bakeTopBar, type IconKind } from '../art/ui';
-import { BOON, DEED_CARD, TOAST } from './layout';
+import { BOON, DEED_CARD, STATUS_CARD, TOAST } from './layout';
 import { T } from '../art/stitch';
 
 /**
  * Texture keys. Figures: `fig-<unit type>` for soldiers and `fig-villager-<faction>` for villagers,
  * one strip each with frames named `<pose>-<n>` (see figures.ts). Buildings: `bld-<faction>-<type>`.
- * Nodes: `tree-0`..`tree-3`, `bush`, `mine`. The ground is painted by the game in chunks, since
+ * Nodes: `tree-0`..`tree-3`, `bush`, `mine`. Camps: `camp-cache-<res>`, and `camp-relic-<relic>-<faction>`
+ * (or `-none` while nobody holds it). Wild guards: `fig-wild-<name>`. The ground is painted by the game in chunks, since
  * each match has its own map.
  */
 export const figKey = (type: string, faction: FactionId) => (type === 'villager' ? `fig-villager-${faction}` : `fig-${type}`);
 export const buildingKey = (faction: FactionId, type: BuildingId) => `bld-${faction}-${type}`;
 export const TREE_VARIANTS = 4;
+export const relicKey = (relic: RelicId, holder: FactionId | null) => `camp-relic-${relic}-${holder ?? 'none'}`;
 
 /** Paints every texture once, so the game itself only places sprites. */
 export class BootScene extends Phaser.Scene {
@@ -37,13 +39,25 @@ export class BootScene extends Phaser.Scene {
       }
       for (const type of Object.keys(BUILDINGS) as BuildingId[]) this.bake(buildingKey(faction, type), bakeBuilding(type, faction));
       this.bake(`icon-banner-${faction}`, bakeIcon('banner', 20, WOOL[faction].cloth));
+      for (const relic of Object.keys(RELICS) as RelicId[]) this.bake(relicKey(relic, faction), bakeRelic(relic, faction));
     }
-    for (const kind of ['wood', 'food', 'ore', 'pop', 'clock', 'horn', 'wheat'] as IconKind[]) this.bake(`icon-${kind}`, bakeIcon(kind));
+    for (const def of Object.values(UNITS)) {
+      if (def.faction !== 'wild') continue;
+      const { cv, frames } = bakeFigureSheet(def.id, def.role, 'wild');
+      const tex = this.bake(figKey(def.id, 'ember'), cv);
+      frames.forEach(([pose, i], k) => tex.add(`${pose}-${i}`, 0, k * FRAME, 0, FRAME, FRAME));
+    }
+    for (const relic of Object.keys(RELICS) as RelicId[]) this.bake(relicKey(relic, null), bakeRelic(relic, null));
+    for (const res of ['ore', 'food', 'wood'] as const) this.bake(`camp-cache-${res}`, bakeCache(res));
+    for (const kind of ['wood', 'food', 'ore', 'pop', 'clock', 'horn', 'wheat', 'sword', 'feather'] as IconKind[]) this.bake(`icon-${kind}`, bakeIcon(kind));
+    this.bake('rally-flag', bakeRallyFlag());
     this.bake('icon-shield', bakeIcon('shield', 22, T.red));
     this.bake('topbar', bakeTopBar());
     this.bake('panel', bakePanel());
     for (const s of ['on', 'off', 'hot'] as const) this.bake(`btn-${s}`, bakeButton(s));
     this.bake('card-deeds', bakeCard(DEED_CARD.w, DEED_CARD.h, { lw: 1.1 }));
+    this.bake('card-status', bakeCard(STATUS_CARD.w, STATUS_CARD.h, { lw: 1.1 }));
+    this.bake('card-status-tall', bakeCard(STATUS_CARD.w, STATUS_CARD.hMonument, { lw: 1.1 }));
     this.bake('card-toast', bakeCard(TOAST.w, TOAST.h, { pill: true }));
     this.bake('card-boon', bakeCard(BOON.w, BOON.h));
     this.bake('card-boon-hot', bakeCard(BOON.w, BOON.h, { fill: '#f3e2b0', lw: 1.4, hot: true }));

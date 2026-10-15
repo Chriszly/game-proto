@@ -3,7 +3,7 @@
 import { AGE_PIPS, BUTTONS, MINI, PANEL_BARS, PANEL_Y, TOP_BARS, TOP_H, W, H } from '../scenes/layout';
 import { bar, band, canvas, card, knot, linen, mix, PI, reseed, rrect, se, sew, sp, T, thread, type Ctx } from './stitch';
 
-export type IconKind = 'wood' | 'food' | 'ore' | 'pop' | 'clock' | 'horn' | 'shield' | 'wheat' | 'banner';
+export type IconKind = 'wood' | 'food' | 'ore' | 'pop' | 'clock' | 'horn' | 'shield' | 'wheat' | 'banner' | 'sword' | 'feather';
 
 /** A small wool icon centred at (x, y), about 2s across. */
 export function icon(c: Ctx, kind: IconKind, x: number, y: number, s: number, col: string = T.red) {
@@ -42,6 +42,15 @@ export function icon(c: Ctx, kind: IconKind, x: number, y: number, s: number, co
       thread(c, [[x + k * s * 0.3, y + s], [x + k * s * 0.45, y - s * 0.3]], T.ochre, 1);
       se(c, x + k * s * 0.45, y - s * 0.5, s * 0.2, s * 0.45, T.ochre, { noCouch: true, lw: 0.5 });
     }
+  if (kind === 'sword') {
+    thread(c, [[x - s * 0.8, y + s * 0.8], [x + s * 0.8, y - s * 0.8]], T.grey, s * 0.32);
+    thread(c, [[x - s * 0.75, y + s * 0.15], [x - s * 0.15, y + s * 0.75]], T.ink, s * 0.25);
+    knot(c, x - s * 0.85, y + s * 0.85, s * 0.18, T.ochre);
+  }
+  if (kind === 'feather') {
+    se(c, x, y, s * 0.35, s * 0.95, T.indigo, { rot: 0.6, noCouch: true, lw: 0.5 });
+    thread(c, [[x - s * 0.7, y + s * 0.95], [x + s * 0.45, y - s * 0.75]], T.ink, 0.7);
+  }
   if (kind === 'banner') sp(c, [[x - s * 0.5, y - s], [x + s * 0.5, y - s], [x + s * 0.5, y + s], [x, y + s * 0.6], [x - s * 0.5, y + s]], col, { ang: PI / 2, noCouch: true });
 }
 
