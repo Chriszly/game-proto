@@ -39,23 +39,29 @@ Each game's guide for agents, to read before changing it:
 ## Feedback and issues
 
 Feedback comes in as issues filed through the forms in `.github/ISSUE_TEMPLATE/` (bug report,
-gameplay feedback, feature wish). Every issue carries one `game:` label and one `type:` label
-(`type: bug`, `type: gameplay` or `type: feature`); `prio:` and `status:` labels are optional. The
-form sets the type label and `.github/workflows/issue-labels.yml` adds the game label from the
+gameplay feedback, feature wish). Labels have short names, and each label's group is the start of
+its description: **Game** (the folder name, like `apothecary`, plus `hub` and `shared`), **Type**
+(`bug`, `gameplay`, `feature`, `refactor`, `assets`, `docs`, `ci`), **Priority** (`high`,
+`medium`, `low`) and **Status** (`needs-info`, `duplicate`, `wontfix`). Every issue carries one
+Game label and one Type label (`bug`, `gameplay` or `feature`); Priority and Status are optional.
+The form sets the Type label and `.github/workflows/issue-labels.yml` adds the Game label from the
 form's Game dropdown. Labels are defined in `.github/labels.json` and the Labels workflow
 (`.github/workflows/labels.yml`) syncs them on main, deleting any label not in that file, so labels
-are never edited on GitHub. A PR that fixes an issue says `Fixes #<number>`.
+are never edited on GitHub. A PR that fixes an issue says `Fixes #<number>`. Each Game label has its
+own public GitHub Project, plus one "All feedback" Project, with the title, short description and
+README listed in `.github/projects.json`. Each Project's built-in Auto-add workflow files issues
+and PRs into it (filter `is:issue,pr is:open label:<game>`, or no label for "All feedback").
 
-- **Every PR needs labels.** It carries at least one `type:` label for what it changes
-  (`type: bug` for a fix, `type: feature`, `type: gameplay`, `type: refactor`, `type: assets`,
-  `type: docs`, `type: ci`) and at least one `game:` label for where (a game, `game: hub` or
-  `game: shared`). The `type-and-game` job of the **PR Template Validation** workflow
-  (`.github/workflows/pr-template-validation.yml`) fails until both are set, so add them right after opening the PR.
+- **Every PR needs labels.** It carries at least one Type label for what it changes (`bug` for a
+  fix, `feature`, `gameplay`, `refactor`, `assets`, `docs`, `ci`) and at least one Game label for
+  where (a game, `hub` or `shared`). The `type-and-game` job of the **PR Template Validation**
+  workflow (`.github/workflows/pr-template-validation.yml`) reads each label's group from
+  `.github/labels.json` and fails until both are set, so add them right after opening the PR.
 - **Never create a new label.** Use only the labels in `.github/labels.json`, and never add one
   on GitHub or apply a label name that isn't in that file (GitHub creates it silently). The
-  `type-and-game` check fails on any label not in the file. The one exception is a PR that adds a new game:
-  it adds that game's `game: <name>` label to `.github/labels.json` (see "Add a game" below) and
-  carries it.
+  `type-and-game` check fails on any label not in the file. The one exception is a PR that adds a
+  new game: it adds that game's label (its folder name, description `Game: <Name>`) to
+  `.github/labels.json` (see "Add a game" below) and carries it.
 
 ## Work on one game at a time
 
@@ -76,10 +82,14 @@ are never edited on GitHub. A PR that fixes an issue says `Fixes #<number>`.
   `favicon.svg` (same ears, head, dot eyes and muzzle, 32x32 viewBox) with one prop for the game,
   like Apothecary's plague doctor hat and beak. Then add a card for it in the hub's `index.html` and in `e2e/hub.spec.ts`, a
   Playwright project in `playwright.config.ts`, a row in the README's table of games and a row in
-  the table of guides above. Add its `game: <name>` label to `.github/labels.json` (the Labels
-  workflow creates it on main), its name to the Game dropdown of the three issue forms in
+  the table of guides above. Add its Game label (its folder name, description `Game: <Name>`) to `.github/labels.json` (the Labels
+  workflow creates it on main), its Project (title, short description and README) to `.github/projects.json`, its name to the
+  Game dropdown of the three issue forms in
   `.github/ISSUE_TEMPLATE/`, and its name and label to the map in
-  `.github/workflows/issue-labels.yml`. Vite picks
+  `.github/workflows/issue-labels.yml`. Then remind **Chriszly** to create the game's GitHub
+  Project by hand, in the PR's "Notes for reviewers" and in your reply when the PR is up: its title,
+  short description and README from `.github/projects.json`, public visibility, the Auto-add
+  workflow with the filter `is:issue,pr is:open label:<game>`, and a link to the repo. Vite picks
   up `games/*/index.html` on its own. Keep save keys and other browser storage prefixed with the
   game's name, since every game shares the hub's origin.
 - **Honour the hub's settings.** Every game calls `setupGame(game)` from `shared/setupGame.ts`

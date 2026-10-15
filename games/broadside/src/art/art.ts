@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { ORDER_IDS, type OrderId } from '../game/orders';
 import type { EnemyKind } from '../game/ships';
 import { ISLANDS, WORLD } from '../game/state';
-import { FIRE, HARBOR, HELM, HUD_HEIGHT, VIEW } from '../scenes/layout';
+import { FIRE, HARBOR, HELM, HUD_HEIGHT, OVER, VIEW, WIND } from '../scenes/layout';
 
 // The art of an old hand-tinted sea chart: ink on parchment, a compass rose and rhumb lines,
 // engraved hatching for the sea and form lines round the coasts, and ships drawn as engraved
@@ -32,6 +32,11 @@ interface ShipLook {
   guns: number;
   sail: string;
   flag: string;
+  /**
+   * Something only this ship carries: a fireship's deck stacked with burning pitch, a ketch's
+   * mortar on the foredeck, or the flagship's gilded rail and stern lanterns.
+   */
+  extra?: 'fire' | 'mortar' | 'flagship';
 }
 
 export const SHIP_LOOKS: Record<'player' | EnemyKind, ShipLook> = {
@@ -39,6 +44,9 @@ export const SHIP_LOOKS: Record<'player' | EnemyKind, ShipLook> = {
   sloop: { length: 56, beam: 21, masts: [0.06], guns: 1, sail: '#f6ecd2', flag: 'rgba(60,100,170,0.9)' },
   brig: { length: 70, beam: 27, masts: [0.2, -0.14], guns: 2, sail: '#f6ecd2', flag: 'rgba(176,70,52,0.85)' },
   galleon: { length: 90, beam: 34, masts: [0.26, 0.02, -0.22], guns: 3, sail: '#f4e4b8', flag: 'rgba(201,144,46,0.95)' },
+  fireship: { length: 54, beam: 20, masts: [0.16], guns: 0, sail: '#d9b98a', flag: 'rgba(214,110,40,0.95)', extra: 'fire' },
+  ketch: { length: 60, beam: 24, masts: [-0.02, -0.28], guns: 0, sail: '#efe0bc', flag: 'rgba(80,110,60,0.9)', extra: 'mortar' },
+  flagship: { length: 104, beam: 38, masts: [0.28, 0.06, -0.16, -0.34], guns: 4, sail: '#f4e4b8', flag: 'rgba(110,50,120,0.95)', extra: 'flagship' },
 };
 
 /** A small seeded random, so the chart is drawn the same every time without touching Math.random. */
@@ -404,6 +412,21 @@ function bakeShip(scene: Phaser.Scene, kind: keyof typeof SHIP_LOOKS) {
     ctx.restore();
     poly(ctx, P([[0.3, 0.3], [0.08, 0.36], [-0.28, 0.33], [-0.42, 0.24], [-0.42, -0.24], [-0.28, -0.33], [0.08, -0.36], [0.3, -0.3], [0.4, 0]]), '#d9b77e', INK, 0.75);
     poly(ctx, P([[-0.24, 0.3], [-0.42, 0.24], [-0.42, -0.24], [-0.24, -0.3]]), '#c49a62', INK, 0.75);
+    if (look.extra === 'flagship') {
+      // A gilded rail round the deck and a lantern on each quarter.
+      poly(ctx, P([[0.3, 0.3], [0.08, 0.36], [-0.28, 0.33], [-0.42, 0.24], [-0.42, -0.24], [-0.28, -0.33], [0.08, -0.36], [0.3, -0.3], [0.4, 0]]), null, OCHRE, 1.4);
+      for (const side of [-1, 1]) circle(ctx, -0.47 * L, side * 0.3 * B, 2.6, '#f0c860', INK, 0.8);
+    }
+    if (look.extra === 'mortar') {
+      // A squat mortar on a round bed on the foredeck.
+      circle(ctx, 0.24 * L, 0, B * 0.3, '#c49a62', INK, 1);
+      circle(ctx, 0.24 * L, 0, B * 0.19, '#3a332c', INK, 1);
+      circle(ctx, 0.24 * L, 0, B * 0.09, INK);
+    }
+    if (look.extra === 'fire') {
+      // Barrels of pitch stacked on deck.
+      for (const [bx, by] of [[0.32, 0], [-0.05, 0.2], [-0.05, -0.2], [-0.3, 0.05]]) circle(ctx, bx * L, by * B, 3.2, '#6a4a2a', INK, 0.8);
+    }
     // Sails, bellied forward by the wind, with engraved shading lines.
     for (const m of look.masts) {
       const span = B * 0.92;
@@ -451,6 +474,46 @@ function bakeShip(scene: Phaser.Scene, kind: keyof typeof SHIP_LOOKS) {
     ctx.strokeStyle = INK;
     ctx.lineWidth = 0.75;
     ctx.stroke();
+    if (look.extra === 'fire') {
+      // Tongues of flame licking up from the pitch, in ochre and orange with ink outlines.
+      for (const [fx, fy, s] of [[0.3, 0.05, 1], [-0.08, -0.25, 0.8], [-0.32, 0.2, 0.9]] as const) {
+        const x = fx * L;
+        const y = fy * B;
+        ctx.beginPath();
+        ctx.moveTo(x + 6 * s, y);
+        ctx.quadraticCurveTo(x + 1 * s, y - 4 * s, x - 5 * s, y - 2 * s);
+        ctx.quadraticCurveTo(x - 1 * s, y, x - 5 * s, y + 2.5 * s);
+        ctx.quadraticCurveTo(x + 1 * s, y + 4 * s, x + 6 * s, y);
+        ctx.fillStyle = 'rgba(224,120,40,0.92)';
+        ctx.fill();
+        ctx.strokeStyle = INK;
+        ctx.lineWidth = 0.7;
+        ctx.stroke();
+        circle(ctx, x - 0.5 * s, y, 1.4 * s, '#f0c860');
+      }
+    }
+  });
+}
+
+/**
+ * The wind rose in the top right corner: a small compass card. The arrow showing which way the
+ * wind blows is drawn over it each frame.
+ */
+function bakeWindRose(scene: Phaser.Scene) {
+  const size = WIND.r * 2 + 8;
+  bake(scene, 'wind-rose', size, size, HI, (ctx) => {
+    const c = size / 2;
+    const R = WIND.r;
+    circle(ctx, c, c, R, 'rgba(246,236,210,0.94)', INK, 1.5);
+    circle(ctx, c, c, R - 5, null, INK, 0.6);
+    for (let k = 0; k < 32; k++) {
+      const a = (k / 32) * Math.PI * 2;
+      const l = k % 8 === 0 ? 5 : k % 4 === 0 ? 3.5 : 2;
+      line(ctx, c + Math.cos(a) * (R - 5), c + Math.sin(a) * (R - 5), c + Math.cos(a) * (R - 5 - l), c + Math.sin(a) * (R - 5 - l), INK, 0.6);
+    }
+    for (const [label, a] of [['N', -Math.PI / 2], ['E', 0], ['S', Math.PI / 2], ['W', Math.PI]] as const) {
+      text(ctx, label, c + Math.cos(a) * (R - 14), c + Math.sin(a) * (R - 14), `700 8px ${SERIF}`, ink(0.7));
+    }
   });
 }
 
@@ -739,7 +802,8 @@ export function bakeAll(scene: Phaser.Scene) {
   }
   for (const order of ORDER_IDS) bakeSeal(scene, order);
   bakePanel(scene, 'panel-harbor', HARBOR.w, HARBOR.h);
-  bakePanel(scene, 'panel-over', 560, 280);
+  bakePanel(scene, 'panel-over', OVER.w, OVER.h);
+  bakeWindRose(scene);
   bakeOrderCard(scene);
   bakeHudBar(scene);
 }

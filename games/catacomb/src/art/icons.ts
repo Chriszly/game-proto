@@ -1,12 +1,14 @@
 import Phaser from 'phaser';
 import type { Icon } from '../game/cards';
 import type { RoomKind } from '../game/map';
-import { BLUE, BONE, FIRE, GOLD, GREEN, INK, IRON, RED, WOOD } from './palette';
+import { BLUE, BONE, FIRE, GOLD, GREEN, INK, IRON, PURPLE, RED, STONE, WOOD } from './palette';
+import type { StatusKind } from '../game/enemies';
+import type { RelicId } from '../game/relics';
 import { bakePainted } from './paint';
 import { type Palette } from './pixelArt';
 
-// Small pictures: one per kind of card for its face, the foes' intents, the rooms on the map and
-// the hero's heart. All 12 x 12 character grids, repainted with small brushes when baked.
+// Small pictures: one per kind of card for its face, the foes' intents, the statuses, the rooms
+// on the map, the relics, a gold coin and the hero's heart. All 12 x 12 character grids, repainted with small brushes when baked.
 
 const PALETTE: Palette = {
   e: INK,
@@ -28,6 +30,13 @@ const PALETTE: Palette = {
   L: GREEN.light,
   c: BONE.light,
   o: BONE.mid,
+  k: GREEN.dark,
+  h: GREEN.shine,
+  p: PURPLE.dark,
+  P: PURPLE.mid,
+  q: PURPLE.light,
+  s: STONE.light,
+  S: STONE.shine,
 };
 
 const SWORD = [
@@ -189,6 +198,76 @@ const CARD_ICONS: Record<Icon, string[]> = {
     '..........r.',
     '............',
   ],
+  cut: [
+    '.......ii...',
+    '......iIi...',
+    '.....iIi....',
+    '....iIi.....',
+    '.g.iIi...PP.',
+    '..gIi....PP.',
+    '..wg.....PP.',
+    '.w..g....PP.',
+    'w.......PPPP',
+    'G.......qPPq',
+    '.........qq.',
+    '............',
+  ],
+  crack: [
+    '.gggggggggg.',
+    'gbbbbbbbbbbg',
+    'gbBbbbebbbbg',
+    'gbBbbbebbbbg',
+    'gbbbbebbbbbg',
+    'gbbbbbebbbbg',
+    'gbbbbbbebbbg',
+    '.gbbbbebbbg.',
+    '.gbbbebbbbg.',
+    '..gbbbebbg..',
+    '...gbbebg...',
+    '....gggg....',
+  ],
+  dart: [
+    '..........L.',
+    '.........LL.',
+    '........lL..',
+    '.......iI...',
+    '......iI....',
+    '.....iI.....',
+    '....wI......',
+    '...ww.......',
+    '..Ww........',
+    '.WW.........',
+    'WW......L...',
+    '.......LhL..',
+  ],
+  cloud: [
+    '............',
+    '....LLL.....',
+    '..LLhhLL.L..',
+    '.LhhLLLLLhL.',
+    'LLhLLLLLLLLL',
+    'LLLLLLlLLLLl',
+    '.lLLLlllLLl.',
+    '..llllllll..',
+    '....l..l....',
+    '...l..l..l..',
+    '..l..l..l...',
+    '............',
+  ],
+  horn: [
+    '............',
+    '.......cc...',
+    '......cccG..',
+    '.....ccoc.G.',
+    '....ccoc..G.',
+    '...ccoc.....',
+    '..cccoc..G..',
+    '.ccooc...G..',
+    'ccooc....G..',
+    'cooc........',
+    'gggg........',
+    '............',
+  ],
   shieldBash: [
     '.ggggggg....',
     'gbbbGbbbg...',
@@ -222,7 +301,171 @@ const INTENTS = {
     '....GGGG....',
     '............',
   ],
+  debuff: [
+    '.....qq.....',
+    '....qPPq....',
+    '...qPPPPq...',
+    '..qPPPPPPq..',
+    '..qPeePeeq..',
+    '..qPeePeeq..',
+    '..qPPPPPPq..',
+    '...qPPPPq...',
+    '....qPPq....',
+    '....q..q....',
+    '...q....q...',
+    '............',
+  ],
 };
+
+/** The statuses, shown with their numbers by the hero and the foes. */
+const STATUSES: Record<StatusKind, string[]> = {
+  weak: [
+    '..........ii',
+    '.........iIi',
+    '........iIi.',
+    '.......iIi..',
+    '............',
+    '.....iIi....',
+    '..g.iIi.....',
+    '...gIi......',
+    '...wg.......',
+    '..w..g......',
+    '.w..........',
+    'G...........',
+  ],
+  vulnerable: CARD_ICONS.crack,
+  poison: [
+    '.....L......',
+    '....LL......',
+    '....LhL.....',
+    '...LhLL.....',
+    '...LhLLL....',
+    '..LLLLLLL...',
+    '..LhLLLLL...',
+    '..LLLLLLl...',
+    '..lLLLLLl...',
+    '...lLLLl....',
+    '....lll.....',
+    '............',
+  ],
+};
+
+/** The relics, shown in the top bar and at the merchant's. */
+const RELIC_ICONS: Record<RelicId, string[]> = {
+  oakWard: [
+    '....wwww....',
+    '..wwWWWWww..',
+    '.wWWWlLWWWw.',
+    '.wWWlLLlWWw.',
+    'wWWWlLLlWWWw',
+    'wWWWWlLWWWWw',
+    'wWWWWwwWWWWw',
+    '.wWWWwwWWWw.',
+    '.wWWWwwWWWw.',
+    '..wWWWWWWw..',
+    '...wwwwww...',
+    '............',
+  ],
+  whetstone: [
+    '............',
+    '.......ii...',
+    '......iIi...',
+    '.....iIi....',
+    '....iIi.....',
+    '...gIi......',
+    '...wg.......',
+    '............',
+    '.ssssssssss.',
+    'sSSSSSSSSSSs',
+    'ssssssssssss',
+    '............',
+  ],
+  emberLantern: [
+    '.....gg.....',
+    '....g..g....',
+    '...gggggg...',
+    '...gFFFFg...',
+    '...gFyyFg...',
+    '...gFyyFg...',
+    '...gFFFFg...',
+    '...gFFFFg...',
+    '...gggggg...',
+    '....gggg....',
+    '............',
+    '............',
+  ],
+  mendingMoss: [
+    '............',
+    '...L....L...',
+    '..LhL..LhL..',
+    '..LLL..LLL..',
+    '...L.LL.L...',
+    '....LhhL....',
+    '...LLhhLL...',
+    '..LLLLLLLL..',
+    '.lLLLLLLLLl.',
+    '.llllllllll.',
+    '..ssssssss..',
+    '............',
+  ],
+  goldenIdol: [
+    '....gggg....',
+    '...gGGGGg...',
+    '...gGeGeg...',
+    '...gGGGGg...',
+    '....gGGg....',
+    '..ggGGGGgg..',
+    '.gGgGGGGgGg.',
+    '.g.gGGGGg.g.',
+    '...gGGGGg...',
+    '...gGggGg...',
+    '..gggggggg..',
+    '............',
+  ],
+  boneCharm: [
+    '.....gg.....',
+    '....g..g....',
+    '....g..g....',
+    '.....gg.....',
+    '....cccc....',
+    '...cccccc...',
+    '...ceccec...',
+    '...cccccc...',
+    '....cocc....',
+    '....cccc....',
+    '............',
+    '............',
+  ],
+  venomGland: [
+    '....oooo....',
+    '....cccc....',
+    '.....cc.....',
+    '....cLLc....',
+    '...cLhLLc...',
+    '..cLhLLLLc..',
+    '..cLLLLLLc..',
+    '..cLLLLLLc..',
+    '..clLLLLlc..',
+    '...cllllc...',
+    '....cccc....',
+    '............',
+  ],
+};
+
+const COIN = [
+  '............',
+  '...gggggg...',
+  '..gGGGGGGg..',
+  '.gGGgggGGGg.',
+  '.gGgGGGgGGg.',
+  '.gGgGGGGGGg.',
+  '.gGgGGGGGGg.',
+  '.gGgGGGgGGg.',
+  '.gGGgggGGGg.',
+  '..gGGGGGGg..',
+  '...gggggg...',
+  '............',
+];
 
 const ROOMS: Record<RoomKind, string[]> = {
   fight: CARD_ICONS.twin,
@@ -254,6 +497,48 @@ const ROOMS: Record<RoomKind, string[]> = {
     'wwwwwwwwwwww',
     '............',
   ],
+  elite: [
+    '.c........c.',
+    '.cc......cc.',
+    '..cc....cc..',
+    '...cccccc...',
+    '..cccccccc..',
+    '..cffccffc..',
+    '..cffccffc..',
+    '..cccoccc...',
+    '...cccccc...',
+    '...cocococ..',
+    '....cccc....',
+    '............',
+  ],
+  shop: [
+    '....wwww....',
+    '.....ww.....',
+    '....wWWw....',
+    '...wWWWWw...',
+    '..wWWWWWWw..',
+    '.wWWWggWWWw.',
+    '.wWWgWWWWWw.',
+    '.wWWWggWWWw.',
+    '.wWWWWWgWWw.',
+    '.wWWWggWWWw.',
+    '..wwwwwwww..',
+    '............',
+  ],
+  event: [
+    '....GGGG....',
+    '...GGggGG...',
+    '..GG....GG..',
+    '........GG..',
+    '.......GG...',
+    '......GG....',
+    '.....GG.....',
+    '.....GG.....',
+    '............',
+    '.....GG.....',
+    '.....GG.....',
+    '............',
+  ],
   boss: [
     '..g.g..g.g..',
     '..gGgggGgg..',
@@ -274,7 +559,15 @@ export function bakeIcons(scene: Phaser.Scene) {
   for (const [id, rows] of Object.entries(CARD_ICONS)) bakePainted(scene, `card-${id}`, rows, PALETTE, 4, undefined, 2.4);
   for (const [id, rows] of Object.entries(INTENTS)) bakePainted(scene, `intent-${id}`, rows, PALETTE, 2, INK, 1.4);
   for (const [id, rows] of Object.entries(ROOMS)) bakePainted(scene, `room-${id}`, rows, PALETTE, 3, undefined, 2);
+  for (const [id, rows] of Object.entries(STATUSES)) bakePainted(scene, `status-${id}`, rows, PALETTE, 2, INK, 1.4);
+  for (const [id, rows] of Object.entries(RELIC_ICONS)) {
+    bakePainted(scene, `relic-${id}`, rows, PALETTE, 2, INK, 1.4);
+    bakePainted(scene, `relic-big-${id}`, rows, PALETTE, 4, INK, 2.4);
+  }
   bakePainted(scene, 'heart', CARD_ICONS.heart, PALETTE, 2, INK, 1.4);
+  bakePainted(scene, 'coin', COIN, PALETTE, 2, INK, 1.4);
 }
+
+export const relicIcon = (id: RelicId, big = false) => `relic-${big ? 'big-' : ''}${id}`;
 
 export const cardIcon = (icon: Icon) => `card-${icon}`;

@@ -1,11 +1,12 @@
 import Phaser from 'phaser';
-import { rank, type GameState } from '../game/state';
+import { SHOTS } from '../game/shot';
+import { rank, type GameState, type Side } from '../game/state';
 import { costOf, REPAIR_COST, UPGRADE_IDS, UPGRADES, type UpgradeId } from '../game/upgrades';
 import { FONT, HARBOR, UI_DEPTH, VIEW } from '../scenes/layout';
 import { makeButton } from './Button';
 import { pinToScreen } from './screen';
 
-export type HarborAction = UpgradeId | 'repair' | 'sail';
+export type HarborAction = UpgradeId | 'repair' | 'sail' | `load-${Side}`;
 export interface HarborButton {
   id: HarborAction;
   x: number;
@@ -38,6 +39,8 @@ export class Harbor {
   private title: Phaser.GameObjects.Text;
   private gold: Phaser.GameObjects.Text;
   private rows: Row[] = [];
+  /** The two loading buttons, one per side, each with what that side is loaded with. */
+  private loads: { side: Side; name: Phaser.GameObjects.Text; desc: Phaser.GameObjects.Text }[] = [];
 
   constructor(scene: Phaser.Scene, onAction: (id: HarborAction) => void) {
     const dim = scene.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x3a2a18, 0.45).setInteractive();
@@ -64,6 +67,27 @@ export class Harbor {
       this.buttons.push({ id, x: HARBOR.x, y, w: HARBOR.rowW, h: HARBOR.rowH });
       parts.push(bg, name, desc, cost);
     });
+
+    // Below the ledger, what each side's guns are loaded with; a tap loads the next kind of shot.
+    const loadW = (HARBOR.rowW - 12) / 2;
+    (['port', 'starboard'] as Side[]).forEach((side, i) => {
+      const x = HARBOR.x + (i === 0 ? -1 : 1) * (loadW / 2 + 6);
+      const y = HARBOR.loadY;
+      const id = `load-${side}` as const;
+      const bg = scene.add.rectangle(x, y, loadW, HARBOR.rowH, ROW, 0.9).setStrokeStyle(1.5, INK);
+      bg.setInteractive({ useHandCursor: true })
+        .on('pointerover', () => bg.setFillStyle(ROW_LIT, 0.95))
+        .on('pointerout', () => bg.setFillStyle(ROW, 0.9))
+        .on('pointerdown', () => onAction(id));
+      const name = scene.add.text(x - loadW / 2 + 12, y - 8, '', style(15, '#2b2118', 'bold')).setOrigin(0, 0.5);
+      const desc = scene.add.text(x - loadW / 2 + 12, y + 10, '', style(11, '#5a4a38', 'italic')).setOrigin(0, 0.5);
+      const swap = scene.add.text(x + loadW / 2 - 12, y, '⟳', style(20, '#6a4410', 'bold')).setOrigin(1, 0.5);
+      this.loads.push({ side, name, desc });
+      this.buttons.push({ id, x, y, w: loadW, h: HARBOR.rowH });
+      parts.push(bg, name, desc, swap);
+    });
+    const loadLabel = scene.add.text(HARBOR.x, HARBOR.loadY - HARBOR.rowH / 2 - 10, 'Load the guns: tap a side to change its shot', style(12, '#6a4410', 'italic')).setOrigin(0.5);
+    parts.push(loadLabel);
 
     const sailY = HARBOR.y + HARBOR.h / 2 - 34;
     const sail = makeButton(scene, HARBOR.x, sailY, 'Set sail', () => onAction('sail'));
@@ -93,6 +117,11 @@ export class Harbor {
       row.desc.setText(u.desc);
       row.cost.setText(cost === null ? 'Maxed' : `${cost} gold`);
       row.bg.setAlpha(cost !== null && s.gold >= cost ? 1 : 0.5);
+    }
+    for (const load of this.loads) {
+      const shot = SHOTS[s.loadout[load.side]];
+      load.name.setText(`${load.side === 'port' ? 'Port' : 'Starboard'}: ${shot.name}`);
+      load.desc.setText(shot.desc);
     }
   }
 }

@@ -1,11 +1,15 @@
 import { byDifficulty } from '../../../../shared/settings';
-import { drawOrder, ORDERS, PELLET_FAN, SLOW_MS } from './orders';
-import { ENEMIES } from './ships';
+import { drawOrder, ORDERS } from './orders';
+import { ENEMIES, type EnemyKind } from './ships';
+import { JAM_MS, nextShot, PELLET_FAN, SHOTS, SLOW_MS } from './shot';
 import {
   AGROUND_DAMAGE,
   AGROUND_MS,
   ARC,
   BALL_SPEED,
+  BOARD_HP,
+  BOARD_MS,
+  BOARD_REACH,
   BREAK_MS,
   CHARGE_DAMAGE,
   CHARGE_MS,
@@ -13,11 +17,15 @@ import {
   LOOT_MS,
   LOOT_PULL,
   WORLD,
+  loadedShot,
   newShip,
   offset,
   radiusOf,
   reachOf,
+  sideRange,
   stats,
+  windReach,
+  windSpeed,
   type Ball,
   type Effect,
   type GameState,
@@ -27,6 +35,7 @@ import {
   wrapCoord,
   wrapPoint,
 } from './state';
+import { medalsFor } from './admiralty';
 import { costOf, REPAIR_COST, type UpgradeId } from './upgrades';
 import { hpScale, waveShips } from './waves';
 
@@ -49,6 +58,18 @@ const SHORTEN_SAIL = 0.25;
 const SIDES: Side[] = ['port', 'starboard'];
 /** How far outside a broadside's arc the player's crews still pick a target, in radians. */
 const TRAIN_SLACK = (12 * Math.PI) / 180;
+/** The share of its speed a crippled ship (one that can be boarded) still makes. */
+const CRIPPLED = 0.7;
+/** How far from the player an escort goes after an enemy ship. */
+const ESCORT_HUNT = 360;
+/** How close to the player an escort keeps station when there is nothing to fight. */
+const ESCORT_STATION = 110;
+/** How long a mortar shell is in the air, how far its blast reaches and how far off its aim can be. */
+export const SHELL_MS = 2000;
+export const SHELL_R = 40;
+const SHELL_SPREAD = 24;
+/** How far a fireship's blast reaches. */
+export const FIRE_BLAST = 70;
 
 /** An angle brought into (-PI, PI]. */
 export function wrap(a: number) {
@@ -83,10 +104,11 @@ function effect(s: GameState, kind: Effect['kind'], x: number, y: number, total:
 export function tick(s: GameState, dt: number) {
   for (const e of s.effects) e.ms -= dt;
   s.effects = s.effects.filter((e) => e.ms > 0);
-  for (const ship of [s.player, ...s.enemies]) {
+  for (const ship of [s.player, ...s.enemies, ...s.escorts]) {
     ship.hitMs = Math.max(0, ship.hitMs - dt);
     ship.agroundMs = Math.max(0, ship.agroundMs - dt);
     ship.slowMs = Math.max(0, ship.slowMs - dt);
+    ship.jamMs = Math.max(0, ship.jamMs - dt);
   }
   if (s.phase === 'harbor' || s.phase === 'over') return;
 
@@ -99,7 +121,7 @@ export function tick(s: GameState, dt: number) {
   }
 
   const p = stats(s);
-  steer(s.player, s.player.heading + (s.helm * Math.PI) / 2, p.turn * Math.abs(s.helm), p.speed, dt);
+  steer(s.player, s.player.heading + (s.helm * Math.PI) / 2, p.turn * Math.abs(s.helm), p.speed * windSpeed(s.wind, s.player.heading), dt);
   if (s.phase !== 'fighting') {
     // Nothing to shoot at yet: the guns can't be aimed until the wave comes.
     s.charge = { port: null, starboard: null };
@@ -110,14 +132,24 @@ export function tick(s: GameState, dt: number) {
 
   spawn(s, dt);
   for (const e of s.enemies) sailEnemy(s, e, dt);
+  for (const e of s.escorts) sailEscort(s, e, dt);
   separate(s);
-  for (const ship of [s.player, ...s.enemies]) runAground(s, ship);
+  for (const ship of [s.player, ...s.enemies, ...s.escorts]) runAground(s, ship);
+  board(s, dt);
   aimBroadsides(s, dt);
   enemyBroadsides(s, dt);
+  escortBroadsides(s, dt);
   moveBalls(s, dt);
+  landShells(s, dt);
+  ram(s);
 
-  for (const e of s.enemies.filter((e) => e.hp <= 0)) sink(s, e);
-  s.enemies = s.enemies.filter((e) => e.hp > 0);
+  // A fireship sunk blows up and may take others down with it, so keep sinking until none are left.
+  for (let down = s.enemies.filter((e) => e.hp <= 0); down.length; down = s.enemies.filter((e) => e.hp <= 0)) {
+    s.enemies = s.enemies.filter((e) => e.hp > 0);
+    for (const e of down) sink(s, e);
+  }
+  for (const e of s.escorts.filter((e) => e.hp <= 0)) effect(s, 'sink', e.x, e.y, 1400, { heading: e.heading, ship: e.kind as EnemyKind });
+  s.escorts = s.escorts.filter((e) => e.hp > 0);
   if (playerSunk(s)) return;
 
   gatherLoot(s, dt);
@@ -135,6 +167,7 @@ function playerSunk(s: GameState) {
   s.player.hp = 0;
   s.phase = 'over';
   s.bestWave = Math.max(s.bestWave, s.wave - 1);
+  s.medals = medalsFor(s.wave - 1, s.bestBefore);
   return true;
 }
 
@@ -212,10 +245,18 @@ function spawn(s: GameState, dt: number) {
   s.enemies.push(newShip(s.nextId++, kind, x, y, bearing({ x, y }, s.player), hp));
 }
 
-/** How fast an enemy ship sails right now: slower while chain shot has its rigging tangled. */
-export function speedOf(e: Ship) {
-  const base = ENEMIES[e.kind as keyof typeof ENEMIES].speed;
-  return e.slowMs > 0 ? base * (ORDERS.chain.slow ?? 1) : base;
+/** An enemy ship crippled enough to board and take: under a fifth of its hull. Fireships burn instead. */
+export const boardable = (e: Ship) => e.kind !== 'player' && e.kind !== 'fireship' && e.hp > 0 && e.hp <= e.maxHp * BOARD_HP;
+
+/**
+ * How fast an enemy ship (or a prize) sails right now on its heading: with or against the wind,
+ * slower while chain shot has its rigging tangled, and slower still once crippled.
+ */
+export function speedOf(s: GameState, e: Ship) {
+  let speed = ENEMIES[e.kind as keyof typeof ENEMIES].speed * windSpeed(s.wind, e.heading);
+  if (e.slowMs > 0) speed *= SHOTS.chain.slow ?? 1;
+  if (boardable(e)) speed *= CRIPPLED;
+  return speed;
 }
 
 /**
@@ -225,28 +266,69 @@ export function speedOf(e: Ship) {
  * bear off a beach rather than run onto it.
  */
 function sailEnemy(s: GameState, e: Ship, dt: number) {
+  captain(s, e, s.player, dt);
+}
+
+/**
+ * Sails `e` against `target`. A broadside ship closes in and turns side-on; a fireship sails
+ * straight at it; a mortar ketch keeps to long range, circling. All plan a way round an island in
+ * the way, and keep a lookout.
+ */
+function captain(s: GameState, e: Ship, target: Ship, dt: number) {
   const type = ENEMIES[e.kind as keyof typeof ENEMIES];
-  const d = distance(e, s.player);
-  const b = bearing(e, s.player);
+  const d = distance(e, target);
+  const b = bearing(e, target);
+  const broadside = () => {
+    const starboard = b - Math.PI / 2;
+    const port = b + Math.PI / 2;
+    return Math.abs(wrap(starboard - e.heading)) < Math.abs(wrap(port - e.heading)) ? starboard : port;
+  };
   let want = b;
   const last = e.detour;
   e.detour = null;
-  if (d < radiusOf(e) + 70) want = b + Math.PI;
-  else if (d < type.range * 0.9) {
-    const starboard = b - Math.PI / 2;
-    const port = b + Math.PI / 2;
-    want = Math.abs(wrap(starboard - e.heading)) < Math.abs(wrap(port - e.heading)) ? starboard : port;
-  } else {
-    const round = planDetour(e, s.player, last);
+  const close = () => {
+    const round = planDetour(e, target, last);
     if (round) {
       e.detour = { island: round.island, side: round.side };
       want = round.heading;
     }
-  }
+  };
+  if (type.role === 'fireship') close();
+  else if (type.role === 'mortar') {
+    if (d < type.range * 0.55) want = b + Math.PI;
+    else if (d < type.range * 0.85) want = broadside();
+    else close();
+  } else if (d < radiusOf(e) + 70) want = b + Math.PI;
+  else if (d < type.range * 0.9) want = broadside();
+  else close();
   // With a beach dead ahead on the ship's present heading, the crew shortens sail so it can come
   // about in a tighter circle.
   const shorten = shoalAhead(e, e.heading) ? SHORTEN_SAIL : 1;
-  steer(e, fend(e, want), type.turn, speedOf(e) * shorten, dt);
+  steer(e, fend(e, want), type.turn, speedOf(s, e) * shorten, dt);
+}
+
+/**
+ * A prize taken by boarding sails with the player: it goes after the nearest enemy ship near the
+ * player, as an enemy captain would go after the player, and otherwise keeps station close by.
+ */
+function sailEscort(s: GameState, e: Ship, dt: number) {
+  const foe = nearestFoe(s, s.player, ESCORT_HUNT);
+  if (foe) return captain(s, e, foe, dt);
+  e.detour = null;
+  const type = ENEMIES[e.kind as keyof typeof ENEMIES];
+  const want = distance(e, s.player) > ESCORT_STATION ? bearing(e, s.player) : s.player.heading;
+  const shorten = shoalAhead(e, e.heading) ? SHORTEN_SAIL : 1;
+  steer(e, fend(e, want), type.turn, speedOf(s, e) * shorten, dt);
+}
+
+/** The enemy ship afloat nearest `from`, within `within`. */
+function nearestFoe(s: GameState, from: { x: number; y: number }, within: number) {
+  let best: Ship | null = null;
+  for (const e of s.enemies) {
+    if (e.hp <= 0 || distance(from, e) >= within) continue;
+    if (!best || distance(from, e) < distance(from, best)) best = e;
+  }
+  return best;
 }
 
 /** An island's no-go zone for a ship: the beach grown by the ship's reach and some sea room. */
@@ -378,7 +460,7 @@ function fend(e: Ship, want: number) {
 
 /** Pushes overlapping ships apart. */
 function separate(s: GameState) {
-  const ships = [s.player, ...s.enemies];
+  const ships = [s.player, ...s.enemies, ...s.escorts];
   for (let i = 0; i < ships.length; i++) {
     for (let j = i + 1; j < ships.length; j++) {
       const a = ships[i];
@@ -423,33 +505,125 @@ function aimBroadsides(s: GameState, dt: number) {
 function firePlayer(s: GameState, side: Side, charge: number) {
   const p = stats(s);
   const player = s.player;
-  const reach = reachOf(p.range, charge);
+  const reach = reachOf(sideRange(s, side), charge);
   const damage = p.damage * (1 + CHARGE_DAMAGE * charge);
-  // The crews train their guns on the nearest enemy in the shot's reach that is within the arc, or
-  // just outside it (then as far round as the guns go), or fire straight out if there is none.
+  // The crews train their guns on the nearest enemy in the shot's reach (further downwind) that is
+  // within the arc, or just outside it (then as far round as the guns go), or fire straight out if
+  // there is none.
   const out = player.heading + (side === 'starboard' ? Math.PI / 2 : -Math.PI / 2);
+  const inReach = reach * windReach(s.wind, out);
   const target = s.enemies
-    .filter((e) => e.hp > 0 && distance(player, e) < reach + radiusOf(e) && Math.abs(wrap(bearing(player, e) - out)) < ARC + TRAIN_SLACK)
+    .filter((e) => e.hp > 0 && distance(player, e) < inReach + radiusOf(e) && Math.abs(wrap(bearing(player, e) - out)) < ARC + TRAIN_SLACK)
     .sort((a, b) => distance(player, a) - distance(player, b))[0];
-  const order = ORDERS[s.order];
-  fire(s, player, side, target ?? null, target ? speedOf(target) : 0, p.guns, damage, reach, 0, order.shot, order.pellets ?? 1, order.pellet ?? 1);
+  const kind = loadedShot(s, side);
+  const shot = SHOTS[kind];
+  const look = kind === 'round' && ORDERS[s.order].powder ? 'powder' : kind;
+  fire(s, player, side, target ?? null, target ? speedOf(s, target) : 0, p.guns, damage, reach, 0, look, shot.pellets ?? 1, shot.pellet ?? 1);
   player.reload[side] = p.reloadMs;
 }
 
-/** Enemy broadsides go off on their own whenever the player is off a loaded side and in range. */
+/** How much a ship's reload runs down in `dt`: at the jam's share of the pace after a grapeshot hit. */
+const reloadStep = (ship: Ship, dt: number) => (ship.jamMs > 0 ? dt * (SHOTS.grape.jam ?? 1) : dt);
+
+/**
+ * Enemy broadsides go off on their own whenever the player, or else one of the player's prizes,
+ * is off a loaded side and in range. Mortar ketches lob a shell at the player instead.
+ */
 function enemyBroadsides(s: GameState, dt: number) {
-  const p = stats(s);
   const player = s.player;
+  const playerSpeed = stats(s).speed * windSpeed(s.wind, player.heading);
   // A ship already sunk this tick (on a beach) neither fires nor soaks up a broadside.
   for (const e of s.enemies) {
     if (e.hp <= 0) continue;
     const type = ENEMIES[e.kind as keyof typeof ENEMIES];
+    if (type.role === 'mortar') {
+      mortar(s, e, player, playerSpeed, dt);
+      continue;
+    }
+    if (type.guns === 0) continue;
     for (const side of SIDES) {
-      e.reload[side] = Math.max(0, e.reload[side] - dt);
-      if (e.reload[side] > 0 || distance(e, player) >= type.range || sideFacing(e, player) !== side) continue;
-      fire(s, e, side, player, p.speed, type.guns, type.damage, type.range, ENEMY_SPREAD);
+      e.reload[side] = Math.max(0, e.reload[side] - reloadStep(e, dt));
+      if (e.reload[side] > 0) continue;
+      const target = [player, ...s.escorts].find((t) => t.hp > 0 && distance(e, t) < type.range && sideFacing(e, t) === side);
+      if (!target) continue;
+      fire(s, e, side, target, target === player ? playerSpeed : speedOf(s, target), type.guns, type.damage, type.range, ENEMY_SPREAD);
       e.reload[side] = type.reloadMs;
     }
+  }
+}
+
+/** The player's prizes fire their broadsides on their own at any enemy off a loaded side, as enemies do. */
+function escortBroadsides(s: GameState, dt: number) {
+  for (const e of s.escorts) {
+    if (e.hp <= 0) continue;
+    const type = ENEMIES[e.kind as keyof typeof ENEMIES];
+    if (type.role === 'mortar') {
+      const foe = nearestFoe(s, e, type.range);
+      if (foe) mortar(s, e, foe, speedOf(s, foe), dt);
+      else e.reload.port = Math.max(0, e.reload.port - dt);
+      continue;
+    }
+    for (const side of SIDES) {
+      e.reload[side] = Math.max(0, e.reload[side] - dt);
+      if (e.reload[side] > 0) continue;
+      const target = s.enemies.find((t) => t.hp > 0 && distance(e, t) < type.range && sideFacing(e, t) === side);
+      if (!target) continue;
+      fire(s, e, side, target, speedOf(s, target), type.guns, type.damage, type.range, ENEMY_SPREAD, 'round', 1, 1, true);
+      e.reload[side] = type.reloadMs;
+    }
+  }
+}
+
+/**
+ * A mortar ketch lobs a shell at `target` whenever loaded and in range: it marks the spot where the
+ * shell will land (where the target will be if it holds its course), and the shell comes down there
+ * `SHELL_MS` later. Its one mortar reloads on the port side's timer. Uses Math.random twice.
+ */
+function mortar(s: GameState, e: Ship, target: Ship, targetSpeed: number, dt: number) {
+  const type = ENEMIES[e.kind as keyof typeof ENEMIES];
+  e.reload.port = Math.max(0, e.reload.port - reloadStep(e, dt));
+  if (e.reload.port > 0 || distance(e, target) >= type.range) return;
+  const lead = (targetSpeed * SHELL_MS) / 1000;
+  const a = Math.random() * Math.PI * 2;
+  const r = Math.random() * SHELL_SPREAD;
+  const x = wrapCoord(target.x + Math.cos(target.heading) * lead + Math.cos(a) * r, WORLD.w);
+  const y = wrapCoord(target.y + Math.sin(target.heading) * lead + Math.sin(a) * r, WORLD.h);
+  s.shells.push({ id: s.nextId++, x, y, ms: SHELL_MS, total: SHELL_MS, damage: type.damage });
+  effect(s, 'smoke', e.x, e.y, 800, { heading: bearing(e, { x, y }) });
+  e.reload.port = type.reloadMs;
+}
+
+/** Shells in the air come down on the spots they marked, hurting every ship under them. */
+function landShells(s: GameState, dt: number) {
+  s.shells = s.shells.filter((shell) => {
+    shell.ms -= dt;
+    if (shell.ms > 0) return true;
+    blast(s, shell.x, shell.y, SHELL_R, shell.damage);
+    return false;
+  });
+}
+
+/** A blast, from a shell or a fireship: every ship within `radius` (of its hull's middle half) takes `damage`. */
+function blast(s: GameState, x: number, y: number, radius: number, damage: number) {
+  for (const ship of [s.player, ...s.enemies, ...s.escorts]) {
+    if (ship.hp <= 0 || distance(ship, { x, y }) >= radius + radiusOf(ship) * 0.5) continue;
+    ship.hp -= damage;
+    ship.hitMs = 160;
+  }
+  effect(s, 'blast', x, y, 700, { size: radius });
+}
+
+/** A fireship that reaches the player or a prize sets itself alight and blows up alongside: it is gone, with no loot. */
+function ram(s: GameState) {
+  for (const e of s.enemies) {
+    if (e.kind !== 'fireship' || e.hp <= 0) continue;
+    const touching = [s.player, ...s.escorts].some((t) => t.hp > 0 && distance(e, t) < radiusOf(e) + radiusOf(t) + 4);
+    if (!touching) continue;
+    // Gone without loot: taken out of the fleet here, so sinking doesn't drop any.
+    s.enemies = s.enemies.filter((o) => o !== e);
+    effect(s, 'sink', e.x, e.y, 1400, { heading: e.heading, ship: 'fireship' });
+    blast(s, e.x, e.y, FIRE_BLAST, ENEMIES.fireship.damage);
+    return ram(s);
   }
 }
 
@@ -458,6 +632,7 @@ function enemyBroadsides(s: GameState, dt: number) {
  * as far as the arc allows to where the target will be when the shot gets there (straight out
  * with no target); enemy crews aim worse, off by up to `spread` radians either way. With
  * grapeshot each gun fires `pellets` shots in a fan, each hitting for `pellet` of `damage`.
+ * `friendly` shot (the player's and the prizes') hits enemies; the rest hits the player and prizes.
  */
 function fire(
   s: GameState,
@@ -472,6 +647,7 @@ function fire(
   shot: Ball['shot'] = 'round',
   pellets = 1,
   pellet = 1,
+  friendly = ship.kind === 'player',
 ) {
   const out = ship.heading + (side === 'starboard' ? Math.PI / 2 : -Math.PI / 2);
   let aim = out;
@@ -493,9 +669,10 @@ function fire(
         y,
         vx: Math.cos(dir) * BALL_SPEED,
         vy: Math.sin(dir) * BALL_SPEED,
-        ms: (range / BALL_SPEED) * 1000,
+        // Shot fired downwind carries further.
+        ms: ((range * windReach(s.wind, dir)) / BALL_SPEED) * 1000,
         damage: damage * pellet,
-        fromPlayer: ship.kind === 'player',
+        fromPlayer: friendly,
         shot,
       });
     }
@@ -509,12 +686,13 @@ function moveBalls(s: GameState, dt: number) {
     ball.y += (ball.vy * dt) / 1000;
     wrapPoint(ball);
     ball.ms -= dt;
-    const targets = ball.fromPlayer ? s.enemies : [s.player];
+    const targets = ball.fromPlayer ? s.enemies : [s.player, ...s.escorts];
     const hit = targets.find((t) => t.hp > 0 && distance(ball, t) < radiusOf(t));
     if (hit) {
       hit.hp -= ball.damage;
       hit.hitMs = 160;
       if (ball.shot === 'chain') hit.slowMs = SLOW_MS;
+      if (ball.shot === 'grape') hit.jamMs = JAM_MS;
       effect(s, 'hit', ball.x, ball.y, 400);
       return false;
     }
@@ -526,13 +704,54 @@ function moveBalls(s: GameState, dt: number) {
   });
 }
 
-/** A sunk ship goes down and leaves a barrel of loot floating where it was. */
+/** The gold a ship of `kind` is worth on `wave`. */
+const lootOf = (kind: EnemyKind, wave: number) => ENEMIES[kind].loot + 2 * (wave - 1);
+
+/** A sunk ship goes down and leaves a barrel of loot floating where it was. A fireship blows up as it goes. */
 function sink(s: GameState, e: Ship) {
-  const kind = e.kind as keyof typeof ENEMIES;
+  const kind = e.kind as EnemyKind;
   s.sunk++;
   effect(s, 'sink', e.x, e.y, 1400, { heading: e.heading, ship: kind });
-  s.loot.push({ id: s.nextId++, x: e.x, y: e.y, gold: ENEMIES[kind].loot + 2 * (s.wave - 1), ms: LOOT_MS });
+  s.loot.push({ id: s.nextId++, x: e.x, y: e.y, gold: lootOf(kind, s.wave), ms: LOOT_MS });
+  if (kind === 'fireship') blast(s, e.x, e.y, FIRE_BLAST, ENEMIES.fireship.damage);
 }
+
+/**
+ * Boarding: staying alongside a crippled enemy (`boardable`) for `BOARD_MS` takes her as a prize.
+ * Her prize crew patches her up to half her hull and she sails as the player's escort.
+ */
+function board(s: GameState, dt: number) {
+  const player = s.player;
+  for (const e of [...s.enemies]) {
+    const gap = distance(player, e) - radiusOf(player) - radiusOf(e);
+    e.boardMs = boardable(e) && gap < BOARD_REACH ? e.boardMs + dt : 0;
+    if (e.boardMs < BOARD_MS) continue;
+    s.enemies = s.enemies.filter((o) => o !== e);
+    e.hp = Math.max(e.hp, Math.ceil(e.maxHp / 2));
+    e.boardMs = 0;
+    e.slowMs = 0;
+    e.jamMs = 0;
+    e.detour = null;
+    e.reload = { port: 1000, starboard: 1000 };
+    s.escorts.push(e);
+    s.taken++;
+    effect(s, 'prize', e.x, e.y, 1400);
+  }
+}
+
+/** Scuttles the prize `id` for twice its loot, straight into the hold. */
+export function scuttle(s: GameState, id: number) {
+  const e = s.escorts.find((o) => o.id === id);
+  if (!e || s.phase !== 'fighting') return false;
+  s.escorts = s.escorts.filter((o) => o !== e);
+  s.sunk++;
+  effect(s, 'sink', e.x, e.y, 1400, { heading: e.heading, ship: e.kind as EnemyKind });
+  haulIn(s, { id: 0, x: e.x, y: e.y, gold: 2 * lootOf(e.kind as EnemyKind, s.wave), ms: 0 });
+  return true;
+}
+
+/** What scuttling a prize would bring in. */
+export const scuttleGold = (s: GameState, e: Ship) => 2 * lootOf(e.kind as EnemyKind, s.wave);
 
 function gatherLoot(s: GameState, dt: number) {
   const player = s.player;
@@ -562,6 +781,10 @@ function haulIn(s: GameState, l: Loot) {
 }
 
 function reachHarbor(s: GameState) {
+  // Prizes still afloat are sold in harbor for their loot.
+  for (const e of s.escorts) haulIn(s, { id: 0, x: e.x, y: e.y, gold: lootOf(e.kind as EnemyKind, s.wave), ms: 0 });
+  s.escorts = [];
+  s.shells = [];
   s.phase = 'harbor';
   s.balls = [];
   s.charge = { port: null, starboard: null };
@@ -599,7 +822,16 @@ export function setSail(s: GameState) {
   s.wave++;
   s.toSpawn = waveShips(s.wave);
   s.order = drawOrder(s.order);
+  // A new wind for the wave, from one of the eight main points of the compass.
+  s.wind = Math.floor(Math.random() * 8) * (Math.PI / 4);
   s.phase = 'break';
   s.breakMs = BREAK_MS;
   s.loot = [];
+}
+
+/** Loads the next kind of shot into one side's guns at the harbor: round, chain, grape, round... */
+export function loadShot(s: GameState, side: Side) {
+  if (s.phase !== 'harbor') return false;
+  s.loadout[side] = nextShot(s.loadout[side]);
+  return true;
 }

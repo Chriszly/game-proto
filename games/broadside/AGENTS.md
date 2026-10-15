@@ -9,11 +9,34 @@ file up to date with any change to the game, as the root `AGENTS.md` asks.
 A wave-based naval battle drawn as an old hand-tinted sea chart. The player's ship always sails
 forward. The player steers with the helm (turn left, turn right, or let go) and fires each
 broadside by hand: holding a side's fire control charges it, letting go fires it, and a longer
-charge reaches further and hits harder. Each wave has one captain's order (a bonus for the wave).
-Sunk enemies drop loot barrels, and gold buys upgrades at a harbor between waves.
+charge reaches further and hits harder. Each wave has one captain's order (a bonus for the wave)
+and a wind. Sunk enemies drop loot barrels, crippled ones can be boarded and taken as escorts, and
+gold buys upgrades at a harbor between waves, where each side's guns are loaded with a kind of shot.
+Between runs, the Admiralty's medals buy starting upgrades.
 
-- **Implemented:** endless waves (sloops from wave 1, brigs from wave 3, galleons from wave 5) with
-  enemy hull scaling per wave. Hold-to-aim broadsides for the player (`aim` and `charge` in the
+- **Implemented:** endless waves (sloops from wave 1, brigs and fireships from wave 3, mortar
+  ketches from wave 4, galleons from wave 5, a flagship last in every fifth wave) with enemy hull
+  scaling per wave. Fireships (`role: 'fireship'`) sail straight at the player and blow up on
+  touching the player or a prize (`ram`, no loot) or when sunk (`sink`); the blast (`blast`) hurts
+  every ship near, enemies included. Mortar ketches (`role: 'mortar'`) keep to long range and lob
+  shells (`mortar`, `GameState.shells`) at where the target will be in `SHELL_MS`; the scene marks
+  the spot and `landShells` blasts it. Wind (`GameState.wind`, a heading): `windSpeed` scales every
+  ship's speed by its heading against the wind and `windReach` lengthens shot fired downwind (ball
+  lifetime in `fire`, the player's targeting in `firePlayer` and the arcs drawn); wave 1's wind is
+  `FIRST_WIND` (blowing east), later waves draw one of eight points in `setSail`. Boarding
+  (`board`): an enemy at or under `BOARD_HP` of its hull is `boardable` (not fireships), sails at
+  `CRIPPLED` of its speed, and is taken once the player stays within `BOARD_REACH` hull to hull for
+  `BOARD_MS` (`Ship.boardMs`); it moves to `GameState.escorts`, patched to half its hull, and sails
+  with the player (`sailEscort`: goes after the nearest enemy within `ESCORT_HUNT` of the player
+  with the enemy captain's logic, `captain`, otherwise keeps station) and fires at enemies
+  (`escortBroadsides`). Enemy broadsides fire at the player or a prize. `scuttle` sinks a prize for
+  twice its loot; prizes left at the wave's end are sold for their loot in `reachHarbor`. Loadable
+  shot (`src/game/shot.ts`): `GameState.loadout` per side, cycled at the harbor by `loadShot`; the
+  chain and grape orders load both sides for the wave instead (`loadedShot`); grapeshot has
+  `range: 0.7` (`sideRange`) and a hit sets `Ship.jamMs`, slowing that ship's reload. Admiralty
+  rewards (`src/game/admiralty.ts`): `playerSunk` sets `GameState.medals` (`medalsFor`: one per
+  wave beaten, `BEST_BONUS` more for beating `bestBefore`), the scene banks them, and the game-over
+  panel spends them on `BOONS` passed to `newRun` on "Sail again". Hold-to-aim broadsides for the player (`aim` and `charge` in the
   state, `aimBroadsides` and `firePlayer` in `sim.ts`); enemy broadsides still fire on their own.
   Captain's orders (`src/game/orders.ts`): the first wave is always chain shot (`FIRST_ORDER`),
   later waves draw a different one from the last in `setSail`; the order changes the player's
@@ -23,22 +46,25 @@ Sunk enemies drop loot barrels, and gold buys upgrades at a harbor between waves
   as a dotted line), and a lookout bears off any beach ahead and shortens sail to come about in
   time. Broadsides lead their target, and enemy aim has a random spread. Loot drifts toward the
   player and expires; when a wave's last enemy sinks, every barrel still afloat is hauled in at
-  once. There is a harbor shop with five upgrades plus a paid repair, a game-over panel with "Sail
-  again", and off-screen arrows pointing to enemies and loot. The sea wraps around at every edge
+  once. There is a harbor shop with five upgrades plus a paid repair and the two loading buttons, a
+  game-over panel with the Admiralty's rewards and "Sail again", and off-screen arrows pointing to
+  enemies (rust), prizes (green) and loot (ochre). The sea wraps around at every edge
   like a globe: sailing off the north edge comes back in at the south, and off the west edge in at
   the east. Ships, balls and loot all wrap, and every distance and bearing takes the shortest way
   round. Islands have collision: any ship, player or enemy, that sails onto an island's beach is
   pushed off, glances away and takes `AGROUND_DAMAGE`.
-- **Screens:** there is only `GameScene`. The wave banner, the captain's order card, the harbor
-  panel and the game-over panel are overlays drawn on top of it. There is no title screen, pause
+- **Screens:** there is only `GameScene`. The wave banner, the captain's order card, the wind rose,
+  the scuttle button, the harbor panel and the game-over panel are overlays drawn on top of it. There is no title screen, pause
   or in-game settings; the shared settings (difficulty, frame cap, FPS readout, reduced motion and full screen)
   are set on the hub page.
-- **Persistence:** only the best wave beaten is saved. Each run starts fresh at wave 1.
+- **Persistence:** the best wave beaten and the banked medals are saved. Each run starts fresh at
+  wave 1, plus any starting upgrades bought with medals.
 - **Rough or unused:** there is no sound. Enemy captains still run aground now and then (pushed by
   another ship or the player, or cornered at close range), far less often than before the
   steering: a long scripted fight of wave-6 fleets saw 3 groundings where plain chasing saw 41.
-  Detours are planned round one island at a time (the nearest blocking one). There are no TODO
-  comments in the code.
+  Detours are planned round one island at a time (the nearest blocking one). Medals can only be
+  spent on the game-over panel, so a freshly loaded page can't spend banked medals until a run
+  ends. There are no TODO comments in the code.
 
 ## Architecture
 
@@ -52,36 +78,51 @@ File map (all under `src/`, plus the shared files it imports):
   frame and draws everything (HUD, order card, helm wheels and fire controls with their charge
   rings, wakes, detour courses, effects, firing arcs, harbor and game-over overlays).
 - `scenes/layout.ts`: `VIEW`, `HUD_HEIGHT`, the `HELM` wheel centres, the `FIRE` control centres,
-  `ORDER_CARD`, the `HARBOR` panel and row geometry, `BUTTON`, `UI_DEPTH` and `FONT` (a Georgia
-  serif stack, no web fonts).
+  `ORDER_CARD`, the `HARBOR` panel and row geometry (with `loadY` for the loading buttons), the
+  `OVER` (game-over) panel and its rows, `WIND` (the wind rose), `SCUTTLE`, `BUTTON`, `UI_DEPTH`
+  and `FONT` (a Georgia serif stack, no web fonts).
 - `game/state.ts`: types, the world and timing constants (including `CHARGE_MS`, `REACH_MIN` and
   `CHARGE_DAMAGE`), the base `PLAYER` stats, `stats()` (the player's stats after upgrades and the
-  wave's order), `reachOf`, `newShip`, `newRun`, `FIRST_ORDER`, `radiusOf` and `ISLANDS`, plus
+  wave's order), `reachOf`, `newShip`, `newRun` (with the Admiralty's boons), `FIRST_ORDER`,
+  `loadedShot`, `sideRange`, the wind (`WIND_SPEED`, `WIND_REACH`, `FIRST_WIND`, `windSpeed`,
+  `windReach`, `windFrom`), boarding (`BOARD_HP`, `BOARD_REACH`, `BOARD_MS`), `radiusOf` and
+  `ISLANDS`, plus
   the wrapping helpers `wrapCoord`, `wrapPoint` and `offset` (the shortest `dx`, `dy` between two
   points on the sea).
-- `game/orders.ts`: the `ORDERS` table (title, description, stat multipliers, `slow`, `pellets`
-  and `pellet`, and the `shot` look), `ORDER_IDS`, `SLOW_MS`, `PELLET_FAN` and `drawOrder`.
+- `game/orders.ts`: the `ORDERS` table (title, description, stat multipliers, `load` for the
+  shot both sides fire that wave, `powder` for the powder-flash look), `ORDER_IDS` and `drawOrder`.
+- `game/shot.ts`: `ShotKind`, the `SHOTS` table (`slow`, `pellets`, `pellet`, `range`, `jam`),
+  `SHOT_IDS`, `SLOW_MS`, `JAM_MS`, `PELLET_FAN` and `nextShot`.
+- `game/admiralty.ts`: `BoonId`, the `BOONS` table (name, description, medal cost, starting `gold`
+  or upgrade `rank`), `BOON_IDS`, `BEST_BONUS`, `medalsFor` and `costOfBoons`.
 - `game/sim.ts`: all rules. `tick` handles steering, spawning (never on an island), enemy AI
-  (`sailEnemy`, with `planDetour`, `roundIsland`, `blocked`, `fend` and `shoalAhead`), separation,
-  running aground on islands (`runAground`), the player's broadsides (`aimBroadsides`,
-  `firePlayer`), enemy broadsides (`enemyBroadsides`), `fire`, balls (chain shot sets `slowMs`),
-  sinking, loot (`haulIn`) and reaching the harbor. `detourCourse` and `speedOf` are exported for
-  the scene. `buy`, `repair` and `setSail` are the harbor actions.
+  (`sailEnemy` calls `captain`, with `planDetour`, `roundIsland`, `blocked`, `fend` and
+  `shoalAhead`), escorts (`sailEscort`, `escortBroadsides`), separation, running aground on islands
+  (`runAground`), boarding (`board`), the player's broadsides (`aimBroadsides`, `firePlayer`),
+  enemy broadsides and mortars (`enemyBroadsides`, `mortar`), `fire`, balls (chain shot sets
+  `slowMs`, grapeshot `jamMs`), shells (`landShells`), blasts (`blast`), fireships ramming
+  (`ram`), sinking, loot (`haulIn`) and reaching the harbor. `detourCourse`, `speedOf`,
+  `boardable`, `scuttleGold`, `SHELL_MS`, `SHELL_R` and `FIRE_BLAST` are exported for the scene.
+  `scuttle` is the in-battle action; `buy`, `repair`, `loadShot` and `setSail` are the harbor
+  actions.
 - `game/ships.ts`: the `ENEMIES` table (name, hp, radius, speed, turn, guns, damage, reload,
-  range, loot). `name` labels a detour course.
+  range, loot, and `role` for the fireship and the mortar ketch, whose `damage`, `reloadMs` and
+  `range` are the blast's or the mortar's). `name` labels a detour course and the scuttle button.
 - `game/upgrades.ts`: the `UPGRADES` table, `UPGRADE_IDS`, `costOf` and `REPAIR_COST`.
 - `game/waves.ts`: `waveShips(wave)` (which ships come, in order) and `hpScale(wave)`.
-- `game/save.ts`: `loadBestWave` and `saveBestWave`.
+- `game/save.ts`: `loadBestWave`, `saveBestWave`, `loadMedals` and `saveMedals`.
 - `art/art.ts`: the chart style. `SHIP_LOOKS` (size, masts, guns, sail and pennant colours for
-  each ship kind), `ROSES`, the ink and ochre colours, and the bake functions, which paint 2D
+  each ship kind, and `extra` for the fireship's burning pitch, the ketch's mortar and the
+  flagship's gilded rail), `ROSES`, the ink and ochre colours, and the bake functions, which paint 2D
   canvases and add them with `textures.addCanvas`: `sea` (the whole 1920x1200 sea as one chart:
   parchment, rhumb lines, hatching, islands with names, soundings and the compass rose, drawn so
   it repeats seamlessly), `frame` (screen vignette and neatline), `ship-<kind>`, `shot-round`,
   `shot-chain`, `shot-grape`, `shot-powder`, `loot`, `helm-<side>[-held]`, `fire-<side>[-held]`,
-  `seal-<order>`, `order-card`, `hud-bar`, `panel-harbor` and `panel-over`. Small textures are
+  `seal-<order>`, `order-card`, `hud-bar`, `wind-rose`, `panel-harbor` and `panel-over`. Small textures are
   painted at `HI` (2x) and shown at `1 / HI` scale.
 - `ui/Harbor.ts`: the harbor panel, a ledger on parchment. Its rows are built from `UPGRADE_IDS`
-  plus `repair`, followed by a "Set sail" button. It also records each button's screen rectangle
+  plus `repair`, followed by the two loading buttons (`load-port`, `load-starboard`) and a "Set
+  sail" button. It also records each button's screen rectangle
   in `buttons`.
 - `ui/Button.ts`: `makeButton`, a cream chart-label button ruled in ink.
 - `ui/screen.ts`: `pinToScreen`, which sets scroll factor 0 on a container and every child.
@@ -93,8 +134,9 @@ How it runs:
 
 - **Boot:** `BootScene.create` paints every texture (there are no asset files), then starts
   `GameScene`. `GameScene.create` builds a fresh `newRun(loadBestWave())`, the HUD, the order
-  card, the controls, the `Harbor` and the game-over container. "Sail again" calls
-  `scene.restart()`, which runs `create` again and clears the sprite maps and held pointers.
+  card, the controls, the scuttle button, the `Harbor` and the game-over container. "Sail again"
+  saves the medals left and calls `scene.restart({ boons })`, which runs `create(data)` again,
+  builds `newRun(best, boons)` and clears the sprite maps and held pointers.
 - **Time:** `GameScene.update(time)` computes `dt` from the frame timestamp, not from Phaser's
   smoothed delta, and clamps it to `MAX_STEP_MS` (250). It then calls `tick(state, dt)` once.
   The sim works in milliseconds. Speeds are in pixels per second and turn rates in radians per
@@ -104,7 +146,9 @@ How it runs:
   `tick` returns early in `harbor` and `over`, after ageing effects. The harbor opens once
   `toSpawn` and `enemies` are both empty; on that tick every barrel left in `loot` goes through
   `haulIn` (gold, `plundered` and a `coins` effect), `loot` is emptied and `charge`/`aim` reset.
-  The game is over when the player's hp reaches 0 or below.
+  The game is over when the player's hp reaches 0 or below; `playerSunk` then sets `medals`, and
+  the scene adds them to the bank (`broadside-medals`) on the phase change. Escorts and shells
+  are cleared in `reachHarbor`.
 - **Input:** `readInput` sets `state.helm` to -1, 0 or 1 and `state.aim.port`/`.starboard` each
   frame. Keys win over the pointer for the helm (Left/A, Right/D); Q and E hold the port and
   starboard fire controls. Each pointer that presses a control is remembered in `held` (pointer
@@ -118,12 +162,16 @@ How it runs:
   fires: `firePlayer` works out the reach (`reachOf`: `REACH_MIN` of the range at 0, all of it at
   1) and damage (`1 + CHARGE_DAMAGE * charge` times the base), picks the nearest enemy within
   reach and within `ARC + TRAIN_SLACK` of straight out, and calls `fire` with the order's shot,
-  pellets and pellet share. The shot's lifetime is `reach / BALL_SPEED`. Then the side reloads.
+  pellets and pellet share. The shot's lifetime is `reach * windReach / BALL_SPEED`. Then the side
+  reloads. The reach starts from `sideRange` (shorter for grapeshot), and the target search and the
+  drawn arc use the reach times `windReach` straight out from the side.
 - **Rendering:** ships, balls, loot (barrel plus a "Plunder" label), sinking hulks and the "+N
   gold" floaters are sprites kept in maps keyed by entity or effect id. They are created on first
   sight, moved each frame and destroyed when the id disappears from state. Wakes, detour courses,
   smoke (ink-outlined clouds), splashes, hits, the firing arcs and their aim label, HP bars, the
-  slowed ring, the HUD bars, the control rings and the edge pointers are Graphics, cleared and
+  slowed ring, the jammed ring of dashes, the prize's green ring, the boarding ring and its
+  progress arc, shell marks, blasts, fireship smoke, the wind arrow, the HUD bars, the control
+  rings and the edge pointers are Graphics, cleared and
   redrawn every frame. The HUD, order card, controls, frame and overlays use scroll factor 0.
 - **Wrapping sea:** `WORLD` (1920x1200) wraps on both axes. In the sim, every move ends in
   `wrapPoint`, and `bearing` and `distance` in `sim.ts` go through `offset`, so ships chase, aim,
@@ -156,18 +204,21 @@ State model (`src/game/state.ts`):
 
 - `GameState` holds the phase, wave, timers (`breakMs`, `spawnMs`), the `toSpawn` queue, `player`,
   `helm`, `aim` (which fire controls are held, written by the scene), `charge` (each side's charge
-  0..1, or null when not aiming), `order` (the wave's `OrderId`), `enemies`, `balls`, `loot`,
-  `effects`, `gold`, `plundered`, `sunk`, `ranks` (upgrade ranks, absent means 0), `bestWave` and
-  `nextId`.
+  0..1, or null when not aiming), `order` (the wave's `OrderId`), `wind` (the heading the wind
+  blows toward), `loadout` (each side's `ShotKind`), `enemies`, `escorts` (prizes), `shells`,
+  `balls`, `loot`, `effects`, `gold`, `plundered`, `sunk`, `taken` (prizes this run), `ranks`
+  (upgrade ranks, absent means 0), `bestWave`, `bestBefore`, `medals` and `nextId`.
 - `Ship` has a heading in radians (0 is east, positive is clockwise on screen), `hp`/`maxHp`,
   per-side `reload` timers, `hitMs`, `agroundMs` (the cooldown before an island can damage it
-  again) and `slowMs` (chain shot), which `tick` counts down for every ship in every phase, so a
-  ship hit just before the game ends doesn't stay tinted behind the panel; and `detour` (enemies
-  only). The player is always id 1 with kind `player`.
-- `Ball` carries its velocity, remaining `ms`, `damage`, `fromPlayer` and `shot` (`round`,
-  `chain`, `grape` or `powder`; enemy shot is always `round`). `Loot` has `gold` and `ms` to live.
-  An `Effect` is visual only (`splash`, `smoke` with the side's `heading`, `hit`, `sink`,
-  `coins`).
+  again), `slowMs` (chain shot) and `jamMs` (grapeshot), which `tick` counts down for every ship in every phase, so a
+  ship hit just before the game ends doesn't stay tinted behind the panel; `boardMs` (time the
+  player has been alongside); and `detour` (enemies and escorts). The player is always id 1 with
+  kind `player`. A prize keeps its id, so its sprite carries over from the enemy it was.
+- `Ball` carries its velocity, remaining `ms`, `damage`, `fromPlayer` (fired by the player or a
+  prize, so it hits enemies) and `shot` (`round`, `chain`, `grape` or `powder`; enemy and prize
+  shot is always `round`). A `Shell` has its landing spot, `ms`, `total` and `damage`. `Loot` has
+  `gold` and `ms` to live. An `Effect` is visual only (`splash`, `smoke` with the side's
+  `heading`, `hit`, `sink`, `coins`, `blast` with its `size`, `prize`).
 - Only `sim.ts` functions mutate state, plus the scene writing `helm` and `aim` each frame. The
   player's derived stats always come from `stats(s)`. The only stored derived value is
   `player.maxHp`, which `buy('hull')` updates.
@@ -175,13 +226,15 @@ State model (`src/game/state.ts`):
   maps by id.
 
 Persistence: `localStorage` key `broadside-best-wave` stores one number. The scene saves it when
-the phase changes to `harbor` or `over`. Reads and writes are wrapped in try/catch, and a stored
+the phase changes to `harbor` or `over`. `broadside-medals` stores the banked medals: the run's
+medals are added when the phase changes to `over`, and "Sail again" saves what is left after the
+chosen boons. Reads and writes are wrapped in try/catch, and a stored
 value that is not a finite positive number loads as 0 (rounded down otherwise).
 
 Randomness and timing: `Math.random` is used in `spawn` (the angle at which an enemy appears), in
-`fire` (one call per shot, even for the player, whose spread is 0; grapeshot makes three per gun)
-and in `drawOrder` (once per `setSail`, never before wave 1 is beaten, which is why the first
-order is fixed). Adding guns or shots therefore shifts the random sequence the test relies on.
+`fire` (one call per shot, even for the player, whose spread is 0; grapeshot makes three per gun),
+in `mortar` (two per shell), and in `drawOrder` and the wind draw (once each per `setSail`, never
+before wave 1 is beaten, which is why the first order and wind are fixed). Adding guns or shots therefore shifts the random sequence the test relies on.
 The art uses its own seeded generator (`rng` in `art.ts`), never `Math.random`. All timing comes
 from `update`'s `time`. There is no `Date` or `setTimeout` in the game.
 
@@ -190,8 +243,14 @@ Data tables, where to tune:
 - Player base stats: `PLAYER` in `state.ts`. Upgrade and order effects: `stats()` in `state.ts`.
 - Charging: `CHARGE_MS` (1000), `REACH_MIN` (0.65) and `CHARGE_DAMAGE` (0.5) in `state.ts`;
   `TRAIN_SLACK` (12 degrees) at the top of `sim.ts`.
-- Captain's orders: `ORDERS`, `SLOW_MS` (4000) and `PELLET_FAN` in `orders.ts`; `FIRST_ORDER` in
-  `state.ts`.
+- Captain's orders: `ORDERS` in `orders.ts`; `FIRST_ORDER` in `state.ts`. Shot: `SHOTS`,
+  `SLOW_MS` (4000), `JAM_MS` (4000) and `PELLET_FAN` in `shot.ts`.
+- Wind: `WIND_SPEED` (0.18), `WIND_REACH` (0.25) and `FIRST_WIND` in `state.ts`.
+- Boarding: `BOARD_HP` (0.2), `BOARD_REACH` (28) and `BOARD_MS` (1200) in `state.ts`; `CRIPPLED`,
+  `ESCORT_HUNT` and `ESCORT_STATION` at the top of `sim.ts`. Scuttling pays 2x loot (`scuttle`).
+- Fireship and mortar: `FIRE_BLAST`, `SHELL_MS`, `SHELL_R` and `SHELL_SPREAD` at the top of
+  `sim.ts`; their damage is `ENEMIES[kind].damage`.
+- Admiralty: `BOONS` and `BEST_BONUS` in `admiralty.ts`.
 - `ISLANDS` (name on the chart, centre, and `rx`/`ry`, the beach's half-widths, from which
   `bakeSea` in `art/art.ts` draws each coast), `AGROUND_DAMAGE` (8) and `AGROUND_MS` (800): in
   `state.ts`. In `runAground` the beach grows by 0.6 of the ship's radius.
@@ -215,7 +274,7 @@ Data tables, where to tune:
 - `GameScene` reads `settings.reduceMotion` itself: with it on, a ship is not tinted while
   `hitMs > 0` (from a cannonball or running aground) and does not roll on the swell, loot holds
   still and, in its last 4s, faded at alpha 0.4 instead of blinking, chain shot does not tumble,
-  and the dotted ring round a slowed ship does not turn.
+  the dotted ring round a slowed ship does not turn, and a fireship's smoke holds still.
 - Normal must stay exactly as designed: the playthrough runs on Normal and relies on wave 1 sloop
   hp. Keep the Broadside row of the difficulty table in the root `README.md` (and the sentence in
   this game's `README.md`) in sync with the multipliers.
@@ -238,7 +297,10 @@ Data tables, where to tune:
   same way (`fight`: hold a loaded side's fire control while a sloop is off it, let go when
   charged enough or the sloop leaves the arc, otherwise steer) until both sloops are sunk, checks
   that the first leaves loot (afloat or already sailed over, `2-loot`) and that the harbor opens
-  with both sloops' gold aboard (`3-harbor`), then taps the `shot` row and `sail`.
+  with both sloops' gold aboard (`3-harbor`), then taps the `shot` row, taps `load-starboard`
+  and checks that side is loaded with chain shot at no cost (`4-loadout`), and taps `sail`. At the
+  start it also checks the wave's `wind` is `FIRST_WIND` and the `loadout` is round shot on both
+  sides.
 - Keep in sync with the test: `HELM` and `FIRE` centres (copied into the test), `VIEW`, wave 1
   being `['sloop', 'sloop']`, `FIRST_ORDER` (`chain`) and chain shot's look (`shot: 'chain'`),
   sloop loot 10 (plus the per-wave bonus, which is 0 on wave 1), the player hull of 120, two guns
@@ -246,14 +308,17 @@ Data tables, where to tune:
   32), Heavy Shot's first cost of 15, `CLOSE_IN` (220) staying under `PLAYER.range`, and `WORLD`
   (copied into the test, which measures bearings and distances the shortest way round). The test
   also relies on: the `break` phase allowing steering, the first enemy appearing within 5s,
-  `GameState` field names, harbor button ids matching `UpgradeId` / `'sail'`, `bestWave` becoming
-  1 on reaching the harbor, and wave 2 having more ships than wave 1.
+  `GameState` field names, harbor button ids matching `UpgradeId` / `'sail'` / `load-<side>`,
+  `bestWave` becoming 1 on reaching the harbor, and wave 2 having more ships than wave 1. Also
+  `FIRST_WIND` (0, copied into the test), both sides starting loaded with round shot, the chain
+  order overriding the loadout, and `nextShot` going from round to chain.
 
 ## Making common changes
 
 - **Add an upgrade:** add an id to `UpgradeId` and an entry to `UPGRADES` in `upgrades.ts`, then
   apply it in `stats()` in `state.ts`. The harbor adds a row automatically, but `HARBOR` in
-  `layout.ts` only fits about six rows plus "Set sail", so adjust `h`, `firstRowY` or `rowGap`.
+  `layout.ts` only fits six rows plus the loading buttons and "Set sail", so adjust `h`,
+  `firstRowY`, `rowGap` or `loadY`.
 - **Add a captain's order:** add an id to `OrderId` and an entry to `ORDERS` in `orders.ts`. Stat
   multipliers (`damage`, `range`, `reload`, `sails`) apply through `stats()`; anything else needs
   rules in `sim.ts`. Draw its emblem in `bakeSeal` in `art/art.ts` (the texture `seal-<id>` is
@@ -261,6 +326,14 @@ Data tables, where to tune:
   in `bakeShot`. Keep the title and description short enough for the card (about 300px).
 - **Add an enemy ship:** add a kind to `EnemyKind` and `ENEMIES` in `ships.ts`, a look in
   `SHIP_LOOKS` in `art/art.ts` (its texture is baked automatically), and place it in `waveShips`.
+  A ship that fights other than by broadsides gets a `role` handled in `captain` (how it sails)
+  and `enemyBroadsides` / `escortBroadsides` (how it attacks).
+- **Add a kind of shot:** add it to `ShotKind` and `SHOTS` in `shot.ts`, its effect on a hit in
+  `moveBalls`, and a `shot-<kind>` texture in `bakeShot`. The harbor's buttons cycle through
+  `SHOT_IDS` on their own.
+- **Add an Admiralty reward:** add it to `BoonId` and `BOONS` in `admiralty.ts` and apply it in
+  `newRun`. The game-over panel adds a row on its own, but `OVER` fits five rows; adjust
+  `firstRowY`, `rowGap` or `h` for more.
 - **Rebalance:** edit the tables listed above. If a wave 1 number changes (sloop stats, player
   stats, charge numbers, the first order, Heavy Shot cost), update the constants at the top of
   the playthrough test in the same PR.
@@ -279,9 +352,14 @@ Data tables, where to tune:
 - The harbor dims rows that cannot be afforded, but every row stays clickable. `buy` and `repair`
   enforce the rules and quietly return false.
 - `ENEMIES[e.kind as keyof typeof ENEMIES]` casts appear throughout `sim.ts`. Never pass the player
-  ship to code that looks up `ENEMIES` (`speedOf`, `fend`, `shoalAhead` included).
-- When aiming at the player, enemies lead using `stats(s).speed`. The player's own broadside leads
-  using `speedOf(target)` (slowed by chain shot, not by shortened sail).
+  ship to code that looks up `ENEMIES` (`speedOf`, `fend`, `shoalAhead`, `captain` included).
+  Prizes are enemy kinds, so they can go through it.
+- Every loop over all ships must include `s.escorts` as well as `s.player` and `s.enemies`
+  (timers, separation, running aground, blasts, wakes). A ship moves between `enemies` and
+  `escorts` on capture, so take it out of the list before pushing it to the other.
+- When aiming at the player, enemies lead using `stats(s).speed` times `windSpeed`. The player's
+  own broadside leads using `speedOf(s, target)` (wind, chain shot and crippling, not shortened
+  sail).
 - Balls are cleared on reaching the harbor and loot is cleared by `setSail`. HP, reload timers and
   position carry over between waves.
 - Everything that is fixed on screen must be scroll factor 0, and containers need `pinToScreen`,

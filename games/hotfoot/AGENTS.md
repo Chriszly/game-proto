@@ -24,6 +24,19 @@ in.
   **wayside shrine** once a stage from stage 2 (slide into it to trade 15 run coins for a heart when
   hurt) and a **run track** under the HUD (a banner every 100 m, the knight's marker, and a ghost
   flag at the best distance).
+- Gameplay upgrades: **terrains** (each stage after the first runs on its own ground with its own
+  rule: the Frozen Pass, where slides run 60% longer and each landing skids for 220 ms so a jump
+  waits it out, the Fen, where jumps are 20% lower, and the Windy Pass, where the knight runs at
+  70% speed in the air; stages go road, ice, fen, wind, Gatekeeper, fen, wind, ice and so on; each
+  opens with a title and shows its name in a tag right of the run track, with snow or gusts drawn
+  over it), the **Gatekeeper** on every fifth stage (an ogre boss who keeps ahead throwing barrels
+  to jump and axes to slide under, then tires and stands to be stomped; three stomps beat it for 25
+  coins and the run goes on to a checkpoint 1400 px later), the **armoury** on the game-over panel
+  (banked coins forge lasting upgrades: Iron Heart, Lodestone Charm, Squire's Purse), **cursed
+  boons** (Cursed Gold, Glass Greaves, Iron Oath: from the second checkpoint one may take the
+  second card, half the time; they trade something away and are never for sale) and the **daily
+  course** (a "Daily course" button on the game-over panel starts a run whose course and boons are
+  drawn from a seed of the date, with its own best distance).
 - The art is an illuminated manuscript: a gothic miniature on vellum, painted on 2D canvases
   (`src/art/ink.ts`): a lapis-and-madder diapered sky with a gold-leaf moon, crags and a pink
   castle, lollipop trees, a turf road, ink outlines with white highlights, gold-leaf coins, a lapis
@@ -33,9 +46,11 @@ in.
   starts as soon as `GameScene` loads. The hub's shared settings (difficulty, frame cap, FPS readout, reduced motion and full screen) apply; see Hub settings below.
 - Coins are counted during a run and banked when the knight falls. On the game-over panel they buy
   the boon missed at the last checkpoint (the card not taken), for `BOON_PRICE` (30) coins. The next
-  run starts with that boon at one rank, with full hearts. One purchase at a time; Field Dressing is
-  never for sale, and no boon is for sale before the first checkpoint.
-- The best distance, the banked coins and a bought boon persist. A run in progress is lost on
+  run starts with that boon at one rank, with full hearts. One purchase at a time; Field Dressing
+  and cursed boons are never for sale, and no boon is for sale before the first checkpoint. The
+  "Armoury" button opens a panel over the game-over panel where the bank also buys armoury levels.
+- The best distance, the banked coins, a bought boon, the armoury's levels and the last daily
+  course's best persist. A run in progress is lost on
   reload; a bought boon waits in storage until a run starts with it.
 - No TODOs or FIXMEs in the code.
 
@@ -45,46 +60,63 @@ in.
 
 - `src/main.ts`: creates the `Phaser.Game` (960x540, `Scale.FIT`, `pixelArt: false`) with `BootScene`
   then `GameScene`, calls `setupGame(game)`, and puts `game` on `window` in dev builds.
-- `src/game/state.ts`: `GameState` and its parts (`Trap`, `Ledge`, `Shrine`, `Coin`, `Effect`,
-  `Runner`), the physics and size constants, `BOON_PRICE`, `STREAK` and `streakMult` (the coin
+- `src/game/state.ts`: `GameState` and its parts (`Trap`, `Ledge`, `Shrine`, `Boss`, `Coin`,
+  `Effect`, `Runner`), the terrains (`Terrain`, `TERRAIN` names and rules, `ICE`, `MARSH`, `WIND`,
+  `terrainOf`), `BOSS_EVERY` and `isBossStage`, the daily course's randomness (`rand`, `seedOf`,
+  `today`), the physics and size constants, `BOON_PRICE`, `STREAK` and `streakMult` (the coin
   multiplier), `SHRINE` (first stage, price, width), `FOES`, `TRAP_SPAN`, `FLAMES` and `flameOf` (a
   vent's burn), `AWAKE`, `floorAt` (ground height under a stretch of course), `speedOf`, `stats`
-  (the knight's numbers from boon ranks), `canTake`, `freshState`, `metres`, and `trackOf` (the run
+  (the knight's numbers from boon ranks, the armoury and the terrain), `canTake`, `freshState`, `metres`, and `trackOf` (the run
   track's numbers: metres run, best, track length, banners, metres to the next banner).
-- `src/game/sim.ts`: the rules. `newRun`, `jump`, `slide`, `tick`, `rollChoices`, `pick`, `buyMissed`, plus
+- `src/game/sim.ts`: the rules. `newRun` (from a `Carry`: best, bank, pending boon, armoury; and a
+  daily date or null), `jump`, `slide`, `tick`, `rollChoices`, `pick`, `buyMissed`, `buyArmoury`, plus
   `runnerBox` and the private helpers: collision (`touches`), foe movement (`moveFoes`), stomping
-  (`stomp`), coins (`gainCoin`: the streak and its multiplier), shrines (`visitShrines`) and damage
-  (`hurt`, which also takes `'wall'` for a ledge's side, and resets the streak).
+  (`stomp`), the Gatekeeper's stomps and bumps (`bossContact`), coins (`gainCoin`: the streak and
+  its multiplier), shrines (`visitShrines`) and damage (`hurt`, which also takes `'wall'` for a
+  ledge's side and `'boss'`, and resets the streak).
+- `src/game/boss.ts`: the Gatekeeper's numbers (`BOSS`), `moveBoss` (its modes and throws) and
+  `bossStands`.
+- `src/game/armoury.ts`: the `ARMOURY` table (name, text, price per level), `ARMOURY_EACH` (what a
+  level adds), `noArmoury` and `nextPrice`.
 - `src/game/course.ts`: `buildStage` lays out a stage's pieces (`Piece`: each trap kind, `ledge`
   and `steps`) and their coins, and from `SHRINE.from` its shrine (`placeShrine`, in the gap between
   pieces nearest the stage's middle); `planOf` sizes and places one piece, `piecesOf` is the pool per
-  stage, `OPENING` is stage 1's fixed first four, `gapsOf` gives spacing per stage, `nextStage`
-  moves to the next stage.
-- `src/game/boons.ts`: the `BOONS` table (name, text, `maxRank`, `filler`) and `BOON_IDS`.
-- `src/game/save.ts`: `loadProgress` and `saveProgress` (best distance, banked coins, the bought boon).
+  stage, `OPENING` is stage 1's fixed first four, `gapsOf` gives spacing per stage,
+  `buildBossStage` lays out a Gatekeeper's stage, `nextStage` moves to the next stage (and sets its
+  terrain).
+- `src/game/boons.ts`: the `BOONS` table (name, text, `maxRank`, `filler`, `cursed`), `BOON_IDS`,
+  `forSale` and `CURSE` (from which stage, how often).
+- `src/game/save.ts`: `loadProgress` and `saveProgress` (best distance, banked coins, the bought
+  boon, the armoury, the daily best).
 - `src/scenes/BootScene.ts`: bakes every texture, then starts `Game`.
 - `src/scenes/GameScene.ts`: owns the `GameState`, wires input, ticks the sim and draws everything.
 - `src/scenes/layout.ts`: screen constants (`VIEW`, `GROUND_Y`, `RUNNER_X`, `TAP_SPLIT_Y`,
-  `FRAME` (the miniature's gold frame), `TRACK` (the run track), `STREAK_CHIP`, `MARGIN` (the
+  `FRAME` (the miniature's gold frame), `TRACK` (the run track), `TAG` (the stage's tag),
+  `STAGE_TITLE`, `ARMOURY_PANEL`, `STREAK_CHIP`, `MARGIN` (the
   scrollwork and caption), `CARDS`, `BUTTON`, `HUD_HEIGHT`, `UI_DEPTH`, `FONT` (a Georgia serif stack)).
-- `src/ui/BoonCards.ts`: the checkpoint overlay and its two vellum cards; exposes `cards: CardSpot[]`.
-- `src/ui/Button.ts`: `makeButton`, the lapis button ruled in gold used for "Run again" and the shop's buy button.
+- `src/ui/BoonCards.ts`: the checkpoint overlay and its two vellum cards (a cursed boon's card is
+  edged in madder); exposes `cards: CardSpot[]`.
+- `src/ui/Button.ts`: `makeButton`, the lapis button ruled in gold used on the game-over panel and
+  the armoury (its caption is the container's second child).
 - `src/art/ink.ts`: the manuscript toolkit. `C` (the pigments as CSS colours) and `N` (the same as
   numbers for Phaser), `SERIF`, `seeded`, `paint` (paints a canvas and adds it with
   `textures.addCanvas`), `poly`, `circle`, `oval`, `hl` (a white highlight), `gold` (a gold-leaf
   gradient), `star6`, `heartPath`, `bezant` (a gold coin) and `shade`.
 - `src/art/scenery.ts`: the vellum `page` (stains, acanthus scrollwork, snail), `sky` (diaper,
-  sunset clouds, stars, moon), `far` (crags and a castle), `near` (trees and a tower), `ground`
-  (turf and flowers), spikes, pits, the hanging log (`blade`), fire vent, `ledge` (pink ashlar),
+  sunset clouds, stars, moon), `far` (crags and a castle), `near` (trees and a tower), the road
+  strips `ground`, `ground-ice`, `ground-marsh` and `ground-wind` (`GROUNDS`), spikes, pits, the hanging log (`blade`), fire vent, `ledge` (pink ashlar),
   coins, `checkpoint`, `shrine` and `shrine-used`, the shrine's `banderole` and the miniature's
   `frame`. Exports `FAR_H`, `NEAR_H`, `GROUND_TOP` and `PIT_DEPTH`.
-- `src/art/foes.ts`: the goblin (`goblin-0`, `goblin-1`, sized by `GOBLIN_ART`) and bat (`bat-0`,
-  `bat-1`, `BAT_ART`), facing left.
+- `src/art/foes.ts`: the goblin (`goblin-0`, `goblin-1`, sized by `GOBLIN_ART`), bat (`bat-0`,
+  `bat-1`, `BAT_ART`) and the Gatekeeper (`gate-ready`, `gate-throw`, `gate-tired`, `GATE_ART`),
+  facing left, and its thrown `barrel` and `axe`.
 - `src/art/knight.ts`: the knight's poses (`KnightPose`), painted as `knight-<pose>`, and
   `KNIGHT_FEET` (texture sizes and where the feet are).
-- `src/art/icons.ts`: one 64x64 icon per boon (`iconTexture`), and the HUD's `heart-full` and `heart-empty`.
+- `src/art/icons.ts`: one 64x64 icon per boon (`iconTexture`), the armoury's (`armouryIcon`: the
+  purse's own, Iron Heart and Lodestone Charm reuse Hearty Ale's and Lodestone's), and the HUD's
+  `heart-full` and `heart-empty`.
 - `src/art/hud.ts`: `bakeHud` (the `hud-band`, the illuminated `initial`, the `streak-chip` and its
-  `medallion`, the `track-strip`), `bakePanel` (vellum panels: cards, the title strip, the game-over
+  `medallion`, the `track-strip`, the `tag-strip`), `bakePanel` (vellum panels: cards, the title strip, the game-over
   panel) and `bakeButton`.
 - `shared/setupGame.ts` and `shared/settings.ts` (outside the game folder): the hub's settings.
   `main.ts` imports `setupGame`; `state.ts` imports `byDifficulty`.
@@ -99,12 +131,24 @@ in.
   delta), clamped to `MAX_STEP_MS` (100), with 0 on the first frame. It calls `tick(state, dt)`
   once per frame (no fixed substeps) and advances its own `clock`, used only for animation.
 - `tick` order: age effects; stop unless `phase === 'running'`; add `dt` to `time`; move awake
-  foes (`moveFoes`); move `distance` (clamped to `checkpointX`); if the feet are now below the
+  foes (`moveFoes`); while the Gatekeeper stands, push `checkpointX` to at least `BOSS.holdBack`
+  ahead; move `distance` (at `WIND.air` of the speed when airborne on wind; clamped to
+  `checkpointX`); move the Gatekeeper (`moveBoss`); if the feet are now below the
   floor (`floorAt` under the knight's box), that is a ledge's side: hurt (`'wall'`, unless
-  unhurtable or less than `STEP_UP` short) and snap onto its top; apply gravity and land on the floor; stomp a foe landed on;
-  refill jumps when grounded; count down slide and hurt; check one trap hit; visit a shrine slid
-  into; collect or pull coins; drop traps, ledges, shrines and coins more than `BEHIND` behind;
-  enter `checkpoint` and roll choices when `distance` reaches `checkpointX`.
+  unhurtable or less than `STEP_UP` short) and snap onto its top; apply gravity and land on the
+  floor (on ice, a landing starts a skid); stomp a foe landed on; stomp or bump the Gatekeeper
+  (`bossContact`); refill jumps when grounded; count down slide, hurt and skid (a jump queued
+  during the skid fires as it ends); check one trap hit; visit a shrine slid into; collect or pull
+  coins; drop traps, ledges, shrines, coins and a beaten Gatekeeper more than `BEHIND` behind;
+  enter `checkpoint`, note its banner and roll choices when `distance` reaches `checkpointX`.
+- The Gatekeeper (`moveBoss`, `Boss.mode`): `wait` on the road until `BOSS.station` (400 px) ahead
+  of the knight; `throw` keeps that gap and throws `BOSS.throws(hp)` things (barrel, axe, barrel...)
+  every `BOSS.throwEvery(hp)` ms, faster as it loses hp; `tired` first keeps the gap (`ms > 0`) until
+  its last throw is past and the knight is on the road, then stands (`ms` 0); a stomp (falling onto
+  `BOSS.h`, 86 px) costs it an hp and sends it to `flee` (running `BOSS.flee` faster than the knight
+  until back at its gap, then `throw` again); running into it hurts the knight and also sends it to
+  `flee`; leaping clean over it does too. No contact while it waits or flees. At 0 hp it is `down`:
+  `bosses` goes up, `BOSS.reward` coins are paid, and `checkpointX` is set `BOSS.after` ahead.
 - Coins: `gainCoin` pays `stats().coinValue * streakMult(streak)` (the multiplier reached before
   this coin), then adds one to `streak`, and pushes a `pop` effect ("+N") when the coin is worth more
   than one. Picked-up coins and stomped foes both go through it. `hurt` sets `streak` to 0 on every
@@ -126,6 +170,11 @@ in.
   (4.5: vellum side strips and the gold rule), the knight (5), effects (6) and words (6.5), the hint
   and the HUD (`UI_DEPTH`). The margin caption is a `Text` at depth 0, set by `drawCaption` from
   the phase and the nearest thing ahead.
+- Terrain: `drawWorld` swaps the `ground` tile sprite's texture by `state.terrain`, `drawWeather`
+  draws snow (ice) or gust streaks (wind) on a `Graphics` at depth 4.4, under the frame, and
+  `drawHud` fills the stage's tag and fades the stage title (`createTitle`) over its first
+  `LEAD_IN` px. The Gatekeeper is one image (depth 3.5) posed by `drawBoss`; barrels roll and axes
+  spin by their x in `drawTrap`.
 - Traps, coins and shrines are diffed into caches each frame (created on first sight, destroyed when
   gone from state), and ledges into `Map<id, TileSprite>` of the `ledge` texture cropped to each
   ledge's height. `drawTrap` animates fire vents (by `flameOf`), goblin steps (by x, flipped when
@@ -136,7 +185,10 @@ in.
   the scene's clock while the multiplier is x2 or more. The knight is one image whose texture and
   origin change by pose. `BoonCards.show` rebuilds only when the choices change.
 - Saving (`persist`) happens in `update` whenever the phase changes away from `running` (checkpoint
-  or fall), on each run's start (`create` and `restart`) and when a boon is bought.
+  or fall), on each run's start (`create` and `restart`) and when a boon or armoury level is
+  bought. `GameScene` keeps the loaded `Progress`; `persist` copies the run's bank, pending boon and
+  armoury into it, and its best into `progress.best` or, on a daily run, `progress.daily`.
+  `freshRun(daily)` builds the next run from it, chasing the daily best when the date matches.
 
 ### State model
 
@@ -148,9 +200,14 @@ in.
   "grounded" means feet at `floorAt` under the box and not rising. Screen x is
   `RUNNER_X + x - distance` (`GameScene.sx`), screen y is `GROUND_Y - h`.
 - `Runner`: `h`, `vh`, `slideMs`, `slideQueued` (slide on landing after an air drop), `jumps` left,
-  `hurtMs` (invulnerable time).
-- `traps: Trap[]`: `kind`, `x`, `w`, `h` (the ground it stands on; a bat's flying height, 34),
-  `vx` (0 unless a foe), a goblin's beat `from`/`to`, a fire vent's `phase` in its burn.
+  `hurtMs` (invulnerable time), `skidMs` and `jumpQueued` (the ice skid).
+- `terrain` is `terrainOf(stage)`, set by `freshState` and `nextStage`. `boss` is the Gatekeeper on
+  its stage (null otherwise, and once beaten and left behind); `bosses` counts those beaten.
+  `banners` lists the metres of each checkpoint passed, for the run track. `armoury` holds the
+  levels bought; `daily` is the daily course's date (null on an ordinary run) and `seed` its
+  random state.
+- `traps: Trap[]`: `kind`, `x`, `w`, `h` (the ground it stands on; a bat's and an axe's flying
+  height, 34), `vx` (0 unless a foe or a thrown barrel or axe), a goblin's beat `from`/`to`, a fire vent's `phase` in its burn.
   Foes (`FOES`: goblin, bat) only move once within `AWAKE` (760 px) ahead of the knight, just off
   screen. A bat is placed so it meets the knight where its piece was laid out, from the stage's
   speed. A stomped foe is removed from `traps` and counted in `stomps`.
@@ -162,56 +219,68 @@ in.
 - `streak`: coins taken in a row since the last hit (stomps count). `streakMult(streak)` is
   `min(5, 1 + floor(streak / 10))`.
 - `course: Coin[]` (the coins; `pulled` once a lodestone catches one). `effects: Effect[]` are
-  short visual timers (`coin`, `hit`, `block`, `dust`, `stomp`, and `pop`, `heal`, `refuse`,
+  short visual timers (`coin`, `hit`, `block`, `dust`, `skid`, `stomp`, and `pop`, `heal`, `refuse`,
   which carry their words in `text`).
-- `ranks` maps `BoonId` to rank taken; `stats(s)` derives every boon effect from it, so boons have
-  no other state except `shields` (Aegis charges, reset from `stats` on each `pick`).
+- `ranks` maps `BoonId` to rank taken; `stats(s)` derives every boon effect from it (cursed ones
+  included), with the armoury's levels and the terrain's rule, so boons have no other state except
+  `shields` (Aegis and Iron Oath charges, reset from `stats` on each `pick`).
 - `nextId` hands out ids for traps, ledges, shrines, coins and effects; sprite caches key on them.
 - All mutation is in `src/game/` (`sim.ts`, `course.ts`). `GameScene` only calls those functions,
-  except `restart`, which replaces `state` with `newRun(best, bank, pending)`, and `buy`, which
-  calls `buyMissed`.
+  except `restart`, which replaces `state` with `freshRun(daily)`, and `buy` and `buyArmoury`,
+  which call `buyMissed` and `buyArmoury`.
 - Progress across runs: `best` (the best distance in metres), `bank` (coins banked from finished
   runs, added in `hurt` when the knight falls), `pending` (the boon bought at game over, applied and
   cleared by the next `newRun`) and `missed` (the boon offered at the last checkpoint and not taken,
   set by `pick`; null before any checkpoint). `buyMissed` takes `BOON_PRICE` from `bank` into
-  `pending`, and refuses unless the run is over, `missed` is a non-filler boon, nothing is pending and
-  the bank covers the price.
+  `pending`, and refuses unless the run is over, `missed` is `forSale` (not filler or cursed),
+  nothing is pending and the bank covers the price. `buyArmoury` takes `nextPrice` from `bank` and
+  adds a level, while the run is over and the item is not full.
 - Invariants: `distance <= checkpointX`; `choices` is non-null only at a checkpoint and holds two
-  ids; `hearts` is clamped to `stats().maxHearts` on `pick`; a pit only hurts when grounded over
+  ids (at most one cursed, always the second); `hearts` is clamped to `stats().maxHearts` (and at
+  least 1) on `pick`; a Gatekeeper's stage has no pieces, ledges or shrine; a pit only hurts when grounded over
   its middle; one hit per frame, and none while `hurtMs > 0`; pieces never overlap, so pits, blades
   and the rest always sit on the road (`h` 0) and the checkpoint is always on the road.
 
 ### Persistence
 
-`localStorage` keys: `hotfoot-best` (the best distance in metres), `hotfoot-bank` (banked coins) and
-`hotfoot-start` (the boon bought for the next run; removed once a run starts with it). Read once in
+`localStorage` keys: `hotfoot-best` (the best distance in metres), `hotfoot-bank` (banked coins),
+`hotfoot-start` (the boon bought for the next run; removed once a run starts with it),
+`hotfoot-armoury` (JSON levels per armoury item, clamped to each item's levels on load) and
+`hotfoot-daily` (JSON `{ date, best }` of the last daily course run; a new date starts from 0). Read once in
 `GameScene.create` via `loadProgress`, written by `saveProgress`; every access is wrapped in
 try/catch. Nothing else is saved by the game; the hub's settings live under the shared `hub-settings`
 key (see Hub settings).
 
 ### Randomness and timing
 
-- `Math.random` is used only in `src/game/course.ts` (sizes and fire vent phases in `planOf`,
-  ledge heights, `pickOf`, gap length) and in
-  `rollChoices` in `src/game/sim.ts`. `placeShrine` takes no random draws, so adding the shrine did
-  not change the seeded courses. The art uses `seeded()` from `ink.ts`, not `Math.random`.
+- Every random draw goes through `rand(s)` in `state.ts`: `Math.random` on an ordinary run, and a
+  mulberry32 sequence seeded by `seedOf(date)` on a daily run, so everyone's daily course and boon
+  offers match. It is used only in `src/game/course.ts` (sizes and fire vent phases in `planOf`,
+  ledge heights, `pickOf`, gap length) and in `rollChoices` in `src/game/sim.ts`. `placeShrine`,
+  the Gatekeeper and the terrains take no draws, and the curse draw only happens from `CURSE.from`
+  (stage 2), so the seeded first stage and first checkpoint are what they were before. The art
+  uses `seeded()` from `ink.ts`, not `Math.random`.
 - Time comes only from the `time` argument of `GameScene.update` (the sim's `state.time` is the sum
-  of the `dt`s it was given). No timers, tweens or
-  `Date.now`.
+  of the `dt`s it was given). No timers, tweens or `Date.now`. The one use of the calendar is
+  `today()`, read when "Daily course" is tapped, to pick the day's seed.
 
 ### Data tables
 
 - `src/game/state.ts`: `RUNNER` box, `GRAVITY`, `JUMP_V`, `DROP_V`, `SLIDE_MS`, `HURT_MS`,
   `START_HEARTS`, `COIN_REACH`, `STAGE_LEN`, `LEAD_IN`, `BOON_PRICE`, `STREAK` (step 10, max 5),
   `SHRINE` (from stage 2, price 15, width 46), `PX_PER_M`, `speedOf`, `TRAP_SPAN`,
-  `FLAMES`, `AWAKE`, and the per-rank boon multipliers inside `stats`.
+  `FLAMES`, `AWAKE`, `ICE`, `MARSH`, `WIND`, `BOSS_EVERY`, `terrainOf`'s order, and the per-rank
+  boon and armoury multipliers inside `stats`.
+- `src/game/boss.ts`: `BOSS` (size, hp, station, flee speed, throws and their spacing per hp, the
+  barrel's and axe's size and speed, reward, how far on the checkpoint comes, `holdBack`).
+- `src/game/armoury.ts`: `ARMOURY` (prices per level) and `ARMOURY_EACH`.
 - `src/game/course.ts`: `CLEAR_BEFORE_CHECKPOINT`, `gapsOf`, `piecesOf` (the pool and its weights
   per stage: fire vents and bats from stage 2, steps, tall ledges and a second goblin entry from
   stage 3), `OPENING`, `GOBLIN` (width, beat, speed per stage), `BAT` (width, height, speed per
   stage), `LEDGE_H`, sizes and coin patterns per piece in `planOf`, and the shrine's gap (at least
   `SHRINE.w + 160`) in `placeShrine`.
 - `src/game/sim.ts`: `PULL_SPEED`, `BEHIND`, `STOMP_REACH`, `STOMP_BOUNCE`, `STEP_UP`.
-- `src/game/boons.ts`: names, card text and max ranks.
+- `src/game/boons.ts`: names, card text, max ranks, and `CURSE` (from stage 2, half the time).
 
 ### Hub settings
 
@@ -225,7 +294,8 @@ key (see Hub settings).
 - `GameScene` reads `settings.reduceMotion` itself: with it on, the knight's hurt blink (alpha
   toggled every 80 ms) is held at a steady 0.6 alpha, the Aegis nimbus's pulse is held at a fixed
   alpha, the "+N" coin pops and the shrine's "+1 heart" stay where they appear instead of rising,
-  and the streak's sparkle trail is not drawn.
+  the streak's sparkle trail is not drawn, the Gatekeeper's flash after a stomp is held at 0.6
+  alpha, and the snow and wind streaks are drawn still.
 - Normal must stay exactly as designed: the playthrough runs on Normal and its `STAGE_1` expects 3
   hearts.
 - Keep the README's difficulty line (5 hearts on Easy, 2 on Hard) in sync with `byDifficulty`.
@@ -249,8 +319,10 @@ key (see Hub settings).
   `course.ts`), a jump peak above 100 px, a slide, a goblin and a ledge's side passed, running on a
   ledge, coins, zero hits, a streak past 10 and coins equal to what that streak pays (`STREAK` and
   `coinsFor` copy the rule: step 10, max x5), no shrine on stage 1 and a new run's streak of 0, two
-  different choices matching the card order, and that stage 2 is faster, laid out past 3200 and has
-  one unused shrine.
+  different choices matching the card order, that stage 1 runs on the road with no Gatekeeper, and
+  that stage 2 is faster, on the Frozen Pass (`terrain: 'ice'`), laid out past 3200 and has one
+  unused shrine. The terrains past stage 2, the Gatekeeper, cursed boons, the armoury and the daily
+  course are off its path on purpose.
 - The test loads the game by its folder URL in `page.goto`, which must follow the folder name.
 
 ## Making common changes
@@ -279,6 +351,17 @@ key (see Hub settings).
 - Restyle an object: its sprite is painted in `scenery.ts`, `foes.ts`, `knight.ts`, `icons.ts` or
   `hud.ts` with the `ink.ts` helpers. Keep the texture's size and its origin in `GameScene` (feet on
   the road; see Gotchas), or change both together.
+- Add a terrain: add it to `Terrain` and `TERRAIN` in `state.ts`, apply its rule in `stats` or
+  `tick`, place it in `terrainOf`, paint its road in `GROUNDS` in `scenery.ts` (key
+  `ground-<terrain>`), and give it a line in `drawCaption`'s `onward` and, if it has weather, in
+  `drawWeather`. Stage 2's terrain is on the playthrough's path (it asserts `ice`).
+- Tune the Gatekeeper: `BOSS` in `boss.ts`, and `BOSS_EVERY` in `state.ts`. Its art's helm height
+  must match `BOSS.h` (`GATE_ART` and the 0.43 scale in `foes.ts`).
+- Add a cursed boon: a `BOONS` entry with `cursed: true` and `maxRank: 1`, its gift and price in
+  `stats`, and an icon; `rollChoices` offers it on its own.
+- Add an armoury item: an `ARMOURY` entry and `ARMOURY_EACH` value, its effect in `stats` or
+  `newRun`, an icon (`ARMOURY_ICONS` in `icons.ts` unless a boon's fits), and a row y in
+  `ARMOURY_PANEL.rowY`.
 - Tune the streak or the shrine: `STREAK` and `SHRINE` in `state.ts`; the test's `STREAK` copy and
   the README's rules must follow. Moving the shrine to stage 1 puts it on the playthrough's path:
   the test would then need to handle it (it is harmless, so only the assertions change).
@@ -317,7 +400,12 @@ key (see Hub settings).
   piece three times, a page-width apart, so the seam matches.
 - Texts redrawn every frame (`setText`) only re-render when their string changes; keep it that
   way, since the canvas renderer is what the playthrough uses.
-- A bat's meeting point assumes the knight runs at `speedOf(stage)` the whole way, which holds
-  because nothing changes speed mid-stage.
+- A bat's meeting point assumes the knight runs at `speedOf(stage)` the whole way. On the Windy
+  Pass the knight runs slower in the air, so a bat there arrives a little early; nothing else
+  changes speed mid-stage.
+- A Gatekeeper's stage is longer than 100 m (its checkpoint waits on the fight), so banners after
+  it no longer fall on hundreds; `trackOf` draws the passed ones from `banners`.
+- An ordinary run never draws from the daily seed, and a daily run never touches `Math.random` in
+  the course or the boon offers; keep new course randomness on `rand(s)`.
 - Hearts in the HUD are created up to `maxHearts` and never destroyed; extra ones are hidden.
 - Healing art uses green (`C.heal`). Never draw a red cross (root `AGENTS.md`).
