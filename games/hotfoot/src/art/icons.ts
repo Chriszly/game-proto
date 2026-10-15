@@ -1,9 +1,11 @@
 import Phaser from 'phaser';
+import type { ArmouryId } from '../game/armoury';
 import type { BoonId } from '../game/boons';
 import { C, bezant, circle, gold, heartPath, hl, oval, paint, poly, type Ctx } from './ink';
 
 // Small paintings for the boon cards (64x64, in page units of 128 scaled by half) and the hearts in
-// the top band, in the same flat colours and ink as the world. Healing is a green cross, never red.
+// the top band, in the same flat colours and ink as the world, plus the armoury's purse. Cursed
+// boons carry a madder crack or chain. Healing is a green cross, never red.
 
 type Draw = (ctx: Ctx) => void;
 
@@ -84,11 +86,76 @@ const ICONS: Record<BoonId, Draw> = {
     oval(ctx, 102, 66, 14, 26, C.vellumDark, 4);
     poly(ctx, [[50, 46], [66, 46], [66, 58], [78, 58], [78, 74], [66, 74], [66, 86], [50, 86], [50, 74], [38, 74], [38, 58], [50, 58]], C.heal, 3);
   },
+  gilt: (ctx) => {
+    // A pile of gold beside a cracked heart: double coins, one heart less.
+    bezant(ctx, 40, 84, 26, 1, 4);
+    bezant(ctx, 58, 60, 26, 1, 4);
+    heartPath(ctx, 92, 44, 52);
+    ctx.fillStyle = C.verm;
+    ctx.fill();
+    ctx.strokeStyle = C.ink;
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    ctx.lineWidth = 3.5;
+    ctx.beginPath();
+    ctx.moveTo(92, 26);
+    ctx.lineTo(86, 38);
+    ctx.lineTo(96, 46);
+    ctx.lineTo(88, 58);
+    ctx.lineTo(92, 66);
+    ctx.stroke();
+  },
+  glass: (ctx) => {
+    // A greave of pale glass, long in the slide but cracked across.
+    poly(ctx, [[42, 20], [86, 20], [80, 100], [48, 100]], C.frost, 4);
+    hl(ctx, [[50, 28], [54, 92]], 4);
+    poly(ctx, [[40, 100], [92, 100], [104, 116], [40, 116]], '#e9eefb', 4);
+    ctx.strokeStyle = C.madder;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(44, 54);
+    ctx.lineTo(60, 62);
+    ctx.lineTo(56, 72);
+    ctx.lineTo(82, 80);
+    ctx.stroke();
+  },
+  oath: (ctx) => {
+    // An iron shield bound with a madder chain: more shields, a heavier jump.
+    poly(ctx, [[22, 20], [106, 20], [106, 62], [64, 112], [22, 62]], C.iron, 4);
+    hl(ctx, [[30, 28], [30, 60]], 3);
+    for (let k = 0; k < 5; k++) oval(ctx, 26 + k * 19, 58 - (k % 2) * 4, 11, 7, C.madder, 3, k % 2 ? 0.4 : -0.4);
+  },
+};
+
+/** The armoury's own items that have no boon to borrow an icon from. */
+const ARMOURY_ICONS: Partial<Record<ArmouryId, Draw>> = {
+  purse: (ctx) => {
+    // A leather purse tied at the neck, spilling gold.
+    poly(ctx, [[40, 38], [88, 38], [104, 92], [90, 112], [38, 112], [24, 92]], C.wood, 4);
+    hl(ctx, [[34, 90], [44, 54]], 3);
+    poly(ctx, [[46, 26], [82, 26], [88, 38], [40, 38]], C.woodDark, 4);
+    ctx.strokeStyle = C.gold;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(42, 40);
+    ctx.lineTo(86, 40);
+    ctx.stroke();
+    bezant(ctx, 100, 104, 14, 1, 3);
+    bezant(ctx, 112, 84, 12, 0.5, 3);
+  },
 };
 
 export const iconTexture = (id: BoonId) => `icon-${id}`;
+/** An armoury item's icon: the purse's own, or the boon it echoes (Iron Heart, Lodestone Charm). */
+export const armouryIcon = (id: ArmouryId) => (ARMOURY_ICONS[id] ? `icon-armoury-${id}` : `icon-${id}`);
 
 export function bakeIcons(scene: Phaser.Scene) {
+  for (const [id, draw] of Object.entries(ARMOURY_ICONS)) {
+    paint(scene, `icon-armoury-${id}`, 64, 64, (ctx) => {
+      ctx.scale(0.5, 0.5);
+      draw(ctx);
+    });
+  }
   for (const [id, draw] of Object.entries(ICONS)) {
     paint(scene, `icon-${id}`, 64, 64, (ctx) => {
       ctx.scale(0.5, 0.5);

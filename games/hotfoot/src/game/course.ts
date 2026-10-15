@@ -1,15 +1,18 @@
-import { AWAKE, FLAMES, LEAD_IN, SHRINE, STAGE_LEN, speedOf, type GameState, type TrapKind } from './state';
+import { BOSS } from './boss';
+import { AWAKE, FLAMES, LEAD_IN, SHRINE, STAGE_LEN, isBossStage, rand, speedOf, terrainOf, type GameState, type TrapKind } from './state';
 
 // Lays out a stage's obstacles and coins between its start and its checkpoint: traps, goblins and
 // bats, and raised ledges to climb, and from stage 2 a wayside shrine in the gap nearest the
-// stage's middle. New kinds join on later stages, and obstacles come closer together; every random
-// pick goes through Math.random so a seeded run repeats (the shrine takes no random draws).
+// stage's middle. New kinds join on later stages, and obstacles come closer together. Every fifth
+// stage is the Gatekeeper's instead: a clear road with the boss waiting on it. Every random pick
+// goes through `rand` (Math.random, or the daily course's seed) so a seeded run repeats (the shrine
+// and the Gatekeeper take no random draws).
 
 /** No obstacle this close before the checkpoint, so the knight lands before reaching it. */
 const CLEAR_BEFORE_CHECKPOINT = 420;
 
 /** One obstacle on the course: a trap, a foe, or a ledge or flight of steps to climb. */
-export type Piece = Exclude<TrapKind, 'pit'> | 'pit' | 'ledge' | 'steps';
+export type Piece = Exclude<TrapKind, 'barrel' | 'axe'> | 'ledge' | 'steps';
 
 /** What can turn up on a stage. Spikes come up most often; fire vents and bats join on stage 2, steps on stage 3. */
 export function piecesOf(stage: number): Piece[] {
@@ -22,7 +25,7 @@ export function piecesOf(stage: number): Piece[] {
 /** The first stage shows these once each, in this order, before mixing them up. */
 export const OPENING: Piece[] = ['spikes', 'blade', 'goblin', 'ledge'];
 
-const pickOf = <T>(items: T[]) => items[Math.floor(Math.random() * items.length)];
+const pickOf = <T>(s: GameState, items: T[]) => items[Math.floor(rand(s) * items.length)];
 
 /** Room between one obstacle and the next on a stage: at least the length of a jump and a landing. */
 export function gapsOf(stage: number) {
@@ -59,18 +62,18 @@ function planOf(s: GameState, piece: Piece): Plan {
 
   switch (piece) {
     case 'spikes': {
-      const w = 36 + 12 * Math.floor(Math.random() * 3);
+      const w = 36 + 12 * Math.floor(rand(s) * 3);
       return { span: w, place: (x) => (trap('spikes', x, w), arc(x + w / 2)) };
     }
     case 'pit': {
-      const w = 80 + 16 * Math.floor(Math.random() * 3);
+      const w = 80 + 16 * Math.floor(rand(s) * 3);
       return { span: w, place: (x) => (trap('pit', x, w), arc(x + w / 2)) };
     }
     case 'blade':
       return { span: 26, place: (x) => (trap('blade', x, 26), low(x + 13)) };
     case 'flames': {
       // Each vent starts somewhere in its burn, so they don't all flare together.
-      const phase = Math.floor(Math.random() * FLAMES.cycle);
+      const phase = Math.floor(rand(s) * FLAMES.cycle);
       return { span: 32, place: (x) => (trap('flames', x, 32, { phase }), arc(x + 16)) };
     }
     case 'goblin': {
@@ -92,8 +95,8 @@ function planOf(s: GameState, piece: Piece): Plan {
     }
     case 'ledge': {
       // A raised stretch to jump up onto, with coins along its top and a drop off its far end.
-      const h = s.stage >= 3 && Math.random() < 0.5 ? LEDGE_H.high : LEDGE_H.low;
-      const w = 280 + 40 * Math.floor(Math.random() * 4);
+      const h = s.stage >= 3 && rand(s) < 0.5 ? LEDGE_H.high : LEDGE_H.low;
+      const w = 280 + 40 * Math.floor(rand(s) * 4);
       return {
         span: w,
         place: (x) => {
@@ -119,6 +122,7 @@ function planOf(s: GameState, piece: Piece): Plan {
 }
 
 export function buildStage(s: GameState) {
+  if (isBossStage(s.stage)) return buildBossStage(s);
   const end = s.checkpointX - CLEAR_BEFORE_CHECKPOINT;
   const { min, max } = gapsOf(s.stage);
   let x = s.stageStart + LEAD_IN;
@@ -132,14 +136,14 @@ export function buildStage(s: GameState) {
   while (x < end) {
     // Nothing but spikes comes twice in a row. The opening is evenly spaced, so it always fits.
     const first = opening.shift();
-    const piece = first ?? pickOf(piecesOf(s.stage).filter((p) => p === 'spikes' || p !== last));
+    const piece = first ?? pickOf(s, piecesOf(s.stage).filter((p) => p === 'spikes' || p !== last));
     const plan = planOf(s, piece);
     if (x + plan.span > end) break;
     plan.place(x);
     if (lastEnd !== null) gaps.push([lastEnd, x]);
     lastEnd = x + plan.span;
     last = piece;
-    x += plan.span + (first ? min : min + Math.random() * (max - min));
+    x += plan.span + (first ? min : min + rand(s) * (max - min));
   }
   if (s.stage >= SHRINE.from) placeShrine(s, gaps);
 }
@@ -154,9 +158,20 @@ function placeShrine(s: GameState, gaps: [number, number][]) {
   s.shrines.push({ id: s.nextId++, x: Math.round(centre(gap) - SHRINE.w / 2), w: SHRINE.w, used: false, tried: false });
 }
 
+/**
+ * The Gatekeeper's stage: a row of coins on the lead-in, then the Gatekeeper waiting on the open
+ * road. Its checkpoint is pushed on ahead of the knight until it is beaten (see `boss.ts`).
+ */
+function buildBossStage(s: GameState) {
+  for (let i = 0; i < 5; i++) s.course.push({ id: s.nextId++, x: s.stageStart + 300 + i * 40, h: 12, pulled: false });
+  s.boss = { x: s.stageStart + LEAD_IN + BOSS.station, w: BOSS.w, hp: BOSS.hp, mode: 'wait', ms: 0, thrown: 0, hurtMs: 0 };
+}
+
 /** Starts the stage after a checkpoint, right where the last one ended. */
 export function nextStage(s: GameState) {
   s.stage += 1;
+  s.terrain = terrainOf(s.stage);
+  s.boss = null;
   s.stageStart = s.checkpointX;
   s.checkpointX = s.stageStart + STAGE_LEN;
   buildStage(s);
