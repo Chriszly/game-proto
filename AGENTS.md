@@ -48,9 +48,9 @@ The form sets the Type label and `.github/workflows/issue-labels.yml` adds the G
 form's Game dropdown. Labels are defined in `.github/labels.json` and the Labels workflow
 (`.github/workflows/labels.yml`) syncs them on main, deleting any label not in that file, so labels
 are never edited on GitHub. A PR that fixes an issue says `Fixes #<number>`. Each Game label has its
-own GitHub Project, plus one "All feedback" Project, listed in `.github/projects.json`; the
-Projects workflow (`.github/workflows/projects.yml`, using the `PROJECTS_TOKEN` secret) creates them
-and files every issue and PR into "All feedback" and its game's Project.
+own public GitHub Project, plus one "All feedback" Project, with the title, short description and
+README listed in `.github/projects.json`. Each Project's built-in Auto-add workflow files issues
+and PRs into it (filter `is:issue,pr is:open label:<game>`, or no label for "All feedback").
 
 - **Every PR needs labels.** It carries at least one Type label for what it changes (`bug` for a
   fix, `feature`, `gameplay`, `refactor`, `assets`, `docs`, `ci`) and at least one Game label for
@@ -86,11 +86,10 @@ and files every issue and PR into "All feedback" and its game's Project.
   workflow creates it on main), its Project (title, short description and README) to `.github/projects.json`, its name to the
   Game dropdown of the three issue forms in
   `.github/ISSUE_TEMPLATE/`, and its name and label to the map in
-  `.github/workflows/issue-labels.yml`. Then remind **Chriszly** about the game's GitHub Project,
-  in the PR's "Notes for reviewers" and in your reply when the PR is up: the Projects workflow
-  creates it when the PR merges, and if that run fails (for example an expired `PROJECTS_TOKEN`)
-  it has to be created by hand with the title, short description and README from
-  `.github/projects.json` and linked to the repo. Vite picks
+  `.github/workflows/issue-labels.yml`. Then remind **Chriszly** to create the game's GitHub
+  Project by hand, in the PR's "Notes for reviewers" and in your reply when the PR is up: its title,
+  short description and README from `.github/projects.json`, public visibility, the Auto-add
+  workflow with the filter `is:issue,pr is:open label:<game>`, and a link to the repo. Vite picks
   up `games/*/index.html` on its own. Keep save keys and other browser storage prefixed with the
   game's name, since every game shares the hub's origin.
 - **Honour the hub's settings.** Every game calls `setupGame(game)` from `shared/setupGame.ts`
