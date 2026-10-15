@@ -1,15 +1,16 @@
 import Phaser from 'phaser';
-import { bakeValley } from '../art/valley';
+import { bakeProps } from '../art/valley';
 import { bakeSprites } from '../art/sprites';
 
-// Generates all textures at runtime so the prototype needs no asset files yet.
+// Generates the textures at runtime so the prototype needs no asset files yet. The valley itself
+// is baked by GameScene for each new game.
 export class BootScene extends Phaser.Scene {
   constructor() {
     super('Boot');
   }
 
   create() {
-    bakeValley(this);
+    bakeProps(this);
     bakeSprites(this);
     this.scene.start('Game');
   }

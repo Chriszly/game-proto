@@ -10,11 +10,13 @@ import { bakePixelArt } from './pixelArt';
 // the scene places it on the track and sorts it by that point; the part floats above it.
 
 export function bakeSprites(scene: Phaser.Scene) {
-  bakeWyrm(scene);
+  bakeWyrm(scene, 'wyrm', false);
+  bakeWyrm(scene, 'wyrm2', true);
   for (const [cargo, rows] of Object.entries(CARGO_ICONS)) bakePixelArt(scene, `cargo-${cargo}`, rows, ICON_COLORS, 3, INK);
   bakePixelArt(scene, 'coin', COIN, ICON_COLORS, 3, INK);
   bakePixelArt(scene, 'heart', HEART, ICON_COLORS, 3, INK);
   bakePixelArt(scene, 'heart-empty', HEART.map((r) => r.replace(/[rp]/g, 'x')), ICON_COLORS, 3, INK);
+  bakePixelArt(scene, 'food', FOOD, ICON_COLORS, 2, INK);
 }
 
 /** Every wyrm texture is this size, with the ground point under the part at `x`, `y`. */
@@ -25,8 +27,16 @@ export const PART_ORIGIN = { x: PART.x / PART.w, y: PART.y / PART.h };
 const SCALE = (ISO.tw / 150) * 1.4;
 const GREEN = { base: '#4fbf5a', light: '#9be883', dark: '#2b7c39' };
 
-function bakeWyrm(scene: Phaser.Scene) {
-  const part = (key: string, draw: (ctx: Ctx, x: number, y: number) => void) => bakeCanvas(scene, key, PART.w, PART.h, (ctx) => draw(ctx, PART.x, PART.y));
+/**
+ * Bakes a wyrm's head, coils and wings as `<prefix>-head` and so on. The second wyrm is the same
+ * drawing with its greens turned to copper. The wagons are shared and baked with the first.
+ */
+function bakeWyrm(scene: Phaser.Scene, prefix: string, copper: boolean) {
+  const part = (key: string, draw: (ctx: Ctx, x: number, y: number) => void) =>
+    bakeCanvas(scene, key.replace('wyrm', prefix), PART.w, PART.h, (ctx) => {
+      draw(ctx, PART.x, PART.y);
+      if (copper) toCopper(ctx);
+    });
   part('wyrm-head', (ctx, x, y) => {
     shadow(ctx, x + 3, y + 3, 18, 7, 0.25);
     head(ctx, x, y - 38);
@@ -47,7 +57,34 @@ function bakeWyrm(scene: Phaser.Scene) {
     poly(ctx, [w, { x: w.x + 66 * k, y: w.y - 52 * k }, { x: w.x + 50 * k, y: w.y - 10 * k }, { x: w.x + 68 * k, y: w.y + 4 * k }], '#2f8a3f', '#25623a', 1);
   });
   // The wagons, lengthwise along the columns (`wagon-u`) or along the rows (`wagon-v`).
-  for (const along of ['u', 'v'] as const) part(`wagon-${along}`, (ctx, x, y) => wagon(ctx, x, y, along));
+  if (!copper) for (const along of ['u', 'v'] as const) part(`wagon-${along}`, (ctx, x, y) => wagon(ctx, x, y, along));
+}
+
+/** Turns every green on the canvas to copper, keeping its shading; cream horns and the gold eye stay. */
+function toCopper(ctx: Ctx) {
+  const img = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height);
+  const d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    if (!d[i + 3]) continue;
+    const [r, g, b] = [d[i] / 255, d[i + 1] / 255, d[i + 2] / 255];
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    if (max !== g || max - min < 0.12) continue;
+    const hue = 60 * ((b - r) / (max - min) + 2);
+    if (hue < 70 || hue > 170) continue;
+    // Same lightness and saturation, the greens (hue 70 to 170) squeezed into copper (12 to 42).
+    const l = (max + min) / 2;
+    const sat = (max - min) / (1 - Math.abs(2 * l - 1));
+    const c = (1 - Math.abs(2 * l - 1)) * sat;
+    const h = (12 + (hue - 70) * 0.3) / 60;
+    const x = c * (1 - Math.abs((h % 2) - 1));
+    const m = l - c / 2;
+    const [rr, gg, bb] = [c, x, 0];
+    d[i] = (rr + m) * 255;
+    d[i + 1] = (gg + m) * 255;
+    d[i + 2] = (bb + m) * 255;
+  }
+  ctx.putImageData(img, 0, 0);
 }
 
 /**
@@ -192,6 +229,13 @@ const ICON_COLORS = {
   r: 0xd8483f, // heart
   p: 0xf08a8a,
   x: 0x4a3a3a,
+  n: 0xf4efe2, // flour
+  N: 0xd8d0bc,
+  I: 0xe2e2ec, // iron bars
+  k: 0x6a6878,
+  m: 0xc0603a, // meat
+  M: 0xe8956a,
+  B: 0xf1e4c6,
 };
 
 const CARGO_ICONS: Record<Cargo, string[]> = {
@@ -200,7 +244,13 @@ const CARGO_ICONS: Record<Cargo, string[]> = {
   timber: ['.......', 'WbWbWb.', 'wwwwwwb', '.WbWbWb', 'wwwwwww', 'WbWbWb.', '.......'],
   ore: ['...O...', '..OOo..', '.OcOoo.', 'OOOoooo', 'OOocooo', '.Ooooo.', '.......'],
   fish: ['.......', 'f..fff.', 'ff.fFfF', '.fffffF', 'ff.ffff', 'f..fff.', '.......'],
+  flour: ['..b.b..', '...b...', '.nnnnn.', 'nnnnnnn', 'nnnNnnn', 'nnNNNnn', '.nnnnn.'],
+  planks: ['.......', 'WWWWWWW', 'wwwwwwD', 'DDDDDDD', 'WWWWWWW', 'wwwwwwD', 'DDDDDDD'],
+  iron: ['..III..', '.IiiiI.', 'kkkkkkk', '.......', '.IIIII.', 'IiiiiiI', 'kkkkkkk'],
 };
+
+/** The wyrm's belly on the HUD: a joint of meat on the bone. */
+const FOOD = ['....mm.', '...mMmm', '..mmmmm', '..mmmm.', '.Bm....', 'BB.....', '.B.....'];
 
 const COIN = ['.GGG.', 'GLGGG', 'GLGGG', 'GGGGG', '.GGG.'];
 const HEART = ['.rr.rr.', 'rpprrrr', 'rprrrrr', '.rrrrr.', '..rrr..', '...r...'];
