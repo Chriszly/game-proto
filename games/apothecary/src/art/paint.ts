@@ -63,6 +63,9 @@ export const ITEM_COL: Record<string, string> = {
   nightshade: '#4a3060',
   nightshadeExtract: '#5a3a78',
   shadowElixir: '#2f8a72',
+  vigourTonic: '#e0862e',
+  moonlightSalve: '#6fa8d6',
+  witchsBrew: '#7a8f22',
 };
 
 /** How many canvas pixels each texture has per pixel shown, by texture key. */
@@ -378,6 +381,9 @@ export function sparkle(c: Ctx, x: number, y: number, r: number) {
   c.restore();
 }
 
+/** The potions, each drawn as its own flask. */
+const POTION_SHAPES = { healingDraught: 1, sleepingTonic: 1, vigourTonic: 1, shadowElixir: 1, moonlightSalve: 1, witchsBrew: 1 };
+
 /**
  * An item, centred on (x, y) and about `s` pixels tall, washed in its colour with an ink outline:
  * a flask for each potion, a sheaf of wheat, a mandrake root with its leaves, a sprig of nightshade
@@ -401,13 +407,29 @@ export function itemIcon(c: Ctx, kind: string, x: number, y: number, s: number) 
   c.translate(x, y);
   c.lineJoin = 'round';
   c.lineCap = 'round';
-  if (kind === 'healingDraught' || kind === 'sleepingTonic' || kind === 'shadowElixir') {
-    const round = kind === 'healingDraught';
-    // A round flask, a cone, or for the Shadow Elixir a tall square-shouldered bottle.
+  if (kind in POTION_SHAPES) {
+    const round = kind === 'healingDraught' || kind === 'witchsBrew';
+    // A round flask, a cone, a squat jar, a slim vial, a fat round pot, or for the Shadow Elixir a
+    // tall square-shouldered bottle.
     const body = () => {
       c.beginPath();
-      if (round) c.arc(0, s * 0.12, s * 0.33, 0, Math.PI * 2);
-      else if (kind === 'shadowElixir') {
+      if (kind === 'witchsBrew') c.arc(0, s * 0.14, s * 0.36, 0, Math.PI * 2);
+      else if (round) c.arc(0, s * 0.12, s * 0.33, 0, Math.PI * 2);
+      else if (kind === 'vigourTonic') {
+        c.moveTo(-s * 0.1, -s * 0.24);
+        c.lineTo(s * 0.1, -s * 0.24);
+        c.lineTo(s * 0.3, -s * 0.04);
+        c.lineTo(s * 0.3, s * 0.44);
+        c.lineTo(-s * 0.3, s * 0.44);
+        c.lineTo(-s * 0.3, -s * 0.04);
+        c.closePath();
+      } else if (kind === 'moonlightSalve') {
+        c.moveTo(-s * 0.1, -s * 0.24);
+        c.lineTo(s * 0.1, -s * 0.24);
+        c.lineTo(s * 0.14, s * 0.3);
+        c.quadraticCurveTo(0, s * 0.56, -s * 0.14, s * 0.3);
+        c.closePath();
+      } else if (kind === 'shadowElixir') {
         c.moveTo(-s * 0.1, -s * 0.24);
         c.lineTo(s * 0.1, -s * 0.24);
         c.lineTo(s * 0.22, -s * 0.1);

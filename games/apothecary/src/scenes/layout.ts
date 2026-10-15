@@ -78,6 +78,11 @@ export const GUILD = {
   customers: { x: 820, y: 440 },
   slots: { x: 820, y: 520 },
 };
+/**
+ * The study at the bottom left of the market: a writing desk under its sign, and the marker below it
+ * where the doctor pays to learn the next recipe.
+ */
+export const STUDY = { sign: { x: 580, y: 580 }, desk: { x: 580, y: 625 }, learn: { x: 580, y: 692 } };
 /** Where the doctor stands to buy the expansion's land: at the bottom of the market. */
 export const EXPANSION_LAND = { x: 700, y: 640 };
 
@@ -130,10 +135,12 @@ export const SHOP_DOOR = { from: 660, to: 740 };
 export const COUNTER = { x: 700, y: 940 };
 /** The doctor's markers left of the counter, its upgrade marker right of it. */
 export const COUNTER_MARKERS: StationMarkers = {
-  drop: { x: COUNTER.x - 140, y: COUNTER.y - 80 },
+  // Potions go on the shelves from the drop marker north of them, just inside the back door.
+  drop: { x: COUNTER.x, y: COUNTER.y - 134 },
   work: { x: COUNTER.x - 140, y: COUNTER.y },
   pickUp: { x: COUNTER.x - 140, y: COUNTER.y + 75 },
-  upgrade: { x: COUNTER.x + 140, y: COUNTER.y - 80 },
+  // Right of the shelves, clear of the last one when all six stand.
+  upgrade: { x: COUNTER.x + 170, y: COUNTER.y - 100 },
 };
 /** Where waiting customer i stands, on the street side of the counter; a market day's crowd fills the row to the right wall. */
 export const customerPosition = (i: number) => ({ x: COUNTER.x - 56 + i * 45, y: COUNTER.y + 70 });
@@ -214,27 +221,31 @@ export interface StationPallets {
 /** Three pallets across a belt heading down, whose first lane is on the east side. */
 const acrossBelt = (x: number, y: number) => [{ x: x + 36, y }, { x, y }, { x: x - 36, y }];
 const REFINER_PALLETS: StationPallets = { in: acrossBelt(LINE_X, REFINER.y - 36), out: acrossBelt(LINE_X, REFINER.y + 84) };
-const CAULDRON_PALLETS: StationPallets = { in: acrossBelt(LINE_X, CAULDRON.y - 44), out: acrossBelt(LINE_X, CAULDRON.y + 84) };
+/** The cauldron's six potions leave from two rows of three below it. */
+const CAULDRON_PALLETS: StationPallets = {
+  in: acrossBelt(LINE_X, CAULDRON.y - 44),
+  out: [...acrossBelt(LINE_X, CAULDRON.y + 84), ...acrossBelt(LINE_X, CAULDRON.y + 116)],
+};
+/** The second line's pallets, mirrored; the pixies carry each kind to its own pallet wherever it stands. */
+const mirrorPallets = (p: StationPallets): StationPallets => ({ in: p.in.map(mirror), out: p.out.map(mirror) });
 /**
- * The second line's pallets, mirrored. Its belts' lanes are not mirrored (a belt heading south keeps
- * its first lane on its east side on both lines), so each pair also swaps over to keep every kind at
- * the end of its own lane.
+ * The shop's shelves, one for each potion the apothecary has learned, stand side by side behind the
+ * counter, given by the middle of their bottom edge: shelf `i` of `count`.
  */
-const mirrorPallets = (p: StationPallets): StationPallets => ({
-  in: p.in.map(mirror).reverse(),
-  out: p.out.map(mirror).reverse(),
-});
+export const SHELF_Y = 903;
+export const shelfPosition = (i: number, count: number) => ({ x: COUNTER.x + (i - (count - 1) / 2) * 44, y: SHELF_Y });
 export const PALLETS = {
   refiner: REFINER_PALLETS,
   cauldron: CAULDRON_PALLETS,
   refiner2: mirrorPallets(REFINER_PALLETS),
   cauldron2: mirrorPallets(CAULDRON_PALLETS),
-  counter: { in: acrossBelt(COUNTER.x, COUNTER.y - 30), out: [] } as StationPallets,
+  // The counter keeps its potions on shelves instead (see `shelfPosition`).
+  counter: { in: [], out: [] } as StationPallets,
 };
 
 /** Where a belt ending on pallets from above stops, at their back edge, and where one leaving them below starts. */
 const endAbove = (pallets: { y: number }[]) => pallets[0].y - 32;
-const startBelow = (pallets: { y: number }[]) => pallets[0].y + 16;
+const startBelow = (pallets: { y: number }[]) => Math.max(...pallets.map((p) => p.y)) + 16;
 const mirrorRun = (run: { x: number; y: number }[]) => run.map(mirror);
 
 /**
@@ -259,7 +270,7 @@ const LINE1_BELTS = {
       { x: LINE_X, y: startBelow(CAULDRON_PALLETS.out) },
       { x: LINE_X, y: BELT_IN_Y },
       { x: COUNTER.x, y: BELT_IN_Y },
-      { x: COUNTER.x, y: endAbove(PALLETS.counter.in) },
+      { x: COUNTER.x, y: SHELF_Y - 56 },
     ],
   ],
 };

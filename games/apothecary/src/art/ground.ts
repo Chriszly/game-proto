@@ -113,7 +113,22 @@ function drawWorld(c: Ctx) {
   }
   c.restore();
   hatch(c, [[s.x + 8, s.y + 8], [s.x + s.w - 8, s.y + 8], [s.x + s.w - 8, s.y + 18], [s.x + 18, s.y + 18], [s.x + 18, s.y + s.h - 8], [s.x + 8, s.y + s.h - 8]], { gap: 3, alpha: 0.3, w: 0.6 });
-  for (const wall of SHOP_WALLS) stones(c, wall.x, wall.y, wall.w, wall.h);
+}
+
+/**
+ * The shop's stone walls, painted on their own and laid above the expansion's yard, so the yard's
+ * edge never washes over the right wall.
+ */
+const WALLS_MARGIN = 6;
+const WALLS_BOX = (() => {
+  const x = Math.min(...SHOP_WALLS.map((w) => w.x)) - WALLS_MARGIN;
+  const y = Math.min(...SHOP_WALLS.map((w) => w.y)) - WALLS_MARGIN;
+  const w = Math.max(...SHOP_WALLS.map((w) => w.x + w.w)) + WALLS_MARGIN - x;
+  const h = Math.max(...SHOP_WALLS.map((w) => w.y + w.h)) + WALLS_MARGIN - y;
+  return { x, y, w, h };
+})();
+function drawWalls(c: Ctx) {
+  for (const wall of SHOP_WALLS) stones(c, wall.x - WALLS_BOX.x, wall.y - WALLS_BOX.y, wall.w, wall.h);
 }
 
 /** The expansion's yard, painted on its own with a margin of paper-free edge, laid once the land is bought. */
@@ -250,6 +265,7 @@ export function bakeGround(scene: Phaser.Scene) {
   paint(scene, 'ground-world', WORLD.w, WORLD.h, drawWorld, GROUND_RES);
   const yard = EXPANSION_YARDS[0];
   paint(scene, 'ground-expansion', yard.w + 2 * EXPANSION_MARGIN, yard.h + 2 * EXPANSION_MARGIN, drawExpansion, GROUND_RES);
+  paint(scene, 'ground-walls', WALLS_BOX.w, WALLS_BOX.h, drawWalls, GROUND_RES);
   GARDEN_AREAS.forEach((area, i) =>
     paint(scene, gardenTexture(i), area.w + 12, area.h + 12, (c) => drawGarden(c, area.w, area.h, area.name === 'Shade garden'), 2, 300 + (i % 2)),
   );
@@ -260,5 +276,7 @@ export function bakeGround(scene: Phaser.Scene) {
 
 /** Where the expansion's yard image goes: its painting has a margin round the yard. */
 export const EXPANSION_IMAGE = { x: EXPANSION_YARDS[0].x - EXPANSION_MARGIN, y: EXPANSION_YARDS[0].y - EXPANSION_MARGIN };
+/** Where the shop walls' image goes. */
+export const WALLS_IMAGE = { x: WALLS_BOX.x, y: WALLS_BOX.y };
 /** A garden's painting has a 6 pixel margin round its fenced area. */
 export const GARDEN_MARGIN = 6;
