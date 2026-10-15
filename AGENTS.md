@@ -85,7 +85,8 @@ and PRs into it (filter `is:issue,pr is:open label:<game>`, or no label for "All
   the table of guides above. Add its Game label (its folder name, description `Game: <Name>`) to `.github/labels.json` (the Labels
   workflow creates it on main), its Project (title, short description and README) to `.github/projects.json`, its name to the
   Game dropdown of the three issue forms in
-  `.github/ISSUE_TEMPLATE/`, and its name and label to the map in
+  `.github/ISSUE_TEMPLATE/` (before `Hub page` and `Shared / all games`, then raise each form's
+  `default` by one so it still preselects Shared), and its name and label to the map in
   `.github/workflows/issue-labels.yml`. Then remind **Chriszly** to create the game's GitHub
   Project by hand, in the PR's "Notes for reviewers" and in your reply when the PR is up: its title,
   short description and README from `.github/projects.json`, public visibility, the Auto-add

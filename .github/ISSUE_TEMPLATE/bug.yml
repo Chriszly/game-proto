@@ -29,6 +29,8 @@ body:
         - Colonizer
         - Hub page
         - Shared / all games
+      # Preselect Shared, so a report never lands on a game by accident.
+      default: 19
     validations:
       required: true
   - type: textarea
