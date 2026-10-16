@@ -121,7 +121,7 @@ study, shade gardens and a mirrored second production line.
 - `src/ui/`: `BackStack` (items piled on the doctor), `IconRow` (customer wants), `Pallet` (crate
   stacks, exposes `item` and `count`, `setVisible`), `Shelf` (a shop shelf of one potion, up to six bottles, fine
   ones first; exposes `item` and `count`), `ProgressBar` (redraws only when its fill changes;
-  `setZone` marks a golden end zone, used for the cauldron's fine window),
+  an optional last argument sets its height, 6 by default; `setZone` marks a golden end zone, used for the cauldron's fine window),
   `RecipeBook` (exposes `lines`), `Settings` (read-only view of the hub's settings, and New game).
 
 ### How it runs
@@ -243,7 +243,8 @@ study, shade gardens and a mirrored second production line.
   `pickUpFromCauldron` takes such a brew (`brewing` first, then `brewing2`) out as its `FINE` potion before anything on the out
   pallets. A brew only moves while worked, so stepping off the work spot holds it in the window.
   The brewing bar's zone (`setZone`) and fill turn gold there. Each station has a second bar
-  8px below the first for its second pipe, shown only while that pipe works.
+  below the first for its second pipe, shown only while that pipe works. The refining table's bars
+  are amber (`REFINING_BAR`) and 8px tall (`REFINING_BAR_H`), so they read against the cream track.
 - Reputation and regulars: `tick` lowers `reputation` by `REPUTATION_WALKED_OFF` for each order
   whose patience runs out (and marks a running rush lost); `orderFilled` raises it by
   `REPUTATION_SERVED`, and a customer filled with `tipLeft` at least `REGULAR_TIP_LEFT` joins
