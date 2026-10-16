@@ -6,20 +6,65 @@ to the game, per the root AGENTS.md.
 
 ## Current state
 
-Tiny Kingdom is a turn-based tile-placing puzzle on a 10x7 island. The player picks a farm, house
-or tower (and, once won as gifts, a windmill, market, harbor and lumber camp) from a pouch and
-places it on grass; each building scores from its neighbours and the score is the whole board's
-plus bonuses (decrees and seasons). Two houses side by side can merge into a manor. Each round has a
-royal decree (a side goal paying +8 and a crown) and a season. Reaching the round's goal refills
-the pouch, raises the goal and offers a choice of two gifts. The island is random, typed in by its
-number, the island of the day, or one of eight campaign levels scored with stars.
+Tiny Kingdom is a turn-based tile-placing puzzle on a 10x7 island. Each turn draws three tiles
+from a pouch of farms, houses, towers and roads (and, once won as gifts, windmills, markets,
+harbors and lumber camps); the player places one on grass and the others go back. Each building
+scores from its neighbours and the score is the whole board's plus bonuses (decrees and seasons).
+Two houses side by side can merge into a manor, a lumber camp can clear a wood, a market can trade
+tiles. Each round has a royal decree (a side goal paying +8 and a crown) and a season; from round 3
+an omen warns of a flood or storm the next round brings. Every island has a castle, and the
+buildings joined to it by a chain of buildings and roads pay +1 each when the kingdom is finished.
+Reaching the round's goal refills the pouch, raises the goal and offers a choice of two gifts. The
+island is random, typed in by its number, the island of the day, or one of eight campaign levels
+scored with stars.
 
 Implemented today:
 
+- The hand (`HAND` = 3): `drawHand` draws three tiles from the pouch (which still counts them)
+  with a generator seeded by the island and `draws`, so a kingdom's hands never touch
+  `Math.random` and an undone placement redraws the same hand; when no drawn tile has room but a
+  pouch tile has, the first is swapped for one that has. `hand` is sorted in `BUILDINGS` order.
+  `select`, `previewPlacement` and `place` only take kinds in the hand (`inHand`); `place`, `clear`
+  and `trade` draw the next hand; `chooseGift` keeps it. `shownKinds` gives one tile button per
+  kind in the hand and `handCount` how many of it the hand holds; the pouch line under the
+  buttons lists what is left to draw.
+- The castle (`src/game/castle.ts`): `islandMap` puts a `'C'` (`'castle'`, a `Terrain`) on a random
+  grass cell after the lakes and woods, so islands lie as before with one cell taken.
+  `joinedCells` walks the chain of built cells (`isBuilt`: buildings, manors and roads) from the
+  castle along shared edges; `joinedCount` counts the ones that score (`scores`: everything built
+  but roads). `end` (in `state.ts`) pays that count into `bonus` and `score` as `state.castle` when
+  the kingdom finishes. `Preview.joins` is how many more a placement would join; the scene shows it
+  as a navy "castle +N" pill under the ghost, a gold bead on every joined cell, and the count
+  beside the score ("Castle joins N").
+- Roads: `'road'` is the last of `BUILDINGS`, in `FIRST_POUCH` and `ROUND_POUCH` (1 each). It is a
+  flat tile (`tile-road`, no prop) that scores nothing, counts for nothing (the market's kinds
+  skip it) and only runs the chain on.
+- Omens (`src/game/omens.ts`): from `OMEN_FROM` (3), `omenFor(island, round, grid)` draws the omen
+  for the round after `round` when `round` begins, seeded by island and round: a `storm` on a
+  tower with no home around it, or a `flood` on a grass or farm cell beside a named lake (the
+  kinds are tried in a seeded order; null when neither fits). `state.omen` holds it; `settle`
+  lets it `strike` as the next round begins (flood: the cell becomes a lake, whatever stood
+  there; storm: the tower becomes grass if it is still alone), recomputes the score, then draws the
+  decree and the next omen on the board as it stands. `Placed.struck` carries the cells for the
+  scene's "Flooded" / "Toppled" popups. The panel's omen strip (`OMEN`, coral) shows `omen.short`,
+  the round banner `omen.text`, and `refreshBoardMarks` draws a coral dashed box with "Flood" or
+  "Storm" on the threatened cell.
+- Clearing a wood: with `'lumber'` selected and in the hand, a tap on a forest beside a lumber camp
+  (`canClear`) calls `clear`, which turns it to grass, spends the lumber tile and settles like a
+  placement (undoable). `previewClear` gives the (usually negative) change; the hover shows a
+  grass ghost, the bubble and a "Clear the wood" hint.
+- Market trades: `canTrade` needs the playing phase, a market on the board, no trade this round
+  (`tradedIn !== round`), a special won and a kind with `TRADE_GIVE` (2) in the pouch
+  (`tradeGives`). A tap on a market (hover hint "Tap to trade") opens the trade card
+  (`TRADE_CARD`, `createTradeCard` / `refreshTrade`): a row of chips to give two of, a row of the
+  specials won to take one of, and a Trade button once both are picked. `trade(s, give, take)`
+  moves the tiles, sets `tradedIn`, clears the undo snapshot and draws a new hand. The pouch line
+  adds "Tap a market to trade." while one can be made.
 - Random islands: each kingdom (the first and every "New kingdom") draws an island number from
   1 to `ISLANDS` (9999) with `Math.random`, and `islandMap` lays it out from that number with its
   own seeded generator: two or three lakes of 2 to 4 cells, then two or three woods of 1 to 3,
-  each grown from a random grass cell. The same number always gives the same island.
+  each grown from a random grass cell, then the castle on a random grass cell. The same number
+  always gives the same island.
 - Islands card (`src/game/islands.ts`, `createIslandsCard` in the scene): opened by the island
   button on the panel's round line (`ISLAND_BUTTON`) or the game-over "Islands" button. It has
   the campaign's eight level plaques with their best stars (locked ones dimmed), a line with the
@@ -53,11 +98,13 @@ Implemented today:
   season. `Preview.season` and `Placed.season` carry it; the preview draws an "x2" pill by the
   bubble; the panel's season strip (`SEASON`) and the round banner show the season.
 - One screen (`GameScene`): the decree banner above the board, the board in a walnut tray, a side
-  panel (title plaque, round, island button, score, goal bar, the gift row, the season strip,
-  three, four or a grid of tile buttons, undo, best score or star scores), a hover preview (ghost
-  building, neighbour links, a "+N" bubble and a season "x2"), floating score popups for every
-  building whose worth changed, a gift card over the board, the islands card, a "Round N" banner
-  and a game-over overlay with "Islands" and "New kingdom" buttons.
+  panel (title plaque, round, island button, score and the castle's count, goal bar, the gift row,
+  the season strip, one tile button per kind in the hand, the pouch line, the omen strip, undo,
+  best score or star scores), a hover preview (ghost building, neighbour links, a "+N" bubble, a
+  season "x2" and a "castle +N" pill), floating score popups for every building whose worth
+  changed, a gift card and a trade card over the board, the islands card, a "Round N" banner (with
+  the omen) and a game-over overlay (with the castle bonus) with "Islands" and "New kingdom"
+  buttons.
 - Royal decrees (`src/game/decree.ts`): one per round, from `decreeFor`. Three kinds: `shore`
   (farms beside a named lake), `wood` (houses beside a named wood) and `watch` (one tower with 3
   houses around it). `need` is what the board already has plus `ASK` (3 farms, 2 houses; 3 for
@@ -80,10 +127,10 @@ Implemented today:
   can reach several); `chooseGift` adds the gift's tiles, adds a new special to `unlocked`,
   offers the next pair and goes back to `'playing'` when none are due. The card's buttons and the
   panel's chips both choose.
-- The windmill: a fourth building, `+1 per farm around it, and +1 to each farm beside it`. Its tile
-  button only shows once it is in `unlocked`; the panel then switches from three 80px buttons to
-  four 60px ones (`TILE_BUTTONS.three` / `.four`), and from five kinds on to two columns of slim
-  110x50 buttons (`TILE_BUTTONS.grid`, `buildGrid`) with the picked building's rule under them.
+- The windmill: a fourth building, `+1 per farm around it, and +1 to each farm beside it`. Like the
+  other specials it reaches the hand once `chooseGift` has put its tiles in the pouch; the tile
+  buttons (`TILE_BUTTONS`, up to three 60px plaques) always show the hand's kinds, not the
+  pouch's.
 - Neighbour links: `previewPlacement` returns the gain, the new building's own `base` (1 for a
   farm) and one `Share` per neighbour (its part of the new building's points plus what it gains
   itself); the shares plus `base` and `season` always equal `gained`, because `cellParts` splits each
@@ -91,23 +138,28 @@ Implemented today:
   draws each as a dotted curve from a yellow "+N" pill (coral for a negative share) on the
   neighbour to the ghost, and the total in a bubble over it.
 - Rounds with goals from `goalFor` and pouch refills from `ROUND_POUCH`, without end.
-- One undo per round: `state.undo` holds a snapshot taken in `place` or `merge`; `undo` restores it and
-  records the round in `undoneIn`. A placement that fulfils a decree or starts a new round clears
-  the snapshot, so it cannot be undone. Undo is only offered while `phase` is `'playing'`.
+- One undo per round: `state.undo` holds a snapshot taken in `place`, `clear` or `merge`; `undo`
+  restores it (the hand and `draws` included) and records the round in `undoneIn`. A placement
+  that fulfils a decree or starts a new round clears the snapshot, so it cannot be undone, and so
+  does a trade. Undo is only offered while `phase` is `'playing'`.
 - Art: a wooden toy set painted on 2D canvases at boot (`src/art/`), in art units twice the view
   (the approved mockup's scale, `.../next5/tiny-kingdom/style-wooden-toy.png` and its `woodtoy.js`),
   baked at `RES` texture pixels per view pixel (the screen's `renderScale`, up to 4 on a 4K
   screen) and shown at view size by `addArt`. Fonts are the system sans stack (`FONT`), weights 700 to 900.
 - The game ends when the pouch is empty, or when no tile has room (`anyPlace`) and no two houses
   could merge. When only a merge is left, the undo button reads "No room: merge houses or finish"
-  and calls `finish`. A reached goal first gets its gift, unless the island is full. The best
-  final score, the crowns, the daily best and the campaign stars persist (`gameEnded`).
+  and calls `finish`. A reached goal first gets its gift, unless the island is full. `end` pays
+  the castle bonus; the best final score, the crowns, the daily best and the campaign stars
+  persist (`gameEnded`).
 
 Missing or rough:
 
 - No title screen, menu or sound.
-- The campaign's star scores come from a greedy bot (`previewScore` for every kind and cell,
-  merging when it gains), not from human play; retune `LEVELS` if they feel off.
+- The campaign's star scores come from a greedy bot (`previewScore` for every kind in the hand and
+  every cell, merging when it gains, taking the second gift, the castle bonus included), not from
+  human play; retune `LEVELS` if they feel off. The bot never trades or clears woods.
+- The castle bonus can be large on a crowded island (a greedy bot joins 40 to 50 buildings), since
+  every building in one blob counts; the campaign's stars were set with it in.
 - Islands are not checked for winnability; decrees are only checked for enough open spots, not
   for enough tiles in the pouch.
 - The decree outline is drawn cell edge by cell edge (dashed, square corners), not as one rounded
@@ -119,8 +171,12 @@ Missing or rough:
   placed a tile by tapping; the islands called `newGame(0, 0, island)` from
   `/games/tiny-kingdom/src/game/state.ts` imported in the page). Refresh them the same way. The
   same goes for `new-buildings`, `season-harbor`, `season-lumber`, `merge-preview`, `manor`,
-  `islands-card`, `no-room` and `campaign-over`: boards set up with `state.ts` imported in the
-  page (greedy moves or hand-placed tiles), then real hovers, taps and keys.
+  `islands-card`, `no-room`, `campaign-over`, `castle-preview`, `road-chain`, `omen-flood`,
+  `omen-struck`, `trade-card` and `clear-wood`: boards set up with `state.ts` imported in the
+  page (greedy moves or hand-placed tiles, then `scene.state = s; scene.redrawCells();
+  scene.refresh()`), then real hovers, taps and keys. The cover, the island shots, `windmill`,
+  `new-buildings`, the season, manor and islands-card shots predate the hand, the castle and the
+  omen strip, so their panels look older.
 - `docs/screenshots/readable-panel*.png` and `favicon.png` are older shots no README links.
 
 ## Architecture
@@ -132,24 +188,32 @@ File map (`src/`):
   `setupScaling(game)` from `shared/scaling.ts`, and in dev builds puts `game` on `window`.
 - `scenes/BootScene.ts`: calls `bakeTextures`, then starts `Game`.
 - `scenes/GameScene.ts`: builds the board (tile and prop images per cell), the decree banner, the
-  panel (island button, season strip), the gift card, the islands card, the round banner and the
-  game-over overlay; turns pointer events into `select`, `place`, `merge`, `undo`, `finish`,
-  `chooseGift` and new kingdoms (`start`); draws the hover (ghost, links, bubble, season pill,
-  merge hints), the decree marks, popups and panel in `refresh`; saves at game over (`gameEnded`).
+  panel (island button, castle count, season strip, pouch line, omen strip), the gift card, the
+  trade card, the islands card, the round banner and the game-over overlay; turns pointer events
+  into `select`, `place`, `clear`, `merge`, `trade`, `undo`, `finish`, `chooseGift` and new
+  kingdoms (`start`); draws the hover (ghost, links, bubble, season and castle pills, merge, clear
+  and trade hints), the decree marks (`refreshDecree`), the omen mark and the chain's beads
+  (`refreshBoardMarks`), popups and panel in `refresh`; saves at game over (`gameEnded`).
 - `scenes/layout.ts`: `VIEW`, `GRID`, `TRAY`, `DECREE`, `PANEL`, `TITLE`, `ISLAND_BUTTON`,
-  `GOAL_BAR`, `GIFT_ROW`, `SEASON`, `TILE_BUTTONS` (`three`, `four` and `grid` layouts),
-  `UNDO_BUTTON`, `GIFT_CARD`, `BUTTON`, `ISLANDS_CARD`, `UI_DEPTH`, `FONT` and `cellCentre`.
-- `game/tiles.ts`: `BUILDINGS` (farm, house, tower, windmill, market, harbor, lumber), `SPECIALS`
-  (the four gift buildings), the `Building`, `Special`, `Structure` (a building or `'manor'`),
-  `Terrain` and `Cell` types, `INFO` (name, short name and rule text for each), `isBuilding`,
-  `isHome`, `MAP_SIZE`, `ISLANDS`, `SIDES`, `AROUND`, `islandMap`, `seeded` (mulberry32),
+  `GOAL_BAR`, `GIFT_ROW`, `SEASON`, `TILE_BUTTONS` (three 60px slots), `POUCH_LINE`, `OMEN`,
+  `UNDO_BUTTON`, `GIFT_CARD`, `TRADE_CARD`, `BUTTON`, `ISLANDS_CARD`, `UI_DEPTH`, `FONT` and
+  `cellCentre`.
+- `game/tiles.ts`: `BUILDINGS` (farm, house, tower, windmill, market, harbor, lumber, road),
+  `SPECIALS` (the four gift buildings), the `Building`, `Special`, `Structure` (a building or
+  `'manor'`), `Terrain` (grass, lake, forest, castle) and `Cell` types, `INFO` (name, short name
+  and rule text for each), `isBuilding`, `isBuilt`, `scores`, `isHome`, `MAP_SIZE`, `ISLANDS`,
+  `SIDES`, `AROUND`, `islandMap` (lakes, woods, then the castle), `seeded` (mulberry32),
   `randomIsland` and `startingGrid`.
 - `game/state.ts`: `GameState`, `Snapshot`, `Share`, `Preview`, `Placed`, `FIRST_POUCH`,
-  `ROUND_POUCH`, `goalFor`, `season`, `newGame(best, crowns, island?, kingdom?)`, `cellParts`,
-  `cellScore`, `boardScore`, `canPlace(s, col, row, kind?)`, `previewPlacement`, `previewScore`,
-  `select`, `place`, `canMerge`, `mergeable`, `previewMerge`, `merge`, `anyPlace`, `finish`,
-  `canUndo`, `undo`, `chooseGift` and `shownKinds`; `settle` is the shared tail of `place` and
-  `merge`. No Phaser; `goalFor` reads `byDifficulty` from `shared/settings.ts`.
+  `ROUND_POUCH`, `HAND`, `TRADE_GIVE`, `goalFor`, `season`, `newGame(best, crowns, island?,
+  kingdom?)`, `inHand`, `cellParts`, `cellScore`, `boardScore`, `canPlace(s, col, row, kind?)`,
+  `previewPlacement`, `previewScore`, `select`, `place`, `canClear`, `previewClear`, `clear`,
+  `canTrade`, `tradeGives`, `trade`, `canMerge`, `mergeable`, `previewMerge`, `merge`, `anyPlace`,
+  `finish`, `canUndo`, `undo`, `chooseGift`, `shownKinds` and `handCount`; `settle` is the shared
+  tail of `place`, `clear` and `merge`, `drawHand` draws the next hand and `end` finishes the
+  kingdom. No Phaser; `goalFor` reads `byDifficulty` from `shared/settings.ts`.
+- `game/omens.ts`: `OMEN_FROM`, `OmenKind`, `Omen`, `Struck`, `omenFor` and `strike`.
+- `game/castle.ts`: `castleAt`, `joinedCells` and `joinedCount`.
 - `game/seasons.ts`: `SEASONS`, `Season`, `SEASON_INFO` (name, rule, short rule, doubled
   buildings, colour), `seasonFor` and `seasonBonus`.
 - `game/islands.ts`: `Mode`, `Kingdom`, `Level`, `LEVELS`, `starsFor`, `levelOpen`, `today`,
@@ -170,8 +234,9 @@ File map (`src/`):
   in the same style.
 - `art/textures.ts`: `bakeTextures` (every texture, listed at the top of the file), `PROP` and
   `PROP_ORIGIN` (where a prop's cell centre sits), `tileKey(cell, col, row)` (grass picks one of
-  `GRASS_VARIANTS` flower variants by position; buildings and woods stand on `tile-plain`) and
-  `propKey(cell)`. The table, the decree sign, the tray, the panel and the title plaque are the one
+  `GRASS_VARIANTS` flower variants by position; lakes, farms and roads have tiles of their own;
+  buildings, woods and the castle stand on `tile-plain`) and `propKey(cell)` (`prop-castle` among
+  them; `castle` in `wood.ts` paints it). The table, the decree sign, the tray, the panel and the title plaque are the one
   `bg` texture.
 - `ui/Button.ts`: `makeButton`, the beech plaque button used by the game-over overlay.
 
@@ -190,39 +255,47 @@ How it runs:
   the pointer into view pixels with `viewPoint` and calls `hoverAt`, which sets
   `preview` from `previewPlacement` and redraws the hover; `pointerdown` calls `tapAt`, which maps
   the point to a cell with `cellAt` and calls `merge` (second tap of a merge), picks a house to
-  merge, or calls `place`. Each tile button's plaque calls `select`;
-  the gift card's plaques and the panel's chips (enabled only while a gift is due) call
-  `takeGift`. The gift card's dim rectangle over the tray, the game-over and the islands card's
-  dim rectangles swallow taps to the board below. The islands card listens to `keydown` only while
-  it is visible.
+  merge, calls `clear` on a wood that `canClear`, opens the trade card on a market while
+  `canTrade`, or calls `place`. Each tile button's plaque calls `select`; the gift card's plaques
+  and the panel's chips (enabled only while a gift is due) call `takeGift`; the trade card's chips
+  pick `tradeGive` / `tradeTake` and its Trade button calls `makeTrade`. The gift and trade cards'
+  dim rectangles over the tray, the game-over and the islands card's dim rectangles swallow taps
+  to the board below. The islands card listens to `keydown` only while it is visible.
 - Rendering is diffed objects, not a per-frame redraw: each cell has a tile image and a prop image
   (depth by row, so roofs and flags overlap the row above) whose textures are swapped by
-  `redrawCells`; `refresh` rewrites the panel, rebuilds the tile buttons when the shown kinds
-  change, redraws the goal bar, the decree banner and marks (`refreshDecree`) and the gift row and
-  card (`refreshGifts`).
+  `redrawCells`; `refresh` rewrites the panel (pouch line, omen strip, castle count), rebuilds the
+  tile buttons when the hand's kinds change, redraws the goal bar, the decree banner and marks
+  (`refreshDecree`), the omen mark and chain beads (`refreshBoardMarks`) and the gift row and
+  card (`refreshGifts`), and closes the trade card outside the playing phase.
 
 State model (`GameState` in `src/game/state.ts`):
 
 - `grid` is `Cell[][]`, indexed `grid[row][col]`; cells are terrain or a building.
 - `grid` cells can also be `'manor'`, which is never in the pouch.
-- `pouch` counts tiles left per building (the specials 0 until their gift); `selected` is the
-  building the next tap places.
+- `pouch` counts tiles left per building, the hand's included (the specials 0 until their gift);
+  `hand` is the three (or fewer) drawn this turn and `draws` how many hands have been drawn;
+  `selected` is the building the next tap places, always one in the hand.
 - `score` is `boardScore(grid) + bonus`, recomputed after each placement. It can fall: a tower
   next to another tower is worth 0, so a placement's gain or preview can be negative.
-- `bonus` (decree and season points won this kingdom), `crowns` (all kingdoms; loaded and saved),
-  `decree` (`Decree | null`, with `done`), `gifts` (the pair on offer), `giftsDue`, `unlocked`
-  (the specials won, in order).
+- `bonus` (decree, season and, at the end, castle points won this kingdom), `crowns` (all
+  kingdoms; loaded and saved), `decree` (`Decree | null`, with `done`), `gifts` (the pair on
+  offer), `giftsDue`, `unlocked` (the specials won, in order), `omen` (`Omen | null`, for the next
+  round), `tradedIn` (the round of the last market trade, 0 for none) and `castle` (the bonus paid
+  at the end, 0 before).
 - `island`, `mode`, `level` (0 outside the campaign), `day` ('' unless daily), `round`, `goal`,
   `placed`, `phase` (`'playing'`, `'gift'` or `'over'`) and `best`. The season is not stored:
   `season(s)` derives it from `round`.
-- `undo` (the `Snapshot` of grid, pouch, score, bonus, selected and placed before the last
-  placement or merge, or null) and `undoneIn` (the round the undo was last used in, 0 for none).
-- `place` and `merge` both end in `settle`; order matters: snapshot, change the grid, add the
-  season's bonus, then the decree (pays once, the first time
-  `decreeMarks(...).have >= need`), then loop rounds while `score >= goal` (each adds
-  `ROUND_POUCH` and a gift due), then a new decree on the board as it stands and `phase = 'gift'`,
-  keep the snapshot only if no round began and no decree paid, reselect if the picked kind ran
-  out, and check for the end only while playing (a gift due waits unless the island is full).
+- `undo` (the `Snapshot` of grid, pouch, hand, draws, score, bonus, selected and placed before
+  the last placement, clearing or merge, or null) and `undoneIn` (the round the undo was last used
+  in, 0 for none).
+- `place`, `clear` and `merge` all end in `settle`; order matters: snapshot, change the grid, add
+  the season's bonus, then the decree (pays once, the first time `decreeMarks(...).have >= need`),
+  then loop rounds while `score >= goal` (each adds `ROUND_POUCH` and a gift due), then, if a
+  round began, let the omen strike and recompute the score, draw a new decree and the next omen on
+  the board as it stands and set `phase = 'gift'`, keep the snapshot only if no round began and no
+  decree paid, and check for the end only while playing (a gift due waits unless the island is
+  full). `place` and `clear` then draw the next hand (which reselects if the picked kind left the
+  hand).
 - Buildings only go on `'grass'`; `canPlace` also requires `phase === 'playing'`, and for a harbor
   a lake beside, for a lumber camp a forest beside.
 
@@ -233,7 +306,8 @@ Persistence: `tiny-kingdom-best` (the best final score, written at game over),
 are never saved. The hub's settings are read from the shared `hub-settings` key.
 
 Randomness and timing: `randomIsland` makes the game's only `Math.random` call, once per random
-kingdom; the island, its decrees and its gifts all follow from that number (`seeded`). The only
+kingdom; the island, its hands, its decrees, its omens and its gifts all follow from that number
+(`seeded`). The only
 date read is `today()` (`new Date()`) when the islands card opens or the daily island starts. The
 game calls no `Date.now` or `performance.now`. The art uses its own seeded `rnd`, so textures are
 identical every load. Only Phaser tweens use time.
@@ -242,7 +316,8 @@ Data tables:
 
 - Scoring rules: the cases in `cellParts`, with `SIDES` and `AROUND` for the neighbourhoods.
 - Button rule text: `INFO` in `src/game/tiles.ts` (keep it matching `cellParts`).
-- Pouches and goals: `FIRST_POUCH`, `ROUND_POUCH` and `goalFor` in `src/game/state.ts`.
+- Pouches, the hand and goals: `FIRST_POUCH`, `ROUND_POUCH`, `HAND`, `TRADE_GIVE` and `goalFor`
+  in `src/game/state.ts`. Omens: `OMEN_FROM` and the kinds in `omenFor` in `src/game/omens.ts`.
 - Seasons: `SEASON_INFO` in `src/game/seasons.ts`. Campaign: `LEVELS` in `src/game/islands.ts`.
 - Decrees: `DECREE_BONUS`, `ASK` and the kinds in `decreeFor` / `makeDecree`; names in
   `namedPlaces`.
@@ -276,31 +351,41 @@ Data tables:
 
 - `src/main.ts` exposes `window.game` in dev builds. The test reads
   `game.scene.getScene('Game')` and its `state` (copied through JSON), `preview` (`{ col, row,
-  gained, base, links }` or null), `tileButtons` (`{ kind, x, y, w, h }` per shown button),
-  `undoButton` (`{ x, y, w, h }`) and `giftButtons` (`{ gift, x, y, w, h }` while a gift is due),
-  all in view pixels. `mergeFrom` and `islandButton` are public too but the test does not use them.
+  gained, base, links, season, joins }` or null), `tileButtons` (`{ kind, x, y, w, h }` per shown
+  button), `undoButton` (`{ x, y, w, h }`) and `giftButtons` (`{ gift, x, y, w, h }` while a gift
+  is due), all in view pixels. `mergeFrom` and `islandButton` are public too but the test does not
+  use them.
 - Inputs: it clicks tile buttons, the undo button and a gift button at their centres, moves the
   mouse over cells to check `preview`, and clicks cell centres, scaling view pixels by the canvas
   bounding box. It reads `localStorage['tiny-kingdom-crowns']` to check the crown is saved.
 - The test mirrors these, so change them together: the `GameState` shape, `GRID`, `VIEW`,
-  `islandMap` (as `ISLAND` and `MAP`), `FIRST_POUCH`, `ROUND_POUCH`, the goals 20 and 45
-  (`GOALS`), `DECREE_BONUS`, round 1's decree (`FIRST_DECREE`: 3 farms on the shore of Eastmere),
-  round 1's gifts (`FIRST_GIFTS`) and the windmill gift's tiles (`WINDMILLS`), the scene key
+  `islandMap` (as `ISLAND` and `MAP`, the castle included), `FIRST_POUCH`, `ROUND_POUCH`, `HAND`,
+  the goals 20 and 45 (`GOALS`), `DECREE_BONUS`, round 1's decree (`FIRST_DECREE`: 3 farms on the
+  shore of Eastmere), round 1's gifts (`FIRST_GIFTS`) and the windmill gift's tiles (`WINDMILLS`),
+  the hands `drawHand` deals on island 1990 (`PLAN[].hand`, `ROUND_2_HAND`), the scene key
   `'Game'` and its public fields.
 - The test seeds `Math.random`, so the game always picks island 1990. Changing `islandMap`,
   `ISLANDS`, `randomIsland`, or anything that calls `Math.random` before `GameScene.create`
   changes the island: take the new number and rows from the failure message and re-derive `PLAN`.
-- `PLAN` is five placements on `MAP`: farms at (5,5), (4,4) and (7,5) (the third fulfils the
-  decree: 10 points + 8), a tower at (2,4) (+0) and a house at (3,4) (+4, reaching 22 >= 20).
-  Round 1 is Spring fair, which doubles only markets and harbors, so no step gets a season bonus
-  (the links check adds `season`, which is 0). No two houses stand side by side, so no tap picks a
-  house to merge.
-  Before the house it hovers (3,4) and expects links +2 from the farm (4,4) and +2 from the tower
-  (2,4) (`LINKED`). The first hover, a farm at (5,5), expects a base of 1 and three lake links of
-  +1. After the second farm it tests undo. After the goal it checks the gift card, that a tap on
-  grass places nothing, takes the Windmill and checks the pouch, the fourth tile button and the
-  new decree. Editing the island, a scoring rule, the decree choice for round 1, round 1's
-  season, `FIRST_POUCH`, `goalFor(1)` or round 1's gifts needs `PLAN` re-derived.
+  Changing `drawHand`'s seed or draw, `FIRST_POUCH` or `BUILDINGS` changes the hands: re-derive
+  `PLAN` (a hand only depends on the kinds placed so far, not where).
+- `PLAN` is seven placements on `MAP`, each with the hand it is drawn from: a house at (0,5) (+1
+  from the forest, beside the castle so it joins the chain), a farm at (2,5) (+2, by the castle),
+  farms at (5,5) (+4) and (4,4) (+3), a house at (4,3) (+3: the farm pays 2 and the forest 1), a
+  road at (2,4) (+0) and a farm at (7,5) (+3, the third farm on Eastmere's shore: the decree pays
+  8, and 24 >= 20 begins round 2 in the same placement). Round 1 is Spring fair, which doubles
+  only markets and harbors, so no step gets a season bonus (the links check adds `season`, which
+  is 0). No two houses stand side by side, so no tap picks a house to merge. Before each
+  placement it checks the hand and the tile buttons (one per kind in the hand). The first hover,
+  the house at (0,5), expects a base of 0, a forest link of +1 and `joins` 1. Before the second
+  house it hovers (4,3) and expects links +1 from the forest (5,3) and +2 from the farm (4,4)
+  (`LINKED`); the road's preview expects +0, no links and no joins. After the farm by the castle
+  it tests undo (the hand comes back with it). After the goal it checks the gift card, that a tap
+  on grass places nothing, takes the Windmill and checks the pouch, the new hand's buttons and
+  the new decree. Editing the island, a scoring rule, the decree choice for round 1, round 1's
+  season, `FIRST_POUCH`, the hand's draw, `goalFor(1)` or round 1's gifts needs `PLAN`
+  re-derived: a scratch Playwright script that imports `state.ts` in the page and searches
+  placements (beam search over the hand's kinds and every cell) finds one quickly.
 - It saves `0-start`, `1-preview`, `2-decree`, `3-links`, `4-gift` and `5-round-2` screenshots
   (under `test-results/`); copy them into `docs/screenshots/` as `playthrough-*.png` when the look
   changes.
@@ -311,8 +396,15 @@ Data tables:
   scoring table, then recompute the `gained` values (and links) in the test's `PLAN`.
 - **Add a building**: add it to `BUILDINGS`, `INFO`, `cellParts`, `FIRST_POUCH` / `ROUND_POUCH`
   (and to `SPECIALS` plus a new and a more gift in `gifts.ts` if it is won as a gift); paint it in
-  `src/art/wood.ts`, add it to `PROPS` and `ICONS` in `textures.ts`. The grid layout fits eight
-  buttons (`TILE_BUTTONS.grid.ys` has four rows). Update the test's `Building` type and pouches.
+  `src/art/wood.ts`, add it to `PROPS` and `ICONS` in `textures.ts` (a flat tile like the road
+  goes in `cellTile` and `tileKey` instead). The hand never shows more than `HAND` kinds, so the
+  tile buttons need no new layout. Update the test's `Building` type and pouches, and re-derive
+  its hands if the first pouch changed.
+- **Change the hand**: `HAND` and `drawHand` in `state.ts`; the test's hands follow from them.
+- **Add an omen kind**: add it to `OmenKind`, pick its cell and texts in `omenFor` and its effect
+  in `strike`; the scene's mark label (`refreshBoardMarks`) names the kinds.
+- **Change the trade**: `TRADE_GIVE`, `canTrade`, `tradeGives` and `trade` in `state.ts`; the
+  card's chips come from `tradeGives` and `unlocked` (`refreshTrade`).
 - **Add a season or change one**: `SEASONS` and `SEASON_INFO`; round 1's season must not double
   anything the playthrough places, or its `PLAN` changes.
 - **Add a campaign level**: append to `LEVELS` (the card's row fits about eight plaques at
@@ -334,9 +426,15 @@ Data tables:
 ## Gotchas
 
 - `GRID.cols` and `GRID.rows` must equal `MAP_SIZE`; nothing checks it.
-- `TILE_BUTTONS.three.ys` / `.four.ys` / `.grid` are indexed in the order of `shownKinds`
-  (farm, house, tower, then the specials in the order won). `buildButtons` destroys and recreates
-  them, so `tileButtons` changes when a special arrives.
+- `TILE_BUTTONS.ys` are indexed in the order of `shownKinds` (the hand's kinds in `BUILDINGS`
+  order). `buildButtons` destroys and recreates them whenever the hand's kinds change, so
+  `tileButtons` changes almost every placement; the count pill shows how many of the kind are in
+  the hand, not the pouch.
+- A `GameState` field a placement changes must be in `Snapshot` (the hand and `draws` are), or
+  undo leaves it stale. `tradedIn` and `omen` are not: a trade clears the snapshot, and an omen only
+  changes when a round begins, which clears it too.
+- `drawHand` is called at the end of `place`, `clear` and `trade`, after `settle`, so a flood or
+  storm that struck is already on the board when the hand is checked for room.
 - Season bonuses are banked into `bonus` at placement, so they are in the undo `Snapshot`; a
   manor's merge never gets one.
 - `checkEnd` counts a possible merge as a reason to go on; `finish` is the way out then.

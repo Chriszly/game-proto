@@ -1,19 +1,19 @@
 import Phaser from 'phaser';
-import { BUTTON, DECREE, GIFT_CARD, ISLAND_BUTTON, ISLANDS_CARD, PANEL, TILE_BUTTONS, TITLE, TRAY, UNDO_BUTTON, VIEW } from '../scenes/layout';
-import { bake, setArtRes, ball, circle, crown, ctx, grain, harbor, house, lumber, manor, market, peg, PI, reseed, rnd, rrect, stripes, T, tile, tower, walnut, windmill } from './wood';
+import { BUTTON, DECREE, GIFT_CARD, ISLAND_BUTTON, ISLANDS_CARD, PANEL, TILE_BUTTONS, TITLE, TRADE_CARD, TRAY, UNDO_BUTTON, VIEW } from '../scenes/layout';
+import { bake, setArtRes, ball, castle, circle, crown, ctx, grain, harbor, house, lumber, manor, market, peg, PI, reseed, rnd, rrect, stripes, T, tile, tower, walnut, windmill } from './wood';
 
 // Every texture the game uses, painted once at boot:
 // - `bg`: the table, the decree sign, the walnut tray and the panel with its title plaque.
 // - `tile-grass-0..3` (grass with painted flowers), `tile-plain` (grass under a building or wood),
-//   `tile-lake`, `tile-farm`: one 64px cell each.
-// - `prop-<kind>` for every building but the farm (house, tower, windmill, market, harbor, lumber,
-//   manor) and for the forest: what stands on a cell, 80x100 with the cell's centre at
-//   PROP_ORIGIN, so roofs and flags reach into the row above.
+//   `tile-lake`, `tile-farm`, `tile-road`: one 64px cell each.
+// - `prop-<kind>` for every building but the farm and the road (house, tower, windmill, market,
+//   harbor, lumber, manor), for the forest and for the castle: what stands on a cell, 80x100 with
+//   the cell's centre at PROP_ORIGIN, so roofs and flags reach into the row above.
 // - `icon-<building>` and `icon-<building>-big`: icons for the gift chips and the gift card; `spot-farm`, `spot-house`: the decree's open
 //   spots; `tick`, `bead-on`, `bead-off`, `crown`, `count`, `star-on` and `star-off` (campaign stars).
 // - `plaque-<w>x<h>`, `plaque-<w>x<h>-sel`, `glow-<w>x<h>`: beech plaques for buttons;
-//   `walnut-<w>x<h>`: walnut boards for the gift card, the islands card, the round banner and the
-//   game-over card.
+//   `walnut-<w>x<h>`: walnut boards for the gift card, the islands card, the trade card, the round
+//   banner and the game-over card.
 
 /** One cell in art units. */
 const CELL = 128;
@@ -23,7 +23,7 @@ export const PROP_ORIGIN = { x: 0.5, y: 0.68 };
 export const GRASS_VARIANTS = 4;
 
 /** A cell's tile, painted with its top left at (0, 0). */
-function cellTile(kind: 'grass' | 'plain' | 'lake' | 'farm', variant = 0) {
+function cellTile(kind: 'grass' | 'plain' | 'lake' | 'farm' | 'road', variant = 0) {
   const pad = 5;
   const X = CELL / 2;
   const Y = CELL / 2;
@@ -63,6 +63,26 @@ function cellTile(kind: 'grass' | 'plain' | 'lake' | 'farm', variant = 0) {
     return;
   }
   tile(pad, pad, CELL - 2 * pad, CELL - 2 * pad - 6, 14, T.green);
+  if (kind === 'road') {
+    // a cobbled cross, so it joins whichever side the chain comes from
+    ctx.save();
+    rrect(pad + 2, pad + 2, CELL - 2 * pad - 4, CELL - 2 * pad - 10, 12);
+    ctx.clip();
+    ctx.fillStyle = '#d9c39a';
+    rrect(X - 17, 0, 34, CELL, 6);
+    ctx.fill();
+    rrect(0, Y - 17, CELL, 34, 6);
+    ctx.fill();
+    reseed(31);
+    for (let i = 0; i < 26; i++) {
+      const along = rnd() * (CELL - 20) + 10;
+      const across = (rnd() - 0.5) * 24;
+      const [cx, cy] = i % 2 ? [X + across, along] : [along, Y + across];
+      circle(cx, cy, 3.5 + rnd() * 2.5, 'rgba(120,90,50,0.35)');
+    }
+    ctx.restore();
+    return;
+  }
   if (kind === 'plain' || variant === 0) return;
   // little painted flowers: a dimple and a cream or yellow bead
   reseed(40 + variant * 17);
@@ -76,8 +96,8 @@ function cellTile(kind: 'grass' | 'plain' | 'lake' | 'farm', variant = 0) {
 }
 
 /** A building or wood standing on a cell, around the cell's centre (0, 0). */
-type PropKind = 'house' | 'tower' | 'forest' | 'windmill' | 'market' | 'harbor' | 'lumber' | 'manor';
-const PROPS: PropKind[] = ['house', 'tower', 'forest', 'windmill', 'market', 'harbor', 'lumber', 'manor'];
+type PropKind = 'house' | 'tower' | 'forest' | 'windmill' | 'market' | 'harbor' | 'lumber' | 'manor' | 'castle';
+const PROPS: PropKind[] = ['house', 'tower', 'forest', 'windmill', 'market', 'harbor', 'lumber', 'manor', 'castle'];
 
 function prop(kind: PropKind) {
   reseed(500 + kind.length * 13);
@@ -91,6 +111,7 @@ function prop(kind: PropKind) {
   else if (kind === 'market') market(0, 0, 1.05);
   else if (kind === 'harbor') harbor(0, -6, 1);
   else if (kind === 'lumber') lumber(0, 0, 1.05);
+  else if (kind === 'castle') castle(0, 0, 1);
   else manor(0, 2, 1);
 }
 
@@ -228,6 +249,7 @@ export function bakeTextures(scene: Phaser.Scene) {
   bake(scene, 'tile-plain', 64, 64, () => cellTile('plain'));
   bake(scene, 'tile-lake', 64, 64, () => cellTile('lake'));
   bake(scene, 'tile-farm', 64, 64, () => cellTile('farm'));
+  bake(scene, 'tile-road', 64, 64, () => cellTile('road'));
   for (const kind of PROPS) {
     bake(scene, `prop-${kind}`, PROP.w, PROP.h, () => prop(kind), PROP.w * PROP_ORIGIN.x, PROP.h * PROP_ORIGIN.y);
   }
@@ -259,10 +281,10 @@ export function bakeTextures(scene: Phaser.Scene) {
   });
   bake(scene, 'star-on', 16, 16, () => star(true), 8, 8);
   bake(scene, 'star-off', 16, 16, () => star(false), 8, 8);
-  plaques(scene, TILE_BUTTONS.w, TILE_BUTTONS.three.h);
-  plaques(scene, TILE_BUTTONS.w, TILE_BUTTONS.four.h);
-  plaques(scene, TILE_BUTTONS.grid.w, TILE_BUTTONS.grid.h, 14);
+  plaques(scene, TILE_BUTTONS.w, TILE_BUTTONS.h);
   plaques(scene, ISLAND_BUTTON.w, ISLAND_BUTTON.h, 14);
+  plaques(scene, TRADE_CARD.chip.w, TRADE_CARD.chip.h, 12);
+  walnutBoard(scene, TRADE_CARD.w, TRADE_CARD.h);
   const C = ISLANDS_CARD;
   for (const b of [C.level, C.daily, C.random, C.key, C.close]) plaques(scene, b.w, b.h, 14);
   walnutBoard(scene, C.w, C.h);
@@ -277,7 +299,7 @@ export function bakeTextures(scene: Phaser.Scene) {
 /** The texture of a cell's tile: grass shows one of its flower variants, picked by position. */
 export function tileKey(cell: string, col: number, row: number) {
   if (cell === 'grass') return `tile-grass-${(col * 7 + row * 13 + ((col * row) % 5)) % GRASS_VARIANTS}`;
-  if (cell === 'lake' || cell === 'farm') return `tile-${cell}`;
+  if (cell === 'lake' || cell === 'farm' || cell === 'road') return `tile-${cell}`;
   return 'tile-plain';
 }
 
