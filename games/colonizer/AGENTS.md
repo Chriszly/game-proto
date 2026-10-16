@@ -183,7 +183,9 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   a camp sends the selection to its free tiles (soldiers attack-move). A left click on a camp shows
   what it is in the toast.
 - The build list's page is `buildPage` (0 or 1); its second page is behind the `Walls & Monument`
-  button. A building the player may not place (`notAllowed`) shows disabled.
+  button. A building the player may not place (`notAllowed`) shows disabled. `renderPanel` closes
+  the build list (`buildMenu`, `buildPage`) whenever the selection changes (`panelSelection`) or no
+  villager is left in it, so clicking another unit or building shows its own buttons.
 - The panel is rebuilt when `panelSignature` changes. While `boonPending`, the two boon cards take
   the buttons' place, with `hud` labels `Shieldwall` and `Harvest Rites`.
 
