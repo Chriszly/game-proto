@@ -1,14 +1,30 @@
 import Phaser from 'phaser';
 import { settings } from '../../../../shared/settings';
 import { BLESSING_INFO, BLESSINGS, type BlessingId } from '../game/blessings';
-import { CURSE_INFO, KIND_INFO, SHOP, SHOP_INFO, TRIAL_INFO, type ShopId, type StoneKind } from '../game/catalog';
+import {
+  CURSE_INFO,
+  KIND_INFO,
+  MATERIAL_INFO,
+  MATERIAL_PICKS,
+  PATRON_INFO,
+  SHOP_INFO,
+  TRIAL_INFO,
+  type MaterialId,
+  type PatronId,
+  type ShopId,
+  type StoneKind,
+} from '../game/catalog';
 import { loadBest, saveBest } from '../game/save';
 import {
   buildOn,
   buy,
   canBuy,
+  canPickMaterial,
   canReroll,
+  canSwap,
   chooseBlessing,
+  chooseMaterial,
+  choosePatron,
   CURSE_MULT,
   curseNow,
   drop,
@@ -16,13 +32,18 @@ import {
   GILDED_MULT,
   GILDED_TIER,
   GOAL_TIER,
+  LEAN_FROM_TIER,
+  LEAN_MAX,
   newGame,
   PLINTH_W,
   REROLL_COST,
   reroll,
+  RESERVE_FROM_TIER,
+  shopFor,
   stackHeight,
   STONE_H,
   STONES_PER_TIER,
+  swapReserve,
   tick,
   toggleCurse,
   TOWER_X,
@@ -30,7 +51,29 @@ import {
   type GameState,
 } from '../game/state';
 import { makeButton } from '../ui/Button';
-import { BUILD_ON, CARDS, CURSE, FONT, GOAL, OFFER_TITLE, PANEL, PLINTH_Y, REROLL, SHOP_ROW, SHOP_TITLE, TOP_SCREEN_Y, UI_DEPTH, VIEW } from './layout';
+import {
+  BUILD_ON,
+  CARDS,
+  CARDS_FOUR,
+  CURSE,
+  FONT,
+  GOAL,
+  LEAN_BAR,
+  MATERIAL_ROW,
+  MATERIAL_TITLE,
+  OFFER_TITLE,
+  PANEL,
+  PATRON_CARDS,
+  PATRON_TITLE,
+  PLINTH_Y,
+  REROLL,
+  RESERVE_BUTTON,
+  SHOP_ROW,
+  SHOP_TITLE,
+  TOP_SCREEN_Y,
+  UI_DEPTH,
+  VIEW,
+} from './layout';
 
 /** The longest step of game time one frame may take, so a hidden tab doesn't drop a stone through the temple. */
 const MAX_STEP_MS = 100;
@@ -77,6 +120,24 @@ export interface ShopButton extends Spot {
   id: ShopId;
 }
 
+/** Where a patron card is on screen before the first stone; read by the playthrough test. */
+export interface PatronCard extends Spot {
+  id: PatronId;
+}
+
+/** Where a material button is on screen during a break. */
+export interface MaterialButton extends Spot {
+  id: MaterialId;
+}
+
+/** Mixes `t` of colour `b` into colour `a`. */
+function blend(a: number, b: number, t: number) {
+  const ca = Phaser.Display.Color.IntegerToColor(a);
+  const cb = Phaser.Display.Color.IntegerToColor(b);
+  const f = (x: number, y: number) => Math.round(x + (y - x) * t);
+  return Phaser.Display.Color.GetColor(f(ca.red, cb.red), f(ca.green, cb.green), f(ca.blue, cb.blue));
+}
+
 /** Shifts a colour lighter (amount > 0) or darker (amount < 0). */
 function shade(color: number, amount: number) {
   const c = Phaser.Display.Color.IntegerToColor(color);
@@ -120,9 +181,19 @@ function place(parts: UiPart[], x: number, y: number, alpha = 1) {
 
 const tierColor = (tier: number) => (tier === GILDED_TIER ? GILT : TIER_COLORS[(tier - 1) % TIER_COLORS.length]);
 
-/** Draws a stone `w` wide with its bottom middle at the graphics' origin; heavy ones darker and strapped, light ones pale and porous. */
-function drawStone(g: Phaser.GameObjects.Graphics, w: number, tier: number, perfect: boolean, kind: StoneKind = 'normal') {
+/** The colour of a tier's stone in a material: marble pale, sandstone warm, basalt dark; limestone is the tier's own colour. */
+function materialColor(tier: number, material: MaterialId) {
   const base = tierColor(tier);
+  if (tier === GILDED_TIER) return base;
+  return material === 'marble' ? blend(base, 0xf4f0f8, 0.6) : material === 'sandstone' ? blend(base, 0xe0a060, 0.6) : material === 'basalt' ? blend(base, 0x3e4454, 0.7) : base;
+}
+
+/**
+ * Draws a stone `w` wide with its bottom middle at the graphics' origin; heavy ones darker and strapped,
+ * light ones pale and porous; marble veined, sandstone grained, basalt pitted.
+ */
+function drawStone(g: Phaser.GameObjects.Graphics, w: number, tier: number, perfect: boolean, kind: StoneKind = 'normal', material: MaterialId = 'limestone') {
+  const base = materialColor(tier, material);
   const color = kind === 'heavy' ? shade(base, -0.28) : kind === 'light' ? shade(base, 0.35) : base;
   const x = -w / 2;
   const y = -STONE_H;
@@ -144,6 +215,19 @@ function drawStone(g: Phaser.GameObjects.Graphics, w: number, tier: number, perf
     // Pumice pores.
     g.fillStyle(shade(color, -0.3));
     for (let px = x + 7, i = 0; px < x + w - 5; px += 13, i++) g.fillRect(Math.round(px), y + (i % 2 ? 9 : 17), 2, 2);
+  }
+  if (material === 'marble' && w > 20) {
+    // Grey veins running across the slab.
+    g.lineStyle(1, shade(color, -0.3), 0.8);
+    for (let vx = x + 14; vx < x + w - 10; vx += 38) g.lineBetween(Math.round(vx), y + 5, Math.round(vx) + 9, y + STONE_H - 7);
+  } else if (material === 'sandstone' && w > 20) {
+    // Layered grain.
+    g.fillStyle(shade(color, -0.18));
+    g.fillRect(x + 4, y + 10, w - 8, 1).fillRect(x + 7, y + 17, w - 14, 1);
+  } else if (material === 'basalt' && w > 20) {
+    // Pits in the dark rock.
+    g.fillStyle(shade(color, -0.45));
+    for (let px = x + 10, i = 0; px < x + w - 6; px += 17, i++) g.fillRect(Math.round(px), y + (i % 3 ? 8 : 15), 3, 2);
   }
   if (tier === GILDED_TIER && w > 12) {
     // Gilding: a bright leaf along the top and a glint near either end.
@@ -170,6 +254,11 @@ export class GameScene extends Phaser.Scene {
   buildOnButton: Spot | null = null;
   /** The "Keep building" button on the crowned panel, or null. */
   keepButton: Spot | null = null;
+  /** The patron cards before the first stone; read by the playthrough test. */
+  patronCards: PatronCard[] = [];
+  /** The material buttons during a break (from tier 3), and the reserve's swap button while it can be used. */
+  materialButtons: MaterialButton[] = [];
+  reserveButton: Spot | null = null;
   private lastFrame: number | null = null;
   private stoneViews: Phaser.GameObjects.Graphics[] = [];
   /** The gold trim and lanterns on each balanced tier, by tier. */
@@ -184,6 +273,11 @@ export class GameScene extends Phaser.Scene {
   private nextText!: Phaser.GameObjects.Text;
   private trialText!: Phaser.GameObjects.Text;
   private curseText!: Phaser.GameObjects.Text;
+  private patronText!: Phaser.GameObjects.Text;
+  private reserveText!: Phaser.GameObjects.Text;
+  private reserveParts: UiPart[] = [];
+  private leanLabel!: Phaser.GameObjects.Text;
+  private leanBar!: Phaser.GameObjects.Graphics;
   private windText!: Phaser.GameObjects.Text;
   private crown: Phaser.GameObjects.Graphics | null = null;
   /** "Build again" centred (after a fall) and beside "Keep building" (after the crown). */
@@ -197,6 +291,9 @@ export class GameScene extends Phaser.Scene {
   /** Everything shown during a break between tiers, rebuilt with the offer. */
   private offerParts: UiPart[] = [];
   private offerKey = '';
+  /** The patron pick before the first stone. */
+  private patronParts: UiPart[] = [];
+  private patronShown = false;
   /** The end panel's dim, panel and texts. */
   private gameOver: UiPart[] = [];
   private gameOverTitle!: Phaser.GameObjects.Text;
@@ -220,6 +317,11 @@ export class GameScene extends Phaser.Scene {
     this.curseToggle = null;
     this.buildOnButton = null;
     this.keepButton = null;
+    this.patronCards = [];
+    this.materialButtons = [];
+    this.reserveButton = null;
+    this.patronParts = [];
+    this.patronShown = false;
     this.crown = null;
     this.crownedMs = 0;
     this.movingKey = '';
@@ -251,6 +353,8 @@ export class GameScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => drop(this.state));
+    // R swaps the stone in hand with the reserve, like the panel's button.
+    this.input.keyboard?.on('keydown-R', () => swapReserve(this.state));
 
     this.offerParts = [];
     this.createGameOver();
@@ -345,19 +449,33 @@ export class GameScene extends Phaser.Scene {
   private createPanel() {
     const fixed = <T extends Phaser.GameObjects.Components.ScrollFactor & Phaser.GameObjects.Components.Depth>(o: T) =>
       o.setScrollFactor(0).setDepth(UI_DEPTH);
-    fixed(this.add.rectangle(PANEL.x, PANEL.y, PANEL.w, PANEL.h, 0x231c38, 0.92).setOrigin(0).setStrokeStyle(3, 0x4a3a6a));
-    fixed(this.add.text(PANEL.x + PANEL.w / 2, PANEL.y + 22, 'Shrine Stack', textStyle(22, '#f3c64e')).setOrigin(0.5));
-    this.tierText = fixed(this.add.text(PANEL.x + 16, PANEL.y + 50, '', textStyle(18)));
-    this.pips = fixed(this.add.graphics());
-    this.favorText = fixed(this.add.text(PANEL.x + 16, PANEL.y + 104, '', textStyle(18, '#f3c64e')));
-    this.builtText = fixed(this.add.text(PANEL.x + 16, PANEL.y + 130, '', textStyle(14, '#d8cbe8')));
-    this.nextText = fixed(this.add.text(PANEL.x + 16, PANEL.y + 150, '', textStyle(14)));
     const small = (color: string) => ({ fontFamily: FONT, fontSize: '13px', color, stroke: '#14101f', strokeThickness: 2 });
-    this.trialText = fixed(this.add.text(PANEL.x + 16, PANEL.y + 173, '', small('#9ad46a')));
-    this.curseText = fixed(this.add.text(PANEL.x + 16, PANEL.y + 192, '', small('#e8a0d4')));
-    fixed(this.add.text(PANEL.x + 16, PANEL.y + 214, 'Blessings', textStyle(16, '#f3c64e')));
+    fixed(this.add.rectangle(PANEL.x, PANEL.y, PANEL.w, PANEL.h, 0x231c38, 0.92).setOrigin(0).setStrokeStyle(3, 0x4a3a6a));
+    fixed(this.add.text(PANEL.x + PANEL.w / 2, PANEL.y + 20, 'Shrine Stack', textStyle(22, '#f3c64e')).setOrigin(0.5));
+    this.patronText = fixed(this.add.text(PANEL.x + PANEL.w / 2, PANEL.y + 42, '', { fontFamily: FONT, fontSize: '12px', color: '#d8cbe8' }).setOrigin(0.5));
+    this.tierText = fixed(this.add.text(PANEL.x + 16, PANEL.y + 56, '', textStyle(18)));
+    this.pips = fixed(this.add.graphics());
+    this.favorText = fixed(this.add.text(PANEL.x + 16, PANEL.y + 102, '', textStyle(18, '#f3c64e')));
+    this.builtText = fixed(this.add.text(PANEL.x + 16, PANEL.y + 126, '', textStyle(14, '#d8cbe8')));
+    this.nextText = fixed(this.add.text(PANEL.x + 16, PANEL.y + 146, '', textStyle(14)));
+    this.reserveText = fixed(this.add.text(PANEL.x + 16, PANEL.y + 166, '', small('#d8cbe8')));
+    // The reserve's swap button, lit while a swap is allowed.
+    const { x: rx, y: ry, w: rw, h: rh } = RESERVE_BUTTON;
+    const swapBg = fixed(this.add.rectangle(rx, ry, rw, rh, 0x4a3a6a).setStrokeStyle(2, GOLD));
+    const swapLabel = fixed(this.add.text(rx, ry, 'Swap (R)', { fontFamily: FONT, fontSize: '10px', color: '#f3e9d2' }).setOrigin(0.5));
+    swapBg
+      .setInteractive({ useHandCursor: true })
+      .on('pointerover', () => canSwap(this.state) && swapBg.setFillStyle(0x6a5a9a))
+      .on('pointerout', () => swapBg.setFillStyle(0x4a3a6a))
+      .on('pointerdown', () => swapReserve(this.state));
+    this.reserveParts = [swapBg, swapLabel];
+    this.trialText = fixed(this.add.text(PANEL.x + 16, PANEL.y + 186, '', small('#9ad46a')));
+    this.curseText = fixed(this.add.text(PANEL.x + 16, PANEL.y + 203, '', small('#e8a0d4')));
+    this.leanLabel = fixed(this.add.text(PANEL.x + 16, PANEL.y + 220, 'Lean', small('#d8cbe8')));
+    this.leanBar = fixed(this.add.graphics());
+    fixed(this.add.text(PANEL.x + 16, PANEL.y + 244, 'Blessings', textStyle(16, '#f3c64e')));
     this.blessingsText = fixed(
-      this.add.text(PANEL.x + 16, PANEL.y + 238, '', { fontFamily: FONT, fontSize: '13px', color: '#f3e9d2', lineSpacing: 6 }),
+      this.add.text(PANEL.x + 16, PANEL.y + 266, '', { fontFamily: FONT, fontSize: '12px', color: '#f3e9d2', lineSpacing: 3 }),
     );
     // The run's goal: a pip per tier up to the crown, the gilded one framed in gold.
     const goal = PANEL.y + GOAL.y;
@@ -366,13 +484,31 @@ export class GameScene extends Phaser.Scene {
     this.goalPips = fixed(this.add.graphics());
     fixed(this.add.text(PANEL.x + 18, goal + 52, `Tier ${GILDED_TIER} gilded: x${GILDED_MULT} favor`, { fontFamily: FONT, fontSize: '12px', color: '#e9b949' }));
     fixed(
-      this.add.text(PANEL.x + 16, PANEL.y + PANEL.h - 66, 'Tap to drop a stone.\nOverhangs break off.\nLand 3/4 on to balance.', {
+      this.add.text(PANEL.x + 16, PANEL.y + PANEL.h - 68, 'Tap to drop a stone.\nOverhangs break off.\nLand 3/4 on to balance.', {
         fontFamily: FONT,
         fontSize: '12px',
         color: '#a99cc0',
         lineSpacing: 3,
       }),
     );
+  }
+
+  /** The panel's lean meter: a bar with the centre marked and a pointer for the lean, red near the limit. */
+  private drawLean() {
+    const s = this.state;
+    const { x, y, w, h } = LEAN_BAR;
+    const g = this.leanBar.clear();
+    const on = s.tier >= LEAN_FROM_TIER;
+    this.leanLabel.setText(on ? 'Lean' : `Lean from tier ${LEAN_FROM_TIER}`).setColor(on ? '#d8cbe8' : '#8a7ea0');
+    if (!on) return;
+    g.fillStyle(OUTLINE).fillRect(x - 1, y - 1, w + 2, h + 2);
+    g.fillStyle(0x3a3052).fillRect(x, y, w, h);
+    g.fillStyle(0x6a5a9a).fillRect(x + w / 2 - 1, y, 2, h);
+    const share = Phaser.Math.Clamp(s.lean / LEAN_MAX, -1, 1);
+    const px = x + w / 2 + share * (w / 2 - 3);
+    const color = Math.abs(share) > 0.7 ? 0xe86a4a : Math.abs(share) > 0.4 ? 0xf3c64e : 0x9ad46a;
+    g.fillStyle(color).fillRect(Math.round(Math.min(px, x + w / 2)), y + 2, Math.max(2, Math.round(Math.abs(px - (x + w / 2)))), h - 4);
+    g.fillStyle(0xf3e9d2).fillRect(Math.round(px) - 1, y - 2, 3, h + 4);
   }
 
   private createGameOver() {
@@ -404,13 +540,13 @@ export class GameScene extends Phaser.Scene {
       const i = s.stones.length - 1;
       const stone = s.stones[i];
       const g = this.add.graphics().setDepth(3).setPosition(stone.x, this.worldY(i * STONE_H));
-      drawStone(g, stone.w, stone.tier, stone.perfect, stone.kind);
+      drawStone(g, stone.w, stone.tier, stone.perfect, stone.kind, stone.material);
       this.stoneViews.push(g);
-      for (const piece of e.cut) this.debris(piece.x, this.worldY(i * STONE_H), piece.w, stone.tier, stone.kind);
+      for (const piece of e.cut) this.debris(piece.x, this.worldY(i * STONE_H), piece.w, stone.tier, stone.kind, stone.material);
       this.popup(stone.x, this.worldY((i + 1) * STONE_H) - 6, e.drop.perfect ? `Perfect! +${e.favor}` : `+${e.favor}`, e.drop.perfect);
       if (e.drop.perfect) this.glow(stone.x, this.worldY(i * STONE_H), stone.w);
     } else if (e.type === 'missed') {
-      this.debris(e.drop.x, this.worldY(stackHeight(s)), e.drop.w, s.tier, s.moving.kind);
+      this.debris(e.drop.x, this.worldY(stackHeight(s)), e.drop.w, s.tier, s.moving.kind, s.moving.material);
       this.cameras.main.shake(200, 0.006);
       if (e.drop.caught) this.announce(["Mason's Grace", 'The stone is caught: try again']);
       if (s.phase === 'over') saveBest(s.best);
@@ -423,6 +559,20 @@ export class GameScene extends Phaser.Scene {
       const top = s.stones.at(-1)!;
       const y = this.worldY(stackHeight(s)) - 34;
       this.popup(top.x, y, e.passed ? `Trial passed! +${e.favor}` : 'Trial failed', e.passed);
+    } else if (e.type === 'toppled') {
+      // The tier's stones tumble off the way the temple was leaning.
+      const side = e.lean > 0 ? 1 : -1;
+      for (const g of this.stoneViews.splice(this.stoneViews.length - e.count, e.count)) this.tumble(g, side);
+      this.cameras.main.shake(250, 0.008);
+      this.announce(['The tier topples!', `The temple leaned ${Math.abs(Math.round(e.lean))} too far ${side > 0 ? 'right' : 'left'}`]);
+    } else if (e.type === 'regrown') {
+      this.redrawTop();
+      this.popup(s.stones.at(-1)!.x, this.worldY(stackHeight(s)) - 34, `Regrown +${e.px}`, true);
+    } else if (e.type === 'swapped') {
+      this.popup(PANEL.x + PANEL.w + 90, RESERVE_BUTTON.y + 8, `${KIND_INFO[e.kind].name} in hand`, false);
+    } else if (e.type === 'patron') {
+      const info = PATRON_INFO[e.patron];
+      this.announce([`${info.name} watches over you`, info.boon]);
     } else {
       if (e.balanced) this.ornament(e.tier);
       if (s.phase === 'crowned') this.crownTemple();
@@ -449,10 +599,16 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** A broken piece or a missed stone, tumbling down off the temple. */
-  private debris(x: number, y: number, w: number, tier: number, kind: StoneKind = 'normal') {
+  private debris(x: number, y: number, w: number, tier: number, kind: StoneKind = 'normal', material: MaterialId = 'limestone') {
     const g = this.add.graphics().setDepth(6).setPosition(x, y);
-    drawStone(g, w, tier, false, kind);
-    const side = x < TOWER_X ? -1 : 1;
+    drawStone(g, w, tier, false, kind, material);
+    this.tumble(g, x < TOWER_X ? -1 : 1);
+  }
+
+  /** Sends a drawn stone tumbling down off the temple to `side`, then destroys it. */
+  private tumble(g: Phaser.GameObjects.Graphics, side: number) {
+    const { x, y } = g;
+    g.setDepth(6);
     this.tweens.add({
       targets: g,
       y: y + 420,
@@ -512,11 +668,11 @@ export class GameScene extends Phaser.Scene {
     this.moving.setVisible(show);
     this.guide.clear();
     if (!show) return;
-    const key = `${m.w}|${s.tier}|${m.kind}`;
+    const key = `${m.w}|${s.tier}|${m.kind}|${m.material}`;
     if (key !== this.movingKey) {
       this.movingKey = key;
       this.moving.clear();
-      drawStone(this.moving, m.w, s.tier, false, m.kind);
+      drawStone(this.moving, m.w, s.tier, false, m.kind, m.material);
     }
     const y = this.worldY(m.h);
     this.moving.setPosition(m.x, y);
@@ -543,8 +699,8 @@ export class GameScene extends Phaser.Scene {
     this.pips.clear();
     for (let i = 0; i < STONES_PER_TIER; i++) {
       const x = PANEL.x + 16 + i * 30;
-      this.pips.fillStyle(OUTLINE).fillRect(x, PANEL.y + 78, 24, 14);
-      this.pips.fillStyle(i < s.inTier ? (s.wobbly ? 0xb08a6a : TIER_COLORS[(s.tier - 1) % TIER_COLORS.length]) : 0x3a3052).fillRect(x + 2, PANEL.y + 80, 20, 10);
+      this.pips.fillStyle(OUTLINE).fillRect(x, PANEL.y + 82, 24, 14);
+      this.pips.fillStyle(i < s.inTier ? (s.wobbly ? 0xb08a6a : TIER_COLORS[(s.tier - 1) % TIER_COLORS.length]) : 0x3a3052).fillRect(x + 2, PANEL.y + 84, 20, 10);
     }
     this.goalPips.clear();
     for (let t = 1; t <= GOAL_TIER; t++) {
@@ -564,22 +720,37 @@ export class GameScene extends Phaser.Scene {
       .setText(t ? (t.failed ? `Failed: ${TRIAL_INFO[t.id].short}` : `Trial: ${TRIAL_INFO[t.id].short} ${t.done}/${STONES_PER_TIER}`) : 'Trials from tier 2')
       .setColor(t && !t.failed ? '#9ad46a' : '#8a7ea0');
     const curse = curseNow(s);
-    this.curseText.setText(curse ? `Curse: ${CURSE_INFO[curse].name} (x${CURSE_MULT})` : '');
+    const material = s.material !== 'limestone' ? `${MATERIAL_INFO[s.material].name} tier` : '';
+    this.curseText.setText([curse ? `Curse: ${CURSE_INFO[curse].name} (x${CURSE_MULT})` : '', material].filter(Boolean).join('  '));
+    this.patronText.setText(s.patron ? `Patron: ${PATRON_INFO[s.patron].name}` : 'Choose a patron');
+    const reserveOn = s.tier >= RESERVE_FROM_TIER;
+    this.reserveText
+      .setText(reserveOn ? `Hold: ${s.reserve ? KIND_INFO[s.reserve].name.replace(' stone', '') : 'nothing'}` : `Reserve from tier ${RESERVE_FROM_TIER}`)
+      .setColor(reserveOn ? '#d8cbe8' : '#8a7ea0');
+    const swappable = canSwap(s);
+    for (const part of this.reserveParts) part.setVisible(reserveOn).setAlpha(swappable ? 1 : 0.4);
+    this.reserveButton = swappable ? { ...RESERVE_BUTTON } : null;
+    this.drawLean();
     const playing = s.phase === 'swinging' || s.phase === 'falling';
     this.windText.setText(s.endless && playing ? (s.wind ? `Gust ${s.wind > 0 ? '>>>' : '<<<'} ${Math.abs(s.wind)}` : 'Calm air') : '');
     const counts = BLESSINGS.filter((b) => s.blessings.includes(b)).map((b) => {
       const n = s.blessings.filter((x) => x === b).length;
-      return `${BLESSING_INFO[b].name}${n > 1 ? ` x${n}` : ''}`;
+      const held = b === 'grace' && s.grace ? ` (${s.grace} held)` : '';
+      return `${BLESSING_INFO[b].name}${n > 1 ? ` x${n}` : ''}${held}`;
     });
-    if (s.grace) counts.push(`(${s.grace} stone${s.grace > 1 ? 's' : ''} in grace)`);
+    if (s.grace && !s.blessings.includes('grace')) counts.push(`Grace bought (${s.grace} held)`);
     this.blessingsText.setText(counts.length ? counts : ['None yet']);
     // The hint shows until the first drop, while the temple is still too short to reach it.
     this.hint.setVisible(s.dropped === 0 && s.phase === 'swinging');
 
-    const offerKey = s.phase === 'blessing' ? `break:${s.offer.join(',')}` : '';
+    const offerKey = s.phase === 'blessing' ? `break:${s.offer.join(',')}:${s.material}` : '';
     if (offerKey !== this.offerKey) {
       this.offerKey = offerKey;
       this.buildOffer();
+    }
+    if ((s.phase === 'patron') !== this.patronShown) {
+      this.patronShown = s.phase === 'patron';
+      this.buildPatrons();
     }
 
     const ended = s.phase === 'over' || (s.phase === 'crowned' && this.crownedMs >= CROWN_MS);
@@ -614,28 +785,33 @@ export class GameScene extends Phaser.Scene {
     this.shopButtons = [];
     this.curseToggle = null;
     this.buildOnButton = null;
+    this.materialButtons = [];
     const s = this.state;
     if (s.phase !== 'blessing') return;
     const dim = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x0c0916, 0.55).setInteractive();
     this.addOffer(dim, ...this.makeShop());
+    if (canPickMaterial(s)) this.addOffer(...this.makeMaterials());
     if (!s.offer.length) {
-      const title = this.add.text(OFFER_TITLE.x + 70, OFFER_TITLE.y, `Tier ${s.tier - 1} is wobbly: no blessing this time`, textStyle(20, '#d8cbe8')).setOrigin(0.5);
+      const sky = s.endless && s.tier === GOAL_TIER + 1;
+      const text = sky ? 'Into the endless sky: pick a stone' : `Tier ${s.tier - 1} is wobbly: no blessing this time`;
+      const title = this.add.text(OFFER_TITLE.x + 70, OFFER_TITLE.y, text, textStyle(20, '#d8cbe8')).setOrigin(0.5);
       this.addOffer(title, ...this.makeBuildOn());
       return;
     }
     const title = this.add.text(OFFER_TITLE.x, OFFER_TITLE.y, `Tier ${s.tier - 1} balanced: choose a blessing`, textStyle(20, '#f3c64e')).setOrigin(0.5);
     this.addOffer(title, ...this.makeReroll());
     if (s.curseOffer) this.addOffer(...this.makeCurse());
+    const cards = s.offer.length > CARDS.xs.length ? CARDS_FOUR : CARDS;
     s.offer.forEach((id, i) => {
       const info = BLESSING_INFO[id];
-      const x = CARDS.xs[i];
-      const { y, w, h } = CARDS;
+      const x = cards.xs[i];
+      const { y, w, h } = cards;
       const bg = this.add.rectangle(x, y, w, h, 0x2c2446).setStrokeStyle(3, 0x6a5a9a);
       const icon = this.add.graphics().setPosition(x, y - 50);
       this.drawBlessingIcon(icon, id, info.color);
-      const name = this.add.text(x, y + 6, info.name, textStyle(17, '#f3c64e')).setOrigin(0.5);
+      const name = this.add.text(x, y + 6, info.name, textStyle(w < 200 ? 15 : 17, '#f3c64e')).setOrigin(0.5);
       const text = this.add
-        .text(x, y + 30, info.text, { fontFamily: FONT, fontSize: '13px', color: '#e8dcf4', align: 'center', wordWrap: { width: w - 28 }, lineSpacing: 3 })
+        .text(x, y + 30, info.text, { fontFamily: FONT, fontSize: '13px', color: '#e8dcf4', align: 'center', wordWrap: { width: w - 24 }, lineSpacing: 3 })
         .setOrigin(0.5, 0);
       bg.setInteractive({ useHandCursor: true })
         .on('pointerover', () => bg.setStrokeStyle(3, GOLD))
@@ -679,10 +855,12 @@ export class GameScene extends Phaser.Scene {
     const s = this.state;
     const title = this.add.text(SHOP_TITLE.x, SHOP_TITLE.y, `Spend favor (you have ${s.favor})`, textStyle(14, '#d8cbe8')).setOrigin(0.5);
     const parts: UiPart[] = [title];
-    SHOP.forEach((id, i) => {
+    const items = shopFor(s);
+    items.forEach((id, i) => {
       const info = SHOP_INFO[id];
       const { y, w, h } = SHOP_ROW;
-      const x = SHOP_ROW.xs[i];
+      // Three buttons sit on the row's spots; two are centred under the title.
+      const x = items.length === SHOP_ROW.xs.length ? SHOP_ROW.xs[i] : SHOP_TITLE.x + (i - (items.length - 1) / 2) * (w + 18);
       const bought = s.bought.includes(id);
       const afford = canBuy(s, id);
       const bg = this.add.rectangle(0, 0, w, h, bought ? 0x3a3060 : 0x2c2446).setStrokeStyle(3, bought ? GOLD : afford ? info.color : 0x4a3a6a);
@@ -713,6 +891,97 @@ export class GameScene extends Phaser.Scene {
       g.fillTriangle(x - 12, 0, x - 7, -5, x - 7, 5).fillTriangle(x + 12, 0, x + 7, -5, x + 7, 5);
     } else {
       g.fillEllipse(x - 5, 2, 9, 16).fillEllipse(x + 5, 2, 9, 16);
+    }
+  }
+
+  /** The row that picks the next tier's material: the chosen one lit, tapped again to go back to limestone. */
+  private makeMaterials() {
+    const s = this.state;
+    const title = this.add
+      .text(MATERIAL_TITLE.x, MATERIAL_TITLE.y, `Stone for tier ${s.tier}: ${MATERIAL_INFO[s.material].name}`, { fontFamily: FONT, fontSize: '12px', color: '#d8cbe8' })
+      .setOrigin(0.5);
+    const parts: UiPart[] = [title];
+    MATERIAL_PICKS.forEach((id, i) => {
+      const info = MATERIAL_INFO[id];
+      const { y, w, h } = MATERIAL_ROW;
+      const x = MATERIAL_ROW.xs[i];
+      const picked = s.material === id;
+      const bg = this.add.rectangle(0, 0, w, h, picked ? 0x3a3060 : 0x2c2446).setStrokeStyle(3, picked ? GOLD : info.color);
+      const swatch = this.add.graphics();
+      swatch.fillStyle(OUTLINE).fillRect(-w / 2 + 9, -8, 22, 16);
+      swatch.fillStyle(info.color).fillRect(-w / 2 + 10, -7, 20, 14);
+      swatch.fillStyle(shade(info.color, 0.3)).fillRect(-w / 2 + 10, -7, 20, 2);
+      const name = this.add.text(-w / 2 + 38, -8, info.name, textStyle(14, picked ? '#f3c64e' : '#f3e9d2')).setOrigin(0, 0.5);
+      const text = this.add.text(-w / 2 + 38, 7, info.short, { fontFamily: FONT, fontSize: '11px', color: '#d8cbe8' }).setOrigin(0, 0.5);
+      bg.setInteractive({ useHandCursor: true })
+        .on('pointerover', () => bg.setFillStyle(0x3a3060))
+        .on('pointerout', () => !picked && bg.setFillStyle(0x2c2446))
+        .on('pointerdown', () => chooseMaterial(this.state, id) && this.rebuildOffer());
+      parts.push(...place([bg, swatch, name, text], x, y));
+      this.materialButtons.push({ id, x, y, w, h });
+    });
+    return parts;
+  }
+
+  /** Before the first stone: the two patrons on offer, each a card with its boon and its bane. */
+  private buildPatrons() {
+    for (const part of this.patronParts) part.destroy();
+    this.patronParts = [];
+    this.patronCards = [];
+    const s = this.state;
+    if (s.phase !== 'patron') return;
+    const dim = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x0c0916, 0.55).setInteractive();
+    const title = this.add.text(PATRON_TITLE.x, PATRON_TITLE.y, 'Choose a patron for this temple', textStyle(22, '#f3c64e')).setOrigin(0.5);
+    const sub = this.add.text(PATRON_TITLE.x, PATRON_TITLE.y + 30, 'Their rule holds for the whole run', textStyle(14, '#d8cbe8')).setOrigin(0.5);
+    const parts: UiPart[] = [dim, title, sub];
+    s.patronOffer.forEach((id, i) => {
+      const info = PATRON_INFO[id];
+      const x = PATRON_CARDS.xs[i];
+      const { y, w, h } = PATRON_CARDS;
+      const bg = this.add.rectangle(x, y, w, h, 0x2c2446).setStrokeStyle(3, 0x6a5a9a);
+      const icon = this.add.graphics().setPosition(x, y - 56);
+      this.drawPatronIcon(icon, id, info.color);
+      const name = this.add.text(x, y - 4, info.name, textStyle(16, '#f3c64e')).setOrigin(0.5);
+      const style = (color: string) => ({ fontFamily: FONT, fontSize: '12px', color, align: 'center', wordWrap: { width: w - 24 }, lineSpacing: 2 });
+      const boon = this.add.text(x, y + 16, info.boon, style('#9ad46a')).setOrigin(0.5, 0);
+      const bane = this.add.text(x, y + 54, info.bane, style('#e8a0d4')).setOrigin(0.5, 0);
+      bg.setInteractive({ useHandCursor: true })
+        .on('pointerover', () => bg.setStrokeStyle(3, GOLD))
+        .on('pointerout', () => bg.setStrokeStyle(3, 0x6a5a9a))
+        .on('pointerdown', () => choosePatron(this.state, id));
+      parts.push(bg, icon, name, boon, bane);
+      this.patronCards.push({ id, x, y, w, h });
+    });
+    for (const part of parts) this.patronParts.push(part.setScrollFactor(0).setDepth(UI_DEPTH + 10));
+  }
+
+  /** A small emblem for each patron, centred on the graphics' origin. */
+  private drawPatronIcon(g: Phaser.GameObjects.Graphics, id: PatronId, color: number) {
+    g.fillStyle(color, 0.2).fillCircle(0, 0, 30);
+    g.lineStyle(2, color).strokeCircle(0, 0, 30);
+    g.fillStyle(color);
+    switch (id) {
+      case 'gilded':
+        // An open hand: a palm and four fingers.
+        g.fillRect(-12, -2, 24, 16);
+        for (const fx of [-12, -5, 2, 9]) g.fillRect(fx, -18, 5, 18);
+        break;
+      case 'hands':
+        // Four hands reaching in from the sides.
+        for (const [dx, dy] of [[-18, -8], [18, -8], [-18, 8], [18, 8]] as const) g.fillRect(dx - 6, dy - 3, 12, 6);
+        g.fillCircle(0, 0, 7);
+        break;
+      case 'patient':
+        // An hourglass, sand settled at the bottom.
+        g.fillRect(-12, -18, 24, 3).fillRect(-12, 15, 24, 3);
+        g.fillTriangle(-9, 14, 9, 14, 0, 2);
+        g.lineStyle(2, color).lineBetween(-9, -15, 0, 0).lineBetween(9, -15, 0, 0);
+        break;
+      case 'storm':
+        // A gust: three streaks and a swirl.
+        for (const [y, w] of [[-10, 36], [2, 26], [12, 30]] as const) g.fillRect(-w / 2 - 2, y - 2, w, 4);
+        g.lineStyle(3, color).strokeCircle(16, -8, 5);
+        break;
     }
   }
 
@@ -767,7 +1036,7 @@ export class GameScene extends Phaser.Scene {
     const i = this.state.stones.length - 1;
     const top = this.state.stones[i];
     this.stoneViews[i].clear();
-    drawStone(this.stoneViews[i], top.w, top.tier, top.perfect, top.kind);
+    drawStone(this.stoneViews[i], top.w, top.tier, top.perfect, top.kind, top.material);
     this.glow(top.x, this.worldY(i * STONE_H), top.w);
     if (this.ornaments.has(top.tier) && i === top.tier * STONES_PER_TIER - 1) this.ornament(top.tier);
   }
