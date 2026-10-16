@@ -50,8 +50,16 @@ import {
   UpgradeDef,
   WATCH,
   bushAt,
+  AI_BUILDS,
+  AI_BUILD_FOR,
+  BUYBACK,
+  RECALL,
+  WARD,
+  WARD_AI,
+  WARD_SPOTS,
+  bountyOf,
 } from './data';
-import { GameState, Unit, dist, getUnit, laneNear, levelFor, refreshStats, spawnWave } from './state';
+import { GameState, Unit, dist, getUnit, laneNear, levelFor, refreshStats, spawnWard, spawnWave } from './state';
 import { shortName } from './names';
 import { aiLog } from '../../../../shared/watch';
 
@@ -79,8 +87,8 @@ export function tick(s: GameState, dt: number) {
   for (const u of [...s.units]) updateUnit(s, u, dt);
   updateProjectiles(s, dt);
   updateZones(s, dt);
-  // Dead minions are gone for good; their slots are cleaned up here.
-  s.units = s.units.filter((u) => !(u.dead && u.kind === 'minion'));
+  // Dead minions and wards are gone for good; their slots are cleaned up here.
+  s.units = s.units.filter((u) => !(u.dead && (u.kind === 'minion' || u.kind === 'ward')));
   if (s.phase !== 'playing') return;
   // Objectives are the player's errands, so a watched match runs none.
   if (!s.watch) updateObjective(s);
@@ -257,6 +265,7 @@ export function commandMove(s: GameState, point: Vec) {
   if (!p || p.dead) return;
   p.moveTo = { x: clampWorld(point).x, y: clampWorld(point).y };
   p.target = null;
+  p.recallMs = 0;
 }
 
 /** Sends a player's champion to attack an enemy unit. */
@@ -265,6 +274,7 @@ export function commandAttack(s: GameState, id: number) {
   if (!p || p.dead) return;
   p.target = id;
   p.moveTo = null;
+  p.recallMs = 0;
 }
 
 /** What an item costs a champion: its price less the parts it builds from that the champion owns. */
@@ -273,15 +283,24 @@ export function priceFor(u: Unit, item: ItemDef): number {
   return item.cost - parts.reduce((n, id) => n + (ITEMS.find((i) => i.id === id)?.cost ?? 0), 0);
 }
 
-/** Buys an item for a champion that stands near its Nexus. Parts it builds from are used up. */
+/**
+ * Buys an item for a champion that stands near its Nexus. Parts it builds from are used up. A
+ * Vision Ward adds to the wards carried instead of the bag.
+ */
 export function buy(u: Unit, id: string): boolean {
   const item = ITEMS.find((i) => i.id === id);
-  if (!item || u.side === 'neutral' || u.items.includes(id)) return false;
+  if (!item || u.side === 'neutral' || (!item.ward && u.items.includes(id))) return false;
+  // A champion shops at its Nexus, or anywhere while it waits to respawn.
+  if (!u.dead && !atShop(u)) return false;
+  if (item.ward) {
+    if (u.wards >= WARD.carry || u.gold < item.cost) return false;
+    u.gold -= item.cost;
+    u.wards++;
+    return true;
+  }
   const parts = (item.from ?? []).filter((p) => u.items.includes(p));
   const price = priceFor(u, item);
   if (u.gold < price || u.items.length - parts.length >= MAX_ITEMS) return false;
-  // A champion shops at its Nexus, or anywhere while it waits to respawn.
-  if (!u.dead && !atShop(u)) return false;
   u.gold -= price;
   u.items = u.items.filter((i) => !parts.includes(i));
   u.items.push(id);
@@ -299,12 +318,14 @@ export function atFountain(u: Unit): boolean {
   return u.side !== 'neutral' && dist(u, BASE[u.side]) <= FOUNTAIN.radius;
 }
 
-/** Uses an item's active (a short dash, or a drink from the healing flask). */
+/** Uses an item's active (a short dash, a drink from the healing flask, or planting a ward). */
 export function useActive(s: GameState, u: Unit, id: ActiveId, aim: Vec): boolean {
   const def = ACTIVES.find((a) => a.id === id);
   if (!def || s.phase !== 'playing' || u.dead || u.stunMs > 0 || (u.activeCds[id] ?? 0) > 0) return false;
+  if (id === 'ward') return plantWard(s, u, aim);
   if (!u.items.some((i) => ITEMS.find((d) => d.id === i)?.active === id)) return false;
   u.activeCds[id] = def.cd;
+  u.recallMs = 0;
   if (id === 'dash') {
     const to = towards(u, aim, def.range ?? 0);
     s.fx.push({ kind: 'line', x: u.x, y: u.y, x2: to.x, y2: to.y, color: '#7fb6ff', ms: 250 });
@@ -316,6 +337,61 @@ export function useActive(s: GameState, u: Unit, id: ActiveId, aim: Vec): boolea
     u.hp = Math.min(u.maxHp, u.hp + (def.heal ?? 0));
     s.fx.push({ kind: 'ring', x: u.x, y: u.y, r: 34, color: '#62d86f', ms: 500 });
   }
+  return true;
+}
+
+/** Plants one of a champion's wards within `WARD.range` of it, toward `aim`. */
+export function plantWard(s: GameState, u: Unit, aim: Vec): boolean {
+  if (s.phase !== 'playing' || u.dead || u.wards <= 0 || u.side === 'neutral') return false;
+  const at = towards(u, aim, WARD.range);
+  spawnWard(s, u.side, at.x, at.y);
+  u.wards--;
+  if (dist(u, at) > 1) u.facing = Math.atan2(at.y - u.y, at.x - u.x);
+  u.castMs = 300;
+  s.fx.push({ kind: 'ring', x: at.x, y: at.y, r: 30, color: SIDE_COLOR[u.side], ms: 500 });
+  return true;
+}
+
+/**
+ * Starts a recall: the champion stands still for `RECALL.ms` and then appears at its Nexus. Damage,
+ * a move, an attack or a cast cancels it. Returns false if it can't recall now.
+ */
+export function startRecall(s: GameState, u: Unit): boolean {
+  if (s.phase !== 'playing' || u.dead || !u.champ || u.recallMs > 0 || u.stunMs > 0 || atFountain(u)) return false;
+  u.recallMs = RECALL.ms;
+  u.lastRecallAt = s.time;
+  u.moveTo = null;
+  u.target = null;
+  return true;
+}
+
+function finishRecall(s: GameState, u: Unit) {
+  s.fx.push({ kind: 'ring', x: u.x, y: u.y, r: 40, color: '#9fd8ff', ms: 500 });
+  u.x = u.spawnX;
+  u.y = u.spawnY;
+  u.target = null;
+  u.moveTo = null;
+  if (u.path) u.wp = 1;
+  s.fx.push({ kind: 'ring', x: u.x, y: u.y, r: 40, color: '#9fd8ff', ms: 500 });
+  if (!u.player) aiLog(u.side, `${shortName(u.name)} recalls home`);
+}
+
+/** What a dead champion pays to respawn at once. */
+export function buybackCost(u: Unit): number {
+  return BUYBACK.base + u.level * BUYBACK.perLevel;
+}
+
+/** Pays for a dead champion to respawn at once, once per `BUYBACK.cd`. Returns false if it can't. */
+export function buyBack(s: GameState, u: Unit): boolean {
+  if (s.phase !== 'playing' || !u.dead || !u.champ || s.time < u.buybackReadyAt) return false;
+  const cost = buybackCost(u);
+  if (u.gold < cost) return false;
+  u.gold -= cost;
+  u.buybackReadyAt = s.time + BUYBACK.cd;
+  revive(u);
+  s.fx.push({ kind: 'ring', x: u.x, y: u.y, r: 50, color: '#f2c14e', ms: 600 });
+  if (u.player) notice(s, `You bought back for ${cost} gold`, '#f2c14e');
+  else aiLog(u.side, `${shortName(u.name)} buys back for ${cost} gold`);
   return true;
 }
 
@@ -346,6 +422,7 @@ export function cast(s: GameState, caster: Unit, key: AbilityKey, aim: Vec): boo
   if (!ab || caster.level < ab.level || caster.cds[key] > 0) return false;
   caster.cds[key] = ab.cd * Math.max(MIN_CD, 1 - (caster.cdr + buffSum(caster, 'cdr')) / 100);
   caster.castMs = 300;
+  caster.recallMs = 0;
   caster.revealMs = REVEAL_MS;
   caster.lullMs = 0;
   breakStealth(caster);
@@ -458,6 +535,14 @@ export function cast(s: GameState, caster: Unit, key: AbilityKey, aim: Vec): boo
 /** Hurts a unit after its armor and any shield. A unit reduced to 0 health dies. Returns the health it lost. */
 export function damage(s: GameState, t: Unit, amount: number, sourceId: number): number {
   if (t.dead || amount <= 0 || !hittable(t) || invulnerable(s, t)) return 0;
+  // A ward falls to a fixed number of hits, whatever they are.
+  if (t.kind === 'ward') {
+    t.hp -= 1;
+    t.flash = 120;
+    t.lastHitBy = sourceId;
+    if (t.hp <= 0) kill(s, t, sourceId);
+    return 1;
+  }
   // A jungle camp is only hurt by a champion that goes for it or that it is already fighting:
   // splash, bursts and stray bolts from a fight near by pass it by.
   if (t.kind === 'camp') {
@@ -477,8 +562,9 @@ export function damage(s: GameState, t: Unit, amount: number, sourceId: number):
   t.hp -= rest;
   t.flash = 120;
   t.lastHitBy = sourceId;
-  // Hurting a champion draws the fire of that champion's towers.
+  // Hurting a champion draws the fire of that champion's towers, and breaks its recall.
   if (t.kind === 'champion') {
+    t.recallMs = 0;
     const src = getUnit(s, sourceId);
     if (src && src.kind === 'champion') src.aggroMs = TOWER.aggroMs;
   }
@@ -520,10 +606,23 @@ function dealt(s: GameState, u: Unit, amount: number): number {
 
 function updateUnit(s: GameState, u: Unit, dt: number) {
   if (u.kind === 'watchstone') return;
+  if (u.kind === 'ward') {
+    // A ward burns out on its own in the end.
+    if (!u.dead && s.time >= u.expiresAt) {
+      u.dead = true;
+      u.hp = 0;
+    }
+    u.flash = Math.max(0, u.flash - dt);
+    return;
+  }
   if (u.dead) {
     if ((u.kind === 'champion' || u.kind === 'camp' || u.kind === 'beast') && s.time >= u.respawnAt) {
       revive(u);
       if (u.kind === 'beast') notice(s, 'The guardian beast has awoken', '#f2c14e');
+    } else if (u.kind === 'champion' && !u.player) {
+      // A dead AI champion spends its wait at the shop, and buys back when its base is in danger.
+      aiShop(u);
+      aiBuyBack(s, u);
     }
     return;
   }
@@ -550,6 +649,14 @@ function updateUnit(s: GameState, u: Unit, dt: number) {
     u.hasteMs = Math.max(0, u.hasteMs - dt);
     u.lullMs += dt;
     u.gold += (GOLD_PER_SEC * dt) / 1000;
+    if (u.recallMs > 0) {
+      u.recallMs -= dt;
+      if (u.recallMs <= 0) {
+        u.recallMs = 0;
+        finishRecall(s, u);
+      }
+    }
+    if (!u.player) aiShop(u);
     const p = u.champ.passive;
     const regen = (p.regen ?? 0) + buffSum(u, 'regen');
     if (regen) u.hp = Math.min(u.maxHp, u.hp + (regen * dt) / 1000);
@@ -611,6 +718,7 @@ function revive(u: Unit) {
   u.buffs = [];
   u.lastHitBy = null;
   u.hasteMs = 0;
+  u.recallMs = 0;
   if (u.path) u.wp = 1;
 }
 
@@ -681,6 +789,14 @@ function kill(s: GameState, t: Unit, killerId: number) {
       s.fx.push({ kind: 'ring', x: t.x, y: t.y, r: 70, color: SIDE_COLOR[t.side], ms: 700 });
       break;
     }
+    case 'ward': {
+      if (champKiller) champKiller.gold += WARD.gold;
+      const foe = t.side === 'blue' ? 'red' : 'blue';
+      aiLog(foe, 'destroys a ward');
+      if (t.side === 'blue' && !s.watch) notice(s, 'Red destroyed one of your wards', SIDE_COLOR.red);
+      s.fx.push({ kind: 'ring', x: t.x, y: t.y, r: 24, color: SIDE_COLOR[t.side], ms: 400 });
+      break;
+    }
     case 'tower':
       if (champKiller) champKiller.gold += TOWER.gold;
       aiLog(t.side === 'blue' ? 'red' : 'blue', `takes a ${t.lane} tower`);
@@ -690,19 +806,31 @@ function kill(s: GameState, t: Unit, killerId: number) {
       s.phase = t.side === 'blue' ? 'lost' : 'won';
       s.winner = t.side === 'blue' ? 'red' : 'blue';
       break;
-    case 'champion':
+    case 'champion': {
       t.deaths++;
+      t.recallMs = 0;
+      const bounty = bountyOf(t.killStreak);
+      t.killStreak = 0;
       if (champKiller && champKiller.side !== t.side) {
-        champKiller.gold += KILL.gold;
+        champKiller.gold += KILL.gold + bounty;
         champKiller.kills++;
+        champKiller.killStreak++;
         gainXp(s, champKiller, KILL.xp);
         const who = champKiller.player ? 'You' : shortName(champKiller.name);
-        aiLog(champKiller.side, `${shortName(champKiller.name)} slays ${shortName(t.name)}`);
-        notice(s, t.player ? `${who} slew you` : `${who} slew ${shortName(t.name)}`, SIDE_COLOR[champKiller.side as Team]);
+        const side = champKiller.side as Team;
+        aiLog(side, `${shortName(champKiller.name)} slays ${shortName(t.name)}${bounty ? ` and claims a ${bounty} gold bounty` : ''}`);
+        notice(s, `${t.player ? `${who} slew you` : `${who} slew ${shortName(t.name)}`}${bounty ? `, claiming a ${bounty}g bounty` : ''}`, SIDE_COLOR[side]);
+        // Three kills in a row put a price on the killer's head, and every kill after raises it.
+        const price = bountyOf(champKiller.killStreak);
+        if (price) {
+          aiLog(side, `${shortName(champKiller.name)} is on a ${champKiller.killStreak} kill streak: a ${price} gold bounty`);
+          notice(s, `${champKiller.player ? 'You are' : `${shortName(champKiller.name)} is`} on a ${champKiller.killStreak} kill streak: ${price}g bounty`, '#f2c14e');
+        }
       }
       t.respawnAt = s.time + RESPAWN_BASE_MS + t.level * RESPAWN_PER_LEVEL_MS;
       s.fx.push({ kind: 'ring', x: t.x, y: t.y, r: 50, color: SIDE_COLOR[t.side], ms: 500 });
       break;
+    }
   }
 }
 
@@ -739,6 +867,8 @@ function notice(s: GameState, text: string, color: string) {
 
 /** Plays a player's champion: walk to a point, attack a clicked unit, or hit whatever is in reach. */
 function playerAct(s: GameState, u: Unit, dt: number) {
+  // A recalling champion stands and waits; a click breaks the channel.
+  if (u.recallMs > 0) return;
   if (u.moveTo) {
     if (dist(u, u.moveTo) < 4) u.moveTo = null;
     else {
@@ -762,12 +892,19 @@ function playerAct(s: GameState, u: Unit, dt: number) {
 
 /** The AI for allies, enemies and minions: fight what is in reach, otherwise walk the lane. */
 function aiAct(s: GameState, u: Unit, dt: number) {
-  if (u.kind === 'champion' && championPlan(s, u, dt)) return;
+  if (u.kind === 'champion') {
+    // A hurt champion drinks its flask, and one carrying a ward plants it at a spot it passes.
+    if (u.hp < u.maxHp * 0.4) useActive(s, u, 'flask', u);
+    aiWard(s, u);
+    if (championPlan(s, u, dt)) return;
+  }
   const reach = u.kind === 'champion' ? CHAMP_AGGRO : MINION.aggro;
   const t =
     nearest(s, u, reach, (e) => e.kind === 'champion') ??
     nearest(s, u, reach, (e) => e.kind === 'minion') ??
-    nearest(s, u, u.range, (e) => e.kind === 'tower' || e.kind === 'nexus' || e.kind === 'inhibitor');
+    nearest(s, u, u.range, (e) => e.kind === 'tower' || e.kind === 'nexus' || e.kind === 'inhibitor') ??
+    // An enemy ward in the way is knocked down.
+    (u.kind === 'champion' ? nearest(s, u, 220, (e) => e.kind === 'ward') : null);
   u.target = t ? t.id : null;
   if (t && u.kind === 'champion') castAi(s, u, t);
   // A ranged champion steps back from a melee champion between its shots.
@@ -790,6 +927,18 @@ function aiAct(s: GameState, u: Unit, dt: number) {
  * jungle for a buff or a watchstone. Returns true when the plan moved the champion this tick.
  */
 function championPlan(s: GameState, u: Unit, dt: number): boolean {
+  // Recalling: stand still until it goes through, or damage breaks it.
+  if (u.recallMs > 0) {
+    u.target = null;
+    return true;
+  }
+  const home = BASE[u.side as Team];
+  const foeNear = (r: number) => nearest(s, u, r, (e) => e.kind === 'champion');
+  // Home and hurt: heal up at the fountain (the shop happens on its own) before walking out again.
+  if (atFountain(u) && u.hp < u.maxHp * 0.9 && !foeNear(CHAMP_AGGRO)) {
+    u.target = null;
+    return true;
+  }
   if (s.time < u.retreatUntil) {
     u.target = null;
     moveToward(u, fallbackPoint(s, u), dt);
@@ -822,8 +971,18 @@ function championPlan(s: GameState, u: Unit, dt: number): boolean {
       return true;
     }
   }
+  // Far from home with no enemy about, a champion that is low, or rich with something to buy, goes home.
+  if (s.time - u.lastRecallAt >= RECALL.aiEvery && !s.contesters.includes(u.id) && dist(u, home) > FOUNTAIN.radius + 300 && !foeNear(RECALL.aiLook)) {
+    const low = u.hp < u.maxHp * RECALL.aiLow;
+    const next = nextBuy(u);
+    const rich = next !== null && u.gold >= Math.max(RECALL.rich, priceFor(u, next));
+    if ((low || rich) && startRecall(s, u)) {
+      aiLog(u.side, `${shortName(u.name)} recalls, ${low ? 'hurt' : `to buy the ${next!.name}`}`);
+      return true;
+    }
+  }
   // An enemy champion in reach: the lane fight below handles it.
-  if (nearest(s, u, CHAMP_AGGRO, (e) => e.kind === 'champion')) return false;
+  if (foeNear(CHAMP_AGGRO)) return false;
   const beast = s.contesters.includes(u.id) ? getUnit(s, s.beast) : null;
   if (beast && !beast.dead) {
     u.target = beast.id;
@@ -872,7 +1031,49 @@ function fallbackPoint(s: GameState, u: Unit): Vec {
 
 /** Whether an AI champion is free for a team plan: healthy, not falling back, not on another plan. */
 function free(s: GameState, u: Unit, minHp: number): boolean {
-  return u.kind === 'champion' && !u.player && !u.dead && u.hp >= u.maxHp * minHp && s.time >= u.retreatUntil && u.gankTarget === null && u.jungleTarget === null;
+  return u.kind === 'champion' && !u.player && !u.dead && u.recallMs <= 0 && u.hp >= u.maxHp * minHp && s.time >= u.retreatUntil && u.gankTarget === null && u.jungleTarget === null;
+}
+
+/** The next item on an AI champion's build that it doesn't own yet, or null when the build is done. */
+function nextBuy(u: Unit): ItemDef | null {
+  const plan = AI_BUILDS[AI_BUILD_FOR[u.champ?.role ?? ''] ?? 'fighter'];
+  for (const id of plan) {
+    if (u.items.includes(id)) continue;
+    // A part is done with once the item it builds into is owned.
+    if (ITEMS.some((it) => it.from?.includes(id) && u.items.includes(it.id))) continue;
+    return ITEMS.find((it) => it.id === id) ?? null;
+  }
+  return null;
+}
+
+/** An AI champion at home or dead buys the next item of its build it can pay for, then a ward when it has none. */
+function aiShop(u: Unit) {
+  if (!u.champ || u.player || (!u.dead && !atShop(u))) return;
+  const next = nextBuy(u);
+  if (next && u.gold >= priceFor(u, next) && buy(u, next.id)) {
+    aiLog(u.side, `${shortName(u.name)} buys the ${next.name}`);
+    return;
+  }
+  if (u.wards === 0 && buy(u, 'ward')) aiLog(u.side, `${shortName(u.name)} buys a ward`);
+}
+
+/** A dead AI champion buys back when an enemy champion stands near its Nexus and it has time left to wait. */
+function aiBuyBack(s: GameState, u: Unit) {
+  if (s.time < u.buybackReadyAt || u.gold < buybackCost(u) || u.respawnAt - s.time < 3000) return;
+  const home = BASE[u.side as Team];
+  const threat = s.units.some((e) => e.kind === 'champion' && !e.dead && e.side !== u.side && e.side !== 'neutral' && dist(e, home) <= BUYBACK.aiThreat);
+  if (threat) buyBack(s, u);
+}
+
+/** An AI champion carrying a ward plants it at a spot it passes that its team has no ward at. */
+function aiWard(s: GameState, u: Unit) {
+  if (u.wards <= 0 || u.recallMs > 0) return;
+  for (const spot of WARD_SPOTS) {
+    if (dist(u, spot) > WARD_AI.reach) continue;
+    if (s.units.some((w) => w.kind === 'ward' && !w.dead && w.side === u.side && dist(w, spot) < WARD_AI.taken)) continue;
+    if (plantWard(s, u, spot)) aiLog(u.side, `${shortName(u.name)} wards ${spot.x === BEAST.x && spot.y === BEAST.y ? "the beast's pit" : 'the river'}`);
+    return;
+  }
 }
 
 /** Each tick, picks the AI champions of each team that go for the beast while it is awake. */
@@ -897,11 +1098,14 @@ function updateContesters(s: GameState) {
 /** Now and then each team sends one AI champion from another lane to gang up on the weakest enemy. */
 function updateGanks(s: GameState) {
   if (s.time < s.nextGank) return;
-  s.nextGank = s.time + GANK.every;
+  // While a champion carries a bounty, the hunts come twice as often.
+  const hunted = s.units.some((u) => u.kind === 'champion' && !u.dead && bountyOf(u.killStreak) > 0);
+  s.nextGank = s.time + (hunted ? GANK.every / 2 : GANK.every);
   for (const team of TEAMS) {
+    // The biggest bounty in sight first, then the weakest.
     const prey = s.units
       .filter((u) => u.kind === 'champion' && !u.dead && u.side !== team && !hiddenFrom(s, team, u))
-      .sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp || a.id - b.id)[0];
+      .sort((a, b) => bountyOf(b.killStreak) - bountyOf(a.killStreak) || a.hp / a.maxHp - b.hp / b.maxHp || a.id - b.id)[0];
     if (!prey) continue;
     const hunter = s.units
       .filter((u) => u.side === team && free(s, u, GANK.minHp) && !s.contesters.includes(u.id) && dist(u, prey) > GANK.from)
@@ -910,7 +1114,8 @@ function updateGanks(s: GameState) {
     hunter.gankTarget = prey.id;
     hunter.gankUntil = s.time + GANK.ms;
     const lane = laneNear(prey);
-    aiLog(team, `${shortName(hunter.name)} roams to the ${lane} lane after ${shortName(prey.name)}`);
+    const price = bountyOf(prey.killStreak);
+    aiLog(team, `${shortName(hunter.name)} roams to the ${lane} lane after ${shortName(prey.name)}${price ? ` and its ${price} gold bounty` : ''}`);
     if (team === 'red') notice(s, prey.player ? `Red's ${shortName(hunter.name)} is coming for you` : `Red's ${shortName(hunter.name)} roams to the ${lane} lane`, SIDE_COLOR.red);
     else notice(s, `Your ${shortName(hunter.name)} roams to the ${lane} lane`, SIDE_COLOR.blue);
   }
@@ -981,6 +1186,7 @@ function sightOf(u: Unit): number {
     case 'tower':
     case 'inhibitor':
     case 'nexus':
+    case 'ward':
       return SIGHT[u.kind];
     case 'watchstone':
       return u.side === 'neutral' ? 0 : SIGHT.watchstone;
@@ -1009,6 +1215,7 @@ function updateVision(s: GameState) {
   for (const team of TEAMS) {
     const eyes = viewers(s, team);
     const close = s.units.filter((v) => !v.dead && v.side === team && (v.kind === 'champion' || v.kind === 'minion' || v.kind === 'tower'));
+    const wards = s.units.filter((v) => !v.dead && v.side === team && v.kind === 'ward');
     for (const c of s.units) {
       if (c.dead || c.side === team || c.kind === 'tower' || c.kind === 'inhibitor' || c.kind === 'nexus' || c.kind === 'watchstone') {
         c.hidden[team] = false;
@@ -1019,7 +1226,8 @@ function updateVision(s: GameState) {
         if (stealthed(c)) seen = close.some((v) => dist(v, c) <= BUSH_REVEAL);
         else if (c.revealMs <= 0) {
           const bush = bushAt(c);
-          if (bush >= 0) seen = close.some((v) => dist(v, c) <= BUSH_REVEAL || bushAt(v) === bush);
+          // A ward's eye sees into the grass.
+          if (bush >= 0) seen = close.some((v) => dist(v, c) <= BUSH_REVEAL || bushAt(v) === bush) || wards.some((w) => dist(w, c) <= SIGHT.ward);
         }
       }
       c.hidden[team] = !seen;
@@ -1229,7 +1437,7 @@ function updateProjectiles(s: GameState, dt: number) {
     p.y += p.vy * dt;
     p.left -= step;
     for (const e of s.units) {
-      if (e.dead || e.side === p.side || !hittable(e) || p.hit.includes(e.id)) continue;
+      if (e.dead || e.side === p.side || !hittable(e) || e.kind === 'ward' || p.hit.includes(e.id)) continue;
       if (Math.hypot(e.x - p.x, e.y - p.y) > p.width + e.radius) continue;
       p.hit.push(e.id);
       const owner = getUnit(s, p.owner);
@@ -1258,7 +1466,7 @@ function updateZones(s: GameState, dt: number) {
   for (const z of s.zones) {
     z.left -= dt;
     for (const e of s.units) {
-      if (e.dead || e.side === z.side || !hittable(e) || e.kind === 'tower' || e.kind === 'inhibitor' || e.kind === 'nexus') continue;
+      if (e.dead || e.side === z.side || !hittable(e) || e.kind === 'tower' || e.kind === 'inhibitor' || e.kind === 'nexus' || e.kind === 'ward') continue;
       if ((e.x - z.x) ** 2 + (e.y - z.y) ** 2 > (z.r + e.radius) ** 2) continue;
       damage(s, e, (z.dps * dt) / 1000, z.owner);
       if (z.slow && (e.kind === 'champion' || e.kind === 'minion')) e.slowMs = Math.max(e.slowMs, Math.min(z.slow, 400));

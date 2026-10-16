@@ -10,8 +10,11 @@ of them burning when the sun is gone and they pay coins; too few and one of the 
 goes out. Each night the herald orders a bonus, gusts come for the lanterns, and a refill that
 saves a nearly dry lantern pays on the spot. Every night is of a kind (foggy, a feast, stormy),
 bats come to snuff the lanterns, and lanterns side by side form chains that pay when all of them
-burn. Spend the coins between nights on better wicks, more oil, more and faster moths and
-fireflies. Keep ten nights to reach the Great Festival; the nights go on after it.
+burn. Cottage windows call for a lantern, refills draw on a cask of oil, some spots hold a beacon,
+a candle or a bell, every fifth night the Great Owl sweeps a row, and at every fifth nightfall the
+keep can move to the Docks, Chapel Hill or the Market. Spend the coins between nights on better
+wicks, more oil, more and faster moths, fireflies and the cask. Keep ten nights to reach the Great
+Festival; the nights go on after it.
 
 It is played as a shadow-puppet theatre: the keep is black cut card in front of a backlit paper
 screen that turns from saffron to indigo as dusk falls, light shows through its arrow slits and
@@ -25,7 +28,8 @@ stone joints, the lanterns have coloured-glass panes and the moths are lace-wing
 | --- | --- |
 | Tap or click a lantern | Send an idle moth to light it, or to refill a lit one's oil; with every moth busy, the tap waits in line |
 | Tap or click a bat | Send an idle moth to chase it off |
-| Tap or click an upgrade | Between nights: buy its next level |
+| Tap or click an upgrade | Between nights: buy its next level, or put a fill in the cask |
+| Tap or click a district | At a fifth nightfall: move the keep there (or stay) |
 | Next dusk | Between nights: start the next night's dusk |
 | Keep going | After the Great Festival: play on |
 | New keep | After the game ends: start again |
@@ -90,6 +94,30 @@ stone joints, the lanterns have coloured-glass panes and the moths are lace-wing
     of it burns, and each chain lit at nightfall pays 8 coins.
 13. **The Great Festival**: keep ten nights (meet the quota ten times) and the valley holds the
     Great Festival: a win, with sky lanterns rising. "Keep going" plays on, night after night.
+14. **Windows that call**: from the second night a cottage window calls for a named lantern
+    (a plaque counts down beside it, with a gold ring round it). Light or refill that lantern
+    within 8 seconds for 3 coins ("+3c window lit!"); a call that runs out costs nothing. Two
+    windows call a night (37 and 23 seconds before nightfall), three from night 6 (also 11).
+15. **The oil cask**: the barrel on the HUD holds fills of oil (3 to start, 6 at most). From the
+    third night a refill of a lit lantern draws one fill; lighting a dark lantern is always free.
+    With the cask dry a tap on a lit lantern is refused, and a moth that arrives to find it dry
+    leaves the lantern as it is ("Cask dry!"), so keep one going or let it go dark. Between nights
+    the Cask card puts a fill in for 3 coins.
+16. **Kinds of lantern**: from the fourth night some spots hold a special lantern, named under
+    it: one on night 4, two on night 5, three from night 6, on spots that change with the night.
+    - **Beacon** (red-orange panes): burns its oil 40% faster, but pays triple at nightfall.
+    - **Candle** (a single pale pane): catches at once, but holds half the oil.
+    - **Bell** (teal panes, a bell under it): while lit, every bat within 150 pixels is held still.
+17. **The Great Owl**: every fifth night, 26 seconds before nightfall, a dashed line marks a row
+    of lanterns (the one with the most lit) and a plaque counts down. Six seconds later the owl
+    sweeps across it and snuffs every lit lantern it passes unless a moth sits on it: a moth that
+    lights a lantern on the row stays to keep it, like a gust's guard.
+18. **Districts**: at every fifth nightfall a panel asks where the keep stands next. Each
+    district has its own ten spots, chains and rule, and the herald's orders name its lanterns:
+    - **The Keep**: the old walls, with no rule.
+    - **The Docks**: a sea wind, so each gust blows out a second lantern (the next with most oil).
+    - **Chapel Hill**: vespers pay 2 more coins a lantern, but three lanterns in four must burn.
+    - **The Market**: close calls and window calls pay double, and oil burns 15% faster.
 
 ![The first lantern lit](docs/screenshots/playthrough-1-first-lantern.png)
 
@@ -111,6 +139,24 @@ stone joints, the lanterns have coloured-glass panes and the moths are lace-wing
 
 ![The Great Festival](docs/screenshots/loop-great-festival.png)
 
+![A window calling for the left wall's lantern on night 2](docs/screenshots/loop-window-call.png)
+
+![Night 3: the cask is dry, a refill failed and a window calls](docs/screenshots/loop-oil-cask.png)
+
+![Night 6 with a bell, a beacon and a candle lantern](docs/screenshots/loop-lantern-kinds.png)
+
+![The Great Owl warned for the wall's row](docs/screenshots/loop-great-owl-warned.png)
+
+![The Great Owl sweeping the row and snuffing its lanterns](docs/screenshots/loop-great-owl.png)
+
+![The fifth nightfall's choice of district](docs/screenshots/loop-district-choice.png)
+
+![The Docks](docs/screenshots/loop-docks.png)
+
+![Chapel Hill on a feast night](docs/screenshots/loop-chapel.png)
+
+![The Market on a stormy night](docs/screenshots/loop-market.png)
+
 ### Upgrades
 
 | Upgrade | Each level | Costs |
@@ -120,8 +166,9 @@ stone joints, the lanterns have coloured-glass panes and the moths are lace-wing
 | Moths | One more moth in the jar (kinds keep cycling fast, slow, heavy) | 15, 30, 50 |
 | Wings | Moths fly 20% faster | 10, 20, 35 |
 | Firefly | One more firefly in the jar | 25, 45 |
+| Cask | One more fill of oil (up to 6) | 3 each |
 
-![A feast nightfall with four chains lit, the festival count, the next night's kind and the upgrades](docs/screenshots/loop-night-panel.png)
+![A nightfall's tally, the next night's kind and the upgrades, with the cask's card](docs/screenshots/loop-night-panel.png)
 
 The difficulty, set on the hub page's Settings, changes one thing: lanterns burn 26 seconds on
 Easy and 16 on Hard, instead of 20. (A heavy moth's lanterns burn 50% longer on every setting.)
@@ -155,18 +202,22 @@ npx playwright test --project lanternkeep
 All paths are inside `games/lanternkeep/`.
 
 - `src/game/`: the rules in plain TypeScript with no Phaser dependency. `state.ts` has dusk, moths,
-  oil, gusts, close calls, the herald's orders, kinds of night, bats, chains, nightfall, the Great
-  Festival and the upgrades, `places.ts` where the lanterns, the chains and the jar are, and
-  `save.ts` the best score.
-- `src/scenes/`: `BootScene` bakes textures, `GameScene` draws the screen, castle, lanterns,
-  chains, moths, bats, the order card and night-kind plaque, mist, bunting and rain, gust
-  warnings, close-call tags, HUD and panels and wires taps to the rules, `layout.ts` says where
-  the HUD and panels go.
-- `src/art/puppet.ts`: every texture (paper screens, the cut-card castle, lanterns, moth and bat
-  puppets, mist, bunting, sky lanterns, plaques, icons), painted on 2D canvases at startup.
+  oil, gusts, close calls, the herald's orders, kinds of night, bats, chains, window calls, the
+  cask, kinds of lantern, the Great Owl, nightfall, the Great Festival, the move between
+  districts and the upgrades, `places.ts` the districts (where their lanterns and chains are) and
+  the jar, and `save.ts` the best score.
+- `src/scenes/`: `BootScene` bakes textures, `GameScene` draws the screen, the district's
+  scenery, lanterns, chains, moths, bats, the owl, the order card and night-kind plaque, mist,
+  bunting and rain, gust, owl and window plaques, close-call tags, HUD and panels and wires taps
+  to the rules, `layout.ts` says where the HUD and panels go.
+- `src/art/puppet.ts`: every texture (paper screens, the cut-card scenery of each district,
+  lanterns of every kind, moth, bat and owl puppets, mist, bunting, sky lanterns, plaques, icons),
+  painted on 2D canvases at startup.
 - `src/ui/`: the button.
 
 Retuning a night is the constants at the top of `src/game/state.ts`; an upgrade is its row in
 `UPGRADES` there, a moth kind its row in `MOTH_KINDS`, an order its row in `ORDERS`, the gusts
 `gustsFor` and `GUST_WARN_MS`, a kind of night its row in `NIGHT_KINDS`, the bats `batsFor` and
-`BAT_SPEED`, and a chain its row in `CHAINS` in `places.ts`.
+`BAT_SPEED`, a kind of lantern its row in `LANTERN_KINDS`, the owl `OWL_AT_MS` and `OWL_EVERY`,
+the window calls `callsFor` and `CALL_MS`, the cask `CASK_START` and `CASK_MAX`, and a district
+(its spots, chains and rule) its entry in `DISTRICTS` in `places.ts`.

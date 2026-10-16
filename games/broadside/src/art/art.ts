@@ -1,8 +1,9 @@
 import Phaser from 'phaser';
 import { sharpRes } from '../../../../shared/scaling';
 import { ORDER_IDS, type OrderId } from '../game/orders';
+import { HULLS, type HullId } from '../game/hulls';
 import type { EnemyKind } from '../game/ships';
-import { ISLANDS, WORLD } from '../game/state';
+import { FORT, ISLANDS, WORLD } from '../game/state';
 import { FIRE, HARBOR, HELM, HUD_HEIGHT, OVER, VIEW, WIND } from '../scenes/layout';
 
 // The art of an old hand-tinted sea chart: ink on parchment, a compass rose and rhumb lines,
@@ -45,15 +46,22 @@ interface ShipLook {
   extra?: 'fire' | 'mortar' | 'flagship';
 }
 
-export const SHIP_LOOKS: Record<'player' | EnemyKind, ShipLook> = {
-  player: { length: 76, beam: 27, masts: [0.2, -0.14], guns: 2, sail: '#3a332c', flag: '#1e1a16' },
+export const SHIP_LOOKS: Record<HullId | EnemyKind, ShipLook> = {
+  // The player's ships, with black sails.
+  frigate: { length: 76, beam: 27, masts: [0.2, -0.14], guns: 2, sail: '#3a332c', flag: '#1e1a16' },
+  cutter: { length: 60, beam: 22, masts: [0.08], guns: 1, sail: '#3a332c', flag: '#1e1a16' },
+  bomb: { length: 72, beam: 30, masts: [-0.06, -0.3], guns: 2, sail: '#3a332c', flag: '#1e1a16', extra: 'mortar' },
   sloop: { length: 56, beam: 21, masts: [0.06], guns: 1, sail: '#f6ecd2', flag: 'rgba(60,100,170,0.9)' },
   brig: { length: 70, beam: 27, masts: [0.2, -0.14], guns: 2, sail: '#f6ecd2', flag: 'rgba(176,70,52,0.85)' },
   galleon: { length: 90, beam: 34, masts: [0.26, 0.02, -0.22], guns: 3, sail: '#f4e4b8', flag: 'rgba(201,144,46,0.95)' },
   fireship: { length: 54, beam: 20, masts: [0.16], guns: 0, sail: '#d9b98a', flag: 'rgba(214,110,40,0.95)', extra: 'fire' },
   ketch: { length: 60, beam: 24, masts: [-0.02, -0.28], guns: 0, sail: '#efe0bc', flag: 'rgba(80,110,60,0.9)', extra: 'mortar' },
   flagship: { length: 104, beam: 38, masts: [0.28, 0.06, -0.16, -0.34], guns: 4, sail: '#f4e4b8', flag: 'rgba(110,50,120,0.95)', extra: 'flagship' },
+  admiral: { length: 114, beam: 42, masts: [0.3, 0.08, -0.14, -0.34], guns: 5, sail: '#efd9a0', flag: 'rgba(200,150,30,0.98)', extra: 'flagship' },
 };
+
+/** The look of a ship: the player's by the hull sailed, an enemy's or a prize's by its kind. */
+export const lookOf = (ship: { kind: string }, hull: HullId) => SHIP_LOOKS[(ship.kind === 'player' ? hull : ship.kind) as HullId | EnemyKind];
 
 /** A small seeded random, so the chart is drawn the same every time without touching Math.random. */
 function rng(seed: number) {
@@ -398,7 +406,7 @@ function bakeShip(scene: Phaser.Scene, kind: keyof typeof SHIP_LOOKS) {
   const B = look.beam;
   const w = L + 12;
   const h = B * 2 + 12;
-  const dark = kind === 'player';
+  const dark = kind in HULLS;
   bake(scene, `ship-${kind}`, w, h, HI, (ctx) => {
     ctx.translate(w / 2, h / 2);
     const P = (pts: number[][]): Pt[] => pts.map(([a, b]) => [a * L, b * B]);
@@ -498,6 +506,57 @@ function bakeShip(scene: Phaser.Scene, kind: keyof typeof SHIP_LOOKS) {
         circle(ctx, x - 0.5 * s, y, 1.4 * s, '#f0c860');
       }
     }
+  });
+}
+
+/**
+ * A shore fort on an island: a four-pointed stone bastion with a gun on each point and a flag,
+ * engraved and washed in grey. Its hull bar and hit flash are drawn over it each frame.
+ */
+function bakeFort(scene: Phaser.Scene) {
+  const size = FORT.radius * 2 + 12;
+  bake(scene, 'fort', size, size, HI, (ctx) => {
+    const c = size / 2;
+    const R = FORT.radius;
+    // The star: four bastions at the corners of a square keep.
+    const star: Pt[] = [];
+    for (let k = 0; k < 4; k++) {
+      const a = (k * Math.PI) / 2 + Math.PI / 4;
+      star.push([c + Math.cos(a - 0.5) * R * 0.62, c + Math.sin(a - 0.5) * R * 0.62]);
+      star.push([c + Math.cos(a) * R, c + Math.sin(a) * R]);
+      star.push([c + Math.cos(a + 0.5) * R * 0.62, c + Math.sin(a + 0.5) * R * 0.62]);
+    }
+    ctx.shadowColor = 'rgba(40,30,20,0.3)';
+    ctx.shadowBlur = 4;
+    ctx.shadowOffsetY = 2;
+    poly(ctx, star, '#b7ad98', INK, 1.5);
+    ctx.shadowColor = 'transparent';
+    // Masonry: hatched courses of stone.
+    ctx.save();
+    poly(ctx, star);
+    ctx.clip();
+    for (let y = 0; y < size; y += 4) line(ctx, 0, y, size, y, ink(0.35), 0.5);
+    for (let x = 0; x < size; x += 7) line(ctx, x, 0, x + 2, size, ink(0.2), 0.5);
+    ctx.restore();
+    poly(ctx, star, null, INK, 1.5);
+    // The keep, its parapet and the magazine's well.
+    const k = R * 0.42;
+    poly(ctx, [[c - k, c - k], [c + k, c - k], [c + k, c + k], [c - k, c + k]], '#cfc6b0', INK, 1.2);
+    poly(ctx, [[c - k + 3, c - k + 3], [c + k - 3, c - k + 3], [c + k - 3, c + k - 3], [c - k + 3, c + k - 3]], null, ink(0.6), 0.6);
+    circle(ctx, c, c, R * 0.16, '#3a332c', INK, 1);
+    circle(ctx, c, c, R * 0.07, INK);
+    // Guns on each bastion, run out toward the sea.
+    for (let i = 0; i < 4; i++) {
+      const a = (i * Math.PI) / 2 + Math.PI / 4;
+      const gx = c + Math.cos(a) * R * 0.78;
+      const gy = c + Math.sin(a) * R * 0.78;
+      const ca = Math.cos(a);
+      const sa = Math.sin(a);
+      poly(ctx, [[gx - ca * 4 - sa * 1.6, gy - sa * 4 + ca * 1.6], [gx + ca * 5 - sa * 1.2, gy + sa * 5 + ca * 1.2], [gx + ca * 5 + sa * 1.2, gy + sa * 5 - ca * 1.2], [gx - ca * 4 + sa * 1.6, gy - sa * 4 - ca * 1.6]], INK);
+    }
+    // A rust pennant on a staff over the keep.
+    line(ctx, c + 4, c - k - 2, c + 4, c - k - 16, INK, 1.4);
+    poly(ctx, [[c + 4, c - k - 16], [c + 20, c - k - 12], [c + 4, c - k - 7]], 'rgba(154,74,48,0.95)', INK, 0.8);
   });
 }
 
@@ -804,6 +863,7 @@ export function bakeAll(scene: Phaser.Scene) {
   for (const kind of Object.keys(SHIP_LOOKS) as (keyof typeof SHIP_LOOKS)[]) bakeShip(scene, kind);
   bakeShot(scene);
   bakeLoot(scene);
+  bakeFort(scene);
   for (const side of ['port', 'starboard'] as const) {
     for (const held of [false, true]) {
       bakeWheel(scene, side, held);

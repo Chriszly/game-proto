@@ -4,20 +4,28 @@ import { renderScale } from '../../../../shared/scaling';
 import { CANVAS, NAME_COLOR, TINT, TS, paintFog, paintTerrain, placeNames } from '../art/map';
 import { BLUE, GOLD_DARK, GREEN, GREY, HI, INK, MAGENTA, RULE, SHEET, SLATE, TRACK, VELLUM, hex } from '../art/paint';
 import { SURVEYOR_ORIGIN } from '../art/surveyor';
-import { loadGame, saveGame } from '../game/save';
+import { loadBest, loadGame, saveBest, saveGame } from '../game/save';
 import {
+  artifactValue,
+  atlasKinds,
   buy,
   canAfford,
   canCamp,
   chartOf,
+  closeAtlas,
   costOf,
   dig,
   diggable,
+  featureAt,
+  featuresDone,
   frontier,
+  hire,
+  isPicked,
   isleProgress,
   islandCharted,
   milestonesDue,
   newGame,
+  pickCommission,
   pitchCamp,
   returnToPort,
   sellChart,
@@ -25,19 +33,21 @@ import {
   survey,
   valueOf,
 } from '../game/sim';
-import { kindOf, KINDS } from '../game/kinds';
+import { HANDS } from '../game/hands';
+import { kindOf, KINDS, type IsleKind } from '../game/kinds';
 import {
-  ARTIFACT_VALUE,
   CAMP_COST,
   DIG_COST,
   GRID,
   MILESTONES,
+  ROYAL_KINDS,
   SELL_BACK,
   TREASURE_VALUE,
   WRECK_SUPPLIES,
   indexOf,
   maxSupplies,
   rankOf,
+  type Commission,
   type GameState,
   type Point,
   type Tile,
@@ -46,8 +56,10 @@ import { CHART_ORDER, TERRAIN, isLandmark } from '../game/terrain';
 import { UPGRADES, UPGRADE_IDS, nextCost } from '../game/upgrades';
 import { makeButton } from '../ui/Button';
 import {
+  BOARD,
   CAMP_BUTTON,
   FONT,
+  HANDS_COLUMN,
   MAP,
   OVERLAY,
   OVERLAY_BUTTON,
@@ -149,6 +161,9 @@ export class GameScene extends Phaser.Scene {
   private hoverPill!: Phaser.GameObjects.Container;
   private surveyor!: Phaser.GameObjects.Image;
   private walker = { x: 0, y: 0 };
+  /** The rival surveyor's sprite and where it has walked to. */
+  private rivalSprite!: Phaser.GameObjects.Image;
+  private rivalWalker = { x: 0, y: 0 };
   private popups: Popup[] = [];
   private sweep: Sweep | null = null;
   private header!: { isle: Phaser.GameObjects.Text; sheet: Phaser.GameObjects.Text };
@@ -220,6 +235,12 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(SURVEYOR_ORIGIN.x, SURVEYOR_ORIGIN.y)
       .setScale(1 / HI)
       .setDepth(6);
+    this.rivalSprite = this.add
+      .image(start.x, start.y, 'rival')
+      .setOrigin(SURVEYOR_ORIGIN.x, SURVEYOR_ORIGIN.y)
+      .setScale(1 / HI)
+      .setDepth(5.8)
+      .setVisible(false);
     this.hoverPill = this.pill(0, 0, '−1 supply', 64, 13, 7.5).setDepth(8).setVisible(false);
     this.createPanel();
     this.syncIsland();
@@ -232,12 +253,21 @@ export class GameScene extends Phaser.Scene {
       const t = this.tileAtScreen(p.worldX, p.worldY);
       if (!t) return;
       const s = this.state;
-      const before = { surveyed: s.surveyed.length, storms: s.storms.length, known: !!s.riddle?.known };
+      const before = {
+        surveyed: s.surveyed.length,
+        storms: s.storms.length,
+        known: !!s.riddle?.known,
+        features: featuresDone(s).map((f) => f.name),
+        rivalRuins: !!s.rival?.ruins,
+        rivalTreasure: !!s.riddle?.rival,
+      };
       if (survey(s, t.x, t.y)) {
         saveGame(s);
         const fresh = s.surveyed.slice(before.surveyed);
         this.announce(t, fresh);
         this.announceFinds(fresh, before.storms, before.known);
+        this.announceFeatures(before.features);
+        this.announceRival(before.rivalRuins, before.rivalTreasure);
       } else if (dig(s, t.x, t.y)) {
         saveGame(s);
         const c = tileCentre(t.x, t.y);
@@ -255,6 +285,7 @@ export class GameScene extends Phaser.Scene {
     this.syncIsland();
     this.ageFades(dt);
     this.moveSurveyor(dt);
+    this.moveRival(dt);
     this.drawGlow();
     this.syncMarks();
     this.agePopups(dt);
@@ -391,7 +422,7 @@ export class GameScene extends Phaser.Scene {
       paintTerrain(this.terrainTex.context, s.tiles);
       this.terrainTex.refresh();
       for (const n of this.names) n.text.destroy();
-      this.names = placeNames(s.tiles, s.island, s.port).map((n) => {
+      this.names = placeNames(s.tiles, s.island, s.port, s.features).map((n) => {
         const c = tileCentre(n.tile.x, n.tile.y);
         const style: TextOpts =
           n.kind === 'water'
@@ -400,7 +431,9 @@ export class GameScene extends Phaser.Scene {
               ? { size: 7.5, weight: n.kind === 'height' ? 600 : 500, italic: n.kind === 'port' }
               : n.kind === 'ruin'
                 ? { size: 8, weight: 500, italic: true }
-                : { size: n.kind === 'wood' ? 9 : 9.5, weight: 600, italic: true };
+                : n.kind === 'river'
+                  ? { size: 7.5, weight: 600, italic: true, ls: 1 }
+                  : { size: n.kind === 'wood' ? 9 : 9.5, weight: 600, italic: true };
         const text = this.text(c.x + n.dx, c.y + n.dy, n.text, { ...style, color: NAME_COLOR[n.kind], stroke: true })
           .setOrigin(0.5)
           .setDepth(3);
@@ -488,13 +521,35 @@ export class GameScene extends Phaser.Scene {
     for (const p of fresh) {
       const find = s.tiles[indexOf(p.x, p.y)].find;
       if (find === 'wreck') say(p, `Shipwreck: +${WRECK_SUPPLIES} supplies`, true);
-      if (find === 'cave') say(p, `Cave: an artifact (${ARTIFACT_VALUE}c)`, true);
+      if (find === 'cave') say(p, `Cave: an artifact (${artifactValue(s)}c)`, true);
       if (find === 'storm' && s.storms.length === stormsBefore) say(p, 'A storm blows over');
     }
     for (const st of s.storms.slice(stormsBefore)) say(st, 'Storm: blocked this voyage');
     if (!knewRiddle && s.riddle?.known) {
       say(fresh.find((p) => s.tiles[indexOf(p.x, p.y)].terrain === 'ruins')!, 'A riddle chart in the ruins!', true);
     }
+  }
+
+  /** A notice for each feature the survey charted whole: its name and bonus, over its middle tile. */
+  private announceFeatures(doneBefore: string[]) {
+    const s = this.state;
+    let n = 0;
+    for (const f of featuresDone(s)) {
+      if (doneBefore.includes(f.name)) continue;
+      const mid = f.tiles[Math.floor(f.tiles.length / 2)];
+      const c = tileCentre(mid.x, mid.y);
+      this.notice(c.x, c.y - 16 - 18 * n++, `${f.name} charted whole: +${f.bonus}c`, true);
+    }
+  }
+
+  /** The rival's news: they have reached the ruins, or dug the treasure up first. */
+  private announceRival(hadRuins: boolean, hadTreasure: boolean) {
+    const s = this.state;
+    const r = s.rival;
+    if (!r) return;
+    const c = tileCentre(r.at.x, r.at.y);
+    if (!hadTreasure && s.riddle?.rival) this.notice(c.x, c.y - 30, 'The rival dug up the treasure!');
+    else if (!hadRuins && r.ruins) this.notice(c.x, c.y - 30, 'The rival has read the riddle');
   }
 
   /** A notice on the map: a magenta pill (or a white one with magenta type) that floats up and fades. */
@@ -633,6 +688,27 @@ export class GameScene extends Phaser.Scene {
     this.surveyor.setVisible(this.state.phase === 'survey');
   }
 
+  /** The rival walks the same way, and is only seen while they are on the isle. */
+  private moveRival(dt: number) {
+    const r = this.state.rival;
+    this.rivalSprite.setVisible(!!r);
+    if (!r) return;
+    const target = tileCentre(r.at.x, r.at.y);
+    const dx = target.x - this.rivalWalker.x;
+    const dy = target.y - this.rivalWalker.y;
+    const d = Math.hypot(dx, dy);
+    const step = (WALK_SPEED * dt) / 1000;
+    if (d <= step || d > MAP.tile * 6) this.rivalWalker = { ...target };
+    else {
+      this.rivalWalker.x += (dx / d) * step;
+      this.rivalWalker.y += (dy / d) * step;
+    }
+    const walking = d > step && d <= MAP.tile * 6;
+    this.rivalSprite.setTexture(walking && Math.floor(this.clock / 140) % 2 === 1 ? 'rival-step' : 'rival');
+    if (dx !== 0 && walking) this.rivalSprite.setFlipX(dx < 0);
+    this.rivalSprite.setPosition(this.rivalWalker.x, this.rivalWalker.y + MAP.tile * 0.3);
+  }
+
   /**
    * Marks every tile that can be surveyed as a magenta survey station with its cost under it (grey
    * when the supplies can't pay it); the one under the pointer is lit with a pill. Once the riddle is
@@ -671,7 +747,11 @@ export class GameScene extends Phaser.Scene {
           if (label.text !== caption) label.setText(caption);
           label.setPosition(c.x, c.y + 10).setColor(can ? MAGENTA : GREY).setVisible(true);
         }
-        if (lit) this.showPill(c, cost === 0 ? 'free to follow' : `−${cost} ${cost === 1 ? 'supply' : 'supplies'}`);
+        if (lit) {
+          const f = featureAt(s, p.x, p.y);
+          const price = cost === 0 ? 'free to follow' : `−${cost} ${cost === 1 ? 'supply' : 'supplies'}`;
+          this.showPill(c, f ? `${price} · finishes ${f.name} +${f.bonus}c` : price);
+        }
       }
       const h = this.hover;
       if (h && diggable(s).some((p) => p.x === h.x && p.y === h.y)) {
@@ -720,6 +800,8 @@ export class GameScene extends Phaser.Scene {
     for (const p of s.dug) want.set(`dug:${indexOf(p.x, p.y)}`, { key: 'dug', ...at(p, 0, 6), scale: 0.9 });
     if (s.riddle?.found) want.set(`treasure`, { key: 'treasure', ...at(s.riddle.at, 0, 4), scale: 0.9 });
     for (const p of s.camps) want.set(`camp:${indexOf(p.x, p.y)}`, { key: 'camp', ...at(p, 9, -9), scale: 1 });
+    // The rival's claims show through the paper, so you know which tiles will sell for half.
+    for (const p of s.rival?.claims ?? []) want.set(`claim:${indexOf(p.x, p.y)}`, { key: 'claim', ...at(p, 11, -10), scale: 0.8 });
     for (const [id, img] of this.marks) {
       if (want.has(id)) continue;
       img.destroy();
@@ -727,7 +809,7 @@ export class GameScene extends Phaser.Scene {
     }
     for (const [id, m] of want) {
       if (this.marks.has(id)) continue;
-      this.marks.set(id, this.add.image(m.x, m.y, m.key).setScale(m.scale / HI).setDepth(m.key === 'camp' ? 5.5 : 3.5));
+      this.marks.set(id, this.add.image(m.x, m.y, m.key).setScale(m.scale / HI).setDepth(m.key === 'camp' || m.key === 'claim' ? 5.5 : 3.5));
     }
   }
 
@@ -851,7 +933,8 @@ export class GameScene extends Phaser.Scene {
     const set = (t: Phaser.GameObjects.Text, v: string) => t.text !== v && t.setText(v);
     set(this.header.isle, `ISLE ${s.island}`);
     this.header.sheet.setX(24 + this.header.isle.width + 14);
-    set(this.header.sheet, `${KINDS[s.kind].name.toUpperCase()}  ·  SURVEY SHEET ${s.voyage - s.isleStart + 1}  ·  SCALE 1 : 40`);
+    const aboard = s.hand ? `  ·  ${HANDS[s.hand].name.toUpperCase()} ABOARD` : '';
+    set(this.header.sheet, `${KINDS[s.kind].name.toUpperCase()}  ·  SURVEY SHEET ${s.voyage - s.isleStart + 1}  ·  SCALE 1 : 40${aboard}`);
     set(p.isle, `ISLE ${s.island} · VOYAGE ${s.voyage}`);
     const pages = s.atlas.length;
     set(p.atlas, pages === 0 ? 'ATLAS 0' : `ATLAS ${pages}`);
@@ -863,7 +946,7 @@ export class GameScene extends Phaser.Scene {
     set(p.coins, `${s.coins}`);
     const chart = s.chart ?? chartOf(s);
     set(p.tiles, `${s.surveyed.length} tiles`);
-    set(p.worth, `worth ${chart.base + chart.ink + chart.artifactCoins + chart.treasure}c`);
+    set(p.worth, `worth ${chart.base - chart.rivalLoss + chart.ink + chart.featureCoins + chart.artifactCoins + chart.treasure}c`);
 
     const g = p.live.clear();
     // Supply pips, with the unused ones bracketed in magenta while they can still sell back. A
@@ -903,16 +986,18 @@ export class GameScene extends Phaser.Scene {
     const c = s.commission;
     set(p.order, `WO-${String(s.voyage).padStart(2, '0')}`);
     if (c) {
-      const have = Math.min(chart.counts[c.terrain] ?? 0, c.need);
-      const name = c.need === 1 ? TERRAIN[c.terrain].name.toLowerCase() : TERRAIN[c.terrain].plural;
-      set(p.commission, `Chart ${c.need} ${name} this voyage: +${c.bonus}c`);
+      const have = Math.min(c.done + (chart.counts[c.terrain] ?? 0), c.need);
+      set(p.commission, commissionText(c));
+      // Up to four tiles are shown as swatches; a long commission counts in words.
+      const pips = c.need <= p.swatches.length;
       p.swatches.forEach((img, k) => {
-        img.setVisible(k < c.need);
+        img.setVisible(pips && k < c.need);
         if (img.texture.key !== `swatch-${c.terrain}`) img.setTexture(`swatch-${c.terrain}`);
         img.setAlpha(k < have ? 1 : 0.28);
       });
-      set(p.soFar, `So far ${have} / ${c.need}`);
-      p.soFar.setX(PL + 9 + c.need * 19 + 6).setVisible(true);
+      const left = c.voyages > 1 ? ` · ${c.left === 1 ? 'last voyage' : `${c.left} voyages left`}` : '';
+      set(p.soFar, `So far ${have} / ${c.need}${left}`);
+      p.soFar.setX(pips ? PL + 9 + c.need * 19 + 6 : PL + 9).setVisible(true);
       const met = have >= c.need;
       p.done.setVisible(met);
       if (met) {
@@ -936,13 +1021,15 @@ export class GameScene extends Phaser.Scene {
     const clue = r ? `“${r.clues.join(', ')}.”` : '';
     const riddle = !r
       ? 'No riddle on this isle.'
-      : r.found
-        ? `Treasure dug up: +${TREASURE_VALUE}c ${s.treasure ? 'on this chart' : 'sold'}.`
+      : r.found && r.rival
+        ? 'The rival surveyor dug up the treasure first.'
+        : r.found
+          ? `Treasure dug up: +${TREASURE_VALUE}c ${s.treasure ? 'on this chart' : 'sold'}.`
         : r.known
           ? clue
           : 'The ruins on this isle hold a riddle chart. Chart them to read it.';
     set(p.riddle, riddle);
-    p.riddle.setColor(r?.known && !r.found ? INK : r?.found ? GREEN : SLATE).setFontStyle(r?.known && !r.found ? 'italic 600' : '600');
+    p.riddle.setColor(r?.known && !r.found ? INK : r?.found && !r.rival ? GREEN : SLATE).setFontStyle(r?.known && !r.found ? 'italic 600' : '600');
     set(p.riddleTag, r?.known && !r.found ? `DIG −${DIG_COST} SUPPLY` : '');
 
     // The isle goal: the share charted, with its milestones.
@@ -995,13 +1082,15 @@ export class GameScene extends Phaser.Scene {
   /** Rebuilds the chart or harbor overlay when what it shows changes. */
   private syncOverlay() {
     const s = this.state;
-    const key = s.phase === 'survey' ? '' : `${s.phase}:${s.coins}:${JSON.stringify(s.ranks)}`;
+    const pick = s.board.findIndex((_, n) => isPicked(s, n));
+    const key = s.phase === 'survey' ? '' : `${s.phase}:${s.coins}:${JSON.stringify(s.ranks)}:${s.hand}:${pick}`;
     if (key === this.overlayKey) return;
     this.overlayKey = key;
     this.overlay?.destroy();
     this.overlay = null;
-    for (const name of Object.keys(this.spots)) if (name !== 'return') delete this.spots[name];
+    for (const name of Object.keys(this.spots)) if (name !== 'return' && name !== 'camp') delete this.spots[name];
     if (s.phase === 'chart') this.showChart();
+    if (s.phase === 'atlas') this.showAtlas();
     if (s.phase === 'harbor') this.showHarbor();
   }
 
@@ -1038,19 +1127,22 @@ export class GameScene extends Phaser.Scene {
       const n = chart.counts[t]!;
       rows.push({ icon: `swatch-${t}`, label: `${TERRAIN[t].name}   ${n} × ${TERRAIN[t].value}`, value: `${n * TERRAIN[t].value}` });
     }
+    if (chart.rivalTiles > 0) {
+      rows.push({ icon: 'claim', label: `Charted by the rival first   ${chart.rivalTiles} tile${chart.rivalTiles > 1 ? 's' : ''} at half`, value: `−${chart.rivalLoss}`, color: GREY });
+    }
     if (chart.ink > 0) rows.push({ label: 'Fine Ink', value: `+${chart.ink}` });
+    for (const f of chart.features) rows.push({ label: `${f.name} charted whole`, value: `+${f.bonus}`, color: GREEN });
     if (chart.artifacts > 0) {
-      rows.push({ icon: 'artifact', label: `Artifacts from caves   ${chart.artifacts} × ${ARTIFACT_VALUE}`, value: `+${chart.artifactCoins}`, color: GOLD_DARK });
+      const each = artifactValue(s);
+      const hand = s.hand === 'naturalist' ? ' (Naturalist)' : '';
+      rows.push({ icon: 'artifact', label: `Artifacts from caves   ${chart.artifacts} × ${each}${hand}`, value: `+${chart.artifactCoins}`, color: GOLD_DARK });
     }
     if (chart.treasure > 0) rows.push({ icon: 'treasure', label: 'Treasure from the riddle', value: `+${chart.treasure}`, color: GOLD_DARK });
     const com = s.commission;
     if (com) {
-      const name = com.need === 1 ? TERRAIN[com.terrain].name.toLowerCase() : TERRAIN[com.terrain].plural;
-      rows.push({
-        label: `Commission: ${com.need} ${name}`,
-        value: chart.bonus > 0 ? `+${chart.bonus}` : 'missed',
-        color: chart.bonus > 0 ? GREEN : GREY,
-      });
+      const have = com.done + (chart.counts[com.terrain] ?? 0);
+      const on = chart.bonus > 0 ? `+${chart.bonus}` : com.left > 1 ? `${have} / ${com.need}, ${com.left - 1} more voyage${com.left > 2 ? 's' : ''}` : 'missed';
+      rows.push({ label: `Commission: ${commissionText(com, 'short')}`, value: on, color: chart.bonus > 0 ? GREEN : GREY });
     }
     if (chart.unused > 0) {
       const capped = chart.sellBack < chart.unused * SELL_BACK;
@@ -1086,10 +1178,68 @@ export class GameScene extends Phaser.Scene {
     c.add(this.text(right, y, `${chart.total} coins`, { size: 15, weight: 800 }).setOrigin(1, 0.5));
     c.add(
       makeButton(this, OVERLAY_BUTTON.x, OVERLAY_BUTTON.y, 'Sell chart', () => {
-        if (sellChart(this.state)) saveGame(this.state);
+        if (!sellChart(this.state)) return;
+        // The chart that completes the Royal Atlas sets a best if it is one.
+        if (this.state.phase === 'atlas' && this.state.royal) saveBest(this.state.royal.voyage);
+        saveGame(this.state);
       }),
     );
     this.spots.sell = { ...OVERLAY_BUTTON };
+  }
+
+  /** The Royal Atlas: the win page, with the four pages, the voyages it took and the best. */
+  private showAtlas() {
+    const s = this.state;
+    const c = this.overlayBase('The Royal Atlas');
+    const top = OVERLAY.y - OVERLAY.h / 2;
+    const left = OVERLAY.x - OVERLAY.w / 2 + 60;
+    const right = OVERLAY.x + OVERLAY.w / 2 - 60;
+    const voyages = s.royal?.voyage ?? s.voyage;
+    const best = loadBest() ?? voyages;
+    c.add(this.text(OVERLAY.x, top + 76, 'Every kind of isle is charted and bound.', { size: 13, weight: 600, color: SLATE }).setOrigin(0.5));
+    c.add(this.text(OVERLAY.x, top + 112, `Completed in ${voyages} voyage${voyages === 1 ? '' : 's'}`, { size: 22, weight: 900 }).setOrigin(0.5));
+    const record = best >= voyages ? 'A new best!' : `Best: ${best} voyages`;
+    c.add(this.text(OVERLAY.x, top + 138, record, { size: 11, weight: 700, color: best >= voyages ? MAGENTA : GREY, ls: 1 }).setOrigin(0.5));
+    // One page per kind, in the order the isles come, with the isle that bound it.
+    const kinds = Object.keys(KINDS) as IsleKind[];
+    const gap = (right - left) / kinds.length;
+    kinds.forEach((kind, k) => {
+      const page = s.atlas.find((pg) => pg.kind === kind);
+      const x = left + gap * (k + 0.5);
+      const y = top + 220;
+      const g = this.add.graphics();
+      g.fillStyle(hex(KINDS[kind].page)).fillRoundedRect(x - 36, y - 48, 72, 96, 3);
+      g.fillStyle(hex(MAGENTA)).fillRect(x - 36, y - 48, 7, 96);
+      g.lineStyle(1, hex(SHEET), 0.7).strokeTriangle(x + 3, y - 14, x + 20, y + 14, x - 14, y + 14);
+      c.add(g);
+      c.add(this.text(x + 3, y + 30, KINDS[kind].name.toUpperCase(), { size: 7, weight: 800, color: SHEET, ls: 1 }).setOrigin(0.5));
+      if (page) {
+        c.add(this.text(x, y + 66, `Isle ${page.island}`, { size: 10.5, weight: 700 }).setOrigin(0.5));
+        c.add(this.text(x, y + 80, `${page.voyages} voyage${page.voyages === 1 ? '' : 's'}`, { size: 9, weight: 600, color: GREY }).setOrigin(0.5));
+      }
+    });
+    c.add(
+      this.text(OVERLAY.x, top + 340, 'Keep charting, or begin a new atlas and try to bind one in fewer voyages.', {
+        size: 10,
+        weight: 500,
+        color: SLATE,
+      }).setOrigin(0.5),
+    );
+    c.add(
+      makeButton(this, OVERLAY_BUTTON.x - 110, OVERLAY_BUTTON.y, 'Keep charting', () => {
+        if (closeAtlas(this.state)) saveGame(this.state);
+      }),
+    );
+    c.add(
+      makeButton(this, OVERLAY_BUTTON.x + 110, OVERLAY_BUTTON.y, 'New atlas', () => {
+        this.state = newGame();
+        saveGame(this.state);
+        this.endSweep();
+        this.walker = tileCentre(this.state.port.x, this.state.port.y);
+      }),
+    );
+    this.spots.keep = { x: OVERLAY_BUTTON.x - 110, y: OVERLAY_BUTTON.y };
+    this.spots.newAtlas = { x: OVERLAY_BUTTON.x + 110, y: OVERLAY_BUTTON.y };
   }
 
   private showHarbor() {
@@ -1098,16 +1248,20 @@ export class GameScene extends Phaser.Scene {
     const top = OVERLAY.y - OVERLAY.h / 2;
     const left = OVERLAY.x - OVERLAY.w / 2 + 34;
     const right = OVERLAY.x + OVERLAY.w / 2 - 34;
+    const small = (x: number, y: number, caption: string, origin = 0) =>
+      this.text(x, y, caption, { size: 8.5, weight: 700, color: GREY, ls: 1.5 }).setOrigin(origin, 0.5);
     c.add(this.text(left, top + 62, `Chart sold for ${s.lastSale} coins.`, { size: 12, weight: 600, color: SLATE }).setOrigin(0, 0.5));
     c.add(this.text(right, top + 62, `Coins ${s.coins}`, { size: 15, weight: 800 }).setOrigin(1, 0.5));
     const g = this.add.graphics();
     c.add(g);
+    // The upgrades, down the left.
+    const shopRight = SHOP.buyX + SMALL_BUTTON.w / 2;
     UPGRADE_IDS.forEach((id, n) => {
       const y = SHOP.y + n * SHOP.gap;
       const up = UPGRADES[id];
       const rank = rankOf(s, id);
       const cost = nextCost(id, rank);
-      g.fillStyle(hex(RULE)).fillRect(left, y - SHOP.gap / 2, right - left, 1);
+      g.fillStyle(hex(RULE)).fillRect(left, y - SHOP.gap / 2, shopRight - left, 1);
       c.add(this.add.image(left + 14, y, `icon-${id}`).setScale(1 / HI));
       const name = this.text(left + 36, y - 9, up.name, { size: 12.5, weight: 800 }).setOrigin(0, 0.5);
       c.add(name);
@@ -1134,20 +1288,64 @@ export class GameScene extends Phaser.Scene {
       );
       this.spots[`buy-${id}`] = { x: SHOP.buyX, y };
     });
-    // The atlas: one bound page per isle charted in full.
-    const by = OVERLAY_BUTTON.y;
-    c.add(this.text(left, by - 8, 'ATLAS', { size: 8.5, weight: 700, color: GREY, ls: 1.5 }).setOrigin(0, 0.5));
+    // The hands, down the right: tap one to take them aboard, tap again to leave them ashore.
+    const hx = HANDS_COLUMN.x;
+    c.add(small(hx, HANDS_COLUMN.y - HANDS_COLUMN.h / 2 - 12, 'HIRE A HAND · THIS VOYAGE'));
+    s.hands.forEach((id, n) => {
+      const y = HANDS_COLUMN.y + n * HANDS_COLUMN.gap;
+      const on = s.hand === id;
+      c.add(this.card(hx, y, HANDS_COLUMN.w, HANDS_COLUMN.h, on, () => hire(this.state, on ? null : id)));
+      c.add(this.add.image(hx + 16, y, `hand-${id}`).setScale(0.9 / HI));
+      c.add(this.text(hx + 32, y - 8, HANDS[id].name, { size: 11, weight: 800, color: on ? '#ffffff' : INK }).setOrigin(0, 0.5));
+      c.add(this.text(hx + 32, y + 7, HANDS[id].text, { size: 8, weight: 500, color: on ? '#ffd9ec' : SLATE }).setOrigin(0, 0.5));
+      this.spots[`hire-${id}`] = { x: hx + HANDS_COLUMN.w / 2, y };
+    });
+    if (s.hands.length === 0) c.add(this.text(hx, HANDS_COLUMN.y, 'No hands at the harbor', { size: 9.5, weight: 500, color: SLATE }).setOrigin(0, 0.5));
+    // The commission board, across the bottom: the one picked is inked.
+    const by = BOARD.y - BOARD.h / 2 - 14;
+    g.fillStyle(hex(RULE)).fillRect(left, by - 12, right - left, 1);
+    const com = s.commission;
+    if (s.board.length > 0) {
+      c.add(small(left, by, 'COMMISSION BOARD · PICK ONE'));
+      s.board.forEach((b, n) => {
+        const y = BOARD.y + n * BOARD.gap;
+        const on = isPicked(s, n);
+        c.add(this.card(left, y, right - left, BOARD.h, on, () => pickCommission(this.state, n)));
+        c.add(this.add.image(left + 14, y, `swatch-${b.terrain}`).setScale(0.8 / HI));
+        c.add(this.text(left + 28, y, commissionText(b), { size: 10.5, weight: on ? 800 : 600, color: on ? '#ffffff' : INK }).setOrigin(0, 0.5));
+        if (b.voyages > 1) c.add(this.text(right - 10, y, 'LONG', { size: 7.5, weight: 800, color: on ? '#ffd9ec' : MAGENTA, ls: 1.5 }).setOrigin(1, 0.5));
+        this.spots[`pick-${n}`] = { x: OVERLAY.x, y };
+      });
+    } else if (com) {
+      c.add(small(left, by, 'COMMISSION UNDER WAY'));
+      c.add(this.text(left, BOARD.y, commissionText(com), { size: 11, weight: 700 }).setOrigin(0, 0.5));
+      c.add(
+        this.text(left, BOARD.y + 18, `${com.done} of ${com.need} charted so far · ${com.left === 1 ? 'last voyage' : `${com.left} voyages left`}`, {
+          size: 10,
+          weight: 500,
+          color: SLATE,
+        }).setOrigin(0, 0.5),
+      );
+    } else {
+      c.add(small(left, by, 'COMMISSION BOARD'));
+      c.add(this.text(left, BOARD.y, 'No commission for the next voyage.', { size: 10.5, weight: 500, color: SLATE }).setOrigin(0, 0.5));
+    }
+    // The atlas: one bound page per isle charted in full, toward the Royal Atlas.
+    const ay = OVERLAY_BUTTON.y;
+    c.add(small(left, ay - 8, 'ATLAS'));
     const pages = s.atlas.length;
     if (pages === 0) {
-      c.add(this.text(left, by + 7, 'Chart an isle in full', { size: 9.5, weight: 500, color: SLATE }).setOrigin(0, 0.5));
+      c.add(this.text(left, ay + 7, 'Chart an isle in full', { size: 9.5, weight: 500, color: SLATE }).setOrigin(0, 0.5));
     } else {
-      s.atlas.slice(-6).forEach((page, k) => c.add(this.add.image(left + 8 + k * 14, by + 8, `atlas-${page.kind}`).setScale(1 / HI)));
+      s.atlas.slice(-6).forEach((page, k) => c.add(this.add.image(left + 8 + k * 14, ay + 8, `atlas-${page.kind}`).setScale(1 / HI)));
       const shown = Math.min(pages, 6);
-      c.add(this.text(left + 4 + shown * 14, by + 8, `${pages} page${pages > 1 ? 's' : ''}`, { size: 10, weight: 700 }).setOrigin(0, 0.5));
+      const kinds = atlasKinds(s).size;
+      const royal = s.royal ? ' · Royal Atlas bound' : ` · ${kinds} of ${ROYAL_KINDS} kinds`;
+      c.add(this.text(left + 4 + shown * 14, ay + 8, `${pages} page${pages > 1 ? 's' : ''}${royal}`, { size: 10, weight: 700 }).setOrigin(0, 0.5));
     }
     const { pct } = isleProgress(s);
-    c.add(this.text(right, by - 8, `ISLE ${s.island}`, { size: 8.5, weight: 700, color: GREY, ls: 1.5 }).setOrigin(1, 0.5));
-    c.add(this.text(right, by + 7, `${pct}% surveyed`, { size: 10, weight: 700, color: pct === 100 ? MAGENTA : INK }).setOrigin(1, 0.5));
+    c.add(small(right, ay - 8, `ISLE ${s.island}`, 1));
+    c.add(this.text(right, ay + 7, `${pct}% surveyed`, { size: 10, weight: 700, color: pct === 100 ? MAGENTA : INK }).setOrigin(1, 0.5));
     const next = KINDS[kindOf(s.island + 1)].name.toLowerCase();
     const caption = islandCharted(s) ? `Sail to ${/^[aeiou]/.test(next) ? 'an' : 'a'} ${next}` : 'Set sail';
     c.add(
@@ -1161,6 +1359,22 @@ export class GameScene extends Phaser.Scene {
     );
     this.spots.sail = { ...OVERLAY_BUTTON };
   }
+
+  /** A pick card: a white box with an ink rule, inked when picked; a tap calls `onPick` and saves. */
+  private card(x: number, y: number, w: number, h: number, on: boolean, onPick: () => boolean) {
+    const box = this.add.rectangle(x, y, w, h, on ? hex(INK) : 0xffffff).setOrigin(0, 0.5).setStrokeStyle(1, hex(on ? INK : RULE));
+    box.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+      if (onPick()) saveGame(this.state);
+    });
+    return box;
+  }
+}
+
+/** A commission in words: "Chart 3 forests this voyage: +12c", or "7 forests over 2 voyages" when short. */
+function commissionText(c: Commission, form: 'full' | 'short' = 'full') {
+  const name = c.need === 1 ? TERRAIN[c.terrain].name.toLowerCase() : TERRAIN[c.terrain].plural;
+  const span = c.voyages > 1 ? `over ${c.voyages} voyages` : 'this voyage';
+  return form === 'short' ? `${c.need} ${name} ${span}` : `Chart ${c.need} ${name} ${span}: +${c.bonus}c`;
 }
 
 /** Strokes a rectangle in dashes, in the graphics' current line style. */
