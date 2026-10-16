@@ -2,8 +2,8 @@ import Phaser from 'phaser';
 import { EXPANSION_YARDS, GARDEN_AREAS, SHOP, SHOP_WALLS, STREET_PATH, WORLD, YARDS } from '../scenes/layout';
 import { INK, WASH, both, chance, ellPts, hatch, ink, paint, paper, pathOf, rectPts, reseed, rr, seeded, wash, type Ctx, type Pt } from './paint';
 
-// The ground as one painted page: cream paper under a broad grass wash, the packed-earth yard and
-// market, the street, and the shop's plank floor inside its stone walls. Things bought later (the
+// The ground as one painted page: cream paper under a broad grass wash, the compressed-earth yard,
+// forecourt and markets, the street, and the shop's plank floor inside its stone walls. Things bought later (the
 // expansion's yard, the second line's fields) are painted on their own pieces of paper laid on top.
 // Trees and bushes stand in the grass round the edges.
 
@@ -12,20 +12,7 @@ const GROUND_RES = 1.5;
 
 export const gardenTexture = (garden: number) => `garden-${garden}`;
 
-/** The yard and the market as one outline: the first line's column and the market beside it, down to the shop. */
-function yardOutline(): Pt[] {
-  const [line, market] = YARDS;
-  return [
-    [line.x, line.y],
-    [market.x + market.w, market.y],
-    [market.x + market.w, market.y + market.h],
-    [market.x, market.y + market.h],
-    [line.x + line.w, line.y + line.h],
-    [line.x, line.y + line.h],
-  ];
-}
-
-/** Packed earth: a warm wash with darker blotches, speckled grit and an inked edge. */
+/** Compressed earth: a dark brown wash with darker blotches, speckled grit and an inked edge. */
 function dirt(c: Ctx, outline: Pt[], box: { x: number; y: number; w: number; h: number }) {
   wash(c, outline, WASH.dirt, { layers: 5, spread: 2.5, alpha: 0.85, bloom: 6, cx: box.x + box.w / 2, cy: box.y + box.h / 3, edge: 3 });
   c.save();
@@ -84,11 +71,10 @@ function drawWorld(c: Ctx) {
   }
   // A deeper green at the world's edges.
   for (const x0 of [-20, w - 10]) wash(c, rectPts(x0, -10, 30, h + 20), WASH.forest, { layers: 3, spread: 6, alpha: 0.45, edge: 0 });
-  const outline = yardOutline();
-  const inYard = (x: number, y: number) => x > YARDS[0].x - 6 && x < YARDS[1].x + YARDS[1].w + 6 && y > YARDS[0].y - 6 && y < YARDS[0].y + YARDS[0].h + 6;
+  const inYard = (x: number, y: number) => YARDS.some((r) => x > r.x - 6 && x < r.x + r.w + 6 && y > r.y - 6 && y < r.y + r.h + 6);
   const inShop = (x: number, y: number) => x > SHOP.x - 14 && x < SHOP.x + SHOP.w + 14 && y > SHOP.y - 14;
-  grassTufts(c, 0, 0, w, h, 520, (x, y) => inYard(x, y) || inShop(x, y));
-  dirt(c, outline, { x: YARDS[0].x, y: YARDS[0].y, w: YARDS[1].x + YARDS[1].w - YARDS[0].x, h: YARDS[0].h });
+  grassTufts(c, 0, 0, w, h, 620, (x, y) => inYard(x, y) || inShop(x, y));
+  for (const yard of YARDS) dirt(c, rectPts(yard.x, yard.y, yard.w, yard.h), yard);
   // The street, a sandy path from the storefront's door to the bottom edge.
   const p = STREET_PATH;
   both(c, [[p.x - 2, p.y], [p.x + p.w + 2, p.y], [p.x + p.w + 8, h + 4], [p.x - 8, h + 4]], '#d8b07a', { layers: 3 }, { w: 1.1 });
@@ -238,16 +224,19 @@ export interface Scenery {
 }
 
 /**
- * Trees and bushes in the grass either side of the shop, below the yards. Placed by a seeded scatter, so they stand in the same spots on
- * every load.
+ * Trees and bushes in the grass below the gardens, either side of the street and above the shop.
+ * Placed by a seeded scatter, so they stand in the same spots on every load.
  */
 export function sceneryLayout(): Scenery[] {
   const rand = seeded(97);
   const between = (a: number, b: number) => a + rand() * (b - a);
   const spots: Scenery[] = [];
   const zones = [
-    { x0: 30, x1: 460, y0: 945, y1: 1105, trees: 7, bushes: 4 },
-    { x0: 940, x1: 1370, y0: 945, y1: 1105, trees: 7, bushes: 4 },
+    { x0: 30, x1: 210, y0: 700, y1: 895, trees: 3, bushes: 2 },
+    { x0: 1470, x1: 1650, y0: 700, y1: 895, trees: 3, bushes: 2 },
+    { x0: 660, x1: 800, y0: 700, y1: 895, trees: 2, bushes: 2 },
+    { x0: 880, x1: 1020, y0: 700, y1: 895, trees: 2, bushes: 2 },
+    { x0: 700, x1: 980, y0: 60, y1: 140, trees: 2, bushes: 3 },
   ];
   for (const z of zones) {
     for (let n = 0, tries = 0; n < z.trees + z.bushes && tries < 400; tries++) {

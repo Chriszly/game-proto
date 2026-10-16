@@ -1,3 +1,4 @@
+import { upgradePad, type UpgradeIcon } from '../art/markers';
 import Phaser from 'phaser';
 import { settings as hubSettings } from '../../../../shared/settings';
 import { renderScale, scrollingCamera, viewSize } from '../../../../shared/scaling';
@@ -9,7 +10,7 @@ import { INK, SERIF, TEXT_HALO, fit, resOf } from '../art/paint';
 import { craftsmanTexture, customerTexture } from '../art/townsfolk';
 import { BUBBLE_TAIL, cardInset, cardTexture, signTexture, type CardKind } from '../art/ui';
 import { catchUp, type AwaySummary } from '../game/away';
-import { GROW_MS, ITEMS, PLANTS, POTIONS, REFINE, REFINED, isPlant, isRefined, isSellable, plainOf, type ItemId, type SellableId } from '../game/items';
+import { GROW_MS, ITEMS, PLANTS, POTIONS, REFINE, REFINED, isPlant, isPotion, isRefined, isSellable, plainOf, type ItemId, type SellableId } from '../game/items';
 import {
   collectTill,
   doneByHand,
@@ -53,6 +54,7 @@ import {
   UPGRADES,
   RESEARCH_ORDER,
   researched,
+  shadeGrown,
   carryCapacity,
   craftsmanCost,
   harvestReach,
@@ -124,7 +126,6 @@ import {
   type StationMarkers,
   type StationPallets,
   STUDY,
-  SHELF_Y,
   shelfPosition,
 } from './layout';
 
@@ -226,6 +227,10 @@ interface Marker {
   /** A purple marker that takes coins: it pays only once the doctor has stood still on it for `STILL_MS`. */
   pays?: boolean;
 }
+
+/** A purple level marker's icon: the station for a station's level, otherwise the upgrade's own. */
+const upgradeIcon = (id: UpgradeId): UpgradeIcon =>
+  id === 'refiner' || id === 'refiner2' ? 'refiner' : id === 'cauldron' || id === 'cauldron2' ? 'cauldron' : id;
 
 export class GameScene extends Phaser.Scene {
   private state!: GameState;
@@ -559,7 +564,7 @@ export class GameScene extends Phaser.Scene {
     this.addCraftsmen(id);
     this.views.push(() => {
       // The plant being refined is always the front one (see tick).
-      progress.set(refining(refiner) >= 0 ? refiner.progress / REFINE[refiner.queue[0]].ms : null);
+      progress.set(refining(this.state, refiner) >= 0 ? refiner.progress / REFINE[refiner.queue[0]].ms : null);
       progress2.set(refiner.second ? refiner.second.progress / REFINE[refiner.second.plant].ms : null);
     });
   }
@@ -604,14 +609,32 @@ export class GameScene extends Phaser.Scene {
       in: at.in.map((p, i) => new Pallet(this, p.x, p.y, kinds[0][i])),
       out: at.out.map((p, i) => new Pallet(this, p.x, p.y, kinds[1][i])),
     };
-    this.pallets[id] = pallets;
     const stack = (row: Pallet[], tray: readonly ItemId[]) => {
       for (const pallet of row) pallet.set(tray.filter((item) => item === pallet.item).length);
     };
+    // A pallet stands only once its goods can be made: nightshade's once a shade garden grows, a
+    // potion's once its recipe is known. The test reads the pallets standing.
+    let standing = '';
     this.views.push(() => {
+      const shown = [...pallets.in, ...pallets.out].map((p) => this.available(p.item));
+      if (shown.join() !== standing) {
+        standing = shown.join();
+        for (const pallet of [...pallets.in, ...pallets.out]) pallet.setVisible(this.available(pallet.item));
+        this.pallets[id] = { in: pallets.in.filter((p) => this.available(p.item)), out: pallets.out.filter((p) => this.available(p.item)) };
+      }
       stack(pallets.in, trays[0]());
       stack(pallets.out, trays[1]());
     });
+  }
+
+  /**
+   * Whether goods of a kind can be made yet: wheat and mandrakes always, nightshade once a shade
+   * garden grows it, a refined good once its plant can be grown, a potion once its recipe is known.
+   */
+  private available(item: ItemId): boolean {
+    if (isPlant(item)) return item !== 'nightshade' || shadeGrown(this.state);
+    if (isRefined(item)) return PLANTS.some((plant) => REFINE[plant].out === item && this.available(plant));
+    return isPotion(item) && researched(this.state, item);
   }
 
   /** Lays a floor marker with a caption. A marker a belt replaces goes away once `gone` holds. */
@@ -649,6 +672,7 @@ export class GameScene extends Phaser.Scene {
   private addUpgradeMarker(at: Point, id: UpgradeId, name = 'Lv') {
     this.addLevelMarker(
       at,
+      upgradeIcon(id),
       () => this.state.upgrades[id],
       UPGRADES[id].max,
       (level) => upgradeCost(id, level),
@@ -665,6 +689,7 @@ export class GameScene extends Phaser.Scene {
    */
   private addLevelMarker(
     at: Point,
+    icon: UpgradeIcon,
     get: () => Upgrade,
     max: number,
     cost: (level: number) => number,
@@ -674,7 +699,7 @@ export class GameScene extends Phaser.Scene {
   ) {
     this.addMarker(
       at,
-      'pad-up',
+      upgradePad(icon),
       '',
       () => {
         const level = get().level;
@@ -708,6 +733,7 @@ export class GameScene extends Phaser.Scene {
     const hired = () => this.state.craftsmen[id];
     this.addLevelMarker(
       hire,
+      'hire',
       hired,
       MAX_CRAFTSMEN,
       craftsmanCost,
@@ -736,7 +762,7 @@ export class GameScene extends Phaser.Scene {
     if (id === 'counter') return (this.state.counter.serving ?? 0) > 0;
     if (id === 'refiner' || id === 'refiner2') {
       const refiner = this.state[id];
-      return i === 0 ? refining(refiner, this.state.priority[id]) >= 0 : !!refiner.second;
+      return i === 0 ? refining(this.state, refiner, this.state.priority[id]) >= 0 : !!refiner.second;
     }
     const cauldron = this.state[id];
     return !!(i === 0 ? cauldron.brewing : cauldron.brewing2);
@@ -746,8 +772,8 @@ export class GameScene extends Phaser.Scene {
    * A purple build marker captioned with the coins still to pay for the build, shown while `shown`
    * holds; standing still on it pays towards the build.
    */
-  private addBuildMarker(at: Point, caption: string, cost: number, build: Build, shown: () => boolean, act: () => Feedback | null) {
-    const pad = fit(this.add.image(at.x, at.y, 'pad-up').setDepth(-400));
+  private addBuildMarker(at: Point, icon: UpgradeIcon, caption: string, cost: number, build: Build, shown: () => boolean, act: () => Feedback | null) {
+    const pad = fit(this.add.image(at.x, at.y, upgradePad(icon)).setDepth(-400));
     const text = this.add
       .text(at.x, at.y + 26, '', { ...CAPTION, color: CAPTION_PAY })
       .setOrigin(0.5, 0)
@@ -766,26 +792,27 @@ export class GameScene extends Phaser.Scene {
    */
   private createExpansion() {
     const { expansion } = this.state;
-    this.addBuildMarker(EXPANSION_LAND, 'Land', EXPANSION_COST.land, expansion.land, () => !expansion.land.built && unlocked(this.state, 'land'), () =>
+    this.addBuildMarker(EXPANSION_LAND, 'land', 'Land', EXPANSION_COST.land, expansion.land, () => !expansion.land.built && unlocked(this.state, 'land'), () =>
       payExpansion(this.state, 'land'),
     );
-    const parts: { part: ExpansionPart; at: Point; caption: string; cost: number; build: Build }[] = [
+    const parts: { part: ExpansionPart; at: Point; icon: UpgradeIcon; caption: string; cost: number; build: Build }[] = [
       ...expansion.fields.map((build, i) => {
         const area = GARDEN_AREAS[LINE2_GARDEN + i];
         return {
           part: (i === 0 ? 'field1' : 'field2') as ExpansionPart,
           at: { x: area.x + area.w / 2, y: area.y + area.h / 2 },
+          icon: 'field' as const,
           caption: area.name,
           cost: EXPANSION_COST.field,
           build,
         };
       }),
       // The stations are bought from where their work spots will be, clear of where they will stand.
-      { part: 'refiner', at: REFINER2_MARKERS.work, caption: 'Table', cost: EXPANSION_COST.refiner, build: expansion.refiner },
-      { part: 'cauldron', at: CAULDRON2_MARKERS.work, caption: 'Cauldron', cost: EXPANSION_COST.cauldron, build: expansion.cauldron },
+      { part: 'refiner', at: REFINER2_MARKERS.work, icon: 'refiner', caption: 'Table', cost: EXPANSION_COST.refiner, build: expansion.refiner },
+      { part: 'cauldron', at: CAULDRON2_MARKERS.work, icon: 'cauldron', caption: 'Cauldron', cost: EXPANSION_COST.cauldron, build: expansion.cauldron },
     ];
-    for (const { part, at, caption, cost, build } of parts) {
-      this.addBuildMarker(at, caption, cost, build, () => expansion.land.built && !build.built, () => payExpansion(this.state, part));
+    for (const { part, at, icon, caption, cost, build } of parts) {
+      this.addBuildMarker(at, icon, caption, cost, build, () => expansion.land.built && !build.built, () => payExpansion(this.state, part));
     }
     // The shade gardens, bought in the middle of where each will grow: the first line's once the
     // garden belt is built, the second line's once the expansion's land is bought.
@@ -793,7 +820,7 @@ export class GameScene extends Phaser.Scene {
     ([0, 1] as const).forEach((line) => {
       const area = GARDEN_AREAS[SHADE_GARDEN + line];
       const shown = () => !shade[line].built && (line === 0 ? unlocked(this.state, 'shade') : expansion.land.built);
-      this.addBuildMarker({ x: area.x + area.w / 2, y: area.y + area.h / 2 + 10 }, 'Shade garden', SHADE_COST[line], shade[line], shown, () =>
+      this.addBuildMarker({ x: area.x + area.w / 2, y: area.y + area.h / 2 + 10 }, 'shade', 'Shade garden', SHADE_COST[line], shade[line], shown, () =>
         payShade(this.state, line),
       );
     });
@@ -819,7 +846,7 @@ export class GameScene extends Phaser.Scene {
 
     for (const id of BELTS) {
       const belt = this.state.belts[id];
-      this.addBuildMarker(BELT_BUILD[id], 'Pixies', BELT_COST[id], belt, () => !belt.built && beltBuildable(this.state, id) && unlocked(this.state, `belt-${id}`), () =>
+      this.addBuildMarker(BELT_BUILD[id], 'pixies', 'Pixies', BELT_COST[id], belt, () => !belt.built && beltBuildable(this.state, id) && unlocked(this.state, `belt-${id}`), () =>
         payBelt(this.state, id),
       );
       const riding: { pixie: Phaser.GameObjects.Image; icon: Phaser.GameObjects.Image }[] = [];
@@ -886,10 +913,9 @@ export class GameScene extends Phaser.Scene {
   private dropSpot(id: BeltId, kind: ItemId): Point | null {
     const target = BELT_TARGET[id];
     if (target === 'counter') {
-      const known = POTIONS.filter((p) => researched(this.state, p));
-      const i = known.indexOf(plainOf(kind as SellableId));
+      const i = POTIONS.indexOf(plainOf(kind as SellableId));
       if (i < 0) return null;
-      const at = shelfPosition(i, known.length);
+      const at = shelfPosition(i);
       return { x: at.x, y: at.y - 50 };
     }
     const kinds: readonly ItemId[] = target === 'refiner' || target === 'refiner2' ? PLANTS : REFINED;
@@ -908,7 +934,7 @@ export class GameScene extends Phaser.Scene {
     this.label(GUILD.sign.x, GUILD.sign.y, 'Guild');
     // Its upgrades go up for sale once the doctor has paid to join.
     const { guild } = this.state;
-    this.addBuildMarker(GUILD.join, 'Join guild', GUILD_COST, guild, () => !guild.built && unlocked(this.state, 'guild'), () => joinGuild(this.state));
+    this.addBuildMarker(GUILD.join, 'guild', 'Join guild', GUILD_COST, guild, () => !guild.built && unlocked(this.state, 'guild'), () => joinGuild(this.state));
     for (const id of GUILD_UPGRADES) this.addUpgradeMarker(GUILD[id], id, UPGRADES[id].name);
   }
 
@@ -921,6 +947,7 @@ export class GameScene extends Phaser.Scene {
     this.addObstacle(STUDY.desk.x, STUDY.desk.y, 'study', 60, 16);
     this.addLevelMarker(
       STUDY.learn,
+      'research',
       () => this.state.upgrades.research,
       UPGRADES.research.max,
       (level) => upgradeCost('research', level),
@@ -932,13 +959,12 @@ export class GameScene extends Phaser.Scene {
 
   private createShopfront() {
     this.addObstacle(COUNTER.x, COUNTER.y, 'counter', 200, 30);
-    // A shelf for each potion the apothecary has learned, side by side behind the counter; a new
-    // recipe's shelf joins the row and the others make room. Below each, how much less the next one
-    // sells for while the shop is well stocked.
-    const shelves = POTIONS.map((potion) => new Shelf(this, COUNTER.x, SHELF_Y, potion));
-    const cuts = POTIONS.map(() =>
+    // A shelf for each potion along the side walls, standing once the apothecary has learned it. Below
+    // each, how much less the next one sells for while the shop is well stocked.
+    const shelves = POTIONS.map((potion, i) => new Shelf(this, shelfPosition(i).x, shelfPosition(i).y, potion));
+    const cuts = POTIONS.map((_, i) =>
       this.add
-        .text(0, SHELF_Y + 2, '', { fontFamily: SERIF, fontSize: '10px', fontStyle: 'bold', color: '#8a3a10', stroke: TEXT_HALO, strokeThickness: 3 })
+        .text(shelfPosition(i).x, shelfPosition(i).y + 2, '', { fontFamily: SERIF, fontSize: '10px', fontStyle: 'bold', color: '#8a3a10', stroke: TEXT_HALO, strokeThickness: 3 })
         .setOrigin(0.5, 0)
         .setDepth(WORLD_UI_DEPTH),
     );
@@ -950,11 +976,6 @@ export class GameScene extends Phaser.Scene {
       if (known.join() !== row) {
         row = known.join();
         shelves.forEach((s, i) => s.setVisible(known.includes(POTIONS[i])));
-        known.forEach((potion, i) => {
-          const at = shelfPosition(i, known.length);
-          shelves[POTIONS.indexOf(potion)].moveTo(at.x, at.y);
-          cuts[POTIONS.indexOf(potion)].setX(at.x);
-        });
         // The test reads the shelves standing, in POTIONS order.
         this.pallets.counter!.in = shelves.filter((_, i) => known.includes(POTIONS[i]));
       }

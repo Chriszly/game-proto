@@ -46,6 +46,7 @@ import {
   gardenOf,
   speedAt,
   palletHasRoom,
+  storage,
   upgradeCost,
   contractFor,
   maxTip,
@@ -84,8 +85,8 @@ import {
   type Upgrade,
   type UpgradeId,
 } from './state';
-// Where belts meet comes from their paths; the layout is plain data, free of Phaser too.
-import { BELT_JOIN_MS, beltSpan } from '../scenes/layout';
+// Where goods get on the belts comes from their paths; the layout is plain data, free of Phaser too.
+import { beltSpan } from '../scenes/layout';
 
 // Pure game rules, kept free of Phaser so later automation can drive the same functions.
 
@@ -121,7 +122,7 @@ export function tick(
   for (const id of REFINERS) {
     const refiner = state[id];
     const speed = dt * speedAt(state.upgrades[id].level);
-    const next = refining(refiner, state.priority[id]);
+    const next = refining(state, refiner, state.priority[id]);
     // Each pair of hands works its own pipe at the same speed: the first the front of the queue, a
     // second craftsman's a plant of its own (see `refineSecond`).
     if (crew(state, id, workingAt) > 0 && next >= 0) {
@@ -136,11 +137,11 @@ export function tick(
         // Work past the end of this plant goes on the next, so a slow frame rate makes no less. The
         // next is picked now, so the priority applies to it as well.
         refiner.progress = refiner.queue.length > 0 ? refiner.progress - recipe.ms : 0;
-        const after = firstToRefine(refiner, state.priority[id]);
+        const after = firstToRefine(state, refiner, state.priority[id]);
         if (after > 0) refiner.queue.unshift(...refiner.queue.splice(after, 1));
       }
     }
-    if (secondPipe(state, id)) refineSecond(refiner, speed, state.priority[id]);
+    if (secondPipe(state, id)) refineSecond(state, refiner, speed, state.priority[id]);
   }
 
   for (const id of CAULDRONS) {
@@ -185,20 +186,30 @@ export function tick(
  * Which waiting plant the refining table works on, or -1 when there is none: the one at the front
  * while work on it has started, otherwise the first one to start on.
  */
-export function refining(refiner: Refiner, first: PlantId | null = null) {
+export function refining(state: GameState, refiner: Refiner, first: PlantId | null = null) {
   const front = refiner.queue[0];
-  if (refiner.progress > 0 && front && palletHasRoom(refiner.output, REFINE[front].out)) return 0;
-  return firstToRefine(refiner, first);
+  if (refiner.progress > 0 && front && palletHasRoom(state, refiner.output, REFINE[front].out)) return 0;
+  return firstToRefine(state, refiner, first);
 }
+
+/** How many of `item` stand on a station's output pallets. */
+const onPallet = <T extends string>(output: T[], item: T) => output.filter((i) => i === item).length;
 
 /**
  * Which waiting plant to start on: the first of the priority plant `first` whose output pallet has
- * room, or else the first of any, or -1 when no output pallet has room.
+ * room, or else the one whose good has the fewest on its output pallet (ties to the front of the
+ * queue), or -1 when no output pallet has room.
  */
-function firstToRefine(refiner: Refiner, first: PlantId | null) {
-  const fits = (plant: PlantId) => palletHasRoom(refiner.output, REFINE[plant].out);
+function firstToRefine(state: GameState, refiner: Refiner, first: PlantId | null) {
+  const fits = (plant: PlantId) => palletHasRoom(state, refiner.output, REFINE[plant].out);
   const preferred = first ? refiner.queue.findIndex((plant) => plant === first && fits(plant)) : -1;
-  return preferred >= 0 ? preferred : refiner.queue.findIndex(fits);
+  if (preferred >= 0) return preferred;
+  let best = -1;
+  refiner.queue.forEach((plant, i) => {
+    if (!fits(plant)) return;
+    if (best < 0 || onPallet(refiner.output, REFINE[plant].out) < onPallet(refiner.output, REFINE[refiner.queue[best]].out)) best = i;
+  });
+  return best;
 }
 
 /**
@@ -206,10 +217,10 @@ function firstToRefine(refiner: Refiner, first: PlantId | null) {
  * the front one, which is the first pipe's), refines it and puts it out, then starts on the next with
  * the work left over. A finished plant waits there while its pallet is full.
  */
-function refineSecond(refiner: Refiner, ms: number, first: PlantId | null) {
+function refineSecond(state: GameState, refiner: Refiner, ms: number, first: PlantId | null) {
   if (!refiner.second) {
     const rest: Refiner = { ...refiner, queue: refiner.queue.slice(1) };
-    const i = firstToRefine(rest, first);
+    const i = firstToRefine(state, rest, first);
     if (i < 0) return;
     refiner.second = { plant: refiner.queue.splice(i + 1, 1)[0], progress: 0 };
   }
@@ -217,11 +228,11 @@ function refineSecond(refiner: Refiner, ms: number, first: PlantId | null) {
   const recipe = REFINE[second.plant];
   const over = second.progress + ms - recipe.ms;
   second.progress = Math.min(second.progress + ms, recipe.ms);
-  if (over < 0 || !palletHasRoom(refiner.output, recipe.out)) return;
+  if (over < 0 || !palletHasRoom(state, refiner.output, recipe.out)) return;
   refiner.output.push(recipe.out);
   refiner.second = null;
   // Work past the end of this plant goes on the next, so a slow frame rate makes no less.
-  if (over > 0) refineSecond(refiner, over, first);
+  if (over > 0) refineSecond(state, refiner, over, first);
 }
 
 /**
@@ -257,28 +268,18 @@ function beltTarget(state: GameState, belt: BeltId): ItemId[] {
 /** Hands an item from the end of a belt to the next station, if it has room. */
 function giveFromBelt(state: GameState, belt: BeltId, id: ItemId) {
   const to = beltTarget(state, belt);
-  if (!palletHasRoom(to, id)) return false;
+  if (!hasRoom(state, to, id)) return false;
   (to as ItemId[]).push(id);
   return true;
 }
 
 /**
- * The two cauldron belts share their run up to the counter, so in each lane an item from a gap
- * before the join on keeps a gap behind the other belt's items there as well. Returns the other
- * belt's items near or past the join, by lane, or null for a belt that joins none.
+ * Whether `to` has room for one more `id`: its pallet, or on the shop's shelf, that potion's shelf,
+ * which holds its plain and fine ones together.
  */
-function mergingItems(state: GameState, id: BeltId) {
-  if (id !== 'cauldron' && id !== 'cauldron2') return null;
-  const byLane = new Map<ItemId, BeltItem[]>();
-  const other = state.belts[OTHER_LINE[id]];
-  if (!other.built) return byLane;
-  for (const item of other.items) {
-    if (item.at < BELT_JOIN_MS - BELT_GAP_MS) continue;
-    const lane = byLane.get(item.id);
-    if (lane) lane.push(item);
-    else byLane.set(item.id, [item]);
-  }
-  return byLane;
+function hasRoom(state: GameState, to: readonly ItemId[], id: ItemId) {
+  if (to !== state.counter.shelf || !isSellable(id)) return palletHasRoom(state, to, id);
+  return to.filter((p) => isSellable(p) && plainOf(p) === plainOf(id)).length < storage(state);
 }
 
 /**
@@ -296,18 +297,10 @@ function runBelt(state: GameState, id: BeltId, dt: number) {
   const step = (dt * beltSpeed(state)) / LANE_SHARE;
   // The item last seen in each lane: the one ahead of the next in that lane, and in the end the rearmost.
   const ahead = new Map<ItemId, BeltItem>();
-  const merging = mergingItems(state, id);
   belt.items = belt.items.filter((item) => {
     const front = !ahead.has(item.id);
     if (front && item.at >= length && giveFromBelt(state, id, item.id)) return false;
-    let room = front ? length : ahead.get(item.id)!.at - BELT_GAP_MS;
-    if (merging && item.at + step >= BELT_JOIN_MS - BELT_GAP_MS) {
-      for (const other of merging.get(item.id) ?? []) {
-        // The first line's belt goes first when two items reach the join together.
-        const first = other.at > item.at || (other.at === item.at && id === 'cauldron2');
-        if (first) room = Math.min(room, other.at - BELT_GAP_MS);
-      }
-    }
+    const room = front ? length : ahead.get(item.id)!.at - BELT_GAP_MS;
     item.at = Math.max(item.at, Math.min(item.at + step, room));
     ahead.set(item.id, item);
     return true;
@@ -321,23 +314,6 @@ const LANE_SHARE = 2;
 
 /** Where goods of a kind get on a belt, in ms along its main run: the start of their own run. */
 const beltStart = (id: BeltId, kind: ItemId) => beltSpan(id, kind).start;
-
-/**
- * How many more of a potion customers want than the apothecary has ready or on the way: on the
- * counter's shelf, brewing, on the cauldrons' pallets and belts, and in the doctor's hands.
- */
-export function shortfall(state: GameState, potion: PotionId) {
-  const wanted = state.orders.reduce((n, o) => n + o.wants.filter((p) => p === potion).length, 0);
-  // Each cauldron's belt is named after it.
-  const riding = CAULDRONS.flatMap((id) => state.belts[id].items.map((item) => item.id));
-  const brewing = CAULDRONS.flatMap((id) => [state[id].brewing, state[id].brewing2].flatMap((brew) => brew?.out ?? []));
-  // Fine potions count as the potion they are.
-  const ready = [state.counter.shelf, state.carrying, riding, brewing, ...CAULDRONS.map((id) => state[id].output)].reduce(
-    (n, items) => n + items.filter((p) => isSellable(p) && plainOf(p) === potion).length,
-    0,
-  );
-  return wanted - ready;
-}
 
 /**
  * Works one of a cauldron's pipes for `ms` and returns its brew afterwards: starts one when it has
@@ -357,16 +333,18 @@ function brew(state: GameState, cauldron: Cauldron, brewing: Brew | null, ms: nu
 }
 
 /**
- * Starts the recipe the shop is shortest of among those the apothecary has learned and the cauldron
- * has the ingredients and room for, so the potion customers are waiting for gets brewed first. Ties go in recipe order. Takes the
- * ingredients out of the cauldron and returns the brew started, if any, for a pipe to work.
+ * Starts the recipe with the fewest potions on the cauldron's output pallets among those the
+ * apothecary has learned and the cauldron has the ingredients and room for, so every potion keeps
+ * coming. Ties go in recipe order. Takes the ingredients out of the cauldron and returns the brew
+ * started, if any, for a pipe to work.
  */
 function startBrew(state: GameState, cauldron: Cauldron, first: PotionId | null = null): Brew | null {
-  const need = new Map(RECIPES.map((r) => [r.out, shortfall(state, r.out)]));
-  // The priority potion goes first whenever its ingredients are in; the rest by need.
-  const byNeed = [...RECIPES].sort((a, b) => Number(b.out === first) - Number(a.out === first) || need.get(b.out)! - need.get(a.out)!);
+  // A fine potion counts as the potion it is.
+  const have = new Map(RECIPES.map((r) => [r.out, onPallet(cauldron.output.map(plainOf), r.out)]));
+  // The priority potion goes first whenever its ingredients are in; the rest by fewest on the pallet.
+  const byNeed = [...RECIPES].sort((a, b) => Number(b.out === first) - Number(a.out === first) || have.get(a.out)! - have.get(b.out)!);
   for (const recipe of byNeed) {
-    if (!researched(state, recipe.out) || !palletHasRoom(cauldron.output, recipe.out)) continue;
+    if (!researched(state, recipe.out) || !palletHasRoom(state, cauldron.output, recipe.out)) continue;
     const left = without(cauldron.contents, recipe.inputs);
     if (left) {
       cauldron.contents = left;
@@ -557,7 +535,7 @@ function without<T extends ItemId>(items: readonly T[], taken: readonly T[]): T[
 function takeTopFromBack<T extends ItemId>(state: GameState, pick: (id: ItemId) => id is T, to: readonly ItemId[]): T | null {
   for (let i = state.carrying.length - 1; i >= 0; i--) {
     const id = state.carrying[i];
-    if (pick(id) && palletHasRoom(to, id)) {
+    if (pick(id) && hasRoom(state, to, id)) {
       state.carrying.splice(i, 1);
       return id;
     }
@@ -565,9 +543,20 @@ function takeTopFromBack<T extends ItemId>(state: GameState, pick: (id: ItemId) 
   return null;
 }
 
+/**
+ * Picks one item up off a station's pallets, so the hands fill with a mix of every kind there: the
+ * kind the doctor carries fewest of, then the kind with the most waiting, then the first.
+ */
 function pickUpOne(state: GameState, from: ItemId[]): Feedback | null {
   if (from.length === 0 || freeHands(state) === 0) return null;
-  const id = from.shift()!;
+  const held = (id: ItemId) => state.carrying.filter((i) => i === id).length;
+  const waiting = (id: ItemId) => from.filter((i) => i === id).length;
+  let best = 0;
+  from.forEach((id, i) => {
+    const other = from[best];
+    if (held(id) < held(other) || (held(id) === held(other) && waiting(id) > waiting(other))) best = i;
+  });
+  const id = from.splice(best, 1)[0];
   state.carrying.push(id);
   return [`+ ${ITEMS[id].name}`];
 }
