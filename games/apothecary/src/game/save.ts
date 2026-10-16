@@ -1,5 +1,5 @@
 import type { ItemId } from './items';
-import { BELT_GAP_MS, BELT_MS, BELTS, COLUMNS_BELT_MS, COLUMNS_LAYOUT, FEEDERS_LAYOUT, GARDENS, GUILD_UPGRADES, HEART_LAYOUT, U_BELT_MS, createInitialState, gardenOf, type GameState, type Plot } from './state';
+import { BELT_GAP_MS, BELT_MS, BELTS, COLUMNS_BELT_MS, COLUMNS_LAYOUT, FEEDERS_LAYOUT, GUILD_UPGRADES, HEART_LAYOUT, PLOTS_PER_GARDEN, U_BELT_MS, createInitialState, gardenOf, type GameState, type Plot } from './state';
 import { beltSpan } from '../scenes/layout';
 
 const KEY = 'apothecary-save';
@@ -15,7 +15,7 @@ export function loadState(): GameState {
     // Fields added after the save was written fall back to their defaults, including new plots,
     // stations' upgrades, craftsmen and belts, the contract, sales and tips counts, the last-seen
     // time (0, so a save from before them catches up on nothing), the shade gardens, the
-    // reputation, the regulars and the market day's rush.
+    // reputation, the regulars, the market day's rush, the plague, the price signs and the rival.
     const state: GameState = {
       ...fresh,
       ...saved,
@@ -47,11 +47,12 @@ export function loadState(): GameState {
 }
 
 /**
- * Whether saved plots still fit today's gardens, each plot growing its garden's plant. Saves from
- * when a garden had three plots don't, and start again with every plot ripe.
+ * Whether saved plots still fit today's gardens: every bed of a garden grows the same plant (a
+ * replanted garden switches all nine). Saves from when a garden had three plots don't, and start
+ * again with every plot ripe.
  */
 function keepsPlots(plots: Plot[]) {
-  return plots.every((plot, i) => GARDENS[gardenOf(i)] === plot.plant);
+  return plots.every((plot, i) => plots[gardenOf(i) * PLOTS_PER_GARDEN].plant === plot.plant);
 }
 
 /**

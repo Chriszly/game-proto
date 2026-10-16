@@ -10,10 +10,14 @@ import { INK, SERIF, TEXT_HALO, fit, resOf } from '../art/paint';
 import { craftsmanTexture, customerTexture } from '../art/townsfolk';
 import { BUBBLE_TAIL, cardInset, cardTexture, signTexture, type CardKind } from '../art/ui';
 import { catchUp, type AwaySummary } from '../game/away';
-import { GROW_MS, ITEMS, PLANTS, POTIONS, REFINE, REFINED, isPlant, isPotion, isRefined, isSellable, plainOf, type ItemId, type SellableId } from '../game/items';
+import { GROW_MS, ITEMS, PANACEA_RECIPE, PLANTS, POTIONS, REFINE, REFINED, isPlant, isPotion, isRefined, isSellable, plainOf, type ItemId, type SellableId } from '../game/items';
 import {
+  clearBlight,
   collectTill,
+  cycleSign,
   doneByHand,
+  isBlighted,
+  replantGarden,
   dropAll,
   dropAtRefiner,
   dropInCauldron,
@@ -84,6 +88,19 @@ import {
   isMarketDay,
   weatherFor,
   type Weather,
+  DAY_MS as DAY,
+  GARDEN_NAMES,
+  PLAGUE_STAGES,
+  RIVAL_CUT,
+  RIVAL_MONTH_DAYS,
+  RIVAL_SALES,
+  SIGN_NAMES,
+  SIGN_PAY,
+  gardenPlant,
+  panaceaUnlocked,
+  plagueStage,
+  rivalUndercuts,
+  signOf,
 } from '../game/state';
 import { BackStack } from '../ui/BackStack';
 import { IconRow } from '../ui/IconRow';
@@ -126,7 +143,9 @@ import {
   type StationMarkers,
   type StationPallets,
   STUDY,
+  RIVAL,
   shelfPosition,
+  shelfSignPosition,
 } from './layout';
 
 type Point = { x: number; y: number };
@@ -157,6 +176,14 @@ const SICKLE_SCALE = 1;
 const SICKLE_LINGER_MS = 400;
 /** Width of a crafting station's priority sign, wide enough for "First:" and its choice. */
 const PRIORITY_SIGN_W = 92;
+/** Width of a shelf's price sign, wide enough for "Cheap". */
+const PRICE_SIGN_W = 48;
+/** Width of a garden's sign, wide enough for any of `GARDEN_NAMES` and the plant's icon. */
+const GARDEN_SIGN_W = 128;
+/** The plague card, under the town card and the away chip, clear of the shop's shelves when the doctor is at the counter. */
+const PLAGUE_CARD = { x: 626, y: 150, w: 316, h: 44 };
+/** A blighted plant is drawn in a sickly violet-grey. */
+const BLIGHT_TINT = 0x8a7aa0;
 /** How long the doctor stands still on a purple marker before it starts taking coins, so walking over one buys nothing. */
 const STILL_MS = 400;
 /**
@@ -283,6 +310,8 @@ export class GameScene extends Phaser.Scene {
   private pinch: { spread: number; zoom: number } | null = null;
   /** What the craftsmen and belts earned while the player was away, shown on a chip until tapped. */
   away: AwaySummary | null = null;
+  /** The panel shown once the town is cured, until tapped away. */
+  private winPanel: Phaser.GameObjects.Container | null = null;
 
   constructor() {
     super('Game');
@@ -303,6 +332,7 @@ export class GameScene extends Phaser.Scene {
     this.blockedAreas = [];
     this.atCounter = new Set();
     this.shopMeasured = null;
+    this.winPanel = null;
     this.physics.world.setBounds(0, HUD_HEIGHT, WORLD.w, WORLD.h - HUD_HEIGHT);
     // Restarting the scene for a new game keeps its event listeners, so this one is added once.
     this.events.off(Phaser.Scenes.Events.PRE_UPDATE, this.limitWalkStep, this);
@@ -322,7 +352,9 @@ export class GameScene extends Phaser.Scene {
     this.createShopfront();
     this.createHud();
     this.createContract();
+    this.createPlague();
     this.createTown();
+    this.createRival();
     this.createOrderStrip();
     this.createWeather();
     this.createAwayChip();
@@ -419,11 +451,49 @@ export class GameScene extends Phaser.Scene {
     return fit(this.add.image(x, y, texture).setOrigin(0).setDepth(depth));
   }
 
-  /** A garden: meadow inside a picket fence, with its name on a sign. */
+  /** A garden: meadow inside a picket fence, with its name on a sign that replants it when tapped. */
   private drawGarden(garden: number) {
     const area = GARDEN_AREAS[garden];
     this.ground(area.x - GARDEN_MARGIN, area.y - GARDEN_MARGIN, gardenTexture(garden), -990);
-    this.label(area.x + area.w / 2, area.y + 10, area.name);
+    this.addGardenSign(garden, { x: area.x + area.w / 2, y: area.y + 10 });
+  }
+
+  /**
+   * A garden's sign: the plant its beds grow, by name and icon. Tapping it switches every bed to the
+   * next plant the line grows, which starts again from seed; the tap doesn't walk the doctor.
+   */
+  private addGardenSign(garden: number, at: Point) {
+    const sign = this.card(at.x, at.y, 'sign', signTexture(this, GARDEN_SIGN_W)).setDepth(-910);
+    const name = this.add
+      .text(at.x + 8, at.y, '', { fontFamily: SERIF, fontSize: '13px', fontStyle: 'bold', color: INK })
+      .setOrigin(0.5)
+      .setDepth(-900);
+    const icon = fit(this.add.image(at.x, at.y, itemTexture('wheat')).setDepth(-900));
+    sign.setInteractive({ useHandCursor: true }).on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
+      e.stopPropagation();
+      if (this.pinching()) return;
+      if (this.closePanels()) return;
+      const feedback = replantGarden(this.state, garden);
+      if (feedback) this.showFeedback(feedback);
+    });
+    let shown = '';
+    this.views.push(() => {
+      const plant = gardenPlant(this.state, garden);
+      if (plant === shown) return;
+      shown = plant;
+      name.setText(GARDEN_NAMES[plant]);
+      icon.setTexture(itemTexture(plant)).setX(name.x - name.width / 2 - 10);
+    });
+  }
+
+  /** Closes any open panel; true if one was open, so the tap that closed it does nothing else. */
+  private closePanels() {
+    const open = this.recipes.visible || this.settings.visible || !!this.winPanel;
+    this.recipes.toggle(false);
+    this.settings.toggle(false);
+    this.winPanel?.destroy();
+    this.winPanel = null;
+    return open;
   }
 
   /** A place name on a parchment sign. */
@@ -461,11 +531,7 @@ export class GameScene extends Phaser.Scene {
       // A second finger landing on a sign starts a pinch, not a priority change.
       if (this.pinching()) return;
       // With a panel open, a tap anywhere closes it, a sign's included, without changing the sign.
-      if (this.recipes.visible || this.settings.visible) {
-        this.recipes.toggle(false);
-        this.settings.toggle(false);
-        return;
-      }
+      if (this.closePanels()) return;
       cyclePriority(this.state, id);
     });
     this.views.push(() => {
@@ -526,7 +592,9 @@ export class GameScene extends Phaser.Scene {
           this.views.push(() => {
             const grown = plot.grown / GROW_MS[plot.plant];
             plant.setTexture(plantTexture(plot.plant, grown >= 1 ? 2 : grown >= 0.5 ? 1 : 0));
-            growth.set(grown >= 1 ? null : grown);
+            // A blighted bed's plant withers to a sickly violet-grey and its bar goes.
+            plant.setTint(plot.blighted ? BLIGHT_TINT : 0xffffff);
+            growth.set(grown >= 1 || plot.blighted ? null : grown);
           });
         },
       );
@@ -854,7 +922,7 @@ export class GameScene extends Phaser.Scene {
       // For each kind of goods: the run it gets on at, where on the main run that starts and joins,
       // and how far across the route its pixies fly.
       const lanes = BELT_LANES[id];
-      const spans = new Map(lanes.map((kind, lane) => [kind, { ...beltSpan(id, kind), off: laneOffset(lane, lanes.length) }]));
+      const offs = new Map(lanes.map((kind, lane) => [kind, laneOffset(lane, lanes.length)]));
       const approach = BELT_MS[id] - PIXIE_APPROACH_MS;
       this.views.push(() => {
         while (riding.length < belt.items.length) {
@@ -870,9 +938,11 @@ export class GameScene extends Phaser.Scene {
             icon.setVisible(false);
             return;
           }
-          // Goods loaded from the doctor's hands wait out of sight until their turn to set off.
-          // A kind with no lane of its own (from an edited save) flies down the middle of the main run.
-          const { run, start, join, off } = spans.get(item.id) ?? { run: 0, start: 0, join: 0, off: 0 };
+          // Goods loaded from the doctor's hands wait out of sight until their turn to set off. They
+          // ride the run of the garden they came from, or their kind's. A kind with no lane of its own
+          // (from an edited save) flies down the middle of the main run.
+          const { run, start, join } = beltSpan(id, item.id, item.run);
+          const off = offs.get(item.id) ?? 0;
           pixie.setVisible(item.at >= start);
           icon.setVisible(item.at >= start);
           // Along the main run, off to the side for the item's kind. On a feeder, the pixie drifts over
@@ -968,6 +1038,8 @@ export class GameScene extends Phaser.Scene {
         .setOrigin(0.5, 0)
         .setDepth(WORLD_UI_DEPTH),
     );
+    // Each shelf's price sign, which a tap moves on: Fair, Dear, Cheap.
+    const signs = POTIONS.map((potion, i) => this.addPriceSign(potion, shelfSignPosition(i)));
     this.pallets.counter = { in: [], out: [] };
     let row = '';
     this.views.push(() => {
@@ -976,6 +1048,7 @@ export class GameScene extends Phaser.Scene {
       if (known.join() !== row) {
         row = known.join();
         shelves.forEach((s, i) => s.setVisible(known.includes(POTIONS[i])));
+        signs.forEach((show, i) => show(known.includes(POTIONS[i])));
         // The test reads the shelves standing, in POTIONS order.
         this.pallets.counter!.in = shelves.filter((_, i) => known.includes(POTIONS[i]));
       }
@@ -983,8 +1056,11 @@ export class GameScene extends Phaser.Scene {
         if (!known.includes(potion)) return cuts[i].setText('');
         shelves[i].set(shelf);
         const others = shelf.filter((p) => plainOf(p) === potion).length - 1;
-        const off = Math.round(100 * (1 - stockFactor(Math.max(0, others))));
-        cuts[i].setText(off > 0 ? `-${off}%` : '');
+        // What the next plain one sells for against the price: the stock cut, the sign and the rival's cut.
+        const rival = rivalUndercuts(this.state, potion);
+        const factor = stockFactor(Math.max(0, others)) * SIGN_PAY[signOf(this.state, potion)] * (rival ? 1 - RIVAL_CUT : 1);
+        const off = Math.round(100 * (factor - 1));
+        cuts[i].setText(off === 0 ? '' : `${rival ? 'rival ' : ''}${off > 0 ? '+' : ''}${off}%`).setColor(off > 0 ? '#2f6a1a' : '#8a3a10');
       });
     });
     // Potions are stocked by hand until every cauldron standing has its belt to the counter, and
@@ -1051,6 +1127,30 @@ export class GameScene extends Phaser.Scene {
       }
       this.customers = [...customers].map(([id, s]) => ({ id, x: s.x, y: s.y, arrived: !!s.getData('arrived') }));
     });
+  }
+
+  /**
+   * A shelf's price sign beside it: Cheap, Fair or Dear. A tap moves it on and doesn't walk the
+   * doctor. Returns a function that shows or hides it with its shelf.
+   */
+  private addPriceSign(potion: (typeof POTIONS)[number], at: Point) {
+    const sign = this.card(at.x, at.y, 'small', signTexture(this, PRICE_SIGN_W, true)).setDepth(-910);
+    const text = this.add.text(at.x, at.y, '', { fontFamily: SERIF, fontSize: '12px', fontStyle: 'bold', color: INK }).setOrigin(0.5).setDepth(-900);
+    sign.setInteractive({ useHandCursor: true }).on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
+      e.stopPropagation();
+      if (this.pinching()) return;
+      if (this.closePanels()) return;
+      this.showFeedback(cycleSign(this.state, potion));
+    });
+    const COLOURS = { cheap: '#2f6a1a', fair: INK, dear: '#8a3a10' };
+    this.views.push(() => {
+      const sign = signOf(this.state, potion);
+      text.setText(SIGN_NAMES[sign]).setColor(COLOURS[sign]);
+    });
+    return (shown: boolean) => {
+      sign.setVisible(shown);
+      text.setVisible(shown);
+    };
   }
 
   /**
@@ -1191,6 +1291,156 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
+   * The plague card under the contract card, from the day the sickness comes: its stage and the
+   * potions it asks for, a pip for each sold, and the days left before it comes back worse. Past
+   * the last stage it shows the Panacea's recipe; once the town is cured it says so. A note under
+   * the card says when a stage is beaten or missed, and the cure opens a panel over the map.
+   */
+  private createPlague() {
+    const { x, y, w, h } = PLAGUE_CARD;
+    const d = UI_DEPTH;
+    const first = this.children.list.length;
+    const card = this.card(x + w / 2, y + h / 2, 'plague', cardTexture(this, 'plague', w, h)).setDepth(d);
+    const bell = fit(this.add.image(x + 19, y + h / 2, 'bell')).setDepth(d + 0.1);
+    const title = this.add.text(x + 36, y + 13, '', { ...HUD_TEXT, fontSize: '13px' }).setOrigin(0, 0.5).setDepth(d + 0.1);
+    const pips = this.add.graphics().setDepth(d + 0.1);
+    const count = this.add.text(0, y + 31, '', { ...HUD_TEXT, fontSize: '12px' }).setOrigin(0, 0.5).setDepth(d + 0.1);
+    const side = this.add.text(x + w - 10, y + 31, '', { ...HUD_TEXT, fontSize: '12px' }).setOrigin(1, 0.5).setDepth(d + 0.1);
+    // The Panacea's ingredients, shown once it is unlocked.
+    const cure = PANACEA_RECIPE.inputs.map((item, i) => fit(this.add.image(x + 46 + i * 26, y + 31, itemTexture(item))).setDepth(d + 0.1).setVisible(false));
+    const plus = [0, 1].map((i) => this.add.text(x + 59 + i * 26, y + 31, '+', { ...HUD_TEXT, fontSize: '12px' }).setOrigin(0.5).setDepth(d + 0.1).setVisible(false));
+    const note = this.add
+      .text(x + w / 2, y + h + 12, '', { ...HUD_TEXT, fontSize: '13px', stroke: TEXT_HALO, strokeThickness: 4 })
+      .setOrigin(0.5)
+      .setDepth(d + 0.1)
+      .setAlpha(0);
+    const parts = this.children.list.slice(first) as (Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.Visible)[];
+    for (const obj of parts) (obj as unknown as Phaser.GameObjects.Components.ScrollFactor).setScrollFactor(0);
+    const say = (text: string, good: boolean) => {
+      note.setText(text).setColor(good ? '#2f6a1a' : '#8a3a10').setAlpha(1);
+      this.tweens.killTweensOf(note);
+      this.tweens.add({ targets: note, alpha: 0, delay: 2_500, duration: 800 });
+    };
+    let seen = this.state.plague ? { stage: this.state.plague.stage, relapses: this.state.plague.relapses, cured: this.state.plague.cured } : null;
+    let drawn = '';
+    this.views.push(() => {
+      const plague = this.state.plague;
+      card.setVisible(!!plague);
+      if (!plague) {
+        for (const part of parts) part.setVisible(false);
+        return;
+      }
+      if (seen && plague.cured && !seen.cured) {
+        say('The Panacea is brewed: the town is cured!', true);
+        this.showWin();
+      } else if (seen && plague.stage > seen.stage) say(plague.stage < PLAGUE_STAGES.length ? 'Stage beaten, but the sickness moves on' : 'Every stage beaten: the Panacea is unlocked!', true);
+      else if (seen && plague.relapses > seen.relapses) say('Too late: the sickness comes back worse', false);
+      else if (!seen) say('A sickness spreads in the town!', false);
+      seen = { stage: plague.stage, relapses: plague.relapses, cured: plague.cured };
+      const stage = plagueStage(this.state);
+      const key = `${plague.stage}:${plague.need}:${plague.made}:${plague.cured}:${Math.ceil(plague.left / (DAY / 4))}`;
+      if (key === drawn) return;
+      drawn = key;
+      for (const part of parts) part.setVisible(true);
+      const unlocked = panaceaUnlocked(this.state);
+      for (const icon of cure) icon.setVisible(unlocked);
+      for (const p of plus) p.setVisible(unlocked);
+      pips.clear();
+      if (plague.cured) {
+        bell.setVisible(false);
+        title.setText('The town is cured!');
+        count.setText('Trade goes on; the plague is over').setX(x + 36);
+        side.setText('');
+      } else if (!stage) {
+        title.setText('Panacea unlocked: brew the cure');
+        count.setText('in a cauldron').setX(x + 46 + cure.length * 26 - 6);
+        side.setText('');
+      } else {
+        const what = stage.potion ? `${ITEMS[stage.potion].name}${plague.need === 1 ? '' : 's'}` : 'potions of any kind';
+        title.setText(`Plague ${plague.stage + 1}/${PLAGUE_STAGES.length}: ${plague.need} ${what}`);
+        title.setFontSize(13);
+        for (let size = 12; title.width > w - 46 && size >= 10; size--) title.setFontSize(size);
+        const gap = plague.need > 8 ? 11 : 15;
+        const r = plague.need > 8 ? 4.5 : 5.5;
+        for (let k = 0; k < plague.need; k++) {
+          const px = x + 48 + k * gap;
+          if (k < plague.made) pips.fillStyle(0x8a3a40, 0.9).fillCircle(px, y + 31, r);
+          pips.lineStyle(1.1, 0x2a1d14, k < plague.made ? 0.95 : 0.5).strokeCircle(px, y + 31, r);
+        }
+        count.setText(`${plague.made}/${plague.need}`).setX(x + 48 + plague.need * gap - gap / 2 + 4);
+        const days = plague.left / DAY;
+        side.setText(days >= 1 ? `${Math.ceil(days)} day${days > 1 ? 's' : ''} left` : 'last day!');
+      }
+    });
+  }
+
+  /** The panel over the map once the town is cured: the win, and "Keep trading" to go on. */
+  private showWin() {
+    if (this.winPanel) return;
+    const { width, height } = viewSize(this);
+    const w = 360, h = 150;
+    const bg = fit(this.add.image(0, 0, cardTexture(this, 'panel', w, h)))
+      .setInteractive()
+      .on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
+        e.stopPropagation();
+        this.closePanels();
+      });
+    const parts: Phaser.GameObjects.GameObject[] = [
+      bg,
+      fit(this.add.image(0, -46, 'bell')),
+      this.add.text(0, -18, 'The town is cured!', { ...HUD_TEXT, fontSize: '20px', color: '#7a4a10' }).setOrigin(0.5),
+      this.add
+        .text(0, 12, `Your Panacea ended the plague on day ${this.state.contract.day}.\nThe apothecary stays open: keep trading.`, { ...HUD_TEXT, fontSize: '13px', fontStyle: 'normal', align: 'center' })
+        .setOrigin(0.5),
+      this.card(0, 52, 'button', cardTexture(this, 'button', 120, 28)),
+      this.add.text(0, 52, 'Keep trading', { ...HUD_TEXT, fontSize: '14px' }).setOrigin(0.5),
+    ];
+    this.winPanel = this.add
+      .container(width / 2, height / 2, parts)
+      .setDepth(UI_DEPTH + 1)
+      .setScrollFactor(0, 0, true);
+  }
+
+  /**
+   * The rival's stall across the street, from the day it opens: its sign, the potion it undercuts
+   * today with the cut, and how many days running the shop has outsold it. Once it closes for good
+   * the stall is boarded up and says so.
+   */
+  private createRival() {
+    const stall = fit(this.add.image(RIVAL.x, RIVAL.y, 'rival-stall').setOrigin(0.5, 1).setDepth(RIVAL.y)).setVisible(false);
+    const sign = this.card(RIVAL.sign.x, RIVAL.sign.y, 'sign', signTexture(this, 118)).setDepth(RIVAL.y + 0.1).setVisible(false);
+    const name = this.add
+      .text(RIVAL.sign.x, RIVAL.sign.y, 'Rival apothecary', { fontFamily: SERIF, fontSize: '13px', fontStyle: 'bold', color: INK })
+      .setOrigin(0.5)
+      .setDepth(RIVAL.y + 0.2)
+      .setVisible(false);
+    const style = { fontFamily: SERIF, fontSize: '12px', fontStyle: 'bold', color: INK, stroke: TEXT_HALO, strokeThickness: 3 };
+    const offer = this.add.text(RIVAL.offer.x + 8, RIVAL.offer.y, '', style).setOrigin(1, 0.5).setDepth(RIVAL.y + 0.2).setVisible(false);
+    const icon = fit(this.add.image(RIVAL.offer.x + 18, RIVAL.offer.y, itemTexture('healingDraught'))).setDepth(RIVAL.y + 0.2).setVisible(false);
+    const streak = this.add.text(RIVAL.streak.x, RIVAL.streak.y, '', style).setOrigin(0.5).setDepth(RIVAL.y + 0.2).setVisible(false);
+    let drawn = '';
+    this.views.push(() => {
+      const { rival } = this.state;
+      const there = !!rival.potion || rival.streak > 0 || !rival.open;
+      const key = `${there}:${rival.open}:${rival.potion}:${rival.sold}:${rival.streak}`;
+      if (key === drawn) return;
+      drawn = key;
+      for (const part of [stall, sign, name, offer, icon, streak]) part.setVisible(there);
+      if (!there) return;
+      stall.setAlpha(rival.open ? 1 : 0.55);
+      icon.setVisible(!!rival.potion);
+      if (rival.potion) {
+        icon.setTexture(itemTexture(rival.potion));
+        offer.setText(`Today ${Math.round(RIVAL_CUT * 100)}% off`);
+        streak.setText(`Outsold ${rival.streak}/${RIVAL_MONTH_DAYS} days, ${rival.sold}/${RIVAL_SALES + 1} today`);
+      } else {
+        offer.setText(rival.open ? '' : 'Closed for good');
+        streak.setText(rival.open ? '' : 'The street is yours');
+      }
+    });
+  }
+
+  /**
    * The town card under the top bar, right of the contract: today's weather from the almanac and what
    * it does, the street's reputation as a bar, and tomorrow's weather, or on a market day how its
    * crowd is going. When a market day's rush pays its bonus or loses it, a note under the card says so.
@@ -1219,10 +1469,16 @@ export class GameScene extends Phaser.Scene {
     };
     // What the rush was when last drawn, so a change to it can be told.
     let rushSeen = JSON.stringify(this.state.rush);
+    let blightSeen = new Set(this.state.plots.flatMap((p, i) => (p.blighted ? [i] : [])));
     let drawn = '';
     this.views.push(() => {
       const { contract, rush } = this.state;
       const day = contract.day;
+      // Blight striking a bed: say which garden.
+      const blighted = new Set(this.state.plots.flatMap((p, i) => (p.blighted ? [i] : [])));
+      const struck = [...blighted].find((i) => !blightSeen.has(i));
+      if (struck !== undefined) say(`Blight in the ${GARDEN_NAMES[gardenPlant(this.state, gardenOf(struck))].toLowerCase()}! Clear it with the sickle`, false);
+      blightSeen = blighted;
       const rushNow = JSON.stringify(rush);
       if (rushNow !== rushSeen && rush) {
         const before = rushSeen === 'null' ? null : (JSON.parse(rushSeen) as typeof rush);
@@ -1382,8 +1638,9 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0, 0.5)
       .setDepth(UI_DEPTH);
     this.hudButton(width - 16, 'Settings', () => {
-      this.recipes.toggle(false);
-      this.settings.toggle();
+      const open = this.settings.visible;
+      this.closePanels();
+      this.settings.toggle(!open);
     });
     // Empties the doctor's hands, for goods that are no longer needed.
     const drop = this.hudButton(width / 2 - 150, 'Drop all', () => {
@@ -1392,8 +1649,9 @@ export class GameScene extends Phaser.Scene {
     });
     // What each station makes from what, in a panel over the map.
     this.hudButton(width / 2 - 230, 'Recipes', () => {
-      this.settings.toggle(false);
-      this.recipes.toggle();
+      const open = this.recipes.visible;
+      this.closePanels();
+      this.recipes.toggle(!open);
     });
 
     // A slot for everything the biggest pack holds; those beyond the current pack stay hidden.
@@ -1491,11 +1749,7 @@ export class GameScene extends Phaser.Scene {
       if (this.pinching()) return;
       if (p.y < HUD_HEIGHT) return;
       // While a panel is open, a tap anywhere below the top bar closes it instead of walking.
-      if (this.recipes.visible || this.settings.visible) {
-        this.recipes.toggle(false);
-        this.settings.toggle(false);
-        return;
-      }
+      if (this.closePanels()) return;
       // Where the tap is in the world, through the zoomed main camera rather than the top bar's.
       const at = this.cameras.main.getWorldPoint(p.x, p.y);
       this.pointerTarget = this.reachable(new Phaser.Math.Vector2(at.x, at.y));
@@ -1515,14 +1769,16 @@ export class GameScene extends Phaser.Scene {
   private autoHarvest() {
     const reach = this.harvestReach();
     const centre = new Phaser.Math.Vector2(this.player.x, this.player.y);
-    const inReach = this.plotCentres
-      .map((at, i) => ({ i, d: at.distance(centre) }))
-      .filter(({ i, d }) => d <= reach && isRipe(this.state, i))
-      .sort((a, b) => a.d - b.d);
-    if (inReach.length === 0 || this.state.carrying.length >= carryCapacity(this.state)) return false;
+    const near = this.plotCentres.map((at, i) => ({ i, d: at.distance(centre) })).filter(({ d }) => d <= reach);
+    // The sickle clears blighted beds in reach first, with the hands full or not, then cuts ripe ones.
+    const blighted = near.filter(({ i }) => isBlighted(this.state, i)).sort((a, b) => a.d - b.d);
+    const inReach = near.filter(({ i }) => isRipe(this.state, i)).sort((a, b) => a.d - b.d);
+    const full = this.state.carrying.length >= carryCapacity(this.state);
+    if (blighted.length === 0 && (inReach.length === 0 || full)) return false;
     if (this.time.now >= this.nextHarvestAt) {
       this.nextHarvestAt = this.time.now + HARVEST_INTERVAL_MS;
-      this.showFeedback(harvest(this.state, inReach[0].i));
+      const feedback = blighted.length > 0 ? clearBlight(this.state, blighted[0].i) : full ? null : harvest(this.state, inReach[0].i);
+      if (feedback) this.showFeedback(feedback);
     }
     return true;
   }

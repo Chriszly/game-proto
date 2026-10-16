@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { both, ellPts, ink, paint, paper, pathOf, rectPts, sparkle, wash, type Ctx, type Pt } from './paint';
+import { WASH, both, ellPts, ink, paint, paper, pathOf, rectPts, shadow, sparkle, wash, type Ctx, type Pt } from './paint';
 
 // Interface pieces as parchment cards with ink rules: the top bar, buttons, hand slots, the signs
 // behind place names, panels, the contract card, the town card, the away chip and customers' order
@@ -12,6 +12,7 @@ const CARD = {
   contract: '#d8c8a2',
   chip: '#c6b4d6',
   town: '#c4d0aa',
+  plague: '#cdb4a6',
   bubble: '#e6dcc4',
   sign: '#cfb27c',
   small: '#c4a46c',
@@ -53,7 +54,7 @@ function drawCard(c: Ctx, kind: CardKind, w: number, h: number) {
   c.restore();
   wash(c, rectPts(x, y, w, h, r), col, { layers: 2, spread: 0.8, alpha: 0.5 });
   ink(c, rectPts(x, y, w, h, r), { w: kind === 'button' || kind === 'small' || kind === 'bubble' ? 1.1 : 1.3 });
-  if (kind === 'contract' || kind === 'chip' || kind === 'panel') ink(c, rectPts(x + 3, y + 3, w - 6, h - 6, r - 2), { w: 0.6, alpha: 0.5 });
+  if (kind === 'contract' || kind === 'chip' || kind === 'panel' || kind === 'plague') ink(c, rectPts(x + 3, y + 3, w - 6, h - 6, r - 2), { w: 0.6, alpha: 0.5 });
 }
 
 /**
@@ -96,6 +97,45 @@ function drawHourglass(c: Ctx) {
   both(c, [[2, 2], [12, 2], [7, 9], [12, 16], [2, 16], [7, 9]], '#c99a3a', { layers: 2, edge: 0 }, { w: 0.9 });
   ink(c, [[1, 1.5], [13, 1.5]], { closed: false, w: 1.3 });
   ink(c, [[1, 16.5], [13, 16.5]], { closed: false, w: 1.3 });
+}
+
+/** The plague card's bell: the town crier's handbell, rung for the sickness. 22x22 as shown. */
+function drawBell(c: Ctx) {
+  ink(c, [[11, 1.5], [11, 5]], { closed: false, w: 2 });
+  both(c, [[11, 4], [16, 7], [17, 15], [20, 18], [2, 18], [5, 15], [6, 7]], '#b8923a', { layers: 2, edge: 0 }, { w: 1 });
+  both(c, ellPts(11, 19.5, 2.2, 1.8, 10), '#2a1d14', { layers: 1, edge: 0 }, { w: 0.6 });
+}
+
+/**
+ * The rival's stall across the street: a counter under a striped awning, with a potion bottle and a
+ * price board on it. 72x64 as shown, its feet at the bottom.
+ */
+function drawRivalStall(c: Ctx) {
+  shadow(c, 36, 60, 30, 4, 0.18);
+  for (const px of [6, 62]) both(c, rectPts(px, 14, 4, 44, 1), WASH.woodDark, { layers: 2 }, { w: 1 });
+  both(c, rectPts(4, 36, 64, 20, 2), WASH.wood, { layers: 3, bloom: 2, cx: 20, cy: 40 }, { w: 1.2 });
+  for (const y of [42, 49]) ink(c, [[7, y], [65, y]], { closed: false, w: 0.5, alpha: 0.4 });
+  // The awning, with a scalloped edge.
+  both(c, [[2, 14], [70, 14], [70, 22], [2, 22]], '#8a3a40', { layers: 2 }, { w: 1.1 });
+  for (let i = 0; i < 6; i++) {
+    const x = 2 + i * 11.3;
+    wash(c, rectPts(x, 14, 5.6, 8), '#e8dcc0', { layers: 1, edge: 0 });
+  }
+  c.save();
+  c.fillStyle = '#8a3a40';
+  for (let i = 0; i < 6; i++) {
+    c.beginPath();
+    c.arc(7.6 + i * 11.3, 22, 5.6, 0, Math.PI);
+    c.fill();
+  }
+  c.restore();
+  ink(c, [[2, 22], [70, 22]], { closed: false, w: 1, alpha: 0.7 });
+  // A bottle and a price board on the counter.
+  both(c, rectPts(14, 24, 6, 12, 2), '#6a5bd6', { layers: 2 }, { w: 0.8 });
+  both(c, rectPts(15, 20, 4, 5, 1), '#efe6cc', { layers: 1 }, { w: 0.7 });
+  both(c, rectPts(38, 23, 22, 13, 1.5), '#2a2a2a', { layers: 1 }, { w: 0.9 });
+  ink(c, [[41, 28], [52, 28]], { closed: false, w: 1, col: '#f4f0e6' });
+  ink(c, [[41, 32], [56, 32]], { closed: false, w: 1, col: '#f4f0e6' });
 }
 
 /** The dusk dial: a sun half under the horizon, which the contract card moves down as the day passes. */
@@ -170,4 +210,6 @@ export function bakeUi(scene: Phaser.Scene) {
   paint(scene, 'slot', 32, 32, drawSlot, 3);
   paint(scene, 'hourglass', 14, 18, drawHourglass, 3);
   paint(scene, 'sun', 16, 16, drawSun, 3);
+  paint(scene, 'bell', 22, 22, drawBell, 3);
+  paint(scene, 'rival-stall', 72, 64, drawRivalStall, 3);
 }

@@ -60,6 +60,20 @@ export interface Recipe {
   ms: number;
 }
 
+/**
+ * The town's cure, which ends the plague: brewed once from one of each refined good, when the plague's
+ * last stage is over, and handed to the town as soon as it is done. It is never sold, so it is no item.
+ */
+export const PANACEA = 'panacea';
+/** What a cauldron can brew: a potion, or the Panacea. */
+export type BrewOut = PotionId | typeof PANACEA;
+export const PANACEA_RECIPE: { out: typeof PANACEA; inputs: RefinedId[]; ms: number; name: string } = {
+  out: PANACEA,
+  inputs: ['flour', 'mandrakeSeeds', 'nightshadeExtract'],
+  ms: 9_000,
+  name: 'Panacea',
+};
+
 // A cauldron brews whichever of these the shop is shortest of; ties go in this order, rarer ingredient first.
 export const RECIPES: Recipe[] = [
   { out: 'witchsBrew', inputs: ['nightshadeExtract', 'nightshadeExtract'], ms: 7_000 },
