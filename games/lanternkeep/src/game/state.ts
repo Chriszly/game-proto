@@ -1,5 +1,5 @@
 import { byDifficulty } from '../../../../shared/settings';
-import { CHAINS, LANTERN_SPOTS, mothRest } from './places';
+import { DISTRICTS, type DistrictId, LANTERN_SPOTS, mothRest } from './places';
 
 // The rules in plain TypeScript, with no Phaser. Each night begins with a dusk: tap a lantern and
 // an idle moth flies from the jar to light it, then flies home. A lit lantern burns its oil and
@@ -9,7 +9,10 @@ import { CHAINS, LANTERN_SPOTS, mothRest } from './places';
 // saves a nearly dry lantern pays a little at once. Each night draws a kind (fog, a feast, a
 // storm), bats come for the lanterns from the third night, lanterns side by side form chains that
 // pay when all of them are lit, and ten nights kept reach the Great Festival, a win, with endless
-// nights after.
+// nights after. From the second night cottage windows call for a named lantern, from the third
+// refills draw on a cask of oil topped up between nights, from the fourth some spots hold a
+// beacon, a candle or a bell, every fifth night the Great Owl sweeps a row of lanterns, and at
+// every fifth nightfall the keep can move to another district with its own spots and rule.
 
 export const UPGRADE_IDS = ['wick', 'oil', 'moths', 'wings', 'firefly'] as const;
 export type UpgradeId = (typeof UPGRADE_IDS)[number];
@@ -30,7 +33,7 @@ export const UPGRADES: Record<UpgradeId, Upgrade> = {
   firefly: { name: 'Firefly', blurb: 'Lights two lanterns a flight', costs: [25, 45] },
 };
 
-/** The view's width in pixels, where bats come in and leave. */
+/** The view's width in pixels, where bats and the owl come in and leave. */
 const VIEW_W = 960;
 /** How long each dusk lasts before night falls, in milliseconds. */
 export const DUSK_MS = 45_000;
@@ -64,6 +67,42 @@ export const FIREFLY_LANTERNS = 2;
 /** Taps kept while every moth is busy; a tap past this is lost. */
 export const QUEUE_MAX = 2;
 
+/**
+ * The kinds of lantern (LK6). From LANTERN_KINDS_NIGHT some spots hold one: a beacon burns its oil
+ * faster but pays triple at nightfall, a candle catches at once but holds half the oil, and a bell
+ * stuns every bat within BELL_RANGE of it while it is lit. Each multiplies the oil a fill gives,
+ * the wick time and the pay a lantern.
+ */
+export const LANTERN_KINDS = {
+  plain: { name: 'Lantern', blurb: '', oil: 1, wick: 1, pay: 1 },
+  beacon: { name: 'Beacon', blurb: 'Burns fast, pays triple', oil: 0.6, wick: 1, pay: 3 },
+  candle: { name: 'Candle', blurb: 'Lights at once, half the oil', oil: 0.5, wick: 0, pay: 1 },
+  bell: { name: 'Bell', blurb: 'Stuns bats near it while lit', oil: 1, wick: 1, pay: 1 },
+} as const;
+export type LanternKind = keyof typeof LANTERN_KINDS;
+/** The kinds of lantern that spots hold, in the order nights deal them. */
+export const SPECIAL_KINDS: readonly LanternKind[] = ['beacon', 'candle', 'bell'];
+/** The first night with special lanterns, and the most of them a night has. */
+export const LANTERN_KINDS_NIGHT = 4;
+export const LANTERN_KINDS_MAX = 3;
+/** How near a lit bell a bat must be to be stunned, in view pixels. */
+export const BELL_RANGE = 150;
+/**
+ * The kind of each of the night's `count` lanterns: all plain before LANTERN_KINDS_NIGHT, then one
+ * more special spot each night up to LANTERN_KINDS_MAX, dealt to spots that change with the night.
+ */
+export function lanternKindsFor(night: number, count: number): LanternKind[] {
+  const kinds: LanternKind[] = Array.from({ length: count }, () => 'plain');
+  if (night < LANTERN_KINDS_NIGHT) return kinds;
+  const specials = Math.min(LANTERN_KINDS_MAX, night - LANTERN_KINDS_NIGHT + 1, count);
+  for (let k = 0; k < specials; k++) {
+    let spot = (night * 7 + k * 4) % count;
+    while (kinds[spot] !== 'plain') spot = (spot + 1) % count;
+    kinds[spot] = SPECIAL_KINDS[(night + k) % SPECIAL_KINDS.length];
+  }
+  return kinds;
+}
+
 /** How long before a gust its warning shows the lantern it will blow out, in milliseconds. */
 export const GUST_WARN_MS = 5_000;
 /**
@@ -75,6 +114,47 @@ export function gustsFor(night: number, kind: NightKind = 'clear') {
   // A stormy night adds two gusts between them, still more than GUST_WARN_MS apart.
   return kind === 'storm' ? [...gusts, ...STORM_GUSTS].sort((a, b) => b - a) : gusts;
 }
+
+/**
+ * The Great Owl (LK7): every OWL_EVERY nights it sweeps one row of lanterns, OWL_AT_MS of dusk
+ * left, warned OWL_WARN_MS before, flying across at OWL_SPEED and snuffing every lit lantern on
+ * the row it passes unless a moth sits on it.
+ */
+export const OWL_EVERY = 5;
+export const OWL_AT_MS = 20_000;
+export const OWL_WARN_MS = 6_000;
+export const OWL_SPEED = 300;
+/** When the owl comes on night `night`, as dusk left: one sweep every fifth night, else none. */
+export const owlsFor = (night: number) => (night % OWL_EVERY === 0 ? [OWL_AT_MS] : []);
+
+/**
+ * Windows that call (LK8): from CALLS_NIGHT a cottage window asks for a named lantern to be lit
+ * within CALL_MS, for CALL_PAY coins; a call that runs out costs nothing.
+ */
+export const CALLS_NIGHT = 2;
+export const CALL_MS = 8_000;
+export const CALL_PAY = 3;
+/** When the windows call on night `night`, as dusk left: none on the first night, two after, three from night 6. */
+export const callsFor = (night: number) => (night < CALLS_NIGHT ? [] : night < 6 ? [37_000, 23_000] : [37_000, 23_000, 11_000]);
+
+/**
+ * The oil cask (LK9): from CASK_NIGHT a refill of a lit lantern draws one fill from the cask,
+ * which holds up to CASK_MAX and is topped up between nights at CASK_COST a fill. Lighting a dark
+ * lantern is always free.
+ */
+export const CASK_NIGHT = 3;
+export const CASK_START = 3;
+export const CASK_MAX = 6;
+export const CASK_COST = 3;
+/** True once refills draw on the cask. */
+export const usesCask = (s: GameState) => s.night >= CASK_NIGHT;
+
+/** Districts (LK10): at every MOVE_EVERY nightfalls the keep can move to another district. */
+export const MOVE_EVERY = 5;
+/** The district the game is in. */
+export const districtOf = (s: GameState) => DISTRICTS[s.district];
+/** The chains of the district the game is in. */
+export const chainsOf = (s: GameState) => districtOf(s).chains;
 
 /**
  * The kinds of night. The first night is always clear; each later night's kind is drawn at the
@@ -90,6 +170,11 @@ export type NightKind = keyof typeof NIGHT_KINDS;
 export const NIGHT_KIND_IDS = Object.keys(NIGHT_KINDS) as NightKind[];
 /** How much faster oil burns on a foggy night. */
 export const FOG_BURN = 1.4;
+/** How much faster oil burns in the market. */
+export const TRADE_BURN = 1.15;
+/** What vespers add to each lantern's pay on Chapel Hill, and the share that must burn there. */
+export const VESPERS_PAY = 2;
+export const VESPERS_QUOTA = 0.75;
 /** What a feast night multiplies the lanterns', all-lit bonus's and chains' pay by. */
 export const FEAST_PAY = 2;
 /** The extra gusts of a stormy night, as dusk left. */
@@ -110,10 +195,10 @@ export const batsFor = (night: number) => (night < 3 ? [] : night < 6 ? [28_000]
 
 /** What each lantern chain with every lantern lit at nightfall pays. */
 export const CHAIN_BONUS = 8;
-/** The chains night `s` has every lantern of, by index into CHAINS. */
-export const chainsFor = (s: GameState) => CHAINS.map((_, i) => i).filter((i) => CHAINS[i].lanterns.every((l) => l < s.lanterns.length));
+/** The chains night `s` has every lantern of, by index into the district's chains. */
+export const chainsFor = (s: GameState) => chainsOf(s).map((_, i) => i).filter((i) => chainsOf(s)[i].lanterns.every((l) => l < s.lanterns.length));
 /** True when every lantern of chain `i` is lit. */
-export const chainLit = (s: GameState, i: number) => CHAINS[i].lanterns.every((l) => s.lanterns[l]?.lit);
+export const chainLit = (s: GameState, i: number) => chainsOf(s)[i].lanterns.every((l) => s.lanterns[l]?.lit);
 
 /** Nights kept to reach the Great Festival, the win; the nights go on after it. */
 export const FESTIVAL_NIGHTS = 10;
@@ -121,6 +206,10 @@ export const FESTIVAL_NIGHTS = 10;
 export const CLOSE_CALL = 0.15;
 /** ...and pays this many coins at once. */
 export const CLOSE_CALL_PAY = 2;
+/** What a close call pays here: double in the market. */
+export const closeCallPay = (s: GameState) => CLOSE_CALL_PAY * (districtOf(s).rule === 'trade' ? 2 : 1);
+/** What a window call pays here: double in the market. */
+export const callPay = (s: GameState) => CALL_PAY * (districtOf(s).rule === 'trade' ? 2 : 1);
 
 /**
  * The herald's order: one bonus goal a night, paid at nightfall. `lit` names lanterns that must be
@@ -133,7 +222,10 @@ export interface Order {
   goal: OrderGoal;
   reward: number;
 }
-/** The orders, one a night in this order, then round again. Each only names lanterns its night has. */
+/**
+ * The orders, one a night in this order, then round again. Each only names lanterns its night has.
+ * The texts name the keep's lanterns; in another district `orderFor` names that district's.
+ */
 export const ORDERS: readonly Order[] = [
   { text: 'Both towers + keep lit at nightfall', goal: { kind: 'lit', lanterns: [0, 1, 2] }, reward: 15 },
   { text: 'The west wall lit at nightfall', goal: { kind: 'lit', lanterns: [0, 3, 5] }, reward: 15 },
@@ -141,7 +233,12 @@ export const ORDERS: readonly Order[] = [
   { text: 'The east wall lit at nightfall', goal: { kind: 'lit', lanterns: [1, 4, 6] }, reward: 15 },
   { text: 'Shield a lantern from a gust', goal: { kind: 'shields', count: 1 }, reward: 15 },
 ];
-export const orderFor = (night: number) => ORDERS[(night - 1) % ORDERS.length];
+export function orderFor(night: number, district: DistrictId = 'keep'): Order {
+  const order = ORDERS[(night - 1) % ORDERS.length];
+  if (district === 'keep' || order.goal.kind !== 'lit') return order;
+  const names = order.goal.lanterns.map((i) => DISTRICTS[district].spots[i].name);
+  return { ...order, text: `Lit at nightfall: ${names.join(', ')}` };
+}
 
 /** How far the night's order has come: `done` of `of`. */
 export function orderProgress(s: GameState) {
@@ -152,12 +249,14 @@ export function orderProgress(s: GameState) {
 
 /** Lanterns to light on night `night`: five on the first, one more each night after. */
 export const lanternsFor = (night: number) => Math.min(4 + night, LANTERN_SPOTS.length);
-/** Lanterns that must be lit at nightfall to keep every hearth: three in five. */
-export const requiredFor = (count: number) => Math.ceil(count * 0.6);
+/** Lanterns that must be lit at nightfall to keep every hearth: three in five, or three in four on Chapel Hill. */
+export const requiredFor = (count: number, district: DistrictId = 'keep') => Math.ceil(count * (DISTRICTS[district].rule === 'vespers' ? VESPERS_QUOTA : 0.6));
 
 export interface Lantern {
   x: number;
   y: number;
+  /** A plain lantern, or one of the special kinds from night LANTERN_KINDS_NIGHT. */
+  kind: LanternKind;
   lit: boolean;
   /** Oil left while lit, in milliseconds of burning. */
   oilMs: number;
@@ -172,8 +271,9 @@ export interface Moth {
   x: number;
   y: number;
   /**
-   * Waiting in the jar, flying out, lighting a wick, guarding the lantern a gust is coming for
-   * (it stays after lighting it until the gust has passed), chasing a bat, or flying home.
+   * Waiting in the jar, flying out, lighting a wick, guarding the lantern a gust or the owl is
+   * coming for (it stays after lighting it until the threat has passed), chasing a bat, or flying
+   * home.
    */
   task: 'idle' | 'out' | 'lighting' | 'guard' | 'chase' | 'home';
   /** The lantern it is flying to or lighting, or -1. */
@@ -204,6 +304,25 @@ export interface Gust {
   atMs: number;
 }
 
+/** The Great Owl, warned for a row of lanterns and then sweeping across it. */
+export interface Owl {
+  /** The row it sweeps, as the lanterns' height, and the lanterns on it. */
+  y: number;
+  lanterns: number[];
+  /** When it comes, as dusk left in milliseconds. */
+  atMs: number;
+  /** Where it is while sweeping, or null while only warned. */
+  x: number | null;
+  /** The lanterns it has passed on this sweep. */
+  passed: number[];
+}
+
+/** A window calling for lantern `lantern` to be lit within `msLeft`. */
+export interface Call {
+  lantern: number;
+  msLeft: number;
+}
+
 /** Something that just happened, for the scene to show; it empties the list every frame. */
 export type GameEvent =
   | { type: 'closeCall'; lantern: number; coins: number }
@@ -211,7 +330,13 @@ export type GameEvent =
   /** A bat reached its lantern: it snuffed it, or a moth sitting on it drove the bat off. */
   | { type: 'bat'; lantern: number; snuffed: boolean }
   /** A moth caught up with a bat, which flees. */
-  | { type: 'chased'; x: number; y: number };
+  | { type: 'chased'; x: number; y: number }
+  /** The owl passed a lantern on its row: snuffed it, or a moth sitting on it kept it. */
+  | { type: 'owl'; lantern: number; shielded: boolean }
+  /** A window's call was answered in time (`coins` paid) or ran out. */
+  | { type: 'call'; lantern: number; kept: boolean; coins: number }
+  /** A moth came to refill a lantern and found the cask dry. */
+  | { type: 'dry'; lantern: number };
 
 /** What nightfall counted, shown until the next dusk. */
 export interface NightReport {
@@ -230,8 +355,11 @@ export interface NightReport {
 
 export interface GameState {
   night: number;
-  /** `festival` is the night the Great Festival is reached: its panel shows before the night panel. */
-  phase: 'dusk' | 'night' | 'festival' | 'over';
+  /**
+   * `festival` is the night the Great Festival is reached: its panel shows before the night
+   * panel. `move` is a fifth nightfall's choice of district, shown before the night panel too.
+   */
+  phase: 'dusk' | 'night' | 'festival' | 'move' | 'over';
   /** Dusk left before night falls, in milliseconds. */
   duskMs: number;
   coins: number;
@@ -270,6 +398,20 @@ export interface GameState {
   chased: number;
   /** True once the Great Festival has been reached this game. */
   festival: boolean;
+  /** The owl's sweeps still to come this dusk, as dusk left, and the one warned or flying. */
+  owls: number[];
+  owl: Owl | null;
+  /** Window calls still to come this dusk, as dusk left, the one calling now, and those answered this dusk. */
+  callTimes: number[];
+  call: Call | null;
+  callsKept: number;
+  /** Fills of oil in the cask, which refills draw on from CASK_NIGHT. */
+  cask: number;
+  /** The district the keep stands in, and the one it moves to at the next dusk. */
+  district: DistrictId;
+  nextDistrict: DistrictId;
+  /** True from a fifth nightfall until the district for the next night is chosen. */
+  moveDue: boolean;
 }
 
 /** Moth count, flight speed, wick time and burn time with the bought upgrades. */
@@ -285,11 +427,14 @@ export function stats(s: GameState) {
 
 /** How fast moth `m` flies, in pixels per second. */
 export const mothSpeed = (s: GameState, m: Moth) => stats(s).speed * MOTH_KINDS[m.kind].speed;
-/** How long moth `m` takes to catch a wick, in milliseconds. */
-export const mothLightMs = (s: GameState, m: Moth) => Math.round(stats(s).lightMs * MOTH_KINDS[m.kind].wick);
+/** How long moth `m` takes to catch a wick, in milliseconds: none at all on a candle. */
+export const mothLightMs = (s: GameState, m: Moth) =>
+  Math.round(stats(s).lightMs * MOTH_KINDS[m.kind].wick * (LANTERN_KINDS[s.lanterns[m.target]?.kind ?? 'plain'].wick));
 
-function makeLanterns(night: number): Lantern[] {
-  return LANTERN_SPOTS.slice(0, lanternsFor(night)).map(({ x, y }) => ({ x, y, lit: false, oilMs: 0, oilMaxMs: 0, claimed: false }));
+function makeLanterns(night: number, district: DistrictId): Lantern[] {
+  const count = lanternsFor(night);
+  const kinds = lanternKindsFor(night, count);
+  return DISTRICTS[district].spots.slice(0, count).map(({ x, y }, i) => ({ x, y, kind: kinds[i], lit: false, oilMs: 0, oilMaxMs: 0, claimed: false }));
 }
 
 /** `n` moths in KIND_ORDER, then `fireflies` fireflies, at rest on the jar. */
@@ -314,7 +459,7 @@ export function newGame(best = 0): GameState {
     duskMs: DUSK_MS,
     coins: 0,
     lives: LIVES,
-    lanterns: makeLanterns(1),
+    lanterns: makeLanterns(1, 'keep'),
     moths: [],
     levels: { wick: 0, oil: 0, moths: 0, wings: 0, firefly: 0 },
     report: null,
@@ -334,6 +479,15 @@ export function newGame(best = 0): GameState {
     nextBat: 0,
     chased: 0,
     festival: false,
+    owls: owlsFor(1),
+    owl: null,
+    callTimes: callsFor(1),
+    call: null,
+    callsKept: 0,
+    cask: CASK_START,
+    district: 'keep',
+    nextDistrict: 'keep',
+    moveDue: false,
   };
   const { moths, fireflies } = stats(s);
   s.moths = makeMoths(moths, fireflies);
@@ -371,11 +525,12 @@ function nextHop(s: GameState, m: Moth) {
  * Taps lantern `i`. The first idle moth goes to light it, or refill it if it is already lit. When
  * every moth is busy the tap waits in the queue (up to QUEUE_MAX) and a moth takes it when one
  * comes home. False when the tap was lost: another moth already has the lantern, the queue is full,
- * or it is not dusk.
+ * it is not dusk, or it is lit and the cask is dry.
  */
 export function send(s: GameState, i: number) {
   const lantern = s.lanterns[i];
   if (s.phase !== 'dusk' || !lantern || lantern.claimed || s.queue.includes(i)) return false;
+  if (lantern.lit && usesCask(s) && s.cask <= 0) return false;
   // An idle firefly goes first, so its second lantern is not wasted.
   const moth = s.moths.find((m) => m.task === 'idle' && m.kind === 'firefly') ?? s.moths.find((m) => m.task === 'idle');
   if (moth) {
@@ -420,17 +575,23 @@ function flyTo(m: { x: number; y: number }, x: number, y: number, step: number) 
 /** True when a moth is sitting on lantern `i`: lighting it or guarding it. */
 const sitting = (s: GameState, i: number) => s.moths.some((m) => m.target === i && (m.task === 'lighting' || m.task === 'guard'));
 
+/** True while a gust or the owl is coming for lantern `i`, so a moth that lights it stays to guard it. */
+export const threatened = (s: GameState, i: number) => s.gust?.target === i || !!s.owl?.lanterns.includes(i);
+
 /** The lantern a gust warned now goes for: the lit one with the most oil left, or -1 if none is lit. */
-function gustTarget(s: GameState) {
+function gustTarget(s: GameState, except = -1) {
   let best = -1;
   s.lanterns.forEach((l, i) => {
-    if (l.lit && (best < 0 || l.oilMs > s.lanterns[best].oilMs)) best = i;
+    if (i !== except && l.lit && (best < 0 || l.oilMs > s.lanterns[best].oilMs)) best = i;
   });
   return best;
 }
 
 /** The lantern a bat goes for: the lit one with the most oil, or -1 if none is lit. */
-const batTarget = gustTarget;
+const batTarget = (s: GameState) => gustTarget(s);
+
+/** True while bat `bat` is within BELL_RANGE of a lit bell, which holds it still. */
+export const stunned = (s: GameState, bat: Bat) => s.lanterns.some((l) => l.kind === 'bell' && l.lit && Math.hypot(l.x - bat.x, l.y - bat.y) <= BELL_RANGE);
 
 /** Bats come in from the edges at their times, fly to a lit lantern and snuff it, unless chased off first. */
 function raiders(s: GameState, dt: number) {
@@ -458,6 +619,8 @@ function raiders(s: GameState, dt: number) {
       }
       bat.target = next;
     }
+    // A lit bell nearby holds it where it is.
+    if (stunned(s, bat)) continue;
     const lantern = s.lanterns[bat.target];
     if (flyTo(bat, lantern.x, lantern.y - 6, (BAT_SPEED * dt) / 1000)) {
       const snuffed = !sitting(s, bat.target);
@@ -479,6 +642,23 @@ function release(m: Moth, s: GameState) {
   m.target = -1;
 }
 
+/** Sends home every guard whose lantern nothing is coming for any more. */
+function releaseGuards(s: GameState) {
+  for (const m of s.moths) if (m.task === 'guard' && !threatened(s, m.target)) release(m, s);
+}
+
+/** Blows out lantern `i` unless a moth sits on it; the gust's event says which. */
+function blow(s: GameState, i: number) {
+  const lantern = s.lanterns[i];
+  const shielded = sitting(s, i);
+  if (shielded) s.shields++;
+  else if (lantern.lit) {
+    lantern.lit = false;
+    lantern.oilMs = 0;
+  }
+  s.events.push({ type: 'gust', lantern: i, shielded });
+}
+
 /** Warns of the next gust when it is GUST_WARN_MS away, and blows it when it arrives. */
 function wind(s: GameState) {
   if (!s.gust && s.gusts.length && s.duskMs <= s.gusts[0] + GUST_WARN_MS) {
@@ -489,24 +669,104 @@ function wind(s: GameState) {
   }
   if (s.gust && s.duskMs <= s.gust.atMs) {
     const { target } = s.gust;
-    const lantern = s.lanterns[target];
-    const shielded = sitting(s, target);
-    if (shielded) s.shields++;
-    else if (lantern.lit) {
+    blow(s, target);
+    // The sea wind at the docks takes the next lantern too.
+    if (districtOf(s).rule === 'seawind') {
+      const second = gustTarget(s, target);
+      if (second >= 0) blow(s, second);
+    }
+    s.gust = null;
+    releaseGuards(s);
+  }
+}
+
+/** The rows of lanterns: each height and the lanterns at it, top row first. */
+function rows(s: GameState) {
+  const byY = new Map<number, number[]>();
+  s.lanterns.forEach((l, i) => byY.set(l.y, [...(byY.get(l.y) ?? []), i]));
+  return [...byY.entries()].sort((a, b) => a[0] - b[0]).map(([y, lanterns]) => ({ y, lanterns }));
+}
+
+/** Warns of the owl OWL_WARN_MS before its sweep of the row with the most lit lanterns, then flies it across. */
+function greatOwl(s: GameState, dt: number) {
+  if (!s.owl && s.owls.length && s.duskMs <= s.owls[0] + OWL_WARN_MS) {
+    const atMs = s.owls.shift()!;
+    const lit = (r: { lanterns: number[] }) => r.lanterns.filter((i) => s.lanterns[i].lit).length;
+    const row = rows(s).reduce((best, r) => (lit(r) > lit(best) || (lit(r) === lit(best) && r.lanterns.length > best.lanterns.length) ? r : best));
+    s.owl = { y: row.y, lanterns: row.lanterns, atMs, x: null, passed: [] };
+  }
+  const owl = s.owl;
+  if (!owl) return;
+  if (owl.x === null) {
+    if (s.duskMs <= owl.atMs) owl.x = -40;
+    else return;
+  }
+  owl.x += (OWL_SPEED * dt) / 1000;
+  for (const i of owl.lanterns) {
+    if (owl.passed.includes(i) || s.lanterns[i].x > owl.x) continue;
+    owl.passed.push(i);
+    const lantern = s.lanterns[i];
+    const shielded = sitting(s, i);
+    // A dark lantern with no moth on it is passed without a word.
+    if (!lantern.lit && !shielded) continue;
+    if (!shielded) {
       lantern.lit = false;
       lantern.oilMs = 0;
     }
-    s.events.push({ type: 'gust', lantern: target, shielded });
-    s.gust = null;
-    for (const m of s.moths) if (m.task === 'guard') release(m, s);
+    s.events.push({ type: 'owl', lantern: i, shielded });
   }
+  if (owl.x > VIEW_W + 40) {
+    s.owl = null;
+    releaseGuards(s);
+  }
+}
+
+/** The lantern a window calls for: a dark one no moth is going to, by the night and the call, else the lit one lowest on oil, else -1. */
+function callTarget(s: GameState) {
+  const n = s.lanterns.length;
+  const start = (s.night * 3 + s.callsKept + s.callTimes.length) % n;
+  for (let k = 0; k < n; k++) {
+    const i = (start + k) % n;
+    const l = s.lanterns[i];
+    if (!l.lit && !l.claimed && !s.queue.includes(i)) return i;
+  }
+  let best = -1;
+  s.lanterns.forEach((l, i) => {
+    if (l.lit && !l.claimed && (best < 0 || l.oilMs < s.lanterns[best].oilMs)) best = i;
+  });
+  return best;
+}
+
+/** A window calls for a lantern at its times; the call runs out after CALL_MS. */
+function windows(s: GameState, dt: number) {
+  if (!s.call && s.callTimes.length && s.duskMs <= s.callTimes[0]) {
+    s.callTimes.shift();
+    const lantern = callTarget(s);
+    if (lantern >= 0) s.call = { lantern, msLeft: CALL_MS };
+  }
+  if (!s.call) return;
+  s.call.msLeft -= dt;
+  if (s.call.msLeft <= 0) {
+    s.events.push({ type: 'call', lantern: s.call.lantern, kept: false, coins: 0 });
+    s.call = null;
+  }
+}
+
+/** A moth has just lit (or refilled) lantern `i`: a window calling for it is answered. */
+function answerCall(s: GameState, i: number) {
+  if (s.call?.lantern !== i) return;
+  const coins = callPay(s);
+  s.coins += coins;
+  s.callsKept++;
+  s.events.push({ type: 'call', lantern: i, kept: true, coins });
+  s.call = null;
 }
 
 /** Advances dusk by `dt` milliseconds: oil burns, moths fly and light, gusts blow, and night falls at the end. */
 export function tick(s: GameState, dt: number) {
   if (s.phase !== 'dusk') return;
   const { burnMs } = stats(s);
-  const burn = s.kind === 'fog' ? FOG_BURN : 1;
+  const burn = (s.kind === 'fog' ? FOG_BURN : 1) * (districtOf(s).rule === 'trade' ? TRADE_BURN : 1);
   s.lanterns.forEach((lantern, i) => {
     // A moth refilling a lantern holds its flame, so it burns no oil meanwhile.
     if (!lantern.lit || sitting(s, i)) return;
@@ -529,17 +789,27 @@ export function tick(s: GameState, dt: number) {
       m.lightingMs += dt;
       if (m.lightingMs >= mothLightMs(s, m)) {
         const lantern = s.lanterns[m.target];
-        lantern.lit = true;
-        lantern.oilMs = burnMs * MOTH_KINDS[m.kind].oil;
-        lantern.oilMaxMs = lantern.oilMs;
-        if (m.closeCall) {
-          s.coins += CLOSE_CALL_PAY;
-          s.closeCalls++;
-          s.events.push({ type: 'closeCall', lantern: m.target, coins: CLOSE_CALL_PAY });
+        // A refill draws a fill from the cask; with the cask dry the moth leaves the lantern as it is.
+        const refill = lantern.lit && usesCask(s);
+        if (refill && s.cask <= 0) {
+          s.events.push({ type: 'dry', lantern: m.target });
           m.closeCall = false;
+        } else {
+          if (refill) s.cask--;
+          lantern.lit = true;
+          lantern.oilMs = burnMs * MOTH_KINDS[m.kind].oil * LANTERN_KINDS[lantern.kind].oil;
+          lantern.oilMaxMs = lantern.oilMs;
+          if (m.closeCall) {
+            const coins = closeCallPay(s);
+            s.coins += coins;
+            s.closeCalls++;
+            s.events.push({ type: 'closeCall', lantern: m.target, coins });
+            m.closeCall = false;
+          }
+          answerCall(s, m.target);
         }
-        // On the lantern a gust is coming for, the moth stays to shield it.
-        if (s.gust?.target === m.target) m.task = 'guard';
+        // On the lantern a gust or the owl is coming for, the moth stays to shield it.
+        if (threatened(s, m.target)) m.task = 'guard';
         else {
           // A firefly with a lantern still to light flies on to it instead of going home.
           const next = m.hops > 0 ? nextHop(s, m) : -1;
@@ -567,7 +837,9 @@ export function tick(s: GameState, dt: number) {
     }
   });
   wind(s);
+  greatOwl(s, dt);
   raiders(s, dt);
+  windows(s, dt);
   // A moth that has just come home takes the oldest queued tap.
   for (const moth of s.moths) {
     if (moth.task !== 'idle' || s.queue.length === 0) continue;
@@ -578,21 +850,29 @@ export function tick(s: GameState, dt: number) {
   if (s.duskMs === 0) nightfall(s);
 }
 
+/** What lantern `l` pays lit at nightfall, before the feast: its kind's share of PAY_PER_LANTERN, plus vespers on Chapel Hill. */
+export const lanternPay = (s: GameState, l: Lantern) => PAY_PER_LANTERN * LANTERN_KINDS[l.kind].pay + (districtOf(s).rule === 'vespers' ? VESPERS_PAY : 0);
+
 function nightfall(s: GameState) {
   const count = s.lanterns.length;
-  const lit = s.lanterns.filter((l) => l.lit).length;
-  const required = requiredFor(count);
+  const litLanterns = s.lanterns.filter((l) => l.lit);
+  const lit = litLanterns.length;
+  const required = requiredFor(count, s.district);
   const { done, of } = orderProgress(s);
   const orderMet = done >= of;
   const chains = chainsFor(s).filter((i) => chainLit(s, i)).length;
-  const lanternPay = lit * PAY_PER_LANTERN + (lit === count ? ALL_LIT_BONUS : 0) + chains * CHAIN_BONUS;
-  const earned = lanternPay * (s.kind === 'feast' ? FEAST_PAY : 1) + (orderMet ? s.order.reward : 0);
+  const lanternPayTotal = litLanterns.reduce((sum, l) => sum + lanternPay(s, l), 0) + (lit === count ? ALL_LIT_BONUS : 0) + chains * CHAIN_BONUS;
+  const earned = lanternPayTotal * (s.kind === 'feast' ? FEAST_PAY : 1) + (orderMet ? s.order.reward : 0);
   const lostHearth = lit < required;
   s.queue = [];
   s.gust = null;
   s.gusts = [];
   s.batTimes = [];
   s.bats = [];
+  s.owl = null;
+  s.owls = [];
+  s.call = null;
+  s.callTimes = [];
   s.coins += earned;
   if (lostHearth) s.lives--;
   else s.kept++;
@@ -601,12 +881,22 @@ function nightfall(s: GameState) {
   if (festival) s.festival = true;
   s.report = { lit, count, required, earned, lostHearth, orderMet, chains, festival };
   s.nextKind = drawKind(s.night + 1);
-  s.phase = s.lives <= 0 ? 'over' : festival ? 'festival' : 'night';
+  s.moveDue = s.lives > 0 && s.night % MOVE_EVERY === 0;
+  s.phase = s.lives <= 0 ? 'over' : festival ? 'festival' : s.moveDue ? 'move' : 'night';
 }
 
-/** Leaves the Great Festival's panel for the night panel; the nights go on. */
+/** Leaves the Great Festival's panel for the choice of district or the night panel; the nights go on. */
 export function carryOn(s: GameState) {
   if (s.phase !== 'festival') return false;
+  s.phase = s.moveDue ? 'move' : 'night';
+  return true;
+}
+
+/** Picks the district the keep stands in from the next dusk, at a fifth nightfall's choice. */
+export function moveTo(s: GameState, district: DistrictId) {
+  if (s.phase !== 'move') return false;
+  s.nextDistrict = district;
+  s.moveDue = false;
   s.phase = 'night';
   return true;
 }
@@ -623,18 +913,27 @@ export function buy(s: GameState, id: UpgradeId) {
   return true;
 }
 
+/** Puts one fill of oil in the cask between nights, for CASK_COST; false when it is full or the coins are short. */
+export function topUp(s: GameState) {
+  if (s.phase !== 'night' || s.cask >= CASK_MAX || s.coins < CASK_COST) return false;
+  s.coins -= CASK_COST;
+  s.cask++;
+  return true;
+}
+
 /** Starts the next night's dusk, with one more lantern and every moth back in the jar. */
 export function nextDusk(s: GameState) {
   if (s.phase !== 'night') return false;
   s.night++;
   s.phase = 'dusk';
   s.duskMs = DUSK_MS;
-  s.lanterns = makeLanterns(s.night);
+  s.district = s.nextDistrict;
+  s.lanterns = makeLanterns(s.night, s.district);
   const { moths, fireflies } = stats(s);
   s.moths = makeMoths(moths, fireflies);
   s.queue = [];
   s.report = null;
-  s.order = orderFor(s.night);
+  s.order = orderFor(s.night, s.district);
   s.kind = s.nextKind;
   s.gusts = gustsFor(s.night, s.kind);
   s.batTimes = batsFor(s.night);
@@ -643,5 +942,10 @@ export function nextDusk(s: GameState) {
   s.gust = null;
   s.closeCalls = 0;
   s.shields = 0;
+  s.owls = owlsFor(s.night);
+  s.owl = null;
+  s.callTimes = callsFor(s.night);
+  s.call = null;
+  s.callsKept = 0;
   return true;
 }

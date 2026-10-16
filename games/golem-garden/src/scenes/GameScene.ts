@@ -5,20 +5,27 @@ import { GARDENS, cellAt, pathPoint } from '../game/board';
 import {
   BLOOM_GOAL,
   BOSS_EVERY,
+  COMPOST,
   EARLY_BONUS,
   FAST,
-  GOLEMS,
+  FORM_INFO,
   GOLEM_INFO,
+  HARVEST_WAVE,
+  HEDGE,
   MAX_LEVEL,
   MOVE_FEE,
   PESTS,
+  SEEDS,
+  STAR_LEAVES,
+  TARGET_INFO,
+  formsOf,
   golemStats,
   waveBonus,
   waveCounts,
-  type GolemKind,
   type PestKind,
+  type SeedKind,
 } from '../game/data';
-import { loadBest, loadBloom, loadGarden, saveBest, saveBloom, saveGarden } from '../game/save';
+import { loadBest, loadBloom, loadGarden, loadStars, saveBest, saveBloom, saveGarden, saveStars } from '../game/save';
 import {
   SHOT_MS,
   canCallEarly,
@@ -26,14 +33,22 @@ import {
   canPlant,
   comboAt,
   gardenOf,
+  gardenOpen,
   golemAt,
+  hedgeAt,
   move,
   newGame,
+  nextTarget,
   nextWave,
+  picksForm,
   plant,
+  seedCost,
   select,
+  setTarget,
   startWave,
+  statsOf,
   tick,
+  totalStars,
   unlocked,
   upgrade,
   upgradeCost,
@@ -74,6 +89,8 @@ const QUEEN_ORIGIN = { x: 84 / 160, y: 62 / 90 };
 const PEST_TOP: Partial<Record<PestKind, number>> = { crow: 37, aphid: 15, queen: 54 };
 /** How long a sap droplet takes to fly to the counter, in ms. */
 const DROP_MS = 650;
+/** The Heartwood's leaves at the start, the most a harvest can keep (three stars). */
+const START_HEART = STAR_LEAVES[STAR_LEAVES.length - 1];
 /** The preview's pests, without the Queen Slug, who is named in its title instead. */
 const PREVIEW_PESTS = PESTS.filter((kind) => kind !== 'queen');
 
@@ -85,7 +102,7 @@ type Chip = { bg: Image; text: Text };
 export class GameScene extends Phaser.Scene {
   state!: GameState;
   /** Where the seed cards are, in view pixels; read by the playthrough test. */
-  seedButtons: (Rect & { kind: GolemKind })[] = [];
+  seedButtons: (Rect & { kind: SeedKind })[] = [];
   /** Where the wave button is, in view pixels; read by the playthrough test. */
   waveButton: Rect = { x: WAVE_BUTTON.x, y: WAVE_BUTTON.y, w: WAVE_BUTTON.w, h: WAVE_BUTTON.h };
   /** What the wave button says, on one line; read by the playthrough test. */
@@ -97,9 +114,15 @@ export class GameScene extends Phaser.Scene {
   private picked: number | null = null;
   /** The golem being moved: the next tap on free soil moves it there. */
   private moving: number | null = null;
+  /** Whether the open menu shows the level-3 forms to pick from instead of Raise, Aim, Move and Uproot. */
+  private formMenu = false;
+  /** The menu chip under the pointer, so the hint can say what a form does. */
+  private chipHover: number | null = null;
   private savedBest = 0;
   private savedBloom = 0;
+  private savedStars = '';
   private golems = new Map<number, Image>();
+  private hedges = new Map<number, Image>();
   private pests = new Map<number, { body: Image; slow: Image; mound: Image }>();
   private shots = new Map<number, Image>();
   private slimes = new Map<string, Image>();
@@ -108,9 +131,9 @@ export class GameScene extends Phaser.Scene {
   private bars!: Phaser.GameObjects.Graphics;
   private hoverGfx!: Phaser.GameObjects.Graphics;
   private ghost!: Image;
-  private hud!: { wave: Text; heart: Text; sap: Text; best: Text; bloom: Text; bloomSub: Text; flowers: Image[]; glow: Image };
+  private hud!: { wave: Text; waveSub: Text; heart: Text; sap: Text; best: Text; stars: Text; bloom: Text; bloomSub: Text; flowers: Image[]; glow: Image };
   private speed!: { bg: Image; text: Text };
-  private cards: { kind: GolemKind; rim: Image; card: Image; open: Phaser.GameObjects.Container; locked?: Phaser.GameObjects.Container }[] = [];
+  private cards: { kind: SeedKind; rim: Image; card: Image; open: Phaser.GameObjects.Container; locked?: Phaser.GameObjects.Container }[] = [];
   private lockPips!: Phaser.GameObjects.Graphics;
   private preview!: { title: Text; icons: Record<PestKind, Image>; counts: Record<PestKind, Text> };
   private hint!: Text;
@@ -118,26 +141,30 @@ export class GameScene extends Phaser.Scene {
   private waveText!: Text;
   private waveSub!: Text;
   private waveDrop!: Image;
-  private menu!: { box: Phaser.GameObjects.Container; raise: Chip; move: Chip; uproot: Chip };
+  private menu!: { box: Phaser.GameObjects.Container; chips: Chip[] };
   private banner!: Text;
-  private picker!: { box: Phaser.GameObjects.Container; title: Text; text: Text; back: Phaser.GameObjects.Container; captions: Text[] };
+  private picker: Phaser.GameObjects.Container | null = null;
 
   constructor() {
     super('Game');
   }
 
   create() {
-    this.state = newGame(loadBest(), loadBloom(), loadGarden());
+    this.state = newGame(loadBest(), loadBloom(), loadGarden(), loadStars());
     this.savedBest = this.state.best;
     this.savedBloom = this.state.bloom;
+    this.savedStars = this.state.stars.join(',');
     this.lastFrame = null;
     // A restart (a new garden) reuses this scene object, so start these afresh.
     this.hover = null;
     this.picked = null;
     this.moving = null;
+    this.formMenu = false;
+    this.picker = null;
     this.cards = [];
     this.treeFlowers = [];
     this.golems.clear();
+    this.hedges.clear();
     this.pests.clear();
     this.shots.clear();
     this.slimes.clear();
@@ -169,7 +196,6 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(UI_DEPTH)
       .setAlpha(0);
-    this.createPicker();
     this.refresh();
   }
 
@@ -178,15 +204,17 @@ export class GameScene extends Phaser.Scene {
     const dt = this.lastFrame === null ? 0 : Phaser.Math.Clamp(time - this.lastFrame, 0, MAX_STEP_MS);
     this.lastFrame = time;
     const s = this.state;
-    const { wave, heart, phase, bloom } = s;
+    const { wave, heart, phase, bloom, harvest } = s;
     tick(s, dt * (s.fast ? FAST : 1));
     if (s.heart < heart) this.heartHit();
     if (s.wave > wave) this.waveDone(wave, bloom, false);
+    if (s.harvest && !harvest) this.showPicker('harvest');
     if (s.phase === 'over' && phase !== 'over') this.showPicker('over');
     for (const pop of s.pops) this.sapPop(pop);
     s.pops = [];
     this.bars.clear();
     this.drawSlime();
+    this.drawHedges();
     this.drawGolems();
     this.drawPests();
     this.drawShots();
@@ -227,6 +255,7 @@ export class GameScene extends Phaser.Scene {
     const s = this.state;
     const moving = this.golemById(this.moving);
     this.moving = null;
+    this.formMenu = false;
     if (moving) {
       move(s, moving, col, row);
       this.picked = null;
@@ -254,12 +283,14 @@ export class GameScene extends Phaser.Scene {
     this.add.image(HUD.leaf.icon, HUD.y, 'leaf');
     this.add.image(HUD.sap.icon, HUD.y - 1, 'sap').setDepth(UI_DEPTH - 1);
     this.hud = {
-      wave: this.press(HUD.wave.x + HUD.wave.w / 2, HUD.y, '', 20, ink, [0.5, 0.5]),
+      wave: this.press(HUD.wave.x + HUD.wave.w / 2, HUD.y - 5, '', 18, ink, [0.5, 0.5]),
+      waveSub: this.press(HUD.wave.x + HUD.wave.w / 2, HUD.y + 11, '', 8.5, '#6a4a2a', [0.5, 0.5]),
       heart: this.press(HUD.leaf.text, HUD.y, '', 20, ink),
       sap: this.press(HUD.sap.text, HUD.y, '', 20, ink).setDepth(UI_DEPTH - 1),
       bloom: this.press(HUD.bloom.text, HUD.y - 7, '', 10.5, '#3a3014'),
       bloomSub: this.press(HUD.bloom.text, HUD.y + 7, '', 9, '#4a6a24'),
-      best: this.press(HUD.best.x, HUD.y, '', 12, '#e8d6a8', [1, 0.5]),
+      best: this.press(HUD.best.x, HUD.y - 7, '', 11, '#e8d6a8', [1, 0.5]),
+      stars: this.press(HUD.best.x, HUD.y + 7, '', 11, '#f2c44a', [1, 0.5]),
       flowers,
       glow,
     };
@@ -272,13 +303,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createPanel() {
-    this.press(PANEL.x + PANEL.w / 2, PANEL.y + 12, 'Seeds', 15, '#f2c44a', [0.5, 0.5]);
+    this.press(PANEL.x + PANEL.w / 2, PANEL.y + 9, 'Seeds', 14, '#f2c44a', [0.5, 0.5]);
     const ink = '#3a2a18';
-    this.seedButtons = GOLEMS.map((kind, i) => {
+    this.seedButtons = SEEDS.map((kind, i) => {
       const x = SEED_BUTTONS.x;
       const y = SEED_BUTTONS.ys[i];
       const h = SEED_BUTTONS.hs[i];
-      const info = GOLEM_INFO[kind];
       const rim = this.add.image(x, y, `rim-${h}`).setVisible(false);
       const card = this.add.image(x, y, `card-${h}`);
       card.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
@@ -287,39 +317,53 @@ export class GameScene extends Phaser.Scene {
         this.refresh();
       });
       const left = x - SEED_BUTTONS.w / 2;
-      const tall = h > 70;
-      // The card's face: the golem, its name, its cost in sap and what it does.
-      const icon = this.add
-        .image(left + (tall ? 31 : 27), y + (tall ? 30 : 26), `golem-${kind}`)
-        .setOrigin(GOLEM_ORIGIN.x, GOLEM_ORIGIN.y)
-        .setScale(tall ? 0.62 : 0.5);
-      const [first, second] = info.name.split(' ');
-      const face = tall
-        ? [
-            this.press(left + 61, y - 23, first, 14, ink),
-            this.press(left + 61, y - 7, second, 14, ink),
-            this.add.image(left + 68, y + 12, 'sap').setScale(0.62),
-            this.press(left + 78, y + 13, String(info.cost), 14, ink),
-            this.press(left + 61, y + 30, info.blurb, 9, '#7a5a34'),
-          ]
-        : [
-            this.press(left + 55, y - 19, info.name, 10.5, ink),
-            this.add.image(left + 62, y - 2, 'sap').setScale(0.5),
-            this.press(left + 70, y - 1, String(info.cost), 12, ink),
-            this.press(left + 55, y + 16, info.blurb, 9, '#7a5a34'),
-          ];
-      const open = this.add.container(0, 0, [icon, ...face]);
+      let face: Phaser.GameObjects.GameObject[];
       let locked: Phaser.GameObjects.Container | undefined;
-      if (info.locked) {
-        locked = this.add.container(0, 0, [
-          this.add.image(x, y, 'card-locked'),
-          this.press(left + 55, y - 18, info.name, 10.5, ink),
-          this.press(left + 56, y - 3, 'Blooms after', 9, '#4a6a24'),
-          this.press(left + 56, y + 9, `${BLOOM_GOAL} waves`, 9, '#4a6a24'),
-        ]);
-        this.lockPips = this.add.graphics();
-        locked.add(this.lockPips);
+      if (kind === 'hedge') {
+        // The hedge strip: the hedge, its name and its cost; the hint says what it does.
+        face = [
+          this.add.image(left + 28, y + 15, 'hedge').setOrigin(0.5, 54 / 64).setScale(0.5),
+          this.press(left + 55, y - 9, HEDGE.name, 10.5, ink),
+          this.add.image(left + 62, y + 6, 'sap').setScale(0.5),
+          this.press(left + 70, y + 7, String(HEDGE.cost), 12, ink),
+        ];
+      } else {
+        const info = GOLEM_INFO[kind];
+        const tall = h > 70;
+        // The card's face: the golem, its name, its cost in sap and what it does.
+        const icon = this.add
+          .image(left + (tall ? 31 : 27), y + (tall ? 27 : 22), `golem-${kind}`)
+          .setOrigin(GOLEM_ORIGIN.x, GOLEM_ORIGIN.y)
+          .setScale(tall ? 0.62 : 0.45);
+        const [first, second] = info.name.split(' ');
+        face = tall
+          ? [
+              icon,
+              this.press(left + 61, y - 21, first, 14, ink),
+              this.press(left + 61, y - 6, second, 14, ink),
+              this.add.image(left + 68, y + 11, 'sap').setScale(0.62),
+              this.press(left + 78, y + 12, String(info.cost), 14, ink),
+              this.press(left + 61, y + 27, info.blurb, 9, '#7a5a34'),
+            ]
+          : [
+              icon,
+              this.press(left + 55, y - 15, info.name, 10.5, ink),
+              this.add.image(left + 62, y - 1, 'sap').setScale(0.5),
+              this.press(left + 70, y, String(info.cost), 12, ink),
+              this.press(left + 55, y + 14, info.blurb, 9, '#7a5a34'),
+            ];
+        if (info.locked) {
+          locked = this.add.container(0, 0, [
+            this.add.image(x, y, 'card-locked'),
+            this.press(left + 55, y - 16, info.name, 10.5, ink),
+            this.press(left + 56, y - 4, 'Blooms after', 9, '#4a6a24'),
+            this.press(left + 56, y + 7, `${BLOOM_GOAL} waves`, 9, '#4a6a24'),
+          ]);
+          this.lockPips = this.add.graphics();
+          locked.add(this.lockPips);
+        }
       }
+      const open = this.add.container(0, 0, face);
       this.cards.push({ kind, rim, card, open, locked });
       return { kind, x, y, w: SEED_BUTTONS.w, h };
     });
@@ -350,43 +394,69 @@ export class GameScene extends Phaser.Scene {
     this.waveDrop = this.add.image(WAVE_BUTTON.x - 23, WAVE_BUTTON.y + 10, 'sap').setScale(0.55);
   }
 
-  /** The menu a tapped golem opens: Raise it a level, Move it for a fee, or Uproot it for sap back. */
+  /**
+   * The menu a tapped golem opens: four chips, Raise it a level, Aim (its targeting), Move it for
+   * a fee and Uproot it for sap back. Raising to level 3 turns the chips into its two forms and Back.
+   */
   private createMenu() {
     const { chip } = GOLEM_MENU;
-    const make = (dx: number, onTap: (g: Golem) => void): Chip => {
+    const step = chip.w + chip.gap;
+    const chips = [0, 1, 2, 3].map((i): Chip => {
+      const dx = (i - 1.5) * step;
       const bg = this.add.image(dx, 0, 'chip');
-      bg.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
-        const g = this.golemById(this.picked);
-        if (g) onTap(g);
-        this.refresh();
-      });
+      bg.setInteractive({ useHandCursor: true })
+        .on('pointerover', () => (this.chipHover = i))
+        .on('pointerout', () => (this.chipHover = null))
+        .on('pointerdown', () => {
+          const g = this.golemById(this.picked);
+          if (g) this.menuTap(g, i);
+          this.refresh();
+        });
       const text = this.add
         .text(dx, 0, '', { fontFamily: FONT, fontStyle: 'bold', fontSize: '10.5px', color: '#3a2a18', align: 'center' })
         .setOrigin(0.5)
         .setLineSpacing(-1)
         .setShadow(1, 1, 'rgba(255,240,210,0.35)', 0);
       return { bg, text };
-    };
-    const step = chip.w + chip.gap;
-    const raise = make(-step, (g) => upgrade(this.state, g));
-    const moveChip = make(0, (g) => {
-      if (this.state.sap < MOVE_FEE) return;
-      this.moving = g.id;
-      this.picked = null;
-    });
-    const uprootChip = make(step, (g) => {
-      uproot(this.state, g);
-      this.picked = null;
     });
     const box = this.add
-      .container(0, 0, [this.add.image(0, 0, 'menu'), raise.bg, raise.text, moveChip.bg, moveChip.text, uprootChip.bg, uprootChip.text])
+      .container(0, 0, [this.add.image(0, 0, 'menu'), ...chips.flatMap((c) => [c.bg, c.text])])
       .setDepth(UI_DEPTH + 2)
       .setVisible(false);
-    this.menu = { box, raise, move: moveChip, uproot: uprootChip };
+    this.menu = { box, chips };
   }
 
-  /** The garden picker: a card per garden, each planted fresh when tapped if your best wave has unlocked it. */
-  private createPicker() {
+  /** A tap on the open golem's menu chip `i`. */
+  private menuTap(g: Golem, i: number) {
+    const s = this.state;
+    if (this.formMenu) {
+      const forms = formsOf(g.kind);
+      if (i < forms.length) {
+        if (upgrade(s, g, forms[i])) this.formMenu = false;
+      } else if (i === forms.length) this.formMenu = false;
+      return;
+    }
+    if (i === 0) {
+      if (picksForm(g)) this.formMenu = upgradeCost(g) !== null && s.sap >= upgradeCost(g)!;
+      else upgrade(s, g);
+    } else if (i === 1) {
+      setTarget(s, g, nextTarget(g));
+    } else if (i === 2) {
+      if (s.sap < MOVE_FEE) return;
+      this.moving = g.id;
+      this.picked = null;
+    } else {
+      uproot(s, g);
+      this.picked = null;
+    }
+  }
+
+  /**
+   * The garden picker, built afresh each time it opens: a card per garden with its harvest stars,
+   * each planted fresh when tapped if enough stars have unlocked it.
+   */
+  private createPicker(mode: 'choose' | 'over' | 'harvest') {
+    const s = this.state;
     const dim = this.add.rectangle(0, 0, VIEW.w, VIEW.h, 0x1a0e06, 0.76).setOrigin(0).setInteractive();
     const title = this.add
       .text(VIEW.w / 2, 104, '', { fontFamily: FONT, fontStyle: 'bold', fontSize: '30px', color: '#f2c44a', stroke: '#3a2008', strokeThickness: 6 })
@@ -395,13 +465,30 @@ export class GameScene extends Phaser.Scene {
       .text(VIEW.w / 2, 164, '', { fontFamily: FONT, fontStyle: 'bold', fontSize: '15px', color: '#fbefd6', align: 'center' })
       .setOrigin(0.5)
       .setLineSpacing(5);
+    const stars = totalStars(s);
+    if (mode === 'over') {
+      title.setText('The Heartwood has fallen');
+      text.setText(`Pests ate the Heartwood on wave ${s.wave}. ${s.kills} pests squashed.\nBest: ${s.best} waves cleared. Pick a garden to plant again.`);
+    } else if (mode === 'harvest') {
+      const n = s.harvest;
+      title.setText(`Harvest: ${this.starText(n)}`);
+      const kept = `${s.heart} of ${START_HEART} leaves kept`;
+      const next = GARDENS.find((g) => g.unlockStars > stars);
+      text.setText(
+        `Wave ${HARVEST_WAVE} cleared with ${kept}: ${n} star${n === 1 ? '' : 's'} for the ${gardenOf(s).name}.\n` +
+          (next ? `${next.name} opens at ${next.unlockStars} stars; you have ${stars}. ` : 'Every garden is open. ') +
+          'The waves go on: keep going, or plant another garden.',
+      );
+    } else {
+      title.setText('Choose a garden');
+      text.setText(`A new garden starts from wave 1; this one is left behind.\nYour best (${s.best} waves), your stars and the Heartwood's bloom carry over.`);
+    }
     const parts: Phaser.GameObjects.GameObject[] = [dim, title, text];
-    const captions: Text[] = [];
     const { y, w, gap } = GARDEN_CARD;
     GARDENS.forEach((garden, i) => {
       const x = VIEW.w / 2 + (i - (GARDENS.length - 1) / 2) * (w + gap);
-      const open = this.state.best >= garden.unlockAt;
-      const here = i === this.state.garden;
+      const open = gardenOpen(s, i);
+      const here = i === s.garden;
       if (here) parts.push(this.add.image(x, y, 'gcard-rim'));
       const card = this.add.image(x, y, open ? 'gcard' : 'gcard-locked');
       if (open) {
@@ -413,14 +500,23 @@ export class GameScene extends Phaser.Scene {
       parts.push(card, this.press(x, y - 80, garden.name, 18, '#3a2a18', [0.5, 0.5]), this.miniMap(i, x, y - 18, open));
       parts.push(this.press(x, y + 50, garden.blurb, 10, '#7a5a34', [0.5, 0.5]).setAlign('center').setWordWrapWidth(w - 24));
       const caption = this.press(x, y + 78, '', 12.5, open ? '#4a6a24' : '#5a4a34', [0.5, 0.5]);
-      caption.setText(open ? (here ? 'Replant here' : 'Plant here') : `Clear ${garden.unlockAt} waves to unlock`);
-      captions.push(caption);
+      caption.setText(open ? `${this.starText(s.stars[i])}  ${here ? 'Replant here' : 'Plant here'}` : `Needs ${garden.unlockStars} star${garden.unlockStars === 1 ? '' : 's'} (you have ${stars})`);
       parts.push(caption);
     });
-    const back = makeButton(this, VIEW.w / 2, 478, 'Back', () => this.picker.box.setVisible(false));
-    parts.push(back);
-    const box = this.add.container(0, 0, parts).setDepth(UI_DEPTH + 10).setVisible(false);
-    this.picker = { box, title, text, back, captions };
+    if (mode !== 'over') {
+      parts.push(makeButton(this, VIEW.w / 2, 478, mode === 'harvest' ? 'Keep going' : 'Back', () => this.closePicker()));
+    }
+    return this.add.container(0, 0, parts).setDepth(UI_DEPTH + 10);
+  }
+
+  /** `n` of three stars, as filled and empty stars. */
+  private starText(n: number) {
+    return '★'.repeat(n) + '☆'.repeat(3 - n);
+  }
+
+  private closePicker() {
+    this.picker?.destroy();
+    this.picker = null;
   }
 
   /** A garden's map in miniature: grass, its paths and the Heartwood. */
@@ -447,20 +543,17 @@ export class GameScene extends Phaser.Scene {
     return g;
   }
 
-  /** Opens the garden picker: from the garden tag ('choose', with a Back button) or when the Heartwood falls ('over'). */
-  private showPicker(mode: 'choose' | 'over') {
-    const s = this.state;
+  /**
+   * Opens the garden picker: from the garden tag ('choose', with a Back button), at the harvest
+   * ('harvest', with a Keep going button) or when the Heartwood falls ('over').
+   */
+  private showPicker(mode: 'choose' | 'over' | 'harvest') {
     this.picked = null;
     this.moving = null;
-    if (mode === 'over') {
-      this.picker.title.setText('The Heartwood has fallen');
-      this.picker.text.setText(`Pests ate the Heartwood on wave ${s.wave}. ${s.kills} pests squashed.\nBest: ${s.best} waves cleared. Pick a garden to plant again.`);
-    } else {
-      this.picker.title.setText('Choose a garden');
-      this.picker.text.setText(`A new garden starts from wave 1; this one is left behind.\nYour best (${s.best} waves) and the Heartwood's bloom carry over.`);
-    }
-    this.picker.back.setVisible(mode === 'choose');
-    this.picker.box.setVisible(true);
+    this.formMenu = false;
+    this.closePicker();
+    this.refresh();
+    this.picker = this.createPicker(mode);
   }
 
   /** Rewrites the HUD and panel from the state. */
@@ -468,10 +561,16 @@ export class GameScene extends Phaser.Scene {
     const s = this.state;
     if (s.best > this.savedBest) saveBest((this.savedBest = s.best));
     if (s.bloom > this.savedBloom) saveBloom((this.savedBloom = s.bloom));
+    if (s.stars.join(',') !== this.savedStars) {
+      this.savedStars = s.stars.join(',');
+      saveStars(s.stars);
+    }
     this.hud.wave.setText(`Wave ${s.wave}`);
+    this.hud.waveSub.setText(s.harvest ? `harvested ${this.starText(s.harvest)}` : `harvest at ${HARVEST_WAVE}`);
     this.hud.heart.setText(String(s.heart));
     this.hud.sap.setText(String(s.sap));
     this.hud.best.setText(`Best: ${s.best}`);
+    this.hud.stars.setText(`${totalStars(s)} ★`);
     const full = s.bloom >= BLOOM_GOAL;
     this.hud.bloom.setText(full ? 'Heartwood in bloom' : `Heartwood bloom ${s.bloom}/${BLOOM_GOAL}`);
     this.hud.bloomSub.setText(full ? 'Thorn golem unlocked' : 'unlocks Thorn golem');
@@ -481,16 +580,16 @@ export class GameScene extends Phaser.Scene {
     this.speed.text.setText(`${s.fast ? FAST : 1}x`);
 
     for (const { kind, rim, card, open, locked } of this.cards) {
-      const h = SEED_BUTTONS.hs[GOLEMS.indexOf(kind)];
+      const h = SEED_BUTTONS.hs[SEEDS.indexOf(kind)];
       const isOpen = unlocked(s, kind);
       rim.setVisible(isOpen && s.selected === kind);
-      card.setVisible(isOpen).setTexture(s.sap >= GOLEM_INFO[kind].cost ? `card-${h}` : `card-${h}-dim`);
+      card.setVisible(isOpen).setTexture(s.sap >= seedCost(kind) ? `card-${h}` : `card-${h}-dim`);
       open.setVisible(isOpen);
       locked?.setVisible(!isOpen);
     }
     if (this.lockPips) {
       const left = SEED_BUTTONS.x - SEED_BUTTONS.w / 2;
-      const y = SEED_BUTTONS.ys[2] + 22;
+      const y = SEED_BUTTONS.ys[2] + 19;
       this.lockPips.clear();
       for (let i = 0; i < BLOOM_GOAL; i++) this.bead(this.lockPips, left + 61 + i * 13, y, 4, i < s.bloom ? 0xf2c44a : 0x8a8070);
     }
@@ -556,14 +655,27 @@ export class GameScene extends Phaser.Scene {
     const mx = Phaser.Math.Clamp(x, GRID.x + half, GRID.x + GRID.cols * GRID.cell - half);
     const my = g.row < 2 ? y + 62 : y - 84;
     this.menu.box.setPosition(mx, my);
-    const set = (chip: Chip, text: string, ok: boolean) => {
-      chip.bg.setTexture(ok ? 'chip' : 'chip-off');
-      chip.text.setText(text).setAlpha(ok ? 1 : 0.7);
+    const set = (i: number, text: string, ok: boolean) => {
+      const chip = this.menu.chips[i];
+      chip.bg.setVisible(true).setTexture(ok ? 'chip' : 'chip-off');
+      chip.text.setVisible(true).setText(text).setAlpha(ok ? 1 : 0.7);
     };
     const cost = upgradeCost(g);
-    set(this.menu.raise, cost === null ? (g.growMs > 0 ? 'Raise\ngrowing' : 'Raise\nmax level') : `Raise\n${cost} sap`, cost !== null && s.sap >= cost);
-    set(this.menu.move, `Move\n${MOVE_FEE} sap`, s.sap >= MOVE_FEE);
-    set(this.menu.uproot, `Uproot\n+${uprootValue(g)} sap`, true);
+    if (this.formMenu && cost !== null) {
+      // Raising to level 3: pick the golem's form.
+      formsOf(g.kind).forEach((form, i) => set(i, `${FORM_INFO[form].name}\n${cost} sap`, s.sap >= cost));
+      set(2, 'Back', true);
+      this.menu.chips[3].bg.setVisible(false);
+      this.menu.chips[3].text.setVisible(false);
+      return;
+    }
+    this.formMenu = false;
+    const top = g.form ? FORM_INFO[g.form].name : 'max level';
+    set(0, cost === null ? (g.growMs > 0 ? 'Raise\ngrowing' : `Raise\n${top}`) : `${picksForm(g) ? 'Form' : 'Raise'}\n${cost} sap`, cost !== null && s.sap >= cost);
+    const area = statsOf(g).area;
+    set(1, area ? 'Aim\nall near' : `Aim\n${TARGET_INFO[g.target].name}`, !area);
+    set(2, `Move\n${MOVE_FEE} sap`, s.sap >= MOVE_FEE);
+    set(3, `Uproot\n+${uprootValue(g)} sap`, true);
   }
 
   private hintText() {
@@ -574,12 +686,25 @@ export class GameScene extends Phaser.Scene {
     const hovered = picked ?? (this.hover && golemAt(s, this.hover.col, this.hover.row));
     if (hovered) {
       const name = GOLEM_INFO[hovered.kind].name;
+      if (picked && this.formMenu) {
+        const forms = formsOf(picked.kind);
+        const over = this.chipHover !== null && forms[this.chipHover];
+        if (over) return `${FORM_INFO[over].name}: ${FORM_INFO[over].blurb}`;
+        return `Level 3 picks its form for good: ${forms.map((f) => FORM_INFO[f].name).join(' or ')}`;
+      }
       const combo = hovered.growMs === 0 ? comboAt(s, hovered.kind, hovered.col, hovered.row) : null;
+      if (hovered.form) return `${FORM_INFO[hovered.form].name} ${name.toLowerCase()}: ${FORM_INFO[hovered.form].blurb}`;
       const level = hovered.growMs > 0 ? `${name}, still growing` : `${name}, level ${hovered.level}`;
       if (combo) return `${name} lv ${hovered.level}: moss combo, ${combo === 'slowed' ? 'harder on slowed pests' : 'pricks twice'}`;
-      return picked ? `${level}. Tap it again to close` : `${level}. Tap it to raise, move or uproot`;
+      if (picked && !statsOf(picked).area) return `${level}, aims at ${TARGET_INFO[picked.target].blurb}`;
+      if (picked && picksForm(picked)) return `${level}. Level 3 picks a form: ${formsOf(picked.kind).map((f) => FORM_INFO[f].name).join(' or ')}`;
+      return picked ? `${level}. Tap it again to close` : `${level}. Tap it to raise, aim, move or uproot`;
     }
+    const hedge = this.hover && hedgeAt(s, this.hover.col, this.hover.row);
+    if (hedge) return `A hedge: pests stop and chew on it (${Math.ceil(hedge.hp)} left)`;
+    if (s.selected === 'hedge') return 'Tap a path cell to plant a hedge there; pests chew through it';
     if (s.phase === 'build' && nextWave(s) % BOSS_EVERY === 0) return 'The Queen Slug slimes golems beside her trail';
+    if (s.phase === 'build' && s.wave >= COMPOST.fromWave) return `Compost: clearing pays ${Math.round(COMPOST.rate * 100)}% of unspent sap (up to ${COMPOST.cap})`;
     return s.golems.length ? 'Golems side by side with a moss golem combo' : 'Tap soil to plant the picked seed';
   }
 
@@ -630,6 +755,8 @@ export class GameScene extends Phaser.Scene {
       } else {
         image.setTexture(`golem-${g.kind}`).setOrigin(GOLEM_ORIGIN.x, GOLEM_ORIGIN.y).setY(y + FEET);
         for (let i = 0; i < MAX_LEVEL; i++) this.bead(this.bars, x - 11 + i * 11, y + 31, 3.6, i < g.level ? 0xf2c44a : 0x4a5a3a);
+        // A level-3 golem wears a bead in its form's colour on its shoulder.
+        if (g.form) this.bead(this.bars, x + 20, y - 22, 5, FORM_INFO[g.form].colour);
         // Combos: a vine to each grown moss golem beside a pebble or thorn golem.
         if (g.kind === 'moss') continue;
         for (const o of s.golems) {
@@ -640,6 +767,22 @@ export class GameScene extends Phaser.Scene {
       }
     }
     for (const [id, image] of this.golems) if (!seen.has(id)) (image.destroy(), this.golems.delete(id));
+  }
+
+  /** Hedges on the path, each with its health bar as pests chew it down. */
+  private drawHedges() {
+    const seen = new Set<number>();
+    for (const h of this.state.hedges) {
+      seen.add(h.id);
+      const { x, y } = cellCentre(h.col, h.row);
+      let image = this.hedges.get(h.id);
+      if (!image) {
+        image = this.add.image(x, y + 22, 'hedge').setOrigin(0.5, 54 / 64).setDepth(y + 22);
+        this.hedges.set(h.id, image);
+      }
+      if (h.hp < h.maxHp) this.bar(x, y - 34, 40, Math.max(0, h.hp / h.maxHp), 0x8cd05a);
+    }
+    for (const [id, image] of this.hedges) if (!seen.has(id)) (image.destroy(), this.hedges.delete(id));
   }
 
   private drawPests() {
@@ -760,13 +903,21 @@ export class GameScene extends Phaser.Scene {
       }
       return;
     }
-    if (gardenOf(s).map[row][col] !== 'soil') return;
     const moving = this.golemById(this.moving);
     const kind = moving?.kind ?? s.selected;
+    if (kind === 'hedge') {
+      // A hedge goes on the path: the ghost hedge, if the cell is a free path cell.
+      if (hedgeAt(s, col, row) || gardenOf(s).map[row][col] !== 'path') return;
+      const ok = this.picked === null && canPlant(s, col, row);
+      if (ok) this.ghost.setTexture('hedge').setOrigin(0.5, 54 / 64).setPosition(x, y + 22).setVisible(true);
+      outline(x, y, ok ? 0xfbefd6 : 0x8a7a6a);
+      return;
+    }
+    if (gardenOf(s).map[row][col] !== 'soil') return;
     const ok = moving ? canMove(s, moving, col, row) : this.picked === null && canPlant(s, col, row);
     if (ok) {
-      reach(x, y, golemStats(kind, moving?.level ?? 1).range);
-      this.ghost.setTexture(`golem-${kind}`).setPosition(x, y + FEET).setVisible(true);
+      reach(x, y, golemStats(kind, moving?.level ?? 1, moving?.form).range);
+      this.ghost.setTexture(`golem-${kind}`).setOrigin(GOLEM_ORIGIN.x, GOLEM_ORIGIN.y).setPosition(x, y + FEET).setVisible(true);
     }
     outline(x, y, ok ? 0xfbefd6 : 0x8a7a6a);
   }
@@ -810,7 +961,9 @@ export class GameScene extends Phaser.Scene {
   private waveDone(n: number, bloomBefore: number, early: boolean) {
     const s = this.state;
     const sap = waveBonus(n) + (early ? EARLY_BONUS : 0);
-    const lines = [early ? `Wave ${n + 1} called early!  +${sap} sap` : `Wave ${n} cleared!  +${sap} sap`];
+    const compost = s.compost ? `, +${s.compost} compost` : '';
+    const lines = [early ? `Wave ${n + 1} called early!  +${sap} sap${compost}` : `Wave ${n} cleared!  +${sap} sap${compost}`];
+    if (n === HARVEST_WAVE) lines.push(`Harvest! ${this.starText(s.harvest)} with ${s.heart} leaves kept`);
     if (s.bloom > bloomBefore) lines.push(s.bloom >= BLOOM_GOAL ? 'The Heartwood is in bloom: Thorn golem unlocked!' : `A bud opens on the Heartwood (${s.bloom}/${BLOOM_GOAL})`);
     if (early && s.wave % BOSS_EVERY === 0) lines.push('The Queen Slug is coming!');
     this.announce(lines);

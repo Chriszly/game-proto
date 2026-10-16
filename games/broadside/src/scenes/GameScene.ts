@@ -1,16 +1,19 @@
 import Phaser from 'phaser';
 import { settings } from '../../../../shared/settings';
-import { HI, SEA_RES, SHEET_RES, SHIP_LOOKS } from '../art/art';
+import { HI, lookOf, SEA_RES, SHEET_RES } from '../art/art';
 import { renderScale } from '../../../../shared/scaling';
 import { BOON_IDS, BOONS, costOfBoons, type BoonId } from '../game/admiralty';
+import { BOUNTIES, bountyMet, bountyPay } from '../game/bounties';
+import { FIRST_HULL, HULL_IDS, HULLS, unlocked, type HullId } from '../game/hulls';
 import { ORDERS } from '../game/orders';
-import { loadBestWave, loadMedals, saveBestWave, saveMedals } from '../game/save';
+import type { PerkId } from '../game/perks';
+import { loadBestWave, loadHull, loadMedals, saveBestWave, saveHull, saveMedals } from '../game/save';
 import { ENEMIES } from '../game/ships';
 import { SHOTS } from '../game/shot';
-import { boardable, buy, detourCourse, loadShot, repair, scuttle, scuttleGold, setSail, SHELL_R, tick } from '../game/sim';
+import type { UpgradeId } from '../game/upgrades';
+import { boardable, boardMs, buy, canBoard, detourCourse, fortBounty, hire, loadShot, pickPerk, repair, sailOn, scuttle, scuttleGold, setSail, SHELL_R, tick } from '../game/sim';
 import {
-  ARC,
-  BOARD_MS,
+  FORT,
   ISLANDS,
   loadedShot,
   newRun,
@@ -27,9 +30,10 @@ import {
   type Side,
 } from '../game/state';
 import { makeButton } from '../ui/Button';
+import { HAVEN_WAVE } from '../game/waves';
 import { Harbor, type HarborAction } from '../ui/Harbor';
 import { pinToScreen } from '../ui/screen';
-import { FIRE, FONT, HELM, HUD_HEIGHT, ORDER_CARD, OVER, SCUTTLE, UI_DEPTH, VIEW, WIND } from './layout';
+import { BOUNTY, FIRE, FONT, HELM, HUD_HEIGHT, ORDER_CARD, OVER, SCUTTLE, UI_DEPTH, VIEW, WIND } from './layout';
 
 /** Longest simulated step, so a backgrounded tab doesn't jump the battle forward. */
 const MAX_STEP_MS = 250;
@@ -64,6 +68,7 @@ export class GameScene extends Phaser.Scene {
   /** The harbor panel; the playthrough test reads where its buttons are to tap one. */
   harbor!: Harbor;
   private ships = new Map<number, Phaser.GameObjects.Image>();
+  private forts = new Map<number, Phaser.GameObjects.Image>();
   private balls = new Map<number, Phaser.GameObjects.Image>();
   private loot = new Map<number, { barrel: Phaser.GameObjects.Image; label: Phaser.GameObjects.Text }>();
   private sinking = new Map<number, Phaser.GameObjects.Image>();
@@ -98,6 +103,8 @@ export class GameScene extends Phaser.Scene {
   private waveText!: Phaser.GameObjects.Text;
   private hullText!: Phaser.GameObjects.Text;
   private goldText!: Phaser.GameObjects.Text;
+  private crewText!: Phaser.GameObjects.Text;
+  private bountyText!: Phaser.GameObjects.Text;
   private infoText!: Phaser.GameObjects.Text;
   private bannerTitle!: Phaser.GameObjects.Text;
   private bannerSub!: Phaser.GameObjects.Text;
@@ -107,13 +114,19 @@ export class GameScene extends Phaser.Scene {
   private orderTitle!: Phaser.GameObjects.Text;
   private orderDesc!: Phaser.GameObjects.Text;
   private gameOver!: Phaser.GameObjects.Container;
+  private gameOverTitle!: Phaser.GameObjects.Text;
   private gameOverText!: Phaser.GameObjects.Text;
   private medalText!: Phaser.GameObjects.Text;
   private boonRows: { id: BoonId; bg: Phaser.GameObjects.Rectangle; cost: Phaser.GameObjects.Text }[] = [];
+  private shipRows: { id: HullId; bg: Phaser.GameObjects.Rectangle; name: Phaser.GameObjects.Text; desc: Phaser.GameObjects.Text }[] = [];
+  private againButton!: Phaser.GameObjects.Container;
+  private sailOnButton!: Phaser.GameObjects.Container;
   /** The Admiralty's medals banked across runs, once this run's are added at its end. */
   private medalBank = 0;
   /** The starting upgrades chosen on the game-over panel for the next run. */
   private commission: BoonId[] = [];
+  /** The ship chosen on the game-over panel for the next run. */
+  private nextHull: HullId = FIRST_HULL;
   private windText!: Phaser.GameObjects.Text;
   private windRose!: Phaser.GameObjects.Image;
   private shotTexts!: Record<Side, Phaser.GameObjects.Text>;
@@ -133,8 +146,8 @@ export class GameScene extends Phaser.Scene {
     super('Game');
   }
 
-  create(data?: { boons?: BoonId[] }) {
-    for (const map of [this.ships, this.balls, this.sinking, this.floaters]) map.clear();
+  create(data?: { boons?: BoonId[]; hull?: HullId }) {
+    for (const map of [this.ships, this.forts, this.balls, this.sinking, this.floaters]) map.clear();
     this.loot.clear();
     this.wakes = [];
     this.held.clear();
@@ -143,7 +156,12 @@ export class GameScene extends Phaser.Scene {
     this.lastFrame = null;
     this.commission = [];
     this.boonRows = [];
-    this.state = newRun(loadBestWave(), data?.boons ?? []);
+    this.shipRows = [];
+    // A fresh page sails the ship chosen last, if the best wave still unlocks it.
+    const best = loadBestWave();
+    const hull = data?.hull ?? (unlocked(loadHull(), best) ? loadHull() : FIRST_HULL);
+    this.nextHull = hull;
+    this.state = newRun(best, data?.boons ?? [], hull);
     this.view = { x: this.state.player.x, y: this.state.player.y };
     this.lastPlayer = { ...this.view };
 
@@ -189,10 +207,11 @@ export class GameScene extends Phaser.Scene {
     const phase = s.phase;
     this.readInput();
     tick(s, dt);
-    if (s.phase !== phase && (s.phase === 'harbor' || s.phase === 'over')) saveBestWave(s.bestWave);
-    if (s.phase !== phase && s.phase === 'over') {
+    if (s.phase !== phase && (s.phase === 'harbor' || s.phase === 'over' || s.phase === 'won')) saveBestWave(s.bestWave);
+    if (s.phase !== phase && (s.phase === 'over' || s.phase === 'won')) {
       this.medalBank = loadMedals() + s.medals;
       saveMedals(this.medalBank);
+      this.commission = [];
     }
     this.clock += dt;
 
@@ -209,8 +228,9 @@ export class GameScene extends Phaser.Scene {
     this.drawControls();
     this.drawScuttle();
     this.harbor.show(s.phase === 'harbor' ? s : null);
-    this.gameOver.setVisible(s.phase === 'over');
-    if (s.phase === 'over') this.drawGameOver();
+    const ended = s.phase === 'over' || s.phase === 'won';
+    this.gameOver.setVisible(ended);
+    if (ended) this.drawGameOver();
   }
 
   /** Writes the helm and the fire controls into the state, from the keys and the pointers. */
@@ -258,8 +278,10 @@ export class GameScene extends Phaser.Scene {
   private harborAction(id: HarborAction) {
     if (id === 'sail') setSail(this.state);
     else if (id === 'repair') repair(this.state);
+    else if (id === 'hire') hire(this.state);
     else if (id === 'load-port' || id === 'load-starboard') loadShot(this.state, id === 'load-port' ? 'port' : 'starboard');
-    else buy(this.state, id);
+    else if (id.startsWith('draft-')) pickPerk(this.state, id.slice('draft-'.length) as PerkId);
+    else buy(this.state, id as UpgradeId);
   }
 
   private drawShips() {
@@ -270,7 +292,7 @@ export class GameScene extends Phaser.Scene {
       seen.add(ship.id);
       let sprite = this.ships.get(ship.id);
       if (!sprite) {
-        sprite = this.add.image(0, 0, `ship-${ship.kind}`).setScale(1 / HI).setDepth(4);
+        sprite = this.add.image(0, 0, `ship-${ship.kind === 'player' ? s.hull : ship.kind}`).setScale(1 / HI).setDepth(4);
         this.ships.set(ship.id, sprite);
       }
       // A gentle roll on the swell.
@@ -292,6 +314,38 @@ export class GameScene extends Phaser.Scene {
       sprite.destroy();
       this.ships.delete(id);
     }
+    this.drawForts();
+  }
+
+  /** The wave's shore forts on their islands, each with its hull bar and a flash when hit. */
+  private drawForts() {
+    const s = this.state;
+    const seen = new Set<number>();
+    for (const fort of s.forts) {
+      seen.add(fort.id);
+      let sprite = this.forts.get(fort.id);
+      if (!sprite) {
+        sprite = this.add.image(0, 0, 'fort').setScale(1 / HI).setDepth(3.5);
+        this.forts.set(fort.id, sprite);
+      }
+      const at = this.place(fort);
+      sprite.setPosition(at.x, at.y);
+      if (fort.hitMs > 0 && !settings.reduceMotion) sprite.setTint(0xffc090).setTintMode(Phaser.TintModes.MULTIPLY);
+      else sprite.clearTint();
+      const x = Math.round(at.x - HP_BAR_W / 2);
+      const y = Math.round(at.y - FORT.radius - 22);
+      const fill = (HP_BAR_W - 2) * Phaser.Math.Clamp(fort.hp / fort.maxHp, 0, 1);
+      const g = this.bars;
+      g.fillStyle(0xf3e6c4).fillRect(x, y, HP_BAR_W, 5);
+      g.fillStyle(0xb04634, 0.9).fillRect(x + 1, y + 1, fill, 3);
+      g.lineStyle(0.75, INK).strokeRect(x, y, HP_BAR_W, 5);
+      for (let k = 1; k < 4; k++) g.lineBetween(x + (k * HP_BAR_W) / 4, y, x + (k * HP_BAR_W) / 4, y + 5);
+    }
+    for (const [id, sprite] of this.forts) {
+      if (seen.has(id)) continue;
+      sprite.destroy();
+      this.forts.delete(id);
+    }
   }
 
   /** An enemy's hull, as a little scale bar over it once it has been hit. */
@@ -300,7 +354,7 @@ export class GameScene extends Phaser.Scene {
     if (ship.hp >= ship.maxHp && !escort && ship.kind !== 'flagship') return;
     const at = this.place(ship);
     const x = Math.round(at.x - HP_BAR_W / 2);
-    const y = Math.round(at.y - SHIP_LOOKS[ship.kind].length / 2 - 14);
+    const y = Math.round(at.y - lookOf(ship, this.state.hull).length / 2 - 14);
     const fill = (HP_BAR_W - 2) * Phaser.Math.Clamp(ship.hp / ship.maxHp, 0, 1);
     const g = this.bars;
     g.fillStyle(0xf3e6c4).fillRect(x, y, HP_BAR_W, 5);
@@ -366,7 +420,7 @@ export class GameScene extends Phaser.Scene {
         const a = (k / 12) * Math.PI * 2;
         g.beginPath().arc(at.x, at.y, r, a, a + 0.3).strokePath();
       }
-      if (e.boardMs > 0) g.lineStyle(5, OCHRE, 1).beginPath().arc(at.x, at.y, r + 5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, e.boardMs / BOARD_MS)).strokePath();
+      if (e.boardMs > 0) g.lineStyle(5, OCHRE, 1).beginPath().arc(at.x, at.y, r + 5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, e.boardMs / boardMs(s))).strokePath();
       const { dx, dy } = offset(s.player, e);
       if (Math.hypot(dx, dy) < best) {
         best = Math.hypot(dx, dy);
@@ -375,7 +429,7 @@ export class GameScene extends Phaser.Scene {
     }
     if (!nearest) return;
     const at = this.place(nearest);
-    const label = nearest.boardMs > 0 ? 'Boarding her...' : 'Crippled: sail alongside to board';
+    const label = nearest.boardMs > 0 ? 'Boarding her...' : canBoard(s, nearest) ? 'Crippled: sail alongside to board' : 'Crippled, but too few sailors to board her';
     this.boardLabel.setText(label).setPosition(at.x, at.y - radiusOf(nearest) - 36).setVisible(true);
   }
 
@@ -386,13 +440,14 @@ export class GameScene extends Phaser.Scene {
     if (sailing && this.clock - this.lastWake >= WAKE_EVERY_MS) {
       this.lastWake = this.clock;
       for (const ship of [s.player, ...s.enemies, ...s.escorts]) {
-        const back = SHIP_LOOKS[ship.kind].length * 0.45;
+        const look = lookOf(ship, s.hull);
+        const back = look.length * 0.45;
         this.wakes.push({
           x: ship.x - Math.cos(ship.heading) * back,
           y: ship.y - Math.sin(ship.heading) * back,
           heading: ship.heading,
           ms: WAKE_MS,
-          size: SHIP_LOOKS[ship.kind].beam * 0.3,
+          size: look.beam * 0.3,
         });
       }
     }
@@ -655,6 +710,7 @@ export class GameScene extends Phaser.Scene {
     const s = this.state;
     if (s.phase !== 'fighting' && s.phase !== 'break') return;
     const p = { ...s.player, ...this.view };
+    const ARC = stats(s).arc;
     const at = (a: number, r: number) => ({ x: p.x + Math.cos(a) * r, y: p.y + Math.sin(a) * r });
     for (const side of SIDES) {
       const out = p.heading + (side === 'starboard' ? Math.PI / 2 : -Math.PI / 2);
@@ -731,7 +787,13 @@ export class GameScene extends Phaser.Scene {
     text(128, 20, 15, '#2b2118', 'bold italic').setOrigin(0, 0.5).setText('Hull');
     this.hullText = text(268, 16, 11, '#2b2118', 'bold').setOrigin(0.5).setStroke('#f6ecd2', 3);
     this.goldText = text(414, 21, 17, '#6a4410', 'bold').setOrigin(0, 0.5);
+    this.crewText = text(528, 21, 14, '#2b2118', 'bold italic').setOrigin(0, 0.5);
     this.infoText = text(VIEW.w - 20, 21, 15, '#2b2118', 'bold italic').setOrigin(1, 0.5);
+    this.bountyText = this.add
+      .text(BOUNTY.x, BOUNTY.y, '', textStyle(12, '#2b2118', 'bold italic', '#f0e2c0', 4))
+      .setOrigin(0, 0.5)
+      .setDepth(UI_DEPTH - 5)
+      .setScrollFactor(0);
     this.bannerTitle = this.add
       .text(VIEW.w / 2, 168, '', textStyle(44, '#2b2118', 'bold', '#f0e2c0', 7))
       .setOrigin(0.5)
@@ -788,16 +850,32 @@ export class GameScene extends Phaser.Scene {
       g.lineStyle(0.6, INK).strokeRect(x, 26, w, 5);
     }
     this.goldText.setText(`Gold ${s.gold}`);
+    const short = s.player.crew < s.player.maxCrew;
+    this.crewText.setText(`Crew ${s.player.crew}/${s.player.maxCrew}`).setColor(short ? '#9a4a30' : '#2b2118');
     this.infoText.setText(`Ships left ${s.toSpawn.length + s.enemies.length}   ❦   Sunk ${s.sunk}   ❦   Best wave ${s.bestWave}`);
 
     const breaking = s.phase === 'break';
     const fade = breaking ? Math.min(1, s.breakMs / 500) : 0;
-    this.bannerTitle.setVisible(breaking).setText(`Wave ${s.wave}`).setAlpha(fade);
+    this.bannerTitle.setVisible(breaking).setText(s.wave === HAVEN_WAVE ? 'The pirate haven' : `Wave ${s.wave}`).setAlpha(fade);
     const flagship = s.toSpawn.includes('flagship') || s.enemies.some((e) => e.kind === 'flagship');
-    this.bannerSub.setVisible(breaking).setAlpha(fade).setText(flagship ? 'The enemy flagship is sighted!' : 'Enemy sails sighted!');
+    const sub =
+      s.wave === HAVEN_WAVE ? "Three shore forts and the admiral's flagship: sink her to win!"
+      : s.forts.length ? `${s.forts.length === 1 ? 'A shore fort guards' : `${s.forts.length} shore forts guard`} these waters: razed, each pays ${fortBounty(s.wave)} gold`
+      : flagship ? 'The enemy flagship is sighted!'
+      : 'Enemy sails sighted!';
+    this.bannerSub.setVisible(breaking).setAlpha(fade).setText(sub);
 
     const sailing = s.phase === 'break' || s.phase === 'fighting';
     this.orderCard.setVisible(sailing);
+    // The Admiralty's bounty under the order card, and whether it still stands.
+    this.bountyText.setVisible(sailing && !!s.bounty);
+    if (s.bounty) {
+      const bounty = BOUNTIES[s.bounty];
+      const met = bountyMet(s);
+      const standing = bounty.kind === 'keep' ? (met ? 'still standing' : 'lost') : met ? 'done' : 'not yet';
+      const pay = s.waveLoot ? `+${bountyPay(s)} gold so far` : 'half the wave\'s loot';
+      this.bountyText.setText(`Bounty: ${bounty.desc(s)}  ❦  ${standing}  ❦  pays ${pay}`).setColor(met ? '#2f5a3a' : '#9a4a30');
+    }
     const order = ORDERS[s.order];
     this.orderSeal.setTexture(`seal-${s.order}`);
     this.orderHead.setText(`Captain's order, wave ${s.wave}`);
@@ -864,6 +942,7 @@ export class GameScene extends Phaser.Scene {
       g.lineStyle(1, INK, 1).strokePoints(pts as Phaser.Math.Vector2[], true);
     };
     for (const e of this.state.enemies) mark(e, RUST);
+    for (const f of this.state.forts) mark(f, RUST);
     for (const e of this.state.escorts) mark(e, GREEN);
     for (const l of this.state.loot) mark(l, OCHRE);
   }
@@ -923,7 +1002,7 @@ export class GameScene extends Phaser.Scene {
       const loaded = s.player.reload[side] <= 0;
       const caption = !aiming ? 'Hold to fire' : !loaded ? 'Loading...' : (charge ?? 0) >= 1 ? 'Let go!' : `Charge ${Math.round((charge ?? 0) * 100)}%`;
       this.fireCaptions[side].setVisible(sailing).setText(caption);
-      this.shotTexts[side].setVisible(sailing).setText(SHOTS[loadedShot(s, side)].name);
+      this.shotTexts[side].setVisible(sailing).setText(HULLS[s.hull].mortarSide === side ? 'Mortar' : SHOTS[loadedShot(s, side)].name);
       if (!sailing) continue;
       const { x, y } = FIRE[side];
       const R = FIRE.r + 6;
@@ -971,31 +1050,49 @@ export class GameScene extends Phaser.Scene {
     const top = OVER.y - OVER.h / 2;
     const dim = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x3a2a18, 0.5).setInteractive();
     const panel = this.add.image(OVER.x, OVER.y, 'panel-over').setScale(1 / SHEET_RES);
-    const title = this.add.text(OVER.x, top + 34, 'Sunk!', textStyle(32, '#2b2118', 'bold')).setOrigin(0.5);
+    this.gameOverTitle = this.add.text(OVER.x, top + 30, 'Sunk!', textStyle(30, '#2b2118', 'bold')).setOrigin(0.5);
     this.gameOverText = this.add
-      .text(OVER.x, top + 96, '', { ...textStyle(15, '#3a2c20', 'italic'), align: 'center', lineSpacing: 5 })
+      .text(OVER.x, top + 76, '', { ...textStyle(14, '#3a2c20', 'italic'), align: 'center', lineSpacing: 2 })
       .setOrigin(0.5);
     this.medalText = this.add
-      .text(OVER.x, top + 160, '', { ...textStyle(14, '#6a4410', 'bold italic'), align: 'center', lineSpacing: 3 })
+      .text(OVER.x, top + 124, '', { ...textStyle(13, '#6a4410', 'bold italic'), align: 'center', lineSpacing: 1 })
       .setOrigin(0.5);
-    const parts: Phaser.GameObjects.GameObject[] = [dim, panel, title, this.gameOverText, this.medalText];
+    const shipLabel = this.add.text(OVER.x, OVER.shipY - 29, 'Your ship for the next run (unlocked by the best wave beaten):', textStyle(12, '#5a4a38', 'italic')).setOrigin(0.5);
+    const parts: Phaser.GameObjects.GameObject[] = [dim, panel, this.gameOverTitle, this.gameOverText, this.medalText, shipLabel];
+    HULL_IDS.forEach((id, i) => {
+      const x = OVER.x + (i - (HULL_IDS.length - 1) / 2) * (OVER.shipW + 10);
+      const y = OVER.shipY;
+      const bg = this.add.rectangle(x, y, OVER.shipW, 36, CREAM, 0.9).setStrokeStyle(1.5, INK);
+      bg.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+        if (unlocked(id, this.state.bestWave)) this.nextHull = id;
+      });
+      const name = this.add.text(x, y - 8, HULLS[id].name, textStyle(14, '#2b2118', 'bold')).setOrigin(0.5);
+      const desc = this.add.text(x, y + 9, '', textStyle(10, '#5a4a38', 'italic')).setOrigin(0.5);
+      this.shipRows.push({ id, bg, name, desc });
+      parts.push(bg, name, desc);
+    });
     BOON_IDS.forEach((id, i) => {
       const y = OVER.firstRowY + i * OVER.rowGap;
       const left = OVER.x - OVER.rowW / 2;
       const boon = BOONS[id];
       const bg = this.add.rectangle(OVER.x, y, OVER.rowW, OVER.rowH, CREAM, 0.9).setStrokeStyle(1.5, INK);
       bg.setInteractive({ useHandCursor: true }).on('pointerdown', () => this.toggleBoon(id));
-      const name = this.add.text(left + 12, y, boon.name, textStyle(15, '#2b2118', 'bold')).setOrigin(0, 0.5);
+      const name = this.add.text(left + 12, y, boon.name, textStyle(14, '#2b2118', 'bold')).setOrigin(0, 0.5);
       const desc = this.add.text(left + 200, y, boon.desc, textStyle(12, '#5a4a38', 'italic')).setOrigin(0, 0.5);
-      const cost = this.add.text(left + OVER.rowW - 12, y, '', textStyle(14, '#6a4410', 'bold italic')).setOrigin(1, 0.5);
+      const cost = this.add.text(left + OVER.rowW - 12, y, '', textStyle(13, '#6a4410', 'bold italic')).setOrigin(1, 0.5);
       this.boonRows.push({ id, bg, cost });
       parts.push(bg, name, desc, cost);
     });
-    const again = makeButton(this, OVER.x, top + OVER.h - 34, 'Sail again', () => {
+    const again = makeButton(this, OVER.x, top + OVER.h - 32, 'Sail again', () => {
       saveMedals(this.medalBank - costOfBoons(this.commission));
-      this.scene.restart({ boons: this.commission });
+      saveHull(this.nextHull);
+      this.scene.restart({ boons: this.commission, hull: this.nextHull });
     });
-    parts.push(again.button);
+    this.againButton = again.button;
+    // After razing the haven, the run can go on through the waves beyond instead.
+    const on = makeButton(this, OVER.x - 110, top + OVER.h - 32, 'Sail on', () => sailOn(this.state));
+    this.sailOnButton = on.button;
+    parts.push(again.button, on.button);
     this.gameOver = pinToScreen(this.add.container(0, 0, parts))
       .setDepth(UI_DEPTH + 20)
       .setVisible(false);
@@ -1009,13 +1106,25 @@ export class GameScene extends Phaser.Scene {
 
   private drawGameOver() {
     const s = this.state;
+    const won = s.phase === 'won';
+    this.gameOverTitle.setText(won ? 'The haven is razed!' : 'Sunk!');
     this.gameOverText.setText(
-      `Your ship went down on wave ${s.wave}.\n${s.sunk} ships sunk, ${s.taken} taken as prizes and ${s.plundered} gold plundered.\nBest wave beaten: ${s.bestWave}.`,
+      won
+        ? `The admiral's flagship went down on wave ${s.wave}: the campaign is won.\n${s.sunk} ships sunk, ${s.taken} taken as prizes and ${s.plundered} gold plundered.\nSail on through the waves beyond, or sail again from wave 1.`
+        : `Your ship went down on wave ${s.wave}.\n${s.sunk} ships sunk, ${s.taken} taken as prizes and ${s.plundered} gold plundered.\nBest wave beaten: ${s.bestWave}.`,
     );
+    this.sailOnButton.setVisible(won);
+    this.againButton.setX(won ? OVER.x + 110 : OVER.x);
     const left = this.medalBank - costOfBoons(this.commission);
     this.medalText.setText(
-      `The Admiralty awards you ${s.medals} medal${s.medals === 1 ? '' : 's'} (${left} to spend).\nChoose starting upgrades for your next run:`,
+      `The Admiralty awards you ${s.medals} medal${s.medals === 1 ? '' : 's'} (${left} to spend).\nChoose a ship and starting upgrades for your next run:`,
     );
+    for (const row of this.shipRows) {
+      const open = unlocked(row.id, s.bestWave);
+      const chosen = this.nextHull === row.id;
+      row.desc.setText(open ? HULLS[row.id].desc : `Beat wave ${HULLS[row.id].unlockWave} to unlock`);
+      row.bg.setFillStyle(chosen ? 0xebd29a : CREAM, 0.95).setStrokeStyle(chosen ? 2.5 : 1.5, INK).setAlpha(open ? 1 : 0.5);
+    }
     for (const row of this.boonRows) {
       const chosen = this.commission.includes(row.id);
       const cost = BOONS[row.id].cost;
