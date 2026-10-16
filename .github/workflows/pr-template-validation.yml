@@ -22,6 +22,11 @@ jobs:
               ...context.repo,
               pull_number: context.payload.pull_request.number
             });
+            // Dependabot writes its own description, without the template.
+            if (pr.user.login === 'dependabot[bot]') {
+              console.log('Dependabot PR, template not checked.');
+              return;
+            }
             const body = pr.body || '';
             const requiredSections = [
               '## Summary',

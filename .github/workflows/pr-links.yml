@@ -37,6 +37,19 @@ jobs:
             // check the title and description it started with.
             const pull_number = (context.payload.pull_request || context.payload.issue).number;
             const { data: pr } = await github.rest.pulls.get({ ...context.repo, pull_number });
+            // Dependabot's descriptions and commits quote release notes from other
+            // sites, so its PRs are not checked.
+            if (pr.user.login === 'dependabot[bot]') {
+              await github.rest.repos.createCommitStatus({
+                ...context.repo,
+                sha: pr.head.sha,
+                context: 'PR Links',
+                state: 'success',
+                description: 'Not checked on Dependabot PRs'
+              });
+              console.log('Dependabot PR, links not checked.');
+              return;
+            }
             const body = pr.body || '';
             // What GitHub turns into a link: a URL with a scheme, or one starting with www.
             const link = /\b(?:[a-z][a-z0-9+.-]*:\/\/|www\.)[^\s<>()[\]"'`]+/gi;
