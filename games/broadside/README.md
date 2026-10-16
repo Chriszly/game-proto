@@ -11,9 +11,13 @@ lights up and a charge fills along the arc's rim, and letting go fires the broad
 harder the longer you held it. Each wave comes with one captain's order, a bonus for that wave,
 and its own wind. Sunk ships leave a barrel of plunder floating where they went down; sail over it
 to haul it aboard, or sail alongside a crippled ship to board her and take her as a prize. Once a
-wave is beaten the ship puts into harbor, where the gold buys a stronger hull, heavier shot, more
-guns, a faster crew and faster sails, and each side's guns are loaded with the shot you choose.
-When your ship goes down, the Admiralty awards medals that buy a head start for the next run.
+wave is beaten the ship puts into harbor, where a prize draft offers three perks to keep one of,
+and the gold buys a stronger hull, heavier shot, more guns, a faster crew, faster sails and more
+sailors, and each side's guns are loaded with the shot you choose. From wave 2 the Admiralty posts
+a bounty each wave, a side goal that pays half the wave's loot on top. From wave 6 some islands
+carry shore forts that shell you; wave 20 is the pirate haven, three forts and the admiral's
+flagship, and sinking her wins the campaign. When your ship goes down, the Admiralty awards
+medals that buy a head start for the next run, which can sail a different ship.
 
 ![Holding the starboard guns: the arc is washed in ochre and the charge fills its rim and the ring
 round the held button, while a brig steers round the island on a dotted course](docs/screenshots/hold-to-aim.png)
@@ -26,11 +30,13 @@ round the held button, while a brig steers round the island on a dotted course](
 | Hold the **Starboard** wheel (bottom right), Right arrow or D | Turn to the right |
 | Hold **Port guns** (above the left wheel) or Q, then let go | Aim, charge and fire the port broadside |
 | Hold **Starboard** guns (above the right wheel) or E, then let go | Aim, charge and fire the starboard broadside |
-| Tap a row at the harbor | Buy that upgrade, or patch the hull |
+| Tap a card of the prize draft (as the harbor opens) | Keep that perk for the rest of the run |
+| Tap a row at the harbor | Buy that upgrade, patch the hull or hire sailors |
 | Tap **Port** or **Starboard** under the harbor's ledger | Load that side with the next kind of shot |
 | Set sail | Leave the harbor for the next wave |
-| Tap **Scuttle the prize** (under the order card) | Sink your newest prize for twice its loot |
-| Tap a row on the "Sunk!" panel, then **Sail again** | Spend the Admiralty's medals on a starting upgrade |
+| Tap **Scuttle the prize** (under the bounty) | Sink your newest prize for twice its loot |
+| Tap a ship and rows on the "Sunk!" panel, then **Sail again** | Choose the ship for the next run and spend the Admiralty's medals on starting upgrades |
+| **Sail on** (once the haven is razed) | Keep the run going through the waves beyond |
 
 On a phone, one thumb can hold a wheel while the other holds a fire control.
 
@@ -87,9 +93,10 @@ On a phone, one thumb can hold a wheel while the other holds a fire control.
 7. **Loot**: every sunk ship leaves a barrel of gold that drifts toward your ship once close. It
    sinks after 25 seconds, blinking at the end; ochre arrows point to barrels out of sight. Once
    the last ship of a wave goes down, the crew hauls in every barrel still afloat.
-8. **The harbor** opens as soon as the last enemy ship of the wave is sunk. The crew patches a
-   quarter of the hull for free; the rest is 10 gold. Under the ledger, tap a side to load its
-   guns with the next kind of shot (round, chain, grape); loading is free and lasts until changed.
+8. **The harbor** opens as soon as the last enemy ship of the wave is sunk, with the prize draft
+   first (below). The crew patches a quarter of the hull for free; the rest is 10 gold, and 12
+   gold hires 8 sailors. Under the ledger, tap a side to load its guns with the next kind of shot
+   (round, chain, grape); loading is free and lasts until changed.
 9. **The sea has no edge.** Like on a globe, sailing off the top brings you back in at the
    bottom, and off the left side back in on the right. Enemy ships, loot and cannonballs cross
    over the same way, and the arrows point the shortest way round.
@@ -98,9 +105,9 @@ On a phone, one thumb can hold a wheel while the other holds a fire control.
 11. **The run is over when your hull is sunk**. "Sail again" starts afresh at wave 1. The best wave
    beaten is kept in the browser.
 12. **Admiralty rewards.** At the end of a run the Admiralty awards one medal per wave beaten, and
-   2 more for beating your best wave. Medals are kept in the browser between runs. On the "Sunk!"
-   panel, tap starting upgrades to choose them for the next run (tap again to put one back); the
-   medals are spent when you sail again.
+   2 more for beating your best wave (and 5 more for razing the haven). Medals are kept in the
+   browser between runs. On the "Sunk!" panel, tap starting upgrades to choose them for the next
+   run (tap again to put one back); the medals are spent when you sail again.
 
    | Reward | Medals | Next run starts with |
    | --- | --- | --- |
@@ -109,6 +116,80 @@ On a phone, one thumb can hold a wheel while the other holds a fire control.
    | Picked gun crews | 3 | Heavy Shot 1 |
    | New canvas | 3 | Fast Sails 1 |
    | An extra pair of guns | 5 | More Guns 1 |
+
+13. **The prize draft.** As each harbor opens, three cards offer perks; tap one to keep it for the
+   rest of the run, at no cost, and the ledger opens. The first wave always offers Salvage,
+   Bouncing shot and A mortar of your own; later drafts draw from the perks not yet taken, so
+   every run builds differently.
+
+   | Perk | What it does |
+   | --- | --- |
+   | Salvage | Every ship sunk patches 6 hull |
+   | Bouncing shot | A ball of yours that would splash skips once across the water and flies half as far again |
+   | A mortar of your own | Every 6 seconds a shell is lobbed at the nearest enemy within 360, bursting for 22 |
+   | Prize gun crews | Your prizes reload twice as fast |
+   | Grapnels | Boarding takes half the time and a prize needs half the crew |
+   | Swivel guns | Broadsides train half as wide again either side (48 degrees instead of 32) |
+   | Carronades | Shot at a ship inside half your reach hits 50% harder |
+
+14. **Admiralty bounties.** From wave 2, a line under the order card names one side goal for the
+   wave and whether it still stands. Met when the wave is beaten, it pays half the loot gathered
+   that wave on top (prizes sold and forts razed count), shown on the harbor's ledger.
+
+   | Bounty | Met when |
+   | --- | --- |
+   | Lose no more than 20 hull | The hull lost this wave (before any patching) stays at 20 or under |
+   | Never run aground | Your ship touches no beach this wave |
+   | Beat the wave within N seconds | The last ship sinks within 30 seconds plus 8 a ship |
+   | Board a ship and take her as a prize | A prize is taken this wave |
+   | Sink the mortar ketch before any brig | Only on waves with both; a ketch goes down before the first brig does |
+
+15. **Crew.** Your ship carries sailors (40 on the Frigate), shown at the top; with fewer than a
+   full crew every reload is slower in the same share, down to a third of the pace. Grapeshot
+   kills a sailor per pellet that hits, and a blast (a shell or a fireship) kills 3 on every ship
+   it hurts; round and chain shot never kill crew. Brigs, galleons and flagships load grapeshot
+   within about 130 of their target, so close alongside them the deck gets raked. A prize takes
+   half her full crew across from yours (a quarter with Grapnels), which slows your own reloads
+   while you keep her: you can't board without 4 sailors left aboard after that, scuttling her or
+   selling her at the harbor brings them back, and losing her loses them. The harbor hires 8
+   sailors for 12 gold. Enemy crews suffer the same way under your grapeshot.
+16. **Shore forts.** From wave 6 an island carries a fort (two from wave 12), a stone star that
+   shells your ship like a mortar ketch whenever you are within 340 (16 damage every 5 seconds, a
+   rust ring marking the spot). Your shot and shells batter it; razed, it pays 50 gold plus 5 a
+   wave straight into the hold. Forts are optional: the wave is beaten once its ships are sunk.
+17. **The pirate haven.** Wave 20 brings three forts and the admiral's flagship, the biggest ship
+   afloat (five guns a side, 300 gold). Sinking her wins the campaign: the end card awards the
+   medals and offers **Sail on**, which puts into harbor and carries the run on through the waves
+   beyond (the forts and flagships keep coming), or **Sail again** from wave 1.
+18. **Choose your ship.** The "Sunk!" panel picks the ship for the next run; the first run always
+   sails the Frigate, and the choice is kept in the browser. Each has its own crew, and a hull
+   upgrade adds 30 to any of them.
+
+   | Ship | Unlocked by | Hull | Guns a side | Speed | What else |
+   | --- | --- | --- | --- | --- | --- |
+   | Frigate | the start | 120 | 2 (10 damage, 2 s reload, range 260) | 90 | 40 sailors |
+   | Cutter | best wave 3 | 90 | 1 heavy gun (14 damage, 1.5 s reload, range 240) | 114, turns faster | 24 sailors |
+   | Bomb Ketch | best wave 6 | 150 | 2 to port (10 damage, 2.2 s, range 250); a mortar to starboard | 70, turns slowly | 36 sailors; holding the starboard control aims a shell that lands where the arc reaches two seconds later, bursting for 26 (more when charged) |
+
+![The prize draft as the harbor opens: three perks, one to keep](docs/screenshots/prize-draft.png)
+
+![The Admiralty's bounty under the order card, and a crew short of hands](docs/screenshots/bounty.png)
+
+![A shore fort on Isla de las Palmas under fire](docs/screenshots/shore-fort.png)
+
+![A brig alongside raking the deck with grapeshot: the crew drops from 40 to 34](docs/screenshots/crew-grape.png)
+
+![The Bomb Ketch's mortar shell marked where it will land](docs/screenshots/bomb-ketch.png)
+
+![Choosing the ship for the next run on the "Sunk!" panel](docs/screenshots/choose-ship.png)
+
+![Wave 20, the pirate haven](docs/screenshots/haven-banner.png)
+
+![The admiral's flagship](docs/screenshots/haven.png)
+
+![The haven razed: the campaign won, with Sail on](docs/screenshots/haven-won.png)
+
+![The harbor's ledger with the sailors to hire and a Bomb Ketch's mortar side](docs/screenshots/harbor-hire.png)
 
 ![The captain's order for the wave: grapeshot, fired in fans of small clusters](docs/screenshots/captains-order.png)
 
@@ -148,13 +229,14 @@ astern came over the edge after the ship](docs/screenshots/wrap-around.png)
 | Ship | From | What it does |
 | --- | --- | --- |
 | Sloop | wave 1 | Small and quick, one gun a side, 10 gold |
-| Brig | wave 3 | Two guns a side and twice the timber, 25 gold |
-| Galleon | wave 5 | Slow, three guns a side and very tough, 60 gold |
+| Brig | wave 3 | Two guns a side and twice the timber, 25 gold; loads grapeshot up close |
+| Galleon | wave 5 | Slow, three guns a side and very tough, 60 gold; loads grapeshot up close |
 | Fireship | wave 3 | No guns, faster than you; sails straight at you and blows up alongside (26 damage to every ship near), and blows up too when sunk. Rammed, it leaves no loot. 12 gold |
 | Mortar ketch | wave 4 | Keeps its distance and lobs a shell every few seconds; a rust ring marks where it will land, two seconds later, where you'd be holding your course. 20 damage to any ship under it. 30 gold |
-| Flagship | every fifth wave | Comes last, four guns a side and the toughest hull, its hull bar always shown, 150 gold |
+| Flagship | every fifth wave | Comes last, four guns a side and the toughest hull, its hull bar always shown, 150 gold; loads grapeshot up close |
+| Admiral's flagship | wave 20 | The haven's last ship: five guns a side, 440 hull, 300 gold. Sinking her wins the campaign |
 
-Every wave brings one more sloop than the last, and enemy hulls get 12% tougher each wave.
+Every wave brings one more sloop than the last, and enemy hulls (and forts) get 12% tougher each wave.
 
 ### Upgrades
 
@@ -166,9 +248,12 @@ Every wave brings one more sloop than the last, and enemy hulls get 12% tougher 
 | Drilled Crew | 4 | Reload 15% faster |
 | Fast Sails | 3 | Sail and turn 12% faster |
 
-![The harbor between waves](docs/screenshots/playthrough-3-harbor.png)
+Below them, "Patch the hull" repairs the ship for 10 gold and "Hire sailors" brings 8 aboard for
+12 gold, up to a full crew.
 
-The difficulty, set on the hub page's Settings, changes one thing: enemy ships have 25% less health on Easy and 30% more on Hard.
+![The harbor between waves](docs/screenshots/playthrough-4-harbor.png)
+
+The difficulty, set on the hub page's Settings, changes one thing: enemy ships and forts have 25% less health on Easy and 30% more on Hard.
 
 ## Running locally
 
@@ -184,8 +269,9 @@ round shot. Then it steers by the wheels to close on each sloop and turn
 side-on, holds that side's fire control (checking that the broadside charges without firing),
 lets go once the charge reaches the sloop, and checks that chain shot flew and that the sloop it
 hit is slowed. It fights on the same way until both sloops are sunk, checks the gold from the loot
-(sailed over, or hauled in when the wave ends), waits for the harbor, buys Heavy Shot with the
-plunder, loads the starboard guns with chain shot and sets sail for wave 2. Like the other games' tests it owns the game clock and plays at
+(sailed over, or hauled in when the wave ends), waits for the harbor, keeps the first card of
+the prize draft (Salvage), buys Heavy Shot with the plunder, loads the starboard guns with chain
+shot and sets sail for wave 2. Like the other games' tests it owns the game clock and plays at
 4x speed (`PLAYTHROUGH_SPEED`). The **Playthrough Broadside** workflow
 (`.github/workflows/playthrough.yml`) runs it on every pull request that changes
 `games/broadside/` or the workflow itself, and uploads the video and screenshots as the
@@ -200,12 +286,14 @@ npx playwright test --project broadside
 All paths are inside `games/broadside/`.
 
 - `src/game/`: the rules in plain TypeScript with no Phaser dependency. `ships.ts`,
-  `upgrades.ts`, `orders.ts` (the captain's orders), `shot.ts` (the kinds of shot) and
-  `admiralty.ts` (the medals' rewards) are data tables, `waves.ts` says what each
-  wave brings, `state.ts` holds the run and works out the player's ship from the upgrades bought
-  and the wave's order, `sim.ts` sails the ships (enemy captains plan their way round islands),
-  charges and fires the broadsides, boards prizes and runs the harbor, and `save.ts` keeps the
-  best wave and the medals.
+  `upgrades.ts`, `orders.ts` (the captain's orders), `shot.ts` (the kinds of shot),
+  `admiralty.ts` (the medals' rewards), `hulls.ts` (the player's ships), `perks.ts` (the prize
+  draft) and `bounties.ts` (the Admiralty's bounties) are data tables, `waves.ts` says what each
+  wave brings (and which carry forts, and the haven), `state.ts` holds the run and works out the
+  player's ship from its hull, the upgrades bought, the perks and the wave's order, `sim.ts`
+  sails the ships (enemy captains plan their way round islands), charges and fires the
+  broadsides, shells from forts and mortars, boards prizes, keeps the crew and runs the harbor,
+  and `save.ts` keeps the best wave, the medals and the ship chosen.
 - `src/scenes/`: `BootScene` paints the textures, `GameScene` draws the chart, follows the ship
   with the camera across the wrapping sea and wires the helm wheels, fire controls and keys to the
   rules, `layout.ts` says where things are drawn.
@@ -216,4 +304,7 @@ All paths are inside `games/broadside/`.
 Adding an upgrade is an entry in `src/game/upgrades.ts` and its effect in `stats` in
 `src/game/state.ts`; adding a captain's order is an entry in `src/game/orders.ts` (plus a seal
 emblem in `bakeSeal` in `src/art/art.ts`); adding an enemy ship is an entry in
-`src/game/ships.ts`, a look in `src/art/art.ts` and a place in `src/game/waves.ts`.
+`src/game/ships.ts`, a look in `src/art/art.ts` and a place in `src/game/waves.ts`; adding a
+perk is an entry in `src/game/perks.ts` and its rule in `src/game/sim.ts`; adding a bounty is an
+entry in `src/game/bounties.ts`; adding a ship for the player is an entry in `src/game/hulls.ts`
+and a look in `src/art/art.ts`.

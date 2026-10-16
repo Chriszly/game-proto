@@ -1,5 +1,5 @@
 import { KINDS, kindOf, type IsleKind, type KindInfo } from './kinds';
-import { GRID, inGrid, indexOf, neighbours, type Find, type Point, type Riddle, type Tile } from './state';
+import { FEATURE_BONUS, GRID, WOOD_MIN, inGrid, indexOf, neighbours, type Feature, type Find, type Point, type Riddle, type Tile } from './state';
 import type { Terrain } from './terrain';
 
 /** How many of each find an isle hides, and the tiles each can hide under. */
@@ -14,6 +14,7 @@ export interface Island {
   tiles: Tile[];
   port: Point;
   riddle: Riddle | null;
+  features: Feature[];
 }
 
 /**
@@ -108,7 +109,52 @@ function tryIsland(number: number, kind: IsleKind, k: KindInfo): Island | null {
     }
   }
 
-  return { kind, tiles, port: { x: port.x, y: port.y }, riddle: makeRiddle(tiles, port) };
+  return { kind, tiles, port: { x: port.x, y: port.y }, riddle: makeRiddle(tiles, port), features: findFeatures(terrain, number) };
+}
+
+// ---- Features: the rivers, roads and woods that pay a bonus once charted whole.
+
+const RIVER_NAMES = ['Otter Brook', 'Heron Water', 'Mill Stream', 'Alder Burn', 'Kestrel Run', 'Fox Beck'];
+const ROAD_NAMES = ['Port Road', 'Old Road', "Drovers' Way", 'Salt Road'];
+export const WOOD_NAMES = ['Thornwood', 'Ashgrove', 'Elder Wood', 'Blackthorn', 'Hazel Holt', 'Rook Wood'];
+
+/**
+ * Finds the island's features in its terrain: each stretch of river, road or forest joined side to
+ * side (a wood needs `WOOD_MIN` tiles), named from the island number, in reading order. Each pays
+ * `FEATURE_BONUS` a tile once every tile of it is charted. Worked out from the tiles alone, so a save
+ * from before features can have them too.
+ */
+export function findFeatures(terrain: Terrain[], island: number): Feature[] {
+  const out: Feature[] = [];
+  const seen = new Set<number>();
+  const counts = { river: 0, road: 0, wood: 0 };
+  for (let y = 0; y < GRID.h; y++) {
+    for (let x = 0; x < GRID.w; x++) {
+      const t = terrain[indexOf(x, y)];
+      const kind = t === 'river' ? 'river' : t === 'road' ? 'road' : t === 'forest' ? 'wood' : null;
+      if (!kind || seen.has(indexOf(x, y))) continue;
+      const tiles: Point[] = [];
+      const queue: Point[] = [{ x, y }];
+      seen.add(indexOf(x, y));
+      while (queue.length > 0) {
+        const p = queue.pop()!;
+        tiles.push(p);
+        for (const n of neighbours(p.x, p.y)) {
+          const i = indexOf(n.x, n.y);
+          if (terrain[i] === t && !seen.has(i)) {
+            seen.add(i);
+            queue.push(n);
+          }
+        }
+      }
+      if (kind === 'wood' && tiles.length < WOOD_MIN) continue;
+      const names = kind === 'river' ? RIVER_NAMES : kind === 'road' ? ROAD_NAMES : WOOD_NAMES;
+      const name = names[(island * 2 + counts[kind]++) % names.length];
+      tiles.sort((a, b) => a.y - b.y || a.x - b.x);
+      out.push({ kind, name, tiles, bonus: FEATURE_BONUS * tiles.length });
+    }
+  }
+  return out;
 }
 
 /** Joins every islet to the biggest one with a straight-ish sandbar of land, nearest first. */

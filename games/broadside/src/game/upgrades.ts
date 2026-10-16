@@ -28,3 +28,6 @@ export function costOf(id: UpgradeId, rank: number) {
 
 /** Patching the hull back to full. */
 export const REPAIR_COST = 10;
+
+/** Hiring sailors at the harbor: how many come aboard for the price. */
+export const HIRE = { crew: 8, cost: 12 };
