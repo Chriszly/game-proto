@@ -12,7 +12,7 @@ const game = new Phaser.Game({
   parent: 'game',
   width: GAME_WIDTH,
   height: GAME_HEIGHT,
-  backgroundColor: '#f2e8d0',
+  backgroundColor: '#cfc09c',
   pixelArt: false,
   scale: {
     mode: Phaser.Scale.FIT,

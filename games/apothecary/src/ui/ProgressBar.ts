@@ -41,7 +41,7 @@ export class ProgressBar {
     if (filled === null) return;
     const left = this.x - this.width / 2;
     // A cream track inked round, filled with a wash of the bar's colour.
-    this.bar.fillStyle(0xfaf4e4, 0.95).fillRoundedRect(left, this.y, this.width, 6, 3);
+    this.bar.fillStyle(0xe6dcc4, 0.95).fillRoundedRect(left, this.y, this.width, 6, 3);
     const zone = this.zone;
     const zoneX = zone ? Math.round((this.width - 2) * zone.from) : Infinity;
     if (zone) this.bar.fillStyle(zone.color, 0.35).fillRect(left + 1 + zoneX, this.y + 1, this.width - 2 - zoneX, 4);

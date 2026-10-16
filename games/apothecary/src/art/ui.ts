@@ -7,15 +7,15 @@ import { both, ellPts, ink, paint, paper, pathOf, rectPts, sparkle, wash, type C
 
 /** Each kind of card's paper colour. */
 const CARD = {
-  bar: '#e9d8b0',
-  button: '#d9b47a',
-  contract: '#f7ecd2',
-  chip: '#e3d2f0',
-  town: '#e6efd2',
-  bubble: '#fffaf0',
-  sign: '#ecd3a0',
-  small: '#e2c48c',
-  panel: '#f4e6c6',
+  bar: '#c8b48a',
+  button: '#c09a5e',
+  contract: '#d8c8a2',
+  chip: '#c6b4d6',
+  town: '#c4d0aa',
+  bubble: '#e6dcc4',
+  sign: '#cfb27c',
+  small: '#c4a46c',
+  panel: '#d6c49c',
 } as const;
 export type CardKind = keyof typeof CARD;
 
@@ -84,7 +84,7 @@ export function signTexture(scene: Phaser.Scene, minWidth: number, small = false
 /** A hand slot: an inked square on pale paper. 32x32 as shown. */
 function drawSlot(c: Ctx) {
   c.save();
-  c.fillStyle = 'rgba(255,250,236,0.75)';
+  c.fillStyle = 'rgba(230,220,196,0.75)';
   pathOf(c, rectPts(2, 2, 28, 28, 4));
   c.fill();
   c.restore();

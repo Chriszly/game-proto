@@ -5,8 +5,8 @@ import { INK, WASH, both, ellPts, hatch, ink, paint, rectPts, reseed, rr, shadow
 // kept to the size the layout expects, since each station's lower part is its collision box.
 
 /** The refining table's board and the pallets' deck: light, fresh wood that reads on dark earth. */
-const TABLE_TOP = '#f0cc8e';
-const PALLET_DECK = '#f2c98a';
+const TABLE_TOP = '#d4ac72';
+const PALLET_DECK = '#d2a86c';
 
 /** A plank-topped workbench with a mortar and pestle and a bundle of herbs. 88x52 as shown. */
 function drawTable(c: Ctx) {
