@@ -1,24 +1,34 @@
 // The garden's state and the rules that change it. No Phaser: the scene calls these on taps and
 // calls `tick` every frame with the game time that passed.
-import { GARDENS, cellAt, cellCentre, pathPoint, type Garden } from './board';
+import { GARDENS, cellAt, cellCentre, pathPoint, routeDist, type Garden } from './board';
 import {
   BLOOM_GOAL,
+  CHEW_PER_BITE,
   COMBO,
+  COMPOST,
   EARLY_BONUS,
+  FORM_INFO,
   GOLEM_INFO,
+  HARVEST_WAVE,
+  HEDGE,
   MAX_LEVEL,
   MOVE_FEE,
   PEST_INFO,
   SLIME,
   START,
+  TARGETS,
   UPGRADE_COST,
   UPROOT_REFUND,
   golemStats,
+  harvestStars,
   waveBonus,
   waveFor,
+  type FormKind,
   type GolemKind,
   type PestKind,
+  type SeedKind,
   type Spawn,
+  type Target,
 } from './data';
 
 export interface Golem {
@@ -33,6 +43,21 @@ export interface Golem {
   cooldownMs: number;
   /** Sap spent on it, its seed and its levels; uprooting gives back UPROOT_REFUND of it. */
   spent: number;
+  /** The form it took at level MAX_LEVEL, or null below it. */
+  form: FormKind | null;
+  /** Which pest within reach it throws at. */
+  target: Target;
+}
+
+/** A hedge on a path cell: pests stop at it and chew until it is gone. */
+export interface Hedge {
+  id: number;
+  col: number;
+  row: number;
+  hp: number;
+  maxHp: number;
+  /** Where on each of the garden's routes pests halt at it, in pixels, or null for a route that misses it. */
+  stops: (number | null)[];
 }
 
 export interface Pest {
@@ -51,6 +76,8 @@ export interface Pest {
   slowFactor: number;
   /** Time left on its hit flash, in ms. */
   hitMs: number;
+  /** Chewing on a hedge in its way. */
+  chewing: boolean;
 }
 
 /** A thrown stone, moss clump or thorn in flight, drawn by the scene; its damage lands when thrown. */
@@ -85,9 +112,10 @@ export interface GameState {
   phase: 'build' | 'wave' | 'over';
   heart: number;
   sap: number;
-  /** The seed the next tap on soil plants. */
-  selected: GolemKind;
+  /** The seed the next tap on soil (or, for a hedge, on the path) plants. */
+  selected: SeedKind;
   golems: Golem[];
+  hedges: Hedge[];
   pests: Pest[];
   /** Pests of the current wave still to come in. */
   queue: Spawn[];
@@ -108,17 +136,25 @@ export interface GameState {
   pops: Pop[];
   /** The most waves cleared in any garden, this one included. */
   best: number;
+  /** Compost paid when the last wave ended: COMPOST.rate of the sap unspent then, up to COMPOST.cap. */
+  compost: number;
+  /** Each garden's harvest stars (0 to 3), in GARDENS order; this garden's rises at its harvest. */
+  stars: number[];
+  /** The stars this garden's harvest earned at wave HARVEST_WAVE, or 0 before it. */
+  harvest: number;
   nextId: number;
 }
 
 /** The rules run in steps of at most this many ms, so a long frame plays like several short ones. */
 const STEP_MS = 16;
+/** How far before a hedge cell's centre pests halt to chew on it, in pixels. */
+const HEDGE_STOP = 30;
 /** How long a throw is in the air, in ms. */
 export const SHOT_MS = 160;
 /** How long a pest flashes after a hit, in ms. */
 const HIT_MS = 120;
 
-export function newGame(best: number, bloom = 0, garden = 0): GameState {
+export function newGame(best: number, bloom = 0, garden = 0, stars: number[] = []): GameState {
   return {
     garden: GARDENS[garden] ? garden : 0,
     wave: 1,
@@ -127,6 +163,7 @@ export function newGame(best: number, bloom = 0, garden = 0): GameState {
     sap: START.sap,
     selected: 'pebble',
     golems: [],
+    hedges: [],
     pests: [],
     queue: [],
     spawned: 0,
@@ -139,42 +176,62 @@ export function newGame(best: number, bloom = 0, garden = 0): GameState {
     bloom: Math.min(BLOOM_GOAL, bloom),
     pops: [],
     best,
+    compost: 0,
+    stars: GARDENS.map((_, i) => stars[i] ?? 0),
+    harvest: 0,
     nextId: 1,
   };
 }
 
 export const gardenOf = (s: GameState): Garden => GARDENS[s.garden];
 
-/** Whether this seed can be picked: the Thorn golem only once the Heartwood is in full bloom. */
-export const unlocked = (s: GameState, kind: GolemKind) => !GOLEM_INFO[kind].locked || s.bloom >= BLOOM_GOAL;
+/** Harvest stars earned over every garden; they unlock gardens (`Garden.unlockStars`). */
+export const totalStars = (s: GameState) => s.stars.reduce((a, b) => a + b, 0);
 
-export function select(s: GameState, kind: GolemKind) {
+/** Whether garden `n` can be planted: enough harvest stars have been earned. */
+export const gardenOpen = (s: GameState, n: number) => totalStars(s) >= GARDENS[n].unlockStars;
+
+/** Whether this seed can be picked: the Thorn golem only once the Heartwood is in full bloom. */
+export const unlocked = (s: GameState, kind: SeedKind) => kind === 'hedge' || !GOLEM_INFO[kind].locked || s.bloom >= BLOOM_GOAL;
+
+/** What a seed costs to plant. */
+export const seedCost = (kind: SeedKind) => (kind === 'hedge' ? HEDGE.cost : GOLEM_INFO[kind].cost);
+
+export function select(s: GameState, kind: SeedKind) {
   if (!unlocked(s, kind)) return false;
   s.selected = kind;
   return true;
 }
 
 export const golemAt = (s: GameState, col: number, row: number) => s.golems.find((g) => g.col === col && g.row === row);
+export const hedgeAt = (s: GameState, col: number, row: number) => s.hedges.find((h) => h.col === col && h.row === row);
 
 /** Whether (col, row) is soil with no golem on it. */
 export const freeSoil = (s: GameState, col: number, row: number) => gardenOf(s).map[row]?.[col] === 'soil' && !golemAt(s, col, row);
 
-/** Whether the selected seed can be planted at (col, row) now. */
+/** Whether (col, row) is a path cell (not the Heartwood's) with no hedge on it. */
+export const freePath = (s: GameState, col: number, row: number) => gardenOf(s).map[row]?.[col] === 'path' && !hedgeAt(s, col, row);
+
+/** Whether the selected seed can be planted at (col, row) now: a golem on free soil, a hedge on a free path cell. */
 export function canPlant(s: GameState, col: number, row: number) {
-  return (
-    s.phase !== 'over' &&
-    freeSoil(s, col, row) &&
-    unlocked(s, s.selected) &&
-    s.sap >= GOLEM_INFO[s.selected].cost
-  );
+  if (s.phase === 'over' || !unlocked(s, s.selected) || s.sap < seedCost(s.selected)) return false;
+  return s.selected === 'hedge' ? freePath(s, col, row) : freeSoil(s, col, row);
 }
 
-/** Plants the selected seed on an empty soil cell, if there is sap for it. */
+/** Plants the selected seed, if there is sap for it: a golem seed on empty soil, or a hedge on the path. */
 export function plant(s: GameState, col: number, row: number) {
   if (!canPlant(s, col, row)) return false;
+  s.sap -= seedCost(s.selected);
+  if (s.selected === 'hedge') {
+    const stops = gardenOf(s).routes.map((route) => {
+      const at = routeDist(route, col, row);
+      return at === null ? null : at - HEDGE_STOP;
+    });
+    s.hedges.push({ id: s.nextId++, col, row, hp: HEDGE.hp, maxHp: HEDGE.hp, stops });
+    return true;
+  }
   const info = GOLEM_INFO[s.selected];
-  s.sap -= info.cost;
-  s.golems.push({ id: s.nextId++, kind: s.selected, col, row, level: 1, growMs: info.growMs, cooldownMs: 0, spent: info.cost });
+  s.golems.push({ id: s.nextId++, kind: s.selected, col, row, level: 1, growMs: info.growMs, cooldownMs: 0, spent: info.cost, form: null, target: 'first' });
   return true;
 }
 
@@ -183,15 +240,38 @@ export function upgradeCost(g: Golem) {
   return g.growMs > 0 || g.level >= MAX_LEVEL ? null : UPGRADE_COST[g.level];
 }
 
-/** Raises a grown golem a level, if there is sap for it. */
-export function upgrade(s: GameState, g: Golem) {
+/** Whether raising this golem next makes it level MAX_LEVEL, which needs a form picked. */
+export const picksForm = (g: Golem) => g.level === MAX_LEVEL - 1;
+
+/**
+ * Raises a grown golem a level, if there is sap for it. The raise to MAX_LEVEL needs a `form` of
+ * its kind, which it then keeps.
+ */
+export function upgrade(s: GameState, g: Golem, form: FormKind | null = null) {
   const cost = upgradeCost(g);
   if (s.phase === 'over' || cost === null || s.sap < cost) return false;
+  if (picksForm(g)) {
+    if (!form || FORM_INFO[form].of !== g.kind) return false;
+    g.form = form;
+  }
   s.sap -= cost;
   g.spent += cost;
   g.level++;
   return true;
 }
+
+/** The stats this golem throws with now. */
+export const statsOf = (g: Golem) => golemStats(g.kind, g.level, g.form);
+
+/** Sets how a golem picks its target; a golem that hits everything in reach has no pick to make. */
+export function setTarget(s: GameState, g: Golem, target: Target) {
+  if (!s.golems.includes(g) || statsOf(g).area) return false;
+  g.target = target;
+  return true;
+}
+
+/** Steps a golem's targeting to the next mode, round and round. */
+export const nextTarget = (g: Golem): Target => TARGETS[(TARGETS.indexOf(g.target) + 1) % TARGETS.length];
 
 /** The sap uprooting this golem gives back. */
 export const uprootValue = (g: Golem) => Math.floor(g.spent * UPROOT_REFUND);
@@ -248,11 +328,19 @@ function beginWave(s: GameState) {
   s.waveMs = 0;
 }
 
-/** Counts wave `s.wave` as done: its bonus, a bud on the Heartwood and the best, and moves on. */
+/**
+ * Counts wave `s.wave` as done: its bonus, compost on the sap unspent (from COMPOST.fromWave), a bud
+ * on the Heartwood, the best, and at HARVEST_WAVE the garden's harvest stars, and moves on.
+ */
 function finishWave(s: GameState) {
-  s.sap += waveBonus(s.wave);
+  s.compost = s.wave >= COMPOST.fromWave ? Math.min(COMPOST.cap, Math.floor(s.sap * COMPOST.rate)) : 0;
+  s.sap += waveBonus(s.wave) + s.compost;
   s.bloom = Math.min(BLOOM_GOAL, s.bloom + 1);
   s.best = Math.max(s.best, s.wave);
+  if (s.wave === HARVEST_WAVE) {
+    s.harvest = harvestStars(s.heart);
+    s.stars[s.garden] = Math.max(s.stars[s.garden], s.harvest);
+  }
   s.wave++;
 }
 
@@ -287,6 +375,22 @@ function spreadSlime(s: GameState, col: number, row: number) {
   }
 }
 
+/**
+ * The pest a golem throws at, by its targeting: the one furthest along its route (as a share of
+ * it, since a forked garden's routes differ in length), the one with the most or the least health
+ * left, or a flying pest first (then the first).
+ */
+function pickTarget(inReach: Pest[], target: Target, routes: Garden['routes']) {
+  const first = (pests: Pest[]) => pests.reduce((a, b) => (b.dist / routes[b.route].length > a.dist / routes[a.route].length ? b : a));
+  if (target === 'strongest') return inReach.reduce((a, b) => (b.hp > a.hp ? b : a));
+  if (target === 'weakest') return inReach.reduce((a, b) => (b.hp < a.hp ? b : a));
+  if (target === 'flyers') {
+    const flyers = inReach.filter((p) => PEST_INFO[p.kind].flies);
+    return first(flyers.length ? flyers : inReach);
+  }
+  return first(inReach);
+}
+
 /** Plays `dt` ms of game time (twice as much with the speed button on: the scene passes it in). */
 export function tick(s: GameState, dt: number) {
   for (let left = dt; left > 0 && s.phase !== 'over'; left -= STEP_MS) step(s, Math.min(STEP_MS, left));
@@ -305,20 +409,33 @@ function step(s: GameState, dt: number) {
       const { kind } = s.queue.shift()!;
       const hp = Math.round(PEST_INFO[kind].hp * s.waveHpScale);
       const route = s.spawned++ % routes.length;
-      s.pests.push({ id: s.nextId++, kind, hp, maxHp: hp, route, dist: 0, under: false, slowMs: 0, slowFactor: 1, hitMs: 0 });
+      s.pests.push({ id: s.nextId++, kind, hp, maxHp: hp, route, dist: 0, under: false, slowMs: 0, slowFactor: 1, hitMs: 0, chewing: false });
     }
   }
 
   // Pests walk on; those reaching the Heartwood take a bite out of it and are gone. A mole is
-  // underground in its tunnel; the Queen Slug slimes the cells round the one she is on.
+  // underground in its tunnel; the Queen Slug slimes the cells round the one she is on. A hedge in
+  // the way stops a walking pest, which chews on it until it is gone (crows fly over, a mole in its
+  // tunnel passes under).
   const gone = (p: Pest) => p.dist >= routes[p.route].length;
   for (const p of s.pests) {
     const info = PEST_INFO[p.kind];
     const slowed = p.slowMs > 0 ? p.slowFactor : 1;
-    p.dist += (info.speed * slowed * dt) / 1000;
+    const length = routes[p.route].length;
+    let next = p.dist + (info.speed * slowed * dt) / 1000;
+    p.chewing = false;
+    if (!info.flies && !p.under) {
+      for (const hedge of s.hedges) {
+        const stop = hedge.stops[p.route];
+        if (stop === null || p.dist > stop || next < stop) continue;
+        next = stop;
+        p.chewing = true;
+        hedge.hp -= (info.bite * CHEW_PER_BITE * dt) / 1000;
+      }
+    }
+    p.dist = next;
     p.slowMs = Math.max(0, p.slowMs - dt);
     p.hitMs = Math.max(0, p.hitMs - dt);
-    const length = routes[p.route].length;
     p.under = !!info.tunnel && p.dist >= info.tunnel[0] * length && p.dist < info.tunnel[1] * length;
     if (info.slime) {
       const pos = pathPoint(routes[p.route], p.dist);
@@ -331,13 +448,14 @@ function step(s: GameState, dt: number) {
     }
   }
   s.pests = s.pests.filter((p) => !gone(p));
+  s.hedges = s.hedges.filter((h) => h.hp > 0);
   if (s.heart <= 0) {
     s.phase = 'over';
     return;
   }
 
-  // Seeds grow; grown golems throw at the pest furthest along the path within reach, or a thorn
-  // golem pricks every pest within reach.
+  // Seeds grow; grown golems throw at the pest their targeting picks within reach, or a golem that
+  // hits all (a thorn golem, a spore form) at every pest within reach.
   for (const g of s.golems) {
     if (g.growMs > 0) {
       g.growMs = Math.max(0, g.growMs - dt);
@@ -345,33 +463,43 @@ function step(s: GameState, dt: number) {
     }
     g.cooldownMs = Math.max(0, g.cooldownMs - dt * (slimed(s, g.col, g.row) ? SLIME.slow : 1));
     if (g.cooldownMs > 0) continue;
-    const info = GOLEM_INFO[g.kind];
-    const { damage, range } = golemStats(g.kind, g.level);
+    const stats = statsOf(g);
     const at = cellCentre(g.col, g.row);
+    const where = (p: Pest) => pathPoint(routes[p.route], p.dist);
     const inReach = s.pests.filter((p) => {
       if (p.hp <= 0 || p.under) return false;
-      const pos = pathPoint(routes[p.route], p.dist);
-      return Math.hypot(pos.x - at.x, pos.y - at.y) <= range;
+      const pos = where(p);
+      return Math.hypot(pos.x - at.x, pos.y - at.y) <= stats.range;
     });
     if (!inReach.length) continue;
     const combo = comboAt(s, g.kind, g.col, g.row);
     const pricks = combo === 'twice' ? COMBO.thornPricks : 1;
-    const targets = info.area ? inReach : [inReach.reduce((a, b) => (b.dist / routes[b.route].length > a.dist / routes[a.route].length ? b : a))];
-    for (const target of targets) {
+    const targets = stats.area ? inReach : [pickTarget(inReach, g.target, routes)];
+    const hit = (target: Pest, damage: number) => {
       const boost = combo === 'slowed' && target.slowMs > 0 ? COMBO.slowedDamage : 1;
-      const armour = PEST_INFO[target.kind].armour ?? 0;
+      const armour = stats.pierce ? 0 : (PEST_INFO[target.kind].armour ?? 0);
       target.hp -= pricks * Math.max(1, damage * boost - armour);
       target.hitMs = HIT_MS;
-      if (info.slow) {
-        target.slowMs = info.slow.ms;
-        target.slowFactor = info.slow.factor;
+      if (stats.slow) {
+        target.slowMs = stats.slow.ms;
+        target.slowFactor = stats.slow.factor;
       }
-      const to = pathPoint(routes[target.route], target.dist);
+    };
+    for (const target of targets) {
+      hit(target, stats.damage);
+      const to = where(target);
+      if (stats.splash) {
+        for (const other of inReach) {
+          if (other === target) continue;
+          const pos = where(other);
+          if (Math.hypot(pos.x - to.x, pos.y - to.y) <= stats.splash) hit(other, stats.damage / 2);
+        }
+      }
       for (let k = 0; k < pricks; k++) {
         s.shots.push({ id: s.nextId++, kind: g.kind, from: { x: at.x, y: at.y - 14 }, to: { x: to.x, y: to.y }, ms: SHOT_MS + k * SHOT_MS * 0.5 });
       }
     }
-    g.cooldownMs = info.cooldownMs;
+    g.cooldownMs = stats.cooldownMs;
   }
 
   // Squashed pests drop their sap.

@@ -10,7 +10,7 @@ start page lists the games; each one lives in its own folder under `games/`.
 | [Apothecary](games/apothecary/README.md) | Run a medieval apothecary as a plague doctor: grow herbs, refine them, brew potions and sell them to customers. |
 | [Deadline](games/deadline/README.md) | Hold the bottom of a road against growing waves of zombies: move left and right, shoot automatically, and shoot crates open for upgrades. |
 | [Palisade](games/palisade/README.md) | Hold a barricade against waves of goblins, orcs, harpies, shield bearers and shamans as a ranger, picking one of three upgrades each level, hiring guards with coins, with a boss and a choice of road every ten waves. |
-| [Tiny Kingdom](games/tiny-kingdom/README.md) | Place farms, houses and towers on a small island grid, each scoring against its neighbours, and reach each round's goal before the tiles run out. |
+| [Tiny Kingdom](games/tiny-kingdom/README.md) | Draw three tiles a turn and place farms, houses, towers and roads on a small island grid, each scoring against its neighbours, join them to the castle, and reach each round's goal before the tiles run out. |
 | [Hotfoot](games/hotfoot/README.md) | Run as a knight who never stops: jump spikes and pits, slide under blades, and pick one of two boons at each checkpoint. |
 | [Anvilheart](games/anvilheart/README.md) | Run a smithy: forge swords, drag two matching ones together to merge them into a better blade, and sell them to adventurers as their orders come in. |
 | [Broadside](games/broadside/README.md) | Captain a pirate ship on an old sea chart: steer left and right, hold a side to aim and charge a broadside at enemy ships, follow each wave's captain's order, sail over their loot, and upgrade hull and cannons at the harbor between waves. |
@@ -43,7 +43,7 @@ The hub's **Settings** button opens the settings every game shares. They are sav
   | Tiny Kingdom | round goals 20% lower | round goals 20% higher |
   | Hotfoot | 5 hearts | 2 hearts |
   | Anvilheart | adventurers wait 50% longer | adventurers wait 30% less |
-  | Broadside | enemy ships have 25% less health | enemy ships have 30% more health |
+  | Broadside | enemy ships and forts have 25% less health | enemy ships and forts have 30% more health |
   | Lane Brawl | red's champions and minions deal 20% less damage | red's champions and minions deal 25% more damage |
   | TinctureTinker | 5 more moves per order | 3 fewer moves per order |
   | Catacomb | foes have 25% less health | foes have 30% more health |

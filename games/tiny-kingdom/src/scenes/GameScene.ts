@@ -3,37 +3,48 @@ import { settings } from '../../../../shared/settings';
 import { viewPoint } from '../../../../shared/scaling';
 import { propKey, PROP_ORIGIN, tileKey } from '../art/textures';
 import { addArt, RES } from '../art/wood';
+import { joinedCells, joinedCount } from '../game/castle';
 import { DECREE_BONUS, decreeMarks, type At } from '../game/decree';
 import { GIFT_INFO, type Gift } from '../game/gifts';
 import { dailyIsland, LEVELS, levelOpen, parseIsland, starsFor, today, type Kingdom } from '../game/islands';
 import { loadBest, loadCrowns, loadDailyBest, loadStars, saveBest, saveCrowns, saveDailyBest, saveStars } from '../game/save';
+import { OMEN_FROM } from '../game/omens';
 import { SEASON_INFO } from '../game/seasons';
 import {
+  canClear,
   canMerge,
   canPlace,
+  canTrade,
   anyPlace,
   canUndo,
   chooseGift,
+  clear,
   finish,
   goalFor,
+  handCount,
   merge,
   mergeable,
   newGame,
   place,
+  previewClear,
   previewMerge,
   previewPlacement,
   ROUND_POUCH,
   season,
   select,
   shownKinds,
+  trade,
+  TRADE_GIVE,
+  tradeGives,
   undo,
   type GameState,
   type Placed,
   type Share,
 } from '../game/state';
-import { BUILDINGS, INFO, ISLANDS, randomIsland, type Building } from '../game/tiles';
+import { BUILDINGS, INFO, ISLANDS, randomIsland, type Building, type Special } from '../game/tiles';
 import { makeButton } from '../ui/Button';
 import {
+  BUTTON,
   cellCentre,
   DECREE,
   FONT,
@@ -43,10 +54,13 @@ import {
   GRID,
   ISLAND_BUTTON,
   ISLANDS_CARD,
+  OMEN,
   PANEL,
+  POUCH_LINE,
   SEASON,
   TILE_BUTTONS,
   TITLE,
+  TRADE_CARD,
   TRAY,
   UI_DEPTH,
   UNDO_BUTTON,
@@ -111,8 +125,8 @@ interface ButtonParts {
 export class GameScene extends Phaser.Scene {
   /** The game being played; read by the playthrough test. */
   state!: GameState;
-  /** The cell under the pointer with the selected building: what placing it there would add, each neighbour's share and the season's bonus. */
-  preview: { col: number; row: number; gained: number; base: number; links: Share[]; season: number } | null = null;
+  /** The cell under the pointer with the selected building: what placing it there would add, each neighbour's share, the season's bonus and the castle's new joins. */
+  preview: { col: number; row: number; gained: number; base: number; links: Share[]; season: number; joins: number } | null = null;
   /** The house picked to merge into a house beside it, while one is picked. */
   mergeFrom: { col: number; row: number } | null = null;
   /** Where the island button is on screen. */
@@ -140,8 +154,14 @@ export class GameScene extends Phaser.Scene {
   private islandText!: Phaser.GameObjects.Text;
   private seasonStrip!: Phaser.GameObjects.Graphics;
   private seasonText!: Phaser.GameObjects.Text;
-  private ruleText: Phaser.GameObjects.Text | null = null;
+  private pouchText!: Phaser.GameObjects.Text;
+  private omenStrip!: Phaser.GameObjects.Graphics;
+  private omenText!: Phaser.GameObjects.Text;
+  private omenLabel!: Phaser.GameObjects.Text;
+  private castleText!: Phaser.GameObjects.Text;
+  private joinImages: Phaser.GameObjects.Image[] = [];
   private seasonBadge!: Phaser.GameObjects.Text;
+  private castleBadge!: Phaser.GameObjects.Text;
   private mergeHint!: Phaser.GameObjects.Text;
   private scoreText!: Phaser.GameObjects.Text;
   private goalText!: Phaser.GameObjects.Text;
@@ -165,6 +185,13 @@ export class GameScene extends Phaser.Scene {
   private giftTitle!: Phaser.GameObjects.Text;
   private giftSub!: Phaser.GameObjects.Text;
   private giftParts: { plaque: Phaser.GameObjects.Image; icon: Phaser.GameObjects.Image; label: Phaser.GameObjects.Text; desc: Phaser.GameObjects.Text }[] = [];
+  private tradeCard!: Phaser.GameObjects.Container;
+  private tradeObjects: Phaser.GameObjects.GameObject[] = [];
+  private tradeGo!: Phaser.GameObjects.Image;
+  private tradeGoText!: Phaser.GameObjects.Text;
+  /** The kind to give two of and the gift building to take, while the trade card is open. */
+  private tradeGive: Building | null = null;
+  private tradeTake: Special | null = null;
   private gameOver!: Phaser.GameObjects.Container;
   private gameOverText!: Phaser.GameObjects.Text;
   private islandsCard!: Phaser.GameObjects.Container;
@@ -189,6 +216,7 @@ export class GameScene extends Phaser.Scene {
     this.createDecree();
     this.createPanel();
     this.createGiftCard();
+    this.createTradeCard();
     this.createGameOver();
     this.createIslandsCard();
     const backdrop = addArt(this, 0, 0, 'walnut-440x96');
@@ -223,6 +251,8 @@ export class GameScene extends Phaser.Scene {
     for (let i = 0; i < 8; i++) this.linkTexts.push(this.add.text(0, 0, '', style(12, INK, '900')).setOrigin(0.5).setDepth(D.label).setVisible(false));
     this.bubbleText = this.add.text(0, 0, '', style(19, INK, '900')).setOrigin(0.5).setDepth(D.label + 0.1).setVisible(false);
     this.seasonBadge = this.add.text(0, 0, 'x2', style(11, CREAM, '900')).setOrigin(0.5).setDepth(D.label + 0.2).setVisible(false);
+    this.castleBadge = this.add.text(0, 0, '', style(10, CREAM, '900')).setOrigin(0.5).setDepth(D.label + 0.2).setVisible(false);
+    this.omenLabel = this.add.text(0, 0, '', style(10, CREAM, '800')).setOrigin(0.5).setDepth(D.label).setVisible(false);
     this.mergeHint = this.add.text(0, 0, '', style(11, CREAM, '900')).setOrigin(0.5).setDepth(D.label + 0.2).setVisible(false);
 
     // One zone over the whole board: hovering previews, a tap places.
@@ -259,6 +289,8 @@ export class GameScene extends Phaser.Scene {
     islandBg.on('pointerdown', () => this.openIslands());
     this.islandText = this.add.text(ib.x, ib.y - 1, '', style(12, INK, '900')).setOrigin(0.5);
     this.scoreText = this.add.text(PANEL.x + 16, 104, '', style(20, CREAM, '900', { shadow: { offsetX: 1, offsetY: 1.5, color: 'rgba(0,0,0,0.45)', fill: true } })).setOrigin(0, 0.5);
+    // How many buildings the castle's chain reaches: the bonus the end of the kingdom pays.
+    this.castleText = this.add.text(PANEL.x + PANEL.w - 16, 104, '', style(11, LABEL, '700', { align: 'right' })).setOrigin(1, 0.5);
     this.bar = this.add.graphics();
     this.goalText = this.add
       .text(GOAL_BAR.x + GOAL_BAR.w / 2, GOAL_BAR.y + GOAL_BAR.h / 2, '', style(10, CREAM, '900', { stroke: 'rgba(30,20,10,0.6)', strokeThickness: 2 }))
@@ -283,6 +315,13 @@ export class GameScene extends Phaser.Scene {
     this.seasonStrip = this.add.graphics();
     this.seasonText = this.add.text(SEASON.x + SEASON.w / 2, SEASON.y + SEASON.h / 2, '', style(10.5, CREAM, '800')).setOrigin(0.5);
 
+    // The pouch line: what is left to draw, and whether a market can trade (a tap on one opens the trade card).
+    this.pouchText = this.add.text(POUCH_LINE.x, POUCH_LINE.y, '', style(10, LABEL, '700', { wordWrap: { width: POUCH_LINE.w }, lineSpacing: 1 }));
+
+    // The omen strip: what the next round brings, once omens begin.
+    this.omenStrip = this.add.graphics();
+    this.omenText = this.add.text(OMEN.x + OMEN.w / 2, OMEN.y + OMEN.h / 2, '', style(10, CREAM, '800')).setOrigin(0.5);
+
     const { x, y, w, h } = UNDO_BUTTON;
     this.undoBg = addArt(this, x, y, `plaque-${w}x${h}`);
     this.undoText = this.add.text(x, y - 1, '', style(13, INK)).setOrigin(0.5);
@@ -302,54 +341,28 @@ export class GameScene extends Phaser.Scene {
     this.bestText = this.add.text(PANEL.x + PANEL.w / 2, PANEL.y + PANEL.h - 12, '', style(12, LABEL)).setOrigin(0.5);
   }
 
-  /**
-   * Builds the tile buttons for the kinds on show: three big plaques, four slimmer ones once the
-   * windmill is won, then two columns of slim ones with the picked building's rule under them.
-   */
+  /** Builds the tile buttons for the kinds in the hand: one plaque per kind, with its rule and how many the hand holds. */
   private buildButtons(kinds: Building[]) {
     for (const o of this.buttonObjects) o.destroy();
     this.buttonObjects = [];
     this.buttons.clear();
     this.tileButtons = [];
-    this.ruleText = null;
-    if (kinds.length > 4) {
-      this.buildGrid(kinds);
-      return;
-    }
-    const four = kinds.length > 3;
-    const { ys, h } = four ? TILE_BUTTONS.four : TILE_BUTTONS.three;
-    const w = TILE_BUTTONS.w;
-    const x = TILE_BUTTONS.x;
+    const { ys, h, w, x } = TILE_BUTTONS;
     kinds.forEach((kind, i) => {
       const y = ys[i];
       const left = x - w / 2;
       const top = y - h / 2;
-      const icon = this.tileIcon(kind, left + (four ? 31 : 37), four ? y - 1 : top + 38, four ? 0.62 : 0.84);
-      const textX = left + (four ? 60 : 74);
-      const name = this.add.text(textX, top + (four ? 12 : 14), INFO[kind].name, style(four ? 15 : 17, INK, '900')).setOrigin(0, 0.5);
-      const rule = this.add.text(textX, top + (four ? 22 : 27), INFO[kind].rule, style(four ? 9.5 : 10.5, RULE, '700', { wordWrap: { width: four ? 152 : 148 }, lineSpacing: four ? 0 : 2 }));
-      this.addTileButton(kind, x, y, w, h, top + (four ? 12 : 15), icon, name, [rule]);
+      const icon = this.tileIcon(kind, left + 31, y - 1, 0.62);
+      const textX = left + 60;
+      const name = this.add.text(textX, top + 12, INFO[kind].name, style(15, INK, '900')).setOrigin(0, 0.5);
+      const rule = this.add.text(textX, top + 22, INFO[kind].rule, style(9.5, RULE, '700', { wordWrap: { width: 152 }, lineSpacing: 0 }));
+      this.addTileButton(kind, x, y, w, h, top + 12, icon, name, [rule]);
     });
-  }
-
-  /** Two columns of slim buttons, for five to seven kinds, and a line for the picked one's rule. */
-  private buildGrid(kinds: Building[]) {
-    const G = TILE_BUTTONS.grid;
-    kinds.forEach((kind, i) => {
-      const x = G.xs[i % 2];
-      const y = G.ys[Math.floor(i / 2)];
-      const left = x - G.w / 2;
-      const icon = this.tileIcon(kind, left + 22, y, 0.5);
-      const name = this.add.text(left + 42, y - 8, INFO[kind].short, style(12.5, INK, '900')).setOrigin(0, 0.5);
-      this.addTileButton(kind, x, y, G.w, G.h, y + 10, icon, name, [], left + 54);
-    });
-    this.ruleText = this.add.text(TILE_BUTTONS.x, G.ruleY, '', style(10.5, LABEL, '700', { align: 'center', wordWrap: { width: TILE_BUTTONS.w - 8 } })).setOrigin(0.5, 0);
-    this.buttonObjects.push(this.ruleText);
   }
 
   /** A building's tile and what stands on it, scaled into a button. */
   private tileIcon(kind: Building, x: number, y: number, scale: number) {
-    const parts: Phaser.GameObjects.Image[] = [addArt(this, 0, 0, tileKey(kind === 'farm' ? 'farm' : 'plain', 0, 0))];
+    const parts: Phaser.GameObjects.Image[] = [addArt(this, 0, 0, tileKey(kind === 'farm' || kind === 'road' ? kind : 'plain', 0, 0))];
     const prop = propKey(kind);
     if (prop) parts.push(addArt(this, 0, 0, prop).setOrigin(PROP_ORIGIN.x, PROP_ORIGIN.y));
     return this.add.container(x, y, parts).setScale(scale);
@@ -386,6 +399,89 @@ export class GameScene extends Phaser.Scene {
     this.buttonObjects.push(glow, plaque, icon, name, pill, count, ...extra);
     this.buttons.set(kind, { glow, plaque, icon, name, count, key });
     this.tileButtons.push({ kind, x, y, w, h });
+  }
+
+  /**
+   * The market trade card: a row of kinds to give two of and a row of gift buildings to take one
+   * of; picking one of each and tapping Trade makes the trade. Its chips are rebuilt on opening.
+   */
+  private createTradeCard() {
+    const C = TRADE_CARD;
+    const top = C.y - C.h / 2;
+    const dim = this.add.rectangle(TRAY.x + TRAY.w / 2, TRAY.y + TRAY.h / 2, TRAY.w, TRAY.h, 0x2a170a, 0.45).setInteractive();
+    const card = addArt(this, C.x, C.y, `walnut-${C.w}x${C.h}`);
+    const title = this.add.text(C.x, top + 30, 'Market trade', style(20, CREAM, '900', { shadow: { offsetX: 1, offsetY: 1.5, color: 'rgba(0,0,0,0.45)', fill: true } })).setOrigin(0.5);
+    const sub = this.add.text(C.x, top + 56, `Once a round, the market swaps ${TRADE_GIVE} tiles of one kind for one gift building`, style(12, LABEL, '700')).setOrigin(0.5);
+    const heading = (y: number, text: string) => this.add.text(C.x, y, text, style(10, '#f2c33a', '900', { letterSpacing: 1 } as never)).setOrigin(0.5);
+    this.tradeGo = this.plaque(C.x - 110, top + C.buttonY, BUTTON.w, BUTTON.h, () => this.makeTrade());
+    this.tradeGoText = this.add.text(C.x - 110, top + C.buttonY - 1, 'Trade', style(16, INK, '900')).setOrigin(0.5);
+    const close = this.plaque(C.x + 110, top + C.buttonY, BUTTON.w, BUTTON.h, () => this.closeTrade());
+    const closeText = this.add.text(C.x + 110, top + C.buttonY - 1, 'Close', style(16, INK, '900')).setOrigin(0.5);
+    this.tradeCard = this.add
+      .container(0, 0, [dim, card, title, sub, heading(top + C.giveY - 40, `GIVE ${TRADE_GIVE}`), heading(top + C.takeY - 40, 'TAKE 1'), this.tradeGo, this.tradeGoText, close, closeText])
+      .setDepth(UI_DEPTH + 12)
+      .setVisible(false);
+  }
+
+  /** One row of chips on the trade card, centred, each with a building's icon and a label; `picked` says which is chosen. */
+  private tradeRow<K extends Building>(kinds: K[], y: number, label: (k: K) => string, picked: K | null, onPick: (k: K) => void) {
+    const { w, h, gap } = TRADE_CARD.chip;
+    const rowW = kinds.length * w + (kinds.length - 1) * gap;
+    kinds.forEach((kind, i) => {
+      const x = TRADE_CARD.x - rowW / 2 + w / 2 + i * (w + gap);
+      const key = `plaque-${w}x${h}`;
+      const glow = addArt(this, x, y + 1, `glow-${w}x${h}`).setVisible(kind === picked);
+      const plaque = addArt(this, x, y, kind === picked ? `${key}-sel` : key).setInteractive({ useHandCursor: true });
+      plaque.on('pointerdown', () => onPick(kind));
+      const icon = this.tileIcon(kind, x, y - 9, 0.4);
+      const text = this.add.text(x, y + h / 2 - 11, label(kind), style(10, kind === picked ? '#b0401f' : INK, '900')).setOrigin(0.5);
+      this.tradeObjects.push(glow, plaque, icon, text);
+      this.tradeCard.add([glow, plaque, icon, text]);
+    });
+  }
+
+  private openTrade() {
+    if (!canTrade(this.state)) return;
+    this.tradeGive = null;
+    this.tradeTake = null;
+    this.mergeFrom = null;
+    this.drawHover(null);
+    this.refreshTrade();
+    this.tradeCard.setVisible(true);
+  }
+
+  private closeTrade() {
+    this.tradeCard.setVisible(false);
+  }
+
+  /** Rebuilds the trade card's chips for the pouch and the gift buildings won, marking the picks. */
+  private refreshTrade() {
+    for (const o of this.tradeObjects) o.destroy();
+    this.tradeObjects = [];
+    const s = this.state;
+    const top = TRADE_CARD.y - TRADE_CARD.h / 2;
+    const gives = tradeGives(s).filter((b) => b !== this.tradeTake);
+    if (this.tradeGive && !gives.includes(this.tradeGive)) this.tradeGive = null;
+    this.tradeRow(gives, top + TRADE_CARD.giveY, (b) => `${TRADE_GIVE} ${INFO[b].short.toLowerCase()}s`, this.tradeGive, (b) => {
+      this.tradeGive = b;
+      this.refreshTrade();
+    });
+    const takes = s.unlocked.filter((b) => b !== this.tradeGive);
+    if (this.tradeTake && !takes.includes(this.tradeTake)) this.tradeTake = null;
+    this.tradeRow(takes, top + TRADE_CARD.takeY, (b) => `1 ${INFO[b].short.toLowerCase()}`, this.tradeTake, (b) => {
+      this.tradeTake = b;
+      this.refreshTrade();
+    });
+    const ready = !!(this.tradeGive && this.tradeTake);
+    this.tradeGo.setAlpha(ready ? 1 : 0.5);
+    this.tradeGoText.setAlpha(ready ? 1 : 0.5).setText(ready ? `Trade ${TRADE_GIVE} ${INFO[this.tradeGive!].short.toLowerCase()}s for 1 ${INFO[this.tradeTake!].short.toLowerCase()}` : 'Trade');
+  }
+
+  private makeTrade() {
+    if (!this.tradeGive || !this.tradeTake || !trade(this.state, this.tradeGive, this.tradeTake)) return;
+    this.closeTrade();
+    this.refresh();
+    this.hoverPointer();
   }
 
   private createGiftCard() {
@@ -590,7 +686,8 @@ export class GameScene extends Phaser.Scene {
 
   /**
    * A tap on the board: on a house with a house beside it, picks it to merge (a second tap on the
-   * house beside it merges them into a manor); anywhere else, places the picked building.
+   * house beside it merges them into a manor); on a wood beside a lumber camp with the lumber camp
+   * picked, clears the wood; anywhere else, places the picked building.
    */
   private tapAt(x: number, y: number) {
     const at = this.cellAt(x, y);
@@ -600,13 +697,18 @@ export class GameScene extends Phaser.Scene {
     let placed: Placed | null = null;
     if (from && canMerge(this.state, from, at)) placed = merge(this.state, from, at);
     else if ((!from || from.col !== at.col || from.row !== at.row) && mergeable(this.state, at.col, at.row)) this.mergeFrom = at;
-    else if (!from) placed = place(this.state, at.col, at.row);
+    else if (!from && canClear(this.state, at.col, at.row)) placed = clear(this.state, at.col, at.row);
+    else if (!from && this.state.grid[at.row][at.col] === 'market' && canTrade(this.state)) {
+      this.openTrade();
+      return;
+    } else if (!from) placed = place(this.state, at.col, at.row);
     if (placed) {
       if (placed.decree) saveCrowns(this.state.crowns);
       if (this.state.phase === 'over') this.gameEnded();
       this.redrawCells();
       for (const change of placed.changes) this.popup(change.col, change.row, change.gained, change.col === at.col && change.row === at.row);
       if (placed.decree) this.decreePaid();
+      if (placed.struck) for (const [c, r] of placed.struck.cells) this.popup(c, r, 0, true, placed.struck.word);
     }
     this.refresh();
     this.hoverAt(x, y);
@@ -632,12 +734,12 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** A "+N" that floats up from a cell and fades; it only fades with reduced motion. */
-  private popup(col: number, row: number, gained: number, main: boolean) {
+  /** A "+N" (or a word, such as an omen's "Flooded") that floats up from a cell and fades; it only fades with reduced motion. */
+  private popup(col: number, row: number, gained: number, main: boolean, word = '') {
     const { x, y } = cellCentre(col, row);
-    const color = gained > 0 ? '#f2c33a' : gained < 0 ? '#e0785f' : '#f1d9b0';
+    const color = word ? '#e0785f' : gained > 0 ? '#f2c33a' : gained < 0 ? '#e0785f' : '#f1d9b0';
     const text = this.add
-      .text(x, y - 8, `${gained >= 0 ? '+' : ''}${gained}`, style(main ? 24 : 16, color, '900', { stroke: '#3a2414', strokeThickness: 4 }))
+      .text(x, y - 8, word || `${gained >= 0 ? '+' : ''}${gained}`, style(word ? 15 : main ? 24 : 16, color, '900', { stroke: '#3a2414', strokeThickness: 4 }))
       .setOrigin(0.5)
       .setDepth(UI_DEPTH);
     const rise = settings.reduceMotion ? 0 : 32;
@@ -659,10 +761,12 @@ export class GameScene extends Phaser.Scene {
   private announceRound(gift: Gift) {
     const s = this.state;
     const tiles = BUILDINGS.filter((b) => ROUND_POUCH[b] > 0)
-      .map((b) => `+${ROUND_POUCH[b]} ${INFO[b].name.toLowerCase()}s`)
+      .map((b) => `+${ROUND_POUCH[b]} ${INFO[b].name.toLowerCase()}${ROUND_POUCH[b] > 1 ? 's' : ''}`)
       .join('  ');
     const info = SEASON_INFO[season(s)];
-    this.bannerText.setText([`Round ${s.round}: ${info.name}`, `${info.rule}.  ${tiles}`, `Royal gift: ${GIFT_INFO[gift].label}`]);
+    const lines = [`Round ${s.round}: ${info.name}`, `${info.rule}.  ${tiles}`, `Royal gift: ${GIFT_INFO[gift].label}`];
+    if (s.omen) lines.push(`Omen for round ${s.round + 1}. ${s.omen.text}`);
+    this.bannerText.setText(lines);
     this.banner.setAlpha(1);
     this.tweens.killTweensOf(this.banner);
     this.tweens.add({ targets: this.banner, alpha: 0, delay: BANNER_MS / 2, duration: BANNER_MS / 2 });
@@ -675,6 +779,7 @@ export class GameScene extends Phaser.Scene {
     this.ghost.setVisible(false);
     this.bubbleText.setVisible(false);
     this.seasonBadge.setVisible(false);
+    this.castleBadge.setVisible(false);
     this.mergeHint.setVisible(false);
     for (const t of this.linkTexts) t.setVisible(false);
     if (this.state.phase !== 'playing') return;
@@ -704,10 +809,26 @@ export class GameScene extends Phaser.Scene {
       this.hint(cx, y + GRID.cell - 12, 'Manor');
       return;
     }
+    // Clearing a wood: with the lumber camp picked, a wood beside a camp shows what clearing it would cost.
+    const cleared = previewClear(this.state, at.col, at.row);
+    if (cleared !== null) {
+      box(at.col, at.row, TEAL);
+      this.ghost.setTexture('tile-grass-0').setOrigin(0.5).setPosition(cx, cy).setAlpha(0.6).setVisible(true);
+      this.bubble(cx, y - 4, cleared);
+      this.hint(cx, y + GRID.cell - 12, 'Clear the wood');
+      return;
+    }
+    // A market: a tap opens the trade card while a trade can be made this round.
+    if (this.state.grid[at.row][at.col] === 'market') {
+      const can = canTrade(this.state);
+      box(at.col, at.row, can ? TEAL : CORAL);
+      this.hint(cx, y + GRID.cell - 12, can ? 'Tap to trade' : this.state.tradedIn === this.state.round ? 'Traded this round' : 'No trade');
+      return;
+    }
     const ok = canPlace(this.state, at.col, at.row, kind);
     g.lineStyle(3.5, ok && kind ? YELLOW : CORAL, 1).strokeRoundedRect(x + 1, y + 1, GRID.cell - 2, GRID.cell - 4, 8);
     if (!this.preview || !kind) return;
-    if (kind === 'farm') this.ghost.setTexture('tile-farm').setOrigin(0.5).setPosition(cx, cy).setAlpha(0.65);
+    if (kind === 'farm' || kind === 'road') this.ghost.setTexture(`tile-${kind}`).setOrigin(0.5).setPosition(cx, cy).setAlpha(0.65);
     else this.ghost.setTexture(`prop-${kind}`).setOrigin(PROP_ORIGIN.x, PROP_ORIGIN.y).setPosition(cx, cy).setAlpha(0.6);
     this.ghost.setVisible(true);
 
@@ -736,13 +857,20 @@ export class GameScene extends Phaser.Scene {
       l.fillStyle(link.pts > 0 ? YELLOW : CORAL, 1).fillRoundedRect(start.x - pw / 2, start.y - 9.5, pw, 19, 9.5);
       this.linkTexts[i].setText(label).setColor(link.pts > 0 ? INK : CREAM).setPosition(start.x, start.y).setVisible(true);
     });
-    // The total in a bubble over the ghost, and the season's "x2" when it doubles this building.
+    // The total in a bubble over the ghost, the season's "x2" when it doubles this building, and the castle's new joins.
     this.bubble(cx, y - 4, this.preview.gained);
     if (this.preview.season > 0) {
       const color = SEASON_INFO[season(this.state)].color;
       l.fillStyle(0x000000, 0.3).fillRoundedRect(cx + 16, y - 21, 26, 16, 8);
       l.fillStyle(color, 1).fillRoundedRect(cx + 16, y - 22.5, 26, 16, 8);
       this.seasonBadge.setPosition(cx + 29, y - 14.5).setVisible(true);
+    }
+    if (this.preview.joins > 0) {
+      const by = y + GRID.cell - 12;
+      this.castleBadge.setText(`castle +${this.preview.joins}`).setPosition(cx, by).setVisible(true);
+      const w = this.castleBadge.width + 10;
+      l.fillStyle(0x000000, 0.3).fillRoundedRect(cx - w / 2, by - 6.5, w, 16, 8);
+      l.fillStyle(NAVY, 1).fillRoundedRect(cx - w / 2, by - 8, w, 16, 8);
     }
   }
 
@@ -817,6 +945,40 @@ export class GameScene extends Phaser.Scene {
         const { x, y } = cellCentre(c, r);
         this.markImages.push(addArt(this, x, y - 2, spot).setDepth(D.spots));
       }
+    }
+  }
+
+  /** The omen's mark on the board (a coral dashed box with a word on the threatened cell) and a bead on every cell the castle's chain reaches. */
+  private refreshBoardMarks() {
+    const s = this.state;
+    for (const m of this.joinImages) m.destroy();
+    this.joinImages = [];
+    this.omenLabel.setVisible(false);
+    const g = this.marks;
+    if (s.omen && s.phase !== 'over') {
+      const [c, r] = s.omen.at;
+      const x = GRID.x + c * GRID.cell;
+      const y = GRID.y + r * GRID.cell;
+      g.lineStyle(3, CORAL, 1);
+      for (let t = 0; t < 4; t++) {
+        const [x1, y1, x2, y2] = [
+          [x + 3, y + 3, x + GRID.cell - 3, y + 3],
+          [x + GRID.cell - 3, y + 3, x + GRID.cell - 3, y + GRID.cell - 5],
+          [x + GRID.cell - 3, y + GRID.cell - 5, x + 3, y + GRID.cell - 5],
+          [x + 3, y + GRID.cell - 5, x + 3, y + 3],
+        ][t];
+        const len = Math.hypot(x2 - x1, y2 - y1);
+        for (let d = 0; d < len; d += 11) {
+          const e = Math.min(len, d + 6);
+          g.lineBetween(x1 + ((x2 - x1) * d) / len, y1 + ((y2 - y1) * d) / len, x1 + ((x2 - x1) * e) / len, y1 + ((y2 - y1) * e) / len);
+        }
+      }
+      this.omenLabel.setText(s.omen.kind === 'flood' ? 'Flood' : 'Storm').setPosition(x + GRID.cell / 2, y + GRID.cell - 12).setVisible(true);
+      const w = this.omenLabel.width + 12;
+      g.fillStyle(CORAL, 1).fillRoundedRect(x + GRID.cell / 2 - w / 2, y + GRID.cell - 20, w, 16, 8);
+    }
+    for (const [c, r] of joinedCells(s.grid)) {
+      this.joinImages.push(addArt(this, GRID.x + c * GRID.cell + 11, GRID.y + r * GRID.cell + 11, 'bead-on').setScale(0.7 / RES).setDepth(D.ticks));
     }
   }
 
@@ -932,7 +1094,23 @@ export class GameScene extends Phaser.Scene {
     this.seasonStrip.fillStyle(info.color, 1).fillRoundedRect(S.x, S.y, S.w, S.h, S.h / 2);
     this.seasonStrip.fillStyle(0xffffff, 0.16).fillRoundedRect(S.x + 1, S.y + 1, S.w - 2, S.h / 2, S.h / 4);
     this.seasonText.setText(`${info.name}: ${info.short}`);
-    if (this.ruleText) this.ruleText.setText(s.selected ? `${INFO[s.selected].name}: ${INFO[s.selected].rule}` : '');
+
+    // The pouch line, the omen strip and the castle's count.
+    const left = BUILDINGS.filter((b) => s.pouch[b] > 0).map((b) => `${s.pouch[b]} ${INFO[b].short.toLowerCase()}${s.pouch[b] > 1 ? 's' : ''}`);
+    const pouch = left.length ? `Pouch: ${left.join(', ')}` : 'The pouch is empty';
+    this.pouchText.setText(canTrade(s) ? `${pouch}. Tap a market to trade.` : pouch);
+    const O = OMEN;
+    this.omenStrip.clear();
+    const omenOn = !!s.omen && s.phase !== 'over';
+    if (omenOn) {
+      this.omenStrip.fillStyle(0x000000, 0.3).fillRoundedRect(O.x, O.y + 1.5, O.w, O.h, O.h / 2);
+      this.omenStrip.fillStyle(CORAL, 1).fillRoundedRect(O.x, O.y, O.w, O.h, O.h / 2);
+      this.omenStrip.fillStyle(0xffffff, 0.16).fillRoundedRect(O.x + 1, O.y + 1, O.w - 2, O.h / 2, O.h / 4);
+    }
+    this.omenText.setText(omenOn ? s.omen!.short : s.round < OMEN_FROM ? `Omens from round ${OMEN_FROM}` : 'No omen for the next round').setColor(omenOn ? CREAM : LABEL);
+    const joined = joinedCount(s.grid);
+    this.castleText.setText(s.phase === 'over' ? `Castle paid +${s.castle}` : `Castle joins ${joined}
+(+${joined} at the end)`);
 
     // The goal bar is a groove filled with green from the last round's goal to this one's.
     const from = s.round === 1 ? 0 : goalFor(s.round - 1);
@@ -947,13 +1125,12 @@ export class GameScene extends Phaser.Scene {
     }
 
     for (const [kind, parts] of this.buttons) {
-      const left = s.pouch[kind];
+      const inHand = handCount(s, kind);
       const chosen = s.selected === kind;
       parts.glow.setVisible(chosen);
       parts.plaque.setTexture(chosen ? `${parts.key}-sel` : parts.key);
       parts.name.setColor(chosen ? '#b0401f' : INK);
-      parts.icon.setAlpha(left > 0 ? 1 : 0.35);
-      parts.count.setText(`x${left}`).setColor(left > 0 ? CREAM : '#9aa3b8');
+      parts.count.setText(`x${inHand}`);
     }
 
     const stuck = s.phase === 'playing' && !anyPlace(s);
@@ -964,7 +1141,9 @@ export class GameScene extends Phaser.Scene {
     this.undoText.setAlpha(undoable ? 1 : 0.5);
 
     this.refreshDecree();
+    this.refreshBoardMarks();
     this.refreshGifts();
+    if (s.phase !== 'playing') this.closeTrade();
 
     this.gameOver.setVisible(s.phase === 'over');
     if (s.phase === 'over') {
@@ -973,7 +1152,7 @@ export class GameScene extends Phaser.Scene {
         const stars = starsFor(s.level, s.score);
         won = `Level ${s.level}: ${stars} ${stars === 1 ? 'star' : 'stars'}${stars < 3 ? ` (next at ${LEVELS[s.level - 1].stars[stars]})` : ''}.  Crowns ${s.crowns}.`;
       } else if (s.mode === 'daily') won = `Island of the day: today's best ${loadDailyBest(s.day)}.  Crowns ${s.crowns}.`;
-      this.gameOverText.setText(`Final score ${s.score} on island ${s.island}, reaching round ${s.round}.\n${s.placed} buildings placed.\n\n${won}`);
+      this.gameOverText.setText(`Final score ${s.score} on island ${s.island}, reaching round ${s.round}.\n${s.placed} buildings placed, ${s.castle} joined to the castle (+${s.castle}).\n\n${won}`);
     }
   }
 
@@ -982,6 +1161,7 @@ export class GameScene extends Phaser.Scene {
     // The best score and crowns carry over even when storage is blocked and comes back empty.
     this.state = newGame(Math.max(loadBest(), this.state.best), Math.max(loadCrowns(), this.state.crowns), island, kingdom);
     this.closeIslands();
+    this.closeTrade();
     this.tweens.killTweensOf(this.banner);
     this.banner.setAlpha(0);
     this.redrawCells();

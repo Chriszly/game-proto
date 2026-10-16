@@ -1,13 +1,16 @@
 import { byDifficulty } from '../../../../shared/settings';
+import { joinedCount } from './castle';
 import { DECREE_BONUS, decreeFor, decreeMarks, type Decree } from './decree';
 import { GIFT_INFO, giftsFor, newSpecial, type Gift } from './gifts';
 import type { Kingdom, Mode } from './islands';
+import { omenFor, strike, type Omen, type Struck } from './omens';
 import { seasonBonus, seasonFor, type Season } from './seasons';
-import { AROUND, BUILDINGS, SIDES, SPECIALS, isBuilding, isHome, randomIsland, startingGrid, type Building, type Cell, type Special } from './tiles';
+import { AROUND, BUILDINGS, SIDES, isBuilding, isHome, randomIsland, scores, seeded, startingGrid, type Building, type Cell, type Special } from './tiles';
 
 // The rules in plain TypeScript, with no Phaser. The score is the whole board's score plus the
 // bonuses won (decrees and seasons): each building's points depend on its neighbours, so a
-// placement can also raise the buildings next to it.
+// placement can also raise the buildings next to it. Each turn draws HAND tiles from the pouch;
+// one is placed and the others go back.
 
 export type Pouch = Record<Building, number>;
 
@@ -19,9 +22,13 @@ export interface GameState {
   score: number;
   /** Points won from fulfilled decrees and from seasons' doubled buildings. */
   bonus: number;
-  /** Tiles left to place. */
+  /** Tiles left to place, the ones in the hand included. */
   pouch: Pouch;
-  /** The building the next tap places, if any. */
+  /** The tiles drawn from the pouch this turn: one of these is placed next, the rest go back. */
+  hand: Building[];
+  /** How many hands have been drawn; with the island, it seeds the next draw. */
+  draws: number;
+  /** The building the next tap places, if any; always one in the hand. */
   selected: Building | null;
   /** Which island this kingdom is built on; `islandMap` lays it out. */
   island: number;
@@ -46,8 +53,14 @@ export interface GameState {
   gifts: [Gift, Gift];
   /** Gifts still to choose: one per goal reached. */
   giftsDue: number;
-  /** The gift buildings won so far, in the order they were won; each adds a tile button. */
+  /** The gift buildings won so far, in the order they were won. */
   unlocked: Special[];
+  /** The omen for the next round, from round OMEN_FROM on, or null. */
+  omen: Omen | null;
+  /** The round in which a market trade was last made; 0 for none. One trade per round. */
+  tradedIn: number;
+  /** The castle bonus paid when the kingdom was finished: one point per building joined to the castle. 0 before. */
+  castle: number;
   /** The board as it was before the last placement, if that placement can be undone. */
   undo: Snapshot | null;
   /** The round in which the undo was last used; 0 if none yet. One undo per round. */
@@ -58,6 +71,8 @@ export interface GameState {
 export interface Snapshot {
   grid: Cell[][];
   pouch: Pouch;
+  hand: Building[];
+  draws: number;
   score: number;
   bonus: number;
   selected: Building | null;
@@ -65,9 +80,13 @@ export interface Snapshot {
 }
 
 /** The first round's tiles. */
-export const FIRST_POUCH: Pouch = { farm: 4, house: 4, tower: 2, windmill: 0, market: 0, harbor: 0, lumber: 0 };
+export const FIRST_POUCH: Pouch = { farm: 4, house: 4, tower: 2, windmill: 0, market: 0, harbor: 0, lumber: 0, road: 1 };
 /** The tiles each later round adds to whatever is left. */
-export const ROUND_POUCH: Pouch = { farm: 3, house: 3, tower: 2, windmill: 0, market: 0, harbor: 0, lumber: 0 };
+export const ROUND_POUCH: Pouch = { farm: 3, house: 3, tower: 2, windmill: 0, market: 0, harbor: 0, lumber: 0, road: 1 };
+/** How many tiles a turn draws from the pouch. */
+export const HAND = 3;
+/** A market trade gives this many tiles of one kind for one gift building. */
+export const TRADE_GIVE = 2;
 
 /**
  * The score that ends round `round`: 20, 45, 75, 110, ... (each round asks 5 more than the last),
@@ -81,12 +100,14 @@ export const season = (s: GameState): Season => seasonFor(s.round);
 /** A new kingdom on island `island` (a random one unless given), chosen as `kingdom` says. */
 export function newGame(best = 0, crowns = 0, island = randomIsland(), kingdom: Kingdom = { mode: 'random' }): GameState {
   const grid = startingGrid(island);
-  return {
+  const s: GameState = {
     round: 1,
     goal: goalFor(1),
     score: 0,
     bonus: 0,
     pouch: { ...FIRST_POUCH },
+    hand: [],
+    draws: 0,
     selected: null,
     island,
     mode: kingdom.mode,
@@ -101,10 +122,47 @@ export function newGame(best = 0, crowns = 0, island = randomIsland(), kingdom: 
     gifts: giftsFor(island, 1, []),
     giftsDue: 0,
     unlocked: [],
+    omen: null,
+    tradedIn: 0,
+    castle: 0,
     undo: null,
     undoneIn: 0,
   };
+  drawHand(s);
+  return s;
 }
+
+/** Whether `kind` could go at (col, row) on `grid`, whatever the phase: on grass, a harbor by a lake, a lumber camp by a forest. */
+function fits(grid: Cell[][], col: number, row: number, kind: Building) {
+  if (grid[row]?.[col] !== 'grass') return false;
+  if (kind === 'harbor') return beside(grid, col, row, 'lake');
+  if (kind === 'lumber') return beside(grid, col, row, 'forest');
+  return true;
+}
+
+const fitsAnywhere = (grid: Cell[][], kind: Building) => grid.some((cells, row) => cells.some((_, col) => fits(grid, col, row, kind)));
+
+/**
+ * Draws the next hand: HAND tiles from the pouch, seeded by the island and the number of draws so
+ * far, so a kingdom's hands never touch Math.random and an undone placement redraws the same hand.
+ * When no drawn tile has room but one in the pouch has, the first is swapped for one that has.
+ */
+function drawHand(s: GameState) {
+  const rand = seeded(s.island * 7 + s.draws * 48271 + 11);
+  s.draws++;
+  const bag = BUILDINGS.flatMap((b) => Array<Building>(s.pouch[b]).fill(b));
+  const hand: Building[] = [];
+  while (hand.length < HAND && bag.length) hand.push(bag.splice(Math.floor(rand() * bag.length), 1)[0]);
+  if (hand.length && !hand.some((b) => fitsAnywhere(s.grid, b))) {
+    const fitting = BUILDINGS.filter((b) => s.pouch[b] > 0 && fitsAnywhere(s.grid, b));
+    if (fitting.length) hand[0] = fitting[Math.floor(rand() * fitting.length)];
+  }
+  s.hand = hand.sort((a, b) => BUILDINGS.indexOf(a) - BUILDINGS.indexOf(b));
+  if (s.selected && !s.hand.includes(s.selected)) s.selected = s.hand[0] ?? null;
+}
+
+/** Whether a tile of `kind` is in the hand, ready to place. */
+export const inHand = (s: GameState, kind: Building) => s.hand.includes(kind);
 
 /** One neighbour's share of a building's points. */
 export interface Share {
@@ -148,7 +206,7 @@ export function cellParts(grid: Cell[][], col: number, row: number): { base: num
     case 'market': {
       // +1 for each kind of building around it, credited to the first one of that kind.
       const seen = new Set<Cell>();
-      add(AROUND, (c) => (isBuilding(c) && !seen.has(c) ? (seen.add(c), 1) : 0));
+      add(AROUND, (c) => (scores(c) && !seen.has(c) ? (seen.add(c), 1) : 0));
       return { base: 0, from };
     }
     case 'harbor':
@@ -182,12 +240,10 @@ const beside = (grid: Cell[][], col: number, row: number, cell: Cell) => SIDES.s
  */
 export function canPlace(s: GameState, col: number, row: number, kind: Building | null = null) {
   if (s.phase !== 'playing' || s.grid[row]?.[col] !== 'grass') return false;
-  if (kind === 'harbor') return beside(s.grid, col, row, 'lake');
-  if (kind === 'lumber') return beside(s.grid, col, row, 'forest');
-  return true;
+  return kind ? fits(s.grid, col, row, kind) : true;
 }
 
-/** What placing a building would bring: points in all, its own base, each neighbour's share and the season's bonus. */
+/** What placing a building would bring: points in all, its own base, each neighbour's share, the season's bonus and the castle's chain. */
 export interface Preview {
   gained: number;
   base: number;
@@ -195,11 +251,13 @@ export interface Preview {
   links: Share[];
   /** What the season adds for this building, 0 if the season does not double it. */
   season: number;
+  /** How many more buildings the castle's chain would reach (the castle bonus at the end grows by this). */
+  joins: number;
 }
 
-/** What placing `kind` at (col, row) would add to the score, split by neighbour, or null where it can't go. */
+/** What placing `kind` at (col, row) would add to the score, split by neighbour, or null where it can't go or the hand lacks it. */
 export function previewPlacement(s: GameState, kind: Building, col: number, row: number): Preview | null {
-  if (!canPlace(s, col, row, kind) || s.pouch[kind] <= 0) return null;
+  if (!canPlace(s, col, row, kind) || !inHand(s, kind)) return null;
   const grid = s.grid.map((cells) => [...cells]);
   grid[row][col] = kind;
   const own = cellParts(grid, col, row);
@@ -221,7 +279,7 @@ export function previewPlacement(s: GameState, kind: Building, col: number, row:
   }
   const links = [...shares.values()].filter((l) => l.pts !== 0);
   const bonus = seasonBonus(season(s), kind, cellScore(grid, col, row));
-  return { gained: boardScore(grid) - boardScore(s.grid) + bonus, base: own.base, links, season: bonus };
+  return { gained: boardScore(grid) - boardScore(s.grid) + bonus, base: own.base, links, season: bonus, joins: joinedCount(grid) - joinedCount(s.grid) };
 }
 
 /** What placing `kind` at (col, row) would add to the score, or null where it can't go. */
@@ -230,7 +288,7 @@ export function previewScore(s: GameState, kind: Building, col: number, row: num
 }
 
 export function select(s: GameState, kind: Building) {
-  if (s.phase !== 'playing' || s.pouch[kind] <= 0) return false;
+  if (s.phase !== 'playing' || !inHand(s, kind)) return false;
   s.selected = kind;
   return true;
 }
@@ -246,6 +304,8 @@ export interface Placed {
   newRound: boolean;
   /** What the season added. */
   season: number;
+  /** What the pending omen did as the new round began, if it struck. */
+  struck: Struck | null;
 }
 
 /** Whether the last placement can be taken back: once per round, and not one that began a round or fulfilled a decree. */
@@ -263,13 +323,19 @@ export function anyPlace(s: GameState) {
   return BUILDINGS.some((b) => s.pouch[b] > 0 && s.grid.some((cells, row) => cells.some((_, col) => canPlace(s, col, row, b))));
 }
 
+/** Finishes the kingdom: the castle pays a point per building its chain reaches, and the best score is kept. */
+function end(s: GameState) {
+  s.castle = joinedCount(s.grid);
+  s.bonus += s.castle;
+  s.score += s.castle;
+  s.phase = 'over';
+  s.best = Math.max(s.best, s.score);
+}
+
 /** Ends the kingdom when no tiles are left, or none can go anywhere and no merge would make room. */
 function checkEnd(s: GameState) {
   const tilesLeft = BUILDINGS.some((b) => s.pouch[b] > 0);
-  if (!tilesLeft || (!anyPlace(s) && !anyMerge(s))) {
-    s.phase = 'over';
-    s.best = Math.max(s.best, s.score);
-  }
+  if (!tilesLeft || (!anyPlace(s) && !anyMerge(s))) end(s);
 }
 
 /**
@@ -278,14 +344,15 @@ function checkEnd(s: GameState) {
  */
 export function finish(s: GameState) {
   if (s.phase !== 'playing' || anyPlace(s)) return false;
-  s.phase = 'over';
-  s.best = Math.max(s.best, s.score);
+  end(s);
   return true;
 }
 
 const snapshot = (s: GameState): Snapshot => ({
   grid: s.grid.map((cells) => [...cells]),
   pouch: { ...s.pouch },
+  hand: [...s.hand],
+  draws: s.draws,
   score: s.score,
   bonus: s.bonus,
   selected: s.selected,
@@ -315,11 +382,10 @@ function settle(s: GameState, prior: Snapshot, at: { col: number; row: number },
     s.crowns++;
     decree = true;
   }
-  const score = boardScore(s.grid) + s.bonus;
-  const gained = score - s.score;
-  s.score = score;
+  s.score = boardScore(s.grid) + s.bonus;
 
   let newRound = false;
+  let struck: Struck | null = null;
   while (s.score >= s.goal) {
     s.round++;
     s.goal = goalFor(s.round);
@@ -328,27 +394,81 @@ function settle(s: GameState, prior: Snapshot, at: { col: number; row: number },
     newRound = true;
   }
   if (newRound) {
+    // The omen warned of strikes as the round begins, then the decree and the next omen are drawn on the board as it stands.
+    if (s.omen) struck = strike(s.grid, s.omen);
+    if (struck) s.score = boardScore(s.grid) + s.bonus;
     s.decree = decreeFor(s.island, s.round, s.grid, s.decree);
+    s.omen = omenFor(s.island, s.round, s.grid);
     s.phase = 'gift';
   }
   // A change that began a round or won a crown is kept: undoing it would hand back what was paid.
   s.undo = newRound || decree ? null : prior;
-  if (!s.selected || s.pouch[s.selected] <= 0) s.selected = BUILDINGS.find((b) => s.pouch[b] > 0) ?? null;
   // A goal reached carries on to its gift, even with the pouch empty, unless the island is full.
   if (s.phase === 'gift' && !s.grid.some((cells) => cells.includes('grass'))) s.giftsDue = 0;
   if (s.phase === 'playing' || s.giftsDue === 0) checkEnd(s);
-  return { gained, changes, decree, newRound, season: seasonal };
+  return { gained: s.score - prior.score, changes, decree, newRound, season: seasonal, struck };
 }
 
-/** Places the selected building at (col, row); null if it can't go there. */
+/** Places the selected building at (col, row) and draws the next hand; null if it can't go there. */
 export function place(s: GameState, col: number, row: number): Placed | null {
   const kind = s.selected;
-  if (!kind || !canPlace(s, col, row, kind) || s.pouch[kind] <= 0) return null;
+  if (!kind || !canPlace(s, col, row, kind) || !inHand(s, kind)) return null;
   const prior = snapshot(s);
   s.grid[row][col] = kind;
   s.pouch[kind]--;
   s.placed++;
-  return settle(s, prior, { col, row }, seasonBonus(season(s), kind, cellScore(s.grid, col, row)));
+  const placed = settle(s, prior, { col, row }, seasonBonus(season(s), kind, cellScore(s.grid, col, row)));
+  drawHand(s);
+  return placed;
+}
+
+/** Whether the wood at (col, row) can be cleared: a lumber camp tile in the hand is spent on a forest beside a lumber camp. */
+export function canClear(s: GameState, col: number, row: number) {
+  return s.phase === 'playing' && s.selected === 'lumber' && inHand(s, 'lumber') && s.grid[row]?.[col] === 'forest' && beside(s.grid, col, row, 'lumber');
+}
+
+/** What clearing the wood at (col, row) would add to the score (usually a loss: the camp and houses beside it lose the forest), or null. */
+export function previewClear(s: GameState, col: number, row: number) {
+  if (!canClear(s, col, row)) return null;
+  const grid = s.grid.map((cells) => [...cells]);
+  grid[row][col] = 'grass';
+  return boardScore(grid) - boardScore(s.grid);
+}
+
+/**
+ * Clears the wood at (col, row) to grass, spending the lumber camp tile from the hand: points for
+ * room. It counts like a placement for the decree, the goal and the undo. Null if it can't be done.
+ */
+export function clear(s: GameState, col: number, row: number): Placed | null {
+  if (!canClear(s, col, row)) return null;
+  const prior = snapshot(s);
+  s.grid[row][col] = 'grass';
+  s.pouch.lumber--;
+  const placed = settle(s, prior, { col, row }, 0);
+  drawHand(s);
+  return placed;
+}
+
+/** Whether a market trade can be made now: a market stands, none was made this round, and a gift building has been won. */
+export function canTrade(s: GameState) {
+  return s.phase === 'playing' && s.tradedIn !== s.round && s.unlocked.length > 0 && s.grid.some((cells) => cells.includes('market')) && tradeGives(s).length > 0;
+}
+
+/** The kinds the pouch could give two of in a trade. */
+export const tradeGives = (s: GameState) => BUILDINGS.filter((b) => s.pouch[b] >= TRADE_GIVE);
+
+/**
+ * A market trade, once per round: gives TRADE_GIVE tiles of `give` from the pouch for one tile of
+ * `take`, a gift building already won, then draws a new hand. It cannot be undone. False if not allowed.
+ */
+export function trade(s: GameState, give: Building, take: Special) {
+  if (!canTrade(s) || s.pouch[give] < TRADE_GIVE || !s.unlocked.includes(take) || give === take) return false;
+  s.pouch[give] -= TRADE_GIVE;
+  s.pouch[take]++;
+  s.tradedIn = s.round;
+  s.undo = null;
+  drawHand(s);
+  return true;
 }
 
 /** Whether the house at `from` can merge into the house beside it at `to`. */
@@ -398,11 +518,12 @@ export function chooseGift(s: GameState, gift: Gift) {
   s.gifts = giftsFor(s.island, s.round - s.giftsDue, s.unlocked);
   if (s.giftsDue === 0) {
     s.phase = 'playing';
-    if (!s.selected || s.pouch[s.selected] <= 0) s.selected = BUILDINGS.find((b) => s.pouch[b] > 0) ?? null;
     checkEnd(s);
   }
   return true;
 }
 
-/** The buildings with a tile button: the first three, then the gift buildings in the order they were won. */
-export const shownKinds = (s: GameState): Building[] => [...BUILDINGS.filter((b) => !(SPECIALS as readonly Building[]).includes(b)), ...s.unlocked];
+/** The buildings with a tile button: each kind in the hand, once, in BUILDINGS order. */
+export const shownKinds = (s: GameState): Building[] => BUILDINGS.filter((b) => s.hand.includes(b));
+/** How many tiles of `kind` the hand holds. */
+export const handCount = (s: GameState, kind: Building) => s.hand.filter((b) => b === kind).length;
