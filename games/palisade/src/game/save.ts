@@ -1,3 +1,4 @@
+import { AIM_MODES, type AimMode } from './aim';
 import { freshProgress, type Progress } from './state';
 import { RELICS } from './relics';
 import { UPGRADES, type UpgradeId } from './upgrades';
@@ -79,5 +80,25 @@ export function saveFound(found: UpgradeId[]) {
     localStorage.setItem(FOUND_KEY, JSON.stringify(found));
   } catch {
     // Storage can be blocked; the book then only lasts until a reload.
+  }
+}
+
+// The aim priority is a setting too, kept apart from the hero like the speed.
+const AIM_KEY = 'palisade-aim';
+
+export function loadAim(): AimMode {
+  try {
+    const saved = localStorage.getItem(AIM_KEY);
+    return AIM_MODES.find((m) => m === saved) ?? 'nearest';
+  } catch {
+    return 'nearest';
+  }
+}
+
+export function saveAim(mode: AimMode) {
+  try {
+    localStorage.setItem(AIM_KEY, mode);
+  } catch {
+    // Storage can be blocked; the choice then only lasts until a reload.
   }
 }

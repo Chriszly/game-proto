@@ -15,7 +15,53 @@ seconds without a tap.
 
 - **Loop:** a break with the wave's banner, then the wave's foes come on one by one. Clearing it
   repairs a tenth of the barricade and starts the next break. Foes hack at the barricade, and once
-  it is at 0 they walk on. The run ends when one reaches the hero (`phase` becomes `'over'`).
+  it is at 0 they walk on (to a bought stake line first, see Fortifications). The run ends when one
+  reaches the hero (`phase` becomes `'over'`).
+- **Siege lifted and heats** (`heat.ts`): clearing `WIN_WAVE` (30) for the first time in a run
+  sets `won`, raises `heatUnlocked` to `heat + 1` (up to `MAX_HEAT`, 3) and sets `phase` to
+  `'won'`, which holds everything (`held(state)` is `'over'` or `'won'`; `tick` stops, `loose`,
+  `strew`, `hire` and `train` refuse) under the victory panel. `keepFighting` sets the phase back
+  to `'break'` (the relic chest and road choice set by `clearWave` are still there); `startHeat`
+  starts a new run at an unlocked heat. `heat` and `heatUnlocked` are in `Progress`.
+  `heatRules(heat)` is cumulative: Heat 1 scales `spawnInterval` by 0.7, Heat 2 adds a bar in
+  `bossBars` (so in `foeHp` too), Heat 3 halves `stats().repair` and `stats().mend`. `stats` takes
+  `heat`, so it is a `Pick` of `ranks`, `relics` and `heat`. The game-over panel has a "Next run
+  at" row of heat buttons (`restartAt`), and a chip beside the wave track shows `heat` when above 0.
+- **Elite foes** (`elites.ts`): from `ELITE_FROM_WAVE` (4) `spawn` rolls `eliteChance(wave)` per
+  non-boss foe and a trait from `TRAIT_IDS` (two `Math.random` calls, only from wave 4, so the
+  first waves' random sequence is unchanged). An elite has `ELITE_HP` times the health and gives
+  `ELITE_XP` times the experience and `ELITE_COINS` times the coins in `removeDead`. `Enemy.trait`
+  is `'splitting'` (in `removeDead`, `SPLIT_INTO` goblins with `SPLIT_HP` of a goblin's health are
+  added at its spot, clamped to the road, with a `split` effect), `'enraged'` (`moveEnemies`
+  multiplies its pace, so walk and barricade damage, by `ENRAGE_PACE` below half health) or
+  `'warded'` (`ignite` and the chill in `arrowHit` skip it). The scene draws a coloured hexagon and
+  the trait's name over its health bar (`eliteLabels`, one text per elite) and a rune ring for Warded.
+- **Aim priority** (`aim.ts`): `state.aimMode` (`AimMode`: nearest, strongest, flyers, healers)
+  orders `targets(state)` through `sortTargets`, so the arrows and lightning follow it; the mage
+  and `crowdSpot` ask for `'nearest'` and fireballs still pick the crowd. The toggle at `AIM` in
+  the layout (and T) calls `setAim` with `nextAim`; the choice is saved under `palisade-aim`
+  (`loadAim`/`saveAim`) and passed into `newRun`, so "New hero" keeps it. Default `'nearest'`
+  plays exactly as before.
+- **Boss moves** (`bosses.ts`, `bossMoves` in `sim.ts`, run before `moveEnemies` for bosses in
+  view): a boss's `castMs` is its move timer (set at spawn to `FIRST_ROCK_MS` or `FIRST_ROAR_MS`).
+  The Troll King throws a `'rock'` missile (`target` null, with `from`, `to` and `slot`) every
+  `ROCK_MS` at a random hired guard, or at the barricade's face when none is hired (skipped if the
+  barricade is down too); `moveMissiles` flies it straight to `to` over the foes and `landRock`
+  sets `Guard.stunMs` to `STUN_MS` (a stunned guard skips `guardsAct`) or takes `ROCK_DAMAGE` off
+  the barricade, with a `rockHit` effect. The Ogre Warlord, once below half health (`moved`), adds
+  `CALL_GOBLINS` goblins beside it (`call` effect). The Frost Giant sets `state.roarMs` to
+  `ROAR_SLOW_MS` every `ROAR_MS` (`roar` effect); while it runs `shoot` multiplies the bow's
+  cooldown by `ROAR_SLOW` and the scene shows the "Chilled bow" chip at `ROAR_CHIP`.
+- **Fortifications** (`forts.ts`, `state.forts`): during a break the "Fortify" button at `FORTIFY`
+  opens `FortifyPanel`; `fortify(state, id)` buys one per break (`forts.boughtWave` is the wave
+  whose break it was bought in; `canFortify`). `stakes` sets `forts.stakeHp` to `STAKE_HP`: in
+  `moveEnemies`, once the barricade is down, walking foes stop at `STAKE_FRONT` and hack the stakes
+  instead (Spiked Stakes counts there too); `oil` arms `forts.oil`, which `burstOil` spends on the
+  first foe to start hacking at the standing barricade (`OIL_HIT`, `ignite` for `OIL_MS`, a
+  `fireblast` effect); `lookout` sets `forts.lookout` to `LOOKOUT_WAVES`, counted down in
+  `clearWave`, and `rainRingOf(state)` (used by `crowdSpot`, `landVolleys` and the scene's `ring()`)
+  multiplies `stats().rainRing` by `LOOKOUT_RING` while it lasts. The scene draws them in
+  `drawForts`. A new run starts with none (`freshForts`).
 - **Road to the boss:** waves come in roads of ten (`waveTrack` in `waves.ts`), shown as a track
   under the top bar. The tenth wave of each road ends with its boss (`bossOf`: the Troll King, the
   Ogre Warlord, the Frost Giant, then round again) with stacked health bars. Clearing a boss wave
@@ -91,7 +137,8 @@ seconds without a tap.
     Hub settings), and the hero has a single frame. Arrow Rain can be loosed during a break, when
     there may be no foes to hit; the same goes for the caltrops.
   - The original balance lets a hero who always takes the first card reach wave 40 at a high level;
-    the new foes and roads add pressure but do not change that curve.
+    the new foes, elites, boss moves and roads add pressure, and the heats are the ladder past the
+    win on wave 30, but the curve itself is unchanged.
 
 ## Architecture
 
@@ -102,16 +149,22 @@ seconds without a tap.
   `game` on `window` in the dev build.
 - `src/game/`: the rules in plain TypeScript, with no Phaser imports.
   - `state.ts`: `GameState` and its parts (`Enemy`, `Missile`, `Effect`, `Volley`, `Patch`,
-    `Guard`), field geometry (`FIELD`, `SPAWN_X`, `BOW`, `HERO_FRONT`, `BARRICADE_FRONT`,
-    `GUARD_SLOTS`), `xpToNext`, `stats` (all upgrade, relic and set effects), `streakBonus`,
+    `Guard`, `Forts`), field geometry (`FIELD`, `SPAWN_X`, `BOW`, `HERO_FRONT`, `BARRICADE_FRONT`,
+    `GUARD_SLOTS`), `xpToNext`, `stats` (all upgrade, relic, set and heat effects), `streakBonus`,
     `STREAK_MS`, `RAIN_KILLS`, `CALTROP_KILLS`, `rainNeed`, `newRun`, `Progress`, `progressOf`,
-    `offerable`.
-  - `sim.ts`: `tick` (the battle and the auto-pick countdown), `pick`, `offer`, `rollChoices`,
-    `pickRoad`, `fightAgain`, `loose` (Arrow Rain), `strew` (caltrops), `hire`, `train`,
-    `crowdSpot`, `inRing`, `AUTO_PICK_MS`, `RAIN_FALL_MS`, `RAIN_RING`, `CALTROP_PATCH`,
-    `CALTROP_WAVES`, `MAX_PATCHES`, `SHIELD_BLOCK`, and the private steps: spawning, shooting, guards, missiles,
-    volleys, damage, foe movement (caltrops, healing), kills (coins, streak, charges, experience),
-    wave clear with the relic chest and road choice, game over.
+    `freshForts`, `offerable`.
+  - `sim.ts`: `tick` (the battle and the auto-pick countdown), `held`, `pick`, `offer`, `rollChoices`,
+    `pickRoad`, `fightAgain`, `startHeat`, `keepFighting`, `loose` (Arrow Rain), `strew`
+    (caltrops), `hire`, `train`, `fortify`, `canFortify`, `setAim`,
+    `crowdSpot`, `inRing`, `rainRingOf`, `AUTO_PICK_MS`, `RAIN_FALL_MS`, `RAIN_RING`, `CALTROP_PATCH`,
+    `CALTROP_WAVES`, `MAX_PATCHES`, `SHIELD_BLOCK`, and the private steps: spawning (elites), shooting, guards (stuns), missiles
+    (rocks), boss moves, volleys, damage, foe movement (caltrops, healing, the stake line, the oil pot), kills (coins, streak, charges, experience, splitting),
+    wave clear with the relic chest, road choice and the win, game over.
+  - `elites.ts`: `Trait`, `TRAITS`, `TRAIT_IDS`, `ELITE_FROM_WAVE`, `eliteChance` and the elite and
+    trait numbers. `bosses.ts`: the bosses' move numbers. `forts.ts`: `FortId`, `FORTS`,
+    `FORT_IDS`, `STAKE_FRONT`, `STAKE_HP`, the oil and lookout numbers. `heat.ts`: `WIN_WAVE`,
+    `MAX_HEAT`, `HEAT_RULES` (texts) and `heatRules`. `aim.ts`: `AimMode`, `AIM_MODES`, `AIMS`,
+    `nextAim`, `sortTargets`.
   - `enemies.ts`: the `ENEMIES` table of wave 1 stats per `EnemyKind` (with `coins` and the
     `flying`, `shield` and `healer` flags), the three bosses included.
   - `upgrades.ts`: the `UPGRADES` table, `UpgradeId`, `Icon`, `UPGRADE_IDS`, `FILLERS` and
@@ -121,18 +174,23 @@ seconds without a tap.
   - `guards.ts`: the `GUARDS` table, `GuardKind`, `GUARD_KINDS`, `MAX_GUARD_LEVEL`, `trainCost`,
     `guardDamage`, `SPEAR_REACH` and `ARCANE_RADIUS`.
   - `roads.ts`: the `ROADS` table, `RoadId`, `ROAD_IDS` and `roadEffects`.
-  - `waves.ts`: `waveFoes` (with the road's foe count), `foeHp` (scaled by difficulty and road), `hpScale`, `bossBars`, `BOSSES`,
-    `bossOf`, `waveTrack`, `isBossWave`, `spawnInterval`, break lengths.
+  - `waves.ts`: `waveFoes` (with the road's foe count), `foeHp` (scaled by difficulty and road, a boss's by the heat's bars), `hpScale`, `bossBars` (with the heat), `BOSSES`,
+    `bossOf`, `waveTrack`, `isBossWave`, `spawnInterval` (with the heat), break lengths.
   - `save.ts`: `loadProgress`, `saveProgress`, `clearProgress`, `loadSpeed`, `saveSpeed`,
-    `loadFound`, `saveFound`.
+    `loadFound`, `saveFound`, `loadAim`, `saveAim`.
 - `src/scenes/BootScene.ts`: paints every texture, then starts `Game`.
-- `src/scenes/GameScene.ts`: owns the `GameState`, ticks it each frame, draws the battle, the HUD
-  (coins in the top bar), the wave track (named after the road), Arrow Rain (button, drag arc,
+- `src/scenes/GameScene.ts`: owns the `GameState`, ticks it each frame, draws the battle (elite
+  badges and labels, rocks, stunned guards), the HUD
+  (coins in the top bar, the heat chip, the "Chilled bow" chip), the wave track (named after the road), Arrow Rain (button, drag arc,
   ring, falling volleys), the caltrops (button, drag arc, patches), the guard slots and guards, the
-  streak chip, the relic chest panel and the game-over panel, saves progress, handles restart and the 1x/2x speed switch
+  fortifications on the field (`drawForts`), the aim toggle and the Fortify button
+  (`drawAimToggle`), the streak chip, the relic chest panel, the victory panel (`createWon`) and
+  the game-over panel with its heat buttons (`drawHeatPicks`), saves progress, handles restart
+  (`restart`, `restartAt`) and the 1x/2x speed switch
   (`speed`, at `SPEED` in the bottom bar).
 - `src/scenes/layout.ts`: screen positions (`HERO_FEET`, `BARRICADE`, `XP_BAR`, `BOSS_BAR`,
-  `TRACK`, `RAIN`, `CALTROPS`, `GUARD_HIT`, `HIRE`, `ROAD_CARDS`, `RAIN_HINT`, `STREAK`, `CARDS`,
+  `TRACK`, `RAIN`, `CALTROPS`, `AIM`, `FORTIFY` (with its panel's size), `HEAT`, `ROAR_CHIP`,
+  `GUARD_HIT`, `HIRE`, `ROAD_CARDS`, `RAIN_HINT`, `STREAK`, `CARDS`,
   `COUNTDOWN`, `SKILL_BOOK`, `SPEED`, `BUTTON`),
   `HUD_HEIGHT`, `UI_DEPTH`, `FONT` (a system font stack).
 - `src/ui/LevelUp.ts`: the level-up overlay, its cards and the auto-pick countdown (seconds left
@@ -143,6 +201,10 @@ seconds without a tap.
   empty slot, or one row to train a hired guard, each with a button showing its cost (greyed out
   and not tappable when the coins are short), and a dim backdrop that closes it. `slot`/`open`
   tell the scene to hold everything still.
+- `src/ui/FortifyPanel.ts`: the panel the Fortify button opens during a break: a row per
+  fortification in `FORT_IDS` (a little picture, its text, what is held and a Buy button with its
+  cost, greyed out when the coins are short or this break's one is bought) and a dim backdrop that
+  closes it. `open` tells the scene to hold everything still.
 - `src/ui/SkillBook.ts`: the "Skill book found/total" button in the top bar and the book it opens,
   a 4x7 grid with a slot for every id in `UPGRADE_IDS` order (the three fillers last), and the
   relics won along the bottom (a full set's relics in green, its bonus above them).
@@ -177,20 +239,22 @@ seconds without a tap.
   `barricade-N`, `hero`, `guard-<kind>`, `foe-<kind>-<frame>`, `arrow`, `arrow-fire`,
   `arrow-frost`, `fireball`, `magic-bolt`, `rain-arrow`, `icon-<icon>`, `relic-<id>`, `chest`,
   `chest-open`, `node-<boss>`, `road-<id>`, `rain-ready`, `rain-charging`, `caltrops-ready`,
-  `caltrops-charging`, `caltrop`, `hud-coin`, `hud-flame` and `hud-book`. There are no asset files.
+  `caltrops-charging`, `caltrop`, `rock`, `hud-coin`, `hud-flame` and `hud-book`. There are no asset files.
 - **Tick:** `GameScene.update(time)` takes `dt` from the frame timestamp (not Phaser's smoothed
   delta), clamped to `MAX_STEP_MS` (250), then multiplies it by `speed` (1 or 2) unless a level-up
   is up, so the auto-pick countdown stays in real seconds. It calls `tick(state, dt)`, which runs
   `step` in substeps of at most `SUBSTEP_MS` (16) and stops while `choices` is set or the run is
-  over. Only effects keep ageing then. While `choices` is set, `tick` counts `pickMs` down instead,
+  `held` (over, or won and on the victory panel). Only effects keep ageing then. The scene also
+  skips `tick` while the fortify panel is open. While `choices` is set, `tick` counts `pickMs` down instead,
   and when it reaches 0 it calls `pick` with one of `choices` chosen by `Math.random`; any time left
   in the frame then goes on to the battle (or the next level-up's countdown). The scene keeps its
   own `clock`, used only for animation phases, pulses and blinking, and it stops during a pick and
   after a fall.
 - **Order inside `step`:** age effects, count the streak down (ending it at 0), update
-  `rain.need`, bring volleys down (`landVolleys`), count up how long each caltrop patch has lain, then the break countdown
+  `rain.need`, count the roar down, bring volleys down (`landVolleys`), count up how long each caltrop patch has lain, then the break countdown
   (or the road choice's countdown while `roadChoices` is set) or spawning, then `shoot`,
-  `guardsAct`, `moveMissiles`, `moveEnemies` (caltrops, shaman healing), and finally the
+  `guardsAct`, `moveMissiles`, `bossMoves`, `moveEnemies` (caltrops, shaman healing, the oil pot,
+  the stake line), and finally the
   wave-clear check. Arrows home, turning
   fully towards their target every substep. Every death goes through `removeDead`, which counts the
   kill, pays its coins, charges Arrow Rain and the caltrops, carries the streak, adds `death`, `xp`
@@ -204,8 +268,11 @@ seconds without a tap.
   calls `strew` 40px in front of it. A level-up, a fall, the open skill book or hire panel clears
   `aim`. A tap on a guard slot's zone (depth `UI_DEPTH - 3`, under every overlay) opens
   `HirePanel`, which calls `GameScene.hire`/`train`; the scene holds the battle while it is open and
-  closes it on a level-up or a fall. A tap on a road card calls `pickRoad`. "Fight again" and "New hero" call
-  `restart`. The "Skill book" button opens `SkillBook`; Back or a tap beside the book closes it.
+  closes it on a level-up or a fall. A tap on the Fortify button (shown only during a break) opens
+  `FortifyPanel`, which calls `GameScene.fortify`; the scene holds the break while it is open and
+  closes it when the wave comes on. A tap on the aim toggle (or T) calls `cycleAim`. A tap on a road card calls `pickRoad`. "Fight again" and "New hero" call
+  `restart`, the heat buttons on the game-over panel and "Heat N" on the victory panel call
+  `restartAt`, and "Keep fighting" calls `keepFighting`. The "Skill book" button opens `SkillBook`; Back or a tap beside the book closes it.
   While it is open `GameScene.update` skips `tick` and its `clock`, so the battle, effects and the
   auto-pick countdown all wait. The button sits above the level-up overlay (depth `UI_DEPTH + 15`)
   so it works while choosing, and hides after a fall. Shooting is automatic. A dimming rectangle
@@ -225,27 +292,29 @@ seconds without a tap.
 ### State model
 
 - `GameState` (`src/game/state.ts`) has two halves. The progress fields (`level`, `xp`, `ranks`,
-  `levelUps`, `bestWave`, `runs`, `relics`, `mastered`) form `Progress`. The run fields are `wave`, `phase`
-  (`'break' | 'fighting' | 'over'`), `breakMs`, `toSpawn`, `spawnMs`, `barricade`, `enemies`,
+  `levelUps`, `bestWave`, `runs`, `relics`, `mastered`, `heat`, `heatUnlocked`) form `Progress`. The run fields are `wave`, `phase`
+  (`'break' | 'fighting' | 'over' | 'won'`), `breakMs`, `toSpawn`, `spawnMs`, `barricade`, `enemies`,
   `missiles`, `effects`, `cooldown`, `choices`, `pickMs` (time left to pick before the auto-pick),
   `kills`, `rain` (`charge`, `need`, `volleys`), `caltrops` (`charge`, `need`, `patches`), `coins`,
   `guards`, `road`, `roadChoices`, `roadMs`, `streak` (`count`, `ms` left, `best`, `bonusXp`),
-  `relicFound` (a list, or null) and `nextId`.
+  `relicFound` (a list, or null), `aimMode`, `roarMs`, `forts` (`stakeHp`, `oil`, `lookout`,
+  `boughtWave`), `won` and `nextId`.
 - `Enemy` holds its position, `hp`/`maxHp`, boss `bars`, slow and burn timers, `attacking`,
-  `hitMs` and `castMs` (a shaman's healing timer). `Missile` is an arrow, a fireball or a mage's
-  `magic` bolt (with its `damage`) with a homing `target`, a `hit` list and `pierce`. `Patch` is a
-  caltrops patch on the road (`x`, `y`, `ms` left). `Guard` is a hired guard (`kind`, `level`, `cd`).
+  `hitMs`, `castMs` (a shaman's healing timer, a boss's move timer), `trait` (an elite's, or null)
+  and `moved` (the Ogre Warlord's call). `Missile` is an arrow, a fireball, a mage's
+  `magic` bolt (with its `damage`) or a Troll King's `rock` (with `from`, `to` and `slot`) with a homing `target`, a `hit` list and `pierce`. `Patch` is a
+  caltrops patch on the road (`x`, `y`, `ms` left). `Guard` is a hired guard (`kind`, `level`, `cd`, `stunMs`).
   `Volley` is an Arrow Rain volley in the air (`x`, `y`, `ms` until it lands). `Effect` is a
   short-lived visual with `ms`/`total`; `xp` and `orb` carry `amount` (the kill's experience) and
   `xp` its `streak`.
-- Hero stats are never stored. `stats(state)` derives them from `ranks` and `relics` each time.
+- Hero stats are never stored. `stats(state)` derives them from `ranks`, `relics` and `heat` each time.
   `pick` counts the fillers (`mend`, `purse`, `wind`) in `ranks` too (for the skill book); `stats`
   ignores them and `offerable` never offers one, so their ranks change nothing else.
   `rollChoices` fills any of the three cards no upgrade is left for with `FILLERS` in order, so a
   level-up shows three different cards, until none is left at all (see Every skill learned).
 - Only `sim.ts` mutates state during play. The scene only replaces it wholesale (`newRun`,
-  `fightAgain`), calls `offer` on load when level-ups are pending, and calls `loose`, `strew`,
-  `hire`, `train`, `pick` and `pickRoad`.
+  `fightAgain`, `startHeat`), calls `offer` on load when level-ups are pending, and calls `loose`, `strew`,
+  `hire`, `train`, `fortify`, `setAim`, `keepFighting`, `pick` and `pickRoad`.
 - **Invariants:** `choices` is set while `levelUps > 0` (unless `mastered` with nothing left to
   offer, when `offer` spends them at once), and the battle (streak timer and volleys
   included) is frozen then. Every place that sets `choices` (`offer`, `fightAgain`) also resets
@@ -257,7 +326,10 @@ seconds without a tap.
   `roadChoices` is set by `clearWave` on a boss wave and cleared by `pickRoad`, which restarts
   `breakMs`; the break never ends while it is set. `caltrops.charge` never exceeds `caltrops.need`.
   `hire` and `train` refuse during a level-up or a fall, or without the coins; `coins` never goes
-  below 0. In
+  below 0. `fortify` refuses outside a break, during a level-up, twice in one break or without the
+  coins. `phase` is `'won'` only between clearing `WIN_WAVE` and "Keep fighting" (or a new run);
+  `won` stays set for the rest of the run, so wave 60 never wins again. `heat` never exceeds
+  `heatUnlocked`. In
   `moveEnemies` a foe hacks at the standing barricade only when it is at the face (at most one
   substep's walk past it); a foe that got behind it while it was down keeps walking after a repair
   (Stout Timber or Mend), and any live foe reaching `HERO_FRONT` ends the run (one that burns to
@@ -267,24 +339,26 @@ seconds without a tap.
 
 ### Persistence
 
-Three `localStorage` keys. `palisade-skill-book` holds a JSON array of the upgrade ids found
+Four `localStorage` keys. `palisade-skill-book` holds a JSON array of the upgrade ids found
 (offered on a level-up, or held), read by `loadFound` (unknown ids dropped) and written by
 `GameScene.discover` whenever one is new; "New hero" leaves it alone. `palisade-speed` holds the
-battle speed (`'1'` or `'2'`, through `loadSpeed`/`saveSpeed`), kept apart so "New hero" leaves it
-alone. `palisade-progress` holds JSON of `Progress`, relics included. `loadProgress` merges it over
-`freshProgress()` (dropping unknown upgrade and relic ids) and falls back to fresh on any error.
-"New hero" calls `clearProgress`, which also drops the relics. The run itself (wave, foes,
-barricade, Arrow Rain and caltrops charge, streak, coins, guards, road) is never saved, so a reload
+battle speed (`'1'` or `'2'`, through `loadSpeed`/`saveSpeed`) and `palisade-aim` the aim priority
+(an `AimMode`, through `loadAim`/`saveAim`), both kept apart so "New hero" leaves them
+alone. `palisade-progress` holds JSON of `Progress`, relics, `heat` and `heatUnlocked` included. `loadProgress` merges it over
+`freshProgress()` (dropping unknown upgrade and relic ids; an older save gets heat 0) and falls back to fresh on any error.
+"New hero" calls `clearProgress`, which also drops the relics and the heats. The run itself (wave, foes,
+barricade, Arrow Rain and caltrops charge, streak, coins, guards, road, fortifications) is never saved, so a reload
 starts at wave 1.
 
 ### Randomness and timing
 
-- `Math.random` is used in exactly seven places, all in `src/game/`. In `sim.ts`: `spawn` (a foe's
-  y, one call for every kind), `arrowHit` (crit roll, called on every arrow hit even at 0% crit
+- `Math.random` is used in exactly ten places, all in `src/game/`. In `sim.ts`: `spawn` (a foe's
+  y, one call for every kind, then from wave 4 the elite roll and, for an elite, its trait), `arrowHit` (crit roll, called on every arrow hit even at 0% crit
   and on a shield), `rollChoices`, the auto-pick in `tick` (only when the countdown runs out), the
-  relic chest and the two roads offered in `clearWave` (only on boss waves) and the road auto-pick
-  in `step` (only when its countdown runs out). In `waves.ts`: `waveFoes` (shuffle). Arrow Rain,
-  the caltrops, guards, shamans and the streak use none. Art uses
+  relic chest and the two roads offered in `clearWave` (only on boss waves), the road auto-pick
+  in `step` (only when its countdown runs out) and the Troll King's choice of guard in `bossMoves`
+  (only on its waves, with a guard hired). In `waves.ts`: `waveFoes` (shuffle). Arrow Rain,
+  the caltrops, guards, shamans, the other boss moves, splitting, the fortifications and the streak use none. Art uses
   its own `seeded` generator, and the scene scatters a volley's shafts with a hash of its id, so
   neither touches the sequence.
 - Time comes only from Phaser's frame timestamp in `GameScene.update`. There are no timers or
@@ -302,7 +376,8 @@ level curve (`xpToNext`), `streakBonus`, `STREAK_MS`, `RAIN_KILLS`, `rainNeed` a
 are also in `state.ts`. The difficulty multiplier on foe health is in `foeHp` (`waves.ts`).
 Missile speeds, `LEAP_RANGE`, effect durations (`EFFECT_MS`), `RAIN_FALL_MS`, `RAIN_RING`, the
 caltrops' patch, `CALTROP_WAVES` and `MAX_PATCHES`, `SHIELD_BLOCK` and the shaman's healing numbers are in
-`sim.ts`. Arrow Rain's damage (`rainDamage`) and ring (`rainRing`), the caltrops' slow and damage
+`sim.ts`. The elites' numbers are in `elites.ts`, the bosses' moves in `bosses.ts`, the
+fortifications' in `forts.ts` and the heats' in `heat.ts`. Arrow Rain's damage (`rainDamage`) and ring (`rainRing`), the caltrops' slow and damage
 (`caltropSlow`, `caltropDps`) and the barricade's repair after a wave (`repair`) are in `stats`.
 
 ### Screens
@@ -357,7 +432,10 @@ caltrops' patch, `CALTROP_WAVES` and `MAX_PATCHES`, `SHIELD_BLOCK` and the shama
 - **What it checks:**
   - A fresh hero: level 1, no ranks or relics, wave 1, phase `'break'`, a full barricade, Arrow
     Rain at 0 of 4, caltrops at 0 of 6, no coins, guards or road, no streak, and the track on step
-    1 of the road to the Troll King (1 to 10).
+    1 of the road to the Troll King (1 to 10). It never touches the aim toggle, the Fortify button
+    or the heats: with no `palisade-aim` saved the ranger shoots the nearest foe, as always, and a
+    fresh hero is on Heat 0. Elites only come from wave 4 and boss moves from wave 10, so wave 1
+    plays as before; keep `ELITE_FROM_WAVE` above 1, since the elite roll adds random calls.
   - Wave 1 is exactly 3 goblins and 3 orcs, with an orc first.
   - An arrow is fired and hits.
   - The first kill: earned experience equals that foe's `xp` (a streak of 1 has no bonus), the
@@ -413,6 +491,17 @@ caltrops' patch, `CALTROP_WAVES` and `MAX_PATCHES`, `SHIELD_BLOCK` and the shama
 - **Add a guard:** add its kind to `GuardKind` and `GUARDS` in `src/game/guards.ts`, its attack to
   `guardsAct` in `sim.ts`, a rig to `RIGS` baked as `guard-<kind>` in `bakeCharacters`, and a row to
   the README's guard table; the hire panel lists every kind in `GUARD_KINDS` (it has room for two).
+- **Add a trait:** add its id to `Trait` and `TRAITS` in `src/game/elites.ts`, its effect where it
+  acts in `sim.ts` (`arrowHit`/`ignite`, `moveEnemies` or `removeDead`), and a row to the README's
+  trait table. The scene draws every trait the same way, from `TRAITS`.
+- **Add a fortification:** add its id to `FortId` and `FORTS` in `src/game/forts.ts`, its field to
+  `Forts` and `freshForts` in `state.ts`, what buying it does in `fortify`, its effect in `sim.ts`,
+  a picture in `FortifyPanel.drawMark` and `GameScene.drawForts`, and a row to the README's table.
+- **Add a boss move:** give the boss a branch in `bossMoves` in `sim.ts` (its numbers in
+  `bosses.ts`), an effect kind if it needs one (in `Effect`, `EFFECT_MS` and `drawEffects`), and
+  describe it in the README's foe table.
+- **Add a heat rule:** add a line to `HEAT_RULES` and a field to `heatRules` in `src/game/heat.ts`,
+  raise `MAX_HEAT`, read the field where it acts, and add a row to the README's heat table.
 - **Add a foe:**
   1. Extend `EnemyKind` and `ENEMIES` (with its `coins`), and `SCALE` in `src/art/characters.ts`.
   2. Add its rig to `RIGS` (parts in local units, feet at 0,0, facing left) and bake it in
@@ -440,7 +529,11 @@ caltrops' patch, `CALTROP_WAVES` and `MAX_PATCHES`, `SHIELD_BLOCK` and the shama
   double-unit x 365, `BARRICADE_TEX`). Moving the barricade art means moving `BARRICADE` and
   `BARRICADE_FRONT` too.
 - `armor` only reduces arrow, burst, Arrow Rain, fireball and spear hits (`hurt(..., true)`).
-  Burning, lightning, caltrops, Spiked Stakes and arcane bolts ignore it. Damage after armour is at least 1.
+  Burning, lightning, caltrops, Spiked Stakes, arcane bolts and the oil pot's hit ignore it. Damage after armour is at least 1.
+- `STAKE_FRONT` (140) is left of the barricade art and right of the hero: foes hacking the stake
+  line stand at `STAKE_FRONT + radius`, over the guard platforms, and are still within
+  `SPEAR_REACH`. A split's goblins are placed no further left than `HERO_FRONT + 20`, so a
+  Splitting foe that falls at the stakes does not end the run on the spot.
 - A harpy's `y` is where it flies, above the road's far edge (from `FIELD.top - 50`), so arrows and
   Arrow Rain aim at it there; its shadow is only drawn. `loose` clamps to `FIELD.top`, and the ring
   still reaches harpies flying low enough.
