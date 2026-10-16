@@ -3,13 +3,29 @@
 // drops line up. Every three stones make a tier, and a tier whose stones all landed well is
 // balanced and offers a blessing, which favor can reroll. Between tiers favor also buys a slow drop,
 // a wider stone or Mason's Grace, and a curse can be taken with a blessing for double favor. From
-// tier 2 stones come heavy or light, and each tier sets a trial for extra favor. Tier 10 is gilded
-// for double favor, and finishing tier 12 crowns the shrine and wins the run; after that the
-// player can keep building into the endless sky, where gusts push the falling stone.
+// tier 2 stones come heavy or light, each tier sets a trial, and a stone can be held in reserve. From
+// tier 3 the temple leans with every off-centre drop (too far and the top tier topples), a chain of
+// perfect drops grows the stone back, and each break picks the next tier's material. Tier 10 is gilded
+// for double favor, and finishing tier 12 crowns the shrine and wins the run; after that the player
+// can keep building into the endless sky, where gusts push the falling stone. Every temple starts
+// under one of two patrons offered, whose rule holds for the whole run.
 
 import { byDifficulty } from '../../../../shared/settings';
 import { BLESSINGS, type BlessingId } from './blessings';
-import { CHEAPEST, CURSES, SHOP_INFO, TRIALS, type CurseId, type ShopId, type StoneKind, type TrialId } from './catalog';
+import {
+  CHEAPEST,
+  CURSES,
+  PATRONS,
+  SHOP,
+  SHOP_INFO,
+  TRIALS,
+  type CurseId,
+  type MaterialId,
+  type PatronId,
+  type ShopId,
+  type StoneKind,
+  type TrialId,
+} from './catalog';
 
 /** The middle of the temple, in view pixels. */
 export const TOWER_X = 590;
@@ -80,11 +96,40 @@ export const WIND_BASE = 40;
 export const WIND_PER_TIER = 8;
 export const WIND_MAX = 120;
 
+/** The temple leans (SS6): from this tier each stone's offset from the one below adds to `lean`, past `LEAN_MAX` the top tier topples, and a finished tier settles to this share of its lean. */
+export const LEAN_FROM_TIER = 3;
+export const LEAN_MAX = 60;
+export const LEAN_SETTLE = 0.5;
+/** Perfect chains (SS7): from `CHAIN_FROM_TIER`, the `CHAIN_LEN`th perfect drop in a row, and each one after, grows the stone back `REGROW_PX`. */
+export const CHAIN_FROM_TIER = 3;
+export const CHAIN_LEN = 3;
+export const REGROW_PX = 12;
+/** Materials (SS8): from this tier a break picks the next tier's stone. Marble's and Sandstone's perfect window and favor, Basalt's speed, crack and trial favor. */
+export const MATERIAL_FROM_TIER = 3;
+export const MARBLE_PERFECT = 0.5;
+export const MARBLE_MULT = 2;
+export const SANDSTONE_PERFECT = 2;
+export const SANDSTONE_MULT = 0.5;
+export const BASALT_SPEED = 0.75;
+export const BASALT_CRACK = 6;
+export const BASALT_TRIAL_MULT = 2;
+/** Reserve (SS9): from this tier a stone can be held back and swapped in, once per tier. */
+export const RESERVE_FROM_TIER = 2;
+/** Patrons (SS10): how many are offered, the Gilded Hand's favor, the Many-Handed's offer and speed, the Patient Mason's speed, the Storm Caller's leeway and first gusty tier. */
+export const PATRON_OFFER = 2;
+export const PATRON_FAVOR = 1;
+export const HANDS_OFFER = 4;
+export const HANDS_SPEED = 1.1;
+export const PATIENT_SPEED = 0.9;
+export const STORM_PERFECT = 3;
+export const STORM_FROM_TIER = 6;
+
 /**
- * `blessing` is the break between tiers: after a balanced tier (blessings on offer) or a wobbly one
- * the player can buy from (no offer, just the shop). `crowned` is the win: the goal tier is finished.
+ * `patron` is the pick of a patron before the first stone. `blessing` is the break between tiers: after
+ * a balanced tier (blessings on offer) or a wobbly one the player can buy from or pick a material for
+ * (no offer, just the shop). `crowned` is the win: the goal tier is finished.
  */
-export type Phase = 'swinging' | 'falling' | 'blessing' | 'over' | 'crowned';
+export type Phase = 'patron' | 'swinging' | 'falling' | 'blessing' | 'over' | 'crowned';
 
 /** A stone in the temple, by its middle and width. `tier` counts from 1. */
 export interface Stone {
@@ -93,6 +138,7 @@ export interface Stone {
   tier: number;
   perfect: boolean;
   kind: StoneKind;
+  material: MaterialId;
 }
 
 /** The stone in play: swinging above the temple, then falling. `h` is its bottom's height above the plinth. */
@@ -103,6 +149,7 @@ export interface Moving {
   dir: 1 | -1;
   vy: number;
   kind: StoneKind;
+  material: MaterialId;
 }
 
 /** This tier's trial: how many stones have met it so far, and whether one has failed it. */
@@ -130,7 +177,11 @@ export type GameEvent =
   | { type: 'tier'; tier: number; balanced: boolean }
   | { type: 'trial'; tier: number; passed: boolean; favor: number }
   | { type: 'rerolled' }
-  | { type: 'bought'; item: ShopId };
+  | { type: 'bought'; item: ShopId }
+  | { type: 'toppled'; count: number; lean: number }
+  | { type: 'regrown'; px: number }
+  | { type: 'swapped'; kind: StoneKind }
+  | { type: 'patron'; patron: PatronId };
 
 export interface GameState {
   phase: Phase;
@@ -171,19 +222,35 @@ export interface GameState {
   /** Building past the crown, and the gust on the stone in hand in pixels per second (+ pushes right). */
   endless: boolean;
   wind: number;
+  /** How far the temple leans, in pixels (+ right): the offsets of its stones from the ones below, from `LEAN_FROM_TIER`. */
+  lean: number;
+  /** Perfect drops in a row. */
+  chain: number;
+  /** The material of the tier being built, picked in the break before it. */
+  material: MaterialId;
+  /** The stone held in reserve, and whether this tier's swap is spent. */
+  reserve: StoneKind | null;
+  swapped: boolean;
+  /** The patrons offered before the first stone, and the one chosen for the run. */
+  patronOffer: PatronId[];
+  patron: PatronId | null;
   events: GameEvent[];
 }
 
-/** The swing speed for a tier, with the difficulty and the Calm Winds kept. */
-export function speedFor(tier: number, calm: number) {
-  return BASE_SPEED * byDifficulty(0.8, 1, 1.25) * (1 + TIER_SPEEDUP * (tier - 1)) * CALM ** calm;
+/** How much faster or slower a patron makes every stone swing. */
+export const patronSpeed = (patron: PatronId | null) => (patron === 'hands' ? HANDS_SPEED : patron === 'patient' ? PATIENT_SPEED : 1);
+
+/** The swing speed for a tier, with the difficulty, the Calm Winds kept and the patron's pace. */
+export function speedFor(tier: number, calm: number, patron: PatronId | null = null) {
+  return BASE_SPEED * byDifficulty(0.8, 1, 1.25) * (1 + TIER_SPEEDUP * (tier - 1)) * CALM ** calm * patronSpeed(patron);
 }
 
+/** A new temple, waiting for its patron to be chosen from `patronOffer`. */
 export function newGame(best = 0): GameState {
   const s: GameState = {
-    phase: 'swinging',
+    phase: 'patron',
     stones: [],
-    moving: { x: 0, w: START_W, h: 0, dir: 1, vy: 0, kind: 'normal' },
+    moving: { x: 0, w: START_W, h: 0, dir: 1, vy: 0, kind: 'normal', material: 'limestone' },
     tier: 1,
     inTier: 0,
     wobbly: false,
@@ -208,11 +275,48 @@ export function newGame(best = 0): GameState {
     curse: null,
     endless: false,
     wind: 0,
+    lean: 0,
+    chain: 0,
+    material: 'limestone',
+    reserve: null,
+    swapped: false,
+    patronOffer: pickPatrons(),
+    patron: null,
     events: [],
   };
   spawn(s);
   return s;
 }
+
+/** Two different patrons to choose from, drawn with `Math.random`. */
+function pickPatrons() {
+  const pool = [...PATRONS];
+  const offer: PatronId[] = [];
+  while (offer.length < PATRON_OFFER) offer.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+  return offer;
+}
+
+/** Takes one of the offered patrons: its rule holds for the run, and the first stone starts swinging. */
+export function choosePatron(s: GameState, id: PatronId) {
+  if (s.phase !== 'patron' || !s.patronOffer.includes(id)) return false;
+  s.patron = id;
+  s.patronOffer = [];
+  if (id === 'gilded') s.favorPerStone += PATRON_FAVOR;
+  else if (id === 'storm') s.perfectPx += STORM_PERFECT;
+  s.speed = speedFor(s.tier, 0, id);
+  s.phase = 'swinging';
+  s.events.push({ type: 'patron', patron: id });
+  return true;
+}
+
+/** How many blessings a balanced tier offers: four under the Many-Handed. */
+export const offerSize = (s: GameState) => (s.patron === 'hands' ? HANDS_OFFER : OFFER_SIZE);
+
+/** The blessings that can be offered: the Gilded Hand allows no Mason's Grace. */
+export const blessingsFor = (s: GameState): BlessingId[] => (s.patron === 'gilded' ? BLESSINGS.filter((b) => b !== 'grace') : [...BLESSINGS]);
+
+/** The shop's items, in order: the Gilded Hand allows no Mason's Grace. */
+export const shopFor = (s: GameState): ShopId[] => (s.patron === 'gilded' ? SHOP.filter((i) => i !== 'grace') : [...SHOP]);
 
 /** The temple's height above the plinth. */
 export const stackHeight = (s: GameState) => s.stones.length * STONE_H;
@@ -226,9 +330,16 @@ export function topOf(s: GameState) {
 function spawn(s: GameState) {
   const dir = s.dropped % 2 === 0 ? 1 : -1;
   const w = s.stones.length ? topOf(s).w : START_W;
-  s.moving = { x: TOWER_X - dir * SWING, w, h: stackHeight(s) + DROP_GAP, dir, vy: 0, kind: s.nextKind };
+  s.moving = { x: TOWER_X - dir * SWING, w, h: stackHeight(s) + DROP_GAP, dir, vy: 0, kind: s.nextKind, material: s.material };
   s.nextKind = kindFor(s.stones.length + 1);
-  s.wind = s.endless ? gust(s.tier) : 0;
+  s.wind = gustFor(s);
+}
+
+/** The gust on a new stone: in the endless sky, or from `STORM_FROM_TIER` under the Storm Caller. */
+function gustFor(s: GameState) {
+  if (s.endless) return gust(s.tier, GOAL_TIER);
+  if (s.patron === 'storm' && s.tier >= STORM_FROM_TIER) return gust(s.tier, STORM_FROM_TIER - 1);
+  return 0;
 }
 
 /** The kind of the stone that will be the temple's `n`th from the bottom (from 0): ordinary on the first tiers. */
@@ -238,10 +349,10 @@ function kindFor(n: number): StoneKind {
   return r < HEAVY_CHANCE ? 'heavy' : r < HEAVY_CHANCE + LIGHT_CHANCE ? 'light' : 'normal';
 }
 
-/** A gust for a stone on `tier` of the endless sky, or calm air; stronger the higher the tier. */
-function gust(tier: number) {
+/** A gust for a stone on `tier`, or calm air; `WIND_BASE` on the first gusty tier after `from`, stronger each tier after. */
+function gust(tier: number, from: number) {
   if (Math.random() >= GUST_CHANCE) return 0;
-  const strength = Math.min(WIND_MAX, WIND_BASE + WIND_PER_TIER * Math.max(0, tier - GOAL_TIER - 1));
+  const strength = Math.min(WIND_MAX, WIND_BASE + WIND_PER_TIER * Math.max(0, tier - from - 1));
   const side = Math.random() < 0.5 ? -1 : 1;
   return Math.round(side * strength * (0.6 + 0.4 * Math.random()));
 }
@@ -249,9 +360,39 @@ function gust(tier: number) {
 /** The curse in force on the tier being built, if any. */
 export const curseNow = (s: GameState) => (s.curse && s.curse.tier === s.tier ? s.curse.id : null);
 
-/** How fast the stone in hand swings: the tier's speed, its kind, a slow drop and Haste. */
+/** How fast the stone in hand swings: the tier's speed, its kind and material, a slow drop and Haste. */
 export function swingSpeed(s: GameState) {
-  return s.speed * KIND_SPEED[s.moving.kind] * (s.slow ? SLOW_MULT : 1) * (curseNow(s) === 'haste' ? HASTE : 1);
+  const basalt = s.moving.material === 'basalt' ? BASALT_SPEED : 1;
+  return s.speed * KIND_SPEED[s.moving.kind] * basalt * (s.slow ? SLOW_MULT : 1) * (curseNow(s) === 'haste' ? HASTE : 1);
+}
+
+/** How close to the stone below a drop must be to be perfect: the blessings' window, scaled by the material. */
+export function perfectWindow(s: GameState) {
+  return s.perfectPx * (s.material === 'marble' ? MARBLE_PERFECT : s.material === 'sandstone' ? SANDSTONE_PERFECT : 1);
+}
+
+/** Whether the stone in hand can go to the reserve, or swap with the stone held there. */
+export function canSwap(s: GameState) {
+  return s.phase === 'swinging' && s.tier >= RESERVE_FROM_TIER && (s.reserve === null || !s.swapped);
+}
+
+/**
+ * Puts the stone in hand in reserve and takes the next one (free while the reserve is empty), or swaps it
+ * with the one held, once per tier. The stone keeps swinging from where it is.
+ */
+export function swapReserve(s: GameState) {
+  if (!canSwap(s)) return false;
+  const held = s.reserve;
+  s.reserve = s.moving.kind;
+  if (held === null) {
+    s.moving.kind = s.nextKind;
+    s.nextKind = kindFor(s.stones.length + 1);
+  } else {
+    s.moving.kind = held;
+    s.swapped = true;
+  }
+  s.events.push({ type: 'swapped', kind: s.moving.kind });
+  return true;
 }
 
 /** Moves the swinging or falling stone on by `dt` milliseconds. */
@@ -293,7 +434,7 @@ function land(s: GameState) {
   let kept: number;
   // Only a drop that would also overlap enough to stand counts as perfect, so a wide window
   // can't save a narrow stone that misses.
-  const perfect = Math.abs(m.x - top.x) <= Math.min(s.perfectPx, (top.w + m.w) / 2 - MIN_W);
+  const perfect = Math.abs(m.x - top.x) <= Math.min(perfectWindow(s), (top.w + m.w) / 2 - MIN_W);
   const cut: { x: number; w: number }[] = [];
   if (perfect) {
     x = top.x;
@@ -305,8 +446,8 @@ function land(s: GameState) {
     x = (left + right) / 2;
     if (left > m.x - m.w / 2) cut.push({ x: (m.x - m.w / 2 + left) / 2, w: left - (m.x - m.w / 2) });
     if (right < m.x + m.w / 2) cut.push({ x: (right + m.x + m.w / 2) / 2, w: m.x + m.w / 2 - right });
-    // Heavy stones and the Brittle curse crack a little more off either side.
-    const crack = (m.kind === 'heavy' ? HEAVY_CRACK : 0) + (curseNow(s) === 'brittle' ? BRITTLE_CRACK : 0);
+    // Heavy stones, Basalt and the Brittle curse crack a little more off either side.
+    const crack = (m.kind === 'heavy' ? HEAVY_CRACK : 0) + (m.material === 'basalt' ? BASALT_CRACK : 0) + (curseNow(s) === 'brittle' ? BRITTLE_CRACK : 0);
     if (crack && kept >= MIN_W) {
       const c = Math.min(crack, kept) / 2;
       cut.push({ x: left + c / 2, w: c }, { x: right - c / 2, w: c });
@@ -318,6 +459,7 @@ function land(s: GameState) {
     const caught = s.grace > 0;
     const d: Drop = { x: m.x, w: m.w, kept: 0, share: 0, perfect: false, missed: true, caught };
     s.lastDrop = d;
+    s.chain = 0;
     s.events.push({ type: 'missed', drop: d });
     if (caught) {
       s.grace--;
@@ -332,13 +474,28 @@ function land(s: GameState) {
   const share = kept / m.w;
   const d: Drop = { x, w: m.w, kept, share, perfect, missed: false, caught: false };
   s.lastDrop = d;
-  s.stones.push({ x, w: kept, tier: s.tier, perfect, kind: m.kind });
+  s.stones.push({ x, w: kept, tier: s.tier, perfect, kind: m.kind, material: m.material });
   const favor = stoneFavor(s, perfect, m.kind);
   s.favor += favor;
   if (share < BALANCE) s.wobbly = true;
   s.inTier++;
+  s.chain = perfect ? s.chain + 1 : 0;
   s.events.push({ type: 'placed', drop: d, cut, favor });
   s.phase = 'swinging';
+  // A chain of perfect drops grows the stone back a little, from the third in a row.
+  if (perfect && s.tier >= CHAIN_FROM_TIER && s.chain >= CHAIN_LEN && kept < PLINTH_W) {
+    widenTop(s, REGROW_PX);
+    s.events.push({ type: 'regrown', px: s.stones.at(-1)!.w - kept });
+  }
+  // From tier 3 every off-centre stone leans the temple; too far and the tier being built topples.
+  if (s.tier >= LEAN_FROM_TIER) {
+    s.lean += x - top.x;
+    if (Math.abs(s.lean) > LEAN_MAX) {
+      topple(s);
+      spawn(s);
+      return;
+    }
+  }
   const trial = s.trial;
   if (trial && !trial.failed) {
     if (trial.id === 'perfect' ? perfect : share >= TRIAL_KEEP) trial.done++;
@@ -353,13 +510,13 @@ function land(s: GameState) {
     const done = s.tier;
     s.events.push({ type: 'tier', tier: done, balanced });
     if (trial && !trial.failed) {
-      const bonus = TRIAL_FAVOR * favorMult(s, done);
+      const bonus = Math.ceil(TRIAL_FAVOR * favorMult(s, done) * (s.material === 'basalt' ? BASALT_TRIAL_MULT : 1));
       s.favor += bonus;
       s.events.push({ type: 'trial', tier: done, passed: true, favor: bonus });
     }
     if (balanced) {
       s.balancedTiers++;
-      s.favor += TIER_FAVOR * favorMult(s, done);
+      s.favor += Math.ceil(TIER_FAVOR * favorMult(s, done));
     }
     s.tiersBuilt++;
     s.best = Math.max(s.best, s.tiersBuilt);
@@ -367,18 +524,23 @@ function land(s: GameState) {
     s.inTier = 0;
     s.wobbly = false;
     s.curse = null;
-    s.speed = speedFor(s.tier, s.blessings.filter((b) => b === 'calm').length);
+    s.swapped = false;
+    s.material = 'limestone';
+    // A finished tier settles: the temple keeps half its lean.
+    s.lean = Math.trunc(s.lean * LEAN_SETTLE);
+    s.speed = speedFor(s.tier, s.blessings.filter((b) => b === 'calm').length, s.patron);
     s.trial = s.tier >= TRIALS_FROM_TIER ? { id: TRIALS[Math.floor(Math.random() * TRIALS.length)], done: 0, failed: false } : null;
     if (s.tiersBuilt === GOAL_TIER && !s.endless) {
       s.phase = 'crowned';
       return;
     }
     if (balanced) {
-      s.offer = pickOffer();
+      s.offer = pickOffer(s);
       s.curseOffer = pickCurse();
       s.phase = 'blessing';
-    } else if (s.favor >= CHEAPEST) {
-      // A wobbly tier earns no blessing, but the shop still opens when favor can buy something.
+    } else if (s.favor >= CHEAPEST || s.tier >= MATERIAL_FROM_TIER) {
+      // A wobbly tier earns no blessing, but the break still opens when favor can buy something or
+      // a material is to be picked.
       s.offer = [];
       s.curseOffer = null;
       s.phase = 'blessing';
@@ -387,15 +549,45 @@ function land(s: GameState) {
   spawn(s);
 }
 
+/** The tier being built falls off the temple: its stones go, the lean is gone with them and the tier starts over. */
+function topple(s: GameState) {
+  const count = s.inTier;
+  s.stones.splice(s.stones.length - count, count);
+  s.events.push({ type: 'toppled', count, lean: s.lean });
+  s.inTier = 0;
+  s.wobbly = false;
+  s.lean = 0;
+  s.chain = 0;
+  if (s.trial) s.trial = { id: s.trial.id, done: 0, failed: false };
+}
+
+/** Whether a material can be picked now: in a break, from `MATERIAL_FROM_TIER`. */
+export const canPickMaterial = (s: GameState) => s.phase === 'blessing' && s.tier >= MATERIAL_FROM_TIER;
+
+/** Picks what the tier about to be built is cut from; picking the same one again goes back to limestone. */
+export function chooseMaterial(s: GameState, id: MaterialId) {
+  if (!canPickMaterial(s)) return false;
+  s.material = s.material === id ? 'limestone' : id;
+  s.moving.material = s.material;
+  return true;
+}
+
 /** How much a tier's favor is multiplied by: double on the gilded tier. */
 export const gild = (tier: number) => (tier === GILDED_TIER ? GILDED_MULT : 1);
 
-/** The gilded tier's multiplier, doubled again while a curse is in force on that tier. */
-export const favorMult = (s: GameState, tier: number) => gild(tier) * (s.curse && s.curse.tier === tier ? CURSE_MULT : 1);
+/** What a material does to its tier's favor. */
+export const materialMult = (material: MaterialId) => (material === 'marble' ? MARBLE_MULT : material === 'sandstone' ? SANDSTONE_MULT : 1);
 
-/** The favor a stone placed now earns. */
+/**
+ * The gilded tier's multiplier, doubled again while a curse is in force on that tier, times the tier's
+ * material (known only for the tier being built). Favor is rounded up after it.
+ */
+export const favorMult = (s: GameState, tier: number) =>
+  gild(tier) * (s.curse && s.curse.tier === tier ? CURSE_MULT : 1) * (tier === s.tier ? materialMult(s.material) : 1);
+
+/** The favor a stone placed now earns; the Patient Mason's perfect drops earn nothing extra. */
 export const stoneFavor = (s: GameState, perfect: boolean, kind: StoneKind = 'normal') =>
-  (s.favorPerStone + (perfect ? PERFECT_FAVOR : 0) + (kind === 'light' ? LIGHT_FAVOR : 0)) * favorMult(s, s.tier);
+  Math.ceil((s.favorPerStone + (perfect && s.patron !== 'patient' ? PERFECT_FAVOR : 0) + (kind === 'light' ? LIGHT_FAVOR : 0)) * favorMult(s, s.tier));
 
 /** Whether the blessings on offer can be swapped for three new ones. */
 export const canReroll = (s: GameState) => s.phase === 'blessing' && s.offer.length > 0 && s.favor >= REROLL_COST;
@@ -404,7 +596,7 @@ export const canReroll = (s: GameState) => s.phase === 'blessing' && s.offer.len
 export function reroll(s: GameState) {
   if (!canReroll(s)) return false;
   s.favor -= REROLL_COST;
-  s.offer = pickOffer();
+  s.offer = pickOffer(s);
   s.curseOffer = pickCurse();
   s.events.push({ type: 'rerolled' });
   return true;
@@ -417,7 +609,7 @@ function pickCurse() {
 
 /** Whether a shop item can be bought now: between tiers, once per break, with the favor for it. */
 export function canBuy(s: GameState, item: ShopId) {
-  if (s.phase !== 'blessing' || s.bought.includes(item) || s.favor < SHOP_INFO[item].cost) return false;
+  if (s.phase !== 'blessing' || !shopFor(s).includes(item) || s.bought.includes(item) || s.favor < SHOP_INFO[item].cost) return false;
   return item !== 'wider' || topOf(s).w < PLINTH_W;
 }
 
@@ -462,20 +654,22 @@ function endBreak(s: GameState) {
   s.phase = 'swinging';
 }
 
-/** After the crown: keep building into the endless sky, where gusts push the falling stone. */
+/** After the crown: keep building into the endless sky, where gusts push the falling stone, after a break to pick the first sky tier's material. */
 export function keepBuilding(s: GameState) {
   if (s.phase !== 'crowned') return false;
   s.endless = true;
-  s.phase = 'swinging';
+  s.offer = [];
+  s.curseOffer = null;
+  s.phase = 'blessing';
   spawn(s);
   return true;
 }
 
-/** Three different blessings, drawn with `Math.random`. */
-function pickOffer() {
-  const pool = [...BLESSINGS];
+/** Different blessings, as many as the patron allows, drawn with `Math.random`. */
+function pickOffer(s: GameState) {
+  const pool = blessingsFor(s);
   const offer: BlessingId[] = [];
-  while (offer.length < OFFER_SIZE) offer.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+  while (offer.length < offerSize(s)) offer.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
   return offer;
 }
 
@@ -490,7 +684,7 @@ export function chooseBlessing(s: GameState, id: BlessingId) {
       widenTop(s, BROAD_PX);
       break;
     case 'calm':
-      s.speed = speedFor(s.tier, s.blessings.filter((b) => b === 'calm').length);
+      s.speed = speedFor(s.tier, s.blessings.filter((b) => b === 'calm').length, s.patron);
       break;
     case 'steady':
       s.perfectPx += STEADY_PX;
