@@ -3,6 +3,8 @@ import {
   FINE,
   GROW_MS,
   ITEMS,
+  PANACEA,
+  PANACEA_RECIPE,
   POTIONS,
   RECIPES,
   REFINE,
@@ -70,6 +72,37 @@ import {
   orderable,
   researched,
   RESEARCH_ORDER,
+  BLIGHT_DAY,
+  BLIGHT_EVERY_MS,
+  BLIGHT_SPREAD_MS,
+  GARDEN_RUN,
+  GARDEN_NAMES,
+  MAX_PLAGUE_NEED,
+  PLAGUE_DAY,
+  PLAGUE_RELAPSE_EXTRA,
+  PLAGUE_RELAPSE_REPUTATION,
+  PLAGUE_STAGE_MS,
+  PRICE_SIGNS,
+  RIVAL_MONTH_DAYS,
+  RIVAL_CUT,
+  RIVAL_SALES,
+  SIGN_DEMAND,
+  SIGN_NAMES,
+  SIGN_PAY,
+  SIGN_REPUTATION,
+  blightImmune,
+  gardenPlant,
+  panaceaUnlocked,
+  patienceRate,
+  plagueAt,
+  plagueStage,
+  plantChoices,
+  plotNeighbours,
+  rivalPotionFor,
+  rivalUndercuts,
+  signOf,
+  weatherFor,
+  PLOTS_PER_GARDEN,
   type BeltId,
   type CraftingId,
   type BeltItem,
@@ -115,8 +148,9 @@ export function tick(
   atCounter: (order: Order) => boolean = () => true,
   rand: () => number = Math.random,
 ) {
+  // A blighted bed stands still until the sickle clears it.
   for (const plot of state.plots) {
-    plot.grown = Math.min(plot.grown + dt * growthSpeed(state), GROW_MS[plot.plant]);
+    if (!plot.blighted) plot.grown = Math.min(plot.grown + dt * growthSpeed(state), GROW_MS[plot.plant]);
   }
 
   for (const id of REFINERS) {
@@ -157,7 +191,8 @@ export function tick(
 
   serveCustomers(state, dt, workingAt, atCounter);
   if (state.craftsmen.counter.level >= 2) collectTill(state);
-  for (const order of state.orders) if (atCounter(order)) order.patience -= dt;
+  // Patience runs out faster while a potion wanted is sold dear.
+  for (const order of state.orders) if (atCounter(order)) order.patience -= dt * patienceRate(state, order);
   // A customer who runs out of patience walks off, and the street thinks less of the shop. One of a
   // market day's crowd walking off loses the rush bonus.
   for (const order of state.orders) {
@@ -174,12 +209,108 @@ export function tick(
   // On a market day, a crowd comes in at midday.
   const day = state.contract.day;
   if (isMarketDay(day) && state.contract.dayLeft <= DAY_MS / 2 && state.rush?.day !== day) startRush(state, rand);
+  // Each new day the rival picks the potion it undercuts, after yesterday's sales are counted.
+  if (state.rival.day !== day) rivalNewDay(state);
+  // From the fifth day the plague spreads; each stage has so long before it comes back worse.
+  if (!state.plague && day >= PLAGUE_DAY) state.plague = plagueAt(0);
+  const stage = plagueStage(state);
+  if (stage) {
+    state.plague!.left -= dt;
+    if (state.plague!.left <= 0) relapse(state);
+  }
+  spreadBlight(state, dt, rand);
 
   state.nextOrderIn -= dt;
   if (state.nextOrderIn <= 0) {
     state.nextOrderIn = orderInterval(state, rand());
     if (state.orders.length < maxOrders(state)) state.orders.push(newOrder(state, rand));
   }
+}
+
+/**
+ * A plague stage missed comes back worse: the same stage asks for `PLAGUE_RELAPSE_EXTRA` more potions
+ * within the same time, and the street thinks less of the shop.
+ */
+function relapse(state: GameState) {
+  const plague = state.plague!;
+  plague.need = Math.min(MAX_PLAGUE_NEED, plague.need + PLAGUE_RELAPSE_EXTRA);
+  plague.made = 0;
+  plague.left = PLAGUE_STAGE_MS;
+  plague.relapses++;
+  nudgeReputation(state, -PLAGUE_RELAPSE_REPUTATION);
+}
+
+/**
+ * Counts a potion sold towards the plague's stage: the stage's potion, or any on the last stage.
+ * Once enough are sold the next stage comes; past the last, the Panacea is unlocked.
+ */
+function deliverForPlague(state: GameState, potion: PotionId) {
+  const stage = plagueStage(state);
+  const plague = state.plague;
+  if (!stage || !plague || (stage.potion && stage.potion !== potion)) return;
+  plague.made++;
+  if (plague.made < plague.need) return;
+  state.plague = { ...plagueAt(plague.stage + 1, plague.relapses), left: 0 };
+}
+
+/**
+ * The blight: on a rainy day from `BLIGHT_DAY`, now and then a bed in a garden that stands is
+ * blighted, and every blighted bed blights a neighbour in its garden every `BLIGHT_SPREAD_MS`. The
+ * guild's herbalist keeps every bed clear. `rand` is only rolled when the blight can strike, so an
+ * earlier day's randomness is as it was.
+ */
+function spreadBlight(state: GameState, dt: number, rand: () => number) {
+  if (blightImmune(state)) {
+    for (const plot of state.plots) plot.blighted = false;
+    return;
+  }
+  const day = state.contract.day;
+  const standing = (i: number) => gardenBuilt(state, gardenOf(i));
+  if (day >= BLIGHT_DAY && weatherFor(day) === 'rain' && rand() < dt / BLIGHT_EVERY_MS) {
+    const clear = state.plots.map((_, i) => i).filter((i) => standing(i) && !state.plots[i].blighted);
+    if (clear.length > 0) blight(state, clear[Math.floor(rand() * clear.length)]);
+  }
+  state.plots.forEach((plot, i) => {
+    if (!plot.blighted) return;
+    plot.blightMs = (plot.blightMs ?? 0) + dt;
+    if (plot.blightMs < BLIGHT_SPREAD_MS) return;
+    plot.blightMs -= BLIGHT_SPREAD_MS;
+    const near = plotNeighbours(i).filter((n) => !state.plots[n].blighted);
+    if (near.length > 0) blight(state, near[Math.floor(rand() * near.length)]);
+  });
+}
+
+function blight(state: GameState, plot: number) {
+  state.plots[plot].blighted = true;
+  state.plots[plot].blightMs = 0;
+}
+
+/** Whether a bed is blighted. */
+export const isBlighted = (state: GameState, plotIndex: number) => !!state.plots[plotIndex].blighted;
+
+/** The sickle clears a blighted bed, which then grows again from seed. */
+export function clearBlight(state: GameState, plotIndex: number): Feedback | null {
+  const plot = state.plots[plotIndex];
+  if (!plot.blighted) return null;
+  plot.blighted = false;
+  plot.blightMs = 0;
+  plot.grown = 0;
+  return ['Blight cleared'];
+}
+
+/**
+ * A new day for the rival: yesterday's sales of its potion are counted (more than its own keep the
+ * streak going, fewer break it; a month's streak closes it for good), and it picks today's potion.
+ */
+function rivalNewDay(state: GameState) {
+  const { rival } = state;
+  if (rival.open && rival.potion) {
+    rival.streak = rival.sold > RIVAL_SALES ? rival.streak + 1 : 0;
+    if (rival.streak >= RIVAL_MONTH_DAYS) rival.open = false;
+  }
+  rival.day = state.contract.day;
+  rival.sold = 0;
+  rival.potion = rival.open ? rivalPotionFor(state, rival.day) : null;
 }
 
 /**
@@ -239,17 +370,20 @@ function refineSecond(state: GameState, refiner: Refiner, ms: number, first: Pla
  * Where each belt takes goods from: a ripe plant from either garden of its line, or a station's
  * finished goods; only goods whose lane has room at the start.
  */
-function takeForBelt(state: GameState, belt: BeltId, fits: (id: ItemId) => boolean): ItemId | null {
+function takeForBelt(state: GameState, belt: BeltId, fits: (id: ItemId, run: number) => boolean): BeltItem | null {
   if (belt === 'garden' || belt === 'garden2') {
     const line = belt === 'garden2' ? 2 : 1;
-    const i = state.plots.findIndex((p, i) => GARDEN_LINE[gardenOf(i)] === line && isRipe(state, i) && fits(p.plant));
+    const i = state.plots.findIndex((p, i) => GARDEN_LINE[gardenOf(i)] === line && isRipe(state, i) && fits(p.plant, GARDEN_RUN[gardenOf(i)]));
     if (i < 0) return null;
     state.plots[i].grown = 0;
-    return state.plots[i].plant;
+    const run = GARDEN_RUN[gardenOf(i)];
+    return { id: state.plots[i].plant, at: beltStart(belt, state.plots[i].plant, run), run };
   }
   const output = state[belt].output;
-  const i = output.findIndex(fits);
-  return i < 0 ? null : output.splice(i, 1)[0];
+  const i = output.findIndex((id) => fits(id, 0));
+  if (i < 0) return null;
+  const id = output.splice(i, 1)[0];
+  return { id, at: beltStart(belt, id) };
 }
 
 /** Where each belt hands its goods to: the station's tray they go in. */
@@ -305,15 +439,16 @@ function runBelt(state: GameState, id: BeltId, dt: number) {
     ahead.set(item.id, item);
     return true;
   });
-  const item = takeForBelt(state, id, (kind) => BELT_LANES[id].includes(kind) && (ahead.get(kind)?.at ?? Infinity) >= beltStart(id, kind) + BELT_GAP_MS);
-  if (item) belt.items.push({ id: item, at: beltStart(id, item) });
+  // Goods get on at the start of their garden's run (or their kind's), a gap behind the last in their lane.
+  const item = takeForBelt(state, id, (kind, run) => BELT_LANES[id].includes(kind) && (ahead.get(kind)?.at ?? Infinity) >= beltStart(id, kind, run) + BELT_GAP_MS);
+  if (item) belt.items.push(item);
 }
 
 /** What share of a belt's speed each of its lanes runs at. */
 const LANE_SHARE = 2;
 
-/** Where goods of a kind get on a belt, in ms along its main run: the start of their own run. */
-const beltStart = (id: BeltId, kind: ItemId) => beltSpan(id, kind).start;
+/** Where goods of a kind get on a belt, in ms along its main run: the start of their own run, or of `run`. */
+const beltStart = (id: BeltId, kind: ItemId, run?: number) => beltSpan(id, kind, run).start;
 
 /**
  * Works one of a cauldron's pipes for `ms` and returns its brew afterwards: starts one when it has
@@ -325,7 +460,10 @@ function brew(state: GameState, cauldron: Cauldron, brewing: Brew | null, ms: nu
   if (!current) return null;
   current.progress += ms;
   if (current.progress < current.ms) return current;
-  cauldron.output.push(current.out);
+  // The Panacea goes straight to the town, which it cures; a potion goes out on its pallet.
+  if (current.out === PANACEA) {
+    if (state.plague) state.plague.cured = true;
+  } else cauldron.output.push(current.out);
   // Work past the end of this brew goes on the next, if there is one.
   const next = startBrew(state, cauldron, first);
   if (next) next.progress = current.progress - current.ms;
@@ -339,6 +477,15 @@ function brew(state: GameState, cauldron: Cauldron, brewing: Brew | null, ms: nu
  * started, if any, for a pipe to work.
  */
 function startBrew(state: GameState, cauldron: Cauldron, first: PotionId | null = null): Brew | null {
+  // Once the plague's last stage is over, the town's cure comes before everything, the moment one of
+  // each refined good is in.
+  if (panaceaUnlocked(state)) {
+    const left = without(cauldron.contents, PANACEA_RECIPE.inputs);
+    if (left) {
+      cauldron.contents = left;
+      return { out: PANACEA, ms: PANACEA_RECIPE.ms, progress: 0 };
+    }
+  }
   // A fine potion counts as the potion it is.
   const have = new Map(RECIPES.map((r) => [r.out, onPallet(cauldron.output.map(plainOf), r.out)]));
   // The priority potion goes first whenever its ingredients are in; the rest by fewest on the pallet.
@@ -365,7 +512,9 @@ function newOrder(state: GameState, rand: () => number, regulars = true): Order 
   if (theirs.length > 0) wants = theirs;
   else {
     const count = rand() < 0.35 + 0.2 * busy ? 2 : 1;
-    wants = Array.from({ length: count }, () => potions[Math.floor(rand() * potions.length)]);
+    // A potion sold cheap is asked for twice as often: it is in the hat twice.
+    const hat = potions.flatMap((p) => Array.from({ length: SIGN_DEMAND[signOf(state, p)] }, () => p));
+    wants = Array.from({ length: count }, () => hat[Math.floor(rand() * hat.length)]);
   }
   const back = theirs.length > 0;
   // Customers pay for each potion as they get it, with a counter bonus that is more generous, and
@@ -403,7 +552,7 @@ function startRush(state: GameState, rand: () => number) {
 /** Whether a plot can be harvested: grown, in a garden that is there. */
 export function isRipe(state: GameState, plotIndex: number) {
   const plot = state.plots[plotIndex];
-  return plot.grown >= GROW_MS[plot.plant] && gardenBuilt(state, gardenOf(plotIndex));
+  return !plot.blighted && plot.grown >= GROW_MS[plot.plant] && gardenBuilt(state, gardenOf(plotIndex));
 }
 
 /** Outcome of an interaction, as short lines for floating feedback text. */
@@ -459,10 +608,16 @@ function serveFromShelf(state: GameState, atCounter: (order: Order) => boolean, 
       if (i < 0) return true;
       counter.shelf.splice(i, 1);
       const others = counter.shelf.filter((p) => plainOf(p) === want).length;
-      const pay = order.pay[want] ?? 0;
-      counter.till += stockedPay(fine ? Math.round(pay * FINE_BONUS) : pay, others);
+      const sign = signOf(state, want);
+      // A fine one pays more, the shelf's sign scales the price, and the rival's cut comes off a plain one.
+      let pay = Math.round((order.pay[want] ?? 0) * SIGN_PAY[sign] * (fine ? FINE_BONUS : 1));
+      if (!fine && rivalUndercuts(state, want)) pay = Math.round(pay * (1 - RIVAL_CUT));
+      counter.till += stockedPay(pay, others);
       state.sold++;
+      nudgeReputation(state, SIGN_REPUTATION[sign]);
+      if (rivalUndercuts(state, want)) state.rival.sold++;
       if (want === state.contract.potion) deliverForContract(state);
+      deliverForPlague(state, want);
       limit--;
       return false;
     });
@@ -584,9 +739,11 @@ export function dropInCauldron(state: GameState, id: CauldronId = 'cauldron'): F
 export function pickUpFromCauldron(state: GameState, id: CauldronId = 'cauldron'): Feedback | null {
   const cauldron = state[id];
   // Either pipe's brew can be taken out fine.
-  const pipe = inFineWindow(cauldron.brewing) ? 'brewing' : inFineWindow(cauldron.brewing2 ?? null) ? 'brewing2' : null;
+  // The Panacea is for the town, so it is never taken out early.
+  const fineIn = (brew: Brew | null | undefined) => inFineWindow(brew ?? null) && brew!.out !== PANACEA;
+  const pipe = fineIn(cauldron.brewing) ? 'brewing' : fineIn(cauldron.brewing2) ? 'brewing2' : null;
   if (pipe && freeHands(state) > 0) {
-    const fine = FINE[cauldron[pipe]!.out];
+    const fine = FINE[cauldron[pipe]!.out as PotionId];
     cauldron[pipe] = null;
     state.carrying.push(fine);
     return [`+ ${ITEMS[fine].name}!`];
@@ -634,6 +791,29 @@ export function cyclePriority(state: GameState, id: CraftingId): Feedback {
   const next = choices[(choices.indexOf(state.priority[id]) + 1) % choices.length];
   (state.priority as Record<CraftingId, PlantId | PotionId | null>)[id] = next;
   return [next ? `${ITEMS[next].name} first` : 'Any order'];
+}
+
+/** Moves a shelf's price sign on: Fair to Dear, Dear to Cheap, Cheap to Fair. */
+export function cycleSign(state: GameState, potion: PotionId): Feedback {
+  const next = PRICE_SIGNS[(PRICE_SIGNS.indexOf(signOf(state, potion)) + 1) % PRICE_SIGNS.length];
+  state.signs[potion] = next;
+  return [`${ITEMS[potion].name}: ${SIGN_NAMES[next].toLowerCase()}`];
+}
+
+/**
+ * Switches a garden's beds to the next plant its line grows (see `plantChoices`). Every bed starts
+ * again from seed, clear of blight, so the switch costs a crop.
+ */
+export function replantGarden(state: GameState, garden: number): Feedback | null {
+  const choices = plantChoices(state, garden);
+  const now = gardenPlant(state, garden);
+  const next = choices[(choices.indexOf(now) + 1) % choices.length];
+  if (!next || next === now) return ['Nothing else to plant'];
+  // Changed in place: the scene keeps each bed's plot object.
+  for (let i = garden * PLOTS_PER_GARDEN; i < (garden + 1) * PLOTS_PER_GARDEN; i++) {
+    Object.assign(state.plots[i], { plant: next, grown: 0, blighted: false, blightMs: 0 });
+  }
+  return [`Replanted: ${GARDEN_NAMES[next].toLowerCase()}`];
 }
 
 /** Pays a handful of coins towards hiring a station's next craftsman, who starts work once fully paid. */

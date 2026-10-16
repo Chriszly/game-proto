@@ -1,9 +1,13 @@
-import { GROW_MS, PLANTS, POTION_PRICE, POTIONS, REFINED, type ItemId, type PlantId, type PotionId, type RefinedId, type SellableId } from './items';
+import { GROW_MS, PLANTS, POTION_PRICE, POTIONS, REFINED, type BrewOut, type ItemId, type PlantId, type PotionId, type RefinedId, type SellableId } from './items';
 
 export interface Plot {
   plant: PlantId;
   /** Milliseconds grown since the last harvest; ripe once it reaches the plant's grow time. */
   grown: number;
+  /** Blighted: the bed stops growing and spreads the blight, until the sickle clears it. Missing in older saves. */
+  blighted?: boolean;
+  /** Milliseconds since this blighted bed last spread the blight; it spreads every `BLIGHT_SPREAD_MS`. */
+  blightMs?: number;
 }
 
 export interface Refiner {
@@ -19,7 +23,8 @@ export interface Refiner {
 }
 
 export interface Brew {
-  out: PotionId;
+  /** The potion, or the Panacea, which cures the town the moment it is done. */
+  out: BrewOut;
   ms: number;
   progress: number;
 }
@@ -132,6 +137,8 @@ export const BELTS: BeltId[] = ['garden', 'refiner', 'cauldron', 'garden2', 'ref
 export interface BeltItem {
   id: ItemId;
   at: number;
+  /** The run it got on at (a garden's feeder, by `GARDEN_RUN`); missing means its kind's own run. */
+  run?: number;
 }
 
 /** Something bought on its build marker in handfuls of coins, like an upgrade. */
@@ -169,9 +176,9 @@ export interface Upgrade {
  * much every pallet and shelf holds, the shop's prices, an extra order slot and how often customers
  * come in.
  */
-export type UpgradeId = StationId | 'pack' | 'boots' | 'sickle' | 'growth' | 'belts' | 'storage' | 'prices' | 'slots' | 'customers' | 'research';
+export type UpgradeId = StationId | 'pack' | 'boots' | 'sickle' | 'growth' | 'belts' | 'storage' | 'prices' | 'slots' | 'customers' | 'research' | 'herbalist';
 export const DOCTOR_UPGRADES = ['pack', 'boots', 'sickle'] as const;
-export const GUILD_UPGRADES = ['growth', 'belts', 'storage', 'prices', 'slots', 'customers'] as const;
+export const GUILD_UPGRADES = ['growth', 'belts', 'storage', 'prices', 'slots', 'customers', 'herbalist'] as const;
 
 /** Each upgrade's highest level (levels count from 0), its first cost, which doubles per level, and name. */
 export const UPGRADES: Record<UpgradeId, { max: number; cost: number; name: string }> = {
@@ -189,6 +196,8 @@ export const UPGRADES: Record<UpgradeId, { max: number; cost: number; name: stri
   prices: { max: 2, cost: 20, name: 'Prices' },
   slots: { max: 1, cost: 30, name: 'Slots' },
   customers: { max: 2, cost: 25, name: 'Customers' },
+  // The guild's herbalist tends the beds, so the blight never takes one.
+  herbalist: { max: 1, cost: 60, name: 'Herbalist' },
   // Each level learns the next recipe in RESEARCH_ORDER.
   research: { max: 4, cost: 30, name: 'Study' },
 };
@@ -253,6 +262,12 @@ export interface GameState {
   regulars: Regular[];
   /** The latest market day's rush, or null before the first. */
   rush: Rush | null;
+  /** The plague, from `PLAGUE_DAY` on, or null before it. */
+  plague: Plague | null;
+  /** The price sign on each potion's shelf; a shelf without one is Fair. */
+  signs: Partial<Record<PotionId, PriceSign>>;
+  /** The rival shop across the street. */
+  rival: Rival;
 }
 
 /**
@@ -264,6 +279,22 @@ export interface GameState {
 export const GARDENS: PlantId[] = ['wheat', 'mandrake', 'wheat', 'mandrake', 'nightshade', 'nightshade'];
 /** Which production line each garden belongs to: 1 or 2. */
 export const GARDEN_LINE = [1, 1, 2, 2, 1, 2];
+/** Which run of its line's garden belt each garden's goods get on: the main run, or a feeder. */
+export const GARDEN_RUN = [0, 1, 0, 1, 2, 2];
+/** The gardens of each line, in the order of the belt's runs. */
+export const LINE_GARDENS = (line: number) => GARDENS.map((_, g) => g).filter((g) => GARDEN_LINE[g] === line);
+/** What a garden is called while it grows each plant. */
+export const GARDEN_NAMES: Record<PlantId, string> = { wheat: 'Wheat field', mandrake: 'Mandrake patch', nightshade: 'Shade garden' };
+/** The plant a garden grows: every bed in a garden grows the same one. */
+export const gardenPlant = (state: GameState, garden: number) => state.plots[garden * PLOTS_PER_GARDEN].plant;
+/**
+ * What a garden's sign can switch its beds to: the plants its line grows already, so nightshade only
+ * once the line's shade garden is planted.
+ */
+export const plantChoices = (state: GameState, garden: number): PlantId[] => {
+  const line = GARDEN_LINE[garden];
+  return PLANTS.filter((plant) => plant !== 'nightshade' || !!state.shade[line - 1]?.built);
+};
 /** Each garden has nine plots, three by three. */
 export const PLOTS_PER_GARDEN = 9;
 /** The second line's fields are gardens LINE2_GARDEN and the one after it. */
@@ -466,6 +497,7 @@ export const UNLOCKED_BY: Partial<Record<Unlock, Unlock>> = {
   'level-customers': 'level-prices',
   'level-slots': 'level-customers',
   'level-research': 'belt-garden',
+  'level-herbalist': 'level-growth',
 };
 
 /** The coins paid towards a thing so far, and whether at least its first level or build is done. */
@@ -520,6 +552,120 @@ export function contractFor(state: GameState, day: number, kept: number): Contra
   const need = Math.min(MAX_CONTRACT, 3 + kept);
   return { day, potion, need, made: 0, reward: roundFive(need * potionPrice(state, potion) * 0.45), dayLeft: DAY_MS, kept };
 }
+/**
+ * The plague: from `PLAGUE_DAY` a sickness spreads through the town in stages. Each stage asks for
+ * `need` potions sold at the counter (any kind on the last stage) within `PLAGUE_STAGE_MS`; a stage
+ * met moves the sickness on to the next, a stage missed comes back asking for `PLAGUE_RELAPSE_EXTRA`
+ * more and costs reputation. Past the last stage the Panacea is unlocked: brewing it cures the town
+ * and wins the game, and trade goes on after.
+ */
+export interface Plague {
+  /** The stage, from 0; `PLAGUE_STAGES.length` once every stage is met and the Panacea is unlocked. */
+  stage: number;
+  need: number;
+  made: number;
+  /** Milliseconds left to meet the stage. */
+  left: number;
+  /** How often a stage was missed and came back worse. */
+  relapses: number;
+  /** Set once the Panacea is brewed: the town is cured. */
+  cured: boolean;
+}
+export const PLAGUE_DAY = 5;
+export const PLAGUE_STAGE_MS = 3 * DAY_MS;
+export const PLAGUE_STAGES: { name: string; potion: PotionId | null; need: number }[] = [
+  { name: 'A fever spreads', potion: 'healingDraught', need: 6 },
+  { name: 'The chills take hold', potion: 'sleepingTonic', need: 6 },
+  { name: 'The whole town lies ill', potion: null, need: 10 },
+];
+export const PLAGUE_RELAPSE_EXTRA = 2;
+export const PLAGUE_RELAPSE_REPUTATION = 10;
+/** The most a relapsed stage asks for. */
+export const MAX_PLAGUE_NEED = 16;
+/** The plague stage at hand, or null before the plague, once the Panacea is unlocked, or after the cure. */
+export const plagueStage = (state: GameState) => (state.plague && !state.plague.cured ? (PLAGUE_STAGES[state.plague.stage] ?? null) : null);
+/** Whether the cauldrons may brew the Panacea: every stage is met and the town is still sick. */
+export const panaceaUnlocked = (state: GameState) => !!state.plague && state.plague.stage >= PLAGUE_STAGES.length && !state.plague.cured;
+/** The plague at `stage`, fresh. */
+export const plagueAt = (stage: number, relapses = 0, extra = 0): Plague => ({
+  stage,
+  need: Math.min(MAX_PLAGUE_NEED, (PLAGUE_STAGES[stage]?.need ?? 0) + extra),
+  made: 0,
+  left: PLAGUE_STAGE_MS,
+  relapses,
+  cured: false,
+});
+
+/**
+ * Price signs: each shelf sells Cheap, Fair or Dear. A cheap potion pays `SIGN_PAY` of the price,
+ * is asked for `SIGN_DEMAND` times as often and makes the street think `SIGN_REPUTATION` better of
+ * the shop a sale; a dear one pays about 40% more, but a customer waiting for one loses patience
+ * `SIGN_PATIENCE` times as fast.
+ */
+export type PriceSign = 'cheap' | 'fair' | 'dear';
+export const PRICE_SIGNS: PriceSign[] = ['cheap', 'fair', 'dear'];
+export const SIGN_NAMES: Record<PriceSign, string> = { cheap: 'Cheap', fair: 'Fair', dear: 'Dear' };
+export const SIGN_PAY: Record<PriceSign, number> = { cheap: 0.75, fair: 1, dear: 1.4 };
+export const SIGN_DEMAND: Record<PriceSign, number> = { cheap: 2, fair: 1, dear: 1 };
+export const SIGN_REPUTATION: Record<PriceSign, number> = { cheap: 2, fair: 0, dear: 0 };
+export const SIGN_PATIENCE: Record<PriceSign, number> = { cheap: 1, fair: 1, dear: 1.5 };
+/** The sign on a potion's shelf: Fair unless changed. */
+export const signOf = (state: GameState, potion: PotionId): PriceSign => state.signs[potion] ?? 'fair';
+/** How fast an order's patience runs out: faster while any potion it still wants is sold dear. */
+export const patienceRate = (state: GameState, order: Order) => Math.max(1, ...order.wants.map((p) => SIGN_PATIENCE[signOf(state, p)]));
+
+/**
+ * Blight: from `BLIGHT_DAY`, rain can blight a bed (one about every `BLIGHT_EVERY_MS` on a rainy
+ * day). A blighted bed stops growing and blights a neighbour in its garden every `BLIGHT_SPREAD_MS`
+ * until the doctor's sickle clears it, after which it grows again from seed. The guild's herbalist
+ * makes every bed immune.
+ */
+export const BLIGHT_DAY = 3;
+export const BLIGHT_EVERY_MS = 45_000;
+export const BLIGHT_SPREAD_MS = 40_000;
+export const blightImmune = (state: GameState) => state.upgrades.herbalist.level > 0;
+/** The beds next to a bed in its garden's three by three: above, below, left and right. */
+export const plotNeighbours = (plot: number) => {
+  const garden = gardenOf(plot), slot = plot % PLOTS_PER_GARDEN;
+  const col = slot % 3, row = Math.floor(slot / 3);
+  const near: number[] = [];
+  if (col > 0) near.push(plot - 1);
+  if (col < 2) near.push(plot + 1);
+  if (row > 0) near.push(plot - 3);
+  if (row < 2) near.push(plot + 3);
+  return near.filter((p) => gardenOf(p) === garden);
+};
+
+/**
+ * The rival shop across the street: from `RIVAL_DAY` it undercuts one potion a day, so customers
+ * pay `RIVAL_CUT` less for a plain one (a Fine one beats the cut), and sells `RIVAL_SALES` of it a
+ * day itself. Sell more of that potion than the rival each day for `RIVAL_MONTH_DAYS` days running
+ * and it closes for good.
+ */
+export interface Rival {
+  open: boolean;
+  /** The day its undercut potion was picked for; a new day picks again. */
+  day: number;
+  /** The potion it undercuts today, or null before `RIVAL_DAY` and once closed. */
+  potion: PotionId | null;
+  /** How many of that potion the shop has sold today. */
+  sold: number;
+  /** Days running the shop has outsold the rival. */
+  streak: number;
+}
+export const RIVAL_DAY = 4;
+export const RIVAL_CUT = 0.3;
+export const RIVAL_SALES = 4;
+export const RIVAL_MONTH_DAYS = 10;
+/** Whether the rival undercuts a potion today. */
+export const rivalUndercuts = (state: GameState, potion: PotionId) => state.rival.open && state.rival.potion === potion;
+/** The potion the rival undercuts on `day`: the same in every game, going round what customers ask for. */
+export const rivalPotionFor = (state: GameState, day: number): PotionId | null => {
+  if (day < RIVAL_DAY) return null;
+  const potions = orderable(state);
+  return potions[(day * 7 + 2) % potions.length] ?? null;
+};
+
 /** Least time between two items in a belt's lane, so they don't overlap. */
 export const BELT_GAP_MS = 600;
 /**
@@ -575,6 +721,9 @@ export function createInitialState(): GameState {
     reputation: START_REPUTATION,
     regulars: [],
     rush: null,
+    plague: null,
+    signs: {},
+    rival: { open: true, day: 0, potion: null, sold: 0, streak: 0 },
   };
   state.contract = contractFor(state, 1, 0);
   return state;

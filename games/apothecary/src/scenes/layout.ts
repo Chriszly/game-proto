@@ -80,9 +80,10 @@ export const GUILD = {
   growth: { x: 1199, y: 716 },
   belts: { x: 1289, y: 716 },
   storage: { x: 1379, y: 716 },
-  prices: { x: 1154, y: 796 },
-  customers: { x: 1244, y: 796 },
-  slots: { x: 1334, y: 796 },
+  prices: { x: 1109, y: 796 },
+  customers: { x: 1199, y: 796 },
+  slots: { x: 1289, y: 796 },
+  herbalist: { x: 1379, y: 796 },
 };
 /**
  * The study in the left market, beside the outfitter: a writing desk under its sign, and the marker
@@ -165,6 +166,11 @@ export const SHOP_STREET_DOOR = { from: 820, to: 860 };
 export const STREET = { x: COUNTER.x, y: WORLD.h - 16 };
 /** The shop's sign, on its front wall facing the street, left of the street door. */
 export const SHOP_SIGN = { x: SHOP.x + 70, y: SHOP.y + SHOP.h };
+/**
+ * The rival's stall across the street, left of the street door and out of the doctor's reach: its
+ * feet, its sign above it, and the lines above that saying what it undercuts and how the race goes.
+ */
+export const RIVAL = { x: 740, y: 800, sign: { x: 740, y: 724 }, offer: { x: 740, y: 704 }, streak: { x: 740, y: 686 } };
 
 /** How thick the shop's stone walls are; each runs along an edge of the shop, half inside and half out. */
 const WALL = 16;
@@ -253,6 +259,11 @@ export const shelfPosition = (i: number) => ({
   x: i < 3 ? SHOP.x + 32 : SHOP.x + SHOP.w - 32,
   y: SHOP.y + 80 + (i % 3) * 50,
 });
+/** Each shelf's price sign, hung beside it on the shop's side, level with its upper board. */
+export const shelfSignPosition = (i: number) => {
+  const shelf = shelfPosition(i);
+  return { x: shelf.x + (i < 3 ? 44 : -44), y: shelf.y - 26 };
+};
 export const PALLETS = {
   refiner: REFINER_PALLETS,
   cauldron: CAULDRON_PALLETS,
@@ -350,10 +361,13 @@ const RUN_MS = Object.fromEntries(
   }),
 ) as Record<BeltId, { start: number; join: number }[]>;
 
-/** The run goods of a kind ride on a belt, and where on its main run they get on and join it, in ms. */
-export const beltSpan = (id: BeltId, kind: ItemId) => {
-  const run = beltRun(id, kind);
-  return { run, ...RUN_MS[id][run] };
+/**
+ * The run goods of a kind ride on a belt (or `run`, the garden's they came from), and where on its
+ * main run they get on and join it, in ms.
+ */
+export const beltSpan = (id: BeltId, kind: ItemId, run?: number) => {
+  const on = run !== undefined && run < BELT_PATHS[id].length ? run : beltRun(id, kind);
+  return { run: on, ...RUN_MS[id][on] };
 };
 
 /**
