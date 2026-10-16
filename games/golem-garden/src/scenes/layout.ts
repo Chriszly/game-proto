@@ -19,16 +19,16 @@ export const HUD = {
 };
 /** The speed button, at the right end of the HUD strip. */
 export const SPEED_BUTTON = { x: 914, y: 32, w: 54, h: 32 };
-/** The menu a tapped golem opens, above or below it: Raise, Move and Uproot. */
-export const GOLEM_MENU = { w: 204, h: 50, chip: { w: 60, h: 38, gap: 6 } };
+/** The menu a tapped golem opens, above or below it: Raise, Aim, Move and Uproot (or, raising to level 3, its two forms and Back). */
+export const GOLEM_MENU = { w: 270, h: 50, chip: { w: 60, h: 38, gap: 6 } };
 /** The garden picker's cards, side by side. */
 export const GARDEN_CARD = { y: 318, w: 236, h: 196, gap: 20 };
 /** The side panel right of the board. */
 export const PANEL = { x: 800, y: 64, w: 148, h: 448 };
-/** The seed cards, by their centres, in the order of GOLEMS; the third (thorn) card is shorter. */
-export const SEED_BUTTONS = { x: 874, ys: [130, 226, 311], hs: [84, 84, 68], w: 136 };
+/** The seed cards, by their centres, in the order of SEEDS: two tall golem cards, the shorter thorn card and the hedge strip. */
+export const SEED_BUTTONS = { x: 874, ys: [120, 204, 276, 330], hs: [76, 76, 52, 40], w: 136 };
 /** The next wave's preview, above the wave button. */
-export const PREVIEW = { x: 808, y: 356, w: 132, h: 62 };
+export const PREVIEW = { x: 808, y: 358, w: 132, h: 60 };
 /** The one-line hint between the preview and the wave button. */
 export const HINT = { y: 432 };
 /** The button that sends the next wave, or calls it early. */

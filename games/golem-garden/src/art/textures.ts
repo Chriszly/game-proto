@@ -21,10 +21,11 @@ import { C, E, PI, Pp, R, addSharp, bake, blur, ctx, drop, ellipse, flower, gole
 // sap, glow       a sap drop and the glow behind the sap counter
 // splat           what a squashed pest leaves on the path
 // leaf            the Heartwood's leaf in the HUD
-// card-<h>[-dim]  a seed card, h 84 or 68 view pixels tall; rim-<h> is the gold rim of the picked one
+// hedge           a hedge planted on a path cell, anchored at its foot
+// card-<h>[-dim]  a seed card, h 76, 52 or 40 view pixels tall; rim-<h> is the gold rim of the picked one
 // card-locked     the Thorn golem's card before the Heartwood blooms, with its padlock
 // btn-wave[-off]  the wave button, lit or waiting; btn is the overlays' button
-// menu, chip[-off] the golem menu's slab and its buttons (Raise, Move, Uproot), usable or not
+// menu, chip[-off] the golem menu's slab and its buttons (Raise, Aim, Move, Uproot, the forms), usable or not
 // speed[-on]      the speed button in the HUD, off or on
 // pill            the garden tag under the title, which opens the garden picker
 // gcard[-rim|-locked] a garden card in the garden picker, its gold rim, and a locked one
@@ -67,6 +68,7 @@ export function bakeTextures(scene: Phaser.Scene) {
     bake(scene, `golem-${kind}`, 100, 88, () => golem(0, 0, kind), 50, 78);
   }
   bake(scene, 'sprout', 70, 50, () => sprout(0, 0), 35, 40);
+  bake(scene, 'hedge', 70, 64, paintHedge, 35, 54);
   for (const kind of ['beetle', 'slug', 'crow', 'mole', 'snail', 'aphid'] as const) bake(scene, `pest-${kind}`, 100, 60, () => pest(kind), 50, 34);
   bake(scene, 'pest-queen', 160, 90, () => pest('queen'), 84, 62);
   bake(scene, 'mound', 70, 36, paintMound, 35, 26);
@@ -101,7 +103,7 @@ export function bakeTextures(scene: Phaser.Scene) {
   }, 25, 16);
   bake(scene, 'leaf', 32, 32, paintLeaf, 16, 16);
 
-  for (const h of [84, 68]) {
+  for (const h of new Set(SEED_BUTTONS.hs)) {
     const w = SEED_BUTTONS.w * A - 8;
     const ha = h * A - 8;
     bake(scene, `card-${h}`, 150, h + 16, () => R(-w / 2, -ha / 2, w, ha, 22, C.card, { sb: 6, sa: 0.45, rim: 6 }), 75, h / 2 + 6);
@@ -122,6 +124,19 @@ export function bakeTextures(scene: Phaser.Scene) {
   bake(scene, 'gcard-locked', gw + 16, gh + 16, () => R(-gw, -gh, gw * A, gh * A, 26, '#a89c84', { sb: 8, sa: 0.5, rim: 7 }), gw / 2 + 6, gh / 2 + 6);
   bake(scene, 'gcard-rim', gw + 24, gh + 24, () => R(-gw - 8, -gh - 8, gw * A + 16, gh * A + 16, 32, C.gold, { sb: 8, rim: 7 }), gw / 2 + 10, gh / 2 + 10);
   bake(scene, 'btn', BUTTON.w + 16, BUTTON.h + 16, () => R(-BUTTON.w, -BUTTON.h, BUTTON.w * A, BUTTON.h * A, 30, '#e0a23a', { sb: 8, sx: 5, sy: 9, rim: 8 }), BUTTON.w / 2 + 6, BUTTON.h / 2 + 6);
+}
+
+/** A hedge: a clump of clay bushes on a strip of soil, with a few lighter leaves pressed on. */
+function paintHedge() {
+  reseed(23);
+  E(0, 0, 56, 12, C.soil, { sb: 4, sx: 3, sy: 4, rim: 3 });
+  for (const [x, y, r] of [[-34, -16, 20], [34, -18, 19], [-12, -34, 22], [16, -30, 23], [0, -12, 24]] as const) {
+    E(x, y, r, r * 0.85, rnd() < 0.5 ? '#3f7a2c' : '#4a8a34', { sb: 4, sx: 3, sy: 5, rim: 3 });
+  }
+  for (let k = 0; k < 9; k++) {
+    const a = rnd() * PI * 2;
+    E(-30 + rnd() * 60, -44 + rnd() * 30, 7, 3.5, '#8cd05a', { rot: a, print: false, sb: 2 });
+  }
 }
 
 /** A heap of crumbly earth, the mole's tunnel showing above it. */
@@ -196,7 +211,7 @@ function paintLockedCard() {
   const y = -h / 2;
   R(x, y, w, h, 22, '#b9ad94', { sb: 6, rim: 6 });
   const tx = x + 58;
-  const ty = y + 66;
+  const ty = y + h / 2;
   ctx.save();
   ctx.globalAlpha = 0.6;
   for (let k = 0; k < 8; k++) {

@@ -8,25 +8,54 @@ root AGENTS.md.
 
 Golem Garden is a real-time tower defense on a 12x7 garden, one of three layouts (`GARDENS`).
 Pests walk dirt paths from the left edge to the Heartwood at their end. The player plants seeds on
-soil cells beside the path; each grows into a golem that throws at pests within reach. Squashed pests drop sap, which buys seeds and
-golem levels. Waves are started by the player, without end; the next one can be called early. The
-art is claymation (plasticine on a studio table), painted in code at startup.
+soil cells beside the path; each grows into a golem that throws at pests within reach, and a hedge
+seed blocks a path cell. Squashed pests drop sap, which buys seeds and golem levels. Waves are
+started by the player, without end; the next one can be called early. Wave 30 is the garden's
+harvest, which earns the stars that unlock the other gardens. The art is claymation (plasticine on
+a studio table), painted in code at startup.
 
 Implemented today:
 
 - One screen (`GameScene`): the garden, a clay HUD strip (title, the garden tag that opens the
   garden picker, wave, Heartwood leaves, sap, the Heartwood bloom tag with five flowers, best, the
-  1x/2x speed button), a side panel with three seed cards (the third, Thorn, shown as a padlock
-  card until the Heartwood blooms), the next wave's preview, a hint line and the wave button, a
-  hover outline with a bead ring for reach and a ghost golem, the golem menu, a banner for cleared
-  or called waves, buds and the Queen Slug, and the garden picker overlay (also the game-over
-  screen).
+  1x/2x speed button; the wave tag's second line says "harvest at 30" or the stars harvested, and
+  the best tag counts total stars), a side panel with four seed cards (the third, Thorn, shown as
+  a padlock card until the Heartwood blooms; the fourth, the Hedge strip), the next wave's preview,
+  a hint line and the wave button, a hover outline with a bead ring for reach and a ghost golem (or
+  ghost hedge on the path), the golem menu, a banner for cleared or called waves, compost, the
+  harvest, buds and the Queen Slug, and the garden picker overlay (also the game-over and the
+  harvest screen).
 - Three golems, pebble, moss (slows) and thorn (pricks every pest in reach at once), each with
   three levels.
-- Golem menu (GG1): tapping a golem opens Raise (`upgrade`), Move (`move`, `MOVE_FEE` = 10 sap,
-  then a tap on free soil) and Uproot (`uproot`, gives back `UPROOT_REFUND` = 70% of
-  `Golem.spent`). The speed button sets `state.fast`; the scene plays `FAST` (2) times the frame's
-  time.
+- Golem menu (GG1): tapping a golem opens Raise (`upgrade`), Aim (`setTarget`, `nextTarget`),
+  Move (`move`, `MOVE_FEE` = 10 sap, then a tap on free soil) and Uproot (`uproot`, gives back
+  `UPROOT_REFUND` = 70% of `Golem.spent`). The speed button sets `state.fast`; the scene plays
+  `FAST` (2) times the frame's time.
+- Level 3 forms (GG6): the raise from level 2 to 3 (`picksForm`) turns the menu into the golem's
+  two forms (`formsOf`, from `FORM_INFO`: Boulder or Sling, Bog or Spore, Bramble or Barb) and
+  Back (the scene's `formMenu`); `upgrade(s, g, form)` then sets `Golem.form` for good.
+  `golemStats(kind, level, form)` (and `statsOf(g)`) folds the form in: a damage multiplier, added
+  reach, a cooldown multiplier, its own `slow`, `area` (Spore), `splash` (Boulder: half damage on
+  every other pest within 44px of the target) and `pierce` (Barb ignores armour). A level-3 golem
+  wears a bead in `FormInfo.colour` on its shoulder.
+- Targeting (GG7): `Golem.target` is one of `TARGETS` (`first`, the default, `strongest`,
+  `weakest`, `flyers`); `pickTarget` picks among the pests in reach (flyers: `PestInfo.flies`,
+  the crow, then first). Area golems ignore it and their Aim chip is off.
+- Hedges (GG8): the fourth seed card selects `'hedge'` (`SeedKind` is `GolemKind | 'hedge'`;
+  `state.selected` is a `SeedKind`). `plant` on a free path cell (`freePath`, never the
+  Heartwood's) pushes a `Hedge` (`HEDGE.cost` = 15 sap, `HEDGE.hp` = 60) with `stops`: for each
+  route, the distance `HEDGE_STOP` (30px) before the cell's centre (`routeDist`), or null. In
+  `step`, a walking pest that would pass a stop halts there, sets `Pest.chewing` and takes
+  `bite * CHEW_PER_BITE` (6) health a second off the hedge; crows (`flies`) and a mole in its
+  tunnel pass. Hedges at 0 health are dropped. The scene draws them (`drawHedges`) with a bar.
+- Compost (GG9): `finishWave` from `COMPOST.fromWave` (3) adds `COMPOST.rate` (10%) of the sap
+  unspent, floored and at most `COMPOST.cap` (30), and records it in `state.compost` for the
+  banner and the hint.
+- Harvest (GG10): `finishWave` at `HARVEST_WAVE` (30) sets `state.harvest` to
+  `harvestStars(heart)` (1, 2 or 3 stars at `STAR_LEAVES` 1, 6 and 10 leaves) and raises
+  `state.stars[garden]`; the scene opens the picker in 'harvest' mode (Keep going) and saves the
+  stars. Gardens unlock by total stars (`Garden.unlockStars`, `gardenOpen`, `totalStars`): Forked
+  Brook at 1, Two Gates at 3. The waves go on after the harvest.
 - Combos (GG2, `comboAt`): a grown moss golem one cell up, down, left or right of a pebble golem
   makes its hits on slowed pests do `COMBO.slowedDamage` (1.5x); of a thorn golem, makes it prick
   `COMBO.thornPricks` (2) times per throw. The scene draws a clay vine with a gold (pebble) or pink
@@ -36,10 +65,11 @@ Implemented today:
   (from 5; `armour` 4 off every hit, down to 1), aphid (from 6, in swarms) and the Queen Slug
   (`boss`, every `BOSS_EVERY` = 10th wave; `slime`: the 3x3 cells round her cell are slimed for
   `SLIME.ms`, and golems on slimed cells cool down at `SLIME.slow` speed).
-- Gardens (GG5): Meadow (the first, the playthrough's), Forked Brook (best 5; two routes that
-  split and rejoin) and Two Gates (best 10; two entrances). Pests take a garden's routes in turn
-  (`state.spawned`). The garden tag and the game-over screen show the picker; a card plants that
-  garden afresh (`saveGarden`, then `scene.restart`).
+- Gardens (GG5): Meadow (the first, the playthrough's), Forked Brook (1 star; two routes that
+  split and rejoin) and Two Gates (3 stars; two entrances). Pests take a garden's routes in turn
+  (`state.spawned`). The garden tag, the harvest and the game-over screen show the picker (built
+  afresh each time, with each garden's stars); a card plants that garden afresh (`saveGarden`,
+  then `scene.restart`).
 - Heartwood bloom: each wave cleared or called early opens a bud (`state.bloom`, up to
   `BLOOM_GOAL` = 5), drawn on the tree and on the HUD tag; at 5 the Thorn golem unlocks. The bloom
   is saved and kept between gardens, so once full the Thorn golem stays unlocked.
@@ -49,13 +79,17 @@ Implemented today:
 - Sap pops: each squashed pest pushes a `Pop` onto `state.pops`; the scene drains them into a
   splat, a "+N" label and three droplets that arc to the sap counter, whose glow pulses as they
   land.
-- The most waves ever cleared, the bloom and the garden last picked persist.
+- The most waves ever cleared, the bloom, each garden's stars and the garden last picked persist.
 
 Missing or rough:
 
 - No title screen, sound or pause.
 - The preview fits six kinds; the Queen Slug is named in its title instead of an icon.
 - The golem menu can cover a neighbouring golem; it opens below golems in the top two rows.
+- On a touch screen the form chips have no hover, so the hint names the two forms but not what
+  each does until it is picked (the README's table has them).
+- Pests stacked at a hedge all chew it at once, so a crowd gets through quickly.
+- Boulder and sling shots look like any pebble golem's; only the shoulder bead tells forms apart.
 - Pests come in at the board's left edge from under a strip of table (`edge`), so they pop in at
   the first path cell's left half.
 - Pests on the same stretch can overlap; nothing spreads them out.
@@ -64,7 +98,8 @@ Missing or rough:
   they can still bite the Heartwood, but its bonus and bud are already paid.
 - Canvas `filter: blur` (the clay's soft shadows) is ignored by Safari, so shadows are hard there.
 - The cover and the loop screenshots (`heartwood-bloom`, `call-early`, `sap-pops`, `golem-menu`,
-  `golem-move`, `new-pests`, `queen-slug`, `garden-picker`, `forked-brook`, `two-gates`) were
+  `golem-move`, `new-pests`, `queen-slug`, `garden-picker`, `forked-brook`, `two-gates`,
+  `level-3-forms`, `targeting`, `hedge`, `compost`, `harvest`) were
   staged through `window.game` with a scratch Playwright script against the dev server (set
   `state` fields and `localStorage` keys, push pests or pops, click cells and buttons, pause the
   scene); refresh them the same way.
@@ -77,30 +112,38 @@ File map (`src/`):
   `BootScene` and `GameScene`, calls `setupGame(game)` from `shared/setupGame.ts` and
   `setupScaling(game)` from `shared/scaling.ts`, and in dev builds puts `game` on `window`.
 - `scenes/BootScene.ts`: calls `bakeTextures`, then starts `Game`.
-- `scenes/GameScene.ts`: builds the garden, HUD, panel, golem menu, banner and garden picker;
-  turns taps into `select`, `plant`, `upgrade`, `move`, `uproot`, `startWave` and the speed
-  toggle; calls `tick` in `update` and draws slime, golems (and combo vines), pests (and mole
-  mounds), shots, bars, level beads and the hover from the state; turns `state.pops` into splats,
-  "+N" labels and flying droplets (`sapPop`); shows the banner (`waveDone`, `announce`); saves
-  best and bloom in `refresh` when they rise.
+- `scenes/GameScene.ts`: builds the garden, HUD, panel, golem menu and banner, and the garden
+  picker each time it opens (`createPicker(mode)`, `showPicker`, `closePicker`); turns taps into
+  `select`, `plant`, `upgrade` (with a form, through `menuTap` and `formMenu`), `setTarget`,
+  `move`, `uproot`, `startWave` and the speed toggle; calls `tick` in `update` and draws slime,
+  hedges, golems (and combo vines, form beads), pests (and mole mounds), shots, bars, level beads
+  and the hover from the state; turns `state.pops` into splats, "+N" labels and flying droplets
+  (`sapPop`); shows the banner (`waveDone`, `announce`); saves best, bloom and stars in `refresh`
+  when they change.
 - `scenes/layout.ts`: `VIEW`, `HUD` (title, garden tag and tag positions), `SPEED_BUTTON`,
-  `GOLEM_MENU`, `GARDEN_CARD`, `PANEL`, `SEED_BUTTONS` (`ys` and `hs` per
-  card), `PREVIEW`, `HINT`, `WAVE_BUTTON`, `BUTTON`, `UI_DEPTH`, `FONT` (a system sans stack), and
+  `GOLEM_MENU` (four chips wide), `GARDEN_CARD`, `PANEL`, `SEED_BUTTONS` (`ys` and `hs` per
+  card, in `SEEDS` order), `PREVIEW`, `HINT`, `WAVE_BUTTON`, `BUTTON`, `UI_DEPTH`, `FONT` (a system sans stack), and
   re-exports `GRID` and `cellCentre` from `game/board.ts`.
 - `game/board.ts`: `GRID`, the `Cell`, `Route` and `Garden` types, `GARDENS` (each with its
-  name, blurb, `unlockAt`, `routes`, `map` and `heart`, built from corner lists), `cellCentre`,
-  `cellAt` and `pathPoint(route, dist)` (position and facing at a distance along a route).
-- `game/data.ts`: `GOLEMS`, `GOLEM_INFO` (with `area` and `locked` for the thorn golem),
-  `BLOOM_GOAL`, `EARLY_BONUS`, `UPROOT_REFUND`, `MOVE_FEE`, `FAST`, `COMBO`, `MAX_LEVEL`,
-  `UPGRADE_COST`, `golemStats`, `PESTS`, `PEST_INFO` (with `armour`, `tunnel`, `slime`, `boss`),
-  `BOSS_EVERY`, `SLIME`, `PEST_HP_SCALE` (difficulty), `waveFor`, `waveCounts`, `waveBonus` and
-  `START`.
-- `game/state.ts`: `GameState`, `Golem`, `Pest`, `Shot`, `Pop`, `Slime`, `SHOT_MS`, `newGame(best,
-  bloom, garden)`, `gardenOf`, `unlocked`, `select`, `golemAt`, `freeSoil`, `canPlant`, `plant`,
-  `upgradeCost`, `upgrade`, `uprootValue`, `uproot`, `canMove`, `move`, `neighbours`, `comboAt`,
-  `slimed`, `canCallEarly`, `nextWave`, `startWave` (returns `'start'`, `'early'` or null) and
-  `tick`. No Phaser.
-- `game/save.ts`: `loadBest`/`saveBest`, `loadBloom`/`saveBloom`, `loadGarden`/`saveGarden`.
+  name, blurb, `unlockStars`, `routes`, `map` and `heart`, built from corner lists), `cellCentre`,
+  `cellAt`, `routeDist(route, col, row)` (how far along a route a cell's centre is, or null) and
+  `pathPoint(route, dist)` (position and facing at a distance along a route).
+- `game/data.ts`: `GOLEMS`, `SEEDS`/`SeedKind`, `GOLEM_INFO` (with `area` and `locked` for the
+  thorn golem), `BLOOM_GOAL`, `EARLY_BONUS`, `UPROOT_REFUND`, `MOVE_FEE`, `FAST`, `COMBO`,
+  `MAX_LEVEL`, `UPGRADE_COST`, `FORMS`, `FORM_INFO`, `formsOf`, `TARGETS`, `TARGET_INFO`,
+  `golemStats(kind, level, form)` (a `GolemStats`), `HEDGE`, `CHEW_PER_BITE`, `COMPOST`,
+  `HARVEST_WAVE`, `STAR_LEAVES`, `harvestStars`, `PESTS`, `PEST_INFO` (with `armour`, `tunnel`,
+  `slime`, `boss`, `flies`), `BOSS_EVERY`, `SLIME`, `PEST_HP_SCALE` (difficulty), `waveFor`,
+  `waveCounts`, `waveBonus` and `START`.
+- `game/state.ts`: `GameState`, `Golem` (with `form` and `target`), `Hedge`, `Pest` (with
+  `chewing`), `Shot`, `Pop`, `Slime`, `SHOT_MS`, `newGame(best, bloom, garden, stars)`,
+  `gardenOf`, `totalStars`, `gardenOpen`, `unlocked`, `seedCost`, `select`, `golemAt`, `hedgeAt`,
+  `freeSoil`, `freePath`, `canPlant`, `plant`, `upgradeCost`, `picksForm`, `upgrade(s, g, form)`,
+  `statsOf`, `setTarget`, `nextTarget`, `uprootValue`, `uproot`, `canMove`, `move`, `neighbours`,
+  `comboAt`, `slimed`, `canCallEarly`, `nextWave`, `startWave` (returns `'start'`, `'early'` or
+  null) and `tick`. No Phaser.
+- `game/save.ts`: `loadBest`/`saveBest`, `loadBloom`/`saveBloom`, `loadGarden`/`saveGarden`,
+  `loadStars`/`saveStars`.
 - `art/clay.ts`: the claymation toolkit. `bake` paints a texture in art units (2 per view pixel)
   around an anchor, on a canvas `sharpRes` times the view size (at most `MAX_RES` = 2), and adds it
   with `addSharp`, which marks the texture's resolution so images show it at its view size; `clay` shades any path as
@@ -110,8 +153,9 @@ File map (`src/`):
   at 1.7x with a crown), ported from the approved mockup's
   drawing script.
 - `art/textures.ts`: `bakeTextures` (every texture, listed at the top of the file: `bg-0`,
-  `edge`, `tree`, `bud`/`bloom`, `golem-<kind>`, `sprout`, `pest-<kind>`, `mound`, `slime`,
-  `slow`, `shot-<kind>`, `sap`, `glow`, `splat`, `leaf`, `card-<h>[-dim]`, `rim-<h>`,
+  `edge`, `tree`, `bud`/`bloom`, `golem-<kind>`, `sprout`, `hedge`, `pest-<kind>`, `mound`,
+  `slime`, `slow`, `shot-<kind>`, `sap`, `glow`, `splat`, `leaf`, `card-<h>[-dim]` (one per
+  height in `SEED_BUTTONS.hs`), `rim-<h>`,
   `card-locked`, `btn-wave[-off]`, `menu`, `chip[-off]`, `speed[-on]`, `pill`,
   `gcard[-rim|-locked]`, `btn`), `bakeGarden` and `gardenBg` (each garden's `bg-<n>`, baked when
   it is first planted) and `TREE_FLOWERS`, where the five flowers sit on the tree. A garden's
@@ -137,36 +181,43 @@ How it runs:
 - `GameScene.update` takes game time from the frame's timestamp (clamped to `MAX_STEP_MS`) and
   calls `tick` (with twice the time when `fast`), which plays it in steps of at most 16ms. Each
   step: shots and slime age, the wave's queue spawns pests whose `atMs` has come (each on the next
-  route in turn), pests walk (slowed if `slowMs`; a mole's `under` is set in its tunnel; the queen
-  slimes the cells round her), pests past their route's `length` bite the Heartwood, seeds grow,
-  grown golems off cooldown (slower on slime) throw at the pest furthest along its route (as a
-  share of it) within `golemStats(...).range` and not `under` (a thorn golem hits every pest in
-  reach; combos and armour change the damage, which lands at once; the `Shot` is only drawn), squashed pests pay their bounty and push a `Pop`, and an empty
-  queue with no pests ends the wave (`finishWave`: `waveBonus`, a bud, `best`).
+  route in turn), pests walk (slowed if `slowMs`; halted and `chewing` at a hedge's stop unless
+  they fly or are under ground; a mole's `under` is set in its tunnel; the queen slimes the cells
+  round her), pests past their route's `length` bite the Heartwood, chewed-through hedges go,
+  seeds grow, grown golems off cooldown (slower on slime) throw at the pest their `target` picks
+  (`pickTarget`) within `statsOf(g).range` and not `under` (an `area` golem hits every pest in
+  reach; combos, armour, `pierce` and `splash` change the damage, which lands at once; the `Shot`
+  is only drawn), squashed pests pay their bounty and push a `Pop`, and an empty queue with no
+  pests ends the wave (`finishWave`: `waveBonus`, compost, a bud, `best`, the harvest at wave 30).
 - Input: one zone over the board; `pointermove` sets `hover` (from `pointer.worldX/Y`), `pointerdown` calls `tapCell`,
   which moves the golem being moved (`moving`) there, else toggles the menu of the golem on the
-  cell (`picked`), else closes an open menu, else plants. The menu's chips call `upgrade`, start a
-  move or `uproot`. The seed cards call `select` (refused for a
-  locked kind; the locked thorn card's own image is hidden, so a tap on it does nothing), the wave
-  button `startWave`, the speed button toggles `fast`, the garden tag opens the picker. The
-  picker's dim rectangle swallows taps.
-- Rendering is diffed by id: `golems`, `pests` (body, slow-clump and mound images), `shots` and
-  `slimes` (by cell) map state ids to images, created and destroyed as the state changes; bars, level beads and the hover are
+  cell (`picked`), else closes an open menu, else plants (a golem on soil or a hedge on the path,
+  by `selected`). The menu's chips (`menuTap`) call `upgrade` (or open the form chips for the
+  raise to level 3, which call `upgrade` with the form), `setTarget`, start a move or `uproot`.
+  The seed cards call `select` (refused for a locked kind; the locked thorn card's own image is
+  hidden, so a tap on it does nothing), the wave button `startWave`, the speed button toggles
+  `fast`, the garden tag opens the picker. The picker's dim rectangle swallows taps.
+- Rendering is diffed by id: `golems`, `hedges`, `pests` (body, slow-clump and mound images),
+  `shots` and `slimes` (by cell) map state ids to images, created and destroyed as the state changes; bars, level beads and the hover are
   redrawn each frame on Graphics; `refresh` rewrites the HUD, flowers, cards, preview and wave
   button. Splats, labels and droplets are fire-and-forget objects on Phaser tweens.
 
 State model (`GameState` in `src/game/state.ts`): `garden` (index into `GARDENS`), `wave` (being
 fought, or next while building), `phase` (`'build'`, `'wave'` or `'over'`), `heart`, `sap`,
-`selected`, `golems` (each with `spent`), `pests` (each with `route` and `under`), `queue`,
-`spawned`, `slime`, `fast`, `waveMs`, `waveHpScale`, `shots`, `kills`, `bloom` (0 to 5), `pops`
-(squashed pests not yet shown; the scene empties it every frame), `best` and `nextId`. Golem
-positions are cells; pest positions are `dist` pixels along their route. The open menu and the
-golem being moved (`picked`, `moving`) are the scene's, not the state's.
+`selected` (a `SeedKind`), `golems` (each with `spent`, `form` and `target`), `hedges` (each with
+`hp` and `stops`), `pests` (each with `route`, `under` and `chewing`), `queue`, `spawned`,
+`slime`, `fast`, `waveMs`, `waveHpScale`, `shots`, `kills`, `bloom` (0 to 5), `pops` (squashed
+pests not yet shown; the scene empties it every frame), `best`, `compost` (paid at the last wave's
+end), `stars` (per garden), `harvest` (this garden's, 0 before wave 30) and `nextId`. Golem
+positions are cells; pest positions are `dist` pixels along their route. The open menu, its form
+mode and the golem being moved (`picked`, `formMenu`, `moving`) are the scene's, not the state's.
 
-Persistence: three `localStorage` keys, written by the scene: `golem-garden-best` (the most waves
+Persistence: four `localStorage` keys, written by the scene: `golem-garden-best` (the most waves
 ever cleared, when `state.best` rises), `golem-garden-bloom` (the Heartwood's bloom, when it rises;
-kept between gardens, so the Thorn golem stays unlocked once it blooms) and `golem-garden-garden`
-(the garden last picked, which a reload plants). The garden's golems and pests are never saved.
+kept between gardens, so the Thorn golem stays unlocked once it blooms), `golem-garden-stars`
+(each garden's harvest stars, comma-separated in `GARDENS` order, when they change) and
+`golem-garden-garden` (the garden last picked, which a reload plants). The garden's golems, hedges
+and pests are never saved.
 The hub's settings are read from the shared `hub-settings` key.
 
 Randomness and timing: no `Math.random`, `Date.now` or `performance.now`. Waves are fixed by
@@ -191,7 +242,8 @@ Phaser passes to `update`; the pops' tweens run on Phaser's clock and are cosmet
   `waveButton` (`{ x, y, w, h }`), all in view pixels, and `waveLabel` (the wave button's text on
   one line, such as `Start wave 1` or `Call wave 2 now, +15 early`).
 - Inputs: it clicks the seed cards, cell centres and the wave button, scaling view pixels by the
-  canvas bounding box.
+  canvas bounding box. It never plants a hedge, raises a golem or opens the menu: forms,
+  targeting, hedges, compost (from wave 3) and the harvest (wave 30) stay out of its first round.
 - The test mirrors these, so change them together: the `GameState` fields it reads, `GRID`,
   `VIEW`, `START`, the Meadow's path (the playthrough plays it, with no saved keys), the pebble seed's cost and grow time (`PEBBLE`), wave 1's beetle count, bounty
   and bonus (`WAVE_1`), `EARLY_BONUS`, the wave button's labels, the cells it plants on (`PLANTS`,
@@ -206,9 +258,14 @@ Phaser passes to `update`; the pops' tweens run on Phaser's clock and are cosmet
 
 - **Retune a golem or pest**: its row in `GOLEM_INFO` or `PEST_INFO`, the README tables, and the
   test's constants if it is the pebble golem or the beetle.
-- **Add a golem**: add it to `GOLEMS` and `GOLEM_INFO`, give `golem()` in `src/art/clay.ts` its
-  look, bake `golem-<kind>` and `shot-<kind>` in `src/art/textures.ts`, and add a card to
-  `SEED_BUTTONS.ys` and `hs` (the panel is full; the preview or the hint would have to shrink).
+- **Add a golem**: add it to `GOLEMS` and `GOLEM_INFO`, give it two forms in `FORMS` and
+  `FORM_INFO` (`of` it), give `golem()` in `src/art/clay.ts` its look, bake `golem-<kind>` and
+  `shot-<kind>` in `src/art/textures.ts`, and add a card to `SEED_BUTTONS.ys` and `hs` before the
+  hedge strip (the panel is full; the preview or the hint would have to shrink).
+- **Retune a form, targeting, the hedge, compost or the harvest**: `FORM_INFO` (its multipliers
+  and flags), `TARGET_INFO` (names and hint text), `HEDGE` and `CHEW_PER_BITE`, `COMPOST`, and
+  `HARVEST_WAVE` and `STAR_LEAVES` in `data.ts`; `HEDGE_STOP` in `state.ts`; the gardens'
+  `unlockStars` in `board.ts`; and the README's tables.
 - **Add a pest**: add it to `PESTS` and `PEST_INFO`, give `pest()` in `clay.ts` its look (bake it
   as `pest-<kind>` in `textures.ts`; it is used in the preview too, which fits six kinds), its
   health bar height in `PEST_TOP` if it is not slug-sized, and give it spawns in `waveFor` (from
@@ -235,8 +292,12 @@ Phaser passes to `update`; the pops' tweens run on Phaser's clock and are cosmet
 - `pointer.x/y` and `this.scale` are canvas pixels, `renderScale` times view pixels; read pointers
   through game objects' own events or `pointer.worldX/Y`, and lay out with `VIEW` or `viewSize`.
 
-- `SEED_BUTTONS.ys` and `hs` are indexed in `GOLEMS` order; a 68px-tall card uses the short card
-  layout (the thorn golem's).
+- `SEED_BUTTONS.ys` and `hs` are indexed in `SEEDS` order; a card under 70px tall uses the short
+  card layout (the thorn golem's), and the hedge strip has its own.
+- The menu's chip `i` means different things in form mode (form A, form B, Back) and out of it
+  (Raise, Aim, Move, Uproot); `refreshMenu` and `menuTap` agree on that order.
+- A hedge's `stops` are fixed when it is planted, from the garden's routes; a pest exactly at a
+  stop keeps chewing because the halt test is `dist <= stop <= next`.
 - `startWave` during a wave returns null until the queue is empty. The scene shows the "called
   early" banner itself (from the click), while a natural clear is spotted in `update`.
 - A golem's damage lands when it throws; the shot image is cosmetic, so a pest can vanish before
@@ -245,6 +306,8 @@ Phaser passes to `update`; the pops' tweens run on Phaser's clock and are cosmet
   anywhere with a menu open only closes it.
 - The scene saves `best` and `bloom` on any rise (in `refresh`, so an early call counts too);
   `newGame` reads them back on restart.
-- Picking "furthest along" compares the share of each pest's route walked, since a forked
-  garden's routes can differ in length.
+- Picking "furthest along" (`first` targeting) compares the share of each pest's route walked,
+  since a forked garden's routes can differ in length.
+- `saveStars` writes the whole list, so a garden's stars never go down (`finishWave` takes the
+  max); the picker is rebuilt on each open, so new stars show at once.
 - A pest's texture origin is `PEST_ORIGIN`, except the bigger queen's (`QUEEN_ORIGIN`).

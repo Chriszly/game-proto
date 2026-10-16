@@ -35,11 +35,12 @@ import {
   SUPER_MINION,
   PUPS,
   WATCHSTONES,
+  WARD,
 } from './data';
 import { championName } from './names';
 
 export type Phase = 'pick' | 'playing' | 'won' | 'lost';
-export type UnitKind = 'champion' | 'minion' | 'tower' | 'nexus' | 'camp' | 'beast' | 'inhibitor' | 'watchstone';
+export type UnitKind = 'champion' | 'minion' | 'tower' | 'nexus' | 'camp' | 'beast' | 'inhibitor' | 'watchstone' | 'ward';
 /** Camps, the beast and untaken watchstones belong to no team: every team's units may attack the first two. */
 export type Side = Team | 'neutral';
 
@@ -112,6 +113,8 @@ export interface Unit {
   group: number;
   // Watchstones only: the team taking it and how far along it is, in ms.
   capture: { team: Team; ms: number } | null;
+  // Wards only: the game time it burns out at.
+  expiresAt: number;
   // Champions only.
   champ: ChampionDef | null;
   /** A champion's own name: a first name and a byname, like "Brannoc Ironwall". */
@@ -142,6 +145,16 @@ export interface Unit {
   hasteMs: number;
   kills: number;
   deaths: number;
+  /** Champions slain since this champion last died; three or more put a bounty on it (`bountyOf`). */
+  killStreak: number;
+  /** Vision wards carried, planted with V (`WARD.carry` at most). */
+  wards: number;
+  /** Time left on a recall channel, in ms; 0 when not recalling. */
+  recallMs: number;
+  /** When this champion last started a recall (the AI spaces its trips home). */
+  lastRecallAt: number;
+  /** A buy back is allowed again from this game time. */
+  buybackReadyAt: number;
 }
 
 export interface Buff {
@@ -280,6 +293,14 @@ export interface GameState {
   notices: Notice[];
 }
 
+/** Plants a team's vision ward at a point; it burns out at `WARD.ms` from now. */
+export function spawnWard(s: GameState, side: Team, x: number, y: number): Unit {
+  const w = blankUnit(s, 'ward', side, x, y, { hp: WARD.hits, dmg: 0, armor: 0, range: 0, speed: 0, attackMs: 1000, radius: WARD.radius });
+  w.expiresAt = s.time + WARD.ms;
+  s.units.push(w);
+  return w;
+}
+
 export interface Notice {
   text: string;
   color: string;
@@ -342,6 +363,7 @@ export function blankUnit(
     campKind: null,
     group: 0,
     capture: null,
+    expiresAt: 0,
     champ: null,
     name: '',
     player: false,
@@ -362,6 +384,11 @@ export function blankUnit(
     hasteMs: 0,
     kills: 0,
     deaths: 0,
+    killStreak: 0,
+    wards: 0,
+    recallMs: 0,
+    lastRecallAt: -1e9,
+    buybackReadyAt: 0,
   };
 }
 

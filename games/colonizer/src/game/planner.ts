@@ -4,6 +4,7 @@
 // line, research, then train and send the army. Only the AI's own units and buildings are touched.
 // It plays the AI's side, and in watch mode (`?watch`) the player's side too: `think` takes the side.
 import {
+  BELL_RANGE,
   BUILDINGS,
   RAID_MAX_MS,
   RAID_PARTY,
@@ -16,6 +17,7 @@ import {
   type BuildingId,
   type Resource,
   type Role,
+  isSoldier,
   unitFor,
 } from './data';
 import {
@@ -26,6 +28,7 @@ import {
   canPlace,
   chooseBoon,
   endRaid,
+  garrisoned,
   hasBuilt,
   hasBuildingFor,
   holds,
@@ -36,11 +39,15 @@ import {
   placeWall,
   popCap,
   popUsed,
+  releaseBell,
   research,
+  ringBell,
   setRally,
   startRaid,
+  trade,
   train,
   unitCost,
+  unitCount,
   type Building,
   type GameState,
   type RaidGoal,
@@ -59,12 +66,18 @@ const ACTIONS_PER_THINK = 2;
 const TARGET_VILLAGERS = 18;
 const ARMY_TO_ATTACK = 14;
 /** What an economy raid goes for, and how far from the enemy Town Center it must stand. */
-const RAID_ECONOMY: BuildingId[] = ['lumber', 'mine', 'farm', 'dock', 'grove'];
+const RAID_ECONOMY: BuildingId[] = ['lumber', 'mine', 'farm', 'dock', 'grove', 'market'];
 const RAID_CLEAR = 8;
 const ARMY_CAP = 40;
 const RESEARCH_ORDER = ['axes', 'baskets', 'ironworks', 'fletching', 'age2', 'stirrups', 'bodkin', 'picks', 'age3'];
 /** `unique` stands for the faction's own building (Forge, Dock or Grove); the Monument waits for Age III. */
-const BUILD_PLAN: (BuildingId | 'unique')[] = ['farm', 'lumber', 'mine', 'unique', 'barracks', 'academy', 'range', 'stable', 'watchtower', 'monument'];
+const BUILD_PLAN: (BuildingId | 'unique')[] = ['farm', 'lumber', 'mine', 'unique', 'barracks', 'academy', 'range', 'stable', 'watchtower', 'market', 'monument'];
+/** Trade carts the AI keeps on the road once it has a Market, and rams it keeps with its army in Age II. */
+const AI_CARTS = 3;
+const AI_RAMS = 2;
+/** Market swaps: sell a lot when a resource piles up this high while ore is short, buy one when it runs this low. */
+const SWAP_HIGH = 600;
+const SWAP_LOW = 60;
 /** The AI's palisade: a short diagonal line this far from its Town Center, towards the player, with a gate in the middle. */
 const WALL_OFFSET = 9;
 const WALL_HALF = 4;
@@ -106,7 +119,16 @@ function plan(s: GameState) {
   const p = s.players[ME];
   const villagers = [...s.units.values()].filter((u) => u.owner === ME && UNITS[u.type].role === 'villager');
   const idleVillagers = villagers.filter((u) => u.order.t === 'idle');
-  const military = [...s.units.values()].filter((u) => u.owner === ME && UNITS[u.type].role !== 'villager');
+  const military = [...s.units.values()].filter((u) => u.owner === ME && isSoldier(UNITS[u.type].role));
+
+  // 0a. The town bell: enemy soldiers near the base send the villagers to shelter in the Town Center
+  // and the towers, and once the base is clear again they go back to work.
+  const threat = [...s.units.values()].some((u) => u.owner === FOE && u.hp > 0 && isSoldier(UNITS[u.type].role) && Math.hypot(u.x - town.tx - 2, u.y - town.ty - 2) <= BELL_RANGE);
+  if (threat && !p.bell) {
+    if (act(() => ringBell(s, ME) > 0)) log('rings the town bell');
+  } else if (!threat && p.bell) {
+    if (act(() => (releaseBell(s, ME), true))) log('sends the villagers back to work');
+  }
 
   // 0. Every unfinished building gets a builder, so none is left waiting for one. A palisade gets one
   // builder for the whole line: a builder goes on to the next piece by itself.
@@ -121,7 +143,7 @@ function plan(s: GameState) {
   }
 
   // 1. Economy: villagers from the Town Center until the target, when it's idle.
-  if (town.queue.length === 0 && villagers.length < TARGET_VILLAGERS && affordable(p, UNITS.villager.cost)) {
+  if (town.queue.length === 0 && villagers.length + garrisoned(s, ME) < TARGET_VILLAGERS && affordable(p, UNITS.villager.cost)) {
     if (act(() => train(s, ME, town.id, 'villager'))) log('trains a villager');
   }
 
@@ -177,16 +199,36 @@ function plan(s: GameState) {
     if (tech && act(() => research(s, ME, b.id, tech))) log(`researches ${TECHS[tech].name}`);
   }
 
-  // 5. Military: train from each production building in turn, while the army is under the cap.
-  const roles: Role[] = ['melee', 'ranged', 'cavalry'];
+  // 5. Military: train from each production building in turn, while the army is under the cap. In
+  // Age II a couple of rams join the army, in Age III the faction's champion.
+  // Rams come first in the list so the Barracks' queue isn't always taken by infantry.
+  const roles: Role[] = ['siege', 'melee', 'ranged', 'cavalry', 'champion'];
   if (military.length < ARMY_CAP) {
     for (const role of roles) {
-      const type = unitFor(s.players[ME].faction, role).id;
+      const def = unitFor(s.players[ME].faction, role);
+      if (def.age && p.age < def.age) continue;
+      if (role === 'siege' && unitCount(s, ME, def.id) >= AI_RAMS) continue;
+      if (def.limit !== undefined && unitCount(s, ME, def.id) >= def.limit) continue;
       const producer = [...s.buildings.values()].find((b) => b.owner === ME && b.built && b.queue.length === 0 && BUILDINGS[b.type].trains?.includes(role));
       if (!producer) continue;
-      const cost = unitCost(s, ME, UNITS[type]);
+      const cost = unitCost(s, ME, def);
       if (!affordable(p, cost)) continue;
-      if (act(() => train(s, ME, producer.id, type))) log(`trains a ${UNITS[type].name}`);
+      if (act(() => train(s, ME, producer.id, def.id))) log(`trains a ${def.name}`);
+    }
+  }
+
+  // 5b. The Market: a few trade carts on the road, and swaps when one resource piles up or runs out.
+  const market = [...s.buildings.values()].find((b) => b.owner === ME && b.type === 'market' && b.built);
+  if (market) {
+    if (market.queue.length === 0 && unitCount(s, ME, 'cart') < AI_CARTS && affordable(p, UNITS.cart.cost)) {
+      if (act(() => train(s, ME, market.id, 'cart'))) log('trains a Trade Cart');
+    }
+    for (const res of ['wood', 'food'] as const) {
+      if (p.res.ore < 100 && p.res[res] >= SWAP_HIGH) {
+        if (act(() => trade(s, ME, res, 'sell'))) log(`sells ${res} at the Market`);
+      } else if (p.res[res] < SWAP_LOW && p.res.ore >= 250) {
+        if (act(() => trade(s, ME, res, 'buy'))) log(`buys ${res} at the Market`);
+      }
     }
   }
 
