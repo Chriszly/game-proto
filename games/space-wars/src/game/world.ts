@@ -2,7 +2,7 @@ import { byDifficulty } from '../../../../shared/settings';
 import { aiLog } from '../../../../shared/watch';
 import { ARENA, BUILD_RANGE, NODE_AMOUNT, NODE_CLEARANCE } from './arena';
 import { COMBAT_UNITS, FACTIONS, type Ability, type Faction, type Role, type UnitId } from './factions';
-import type { MapLayout, Point } from './map';
+import { beaconNode, type DerelictKind, type MapLayout, type Point } from './map';
 import { CONTRACTS, NO_PERKS, type Perks } from './contracts';
 import { Fog } from './fog';
 import {
@@ -36,12 +36,46 @@ export const BEACON_RADIUS = 70;
 export const CAPTURE_MS = 5000;
 export const BEACON_PAY = 3;
 const BEACON_PAY_MS = 1000;
-/** Where the relay beacon goes: the loose crystal node nearest this share of the way from the player's start to the map's centre. */
-const BEACON_TOWARD = 0.5;
-/** How far the relay beacon stays from the player's start, beyond what the hub sees (HUB_VISION), so it has to be found. */
-const BEACON_HOME_GAP = 200;
-/** How far the relay beacon stays from every rival's start, so it sits in open space. */
-const BEACON_RIVAL_GAP = 300;
+/**
+ * Nebulae: a ship inside one is hidden from enemies unless one of them is within NEBULA_SPOT px
+ * (or their sensors cover it), shows for NEBULA_REVEAL_MS after it fires, and flies at NEBULA_SLOW
+ * of its speed.
+ */
+export const NEBULA_SPOT = 70;
+const NEBULA_REVEAL_MS = 1500;
+export const NEBULA_SLOW = 0.7;
+/** Veteran ranks: the kills that earn each one, what each adds to a ship's damage and hit points, and their names. */
+export const VETERAN_RANKS = [3, 8] as const;
+export const VETERAN_STEP = 0.15;
+export const VETERAN_NAMES = ['Veteran', 'Ace'] as const;
+/** Repair: a ship within REPAIR_RANGE px of a finished hub, outpost or Depot of its faction gets back this share of its hit points a second. */
+export const REPAIR_RANGE = 120;
+export const REPAIR_RATE = 0.03;
+/** How far short of the repair point a ship falling back stops. */
+const FALL_BACK_STOP = 30;
+/** The AI pulls a warship home to repair below this share of its hit points. */
+const AI_FALL_BACK_HP = 0.3;
+/** Derelict stations: the ring to hold, how long a lone faction takes to claim one, and what each kind gives. */
+export const DERELICT_RADIUS = 60;
+export const CLAIM_MS = 10000;
+export const SENSOR_RANGE = 280;
+export const DERELICT_GUN = { damage: 14, range: 170, cooldownMs: 1000 };
+/** The AI goes for derelicts from this much game time, those within this far of its hub, once it has this many warships. */
+const AI_CLAIM_MS = 60000;
+const AI_CLAIM_REACH = 600;
+const AI_CLAIM_ARMY = 3;
+/** Truces: how long one lasts, the tribute a rival pays for one, how long its offer stays open and the pause before it offers again. */
+export const TRUCE_MS = 90000;
+export const TRUCE_TRIBUTE = 40;
+export const OFFER_MS = 25000;
+const OFFER_COOLDOWN_MS = 120000;
+/** A rival holding a grudge against the player offers a truce under pressure: its hub under this share of its hit points, or this many ships lost to the player lately. */
+const PRESSURE_HUB = 0.75;
+const PRESSURE_LOSSES = 3;
+const PRESSURE_DECAY_MS = 10000;
+/** Tribute: what turning a rival's grudge onto another faction costs the player, and how long that grudge holds. */
+export const BRIBE_COST = 60;
+export const BRIBE_MS = 60000;
 /** Salvage: what a shard is worth, how far a ship pulls it in from, how fast it flies, and how long it lasts. */
 export const SHARD_VALUE = 8;
 export const SHARD_MAGNET = 260;
@@ -119,8 +153,16 @@ export interface Unit {
   decoyMs: number | null;
   /** The faction whose shot hit it last, or -1: who gets the kill. */
   lastHit: number;
+  /** The ship whose shot hit it last (by id, -1 for a turret, mine or none): who gets the veteran credit. */
+  lastHitBy: number;
   /** For a harvester: the hub (main or expansion) whose crystal it works, by id; -1 for the rest. */
   home: number;
+  /** Enemy ships it has destroyed; VETERAN_RANKS of them earn a rank. */
+  kills: number;
+  /** Whether it is inside a nebula this update. */
+  nebula: boolean;
+  /** Whether it got repair this update, beside a hub or Depot. */
+  repairing: boolean;
 }
 
 /** What a faction can build: the buildings beside a hub, and an expansion (a second hub) at a far crystal field. */
@@ -167,6 +209,33 @@ export interface Node extends Point {
   amount: number;
 }
 
+/**
+ * A derelict station out in the fog. A faction alone in its ring with warships fills `claim` in
+ * CLAIM_MS (draining a rival's first) and owns it until another takes it: wide sensors see
+ * SENSOR_RANGE round it, a shipyard trains the owner's combat units, a gun platform shoots for it.
+ */
+export interface Derelict extends Point {
+  kind: 'derelict';
+  id: number;
+  perk: DerelictKind;
+  owner: number;
+  /** Who the claim progress belongs to, or -1. */
+  capturer: number;
+  claim: number;
+  /** For a shipyard: the owner's units queued here. */
+  queue: UnitId[];
+  trainLeft: number;
+  /** For a gun platform: time until its next shot. */
+  cooldown: number;
+}
+
+/** What a derelict of each kind is called and does. */
+export const DERELICT_DEFS: Record<DerelictKind, { name: string; text: string }> = {
+  sensors: { name: 'Wide Sensors', text: `Sees ${SENSOR_RANGE} px round it for its owner, nebulae included` },
+  shipyard: { name: 'Shipyard', text: 'Trains its owner\'s combat units out here, like a Barracks' },
+  gun: { name: 'Gun Platform', text: `Shoots its owner's enemies within ${DERELICT_GUN.range} px for ${DERELICT_GUN.damage}` },
+};
+
 /** A short-lived shot (a beam from x, y to x2, y2) or wreck (a ring of radius r at x, y). */
 export interface Effect extends Point {
   color: number;
@@ -191,6 +260,18 @@ export interface Side {
   research: Research;
   /** The faction that hit this one last, or -1: an AI sends its army after it. */
   grudge: number;
+  /** While above 0, tribute holds the grudge where it is: hits don't change it. */
+  grudgeLockMs: number;
+  /** Time left on this rival's truce with the player, or 0. */
+  truceMs: number;
+  /** Time left on this rival's open truce offer to the player, or 0. */
+  offerMs: number;
+  /** Time before this rival offers a truce again. */
+  offerCooldownMs: number;
+  /** Ships lost to the player lately; it fades, and enough of it makes a rival sue for peace. */
+  pressure: number;
+  /** The warship this rival has sent to claim a derelict station, or -1. */
+  claimer: number;
 }
 
 /**
@@ -233,6 +314,9 @@ export interface ContractState {
 
 /** Things the scene shows once: a notice on the command bar, or crystal gained (flashed by the count). */
 export type WorldEvent = { kind: 'notice'; text: string } | { kind: 'gain'; amount: number };
+
+/** Anything that can fire a shot. */
+type Shooter = Unit | Building | Derelict;
 
 export interface Target {
   kind: 'unit' | 'building';
@@ -320,6 +404,8 @@ export class World {
   phase: 'playing' | 'won' | 'lost' = 'playing';
   elapsedMs = 0;
   readonly beacon: Beacon;
+  /** The derelict stations, claimed by holding them. */
+  readonly derelicts: Derelict[];
   shards: Shard[] = [];
   mines: Mine[] = [];
   pops: Pop[] = [];
@@ -339,6 +425,8 @@ export class World {
 
   /** The last faction standing in a watched battle (a side index), or -1. */
   winner = -1;
+  /** Which factions can see each ship hiding in a nebula this update (by unit id), from `updateCover`. */
+  private spotted = new Map<number, Set<number>>();
 
   /**
    * `pick` is the faction the player commands, an index into `FACTIONS`. It takes the player's start
@@ -349,16 +437,16 @@ export class World {
     const order = [pick, ...FACTIONS.map((_, i) => i).filter((i) => i !== pick)];
     this.sides = order.map((f, index) => ({
       index, def: FACTIONS[f], crystal: START_CRYSTAL, alive: true, thinkMs: 0, attackMs: 0, perks: { ...NO_PERKS }, picket: -1,
-      research: noResearch(), grudge: -1,
+      research: noResearch(), grudge: -1, grudgeLockMs: 0, truceMs: 0, offerMs: 0, offerCooldownMs: 0, pressure: 0, claimer: -1,
     }));
     const nodes = layout.nodes.map((n) => ({ id: this.id(), x: n.x, y: n.y, amount: n.amount }));
     // One loose crystal node partway to the centre becomes the relay beacon and is no longer mined.
-    const home = layout.homes[0];
-    const toward = { x: home.x + (ARENA.x + ARENA.w / 2 - home.x) * BEACON_TOWARD, y: home.y + (ARENA.y + ARENA.h / 2 - home.y) * BEACON_TOWARD };
-    const loose = nodes.slice(layout.homes.length * 3).filter((n) => layout.homes.every((h, i) => dist(h, n) > (i === 0 ? BEACON_HOME_GAP : BEACON_RIVAL_GAP)));
-    const spot = (loose.length ? loose : nodes).reduce((a, b) => (dist(b, toward) < dist(a, toward) ? b : a));
+    const spot = nodes[beaconNode(layout.homes, layout.nodes)];
     this.nodes = nodes.filter((n) => n !== spot);
     this.beacon = { x: spot.x, y: spot.y, owner: -1, capturer: -1, capture: 0, held: false, payMs: 0, paid: 0 };
+    this.derelicts = layout.derelicts.map((d) => ({
+      kind: 'derelict', id: this.id(), perk: d.kind, x: d.x, y: d.y, owner: -1, capturer: -1, claim: 0, queue: [], trainLeft: 0, cooldown: 0,
+    }));
     this.sides.forEach((side, index) => {
       const home = layout.homes[index];
       const hp = buildingStats(side, 'hub').hp;
@@ -396,9 +484,35 @@ export class World {
     return this.buildings.filter((b) => b.faction === faction && b.type === 'hub' && (!done || b.done));
   }
 
-  /** Whether the player sees a unit now: its own, or a rival's in sight and not cloaked. */
+  /** Whether the player sees a unit now: its own, or a rival's in sight and not hidden (cloaked or in a nebula). Watching, every ship shows. */
   seesUnit(u: Unit) {
-    return u.faction === PLAYER || (this.fog.sees(u) && !this.hidden(u, PLAYER));
+    return u.faction === PLAYER || this.watch || (this.fog.sees(u) && !this.hidden(u, PLAYER));
+  }
+
+  /** Whether a point is inside a nebula. */
+  inNebula(p: Point) {
+    return this.layout.nebulae.some((n) => dist(n, p) <= n.r);
+  }
+
+  /** The derelict station whose ring is under (x, y), if the player knows of it. */
+  derelictAt(x: number, y: number): Derelict | null {
+    return this.derelicts.find((d) => dist(d, { x, y }) <= DERELICT_RADIUS && (this.watch || this.fog.knows(d))) ?? null;
+  }
+
+  /** Whether two factions are under a truce (only the player makes truces, with one rival at a time each). */
+  atPeace(a: number, b: number) {
+    if (a === b) return false;
+    return (a === PLAYER && this.sides[b].truceMs > 0) || (b === PLAYER && this.sides[a].truceMs > 0);
+  }
+
+  /** A ship's veteran rank: how many of VETERAN_RANKS its kills have reached. */
+  rankOf(u: Unit) {
+    return VETERAN_RANKS.filter((k) => u.kills >= k).length;
+  }
+
+  /** What a ship's rank multiplies its damage and hit points by. */
+  veteranBonus(u: Unit) {
+    return 1 + VETERAN_STEP * this.rankOf(u);
   }
 
   /** Whether the player knows a building is there: its own, or a rival's it has seen. */
@@ -442,6 +556,7 @@ export class World {
     if (this.layout.rocks.some((k) => dist(k, { x, y }) < k.r + r + 4)) return 'Blocked by rocks';
     if (this.nodes.some((n) => n.amount > 0 && dist(n, { x, y }) < NODE_CLEARANCE + r)) return 'Too close to crystal';
     if (dist(this.beacon, { x, y }) < NODE_CLEARANCE + r + 10) return 'Too close to the relay beacon';
+    if (this.derelicts.some((d) => dist(d, { x, y }) < DERELICT_RADIUS + r)) return 'Too close to a derelict station';
     return null;
   }
 
@@ -483,9 +598,11 @@ export class World {
     const side = this.sides[faction];
     const cost = unitStats(side, type).cost;
     if (side.crystal < cost) return 'Not enough crystal';
-    const producers = this.buildings.filter(
+    // Harvesters come from a hub, combat units from a Barracks or a claimed derelict shipyard.
+    const producers: { queue: UnitId[] }[] = this.buildings.filter(
       (b) => b.faction === faction && b.done && b.type === (type === 'harvester' ? 'hub' : 'barracks'),
     );
+    if (type !== 'harvester') producers.push(...this.derelicts.filter((d) => d.perk === 'shipyard' && d.owner === faction));
     if (!producers.length) {
       return type === 'harvester' ? 'No hub' : `Build the ${side.def.buildings.barracks.name} (barracks) first`;
     }
@@ -504,12 +621,114 @@ export class World {
     if (this.phase !== 'playing') return false;
     const target = this.entityAt(x, y);
     const units = ids.map((id) => this.unit(id)).filter((u): u is Unit => !!u && this.commandable(u));
+    // An attack on a rival under truce breaks the truce.
+    if (units.length && target && target.faction !== PLAYER && this.atPeace(PLAYER, target.faction)) {
+      const side = this.sides[target.faction];
+      side.truceMs = 0;
+      side.grudge = PLAYER;
+      this.events.push({ kind: 'notice', text: `Truce with the ${side.def.name} broken` });
+    }
     for (const u of units) {
       u.order = target && target.faction !== PLAYER
         ? { kind: 'attack', id: target.id, auto: false }
         : { kind: 'move', x, y };
     }
     return units.length > 0;
+  }
+
+  /** The player's order to fall back: the selected ships fly home to the nearest hub or Depot, where ships repair. */
+  fallBack(ids: number[]): boolean {
+    if (this.phase !== 'playing') return false;
+    const units = ids.map((id) => this.unit(id)).filter((u): u is Unit => !!u && this.commandable(u));
+    let sent = 0;
+    for (const u of units) if (this.sendHome(u)) sent += 1;
+    return sent > 0;
+  }
+
+  /** Accepts a rival's truce offer: peace for TRUCE_MS, and its tribute paid into the player's bank. */
+  acceptTruce(faction: number): string | null {
+    const side = this.sides[faction];
+    if (faction === PLAYER || !side.alive) return 'No such rival';
+    if (side.offerMs <= 0) return `The ${side.def.name} is not offering a truce`;
+    const tribute = Math.min(TRUCE_TRIBUTE, side.crystal);
+    side.crystal -= tribute;
+    this.sides[PLAYER].crystal += tribute;
+    side.offerMs = 0;
+    side.offerCooldownMs = OFFER_COOLDOWN_MS;
+    side.truceMs = TRUCE_MS;
+    side.grudge = -1;
+    side.pressure = 0;
+    // Both sides call off the ships already sent at each other.
+    for (const u of this.units) {
+      if (u.order?.kind !== 'attack') continue;
+      const target = this.unit(u.order.id) ?? this.building(u.order.id);
+      if (target && this.atPeace(u.faction, target.faction)) u.order = null;
+    }
+    this.events.push({ kind: 'gain', amount: tribute });
+    this.events.push({ kind: 'notice', text: `Truce with the ${side.def.name} for ${TRUCE_MS / 1000} s: +${tribute} crystal tribute` });
+    return null;
+  }
+
+  /** Turns a rival's truce offer down; it waits a while before offering again. */
+  declineTruce(faction: number): string | null {
+    const side = this.sides[faction];
+    if (faction === PLAYER || side.offerMs <= 0) return 'No offer to decline';
+    side.offerMs = 0;
+    side.offerCooldownMs = OFFER_COOLDOWN_MS / 2;
+    return null;
+  }
+
+  /** The faction a bribed rival turns on: the living faction nearest its hub, other than the player and itself. */
+  bribeTarget(faction: number): Side | null {
+    const hub = this.hubOf(faction);
+    if (!hub) return null;
+    return this.sides
+      .filter((s) => s.alive && s.index !== faction && s.index !== PLAYER && this.hubOf(s.index))
+      .reduce<Side | null>((best, s) => (!best || dist(this.hubOf(s.index)!, hub) < dist(this.hubOf(best.index)!, hub) ? s : best), null);
+  }
+
+  /** Pays a rival tribute to turn its grudge onto another faction for BRIBE_MS; its next raids go there. */
+  bribe(faction: number): string | null {
+    if (this.phase !== 'playing') return 'The battle is over';
+    const side = this.sides[faction];
+    if (faction === PLAYER || !side.alive) return 'No such rival';
+    const target = this.bribeTarget(faction);
+    if (!target) return 'No other faction left to turn it on';
+    const me = this.sides[PLAYER];
+    if (me.crystal < BRIBE_COST) return 'Not enough crystal';
+    me.crystal -= BRIBE_COST;
+    side.crystal += BRIBE_COST;
+    side.grudge = target.index;
+    side.grudgeLockMs = BRIBE_MS;
+    side.pressure = 0;
+    // Its ships already on their way at the player turn on the new foe instead.
+    const hub = this.hubOf(target.index);
+    for (const u of this.units) {
+      if (u.faction !== faction || u.order?.kind !== 'attack' || u.order.auto) continue;
+      const t = this.unit(u.order.id) ?? this.building(u.order.id);
+      if (t?.faction === PLAYER && hub) u.order = { kind: 'attack', id: hub.id, auto: false };
+    }
+    this.events.push({ kind: 'notice', text: `Tribute paid: the ${side.def.name} turns on the ${target.def.name} for ${BRIBE_MS / 1000} s` });
+    return null;
+  }
+
+  /**
+   * Sends a ship home to repair: a move order to the nearest finished hub, outpost or Depot of its
+   * faction, stopping just short of it. False when the faction has nowhere to go.
+   */
+  private sendHome(u: Unit): boolean {
+    const spot = this.repairSpots(u.faction).reduce<Building | null>((best, b) => (!best || dist(b, u) < dist(best, u) ? b : best), null);
+    if (!spot) return false;
+    const d = dist(u, spot);
+    const stop = buildingStats(this.sides[u.faction], spot.type).radius + FALL_BACK_STOP;
+    const k = d > 1 ? stop / d : 0;
+    u.order = { kind: 'move', x: spot.x + (u.x - spot.x) * k, y: spot.y + (u.y - spot.y) * k + (d > 1 ? 0 : stop) };
+    return true;
+  }
+
+  /** Where a faction's ships repair: its finished hubs, outposts and Depots. */
+  private repairSpots(faction: number) {
+    return this.buildings.filter((b) => b.faction === faction && b.done && (b.type === 'hub' || b.type === 'depot'));
   }
 
   /** The player's combat units inside a box, for box selection. */
@@ -561,10 +780,13 @@ export class World {
     if (this.phase !== 'playing') return;
     this.elapsedMs += dt;
 
+    this.updateCover();
     for (const b of [...this.buildings]) this.updateBuilding(b, dt);
+    for (const d of this.derelicts) this.updateDerelict(d, dt);
     for (const u of [...this.units]) this.updateUnit(u, dt);
     for (const side of this.sides) {
       if (!side.alive || (side.index === PLAYER && !this.watch)) continue;
+      this.updateTruce(side, dt);
       side.thinkMs += dt;
       if (side.thinkMs >= AI_THINK_MS) {
         side.thinkMs = 0;
@@ -635,11 +857,19 @@ export class World {
     const ability = this.abilityOf(u);
     u.cooldown -= dt;
     u.revealMs = Math.max(0, u.revealMs - dt);
+    u.repairing = false;
     if (u.decoyMs !== null) {
       // A decoy only draws fire: it never acts, and it fades when its time runs out.
       u.decoyMs -= dt;
       if (u.decoyMs <= 0) u.hp = 0;
       return;
+    }
+    // A nebula slows every ship inside it.
+    const speed = u.nebula ? stats.speed * NEBULA_SLOW : stats.speed;
+    // Beside a hub or Depot of its own, a ship slowly repairs.
+    if (u.hp < u.maxHp && this.repairSpots(u.faction).some((b) => dist(b, u) <= REPAIR_RANGE)) {
+      u.hp = Math.min(u.maxHp, u.hp + (u.maxHp * REPAIR_RATE * dt) / 1000);
+      u.repairing = true;
     }
     if (ability?.kind === 'decoy' || ability?.kind === 'brood') {
       u.timer += dt;
@@ -649,19 +879,19 @@ export class World {
       }
     }
     if (u.type === 'harvester') {
-      this.harvest(u, dt, stats.speed);
+      this.harvest(u, dt, speed);
       return;
     }
     if (!u.order) this.acquire(u, stats.sight);
     const order = u.order;
     if (!order) return;
     if (order.kind === 'move') {
-      if (this.approach(u, order.x, order.y, 2, dt, stats.speed)) u.order = null;
+      if (this.approach(u, order.x, order.y, 2, dt, speed)) u.order = null;
       return;
     }
     const target = this.unit(order.id) ?? this.building(order.id);
-    // A target can change sides when a hack takes it over.
-    if (!target || target.hp <= 0 || target.faction === u.faction || this.hidden(target, u.faction)) {
+    // A target can change sides when a hack takes it over, slip into a nebula, or come under a truce.
+    if (!target || target.hp <= 0 || target.faction === u.faction || this.hidden(target, u.faction) || this.atPeace(u.faction, target.faction)) {
       u.order = null;
       return;
     }
@@ -674,23 +904,144 @@ export class World {
     // Same slack as `approach`, so a unit that stopped at its range can always fire.
     if (dist(u, target) <= stop + 0.5) {
       if (u.cooldown <= 0) {
-        this.shoot(u, stats.weapon.damage, target);
+        this.shoot(u, Math.round(stats.weapon.damage * this.veteranBonus(u)), target);
         u.cooldown = stats.weapon.cooldownMs;
       }
     } else {
-      this.approach(u, target.x, target.y, stop, dt, stats.speed);
+      this.approach(u, target.x, target.y, stop, dt, speed);
     }
   }
 
   /** The ability a unit or building carries, from its faction's definition. */
-  private abilityOf(e: Unit | Building): Ability | undefined {
+  private abilityOf(e: Shooter): Ability | undefined {
+    if (e.kind === 'derelict') return undefined;
     const def = this.sides[e.faction].def;
     return e.kind === 'unit' ? def.units[e.type].ability : def.buildings[e.type].ability;
   }
 
-  /** Whether `e` is hidden from `faction`: a cloaked unit that has not fired lately, seen only by its own side. */
+  /**
+   * Whether `e` is hidden from `faction`: a cloaked unit that has not fired lately, or a ship in a
+   * nebula that has not fired lately and that none of `faction`'s ships, buildings or sensors is close to.
+   */
   hidden(e: Unit | Building, faction: number) {
-    return e.faction !== faction && e.kind === 'unit' && e.revealMs <= 0 && this.abilityOf(e)?.kind === 'cloak';
+    if (e.faction === faction || e.kind !== 'unit' || e.revealMs > 0) return false;
+    if (this.abilityOf(e)?.kind === 'cloak') return true;
+    return e.nebula && !this.spotted.get(e.id)?.has(faction);
+  }
+
+  /**
+   * Works out, once an update, which ships are in a nebula and who can see each of them: a faction
+   * with a ship within NEBULA_SPOT, a building within NEBULA_SPOT of its edge, or sensors it owns in range.
+   */
+  private updateCover() {
+    this.spotted.clear();
+    const covered: Unit[] = [];
+    for (const u of this.units) {
+      u.nebula = this.inNebula(u);
+      if (u.nebula) covered.push(u);
+    }
+    if (!covered.length) return;
+    const sensors = this.derelicts.filter((d) => d.perk === 'sensors' && d.owner >= 0);
+    for (const u of covered) {
+      const by = new Set<number>();
+      for (const v of this.units) if (v.faction !== u.faction && dist(v, u) <= NEBULA_SPOT) by.add(v.faction);
+      for (const b of this.buildings) {
+        if (b.faction !== u.faction && dist(b, u) <= NEBULA_SPOT + buildingStats(this.sides[b.faction], b.type).radius) by.add(b.faction);
+      }
+      for (const d of sensors) if (d.owner !== u.faction && dist(d, u) <= SENSOR_RANGE) by.add(d.owner);
+      this.spotted.set(u.id, by);
+    }
+  }
+
+  /**
+   * A derelict station: a faction alone in its ring claims it (draining a rival's claim first); the
+   * owner's shipyard trains and its gun platform fires.
+   */
+  private updateDerelict(d: Derelict, dt: number) {
+    const present = new Set<number>();
+    for (const u of this.units) {
+      if (u.type !== 'harvester' && u.decoyMs === null && dist(u, d) <= DERELICT_RADIUS) present.add(u.faction);
+    }
+    if (d.owner >= 0 && !this.sides[d.owner].alive) this.loseDerelict(d);
+    if (present.size === 1) {
+      const f = [...present][0];
+      const step = dt / CLAIM_MS;
+      if (d.capturer === f || d.capturer < 0) {
+        d.capturer = f;
+        d.claim = Math.min(1, d.claim + step);
+        if (d.claim >= 1 && d.owner !== f) {
+          if (d.owner === PLAYER) this.events.push({ kind: 'notice', text: `The derelict ${DERELICT_DEFS[d.perk].name} was taken by the ${this.sides[f].def.name}` });
+          d.owner = f;
+          d.queue = [];
+          d.trainLeft = 0;
+          const def = DERELICT_DEFS[d.perk];
+          if (f === PLAYER) this.events.push({ kind: 'notice', text: `Derelict claimed: ${def.name}. ${def.text}` });
+          else aiLog(String(f), `claims the derelict ${def.name}`);
+        }
+      } else {
+        d.claim = Math.max(0, d.claim - step);
+        if (d.claim <= 0) {
+          if (d.owner >= 0) this.loseDerelict(d);
+          d.capturer = f;
+        }
+      }
+    }
+    const side = d.owner >= 0 ? this.sides[d.owner] : null;
+    if (!side) return;
+    if (d.perk === 'shipyard' && d.queue.length) {
+      if (d.trainLeft <= 0) d.trainLeft = unitStats(side, d.queue[0]).trainMs;
+      d.trainLeft -= dt;
+      if (d.trainLeft <= 0) {
+        const type = d.queue.shift()!;
+        d.trainLeft = 0;
+        this.spawn(d.owner, type, d.x, d.y + DERELICT_RADIUS * 0.6);
+      }
+    }
+    if (d.perk === 'gun') {
+      d.cooldown -= dt;
+      if (d.cooldown > 0) return;
+      const target = this.nearestEnemy(d, d.owner, DERELICT_GUN.range);
+      if (target) {
+        this.shoot(d, DERELICT_GUN.damage, target);
+        d.cooldown = DERELICT_GUN.cooldownMs;
+      }
+    }
+  }
+
+  /** A derelict goes back to nobody: its owner fell or was drained out. */
+  private loseDerelict(d: Derelict) {
+    if (d.owner === PLAYER) this.events.push({ kind: 'notice', text: `The derelict ${DERELICT_DEFS[d.perk].name} is lost` });
+    d.owner = -1;
+    d.capturer = -1;
+    d.claim = 0;
+    d.queue = [];
+    d.trainLeft = 0;
+  }
+
+  /** A rival's truce, offer, tribute lock and pressure run down with time. */
+  private updateTruce(side: Side, dt: number) {
+    if (side.truceMs > 0) {
+      side.truceMs = Math.max(0, side.truceMs - dt);
+      if (side.truceMs <= 0) this.events.push({ kind: 'notice', text: `The truce with the ${side.def.name} has ended` });
+    }
+    if (side.offerMs > 0) side.offerMs = Math.max(0, side.offerMs - dt);
+    side.offerCooldownMs = Math.max(0, side.offerCooldownMs - dt);
+    side.grudgeLockMs = Math.max(0, side.grudgeLockMs - dt);
+    side.pressure = Math.max(0, side.pressure - dt / PRESSURE_DECAY_MS);
+  }
+
+  /** A rival holding a grudge against the player sues for peace when it is under pressure. */
+  private considerTruce(side: Side) {
+    if (this.watch || side.grudge !== PLAYER || side.truceMs > 0 || side.offerMs > 0 || side.offerCooldownMs > 0) return;
+    if (side.crystal < TRUCE_TRIBUTE) return;
+    const hub = this.hubOf(side.index);
+    const pressed = (hub && hub.hp < hub.maxHp * PRESSURE_HUB) || side.pressure >= PRESSURE_LOSSES;
+    if (!pressed) return;
+    side.offerMs = OFFER_MS;
+    this.events.push({
+      kind: 'notice',
+      text: `The ${side.def.name} offers a truce: ${TRUCE_MS / 1000} s of peace and ${TRUCE_TRIBUTE} crystal tribute. Press T to answer`,
+    });
   }
 
   /** Carries out a unit's cadenced ability: a decoy copy of itself, or a scout from a brood carrier. */
@@ -717,7 +1068,7 @@ export class World {
       let best: Unit | Building | null = null;
       let bestD = range;
       for (const e of pool) {
-        if (e.faction === faction || this.hidden(e, faction)) continue;
+        if (e.faction === faction || this.hidden(e, faction) || this.atPeace(faction, e.faction)) continue;
         const d = dist(from, e);
         if (d <= bestD) {
           best = e;
@@ -730,29 +1081,34 @@ export class World {
   }
 
   /** One shot from `from` at `target`: shields soak part of it, and the shot's own ability acts. */
-  private shoot(from: Unit | Building, damage: number, target: Unit | Building) {
+  private shoot(from: Shooter, damage: number, target: Unit | Building) {
+    const faction = from.kind === 'derelict' ? from.owner : from.faction;
     const dealt = Math.round(damage * this.shieldShare(target));
     target.hp -= dealt;
-    target.lastHit = from.faction;
-    this.beams.push({ x: from.x, y: from.y, x2: target.x, y2: target.y, color: this.sides[from.faction].def.color, life: BEAM_MS });
+    target.lastHit = faction;
+    if (target.kind === 'unit') target.lastHitBy = from.kind === 'unit' ? from.id : -1;
+    this.beams.push({ x: from.x, y: from.y, x2: target.x, y2: target.y, color: this.sides[faction].def.color, life: BEAM_MS });
     if (from.kind === 'unit') {
       const ability = this.abilityOf(from);
       if (ability?.kind === 'cloak') from.revealMs = ability.revealMs;
+      // A shot out of a nebula gives the ship away for a moment.
+      if (from.nebula) from.revealMs = Math.max(from.revealMs, NEBULA_REVEAL_MS);
     }
-    // Whoever is hit holds a grudge: an AI sends its next attack at that faction.
-    if (from.faction !== target.faction) this.sides[target.faction].grudge = from.faction;
+    // Whoever is hit holds a grudge: an AI sends its next attack at that faction, unless tribute holds it elsewhere.
+    if (faction !== target.faction && this.sides[target.faction].grudgeLockMs <= 0) this.sides[target.faction].grudge = faction;
     const ability = this.abilityOf(from);
     if (ability?.kind === 'hack' && target.kind === 'building' && this.sides[target.faction].def.buildings[target.type].weapon) {
       target.disabledMs = ability.disableMs;
       target.hacks += 1;
-      if (target.hacks >= ability.takeover && target.hp > 0) this.takeOver(target, from.faction);
+      if (target.hacks >= ability.takeover && target.hp > 0) this.takeOver(target, faction);
     }
     if (ability?.kind === 'splash') {
-      this.booms.push({ x: target.x, y: target.y, color: this.sides[from.faction].def.color, life: BOOM_MS, r: ability.radius });
+      this.booms.push({ x: target.x, y: target.y, color: this.sides[faction].def.color, life: BOOM_MS, r: ability.radius });
       for (const e of [...this.units, ...this.buildings]) {
-        if (e === target || e.faction === from.faction || dist(e, target) > ability.radius) continue;
+        if (e === target || e.faction === faction || this.atPeace(faction, e.faction) || dist(e, target) > ability.radius) continue;
         e.hp -= Math.round(damage * ability.share);
-        e.lastHit = from.faction;
+        e.lastHit = faction;
+        if (e.kind === 'unit') e.lastHitBy = from.kind === 'unit' ? from.id : -1;
       }
     }
   }
@@ -792,11 +1148,12 @@ export class World {
     this.mines = this.mines.filter((m) => {
       const def = this.sides[m.faction].def.buildings.turret.ability;
       if (def?.kind !== 'mines' || !this.sides[m.faction].alive) return false;
-      if (!this.units.some((u) => u.faction !== m.faction && u.hp > 0 && dist(u, m) <= def.trigger)) return true;
+      if (!this.units.some((u) => u.faction !== m.faction && !this.atPeace(m.faction, u.faction) && u.hp > 0 && dist(u, m) <= def.trigger)) return true;
       for (const u of this.units) {
-        if (u.faction === m.faction || dist(u, m) > def.radius) continue;
+        if (u.faction === m.faction || this.atPeace(m.faction, u.faction) || dist(u, m) > def.radius) continue;
         u.hp -= Math.round(def.damage * this.shieldShare(u));
         u.lastHit = m.faction;
+        u.lastHitBy = -1;
       }
       this.booms.push({ x: m.x, y: m.y, color: this.sides[m.faction].def.color, life: BOOM_MS, r: def.radius });
       return false;
@@ -851,6 +1208,7 @@ export class World {
       if (b.faction !== PLAYER) continue;
       fog.stamp(b.x, b.y, b.type === 'hub' ? HUB_VISION : buildingStats(this.sides[PLAYER], b.type).radius + BUILDING_VISION);
     }
+    for (const d of this.derelicts) if (d.perk === 'sensors' && d.owner === PLAYER) fog.stamp(d.x, d.y, SENSOR_RANGE);
     // A rival building, once seen, stays drawn where it was seen.
     for (const b of this.buildings) if (b.faction !== PLAYER && fog.sees(b)) this.known.add(b.id);
   }
@@ -938,8 +1296,9 @@ export class World {
       x: Math.min(ARENA.x + ARENA.w - 12, Math.max(ARENA.x + 12, x)),
       y: Math.min(ARENA.y + ARENA.h - 12, Math.max(ARENA.y + 12, y)),
       angle: -Math.PI / 2, hp: stats.hp, maxHp: stats.hp, cooldown: 0, order: null, mining: null, carry: 0,
-      timer: 0, revealMs: 0, decoyMs, lastHit: -1, home: -1,
+      timer: 0, revealMs: 0, decoyMs, lastHit: -1, lastHitBy: -1, home: -1, kills: 0, nebula: false, repairing: false,
     };
+    unit.nebula = this.inNebula(unit);
     this.units.push(unit);
     return unit;
   }
@@ -985,15 +1344,24 @@ export class World {
       }
     }
     this.contestBeacon(side);
+    this.contestDerelicts(side, army);
     this.fetchSalvage(side);
+    this.considerTruce(side);
+    // A badly hurt warship that is not on a raid falls back to repair.
+    for (const u of army) {
+      if (u.hp < u.maxHp * AI_FALL_BACK_HP && !u.repairing && u.id !== side.picket && (!u.order || (u.order.kind === 'attack' && u.order.auto))) {
+        this.sendHome(u);
+      }
+    }
     side.attackMs += AI_THINK_MS;
     if (this.elapsedMs < AI_GRACE_MS || army.length < AI_ARMY_TO_ATTACK || side.attackMs < AI_ATTACK_MS) return;
     side.attackMs = 0;
-    const foe = side.grudge >= 0 && this.sides[side.grudge].alive ? side.grudge : -1;
+    const foe = side.grudge >= 0 && this.sides[side.grudge].alive && !this.atPeace(f, side.grudge) ? side.grudge : -1;
     const target = this.nearestEnemyBuilding(hub, f, foe);
     if (!target) return;
-    // The picket stays on the beacon and a few ships stay home; the rest go.
-    const raid = army.filter((u) => u.id !== side.picket).sort((a, b) => dist(b, hub) - dist(a, hub));
+    // The picket stays on the beacon, the claimer at its derelict, the hurt stay to repair and a few ships stay home; the rest go.
+    const raid = army.filter((u) => u.id !== side.picket && u.id !== side.claimer && !u.repairing && u.hp >= u.maxHp * AI_FALL_BACK_HP)
+      .sort((a, b) => dist(b, hub) - dist(a, hub));
     const sent = raid.slice(0, Math.max(0, raid.length - AI_HOME_GUARD));
     for (const u of sent) u.order = { kind: 'attack', id: target.id, auto: false };
     if (sent.length > 0) {
@@ -1011,6 +1379,32 @@ export class World {
         && u.id !== side.picket && dist(u, s) <= AI_SALVAGE_REACH);
       if (idle) idle.order = { kind: 'move', x: s.x, y: s.y };
     }
+  }
+
+  /**
+   * A rival with a fair army sends one idle warship (its claimer) to the nearest derelict station it
+   * does not own within reach of its hub, once the opening is over. Once the station is its, the
+   * ship is free again; a lost station is contested again.
+   */
+  private contestDerelicts(side: Side, army: Unit[]) {
+    const f = side.index;
+    if (this.elapsedMs < AI_CLAIM_MS || army.length < AI_CLAIM_ARMY) return;
+    const hub = this.hubOf(f)!;
+    const current = this.unit(side.claimer);
+    if (current && current.faction === f) {
+      const at = this.derelicts.reduce((a, b) => (dist(b, current) < dist(a, current) ? b : a));
+      if (at.owner === f && dist(at, current) <= DERELICT_RADIUS) side.claimer = -1;
+      return;
+    }
+    side.claimer = -1;
+    const open = this.derelicts.filter((d) => d.owner !== f && dist(d, hub) <= AI_CLAIM_REACH).sort((a, b) => dist(a, hub) - dist(b, hub));
+    const target = open[0];
+    if (!target) return;
+    const idle = this.units.find((u) => u.faction === f && u.type !== 'harvester' && u.decoyMs === null && !u.order && u.id !== side.picket);
+    if (!idle) return;
+    side.claimer = idle.id;
+    idle.order = { kind: 'move', x: target.x, y: target.y };
+    aiLog(String(f), `sends a ship to claim the derelict ${DERELICT_DEFS[target.perk].name}`);
   }
 
   /** An AI expansion: a second hub beside the richest-looking crystal field away from everyone. */
@@ -1075,7 +1469,7 @@ export class World {
   private nearestEnemyBuilding(from: Point, faction: number, only = -1): Building | null {
     let best: Building | null = null;
     for (const b of this.buildings) {
-      if (b.faction === faction || (only >= 0 && b.faction !== only)) continue;
+      if (b.faction === faction || (only >= 0 && b.faction !== only) || this.atPeace(faction, b.faction)) continue;
       if (!best || dist(b, from) < dist(best, from)) best = b;
     }
     return best ?? (only >= 0 ? this.nearestEnemyBuilding(from, faction) : null);
@@ -1101,9 +1495,12 @@ export class World {
       // A destroyed ship leaves a salvage shard for whoever destroyed it; the player's count as kills.
       if (u.decoyMs !== null || u.lastHit < 0 || u.lastHit === u.faction) continue;
       this.shards.push({ id: this.id(), faction: u.lastHit, x: u.x, y: u.y, value: SHARD_VALUE, life: SHARD_LIFE_MS });
+      const killer = this.unit(u.lastHitBy);
+      if (killer && killer.hp > 0 && killer.faction === u.lastHit && killer.decoyMs === null) this.credit(killer);
       if (u.lastHit === PLAYER) {
         this.kills += 1;
         this.score('kills');
+        if (u.faction !== PLAYER) this.sides[u.faction].pressure += 1;
       }
     }
     // The rest of a fallen faction's ships and buildings go up with its hub.
@@ -1116,6 +1513,23 @@ export class World {
       this.sides[f].crystal = 0;
     }
     this.shards = this.shards.filter((s) => this.sides[s.faction].alive);
+  }
+
+  /** A kill for a ship; at VETERAN_RANKS kills it ranks up, with more damage and a stronger hull. */
+  private credit(u: Unit) {
+    const before = this.veteranBonus(u);
+    u.kills += 1;
+    const after = this.veteranBonus(u);
+    if (after === before) return;
+    const k = after / before;
+    u.maxHp = Math.round(u.maxHp * k);
+    u.hp = Math.min(u.maxHp, u.hp * k);
+    const name = VETERAN_NAMES[this.rankOf(u) - 1];
+    this.booms.push({ x: u.x, y: u.y, color: 0xffd36a, life: BOOM_MS, r: 14 });
+    if (u.faction === PLAYER) {
+      this.pops.push({ x: u.x, y: u.y - 20, text: name.toUpperCase(), color: 0xffd36a, life: POP_MS });
+      this.events.push({ kind: 'notice', text: `${this.sides[PLAYER].def.units[u.type].name} is now ${name === 'Ace' ? 'an' : 'a'} ${name}: +${Math.round(VETERAN_STEP * 100)}% damage and hull per rank` });
+    }
   }
 
   /** A salvage yard pays its faction for each enemy unit destroyed within its range. */

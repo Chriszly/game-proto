@@ -1,6 +1,10 @@
 import type { Ability, Faction, Role, UnitId } from './factions';
 import { RESEARCH_LEVELS, RESEARCH_MS, RESEARCH_STEP, TRACK_DEFS, type Track } from './research';
-import { EXPANSION_GAP, buildingStats, expansionStats, researchCost, unitStats, type Side } from './world';
+import type { DerelictKind } from './map';
+import {
+  CLAIM_MS, DERELICT_DEFS, EXPANSION_GAP, REPAIR_RANGE, REPAIR_RATE, VETERAN_NAMES, VETERAN_RANKS, VETERAN_STEP, buildingStats, expansionStats,
+  researchCost, unitStats, type Side,
+} from './world';
 
 /** A sentence about what an ability does, with its numbers. */
 export function abilityText(a: Ability): string {
@@ -57,6 +61,20 @@ export function expansionLines(side: Side): string[] {
     `A second hub beside a far crystal field, at least ${EXPANSION_GAP} px from your hubs.`,
     'Trains harvesters that work its field, takes crystal and lets you build around it.',
   ];
+}
+
+/** The lines the Fall back button's tooltip shows under its name. */
+export function fallBackLines(): string[] {
+  return [
+    'Sends the selected ships home to the nearest hub, outpost or Depot.',
+    `Ships within ${REPAIR_RANGE} px of one repair ${Math.round(REPAIR_RATE * 100)}% of their hull a second. Also F.`,
+    `Ranks: ${VETERAN_RANKS.map((k, i) => `${VETERAN_NAMES[i]} at ${k} kills`).join(', ')}, each +${Math.round(VETERAN_STEP * 100)}% damage and hull.`,
+  ];
+}
+
+/** The lines a derelict station's label shows: what it gives and how to claim it. */
+export function derelictLines(kind: DerelictKind): string[] {
+  return [DERELICT_DEFS[kind].text, `Hold its ring alone with warships for ${CLAIM_MS / 1000} s to claim it.`];
 }
 
 /** The lines a research button's tooltip shows under its name. */
