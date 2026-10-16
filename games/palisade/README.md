@@ -202,6 +202,13 @@ the empty cards, in this order: "Mend the Barricade" (repair half of the barrica
 | Drill Sergeant | 3 | Hired guards attack 20% faster |
 
 ![With every upgrade taken, the three fillers](docs/screenshots/fillers.png)
+
+Once every skill is learned, the next level-up opens one last time with the repair card alone
+("Every skill learned"). From then on each level-up repairs half of the barricade at once, with a
+"Level N! Barricade repaired" pop-up over it, and the battle goes on without a pause.
+
+![The last level-up, with the repair card alone](docs/screenshots/last-level-up.png)
+![A level-up after that: the barricade is repaired](docs/screenshots/level-up-repair-pop.png)
 ![Three of the newer skills on a level-up](docs/screenshots/new-skills-level-up.png)
 
 The skill book (its button in the top bar shows how many skills are found, such as "Skill book

@@ -66,8 +66,14 @@ seconds without a tap.
   adds to `streak.count`; from two on every kill gives `streakBonus` (5% a kill, up to 50%) more
   experience, totalled in `streak.bonusXp`. Each kill pops "+N XP" (and "xN") and sends orbs to the
   experience bar, whose gold segment shows experience still in flight.
-- **Progression:** level, experience, upgrade ranks, relics, pending level-ups, best wave and run
-  count carry over between runs. Every run restarts at wave 1 on the first road, with no coins,
+- **Every skill learned:** once `offerable` is empty, `rollChoices` returns `['mend']` alone and
+  `LevelUp` shows it in the middle under "Every skill learned". Picking any card while `offerable`
+  is empty sets `mastered` (saved with the progress). From then on `offer` takes each pending
+  level-up at once: `mend` repairs half of the barricade (counted in `ranks.mend`) and a `mended`
+  effect pops "Level N! Barricade repaired" over it (at `MENDED_POP`, `amount` the level), with no
+  cards and no pause. A skill added later puts the cards back, since `offerable` is no longer empty.
+- **Progression:** level, experience, upgrade ranks, relics, pending level-ups, best wave, run
+  count and `mastered` carry over between runs. Every run restarts at wave 1 on the first road, with no coins,
   guards or caltrops.
 - **Screens:** there is one scene with the battle and HUD, plus overlays drawn over it: the
   level-up cards (`LevelUp`), the skill book (`SkillBook`, opened by the "Skill book" button in the
@@ -78,8 +84,8 @@ seconds without a tap.
 - **Rough edges seen in the code:**
   - `GameState.version` (`VERSION`) is never read, and the save holds no version, so there is no
     migration path (relics are merged over `freshProgress`, so older saves load with none).
-  - Progress is only saved when the phase or wave changes, on a level-up and on a pick (tapped or
-    auto). Experience and kills gained mid-wave are lost on a reload.
+  - Progress is only saved when the phase, wave, level or pending level-ups change and on a pick
+    (tapped or auto). Experience and kills gained mid-wave are lost on a reload.
   - `HERO` in `src/game/state.ts` is unused (the scene draws the hero at `HERO_FEET`).
   - There is no sound, pause button or in-game settings panel (only the hub's shared settings, see
     Hub settings), and the hero has a single frame. Arrow Rain can be loosed during a break, when
@@ -219,7 +225,7 @@ seconds without a tap.
 ### State model
 
 - `GameState` (`src/game/state.ts`) has two halves. The progress fields (`level`, `xp`, `ranks`,
-  `levelUps`, `bestWave`, `runs`, `relics`) form `Progress`. The run fields are `wave`, `phase`
+  `levelUps`, `bestWave`, `runs`, `relics`, `mastered`) form `Progress`. The run fields are `wave`, `phase`
   (`'break' | 'fighting' | 'over'`), `breakMs`, `toSpawn`, `spawnMs`, `barricade`, `enemies`,
   `missiles`, `effects`, `cooldown`, `choices`, `pickMs` (time left to pick before the auto-pick),
   `kills`, `rain` (`charge`, `need`, `volleys`), `caltrops` (`charge`, `need`, `patches`), `coins`,
@@ -236,11 +242,12 @@ seconds without a tap.
   `pick` counts the fillers (`mend`, `purse`, `wind`) in `ranks` too (for the skill book); `stats`
   ignores them and `offerable` never offers one, so their ranks change nothing else.
   `rollChoices` fills any of the three cards no upgrade is left for with `FILLERS` in order, so a
-  level-up always shows three different cards.
+  level-up shows three different cards, until none is left at all (see Every skill learned).
 - Only `sim.ts` mutates state during play. The scene only replaces it wholesale (`newRun`,
   `fightAgain`), calls `offer` on load when level-ups are pending, and calls `loose`, `strew`,
   `hire`, `train`, `pick` and `pickRoad`.
-- **Invariants:** `choices` is set while `levelUps > 0`, and the battle (streak timer and volleys
+- **Invariants:** `choices` is set while `levelUps > 0` (unless `mastered` with nothing left to
+  offer, when `offer` spends them at once), and the battle (streak timer and volleys
   included) is frozen then. Every place that sets `choices` (`offer`, `fightAgain`) also resets
   `pickMs` to `AUTO_PICK_MS`, so each level-up gets the full 10 seconds. The countdown also stops
   while the run is over. `rain.charge` never exceeds `rain.need`; `loose` refuses unless it is full,
