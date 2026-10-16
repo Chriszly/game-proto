@@ -1,3 +1,5 @@
+import type { CurseKind } from './cards';
+
 // The foes of the dungeon. Each one opens with its first move, then draws its next move at random
 // from its list (never the same one twice in a row), shown above its head the turn before it acts,
 // so the player can plan around it.
@@ -27,7 +29,9 @@ export type Intent =
   /** Grows stronger: every attack after deals this much more per hit. */
   | { kind: 'buff'; strength: number }
   /** Puts a status on the hero. */
-  | { kind: 'debuff'; status: StatusKind; amount: number };
+  | { kind: 'debuff'; status: StatusKind; amount: number }
+  /** Adds a curse card to the hero's deck (and discard pile). Only elites do this. */
+  | { kind: 'curse'; curse: CurseKind };
 
 export interface EnemyType {
   name: string;
@@ -71,14 +75,14 @@ export const ENEMIES: Record<EnemyKind, EnemyType> = {
     hp: 58,
     gold: 40,
     elite: true,
-    moves: [{ kind: 'block', block: 10 }, { kind: 'attack', damage: 13 }, { kind: 'attack', damage: 6, hits: 2, apply: { status: 'vulnerable', amount: 2 } }],
+    moves: [{ kind: 'block', block: 10 }, { kind: 'attack', damage: 13 }, { kind: 'attack', damage: 6, hits: 2, apply: { status: 'vulnerable', amount: 2 } }, { kind: 'curse', curse: 'wound' }],
   },
   bogWitch: {
     name: 'Bog Witch',
     hp: 46,
     gold: 40,
     elite: true,
-    moves: [{ kind: 'debuff', status: 'weak', amount: 2 }, { kind: 'attack', damage: 7, apply: { status: 'poison', amount: 3 } }, { kind: 'attack', damage: 11 }, { kind: 'buff', strength: 2 }],
+    moves: [{ kind: 'debuff', status: 'weak', amount: 2 }, { kind: 'attack', damage: 7, apply: { status: 'poison', amount: 3 } }, { kind: 'attack', damage: 11 }, { kind: 'buff', strength: 2 }, { kind: 'curse', curse: 'doubt' }],
   },
   boneKing: {
     name: 'Bone King',
@@ -123,7 +127,7 @@ export const ENEMIES: Record<EnemyKind, EnemyType> = {
     hp: 82,
     gold: 50,
     elite: true,
-    moves: [{ kind: 'block', block: 16 }, { kind: 'attack', damage: 17 }, { kind: 'attack', damage: 5, hits: 3 }],
+    moves: [{ kind: 'block', block: 16 }, { kind: 'attack', damage: 17 }, { kind: 'attack', damage: 5, hits: 3 }, { kind: 'curse', curse: 'rust' }],
   },
   hollowQueen: {
     name: 'Hollow Queen',

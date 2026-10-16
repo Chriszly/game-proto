@@ -1,25 +1,32 @@
 import { settings } from '../../../../shared/settings';
 import Phaser from 'phaser';
-import { foeTexture } from '../art/characters';
-import { relicIcon } from '../art/icons';
-import { BLUE, GOLD, INK, RED, STONE } from '../art/palette';
+import { foeTexture, heroTexture } from '../art/characters';
+import { cardIcon, flaskIcon, relicIcon } from '../art/icons';
+import { BLUE, GOLD, INK, PURPLE, RED, STONE } from '../art/palette';
 import { artImage } from '../art/paint';
 import { backdrop } from '../art/scenery';
-import { isTempered, tempered, type CardId } from '../game/cards';
+import { card, describe, isTempered, tempered, type CardId } from '../game/cards';
+import { depthText } from '../game/depth';
 import { ENEMIES, type StatusKind } from '../game/enemies';
+import { FLASKS, FLASK_SLOTS } from '../game/flasks';
+import { HEROES } from '../game/heroes';
 import { COLUMNS, ENTRANCE, reachable } from '../game/map';
 import { RELICS, type RelicId } from '../game/relics';
 import {
   actName,
   buyCard,
+  buyFlask,
   buyRelic,
   buyRemoval,
+  canBuyFlask,
   canBuyRemoval,
   canChoose,
   canPlay,
   canRemove,
   canTemper,
+  canUseFlask,
   chooseEvent,
+  chooseHero,
   descend,
   endTurn,
   eventHere,
@@ -31,9 +38,11 @@ import {
   removeCard,
   rest,
   restHeal,
+  setDepth,
   takeReward,
   temperCard,
   tick,
+  useFlask,
   walkTo,
 } from '../game/sim';
 import { ENERGY, HAND_SIZE, POP_MS, WALK_MS, type Enemy, type GameState, type Status } from '../game/state';
@@ -44,10 +53,12 @@ import {
   END_TURN,
   ENERGY_ORB,
   EVENT_BUTTONS,
+  FLASKS as FLASK_ROW,
   FOE_FEET_Y,
   FOE_XS,
   FONT,
   HAND,
+  HERO_PANEL,
   HERO_FEET,
   HP_BAR,
   HUD,
@@ -55,6 +66,7 @@ import {
   PANEL_BUTTON,
   PICKER,
   PILES_Y,
+  POWERS,
   REST_BUTTONS,
   REWARD,
   ROOM_RADIUS,
@@ -147,6 +159,9 @@ const PICK_TITLES: Record<PickMode, string> = {
 
 const POP_COLORS = { damage: '#f4a08a', block: '#8ab8e8', heal: '#8cd060', status: '#c49ae8' };
 
+/** A power's rules, without the "Power." lead-in its card face carries. */
+const describePower = (id: CardId) => describe(id).replace(/^Power\. /, '');
+
 export class GameScene extends Phaser.Scene {
   /** The run being played; read by the playthrough test. */
   state!: GameState;
@@ -179,6 +194,12 @@ export class GameScene extends Phaser.Scene {
   private discardText!: Phaser.GameObjects.Text;
   private endTurnButton!: Phaser.GameObjects.Container;
   private turnBanner!: Phaser.GameObjects.Text;
+  /** The flask slots down the left of a fight, rebuilt when the flasks or the phase change. */
+  private flaskLayer!: Phaser.GameObjects.Container;
+  private flaskKey = '';
+  /** The powers in play, under the top bar. */
+  private powerLayer!: Phaser.GameObjects.Container;
+  private powerKey = '';
 
   private rewardLayer!: Phaser.GameObjects.Container;
   private rewardTitle!: Phaser.GameObjects.Text;
@@ -191,8 +212,12 @@ export class GameScene extends Phaser.Scene {
   /** The campfire's other choices, next to Rest. */
   private temperButton!: Phaser.GameObjects.Container;
   private removeButton!: Phaser.GameObjects.Container;
-  /** A mystery room's two choices. */
+  /** A mystery room's two choices, and the hero choice's two heroes. */
   private choiceButtons: Phaser.GameObjects.Container[] = [];
+  /** On the hero panel: the two heroes, the depth's arrows and label. */
+  private heroPics: Phaser.GameObjects.Image[] = [];
+  private depthButtons: Phaser.GameObjects.Container[] = [];
+  private depthText!: Phaser.GameObjects.Text;
   /** The deck laid out to pick a card to burn, temper or sell. */
   private pickLayer!: Phaser.GameObjects.Container;
   private pickTitle!: Phaser.GameObjects.Text;
@@ -229,6 +254,8 @@ export class GameScene extends Phaser.Scene {
     this.pickKey = '';
     this.shopKey = '';
     this.relicKey = '';
+    this.flaskKey = '';
+    this.powerKey = '';
     this.roomsBuilt = null;
     this.tipMs = 0;
     this.choiceButtons = [];
@@ -252,7 +279,7 @@ export class GameScene extends Phaser.Scene {
     const s = this.state;
     const roomKind = s.at === null ? null : s.rooms[s.at]?.kind;
     const inFight = roomKind === 'fight' || roomKind === 'elite' || roomKind === 'boss';
-    const onMap = ['map', 'walk', 'rest', 'shop', 'event'].includes(s.phase) || (s.phase === 'reward' && !inFight);
+    const onMap = ['hero', 'map', 'walk', 'rest', 'shop', 'event'].includes(s.phase) || (s.phase === 'reward' && !inFight);
     this.mapLayer.setVisible(onMap);
     this.fightLayer.setVisible(!onMap);
     // Pops first, so a killing blow's number still finds its foe before drawFight drops it.
@@ -272,7 +299,7 @@ export class GameScene extends Phaser.Scene {
     this.paths = this.add.graphics();
     this.roomRings = this.add.graphics();
     this.roomLayer = this.add.container(0, 0);
-    this.token = artImage(this, ENTRANCE.x, ENTRANCE.y, 'hero-token').setOrigin(0.5, 1);
+    this.token = artImage(this, ENTRANCE.x, ENTRANCE.y, heroTexture('knight', true)).setOrigin(0.5, 1);
     this.mapHint = this.add
       .text(VIEW.w / 2, VIEW.h - 34, '', { ...textStyle(18, '#e6c766'), align: 'center', wordWrap: { width: VIEW.w - 80 } })
       .setOrigin(0.5);
@@ -336,7 +363,7 @@ export class GameScene extends Phaser.Scene {
       const t = Math.min(1, s.walk.ms / WALK_MS);
       pos = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t - Math.abs(Math.sin(t * Math.PI * 4)) * 4 };
     }
-    this.token.setPosition(pos.x, pos.y - (s.walk ? 0 : ROOM_RADIUS - 6));
+    this.token.setTexture(heroTexture(s.hero, true)).setPosition(pos.x, pos.y - (s.walk ? 0 : ROOM_RADIUS - 6));
     const hint = s.at === null ? 'Tap a room to enter the dungeon' : 'Tap a lit room to go on';
     this.mapHint.setText(s.phase === 'map' ? s.notice || hint : '');
   }
@@ -345,7 +372,7 @@ export class GameScene extends Phaser.Scene {
 
   private createFight() {
     this.roomBg = artImage(this, 0, 0, 'room-bg').setOrigin(0);
-    this.hero = artImage(this, HERO_FEET.x, HERO_FEET.y, 'hero').setOrigin(0.5, 1);
+    this.hero = artImage(this, HERO_FEET.x, HERO_FEET.y, heroTexture('knight')).setOrigin(0.5, 1);
     this.bars = this.add.graphics();
     this.heroHp = this.add.text(HERO_FEET.x, FOE_FEET_Y + HP_BAR.dy + HP_BAR.h / 2, '', textStyle(13)).setOrigin(0.5);
     this.handLayer = this.add.container(0, 0);
@@ -359,7 +386,9 @@ export class GameScene extends Phaser.Scene {
     this.discardText = this.add.text(END_TURN.x, PILES_Y, '', textStyle(14, '#d8c7a6')).setOrigin(0.5);
     this.endTurnButton = makeButton(this, END_TURN.x, END_TURN.y, 'End turn', () => endTurn(this.state), END_TURN.w);
     this.turnBanner = this.add.text(VIEW.w / 2, 150, '', textStyle(30, '#e6c766')).setOrigin(0.5);
-    this.fightLayer = this.add.container(0, 0, [this.roomBg, this.hero, this.bars, this.heroHp, orb, this.energyText, this.endTurnButton, this.handLayer, this.drawText, this.discardText, this.turnBanner]);
+    this.flaskLayer = this.add.container(0, 0);
+    this.powerLayer = this.add.container(0, 0);
+    this.fightLayer = this.add.container(0, 0, [this.roomBg, this.hero, this.bars, this.heroHp, orb, this.energyText, this.endTurnButton, this.handLayer, this.drawText, this.discardText, this.turnBanner, this.flaskLayer, this.powerLayer]);
     this.heroStatuses = new StatusRow(this, this.fightLayer);
   }
 
@@ -372,7 +401,7 @@ export class GameScene extends Phaser.Scene {
 
     // The hero shakes and flashes red when hit, unless motion is reduced.
     const shake = s.heroHitMs > 0 && !settings.reduceMotion ? Math.sin(this.clock / 20) * 4 : 0;
-    this.hero.setPosition(HERO_FEET.x + shake, HERO_FEET.y);
+    this.hero.setTexture(heroTexture(s.hero)).setPosition(HERO_FEET.x + shake, HERO_FEET.y);
     if (s.heroHitMs > 0 && !settings.reduceMotion) this.hero.setTint(0xff8080);
     else this.hero.clearTint();
 
@@ -419,8 +448,10 @@ export class GameScene extends Phaser.Scene {
       this.tweens.add({ targets: foe.sprite, alpha: 0, y: foe.sprite.y + 10, duration: 400, onComplete: () => foe.sprite.destroy() });
     }
 
-    // Hand, energy and piles.
+    // Hand, energy, piles, flasks and powers.
     this.drawHand();
+    this.drawFlasks();
+    this.drawPowers();
     this.energyText.setText(f ? `${f.energy}/${ENERGY}` : '');
     this.drawText.setText(f ? `Draw pile ${f.draw.length}` : '');
     this.discardText.setText(f ? `Discard pile ${f.discard.length}` : '');
@@ -452,8 +483,10 @@ export class GameScene extends Phaser.Scene {
           ? `${intent.block}`
           : intent.kind === 'buff'
             ? `+${intent.strength}`
-            : `${intent.amount}`;
-    const color = { attack: '#f4a08a', block: '#8ab8e8', buff: '#e6c766', debuff: '#c49ae8' }[intent.kind];
+            : intent.kind === 'curse'
+              ? card(intent.curse).name
+              : `${intent.amount}`;
+    const color = { attack: '#f4a08a', block: '#8ab8e8', buff: '#e6c766', debuff: '#c49ae8', curse: '#9a6ac0' }[intent.kind];
     foe.intentText.setText(text).setPosition(x + 2, y).setColor(color);
     const extra = intent.kind === 'debuff' ? intent.status : intent.kind === 'attack' ? intent.apply?.status : undefined;
     if (extra) foe.intentExtra.setTexture(`status-${extra}`).setPosition(x + 2 + foe.intentText.width + 14, y);
@@ -487,6 +520,51 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /** The three flask slots down the left: a filled one is lit and drinkable on the hero's turn, an empty one a dark ring. */
+  private drawFlasks() {
+    const s = this.state;
+    const usable = s.phase === 'player';
+    const key = `${s.flasks.join()}|${usable}`;
+    if (key === this.flaskKey) return;
+    this.flaskKey = key;
+    this.flaskLayer.removeAll(true);
+    for (let i = 0; i < FLASK_SLOTS; i++) {
+      const x = FLASK_ROW.x;
+      const y = FLASK_ROW.y + i * FLASK_ROW.gap;
+      const id = s.flasks[i];
+      const ring = this.add.circle(x, y, FLASK_ROW.r, INK, 0.85).setStrokeStyle(3, id ? GOLD.mid : STONE.light);
+      this.flaskLayer.add(ring);
+      if (!id) continue;
+      const pic = artImage(this, x, y, flaskIcon(id)).setAlpha(usable ? 1 : 0.5);
+      this.flaskLayer.add(pic);
+      ring
+        .setInteractive({ useHandCursor: usable })
+        .on('pointerover', () => this.showTip(`${FLASKS[id].name}: ${FLASKS[id].text}${usable ? ' Tap to drink it, for no energy.' : ''}`))
+        .on('pointerdown', () => {
+          this.showTip(`${FLASKS[id].name}: ${FLASKS[id].text}`);
+          if (canUseFlask(this.state, i)) useFlask(this.state, i);
+        });
+    }
+  }
+
+  /** The powers in play, as their icons in purple rings under the top bar; hover or tap for the text. */
+  private drawPowers() {
+    const s = this.state;
+    const powers = s.fight?.powers ?? [];
+    const key = powers.join();
+    if (key === this.powerKey) return;
+    this.powerKey = key;
+    this.powerLayer.removeAll(true);
+    powers.forEach((id, i) => {
+      const x = POWERS.x + i * POWERS.gap;
+      const ring = this.add.circle(x, POWERS.y, POWERS.r, PURPLE.mid).setStrokeStyle(2, PURPLE.light);
+      const pic = artImage(this, x, POWERS.y, cardIcon(card(id).icon), 0.5);
+      const tip = () => this.showTip(`${card(id).name} (in play): ${describePower(id)}`);
+      ring.setInteractive({ useHandCursor: true }).on('pointerover', tip).on('pointerdown', tip);
+      this.powerLayer.add([ring, pic]);
+    });
+  }
+
   // Rewards, the merchant, rests, events and the end of an act or a run
 
   private createReward() {
@@ -509,7 +587,7 @@ export class GameScene extends Phaser.Scene {
     this.rewards = [];
     if (!choices) return;
     const kind = s.rooms[s.at!]?.kind;
-    const gold = s.goldWon ? `+${s.goldWon} gold. ` : '';
+    const gold = s.goldWon ? `+${s.goldWon} gold${s.flaskWon ? ` and a ${FLASKS[s.flaskWon].name}` : ''}. ` : '';
     this.rewardTitle.setText(
       kind === 'treasure'
         ? 'Treasure! Take a rare card'
@@ -596,6 +674,22 @@ export class GameScene extends Phaser.Scene {
     box(SHOP.box.ys[2], 'room-rest', 'Remove a card', 'Take one card out of your deck for good.', shop.removePrice, shop.removed, canBuyRemoval(s), () => {
       if (canBuyRemoval(this.state)) this.picking = 'sell';
     });
+    // Flasks under the cards, with how many slots are free.
+    shop.flasks.forEach((w, i) => {
+      const { xs, y, w: bw, h } = SHOP.flasks;
+      const x = xs[i];
+      const can = canBuyFlask(s, i);
+      const fl = FLASKS[w.id];
+      const bg = this.add.rectangle(x, y, bw, h, 0x2a2632, w.sold ? 0.5 : 1).setStrokeStyle(3, can ? GOLD.mid : 0x5a5366);
+      const pic = artImage(this, x - bw / 2 + 24, y, flaskIcon(w.id)).setAlpha(w.sold ? 0.3 : 1);
+      const title = this.add.text(x - bw / 2 + 46, y - 24, fl.name, textStyle(13, '#f3e9d2'));
+      const rules = this.add.text(x - bw / 2 + 46, y - 4, fl.text, { fontFamily: FONT, fontSize: '12px', color: '#d8c7a6', wordWrap: { width: bw - 56 } }).setAlpha(w.sold ? 0.5 : 1);
+      ware(bg, pic, title, rules);
+      price(x + bw / 2 - 20, y - 14, w.price, w.sold);
+      if (can) bg.setInteractive({ useHandCursor: true }).on('pointerdown', () => buyFlask(this.state, i));
+    });
+    const slots = this.add.text(SHOP.flasks.xs[0] - SHOP.flasks.w / 2, SHOP.flasks.y - SHOP.flasks.h / 2 - 18, `Flasks: ${s.flasks.length} of ${FLASK_SLOTS} slots held`, textStyle(14, '#d8c7a6'));
+    ware(slots);
   }
 
   private createPanel() {
@@ -608,11 +702,18 @@ export class GameScene extends Phaser.Scene {
     this.panelButton = makeButton(this, PANEL_BUTTON.x, PANEL_BUTTON.y, 'Continue', () => this.panelAction());
     this.temperButton = makeButton(this, PANEL_BUTTON.x, PANEL_BUTTON.y, 'Temper a card', () => canTemper(this.state) && (this.picking = 'temper'), REST_BUTTONS.w);
     this.removeButton = makeButton(this, PANEL_BUTTON.x + REST_BUTTONS.dx, PANEL_BUTTON.y, 'Remove a card', () => canRemove(this.state) && (this.picking = 'burn'), REST_BUTTONS.w);
+    // The two choices of a mystery room double as the hero choice before the first room.
     this.choiceButtons = [0, 1].map((i) =>
-      makeButton(this, VIEW.w / 2, EVENT_BUTTONS.y + i * EVENT_BUTTONS.gap, '', () => chooseEvent(this.state, i), EVENT_BUTTONS.w),
+      makeButton(this, VIEW.w / 2, EVENT_BUTTONS.y + i * EVENT_BUTTONS.gap, '', () => (this.state.phase === 'hero' ? chooseHero(this.state, i === 0 ? 'knight' : 'hunter') : chooseEvent(this.state, i)), EVENT_BUTTONS.w),
     );
+    this.heroPics = [
+      artImage(this, HERO_PANEL.knightX, HERO_PANEL.feetY, heroTexture('knight')).setOrigin(0.5, 1),
+      artImage(this, HERO_PANEL.hunterX, HERO_PANEL.feetY, heroTexture('hunter')).setOrigin(0.5, 1),
+    ];
+    this.depthButtons = [-1, 1].map((d) => makeButton(this, VIEW.w / 2 + d * HERO_PANEL.depthDx, HERO_PANEL.depthY, d < 0 ? '<' : '>', () => setDepth(this.state, this.state.depth + d), 44));
+    this.depthText = this.add.text(VIEW.w / 2, HERO_PANEL.depthY, '', textStyle(20, '#e6c766')).setOrigin(0.5);
     this.panel = this.add
-      .container(0, 0, [dim, box, this.panelTitle, this.panelText, this.panelButton, this.temperButton, this.removeButton, ...this.choiceButtons])
+      .container(0, 0, [dim, box, this.panelTitle, this.panelText, this.panelButton, this.temperButton, this.removeButton, ...this.choiceButtons, ...this.heroPics, ...this.depthButtons, this.depthText])
       .setDepth(UI_DEPTH + 20)
       .setVisible(false);
   }
@@ -621,15 +722,31 @@ export class GameScene extends Phaser.Scene {
     const s = this.state;
     if (s.phase !== 'rest' && s.phase !== 'shop') this.picking = null;
     const ev = eventHere(s);
-    const show = (s.phase === 'rest' && !this.picking) || !!ev || s.phase === 'descend' || s.phase === 'over' || s.phase === 'won';
+    const heroes = s.phase === 'hero';
+    const show = heroes || (s.phase === 'rest' && !this.picking) || !!ev || s.phase === 'descend' || s.phase === 'over' || s.phase === 'won';
     this.panel.setVisible(show);
     this.drawPicker();
     if (!show) return;
     const caption = this.panelButton.list[1] as Phaser.GameObjects.Text;
     const camp = s.phase === 'rest';
-    this.panelButton.setVisible(!ev);
+    this.panelButton.setVisible(!ev && !heroes);
     this.temperButton.setVisible(camp).setAlpha(canTemper(s) ? 1 : 0.45);
     this.removeButton.setVisible(camp).setAlpha(canRemove(s) ? 1 : 0.45);
+    for (const pic of this.heroPics) pic.setVisible(heroes);
+    const ladder = heroes && s.bestDepth > 0;
+    this.depthText.setVisible(ladder).setText(`Depth ${s.depth}`);
+    this.depthButtons.forEach((b, i) => b.setVisible(ladder).setAlpha((i === 0 ? s.depth > 0 : s.depth < s.bestDepth) ? 1 : 0.4));
+    this.panelText.setWordWrapWidth(heroes ? 300 : 520).setY(heroes ? HERO_PANEL.rulesY : VIEW.h / 2 - 26);
+    if (heroes) {
+      this.panelTitle.setText('Choose your hero').setColor('#e6c766');
+      this.panelText.setText(ladder ? depthText(s.depth) : s.bestDepth > 0 ? '' : 'Beat the Hollow Queen to open the depths below.');
+      this.choiceButtons.forEach((b, i) => {
+        const h = HEROES[i === 0 ? 'knight' : 'hunter'];
+        b.setVisible(true).setAlpha(1);
+        (b.list[1] as Phaser.GameObjects.Text).setText(`${h.name}: ${h.text}`);
+      });
+      return;
+    }
     this.panelButton.setX(camp ? PANEL_BUTTON.x - REST_BUTTONS.dx : PANEL_BUTTON.x);
     (this.panelButton.list[0] as Phaser.GameObjects.Rectangle).setSize(camp ? REST_BUTTONS.w : BUTTON.w, BUTTON.h).setOrigin(0.5);
     this.choiceButtons.forEach((b, i) => {
@@ -657,10 +774,11 @@ export class GameScene extends Phaser.Scene {
       const won = s.phase === 'won';
       const where = s.at === null ? 1 : s.rooms[s.at].col + 1;
       this.panelTitle.setText(won ? 'The Hollow Queen falls!' : 'You have fallen').setColor(won ? '#e6c766' : '#e0584f');
+      const deep = s.depth > 0 ? ` at depth ${s.depth}` : '';
       this.panelText.setText(
         won
-          ? `You cleared the dungeon with ${s.hp} health left, ${s.gold} gold and a deck of ${s.deck.length} cards.`
-          : `You fell in ${actName(s)}, room ${where} of ${COLUMNS}, with a deck of ${s.deck.length} cards.`,
+          ? `You cleared the dungeon${deep} with ${s.hp} health left, ${s.gold} gold and a deck of ${s.deck.length} cards.\nDepth ${s.depth + 1} is open: ${depthText(s.depth + 1)}`
+          : `You fell in ${actName(s)}${deep}, room ${where} of ${COLUMNS}, with a deck of ${s.deck.length} cards.`,
       );
       caption.setText('Delve again');
       this.panelAction = () => this.scene.restart();
@@ -755,10 +873,14 @@ export class GameScene extends Phaser.Scene {
       .setVisible(false);
   }
 
-  /** Shows a relic's name and text under the top bar for a moment. */
-  private showTip(id: RelicId) {
-    this.tip.setText(`${RELICS[id].name}: ${RELICS[id].text}`);
+  /** Shows a line of text (a relic's, flask's or power's name and text) under the top bar for a moment. */
+  private showTip(text: string) {
+    this.tip.setText(text);
     this.tipMs = TIP_MS;
+  }
+
+  private relicTip(id: RelicId) {
+    this.showTip(`${RELICS[id].name}: ${RELICS[id].text}`);
   }
 
   private drawHud() {
@@ -775,7 +897,7 @@ export class GameScene extends Phaser.Scene {
       this.relicLayer.removeAll(true);
       s.relics.forEach((id, i) => {
         const icon = artImage(this, HUD.relicX + i * HUD.relicGap, HUD_HEIGHT / 2, relicIcon(id)).setInteractive({ useHandCursor: true });
-        icon.on('pointerdown', () => this.showTip(id)).on('pointerover', () => this.showTip(id));
+        icon.on('pointerdown', () => this.relicTip(id)).on('pointerover', () => this.relicTip(id));
         this.relicLayer.add(icon);
       });
     }
@@ -784,7 +906,8 @@ export class GameScene extends Phaser.Scene {
     const depth = room ? room.col + 1 : 0;
     const names: Record<string, string> = { rest: 'Campfire', treasure: 'Treasure', shop: 'Merchant', event: 'Mystery' };
     const name = room?.foes ? room.foes.map((k) => ENEMIES[k].name).join(' and ') : room ? names[room.kind] : 'Entrance';
-    const where = s.phase === 'map' || s.phase === 'walk' ? '' : name;
-    this.roomText.setText(`${actName(s)}   Room ${depth} of ${COLUMNS}   ${where}`.trimEnd());
+    const where = s.phase === 'map' || s.phase === 'walk' || s.phase === 'hero' ? '' : name;
+    const deep = s.depth > 0 ? `Depth ${s.depth}   ` : '';
+    this.roomText.setText(`${deep}${actName(s)}   Room ${depth} of ${COLUMNS}   ${where}`.trimEnd());
   }
 }

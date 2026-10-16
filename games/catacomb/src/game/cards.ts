@@ -20,7 +20,20 @@ export type Icon =
   | 'crack'
   | 'dart'
   | 'cloud'
-  | 'horn';
+  | 'horn'
+  | 'knife'
+  | 'rage'
+  | 'thorns'
+  | 'veil'
+  | 'bulwark'
+  | 'skull'
+  | 'rust'
+  | 'doubt';
+
+/** A power that stays in play for the rest of the fight. */
+export type PowerKind = 'rage' | 'thorns' | 'splash' | 'bulwark';
+/** A curse: an unplayable card that clogs the hand (Rust), hurts when drawn (Wound) or makes the first card of a turn dearer (Doubt). */
+export type CurseKind = 'rust' | 'wound' | 'doubt';
 
 /** What a card does; `up` is what tempering changes. */
 interface Effects {
@@ -38,13 +51,17 @@ interface Effects {
   weak?: number;
   vulnerable?: number;
   poison?: number;
+  /** A power card: played, it stays in play and does this for the rest of the fight. */
+  power?: PowerKind;
+  /** A curse card: it can't be played; `curse` says what it does instead. */
+  curse?: CurseKind;
 }
 
 export interface Card extends Effects {
   name: string;
   icon: Icon;
-  /** Common cards are offered after a fight; rare ones in treasure rooms and by elites. Starter cards neither. */
-  rarity: 'starter' | 'common' | 'rare';
+  /** Common cards are offered after a fight; rare ones in treasure rooms and by elites. Starter and curse cards neither. */
+  rarity: 'starter' | 'common' | 'rare' | 'curse';
   /** The fields a tempered copy changes. */
   up: Partial<Effects>;
 }
@@ -70,7 +87,40 @@ export const CARDS = {
   fortress: { name: 'Fortress', cost: 1, icon: 'shield', rarity: 'rare', block: 12, draw: 1, up: { cost: 0 } },
   toxicCloud: { name: 'Toxic Cloud', cost: 2, icon: 'cloud', rarity: 'rare', poison: 5, all: true, up: { poison: 8 } },
   warCry: { name: 'War Cry', cost: 1, icon: 'horn', rarity: 'rare', weak: 2, vulnerable: 2, all: true, up: { cost: 0 } },
+  // The Hunter's starters.
+  venomKnife: { name: 'Venom Knife', cost: 1, icon: 'knife', rarity: 'starter', damage: 4, poison: 2, up: { damage: 6, poison: 3 } },
+  dodge: { name: 'Dodge', cost: 1, icon: 'boot', rarity: 'starter', block: 4, draw: 1, up: { block: 6 } },
+  // Powers: played once, they stay in play for the rest of the fight.
+  bulwark: { name: 'Bulwark', cost: 1, icon: 'bulwark', rarity: 'common', power: 'bulwark', up: { cost: 0 } },
+  thorns: { name: 'Thorns', cost: 1, icon: 'thorns', rarity: 'common', power: 'thorns', up: { cost: 0 } },
+  battleRage: { name: 'Battle Rage', cost: 1, icon: 'rage', rarity: 'rare', power: 'rage', up: { cost: 0 } },
+  venomVeil: { name: 'Venom Veil', cost: 1, icon: 'veil', rarity: 'rare', power: 'splash', up: { cost: 0 } },
+  // Curses: they can't be played, and only leave the deck when burnt or removed.
+  rust: { name: 'Rust', cost: 0, icon: 'rust', rarity: 'curse', curse: 'rust', up: {} },
+  wound: { name: 'Wound', cost: 0, icon: 'skull', rarity: 'curse', curse: 'wound', up: {} },
+  doubt: { name: 'Doubt', cost: 0, icon: 'doubt', rarity: 'curse', curse: 'doubt', up: {} },
 } satisfies Record<string, Card>;
+
+/** What each power does every turn (Bulwark, Battle Rage) or whenever it applies (Thorns, Venom Veil). */
+export const POWER_BLOCK = 3;
+export const POWER_STRENGTH = 1;
+export const THORNS = 3;
+/** What a Wound costs when drawn (it never kills), and how much dearer Doubt makes the first card of a turn. */
+export const WOUND_HURT = 2;
+export const DOUBT_COST = 1;
+
+const POWER_TEXT: Record<PowerKind, string> = {
+  bulwark: `Power. Gain ${POWER_BLOCK} block at the start of each turn.`,
+  thorns: `Power. Deal ${THORNS} back to any foe that hits you.`,
+  rage: `Power. Gain ${POWER_STRENGTH} Strength at the start of each turn.`,
+  splash: 'Power. Poison on one foe splashes half onto the rest.',
+};
+
+const CURSE_TEXT: Record<CurseKind, string> = {
+  rust: 'Curse. Unplayable. It only clogs your hand.',
+  wound: `Curse. Unplayable. Lose ${WOUND_HURT} health when drawn.`,
+  doubt: `Curse. Unplayable. First card each turn costs ${DOUBT_COST} more.`,
+};
 
 export type BaseId = keyof typeof CARDS;
 /** A card in a deck: its base id, with a '+' once tempered. */
@@ -86,8 +136,10 @@ export const card = (id: CardId): Card => {
   return isTempered(id) ? { ...base, ...base.up, name: `${base.name}+` } : base;
 };
 
-/** Every run starts with this deck of ten. */
+/** The Knight's starting deck of ten. */
 export const STARTER_DECK: CardId[] = ['strike', 'strike', 'strike', 'strike', 'strike', 'defend', 'defend', 'defend', 'defend', 'bash'];
+/** The Hunter's starting deck of ten: fewer shields, poison knives and dodges. */
+export const HUNTER_DECK: CardId[] = ['strike', 'strike', 'strike', 'venomKnife', 'venomKnife', 'venomKnife', 'dodge', 'dodge', 'dodge', 'defend'];
 
 export const COMMON = (Object.keys(CARDS) as BaseId[]).filter((id) => card(id).rarity === 'common');
 export const RARE = (Object.keys(CARDS) as BaseId[]).filter((id) => card(id).rarity === 'rare');
@@ -95,6 +147,8 @@ export const RARE = (Object.keys(CARDS) as BaseId[]).filter((id) => card(id).rar
 /** The card's rules as a line of text for its face. */
 export function describe(id: CardId) {
   const c = card(id);
+  if (c.power) return POWER_TEXT[c.power];
+  if (c.curse) return CURSE_TEXT[c.curse];
   const parts: string[] = [];
   const to = c.all ? ' to all foes' : '';
   if (c.damage) parts.push(`Deal ${c.damage}${c.hits ? ` x${c.hits}` : ''}${to}.`);
@@ -107,5 +161,11 @@ export function describe(id: CardId) {
   return parts.join(' ');
 }
 
+export type CardKind = 'attack' | 'skill' | 'power' | 'curse';
+
 /** What kind of card it is, for the colour of its frame. */
-export const kindOf = (id: CardId) => (card(id).damage ? 'attack' : 'skill');
+export const kindOf = (id: CardId): CardKind => {
+  const c = card(id);
+  return c.curse ? 'curse' : c.power ? 'power' : c.damage ? 'attack' : 'skill';
+};
+export const isCurse = (id: CardId) => !!card(id).curse;

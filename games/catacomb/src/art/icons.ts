@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { Icon } from '../game/cards';
+import type { FlaskId } from '../game/flasks';
 import type { RoomKind } from '../game/map';
 import { BLUE, BONE, FIRE, GOLD, GREEN, INK, IRON, PURPLE, RED, STONE, WOOD } from './palette';
 import type { StatusKind } from '../game/enemies';
@@ -72,6 +73,126 @@ const SHIELD = [
 const CARD_ICONS: Record<Icon, string[]> = {
   sword: SWORD,
   shield: SHIELD,
+  // A short knife dripping venom (the Hunter's Venom Knife).
+  knife: [
+    '............',
+    '.........ii.',
+    '........iIi.',
+    '.......iIi..',
+    '......iIi...',
+    '.....iIi....',
+    '....iIi.....',
+    '...wIi......',
+    '..ww........',
+    '.ww.........',
+    'w....L......',
+    '.....l......',
+  ],
+  // A clenched red fist (Battle Rage).
+  rage: [
+    '............',
+    '....RRRR....',
+    '...RrRrRR...',
+    '..RRRRRRRR..',
+    '..RrrrrrrR..',
+    '..RRRRRRRR..',
+    '..RrRrRrRR..',
+    '..RRRRRRRR..',
+    '...RRRRRR...',
+    '....RRRR....',
+    '....ssss....',
+    '....ssss....',
+  ],
+  // A ring of thorns (Thorns).
+  thorns: [
+    '.....k......',
+    '..k..k...k..',
+    '..kk.k..kk..',
+    '...kkkkkk...',
+    '.kkklllkkkk.',
+    '..klLLLlk...',
+    '..klLLLlk...',
+    '.kkklllkkkk.',
+    '...kkkkkk...',
+    '..kk.k..kk..',
+    '..k..k...k..',
+    '.....k......',
+  ],
+  // A green veil of venom hanging in the air (Venom Veil).
+  veil: [
+    '............',
+    '..kkkkkkkk..',
+    '.kllllllllk.',
+    '.klLLLLLLlk.',
+    '.kllLLLLllk.',
+    '..kllllllk..',
+    '..kl.ll.lk..',
+    '...k.ll.k...',
+    '.....ll.....',
+    '.....l......',
+    '....l.......',
+    '............',
+  ],
+  // A tower shield with a band (Bulwark).
+  bulwark: [
+    '.gggggggggg.',
+    'gIIIIIIIIIIg',
+    'gIiIIIIIIIIg',
+    'gIiIIIIIIIIg',
+    'gGGGGGGGGGGg',
+    'gGGGGGGGGGGg',
+    'gIiIIIIIIIIg',
+    'gIiIIIIIIIIg',
+    'gIIIIIIIIIIg',
+    '.gIIIIIIIIg.',
+    '..gIIIIIIg..',
+    '...gggggg...',
+  ],
+  // A pale skull (Wound).
+  skull: [
+    '....cccc....',
+    '..cccccccc..',
+    '.cccccccccc.',
+    '.cccccccccc.',
+    '.ceecccceec.',
+    '.ceecccceec.',
+    '.cccceecccc.',
+    '..cccccccc..',
+    '...cccccc...',
+    '...cecece...',
+    '...cccccc...',
+    '............',
+  ],
+  // A rusted, broken blade (Rust).
+  rust: [
+    '.........ww.',
+    '........wWw.',
+    '.......wWw..',
+    '............',
+    '.....wWw....',
+    '....wWw.....',
+    '..g.wWw.....',
+    '...gWw......',
+    '...wg.......',
+    '..w..g......',
+    '.w..........',
+    'G...........',
+  ],
+  // A purple question mark (Doubt).
+  doubt: [
+    '....PPPP....',
+    '...PqqqqP...',
+    '..Pq....qP..',
+    '..Pq....qP..',
+    '.......qP...',
+    '......qP....',
+    '.....qP.....',
+    '.....qP.....',
+    '.....qP.....',
+    '............',
+    '.....qq.....',
+    '.....qq.....',
+  ],
   axe: [
     '...iii......',
     '..iIIIi.....',
@@ -301,6 +422,21 @@ const INTENTS = {
     '....GGGG....',
     '............',
   ],
+  // A curse: a purple skull-shaped flame.
+  curse: [
+    '.....q......',
+    '....qPq.....',
+    '...qPPPq....',
+    '..qPPPPPq...',
+    '..qPpPpPq...',
+    '..qPpPpPq...',
+    '..qPPPPPq...',
+    '...qPpPq....',
+    '...qPPPq....',
+    '....qqq.....',
+    '............',
+    '............',
+  ],
   debuff: [
     '.....qq.....',
     '....qPPq....',
@@ -315,6 +451,31 @@ const INTENTS = {
     '...q....q...',
     '............',
   ],
+};
+
+/** Flasks: a corked bottle, each with its own colour of brew. */
+const flask = (dark: string, light: string, shine: string) =>
+  [
+    '.....ww.....',
+    '.....ww.....',
+    '....ssss....',
+    '....s..s....',
+    '...s....s...',
+    '..s......s..',
+    '..sDDDDDDs..',
+    '..sDLDDDDs..',
+    '..sDLDDDDs..',
+    '..sDDDDDDs..',
+    '...sDDDDs...',
+    '....ssss....',
+  ].map((row) => row.replace(/D/g, dark).replace(/L/g, light).replace(/S/g, shine));
+
+const FLASK_ICONS: Record<FlaskId, string[]> = {
+  heal: flask('r', 'R', 'R'),
+  energy: flask('g', 'G', 'y'),
+  poison: flask('l', 'L', 'h'),
+  block: flask('b', 'B', 'B'),
+  draw: flask('P', 'q', 'q'),
 };
 
 /** The statuses, shown with their numbers by the hero and the foes. */
@@ -565,9 +726,11 @@ export function bakeIcons(scene: Phaser.Scene) {
     bakePainted(scene, `relic-big-${id}`, rows, PALETTE, 4, INK, 2.4);
   }
   bakePainted(scene, 'heart', CARD_ICONS.heart, PALETTE, 2, INK, 1.4);
+  for (const [id, rows] of Object.entries(FLASK_ICONS)) bakePainted(scene, `flask-${id}`, rows, PALETTE, 3, INK, 2);
   bakePainted(scene, 'coin', COIN, PALETTE, 2, INK, 1.4);
 }
 
 export const relicIcon = (id: RelicId, big = false) => `relic-${big ? 'big-' : ''}${id}`;
 
 export const cardIcon = (icon: Icon) => `card-${icon}`;
+export const flaskIcon = (id: FlaskId) => `flask-${id}`;

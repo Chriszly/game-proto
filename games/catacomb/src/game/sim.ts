@@ -1,7 +1,10 @@
 import { byDifficulty } from '../../../../shared/settings';
-import { COMMON, RARE, STARTER_DECK, card, isTempered, tempered, type BaseId, type CardId } from './cards';
+import { COMMON, DOUBT_COST, POWER_BLOCK, POWER_STRENGTH, RARE, THORNS, WOUND_HURT, card, isCurse, isTempered, tempered, type BaseId, type CardId } from './cards';
+import { DEPTH_CURSE, depthFoeHp, DEEP_REST_HEAL, loadBestDepth, saveBestDepth } from './depth';
 import { ENEMIES, type EnemyKind, type Intent, type StatusKind } from './enemies';
-import { ALTAR_COST, CHEST_COST, EVENTS, POOL_COST, POOL_HEAL, SHRINE_COST, SHRINE_GOLD } from './events';
+import { ALTAR_COST, CHEST_CURSE, EVENTS, POOL_COST, POOL_HEAL, SHRINE_CURSE, SHRINE_GOLD } from './events';
+import { FLASKS, FLASK_BLOCK, FLASK_DRAW, FLASK_ENERGY, FLASK_HEAL, FLASK_IDS, FLASK_POISON, FLASK_PRICE, FLASK_SLOTS, type FlaskId } from './flasks';
+import { HEROES, type HeroId } from './heroes';
 import { ACTS, ACT_FOES, makeMap, reachable } from './map';
 import { RELICS, RELIC_IDS, type RelicId } from './relics';
 import {
@@ -11,7 +14,6 @@ import {
   ENERGY,
   HAND_SIZE,
   HIT_MS,
-  MAX_HP,
   MIN_DECK,
   POP_MS,
   RELIC_GOLD,
@@ -20,6 +22,7 @@ import {
   REST_HEAL,
   REWARD_CHOICES,
   SHOP_CARDS,
+  SHOP_FLASKS,
   SHOP_RELICS,
   START_GOLD,
   VULNERABLE_MULT,
@@ -36,14 +39,20 @@ import {
 // the merchant, mystery rooms and the descent to the next act. Plain TypeScript, with randomness
 // only through Math.random so the playthrough test can seed it.
 
+/** A new run, waiting for the hero to be chosen. The Knight's health and deck stand in until then. */
 export function newRun(): GameState {
+  const bestDepth = loadBestDepth();
   return {
-    phase: 'map',
+    phase: 'hero',
+    hero: 'knight',
+    depth: bestDepth,
+    bestDepth,
+    flasks: [],
     act: 1,
     rooms: makeMap(1),
-    hp: MAX_HP,
-    maxHp: MAX_HP,
-    deck: [...STARTER_DECK],
+    hp: HEROES.knight.hp,
+    maxHp: HEROES.knight.hp,
+    deck: [...HEROES.knight.deck],
     gold: START_GOLD,
     relics: [],
     at: null,
@@ -53,6 +62,7 @@ export function newRun(): GameState {
     reward: null,
     rewardRare: false,
     goldWon: 0,
+    flaskWon: null,
     shop: null,
     notice: '',
     timerMs: 0,
@@ -74,6 +84,61 @@ export function shuffle<T>(items: T[]) {
 }
 
 export const hasRelic = (s: GameState, id: RelicId) => s.relics.includes(id);
+
+// The hero and the depth
+
+/** Picks the hero: their health, deck and flask, plus the depth's starting curse, then on to the map. */
+export function chooseHero(s: GameState, hero: HeroId) {
+  if (s.phase !== 'hero') return false;
+  const h = HEROES[hero];
+  s.hero = hero;
+  s.hp = h.hp;
+  s.maxHp = h.hp;
+  s.deck = [...h.deck];
+  if (s.depth >= 3) s.deck.push(DEPTH_CURSE);
+  s.flasks = [h.flask];
+  s.phase = 'map';
+  return true;
+}
+
+/** Sets the depth to delve to, between 0 and the best unlocked, while choosing the hero. */
+export function setDepth(s: GameState, depth: number) {
+  if (s.phase !== 'hero' || depth < 0 || depth > s.bestDepth) return false;
+  s.depth = depth;
+  return true;
+}
+
+// Flasks
+
+/** Whether a flask can be drunk now: on the hero's turn, in a fight. */
+export const canUseFlask = (s: GameState, slot: number) => s.phase === 'player' && !!s.fight && slot >= 0 && slot < s.flasks.length;
+
+/** Drinks the flask in this slot, for no energy. */
+export function useFlask(s: GameState, slot: number) {
+  if (!canUseFlask(s, slot)) return false;
+  const f = s.fight!;
+  const id = s.flasks.splice(slot, 1)[0];
+  if (id === 'heal') heal(s, FLASK_HEAL);
+  else if (id === 'energy') f.energy += FLASK_ENERGY;
+  else if (id === 'block') gainBlock(s, FLASK_BLOCK);
+  else if (id === 'draw') drawCards(s, FLASK_DRAW);
+  else for (const e of [...f.enemies]) applyPoison(s, e, FLASK_POISON);
+  if (f.enemies.length === 0) clearFight(s);
+  return true;
+}
+
+/** Puts a flask in a free slot; false when all three are held. */
+function addFlask(s: GameState, id: FlaskId) {
+  if (s.flasks.length >= FLASK_SLOTS) return false;
+  s.flasks.push(id);
+  return true;
+}
+
+/** A random flask, left behind by an elite or a boss; none when the slots are full. */
+function grantFlask(s: GameState) {
+  const id = FLASK_IDS[Math.floor(Math.random() * FLASK_IDS.length)];
+  return addFlask(s, id) ? id : null;
+}
 
 /** The name of the act the hero is in. */
 export const actName = (s: GameState) => ACT_FOES[s.act - 1].name;
@@ -115,14 +180,17 @@ function startFight(s: GameState, foes: EnemyKind[]) {
     block: 0,
     turn: 0,
     enemies: foes.map((kind) => {
-      // Foes are a quarter weaker on Easy and 30% tougher on Hard.
-      const hp = Math.round(ENEMIES[kind].hp * byDifficulty(0.75, 1, 1.3));
+      // Foes are a quarter weaker on Easy and 30% tougher on Hard, and tougher again down the depths.
+      const hp = Math.round(ENEMIES[kind].hp * byDifficulty(0.75, 1, 1.3) * depthFoeHp(s.depth));
       const status = noStatus();
       if (hasRelic(s, 'boneCharm')) status.vulnerable = 2;
       return { id: s.nextId++, kind, hp, maxHp: hp, block: 0, strength: 0, status, step: 0, intent: ENEMIES[kind].moves[0], hitMs: 0, actMs: 0 };
     }),
     acted: 0,
     status: noStatus(),
+    strength: 0,
+    powers: [],
+    played: 0,
     gold: foes.reduce((sum, kind) => sum + ENEMIES[kind].gold, 0),
   };
   startTurn(s);
@@ -132,10 +200,22 @@ function startTurn(s: GameState) {
   const f = s.fight!;
   f.block = hasRelic(s, 'oakWard') ? 3 : 0;
   f.turn++;
+  f.played = 0;
   f.energy = ENERGY + (f.turn === 1 && hasRelic(s, 'emberLantern') ? 1 : 0);
-  drawCards(s, HAND_SIZE);
   s.phase = 'player';
+  // The powers in play do their turn's work before the hand is drawn.
+  for (const id of f.powers) {
+    const power = card(id).power;
+    if (power === 'bulwark') gainBlock(s, POWER_BLOCK);
+    else if (power === 'rage') {
+      f.strength += POWER_STRENGTH;
+      pop(s, 'hero', `+${POWER_STRENGTH} str`, 'heal');
+    }
+  }
+  drawCards(s, HAND_SIZE);
 }
+
+const hasPower = (s: GameState, power: NonNullable<ReturnType<typeof card>['power']>) => !!s.fight?.powers.some((id) => card(id).power === power);
 
 /** Draws up to n cards, shuffling the discard pile into the draw pile when it runs out. */
 function drawCards(s: GameState, n: number) {
@@ -146,19 +226,34 @@ function drawCards(s: GameState, n: number) {
       f.draw = shuffle(f.discard);
       f.discard = [];
     }
-    f.hand.push(f.draw.shift()!);
+    const id = f.draw.shift()!;
+    f.hand.push(id);
+    // A Wound bites when drawn, but never kills.
+    if (card(id).curse === 'wound' && s.hp > 1) {
+      const hurt = Math.min(WOUND_HURT, s.hp - 1);
+      s.hp -= hurt;
+      s.heroHitMs = HIT_MS;
+      pop(s, 'hero', `-${hurt}`, 'damage');
+    }
   }
+}
+
+/** What the card at this place in the hand costs now: its own cost, plus Doubt's on the first card of a turn. */
+export function costOf(s: GameState, index: number) {
+  const f = s.fight!;
+  const doubt = f.played === 0 && f.hand.some((id) => card(id).curse === 'doubt') ? DOUBT_COST : 0;
+  return card(f.hand[index]).cost + doubt;
 }
 
 export function canPlay(s: GameState, index: number) {
   const f = s.fight;
   if (s.phase !== 'player' || !f || index < 0 || index >= f.hand.length) return false;
-  return card(f.hand[index]).cost <= f.energy;
+  return !isCurse(f.hand[index]) && costOf(s, index) <= f.energy;
 }
 
 /** What one hit of a card's `damage` deals to this foe before its block: the Whetstone, the hero's Weak and the foe's Vulnerable. */
 export function heroHit(s: GameState, damage: number, e: Enemy) {
-  let d = damage + (hasRelic(s, 'whetstone') ? 2 : 0);
+  let d = damage + (hasRelic(s, 'whetstone') ? 2 : 0) + (s.fight?.strength ?? 0);
   if (s.fight?.status.weak) d = Math.floor(d * WEAK_MULT);
   if (e.status.vulnerable) d = Math.floor(d * VULNERABLE_MULT);
   return d;
@@ -176,9 +271,16 @@ export function foeHit(s: GameState, e: Enemy, damage: number) {
 export function playCard(s: GameState, index: number) {
   if (!canPlay(s, index)) return false;
   const f = s.fight!;
+  const cost = costOf(s, index);
   const id = f.hand.splice(index, 1)[0];
   const c = card(id);
-  f.energy -= c.cost;
+  f.energy -= cost;
+  f.played++;
+  if (c.power) {
+    f.powers.push(id);
+    pop(s, 'hero', c.name, 'status');
+    return true;
+  }
   const targets = c.all ? [...f.enemies] : f.enemies.slice(0, 1);
   if (c.damage) {
     for (let hit = 0; hit < (c.hits ?? 1); hit++) {
@@ -190,12 +292,9 @@ export function playCard(s: GameState, index: number) {
     if (!f.enemies.includes(e)) continue;
     if (c.weak) applyStatus(s, e.status, e.id, 'weak', c.weak);
     if (c.vulnerable) applyStatus(s, e.status, e.id, 'vulnerable', c.vulnerable);
-    if (c.poison) applyStatus(s, e.status, e.id, 'poison', c.poison + (hasRelic(s, 'venomGland') ? 2 : 0));
+    if (c.poison) applyPoison(s, e, c.poison, !c.all);
   }
-  if (c.block) {
-    f.block += c.block;
-    pop(s, 'hero', `+${c.block}`, 'block');
-  }
+  if (c.block) gainBlock(s, c.block);
   if (c.heal) heal(s, c.heal);
   if (c.energy) f.energy += c.energy;
   if (c.draw) drawCards(s, c.draw);
@@ -210,6 +309,21 @@ function clearFight(s: GameState) {
 }
 
 const STATUS_NAMES: Record<StatusKind, string> = { weak: 'Weak', vulnerable: 'Vulnerable', poison: 'Poison' };
+
+function gainBlock(s: GameState, amount: number) {
+  s.fight!.block += amount;
+  pop(s, 'hero', `+${amount}`, 'block');
+}
+
+/** Poisons a foe, 2 more with the Venom Gland; with the Venom Veil in play, poison aimed at one foe splashes half onto the others. */
+function applyPoison(s: GameState, e: Enemy, amount: number, splash = false) {
+  const f = s.fight!;
+  const total = amount + (hasRelic(s, 'venomGland') ? 2 : 0);
+  applyStatus(s, e.status, e.id, 'poison', total);
+  if (splash && hasPower(s, 'splash')) {
+    for (const other of f.enemies) if (other !== e) applyStatus(s, other.status, other.id, 'poison', Math.ceil(total / 2));
+  }
+}
 
 function applyStatus(s: GameState, status: Status, on: Pop['on'], kind: StatusKind, amount: number) {
   status[kind] += amount;
@@ -234,14 +348,15 @@ function damageEnemy(s: GameState, e: Enemy, amount: number) {
   if (e.hp <= 0) f.enemies.splice(f.enemies.indexOf(e), 1);
 }
 
-/** Hits the hero for this much, through block. */
-function damageHero(s: GameState, amount: number) {
+/** Hits the hero for this much, through block; with Thorns in play, the foe that hit takes damage back. */
+function damageHero(s: GameState, amount: number, from?: Enemy) {
   const f = s.fight!;
   const blocked = Math.min(f.block, amount);
   f.block -= blocked;
   s.hp = Math.max(0, s.hp - (amount - blocked));
   s.heroHitMs = HIT_MS;
   pop(s, 'hero', blocked === amount ? 'Blocked' : `-${amount - blocked}`, 'damage');
+  if (from && hasPower(s, 'thorns')) damageEnemy(s, from, THORNS);
 }
 
 export const intentOf = (e: Enemy): Intent => e.intent;
@@ -267,7 +382,7 @@ export function endTurn(s: GameState) {
   return true;
 }
 
-/** A foe's go: its poison first, then its move. False if the poison killed it. */
+/** A foe's go: its poison first, then its move. False if the poison, or the hero's Thorns, killed it. */
 function act(s: GameState, e: Enemy) {
   const f = s.fight!;
   if (e.status.poison > 0) {
@@ -285,8 +400,11 @@ function act(s: GameState, e: Enemy) {
   nextIntent(e);
   e.actMs = HIT_MS;
   if (intent.kind === 'attack') {
-    for (let hit = 0; hit < (intent.hits ?? 1); hit++) damageHero(s, foeHit(s, e, intent.damage));
+    for (let hit = 0; hit < (intent.hits ?? 1); hit++) damageHero(s, foeHit(s, e, intent.damage), e);
     if (intent.apply) applyStatus(s, f.status, 'hero', intent.apply.status, intent.apply.amount);
+    if (!f.enemies.includes(e)) return false;
+  } else if (intent.kind === 'curse') {
+    curse(s, intent.curse);
   } else if (intent.kind === 'block') {
     e.block += intent.block;
     pop(s, e.id, `+${intent.block}`, 'block');
@@ -298,6 +416,13 @@ function act(s: GameState, e: Enemy) {
   }
   e.status.weak = Math.max(0, e.status.weak - 1);
   return true;
+}
+
+/** Adds a curse card to the deck for good, and to the discard pile of the fight in progress. */
+function curse(s: GameState, id: CardId) {
+  s.deck.push(id);
+  s.fight?.discard.push(id);
+  pop(s, 'hero', `Cursed: ${card(id).name}`, 'status');
 }
 
 /** After the foes' turn: Vulnerable wears off a turn on everyone, the hero's poison bites, and the hero's turn starts. */
@@ -357,23 +482,32 @@ function winFight(s: GameState) {
   s.gold += s.goldWon;
   s.fight = null;
   if (hasRelic(s, 'mendingMoss')) heal(s, 5);
+  const flask = room.kind === 'elite' || room.kind === 'boss' ? grantFlask(s) : null;
   if (room.kind !== 'boss') {
     offerReward(s, room.kind === 'elite');
+    s.flaskWon = flask;
     return;
   }
   s.cleared.push(s.at!);
   if (s.act >= ACTS) {
+    // The Hollow Queen falls: the next depth opens, and is saved.
+    if (s.depth + 1 > s.bestDepth) {
+      s.bestDepth = s.depth + 1;
+      saveBestDepth(s.bestDepth);
+    }
     s.phase = 'won';
     return;
   }
   const relic = grantRelic(s);
   s.notice = relic ? `Among the bones lies the ${RELICS[relic].name}: ${RELICS[relic].text}` : `Among the bones lie ${RELIC_GOLD} more gold.`;
+  if (flask) s.notice += ` A ${FLASKS[flask].name} too.`;
   s.phase = 'descend';
 }
 
 function offerReward(s: GameState, rare: boolean) {
   s.rewardRare = rare;
   s.reward = pickSome(rare ? RARE : COMMON, REWARD_CHOICES);
+  s.flaskWon = null;
   s.phase = 'reward';
 }
 
@@ -387,6 +521,7 @@ export function takeReward(s: GameState, index: number | null) {
   }
   s.reward = null;
   s.goldWon = 0;
+  s.flaskWon = null;
   s.cleared.push(s.at!);
   s.phase = 'map';
   return true;
@@ -419,8 +554,11 @@ export function descend(s: GameState) {
 
 // The campfire
 
+/** The share of health a rest heals: less from depth 2 down. */
+export const restShare = (s: GameState) => (s.depth >= 2 ? DEEP_REST_HEAL : REST_HEAL);
+
 /** What resting at the campfire would heal. */
-export const restHeal = (s: GameState) => Math.min(s.maxHp - s.hp, Math.round(s.maxHp * REST_HEAL));
+export const restHeal = (s: GameState) => Math.min(s.maxHp - s.hp, Math.round(s.maxHp * restShare(s)));
 
 /** Rests at the campfire: heals, then goes back to the map. */
 export function rest(s: GameState) {
@@ -486,6 +624,7 @@ function makeShop(s: GameState) {
       ...shuffle(RARE).slice(0, SHOP_CARDS.rare).map((id) => ware<BaseId>(id, CARD_PRICE.rare)),
     ],
     relics: relics.map((id) => ware(id, RELIC_PRICE)),
+    flasks: shuffle(FLASK_IDS).slice(0, SHOP_FLASKS).map((id) => ware(id, FLASK_PRICE)),
     removePrice: REMOVE_PRICE,
     removed: false,
   };
@@ -507,6 +646,22 @@ export function buyRelic(s: GameState, i: number) {
   if (!w || w.sold || s.gold < w.price || hasRelic(s, w.id)) return false;
   s.gold -= w.price;
   s.relics.push(w.id);
+  w.sold = true;
+  return true;
+}
+
+/** Whether the merchant's flask at this place can be bought: not sold, affordable, and a slot free. */
+export function canBuyFlask(s: GameState, i: number) {
+  const w = s.phase === 'shop' ? s.shop?.flasks[i] : undefined;
+  return !!w && !w.sold && s.gold >= w.price && s.flasks.length < FLASK_SLOTS;
+}
+
+/** Buys the merchant's flask at this place into a free slot. */
+export function buyFlask(s: GameState, i: number) {
+  if (!canBuyFlask(s, i)) return false;
+  const w = s.shop!.flasks[i];
+  s.gold -= w.price;
+  addFlask(s, w.id);
   w.sold = true;
   return true;
 }
@@ -539,8 +694,6 @@ export function canChoose(s: GameState, choice: number) {
   const ev = s.phase === 'event' ? s.rooms[s.at!].event : undefined;
   if (!ev || (choice !== 0 && choice !== 1)) return false;
   if (ev === 'altar' && choice === 0) return s.hp > ALTAR_COST;
-  if (ev === 'shrine' && choice === 1) return s.hp > SHRINE_COST;
-  if (ev === 'chest' && choice === 0) return s.maxHp > CHEST_COST + 1;
   if (ev === 'pool' && choice === 1) return s.hp > POOL_COST;
   return true;
 }
@@ -565,16 +718,15 @@ export function chooseEvent(s: GameState, choice: number) {
       const names = temperRandom(s, 2);
       s.notice = names.length ? `The idol tempers ${names.join(' and ')}` : 'The idol is silent';
     } else {
-      hurt(SHRINE_COST);
       s.gold += SHRINE_GOLD;
-      s.notice = `+${SHRINE_GOLD} gold`;
+      curse(s, SHRINE_CURSE);
+      s.notice = `+${SHRINE_GOLD} gold, and the idol's ${card(SHRINE_CURSE).name} joins your deck`;
     }
   } else if (ev === 'chest') {
     if (choice === 0) {
-      s.maxHp -= CHEST_COST;
-      s.hp = Math.min(s.hp, s.maxHp);
       const relic = grantRelic(s);
-      s.notice = relic ? `Found the ${RELICS[relic].name}: ${RELICS[relic].text}` : `Found ${RELIC_GOLD} gold`;
+      curse(s, CHEST_CURSE);
+      s.notice = `${relic ? `Found the ${RELICS[relic].name}: ${RELICS[relic].text}` : `Found ${RELIC_GOLD} gold`} A ${card(CHEST_CURSE).name} curse joins your deck.`;
     }
   } else if (choice === 0) {
     const healed = heal(s, POOL_HEAL);
