@@ -1,6 +1,7 @@
 import { byDifficulty } from '../../../../shared/settings';
 import { ARMOURY_EACH, noArmoury, type Armoury } from './armoury';
 import { BOONS, type BoonId } from './boons';
+import { pairsOf } from './pairs';
 
 // The run in plain numbers. The course runs left to right along x in world pixels; heights are
 // measured up from the road, so the knight's feet are at h = 0 when running on it and at a
@@ -31,8 +32,71 @@ export const BOON_PRICE = 30;
  * to `max`. A coin is worth its value times the multiplier reached before it.
  */
 export const STREAK = { step: 10, max: 5 };
-/** The coin multiplier after `streak` coins in a row. */
-export const streakMult = (streak: number) => Math.min(STREAK.max, 1 + Math.floor(streak / STREAK.step));
+/** The coin multiplier after `streak` coins in a row, capped at `max` (the road's cap). */
+export const streakMult = (streak: number, max = STREAK.max) => Math.min(max, 1 + Math.floor(streak / STREAK.step));
+
+/**
+ * The forked roads: from the checkpoint before stage `ROAD.from`, the knight also picks the road
+ * the next stage runs on. The High Road has more coins and more foes, closer together, no shrine,
+ * and a streak cap two higher; the Low Road is safer, with wider gaps, and has the shrine.
+ */
+export type Road = 'high' | 'low';
+export const ROADS: Record<Road, { name: string; text: string }> = {
+  high: { name: 'The High Road', text: 'More coins and more foes, closer together, and the streak climbs to x7. No shrine.' },
+  low: { name: 'The Low Road', text: 'Fewer foes, further apart, and a wayside shrine to heal at.' },
+};
+export const ROAD = { from: 3, highStreak: 2, highGap: -40, lowGap: 40 };
+/** The streak's cap on this road: `STREAK.max`, two more on the High Road. */
+export const streakMax = (road: Road | null) => STREAK.max + (road === 'high' ? ROAD.highStreak : 0);
+
+/**
+ * The herald's dare: from stage `from`, each ordinary stage sets one (stomp foes, take no hit, take
+ * coins, reach a streak), going round `kinds` by stage. Meeting it pays `reward` coins and puts a
+ * third boon card on the stage's checkpoint.
+ */
+export type DareKind = 'stomp' | 'nohit' | 'coins' | 'streak';
+export interface Dare {
+  kind: DareKind;
+  /** What counts as met: foes stomped, coins taken, the streak multiplier reached; 0 for no hit. */
+  goal: number;
+  progress: number;
+  done: boolean;
+  /** A no-hit dare lost to a hit. */
+  failed: boolean;
+}
+export const DARE = { from: 2, reward: 20, kinds: ['stomp', 'nohit', 'coins', 'streak'] as DareKind[], goals: { stomp: 2, nohit: 0, coins: 20, streak: 3 } };
+export function dareOf(stage: number): Dare {
+  const kind = DARE.kinds[(stage - DARE.from) % DARE.kinds.length];
+  return { kind, goal: DARE.goals[kind], progress: 0, done: false, failed: false };
+}
+/** A dare in the herald's words. */
+export function dareText(d: Dare) {
+  switch (d.kind) {
+    case 'stomp':
+      return `Stomp ${d.goal} foes`;
+    case 'nohit':
+      return 'Take no hit';
+    case 'coins':
+      return `Take ${d.goal} coins`;
+    case 'streak':
+      return `Reach a x${d.goal} streak`;
+  }
+}
+
+/**
+ * The rockfall: on every `every`th stage a fall of boulders rolls in behind the knight, keeping
+ * their pace and creeping up a little, and gains `hit` px on every hit and `skid` px on every skid.
+ * It starts `start` px behind; when it catches the knight it costs a heart and falls back there.
+ */
+export interface Rockfall {
+  /** Its leading edge along the course. */
+  x: number;
+}
+export const ROCK = { every: 7, start: 240, creep: 10, hit: 90, skid: 45, r: 40 };
+export const isRockStage = (stage: number) => stage % ROCK.every === 0 && !isBossStage(stage);
+
+/** The Dragon's Keep: the first stage that starts at or past this many metres is the dragon's. */
+export const DRAGON_AT = 1500;
 
 /**
  * A wayside shrine: one stands on the road once a stage from stage `from`. Sliding into it trades
@@ -40,8 +104,10 @@ export const streakMult = (streak: number) => Math.min(STREAK.max, 1 + Math.floo
  */
 export const SHRINE = { from: 2, price: 15, w: 46 };
 
-/** Running speed on a stage, in pixels per second. */
-export const speedOf = (stage: number) => Math.min(480, 260 + 30 * (stage - 1));
+/** Running speed on a stage, in pixels per second; `HARDER.speed` more once the dragon is beaten. */
+export const speedOf = (stage: number, hard = false) => Math.min(480, 260 + 30 * (stage - 1)) + (hard ? HARDER.speed : 0);
+/** How the run goes on after the dragon is beaten: faster, with the obstacles closer together. */
+export const HARDER = { speed: 60, gap: -50 };
 
 /**
  * The ground a stage is run on, each with its own rule: the old road (no rule), an icy pass where
@@ -70,7 +136,7 @@ export function terrainOf(stage: number): Terrain {
   return (['ice', 'marsh', 'wind'] as const)[(stage - 2) % 3];
 }
 
-export type TrapKind = 'spikes' | 'pit' | 'blade' | 'flames' | 'goblin' | 'bat' | 'barrel' | 'axe';
+export type TrapKind = 'spikes' | 'pit' | 'blade' | 'flames' | 'goblin' | 'bat' | 'barrel' | 'axe' | 'fire' | 'tail';
 /** The traps that move along the course and can be stomped on from above. */
 export const FOES: readonly TrapKind[] = ['goblin', 'bat'];
 
@@ -82,7 +148,7 @@ export interface Trap {
   w: number;
   /** Height of the ground it stands on, up from the road; a bat's is where it flies. */
   h: number;
-  /** Speed along the course: a goblin's walk, a bat's flight, a thrown barrel or axe (negative is towards the knight). */
+  /** Speed along the course: a goblin's walk, a bat's flight, a thrown barrel, axe, gout of fire or tail lash (negative is towards the knight). */
   vx: number;
   /** A goblin walks back and forth between these; a fire vent starts its burn this far in. */
   from?: number;
@@ -102,6 +168,8 @@ export const TRAP_SPAN: Record<Exclude<TrapKind, 'pit'>, { lo: number; hi: numbe
   bat: { lo: 0, hi: 20 },
   barrel: { lo: 0, hi: 26 },
   axe: { lo: 0, hi: 18 },
+  fire: { lo: 0, hi: 30 },
+  tail: { lo: 0, hi: 18 },
 };
 
 /** Goblins and bats start moving once they are this close ahead, just off the right of the screen. */
@@ -143,10 +211,13 @@ export interface Shrine {
 }
 
 /**
- * The Gatekeeper on a boss stage: it waits on the road, then keeps ahead of the knight throwing
- * barrels and axes, tires and stands still to be stomped, and flees ahead after a stomp or a hit.
+ * The boss on a boss stage: the Gatekeeper, or the dragon of the Dragon's Keep. It waits on the
+ * road, then keeps ahead of the knight throwing things back (barrels and axes, or fire and tail
+ * lashes), tires and stands still to be stomped, and flees ahead after a stomp or a hit.
  */
+export type BossKind = 'gate' | 'dragon';
 export interface Boss {
+  kind: BossKind;
   /** Left edge along the course, and width. */
   x: number;
   w: number;
@@ -202,6 +273,18 @@ export interface GameState {
   /** The ground this stage is run on (`terrainOf(stage)`). */
   terrain: Terrain;
   phase: 'running' | 'checkpoint' | 'over';
+  /** The road this stage runs on, picked at the checkpoint before it; null on stages 1 and 2 and boss stages. */
+  road: Road | null;
+  /** The two roads on offer at a checkpoint once the boon is taken, or null. */
+  roads: Road[] | null;
+  /** The herald's dare for this stage, or null (stage 1, boss stages). */
+  dare: Dare | null;
+  /** The rockfall behind the knight on a rockfall stage, or null. */
+  rockfall: Rockfall | null;
+  /** Whether the dragon of the Dragon's Keep is beaten this run; the run then goes on harder. */
+  dragonBeaten: boolean;
+  /** The lasting crown, won by beating the dragon in any run. */
+  crown: boolean;
   /** Where the knight is along the course: the middle of their box. */
   distance: number;
   speed: number;
@@ -219,7 +302,7 @@ export interface GameState {
   /** Hits the aegis will still shrug off before the next checkpoint. */
   shields: number;
   ranks: Partial<Record<BoonId, number>>;
-  /** The two boons on offer at a checkpoint, or null while running. */
+  /** The boons on offer at a checkpoint (two, or three after a met dare), or null while running. */
   choices: BoonId[] | null;
   /** Where the current stage started and where its checkpoint stands. */
   stageStart: number;
@@ -227,7 +310,7 @@ export interface GameState {
   traps: Trap[];
   ledges: Ledge[];
   shrines: Shrine[];
-  /** The Gatekeeper on a boss stage, until it is beaten and left behind. */
+  /** The Gatekeeper or the dragon on a boss stage, until it is beaten and left behind. */
   boss: Boss | null;
   /** Gatekeepers beaten this run. */
   bosses: number;
@@ -278,6 +361,7 @@ export function trackOf(s: Pick<GameState, 'distance' | 'checkpointX' | 'best' |
 export function stats(s: Pick<GameState, 'ranks' | 'armoury' | 'terrain'>) {
   const r = (id: BoonId) => s.ranks[id] ?? 0;
   const a = s.armoury;
+  const pairs = pairsOf(s.ranks);
   // Jump height goes with the square of the speed off the ground.
   const height = (1 + 0.12 * r('boots') - 0.15 * r('oath')) * (s.terrain === 'marsh' ? MARSH.jump : 1);
   return {
@@ -289,6 +373,10 @@ export function stats(s: Pick<GameState, 'ranks' | 'armoury' | 'terrain'>) {
     reach: COIN_REACH + 45 * r('magnet') + a.magnet * ARMOURY_EACH.magnet,
     coinValue: (1 + r('greed')) * (r('gilt') ? 2 : 1),
     shields: r('aegis') + 2 * r('oath'),
+    // The boon pairs' hidden bonuses.
+    glide: pairs.includes('glide'),
+    hoard: pairs.includes('hoard'),
+    bulwark: pairs.includes('bulwark'),
   };
 }
 
@@ -324,11 +412,17 @@ export function today(now = new Date()) {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
-export function freshState(best = 0, bank = 0, armoury: Armoury = noArmoury(), daily: string | null = null): GameState {
+export function freshState(best = 0, bank = 0, armoury: Armoury = noArmoury(), daily: string | null = null, crown = false): GameState {
   return {
     stage: 1,
     terrain: terrainOf(1),
     phase: 'running',
+    road: null,
+    roads: null,
+    dare: null,
+    rockfall: null,
+    dragonBeaten: false,
+    crown,
     distance: 0,
     speed: speedOf(1),
     runner: { h: 0, vh: 0, slideMs: 0, slideQueued: false, jumps: 1, hurtMs: 0, skidMs: 0, jumpQueued: false },

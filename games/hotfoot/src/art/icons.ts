@@ -1,11 +1,12 @@
 import Phaser from 'phaser';
 import type { ArmouryId } from '../game/armoury';
 import type { BoonId } from '../game/boons';
+import type { Road } from '../game/state';
 import { C, bezant, circle, gold, heartPath, hl, oval, paint, poly, type Ctx } from './ink';
 
 // Small paintings for the boon cards (64x64, in page units of 128 scaled by half) and the hearts in
-// the top band, in the same flat colours and ink as the world, plus the armoury's purse. Cursed
-// boons carry a madder crack or chain. Healing is a green cross, never red.
+// the top band, in the same flat colours and ink as the world, plus the armoury's purse and the two
+// road cards' paths. Cursed boons carry a madder crack or chain. Healing is a green cross, never red.
 
 type Draw = (ctx: Ctx) => void;
 
@@ -145,11 +146,63 @@ const ARMOURY_ICONS: Partial<Record<ArmouryId, Draw>> = {
   },
 };
 
+/** The road cards: a path up over a crag strewn with coins, and a path down a green dale to a shrine. */
+const ROAD_ICONS: Record<Road, Draw> = {
+  high: (ctx) => {
+    poly(ctx, [[8, 116], [40, 60], [64, 80], [92, 24], [120, 116]], C.iron, 4);
+    hl(ctx, [[46, 70], [60, 54]], 3);
+    poly(ctx, [[8, 116], [120, 116], [118, 128], [10, 128]], C.turf, 3);
+    ctx.strokeStyle = C.vellumDark;
+    ctx.lineWidth = 7;
+    ctx.beginPath();
+    ctx.moveTo(14, 118);
+    ctx.quadraticCurveTo(40, 100, 50, 84);
+    ctx.quadraticCurveTo(70, 70, 92, 32);
+    ctx.stroke();
+    ctx.strokeStyle = C.ink;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    bezant(ctx, 30, 96, 9, 1, 2.5);
+    bezant(ctx, 60, 70, 9, 1, 2.5);
+    bezant(ctx, 84, 40, 9, 1, 2.5);
+    bezant(ctx, 104, 18, 9, 1, 2.5);
+  },
+  low: (ctx) => {
+    poly(ctx, [[8, 40], [40, 70], [64, 60], [92, 76], [120, 36], [120, 128], [8, 128]], C.turf, 4);
+    hl(ctx, [[14, 50], [36, 72]], 3);
+    ctx.strokeStyle = C.vellumDark;
+    ctx.lineWidth = 7;
+    ctx.beginPath();
+    ctx.moveTo(14, 56);
+    ctx.quadraticCurveTo(50, 90, 60, 118);
+    ctx.stroke();
+    ctx.strokeStyle = C.ink;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    // A little wayside shrine with its green heart.
+    poly(ctx, [[82, 118], [82, 84], [96, 70], [110, 84], [110, 118]], C.vellumLight, 3);
+    poly(ctx, [[78, 84], [96, 62], [114, 84]], C.madder, 3);
+    heartPath(ctx, 96, 100, 22);
+    ctx.fillStyle = C.heal;
+    ctx.fill();
+    ctx.strokeStyle = C.ink;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  },
+};
+
 export const iconTexture = (id: BoonId) => `icon-${id}`;
+export const roadIcon = (road: Road) => `icon-road-${road}`;
 /** An armoury item's icon: the purse's own, or the boon it echoes (Iron Heart, Lodestone Charm). */
 export const armouryIcon = (id: ArmouryId) => (ARMOURY_ICONS[id] ? `icon-armoury-${id}` : `icon-${id}`);
 
 export function bakeIcons(scene: Phaser.Scene) {
+  for (const [road, draw] of Object.entries(ROAD_ICONS)) {
+    paint(scene, `icon-road-${road}`, 64, 64, (ctx) => {
+      ctx.scale(0.5, 0.5);
+      draw(ctx);
+    });
+  }
   for (const [id, draw] of Object.entries(ARMOURY_ICONS)) {
     paint(scene, `icon-armoury-${id}`, 64, 64, (ctx) => {
       ctx.scale(0.5, 0.5);

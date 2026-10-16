@@ -1,15 +1,18 @@
 import { ARMOURY_EACH, nextPrice, noArmoury, type Armoury, type ArmouryId } from './armoury';
 import { BOONS, BOON_IDS, CURSE, forSale, type BoonId } from './boons';
-import { BOSS, bossStands, moveBoss } from './boss';
-import { buildStage, nextStage } from './course';
+import { MISSILES, bossOf, bossStands, moveBoss } from './boss';
+import { buildStage, nextStage, roadChoiceDue } from './course';
+import { PAIRS, pairsOf } from './pairs';
 import {
   AWAKE,
   BOON_PRICE,
   COIN_REACH,
+  DARE,
   DROP_V,
   FOES,
   GRAVITY,
   ICE,
+  ROCK,
   RUNNER,
   SHRINE,
   TRAP_SPAN,
@@ -21,8 +24,11 @@ import {
   rand,
   speedOf,
   stats,
+  streakMax,
   streakMult,
+  type DareKind,
   type GameState,
+  type Road,
   type Trap,
   type TrapKind,
   WIND,
@@ -31,8 +37,11 @@ import {
 // Moves the run on: the knight runs, jumps, slides and lands, climbs onto ledges and drops off
 // them, goblins and bats move and can be stomped on, traps hurt, coins are picked up (worth more
 // on a streak), wayside shrines trade coins for a heart, the stage's ground bends the rules (ice,
-// fen, wind), a Gatekeeper is fought on every fifth stage, and each checkpoint stops the run on a
-// choice of two boons, sometimes a cursed one. Between runs the bank buys the missed boon or the
+// fen, wind), a Gatekeeper is fought on every fifth stage and the dragon at the Dragon's Keep (for
+// a lasting crown; the run then goes on harder), a rockfall chases the knight on every seventh
+// stage, the herald's dare is kept or lost, boon pairs give their hidden bonuses, and each
+// checkpoint stops the run on a choice of two boons (three after a met dare), sometimes a cursed
+// one, and then, from stage 3, of the next road. Between runs the bank buys the missed boon or the
 // armoury's lasting upgrades.
 
 /** A pulled coin's speed towards the knight. */
@@ -44,6 +53,12 @@ const STOMP_REACH = 8;
 const STOMP_BOUNCE = 0.65;
 /** Feet this little below a ledge's top as the knight reaches it still climb up it unhurt. */
 const STEP_UP = 16;
+/** Falcon's Glide: the share of gravity that pulls on the knight while they fall. */
+const GLIDE = 0.5;
+/** Goblin's Hoard: coins a stomped foe bursts into besides the one it always drops. */
+const HOARD = 2;
+/** Bulwark: how far ahead of the knight a blocked hit knocks the foes away. */
+const BULWARK_REACH = 220;
 
 /** What a new run carries over from the runs before it. */
 export interface Carry {
@@ -52,14 +67,16 @@ export interface Carry {
   bank: number;
   pending: BoonId | null;
   armoury: Armoury;
+  /** The lasting crown from the Dragon's Keep. */
+  crown: boolean;
 }
 
 /**
  * A new run: an ordinary one, or the daily course of the date given. A boon bought at the last
  * game over starts it with one rank of that boon, and the armoury's levels apply.
  */
-export function newRun({ best, bank, pending, armoury }: Carry = { best: 0, bank: 0, pending: null, armoury: noArmoury() }, daily: string | null = null): GameState {
-  const s = freshState(best, bank, armoury, daily);
+export function newRun({ best, bank, pending, armoury, crown }: Carry = { best: 0, bank: 0, pending: null, armoury: noArmoury(), crown: false }, daily: string | null = null): GameState {
+  const s = freshState(best, bank, armoury, daily, crown);
   if (pending) s.ranks[pending] = 1;
   const st = stats(s);
   s.hearts = st.maxHearts;
@@ -152,8 +169,11 @@ function stomp(s: GameState, prevH: number) {
   const top = foe.h + TRAP_SPAN[foe.kind as Exclude<TrapKind, 'pit'>].hi;
   s.traps = s.traps.filter((t) => t !== foe);
   s.stomps += 1;
+  dared(s, 'stomp', 1);
   gainCoin(s, foe.x + foe.w / 2, top);
   effect(s, 'stomp', foe.x + foe.w / 2, top, 450);
+  // Goblin's Hoard: the foe bursts into more coins, which fly to the knight.
+  if (st.hoard) for (let i = 0; i < HOARD; i++) s.course.push({ id: s.nextId++, x: foe.x + foe.w / 2 + (i ? 30 : -30), h: top + 30, pulled: true });
   r.h = Math.max(r.h, top);
   r.vh = st.jumpV * STOMP_BOUNCE;
   r.jumps = st.jumps;
@@ -170,10 +190,31 @@ function effect(s: GameState, kind: GameState['effects'][number]['kind'], x: num
  * multiplier, and one more on the streak. A coin worth more than one pops its value over the knight.
  */
 function gainCoin(s: GameState, x: number, h: number) {
-  const value = stats(s).coinValue * streakMult(s.streak);
+  const value = stats(s).coinValue * streakMult(s.streak, streakMax(s.road));
   s.streak += 1;
   s.coins += value;
   if (value > 1) effect(s, 'pop', x, h + 40, 700, `+${value}`);
+  dared(s, 'coins', 1);
+  dared(s, 'streak', streakMult(s.streak, streakMax(s.road)));
+}
+
+/**
+ * Moves the stage's dare on: a stomp or a coin counts one more, a streak dare records the
+ * multiplier reached. Met, it pays its reward at once (a no-hit dare is met at the checkpoint).
+ */
+function dared(s: GameState, kind: DareKind, n: number) {
+  const d = s.dare;
+  if (!d || d.kind !== kind || d.done || d.failed) return;
+  d.progress = kind === 'streak' ? Math.max(d.progress, n) : d.progress + n;
+  if (d.progress >= d.goal) meetDare(s);
+}
+
+function meetDare(s: GameState) {
+  const d = s.dare;
+  if (!d || d.done) return;
+  d.done = true;
+  s.coins += DARE.reward;
+  effect(s, 'pop', s.distance + 420, RUNNER.h + 100, 1600, `Dare met! +${DARE.reward}`);
 }
 
 /**
@@ -199,13 +240,15 @@ function visitShrines(s: GameState) {
   }
 }
 
-/** A hit from a trap, from running into the side of a ledge (`'wall'`), or from running into the Gatekeeper. */
-function hurt(s: GameState, kind: TrapKind | 'wall' | 'boss') {
+/** A hit from a trap, from running into the side of a ledge (`'wall'`), from running into a boss, or from the rockfall. */
+function hurt(s: GameState, kind: TrapKind | 'wall' | 'boss' | 'rock') {
   const st = stats(s);
   const r = s.runner;
   s.hits += 1;
   s.streak = 0;
   r.hurtMs = st.hurtMs;
+  // A no-hit dare is lost to any hit, a blocked one included.
+  if (s.dare?.kind === 'nohit' && !s.dare.done) s.dare.failed = true;
   if (kind === 'pit') {
     // Thrown back up out of the pit, high enough to clear it.
     r.vh = st.jumpV;
@@ -216,6 +259,12 @@ function hurt(s: GameState, kind: TrapKind | 'wall' | 'boss') {
   if (s.shields > 0) {
     s.shields -= 1;
     effect(s, 'block', s.distance, r.h + RUNNER.h / 2, 500);
+    // Bulwark: the block knocks every foe and missile just ahead off the road.
+    if (st.bulwark) {
+      const gone = s.traps.filter((t) => (FOES.includes(t.kind) || MISSILES.includes(t.kind)) && t.x + t.w > s.distance - RUNNER.w && t.x < s.distance + BULWARK_REACH);
+      for (const t of gone) effect(s, 'stomp', t.x + t.w / 2, t.h + TRAP_SPAN[t.kind as Exclude<TrapKind, 'pit'>].hi, 450);
+      s.traps = s.traps.filter((t) => !gone.includes(t));
+    }
     return;
   }
   s.hearts -= 1;
@@ -238,12 +287,17 @@ export function tick(s: GameState, dt: number) {
   const r = s.runner;
   s.time += dt;
   moveFoes(s, sec);
-  // The checkpoint stays out of reach while the Gatekeeper stands.
-  if (bossStands(s)) s.checkpointX = Math.max(s.checkpointX, Math.round(s.distance + BOSS.holdBack));
+  // The checkpoint stays out of reach while the boss stands.
+  if (s.boss && bossStands(s)) s.checkpointX = Math.max(s.checkpointX, Math.round(s.distance + bossOf(s.boss).holdBack));
 
   // In the windy pass a headwind slows the knight while they are off the ground.
   const pace = s.terrain === 'wind' && !grounded(s) ? WIND.air : 1;
+  const from = s.distance;
   s.distance = Math.min(s.checkpointX, s.distance + s.speed * pace * sec);
+  // The rockfall keeps the knight's pace and creeps up a little; hits and skids let it gain.
+  const rock = s.rockfall;
+  if (rock) rock.x += s.distance - from + ROCK.creep * sec;
+  const hitsBefore = s.hits;
   moveBoss(s, dt);
   // Running into the side of a ledge hurts, and the knight scrambles up onto it. A jump that only
   // just falls short climbs up unhurt.
@@ -255,7 +309,8 @@ export function tick(s: GameState, dt: number) {
   }
   const prevH = r.h;
   if (r.h > floor || r.vh > 0) {
-    r.vh -= GRAVITY * sec;
+    // Falcon's Glide: the knight falls at half the pull.
+    r.vh -= GRAVITY * (r.vh < 0 && st.glide ? GLIDE : 1) * sec;
     r.h += r.vh * sec;
     if (r.h <= floor) {
       r.h = floor;
@@ -267,6 +322,7 @@ export function tick(s: GameState, dt: number) {
       if (s.terrain === 'ice') {
         r.skidMs = ICE.skidMs;
         effect(s, 'skid', s.distance, floor, ICE.skidMs + 120);
+        if (rock) rock.x += ROCK.skid;
       }
     }
   }
@@ -286,6 +342,19 @@ export function tick(s: GameState, dt: number) {
   if (r.hurtMs <= 0 && s.phase === 'running') {
     const hit = s.traps.find((t) => touches(s, t));
     if (hit) hurt(s, hit.kind);
+  }
+  if (rock && s.phase === 'running') {
+    if (s.hits > hitsBefore) rock.x += ROCK.hit;
+    // Caught: a heart lost, and the rocks fall back to where they started. A knight still
+    // unhurtable from the last hit is only kept at their heels until they can be hurt.
+    const back = s.distance - RUNNER.w / 2;
+    if (rock.x >= back) {
+      if (r.hurtMs <= 0) {
+        hurt(s, 'rock');
+        effect(s, 'stomp', back, 20, 500);
+        rock.x = back - ROCK.start;
+      } else rock.x = back;
+    }
   }
   if (s.phase === 'running') visitShrines(s);
 
@@ -322,30 +391,38 @@ export function tick(s: GameState, dt: number) {
     s.phase = 'checkpoint';
     s.banners.push(metres(s.checkpointX));
     s.best = Math.max(s.best, metres(s.distance));
+    // A no-hit dare is met by reaching the banner unhurt.
+    if (s.dare?.kind === 'nohit' && !s.dare.failed) meetDare(s);
     s.choices = rollChoices(s);
     r.slideMs = 0;
   }
 }
 
 /**
- * Two different boons the knight can still take; Field Dressing fills in when few are left. From
- * the second checkpoint, a cursed boon may take the second card. (The first checkpoint draws no
- * curse, so its draws are the same as before curses were added.)
+ * Two different boons the knight can still take (three when the stage's dare was met); Field
+ * Dressing fills in when few are left. From the second checkpoint, a cursed boon may take the
+ * second card. (The first checkpoint draws no curse, so its draws are the same as before curses
+ * were added.)
  */
 export function rollChoices(s: GameState): BoonId[] {
   const pool = BOON_IDS.filter((id) => !BOONS[id].filler && !BOONS[id].cursed && canTake(s, id));
   const picks: BoonId[] = [];
-  while (picks.length < 2 && pool.length > 0) picks.push(pool.splice(Math.floor(rand(s) * pool.length), 1)[0]);
-  while (picks.length < 2) picks.push('mend');
+  const want = s.dare?.done ? 3 : 2;
+  while (picks.length < want && pool.length > 0) picks.push(pool.splice(Math.floor(rand(s) * pool.length), 1)[0]);
+  while (picks.length < want) picks.push('mend');
   const curses = BOON_IDS.filter((id) => BOONS[id].cursed && canTake(s, id));
   if (s.stage >= CURSE.from && curses.length > 0 && rand(s) < CURSE.chance) picks[1] = curses[Math.floor(rand(s) * curses.length)];
   return picks;
 }
 
-/** Takes a boon at a checkpoint and starts the next stage. */
+/**
+ * Takes a boon at a checkpoint, then starts the next stage, or, from stage 3, offers the two roads
+ * it can run on first (`pickRoad`). A pair completed is announced.
+ */
 export function pick(s: GameState, id: BoonId) {
   if (s.phase !== 'checkpoint' || !s.choices?.includes(id)) return false;
   s.missed = s.choices.find((c) => c !== id) ?? null;
+  const before = pairsOf(s.ranks);
   s.ranks[id] = (s.ranks[id] ?? 0) + 1;
   const st = stats(s);
   if (id === 'heart') s.hearts = Math.min(st.maxHearts, s.hearts + 1);
@@ -353,28 +430,45 @@ export function pick(s: GameState, id: BoonId) {
   // Cursed Gold takes a heart away.
   s.hearts = Math.max(1, Math.min(st.maxHearts, s.hearts));
   s.choices = null;
-  s.phase = 'running';
   s.shields = st.shields;
+  for (const pid of pairsOf(s.ranks)) {
+    if (!before.includes(pid)) effect(s, 'pop', s.distance + 480, RUNNER.h + 120, 2400, `${PAIRS.find((p) => p.id === pid)!.name}!`);
+  }
+  if (roadChoiceDue(s)) {
+    s.roads = ['high', 'low'];
+    return true;
+  }
+  s.phase = 'running';
   nextStage(s);
-  s.speed = speedOf(s.stage);
   return true;
 }
 
-/** Landing on the Gatekeeper's head stomps it; running into it hurts. Either way it flees ahead. */
+/** Picks the road the next stage runs on, once the boon is taken, and starts it. */
+export function pickRoad(s: GameState, road: Road) {
+  if (s.phase !== 'checkpoint' || !s.roads?.includes(road)) return false;
+  s.road = road;
+  s.roads = null;
+  s.phase = 'running';
+  nextStage(s);
+  return true;
+}
+
+/** Landing on a boss's head stomps it; running into it hurts. Either way it flees ahead. */
 function bossContact(s: GameState, prevH: number) {
   const b = s.boss;
   const r = s.runner;
   // Waiting, it is still out of reach; fleeing, it runs on past the knight without a blow.
   if (!b || !bossStands(s) || b.mode === 'wait' || b.mode === 'flee') return;
+  const n = bossOf(b);
   const box = runnerBox(s);
-  if (box.x1 <= b.x || box.x0 >= b.x + b.w || box.lo >= BOSS.h) return;
+  if (box.x1 <= b.x || box.x0 >= b.x + b.w || box.lo >= n.h) return;
   const st = stats(s);
-  if (r.h < prevH && prevH >= BOSS.h - STOMP_REACH && b.hurtMs <= 0) {
+  if (r.h < prevH && prevH >= n.h - STOMP_REACH && b.hurtMs <= 0) {
     b.hp -= 1;
-    b.hurtMs = BOSS.hurtMs;
+    b.hurtMs = n.hurtMs;
     s.stomps += 1;
-    effect(s, 'stomp', b.x + b.w / 2, BOSS.h, 450);
-    r.h = BOSS.h;
+    effect(s, 'stomp', b.x + b.w / 2, n.h, 450);
+    r.h = n.h;
     r.vh = st.jumpV * STOMP_BOUNCE;
     r.jumps = st.jumps;
     r.slideMs = 0;
@@ -383,12 +477,20 @@ function bossContact(s: GameState, prevH: number) {
       b.mode = 'flee';
       return;
     }
-    // Beaten: it falls where it stands, pays out, and the checkpoint comes up a little way on.
+    // Beaten: it falls where it stands, pays out, and the checkpoint comes up a little way on. The
+    // dragon beaten wins the lasting crown, and the run goes on harder.
     b.mode = 'down';
-    s.bosses += 1;
-    s.coins += BOSS.reward;
-    effect(s, 'pop', s.distance + 300, BOSS.h + 150, 1400, `Gatekeeper beaten! +${BOSS.reward}`);
-    s.checkpointX = Math.round(s.distance + BOSS.after);
+    s.coins += n.reward;
+    if (b.kind === 'dragon') {
+      s.dragonBeaten = true;
+      s.crown = true;
+      s.speed = speedOf(s.stage, true);
+      effect(s, 'pop', s.distance + 300, n.h + 150, 2600, `The dragon is beaten! The crown is yours. +${n.reward}`);
+    } else {
+      s.bosses += 1;
+      effect(s, 'pop', s.distance + 300, n.h + 150, 1400, `Gatekeeper beaten! +${n.reward}`);
+    }
+    s.checkpointX = Math.round(s.distance + n.after);
     for (let i = 0; i < 6; i++) s.course.push({ id: s.nextId++, x: s.distance + 500 + i * 40, h: 12, pulled: false });
     return;
   }

@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { HUD_HEIGHT, STREAK_CHIP, TAG, TRACK, VIEW } from '../scenes/layout';
+import { DARE_TAG, HUD_HEIGHT, STREAK_CHIP, TAG, TRACK, VIEW } from '../scenes/layout';
 import { C, gold, paint, poly, SERIF } from './ink';
 
 // The page furniture round the miniature: the lapis rubric band of the HUD ruled in gold, the
@@ -85,12 +85,14 @@ export function bakeHud(scene: Phaser.Scene) {
     ctx.strokeRect(3, 3, tw - 6, TRACK.h - 6);
   });
   // The stage's tag beside the track: the ground's name, or the Gatekeeper and its stomps left.
-  paint(scene, 'tag-strip', TAG.w, TAG.h, (ctx) => {
-    poly(ctx, [[0.75, 0.75], [TAG.w - 0.75, 0.75], [TAG.w - 0.75, TAG.h - 0.75], [0.75, TAG.h - 0.75]], C.vellumLight, 1.25);
-    ctx.strokeStyle = C.gold;
-    ctx.lineWidth = 0.8;
-    ctx.strokeRect(3, 3, TAG.w - 6, TAG.h - 6);
-  });
+  for (const [key, { w: sw, h: sh }] of [['tag-strip', TAG], ['dare-strip', DARE_TAG]] as const) {
+    paint(scene, key, sw, sh, (ctx) => {
+      poly(ctx, [[0.75, 0.75], [sw - 0.75, 0.75], [sw - 0.75, sh - 0.75], [0.75, sh - 0.75]], C.vellumLight, 1.25);
+      ctx.strokeStyle = C.gold;
+      ctx.lineWidth = 0.8;
+      ctx.strokeRect(3, 3, sw - 6, sh - 6);
+    });
+  }
 }
 
 /**
