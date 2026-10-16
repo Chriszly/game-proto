@@ -150,6 +150,8 @@ export interface Buff {
   ms: number;
   def: BuffDef;
   color: string;
+  /** The look of the ability that gave it (`${championId}.${key}`), for its aura; none for a jungle buff. */
+  look?: string;
 }
 
 /** A patch on the ground from a zone ability: it hurts and slows the other team's units inside. */
@@ -166,6 +168,8 @@ export interface Zone {
   left: number;
   ms: number;
   color: string;
+  /** The look of the ability that made it, `${championId}.${key}`. */
+  look: string;
 }
 
 export interface Projectile {
@@ -190,6 +194,8 @@ export interface Projectile {
   pull: boolean;
   /** Double damage to a target below this share of its health (0 for none). */
   executeBelow: number;
+  /** The look of the ability that threw it, `${championId}.${key}`; none for towers and the beast. */
+  look?: string;
 }
 
 /** A short-lived visual the view turns into shapes: a ring, or a line between two points. */
@@ -199,7 +205,13 @@ export type Fx =
   /** A slash: an arc of radius r around (x, y), centred on the angle a. */
   | { kind: 'arc'; x: number; y: number; r: number; a: number; color: string; ms: number }
   /** A coin that pops out of a minion the player last-hit, showing the gold it paid. */
-  | { kind: 'coin'; x: number; y: number; gold: number; color: string; ms: number };
+  | { kind: 'coin'; x: number; y: number; gold: number; color: string; ms: number }
+  /**
+   * An ability's own effect, drawn by the view in that ability's look (`${championId}.${key}`, or
+   * `${look}>hit` where a bolt struck): (x, y) where it lands, (x2, y2) where the caster stood, r the
+   * area's radius and a the way the caster faced. The view sets how long it lasts.
+   */
+  | { kind: 'skill'; look: string; x: number; y: number; x2: number; y2: number; r: number; a: number; color: string; ms: number };
 
 /** The goal the player's team is chasing now. `target` is the unit to bring down. */
 export interface Objective {
@@ -361,7 +373,8 @@ export function refreshStats(u: Unit) {
   const sum = (key: 'hp' | 'dmg' | 'armor' | 'speed' | 'atk' | 'cdr') => owned.reduce((n, i) => n + (i[key] ?? 0), 0);
   const levels = u.level - 1;
   const maxHp = c.hp + levels * c.hpPerLevel + sum('hp');
-  u.hp += maxHp - u.maxHp;
+  // A dead champion stays at 0 until it respawns full.
+  if (!u.dead) u.hp += maxHp - u.maxHp;
   u.maxHp = maxHp;
   u.dmg = c.dmg + levels * c.dmgPerLevel + sum('dmg');
   u.armor = c.armor + sum('armor');

@@ -654,6 +654,8 @@ export const ACTIVES: ActiveDef[] = [
 
 /** How close a champion must stand to its Nexus to shop. */
 export const SHOP_RANGE = 700;
+/** A champion within `radius` of its own Nexus heals `share` of its health a second. */
+export const FOUNTAIN = { radius: 420, share: 0.12 };
 
 /** Which lane each AI champion walks, in roster order without the player's champion. */
 export const ALLY_LANES: LaneId[] = ['top', 'mid', 'bottom', 'mid'];
