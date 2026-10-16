@@ -82,6 +82,12 @@ to its log and run summary.
   `CLAUDE.md` next to it imports it (`@AGENTS.md`), like the root one does.
 - **Say which game a PR is for** in its title or summary, and keep its screenshots in that game's
   `docs/screenshots/`.
+- **Keep screenshots small.** Every committed image stays in the history and in every clone, and
+  screenshots already make up most of the repo's size. Save PR screenshots at 960x540 (540x960 for
+  an upright game) unless a detail needs more, never wider or taller than 1280 pixels, and under
+  500 KB each (a 4K or phone-resolution capture is scaled down first). Show only what the PR adds,
+  reuse a screenshot already in the folder when it still shows the change, and replace an outdated
+  file under the same name rather than adding a new one.
 - **Add a game** by creating `games/<name>/` with an `index.html` that loads `./src/main.ts`, a
   `README.md`, an `AGENTS.md` (current state and architecture) with a `CLAUDE.md` that imports it,
   a `cover.png` (a 16:9 screenshot) and an `e2e/playthrough.spec.ts` that plays its first round,
