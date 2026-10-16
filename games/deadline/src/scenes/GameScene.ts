@@ -4,49 +4,68 @@ import { Backdrop, type BackdropInfo } from '../art/backdrop';
 import { bakeComic } from '../art/comic';
 import { bakeNightVision } from '../art/nightvision';
 import { GEOM, GRAIN_TILE, geomOf, num, tex } from '../art/paint';
-import { ACID_COLOR, CRATE_COLORS, SHIELD_COLOR, THEMES, UPGRADE_COLORS, type Theme } from '../art/theme';
+import { ACID_COLOR, BURN_COLOR, CRATE_COLORS, SHIELD_COLOR, SURVIVOR_COLOR, THEMES, UPGRADE_COLORS, type Theme } from '../art/theme';
 import { Pool } from '../game/pool';
 import {
   ACID_SLOW,
   BASE_STATS,
+  BLOATER,
   BOSS,
+  BOSSES,
   BREAK_MS,
+  BROOD,
   BULLET,
+  CONDITION,
+  CONDITIONS,
   DRUM,
   ENEMIES,
+  EXTRACT,
+  FIRE_ROUNDS,
   FLAMER,
   FRENZY,
+  HEADSHOT,
   HERO,
   HUD_HEIGHT,
   KIT_COSTS,
   LANES,
   MAX_COMPANIONS,
   MEDKIT,
+  PERKS,
   PICKUP,
   REACH_Y,
+  RICOCHET,
   SCRAP,
   SHOTGUN,
   SPAWN_Y,
   SPITTER,
   SQUAD_SLOTS,
   SUPPLIES,
+  SURVIVOR,
   UPGRADE_KINDS,
   UPGRADES,
   VIEW,
   WALL,
   applyUpgrade,
   blastDamage,
+  bossKind,
   bossMove,
+  canExtract,
+  drawCondition,
+  isBoss,
   isBossWave,
   laneAt,
+  perksOf,
   planWave,
   riotShield,
   supplyPick,
   toughness,
   waveTotal,
+  type BossKind,
   type BossMove,
+  type Condition,
   type CrateKind,
   type EnemyKind,
+  type Perk,
   type Spawn,
   type Stats,
   type SupplyKind,
@@ -56,8 +75,8 @@ import { loadBest, loadKit, loadScrap, loadStyle, saveBest, saveKit, saveScrap, 
 import { HUD_DEPTH, Hud } from './Hud';
 
 const DEPTH = {
-  ground: 0, sandbags: 5, splats: 8, acid: 8.5, ringUnder: 9, drums: 10, pickups: 11, enemies: 20, hero: 40,
-  bullets: 45, muzzle: 46, fx: 47, bars: 50, overlay: 90, labels: 92, pops: 95, hud: HUD_DEPTH,
+  ground: 0, sandbags: 5, splats: 8, acid: 8.5, ringUnder: 9, drums: 10, pickups: 11, dark: 19, enemies: 20, hero: 40,
+  bullets: 45, muzzle: 46, fx: 47, moon: 48, bars: 50, overlay: 90, labels: 92, pops: 95, hud: HUD_DEPTH,
 };
 /** How long a fallen enemy's splat stays on the road, in ms. */
 const SPLAT_MS = 900;
@@ -81,7 +100,22 @@ interface Enemy {
   maxShield: number;
   /** A spitter's clock towards its next glob. */
   clock: number;
+  /** Fire rounds: burn time left, and the clock towards its next tick of burn damage. */
+  burn: number;
+  burnTick: number;
   sprite: Phaser.GameObjects.Image;
+}
+
+/** A survivor walking down the road among the zombies, towards the sandbags. */
+interface Survivor {
+  alive: boolean;
+  id: number;
+  hp: number;
+  maxHp: number;
+  x: number;
+  y: number;
+  sprite: Phaser.GameObjects.Image;
+  label: Phaser.GameObjects.Text;
 }
 
 interface Pickup {
@@ -126,6 +160,8 @@ interface Bullet {
   /** Targets it can still hit, and the ids of those it already went through. */
   hitsLeft: number;
   hit: number[];
+  /** Ricochets left: with the perk, a spent bullet jumps once to the nearest zombie. */
+  ricochets: number;
   sprite: Phaser.GameObjects.Image;
 }
 
@@ -217,6 +253,19 @@ export interface GameState {
   /** The boss's move being wound up or under way, and how many it has made. */
   bossMove: BossMove | null;
   bossMoves: number;
+  /** Which boss this wave ends with (null on other waves). */
+  bossKind: BossKind | null;
+  /** The perks earned from three crates of a kind, and the headshots landed this run. */
+  perks: Perk[];
+  headshots: number;
+  /** Survivors who made it to the sandbags, and those the squad's fire killed. */
+  survivorsSaved: number;
+  survivorsLost: number;
+  /** This wave's condition. */
+  condition: Condition;
+  /** The run ended by extraction (a win), and the scrap it paid. */
+  extracted: boolean;
+  payout: number;
 }
 
 export class GameScene extends Phaser.Scene {
@@ -237,6 +286,7 @@ export class GameScene extends Phaser.Scene {
   private fx!: Pool<Fx>;
   private acids!: Pool<Acid>;
   private walls!: Pool<Wall>;
+  private survivors!: Pool<Survivor>;
   private nextId = 1;
   private plan: Spawn[] = [];
   private waveClock = 0;
@@ -265,10 +315,15 @@ export class GameScene extends Phaser.Scene {
   private overText: Phaser.GameObjects.GameObject[] = [];
   /** The supply drop's cards, and the game over screen's kit buttons, as tap boxes. */
   private supplyUi: Phaser.GameObjects.GameObject[] = [];
-  private cards: { kind: SupplyKind; x: number; y: number; w: number; h: number }[] = [];
+  private cards: { kind: SupplyKind | 'extract'; x: number; y: number; w: number; h: number }[] = [];
   private shop: { kind: UpgradeKind; x: number; y: number; w: number; h: number }[] = [];
   private bossCall!: Phaser.GameObjects.Text;
   private placeHint!: Phaser.GameObjects.Text;
+  /** The blackout's darkness over the road, and the blood moon's red cast. */
+  private dark!: Phaser.GameObjects.Rectangle;
+  private moon!: Phaser.GameObjects.Rectangle;
+  /** Bullet hits on zombies, counted for the headshot perk. */
+  private bulletHits = 0;
   private keys!: { left: Phaser.Input.Keyboard.Key[]; right: Phaser.Input.Keyboard.Key[] };
   private static backdrop: Backdrop | null = null;
 
@@ -307,10 +362,23 @@ export class GameScene extends Phaser.Scene {
       inAcid: false,
       bossMove: null,
       bossMoves: 0,
+      bossKind: null,
+      perks: [],
+      headshots: 0,
+      survivorsSaved: 0,
+      survivorsLost: 0,
+      condition: 'clear',
+      extracted: false,
+      payout: 0,
     };
-    // The starting crates bought last run are spent now.
+    // The starting crates bought last run are spent now; they count towards the perks.
     saveKit([]);
-    for (const kind of this.state.startKit) this.state.stats = applyUpgrade(this.state.stats, kind);
+    for (const kind of this.state.startKit) {
+      this.state.stats = applyUpgrade(this.state.stats, kind);
+      this.state.collected[kind]++;
+    }
+    this.state.perks = perksOf(this.state.collected);
+    this.bulletHits = 0;
     this.bossClock = 0;
     this.bossAct = null;
     this.flameClock = 0;
@@ -341,11 +409,13 @@ export class GameScene extends Phaser.Scene {
     this.marks = this.add.graphics().setDepth(DEPTH.labels);
     // The night-vision feed's scanlines and grain, over the picture but under its amber overlay.
     this.scan = this.add.image(0, 0, '__DEFAULT').setOrigin(0).setDepth(DEPTH.overlay);
+    this.dark = this.add.rectangle(0, 0, VIEW.w, VIEW.h, 0x05040c, 0.55).setOrigin(0).setDepth(DEPTH.dark).setVisible(false);
+    this.moon = this.add.rectangle(0, 0, VIEW.w, VIEW.h, 0xc01a1a, 0.16).setOrigin(0).setDepth(DEPTH.moon).setVisible(false);
     this.grain = this.add.tileSprite(0, 0, VIEW.w, VIEW.h, '__DEFAULT').setOrigin(0).setDepth(DEPTH.overlay + 1);
 
     const text = (depth: number) => this.add.text(0, 0, '').setOrigin(0.5).setDepth(depth).setVisible(false);
     this.enemies = new Pool<Enemy>(
-      () => ({ alive: false, id: 0, kind: 'grunt', hp: 0, maxHp: 0, x: 0, y: 0, inBlast: false, shield: 0, maxShield: 0, clock: 0, sprite: this.add.image(0, 0, '__DEFAULT') }),
+      () => ({ alive: false, id: 0, kind: 'grunt', hp: 0, maxHp: 0, x: 0, y: 0, inBlast: false, shield: 0, maxShield: 0, clock: 0, burn: 0, burnTick: 0, sprite: this.add.image(0, 0, '__DEFAULT') }),
       (e) => e.sprite.setVisible(false),
     );
     this.pickups = new Pool<Pickup>(
@@ -367,7 +437,7 @@ export class GameScene extends Phaser.Scene {
       (d) => [d.sprite, d.ring, d.label].forEach((o) => o.setVisible(false)),
     );
     this.bullets = new Pool<Bullet>(
-      () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, prevX: 0, prevY: 0, pierces: false, hitsLeft: 0, hit: [], sprite: this.skin(this.add.image(0, 0, '__DEFAULT'), 'bullet').setDepth(DEPTH.bullets) }),
+      () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, prevX: 0, prevY: 0, pierces: false, hitsLeft: 0, hit: [], ricochets: 0, sprite: this.skin(this.add.image(0, 0, '__DEFAULT'), 'bullet').setDepth(DEPTH.bullets) }),
       (b) => b.sprite.setVisible(false),
     );
     this.splats = new Pool<Splat>(
@@ -394,6 +464,10 @@ export class GameScene extends Phaser.Scene {
       () => ({ alive: false, lane: 0, ms: 0, sprite: this.skin(this.add.image(0, 0, '__DEFAULT'), 'wall').setDepth(DEPTH.enemies + WALL.y / VIEW.h) }),
       (w) => w.sprite.setVisible(false),
     );
+    this.survivors = new Pool<Survivor>(
+      () => ({ alive: false, id: 0, hp: 0, maxHp: 0, x: 0, y: 0, sprite: this.add.image(0, 0, '__DEFAULT'), label: text(DEPTH.labels) }),
+      (v) => [v.sprite, v.label].forEach((o) => o.setVisible(false)),
+    );
     // Starting crates bought with scrap: a companion one brings its soldier in at once.
     this.addCompanions();
 
@@ -419,6 +493,11 @@ export class GameScene extends Phaser.Scene {
   /** The sandbag walls standing: their lane and the time they have left. */
   liveWalls() {
     return this.walls.live().map(({ lane, ms }) => ({ lane, ms }));
+  }
+
+  /** The survivors on the road: their hit points left and where they are. */
+  liveSurvivors() {
+    return this.survivors.live().map(({ id, hp, maxHp, x, y }) => ({ id, hp, maxHp, x, y }));
   }
 
   /** The pickups in play: what they give, how many hits are left to open them and where they are. */
@@ -481,6 +560,7 @@ export class GameScene extends Phaser.Scene {
     for (const d of this.drums.all) d.ring.setDepth(nv ? DEPTH.labels - 1 : DEPTH.ringUnder);
     for (const p of this.pickups.all) this.styleCrateText(p.hpText);
     for (const d of this.drums.all) this.styleDrumLabel(d.label);
+    for (const v of this.survivors.all) this.styleSurvivorLabel(v.label);
     for (const f of this.fx.all) if (f.alive) this.fx.release(f);
     this.font(this.banner, 40, nv ? th.accent : '#ffe04a', nv ? { glow: th.accent } : { stroke: th.ink, sw: 8 });
     this.font(this.bossCall, nv ? 16 : 20, nv ? th.warn : '#ffe04a', nv ? { glow: th.warn } : { stroke: th.ink, sw: 6 });
@@ -517,6 +597,12 @@ export class GameScene extends Phaser.Scene {
     else this.font(t, 10, THEMES.nv.accent, { glow: THEMES.nv.accent });
   }
 
+  private styleSurvivorLabel(t: Phaser.GameObjects.Text) {
+    if (this.style === 'comic') this.font(t, 11, '#fff8e8', { stroke: THEMES.comic.ink, sw: 3 });
+    else this.font(t, 9, SURVIVOR_COLOR, { glow: SURVIVOR_COLOR });
+    t.setText(this.style === 'comic' ? "HELP! DON'T SHOOT!" : 'FRIENDLY · HOLD FIRE');
+  }
+
   // ---------- Input and waves ----------
 
   private createInput() {
@@ -531,6 +617,8 @@ export class GameScene extends Phaser.Scene {
     // S drops a sandbag wall in the hero's lane; 1, 2 and 3 pick a supply.
     kb.addKey(K.S).on('down', () => this.state.phase !== 'over' && this.state.phase !== 'supply' && this.placeWall(laneAt(this.player.x)));
     [K.ONE, K.TWO, K.THREE].forEach((code, i) => kb.addKey(code).on('down', () => this.state.phase === 'supply' && this.pickSupply(this.state.offer[i])));
+    // 4 takes the extraction, when it is on offer.
+    kb.addKey(K.FOUR).on('down', () => this.state.phase === 'supply' && this.cards.some((c) => c.kind === 'extract') && this.pickSupply('extract'));
     // Tap or drag anywhere: the hero walks along their line to below that spot.
     const aim = (p: Phaser.Input.Pointer) => {
       if (this.state.phase === 'over' || this.state.phase === 'supply') return;
@@ -567,18 +655,43 @@ export class GameScene extends Phaser.Scene {
     this.state.phase = 'wave';
     this.state.fallen = 0;
     this.state.waveTotal = waveTotal(wave);
-    this.plan = planWave(wave);
+    // The condition is drawn before the plan, as an ammo shortage adds drums to it. Neither draws
+    // anything before wave 6, so the first waves are the same as without conditions.
+    this.state.condition = drawCondition(wave);
+    this.plan = planWave(wave, Math.random, this.state.condition);
     this.waveClock = 0;
     this.bossClock = 0;
     this.bossAct = null;
     this.state.bossMove = null;
     this.state.bossMoves = 0;
+    this.state.bossKind = isBossWave(wave) ? bossKind(wave) : null;
     if (wave > this.state.best) {
       this.state.best = wave;
       saveBest(wave);
     }
-    this.showBanner(isBossWave(wave) ? `WAVE ${wave}\nBOSS INCOMING!` : isBossWave(wave + 1) ? `WAVE ${wave}\nBOSS NEXT WAVE` : `WAVE ${wave}`);
+    const bossName = this.state.bossKind ? BOSSES[this.state.bossKind].name.toUpperCase() : '';
+    const lines = [`WAVE ${wave}`, isBossWave(wave) ? `${bossName} INCOMING!` : isBossWave(wave + 1) ? 'BOSS NEXT WAVE' : ''];
+    if (this.state.condition !== 'clear') lines.push(`${CONDITIONS[this.state.condition].label.toUpperCase()}!`);
+    this.showBanner(lines.filter(Boolean).join('\n'));
+    this.applyCondition();
     this.refreshBackdrop();
+  }
+
+  /** The blackout's dark and the blood moon's red cast come and go with the wave's condition. */
+  private applyCondition() {
+    const c = this.state.condition;
+    this.dark.setVisible(c === 'blackout');
+    this.moon.setVisible(c === 'bloodmoon');
+  }
+
+  /**
+   * How well something at x, y can be seen: 1 in the open, fading to 0 beyond `blackoutRadius` of
+   * the hero during a blackout.
+   */
+  private visibility(x: number, y: number) {
+    if (this.state.condition !== 'blackout') return 1;
+    const d = Math.hypot(x - this.player.x, y - HERO.y), r = CONDITION.blackoutRadius;
+    return Phaser.Math.Clamp((r + 70 - d) / 70, 0, 1);
   }
 
   private showBanner(text: string) {
@@ -603,6 +716,7 @@ export class GameScene extends Phaser.Scene {
     this.moveDrums(dt);
     this.moveAcid(dt);
     this.moveWalls(dt);
+    this.moveSurvivors(dt);
     this.hitTargets();
     this.tickFlamer(dt);
     this.tickFrenzy(dt);
@@ -675,6 +789,12 @@ export class GameScene extends Phaser.Scene {
         this.skin(p.label, `label-${upgrade}`).setVisible(true);
         this.styleCrateText(p.hpText);
         p.hpText.setVisible(true);
+      } else if (s.type === 'survivor') {
+        const v = this.survivors.take();
+        Object.assign(v, { id: this.nextId++, hp: s.hp, maxHp: s.hp, x: s.x, y: SPAWN_Y });
+        this.skin(v.sprite, 'survivor').setPosition(v.x, v.y).setAlpha(1).setVisible(true);
+        this.styleSurvivorLabel(v.label);
+        v.label.setVisible(true);
       } else {
         const d = this.drums.take();
         Object.assign(d, { id: this.nextId++, hp: s.hp, maxHp: s.hp, x: s.x, y: SPAWN_Y, caught: 0 });
@@ -688,8 +808,8 @@ export class GameScene extends Phaser.Scene {
   private addEnemy(kind: EnemyKind, hp: number, x: number, y: number) {
     const e = this.enemies.take();
     const shield = kind === 'riot' ? riotShield(this.state.wave) : 0;
-    Object.assign(e, { id: this.nextId++, kind, hp, maxHp: hp, x, y, inBlast: false, shield, maxShield: shield, clock: SPITTER.everyMs - SPITTER.firstMs });
-    this.skin(e.sprite, kind).setPosition(e.x, e.y).setVisible(true);
+    Object.assign(e, { id: this.nextId++, kind, hp, maxHp: hp, x, y, inBlast: false, shield, maxShield: shield, clock: SPITTER.everyMs - SPITTER.firstMs, burn: 0, burnTick: 0 });
+    this.skin(e.sprite, kind).setPosition(e.x, e.y).setAlpha(1).setVisible(true);
     return e;
   }
 
@@ -701,7 +821,8 @@ export class GameScene extends Phaser.Scene {
   private fire(dt: number) {
     this.fireClock += dt;
     const { pierce } = this.state.stats;
-    const interval = (this.state.stats.fireInterval / (this.state.frenzyMs > 0 ? FRENZY.rate : 1)) * (this.state.inAcid ? ACID_SLOW : 1);
+    const interval = (this.state.stats.fireInterval / (this.state.frenzyMs > 0 ? FRENZY.rate : 1)) * (this.state.inAcid ? ACID_SLOW : 1) * (this.state.condition === 'shortage' ? CONDITION.shortageFire : 1);
+    const ricochets = this.state.perks.includes('ricochet') ? 1 : 0;
     const shoot = (x: number, y: number, angle: number) => {
       const b = this.bullets.take();
       b.x = b.prevX = x;
@@ -710,6 +831,7 @@ export class GameScene extends Phaser.Scene {
       b.vy = Math.cos(angle) * BULLET.speed;
       b.hitsLeft = 1 + pierce;
       b.pierces = pierce > 0;
+      b.ricochets = ricochets;
       b.hit.length = 0;
       b.sprite.setPosition(b.x, b.y).setRotation(angle).setVisible(true);
     };
@@ -750,13 +872,25 @@ export class GameScene extends Phaser.Scene {
   private moveEnemies(dt: number): boolean {
     for (const e of this.enemies.all) {
       if (!e.alive) continue;
-      const { speed, steer, radius } = ENEMIES[e.kind];
+      const { steer, radius } = ENEMIES[e.kind], boss = isBoss(e.kind);
+      // Under a blood moon the runners come faster.
+      const speed = ENEMIES[e.kind].speed * (e.kind === 'runner' && this.state.condition === 'bloodmoon' ? CONDITION.bloodMoonRunner : 1);
       // A boss winding up a move stands still, and a charge moves it on its own (`tickBoss`).
-      const bossBusy = e.kind === 'boss' && this.bossAct !== null;
+      const bossBusy = boss && this.bossAct !== null;
       // A sandbag wall in its lane holds a zombie back; a boss smashes through it.
       const wall = this.walls.all.find((w) => w.alive && w.lane === laneAt(e.x) && e.y < WALL.y && e.y + radius >= WALL.y - 14);
-      if (wall && e.kind === 'boss') this.smashWall(wall);
-      const held = !!wall && e.kind !== 'boss';
+      if (wall && boss) this.smashWall(wall);
+      const held = !!wall && !boss;
+      // Fire rounds: a burning zombie takes a tick of damage every so often until the fire is out.
+      if (e.burn > 0) {
+        e.burn -= dt;
+        e.burnTick += dt;
+        if (e.burnTick >= FIRE_ROUNDS.tickMs) {
+          e.burnTick -= FIRE_ROUNDS.tickMs;
+          this.hurt(e, FIRE_ROUNDS.damage(this.state.wave));
+          if (!e.alive) continue;
+        }
+      }
       if (!bossBusy && !held) {
         e.y += (speed * dt) / 1000;
         // A spitter stops at its range and lobs acid from there.
@@ -768,14 +902,14 @@ export class GameScene extends Phaser.Scene {
             this.lobAcid(e.x, e.y - 4, SPITTER.poolRadius, SPITTER.warnMs, SPITTER.poolMs);
           }
         } else {
-          const aside = e.kind === 'boss' ? 0 : ((e.id * 53) % 81) - 40;
+          const aside = boss ? 0 : ((e.id * 53) % 81) - 40;
           const dx = this.player.x + aside - e.x, maxStep = (steer * dt) / 1000;
           e.x += Phaser.Math.Clamp(dx, -maxStep, maxStep);
         }
       }
       // A little shamble from side to side, the same for every frame rate (none when motion is reduced).
-      const sway = settings.reduceMotion || e.kind === 'boss' ? 0 : Math.sin((e.y + e.id * 37) / 9) * 1.5;
-      e.sprite.setPosition(e.x + sway, e.y).setDepth(DEPTH.enemies + e.y / VIEW.h);
+      const sway = settings.reduceMotion || boss ? 0 : Math.sin((e.y + e.id * 37) / 9) * 1.5;
+      e.sprite.setPosition(e.x + sway, e.y).setDepth(DEPTH.enemies + e.y / VIEW.h).setAlpha(this.visibility(e.x, e.y));
       if (e.y + radius >= REACH_Y) {
         // A medkit gets the squad through one breach; without one, it's over.
         if (this.state.medkits > 0) this.useMedkit();
@@ -786,6 +920,51 @@ export class GameScene extends Phaser.Scene {
       }
     }
     return false;
+  }
+
+  /**
+   * Survivors walk down towards the squad like the zombies do (a little to one side, so they are
+   * in the line of fire as often as not). One who reaches the sandbags is rescued.
+   */
+  private moveSurvivors(dt: number) {
+    for (const v of this.survivors.all) {
+      if (!v.alive) continue;
+      v.y += (SURVIVOR.speed * dt) / 1000;
+      const aside = ((v.id * 53) % 81) - 40, maxStep = (SURVIVOR.steer * dt) / 1000;
+      v.x += Phaser.Math.Clamp(this.player.x + aside - v.x, -maxStep, maxStep);
+      const seen = this.visibility(v.x, v.y);
+      v.sprite.setPosition(v.x, v.y).setDepth(DEPTH.enemies + v.y / VIEW.h).setAlpha(seen);
+      v.label.setPosition(v.x, v.y - SURVIVOR.radius - 30).setAlpha(seen);
+      if (v.y + SURVIVOR.radius >= REACH_Y) this.rescue(v);
+    }
+  }
+
+  /** A survivor made it: they join the squad, or hand over scrap when it is full. */
+  private rescue(v: Survivor) {
+    this.survivors.release(v);
+    this.state.survivorsSaved++;
+    if (this.state.stats.companions < MAX_COMPANIONS) {
+      this.state.stats = applyUpgrade(this.state.stats, 'companion');
+      this.addCompanions();
+      this.pop(this.style === 'comic' ? 'SURVIVOR JOINS THE SQUAD!' : 'SURVIVOR JOINED SQUAD', SURVIVOR_COLOR);
+    } else {
+      this.state.scrap += SURVIVOR.scrap;
+      this.pop(this.style === 'comic' ? `SURVIVOR SAVED! +${SURVIVOR.scrap} SCRAP` : `SURVIVOR SAVED · +${SURVIVOR.scrap} SCRAP`, SURVIVOR_COLOR);
+    }
+    this.refreshBackdrop();
+  }
+
+  /** A bullet hits a survivor: it hurts them, and the squad's fire can kill them. */
+  private hurtSurvivor(v: Survivor, damage: number) {
+    v.hp -= damage;
+    this.effect('', v.x + SURVIVOR.radius + 4, v.y - 6, { life: 520, rise: 36, text: `-${damage}` });
+    if (v.hp > 0) return;
+    this.survivors.release(v);
+    this.state.survivorsLost++;
+    const s = this.splats.take();
+    s.age = 0;
+    s.sprite.setPosition(v.x, v.y).setScale(GEOM.splat.w / s.sprite.frame.width).setAlpha(1).setVisible(true);
+    this.effect('', v.x, v.y - 20, { life: 900, rise: 24, text: this.style === 'comic' ? 'SURVIVOR LOST!' : 'FRIENDLY DOWN' });
   }
 
   /** The squad patches up and throws back every zombie near the line. */
@@ -802,7 +981,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Every so often a boss winds up a move (shown for `BOSS.warnMs`), then makes it. */
   private tickBoss(dt: number) {
-    const boss = this.enemies.all.find((e) => e.alive && e.kind === 'boss');
+    const boss = this.enemies.all.find((e) => e.alive && isBoss(e.kind));
     if (!boss) {
       if (this.bossAct) this.endBossMove();
       return;
@@ -816,12 +995,12 @@ export class GameScene extends Phaser.Scene {
       const tx = Phaser.Math.Clamp(this.player.x, LANES[0].x0 + 40, LANES[2].x1 - 40);
       this.bossAct = { move, ms: 0, acting: false, tx, fromX: boss.x, fromY: boss.y };
       this.state.bossMove = move;
-      const call = { charge: ['CHARGE!', 'CHARGE INBOUND'], spit: ['ACID SPIT!', 'ACID INBOUND'], call: ['ROAAAR!', 'PACK CALLED'] }[move];
+      const call = { charge: ['CHARGE!', 'CHARGE INBOUND'], spit: ['ACID SPIT!', 'ACID INBOUND'], call: boss.kind === 'brood' ? ['SKREEEE!', 'BROOD CALLED'] : ['ROAAAR!', 'PACK CALLED'] }[move];
       this.bossCall.setText(call[this.style === 'comic' ? 0 : 1]).setVisible(true);
       return;
     }
     a.ms += dt;
-    this.bossCall.setPosition(boss.x, boss.y - ENEMIES.boss.radius - 46);
+    this.bossCall.setPosition(boss.x, boss.y - ENEMIES[boss.kind].radius - 46);
     if (!a.acting) {
       if (a.ms < BOSS.warnMs) return;
       a.ms = 0;
@@ -831,7 +1010,7 @@ export class GameScene extends Phaser.Scene {
         a.fromY = boss.y;
         return;
       }
-      if (a.move === 'spit') this.lobAcid(boss.x, boss.y - 20, BOSS.spitRadius, 400, BOSS.poolMs, a.tx);
+      if (a.move === 'spit') this.lobAcid(boss.x, boss.y - 20, this.spitRadius(boss.kind), 400, BOSS.poolMs, a.tx);
       else this.callPack(boss);
       this.endBossMove();
       return;
@@ -850,14 +1029,25 @@ export class GameScene extends Phaser.Scene {
     this.bossCall.setVisible(false);
   }
 
-  /** The boss calls a pack of runners out round it; they join the wave's count. */
+  /** How wide a boss's acid spit lands: the Bloater's is the big one. */
+  private spitRadius(kind: EnemyKind) {
+    return kind === 'bloater' ? BLOATER.spitRadius : BOSS.spitRadius;
+  }
+
+  /** The boss calls a pack out round it (runners, or crawlers for the Brood Mother); they join the wave's count. */
   private callPack(boss: Enemy) {
-    const hp = Math.round(ENEMIES.runner.hp * toughness(this.state.wave));
-    for (let i = 0; i < BOSS.pack; i++) {
-      const x = Phaser.Math.Clamp(boss.x + (i - (BOSS.pack - 1) / 2) * 30, LANES[0].x0 + 10, LANES[2].x1 - 10);
-      this.addEnemy('runner', hp, x, boss.y + 26 + (i % 2) * 12);
+    const brood = boss.kind === 'brood';
+    this.spawnPack(boss, brood ? 'crawler' : 'runner', brood ? BROOD.pack : BOSS.pack, 30);
+  }
+
+  /** A bunch of `n` zombies of a kind comes out round a boss, in two staggered rows. */
+  private spawnPack(boss: Enemy, kind: EnemyKind, n: number, step: number) {
+    const hp = Math.round(ENEMIES[kind].hp * toughness(this.state.wave));
+    for (let i = 0; i < n; i++) {
+      const x = Phaser.Math.Clamp(boss.x + (i - (n - 1) / 2) * step, LANES[0].x0 + 10, LANES[2].x1 - 10);
+      this.addEnemy(kind, hp, x, boss.y + 26 + (i % 2) * 12);
     }
-    this.state.waveTotal += BOSS.pack;
+    this.state.waveTotal += n;
   }
 
   /** Lobs a glob of acid from x, y at the hero's line (where the hero stands, or at `tx`). */
@@ -983,26 +1173,60 @@ export class GameScene extends Phaser.Scene {
   }
 
   private hitTargets() {
-    const damage = this.state.stats.damage;
+    const damage = this.state.stats.damage, perks = this.state.perks;
+    const fire = perks.includes('fire'), headshots = perks.includes('headshot');
     for (const b of this.bullets.all) {
       if (!b.alive) continue;
       // Swept along the stretch from prevY up to y, so a long frame can't carry a bullet through a
-      // target; the nearest ones (largest y) are hit first.
+      // target; the nearest ones (largest y) are hit first. Survivors are in the way like zombies.
       const sx = b.x - b.prevX, sy = b.y - b.prevY, len2 = sx * sx + sy * sy || 1;
-      const hits = this.enemies.all.filter((e) => {
-        if (!e.alive || b.hit.includes(e.id)) return false;
-        const r = ENEMIES[e.kind].radius + BULLET.radius;
-        // The point of this frame's stretch nearest the enemy.
-        const t = Phaser.Math.Clamp(((e.x - b.prevX) * sx + (e.y - b.prevY) * sy) / len2, 0, 1);
-        return (b.prevX + sx * t - e.x) ** 2 + (b.prevY + sy * t - e.y) ** 2 <= r * r;
-      });
+      const inPath = (t: { id: number; x: number; y: number }, radius: number) => {
+        if (b.hit.includes(t.id)) return false;
+        const r = radius + BULLET.radius;
+        // The point of this frame's stretch nearest the target.
+        const k = Phaser.Math.Clamp(((t.x - b.prevX) * sx + (t.y - b.prevY) * sy) / len2, 0, 1);
+        return (b.prevX + sx * k - t.x) ** 2 + (b.prevY + sy * k - t.y) ** 2 <= r * r;
+      };
+      const hits: (Enemy | Survivor)[] = [
+        ...this.enemies.all.filter((e) => e.alive && inPath(e, ENEMIES[e.kind].radius)),
+        ...this.survivors.all.filter((v) => v.alive && inPath(v, SURVIVOR.radius)),
+      ];
       hits.sort((a, c) => c.y - a.y);
+      let last: Enemy | null = null;
       for (const e of hits) {
         b.hit.push(e.id);
+        if (!('kind' in e)) this.hurtSurvivor(e, damage);
         // A riot shield stops a bullet without pierce, and takes the hit itself.
-        if (e.shield > 0 && !b.pierces) this.chipShield(e, damage);
-        else this.hurt(e, damage);
+        else if (e.shield > 0 && !b.pierces) this.chipShield(e, damage);
+        else {
+          last = e;
+          // Headshots: every so many hits lands triple. Fire rounds set the zombie burning.
+          const head = headshots && ++this.bulletHits % HEADSHOT.every === 0;
+          if (head) {
+            this.state.headshots++;
+            this.effect('', e.x, e.y - ENEMIES[e.kind].radius - 12, { life: 600, rise: 30, text: this.style === 'comic' ? 'HEADSHOT!' : 'HEADSHOT' });
+          }
+          if (fire) e.burn = FIRE_ROUNDS.ms;
+          this.hurt(e, head ? damage * HEADSHOT.mult : damage);
+        }
         if (--b.hitsLeft <= 0) break;
+      }
+      // Ricochets: a bullet spent on a zombie jumps to the nearest one it hasn't hit, with one more hit.
+      if (b.hitsLeft <= 0 && b.ricochets > 0 && last) {
+        const from = last.alive ? last : { x: last.x, y: last.y };
+        const next = this.nearestEnemy(from.x, from.y, RICOCHET.range, b.hit);
+        if (next) {
+          b.ricochets--;
+          b.hitsLeft = 1;
+          b.x = b.prevX = from.x;
+          b.y = b.prevY = from.y;
+          const ang = Math.atan2(next.x - from.x, from.y - next.y);
+          b.vx = Math.sin(ang) * BULLET.speed;
+          b.vy = Math.cos(ang) * BULLET.speed;
+          b.sprite.setPosition(b.x, b.y).setRotation(ang);
+          this.effect('', from.x, from.y - 16, { life: 400, rise: 20, text: this.style === 'comic' ? 'PING!' : 'RICOCHET' });
+          continue;
+        }
       }
       if (b.hitsLeft <= 0) {
         this.bullets.release(b);
@@ -1025,6 +1249,20 @@ export class GameScene extends Phaser.Scene {
       }
       if (b.hitsLeft <= 0) this.bullets.release(b);
     }
+  }
+
+  /** The nearest living zombie to x, y within `range`, skipping the ids in `not`. */
+  private nearestEnemy(x: number, y: number, range: number, not: number[]) {
+    let best: Enemy | null = null, bestD = range;
+    for (const e of this.enemies.all) {
+      if (!e.alive || not.includes(e.id)) continue;
+      const d = Math.hypot(e.x - x, e.y - y);
+      if (d < bestD) {
+        bestD = d;
+        best = e;
+      }
+    }
+    return best;
   }
 
   /** A bullet on a riot shield: it chips the shield, and the shield breaks at 0. */
@@ -1063,9 +1301,17 @@ export class GameScene extends Phaser.Scene {
     if (n >= 3 && n % 3 === 0) this.effect('streak', e.x + 12, e.y + 2, { life: 700, text: `x${n}`, grow: 0.1 });
     const s = this.splats.take();
     s.age = 0;
-    s.sprite.setPosition(e.x, e.y).setScale(((e.kind === 'boss' ? 3 : e.kind === 'brute' ? 1.6 : e.kind === 'crawler' ? 0.7 : 1) * GEOM.splat.w) / s.sprite.frame.width).setAlpha(1).setVisible(true);
+    s.sprite.setPosition(e.x, e.y).setScale(((isBoss(e.kind) ? 3 : e.kind === 'brute' ? 1.6 : e.kind === 'crawler' ? 0.7 : 1) * GEOM.splat.w) / s.sprite.frame.width).setAlpha(1).setVisible(true);
     if (this.style === 'comic' && this.state.kills % SPLUT_EVERY === 0) this.effect('sfx-splut', e.x - 30, e.y + 10, { life: 450, grow: 0.1, angle: -5 });
     this.enemies.release(e);
+    // The Brood Mother bursts into crawlers; the Bloater leaves a huge acid pool on the squad's line.
+    if (e.kind === 'brood') {
+      this.spawnPack(e, 'crawler', BROOD.burst, 24);
+      this.effect('', e.x, e.y - 50, { life: 900, rise: 30, text: this.style === 'comic' ? 'THE BROOD BURSTS OUT!' : 'BROOD RELEASED' });
+    } else if (e.kind === 'bloater') {
+      this.lobAcid(e.x, e.y, BLOATER.poolRadius, 600, BLOATER.poolMs);
+      this.effect('', e.x, e.y - 50, { life: 900, rise: 30, text: this.style === 'comic' ? 'IT BURSTS! ACID EVERYWHERE!' : 'ACID RELEASED' });
+    }
   }
 
   /** A fuel drum goes up: every zombie in its ring takes the blast. */
@@ -1098,6 +1344,10 @@ export class GameScene extends Phaser.Scene {
     this.state.collected[upgrade]++;
     if (upgrade === 'companion') this.addCompanions();
     this.pop(UPGRADES[upgrade].label.toUpperCase(), UPGRADE_COLORS[upgrade]);
+    // The third crate of a kind evolves its stat into a perk.
+    const perks = perksOf(this.state.collected), gained = perks.find((p) => !this.state.perks.includes(p));
+    this.state.perks = perks;
+    if (gained) this.showBanner(`${PERKS[gained].label.toUpperCase()}!\n${PERKS[gained].detail.toUpperCase()}`);
     this.refreshBackdrop();
   }
 
@@ -1199,8 +1449,15 @@ export class GameScene extends Phaser.Scene {
     this.bars.setDepth(comic ? DEPTH.bars : DEPTH.labels);
     this.marks.setDepth(comic ? DEPTH.ringUnder + 0.5 : DEPTH.labels);
     for (const e of this.enemies.all) {
-      if (!e.alive) continue;
+      if (!e.alive || this.visibility(e.x, e.y) < 0.5) continue;
       const r = ENEMIES[e.kind].radius;
+      // Burning: a flicker of flame over a zombie with fire rounds in it.
+      if (e.burn > 0) {
+        const k = Math.max(0.5, e.burn / FIRE_ROUNDS.ms), fy = e.y - r * 0.6, fw = r * 0.9 * k, fh = r * 1.3 * k;
+        if (comic) g.lineStyle(3, num(th.ink)).strokeTriangle(e.x - fw, fy, e.x + fw, fy, e.x, fy - fh);
+        g.fillStyle(num(comic ? BURN_COLOR : th.accent), comic ? 0.95 : 0.8).fillTriangle(e.x - fw, fy, e.x + fw, fy, e.x, fy - fh);
+        g.fillStyle(num(comic ? '#ffe24a' : '#ffffff'), 0.9).fillTriangle(e.x - fw * 0.45, fy, e.x + fw * 0.45, fy, e.x, fy - fh * 0.5);
+      }
       if (e.inBlast) {
         if (comic) {
           m.lineStyle(3.5, num(th.ink)).strokeEllipse(e.x, e.y + r * 0.9, (r + 4) * 2, 12);
@@ -1227,6 +1484,27 @@ export class GameScene extends Phaser.Scene {
         g.fillStyle(num(th.hp)).fillRect(e.x - r + 0.5, top + 0.5, ((w - 1) * e.hp) / e.maxHp, 3);
       }
     }
+    // Survivors: a pale health bar once hurt, and their plea on a balloon in the comic.
+    for (const v of this.survivors.all) {
+      if (!v.alive || this.visibility(v.x, v.y) < 0.5) continue;
+      const r = SURVIVOR.radius, w = r * 2 + 6, top = v.y - r - 14, lw = v.label.width + 14;
+      if (comic) {
+        g.fillStyle(num('#fff8e8')).fillRoundedRect(v.x - lw / 2, v.y - r - 39, lw, 18, 6);
+        g.lineStyle(1.6, num(th.ink)).strokeRoundedRect(v.x - lw / 2, v.y - r - 39, lw, 18, 6);
+      } else {
+        g.fillStyle(num('#1e1204'), 0.8).fillRoundedRect(v.x - lw / 2, v.y - r - 38, lw, 15, 2);
+        g.lineStyle(1, num(SURVIVOR_COLOR)).strokeRoundedRect(v.x - lw / 2, v.y - r - 38, lw, 15, 2);
+      }
+      if (v.hp === v.maxHp) continue;
+      if (comic) {
+        g.fillStyle(num('#fff8e8')).fillRect(v.x - w / 2 - 1, top - 1, w + 2, 7);
+        g.lineStyle(1.4, num(th.ink)).strokeRect(v.x - w / 2 - 1, top - 1, w + 2, 7);
+        g.fillStyle(num(SURVIVOR_COLOR)).fillRect(v.x - w / 2 + 0.5, top + 0.5, ((w - 1) * v.hp) / v.maxHp, 4);
+      } else {
+        g.lineStyle(1, num(th.text)).strokeRect(v.x - w / 2 - 1, top - 1, w + 2, 6);
+        g.fillStyle(num(SURVIVOR_COLOR)).fillRect(v.x - w / 2 + 0.5, top + 0.5, ((w - 1) * v.hp) / v.maxHp, 3);
+      }
+    }
     // Drum labels sit on a balloon in the comic, on a dark tag in night vision.
     for (const d of this.drums.all) {
       if (!d.alive) continue;
@@ -1249,7 +1527,7 @@ export class GameScene extends Phaser.Scene {
       g.lineStyle(2, col).strokeEllipse(a.x, HERO.y + 6, a.r * 2, a.r * 0.72);
     }
     // A boss winding up a move shows what is coming and where.
-    const act = this.bossAct, boss = this.enemies.all.find((e) => e.alive && e.kind === 'boss');
+    const act = this.bossAct, boss = this.enemies.all.find((e) => e.alive && isBoss(e.kind));
     if (act && boss && !act.acting) {
       // Orange, never red: a red ring with a line through it would read as a red crosshair.
       const col = num(comic ? '#ff9a2a' : th.warn), dy = BOSS.chargeDrop;
@@ -1263,11 +1541,11 @@ export class GameScene extends Phaser.Scene {
         g.fillStyle(col).fillTriangle(hx, hy, p1.x, p1.y, p2.x, p2.y);
         if (comic) g.lineStyle(2, num(th.ink)).strokeTriangle(hx, hy, p1.x, p1.y, p2.x, p2.y);
       } else if (act.move === 'spit') {
-        const r = BOSS.spitRadius;
+        const r = this.spitRadius(boss.kind);
         if (comic) g.lineStyle(4, num(th.ink)).strokeEllipse(act.tx, HERO.y + 6, r * 2, r * 0.72);
         g.lineStyle(2, num(comic ? ACID_COLOR : th.warn)).strokeEllipse(act.tx, HERO.y + 6, r * 2, r * 0.72);
       } else {
-        g.lineStyle(comic ? 3 : 1.5, col).strokeCircle(boss.x, boss.y, ENEMIES.boss.radius + 14);
+        g.lineStyle(comic ? 3 : 1.5, col).strokeCircle(boss.x, boss.y, ENEMIES[boss.kind].radius + 14);
       }
     }
     // Placing a sandbag wall: every lane lights up, with where its wall would stand.
@@ -1314,6 +1592,9 @@ export class GameScene extends Phaser.Scene {
       medkits: s.medkits,
       pellets: s.pellets,
       inAcid: s.inAcid,
+      perks: s.perks,
+      condition: s.condition,
+      bossLive: this.enemies.all.some((e) => e.alive && isBoss(e.kind)),
     });
   }
 
@@ -1364,12 +1645,14 @@ export class GameScene extends Phaser.Scene {
   private showGameOver() {
     const th = this.theme(), comic = this.style === 'comic', s = this.state;
     const shade = this.add.rectangle(0, 0, VIEW.w, VIEW.h, comic ? 0x15121a : 0x000000, comic ? 0.6 : 0.65).setOrigin(0).setDepth(DEPTH.hud + 1);
-    const title = this.add.text(VIEW.w / 2, 250, comic ? 'OVERRUN!' : 'FEED LOST: OVERRUN').setOrigin(0.5).setDepth(DEPTH.hud + 2);
-    if (comic) this.font(title, 52, '#e8402a', { stroke: th.ink, sw: 9 });
-    else this.font(title, 30, th.warn, { glow: th.warn });
+    const won = s.extracted;
+    const title = this.add.text(VIEW.w / 2, 250, won ? (comic ? 'EXTRACTED!' : 'EXTRACTION COMPLETE') : comic ? 'OVERRUN!' : 'FEED LOST: OVERRUN').setOrigin(0.5).setDepth(DEPTH.hud + 2);
+    if (comic) this.font(title, won ? 48 : 52, won ? '#8cd05a' : '#e8402a', { stroke: th.ink, sw: 9 });
+    else this.font(title, 30, won ? '#6ae06a' : th.warn, { glow: won ? '#6ae06a' : th.warn });
     const best = s.wave >= s.best && this.bestAtStart < s.wave ? 'A new best!' : `Best: wave ${s.best}`;
+    const scrap = won ? `Scrap ${s.scrap} paid ${EXTRACT.bonus(s.wave)}x: +${s.payout}  ·  banked ${s.bank}` : `Scrap +${s.scrap}  ·  banked ${s.bank}`;
     const info = this.add
-      .text(VIEW.w / 2, 310, `Reached wave ${s.wave} with ${s.kills} kills\n${best}\nScrap +${s.scrap}  ·  banked ${s.bank}`, { align: 'center' })
+      .text(VIEW.w / 2, 310, `${won ? 'Got out at' : 'Reached'} wave ${s.wave} with ${s.kills} kills\n${best}\n${scrap}`, { align: 'center' })
       .setOrigin(0.5, 0)
       .setDepth(DEPTH.hud + 2);
     const body = (t: Phaser.GameObjects.Text, size: number, color = comic ? '#fff8e8' : th.text) =>
@@ -1462,11 +1745,58 @@ export class GameScene extends Phaser.Scene {
       this.supplyUi.push(key, icon, name, detail);
       this.cards.push({ kind, x, y, w, h });
     });
+    // From wave 20, a fourth card: extract, and end the run as a win with the scrap paid over.
+    if (!canExtract(this.state.wave)) return;
+    const bonus = EXTRACT.bonus(this.state.wave), x = 18, y = 616, w = VIEW.w - 36, h = 74;
+    if (comic) {
+      g.fillStyle(num(th.ink)).fillRect(x + 5, y + 5, w, h);
+      g.fillStyle(num('#8cd05a')).fillRect(x, y, w, h);
+      g.lineStyle(3, num(th.ink)).strokeRect(x, y, w, h);
+    } else {
+      g.fillStyle(num('#06200c'), 0.9).fillRoundedRect(x, y, w, h, 4);
+      g.lineStyle(1.5, num('#6ae06a')).strokeRoundedRect(x, y, w, h, 4);
+    }
+    const key = this.add.text(x + 16, y + h / 2, '4').setOrigin(0.5).setDepth(DEPTH.hud + 3);
+    this.font(key, 14, comic ? th.ink : '#6ae06a', comic ? {} : { glow: '#6ae06a' });
+    const icon = this.add.image(x + 56, y + h / 2, tex(this.style, 'supply-extract')).setDepth(DEPTH.hud + 3);
+    icon.setScale((GEOM.supply.w / icon.frame.width) * 0.8);
+    const name = this.add.text(x + 98, y + 22, comic ? 'EXTRACT: END THE RUN AS A WIN' : 'EXTRACT · END RUN (WIN)').setOrigin(0, 0.5).setDepth(DEPTH.hud + 3);
+    this.font(name, comic ? 15 : 13, comic ? th.ink : th.text, comic ? {} : { glow: th.text });
+    const pay = Math.round(this.state.scrap * bonus);
+    const detail = this.add.text(x + 98, y + 48, `Scrap paid ${bonus}x: +${pay}. Fight on for more, at your peril.`).setOrigin(0, 0.5).setDepth(DEPTH.hud + 3);
+    this.font(detail, 11, comic ? th.ink : th.muted);
+    this.supplyUi.push(key, icon, name, detail);
+    this.cards.push({ kind: 'extract', x, y, w, h });
   }
 
-  private pickSupply(kind: SupplyKind | undefined) {
+  /** Extraction: the run ends as a win, and its scrap goes in the bank with the bonus. */
+  private extract() {
+    const s = this.state;
+    s.payout = Math.round(s.scrap * EXTRACT.bonus(s.wave));
+    s.extracted = true;
+    s.offer = [];
+    for (const o of this.supplyUi) o.destroy();
+    this.supplyUi = [];
+    this.cards = [];
+    s.phase = 'over';
+    s.frenzyMs = 0;
+    s.placing = false;
+    this.pointerTarget = null;
+    this.bossCall.setVisible(false);
+    s.bank += s.payout;
+    saveScrap(s.bank);
+    this.updateHud();
+    this.showGameOver();
+    this.refreshBackdrop();
+  }
+
+  private pickSupply(kind: SupplyKind | 'extract' | undefined) {
     const s = this.state;
     if (!kind || s.phase !== 'supply') return;
+    if (kind === 'extract') {
+      this.extract();
+      return;
+    }
     if (kind === 'shotgun') s.pellets = Math.min(SHOTGUN.maxPairs, s.pellets + 1);
     else if (kind === 'flamer') s.flames += FLAMER.charges;
     else if (kind === 'medkit') s.medkits++;
