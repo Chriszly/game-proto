@@ -160,7 +160,7 @@ lost half of three of them while a long commission paid.
 
 ![The rival surveyor and their claims](docs/screenshots/rival-surveyor.png)
 
-![A chart with the rival's tiles and a long commission](docs/screenshots/chart-rival-and-long-commission.png)
+![A chart with the rival's tiles and a long commission](docs/screenshots/rival-chart.png)
 
 ### Upgrades
 
