@@ -9,8 +9,8 @@ export const DUSK_BAR = { x: 330, y: 12, w: 300, h: 16 };
 /** The panel shown between nights, with the night's tally and the upgrades. */
 export const NIGHT_PANEL = { x: 480, y: 280, w: 600, h: 460 };
 /**
- * The upgrade buttons in that panel, by their centres, in the order of UPGRADE_IDS (two by two; a
- * last one on its own row sits in the middle).
+ * The upgrade buttons in that panel, by their centres: the UPGRADE_IDS and then the cask, two by
+ * two (a last one on its own row sits in the middle).
  */
 export const SHOP = { xs: [345, 615], ys: [254, 314, 374], w: 250, h: 52 };
 /** The panel's "Next dusk" button, and the game-over "New keep" button. */
@@ -22,8 +22,16 @@ export const BUTTON = { w: 200, h: 40 };
 export const ORDER = { x: 12, y: 50, w: 256, h: 58 };
 /** The night's kind plaque, pinned under the HUD on the right. */
 export const KIND_TAG = { x: 738, y: 50, w: 210, h: 40 };
-/** The gust warning plaque, beside the lantern the gust is coming for. */
+/** The gust warning plaque, beside the lantern the gust is coming for; the owl's warning plaque is the same size. */
 export const GUST_TAG = { w: 132, h: 40 };
+/** The window-call plaque, beside the lantern a window asks for. */
+export const CALL_TAG = { w: 150, h: 40 };
+/** The panel of a fifth nightfall's choice of district, centred on the view. */
+export const MOVE_PANEL = { w: 600, h: 330 };
+/** The district cards in that panel, by their centres, in the order of DISTRICT_IDS (two by two). */
+export const MOVE_CARDS = { xs: [335, 625], ys: [236, 316], w: 280, h: 62 };
+/** Where the HUD shows the oil cask: its icon and the fills beside it. */
+export const CASK_HUD = { x: 296, y: 20 };
 /** The tap area around each lantern, and around a bat. */
 export const LANTERN_HIT = { w: 64, h: 72 };
 export const BAT_HIT = { w: 64, h: 52 };
