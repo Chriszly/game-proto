@@ -602,6 +602,39 @@ export function lumber(x: number, y: number, s = 1) {
 }
 
 /** Painted wheat rows, as on a farm tile. */
+/** The island's castle: a wide stone keep with battlements, a round tower at each corner, a gate and the royal flag. */
+export function castle(x: number, y: number, s = 1) {
+  shadowBlob(x + 14 * s, y + 30 * s, 56 * s, 13 * s, 0.4);
+  const w = 62 * s;
+  const h = 34 * s;
+  const d = 12 * s;
+  const x0 = x - w / 2 - 4 * s;
+  const y0 = y - 6 * s;
+  tower(x0 + 4 * s, y - 2 * s, 0.6 * s);
+  tower(x0 + w - 4 * s, y - 2 * s, 0.6 * s);
+  box(x0, y0, w, h, d, '#d4cec4');
+  for (let i = 0; i < 4; i++) {
+    rrect(x0 + 6 * s + i * 15 * s, y0 - 8 * s, 9 * s, 11 * s, 2 * s);
+    ctx.fillStyle = '#e9e4db';
+    ctx.fill();
+  }
+  rrect(x - 8 * s, y0 + h - 20 * s, 16 * s, 20 * s, 7 * s);
+  ctx.fillStyle = T.navy;
+  ctx.fill();
+  ctx.strokeStyle = '#9a6a3a';
+  ctx.lineWidth = 3 * s;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x, y0 - 8 * s);
+  ctx.lineTo(x, y0 - 46 * s);
+  ctx.stroke();
+  rrect(x, y0 - 47 * s, 28 * s, 16 * s, 3 * s);
+  ctx.fillStyle = T.red;
+  ctx.fill();
+  crown(x + 14 * s, y0 - 39 * s, 0.45 * s);
+  ball(x, y0 - 48 * s, 3.5 * s, T.yellow);
+}
+
 export function stripes(x: number, y: number, w: number, h: number, s = 1) {
   const n = 4;
   const gap = h / n;

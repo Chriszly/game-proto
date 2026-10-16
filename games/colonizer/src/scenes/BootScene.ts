@@ -2,19 +2,20 @@ import Phaser from 'phaser';
 import { watching } from '../../../../shared/watch';
 import { BUILDINGS, FACTION_IDS, RELICS, UNITS, type BuildingId, type FactionId, type RelicId } from '../game/data';
 import { bakeFigureSheet, FRAME, WOOL } from '../art/figures';
-import { bakeBuilding, bakeBush, bakeCache, bakeFogPattern, bakeMine, bakeNeedle, bakeRallyFlag, bakeRelic, bakeTree } from '../art/scenery';
+import { bakeBuilding, bakeBush, bakeCache, bakeFogPattern, bakeMine, bakeNeedle, bakePost, bakeRallyFlag, bakeRelic, bakeTree } from '../art/scenery';
 import { bakeBackdrop, bakeButton, bakeCard, bakeIcon, bakePanel, bakeTopBar, type IconKind } from '../art/ui';
 import { BOON, DEED_CARD, STATUS_CARD, TOAST } from './layout';
 import { T } from '../art/stitch';
 
 /**
- * Texture keys. Figures: `fig-<unit type>` for soldiers and `fig-villager-<faction>` for villagers,
- * one strip each with frames named `<pose>-<n>` (see figures.ts). Buildings: `bld-<faction>-<type>`.
+ * Texture keys. Figures: `fig-<unit type>` for a faction's soldiers and `fig-<unit type>-<faction>`
+ * for the units every faction shares (villagers, trade carts and rams), one strip each with frames
+ * named `<pose>-<n>` (see figures.ts). Buildings: `bld-<faction>-<type>`; the trading post is `post`.
  * Nodes: `tree-0`..`tree-3`, `bush`, `mine`. Camps: `camp-cache-<res>`, and `camp-relic-<relic>-<faction>`
  * (or `-none` while nobody holds it). Wild guards: `fig-wild-<name>`. The ground is painted by the game in chunks, since
  * each match has its own map.
  */
-export const figKey = (type: string, faction: FactionId) => (type === 'villager' ? `fig-villager-${faction}` : `fig-${type}`);
+export const figKey = (type: string, faction: FactionId) => (UNITS[type]?.faction === 'neutral' ? `fig-${type}-${faction}` : `fig-${type}`);
 export const buildingKey = (faction: FactionId, type: BuildingId) => `bld-${faction}-${type}`;
 export const TREE_VARIANTS = 4;
 export const relicKey = (relic: RelicId, holder: FactionId | null) => `camp-relic-${relic}-${holder ?? 'none'}`;
@@ -29,6 +30,7 @@ export class BootScene extends Phaser.Scene {
     for (let v = 0; v < TREE_VARIANTS; v++) this.bake(`tree-${v}`, bakeTree(v));
     this.bake('bush', bakeBush());
     this.bake('mine', bakeMine());
+    this.bake('post', bakePost());
     this.bake('fog-pattern', bakeFogPattern(256));
     this.bake('needle', bakeNeedle());
     for (const faction of FACTION_IDS) {

@@ -1,19 +1,24 @@
 import Phaser from 'phaser';
 import { renderScale, splitHudCamera, viewPoint } from '../../../../shared/scaling';
 import {
+  AURA_RANGE,
   BOONS,
   BUILD_MORE,
   BUILD_ORDER,
   BUILDINGS,
   FACTION_IDS,
   FACTIONS,
+  HEAL_RANGE,
   MAP_SIZE,
+  MARKET_LOT,
+  RANK_NAMES,
   RELICS,
   TECHS,
   TILE,
   UNIQUE,
   UNIQUE_TEXT,
   UNITS,
+  isSoldier,
   unitFor,
   type BoonId,
   type BuildingId,
@@ -34,18 +39,26 @@ import {
   deedsDone,
   entityAt,
   hasBuilt,
+  inAura,
   issue,
+  marketPrice,
+  maxHp,
   notAllowed,
   placeBuilding,
   placeWall,
   popCap,
   popUsed,
+  postAt,
+  releaseBell,
   research,
+  ringBell,
   say,
   setRally,
   tick,
+  trade,
   train,
   unitCost,
+  unitCount,
   visible,
   wallLine,
   type Building,
@@ -116,6 +129,7 @@ export class GameScene extends Phaser.Scene {
   private buildingSprites = new Map<number, Phaser.GameObjects.Image>();
   private nodeSprites = new Map<number, Phaser.GameObjects.Image>();
   private campSprites = new Map<number, Phaser.GameObjects.Image>();
+  private postSprites: Phaser.GameObjects.Image[] = [];
   private rallyFlag!: Phaser.GameObjects.Image;
   /** Where a palisade drag started, in tiles, while placing a wall. */
   private wallStart: { tx: number; ty: number } | null = null;
@@ -172,6 +186,7 @@ export class GameScene extends Phaser.Scene {
     this.panelSelection = '';
     this.wallStart = null;
     this.campSprites = new Map();
+    this.postSprites = [];
     this.hud = [];
     this.popLog = [];
     this.toastLog = [];
@@ -223,6 +238,8 @@ export class GameScene extends Phaser.Scene {
     // Placement ghosts sit above the fog, so a site in explored land still shows clearly.
     this.wallGhost = this.add.graphics().setDepth(5002);
     this.rallyFlag = this.add.image(0, 0, 'rally-flag').setOrigin(4 / 28, 38 / 40).setDepth(4955).setVisible(false);
+    // The trading posts, where trade carts load ore; shown once their ground has been seen.
+    for (const p of this.state.posts) this.postSprites.push(this.add.image(p.tx * TILE, p.ty * TILE - BUILDING_TOP, 'post').setOrigin(0, 0).setDepth((p.ty + 2) * TILE - 1).setVisible(false));
     this.fx = new Effects(this);
 
     this.buildHud();
@@ -308,6 +325,7 @@ export class GameScene extends Phaser.Scene {
       if (u.act === 'walk') return `walk-${still ? 0 : Math.floor(t / 140) % 4}`;
       return 'idle-0';
     }
+    if (def.role === 'cart') return u.act === 'walk' && !still ? `walk-${Math.floor(t / 120) % 4}` : 'idle-0';
     const since = s.time - u.struck;
     if (u.act === 'fight' || since < def.cooldown * 0.3) {
       if (still) return 'attack-0';
@@ -380,6 +398,7 @@ export class GameScene extends Phaser.Scene {
       img.setVisible(s.sight[idx(n.tx, n.ty)] >= 1);
     }
 
+    s.posts.forEach((p, i) => this.postSprites[i]?.setVisible(s.sight[idx(p.tx, p.ty)] >= 1));
     for (const c of s.camps) {
       let img = this.campSprites.get(c.id);
       if (!img) {
@@ -486,11 +505,26 @@ export class GameScene extends Phaser.Scene {
       }
     }
     for (const u of s.units.values()) {
-      const max = UNITS[u.type].hp;
+      const def = UNITS[u.type];
       const mine = u.owner === PLAYER;
-      if (!this.selected.has(u.id) && u.hp >= max) continue;
       if (!mine && !visible(s, Math.floor(u.x), Math.floor(u.y))) continue;
-      const top = u.y * TILE - (UNITS[u.type].role === 'cavalry' ? 48 : 40);
+      const top = u.y * TILE - (def.role === 'cavalry' ? 48 : def.role === 'siege' ? 44 : 40);
+      // A champion's gift shows as a faint ring: ochre for the Warlord's aura, green for the Druid's healing.
+      if (def.gift === 'aura') stitchEllipse(g, u.x * TILE, u.y * TILE, AURA_RANGE * TILE, AURA_RANGE * TILE * 0.6, 1.2, ochre, 0.45);
+      if (def.gift === 'heal') stitchEllipse(g, u.x * TILE, u.y * TILE, HEAL_RANGE * TILE, HEAL_RANGE * TILE * 0.6, 1.2, hexNum(T.green), 0.45);
+      // Veteran chevrons over the head, one per rank.
+      for (let k = 0; k < u.rank; k++) {
+        const cx = u.x * TILE - 4 + k * 4;
+        const cy = top - 4;
+        g.lineStyle(1.2, mine ? ochre : hexNum(T.ink), 1);
+        g.beginPath();
+        g.moveTo(cx - 2, cy - 2);
+        g.lineTo(cx, cy);
+        g.lineTo(cx + 2, cy - 2);
+        g.strokePath();
+      }
+      const max = maxHp(u);
+      if (!this.selected.has(u.id) && u.hp >= max) continue;
       const foe = u.owner === NEUTRAL ? WOOL.wild.cloth : WOOL[s.players[u.owner].faction].cloth;
       this.thread(g, u.x * TILE - 9, top, 18, u.hp / max, mine ? T.green : foe);
     }
@@ -509,6 +543,10 @@ export class GameScene extends Phaser.Scene {
       if (b.owner !== PLAYER && !visible(s, b.tx, b.ty)) continue;
       if (!b.built) this.thread(g, b.tx * TILE + 4, b.ty * TILE - BUILDING_TOP + 2, def.w * TILE - 8, 1 - b.buildLeft / Math.max(1, def.time), T.indigo);
       else if (b.hp < def.hp) this.thread(g, b.tx * TILE + 4, b.ty * TILE - BUILDING_TOP + 2, def.w * TILE - 8, b.hp / def.hp, b.owner === PLAYER ? T.green : T.red);
+      // A sheltering garrison: a knot of ochre per villager inside, along the top of the walls.
+      for (let k = 0; k < b.garrison.length; k++) {
+        g.fillStyle(ochre, 1).fillCircle(b.tx * TILE + 8 + (k % 6) * 7, b.ty * TILE - BUILDING_TOP + 10 + Math.floor(k / 6) * 7, 2.4);
+      }
     }
   }
 
@@ -662,6 +700,7 @@ export class GameScene extends Phaser.Scene {
         if (!additive) this.selectOwn([]);
         const camp = campAt(this.state, b.x, b.y);
         if (camp) say(this.state, this.campText(camp));
+        else if (postAt(this.state, b.x, b.y)) say(this.state, 'A trading post: trade carts from a Market load ore here');
         return;
       }
       if (hit.owner !== PLAYER && hit.kind !== 'node') {
@@ -713,16 +752,23 @@ export class GameScene extends Phaser.Scene {
     }
     const hit = entityAt(this.state, tx, ty);
     const villagers = units.filter((u) => UNITS[u.type].role === 'villager');
-    const army = units.filter((u) => UNITS[u.type].role !== 'villager');
+    const carts = units.filter((u) => UNITS[u.type].role === 'cart');
+    const army = units.filter((u) => isSoldier(UNITS[u.type].role));
+    if (postAt(this.state, tx, ty)) {
+      // To a trading post: carts set off trading, everyone else walks there.
+      issue(this.state, PLAYER, carts.map((u) => u.id), { t: 'trade' });
+      issue(this.state, PLAYER, [...villagers, ...army].map((u) => u.id), { t: 'move', x: tx, y: ty });
+      return;
+    }
     if (hit && hit.kind !== 'node' && hit.owner !== PLAYER) {
       issue(this.state, PLAYER, army.map((u) => u.id), { t: 'attack', target: hit.id });
-      issue(this.state, PLAYER, villagers.map((u) => u.id), { t: 'move', x: tx, y: ty });
+      issue(this.state, PLAYER, [...villagers, ...carts].map((u) => u.id), { t: 'move', x: tx, y: ty });
       return;
     }
     if (hit && hit.kind === 'node') {
       const node = this.state.nodes.get(hit.id);
       if (node) issue(this.state, PLAYER, villagers.map((u) => u.id), { t: 'gather', node: node.id });
-      issue(this.state, PLAYER, army.map((u) => u.id), { t: 'move', x: tx, y: ty });
+      issue(this.state, PLAYER, [...army, ...carts].map((u) => u.id), { t: 'move', x: tx, y: ty });
       return;
     }
     if (hit && hit.kind === 'building') {
@@ -730,7 +776,7 @@ export class GameScene extends Phaser.Scene {
       if (!b.built) issue(this.state, PLAYER, villagers.map((u) => u.id), { t: 'build', b: b.id });
       else if (BUILDINGS[b.type].farm) issue(this.state, PLAYER, villagers.map((u) => u.id), { t: 'gather', node: b.id });
       else issue(this.state, PLAYER, villagers.map((u) => u.id), { t: 'move', x: tx, y: ty });
-      issue(this.state, PLAYER, army.map((u) => u.id), { t: 'move', x: tx, y: ty });
+      issue(this.state, PLAYER, [...army, ...carts].map((u) => u.id), { t: 'move', x: tx, y: ty });
       return;
     }
     // Walk: spread the group around the spot so the units don't stack on one tile.
@@ -794,7 +840,7 @@ export class GameScene extends Phaser.Scene {
     }
     switch (e.key.toLowerCase()) {
       case 'a':
-        if (this.selectedUnits().some((u) => UNITS[u.type].role !== 'villager')) this.attackMode = true;
+        if (this.selectedUnits().some((u) => isSoldier(UNITS[u.type].role))) this.attackMode = true;
         break;
       case 's':
         issue(this.state, PLAYER, this.selectedUnits().map((u) => u.id), { t: 'stop' });
@@ -875,7 +921,7 @@ export class GameScene extends Phaser.Scene {
           const x = SEL.x + 16 + (i % 7) * 38;
           const y = SEL.y + 56 + Math.floor(i / 7) * 40;
           this.selFigs[i].setTexture(figKey(u.type, this.faction), 'idle-0').setPosition(x, y).setVisible(true);
-          const f = u.hp / UNITS[u.type].hp;
+          const f = u.hp / maxHp(u);
           stitchLine(g, x - 8, y + 3, x + 8, y + 3, 1.6, hexNum('#c8b890'));
           stitchLine(g, x - 8, y + 3, x - 8 + 16 * f, y + 3, 1.6, hexNum(T.green));
         });
@@ -886,8 +932,15 @@ export class GameScene extends Phaser.Scene {
       const def = UNITS[u.type];
       this.selTitle.setText(def.name.toUpperCase());
       this.selBig.setTexture(figKey(u.type, this.faction), this.frameOf(u)).setOrigin(FEET.x / FRAME, FEET.y / FRAME).setScale(1.3).setPosition(SEL.x + 34, SEL.y + 96).setVisible(true);
-      const lines = [`Health ${Math.ceil(u.hp)} of ${def.hp}`];
+      const lines = [`Health ${Math.ceil(u.hp)} of ${maxHp(u)}`];
       if (u.carry && u.amount > 0) lines.push(`Carrying ${u.amount} ${u.carry}`);
+      if (u.rank > 0) lines.push(`${RANK_NAMES[u.rank]}, rank ${['', 'I', 'II', 'III'][u.rank]}: ${u.kills} kills`);
+      else if (def.role !== 'villager' && def.role !== 'cart' && def.role !== 'siege') lines.push(`${u.kills} kill${u.kills === 1 ? '' : 's'}: rank I at 2`);
+      if (def.gift === 'aura') lines.push('Soldiers near it deal +2 damage');
+      if (def.gift === 'sight') lines.push('Sees far across the fog');
+      if (def.gift === 'heal') lines.push('Mends units near it');
+      if (def.role === 'siege') lines.push('Smashes buildings, walls and gates; harmless to units');
+      if (inAura(this.state, u) && def.gift !== 'aura') lines.push('In the Warlord\'s aura');
       lines.push(doing(u));
       this.selInfo.setPosition(SEL.x + 76, SEL.y + 26).setText(lines.join('\n'));
       return;
@@ -914,6 +967,8 @@ export class GameScene extends Phaser.Scene {
       if (unique && !head) lines.push(UNIQUE_TEXT[unique].split(': ')[1]);
       if (b.type === 'monument' && b.built) lines.push('Stands for 3 minutes: victory');
       if (b.type === 'gate' && b.built) lines.push('Only your units pass');
+      if (def.shelter && b.built) lines.push(b.garrison.length > 0 ? `${b.garrison.length} villager${b.garrison.length === 1 ? '' : 's'} inside, each adds an arrow` : `Shelters ${def.shelter} villagers when the bell rings`);
+      if (def.market && b.built && !head) lines.push('Ore buys wood and food;\nevery trade moves the price');
       if (def.trains && b.built && !head) lines.push(b.rally ? 'Right click moves the rally flag' : 'Right click sets a rally flag');
       this.selInfo.setPosition(SEL.x + 84, SEL.y + 24).setText(lines.join('\n'));
       return;
@@ -991,7 +1046,9 @@ export class GameScene extends Phaser.Scene {
     const q = b ? b.queue.map((x) => x.key).join(',') : '';
     const p = this.state.players[PLAYER];
     const own = [...this.state.buildings.values()].filter((x) => x.owner === PLAYER).length;
-    return [...this.selected].join(',') + `|${this.buildMenu}|${this.buildPage}|${this.placing}|${this.attackMode}|${q}|${p.techs.join(',')}|${p.age}|${p.boonPending}|${deedsDone(p)}|${this.resourceKey()}|${own}|${hasBuilt(this.state, PLAYER, 'forge')}`;
+    const rates = `${p.rates.wood.toFixed(2)}/${p.rates.food.toFixed(2)}`;
+    const champion = unitCount(this.state, PLAYER, unitFor(this.faction, 'champion').id);
+    return [...this.selected].join(',') + `|${this.buildMenu}|${this.buildPage}|${this.placing}|${this.attackMode}|${q}|${p.techs.join(',')}|${p.age}|${p.boonPending}|${deedsDone(p)}|${this.resourceKey()}|${own}|${hasBuilt(this.state, PLAYER, 'forge')}|${p.bell}|${rates}|${champion}`;
   }
 
   private resourceKey() {
@@ -1022,14 +1079,16 @@ export class GameScene extends Phaser.Scene {
           },
         });
       }
-      if (this.buildPage === 0) out.push({ label: 'Walls & Monument', enabled: true, run: () => (this.buildPage = 1) });
+      if (this.buildPage === 0) out.push({ label: 'Walls & More', enabled: true, run: () => (this.buildPage = 1) });
       out.push({ label: 'Back', enabled: true, run: () => (this.buildPage === 1 ? (this.buildPage = 0) : (this.buildMenu = false)) });
       return out;
     }
     const units = this.selectedUnits();
     const villagers = units.filter((u) => UNITS[u.type].role === 'villager');
-    const army = units.filter((u) => UNITS[u.type].role !== 'villager');
+    const carts = units.filter((u) => UNITS[u.type].role === 'cart');
+    const army = units.filter((u) => isSoldier(UNITS[u.type].role));
     if (villagers.length > 0) out.push({ label: 'Build (B)', enabled: true, run: () => (this.buildMenu = true) });
+    if (carts.length > 0) out.push({ label: 'Trade', enabled: true, run: () => issue(this.state, PLAYER, carts.map((u) => u.id), { t: 'trade' }) });
     if (army.length > 0) {
       out.push({ label: 'Attack (A)', enabled: true, run: () => (this.attackMode = true) });
       out.push({ label: 'Stop (S)', enabled: true, run: () => issue(this.state, PLAYER, units.map((u) => u.id), { t: 'stop' }) });
@@ -1038,16 +1097,34 @@ export class GameScene extends Phaser.Scene {
     if (b && b.built) {
       const def = BUILDINGS[b.type];
       for (const role of def.trains ?? []) {
-        const unit = role === 'villager' ? UNITS.villager : unitFor(this.faction, role);
+        const unit = unitFor(this.faction, role);
         const cost = unitCost(s, PLAYER, unit);
-        const ok = affordable(p, cost) && popUsed(this.state, PLAYER) < popCap(this.state, PLAYER);
+        const tooEarly = unit.age !== undefined && p.age < unit.age;
+        const atLimit = unit.limit !== undefined && unitCount(s, PLAYER, unit.id) >= unit.limit;
+        const ok = !tooEarly && !atLimit && affordable(p, cost) && popUsed(this.state, PLAYER) < popCap(this.state, PLAYER);
         out.push({
-          label: `${unit.name} ${costOf(cost)}`,
+          label: tooEarly ? `${unit.name} (Age ${unit.age === 3 ? 'III' : 'II'})` : atLimit ? `${unit.name} (one only)` : `${unit.name} ${costOf(cost)}`,
           enabled: ok,
           run: () => {
             if (!train(this.state, PLAYER, b.id, unit.id)) say(this.state, 'Not enough resources or population');
           },
         });
+      }
+      if (b.type === 'town') {
+        // The town bell: villagers near the Town Center and the towers shelter inside until released.
+        out.push(
+          p.bell
+            ? { label: 'Back to work', enabled: true, run: () => void releaseBell(this.state, PLAYER) }
+            : { label: 'Ring the bell', enabled: true, run: () => void ringBell(this.state, PLAYER) },
+        );
+      }
+      if (def.market) {
+        for (const res of ['wood', 'food'] as const) {
+          const buy = marketPrice(s, PLAYER, res, 'buy');
+          const sell = marketPrice(s, PLAYER, res, 'sell');
+          out.push({ label: `Buy ${MARKET_LOT} ${res} ${buy}o`, enabled: p.res.ore >= buy, run: () => void trade(this.state, PLAYER, res, 'buy') });
+          out.push({ label: `Sell ${MARKET_LOT} ${res} ${sell}o`, enabled: p.res[res] >= MARKET_LOT, run: () => void trade(this.state, PLAYER, res, 'sell') });
+        }
       }
       if (def.research) {
         for (const tech of Object.values(TECHS)) {
@@ -1152,7 +1229,9 @@ function doing(u: Unit) {
   if (u.act === 'gather') return u.carry === 'wood' ? 'Chopping wood' : u.carry === 'ore' ? 'Mining ore' : 'Gathering food';
   if (u.act === 'build') return 'Building';
   if (u.act === 'fight') return 'Fighting';
-  if (u.order.t === 'return') return 'Carrying the load home';
+  if (u.order.t === 'garrison') return 'Running for shelter';
+  if (u.order.t === 'trade') return 'Driving to the trading post';
+  if (u.order.t === 'return') return UNITS[u.type].role === 'cart' ? 'Bringing the ore home' : 'Carrying the load home';
   if (u.act === 'walk') return 'Walking';
   return 'Standing by';
 }

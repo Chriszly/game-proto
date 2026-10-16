@@ -1,4 +1,5 @@
 import { byDifficulty } from '../../../../shared/settings';
+import type { Hand } from './hands';
 import type { IsleKind } from './kinds';
 import type { Terrain } from './terrain';
 import type { UpgradeId } from './upgrades';
@@ -33,6 +34,17 @@ export const CAMP_REACH = 2;
 /** What digging a charted tile for the riddle's treasure costs, and what the treasure pays. */
 export const DIG_COST = 1;
 export const TREASURE_VALUE = 60;
+/** What charting a whole feature (a river, a road or a wood) pays on top, for each of its tiles. */
+export const FEATURE_BONUS = 2;
+/** A wood counts as a feature from this many forest tiles. */
+export const WOOD_MIN = 3;
+/** The rival surveyor lands from this isle on, and charts one tile for every `RIVAL_PACE` surveys. */
+export const RIVAL_FROM = 3;
+export const RIVAL_PACE = 2;
+/** How far the rival walks in one turn, through fog and charted ground alike, to reach a tile to chart. */
+export const RIVAL_STEPS = 3;
+/** The kinds of isle the Royal Atlas needs one page of each. */
+export const ROYAL_KINDS = 4;
 
 export interface Milestone {
   pct: number;
@@ -71,13 +83,43 @@ export interface Riddle {
   clues: string[];
   known: boolean;
   found: boolean;
+  /** True when the rival surveyor dug the treasure up first. */
+  rival?: boolean;
 }
 
-/** A buyer at the port pays a bonus for a chart that shows enough of one terrain. */
+/**
+ * A buyer at the port pays a bonus for charts that show enough of one terrain: on one voyage, or
+ * added up over `voyages` voyages for a bigger pay.
+ */
 export interface Commission {
   terrain: Terrain;
   need: number;
   bonus: number;
+  voyages: number;
+  /** Tiles counted on earlier voyages, and voyages left including this one. */
+  done: number;
+  left: number;
+}
+
+/** A river, a road or a wood: charting every tile of it pays a named bonus with that chart. */
+export interface Feature {
+  kind: 'river' | 'road' | 'wood';
+  name: string;
+  tiles: Point[];
+  bonus: number;
+}
+
+/**
+ * The rival surveyor, on the isle from `RIVAL_FROM`: charts one tile for every `RIVAL_PACE` of yours,
+ * heading for high ground and ruins. Tiles they `claims` first sell for half.
+ */
+export interface Rival {
+  at: Point;
+  claims: Point[];
+  /** Surveys of yours since their last turn. */
+  due: number;
+  /** True once they have charted the ruins and read the riddle. */
+  ruins: boolean;
 }
 
 /** What a voyage's chart sells for. */
@@ -93,6 +135,12 @@ export interface Chart {
   artifacts: number;
   artifactCoins: number;
   treasure: number;
+  /** Features charted whole on this voyage, and what they pay together. */
+  features: { name: string; bonus: number }[];
+  featureCoins: number;
+  /** Tiles the rival charted first, and the coins they cost (half of those tiles' value). */
+  rivalTiles: number;
+  rivalLoss: number;
   /** Supplies left when the voyage ended, and what they sell back for (`SELL_BACK` each, capped at `base`). */
   unused: number;
   sellBack: number;
@@ -106,9 +154,10 @@ export interface Chart {
 /**
  * - `survey`: on the island, revealing tiles.
  * - `chart`: back at port with the voyage's chart, not sold yet.
- * - `harbor`: chart sold; buy upgrades and set sail.
+ * - `atlas`: the chart that completed the Royal Atlas is sold; the win page is up.
+ * - `harbor`: chart sold; pick a commission and a hand, buy upgrades and set sail.
  */
-export type Phase = 'survey' | 'chart' | 'harbor';
+export type Phase = 'survey' | 'chart' | 'atlas' | 'harbor';
 
 export interface Point {
   x: number;
@@ -133,6 +182,11 @@ export interface GameState {
   /** The tiles revealed on this voyage, in order, surveyed or seen from hills and peaks. */
   surveyed: Point[];
   commission: Commission | null;
+  /** The commission board at the harbor: up to three to pick from, while no commission runs on. */
+  board: Commission[];
+  /** The hands offered at the harbor, and the one aboard for this voyage. */
+  hands: Hand[];
+  hand: Hand | null;
   /** Set on the way back to port. */
   chart: Chart | null;
   /** What the last chart sold for, shown at the harbor. */
@@ -153,6 +207,11 @@ export interface GameState {
   riddle: Riddle | null;
   /** Charted tiles already dug for the treasure on this isle. */
   dug: Point[];
+  /** This isle's rivers, roads and woods, each paying a bonus once charted whole. */
+  features: Feature[];
+  rival: Rival | null;
+  /** Set once the atlas holds a page of every kind of isle: the voyage it was completed on. */
+  royal: { voyage: number } | null;
 }
 
 export const rankOf = (s: GameState, id: UpgradeId) => s.ranks[id] ?? 0;

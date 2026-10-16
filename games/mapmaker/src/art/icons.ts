@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { HANDS, type Hand } from '../game/hands';
 import { KINDS, type IsleKind } from '../game/kinds';
 import type { Terrain } from '../game/terrain';
 import type { UpgradeId } from '../game/upgrades';
@@ -57,6 +58,81 @@ const UPGRADE_ICONS: Record<UpgradeId, (ctx: Ctx) => void> = {
     circle(ctx, 12, 12, 9, SHEET, INK, 1.5);
     star(ctx, 12, 12, 7.5, 2, 4, GOLD, GOLD_DARK, 0.8);
     circle(ctx, 12, 12, 1.2, INK);
+  },
+};
+
+/** The hands' icons, 24 px, baked as `hand-<id>`: a tool each, in ink with a magenta mark. */
+const HAND_ICONS: Record<Hand, (ctx: Ctx) => void> = {
+  // A woodsman's axe.
+  woodsman: (ctx) => {
+    ctx.strokeStyle = BROWN;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(6, 21);
+    ctx.lineTo(17, 7);
+    ctx.stroke();
+    poly(ctx, [[13, 3], [21, 6], [20, 13], [14, 10]], '#9aa3ab', INK, 1.2);
+    ctx.fillStyle = MAGENTA;
+    ctx.fillRect(5, 19, 4, 3);
+  },
+  // A climber's coil of rope and piton.
+  climber: (ctx) => {
+    circle(ctx, 11, 13, 7, null, BROWN, 2.5);
+    circle(ctx, 11, 13, 3.5, null, BROWN, 1.5);
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(17, 20);
+    ctx.lineTo(21, 4);
+    ctx.stroke();
+    ctx.fillStyle = MAGENTA;
+    ctx.fillRect(18.5, 3, 4, 3);
+  },
+  // A naturalist's magnifying glass over a leaf.
+  naturalist: (ctx) => {
+    ctx.fillStyle = TREE;
+    ctx.beginPath();
+    ctx.moveTo(4, 20);
+    ctx.quadraticCurveTo(4, 10, 14, 9);
+    ctx.quadraticCurveTo(13, 19, 4, 20);
+    ctx.fill();
+    circle(ctx, 14, 9, 5.5, 'rgba(255,255,255,0.55)', INK, 1.8);
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(18, 13);
+    ctx.lineTo(22, 19);
+    ctx.stroke();
+    ctx.fillStyle = MAGENTA;
+    ctx.fillRect(20, 17.5, 3, 3);
+  },
+  // A boatman's rowing boat on a wave.
+  boatman: (ctx) => {
+    ctx.beginPath();
+    ctx.moveTo(3, 11);
+    ctx.lineTo(21, 11);
+    ctx.quadraticCurveTo(19, 17, 12, 17);
+    ctx.quadraticCurveTo(5, 17, 3, 11);
+    ctx.fillStyle = BROWN;
+    ctx.fill();
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(9, 11);
+    ctx.lineTo(16, 3);
+    ctx.stroke();
+    ctx.fillStyle = MAGENTA;
+    ctx.fillRect(14.5, 2, 3.5, 3);
+    ctx.strokeStyle = BLUE;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(2, 20);
+    ctx.quadraticCurveTo(7, 17.5, 12, 20);
+    ctx.quadraticCurveTo(17, 22.5, 22, 20);
+    ctx.stroke();
   },
 };
 
@@ -265,6 +341,16 @@ const MARKS: Record<string, (ctx: Ctx) => void> = {
     ctx.lineWidth = 1.2;
     ctx.stroke();
   },
+  // The rival's claim: a small grey pennant on a stake, on a tile they charted first.
+  claim: (ctx) => {
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(8, 21);
+    ctx.lineTo(8, 4);
+    ctx.stroke();
+    poly(ctx, [[8.5, 4], [19, 7.5], [8.5, 11]], '#8a949c', INK, 1);
+  },
   // The riddle chart: a curled sheet with a dotted magenta trail to a gold star.
   riddle: (ctx) => {
     rrect(ctx, 3, 4, 18, 16, 2);
@@ -281,6 +367,7 @@ const MARKS: Record<string, (ctx: Ctx) => void> = {
 
 export function bakeIcons(scene: Phaser.Scene) {
   for (const [id, draw] of Object.entries(UPGRADE_ICONS)) bake(scene, `icon-${id}`, 24, 24, draw);
+  for (const id of Object.keys(HANDS) as Hand[]) bake(scene, `hand-${id}`, 24, 24, HAND_ICONS[id]);
   for (const t of Object.keys(TINT) as Terrain[]) bake(scene, `swatch-${t}`, 16, 16, (ctx) => swatch(ctx, t));
   // The Lodestone Compass's mark for a landmark under the fog: a gold rose in a thin ring.
   bake(scene, 'landmark-hint', 26, 26, (ctx) => {

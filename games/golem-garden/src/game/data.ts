@@ -3,6 +3,9 @@ import { byDifficulty } from '../../../../shared/settings';
 
 export const GOLEMS = ['pebble', 'moss', 'thorn'] as const;
 export type GolemKind = (typeof GOLEMS)[number];
+/** What a seed card plants: a golem on soil, or a hedge on the path. */
+export const SEEDS = [...GOLEMS, 'hedge'] as const;
+export type SeedKind = (typeof SEEDS)[number];
 
 export interface GolemInfo {
   name: string;
@@ -74,11 +77,101 @@ export const MAX_LEVEL = 3;
 /** Sap to raise a golem from level `n` to `n + 1`, indexed by its current level. */
 export const UPGRADE_COST = [0, 40, 70];
 
-/** A golem's damage and reach at its level: each level adds 60% damage and 12 pixels of reach. */
-export function golemStats(kind: GolemKind, level: number) {
-  const info = GOLEM_INFO[kind];
-  return { damage: info.damage * (1 + 0.6 * (level - 1)), range: info.range + 12 * (level - 1) };
+/** The forms a golem can take at level `MAX_LEVEL`: two per kind, and the raise to 3 picks one. */
+export const FORMS = ['boulder', 'sling', 'bog', 'spore', 'bramble', 'barb'] as const;
+export type FormKind = (typeof FORMS)[number];
+
+export interface FormInfo {
+  /** The golem kind it is a form of. */
+  of: GolemKind;
+  name: string;
+  blurb: string;
+  /** Multiplies the level-3 damage. */
+  damage?: number;
+  /** Added to the level-3 reach, in pixels. */
+  range?: number;
+  /** Multiplies the time between throws. */
+  cooldown?: number;
+  /** Replaces the golem's slow. */
+  slow?: { factor: number; ms: number };
+  /** Hits every pest within reach at once. */
+  area?: boolean;
+  /** Its hit also lands, at half strength, on every other pest within this many pixels of the target. */
+  splash?: number;
+  /** Its hits ignore armour. */
+  pierce?: boolean;
+  /** The form's colour, for its level bead and badge. */
+  colour: number;
 }
+
+export const FORM_INFO: Record<FormKind, FormInfo> = {
+  boulder: { of: 'pebble', name: 'Boulder', blurb: 'double damage, splashes, slower throws', damage: 2, cooldown: 1.6, splash: 44, colour: 0x8a8680 },
+  sling: { of: 'pebble', name: 'Sling', blurb: 'quick throws, far reach', damage: 0.8, cooldown: 0.55, range: 50, colour: 0xf2c44a },
+  bog: { of: 'moss', name: 'Bog', blurb: 'slows to a crawl for 3s', slow: { factor: 0.25, ms: 3000 }, colour: 0x3a6a8a },
+  spore: { of: 'moss', name: 'Spore', blurb: 'slows every pest in reach', area: true, damage: 0.7, colour: 0xb0d860 },
+  bramble: { of: 'thorn', name: 'Bramble', blurb: 'reaches 60px further', range: 60, colour: 0x6fae4a },
+  barb: { of: 'thorn', name: 'Barb', blurb: 'deeper pricks, pierce armour', damage: 1.5, pierce: true, colour: 0xf2a6c8 },
+};
+
+/** The two forms a golem of `kind` can take at level 3. */
+export const formsOf = (kind: GolemKind) => FORMS.filter((form) => FORM_INFO[form].of === kind);
+
+/** How a golem picks its target, among the pests within reach. */
+export const TARGETS = ['first', 'strongest', 'weakest', 'flyers'] as const;
+export type Target = (typeof TARGETS)[number];
+export const TARGET_INFO: Record<Target, { name: string; blurb: string }> = {
+  first: { name: 'First', blurb: 'the pest furthest along the path' },
+  strongest: { name: 'Strongest', blurb: 'the pest with the most health left' },
+  weakest: { name: 'Weakest', blurb: 'the pest with the least health left' },
+  flyers: { name: 'Flyers', blurb: 'crows before anything else' },
+};
+
+/** What a golem throws with at its level and form. */
+export interface GolemStats {
+  damage: number;
+  range: number;
+  cooldownMs: number;
+  slow?: { factor: number; ms: number };
+  area: boolean;
+  splash: number;
+  pierce: boolean;
+}
+
+/**
+ * A golem's stats at its level: each level adds 60% damage and 12 pixels of reach, and at level 3
+ * its form changes what it does.
+ */
+export function golemStats(kind: GolemKind, level: number, form: FormKind | null = null): GolemStats {
+  const info = GOLEM_INFO[kind];
+  const f = form && level >= MAX_LEVEL ? FORM_INFO[form] : undefined;
+  return {
+    damage: info.damage * (1 + 0.6 * (level - 1)) * (f?.damage ?? 1),
+    range: info.range + 12 * (level - 1) + (f?.range ?? 0),
+    cooldownMs: info.cooldownMs * (f?.cooldown ?? 1),
+    slow: f?.slow ?? info.slow,
+    area: !!(info.area || f?.area),
+    splash: f?.splash ?? 0,
+    pierce: !!f?.pierce,
+  };
+}
+
+/** A hedge: a cheap seed for a path cell that pests must chew through before they walk on. */
+export const HEDGE = { name: 'Hedge', cost: 15, hp: 60, blurb: 'Blocks the path until chewed through' };
+/** Health a chewing pest takes off a hedge every second, per leaf it bites. */
+export const CHEW_PER_BITE = 6;
+
+/**
+ * Compost: from wave `fromWave`, clearing a wave also pays `rate` of the sap still unspent, at most
+ * `cap`.
+ */
+export const COMPOST = { fromWave: 3, rate: 0.1, cap: 30 };
+
+/** The wave whose clearing is a garden's harvest: it earns stars by the leaves kept, then goes on endless. */
+export const HARVEST_WAVE = 30;
+/** Leaves the Heartwood must still have at the harvest for one, two and three stars. */
+export const STAR_LEAVES = [1, 6, 10];
+/** Stars a harvest earns with `heart` leaves left. */
+export const harvestStars = (heart: number) => STAR_LEAVES.filter((leaves) => heart >= leaves).length;
 
 export const PESTS = ['beetle', 'slug', 'crow', 'mole', 'snail', 'aphid', 'queen'] as const;
 export type PestKind = (typeof PESTS)[number];
@@ -99,12 +192,14 @@ export interface PestInfo {
   slime?: boolean;
   /** A boss: one comes every `BOSS_EVERY` waves. */
   boss?: boolean;
+  /** Flies: over hedges, and first in a golem's 'flyers' targeting. */
+  flies?: boolean;
 }
 
 export const PEST_INFO: Record<PestKind, PestInfo> = {
   beetle: { hp: 20, speed: 40, bounty: 5, bite: 1 },
   slug: { hp: 50, speed: 24, bounty: 9, bite: 2 },
-  crow: { hp: 14, speed: 72, bounty: 6, bite: 1 },
+  crow: { hp: 14, speed: 72, bounty: 6, bite: 1, flies: true },
   mole: { hp: 34, speed: 34, bounty: 8, bite: 1, tunnel: [0.3, 0.6] },
   snail: { hp: 36, speed: 20, bounty: 11, bite: 2, armour: 4 },
   aphid: { hp: 5, speed: 46, bounty: 1, bite: 1 },
