@@ -1,16 +1,20 @@
 import Phaser from 'phaser';
 import { settings } from '../../../../shared/settings';
-import { CARGO_NAMES, COLS, ROOST, ROWS, inGrid, key, neighbours, terrainAt, type Tile } from '../game/map';
+import { CARGO_NAMES, COLS, ROOST, ROWS, inGrid, key, terrainAt, type Tile } from '../game/map';
 import {
+  arms,
   buildTrack,
   buyUpgrade,
   canRemove,
   dispatch,
   festivalHost,
+  isCrossing,
   jobOrder,
+  moodOf,
   newGame,
   openVillages,
   orderPay,
+  pickCharter,
   removeTrack,
   routable,
   throwSwitch,
@@ -21,7 +25,20 @@ import {
   villages,
   workshopOf,
 } from '../game/sim';
-import { FESTIVAL_GOAL, FESTIVAL_ROUND, HUNGRY, POP_MS, SECOND_WYRM_ROUND, roundGoal, type GameState, type Order, type Wyrm } from '../game/state';
+import {
+  FESTIVAL_GOAL,
+  FESTIVAL_ROUND,
+  HUNGRY,
+  MOOD_PAY,
+  MOOD_ROUND,
+  POP_MS,
+  SECOND_WYRM_ROUND,
+  isPassengers,
+  roundGoal,
+  type GameState,
+  type Order,
+  type Wyrm,
+} from '../game/state';
 import { RAIL, WOOD } from '../art/palette';
 import { fit } from '../art/canvas';
 import { LOAD_LIFT, PART_ORIGIN } from '../art/sprites';
@@ -30,6 +47,7 @@ import { makeButton } from '../ui/Button';
 import {
   BOARD,
   BUTTONS,
+  CHARTER_CARD,
   FONT,
   HINT_Y,
   HUD_HEIGHT,
@@ -65,7 +83,7 @@ const textStyle = (size: number, color = '#f3e9d2') => ({
 });
 
 const STATUS_TEXT: Record<Order['status'], string> = {
-  waiting: 'Tap to send the wyrm',
+  waiting: 'Tap to send',
   queued: 'Queued',
   loading: 'Loading...',
   carrying: 'On the way',
@@ -86,21 +104,40 @@ interface WyrmView {
 /** Each wyrm's colour for its planned route and its belly bar: the green wyrm, then the copper one. */
 const WYRM_COLORS = [0x9be883, 0xf0a060];
 
+/** A village's mood bubble, from bitter to delighted: its colour and its mouth (down, flat or up). */
+const MOOD_LOOKS: { color: number; mouth: number }[] = [
+  { color: 0xe0584f, mouth: -1 },
+  { color: 0xe8b040, mouth: -1 },
+  { color: 0xb8b0a0, mouth: 0 },
+  { color: 0x9be883, mouth: 1 },
+  { color: 0x5ad06a, mouth: 1 },
+];
+
+/** How taps on the valley act: laying track that joins its neighbours, plain track, or taking track up. */
+type Mode = 'auto' | 'plain' | 'remove';
+
 export class GameScene extends Phaser.Scene {
   /** The game being played; read by the playthrough test. */
   state!: GameState;
   /** The order cards on the panel; read by the playthrough test. */
   orderSpots: OrderSpot[] = [];
 
-  private removeMode = false;
+  private mode: Mode = 'auto';
   private lastFrame = 0;
   private dragTile: string | null = null;
+  /** The last tile track was laid on, which plain track continues from. */
+  private lastLaid: Tile | null = null;
 
   private hints!: Phaser.GameObjects.Graphics;
   private rails!: Phaser.GameObjects.Graphics;
   private trackKey = '';
   /** The Roost and the villages, each with its name and, for a workshop, a sign of what it makes. */
   private stations: { sprite: Phaser.GameObjects.Image; label: Phaser.GameObjects.Text; sign?: Phaser.GameObjects.Container; round: number }[] = [];
+  /** Each village's mood, as a face by its name, from round `MOOD_ROUND`. */
+  private moodLayer!: Phaser.GameObjects.Graphics;
+  private moodKey = '';
+  /** The warning over a tile a washout or a rockfall is about to take. */
+  private hazardMark!: Phaser.GameObjects.Text;
   /** The pines on each forest tile, by tile key; hidden once track is laid through them. */
   private pines = new Map<string, Phaser.GameObjects.Image>();
   private markers: Phaser.GameObjects.Image[] = [];
@@ -126,6 +163,12 @@ export class GameScene extends Phaser.Scene {
   private hoardButton!: Button;
   private secondButton!: Button;
   private removeButton!: Button;
+  private plainButton!: Button;
+  /** The round's two charters to choose from, over the board. */
+  private charterLayer!: Phaser.GameObjects.Container;
+  private charterTitle!: Phaser.GameObjects.Text;
+  private charterCards: { name: Phaser.GameObjects.Text; text: Phaser.GameObjects.Text }[] = [];
+  private charterKey = '';
 
   private banner!: Phaser.GameObjects.Container;
   private bannerText!: Phaser.GameObjects.Text;
@@ -139,9 +182,13 @@ export class GameScene extends Phaser.Scene {
 
   create() {
     this.state = newGame();
-    this.removeMode = false;
+    this.mode = 'auto';
+    this.lastLaid = null;
     this.trackKey = '';
     this.cardKey = '';
+    this.moodKey = '';
+    this.charterKey = '';
+    this.charterCards = [];
     this.stations = [];
     this.pines.clear();
     this.markers = [];
@@ -157,6 +204,8 @@ export class GameScene extends Phaser.Scene {
     this.hints = this.add.graphics().setDepth(2);
     this.createScenery();
     this.createStations();
+    this.moodLayer = this.add.graphics().setDepth(UI_DEPTH - 2);
+    this.hazardMark = this.add.text(0, 0, '!', textStyle(26, '#f0a050')).setOrigin(0.5, 1).setDepth(UI_DEPTH - 1).setVisible(false);
     this.wyrmViews.push(this.createWyrm('wyrm'));
     this.createHud();
     this.createPanel();
@@ -186,8 +235,10 @@ export class GameScene extends Phaser.Scene {
     if (!inGrid(t)) return;
     if (!down && (this.dragTile === null || this.dragTile === key(t))) return;
     this.dragTile = key(t);
-    if (this.removeMode) removeTrack(this.state, t);
-    else if (!(down && throwSwitch(this.state, t))) buildTrack(this.state, t);
+    if (this.mode === 'remove') return void removeTrack(this.state, t);
+    if (down && throwSwitch(this.state, t)) return;
+    // Plain track continues from the piece laid just before it, when that is next to it.
+    if (buildTrack(this.state, t, this.mode === 'plain', this.lastLaid)) this.lastLaid = t;
   }
 
   /** A prop standing on a tile, sorted with the wyrm by where it touches the ground. */
@@ -283,7 +334,12 @@ export class GameScene extends Phaser.Scene {
     this.wingsButton = button(BUTTONS.wings, () => buyUpgrade(this.state, 'wings'));
     this.hoardButton = button(BUTTONS.hoard, () => buyUpgrade(this.state, 'hoard'));
     this.secondButton = button(BUTTONS.second, () => buyUpgrade(this.state, 'second'));
-    this.removeButton = button(BUTTONS.remove, () => (this.removeMode = !this.removeMode));
+    const toggle = (mode: Mode) => () => (this.mode = this.mode === mode ? 'auto' : mode);
+    const dx = (PANEL.w - BUTTONS.half) / 2;
+    this.removeButton = makeButton(this, PANEL.x - dx, BUTTONS.remove, BUTTONS.half, BUTTONS.h, 'Remove', toggle('remove'));
+    this.plainButton = makeButton(this, PANEL.x + dx, BUTTONS.remove, BUTTONS.half, BUTTONS.h, 'Plain', toggle('plain'));
+    this.removeButton.container.setDepth(UI_DEPTH + 1);
+    this.plainButton.container.setDepth(UI_DEPTH + 1);
   }
 
   private createOverlays() {
@@ -297,6 +353,24 @@ export class GameScene extends Phaser.Scene {
     this.overText = this.add.text(BOARD.w / 2, 220 - BOARD.y, '', { ...textStyle(20), align: 'center' }).setOrigin(0.5);
     const restart = makeButton(this, PANEL_BUTTON.x, PANEL_BUTTON.y - BOARD.y, 160, 44, 'Play again', () => this.scene.restart());
     this.overLayer = this.add.container(BOARD.x, BOARD.y, [shade, this.overText, restart.container]).setDepth(UI_DEPTH + 4).setVisible(false);
+
+    // The round's charter: two cards over the board, the game waiting until one is tapped.
+    const charterShade = this.add.rectangle(0, 0, BOARD.w, BOARD.h, 0x0e0a08, 0.6).setOrigin(0);
+    this.charterTitle = this.add.text(BOARD.w / 2, CHARTER_CARD.y - CHARTER_CARD.h / 2 - 40, '', { ...textStyle(20, '#f3c64e'), align: 'center' }).setOrigin(0.5);
+    const parts: Phaser.GameObjects.GameObject[] = [charterShade, this.charterTitle];
+    for (const i of [0, 1]) {
+      const x = BOARD.w / 2 + (i ? 1 : -1) * (CHARTER_CARD.w + CHARTER_CARD.gap) / 2;
+      const bg = this.add.rectangle(x, CHARTER_CARD.y, CHARTER_CARD.w, CHARTER_CARD.h, 0x3d2b1f).setStrokeStyle(3, 0xc9a040);
+      bg.setInteractive({ useHandCursor: true })
+        .on('pointerover', () => bg.setFillStyle(0x5c3a21))
+        .on('pointerout', () => bg.setFillStyle(0x3d2b1f))
+        .on('pointerdown', () => pickCharter(this.state, i));
+      const name = this.add.text(x, CHARTER_CARD.y - 34, '', textStyle(17, '#f3c64e')).setOrigin(0.5);
+      const text = this.add.text(x, CHARTER_CARD.y + 10, '', { ...textStyle(13, '#f3e9d2'), align: 'center', wordWrap: { width: CHARTER_CARD.w - 30 } }).setOrigin(0.5);
+      this.charterCards.push({ name, text });
+      parts.push(bg, name, text);
+    }
+    this.charterLayer = this.add.container(BOARD.x, BOARD.y, parts).setDepth(UI_DEPTH + 4).setVisible(false);
   }
 
   private draw() {
@@ -309,6 +383,8 @@ export class GameScene extends Phaser.Scene {
       st.sign?.setVisible(st.round <= s.round);
     }
     this.bunting.setVisible(s.round === FESTIVAL_ROUND);
+    this.drawMoods();
+    this.drawHazard();
     this.drawMarkers();
     while (this.wyrmViews.length < s.wyrms.length) this.wyrmViews.push(this.createWyrm('wyrm2'));
     s.wyrms.forEach((w, i) => this.drawWyrm(w, i, this.wyrmViews[i]));
@@ -322,40 +398,87 @@ export class GameScene extends Phaser.Scene {
     }
     this.banner.setVisible(!!s.banner);
     if (s.phase === 'over' && !this.overLayer.visible) {
-      this.overText.setText(`Three orders went undelivered.\nThe villages lost faith in the line.\n\nReached round ${s.round}, ${s.totalDelivered} delivered`);
+      this.overText.setText(`The line's last heart is gone.\nThe villages lost faith in the wyrm.\n\nReached round ${s.round}, ${s.totalDelivered} delivered`);
     }
     if (s.phase === 'won' && !this.overLayer.visible) {
       const host = villages(s)[festivalHost(s)].name;
       this.overText.setText(`The festival at ${host} is a triumph!\nThe whole valley rides the wyrm line.\n\n${s.totalDelivered} delivered, ${s.hearts} of 3 hearts left`);
     }
     this.overLayer.setVisible(s.phase !== 'play');
+    this.drawCharters();
   }
 
-  /** The line's tiles: track, plus the open stations it runs into. */
-  private lineTiles() {
+  /** The two charters on offer at a round's start, while the player has yet to pick one. */
+  private drawCharters() {
     const s = this.state;
-    return new Set([...s.track, key(ROOST), ...openVillages(s).map(key)]);
+    const offer = s.charterOffer;
+    this.charterLayer.setVisible(!!offer && s.phase === 'play');
+    if (!offer) return;
+    const k = `${s.round}|${offer.map((c) => c.id + c.text).join(';')}`;
+    if (k === this.charterKey) return;
+    this.charterKey = k;
+    this.charterTitle.setText(`Round ${s.round}: pick the round's charter`);
+    offer.forEach((c, i) => {
+      this.charterCards[i].name.setText(c.name);
+      this.charterCards[i].text.setText(c.text);
+    });
+  }
+
+  /** Each open village's mood, as a face by its name, once moods count. */
+  private drawMoods() {
+    const s = this.state;
+    const k = s.round < MOOD_ROUND ? '' : `${s.round}|${s.moods.join(',')}`;
+    if (k === this.moodKey) return;
+    this.moodKey = k;
+    const g = this.moodLayer.clear();
+    if (!k) return;
+    openVillages(s).forEach((v) => {
+      const i = villages(s).indexOf(v);
+      const st = this.stations[i + 1];
+      const look = MOOD_LOOKS[moodOf(s, i) + 2];
+      const x = st.label.x + st.label.width / 2 + 10;
+      const y = st.label.y;
+      g.fillStyle(0x1d1a14, 0.8).fillCircle(x, y + 1, 8);
+      g.fillStyle(look.color).fillCircle(x, y, 7);
+      g.fillStyle(0x1d1a14).fillCircle(x - 2.5, y - 2, 1.2).fillCircle(x + 2.5, y - 2, 1.2);
+      g.lineStyle(1.5, 0x1d1a14);
+      if (look.mouth === 0) g.lineBetween(x - 3, y + 2.5, x + 3, y + 2.5);
+      else {
+        g.beginPath();
+        g.arc(x, y + (look.mouth > 0 ? 1 : 5), 3.2, look.mouth > 0 ? 0.3 : Math.PI + 0.3, look.mouth > 0 ? Math.PI - 0.3 : 2 * Math.PI - 0.3);
+        g.strokePath();
+      }
+    });
+  }
+
+  /** The warning over the tile a washout or a rockfall is about to take: an amber mark that blinks (held still with reduced motion). */
+  private drawHazard() {
+    const h = this.state.hazard;
+    this.hazardMark.setVisible(!!h);
+    if (!h) return;
+    const { x, y } = tileCenter(h.tile);
+    const blink = !settings.reduceMotion && Math.floor(this.time.now / 300) % 2 === 0;
+    this.hazardMark.setPosition(x, y - 14).setAlpha(blink ? 0.5 : 1);
   }
 
   /** Redraws the rails when the track, the switches or the open villages change. */
   private drawTrack() {
     const s = this.state;
-    const k = `${s.track.join(';')}|${s.round}|${Object.entries(s.switches).join(';')}`;
+    const k = `${s.track.join(';')}|${s.round}|${Object.entries(s.switches).join(';')}|${s.cuts.join(';')}|${s.crossings.join(';')}|${s.hazard ? key(s.hazard.tile) : ''}`;
     if (k === this.trackKey) return;
     this.trackKey = k;
     for (const [tile, pines] of this.pines) pines.setVisible(!s.track.includes(tile));
     const g = this.rails.clear();
-    const line = this.lineTiles();
     const tiles = [...s.track.map((k) => k.split(',').map(Number)), ...[ROOST, ...openVillages(s)].map((t) => [t.c, t.r])];
-    // Each tile draws a half rail towards every arm. Ballast and bridges first, then sleepers, then rails.
+    // Each tile draws a half rail towards every arm it is joined to. Ballast and bridges first, then sleepers, then rails.
     for (const pass of ['bed', 'sleepers', 'rails', 'switches'] as const) {
       for (const [c, r] of tiles) {
         const here = { c, r };
         const station = !s.track.includes(key(here));
-        const arms = neighbours(here).filter((n) => s.track.includes(key(n)) || (!station && line.has(key(n))));
         const bridge = !station && terrainAt(s.valley, here) === 'river';
         const closed = s.switches[key(here)];
-        for (const n of arms) {
+        const doomed = s.hazard && key(s.hazard.tile) === key(here);
+        for (const n of arms(s, here)) {
           const dc = n.c - c;
           const dr = n.r - r;
           // A point `t` of the way from the tile's middle to its edge towards `n`, `side` tiles across, `z` up.
@@ -365,7 +488,7 @@ export class GameScene extends Phaser.Scene {
           };
           const shut = closed === key(n);
           if (pass === 'bed') {
-            g.fillStyle(bridge ? WOOD.base : RAIL.bed).fillPoints([at(0, -0.24), at(1, -0.24), at(1, 0.24), at(0, 0.24)], true);
+            g.fillStyle(doomed ? 0xc06a3a : bridge ? WOOD.base : RAIL.bed).fillPoints([at(0, -0.24), at(1, -0.24), at(1, 0.24), at(0, 0.24)], true);
             if (bridge) for (const side of [-0.25, 0.25]) g.lineStyle(2, WOOD.dark).lineBetween(at(-0.5, side).x, at(-0.5, side).y, at(1, side).x, at(1, side).y);
           }
           if (pass === 'sleepers') {
@@ -396,6 +519,12 @@ export class GameScene extends Phaser.Scene {
             for (const end of [a, b]) g.lineStyle(1.5, 0x3a2a1c).lineBetween(end.x, end.y, end.x, end.y + 5);
           }
         }
+        if (pass === 'switches' && isCrossing(s, here)) {
+          // A crossing's plate, where the two straights pass over each other.
+          const m = iso(c + 0.5, r + 0.5, 1.5);
+          g.fillStyle(0x3a3a44).fillPoints([iso(c + 0.3, r + 0.3, 1.5), iso(c + 0.7, r + 0.3, 1.5), iso(c + 0.7, r + 0.7, 1.5), iso(c + 0.3, r + 0.7, 1.5)].map((p) => new Phaser.Math.Vector2(p.x, p.y)), true);
+          g.lineStyle(1.5, RAIL.shine).strokeCircle(m.x, m.y, 3);
+        }
         if (pass === 'switches' && closed) {
           // The lever on the junction's front corner.
           const foot = iso(c + 0.86, r + 0.86);
@@ -418,7 +547,7 @@ export class GameScene extends Phaser.Scene {
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
         const t = { c, r };
-        if (this.removeMode) {
+        if (this.mode === 'remove') {
           if (canRemove(s, t)) g.lineStyle(2, 0xf0a050, 0.95).strokePoints(diamond(c, r), true);
           continue;
         }
@@ -426,8 +555,12 @@ export class GameScene extends Phaser.Scene {
         if (cost === null) continue;
         const pts = diamond(c, r);
         g.fillStyle(0xfffff0, cost <= s.coins ? 0.12 : 0.05).fillPoints(pts, true);
-        g.lineStyle(1.5, cost <= s.coins ? 0xfffff0 : 0x6a6070, cost <= s.coins ? 0.8 : 0.5).strokePoints(pts, true);
+        g.lineStyle(1.5, cost <= s.coins ? (this.mode === 'plain' ? 0x9bd8f0 : 0xfffff0) : 0x6a6070, cost <= s.coins ? 0.8 : 0.5).strokePoints(pts, true);
       }
+    }
+    if (s.hazard) {
+      const { c, r } = s.hazard.tile;
+      g.lineStyle(3, 0xf0a050, 0.95).strokePoints(diamond(c, r), true);
     }
     // Each wyrm's way ahead, as a dotted line in its colour, so the player can see where the switches send it.
     s.wyrms.forEach((w, i) => {
@@ -499,7 +632,7 @@ export class GameScene extends Phaser.Scene {
     const carried = s.orders.filter((o) => o.status === 'carrying' && o.wyrm === index);
     wagonCargo.forEach((icon, i) => {
       const wagon = segments[4 + i];
-      const o = carried[i];
+      const o = carried[i] ?? (carried[0] && isPassengers(carried[0]) ? carried[0] : undefined);
       icon.setVisible(!!o).setPosition(wagon.x, wagon.y - LOAD_LIFT).setDepth(wagon.depth + 0.1);
       if (o) icon.setTexture(`cargo-${o.cargo}`);
     });
@@ -548,7 +681,7 @@ export class GameScene extends Phaser.Scene {
     this.roundText.setText(
       s.round === FESTIVAL_ROUND
         ? `Festival: ${s.delivered}/${FESTIVAL_GOAL} delivered`
-        : `Round ${s.round}: ${s.delivered}/${roundGoal(s.round)} delivered`,
+        : `Round ${s.round}: ${s.delivered}/${roundGoal(s.round)} delivered${s.charter ? ` · ${s.charter.name}` : ''}`,
     );
     const two = s.wyrms.length > 1;
     this.wyrmText
@@ -566,11 +699,15 @@ export class GameScene extends Phaser.Scene {
   private drawHintLine() {
     const s = this.state;
     this.hint.setText(
-      this.removeMode
-        ? 'Tap track to take it up for half its cost. Tap Remove track again to lay track.'
-        : Object.keys(s.switches).length
-          ? 'Tap a junction to set its switch: the wyrm goes the way the switches send it.'
-          : 'Tap or drag next to the line to lay track: grass 2, forest 4, bridge 6. Then tap an order.',
+      this.mode === 'remove'
+        ? 'Tap track to take it up for half its cost. Tap Remove again to lay track.'
+        : this.mode === 'plain'
+          ? 'Plain track joins only the piece it continues. Track on all four sides makes a crossing.'
+          : s.hazard
+            ? `A ${s.hazard.kind} is coming: lay a way round it, or rebuild the track after.`
+            : Object.keys(s.switches).length
+              ? 'Tap a junction to set its switch: the wyrm goes the way the switches send it.'
+              : 'Tap or drag next to the line to lay track: grass 2, forest 4, bridge 6. Then tap an order.',
     );
   }
 
@@ -605,8 +742,10 @@ export class GameScene extends Phaser.Scene {
       second === null ? 'Second wyrm: awake' : upgradeLocked(s, 'second') ? `Second wyrm: round ${SECOND_WYRM_ROUND}` : `Second wyrm: ${second}c`,
     );
     this.secondButton.setEnabled(second !== null && second <= s.coins && !upgradeLocked(s, 'second'));
-    this.removeButton.setCaption(this.removeMode ? 'Removing track' : 'Remove track');
-    this.removeButton.setLit(this.removeMode);
+    this.removeButton.setCaption(this.mode === 'remove' ? 'Removing' : 'Remove');
+    this.removeButton.setLit(this.mode === 'remove');
+    this.plainButton.setCaption(this.mode === 'plain' ? 'Plain on' : 'Plain');
+    this.plainButton.setLit(this.mode === 'plain');
   }
 
   private makeCard(o: Order, y: number) {
@@ -619,11 +758,16 @@ export class GameScene extends Phaser.Scene {
     const vs = villages(s);
     const icon = fit(this.add.image(left + 12, -18, `cargo-${o.cargo}`));
     // Goods a workshop made have their name in gold.
-    const title = this.add.text(left + 28, -26, CARGO_NAMES[o.cargo], textStyle(14, o.made ? '#f3c64e' : '#f3e9d2'));
+    const title = this.add.text(left + 28, -26, CARGO_NAMES[o.cargo], textStyle(14, o.made ? '#f3c64e' : isPassengers(o) ? '#9bd8f0' : '#f3e9d2'));
     const pay = this.add.text(PANEL.w / 2 - 8, -26, `${orderPay(s, o)}c`, textStyle(14, '#f3c64e')).setOrigin(1, 0);
     const route = this.add.text(left, -8, `${vs[o.from].name} > ${vs[o.to].name}`, textStyle(11, '#d8c7a6'));
-    const status = this.add.text(left, 5, ok ? STATUS_TEXT[o.status] : 'No track there yet', textStyle(11, ok ? '#c9e8c0' : '#a8957a'));
-    const card = this.add.container(PANEL.x, y, [bg, icon, title, pay, route, status]).setDepth(UI_DEPTH + 1);
+    const status = this.add.text(left, 5, ok ? STATUS_TEXT[o.status] : 'No track yet', textStyle(11, ok ? '#c9e8c0' : '#a8957a'));
+    // What the sending village's mood did to the order: a sulking village wants it fast, a happy one pays more.
+    const mood = moodOf(s, o.from);
+    const tag = this.add
+      .text(PANEL.w / 2 - 8, 5, mood < 0 ? 'rush order' : mood > 0 ? `+${(MOOD_PAY[mood] - 1) * 100}% pay` : '', textStyle(11, mood < 0 ? '#e8b040' : '#9be883'))
+      .setOrigin(1, 0);
+    const card = this.add.container(PANEL.x, y, [bg, icon, title, pay, route, status, tag]).setDepth(UI_DEPTH + 1);
     bg.setInteractive({ useHandCursor: true }).on('pointerdown', () => dispatch(this.state, o.id));
     return card;
   }

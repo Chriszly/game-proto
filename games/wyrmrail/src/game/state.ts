@@ -46,12 +46,69 @@ export const HOARD_BONUS = 0.25;
 /** The price of each upgrade level; the length is the top level. */
 export const UPGRADE_COSTS = { wings: [30, 60, 100], hoard: [40, 80, 140], second: [150] } as const;
 export type Upgrade = keyof typeof UPGRADE_COSTS;
+/** Village moods (WR6), from `MOOD_ROUND`: how far a mood runs, each way from 0. */
+export const MOOD_ROUND = 2;
+export const MOOD_MAX = 2;
+/** A village with no visit for this long, plus so much for every village on the line, sours by one. */
+export const MOOD_GAP_MS = 25_000;
+export const MOOD_GAP_PER_VILLAGE_MS = 6_000;
+/** What a cheerful (1) and a delighted (2) village's orders pay, times the usual. */
+export const MOOD_PAY = [1, 1.25, 1.5];
+/** How much time a sulking village's orders allow, times the usual. */
+export const MOOD_RUSH = 0.7;
+/** Washouts and rockfalls (WR7), from `HAZARD_ROUND`: how often one is warned, and how long the warning lasts. */
+export const HAZARD_ROUND = 3;
+export const HAZARD_EVERY_MS = 35_000;
+export const HAZARD_WARN_MS = 9_000;
+/** Round charters (WR9), from this round: one of two, picked at the round's start. */
+export const CHARTER_ROUND = 3;
+/** Passengers (WR10), from this round: how often an order is passengers, what they pay and how long they wait. */
+export const PASSENGER_ROUND = 3;
+export const PASSENGER_CHANCE = 0.15;
+export const PASSENGER_PAY = 3;
+export const PASSENGER_TIME = 0.6;
 /** How long a banner and a floating number stay on screen. */
 export const BANNER_MS = 2_800;
 export const POP_MS = 1_200;
 
 /** Deliveries needed to finish a round. */
 export const roundGoal = (round: number) => (round === 1 ? 1 : round === FESTIVAL_ROUND ? FESTIVAL_GOAL : round + 1);
+
+/** A round's charter: its rule for every order, and the odd one for the track or the belly. */
+export interface Charter {
+  id: string;
+  name: string;
+  text: string;
+  /** Pay, times the usual, for every order or only for `cargo`. */
+  pay: number;
+  cargo?: Cargo;
+  /** Deadlines, times the usual. */
+  time: number;
+  /** Track prices, times the usual. */
+  track?: number;
+  /** New orders come in this many times as often. */
+  orders?: number;
+  /** The wyrms never grow hungry. */
+  fed?: boolean;
+}
+
+/** The charters a round can offer; `cargo` ones are filled in with a cargo an open village sends. */
+export const CHARTERS: Charter[] = [
+  { id: 'fair', name: 'Fair', text: '%c pays double, every deadline a quarter shorter', pay: 2, cargo: 'grain', time: 0.75 },
+  { id: 'rush', name: 'Rush orders', text: 'Every order pays half again, deadlines a third shorter', pay: 1.5, time: 0.67 },
+  { id: 'patient', name: 'Patient villages', text: 'Deadlines half as long again, pay a quarter less', pay: 0.75, time: 1.5 },
+  { id: 'rails', name: 'Cheap rails', text: 'Track costs half, every order pays a fifth less', pay: 0.8, time: 1, track: 0.5 },
+  { id: 'busy', name: 'Busy season', text: 'Orders come in twice as often, pay a tenth less', pay: 0.9, time: 1, orders: 2 },
+  { id: 'feast', name: 'Feast', text: 'The wyrms never go hungry, every order pays a tenth less', pay: 0.9, time: 1, fed: true },
+];
+
+/** A washout (a bridge) or a rockfall (track under a mountain) about to take a tile's track. */
+export interface Hazard {
+  tile: Tile;
+  kind: 'washout' | 'rockfall';
+  /** Time left before it hits. */
+  ms: number;
+}
 
 export type OrderStatus = 'waiting' | 'queued' | 'loading' | 'carrying';
 
@@ -70,6 +127,9 @@ export interface Order {
   /** Made by a workshop from goods the wyrm brought it. */
   made: boolean;
 }
+
+/** Passengers fill both wagons: a wyrm carrying them loads nothing else. */
+export const isPassengers = (o: Order) => o.cargo === 'passengers';
 
 /** A stop the wyrm is heading for: an order to fetch or deliver, or the Roost to eat. */
 export type Job = { order: number; leg: 'pickup' | 'drop' } | { leg: 'feed' };
@@ -124,6 +184,20 @@ export interface GameState {
   queue: number[];
   /** The switch on each junction (track with three or four arms): its key, and the arm it is set against. */
   switches: Record<string, string>;
+  /** Pairs of tiles next to each other on the line whose track is not joined ("c,r|c,r", lower key first). */
+  cuts: string[];
+  /** Track tiles where two straights cross without joining. */
+  crossings: string[];
+  /** Each village's mood, by its index: `-MOOD_MAX` (bitter) to `MOOD_MAX` (delighted). */
+  moods: number[];
+  /** How long each village has gone without a visit. */
+  idleMs: number[];
+  /** The washout or rockfall under way, if any, and the time until the next is warned. */
+  hazard: Hazard | null;
+  hazardTimerMs: number;
+  /** This round's charter, and the two on offer while the player has yet to pick (the game waits). */
+  charter: Charter | null;
+  charterOffer: Charter[] | null;
   /** The wyrms on the line: one, then two once the second is bought. */
   wyrms: Wyrm[];
   upgrades: Record<Upgrade, number>;

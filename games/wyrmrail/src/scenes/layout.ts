@@ -36,9 +36,11 @@ export const groundDepth = (y: number) => 100 + y;
 export const PANEL = { x: 864, w: 176, top: 48 };
 /** The order cards, by their centres: room for four, three orders and a workshop's goods. */
 export const ORDER_CARD = { y: 106, h: 62, gap: 6 };
-/** The Upgrades heading, the upgrade buttons and the Remove track toggle, by their centres. */
+/** The Upgrades heading, the upgrade buttons and the Remove and Plain track toggles (side by side, `half` wide), by their centres. */
 export const UPGRADES_Y = 354;
-export const BUTTONS = { wings: 380, hoard: 416, second: 452, remove: 492, h: 32 };
+export const BUTTONS = { wings: 380, hoard: 416, second: 452, remove: 492, h: 32, half: (PANEL.w - 6) / 2 };
+/** The charter cards on the board at a round's start: two side by side, by their centres. */
+export const CHARTER_CARD = { y: 250, w: 300, h: 110, gap: 20 };
 /** The hint line under the grid. */
 export const HINT_Y = 518;
 /** The button on the game over panel. */
