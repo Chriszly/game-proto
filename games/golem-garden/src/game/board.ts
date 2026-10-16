@@ -22,8 +22,8 @@ export interface Garden {
   name: string;
   /** What sets it apart, shown on its card. */
   blurb: string;
-  /** The best wave (most waves ever cleared) that unlocks it. */
-  unlockAt: number;
+  /** How many harvest stars, over every garden, unlock it. */
+  unlockStars: number;
   /** The ways through it; a forked garden has more than one, and pests take them in turn. */
   routes: Route[];
   /** What every cell is, indexed `[row][col]`. */
@@ -52,7 +52,7 @@ function route(corners: readonly [number, number][]): Route {
   return { corners, points, segments, length: segments.reduce((a, b) => a + b, 0) };
 }
 
-function garden(name: string, blurb: string, unlockAt: number, routes: (readonly [number, number][])[]): Garden {
+function garden(name: string, blurb: string, unlockStars: number, routes: (readonly [number, number][])[]): Garden {
   const map: Cell[][] = Array.from({ length: GRID.rows }, () => Array<Cell>(GRID.cols).fill('soil'));
   for (const corners of routes) {
     for (let i = 1; i < corners.length; i++) {
@@ -68,7 +68,7 @@ function garden(name: string, blurb: string, unlockAt: number, routes: (readonly
   }
   const [hc, hr] = routes[0][routes[0].length - 1];
   map[hr][hc] = 'heart';
-  return { name, blurb, unlockAt, routes: routes.map(route), map, heart: { col: hc, row: hr } };
+  return { name, blurb, unlockStars, routes: routes.map(route), map, heart: { col: hc, row: hr } };
 }
 
 /**
@@ -79,15 +79,31 @@ export const GARDENS: Garden[] = [
   garden('Meadow', 'One winding path', 0, [
     [[-1, 1], [3, 1], [3, 5], [7, 5], [7, 2], [11, 2]],
   ]),
-  garden('Forked Brook', 'The path splits round a bed and meets again', 5, [
+  garden('Forked Brook', 'The path splits round a bed and meets again', 1, [
     [[-1, 3], [2, 3], [2, 1], [8, 1], [8, 3], [11, 3]],
     [[-1, 3], [2, 3], [2, 5], [8, 5], [8, 3], [11, 3]],
   ]),
-  garden('Two Gates', 'Pests come in by two gates', 10, [
+  garden('Two Gates', 'Pests come in by two gates', 3, [
     [[-1, 1], [5, 1], [5, 3], [9, 3], [9, 1], [11, 1]],
     [[-1, 5], [5, 5], [5, 3], [9, 3], [9, 1], [11, 1]],
   ]),
 ];
+
+/** How far along `route` the centre of the cell (col, row) is, in pixels, or null if the route misses it. */
+export function routeDist(route: Route, col: number, row: number) {
+  const { points, segments } = route;
+  const at = cellCentre(col, row);
+  let before = 0;
+  for (let i = 0; i < segments.length; i++) {
+    const a = points[i];
+    const b = points[i + 1];
+    const along = a.x === b.x ? (at.y - a.y) / (b.y - a.y) : (at.x - a.x) / (b.x - a.x);
+    const across = a.x === b.x ? at.x - a.x : at.y - a.y;
+    if (across === 0 && along >= 0 && along <= 1) return before + along * segments[i];
+    before += segments[i];
+  }
+  return null;
+}
 
 /** Where a pest `dist` pixels along `route` stands, and which way it faces (-1 left, 1 right). */
 export function pathPoint(route: Route, dist: number) {
