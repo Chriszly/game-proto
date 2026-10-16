@@ -9,6 +9,7 @@ import {
   ROWS,
   shuffle,
   special,
+  spreadMould,
   stuck,
   swapped,
   swapWorks,
@@ -18,10 +19,10 @@ import {
   type Run,
   type Tile,
 } from './board';
-import { randomKind } from './kinds';
-import { MOVE_BONUS } from './orders';
+import { randomKind, type Kind } from './kinds';
+import { MOVE_BONUS, TWIN_BONUS, type PotionId } from './orders';
 import { starsFor } from './ranks';
-import { filled, startOrder, tileMaker, wanted, type GameState } from './state';
+import { drawPantry, filled, firstNeeds, progressOf, startOrder, stockPantry, tileMaker, wanted, type GameState } from './state';
 
 /** One round of a swap's outcome: the tiles matched, then the board once the rest have fallen. */
 export interface Step {
@@ -29,8 +30,11 @@ export interface Step {
   cleared: (Cell & Tile)[];
   /** Tiles a match turned into Catalysts (four or more) or Blooms (an L or T); they stay on the board. */
   brewed: (Cell & Tile)[];
-  /** Resin-held tiles a match freed; they stay on the board. */
+  /** Resin-held tiles a match freed, and mouldy tiles a match scrubbed clean; they stay on the board. */
   melted: (Cell & Tile)[];
+  scrubbed: (Cell & Tile)[];
+  /** The ingredients counted this round: the order's (or stage's) needs at the time. */
+  needs: Kind[];
   /** Rows a matched Catalyst (or a Catalyst pair) cleared, and columns a Catalyst pair cleared. */
   rows: number[];
   cols: number[];
@@ -41,6 +45,12 @@ export interface Step {
   board: Board;
   /** The board had no moves left, so its tiles were shuffled. */
   shuffled?: boolean;
+  /** Mould crept onto this tile after the move. */
+  spread?: Cell & Tile;
+  /** A royal commission moved on to this stage (from 1): the needs changed and the moves carried over. */
+  stage?: number;
+  /** A twin order's customer was served this round. */
+  served?: PotionId;
 }
 
 /** Runs of this length or longer brew a Catalyst. */
@@ -69,8 +79,29 @@ export function trySwap(s: GameState, a: Cell, b: Cell): Step[] | null {
   s.moves--;
   const extra = pair ? { cells: [...rowCells(b.row), ...colCells(b.col)], rows: [b.row], cols: [b.col], fire: false } : undefined;
   // On the swap's own match a Catalyst is brewed where the player moved a tile to, if it can be.
-  return resolve(s, swapped(s.board, a, b), [b, a], extra);
+  const steps = resolve(s, swapped(s.board, a, b), [b, a], extra);
+  // Mould creeps to a neighbour after every move, unless a match touched some this move.
+  if (s.phase === 'play' && !steps.some((st) => st.scrubbed.length > 0)) {
+    const grown = spreadMould(s.board);
+    if (grown) {
+      s.board = grown.board;
+      steps.push({ ...emptyStep(s), board: grown.board, spread: grown.at });
+    }
+  }
+  return steps;
 }
+
+const emptyStep = (s: GameState): Step => ({
+  cleared: [],
+  brewed: [],
+  melted: [],
+  scrubbed: [],
+  needs: Object.keys(s.current.needs) as Kind[],
+  rows: [],
+  cols: [],
+  areas: [],
+  board: s.board,
+});
 
 /**
  * Plays `board` out: gathers its matches (and `extra`) and every cascade after them, shuffles the
@@ -93,11 +124,35 @@ function resolve(s: GameState, board: Board, prefer: Cell[], extra?: Extra): Ste
   }
   if (validMoves(board).length === 0) {
     board = shuffle(board, newTile);
-    steps.push({ cleared: [], brewed: [], melted: [], rows: [], cols: [], areas: [], board, shuffled: true });
+    steps.push({ ...emptyStep(s), board, shuffled: true });
   }
   s.board = board;
 
+  // On a twin order, the customer whose needs are met first is served, with a bonus for speed.
+  if (s.current.second) {
+    for (const [potion, needs] of [[s.current.potion, firstNeeds(s.current)], [s.current.second.potion, s.current.second.needs]] as const) {
+      if (s.served.includes(potion) || !filled(s, needs)) continue;
+      s.served.push(potion);
+      if (!filled(s)) {
+        s.speedBonus = TWIN_BONUS;
+        s.coins += TWIN_BONUS;
+      }
+      steps.push({ ...emptyStep(s), served: potion });
+    }
+  }
+  // A royal commission moves on to its next stage, the moves carried over; the pantry chips in.
+  const stages = s.current.stages;
+  while (stages && s.stage < stages.length - 1 && filled(s)) {
+    stockPantry(s);
+    s.stage++;
+    s.current = { ...s.current, potion: stages[s.stage].potion, needs: stages[s.stage].needs };
+    for (const kind of Object.keys(s.got) as Kind[]) s.got[kind] = 0;
+    drawPantry(s);
+    steps.push({ ...emptyStep(s), stage: s.stage });
+  }
+
   if (filled(s)) {
+    stockPantry(s);
     s.phase = 'sold';
     s.earned = s.current.price + s.moves * MOVE_BONUS;
     s.coins += s.earned;
@@ -105,6 +160,7 @@ function resolve(s: GameState, board: Board, prefer: Cell[], extra?: Extra): Ste
     s.stars += s.orderStars;
     s.sold++;
     s.order++;
+    if (s.current.last) s.royal = true;
   } else if (s.moves === 0) {
     s.phase = 'failed';
   }
@@ -131,8 +187,11 @@ function gather(s: GameState, board: Board, prefer: Cell[], extra?: Extra): Step
   const swept = new Set<number>();
   for (const c of extra?.cells ?? []) swept.add(key(c));
   const rows = [...new Set([...firing].filter((i) => tile(i).catalyst).map((i) => cell(i).row))];
+  // Potent Catalysts (a workbench upgrade) clear their column as well.
+  const cols = s.upgrades.catalyst > 0 ? [...new Set([...firing].filter((i) => tile(i).catalyst).map((i) => cell(i).col))] : [];
   const areas = [...firing].filter((i) => tile(i).bloom).map(cell);
   for (const row of rows) for (const c of rowCells(row)) swept.add(key(c));
+  for (const col of cols) for (const c of colCells(col)) swept.add(key(c));
   for (const a of areas) {
     for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) if (inBoard({ row: a.row + dr, col: a.col + dc })) swept.add(key({ row: a.row + dr, col: a.col + dc }));
   }
@@ -178,13 +237,25 @@ function gather(s: GameState, board: Board, prefer: Cell[], extra?: Extra): Step
   }
   s.melted += melted.length;
 
-  // A match next to a corked jar opens it, and its ingredient is gathered too.
+  // Mould is scrubbed off instead of its tile being gathered, whether hit or next to a match.
   const touched = new Set([...hit, ...brewed.map(key), ...melted.map(key)]);
+  const scrubbed: (Cell & Tile)[] = [];
+  const near = (i: number) => {
+    const { row, col } = cell(i);
+    return [{ row: row - 1, col }, { row: row + 1, col }, { row, col: col - 1 }, { row, col: col + 1 }];
+  };
+  for (let i = 0; i < ROWS * COLS; i++) {
+    if (!tile(i).mould || !(hit.has(i) || near(i).some((c) => inBoard(c) && touched.has(key(c))))) continue;
+    hit.delete(i);
+    next[cell(i).row][cell(i).col] = { ...tile(i), mould: false };
+    scrubbed.push({ ...cell(i), ...next[cell(i).row][cell(i).col] });
+  }
+  s.scrubbed += scrubbed.length;
+
+  // A match next to a corked jar opens it, and its ingredient is gathered too.
   for (let i = 0; i < ROWS * COLS; i++) {
     if (!tile(i).jar || hit.has(i)) continue;
-    const { row, col } = cell(i);
-    const near = [{ row: row - 1, col }, { row: row + 1, col }, { row, col: col - 1 }, { row, col: col + 1 }];
-    if (near.some((c) => inBoard(c) && touched.has(key(c)))) hit.add(i);
+    if (near(i).some((c) => inBoard(c) && touched.has(key(c)))) hit.add(i);
   }
   s.opened += [...hit].filter((i) => tile(i).jar).length;
 
@@ -192,7 +263,18 @@ function gather(s: GameState, board: Board, prefer: Cell[], extra?: Extra): Step
   // Only the ingredients the order asks for are counted.
   for (const { kind } of cleared) if (wanted(s, kind)) s.got[kind]++;
   const penalty = !!s.current.forbid && runs.some((r) => r.kind === s.current.forbid);
-  return { cleared, brewed, melted, rows: [...new Set([...rows, ...(extra?.rows ?? [])])], cols: extra?.cols ?? [], areas, penalty, board: next };
+  return {
+    cleared,
+    brewed,
+    melted,
+    scrubbed,
+    needs: Object.keys(s.current.needs) as Kind[],
+    rows: [...new Set([...rows, ...(extra?.rows ?? [])])],
+    cols: [...new Set([...cols, ...(extra?.cols ?? [])])],
+    areas,
+    penalty,
+    board: next,
+  };
 }
 
 // ---- Bench tools: coins spent during an order ----
@@ -265,5 +347,4 @@ export function funnel(s: GameState, a: Cell, b: Cell): Step[] | null {
 }
 
 /** After a sale, the next order; after running out of moves, the same order again. */
-export const nextOrder = (s: GameState) =>
-  startOrder({ order: s.order, coins: s.coins, sold: s.sold, stars: s.stars });
+export const nextOrder = (s: GameState) => startOrder(progressOf(s));

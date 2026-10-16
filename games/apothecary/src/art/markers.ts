@@ -27,6 +27,7 @@ export const UPGRADE_ICONS = [
   'slots',
   'customers',
   'research',
+  'herbalist',
   'hire',
   'land',
   'field',
@@ -213,6 +214,20 @@ const ICONS: Record<UpgradeIcon, (c: Ctx, x: number, y: number) => void> = {
     c.closePath();
     c.stroke();
     line(c, [[x, y - 5], [x, y + 9]]);
+  },
+  // A leaf with a drop of dew on it: the herbalist who keeps the beds clear of blight.
+  herbalist: (c, x, y) => {
+    c.beginPath();
+    c.moveTo(x - 9, y + 8);
+    c.quadraticCurveTo(x - 9, y - 8, x + 9, y - 9);
+    c.quadraticCurveTo(x + 9, y + 7, x - 9, y + 8);
+    c.closePath();
+    c.fill();
+    c.globalCompositeOperation = 'destination-out';
+    line(c, [[x - 8, y + 7], [x + 7, y - 7]]);
+    c.globalCompositeOperation = 'source-over';
+    circle(c, x + 6, y + 5, 2.2);
+    c.fill();
   },
   // A craftsman in a cap.
   hire: (c, x, y) => {

@@ -234,7 +234,8 @@ export function sceneryLayout(): Scenery[] {
   const zones = [
     { x0: 30, x1: 210, y0: 700, y1: 895, trees: 3, bushes: 2 },
     { x0: 1470, x1: 1650, y0: 700, y1: 895, trees: 3, bushes: 2 },
-    { x0: 660, x1: 800, y0: 700, y1: 895, trees: 2, bushes: 2 },
+    // The rival's stall stands on the street's left (see `RIVAL` in the layout); only bushes below it.
+    { x0: 660, x1: 800, y0: 840, y1: 895, trees: 0, bushes: 2 },
     { x0: 880, x1: 1020, y0: 700, y1: 895, trees: 2, bushes: 2 },
     { x0: 700, x1: 980, y0: 60, y1: 140, trees: 2, bushes: 3 },
   ];

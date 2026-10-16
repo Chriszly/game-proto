@@ -1,24 +1,55 @@
 import { BOSS } from './boss';
-import { AWAKE, FLAMES, LEAD_IN, SHRINE, STAGE_LEN, isBossStage, rand, speedOf, terrainOf, type GameState, type TrapKind } from './state';
+import {
+  AWAKE,
+  DARE,
+  DRAGON_AT,
+  FLAMES,
+  HARDER,
+  LEAD_IN,
+  ROAD,
+  ROCK,
+  SHRINE,
+  STAGE_LEN,
+  dareOf,
+  isBossStage,
+  isRockStage,
+  metres,
+  rand,
+  speedOf,
+  terrainOf,
+  type BossKind,
+  type GameState,
+  type Road,
+  type TrapKind,
+} from './state';
 
 // Lays out a stage's obstacles and coins between its start and its checkpoint: traps, goblins and
 // bats, and raised ledges to climb, and from stage 2 a wayside shrine in the gap nearest the
-// stage's middle. New kinds join on later stages, and obstacles come closer together. Every fifth
-// stage is the Gatekeeper's instead: a clear road with the boss waiting on it. Every random pick
-// goes through `rand` (Math.random, or the daily course's seed) so a seeded run repeats (the shrine
-// and the Gatekeeper take no random draws).
+// stage's middle (not on the High Road). New kinds join on later stages, and obstacles come closer
+// together: closer still on the High Road, which also has more foes and more coins, and further
+// apart on the Low Road. Every fifth stage is the Gatekeeper's instead, and the first stage past
+// 1500 m the dragon's: a clear road with the boss waiting on it. Every seventh stage a rockfall
+// rolls in behind the knight. Every random pick goes through `rand` (Math.random, or the daily
+// course's seed) so a seeded run repeats (the shrine, the bosses, the roads' extra coins, the dare
+// and the rockfall take no random draws).
 
 /** No obstacle this close before the checkpoint, so the knight lands before reaching it. */
 const CLEAR_BEFORE_CHECKPOINT = 420;
+/** Half the knight's width, so the rockfall starts its distance behind the knight's back. */
+const RUNNER_BACK = 14;
 
 /** One obstacle on the course: a trap, a foe, or a ledge or flight of steps to climb. */
-export type Piece = Exclude<TrapKind, 'barrel' | 'axe'> | 'ledge' | 'steps';
+export type Piece = Exclude<TrapKind, 'barrel' | 'axe' | 'fire' | 'tail'> | 'ledge' | 'steps';
 
-/** What can turn up on a stage. Spikes come up most often; fire vents and bats join on stage 2, steps on stage 3. */
-export function piecesOf(stage: number): Piece[] {
+/**
+ * What can turn up on a stage. Spikes come up most often; fire vents and bats join on stage 2, steps
+ * on stage 3. The High Road adds another goblin and bat to the pool.
+ */
+export function piecesOf(stage: number, road: Road | null = null): Piece[] {
   const pool: Piece[] = ['spikes', 'spikes', 'blade', 'pit', 'goblin', 'ledge'];
   if (stage >= 2) pool.push('flames', 'bat');
   if (stage >= 3) pool.push('steps', 'goblin');
+  if (road === 'high') pool.push('goblin', 'bat');
   return pool;
 }
 
@@ -27,9 +58,14 @@ export const OPENING: Piece[] = ['spikes', 'blade', 'goblin', 'ledge'];
 
 const pickOf = <T>(s: GameState, items: T[]) => items[Math.floor(rand(s) * items.length)];
 
-/** Room between one obstacle and the next on a stage: at least the length of a jump and a landing. */
-export function gapsOf(stage: number) {
-  const min = Math.max(300, 440 - 25 * (stage - 1));
+/**
+ * Room between one obstacle and the next on a stage: at least the length of a jump and a landing.
+ * The High Road packs them closer, the Low Road spreads them out, and the run after the dragon is
+ * beaten packs them closer still.
+ */
+export function gapsOf(stage: number, road: Road | null = null, hard = false) {
+  const base = Math.max(300, 440 - 25 * (stage - 1));
+  const min = Math.max(240, base + (road === 'high' ? ROAD.highGap : road === 'low' ? ROAD.lowGap : 0) + (hard ? HARDER.gap : 0));
   return { min, max: min + 200 };
 }
 
@@ -49,13 +85,16 @@ interface Plan {
 function planOf(s: GameState, piece: Piece): Plan {
   const id = () => s.nextId++;
   const coin = (x: number, h: number) => s.course.push({ id: id(), x, h, pulled: false });
-  /** An arc of coins over a jump, on ground of height `base`. */
+  const high = s.road === 'high';
+  /** An arc of coins over a jump, on ground of height `base`; two more on the High Road. */
   const arc = (mid: number, base = 0) => {
     for (const [dx, h] of [[-44, 70], [0, 104], [44, 70]]) coin(mid + dx, base + h);
+    if (high) for (const [dx, h] of [[-76, 36], [76, 36]]) coin(mid + dx, base + h);
   };
-  /** Low coins along the ground, picked up on a slide. */
+  /** Low coins along the ground, picked up on a slide; two more on the High Road. */
   const low = (mid: number) => {
     for (const dx of [-30, 0, 30]) coin(mid + dx, 10);
+    if (high) for (const dx of [-60, 60]) coin(mid + dx, 10);
   };
   const trap = (kind: TrapKind, x: number, w: number, extra: Partial<GameState['traps'][number]> = {}) =>
     s.traps.push({ id: id(), kind, x, w, h: 0, vx: 0, ...extra });
@@ -90,7 +129,7 @@ function planOf(s: GameState, piece: Piece): Plan {
     case 'bat': {
       // A bat flies at the knight once awake; it starts far enough out to meet them at `x`.
       const v = BAT.speed(s.stage);
-      const ahead = (v * AWAKE) / (speedOf(s.stage) + v);
+      const ahead = (v * AWAKE) / (s.speed + v);
       return { span: BAT.w + 40, place: (x) => (trap('bat', x + ahead, BAT.w, { h: BAT.h, vx: -v }), low(x + 13)) };
     }
     case 'ledge': {
@@ -108,7 +147,7 @@ function planOf(s: GameState, piece: Piece): Plan {
     case 'steps': {
       // Two steps up, one after the other, then a drop from the top back to the road. Each step is
       // long enough to land a jump on and jump again before the next, at the stage's speed.
-      const w = Math.max(240, 40 * Math.ceil(speedOf(s.stage) / 40));
+      const w = Math.max(240, 40 * Math.ceil(s.speed / 40));
       return {
         span: 2 * w,
         place: (x) => {
@@ -121,22 +160,28 @@ function planOf(s: GameState, piece: Piece): Plan {
   }
 }
 
+/** Whether this stage is the dragon's: the first to start at or past `DRAGON_AT` metres, until it is beaten. */
+export const dragonStage = (s: Pick<GameState, 'stageStart' | 'dragonBeaten'>) => !s.dragonBeaten && metres(s.stageStart) >= DRAGON_AT;
+
 export function buildStage(s: GameState) {
-  if (isBossStage(s.stage)) return buildBossStage(s);
+  if (dragonStage(s)) return buildBossStage(s, 'dragon');
+  if (isBossStage(s.stage)) return buildBossStage(s, 'gate');
+  if (isRockStage(s.stage)) s.rockfall = { x: s.distance - RUNNER_BACK - ROCK.start };
+  if (s.stage >= DARE.from) s.dare = dareOf(s.stage);
   const end = s.checkpointX - CLEAR_BEFORE_CHECKPOINT;
-  const { min, max } = gapsOf(s.stage);
+  const { min, max } = gapsOf(s.stage, s.road, s.dragonBeaten);
   let x = s.stageStart + LEAD_IN;
   let last: Piece | null = null;
   const opening = s.stage === 1 ? [...OPENING] : [];
-  // A row of coins on the clear run, to show the way.
-  for (let i = 0; i < 5; i++) s.course.push({ id: s.nextId++, x: s.stageStart + 300 + i * 40, h: 12, pulled: false });
+  // A row of coins on the clear run, to show the way; a longer one on the High Road.
+  for (let i = 0; i < (s.road === 'high' ? 8 : 5); i++) s.course.push({ id: s.nextId++, x: s.stageStart + 300 + i * 40, h: 12, pulled: false });
   /** The open road between one piece and the next, where a shrine can stand. */
   const gaps: [number, number][] = [];
   let lastEnd: number | null = null;
   while (x < end) {
     // Nothing but spikes comes twice in a row. The opening is evenly spaced, so it always fits.
     const first = opening.shift();
-    const piece = first ?? pickOf(s, piecesOf(s.stage).filter((p) => p === 'spikes' || p !== last));
+    const piece = first ?? pickOf(s, piecesOf(s.stage, s.road).filter((p) => p === 'spikes' || p !== last));
     const plan = planOf(s, piece);
     if (x + plan.span > end) break;
     plan.place(x);
@@ -145,8 +190,9 @@ export function buildStage(s: GameState) {
     last = piece;
     x += plan.span + (first ? min : min + rand(s) * (max - min));
   }
-  if (s.stage >= SHRINE.from) placeShrine(s, gaps);
+  if (s.stage >= SHRINE.from && s.road !== 'high') placeShrine(s, gaps);
 }
+
 
 /** Stands the stage's shrine in the middle of the gap nearest the middle of the stage. */
 function placeShrine(s: GameState, gaps: [number, number][]) {
@@ -159,20 +205,32 @@ function placeShrine(s: GameState, gaps: [number, number][]) {
 }
 
 /**
- * The Gatekeeper's stage: a row of coins on the lead-in, then the Gatekeeper waiting on the open
- * road. Its checkpoint is pushed on ahead of the knight until it is beaten (see `boss.ts`).
+ * A boss's stage: a row of coins on the lead-in, then the Gatekeeper or the dragon waiting on the
+ * open road. Its checkpoint is pushed on ahead of the knight until it is beaten (see `boss.ts`).
  */
-function buildBossStage(s: GameState) {
+function buildBossStage(s: GameState, kind: BossKind) {
+  const n = BOSS[kind];
   for (let i = 0; i < 5; i++) s.course.push({ id: s.nextId++, x: s.stageStart + 300 + i * 40, h: 12, pulled: false });
-  s.boss = { x: s.stageStart + LEAD_IN + BOSS.station, w: BOSS.w, hp: BOSS.hp, mode: 'wait', ms: 0, thrown: 0, hurtMs: 0 };
+  s.boss = { kind, x: s.stageStart + LEAD_IN + n.station, w: n.w, hp: n.hp, mode: 'wait', ms: 0, thrown: 0, hurtMs: 0 };
+  s.road = null;
+  s.terrain = 'road';
 }
 
 /** Starts the stage after a checkpoint, right where the last one ended. */
 export function nextStage(s: GameState) {
   s.stage += 1;
   s.terrain = terrainOf(s.stage);
+  s.speed = speedOf(s.stage, s.dragonBeaten);
   s.boss = null;
+  s.rockfall = null;
+  s.dare = null;
   s.stageStart = s.checkpointX;
   s.checkpointX = s.stageStart + STAGE_LEN;
   buildStage(s);
+}
+
+/** Whether the checkpoint at `checkpointX` asks for a road: the next stage is an ordinary one from stage `ROAD.from`. */
+export function roadChoiceDue(s: Pick<GameState, 'stage' | 'checkpointX' | 'dragonBeaten'>) {
+  const next = s.stage + 1;
+  return next >= ROAD.from && !isBossStage(next) && !dragonStage({ stageStart: s.checkpointX, dragonBeaten: s.dragonBeaten });
 }

@@ -3,14 +3,15 @@ import { BOON_IDS, type BoonId } from './boons';
 
 // Progress kept between runs, in the browser's local storage: the best distance, the coins banked,
 // the boon bought for the next run, the armoury's levels and the daily course's best. Every key is
-// prefixed with the game's name, since every game shares the hub's origin. Storage can be blocked or
-// full, so every access is wrapped.
+// prefixed with the game's name, since every game shares the hub's origin, and the crown from the
+// Dragon's Keep. Storage can be blocked or full, so every access is wrapped.
 
 const BEST = 'hotfoot-best';
 const BANK = 'hotfoot-bank';
 const PENDING = 'hotfoot-start';
 const ARMOURY_KEY = 'hotfoot-armoury';
 const DAILY = 'hotfoot-daily';
+const CROWN = 'hotfoot-crown';
 
 export interface Progress {
   best: number;
@@ -19,6 +20,8 @@ export interface Progress {
   armoury: Armoury;
   /** The best distance on the last daily course run, and its date (`YYYY-MM-DD`). */
   daily: { date: string; best: number } | null;
+  /** Whether the dragon of the Dragon's Keep has ever been beaten. */
+  crown: boolean;
 }
 
 function read(key: string) {
@@ -53,10 +56,11 @@ export function loadProgress(): Progress {
     pending: BOON_IDS.find((id) => id === pending) ?? null,
     armoury,
     daily,
+    crown: read(CROWN) === '1',
   };
 }
 
-export function saveProgress({ best, bank, pending, armoury, daily }: Progress) {
+export function saveProgress({ best, bank, pending, armoury, daily, crown }: Progress) {
   try {
     localStorage.setItem(BEST, String(best));
     localStorage.setItem(BANK, String(bank));
@@ -64,6 +68,7 @@ export function saveProgress({ best, bank, pending, armoury, daily }: Progress) 
     else localStorage.removeItem(PENDING);
     localStorage.setItem(ARMOURY_KEY, JSON.stringify(armoury));
     if (daily) localStorage.setItem(DAILY, JSON.stringify(daily));
+    if (crown) localStorage.setItem(CROWN, '1');
   } catch {
     // Storage can be full or blocked (private mode); the game keeps running unsaved.
   }

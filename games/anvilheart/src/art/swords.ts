@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
-import { isGem, isGemmed, tierOf } from '../game/items';
+import { isBattered, isGem, isGemmed, tierOf } from '../game/items';
 import { MAX_TIER } from '../game/swords';
-import { PI, bake, ctx, diamond, glass, glow, lit, mix, rect, reseed, ring, type Pt } from './glass';
+import { PI, bake, ctx, diamond, glass, glow, lit, mix, paint, rect, reseed, ring, type Pt } from './glass';
 
 // Every sword is a leaded window piece lying corner to corner, hilt at the bottom left: a blade of
 // two panes split along its ridge, a guard, a grip and a jewel pommel. Better swords are longer and
@@ -49,14 +49,16 @@ export const SWORD_SIZE = 100;
 /** The scale the swords are painted at; a sword image at scale 1 is this big on its anvil. */
 const PAINT_SCALE = 1.15;
 
-export const swordTexture = (tier: number, gemmed = false) => `sword-${tier}${gemmed ? '-gem' : ''}`;
+export const swordTexture = (tier: number, gemmed = false, battered = false) => `sword-${tier}${gemmed ? '-gem' : ''}${battered ? '-worn' : ''}`;
 /** The texture of anything that can lie on an anvil (see `items.ts`). */
-export const itemTexture = (item: number) => (isGem(item) ? 'gem' : swordTexture(tierOf(item), isGemmed(item)));
+export const itemTexture = (item: number) => (isGem(item) ? 'gem' : swordTexture(tierOf(item), isGemmed(item), isBattered(item)));
 
 export function bakeSwords(scene: Phaser.Scene) {
   for (let tier = 1; tier <= MAX_TIER; tier++) {
     for (const gemmed of [false, true]) {
-      bake(scene, swordTexture(tier, gemmed), SWORD_SIZE, SWORD_SIZE, () => drawSword(tier, SWORD_SIZE, SWORD_SIZE, PAINT_SCALE, 0.6, gemmed));
+      for (const battered of [false, true]) {
+        bake(scene, swordTexture(tier, gemmed, battered), SWORD_SIZE, SWORD_SIZE, () => drawSword(tier, SWORD_SIZE, SWORD_SIZE, PAINT_SCALE, 0.6, gemmed, battered));
+      }
     }
   }
   bake(scene, 'gem', SWORD_SIZE, SWORD_SIZE, () => drawGem(SWORD_SIZE, SWORD_SIZE + 6, 34));
@@ -99,12 +101,14 @@ function bladeHalves(tier: number) {
 
 /**
  * Paints a sword of `tier` centred on (x, y) in art units, pointing up and to the right, at scale
- * `s`, with a halo of light behind it of strength `light`.
+ * `s`, with a halo of light behind it of strength `light`. A battered one, brought back from a
+ * quest, is in dulled glass with a notched edge and cracks across the blade.
  */
-export function drawSword(tier: number, x: number, y: number, s: number, light = 1, gemmed = false) {
+export function drawSword(tier: number, x: number, y: number, s: number, light = 1, gemmed = false, battered = false) {
   const sh = SHAPES[tier - 1];
-  const c = COLOURS[tier - 1];
-  if (light) glow(x, y, 70 * s, mix(c.b, '#ffffff', 0.3), 0.18 * light);
+  const fresh = COLOURS[tier - 1];
+  const c = battered ? { b: mix(fresh.b, '#6a5a4a', 0.45), g: mix(fresh.g, '#5a4a3a', 0.4), h: fresh.h, p: mix(fresh.p, '#5a4a3a', 0.4) } : fresh;
+  if (light && !battered) glow(x, y, 70 * s, mix(c.b, '#ffffff', 0.3), 0.18 * light);
   reseed(tier * 31);
   ctx.save();
   ctx.translate(x, y);
@@ -124,6 +128,21 @@ export function drawSword(tier: number, x: number, y: number, s: number, light =
     glass([[30, -2.5], [sh.blade[0] * 0.8, -1.5], [sh.blade[0] * 0.8, 1.5], [30, 2.5]], '#ffd36a', { lw: 1.5 / s, flat: true });
     glow(16, 0, 22, '#ffb080', 0.7);
     glass([[26, 0], [14, -9], [7, -9], [4, -5], [6, 0], [4, 5], [7, 9], [14, 9]], '#ff4a3a', { lw: 2 / s, flat: true, hi: 0.5 });
+  }
+  // Battered: two notches bitten from the edge and a crack across the blade.
+  if (battered) {
+    const len = sh.blade[0];
+    const hw = sh.blade[1] / 2;
+    for (const u of [0.35, 0.62]) {
+      const bend = -sh.blade[2] * len * u * u;
+      glass([[len * u - 5, bend - hw - 1], [len * u + 5, bend - hw - 1], [len * u + 1, bend - hw + 5]], '#2a2430', { lw: 1.5 / s, flat: true });
+    }
+    paint(() => {
+      ctx.moveTo(len * 0.48, -hw);
+      ctx.lineTo(len * 0.5, -1);
+      ctx.lineTo(len * 0.46, 2);
+      ctx.lineTo(len * 0.5, hw);
+    }, 2 / s);
   }
   const [gs, gt] = sh.guard;
   glass([[-gt, -gs], [0, -gs], [0, gs], [-gt, gs]], c.g, { lw, flat: true });

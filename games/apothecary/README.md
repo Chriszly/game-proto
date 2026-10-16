@@ -37,7 +37,8 @@ bigger than the screen, so the camera follows the doctor.
 
 1. **Gardens**: each garden grows one kind of plant in nine beds, three rows of three edge to
    edge. Harvest ripe wheat in the wheat field and mandrake in the mandrake patch. Beds regrow on
-   their own: wheat in 24 seconds, mandrake in 42 and nightshade in 54.
+   their own: wheat in 24 seconds, mandrake in 42 and nightshade in 54. Tap a garden's sign to
+   replant it with another plant of its line (see **Replanting** below).
 2. **Refining table**: drop off plants; wheat becomes wheat flour, mandrake becomes mandrake seeds
    and nightshade becomes nightshade extract.
    Stand on the work spot while it refines; pick the finished goods up on the pick-up marker.
@@ -62,7 +63,8 @@ bigger than the screen, so the camera follows the doctor.
    pays 2.5% less for a potion for each other one of its kind still on the shelves, down to half
    price, and the cut for the next sale shows under each shelf ("-30%"). A fine potion stands on
    its plain potion's shelf, with a gold sparkle, and goes to the next customer who wants that
-   potion first.
+   potion first. Each shelf has a price sign beside it, Cheap, Fair or Dear (see **Price signs**
+   below).
 
 ![The recipes](docs/screenshots/playthrough-0-recipes.png)
 
@@ -106,6 +108,58 @@ kept, as before.
 at once, filling every place at the counter and two more. Serve every one of them and the purse
 gets 6 coins for each; if any walks off, the bonus is lost. The town card counts them, and a note
 under it says how it went.
+
+**Blight**: from the third day, rain can blight a bed (about one every 45 seconds of a rainy day).
+A blighted bed withers to a sickly violet-grey, stops growing and blights a neighbouring bed in
+its garden every 40 seconds, in any weather, until the doctor walks past it: the sickle clears
+blighted beds in reach before it cuts anything, hands full or not, and the bed grows again from
+seed. The town card says which garden the blight struck. The guild's **Herbalist** upgrade (60
+coins, after growth) makes every bed immune, so a garden left to the pixies is never quite
+hands-off until then.
+
+![Blight in the wheat field: the withered beds, and the town card's warning](docs/screenshots/blight.png)
+
+**Replanting**: tap a garden's sign to switch all nine of its beds to the next plant its line
+grows: wheat, mandrake, and nightshade once the line's shade garden is planted (the shade garden
+can be switched too). The sign shows the plant's name and icon. Every bed starts again from seed
+and the blight is cleared, so rebalancing the gardens for the day's contract costs a crop. The
+pixies pick from whatever each garden grows, flying it in from that garden.
+
+![The wheat field replanted with mandrakes, growing from seed](docs/screenshots/replant.png)
+
+**Price signs**: each shelf has a sign beside it, Fair at first. Tap it to go Dear, then Cheap,
+then Fair again. A Dear potion sells for 40% more, but a customer waiting for one loses patience
+half again as fast (and so tips less). A Cheap one sells for 25% less, is asked for twice as
+often and raises the reputation by 2 more for each one sold. The cut under each shelf counts the
+sign in: "+33%" or "-27%" against the price.
+
+![Price signs: Healing Draughts cheap, Sleeping Tonics dear](docs/screenshots/price-signs.png)
+
+**The rival shop**: from the fourth day a rival apothecary opens a stall across the street, left
+of the street door, and undercuts one potion a day (the same one in every game, going round what
+customers ask for). Customers pay 30% less for a plain one that day ("rival -30%" under its
+shelf); a Fine one beats the cut and pays in full. The rival sells 4 of that potion a day itself;
+sell 5 or more and the day counts as outsold. The stall's lines say what is undercut and how the
+race stands ("Outsold 2/10 days, 3/5 today"). Outsell it for a month, ten days running, and it
+closes for good: the stall is boarded up and the street is yours.
+
+![The rival's stall across the street, undercutting Sleeping Tonics](docs/screenshots/rival-shop.png)
+
+**The plague**, the game's ending: from the fifth day a sickness spreads through the town in
+three stages, each on its own card under the town card. The first asks for 6 Healing Draughts,
+the second for 6 Sleeping Tonics, the third for 10 potions of any kind, each sold at the counter
+within three days (a pip per potion, and the days left on the right). A stage met moves the
+sickness on; a stage missed comes back asking for 2 more and costs 10 reputation. Past the last
+stage the **Panacea** is unlocked: one wheat flour, one mandrake seeds and one nightshade extract
+in a cauldron brew the town's cure (9 seconds) before anything else, and it goes straight to the
+town the moment it is done, never out early and never for sale. That cures the town and wins the
+game: a panel says so, and "Keep trading" carries on with the shop as it is.
+
+![Plague, stage one: two of six Healing Draughts sold, three days left](docs/screenshots/plague-stage.png)
+
+![The Panacea unlocked and brewing in the cauldron](docs/screenshots/panacea.png)
+
+![The town is cured](docs/screenshots/plague-cured.png)
 
 ![Rain over the yard](docs/screenshots/weather-rain.png)
 ![Heat waves on a drought day](docs/screenshots/weather-drought.png)
@@ -208,13 +262,14 @@ growth makes every garden grow a quarter faster per level (20, then 40 coins), p
 as fast per level, carrying more goods a second (30, then 60), storage lets every pallet and shelf
 hold 10 more of each kind per level (25, 50, then 100), prices make customers pay a quarter
 more per potion per level (20, then 40), an extra order slot lets a fourth customer wait at the
-counter (30), and customers makes them come in more often, a new one every 6 to 10 seconds and then
-every 4 to 7 instead of every 12 to 20 (25, then 50). A busier shop is harder to keep up with: per
+counter (30), customers makes them come in more often, a new one every 6 to 10 seconds and then
+every 4 to 7 instead of every 12 to 20 (25, then 50), and the herbalist (60, after growth) keeps
+every bed clear of blight. A busier shop is harder to keep up with: per
 customers level, a fifth more customers want two potions (35% at first, then 55% and 75%), and they
 wait a third less long, then half as long. One line with a craftsman per station can't serve
 everyone at the top level; it takes the second line, more craftsmen or station upgrades.
 
-![The guild](docs/screenshots/guild.png)
+![The guild, with the herbalist for sale](docs/screenshots/guild.png)
 
 ![Every purple marker's icon, one for each kind of thing it buys](docs/screenshots/upgrade-icons.png)
 

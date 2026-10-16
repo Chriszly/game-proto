@@ -1,9 +1,12 @@
 import Phaser from 'phaser';
 import { CELL_CAP, FLOWERS } from '../game/state';
 import { MEADOWS } from '../game/meadows';
-import { AWAY, BOARD, COMB, FAR_RIDGE, FLOWER_GROUND, GOAL, HIVE, MARKET, MEADOW_SPOTS, ORDER, PLAQUE, MEADOW_TAG, VIEW, farY, flowerSpot } from '../scenes/layout';
+import { AWAY, BOARD, CASK, COMB, CONTRACT, END_CARD, FAR_RIDGE, FLOWER_GROUND, GOAL, HIVE, HIVE_TAB, MARKET, MEADOW_SPOTS, ORDER, PLAQUE, MEADOW_TAG, SWARM, VIEW, farY, flowerSpot } from '../scenes/layout';
 import { KINDS } from '../game/honey';
-import { BROOD_CARD, CARD, KIND_CARD, MEADOW_CARD, NOTE_CARD, PETALS, WAX_CARD } from './palette';
+import { BROOD_CARD, CARD, KIND_CARD, MEADOW_CARD, MEAD_CARD, NOTE_CARD, ORCHARD_CARD, PETALS, WAX_CARD } from './palette';
+
+/** The rosette's deeper gold on the end card. */
+const LIVE_GOLD = '#e8a31c';
 import { addTexture, circ, cut, hex, outline, rect, reseed, resOfCtx, rr, sketch, smooth, type Pt } from './paper';
 
 // The meadow and the hive in cut paper: a sky sheet with a paper sun and clouds, layered hills with
@@ -342,11 +345,39 @@ function bakeCards(scene: Phaser.Scene) {
   });
   // The market board under the hive, a cream card like the goal card.
   card('market-card', MARKET.w, MARKET.h, (ctx) => cut(ctx, rr(0, 0, MARKET.w, MARKET.h, 8), CARD.goal, { depth: 4 }));
-  // The village order: a note pinned to the button board, with a stitched edge and a green pin.
+  // The village order and the orchard contract: notes pinned to the button board, with a stitched edge and a pin.
   card('order-card', ORDER.w, ORDER.h, (ctx) => {
     cut(ctx, rr(0, 0, ORDER.w, ORDER.h, 4), NOTE_CARD.paper, { depth: 3 });
     outline(ctx, rr(3.5, 3.5, ORDER.w - 7, ORDER.h - 7, 3), NOTE_CARD.edge, 1, [3, 3]);
     cut(ctx, circ(ORDER.w / 2, 4, 3.6), NOTE_CARD.pin, { depth: 1.5, wob: 0 });
+  });
+  card('contract-card', CONTRACT.w, CONTRACT.h, (ctx) => {
+    cut(ctx, rr(0, 0, CONTRACT.w, CONTRACT.h, 4), ORCHARD_CARD.paper, { depth: 3 });
+    outline(ctx, rr(3.5, 3.5, CONTRACT.w - 7, CONTRACT.h - 7, 3), ORCHARD_CARD.edge, 1, [3, 3]);
+    cut(ctx, circ(CONTRACT.w / 2, 4, 3.6), ORCHARD_CARD.pin, { depth: 1.5, wob: 0 });
+  });
+  // A mead cask: a barrel with two hoops, standing on the shelf.
+  card('cask', CASK.w, CASK.h, (ctx) => {
+    cut(ctx, rr(0, 0, CASK.w, CASK.h, 7), MEAD_CARD.stave, { depth: 2.5 });
+    for (const y of [6, CASK.h - 9]) cut(ctx, rect(1, y, CASK.w - 2, 3), MEAD_CARD.hoop, { depth: 0.5, wob: 0 });
+    cut(ctx, circ(CASK.w / 2, CASK.h / 2, 3, 3, 10), MEAD_CARD.bung, { depth: 0.5, wob: 0 });
+  });
+  // The tabs on the hive roof that switch combs: cream when shown, flat brown otherwise.
+  card('hive-tab-on', HIVE_TAB.w, HIVE_TAB.h, (ctx) => cut(ctx, rr(0, 0, HIVE_TAB.w, HIVE_TAB.h, 5), CARD.plaque, { depth: 2 }));
+  card('hive-tab-off', HIVE_TAB.w, HIVE_TAB.h, (ctx) => cut(ctx, rr(0, 0, HIVE_TAB.w, HIVE_TAB.h, 5), CARD.roofTrim, { depth: 0.5, shadow: 0.2 }));
+  // The swarm chip under the hive, a warm card to tap while the swarm gathers.
+  card('swarm-chip', SWARM.w, SWARM.h, (ctx) => cut(ctx, rr(0, 0, SWARM.w, SWARM.h, 8), CARD.roof, { depth: 4 }));
+  // The end card, a big cream card with a gold rosette, when the fair makes the player the Baron.
+  card('end-card', END_CARD.w, END_CARD.h, (ctx) => {
+    cut(ctx, rr(0, 0, END_CARD.w, END_CARD.h, 14), CARD.goal, { depth: 6 });
+    outline(ctx, rr(8, 8, END_CARD.w - 16, END_CARD.h - 16, 10), NOTE_CARD.edge, 1.5, [5, 4]);
+    const [rx, ry] = [END_CARD.w / 2, 46];
+    for (let n = 0; n < 12; n++) {
+      const t = (n / 12) * Math.PI * 2;
+      cut(ctx, circ(rx + Math.cos(t) * 15, ry + Math.sin(t) * 15, 6, 6, 10), n % 2 ? CARD.sun : LIVE_GOLD, { depth: 1 });
+    }
+    cut(ctx, circ(rx, ry, 13), CARD.sun, { depth: 1 });
+    cut(ctx, circ(rx, ry, 7), '#fff0b0', { depth: 0.5 });
   });
   // Green tags: the build preview's callout and the "+N touching" pop.
   card('tag-build', 104, 32, (ctx) => cut(ctx, rr(0, 0, 104, 32, 7), CARD.green, { depth: 3 }));

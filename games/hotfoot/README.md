@@ -15,9 +15,14 @@ with the traps a little closer together. Coins taken in a row build a streak tha
 from the second trades coins for a heart, and a run track under the top band shows how far the
 knight is from the next banner and from the best run. Each stage after the first runs on its own
 ground with its own rule (a frozen pass, a fen, a windy pass), and every fifth stage a Gatekeeper
-bars the road. Some checkpoints offer a cursed boon, a gift with a price. Coins are banked when the
-knight falls, and buy back the boon you missed at the last checkpoint or lasting upgrades in the
-armoury. A daily course, the same for everyone on the day, keeps its own best distance.
+bars the road. Some checkpoints offer a cursed boon, a gift with a price, and two boons held
+together unlock a hidden bonus. From the second checkpoint the knight also picks the next road, the
+bold High Road or the safer Low Road, and from stage 2 a herald sets a dare on each stage that pays
+coins and a third boon card. Every seventh stage a rockfall rolls in behind the knight, and at
+1500 m the dragon of the Dragon's Keep waits to be beaten for a lasting crown, after which the run
+goes on harder. Coins are banked when the knight falls, and buy back the boon you missed at the last
+checkpoint or lasting upgrades in the armoury. A daily course, the same for everyone on the day,
+keeps its own best distance.
 
 ![The knight leaping a flame on stage 3, a wayside shrine and a goblin ahead](cover.png)
 
@@ -30,6 +35,7 @@ armoury. A daily course, the same for everyone on the day, keeps its own best di
 | Tap the top half of the screen, or Space / Up / W | Jump (again in the air with Second Leap) |
 | Tap the bottom half of the screen, or Down / S | Slide; in the air, drop fast and slide on landing |
 | Tap a card | Take that boon at a checkpoint |
+| Tap a road card | From stage 3: pick the road the next stage runs on, once the boon is taken |
 | Run again | After a fall: a new run from the start, with no boons (or the one bought on the game-over panel) |
 | Daily course | After a fall: a run on the day's own course |
 | Armoury | After a fall: spend banked coins on lasting upgrades |
@@ -100,8 +106,41 @@ A hint on the first stretch of the run shows where to tap.
    offers are drawn from the date, the same for everyone that day. Its best distance is kept apart
    from the ordinary best, and the tag says "Daily" while it runs.
 
-   The best distance, the banked coins, any boon bought, the armoury and the day's best on the
-   daily course are saved between runs.
+17. **Forked roads**: from the second checkpoint, once the boon is taken, two road cards come up for
+   the next stage (not for a Gatekeeper's or the dragon's stage). **The High Road** has more coins
+   (five in each arc and row, a longer row on the lead-in), another goblin and bat in the mix,
+   obstacles 40 px closer together, no shrine, and a streak cap of x7 instead of x5. **The Low
+   Road** keeps the usual mix with obstacles 40 px further apart and has the wayside shrine. The tag
+   right of the run track names the road.
+18. **The herald's dare**: from stage 2, each ordinary stage opens with a dare in its title, shown
+   with its progress in the strip under the tag: stomp 2 foes, take no hit, take 20 coins, or reach
+   a x3 streak, going round in that order (stage 2 is the stomp, stage 3 no hit, and so on). Meeting
+   it pays 20 coins on the spot ("Dare met!") and puts a **third boon card** on the stage's
+   checkpoint. A no-hit dare is met at the banner, and lost to any hit, a blocked one included.
+19. **Boon pairs**: some boons held together unlock a hidden bonus, hinted at on their cards
+   ("Pairs with Second Leap: ...", in green once the other half is held) and announced when the
+   pair completes:
+
+   | Pair | Boons | Bonus |
+   | --- | --- | --- |
+   | Falcon's Glide | Winged Boots + Second Leap | The knight falls at half the pull of the ground, so every leap carries further |
+   | Goblin's Hoard | Golden Greed + Lodestone | A stomped goblin or bat bursts into three coins instead of one |
+   | Bulwark | Aegis + Shadow Cloak | A hit the shield shrugs off knocks every foe, barrel, axe, fire and tail lash within 220 px ahead off the road |
+
+20. **The rockfall**: on every seventh stage (7, 14, 21...) a fall of boulders rolls in behind the
+   knight, 240 px back. It keeps their pace and creeps up 10 px a second, and gains 90 px on every
+   hit and 45 px on every skid on the Frozen Pass. If it catches the knight it costs a heart and
+   falls back to where it started. The tag reads "Rockfall!" and the title warns of it.
+21. **The Dragon's Keep**: the first stage that begins at or past 1500 m is the dragon's, on the
+   old road with no road choice before it. The dragon keeps ahead like the Gatekeeper, breathing
+   gouts of fire that roll along the road (jump them) and lashing its tail at head height (slide
+   under it), then tires and lowers its head: stomp it three times to beat it for 60 coins, a
+   lasting **crown** (worn on the knight's helm in every run after, and named on the game-over
+   panel) and the stage's banner a little way on. **The run then goes on harder**: 60 px/s faster
+   from that moment and on every stage after, with obstacles 50 px closer together.
+
+   The best distance, the banked coins, any boon bought, the armoury, the day's best on the
+   daily course and the crown are saved between runs.
 
 ![A streak at x3: the chip, a "+3" pop and the trail of gold stars](docs/screenshots/streak.png)
 
@@ -141,6 +180,20 @@ A hint on the first stretch of the run shows where to tap.
 
 ![A daily course under way](docs/screenshots/daily-course.png)
 
+![Choosing the road for stage 3](docs/screenshots/forked-roads.png)
+
+![Stage 3 on the High Road: its title names the road and the herald's dare, shown under the tag](docs/screenshots/high-road.png)
+
+![Stage 4 on the Low Road, with a pair just completed](docs/screenshots/low-road.png)
+
+![The rockfall close behind on stage 7](docs/screenshots/rockfall.png)
+
+![The dragon breathes fire along the road and lashes its tail](docs/screenshots/dragon-fire.png)
+
+![The knight bounces off the dragon's head, and it flies ahead](docs/screenshots/dragon-stomp.png)
+
+![The dragon beaten: the crown on the knight's helm](docs/screenshots/crowned.png)
+
 ### Boons and the coin shop
 
 | Boon | Ranks | What it does |
@@ -161,6 +214,10 @@ A hint on the first stretch of the run shows where to tap.
 ![Two boons at a checkpoint](docs/screenshots/playthrough-1-checkpoint.png)
 
 ![A cursed boon beside an ordinary one](docs/screenshots/cursed-boon.png)
+
+![Three cards after a met dare, with the pair hints](docs/screenshots/dare-met-three-cards.png)
+
+![After a fall at the Dragon's Keep, crowned](docs/screenshots/game-over-crowned.png)
 
 ![A hit](docs/screenshots/hit.png)
 
@@ -208,12 +265,14 @@ All paths are inside `games/hotfoot/`.
 
 - `src/game/`: the rules in plain TypeScript with no Phaser dependency. `state.ts` holds the run,
   the knight's and the traps' sizes and works out the knight's numbers from the boons taken,
-  `course.ts` lays out each stage's traps, foes, ledges, coins and shrine (or the Gatekeeper),
-  `boons.ts` is the table of boons (cursed ones too), `boss.ts` moves the Gatekeeper and its throws,
+  `course.ts` lays out each stage's traps, foes, ledges, coins and shrine by its road, its dare
+  and its rockfall (or the Gatekeeper or the dragon), `boons.ts` is the table of boons (cursed ones
+  too), `pairs.ts` the boon pairs, `boss.ts` moves the Gatekeeper and the dragon and their throws,
   `armoury.ts` is the table of lasting upgrades, `sim.ts` moves the run on (foes, ledges, stomps,
-  the ground's rules, the Gatekeeper, the coin streak and shrines included), jumps, slides, takes
-  boons and sells the missed one and the armoury's levels, and `save.ts` keeps the best distance,
-  the banked coins, any boon bought, the armoury and the daily course's best.
+  the ground's rules, the bosses, the rockfall, the dares, the pairs' bonuses, the coin streak and
+  shrines included), jumps, slides, takes boons and roads and sells the missed boon and the
+  armoury's levels, and `save.ts` keeps the best distance, the banked coins, any boon bought, the
+  armoury, the daily course's best and the crown.
 - `src/scenes/`: `BootScene` bakes textures, `GameScene` draws the run and wires taps and keys to
   the rules, `layout.ts` says where things are drawn.
 - `src/art/`: all the art, painted in code on 2D canvases at startup, in the manner of an
@@ -221,10 +280,11 @@ All paths are inside `games/hotfoot/`.
   helpers and pigments in `ink.ts`. `scenery.ts` paints the vellum page and its margin, the sky,
   crags and trees, the road on each ground, the ledges, the traps, the coins, the checkpoint
   banner, the wayside shrine and the miniature's frame; `knight.ts` the knight's poses; `foes.ts`
-  the goblin, bat, Gatekeeper and its barrel and axe; `icons.ts` the boon and armoury icons and
-  hearts; `hud.ts` the top band, the illuminated initial, the streak chip, the run track's strip,
-  the stage's tag, the vellum panels and the buttons.
-- `src/ui/`: the boon cards and buttons.
+  the goblin, bat, Gatekeeper and its barrel and axe, the dragon and its fire and tail lash, and
+  the rockfall's boulder; `icons.ts` the boon, road and armoury icons and hearts; `hud.ts` the top
+  band, the illuminated initial, the streak chip, the run track's strip, the stage's tag, the
+  dare's strip, the vellum panels and the buttons.
+- `src/ui/`: the boon and road cards and buttons.
 
 Adding a boon is an entry in `src/game/boons.ts`, its effect in `stats` in `src/game/state.ts`, and
 an icon in `src/art/icons.ts`. Adding a trap is a kind in `state.ts` (with its height in

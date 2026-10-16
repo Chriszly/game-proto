@@ -10,7 +10,8 @@ to the counter on the right, each asking for a sword, and you sell them one by d
 them: the exact sword they asked for earns a tip and the guild's good name. Quick merges chain into
 a hammer streak for bonus coins, and royal commissions in the top bar ask you to deliver great
 swords to the crown, ending with the Crown Blade, which wins the smithy. The coins buy upgrades for
-the forge, a fifth row of anvils and a quench barrel.
+the forge, a fifth row of anvils and a quench barrel. After the win you can found a new smithy
+under a new charter, keeping the guild stars that raise every price.
 
 ![The smithy as a stained-glass window, with a Steel Sword held over its two twins](cover.png)
 
@@ -24,6 +25,8 @@ the forge, a fifth row of anvils and a quench barrel.
 | Drag a gem onto a plain sword | Set the gem in it |
 | Drag a sword onto an adventurer | Sell it, if it is at least as good as the one they asked for; the exact one pays a tip |
 | Drag a sword onto the commission banner | Deliver it to the crown, if the commission wants it |
+| Tap the commission banner | Choose between the crown's two offers, or found a new smithy once the Crown Blade is in |
+| Drag a Rusty Dagger onto a battered sword | Repair it, for a bonus |
 | Drag a sword onto the quench barrel, once bought | Keep it there, off the anvils |
 | Tap the quench barrel or the fifth row's button | Buy it |
 | Tap an upgrade | Buy its next rank |
@@ -55,7 +58,12 @@ the forge, a fifth row of anvils and a quench barrel.
    top bar, and the next one takes its place. The commissions are a Golden Claymore (500 coins), a
    Runeblade (1200), a Dragonslayer (3000), two Dragonslayers (6000), three (9000) and last the
    Crown Blade: an Anvilheart (20000). Delivering the Crown Blade wins the smithy; you can keep
-   smithing afterwards.
+   smithing afterwards, or found a new one (see below).
+   **Choose your commission.** From the second commission on, the crown offers each one two ways:
+   quick, as listed, or grand, with a gem set in every sword asked for, for two and a half times
+   the purse (a gemmed Runeblade pays 3000 instead of 1200). A window opens with the two offers
+   when the one before is done; "Decide later" closes it and tapping the banner opens it again.
+   Nothing is delivered until you have chosen.
 7. **Guild reputation.** The meter at the top left starts in the middle. An exact fit raises it by
    5 and an adventurer who walks off lowers it by 10. At full reputation adventurers come twice as
    often (every 3 seconds) and wait 25% longer; at none they come every 9 seconds and wait 25%
@@ -72,8 +80,28 @@ the forge, a fifth row of anvils and a quench barrel.
    for.
 11. **Discovered swords** are shown in a row under the anvils, one frame per tier. A frame shows its
    sword's picture once you have made that sword, and a question mark until then.
-12. **The smithy is kept**: the board and barrel, coins, swords sold, upgrades, the standing
-   commission, your guild stars, reputation and whether you have won are saved in the browser.
+12. **Rust.** A sword left on its anvil for 3 minutes dulls (it fades, and a rust-brown ring round
+   the anvil drains), and a minute later it drops a tier. Moving, merging or swapping it starts it
+   afresh, Rusty Daggers and gems never rust, and the quench barrel keeps a sword safe for as long
+   as you like.
+13. **Adventurers with traits.** From the second adventurer on, about a third come with a trait,
+   written under their order. A **Haggler** waits 60% longer but pays 70% of any price. A
+   **Noble** pays triple for the exact sword asked for and takes nothing else. A **Veteran** also
+   takes the sword one tier below the one asked for, at the price asked (no tip).
+14. **Returning heroes.** Whoever buys a Knight's Blade or better may come back half a minute
+   later (3 in 10 do) with a new order, a trophy of a tenth of the sword's price in coins, and the
+   sword itself, battered and a tier lower, laid on the first empty anvil. A battered sword merges
+   and sells like any other, and a Rusty Dagger dropped on it repairs it for a fifth of its price.
+15. **A new charter.** Once the Crown Blade is in, "Found a new smithy" (in the win window, or by
+   tapping the banner) clears the board, barrel, coins and upgrades but keeps your guild stars,
+   reputation and swords sold. Every guild star raises every sale's price by 5% (a sword's price
+   on the order card already includes it), and in each new charter the commissions ask for one
+   more sword each (two Golden Claymores, then two Runeblades, and so on, paying as much more).
+   The top bar names the charter: Anvilheart II, III and so on. "New smithy" in the corner still
+   throws everything away, stars included.
+16. **The smithy is kept**: the board and barrel (and how long each sword has lain), coins, swords
+   sold, upgrades, the standing commission and its open offer, your guild stars and charter,
+   reputation and whether you have won are saved in the browser.
 
 ![While a Steel Sword is held, the knight who asked for one shows the tipped price and the ranger who asked for less shows Overkill](docs/screenshots/exact-fit-tip.png)
 
@@ -99,6 +127,24 @@ the forge, a fifth row of anvils and a quench barrel.
 
 ![The row of discovered swords under the anvils](docs/screenshots/discovered-swords.png)
 
+![The crown's two offers for the next commission: a Runeblade for 1200 coins, or a gemmed one for 3000](docs/screenshots/commission-offer.png)
+
+![The grand commission chosen: a gemmed Runeblade held over the banner](docs/screenshots/grand-commission.png)
+
+![Three dulled swords with their rust rings draining, next to a fresh one](docs/screenshots/rust.png)
+
+![A Noble, a Haggler and a Veteran at the counter, each tag showing what they would pay for the held Knight's Blade](docs/screenshots/adventurer-traits.png)
+
+![A hero back from the quest with a battered Silver Saber and a trophy](docs/screenshots/returning-hero.png)
+
+![A Rusty Dagger dragged onto the battered Silver Saber to repair it](docs/screenshots/repair-battered.png)
+
+![The win window with "Found a new smithy"](docs/screenshots/found-new-smithy.png)
+
+![The new charter: an empty smithy, six stars, 30% on every price and a commission for two Golden Claymores](docs/screenshots/new-charter.png)
+
+![In the new charter an Iron Shortsword asked for pays 13 coins instead of 10, and 19 as an exact fit](docs/screenshots/charter-prices.png)
+
 ![Dragging a dagger onto its twin](docs/screenshots/playthrough-1-dragging.png)
 
 ### Swords
@@ -119,7 +165,7 @@ more.
 | 9 | Anvilheart | 4000 |
 
 Adventurers never ask for the Anvilheart; it is made for the crown. A gemmed sword asked for pays
-double its price.
+double its price, and every guild star adds 5%.
 
 ### Upgrades
 
@@ -161,16 +207,19 @@ npx playwright test --project anvilheart
 All paths are inside `games/anvilheart/`.
 
 - `src/game/`: the rules in plain TypeScript with no Phaser dependency. `swords.ts`,
-  `upgrades.ts` and `commissions.ts` are data tables, `items.ts` says what can lie on an anvil
-  (swords, gems, gemmed swords) and how two combine, `state.ts` holds the shop, its timings, the
-  reputation rules and the sale price rule, `sim.ts` forges, merges (with streaks), delivers to the
-  crown, sells, buys and moves the adventurers on, and `save.ts` keeps the smithy.
+  `upgrades.ts` and `commissions.ts` are data tables (the last also scales commissions per charter
+  and makes the grand offers), `items.ts` says what can lie on an anvil (swords, gems, gemmed and
+  battered swords) and how two combine, `state.ts` holds the shop, its timings, the reputation,
+  rust, trait and returning-hero rules and the sale price rule, `sim.ts` forges, rusts, merges
+  (with streaks), repairs, delivers to the crown, offers commissions, sells, buys, brings heroes
+  back and founds new charters, and `save.ts` keeps the smithy.
 - `src/scenes/`: `BootScene` bakes textures, `GameScene` draws the smithy and turns drags into
   rules calls, `layout.ts` says where things are drawn.
 - `src/art/`: all the stained-glass art, painted on canvases in code at startup: `glass.ts` holds
   the glass-and-lead painting kit, `scenery.ts` the mosaic wall, furnace, anvils and counter,
-  `swords.ts` the nine swords (each also with a set gem) and the loose gem, `characters.ts` the
-  four adventurers and `ui.ts` the buttons, cards, tags, banner, barrel, win window and effects.
+  `swords.ts` the nine swords (each also with a set gem, and battered) and the loose gem, `characters.ts` the
+  four adventurers and `ui.ts` the buttons, cards, tags, banner, barrel, the win and offer windows
+  and effects.
 - `src/ui/`: the leaded-glass button.
 
 Adding a sword is an entry in `src/game/swords.ts` and a shape and colours for it in

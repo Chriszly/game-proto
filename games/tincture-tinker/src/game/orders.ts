@@ -25,24 +25,41 @@ export const POTION_NAMES: Record<PotionId, string> = {
   philosophersDraught: "Philosopher's Draught",
 };
 
+export type Needs = Partial<Record<Kind, number>>;
+
+/** One stage of a royal commission: a potion and what it needs. */
+export interface Stage {
+  potion: PotionId;
+  needs: Needs;
+}
+
 export interface Order {
   /** 1 for the first order. */
   number: number;
+  /** The potion being brewed: on a royal commission, the stage's; on a twin order, the first customer's. */
   potion: PotionId;
-  needs: Partial<Record<Kind, number>>;
+  /** What is still to gather: the stage's needs on a royal commission, both customers' on a twin order. */
+  needs: Needs;
   moves: number;
-  /** The price, a rush order's bonus included. */
+  /** The price, a rush order's bonus and a second customer's price included. */
   price: number;
   /** A rush order: fewer moves, more coins. */
   rush?: boolean;
   /** An ingredient the order forbids: a swap that matches it costs an extra move. */
   forbid?: Kind;
-  /** Corked jars and resin-coated tiles on the order's board. */
+  /** Corked jars, resin-coated tiles and mouldy tiles on the order's board. */
   jars: number;
   resin: number;
+  mould: number;
+  /** A royal commission: three stages brewed one after the other on one board, the moves carried over. */
+  stages?: Stage[];
+  /** The crown's last order: filling it makes the tinker Royal Apothecary. */
+  last?: boolean;
+  /** A second customer sharing the board and the moves: its potion, its own kinds among `needs` and its price. */
+  second?: { potion: PotionId; needs: Needs; price: number };
 }
 
-type Recipe = Omit<Order, 'number' | 'jars' | 'resin'>;
+type Recipe = Omit<Order, 'number' | 'jars' | 'resin' | 'mould'>;
 
 /** Coins for each move left when an order is filled. */
 export const MOVE_BONUS = 5;
@@ -54,6 +71,22 @@ export const RUSH_MOVES = 3;
 export const RUSH_COINS = 20;
 /** The fewest moves an order can give. */
 const MIN_MOVES = 5;
+
+/** Every fifth order is a royal commission; mould creeps over boards from this order on. */
+export const ROYAL_EVERY = 5;
+export const MOULD_FROM = 5;
+/** A royal commission's stages ask for this share of a recipe's needs, and it pays this share of their prices... */
+const ROYAL_SHARE = 0.5;
+/** ...plus this, with this many moves on top of the first stage's recipe for the two stages after it. */
+export const ROYAL_COINS = 40;
+export const ROYAL_MOVES = 12;
+/** A twin order's two customers each ask for this share of their recipe's two biggest needs... */
+const TWIN_SHARE = 0.6;
+/** ...and the one served first pays this many coins on top. From Journeyman on, every fifth order after the second. */
+export const TWIN_BONUS = 20;
+export const TWIN_AT = 2;
+/** The moves a second customer brings, as a share of its recipe's. */
+const TWIN_MOVES = 0.5;
 
 const ORDERS: Recipe[] = [
   { potion: 'healingDraught', needs: { ember: 12, sage: 12 }, moves: 15, price: 30 },
@@ -70,12 +103,17 @@ export const RANK_RECIPES: Partial<Record<PotionId, Recipe>> = {
   philosophersDraught: { potion: 'philosophersDraught', needs: { ember: 18, moonpetal: 16, mandrake: 16 }, moves: 22, price: 100 },
 };
 
+/** True on the orders that are royal commissions (5, 10, 15...). */
+export const isRoyal = (number: number) => number % ROYAL_EVERY === 0;
+/** True on the orders two customers share, once a recipe is unlocked (Journeyman): 7, 12, 17... */
+export const isTwin = (number: number, unlocked: PotionId[]) => unlocked.length > 0 && number > ROYAL_EVERY && number % ROYAL_EVERY === TWIN_AT;
+
 /**
- * The twist on order `number`: none on the first two, then a rush order, one that forbids an
- * ingredient it doesn't need, and a plain one, round and round.
+ * The twist on order `number`: none on the first two or on a twin order, then a rush order, one that
+ * forbids an ingredient it doesn't need, and a plain one, round and round.
  */
-export function twistFor(number: number, needs: Order['needs']): Pick<Order, 'rush' | 'forbid'> {
-  if (number < 3) return {};
+export function twistFor(number: number, needs: Needs, unlocked: PotionId[] = []): Pick<Order, 'rush' | 'forbid'> {
+  if (number < 3 || isTwin(number, unlocked)) return {};
   if (number % 3 === 0) return { rush: true };
   if (number % 3 === 1) {
     const spare = KINDS.filter((k) => !(k in needs));
@@ -84,24 +122,76 @@ export function twistFor(number: number, needs: Order['needs']): Pick<Order, 'ru
   return {};
 }
 
-/** The corked jars and resin on order `number`'s board: none on the first, then more as orders go by. */
+/**
+ * The corked jars, resin and mould on order `number`'s board: none on the first, then more as orders
+ * go by. Mould starts on order 5 with two patches, one more every five orders.
+ */
 export const blockersFor = (number: number) => ({
   jars: number < 2 ? 0 : Math.min(3 + Math.floor((number - 2) / 3), 8),
   resin: number < 3 ? 0 : Math.min(4 + Math.floor((number - 3) / 3), 10),
+  mould: number < MOULD_FROM ? 0 : Math.min(2 + Math.floor((number - MOULD_FROM) / 5), 5),
 });
+
+/** `needs` with every count scaled by `share` (at least 1). */
+const scaled = (needs: Needs, share: number): Needs =>
+  Object.fromEntries(Object.entries(needs).map(([kind, n]) => [kind, Math.max(1, Math.round(n * share))]));
+
+/** The two biggest needs of a recipe, the ones a customer on a twin order keeps. */
+const biggest = (needs: Needs, keep: number): Needs =>
+  Object.fromEntries(Object.entries(needs).sort(([, a], [, b]) => b - a).slice(0, keep));
+
+/** What the tinker has done so far, as far as the orders care. */
+export interface Standing {
+  /** The recipes unlocked by rank, in the order they were earned (see ranks.ts). */
+  unlocked?: PotionId[];
+  /** Moves added to every order by the workbench. */
+  extraMoves?: number;
+  /** The tinker is already Royal Apothecary: no royal commission is the last one any more. */
+  royal?: boolean;
+}
 
 /**
  * Order `number`, given the recipes unlocked so far: the five orders and then the unlocked recipes,
- * round and round. Needs and price grow every five orders, however many recipes are unlocked.
+ * round and round. Needs and price grow every five orders, however many recipes are unlocked. Every
+ * fifth order is a royal commission of three stages (the last one, once every recipe is unlocked,
+ * ends the game), and from Journeyman on every fifth order after the second serves two customers.
  */
-export function orderFor(number: number, unlocked: PotionId[] = []): Order {
+export function orderFor(number: number, standing: Standing | PotionId[] = {}): Order {
+  const { unlocked = [], extraMoves = 0, royal = false } = Array.isArray(standing) ? { unlocked: standing } : standing;
   const list = [...ORDERS, ...unlocked.flatMap((p) => (RANK_RECIPES[p] ? [RANK_RECIPES[p]] : []))];
-  const base = list[(number - 1) % list.length];
   const round = Math.floor((number - 1) / ORDERS.length);
-  const needs = Object.fromEntries(Object.entries(base.needs).map(([kind, n]) => [kind, n + round * ROUND_NEEDS]));
-  const twist = twistFor(number, needs);
+  const grown = (i: number): Recipe => {
+    const base = list[i % list.length];
+    const needs = Object.fromEntries(Object.entries(base.needs).map(([kind, n]) => [kind, n + round * ROUND_NEEDS]));
+    return { ...base, needs, price: base.price + round * ROUND_PRICE };
+  };
+  const at = (number - 1) % list.length;
+  let recipe = grown(at);
+  if (isRoyal(number)) {
+    // Three recipes in a row, each at half strength, brewed one after the other on the same board.
+    const stages = [0, 1, 2].map((k) => grown(at + k)).map((r) => ({ potion: r.potion, needs: scaled(r.needs, ROYAL_SHARE) }));
+    const price = Math.round([0, 1, 2].reduce((sum, k) => sum + grown(at + k).price * ROYAL_SHARE, 0)) + ROYAL_COINS;
+    recipe = { ...recipe, needs: stages[0].needs, moves: recipe.moves + ROYAL_MOVES, price, stages, last: unlocked.length === Object.keys(RANK_RECIPES).length && !royal };
+  } else if (isTwin(number, unlocked)) {
+    // Two customers with two needs each, of different ingredients, on one board.
+    const first = scaled(biggest(recipe.needs, 2), TWIN_SHARE);
+    const other = grown(at + 1);
+    const spare = KINDS.filter((k) => !(k in first));
+    const wants = Object.entries(biggest(other.needs, 3)).filter(([k]) => !(k in first));
+    while (wants.length < 2) wants.push([spare.find((k) => !wants.some(([w]) => w === k))!, Object.values(other.needs)[0]]);
+    const needs = scaled(biggest(Object.fromEntries(wants), 2), TWIN_SHARE);
+    const price = Math.round(other.price * TWIN_SHARE);
+    recipe = {
+      ...recipe,
+      needs: { ...first, ...needs },
+      moves: recipe.moves + Math.round(other.moves * TWIN_MOVES),
+      price: Math.round(recipe.price * TWIN_SHARE) + price,
+      second: { potion: other.potion, needs, price },
+    };
+  }
+  const twist = twistFor(number, recipe.needs, unlocked);
   // Easy gives five more moves, Hard three fewer.
-  const moves = Math.max(MIN_MOVES, base.moves + byDifficulty(5, 0, -3) - (twist.rush ? RUSH_MOVES : 0));
-  const price = base.price + round * ROUND_PRICE + (twist.rush ? RUSH_COINS : 0);
-  return { ...base, ...twist, ...blockersFor(number), number, needs, moves, price };
+  const moves = Math.max(MIN_MOVES, recipe.moves + extraMoves + byDifficulty(5, 0, -3) - (twist.rush ? RUSH_MOVES : 0));
+  const price = recipe.price + (twist.rush ? RUSH_COINS : 0);
+  return { ...recipe, ...twist, ...blockersFor(number), number, moves, price };
 }

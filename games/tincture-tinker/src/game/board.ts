@@ -17,6 +17,8 @@ export interface Tile {
   jar?: boolean;
   /** Sticky resin: the tile can't be swapped, and the first match it is in only melts the resin. */
   resin?: boolean;
+  /** Creeping mould: the tile can't be swapped and never matches; a match next to it scrubs it clean. */
+  mould?: boolean;
 }
 export type Board = Tile[][];
 export interface Cell {
@@ -27,10 +29,10 @@ export type NewTile = () => Tile;
 
 export const adjacent = (a: Cell, b: Cell) => Math.abs(a.row - b.row) + Math.abs(a.col - b.col) === 1;
 export const inBoard = (c: Cell) => c.row >= 0 && c.row < ROWS && c.col >= 0 && c.col < COLS;
-/** What a tile matches as: its kind, or nothing for a corked jar. */
-export const matchKind = (t: Tile): Kind | null => (t.jar ? null : t.kind);
-/** Jars and resin hold their tiles in place: they can't be swapped. */
-export const stuck = (t: Tile) => !!(t.jar || t.resin);
+/** What a tile matches as: its kind, or nothing for a corked jar or a mouldy tile. */
+export const matchKind = (t: Tile): Kind | null => (t.jar || t.mould ? null : t.kind);
+/** Jars, resin and mould hold their tiles in place: they can't be swapped. */
+export const stuck = (t: Tile) => !!(t.jar || t.resin || t.mould);
 /** Catalysts and Blooms: the special tiles. */
 export const special = (t: Tile) => !!(t.catalyst || t.bloom);
 
@@ -172,14 +174,14 @@ export function shuffle(board: Board, newTile: NewTile): Board {
 }
 
 /**
- * Corks `jars` random tiles into jars and coats `resin` others in resin, keeping the board free of
- * matches and with a move left. Leaves the board alone when both are 0.
+ * Corks `jars` random tiles into jars, coats `resin` others in resin and grows `mould` on others,
+ * keeping the board free of matches and with a move left. Leaves the board alone when all are 0.
  */
-export function addBlockers(board: Board, jars: number, resin: number): Board {
-  if (jars + resin === 0) return board;
+export function addBlockers(board: Board, jars: number, resin: number, mould = 0): Board {
+  if (jars + resin + mould === 0) return board;
   for (let attempt = 0; attempt < 50; attempt++) {
     const next = board.map((row) => [...row]);
-    const pick = (n: number, mark: 'jar' | 'resin') => {
+    const pick = (n: number, mark: 'jar' | 'resin' | 'mould') => {
       for (let placed = 0, tries = 0; placed < n && tries < 200; tries++) {
         const row = Math.floor(Math.random() * ROWS);
         const col = Math.floor(Math.random() * COLS);
@@ -190,7 +192,32 @@ export function addBlockers(board: Board, jars: number, resin: number): Board {
     };
     pick(jars, 'jar');
     pick(resin, 'resin');
+    pick(mould, 'mould');
     if (validMoves(next).length > 0) return next;
   }
   return board;
+}
+
+/** The four cells around `c` that are on the board. */
+export const neighbours = (c: Cell): Cell[] =>
+  [{ row: c.row - 1, col: c.col }, { row: c.row + 1, col: c.col }, { row: c.row, col: c.col - 1 }, { row: c.row, col: c.col + 1 }].filter(inBoard);
+
+/**
+ * Mould creeps: one random mouldy tile spreads to a random neighbour that is plain (not held, not a
+ * special), leaving a move on the board. Returns the new board and the tile it grew on, or null if
+ * it couldn't.
+ */
+export function spreadMould(board: Board): { board: Board; at: Cell & Tile } | null {
+  const mouldy = board.flatMap((row, r) => row.flatMap((t, c) => (t.mould ? [{ row: r, col: c }] : [])));
+  if (mouldy.length === 0) return null;
+  const spots = mouldy.flatMap((m) => neighbours(m).filter((c) => !stuck(board[c.row][c.col]) && !special(board[c.row][c.col])));
+  for (let attempt = 0; attempt < 8 && spots.length > 0; attempt++) {
+    const i = Math.floor(Math.random() * spots.length);
+    const at = spots[i];
+    const next = board.map((row) => [...row]);
+    next[at.row][at.col] = { ...board[at.row][at.col], mould: true };
+    if (validMoves(next).length > 0) return { board: next, at: { ...at, ...next[at.row][at.col] } };
+    spots.splice(i, 1);
+  }
+  return null;
 }

@@ -258,10 +258,163 @@ function thrownAxe(scene: Phaser.Scene) {
   });
 }
 
+/** The dragon's texture: 170x130 px, centred on its feet at (85, 126). Its head, lowered when tired, is 96 px up (`BOSS.dragon.h`). */
+export const DRAGON_ART = { w: 170, h: 130, feetY: 126 };
+/** The bosses' textures by kind, for the one boss sprite. */
+export const BOSS_ART = { gate: GATE_ART, dragon: DRAGON_ART };
+const SCALE = '#4f8a3f';
+const SCALE_DARK = '#376b2c';
+const BELLY = '#d8c57a';
+
+/**
+ * The dragon of the Dragon's Keep, a wyrm in leaf-green scales with madder wings and a pale
+ * belly, facing left: `dragon-ready` reared with its head high and wings spread, `dragon-breathe`
+ * with its head down and jaws open on a flame, and `dragon-tired` slumped with its wings folded and
+ * its head low, where a stomp lands.
+ */
+function dragon(scene: Phaser.Scene) {
+  for (const pose of ['ready', 'breathe', 'tired'] as const) {
+    paint(scene, `dragon-${pose}`, DRAGON_ART.w, DRAGON_ART.h, (ctx) => {
+      ctx.translate(DRAGON_ART.w / 2, DRAGON_ART.feetY);
+      ctx.scale(0.5, 0.5);
+      draw(ctx, pose);
+    });
+  }
+  function wing(ctx: Ctx, root: [number, number], tip: [number, number], folded: boolean) {
+    const [x0, y0] = root;
+    const [x1, y1] = folded ? [x0 + 40, y0 - 30] : tip;
+    const mid: [number, number] = [(x0 + x1) / 2 + (folded ? 10 : 30), (y0 + y1) / 2 + (folded ? 10 : 40)];
+    poly(ctx, [[x0, y0], [x1, y1], [x1 + 24, y1 + 50], mid, [x0 + 20, y0 + 30]], C.madder, 3);
+    ctx.strokeStyle = C.ink;
+    ctx.lineWidth = 3;
+    for (const to of [[x1, y1], [x1 + 24, y1 + 50], mid] as const) {
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(to[0], to[1]);
+      ctx.stroke();
+    }
+  }
+  function head(ctx: Ctx, x: number, y: number, open: boolean, shut: boolean) {
+    // The neck up to the head, the head with its horns and eye, and the jaws.
+    oval(ctx, x, y, 34, 22, SCALE, 3);
+    poly(ctx, [[x - 8, y - 16], [x - 2, y - 44], [x + 10, y - 18]], BELLY, 2.5);
+    poly(ctx, [[x + 12, y - 14], [x + 24, y - 38], [x + 26, y - 12]], BELLY, 2.5);
+    if (open) {
+      poly(ctx, [[x - 30, y + 6], [x - 70, y + 20], [x - 28, y + 24]], SCALE_DARK, 2.5);
+      poly(ctx, [[x - 30, y - 6], [x - 74, y - 10], [x - 28, y + 8]], SCALE, 2.5);
+      // The fire in its jaws.
+      poly(ctx, [[x - 70, y + 4], [x - 110, y - 6], [x - 96, y + 10], [x - 118, y + 14], [x - 92, y + 20], [x - 70, y + 20]], C.verm, 2);
+      poly(ctx, [[x - 72, y + 8], [x - 96, y + 4], [x - 88, y + 16], [x - 74, y + 16]], C.goldLight, 1.5);
+    } else {
+      poly(ctx, [[x - 30, y - 8], [x - 72, y + 2], [x - 30, y + 18]], SCALE, 2.5);
+      poly(ctx, [[x - 60, y + 6], [x - 56, y + 14], [x - 52, y + 6]], '#fff8e0', 1.5);
+    }
+    if (shut) {
+      ctx.strokeStyle = C.ink;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(x - 10, y - 4, 7, 0.1 * Math.PI, 0.9 * Math.PI);
+      ctx.stroke();
+    } else {
+      circle(ctx, x - 10, y - 4, 7, C.goldLight, 2.5);
+      circle(ctx, x - 11, y - 4, 3, C.ink, 0);
+    }
+  }
+  function draw(ctx: Ctx, pose: 'ready' | 'breathe' | 'tired') {
+    const tired = pose === 'tired';
+    const bodyY = tired ? -96 : -116;
+    // The tail, curling back and up behind the body, with spikes along it.
+    ctx.strokeStyle = C.ink;
+    ctx.lineWidth = 22;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(40, bodyY + 10);
+    ctx.quadraticCurveTo(130, bodyY + 40, 150, bodyY - 60);
+    ctx.stroke();
+    ctx.strokeStyle = SCALE;
+    ctx.lineWidth = 16;
+    ctx.stroke();
+    ctx.lineCap = 'butt';
+    for (const [x, y] of [[90, bodyY + 18], [122, bodyY + 10], [142, bodyY - 20]] as const) poly(ctx, [[x - 8, y], [x + 2, y - 22], [x + 10, y - 2]], BELLY, 2);
+    // The far wing, the legs and the body.
+    wing(ctx, [10, bodyY - 30], [60, bodyY - 150], tired);
+    poly(ctx, [[-36, -4], [-30, bodyY + 30], [-6, bodyY + 30], [-14, -4]], SCALE_DARK, 2.5);
+    poly(ctx, [[20, -4], [14, bodyY + 30], [38, bodyY + 30], [44, -4]], SCALE_DARK, 2.5);
+    for (const x of [-40, -24, 18, 40]) poly(ctx, [[x - 6, -4], [x, -14], [x + 6, -4], [x + 4, 0], [x - 4, 0]], BELLY, 2);
+    oval(ctx, 0, bodyY, 76, 50, SCALE, 3);
+    oval(ctx, -6, bodyY + 18, 52, 26, BELLY, 2.5);
+    hl(ctx, [[-50, bodyY - 20], [-30, bodyY - 40]], 3);
+    for (const [x, y] of [[-30, bodyY - 48], [-4, bodyY - 52], [22, bodyY - 48]] as const) poly(ctx, [[x - 8, y + 2], [x, y - 18], [x + 8, y + 2]], BELLY, 2);
+    // The near wing, folded when tired.
+    wing(ctx, [-20, bodyY - 34], [-10, bodyY - 170], tired);
+    // The neck and head: high and proud, down and breathing, or hung low and panting.
+    const [hx, hy] = pose === 'ready' ? [-96, -236] : pose === 'breathe' ? [-104, -160] : [-70, -186];
+    ctx.strokeStyle = C.ink;
+    ctx.lineWidth = 34;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-50, bodyY - 20);
+    ctx.quadraticCurveTo(hx + 30, (bodyY + hy) / 2, hx + 10, hy + 6);
+    ctx.stroke();
+    ctx.strokeStyle = SCALE;
+    ctx.lineWidth = 28;
+    ctx.stroke();
+    ctx.lineCap = 'butt';
+    head(ctx, hx, hy, pose === 'breathe', tired);
+  }
+}
+
+/** A gout of the dragon's fire rolling along the road: 44x34 px, standing on its bottom middle, in two flickers. */
+function fire(scene: Phaser.Scene) {
+  for (const k of [0, 1]) {
+    paint(scene, `fire-${k}`, 44, 34, (ctx) => {
+      ctx.scale(0.5, 0.5);
+      const f = k ? 8 : 0;
+      poly(ctx, [[4, 66], [10, 40 - f], [26, 48], [34, 8 + f], [50, 40], [62, 20 - f], [70, 44], [84, 32 + f], [84, 66]], C.verm, 3);
+      poly(ctx, [[22, 66], [30, 46], [42, 56], [48, 28 + f], [58, 50], [66, 66]], C.goldLight, 2);
+      hl(ctx, [[26, 56], [30, 50]], 2);
+    });
+  }
+}
+
+/** A lash of the dragon's tail flying at head height: 64x22 px, centred, its spikes along the top. */
+function tailLash(scene: Phaser.Scene) {
+  paint(scene, 'tail', 64, 22, (ctx) => {
+    ctx.scale(0.5, 0.5);
+    poly(ctx, [[4, 26], [40, 14], [124, 10], [124, 34], [40, 34]], SCALE, 3);
+    hl(ctx, [[44, 20], [110, 16]], 2.5);
+    for (const x of [48, 76, 104]) poly(ctx, [[x - 8, 14], [x, 0], [x + 8, 12]], BELLY, 2);
+    poly(ctx, [[4, 26], [-2, 8], [18, 20]], BELLY, 2);
+  });
+}
+
+/** A boulder of the rockfall: 80x80 px, centred, grey stone with ink cracks and a mossy top. */
+function boulder(scene: Phaser.Scene) {
+  paint(scene, 'boulder', 80, 80, (ctx) => {
+    ctx.scale(0.5, 0.5);
+    poly(ctx, [[80, 8], [120, 20], [150, 60], [148, 110], [110, 150], [50, 148], [12, 110], [10, 56], [40, 18]], C.iron, 4);
+    poly(ctx, [[80, 8], [120, 20], [136, 40], [100, 36], [60, 44], [30, 36], [40, 18]], C.turf, 3);
+    hl(ctx, [[30, 70], [40, 44], [66, 30]], 3);
+    ctx.strokeStyle = C.ink;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(70, 60);
+    ctx.lineTo(90, 84);
+    ctx.lineTo(80, 110);
+    ctx.moveTo(90, 84);
+    ctx.lineTo(118, 92);
+    ctx.stroke();
+  });
+}
+
 export function bakeFoes(scene: Phaser.Scene) {
   goblin(scene);
   bat(scene);
   gatekeeper(scene);
   barrel(scene);
   thrownAxe(scene);
+  dragon(scene);
+  fire(scene);
+  tailLash(scene);
+  boulder(scene);
 }

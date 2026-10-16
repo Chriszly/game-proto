@@ -1,12 +1,23 @@
+import { CONTRACT_GAP_MS, type Contract } from './contracts';
+import { noEntries, type FairEntries } from './fair';
 import { DEMAND, HONEY, KINDS, MARKET_MS, noJars, type Kind } from './honey';
+import { CASK_MS, type Cask } from './mead';
 import { MEADOWS, SUNFLOWER_COINS } from './meadows';
 import { ORDER_GAP_MS, type Order } from './orders';
+import { SEASONS, SEASON_MS, SUMMER_NECTAR, WINTER_EAT_MS, YEAR_MS, type Season } from './seasons';
+import { MAX_HIVES, SWARM_MS } from './swarm';
 import type { UpgradeId } from './upgrades';
 import { WASP_GAP, type Wasp } from './wasps';
 
-/** The comb's spots for cells: a hex grid of 5 x 4, numbered row by row from the top left. */
+/**
+ * Each hive's comb: a hex grid of 5 x 4 spots, numbered row by row from the top left. A second
+ * hive's spots follow the first's (`SLOTS` to `2 * SLOTS - 1`); `hiveOf` and `localSlot` split a
+ * spot into its hive and its place on that comb.
+ */
 export const GRID = { cols: 5, rows: 4 };
 export const SLOTS = GRID.cols * GRID.rows;
+export const hiveOf = (slot: number) => Math.floor(slot / SLOTS);
+export const localSlot = (slot: number) => slot % SLOTS;
 /** How many drops of nectar fill a cell, and how long a full cell takes to ripen into honey. */
 export const CELL_CAP = 4;
 export const RIPEN_MS = 2500;
@@ -14,7 +25,7 @@ export const RIPEN_MS = 2500;
 export const TRIP_MS = 3000;
 /** Each jar of clover honey sells for this many coins, before the market, the comb bonus and the Sunflower Ridge. */
 export const HONEY_PRICE = HONEY.clover.price;
-/** A new hive starts with this many bees, and its brood cells can raise it to `MAX_BEES`. */
+/** A new hive starts with this many bees, and its brood cells can raise it to `MAX_BEES` per hive. */
 export const START_BEES = 2;
 export const MAX_BEES = 12;
 /** A brood cell hatches a bee this often, and costs this much more than a honey cell. */
@@ -61,6 +72,8 @@ export interface Bee {
   flower: number;
   /** The nectar it is fetching. */
   kind: Kind;
+  /** Whether it is away at the orchard on a contract (home, but not foraging). */
+  lent: boolean;
 }
 
 export interface GameState {
@@ -88,6 +101,23 @@ export interface GameState {
   /** The village order on the card, or null between orders, and the game time until the next one. */
   order: Order | null;
   orderIn: number;
+  /** Game time into the year (sets the season) and the years the hive has come through. */
+  seasonMs: number;
+  years: number;
+  /** In winter: game time until the bees eat again. */
+  eatIn: number;
+  /** The mead casks in the cellar, aging or ready. */
+  casks: Cask[];
+  /** Hives kept (1 or 2); a second hive's comb is the second `SLOTS` of `cells`. */
+  hives: number;
+  /** Game time until a crowded hive swarms; `SWARM_MS` while it is not crowded. */
+  swarmIn: number;
+  /** The orchard contract on the card (an offer, or bees away), or null, and the game time until the next offer. */
+  contract: Contract | null;
+  contractIn: number;
+  /** The county fair: the best entry of each kind, and whether gold has made the player Baron. */
+  fair: FairEntries;
+  baron: boolean;
   nextId: number;
   /** Things that just happened, for the scene to animate; it empties the list as it draws them. */
   events: GameEvent[];
@@ -109,7 +139,22 @@ export type GameEvent =
   | { kind: 'guarded'; id: number }
   | { kind: 'order'; order: Order }
   | { kind: 'order-done'; premium: number }
-  | { kind: 'order-failed' };
+  | { kind: 'order-failed' }
+  | { kind: 'season'; season: Season }
+  | { kind: 'year'; years: number }
+  | { kind: 'ate'; what: 'jar' | 'cell' | 'bee'; slot: number | null }
+  | { kind: 'casked'; honey: Kind }
+  | { kind: 'mead'; cask: number }
+  | { kind: 'swarm-ready' }
+  | { kind: 'caught' }
+  | { kind: 'swarmed'; lost: number }
+  | { kind: 'contract'; contract: Contract }
+  | { kind: 'lent'; bees: number; coins: number }
+  | { kind: 'returned'; bees: number }
+  | { kind: 'contract-lapsed' }
+  | { kind: 'entered'; honey: Kind; score: number }
+  | { kind: 'judged'; total: number }
+  | { kind: 'baron' };
 
 /** What is kept between visits: the comb, the coins, the jars, the wax, the bees, the upgrades and the meadows. */
 export interface Progress {
@@ -122,6 +167,12 @@ export interface Progress {
   ranks: Record<UpgradeId, number>;
   meadows: number;
   forage: Kind;
+  seasonMs: number;
+  years: number;
+  casks: Cask[];
+  hives: number;
+  fair: FairEntries;
+  baron: boolean;
   /** When the hive was last seen (`Date.now()`), for the nectar gathered while away; 0 if never. */
   seen: number;
 }
@@ -136,6 +187,12 @@ export const freshProgress = (): Progress => ({
   ranks: { baskets: 0, clover: 0, dance: 0, guards: 0 },
   meadows: 0,
   forage: 'clover',
+  seasonMs: 0,
+  years: 0,
+  casks: [],
+  hives: 1,
+  fair: noEntries(),
+  baron: false,
   seen: 0,
 });
 
@@ -161,12 +218,13 @@ function cellOf(saved: unknown): Cell | null {
 }
 
 export function newHive(progress: Progress): GameState {
-  const count = Math.max(START_BEES, Math.min(MAX_BEES, Math.floor(progress.bees) || START_BEES));
+  const hives = Math.max(1, Math.min(MAX_HIVES, Math.floor(progress.hives) || 1));
+  const count = Math.max(1, Math.min(MAX_BEES * hives, Math.floor(progress.bees) || START_BEES));
   const meadows = Math.max(0, Math.min(MEADOWS.length, Math.floor(progress.meadows) || 0));
   const s: GameState = {
     coins: progress.coins,
-    cells: new Array(SLOTS).fill(null).map((_, i) => cellOf(progress.cells[i])),
-    bees: [...Array(count).keys()].map((i) => ({ id: i + 1, tripMs: 0, trip: 0, flower: 0, kind: 'clover' })),
+    cells: new Array(SLOTS * hives).fill(null).map((_, i) => cellOf(progress.cells[i])),
+    bees: [...Array(count).keys()].map((i) => ({ id: i + 1, tripMs: 0, trip: 0, flower: 0, kind: 'clover', lent: false })),
     jars: { ...noJars(), ...progress.jars },
     wax: progress.wax,
     sold: progress.sold,
@@ -179,6 +237,16 @@ export function newHive(progress: Progress): GameState {
     waspIn: WASP_GAP,
     order: null,
     orderIn: ORDER_GAP_MS,
+    seasonMs: Math.max(0, Math.min(YEAR_MS - 1, Math.floor(progress.seasonMs) || 0)),
+    years: Math.max(0, Math.floor(progress.years) || 0),
+    eatIn: WINTER_EAT_MS,
+    casks: progress.casks.map((c) => ({ ...c })),
+    hives,
+    swarmIn: SWARM_MS,
+    contract: null,
+    contractIn: CONTRACT_GAP_MS,
+    fair: { ...noEntries(), ...progress.fair },
+    baron: progress.baron,
     nextId: count + 1,
     events: [],
   };
@@ -196,14 +264,42 @@ export const progressOf = (s: GameState): Progress => ({
   ranks: { ...s.ranks },
   meadows: s.meadows,
   forage: s.forage,
+  seasonMs: s.seasonMs,
+  years: s.years,
+  casks: s.casks.map((c) => ({ ...c })),
+  hives: s.hives,
+  fair: { ...s.fair },
+  baron: s.baron,
   seen: Date.now(),
 });
+
+/** The season now, how long it has left, and whether the bees are shut in for winter. */
+export const season = (s: GameState): Season => SEASONS[Math.floor(s.seasonMs / SEASON_MS) % SEASONS.length];
+export const seasonLeft = (s: GameState) => SEASON_MS - (s.seasonMs % SEASON_MS);
+export const isWinter = (s: GameState) => season(s) === 'winter';
+/** How many bees the hives can hold: `MAX_BEES` each. */
+export const maxBees = (s: GameState) => MAX_BEES * s.hives;
+/** A bee at home and free to forage: not out on a trip and not lent to the orchard. */
+export const atHome = (b: Bee) => b.tripMs === 0 && !b.lent;
+/** Whether the hives are crowded enough to swarm: every spot built and the bees at their most, with one hive. */
+export const crowded = (s: GameState) => s.hives < MAX_HIVES && s.bees.length >= maxBees(s) && s.cells.every((c) => c !== null);
+/** What mead sells for: a kind's multiple of what its jars would sell for now. */
+export const meadValue = (s: GameState, kind: Kind, jars: number, mult: number) => Math.round(jars * jarPrice(s, kind) * mult);
+/** What the casks of ready mead sell for now. */
+export const meadReady = (s: GameState) => s.casks.filter((c) => c.agingMs === 0);
+export const cellarValue = (s: GameState) => meadReady(s).reduce((n, c) => n + c.value, 0);
+/** Whether a cask is still aging, and how far along it is. */
+export const caskDone = (c: Cask) => 1 - c.agingMs / CASK_MS;
+/** The fair's points so far, over the kinds entered; null while a kind is missing. */
+export const fairTotal = (s: GameState) => (KINDS.every((k) => s.fair[k] !== null) ? KINDS.reduce((n, k) => n + (s.fair[k] ?? 0), 0) : null);
+/** Whether the county fair is on: every meadow is open. */
+export const fairOpen = (s: GameState) => s.meadows >= MEADOWS.length;
 
 export const isHoney = (c: Cell | null): c is HoneyCell => c?.type === 'honey';
 export const isBrood = (c: Cell | null): c is BroodCell => c?.type === 'brood';
 
-/** Whether the bees can forage a kind yet: its meadow is open. */
-export const isOpen = (s: GameState, kind: Kind) => s.meadows >= HONEY[kind].meadows;
+/** Whether the bees can forage a kind now: its meadow is open, and the Lavender Field shuts for autumn. */
+export const isOpen = (s: GameState, kind: Kind) => s.meadows >= HONEY[kind].meadows && !(kind === 'lavender' && season(s) === 'autumn');
 export const openKinds = (s: GameState) => KINDS.filter((k) => isOpen(s, k));
 /** The kind the market wants now, or null while only one kind is open. Each holds for `MARKET_MS`. */
 export function demand(s: GameState): Kind | null {
@@ -214,17 +310,19 @@ export function demand(s: GameState): Kind | null {
 /** Game time until the market moves on to the next kind. */
 export const marketLeft = (s: GameState) => MARKET_MS - (s.marketMs % MARKET_MS);
 
-/** How many drops each forager brings home: one, plus the baskets, plus one with the Lavender Field. */
-export const carry = (s: GameState) => 1 + s.ranks.baskets + (s.meadows >= 1 ? 1 : 0);
+/** How many drops each forager brings home: one, plus the baskets, plus one with the Lavender Field, plus one in summer. */
+export const carry = (s: GameState) => 1 + s.ranks.baskets + (s.meadows >= 1 ? 1 : 0) + (season(s) === 'summer' ? SUMMER_NECTAR : 0);
 /** How long a full cell takes to ripen: half as long once the Heather Moor is unlocked. */
 export const ripenTime = (s: GameState) => (s.meadows >= 3 ? RIPEN_MS / 2 : RIPEN_MS);
-/** The price of the next honey cell: the first is free, then each costs more. Brood cells count as built. */
-export const cellPrice = (s: GameState) => {
-  const built = s.cells.filter((c) => c !== null).length;
+/** The spots of one hive's comb. */
+export const hiveSlots = (hive: number) => [...Array(SLOTS).keys()].map((i) => hive * SLOTS + i);
+/** The price of the next honey cell on a hive: its first is free, then each costs more. Brood cells count as built. */
+export const cellPrice = (s: GameState, hive = 0) => {
+  const built = hiveSlots(hive).filter((i) => s.cells[i] !== null).length;
   return built === 0 ? 0 : Math.round(12 * Math.pow(1.25, built - 1));
 };
 /** The price of a brood cell: a honey cell's and `BROOD_EXTRA` more. */
-export const broodPrice = (s: GameState) => cellPrice(s) + BROOD_EXTRA;
+export const broodPrice = (s: GameState, hive = 0) => cellPrice(s, hive) + BROOD_EXTRA;
 /** How much of a price the wax pays: the pieces used and the coins still to pay. */
 export function withWax(s: GameState, price: number) {
   const wax = Math.min(s.wax, Math.floor(price / 2 / WAX_COINS));
@@ -236,13 +334,15 @@ export const room = (s: GameState, kind: Kind = s.forage) =>
 /** Every jar on the shelf, of any kind. */
 export const jarCount = (s: GameState) => KINDS.reduce((n, k) => n + s.jars[k], 0);
 
-/** The spots next to a spot on the comb (odd rows sit half a cell to the right). */
+/** The spots next to a spot on its comb (odd rows sit half a cell to the right); combs never touch. */
 export function neighbours(slot: number) {
-  const col = slot % GRID.cols;
-  const row = Math.floor(slot / GRID.cols);
+  const base = hiveOf(slot) * SLOTS;
+  const local = localSlot(slot);
+  const col = local % GRID.cols;
+  const row = Math.floor(local / GRID.cols);
   const out: number[] = [];
   const add = (c: number, r: number) => {
-    if (c >= 0 && c < GRID.cols && r >= 0 && r < GRID.rows) out.push(r * GRID.cols + c);
+    if (c >= 0 && c < GRID.cols && r >= 0 && r < GRID.rows) out.push(base + r * GRID.cols + c);
   };
   add(col - 1, row);
   add(col + 1, row);
@@ -263,5 +363,5 @@ export const combBonus = (s: GameState) => sharedEdges(s).length;
  */
 export const jarPrice = (s: GameState, kind: Kind = 'clover') =>
   Math.round(HONEY[kind].price * (demand(s) === kind ? DEMAND : 1)) + (s.meadows >= 2 ? SUNFLOWER_COINS : 0) + combBonus(s);
-/** What every jar on the shelf sells for now. */
-export const shelfValue = (s: GameState) => KINDS.reduce((n, k) => n + s.jars[k] * jarPrice(s, k), 0);
+/** What every jar on the shelf, and every cask of ready mead, sells for now. */
+export const shelfValue = (s: GameState) => KINDS.reduce((n, k) => n + s.jars[k] * jarPrice(s, k), 0) + cellarValue(s);

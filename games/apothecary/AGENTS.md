@@ -26,6 +26,11 @@ study, shade gardens and a mirrored second production line.
   a Recipes panel and a Settings panel, a daily contract card, tips that shrink while a customer
   waits (a coin ring on each order bubble), and an autopilot that plays the time away (up to 2h)
   on load and shows a "While you were away" chip. Progress autosaves to localStorage.
+- Round two: a price sign on each shelf (Cheap, Fair, Dear), blight on the beds from day 3 and the
+  guild's herbalist against it, replanting a garden from its sign, a rival shop across the street
+  from day 4 that undercuts one potion a day and closes after ten days outsold, and the plague
+  from day 5, three stages on a card under the town card, ending in the Panacea: brewing it cures
+  the town and wins the game, with "Keep trading" after. The game's first ending.
 - Gardens have nine beds each, three by three edge to edge (`PLOTS_PER_GARDEN`, `plotPosition`).
   Two shade gardens grow nightshade for the Shadow Elixir, Moonlight Salve and Witch's Brew. A brew's last quarter
   is its fine window: picked up then by hand, it becomes a Fine potion (its own item kind) worth
@@ -37,8 +42,8 @@ study, shade gardens and a mirrored second production line.
   The palette is kept dark and muted (deep greens, dark earth and floor boards, aged-paper cards
   under dark ink): keep new ground, card and surface colours in that range, and only items, markers
   and the brew bright.
-- There is one scene with no title, win or lose screen, and no audio. A customer who runs out of
-  patience leaves and lowers the reputation.
+- There is one scene with no title or lose screen, and no audio; the only win screen is the cure's
+  panel (`showWin`). A customer who runs out of patience leaves and lowers the reputation.
 - Leftovers: `GAME_WIDTH`/`GAME_HEIGHT` in `src/main.ts` are only used there. `DOCTOR_W`/`DOCTOR_H`
   in `src/art/doctor.ts` are exported but unused.
 
@@ -66,11 +71,20 @@ study, shade gardens and a mirrored second production line.
   `REPUTATION_SERVED`, `REPUTATION_WALKED_OFF`, `reputationFactor`, `nudgeReputation`,
   `REGULAR_TIP_LEFT`, `MAX_REGULARS`, `REGULAR_CHANCE`, `REGULAR_BONUS`), the weather (`Weather`,
   `WEATHER`, `weatherFor`) and market days (`MARKET_EVERY`, `isMarketDay`, `RUSH_SIZE`,
-  `RUSH_BONUS`, `RUSH_EXTRA`).
+  `RUSH_BONUS`, `RUSH_EXTRA`). Also the plague (`Plague`, `PLAGUE_DAY`, `PLAGUE_STAGES`,
+  `PLAGUE_STAGE_MS`, `PLAGUE_RELAPSE_EXTRA`, `PLAGUE_RELAPSE_REPUTATION`, `MAX_PLAGUE_NEED`,
+  `plagueStage`, `panaceaUnlocked`, `plagueAt`), the price signs (`PriceSign`, `PRICE_SIGNS`,
+  `SIGN_NAMES`, `SIGN_PAY`, `SIGN_DEMAND`, `SIGN_REPUTATION`, `SIGN_PATIENCE`, `signOf`,
+  `patienceRate`), the blight (`BLIGHT_DAY`, `BLIGHT_EVERY_MS`, `BLIGHT_SPREAD_MS`, `blightImmune`,
+  `plotNeighbours`), the rival (`Rival`, `RIVAL_DAY`, `RIVAL_CUT`, `RIVAL_SALES`,
+  `RIVAL_MONTH_DAYS`, `rivalUndercuts`, `rivalPotionFor`) and replanting (`GARDEN_RUN`,
+  `LINE_GARDENS`, `GARDEN_NAMES`, `gardenPlant`, `plantChoices`). `items.ts` also holds the
+  Panacea (`PANACEA`, `PANACEA_RECIPE`, `BrewOut`: what a brew can be, a potion or the Panacea).
 - `src/game/sim.ts`: the rules, free of Phaser. `tick` advances the world; marker actions
   (`dropAtRefiner`, `pickUpFromCauldron`, `stockShelf`, `collectTill`, `payUpgrade`,
-  `payCraftsman`, `payBelt`, `payExpansion`, `payShade`, `joinGuild`, `dropAll`, `cyclePriority`) and `harvest` each change
-  state and return `Feedback` lines. Also `refining`, `hasRoom` and `doneByHand`.
+  `payCraftsman`, `payBelt`, `payExpansion`, `payShade`, `joinGuild`, `dropAll`, `cyclePriority`,
+  `cycleSign`, `replantGarden`, `clearBlight`) and `harvest` each change
+  state and return `Feedback` lines. Also `refining`, `hasRoom`, `doneByHand` and `isBlighted`.
 - `src/game/save.ts`: `loadState`, `saveState` (stamps `lastSeen` with `Date.now()`), `clearSave`
   (key `apothecary-save`), and the `ontoOwnRuns`, `ontoColumns` and `ontoHeart` belt migrations.
 - `src/game/away.ts`: the autopilot. `catchUp(state, now, rand)` plays the time since `lastSeen`
@@ -96,8 +110,8 @@ study, shade gardens and a mirrored second production line.
   (`ground-walls`, laid above the expansion yard so its edge doesn't cover the right wall), each garden and
   the scattered trees and bushes (`sceneryLayout`). `ui.ts` paints parchment cards on demand
   (`cardTexture(scene, kind, w, h)`: bar, button, contract, town, chip, bubble, sign, small, panel) and
-  `signTexture`, plus the `weather-<kind>` icons and the regular's `regular` star (`sparkle` in
-  `paint.ts`, also on fine potions' icons). `pixies.ts` paints the pixie (`PIXIE_FRAMES`, two wing
+  `signTexture`, plus the `weather-<kind>` icons, the regular's `regular` star (`sparkle` in
+  `paint.ts`, also on fine potions' icons), the plague card's `bell` and the `rival-stall`. `pixies.ts` paints the pixie (`PIXIE_FRAMES`, two wing
   beats) and the built routes' fairy-dust trails as one image (`drawFairyPaths`, re-painted when the
   set of built belts changes), and `pointAlong`/`laneOffset` place pixies on them. `stations.ts`
   also paints the study's desk (`study`) and the shop shelf (`shelf`); `TABLE_TOP` and
@@ -247,7 +261,37 @@ study, shade gardens and a mirrored second production line.
   the order to its `atCounter` set once it arrives. `tick` serves, and counts down patience for,
   only orders `atCounter` accepts (default: all). Wants and patience show only once arrived.
 - Harvest is automatic: plots within `displayHeight * harvestReach(state)` of the doctor's centre,
-  nearest first, one per `HARVEST_INTERVAL_MS` (150).
+  nearest first, one per `HARVEST_INTERVAL_MS` (150). Blighted plots in reach are cleared first
+  (`clearBlight`, hands full or not), and the sickle spins for them too.
+- Price signs: `addPriceSign` puts a tappable small sign beside each shelf at `shelfSignPosition(i)`,
+  shown with the shelf; a tap calls `cycleSign` and stops propagation. `serveFromShelf` scales a
+  potion's pay by `SIGN_PAY`, adds `SIGN_REPUTATION` and takes the rival's `RIVAL_CUT` off a plain
+  one the rival undercuts (a fine one beats it); `tick` drains patience by `patienceRate` (dear
+  wants); `newOrder` draws from a hat with each potion in it `SIGN_DEMAND` times (all signs Fair
+  leaves the draw as it was, so the playthrough's orders repeat). The cut text under a shelf shows
+  the combined factor: stock, sign and rival.
+- Blight: `spreadBlight` in `tick` rolls `rand` only when the blight can strike (from `BLIGHT_DAY`
+  on a rainy day, not immune) or a blighted bed can spread, so day 1 uses the same randomness as
+  before. A blighted plot (`blighted`, `blightMs`) doesn't grow and `isRipe` is false, so the
+  sickle and the pixies leave it; its plant is tinted `BLIGHT_TINT` and its bar hidden. The
+  herbalist clears every bed at once. The town card's note names the garden struck.
+- Replanting: `addGardenSign` makes each garden's sign tappable (`GARDEN_SIGN_W`, the plant's
+  name from `GARDEN_NAMES` and its icon); a tap calls `replantGarden`, which changes every plot
+  of the garden in place (the scene's plot closures keep their plot objects). Goods picked by a
+  garden belt carry `run` (`GARDEN_RUN` of their garden) so pixies fly them from the garden they
+  came from: `beltSpan(id, kind, run)` and `takeForBelt` return it.
+- Rival: `tick` calls `rivalNewDay` whenever `rival.day` falls behind `contract.day`: yesterday's
+  `sold` against `RIVAL_SALES` moves `streak` on or resets it, `RIVAL_MONTH_DAYS` closes the
+  rival, and `rivalPotionFor(day)` picks today's potion (none before `RIVAL_DAY`). `createRival`
+  draws the stall at `RIVAL` once there is anything to say, boarded (faded) when closed.
+- Plague: `tick` starts it at `PLAGUE_DAY` (`plagueAt(0)`), counts the stage's `left` down and
+  calls `relapse` at 0. `serveFromShelf` calls `deliverForPlague` for every potion sold; enough
+  moves to the next stage, and past the last `panaceaUnlocked` holds. `startBrew` then brews the
+  Panacea first whenever `PANACEA_RECIPE.inputs` are in; `brew` sets `plague.cured` instead of
+  putting it out, and `pickUpFromCauldron` never takes it out fine. `createPlague` draws the card
+  at `PLAGUE_CARD` (under the town card, clear of the shelves when the doctor is at the counter)
+  with notes for each change, and `showWin` opens the cure's panel, closed like the others by
+  `closePanels` (any tap).
 
 ### State model
 
@@ -262,10 +306,13 @@ along the main run), `priority` (per `CraftingId`, a `PlantId` or `PotionId` to 
 null), `guild` (a `Build`: entry to the guild), `expansion` (land, two fields, refiner, cauldron as
 `Build`s), `shade` (the two shade gardens as `Build`s), `contract` (`day`, `potion`, `need`, `made`, `reward`, `dayLeft`, `kept`), `sold` (potions
 handed over at the counter, ever), `tips` (tip coins ever), `lastSeen` (wall-clock ms of the last
-save or load, 0 in a new game), `reputation` (0 to 100), `regulars` (`face`, `wants`) and `rush`
-(`day`, `size`, `served`, `lost`, `paid`, or null). Each order also has `tip`, its full tip (`maxTip`
+save or load, 0 in a new game), `reputation` (0 to 100), `regulars` (`face`, `wants`), `rush`
+(`day`, `size`, `served`, `lost`, `paid`, or null), `plague` (`stage`, `need`, `made`, `left`,
+`relapses`, `cured`, or null before day 5), `signs` (a `PriceSign` per potion, Fair when missing)
+and `rival` (`open`, `day`, `potion`, `sold`, `streak`). Each order also has `tip`, its full tip (`maxTip`
 of its size), and may have `asked`, `face`, `regular` and `rush`. `counter.shelf` and `carrying`
-can hold fine potions.
+can hold fine potions. A plot may be `blighted` with `blightMs`; a belt item may carry `run`; a
+brew's `out` may be `PANACEA`.
 
 - Tips: when an order's last potion is handed over, `serveFromShelf` adds `tipNow(order)` to the
   till and `state.tips`: `tip` scaled by `tipLeft`, which falls from 1 at the counter to 0 once
@@ -309,7 +356,8 @@ can hold fine potions.
   differs or that lack `plots`, shallow-merges top-level fields, merges `upgrades`, `craftsmen`,
   `belts` and `priority` per key, appends new plots (or, when a saved plot's plant doesn't match
   its garden, as in saves from three beds a garden, starts every plot fresh: `keepsPlots`) and
-  drops orders without `pay`. A save without
+  drops orders without `pay`. `keepsPlots` now asks that every bed of a garden grows the same
+  plant (a replanted garden switches all nine), not that it grows `GARDENS`' plant. A save without
   `guild` counts as having joined if it bought or paid into any guild upgrade. A save from before
   `COLUMNS_LAYOUT` (5) first gets `ontoColumns`, which scales each belt item's `at` by its belt's
   new `BELT_MS` over the old `U_BELT_MS`, so it keeps its place along the shorter run; then a save
@@ -320,8 +368,9 @@ can hold fine potions.
 - Away: `GameScene.create` calls `catchUp(state, Date.now())` right after `loadState` and keeps the
   result in the public `away` field; `createAwayChip` shows it (top right, `AWAY_CHIP`) until tapped.
   The new fields (`contract`, `sold`, `tips`, `lastSeen`, `shade`, `reputation`, `regulars`,
-  `rush`) come from `fresh` through the shallow merge, so `version` was not bumped; old orders
-  without `tip` tip nothing.
+  `rush`, `plague`, `signs`, `rival`) come from `fresh` through the shallow merge, so `version` was
+  not bumped; old orders without `tip` tip nothing, and an old save's rival picks its potion on
+  the next tick.
 - `apothecary-zoom`: the main camera's zoom, a view preference that "New game" keeps.
 - "New game" (`clearSave` + `scene.restart`) removes only `apothecary-save`. The old
   `apothecary-fps` key is no longer used; the frame rate comes from the hub.
@@ -330,8 +379,9 @@ can hold fine potions.
 
 - `Math.random` is used only by `tick` (its default `rand`, now the fifth argument): `orderInterval`,
   `newOrder` (a returning regular, only once there are any; one or two potions, which ones,
-  patience) and `startRush`, also when `catchUp` plays time away. The weather is not random: it
-  comes from the day.
+  patience), `startRush` and `spreadBlight` (only from day 3 in the rain, or while a bed is
+  blighted), also when `catchUp` plays time away. The weather, the rival's potion and the plague
+  are not random: they come from the day.
   Art noise uses `seeded`/`reseed` from `src/art/paint.ts`, reseeded per texture, so painting never
   touches `Math.random`.
 - `Date.now()` is used only for `lastSeen` and `catchUp`; the test starts with empty storage, so
@@ -386,6 +436,9 @@ can hold fine potions.
 - Inputs: canvas clicks only (walking, the Recipes button at screen 219,22, a tap on the panel to
   close it). It
   watches the first customer walk in from `STREET`, and walks into the shop by the door routing.
+  Its taps must not land on a garden sign or a shelf's price sign either, which take the tap like
+  a priority sign. Day 1 has no blight, rival or plague, and every sign is Fair, so none of them
+  changes the first round.
 - It seeds `Math.random`, owns `page.clock`, makes `requestAnimationFrame` a 64ms timer and forces
   the canvas renderer. It starts with empty storage, so it expects a fresh state on Normal, with
   every priority left at "any"; its taps must not land on a priority sign, which takes the tap.
@@ -432,7 +485,10 @@ can hold fine potions.
   `GUILD_UPGRADES` (the guild also needs a spot in `GUILD` in layout), an icon in `UPGRADE_ICONS`
   and `ICONS` in `src/art/markers.ts` (and in `upgradeIcon` if it isn't its id), give it a row in
   `UNLOCKED_BY` unless it is for sale from the start, and apply its level in a helper in
-  `src/game/state.ts` used by the sim or scene.
+  `src/game/state.ts` used by the sim or scene (the herbalist: `blightImmune`).
+- Add a plague stage: a row in `PLAGUE_STAGES` (name, potion or null for any, need); the card and
+  the counting follow. The Panacea's recipe is `PANACEA_RECIPE` in `src/game/items.ts`; it is not
+  in `RECIPES` or the Recipes panel, whose `lines` the test checks.
 - Move a station, marker or wall: edit `src/scenes/layout.ts` (a station's pallets and the belt
   ends at them move with it, and `BELT_MS` stays about 100 pixels a second), bump `LAYOUT` in
   `src/game/state.ts`, update the test's coordinates, and refresh
@@ -461,6 +517,11 @@ can hold fine potions.
   objects must stay below it (`WORLD_UI_DEPTH` is the highest).
 - `tick` runs before `movePlayer`, so `workingAt` uses last frame's feet position.
 - Healing Draught art is red; keep any cross shapes off red (root rule on red crosses).
+- `replantGarden` must change plots in place: `createPlots` keeps each plot object in a closure.
+- New randomness in `tick` must stay behind a condition that is false on day 1 (like the blight's),
+  or the playthrough's seeded orders change.
+- `rival.open` starts true and `rival.day` 0, so the rival exists in every save; it only does
+  anything from `RIVAL_DAY`. `rival.potion` is null until then and once closed.
 - Fine potions are not in `POTIONS`, so they have no pallets, shelves, belt lanes or orders of their
   own. Anything that counts potions on the shelf or in hands goes through `plainOf` (`hasRoom`,
   `startBrew`, `canFill`, stock cuts, the shelves).

@@ -8,7 +8,8 @@ fires on their own; you only move them left and right. Upgrade crates come down 
 shoot one open to collect its upgrade. Fuel drums roll down too: shoot one and it blows up the
 zombies around it. Kills in quick succession build a frenzy that doubles your fire rate. There is no
 XP and no levelling: every upgrade comes from a crate. The waves keep getting bigger and tougher,
-and every fifth wave ends with a boss that fights back and leaves a supply drop behind. If a zombie
+and every fifth wave ends with a boss that fights back and leaves a supply drop behind; from wave
+20 that drop also offers a way out. If a zombie
 reaches the sandbags in front of the soldier, it's game over. Your best wave is kept, so every run
 has a record to beat, and every kill banks scrap that buys a head start for the next run.
 
@@ -42,6 +43,7 @@ and the fuel drum's blast doesn't swell.
 | Tap the kit panel (bottom left), then a lane | Place a sandbag wall in that lane |
 | S | Place a sandbag wall in the soldier's lane |
 | Tap a card, or 1 / 2 / 3 | Pick a supply after a boss |
+| Tap the wide card, or 4 | Extract: end the run as a win (from wave 20) |
 | Tap the COMIC / NV switch, or V | Switch the art style |
 | Tap a starting crate after game over | Buy it with scrap for the next run (tap again to refund) |
 | Tap anywhere else after game over | Start again from wave 1 |
@@ -77,6 +79,26 @@ and the fuel drum's blast doesn't swell.
   | Sandbag wall (tan) | A sandbag wall for the kit panel; from wave 2, about every other wave has one |
 
   A crate nobody opens is lost behind the sandbags.
+- **Upgrade evolutions**: the third crate of one kind (starting crates count) turns its stat into
+  a perk for the rest of the run, shown with a star in the top bar and listed on the kit panel.
+  Fire rate becomes **fire rounds** (every hit sets the zombie burning for a couple of seconds,
+  past any shield), damage becomes **headshots** (every fourth hit lands triple damage) and pierce
+  becomes **ricochets** (a bullet that has spent its hits on a zombie jumps to the nearest other
+  one for one more hit). Committing to one kind pays.
+
+  ![Fire rounds, headshots and ricochets in both styles](docs/screenshots/perks.png)
+- **Survivors**: from wave 3, one walks down among the zombies each wave, waving at you. Your
+  bullets hurt them like anything else in the way, so aiming becomes a choice. A survivor who
+  reaches the sandbags joins the squad as a companion, or hands over 15 scrap once the squad is
+  full.
+
+  ![A survivor among the horde in both styles](docs/screenshots/survivors.png)
+- **Wave conditions**: from wave 6, each wave may come with a condition, named in the wave banner
+  and on a chip under the progress strip. A **blackout** means zombies can only be seen when they
+  are close to the soldier; a **blood moon** makes the runners half again as fast; an **ammo
+  shortage** slows the squad's fire by 40% but rolls two more fuel drums down the road.
+
+  ![A blackout, a blood moon and an ammo shortage](docs/screenshots/conditions.png)
 - **Sandbag walls**: tap the kit panel at the bottom left, then tap a lane on the road. A short wall
   goes up across that lane and holds its zombies back for 6 seconds (a boss smashes straight
   through). Tap the panel again, or anywhere off the road, to put the sandbags away.
@@ -102,12 +124,18 @@ and the fuel drum's blast doesn't swell.
   full, companion crates give Damage +1 instead.
 - **Bosses** come at the end of every fifth wave, with a big health bar under the progress strip.
   A boss fights back: every few seconds it winds up a move, called out over its head, and makes it
-  after a moment's warning. It takes turns between a **charge** (an arrow shows the lunge across the
-  lanes towards where the soldier stood), an **acid spit** (a big ring marks the pool it will leave
-  on the squad's line) and a **roar** that calls a pack of five runners out round it.
+  after a moment's warning. The **Behemoth** (wave 5) takes turns between a **charge** (an arrow
+  shows the lunge across the lanes towards where the soldier stood), an **acid spit** (a big ring
+  marks the pool it will leave on the squad's line) and a **roar** that calls a pack of five
+  runners out round it. Three bosses take turns: the **Brood Mother** (wave 10) calls a brood of
+  eight crawlers instead of runners and bursts into ten more when it falls, and the **Bloater**
+  (wave 15) spits a far bigger pool and leaves a huge acid pool on the squad's line when it falls.
+  Then the Behemoth again at wave 20, and so on.
 
   ![A boss winding up a charge, an acid spit and calling its pack](docs/screenshots/boss-moves.png)
   ![The same moves on the night-vision feed](docs/screenshots/boss-moves-night-vision.png)
+  ![The Brood Mother with its brood, and the Bloater spitting and bursting](docs/screenshots/bosses.png)
+  ![The same two bosses on the night-vision feed](docs/screenshots/bosses-night-vision.png)
 - **Supply drop**: clearing a boss wave brings a supply drop. The game waits while you pick one of
   three: a **shotgun** (two more bullets fan out from the soldier's rifle every volley, up to three
   pairs), a **flamethrower** (two flame bursts that go off on their own when a zombie gets close to
@@ -117,6 +145,11 @@ and the fuel drum's blast doesn't swell.
 
   ![The supply drop in both styles](docs/screenshots/supply-drop.png)
   ![The shotgun's spread, and a flame burst along the sandbags in both styles](docs/screenshots/shotgun-and-flamethrower.png)
+- **Extraction**: from wave 20, every boss's supply drop also offers a wide fourth card: extract.
+  Taking it ends the run as a win and banks this run's scrap twice over. Pass it up and the next
+  boss's drop pays more (2.5x at wave 25, 3x at wave 30), if you live to see it.
+
+  ![The extraction card on wave 20's supply drop, and the run extracted](docs/screenshots/extraction.png)
 - **Scrap**: every kill banks scrap (a grunt, runner or crawler 1, a spitter 2, a brute or riot
   zombie 3, a boss 25), saved when a wave is cleared and when the run ends. On the game over screen,
   spend it on starting crates for the next run: Fire rate (40), Damage +1 (60), Companion +1 (80)
@@ -131,18 +164,20 @@ The difficulty, set on the hub page's Settings, changes one thing: zombies have 
 
 ## Code layout
 
-- `src/game/rules.ts`: the numbers and rules: enemy stats, upgrades, fuel drums, the frenzy, wave
-  plans, the boss's moves, sandbag walls, the supply drop and scrap. No drawing.
+- `src/game/rules.ts`: the numbers and rules: enemy stats, upgrades and their perks, fuel drums,
+  the frenzy, wave plans and conditions, the bosses and their moves, survivors, sandbag walls, the
+  supply drop, extraction and scrap. No drawing.
 - `src/game/save.ts`: the saved best wave, art style, banked scrap and starting crates.
 - `src/game/pool.ts`: reuses sprites for enemies, bullets, crates, drums and effects, so a big horde
   doesn't create and destroy objects every frame.
 - `src/art/`: both art styles, painted on canvases in code (no image files): `comic.ts`,
   `nightvision.ts`, their shared tools and sprite sizes in `paint.ts`, HUD colours and fonts in
   `theme.ts`, and the side panels on wide screens in `backdrop.ts`.
-- `src/scenes/GameScene.ts`: the battle: moving the soldier, spawning, shooting, hits, drums, the
-  frenzy, acid, boss moves, sandbag walls, waves, the supply drop, switching styles and game over
-  with its scrap shop. `src/scenes/Hud.ts` draws the top bar, the progress strip, the frenzy meter
-  and the kit panel.
+- `src/scenes/GameScene.ts`: the battle: moving the soldier, spawning, shooting, hits and perks,
+  drums, the frenzy, acid, boss moves, survivors, conditions, sandbag walls, waves, the supply drop
+  and extraction, switching styles and game over
+  with its scrap shop. `src/scenes/Hud.ts` draws the top bar, the progress strip, the condition
+  chip, the frenzy meter and the kit panel.
 - `e2e/playthrough.spec.ts`: plays the first wave with taps: switches the style and back, blows up
   the wave's fuel drum among the horde, collects its crate and checks the wave's scrap is banked
   (see `AGENTS.md` at the repo root).

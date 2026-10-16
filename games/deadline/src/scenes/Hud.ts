@@ -1,13 +1,14 @@
 import Phaser from 'phaser';
-import { HUD_HEIGHT, VIEW, type Stats } from '../game/rules';
+import { CONDITIONS, HUD_HEIGHT, PERKS, VIEW, type Condition, type Perk, type Stats } from '../game/rules';
 import type { ArtStyle } from '../game/save';
 import { GEOM, num, tex } from '../art/paint';
 import { ACID_COLOR, CRATE_COLORS, THEMES, UPGRADE_COLORS, type Theme } from '../art/theme';
 
 // The HUD: the top bar (wave, best wave, kills, stats and the art style switch), the wave progress
 // strip under it, the frenzy meter beside the squad, and the kit panel on the squad's other side
-// (sandbag walls to place, flame bursts, medkits and shotgun pairs). Drawn as comic caption boxes or as an
-// amber overwatch overlay. Its Graphics are only redrawn when something on it changes.
+// (sandbag walls to place, flame bursts, medkits, shotgun pairs and the perks earned), and the
+// wave's condition under the progress strip. Drawn as comic caption boxes or as an amber overwatch
+// overlay. Its Graphics are only redrawn when something on it changes.
 
 export const HUD_DEPTH = 100;
 /** The art style switch in the top bar's stats row, in game pixels; taps inside it switch style. */
@@ -18,6 +19,8 @@ export const PROGRESS = { x: 10, y: HUD_HEIGHT + 4, w: VIEW.w - 20, h: 20 };
 export const FRENZY_PANEL = { x: 384, y: 884, w: 140, h: 50 };
 /** The kit panel, to the left of the squad; tapping it while holding sandbags readies a wall. */
 export const KIT_PANEL = { x: 16, y: 884, w: 140, h: 50 };
+/** The wave condition's chip, under the progress strip at the right; it drops below the boss bar while a boss is up. */
+export const CONDITION_CHIP = { x: VIEW.w - 10, y: HUD_HEIGHT + 32, h: 16, bossDrop: 20 };
 
 export interface HudData {
   wave: number;
@@ -46,6 +49,11 @@ export interface HudData {
   pellets: number;
   /** The hero stands in acid: the squad fires slower. */
   inAcid: boolean;
+  /** The perks earned from three crates of a kind. */
+  perks: Perk[];
+  /** This wave's condition, and whether a boss is on the road (its bar takes the chip's place). */
+  condition: Condition;
+  bossLive: boolean;
 }
 
 type Text = Phaser.GameObjects.Text;
@@ -54,7 +62,7 @@ export class Hud {
   private bar: Phaser.GameObjects.Image;
   private g: Phaser.GameObjects.Graphics;
   private t: Record<
-    'wave' | 'kills' | 'best' | 'comic' | 'nv' | 'count' | 'note' | 'frenzy' | 'streak' | 'hint' | 'kit' | 'kitHint' | 'kitList' | 'acid',
+    'wave' | 'kills' | 'best' | 'comic' | 'nv' | 'count' | 'note' | 'frenzy' | 'streak' | 'hint' | 'kit' | 'kitHint' | 'kitList' | 'acid' | 'condition',
     Text
   >;
   private statLabels: Text[];
@@ -69,7 +77,7 @@ export class Hud {
     this.t = {
       wave: text(), kills: text(), best: text(), comic: text(), nv: text(),
       count: text(), note: text(), frenzy: text(), streak: text(), hint: text(),
-      kit: text(), kitHint: text(), kitList: text(), acid: text(),
+      kit: text(), kitHint: text(), kitList: text(), acid: text(), condition: text(),
     };
     this.statLabels = [text(), text(), text(), text()];
     this.statValues = [text(), text(), text(), text()];
@@ -104,6 +112,26 @@ export class Hud {
     if (this.style === 'comic') this.drawComic(d, th);
     else this.drawNv(d, th);
     this.drawKit(d, th);
+    this.drawCondition(d, th);
+  }
+
+  /** The wave's condition on a chip under the progress strip (none when the wave is clear). */
+  private drawCondition(d: HudData, th: Theme) {
+    const t = this.t.condition, show = d.condition !== 'clear';
+    t.setVisible(show);
+    if (!show) return;
+    const c = CONDITION_CHIP, comic = this.style === 'comic', y = c.y + (d.bossLive ? c.bossDrop : 0);
+    const label = `${CONDITIONS[d.condition].label.toUpperCase()}: ${CONDITIONS[d.condition].detail.toUpperCase()}`;
+    if (comic) this.font(t, 9.5, th.ink, th).setText(label).setOrigin(1, 0.5).setPosition(c.x - 8, y + c.h / 2);
+    else this.font(t, 9, th.warn, th, { glow: th.warn }).setText(label).setOrigin(1, 0.5).setPosition(c.x - 8, y + c.h / 2);
+    const w = t.width + 16, x = c.x - w;
+    if (comic) this.caption(x, y, w, c.h, '#e8c0e8', th.ink, 1.6);
+    else {
+      this.g.fillStyle(num('#140404'), 0.8).fillRoundedRect(x, y, w, c.h, 2);
+      this.g.lineStyle(1, num(th.warn), 0.9).strokeRoundedRect(x, y, w, c.h, 2);
+    }
+    // Drawn after the chip, so the text sits on top of it.
+    t.setDepth(HUD_DEPTH + 2);
   }
 
   /**
@@ -113,26 +141,30 @@ export class Hud {
   private drawKit(d: HudData, th: Theme) {
     const g = this.g, t = this.t, k = KIT_PANEL, comic = this.style === 'comic';
     const list = [d.flames && `FLAME ${d.flames}`, d.medkits && `MEDKIT ${d.medkits}`, d.pellets && `SPREAD ${d.pellets}`].filter(Boolean).join(' · ');
-    const show = d.sandbags > 0 || d.placing || list !== '';
+    // The perks take the sandbag hint's line while there is no hint to show; with one, they join the supplies.
+    const perks = d.perks.map((p) => PERKS[p].label.toUpperCase()).join(' · ');
+    const ready = d.sandbags > 0, hint = ready || d.placing;
+    const line2 = hint ? '' : perks, line3 = hint && perks ? [perks, list].filter(Boolean).join(' · ') : list;
+    const show = hint || list !== '' || perks !== '';
     [t.kit, t.kitHint, t.kitList].forEach((o) => o.setVisible(show));
     if (show) {
-      const bag = CRATE_COLORS.sandbag, ready = d.sandbags > 0;
+      const bag = CRATE_COLORS.sandbag, title = ready ? `SANDBAGS${comic ? ' x' : ' '}${d.sandbags}` : perks && !list ? 'PERKS' : 'KIT';
       if (comic) {
         this.caption(k.x, k.y, k.w, k.h, d.placing ? '#ffd23f' : '#fff8e8', th.ink, 2.2);
         if (ready) {
           g.fillStyle(num(bag)).fillRoundedRect(k.x + k.w - 30, k.y + 7, 22, 11, 5);
           g.lineStyle(1.3, num(th.ink)).strokeRoundedRect(k.x + k.w - 30, k.y + 7, 22, 11, 5);
         }
-        this.font(t.kit, 12, th.ink, th).setText(ready ? `SANDBAGS x${d.sandbags}` : 'KIT').setOrigin(0, 0.5).setPosition(k.x + 8, k.y + 13);
-        this.font(t.kitHint, 8.5, d.placing ? th.warn : th.ink, th).setText(d.placing ? 'NOW TAP A LANE!' : ready ? 'TAP HERE, THEN A LANE' : '').setOrigin(0, 0.5).setPosition(k.x + 8, k.y + 28);
-        this.font(t.kitList, 8, '#5a4a6a', th).setText(list).setOrigin(0, 0.5).setPosition(k.x + 8, k.y + 42);
+        this.font(t.kit, 12, th.ink, th).setText(title).setOrigin(0, 0.5).setPosition(k.x + 8, k.y + 13);
+        this.font(t.kitHint, 8.5, d.placing ? th.warn : hint ? th.ink : '#c05a1a', th).setText(d.placing ? 'NOW TAP A LANE!' : ready ? 'TAP HERE, THEN A LANE' : line2).setOrigin(0, 0.5).setPosition(k.x + 8, k.y + 28);
+        this.font(t.kitList, 8, '#5a4a6a', th).setText(line3).setOrigin(0, 0.5).setPosition(k.x + 8, k.y + 42);
       } else {
         g.fillStyle(num('#040c06'), 0.72).fillRoundedRect(k.x, k.y, k.w, k.h, 3);
         g.lineStyle(1, num(d.placing ? th.text : th.accent), 0.8).strokeRoundedRect(k.x, k.y, k.w, k.h, 3);
         if (ready) g.fillStyle(num(bag)).fillRect(k.x + k.w - 20, k.y + 8, 12, 6);
-        this.font(t.kit, 11, th.accent, th, { glow: th.accent, weight: 'bold' }).setText(ready ? `SANDBAGS ${d.sandbags}` : 'KIT').setOrigin(0, 0.5).setPosition(k.x + 8, k.y + 12);
-        this.font(t.kitHint, 8.5, d.placing ? th.text : '#9fd8a4', th, { weight: 'normal' }).setText(d.placing ? 'SELECT LANE' : ready ? 'TAP, THEN A LANE' : '').setOrigin(0, 0.5).setPosition(k.x + 8, k.y + 27);
-        this.font(t.kitList, 8.5, th.muted, th, { weight: 'normal' }).setText(list).setOrigin(0, 0.5).setPosition(k.x + 8, k.y + 41);
+        this.font(t.kit, 11, th.accent, th, { glow: th.accent, weight: 'bold' }).setText(title).setOrigin(0, 0.5).setPosition(k.x + 8, k.y + 12);
+        this.font(t.kitHint, 8.5, d.placing ? th.text : '#9fd8a4', th, { weight: 'normal' }).setText(d.placing ? 'SELECT LANE' : ready ? 'TAP, THEN A LANE' : line2).setOrigin(0, 0.5).setPosition(k.x + 8, k.y + 27);
+        this.font(t.kitList, 8.5, th.muted, th, { weight: 'normal' }).setText(line3).setOrigin(0, 0.5).setPosition(k.x + 8, k.y + 41);
       }
     }
     t.acid.setVisible(d.inAcid);
@@ -159,13 +191,14 @@ export class Hud {
     this.g.lineStyle(lw, num(ink)).strokeRect(x, y, w, h);
   }
 
+  /** The stats row; a stat that has evolved into a perk gets a star after its number. */
   private stats(d: HudData) {
-    const s = d.stats;
+    const s = d.stats, star = (p: Perk) => (d.perks.includes(p) ? '★' : '');
     return [
-      { label: this.style === 'comic' ? 'DAMAGE' : 'DMG', value: String(s.damage), color: UPGRADE_COLORS.damage },
-      { label: 'RATE', value: `${(1000 / s.fireInterval).toFixed(1)}/s`, color: UPGRADE_COLORS.rate },
+      { label: this.style === 'comic' ? 'DAMAGE' : 'DMG', value: String(s.damage) + star('headshot'), color: UPGRADE_COLORS.damage },
+      { label: 'RATE', value: `${(1000 / s.fireInterval).toFixed(1)}/s${star('fire')}`, color: UPGRADE_COLORS.rate },
       { label: 'SQUAD', value: String(s.companions + 1), color: UPGRADE_COLORS.companion },
-      { label: 'PIERCE', value: String(s.pierce), color: UPGRADE_COLORS.pierce },
+      { label: 'PIERCE', value: String(s.pierce) + star('ricochet'), color: UPGRADE_COLORS.pierce },
     ];
   }
 

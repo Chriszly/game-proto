@@ -14,10 +14,17 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
 - **Implemented:** endless waves that grow in size and toughness, runners from wave 2, brutes from
   wave 3, spitters (acid from range) and crawler swarms from wave 4, riot zombies (a shield only
   pierce, drums and flames get past) from wave 6, a boss at the end of every fifth wave with three
-  telegraphed moves (charge, acid spit, a called pack of runners), a supply drop after each boss
-  (pick one of three: shotgun, flamethrower, medkit, sandbags), sandbag crates from wave 2 and walls
+  telegraphed moves (charge, acid spit, a called pack), three bosses taking turns (the Behemoth, the
+  Brood Mother who calls crawlers and bursts into more, the Bloater whose spit is huge and who
+  leaves a huge acid pool when it falls), a supply drop after each boss
+  (pick one of three: shotgun, flamethrower, medkit, sandbags), extraction (from wave 20 the supply
+  drop also offers to end the run as a win, paying the run's scrap 2x and more for each boss wave
+  passed up), sandbag crates from wave 2 and walls
   placed in a lane, scrap banked from kills and spent on the game over screen on starting crates for
-  the next run, four crate upgrades (fire rate, damage, companion, pierce), a squad of up to eight companions in three staggered rows of three, fuel drums with a
+  the next run, four crate upgrades (fire rate, damage, companion, pierce) and the perks their third
+  crate evolves into (fire rounds, headshots, ricochets), survivors walking among the zombies from
+  wave 3 (shots hurt them; one who reaches the sandbags joins the squad or gives scrap), wave
+  conditions from wave 6 (blackout, blood moon, ammo shortage), a squad of up to eight companions in three staggered rows of three, fuel drums with a
   blast ring that previews how many zombies they would catch, a frenzy streak (12 quick kills
   double the fire rate for 5s), damage numbers on hits, a wave progress strip with a boss warning,
   a saved best wave, a HUD, a wave banner, health bars, a boss bar and a game over screen.
@@ -25,20 +32,21 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
   overwatch feed. All art is painted on 2D canvases in code (`src/art/`); there are no image files.
   On screens wider than the game, a canvas behind it fills the sides with comic panels or an
   overwatch console.
-- **Progression** within a run is the crates and the boss supply drops: no XP or levels. Stats reset
-  on restart. Between runs, scrap (saved) buys starting crates, each kind once, spent at the next
-  run's start.
+- **Progression** within a run is the crates (and the perks three of a kind evolve into), the
+  survivors who make it and the boss supply drops: no XP or levels. Stats reset on restart. Between
+  runs, scrap (saved) buys starting crates, each kind once, spent at the next run's start. The run
+  has an ending: extraction, offered on every boss supply drop from wave 20.
 - **Screens:** there is no title or menu. `BootScene` only starts `GameScene`, which bakes the
   textures it needs and begins wave 1 at once. The supply drop (phase `'supply'`) and game over are
-  overlays in the same scene. On game over a tap on a starting crate buys or refunds it; any other
+  overlays in the same scene; an extraction ends in the same game over overlay with a win title
+  (`state.extracted`). On game over a tap on a starting crate buys or refunds it; any other
   tap calls `scene.restart()`.
 - **Persistence:** the best wave reached, the art style, banked scrap and the starting crates
   bought for the next run (see Save keys). It also reads the hub's
   shared settings (the `hub-settings` key, see Hub settings below).
 - **Rough edges seen in the code:**
   - No audio, no camera shake.
-  - The boss's moves cycle in a fixed order (each boss starts one further along); there is no
-    other boss kind.
+  - Each boss's moves cycle in a fixed order (each boss wave starts one further along).
   - A spitter stands still at its range until shot, so a wave can't end while one stands; it is
     an easy target once the soldier walks under it.
   - Supply drop picks and kit panel items are not shown in the wide-screen backdrop.
@@ -46,6 +54,10 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
     (measured in headless Chromium) on that first switch; later switches take a frame or so. On a
     big screen the textures are painted finer, and the first switch takes about twice as long.
   - Drums are not blocked by anything and can overlap crates; their labels then overlap too.
+  - Zombies ignore survivors: nothing but the squad's fire can kill one, and a survivor walks
+    through sandbag walls.
+  - A boss wave can draw a condition too; a blackout hides the boss until it is close (its bar at
+    the top still shows its health).
 
 ## Architecture
 
@@ -57,16 +69,21 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
 - `index.html`: the page; `#game` sits above the backdrop canvas (`z-index: 1`).
 - `src/scenes/BootScene.ts`: scene `'Boot'`; starts `'Game'`.
 - `src/scenes/GameScene.ts`: scene `'Game'`; all runtime logic: state, input, spawning, firing,
-  movement, collisions, drums and blasts, riot shields, acid, boss moves, sandbag walls, the
-  flamethrower and medkit, the frenzy, effects, waves, the supply drop, style switching, bars, game
-  over and its scrap shop.
-- `src/scenes/Hud.ts`: `Hud` (top bar, style switch, progress strip, frenzy meter, kit panel, the
+  movement, collisions, drums and blasts, riot shields, acid, boss moves and the three bosses,
+  survivors, perks (burning, headshots, ricochets), wave conditions, sandbag walls, the
+  flamethrower and medkit, the frenzy, effects, waves, the supply drop and extraction, style
+  switching, bars, game over and its scrap shop.
+- `src/scenes/Hud.ts`: `Hud` (top bar, style switch, progress strip, the wave condition's chip,
+  frenzy meter, kit panel with the perks, the
   in-acid warning, drawn per style into one Graphics plus Text objects, redrawn only when its data
-  changes), and the layout constants `STYLE_SWITCH`, `PROGRESS`, `FRENZY_PANEL`, `KIT_PANEL`,
-  `HUD_DEPTH`.
+  changes), and the layout constants `STYLE_SWITCH`, `PROGRESS`, `CONDITION_CHIP`, `FRENZY_PANEL`,
+  `KIT_PANEL`, `HUD_DEPTH`.
 - `src/game/rules.ts`: pure numbers and rules: `VIEW`, `HERO`, `REACH_Y`, `SQUAD_SLOTS`,
   `MAX_COMPANIONS`, `ENEMIES`, `SCRAP`, `SPITTER`, `ACID_SLOW`, `riotShield`, `SWARM`,
-  `swarmCount`, `BOSS`, `BOSS_MOVES`, `bossMove`, `UPGRADES`, `CRATES` (upgrades plus `sandbag`),
+  `swarmCount`, `BOSS`, `BOSS_MOVES`, `BOSSES`, `BOSS_KINDS`, `isBoss`, `bossKind`, `bossMove`,
+  `BROOD`, `BLOATER`, `UPGRADES`, `PERKS`, `PERK_AT`, `perksOf`, `FIRE_ROUNDS`, `HEADSHOT`,
+  `RICOCHET`, `SURVIVOR`, `CONDITIONS`, `CONDITION`, `drawCondition`, `EXTRACT`, `canExtract`,
+  `CRATES` (upgrades plus `sandbag`),
   `SANDBAG_CRATE_ODDS`, `LANES`, `laneAt`, `WALL`, `SUPPLIES`, `supplyPick`, `SHOTGUN`, `FLAMER`,
   `MEDKIT`, `KIT_COSTS`, `PICKUP`, `DRUM`, `blastDamage`, `FRENZY`, `Stats`, `BASE_STATS`,
   `applyUpgrade`, `planWave`, `isBossWave`, `waveSize`, `waveTotal`, `toughness`, `drumCount`. No
@@ -83,7 +100,7 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
 - `src/art/nightvision.ts`: `bakeNightVision`; sprites are painted in greys, then `phosphor` maps
   them to green and blooms the brightest pixels; chemlights and amber brackets are painted after.
 - `src/art/theme.ts`: `UPGRADE_COLORS`, `CRATE_COLORS` (adds the sandbag crate's tan),
-  `ACID_COLOR`, `SHIELD_COLOR` and the per-style `Theme` (fonts, text colours, accent,
+  `ACID_COLOR`, `SHIELD_COLOR`, `SURVIVOR_COLOR`, `BURN_COLOR` and the per-style `Theme` (fonts, text colours, accent,
   warning, hp bar) in `THEMES`. System font stacks only.
 - `src/art/backdrop.ts`: `Backdrop`, the page canvas behind the game (comic panels or the overwatch
   console), and `BackdropInfo`, what the scene feeds it. Its canvas carries `data-backdrop` (and
@@ -98,8 +115,9 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
   `ground`, `sandbags`, `hero`, `companion`, `grunt`, `runner`, `brute`, `boss`, `crate-<kind>`,
   `label-<kind>` (the crate's caption), `drum`, `ring` (the drum's blast ring), `bullet`, `muzzle`,
   `splat`, `blast`, `streak`, `hudbar`, `spitter`, `riot`, `riot-bare` (its shield broken),
-  `crawler`, `acid` (a puddle, painted for radius 78 and scaled), `glob`, `wall` (painted for the
-  middle lane and stretched to the others), `flame`, `supply-<kind>` (the supply drop's icons),
+  `crawler`, `brood`, `bloater`, `survivor`, `acid` (a puddle, painted for radius 78 and scaled), `glob`, `wall` (painted for the
+  middle lane and stretched to the others), `flame`, `supply-<kind>` (the supply drop's icons)
+  and `supply-extract` (the extraction card's flare),
   plus `sfx-blam`, `sfx-splut`, `sfx-boom` (comic only) and `scan`, `grain` (night vision only). Enemy sprites use the `EnemyKind` as the name. `create`
   bakes the saved style; `switchStyle` bakes the other one the first time.
 - **Skins:** `GameScene.skin(img, name)` sets an image's texture for the current style, its origin
@@ -111,14 +129,18 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
 - **Tick:** `GameScene.update` clamps `delta` to 100ms, runs `animateFeed` (grain and flicker),
   and unless the phase is `'over'` or `'supply'` (everything holds still then) runs in order:
   `moveHero`, `spawn`, `fire`, `moveBullets`, `tickBoss`, `moveEnemies` (stops the frame on game
-  over), `movePickups`, `moveDrums`, `moveAcid`, `moveWalls`, `hitTargets`, `tickFlamer`,
+  over; also ticks the burn of fire rounds), `movePickups`, `moveDrums`, `moveAcid`, `moveWalls`,
+  `moveSurvivors`, `hitTargets`, `tickFlamer`,
   `tickFrenzy`, `ageEffects`, `checkWave`, `drawBars`, `updateHud`, and once per game second
   `refreshBackdrop`. All timing is accumulated `dt` in private clocks (`waveClock`, `fireClock`,
   `breakClock`, `sinceKill`, `runMs`, effect and splat ages); no Phaser timers drive gameplay.
   Tweens only fade the banner and the upgrade pop-up text.
-- **Waves:** `startWave` sets `plan = planWave(wave)`, a list of `Spawn`s (enemy, pickup or drum)
-  sorted by `at`, resets `fallen` and `waveTotal` (`waveTotal(wave)`: its zombies plus its boss),
-  and saves a new best. `spawn` shifts entries off the front once `waveClock` passes their `at`.
+- **Waves:** `startWave` draws `state.condition = drawCondition(wave)` (from wave 6), then sets
+  `plan = planWave(wave, Math.random, condition)`, a list of `Spawn`s (enemy, pickup, drum or
+  survivor) sorted by `at`, resets `fallen` and `waveTotal` (`waveTotal(wave)`: its zombies plus
+  its boss), sets `state.bossKind` (`bossKind(wave)` on a boss wave), and saves a new best. The
+  banner names the boss and the condition, and `applyCondition` shows the blackout's dark rectangle
+  (`dark`, under the enemies) or the blood moon's red cast (`moon`, over the road). `spawn` shifts entries off the front once `waveClock` passes their `at`.
   `checkWave` moves to `'break'` when `enemiesToCome()` is 0 and no enemy is live (crates and drums
   do not count) and saves the bank plus this run's scrap; after a boss wave it moves to `'supply'`
   instead, with `offer = supplyPick()`, and `pickSupply` (a card tap or 1/2/3) moves on to
@@ -133,11 +155,42 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
   hero's line over `flight` ms (its target ring drawn in `drawBars`), then a puddle burns for
   `life` ms. `moveAcid` sets `state.inAcid` when the hero's x is inside a landed puddle, and `fire`
   then multiplies the interval by `ACID_SLOW`.
-- **Boss moves:** `tickBoss` counts `bossClock` to `BOSS.firstMs` (then `everyMs`), picks
-  `bossMove(wave, bossMoves)` and aims at the hero's x (`bossAct`), shows `bossCall` text and the
+- **Boss moves:** `tickBoss` finds the live boss (`isBoss(kind)`: `boss`, `brood` or `bloater`),
+  counts `bossClock` to `BOSS.firstMs` (then `everyMs`), picks
+  `bossMove(wave, bossMoves)` from that boss's own round (`BOSSES[kind].moves`) and aims at the
+  hero's x (`bossAct`), shows `bossCall` text and the
   warning (arrow, ring or circle, in `drawBars`) for `BOSS.warnMs`, then charges (moving the boss
-  itself over `chargeMs`; `moveEnemies` doesn't move a busy boss), lobs a big acid pool or calls
-  the pack. A medkit push ends a charge.
+  itself over `chargeMs`; `moveEnemies` doesn't move a busy boss), lobs a big acid pool
+  (`spitRadius(kind)`: the Bloater's is `BLOATER.spitRadius`) or calls
+  the pack (`callPack`: `BOSS.pack` runners, or `BROOD.pack` crawlers for the Brood Mother, placed
+  by `spawnPack`, which adds them to `waveTotal`). A medkit push ends a charge. In `kill`, a
+  Brood Mother bursts into `BROOD.burst` crawlers (`spawnPack` again) and a Bloater lobs a
+  `BLOATER.poolRadius` acid pool at the hero's x that burns for `BLOATER.poolMs`.
+- **Perks:** `collected` counts every crate of a kind (the starting kit included, counted in
+  `create`); `perksOf(collected)` lists the perks at `PERK_AT` or more, kept in `state.perks`
+  (`collect` shows a banner for a new one). In `hitTargets`, with `fire` every bullet hit sets
+  `e.burn = FIRE_ROUNDS.ms` and `moveEnemies` ticks `FIRE_ROUNDS.damage(wave)` every `tickMs`
+  (past shields, drawn as a flame in `drawBars`); with `headshot` every `HEADSHOT.every`th bullet
+  hit on a zombie (`bulletHits`) does `HEADSHOT.mult` times the damage and counts in
+  `state.headshots`; with `ricochet` a bullet whose hits ran out on a zombie (`b.ricochets` set by
+  `fire`) is re-aimed from that zombie at `nearestEnemy` within `RICOCHET.range` with one more hit.
+- **Survivors:** a `survivor` spawn takes one from the `survivors` pool (sprite plus a label
+  Text). `moveSurvivors` walks it down at `SURVIVOR.speed`, steering towards the hero like a
+  zombie, and calls `rescue` at the sandbags: a companion (`applyUpgrade(stats, 'companion')`,
+  `addCompanions`) or `SURVIVOR.scrap` once the squad is full; `state.survivorsSaved` counts them.
+  `hitTargets` sweeps survivors along with the enemies, so the nearest thing in a bullet's path is
+  hit first; `hurtSurvivor` takes the damage and at 0 the survivor is lost (`state.survivorsLost`).
+  They don't count towards `waveTotal` or block a wave clear, and keep walking in the break.
+- **Conditions:** `state.condition` is read where it applies: `fire` multiplies the interval by
+  `CONDITION.shortageFire` in a shortage (and `planWave` got `CONDITION.shortageDrums` more drums
+  through `drumCount`), `moveEnemies` multiplies a runner's speed by `CONDITION.bloodMoonRunner`
+  under a blood moon, and in a blackout `visibility(x, y)` (0 beyond `CONDITION.blackoutRadius`
+  of the hero, fading in over 70px) sets every enemy's and survivor's alpha and hides the bars
+  of those out of sight. The `Hud` shows the condition on a chip under the progress strip.
+- **Extraction:** `showSupply` adds a fourth, wide card when `canExtract(wave)` (a boss wave from
+  `EXTRACT.fromWave`), tapped or taken with 4; `pickSupply('extract')` calls `extract`, which
+  sets `state.extracted`, pays `state.payout = round(scrap * EXTRACT.bonus(wave))` into the bank
+  (saved) and shows the game over overlay with a win title.
 - **Sandbag walls:** a `sandbag` crate adds to `state.sandbags`. A tap on `Hud.onKit` toggles
   `state.placing`; the next tap on the road calls `placeWall(laneAt(x))` (the S key places in the
   hero's lane). Walls are a `walls` pool, one per lane, at `WALL.y` for `WALL.ms`; `moveEnemies`
@@ -148,7 +201,7 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
   `FLAMER.reach`. In `moveEnemies` a zombie at the line spends a medkit (`useMedkit`) instead of
   ending the game.
 - **Scrap:** `kill` adds `SCRAP[kind]` to `state.scrap`. `gameOver` adds it to `state.bank` and
-  saves it; `showGameOver` draws the shop (`shop` tap boxes) and `buyKit` buys or refunds a
+  saves it (an extraction adds the payout instead); `showGameOver` draws the shop (`shop` tap boxes) and `buyKit` buys or refunds a
   starting crate into `state.nextKit` (saved as `deadline-kit`). `create` applies the saved kit to
   the starting stats (`state.startKit`) and clears it.
 - **Drums:** `moveDrums` rolls each drum down at `DRUM.speed`, counts the zombies within
@@ -176,7 +229,7 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
   falling when the squad filled; `applyUpgrade` also caps the count.
 - **Input:** a `pointerdown` inside `Hud.onSwitch` (the `STYLE_SWITCH` box, padded 6px) calls
   `switchStyle` and nothing else; the V key does the same. In `'over'` it buys from the shop or
-  restarts, in `'supply'` it picks a card, on the kit panel it toggles placing, and while placing it
+  restarts, in `'supply'` it picks a card (1, 2, 3, or 4 for the extraction card), on the kit panel it toggles placing, and while placing it
   places a wall. Otherwise `createInput` sets `pointerTarget` (clamped to `heroRange()`) on
   `pointerdown`, and on `pointermove` while held (unless the press was used by any of the above:
   `pressOnUi`). `moveHero` walks towards it at `HERO.speed` and clears it
@@ -236,28 +289,32 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
   `streak`, `frenzyMs` and `frenzies`, `drumsBlown` and `lastBlast` (`{ caught, killed }` of the
   last drum), `scrap` (this run) and `bank` (saved before it), `startKit` and `nextKit`,
   `sandbags`, `placing` and `walls` (placed this run), `pellets`, `flames` and `medkits`, `offer`
-  and `supplies` (picked this run), `inAcid`, `bossMove` and `bossMoves`. The scene's public `squad` holds the companion images, one per `stats.companions`,
+  and `supplies` (picked this run), `inAcid`, `bossMove`, `bossMoves` and `bossKind`, `perks` and
+  `headshots`, `survivorsSaved` and `survivorsLost`, `condition`, `extracted` and `payout`. The
+  scene's public `squad` holds the companion images, one per `stats.companions`,
   and `style` the current `ArtStyle`.
-- Entities (`Enemy`, `Pickup`, `Drum`, `Bullet`, `Acid`, `Wall`, `Splat`, `Fx`) are private interfaces in
-  `GameScene.ts`, held in `Pool`s, not in `GameState`. Each has `alive`; enemies, pickups and drums
-  share the `id` counter `nextId` so a bullet's `hit` list can hold all three.
+- Entities (`Enemy`, `Survivor`, `Pickup`, `Drum`, `Bullet`, `Acid`, `Wall`, `Splat`, `Fx`) are private interfaces in
+  `GameScene.ts`, held in `Pool`s, not in `GameState`. Each has `alive`; enemies, survivors, pickups and drums
+  share the `id` counter `nextId` so a bullet's `hit` list can hold all of them.
 - Mutation: the scene mutates everything. The only pure function on state is `applyUpgrade`, which
   returns a new `Stats` (called from `collect`). `planWave` is pure given its `rand`.
 - Invariants: `player.x` is always in `heroRange()` (inside `HERO.minX..HERO.maxX`), and it is the
   rifle's x, not the sprite's centre (the soldier's `GEOM` origin is the rifle). A bullet's
-  `hitsLeft` starts at `1 + pierce` and is spent on enemies first, then drums, then crates, in the
-  same frame. `fallen` counts every kill of the wave, drum kills included, so it equals `kills`
+  `hitsLeft` starts at `1 + pierce` and is spent on enemies and survivors first, then drums, then
+  crates, in the same frame (a ricochet gives it one more hit and skips the drums and crates that
+  frame). `fallen` counts every kill of the wave, drum kills included, so it equals `kills`
   during wave 1. Wave 1 is all grunts.
 - Game over: `moveEnemies` calls `gameOver` as soon as any enemy's `y + radius >= REACH_Y`, and
   the rest of that frame is skipped.
 
 ### Randomness and timing
 
-- `Math.random` is used only by `planWave` and `supplyPick` (their default `rand`). The order of
+- `Math.random` is used only by `planWave`, `drawCondition` and `supplyPick` (their default
+  `rand`). `startWave` calls `drawCondition` (one draw, from wave 6 only) before `planWave`. The order of
   `rand()` calls in `planWave` (per enemy: kind roll then x; then per crate: upgrade then x; then
   per drum: x; then per crawler swarm: x; then, from wave 2, the sandbag crate roll and its time
-  and x) fixes what the seeded test sees. Newer draws come last and only on the waves that have
-  them, so wave 1's draws are unchanged. The new kinds reuse the one kind roll (spitter 0.4-0.5
+  and x; then, from wave 3, the survivor's time and x) fixes what the seeded test sees. Newer draws
+  come last and only on the waves that have them, so wave 1's draws are unchanged. The new kinds reuse the one kind roll (spitter 0.4-0.5
   from wave 4, riot 0.5-0.6 from wave 6).
 - The art uses its own seeded `rng` (`paint.ts`), so it looks the same every run. Effects, the
   BLAM! placement and the night-vision flicker come from counters and the frame number.
@@ -273,11 +330,15 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
   (`ENEMIES`), crate speed and size (`PICKUP`), drum speed, size, blast radius and hp (`DRUM`:
   30px/s, 88px, one hit), `blastDamage` (`6 + 3 * wave`), the frenzy (`FRENZY`: 1500ms gap, 12
   kills, 5000ms, 2x), starting stats (`BASE_STATS`), `MIN_FIRE_INTERVAL`, the upgrade effects
-  (`applyUpgrade`), the new zombies (`SPITTER`, `riotShield`, `SWARM`), the boss (`BOSS`), walls
+  (`applyUpgrade`), the perks (`PERK_AT`, `FIRE_ROUNDS`, `HEADSHOT`, `RICOCHET`), the new zombies
+  (`SPITTER`, `riotShield`, `SWARM`), the bosses (`BOSS`, `BOSSES`, `BROOD`, `BLOATER`),
+  survivors (`SURVIVOR`), conditions (`CONDITION`), extraction (`EXTRACT`: from wave 20, bonus
+  `2 + (wave - 20) / 10`), walls
   (`WALL`, `LANES`), supplies (`SHOTGUN`, `FLAMER`, `MEDKIT`), scrap (`SCRAP`, `KIT_COSTS`), and
   wave growth in `waveSize` and `planWave` (toughness `1 + 0.3 * (wave - 1)`
   times the difficulty multiplier, spawn gap, kind odds, boss delay, crate count
-  `1 + floor(wave / 3)`, crate hp `10 + 6 * wave`, drum count `1 + floor(wave / 4)` from 2000ms).
+  `1 + floor(wave / 3)`, crate hp `10 + 6 * wave`, drum count `1 + floor(wave / 4)` from 2000ms,
+  plus 2 in an ammo shortage).
 - Visual-only constants stay in `GameScene.ts` (`DEPTH`, `SPLAT_MS`, `BLAM_EVERY`,
   `SPLUT_EVERY`), `Hud.ts` (layout) and `src/art/` (colours, `GEOM`).
 
@@ -287,8 +348,8 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
   `window.game.scene.getScene('Game')` and from it `state` (deep-copied), `player.x`/`player.y`,
   `pointerTarget !== null` (as "moving"), `style`, `liveEnemies()`, `livePickups()` and
   `liveDrums()` (`id`, `hp`, `maxHp`, `x`, `y`, `caught`), and `localStorage` (`deadline-best`,
-  `deadline-style`, `deadline-scrap`). `liveEnemies()` also gives `shield`; `liveAcid()` and
-  `liveWalls()` exist for checks by hand.
+  `deadline-style`, `deadline-scrap`). `liveEnemies()` also gives `shield`; `liveAcid()`,
+  `liveWalls()` and `liveSurvivors()` exist for checks by hand.
 - Inputs: only mouse clicks on the game's canvas (`#game canvas`; the page has a second canvas
   behind it), converted from game pixels with its bounding box. The Playwright project `deadline`
   uses a 540x960 viewport.
@@ -343,8 +404,15 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
   `Hud.ts`; keep clear of `STYLE_SWITCH`, or move the switch and the test's `SWITCH`.
 - **Add a supply:** add it to `SupplyKind` and `SUPPLIES`, apply it in `pickSupply`, paint
   `supply-<kind>` in both styles, and show it in `Hud.drawKit` if it is held.
-- **Add a boss move:** add it to `BossMove` and `BOSS_MOVES`, its call text and action in
-  `tickBoss`, and its warning in `drawBars`.
+- **Add a boss move:** add it to `BossMove` and `BOSS_MOVES` (and to the rounds in `BOSSES`), its
+  call text and action in `tickBoss`, and its warning in `drawBars`.
+- **Add a boss:** add it to `EnemyKind`, `BossKind`, `BOSS_KINDS`, `ENEMIES`, `SCRAP` and `BOSSES`
+  (name and round of moves), a `GEOM` box and a sprite in both styles (the bosses are painted at
+  1.9x like the Behemoth), and anything it does on death in `kill`.
+- **Add a perk:** add it to `Perk` and `PERKS` (which upgrade it evolves from), and apply it in
+  `fire`, `hitTargets` or `moveEnemies`; the HUD lists it on the kit panel on its own.
+- **Add a condition:** add it to `Condition`, `CONDITIONS` and `CONDITION_DRAWS`, and read
+  `state.condition` where it applies (`fire`, `moveEnemies`, `planWave`, `visibility`).
 - **Add a new phase or screen** (title, pause): extend `Phase`, guard `update`, `spawn` and the
   `pointerdown` handler on it, and keep wave 1 starting at once or update the test's opening steps.
 
@@ -383,5 +451,8 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
   crosshair). Keep them all non-red-cross.
 - A wall sprite is skinned first and then stretched to its lane (`placeWall`), as `skin` sets the
   scale; `applyStyle` only swaps its texture, so the stretch survives a style switch.
-- The supply drop pauses the whole update (`'supply'`), so crates and drums in the air wait too.
+- The supply drop pauses the whole update (`'supply'`), so crates, drums and survivors on the
+  road wait too.
+- Survivors are in the bullets' sweep with the zombies, so a survivor standing between the squad
+  and a zombie takes the bullet; with pierce it goes on through them.
   The favicon is the hub bear (ears, head, dot eyes, muzzle) with a helmet set between its ears.
