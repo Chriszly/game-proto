@@ -37,6 +37,22 @@ in.
   second card, half the time; they trade something away and are never for sale) and the **daily
   course** (a "Daily course" button on the game-over panel starts a run whose course and boons are
   drawn from a seed of the date, with its own best distance).
+- Round 2 upgrades: **forked roads** (from the checkpoint before stage 3, once the boon is taken,
+  two road cards pick the next ordinary stage's road: the High Road has more coins, an extra goblin
+  and bat in the pool, gaps 40 px tighter, no shrine and a streak cap of x7; the Low Road has gaps
+  40 px wider and the shrine), **boon pairs** (`pairs.ts`: Winged Boots + Second Leap is Falcon's
+  Glide, half gravity while falling; Golden Greed + Lodestone is Goblin's Hoard, two more pulled
+  coins per stomp; Aegis + Shadow Cloak is Bulwark, a blocked hit removes the foes and missiles
+  within 220 px ahead; hinted on the cards, announced with a pop when completed), **the herald's
+  dare** (from stage 2 each ordinary stage has one, by stage in turn: stomp 2 foes, take no hit,
+  take 20 coins, reach a x3 streak; met, it pays 20 coins at once and the stage's checkpoint deals
+  three cards; shown in a strip under the tag and in the stage title), **the rockfall** (every
+  seventh non-boss stage: boulders 240 px behind the knight that keep their pace, creep 10 px/s and
+  gain 90 px per hit and 45 px per skid; catching the knight costs a heart and resets it) and **the
+  Dragon's Keep** (the first stage starting at or past 1500 m is a boss stage with the dragon,
+  which throws fire on the road and tail lashes at head height; three stomps beat it for 60 coins
+  and the lasting crown, saved and drawn on the knight's helm; the run then goes on 60 px/s faster
+  with gaps 50 px tighter).
 - The art is an illuminated manuscript: a gothic miniature on vellum, painted on 2D canvases
   (`src/art/ink.ts`): a lapis-and-madder diapered sky with a gold-leaf moon, crags and a pink
   castle, lollipop trees, a turf road, ink outlines with white highlights, gold-leaf coins, a lapis
@@ -61,42 +77,56 @@ in.
 - `src/main.ts`: creates the `Phaser.Game` (960x540, `Scale.FIT`, `pixelArt: false`) with `BootScene`
   then `GameScene`, calls `setupGame(game)` and `setupScaling(game)` (see Screen scaling), and puts
   `game` on `window` in dev builds.
-- `src/game/state.ts`: `GameState` and its parts (`Trap`, `Ledge`, `Shrine`, `Boss`, `Coin`,
-  `Effect`, `Runner`), the terrains (`Terrain`, `TERRAIN` names and rules, `ICE`, `MARSH`, `WIND`,
-  `terrainOf`), `BOSS_EVERY` and `isBossStage`, the daily course's randomness (`rand`, `seedOf`,
-  `today`), the physics and size constants, `BOON_PRICE`, `STREAK` and `streakMult` (the coin
-  multiplier), `SHRINE` (first stage, price, width), `FOES`, `TRAP_SPAN`, `FLAMES` and `flameOf` (a
-  vent's burn), `AWAKE`, `floorAt` (ground height under a stretch of course), `speedOf`, `stats`
-  (the knight's numbers from boon ranks, the armoury and the terrain), `canTake`, `freshState`, `metres`, and `trackOf` (the run
-  track's numbers: metres run, best, track length, banners, metres to the next banner).
-- `src/game/sim.ts`: the rules. `newRun` (from a `Carry`: best, bank, pending boon, armoury; and a
-  daily date or null), `jump`, `slide`, `tick`, `rollChoices`, `pick`, `buyMissed`, `buyArmoury`, plus
-  `runnerBox` and the private helpers: collision (`touches`), foe movement (`moveFoes`), stomping
-  (`stomp`), the Gatekeeper's stomps and bumps (`bossContact`), coins (`gainCoin`: the streak and
-  its multiplier), shrines (`visitShrines`) and damage (`hurt`, which also takes `'wall'` for a
-  ledge's side and `'boss'`, and resets the streak).
-- `src/game/boss.ts`: the Gatekeeper's numbers (`BOSS`), `moveBoss` (its modes and throws) and
-  `bossStands`.
+- `src/game/state.ts`: `GameState` and its parts (`Trap`, `Ledge`, `Shrine`, `Boss` with its
+  `BossKind`, `Rockfall`, `Dare`, `Coin`, `Effect`, `Runner`), the terrains (`Terrain`, `TERRAIN`
+  names and rules, `ICE`, `MARSH`, `WIND`, `terrainOf`), the roads (`Road`, `ROADS` names and card
+  text, `ROAD` (first stage, streak and gap changes), `streakMax`), the dares (`DareKind`, `DARE`
+  (first stage, reward, kinds in turn, goals), `dareOf`, `dareText`), the rockfall (`ROCK`,
+  `isRockStage`), `DRAGON_AT` and `HARDER` (the run after the dragon), `BOSS_EVERY` and
+  `isBossStage`, the daily course's randomness (`rand`, `seedOf`, `today`), the physics and size
+  constants, `BOON_PRICE`, `STREAK` and `streakMult` (the coin multiplier, capped by the road),
+  `SHRINE` (first stage, price, width), `FOES`, `TRAP_SPAN`, `FLAMES` and `flameOf` (a vent's
+  burn), `AWAKE`, `floorAt` (ground height under a stretch of course), `speedOf`, `stats` (the
+  knight's numbers from boon ranks, the armoury, the terrain and the pairs' bonuses `glide`,
+  `hoard`, `bulwark`), `canTake`, `freshState`, `metres`, and `trackOf` (the run track's numbers:
+  metres run, best, track length, banners, metres to the next banner).
+- `src/game/sim.ts`: the rules. `newRun` (from a `Carry`: best, bank, pending boon, armoury,
+  crown; and a daily date or null), `jump`, `slide`, `tick`, `rollChoices`, `pick`, `pickRoad`,
+  `buyMissed`, `buyArmoury`, plus `runnerBox` and the private helpers: collision (`touches`), foe
+  movement (`moveFoes`), stomping (`stomp`, with the hoard's coins), a boss's stomps and bumps
+  (`bossContact`, which also crowns the knight), coins (`gainCoin`: the streak and its multiplier),
+  the dare's progress and reward (`dared`, `meetDare`), shrines (`visitShrines`) and damage
+  (`hurt`, which also takes `'wall'` for a ledge's side, `'boss'` and `'rock'`, resets the streak,
+  loses a no-hit dare and, with Bulwark, knocks foes away on a block).
+- `src/game/boss.ts`: both bosses' numbers (`BOSS` by `BossKind`, each with its `missiles`),
+  `bossOf`, `MISSILES` (the thrown trap kinds), `moveBoss` (its modes and throws) and `bossStands`.
+- `src/game/pairs.ts`: the `PAIRS` table (`PairId`, name, the two boons, text), `pairsOf` (the
+  pairs completed by a run's ranks) and `pairFor` (a boon's pair and partner, for the card hint).
 - `src/game/armoury.ts`: the `ARMOURY` table (name, text, price per level), `ARMOURY_EACH` (what a
   level adds), `noArmoury` and `nextPrice`.
 - `src/game/course.ts`: `buildStage` lays out a stage's pieces (`Piece`: each trap kind, `ledge`
-  and `steps`) and their coins, and from `SHRINE.from` its shrine (`placeShrine`, in the gap between
-  pieces nearest the stage's middle); `planOf` sizes and places one piece, `piecesOf` is the pool per
-  stage, `OPENING` is stage 1's fixed first four, `gapsOf` gives spacing per stage,
-  `buildBossStage` lays out a Gatekeeper's stage, `nextStage` moves to the next stage (and sets its
-  terrain).
+  and `steps`) and their coins (more on the High Road), from `SHRINE.from` its shrine
+  (`placeShrine`, in the gap between pieces nearest the stage's middle; none on the High Road), from
+  `DARE.from` its dare and on a rockfall stage its rockfall; `planOf` sizes and places one piece,
+  `piecesOf` is the pool per stage and road, `OPENING` is stage 1's fixed first four, `gapsOf` gives
+  spacing per stage, road and the run after the dragon, `dragonStage` says whether a stage is the
+  dragon's, `buildBossStage` lays out a boss's stage (the road terrain, no road), `nextStage` moves
+  to the next stage (and sets its speed and terrain), and `roadChoiceDue` says whether a checkpoint
+  asks for a road (the next stage is ordinary and at least `ROAD.from`).
 - `src/game/boons.ts`: the `BOONS` table (name, text, `maxRank`, `filler`, `cursed`), `BOON_IDS`,
   `forSale` and `CURSE` (from which stage, how often).
 - `src/game/save.ts`: `loadProgress` and `saveProgress` (best distance, banked coins, the bought
-  boon, the armoury, the daily best).
+  boon, the armoury, the daily best, the crown).
 - `src/scenes/BootScene.ts`: bakes every texture, then starts `Game`.
 - `src/scenes/GameScene.ts`: owns the `GameState`, wires input, ticks the sim and draws everything.
 - `src/scenes/layout.ts`: screen constants (`VIEW`, `GROUND_Y`, `RUNNER_X`, `TAP_SPLIT_Y`,
   `FRAME` (the miniature's gold frame), `TRACK` (the run track), `TAG` (the stage's tag),
-  `STAGE_TITLE`, `ARMOURY_PANEL`, `STREAK_CHIP`, `MARGIN` (the
-  scrollwork and caption), `CARDS`, `BUTTON`, `HUD_HEIGHT`, `UI_DEPTH`, `FONT` (a Georgia serif stack)).
-- `src/ui/BoonCards.ts`: the checkpoint overlay and its two vellum cards (a cursed boon's card is
-  edged in madder); exposes `cards: CardSpot[]`.
+  `DARE_TAG` (the dare's strip under it), `STAGE_TITLE`, `ARMOURY_PANEL`, `STREAK_CHIP`, `MARGIN`
+  (the scrollwork and caption), `CARDS` (card size and the centres for two or three cards),
+  `BUTTON`, `HUD_HEIGHT`, `UI_DEPTH`, `FONT` (a Georgia serif stack)).
+- `src/ui/BoonCards.ts`: the checkpoint overlay and its vellum cards: two or three boon cards (a
+  cursed boon's card is edged in madder; a paired boon's card carries the pair's hint), then the
+  two road cards; exposes `cards: CardSpot[]` (`id` is a `BoonId` or a `Road`).
 - `src/ui/Button.ts`: `makeButton`, the lapis button ruled in gold used on the game-over panel and
   the armoury (its caption is the container's second child).
 - `src/art/ink.ts`: the manuscript toolkit. `C` (the pigments as CSS colours) and `N` (the same as
@@ -110,16 +140,18 @@ in.
   coins, `checkpoint`, `shrine` and `shrine-used`, the shrine's `banderole` and the miniature's
   `frame`. Exports `FAR_H`, `NEAR_H`, `GROUND_TOP` and `PIT_DEPTH`.
 - `src/art/foes.ts`: the goblin (`goblin-0`, `goblin-1`, sized by `GOBLIN_ART`), bat (`bat-0`,
-  `bat-1`, `BAT_ART`) and the Gatekeeper (`gate-ready`, `gate-throw`, `gate-tired`, `GATE_ART`),
-  facing left, and its thrown `barrel` and `axe`.
+  `bat-1`, `BAT_ART`), the Gatekeeper (`gate-ready`, `gate-throw`, `gate-tired`, `GATE_ART`) and
+  the dragon (`dragon-ready`, `dragon-breathe`, `dragon-tired`, `DRAGON_ART`; `BOSS_ART` maps a
+  `BossKind` to its art), facing left, their thrown `barrel`, `axe`, `fire-0`/`fire-1` and `tail`,
+  and the rockfall's `boulder`.
 - `src/art/knight.ts`: the knight's poses (`KnightPose`), painted as `knight-<pose>`, and
   `KNIGHT_FEET` (texture sizes and where the feet are).
-- `src/art/icons.ts`: one 64x64 icon per boon (`iconTexture`), the armoury's (`armouryIcon`: the
-  purse's own, Iron Heart and Lodestone Charm reuse Hearty Ale's and Lodestone's), and the HUD's
-  `heart-full` and `heart-empty`.
+- `src/art/icons.ts`: one 64x64 icon per boon (`iconTexture`), per road (`roadIcon`), the
+  armoury's (`armouryIcon`: the purse's own, Iron Heart and Lodestone Charm reuse Hearty Ale's and
+  Lodestone's), and the HUD's `heart-full` and `heart-empty`.
 - `src/art/hud.ts`: `bakeHud` (the `hud-band`, the illuminated `initial`, the `streak-chip` and its
-  `medallion`, the `track-strip`, the `tag-strip`), `bakePanel` (vellum panels: cards, the title strip, the game-over
-  panel) and `bakeButton`.
+  `medallion`, the `track-strip`, the `tag-strip` and `dare-strip`), `bakePanel` (vellum panels:
+  cards, the title strip, the game-over panel) and `bakeButton`.
 - `shared/setupGame.ts` and `shared/settings.ts` (outside the game folder): the hub's settings.
   `main.ts` imports `setupGame`; `state.ts` imports `byDifficulty`. `shared/scaling.ts`:
   `main.ts` imports `setupScaling`, `ink.ts` imports `sharpRes`, `GameScene` imports `viewPoint`.
@@ -135,28 +167,44 @@ in.
   delta), clamped to `MAX_STEP_MS` (100), with 0 on the first frame. It calls `tick(state, dt)`
   once per frame (no fixed substeps) and advances its own `clock`, used only for animation.
 - `tick` order: age effects; stop unless `phase === 'running'`; add `dt` to `time`; move awake
-  foes (`moveFoes`); while the Gatekeeper stands, push `checkpointX` to at least `BOSS.holdBack`
-  ahead; move `distance` (at `WIND.air` of the speed when airborne on wind; clamped to
-  `checkpointX`); move the Gatekeeper (`moveBoss`); if the feet are now below the
-  floor (`floorAt` under the knight's box), that is a ledge's side: hurt (`'wall'`, unless
-  unhurtable or less than `STEP_UP` short) and snap onto its top; apply gravity and land on the
-  floor (on ice, a landing starts a skid); stomp a foe landed on; stomp or bump the Gatekeeper
-  (`bossContact`); refill jumps when grounded; count down slide, hurt and skid (a jump queued
-  during the skid fires as it ends); check one trap hit; visit a shrine slid into; collect or pull
-  coins; drop traps, ledges, shrines, coins and a beaten Gatekeeper more than `BEHIND` behind;
-  enter `checkpoint`, note its banner and roll choices when `distance` reaches `checkpointX`.
-- The Gatekeeper (`moveBoss`, `Boss.mode`): `wait` on the road until `BOSS.station` (400 px) ahead
-  of the knight; `throw` keeps that gap and throws `BOSS.throws(hp)` things (barrel, axe, barrel...)
-  every `BOSS.throwEvery(hp)` ms, faster as it loses hp; `tired` first keeps the gap (`ms > 0`) until
-  its last throw is past and the knight is on the road, then stands (`ms` 0); a stomp (falling onto
-  `BOSS.h`, 86 px) costs it an hp and sends it to `flee` (running `BOSS.flee` faster than the knight
-  until back at its gap, then `throw` again); running into it hurts the knight and also sends it to
-  `flee`; leaping clean over it does too. No contact while it waits or flees. At 0 hp it is `down`:
-  `bosses` goes up, `BOSS.reward` coins are paid, and `checkpointX` is set `BOSS.after` ahead.
-- Coins: `gainCoin` pays `stats().coinValue * streakMult(streak)` (the multiplier reached before
-  this coin), then adds one to `streak`, and pushes a `pop` effect ("+N") when the coin is worth more
-  than one. Picked-up coins and stomped foes both go through it. `hurt` sets `streak` to 0 on every
-  hit, blocked ones included.
+  foes (`moveFoes`); while a boss stands, push `checkpointX` to at least its `holdBack` ahead;
+  move `distance` (at `WIND.air` of the speed when airborne on wind; clamped to `checkpointX`) and
+  the rockfall with it (plus `ROCK.creep`); move the boss (`moveBoss`); if the feet are now below
+  the floor (`floorAt` under the knight's box), that is a ledge's side: hurt (`'wall'`, unless
+  unhurtable or less than `STEP_UP` short) and snap onto its top; apply gravity (halved while
+  falling with Falcon's Glide) and land on the floor (on ice, a landing starts a skid, and the
+  rockfall gains `ROCK.skid`); stomp a foe landed on; stomp or bump the boss (`bossContact`);
+  refill jumps when grounded; count down slide, hurt and skid (a jump queued during the skid fires
+  as it ends); check one trap hit; let the rockfall gain `ROCK.hit` if a hit landed this tick, and
+  if it has reached the knight's back, hurt (`'rock'`) and drop it `ROCK.start` behind (a knight
+  still unhurtable is only kept at their heels); visit a shrine slid into; collect or pull coins;
+  drop traps, ledges, shrines, coins and a beaten boss more than `BEHIND` behind; enter
+  `checkpoint`, note its banner, meet a no-hit dare still standing and roll choices when
+  `distance` reaches `checkpointX`.
+- A boss (`moveBoss`, `Boss.mode`, with the numbers `bossOf(boss)` from `BOSS[kind]`): `wait` on
+  the road until `station` ahead of the knight; `throw` keeps that gap and throws `throws(hp)`
+  things (its two `missiles` by turns: barrel, axe, barrel... or fire, tail, fire...) every
+  `throwEvery(hp)` ms, faster as it loses hp; `tired` first keeps the gap (`ms > 0`) until its last
+  throw is past and the knight is on the road, then stands (`ms` 0); a stomp (falling onto its `h`:
+  86 px for the Gatekeeper, 96 for the dragon) costs it an hp and sends it to `flee` (running `flee`
+  faster than the knight until back at its gap, then `throw` again); running into it hurts the
+  knight and also sends it to `flee`; leaping clean over it does too. No contact while it waits or
+  flees. At 0 hp it is `down`: `reward` coins are paid and `checkpointX` is set `after` ahead; the
+  Gatekeeper adds to `bosses`, the dragon sets `dragonBeaten` and `crown` and raises `speed` by
+  `HARDER.speed` at once.
+- Coins: `gainCoin` pays `stats().coinValue * streakMult(streak, streakMax(road))` (the
+  multiplier reached before this coin), then adds one to `streak`, pushes a `pop` effect ("+N")
+  when the coin is worth more than one, and moves a coin or streak dare on. Picked-up coins and
+  stomped foes both go through it (a stomp with Goblin's Hoard also adds `HOARD` pulled coins).
+  `hurt` sets `streak` to 0 on every hit, blocked ones included.
+- Dares (`dared`, `meetDare`): a stomp, a coin or a streak multiplier reached moves the stage's
+  dare on; at its goal it is `done`, `DARE.reward` is paid and a pop says so. A no-hit dare is
+  `failed` by any hit and met at the checkpoint otherwise. `rollChoices` deals three cards when
+  `dare.done`.
+- Roads: `pick` takes the boon and, when `roadChoiceDue`, sets `roads` and stays in `checkpoint`;
+  `pickRoad` sets `road` and starts the next stage. `buildStage` reads `road` for the pool, the
+  gaps, the coins and the shrine; `buildBossStage` clears it. Nothing else changes by road but the
+  streak cap (`streakMax`).
 - Shrines: `visitShrines` runs while sliding on the road; a shrine the knight's box overlaps that is
   neither `used` nor `tried` trades `SHRINE.price` coins for a heart (`used`, a `heal` effect) when
   `hearts < maxHearts` and `coins >= price`, and otherwise is marked `tried` with a `refuse` effect
@@ -176,9 +224,15 @@ in.
   the phase and the nearest thing ahead.
 - Terrain: `drawWorld` swaps the `ground` tile sprite's texture by `state.terrain`, `drawWeather`
   draws snow (ice) or gust streaks (wind) on a `Graphics` at depth 4.4, under the frame, and
-  `drawHud` fills the stage's tag and fades the stage title (`createTitle`) over its first
-  `LEAD_IN` px. The Gatekeeper is one image (depth 3.5) posed by `drawBoss`; barrels roll and axes
-  spin by their x in `drawTrap`.
+  `drawHud` fills the stage's tag (ground, "Rockfall!" and road) and the dare's strip, and fades
+  the stage title (`createTitle`; its rule text takes several lines: the ground's rule, the road,
+  the rockfall and the dare) over its first `LEAD_IN` px. A boss is one image (depth 3.5) posed by
+  `drawBoss` (`<kind>-ready`, `-throw`/`-breathe`, `-tired`, with its origin from `BOSS_ART`; a
+  fallen dragon tilts a little, a fallen Gatekeeper lies flat); barrels roll, axes spin, fire
+  flickers and tail lashes whip in `drawTrap`. The rockfall is four `boulder` images (depth 4.3,
+  `BOULDERS`: a scale and a distance behind the leading edge each) placed by `drawRocks`, turning
+  as they roll, with dust drawn on the effects layer. The crown is drawn on the effects layer over
+  the knight's helm while `crown` is set.
 - Traps, coins and shrines are diffed into caches each frame (created on first sight, destroyed when
   gone from state), and ledges into `Map<id, TileSprite>` of the `ledge` texture cropped to each
   ledge's height. `drawTrap` animates fire vents (by `flameOf`), goblin steps (by x, flipped when
@@ -197,7 +251,8 @@ in.
 ### State model
 
 - `GameState.phase` is `'running' | 'checkpoint' | 'over'`. Nothing moves outside `running`;
-  `jump`, `slide` return false and `pick` needs `checkpoint`.
+  `jump`, `slide` return false and `pick` and `pickRoad` need `checkpoint`. A checkpoint holds
+  `choices` first and, once the boon is taken and a road is due, `roads` instead.
 - Coordinates: x is course pixels, left to right; `distance` is the middle of the knight's box.
   Heights (`runner.h`, coin `h`, trap and ledge `h`) are pixels up from the road, and
   `TRAP_SPAN` is up from the trap's own `h`. On a ledge the knight's feet are at the ledge's `h`;
@@ -205,13 +260,18 @@ in.
   `RUNNER_X + x - distance` (`GameScene.sx`), screen y is `GROUND_Y - h`.
 - `Runner`: `h`, `vh`, `slideMs`, `slideQueued` (slide on landing after an air drop), `jumps` left,
   `hurtMs` (invulnerable time), `skidMs` and `jumpQueued` (the ice skid).
-- `terrain` is `terrainOf(stage)`, set by `freshState` and `nextStage`. `boss` is the Gatekeeper on
-  its stage (null otherwise, and once beaten and left behind); `bosses` counts those beaten.
-  `banners` lists the metres of each checkpoint passed, for the run track. `armoury` holds the
-  levels bought; `daily` is the daily course's date (null on an ordinary run) and `seed` its
-  random state.
-- `traps: Trap[]`: `kind`, `x`, `w`, `h` (the ground it stands on; a bat's and an axe's flying
-  height, 34), `vx` (0 unless a foe or a thrown barrel or axe), a goblin's beat `from`/`to`, a fire vent's `phase` in its burn.
+- `terrain` is `terrainOf(stage)`, set by `freshState` and `nextStage` (`'road'` on any boss
+  stage). `road` is the stage's road (null on stages 1 and 2 and boss stages) and `roads` the two
+  on offer. `dare` is the stage's dare (null on stage 1 and boss stages), `rockfall` its rockfall
+  (null elsewhere). `boss` is the Gatekeeper or the dragon on its stage (null otherwise, and once
+  beaten and left behind); `bosses` counts Gatekeepers beaten, `dragonBeaten` says the dragon is
+  (the run is then harder: `speedOf(stage, true)`, `gapsOf(..., true)`) and `crown` is the lasting
+  crown, carried in from the save and set by the dragon's fall. `banners` lists the metres of
+  each checkpoint passed, for the run track. `armoury` holds the levels bought; `daily` is the
+  daily course's date (null on an ordinary run) and `seed` its random state.
+- `traps: Trap[]`: `kind`, `x`, `w`, `h` (the ground it stands on; a bat's, an axe's and a tail
+  lash's flying height, 34), `vx` (0 unless a foe or a boss's missile: barrel, axe, fire, tail), a
+  goblin's beat `from`/`to`, a fire vent's `phase` in its burn.
   Foes (`FOES`: goblin, bat) only move once within `AWAKE` (760 px) ahead of the knight, just off
   screen. A bat is placed so it meets the knight where its piece was laid out, from the stage's
   speed. A stomped foe is removed from `traps` and counted in `stomps`.
@@ -226,31 +286,35 @@ in.
   short visual timers (`coin`, `hit`, `block`, `dust`, `skid`, `stomp`, and `pop`, `heal`, `refuse`,
   which carry their words in `text`).
 - `ranks` maps `BoonId` to rank taken; `stats(s)` derives every boon effect from it (cursed ones
-  included), with the armoury's levels and the terrain's rule, so boons have no other state except
-  `shields` (Aegis and Iron Oath charges, reset from `stats` on each `pick`).
+  and the pairs' bonuses included), with the armoury's levels and the terrain's rule, so boons have
+  no other state except `shields` (Aegis and Iron Oath charges, reset from `stats` on each `pick`).
 - `nextId` hands out ids for traps, ledges, shrines, coins and effects; sprite caches key on them.
 - All mutation is in `src/game/` (`sim.ts`, `course.ts`). `GameScene` only calls those functions,
   except `restart`, which replaces `state` with `freshRun(daily)`, and `buy` and `buyArmoury`,
   which call `buyMissed` and `buyArmoury`.
 - Progress across runs: `best` (the best distance in metres), `bank` (coins banked from finished
   runs, added in `hurt` when the knight falls), `pending` (the boon bought at game over, applied and
-  cleared by the next `newRun`) and `missed` (the boon offered at the last checkpoint and not taken,
-  set by `pick`; null before any checkpoint). `buyMissed` takes `BOON_PRICE` from `bank` into
+  cleared by the next `newRun`), `crown` and `missed` (the first other boon offered at the last
+  checkpoint and not taken, set by `pick`; null before any checkpoint). `buyMissed` takes `BOON_PRICE` from `bank` into
   `pending`, and refuses unless the run is over, `missed` is `forSale` (not filler or cursed),
   nothing is pending and the bank covers the price. `buyArmoury` takes `nextPrice` from `bank` and
   adds a level, while the run is over and the item is not full.
 - Invariants: `distance <= checkpointX`; `choices` is non-null only at a checkpoint and holds two
-  ids (at most one cursed, always the second); `hearts` is clamped to `stats().maxHearts` (and at
-  least 1) on `pick`; a Gatekeeper's stage has no pieces, ledges or shrine; a pit only hurts when grounded over
-  its middle; one hit per frame, and none while `hurtMs > 0`; pieces never overlap, so pits, blades
-  and the rest always sit on the road (`h` 0) and the checkpoint is always on the road.
+  ids, or three after a met dare (at most one cursed, always the second); `roads` is non-null only
+  at a checkpoint once `choices` is null; `hearts` is clamped to `stats().maxHearts` (and at least
+  1) on `pick`; a boss's stage has no pieces, ledges, shrine, dare, road or rockfall; a pit only
+  hurts when grounded over its middle; one hit per frame, and none while `hurtMs > 0` (the rockfall
+  waits at the knight's heels until then); pieces never overlap, so pits, blades and the rest always
+  sit on the road (`h` 0) and the checkpoint is always on the road; `rockfall.x` never passes the
+  knight's back.
 
 ### Persistence
 
 `localStorage` keys: `hotfoot-best` (the best distance in metres), `hotfoot-bank` (banked coins),
 `hotfoot-start` (the boon bought for the next run; removed once a run starts with it),
 `hotfoot-armoury` (JSON levels per armoury item, clamped to each item's levels on load) and
-`hotfoot-daily` (JSON `{ date, best }` of the last daily course run; a new date starts from 0). Read once in
+`hotfoot-daily` (JSON `{ date, best }` of the last daily course run; a new date starts from 0) and
+`hotfoot-crown` (`'1'` once the dragon has been beaten; never removed). Read once in
 `GameScene.create` via `loadProgress`, written by `saveProgress`; every access is wrapped in
 try/catch. Nothing else is saved by the game; the hub's settings live under the shared `hub-settings`
 key (see Hub settings).
@@ -261,8 +325,10 @@ key (see Hub settings).
   mulberry32 sequence seeded by `seedOf(date)` on a daily run, so everyone's daily course and boon
   offers match. It is used only in `src/game/course.ts` (sizes and fire vent phases in `planOf`,
   ledge heights, `pickOf`, gap length) and in `rollChoices` in `src/game/sim.ts`. `placeShrine`,
-  the Gatekeeper and the terrains take no draws, and the curse draw only happens from `CURSE.from`
-  (stage 2), so the seeded first stage and first checkpoint are what they were before. The art
+  the bosses, the terrains, the roads' extra coins, the dare (`dareOf` goes round by stage) and
+  the rockfall take no draws, and the curse draw only happens from `CURSE.from` (stage 2), so the
+  seeded first stage and first checkpoint are what they were before. A met dare adds a third draw
+  to `rollChoices`, from the second checkpoint on. The art
   uses `seeded()` from `ink.ts`, not `Math.random`.
 - Time comes only from the `time` argument of `GameScene.update` (the sim's `state.time` is the sum
   of the `dt`s it was given). No timers, tweens or `Date.now`. The one use of the calendar is
@@ -272,17 +338,24 @@ key (see Hub settings).
 
 - `src/game/state.ts`: `RUNNER` box, `GRAVITY`, `JUMP_V`, `DROP_V`, `SLIDE_MS`, `HURT_MS`,
   `START_HEARTS`, `COIN_REACH`, `STAGE_LEN`, `LEAD_IN`, `BOON_PRICE`, `STREAK` (step 10, max 5),
-  `SHRINE` (from stage 2, price 15, width 46), `PX_PER_M`, `speedOf`, `TRAP_SPAN`,
-  `FLAMES`, `AWAKE`, `ICE`, `MARSH`, `WIND`, `BOSS_EVERY`, `terrainOf`'s order, and the per-rank
-  boon and armoury multipliers inside `stats`.
-- `src/game/boss.ts`: `BOSS` (size, hp, station, flee speed, throws and their spacing per hp, the
-  barrel's and axe's size and speed, reward, how far on the checkpoint comes, `holdBack`).
+  `ROAD` (from stage 3, +2 streak cap and -40 px gaps on the High Road, +40 px on the Low Road),
+  `DARE` (from stage 2, reward 20, kinds and goals), `ROCK` (every 7th stage, start 240, creep 10,
+  hit 90, skid 45, radius 40), `DRAGON_AT` (1500 m), `HARDER` (+60 px/s, -50 px gaps), `SHRINE`
+  (from stage 2, price 15, width 46), `PX_PER_M`, `speedOf`, `TRAP_SPAN`, `FLAMES`, `AWAKE`,
+  `ICE`, `MARSH`, `WIND`, `BOSS_EVERY`, `terrainOf`'s order, and the per-rank boon and armoury
+  multipliers inside `stats`.
+- `src/game/boss.ts`: `BOSS.gate` and `BOSS.dragon` (name, size, hp, station, flee speed, throws
+  and their spacing per hp, the two missiles' kind, size, height and speed, reward, how far on the
+  checkpoint comes, `holdBack`).
+- `src/game/pairs.ts`: `PAIRS`; and in `src/game/sim.ts` `GLIDE` (0.5 of gravity), `HOARD` (2
+  more coins) and `BULWARK_REACH` (220 px).
 - `src/game/armoury.ts`: `ARMOURY` (prices per level) and `ARMOURY_EACH`.
 - `src/game/course.ts`: `CLEAR_BEFORE_CHECKPOINT`, `gapsOf`, `piecesOf` (the pool and its weights
   per stage: fire vents and bats from stage 2, steps, tall ledges and a second goblin entry from
-  stage 3), `OPENING`, `GOBLIN` (width, beat, speed per stage), `BAT` (width, height, speed per
-  stage), `LEDGE_H`, sizes and coin patterns per piece in `planOf`, and the shrine's gap (at least
-  `SHRINE.w + 160`) in `placeShrine`.
+  stage 3, a third goblin and second bat on the High Road), `OPENING`, `GOBLIN` (width, beat, speed
+  per stage), `BAT` (width, height, speed per stage), `LEDGE_H`, sizes and coin patterns per piece
+  in `planOf` (two more coins per arc and row on the High Road, and 8 lead-in coins instead of 5),
+  and the shrine's gap (at least `SHRINE.w + 160`) in `placeShrine`.
 - `src/game/sim.ts`: `PULL_SPEED`, `BEHIND`, `STOMP_REACH`, `STOMP_BOUNCE`, `STEP_UP`.
 - `src/game/boons.ts`: names, card text, max ranks, and `CURSE` (from stage 2, half the time).
 
@@ -327,7 +400,8 @@ key (see Hub settings).
 
 - `src/main.ts` sets `window.game` (the `Phaser.Game`) in dev builds only.
 - `e2e/playthrough.spec.ts` reads `game.scene.getScene('Game')`: its `state` (JSON-copied) and
-  `boonCards.cards` (`CardSpot` with `id`, `x`, `y`, `w`, `h` in game pixels).
+  `boonCards.cards` (`CardSpot` with `id`, `x`, `y`, `w`, `h` in game pixels; two boon cards at
+  the first checkpoint, since no dare and no road choice come before stage 2).
 - It seeds `Math.random`, owns the clock with 64 ms frames, and blocks WebGL so Phaser uses canvas.
 - It drives only mouse clicks on the canvas: `JUMP_AT` (720,120) and `SLIDE_AT` (720,470), on
   either side of `TAP_SPLIT_Y`, and the centre of the first boon card. Nothing interactive may sit
@@ -342,8 +416,9 @@ key (see Hub settings).
   `coinsFor` copy the rule: step 10, max x5), no shrine on stage 1 and a new run's streak of 0, two
   different choices matching the card order, that stage 1 runs on the road with no Gatekeeper, and
   that stage 2 is faster, on the Frozen Pass (`terrain: 'ice'`), laid out past 3200 and has one
-  unused shrine. The terrains past stage 2, the Gatekeeper, cursed boons, the armoury and the daily
-  course are off its path on purpose.
+  unused shrine. The terrains past stage 2, the bosses, cursed boons, the roads (from the second
+  checkpoint), the dare's reward and third card, the rockfall, the pairs, the armoury and the daily
+  course are off its path on purpose; stage 2 carries a stomp dare the test never meets.
 - The test loads the game by its folder URL in `page.goto`, which must follow the folder name.
 
 ## Making common changes
@@ -376,8 +451,23 @@ key (see Hub settings).
   `tick`, place it in `terrainOf`, paint its road in `GROUNDS` in `scenery.ts` (key
   `ground-<terrain>`), and give it a line in `drawCaption`'s `onward` and, if it has weather, in
   `drawWeather`. Stage 2's terrain is on the playthrough's path (it asserts `ice`).
-- Tune the Gatekeeper: `BOSS` in `boss.ts`, and `BOSS_EVERY` in `state.ts`. Its art's helm height
-  must match `BOSS.h` (`GATE_ART` and the 0.43 scale in `foes.ts`).
+- Tune a boss: `BOSS.gate` or `BOSS.dragon` in `boss.ts`, `BOSS_EVERY` and `DRAGON_AT` in
+  `state.ts`. Its art's head height must match its `h` (`GATE_ART` and the 0.43 scale, or
+  `DRAGON_ART` and the tired pose's head at page y -186, in `foes.ts`). A new missile kind is a
+  `TrapKind` with a `TRAP_SPAN` entry, a place in `MISSILES`, its art and a sprite case in
+  `drawWorld`/`drawTrap`, and a caption line.
+- Add a boon pair: a `PAIRS` entry in `pairs.ts`, a flag in `stats` and its effect in `sim.ts`
+  (as `GLIDE`, `HOARD` and `BULWARK_REACH` are applied). The card hint and the game-over listing
+  follow on their own.
+- Add a dare: a `DareKind` with its goal in `DARE.goals`, its words in `dareText`, a place in
+  `DARE.kinds` (the order by stage) and a `dared(s, kind, n)` call where it moves on, or a check
+  at the checkpoint like the no-hit dare's. Its progress string is in `drawHud`.
+- Tune the roads: `ROAD` in `state.ts` (first stage, streak cap, gaps), the pool in `piecesOf`,
+  the extra coins in `planOf`, and the cards' words in `ROADS`. Moving `ROAD.from` to 2 puts the
+  road choice on the playthrough's path (the test would then need to tap a road card after the
+  boon).
+- Tune the rockfall: `ROCK` in `state.ts` and `BOULDERS` in `GameScene` for the look. Its stage
+  rule is `isRockStage`.
 - Add a cursed boon: a `BOONS` entry with `cursed: true` and `maxRank: 1`, its gift and price in
   `stats`, and an icon; `rollChoices` offers it on its own.
 - Add an armoury item: an `ARMOURY` entry and `ARMOURY_EACH` value, its effect in `stats` or
@@ -410,6 +500,14 @@ key (see Hub settings).
 - A collected coin gets `x = NaN` and is filtered out at the end of the same `tick`.
 - `pick` sets `shields` from `stats`, so Aegis charges refill only when a boon is taken at a
   checkpoint, never mid-stage.
+- `pick` stays in `checkpoint` while `roads` is set: a caller that starts the next stage itself
+  must call `pickRoad` then, as `GameScene` does from the road cards.
+- The dragon's stage comes from `dragonStage` (metres of `stageStart`), not a stage number, so
+  it lands on whichever stage starts past 1500 m (around stage 16 after two Gatekeeper stages)
+  and takes the place of a Gatekeeper's, a rockfall's or a road's stage.
+- A screenshot script that pokes `state` from outside sees long frames in headless Chromium
+  (`MAX_STEP_MS` each), so a coin dropped right under the knight can be jumped over in one frame;
+  spread test coins along the road instead.
 - The test's choice of which boon to pick depends on the seeded `rollChoices` order; changing the
   number of `Math.random` calls in `buildStage` changes both the course and the boons offered.
   `planOf` draws its random sizes before `buildStage` checks the piece fits, so a piece that does

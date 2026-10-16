@@ -1,38 +1,44 @@
 import Phaser from 'phaser';
 import { viewPoint } from '../../../../shared/scaling';
 import { settings } from '../../../../shared/settings';
-import { GATE_ART, GOBLIN_ART } from '../art/foes';
+import { BOSS_ART, GOBLIN_ART } from '../art/foes';
 import { bakePanel } from '../art/hud';
 import { armouryIcon } from '../art/icons';
 import { C, N, tileAt } from '../art/ink';
 import { KNIGHT_FEET, type KnightPose } from '../art/knight';
 import { FAR_H, GROUND_TOP, NEAR_H } from '../art/scenery';
 import { ARMOURY, ARMOURY_IDS, nextPrice, type ArmouryId } from '../game/armoury';
-import { BOSS, bossStands } from '../game/boss';
+import { MISSILES, bossOf, bossStands } from '../game/boss';
 import { BOONS, forSale, type BoonId } from '../game/boons';
+import { PAIRS, pairsOf } from '../game/pairs';
 import { loadProgress, saveProgress, type Progress } from '../game/save';
-import { buyArmoury, buyMissed, jump, newRun, pick, slide, tick } from '../game/sim';
+import { buyArmoury, buyMissed, jump, newRun, pick, pickRoad, slide, tick } from '../game/sim';
 import {
   BOON_PRICE,
   LEAD_IN,
+  ROADS,
+  ROCK,
   TERRAIN,
   RUNNER,
   SHRINE,
   STREAK,
+  dareText,
   flameOf,
   floorAt,
   metres,
   stats,
+  streakMax,
   streakMult,
   today,
   trackOf,
   type GameState,
+  type Road,
   type Shrine,
   type Trap,
 } from '../game/state';
 import { BoonCards } from '../ui/BoonCards';
 import { makeButton } from '../ui/Button';
-import { ARMOURY_PANEL, FONT, FRAME, GROUND_Y, MARGIN, RUNNER_X, STAGE_TITLE, STREAK_CHIP, TAG, TAP_SPLIT_Y, TRACK, UI_DEPTH, VIEW } from './layout';
+import { ARMOURY_PANEL, DARE_TAG, FONT, FRAME, GROUND_Y, MARGIN, RUNNER_X, STAGE_TITLE, STREAK_CHIP, TAG, TAP_SPLIT_Y, TRACK, UI_DEPTH, VIEW } from './layout';
 
 /** Longest simulated step, so a backgrounded tab doesn't jump the run forward. */
 const MAX_STEP_MS = 100;
@@ -46,6 +52,13 @@ const TRAIL = { stars: 7, everyMs: 45 };
 const TITLE_UNTIL = LEAD_IN;
 /** The weather over the frozen pass and the windy pass: snowflakes and gust streaks. */
 const WEATHER = { flakes: 26, gusts: 9 };
+/** The rockfall's boulders, from the front: each one's size (as a share of the texture) and how far behind the leading edge it rolls. */
+const BOULDERS = [
+  { scale: 1, back: 0 },
+  { scale: 0.7, back: 62 },
+  { scale: 0.85, back: 110 },
+  { scale: 0.6, back: 168 },
+];
 
 /** A daily course's date for the panel: "14 Oct". */
 const dayName = (date: string) => {
@@ -107,11 +120,15 @@ export class GameScene extends Phaser.Scene {
   private gameOverText!: Phaser.GameObjects.Text;
   private shopText!: Phaser.GameObjects.Text;
   private buyButton!: Phaser.GameObjects.Container;
-  /** The Gatekeeper's sprite, shown on its stage. */
+  /** The boss's sprite (the Gatekeeper or the dragon), shown on its stage. */
   private boss!: Phaser.GameObjects.Image;
+  /** The rockfall's boulders, shown on a rockfall stage. */
+  private rocks: Phaser.GameObjects.Image[] = [];
   /** Snow and wind drawn over the stage's ground. */
   private weather!: Phaser.GameObjects.Graphics;
   private tagText!: Phaser.GameObjects.Text;
+  private dareTag!: Phaser.GameObjects.Image;
+  private dareText!: Phaser.GameObjects.Text;
   private title!: Phaser.GameObjects.Container;
   private titleName!: Phaser.GameObjects.Text;
   private titleRule!: Phaser.GameObjects.Text;
@@ -145,7 +162,8 @@ export class GameScene extends Phaser.Scene {
     this.ground = this.add.tileSprite(0, GROUND_Y - GROUND_TOP, VIEW.w, GROUND_TOP + 13, 'ground').setOrigin(0).setDepth(1);
     this.ledgeSides = this.add.graphics().setDepth(1.6);
     this.flag = this.add.image(0, GROUND_Y + 2, 'checkpoint').setOrigin(8 / 48, 1).setDepth(3);
-    this.boss = this.add.image(0, GROUND_Y + 2, 'gate-ready').setOrigin(0.5, GATE_ART.feetY / GATE_ART.h).setDepth(3.5).setVisible(false);
+    this.boss = this.add.image(0, GROUND_Y + 2, 'gate-ready').setDepth(3.5).setVisible(false);
+    this.rocks = BOULDERS.map((b) => this.add.image(0, GROUND_Y + 2 - (ROCK.r * b.scale) / 1, 'boulder').setScale(b.scale).setDepth(4.3).setVisible(false));
     this.weather = this.add.graphics().setDepth(4.4);
     this.add.image(0, 0, 'frame').setOrigin(0).setDepth(4.5);
     this.knight = this.add.image(RUNNER_X, GROUND_Y, 'knight-run0').setDepth(5);
@@ -159,7 +177,11 @@ export class GameScene extends Phaser.Scene {
     this.createTitle();
     this.createGameOver();
     this.createArmoury();
-    this.boonCards = new BoonCards(this, (id) => this.pick(id));
+    this.boonCards = new BoonCards(
+      this,
+      (id) => this.pick(id),
+      (road) => this.pickRoad(road),
+    );
 
     // A tap in the top half of the screen jumps, in the bottom half slides. Taps on a card or a
     // button are theirs alone.
@@ -189,12 +211,13 @@ export class GameScene extends Phaser.Scene {
 
     this.drawWorld();
     this.drawBoss();
+    this.drawRocks();
     this.drawWeather();
     this.drawKnight();
     this.drawEffects();
     this.drawHud();
     this.drawCaption();
-    this.boonCards.show(s.phase === 'checkpoint' ? s.choices : null, s.ranks, s.stage);
+    this.boonCards.show(s.phase === 'checkpoint' ? s.choices : null, s.phase === 'checkpoint' ? s.roads : null, s.ranks, s.stage);
     this.gameOver.setVisible(s.phase === 'over');
     if (s.phase === 'over') this.drawGameOver();
     else this.armouryPanel.setVisible(false);
@@ -204,7 +227,7 @@ export class GameScene extends Phaser.Scene {
   private freshRun(daily: string | null) {
     const p = this.progress;
     const best = daily ? (p.daily?.date === daily ? p.daily.best : 0) : p.best;
-    return newRun({ best, bank: p.bank, pending: p.pending, armoury: p.armoury }, daily);
+    return newRun({ best, bank: p.bank, pending: p.pending, armoury: p.armoury, crown: p.crown }, daily);
   }
 
   /** Copies the run's lasting numbers into the progress and saves it; a daily run keeps its own best. */
@@ -216,6 +239,7 @@ export class GameScene extends Phaser.Scene {
     p.bank = s.bank;
     p.pending = s.pending;
     p.armoury = { ...s.armoury };
+    p.crown = p.crown || s.crown;
     saveProgress(p);
   }
 
@@ -223,12 +247,15 @@ export class GameScene extends Phaser.Scene {
   private drawGameOver() {
     const s = this.state;
     const boons = (Object.entries(s.ranks) as [BoonId, number][]).map(([id, n]) => (n > 1 ? `${BOONS[id].name} x${n}` : BOONS[id].name));
+    const pairs = pairsOf(s.ranks).map((id) => PAIRS.find((p) => p.id === id)!.name);
     const missed = s.missed ? `\nMissed at the last checkpoint: ${BOONS[s.missed].name}.` : '';
     const beaten = s.bosses ? ` Gatekeepers beaten: ${s.bosses}.` : '';
+    const dragon = s.dragonBeaten ? ' The dragon is beaten!' : '';
     const best = s.daily ? `Best on the daily course of ${dayName(s.daily)}: ${s.best} m.` : `Best run: ${s.best} m.`;
+    const crown = s.crown ? ' Crowned at the Dragon\'s Keep.' : '';
     this.gameOverText.setText(
-      `Fell at ${metres(s.distance)} m on stage ${s.stage}, with ${s.coins} coins (${s.bank} banked).${beaten}\n${best}\n\n` +
-        `Boons: ${boons.length ? boons.join(', ') : 'none'}${missed}`,
+      `Fell at ${metres(s.distance)} m on stage ${s.stage}, with ${s.coins} coins (${s.bank} banked).${beaten}${dragon}\n${best}${crown}\n\n` +
+        `Boons: ${boons.length ? boons.join(', ') : 'none'}${pairs.length ? ` (${pairs.join(', ')})` : ''}${missed}`,
     );
     const missedName = s.missed ? BOONS[s.missed].name : '';
     let line: string;
@@ -322,6 +349,8 @@ export class GameScene extends Phaser.Scene {
         else if (t.kind === 'goblin') sprite = this.add.image(0, GROUND_Y - t.h, 'goblin-0').setOrigin(0.5, GOBLIN_ART.feetY / GOBLIN_ART.h).setDepth(4);
         else if (t.kind === 'barrel') sprite = this.add.image(0, GROUND_Y - t.h - 13, 'barrel').setDepth(4);
         else if (t.kind === 'axe') sprite = this.add.image(0, GROUND_Y - t.h - 9, 'axe').setDepth(4);
+        else if (t.kind === 'fire') sprite = this.add.image(0, GROUND_Y - t.h + 2, 'fire-0').setOrigin(0.5, 1).setDepth(4);
+        else if (t.kind === 'tail') sprite = this.add.image(0, GROUND_Y - t.h - 9, 'tail').setDepth(4);
         else sprite = this.add.image(0, 0, 'bat-0').setOrigin(0.5, 0.5).setDepth(4);
         this.traps.set(t.id, sprite);
       }
@@ -373,7 +402,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Places a trap's sprite, and animates the ones that move or burn. */
   private drawTrap(t: Trap, sprite: Phaser.GameObjects.Image) {
-    if (t.kind === 'blade' || t.kind === 'goblin' || t.kind === 'bat' || t.kind === 'barrel' || t.kind === 'axe') sprite.setX(this.sx(t.x + t.w / 2));
+    if (t.kind === 'blade' || t.kind === 'goblin' || t.kind === 'bat' || MISSILES.includes(t.kind)) sprite.setX(this.sx(t.x + t.w / 2));
     else sprite.setX(this.sx(t.x));
     if (t.kind === 'flames') {
       const burn = flameOf(this.state, t);
@@ -391,25 +420,46 @@ export class GameScene extends Phaser.Scene {
       sprite.setRotation(t.x / 13);
     } else if (t.kind === 'axe') {
       sprite.setRotation(-t.x / 9);
+    } else if (t.kind === 'fire') {
+      // The fire flickers as it rolls.
+      sprite.setTexture(`fire-${Math.floor(this.clock / 80) % 2}`);
+    } else if (t.kind === 'tail') {
+      // The tail lash whips a little up and down as it flies.
+      sprite.setY(GROUND_Y - t.h - 9 + (settings.reduceMotion ? 0 : Math.sin(this.clock / 60) * 3));
     }
   }
 
-  /** The Gatekeeper: its pose by what it is doing, facing away as it flees, flashing after a stomp, felled once beaten. */
+  /** The boss: its pose by what it is doing, facing away as it flees, flashing after a stomp, felled once beaten. */
   private drawBoss() {
     const b = this.state.boss;
     this.boss.setVisible(!!b);
     if (!b) return;
     const s = this.state;
-    let pose = 'gate-ready';
-    if ((b.mode === 'tired' && b.ms <= 0) || b.mode === 'down') pose = 'gate-tired';
-    else if (b.mode === 'throw' && b.thrown > 0 && b.ms > BOSS.throwEvery(b.hp) - 260) pose = 'gate-throw';
+    const n = bossOf(b);
+    const art = BOSS_ART[b.kind];
+    let pose = 'ready';
+    if ((b.mode === 'tired' && b.ms <= 0) || b.mode === 'down') pose = 'tired';
+    else if (b.mode === 'throw' && b.thrown > 0 && b.ms > n.throwEvery(b.hp) - 260) pose = b.kind === 'dragon' ? 'breathe' : 'throw';
     const flash = b.hurtMs > 0 ? (settings.reduceMotion ? 0.6 : Math.floor(this.clock / 80) % 2 ? 0.35 : 1) : 1;
     this.boss
-      .setTexture(pose)
+      .setTexture(`${b.kind}-${pose}`)
+      .setOrigin(0.5, art.feetY / art.h)
       .setX(this.sx(b.x + b.w / 2))
       .setFlipX(b.mode === 'flee')
-      .setAngle(b.mode === 'down' ? 80 : 0)
+      .setAngle(b.mode === 'down' ? (b.kind === 'dragon' ? -14 : 80) : 0)
       .setAlpha(s.phase === 'over' ? 1 : flash);
+  }
+
+  /** The rockfall's boulders tumbling along behind the knight, turning as they roll (held still with reduced motion). */
+  private drawRocks() {
+    const rock = this.state.rockfall;
+    this.rocks.forEach((img, i) => {
+      img.setVisible(!!rock);
+      if (!rock) return;
+      const b = BOULDERS[i];
+      const x = rock.x - b.back - ROCK.r * b.scale;
+      img.setPosition(this.sx(x), GROUND_Y + 2 - ROCK.r * b.scale).setRotation(settings.reduceMotion ? 0 : x / (ROCK.r * b.scale) + i);
+    });
   }
 
   /** Snow falling over the frozen pass and gusts blowing over the windy pass; held still with reduced motion. */
@@ -536,6 +586,34 @@ export class GameScene extends Phaser.Scene {
       this.words.delete(id);
     }
 
+    // The crown from the Dragon's Keep sits on the knight's helm.
+    if (s.crown && s.phase !== 'over') {
+      const r = s.runner;
+      const cx = RUNNER_X + 1;
+      const cy = GROUND_Y - r.h - (r.slideMs > 0 ? 38 : 72);
+      const pts = [
+        new Phaser.Math.Vector2(cx - 11, cy),
+        new Phaser.Math.Vector2(cx - 12, cy - 11),
+        new Phaser.Math.Vector2(cx - 6, cy - 5),
+        new Phaser.Math.Vector2(cx, cy - 13),
+        new Phaser.Math.Vector2(cx + 6, cy - 5),
+        new Phaser.Math.Vector2(cx + 12, cy - 11),
+        new Phaser.Math.Vector2(cx + 11, cy),
+      ];
+      g.fillStyle(N.goldLight).fillPoints(pts, true).lineStyle(1.25, N.ink).strokePoints(pts, true);
+      g.fillStyle(N.madder).fillCircle(cx, cy - 3, 1.6);
+    }
+    // The rockfall's dust, rolling up ahead of the boulders.
+    if (s.rockfall && s.phase === 'running') {
+      const x = this.sx(s.rockfall.x);
+      const t = still ? 0 : this.clock / 1000;
+      for (let i = 0; i < 5; i++) {
+        const px = x + 6 + i * 9 + (still ? 0 : ((t * 60 + i * 17) % 30));
+        const py = GROUND_Y - 6 - i * 7 - ((i * 13) % 9);
+        g.fillStyle(N.vellumDark, 0.55 - i * 0.08).fillCircle(px, py, 7 + i * 2);
+      }
+    }
+
     // The sparkle trail: gold stars left behind the knight while a streak pays x2 or more.
     const running = s.phase === 'running';
     if (!still && running && streakMult(s.streak) >= 2) {
@@ -592,6 +670,10 @@ export class GameScene extends Phaser.Scene {
     // The stage's tag: its ground and rule, or the Gatekeeper's stomps left; "Daily" on a daily run.
     this.add.image(TAG.x, TAG.y, 'tag-strip').setOrigin(0).setDepth(d);
     this.tagText = this.add.text(TAG.x + 10, TAG.y + TAG.h / 2 + 0.5, '', { fontFamily: FONT, fontSize: '10px', fontStyle: 'bold italic', color: C.lapis }).setOrigin(0, 0.5).setDepth(d + 2);
+
+    // The herald's dare under the tag: the dare and how far it has come.
+    this.dareTag = this.add.image(DARE_TAG.x, DARE_TAG.y, 'dare-strip').setOrigin(0).setDepth(d);
+    this.dareText = this.add.text(DARE_TAG.x + 10, DARE_TAG.y + DARE_TAG.h / 2 + 0.5, '', { fontFamily: FONT, fontSize: '10px', fontStyle: 'bold italic', color: C.madder }).setOrigin(0, 0.5).setDepth(d + 2);
   }
 
   private drawHud() {
@@ -606,10 +688,11 @@ export class GameScene extends Phaser.Scene {
     this.coinText.setText(`${s.coins}`);
     this.bestText.setText(`Best ${s.best} m`);
 
-    // The coin streak.
-    const mult = streakMult(s.streak);
+    // The coin streak, capped by the road.
+    const cap = streakMax(s.road);
+    const mult = streakMult(s.streak, cap);
     const c = STREAK_CHIP;
-    const maxed = mult >= STREAK.max;
+    const maxed = mult >= cap;
     const into = maxed ? STREAK.step : s.streak % STREAK.step;
     this.medalText.setText(`x${mult}`);
     this.streakText.setText(`Streak x${mult}`);
@@ -647,13 +730,15 @@ export class GameScene extends Phaser.Scene {
     }
     g.fillStyle(N.lapis).fillCircle(at(tr.at), ly, 4).lineStyle(1, N.ink).strokeCircle(at(tr.at), ly, 4);
     g.fillStyle(N.goldLight).fillCircle(at(tr.at), ly, 1.5);
-    this.trackNext.setText(bossStands(s) ? 'Beat the Gatekeeper' : tr.next > 0 ? `Next banner ${tr.next} m` : 'At the banner');
+    const bossName = s.boss ? bossOf(s.boss).name : '';
+    this.trackNext.setText(s.boss && bossStands(s) ? `Beat ${bossName.toLowerCase().replace(/^the /, 'the ')}` : tr.next > 0 ? `Next banner ${tr.next} m` : 'At the banner');
 
-    // The stage's tag, and the Gatekeeper's stomps left as gold pips while it stands.
+    // The stage's tag (its ground and road), and the boss's stomps left as pips while it stands.
     const daily = s.daily ? 'Daily · ' : '';
     if (s.boss && bossStands(s)) {
-      this.tagText.setText(`${daily}The Gatekeeper`);
-      for (let i = 0; i < BOSS.hp; i++) {
+      this.tagText.setText(`${daily}${bossName}`);
+      const hp = bossOf(s.boss).hp;
+      for (let i = 0; i < hp; i++) {
         const x = TAG.x + TAG.w - 16 - i * 16;
         const y = TAG.y + TAG.h / 2;
         const pip = [new Phaser.Math.Vector2(x, y - 6), new Phaser.Math.Vector2(x + 6, y), new Phaser.Math.Vector2(x, y + 6), new Phaser.Math.Vector2(x - 6, y)];
@@ -661,9 +746,21 @@ export class GameScene extends Phaser.Scene {
       }
     } else {
       const t = TERRAIN[s.terrain];
-      this.tagText.setText(`${daily}${s.boss ? 'The Gatekeeper is beaten' : t.name}`);
+      const road = s.road ? ` · ${ROADS[s.road].name.replace('The ', '')}` : '';
+      this.tagText.setText(`${daily}${s.boss ? `${bossName} is beaten` : s.rockfall ? `${t.name} · Rockfall!` : t.name}${road}`);
     }
     this.trackBest.setText(tr.best === 0 ? 'First run' : tr.at > tr.best ? 'New best!' : `Best ${tr.best} m`);
+
+    // The herald's dare and its progress.
+    const dare = s.dare;
+    this.dareTag.setVisible(!!dare);
+    this.dareText.setVisible(!!dare);
+    if (dare) {
+      const progress = dare.done ? 'met!' : dare.failed ? 'lost' : dare.kind === 'nohit' ? 'so far' : dare.kind === 'streak' ? `x${dare.progress}` : `${dare.progress}/${dare.goal}`;
+      const words = `Dare: ${dareText(dare)} · ${progress}`;
+      if (this.dareText.text !== words) this.dareText.setText(words);
+      this.dareText.setColor(dare.done ? '#2f7a4a' : dare.failed ? C.iron : C.madder);
+    }
 
     // The controls hint fades out a little way into the first stage.
     const hint = s.stage === 1 && s.phase === 'running' ? (HINT_UNTIL - s.distance) / 200 : 0;
@@ -673,9 +770,13 @@ export class GameScene extends Phaser.Scene {
     const intoStage = s.distance - s.stageStart;
     const shown = s.stage > 1 && s.phase === 'running' ? (TITLE_UNTIL - intoStage) / 200 : 0;
     if (shown > 0) {
-      const boss = s.boss ? 'The Gatekeeper bars the road' : TERRAIN[s.terrain].name;
-      const rule = s.boss ? 'Stomp it three times; jump its barrels, slide under its axes' : TERRAIN[s.terrain].rule;
-      if (this.titleName.text !== `Stage ${s.stage}: ${boss}`) this.titleName.setText(`Stage ${s.stage}: ${boss}`);
+      const dragon = s.boss?.kind === 'dragon';
+      const name = dragon ? "The Dragon's Keep" : s.boss ? 'The Gatekeeper bars the road' : TERRAIN[s.terrain].name;
+      const lines = s.boss
+        ? [dragon ? 'Stomp the dragon three times: jump its fire, slide under its tail' : 'Stomp it three times; jump its barrels, slide under its axes']
+        : [TERRAIN[s.terrain].rule, s.road ? `${ROADS[s.road].name}: ${s.road === 'high' ? 'more coins, more foes' : 'the safer way'}` : '', s.rockfall ? 'A rockfall follows: every hit or skid lets it gain' : '', s.dare ? `The herald's dare: ${dareText(s.dare).toLowerCase()}` : ''];
+      const rule = lines.filter(Boolean).join('\n');
+      if (this.titleName.text !== `Stage ${s.stage}: ${name}`) this.titleName.setText(`Stage ${s.stage}: ${name}`);
       if (this.titleRule.text !== rule) this.titleRule.setText(rule);
     }
     this.title.setAlpha(Phaser.Math.Clamp(shown, 0, 1));
@@ -683,7 +784,7 @@ export class GameScene extends Phaser.Scene {
 
   private createTitle() {
     this.titleName = this.add.text(0, 0, '', textStyle(26, C.goldPale, 5)).setOrigin(0.5);
-    this.titleRule = this.add.text(0, 32, '', { ...textStyle(17, C.goldPale, 4), fontStyle: 'bold italic' }).setOrigin(0.5);
+    this.titleRule = this.add.text(0, 32, '', { ...textStyle(17, C.goldPale, 4), fontStyle: 'bold italic', align: 'center' }).setOrigin(0.5, 0);
     this.title = this.add.container(STAGE_TITLE.x, STAGE_TITLE.y, [this.titleName, this.titleRule]).setDepth(UI_DEPTH - 5).setAlpha(0);
   }
 
@@ -692,17 +793,24 @@ export class GameScene extends Phaser.Scene {
     const s = this.state;
     let line: string;
     if (s.phase === 'over') line = 'Here the knight falleth, and the goblins make merry.';
-    else if (s.phase === 'checkpoint') line = 'Here the knight resteth by the banner, and chooseth a boon.';
+    else if (s.phase === 'checkpoint') line = s.roads ? 'Here the knight looketh out from the banner, and chooseth the road ahead.' : 'Here the knight resteth by the banner, and chooseth a boon.';
     else if (s.stage === 1 && s.distance < HINT_UNTIL) line = 'Here the knight setteth out upon the old road at dusk.';
     else if (s.boss && bossStands(s)) {
       const b = s.boss;
-      const thrown = s.traps.find((t) => (t.kind === 'barrel' || t.kind === 'axe') && t.x + t.w > s.distance - 20);
-      if (b.mode === 'wait') line = 'Here the Gatekeeper barreth the road, and will not let the knight pass.';
+      const thrown = s.traps.find((t) => MISSILES.includes(t.kind) && t.x + t.w > s.distance - 20);
+      if (b.kind === 'dragon') {
+        if (b.mode === 'wait') line = 'Here the dragon of the Keep awaiteth the knight upon the road.';
+        else if (b.mode === 'tired' && b.ms <= 0) line = 'Here the dragon tireth and loweth its head: now leap upon it!';
+        else if (thrown?.kind === 'fire') line = 'Here the dragon breatheth fire along the road.';
+        else if (thrown?.kind === 'tail') line = 'Here the dragon lasheth its tail at the knight.';
+        else line = 'Here the knight giveth chase to the dragon.';
+      } else if (b.mode === 'wait') line = 'Here the Gatekeeper barreth the road, and will not let the knight pass.';
       else if (b.mode === 'tired' && b.ms <= 0) line = 'Here the Gatekeeper tireth: now leap upon his helm!';
       else if (thrown?.kind === 'barrel') line = 'Here the Gatekeeper rolleth a barrel at the knight.';
       else if (thrown?.kind === 'axe') line = 'Here the Gatekeeper hurleth an axe at the knight.';
       else line = 'Here the knight giveth chase to the Gatekeeper.';
-    } else {
+    } else if (s.rockfall && s.rockfall.x > s.distance - RUNNER.w / 2 - 110) line = 'Here the rockfall gaineth upon the knight: run clean!';
+    else {
       const ahead = (x: number) => x > s.distance && x < s.distance + 700;
       const trap = s.traps.find((t) => t.x + t.w > s.distance - 20 && t.x < s.distance + 700);
       const wall = s.ledges.find((l) => ahead(l.x));
@@ -725,6 +833,8 @@ export class GameScene extends Phaser.Scene {
         shrine: 'Here standeth a wayside shrine, where a knight may be healed.',
         barrel: 'Here the knight leapeth the rolling barrel.',
         axe: 'Here the knight stoopeth under the flying axe.',
+        fire: "Here the knight leapeth the dragon's fire.",
+        tail: "Here the knight stoopeth under the dragon's tail.",
       };
       const onward: Record<GameState['terrain'], string> = {
         road: 'Here the knight runneth on toward the next banner.',
@@ -732,7 +842,7 @@ export class GameScene extends Phaser.Scene {
         marsh: 'Here the knight wadeth through the fen.',
         wind: 'Here the knight leaneth into the wind.',
       };
-      line = next ? lines[next.kind] : s.boss ? 'Here the knight passeth the fallen Gatekeeper.' : onward[s.terrain];
+      line = next ? lines[next.kind] : s.boss ? `Here the knight passeth the fallen ${s.boss.kind === 'dragon' ? 'dragon, and weareth the crown' : 'Gatekeeper'}.` : onward[s.terrain];
     }
     if (this.caption.text !== line) this.caption.setText(line);
   }
@@ -770,6 +880,10 @@ export class GameScene extends Phaser.Scene {
 
   private pick(id: BoonId) {
     pick(this.state, id);
+  }
+
+  private pickRoad(road: Road) {
+    pickRoad(this.state, road);
   }
 
   /** Spends the coins on the boon missed at the last checkpoint, for the next run. */
