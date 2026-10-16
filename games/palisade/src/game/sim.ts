@@ -38,7 +38,7 @@ const HIT_FLASH_MS = 90;
 const VIEW_RIGHT = 950;
 /** How long each kind of effect plays, in milliseconds. */
 const EFFECT_MS = {
-  blast: 260, fireblast: 360, bolt: 220, death: 320, crit: 400, rain: 520, xp: 900, orb: 750, block: 260, heal: 700, stab: 200, arcane: 360,
+  blast: 260, fireblast: 360, bolt: 220, death: 320, crit: 400, rain: 520, xp: 900, orb: 750, block: 260, heal: 700, stab: 200, arcane: 360, mended: 1_800,
 } as const;
 /** How long an Arrow Rain volley takes to come down after it is loosed. */
 export const RAIN_FALL_MS = 450;
@@ -541,15 +541,40 @@ function gainXp(state: GameState, xp: number) {
   if (state.levelUps > 0 && !state.choices) offer(state);
 }
 
-/** Puts three upgrades up for the next pending level-up and starts the time to pick one. */
+/**
+ * Puts three upgrades up for the next pending level-up and starts the time to pick one. Once every
+ * skill is learned and the last card taken, each pending level-up repairs the barricade instead.
+ */
 export function offer(state: GameState) {
+  if (state.mastered && offerable(state).length === 0) {
+    while (state.levelUps > 0) {
+      state.levelUps--;
+      mend(state);
+      addEffect(state, { kind: 'mended', x: MENDED_POP.x, y: MENDED_POP.y, amount: state.level - state.levelUps });
+    }
+    state.choices = null;
+    return;
+  }
   state.choices = rollChoices(state);
   state.pickMs = AUTO_PICK_MS;
 }
 
-/** Three different upgrades to choose from, always three: fillers take the cards no upgrade is left for. */
+/** Where the "barricade repaired" pop-up of a level-up after the last skill rises from. */
+const MENDED_POP = { x: 300, y: 250 };
+
+/** Mend the Barricade: repairs half of it, counted in `ranks` for the skill book. */
+function mend(state: GameState) {
+  state.ranks.mend = (state.ranks.mend ?? 0) + 1;
+  state.barricade.hp = Math.min(state.barricade.max, state.barricade.hp + state.barricade.max / 2);
+}
+
+/**
+ * Three different upgrades to choose from: fillers take the cards no upgrade is left for. Once
+ * every skill is learned, the last level-up shows the repair card alone.
+ */
 export function rollChoices(state: GameState): UpgradeId[] {
   const pool = offerable(state);
+  if (pool.length === 0) return ['mend'];
   const picks: UpgradeId[] = [];
   while (picks.length < 3 && pool.length > 0) picks.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
   for (const filler of FILLERS) if (picks.length < 3) picks.push(filler);
@@ -559,11 +584,13 @@ export function rollChoices(state: GameState): UpgradeId[] {
 /** Takes one of the offered upgrades; the battle goes on once no level-ups are left to pick. */
 export function pick(state: GameState, id: UpgradeId) {
   if (!state.choices?.includes(id)) return false;
+  // The repair card alone is the last level-up once every skill is learned.
+  if (offerable(state).length === 0) state.mastered = true;
   // Fillers count too, so the skill book can show how often the barricade was mended.
-  state.ranks[id] = (state.ranks[id] ?? 0) + 1;
+  if (id === 'mend') mend(state);
+  else state.ranks[id] = (state.ranks[id] ?? 0) + 1;
   const barricadeMax = stats(state).barricadeMax;
   if (id === 'timber') state.barricade = { hp: barricadeMax, max: barricadeMax };
-  if (id === 'mend') state.barricade.hp = Math.min(state.barricade.max, state.barricade.hp + state.barricade.max / 2);
   if (id === 'purse') state.coins += PURSE_COINS;
   if (id === 'wind') {
     state.rain.charge = state.rain.need;
@@ -624,8 +651,10 @@ export function fightAgain(state: GameState): GameState {
   const next = newRun(progressOf(state));
   if (next.levelUps > 0) {
     // The same cards stay up, with the full time to pick again.
-    next.choices = state.choices ?? rollChoices(next);
-    next.pickMs = AUTO_PICK_MS;
+    if (state.choices) {
+      next.choices = state.choices;
+      next.pickMs = AUTO_PICK_MS;
+    } else offer(next);
   }
   return next;
 }

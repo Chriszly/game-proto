@@ -76,13 +76,13 @@ export interface Missile {
  */
 export interface Effect {
   id: number;
-  kind: 'blast' | 'fireblast' | 'bolt' | 'death' | 'crit' | 'rain' | 'xp' | 'orb' | 'block' | 'heal' | 'stab' | 'arcane';
+  kind: 'blast' | 'fireblast' | 'bolt' | 'death' | 'crit' | 'rain' | 'xp' | 'orb' | 'block' | 'heal' | 'stab' | 'arcane' | 'mended';
   x: number;
   y: number;
   /** Blast radius, or the lightning's path (the healed foes, the thrust's two ends). */
   radius?: number;
   points?: { x: number; y: number }[];
-  /** `xp` and `orb`: the experience the kill gave. `xp`: the kill streak it was part of. */
+  /** `xp` and `orb`: the experience the kill gave. `xp`: the kill streak it was part of. `mended`: the level reached. */
   amount?: number;
   streak?: number;
   ms: number;
@@ -131,6 +131,11 @@ export interface GameState {
   runs: number;
   /** Relics won from the relic chests after the bosses, with how many of each. */
   relics: Partial<Record<RelicId, number>>;
+  /**
+   * Every skill learned and the last level-up (the repair card alone) taken: from then on each
+   * level-up repairs the barricade at once, with a pop-up, instead of pausing on cards.
+   */
+  mastered: boolean;
 
   // This run.
   wave: number;
@@ -243,10 +248,10 @@ export type Stats = ReturnType<typeof stats>;
 export const rainNeed = (wave: number, s: Stats) => Math.max(2, Math.round((RAIN_KILLS + Math.floor((wave - 1) / 2)) * s.rainCharge));
 
 /** The hero's level and upgrades, kept from one run to the next. */
-export type Progress = Pick<GameState, 'level' | 'xp' | 'ranks' | 'levelUps' | 'bestWave' | 'runs' | 'relics'>;
+export type Progress = Pick<GameState, 'level' | 'xp' | 'ranks' | 'levelUps' | 'bestWave' | 'runs' | 'relics' | 'mastered'>;
 
 export function freshProgress(): Progress {
-  return { level: 1, xp: 0, ranks: {}, levelUps: 0, bestWave: 0, runs: 0, relics: {} };
+  return { level: 1, xp: 0, ranks: {}, levelUps: 0, bestWave: 0, runs: 0, relics: {}, mastered: false };
 }
 
 /** A new run from wave 1, with the hero's progress kept. */
@@ -285,8 +290,8 @@ export function newRun(progress: Progress): GameState {
 }
 
 export function progressOf(state: GameState): Progress {
-  const { level, xp, ranks, levelUps, bestWave, runs, relics } = state;
-  return { level, xp, ranks: { ...ranks }, levelUps, bestWave, runs, relics: { ...relics } };
+  const { level, xp, ranks, levelUps, bestWave, runs, relics, mastered } = state;
+  return { level, xp, ranks: { ...ranks }, levelUps, bestWave, runs, relics: { ...relics }, mastered };
 }
 
 /** Upgrades that can still be offered: not maxed, and with what they build on already picked. */

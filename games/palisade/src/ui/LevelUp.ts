@@ -57,8 +57,10 @@ export class LevelUp {
     this.cards = [];
     this.root.setVisible(!!choices);
     if (!choices) return;
-    this.title.setText(more > 1 ? `Level ${level}! Choose an upgrade (${more} to pick)` : `Level ${level}! Choose an upgrade`);
-    choices.forEach((id, i) => this.addCard(id, CARDS.xs[i], ranks[id] ?? 0));
+    // A lone card is the last level-up after every skill is learned, shown in the middle.
+    if (choices.length === 1) this.title.setText(`Level ${level}! Every skill learned`);
+    else this.title.setText(more > 1 ? `Level ${level}! Choose an upgrade (${more} to pick)` : `Level ${level}! Choose an upgrade`);
+    choices.forEach((id, i) => this.addCard(id, choices.length === 1 ? VIEW.w / 2 : CARDS.xs[i], ranks[id] ?? 0));
   }
 
   /** The seconds left, rounded up, over a bar that empties as the time to pick runs out. */
