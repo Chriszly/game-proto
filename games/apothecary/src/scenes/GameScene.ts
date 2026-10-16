@@ -1103,7 +1103,7 @@ export class GameScene extends Phaser.Scene {
       if (key === drawn) return;
       drawn = key;
       ring.clear();
-      ring.fillStyle(0xfffaf0, 1).fillCircle(ringX, top + 1, BUBBLE.ring + 2);
+      ring.fillStyle(0xe6dcc4, 1).fillCircle(ringX, top + 1, BUBBLE.ring + 2);
       ring.lineStyle(1, 0x2a1d14, 0.9).strokeCircle(ringX, top + 1, BUBBLE.ring + 2.5);
       ring.lineStyle(2.4, 0x2a1d14, 0.15).strokeCircle(ringX, top + 1, BUBBLE.ring);
       if (left01 > 0) {

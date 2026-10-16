@@ -34,6 +34,9 @@ study, shade gardens and a mirrored second production line.
   town card right of the contract shows the weather, reputation and the market day.
 - Look: an ink-and-watercolour herbalist's almanac. Every texture is painted on a canvas at load
   (`textures.addCanvas`), with no image files; `pixelArt` is off; all text is serif (`SERIF`).
+  The palette is kept dark and muted (deep greens, dark earth and floor boards, aged-paper cards
+  under dark ink): keep new ground, card and surface colours in that range, and only items, markers
+  and the brew bright.
 - There is one scene with no title, win or lose screen, and no audio. A customer who runs out of
   patience leaves and lowers the reputation.
 - Leftovers: `GAME_WIDTH`/`GAME_HEIGHT` in `src/main.ts` are only used there. `DOCTOR_W`/`DOCTOR_H`
@@ -44,7 +47,7 @@ study, shade gardens and a mirrored second production line.
 ### File map
 
 - `src/main.ts`: creates the `Phaser.Game` (960x540, FIT scaling, arcade physics with
-  `fixedStep: false`, `pixelArt: false`, cream background), registers `BootScene` and `GameScene`, calls `setupGame(game)`
+  `fixedStep: false`, `pixelArt: false`, aged-paper background `PAPER`), registers `BootScene` and `GameScene`, calls `setupGame(game)`
   from `shared/setupGame.ts` and `setupScaling(game)` from `shared/scaling.ts`, and puts `game` on window in dev.
 - `src/game/items.ts`: item ids and defs (`ITEMS`), `GROW_MS`, `REFINE`, `RECIPES`,
   `POTION_PRICE`, the `isPlant`/`isRefined`/`isPotion`/`isFine`/`isSellable` guards, the ordered

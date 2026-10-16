@@ -5,7 +5,7 @@ the [game hub](../../README.md).
 
 You play a plague doctor running a medieval apothecary. Grow herbs in the backyard, refine them,
 brew potions in the cauldron and sell them to customers at the storefront. It looks like a page
-from a herbalist's almanac: watercolour washes on cream paper, wobbly ink outlines and hatched
+from a herbalist's almanac: watercolour washes on aged paper in deep, muted tones, wobbly ink outlines and hatched
 shadows, with the interface in dark ink on parchment cards and a serif type.
 
 ![The whole map with both production lines built](docs/screenshots/rows-map.png)

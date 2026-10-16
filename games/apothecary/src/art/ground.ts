@@ -77,7 +77,7 @@ function drawWorld(c: Ctx) {
   for (const yard of YARDS) dirt(c, rectPts(yard.x, yard.y, yard.w, yard.h), yard);
   // The street, a sandy path from the storefront's door to the bottom edge.
   const p = STREET_PATH;
-  both(c, [[p.x - 2, p.y], [p.x + p.w + 2, p.y], [p.x + p.w + 8, h + 4], [p.x - 8, h + 4]], '#d8b07a', { layers: 3 }, { w: 1.1 });
+  both(c, [[p.x - 2, p.y], [p.x + p.w + 2, p.y], [p.x + p.w + 8, h + 4], [p.x - 8, h + 4]], '#a8845a', { layers: 3 }, { w: 1.1 });
   // The shop: a plank floor, with a hatched shadow under the walls on its lit side.
   const s = SHOP;
   both(c, rectPts(s.x, s.y, s.w, s.h), WASH.planks, { layers: 4, bloom: 4, cx: s.x + s.w / 2, cy: s.y + s.h / 2 }, { w: 1.4 });
@@ -131,7 +131,7 @@ function drawExpansion(c: Ctx) {
  */
 function drawGarden(c: Ctx, w: number, h: number, shaded = false) {
   const m = 6;
-  wash(c, rectPts(m, m, w, h, 6), shaded ? '#7fa45a' : '#a9cc72', { layers: 4, spread: 2, bloom: 4, cx: w / 2, cy: h / 3 });
+  wash(c, rectPts(m, m, w, h, 6), shaded ? '#4f7438' : '#6e9450', { layers: 4, spread: 2, bloom: 4, cx: w / 2, cy: h / 3 });
   if (shaded) {
     for (let i = 0; i < 9; i++) {
       wash(c, ellPts(m + rr(10, w - 10), m + rr(10, h - 10), rr(18, 40), rr(12, 26), 16), '#3f5a30', { layers: 3, spread: 6, alpha: 0.22, edge: 0 });
@@ -203,7 +203,7 @@ function drawBush(c: Ctx) {
   c.fill();
   c.restore();
   const blob = ellPts(x, y - 9, 19, 12, 26).map(([a, b], i) => [a + Math.sin(i * 1.7) * 2, b + Math.cos(i * 2.3) * 2] as Pt);
-  both(c, blob, '#7aa850', { layers: 3 }, { w: 1.1 });
+  both(c, blob, '#57803a', { layers: 3 }, { w: 1.1 });
   hatch(c, ellPts(x + 8, y - 7, 11, 7, 16), { gap: 2.5, alpha: 0.28, w: 0.5 });
   for (let f = 0; f < 5; f++) {
     c.fillStyle = ['#e8a33c', '#d97aa0', '#fff8e8', '#8a7ad8', '#e8a33c'][f];
@@ -258,7 +258,7 @@ export function bakeGround(scene: Phaser.Scene) {
   GARDEN_AREAS.forEach((area, i) =>
     paint(scene, gardenTexture(i), area.w + 12, area.h + 12, (c) => drawGarden(c, area.w, area.h, area.name === 'Shade garden'), 2, 300 + (i % 2)),
   );
-  ['#6f9e48', '#7fae52', '#5f8f40'].forEach((tint, i) => paint(scene, `tree-${i}`, 80, 88, (c) => drawTree(c, tint), 2, 500 + i));
+  ['#527a36', '#5e8a3e', '#466e30'].forEach((tint, i) => paint(scene, `tree-${i}`, 80, 88, (c) => drawTree(c, tint), 2, 500 + i));
   [0, 1].forEach((i) => paint(scene, `bush-${i}`, 48, 32, drawBush, 2, 600 + i));
   reseed(1);
 }

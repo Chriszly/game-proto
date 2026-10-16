@@ -13,8 +13,8 @@ export type Ctx = CanvasRenderingContext2D;
 export const INK = '#2a1d14';
 export const INK_NUM = 0x2a1d14;
 /** Cream paper, the colour of the page under every wash. */
-export const PAPER = '#f2e8d0';
-export const PAPER_NUM = 0xf2e8d0;
+export const PAPER = '#cfc09c';
+export const PAPER_NUM = 0xcfc09c;
 /** A light cream used as the outline of ink text over the world, so it reads on grass and boards alike. */
 export const TEXT_HALO = '#faf4e4';
 /** The interface's serif, from the system: no web fonts are loaded. */
@@ -22,31 +22,31 @@ export const SERIF = 'Georgia, "Times New Roman", serif';
 
 /** Watercolours shared across the art. */
 export const WASH = {
-  grass: '#9cbf6a',
-  grassDark: '#6f9c4a',
-  grassLight: '#b7cf7a',
-  forest: '#4f7a3c',
+  grass: '#5f8a42',
+  grassDark: '#3f6a2e',
+  grassLight: '#7a9c52',
+  forest: '#2f5226',
   leaf: '#6f9e48',
   leafLight: '#7fae52',
-  dirt: '#8f6a45',
-  dirtDark: '#6b4c30',
+  dirt: '#5e4430',
+  dirtDark: '#3e2c1e',
   wood: '#c08850',
   woodDark: '#8a5a32',
   woodDeep: '#6e4426',
-  planks: '#c48c58',
-  stone: '#aab0b4',
-  stoneDark: '#9ca2a8',
+  planks: '#8e6038',
+  stone: '#868c92',
+  stoneDark: '#747a82',
   iron: '#3a3d48',
   ironRim: '#5a5f6c',
   brew: '#7fd04a',
   brass: '#d4a84a',
   brassDark: '#a87e2e',
   leather: '#7a5236',
-  parchment: '#f7ecd2',
-  card: '#ecd3a0',
-  button: '#d9b47a',
-  violetCard: '#e3d2f0',
-  bubble: '#fffaf0',
+  parchment: '#d8c8a2',
+  card: '#cfb27c',
+  button: '#c09a5e',
+  violetCard: '#c6b4d6',
+  bubble: '#e6dcc4',
   flame: '#f08a3a',
   flameLight: '#f5b03a',
   flameCore: '#ffe07a',
@@ -230,7 +230,7 @@ export function wash(c: Ctx, pts: Pt[], col: string, o: WashOpts = {}) {
       const p = pts[Math.floor(rr(0, pts.length))];
       const x = (p[0] + o.cx) / 2 + rr(-10, 10), y = (p[1] + o.cy) / 2 + rr(-10, 10), r = rr(6, 22);
       const g = c.createRadialGradient(x, y, 0, x, y, r);
-      g.addColorStop(0, 'rgba(255,250,235,0.32)');
+      g.addColorStop(0, 'rgba(255,250,235,0.14)');
       g.addColorStop(1, 'rgba(255,250,235,0)');
       c.fillStyle = g;
       c.fillRect(x - r, y - r, r * 2, r * 2);
