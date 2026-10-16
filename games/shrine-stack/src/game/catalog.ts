@@ -39,3 +39,28 @@ export const CURSE_INFO: Record<CurseId, { name: string; text: string }> = {
   brittle: { name: 'Brittle', text: 'every cut cracks 6 more off' },
   dim: { name: 'Dimness', text: 'no drop guide' },
 };
+
+/** What a tier's stones are cut from, picked between tiers from `MATERIAL_FROM_TIER`. Limestone is the plain stone. */
+export const MATERIALS = ['limestone', 'marble', 'sandstone', 'basalt'] as const;
+export type MaterialId = (typeof MATERIALS)[number];
+
+export const MATERIAL_INFO: Record<MaterialId, { name: string; text: string; short: string; color: number }> = {
+  limestone: { name: 'Limestone', text: 'plain stone', short: 'plain', color: 0xd8b58a },
+  marble: { name: 'Marble', text: 'half the perfect window, x2 favor', short: 'tight, x2 favor', color: 0xf0ecf4 },
+  sandstone: { name: 'Sandstone', text: 'double perfect window, half favor', short: 'easy, 1/2 favor', color: 0xe0a060 },
+  basalt: { name: 'Basalt', text: 'heavy: slow and cracks more, x2 trial favor', short: 'heavy, x2 trial', color: 0x6a7080 },
+};
+
+/** The materials a break offers to pick from (limestone is the default, never on a button). */
+export const MATERIAL_PICKS = ['marble', 'sandstone', 'basalt'] as const satisfies readonly MaterialId[];
+
+/** The patrons a new temple picks one of; each sets a rule for the whole run, a boon and a bane. */
+export const PATRONS = ['gilded', 'hands', 'patient', 'storm'] as const;
+export type PatronId = (typeof PATRONS)[number];
+
+export const PATRON_INFO: Record<PatronId, { name: string; boon: string; bane: string; color: number }> = {
+  gilded: { name: 'The Gilded Hand', boon: 'Every stone earns 1 more favor.', bane: "No Mason's Grace: a miss always ends the run.", color: 0xf3c64e },
+  hands: { name: 'The Many-Handed', boon: 'Balanced tiers offer four blessings.', bane: 'Stones swing 10% faster.', color: 0xc9a0e8 },
+  patient: { name: 'The Patient Mason', boon: 'Stones swing 10% slower.', bane: 'Perfect drops earn no extra favor.', color: 0x7fc8e8 },
+  storm: { name: 'The Storm Caller', boon: 'Perfect drops get 3 more pixels of leeway.', bane: 'Gusts blow from tier 6, not only past the crown.', color: 0x9ad46a },
+};
