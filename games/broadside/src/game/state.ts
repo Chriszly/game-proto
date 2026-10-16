@@ -1,6 +1,9 @@
 import { BOONS, type BoonId } from './admiralty';
+import type { BountyId } from './bounties';
+import { FIRST_HULL, HULLS, type HullId } from './hulls';
 import { ORDERS, type OrderId } from './orders';
-import { ENEMIES, type EnemyKind } from './ships';
+import { SWIVEL_ARC, type PerkId } from './perks';
+import type { EnemyKind } from './ships';
 import { SHOTS, type ShotKind } from './shot';
 import type { UpgradeId } from './upgrades';
 import { waveShips } from './waves';
@@ -87,6 +90,23 @@ export const BOARD_HP = 0.2;
 export const BOARD_REACH = 28;
 /** How long the player must stay alongside to take her. */
 export const BOARD_MS = 1200;
+/** The sailors a prize crew must number, as a share of the prize's full crew. */
+export const PRIZE_CREW = 0.5;
+/** The fewest sailors the player must keep aboard to send a prize crew across. */
+export const CREW_TO_BOARD = 4;
+/** The slowest a crew reloads, as a share of the full pace, however few are left. */
+export const CREW_PACE_MIN = 1 / 3;
+/** Sailors a grapeshot pellet kills on a hit, and a blast (shell or fireship) kills on every ship it hurts. */
+export const GRAPE_KILLS = 1;
+export const BLAST_KILLS = 3;
+
+/**
+ * Shore forts, on islands from `FIRST_FORT_WAVE`: each lobs shells like a mortar ketch at the
+ * player in range and pays a bounty when razed. Shot and shells hit it within `radius`.
+ */
+export const FORT = { hp: 110, radius: 30, range: 340, reloadMs: 5000, damage: 16, bounty: 50, bountyStep: 5 };
+/** Medals the Admiralty adds for razing the pirate haven, on top of one per wave. */
+export const WIN_MEDALS = 5;
 
 export type Side = 'port' | 'starboard';
 
@@ -111,6 +131,11 @@ export interface Ship {
   jamMs: number;
   /** How long the player has been alongside this crippled enemy, boarding her. */
   boardMs: number;
+  /** Collision radius. */
+  radius: number;
+  /** Sailors aboard, and with a full crew: fewer reload slower (`crewPace`). */
+  crew: number;
+  maxCrew: number;
   /**
    * An enemy sailing round an island that lies between it and the player: which island (an index
    * into `ISLANDS`) and which way round (1 or -1). Null when the way is clear.
@@ -130,6 +155,21 @@ export interface Ball {
   fromPlayer: boolean;
   /** The shot: what it does (chain slows, grape slows reloads) and how it looks; powder is round shot with a flash. */
   shot: ShotKind | 'powder';
+  /** Bouncing shot: flight left after skipping off the water once, or 0 when it has skipped or never will. */
+  skip: number;
+}
+
+/** A shore fort on an island. */
+export interface Fort {
+  id: number;
+  /** An index into `ISLANDS`. */
+  island: number;
+  x: number;
+  y: number;
+  hp: number;
+  maxHp: number;
+  reload: number;
+  hitMs: number;
 }
 
 /** A mortar shell in the air, coming down on the spot marked on the sea when `ms` runs out. */
@@ -165,8 +205,10 @@ export interface Effect {
 }
 
 export interface GameState {
-  /** `break` shows the wave's banner, `harbor` is the shop between waves. */
-  phase: 'break' | 'fighting' | 'harbor' | 'over';
+  /** `break` shows the wave's banner, `harbor` is the shop between waves, `won` the campaign's end card. */
+  phase: 'break' | 'fighting' | 'harbor' | 'over' | 'won';
+  /** The ship the player sails. */
+  hull: HullId;
   wave: number;
   breakMs: number;
   toSpawn: EnemyKind[];
@@ -192,6 +234,8 @@ export interface GameState {
   escorts: Ship[];
   /** Mortar shells in the air. */
   shells: Shell[];
+  /** The wave's shore forts, still standing. */
+  forts: Fort[];
   balls: Ball[];
   loot: Loot[];
   effects: Effect[];
@@ -202,6 +246,25 @@ export interface GameState {
   /** Ships boarded and taken this run. */
   taken: number;
   ranks: Partial<Record<UpgradeId, number>>;
+  /** The perks taken from the prize drafts this run, and the draft now on offer at the harbor (empty once picked). */
+  perks: PerkId[];
+  draft: PerkId[];
+  /** Time left before the player's own mortar (a perk) fires again. */
+  mortarMs: number;
+  /** The Admiralty's bounty for this wave (none on wave 1), and what the last one paid at the harbor (null before any). */
+  bounty: BountyId | null;
+  bountyPaid: number | null;
+  /** This wave so far: loot hauled in, hull lost, groundings, prizes taken, fighting time and the kinds sunk in order. */
+  waveLoot: number;
+  waveDamage: number;
+  waveAground: number;
+  wavePrizes: number;
+  waveMs: number;
+  waveSunk: EnemyKind[];
+  /** Whether the pirate haven has been razed this run; the waves go on after. */
+  won: boolean;
+  /** Medals already banked this run (at the haven), so sinking later awards only the rest. */
+  medalsBanked: number;
   bestWave: number;
   /** The best wave before this run, which a run must beat for the Admiralty's bonus medals. */
   bestBefore: number;
@@ -210,49 +273,59 @@ export interface GameState {
   nextId: number;
 }
 
-export const PLAYER = { hp: 120, radius: 25, speed: 90, turn: 1.7, guns: 2, damage: 10, reloadMs: 2000, range: 260 };
-
 export const rank = (s: GameState, id: UpgradeId) => s.ranks[id] ?? 0;
+export const hasPerk = (s: GameState, id: PerkId) => s.perks.includes(id);
 
-/** The player's ship as the upgrades bought have made it. */
+/** The player's ship as its hull, the upgrades bought, the perks drafted and the wave's order have made it. */
 export function stats(s: GameState) {
+  const hull = HULLS[s.hull];
   const order = ORDERS[s.order];
   const sails = (1 + 0.12 * rank(s, 'sails')) * (order.sails ?? 1);
   return {
-    maxHp: PLAYER.hp + 30 * rank(s, 'hull'),
-    speed: PLAYER.speed * sails,
-    turn: PLAYER.turn * sails,
-    guns: PLAYER.guns + rank(s, 'guns'),
-    damage: PLAYER.damage * (1 + 0.25 * rank(s, 'shot')) * (order.damage ?? 1),
-    reloadMs: PLAYER.reloadMs * Math.pow(0.85, rank(s, 'crew')) * (order.reload ?? 1),
-    range: PLAYER.range * (order.range ?? 1),
+    maxHp: hull.hp + 30 * rank(s, 'hull'),
+    speed: hull.speed * sails,
+    turn: hull.turn * sails,
+    guns: hull.guns + rank(s, 'guns'),
+    damage: hull.damage * (1 + 0.25 * rank(s, 'shot')) * (order.damage ?? 1),
+    reloadMs: hull.reloadMs * Math.pow(0.85, rank(s, 'crew')) * (order.reload ?? 1),
+    range: hull.range * (order.range ?? 1),
+    /** How far either side of straight out the broadsides train. */
+    arc: ARC * (hasPerk(s, 'swivels') ? SWIVEL_ARC : 1),
   };
 }
+
+/** How fast a ship's crew reloads, as a share of the full pace: all of it with a full crew, down to `CREW_PACE_MIN`. */
+export const crewPace = (ship: Ship) => Math.max(CREW_PACE_MIN, ship.crew / ship.maxCrew);
 
 /** How far a broadside charged to `charge` (0 to 1) reaches, given the full `range`. */
 export const reachOf = (range: number, charge: number) => range * (REACH_MIN + (1 - REACH_MIN) * charge);
 
-export function newShip(id: number, kind: Ship['kind'], x: number, y: number, heading: number, hp: number): Ship {
-  return { id, kind, x, y, heading, hp, maxHp: hp, reload: { port: 0, starboard: 0 }, hitMs: 0, agroundMs: 0, slowMs: 0, jamMs: 0, boardMs: 0, detour: null };
+export function newShip(id: number, kind: Ship['kind'], x: number, y: number, heading: number, hp: number, radius: number, crew: number): Ship {
+  return { id, kind, x, y, heading, hp, maxHp: hp, reload: { port: 0, starboard: 0 }, hitMs: 0, agroundMs: 0, slowMs: 0, jamMs: 0, boardMs: 0, radius, crew, maxCrew: crew, detour: null };
 }
 
 /** The shot one side fires this wave: what the captain's order loads, or else what was loaded at the harbor. */
 export const loadedShot = (s: GameState, side: Side): ShotKind => ORDERS[s.order].load ?? s.loadout[side];
 
-/** The full reach of one side's guns this wave, before the wind: shorter for grapeshot. */
-export const sideRange = (s: GameState, side: Side) => stats(s).range * (SHOTS[loadedShot(s, side)].range ?? 1);
+/** The full reach of one side's guns this wave, before the wind: shorter for grapeshot (a mortar side lobs at the full range). */
+export const sideRange = (s: GameState, side: Side) => stats(s).range * (HULLS[s.hull].mortarSide === side ? 1 : (SHOTS[loadedShot(s, side)].range ?? 1));
 
 export const FIRST_ORDER: OrderId = 'chain';
 
-/** A new run; `boons` are the Admiralty's starting upgrades, bought with medals between runs. */
-export function newRun(bestWave = 0, boons: BoonId[] = []): GameState {
+/**
+ * A new run; `boons` are the Admiralty's starting upgrades, bought with medals between runs, and
+ * `hull` the ship chosen (the Frigate on a first run).
+ */
+export function newRun(bestWave = 0, boons: BoonId[] = [], hull: HullId = FIRST_HULL): GameState {
+  const ship = HULLS[hull];
   const s: GameState = {
     phase: 'break',
+    hull,
     wave: 1,
     breakMs: BREAK_MS,
     toSpawn: waveShips(1),
     spawnMs: 0,
-    player: newShip(1, 'player', WORLD.w / 2, WORLD.h / 2, -Math.PI / 2, PLAYER.hp),
+    player: newShip(1, 'player', WORLD.w / 2, WORLD.h / 2, -Math.PI / 2, ship.hp, ship.radius, ship.crew),
     helm: 0,
     aim: { port: false, starboard: false },
     charge: { port: null, starboard: null },
@@ -263,6 +336,7 @@ export function newRun(bestWave = 0, boons: BoonId[] = []): GameState {
     enemies: [],
     escorts: [],
     shells: [],
+    forts: [],
     balls: [],
     loot: [],
     effects: [],
@@ -271,6 +345,19 @@ export function newRun(bestWave = 0, boons: BoonId[] = []): GameState {
     sunk: 0,
     taken: 0,
     ranks: {},
+    perks: [],
+    draft: [],
+    mortarMs: 0,
+    bounty: null,
+    bountyPaid: null,
+    waveLoot: 0,
+    waveDamage: 0,
+    waveAground: 0,
+    wavePrizes: 0,
+    waveMs: 0,
+    waveSunk: [],
+    won: false,
+    medalsBanked: 0,
     bestWave,
     bestBefore: bestWave,
     medals: 0,
@@ -285,4 +372,4 @@ export function newRun(bestWave = 0, boons: BoonId[] = []): GameState {
   return s;
 }
 
-export const radiusOf = (ship: Ship) => (ship.kind === 'player' ? PLAYER.radius : ENEMIES[ship.kind].radius);
+export const radiusOf = (ship: Ship) => ship.radius;
