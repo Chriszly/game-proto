@@ -731,7 +731,7 @@ export class GameScene extends Phaser.Scene {
     g.fillStyle(N.lapis).fillCircle(at(tr.at), ly, 4).lineStyle(1, N.ink).strokeCircle(at(tr.at), ly, 4);
     g.fillStyle(N.goldLight).fillCircle(at(tr.at), ly, 1.5);
     const bossName = s.boss ? bossOf(s.boss).name : '';
-    this.trackNext.setText(s.boss && bossStands(s) ? `Beat ${bossName.toLowerCase().replace(/^the /, 'the ')}` : tr.next > 0 ? `Next banner ${tr.next} m` : 'At the banner');
+    this.trackNext.setText(s.boss && bossStands(s) ? (s.boss.kind === 'dragon' ? 'Beat the dragon' : 'Beat the Gatekeeper') : tr.next > 0 ? `Next banner ${tr.next} m` : 'At the banner');
 
     // The stage's tag (its ground and road), and the boss's stomps left as pips while it stands.
     const daily = s.daily ? 'Daily · ' : '';
