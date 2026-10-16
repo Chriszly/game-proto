@@ -28,10 +28,17 @@ export interface CampSpot {
   guards: string[];
 }
 
+/** A neutral trading post: a 2x2 hall where trade carts load ore. */
+export interface PostSpot {
+  tx: number;
+  ty: number;
+}
+
 export interface MapData {
   terrain: Uint8Array;
   nodes: Node[];
   camps: CampSpot[];
+  posts: PostSpot[];
 }
 
 const B = 'wild-brigand';
@@ -49,6 +56,11 @@ const CAMP_PLAN: (CampSpot & { mirrorRelic?: RelicId })[] = [
 ];
 /** Tiles cleared around a camp's footprint, so its guards and visitors can stand there. */
 const CAMP_CLEAR = 3;
+/**
+ * The first trading post; the second is its point mirror. Both lie on the line across the middle of
+ * the map that is the same distance from either Town Center, so a cart's trip is as long for both sides.
+ */
+const POST_PLAN: PostSpot = { tx: MAP_SIZE / 2 - 9, ty: MAP_SIZE / 2 + 7 };
 
 /** Top-left tile of each side's Town Center; the second side is the point mirror of the first. */
 export const START_TILES = [
@@ -186,6 +198,15 @@ export function generateMap(): MapData {
         }
     }
   }
+  const posts: PostSpot[] = [POST_PLAN, { tx: MAP_SIZE - POST_PLAN.tx - 2, ty: MAP_SIZE - POST_PLAN.ty - 2 }];
+  for (const c of posts)
+    for (let y = c.ty - CAMP_CLEAR; y < c.ty + 2 + CAMP_CLEAR; y++)
+      for (let x = c.tx - CAMP_CLEAR; x < c.tx + 2 + CAMP_CLEAR; x++) {
+        if (!inMap(x, y)) continue;
+        terrain[idx(x, y)] = GRASS;
+        cleared[idx(x, y)] = 1;
+        taken[idx(x, y)] = 1;
+      }
   const kept = nodes.filter((n) => {
     for (let j = 0; j < n.h; j++) for (let i = 0; i < n.w; i++) if (cleared[idx(n.tx + i, n.ty + j)]) return false;
     return true;
@@ -198,5 +219,5 @@ export function generateMap(): MapData {
     if (terrain[idx(x, y)] === GRASS && !taken[idx(x, y)]) terrain[idx(x, y)] = DIRT;
   }
 
-  return { terrain, nodes: kept, camps };
+  return { terrain, nodes: kept, camps, posts };
 }

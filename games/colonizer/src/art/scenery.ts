@@ -292,6 +292,33 @@ const PAINT: Record<BuildingId, Painter> = {
     knot(c, x + w / 2 - 2.5, y + h / 2 + 2, 1.1, trim);
     knot(c, x + w / 2 + 2.5, y + h / 2 + 2, 1.1, trim);
   },
+  market(c, x, y, w, h, roof, trim) {
+    // A market: a striped awning on poles over a counter of sacks and jars, with a pair of scales.
+    for (const px of [x + 6, x + w - 6]) thread(c, [[px, y + h - 4], [px, y + 22]], T.brown, 2);
+    sp(c, [[x + 2, y + 24], [x + w - 2, y + 24], [x + w - 10, y + 6], [x + 10, y + 6]], T.tan, { ang: 0 });
+    for (let k = 0; k < 6; k++) thread(c, [[x + 12 + k * 13, y + 7], [x + 6 + k * 15, y + 23]], roof, 2.4);
+    for (let k = 0; k < 7; k++) sp(c, [[x + 2 + k * 13, y + 24], [x + 15 + k * 13, y + 24], [x + 8.5 + k * 13, y + 31]], roof, { ang: PI / 2, noCouch: true, lw: 0.5 });
+    wall(c, x + 10, y + 52, x + w - 10, y + h - 4, 2);
+    sr(c, x + 8, y + 48, w - 16, 6, '#a0703a', { ang: 0, noCouch: true, lw: 0.7 });
+    for (const [bx, by, col] of [[x + 20, y + 42, T.tan], [x + 34, y + 40, '#b08a56'], [x + 48, y + 43, T.tan], [x + w - 20, y + 41, T.sage]] as [number, number, string][]) {
+      se(c, bx, by, 6.5, 6, col, { ang: 0, noCouch: true, lw: 0.6 });
+      for (let k = 0; k < 3; k++) knot(c, bx - 3 + k * 3, by - 4, 1.2, k === 1 ? T.ochre : T.red);
+    }
+    for (const jx of [x + 16, x + 26]) {
+      sp(c, [[jx - 3, y + 68], [jx + 3, y + 68], [jx + 4, y + 80], [jx - 4, y + 80]], T.indigo, { ang: PI / 2, noCouch: true, lw: 0.6 });
+      knot(c, jx, y + 67, 1.4, T.ochre);
+    }
+    // The scales on the counter.
+    const sx = x + w - 24;
+    thread(c, [[sx, y + 48], [sx, y + 30]], T.ink, 1);
+    thread(c, [[sx - 9, y + 32], [sx + 9, y + 32]], T.ink, 1);
+    for (const d of [-9, 9]) {
+      thread(c, [[sx + d, y + 32], [sx + d, y + 39]], T.ink, 0.6);
+      sp(c, [[sx + d - 4, y + 39], [sx + d + 4, y + 39], [sx + d + 2.5, y + 42], [sx + d - 2.5, y + 42]], T.ochre, { noCouch: true, lw: 0.5 });
+    }
+    knot(c, sx, y + 29, 1.6, trim);
+    pennant(c, x + w / 2, y + 6, trim);
+  },
   monument(c, x, y, w, h, roof, trim) {
     // A great stepped tower on a plinth, gold-knotted, with a long banner in the side's colours.
     sr(c, x + 4, y + h - 14, w - 8, 10, T.buff, { ang: 0 });
@@ -478,6 +505,39 @@ export function bakeRelic(relic: 'plenty' | 'valor' | 'haste', holder: FactionId
   const col = holder ? WOOL[holder].cloth : T.card;
   thread(c, [[s - 6, y + s - 6], [s - 6, y - 22]], T.ink, 1);
   sp(c, [[s - 5, y - 22], [s + 0, y - 21], [s + 0, y - 6], [s - 5, y - 9]], col, { ang: PI / 2, noCouch: true, lw: 0.6 });
+  return cv;
+}
+
+/**
+ * A trading post: a neutral timber hall with an open front, a hanging sign of scales and a cart
+ * drawn up beside it, where trade carts load ore. Its 2x2 footprint's top-left is at (0, BUILDING_TOP).
+ */
+export function bakePost() {
+  const s = TILE * 2;
+  const { cv, c } = canvas(s + 4, s + BUILDING_TOP);
+  reseed(71);
+  const y = BUILDING_TOP;
+  c.fillStyle = 'rgba(110,90,60,0.14)';
+  c.beginPath();
+  c.ellipse(s / 2, y + s - 3, s / 2, 5, 0, 0, PI * 2);
+  c.fill();
+  wall(c, 6, y + 22, s - 6, y + s - 3, 3);
+  arch(c, s / 2 - 9, y + 36, 18, 25, T.ink);
+  tiles(c, 2, y - 2, s - 2, y + 24, T.bark, 3.5);
+  // A sign of scales hung on a bracket.
+  thread(c, [[s - 8, y + 26], [s + 1, y + 26]], T.ink, 1);
+  thread(c, [[s - 2, y + 26], [s - 2, y + 32]], T.ink, 0.8);
+  thread(c, [[s - 8, y + 32], [s + 4, y + 32]], T.ochre, 1.2);
+  for (const d of [-6, 6]) {
+    thread(c, [[s - 2 + d, y + 32], [s - 2 + d, y + 36]], T.ochre, 0.6);
+    sp(c, [[s - 5 + d, y + 36], [s + 1 + d, y + 36], [s + d - 0.5, y + 38.5], [s - 3.5 + d, y + 38.5]], T.ochre, { noCouch: true, lw: 0.5 });
+  }
+  // Sacks of ore stacked by the door, gold-knotted.
+  for (const [bx, by] of [[12, s - 10], [20, s - 9], [16, s - 17]] as Pt[]) {
+    se(c, bx, y + by, 4.5, 4, T.grey, { noCouch: true, lw: 0.6 });
+    knot(c, bx, y + by - 1, 1, T.ochre);
+  }
+  pennant(c, s / 2, y - 4, T.ochre);
   return cv;
 }
 

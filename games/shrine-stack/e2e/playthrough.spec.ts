@@ -1,19 +1,21 @@
 import { expect, test, type Page } from '@playwright/test';
 
-// Plays the first round with real inputs: watches the first stone swing, taps to drop each of the
-// first tier's three stones while it is over the stone below, checks a tap while a stone falls
-// drops nothing more, checks the break between tiers also offers a curse and the favor shop (which
-// it leaves alone), spends favor to reroll the balanced tier's blessings, and takes one, which
-// starts tier 2 with a trial.
+// Plays the first round with real inputs: picks one of the two patrons offered, watches the first
+// stone swing, taps to drop each of the first tier's three stones while it is over the stone below,
+// checks a tap while a stone falls drops nothing more, checks the break between tiers also offers a
+// curse and the favor shop (which it leaves alone), spends favor to reroll the balanced tier's
+// blessings, and takes one, which starts tier 2 with a trial.
 // Game state is only read, through the `game` object the dev build puts on window.
 
 type BlessingId = 'broad' | 'calm' | 'steady' | 'golden' | 'grace';
 type StoneKind = 'normal' | 'heavy' | 'light';
-interface Stone { x: number; w: number; tier: number; perfect: boolean; kind: StoneKind }
+type MaterialId = 'limestone' | 'marble' | 'sandstone' | 'basalt';
+type PatronId = 'gilded' | 'hands' | 'patient' | 'storm';
+interface Stone { x: number; w: number; tier: number; perfect: boolean; kind: StoneKind; material: MaterialId }
 interface GameState {
-  phase: 'swinging' | 'falling' | 'blessing' | 'over' | 'crowned';
+  phase: 'patron' | 'swinging' | 'falling' | 'blessing' | 'over' | 'crowned';
   stones: Stone[];
-  moving: { x: number; w: number; h: number; dir: 1 | -1; vy: number; kind: StoneKind };
+  moving: { x: number; w: number; h: number; dir: 1 | -1; vy: number; kind: StoneKind; material: MaterialId };
   tier: number;
   inTier: number;
   wobbly: boolean;
@@ -38,9 +40,17 @@ interface GameState {
   curse: { id: string; tier: number } | null;
   endless: boolean;
   wind: number;
+  lean: number;
+  chain: number;
+  material: MaterialId;
+  reserve: StoneKind | null;
+  swapped: boolean;
+  patronOffer: PatronId[];
+  patron: PatronId | null;
 }
 type Spot = { x: number; y: number; w: number; h: number };
 type Card = Spot & { id: BlessingId };
+type PatronCard = Spot & { id: PatronId };
 
 const VIEW = { w: 960, h: 540 };
 /** The rules the first round goes through, from src/game/state.ts. */
@@ -58,6 +68,13 @@ const CALM = 0.85;
 const TIER_SPEEDUP = 0.05;
 const STEADY_PX = 6;
 const REROLL_COST = 5;
+/** What each patron changes in the first round: the swing's pace, favor per stone and for a perfect drop, the blessings offered and the shop. */
+const PATRON_RULES: Record<PatronId, { speed: number; perStone: number; perfectFavor: number; offer: number; shop: string[]; perfectPx: number }> = {
+  gilded: { speed: 1, perStone: 2, perfectFavor: PERFECT_FAVOR, offer: 3, shop: ['slow', 'wider'], perfectPx: 5 },
+  hands: { speed: 1.1, perStone: 1, perfectFavor: PERFECT_FAVOR, offer: 4, shop: ['slow', 'wider', 'grace'], perfectPx: 5 },
+  patient: { speed: 0.9, perStone: 1, perfectFavor: 0, offer: 3, shop: ['slow', 'wider', 'grace'], perfectPx: 5 },
+  storm: { speed: 1, perStone: 1, perfectFavor: PERFECT_FAVOR, offer: 3, shop: ['slow', 'wider', 'grace'], perfectPx: 8 },
+};
 /** A tap drops the stone when its middle is this close to the middle of what it lands on. */
 const AIM_PX = 12;
 
@@ -77,6 +94,8 @@ function scene(page: Page) {
     page.evaluate(`(${fn.toString()})(window.game.scene.getScene('Game'))`) as Promise<T>;
   return {
     state: () => read<GameState>((s) => JSON.parse(JSON.stringify({ ...s.state, events: undefined }))),
+    /** Where the patron cards are on screen before the first stone. */
+    patrons: () => read<PatronCard[]>((s) => s.patronCards),
     /** Where the blessing cards are on screen while choosing. */
     cards: () => read<Card[]>((s) => s.blessingCards),
     /** Where the reroll button is while choosing. */
@@ -164,16 +183,31 @@ test('plays the first round', async ({ page }, testInfo) => {
   /** Anywhere on the sky drops the stone; this spot is clear of the panel and the temple. */
   const sky = () => onPage(860, 200);
 
-  // A new shrine: tier 1, a bare plinth and the first stone swinging in from the left. A few frames
-  // play first so the screenshot shows the drawn scene.
+  // A new shrine waits for its patron: two are offered, and nothing moves until one is taken. A few
+  // frames play first so the screenshot shows the drawn scene.
   await play(STEP_MS, async () => false);
   let s = await game.state();
-  expect(s).toMatchObject({ phase: 'swinging', tier: 1, inTier: 0, stones: [], favor: 0, blessings: [], tiersBuilt: 0 });
+  expect(s).toMatchObject({ phase: 'patron', tier: 1, inTier: 0, stones: [], favor: 0, blessings: [], tiersBuilt: 0, patron: null });
+  expect(new Set(s.patronOffer).size).toBe(2);
+  const patronCards = await game.patrons();
+  expect(patronCards.map((c) => c.id)).toEqual(s.patronOffer);
+  const idle = s.moving.x;
+  await play(500, async () => false);
+  s = await game.state();
+  expect(s.moving.x, 'nothing moves before a patron is chosen').toBe(idle);
+  await snap('0-patrons');
+
+  // Taking the first patron sets the run's rule and starts the first stone swinging in from the left.
+  await tap(await onPage(patronCards[0].x, patronCards[0].y));
+  s = await game.state();
+  const patron = PATRON_RULES[patronCards[0].id];
+  expect(s).toMatchObject({ phase: 'swinging', patron: patronCards[0].id, patronOffer: [], favorPerStone: patron.perStone, perfectPx: patron.perfectPx });
   expect(s.moving.w).toBe(START_W);
-  expect(s.speed).toBeCloseTo(SPEED_NORMAL);
-  // The first tier is all ordinary stones, with no trial, curse or wind.
-  expect(s).toMatchObject({ nextKind: 'normal', trial: null, curse: null, endless: false, wind: 0, slow: false });
-  expect(s.moving.kind).toBe('normal');
+  expect(s.speed).toBeCloseTo(SPEED_NORMAL * patron.speed);
+  // The first tier is all ordinary limestone, with no trial, curse, wind, lean or reserve.
+  expect(s).toMatchObject({ nextKind: 'normal', trial: null, curse: null, endless: false, wind: 0, slow: false, lean: 0, chain: 0, material: 'limestone', reserve: null });
+  expect(s.moving).toMatchObject({ kind: 'normal', material: 'limestone' });
+  await play(STEP_MS, async () => false);
   await snap('0-start');
 
   // The stone swings on its own.
@@ -206,10 +240,10 @@ test('plays the first round', async ({ page }, testInfo) => {
     const d = s.lastDrop!;
     expect(d.missed).toBe(false);
     expect(d.share, `stone ${i + 1} kept ${Math.round(d.kept)} of ${d.w}`).toBeGreaterThanOrEqual(BALANCE);
-    expect(s.stones[i]).toMatchObject({ tier: 1, perfect: d.perfect, kind: 'normal' });
+    expect(s.stones[i]).toMatchObject({ tier: 1, perfect: d.perfect, kind: 'normal', material: 'limestone' });
     expect(s.stones[i].w).toBeCloseTo(d.kept);
     expect(s.dropped).toBe(i + 1);
-    favor += 1 + (d.perfect ? PERFECT_FAVOR : 0);
+    favor += patron.perStone + (d.perfect ? patron.perfectFavor : 0);
     if (i < STONES_PER_TIER - 1) {
       expect(s).toMatchObject({ phase: 'swinging', tier: 1, inTier: i + 1, favor, wobbly: false });
       // The next stone is as wide as the one it will land on.
@@ -219,10 +253,10 @@ test('plays the first round', async ({ page }, testInfo) => {
     if (i === 0) await snap('1-first-stone');
   }
 
-  // The balanced tier is built: it earns favor and offers three different blessings.
+  // The balanced tier is built: it earns favor and offers different blessings, as many as the patron allows.
   favor += TIER_FAVOR;
-  expect(s).toMatchObject({ phase: 'blessing', tier: 2, inTier: 0, tiersBuilt: 1, balancedTiers: 1, best: 1, favor });
-  expect(new Set(s.offer).size).toBe(3);
+  expect(s).toMatchObject({ phase: 'blessing', tier: 2, inTier: 0, tiersBuilt: 1, balancedTiers: 1, best: 1, favor, lean: 0, material: 'limestone' });
+  expect(new Set(s.offer).size).toBe(patron.offer);
   expect(await page.evaluate(() => localStorage.getItem('shrine-stack-best'))).toBe('1');
   // The stone does not swing while the blessing is being chosen, and a tap on the dim does nothing.
   const waiting = s.moving.x;
@@ -238,7 +272,7 @@ test('plays the first round', async ({ page }, testInfo) => {
   expect(s).toMatchObject({ cursed: false, bought: [] });
   expect(s.curseOffer).not.toBeNull();
   expect(await game.curse()).not.toBeNull();
-  expect((await game.shop()).map((b) => b.id)).toEqual(['slow', 'wider', 'grace']);
+  expect((await game.shop()).map((b) => b.id)).toEqual(patron.shop);
   await snap('2-blessing');
 
   // Rerolling spends favor on three new blessings; the cards follow on the next frame.
@@ -249,7 +283,7 @@ test('plays the first round', async ({ page }, testInfo) => {
   favor -= REROLL_COST;
   s = await game.state();
   expect(s).toMatchObject({ phase: 'blessing', favor, stones: { length: 3 } });
-  expect(new Set(s.offer).size).toBe(3);
+  expect(new Set(s.offer).size).toBe(patron.offer);
   await play(FRAME_MS * 2, async () => false, FRAME_MS);
   const rerolled = await game.cards();
   expect(rerolled.map((c) => c.id)).toEqual(s.offer);
@@ -269,20 +303,21 @@ test('plays the first round', async ({ page }, testInfo) => {
       expect(s.moving.w).toBeCloseTo(s.stones[2].w);
       break;
     case 'calm':
-      expect(s.speed).toBeCloseTo(SPEED_NORMAL * (1 + TIER_SPEEDUP) * CALM);
+      expect(s.speed).toBeCloseTo(SPEED_NORMAL * patron.speed * (1 + TIER_SPEEDUP) * CALM);
       break;
     case 'steady':
       expect(s.perfectPx).toBe(before.perfectPx + STEADY_PX);
       break;
     case 'golden':
-      expect(s.favorPerStone).toBe(2);
+      expect(s.favorPerStone).toBe(before.favorPerStone + 1);
       break;
     case 'grace':
       expect(s.grace).toBe(1);
       break;
   }
-  // Tier 2's stone swings, a little faster than tier 1's.
-  if (card.id !== 'calm') expect(s.speed).toBeCloseTo(SPEED_NORMAL * (1 + TIER_SPEEDUP));
+  // Tier 2's stone swings, a little faster than tier 1's. The reserve opens, but is left alone.
+  if (card.id !== 'calm') expect(s.speed).toBeCloseTo(SPEED_NORMAL * patron.speed * (1 + TIER_SPEEDUP));
+  expect(s).toMatchObject({ reserve: null, swapped: false });
   const x1 = s.moving.x;
   await play(1_000, async () => false);
   expect((await game.state()).moving.x).not.toBe(x1);
