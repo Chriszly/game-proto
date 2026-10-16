@@ -21,17 +21,18 @@ export interface Level {
 /**
  * The campaign: eight islands, from roomy ones with plenty of shore to cramped ones. Each level
  * needs a star on the one before it. The star scores were set from a greedy player's final score
- * on each island on Normal: one star at three quarters of it, two at nine tenths, three above it.
+ * (drawing hands of three, the castle bonus included) on each island on Normal: one star at three
+ * quarters of it, two at nine tenths, three above it.
  */
 export const LEVELS: Level[] = [
-  { island: 75, stars: [280, 330, 390] },
-  { island: 324, stars: [270, 320, 370] },
-  { island: 1990, stars: [260, 310, 360] },
-  { island: 4242, stars: [260, 310, 360] },
-  { island: 6772, stars: [250, 300, 350] },
-  { island: 2718, stars: [230, 270, 320] },
-  { island: 9473, stars: [200, 250, 290] },
-  { island: 5810, stars: [190, 220, 260] },
+  { island: 75, stars: [230, 270, 320] },
+  { island: 324, stars: [230, 280, 320] },
+  { island: 1990, stars: [200, 230, 270] },
+  { island: 4242, stars: [210, 250, 300] },
+  { island: 6772, stars: [190, 230, 270] },
+  { island: 2718, stars: [190, 220, 260] },
+  { island: 9473, stars: [180, 210, 250] },
+  { island: 5810, stars: [170, 200, 230] },
 ];
 
 /** Stars a final score earns on campaign level `level` (1 and up): 0 to 3. */

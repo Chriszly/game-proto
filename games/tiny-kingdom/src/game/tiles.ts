@@ -4,14 +4,15 @@
  * Every building the pouch holds, in the order of the panel's tile buttons. The first three are
  * there from the start; the rest are gifts, and each one's button shows once it is won.
  */
-export const BUILDINGS = ['farm', 'house', 'tower', 'windmill', 'market', 'harbor', 'lumber'] as const;
+export const BUILDINGS = ['farm', 'house', 'tower', 'windmill', 'market', 'harbor', 'lumber', 'road'] as const;
 export type Building = (typeof BUILDINGS)[number];
 /** The buildings won as gifts, in the order they join the panel. */
 export const SPECIALS = ['windmill', 'market', 'harbor', 'lumber'] as const;
 export type Special = (typeof SPECIALS)[number];
 /** Everything that can stand on a cell: the pouch's buildings, and the manor two houses merge into. */
 export type Structure = Building | 'manor';
-export type Terrain = 'grass' | 'lake' | 'forest';
+/** The land: grass to build on, lakes, woods and the island's castle, which stands from the start. */
+export type Terrain = 'grass' | 'lake' | 'forest' | 'castle';
 export type Cell = Terrain | Structure;
 
 export interface BuildingInfo {
@@ -29,12 +30,17 @@ export const INFO: Record<Structure, BuildingInfo> = {
   windmill: { name: 'Windmill', short: 'Mill', rule: '+1 per farm around it, and +1 to each farm beside it' },
   market: { name: 'Market', short: 'Market', rule: '+1 for each different building around it' },
   harbor: { name: 'Harbor', short: 'Harbor', rule: "Only on a lake's shore: +2 per lake, +1 per house beside it" },
-  lumber: { name: 'Lumber camp', short: 'Lumber', rule: 'Only beside a forest: +2 per forest beside it, +1 to each house beside it' },
+  lumber: { name: 'Lumber camp', short: 'Lumber', rule: 'By a forest only: +2 per forest, +1 to houses beside it. Or clears a wood by a camp' },
+  road: { name: 'Road', short: 'Road', rule: 'Scores nothing, but joins the buildings along it to the castle' },
   manor: { name: 'Manor', short: 'Manor', rule: 'Two houses merged: 4 points, +3 per farm, +1 per house, manor or forest beside it' },
 };
 
 const STRUCTURES: readonly string[] = [...BUILDINGS, 'manor'];
 export const isBuilding = (cell: Cell): cell is Structure => STRUCTURES.includes(cell);
+/** Whether a cell is built on: a building, a manor or a road (what a chain to the castle runs along). */
+export const isBuilt = (cell: Cell | undefined) => cell !== undefined && isBuilding(cell);
+/** Whether a cell is a building that scores: everything built but roads. */
+export const scores = (cell: Cell | undefined): cell is Exclude<Structure, 'road'> => cell !== undefined && isBuilding(cell) && cell !== 'road';
 /** Houses and manors: what towers, decrees and other houses count as homes. */
 export const isHome = (cell: Cell | undefined) => cell === 'house' || cell === 'manor';
 
@@ -55,7 +61,8 @@ export const AROUND = [...SIDES, [1, 1], [1, -1], [-1, 1], [-1, -1]] as const;
 
 /**
  * Lays out island number `island`, one string per row and one character per cell: '.' grass,
- * '~' lake, 'T' forest. The same number always gives the same island. Buildings only go on grass.
+ * '~' lake, 'T' forest, 'C' the castle. The same number always gives the same island. Buildings
+ * only go on grass.
  */
 export function islandMap(island: number): string[] {
   const rand = seeded(island);
@@ -80,6 +87,11 @@ export function islandMap(island: number): string[] {
   // Two or three lakes of 2 to 4 cells, then two or three woods of 1 to 3, like the first island.
   for (let i = 2 + int(2); i > 0; i--) patch('~', 2 + int(3));
   for (let i = 2 + int(2); i > 0; i--) patch('T', 1 + int(3));
+  // The castle stands on a random grass cell, drawn last so the lakes and woods lie as they always did.
+  let col = int(cols);
+  let row = int(rows);
+  while (map[row][col] !== '.') [col, row] = [int(cols), int(rows)];
+  map[row][col] = 'C';
   return map.map((cells) => cells.join(''));
 }
 
@@ -97,7 +109,7 @@ export function seeded(seed: number) {
 /** Picks a random island number, from Math.random so the playthrough's seeded runs repeat. */
 export const randomIsland = () => 1 + Math.floor(Math.random() * ISLANDS);
 
-const TERRAIN: Record<string, Terrain> = { '.': 'grass', '~': 'lake', T: 'forest' };
+const TERRAIN: Record<string, Terrain> = { '.': 'grass', '~': 'lake', T: 'forest', C: 'castle' };
 
 export function startingGrid(island: number): Cell[][] {
   return islandMap(island).map((row) => [...row].map((c) => TERRAIN[c]));

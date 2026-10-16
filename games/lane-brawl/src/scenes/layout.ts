@@ -30,18 +30,21 @@ export function upgradeCard(i: number) {
   return { x: UPGRADE_PANEL.x + 6, y: UPGRADE_PANEL.y + 20 + i * 46, w: UPGRADE_PANEL.w - 12, h: 42 };
 }
 
-/** The item actives (D and H), two buttons under the shop button. */
+/** The item actives (D, H and the ward on V), three buttons under the shop button. */
 export function activeButton(i: number) {
-  return { x: SHOP_BUTTON.x + i * 50, y: 492, w: 46, h: 38 };
+  return { x: SHOP_BUTTON.x + i * 33, y: 492, w: 30, h: 38 };
 }
 
-/** The shop panel, opened with the button or the B key: twelve item cards in four columns. */
-export const SHOP_PANEL = { x: 100, y: 44, w: 760, h: 362 };
+/** The recall button in the top bar, right of the clock; while the champion is dead it is the buy back button. */
+export const RECALL_BUTTON = { x: 530, y: 4, w: 118, h: 26 };
+
+/** The shop panel, opened with the button or the B key: thirteen item cards in four columns. */
+export const SHOP_PANEL = { x: 100, y: 38, w: 760, h: 368 };
 const SHOP_COL_W = (SHOP_PANEL.w - 28 - 30) / 4;
 export function shopRow(i: number) {
   const col = i % 4;
   const row = Math.floor(i / 4);
-  return { x: SHOP_PANEL.x + 14 + col * (SHOP_COL_W + 10), y: SHOP_PANEL.y + 56 + row * 100, w: SHOP_COL_W, h: 92 };
+  return { x: SHOP_PANEL.x + 14 + col * (SHOP_COL_W + 10), y: SHOP_PANEL.y + 48 + row * 80, w: SHOP_COL_W, h: 74 };
 }
 
 /** The empowered-minion chips at the top right, under the top bar, one per team with the buff. */

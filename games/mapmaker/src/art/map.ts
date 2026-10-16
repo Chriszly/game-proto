@@ -1,4 +1,4 @@
-import { GRID, indexOf, type Point, type Tile } from '../game/state';
+import { GRID, indexOf, type Feature, type Point, type Tile } from '../game/state';
 import type { Terrain } from '../game/terrain';
 import { BLUE, GREEN, INK, SHEET, TREE, VELLUM, circle, poly, rng, type Ctx } from './paint';
 
@@ -423,19 +423,19 @@ export interface PlaceName {
   dx: number;
   dy: number;
   text: string;
-  kind: 'village' | 'ruin' | 'height' | 'wood' | 'water' | 'port';
+  kind: 'village' | 'ruin' | 'height' | 'wood' | 'river' | 'water' | 'port';
 }
 
 const VILLAGES = ['Ashby', 'Kelwick', 'Marlow', 'Pennick', 'Brackenford', 'Oakhurst', 'Saltmere', 'Wendle', 'Hollin', 'Thistle End'];
 const RUINS = ['Old Abbey (ruin)', 'Watchtower (ruin)', 'Old Fort (ruin)', 'Standing Stones'];
-const WOODS = ['Thornwood', 'Ashgrove', 'Elder Wood', 'Blackthorn'];
 const BAYS = ['South Bay', 'Calm Bay', 'Gull Bay', 'Seal Bay'];
 
 /**
- * The names printed on an island: its villages, ruins, peak heights, its biggest wood, the harbour
- * and the bay below it. Picked from the island number and tile spots, never from Math.random.
+ * The names printed on an island: its villages, ruins, peak heights, its woods and rivers (the
+ * features that pay once charted whole, by their names), the harbour and the bay below it. Picked
+ * from the island number and tile spots, never from Math.random.
  */
-export function placeNames(tiles: Tile[], island: number, port: Point): PlaceName[] {
+export function placeNames(tiles: Tile[], island: number, port: Point, features: Feature[]): PlaceName[] {
   const T = terrainOf(tiles);
   const out: PlaceName[] = [];
   let v = island * 3;
@@ -451,21 +451,26 @@ export function placeNames(tiles: Tile[], island: number, port: Point): PlaceNam
       }
     }
   }
-  // The biggest wood: the forest tile with the most forest round it.
-  let best: Point | null = null;
-  let most = 2;
-  for (let y = 0; y < GRID.h; y++) {
-    for (let x = 0; x < GRID.w; x++) {
-      if (T(x, y) !== 'forest') continue;
-      let n = 0;
-      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (T(x + dx, y + dy) === 'forest') n++;
-      if (n > most) {
-        most = n;
-        best = { x, y };
+  for (const f of features) {
+    if (f.kind === 'wood') {
+      // A wood's name sits on the tile of it with the most forest round it.
+      let best = f.tiles[0];
+      let most = -1;
+      for (const p of f.tiles) {
+        let n = 0;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (T(p.x + dx, p.y + dy) === 'forest') n++;
+        if (n > most) {
+          most = n;
+          best = p;
+        }
       }
+      out.push({ tile: best, dx: 0, dy: 0, text: f.name, kind: 'wood' });
+    } else if (f.kind === 'river') {
+      // A river's name runs beside its middle tile.
+      const mid = f.tiles[Math.floor(f.tiles.length / 2)];
+      out.push({ tile: mid, dx: 0, dy: -16, text: f.name, kind: 'river' });
     }
   }
-  if (best) out.push({ tile: best, dx: 0, dy: 0, text: WOODS[island % WOODS.length], kind: 'wood' });
   out.push({ tile: port, dx: -26, dy: 12, text: 'Harbour', kind: 'port' });
   if (port.y + 1 < GRID.h && T(port.x, port.y + 1) === 'sea') {
     out.push({ tile: { x: port.x, y: port.y + 1 }, dx: 50, dy: 4, text: BAYS[island % BAYS.length], kind: 'water' });
@@ -478,6 +483,7 @@ export const NAME_COLOR: Record<PlaceName['kind'], string> = {
   ruin: INK,
   height: INK,
   wood: GREEN,
+  river: BLUE,
   water: BLUE,
   port: INK,
 };
