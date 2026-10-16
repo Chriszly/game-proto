@@ -17,7 +17,58 @@ Implemented today:
 
 - Random maps (`game/map.ts`): hubs at the fixed `START_POINTS` (`game/arena.ts`), each nudged up to
   36 px at random; three crystal nodes near each hub and 16 loose ones, 12 rock fields that block
-  building, eight nebulae and 480 stars.
+  building, eight nebulae, 480 stars and three derelict stations. `beaconNode` picks the relay
+  beacon's node (the world takes it out of `nodes`), so the map can keep nebulae and derelicts off
+  the lane from the player's start to the beacon. Retries that keep them clear draw on a local
+  generator (`localRandom`), so the map takes the same count from `Math.random` however many
+  retries, and the stars and the battle's own randomness repeat as before.
+- Nebulae (`World.inNebula`, `Unit.nebula`, `updateCover`): a ship inside one flies at 70% speed
+  (`NEBULA_SLOW`) and is hidden from an enemy faction (`hidden`) unless that faction has a ship
+  within 70 px (`NEBULA_SPOT`), a building within 70 px of its edge or claimed sensors in range, or
+  the ship fired in the last 1.5 s (`revealMs`, shared with the cloak). `updateCover` works the
+  cover out once an update into `spotted` (unit id to the factions that see it). Hidden ships are
+  skipped by `nearestEnemy` and drop out of an attacker's order, so a chase into a nebula is lost
+  until the chaser is close. The scene draws each nebula's edge as a faint dashed ring and the
+  player's own hidden ships at 0.6 alpha.
+- Veteran ships (`Unit.kills`, `Unit.lastHitBy`, `World.credit`, `rankOf`, `veteranBonus`): the ship
+  whose shot landed last on a destroyed enemy ship (`lastHitBy`; turrets, mines and derelict guns
+  give no credit) gets the kill, and at 3 and 8 kills (`VETERAN_RANKS`) it ranks up, Veteran then Ace
+  (`VETERAN_NAMES`): +15% damage and hit points per rank (`VETERAN_STEP`), the hull scaled on the
+  spot like a hull research level. Gold chevrons above the ship show its rank, the hover label names
+  it, and the player's rank-ups pop a notice.
+- Repair and fall back (`REPAIR_RANGE`, `REPAIR_RATE`, `World.fallBack`, `sendHome`, `repairSpots`,
+  `Unit.repairing`): any ship within 120 px of a finished hub, outpost or Depot of its faction gets
+  back 3% of its hit points a second (a green cross beside it). The Fall back button at the right of
+  the message line (`FALL_BACK_BUTTON` in `layout.ts`, kind `command`, also the F key) sends the
+  selected ships to a point 30 px short of their nearest repair spot. The AI pulls a warship below
+  30% (`AI_FALL_BACK_HP`) home when it is not on a raid, and leaves repairing ships out of raids.
+- Derelict stations (`World.derelicts`, `Derelict`, `updateDerelict`, `DERELICT_DEFS`): three neutral
+  wrecks per map, one of each `DerelictKind`: `sensors` (the owner sees 280 px round it,
+  `SENSOR_RANGE`, stamped into the player's fog and spotting ships in nebulae), `shipyard` (it is a
+  producer for the owner's combat units in `train`, beside its Barracks) and `gun` (it fires
+  `DERELICT_GUN` at the owner's enemies within 170 px). A faction alone in the 60 px ring
+  (`DERELICT_RADIUS`) with warships fills `claim` in 10 s (`CLAIM_MS`), draining a rival's claim first
+  (which costs the owner the station), and owns it until another takes it; a fallen owner loses its
+  stations. They show once the player has seen them (`derelictAt` for the hover label), cannot be
+  destroyed or built beside, and the player can build at them only in the sense of training. From
+  60 s (`AI_CLAIM_MS`) a rival with 3 warships sends one idle ship (`Side.claimer`) to the nearest
+  station it does not own within 600 px of its hub (`contestDerelicts`), and frees it once the
+  station is its.
+- Truces and tribute (`Side.truceMs`, `offerMs`, `offerCooldownMs`, `grudgeLockMs`, `pressure`,
+  `World.atPeace`, `acceptTruce`, `declineTruce`, `bribe`, `bribeTarget`, `considerTruce`,
+  `updateTruce`): a rival whose grudge is the player offers a truce when its hub is under 75% or it
+  has lost 3 ships to the player lately (`pressure`, fading one every 10 s), with 40 crystal of
+  tribute (`TRUCE_TRIBUTE`); the offer stays open 25 s (`OFFER_MS`) and it waits 120 s before the next.
+  Accepting gives 90 s (`TRUCE_MS`) of peace: `nearestEnemy`, `nearestEnemyBuilding`, mines, splash
+  and the AI's raid target all skip a faction at peace, and ships already sent at each other are
+  called off. A player command to attack a rival under truce breaks it. Tribute (`BRIBE_COST` 60)
+  turns a rival's grudge onto the living faction nearest its hub (other than the player) for 60 s
+  (`BRIBE_MS`): hits do not move the grudge while `grudgeLockMs` runs, and its ships already sent at
+  the player turn on that faction's hub. The rivals panel (`RIVALS_PANEL` in `layout.ts`,
+  `GameScene.rivalsOpen`, `rivalButtons`, `drawRivals`) opens from the rivals area of the top bar
+  (`RIVALS_TAB`, which glows while an offer waits) or with T, and shows each rival's grudge, truce or
+  offer with Accept, Decline and Tribute buttons; a hint on the map's top right names an open offer.
+  No offers or panel in watch mode.
 - Harvesting: harvesters seek the crystal nearest their home hub (`Unit.home`: the hub or outpost
   that trained them), mine it, carry it to the nearest hub, outpost or depot of their faction and
   deposit it. Nomad Freight carries 14 a trip, the others 10.
@@ -55,7 +106,8 @@ Implemented today:
   warships fetch their faction's shards within 360 px (`fetchSalvage`).
 - Watch AI (`?watch`, `shared/watch.ts`): `newGame` skips the picker and starts
   `new World(layout, random pick, true)`. With `World.watch` the AI thinks for slot 0 too (and it
-  can hold the beacon picket), the fog is lifted (`updateFog` fills it and knows every building),
+  can hold the beacon picket), the fog is lifted (`updateFog` fills it and knows every building,
+  `seesUnit` shows every ship, cloaked or in a nebula),
   contracts don't run, and the battle ends with `phase` `won` once one faction is left
   (`World.winner`, a side index). The scene runs `update` `watchSteps()` times a frame, ignores
   taps except on the end overlay (which starts another battle), and the overlay names the winner.
@@ -80,8 +132,8 @@ Implemented today:
   on every unit and building) landed last. The top bar's pill and the command bar's panel show the
   current contract, its progress, reward and perk, and the next one.
 - Relay beacon (`World.beacon`, `World.updateBeacon`): the loose crystal node nearest the point
-  halfway from the player's start to the map's centre, at least 300 px from every rival start, is
-  taken out of `nodes` and becomes the beacon. A faction alone in its 70 px ring with warships
+  halfway from the player's start to the map's centre, at least 300 px from every rival start
+  (`beaconNode` in `game/map.ts`), is taken out of `nodes` and becomes the beacon. A faction alone in its 70 px ring with warships
   fills `capture` in 5 s (draining a rival's first) and then owns it; the owner gets 3 crystal a
   second while one of its warships is in the ring (`held`). `paid` counts what it paid the player.
   It sits at least 200 px from the player's start, outside the hub's sight, so it starts hidden in
@@ -114,8 +166,10 @@ Missing or rough:
 - The rivals' Barracks and Turrets are placed at random within 60 to 150 px of their hub.
 - Ships of a type spawn on the same spot and stack (no collision), so a fresh wing looks like one
   ship until it moves.
-- The AI ignores contracts and sees through the fog. Rivals left alone wipe each other out fast:
-  the centre faction usually falls first.
+- The AI ignores contracts and sees through the fog (but not into nebulae). Rivals left alone wipe
+  each other out fast: the centre faction usually falls first.
+- Only the player makes truces and pays tribute; rivals never make peace with each other. The AI
+  never bribes.
 - The playthrough covers only the first round (harvest, raise a Barracks for the first contract,
   train three Lancers, find the beacon in the fog and take it, fight off its picket for salvage,
   attack a base). Purchases
@@ -142,24 +196,32 @@ File map (`src/`):
   faction, and `apply` for the perk), `Perks`, `NO_PERKS`, `Goal`. No Phaser.
 - `game/arena.ts`: `ARENA` (the 1600 by 1000 battlefield in world pixels), `START_POINTS` (the five
   fixed hub spots, player first), `NODE_AMOUNT`, `NODE_CLEARANCE` and `BUILD_RANGE`.
-- `game/map.ts`: `generateMap(count)` returns a `MapLayout` (homes, nodes, rocks, nebulae, stars).
-  Uses `Math.random` only.
+- `game/map.ts`: `generateMap(count)` returns a `MapLayout` (homes, nodes, rocks, nebulae, stars,
+  derelicts), `beaconNode` (which node is the relay beacon), `DerelictKind` and `DERELICT_KINDS`.
+  Uses `Math.random`, plus `localRandom` for the retries that keep nebulae and derelicts clear.
 - `game/describe.ts`: the text for tooltips and faction cards (`unitLines`, `buildingLines`,
-  `factionLines`, `abilityText`, `expansionLines`, `researchLines`), built from the faction data.
-  No Phaser.
+  `factionLines`, `abilityText`, `expansionLines`, `researchLines`, `fallBackLines`,
+  `derelictLines`), built from the faction data. No Phaser.
 - `game/world.ts`: `World`, the whole battle. `new World(layout, pick, watch)` puts faction `pick` in the
   player's slot (`watch`: the AI plays it, see Watch AI above). `PLAYER` (0), `unitStats` and `buildingStats`
   (faction numbers with the faction's multipliers, the side's perks and research applied),
   `expansionStats`, `buildInfo` (what a build button costs and is called), `researchCost`, the
   expansion constants (`EXPANSION_COST`, `EXPANSION_NEAR`, `EXPANSION_GAP`), `MINE_SPOT`, the beacon and
   salvage constants (`BEACON_RADIUS`, `CAPTURE_MS`, `BEACON_PAY`, `SHARD_VALUE`, `SHARD_MAGNET`,
-  `POP_MS`) and the types `Beacon`, `Shard`, `Mine`, `Pop`, `Build`, `ContractState`, `WorldEvent`. Fields
-  `fog`, `known`, `mines`. Methods the scene and test use: `update(dt)`, `build`, `train`,
-  `research`, `command`, `selectableIn`, `selectable`, `entityAt`, `placementProblem`, `count`,
-  `hubOf`, `hubsOf`, `seesUnit`, `knowsBuilding`, `seesMine`, `unit`, `building`. No Phaser import.
+  `POP_MS`), the nebula, veteran, repair, derelict and truce constants (`NEBULA_SPOT`,
+  `NEBULA_SLOW`, `VETERAN_RANKS`, `VETERAN_STEP`, `VETERAN_NAMES`, `REPAIR_RANGE`, `REPAIR_RATE`,
+  `DERELICT_RADIUS`, `CLAIM_MS`, `SENSOR_RANGE`, `DERELICT_GUN`, `DERELICT_DEFS`, `TRUCE_MS`,
+  `TRUCE_TRIBUTE`, `OFFER_MS`, `BRIBE_COST`, `BRIBE_MS`) and the types `Beacon`, `Shard`, `Mine`,
+  `Pop`, `Build`, `ContractState`, `WorldEvent`, `Derelict`. Fields `fog`, `known`, `mines`,
+  `derelicts`. Methods the scene and test use: `update(dt)`, `build`, `train`, `research`,
+  `command`, `fallBack`, `acceptTruce`, `declineTruce`, `bribe`, `bribeTarget`, `selectableIn`,
+  `selectable`, `entityAt`, `derelictAt`, `placementProblem`, `count`, `hubOf`, `hubsOf`,
+  `seesUnit`, `knowsBuilding`, `seesMine`, `inNebula`, `atPeace`, `rankOf`, `veteranBonus`, `unit`,
+  `building`. No Phaser import.
 - `scenes/GameScene.ts`: `GameScene` (key `'Game'`). Holds `state` (the `World`), `layout`, `camera`
-  (the map camera), `buttons`, `selected`, `placing`, `picking` (the faction picker is up) and
-  `pickCards` (the picker's card rectangles, in view pixels). `update(time)` steps the world by the frame
+  (the map camera), `buttons`, `selected`, `placing`, `picking` (the faction picker is up),
+  `pickCards` (the picker's card rectangles, in view pixels), `rivalsOpen` and `rivalButtons` (the
+  rivals panel and its buttons as last drawn). `update(time)` steps the world by the frame
   gap (clamped to 100 ms), reads `World.events`, pans the camera from the keys and draws everything.
   Two cameras: the main `camera` shows the battlefield in the `MAP_VIEW` viewport; a second, fixed
   camera (`fixed`) covers the whole 960 by 540 view. Both viewports are set in canvas pixels
@@ -173,7 +235,7 @@ File map (`src/`):
   one pixel a cell box-blurred and smoothed up 3x, stretched over the battlefield above the ships
   and repainted every third frame. Mines are drawn on `underGfx` (`drawMines`), a hacked turret
   fills a cyan ring toward its takeover, and research buttons are drawn by `drawResearchButton`.
-  Beams, fireballs, rings and health pills are Graphics redrawn each frame (`underGfx` under the sprites, `gfx` over them). `toWorld(x, y)` and `toScreen(x, y)` convert between view pixels and
+  Beams, fireballs, rings and health pills are Graphics redrawn each frame (`underGfx` under the sprites, `gfx` over them), as are the nebula edges (`drawNebulae`), the derelict stations with their claim arcs and labels (`drawDerelicts`), the veteran chevrons and repair crosses (in `drawShips`), the Fall back pill (`drawCommandButton`) and the rivals panel (`drawRivals`, on `pickGfx`). `toWorld(x, y)` and `toScreen(x, y)` convert between view pixels and
   battlefield pixels from the camera's scroll. Input: `onDown`, `onMove`, `onUp` (box or tap; each
   reads the pointer in view pixels through `viewPoint`),
   `tapMap`, `press` (buttons). Bars and drag boxes use view pixels; placement and commands use
@@ -181,7 +243,9 @@ File map (`src/`):
 - `scenes/layout.ts`: `VIEW`, `TOP`, `BAR`, `MAP_VIEW` (the map's window on screen), `BUTTON`
   (116 by 30), `BUTTONS` (each button's kind, `build`, `train` or `research`, key and top-left
   corner: four build buttons with Expansion last, four train buttons, and the research column),
-  `RESEARCH_COLUMN`, `PANEL_X` (where the message line and contract panel start), `ROLE_LABEL` (the generic
+  `RESEARCH_COLUMN`, `FALL_BACK_BUTTON` (kind `command`, key `fallback`, at the right of the message
+  line), `PANEL_X` (where the message line and contract panel start), `RIVALS_PANEL` and `RIVALS_TAB`
+  (the rivals panel's box and the top bar area that opens it), `ROLE_LABEL` (the generic
   name of each building and unit type, shown under the faction's own name), `FONT` (a system sans
   stack, bold italic for headings).
 - `art/mesh.ts`: the modelling kit. `Mesh` (vertex and face lists, each face with a material key),
@@ -214,11 +278,13 @@ How it runs:
 
 - Each frame `update(time)` computes `dt` from the frame timestamp (clamped to 100 ms), calls
   `World.update(dt)` and redraws everything with `Graphics` from the world's state.
-- `World.update` runs, in order: beams, wrecks and pops age; buildings progress (construction,
-  training, turret fire); units act (harvesters `harvest`, others follow their order or acquire a
-  target); each rival `think`s once a second (including `contestBeacon`); dead entities are
-  removed (kills, razes and shards are recorded here, after mines go off); research, the beacon,
-  shards, the contract and the fog update; the phase becomes `won` or `lost`.
+- `World.update` runs, in order: beams, wrecks and pops age; nebula cover is worked out
+  (`updateCover`); buildings progress (construction, training, turret fire); derelicts claim, train
+  and fire; units act (repair, harvesters `harvest`, others follow their order or acquire a
+  target); each rival's truce timers run and it `think`s once a second (including `contestBeacon`,
+  `contestDerelicts`, `considerTruce` and falling hurt ships back); dead entities are removed (kills,
+  veteran credit, razes, pressure and shards are recorded here, after mines go off); research, the
+  beacon, shards, the contract and the fog update; the phase becomes `won` or `lost`.
 - Boot bakes all sprites in `create` (320 ship frames and the rest); a new map only repaints the
   backdrop.
 - Time is simulated, not read from the clock: `elapsedMs` is game time, used for the AI grace and
@@ -247,6 +313,8 @@ Test hooks (read by `e2e/playthrough.spec.ts`):
   `contract` (`index`, `progress`) and `sides[0].perks`: the test asserts the first contract's
   reward and perk, the beacon's capture and pay, and a kill and its salvage.
 - `scene.selected`: the ids of the selected units; the test checks that its box selected the wing.
+- Not read by the test, but there: `scene.state.derelicts` (`perk`, `owner`, `claim`), `sides[i].truceMs`,
+  `offerMs`, `grudge`, `units[i].kills`, `nebula`, `repairing`, and `scene.rivalsOpen`.
 - `scene.camera.scrollX` and `scrollY`: the map's scroll, which the test reads to see whether a pan
   moved. `scene.toScreen(x, y)` gives where a battlefield point is in view pixels.
 - `scene.state.placementProblem(role, x, y)` answers whether a building can go somewhere. The test
@@ -289,7 +357,18 @@ Test hooks (read by `e2e/playthrough.spec.ts`):
   waits on the beacon paying 3 a second and a shard worth 8.
 - **Sight and fog**: the vision constants at the top of `game/world.ts` and the fog's look at the
   top of `GameScene.ts`. Keep the beacon out of the hub's sight at the start (`HUB_VISION` below
-  `BEACON_HOME_GAP`): the playthrough asserts it starts hidden.
+  `BEACON_HOME_GAP` in `game/map.ts`): the playthrough asserts it starts hidden.
+- **Nebula, veteran, repair, derelict or truce numbers**: the constants at the top of
+  `game/world.ts`; the tooltips, labels and panel read them, so update the README's numbers. Keep
+  nebulae and derelicts off the start-to-beacon lane (`NEBULA_LANE_GAP`, `DERELICT_LANE_GAP` in
+  `game/map.ts`), so the playthrough's flight to the beacon stays in the open, and keep the map's
+  `Math.random` draw count the same (retries use `localRandom`), or the seeded playthrough plays a
+  different battle.
+- **A new derelict kind**: add it to `DerelictKind` and `DERELICT_KINDS` in `game/map.ts` (the map
+  places one of each), its name and text to `DERELICT_DEFS`, and its rule to `updateDerelict`,
+  `updateCover`, `updateFog` or `train`.
+- **A new rivals-panel action**: a method on `World` (so the AI could use it too), a `RivalButton`
+  action in `GameScene.drawRivals` and its case in `onDown`.
 - **Research or expansion numbers**: `game/research.ts` and the expansion constants in
   `game/world.ts`; the tooltips read them, so update the README's numbers.
 - **Anything the playthrough depends on** (button positions, the first-round numbers, the hub or

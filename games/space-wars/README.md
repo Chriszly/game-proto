@@ -28,7 +28,9 @@ stripes and long exhaust flames, under a chocolate-and-mustard striped HUD with 
 | Expansion button, then tap a far crystal field | Place an outpost, a second hub |
 | Train buttons | Queue a unit: harvesters at a hub, combat units at a Barracks |
 | Research buttons (Hull, Weapons, Engines) | Start the next level at your hub |
-| Right-click | Cancel a placement and clear the selection |
+| Fall back button, or F | Send the selected ships home to the nearest hub or Depot, where ships repair |
+| The rivals on the top bar, or T | Open the rivals panel: accept or decline a truce, or pay tribute to turn a rival |
+| Right-click | Cancel a placement, clear the selection and close the rivals panel |
 | Arrow keys or WASD | Scroll the map |
 | H | Centre the map on your hub |
 | Hover over a unit or building | Its name, role, hit points and stats |
@@ -55,14 +57,23 @@ stripes and long exhaust flames, under a chocolate-and-mustard striped HUD with 
    of the map, out in the fog. Find it and hold it to earn crystal (below).
 7. **Salvage**: every enemy ship you destroy leaves a glowing gold shard worth 8 crystal.
 8. **Expansions and research** (below) grow your economy and your fleet once the base is running.
-9. **Victory** comes when all four rival hubs are destroyed. A hub that falls takes its whole
-   faction with it (an outpost does not). **Defeat** comes when your own hub falls.
-10. **The rivals** play the same game and fight each other as much as you. They wait about a
-    minute and a quarter before they attack, then send their army (keeping two ships home) at the
-    faction that last hit them, or else the nearest enemy building. From 30 seconds in, the rival
-    nearest the relay beacon keeps a warship on it, and from two minutes the next nearest does too.
-    Their idle warships fetch their own salvage, and from two minutes on they research and from two
-    and a half they build an outpost, saving up for both once their army is big enough.
+9. **Nebulae** hide the ships inside them from enemies and slow them (below), so a wing can lie in
+   wait or slip past. **Derelict stations** out in the fog give a perk to whoever holds one (below).
+10. **Veterans**: a ship that destroys 3 enemy ships is a Veteran and at 8 an Ace, each rank +15%
+    damage and hull. Ships slowly **repair** beside a hub, outpost or Depot, and the Fall back
+    button sends a wing home to do it (below).
+11. **Truces and tribute**: a rival you are beating may offer a truce for crystal, and your crystal
+    can turn a rival's grudge onto another faction (below).
+12. **Victory** comes when all four rival hubs are destroyed. A hub that falls takes its whole
+    faction with it (an outpost does not). **Defeat** comes when your own hub falls.
+13. **The rivals** play the same game and fight each other as much as you. They wait about a
+    minute and a quarter before they attack, then send their army (keeping two ships home, and the
+    hurt ones repairing) at the faction that last hit them, or else the nearest enemy building.
+    From 30 seconds in, the rival nearest the relay beacon keeps a warship on it, and from two
+    minutes the next nearest does too. From a minute in, a rival with three warships sends one to
+    claim the nearest derelict station it does not own. Their idle warships fetch their own
+    salvage, a warship under 30% goes home to repair, and from two minutes on they research and
+    from two and a half they build an outpost, saving up for both once their army is big enough.
 
 ### The contract chain
 
@@ -102,6 +113,64 @@ and the crystal fields show once you have seen them, and you can only build on g
 scouted. The rivals are not limited by the fog.
 
 ![A Lancer scouting east from the base: the space it has flown through is dimmed, the unseen map beyond is near black, and the relay beacon it found sits in the open](docs/screenshots/fog.png)
+
+### Nebulae
+
+The eight nebulae on every map are more than paint. A ship inside one flies at 70% of its speed
+and is hidden from every enemy faction that has no ship within 70 pixels of it, no building within
+70 pixels of its edge and no claimed Wide Sensors covering it. Firing gives a ship away for 1.5
+seconds. Enemies chasing a ship into a nebula lose it until they are close, and a wing waiting
+inside one ambushes whatever passes. Your own hidden ships are drawn faintly, and a faint dashed
+ring marks each nebula's edge. The lane from your start to the relay beacon is always clear of them.
+
+![A Solar Concord wing lying hidden inside a nebula, drawn faintly, while two Ferrox Hive raiders pass by outside without seeing it](docs/screenshots/nebula.png)
+
+### Veterans
+
+The ship whose shot destroys an enemy ship gets the kill. At 3 kills it is a **Veteran** and at 8 an
+**Ace**: each rank adds 15% to its damage and its hit points (the hull grows on the spot). Gold
+chevrons above a ship show its rank and its hover label names it. Turrets, mines and derelict guns
+earn no ranks, so a veteran is worth pulling back from a losing fight.
+
+![A Halo Cruiser that is an Ace, two chevrons over it and its label, as an Aegis beside the hub becomes a Veteran](docs/screenshots/veterans.png)
+
+### Repair and fall back
+
+Any ship within 120 pixels of a finished hub, outpost or Depot of its faction gets back 3% of its hit
+points a second, with a green cross beside it while it heals. The **Fall back** button at the right
+end of the message line (or F) sends the selected ships to a point just short of their nearest hub
+or Depot. Rivals pull their hurt ships home too.
+
+![Three hurt Lancers selected and falling back toward the hub, where a Halo Cruiser and an Aegis already repair under green crosses](docs/screenshots/repair.png)
+
+### Derelict stations
+
+Three derelict stations lie in the fog on every map, one of each kind, away from the bases, the
+beacon and the lane to it. A faction alone in a station's 60-pixel ring with warships claims it in
+10 seconds (first draining a rival's claim, which costs the owner the station) and keeps it until
+another faction takes it the same way; a faction that falls loses its stations. Rivals send a ship to
+claim the stations near their hubs.
+
+| Station | Perk for the owner |
+| --- | --- |
+| Wide Sensors | Sees 280 pixels round it, into nebulae too |
+| Shipyard | Trains the owner's combat units out there, like a second Barracks |
+| Gun Platform | Shoots the owner's enemies within 170 pixels for 14 a second |
+
+![A Solar Concord wing claiming a derelict Wide Sensors station, its claim arc at 70%](docs/screenshots/derelict.png)
+
+### Truces and tribute
+
+A rival whose grudge is on you sues for peace when it is under pressure: its hub under 75% or three
+ships lost to you lately. Its offer stays open for 25 seconds; the rivals area of the top bar glows
+and a hint names it. Open the rivals panel (tap the rivals, or T) and accept for 90 seconds of truce
+and 40 crystal of tribute, or decline. Under a truce neither side's ships, turrets or mines fire on
+the other, and the rival raids someone else; ordering an attack on it breaks the truce. The panel
+also shows each rival's grudge, and for 60 crystal of **tribute** turns that grudge onto the living
+faction nearest it, held there for 60 seconds whatever hits it, its ships already on their way to
+you turning on that faction's hub instead.
+
+![The rivals panel: the Ferrox Hive offering a truce with Accept and Decline, a truce with the Iron Dominion under way, and tribute buttons for the Veil Syndicate and Nomad Freight](docs/screenshots/truce.png)
 
 ### Expansions
 
@@ -231,13 +300,15 @@ what it taps. Run it with `npx playwright test --project space-wars`.
 - `src/game/contracts.ts`: the contract chain, its rewards and the rank perks.
 - `src/game/fog.ts`: the fog of war's grid of explored and in-sight cells.
 - `src/game/research.ts`: the hull, weapons and engines research tracks.
-- `src/game/map.ts`: random star maps: hub spots, crystal nodes, rock fields, nebulae and stars.
+- `src/game/map.ts`: random star maps: hub spots, crystal nodes, rock fields, nebulae, stars and
+  derelict stations, and which node is the relay beacon.
 - `src/game/world.ts`: the battle (economy, expansions, production, research, orders, combat, mines
-  and hacks, the AI, the relay beacon, salvage, the fog and contract progress), with no Phaser.
+  and hacks, nebula cover, veteran ranks, repair, derelict stations, truces and tribute, the AI, the
+  relay beacon, salvage, the fog and contract progress), with no Phaser.
 - `src/game/describe.ts`: the tooltip and faction-card text, from the faction data.
 - `src/game/arena.ts`: the battlefield, the fixed start points and the placement and crystal distances.
 - `src/scenes/GameScene.ts`: draws the battle each frame, scrolls the map and turns clicks into commands.
-- `src/scenes/layout.ts`: the top bar, the command bar, its buttons, the role names and the font.
+- `src/scenes/layout.ts`: the top bar, the command bar, its buttons (the Fall back button included), the rivals panel's box, the role names and the font.
 - `src/art/mesh.ts`: the low-poly modelling kit (boxes, tubes, ellipsoids, extruded outlines).
 - `src/art/render3d.ts`: the software renderer that paints meshes with airbrushed and chrome shading.
 - `src/art/models.ts`: every faction's ship and station models, and the crystal, beacon, shard and rock models.

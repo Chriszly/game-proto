@@ -4,9 +4,10 @@ import { generateMap, type MapLayout } from '../game/map';
 import { FACTIONS, type Role, type UnitId } from '../game/factions';
 import { CONTRACTS } from '../game/contracts';
 import {
-  BEACON_PAY, BEACON_RADIUS, EXPANSION_GAP, PLAYER, POP_MS, World, buildInfo, researchCost, unitStats, type Build,
+  BEACON_PAY, BEACON_RADIUS, BRIBE_COST, BRIBE_MS, DERELICT_DEFS, DERELICT_RADIUS, EXPANSION_GAP, PLAYER, POP_MS, SENSOR_RANGE, TRUCE_MS,
+  TRUCE_TRIBUTE, VETERAN_NAMES, World, buildInfo, researchCost, unitStats, type Build, type Derelict,
 } from '../game/world';
-import { buildingLines, expansionLines, factionLines, researchLines, unitLines } from '../game/describe';
+import { buildingLines, derelictLines, expansionLines, factionLines, fallBackLines, researchLines, unitLines } from '../game/describe';
 import { FOG_CELL, FOG_COLS, FOG_ROWS } from '../game/fog';
 import { RESEARCH_LEVELS, RESEARCH_MS, TRACK_DEFS, type Track } from '../game/research';
 import { dashedCircle, drawHealth, drawProgress, progressArc, stripes } from '../art/draw';
@@ -17,7 +18,7 @@ import {
 import { settings } from '../../../../shared/settings';
 import { mountWatch, watching, watchSteps } from '../../../../shared/watch';
 import { renderScale, viewPoint } from '../../../../shared/scaling';
-import { BAR, BUTTONS, FONT, MAP_VIEW, PANEL_X, ROLE_LABEL, TOP, VIEW, type Button } from './layout';
+import { BAR, BUTTONS, FONT, MAP_VIEW, PANEL_X, RIVALS_PANEL, RIVALS_TAB, ROLE_LABEL, TOP, VIEW, type Button } from './layout';
 
 // Game time for one step at most, so a hidden tab doesn't jump the battle ahead.
 const MAX_STEP_MS = 100;
@@ -81,6 +82,16 @@ interface Drag {
   y1: number;
 }
 
+/** A button on the rivals panel: answer a truce offer, or pay tribute to turn a rival. */
+interface RivalButton {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  action: 'accept' | 'decline' | 'bribe';
+  faction: number;
+}
+
 interface ShipSprite {
   ship: Phaser.GameObjects.Image;
   flame: Phaser.GameObjects.Image;
@@ -103,6 +114,10 @@ export class GameScene extends Phaser.Scene {
   placing: Build | null = null;
   /** Whether the faction picker is up: nothing moves until the player picks a faction. */
   picking = true;
+  /** Whether the rivals panel (truces and tribute) is open over the map. */
+  rivalsOpen = false;
+  /** The rivals panel's buttons, in view pixels, as last drawn. */
+  rivalButtons: RivalButton[] = [];
   /** The picker's cards, one per faction, in view pixels; the playthrough taps one to begin. */
   readonly pickCards = FACTIONS.map((_, faction) => ({
     x: (VIEW.w - FACTIONS.length * CARD_W - (FACTIONS.length - 1) * CARD_GAP) / 2 + faction * (CARD_W + CARD_GAP),
@@ -135,6 +150,10 @@ export class GameScene extends Phaser.Scene {
   private beaconGlow!: Phaser.GameObjects.Image;
   private beaconImg!: Phaser.GameObjects.Image;
   private beaconLabel!: Phaser.GameObjects.Text;
+  private derelictLabels: Phaser.GameObjects.Text[] = [];
+  private rivalTexts: { name: Phaser.GameObjects.Text; status: Phaser.GameObjects.Text; b1: Phaser.GameObjects.Text; b2: Phaser.GameObjects.Text }[] = [];
+  private rivalsHead!: Phaser.GameObjects.Text;
+  private rivalsHint!: Phaser.GameObjects.Text;
   private ghost!: Phaser.GameObjects.Image;
   private fogTex!: Phaser.Textures.CanvasTexture;
   private fogData!: ImageData;
@@ -206,7 +225,7 @@ export class GameScene extends Phaser.Scene {
     };
     const px = PANEL_X;
     this.panel = {
-      line: t(px, 445, 10, INK_CSS.cream).setWordWrapWidth(VIEW.w - px - 10).setMaxLines(2),
+      line: t(px, 445, 10, INK_CSS.cream).setWordWrapWidth(VIEW.w - px - 106).setMaxLines(2),
       head: t(px + 8, 476, 10, INK_CSS.cream, true),
       next: t(VIEW.w - 16, 476, 10, INK_CSS.cream).setOrigin(1, 0),
       brief: t(px + 8, 492, 12, INK_CSS.chocolate, true),
@@ -222,6 +241,20 @@ export class GameScene extends Phaser.Scene {
       .setWordWrapWidth(300).setVisible(false);
     this.pickTitle = t(VIEW.w / 2, MAP_VIEW.y + 18, 22, INK_CSS.mustard, true, 21).setOrigin(0.5, 0).setText('CHOOSE YOUR FACTION')
       .setStroke(INK_CSS.chocolate, 5);
+    // The rivals panel: a header, a row per rival with its stance and up to two buttons, and a hint while an offer is open.
+    const rp = RIVALS_PANEL;
+    this.rivalsHead = t(rp.x + 10, rp.y + 5, 11, INK_CSS.cream, true, 22).setText('RIVALS · truces and tribute · T closes');
+    this.rivalTexts = FACTIONS.slice(1).map((_, k) => {
+      const y = rp.y + rp.head + k * rp.row;
+      return {
+        name: t(rp.x + 24, y + 6, 12, INK_CSS.chocolate, true, 22),
+        status: t(rp.x + 24, y + 23, 10, INK_CSS.cocoa, false, 22).setWordWrapWidth(rp.w - 140).setMaxLines(2),
+        b1: t(0, 0, 10, INK_CSS.chocolate, true, 22).setOrigin(0.5),
+        b2: t(0, 0, 10, INK_CSS.chocolate, true, 22).setOrigin(0.5),
+      };
+    });
+    this.rivalsHint = t(VIEW.w - 8, TOP.h + 8, 11, INK_CSS.chocolate, true, 22).setOrigin(1, 0).setPadding(8, 4, 8, 4)
+      .setBackgroundColor(INK_CSS.mustard).setVisible(false);
     this.pickTexts = this.pickCards.map((c) => {
       const def = FACTIONS[c.faction];
       const name = t(c.x + 12, c.y + 8, 13, INK_CSS.cream, true, 21).setText(def.name.toUpperCase());
@@ -237,8 +270,8 @@ export class GameScene extends Phaser.Scene {
           .setScale(0.9 / RES).setDepth(21)));
       });
     });
-    // Research buttons are slimmer and have no icon: their level pips sit on the right instead.
-    this.captions = BUTTONS.map((b) => b.kind === 'research'
+    // Research buttons are slimmer and have no icon: their level pips sit on the right instead. The Fall back button is a plain pill.
+    this.captions = BUTTONS.map((b) => b.kind === 'research' || b.kind === 'command'
       ? {
         icon: this.onUi(this.add.image(0, 0, '__WHITE').setVisible(false)),
         name: t(b.x + 10, b.y + 2, 11, INK_CSS.chocolate, true),
@@ -256,7 +289,7 @@ export class GameScene extends Phaser.Scene {
     this.input.on('pointermove', this.onMove, this);
     this.input.on('pointerup', this.onUp, this);
     // Arrow keys scroll the map; keep the browser from scrolling the page with them too.
-    this.keys = this.input.keyboard!.addKeys('UP,DOWN,LEFT,RIGHT,W,A,S,D,H') as Record<string, Phaser.Input.Keyboard.Key>;
+    this.keys = this.input.keyboard!.addKeys('UP,DOWN,LEFT,RIGHT,W,A,S,D,H,F,T') as Record<string, Phaser.Input.Keyboard.Key>;
     this.input.keyboard!.addCapture('UP,DOWN,LEFT,RIGHT');
     this.newGame();
   }
@@ -302,6 +335,7 @@ export class GameScene extends Phaser.Scene {
 
   private reset() {
     this.fogFrame = 0;
+    this.rivalsOpen = false;
     this.selected.clear();
     this.placing = null;
     this.drag = null;
@@ -334,10 +368,13 @@ export class GameScene extends Phaser.Scene {
     const bc = this.state.beacon;
     this.beaconImg.setPosition(bc.x, bc.y - 4);
     this.beaconGlow.setPosition(bc.x, bc.y - 10);
+    for (const l of this.derelictLabels) l.destroy();
+    this.derelictLabels = this.state.derelicts.map((d) => this.onMap(this.text(d.x + DERELICT_RADIUS * 0.72, d.y + DERELICT_RADIUS * 0.5, 10, INK_CSS.chocolate, true)
+      .setBackgroundColor(INK_CSS.cream).setPadding(6, 3, 6, 3).setDepth(DEPTH.label).setVisible(false)));
     const art = this.art(PLAYER);
     this.captions.forEach((c, i) => {
       const b = BUTTONS[i];
-      if (b.kind === 'research') return;
+      if (b.kind === 'research' || b.kind === 'command') return;
       if (b.kind === 'build') c.icon.setTexture(buildingKey(art, b.key === 'expansion' ? 'hub' : b.key as Role));
       else c.icon.setTexture(shipKey(art, b.key as UnitId), facing(-Math.PI / 2).frame);
       c.icon.setScale(Math.min(24 / c.icon.width, 24 / c.icon.height) * (b.kind === 'build' ? 1.5 : 1.25));
@@ -413,6 +450,11 @@ export class GameScene extends Phaser.Scene {
       this.scrollTo(this.camera.scrollX + dx * step, this.camera.scrollY + dy * step);
     }
     if (Phaser.Input.Keyboard.JustDown(k.H)) this.centreOnHub();
+    if (!this.picking && !watching) {
+      // F falls the selection back; T opens and closes the rivals panel.
+      if (Phaser.Input.Keyboard.JustDown(k.F)) this.press(BUTTONS.find((b) => b.key === 'fallback')!);
+      if (Phaser.Input.Keyboard.JustDown(k.T)) this.rivalsOpen = !this.rivalsOpen;
+    }
   }
 
   /** The top and command bars: chocolate panels edged with the cover's stripes, drawn once. */
@@ -458,7 +500,9 @@ export class GameScene extends Phaser.Scene {
       c.glow.setVisible(shown).setScale(k * 0.9);
     }
     this.drawFog();
+    this.drawNebulae();
     this.drawBeacon();
+    this.drawDerelicts();
     this.drawMines();
     this.drawBuildings();
     this.drawShips();
@@ -471,7 +515,129 @@ export class GameScene extends Phaser.Scene {
     this.drawBar();
     this.drawTop();
     this.drawText();
+    this.drawRivals();
     this.drawPicker();
+  }
+
+  /** The edge of each nebula, a faint dashed ring: ships inside are hidden from enemies and slowed. */
+  private drawNebulae() {
+    for (const n of this.layout.nebulae) dashedCircle(this.underGfx, n.x, n.y, n.r, 40, INK.cream, 0.14, 1.5);
+  }
+
+  /**
+   * Derelict stations, once found: a dark steel wheel with a broken rim, a ring in the owner's
+   * colour, the claim arc, its sensor reach for the player, and a label with what it gives.
+   */
+  private drawDerelicts() {
+    const s = this.state;
+    const g = this.underGfx;
+    s.derelicts.forEach((d: Derelict, k) => {
+      const label = this.derelictLabels[k];
+      const found = s.watch || s.fog.knows(d);
+      if (!found) {
+        label.setVisible(false);
+        return;
+      }
+      const color = d.owner >= 0 ? s.sides[d.owner].def.color : INK.cream;
+      g.fillStyle(color, d.owner >= 0 ? 0.1 : 0.04);
+      g.fillCircle(d.x, d.y, DERELICT_RADIUS);
+      dashedCircle(g, d.x, d.y, DERELICT_RADIUS, 20, color, 0.4, 1.5);
+      progressArc(g, d.x, d.y, DERELICT_RADIUS, d.claim, d.capturer >= 0 ? s.sides[d.capturer].def.color : INK.cream, 5);
+      if (d.perk === 'sensors' && d.owner === PLAYER) dashedCircle(g, d.x, d.y, SENSOR_RANGE, 64, INK.cream, 0.18, 1);
+      // The wreck: a grey wheel of spokes with a gap torn out of its rim, and a dead core that lights in the owner's colour.
+      g.lineStyle(5, 0x4a4652, 1);
+      g.beginPath();
+      g.arc(d.x, d.y, 18, 0.5, Math.PI * 1.75, false);
+      g.strokePath();
+      g.lineStyle(2, 0x8a8494, 1);
+      g.beginPath();
+      g.arc(d.x, d.y, 18, 0.5, Math.PI * 1.75, false);
+      g.strokePath();
+      g.lineStyle(3, 0x5c5866, 1);
+      for (let i = 0; i < 6; i++) {
+        const a = (i * Math.PI) / 3 + 0.3;
+        if (a > Math.PI * 1.75 && a < Math.PI * 2 + 0.5) continue;
+        g.lineBetween(d.x, d.y, d.x + Math.cos(a) * 18, d.y + Math.sin(a) * 18);
+      }
+      g.fillStyle(0x2a2731, 1);
+      g.fillCircle(d.x, d.y, 8);
+      g.fillStyle(d.owner >= 0 ? color : 0x6a6474, 1);
+      g.fillCircle(d.x, d.y, 4);
+      const def = DERELICT_DEFS[d.perk];
+      const pct = Math.round(d.claim * 100);
+      const who = d.owner === PLAYER ? 'Yours' : d.owner >= 0 ? `Held by ${s.sides[d.owner].def.name}` : `Hold ${pct}% · claim it`;
+      const text = `DERELICT · ${def.name.toUpperCase()}\n${who}`;
+      if (label.text !== text) label.setText(text);
+      label.setVisible(!this.picking);
+    });
+  }
+
+  /**
+   * The rivals panel: each rival's stance toward the player (its grudge, a truce, an open offer) and
+   * the buttons to accept or decline a truce or to pay tribute. A hint shows while an offer waits.
+   */
+  private drawRivals() {
+    const s = this.state;
+    const g = this.pickGfx;
+    const rivals = s.sides.filter((r) => r.index !== PLAYER);
+    const offer = rivals.find((r) => r.offerMs > 0);
+    this.rivalsHint.setVisible(!this.rivalsOpen && !this.picking && !!offer);
+    if (offer) this.setText(this.rivalsHint, `${offer.def.name} offers a truce · ${Math.ceil(offer.offerMs / 1000)} s · press T`);
+    const show = this.rivalsOpen && !this.picking && !watching;
+    this.rivalsHead.setVisible(show);
+    this.rivalTexts.forEach((t) => [t.name, t.status, t.b1, t.b2].forEach((x) => x.setVisible(show)));
+    this.rivalButtons = [];
+    if (!show) return;
+    const rp = RIVALS_PANEL;
+    const h = rp.head + rivals.length * rp.row + 6;
+    g.fillStyle(0x000000, 0.4);
+    g.fillRoundedRect(rp.x + 3, rp.y + 4, rp.w, h, 8);
+    g.fillStyle(INK.cream, 1);
+    g.fillRoundedRect(rp.x, rp.y, rp.w, h, 8);
+    g.fillStyle(INK.chocolate, 1);
+    g.fillRoundedRect(rp.x, rp.y, rp.w, rp.head, { tl: 8, tr: 8, bl: 0, br: 0 });
+    g.lineStyle(2, INK.cocoa, 1);
+    g.strokeRoundedRect(rp.x, rp.y, rp.w, h, 8);
+    const pill = (x: number, y: number, w: number, label: Phaser.GameObjects.Text, text: string, on: boolean, action: RivalButton['action'], faction: number) => {
+      g.fillStyle(on ? INK.mustard : INK.creamDim, 1);
+      g.fillRoundedRect(x, y, w, 22, 11);
+      g.lineStyle(1.5, INK.cocoa, 1);
+      g.strokeRoundedRect(x, y, w, 22, 11);
+      this.setText(label, text);
+      label.setPosition(x + w / 2, y + 11).setVisible(true).setColor(on ? INK_CSS.chocolate : INK_CSS.cocoa);
+      if (on) this.rivalButtons.push({ x, y, w, h: 22, action, faction });
+    };
+    rivals.forEach((r, k) => {
+      const t = this.rivalTexts[k];
+      const y = rp.y + rp.head + k * rp.row;
+      g.fillStyle(r.def.color, r.alive ? 1 : 0.2);
+      g.fillCircle(rp.x + 13, y + 14, 5.5);
+      g.lineStyle(1, INK.cocoa, 1);
+      g.lineBetween(rp.x + 8, y + rp.row, rp.x + rp.w - 8, y + rp.row);
+      this.setText(t.name, r.def.name);
+      t.b1.setVisible(false);
+      t.b2.setVisible(false);
+      if (!r.alive) {
+        this.setText(t.status, 'Fallen');
+        return;
+      }
+      const grudge = r.grudge === PLAYER ? 'Grudge: you' : r.grudge >= 0 ? `Grudge: the ${s.sides[r.grudge].def.name}` : 'No grudge yet';
+      const lock = r.grudgeLockMs > 0 ? ` · held by tribute ${Math.ceil(r.grudgeLockMs / 1000)} s` : '';
+      t.status.setWordWrapWidth(r.offerMs > 0 ? rp.w - 196 : rp.w - 140);
+      if (r.offerMs > 0) {
+        this.setText(t.status, `Offers a truce: ${TRUCE_MS / 1000} s of peace, +${TRUCE_TRIBUTE} crystal · ${Math.ceil(r.offerMs / 1000)} s`);
+        pill(rp.x + rp.w - 160, y + 12, 72, t.b1, 'ACCEPT', true, 'accept', r.index);
+        pill(rp.x + rp.w - 82, y + 12, 74, t.b2, 'DECLINE', true, 'decline', r.index);
+        return;
+      }
+      if (r.truceMs > 0) {
+        this.setText(t.status, `Truce: ${Math.ceil(r.truceMs / 1000)} s left. Attacking it breaks the truce.`);
+        return;
+      }
+      const target = s.bribeTarget(r.index);
+      this.setText(t.status, lock ? `${grudge}${lock}` : `${grudge}${target ? ` · tribute turns it on the ${target.def.name} for ${BRIBE_MS / 1000} s` : ''}`);
+      if (target) pill(rp.x + rp.w - 104, y + 12, 96, t.b1, `TRIBUTE ◆${BRIBE_COST}`, s.sides[PLAYER].crystal >= BRIBE_COST, 'bribe', r.index);
+    });
   }
 
   /**
@@ -609,9 +775,9 @@ export class GameScene extends Phaser.Scene {
       }
       const def = s.sides[u.faction].def.units[u.type];
       const { frame, rest } = facing(u.angle);
-      // A cloaked ship of the player's own shows faintly; a decoy is a dimmer copy of its ship.
+      // A cloaked ship of the player's own shows faintly, as does one hiding in a nebula; a decoy is a dimmer copy of its ship.
       const cloaked = u.faction === PLAYER && def.ability?.kind === 'cloak' && u.revealMs <= 0;
-      const alpha = cloaked ? 0.4 : u.decoyMs !== null ? 0.6 : 1;
+      const alpha = cloaked ? 0.4 : u.nebula && u.revealMs <= 0 ? 0.6 : u.decoyMs !== null ? 0.6 : 1;
       sp.ship.setFrame(frame).setPosition(u.x, u.y).setRotation(rest).setAlpha(alpha);
       const moving = Math.hypot(u.x - sp.lastX, u.y - sp.lastY) > 0.01;
       sp.lastX = u.x;
@@ -635,6 +801,20 @@ export class GameScene extends Phaser.Scene {
       }
       if (this.selected.has(u.id)) dashedCircle(this.gfx, u.x, u.y, u.type === 'heavy' ? 22 : 16, 10, INK.tangerine, 1, 2);
       if (u.hp < u.maxHp) drawHealth(this.gfx, u.x, u.y - 18, 22, u.hp / u.maxHp);
+      // Veteran chevrons above the ship, one per rank, in the faction's gold.
+      const rank = s.rankOf(u);
+      for (let k = 0; k < rank; k++) {
+        const cx = u.x - (rank - 1) * 4 + k * 8;
+        const cy = u.y - 26;
+        this.gfx.fillStyle(0xffd36a, 1);
+        this.gfx.fillTriangle(cx - 3.5, cy - 3, cx + 3.5, cy - 3, cx, cy + 2);
+      }
+      // A green cross beside a ship under repair.
+      if (u.repairing && u.hp < u.maxHp) {
+        this.gfx.lineStyle(2.5, 0x5ad66e, 1);
+        this.gfx.lineBetween(u.x + 10, u.y - 15, u.x + 18, u.y - 15);
+        this.gfx.lineBetween(u.x + 14, u.y - 19, u.x + 14, u.y - 11);
+      }
     }
     for (const [id, sp] of this.ships) {
       if (!seen.has(id)) {
@@ -759,6 +939,13 @@ export class GameScene extends Phaser.Scene {
       ? this.toWorld(this.pointer.x, this.pointer.y)
       : null;
     const target = hit ? this.state.entityAt(hit.x, hit.y) : null;
+    const derelict = hit && !target ? this.state.derelictAt(hit.x, hit.y) : null;
+    if (derelict) {
+      const text = [`Derelict ${DERELICT_DEFS[derelict.perk].name} · Station`, ...derelictLines(derelict.perk)].join('\n');
+      if (label.text !== text) label.setText(text);
+      label.setPosition(derelict.x, derelict.y - LABEL_LIFT).setVisible(true);
+      return;
+    }
     if (!target) {
       label.setVisible(false);
       return;
@@ -768,7 +955,8 @@ export class GameScene extends Phaser.Scene {
     let at: { x: number; y: number };
     if (target.kind === 'unit') {
       const u = this.state.unit(target.id)!;
-      const head = `${side.def.units[u.type].name} · ${ROLE_LABEL[u.type]} · ${Math.ceil(u.hp)}/${u.maxHp} hp`;
+      const rank = this.state.rankOf(u);
+      const head = `${side.def.units[u.type].name} · ${rank ? `${VETERAN_NAMES[rank - 1]} ${'★'.repeat(rank)} · ` : ''}${ROLE_LABEL[u.type]} · ${Math.ceil(u.hp)}/${u.maxHp} hp`;
       text = [head, ...unitLines(side, u.type)].join('\n');
       at = u;
     } else {
@@ -788,6 +976,10 @@ export class GameScene extends Phaser.Scene {
     BUTTONS.forEach((b, i) => {
       if (b.kind === 'research') {
         this.drawResearchButton(b, i);
+        return;
+      }
+      if (b.kind === 'command') {
+        this.drawCommandButton(b, i);
         return;
       }
       const { name, cost } = this.buttonInfo(b);
@@ -859,6 +1051,25 @@ export class GameScene extends Phaser.Scene {
     caption.name.setColor(open || busy ? INK_CSS.chocolate : INK_CSS.cocoa);
   }
 
+  /** The Fall back button: a slim cream pill, lit while ships are selected. */
+  private drawCommandButton(b: Button, i: number) {
+    const g = this.uiGfx;
+    const on = this.selected.size > 0;
+    const round = b.h / 2;
+    g.fillStyle(0x000000, 0.35);
+    g.fillRoundedRect(b.x + 2, b.y + 3, b.w, b.h, round);
+    g.fillStyle(on ? INK.cream : INK.creamDim, 1);
+    g.fillRoundedRect(b.x, b.y, b.w, b.h, round);
+    g.fillStyle(INK.tangerine, 1);
+    g.fillRect(b.x + 4, b.y + 5, 2, b.h - 10);
+    g.lineStyle(1.5, INK.cocoa, 1);
+    g.strokeRoundedRect(b.x, b.y, b.w, b.h, round);
+    const caption = this.captions[i];
+    this.setText(caption.name, 'FALL BACK');
+    this.setText(caption.cost, on ? `${this.selected.size} selected · F` : 'Select ships · F');
+    caption.name.setColor(on ? INK_CSS.chocolate : INK_CSS.cocoa);
+  }
+
   /** Describes the command button under the pointer: its name, role, cost and stats. */
   private drawTip() {
     const b = this.picking
@@ -871,6 +1082,7 @@ export class GameScene extends Phaser.Scene {
     const side = this.state.sides[PLAYER];
     const { name } = this.buttonInfo(b);
     const lines = b.kind === 'research' ? researchLines(side, b.key as Track)
+      : b.kind === 'command' ? fallBackLines()
       : b.key === 'expansion' ? expansionLines(side)
       : b.kind === 'build' ? buildingLines(side, b.key as Role) : unitLines(side, b.key as UnitId);
     const text = [`${name} · ${ROLE_LABEL[b.key]}`, ...lines].join('\n');
@@ -883,6 +1095,7 @@ export class GameScene extends Phaser.Scene {
   buttonInfo(b: Button): { name: string; cost: number } {
     const side = this.state.sides[PLAYER];
     if (b.kind === 'research') return { name: TRACK_DEFS[b.key as Track].name, cost: researchCost(side, b.key as Track) };
+    if (b.kind === 'command') return { name: 'Fall back', cost: 0 };
     if (b.kind === 'build') {
       const stats = buildInfo(side, b.key as Build);
       return { name: stats.name, cost: stats.cost };
@@ -930,7 +1143,11 @@ export class GameScene extends Phaser.Scene {
     h.title.setFontSize(11);
     if (h.title.x + h.title.width > h.count.x - h.count.width - 6) h.title.setFontSize(10);
 
-    // Rivals: a dot in each rival's colour, hollow once it has fallen.
+    // Rivals: a dot in each rival's colour, hollow once it has fallen. The area opens the rivals panel; it glows while a truce is offered.
+    if (s.sides.some((r) => r.index !== PLAYER && r.offerMs > 0) && !this.picking) {
+      g.fillStyle(INK.mustard, 0.35 + (settings.reduceMotion ? 0 : 0.25 * Math.sin(this.clock / 200)));
+      g.fillRoundedRect(RIVALS_TAB.x, 3, RIVALS_TAB.w - 4, 23, 6);
+    }
     s.sides.forEach((r, k) => {
       if (r.index === PLAYER) return;
       const x = 862 + (k - 1) * 15;
@@ -1052,7 +1269,26 @@ export class GameScene extends Phaser.Scene {
     if (pointer.rightButtonDown()) {
       this.placing = null;
       this.selected.clear();
+      this.rivalsOpen = false;
       return;
+    }
+    // The rivals area of the top bar opens the panel; its buttons answer offers and pay tribute.
+    if (p.y < TOP.h && p.x >= RIVALS_TAB.x) {
+      this.rivalsOpen = !this.rivalsOpen;
+      return;
+    }
+    if (this.rivalsOpen) {
+      const rb = this.rivalButtons.find((b) => p.x >= b.x && p.x < b.x + b.w && p.y >= b.y && p.y < b.y + b.h);
+      if (rb) {
+        const reason = rb.action === 'accept' ? this.state.acceptTruce(rb.faction)
+          : rb.action === 'decline' ? this.state.declineTruce(rb.faction) : this.state.bribe(rb.faction);
+        if (reason) this.message = reason;
+        else if (rb.action === 'decline') this.message = `Truce declined`;
+        return;
+      }
+      const rp = RIVALS_PANEL;
+      const h = rp.head + (this.state.sides.length - 1) * rp.row + 6;
+      if (p.x >= rp.x && p.x < rp.x + rp.w && p.y >= rp.y && p.y < rp.y + h) return;
     }
     if (p.y >= BAR.y) {
       const b = BUTTONS.find((btn) => p.x >= btn.x && p.x < btn.x + btn.w && p.y >= btn.y && p.y < btn.y + btn.h);
@@ -1121,6 +1357,11 @@ export class GameScene extends Phaser.Scene {
   /** A press on a command bar button: arm a building, or queue a unit. */
   private press(b: Button) {
     const { name, cost } = this.buttonInfo(b);
+    if (b.kind === 'command') {
+      this.message = this.selected.size === 0 ? 'Select ships first, then Fall back'
+        : this.state.fallBack([...this.selected]) ? 'Falling back to repair' : 'Nowhere to fall back to';
+      return;
+    }
     if (b.kind === 'research') {
       const reason = this.state.research(b.key as Track);
       this.message = reason ?? `${name} research started at the hub`;
