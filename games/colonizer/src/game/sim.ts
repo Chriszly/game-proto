@@ -4,12 +4,32 @@
 import {
   AGE3_DAMAGE,
   ARMY_DEED,
+  AURA_DMG,
+  AURA_RANGE,
+  BELL_RANGE,
   BUILDINGS,
   CARRY,
   CLAIM_RANGE,
   DOCK_FOOD,
   DOCK_MS,
   FORGE_COST,
+  GARRISON_ARROW,
+  HEAL_HP,
+  HEAL_MS,
+  HEAL_RANGE,
+  MARKET_BASE,
+  MARKET_DRIFT,
+  MARKET_LOT,
+  MARKET_RATE_MAX,
+  MARKET_RATE_MIN,
+  MARKET_SELL,
+  MARKET_STEP,
+  RANK_DMG,
+  RANK_HP,
+  RANK_KILLS,
+  TRADE_ORE,
+  earnsRanks,
+  isSoldier,
   GROVE_MS,
   GROVE_RANGE,
   GROVE_TREES,
@@ -38,7 +58,7 @@ import {
   type Resource,
   type UnitDef,
 } from './data';
-import { AMOUNT, START_TILES, WATER, ROCK, idx, inMap, type MapData, type Node } from './map';
+import { AMOUNT, START_TILES, WATER, ROCK, idx, inMap, type MapData, type Node, type PostSpot } from './map';
 
 export type Order =
   | { t: 'idle' }
@@ -47,7 +67,11 @@ export type Order =
   | { t: 'attack'; target: number; resume: { x: number; y: number } | null }
   | { t: 'gather'; node: number }
   | { t: 'build'; b: number }
-  | { t: 'return' };
+  | { t: 'return' }
+  /** A villager runs to shelter in a building (the town bell). */
+  | { t: 'garrison'; b: number }
+  /** A trade cart drives to the nearest trading post. */
+  | { t: 'trade' };
 
 export interface Unit {
   id: number;
@@ -77,6 +101,11 @@ export interface Unit {
   struck: number;
   /** A camp guard's post: it never strays more than LEASH tiles from it. */
   post: { x: number; y: number } | null;
+  /** Kills, and the veteran rank (0 to 3) they have earned (RANK_KILLS). */
+  kills: number;
+  rank: number;
+  /** A champion's timer towards its next heal. */
+  pulse: number;
 }
 
 /** Things that happened this tick, for the scene's effects; the scene empties the list each frame. */
@@ -145,6 +174,8 @@ export interface Building {
   doneAt: number;
   /** Time towards the next catch or sapling, for the Dock and the Grove. */
   workMs: number;
+  /** Villagers sheltering inside since the bell rang; each adds an arrow to the building's volleys. */
+  garrison: Unit[];
 }
 
 /** A neutral camp: a cache to take once, or a relic to hold. Its guards are units of NEUTRAL. */
@@ -176,6 +207,10 @@ export interface Player {
   /** The Age II boon, once picked; `boonPending` while the pick is open. */
   boon: BoonId | null;
   boonPending: boolean;
+  /** The town bell is ringing: villagers near a shelter are inside it until it is released. */
+  bell: boolean;
+  /** The Market's rates for wood and food, in ore; 1 is the base price. */
+  rates: { wood: number; food: number };
 }
 
 export interface GameState {
@@ -187,6 +222,8 @@ export interface GameState {
   /** The owner of a finished gate on a tile (only its owner walks through), or -1. */
   gates: Int8Array;
   camps: Camp[];
+  /** The neutral trading posts, where trade carts load ore. */
+  posts: PostSpot[];
   /** 0 unseen, 1 explored, 2 in sight of the player right now. */
   sight: Uint8Array;
   nodes: Map<number, Node>;
@@ -215,6 +252,7 @@ export type Command =
   | { t: 'attack'; target: number }
   | { t: 'gather'; node: number }
   | { t: 'build'; b: number }
+  | { t: 'trade' }
   | { t: 'stop' };
 
 export const PLAYER = 0;
@@ -234,15 +272,16 @@ export function createGame(faction: FactionId, aiFaction: FactionId, aiGatherMul
     solid: new Uint8Array(MAP_SIZE * MAP_SIZE),
     gates: new Int8Array(MAP_SIZE * MAP_SIZE).fill(-1),
     camps: [],
+    posts: map.posts,
     sight: new Uint8Array(MAP_SIZE * MAP_SIZE),
     nodes: new Map(),
     units: new Map(),
     buildings: new Map(),
     players: [
-      { id: PLAYER, faction, res: { ...START }, techs: [], age: 1, gatherMul: 1, deeds: { age2: false, army: 0, raid: false }, boon: null, boonPending: false },
-      { id: AI, faction: aiFaction, res: { ...START }, techs: [], age: 1, gatherMul: aiGatherMul, deeds: { age2: false, army: 0, raid: false }, boon: null, boonPending: false },
+      { id: PLAYER, faction, res: { ...START }, techs: [], age: 1, gatherMul: 1, deeds: { age2: false, army: 0, raid: false }, boon: null, boonPending: false, bell: false, rates: { wood: 1, food: 1 } },
+      { id: AI, faction: aiFaction, res: { ...START }, techs: [], age: 1, gatherMul: aiGatherMul, deeds: { age2: false, army: 0, raid: false }, boon: null, boonPending: false, bell: false, rates: { wood: 1, food: 1 } },
       // The camp guards' side. Its faction is only a placeholder: wild units have their own colours.
-      { id: NEUTRAL, faction, res: { wood: 0, food: 0, ore: 0 }, techs: [], age: 1, gatherMul: 1, deeds: { age2: false, army: 0, raid: false }, boon: null, boonPending: false },
+      { id: NEUTRAL, faction, res: { wood: 0, food: 0, ore: 0 }, techs: [], age: 1, gatherMul: 1, deeds: { age2: false, army: 0, raid: false }, boon: null, boonPending: false, bell: false, rates: { wood: 1, food: 1 } },
     ],
     nextId: 1000,
     notice: '',
@@ -307,7 +346,7 @@ function pay(p: Player, cost: Cost) {
 
 /** What a unit costs a player: soldiers are cheaper with a finished Forge (Ember Legion). */
 export function unitCost(s: GameState, owner: number, def: UnitDef): Cost {
-  if (def.role === 'villager' || !hasBuilt(s, owner, 'forge')) return def.cost;
+  if (!isSoldier(def.role) || !hasBuilt(s, owner, 'forge')) return def.cost;
   const out: Cost = {};
   for (const r of Object.keys(def.cost) as Resource[]) out[r] = Math.round((def.cost[r] ?? 0) * FORGE_COST);
   return out;
@@ -389,8 +428,35 @@ export function entityAt(s: GameState, x: number, y: number): { kind: 'unit' | '
 export function popUsed(s: GameState, owner: number) {
   let used = 0;
   for (const u of s.units.values()) if (u.owner === owner) used++;
-  for (const b of s.buildings.values()) if (b.owner === owner) for (const q of b.queue) if (q.kind === 'unit') used++;
+  for (const b of s.buildings.values()) {
+    if (b.owner !== owner) continue;
+    used += b.garrison.length;
+    for (const q of b.queue) if (q.kind === 'unit') used++;
+  }
   return used;
+}
+
+/** A unit's full health: its kind's, plus RANK_HP for each veteran rank. */
+export function maxHp(u: Unit) {
+  return UNITS[u.type].hp + u.rank * RANK_HP;
+}
+
+/** How many of a kind of unit a player has alive, sheltering or in training (the champion's limit). */
+export function unitCount(s: GameState, owner: number, type: string) {
+  let n = 0;
+  for (const u of s.units.values()) if (u.owner === owner && u.type === type) n++;
+  for (const b of s.buildings.values()) {
+    if (b.owner !== owner) continue;
+    for (const g of b.garrison) if (g.type === type) n++;
+    for (const q of b.queue) if (q.kind === 'unit' && q.key === type) n++;
+  }
+  return n;
+}
+
+/** The trading post whose footprint covers a point, if any. */
+export function postAt(s: GameState, x: number, y: number): PostSpot | null {
+  for (const p of s.posts) if (x >= p.tx && y >= p.ty && x < p.tx + 2 && y < p.ty + 2) return p;
+  return null;
 }
 
 export function popCap(s: GameState, owner: number) {
@@ -431,6 +497,7 @@ function addBuilding(s: GameState, owner: number, type: BuildingId, tx: number, 
     rally: null,
     doneAt: built ? s.time : -1,
     workMs: 0,
+    garrison: [],
   };
   s.buildings.set(b.id, b);
   return b;
@@ -464,6 +531,9 @@ function spawnAt(s: GameState, owner: number, type: string, x: number, y: number
     face: owner === PLAYER ? 1 : -1,
     struck: -1e9,
     post: null,
+    kills: 0,
+    rank: 0,
+    pulse: 0,
   };
   s.units.set(u.id, u);
   return u;
@@ -519,6 +589,7 @@ export function rebuildSolid(s: GameState) {
   };
   for (const n of s.nodes.values()) mark(n.tx, n.ty, n.w, n.h);
   for (const c of s.camps) if (!c.claimed) mark(c.tx, c.ty, 2, 2);
+  for (const p of s.posts) mark(p.tx, p.ty, 2, 2);
   for (const b of s.buildings.values()) {
     const def = BUILDINGS[b.type];
     if (b.type === 'gate' && b.built) s.gates[idx(b.tx, b.ty)] = b.owner;
@@ -646,13 +717,18 @@ export function issue(s: GameState, owner: number, ids: number[], cmd: Command) 
         u.order = { t: 'move', x: cmd.x, y: cmd.y };
         break;
       case 'attackMove':
-        if (role !== 'villager') u.order = { t: 'attackMove', x: cmd.x, y: cmd.y };
+        if (isSoldier(role)) u.order = { t: 'attackMove', x: cmd.x, y: cmd.y };
         break;
       case 'attack': {
         const target = getEntity(s, cmd.target);
-        if (target && target.owner !== owner && role !== 'villager') u.order = { t: 'attack', target: cmd.target, resume: null };
+        // A ram can't hurt a unit: sent at one, it walks there instead.
+        if (target && role === 'siege' && 'order' in target) u.order = { t: 'move', x: target.x, y: target.y };
+        else if (target && target.owner !== owner && isSoldier(role)) u.order = { t: 'attack', target: cmd.target, resume: null };
         break;
       }
+      case 'trade':
+        if (role === 'cart') u.order = { t: 'trade' };
+        break;
       case 'gather':
         if (role === 'villager') {
           u.home = cmd.node;
@@ -755,6 +831,9 @@ export function train(s: GameState, owner: number, bid: number, type: string): b
   if (!b || b.owner !== owner || !b.built || !def) return false;
   if (!BUILDINGS[b.type].trains?.includes(def.role)) return false;
   const p = s.players[owner];
+  if (def.age && p.age < def.age) return false;
+  if (def.faction !== 'neutral' && def.faction !== p.faction) return false;
+  if (def.limit !== undefined && unitCount(s, owner, type) >= def.limit) return false;
   const cost = unitCost(s, owner, def);
   if (!affordable(p, cost) || popUsed(s, owner) + 1 > popCap(s, owner)) return false;
   pay(p, cost);
@@ -796,8 +875,126 @@ export function chooseBoon(s: GameState, owner: number, boon: BoonId): boolean {
 /** Soldiers a player has alive. */
 export function soldierCount(s: GameState, owner: number) {
   let n = 0;
-  for (const u of s.units.values()) if (u.owner === owner && u.hp > 0 && unitDef(u).role !== 'villager') n++;
+  for (const u of s.units.values()) if (u.owner === owner && u.hp > 0 && isSoldier(unitDef(u).role)) n++;
   return n;
+}
+
+/** The buildings a player's villagers may shelter in: the Town Center and finished Watchtowers. */
+export function shelters(s: GameState, owner: number): Building[] {
+  return [...s.buildings.values()].filter((b) => b.owner === owner && b.built && b.hp > 0 && BUILDINGS[b.type].shelter);
+}
+
+/**
+ * Rings the town bell: every villager within BELL_RANGE of a shelter runs to the nearest one with room
+ * (its `shelter`, counting those already on their way), and gathering stops until `releaseBell`.
+ * Returns how many were sent.
+ */
+export function ringBell(s: GameState, owner: number): number {
+  const p = s.players[owner];
+  const homes = shelters(s, owner);
+  if (homes.length === 0) return 0;
+  p.bell = true;
+  const room = new Map<number, number>();
+  for (const b of homes) room.set(b.id, (BUILDINGS[b.type].shelter ?? 0) - b.garrison.length);
+  for (const u of s.units.values()) if (u.owner === owner && u.order.t === 'garrison') room.set(u.order.b, (room.get(u.order.b) ?? 0) - 1);
+  let sent = 0;
+  const villagers = [...s.units.values()].filter((u) => u.owner === owner && unitDef(u).role === 'villager' && u.order.t !== 'garrison');
+  for (const u of villagers) {
+    let best: { b: Building; d: number } | null = null;
+    for (const b of homes) {
+      if ((room.get(b.id) ?? 0) <= 0) continue;
+      const d = gap(u.x, u.y, footprint(b));
+      if (d <= BELL_RANGE && (!best || d < best.d)) best = { b, d };
+    }
+    if (!best) continue;
+    room.set(best.b.id, (room.get(best.b.id) ?? 0) - 1);
+    u.path = [];
+    u.repath = 0;
+    u.order = { t: 'garrison', b: best.b.id };
+    sent++;
+  }
+  if (owner === PLAYER) say(s, sent > 0 ? `The bell rings: ${sent} villager${sent === 1 ? '' : 's'} run for shelter` : 'The bell rings, but no villager is near a shelter');
+  return sent;
+}
+
+/** Sends every sheltering villager back to work, and those still running for shelter too. */
+export function releaseBell(s: GameState, owner: number): number {
+  const p = s.players[owner];
+  p.bell = false;
+  let out = 0;
+  for (const b of s.buildings.values()) if (b.owner === owner) out += ungarrison(s, b);
+  for (const u of s.units.values()) if (u.owner === owner && u.order.t === 'garrison') backToWork(s, u);
+  if (owner === PLAYER) say(s, out > 0 ? 'The villagers go back to work' : 'Nobody was sheltering');
+  return out;
+}
+
+/** Lets a building's garrison out onto the free tiles round it, back to the work they left. */
+function ungarrison(s: GameState, b: Building): number {
+  let out = 0;
+  for (const u of [...b.garrison]) {
+    const spot = freeSpotNear(s, b);
+    if (!spot) break;
+    b.garrison.splice(b.garrison.indexOf(u), 1);
+    u.x = spot.x;
+    u.y = spot.y;
+    s.units.set(u.id, u);
+    backToWork(s, u);
+    out++;
+  }
+  return out;
+}
+
+/** A villager out of shelter goes back to the node it was working, or stands by. */
+function backToWork(s: GameState, u: Unit) {
+  u.path = [];
+  u.repath = 0;
+  const home = u.home !== null ? s.nodes.get(u.home) ?? s.buildings.get(u.home) : undefined;
+  const again = home && ('amount' in home ? home.amount > 0 : true) ? home : u.lastRes ? nearestSource(s, u.owner, u.lastRes, u.x, u.y) : null;
+  u.order = u.amount > 0 ? { t: 'return' } : again ? { t: 'gather', node: again.id } : { t: 'idle' };
+  u.home = again ? again.id : null;
+}
+
+/** Villagers a player has sheltering, in every building. */
+export function garrisoned(s: GameState, owner: number) {
+  let n = 0;
+  for (const b of s.buildings.values()) if (b.owner === owner) n += b.garrison.length;
+  return n;
+}
+
+/** What a lot of wood or food costs in ore at the Market now, or what selling one pays. */
+export function marketPrice(s: GameState, owner: number, res: 'wood' | 'food', dir: 'buy' | 'sell') {
+  const rate = s.players[owner].rates[res];
+  return dir === 'buy' ? Math.ceil(MARKET_BASE * rate) : Math.floor(MARKET_BASE * rate * MARKET_SELL);
+}
+
+/** Buys or sells a lot of wood or food for ore at a finished Market; the rate moves with each trade. */
+export function trade(s: GameState, owner: number, res: 'wood' | 'food', dir: 'buy' | 'sell'): boolean {
+  if (!hasBuilt(s, owner, 'market')) return false;
+  const p = s.players[owner];
+  const price = marketPrice(s, owner, res, dir);
+  if (dir === 'buy') {
+    if (p.res.ore < price) return false;
+    p.res.ore -= price;
+    p.res[res] += MARKET_LOT;
+    p.rates[res] = Math.min(MARKET_RATE_MAX, p.rates[res] + MARKET_STEP);
+  } else {
+    if (p.res[res] < MARKET_LOT) return false;
+    p.res[res] -= MARKET_LOT;
+    p.res.ore += price;
+    p.rates[res] = Math.max(MARKET_RATE_MIN, p.rates[res] - MARKET_STEP);
+  }
+  return true;
+}
+
+/** Market rates drift back towards the base price. */
+function updateMarkets(s: GameState, dt: number) {
+  for (const p of s.players) {
+    for (const res of ['wood', 'food'] as const) {
+      const r = p.rates[res];
+      const step = (MARKET_DRIFT * dt) / 1000;
+      p.rates[res] = r > 1 ? Math.max(1, r - step) : Math.min(1, r + step);
+    }
+  }
 }
 
 const COMPASS = ['east', 'south-east', 'south', 'south-west', 'west', 'north-west', 'north', 'north-east'];
@@ -895,6 +1092,7 @@ export function tick(s: GameState, dt: number) {
   for (const b of [...s.buildings.values()]) updateBuilding(s, b, dt);
   for (const u of [...s.units.values()]) if (u.hp > 0) updateUnit(s, u, dt);
   separate(s, dt);
+  updateMarkets(s, dt);
   reap(s);
   updateCamps(s);
   updateDeeds(s);
@@ -913,7 +1111,8 @@ function updateBuilding(s: GameState, b: Building, dt: number) {
     if (b.cool <= 0) {
       const target = nearestEnemy(s, b.owner, b.tx + 0.5 * def.w, b.ty + 0.5 * def.h, def.tower.range);
       if (target) {
-        const dmg = takenBy(s, target, def.tower.dmg);
+        // Each villager sheltering inside looses an arrow with the volley.
+        const dmg = takenBy(s, target, def.tower.dmg + b.garrison.length * GARRISON_ARROW);
         target.hp -= dmg;
         b.cool = def.tower.cooldown;
         const at = centre(footprint(target));
@@ -943,6 +1142,8 @@ function updateBuilding(s: GameState, b: Building, dt: number) {
     return;
   }
   b.queue.shift();
+  // A new trade cart sets off for the trading post at once.
+  if (UNITS[unit.type].role === 'cart') return void (unit.order = { t: 'trade' });
   if (b.rally) return sendToRally(s, b, unit);
   // A new villager goes to work on whichever of wood and food is short.
   if (UNITS[unit.type].role === 'villager') {
@@ -1030,14 +1231,82 @@ function updateUnit(s: GameState, u: Unit, dt: number) {
   u.cool = Math.max(0, u.cool - dt);
   u.act = 'idle';
   if (def.role === 'villager') villagerUpdate(s, u, def, dt);
+  else if (def.role === 'cart') cartUpdate(s, u, def, dt);
   else militaryUpdate(s, u, def, dt);
+  if (def.gift === 'heal') heal(s, u, dt);
+}
+
+/** The Druid mends every own unit within HEAL_RANGE by HEAL_HP every HEAL_MS. */
+function heal(s: GameState, u: Unit, dt: number) {
+  u.pulse += dt;
+  if (u.pulse < HEAL_MS) return;
+  u.pulse -= HEAL_MS;
+  for (const o of s.units.values()) {
+    if (o.owner !== u.owner || o.hp <= 0 || Math.hypot(o.x - u.x, o.y - u.y) > HEAL_RANGE) continue;
+    const max = maxHp(o);
+    if (o.hp < max) o.hp = Math.min(max, o.hp + HEAL_HP);
+  }
+}
+
+/**
+ * A trade cart: drives to the nearest trading post, loads TRADE_ORE there, brings it to the nearest
+ * drop-off that takes ore, and sets off again.
+ */
+function cartUpdate(s: GameState, u: Unit, def: UnitDef, dt: number) {
+  const o = u.order;
+  if (o.t === 'idle') {
+    if (u.amount > 0) u.order = { t: 'return' };
+    return;
+  }
+  if (o.t === 'move') {
+    if (u.path.length === 0 && Math.hypot(u.x - o.x, u.y - o.y) < 0.9) return void (u.order = { t: 'idle' });
+    if (!pursue(s, u, speedOf(s, u, def), dt, goalNear(s, o.x, o.y))) u.order = { t: 'idle' };
+    return;
+  }
+  if (o.t === 'trade') {
+    if (u.amount > 0) return void (u.order = { t: 'return' });
+    let best: { p: PostSpot; d: number } | null = null;
+    for (const p of s.posts) {
+      const d = gap(u.x, u.y, { x0: p.tx, y0: p.ty, x1: p.tx + 2, y1: p.ty + 2 });
+      if (!best || d < best.d) best = { p, d };
+    }
+    if (!best) return void (u.order = { t: 'idle' });
+    const f = { x0: best.p.tx, y0: best.p.ty, x1: best.p.tx + 2, y1: best.p.ty + 2 };
+    if (gap(u.x, u.y, f) <= 0.6) {
+      u.path = [];
+      u.carry = 'ore';
+      u.amount = TRADE_ORE;
+      u.order = { t: 'return' };
+      return;
+    }
+    if (!pursue(s, u, speedOf(s, u, def), dt, (tx, ty) => !s.solid[idx(tx, ty)] && gap(tx + 0.5, ty + 0.5, f) <= 0.5)) u.order = { t: 'idle' };
+    return;
+  }
+  if (o.t === 'return') {
+    const drop = nearestDropoff(s, u.owner, 'ore', u.x, u.y);
+    if (!drop) return void (u.order = { t: 'idle' });
+    const f = footprintOf(s, drop.id);
+    if (!f) return;
+    if (gap(u.x, u.y, f) <= 0.6) {
+      u.path = [];
+      s.players[u.owner].res.ore += u.amount;
+      if (u.amount > 0) emit(s, { t: 'drop', x: u.x, y: u.y, res: 'ore', n: u.amount, owner: u.owner });
+      u.amount = 0;
+      u.carry = null;
+      u.order = { t: 'trade' };
+      return;
+    }
+    if (!pursue(s, u, speedOf(s, u, def), dt, (tx, ty) => !s.solid[idx(tx, ty)] && gap(tx + 0.5, ty + 0.5, f) <= 0.5)) u.order = { t: 'idle' };
+  }
 }
 
 function militaryUpdate(s: GameState, u: Unit, def: UnitDef, dt: number) {
   if (u.post) return guardUpdate(s, u, def, dt);
   const o = u.order;
+  // A ram only ever goes for buildings, palisades and gates included.
+  const pick = def.role === 'siege' ? 'structures' : 'auto';
   if (o.t === 'idle') {
-    const t = nearestEnemy(s, u.owner, u.x, u.y, def.sight);
+    const t = nearestEnemy(s, u.owner, u.x, u.y, def.sight, pick);
     if (t) u.order = { t: 'attack', target: t.id, resume: null };
     return;
   }
@@ -1048,7 +1317,7 @@ function militaryUpdate(s: GameState, u: Unit, def: UnitDef, dt: number) {
     return;
   }
   if (o.t === 'attackMove') {
-    const t = nearestEnemy(s, u.owner, u.x, u.y, def.sight);
+    const t = nearestEnemy(s, u.owner, u.x, u.y, def.sight, pick);
     if (t) {
       u.order = { t: 'attack', target: t.id, resume: { x: o.x, y: o.y } };
       return;
@@ -1137,6 +1406,24 @@ function villagerUpdate(s: GameState, u: Unit, def: UnitDef, dt: number) {
   if (o.t === 'move') {
     if (u.path.length === 0 && Math.hypot(u.x - o.x, u.y - o.y) < 0.9) return void (u.order = { t: 'idle' });
     if (!pursue(s, u, speedOf(s, u, def), dt, goalNear(s, o.x, o.y))) u.order = { t: 'idle' };
+    return;
+  }
+  if (o.t === 'garrison') {
+    const b = s.buildings.get(o.b);
+    const def2 = b ? BUILDINGS[b.type] : null;
+    if (!b || !def2?.shelter || b.hp <= 0 || !s.players[u.owner].bell) return void backToWork(s, u);
+    const f = footprintOf(s, b.id);
+    if (!f) return;
+    if (gap(u.x, u.y, f) <= 0.6) {
+      if (b.garrison.length >= def2.shelter) return void backToWork(s, u);
+      // Inside: off the map until the bell is released or the building falls.
+      u.path = [];
+      u.order = { t: 'idle' };
+      s.units.delete(u.id);
+      b.garrison.push(u);
+      return;
+    }
+    if (!pursue(s, u, speedOf(s, u, def), dt, (tx, ty) => !s.solid[idx(tx, ty)] && gap(tx + 0.5, ty + 0.5, f) <= 0.5)) backToWork(s, u);
     return;
   }
   if (o.t === 'build') {
@@ -1341,15 +1628,16 @@ function nearestDropoff(s: GameState, owner: number, res: Resource | null, x: nu
 
 /**
  * The closest living enemy within `range` tiles of a point. `auto` (what soldiers and towers pick on
- * their own) skips palisades and gates, `palisade` looks only at those, `units` only at units.
+ * their own) skips palisades and gates, `palisade` looks only at those, `units` only at units, and
+ * `structures` (what a ram goes for) at every building, palisades and gates included.
  */
-function nearestEnemy(s: GameState, owner: number, x: number, y: number, range: number, pick: 'auto' | 'palisade' | 'units' = 'auto'): Unit | Building | null {
-  const foes: (Unit | Building)[] = pick === 'palisade' ? [...s.buildings.values()] : pick === 'units' ? [...s.units.values()] : [...s.units.values(), ...s.buildings.values()];
+function nearestEnemy(s: GameState, owner: number, x: number, y: number, range: number, pick: 'auto' | 'palisade' | 'units' | 'structures' = 'auto'): Unit | Building | null {
+  const foes: (Unit | Building)[] = pick === 'palisade' || pick === 'structures' ? [...s.buildings.values()] : pick === 'units' ? [...s.units.values()] : [...s.units.values(), ...s.buildings.values()];
   let best: Unit | Building | null = null;
   let bestD = Infinity;
   for (const e of foes) {
     if (e.owner === owner || e.hp <= 0) continue;
-    if ('queue' in e && !!BUILDINGS[e.type].palisade !== (pick === 'palisade')) continue;
+    if (pick !== 'structures' && 'queue' in e && !!BUILDINGS[e.type].palisade !== (pick === 'palisade')) continue;
     const d = gap(x, y, footprint(e));
     if (d <= range && d < bestD) {
       best = e;
@@ -1360,11 +1648,23 @@ function nearestEnemy(s: GameState, owner: number, x: number, y: number, range: 
 }
 
 function strike(s: GameState, u: Unit, def: UnitDef, target: Unit | Building) {
+  // A ram's beam does nothing to a unit.
+  if (def.role === 'siege' && 'order' in target) return;
   let dmg = def.dmg + ownBonus(s, u, def);
   if (def.vsCavalry && 'order' in target && UNITS[target.type].role === 'cavalry') dmg *= def.vsCavalry;
   dmg = takenBy(s, target, dmg);
+  const alive = target.hp > 0;
   target.hp -= dmg;
   u.struck = s.time;
+  // A kill counts towards the veteran ranks: each adds health and damage.
+  if (alive && target.hp <= 0 && 'order' in target && earnsRanks(def.role)) {
+    u.kills++;
+    const rank = RANK_KILLS.filter((k) => u.kills >= k).length;
+    if (rank > u.rank) {
+      u.hp += (rank - u.rank) * RANK_HP;
+      u.rank = rank;
+    }
+  }
   const at = centre(footprint(target));
   emit(s, { t: 'hit', x: at.x, y: at.y, fromX: u.x, fromY: u.y, dmg, ranged: def.range > 1, owner: u.owner });
 }
@@ -1381,9 +1681,18 @@ function ownBonus(s: GameState, u: Unit, def: UnitDef) {
   if (def.role === 'melee' && techs.includes('ironworks')) bonus += 2;
   if (def.role === 'ranged' && techs.includes('fletching')) bonus += 2;
   if (def.role === 'ranged' && techs.includes('bodkin')) bonus += 2;
-  if (def.role !== 'villager' && s.players[u.owner].age >= 3) bonus += AGE3_DAMAGE;
-  if (def.role !== 'villager' && holds(s, u.owner, 'valor')) bonus += RELIC_DAMAGE;
+  if (isSoldier(def.role) && s.players[u.owner].age >= 3) bonus += AGE3_DAMAGE;
+  if (isSoldier(def.role) && holds(s, u.owner, 'valor')) bonus += RELIC_DAMAGE;
+  bonus += u.rank * RANK_DMG;
+  // The Warlord's aura: own soldiers close to it hit harder (not the Warlord itself).
+  if (isSoldier(def.role) && def.gift !== 'aura' && inAura(s, u)) bonus += AURA_DMG;
   return bonus;
+}
+
+/** Whether an own champion with the damage aura stands within AURA_RANGE of a unit. */
+export function inAura(s: GameState, u: Unit) {
+  for (const o of s.units.values()) if (o.owner === u.owner && o.hp > 0 && UNITS[o.type].gift === 'aura' && Math.hypot(o.x - u.x, o.y - u.y) <= AURA_RANGE) return true;
+  return false;
 }
 
 function reap(s: GameState) {
@@ -1395,6 +1704,8 @@ function reap(s: GameState) {
   }
   for (const b of [...s.buildings.values()]) {
     if (b.hp > 0) continue;
+    // A fallen shelter spills its garrison out; whoever finds no room is lost with it.
+    if (b.garrison.length > 0) ungarrison(s, b);
     s.buildings.delete(b.id);
     changed = true;
   }
