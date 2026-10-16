@@ -236,6 +236,9 @@ const ICON_COLORS = {
   m: 0xc0603a, // meat
   M: 0xe8956a,
   B: 0xf1e4c6,
+  s: 0xf0c8a0, // passengers: faces, a blue coat and a plum one
+  h: 0x5070b0,
+  d: 0x8a4a6a,
 };
 
 const CARGO_ICONS: Record<Cargo, string[]> = {
@@ -247,6 +250,7 @@ const CARGO_ICONS: Record<Cargo, string[]> = {
   flour: ['..b.b..', '...b...', '.nnnnn.', 'nnnnnnn', 'nnnNnnn', 'nnNNNnn', '.nnnnn.'],
   planks: ['.......', 'WWWWWWW', 'wwwwwwD', 'DDDDDDD', 'WWWWWWW', 'wwwwwwD', 'DDDDDDD'],
   iron: ['..III..', '.IiiiI.', 'kkkkkkk', '.......', '.IIIII.', 'IiiiiiI', 'kkkkkkk'],
+  passengers: ['.s...s.', 'sss.sss', '.s...s.', 'hhh.ddd', 'hhh.ddd', '.hh.dd.', '.h...d.'],
 };
 
 /** The wyrm's belly on the HUD: a joint of meat on the bone. */

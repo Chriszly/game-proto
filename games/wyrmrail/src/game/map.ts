@@ -11,7 +11,7 @@ export type Terrain = 'grass' | 'forest' | 'river' | 'mountain';
 export const TRACK_COST: Record<Exclude<Terrain, 'mountain'>, number> = { grass: 2, forest: 4, river: 6 };
 
 /** Goods a village sends, and the better goods its workshops make from them. */
-export type Cargo = 'grain' | 'tools' | 'timber' | 'ore' | 'fish' | 'flour' | 'planks' | 'iron';
+export type Cargo = 'grain' | 'tools' | 'timber' | 'ore' | 'fish' | 'flour' | 'planks' | 'iron' | 'passengers';
 
 export interface Tile {
   c: number;
@@ -68,11 +68,14 @@ export const CARGO_NAMES: Record<Cargo, string> = {
   flour: 'Flour',
   planks: 'Planks',
   iron: 'Iron',
+  passengers: 'Passengers',
 };
 
 export const key = (t: Tile) => `${t.c},${t.r}`;
 export const sameTile = (a: Tile, b: Tile) => a.c === b.c && a.r === b.r;
 export const manhattan = (a: Tile, b: Tile) => Math.abs(a.c - b.c) + Math.abs(a.r - b.r);
+/** The tile across `t` from `n`, the straight way on. */
+export const opposite = (t: Tile, n: Tile): Tile => ({ c: 2 * t.c - n.c, r: 2 * t.r - n.r });
 export const inGrid = (t: Tile) => t.c >= 0 && t.r >= 0 && t.c < COLS && t.r < ROWS;
 
 /** The four tiles next to `t` that are on the grid. */

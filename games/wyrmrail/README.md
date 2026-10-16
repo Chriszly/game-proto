@@ -7,8 +7,8 @@ A green wyrm sleeps in the Roost at the edge of a floating valley, drawn in isom
 track from the Roost to the villages, then send the wyrm along it, pulling two wagons, to carry each
 village's goods to another before the order runs out of time. Where the line branches, the switches
 decide which way the wyrm goes. Keep it fed at the Roost, bring goods to the workshops that make
-better ones, wake a second wyrm late in the game, and after the eighth village finish with the
-festival. Every game is played in a new valley.
+better ones, keep the villages in good cheer, wake a second wyrm late in the game, and after the
+eighth village finish with the festival. Every game is played in a new valley.
 
 ![The valley at the start](docs/screenshots/playthrough-0-valley.png)
 
@@ -19,7 +19,9 @@ festival. Every game is played in a new valley.
 | Tap or drag over tiles next to the line | Lay track there |
 | Tap an order | Send the wyrm to fetch and deliver it |
 | Tap a junction | Throw its switch |
-| Remove track | Toggle: tap track to take it up for half its cost |
+| Remove | Toggle: tap track to take it up for half its cost |
+| Plain | Toggle: lay track that joins only the piece it continues, and crossings |
+| A charter card | Pick the round's charter (from round 3) |
 | Swift wings, Golden hoard, Second wyrm | Buy an upgrade |
 
 1. **The valley** is new every game: a river winds down the middle, mountains rise in the east,
@@ -29,6 +31,11 @@ festival. Every game is played in a new valley.
    village. Lit outlines show where. Grass costs 2 coins, forest 4 and a bridge over the river 6;
    mountains can't be built on. Track joins up with every piece and station next to it. Laying
    track through a forest clears its pines.
+   With **Plain** on, a new piece joins only the piece it continues (the one the drag came from,
+   or its first neighbour on the line) and the one straight across from that, so a line can run
+   beside another without making junctions; a plain piece laid with track on all four sides is a
+   **crossing**, two straights the wyrm only goes straight over, with no switch. Its outlines are
+   blue. Auto-join stays the default.
 3. **Orders** come in on the panel on the right, up to three at a time: a cargo, the village it
    comes from, the one it goes to, the pay and a bar of time left. The first is always grain from
    Millbrook to Ashford. Goods waiting for the wyrm show over their village.
@@ -61,9 +68,32 @@ festival. Every game is played in a new valley.
    seconds, then goes on anyway. Each has its own belly.
 9. **Deadlines**: an order that runs out of time leaves the board, cargo and all, and costs one of
    the three hearts. Losing all three ends the game.
-10. **Rounds**: one delivery finishes round 1, then each round asks for one more than its number.
+10. **Village moods**, from round 2: each village wears a face by its name. A delivery in time
+    cheers the village it went to by one step; a late order sours it by one, and so does going
+    without a visit (a pickup or a delivery) for 25 seconds plus 6 for every village on the line.
+    Moods run from bitter through sulking, content and cheerful to delighted. A cheerful village's
+    orders pay 25% more and a delighted one's 50% more; a sulking village sends orders with 30%
+    less time ("rush order" on the card). A village that turns bitter loses faith in the line,
+    which costs a heart, and it sulks on from there.
+11. **Washouts and rockfalls**, from round 3: every 35 seconds the valley picks on a bridge (a
+    washout) or a piece of track beside a mountain (a rockfall), if the line has one. The tile is
+    marked with an amber "!" and a warning for 9 seconds, then its track is gone: a wyrm heading
+    over it stops short and picks its stop again (a pickup goes back to the queue), and an order
+    with no way left waits until the track is rebuilt, at the usual price. A spare loop keeps the
+    line running meanwhile. The warning holds off while a wyrm is on the tile.
+12. **Round charters**, from round 3: each round opens with two charters to choose from, and the
+    game waits until one is tapped. A charter rules the round: a *Fair* (one cargo pays double,
+    every deadline a quarter shorter), *Rush orders* (half again the pay, deadlines a third
+    shorter), *Patient villages* (deadlines half as long again, a quarter less pay), *Cheap rails*
+    (track at half price, a fifth less pay), *Busy season* (orders twice as often, a tenth less
+    pay) or a *Feast* (the wyrms never go hungry, a tenth less pay). The HUD shows the round's
+    charter by the round.
+13. **Passengers**, from round 3: now and then an order is passengers, who pay triple and allow
+    40% less time. They fill both wagons: a wyrm only fetches them while it carries nothing, and
+    loads nothing else until they are delivered.
+14. **Rounds**: one delivery finishes round 1, then each round asks for one more than its number.
     A new village joins in each round from 2 to 8 (see below).
-11. **The festival**: round 9 is the last. The festival is held at Kettlecross, under bunting, and
+15. **The festival**: round 9 is the last. The festival is held at Kettlecross, under bunting, and
     every new order goes there. Ten deliveries win the game.
 
 ![Laying track](docs/screenshots/playthrough-1-track.png)
@@ -94,6 +124,16 @@ An order pays 10 coins plus 3 per tile between the two villages (as the crow fli
 | Swift wings | 3 | 30, 60, 100 | The wyrm flies 0.6 tiles a second faster (from 2) |
 | Golden hoard | 3 | 40, 80, 140 | Every order pays 25% more |
 | Second wyrm | 1 | 150, from round 5 | A second, copper wyrm joins the line |
+
+![Round 4: the villages' moods, a sulking village's rush order and a forgotten one souring](docs/screenshots/moods.png)
+
+![A washout coming to the bridge, marked with an amber "!"](docs/screenshots/washout.png)
+
+![Plain track: a second line beside the first that joins it only at its end, and a crossing by Ashford](docs/screenshots/plain-track.png)
+
+![Round 5 opens with two charters to choose from](docs/screenshots/charter.png)
+
+![Passengers fill both wagons and pay triple](docs/screenshots/passengers.png)
 
 ![Two valleys from two games](docs/screenshots/new-valley-1.png)
 
@@ -143,9 +183,10 @@ All paths are inside `games/wyrmrail/`.
 - `src/game/`: the rules in plain TypeScript with no Phaser dependency. `map.ts` holds the valley
   (generating each game's terrain and village places, track costs, the Roost, the villages and
   their workshops), `state.ts` the tuning numbers and the shape of a game, and `sim.ts` moves it
-  on: laying and removing track, switches, routes along it, orders, the wyrms' trips and meals,
-  workshops, upgrades, rounds and the festival. The valley and new orders are picked with
-  `Math.random`.
+  on: laying and removing track (plain or joined, crossings), switches, routes along it, orders,
+  the wyrms' trips and meals, workshops, village moods, washouts and rockfalls, round charters,
+  passengers, upgrades, rounds and the festival. The valley, new orders, hazards and charters are
+  picked with `Math.random`.
 - `src/scenes/`: `BootScene` bakes textures, `GameScene` draws the valley, the track, the wyrm,
   the HUD and the panel and wires taps to the rules, `layout.ts` says where things are drawn.
 - `src/art/`: all the art, drawn in code and baked into textures at startup. `valley.ts` paints the
