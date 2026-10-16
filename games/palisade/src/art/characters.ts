@@ -367,6 +367,13 @@ export function bakeMissiles(scene: Phaser.Scene) {
     gem(ctx, 0, 0, 20, 8, 0.2, '#e8541c', '#ffe08a');
     poly(ctx, ngon(-5, -5, 7, 7, 5), '#fff4c8');
   });
+  // The Troll King's rock: a grey faceted lump.
+  paint(scene, 'rock', 30, 26, (ctx) => {
+    ctx.translate(15, 13);
+    softShadow(ctx, () => poly(ctx, ngon(0, 0, 13, 11, 7, 0.4), '#6e6a66'), 3, 0.3);
+    facet(ctx, ngon(0, 0, 13, 11, 7, 0.4), '#7d7872');
+    poly(ctx, [[-6, -5], [1, -8], [5, -2]], '#a39d95');
+  });
   paint(scene, 'rain-arrow', 12, 40, (ctx) => {
     ctx.translate(6, 0);
     poly(ctx, rect(-1, 6, 2, 26), '#fff2c4');

@@ -1,6 +1,9 @@
+import type { AimMode } from './aim';
+import type { Trait } from './elites';
 import type { EnemyKind } from './enemies';
 import { FIRST_BREAK_MS } from './waves';
 import type { GuardKind } from './guards';
+import { heatRules } from './heat';
 import { setComplete, type RelicId } from './relics';
 import type { RoadId } from './roads';
 import { UPGRADES, UPGRADE_IDS, type UpgradeId } from './upgrades';
@@ -44,12 +47,16 @@ export interface Enemy {
   attacking: boolean;
   /** Counts down after each hit, for the flash. */
   hitMs: number;
-  /** Shamans: time until the next healing. */
+  /** Shamans: time until the next healing. Bosses: time until their next move. */
   castMs: number;
+  /** An elite's trait, or null for a plain foe. */
+  trait: Trait | null;
+  /** Bosses: whether a once-only move (the Ogre Warlord's goblin call) has been made. */
+  moved?: boolean;
 }
 
-/** The hero's arrows and fireballs, and the hired mage's arcane bolts. */
-export type MissileKind = 'arrow' | 'fireball' | 'magic';
+/** The hero's arrows and fireballs, the hired mage's arcane bolts and the Troll King's rocks. */
+export type MissileKind = 'arrow' | 'fireball' | 'magic' | 'rock';
 
 export interface Missile {
   id: number;
@@ -66,6 +73,10 @@ export interface Missile {
   pierce: number;
   /** Arcane bolts: the damage of their burst. */
   damage?: number;
+  /** Rocks: where they were thrown from and come down, and the guard slot they are thrown at (none when no guard is hired). */
+  from?: { x: number; y: number };
+  to?: { x: number; y: number };
+  slot?: number;
 }
 
 /**
@@ -76,7 +87,7 @@ export interface Missile {
  */
 export interface Effect {
   id: number;
-  kind: 'blast' | 'fireblast' | 'bolt' | 'death' | 'crit' | 'rain' | 'xp' | 'orb' | 'block' | 'heal' | 'stab' | 'arcane' | 'mended';
+  kind: 'blast' | 'fireblast' | 'bolt' | 'death' | 'crit' | 'rain' | 'xp' | 'orb' | 'block' | 'heal' | 'stab' | 'arcane' | 'mended' | 'rockHit' | 'call' | 'roar' | 'split';
   x: number;
   y: number;
   /** Blast radius, or the lightning's path (the healed foes, the thrust's two ends). */
@@ -109,14 +120,31 @@ export interface Patch {
   waves: number;
 }
 
-/** A hired guard on one of the barricade's slots: its kind, level (1 to 3) and time to its next attack. */
+/**
+ * A hired guard on one of the barricade's slots: its kind, level (1 to 3), time to its next attack
+ * and how much longer a Troll King's rock keeps it stunned.
+ */
 export interface Guard {
   kind: GuardKind;
   level: number;
   cd: number;
+  stunMs: number;
 }
 
-export type Phase = 'break' | 'fighting' | 'over';
+/** The fortifications bought in the breaks: see forts.ts. */
+export interface Forts {
+  /** The stake line's health left behind the barricade, 0 for none. */
+  stakeHp: number;
+  /** Whether an oil pot waits for the next foe to reach the barricade. */
+  oil: boolean;
+  /** Waves the lookout still widens Arrow Rain for. */
+  lookout: number;
+  /** The wave whose break a fortification was bought in, so each break sells one. */
+  boughtWave: number;
+}
+
+/** `'won'` is the pause on the victory panel after wave 30; "Keep fighting" goes back to `'break'`. */
+export type Phase = 'break' | 'fighting' | 'over' | 'won';
 
 export interface GameState {
   version: number;
@@ -136,6 +164,9 @@ export interface GameState {
    * level-up repairs the barricade at once, with a pop-up, instead of pausing on cards.
    */
   mastered: boolean;
+  /** The heat this run plays at (0 to MAX_HEAT), and the highest one unlocked by lifting the siege. */
+  heat: number;
+  heatUnlocked: number;
 
   // This run.
   wave: number;
@@ -177,6 +208,14 @@ export interface GameState {
   roadMs: number;
   /** The relics the last boss's chest gave (two on a Hardened Road), shown during the break after it; null otherwise. */
   relicFound: RelicId[] | null;
+  /** Who the ranger shoots first; kept in its own storage key, like the speed. */
+  aimMode: AimMode;
+  /** How much longer the Frost Giant's roar slows the ranger's shots. */
+  roarMs: number;
+  /** The fortifications bought in the breaks. */
+  forts: Forts;
+  /** Whether this run has lifted the siege (cleared wave 30), so going on past it never wins again. */
+  won: boolean;
   nextId: number;
 }
 
@@ -195,10 +234,11 @@ export const streakBonus = (count: number) => (count >= 2 ? Math.min(0.5, 0.05 *
 export const STREAK_MS = 2_500;
 
 /** Everything the upgrades and relics change, worked out from their ranks and counts. */
-export function stats(state: Pick<GameState, 'ranks' | 'relics'>) {
+export function stats(state: Pick<GameState, 'ranks' | 'relics' | 'heat'>) {
   const r = (id: UpgradeId) => rank(state, id);
   const relic = (id: RelicId) => state.relics?.[id] ?? 0;
   const relics = state.relics ?? {};
+  const heat = heatRules(state.heat ?? 0);
   return {
     /** Milliseconds between two shots of the bow. */
     shotMs: 1_000 / (1 + 0.2 * r('swift')) / (1 + 0.1 * relic('drum')),
@@ -219,8 +259,10 @@ export function stats(state: Pick<GameState, 'ranks' | 'relics'>) {
     rainCharge: 0.8 ** relic('quiver'),
     /** Arrow Rain hits every foe in its ring for this many times an arrow's damage. */
     rainDamage: 4 * (setComplete(relics, 'hunter') ? 1.5 : 1) * (1 + 0.25 * r('cloudburst')),
-    /** Share of the barricade mended after each wave. */
-    repair: setComplete(relics, 'warden') ? 0.2 : 0.1,
+    /** Share of the barricade mended after each wave (half as much from Heat 3). */
+    repair: (setComplete(relics, 'warden') ? 0.2 : 0.1) * heat.mending,
+    /** Share of the barricade Mend the Barricade repairs (half as much from Heat 3). */
+    mend: 0.5 * heat.mending,
     streakMs: STREAK_MS + 1_000 * relic('banner'),
     /** Shatter: arrows deal this many times their damage to a chilled foe. */
     chilledDamage: 1 + 0.2 * r('shatter'),
@@ -248,14 +290,16 @@ export type Stats = ReturnType<typeof stats>;
 export const rainNeed = (wave: number, s: Stats) => Math.max(2, Math.round((RAIN_KILLS + Math.floor((wave - 1) / 2)) * s.rainCharge));
 
 /** The hero's level and upgrades, kept from one run to the next. */
-export type Progress = Pick<GameState, 'level' | 'xp' | 'ranks' | 'levelUps' | 'bestWave' | 'runs' | 'relics' | 'mastered'>;
+export type Progress = Pick<GameState, 'level' | 'xp' | 'ranks' | 'levelUps' | 'bestWave' | 'runs' | 'relics' | 'mastered' | 'heat' | 'heatUnlocked'>;
 
 export function freshProgress(): Progress {
-  return { level: 1, xp: 0, ranks: {}, levelUps: 0, bestWave: 0, runs: 0, relics: {}, mastered: false };
+  return { level: 1, xp: 0, ranks: {}, levelUps: 0, bestWave: 0, runs: 0, relics: {}, mastered: false, heat: 0, heatUnlocked: 0 };
 }
 
+export const freshForts = (): Forts => ({ stakeHp: 0, oil: false, lookout: 0, boughtWave: 0 });
+
 /** A new run from wave 1, with the hero's progress kept. */
-export function newRun(progress: Progress): GameState {
+export function newRun(progress: Progress, aimMode: AimMode = 'nearest'): GameState {
   const s = stats(progress);
   const barricadeMax = s.barricadeMax;
   return {
@@ -285,13 +329,17 @@ export function newRun(progress: Progress): GameState {
     roadMs: 0,
     streak: { count: 0, ms: 0, best: 0, bonusXp: 0 },
     relicFound: null,
+    aimMode,
+    roarMs: 0,
+    forts: freshForts(),
+    won: false,
     nextId: 1,
   };
 }
 
 export function progressOf(state: GameState): Progress {
-  const { level, xp, ranks, levelUps, bestWave, runs, relics, mastered } = state;
-  return { level, xp, ranks: { ...ranks }, levelUps, bestWave, runs, relics: { ...relics }, mastered };
+  const { level, xp, ranks, levelUps, bestWave, runs, relics, mastered, heat, heatUnlocked } = state;
+  return { level, xp, ranks: { ...ranks }, levelUps, bestWave, runs, relics: { ...relics }, mastered, heat, heatUnlocked };
 }
 
 /** Upgrades that can still be offered: not maxed, and with what they build on already picked. */

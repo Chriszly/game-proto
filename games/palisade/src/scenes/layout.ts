@@ -18,6 +18,14 @@ export const TRACK = { x: 12, y: 46, w: 344, h: 46, markX: 22, markY: 77, step: 
 export const RAIN = { x: 66, y: 308, r: 26 };
 /** The caltrops button, above the Arrow Rain button, by its centre, and its radius for taps and drags. */
 export const CALTROPS = { x: 66, y: 196, r: 22 };
+/** The aim priority toggle ("Aim: Nearest"), above the caltrops button, by its centre. */
+export const AIM = { x: 66, y: 134, w: 110, h: 22 };
+/** The "Fortify" button under the wave track, by its centre, and the panel it opens. */
+export const FORTIFY = { x: 66, y: 108, w: 110, h: 22, panel: { w: 460, h: 270 } };
+/** The heat chip right of the wave track, by its centre. */
+export const HEAT = { x: 398, y: 58, w: 68, h: 20 };
+/** The "Chilled bow" chip over the hero while the Frost Giant's roar slows the shots, by its centre. */
+export const ROAR_CHIP = { x: 300, y: 236, w: 150, h: 20 };
 /** The tap area of each guard slot on the barricade, round the guard's feet (`GUARD_SLOTS` in state.ts). */
 export const GUARD_HIT = { w: 56, h: 70 };
 /** The hire panel beside a slot: its size and how far right of the slot its centre is. */

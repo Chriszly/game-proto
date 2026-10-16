@@ -7,12 +7,13 @@ rows of pines and a road of faceted earth, with every figure lit from the top le
 A ranger stands on the road on the left, behind a cheval de frise: a heavy log with sharpened
 stakes driven through it. Goblins, orcs, harpies, dark knights, shield bearers and shamans march
 (or fly) in from the right in ever bigger waves, along a road of ten waves that ends in a boss: the Troll King on wave 10, and a new boss on
-every tenth wave after. The ranger can't move and shoots on their own, always at the foe nearest the
-barricade. Every kill fills the experience bar and charges Arrow Rain, a volley the player drags
+every tenth wave after. The ranger can't move and shoots on their own, at the foe nearest the
+barricade unless the aim toggle says otherwise. Every kill fills the experience bar and charges Arrow Rain, a volley the player drags
 onto the horde, and charges Caltrops, a patch of spikes dragged onto the road; kills pay coins that
-hire a spearman or a mage onto the barricade; kills in quick succession build a streak that gives
-more experience; every level-up pauses the battle on three upgrades to pick from; and after each
-boss the hero picks the next road.
+hire a spearman or a mage onto the barricade, or buy a fortification in the break; kills in quick
+succession build a streak that gives more experience; every level-up pauses the battle on three
+upgrades to pick from; after each boss the hero picks the next road; and beating the third boss on
+wave 30 lifts the siege, which wins the run and unlocks the next heat.
 
 ![A wave coming on](docs/screenshots/playthrough-0-battle.png)
 
@@ -25,11 +26,14 @@ boss the hero picks the next road.
 | Drag the Caltrops button (above Arrow Rain) | Once it reads READY, drag it onto the road and let go to strew caltrops there |
 | C | Strew charged caltrops in front of the thickest crowd |
 | Tap a slot on the barricade ("Hire") | Hire a spearman or a mage for coins, or train a hired guard; the battle waits until the panel closes |
+| Fortify (under the wave track, during a break) | Buy one fortification for the coming waves: a stake line, an oil pot or a lookout; one per break |
+| Aim toggle (above the caltrops) or T | Cycle who the ranger shoots first: Nearest, Strongest, Flyers or Healers |
+| Keep fighting / Heat N | After the siege is lifted on wave 30: fight on past it, or start a new run at the next heat |
 | Tap a road card | After a boss, take that road for the next ten waves (after 10 seconds one is taken at random) |
 | Tap or click a card | Take that upgrade when a level-up comes up (after 10 seconds one is taken at random) |
 | 1x / 2x (bottom right) | Switch the battle between normal and double speed; the level-up countdown stays 10 real seconds |
 | Skill book (in the top bar) | Open the skill book; the battle waits until Back |
-| Fight again / New hero | After a fall: start again from wave 1 keeping the hero, or with a new one |
+| Fight again / New hero | After a fall: start again from wave 1 keeping the hero, or with a new one; the "Next run at" row picks the heat |
 
 1. **Waves**: each wave brings more foes than the last, with more health. A short break with the
    wave's banner comes before each, and the barricade gets a tenth of its health back.
@@ -87,6 +91,25 @@ skill book lists the relics of a full set in green with its bonus above them.
 
 ![A relic chest of two relics that completes the Hunter's set, and the road choice](docs/screenshots/road-choice.png)
 
+### Siege lifted and heats
+
+Beating the third boss, the Frost Giant on wave 30, **lifts the siege**: the run is won, with a
+victory panel over the relic chest. "Keep fighting" goes on to wave 31 and beyond on the same
+heat, with a boss every tenth wave as before; "Heat N" starts a new run at the next heat, from wave
+1 with the hero kept. Each heat adds a rule on top of the lower ones, and the game-over panel's
+"Next run at" row starts the next run at any heat unlocked so far. A chip beside the wave track
+shows the heat the run is on.
+
+| Heat | Adds |
+| --- | --- |
+| Heat 1 | Foes come on 30% faster |
+| Heat 2 | Every boss has one more health bar |
+| Heat 3 | The barricade mends half as much after a wave and from Mend the Barricade |
+
+![The siege is lifted](docs/screenshots/siege-lifted.png)
+![A new run at Heat 1](docs/screenshots/heat-1.png)
+![The game-over panel with the heats](docs/screenshots/game-over-heats.png)
+
 ### Road choice
 
 After each boss, under the relic chest, two road cards offer the next road of ten waves, each with
@@ -113,6 +136,17 @@ then charges again from empty. A level-up or a fall drops it from the hand.
 
 ![Dragging Arrow Rain onto the horde](docs/screenshots/arrow-rain-aim.png)
 ![The volley landing](docs/screenshots/arrow-rain-volley.png)
+
+### Aim priority
+
+The ranger always shot the foe nearest the barricade first. The toggle above the caltrops button
+(or T) cycles the aim priority for the arrows and the Storm Staff's lightning: **Nearest**,
+**Strongest** (the most health first, so bosses and dark knights), **Flyers** (harpies first) or
+**Healers** (shamans first), the nearest first breaking every tie. Fireballs still go at the
+thickest crowd and the mage still throws at the nearest. The choice is remembered in the browser,
+apart from the hero.
+
+![Aiming at flyers first](docs/screenshots/aim-priority.png)
 
 ### Caltrops
 
@@ -142,6 +176,22 @@ The battle waits while the panel is open; a tap beside it closes it.
 ![A trained spearman and a mage on the barricade](docs/screenshots/guards.png)
 ![The hire panel](docs/screenshots/hire-panel.png)
 
+### Fortifications
+
+During each break, a "Fortify" button under the wave track opens a panel of three
+fortifications; one can be bought per break, for coins that would otherwise hire guards. The break
+waits while the panel is open.
+
+| Fortification | Cost | What it does |
+| --- | --- | --- |
+| Stake line | 25 coins | A row of stakes behind the barricade. Once the barricade is down, foes stop at the stakes and hack through 80 of them before walking on (Spiked Stakes pricks them there too); buying it again sets it back to full |
+| Oil pot | 15 coins | Armed on the barricade. The first foe to reach it next wave bursts the pot: every foe near it takes 15 and burns for 6s, Warded elites aside |
+| Lookout | 20 coins | A pennant on the barricade: Arrow Rain's ring is 40% wider for the next three waves (the one it was bought before included) |
+
+![The fortify panel](docs/screenshots/fortify-panel.png)
+![An oil pot and a lookout on the barricade](docs/screenshots/fortifications.png)
+![Foes hacking at the stake line after the barricade fell](docs/screenshots/stake-line.png)
+
 ### Kill streak
 
 Kills in quick succession, each within 2.5 seconds of the last, build a kill streak. From two kills
@@ -162,9 +212,28 @@ level-up is up, and ends when no kill comes in time.
 | Dark Knight | wave 4 | Slow and tough, and its armour takes 5 off every arrow, burst, volley and fireball hit |
 | Shield Bearer | wave 5 | Its tower shield takes 75% off every arrow and stops burning, chill and piercing; bursts, fireballs, Arrow Rain, lightning, caltrops and guards get through |
 | Shaman | wave 7 | Heals every hurt foe within reach (itself too) by 12% of its health every 2.5s, a boss by 3% |
-| Troll King | wave 10 (40, 70...) | A boss: three health bars on wave 10 and one more every ten waves, shown stacked at the top of the screen, each a different colour |
-| Ogre Warlord | wave 20 (50, 80...) | A boss with a horned helm and a great axe, harder hitting and better armoured |
-| Frost Giant | wave 30 (60, 90...) | The biggest boss, slow, with the most health |
+| Troll King | wave 10 (40, 70...) | A boss: three health bars on wave 10 and one more every ten waves, shown stacked at the top of the screen, each a different colour. Every 7s it throws a rock at a hired guard, stunning it for 4s; with no guard hired the rock takes 25 off the barricade |
+| Ogre Warlord | wave 20 (50, 80...) | A boss with a horned helm and a great axe, harder hitting and better armoured. Once below half health it calls four goblins to its side |
+| Frost Giant | wave 30 (60, 90...) | The biggest boss, slow, with the most health. Every 9s it roars, and the ranger shoots at 60% of the pace for 4s ("Chilled bow") |
+
+![The Troll King's rock on its way to a guard](docs/screenshots/boss-troll-rock.png)
+![The spearman stunned by the rock](docs/screenshots/boss-guard-stunned.png)
+![The Ogre Warlord calling goblins](docs/screenshots/boss-ogre-call.png)
+![The Frost Giant's roar chills the bow](docs/screenshots/boss-giant-roar.png)
+
+#### Elite foes
+
+From wave 4 some foes (never a boss) come on as **elites**: 10% of them at first, 1.5% more every
+wave up to a third. An elite has 50% more health, gives twice the experience and twice the coins,
+and carries one of three traits, named over its health bar:
+
+| Trait | What it does |
+| --- | --- |
+| Splitting | Falls apart into two goblins (with 60% of a goblin's health) where it fell, on the road even if it flew |
+| Enraged | Below half health it walks and hits 60% faster, and turns red |
+| Warded | Immune to burning and chill, with a violet rune ring on the road; Shatter's bonus never applies to it |
+
+![Elites on wave 14](docs/screenshots/elite-foes.png)
 
 ### Upgrades
 
@@ -204,7 +273,7 @@ the empty cards, in this order: "Mend the Barricade" (repair half of the barrica
 ![With every upgrade taken, the three fillers](docs/screenshots/fillers.png)
 
 Once every skill is learned, the next level-up opens one last time with the repair card alone
-("Every skill learned"). From then on each level-up repairs half of the barricade at once, with a
+("Every skill learned"). From then on each level-up repairs half of the barricade at once (a quarter from Heat 3), with a
 "Level N! Barricade repaired" pop-up over it, and the battle goes on without a pause.
 
 ![The last level-up, with the repair card alone](docs/screenshots/last-level-up.png)
@@ -230,7 +299,7 @@ gold at 2x and is remembered in the browser, separately from the hero.
 
 ![After a fall](docs/screenshots/game-over.png)
 
-The difficulty, set on the hub page's Settings, changes one thing: foes have 25% less health on Easy and 30% more on Hard.
+The difficulty, set on the hub page's Settings, changes one thing: foes have 25% less health on Easy and 30% more on Hard. The heats are separate from it.
 
 ## Running locally
 
@@ -263,11 +332,13 @@ npx playwright test --project palisade
 All paths are inside `games/palisade/`.
 
 - `src/game/`: the rules in plain TypeScript with no Phaser dependency. `enemies.ts`,
-  `upgrades.ts`, `relics.ts` (with the relic sets), `guards.ts` and `roads.ts` are data tables, `waves.ts` says what each wave brings and which
+  `upgrades.ts`, `relics.ts` (with the relic sets), `guards.ts`, `roads.ts`, `forts.ts` (the
+  fortifications), `elites.ts` (the traits), `bosses.ts` (the bosses' moves), `heat.ts` (the heats
+  and the winning wave) and `aim.ts` (the aim priority) are data tables, `waves.ts` says what each wave brings and which
   road and boss it is on, `state.ts` holds the run and works out the hero's stats from the upgrade
-  ranks and relics, `sim.ts` moves the battle on, takes upgrades and roads, looses Arrow Rain, strews caltrops and
-  hires and trains guards, and
-  `save.ts` keeps the hero's progress.
+  ranks, relics and heat, `sim.ts` moves the battle on, takes upgrades and roads, looses Arrow Rain, strews caltrops,
+  hires and trains guards, buys fortifications and lifts the siege, and
+  `save.ts` keeps the hero's progress, the speed and the aim priority.
 - `src/scenes/`: `BootScene` paints the textures, `GameScene` draws the battle, the HUD, the wave
   track, Arrow Rain, the caltrops and the guard slots and wires taps and drags to the rules, `layout.ts` says where things are
   drawn.
@@ -277,7 +348,7 @@ All paths are inside `games/palisade/`.
   breaks up in stages), and `icons.ts` the upgrade and relic icons, the chest, the boss marks,
   the Arrow Rain and caltrops buttons, the coin and the road icons.
 - `src/ui/`: the level-up cards, the road cards (`RoadChoice`), the hire panel (`HirePanel`), the
-  skill book, and `panel.ts` with the slate-and-gold panels,
+  fortify panel (`FortifyPanel`), the skill book, and `panel.ts` with the slate-and-gold panels,
   buttons and text style.
 
 Adding an upgrade is an entry in `src/game/upgrades.ts` and its effect in `stats` in

@@ -1,5 +1,6 @@
 import { byDifficulty } from '../../../../shared/settings';
 import { ENEMIES, type EnemyKind } from './enemies';
+import { heatRules } from './heat';
 import { roadEffects, type RoadId } from './roads';
 
 /** Every tenth wave brings a boss. */
@@ -28,11 +29,11 @@ export function waveTrack(wave: number) {
 /** How much more health foes have in a wave than in wave 1. */
 export const hpScale = (wave: number) => 1 + 0.18 * (wave - 1) + 0.012 * (wave - 1) ** 2;
 
-/** How many health bars a wave's boss has: three on wave 10, one more every ten waves after. */
-export const bossBars = (wave: number) => 2 + Math.floor(wave / BOSS_EVERY);
+/** How many health bars a wave's boss has: three on wave 10, one more every ten waves after, and one more from Heat 2. */
+export const bossBars = (wave: number, heat = 0) => 2 + Math.floor(wave / BOSS_EVERY) + heatRules(heat).bossBars;
 
-/** Time between two foes coming on, in milliseconds. */
-export const spawnInterval = (wave: number) => Math.max(320, 1_300 - 45 * wave);
+/** Time between two foes coming on, in milliseconds; shorter from Heat 1. */
+export const spawnInterval = (wave: number, heat = 0) => Math.max(320, 1_300 - 45 * wave) * heatRules(heat).spawnGap;
 
 /**
  * The foes of a wave in the order they come on. More come every wave; orcs join from the start,
@@ -71,8 +72,8 @@ export function waveFoes(wave: number, road: RoadId | null = null): EnemyKind[] 
  * A foe's full health in a wave, scaled by the hub's difficulty and the road's twist; a boss's is
  * spread over its bars.
  */
-export function foeHp(kind: EnemyKind, wave: number, road: RoadId | null = null) {
+export function foeHp(kind: EnemyKind, wave: number, road: RoadId | null = null, heat = 0) {
   const type = ENEMIES[kind];
   const hp = Math.round(type.hp * hpScale(wave) * roadEffects(road).hp * byDifficulty(0.75, 1, 1.3));
-  return type.boss ? hp * bossBars(wave) : hp;
+  return type.boss ? hp * bossBars(wave, heat) : hp;
 }

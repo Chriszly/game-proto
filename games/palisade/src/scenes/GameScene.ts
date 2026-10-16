@@ -4,12 +4,37 @@ import { FIGURES, foeTexture, guardTexture } from '../art/characters';
 import { bossNodeTexture, relicTexture } from '../art/icons';
 import { fit } from '../art/lowpoly';
 import { BAR, BOSS_BARS, FIRE, GOLD, SLATE, STORM, XP } from '../art/palette';
+import { AIMS, nextAim } from '../game/aim';
+import { TRAITS } from '../game/elites';
 import { ENEMIES } from '../game/enemies';
+import { STAKE_FRONT, STAKE_HP, type FortId } from '../game/forts';
 import { GUARDS, type GuardKind } from '../game/guards';
+import { HEAT_RULES, MAX_HEAT, WIN_WAVE } from '../game/heat';
 import { RELICS, SETS, setComplete } from '../game/relics';
 import { ROADS, type RoadId } from '../game/roads';
-import { clearProgress, loadFound, loadProgress, loadSpeed, saveFound, saveProgress, saveSpeed } from '../game/save';
-import { CALTROP_PATCH, RAIN_FALL_MS, RAIN_RING, crowdSpot, fightAgain, hire, loose, offer, pick, pickRoad, strew, tick, train } from '../game/sim';
+import { clearProgress, loadAim, loadFound, loadProgress, loadSpeed, saveAim, saveFound, saveProgress, saveSpeed } from '../game/save';
+import {
+  CALTROP_PATCH,
+  RAIN_FALL_MS,
+  RAIN_RING,
+  canFortify,
+  crowdSpot,
+  fightAgain,
+  fortify,
+  held,
+  hire,
+  keepFighting,
+  loose,
+  offer,
+  pick,
+  pickRoad,
+  rainRingOf,
+  setAim,
+  startHeat,
+  strew,
+  tick,
+  train,
+} from '../game/sim';
 import {
   BARRICADE_FRONT,
   FIELD,
@@ -25,12 +50,13 @@ import {
 } from '../game/state';
 import type { UpgradeId } from '../game/upgrades';
 import { isBossWave, waveTrack } from '../game/waves';
+import { FortifyPanel } from '../ui/FortifyPanel';
 import { HirePanel } from '../ui/HirePanel';
 import { LevelUp } from '../ui/LevelUp';
 import { RoadChoice } from '../ui/RoadChoice';
 import { chamferPts, drawPanel, makeButton, textStyle } from '../ui/panel';
 import { SkillBook } from '../ui/SkillBook';
-import { BARRICADE, BOSS_BAR, CALTROPS, GUARD_HIT, HERO_FEET, HUD_HEIGHT, RAIN, RAIN_HINT, SPEED, STREAK, TRACK, UI_DEPTH, VIEW, XP_BAR } from './layout';
+import { AIM, BARRICADE, BOSS_BAR, CALTROPS, FORTIFY, GUARD_HIT, HEAT, HERO_FEET, HUD_HEIGHT, RAIN, RAIN_HINT, ROAR_CHIP, SPEED, STREAK, TRACK, UI_DEPTH, VIEW, XP_BAR } from './layout';
 
 /** Longest simulated step, so a backgrounded tab doesn't jump the battle forward. */
 const MAX_STEP_MS = 250;
@@ -68,6 +94,22 @@ export class GameScene extends Phaser.Scene {
   roadChoice!: RoadChoice;
   /** The panel a guard slot opens to hire or train a guard. */
   hirePanel!: HirePanel;
+  /** The panel the "Fortify" button opens during a break. */
+  fortifyPanel!: FortifyPanel;
+  private eliteLabels = new Map<number, Phaser.GameObjects.Text>();
+  private aimBg!: Phaser.GameObjects.Graphics;
+  private aimText!: Phaser.GameObjects.Text;
+  private fortifyBg!: Phaser.GameObjects.Graphics;
+  private fortifyText!: Phaser.GameObjects.Text;
+  private heatText!: Phaser.GameObjects.Text;
+  private roarText!: Phaser.GameObjects.Text;
+  private fortG!: Phaser.GameObjects.Graphics;
+  private fortLabel!: Phaser.GameObjects.Text;
+  private won!: Phaser.GameObjects.Container;
+  private wonText!: Phaser.GameObjects.Text;
+  private wonNext!: Phaser.GameObjects.Container;
+  private wonNextText!: Phaser.GameObjects.Text;
+  private heatPicks: { bg: Phaser.GameObjects.Graphics; text: Phaser.GameObjects.Text; zone: Phaser.GameObjects.Zone }[] = [];
   private foes = new Map<number, Phaser.GameObjects.Image>();
   private missiles = new Map<number, Phaser.GameObjects.Image>();
   private pops = new Map<number, Phaser.GameObjects.Text[]>();
@@ -135,7 +177,8 @@ export class GameScene extends Phaser.Scene {
     this.rainArrows.clear();
     this.caltropPieces.clear();
     this.aim = null;
-    this.state = newRun(loadProgress());
+    this.eliteLabels.clear();
+    this.state = newRun(loadProgress(), loadAim());
     if (this.state.levelUps > 0) offer(this.state);
 
     fit(this.add.image(0, 0, 'background')).setOrigin(0);
@@ -150,8 +193,10 @@ export class GameScene extends Phaser.Scene {
     this.createTrack();
     this.createRain();
     this.createGuards();
+    this.createForts();
     this.createRelicPanel();
     this.createGameOver();
+    this.createWon();
     this.levelUp = new LevelUp(this, (id) => this.pick(id));
     this.roadChoice = new RoadChoice(this, (id) => this.pickRoad(id));
     this.hirePanel = new HirePanel(
@@ -159,6 +204,8 @@ export class GameScene extends Phaser.Scene {
       (slot, kind) => this.hire(slot, kind),
       (slot) => this.train(slot),
     );
+    this.fortifyPanel = new FortifyPanel(this, (id) => this.fortify(id));
+    this.createAimToggle();
     this.found = new Set(loadFound());
     this.skillBook = new SkillBook(this);
     this.createSpeedSwitch();
@@ -174,17 +221,19 @@ export class GameScene extends Phaser.Scene {
     const wave = s.wave;
     const levelUps = s.levelUps;
     const level = s.level;
-    // Everything, the auto-pick countdown included, waits while the skill book or a hire panel is open.
-    if (s.choices || s.phase === 'over') this.hirePanel.close();
-    if (!this.skillBook.open && !this.hirePanel.open) {
+    // Everything, the auto-pick countdown included, waits while the skill book, a hire panel or the
+    // fortify panel is open.
+    if (s.choices || held(s)) this.hirePanel.close();
+    if (s.choices || s.phase !== 'break') this.fortifyPanel.close();
+    if (!this.skillBook.open && !this.hirePanel.open && !this.fortifyPanel.open) {
       // The battle plays at the chosen speed; the auto-pick countdown stays in real seconds.
       const game = s.choices ? dt : dt * this.speed;
       tick(s, game);
-      if (!s.choices && s.phase !== 'over') this.clock += game;
+      if (!s.choices && !held(s)) this.clock += game;
     }
     if (s.phase !== phase || s.wave !== wave || s.levelUps !== levelUps || s.level !== level) saveProgress(progressOf(s));
     // A level-up or a fall drops Arrow Rain from the hand.
-    if (s.choices || s.phase === 'over' || this.skillBook.open || this.hirePanel.open) this.aim = null;
+    if (s.choices || held(s) || this.skillBook.open || this.hirePanel.open || this.fortifyPanel.open) this.aim = null;
 
     this.track = waveTrack(s.wave);
     this.drawFoes();
@@ -196,16 +245,29 @@ export class GameScene extends Phaser.Scene {
     this.drawRain();
     this.drawCaltrops();
     this.drawGuards();
+    this.drawForts();
+    this.drawAimToggle();
     this.roadChoice.show(s.phase === 'break' ? s.roadChoices : null, s.roadMs);
-    this.levelUp.show(s.phase === 'over' ? null : s.choices, s.ranks, s.level - s.levelUps + 1, s.levelUps, s.pickMs);
+    this.levelUp.show(held(s) ? null : s.choices, s.ranks, s.level - s.levelUps + 1, s.levelUps, s.pickMs);
     this.discover();
-    this.skillBook.show(this.found, s.ranks, s.relics, s.phase === 'over');
+    this.skillBook.show(this.found, s.ranks, s.relics, held(s));
     this.gameOver.setVisible(s.phase === 'over');
     if (s.phase === 'over') {
       this.gameOverText.setText(
-        `The foes broke through and reached the hero on wave ${s.wave}.\n${s.kills} foes slain this run, longest streak x${s.streak.best}, best wave cleared: ${s.bestWave}.\n\n` +
+        `The foes broke through and reached the hero on wave ${s.wave}${s.heat > 0 ? ` at Heat ${s.heat}` : ''}.\n${s.kills} foes slain this run, longest streak x${s.streak.best}, best wave cleared: ${s.bestWave}.\n\n` +
           `The hero keeps level ${s.level}, every upgrade picked and every relic won.`,
       );
+      this.drawHeatPicks();
+    }
+    this.won.setVisible(s.phase === 'won');
+    if (s.phase === 'won') {
+      const next = s.heat + 1;
+      this.wonText.setText(
+        `The third boss has fallen on wave ${WIN_WAVE}${s.heat > 0 ? ` at Heat ${s.heat}` : ''}: the siege is lifted.\n${s.kills} foes slain this run, longest streak x${s.streak.best}.\n\n` +
+          (next <= MAX_HEAT ? `Heat ${next} is unlocked: ${HEAT_RULES[next - 1].toLowerCase()}, on top of ${next > 1 ? "the lower heats' rules" : 'the usual rules'}.` : 'Every heat is beaten. Fight on, or start again at any heat.'),
+      );
+      this.wonNext.setVisible(next <= MAX_HEAT);
+      this.wonNextText.setText(`Heat ${next}`);
     }
   }
 
@@ -233,6 +295,17 @@ export class GameScene extends Phaser.Scene {
 
   private train(slot: number) {
     if (train(this.state, slot)) this.hirePanel.show(slot, this.state.guards[slot], this.state.coins);
+  }
+
+  private fortify(id: FortId) {
+    if (fortify(this.state, id)) this.fortifyPanel.close();
+  }
+
+  /** Cycles the aim priority, and keeps it for the next run and the next visit. */
+  private cycleAim() {
+    if (this.skillBook.open || this.hirePanel.open || this.fortifyPanel.open) return;
+    setAim(this.state, nextAim(this.state.aimMode));
+    saveAim(this.state.aimMode);
   }
 
   /** Blinks on and off every `ms`, or holds still with reduced motion. */
@@ -275,14 +348,41 @@ export class GameScene extends Phaser.Scene {
       if (e.hitMs > 0 && this.blink(50) === 0) sprite.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
       else if (e.burnMs > 0) sprite.setTint(this.blink(120) ? 0xffb070 : 0xffd8a0).setTintMode(Phaser.TintModes.MULTIPLY);
       else if (e.slowMs > 0) sprite.setTint(0xa8dcf8).setTintMode(Phaser.TintModes.MULTIPLY);
+      else if (e.trait === 'enraged' && e.hp < e.maxHp / 2) sprite.setTint(0xffb0a0).setTintMode(Phaser.TintModes.MULTIPLY);
       else sprite.clearTint();
       if (!type.boss) this.drawHpBar(e, feet - fig.height - 8);
       if (e.burnMs > 0) this.drawFlames(e, feet - fig.height / 2);
+      if (e.trait) this.drawElite(e, feet - fig.height - 8);
     }
     for (const [id, sprite] of this.foes) {
       if (seen.has(id)) continue;
       sprite.destroy();
       this.foes.delete(id);
+    }
+    for (const [id, label] of this.eliteLabels) {
+      if (seen.has(id)) continue;
+      label.destroy();
+      this.eliteLabels.delete(id);
+    }
+  }
+
+  /** An elite's trait: a coloured hexagon over its health bar, its name beside it, and a Warded foe's rune ring on the road. */
+  private drawElite(e: Enemy, y: number) {
+    const trait = TRAITS[e.trait!];
+    const g = this.bars;
+    const x = Math.round(e.x - HP_BAR_W / 2) - 8;
+    g.fillStyle(0x141820).fillPoints(this.hexPts(x, y + 2, 7), true);
+    g.fillStyle(trait.color).fillPoints(this.hexPts(x, y + 2, 5), true);
+    let label = this.eliteLabels.get(e.id);
+    if (!label) {
+      label = this.add.text(0, 0, trait.name, textStyle(9, trait.css, 2)).setOrigin(0.5, 1).setDepth(UI_DEPTH - 20);
+      this.eliteLabels.set(e.id, label);
+    }
+    label.setPosition(e.x, y - 2);
+    if (e.trait === 'warded') {
+      const r = ENEMIES[e.kind].radius;
+      const feet = e.y + r * 0.6 + (ENEMIES[e.kind].flying ? FLY_HEIGHT : 0);
+      this.glow.lineStyle(2, trait.color, 0.5 + 0.3 * this.pulse(900)).strokeEllipse(e.x, feet, r * 2.4, r * 0.9);
     }
   }
 
@@ -313,13 +413,20 @@ export class GameScene extends Phaser.Scene {
       seen.add(m.id);
       let sprite = this.missiles.get(m.id);
       if (!sprite) {
-        sprite = fit(this.add.image(m.x, m.y, m.kind === 'arrow' ? arrowKey : m.kind === 'magic' ? 'magic-bolt' : 'fireball')).setDepth(UI_DEPTH - 40);
+        sprite = fit(this.add.image(m.x, m.y, m.kind === 'arrow' ? arrowKey : m.kind === 'magic' ? 'magic-bolt' : m.kind === 'rock' ? 'rock' : 'fireball')).setDepth(UI_DEPTH - 40);
         if (m.kind === 'arrow') sprite.setOrigin(30 / 44, 0.5);
         else if (m.kind === 'magic') sprite.setOrigin(28 / 40, 0.5);
-        else sprite.setOrigin(34 / 48, 0.5);
+        else if (m.kind === 'fireball') sprite.setOrigin(34 / 48, 0.5);
         this.missiles.set(m.id, sprite);
       }
-      sprite.setPosition(m.x, m.y).setRotation(Math.atan2(m.vy, m.vx));
+      if (m.kind === 'rock') {
+        // A rock tumbles along a high arc over the foes, with its shadow on the road.
+        const total = Math.max(1, Math.hypot(m.to!.x - m.from!.x, m.to!.y - m.from!.y));
+        const u = Phaser.Math.Clamp(1 - Math.hypot(m.to!.x - m.x, m.to!.y - m.y) / total, 0, 1);
+        const lift = Math.sin(u * Math.PI) * 110;
+        this.fx.fillStyle(0x2a1808, 0.2).fillEllipse(m.x, m.y + 10, 24, 8);
+        sprite.setPosition(m.x, m.y - lift).setRotation(m.x * 0.05);
+      } else sprite.setPosition(m.x, m.y).setRotation(Math.atan2(m.vy, m.vx));
     }
     for (const [id, sprite] of this.missiles) {
       if (seen.has(id)) continue;
@@ -403,6 +510,36 @@ export class GameScene extends Phaser.Scene {
         const [a, b] = e.points;
         glow.lineStyle(4, 0xfff2c4, 0.8 * (1 - t)).lineBetween(a.x, a.y, b.x, b.y);
         glow.fillStyle(0xffffff, 0.8 * (1 - t)).fillCircle(b.x, b.y, 6 * (1 - t) + 2);
+      } else if (e.kind === 'rockHit') {
+        // A rock comes down: dust and stone chips fly.
+        const r = (e.radius ?? 20) * (0.5 + 1.5 * t);
+        g.fillStyle(0xb8ab98, 0.5 * (1 - t)).fillEllipse(e.x, e.y + 6, r * 2.2, r * 0.9);
+        for (let k = 0; k < 6; k++) {
+          const a = (k / 6) * Math.PI * 2 + e.id;
+          const cx = e.x + Math.cos(a) * r;
+          const cy = e.y + Math.sin(a) * r * 0.5 - t * 24;
+          g.fillStyle(0x7d7872, 1 - t).fillTriangle(cx - 4, cy + 3, cx, cy - 4, cx + 4, cy + 3);
+        }
+      } else if (e.kind === 'call') {
+        // The Ogre Warlord's call: rings of sound roll out from it.
+        for (let k = 0; k < 3; k++) {
+          const u = Math.max(0, t - k * 0.15);
+          glow.lineStyle(3, 0xffb08a, 0.7 * (1 - u)).strokeEllipse(e.x, e.y - 30, 40 + u * 220, 24 + u * 120);
+        }
+      } else if (e.kind === 'roar') {
+        // The Frost Giant's roar: a frosty shockwave towards the hero.
+        const r = (e.radius ?? 160) * t;
+        glow.lineStyle(5, 0xa8dcf8, 0.8 * (1 - t)).strokeEllipse(e.x - r * 0.4, e.y, r * 2.4, r * 1.2);
+        glow.lineStyle(2, 0xffffff, 0.6 * (1 - t)).strokeEllipse(e.x - r * 0.4, e.y, r * 1.6, r * 0.8);
+      } else if (e.kind === 'split') {
+        // A Splitting foe falls apart: green shards burst sideways.
+        const r = (e.radius ?? 16) * (0.6 + 1.4 * t);
+        for (let k = 0; k < 6; k++) {
+          const a = (k / 6) * Math.PI * 2 + e.id;
+          const cx = e.x + Math.cos(a) * r * 1.3;
+          const cy = e.y + Math.sin(a) * r * 0.5 - 8;
+          glow.fillStyle(0x8fdc6a, 0.9 * (1 - t)).fillTriangle(cx - 4, cy + 3, cx, cy - 5, cx + 4, cy + 3);
+        }
       } else if (e.kind === 'arcane') {
         // The mage's bolt bursts: a teal starburst.
         const r = (e.radius ?? 40) * (0.4 + 0.6 * t);
@@ -594,7 +731,7 @@ export class GameScene extends Phaser.Scene {
     this.xpText.setText(`${Math.floor(s.xp)} / ${need} XP`);
 
     // The kill streak chip, while a streak of two or more runs.
-    const streak = s.streak.count >= 2 && s.phase !== 'over';
+    const streak = s.streak.count >= 2 && !held(s);
     this.streakFlame.setVisible(streak);
     this.streakText.setVisible(streak).setText(`Streak x${s.streak.count}`);
     this.streakBonusText.setVisible(streak).setText(`+${Math.round(streakBonus(s.streak.count) * 100)}% XP`);
@@ -608,7 +745,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     // The wave's banner during the break before it.
-    const breaking = s.phase === 'break' && !s.choices && !s.relicFound && !s.roadChoices && !this.hirePanel.open;
+    const breaking = s.phase === 'break' && !s.choices && !s.relicFound && !s.roadChoices && !this.hirePanel.open && !this.fortifyPanel.open;
     this.banner
       .setVisible(breaking)
       .setText(isBossWave(s.wave) ? `Wave ${s.wave}\nThe ${ENEMIES[this.track.boss].name} comes!` : `Wave ${s.wave}`)
@@ -777,21 +914,119 @@ export class GameScene extends Phaser.Scene {
     };
     this.input.keyboard?.on('keydown-R', key);
     this.input.keyboard?.on('keydown-SPACE', key);
-    // C strews the caltrops in front of the thickest crowd.
+    // C strews the caltrops in front of the thickest crowd, and T cycles the aim priority.
     this.input.keyboard?.on('keydown-C', () => {
       const spot = this.caltropsReady() ? crowdSpot(this.state) : null;
       if (spot) strew(this.state, spot.x - 40, spot.y);
     });
+    this.input.keyboard?.on('keydown-T', () => this.cycleAim());
+  }
+
+  // ---- The aim priority toggle, the Fortify button and the fortifications on the field.
+
+  private createAimToggle() {
+    const { x, y, w, h } = AIM;
+    this.aimBg = this.add.graphics().setDepth(UI_DEPTH - 6);
+    this.aimText = this.add.text(x, y, '', textStyle(11, '#ffe7a0')).setOrigin(0.5).setDepth(UI_DEPTH - 5);
+    this.add
+      .zone(x, y, w, h)
+      .setDepth(UI_DEPTH - 4)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => this.cycleAim());
+    const f = FORTIFY;
+    this.fortifyBg = this.add.graphics().setDepth(UI_DEPTH - 6);
+    this.fortifyText = this.add.text(f.x, f.y, 'Fortify', textStyle(12, '#ffe7a0')).setOrigin(0.5).setDepth(UI_DEPTH - 5);
+    this.add
+      .zone(f.x, f.y, f.w, f.h)
+      .setDepth(UI_DEPTH - 4)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => {
+        const s = this.state;
+        if (s.phase !== 'break' || s.choices || this.aim || this.skillBook.open || this.hirePanel.open) return;
+        this.fortifyPanel.show(s.forts, s.coins, canFortify(s));
+      });
+    this.heatText = this.add.text(HEAT.x, HEAT.y, '', textStyle(11, '#ffb08a')).setOrigin(0.5).setDepth(UI_DEPTH - 4);
+    this.roarText = this.add.text(ROAR_CHIP.x, ROAR_CHIP.y, 'Chilled bow: slow shots', textStyle(10, '#d8f0ff')).setOrigin(0.5).setDepth(UI_DEPTH - 5);
+  }
+
+  private drawAimToggle() {
+    const s = this.state;
+    const g = this.aimBg;
+    g.clear();
+    const { x, y, w, h } = AIM;
+    drawPanel(g, x - w / 2, y - h / 2, w, h, { c: 5, fill: 0x1e222c, alpha: 0.92, edge: s.aimMode === 'nearest' ? GOLD.dark : GOLD.light, lw: 1.5 });
+    this.aimText.setText(`Aim: ${AIMS[s.aimMode].name}`);
+    // The Fortify button only during a break; lit while this break's fortification is still to buy.
+    const f = FORTIFY;
+    const fg = this.fortifyBg;
+    fg.clear();
+    const show = s.phase === 'break' && !s.choices;
+    const open = show && canFortify(s);
+    this.fortifyText.setVisible(show).setColor(open ? '#ffe7a0' : '#9aa0ac').setText(open ? 'Fortify' : 'Fortified');
+    if (show) drawPanel(fg, f.x - f.w / 2, f.y - f.h / 2, f.w, f.h, { c: 5, fill: open ? SLATE.light : 0x1e222c, alpha: 0.95, edge: open ? GOLD.light : 0x4a5060, lw: open ? 2 : 1 });
+    if (show && open) fg.fillStyle(GOLD.light, 0.1 + 0.15 * this.pulse(900)).fillPoints(chamferPts(f.x - f.w / 2, f.y - f.h / 2, f.w, f.h, 5), true);
+    // The heat chip beside the wave track, and the chilled-bow chip while the Frost Giant's roar lasts.
+    const heat = s.heat > 0;
+    this.heatText.setVisible(heat).setText(`Heat ${s.heat}`);
+    if (heat) drawPanel(g, HEAT.x - HEAT.w / 2, HEAT.y - HEAT.h / 2, HEAT.w, HEAT.h, { c: 5, fill: 0x3a2414, alpha: 0.95, edge: 0xff9b3a, lw: 1.5 });
+    const roar = s.roarMs > 0 && !held(s);
+    this.roarText.setVisible(roar);
+    if (roar) drawPanel(g, ROAR_CHIP.x - ROAR_CHIP.w / 2, ROAR_CHIP.y - ROAR_CHIP.h / 2, ROAR_CHIP.w, ROAR_CHIP.h, { c: 5, fill: 0x1a2a3a, alpha: 0.95, edge: 0xa8dcf8, lw: 1.5 });
+  }
+
+  private createForts() {
+    this.fortG = this.add.graphics().setDepth(2);
+    this.fortLabel = this.add.text(BARRICADE.x + 70, BARRICADE.y - 4, '', textStyle(10, '#ffe7a0', 2)).setOrigin(0.5, 1).setDepth(UI_DEPTH - 7);
+  }
+
+  /** The stake line behind the barricade, the oil pot on top of it and the lookout's banner. */
+  private drawForts() {
+    const f = this.state.forts;
+    const g = this.fortG;
+    g.clear();
+    if (f.stakeHp > 0) {
+      // A row of sharpened stakes leaning towards the foes, from the top of the road to the bottom.
+      for (let y = FIELD.top + 6; y <= FIELD.bottom; y += 18) {
+        g.fillStyle(0x3a2412, 0.3).fillEllipse(STAKE_FRONT - 4, y + 3, 16, 5);
+        g.fillStyle(0x7a4e26).fillTriangle(STAKE_FRONT - 10, y + 2, STAKE_FRONT - 2, y + 2, STAKE_FRONT + 10, y - 20);
+        g.fillStyle(0xc9955a).fillTriangle(STAKE_FRONT - 10, y + 2, STAKE_FRONT - 6, y + 2, STAKE_FRONT + 10, y - 20);
+      }
+      // Its health as a short bar over its top.
+      const w = 40;
+      const x = STAKE_FRONT - 16;
+      const y = FIELD.top - 24;
+      g.fillStyle(BAR.back).fillPoints(chamferPts(x - 1, y - 1, w + 2, 7, 2), true);
+      g.fillStyle(0xc9955a).fillRect(x + 1, y + 1, Math.round((w - 2) * Math.min(1, f.stakeHp / STAKE_HP)), 4);
+    }
+    if (f.oil) {
+      // An oil pot with a lit wick, standing on the barricade's top log.
+      const x = BARRICADE.x + 96;
+      const y = BARRICADE.y + 18;
+      g.fillStyle(0x4a3a2a).fillEllipse(x, y + 2, 18, 16);
+      g.fillStyle(0x6a5038).fillEllipse(x - 3, y - 1, 8, 10);
+      g.fillStyle(0x2a2018).fillRect(x - 6, y - 10, 12, 4);
+      const flick = this.blink(140) ? 1 : 0.8;
+      g.fillStyle(FIRE.mid).fillTriangle(x - 3, y - 10, x + 3, y - 10, x, y - 10 - 10 * flick);
+      g.fillStyle(FIRE.light).fillTriangle(x - 1.5, y - 10, x + 1.5, y - 10, x, y - 16 * flick);
+    }
+    if (f.lookout > 0) {
+      // The lookout's post and pennant on the barricade.
+      const x = BARRICADE.x + 40;
+      const y = BARRICADE.y + 8;
+      g.fillStyle(0x6a4424).fillRect(x - 2, y - 26, 4, 34);
+      g.fillStyle(GOLD.mid).fillTriangle(x + 2, y - 26, x + 20 + 2 * this.pulse(600), y - 21, x + 2, y - 15);
+    }
+    this.fortLabel.setText(f.lookout > 0 ? `Lookout: ${f.lookout} wave${f.lookout > 1 ? 's' : ''}` : '');
   }
 
   private caltropsReady() {
     const s = this.state;
-    return s.caltrops.charge >= s.caltrops.need && !s.choices && s.phase !== 'over' && !this.skillBook.open && !this.hirePanel?.open;
+    return s.caltrops.charge >= s.caltrops.need && !s.choices && !held(s) && !this.skillBook.open && !this.hirePanel?.open && !this.fortifyPanel?.open;
   }
 
   private rainReady() {
     const s = this.state;
-    return s.rain.charge >= s.rain.need && !s.choices && s.phase !== 'over' && !this.skillBook.open && !this.hirePanel?.open;
+    return s.rain.charge >= s.rain.need && !s.choices && !held(s) && !this.skillBook.open && !this.hirePanel?.open && !this.fortifyPanel?.open;
   }
 
   /** Whether a release here looses the volley: on the road in front of the barricade. */
@@ -881,9 +1116,9 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** Half the width and height of Arrow Rain's ring, wider with Cloudburst. */
+  /** Half the width and height of Arrow Rain's ring, wider with Cloudburst and a lookout. */
   private ring() {
-    const k = stats(this.state).rainRing;
+    const k = rainRingOf(this.state);
     return { rx: RAIN_RING.rx * k, ry: RAIN_RING.ry * k };
   }
 
@@ -982,7 +1217,7 @@ export class GameScene extends Phaser.Scene {
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => {
           const s = this.state;
-          if (s.choices || s.phase === 'over' || this.aim) return;
+          if (s.choices || held(s) || this.aim || this.fortifyPanel.open) return;
           this.hirePanel.show(i, s.guards[i], s.coins);
         });
     });
@@ -1004,7 +1239,7 @@ export class GameScene extends Phaser.Scene {
       if (!guard) {
         sprite.setVisible(false);
         // An empty slot: a dashed gold ring that glows once a guard can be afforded.
-        const afford = s.coins >= cheapest && s.phase !== 'over';
+        const afford = s.coins >= cheapest && !held(s);
         const alpha = afford ? 0.55 + 0.45 * this.pulse(900) : 0.45;
         for (let k = 0; k < 12; k += 2) {
           const a0 = (k / 12) * Math.PI * 2;
@@ -1023,8 +1258,17 @@ export class GameScene extends Phaser.Scene {
         .setOrigin(fig.originX, fig.originY)
         .setPosition(slot.x + this.guardFlash[i] * 5, slot.y)
         .setDepth(slot.y);
-      // Its level as gold pips over its head.
-      label.setText('');
+      // Its level as gold pips over its head, and a ring of stars while it is stunned.
+      label.setText(guard.stunMs > 0 ? 'Stunned' : '').setPosition(slot.x, slot.y - fig.height - 20).setColor('#ffe7a0');
+      if (guard.stunMs > 0) {
+        for (let k = 0; k < 4; k++) {
+          const a = (this.clock / 500 + k / 4) * Math.PI * 2;
+          const sx = slot.x + Math.cos(a) * 16;
+          const sy = slot.y - fig.height - 6 + Math.sin(a) * 5;
+          g.fillStyle(0xfff1b0).fillTriangle(sx - 3, sy, sx, sy - 4, sx + 3, sy);
+          g.fillStyle(0xe2a628).fillTriangle(sx - 3, sy, sx, sy + 4, sx + 3, sy);
+        }
+      }
       for (let k = 0; k < guard.level; k++) {
         const px = slot.x - (guard.level - 1) * 5 + k * 10;
         const py = slot.y - fig.height - 8;
@@ -1046,7 +1290,57 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5);
     const again = makeButton(this, VIEW.w / 2 - 100, VIEW.h / 2 + 100, 180, 40, 'Fight again', () => this.restart(false));
     const reset = makeButton(this, VIEW.w / 2 + 100, VIEW.h / 2 + 100, 180, 40, 'New hero', () => this.restart(true));
-    this.gameOver = this.add.container(0, 0, [dim, panel, title, this.gameOverText, again, reset]).setDepth(UI_DEPTH + 20).setVisible(false);
+    // The heat the next run plays at: one button per heat, the locked ones dimmed.
+    const heatLabel = this.add.text(VIEW.w / 2 - 250, VIEW.h / 2 + 52, 'Next run at', textStyle(13, '#c9c3b6')).setOrigin(0, 0.5);
+    const picks: Phaser.GameObjects.GameObject[] = [];
+    for (let h = 0; h <= MAX_HEAT; h++) {
+      const x = VIEW.w / 2 - 110 + h * 92;
+      const y = VIEW.h / 2 + 52;
+      const bg = this.add.graphics();
+      const text = this.add.text(x, y, `Heat ${h}`, textStyle(12, '#ffe7a0')).setOrigin(0.5);
+      const zone = this.add.zone(x, y, 84, 26).setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+        if (h <= this.state.heatUnlocked) this.restartAt(h);
+      });
+      this.heatPicks.push({ bg, text, zone });
+      picks.push(bg, text, zone);
+    }
+    this.gameOver = this.add.container(0, 0, [dim, panel, title, this.gameOverText, heatLabel, ...picks, again, reset]).setDepth(UI_DEPTH + 20).setVisible(false);
+  }
+
+  /** The heat buttons on the game-over panel: the current heat lit gold, the unlocked ones tappable, the rest dim. */
+  private drawHeatPicks() {
+    const s = this.state;
+    this.heatPicks.forEach(({ bg, text, zone }, h) => {
+      const x = zone.x;
+      const y = zone.y;
+      const unlocked = h <= s.heatUnlocked;
+      const current = h === s.heat;
+      bg.clear();
+      drawPanel(bg, x - 42, y - 13, 84, 26, { c: 5, fill: current ? GOLD.mid : unlocked ? SLATE.light : SLATE.panel, alpha: 1, edge: unlocked ? GOLD.mid : 0x4a5060, lw: 1.5 });
+      text.setColor(current ? '#2b2010' : unlocked ? '#ffe7a0' : '#7a8294').setText(unlocked ? `Heat ${h}` : `Heat ${h} (locked)`);
+    });
+  }
+
+  /** The victory panel after wave 30: the siege is lifted, the next heat is unlocked. */
+  private createWon() {
+    const dim = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x0e1218, 0.7).setInteractive();
+    const panel = this.add.graphics();
+    drawPanel(panel, VIEW.w / 2 - 290, VIEW.h / 2 - 150, 580, 300, { c: 18, fill: SLATE.mid, alpha: 1, lw: 3 });
+    const title = this.add.text(VIEW.w / 2, VIEW.h / 2 - 110, 'The siege is lifted!', textStyle(30, '#ffcf4a', 5)).setOrigin(0.5);
+    this.wonText = this.add
+      .text(VIEW.w / 2, VIEW.h / 2 - 25, '', { ...textStyle(15, '#e9e4d8'), fontStyle: 'normal', align: 'center', wordWrap: { width: 520 } })
+      .setOrigin(0.5);
+    const on = makeButton(this, VIEW.w / 2 - 100, VIEW.h / 2 + 100, 180, 40, 'Keep fighting', () => keepFighting(this.state));
+    this.wonNext = makeButton(this, VIEW.w / 2 + 100, VIEW.h / 2 + 100, 180, 40, 'Heat 1', () => this.restartAt(this.state.heat + 1));
+    this.wonNextText = this.wonNext.getAt(1) as Phaser.GameObjects.Text;
+    this.won = this.add.container(0, 0, [dim, panel, title, this.wonText, on, this.wonNext]).setDepth(UI_DEPTH + 20).setVisible(false);
+  }
+
+  /** A new run at an unlocked heat, from wave 1 with the hero kept. */
+  private restartAt(heat: number) {
+    this.state = startHeat(this.state, heat);
+    saveProgress(progressOf(this.state));
+    this.clearSprites();
   }
 
   /** The 1x/2x switch in the bottom bar; the choice is kept in its own storage key. */
@@ -1078,11 +1372,16 @@ export class GameScene extends Phaser.Scene {
   /** A new run from wave 1: with the hero's level and upgrades, or with a new hero from scratch. */
   private restart(newHero: boolean) {
     if (newHero) clearProgress();
-    this.state = newHero ? newRun(freshProgress()) : fightAgain(this.state);
+    this.state = newHero ? newRun(freshProgress(), this.state.aimMode) : fightAgain(this.state);
     saveProgress(progressOf(this.state));
-    for (const sprite of [...this.foes.values(), ...this.missiles.values(), ...[...this.caltropPieces.values()].flat()]) sprite.destroy();
+    this.clearSprites();
+  }
+
+  private clearSprites() {
+    for (const sprite of [...this.foes.values(), ...this.missiles.values(), ...this.eliteLabels.values(), ...[...this.caltropPieces.values()].flat()]) sprite.destroy();
     this.foes.clear();
     this.missiles.clear();
+    this.eliteLabels.clear();
     this.caltropPieces.clear();
   }
 }
