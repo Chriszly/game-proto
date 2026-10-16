@@ -239,8 +239,9 @@ and carries one of three traits, named over its health bar:
 
 Most upgrades have several ranks. Follow-ups only show up once the upgrade they improve has been
 picked. A level-up always shows three cards: once fewer than three upgrades are left, fillers take
-the empty cards, in this order: "Mend the Barricade" (repair half of the barricade), "War Chest"
-(25 coins) and "Second Wind" (charge Arrow Rain and the caltrops at once).
+the empty cards. With two upgrades left the third card is "Mend the Barricade" (repair half of the
+barricade); with one left the other two are "War Chest" (25 coins) and "Second Wind" (charge Arrow
+Rain and the caltrops at once). So every filler turns up on the way to the last skill.
 
 | Upgrade | Ranks | What it does |
 | --- | --- | --- |
@@ -270,7 +271,7 @@ the empty cards, in this order: "Mend the Barricade" (repair half of the barrica
 | Bounty Hunter | 3 | Every kill pays 1 more coin (2 on a Golden Road) |
 | Drill Sergeant | 3 | Hired guards attack 20% faster |
 
-![With every upgrade taken, the three fillers](docs/screenshots/fillers.png)
+![With one upgrade left, War Chest and Second Wind fill the other cards](docs/screenshots/fillers-one-left.png)
 
 Once every skill is learned, the next level-up opens one last time with the repair card alone
 ("Every skill learned"). From then on each level-up repairs half of the barricade at once (a quarter from Heat 3), with a

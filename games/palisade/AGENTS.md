@@ -278,7 +278,9 @@ seconds without a tap.
   so it works while choosing, and hides after a fall. Shooting is automatic. A dimming rectangle
   under each overlay is interactive, so taps on the battle are swallowed.
 - **Skill book:** after each `tick`, `GameScene.discover` adds every id in `choices` and `ranks`
-  to `found` (so an old save's upgrades count as found) and saves it when it grew.
+  to `found` (so an old save's upgrades count as found), and the three `FILLERS` once `mastered`
+  (an older save that learned everything before Second Wind could be offered), and saves it when
+  it grew.
 - **Rendering:** sprites are diffed by id. `foes` and `missiles` are `Map`s of images, the crit and
   "+N XP" texts are `pops`, and each volley's falling shafts are `rainArrows`. Each is created,
   updated or destroyed to match the state every frame. A foe's texture origin and height come from
@@ -310,8 +312,10 @@ seconds without a tap.
 - Hero stats are never stored. `stats(state)` derives them from `ranks`, `relics` and `heat` each time.
   `pick` counts the fillers (`mend`, `purse`, `wind`) in `ranks` too (for the skill book); `stats`
   ignores them and `offerable` never offers one, so their ranks change nothing else.
-  `rollChoices` fills any of the three cards no upgrade is left for with `FILLERS` in order, so a
-  level-up shows three different cards, until none is left at all (see Every skill learned).
+  `rollChoices` fills the cards no upgrade is left for with `FILLERS`: `mend` with two upgrades
+  left, `purse` and `wind` with one left, so a level-up shows three different cards and every
+  filler is offered (and found) before the last skill, until none is left at all (see Every
+  skill learned).
 - Only `sim.ts` mutates state during play. The scene only replaces it wholesale (`newRun`,
   `fightAgain`, `startHeat`), calls `offer` on load when level-ups are pending, and calls `loose`, `strew`,
   `hire`, `train`, `fortify`, `setAim`, `keepFighting`, `pick` and `pickRoad`.

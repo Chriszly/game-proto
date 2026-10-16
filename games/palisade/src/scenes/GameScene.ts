@@ -48,7 +48,7 @@ import {
   type Enemy,
   type GameState,
 } from '../game/state';
-import type { UpgradeId } from '../game/upgrades';
+import { FILLERS, type UpgradeId } from '../game/upgrades';
 import { isBossWave, waveTrack } from '../game/waves';
 import { FortifyPanel } from '../ui/FortifyPanel';
 import { HirePanel } from '../ui/HirePanel';
@@ -274,7 +274,9 @@ export class GameScene extends Phaser.Scene {
   /** Fills the skill book's page for each upgrade offered (or held) for the first time. */
   private discover() {
     const s = this.state;
-    const seen = [...(s.choices ?? []), ...(Object.keys(s.ranks) as UpgradeId[])];
+    // A hero with every skill learned has been offered every filler on the way (an older save may
+    // have missed Second Wind), so the book is complete.
+    const seen = [...(s.choices ?? []), ...(Object.keys(s.ranks) as UpgradeId[]), ...(s.mastered ? FILLERS : [])];
     const fresh = seen.filter((id) => !this.found.has(id));
     if (fresh.length === 0) return;
     for (const id of fresh) this.found.add(id);
