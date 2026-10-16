@@ -193,6 +193,39 @@ function brute(ctx: Ctx, boss: boolean) {
   eyeshine(ctx, x, y - 11, 3.4, 1.9);
 }
 
+/** The Brood Mother: the eggs in its belly are warm, so each one glows through the sac. */
+function brood(ctx: Ctx) {
+  brute(ctx, false);
+  vol(ctx, 0, 6, 17, 12, 0.5, 0.1);
+  ctx.save();
+  ctx.shadowColor = '#fff';
+  ctx.shadowBlur = 5;
+  for (const [ex, ey] of [[-8, 3], [2, 9], [10, 2], [-3, -2], [7, 11]] as const) vol(ctx, ex, ey, 4, 3.4, 0.82, 0.08);
+  ctx.restore();
+}
+
+/** The Bloater: a belly full of warm acid, the brightest body on the feed. */
+function bloater(ctx: Ctx) {
+  brute(ctx, false);
+  ctx.save();
+  ctx.shadowColor = '#fff';
+  ctx.shadowBlur = 10;
+  vol(ctx, 0, 7, 19, 14, 0.8, 0.14);
+  ctx.restore();
+  for (const [dx, dy] of [[-14, 20], [12, 22], [2, 24]] as const) vol(ctx, dx, dy, 2, 3.2, 0.9, 0.05);
+}
+
+/** A survivor: a warm, living body with both arms up, no eyeshine. */
+function survivor(ctx: Ctx) {
+  shade(ctx, 0, 19, 12, 4);
+  limb(ctx, [-4, 7], [-6, 19], 4.5, 0.4);
+  limb(ctx, [4, 7], [6, 19], 4.5, 0.38);
+  vol(ctx, 0, 2, 10, 9.5, 0.62);
+  limb(ctx, [-8, -3], [-13, -14], 4.2, 0.7);
+  limb(ctx, [8, -3], [13, -15], 4.2, 0.66);
+  vol(ctx, 0, -11, 8, 7.8, 0.74);
+}
+
 function crate(ctx: Ctx) {
   const x = 0, y = 0;
   shade(ctx, x + 2, y + 22, 24, 6);
@@ -389,6 +422,17 @@ function flame(ctx: Ctx) {
   }
 }
 
+/** The extraction card's icon: a flare, the hottest point on the feed, over its smoke. */
+function extractIcon(ctx: Ctx) {
+  for (const [sx, sy, r] of [[-16, 14, 9], [-4, 20, 7], [8, 15, 8]] as const) vol(ctx, sx, sy, r, r * 0.8, 0.3, 0.08);
+  limb(ctx, [0, 18], [0, -4], 4, 0.4);
+  ctx.save();
+  ctx.shadowColor = '#fff';
+  ctx.shadowBlur = 14;
+  vol(ctx, 0, -14, 12, 12, 0.98, 0.02);
+  ctx.restore();
+}
+
 function supplyIcon(ctx: Ctx, kind: SupplyKind) {
   if (kind === 'shotgun') {
     for (const a of [-0.45, 0, 0.45]) {
@@ -508,6 +552,15 @@ export function bakeNightVision(scene: Phaser.Scene) {
     c.scale(1.9, 1.9);
     brute(c, true);
   });
+  nvBake(scene, 'brood', GEOM.brood, (c) => {
+    c.scale(1.9, 1.9);
+    brood(c);
+  });
+  nvBake(scene, 'bloater', GEOM.bloater, (c) => {
+    c.scale(1.9, 1.9);
+    bloater(c);
+  }, { bloom: 6 });
+  nvBake(scene, 'survivor', GEOM.survivor, survivor);
   nvBake(scene, 'spitter', GEOM.spitter, spitter);
   nvBake(scene, 'riot', GEOM.riot, (c) => riot(c, true));
   nvBake(scene, 'riot-bare', GEOM.riot, (c) => riot(c, false));
@@ -532,6 +585,7 @@ export function bakeNightVision(scene: Phaser.Scene) {
       c.fillRect(-12, -3, 24, 8);
     } : undefined);
   }
+  nvBake(scene, 'supply-extract', GEOM.supply, extractIcon, { bloom: 8 });
   for (const kind of CRATE_KINDS) {
     nvBake(scene, `crate-${kind}`, GEOM.crate, crate, {}, (c) => chemlight(c, kind));
     bake(scene, key(`label-${kind}`), GEOM.label, (c) => crateLabel(c, kind));

@@ -31,7 +31,7 @@ export const MAX_COMPANIONS = SQUAD_SLOTS.length - 1;
 /** The pause between one wave being cleared and the next coming in, in ms. */
 export const BREAK_MS = 2500;
 
-export type EnemyKind = 'grunt' | 'runner' | 'brute' | 'boss' | 'spitter' | 'riot' | 'crawler';
+export type EnemyKind = 'grunt' | 'runner' | 'brute' | 'boss' | 'spitter' | 'riot' | 'crawler' | 'brood' | 'bloater';
 
 /**
  * Hit points at wave 1, walking speed and how fast they veer towards the hero (pixels per second),
@@ -45,10 +45,12 @@ export const ENEMIES: Record<EnemyKind, { hp: number; speed: number; steer: numb
   spitter: { hp: 4, speed: 34, steer: 12, radius: 13 },
   riot: { hp: 6, speed: 30, steer: 16, radius: 15 },
   crawler: { hp: 1, speed: 54, steer: 30, radius: 8 },
+  brood: { hp: 170, speed: 16, steer: 10, radius: 36 },
+  bloater: { hp: 240, speed: 14, steer: 8, radius: 40 },
 };
 
 /** Scrap banked for each kill, kept between runs to buy a head start (see `KIT_COSTS`). */
-export const SCRAP: Record<EnemyKind, number> = { grunt: 1, runner: 1, brute: 3, boss: 25, spitter: 2, riot: 3, crawler: 1 };
+export const SCRAP: Record<EnemyKind, number> = { grunt: 1, runner: 1, brute: 3, boss: 25, spitter: 2, riot: 3, crawler: 1, brood: 25, bloater: 25 };
 
 /**
  * Spitters walk down to `standY` and stay there, lobbing a glob of acid at the squad's line every
@@ -79,8 +81,33 @@ export const swarmCount = (wave: number) => (wave >= SWARM.fromWave ? 1 + Math.f
 export type BossMove = 'charge' | 'spit' | 'call';
 export const BOSS_MOVES: BossMove[] = ['charge', 'spit', 'call'];
 export const BOSS = { firstMs: 7000, everyMs: 5500, warnMs: 1300, chargeMs: 550, chargeDrop: 55, spitRadius: 64, poolMs: 4500, pack: 5 };
-/** The boss's `n`th move: each boss starts one further along, so the second boss opens with the spit. */
-export const bossMove = (wave: number, n: number) => BOSS_MOVES[(Math.floor(wave / 5) - 1 + n) % BOSS_MOVES.length];
+
+/**
+ * The three bosses take turns on the boss waves: the Behemoth (wave 5, 20, 35...), then the Brood
+ * Mother (wave 10, 25...), then the Bloater (wave 15, 30...). Each has its own round of moves:
+ * - the Behemoth charges, spits and calls a pack of runners;
+ * - the Brood Mother calls a brood of `BROOD.pack` crawlers instead of runners, and bursts into
+ *   `BROOD.burst` more when it falls;
+ * - the Bloater's spit is `BLOATER.spitRadius` wide, and when it falls it leaves a huge acid pool
+ *   (`BLOATER.poolRadius`, for `BLOATER.poolMs`) on the squad's line.
+ */
+export type BossKind = 'boss' | 'brood' | 'bloater';
+export const BOSS_KINDS: BossKind[] = ['boss', 'brood', 'bloater'];
+export const BOSSES: Record<BossKind, { name: string; moves: BossMove[] }> = {
+  boss: { name: 'Behemoth', moves: BOSS_MOVES },
+  brood: { name: 'Brood Mother', moves: ['charge', 'call', 'call'] },
+  bloater: { name: 'Bloater', moves: ['spit', 'charge', 'spit'] },
+};
+export const isBoss = (kind: EnemyKind): kind is BossKind => kind in BOSSES;
+/** Which boss ends a boss wave: wave 5's is the Behemoth, and they take turns from there. */
+export const bossKind = (wave: number): BossKind => BOSS_KINDS[(Math.floor(wave / 5) - 1) % BOSS_KINDS.length];
+export const BROOD = { pack: 8, burst: 10 };
+export const BLOATER = { spitRadius: 96, poolRadius: 150, poolMs: 7000 };
+/** The boss's `n`th move from its own round, started one further along per boss wave: the Behemoth opens with a charge, the Brood Mother with its call. */
+export const bossMove = (wave: number, n: number) => {
+  const moves = BOSSES[bossKind(wave)].moves;
+  return moves[(Math.floor(wave / 5) - 1 + n) % moves.length];
+};
 
 export type UpgradeKind = 'rate' | 'damage' | 'companion' | 'pierce';
 
@@ -92,6 +119,67 @@ export const UPGRADES: Record<UpgradeKind, { label: string }> = {
   pierce: { label: 'Pierce +1' },
 };
 export const UPGRADE_KINDS = Object.keys(UPGRADES) as UpgradeKind[];
+
+/**
+ * Upgrade evolutions: the third crate of one kind (starting crates count) turns its stat into a perk
+ * for the rest of the run.
+ * - fire rounds (fire rate): every bullet hit sets the zombie burning for `FIRE_ROUNDS.ms`, taking
+ *   `FIRE_ROUNDS.damage(wave)` every `tickMs`, past any riot shield;
+ * - headshots (damage): every `HEADSHOT.every`th bullet hit on a zombie lands `HEADSHOT.mult` times
+ *   the damage;
+ * - ricochets (pierce): a bullet that has spent its hits on a zombie jumps once to the nearest other
+ *   zombie within `RICOCHET.range` px, with one more hit in it.
+ * The companion crate has no perk: once the squad is full, it already brings damage instead.
+ */
+export type Perk = 'fire' | 'headshot' | 'ricochet';
+export const PERKS: Record<Perk, { upgrade: UpgradeKind; label: string; detail: string }> = {
+  fire: { upgrade: 'rate', label: 'Fire rounds', detail: 'Bullets set zombies burning' },
+  headshot: { upgrade: 'damage', label: 'Headshots', detail: 'Every fourth hit lands triple damage' },
+  ricochet: { upgrade: 'pierce', label: 'Ricochets', detail: 'Spent bullets jump to the nearest zombie' },
+};
+export const PERK_KINDS = Object.keys(PERKS) as Perk[];
+export const PERK_AT = 3;
+/** The perks a run has earned, from how many crates of each kind it collected. */
+export const perksOf = (collected: Record<UpgradeKind, number>) => PERK_KINDS.filter((p) => collected[PERKS[p].upgrade] >= PERK_AT);
+export const FIRE_ROUNDS = { ms: 2400, tickMs: 400, damage: (wave: number) => Math.max(1, Math.round(toughness(wave) * 0.6)) };
+export const HEADSHOT = { every: 4, mult: 3 };
+export const RICOCHET = { range: 150 };
+
+/**
+ * Survivors: from wave `fromWave`, one walks down the road each wave among the zombies, veering
+ * towards the squad like they do. Bullets hurt them (they have `hp(wave)` hit points); one who
+ * reaches the sandbags joins the squad as a companion, or, once the squad is full, hands over
+ * `scrap` scrap. Zombies leave them alone; it is the squad's fire they must survive.
+ */
+export const SURVIVOR = { fromWave: 3, speed: 44, steer: 30, radius: 12, hp: (wave: number) => 4 + wave, scrap: 15 };
+
+/**
+ * Wave conditions: from wave `fromWave` each wave draws one of these (or none).
+ * - blackout: zombies and survivors can only be seen within `blackoutRadius` px of the hero;
+ * - bloodmoon: runners move `bloodMoonRunner` times as fast;
+ * - shortage: the squad fires `shortageFire` times slower, and `shortageDrums` more fuel drums roll down.
+ */
+export type Condition = 'clear' | 'blackout' | 'bloodmoon' | 'shortage';
+export const CONDITIONS: Record<Condition, { label: string; detail: string }> = {
+  clear: { label: 'Clear', detail: '' },
+  blackout: { label: 'Blackout', detail: 'Zombies only seen up close' },
+  bloodmoon: { label: 'Blood Moon', detail: 'Runners are faster' },
+  shortage: { label: 'Ammo Shortage', detail: 'Slower fire, more drums' },
+};
+export const CONDITION = { fromWave: 6, blackoutRadius: 250, bloodMoonRunner: 1.5, shortageFire: 1.4, shortageDrums: 2 };
+const CONDITION_DRAWS: Condition[] = ['clear', 'blackout', 'bloodmoon', 'shortage'];
+/** The wave's condition: none before `CONDITION.fromWave`, then one draw among the four (one of them clear). */
+export function drawCondition(wave: number, rand: () => number = Math.random): Condition {
+  return wave < CONDITION.fromWave ? 'clear' : CONDITION_DRAWS[Math.floor(rand() * CONDITION_DRAWS.length)];
+}
+
+/**
+ * Extraction, the run's ending: from wave `fromWave`, every boss's supply drop also offers to
+ * extract, which ends the run as a win and banks this run's scrap `bonus(wave)` times over (twice at
+ * wave 20, half as much again for each boss wave passed up: 2.5x at wave 25, 3x at wave 30).
+ */
+export const EXTRACT = { fromWave: 20, bonus: (wave: number) => 2 + Math.max(0, wave - 20) / 10 };
+export const canExtract = (wave: number) => isBossWave(wave) && wave >= EXTRACT.fromWave;
 
 /** What a crate can hold: an upgrade, or (from wave 2, now and then) a sandbag wall to place. */
 export type CrateKind = UpgradeKind | 'sandbag';
@@ -189,7 +277,8 @@ export function applyUpgrade(stats: Stats, kind: UpgradeKind): Stats {
 export type Spawn =
   | { at: number; x: number; type: 'enemy'; kind: EnemyKind; hp: number }
   | { at: number; x: number; type: 'pickup'; upgrade: CrateKind; hp: number }
-  | { at: number; x: number; type: 'drum'; hp: number };
+  | { at: number; x: number; type: 'drum'; hp: number }
+  | { at: number; x: number; type: 'survivor'; hp: number };
 
 /** Every fifth wave ends with a boss. */
 export const isBossWave = (wave: number) => wave % 5 === 0;
@@ -206,16 +295,17 @@ export const waveTotal = (wave: number) => waveSize(wave) + (isBossWave(wave) ? 
 /** How much tougher a wave's zombies are than wave 1's (scaled by the hub's difficulty). */
 export const toughness = (wave: number) => (1 + 0.3 * (wave - 1)) * byDifficulty(0.75, 1, 1.3);
 
-/** How many fuel drums roll down in a wave. */
-export const drumCount = (wave: number) => 1 + Math.floor(wave / 4);
+/** How many fuel drums roll down in a wave (more in an ammo shortage). */
+export const drumCount = (wave: number, condition: Condition = 'clear') => 1 + Math.floor(wave / 4) + (condition === 'shortage' ? CONDITION.shortageDrums : 0);
 
 /**
  * Plans a wave: who comes in, when and where. Waves grow in size and toughness (scaled by the hub's difficulty), bring runners from
  * wave 2, brutes from wave 3, spitters and crawler swarms from wave 4 and riot zombies from wave 6,
- * and carry a pickup or more and a fuel drum or more in among the enemies. Draws for things added
- * later come last, so earlier waves keep the enemies, crates and drums they had.
+ * and carry a pickup or more and a fuel drum or more in among the enemies, and a survivor from wave
+ * 3. Draws for things added later come last, so earlier waves keep the enemies, crates and drums
+ * they had. The wave's condition (drawn before the plan) can add drums.
  */
-export function planWave(wave: number, rand: () => number = Math.random): Spawn[] {
+export function planWave(wave: number, rand: () => number = Math.random, condition: Condition = 'clear'): Spawn[] {
   const tough = toughness(wave);
   const gap = Math.max(180, 550 - 35 * (wave - 1));
   const x = () => Math.round(SPAWN_MARGIN + rand() * (VIEW.w - 2 * SPAWN_MARGIN));
@@ -244,7 +334,7 @@ export function planWave(wave: number, rand: () => number = Math.random): Spawn[
   // Fuel drums come in early and spread over the wave, so the zombies behind them catch up and walk
   // through their blast rings. Their draws come last, so a wave's enemies and crates are the same
   // as without them.
-  const drums = drumCount(wave);
+  const drums = drumCount(wave, condition);
   for (let i = 0; i < drums; i++) {
     const at = 2000 + Math.round((i * size * gap) / drums);
     spawns.push({ at, x: Math.round(VIEW.w * (0.3 + rand() * 0.4)), type: 'drum', hp: DRUM.hp });
@@ -261,6 +351,10 @@ export function planWave(wave: number, rand: () => number = Math.random): Spawn[
   // From wave 2, now and then a crate holds a sandbag wall.
   if (wave >= 2 && rand() < SANDBAG_CRATE_ODDS) {
     spawns.push({ at: 4000 + Math.round(rand() * size * gap * 0.5), x: Math.round(VIEW.w * (0.25 + rand() * 0.5)), type: 'pickup', upgrade: 'sandbag', hp: 8 + 4 * wave });
+  }
+  // From wave 3, a survivor walks down among the zombies, somewhere in the first part of the wave.
+  if (wave >= SURVIVOR.fromWave) {
+    spawns.push({ at: 3000 + Math.round(rand() * size * gap * 0.6), x: x(), type: 'survivor', hp: SURVIVOR.hp(wave) });
   }
   return spawns.sort((a, b) => a.at - b.at);
 }

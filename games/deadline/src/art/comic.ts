@@ -245,6 +245,60 @@ function brute(ctx: Ctx, body: string, limbs: string, boss: boolean) {
   ink(ctx, P(ctx, [[x - 4, y - 6], [x + 4, y - 6], [x + 3, y - 3], [x - 3, y - 3]]), '#2b1a14', { sh: 0, lw: 1 });
 }
 
+/** The Brood Mother: a boss with a swollen, translucent egg sac for a belly, crawlers curled up inside. */
+function brood(ctx: Ctx) {
+  brute(ctx, '#6a3a5a', '#8a5070', false);
+  ink(ctx, E(ctx, 0, 6, 17, 12), '#e8a8c8', { sh: 3, lw: 1.6 });
+  // Eggs showing through the sac, each with a pair of tiny eyes.
+  for (const [ex, ey] of [[-8, 3], [2, 9], [10, 2], [-3, -2], [7, 11]] as const) {
+    ink(ctx, E(ctx, ex, ey, 4.2, 3.6), '#f8d8e8', { sh: 0, lw: 1 });
+    circle(ctx, ex - 1.4, ey, 0.7, INK);
+    circle(ctx, ex + 1.4, ey, 0.7, INK);
+  }
+  ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.arc(-5, 0, 7, Math.PI * 1.1, Math.PI * 1.55);
+  ctx.stroke();
+}
+
+/** The Bloater: a boss bloated with acid, its belly a drum of green with drips down its legs. */
+function bloater(ctx: Ctx) {
+  brute(ctx, '#7a8a3a', '#98a850', false);
+  ink(ctx, E(ctx, 0, 7, 19, 14), ACID_COLOR, { sh: 3.5, lw: 1.8 });
+  ink(ctx, E(ctx, -6, 2, 5, 3.5), '#e4ff9a', { sh: 0, lw: 1 });
+  // Stretched skin: a few taut lines, and acid dripping from the seams.
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (const k of [-10, 0, 10]) {
+    ctx.moveTo(k, -4);
+    ctx.lineTo(k + 2, 18);
+  }
+  ctx.stroke();
+  for (const [dx, dy] of [[-14, 20], [12, 22], [2, 24]] as const) ink(ctx, E(ctx, dx, dy, 2, 3.2), ACID_COLOR, { sh: 0, lw: 0.9 });
+}
+
+/** A survivor: an unbitten civilian in a torn shirt, both arms up and waving at the squad. */
+function survivor(ctx: Ctx) {
+  const skin = '#e8b890', shirt = '#e8e0d0', pants = '#4a5a7a';
+  shadowBlob(ctx, 0, 20, 13);
+  limb(ctx, [[-4, 7], [-6, 19]], 3.5, pants);
+  limb(ctx, [[4, 7], [6, 19]], 3.5, pants);
+  ink(ctx, E(ctx, 0, 2, 10, 9.5), shirt, { sh: 2.5 });
+  limb(ctx, [[-8, -3], [-13, -14]], 3.6, skin);
+  limb(ctx, [[8, -3], [13, -15]], 3.6, skin);
+  ink(ctx, E(ctx, 0, -11, 8, 7.8), skin, { sh: 2.2 });
+  ink(ctx, () => {
+    ctx.beginPath();
+    ctx.ellipse(0, -13, 8.5, 6, 0, Math.PI, TAU);
+    ctx.closePath();
+  }, '#5a3a24', { sh: 1.5, lw: 1.2 });
+  circle(ctx, -2.8, -10.5, 1, INK);
+  circle(ctx, 2.8, -10.5, 1, INK);
+  ink(ctx, E(ctx, 0, -6.5, 2.4, 1.6), '#9a3a3a', { sh: 0, lw: 0.8 });
+}
+
 function crate(ctx: Ctx, kind: CrateKind) {
   const x = 0, y = 0, col = CRATE_COLORS[kind];
   shadowBlob(ctx, x + 2, y + 23, 24);
@@ -454,6 +508,14 @@ function flame(ctx: Ctx) {
   }
 }
 
+/** The extraction card's icon: a signal flare burning red over a drift of smoke. */
+function extractIcon(ctx: Ctx) {
+  for (const [sx, sy, r] of [[-16, 14, 9], [-4, 20, 7], [8, 15, 8]] as const) ink(ctx, E(ctx, sx, sy, r, r * 0.8), '#b8b0c8', { sh: 2 });
+  limb(ctx, [[0, 18], [0, -4]], 4, '#5a5a6a');
+  burst(ctx, 0, -14, 10, 20, 9, '#e8402a', { lw: 1.8, seed: 3 });
+  burst(ctx, 0, -14, 5, 10, 7, '#ffe24a', { lw: 0, seed: 6 });
+}
+
 /** The supply drop's pick icons. */
 function supplyIcon(ctx: Ctx, kind: SupplyKind) {
   if (kind === 'shotgun') {
@@ -621,6 +683,15 @@ export function bakeComic(scene: Phaser.Scene) {
     c.scale(1.9, 1.9);
     brute(c, '#5a3a6e', '#74508a', true);
   });
+  bake(scene, key('brood'), GEOM.brood, (c) => {
+    c.scale(1.9, 1.9);
+    brood(c);
+  });
+  bake(scene, key('bloater'), GEOM.bloater, (c) => {
+    c.scale(1.9, 1.9);
+    bloater(c);
+  });
+  bake(scene, key('survivor'), GEOM.survivor, survivor);
   bake(scene, key('spitter'), GEOM.spitter, spitter);
   bake(scene, key('riot'), GEOM.riot, (c) => riot(c, true));
   bake(scene, key('riot-bare'), GEOM.riot, (c) => riot(c, false));
@@ -630,6 +701,7 @@ export function bakeComic(scene: Phaser.Scene) {
   bake(scene, key('wall'), GEOM.wall, wall);
   bake(scene, key('flame'), GEOM.flame, flame);
   for (const kind of SUPPLY_KINDS) bake(scene, key(`supply-${kind}`), GEOM.supply, (c) => supplyIcon(c, kind));
+  bake(scene, key('supply-extract'), GEOM.supply, extractIcon);
   for (const kind of CRATE_KINDS) {
     bake(scene, key(`crate-${kind}`), GEOM.crate, (c) => crate(c, kind));
     bake(scene, key(`label-${kind}`), GEOM.label, (c) => crateLabel(c, kind));

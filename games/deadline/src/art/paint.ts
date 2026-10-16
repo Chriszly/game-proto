@@ -27,6 +27,10 @@ export const GEOM = {
   runner: { w: 46, h: 62, ox: 23, oy: 34 },
   brute: { w: 68, h: 70, ox: 34, oy: 28 },
   boss: { w: 136, h: 140, ox: 68, oy: 58 },
+  brood: { w: 136, h: 140, ox: 68, oy: 58 },
+  bloater: { w: 136, h: 140, ox: 68, oy: 58 },
+  /** A survivor on the road, the same box as a walker. */
+  survivor: { w: 46, h: 62, ox: 23, oy: 34 },
   crate: { w: 64, h: 86, ox: 32, oy: 58 },
   drum: { w: 40, h: 46, ox: 20, oy: 22 },
   bullet: { w: 14, h: 34, ox: 7, oy: 7 },

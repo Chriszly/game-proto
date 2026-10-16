@@ -16,6 +16,9 @@ export const CRATE_COLORS: Record<CrateKind, string> = { ...UPGRADE_COLORS, sand
 /** The acid of spitters and bosses, and the riot shield's bar. */
 export const ACID_COLOR = '#a6e03a';
 export const SHIELD_COLOR = '#7ab8e8';
+/** A survivor's health bar and label, and the burn of fire rounds. */
+export const SURVIVOR_COLOR = '#ffd9a8';
+export const BURN_COLOR = '#ff8a2a';
 
 export interface Theme {
   /** Font family for Phaser text, and its style ('italic bold' or 'bold'). */
