@@ -10,6 +10,7 @@ import {
   AbilityKey,
   BASE,
   CHAMPIONS,
+  FOUNTAIN,
   ChampionDef,
   ITEMS,
   ItemDef,
@@ -29,7 +30,8 @@ import {
   bushAt,
 } from '../game/data';
 import { Fx, GameState, Phase, Unit, createGame, dist, getUnit } from '../game/state';
-import { buy, cast, chooseUpgrade, commandAttack, commandMove, hiddenFrom, invulnerable, priceFor, stealthed, tick, useActive, viewers } from '../game/sim';
+import { abilityFor, atFountain, atShop, buy, cast, chooseUpgrade, commandAttack, commandMove, hiddenFrom, invulnerable, priceFor, stealthed, tick, useActive, viewers } from '../game/sim';
+import { FxLayers, drawAura, drawProjectile, drawSkill, drawZone, skillMs } from './skillFx';
 import { championName, shortName } from '../game/names';
 import {
   BEAST_CELL,
@@ -126,6 +128,8 @@ interface Zone {
 interface LiveFx {
   f: Fx;
   left: number;
+  /** How long it lasts in all. */
+  ms: number;
 }
 
 /** The images that draw one unit: its figure, the last-hit outline behind it and a hit flash over it. */
@@ -182,6 +186,22 @@ function itemTint(item: ItemDef): string {
   return item.dmg ? '#ff8a5c' : item.armor ? '#b9c3cf' : item.hp ? '#e0556f' : item.speed ? '#7fb6ff' : item.atk ? '#f2c14e' : '#c49bff';
 }
 
+/** Graphics' point lists are typed as vectors but take any {x, y}. */
+function pts2(p: { x: number; y: number }[]): Phaser.Math.Vector2[] {
+  return p as Phaser.Math.Vector2[];
+}
+
+/** A circle drawn as `n` dashes, for ranges. */
+function dashedCircle(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, w: number, color: number, alpha: number, n: number) {
+  g.lineStyle(w, color, alpha);
+  for (let i = 0; i < n; i++) {
+    const a0 = (i / n) * Math.PI * 2;
+    g.beginPath();
+    g.arc(x, y, r, a0, a0 + (Math.PI / n) * 1.1, false);
+    g.strokePath();
+  }
+}
+
 function clock(ms: number) {
   const t = Math.max(0, Math.ceil(ms / 1000));
   return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
@@ -193,6 +213,12 @@ export class GameScene extends Phaser.Scene {
   private shopOpen = false;
   private acc = 0;
   private lastWorld: Vec = { x: BASE.blue.x, y: BASE.blue.y };
+  /** Whether the pointer has been over the canvas, so the world point under it can follow the camera. */
+  private pointerSeen = false;
+  /** The ability whose key is held down: it shows its range and is cast where the cursor is when the key comes up. */
+  private aiming: AbilityKey | null = null;
+  /** The ability box under the pointer, whose range shows too. */
+  private hoverAbility: AbilityKey | null = null;
   private zones: Zone[] = [];
   private zoneKey = '';
   private liveFx: LiveFx[] = [];
@@ -263,17 +289,30 @@ export class GameScene extends Phaser.Scene {
     this.keys = this.input.keyboard!.addKeys('Q,W,E,R,B,D,H,ESC,ONE,TWO') as typeof this.keys;
     // Watching the AI, the keys play no champion.
     if (!watching) {
-      for (const k of ABILITY_KEYS) this.keys[k].on('down', () => this.castAtCursor(k));
+      // Holding an ability's key aims it (its range shows); letting go casts it at the cursor.
+      for (const k of ABILITY_KEYS) {
+        this.keys[k].on('down', () => this.aim(k));
+        this.keys[k].on('up', () => this.release(k));
+      }
       for (const a of ACTIVES) this.keys[a.key].on('down', () => this.activeAtCursor(a));
       this.keys.B.on('down', () => this.toggleShop());
-      this.keys.ESC.on('down', () => this.setShop(false));
+      this.keys.ESC.on('down', () => {
+        this.aiming = null;
+        this.setShop(false);
+      });
       this.keys.ONE.on('down', () => this.pickUpgrade(0));
       this.keys.TWO.on('down', () => this.pickUpgrade(1));
     }
 
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
       this.lastWorld = this.worldAt(p);
+      this.pointerSeen = true;
       const v = viewPoint(p);
+      const box = this.phase === 'playing' ? ABILITY_KEYS.findIndex((_, i) => {
+        const r = abilityBox(i);
+        return v.x >= r.x && v.x <= r.x + r.w && v.y >= r.y && v.y <= r.y + r.h;
+      }) : -1;
+      this.hoverAbility = box >= 0 ? ABILITY_KEYS[box] : null;
       this.hoverPick = CHAMPIONS.findIndex((_, i) => {
         const r = pickCard(i);
         return v.x >= r.x && v.x <= r.x + r.w && v.y >= r.y && v.y <= r.y + r.h;
@@ -303,6 +342,10 @@ export class GameScene extends Phaser.Scene {
     if (s) this.updateFog(s);
     if (s) this.collectFx(s, frameMs);
     this.followPlayer(frameMs);
+    // The camera moves under a still pointer, so the world point under it is read again each frame.
+    if (this.pointerSeen) this.lastWorld = this.worldAt(this.input.activePointer);
+    // A key let go while the page was away never sends its up: the aim is dropped.
+    if (this.aiming && !this.keys[this.aiming].isDown) this.aiming = null;
     this.used.clear();
     this.drawWorld();
     this.drawHud();
@@ -373,6 +416,16 @@ export class GameScene extends Phaser.Scene {
   private toggleShop() {
     if (this.phase !== 'playing') return;
     this.setShop(!this.shopOpen);
+  }
+
+  private aim(key: AbilityKey) {
+    if (this.phase === 'playing') this.aiming = key;
+  }
+
+  private release(key: AbilityKey) {
+    if (this.aiming !== key) return;
+    this.aiming = null;
+    this.castAtCursor(key);
   }
 
   private castAtCursor(key: AbilityKey) {
@@ -466,7 +519,11 @@ export class GameScene extends Phaser.Scene {
   private collectFx(s: GameState, delta: number) {
     // Reduced motion drops the rings and lines but keeps the last-hit coins, which carry the gold.
     // Effects out in the fog stay unseen, like the units that raised them.
-    for (const f of s.fx) if ((!settings.reduceMotion || f.kind === 'coin') && !this.fogged(f.x, f.y)) this.liveFx.push({ f, left: f.ms });
+    for (const f of s.fx) {
+      if ((settings.reduceMotion && f.kind !== 'coin') || this.fogged(f.x, f.y)) continue;
+      const ms = f.kind === 'skill' ? skillMs(f.look) : f.ms;
+      this.liveFx.push({ f, left: ms, ms });
+    }
     s.fx.length = 0;
     for (const l of this.liveFx) l.left -= delta;
     this.liveFx = this.liveFx.filter((l) => l.left > 0);
@@ -611,7 +668,10 @@ export class GameScene extends Phaser.Scene {
     }
     if (s) {
       const me = this.player();
-      this.drawZones(g, s);
+      const layers: FxLayers = { ground: g, top };
+      this.drawFountains(g, s);
+      for (const z of s.zones) if (!this.fogged(z.x, z.y)) drawZone(layers, z, s.time, settings.reduceMotion);
+      if (me) this.drawRanges(g, s, me);
       for (const u of s.units) {
         if (u.dead && u.kind !== 'tower' && u.kind !== 'inhibitor') continue;
         // A red champion hiding in a bush is not drawn at all.
@@ -625,13 +685,17 @@ export class GameScene extends Phaser.Scene {
       if (!watching) this.drawObjectiveMarker(top, s);
       for (const p of s.projectiles) {
         if (this.fogged(p.x, p.y)) continue;
-        const speed = Math.hypot(p.vx, p.vy) || 1;
-        const dx = p.vx / speed, dy = p.vy / speed;
-        const y = p.y - 20;
-        const tail = p.width >= 28 ? 22 : 15;
-        top.lineStyle(7, col(p.color), 0.25).lineBetween(p.x - dx * tail * 1.5, y - dy * tail * 1.5, p.x, y);
-        top.lineStyle(3, col(p.color), 1).lineBetween(p.x - dx * tail, y - dy * tail, p.x, y);
-        top.fillStyle(0xffffff, 1).fillCircle(p.x, y, 3);
+        drawProjectile(top, p, s.time, p.look ? getUnit(s, p.owner) : null);
+      }
+      // Champions healing at their Nexus give off green motes.
+      for (const u of s.units) {
+        if (u.kind !== 'champion' || u.dead || u.hp >= u.maxHp || !atFountain(u) || this.hidden(s, u)) continue;
+        for (let i = 0; i < 3; i++) {
+          const k = (s.time / 900 + i / 3 + u.id * 0.37) % 1;
+          const x = u.x + Math.sin(i * 2.3 + u.id) * 16, y = u.y - 20 - k * 40;
+          const a = Math.sin(k * Math.PI);
+          top.lineStyle(2.5, 0x62d86f, a).lineBetween(x - 5, y, x + 5, y).lineBetween(x, y - 5, x, y + 5);
+        }
       }
       this.drawFx(top);
     }
@@ -644,15 +708,81 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** The patches zone abilities leave on the ground, pulsing in their caster's colour. */
-  private drawZones(g: Phaser.GameObjects.Graphics, s: GameState) {
-    for (const z of s.zones) {
-      if (this.fogged(z.x, z.y)) continue;
-      const fade = Math.min(1, z.left / 400, (z.ms - z.left) / 200 + 0.3);
-      const pulse = settings.reduceMotion ? 0 : Math.sin(s.time / 140) * 0.05;
-      g.fillStyle(col(z.color), (0.2 + pulse) * fade).fillEllipse(z.x, z.y, z.r * 2, z.r * 1.2);
-      g.lineStyle(3, col(z.color), 0.8 * fade).strokeEllipse(z.x, z.y, z.r * 2, z.r * 1.2);
-      g.lineStyle(1.5, col(z.color), 0.5 * fade).strokeEllipse(z.x, z.y, z.r * 1.3, z.r * 0.78);
+  /** The healing ground round each Nexus: a soft ring in the team's colour. */
+  private drawFountains(g: Phaser.GameObjects.Graphics, s: GameState) {
+    for (const team of ['blue', 'red'] as const) {
+      const b = BASE[team];
+      const c = col(SIDE_COLOR[team]);
+      const pulse = settings.reduceMotion ? 0 : Math.sin(s.time / 500) * 0.03;
+      g.fillStyle(0x62d86f, 0.06 + pulse).fillCircle(b.x, b.y, FOUNTAIN.radius);
+      dashedCircle(g, b.x, b.y, FOUNTAIN.radius, 4, c, 0.85, 56);
+      dashedCircle(g, b.x, b.y, FOUNTAIN.radius - 8, 2, 0x62d86f, 0.6, 56);
+    }
+  }
+
+  /**
+   * Range indicators on the ground: the player's attack reach always, the reach of a champion under
+   * the cursor, and the range and shape of an ability while its key is held or its box hovered.
+   */
+  private drawRanges(g: Phaser.GameObjects.Graphics, s: GameState, me: Unit) {
+    if (watching || s.phase !== 'playing') return;
+    const key = this.aiming ?? this.hoverAbility;
+    const hover = !key && s.units.find((u) => u.kind === 'champion' && u !== me && !u.dead && !this.hidden(s, u) && dist(u, this.lastWorld) <= u.radius + 12);
+    if (hover) dashedCircle(g, hover.x, hover.y, hover.range, 2, col(hover.side === 'red' ? '#ff9a8a' : '#9fc8ff'), 0.7, 40);
+    if (me.dead) return;
+    dashedCircle(g, me.x, me.y, me.range, 2, 0xffffff, 0.55, 40);
+    const ab = key && abilityFor(me, key);
+    if (!key || !ab) return;
+    const ready = me.level >= ab.level && me.cds[key] <= 0 && me.stunMs <= 0;
+    const c = !ready ? 0x9aa3b4 : ab.kind === 'ally' || ab.kind === 'buff' ? 0x8ff0a8 : 0x9fd8ff;
+    const aim = this.lastWorld;
+    const d = Math.max(dist(me, aim), 1);
+    const dir = { x: (aim.x - me.x) / d, y: (aim.y - me.y) / d };
+    const reach = (range: number) => (d <= range ? { x: aim.x, y: aim.y } : { x: me.x + dir.x * range, y: me.y + dir.y * range });
+    const area = (x: number, y: number, r: number) => {
+      g.fillStyle(c, 0.22).fillCircle(x, y, r);
+      g.lineStyle(3, c, 1).strokeCircle(x, y, r);
+      g.lineStyle(1.5, 0xffffff, 0.7).strokeCircle(x, y, r - 4);
+    };
+    if (ab.range > 0) dashedCircle(g, me.x, me.y, ab.range, 2, c, 0.7, 64);
+    switch (ab.kind) {
+      case 'burst':
+      case 'ally':
+      case 'zone': {
+        const at = ab.range > 0 ? reach(ab.range) : me;
+        area(at.x, at.y, ab.radius ?? 100);
+        break;
+      }
+      case 'bolt': {
+        const count = ab.count ?? 1;
+        const w = ab.width ?? 24;
+        for (let i = 0; i < count; i++) {
+          const a = (i - (count - 1) / 2) * (ab.spread ?? 0);
+          const vx = Math.cos(a) * dir.x - Math.sin(a) * dir.y, vy = Math.sin(a) * dir.x + Math.cos(a) * dir.y;
+          const px = -vy * w, py = vx * w;
+          const ex = me.x + vx * ab.range, ey = me.y + vy * ab.range;
+          const pts = [
+            { x: me.x + px, y: me.y + py },
+            { x: ex + px, y: ey + py },
+            { x: ex + vx * w, y: ey + vy * w },
+            { x: ex - px, y: ey - py },
+            { x: me.x - px, y: me.y - py },
+          ];
+          g.fillStyle(c, 0.14).fillPoints(pts2(pts), true);
+          g.lineStyle(2, c, 0.85).strokePoints(pts2(pts), true);
+        }
+        break;
+      }
+      case 'dash': {
+        const to = reach(ab.range);
+        g.lineStyle(3, c, 0.85).lineBetween(me.x, me.y, to.x, to.y);
+        if (ab.radius) area(to.x, to.y, ab.radius);
+        else g.lineStyle(2.5, c, 0.9).strokeCircle(to.x, to.y, me.radius + 4);
+        break;
+      }
+      case 'buff':
+        area(me.x, me.y, me.radius + 26);
+        break;
     }
   }
 
@@ -686,7 +816,11 @@ export class GameScene extends Phaser.Scene {
       g.fillStyle(color, 0.16).fillEllipse(u.x, fy, w, h);
       if (u.player) g.lineStyle(1.5, 0xffffff, 0.9).strokeEllipse(u.x, fy, w + 10, h + 6);
       // A jungle buff or an ability's buff glows round the feet in its colour.
-      u.buffs.forEach((b, i) => g.lineStyle(2, col(b.color), 0.85).strokeEllipse(u.x, fy, w + 16 + i * 8, h + 10 + i * 5));
+      // An ability's buff glows in that ability's look.
+      u.buffs.forEach((b, i) => {
+        if (b.look) drawAura({ ground: g, top: this.topG }, b.look, u.x, u.y, s.time, b.color, settings.reduceMotion);
+        else g.lineStyle(2, col(b.color), 0.85).strokeEllipse(u.x, fy, w + 16 + i * 8, h + 10 + i * 5);
+      });
     }
     if (invulnerable(s, u)) {
       // A shimmering ward round a structure that can't be hurt yet.
@@ -834,9 +968,11 @@ export class GameScene extends Phaser.Scene {
 
   private drawFx(g: Phaser.GameObjects.Graphics) {
     let coins = 0;
-    for (const { f, left } of this.liveFx) {
-      const alpha = Math.max(0, left / f.ms);
-      if (f.kind === 'ring') {
+    for (const { f, left, ms } of this.liveFx) {
+      const alpha = Math.max(0, left / ms);
+      if (f.kind === 'skill') {
+        drawSkill({ ground: this.groundG, top: g }, f, 1 - alpha);
+      } else if (f.kind === 'ring') {
         g.lineStyle(4, col(f.color), alpha).strokeEllipse(f.x, f.y, f.r * 2, f.r * 1.2);
       } else if (f.kind === 'line') {
         g.lineStyle(4, col(f.color), alpha).lineBetween(f.x, f.y - 20, f.x2, f.y2 - 20);
@@ -859,9 +995,9 @@ export class GameScene extends Phaser.Scene {
   /** A faceted gold coin drawn with the Graphics. */
   private coin(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, alpha = 1) {
     const pts = (rr: number) => Array.from({ length: 8 }, (_, i) => new Phaser.Math.Vector2(x + Math.cos((i * Math.PI) / 4 + Math.PI / 8) * rr, y + Math.sin((i * Math.PI) / 4 + Math.PI / 8) * rr));
-    g.fillStyle(0x7a5418, alpha).fillPoints(pts(r + 1.2), true);
-    g.fillStyle(col(UI.goldDeep), alpha).fillPoints(pts(r), true);
-    g.fillStyle(col(UI.gold), alpha).fillPoints(pts(r * 0.68), true);
+    g.fillStyle(0x7a5418, alpha).fillPoints(pts2(pts(r + 1.2)), true);
+    g.fillStyle(col(UI.goldDeep), alpha).fillPoints(pts2(pts(r)), true);
+    g.fillStyle(col(UI.gold), alpha).fillPoints(pts2(pts(r * 0.68)), true);
     g.fillStyle(0xfff0b0, alpha * 0.9).fillTriangle(x - r * 0.6, y - r * 0.2, x - r * 0.2, y - r * 0.6, x, y);
   }
 
@@ -1200,19 +1336,19 @@ export class GameScene extends Phaser.Scene {
         break;
       }
       case 'ally':
-        g.fillStyle(col('#cfe9ff'), alpha).fillPoints([V(0, -13), V(11, -8), V(9, 5), V(0, 13), V(-9, 5), V(-11, -8)], true);
-        g.fillStyle(c, alpha).fillPoints([V(0, -10), V(8, -6), V(6.5, 4), V(0, 10), V(-6.5, 4), V(-8, -6)], true);
-        g.fillStyle(0xffffff, alpha * 0.4).fillPoints([V(0, -10), V(-8, -6), V(-6.5, 4), V(0, 10)], true);
+        g.fillStyle(col('#cfe9ff'), alpha).fillPoints(pts2([V(0, -13), V(11, -8), V(9, 5), V(0, 13), V(-9, 5), V(-11, -8)]), true);
+        g.fillStyle(c, alpha).fillPoints(pts2([V(0, -10), V(8, -6), V(6.5, 4), V(0, 10), V(-6.5, 4), V(-8, -6)]), true);
+        g.fillStyle(0xffffff, alpha * 0.4).fillPoints(pts2([V(0, -10), V(-8, -6), V(-6.5, 4), V(0, 10)]), true);
         break;
       case 'dash':
-        g.fillStyle(col(UI.gold), alpha).fillPoints([V(-13, -4), V(2, -4), V(2, -11), V(14, 0), V(2, 11), V(2, 4), V(-13, 4)], true);
-        g.fillStyle(c, alpha).fillPoints([V(-13, 0), V(2, 0), V(2, 4), V(-13, 4)], true);
+        g.fillStyle(col(UI.gold), alpha).fillPoints(pts2([V(-13, -4), V(2, -4), V(2, -11), V(14, 0), V(2, 11), V(2, 4), V(-13, 4)]), true);
+        g.fillStyle(c, alpha).fillPoints(pts2([V(-13, 0), V(2, 0), V(2, 4), V(-13, 4)]), true);
         break;
       case 'buff':
         // Three rising chevrons.
         for (let i = 0; i < 3; i++) {
           const yy = y + 9 - i * 8;
-          g.fillStyle(i === 2 ? col(UI.gold) : c, alpha).fillPoints([V(-11, yy + 3 - y), V(0, yy - 5 - y), V(11, yy + 3 - y), V(11, yy + 7 - y), V(0, yy - 1 - y), V(-11, yy + 7 - y)], true);
+          g.fillStyle(i === 2 ? col(UI.gold) : c, alpha).fillPoints(pts2([V(-11, yy + 3 - y), V(0, yy - 5 - y), V(11, yy + 3 - y), V(11, yy + 7 - y), V(0, yy - 1 - y), V(-11, yy + 7 - y)]), true);
         }
         break;
       case 'zone':
@@ -1297,8 +1433,8 @@ export class GameScene extends Phaser.Scene {
           const rr = i % 2 ? r * 0.45 : r;
           return new Phaser.Math.Vector2(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr);
         });
-      g.fillStyle(col(UI.edge), 1).fillPoints(star(8), true);
-      g.fillStyle(col(UI.gold), 1).fillPoints(star(6.5), true);
+      g.fillStyle(col(UI.edge), 1).fillPoints(pts2(star(8)), true);
+      g.fillStyle(col(UI.gold), 1).fillPoints(pts2(star(6.5)), true);
     }
   }
 
@@ -1307,9 +1443,11 @@ export class GameScene extends Phaser.Scene {
     this.panel(g, p.x, p.y, p.w, p.h, UI.slate);
     g.fillStyle(col(UI.gold), 1).fillRect(p.x + 2, p.y + 2, p.w - 4, 3);
     this.t('shop-title', p.x + 16, p.y + 12, 'Shop', 18, UI.gold, 'left', true);
-    const atBase = Math.hypot(me.x - BASE.blue.x, me.y - BASE.blue.y) <= 700;
-    const note = atBase ? `Gold ${Math.floor(me.gold)}. Bag ${me.items.length}/${MAX_ITEMS}. Parts you own build into bigger items and come off their price.` : 'Return to your Nexus to buy items.';
-    this.t('shop-note', p.x + 16, p.y + 36, note, 11, atBase ? UI.dim : UI.red);
+    const open = me.dead || atShop(me);
+    const note = !open
+      ? 'Return to your Nexus to buy items, or shop while you wait to respawn.'
+      : `Gold ${Math.floor(me.gold)}. Bag ${me.items.length}/${MAX_ITEMS}. ${me.dead ? 'You can shop while you wait to respawn.' : 'Parts you own build into bigger items and come off their price.'}`;
+    this.t('shop-note', p.x + 16, p.y + 36, note, 11, open ? UI.dim : UI.red);
     ITEMS.forEach((item, i) => {
       const r = shopRow(i);
       const has = me.items.includes(item.id);

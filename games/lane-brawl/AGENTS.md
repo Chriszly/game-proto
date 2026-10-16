@@ -52,7 +52,8 @@ Implemented today:
   `paintFog`) and skips hidden units, effects, projectiles and zones there.
 - Gold (passive plus last hits and kills), XP shared by nearby champions, respawns that scale with
   level.
-- Items (LB4): twelve in `ITEMS`, bought near the Nexus, each owned once, at most `MAX_ITEMS` (6) in
+- Items (LB4): twelve in `ITEMS`, bought near the Nexus (`atShop`, `SHOP_RANGE`) or anywhere while
+  the champion is dead (`buy` skips the distance then), each owned once, at most `MAX_ITEMS` (6) in
   the bag. Seven are parts (the Healing Flask among them); five build `from` parts: buying one uses
   up the parts owned and takes their cost off its price (`priceFor`, `buy`). Items add flat damage,
   armor, health and speed, plus percent attack speed (`atk`) and cooldown reduction (`cdr`). Two add
@@ -116,7 +117,25 @@ Implemented today:
   hit would kill is `lastHitMark` and gets a gold outline. A last hit by the player grows the streak
   (`streak`, shown in a chip by the gold counter) and pops a coin fx with the gold; from x4 on it
   pays +25% (24 gold). The streak resets when the marked minion dies to anyone else.
-- Player input: click the ground to walk, click an enemy to attack it, Q/W/E/R cast at the cursor,
+- Healing at home: a champion within `FOUNTAIN.radius` of its own Nexus (`atFountain`) heals
+  `FOUNTAIN.share` of its max health a second (`updateUnit`). The view draws the ring round both
+  Nexuses (`drawFountains`) and green motes over a champion healing there.
+- Skill looks (`scenes/skillFx.ts`): every ability has its own animation, keyed by its look
+  `${championId}.${key}` (`lookOf` in `sim.ts`). `cast` raises one `'skill'` fx per cast (where it
+  lands, where the caster stood, the radius and facing); bolts carry `look` and raise
+  `${look}>hit` where they strike; zones carry `look`; buffs from abilities carry `look` and glow
+  with an aura (`drawAura`) instead of the plain ring. `LOOKS` holds each cast's draw function and
+  how long it lasts, `drawProjectile` each bolt's shape, `drawZone` each zone's churn; anything
+  without a look (towers, the beast, jungle buffs) keeps the plain shapes. Scatter comes from
+  `hash`, never `Math.random`.
+- Range indicators (`drawRanges`): a dashed ring round the player's champion at its attack `range`,
+  one round a champion under the cursor, and while an ability's key is held (`aiming`) or its box is
+  hovered (`hoverAbility`), its range ring and shape on the ground (an area circle, a bolt's lane
+  per bolt, a dash's line and landing), grey while it can't be cast. Holding a key aims; letting go
+  casts at the cursor (`release`); Esc drops the aim. `lastWorld` is re-read from the pointer every
+  frame, as the camera moves under it.
+- Player input: click the ground to walk, click an enemy to attack it, hold Q/W/E/R to aim and let go
+  to cast at the cursor,
   D/H use item actives at the cursor, B or the Shop button opens the shop, Esc closes it, 1 and 2
   pick an upgrade. Standing still
   auto-attacks the nearest enemy.
@@ -155,6 +174,8 @@ File map (`src/`):
   the sprites, draws bars, projectiles, effects and the objective marker (`topG`), then the HUD
   (`hudG` plus text objects kept in a map by key; world texts such as coin labels and level badges
   live in the same map).
+- `scenes/skillFx.ts`: every ability's look (see "Skill looks" above): `drawSkill`, `skillMs`,
+  `drawProjectile`, `drawZone` and `drawAura`, with small shape helpers. No game rules.
 - `scenes/layout.ts`: screen rectangles for the bars, the objective card, the streak chip, the
   ability boxes, the upgrade panel and cards (`upgradeCard`), the shop, the minimap, the pick cards
   and the end panel, plus `VIEW` and `FONT` (a system font stack).
@@ -240,7 +261,7 @@ State model:
 - `Unit.lane` is the lane of a tower, inhibitor, minion or lane champion; `power` a minion's
   super multiplier.
 - `projectiles` are bolts in flight (with an optional `stun`). `fx` holds the visuals raised since
-  the scene last drained them: rings, lines, arcs and last-hit `coin`s.
+  the scene last drained them: rings, lines, arcs, last-hit `coin`s and abilities' `skill` effects.
 - `Unit.side` is `'blue'`, `'red'` or `'neutral'` (camps and the beast). Hostile means a different
   side.
 - Champions keep `champ` (the `ChampionDef`), `name`, `level`, `xp`, `gold`, `items`, `cds`
@@ -295,7 +316,8 @@ generator (`seeded` in `lowpoly.ts`); `performance.now` only times the bake for 
   motion and full screen).
 - Difficulty scales red's damage: `ENEMY_DAMAGE = byDifficulty(0.8, 1, 1.25)` in `GameScene.ts`,
   applied through `dealt` in `sim.ts`. Normal stays 1, which the playthrough expects.
-- `settings.reduceMotion` skips the effect rings and attack lines (`collectFx`) but keeps the
+- `settings.reduceMotion` skips the effect rings, attack lines and skill effects (`collectFx`) and
+  holds zones' and auras' motion still but keeps the
   last-hit coins (they hold still instead of rising), turns off the hit flash, the objective
   marker's bob and its ring's spin, and makes the camera follow without easing. The game has no
   camera shake or screen flashes.
@@ -309,7 +331,7 @@ generator (`seeded` in `lowpoly.ts`); `performance.now` only times the bake for 
   to turn world positions into view pixels. `e2e/screens.spec.ts` at the root opens the game on
   five screens.
 - Inputs: it clicks the Warden's card at the pick screen (top left of the fifteen), presses B, clicks the Long Sword's card,
-  clicks the ground and the red tower, presses Q, clicks the camp the second objective marks, clicks
+  clicks the ground and the red tower, presses Q (down and up: abilities cast on the key's release), clicks the camp the second objective marks, clicks
   gold-outlined minions (`lastHitMark`) and clicks the first upgrade card. Clicks go to the canvas
   through the bounding box, never on the objective card (it blocks clicks).
 - The test mirrors these, so change them together: the card, shop row, tower, objective card and
@@ -334,7 +356,9 @@ generator (`seeded` in `lowpoly.ts`); `performance.now` only times the bake for 
   `docs/screenshots/` as `playthrough-1-pick` to `playthrough-4-upgrade` when the look changes.
   `cover.png` (a copy of `new-cast.png`), `new-cast.png` (the shuffle steered with a fixed
   `Math.random` sequence so blue fields the five new classes), `ten-classes.png`, `fog-of-war.png`,
-  `jungle-brute.png`, `watchstone.png`, `watch-ai.png` (a `?watch` match at 8x with the log open), `loop-objective.png`, `loop-last-hit.png` and
+  `jungle-brute.png`, `watchstone.png`, `watch-ai.png` (a `?watch` match at 8x with the log open), `skill-looks-1.png` to
+  `skill-looks-3.png` (every ability's effect, five classes each), `aim-indicators.png`,
+  `home-heal-and-dead-shop.png`, `loop-objective.png`, `loop-last-hit.png` and
   `upgrade-*.png` are staged docs shots (a scratch Playwright script that places units through
   `window.game` and lets the match run), not test output. The `loop-*` and `upgrade-*` ones predate
   the square map.
@@ -343,7 +367,7 @@ generator (`seeded` in `lowpoly.ts`); `performance.now` only times the bake for 
 
 - **Add a champion**: add a `ChampionDef` to `CHAMPIONS` with a blurb (32 characters at most, for
   the card), a `PassiveDef` (a short desc) and four `AbilityDef`s (keys Q, W, E, R; R at level 3),
-  its four upgrade pairs to `UPGRADES`, bynames in `names.ts`, a `Kit` in `KITS` and its pose in
+  its four upgrade pairs to `UPGRADES`, four looks in `skillFx.ts`, bynames in `names.ts`, a `Kit` in `KITS` and its pose in
   `classPose` (`models.ts`) and its id to `ChampId`. `createGame` shuffles the classes other than the
   player's, gives blue the first four and red the next five, so any roster of ten or more works;
   the pick screen lays out `pickCard(i)` in three rows of five, so a sixteenth needs a new layout.
@@ -353,7 +377,10 @@ generator (`seeded` in `lowpoly.ts`); `performance.now` only times the bake for 
 - **Add a passive**: add its field to `PassiveDef` and apply it where it acts: `damage` (taken),
   `attack` (hits), `updateUnit` (over time) or `abilityDamage` (spells).
 - **Add an ability kind**: add it to `AbilityKind`, handle it in `cast` (`sim.ts`) and, for AI use,
-  in `aimFor`, and give it an icon in `abilityIcon` (`GameScene.ts`).
+  in `aimFor`, give it an icon in `abilityIcon` (`GameScene.ts`) and its shape in `drawRanges`.
+- **Give an ability its look**: add a `LOOKS` row `'<championId>.<key>'` in `skillFx.ts` (and a
+  `drawProjectile` case and `HIT_COLOR` for a bolt, a `drawZone` case for a zone, a `drawAura` case
+  for a buff). A new champion needs four, or its casts fall back to a plain ring.
 - **Add or change an upgrade**: edit the champion's pair in `UPGRADES`; a new kind of effect needs
   a field on `UpgradeDef` and a line in `abilityFor`. The playthrough expects the Warden's level 2
   pair to be `wide-slam` then `stun-slam`.
@@ -400,7 +427,7 @@ generator (`seeded` in `lowpoly.ts`); `performance.now` only times the bake for 
 - Red's damage goes through `dealt`, so a new damage source on red must use it or it ignores the
   difficulty. The siege banner's bonus is applied in `damage` for the player's hits only.
 - `refreshStats` heals by the increase in max health, so a level up or purchase tops the champion up
-  by that amount, not to full.
+  by that amount, not to full; a dead champion (shopping while it waits) stays at 0 until `revive`.
 - All HUD text sits above all HUD graphics (depth 12 over 10), so a panel drawn over another
   panel's text does not hide it: hide the covered panel instead (as the objective card does while
   the shop is open).

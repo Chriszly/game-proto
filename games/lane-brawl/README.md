@@ -30,7 +30,8 @@ left, under bevelled slate panels.
 | New names | Draw new names for the champions on the pick screen |
 | Click the ground | Walk there |
 | Click an enemy | Walk to it and attack it until it dies or you stop it by clicking the ground |
-| Q, W, E, R, or click their boxes | Cast the ability at the cursor |
+| Hold Q, W, E or R, then let go | Show the ability's range and where it will land while held; cast it at the cursor on letting go |
+| Click an ability box | Cast the ability at the cursor (hovering the box shows its range) |
 | D, H, or click their buttons | Use an item's active: D dashes toward the cursor (Phase Boots), H drinks the Healing Flask |
 | 1 or 2, or click an upgrade card | Keep one of the two upgrades a new level offers |
 | B, or Shop | Open or close the shop; buy an item by clicking it |
@@ -106,7 +107,8 @@ left, under bevelled slate panels.
    you (2:00, 150 gold), slay the guardian beast (2:00, 250 gold; only when your team slays it).
    A goal counts however its target falls; a late one is missed, and one with nothing to aim at
    (the beast asleep) is skipped. The next goal comes 4 seconds after one ends.
-12. **Items**: twelve of them, bought within reach of your Nexus, at most six in your bag (the slots
+12. **Items**: twelve of them, bought within reach of your Nexus or anywhere while you wait to
+    respawn, at most six in your bag (the slots
     under your health bar). Cheap parts build into bigger items: buying a big item uses up the parts
     you own and takes their cost off its price (the shop shows the saving).
 
@@ -124,8 +126,15 @@ left, under bevelled slate panels.
    | Phase Boots | 600 | +40 speed; active (D): dash 220 px, every 18s | Swift Boots |
    | Sage's Cloak | 900 | -20% ability cooldowns, +120 health | Sapphire + Ruby Crystal |
    | Giant's Belt | 700 | +320 health | Ruby Crystal |
-13. **Dying** sends the champion back to its Nexus after a short wait that grows with its level.
+13. **Dying** sends the champion back to its Nexus after a short wait that grows with its level;
+    the shop stays open to you the whole time you are down. **Going home** heals: within the
+    dashed ring round your own Nexus you get back 12% of your health a second (green motes rise).
 14. **Winning** destroys the red Nexus. Losing means your Nexus falls first.
+
+Every ability has an animation of its own (a hammer that splits the ground, a meteor from the
+sky, a harpoon on its rope, a tesla pylon arcing, a blood moon rising and so on), and so do bolts in
+flight, where they strike, zones while they last and buffs while they glow. A dashed ring round your
+champion shows how far it attacks; hovering another champion shows its reach.
 
 The bars under the map show the Nexuses' health and your champion's health, experience, items and
 cooldowns, with the D and H buttons under the shop button; the portrait card shows your champion's
@@ -172,6 +181,10 @@ its finisher (R) for champions and the beast and its escape for when it falls ba
 ![The shop: twelve items in four columns, the parts first, with what each builds into or from](docs/screenshots/playthrough-2-shop.png)
 
 ![Ten champions in one brawl by the river: Warden, Witch, Stalker, Lancer and Berserker among them, each under its own name](docs/screenshots/ten-classes.png)
+
+![Each ability's own effect: the Warden's Slam splits the ground, the Mage's Meteor falls from the sky, the Priest's Sanctuary raises a column of light](docs/screenshots/skill-looks-1.png)
+
+![Holding an ability's key shows its range and where it lands: areas, bolt lanes and dash lines](docs/screenshots/aim-indicators.png)
 
 ### Champions
 

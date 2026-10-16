@@ -16,6 +16,7 @@ import {
   RESPAWN_BASE_MS,
   RESPAWN_PER_LEVEL_MS,
   SHOP_RANGE,
+  FOUNTAIN,
   SIGHT,
   MAX_LEVEL,
   TOWER,
@@ -150,12 +151,17 @@ export function speedOf(u: Unit): number {
 }
 
 /** Gives a unit a buff, or renews it if it already has one of that id. */
-export function addBuff(u: Unit, id: string, def: BuffDef, ms: number, color: string) {
+export function addBuff(u: Unit, id: string, def: BuffDef, ms: number, color: string, look?: string) {
   const had = u.buffs.find((b) => b.id === id);
   if (had) {
     had.ms = Math.max(had.ms, ms);
     had.def = def;
-  } else u.buffs.push({ id, ms, def, color });
+  } else u.buffs.push({ id, ms, def, color, look });
+}
+
+/** An ability's look, which the view draws its effects, bolts, zone and buff in. */
+export function lookOf(u: Unit, key: AbilityKey): string {
+  return `${u.champ?.id ?? 'none'}.${key}`;
 }
 
 /** Ends a unit's stealth: attacking or casting shows it. */
@@ -270,16 +276,27 @@ export function priceFor(u: Unit, item: ItemDef): number {
 /** Buys an item for a champion that stands near its Nexus. Parts it builds from are used up. */
 export function buy(u: Unit, id: string): boolean {
   const item = ITEMS.find((i) => i.id === id);
-  if (!item || u.dead || u.side === 'neutral' || u.items.includes(id)) return false;
+  if (!item || u.side === 'neutral' || u.items.includes(id)) return false;
   const parts = (item.from ?? []).filter((p) => u.items.includes(p));
   const price = priceFor(u, item);
   if (u.gold < price || u.items.length - parts.length >= MAX_ITEMS) return false;
-  if (dist(u, BASE[u.side]) > SHOP_RANGE) return false;
+  // A champion shops at its Nexus, or anywhere while it waits to respawn.
+  if (!u.dead && !atShop(u)) return false;
   u.gold -= price;
   u.items = u.items.filter((i) => !parts.includes(i));
   u.items.push(id);
   refreshStats(u);
   return true;
+}
+
+/** Whether a champion stands near enough to its Nexus to shop. */
+export function atShop(u: Unit): boolean {
+  return u.side !== 'neutral' && dist(u, BASE[u.side]) <= SHOP_RANGE;
+}
+
+/** Whether a champion stands in its Nexus's healing ground. */
+export function atFountain(u: Unit): boolean {
+  return u.side !== 'neutral' && dist(u, BASE[u.side]) <= FOUNTAIN.radius;
 }
 
 /** Uses an item's active (a short dash, or a drink from the healing flask). */
@@ -335,12 +352,14 @@ export function cast(s: GameState, caster: Unit, key: AbilityKey, aim: Vec): boo
   if (dist(caster, aim) > 1) caster.facing = Math.atan2(aim.y - caster.y, aim.x - caster.x);
   const color = caster.champ.color;
   const dmg = abilityDamage(s, caster, ab.damage ?? 0);
+  const look = lookOf(caster, key);
+  const shot = (at: Vec, r: number) => s.fx.push({ kind: 'skill', look, x: at.x, y: at.y, x2: caster.x, y2: caster.y, r, a: caster.facing, color, ms: 600 });
 
   switch (ab.kind) {
     case 'burst': {
       const c = ab.range > 0 ? towards(caster, aim, ab.range) : { x: caster.x, y: caster.y };
       const r = ab.radius ?? 0;
-      s.fx.push({ kind: 'ring', x: c.x, y: c.y, r, color, ms: 350 });
+      shot(c, r);
       for (const e of [...s.units]) {
         if (e.dead || e.side === caster.side || !hittable(e) || dist(e, c) > r + e.radius) continue;
         abilityHit(s, caster, e, dmg, ab);
@@ -381,18 +400,18 @@ export function cast(s: GameState, caster: Unit, key: AbilityKey, aim: Vec): boo
           slow: ab.slow ?? 0,
           pull: !!ab.pull,
           executeBelow: ab.executeBelow ?? 0,
+          look,
         });
       }
+      shot(caster, 0);
       break;
     }
     case 'dash': {
-      const from = { x: caster.x, y: caster.y };
       const to = towards(caster, aim, ab.range);
-      s.fx.push({ kind: 'line', x: from.x, y: from.y, x2: to.x, y2: to.y, color, ms: 250 });
+      shot(to, ab.radius ?? 0);
       caster.x = to.x;
       caster.y = to.y;
       if (ab.damage) {
-        s.fx.push({ kind: 'ring', x: to.x, y: to.y, r: ab.radius ?? 0, color, ms: 300 });
         for (const e of [...s.units]) {
           if (e.dead || e.side === caster.side || !hittable(e) || dist(e, to) > (ab.radius ?? 0) + e.radius) continue;
           abilityHit(s, caster, e, dmg, ab);
@@ -403,7 +422,7 @@ export function cast(s: GameState, caster: Unit, key: AbilityKey, aim: Vec): boo
     case 'ally': {
       const c = ab.range > 0 ? towards(caster, aim, ab.range) : { x: caster.x, y: caster.y };
       const r = ab.radius ?? 0;
-      s.fx.push({ kind: 'ring', x: c.x, y: c.y, r, color: '#9af0b0', ms: 400 });
+      shot(c, r);
       for (const e of s.units) {
         if (e.dead || e.kind !== 'champion' || e.side !== caster.side || dist(e, c) > r + e.radius) continue;
         if (ab.heal) e.hp = Math.min(e.maxHp, e.hp + ab.heal);
@@ -411,24 +430,25 @@ export function cast(s: GameState, caster: Unit, key: AbilityKey, aim: Vec): boo
           e.shield += ab.shield;
           e.shieldMs = Math.max(SHIELD_MS, ab.ms ?? 0);
         }
-        if (ab.buff) addBuff(e, ab.name, ab.buff, ab.ms ?? SHIELD_MS, color);
+        if (ab.buff) addBuff(e, ab.name, ab.buff, ab.ms ?? SHIELD_MS, color, look);
       }
       break;
     }
     case 'buff': {
-      if (ab.buff) addBuff(caster, ab.name, ab.buff, ab.ms ?? 3000, color);
+      if (ab.buff) addBuff(caster, ab.name, ab.buff, ab.ms ?? 3000, color, look);
       if (ab.heal) caster.hp = Math.min(caster.maxHp, caster.hp + ab.heal);
       if (ab.shield) {
         caster.shield += ab.shield;
         caster.shieldMs = Math.max(SHIELD_MS, ab.ms ?? 0);
       }
-      s.fx.push({ kind: 'ring', x: caster.x, y: caster.y, r: 46, color, ms: 450 });
+      shot(caster, 46);
       break;
     }
     case 'zone': {
       const c = towards(caster, aim, ab.range);
       const ms = ab.ms ?? 3000;
-      s.zones.push({ x: c.x, y: c.y, r: ab.radius ?? 100, side: caster.side as Team, owner: caster.id, dps: abilityDamage(s, caster, ab.dps ?? 0), slow: ab.slow ?? 0, left: ms, ms, color });
+      s.zones.push({ x: c.x, y: c.y, r: ab.radius ?? 100, side: caster.side as Team, owner: caster.id, dps: abilityDamage(s, caster, ab.dps ?? 0), slow: ab.slow ?? 0, left: ms, ms, color, look });
+      shot(c, ab.radius ?? 100);
       break;
     }
   }
@@ -533,6 +553,8 @@ function updateUnit(s: GameState, u: Unit, dt: number) {
     const p = u.champ.passive;
     const regen = (p.regen ?? 0) + buffSum(u, 'regen');
     if (regen) u.hp = Math.min(u.maxHp, u.hp + (regen * dt) / 1000);
+    // Its own Nexus heals a champion that comes home.
+    if (atFountain(u)) u.hp = Math.min(u.maxHp, u.hp + (u.maxHp * FOUNTAIN.share * dt) / 1000);
     if (p.aura) {
       for (const a of s.units) {
         if (a.kind === 'champion' && !a.dead && a.side === u.side && dist(a, u) <= (p.auraRadius ?? 0)) a.hp = Math.min(a.maxHp, a.hp + (p.aura * dt) / 1000);
@@ -1211,13 +1233,14 @@ function updateProjectiles(s: GameState, dt: number) {
       if (Math.hypot(e.x - p.x, e.y - p.y) > p.width + e.radius) continue;
       p.hit.push(e.id);
       const owner = getUnit(s, p.owner);
+      if (p.look) s.fx.push({ kind: 'skill', look: `${p.look}>hit`, x: e.x, y: e.y, x2: p.x, y2: p.y, r: 0, a: Math.atan2(p.vy, p.vx), color: p.color, ms: 400 });
       if (owner && owner.kind === 'champion') abilityHit(s, owner, e, p.damage, p);
       else damage(s, e, p.damage, p.owner);
       // A harpoon drags what it caught to the thrower.
       if (p.pull && owner && !e.dead && (e.kind === 'champion' || e.kind === 'minion')) {
         const d = Math.max(dist(owner, e), 1);
         const stop = owner.radius + e.radius + 20;
-        s.fx.push({ kind: 'line', x: owner.x, y: owner.y, x2: e.x, y2: e.y, color: p.color, ms: 300 });
+        if (!p.look) s.fx.push({ kind: 'line', x: owner.x, y: owner.y, x2: e.x, y2: e.y, color: p.color, ms: 300 });
         e.x = owner.x + ((e.x - owner.x) / d) * stop;
         e.y = owner.y + ((e.y - owner.y) / d) * stop;
       }
