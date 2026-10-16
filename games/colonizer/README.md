@@ -49,6 +49,8 @@ the last one on the first page of the build list.
 | Click the minimap | Look at that part of the map |
 | Click the horn toast | Look at the raid it names |
 | Click a camp | Say what it holds and who has it |
+| Right click a trading post, with trade carts selected | Send the carts trading |
+| **Ring the bell**, with the Town Center selected | Villagers near the Town Center or a Watchtower shelter inside; **Back to work** sends them out again |
 | Esc | Cancel placing a building or attack-moving |
 | Bottom panel | Train units, research techs and advance the ages from the buttons |
 
@@ -104,9 +106,76 @@ soldiers walk to the flag and stand round it; a villager whose flag is on a tree
 goes straight to work there. Units no longer stack on one spot: they push gently apart until each
 has room, so a group spreads out where it stops (villagers at work hold their place).
 
+## The town bell and the garrison
+
+Select the Town Center and press **Ring the bell** when a raid comes in: every villager within 14
+tiles of a shelter runs to the nearest one with room, the Town Center (12) or a finished Watchtower
+(5), and disappears inside. Each villager sheltering adds an arrow of 3 damage to that building's
+volleys, and a knot of ochre on its roof counts them. They gather nothing while they hide, so press
+**Back to work** as soon as the raiders are dead or gone and they walk back to the node they left.
+A shelter that falls spills its garrison out onto the ground. The AI rings its own bell when enemy
+soldiers come within 14 tiles of its Town Center, and releases it once they are gone.
+
+![The bell rung as Tide spearmen reach the base: four villagers inside the Town Center, the panel's Back to work button, and the tower shooting the raiders](docs/screenshots/town-bell.png)
+
+## Veteran ranks
+
+Every soldier but the Ram earns ranks by its kills: **Seasoned** at 2, **Veteran** at 5 and
+**Champion** at 9. Each rank adds 10 health (healed on the spot) and 1 damage, and draws a chevron
+over the unit's head; the panel shows the rank and the kill count. A veteran is worth pulling back
+from a losing fight. The enemy's soldiers rank up the same way.
+
+![A rank III Militia selected, with its three chevrons, beside a rank II Militia and a rank I Archer](docs/screenshots/veteran-ranks.png)
+
+## The Market and trade carts
+
+The build list's second page offers the **Market** in Age II (150 wood, 50 food, one only). Select
+it to swap resources: ore buys a lot of 100 wood or 100 food, and a lot sells for ore. The base lot
+costs 70 ore and sells for 42; every purchase raises that resource's price by 12% and every sale
+lowers it, and prices drift back to the base over a few minutes. The Market also trains **Trade
+Carts** (80 wood, 40 food): each drives to the nearest of the two **trading posts** in the middle
+of the map, loads 40 ore there, and brings it to the nearest building that takes ore (the Market, a
+Mining Camp or the Town Center), then sets off again. The posts are the same distance from both
+Town Centers and marked on the minimap for everyone. A cart can't fight: the road to the post is a
+line the enemy can raid, and the AI's economy raids go for a Market too. The AI builds a Market after
+its Watchtower and keeps three carts on the road, and sells a resource that piles up past 600 when
+its ore runs low or buys one that runs out when it has ore to spare.
+
+![The Market selected: buy and sell buttons with their current prices, and trade carts setting off](docs/screenshots/market.png)
+
+![Three trade carts at a trading post in the middle of the map](docs/screenshots/trading-post.png)
+
+## Siege rams
+
+In Age II the Barracks trains the **Ram** (160 wood, 60 ore): a slow slung log under a roof, pushed
+by two crewmen, with 220 health and a blow of 32 against buildings, palisades and gates, which it
+goes for on its own. It can't hurt a unit at all, and sent at one it only walks there, so rams
+need an escort and give attackers an answer to a walled base and to a standing Monument. The AI
+keeps two rams with its army from Age II.
+
+![Two rams and their militia escort breaking a Tide palisade, with the Ram's panel text](docs/screenshots/siege-rams.png)
+
+## Faction champions
+
+In Age III the Town Center trains the faction's **champion** (200 food, 150 ore, one at a time):
+
+- The Ember Legion's **Warlord**, a plumed knight on foot (170 health, 11 damage) whose aura gives
+  every own soldier within 6 tiles +2 damage; a ring of ochre stitch shows its reach.
+- The Tide Coven's **Seer** (90 health, 6 damage at range 5) who sees 14 tiles into the fog, so an
+  army round it is never surprised.
+- The Thorn Grove's **Druid** (130 health, 5 damage) who mends every own unit within 5 tiles by 3
+  health every 1.5 s; a green ring shows its reach.
+
+A champion earns ranks like any soldier. The AI trains its own once it reaches Age III, so a late
+match has one to protect and one to hunt.
+
+![The Ember Warlord with its aura ring round the militia fighting beside it](docs/screenshots/champion-warlord.png)
+
+![The Thorn Druid, antlered, mending the brutes round it](docs/screenshots/champion-druid.png)
+
 ## Walls and gates
 
-The build list's second page (**Walls & Monument**) has the **Palisade** (4 wood a stake) and the
+The build list's second page (**Walls & More**) has the **Palisade** (4 wood a stake) and the
 **Gate** (25 wood). Drag a line on the map to lay a palisade, up to 40 stakes; the selected villagers
 start on it and each goes on to the next unfinished piece nearby. A diagonal line has no gaps. A gate
 goes in a gap or straight onto one of your own stakes, and only your units walk through it. Soldiers
@@ -139,7 +208,7 @@ its army to take relics between raids.
 
 ## The Monument
 
-In Age III the build list's second page offers the **Monument** (500 wood, 300 food, 400 ore, one
+In Age III the build list's second page (**Walls & More**) offers the **Monument** (500 wood, 300 food, 400 ore, one
 only, 90 s to build). Once it is finished it counts down three minutes on the relics card; if it is
 still standing at the end, its owner wins. Everyone sees a Monument from the moment it is begun, the
 match says so when one is finished, and the AI throws everything it has at yours. The AI builds one
@@ -154,7 +223,9 @@ too once it reaches Age III.
 - Wood comes from trees, food from berry bushes and farms, and ore from gold mines. The Tide Coven's
   Dock adds food on its own, and the Thorn Grove's Grove grows new trees.
 - Villagers carry ten at a time to the Town Center, or to a Lumber or Mining Camp for wood and ore.
-- A house adds population; the Town Center adds ten. Units in training count against the cap.
+  Trade carts bring 40 ore a trip from a trading post to the Market, a Mining Camp or the Town Center.
+- A house adds population; the Town Center adds ten. Units in training and villagers sheltering
+  count against the cap.
 
 ## Difficulty
 
@@ -185,5 +256,7 @@ unit, tech, attack and relic run (**L**). A click on the end screen starts anoth
 - The AI builds its faction's own building early, sets a rally flag in front of its base for each
   production building, and walls off the front of its base in Age II.
 - The AI plays at a human pace: about 30 commands a minute, so it can leave villagers idle too.
+- The AI rings its town bell when enemy soldiers reach its base, builds a Market and runs three
+  trade carts, adds two rams to its army in Age II and trains its champion in Age III.
 - The Town Center and Watchtowers shoot hard enough to hold off a small raid on their own; a
   Watchtower costs 125 wood and 50 ore.

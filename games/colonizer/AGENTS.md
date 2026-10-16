@@ -7,8 +7,8 @@ as the root AGENTS.md asks.
 ## Current state
 
 Colonizer is a skirmish RTS: one player against one AI on a 128x128 tile map, with three factions
-(Ember Legion, Tide Coven, Thorn Grove) that differ in their three combat units and one unique
-building each (Forge, Dock, Grove). The map is
+(Ember Legion, Tide Coven, Thorn Grove) that differ in their three combat units, one unique
+building each (Forge, Dock, Grove) and an Age III champion. The map is
 generated each match from `Math.random` and is point-symmetric, so both sides start the same. It is
 drawn as the Bayeux tapestry: wool laid-and-couched work and stem-stitch outlines on linen, painted
 in code on 2D canvases (no image files), with `pixelArt` off.
@@ -31,9 +31,41 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   Barracks, Archery Range, Stable, Academy, Watchtower; one per faction (`faction` on the def,
   `UNIQUE`): Forge (Ember, soldiers cost `FORGE_COST` 80%), Dock (Tide, on a shore, `DOCK_FOOD` every
   `DOCK_MS`), Grove (Thorn, plants a tree every `GROVE_MS` within `GROVE_RANGE`, up to `GROVE_TREES`,
-  and takes wood); Palisade and Gate (`palisade: true`); the Monument (`age: 3`). `limit` caps how
+  and takes wood); Palisade and Gate (`palisade: true`); the Market (`market: true`, `age: 2`, takes
+  ore, trains carts); the Monument (`age: 3`). `limit` caps how
   many a player may have. The build list has two pages: `BUILD_ORDER` plus the faction's building,
-  then `BUILD_MORE` (Palisade, Gate, Monument).
+  then `BUILD_MORE` (Palisade, Gate, Market, Monument) behind the `Walls & More` button.
+- Roles (`Role` in data.ts): `villager` and `cart` are civil (`isCivil`), `melee`, `ranged`,
+  `cavalry`, `siege` (the Ram) and `champion` are soldiers (`isSoldier`); `earnsRanks` is every
+  soldier but the Ram. `unitFor(faction, role)` also finds the shared `neutral` units (villager,
+  cart, ram). A `UnitDef` may carry `age` (trained from that age), `limit` (alive, sheltering or
+  queued, counted by `unitCount`) and `gift` (a champion's power).
+- The town bell (`ringBell`, `releaseBell`, `Player.bell`): villagers within `BELL_RANGE` of a
+  shelter (a building with `shelter`: the Town Center 12, a finished Watchtower 5) get a `garrison`
+  order, walk there and are moved out of `s.units` into `Building.garrison`. Each adds
+  `GARRISON_ARROW` to the building's volley. `releaseBell` (or a shelter falling, in `reap`) puts them
+  back on free tiles round it and `backToWork` sends each to its old node. `garrisoned` counts them;
+  `popUsed` and `unitCount` include them. The AI rings when an enemy soldier is within `BELL_RANGE`
+  of its Town Center and releases when none is.
+- Veteran ranks (`Unit.kills`, `Unit.rank`): a kill of a unit in `strike` counts; `RANK_KILLS`
+  gives rank 1 to 3, each worth `RANK_HP` (added to `maxHp(u)` and healed at once) and `RANK_DMG` in
+  `ownBonus`. The scene draws chevrons over the head and names the rank (`RANK_NAMES`).
+- The Market and trade carts: `trade(s, owner, res, dir)` swaps `MARKET_LOT` wood or food for ore
+  at `marketPrice` (`MARKET_BASE` times `Player.rates[res]`, sales pay `MARKET_SELL` of it); each
+  trade moves the rate by `MARKET_STEP` within `MARKET_RATE_MIN..MAX`, and `updateMarkets` drifts
+  rates back to 1 by `MARKET_DRIFT` a second. A cart (`cartUpdate`, order `trade`) drives to the
+  nearest trading post (`GameState.posts`, from `MapData.posts`: two 2x2 halls on the map's
+  anti-diagonal, so each is as far from either Town Center, cleared like camps and solid), loads
+  `TRADE_ORE`, returns it to the nearest ore drop-off, and sets off again; a new cart trades at
+  once. `postAt` finds a post under a point. The AI builds a Market after its Watchtower, keeps
+  `AI_CARTS` carts, and swaps by `SWAP_HIGH`/`SWAP_LOW`.
+- Siege rams (`ram`, role `siege`, Barracks, Age II): `nearestEnemy` with `structures` picks every
+  building including palisades, so a ram goes for walls on its own; `strike` does nothing to a unit,
+  and `issue` turns an attack order on a unit into a walk. The AI keeps `AI_RAMS` with its army.
+- Champions (`gift` on the def, Town Center, Age III, `limit: 1`): the Ember Warlord (`aura`: own
+  soldiers within `AURA_RANGE` get `AURA_DMG` in `ownBonus`, `inAura`), the Tide Seer (`sight` 14),
+  the Thorn Druid (`heal`: `HEAL_HP` to own units within `HEAL_RANGE` every `HEAL_MS`, `Unit.pulse`).
+  The scene rings the aura and heal ranges with a faint ellipse.
 - Rally flags (`Building.rally`): a right click with a production building selected (and no units)
   plants it; new units walk to a ring of spots round it (`RALLY_SPOTS`), and a villager whose flag is
   on a node or own farm gathers there. Units push apart where closer than `UNIT_GAP` (`separate` in
@@ -100,20 +132,26 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   background), registers the three scenes, calls `setupGame(game)` from `shared/setupGame.ts` and
   `setupScaling(game)` from `shared/scaling.ts`, and puts `game` on window in dev.
 - `src/game/data.ts`: every balance number and roster: `FACTIONS`, `UNITS` (cost, time, stats,
-  trainer), `unitFor(faction, role)`, `BUILDINGS`, `BUILD_ORDER`, `TECHS` (with `advance: 2 | 3` on
+  trainer, `age`, `limit`, `gift`), `unitFor(faction, role)`, `isCivil`/`isSoldier`/`earnsRanks`,
+  `BUILDINGS`, `BUILD_ORDER`, `TECHS` (with `advance: 2 | 3` on
   the age techs), `GATHER_MS`, `CARRY`, `START`, `START_VILLAGERS`, `DEEDS`, `ARMY_DEED`,
   `AGE3_DAMAGE`, `BOONS`, `SHIELDWALL_TAKEN`, `HARVEST_RITES`, `BUILD_MORE`, `UNIQUE`,
   `UNIQUE_TEXT`, the Forge, Dock and Grove numbers, `UNIT_GAP`, `RELICS` and their bonuses,
-  `CLAIM_RANGE`, `LEASH`, `MONUMENT_MS`, the raid pacing (`FIRST_RAID_MS`, `RAID_REST_MS`,
+  `CLAIM_RANGE`, `LEASH`, the bell (`BELL_RANGE`, `GARRISON_ARROW`), the ranks (`RANK_KILLS`,
+  `RANK_HP`, `RANK_DMG`, `RANK_NAMES`), the Market (`MARKET_*`, `TRADE_ORE`), the champions
+  (`AURA_*`, `HEAL_*`), `MONUMENT_MS`, the raid pacing (`FIRST_RAID_MS`, `RAID_REST_MS`,
   `RAID_PARTY`, `RAID_TOWN_FROM`, `RAID_MAX_MS`), `TILE` (32) and `MAP_SIZE` (128).
 - `src/game/map.ts`: `generateMap()` draws lakes, rock ridges, forests, bushes and mines, mirrors
-  each one, adds each side's starting trees, bushes and mine, then clears the camps' patches. Terrain is `Uint8Array` of
+  each one, adds each side's starting trees, bushes and mine, then clears the camps' and the two
+  trading posts' patches (`POST_PLAN` and its mirror, `MapData.posts`). Terrain is `Uint8Array` of
   `GRASS`, `WATER`, `ROCK` and `DIRT`; `Node`s are the resources. `START_TILES` are the two Town
   Center corners.
 - `src/game/sim.ts`: the rules, free of Phaser. `createGame` builds the state, `tick` advances it,
   `issue` gives unit orders, `placeBuilding`, `canPlace`, `train` and `research` queue things,
   `chooseBoon` takes the Age II boon, `startRaid` records a raid, `notAllowed` says why a building
   can't be placed at all, `unitCost` applies the Forge, `placeWall`/`wallLine` lay a palisade,
+  `ringBell`/`releaseBell` run the garrison, `trade`/`marketPrice` the Market, `maxHp`, `unitCount`,
+  `garrisoned`, `shelters`, `inAura` and `postAt` read things,
   `setRally` plants a rally flag, `endRaid` ends a raid whose raiders turn back, `campAt`/`campSpots` find a camp and the tiles round it,
   `monumentLeft` reads a Monument's count, `deedCount` and `deedsDone` read
   the deeds, `findPath` is a breadth-first search on the tile grid, `updateSight` computes the
@@ -129,9 +167,12 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   `src/art/figures.ts` also draws the `wild` side (`Side`), the camp guards.
 - `src/art/figures.ts`: the units. `WOOL` holds each side's colours; `drawFigure` paints one frame
   of one unit with its feet at a point; `bakeFigureSheet` paints a unit's frames side by side, each
-  `FRAME` (64) px with the feet at `FEET`. `VILLAGER_POSES` and `SOLDIER_POSES` list the poses and
-  frame counts.
-- `src/art/scenery.ts`: buildings (`bakeBuilding`, with `BUILDING_TOP` px above the footprint),
+  `FRAME` (64) px with the feet at `FEET`. `VILLAGER_POSES`, `SOLDIER_POSES` and `CART_POSES` list
+  the poses and frame counts. Kinds beyond the weapons: `cart` (a villager pulling a cart), `ram`
+  (the slung log and two crewmen), and the champions `warlord` (a plumed, gold-shielded swordsman),
+  `seer` and `druid` (robed, with a `staff`).
+- `src/art/scenery.ts`: buildings (`bakeBuilding`, with `BUILDING_TOP` px above the footprint, the
+  Market among them), the trading post (`bakePost`, also `BUILDING_TOP` above its 2x2 footprint),
   trees (`bakeTree`, `TREE_TOP` px above the tile), `bakeBush`, `bakeMine`, the ground
   (`paintChunk`, one `CHUNK`x`CHUNK` tile chunk at full size), `bakeFogPattern`, `bakeNeedle`,
   `bakeRallyFlag`, and the camps (`bakeCache`, `bakeRelic`, with `CAMP_TOP` px above the footprint).
@@ -140,8 +181,9 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   bar's slots and bars, `AGE_PIPS`, `DEED_CARD`, `STATUS_CARD`, `TOAST`, `SEL`, `BUTTONS`, `BOON`,
   `MINI`).
 - `src/scenes/BootScene.ts`: bakes every texture once, then starts `Menu`. Keys: `fig-<unit type>`
-  for soldiers and `fig-villager-<faction>` for villagers (frames `<pose>-<n>`, e.g. `chop-2`),
-  `bld-<faction>-<building>`, `tree-0`..`tree-3`, `bush`, `mine`, `fog-pattern`, `needle`,
+  for a faction's soldiers and `fig-<unit type>-<faction>` for the shared neutral units (villager,
+  cart, ram), with frames `<pose>-<n>` (e.g. `chop-2`),
+  `bld-<faction>-<building>`, `post`, `tree-0`..`tree-3`, `bush`, `mine`, `fog-pattern`, `needle`,
   `icon-<kind>`, `icon-banner-<faction>`, `topbar`, `panel`, `btn-on|off|hot`, `card-*`, `backdrop`,
   `rally-flag`, `camp-cache-<res>`, `camp-relic-<relic>-<faction|none>` (`relicKey`) and
   `fig-wild-brigand`/`fig-wild-poacher`.
@@ -157,17 +199,21 @@ in code on 2D canvases (no image files), with `pixelArt` off.
 ### State model additions
 
 - `Unit.act` (`idle | walk | gather | build | fight`, set each tick), `Unit.face` (1 or -1) and
-  `Unit.struck` (game time of the last blow) drive the animation; they change no rule.
+  `Unit.struck` (game time of the last blow) drive the animation; they change no rule. `Unit.kills`
+  and `Unit.rank` are the veteran ranks, `Unit.pulse` a champion's heal timer. Orders also include
+  `garrison` (a villager running to a shelter) and `trade` (a cart heading for a post).
 - `Player.age` is 1, 2 or 3; `Player.deeds` is `{ age2, army, raid }` (`army` is the most soldiers
-  alive at once); `Player.boon` and `Player.boonPending`.
+  alive at once); `Player.boon` and `Player.boonPending`; `Player.bell` (the bell is ringing) and
+  `Player.rates` (the Market's wood and food rates).
 - `GameState.raid` (`Raid | null`), `raids` and `repelled` counters, and `events`: `hit`, `drop` and
   `grow` events the sim pushes and the scene drains each frame (capped at 400 when nobody drains them).
 - `GameState.players` has a third entry, `NEUTRAL` (the camp guards); its `faction` is only a
   placeholder. Code that loops over players skips it where it matters (`updateDeeds`, `checkWinner`).
 - `GameState.aiRaid[side]`: `next` (earliest time of the next raid), `count`, `goal`, `party` and
   `started`; the planner's memory, which changes no rule.
-- `Building.rally`, `doneAt` and `workMs` (the Dock's and Grove's timer); `Unit.post` (a guard's
-  post); `GameState.gates`, `camps` and `winBy`.
+- `Building.rally`, `doneAt`, `workMs` (the Dock's and Grove's timer) and `garrison` (the
+  sheltering villagers, as whole `Unit`s taken out of `units`); `Unit.post` (a guard's post);
+  `GameState.gates`, `camps`, `posts` and `winBy`.
 
 ### How it runs
 
@@ -195,12 +241,19 @@ in code on 2D canvases (no image files), with `pixelArt` off.
 - A right click with a production building selected and no units calls `setRally`. A right click on
   a camp sends the selection to its free tiles (soldiers attack-move). A left click on a camp shows
   what it is in the toast.
-- The build list's page is `buildPage` (0 or 1); its second page is behind the `Walls & Monument`
+- The build list's page is `buildPage` (0 or 1); its second page is behind the `Walls & More`
   button. A building the player may not place (`notAllowed`) shows disabled. `renderPanel` closes
   the build list (`buildMenu`, `buildPage`) whenever the selection changes (`panelSelection`) or no
   villager is left in it, so clicking another unit or building shows its own buttons.
-- The panel is rebuilt when `panelSignature` changes. While `boonPending`, the two boon cards take
-  the buttons' place, with `hud` labels `Shieldwall` and `Harvest Rites`.
+- The panel is rebuilt when `panelSignature` changes (it also watches the bell, the Market rates
+  and the champion count). While `boonPending`, the two boon cards take
+  the buttons' place, with `hud` labels `Shieldwall` and `Harvest Rites`. The Town Center's buttons
+  are the Villager, the champion, `Ring the bell` or `Back to work`, and the age; a Market's are the
+  Trade Cart and `Buy 100 wood 70o`-style buy and sell buttons with the live price; selected carts
+  get `Trade`. A unit whose age is too low shows as `Ram (Age II)`, a champion at its limit as
+  `Warlord (one only)`.
+- Right click on a trading post sends selected carts trading (`postAt`) and everyone else there;
+  carts otherwise take move orders with the soldiers. A left click on a post says what it is.
 
 ### Rules worth knowing
 
@@ -223,6 +276,10 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   way, so in watch mode a side's raid can go untracked while the other's is on. A raid ends when
   every raider has fallen (repelled) or with `endRaid` when the planner calls its party home.
 - `speedOf` in `sim.ts` gives cavalry the Stirrups speed (`STIRRUPS_SPEED`) when they move.
+- Garrisoned villagers are not in `s.units`, so nothing targets, draws or selects them; code that
+  counts a player's villagers (the planner's `TARGET_VILLAGERS`) adds `garrisoned(s, owner)`.
+- A ram's `strike` on a unit does nothing, so never give one a unit as an attack target: `issue`
+  and `nearestEnemy('structures')` keep them on buildings.
 - The AI's gather rate is the only difficulty number: `byDifficulty(0.75, 1, 1.25)` in `GameScene`.
 - `canPlace(s, type, tx, ty, owner)` also refuses gate tiles, and a Dock away from water
   (`nearWater`); a gate may go on the owner's own stake.
@@ -243,7 +300,8 @@ None: there is no save. Settings come from the hub (`shared/settings.ts`).
   player's drop-off badges, such as `+10 wood`), `toastLog` (raid toasts shown), `toast.shown`,
   `placing`, `attackMode`, `buildMenu`, `buildPage`, `status.shown` (the Monument line),
   `cameras.main.worldView.x/y` (not `scrollX/Y`, which differ once `renderScale` zooms the
-  camera), and `toScreen(tx, ty)`. `e2e/screens.spec.ts` at the root opens the game on five screens. `state.camps` lists the camps with `holder`.
+  camera), and `toScreen(tx, ty)`. `e2e/screens.spec.ts` at the root opens the game on five screens. `state.camps` lists the camps with `holder`, `state.posts` the trading posts,
+  and each building's `garrison` the villagers inside it.
 - Inputs are canvas clicks (left and right), so the test drives the real controls. It never writes
   to game state.
 - It seeds `Math.random`, owns `page.clock`, makes `requestAnimationFrame` a 64 ms timer and forces
@@ -260,6 +318,11 @@ None: there is no save. Settings come from the hub (`shared/settings.ts`).
 - Add a unit: add an entry to `UNITS` with its faction and role, and add it to the faction's trainer
   building. Give it a figure: map its name to a `Kind` in `kindOf` (`src/art/figures.ts`) and, for a
   new kind, its hands and weapon in `footman` or `rider`. `BootScene` bakes a strip for every unit.
+  A new role needs a line in `isCivil`/`isSoldier`, a branch in `updateUnit` and `frameOf`, and its
+  poses in `framesFor`.
+- Add a champion gift: a value of `gift` on the def, its numbers in data.ts, and its effect in the
+  sim (`ownBonus` for damage, `updateUnit` for a pulse like the heal); the scene's selection text and
+  the range ring in `renderRings` read `gift` too.
 - Add a pose: add it to `VILLAGER_POSES` or `SOLDIER_POSES` with its frame count, draw it in
   `villager`, `footman` or `rider`, and pick it in `GameScene.frameOf`.
 - Add a building: add it to `BUILDINGS` and `BUILD_ORDER` (or `BUILD_MORE`; page one holds 10 plus
@@ -294,6 +357,7 @@ None: there is no save. Settings come from the hub (`shared/settings.ts`).
   them that much higher.
 - Don't put a red cross in any sprite or icon (root rule). The raid's minimap rings and the toast's
   arrow are red; keep them rings and a triangle. The Relic of Valor's sword is drawn in ink and grey.
+  The Druid's heal ring is green, never a cross.
 - `pointer.x/y` and `this.scale` are canvas pixels, `renderScale` times game space: read pointers
   through `viewPoint`, and give anything new on the HUD a scroll factor of 0 (a container too) so
   `splitHudCamera` draws it with the fixed camera.
