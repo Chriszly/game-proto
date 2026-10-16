@@ -32,9 +32,9 @@ export function stitchLine(g: Phaser.GameObjects.Graphics, x0: number, y0: numbe
 }
 
 /** A dashed (chain-stitch) ellipse. */
-export function stitchEllipse(g: Phaser.GameObjects.Graphics, x: number, y: number, rx: number, ry: number, width: number, col: number) {
+export function stitchEllipse(g: Phaser.GameObjects.Graphics, x: number, y: number, rx: number, ry: number, width: number, col: number, alpha = 1) {
   const n = Math.max(12, Math.round((rx + ry) * 1.2));
-  g.lineStyle(width, col, 1);
+  g.lineStyle(width, col, alpha);
   for (let i = 0; i < n; i += 2) {
     const a0 = (i / n) * Math.PI * 2;
     const a1 = ((i + 1.4) / n) * Math.PI * 2;
@@ -376,6 +376,8 @@ export class Minimap {
       const col = c.holder === PLAYER ? this.own : c.holder === null ? (c.kind === 'relic' ? pale : gold) : this.foe;
       for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) put(c.tx + i, c.ty + j, col);
     }
+    // The trading posts are marked for everyone, like a landmark on a chart.
+    for (const p of s.posts) for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) put(p.tx + i, p.ty + j, [122, 85, 48]);
     for (const b of s.buildings.values()) {
       // A Monument shows on every map once it is begun, as it does in the fog for everyone.
       if (b.owner !== PLAYER && b.type !== 'monument' && s.sight[b.ty * MAP_SIZE + b.tx] === 0) continue;

@@ -51,7 +51,15 @@ export const FACTIONS: Record<FactionId, Faction> = {
   },
 };
 
-export type Role = 'villager' | 'melee' | 'ranged' | 'cavalry';
+/**
+ * Villagers and trade carts are civil; melee, ranged, cavalry, siege (the ram) and the faction's
+ * champion are soldiers. `isSoldier` and `isCivil` are the two sides of that line.
+ */
+export type Role = 'villager' | 'melee' | 'ranged' | 'cavalry' | 'cart' | 'siege' | 'champion';
+export const isCivil = (role: Role) => role === 'villager' || role === 'cart';
+export const isSoldier = (role: Role) => !isCivil(role);
+/** Soldiers that earn veteran ranks by kills: every soldier but the ram. */
+export const earnsRanks = (role: Role) => isSoldier(role) && role !== 'siege';
 
 export type BuildingId =
   | 'town'
@@ -69,6 +77,7 @@ export type BuildingId =
   | 'grove'
   | 'wall'
   | 'gate'
+  | 'market'
   | 'monument';
 
 export interface UnitDef {
@@ -88,6 +97,12 @@ export interface UnitDef {
   trainer: BuildingId;
   /** Extra damage against cavalry, for units that counter riders. */
   vsCavalry?: number;
+  /** The age a player needs before training it. */
+  age?: 2 | 3;
+  /** At most this many alive or in training per player (the champion). */
+  limit?: number;
+  /** A champion's gift: a damage aura for nearby soldiers, far sight, or healing nearby units. */
+  gift?: 'aura' | 'sight' | 'heal';
 }
 
 export const UNITS: Record<string, UnitDef> = {
@@ -132,6 +147,29 @@ export const UNITS: Record<string, UnitDef> = {
     id: 'thorn-stalker', faction: 'thorn', role: 'cavalry', name: 'Stalker',
     cost: { food: 60, ore: 30 }, time: 13000, hp: 60, dmg: 8, range: 1, speed: 3.4, sight: 6, cooldown: 1000, trainer: 'stable',
   },
+  // Trained at the Market (Age II): drives to a trading post in the middle of the map and back for ore.
+  cart: {
+    id: 'cart', faction: 'neutral', role: 'cart', name: 'Trade Cart',
+    cost: { wood: 80, food: 40 }, time: 12000, hp: 45, dmg: 0, range: 1, speed: 1.9, sight: 4, cooldown: 1000, trainer: 'market',
+  },
+  // The siege ram (Age II, Barracks): slow, smashes buildings, walls and gates, and can't hurt a unit.
+  ram: {
+    id: 'ram', faction: 'neutral', role: 'siege', name: 'Ram',
+    cost: { wood: 160, ore: 60 }, time: 22000, hp: 220, dmg: 32, range: 1, speed: 1.05, sight: 4, cooldown: 2200, trainer: 'barracks', age: 2,
+  },
+  // Each faction's champion (Age III, Town Center, one at a time).
+  'ember-warlord': {
+    id: 'ember-warlord', faction: 'ember', role: 'champion', name: 'Warlord',
+    cost: { food: 200, ore: 150 }, time: 30000, hp: 170, dmg: 11, range: 1, speed: 2.1, sight: 7, cooldown: 1100, trainer: 'town', age: 3, limit: 1, gift: 'aura',
+  },
+  'tide-seer': {
+    id: 'tide-seer', faction: 'tide', role: 'champion', name: 'Seer',
+    cost: { food: 200, ore: 150 }, time: 30000, hp: 90, dmg: 6, range: 5, speed: 2.2, sight: 14, cooldown: 1200, trainer: 'town', age: 3, limit: 1, gift: 'sight',
+  },
+  'thorn-druid': {
+    id: 'thorn-druid', faction: 'thorn', role: 'champion', name: 'Druid',
+    cost: { food: 200, ore: 150 }, time: 30000, hp: 130, dmg: 5, range: 1, speed: 2.1, sight: 7, cooldown: 1200, trainer: 'town', age: 3, limit: 1, gift: 'heal',
+  },
   // The guards of the neutral camps (see CAMPS); nobody trains them.
   'wild-brigand': {
     id: 'wild-brigand', faction: 'wild', role: 'melee', name: 'Brigand',
@@ -143,9 +181,9 @@ export const UNITS: Record<string, UnitDef> = {
   },
 };
 
-/** The unit a faction trains for each combat role; villagers are shared. */
+/** The unit a faction trains for each role; villagers, carts and rams are shared by every faction. */
 export function unitFor(faction: FactionId, role: Role): UnitDef {
-  const def = Object.values(UNITS).find((u) => u.faction === faction && u.role === role);
+  const def = Object.values(UNITS).find((u) => (u.faction === faction || u.faction === 'neutral') && u.role === role);
   if (!def) throw new Error(`no ${role} for ${faction}`);
   return def;
 }
@@ -180,31 +218,36 @@ export interface BuildingDef {
   limit?: number;
   /** A palisade piece, placed by dragging a line; walls and gates are never auto-targeted. */
   palisade?: boolean;
+  /** Villagers shelter inside when the town bell rings, up to this many; each adds an arrow to its volleys. */
+  shelter?: number;
+  /** Swaps wood and food for ore at a moving rate, and trains trade carts. */
+  market?: boolean;
 }
 
 export const BUILDINGS: Record<BuildingId, BuildingDef> = {
-  town: { id: 'town', name: 'Town Center', cost: {}, time: 0, w: 4, h: 4, hp: 2000, sight: 8, pop: 10, drops: 'all', trains: ['villager'], tower: { dmg: 10, range: 6, cooldown: 1500 } },
+  town: { id: 'town', name: 'Town Center', cost: {}, time: 0, w: 4, h: 4, hp: 2000, sight: 8, pop: 10, drops: 'all', trains: ['villager', 'champion'], tower: { dmg: 10, range: 6, cooldown: 1500 }, shelter: 12 },
   house: { id: 'house', name: 'House', cost: { wood: 50 }, time: 25000, w: 2, h: 2, hp: 400, sight: 3, pop: 6 },
   farm: { id: 'farm', name: 'Farm', cost: { wood: 60 }, time: 15000, w: 2, h: 2, hp: 300, sight: 2, farm: true },
   lumber: { id: 'lumber', name: 'Lumber Camp', cost: { wood: 80 }, time: 20000, w: 2, h: 2, hp: 300, sight: 3, drops: ['wood'] },
   mine: { id: 'mine', name: 'Mining Camp', cost: { wood: 80 }, time: 20000, w: 2, h: 2, hp: 300, sight: 3, drops: ['ore'] },
-  barracks: { id: 'barracks', name: 'Barracks', cost: { wood: 150 }, time: 40000, w: 3, h: 3, hp: 700, sight: 4, trains: ['melee'] },
+  barracks: { id: 'barracks', name: 'Barracks', cost: { wood: 150 }, time: 40000, w: 3, h: 3, hp: 700, sight: 4, trains: ['melee', 'siege'] },
   range: { id: 'range', name: 'Archery Range', cost: { wood: 170 }, time: 40000, w: 3, h: 3, hp: 650, sight: 4, trains: ['ranged'] },
   stable: { id: 'stable', name: 'Stable', cost: { wood: 180 }, time: 45000, w: 3, h: 3, hp: 650, sight: 4, trains: ['cavalry'] },
   academy: { id: 'academy', name: 'Academy', cost: { wood: 150, food: 100 }, time: 40000, w: 3, h: 3, hp: 700, sight: 4, research: true },
-  watchtower: { id: 'watchtower', name: 'Watchtower', cost: { wood: 125, ore: 50 }, time: 30000, w: 2, h: 2, hp: 900, sight: 7, tower: { dmg: 12, range: 7, cooldown: 1500 } },
+  watchtower: { id: 'watchtower', name: 'Watchtower', cost: { wood: 125, ore: 50 }, time: 30000, w: 2, h: 2, hp: 900, sight: 7, tower: { dmg: 12, range: 7, cooldown: 1500 }, shelter: 5 },
   forge: { id: 'forge', name: 'Forge', cost: { wood: 150, ore: 50 }, time: 35000, w: 3, h: 3, hp: 700, sight: 4, faction: 'ember', limit: 1 },
   dock: { id: 'dock', name: 'Dock', cost: { wood: 140 }, time: 30000, w: 2, h: 2, hp: 500, sight: 5, faction: 'tide', shore: true, limit: 3 },
   grove: { id: 'grove', name: 'Grove', cost: { wood: 100, food: 50 }, time: 30000, w: 2, h: 2, hp: 500, sight: 4, drops: ['wood'], faction: 'thorn', limit: 2 },
   wall: { id: 'wall', name: 'Palisade', cost: { wood: 4 }, time: 2500, w: 1, h: 1, hp: 250, sight: 1, palisade: true },
   gate: { id: 'gate', name: 'Gate', cost: { wood: 25 }, time: 8000, w: 1, h: 1, hp: 450, sight: 2, palisade: true },
+  market: { id: 'market', name: 'Market', cost: { wood: 150, food: 50 }, time: 35000, w: 3, h: 3, hp: 600, sight: 4, age: 2, limit: 1, drops: ['ore'], trains: ['cart'], market: true },
   monument: { id: 'monument', name: 'Monument', cost: { wood: 500, food: 300, ore: 400 }, time: 90000, w: 3, h: 3, hp: 2500, sight: 5, age: 3, limit: 1 },
 };
 
 /** The build list's first page; the faction's own building comes after these. */
 export const BUILD_ORDER: BuildingId[] = ['house', 'farm', 'lumber', 'mine', 'barracks', 'range', 'stable', 'academy', 'watchtower'];
 /** The build list's second page. */
-export const BUILD_MORE: BuildingId[] = ['wall', 'gate', 'monument'];
+export const BUILD_MORE: BuildingId[] = ['wall', 'gate', 'market', 'monument'];
 /** Each faction's unique building. */
 export const UNIQUE: Record<FactionId, BuildingId> = { ember: 'forge', tide: 'dock', thorn: 'grove' };
 /** What each unique building does, for the menu and the panel. */
@@ -304,6 +347,45 @@ export const RELIC_SPEED = 1.1;
 export const CLAIM_RANGE = 2.6;
 /** A guard walks back to its camp when it strays this far from it. */
 export const LEASH = 7;
+
+/**
+ * The town bell: villagers within BELL_RANGE tiles of a shelter (the Town Center or a finished
+ * Watchtower, up to its `shelter`) run inside, and each adds an arrow of GARRISON_ARROW damage to
+ * its volleys until they are sent back to work.
+ */
+export const BELL_RANGE = 14;
+export const GARRISON_ARROW = 3;
+
+/**
+ * Veteran ranks: a soldier earns rank I, II and III at these kills, each adding RANK_HP health and
+ * RANK_DMG damage.
+ */
+export const RANK_KILLS = [2, 5, 9] as const;
+export const RANK_HP = 10;
+export const RANK_DMG = 1;
+export const RANK_NAMES = ['', 'Seasoned', 'Veteran', 'Champion'] as const;
+
+/**
+ * The Market (Age II) swaps MARKET_LOT wood or food for ore. Buying a lot costs MARKET_BASE ore
+ * times the resource's rate, selling one pays MARKET_SELL of that; every buy raises the rate by
+ * MARKET_STEP and every sale lowers it, and rates drift back towards 1 by MARKET_DRIFT a second.
+ * Trade carts drive to a trading post in the middle of the map and bring TRADE_ORE back each trip.
+ */
+export const MARKET_LOT = 100;
+export const MARKET_BASE = 70;
+export const MARKET_SELL = 0.6;
+export const MARKET_STEP = 0.12;
+export const MARKET_RATE_MIN = 0.4;
+export const MARKET_RATE_MAX = 3;
+export const MARKET_DRIFT = 0.005;
+export const TRADE_ORE = 40;
+
+/** The champions' gifts: the Warlord's aura, the Druid's healing. The Seer's gift is its sight. */
+export const AURA_RANGE = 6;
+export const AURA_DMG = 2;
+export const HEAL_RANGE = 5;
+export const HEAL_HP = 3;
+export const HEAL_MS = 1500;
 
 /** The Monument (Age III): if it stands this long once built, its owner wins. */
 export const MONUMENT_MS = 180000;
