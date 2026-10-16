@@ -26,11 +26,15 @@ import {
   WORLD,
   XP_FOR_LEVEL,
   MAX_ITEMS,
+  RECALL,
+  SIGHT,
+  WARD,
+  bountyOf,
   upgradeById,
   bushAt,
 } from '../game/data';
 import { Fx, GameState, Phase, Unit, createGame, dist, getUnit } from '../game/state';
-import { abilityFor, atFountain, atShop, buy, cast, chooseUpgrade, commandAttack, commandMove, hiddenFrom, invulnerable, priceFor, stealthed, tick, useActive, viewers } from '../game/sim';
+import { abilityFor, atFountain, atShop, buy, buyBack, buybackCost, cast, chooseUpgrade, commandAttack, commandMove, hiddenFrom, invulnerable, priceFor, startRecall, stealthed, tick, useActive, viewers } from '../game/sim';
 import { FxLayers, drawAura, drawProjectile, drawSkill, drawZone, skillMs } from './skillFx';
 import { championName, shortName } from '../game/names';
 import {
@@ -78,6 +82,7 @@ import {
   OBJECTIVE_CARD,
   PLAY_AGAIN,
   PORTRAIT,
+  RECALL_BUTTON,
   REROLL,
   SHOP_BUTTON,
   SHOP_PANEL,
@@ -142,9 +147,9 @@ interface UnitSprite {
 }
 
 /** Where a unit's feet are drawn, below the centre of its hitbox, by kind. */
-const FOOT = { champion: 9, minion: 5, camp: 8, beast: 10, tower: 12, inhibitor: 10, nexus: 16, watchstone: 10 } as const;
+const FOOT = { champion: 9, minion: 5, camp: 8, beast: 10, tower: 12, inhibitor: 10, nexus: 16, watchstone: 10, ward: 4 } as const;
 /** How far above the feet the top of each kind's figure is, for bars and markers. */
-const HEAD = { champion: 56, minion: 32, camp: 34, beast: 84, tower: 104, inhibitor: 62, nexus: 104, watchstone: 62 } as const;
+const HEAD = { champion: 56, minion: 32, camp: 34, beast: 84, tower: 104, inhibitor: 62, nexus: 104, watchstone: 62, ward: 44 } as const;
 /** The top of a unit's figure above its feet: a brute stands taller than a boar, a pup lower. */
 function headOf(u: Unit): number {
   if (u.kind !== 'camp') return HEAD[u.kind];
@@ -176,6 +181,7 @@ function describe(item: ItemDef): string {
   if (item.speed) parts.push(`+${item.speed} speed`);
   if (item.atk) parts.push(`+${item.atk}% attack speed`);
   if (item.cdr) parts.push(`-${item.cdr}% cooldowns`);
+  if (item.ward) parts.push(`[V] plant: sees ${SIGHT.ward}px for ${WARD.ms / 1000}s, ${WARD.hits} hits`);
   if (active) parts.push(active.id === 'dash' ? `[${active.key}] dash ${active.range}px` : `[${active.key}] heal ${active.heal}`);
   return parts.join(', ');
 }
@@ -183,6 +189,7 @@ function describe(item: ItemDef): string {
 /** The gem colour of an item, by what it gives. */
 function itemTint(item: ItemDef): string {
   if (item.active === 'flask') return '#62d86f';
+  if (item.ward) return '#9fd8ff';
   return item.dmg ? '#ff8a5c' : item.armor ? '#b9c3cf' : item.hp ? '#e0556f' : item.speed ? '#7fb6ff' : item.atk ? '#f2c14e' : '#c49bff';
 }
 
@@ -240,7 +247,7 @@ export class GameScene extends Phaser.Scene {
   private fogG!: Phaser.GameObjects.Graphics;
   private fogMini!: Phaser.GameObjects.Graphics;
   private used = new Set<string>();
-  private keys!: Record<AbilityKey | 'B' | 'D' | 'H' | 'ESC' | 'ONE' | 'TWO', Phaser.Input.Keyboard.Key>;
+  private keys!: Record<AbilityKey | 'B' | 'D' | 'H' | 'V' | 'T' | 'X' | 'ESC' | 'ONE' | 'TWO', Phaser.Input.Keyboard.Key>;
 
   constructor() {
     super('Game');
@@ -286,7 +293,7 @@ export class GameScene extends Phaser.Scene {
     this.fogG = this.add.graphics().setDepth(3.6);
     this.fogMini = this.add.graphics().setScrollFactor(0).setDepth(10.5);
 
-    this.keys = this.input.keyboard!.addKeys('Q,W,E,R,B,D,H,ESC,ONE,TWO') as typeof this.keys;
+    this.keys = this.input.keyboard!.addKeys('Q,W,E,R,B,D,H,V,T,X,ESC,ONE,TWO') as typeof this.keys;
     // Watching the AI, the keys play no champion.
     if (!watching) {
       // Holding an ability's key aims it (its range shows); letting go casts it at the cursor.
@@ -296,6 +303,8 @@ export class GameScene extends Phaser.Scene {
       }
       for (const a of ACTIVES) this.keys[a.key].on('down', () => this.activeAtCursor(a));
       this.keys.B.on('down', () => this.toggleShop());
+      this.keys.T.on('down', () => this.recall());
+      this.keys.X.on('down', () => this.buyBack());
       this.keys.ESC.on('down', () => {
         this.aiming = null;
         this.setShop(false);
@@ -442,6 +451,18 @@ export class GameScene extends Phaser.Scene {
     if (this.state && this.phase === 'playing') chooseUpgrade(this.state, choice);
   }
 
+  /** T: the champion channels its way home. */
+  private recall() {
+    const p = this.player();
+    if (this.state && p) startRecall(this.state, p);
+  }
+
+  /** X: a dead champion pays to respawn at once. */
+  private buyBack() {
+    const p = this.player();
+    if (this.state && p) buyBack(this.state, p);
+  }
+
   /** The zones the pointer can press, rebuilt when the screen they belong to changes. */
   private refreshZones() {
     const offer = this.state?.upgradeOffers.length ?? 0;
@@ -464,6 +485,8 @@ export class GameScene extends Phaser.Scene {
     // The bars and the objective card block presses so a click on the HUD never walks the champion.
     this.zones.push({ ...TOP_BAR, run: noop }, { ...BOTTOM_BAR, run: noop }, { ...OBJECTIVE_CARD, run: noop });
     this.zones.push({ ...SHOP_BUTTON, run: () => this.toggleShop() });
+    // One button in the top bar: Recall while alive, Buy back while dead.
+    this.zones.push({ ...RECALL_BUTTON, run: () => (this.player()?.dead ? this.buyBack() : this.recall()) });
     ABILITY_KEYS.forEach((k, i) => this.zones.push({ ...abilityBox(i), run: () => this.castAtCursor(k) }));
     ACTIVES.forEach((a, i) => this.zones.push({ ...activeButton(i), run: () => this.activeAtCursor(a) }));
     if (offer > 0) [0, 1].forEach((i) => this.zones.push({ ...upgradeCard(i), run: () => this.pickUpgrade(i) }));
@@ -676,8 +699,10 @@ export class GameScene extends Phaser.Scene {
         if (u.dead && u.kind !== 'tower' && u.kind !== 'inhibitor') continue;
         // A red champion hiding in a bush is not drawn at all.
         if (this.hidden(s, u)) continue;
-        seen.add(u.id);
         this.drawGround(g, u, s);
+        // Wards are drawn with the Graphics, not a baked sheet.
+        if (u.kind === 'ward') continue;
+        seen.add(u.id);
         this.placeSprite(u, s);
       }
       for (const u of s.units) if (!u.dead && !this.hidden(s, u)) this.drawBar(top, u, s, me);
@@ -788,6 +813,7 @@ export class GameScene extends Phaser.Scene {
 
   private drawGround(g: Phaser.GameObjects.Graphics, u: Unit, s: GameState) {
     if (u.dead) return;
+    if (u.kind === 'ward') return this.drawWard(g, u, s);
     if (u.kind === 'watchstone') {
       // The ring a team takes it within, and how far along a capture is.
       const color = u.side === 'neutral' ? SIDE_COLOR.neutral : SIDE_COLOR[u.side];
@@ -829,6 +855,30 @@ export class GameScene extends Phaser.Scene {
       g.fillStyle(col(SIDE_COLOR[u.side]), 0.08).fillEllipse(u.x, fy - 2, rr * 2, rr * 1.15);
     }
     if (s.lastHitMark === u.id) g.lineStyle(2.5, col(UI.gold), 1).strokeEllipse(u.x, fy, r * 3, r * 1.75);
+  }
+
+  /** A vision ward: a stake with a gem eye in its team's colour, pips for the hits it has left, and (blue's) its sight. */
+  private drawWard(g: Phaser.GameObjects.Graphics, u: Unit, s: GameState) {
+    const color = col(SIDE_COLOR[u.side]);
+    const fy = u.y + FOOT.ward;
+    if (u.side === 'blue' && !watching) dashedCircle(g, u.x, u.y, SIGHT.ward, 1.5, color, 0.22, 48);
+    g.fillStyle(0x0b1a0e, 0.18).fillEllipse(u.x + 3, fy + 1, 24, 10);
+    g.fillStyle(color, 0.16).fillEllipse(u.x, fy, 26, 13);
+    g.lineStyle(2, color, 0.9).strokeEllipse(u.x, fy, 26, 13);
+    // The stake.
+    g.fillStyle(0x5a3b1e, 1).fillRect(u.x - 3, fy - 30, 6, 30);
+    g.fillStyle(0x8a5d36, 1).fillRect(u.x - 3, fy - 30, 2.5, 30);
+    // The eye: a gem with a glint, pulsing unless motion is reduced.
+    const ey = fy - 35;
+    const pulse = settings.reduceMotion ? 0 : Math.sin(s.time / 300 + u.id) * 0.5;
+    const diamond = (r: number) => [new Phaser.Math.Vector2(u.x, ey - r), new Phaser.Math.Vector2(u.x + r * 0.8, ey), new Phaser.Math.Vector2(u.x, ey + r), new Phaser.Math.Vector2(u.x - r * 0.8, ey)];
+    g.fillStyle(color, 0.25).fillCircle(u.x, ey, 12 + pulse * 2);
+    g.fillStyle(col(UI.edge), 1).fillPoints(diamond(10), true);
+    g.fillStyle(color, 1).fillPoints(diamond(8), true);
+    g.fillStyle(0xffffff, 0.85).fillCircle(u.x - 1, ey - 1, 2.4);
+    if (u.flash > 0 && !settings.reduceMotion) g.lineStyle(2, 0xffffff, u.flash / 120).strokeCircle(u.x, ey, 13);
+    // The hits it has left.
+    for (let i = 0; i < WARD.hits; i++) g.fillStyle(i < u.hp ? color : 0x2a2f3a, 1).fillRect(u.x - 7 + i * 5, fy - 50, 4, 3);
   }
 
   private spriteFor(u: Unit): UnitSprite {
@@ -919,7 +969,7 @@ export class GameScene extends Phaser.Scene {
     const w = u.kind === 'nexus' ? 90 : u.kind === 'tower' || u.kind === 'beast' ? 64 : u.kind === 'inhibitor' ? 50 : u.kind === 'minion' ? 30 : 50;
     const h = u.kind === 'minion' ? 4 : 6;
     const x = u.x - w / 2;
-    if (u.kind === 'watchstone') return;
+    if (u.kind === 'watchstone' || u.kind === 'ward') return;
     const y = u.y + FOOT[u.kind] - headOf(u) - 10;
     const ratio = Math.max(0, u.hp / u.maxHp);
     const own = me !== null && u.side === me.side;
@@ -935,6 +985,19 @@ export class GameScene extends Phaser.Scene {
       this.t(`lvl-${u.id}`, x - 7, y - 3, String(u.level), 9, UI.text, 'center', true, true);
       // The champion's own name over its bar.
       this.t(`cname-${u.id}`, u.x, y - 15, u.player ? shortName(u.name) : shortName(u.name), 10, u.side === 'red' ? '#ffb4a8' : '#cfe1ff', 'center', true, true);
+      // A price on its head, from a kill streak.
+      const bounty = bountyOf(u.killStreak);
+      if (bounty) {
+        g.fillStyle(col(UI.edge), 0.9).fillRect(u.x - 36, y - 30, 72, 13);
+        g.fillStyle(col('#6b4f17'), 1).fillRect(u.x - 35, y - 29, 70, 11);
+        this.t(`bounty-${u.id}`, u.x, y - 30, `BOUNTY ${bounty}g`, 9, UI.gold, 'center', true, true);
+      }
+      // The recall channel, filling under the bar.
+      if (u.recallMs > 0) {
+        g.fillStyle(col(UI.edge), 0.9).fillRect(x - 1, y + h + 2, w + 2, 5);
+        g.fillStyle(col('#9fd8ff'), 1).fillRect(x, y + h + 3, w * (1 - u.recallMs / RECALL.ms), 3);
+        this.t(`recall-${u.id}`, u.x, y + h + 7, 'Recalling', 9, '#9fd8ff', 'center', true, true);
+      }
     }
     if (u.stunMs > 0) this.t(`stun-${u.id}`, u.x, y - (u.kind === 'champion' ? 28 : 16), 'STUN', 9, UI.gold, 'center', true, true);
   }
@@ -1071,8 +1134,8 @@ export class GameScene extends Phaser.Scene {
     const h = CHAMPIONS[this.hoverPick];
     this.t('pick-blurb', VIEW.w / 2, 471, h ? `${this.pickNames[this.hoverPick] ?? h.name}, ${h.name.toLowerCase()}: ${h.blurb.toLowerCase()}` : 'Point at a card to learn more about its champion.', 12, h ? h.color : UI.muted, 'center', true);
     this.t('hint', VIEW.w / 2, 491, 'Click a champion to start. Click the ground to walk, an enemy to attack. Q W E R cast at the cursor, D and H use item actives.', 11, UI.dim, 'center');
-    this.t('hint2', VIEW.w / 2, 506, 'B opens the shop at your Nexus, 1 or 2 picks an upgrade. You only see what your team sees: the rest lies in the fog.', 11, UI.dim, 'center');
-    this.t('hint3', VIEW.w / 2, 521, 'Slay the brutes for buffs, take the watchstones on the river for sight, and the guardian beast for stronger minions.', 11, UI.dim, 'center');
+    this.t('hint2', VIEW.w / 2, 506, 'B opens the shop at your Nexus, 1 or 2 picks an upgrade, V plants a vision ward, T recalls home, X buys back while dead.', 11, UI.dim, 'center');
+    this.t('hint3', VIEW.w / 2, 521, 'You only see what your team sees. Slay the brutes for buffs, take the watchstones for sight, and the beast for stronger minions.', 11, UI.dim, 'center');
   }
 
   private drawPlaying(g: Phaser.GameObjects.Graphics, s: GameState) {
@@ -1108,6 +1171,7 @@ export class GameScene extends Phaser.Scene {
       );
       this.t('streak', c.x + 22, c.y + 4, hot ? `x${s.streak} streak +${Math.round(STREAK.bonus * 100)}%` : `x${s.streak} streak`, 11, hot ? UI.gold : UI.text, 'left', true);
     }
+    if (!watching) this.drawRecallButton(g, s, me);
     const nexus = (team: Team) => s.units.find((u) => u.kind === 'nexus' && u.side === team)!;
     const pct = (u: Unit) => `${Math.max(0, Math.ceil((u.hp / u.maxHp) * 100))}%`;
     this.t('nexus-blue', 232, 9, `Blue Nexus ${pct(nexus('blue'))}`, 14, UI.blue, 'left', true);
@@ -1118,6 +1182,24 @@ export class GameScene extends Phaser.Scene {
     const mins = Math.floor(s.time / 60000);
     const secs = Math.floor((s.time % 60000) / 1000);
     this.t('clock', VIEW.w / 2, 8, `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`, 16, UI.text, 'center', true);
+  }
+
+  /** Recall home while alive (filling as it channels); while dead, buy back at a price, or when it is next allowed. */
+  private drawRecallButton(g: Phaser.GameObjects.Graphics, s: GameState, me: Unit) {
+    const b = RECALL_BUTTON;
+    if (me.dead) {
+      const cost = buybackCost(me);
+      const ready = s.time >= me.buybackReadyAt;
+      const can = ready && me.gold >= cost;
+      this.panel(g, b.x, b.y, b.w, b.h, can ? '#6b4f17' : '#3a4256');
+      if (can) this.coin(g, b.x + 12, b.y + b.h / 2, 6);
+      this.t('recall', b.x + b.w / 2 + (can ? 6 : 0), b.y + 6, ready ? `Buy back ${cost}g [X]` : `Buy back in ${clock(me.buybackReadyAt - s.time)}`, 11, can ? UI.gold : UI.muted, 'center', true);
+      return;
+    }
+    const on = me.recallMs > 0;
+    this.panel(g, b.x, b.y, b.w, b.h, on ? '#2f4f6b' : '#33405a');
+    if (on) g.fillStyle(col('#9fd8ff'), 0.45).fillRect(b.x + 2, b.y + 2, (b.w - 4) * (1 - me.recallMs / RECALL.ms), b.h - 4);
+    this.t('recall', b.x + b.w / 2, b.y + 6, on ? `Recalling ${(me.recallMs / 1000).toFixed(1)}s` : 'Recall home [T]', 11, on ? UI.text : UI.dim, 'center', true);
   }
 
   private drawObjectiveCard(g: Phaser.GameObjects.Graphics, s: GameState) {
@@ -1261,15 +1343,22 @@ export class GameScene extends Phaser.Scene {
     this.t('shop-label', sb.x + 36, sb.y + 10, 'Shop', 16, UI.text, 'left', true);
     this.t('shop-key', sb.x + 36, sb.y + 31, '[B]', 11, UI.dim, 'left', true);
 
-    // The item actives: Dash (Phase Boots) on D, Flask on H (F is the hub's full screen key).
+    // The item actives: Dash (Phase Boots) on D, Flask on H (F is the hub's full screen key), the ward on V.
     ACTIVES.forEach((a, i) => {
       const r = activeButton(i);
-      const owned = me.items.some((id) => ITEMS.find((it) => it.id === id)?.active === a.id);
+      const owned = a.id === 'ward' ? me.wards > 0 : me.items.some((id) => ITEMS.find((it) => it.id === id)?.active === a.id);
       const cd = me.activeCds[a.id] ?? 0;
       this.goldFrame(g, r.x, r.y, r.w, r.h, false);
-      const cx = r.x + r.w / 2 + 6, cy = r.y + r.h / 2 + 2;
+      const cx = r.x + r.w / 2, cy = r.y + r.h / 2 + 4;
       const alpha = owned ? 1 : 0.3;
-      if (a.id === 'dash') {
+      if (a.id === 'ward') {
+        // A stake with an eye, and how many are carried.
+        g.fillStyle(col('#8a5d36'), alpha).fillRect(cx - 2, cy - 2, 4, 12);
+        g.fillStyle(col('#cfe9ff'), alpha).fillEllipse(cx, cy - 5, 17, 10);
+        g.fillStyle(col(UI.blue), alpha).fillCircle(cx, cy - 5, 4);
+        g.fillStyle(0x0d1018, alpha).fillCircle(cx, cy - 5, 2);
+        if (owned) this.t('act-wards', r.x + r.w - 3, r.y + r.h - 13, `x${me.wards}`, 9, UI.gold, 'right', true);
+      } else if (a.id === 'dash') {
         g.fillStyle(col(UI.blue), alpha).fillPoints([new Phaser.Math.Vector2(cx - 9, cy - 3), new Phaser.Math.Vector2(cx + 1, cy - 3), new Phaser.Math.Vector2(cx + 1, cy - 8), new Phaser.Math.Vector2(cx + 10, cy), new Phaser.Math.Vector2(cx + 1, cy + 8), new Phaser.Math.Vector2(cx + 1, cy + 3), new Phaser.Math.Vector2(cx - 9, cy + 3)], true);
       } else {
         // A round flask of green tonic with a cork.
@@ -1279,8 +1368,8 @@ export class GameScene extends Phaser.Scene {
         g.fillStyle(col('#8a5d36'), alpha).fillRect(cx - 3, cy - 11, 6, 3);
       }
       if (owned && cd > 0) g.fillStyle(0x000000, 0.6).fillRect(r.x + 3, r.y + 3, r.w - 6, (r.h - 6) * (cd / a.cd));
-      this.t(`act-${a.id}`, r.x + 5, r.y + 3, a.key, 11, owned ? UI.text : UI.muted, 'left', true);
-      if (owned && cd > 0) this.t(`actcd-${a.id}`, r.x + r.w / 2, r.y + 11, `${Math.ceil(cd / 1000)}`, 14, UI.text, 'center', true);
+      this.t(`act-${a.id}`, r.x + 4, r.y + 2, a.key, 10, owned ? UI.text : UI.muted, 'left', true);
+      if (owned && cd > 0) this.t(`actcd-${a.id}`, r.x + r.w / 2, r.y + 12, `${Math.ceil(cd / 1000)}`, 13, UI.text, 'center', true);
     });
 
     // The upgrade choice, or what the next level brings.
@@ -1412,7 +1501,11 @@ export class GameScene extends Phaser.Scene {
       else if (u.kind === 'champion') g.fillStyle(col(SIDE_COLOR[u.side as Team]), 1).fillCircle(mx(u.x), my(u.y), u.player ? 3.5 : 2.5);
       else if (u.kind === 'minion') g.fillStyle(col(SIDE_COLOR[u.side as Team]), 0.85).fillRect(mx(u.x) - 0.75, my(u.y) - 0.75, 1.5, 1.5);
       else if (u.kind === 'camp' && u.campKind !== 'pup') g.fillStyle(col(u.campKind === 'ember' ? BUFFS.ember.color : u.campKind === 'moss' ? BUFFS.moss.color : SIDE_COLOR.neutral), 0.9).fillCircle(mx(u.x), my(u.y), 2);
-      else if (u.kind === 'watchstone') {
+      else if (u.kind === 'ward') {
+        const cx = mx(u.x), cy = my(u.y);
+        g.fillStyle(col(UI.edge), 1).fillPoints([new Phaser.Math.Vector2(cx, cy - 4), new Phaser.Math.Vector2(cx + 3, cy), new Phaser.Math.Vector2(cx, cy + 4), new Phaser.Math.Vector2(cx - 3, cy)], true);
+        g.fillStyle(col(SIDE_COLOR[u.side as Team]), 1).fillPoints([new Phaser.Math.Vector2(cx, cy - 2.5), new Phaser.Math.Vector2(cx + 2, cy), new Phaser.Math.Vector2(cx, cy + 2.5), new Phaser.Math.Vector2(cx - 2, cy)], true);
+      } else if (u.kind === 'watchstone') {
         const cx = mx(u.x), cy = my(u.y);
         g.fillStyle(col(UI.edge), 1).fillRect(cx - 3, cy - 3, 6, 6);
         g.fillStyle(col(u.side === 'neutral' ? SIDE_COLOR.neutral : SIDE_COLOR[u.side]), 1).fillRect(cx - 2, cy - 2, 4, 4);
@@ -1442,40 +1535,42 @@ export class GameScene extends Phaser.Scene {
     const p = SHOP_PANEL;
     this.panel(g, p.x, p.y, p.w, p.h, UI.slate);
     g.fillStyle(col(UI.gold), 1).fillRect(p.x + 2, p.y + 2, p.w - 4, 3);
-    this.t('shop-title', p.x + 16, p.y + 12, 'Shop', 18, UI.gold, 'left', true);
+    this.t('shop-title', p.x + 16, p.y + 8, 'Shop', 18, UI.gold, 'left', true);
     const open = me.dead || atShop(me);
     const note = !open
-      ? 'Return to your Nexus to buy items, or shop while you wait to respawn.'
-      : `Gold ${Math.floor(me.gold)}. Bag ${me.items.length}/${MAX_ITEMS}. ${me.dead ? 'You can shop while you wait to respawn.' : 'Parts you own build into bigger items and come off their price.'}`;
-    this.t('shop-note', p.x + 16, p.y + 36, note, 11, open ? UI.dim : UI.red);
+      ? 'Return to your Nexus (or recall with T) to buy items, or shop while you wait to respawn.'
+      : `Gold ${Math.floor(me.gold)}. Bag ${me.items.length}/${MAX_ITEMS}. Wards ${me.wards}/${WARD.carry}. ${me.dead ? 'You can shop while you wait to respawn.' : 'Parts you own build into bigger items and come off their price.'}`;
+    this.t('shop-note', p.x + 90, p.y + 14, note, 11, open ? UI.dim : UI.red);
     ITEMS.forEach((item, i) => {
       const r = shopRow(i);
-      const has = me.items.includes(item.id);
+      const has = !item.ward && me.items.includes(item.id);
       const price = priceFor(me, item);
       const parts = (item.from ?? []).filter((id) => me.items.includes(id));
-      const fits = me.items.length - parts.length < MAX_ITEMS;
+      const fits = item.ward ? me.wards < WARD.carry : me.items.length - parts.length < MAX_ITEMS;
       const afford = me.gold >= price;
       this.panel(g, r.x, r.y, r.w, r.h, has ? '#2a3140' : item.from ? '#41496a' : '#3a4660');
       // Items that build from parts get a gold top edge.
       if (item.from) g.fillStyle(col(has ? UI.goldDeep : UI.gold), 1).fillRect(r.x + 2, r.y + 2, r.w - 4, 2);
-      const cx = r.x + 18, cy = r.y + 20;
+      const cx = r.x + 18, cy = r.y + 18;
       g.fillStyle(col(UI.edge), 1).fillPoints([new Phaser.Math.Vector2(cx, cy - 12), new Phaser.Math.Vector2(cx + 11, cy), new Phaser.Math.Vector2(cx, cy + 12), new Phaser.Math.Vector2(cx - 11, cy)], true);
       g.fillStyle(col(itemTint(item)), has ? 0.4 : 1).fillPoints([new Phaser.Math.Vector2(cx, cy - 10), new Phaser.Math.Vector2(cx + 9, cy), new Phaser.Math.Vector2(cx, cy + 10), new Phaser.Math.Vector2(cx - 9, cy)], true);
       g.fillStyle(0xffffff, has ? 0.15 : 0.4).fillTriangle(cx, cy - 10, cx - 9, cy, cx, cy);
-      this.t(`shop-name-${i}`, r.x + 34, r.y + 7, item.name, 12, has ? UI.muted : UI.text, 'left', true);
-      const label = has ? 'Owned' : !fits ? 'Bag full' : `${price}g`;
-      this.t(`shop-price-${i}`, r.x + 34, r.y + 23, label, 11, has || !fits ? UI.muted : afford ? UI.gold : UI.red, 'left', true);
-      if (!has && parts.length) this.t(`shop-save-${i}`, r.x + r.w - 8, r.y + 23, `-${item.cost - price}g parts`, 9, UI.green, 'right', true);
-      this.t(`shop-desc-${i}`, r.x + 10, r.y + 44, describe(item), 10, UI.dim);
+      this.t(`shop-name-${i}`, r.x + 34, r.y + 5, item.name, 12, has ? UI.muted : UI.text, 'left', true);
+      const label = has ? 'Owned' : !fits ? (item.ward ? 'Carrying 2' : 'Bag full') : `${price}g`;
+      this.t(`shop-price-${i}`, r.x + 34, r.y + 20, label, 11, has || !fits ? UI.muted : afford ? UI.gold : UI.red, 'left', true);
+      if (!has && parts.length) this.t(`shop-save-${i}`, r.x + r.w - 8, r.y + 20, `-${item.cost - price}g parts`, 9, UI.green, 'right', true);
+      this.t(`shop-desc-${i}`, r.x + 10, r.y + 37, describe(item), 10, UI.dim);
       const into = ITEMS.filter((it) => it.from?.includes(item.id));
-      const recipe = item.from
-        ? `From ${item.from.map((id) => ITEMS.find((it) => it.id === id)?.name ?? id).join(' + ')}`
-        : into.length === 1
-          ? `Builds into ${into[0].name}`
-          : into.length
-            ? `Builds into ${into.length} items`
-            : 'Active item';
-      this.t(`shop-recipe-${i}`, r.x + 10, r.y + 64, recipe, 9, item.from ? UI.gold : UI.muted, 'left', !!item.from);
+      const recipe = item.ward
+        ? `Consumable: carrying ${me.wards} of ${WARD.carry}`
+        : item.from
+          ? `From ${item.from.map((id) => ITEMS.find((it) => it.id === id)?.name ?? id).join(' + ')}`
+          : into.length === 1
+            ? `Builds into ${into[0].name}`
+            : into.length
+              ? `Builds into ${into.length} items`
+              : 'Active item';
+      this.t(`shop-recipe-${i}`, r.x + 10, r.y + 54, recipe, 9, item.from ? UI.gold : UI.muted, 'left', !!item.from);
     });
   }
 
