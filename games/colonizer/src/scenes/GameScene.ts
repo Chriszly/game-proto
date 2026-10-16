@@ -146,6 +146,8 @@ export class GameScene extends Phaser.Scene {
   private endPanel: Phaser.GameObjects.Container | null = null;
   private buttonObjects: Phaser.GameObjects.GameObject[] = [];
   private panelKey = '';
+  /** The selection the panel last showed, so a new selection closes the build list. */
+  private panelSelection = '';
   private arrows!: Record<'up' | 'down' | 'left' | 'right', Phaser.Input.Keyboard.Key>;
 
   constructor() {
@@ -167,6 +169,7 @@ export class GameScene extends Phaser.Scene {
     this.attackMode = false;
     this.buildMenu = false;
     this.buildPage = 0;
+    this.panelSelection = '';
     this.wallStart = null;
     this.campSprites = new Map();
     this.hud = [];
@@ -922,6 +925,14 @@ export class GameScene extends Phaser.Scene {
   /** Rebuilds the panel's buttons when the selection, the menus or what they show changes. */
   private renderPanel() {
     this.renderSelection();
+    // The build list belongs to the villagers it was opened for: a new selection, or none of them
+    // left in it, closes it so the panel shows what is selected now.
+    const selection = [...this.selected].join(',');
+    if (selection !== this.panelSelection || !this.selectedUnits().some((u) => UNITS[u.type].role === 'villager')) {
+      this.panelSelection = selection;
+      this.buildMenu = false;
+      this.buildPage = 0;
+    }
     const key = this.panelSignature();
     if (key === this.panelKey) return;
     this.panelKey = key;
