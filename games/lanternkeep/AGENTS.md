@@ -17,8 +17,12 @@ pay at once. Every night after the first draws a kind (clear, foggy, feast, stor
 lit lanterns from night 3 and are chased off by tapping them, and lanterns side by side form
 chains that pay when all of them are lit at nightfall. Between nights a panel shows the tally,
 the festival count, the next night's kind and five upgrades (one buys fireflies, which light two
-lanterns a flight); each night adds a lantern. Ten nights kept reach the Great Festival, a win,
-with endless nights after.
+lanterns a flight) plus the cask's top-up; each night adds a lantern. Ten nights kept reach the
+Great Festival, a win, with endless nights after. From night 2 cottage windows call for a lantern
+(LK8), from night 3 refills draw on a cask of oil (LK9), from night 4 some spots hold a beacon, a
+candle or a bell (LK6), every fifth night the Great Owl sweeps a row (LK7), and at every fifth
+nightfall the keep can move to the Docks, Chapel Hill or the Market, each with its own spots,
+chains and rule (LK10).
 
 Implemented today:
 
@@ -76,12 +80,51 @@ Implemented today:
   `state.festival`, `report.festival` and phase `'festival'`; `carryOn` moves on to `'night'`.
 - Five upgrades (four of three levels, Firefly of two), bought between nights. Only the most
   nights kept persists.
+- Kinds of lantern (LK6): `LANTERN_KINDS` (`plain`, `beacon`, `candle`, `bell`), each with `oil`,
+  `wick` and `pay` multipliers. `lanternKindsFor(night, count)` deals `min(LANTERN_KINDS_MAX,
+  night - LANTERN_KINDS_NIGHT + 1)` special spots from `LANTERN_KINDS_NIGHT` (4), at indexes
+  `(night * 7 + k * 4) % count` (the next free one if taken), cycling `SPECIAL_KINDS`. A candle's
+  wick is 0 (`mothLightMs` is 0, the lighting completes on the next tick); a bell holds every bat
+  within `BELL_RANGE` (150) still (`stunned(s, bat)`) while lit. `lanternPay(s, l)` gives a lit
+  lantern's pay. The scene shows `lantern-<kind>-lit/-dark` textures and the kind's name under it.
+- The Great Owl (LK7): `owlsFor(night)` is `[OWL_AT_MS]` (20 s left) every `OWL_EVERY` (5)
+  nights. `OWL_WARN_MS` (6 s) before, `greatOwl` picks the row (`rows(s)`, lanterns grouped by
+  `y`) with the most lit lanterns (ties: the bigger row) and sets `state.owl` (`y`, `lanterns`,
+  `atMs`, `x` null); at `atMs` the owl flies from x -40 at `OWL_SPEED` (300 px/s) and each lantern
+  of the row it passes is snuffed unless a moth sits on it (`owl` event, `shielded`). A moth that
+  finishes lighting a lantern on the row guards it (`threatened(s, i)` covers the gust's target
+  and the owl's row); `releaseGuards` sends the guards home when the owl leaves the screen.
+- Windows that call (LK8): `callsFor(night)` gives the dusk-left times (none on night 1, 37 s and
+  23 s after, 11 s too from night 6). `windows` picks `callTarget` (a dark, unclaimed, unqueued
+  lantern from index `(night * 3 + callsKept + calls left) % count` on, else the lit unclaimed one
+  lowest on oil) and sets `state.call` (`lantern`, `msLeft` = `CALL_MS`, 8 s). A moth that lights
+  or refills that lantern in time pays `callPay(s)` (`CALL_PAY` 3, double in the market) at once
+  and counts `callsKept`; running out pushes a `call` event with `kept` false and costs nothing.
+- Oil cask (LK9): `state.cask` fills, `CASK_START` (3) to `CASK_MAX` (6). From `CASK_NIGHT` (3)
+  (`usesCask(s)`) a refill draws one fill when the moth finishes lighting a lit lantern; `send` on
+  a lit lantern with the cask dry returns false, and a moth that arrives to find it dry pushes a
+  `dry` event and leaves the lantern as it is (no close call). `topUp(s)` in the night phase adds a
+  fill for `CASK_COST` (3); the night panel's sixth card calls it. The HUD shows the cask at
+  `CASK_HUD` (grey before night 3, orange when dry).
+- Districts (LK10): `DISTRICTS` in `places.ts` (`keep`, `docks`, `chapel`, `market`), each with
+  ten `spots` (with `name`s for the orders), `chains` and a `rule` (`none`, `seawind`: `wind`
+  blows a second lantern, the next with most oil; `vespers`: `lanternPay` adds `VESPERS_PAY` (2)
+  and `requiredFor(count, district)` asks for `VESPERS_QUOTA` (0.75); `trade`: `closeCallPay` and
+  `callPay` double and oil burns `TRADE_BURN` (1.15x)). `state.district` is the current one,
+  `nextDistrict` the next; `nightfall` on a night divisible by `MOVE_EVERY` (5) sets `moveDue` and
+  phase `'move'` (after `'festival'` if both; `carryOn` goes to `'move'` then), `moveTo(s, id)`
+  picks and goes to `'night'`, and `nextDusk` moves in and builds the lanterns from the district's
+  spots. `orderFor(night, district)` keeps the keep's order texts and names another district's
+  spots. `districtOf(s)`, `chainsOf(s)` and `chainsFor` read the current district.
 
 Missing or rough:
 
-- No title screen, sound or pause. The kinds, bats, chains, fireflies and the festival are not
-  exercised by the playthrough (night 1 is clear with no bats or chains), only by hand and the
-  scratch staging script.
+- No title screen, sound or pause. The kinds, bats, chains, fireflies, the festival, the window
+  calls, the cask, the kinds of lantern, the owl and the districts are not exercised by the
+  playthrough (night 1 is clear with no bats, chains, calls, cask use or special lanterns), only
+  by hand and the scratch staging script.
+- The feast bunting is strung between the keep's towers in every district, so it floats over the
+  other districts' buildings.
 - Moths fly straight lines.
 - The upgrade buttons are not exercised by the playthrough (purchases stay out of it), only by
   hand.
@@ -98,32 +141,46 @@ File map (`src/`):
   `BootScene` and `GameScene`, calls `setupGame(game)` from `shared/setupGame.ts` and
   `setupScaling(game)` from `shared/scaling.ts`, and in dev builds puts `game` on `window`.
 - `scenes/BootScene.ts`: calls `bakeTextures`, then starts `Game`.
-- `scenes/GameScene.ts`: builds the world, order card, gust plaque, HUD and panels once; `update`
-  ticks the rules, turns `state.events` into popups and redraws from state.
-- `scenes/layout.ts`: `VIEW`, `HUD`, `DUSK_BAR`, `NIGHT_PANEL`, `SHOP` (two columns, three rows;
-  a last card alone sits in the middle), `NEXT_BUTTON`, `SMALL_PANEL` (game over and festival),
-  `BUTTON`, `ORDER` (the order card), `KIND_TAG` (the night-kind plaque), `GUST_TAG` (the gust
-  plaque's size), `LANTERN_HIT`, `BAT_HIT`, `UI_DEPTH` and `FONT` (Georgia / DejaVu Serif / serif).
-- `game/places.ts`: `JAR`, `LANTERN_SPOTS` (view pixels, in the order nights add them), `CHAINS`
-  and `mothRest` (30 px apart on the jar's rim).
+- `scenes/GameScene.ts`: builds the world, order card, gust, owl and window plaques, HUD and
+  panels (night, move, game over, festival) once; `update` ticks the rules, turns `state.events`
+  into popups and redraws from state. `drawDistrict` swaps the scenery texture when the keep moves
+  (baking it with `bakeScenery` the first time), and `drawLanterns` moves each lantern's images,
+  tag, kind label and tap zone to where the district hangs it.
+- `scenes/layout.ts`: `VIEW`, `HUD`, `DUSK_BAR`, `NIGHT_PANEL`, `SHOP` (two columns, three rows,
+  the five upgrades and the cask), `NEXT_BUTTON`, `SMALL_PANEL` (game over and festival),
+  `MOVE_PANEL` and `MOVE_CARDS` (the choice of district), `BUTTON`, `ORDER` (the order card),
+  `KIND_TAG` (the night-kind plaque), `GUST_TAG` (the gust and owl plaques' size), `CALL_TAG` (the
+  window plaque), `CASK_HUD`, `LANTERN_HIT`, `BAT_HIT`, `UI_DEPTH` and `FONT` (Georgia / DejaVu
+  Serif / serif).
+- `game/places.ts`: `JAR`, `DISTRICTS` (each district's `spots` in view pixels, in the order
+  nights add them, with names, its `chains` and `rule`), `DISTRICT_IDS`, `LANTERN_SPOTS` and
+  `CHAINS` (the keep's) and `mothRest` (30 px apart on the jar's rim).
 - `game/state.ts`: `GameState`, `Lantern`, `Moth`, `Bat`, `Gust`, `GameEvent`, `Order`,
   `OrderGoal`, `NightReport`, `NightKind`, the balance constants, `MOTH_KINDS`, `KIND_ORDER`,
   `FIREFLY_LANTERNS`, `QUEUE_MAX`, `GUST_WARN_MS`, `gustsFor`, `NIGHT_KINDS`, `drawKind`,
   `FOG_BURN`, `FEAST_PAY`, `STORM_GUSTS`, `BAT_SPEED`, `BAT_FLEE`, `BAT_Y`, `batsFor`,
-  `CHAIN_BONUS`, `chainsFor`, `chainLit`, `FESTIVAL_NIGHTS`, `CLOSE_CALL`, `CLOSE_CALL_PAY`,
-  `ORDERS`, `orderFor`, `orderProgress`, `UPGRADES`, `stats`, `mothSpeed`, `mothLightMs`,
-  `newGame`, `send`, `chase`, `tick`, `nextCost`, `buy`, `carryOn` and `nextDusk`. No Phaser;
+  `CHAIN_BONUS`, `chainsFor`, `chainLit`, `chainsOf`, `districtOf`, `FESTIVAL_NIGHTS`,
+  `CLOSE_CALL`, `CLOSE_CALL_PAY`, `closeCallPay`, `ORDERS`, `orderFor`, `orderProgress`,
+  `UPGRADES`, `stats`, `mothSpeed`, `mothLightMs`, `LANTERN_KINDS`, `lanternKindsFor`,
+  `BELL_RANGE`, `stunned`, `lanternPay`, `OWL_*`, `owlsFor`, `threatened`, `CALL_*`, `callsFor`,
+  `callPay`, `CASK_*`, `usesCask`, `MOVE_EVERY`, `VESPERS_*`, `TRADE_BURN`, `newGame`, `send`,
+  `chase`, `tick`, `nextCost`, `buy`, `topUp`, `carryOn`, `moveTo` and `nextDusk`. No Phaser;
   `baseBurnMs` reads `byDifficulty` from `shared/settings.ts`.
 - `game/save.ts`: `loadBest` and `saveBest`.
-- `art/puppet.ts`: `bakeTextures` and the painters. Full-screen layers are painted at `BACK_RES`
-  (1 on a screen that needs no scaling, up to 4 on a 4K screen) and drawn at 1 / `BACK_RES` by
-  `GameScene.backdrop` (`screen-0/1/2`, `castle` with the jar, `stars`, `fog`, `bunting`); sprites
+- `art/puppet.ts`: `bakeTextures`, `bakeScenery(scene, district)` and the painters. Full-screen
+  layers are painted at `BACK_RES` (1 on a screen that needs no scaling, up to 4 on a 4K screen)
+  and drawn at 1 / `BACK_RES` by `GameScene.backdrop` (`screen-0/1/2`, `castle-<district>` with
+  the jar, from `SCENERY` (each district's card path and trim) over the shared hills, grass and
+  jar, `stars`, `fog`, `bunting`); sprites
   and plaques at `RES` (2, up to about 4.3) and drawn at scale 1 / `RES`. `bakeTextures` sets both
   from `sharpRes` before painting, so read them at run time, never copy them into a constant.
-  Then: `moon`, `glow`/`glow-pale` (additive), `lantern-lit`/`-dark` (origin 36/56 down), `flame`, `moth-<kind>-up`/`-down` (`MOTH_LOOK`: size and gel colour),
-  `hud`, `dusk-fill` (cropped to the dusk left), `dusk-rim`, `sun`, `hearth-lit`/`-out`, `coin`,
-  `order-card`, `pip-lit`/`-dark`, `gust-tag`, `kind-tag`, `kind-<kind>` (the plaque's emblems),
-  `save-tag`, `spark`, `bat-up`/`-down`, `sky-lantern`, `panel`, `panel-small`, `card-on`/`-off`,
+  Then: `moon`, `glow`/`glow-pale` (additive), `lantern-lit`/`-dark` (origin 36/56 down) and
+  `lantern-<kind>-lit`/`-dark` for the special kinds (`LANTERN_GELS`), `flame`,
+  `moth-<kind>-up`/`-down` (`MOTH_LOOK`: size and gel colour), `hud`, `dusk-fill` (cropped to the
+  dusk left), `dusk-rim`, `sun`, `hearth-lit`/`-out`, `coin`, `cask-full`/`-empty`, `order-card`,
+  `pip-lit`/`-dark`, `gust-tag`, `owl-tag`, `call-tag`, `kind-tag`, `kind-<kind>` (the plaque's
+  emblems), `save-tag`, `spark`, `bat-up`/`-down`, `owl-up`/`-down`, `sky-lantern`, `panel`,
+  `panel-small`, `panel-move`, `card-on`/`-off`, `card-wide-on`/`-off` (the district cards),
   `btn`/`btn-hover`. The glows stay at 1x, as they are soft anyway. Plaques, cards and panels are
   baked with `PAD` pixels of room for their shadow; place them at (x - `PAD`, y - `PAD`) with origin 0. Also exports `INK`,
   `INK_HEX`, `DUSK` (layout's `DUSK_BAR`) and `SCREENS`.
@@ -145,28 +202,32 @@ How it runs:
 
 - `update(time)` computes `dt` from the frame timestamp (clamped to `MAX_STEP_MS`), calls `tick`,
   drains `state.events` into popups, and on a phase change saves the best and starts the nightfall
-  popups. Then it sets every image from state (screens, lanterns, moths, tags, HUD, panels) and
-  redraws the Graphics layers (`marks`: oil bars and rings; `wind`; `trails`; the gust pointer;
-  `cords`: the chains; `rain`; `batMarks`: bat lines and rings).
+  popups. Then it sets every image from state (screens, scenery, lanterns, owl, moths, tags, HUD,
+  panels) and redraws the Graphics layers (`marks`: oil bars and rings; `wind`; `trails`; the gust
+  pointer; `cords`: the chains; `rain`; `batMarks`: bat lines, rings and the bell's stun ring;
+  `owlMarks`: the owl's row line and rings, and the window call's ring).
 - `tick` only runs in `'dusk'`: oil burns (faster on fog; not on a lantern a moth sits on), then
   each moth moves at its kind's speed (`out` to its lantern, `lighting` for its kind's
-  `mothLightMs`, then `guard` if a gust is warned for that lantern, else a firefly's next hop or
-  `home` to its rest spot, then `idle`; `chase` follows its bat). Then `wind` warns or blows the
-  gust, `raiders` brings in and moves the bats, a moth that is idle takes the oldest queued tap,
-  the dusk clock runs down and `nightfall` scores (lanterns, all-lit bonus and chains, doubled on
-  a feast, then the order), draws the next kind and checks the festival. A lantern lit on the
-  last tick counts.
+  `mothLightMs`, then `guard` if a gust or the owl is coming for that lantern, else a firefly's
+  next hop or `home` to its rest spot, then `idle`; `chase` follows its bat). Then `wind` warns
+  or blows the gust, `greatOwl` warns or flies the owl, `raiders` brings in and moves the bats
+  (not one a lit bell holds), `windows` starts or runs out a call, a moth that is idle takes the
+  oldest queued tap, the dusk clock runs down and `nightfall` scores (lanterns by kind and
+  district, all-lit bonus and chains, doubled on a feast, then the order), draws the next kind,
+  checks the festival and whether the district can move. A lantern lit on the last tick counts.
 - Input: one `Zone` per lantern spot calls `send`; one `Zone` per bat (depth 7.5, above the
-  lanterns' zones, moved off screen when unused) calls `chase`; the shop cards' zones call `buy`;
-  "Next dusk" calls `nextDusk`, "Keep going" `carryOn`, and "New keep" `restart`.
+  lanterns' zones, moved off screen when unused) calls `chase`; the shop cards' zones call `buy`
+  (the Cask card `topUp`); the move panel's district cards call `moveTo`; "Next dusk" calls
+  `nextDusk`, "Keep going" `carryOn`, and "New keep" `restart`.
 - Panels open `PANEL_DELAY_MS` after nightfall so the popups show first; `panelOpen` says when.
 
 State model (`GameState` in `src/game/state.ts`):
 
 - `phase` is `'dusk'`, `'night'` (panel open, shop live), `'festival'` (the Great Festival's
-  panel, once) or `'over'`. `duskMs` counts down.
-- `lanterns[i]` sits at `LANTERN_SPOTS[i]`: `lit`, `oilMs` left of `oilMaxMs`, `claimed` while a
-  moth is on its way to it, lighting it or guarding it.
+  panel, once), `'move'` (a fifth nightfall's choice of district) or `'over'`. `duskMs` counts
+  down.
+- `lanterns[i]` sits at the district's `spots[i]`: `kind`, `lit`, `oilMs` left of `oilMaxMs`,
+  `claimed` while a moth is on its way to it, lighting it or guarding it.
 - `moths[i]` has a `kind`, a position, a `task` (`idle`, `out`, `lighting`, `guard`, `chase`,
   `home`), its `target` lantern, `lightingMs`, `closeCall` (set when it arrived at a nearly dry
   lantern), `bat` (the id it chases) and `hops` (lanterns left on a firefly's flight).
@@ -180,8 +241,11 @@ State model (`GameState` in `src/game/state.ts`):
 - `order` is the night's `Order`; `orderProgress(s)` gives `{ done, of }`.
 - `gusts` are the dusk-left times of the gusts still to come; `gust` is the warned one
   (`{ target, atMs }`) or null. `closeCalls` and `shields` count this dusk's.
-- `events` lists `closeCall`, `gust`, `bat` (snuffed or driven off) and `chased` events since the
-  scene last looked; the scene empties it.
+- `events` lists `closeCall`, `gust`, `bat` (snuffed or driven off), `chased`, `owl` (snuffed or
+  kept), `call` (kept or run out) and `dry` events since the scene last looked; the scene empties
+  it.
+- `owls` and `owl`, `callTimes`, `call` and `callsKept`, `cask`, `district`, `nextDistrict` and
+  `moveDue` are described under their upgrades above.
 - `levels` per upgrade; `stats(s)` turns them into moth count, speed, wick time and burn time.
 - `report` is the last nightfall's tally (`lit`, `count`, `required`, `earned` with the order's
   reward, `lostHearth`, `orderMet`, `chains` lit, `festival`); `kept` counts nights that met the
@@ -207,8 +271,9 @@ seeded generator in `puppet.ts`. Popups, flares and sparks are cosmetic Phaser t
   lantern glow's and flame's flicker, the pulse of the close-call rings, the spin of the gust's
   dashed ring and the travelling gust along its wind curls, the rise of popups (they only fade)
   and the spread of the close-call sparks, the drift of the fog, the falling rain (drawn still),
-  the bats' flapping and bobbing and the rising sky lanterns. The game uses no camera shake or
-  flash.
+  the bats' flapping and bobbing, the owl's flapping and bobbing and the travelling dashes of its
+  row line, the pulse of a window call's ring and the rising sky lanterns. The game uses no camera
+  shake or flash.
 - Keep the Lanternkeep row of the difficulty table in the root README and the line in this game's
   README in step with the `byDifficulty` values.
 
@@ -223,7 +288,11 @@ seeded generator in `puppet.ts`. Popups, flares and sparks are cosmetic Phaser t
   burn, the pay (5 a lantern, 10 bonus), night 1's order (lanterns 0, 1, 2 for 15), night 1's one
   gust at 34 s left warned 5 s before, the close call (under 15%, 2 coins), the scene key `'Game'`
   and the fields above (`queue`, `order`, `gusts`, `gust`, `closeCalls`, `shields`, `kind`
-  `'clear'`, empty `batTimes`, and the report's `chains` 0 and `festival` false too).
+  `'clear'`, empty `batTimes`, and the report's `chains` 0 and `festival` false too). It checks
+  `report` with `toEqual`, so a new report field changes the test. Night 1 has no window call,
+  no cask use (refills are free before `CASK_NIGHT`), plain lanterns, no owl and the keep, so
+  none of the round-2 systems touch it. `moveButtons` gives the district cards for tests that
+  play five nights.
 - The timing matters. It lights lantern 0 at the start (lit about 41 s left); when the gust is
   warned (39 s left) it taps lantern 0 again, and the fast moth refills it and guards it until the
   gust passes (34 s left); the lantern burns no oil meanwhile, so it runs low (under 15%) at about
@@ -244,6 +313,11 @@ seeded generator in `puppet.ts`. Popups, flares and sparks are cosmetic Phaser t
   `duskMs`, set `night` and `nextKind` and click "Next dusk" (the Firefly card for the firefly
   shot), light lanterns through state, push a bat time onto `batTimes` and click the bat, or set
   `kept` to 9 before nightfall for the festival.
+- `loop-window-call`, `loop-oil-cask`, `loop-lantern-kinds`, `loop-great-owl-warned`,
+  `loop-great-owl`, `loop-district-choice`, `loop-docks`, `loop-chapel` and `loop-market` were
+  staged the same way: set `night`, `nextDistrict` and `district` before ending a dusk and click
+  "Next dusk", light lanterns through state, set `duskMs` just before a call, the owl's warning
+  or its sweep, set `cask` to 0 and push a `dry` event, and end night 5 for the move panel.
 
 ## Making common changes
 
@@ -254,7 +328,17 @@ seeded generator in `puppet.ts`. Popups, flares and sparks are cosmetic Phaser t
   pips; a goal with more needs more `orderPips`. Night 1's order is mirrored in the test.
 - **Retune gusts**: `gustsFor` and `GUST_WARN_MS` in `state.ts`; night 1's gust is in the test.
 - **Add an upgrade**: add its id to `UPGRADE_IDS`, its row to `UPGRADES` and `levels`, apply it in
-  `stats`, and give `SHOP` room for a sixth card (a third row is there; a seventh needs a fourth).
+  `stats`, and give `SHOP` a fourth row (the three rows hold the five upgrades and the cask).
+- **Add a kind of lantern**: a row in `LANTERN_KINDS` (its `oil`, `wick` and `pay`), its id in
+  `SPECIAL_KINDS`, its gels in `LANTERN_GELS` and any emblem in `paintLantern`, and its textures in
+  the `bakeTextures` loop; a rule beyond those multipliers goes in `tick` or `raiders` like the
+  bell's.
+- **Add a district**: an entry in `DISTRICTS` (ten spots with names, four chains, a rule) and its
+  scenery in `SCENERY` in `puppet.ts` (a card path around the spots, with `merlonXs` to skip them,
+  and the trim); a new rule gets a branch where the others are applied (`wind`, `lanternPay`,
+  `requiredFor`, `closeCallPay`, `callPay`, `tick`). `MOVE_CARDS` has room for four cards.
+- **Retune the owl, the calls or the cask**: `OWL_*`, `owlsFor`, `CALL_*`, `callsFor` and
+  `CASK_*` in `state.ts`.
 - **Add a kind of night**: a row in `NIGHT_KINDS`, its effect in `tick`, `nightfall` or
   `gustsFor`, its emblem in `paintKindIcon` and the list in `bakeTextures`, and any layer in
   `GameScene.drawKind`.
@@ -282,8 +366,14 @@ seeded generator in `puppet.ts`. Popups, flares and sparks are cosmetic Phaser t
 - The gust picks its target when it is warned, not when it hits; if that lantern burns out before
   then, the gust does nothing. A moth still flying to it (`out`) does not shield it.
 - Night 1's quota is `ceil(5 * 0.6)` = 3; `requiredFor` rounds up.
-- Night 1 must stay clear with no bats and no chain (every chain has a lantern from night 2 on):
-  the playthrough's pay depends on it.
+- Night 1 must stay clear with no bats and no chain (every chain has a lantern from night 2 on),
+  no window call, free refills and plain lanterns: the playthrough's pay and refills depend on it.
+- `s.district` is set from `nextDistrict` in `nextDusk`, so a move chosen on the panel shows
+  from the next dusk; the orders are named for the district the night is played in.
+- The owl warns once per night at most and its row is picked at the warning, so lanterns lit on
+  it later are still at risk; a dark lantern it passes makes no popup.
+- The lantern images, kind labels and tap zones are moved to the lantern's position every frame,
+  so a district's spots are never copied anywhere in the scene.
 - A bat zone's `pointerdown` reads `state.bats[k]` when tapped, as bats are removed from the
   array when they leave the screen.
 - `report.festival` is true only on the one nightfall that reaches the festival; `state.festival`
