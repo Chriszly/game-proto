@@ -245,8 +245,8 @@ Rain and the caltrops at once). So every filler turns up on the way to the last 
 
 | Upgrade | Ranks | What it does |
 | --- | --- | --- |
-| Swift Draw | 5 | Shoot 20% faster |
-| Steel Tips | 5 | Arrows (and Arrow Rain) deal 25% more damage |
+| Swift Draw | 5, then no cap | Shoot 20% faster |
+| Steel Tips | 5, then no cap | Arrows (and Arrow Rain) deal 25% more damage |
 | Volley | 3 | One more arrow per shot, each at a different foe |
 | Bodkin Points | 3 | Arrows fly on through one more foe |
 | Keen Eye | 3 | 10% more chance of a double-damage hit |
@@ -260,7 +260,7 @@ Rain and the caltrops at once). So every filler turns up on the way to the last 
 | Pyromancy | 3 | Fireballs come 15% sooner and hit 40% harder (after Tome of Fire) |
 | Storm Staff | 1 | A new missile: lightning every 3.5s that leaps between 3 foes, through armour |
 | Forked Lightning | 3 | Lightning leaps to one more foe and hits 25% harder (after Storm Staff) |
-| Stout Timber | 5 | The barricade gets 25% more health and is repaired |
+| Stout Timber | 5, then no cap | The barricade gets 25% more health and is repaired |
 | Battle Lore | 3 | 20% more experience |
 | Shatter | 3 | Arrows deal 20% more damage to chilled foes (after Frost Arrows) |
 | Finishing Shot | 3 | Arrows deal double damage to foes below 15% of their health, 30% at rank 2, 45% at rank 3 |
@@ -273,12 +273,11 @@ Rain and the caltrops at once). So every filler turns up on the way to the last 
 
 ![With one upgrade left, War Chest and Second Wind fill the other cards](docs/screenshots/fillers-one-left.png)
 
-Once every skill is learned, the next level-up opens one last time with the repair card alone
-("Every skill learned"). From then on each level-up repairs half of the barricade at once (a quarter from Heat 3), with a
-"Level N! Barricade repaired" pop-up over it, and the battle goes on without a pause.
+Once every skill is learned, each level-up offers the three base skills again: Swift Draw, Steel
+Tips and Stout Timber, with no cap on their ranks ("Rank 6, no cap"), so the hero keeps getting
+stronger for as long as the waves keep coming.
 
-![The last level-up, with the repair card alone](docs/screenshots/last-level-up.png)
-![A level-up after that: the barricade is repaired](docs/screenshots/level-up-repair-pop.png)
+![After every skill is learned: the base skills, with no cap](docs/screenshots/base-skills-no-cap.png)
 ![Three of the newer skills on a level-up](docs/screenshots/new-skills-level-up.png)
 
 The skill book (its button in the top bar shows how many skills are found, such as "Skill book

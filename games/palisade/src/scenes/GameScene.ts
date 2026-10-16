@@ -568,22 +568,6 @@ export class GameScene extends Phaser.Scene {
         const alpha = t < 0.7 ? 1 : 1 - (t - 0.7) / 0.3;
         texts[0].setPosition(e.x, e.y - rise).setAlpha(alpha);
         texts[1]?.setPosition(e.x + texts[0].width / 2 + 2, e.y - rise - 10).setAlpha(alpha);
-      } else if (e.kind === 'mended') {
-        // A level-up after the last skill: the barricade is repaired, with a pop-up rising over it.
-        seen.add(e.id);
-        let texts = this.pops.get(e.id);
-        if (!texts) {
-          texts = [
-            this.add.text(e.x, e.y, `Level ${e.amount}!`, textStyle(22, '#ffcf4a', 5)).setOrigin(0.5),
-            this.add.text(e.x, e.y, 'Barricade repaired', textStyle(16, '#8fdc6a', 4)).setOrigin(0.5),
-          ];
-          for (const text of texts) text.setDepth(UI_DEPTH - 10);
-          this.pops.set(e.id, texts);
-        }
-        const rise = Math.min(1, t * 4) * 24 + t * 16;
-        const alpha = t < 0.75 ? 1 : 1 - (t - 0.75) / 0.25;
-        texts[0].setPosition(e.x, e.y - rise - 14).setAlpha(alpha);
-        texts[1].setPosition(e.x, e.y - rise + 10).setAlpha(alpha);
       } else if (e.kind === 'orb') {
         inFlight += e.amount ?? 0;
         this.drawOrbs(e.x, e.y, t);

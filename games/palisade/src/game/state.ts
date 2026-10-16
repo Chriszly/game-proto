@@ -87,13 +87,13 @@ export interface Missile {
  */
 export interface Effect {
   id: number;
-  kind: 'blast' | 'fireblast' | 'bolt' | 'death' | 'crit' | 'rain' | 'xp' | 'orb' | 'block' | 'heal' | 'stab' | 'arcane' | 'mended' | 'rockHit' | 'call' | 'roar' | 'split';
+  kind: 'blast' | 'fireblast' | 'bolt' | 'death' | 'crit' | 'rain' | 'xp' | 'orb' | 'block' | 'heal' | 'stab' | 'arcane' | 'rockHit' | 'call' | 'roar' | 'split';
   x: number;
   y: number;
   /** Blast radius, or the lightning's path (the healed foes, the thrust's two ends). */
   radius?: number;
   points?: { x: number; y: number }[];
-  /** `xp` and `orb`: the experience the kill gave. `xp`: the kill streak it was part of. `mended`: the level reached. */
+  /** `xp` and `orb`: the experience the kill gave. `xp`: the kill streak it was part of. */
   amount?: number;
   streak?: number;
   ms: number;
@@ -160,8 +160,8 @@ export interface GameState {
   /** Relics won from the relic chests after the bosses, with how many of each. */
   relics: Partial<Record<RelicId, number>>;
   /**
-   * Every skill learned and the last level-up (the repair card alone) taken: from then on each
-   * level-up repairs the barricade at once, with a pop-up, instead of pausing on cards.
+   * Every skill learned and a level-up taken after that: from then on the level-ups offer the base
+   * skills (`BASE_SKILLS`), and the skill book counts every filler as found.
    */
   mastered: boolean;
   /** The heat this run plays at (0 to MAX_HEAT), and the highest one unlocked by lifting the siege. */

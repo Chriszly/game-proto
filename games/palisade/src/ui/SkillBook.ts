@@ -143,14 +143,15 @@ export class SkillBook {
       return;
     }
     const taken = rank > 0;
-    const rankText = u.filler ? `${rank}x` : `${rank}/${u.maxRank}`;
+    // A base skill taken past its max (once every skill is learned) shows its rank alone.
+    const rankText = u.filler ? `${rank}x` : rank > u.maxRank ? `${rank}` : `${rank}/${u.maxRank}`;
     this.slots.add([
       back,
       iconBack,
       fit(scene.add.image(x + 22, y + 18, iconTexture(u.icon)), 0.58).setAlpha(taken ? 1 : 0.55),
       scene.add.text(x + 46, y, u.name, textStyle(14, taken ? '#ffcf4a' : '#c9c3b6')),
       scene.add
-        .text(x + colW - 14, y + 1, rankText, textStyle(13, !u.filler && rank === u.maxRank ? '#8fdc6a' : taken ? '#e9e4d8' : '#7a8294'))
+        .text(x + colW - 14, y + 1, rankText, textStyle(13, !u.filler && rank >= u.maxRank ? '#8fdc6a' : taken ? '#e9e4d8' : '#7a8294'))
         .setOrigin(1, 0),
       scene.add
         .text(x + 46, y + 18, u.text, { ...textStyle(11, '#e9e4d8'), fontStyle: 'normal', wordWrap: { width: colW - 60 } })

@@ -57,10 +57,8 @@ export class LevelUp {
     this.cards = [];
     this.root.setVisible(!!choices);
     if (!choices) return;
-    // A lone card is the last level-up after every skill is learned, shown in the middle.
-    if (choices.length === 1) this.title.setText(`Level ${level}! Every skill learned`);
-    else this.title.setText(more > 1 ? `Level ${level}! Choose an upgrade (${more} to pick)` : `Level ${level}! Choose an upgrade`);
-    choices.forEach((id, i) => this.addCard(id, choices.length === 1 ? VIEW.w / 2 : CARDS.xs[i], ranks[id] ?? 0));
+    this.title.setText(more > 1 ? `Level ${level}! Choose an upgrade (${more} to pick)` : `Level ${level}! Choose an upgrade`);
+    choices.forEach((id, i) => this.addCard(id, CARDS.xs[i], ranks[id] ?? 0));
   }
 
   /** The seconds left, rounded up, over a bar that empties as the time to pick runs out. */
@@ -91,7 +89,7 @@ export class LevelUp {
     draw(false);
     const icon = fit(scene.add.image(0, -h / 2 + 62, iconTexture(u.icon)), 1.1);
     const name = scene.add.text(0, -h / 2 + 122, u.name, { ...textStyle(19, '#ffcf4a'), align: 'center' }).setOrigin(0.5);
-    const rankText = u.filler ? FILLER_NOTE[id] ?? 'Filler' : rank === 0 ? (u.maxRank === 1 ? 'New' : `New, ${u.maxRank} ranks`) : `Rank ${rank + 1} of ${u.maxRank}`;
+    const rankText = u.filler ? FILLER_NOTE[id] ?? 'Filler' : rank === 0 ? (u.maxRank === 1 ? 'New' : `New, ${u.maxRank} ranks`) : rank >= u.maxRank ? `Rank ${rank + 1}, no cap` : `Rank ${rank + 1} of ${u.maxRank}`;
     const ranked = scene.add.text(0, -h / 2 + 146, rankText, textStyle(13, rank === 0 ? '#8fdc6a' : '#c9c3b6')).setOrigin(0.5);
     const text = scene.add
       .text(0, -h / 2 + 170, u.text, { ...textStyle(15, '#e9e4d8'), fontStyle: 'normal', align: 'center', wordWrap: { width: w - 36 } })

@@ -102,6 +102,11 @@ export const UPGRADES: Record<UpgradeId, Upgrade> = {
 
 /** The fillers: Mend fills the one empty card with two upgrades left, War Chest and Second Wind the two with one left. */
 export const FILLERS: UpgradeId[] = ['mend', 'purse', 'wind'];
+/**
+ * The base skills: once every other skill is learned, each level-up offers these three again, with
+ * no cap on their ranks, so the hero keeps growing with the waves.
+ */
+export const BASE_SKILLS: UpgradeId[] = ['swift', 'sharp', 'timber'];
 /** Coins a War Chest gives. */
 export const PURSE_COINS = 25;
 
