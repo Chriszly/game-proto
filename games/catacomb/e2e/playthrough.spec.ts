@@ -1,8 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 
-// Plays the first room with real inputs: taps the first room on the map, fights the slime by
-// tapping cards in the hand and the End turn button, as on a phone, picks up the slime's gold,
-// then takes a card from the reward and is back on the map with the next rooms open.
+// Plays the first room with real inputs: picks the Knight on the hero panel, taps the first room on
+// the map, fights the slime by tapping cards in the hand and the End turn button, as on a phone,
+// picks up the slime's gold, then takes a card from the reward and is back on the map with the
+// next rooms open.
 // Game state is only read, through the `game` object the dev build puts on window.
 
 type CardId = string;
@@ -10,7 +11,10 @@ type Intent = { kind: 'attack'; damage: number; hits?: number } | { kind: 'block
 interface Enemy { id: number; kind: string; hp: number; maxHp: number; block: number; strength: number; step: number; intent: Intent }
 interface Fight { draw: CardId[]; hand: CardId[]; discard: CardId[]; energy: number; block: number; turn: number; enemies: Enemy[] }
 interface GameState {
-  phase: 'map' | 'walk' | 'player' | 'enemy' | 'cleared' | 'reward' | 'rest' | 'over' | 'won';
+  phase: 'hero' | 'map' | 'walk' | 'player' | 'enemy' | 'cleared' | 'reward' | 'rest' | 'over' | 'won';
+  hero: 'knight' | 'hunter';
+  depth: number;
+  flasks: string[];
   hp: number;
   maxHp: number;
   deck: CardId[];
@@ -24,7 +28,8 @@ interface GameState {
 type Spot = { id: CardId; x: number; y: number; w: number; h: number };
 
 const VIEW = { w: 960, h: 540 };
-/** The first room on the map and the End turn button, from src/game/map.ts and src/scenes/layout.ts. */
+/** The Knight's button on the hero panel (the first of EVENT_BUTTONS), the first room on the map and the End turn button, from src/scenes/layout.ts and src/game/map.ts. */
+const KNIGHT_BUTTON = { x: 480, y: 324 };
 const FIRST_ROOM = { x: 110, y: 290 };
 const END_TURN = { x: 884, y: 420 };
 /** The starter deck's cards, from src/game/cards.ts. */
@@ -145,9 +150,17 @@ test('plays the first room', async ({ page }, testInfo) => {
     await play(STEP_MS, async () => false);
   }
 
-  // A new run: full health, the starter deck, no gold or relics, at the dungeon's entrance.
-  let s = await until('the map', (s) => s.phase === 'map');
-  expect(s).toMatchObject({ hp: 50, maxHp: 50, gold: 0, relics: [], at: null, cleared: [], fight: null });
+  // A new run opens on the hero panel, at depth 0 (nothing is saved in a fresh browser). Tapping
+  // the Knight gives full health, the starter deck, a flask and no gold or relics, at the dungeon's
+  // entrance.
+  let s = await until('the hero choice', (s) => s.phase === 'hero');
+  expect(s).toMatchObject({ depth: 0, at: null, cleared: [], fight: null });
+  await play(400, async () => false);
+  await snap('0-heroes');
+  await tap(KNIGHT_BUTTON);
+  s = await until('the map', (s) => s.phase === 'map');
+  expect(s).toMatchObject({ hero: 'knight', hp: 50, maxHp: 50, gold: 0, relics: [], at: null, cleared: [], fight: null });
+  expect(s.flasks).toHaveLength(1);
   expect(count(s.deck)).toEqual(STARTER_DECK);
   await play(600, async () => false);
   await snap('0-map');

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { EnemyKind } from '../game/enemies';
+import type { HeroId } from '../game/heroes';
 import { BLUE, BONE, GOLD, GREEN, INK, IRON, PURPLE, RED, SKIN, WOOD } from './palette';
 import { addTexture, bakePainted, paint, sketch } from './paint';
 import { type Palette } from './pixelArt';
@@ -281,8 +282,10 @@ const FOES: Record<EnemyKind, string[]> = {
 };
 
 export function bakeCharacters(scene: Phaser.Scene) {
-  addTexture(scene, 'hero', paintedFigure(KNIGHT, 1));
-  addTexture(scene, 'hero-token', paintedFigure(KNIGHT, 0.5));
+  for (const [hero, figure] of Object.entries(HERO_FIGURES)) {
+    addTexture(scene, `hero-${hero}`, paintedFigure(figure, 1));
+    addTexture(scene, `hero-token-${hero}`, paintedFigure(figure, 0.5));
+  }
   addTexture(scene, 'foe-slime', paintedFigure(SLIME, 1));
   for (const [kind, rows] of Object.entries(FOES)) {
     if (kind !== 'slime') bakePainted(scene, `foe-${kind}`, rows, PALETTE, CHAR_SCALE, INK, 3.5, true);
@@ -290,6 +293,7 @@ export function bakeCharacters(scene: Phaser.Scene) {
 }
 
 export const foeTexture = (kind: EnemyKind) => `foe-${kind}`;
+export const heroTexture = (hero: HeroId, token = false) => `hero-${token ? 'token-' : ''}${hero}`;
 
 /** A figure drawn as shapes at twice its size, around its feet at (`fx`, `fy`), `w` x `h` at its own size. */
 interface Figure {
@@ -368,6 +372,56 @@ const KNIGHT: Figure = {
     ell(425, 583, 4, 4, '#fff1c2');
   },
 };
+
+/** A hunter in a green hooded cloak and leather, a quiver on the back, a long knife raised and a buckler on the arm. */
+const HUNTER: Figure = {
+  w: 84,
+  h: 130,
+  fx: 462,
+  fy: 656,
+  draw(ctx) {
+    const { poly, ell, rrect } = shapes(ctx);
+    // Cloak behind, hanging to the knees.
+    poly([[430, 536], [494, 536], [506, 630], [418, 630]], '#2f5a36');
+    poly([[430, 536], [462, 536], [452, 630], [418, 630]], '#254a2c');
+    // Quiver over the shoulder, with fletched arrows.
+    rrect(478, 528, 16, 56, 6, '#5a3a22');
+    for (const ax of [482, 489]) {
+      rrect(ax - 1, 500, 3, 30, 1, '#c9a24a');
+      poly([[ax - 4, 504], [ax + 1, 494], [ax + 6, 504]], '#e0584f');
+    }
+    // Legs in brown breeches and tall boots.
+    for (const lx of [444, 476]) {
+      rrect(lx - 10, 598, 20, 36, 5, '#6b4a2a');
+      rrect(lx - 12, 622, 26, 34, 6, '#3b2416');
+      rrect(lx - 8, 626, 6, 22, 3, '#5c3a21');
+    }
+    // Leather tunic with a belt.
+    rrect(430, 540, 64, 68, 12, '#8a5a32');
+    poly([[436, 548], [488, 548], [496, 606], [428, 606]], '#6b4a2a');
+    poly([[436, 548], [462, 548], [462, 606], [428, 606]], '#7a5430');
+    rrect(430, 584, 66, 9, 3, '#3b2416');
+    ell(462, 588, 6, 5, '#c9a24a');
+    // Knife arm raised.
+    poly([[486, 552], [502, 548], [512, 520], [498, 516]], '#8a5a32');
+    ell(504, 516, 8, 8, '#d9b48c');
+    rrect(494, 508, 24, 6, 2, '#5a3a22');
+    poly([[501, 508], [509, 508], [507, 450], [504, 440], [501, 450]], '#c9cfdb');
+    poly([[505, 508], [509, 508], [507, 450], [504, 440]], '#eef2f8');
+    // Hood and face in shadow, a strand of hair.
+    ell(462, 522, 30, 32, '#3a6b42');
+    ell(466, 528, 18, 18, '#2a1c14');
+    ell(470, 526, 8, 6, '#d9b48c');
+    poly([[440, 500], [462, 488], [490, 500], [484, 510], [462, 500], [446, 512]], '#2f5a36');
+    // Buckler on the left arm.
+    ell(428, 586, 26, 28, '#5a3a22');
+    ell(428, 586, 19, 21, '#8a5a32');
+    ell(428, 586, 7, 7, '#c9a24a');
+  },
+};
+
+/** The hero figures, by hero. */
+const HERO_FIGURES: Record<HeroId, Figure> = { knight: KNIGHT, hunter: HUNTER };
 
 /** A glossy green slime with a highlight, two dark eyes and a small mouth. */
 const SLIME: Figure = {

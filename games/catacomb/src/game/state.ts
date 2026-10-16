@@ -1,11 +1,14 @@
 import type { BaseId, CardId } from './cards';
 import type { EnemyKind, Intent, StatusKind } from './enemies';
+import type { FlaskId } from './flasks';
+import type { HeroId } from './heroes';
 import type { Room } from './map';
 import type { RelicId } from './relics';
 
 // Everything about a run, as plain data: the hero, the deck, where on the map they are, and the
 // fight in progress. The playthrough test reads it through `window.game`.
 
+/** The Knight's health; the heroes' own are in `heroes.ts`. */
 export const MAX_HP = 50;
 export const ENERGY = 3;
 export const HAND_SIZE = 5;
@@ -22,9 +25,10 @@ export const START_GOLD = 0;
 export const CARD_PRICE = { common: 30, rare: 65 };
 export const RELIC_PRICE = 80;
 export const REMOVE_PRICE = 40;
-/** How many cards of each rarity, and how many relics, the merchant lays out. */
+/** How many cards of each rarity, how many relics and how many flasks the merchant lays out. */
 export const SHOP_CARDS = { common: 2, rare: 1 };
 export const SHOP_RELICS = 2;
+export const SHOP_FLASKS = 2;
 /** Gold found instead of a relic once every relic is owned. */
 export const RELIC_GOLD = 50;
 /** An attack by someone Weak, and an attack on someone Vulnerable, has its damage multiplied by these (rounded down). */
@@ -42,6 +46,8 @@ export const HIT_MS = 300;
 export const POP_MS = 900;
 
 export type Phase =
+  /** Choosing the hero (and the depth) before the first room. */
+  | 'hero'
   /** Choosing the next room on the map. */
   | 'map'
   /** Walking to the room picked. */
@@ -80,6 +86,7 @@ export interface Ware<T> {
 export interface Shop {
   cards: Ware<BaseId>[];
   relics: Ware<RelicId>[];
+  flasks: Ware<FlaskId>[];
   removePrice: number;
   /** The merchant takes one card out of the deck per visit. */
   removed: boolean;
@@ -116,6 +123,12 @@ export interface Fight {
   acted: number;
   /** The hero's statuses. */
   status: Status;
+  /** Added to the damage of each of the hero's hits (Battle Rage). */
+  strength: number;
+  /** The power cards played this fight; they stay in play and leave no pile. */
+  powers: CardId[];
+  /** How many cards the hero has played this turn (Doubt makes the first dearer). */
+  played: number;
   /** The gold the foes leave behind once they all fall. */
   gold: number;
 }
@@ -132,6 +145,14 @@ export interface Pop {
 
 export interface GameState {
   phase: Phase;
+  /** Which hero is played. */
+  hero: HeroId;
+  /** How deep the run goes: 0 is the game as designed, each depth adds a rule (see `depth.ts`). */
+  depth: number;
+  /** The deepest depth unlocked so far, saved in the browser. */
+  bestDepth: number;
+  /** The flasks held, up to FLASK_SLOTS. */
+  flasks: FlaskId[];
   /** Which act the hero is in, from 1. */
   act: number;
   /** This act's map, drawn by makeMap. */
@@ -155,6 +176,8 @@ export interface GameState {
   rewardRare: boolean;
   /** The gold the last fight left behind, shown with its reward. */
   goldWon: number;
+  /** The flask the last elite left behind, shown with its reward. */
+  flaskWon: FlaskId | null;
   /** The merchant's wares, while in a shop. */
   shop: Shop | null;
   /** What the last event, purchase or descent did, shown on the map until the hero walks on. */
