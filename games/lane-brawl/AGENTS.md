@@ -52,15 +52,55 @@ Implemented today:
   `paintFog`) and skips hidden units, effects, projectiles and zones there.
 - Gold (passive plus last hits and kills), XP shared by nearby champions, respawns that scale with
   level.
-- Items (LB4): twelve in `ITEMS`, bought near the Nexus (`atShop`, `SHOP_RANGE`) or anywhere while
+- Items (LB4): thirteen in `ITEMS`, bought near the Nexus (`atShop`, `SHOP_RANGE`) or anywhere while
   the champion is dead (`buy` skips the distance then), each owned once, at most `MAX_ITEMS` (6) in
   the bag. Seven are parts (the Healing Flask among them); five build `from` parts: buying one uses
-  up the parts owned and takes their cost off its price (`priceFor`, `buy`). Items add flat damage,
+  up the parts owned and takes their cost off its price (`priceFor`, `buy`); the thirteenth is the
+  Vision Ward (below). Items add flat damage,
   armor, health and speed, plus percent attack speed (`atk`) and cooldown reduction (`cdr`). Two add
   an `active` (`ACTIVES`): Phase Boots dash 220 px on D, the Healing Flask heals 220 on H (F is the
-  hub's full screen key), through `useActive`, with cooldowns in `Unit.activeCds`. The shop is a 4x3
-  grid of cards; the bag shows as six slots in the portrait card and the actives as two buttons
-  under the shop button.
+  hub's full screen key), through `useActive`, with cooldowns in `Unit.activeCds`; the third
+  `ACTIVES` row is the ward on V. The shop is a 4x4
+  grid of cards (the last row holds the ward alone); the bag shows as six slots in the portrait card
+  and the actives as three narrow buttons under the shop button.
+- Vision wards (LB6, round 2): the `'ward'` item (`ItemDef.ward`) is a consumable: `buy` adds one to
+  `Unit.wards` (up to `WARD.carry`) and takes no bag slot. `useActive(..., 'ward', aim)` calls
+  `plantWard`, which spawns a `'ward'` unit (`spawnWard` in `state.ts`) within `WARD.range` of the
+  champion, with `hp` `WARD.hits` and `expiresAt` `WARD.ms` from now. A ward gives its team
+  `SIGHT.ward` of sight (`sightOf`, `viewers`) and `updateVision` lets it see champions in a bush
+  within that sight. `damage` takes exactly one hit off a ward whatever the amount; projectiles and
+  zones skip wards; `kill` pays `WARD.gold` to a champion killer and notices blue's losses. Dead and
+  burnt-out wards are dropped each tick like dead minions. AI champions (`aiWard`) plant a carried
+  ward at the first `WARD_SPOTS` entry within `WARD_AI.reach` that has no live ward of their team
+  within `WARD_AI.taken`, and in `aiAct` knock down an enemy ward within 220 px when nothing else is
+  in reach. The view draws wards with the Graphics (`drawWard`: stake, gem eye, hit pips, and blue's
+  sight ring), not a baked sheet, and as diamonds on the minimap.
+- Recall (LB7, round 2): `startRecall` sets `Unit.recallMs` to `RECALL.ms` (and `lastRecallAt`);
+  `updateUnit` counts it down and `finishRecall` moves the champion to its spawn point (its lane
+  walk restarts at `wp` 1). `damage` on a champion, `commandMove`, `commandAttack`, `cast` and
+  `useActive` zero `recallMs`; `playerAct` and `championPlan` stand still while it runs, and `free`
+  keeps a recalling champion off team plans. The player recalls with T or the top bar's
+  `RECALL_BUTTON` (`drawRecallButton`), which fills as the channel runs; a bar and "Recalling" show
+  under any recalling champion's health bar. AI champions recall (in `championPlan`) when free of
+  enemies within `RECALL.aiLook`, far from home, at most every `RECALL.aiEvery`, and either under
+  `RECALL.aiLow` health or carrying `RECALL.rich` gold with a `nextBuy` to spend it on; at home they
+  wait at the fountain until 90% health.
+- Kill streak bounties (LB8, round 2): `Unit.killStreak` counts champion kills since the last
+  death (`kill` raises the killer's, zeroes the victim's). `bountyOf(killStreak)` (`BOUNTY`) is the
+  gold a slayer gets on top of `KILL.gold`; notices and `aiLog` say when a streak sets a bounty and
+  when one is claimed. `updateGanks` sorts prey by bounty before health and runs every
+  `GANK.every / 2` while any living champion carries one. The view puts a gold "BOUNTY" label over
+  the champion's bar (`drawBar`).
+- AI shopping (LB9, round 2): `aiShop` runs for every AI champion each tick it is dead or `atShop`:
+  it buys `nextBuy(u)`, the first item of `AI_BUILDS[AI_BUILD_FOR[role] ?? 'fighter']` not owned
+  and not a part of an owned item, when it can pay (the build order is kept, so gold is saved for
+  the next item), else a ward when it carries none. Every build starts with the Healing Flask, which
+  `aiAct` drinks under 40% health. `aiLog` reports each purchase.
+- Buy back (LB10, round 2): `buyBack` lets a dead champion pay `buybackCost` (`BUYBACK.base` plus
+  `perLevel` per level) to `revive` at once, then sets `buybackReadyAt` `BUYBACK.cd` ahead. The
+  player uses X or the top bar button, which shows the cost or the time until it is allowed again
+  while dead. `aiBuyBack` runs for dead AI champions: they buy back with at least 3 s left to wait
+  when an enemy champion stands within `BUYBACK.aiThreat` of their Nexus.
 - Inhibitors (LB5): warded (no damage, not targeted, a ring and a grey bar) while a tower of their
   team and lane stands (`invulnerable`); a Nexus is warded while all three of its inhibitors stand.
   A fallen inhibitor stays down (drawn as small rubble) and makes `spawnWave` give the other team's
@@ -152,7 +192,7 @@ Missing or rough:
 - No pathing or collisions: units overlap and walk straight lines.
 - No sound, pause, title or save. Nothing is persisted, so there are no save keys.
 - Bushes hide champions only, not minions. The camera follows the player's champion.
-- AI champions don't shop (their gold piles up) and don't use bushes or the fog on purpose.
+- AI champions don't use bushes on purpose, and their wards go only to the fixed `WARD_SPOTS`.
 - Balance is tuned with AI-only matches (every class within roughly 35% to 65% wins over 80
   matches); the player's own champion is not part of that.
 - Only the first round (see the playthrough) is covered by the test; the Warden is the only champion
@@ -226,16 +266,20 @@ File map (`src/`):
   `ITEMS`, `ALLY_LANES`, `ENEMY_LANES`, `SIDE_COLOR`, and the loop's data: `OBJECTIVES`,
   `OBJECTIVE_GAP_MS`, `SIEGE`, `UPGRADES` (with `upgradeById`), `STREAK` and `LAST_HIT_LOOK`, plus
   `ACTIVES`, `MAX_ITEMS`, `BEAST`, `BEAST_BUFF`, `BEAST_CONTESTERS`, `INHIBITORS`, `INHIBITOR`,
-  `SUPER_MINION`, `BUSHES` (with `bushAt`), `BUSH_REVEAL`, `REVEAL_MS`, `GANK` and `RETREAT`.
+  `SUPER_MINION`, `BUSHES` (with `bushAt`), `BUSH_REVEAL`, `REVEAL_MS`, `GANK` and `RETREAT`, and
+  round 2's `WARD`, `WARD_SPOTS`, `WARD_AI`, `RECALL`, `BUYBACK`, `BOUNTY` (with `bountyOf`),
+  `AI_BUILDS` and `AI_BUILD_FOR`.
 - `game/state.ts`: the types (`GameState`, `Unit`, `Projectile`, `Fx`, `Objective`,
-  `UpgradeOffer`), `createGame`, `spawnWave`, `spawnChampion`, `refreshStats` (level and items into
-  stats), `pathFor` (red walks lanes backwards), `laneNear` and small helpers. No Phaser.
+  `UpgradeOffer`), `createGame`, `spawnWave`, `spawnChampion`, `spawnWard`, `refreshStats` (level
+  and items into stats), `pathFor` (red walks lanes backwards), `laneNear` and small helpers. No
+  Phaser.
 - `game/sim.ts`: the rules: `tick` (vision, watchstones, contesters, ganks, jungle trips, units,
   projectiles, zones), `cast`, `abilityFor`, `viewers`, `stealthed`, buffs (`addBuff`, `buffSum`), `chooseUpgrade`, `buy`, `priceFor`,
-  `useActive`, `invulnerable`, `hiddenFrom`, `commandMove`,
-  `commandAttack`, `damage`, the objectives (`updateObjective`), the last-hit mark
+  `useActive`, `plantWard`, `startRecall`, `buyBack`, `buybackCost`, `invulnerable`, `hiddenFrom`,
+  `commandMove`, `commandAttack`, `damage`, the objectives (`updateObjective`), the last-hit mark
   (`updateLastHitMark`), vision (`updateVision`), the beast (`beastAct`, `updateContesters`), ganks
-  (`updateGanks`), and the AI (`championPlan`) and player behaviour. No Phaser.
+  (`updateGanks`), and the AI (`championPlan`, `aiShop`, `aiWard`, `aiBuyBack`) and player
+  behaviour. No Phaser.
 
 Shared code it imports (outside the game folder): `shared/setupGame.ts` (`setupGame`),
 `shared/settings.ts` (`byDifficulty`, `settings`), `shared/scaling.ts` (`setupScaling`,
@@ -255,9 +299,10 @@ State model:
 
 - `GameState.phase` is `'pick'` (the scene's own state; `state` is null there), `'playing'`, `'won'`
   or `'lost'`. `winner` says which team won. `time` is game time in ms.
-- `units` holds every Nexus, inhibitor, tower, camp, the beast, champion and minion. Dead minions
-  are removed each tick; dead champions, camps and the beast respawn at `spawnX`/`spawnY`; towers,
-  inhibitors and Nexuses stay dead (drawn as rubble).
+- `units` holds every Nexus, inhibitor, tower, camp, the beast, champion, minion and ward. Dead
+  minions and wards are removed each tick; dead champions, camps and the beast respawn at
+  `spawnX`/`spawnY`; towers, inhibitors and Nexuses stay dead (drawn as rubble). A ward keeps
+  `expiresAt`.
 - `Unit.lane` is the lane of a tower, inhibitor, minion or lane champion; `power` a minion's
   super multiplier.
 - `projectiles` are bolts in flight (with an optional `stun`). `fx` holds the visuals raised since
@@ -283,7 +328,8 @@ State model:
   (queued `{ level, options }`, the first one shown).
 - The upgrades' state: `beast`, `beastBuff`, `beastKills`, `contesters`, `nextGank`, `nextJungle`,
   `notices`; per AI champion `retreatUntil`, `gankTarget`, `gankUntil`, `jungleTarget`,
-  `jungleUntil`; per champion `revealMs`, `aggroMs`, `activeCds`.
+  `jungleUntil`; per champion `revealMs`, `aggroMs`, `activeCds`, and round 2's `killStreak`,
+  `wards`, `recallMs`, `lastRecallAt` and `buybackReadyAt`.
 
 How it runs:
 
@@ -301,8 +347,8 @@ How it runs:
   the last 120 ms of game time shows `w0`..`w3` by distance walked, otherwise `idle`. Feet are drawn
   `FOOT[kind]` px below the hitbox centre; hitboxes (`radius`) are unchanged by the art.
 - Input: `onPointerDown` checks the zones newest first (shop rows and upgrade cards before the
-  bars, which block, and the objective card, which also blocks; the D and H buttons sit in the
-  bottom bar). Anything else is a world click: a
+  bars, which block, and the objective card, which also blocks; the D, H and V buttons sit in the
+  bottom bar, the Recall/Buy back button in the top bar). Anything else is a world click: a
   hostile unit under the cursor becomes the player's target, otherwise the point becomes a move.
 
 Randomness and timing: `Math.random` only draws the rosters and names, in `createGame` and the
@@ -330,7 +376,7 @@ generator (`seeded` in `lowpoly.ts`); `performance.now` only times the bake for 
   through JSON) and its `cameras.main.worldView` (not `scrollX/Y`, which differ once `renderScale` zooms the camera),
   to turn world positions into view pixels. `e2e/screens.spec.ts` at the root opens the game on
   five screens.
-- Inputs: it clicks the Warden's card at the pick screen (top left of the fifteen), presses B, clicks the Long Sword's card,
+- Inputs: it clicks the Warden's card at the pick screen (top left of the fifteen), presses B, clicks the Long Sword's card (T, V and X are never pressed),
   clicks the ground and the red tower, presses Q (down and up: abilities cast on the key's release), clicks the camp the second objective marks, clicks
   gold-outlined minions (`lastHitMark`) and clicks the first upgrade card. Clicks go to the canvas
   through the bounding box, never on the objective card (it blocks clicks).
@@ -345,12 +391,15 @@ generator (`seeded` in `lowpoly.ts`); `performance.now` only times the bake for 
 - It asserts the first objective and its target, the objective paid and the siege banner after
   the tower falls, the camp objective, at least one last hit and a streak, level 2's offer, and
   Wide Slam kept from the card.
+- Round 2 stays out of the first round: the AI buys only a Healing Flask at 0:00 (its wards and
+  recalls change nothing the test asserts), `GANK.firstAt` keeps bounty hunts past it, and the
+  player never recalls, wards or buys back.
 - On the way to the tower the Warden waits out of its reach until a blue minion reaches it (and
   steps back out when none is left there, until the tower is under 200 health), and hits back (with
   Slam) at a red champion that comes within 240 px out of the tower's reach. It Slams the camp too.
-- It saves `0-pick`, `1-shop`, `2-tower-down` and `3-upgrade` screenshots. `SWORD_ROW` is the Long
-  Sword's card in the four-column shop (`shopRow(0)`'s centre, so the Long Sword stays first in
-  `ITEMS`). The round ends near 40 s of game time, before the beast wakes (90 s) and the first gank
+- It saves `0-pick`, `1-shop`, `2-tower-down` and `3-upgrade` screenshots. `SWORD_ROW` is a point inside the Long
+  Sword's card in the four-column shop (`shopRow(0)`, so the Long Sword stays first in `ITEMS`;
+  the card is 74 px tall from y 86, so the click at y 146 lands in its lower half). The round ends near 40 s of game time, before the beast wakes (90 s) and the first gank
   (100 s), so neither touches it; keep `BEAST.firstAt` and `GANK.firstAt` past it, and keep the
   bushes off the middle lane's paving and the path to the camp by the red mid tower. Copy them into
   `docs/screenshots/` as `playthrough-1-pick` to `playthrough-4-upgrade` when the look changes.
@@ -359,7 +408,9 @@ generator (`seeded` in `lowpoly.ts`); `performance.now` only times the bake for 
   `jungle-brute.png`, `watchstone.png`, `watch-ai.png` (a `?watch` match at 8x with the log open), `skill-looks-1.png` to
   `skill-looks-3.png` (every ability's effect, five classes each), `aim-indicators.png`,
   `home-heal-and-dead-shop.png`, `loop-objective.png`, `loop-last-hit.png` and
-  `upgrade-*.png` are staged docs shots (a scratch Playwright script that places units through
+  `upgrade-*.png` and `round2-*.png` (the ward in the shop and planted by a bush, a recall, a
+  bounty, the buy back button and the watch log of the AI shopping) are staged docs shots (a scratch
+  Playwright script that places units through
   `window.game` and lets the match run), not test output. The `loop-*` and `upgrade-*` ones predate
   the square map.
 
@@ -394,10 +445,14 @@ generator (`seeded` in `lowpoly.ts`); `performance.now` only times the bake for 
   so the map stays fair, and check the playthrough still reaches the red mid tower at (1793, 1007).
 - **Tune the fog**: `SIGHT` in `data.ts` (per unit kind) and `FOG_ALPHA` in `GameScene.ts`.
 - **Add an item**: add it to `ITEMS` with its stats, and `from` for a recipe. `refreshStats` applies
-  the stat fields it knows (`dmg`, `armor`, `hp`, `speed`, `atk`, `cdr`). The shop holds twelve
-  cards (4x3); a thirteenth needs a taller `SHOP_PANEL` or a fifth column. A new active needs an
+  the stat fields it knows (`dmg`, `armor`, `hp`, `speed`, `atk`, `cdr`). The shop holds sixteen
+  cards (4x4, thirteen used); put a new one into an AI build in `AI_BUILDS` if the AI should buy
+  it. A new active needs an
   `ActiveId`, an `ACTIVES` row with a free key, a branch in `useActive` and an icon in the bottom
-  bar's active buttons.
+  bar's active buttons (`activeButton`, 30 px wide; a fourth needs the row widened).
+- **Tune round 2**: `WARD` (carry, range, life, hits), `WARD_SPOTS` and `WARD_AI` for the AI's
+  warding, `RECALL` (channel time and the AI's reasons to go home), `BUYBACK` (price and cooldown),
+  `BOUNTY` (streak, gold) and `AI_BUILDS` / `AI_BUILD_FOR` (what each role buys), all in `data.ts`.
 - **Tune the beast or the AI plans**: `BEAST`, `BEAST_BUFF`, `BEAST_CONTESTERS`, `GANK` and
   `RETREAT` in `data.ts`. Move the pit with `BEAST.x`/`y`; `map.ts` paints it there.
 - **Add a bush**: add it to `BUSHES` (blue's half; `both` adds the mirror); `map.ts` paints it and
@@ -424,6 +479,10 @@ generator (`seeded` in `lowpoly.ts`); `performance.now` only times the bake for 
   wins, kills and deaths per class; run one after changing a champion, a passive or an ability.
 - `kill` rewards only a champion killer: a tower or camp killed by a minion pays nothing. Minion
   gold for the player goes through the streak branch; AI champions always get the plain 19.
+- Anything new that hurts a unit over time (a zone, a splash) should skip `'ward'` units, or a ward
+  dies the instant it is touched, since every hit takes one of its three points.
+- `aiShop` runs every tick a champion is home or dead, so it must stay cheap: one `nextBuy` scan
+  and at most one purchase.
 - Red's damage goes through `dealt`, so a new damage source on red must use it or it ignores the
   difficulty. The siege banner's bonus is applied in `damage` for the player's hits only.
 - `refreshStats` heals by the increase in max health, so a level up or purchase tops the champion up
