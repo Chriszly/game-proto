@@ -36,8 +36,8 @@ export const COUNTDOWN = { x: 480, y: 450, w: 160, h: 6 };
 export const SKILL_BOOK = {
   button: { x: 520, y: 20, w: 150, h: 26 },
   panel: { w: 900, h: 500 },
-  cols: 3,
-  colW: 290,
+  cols: 4,
+  colW: 218,
   rowH: 54,
   /** The top of the first row. */
   top: 92,

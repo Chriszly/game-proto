@@ -38,8 +38,17 @@ seconds without a tap.
   `HEAL_MS` (first after `FIRST_HEAL_MS`, counted in `castMs`; a `heal` effect).
 - **Caltrops:** kills charge `caltrops.charge` up to `need` (`CALTROP_KILLS`, 6). When full, the
   button above Arrow Rain's is dragged onto the road (or C strews them before the thickest crowd);
-  `strew` adds a `Patch` for `CALTROP_MS`. Foes on a patch (not flyers) walk at 60% and take 80%
-  of an arrow's damage a second, ignoring armour.
+  `strew` adds a `Patch` for `CALTROP_MS`. Foes on a patch (not flyers) are slowed by
+  `caltropSlow` (40%) and take `caltropDps` (80%) of an arrow's damage a second, ignoring armour;
+  Barbed Caltrops raises both.
+- **Skills that hit harder:** `arrowHit` multiplies the arrow's own hit (not its burst) by
+  `chilledDamage` on a chilled foe (Shatter), by 2 on a foe below `finisher` of its health
+  (Finishing Shot) and by `bossDamage` on a boss (Giant Slayer, which also counts for Arrow Rain in
+  `landVolleys`). Cloudburst raises `rainDamage` and `rainRing`, which scales `RAIN_RING` in
+  `inRing` (its last argument), `crowdSpot` and the scene's `ring()`. Spiked Stakes (`stakes`)
+  hurts every foe with `attacking` set in `moveEnemies`, through armour. Bounty Hunter (`bounty`)
+  adds coins per kill in `removeDead`, and Drill Sergeant (`guardSpeed`) divides each guard's
+  cooldown in `guardsAct`.
 - **Coins and guards:** each kill adds `ENEMIES[kind].coins` (doubled on a Golden Road) to
   `coins`, kept for the run only. `guards` has one entry per `GUARD_SLOTS` slot (null when empty).
   Tapping a slot opens `HirePanel`, which calls `hire(state, slot, kind)` or `train(state, slot)`
@@ -127,7 +136,7 @@ seconds without a tap.
   and not tappable when the coins are short), and a dim backdrop that closes it. `slot`/`open`
   tell the scene to hold everything still.
 - `src/ui/SkillBook.ts`: the "Skill book found/total" button in the top bar and the book it opens,
-  a 3x7 grid with a slot for every id in `UPGRADE_IDS` order (the three fillers last), and the
+  a 4x7 grid with a slot for every id in `UPGRADE_IDS` order (the three fillers last), and the
   relics won along the bottom (a full set's relics in green, its bonus above them).
   A slot not yet in `found` is an empty placeholder (a "?" frame and blank lines); a found one
   shows icon, name, rank of max (`Nx` for a filler, how many times it was picked) and
@@ -283,9 +292,9 @@ the numbers of both are in `stats` (`state.ts`). The barricade base (`BASE_BARRI
 level curve (`xpToNext`), `streakBonus`, `STREAK_MS`, `RAIN_KILLS`, `rainNeed` and field geometry
 are also in `state.ts`. The difficulty multiplier on foe health is in `foeHp` (`waves.ts`).
 Missile speeds, `LEAP_RANGE`, effect durations (`EFFECT_MS`), `RAIN_FALL_MS`, `RAIN_RING`, the
-caltrops' patch, length, slow and damage, `SHIELD_BLOCK` and the shaman's healing numbers are in
-`sim.ts`. Arrow Rain's damage (`rainDamage`) and the barricade's repair after a wave (`repair`)
-are in `stats`.
+caltrops' patch and length, `SHIELD_BLOCK` and the shaman's healing numbers are in
+`sim.ts`. Arrow Rain's damage (`rainDamage`) and ring (`rainRing`), the caltrops' slow and damage
+(`caltropSlow`, `caltropDps`) and the barricade's repair after a wave (`repair`) are in `stats`.
 
 ### Screens
 
@@ -422,7 +431,7 @@ are in `stats`.
   double-unit x 365, `BARRICADE_TEX`). Moving the barricade art means moving `BARRICADE` and
   `BARRICADE_FRONT` too.
 - `armor` only reduces arrow, burst, Arrow Rain, fireball and spear hits (`hurt(..., true)`).
-  Burning, lightning, caltrops and arcane bolts ignore it. Damage after armour is at least 1.
+  Burning, lightning, caltrops, Spiked Stakes and arcane bolts ignore it. Damage after armour is at least 1.
 - A harpy's `y` is where it flies, above the road's far edge (from `FIELD.top - 50`), so arrows and
   Arrow Rain aim at it there; its shadow is only drawn. `loose` clamps to `FIELD.top`, and the ring
   still reaches harpies flying low enough.

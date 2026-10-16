@@ -209,10 +209,27 @@ export function stats(state: Pick<GameState, 'ranks' | 'relics'>) {
     /** Arrow Rain's kills to charge, as a share of the wave's (see `rainNeed` in sim.ts). */
     rainCharge: 0.8 ** relic('quiver'),
     /** Arrow Rain hits every foe in its ring for this many times an arrow's damage. */
-    rainDamage: 4 * (setComplete(relics, 'hunter') ? 1.5 : 1),
+    rainDamage: 4 * (setComplete(relics, 'hunter') ? 1.5 : 1) * (1 + 0.25 * r('cloudburst')),
     /** Share of the barricade mended after each wave. */
     repair: setComplete(relics, 'warden') ? 0.2 : 0.1,
     streakMs: STREAK_MS + 1_000 * relic('banner'),
+    /** Shatter: arrows deal this many times their damage to a chilled foe. */
+    chilledDamage: 1 + 0.2 * r('shatter'),
+    /** Finishing Shot: arrows deal double damage to a foe below this share of its health. */
+    finisher: 0.15 * r('finisher'),
+    /** Giant Slayer: arrows and Arrow Rain deal this many times their damage to a boss. */
+    bossDamage: 1 + 0.3 * r('slayer'),
+    /** Cloudburst: how many times wider (and taller) Arrow Rain's ring is. */
+    rainRing: 1 + 0.15 * r('cloudburst'),
+    /** Caltrops: the share foes on them are slowed by, and how many times an arrow's damage they take a second. */
+    caltropSlow: 0.4 + 0.1 * r('barbs'),
+    caltropDps: 0.8 * (1 + 0.5 * r('barbs')),
+    /** Spiked Stakes: damage a second to every foe hacking at the barricade, through armour. */
+    stakes: 6 * r('stakes'),
+    /** Bounty Hunter: coins every kill pays on top. */
+    bounty: r('bounty'),
+    /** Drill Sergeant: how many times faster hired guards attack. */
+    guardSpeed: 1 + 0.2 * r('drill'),
   };
 }
 

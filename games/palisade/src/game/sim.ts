@@ -48,9 +48,6 @@ export const RAIN_RING = { rx: 80, ry: 50 };
 export const CALTROP_PATCH = { rx: 66, ry: 34 };
 /** How long caltrops lie on the road. */
 export const CALTROP_MS = 8_000;
-/** Foes walking on caltrops are slowed by this share and take this many times an arrow's damage a second. */
-const CALTROP_SLOW = 0.4;
-const CALTROP_DPS = 0.8;
 /** A shield takes this share of an arrow's hit off. */
 export const SHIELD_BLOCK = 0.75;
 /** A shaman heals the foes within this range every HEAL_MS by a share of their health (less for a boss). */
@@ -111,7 +108,7 @@ function step(state: GameState, dt: number) {
     spawn(state, dt);
   }
   shoot(state, s, dt);
-  guardsAct(state, dt);
+  guardsAct(state, s, dt);
   moveMissiles(state, s, dt);
   moveEnemies(state, s, dt);
   if (state.phase === 'fighting' && state.toSpawn.length === 0 && state.enemies.length === 0) clearWave(state);
@@ -260,8 +257,12 @@ function moveMissiles(state: GameState, s: Stats, dt: number) {
 function arrowHit(state: GameState, s: Stats, foe: Enemy, x: number, y: number) {
   const crit = Math.random() < s.critChance;
   const damage = s.damage * (crit ? 2 : 1);
-  const shield = !!ENEMIES[foe.kind].shield;
-  hurt(foe, shield ? damage * (1 - SHIELD_BLOCK) : damage, true);
+  const type = ENEMIES[foe.kind];
+  const shield = !!type.shield;
+  // Shatter, Finishing Shot and Giant Slayer make the arrow itself hit harder, not its burst.
+  const mult =
+    (foe.slowMs > 0 ? s.chilledDamage : 1) * (foe.hp < foe.maxHp * s.finisher ? 2 : 1) * (type.boss ? s.bossDamage : 1);
+  hurt(foe, (shield ? damage * (1 - SHIELD_BLOCK) : damage) * mult, true);
   if (shield) {
     addEffect(state, { kind: 'block', x: foe.x - ENEMIES[foe.kind].radius, y: foe.y - 10 });
     if (s.burst) explode(state, x, y, s.burst.radius, damage * s.burst.share, 'blast', s);
@@ -326,8 +327,8 @@ function moveEnemies(state: GameState, s: Stats, dt: number) {
     }
     // Caltrops slow and prick every foe walking on them; flyers pass over.
     const pricked = !type.flying && onCaltrops(state, e);
-    if (pricked) e.hp -= (s.damage * CALTROP_DPS * dt) / 1000;
-    const pace = (e.slowMs > 0 ? 1 - e.slow : 1) * (pricked ? 1 - CALTROP_SLOW : 1) * roadSpeed;
+    if (pricked) e.hp -= (s.damage * s.caltropDps * dt) / 1000;
+    const pace = (e.slowMs > 0 ? 1 - e.slow : 1) * (pricked ? 1 - s.caltropSlow : 1) * roadSpeed;
     if (e.slowMs > 0) {
       e.slowMs = Math.max(0, e.slowMs - dt);
       if (e.slowMs === 0) e.slow = 0;
@@ -342,6 +343,8 @@ function moveEnemies(state: GameState, s: Stats, dt: number) {
     if (e.attacking) {
       e.x = stop;
       state.barricade.hp = Math.max(0, state.barricade.hp - (type.dps * pace * dt) / 1000);
+      // Spiked Stakes prick every foe hacking at the barricade.
+      e.hp -= (s.stakes * dt) / 1000;
     } else {
       e.x -= (type.speed * pace * dt) / 1000;
     }
@@ -380,7 +383,7 @@ function heal(state: GameState, shaman: Enemy, dt: number) {
  * The hired guards: a spearman stabs the foe at the barricade nearest his slot, a mage throws an
  * arcane bolt at the foe nearest the barricade.
  */
-function guardsAct(state: GameState, dt: number) {
+function guardsAct(state: GameState, s: Stats, dt: number) {
   state.guards.forEach((g, i) => {
     if (!g) return;
     g.cd = Math.max(0, g.cd - dt);
@@ -411,7 +414,7 @@ function guardsAct(state: GameState, dt: number) {
         damage,
       });
     }
-    g.cd = GUARDS[g.kind].ms;
+    g.cd = GUARDS[g.kind].ms / s.guardSpeed;
   });
   removeDead(state);
 }
@@ -443,7 +446,7 @@ function removeDead(state: GameState) {
     const s = stats(state);
     state.kills++;
     const road = roadEffects(state.road);
-    state.coins += ENEMIES[e.kind].coins * road.coins;
+    state.coins += (ENEMIES[e.kind].coins + s.bounty) * road.coins;
     // Each kill charges Arrow Rain and the caltrops and carries the streak on (or starts a new one).
     state.rain.charge = Math.min(state.rain.need, state.rain.charge + 1);
     state.caltrops.charge = Math.min(state.caltrops.need, state.caltrops.charge + 1);
@@ -495,15 +498,16 @@ export function strew(state: GameState, x: number, y: number) {
   return true;
 }
 
-/** Whether a foe at (x, y) with this radius stands in the Arrow Rain ring around (cx, cy). */
-export const inRing = (cx: number, cy: number, x: number, y: number, radius: number) =>
-  ((x - cx) / (RAIN_RING.rx + radius / 2)) ** 2 + ((y - cy) / (RAIN_RING.ry + radius / 2)) ** 2 <= 1;
+/** Whether a foe at (x, y) with this radius stands in the Arrow Rain ring around (cx, cy), `k` times as wide (Cloudburst). */
+export const inRing = (cx: number, cy: number, x: number, y: number, radius: number, k = 1) =>
+  ((x - cx) / (RAIN_RING.rx * k + radius / 2)) ** 2 + ((y - cy) / (RAIN_RING.ry * k + radius / 2)) ** 2 <= 1;
 
 /** Where Arrow Rain hits the most foes in view: on the one with the most others in its ring. */
 export function crowdSpot(state: GameState) {
   const foes = targets(state);
   if (foes.length === 0) return null;
-  const crowd = (e: Enemy) => foes.filter((o) => inRing(e.x, e.y, o.x, o.y, ENEMIES[o.kind].radius)).length;
+  const k = stats(state).rainRing;
+  const crowd = (e: Enemy) => foes.filter((o) => inRing(e.x, e.y, o.x, o.y, ENEMIES[o.kind].radius, k)).length;
   const best = foes.reduce((a, e) => (crowd(e) > crowd(a) ? e : a), foes[0]);
   return { x: best.x, y: best.y };
 }
@@ -517,7 +521,7 @@ function landVolleys(state: GameState, s: Stats, dt: number) {
     if (v.ms > 0) continue;
     addEffect(state, { kind: 'rain', x: v.x, y: v.y });
     for (const e of state.enemies) {
-      if (inRing(v.x, v.y, e.x, e.y, ENEMIES[e.kind].radius)) hurt(e, s.damage * s.rainDamage, true);
+      if (inRing(v.x, v.y, e.x, e.y, ENEMIES[e.kind].radius, s.rainRing)) hurt(e, s.damage * s.rainDamage * (ENEMIES[e.kind].boss ? s.bossDamage : 1), true);
     }
   }
   state.rain.volleys = volleys.filter((v) => v.ms > 0);

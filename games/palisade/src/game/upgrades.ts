@@ -12,6 +12,7 @@ export type UpgradeId =
   | 'wildfire'
   | 'frost'
   | 'deepFreeze'
+  | 'shatter'
   | 'blast'
   | 'bigBlast'
   | 'fireball'
@@ -20,6 +21,13 @@ export type UpgradeId =
   | 'forked'
   | 'timber'
   | 'lore'
+  | 'finisher'
+  | 'slayer'
+  | 'cloudburst'
+  | 'barbs'
+  | 'stakes'
+  | 'bounty'
+  | 'drill'
   | 'mend'
   | 'purse'
   | 'wind';
@@ -37,6 +45,14 @@ export type Icon =
   | 'storm'
   | 'barricade'
   | 'book'
+  | 'shatter'
+  | 'finisher'
+  | 'slayer'
+  | 'cloudburst'
+  | 'barbs'
+  | 'stakes'
+  | 'bounty'
+  | 'drill'
   | 'mend'
   | 'purse'
   | 'wind';
@@ -63,6 +79,7 @@ export const UPGRADES: Record<UpgradeId, Upgrade> = {
   wildfire: { name: 'Wildfire', text: 'Burning deals 50% more damage', maxRank: 3, icon: 'fire', requires: 'fire' },
   frost: { name: 'Frost Arrows', text: 'Arrows chill foes, slowing them by 35%', maxRank: 1, icon: 'frost' },
   deepFreeze: { name: 'Deep Freeze', text: 'Chill slows 10% more and lasts longer', maxRank: 3, icon: 'frost', requires: 'frost' },
+  shatter: { name: 'Shatter', text: 'Arrows deal 20% more damage to chilled foes', maxRank: 3, icon: 'shatter', requires: 'frost' },
   blast: { name: 'Blasting Powder', text: 'Arrows burst on impact, hurting foes nearby', maxRank: 1, icon: 'blast' },
   bigBlast: { name: 'Black Powder', text: 'Bursts are wider and hit harder', maxRank: 3, icon: 'blast', requires: 'blast' },
   fireball: { name: 'Tome of Fire', text: 'Hurl a fireball every 3s that explodes', maxRank: 1, icon: 'fireball' },
@@ -71,6 +88,13 @@ export const UPGRADES: Record<UpgradeId, Upgrade> = {
   forked: { name: 'Forked Lightning', text: 'Lightning leaps to one more foe and hits 25% harder', maxRank: 3, icon: 'storm', requires: 'storm' },
   timber: { name: 'Stout Timber', text: 'The barricade gets 25% more health and is repaired', maxRank: 5, icon: 'barricade' },
   lore: { name: 'Battle Lore', text: 'Gain 20% more experience', maxRank: 3, icon: 'book' },
+  finisher: { name: 'Finishing Shot', text: 'Arrows hit foes below 15% more health twice as hard', maxRank: 3, icon: 'finisher' },
+  slayer: { name: 'Giant Slayer', text: 'Arrows and Arrow Rain deal 30% more damage to bosses', maxRank: 3, icon: 'slayer' },
+  cloudburst: { name: 'Cloudburst', text: 'Arrow Rain hits 25% harder over a 15% wider ring', maxRank: 3, icon: 'cloudburst' },
+  barbs: { name: 'Barbed Caltrops', text: 'Caltrops prick 50% harder and slow foes 10% more', maxRank: 3, icon: 'barbs' },
+  stakes: { name: 'Spiked Stakes', text: 'Foes hacking at the barricade take 6 damage a second', maxRank: 3, icon: 'stakes' },
+  bounty: { name: 'Bounty Hunter', text: 'Every kill pays 1 more coin', maxRank: 3, icon: 'bounty' },
+  drill: { name: 'Drill Sergeant', text: 'Hired guards attack 20% faster', maxRank: 3, icon: 'drill' },
   mend: { name: 'Mend the Barricade', text: 'Repair half of the barricade', maxRank: Infinity, icon: 'mend', filler: true },
   purse: { name: 'War Chest', text: 'Gain 25 coins to hire guards with', maxRank: Infinity, icon: 'purse', filler: true },
   wind: { name: 'Second Wind', text: 'Charge Arrow Rain and Caltrops at once', maxRank: Infinity, icon: 'wind', filler: true },
