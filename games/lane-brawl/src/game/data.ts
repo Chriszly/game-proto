@@ -119,7 +119,7 @@ export const RESPAWN_PER_LEVEL_MS = 1000;
 // Fog of war: each team sees only what lies within sight of one of its own units. Structures are
 // always seen; champions, minions and the jungle are hidden anywhere else.
 
-export const SIGHT = { champion: 360, minion: 240, tower: 440, inhibitor: 260, nexus: 520, watchstone: 560 } as const;
+export const SIGHT = { champion: 360, minion: 240, tower: 440, inhibitor: 260, nexus: 520, watchstone: 560, ward: 420 } as const;
 
 /**
  * Watchstones: standing stones on the river. A team whose champions stand by one with no enemy
@@ -611,11 +611,14 @@ export interface ItemDef {
   from?: string[];
   /** An active the item adds, cast with its key (see `ACTIVES`). */
   active?: ActiveId;
+  /** A consumable: buying it adds one to the champion's wards (`WARD.carry` at most) and takes no bag slot. */
+  ward?: boolean;
 }
 
 /**
  * Bought at the shop by a champion standing near its Nexus. Each item can be owned once. The first
- * seven are parts (cheap, and the flask), the last five build from them.
+ * seven are parts (cheap, and the flask), the next five build from them, and the Vision Ward is a
+ * consumable (see `WARD`).
  */
 export const ITEMS: ItemDef[] = [
   { id: 'sword', name: 'Long Sword', cost: 350, dmg: 12 },
@@ -630,15 +633,16 @@ export const ITEMS: ItemDef[] = [
   { id: 'phase', name: 'Phase Boots', cost: 600, speed: 40, active: 'dash', from: ['boots'] },
   { id: 'cloak', name: "Sage's Cloak", cost: 900, cdr: 20, hp: 120, from: ['sapphire', 'ruby'] },
   { id: 'belt', name: "Giant's Belt", cost: 700, hp: 320, from: ['ruby'] },
+  { id: 'ward', name: 'Vision Ward', cost: 75, ward: true },
 ];
 /** A champion carries at most this many items. */
 export const MAX_ITEMS = 6;
 
-export type ActiveId = 'dash' | 'flask';
+export type ActiveId = 'dash' | 'flask' | 'ward';
 export interface ActiveDef {
   id: ActiveId;
   /** The key that casts it, and the button's label. */
-  key: 'D' | 'H';
+  key: 'D' | 'H' | 'V';
   name: string;
   cd: number;
   /** dash: how far it goes. */
@@ -650,7 +654,64 @@ export interface ActiveDef {
 export const ACTIVES: ActiveDef[] = [
   { id: 'dash', key: 'D', name: 'Dash', cd: 18_000, range: 220 },
   { id: 'flask', key: 'H', name: 'Flask', cd: 40_000, heal: 220 },
+  { id: 'ward', key: 'V', name: 'Ward', cd: 0, range: 600 },
 ];
+
+/**
+ * Vision wards (LB6): a champion carries up to `carry` of them and plants one within `range` of
+ * itself; it gives its team `SIGHT.ward` of sight there, bushes included, for `ms`, and dies to
+ * `hits` hits of any kind. Its killer takes `gold`. The AI plants its wards at `WARD_SPOTS`.
+ */
+export const WARD = { carry: 2, range: 600, ms: 90_000, hits: 3, gold: 20, radius: 10 };
+/** Where the AI likes its wards: the beast's pit and the three river islands; a team wards a spot once at a time. */
+export const WARD_SPOTS: Vec[] = [{ x: 1950, y: 1950 }, { x: 850, y: 850 }, { x: 1200, y: 1200 }, { x: 1600, y: 1600 }];
+/** An AI champion's ward goes at a spot this close to it that has no live ward of its team within `taken` px. */
+export const WARD_AI = { reach: 600, taken: 320 };
+
+/**
+ * Recall (LB7): a champion channels `ms` standing still to go home to its Nexus. Taking damage,
+ * moving, attacking or casting cancels it. An AI champion recalls when it is low with no enemy
+ * about, or when it carries `rich` gold and something to spend it on.
+ */
+export const RECALL = { ms: 4000, aiLow: 0.35, aiLook: 700, rich: 900, aiEvery: 60_000 };
+
+/**
+ * Buy back (LB10): a dead champion pays `base` plus `perLevel` per level to respawn at once, then
+ * waits `cd` before it may again. An AI champion buys back when an enemy champion stands within
+ * `aiThreat` of its Nexus.
+ */
+export const BUYBACK = { base: 100, perLevel: 50, cd: 150_000, aiThreat: 800 };
+
+/**
+ * Kill streak bounties (LB8): a champion that has slain `streak` champions without dying carries a
+ * bounty of `base` gold, `step` more per further kill up to `max`, paid to whoever slays it on top
+ * of the kill gold. The AI's ganks go after the biggest bounty it can see, and twice as often.
+ */
+export const BOUNTY = { streak: 3, base: 100, step: 50, max: 300 };
+/** The bounty a champion carries now, or 0. */
+export function bountyOf(killStreak: number): number {
+  return killStreak >= BOUNTY.streak ? Math.min(BOUNTY.max, BOUNTY.base + (killStreak - BOUNTY.streak) * BOUNTY.step) : 0;
+}
+
+/**
+ * AI shopping (LB9): what an AI champion buys, in order, by its class's role, whenever it is home or
+ * dead and can pay. A part is skipped once the item it builds into is owned; each build fills the
+ * six slots. Roles not listed shop like a fighter.
+ */
+export const AI_BUILDS: Record<string, string[]> = {
+  tank: ['flask', 'cloth', 'ruby', 'thorns', 'boots', 'belt', 'sword', 'phase', 'dagger', 'blade', 'sapphire'],
+  fighter: ['flask', 'sword', 'dagger', 'blade', 'boots', 'phase', 'ruby', 'belt', 'cloth', 'thorns', 'sapphire'],
+  caster: ['flask', 'sapphire', 'ruby', 'cloak', 'boots', 'sword', 'belt', 'phase', 'dagger', 'blade', 'cloth'],
+};
+export const AI_BUILD_FOR: Record<string, keyof typeof AI_BUILDS> = {
+  Tank: 'tank',
+  Bruiser: 'tank',
+  Brawler: 'tank',
+  Catcher: 'tank',
+  Burst: 'caster',
+  Support: 'caster',
+  Controller: 'caster',
+};
 
 /** How close a champion must stand to its Nexus to shop. */
 export const SHOP_RANGE = 700;

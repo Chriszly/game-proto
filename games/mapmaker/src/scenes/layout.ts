@@ -8,12 +8,16 @@ export const PANEL = { x: 652, y: 24, w: 284, h: 492 };
 /** The panel's bottom row: Camp on the left, Return to port on the right. */
 export const CAMP_BUTTON = { x: PANEL.x + 18 + 41, y: 476, w: 82, h: 40 };
 export const RETURN_BUTTON = { x: PANEL.x + PANEL.w - 18 - 80, y: 476, w: 160, h: 40 };
-/** The chart and harbor overlay, centred over the map. */
-export const OVERLAY = { x: 324, y: 284, w: 560, h: 420 };
-/** The overlay's main button: Sell chart, then Set sail. */
+/** The chart, Royal Atlas and harbor overlay, centred over the map. */
+export const OVERLAY = { x: 324, y: 284, w: 600, h: 470 };
+/** The overlay's main button: Sell chart, Keep charting, then Set sail. */
 export const OVERLAY_BUTTON = { x: OVERLAY.x, y: OVERLAY.y + OVERLAY.h / 2 - 40 };
-/** The harbor's upgrade rows: the first row's y, the gap between rows, and the Buy buttons' x. */
-export const SHOP = { y: 184, gap: 56, buyX: OVERLAY.x + 196 };
+/** The harbor's upgrade rows (its left column): the first row's y, the gap between rows, and the Buy buttons' x. */
+export const SHOP = { y: 158, gap: 46, buyX: OVERLAY.x - OVERLAY.w / 2 + 34 + 36 + 230 + 48 };
+/** The harbor's hand cards (its right column): the first card's centre y, the gap, and their size. */
+export const HANDS_COLUMN = { x: OVERLAY.x + OVERLAY.w / 2 - 34 - 150, y: 158, gap: 46, w: 150, h: 40 };
+/** The commission board under the upgrades: the first row's centre y and the gap between rows. */
+export const BOARD = { y: 350, gap: 24, h: 22 };
 export const BUTTON = { w: 200, h: 40 };
 export const SMALL_BUTTON = { w: 96, h: 34 };
 

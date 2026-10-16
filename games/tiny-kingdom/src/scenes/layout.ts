@@ -19,20 +19,16 @@ export const GOAL_BAR = { x: 704, y: 120, w: 220, h: 16 };
 export const GIFT_ROW = { x: 704, y: 142, h: 22 };
 /** The season strip under the gift row: the round's season and its rule. */
 export const SEASON = { x: 704, y: 170, w: 220, h: 22 };
-/**
- * The tile buttons, by their centres, in the order they are shown: three big ones, four once the
- * windmill is won, then two columns of slim ones (with the picked one's rule under them) for five
- * to seven.
- */
-export const TILE_BUTTONS = {
-  x: 814,
-  w: 228,
-  three: { ys: [238, 324, 410], h: 80 },
-  four: { ys: [230, 296, 362, 428], h: 60 },
-  grid: { xs: [755, 873], w: 110, h: 50, ys: [226, 280, 334, 388], ruleY: 418 },
-};
-/** The undo button under the tile buttons, by its centre. */
+/** The tile buttons, by their centres: one per kind in the hand (up to HAND), in BUILDINGS order. */
+export const TILE_BUTTONS = { x: 814, w: 228, ys: [228, 290, 352], h: 60 };
+/** The pouch line under the tile buttons: what is left to draw, by its top left. */
+export const POUCH_LINE = { x: 704, y: 386, w: 220 };
+/** The omen strip under the pouch line: what the next round brings, from round 3 on. */
+export const OMEN = { x: 704, y: 426, w: 220, h: 22 };
+/** The undo button under the omen strip, by its centre. */
 export const UNDO_BUTTON = { x: 814, y: 474, w: 228, h: 28 };
+/** The market trade card over the board, by its centre: a row of kinds to give two of, a row of gift buildings to take one of, and its two buttons. */
+export const TRADE_CARD = { x: 346, y: 270, w: 600, h: 320, chip: { w: 68, h: 58, gap: 4 }, giveY: 130, takeY: 218, buttonY: 290 };
 /** The gift choice card over the board, by its centre, and its two buttons. */
 export const GIFT_CARD = { x: 346, y: 270, w: 440, h: 220, button: { w: 190, h: 96, dx: 100, dy: 30 } };
 export const BUTTON = { w: 200, h: 40 };
