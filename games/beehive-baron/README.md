@@ -6,7 +6,10 @@ side earn a comb bonus on every jar, goals of jars sold unlock new meadows on th
 bees keep gathering a little nectar while you are away. Each open meadow gives its own honey, a
 market shifts which one sells best, village orders pay a premium, wasps raid the capped cells, and
 brood cells hatch new bees. The coins (and the wax from each harvest) buy more cells and upgrades,
-until the Waggle Dance sends the bees out on their own.
+until the Waggle Dance sends the bees out on their own. The year turns through four seasons, and in
+winter the bees stay home and eat honey; casks age jars into mead, a farmer borrows idle bees for
+the orchard, a crowded hive swarms into a second one, and the county honey fair is the ending: gold
+there makes you the Beehive Baron.
 
 ![A hive with every meadow open: clover, lavender and heather cells, two brood cells, the market board under the hive, a village order on the board and wax in the HUD](docs/screenshots/upgrades-overview.png)
 
@@ -21,9 +24,10 @@ until the Waggle Dance sends the bees out on their own.
    and get a piece of wax, and the cell starts over.
 4. **Sell**: tap **Sell** to sell every jar on the shelf. A clover jar is worth 15 coins, plus the
    comb bonus, plus 5 once the Sunflower Ridge is open; other kinds and the market change that.
-5. **The hive is kept**: the comb, coins, jars, wax, bees, upgrades, unlocked meadows and where
-   the bees forage are saved in the browser. Bees out foraging come home when the page reloads,
-   and wasps, the market's timer and village orders start afresh. **New hive**, in the bottom
+5. **The hive is kept**: the comb, coins, jars, wax, bees, upgrades, unlocked meadows, where
+   the bees forage, the season, the casks, the hives and the fair entries are saved in the
+   browser. Bees out foraging or lent come home when the page reloads, and wasps, the market's
+   timer, village orders, contracts and a gathering swarm start afresh. **New hive**, in the bottom
    right corner, starts over.
 
 ![Foragers flying to the flowers](docs/screenshots/playthrough-1-foraging.png)
@@ -116,6 +120,72 @@ when tapped. Cells it fills start ripening as you return.
 
 ![Back after twenty minutes: the bees filled the comb up to the 20-drop cap](docs/screenshots/away.png)
 
+### Seasons and winter
+
+The year turns through spring, summer, autumn and winter, 2 minutes each; the HUD says which it is
+and how long it has left, and the hills change colour with it. Each season changes the rules:
+
+| Season | What happens |
+| --- | --- |
+| Spring | The bees fly as usual. A new hive starts in early spring. |
+| Summer | Every forager brings 1 more drop a trip. |
+| Autumn | The Lavender Field shuts: no lavender nectar, and the market and orders skip it. Foragers sent there go back to clover. |
+| Winter | The bees stay home: no trips, no idle foraging, no away nectar, no orchard contracts. Every 20 seconds they eat a jar from the shelf (the cheapest kind first); with no jar they eat a capped cell's honey, and with no honey at all a bee starves (the last bee never). |
+
+So selling everything before winter is a gamble: keep jars or capped cells back to feed the hive,
+or put honey in casks, which the bees never touch. Every spring the HUD counts another year
+survived.
+
+![Winter: the bees at home, the hills under snow, and the Send button shut](docs/screenshots/seasons-winter.png)
+
+![Autumn: the Lavender Field shut on the market](docs/screenshots/seasons-autumn.png)
+
+### Mead casks
+
+**Mead cask** in the shop takes 3 jars of one kind (the kind you have most of) and ages them for
+90 seconds into a cask of mead on the right end of the shelf (a ring shows it aging, the cask
+glows when it is ready). Mead sells with the jars on **Sell**, for a multiple of what the three
+jars would have sold for the moment they went in: clover x1.5, lavender x1.6, heather x1.8. The
+cellar holds 3 casks. Cash now, or more later; and mead keeps through winter.
+
+![Three jars of heather aging into mead next to a cask that is ready](docs/screenshots/mead-casks.png)
+
+### Orchard contracts
+
+From 5 jars sold, a farmer pins a contract to the board now and then: "Orchard: lend 4 bees,
++100c". Tap it, with that many bees at home, and they go to the orchard for 90 seconds, paid up
+front at 25 coins a bee; they bring no nectar meanwhile and the HUD counts them as lent. The offer
+stands for 40 seconds, the farmer never asks for your last bee, and no contracts come in winter.
+Idle bees get a second job.
+
+![An orchard contract on the board](docs/screenshots/orchard-contract.png)
+
+### Swarming into a second hive
+
+A hive with every spot built and 12 bees is crowded, and a swarm gathers: a chip under the hive
+counts down 45 seconds, after which half the bees leave. Tap the chip before then to catch the
+swarm into a **second hive** for 180 coins. It has its own comb of 20 spots (its first cell free,
+then the same rising prices), its own comb bonus (added to the plaque), and the hive can now hold
+24 bees. Tabs on the roof switch between the two combs; nectar fills both, a wasp brings its comb
+to the front, and the brood and build previews work on the comb shown.
+
+![A swarm gathering under a full hive](docs/screenshots/swarm.png)
+
+![The second hive's empty comb, with the roof tabs](docs/screenshots/second-hive.png)
+
+### The county honey fair
+
+Once the Heather Moor is open, the goal card becomes the fair's. Tap it, then a capped cell, to
+enter that cell's honey: it scores one point for every built cell it touches (up to 6), the cell
+gives its wax and starts over, and a higher entry replaces a lower one of the same kind. With one
+jar of each kind entered the honey is judged, and **14 points** in all win gold, which makes you
+the Beehive Baron, with an end card. Short of gold, enter better-joined honey. You can keep
+playing afterwards.
+
+![Entering honey: each capped cell shows the points it would score](docs/screenshots/fair-entering.png)
+
+![Gold at the fair: the Beehive Baron end card](docs/screenshots/fair-baron.png)
+
 ### What the coins buy
 
 | Buy | Ranks | What it does |
@@ -126,6 +196,8 @@ when tapped. Cells it fills start ripening as you return.
 | Clover Patch | 3 (60, 180, 480 coins) | Trips take 20% less time per rank |
 | Waggle Dance | 1 (250 coins) | Bees at home fly out by themselves whenever the comb has room |
 | Guard Bees | 1 (150 coins) | Every wasp is driven off as it lands, before it steals anything |
+| Mead cask | up to 3 at a time, 3 jars of one kind each | Mead worth 1.5 to 1.8 times the jars, 90 seconds later |
+| Catch the swarm | once (180 coins), when the hive is crowded | A second hive with its own comb and room for 12 more bees |
 
 The difficulty, set on the hub page's Settings, changes one thing: foraging trips take 25% less
 time on Easy and 30% more on Hard.
@@ -157,9 +229,11 @@ All paths are inside `games/beehive-baron/`.
 
 - `src/game/`: the rules in plain TypeScript with no Phaser dependency. `state.ts` holds the hive,
   its numbers, prices and the comb bonus, `sim.ts` builds, forages, ripens, hatches, harvests,
-  sells, buys, runs the market, wasp raids and village orders and adds the nectar gathered while
-  away, `honey.ts` is the kinds of honey, `meadows.ts` the chain of goals, `upgrades.ts` the
-  upgrade table, `wasps.ts` and `orders.ts` their numbers, and `save.ts` keeps the hive.
+  sells, buys, turns the seasons, runs the market, wasp raids, village orders, orchard contracts,
+  casks, swarms and the fair and adds the nectar gathered while away, `honey.ts` is the kinds of
+  honey, `meadows.ts` the chain of goals, `upgrades.ts` the upgrade table, `wasps.ts`, `orders.ts`,
+  `seasons.ts`, `mead.ts`, `swarm.ts`, `contracts.ts` and `fair.ts` their numbers, and `save.ts`
+  keeps the hive.
 - `src/scenes/`: `BootScene` bakes textures, `GameScene` draws the hive and turns taps into rules
   calls, `layout.ts` says where things are drawn.
 - `src/art/`: the cut-paper art, painted on canvases at startup: `paper.ts` cuts card with

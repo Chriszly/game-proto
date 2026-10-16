@@ -1,11 +1,15 @@
 import { KINDS, type Kind } from './honey';
-import { freshProgress, type Progress } from './state';
+import { CASK_MS, MAX_CASKS, type Cask } from './mead';
 import { MEADOWS } from './meadows';
+import { YEAR_MS } from './seasons';
+import { freshProgress, type Progress } from './state';
+import { MAX_HIVES } from './swarm';
 import { UPGRADES, UPGRADE_IDS } from './upgrades';
 
 // The comb, the coins, the jars, the wax, the bees, the upgrades, the meadows unlocked, where the
-// bees forage and when the hive was last seen are saved; bees out foraging come home on load, and
-// wasps, the market and village orders start afresh.
+// bees forage, the season and years, the casks, the hives, the fair entries and when the hive was
+// last seen are saved; bees out foraging or lent come home on load, and wasps, the market, village
+// orders, orchard contracts and a swarm start afresh.
 const KEY = 'beehive-baron-progress';
 
 export function loadProgress(): Progress {
@@ -31,6 +35,14 @@ export function loadProgress(): Progress {
       ) as Progress['ranks'],
       meadows: Math.min(MEADOWS.length, num(saved.meadows, fresh.meadows)),
       forage: KINDS.includes(saved.forage as Kind) ? (saved.forage as Kind) : fresh.forage,
+      seasonMs: Math.min(YEAR_MS - 1, num(saved.seasonMs, fresh.seasonMs)),
+      years: num(saved.years, fresh.years),
+      casks: (Array.isArray(saved.casks) ? saved.casks : []).flatMap((c: Partial<Cask>) =>
+        KINDS.includes(c?.kind as Kind) ? [{ kind: c.kind as Kind, agingMs: Math.min(CASK_MS, num(c.agingMs, 0)), value: num(c.value, 0) }] : [],
+      ).slice(0, MAX_CASKS),
+      hives: Math.max(1, Math.min(MAX_HIVES, num(saved.hives, fresh.hives))),
+      fair: Object.fromEntries(KINDS.map((k) => [k, typeof saved.fair?.[k] === 'number' ? num(saved.fair[k], 0) : null])) as Progress['fair'],
+      baron: saved.baron === true,
       seen: num(saved.seen, fresh.seen),
     };
   } catch {
