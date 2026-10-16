@@ -21,7 +21,7 @@ jobs:
     outputs:
       games: ${{ steps.pick.outputs.games }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - id: pick
@@ -54,8 +54,8 @@ jobs:
       matrix:
         game: ${{ fromJSON(needs.changes.outputs.games) }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -68,7 +68,7 @@ jobs:
           PLAYTHROUGH_SPEED: 4
       # Video and milestone screenshots of the run, pass or fail; open the report's index.html to browse them.
       - if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playthrough-${{ matrix.game }}
           path: |
