@@ -9,7 +9,7 @@ import { GUARDS, type GuardKind } from '../game/guards';
 import { RELICS, SETS, setComplete } from '../game/relics';
 import { ROADS, type RoadId } from '../game/roads';
 import { clearProgress, loadFound, loadProgress, loadSpeed, saveFound, saveProgress, saveSpeed } from '../game/save';
-import { CALTROP_MS, CALTROP_PATCH, RAIN_FALL_MS, RAIN_RING, crowdSpot, fightAgain, hire, loose, offer, pick, pickRoad, strew, tick, train } from '../game/sim';
+import { CALTROP_PATCH, RAIN_FALL_MS, RAIN_RING, crowdSpot, fightAgain, hire, loose, offer, pick, pickRoad, strew, tick, train } from '../game/sim';
 import {
   BARRICADE_FRONT,
   FIELD,
@@ -927,11 +927,11 @@ export class GameScene extends Phaser.Scene {
         if (f > 0) g.lineStyle(3, GOLD.light, 1).lineBetween(a.x, a.y, a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f);
       }
     }
-    // Each patch: a faint ring and caltrops scattered over it, fading out as it ends.
+    // Each patch: a faint ring and caltrops scattered over it, fading in as it lands and dimmed on its last wave.
     const seen = new Set<number>();
     for (const p of c.patches) {
       seen.add(p.id);
-      const fade = Math.min(1, p.ms / 600, (CALTROP_MS - p.ms) / 150 + 0.2);
+      const fade = Math.min(1, p.ms / 150 + 0.2) * (p.waves > 1 ? 1 : 0.55);
       this.fx.fillStyle(0x3a2a1a, 0.18 * fade).fillEllipse(p.x, p.y, CALTROP_PATCH.rx * 2, CALTROP_PATCH.ry * 2);
       let pieces = this.caltropPieces.get(p.id);
       if (!pieces) {

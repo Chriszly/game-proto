@@ -97,12 +97,16 @@ export interface Volley {
   ms: number;
 }
 
-/** A patch of caltrops on the road, slowing and hurting foes that walk on it until `ms` runs out. */
+/**
+ * A patch of caltrops on the road, slowing and hurting foes that walk on it; `ms` is how long it
+ * has lain there and `waves` how many more waves it lasts (counting the one under way).
+ */
 export interface Patch {
   id: number;
   x: number;
   y: number;
   ms: number;
+  waves: number;
 }
 
 /** A hired guard on one of the barricade's slots: its kind, level (1 to 3) and time to its next attack. */

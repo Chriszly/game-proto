@@ -46,8 +46,10 @@ export const RAIN_FALL_MS = 450;
 export const RAIN_RING = { rx: 80, ry: 50 };
 /** The patch caltrops are strewn over: half its width and height. */
 export const CALTROP_PATCH = { rx: 66, ry: 34 };
-/** How long caltrops lie on the road. */
-export const CALTROP_MS = 8_000;
+/** Caltrops stay on the road for this many waves, the one they were strewn in included. */
+export const CALTROP_WAVES = 5;
+/** Strewing more patches than this lifts the oldest. */
+export const MAX_PATCHES = 3;
 /** A shield takes this share of an arrow's hit off. */
 export const SHIELD_BLOCK = 0.75;
 /** A shaman heals the foes within this range every HEAL_MS by a share of their health (less for a boss). */
@@ -90,8 +92,7 @@ function step(state: GameState, dt: number) {
   state.rain.need = rainNeed(state.wave, s);
   state.rain.charge = Math.min(state.rain.charge, state.rain.need);
   landVolleys(state, s, dt);
-  for (const p of state.caltrops.patches) p.ms -= dt;
-  state.caltrops.patches = state.caltrops.patches.filter((p) => p.ms > 0);
+  for (const p of state.caltrops.patches) p.ms += dt;
   if (state.phase === 'break') {
     if (state.roadChoices) {
       // After a boss the break waits on the choice of the next road, taking one at random in time.
@@ -493,8 +494,10 @@ export function strew(state: GameState, x: number, y: number) {
     id: state.nextId++,
     x: Math.round(Math.min(VIEW_RIGHT - 10, Math.max(BARRICADE_FRONT + 30, x))),
     y: Math.round(Math.min(FIELD.bottom, Math.max(FIELD.top, y))),
-    ms: CALTROP_MS,
+    ms: 0,
+    waves: CALTROP_WAVES,
   });
+  if (c.patches.length > MAX_PATCHES) c.patches.shift();
   return true;
 }
 
@@ -587,6 +590,9 @@ function clearWave(state: GameState) {
     state.roadChoices = [0, 1].map(() => roads.splice(Math.floor(Math.random() * roads.length), 1)[0]);
     state.roadMs = AUTO_PICK_MS;
   }
+  // Caltrops wear off once they have lain for CALTROP_WAVES waves.
+  for (const p of state.caltrops.patches) p.waves--;
+  state.caltrops.patches = state.caltrops.patches.filter((p) => p.waves > 0);
   state.wave++;
   state.phase = 'break';
   state.breakMs = BREAK_MS;

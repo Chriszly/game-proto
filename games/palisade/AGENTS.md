@@ -38,7 +38,9 @@ seconds without a tap.
   `HEAL_MS` (first after `FIRST_HEAL_MS`, counted in `castMs`; a `heal` effect).
 - **Caltrops:** kills charge `caltrops.charge` up to `need` (`CALTROP_KILLS`, 6). When full, the
   button above Arrow Rain's is dragged onto the road (or C strews them before the thickest crowd);
-  `strew` adds a `Patch` for `CALTROP_MS`. Foes on a patch (not flyers) are slowed by
+  `strew` adds a `Patch` with `waves` set to `CALTROP_WAVES` (5); `clearWave` counts it down and
+  lifts it at 0, and the scene dims it on its last wave (its `ms` counts up, for the fade-in). A
+  strew past `MAX_PATCHES` (3) lifts the oldest. A new run starts with none. Foes on a patch (not flyers) are slowed by
   `caltropSlow` (40%) and take `caltropDps` (80%) of an arrow's damage a second, ignoring armour;
   Barbed Caltrops raises both.
 - **Skills that hit harder:** `arrowHit` multiplies the arrow's own hit (not its burst) by
@@ -101,7 +103,7 @@ seconds without a tap.
   - `sim.ts`: `tick` (the battle and the auto-pick countdown), `pick`, `offer`, `rollChoices`,
     `pickRoad`, `fightAgain`, `loose` (Arrow Rain), `strew` (caltrops), `hire`, `train`,
     `crowdSpot`, `inRing`, `AUTO_PICK_MS`, `RAIN_FALL_MS`, `RAIN_RING`, `CALTROP_PATCH`,
-    `CALTROP_MS`, `SHIELD_BLOCK`, and the private steps: spawning, shooting, guards, missiles,
+    `CALTROP_WAVES`, `MAX_PATCHES`, `SHIELD_BLOCK`, and the private steps: spawning, shooting, guards, missiles,
     volleys, damage, foe movement (caltrops, healing), kills (coins, streak, charges, experience),
     wave clear with the relic chest and road choice, game over.
   - `enemies.ts`: the `ENEMIES` table of wave 1 stats per `EnemyKind` (with `coins` and the
@@ -180,7 +182,7 @@ seconds without a tap.
   own `clock`, used only for animation phases, pulses and blinking, and it stops during a pick and
   after a fall.
 - **Order inside `step`:** age effects, count the streak down (ending it at 0), update
-  `rain.need`, bring volleys down (`landVolleys`), age caltrop patches, then the break countdown
+  `rain.need`, bring volleys down (`landVolleys`), count up how long each caltrop patch has lain, then the break countdown
   (or the road choice's countdown while `roadChoices` is set) or spawning, then `shoot`,
   `guardsAct`, `moveMissiles`, `moveEnemies` (caltrops, shaman healing), and finally the
   wave-clear check. Arrows home, turning
@@ -292,7 +294,7 @@ the numbers of both are in `stats` (`state.ts`). The barricade base (`BASE_BARRI
 level curve (`xpToNext`), `streakBonus`, `STREAK_MS`, `RAIN_KILLS`, `rainNeed` and field geometry
 are also in `state.ts`. The difficulty multiplier on foe health is in `foeHp` (`waves.ts`).
 Missile speeds, `LEAP_RANGE`, effect durations (`EFFECT_MS`), `RAIN_FALL_MS`, `RAIN_RING`, the
-caltrops' patch and length, `SHIELD_BLOCK` and the shaman's healing numbers are in
+caltrops' patch, `CALTROP_WAVES` and `MAX_PATCHES`, `SHIELD_BLOCK` and the shaman's healing numbers are in
 `sim.ts`. Arrow Rain's damage (`rainDamage`) and ring (`rainRing`), the caltrops' slow and damage
 (`caltropSlow`, `caltropDps`) and the barricade's repair after a wave (`repair`) are in `stats`.
 

@@ -118,8 +118,10 @@ then charges again from empty. A level-up or a fall drops it from the hand.
 
 The second active, on the button above Arrow Rain's. Every kill charges it too (6 kills), and once
 it reads READY it is dragged onto the road the same way, along a dashed arc to a dashed patch. Let
-go and caltrops are strewn over the patch for 8 seconds: every foe walking on them is slowed by 40%
-and takes 80% of an arrow's damage a second, through armour. Harpies fly over them.
+go and caltrops are strewn over the patch, where they stay for five waves (the one they are strewn
+in included) before they wear off, looking worn on their last wave: every foe walking on them is slowed by 40% and takes 80% of an arrow's damage a second, through
+armour. Up to three patches lie on the road at once; strewing a fourth lifts the oldest. Harpies
+fly over them.
 
 ![Dragging the caltrops onto the road](docs/screenshots/caltrops-aim.png)
 ![Foes walking over the caltrops](docs/screenshots/caltrops.png)
