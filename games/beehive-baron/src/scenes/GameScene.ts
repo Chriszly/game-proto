@@ -1,51 +1,70 @@
 import { settings } from '../../../../shared/settings';
 import Phaser from 'phaser';
 import { BEE_TEX, WASP_TEX } from '../art/bees';
-import { LIVE } from '../art/palette';
+import { LIVE, SEASON_TINT } from '../art/palette';
 import { CARD_PAD, FLOWER_TEX, JAR_TEX, meadowOrigin } from '../art/scenery';
+import { CONTRACTS_FROM } from '../game/contracts';
+import { FAIR_GOLD } from '../game/fair';
 import { HONEY, KINDS, type Kind } from '../game/honey';
+import { CASK_JARS, MAX_CASKS, MEAD_MULT } from '../game/mead';
 import { MEADOWS } from '../game/meadows';
 import { ORDERS_FROM } from '../game/orders';
 import { clearProgress, loadProgress, saveProgress } from '../game/save';
-import { build, buildBrood, buy, canPay, forage, gatherAway, harvest, send, sell, swat, tick } from '../game/sim';
+import { SEASON_NAME } from '../game/seasons';
+import { acceptContract, build, buildBrood, buy, canPay, cask, caskKind, catchSwarm, enterFair, forage, gatherAway, harvest, send, sell, swat, tick } from '../game/sim';
 import {
   AWAY_CAP,
   BROOD_MS,
   FLOWERS,
-  MAX_BEES,
   SLOTS,
+  atHome,
   broodPrice,
+  caskDone,
   cellPrice,
   combBonus,
+  crowded,
   demand,
+  fairOpen,
+  fairTotal,
   freshProgress,
+  hiveOf,
   isOpen,
+  isWinter,
   jarCount,
   jarPrice,
   marketLeft,
+  maxBees,
+  meadReady,
   neighbours,
   newHive,
   openKinds,
   progressOf,
   ripenTime,
   room,
+  season,
+  seasonLeft,
   sharedEdges,
   shelfValue,
   withWax,
   type Bee,
   type GameState,
 } from '../game/state';
+import { CATCH_PRICE, SWARM_MS } from '../game/swarm';
 import { UPGRADES, nextPrice, type UpgradeId } from '../game/upgrades';
 import { WASP_IN_MS, WASP_OUT_MS, WASP_STEAL_MS, type Wasp } from '../game/wasps';
 import { Button } from '../ui/Button';
 import {
   AWAY,
+  CASK,
   COMB,
+  CONTRACT,
+  END_CARD,
   ENTRANCE,
   FONT,
   GOAL,
   HINT,
   HIVE,
+  HIVE_TAB,
   MARKET,
   MEADOW_SPOTS,
   MEADOW_TAG,
@@ -55,15 +74,18 @@ import {
   SEND_BUTTON,
   SHELF,
   SHOP_BUTTONS,
+  SWARM,
   UI_DEPTH,
   VIEW,
   WASP_FROM,
   WASP_TO,
+  caskSpot,
   cellAt,
   cellCentre,
   forageSpot,
   flowerSpot,
   hexPoints,
+  hiveTab,
   homeSpot,
   marketEntry,
   shopSpot,
@@ -91,9 +113,9 @@ const textStyle = (size: number, color: string, weight = '800', stroke = false):
 /** How close a tap must be to a wasp to swat it. */
 const SWAT_RADIUS = 30;
 
-/** The shop buttons in order: a brood cell, then each upgrade; the village order card takes the last spot. */
-type ShopItem = 'brood' | UpgradeId;
-const SHOP: ShopItem[] = ['brood', 'guards', 'baskets', 'clover', 'dance'];
+/** The shop buttons in order: a brood cell, each upgrade and the mead cask; the village order and orchard contract cards take the last two spots. */
+type ShopItem = 'brood' | 'cask' | UpgradeId;
+const SHOP: ShopItem[] = ['brood', 'guards', 'baskets', 'clover', 'dance', 'cask'];
 
 /** "1:05" for a time in milliseconds. */
 const clockText = (ms: number) => {
@@ -120,6 +142,22 @@ export class GameScene extends Phaser.Scene {
   private waspAt = new Map<number, { x: number; y: number }>();
   /** Whether the next tap on an empty spot places a brood cell (the Brood cell button arms it). */
   private placing = false;
+  /** Whether the next tap on a capped cell enters its honey in the fair (the fair card arms it). */
+  private entering = false;
+  /** The hive whose comb is shown (0 or 1); the tabs on the roof switch it. */
+  private hive = 0;
+  private tabs: { root: Phaser.GameObjects.Container; card: Phaser.GameObjects.Image; label: Phaser.GameObjects.Text }[] = [];
+  private seasonTint!: Phaser.GameObjects.Rectangle;
+  private casks: { cask: Phaser.GameObjects.Image; label: Phaser.GameObjects.Text }[] = [];
+  private caskArcs!: Phaser.GameObjects.Graphics;
+  private contract!: {
+    card: Phaser.GameObjects.Image;
+    title: Phaser.GameObjects.Text;
+    detail: Phaser.GameObjects.Text;
+  };
+  private swarm!: { root: Phaser.GameObjects.Container; text: Phaser.GameObjects.Text; detail: Phaser.GameObjects.Text; bar: Phaser.GameObjects.Graphics };
+  private endCard!: { root: Phaser.GameObjects.Container; detail: Phaser.GameObjects.Text };
+  private goalZone!: Phaser.GameObjects.Zone;
   private market!: {
     root: Phaser.GameObjects.Container;
     marks: Phaser.GameObjects.Graphics;
@@ -185,8 +223,9 @@ export class GameScene extends Phaser.Scene {
 
   /**
    * Where the controls are on screen, so the playthrough test can tap like a player: the Send and
-   * Sell buttons, each comb cell, each shop button (in `SHOP` order), each market entry (by kind)
-   * and each wasp now in the air (by id).
+   * Sell buttons, each comb cell (of the comb shown), each shop button (in `SHOP` order), each
+   * market entry (by kind), each wasp now in the air (by id), the order and contract cards, the
+   * swarm chip, the goal (or fair) card and the hive tabs.
    */
   spots() {
     return {
@@ -199,6 +238,11 @@ export class GameScene extends Phaser.Scene {
         return [k, { x: e.x + e.w / 2, y: e.y + e.h / 2 }];
       })),
       wasps: Object.fromEntries(this.waspAt),
+      order: { x: ORDER.x, y: ORDER.y },
+      contract: { x: CONTRACT.x, y: CONTRACT.y },
+      swarm: { x: SWARM.x + SWARM.w / 2, y: SWARM.y + SWARM.h / 2 },
+      goal: { x: GOAL.x + GOAL.w / 2, y: GOAL.y + GOAL.h / 2 },
+      tabs: [0, 1].map(hiveTab),
     };
   }
 
@@ -207,6 +251,10 @@ export class GameScene extends Phaser.Scene {
     this.wasps.clear();
     this.waspAt.clear();
     this.placing = false;
+    this.entering = false;
+    this.hive = 0;
+    this.tabs = [];
+    this.casks = [];
     this.jars = [];
     this.cells = [];
     this.prices = [];
@@ -228,8 +276,11 @@ export class GameScene extends Phaser.Scene {
       const tex = this.textures.getFrame(`flower-${i}`);
       this.add.image(f.x, f.y, `flower-${i}`).setOrigin(0.5, FLOWER_TEX.head / tex.realHeight).setDepth(0.1 + f.y / 10_000);
     }
+    // The season lies over the scenery as a tint: the hive, the cards and the bees stay as they are.
+    this.seasonTint = this.add.rectangle(0, 0, VIEW.w, VIEW.h, 0xffffff, 0).setOrigin(0).setDepth(0.5);
     this.add.image(HIVE.x, HIVE.y, 'hive').setOrigin(0).setDepth(1);
     this.plaque = this.add.text(PLAQUE.x, PLAQUE.y, '', textStyle(11, '#7a4410')).setOrigin(0.5).setDepth(1.5);
+    this.createTabs();
     for (let slot = 0; slot < SLOTS; slot++) {
       const c = cellCentre(slot);
       this.cells.push(this.add.image(c.x, c.y, 'cell-empty').setDepth(2));
@@ -250,21 +301,26 @@ export class GameScene extends Phaser.Scene {
       this.jars.push(this.add.image(SHELF.x + i * SHELF.jarGap, SHELF.y, 'jar-clover').setOrigin(16 / JAR_TEX.w, JAR_TEX.footY / JAR_TEX.h).setVisible(false).setDepth(3));
     }
     this.moreJars = this.add.text(SHELF.x + SHELF.jars * SHELF.jarGap - 16, SHELF.y - 30, '', textStyle(14, '#ffd25a', '900', true)).setOrigin(1, 0.5).setDepth(4);
+    this.createCasks();
     this.trails = this.add.graphics().setDepth(49);
 
     this.sendButton = new Button(this, SEND_BUTTON.x, SEND_BUTTON.y, SEND_BUTTON.w, SEND_BUTTON.h, () => this.act(send(this.state)));
     this.sellButton = new Button(this, SELL_BUTTON.x, SELL_BUTTON.y, SELL_BUTTON.w, SELL_BUTTON.h, () => this.act(sell(this.state)));
     SHOP.forEach((item, i) => {
       const at = shopSpot(i);
-      const onClick = () => (item === 'brood' ? (this.placing = !this.placing) : this.act(buy(this.state, item)));
+      const onClick = () =>
+        item === 'brood' ? (this.placing = !this.placing) : item === 'cask' ? this.act(cask(this.state)) : this.act(buy(this.state, item));
       this.shopButtons.set(item, new Button(this, at.x, at.y, SHOP_BUTTONS.w, SHOP_BUTTONS.h, onClick));
     });
     this.createOrder();
+    this.createContract();
     this.createMarket();
     this.createGoal();
     this.createAway();
+    this.createSwarm();
     this.createHud();
     this.createReset();
+    this.createEnd();
 
     // Nectar the bees gathered while the page was closed, capped; save at once so a reload does not count it twice.
     const gained = progress.seen > 0 ? gatherAway(this.state, Date.now() - progress.seen) : 0;
@@ -293,7 +349,7 @@ export class GameScene extends Phaser.Scene {
     tick(this.state, dt);
     // Nectar coming home and cells capping change the comb; keep it. Save now and then anyway,
     // so the last-seen time stays fresh.
-    const changed = (e: GameState['events'][number]) => ['nectar', 'capped', 'hatched', 'stolen'].includes(e.kind);
+    const changed = (e: GameState['events'][number]) => ['nectar', 'capped', 'hatched', 'stolen', 'season', 'ate', 'mead', 'swarmed', 'returned'].includes(e.kind);
     if (this.state.events.some(changed) || this.clock - this.lastSave >= SAVE_EVERY_MS) this.save();
     if (this.awayLeft > 0) {
       this.awayLeft = Math.max(0, this.awayLeft - dt);
@@ -301,12 +357,17 @@ export class GameScene extends Phaser.Scene {
       if (this.awayLeft === 0) this.away.setVisible(false);
     }
 
+    this.drawSeason();
+    this.drawTabs();
     this.drawComb();
     this.drawBees();
     this.drawWasps();
     this.drawJars();
+    this.drawCasks();
     this.drawMarket();
     this.drawOrder();
+    this.drawContract();
+    this.drawSwarm();
     this.drawEvents();
     this.drawGoal();
     this.drawHud();
@@ -323,17 +384,24 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * A tap on a wasp swats it; a tap on the comb builds a cell on an empty spot (a brood cell while
-   * the Brood cell button is armed) or harvests a capped one.
+   * A tap on a wasp swats it; a tap on the comb shown builds a cell on an empty spot (a brood cell
+   * while the Brood cell button is armed) or harvests a capped one (enters it in the fair while
+   * the fair card is armed).
    */
   private tapComb(p: Phaser.Input.Pointer) {
     for (const [id, at] of this.waspAt) {
       if (Math.hypot(p.worldX - at.x, p.worldY - at.y) <= SWAT_RADIUS && swat(this.state, id)) return;
     }
-    const slot = cellAt(p.worldX, p.worldY);
-    if (slot === null) return;
+    const local = cellAt(p.worldX, p.worldY);
+    if (local === null) return;
+    const slot = this.hive * SLOTS + local;
     const cell = this.state.cells[slot];
-    if (cell !== null) return this.act(harvest(this.state, slot));
+    if (cell !== null) {
+      if (!this.entering) return this.act(harvest(this.state, slot));
+      if (!enterFair(this.state, slot)) return;
+      this.entering = false;
+      return this.save();
+    }
     if (!this.placing) return this.act(build(this.state, slot));
     this.placing = false;
     this.act(buildBrood(this.state, slot));
@@ -343,13 +411,17 @@ export class GameScene extends Phaser.Scene {
     const s = this.state;
     const g = this.comb;
     g.clear();
-    const price = this.placing ? broodPrice(s) : cellPrice(s);
+    if (this.hive >= s.hives) this.hive = 0;
+    const base = this.hive * SLOTS;
+    const price = this.placing ? broodPrice(s, this.hive) : cellPrice(s, this.hive);
     const pay = withWax(s, price);
     const pulse = settings.reduceMotion ? 0.8 : 0.55 + 0.4 * Math.sin(this.clock / 150);
-    const preview = this.hover !== null && s.cells[this.hover] === null ? this.hover : null;
-    s.cells.forEach((cell, slot) => {
-      const image = this.cells[slot];
-      const label = this.prices[slot];
+    const preview = this.hover !== null && s.cells[base + this.hover] === null ? base + this.hover : null;
+    for (let local = 0; local < SLOTS; local++) {
+      const slot = base + local;
+      const cell = s.cells[slot];
+      const image = this.cells[local];
+      const label = this.prices[local];
       if (!cell) {
         const lit = slot === preview;
         image.setTexture(lit ? 'cell-preview' : 'cell-empty');
@@ -360,18 +432,18 @@ export class GameScene extends Phaser.Scene {
         const size = lit ? '13px' : '10.5px';
         if (label.style.fontSize !== size) label.setFontSize(size).setFontStyle(lit ? '900' : '700');
         label.setAlpha(lit ? 1 : 0.8);
-        return;
+        continue;
       }
       label.setText('');
       const c = cellCentre(slot);
       if (cell.type === 'brood') {
         image.setTexture('cell-brood');
         // A green arc goes round as the next bee grows; it waits while the hive is full.
-        if (s.bees.length < MAX_BEES) {
+        if (s.bees.length < maxBees(s)) {
           const done = 1 - cell.hatchMs / BROOD_MS;
           g.lineStyle(3.5, LIVE.broodArc, 0.95).beginPath().arc(c.x, c.y, 15, -Math.PI / 2, -Math.PI / 2 + done * Math.PI * 2).strokePath();
         }
-        return;
+        continue;
       }
       const kind = cell.kind ?? 'clover';
       if (cell.phase === 'filling') image.setTexture(`cell-fill-${cell.nectar}-${kind}`);
@@ -382,12 +454,18 @@ export class GameScene extends Phaser.Scene {
         g.lineStyle(3.5, LIVE.ripenArc, 0.95).beginPath().arc(c.x, c.y, 12, -Math.PI / 2, -Math.PI / 2 + done * Math.PI * 2).strokePath();
       } else {
         image.setTexture(`cell-capped-${kind}`);
-        g.lineStyle(2, LIVE.cappedRim, pulse).strokePoints(hexPoints(slot, 3), true);
+        // While the fair card is armed, each capped cell shows the points its honey would score.
+        if (this.entering) {
+          g.lineStyle(3, LIVE.fairPick, pulse).strokePoints(hexPoints(slot, 3), true);
+          label.setText(`${neighbours(slot).filter((n) => s.cells[n] !== null).length} pts`);
+          if (label.style.color !== '#1f4a18') label.setColor('#1f4a18');
+          label.setAlpha(1);
+        } else g.lineStyle(2, LIVE.cappedRim, pulse).strokePoints(hexPoints(slot, 3), true);
       }
-    });
+    }
 
     // Every edge two built cells share glows gold: each one adds a coin to every jar sold.
-    for (const [a, b] of sharedEdges(s)) this.glowLine(sharedEdge(a, b), LIVE.edgeGlow, LIVE.edge, LIVE.edgeCore);
+    for (const [a, b] of sharedEdges(s)) if (hiveOf(a) === this.hive) this.glowLine(sharedEdge(a, b), LIVE.edgeGlow, LIVE.edge, LIVE.edgeCore);
     this.plaque.setText(`Comb bonus +${combBonus(s)}c a jar`);
 
     // The build preview: the edges the new cell would share light up green.
@@ -404,7 +482,7 @@ export class GameScene extends Phaser.Scene {
 
     // A wasp on a cell: an orange bar over it runs out as it steals the honey.
     for (const w of s.wasps) {
-      if (w.phase !== 'steal') continue;
+      if (w.phase !== 'steal' || hiveOf(w.slot) !== this.hive) continue;
       const c = cellCentre(w.slot);
       const [bx, by, bw, bh] = [c.x - 22, c.y - COMB.r - 2, 44, 6];
       g.fillStyle(LIVE.stealTrack, 0.85).fillRoundedRect(bx - 1, by - 1, bw + 2, bh + 2, 3);
@@ -451,6 +529,8 @@ export class GameScene extends Phaser.Scene {
         sprite = this.add.image(0, 0, 'bee-0').setOrigin(BEE_TEX.cx / BEE_TEX.w, BEE_TEX.cy / BEE_TEX.h).setDepth(50);
         this.bees.set(bee.id, sprite);
       }
+      // A bee lent to the orchard is away from the hive, out of sight.
+      sprite.setVisible(!bee.lent);
       if (bee.tripMs === 0) {
         const h = homeSpot(i);
         sprite.setPosition(h.x, h.y).setFlipX(false).setTexture('bee-0');
@@ -518,8 +598,9 @@ export class GameScene extends Phaser.Scene {
         this.wasps.set(w.id, sprite);
       }
       const p = this.waspSpot(w);
-      sprite.setPosition(p.x, p.y).setFlipX(p.left).setTexture(`wasp-${flap}`);
-      if (w.phase !== 'out') this.waspAt.set(w.id, { x: Math.round(p.x), y: Math.round(p.y) });
+      const shown = hiveOf(w.slot) === this.hive;
+      sprite.setPosition(p.x, p.y).setFlipX(p.left).setTexture(`wasp-${flap}`).setVisible(shown);
+      if (w.phase !== 'out' && shown) this.waspAt.set(w.id, { x: Math.round(p.x), y: Math.round(p.y) });
     }
   }
 
@@ -544,6 +625,9 @@ export class GameScene extends Phaser.Scene {
       } else if (e.kind === 'demand') {
         if (this.state.sold > 0) this.float(MARKET.x + MARKET.w / 2, MARKET.y - 8, `${HONEY[e.honey].name} honey in demand!`, '#ffffff', 14, 2000);
       } else if (e.kind === 'wasp') {
+        // The comb the wasp is after comes to the front, so it can be swatted.
+        const w = this.state.wasps.find((w) => w.id === e.id);
+        if (w) this.hive = hiveOf(w.slot);
         this.float(HIVE.x + HIVE.w / 2, HIVE.y + 70, this.state.ranks.guards > 0 ? 'A wasp! The guards are ready' : 'A wasp! Tap it away', '#ffe08a', 15, 2000);
       } else if (e.kind === 'stolen') {
         const c = cellCentre(e.slot);
@@ -560,6 +644,44 @@ export class GameScene extends Phaser.Scene {
         this.float(ORDER.x, ORDER.y - 24, 'The order lapsed', '#ffd0b0', 14, 1600);
       } else if (e.kind === 'spilled') {
         this.float(ENTRANCE.x, ENTRANCE.y - 30, 'Comb full: nectar lost', '#ffd0b0', 14);
+      } else if (e.kind === 'season') {
+        const what = { spring: 'Spring: the bees fly again', summer: 'Summer: +1 nectar a trip', autumn: 'Autumn: the Lavender Field shuts', winter: 'Winter: the bees stay home and eat honey' }[e.season];
+        this.float(VIEW.w / 2, 140, what, '#ffffff', 17, 3000);
+      } else if (e.kind === 'year') {
+        this.float(VIEW.w / 2, 170, `Year ${e.years} survived!`, '#ffd25a', 18, 3000);
+      } else if (e.kind === 'ate') {
+        if (e.what === 'jar') this.float(SHELF.x + 100, SHELF.y - 40, 'The bees ate a jar', '#ffd0b0', 14, 1600);
+        else if (e.what === 'cell' && e.slot !== null) {
+          this.hive = hiveOf(e.slot);
+          const c = cellCentre(e.slot);
+          this.float(c.x, c.y - 10, 'Honey eaten', '#ffc890', 14, 1600);
+        } else this.float(ENTRANCE.x, ENTRANCE.y - 30, 'No honey left: a bee starved', '#ffb0a0', 15, 2400);
+      } else if (e.kind === 'casked') {
+        this.float(CASK.x + CASK.gap, CASK.y - 40, `${CASK_JARS} ${HONEY[e.honey].name.toLowerCase()} jars in the cask`, '#ffffff', 13, 1600);
+      } else if (e.kind === 'mead') {
+        const at = caskSpot(e.cask);
+        this.float(at.x, at.y - 30, 'Mead is ready!', '#ffd25a', 14, 1600);
+      } else if (e.kind === 'swarm-ready') {
+        this.float(HIVE.x + HIVE.w / 2, HIVE.y + 70, 'The hive is crowded: a swarm gathers', '#ffe08a', 15, 2400);
+      } else if (e.kind === 'caught') {
+        this.hive = 1;
+        this.float(HIVE.x + HIVE.w / 2, HIVE.y + 70, 'Swarm caught: a second hive!\nTap the roof tabs to switch combs', '#ffffff', 15, 3000);
+      } else if (e.kind === 'swarmed') {
+        this.float(ENTRANCE.x, ENTRANCE.y - 30, `The swarm left: ${e.lost} bees gone`, '#ffb0a0', 15, 2400);
+      } else if (e.kind === 'contract') {
+        this.float(CONTRACT.x, CONTRACT.y - 22, 'An orchard contract!', '#ffffff', 14, 1600);
+      } else if (e.kind === 'lent') {
+        this.float(CONTRACT.x, CONTRACT.y - 22, `${e.bees} bees to the orchard: +${e.coins} coins`, '#ffd25a', 14, 2000);
+      } else if (e.kind === 'returned') {
+        this.float(ENTRANCE.x, ENTRANCE.y - 30, `${e.bees} bees back from the orchard`, '#ffffff', 14, 1600);
+      } else if (e.kind === 'contract-lapsed') {
+        this.float(CONTRACT.x, CONTRACT.y - 22, 'The farmer found other bees', '#ffd0b0', 13, 1600);
+      } else if (e.kind === 'entered') {
+        this.float(GOAL.x + GOAL.w / 2, GOAL.y + GOAL.h + 16, `${HONEY[e.honey].name} entered: ${e.score} points`, '#ffffff', 14, 2000);
+      } else if (e.kind === 'judged') {
+        this.float(GOAL.x + GOAL.w / 2, GOAL.y + GOAL.h + 16, `${e.total} points: gold needs ${FAIR_GOLD}\nenter better-joined honey`, '#ffd0b0', 14, 2600);
+      } else if (e.kind === 'baron') {
+        this.showEnd();
       } else if (e.kind === 'sold') {
         this.float(SELL_BUTTON.x, SELL_BUTTON.y - 34, `+${e.coins} coins`, '#ffd25a');
       } else if (e.kind === 'unlocked') {
@@ -599,35 +721,53 @@ export class GameScene extends Phaser.Scene {
 
   private drawButtons() {
     const s = this.state;
-    const home = s.bees.filter((b) => b.tripMs === 0).length;
+    const home = s.bees.filter(atHome).length;
     const built = s.cells.some((c) => c !== null);
     // Once a second kind is open, the Send button says which nectar the bees go for.
     const where = openKinds(s).length > 1 ? `\nfor ${HONEY[s.forage].name.toLowerCase()} nectar` : '';
-    const sendCaption = s.ranks.dance > 0
-      ? where ? `Bees forage alone${where}` : 'Bees forage\non their own'
-      : !built
-        ? 'Build a cell first'
-        : room(s) === 0
-          ? where ? `No room for${where.replace('for ', '')}` : 'Comb is full'
-          : home === 0
-            ? 'Foragers out...'
-            : `Send ${home} forager${home === 1 ? '' : 's'}${where}`;
-    const canSend = s.ranks.dance === 0 && home > 0 && room(s) > 0;
+    const sendCaption = isWinter(s)
+      ? 'Winter: the bees\nstay home'
+      : s.ranks.dance > 0
+        ? where ? `Bees forage alone${where}` : 'Bees forage\non their own'
+        : !built
+          ? 'Build a cell first'
+          : room(s) === 0
+            ? where ? `No room for${where.replace('for ', '')}` : 'Comb is full'
+            : home === 0
+              ? 'Foragers out...'
+              : `Send ${home} forager${home === 1 ? '' : 's'}${where}`;
+    const canSend = s.ranks.dance === 0 && home > 0 && room(s) > 0 && !isWinter(s);
     this.sendButton.set(sendCaption, canSend, true);
     const jars = jarCount(s);
-    this.sellButton.set(jars === 0 ? 'No honey yet' : `Sell ${jars} jar${jars === 1 ? '' : 's'}\n+${shelfValue(s)} coins`, jars > 0, true);
+    const mead = meadReady(s).length;
+    const what = [jars > 0 ? `${jars} jar${jars === 1 ? '' : 's'}` : '', mead > 0 ? `${mead} mead` : ''].filter(Boolean).join(' + ');
+    this.sellButton.set(jars + mead === 0 ? 'No honey yet' : `Sell ${what}\n+${shelfValue(s)} coins`, jars + mead > 0, true);
     const free = s.cells.some((c) => c === null);
-    if (this.placing && (!free || !canPay(s, broodPrice(s)))) this.placing = false;
+    const freeHere = s.cells.some((c, i) => c === null && hiveOf(i) === this.hive);
+    if (this.placing && (!freeHere || !canPay(s, broodPrice(s, this.hive)))) this.placing = false;
+    if (this.entering && !fairOpen(s)) this.entering = false;
     for (const item of SHOP) {
       const button = this.shopButtons.get(item)!;
       if (item === 'brood') {
-        const pay = withWax(s, broodPrice(s));
+        const pay = withWax(s, broodPrice(s, this.hive));
         const caption = this.placing
           ? 'Tap an empty spot\nor here to cancel'
           : !free
             ? 'Brood cell\nno empty spot left'
-            : `Brood cell: ${pay.coins}c\n${s.bees.length >= MAX_BEES ? 'hive full of bees' : 'hatches new bees'}`;
-        button.set(caption, free && canPay(s, broodPrice(s)), this.placing);
+            : !freeHere
+              ? 'Brood cell\nthis comb is full'
+              : `Brood cell: ${pay.coins}c\n${s.bees.length >= maxBees(s) ? 'hive full of bees' : 'hatches new bees'}`;
+        button.set(caption, freeHere && canPay(s, broodPrice(s, this.hive)), this.placing);
+        continue;
+      }
+      if (item === 'cask') {
+        const kind = caskKind(s);
+        const caption = s.casks.length >= MAX_CASKS
+          ? 'Mead cask\nthe cellar is full'
+          : kind
+            ? `Mead cask: ${CASK_JARS} ${HONEY[kind].name.toLowerCase()} jars\nages into mead worth x${MEAD_MULT[kind]}`
+            : `Mead cask\nneeds ${CASK_JARS} jars of one kind`;
+        button.set(caption, kind !== null);
         continue;
       }
       const u = UPGRADES[item];
@@ -689,7 +829,9 @@ export class GameScene extends Phaser.Scene {
       entry.bee.setVisible(picked);
       const price = open
         ? `${jarPrice(s, kind)}c${wanted === kind ? ' ★' : ''}`
-        : `${MEADOWS[HONEY[kind].meadows - 1].need} sold`;
+        : s.meadows >= HONEY[kind].meadows
+          ? 'shut for autumn'
+          : `${MEADOWS[HONEY[kind].meadows - 1].need} sold`;
       entry.price.setText(price).setAlpha(open ? 1 : 0.6);
       const colour = wanted === kind ? '#2f7a24' : '#6a4a28';
       if (entry.price.style.color !== colour) entry.price.setColor(colour);
@@ -741,6 +883,9 @@ export class GameScene extends Phaser.Scene {
       blurb: this.add.text(x + 270, y + 36, '', textStyle(10.5, '#6a4aa8', '700')).setOrigin(0, 0.5).setDepth(21),
       lock: this.add.image(x + GOAL.w - 22, y + GOAL.h / 2, 'lock').setDepth(21),
     };
+    // Once every meadow is open the card is the fair's: a tap arms entering a capped cell's honey.
+    this.goalZone = this.add.zone(x, y, GOAL.w, GOAL.h).setOrigin(0).setDepth(21);
+    this.goalZone.on('pointerdown', () => fairOpen(this.state) && !this.state.baron && (this.entering = !this.entering));
     this.meadowTagText = this.add.text(-MEADOW_TAG.w / 2 + 26, 0, '', textStyle(11.5, '#f1e8ff', '800')).setOrigin(0, 0.5);
     this.meadowTag = this.add
       .container(0, 0, [this.add.image(0, 0, 'meadow-tag'), this.add.image(-MEADOW_TAG.w / 2 + 13, -1, 'lock').setScale(0.8), this.meadowTagText])
@@ -753,16 +898,29 @@ export class GameScene extends Phaser.Scene {
     const done = !next;
     const g = this.goal;
     g.icon.setTexture(`meadow-icon-${Math.min(s.meadows, MEADOWS.length - 1)}`);
-    g.title.setText(done ? 'Every meadow is open' : `Goal: ${next.need} jars sold`);
-    g.unlocks.setText(done ? '' : `unlocks ${next.name}`).setX(g.title.x + g.title.width + 10);
-    g.count.setText(done ? `${s.sold} sold` : `${Math.min(s.sold, next.need)} / ${next.need}`);
-    g.blurb.setText(done ? 'all benefits on' : next.blurb);
     g.lock.setVisible(!done);
-    const from = s.meadows === 0 || done ? 0 : MEADOWS[s.meadows - 1].need;
-    const share = done ? 1 : Phaser.Math.Clamp((s.sold - from) / (next.need - from), 0, 1);
     const [bx, by, bw, bh] = [GOAL.x + 38, GOAL.y + 31, 170, 10];
-    g.bar.clear().fillStyle(LIVE.barTrack).fillRoundedRect(bx, by, bw, bh, 5);
-    if (share > 0) g.bar.fillStyle(LIVE.bar).fillRoundedRect(bx, by, Math.max(bh, bw * share), bh, 5);
+    g.bar.clear();
+    if (done) {
+      // The county honey fair: the best entry of each kind, and a tap to enter the next.
+      const total = fairTotal(s);
+      const entries = KINDS.map((k) => `${HONEY[k].name} ${s.fair[k] === null ? '–' : s.fair[k]}`).join(' · ');
+      g.title.setText(s.baron ? 'Beehive Baron!' : this.entering ? 'Tap a capped cell to enter it' : 'County honey fair');
+      g.unlocks.setText(s.baron ? `gold with ${total} points` : this.entering ? '' : total === null ? 'enter a jar of each kind' : `${total} points, gold at ${FAIR_GOLD}`).setX(g.title.x + g.title.width + 10);
+      g.count.setText('').setX(GOAL.x + 38);
+      g.blurb.setText(`${entries}${s.baron ? '' : ' · tap here to enter honey'}`).setX(GOAL.x + 38);
+      if (this.entering) g.bar.lineStyle(2.5, LIVE.fairPick, 0.9).strokeRoundedRect(GOAL.x + 2, GOAL.y + 2, GOAL.w - 4, GOAL.h - 4, 8);
+      if (!this.goalZone.input) this.goalZone.setInteractive({ useHandCursor: true });
+    } else {
+      g.title.setText(`Goal: ${next.need} jars sold`);
+      g.unlocks.setText(`unlocks ${next.name}`).setX(g.title.x + g.title.width + 10);
+      g.count.setText(`${Math.min(s.sold, next.need)} / ${next.need}`).setX(GOAL.x + 216);
+      g.blurb.setText(next.blurb).setX(GOAL.x + 270);
+      const from = s.meadows === 0 ? 0 : MEADOWS[s.meadows - 1].need;
+      const share = Phaser.Math.Clamp((s.sold - from) / (next.need - from), 0, 1);
+      g.bar.fillStyle(LIVE.barTrack).fillRoundedRect(bx, by, bw, bh, 5);
+      if (share > 0) g.bar.fillStyle(LIVE.bar).fillRoundedRect(bx, by, Math.max(bh, bw * share), bh, 5);
+    }
 
     MEADOWS.forEach((_, i) => {
       // Open meadows in full colour, the next one faded behind its lock, later ones not shown yet.
@@ -837,7 +995,9 @@ export class GameScene extends Phaser.Scene {
     h.wax.setText(`${s.wax}`).setX(waxX + 13);
     h.waxLabel.setX(h.wax.x + h.wax.width + 3);
     const out = s.bees.filter((b) => b.tripMs > 0).length;
-    h.stats.setText(`Bees ${s.bees.length} (${out} out)      Jars sold ${s.sold}`);
+    const lent = s.bees.filter((b) => b.lent).length;
+    const bees = `Bees ${s.bees.length} (${out} out${lent ? `, ${lent} lent` : ''})`;
+    h.stats.setText(`Year ${s.years + 1} · ${SEASON_NAME[season(s)]} ${clockText(seasonLeft(s))}      ${bees}      Jars sold ${s.sold}`);
     this.hint.setText(this.awayLeft > 0 ? '' : this.hintText());
   }
 
@@ -867,8 +1027,154 @@ export class GameScene extends Phaser.Scene {
       this.wasps.clear();
       this.waspAt.clear();
       this.placing = false;
+      this.entering = false;
+      this.hive = 0;
       this.state = newHive(freshProgress());
       this.showAway(0);
+      this.endCard.root.setVisible(false);
     });
+  }
+
+  /** The season's tint over the scenery, and a few paper snowflakes drifting in winter. */
+  private drawSeason() {
+    const t = SEASON_TINT[season(this.state)];
+    this.seasonTint.setFillStyle(t.colour, t.alpha);
+  }
+
+  /** The tabs on the roof that switch between the hives' combs, shown once there are two. */
+  private createTabs() {
+    for (const hive of [0, 1]) {
+      const at = hiveTab(hive);
+      const card = this.add.image(0, 0, 'hive-tab-on');
+      const label = this.add.text(0, -1, `Hive ${hive + 1}`, textStyle(10.5, '#7a4410', '800')).setOrigin(0.5);
+      const zone = this.add.zone(0, 0, HIVE_TAB.w, HIVE_TAB.h).setInteractive({ useHandCursor: true });
+      zone.on('pointerdown', () => {
+        this.hive = hive;
+        this.placing = false;
+      });
+      const root = this.add.container(at.x, at.y, [card, label, zone]).setDepth(1.5).setVisible(false);
+      this.tabs.push({ root, card, label });
+    }
+  }
+
+  private drawTabs() {
+    const s = this.state;
+    this.tabs.forEach((tab, hive) => {
+      tab.root.setVisible(s.hives > 1);
+      const on = hive === this.hive;
+      const key = on ? 'hive-tab-on' : 'hive-tab-off';
+      if (tab.card.texture.key !== key) tab.card.setTexture(key);
+      const colour = on ? '#7a4410' : '#fff1cc';
+      if (tab.label.style.color !== colour) tab.label.setColor(colour);
+    });
+  }
+
+  /** The mead casks at the right end of the shelf: a barrel per cask with an arc as it ages, lit once the mead is ready. */
+  private createCasks() {
+    for (let i = 0; i < MAX_CASKS; i++) {
+      const at = caskSpot(i);
+      this.casks.push({
+        cask: this.add.image(at.x, at.y, 'cask').setOrigin(0.5, 1).setVisible(false).setDepth(3),
+        label: this.add.text(at.x, at.y - CASK.h - 9, '', textStyle(10, '#fff1cc', '800', true)).setOrigin(0.5).setDepth(4),
+      });
+    }
+    this.caskArcs = this.add.graphics().setDepth(4);
+  }
+
+  private drawCasks() {
+    const s = this.state;
+    const g = this.caskArcs;
+    g.clear();
+    this.casks.forEach((c, i) => {
+      const cask = s.casks[i];
+      c.cask.setVisible(!!cask);
+      c.label.setText(cask ? (cask.agingMs === 0 ? `${cask.value}c` : clockText(cask.agingMs)) : '');
+      if (!cask) return;
+      const at = caskSpot(i);
+      const [cx, cy] = [at.x, at.y - CASK.h / 2];
+      const kind = cask.kind;
+      if (cask.agingMs > 0) {
+        g.lineStyle(3, LIVE.meadArc, 0.95).beginPath().arc(cx, cy, 9, -Math.PI / 2, -Math.PI / 2 + caskDone(cask) * Math.PI * 2).strokePath();
+      } else {
+        const pulse = settings.reduceMotion ? 0.8 : 0.55 + 0.4 * Math.sin(this.clock / 150);
+        g.lineStyle(2, LIVE.meadReady, pulse).strokeRoundedRect(cx - CASK.w / 2 - 1, cy - CASK.h / 2 - 1, CASK.w + 2, CASK.h + 2, 8);
+      }
+      const colour = kind === 'clover' ? '#f2a92e' : kind === 'lavender' ? '#b48ae0' : '#df7aa6';
+      if (c.label.style.color !== colour) c.label.setColor(colour);
+    });
+  }
+
+  /** The orchard contract card in the shop's last spot: the farmer's offer (tap to take it), or the bees away. */
+  private createContract() {
+    this.contract = {
+      card: this.add.image(CONTRACT.x, CONTRACT.y, 'contract-card').setDepth(30).setInteractive({ useHandCursor: true }),
+      title: this.add.text(CONTRACT.x - CONTRACT.w / 2 + 14, CONTRACT.y - 7, '', textStyle(12.5, '#2f5a24', '900')).setOrigin(0, 0.5).setDepth(31),
+      detail: this.add.text(CONTRACT.x - CONTRACT.w / 2 + 14, CONTRACT.y + 8, '', textStyle(10, '#4a6a30', '700')).setOrigin(0, 0.5).setDepth(31),
+    };
+    this.contract.card.on('pointerdown', () => this.act(acceptContract(this.state)));
+  }
+
+  private drawContract() {
+    const s = this.state;
+    const c = this.contract;
+    const contract = s.contract;
+    const home = s.bees.filter(atHome).length;
+    c.card.setAlpha(s.sold < CONTRACTS_FROM ? 0.75 : 1);
+    if (contract?.phase === 'offer') {
+      c.title.setText(`Orchard: lend ${contract.bees} bees, +${contract.pay}c`);
+      c.detail.setText(home >= contract.bees ? `tap to take it · ${clockText(contract.leftMs)} to decide` : `${contract.bees} bees must be home · ${clockText(contract.leftMs)}`);
+    } else if (contract) {
+      c.title.setText(`${contract.bees} bees at the orchard`);
+      c.detail.setText(`back in ${clockText(contract.leftMs)}`);
+    } else if (s.sold < CONTRACTS_FROM) {
+      c.title.setText('Orchard contracts');
+      c.detail.setText(`from ${CONTRACTS_FROM} jars sold`);
+    } else {
+      c.title.setText('Orchard contracts');
+      c.detail.setText(isWinter(s) ? 'none in winter' : 'the farmer will call...');
+    }
+  }
+
+  /** The swarm chip under the hive while a crowded hive gets ready to swarm: a bar runs out, and a tap catches the swarm. */
+  private createSwarm() {
+    const text = this.add.text(12, 12, '', textStyle(12.5, '#fff1cc', '900')).setOrigin(0, 0.5);
+    const detail = this.add.text(12, 27, '', textStyle(10, '#ffe0b0', '700')).setOrigin(0, 0.5);
+    const bar = this.add.graphics();
+    const card = this.add.image(-CARD_PAD, -CARD_PAD, 'swarm-chip').setOrigin(0).setInteractive({ useHandCursor: true });
+    card.on('pointerdown', () => this.act(catchSwarm(this.state)));
+    const root = this.add.container(SWARM.x, SWARM.y, [card, text, detail, bar]).setDepth(UI_DEPTH - 1).setVisible(false);
+    this.swarm = { root, text, detail, bar };
+  }
+
+  private drawSwarm() {
+    const s = this.state;
+    const on = crowded(s) && this.awayLeft === 0;
+    this.swarm.root.setVisible(on);
+    if (!on) return;
+    this.swarm.text.setText(`A swarm gathers: half the bees leave in ${clockText(s.swarmIn)}`);
+    this.swarm.detail.setText(s.coins >= CATCH_PRICE ? `tap to catch it into a second hive for ${CATCH_PRICE}c` : `catching it into a second hive costs ${CATCH_PRICE}c`);
+    const [bx, by, bw, bh] = [SWARM.w - 80, 15, 68, 8];
+    this.swarm.bar.clear().fillStyle(LIVE.swarmTrack).fillRoundedRect(bx, by, bw, bh, 4);
+    this.swarm.bar.fillStyle(LIVE.swarmBar).fillRoundedRect(bx, by, Math.max(bh, (bw * s.swarmIn) / SWARM_MS), bh, 4);
+  }
+
+  /** The end card: gold at the fair makes the player the Beehive Baron. A tap on it carries on playing. */
+  private createEnd() {
+    const card = this.add.image(0, 0, 'end-card').setInteractive({ useHandCursor: true });
+    const title = this.add.text(0, -16, 'Gold at the county fair!', textStyle(22, '#4a2c10', '900')).setOrigin(0.5);
+    const sub = this.add.text(0, 12, 'You are the Beehive Baron', textStyle(15, '#6a4aa8', '800')).setOrigin(0.5);
+    const detail = this.add.text(0, 40, '', textStyle(11.5, '#6a4a28', '700')).setOrigin(0.5);
+    const more = this.add.text(0, END_CARD.h / 2 - 22, 'tap to keep playing', textStyle(10.5, '#8a6a40', '600')).setOrigin(0.5);
+    const shade = this.add.rectangle(0, 0, VIEW.w * 2, VIEW.h * 2, 0x2a1808, 0.45);
+    const root = this.add.container(END_CARD.x, END_CARD.y, [shade, card, title, sub, detail, more]).setDepth(UI_DEPTH + 5).setVisible(false);
+    card.on('pointerdown', () => root.setVisible(false));
+    this.endCard = { root, detail };
+  }
+
+  private showEnd() {
+    const s = this.state;
+    const total = fairTotal(s) ?? 0;
+    this.endCard.detail.setText(`${total} points · year ${s.years + 1} · ${s.sold} jars sold · ${s.bees.length} bees in ${s.hives} hive${s.hives === 1 ? '' : 's'}`);
+    this.endCard.root.setVisible(true);
   }
 }

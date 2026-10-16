@@ -64,6 +64,17 @@ export const WASP_CARD = { body: '#ffd21f', dark: '#1d1a16', wing: 'rgba(214,224
 export const NOTE_CARD = { paper: '#fff8e4', edge: '#c9a46a', pin: '#4f9a42' };
 export const BROOD_CARD = { cap: '#c98f4a', dome: '#dba560', larva: '#fff4e0' };
 export const WAX_CARD = { cake: '#f3d98c', shine: '#fff0c0' };
+/** The orchard contract's note (a green-tinged paper with a brown pin) and the mead cask's staves, hoops and bung. */
+export const ORCHARD_CARD = { paper: '#eef8dc', edge: '#9bb878', pin: '#a86e36' };
+export const MEAD_CARD = { stave: '#8a5a2e', hoop: '#3f2a16', bung: '#d9a95c' };
+
+/** The tint laid over the scenery each season (the hive and the cards stay as they are), as a colour and how strong. */
+export const SEASON_TINT = {
+  spring: { colour: 0xffffff, alpha: 0 },
+  summer: { colour: 0xfff0a0, alpha: 0.12 },
+  autumn: { colour: 0xe89a3c, alpha: 0.28 },
+  winter: { colour: 0xeaf2fa, alpha: 0.68 },
+};
 
 export const LIVE = {
   edgeGlow: 0xffd640,
@@ -82,4 +93,10 @@ export const LIVE = {
   stealTrack: 0x3a2410,
   marketPick: 0xffd25a,
   marketLine: 0xd9b880,
+  meadArc: 0xffd25a,
+  meadReady: 0xfff0b0,
+  swarmBar: 0xffd25a,
+  swarmTrack: 0x5a3416,
+  fairPick: 0x9cf060,
+  snow: 0xffffff,
 };

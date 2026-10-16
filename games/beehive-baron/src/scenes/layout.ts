@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { smooth } from '../art/paper';
 import type { Kind } from '../game/honey';
-import { FLOWERS, GRID } from '../game/state';
+import { FLOWERS, GRID, localSlot } from '../game/state';
 
 // Where things are drawn in the 960x540 view: the hive with its comb on the left, the meadow the
 // bees fly to on the top right, and the buttons on a board below the meadow.
@@ -9,13 +9,13 @@ import { FLOWERS, GRID } from '../game/state';
 export const VIEW = { w: 960, h: 540 };
 export const HUD_HEIGHT = 40;
 
-/** The comb: the centre of the top left cell and each hexagon's radius (pointy side up). */
+/** The comb: the centre of the top left cell and each hexagon's radius (pointy side up). Both hives' combs draw in the same place. */
 export const COMB = { x: 104, y: 132, r: 34 };
 const HEX_W = Math.sqrt(3) * COMB.r;
 const ROW_H = 1.5 * COMB.r;
 export const cellCentre = (slot: number) => {
-  const col = slot % GRID.cols;
-  const row = Math.floor(slot / GRID.cols);
+  const col = localSlot(slot) % GRID.cols;
+  const row = Math.floor(localSlot(slot) / GRID.cols);
   return { x: COMB.x + col * HEX_W + (row % 2) * (HEX_W / 2), y: COMB.y + row * ROW_H };
 };
 /** The six corners of a cell's hexagon, `inset` pixels in from its edge. */
@@ -27,7 +27,7 @@ export function hexPoints(slot: number, inset = 0) {
     return new Phaser.Math.Vector2(c.x + r * Math.cos(a), c.y + r * Math.sin(a));
   });
 }
-/** The comb spot under a point, or null: the nearest centre, if the point is inside its hexagon. */
+/** The comb spot under a point (on the comb shown), or null: the nearest centre, if the point is inside its hexagon. */
 export function cellAt(x: number, y: number) {
   let best: number | null = null;
   let bestD = Infinity;
@@ -45,7 +45,10 @@ export function cellAt(x: number, y: number) {
  * the bees fly in and out of.
  */
 export const HIVE = { x: 36, y: 46, w: 388, h: 336 };
-export const PLAQUE = { x: 233, y: 68, w: 156, h: 18 };
+export const PLAQUE = { x: 300, y: 68, w: 156, h: 18 };
+/** The tabs on the roof that switch between the hives' combs once the swarm is caught, by hive. */
+export const HIVE_TAB = { w: 54, h: 18 };
+export const hiveTab = (hive: number) => ({ x: 100 + hive * (HIVE_TAB.w + 6), y: 68 });
 export const ENTRANCE = { x: 233, y: 338 };
 /** Where the bees at home rest: eight side by side on the landing board, the rest on the hive above them. */
 export const homeSpot = (i: number) => ({ x: ENTRANCE.x - 105 + (i % 8) * 30, y: ENTRANCE.y + 6 - Math.floor(i / 8) * 24 });
@@ -91,6 +94,8 @@ export function forageSpot(kind: Kind, flower: number) {
 
 /** The chip under the hive that says how much nectar the bees gathered while the page was closed. */
 export const AWAY = { x: 56, y: 384, w: 359, h: 38 };
+/** The swarm chip, in the same place while a crowded hive gets ready to swarm: tap it to catch the swarm. */
+export const SWARM = AWAY;
 /** The hint line for a new player, in the same place (it hides while the chip shows). */
 export const HINT = { x: 233, y: 403 };
 /**
@@ -100,17 +105,22 @@ export const HINT = { x: 233, y: 403 };
 export const MARKET = { ...AWAY, label: 66, entry: 97 };
 export const marketEntry = (i: number) => ({ x: MARKET.x + MARKET.label + i * MARKET.entry, y: MARKET.y, w: MARKET.entry - 2, h: MARKET.h });
 
-/** The shelf of honey jars waiting to be sold, under the hive. */
-export const SHELF = { x: 80, y: 468, jarGap: 34, jars: 10 };
+/** The shelf of honey jars waiting to be sold, under the hive, and the mead casks at its right end. */
+export const SHELF = { x: 80, y: 468, jarGap: 34, jars: 7 };
+export const CASK = { x: 330, y: 468, gap: 36, w: 28, h: 30 };
+export const caskSpot = (i: number) => ({ x: CASK.x + i * CASK.gap, y: CASK.y });
 
 /** The board under the meadow with the buttons, by their centres. */
 export const BOARD = { x: 530, y: 294, w: 420, h: 212 };
 export const SEND_BUTTON = { x: 635, y: 322, w: 190, h: 44 };
 export const SELL_BUTTON = { x: 845, y: 322, w: 190, h: 44 };
-/** The shop: two columns of three rows, filled row by row; the last spot holds the village order card. */
-export const SHOP_BUTTONS = { xs: [635, 845], ys: [372, 418, 464], w: 190, h: 40 };
+/** The shop: two columns of four rows, filled row by row; the last two spots hold the village order and the orchard contract cards. */
+export const SHOP_BUTTONS = { xs: [635, 845], ys: [364, 402, 440, 478], w: 190, h: 34 };
 export const shopSpot = (i: number) => ({ x: SHOP_BUTTONS.xs[i % 2], y: SHOP_BUTTONS.ys[Math.floor(i / 2)] });
-export const ORDER = { ...shopSpot(5), w: SHOP_BUTTONS.w, h: SHOP_BUTTONS.h };
+export const ORDER = { ...shopSpot(6), w: SHOP_BUTTONS.w, h: SHOP_BUTTONS.h };
+export const CONTRACT = { ...shopSpot(7), w: SHOP_BUTTONS.w, h: SHOP_BUTTONS.h };
+/** The end card over everything once the fair's gold makes the player the Baron. */
+export const END_CARD = { x: VIEW.w / 2, y: VIEW.h / 2, w: 420, h: 190 };
 
 /** Where raiding wasps come in from and fly off to, beyond the right edge. */
 export const WASP_FROM = { x: VIEW.w + 30, y: 150 };
