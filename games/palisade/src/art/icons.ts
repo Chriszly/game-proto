@@ -168,6 +168,71 @@ const ICONS: Record<Icon, (ctx: Ctx) => void> = {
     }
     gem(ctx, 44, 44, 6, 4, 0, '#b8862c', '#ffe48a');
   },
+  shatter: (ctx) => {
+    // A frost crystal bursting into shards.
+    crystal(ctx, 24, 30, 15, Math.PI / 6);
+    for (const [x, y, r, a] of [[44, 12, 6, 0.4], [48, 30, 5, 1.2], [40, 46, 5, 2.1], [8, 10, 4, 0.9]] as [number, number, number, number][]) {
+      gem(ctx, x, y, r, 3, a, '#3a6aa0', '#e8f8ff');
+    }
+    line(ctx, [[30, 22], [40, 14]], '#e8f8ff', 1.5);
+    line(ctx, [[34, 32], [44, 31]], '#e8f8ff', 1.5);
+  },
+  finisher: (ctx) => {
+    // A nearly empty health bar, shot through.
+    poly(ctx, rect(6, 34, 44, 12), '#2a1c14', '#c9bfa4', 1.5);
+    poly(ctx, rect(8, 36, 7, 8), '#d8402a');
+    poly(ctx, rect(8, 36, 7, 3), '#ff8a6a');
+    arrow(ctx, [44, 6], [22, 40], 3);
+  },
+  slayer: (ctx) => {
+    // A giant's horned helm with an arrow in it.
+    poly(ctx, [[14, 24], [6, 6], [10, 4], [20, 18]], '#efe5c9');
+    poly(ctx, [[42, 24], [50, 6], [46, 4], [36, 18]], '#c9bfa4');
+    facet(ctx, [[12, 48], [10, 28], [18, 16], [38, 16], [46, 28], [44, 48]], '#8d93a8', { k: 1.4 });
+    poly(ctx, rect(16, 30, 24, 5), '#2a2832');
+    arrow(ctx, [52, 50], [30, 26], 3);
+  },
+  cloudburst: (ctx) => {
+    // A storm cloud raining arrows.
+    for (const dx of [-12, 0, 12]) {
+      ctx.save();
+      ctx.translate(28 + dx, 40);
+      ctx.rotate(1.25);
+      poly(ctx, rect(-12, -1, 18, 2.5), '#f1e3bf');
+      poly(ctx, [[6, -3.5], [13, 0], [6, 3.5]], '#e2e8ee');
+      ctx.restore();
+    }
+    facet(ctx, [[6, 26], [10, 16], [20, 12], [28, 6], [40, 10], [48, 18], [50, 28]], '#9aa4b8', { k: 1.3 });
+    poly(ctx, [[6, 26], [50, 28], [44, 32], [12, 32]], '#5d6478');
+  },
+  barbs: (ctx) => {
+    // Two big caltrops with hooked barbs.
+    caltrop(ctx, 18, 30, 2);
+    caltrop(ctx, 40, 22, 1.6);
+    poly(ctx, [[18, 16], [23, 19], [19, 21]], '#d8e0e8');
+    poly(ctx, [[40, 11], [44, 14], [41, 15]], '#d8e0e8');
+  },
+  stakes: (ctx) => {
+    // Sharpened stakes leaning out of the ground.
+    for (const [x, tilt] of [[12, 8], [26, 12], [40, 8]] as [number, number][]) {
+      poly(ctx, [[x, 50], [x + tilt, 16], [x + tilt + 7, 18], [x + 7, 50]], '#a8743f');
+      poly(ctx, [[x + tilt + 4, 17], [x + tilt + 7, 18], [x + 7, 50], [x + 4, 50]], '#6a4426');
+      poly(ctx, [[x + tilt, 16], [x + tilt + 9, 4], [x + tilt + 7, 18]], '#f3d7aa');
+    }
+    poly(ctx, rect(4, 48, 48, 4), '#5a4a32');
+  },
+  bounty: (ctx) => {
+    // A pile of coins with an arrow stuck in the top one.
+    coin(ctx, 18, 42, 9);
+    coin(ctx, 38, 42, 9);
+    coin(ctx, 28, 28, 12);
+    arrow(ctx, [50, 6], [30, 26], 2.5);
+  },
+  drill: (ctx) => {
+    // A shield with a sergeant's gold chevrons.
+    facet(ctx, [[10, 8], [46, 8], [46, 30], [28, 50], [10, 30]], '#3a6aa0', { k: 1.3 });
+    for (const y of [16, 26]) poly(ctx, [[16, y], [28, y + 8], [40, y], [40, y + 5], [28, y + 13], [16, y + 5]], '#e5b53a');
+  },
   mend: (ctx) => {
     // A plank and a hammer.
     poly(ctx, [[6, 40], [44, 26], [48, 34], [10, 48]], '#c99260');

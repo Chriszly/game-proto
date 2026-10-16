@@ -118,8 +118,10 @@ then charges again from empty. A level-up or a fall drops it from the hand.
 
 The second active, on the button above Arrow Rain's. Every kill charges it too (6 kills), and once
 it reads READY it is dragged onto the road the same way, along a dashed arc to a dashed patch. Let
-go and caltrops are strewn over the patch for 8 seconds: every foe walking on them is slowed by 40%
-and takes 80% of an arrow's damage a second, through armour. Harpies fly over them.
+go and caltrops are strewn over the patch, where they stay for five waves (the one they are strewn
+in included) before they wear off, looking worn on their last wave: every foe walking on them is slowed by 40% and takes 80% of an arrow's damage a second, through
+armour. Up to three patches lie on the road at once; strewing a fourth lifts the oldest. Harpies
+fly over them.
 
 ![Dragging the caltrops onto the road](docs/screenshots/caltrops-aim.png)
 ![Foes walking over the caltrops](docs/screenshots/caltrops.png)
@@ -190,11 +192,20 @@ the empty cards, in this order: "Mend the Barricade" (repair half of the barrica
 | Forked Lightning | 3 | Lightning leaps to one more foe and hits 25% harder (after Storm Staff) |
 | Stout Timber | 5 | The barricade gets 25% more health and is repaired |
 | Battle Lore | 3 | 20% more experience |
+| Shatter | 3 | Arrows deal 20% more damage to chilled foes (after Frost Arrows) |
+| Finishing Shot | 3 | Arrows deal double damage to foes below 15% of their health, 30% at rank 2, 45% at rank 3 |
+| Giant Slayer | 3 | Arrows and Arrow Rain deal 30% more damage to bosses |
+| Cloudburst | 3 | Arrow Rain hits 25% harder and its ring is 15% wider |
+| Barbed Caltrops | 3 | Caltrops prick 50% harder and slow foes 10% more |
+| Spiked Stakes | 3 | Foes hacking at the barricade take 6 damage a second, through armour |
+| Bounty Hunter | 3 | Every kill pays 1 more coin (2 on a Golden Road) |
+| Drill Sergeant | 3 | Hired guards attack 20% faster |
 
 ![With every upgrade taken, the three fillers](docs/screenshots/fillers.png)
+![Three of the newer skills on a level-up](docs/screenshots/new-skills-level-up.png)
 
 The skill book (its button in the top bar shows how many skills are found, such as "Skill book
-8/20") has a page for every upgrade and filler. The pages start as empty placeholders, and each fills in the
+8/28") has a page for every upgrade and filler. The pages start as empty placeholders, and each fills in the
 first time a level-up offers that upgrade, with its icon, what a rank does and the hero's rank
 (dimmed while it has none; for a filler, how many times it was picked, such as "2x"). Along its
 bottom it lists the relics won, with the bonus of each full set. The book stays filled for a new hero. It opens during a
@@ -203,6 +214,7 @@ level-up too, to check what the hero has before choosing.
 ![The empty skill book of a new hero](docs/screenshots/skill-book-empty.png)
 ![A skill book part filled in, with two relics](docs/screenshots/skill-book.png)
 ![A full skill book with the Warden's set](docs/screenshots/skill-book-sets.png)
+![The skill book with all 28 skills](docs/screenshots/skill-book-new-skills.png)
 
 The switch at the right end of the experience bar plays the battle at double speed. It lights up
 gold at 2x and is remembered in the browser, separately from the hero.

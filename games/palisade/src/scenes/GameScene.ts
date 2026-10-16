@@ -9,7 +9,7 @@ import { GUARDS, type GuardKind } from '../game/guards';
 import { RELICS, SETS, setComplete } from '../game/relics';
 import { ROADS, type RoadId } from '../game/roads';
 import { clearProgress, loadFound, loadProgress, loadSpeed, saveFound, saveProgress, saveSpeed } from '../game/save';
-import { CALTROP_MS, CALTROP_PATCH, RAIN_FALL_MS, RAIN_RING, crowdSpot, fightAgain, hire, loose, offer, pick, pickRoad, strew, tick, train } from '../game/sim';
+import { CALTROP_PATCH, RAIN_FALL_MS, RAIN_RING, crowdSpot, fightAgain, hire, loose, offer, pick, pickRoad, strew, tick, train } from '../game/sim';
 import {
   BARRICADE_FRONT,
   FIELD,
@@ -368,12 +368,13 @@ export class GameScene extends Phaser.Scene {
       } else if (e.kind === 'rain') {
         // The volley lands: a gold ring bursts outwards and the shafts stand in the road.
         const k = 1 + 0.25 * t;
-        glow.lineStyle(4, GOLD.light, 0.8 * (1 - t)).strokeEllipse(e.x, e.y, RAIN_RING.rx * 2 * k, RAIN_RING.ry * 2 * k);
-        g.fillStyle(GOLD.mid, 0.25 * (1 - t)).fillEllipse(e.x, e.y, RAIN_RING.rx * 2, RAIN_RING.ry * 2);
+        const { rx, ry } = this.ring();
+        glow.lineStyle(4, GOLD.light, 0.8 * (1 - t)).strokeEllipse(e.x, e.y, rx * 2 * k, ry * 2 * k);
+        g.fillStyle(GOLD.mid, 0.25 * (1 - t)).fillEllipse(e.x, e.y, rx * 2, ry * 2);
         for (let i = 0; i < 12; i++) {
           const [dx, dy] = this.scatter(e.id, i);
-          const x = e.x + dx * RAIN_RING.rx * 0.9;
-          const y = e.y + dy * RAIN_RING.ry * 0.9;
+          const x = e.x + dx * rx * 0.9;
+          const y = e.y + dy * ry * 0.9;
           g.lineStyle(2, 0xfff2c4, 1 - t).lineBetween(x - 3, y - 12, x, y);
         }
       } else if (e.kind === 'block') {
@@ -848,11 +849,12 @@ export class GameScene extends Phaser.Scene {
         arrows = Array.from({ length: 14 }, () => fit(this.add.image(0, 0, 'rain-arrow')).setOrigin(0.5, 1).setDepth(UI_DEPTH - 35));
         this.rainArrows.set(vol.id, arrows);
       }
+      const { rx, ry } = this.ring();
       arrows.forEach((img, i) => {
         const [dx, dy] = this.scatter(vol.id, i);
         const lag = (i % 4) * 0.08;
         const f = Phaser.Math.Clamp(fall + lag, 0, 1);
-        img.setPosition(vol.x + dx * RAIN_RING.rx * 0.9 - f * 40, vol.y + dy * RAIN_RING.ry * 0.9 - f * 260).setRotation(0.15).setAlpha(f < 1 ? 1 : 0);
+        img.setPosition(vol.x + dx * rx * 0.9 - f * 40, vol.y + dy * ry * 0.9 - f * 260).setRotation(0.15).setAlpha(f < 1 ? 1 : 0);
       });
     }
     for (const [id, arrows] of this.rainArrows) {
@@ -862,9 +864,15 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** Half the width and height of Arrow Rain's ring, wider with Cloudburst. */
+  private ring() {
+    const k = stats(this.state).rainRing;
+    return { rx: RAIN_RING.rx * k, ry: RAIN_RING.ry * k };
+  }
+
   /** The Arrow Rain target ring lying on the road: a dashed gold ellipse round a soft fill. */
   private drawRing(g: Phaser.GameObjects.Graphics, x: number, y: number, color: number, alpha: number) {
-    const { rx, ry } = RAIN_RING;
+    const { rx, ry } = this.ring();
     g.fillStyle(color, 0.22 * alpha).fillEllipse(x, y, rx * 2, ry * 2);
     for (let k = 0; k < 16; k += 2) {
       const a0 = (k / 16) * Math.PI * 2;
@@ -919,11 +927,11 @@ export class GameScene extends Phaser.Scene {
         if (f > 0) g.lineStyle(3, GOLD.light, 1).lineBetween(a.x, a.y, a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f);
       }
     }
-    // Each patch: a faint ring and caltrops scattered over it, fading out as it ends.
+    // Each patch: a faint ring and caltrops scattered over it, fading in as it lands and dimmed on its last wave.
     const seen = new Set<number>();
     for (const p of c.patches) {
       seen.add(p.id);
-      const fade = Math.min(1, p.ms / 600, (CALTROP_MS - p.ms) / 150 + 0.2);
+      const fade = Math.min(1, p.ms / 150 + 0.2) * (p.waves > 1 ? 1 : 0.55);
       this.fx.fillStyle(0x3a2a1a, 0.18 * fade).fillEllipse(p.x, p.y, CALTROP_PATCH.rx * 2, CALTROP_PATCH.ry * 2);
       let pieces = this.caltropPieces.get(p.id);
       if (!pieces) {
