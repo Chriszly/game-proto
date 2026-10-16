@@ -119,7 +119,10 @@ changed, on pull requests only, under a single required `Playthrough` check, and
 screenshots as the `playthrough-<name>` artifact. The Hub workflow runs the hub test, opening each game from its
 card in one job per game, on pull requests only for the games whose folder changed. The Screens workflow checks each game that uses `shared/scaling.ts` on five screens,
 one job per game, on pull requests only for the games whose folder changed. Each CI run also uploads a `game-build` artifact: download it from
-the run's summary page, unzip it and serve the folder (for example with `npx serve`) to play.
+the run's summary page, unzip it and serve the folder (for example with `npx serve`) to play. The Dependencies workflow
+(`.github/workflows/dependencies.yml`) lists outdated npm packages and known vulnerabilities on its
+summary page on the first of each month, and fails on a high or critical one; start it by hand to
+check at any time.
 
 ## Play online
 

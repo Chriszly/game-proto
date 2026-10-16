@@ -1,0 +1,49 @@
+name: Dependencies
+
+# Lists the npm packages with a newer version and the known vulnerabilities in
+# them on the run's summary page, once a month and when started by hand. The run
+# fails on a high or critical vulnerability, so it shows up red. It opens no PRs:
+# ask for an update and it comes as an ordinary PR.
+on:
+  schedule:
+    - cron: "0 6 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: List outdated packages
+        run: |
+          {
+            echo "## Outdated packages"
+            echo
+            echo '```'
+            # npm outdated exits with 1 when anything is outdated.
+            npm outdated || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Audit for vulnerabilities
+        run: |
+          set +e
+          npm audit --audit-level=high > audit.txt
+          status=$?
+          {
+            echo "## Vulnerabilities"
+            echo
+            echo '```'
+            cat audit.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat audit.txt
+          exit $status
