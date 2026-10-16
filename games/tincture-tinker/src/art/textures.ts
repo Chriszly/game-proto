@@ -39,9 +39,9 @@ import {
 // art units (twice that).
 
 export const kindTexture = (kind: Kind, catalyst = false) => (catalyst ? `catalyst-${kind}` : `kind-${kind}`);
-/** The texture of a tile on the board: a jar, a resin-held tile, a Bloom, a Catalyst or a plain ingredient. */
+/** The texture of a tile on the board: a jar, a resin-held or mouldy tile, a Bloom, a Catalyst or a plain ingredient. */
 export const tileTexture = (t: Tile) =>
-  t.jar ? `jar-${t.kind}` : t.resin ? `resin-${t.kind}` : t.bloom ? `bloom-${t.kind}` : kindTexture(t.kind, t.catalyst);
+  t.jar ? `jar-${t.kind}` : t.resin ? `resin-${t.kind}` : t.mould ? `mould-${t.kind}` : t.bloom ? `bloom-${t.kind}` : kindTexture(t.kind, t.catalyst);
 export const needTexture = (kind: Kind) => `need-${kind}`;
 export const potionTexture = (potion: PotionId) => `potion-${potion}`;
 export const toolTexture = (tool: Tool, look: 'on' | 'off' | 'armed') => `tool-${tool}-${look}`;
@@ -70,6 +70,7 @@ export function bakeTextures(scene: Phaser.Scene) {
     bake(scene, `bloom-${kind}`, 64, 64, () => paintBloom(kind));
     bake(scene, `jar-${kind}`, BOARD.cell, BOARD.cell, () => paintJar(kind));
     bake(scene, `resin-${kind}`, BOARD.cell, BOARD.cell, () => paintResin(kind));
+    bake(scene, `mould-${kind}`, BOARD.cell, BOARD.cell, () => paintMould(kind));
     bake(scene, needTexture(kind), 40, 40, () => {
       circle(40, 40, 37, '#f6ecd2', GOLD, 2.5);
       ingredient(kind, 40, 40, 28, 5);
@@ -302,6 +303,29 @@ function paintResin(kind: Kind) {
   ctx.stroke();
   line(x - 30, y - 32, x - 8, y - 36, '#fff3d0', 4);
   circle(x + 28, y - 26, 4, '#fff3d0');
+}
+
+/** An ingredient under creeping mould: a grey-green fuzzy growth of spots with pale tufts over it. */
+function paintMould(kind: Kind) {
+  const x = 56;
+  const y = 56;
+  ingredient(kind, x, y, 36, 7);
+  // The growth: a lumpy, translucent patch that leaves the ingredient's edges showing.
+  const lumps: [number, number, number][] = [
+    [-20, -18, 26], [14, -24, 22], [24, 6, 24], [-24, 14, 22], [0, 4, 30], [10, 28, 22], [-14, 30, 20],
+  ];
+  ctx.save();
+  ctx.globalAlpha = 0.55;
+  for (const [dx, dy, r] of lumps) circle(x + dx, y + dy, r, '#5f7452');
+  ctx.restore();
+  const spots: [number, number, number][] = [
+    [-22, -20, 12], [8, -28, 9], [26, -6, 11], [-28, 10, 9], [-4, 4, 14], [22, 20, 10], [-16, 28, 11], [10, 32, 8],
+  ];
+  for (const [dx, dy, r] of spots) {
+    circle(x + dx, y + dy, r, '#7d9a67', SEPIA, 2.5);
+    circle(x + dx - r * 0.3, y + dy - r * 0.3, r * 0.38, '#b6ca9c');
+  }
+  for (const [dx, dy] of [[-10, -6], [14, 4], [-2, 20], [18, -20], [-26, 24], [30, 30]] as const) circle(x + dx, y + dy, 2.5, '#eef0d6');
 }
 
 /** A round flask with a cork, half full, and a label ribbon the scene writes the order number on. */
