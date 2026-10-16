@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
-import { JAR, LANTERN_SPOTS } from '../game/places';
-import type { MothKind, NightKind } from '../game/state';
+import { DISTRICTS, type DistrictId, JAR, type Spot } from '../game/places';
+import type { LanternKind, MothKind, NightKind } from '../game/state';
 import { sharpRes } from '../../../../shared/scaling';
-import { DUSK_BAR as DUSK, GUST_TAG, KIND_TAG, NIGHT_PANEL, ORDER, SHOP, SMALL_PANEL } from '../scenes/layout';
+import { CALL_TAG, DUSK_BAR as DUSK, GUST_TAG, KIND_TAG, MOVE_CARDS, MOVE_PANEL, NIGHT_PANEL, ORDER, SHOP, SMALL_PANEL } from '../scenes/layout';
 
 export { DUSK };
 
@@ -112,10 +112,10 @@ const TOWERS = [
 const KEEP = { x: 400, y: 128, w: 160 };
 
 /** Merlon x positions along a top edge, skipping those a lantern spot covers. */
-function merlonXs(x0: number, x1: number, top: number) {
+function merlonXs(x0: number, x1: number, top: number, spots: readonly Spot[]) {
   const xs: number[] = [];
   for (let x = x0; x + 12 <= x1; x += 24) {
-    if (LANTERN_SPOTS.some((s) => Math.abs(x + 6 - s.x) < 18 && Math.abs(top + 12 - (s.y + 16)) < 8)) continue;
+    if (spots.some((s) => Math.abs(x + 6 - s.x) < 18 && Math.abs(top + 12 - (s.y + 16)) < 8)) continue;
     xs.push(x);
   }
   return xs;
@@ -159,9 +159,8 @@ function paintScreen(stops: string[], lamp: number) {
   }
 }
 
-/** The castle as one black cut card, with light through its slits, joints and gate. */
-function paintCastle() {
-  // Far hills: a fainter, blurred card further from the screen.
+/** Far hills behind every district: a fainter, blurred card further from the screen. */
+function paintHills() {
   ctx.save();
   ctx.filter = 'blur(1.5px)';
   poly(
@@ -169,85 +168,65 @@ function paintCastle() {
     'rgba(40,20,40,0.55)',
   );
   ctx.restore();
-  const castlePath = () => {
-    ctx.beginPath();
-    const r = (x: number, y: number, w: number, h: number) => ctx.rect(x, y, w, h);
-    r(WALL.x, WALL.y, WALL.w, GROUND - WALL.y + 2);
-    for (const x of merlonXs(40, 920, 308)) r(x, 308, 12, 13);
-    for (const t of TOWERS) {
-      r(t.x, t.y, t.w, GROUND - t.y);
-      for (const x of merlonXs(t.x, t.x + 112, 188)) if (x + 12 <= t.x + t.w + 4) r(x - 2, 186, 14, 15);
-      r(t.x - 6, t.y + 2, t.w + 12, 6);
-    }
-    r(KEEP.x, KEEP.y, KEEP.w, GROUND - KEEP.y);
-    for (const x of merlonXs(400, 572, 116)) if (x + 12 <= 564) r(x, 114, 12, 15);
-    r(KEEP.x - 6, KEEP.y + 2, KEEP.w + 12, 6);
-    r(0, GROUND, W, 40);
-  };
-  // The card sits a hair off the screen, so its edge blooms a soft shadow.
-  ctx.save();
-  ctx.filter = 'blur(3px)';
-  ctx.fillStyle = 'rgba(0,0,0,0.35)';
-  castlePath();
-  ctx.fill();
-  ctx.restore();
-  ctx.fillStyle = INK;
-  castlePath();
-  ctx.fill();
-  // Pennant pole and flag on the keep.
-  poly([[548, 70], [550, 70], [550, 116], [548, 116]], INK);
-  poly([[550, 71], [578, 78], [566, 81], [578, 86], [550, 90]], INK);
-  // Grass tufts along the ground edge.
+}
+
+/** Grass tufts along the ground edge. */
+function paintGrass() {
   reseed(4);
   for (let x = 0; x < W; x += 6) {
     const h = 3 + rnd() * 7;
     poly([[x, 501], [x + 2 + rnd() * 2, 500 - h], [x + 5, 501]], INK);
   }
-  // Light through the cuts.
-  const cut = (pts: P[]) => {
-    ctx.save();
-    ctx.globalAlpha = 0.8;
-    poly(pts, '#f0a868');
-    ctx.restore();
-    const cx = pts.reduce((s, p) => s + p[0], 0) / pts.length;
-    const cy = pts.reduce((s, p) => s + p[1], 0) / pts.length;
-    glow(cx, cy, 12, '#ff9a50', 0.35);
-  };
-  for (const t of TOWERS) {
-    for (const oy of [250, 330]) {
-      const x = t.x + 44;
-      cut([[x, oy + 4], [x + 5, oy - 2], [x + 10, oy + 4], [x + 10, oy + 26], [x, oy + 26]]);
-    }
-  }
-  for (const x of [432, 516]) cut([[x, 304], [x + 7, 296], [x + 14, 304], [x + 14, 330], [x, 330]]);
-  // Brick lace: thin joints cut through, so the card reads as masonry.
+}
+
+/** Light through a cut in the card: warm gel and a soft glow. */
+function cut(pts: P[], gel = '#f0a868') {
+  ctx.save();
+  ctx.globalAlpha = 0.8;
+  poly(pts, gel);
+  ctx.restore();
+  const cx = pts.reduce((s, p) => s + p[0], 0) / pts.length;
+  const cy = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+  glow(cx, cy, 12, '#ff9a50', 0.35);
+}
+
+/** An arched window cut, `w` wide, its sill at (x, y) and its top `h` up. */
+function arch(x: number, y: number, w: number, h: number, gel?: string) {
+  cut([[x, y - h + w / 2], [x + w / 2, y - h], [x + w, y - h + w / 2], [x + w, y], [x, y]], gel);
+}
+
+/** Brick lace: thin joints cut through a block, so the card reads as masonry. */
+function joints(b: { x: number; y: number; w: number }, step: number, bottom = 496) {
   ctx.save();
   ctx.strokeStyle = 'rgba(240,150,90,0.22)';
   ctx.lineWidth = 0.7;
-  const joints = (b: { x: number; y: number; w: number }, step: number) => {
-    for (let y = b.y + 18, row = 0; y < 496; y += 18, row++) {
+  for (let y = b.y + 18, row = 0; y < bottom; y += 18, row++) {
+    ctx.beginPath();
+    ctx.moveTo(b.x + 4, y);
+    ctx.lineTo(b.x + b.w - 4, y);
+    ctx.stroke();
+    for (let x = b.x + 8 + ((row % 2) * step) / 2; x < b.x + b.w - 6; x += step) {
       ctx.beginPath();
-      ctx.moveTo(b.x + 4, y);
-      ctx.lineTo(b.x + b.w - 4, y);
+      ctx.moveTo(x, y - 18);
+      ctx.lineTo(x, y);
       ctx.stroke();
-      for (let x = b.x + 8 + ((row % 2) * step) / 2; x < b.x + b.w - 6; x += step) {
-        ctx.beginPath();
-        ctx.moveTo(x, y - 18);
-        ctx.lineTo(x, y);
-        ctx.stroke();
-      }
     }
-  };
-  joints(KEEP, 40);
-  TOWERS.forEach((t) => joints(t, 34));
+  }
   ctx.restore();
-  // The gate: an arch cut out, with a lattice of thin card bars against warm light.
-  poly([[440, 500], [440, 430], [452, 410], [468, 400], [492, 400], [508, 410], [520, 430], [520, 500]], '#f6b06a');
-  glow(480, 455, 50, '#ffb060', 0.6);
-  for (const x of [452, 464, 476, 488, 500, 512]) poly([[x - 1, 400], [x + 1, 400], [x + 1, 500], [x - 1, 500]], INK);
-  for (const y of [420, 440, 460, 480]) poly([[440, y], [520, y], [520, y + 2], [440, y + 2]], INK);
-  for (const x of [452, 464, 476, 488, 500, 512]) poly([[x - 2, 496], [x + 2, 496], [x, 502]], INK);
-  // The moth jar in front of the gate: a card outline with pale blue gel glass.
+}
+
+/** A gateway cut out from `x0` to `x1`, with a lattice of thin card bars against warm light. */
+function gateway(x0: number, x1: number, top = 400) {
+  const m = (x0 + x1) / 2;
+  poly([[x0, 500], [x0, top + 30], [x0 + 12, top + 10], [x0 + 28, top], [x1 - 28, top], [x1 - 12, top + 10], [x1, top + 30], [x1, 500]], '#f6b06a');
+  glow(m, (top + 500) / 2 + 5, 50, '#ffb060', 0.6);
+  for (let x = x0 + 12; x < x1; x += 12) poly([[x - 1, top], [x + 1, top], [x + 1, 500], [x - 1, 500]], INK);
+  for (let y = top + 20; y < 500; y += 20) poly([[x0, y], [x1, y], [x1, y + 2], [x0, y + 2]], INK);
+  for (let x = x0 + 12; x < x1; x += 12) poly([[x - 2, 496], [x + 2, 496], [x, 502]], INK);
+}
+
+/** The moth jar in front of the gate: a card outline with pale blue gel glass. */
+function paintJar() {
   const jx = JAR.x;
   const jy = JAR.y - 20;
   ctx.save();
@@ -261,6 +240,187 @@ function paintCastle() {
   poly([[jx - 6, jy - 21], [jx + 6, jy - 21], [jx + 5, jy - 15], [jx - 5, jy - 15]], INK);
   poly([[jx - 18, jy + 18], [jx + 18, jy + 18], [jx + 18, jy + 22], [jx - 18, jy + 22]], INK);
   poly([[jx - 12, jy - 6], [jx - 10, jy - 6], [jx - 10, jy + 14], [jx - 12, jy + 14]], 'rgba(255,255,255,0.7)');
+}
+
+/** A district's scenery: the path of its black card, and the trim drawn over it (cuts, joints, the gate). */
+interface Scenery {
+  card: (spots: readonly Spot[]) => void;
+  trim: () => void;
+}
+const r = (x: number, y: number, w: number, h: number) => ctx.rect(x, y, w, h);
+
+const SCENERY: Record<DistrictId, Scenery> = {
+  // The castle: a wall with merlons, two towers and the keep.
+  keep: {
+    card(spots) {
+      r(WALL.x, WALL.y, WALL.w, GROUND - WALL.y + 2);
+      for (const x of merlonXs(40, 920, 308, spots)) r(x, 308, 12, 13);
+      for (const t of TOWERS) {
+        r(t.x, t.y, t.w, GROUND - t.y);
+        for (const x of merlonXs(t.x, t.x + 112, 188, spots)) if (x + 12 <= t.x + t.w + 4) r(x - 2, 186, 14, 15);
+        r(t.x - 6, t.y + 2, t.w + 12, 6);
+      }
+      r(KEEP.x, KEEP.y, KEEP.w, GROUND - KEEP.y);
+      for (const x of merlonXs(400, 572, 116, spots)) if (x + 12 <= 564) r(x, 114, 12, 15);
+      r(KEEP.x - 6, KEEP.y + 2, KEEP.w + 12, 6);
+    },
+    trim() {
+      // Pennant pole and flag on the keep.
+      poly([[548, 70], [550, 70], [550, 116], [548, 116]], INK);
+      poly([[550, 71], [578, 78], [566, 81], [578, 86], [550, 90]], INK);
+      for (const t of TOWERS) for (const oy of [250, 330]) arch(t.x + 44, oy + 26, 10, 30);
+      for (const x of [432, 516]) arch(x, 330, 14, 34);
+      joints(KEEP, 40);
+      TOWERS.forEach((t) => joints(t, 34));
+      gateway(440, 520);
+    },
+  },
+  // The docks: a long warehouse with a crane, a customs house with a mast, a fish hall and a lighthouse.
+  docks: {
+    card(spots) {
+      r(40, 320, 380, GROUND - 320 + 2);
+      for (const x of merlonXs(40, 420, 308, spots)) r(x + 2, 312, 8, 9);
+      r(120, 200, 60, GROUND - 200);
+      r(130, 206, 130, 8);
+      r(254, 206, 4, 40);
+      r(540, 320, 380, GROUND - 320 + 2);
+      for (const x of merlonXs(540, 920, 308, spots)) r(x + 2, 312, 8, 9);
+      r(780, 166, 60, GROUND - 166);
+      r(770, 160, 80, 8);
+      r(400, 246, 160, GROUND - 246);
+      r(394, 248, 172, 6);
+      r(477, 128, 6, 120);
+      r(440, 150, 80, 4);
+    },
+    trim() {
+      // The lighthouse lamp room and the warehouse portholes.
+      cut([[790, 178], [830, 178], [830, 200], [790, 200]], '#ffe6a0');
+      glow(810, 190, 30, '#ffd080', 0.6);
+      for (const x of [120, 200, 340]) cut([[x - 7, 400], [x, 393], [x + 7, 400], [x, 407]]);
+      for (const x of [620, 700, 840]) cut([[x - 7, 400], [x, 393], [x + 7, 400], [x, 407]]);
+      arch(470, 300, 20, 40);
+      joints({ x: 400, y: 246, w: 160 }, 40);
+      joints({ x: 780, y: 166, w: 60 }, 30);
+      // Rope from the crane's jib, and a coil on the quay.
+      poly([[256, 214], [258, 214], [258, 290], [256, 290]], INK);
+      gateway(380, 580, 408);
+      for (const x of [400, 560]) poly([[x - 5, 408], [x + 5, 408], [x + 5, 500], [x - 5, 500]], INK);
+    },
+  },
+  // Chapel Hill: a bell tower, a chapel with a steeple, a churchyard wall with headstones and an old yew.
+  chapel: {
+    card(spots) {
+      r(40, 320, 880, GROUND - 320 + 2);
+      for (const x of merlonXs(40, 920, 308, spots)) {
+        ctx.moveTo(x + 1, 322);
+        ctx.lineTo(x + 1, 308);
+        ctx.arc(x + 6, 308, 5, PI, 0);
+        ctx.lineTo(x + 11, 322);
+        ctx.closePath();
+      }
+      r(90, 200, 60, GROUND - 200);
+      r(84, 202, 72, 6);
+      ctx.moveTo(400, 246);
+      ctx.lineTo(480, 200);
+      ctx.lineTo(560, 246);
+      ctx.lineTo(560, GROUND);
+      ctx.lineTo(400, GROUND);
+      ctx.closePath();
+      r(466, 128, 28, 120);
+      r(462, 130, 36, 6);
+      ctx.moveTo(840, 200);
+      ctx.bezierCurveTo(900, 230, 900, 340, 870, 400);
+      ctx.lineTo(880, GROUND);
+      ctx.lineTo(800, GROUND);
+      ctx.lineTo(810, 400);
+      ctx.bezierCurveTo(780, 340, 780, 230, 840, 200);
+      ctx.closePath();
+      r(836, 400, 8, GROUND - 400);
+    },
+    trim() {
+      // The belfry, the chapel's windows and a rose window over the porch.
+      arch(110, 250, 20, 36, '#ffd8a0');
+      for (const x of [420, 530]) arch(x, 330, 10, 40);
+      cut([[480, 300], [490, 310], [480, 320], [470, 310]], '#f0a8c0');
+      glow(480, 310, 14, '#ff9ab0', 0.4);
+      joints({ x: 466, y: 128, w: 28 }, 28, 246);
+      joints({ x: 90, y: 200, w: 60 }, 30);
+      gateway(440, 520, 408);
+    },
+  },
+  // The market: gabled houses, a market hall with a clock tower and a row of stalls with awnings.
+  market: {
+    card(spots) {
+      for (const hx of [150, 710]) {
+        ctx.moveTo(hx, 260);
+        ctx.lineTo(hx + 50, 200);
+        ctx.lineTo(hx + 100, 260);
+        ctx.lineTo(hx + 100, GROUND);
+        ctx.lineTo(hx, GROUND);
+        ctx.closePath();
+        r(hx + 36, 200, 28, 6);
+      }
+      r(400, 246, 160, GROUND - 246);
+      r(394, 248, 172, 6);
+      r(455, 128, 50, 120);
+      r(449, 130, 62, 6);
+      // Stalls: a scalloped awning on two posts each.
+      for (const sx of [100, 320, 640, 860]) {
+        r(sx - 44, 320, 88, 8);
+        for (let x = sx - 44; x < sx + 44; x += 11) {
+          ctx.moveTo(x, 328);
+          ctx.arc(x + 5.5, 328, 5.5, PI, 0, true);
+          ctx.closePath();
+        }
+        r(sx - 42, 328, 4, GROUND - 328);
+        r(sx + 38, 328, 4, GROUND - 328);
+        r(sx - 44, 420, 88, 6);
+      }
+      void spots;
+    },
+    trim() {
+      // The clock face, the houses' windows and the wares on the stalls.
+      ctx.save();
+      ctx.globalAlpha = 0.85;
+      dot(480, 170, 14, '#ffe6b0');
+      ctx.restore();
+      glow(480, 170, 22, '#ffd080', 0.5);
+      poly([[479, 170], [481, 170], [481, 160], [479, 160]], INK);
+      poly([[480, 169], [480, 171], [488, 171], [488, 169]], INK);
+      for (const x of [190, 750]) for (const y of [300, 380]) arch(x, y, 12, 30);
+      joints({ x: 400, y: 246, w: 160 }, 40);
+      const gels = ['#ffc870', '#ff9a8a', '#9ad8c8', '#c8a8ff'];
+      [100, 320, 640, 860].forEach((sx, k) => {
+        for (let i = 0; i < 6; i++) dot(sx - 32 + i * 13, 414, 5, gels[(i + k) % gels.length]);
+      });
+      gateway(440, 520, 408);
+    },
+  },
+};
+
+/** The district's scenery as one black cut card, with light through its cuts and the jar at the gate. */
+function paintScenery(id: DistrictId) {
+  paintHills();
+  const { card, trim } = SCENERY[id];
+  const spots = DISTRICTS[id].spots;
+  const path = () => {
+    ctx.beginPath();
+    card(spots);
+    r(0, GROUND, W, 40);
+  };
+  // The card sits a hair off the screen, so its edge blooms a soft shadow.
+  ctx.save();
+  ctx.filter = 'blur(3px)';
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  path();
+  ctx.fill();
+  ctx.restore();
+  ctx.fillStyle = INK;
+  path();
+  ctx.fill();
+  paintGrass();
+  trim();
+  paintJar();
 }
 
 /** Stars punched through the screen, on their own layer so they can come out as night falls. */
@@ -285,8 +445,20 @@ function paintMoon() {
   ctx.restore();
 }
 
-/** A hanging lantern centred on (0, 0): a black card frame with two coloured gel panes. */
-function paintLantern(lit: boolean) {
+/** The gel panes of each kind of lantern, lit and dark. */
+const LANTERN_GELS: Record<LanternKind, { lit: [string, string]; dark: [string, string] }> = {
+  plain: { lit: ['#ffd480', '#ffb04a'], dark: ['#6f7aa8', '#4a5480'] },
+  beacon: { lit: ['#ff9a50', '#ff5a2a'], dark: ['#8a5a70', '#5a3850'] },
+  candle: { lit: ['#fff6d0', '#ffe8a8'], dark: ['#8a8aa0', '#606078'] },
+  bell: { lit: ['#9af0d8', '#48c8b0'], dark: ['#5a8a90', '#3a6068'] },
+};
+
+/**
+ * A hanging lantern centred on (0, 0): a black card frame with two coloured gel panes. The kinds
+ * differ in their gel and an emblem: a beacon has a flared crown, a candle a single slim pane, and
+ * a bell a bell hanging under it.
+ */
+function paintLantern(lit: boolean, kind: LanternKind = 'plain') {
   const x = 0;
   const y = 0;
   poly([[x - 1.2, y - 30], [x + 1.2, y - 30], [x + 1.2, y - 18], [x - 1.2, y - 18]], INK);
@@ -295,22 +467,41 @@ function paintLantern(lit: boolean) {
   ctx.lineWidth = 1.6;
   ctx.strokeStyle = INK;
   ctx.stroke();
-  poly([[x, y - 24], [x + 12, y - 15], [x + 9, y - 12], [x - 9, y - 12], [x - 12, y - 15]], INK);
+  if (kind === 'beacon') poly([[x, y - 26], [x + 15, y - 15], [x + 9, y - 12], [x - 9, y - 12], [x - 15, y - 15]], INK);
+  else poly([[x, y - 24], [x + 12, y - 15], [x + 9, y - 12], [x - 9, y - 12], [x - 12, y - 15]], INK);
   poly([[x - 11, y - 13], [x + 11, y - 13], [x + 11, y + 10], [x - 11, y + 10]], INK);
   poly([[x - 12, y + 9], [x + 12, y + 9], [x + 8, y + 15], [x - 8, y + 15]], INK);
-  poly([[x - 3, y + 15], [x + 3, y + 15], [x, y + 19]], INK);
-  const pane = lit ? ['#ffd480', '#ffb04a'] : ['#6f7aa8', '#4a5480'];
-  for (const [px, c] of [[-8, pane[0]], [1, pane[1]]] as const) {
+  if (kind === 'bell') {
+    // A small bell on a cord under the base.
+    poly([[x - 0.8, y + 15], [x + 0.8, y + 15], [x + 0.8, y + 18], [x - 0.8, y + 18]], INK);
+    ctx.beginPath();
+    ctx.moveTo(x - 5, y + 24);
+    ctx.quadraticCurveTo(x - 4, y + 17, x, y + 17);
+    ctx.quadraticCurveTo(x + 4, y + 17, x + 5, y + 24);
+    ctx.closePath();
+    ctx.fillStyle = lit ? '#9af0d8' : '#5a8a90';
+    ctx.fill();
+    dot(x, y + 24.5, 1.2, INK);
+  } else poly([[x - 3, y + 15], [x + 3, y + 15], [x, y + 19]], INK);
+  const gels = LANTERN_GELS[kind];
+  const pane = lit ? gels.lit : gels.dark;
+  const panes: readonly (readonly [number, number, string])[] =
+    kind === 'candle' ? [[-3.5, 7, pane[0]]] : [[-8, 7, pane[0]], [1, 7, pane[1]]];
+  for (const [px, pw, c] of panes) {
     ctx.beginPath();
     ctx.moveTo(x + px, y + 7);
     ctx.lineTo(x + px, y - 6);
-    ctx.arc(x + px + 3.5, y - 6, 3.5, PI, 0);
-    ctx.lineTo(x + px + 7, y + 7);
+    ctx.arc(x + px + pw / 2, y - 6, pw / 2, PI, 0);
+    ctx.lineTo(x + px + pw, y + 7);
     ctx.closePath();
     ctx.fillStyle = c;
     ctx.fill();
   }
-  if (lit) glow(x, y, 16, '#fff0b0', 0.9);
+  if (kind === 'candle') {
+    // The candle itself, a pale stick with a wick, behind the pane.
+    poly([[x - 1.2, y + 6], [x + 1.2, y + 6], [x + 1.2, y - 2], [x - 1.2, y - 2]], lit ? '#fff' : '#c0c0d0');
+  }
+  if (lit) glow(x, y, 16, kind === 'beacon' ? '#ffb070' : kind === 'bell' ? '#b0ffe8' : '#fff0b0', kind === 'beacon' ? 1.1 : 0.9);
   else poly([[x - 7, y - 5], [x - 6, y - 5], [x - 6, y + 4], [x - 7, y + 4]], 'rgba(220,230,255,0.5)');
 }
 
@@ -422,6 +613,113 @@ function paintBat(up: boolean) {
   ctx.fill();
   dot(-1.8, -2.5, 1.1, '#ffb050');
   dot(1.8, -2.5, 1.1, '#ffb050');
+}
+
+/**
+ * The Great Owl, a shadow puppet centred on (0, 0): a broad body and wide wings with a pale rim of
+ * light, ear tufts and two big amber gel eyes. `up` and down are its wing beats.
+ */
+function paintOwl(up: boolean) {
+  const sp = up ? 1 : 0.3;
+  for (const side of [-1, 1]) {
+    const X = (x: number) => x * side;
+    ctx.beginPath();
+    ctx.moveTo(X(8), -6);
+    ctx.quadraticCurveTo(X(30), -26 * sp - 6, X(56), -16 * sp - 4);
+    ctx.quadraticCurveTo(X(48), 4, X(36), 10 * sp + 4);
+    ctx.quadraticCurveTo(X(24), 2, X(14), 12 * sp + 2);
+    ctx.quadraticCurveTo(X(10), 6, X(8), 10);
+    ctx.closePath();
+    ctx.save();
+    ctx.shadowColor = 'rgba(255,220,180,0.9)';
+    ctx.shadowBlur = 5 * RES;
+    ctx.strokeStyle = 'rgba(255,230,200,0.85)';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    ctx.restore();
+    ctx.fillStyle = INK;
+    ctx.fill();
+    // Feather lines cut thin, so the screen glows through.
+    ctx.strokeStyle = 'rgba(255,220,180,0.4)';
+    ctx.lineWidth = 0.7;
+    for (const [fx, fy] of [[36, 10 * sp + 3], [24, 10 * sp + 1], [48, 0]] as const) {
+      ctx.beginPath();
+      ctx.moveTo(X(9), -3);
+      ctx.lineTo(X(fx), fy);
+      ctx.stroke();
+    }
+    // An ear tuft.
+    poly([[X(4), -12], [X(9), -22], [X(11), -10]], INK);
+  }
+  ctx.beginPath();
+  ctx.ellipse(0, 2, 11, 15, 0, 0, 2 * PI);
+  ctx.fillStyle = INK;
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(0, -8, 11, 9, 0, 0, 2 * PI);
+  ctx.fill();
+  // Pale rim light round the head and the breast's lace.
+  ctx.save();
+  ctx.shadowColor = 'rgba(255,220,180,0.9)';
+  ctx.shadowBlur = 4 * RES;
+  ctx.strokeStyle = 'rgba(255,230,200,0.7)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.ellipse(0, -8, 11, 9, 0, 0, 2 * PI);
+  ctx.stroke();
+  ctx.restore();
+  for (let k = 0; k < 6; k++) dot((k % 2) * 4 - 2, 4 + k * 2.6, 0.8, 'rgba(255,220,180,0.4)');
+  for (const side of [-1, 1]) {
+    glow(side * 4.5, -8, 7, '#ffb050', 0.8);
+    dot(side * 4.5, -8, 3.6, '#ffb84a');
+    dot(side * 4.5, -8, 1.6, INK);
+  }
+  poly([[-1.5, -4], [1.5, -4], [0, -0.5]], '#ffd8a0');
+}
+
+/** The owl warning plaque, with a pair of owl eyes. */
+function paintOwlTag() {
+  paintPlaque(GUST_TAG.w, GUST_TAG.h, 'rgba(255,220,180,0.55)');
+  for (const x of [13, 25]) {
+    glow(x, 20, 8, '#ffb050', 0.7);
+    dot(x, 20, 5, '#ffb84a');
+    dot(x, 20, 2.2, INK);
+  }
+  poly([[6, 14], [11, 8], [13, 14]], '#ffd8a0');
+  poly([[25, 14], [27, 8], [32, 14]], '#ffd8a0');
+}
+
+/** The window-call plaque: a plaque with a lit cottage window on its left. */
+function paintCallTag() {
+  paintPlaque(CALL_TAG.w, CALL_TAG.h, 'rgba(255,200,140,0.55)');
+  glow(20, 20, 16, '#ffc060', 0.7);
+  poly([[10, 11], [30, 11], [30, 29], [10, 29]], '#ffd890');
+  poly([[19, 11], [21, 11], [21, 29], [19, 29]], INK);
+  poly([[10, 19], [30, 19], [30, 21], [10, 21]], INK);
+  poly([[8, 9], [32, 9], [32, 11], [8, 11]], INK);
+  poly([[8, 29], [32, 29], [32, 31], [8, 31]], INK);
+}
+
+/** The oil cask on the HUD and its shop card: a barrel with two hoops, centred on (0, 0). */
+function paintCask(full: boolean) {
+  ctx.beginPath();
+  ctx.moveTo(-9, -12);
+  ctx.quadraticCurveTo(-13, 0, -9, 12);
+  ctx.lineTo(9, 12);
+  ctx.quadraticCurveTo(13, 0, 9, -12);
+  ctx.closePath();
+  ctx.fillStyle = full ? '#b07a44' : '#5a4a44';
+  ctx.fill();
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 1.4;
+  ctx.stroke();
+  for (const y of [-6, 6]) poly([[-12, y - 1.2], [12, y - 1.2], [12, y + 1.2], [-12, y + 1.2]], INK);
+  poly([[-10, -12.5], [10, -12.5], [10, -10.5], [-10, -10.5]], INK);
+  poly([[-10, 10.5], [10, 10.5], [10, 12.5], [-10, 12.5]], INK);
+  if (full) {
+    glow(0, 0, 12, '#ffc060', 0.5);
+    dot(0, 0, 2.8, '#ffd880');
+  }
 }
 
 /** A paper sky lantern for the Great Festival: a gel shade in a card frame, glowing, centred on (0, 0). */
@@ -709,19 +1007,31 @@ function paintSaveTag() {
   poly([[SAVE_TAG.w / 2 - 5, SAVE_TAG.h - 0.5], [SAVE_TAG.w / 2 + 5, SAVE_TAG.h - 0.5], [SAVE_TAG.w / 2, SAVE_TAG.h + 6]], INK);
 }
 
+/**
+ * Bakes the scenery of district `id` as `castle-<id>`, a full-view layer. `bakeTextures` bakes
+ * the keep's; the scene bakes another district's the first time the keep moves there.
+ */
+export function bakeScenery(scene: Phaser.Scene, id: DistrictId) {
+  bake(scene, `castle-${id}`, W, H, () => paintScenery(id), 0, 0, BACK_RES);
+}
+
 /** Bakes every texture the scene uses. */
 export function bakeTextures(scene: Phaser.Scene) {
   // Sized by the widest texture of each kind, the full-view layers and the HUD bar.
   RES = sharpRes(W, 48, 2);
   BACK_RES = sharpRes(W, H, 1);
   SCREENS.forEach((key, i) => bake(scene, key, W, H, () => paintScreen(SCREEN_STOPS[i], [0.4, 0.35, 0.18][i]), 0, 0, BACK_RES));
-  bake(scene, 'castle', W, H, paintCastle, 0, 0, BACK_RES);
+  bakeScenery(scene, 'keep');
   bake(scene, 'stars', W, 300, paintStars, 0, 0, BACK_RES);
   bake(scene, 'moon', 100, 100, paintMoon, 50, 50);
   bake(scene, 'glow', 128, 128, () => glow(64, 64, 64, '#ffbe6a', 1), 0, 0, 1);
   bake(scene, 'glow-pale', 128, 128, () => glow(64, 64, 64, '#ffe0a0', 1), 0, 0, 1);
   bake(scene, 'lantern-lit', 32, 56, () => paintLantern(true), 16, 36);
   bake(scene, 'lantern-dark', 32, 56, () => paintLantern(false), 16, 36);
+  for (const kind of ['beacon', 'candle', 'bell'] as const satisfies readonly LanternKind[]) {
+    bake(scene, `lantern-${kind}-lit`, 32, 60, () => paintLantern(true, kind), 16, 36);
+    bake(scene, `lantern-${kind}-dark`, 32, 60, () => paintLantern(false, kind), 16, 36);
+  }
   bake(scene, 'flame', 10, 16, paintFlame, 5, 8);
   for (const kind of Object.keys(MOTH_LOOK) as MothKind[]) {
     bake(scene, `moth-${kind}-up`, 56, 52, () => paintMoth(kind, true), 28, 26);
@@ -729,6 +1039,10 @@ export function bakeTextures(scene: Phaser.Scene) {
   }
   bake(scene, 'bat-up', 56, 40, () => paintBat(true), 28, 20);
   bake(scene, 'bat-down', 56, 40, () => paintBat(false), 28, 20);
+  bake(scene, 'owl-up', 120, 70, () => paintOwl(true), 60, 36);
+  bake(scene, 'owl-down', 120, 70, () => paintOwl(false), 60, 36);
+  bake(scene, 'cask-full', 30, 30, () => paintCask(true), 15, 15);
+  bake(scene, 'cask-empty', 30, 30, () => paintCask(false), 15, 15);
   bake(scene, 'sky-lantern', 56, 56, paintSkyLantern, 28, 28);
   bake(scene, 'fog', W, H, paintFog, 0, 0, BACK_RES);
   bake(scene, 'bunting', W, H, paintBunting, 0, 0, BACK_RES);
@@ -750,6 +1064,8 @@ export function bakeTextures(scene: Phaser.Scene) {
   bake(scene, 'pip-lit', 20, 20, () => paintPip(true), 10, 10);
   bake(scene, 'pip-dark', 20, 20, () => paintPip(false), 10, 10);
   padded('gust-tag', GUST_TAG.w, GUST_TAG.h, paintGustTag);
+  padded('owl-tag', GUST_TAG.w, GUST_TAG.h, paintOwlTag);
+  padded('call-tag', CALL_TAG.w, CALL_TAG.h, paintCallTag);
   padded('kind-tag', KIND_TAG.w, KIND_TAG.h, paintKindTag);
   padded('save-tag', SAVE_TAG.w, SAVE_TAG.h, paintSaveTag);
   bake(scene, 'spark', 12, 12, () => {
@@ -758,8 +1074,11 @@ export function bakeTextures(scene: Phaser.Scene) {
   });
   padded('panel', NIGHT_PANEL.w, NIGHT_PANEL.h, () => paintPanel(NIGHT_PANEL.w, NIGHT_PANEL.h));
   padded('panel-small', SMALL_PANEL.w, SMALL_PANEL.h, () => paintPanel(SMALL_PANEL.w, SMALL_PANEL.h));
+  padded('panel-move', MOVE_PANEL.w, MOVE_PANEL.h, () => paintPanel(MOVE_PANEL.w, MOVE_PANEL.h));
   padded('card-on', SHOP.w, SHOP.h, () => paintCard(SHOP.w, SHOP.h, true));
   padded('card-off', SHOP.w, SHOP.h, () => paintCard(SHOP.w, SHOP.h, false));
+  padded('card-wide-on', MOVE_CARDS.w, MOVE_CARDS.h, () => paintCard(MOVE_CARDS.w, MOVE_CARDS.h, true));
+  padded('card-wide-off', MOVE_CARDS.w, MOVE_CARDS.h, () => paintCard(MOVE_CARDS.w, MOVE_CARDS.h, false));
   padded('btn', 200, 40, () => paintCard(200, 40, true));
   padded('btn-hover', 200, 40, () => paintCard(200, 40, true, true));
 }
