@@ -8,18 +8,21 @@ brew potions in the cauldron and sell them to customers at the storefront. It lo
 from a herbalist's almanac: watercolour washes on cream paper, wobbly ink outlines and hatched
 shadows, with the interface in dark ink on parchment cards and a serif type.
 
-![The whole map with both production lines built](docs/screenshots/columns-map.png)
+![The whole map with both production lines built](docs/screenshots/rows-map.png)
 
-The apothecary is laid out in columns. The first production line runs straight down the left
-column: the wheat field and mandrake patch at the top, then the refining table, then the cauldron,
-each with its drop, work and pick-up markers in a row on the side facing the market and its upgrade,
-craftsman and pixie markers on the outer side. The market in the middle holds the outfitter, the
-guild and the study, and the shop sits at the bottom of it. The right column is grass until the expansion is
-bought, which opens it up for a second production line that mirrors the first. Pixies fly goods
-straight down each column and along the bottom into the shop. The map is bigger than the screen, so the
-camera follows the doctor.
+The apothecary is laid out in two rows either side of the shop. The first production line runs
+east along the left half: the wheat field, mandrake patch and shade garden stacked at the far
+edge, then the refining table, then the cauldron, then into the shop's left wall. Each station has
+its drop and pick-up markers north of it, either side, and its work spot just above it; its in
+pallets stand left of it and its out pallets right of it, and its name, its "First:" sign and its
+upgrade, craftsman and pixie markers sit in a row below it. The shop stands in the middle and faces
+the street at the bottom; the doctor goes in by its north door, where the counter's drop-off
+stands outside. The market below holds the outfitter and the study on the left and the guild on
+the right. The right half is grass until the expansion is bought, which opens it up for a second
+production line that mirrors the first. Pixies fly goods along each row into the shop. The map is
+bigger than the screen, so the camera follows the doctor.
 
-![A new game: one line, the market and the shop](docs/screenshots/columns-new-game.png)
+![A new game: one line and the shop](docs/screenshots/rows-new-game.png)
 
 ## How to play
 
@@ -30,7 +33,7 @@ camera follows the doctor.
 | Walk past ripe plants | Harvest every ripe plant within one character height of the doctor; the spinning sickle marks the edge |
 | Recipes (top bar) | Show what each station makes from what, and what each potion sells for; tap again to close |
 | Drop all (top bar) | Throw away everything the doctor carries |
-| Stand on a floor marker | Green: drop off items. Blue: work the station. Gold: pick up products or coins. Purple: stand still on it to pay coins towards an upgrade or build; its caption shows the coins still to pay |
+| Stand on a floor marker | Each is a dashed ring with a faint icon. Green: drop off items. Blue: work the station. Gold: pick up products or coins, a mix of every kind there. Purple: stand still on it to pay coins towards an upgrade or build, each kind with its own icon; its caption shows the coins still to pay |
 
 1. **Gardens**: each garden grows one kind of plant in nine beds, three rows of three edge to
    edge. Harvest ripe wheat in the wheat field and mandrake in the mandrake patch. Beds regrow on
@@ -43,18 +46,18 @@ camera follows the doctor.
    study (see below): wheat flour and mandrake seeds brew a Vigour Tonic, nightshade extract and
    mandrake seeds a Shadow Elixir, nightshade extract and wheat flour a Moonlight Salve, and two
    nightshade extract a Witch's Brew. Stand on the work spot while it brews. When work starts, the cauldron brews whichever
-   potion customers are waiting for that the shop has least of. The last quarter of each brew is
+   potion it has fewest of on its out pallets. The last quarter of each brew is
    its fine window, gold on the brewing bar: step off the work spot then (which stops the brew
    where it is) and onto the pick-up marker, and the potion comes out **Fine**, worth half again
    as much. Left to finish, it comes out plain onto its pallet, as craftsmen always do.
 4. **Storefront**: the storefront faces the street at the bottom of the map. Customers come in
    by the street door in the shop's bottom wall, walk up to the counter and show the potions they want and how long they will wait; they are only served, and
-   only lose patience, once they stand at the counter. The doctor goes in and out by the back door
-   in the top wall, from the market, since the shop's walls are solid and the street door is the
-   customers' own. Drop potions on the drop
-   marker just inside the back door, north of the shelves, and stand on the work spot left of the
-   counter; customers pay for each potion as they get it and leave the coins on the pick-up marker.
-   Behind the counter stands one shelf for each potion the apothecary has learned, showing up to
+   only lose patience, once they stand at the counter. The doctor goes in and out by the north door
+   in the top wall, since the shop's walls are solid and the street door is the customers' own.
+   Drop potions on the drop marker outside the north door, before going in, and stand on the work
+   spot right behind the counter; customers pay for each potion as they get it and leave the coins
+   on the pick-up marker beside it. Along the shop's side walls stands one shelf for each potion the
+   apothecary has learned, showing up to
    six bottles (and how many there are, past that). A well-stocked shop sells cheaper: a customer
    pays 2.5% less for a potion for each other one of its kind still on the shelves, down to half
    price, and the cut for the next sale shows under each shelf ("-30%"). A fine potion stands on
@@ -65,9 +68,9 @@ camera follows the doctor.
 
 ![A Shadow Elixir in its fine window, with a Fine one already in hand](docs/screenshots/fine-window.png)
 
-![The shop's shelves, one per potion learned, with the drop marker north of them](docs/screenshots/shop-shelves.png)
+![The shop's shelves along its walls, with work and coins behind the counter](docs/screenshots/shop-shelves.png)
 
-**The study**, at the bottom left of the market, teaches the recipes the apothecary doesn't know
+**The study**, in the market beside the outfitter, teaches the recipes the apothecary doesn't know
 from the start, one at a time and always in this order: the Vigour Tonic (30 coins, sells for
 11), the Shadow Elixir (60, sells for 24), the Moonlight Salve (120, sells for 20) and the Witch's
 Brew (240, sells for 34). Its purple marker goes up for sale once the garden's pixies are hired,
@@ -141,12 +144,13 @@ carries them or a contract pays.
 
 ![The chip after time away, with pixies and craftsmen running](docs/screenshots/away-chip.png)
 
-**Pallets**: every station keeps each kind of goods coming in or going out on its own pallet: two
-by two on the base, stacked up to ten layers high, so 40 of each kind. The refining table keeps
-its three plants on pallets above it and its three refined goods on pallets below it; the
-cauldron keeps the refined goods above it and its six potions on two rows of pallets below it,
-and the counter keeps its potions on shelves. The drop and pick-up markers stand beside the
-pallets they fill and empty. A full pallet takes nothing more: the doctor keeps the item and the
+**Pallets**: every station keeps each kind of goods coming in or going out on its own pallet. A
+pallet or shelf holds 10 of each kind at first; the guild's Storage upgrade raises that by 10 a
+level, up to 40. The refining table keeps its plants on pallets left of it and its refined goods
+on pallets right of it; the cauldron keeps the refined goods left of it and its potions on two
+columns of pallets right of it, and the counter keeps its potions on shelves. A pallet stands
+only once its goods can be had: nightshade's once a shade garden grows, a potion's once it is
+learned. The drop and pick-up markers stand above the pallets they fill and empty. A full pallet takes nothing more: the doctor keeps the item and the
 pixies wait until there is room.
 
 ![Pallets at the refining tables and cauldrons](docs/screenshots/pallets-map.png)
@@ -168,7 +172,7 @@ at once, and the second makes that twice as fast and also brings the coins from 
 **Priority**: each refining table and cauldron has a small "First:" sign by its name. Tap it to
 choose what the station makes first whenever it can: wheat, mandrake or nightshade at a table, a
 any potion learned at a cauldron, or "any" to leave it to the station (a table takes
-plants in the order they came, a cauldron brews what the customers are shortest of). Tapping the
+plants in the order they came, a table and a cauldron make what their out pallets hold fewest of). Tapping the
 sign doesn't walk the doctor. A station with nothing for its priority makes something else rather
 than wait.
 
@@ -178,8 +182,8 @@ than wait.
 purchase puts the next one out, in this order: refining table level 2, pack 2, cauldron level 2, a
 craftsman at the counter, then the garden's pixies. From the garden's pixies on it branches out:
 boots, sickle, the counter's upgrade, craftsmen at the table and cauldron, the table's pixies, the
-shade garden, the study, and entry to the guild (50 coins), which puts the guild's growth, pixies
-and prices upgrades up for sale. The cauldron's pixies follow the table's, the land follows the
+shade garden, the study, and entry to the guild (50 coins), which puts the guild's growth, pixies,
+storage and prices upgrades up for sale. The cauldron's pixies follow the table's, the land follows the
 cauldron's pixies, customers follows prices and the extra slot follows customers. The second line's things are for sale once their
 station stands.
 
@@ -193,15 +197,16 @@ more for each potion (2 coins over the price per counter level, counting level 1
 longer. Once a level is paid off, step off the marker and back on to start on the next. An upgrade
 marker goes away once its last level is bought, and a hire marker once both craftsmen are hired.
 
-The **outfitter** in the left half of the market kits the doctor out, two levels each: a bigger
+The **outfitter** in the market below the first line kits the doctor out, two levels each: a bigger
 pack carries one more item per level (30, then 60 coins), boots walk a fifth faster per level and
 a longer sickle harvests from a quarter further away (25, then 50 coins each).
 
 ![The outfitter](docs/screenshots/outfitter.png)
 
-The **guild** in the right half of the market sells upgrades for the rest of the apothecary:
+The **guild** in the market below the second line sells upgrades for the rest of the apothecary:
 growth makes every garden grow a quarter faster per level (20, then 40 coins), pixies fly half again
-as fast per level, carrying more goods a second (30, then 60), prices make customers pay a quarter
+as fast per level, carrying more goods a second (30, then 60), storage lets every pallet and shelf
+hold 10 more of each kind per level (25, 50, then 100), prices make customers pay a quarter
 more per potion per level (20, then 40), an extra order slot lets a fourth customer wait at the
 counter (30), and customers makes them come in more often, a new one every 6 to 10 seconds and then
 every 4 to 7 instead of every 12 to 20 (25, then 50). A busier shop is harder to keep up with: per
@@ -210,6 +215,8 @@ wait a third less long, then half as long. One line with a craftsman per station
 everyone at the top level; it takes the second line, more craftsmen or station upgrades.
 
 ![The guild](docs/screenshots/guild.png)
+
+![Every purple marker's icon, one for each kind of thing it buys](docs/screenshots/upgrade-icons.png)
 
 **Pixies** take the walking out of the loop. Three teams can be hired on their own purple markers,
 a handful of coins at a time: gardens to refining table (60 coins), table to cauldron (100) and
@@ -225,12 +232,12 @@ reduced motion the pixies glide without beating their wings.
 
 ![Pixies flying crops from the gardens to the refining table](docs/screenshots/pixies.png)
 
-**The expansion** opens the right column for a second production line. Its land is bought on a
-marker in the market below the guild (100 coins), which lays the yard and puts a build marker where each
+**The expansion** opens the right half for a second production line. Its land is bought on a
+marker beside the shop's right wall (100 coins), which lays the yard and puts a build marker where each
 part will go: a wheat field and a mandrake patch (25 coins each), a refining table (50), a
 cauldron (75) and its shade garden (60). The second line works like the first and has its own
-pixies, for hire once the stations at both ends stand; its cauldron's pixies meet the first line's
-inside the shop, above the shelves, and share the way down to them. The counter's drop marker stays
+pixies, for hire once the stations at both ends stand; its cauldron's pixies fly in through the
+shop's right wall, as the first line's do through the left. The counter's drop marker stays
 until every cauldron has its pixies, and comes back whenever the doctor carries a potion.
 
 ![Both lines with all their pixies](docs/screenshots/expansion-map.png)

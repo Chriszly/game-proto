@@ -4,13 +4,18 @@ import { INK, WASH, both, ellPts, hatch, ink, paint, rectPts, reseed, rr, shadow
 // The refining table, the cauldron and the store counter, painted in ink and watercolour. Each is
 // kept to the size the layout expects, since each station's lower part is its collision box.
 
+/** The refining table's board and the pallets' deck: light, fresh wood that reads on dark earth. */
+const TABLE_TOP = '#f0cc8e';
+const PALLET_DECK = '#f2c98a';
+
 /** A plank-topped workbench with a mortar and pestle and a bundle of herbs. 88x52 as shown. */
 function drawTable(c: Ctx) {
   shadow(c, 48, 47, 40, 5, 0.18);
-  for (const lx of [6, 76]) both(c, rectPts(lx, 36, 6, 13, 1), WASH.woodDeep, { layers: 2 }, { w: 1 });
-  both(c, rectPts(2, 6, 84, 28, 3), WASH.wood, { layers: 3, bloom: 2, cx: 30, cy: 12 }, { w: 1.3 });
+  for (const lx of [6, 76]) both(c, rectPts(lx, 36, 6, 13, 1), WASH.woodDark, { layers: 2 }, { w: 1 });
+  // A pale scrubbed board, so the table stands out on the dark earth.
+  both(c, rectPts(2, 6, 84, 28, 3), TABLE_TOP, { layers: 3, bloom: 2, cx: 30, cy: 12 }, { w: 1.3 });
   for (const y of [13, 20, 27]) ink(c, [[5, y], [83, y]], { closed: false, w: 0.5, alpha: 0.4 });
-  both(c, rectPts(2, 32, 84, 6, 1.5), WASH.woodDark, { layers: 2 }, { w: 1.1 });
+  both(c, rectPts(2, 32, 84, 6, 1.5), WASH.wood, { layers: 2 }, { w: 1.1 });
   hatch(c, rectPts(2, 32, 84, 6), { gap: 2.5, alpha: 0.3, w: 0.5 });
   // Mortar, with a pestle leaning in it.
   both(c, ellPts(22, 19, 10, 8, 20), '#9aa2aa', { layers: 2 }, { w: 1.1 });
@@ -113,9 +118,9 @@ function drawCounter(c: Ctx) {
 
 /** A wooden pallet, slats on blocks, seen from the front. 36x16 as shown. */
 function drawPallet(c: Ctx) {
-  both(c, rectPts(2, 2, 32, 9, 1.5), '#b07a46', { layers: 2 }, { w: 1 });
+  both(c, rectPts(2, 2, 32, 9, 1.5), PALLET_DECK, { layers: 2 }, { w: 1 });
   ink(c, [[3, 6.5], [33, 6.5]], { closed: false, w: 0.6, alpha: 0.6 });
-  for (const bx of [3, 15.5, 28]) both(c, rectPts(bx, 10.5, 5, 4), WASH.woodDeep, { layers: 1 }, { w: 0.8 });
+  for (const bx of [3, 15.5, 28]) both(c, rectPts(bx, 10.5, 5, 4), WASH.wood, { layers: 1 }, { w: 0.8 });
 }
 
 /** The study's writing desk: an open book of recipes, an inkwell and quill, and a candle. 64x50 as shown. */

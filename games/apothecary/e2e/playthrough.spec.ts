@@ -39,40 +39,38 @@ interface GameState {
   belts: Record<string, { built: boolean; paid: number; items: { id: ItemId; at: number }[] }>;
 }
 
-// Floor spots in the 1400x1110 world, from src/scenes/layout.ts. Walking targets the doctor's feet.
+// Floor spots in the 1680x900 world, from src/scenes/layout.ts. Walking targets the doctor's feet.
 // The world is bigger than the 960x540 view; the camera follows the doctor.
 const VIEW = { w: 960, h: 540, hud: 44 };
 /**
- * Each garden has three rows of three beds edge to edge, and the sickle reaches 72px from the
- * doctor's middle, 28.5px above the feet. Walking straight up the gap between the wheat field and
- * the mandrake patch from below them, it reaches the wheat field's right-hand column (beds at x 190)
- * and the patch's left-hand one (x 314) alike: first their bottom beds, then their middle ones, and
- * the hands are full. Standing at the top of the walk, the bottom beds are out of reach again.
+ * Each garden has three rows of three beds edge to edge, and the gardens stand one above the other.
+ * The sickle reaches 72px from the doctor's middle, 28.5px above the feet. Walking left along the
+ * line midway between the wheat field's bottom row (beds at y 212) and the mandrake patch's top row
+ * (y 316), it reaches beds of both rows alike, and only those: first the right-hand column's (x 180),
+ * then the middle one's (x 124), and the hands are full.
  */
-const BELOW_GARDENS = [{ x: 450, y: 316 }, { x: 252, y: 316 }];
-const BETWEEN_GARDENS = { x: 252, y: 200 };
-/** The beds cut on the way up, by plot index: the bottom and middle ones of each column. */
-const WHEAT_CUT = [5, 8];
-const MANDRAKE_CUT = [12, 15];
+const BESIDE_GARDENS = { x: 260, y: 292 };
+const BETWEEN_GARDENS = { x: 152, y: 292 };
+/** The beds cut on the way, by plot index: the right-hand and middle ones of each row. */
+const WHEAT_CUT = [7, 8];
+const MANDRAKE_CUT = [10, 11];
 /** How long wheat and mandrake take to grow, from src/game/items.ts. */
 const GROW_MS = { wheat: 24_000, mandrake: 42_000 };
-/** Each station's drop, work and pick-up markers stand in a column on its inner side. */
-const REFINER = { drop: { x: 352, y: 340 }, work: { x: 352, y: 420 }, pickUp: { x: 352, y: 500 } };
-const CAULDRON = { drop: { x: 352, y: 580 }, work: { x: 352, y: 660 }, pickUp: { x: 352, y: 740 } };
-/** Off the counter's work spot, left of the coins, so the walk to them doesn't cross it. */
-const LEAVE_SHOP = { x: 525, y: 985 };
-/** From the cauldron's pick-up, a step towards the shop's back door, clear of every marker. */
-const LEAVE_CAULDRONS = { x: 460, y: 740 };
+/** Each station's drop and pick-up markers stand in a row north of it, its work spot just above it. */
+const REFINER = { drop: { x: 290, y: 250 }, work: { x: 350, y: 288 }, pickUp: { x: 414, y: 250 } };
+const CAULDRON = { drop: { x: 492, y: 250 }, work: { x: 552, y: 288 }, pickUp: { x: 624, y: 250 } };
+/** Off the counter's work spot, so no customer pays in on the way to the coins. */
+const LEAVE_SHOP = { x: 790, y: 380 };
 /**
- * The counter's markers: the drop north of its shelves, just inside the back door; work left of the
- * counter on the doctor's side and the coins on the street side.
+ * The counter's markers: the drop-off outside the shop's north door, work right behind the counter
+ * and the coins beside it.
  */
-const COUNTER = { drop: { x: 700, y: 806 }, work: { x: 560, y: 940 }, coins: { x: 560, y: 1015 } };
+const COUNTER = { drop: { x: 840, y: 180 }, work: { x: 840, y: 416 }, coins: { x: 892, y: 416 } };
 /** The Recipes button in the top bar, on screen rather than in the world. */
 const RECIPES_BUTTON = { x: 219, y: 22 };
-/** Customers come in from the street door in the storefront at the bottom and line up below the counter. */
-const STREET = { x: 700, y: 1094 };
-const FIRST_CUSTOMER = { x: 644, y: 1010 };
+/** Customers come in from the street door in the shop's south wall and line up below the counter. */
+const STREET = { x: 840, y: 884 };
+const FIRST_CUSTOMER = { x: 728, y: 560 };
 
 const POTION_PRICE: Record<string, number> = { healingDraught: 8, sleepingTonic: 15, shadowElixir: 24 };
 /**
@@ -113,23 +111,6 @@ const ARRIVED_PX = 4 + (WALK_SPEED * FRAME_MS) / 1000 + 2;
  * speed it reached.
  */
 const SPEED = Number(process.env.PLAYTHROUGH_SPEED ?? 4);
-
-/**
- * How many more of a potion customers want than the shop has ready, as the cauldron counts it when
- * it picks a recipe: on the shelf, in the doctor's hands, brewing, on the cauldrons' pallets and
- * riding their belts.
- */
-const shortfall = (s: GameState, potion: ItemId) =>
-  s.orders.flatMap((o) => o.wants).filter((p) => p === potion).length -
-  [
-    ...s.counter.shelf,
-    ...s.carrying,
-    ...s.cauldron.output,
-    ...s.cauldron2.output,
-    ...[s.cauldron.brewing?.out, s.cauldron2.brewing?.out].filter((p) => p !== undefined),
-    ...s.belts.cauldron.items.map((item) => item.id),
-    ...s.belts.cauldron2.items.map((item) => item.id),
-  ].filter((p) => plain(p) === potion).length;
 
 /** What a customer coming in now pays for a potion: its price with the guild's upgrade, and a tip. */
 const potionPay = (s: GameState, potion: string) =>
@@ -369,15 +350,15 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
   expect(firstOrder.tip).toBe(maxTip(firstOrder.wants.length));
 
   // One round of the loop: harvest, refine, brew, sell and collect the coins.
-  // Gardens: walk up the gap between the wheat field and the mandrake patch, where the sickle cuts
-  // the beds either side until both hands are full.
+  // Gardens: walk left along the line between the wheat field and the mandrake patch, where the
+  // sickle cuts the beds either side until both hands are full.
   let s = await game.state();
   expect(s.plots.length, 'nine beds in each of six gardens').toBe(54);
   expect(s.plots.slice(0, 9).every((p) => p.plant === 'wheat') && s.plots.slice(9, 18).every((p) => p.plant === 'mandrake')).toBe(true);
   // A new game starts every bed ripe.
   for (const i of WHEAT_CUT) expect(s.plots[i].grown).toBe(GROW_MS.wheat);
   for (const i of MANDRAKE_CUT) expect(s.plots[i].grown).toBe(GROW_MS.mandrake);
-  await walkTo(...BELOW_GARDENS, BETWEEN_GARDENS);
+  await walkTo(BESIDE_GARDENS, BETWEEN_GARDENS);
   s = await until('two wheat and two mandrakes harvested', (s) => s.carrying.length === 4);
   expect(count(s.carrying)).toEqual({ wheat: 2, mandrake: 2 });
   // Just those four beds were cut, and grow again from nothing.
@@ -390,30 +371,32 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
   await walkTo(REFINER.drop);
   s = await until('plants dropped at the refining table', (s) => s.carrying.length === 0);
   expect(s.refiner.queue.length + s.refiner.output.length).toBe(4);
-  // Each kind of plant goes on its own pallet above the table.
-  expect(await game.pallets('refiner')).toEqual({ in: { wheat: 2, mandrake: 2, nightshade: 0 }, out: { flour: 0, mandrakeSeeds: 0, nightshadeExtract: 0 } });
+  // Each kind of plant goes on its own pallet left of the table. Nightshade's pallets aren't there
+  // until a shade garden grows it.
+  expect(await game.pallets('refiner')).toEqual({ in: { wheat: 2, mandrake: 2 }, out: { flour: 0, mandrakeSeeds: 0 } });
   await walkTo(REFINER.work);
   await snap('2-refining');
   await until('plants refined', (s) => s.refiner.output.length === 4);
-  expect(await game.pallets('refiner')).toEqual({ in: { wheat: 0, mandrake: 0, nightshade: 0 }, out: { flour: 2, mandrakeSeeds: 2, nightshadeExtract: 0 } });
+  expect(await game.pallets('refiner')).toEqual({ in: { wheat: 0, mandrake: 0 }, out: { flour: 2, mandrakeSeeds: 2 } });
   await walkTo(REFINER.pickUp);
   s = await until('refined goods picked up', (s) => s.carrying.length === 4);
   expect(count(s.carrying)).toEqual({ flour: 2, mandrakeSeeds: 2 });
+  // The hands take a mix, a flour and a seed in turn, rather than all of one kind first.
+  expect(count(s.carrying.slice(0, 2))).toEqual({ flour: 1, mandrakeSeeds: 1 });
 
   // Cauldron: two seeds brew a Sleeping Tonic, two flour a Healing Draught. The other potions are
   // still to be learned at the study.
   await walkTo(CAULDRON.drop);
   await until('goods in the cauldron', (s) => s.carrying.length === 0);
-  // The cauldron picks its first recipe when work starts: the potion the shop is shortest of,
-  // Sleeping Tonic on a tie. Two flour and two seeds could make either first.
+  // The cauldron picks its recipe when work starts: the potion with the fewest on its output
+  // pallets, Sleeping Tonic on a tie. Two flour and two seeds could make either first, and both
+  // pallets are empty.
   s = await game.state();
   expect(s.cauldron.brewing).toBeNull();
-  const short = { healingDraught: shortfall(s, 'healingDraught'), sleepingTonic: shortfall(s, 'sleepingTonic') };
+  expect(s.cauldron.output).toEqual([]);
   await walkTo(CAULDRON.work);
   s = await until('a brew started', (s) => s.cauldron.brewing !== null);
-  expect(s.cauldron.brewing!.out, `first brew with shortfalls ${JSON.stringify(short)}`).toBe(
-    short.healingDraught > short.sleepingTonic ? 'healingDraught' : 'sleepingTonic',
-  );
+  expect(s.cauldron.brewing!.out).toBe('sleepingTonic');
   await snap('3-brewing');
   const first = s.cauldron.brewing!.out;
   const second = first === 'sleepingTonic' ? 'healingDraught' : 'sleepingTonic';
@@ -426,26 +409,26 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
   expect(s.carrying).toEqual([FINE[first]]);
   expect(s.cauldron.output).toEqual([]);
   await snap('3-fine');
-  // Back on the work spot, the other brew runs to its end and comes out plain, onto its pallet.
+  // Back on the work spot, the other brew runs to its end and comes out plain, onto its pallet. Only
+  // the two potions known from the start have pallets.
   await walkTo(CAULDRON.work);
   await until('the second potion brewed', (s) => s.cauldron.output.length === 1);
   expect(await game.pallets('cauldron')).toEqual({
-    in: { flour: 0, mandrakeSeeds: 0, nightshadeExtract: 0 },
-    out: { healingDraught: 0, sleepingTonic: 0, vigourTonic: 0, shadowElixir: 0, moonlightSalve: 0, witchsBrew: 0, [second]: 1 },
+    in: { flour: 0, mandrakeSeeds: 0 },
+    out: { healingDraught: 0, sleepingTonic: 0, [second]: 1 },
   });
   await walkTo(CAULDRON.pickUp);
   s = await until('potions picked up', (s) => s.carrying.length === 2);
-  // Down at the cauldron, the view has scrolled down the column with the doctor.
-  expect((await game.view()).y).toBeGreaterThan(0);
+  // Over at the cauldron, the view has scrolled along the line with the doctor.
+  expect((await game.view()).x).toBeGreaterThan(0);
   expect(count(s.carrying)).toEqual({ [FINE[first]]: 1, [second]: 1 });
-  await walkTo(LEAVE_CAULDRONS);
 
-  // Storefront: stock the shelf, serve customers until one has paid, then take the coins.
-  // A tap straight at the counter: the shop's walls are solid, so the doctor finds the way in by the door.
+  // Storefront: stock the shelves from the drop-off outside the door, serve customers until one has
+  // paid, then take the coins.
   await walkTo(COUNTER.drop);
   s = await until('potions on the shelf', (s) => s.carrying.length === 0);
-  // The potions stand on the shelves behind the counter, one shelf for each potion learned, a fine
-  // one on its plain potion's.
+  // The potions stand on the shelves along the shop's walls, one shelf for each potion learned, a
+  // fine one on its plain potion's.
   const shelf = count(s.counter.shelf.map(plain));
   expect((await game.pallets('counter')).in).toEqual({
     healingDraught: shelf.healingDraught ?? 0,
@@ -454,6 +437,7 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
   // One of each potion: a customer pays less for a potion while more of its kind stay stocked,
   // so with no others left behind each one sells at full pay.
   expect(Math.max(...Object.values(shelf)), 'no stock to lower the pay').toBe(1);
+  // A tap straight at the counter: the shop's walls are solid, so the doctor finds the way in by the door.
   await walkTo(COUNTER.work);
   await snap('4-serving');
   // Each customer pays for every potion they get, at the price they came in with. A customer who

@@ -1,5 +1,5 @@
 import type { ItemId } from './items';
-import { BELT_GAP_MS, BELT_MS, BELTS, COLUMNS_LAYOUT, FEEDERS_LAYOUT, GARDENS, GUILD_UPGRADES, U_BELT_MS, createInitialState, gardenOf, type GameState, type Plot } from './state';
+import { BELT_GAP_MS, BELT_MS, BELTS, COLUMNS_BELT_MS, COLUMNS_LAYOUT, FEEDERS_LAYOUT, GARDENS, GUILD_UPGRADES, HEART_LAYOUT, U_BELT_MS, createInitialState, gardenOf, type GameState, type Plot } from './state';
 import { beltSpan } from '../scenes/layout';
 
 const KEY = 'apothecary-save';
@@ -36,6 +36,7 @@ export function loadState(): GameState {
     if (!saved.upgrades?.research && state.shade.some((g) => g.built)) state.upgrades.research = { level: 2, paid: 0 };
     // Rescale first: the joins `ontoOwnRuns` moves goods up to are on today's shorter belts.
     if ((saved.layout ?? 0) < COLUMNS_LAYOUT) ontoColumns(state);
+    if ((saved.layout ?? 0) < HEART_LAYOUT) ontoHeart(state);
     if ((saved.layout ?? 0) < FEEDERS_LAYOUT) ontoOwnRuns(state);
     // The stations have moved since this save; start the doctor somewhere clear of them.
     if (saved.layout !== fresh.layout) return { ...state, layout: fresh.layout, player: fresh.player };
@@ -75,7 +76,15 @@ function ontoOwnRuns(state: GameState) {
  * the way along it.
  */
 function ontoColumns(state: GameState) {
-  for (const id of BELTS) for (const item of state.belts[id].items) item.at *= BELT_MS[id] / U_BELT_MS[id];
+  for (const id of BELTS) for (const item of state.belts[id].items) item.at *= COLUMNS_BELT_MS[id] / U_BELT_MS[id];
+}
+
+/**
+ * Routes got shorter again when the shop moved into the middle, so goods saved on one keep the same
+ * share of the way along it.
+ */
+function ontoHeart(state: GameState) {
+  for (const id of BELTS) for (const item of state.belts[id].items) item.at *= BELT_MS[id] / COLUMNS_BELT_MS[id];
 }
 
 /** Saves the game, stamped with the wall-clock time, so the next load can catch up on the time away. */

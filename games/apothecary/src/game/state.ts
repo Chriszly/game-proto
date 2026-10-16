@@ -165,12 +165,13 @@ export interface Upgrade {
 
 /**
  * What can be upgraded: every station; the doctor's pack (carry more), boots (walk faster) and
- * sickle (harvest from further away); and at the guild, the gardens' growth, the belts' speed, the
- * shop's prices, an extra order slot and how often customers come in.
+ * sickle (harvest from further away); and at the guild, the gardens' growth, the belts' speed, how
+ * much every pallet and shelf holds, the shop's prices, an extra order slot and how often customers
+ * come in.
  */
-export type UpgradeId = StationId | 'pack' | 'boots' | 'sickle' | 'growth' | 'belts' | 'prices' | 'slots' | 'customers' | 'research';
+export type UpgradeId = StationId | 'pack' | 'boots' | 'sickle' | 'growth' | 'belts' | 'storage' | 'prices' | 'slots' | 'customers' | 'research';
 export const DOCTOR_UPGRADES = ['pack', 'boots', 'sickle'] as const;
-export const GUILD_UPGRADES = ['growth', 'belts', 'prices', 'slots', 'customers'] as const;
+export const GUILD_UPGRADES = ['growth', 'belts', 'storage', 'prices', 'slots', 'customers'] as const;
 
 /** Each upgrade's highest level (levels count from 0), its first cost, which doubles per level, and name. */
 export const UPGRADES: Record<UpgradeId, { max: number; cost: number; name: string }> = {
@@ -184,6 +185,7 @@ export const UPGRADES: Record<UpgradeId, { max: number; cost: number; name: stri
   sickle: { max: 2, cost: 25, name: 'Sickle' },
   growth: { max: 2, cost: 20, name: 'Growth' },
   belts: { max: 2, cost: 30, name: 'Pixies' },
+  storage: { max: 3, cost: 25, name: 'Storage' },
   prices: { max: 2, cost: 20, name: 'Prices' },
   slots: { max: 1, cost: 30, name: 'Slots' },
   customers: { max: 2, cost: 25, name: 'Customers' },
@@ -382,26 +384,36 @@ export const walkSpeed = (state: GameState) => 1 + 0.2 * state.upgrades.boots.le
 /** Harvest reach in character heights: one, and a quarter more per sickle level. */
 export const harvestReach = (state: GameState) => 1 + 0.25 * state.upgrades.sickle.level;
 /**
- * Every station keeps each kind of goods coming in or going out on its own pallet: two by two items
- * on the base, stacked up to ten layers high.
+ * Every station keeps each kind of goods coming in or going out on its own pallet, two by two items
+ * on the base, and the shop each potion on its own shelf. A pallet or shelf holds `STORAGE_START` of
+ * its kind, and `STORAGE_STEP` more per level of the guild's storage upgrade, up to `PALLET_SIZE`:
+ * ten layers high.
  */
 export const PALLET_BASE = 4;
 export const PALLET_LAYERS = 10;
 export const PALLET_SIZE = PALLET_BASE * PALLET_LAYERS;
-/** Whether the pallet for `item` in a station's tray has room for one more. */
-export const palletHasRoom = (tray: readonly ItemId[], item: ItemId) => tray.filter((id) => id === item).length < PALLET_SIZE;
+export const STORAGE_START = 10;
+export const STORAGE_STEP = 10;
+/** How many of a kind each pallet and shelf holds. */
+export const storage = (state: GameState) => Math.min(PALLET_SIZE, STORAGE_START + STORAGE_STEP * state.upgrades.storage.level);
+/** Whether the pallet (or shelf) for `item` in a station's tray has room for one more. */
+export const palletHasRoom = (state: GameState, tray: readonly ItemId[], item: ItemId) => tray.filter((id) => id === item).length < storage(state);
 
 /** Bumped whenever stations or walls move, so a loaded save doesn't put the doctor inside one. */
-export const LAYOUT = 5;
+export const LAYOUT = 6;
 /** The layout from which goods get on a belt at the start of their own run, such as a feeder. */
 export const FEEDERS_LAYOUT = 3;
 /** The layout from which the map has two columns, with shorter belts. */
 export const COLUMNS_LAYOUT = 5;
+/** The layout from which the shop stands in the middle and the lines run sideways into it, with shorter routes. */
+export const HEART_LAYOUT = 6;
 
 /** Coins needed to build each belt. */
 export const BELT_COST: Record<BeltId, number> = { garden: 60, refiner: 100, cauldron: 150, garden2: 60, refiner2: 100, cauldron2: 150 };
 /** How long an item takes from one end of each belt to the other in a one-lane belt: about 100 pixels a second. */
-export const BELT_MS: Record<BeltId, number> = { garden: 2_100, refiner: 640, cauldron: 5_900, garden2: 2_100, refiner2: 640, cauldron2: 5_900 };
+export const BELT_MS: Record<BeltId, number> = { garden: 2_500, refiner: 400, cauldron: 540, garden2: 2_500, refiner2: 400, cauldron2: 540 };
+/** `BELT_MS` while the map had two columns, for moving goods saved on a belt then. */
+export const COLUMNS_BELT_MS: Record<BeltId, number> = { garden: 2_100, refiner: 640, cauldron: 5_900, garden2: 2_100, refiner2: 640, cauldron2: 5_900 };
 /** `BELT_MS` before the map went to two columns, for moving goods saved on a belt then. */
 export const U_BELT_MS: Record<BeltId, number> = { garden: 3_500, refiner: 1_500, cauldron: 6_000, garden2: 3_500, refiner2: 1_500, cauldron2: 6_000 };
 /** The stations a belt joins, which must both stand before it can be built. */
@@ -450,6 +462,7 @@ export const UNLOCKED_BY: Partial<Record<Unlock, Unlock>> = {
   'level-growth': 'guild',
   'level-prices': 'guild',
   'level-belts': 'guild',
+  'level-storage': 'guild',
   'level-customers': 'level-prices',
   'level-slots': 'level-customers',
   'level-research': 'belt-garden',
@@ -535,8 +548,8 @@ export function createInitialState(): GameState {
     layout: LAYOUT,
     coins: 0,
     carrying: [],
-    // In the market (see src/scenes/layout.ts), between the outfitter's markers and the land's.
-    player: { x: 630, y: 620 },
+    // On the forecourt north of the shop (see src/scenes/layout.ts), between the two lines.
+    player: { x: 840, y: 150 },
     // Start ripe so the first harvest can happen right away.
     plots: GARDENS.flatMap((plant) => Array.from({ length: PLOTS_PER_GARDEN }, () => ripe(plant))),
     refiner: { queue: [], progress: 0, output: [], second: null },

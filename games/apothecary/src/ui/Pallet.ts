@@ -23,6 +23,7 @@ const shade = (color: number, by: number) => {
  * what goes on it.
  */
 export class Pallet {
+  private base: Phaser.GameObjects.Image;
   private crates: Phaser.GameObjects.Graphics;
   private icon: Phaser.GameObjects.Image;
   /** How many items the pallet shows, read by the playthrough test. */
@@ -34,9 +35,14 @@ export class Pallet {
     private y: number,
     readonly item: ItemId,
   ) {
-    fit(scene.add.image(x, y, 'pallet').setOrigin(0.5, 1).setDepth(y));
+    this.base = fit(scene.add.image(x, y, 'pallet').setOrigin(0.5, 1).setDepth(y));
     this.crates = scene.add.graphics().setDepth(y + 0.01);
     this.icon = fit(scene.add.image(x, y - DECK - 8, itemTexture(item)).setAlpha(0.4).setDepth(y + 0.02));
+  }
+
+  /** Shows or hides the pallet, for goods that can't be made yet. */
+  setVisible(visible: boolean) {
+    for (const part of [this.base, this.crates, this.icon]) part.setVisible(visible);
   }
 
   set(count: number) {
@@ -45,7 +51,7 @@ export class Pallet {
     this.count = count;
     const g = this.crates.clear();
     const color = ITEMS[this.item].color;
-    const front = shade(color, 0.7);
+    const front = shade(color, 0.85);
     const deck = this.y - DECK;
     // Back row first, then the front row, layer by layer, so each crate covers those behind and below.
     for (let n = 0; n < count; n++) {
