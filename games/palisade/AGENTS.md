@@ -112,12 +112,12 @@ seconds without a tap.
   adds to `streak.count`; from two on every kill gives `streakBonus` (5% a kill, up to 50%) more
   experience, totalled in `streak.bonusXp`. Each kill pops "+N XP" (and "xN") and sends orbs to the
   experience bar, whose gold segment shows experience still in flight.
-- **Every skill learned:** once `offerable` is empty, `rollChoices` returns `['mend']` alone and
-  `LevelUp` shows it in the middle under "Every skill learned". Picking any card while `offerable`
-  is empty sets `mastered` (saved with the progress). From then on `offer` takes each pending
-  level-up at once: `mend` repairs half of the barricade (counted in `ranks.mend`) and a `mended`
-  effect pops "Level N! Barricade repaired" over it (at `MENDED_POP`, `amount` the level), with no
-  cards and no pause. A skill added later puts the cards back, since `offerable` is no longer empty.
+- **Every skill learned:** once `offerable` is empty, `rollChoices` returns `BASE_SKILLS`
+  (`swift`, `sharp`, `timber`, in `upgrades.ts`), whose ranks then go past `maxRank` with no cap,
+  so the hero keeps growing and there is no wave the hero can no longer outgrow. The cards say
+  "Rank N, no cap" and the skill book shows the rank alone. Picking any card while `offerable` is
+  empty sets `mastered` (saved with the progress), which only fills the skill book's filler pages.
+  A skill added later puts the usual cards back, since `offerable` is no longer empty.
 - **Progression:** level, experience, upgrade ranks, relics, pending level-ups, best wave, run
   count and `mastered` carry over between runs. Every run restarts at wave 1 on the first road, with no coins,
   guards or caltrops.
@@ -314,13 +314,12 @@ seconds without a tap.
   ignores them and `offerable` never offers one, so their ranks change nothing else.
   `rollChoices` fills the cards no upgrade is left for with `FILLERS`: `mend` with two upgrades
   left, `purse` and `wind` with one left, so a level-up shows three different cards and every
-  filler is offered (and found) before the last skill, until none is left at all (see Every
-  skill learned).
+  filler is offered (and found) before the last skill; with none left it offers the base skills
+  (see Every skill learned).
 - Only `sim.ts` mutates state during play. The scene only replaces it wholesale (`newRun`,
   `fightAgain`, `startHeat`), calls `offer` on load when level-ups are pending, and calls `loose`, `strew`,
   `hire`, `train`, `fortify`, `setAim`, `keepFighting`, `pick` and `pickRoad`.
-- **Invariants:** `choices` is set while `levelUps > 0` (unless `mastered` with nothing left to
-  offer, when `offer` spends them at once), and the battle (streak timer and volleys
+- **Invariants:** `choices` is set while `levelUps > 0`, and the battle (streak timer and volleys
   included) is frozen then. Every place that sets `choices` (`offer`, `fightAgain`) also resets
   `pickMs` to `AUTO_PICK_MS`, so each level-up gets the full 10 seconds. The countdown also stops
   while the run is over. `rain.charge` never exceeds `rain.need`; `loose` refuses unless it is full,
