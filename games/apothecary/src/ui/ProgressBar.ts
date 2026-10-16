@@ -14,6 +14,8 @@ export class ProgressBar {
     private width: number,
     private color: number,
     depth: number,
+    /** How tall the bar is, track included; the fill sits 1px inside it. */
+    private readonly height = 6,
   ) {
     this.bar = scene.add.graphics().setDepth(depth);
   }
@@ -41,12 +43,12 @@ export class ProgressBar {
     if (filled === null) return;
     const left = this.x - this.width / 2;
     // A cream track inked round, filled with a wash of the bar's colour.
-    this.bar.fillStyle(0xe6dcc4, 0.95).fillRoundedRect(left, this.y, this.width, 6, 3);
+    this.bar.fillStyle(0xe6dcc4, 0.95).fillRoundedRect(left, this.y, this.width, this.height, this.height / 2);
     const zone = this.zone;
     const zoneX = zone ? Math.round((this.width - 2) * zone.from) : Infinity;
-    if (zone) this.bar.fillStyle(zone.color, 0.35).fillRect(left + 1 + zoneX, this.y + 1, this.width - 2 - zoneX, 4);
+    if (zone) this.bar.fillStyle(zone.color, 0.35).fillRect(left + 1 + zoneX, this.y + 1, this.width - 2 - zoneX, this.height - 2);
     const color = zone && filled >= zoneX ? zone.color : this.color;
-    if (filled > 0) this.bar.fillStyle(color, 0.95).fillRoundedRect(left + 1, this.y + 1, Math.max(filled, 4), 4, 2);
-    this.bar.lineStyle(1, 0x2a1d14, 0.9).strokeRoundedRect(left, this.y, this.width, 6, 3);
+    if (filled > 0) this.bar.fillStyle(color, 0.95).fillRoundedRect(left + 1, this.y + 1, Math.max(filled, this.height - 2), this.height - 2, (this.height - 2) / 2);
+    this.bar.lineStyle(1, 0x2a1d14, 0.9).strokeRoundedRect(left, this.y, this.width, this.height, this.height / 2);
   }
 }

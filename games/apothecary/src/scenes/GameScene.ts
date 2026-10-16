@@ -231,6 +231,10 @@ const TOWN_CARD = { x: 626, y: 50, w: 316, h: 44 };
 const AWAY_CHIP = { x: 652, y: 102, w: 290, h: 30 };
 /** The order bubble over a waiting customer: its height, how far above the customer's middle its middle is, the spacing of its icons, and its tip ring's radius. */
 const BUBBLE = { h: 30, above: 58, icon: 15, ring: 6 };
+/** The refining bar's fill: a strong amber, since the cream track hides anything paler. */
+const REFINING_BAR = 0xc8741e;
+/** The refining bars' height, a little taller than the 6px default so they read under the table. */
+const REFINING_BAR_H = 8;
 
 /**
  * Closest and farthest the view zooms: out until the whole yard is tall enough to fit, but never past
@@ -622,9 +626,9 @@ export class GameScene extends Phaser.Scene {
     this.addPrioritySign(id, PRIORITY_SIGNS[id]);
     this.addObstacle(at.x, at.y, 'table', 84, 30);
     this.addPallets(id, PALLETS[id], [PLANTS, REFINED], [() => refiner.queue, () => refiner.output]);
-    const progress = new ProgressBar(this, at.x, at.y + 30, 60, 0xd8cfa8, WORLD_UI_DEPTH);
+    const progress = new ProgressBar(this, at.x, at.y + 30, 60, REFINING_BAR, WORLD_UI_DEPTH, REFINING_BAR_H);
     // A second craftsman's pipe shows its own bar just below.
-    const progress2 = new ProgressBar(this, at.x, at.y + 38, 60, 0xd8cfa8, WORLD_UI_DEPTH);
+    const progress2 = new ProgressBar(this, at.x, at.y + 41, 60, REFINING_BAR, WORLD_UI_DEPTH, REFINING_BAR_H);
     this.addMarker(m.pickUp, 'pad-out', 'Pick up', () => pickUpFromRefiner(this.state, id), () => this.state.belts[beltOut].built);
     this.addMarker(m.drop, 'pad-in', 'Drop', () => dropAtRefiner(this.state, id), () => this.state.belts[beltIn].built && !this.carries(isPlant));
     this.addWorkSpot(m.work, id);
