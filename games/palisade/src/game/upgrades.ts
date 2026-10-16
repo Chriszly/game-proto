@@ -100,7 +100,7 @@ export const UPGRADES: Record<UpgradeId, Upgrade> = {
   wind: { name: 'Second Wind', text: 'Charge Arrow Rain and Caltrops at once', maxRank: Infinity, icon: 'wind', filler: true },
 };
 
-/** The fillers, in the order they fill the empty cards once fewer than three upgrades are left. */
+/** The fillers: Mend fills the one empty card with two upgrades left, War Chest and Second Wind the two with one left. */
 export const FILLERS: UpgradeId[] = ['mend', 'purse', 'wind'];
 /** Coins a War Chest gives. */
 export const PURSE_COINS = 25;

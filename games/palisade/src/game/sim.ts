@@ -728,15 +728,18 @@ function mend(state: GameState) {
 }
 
 /**
- * Three different upgrades to choose from: fillers take the cards no upgrade is left for. Once
- * every skill is learned, the last level-up shows the repair card alone.
+ * Three different upgrades to choose from: fillers take the cards no upgrade is left for. With two
+ * upgrades left the third card is Mend the Barricade, and with one left War Chest and Second Wind
+ * take the other two, so every filler is offered on the way to the last skill. Once every skill is
+ * learned, the last level-up shows the repair card alone.
  */
 export function rollChoices(state: GameState): UpgradeId[] {
   const pool = offerable(state);
   if (pool.length === 0) return ['mend'];
   const picks: UpgradeId[] = [];
   while (picks.length < 3 && pool.length > 0) picks.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
-  for (const filler of FILLERS) if (picks.length < 3) picks.push(filler);
+  if (picks.length === 2) picks.push(FILLERS[0]);
+  else if (picks.length === 1) picks.push(...FILLERS.slice(1));
   return picks;
 }
 
