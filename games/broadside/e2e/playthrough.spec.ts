@@ -3,8 +3,8 @@ import { expect, test, type Page } from '@playwright/test';
 // Plays the first wave with real inputs: the helm buttons are held down to steer, as a thumb would
 // on a phone, and a fire control is held to aim and charge a broadside and let go to fire it once
 // an enemy is off that side. Sunk ships leave loot to sail over, and the harbor opens once the
-// wave is beaten, where one upgrade is bought and a side's guns loaded with chain shot before
-// setting sail for wave 2.
+// wave is beaten, where a perk is picked from the prize draft, one upgrade is bought and a side's
+// guns loaded with chain shot before setting sail for wave 2.
 // Game state is only read, through the `game` object the dev build puts on window.
 
 type Side = 'port' | 'starboard';
@@ -20,7 +20,8 @@ interface Ship {
   slowMs: number;
 }
 interface GameState {
-  phase: 'break' | 'fighting' | 'harbor' | 'over';
+  phase: 'break' | 'fighting' | 'harbor' | 'over' | 'won';
+  hull: string;
   wave: number;
   toSpawn: string[];
   player: Ship;
@@ -37,6 +38,9 @@ interface GameState {
   plundered: number;
   sunk: number;
   ranks: Record<string, number>;
+  perks: string[];
+  draft: string[];
+  bounty: string | null;
   bestWave: number;
 }
 type Button = { id: string; x: number; y: number; w: number; h: number };
@@ -69,6 +73,10 @@ const AIM_ARC = (12 * Math.PI) / 180;
 const FIRST_ORDER = 'chain';
 /** The first wave's wind, blowing toward the east, from FIRST_WIND in src/game/state.ts. */
 const FIRST_WIND = 0;
+/** The first run's ship, from FIRST_HULL in src/game/hulls.ts. */
+const FIRST_HULL = 'frigate';
+/** The first wave's prize draft, from FIRST_DRAFT in src/game/perks.ts; the test keeps the first card. */
+const FIRST_DRAFT = ['salvage', 'ricochet', 'mortar'];
 const SIDES: Side[] = ['port', 'starboard'];
 
 /**
@@ -310,6 +318,10 @@ test('plays the first wave', async ({ page }, testInfo) => {
   // order's chain shot overrides it for the wave).
   expect(s.wind).toBe(FIRST_WIND);
   expect(s.loadout).toEqual({ port: 'round', starboard: 'round' });
+  // The first run sails the Frigate, with no perks yet and no bounty on the first wave.
+  expect(s.hull).toBe(FIRST_HULL);
+  expect(s.perks).toEqual([]);
+  expect(s.bounty).toBeNull();
   expect(s.toSpawn).toEqual(WAVE_1);
   expect(s.player.hp).toBe(HULL);
 
@@ -369,7 +381,19 @@ test('plays the first wave', async ({ page }, testInfo) => {
   expect(s).toMatchObject({ wave: 1, sunk: 2, gold: 2 * SLOOP_LOOT, plundered: 2 * SLOOP_LOOT, bestWave: 1, enemies: [], loot: [] });
   expect(s.player.hp).toBeGreaterThan(0);
   await play(STEP_MS, async () => false);
-  await snap('3-harbor');
+
+  // The harbor first offers the prize draft: three perks, always the same ones after wave 1.
+  // Tapping a card keeps that perk for the run, at no cost, and opens the ledger.
+  expect(s.draft).toEqual(FIRST_DRAFT);
+  await snap('3-draft');
+  const cards = await game.harbor();
+  expect(cards.map((b) => b.id)).toEqual(FIRST_DRAFT.map((id) => `draft-${id}`));
+  await tap(cards[0]);
+  s = await game.state();
+  expect(s.perks).toEqual([FIRST_DRAFT[0]]);
+  expect(s.draft).toEqual([]);
+  expect(s.gold).toBe(2 * SLOOP_LOOT);
+  await snap('4-harbor');
 
   // At the harbor, buy Heavy Shot with the plunder, then set sail for wave 2.
   const buttons = await game.harbor();
@@ -382,7 +406,7 @@ test('plays the first wave', async ({ page }, testInfo) => {
   s = await game.state();
   expect(s.loadout).toEqual({ port: 'round', starboard: 'chain' });
   expect(s.gold).toBe(2 * SLOOP_LOOT - HEAVY_SHOT);
-  await snap('4-loadout');
+  await snap('5-loadout');
   await tap(buttons.find((b) => b.id === 'sail')!);
   s = await game.state();
   expect(s).toMatchObject({ phase: 'break', wave: 2 });

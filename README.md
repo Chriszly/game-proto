@@ -43,7 +43,7 @@ The hub's **Settings** button opens the settings every game shares. They are sav
   | Tiny Kingdom | round goals 20% lower | round goals 20% higher |
   | Hotfoot | 5 hearts | 2 hearts |
   | Anvilheart | adventurers wait 50% longer | adventurers wait 30% less |
-  | Broadside | enemy ships have 25% less health | enemy ships have 30% more health |
+  | Broadside | enemy ships and forts have 25% less health | enemy ships and forts have 30% more health |
   | Lane Brawl | red's champions and minions deal 20% less damage | red's champions and minions deal 25% more damage |
   | TinctureTinker | 5 more moves per order | 3 fewer moves per order |
   | Catacomb | foes have 25% less health | foes have 30% more health |
