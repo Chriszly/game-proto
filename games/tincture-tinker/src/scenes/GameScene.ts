@@ -5,13 +5,14 @@ import { BROWN, MOSS, num, OCHRE, RES, RUST, SEPIA, shown } from '../art/nouveau
 import { needTexture, POTION_ORIGIN, potionTexture, tileTexture, TOOL_PAD, toolTexture } from '../art/textures';
 import { adjacent, COLS, inBoard, ROWS, special, stuck, validMoves, type Board, type Cell, type Tile } from '../game/board';
 import { KIND_NAMES, type Kind } from '../game/kinds';
-import { MOVE_BONUS, POTION_NAMES, RUSH_COINS, RUSH_MOVES } from '../game/orders';
+import { MOVE_BONUS, POTION_NAMES, RUSH_COINS, RUSH_MOVES, TWIN_BONUS } from '../game/orders';
 import { RANKS, rankOf, starsFor, STARS_2, STARS_3 } from '../game/ranks';
 import { loadProgress, saveProgress } from '../game/save';
 import { canUse, funnel, nextOrder, pestle, sift, stir, TOOL_ORDER, TOOLS, trySwap, type Step, type Tool } from '../game/sim';
-import { progressOf, startOrder, wanted, type GameState } from '../game/state';
+import { progressOf, startOrder, type GameState } from '../game/state';
+import { buyUpgrade, UPGRADE_ORDER, upgradeCost, UPGRADES, type UpgradeId } from '../game/upgrades';
 import { makeButton } from '../ui/Button';
-import { BOARD, CAPTION, cellX, cellY, NEEDS, PANEL, RIBBON, SERIF, TOOL, UI_DEPTH } from './layout';
+import { BOARD, CAPTION, cellX, cellY, NEEDS, PANEL, PANTRY, RIBBON, SERIF, TOOL, UI_DEPTH } from './layout';
 
 /** Longest frame step, so a backgrounded tab doesn't skip the animations. */
 const MAX_STEP_MS = 250;
@@ -23,6 +24,11 @@ const SHUFFLE_MS = 400;
 const SIFT_MS = 220;
 /** How long the board sits idle before two tiles that would match swell as a hint. */
 const HINT_MS = 6000;
+/** How long mould takes to creep onto a tile, and a served customer's or a new stage's note to show. */
+const MOULD_MS = 260;
+const NOTE_MS = 700;
+/** The title the crown's last order earns. */
+const ROYAL_TITLE = 'Royal Apothecary';
 
 /**
  * Draw order: the table, catalyst row bands, the cursor, specials (whose rays and petals sit under
@@ -32,6 +38,9 @@ const DEPTH = { band: 1.5, cursor: 1.8, catalyst: 1.9, tile: 2, resin: 2.1, pane
 
 const CAPTION_TIP = 'A match of four brews a Catalyst (clears its row); an L or T brews a Bloom (clears a 3x3)';
 const CAPTION_BLOCKERS = 'A match next to a corked jar opens it; resin holds a tile in place for one match';
+const CAPTION_MOULD = 'Mould creeps to a neighbour after every move unless a match touches it, which scrubs it off';
+const CAPTION_ROYAL = 'A royal commission: three potions in turn on one board, the moves carried over';
+const CAPTION_TWIN = `Two customers share the board and the moves; the one served first pays ${TWIN_BONUS} coins more`;
 const CAPTION_SIFT = `Sift: tap a row to reroll it for ${TOOLS.sift.cost} coins, or tap Sift again to put it away`;
 const CAPTION_PESTLE = `Pestle: tap a tile to smash it for ${TOOLS.pestle.cost} coins, or tap Pestle again to put it away`;
 const CAPTION_FUNNEL = `Funnel: tap a tile, then any other, to swap them for ${TOOLS.funnel.cost} coins`;
@@ -101,6 +110,17 @@ export class GameScene extends Phaser.Scene {
   private resultRank!: Phaser.GameObjects.Text;
   private resultStars: Phaser.GameObjects.Image[] = [];
   private resultButton!: Phaser.GameObjects.Container;
+  // Made when first needed: every Text takes a Math.random call (its texture's key), and one more
+  // before or during the first order would change the seeded playthrough's board and refills.
+  private resultBench?: Phaser.GameObjects.Text;
+  private bench?: Phaser.GameObjects.Container;
+  private benchRows?: Phaser.GameObjects.Container;
+  private benchCoins?: Phaser.GameObjects.Text;
+  private pantry?: Phaser.GameObjects.Container;
+  private pantryShown = '';
+  private note?: Phaser.GameObjects.Text;
+  /** The ingredients the label's rows show, from the top: the first customer's, then the second's. */
+  private rows: Kind[] = [];
 
   constructor() {
     super('Game');
@@ -151,6 +171,8 @@ export class GameScene extends Phaser.Scene {
     this.shown = { ...state.got };
     state.board.forEach((row, r) => row.forEach((tile, c) => this.sprites.set(tile.id, this.tileSprite(tile, cellX(c), cellY(r)))));
     this.result.setVisible(false);
+    this.bench?.setVisible(false);
+    this.note?.setVisible(false);
     this.buildPanel();
     this.refresh();
   }
@@ -287,7 +309,7 @@ export class GameScene extends Phaser.Scene {
       let flying: { sprite: Phaser.GameObjects.Image; x0: number; y0: number; x1: number; y1: number }[] = [];
       let brewing: Phaser.GameObjects.Image[] = [];
       let flash: Phaser.GameObjects.Image[] = [];
-      const needs = Object.keys(this.state.current.needs);
+      const needs = step.needs;
       const big = step.rows.length + step.cols.length + step.areas.length > 0;
       this.queue.push({
         ms: big ? CLEAR_MS * 1.5 : CLEAR_MS,
@@ -298,10 +320,10 @@ export class GameScene extends Phaser.Scene {
           for (const t of step.cleared) {
             const sprite = this.sprites.get(t.id)!;
             const row = needs.indexOf(t.kind);
-            if (row < 0 || !wanted(this.state, t.kind)) popping.push(sprite);
-            else flying.push({ sprite: sprite.setDepth(DEPTH.flying), x0: sprite.x, y0: sprite.y, x1: NEEDS.x, y1: NEEDS.y + row * NEEDS.row });
+            if (row < 0) popping.push(sprite);
+            else flying.push({ sprite: sprite.setDepth(DEPTH.flying), x0: sprite.x, y0: sprite.y, x1: NEEDS.x, y1: this.rowY(row) });
           }
-          brewing = [...step.brewed, ...step.melted].map((t) => this.sprites.get(t.id)!.setTexture(tileTexture(t)).setDepth(special(t) ? DEPTH.catalyst : DEPTH.tile));
+          brewing = [...step.brewed, ...step.melted, ...step.scrubbed].map((t) => this.sprites.get(t.id)!.setTexture(tileTexture(t)).setDepth(special(t) ? DEPTH.catalyst : DEPTH.tile));
           flash = [
             ...step.rows.map((row) => this.bandAt(row)),
             ...step.cols.map((col) => shown(this.add.image(BOARD.x + col * BOARD.cell - 1, BOARD.y - 1, 'band-col').setOrigin(0)).setDepth(DEPTH.band)),
@@ -323,13 +345,55 @@ export class GameScene extends Phaser.Scene {
           for (const t of step.cleared) {
             this.sprites.get(t.id)?.destroy();
             this.sprites.delete(t.id);
-            if (wanted(this.state, t.kind)) this.shown[t.kind] = (this.shown[t.kind] ?? 0) + 1;
+            if (needs.includes(t.kind)) this.shown[t.kind] = (this.shown[t.kind] ?? 0) + 1;
           }
           this.refreshNeeds();
         },
       });
     }
+    if (step.spread) {
+      // Mould creeps onto a tile: it swells a little as its fuzz appears (held still with reduced motion).
+      const grown = step.spread;
+      let sprite: Phaser.GameObjects.Image | undefined;
+      this.queue.push({
+        ms: MOULD_MS,
+        start: () => (sprite = this.sprites.get(grown.id)?.setTexture(tileTexture(grown)).setDepth(DEPTH.tile)),
+        step: (k) => sprite && shown(sprite, settings.reduceMotion ? 1 : 1 + 0.2 * Math.sin(Math.PI * k)),
+      });
+      return;
+    }
+    if (step.served) {
+      // A customer is served: a note over the board, and their rows finish.
+      const potion = step.served;
+      const bonus = this.state.served[0] === potion && this.state.speedBonus > 0;
+      this.queue.push(this.showNote(`${POTION_NAMES[potion]} served!${bonus ? ` +${TWIN_BONUS} coins for speed` : ''}`));
+      return;
+    }
+    if (step.stage) {
+      // A royal commission moves on: the label is rebuilt for the next potion and the moves stay.
+      const stage = step.stage;
+      this.queue.push({ ms: 0, end: () => ((this.shown = { ...this.state.got }), this.buildPanel(), this.refreshNeeds()) });
+      this.queue.push(this.showNote(`Stage ${stage + 1}: now the ${POTION_NAMES[this.state.current.stages![stage].potion]}`));
+      return;
+    }
     this.queue.push(this.moveTo(step.board, step.shuffled ? SHUFFLE_MS : FALL_MS));
+  }
+
+  /** A line over the board for a moment: a served customer or a commission's next stage. */
+  private showNote(text: string): Anim {
+    return {
+      ms: NOTE_MS,
+      start: () => {
+        const size = BOARD.cell * COLS;
+        this.note ??= this.add
+          .text(BOARD.x + size / 2, BOARD.y + size / 2, '', { ...ink(20, '#f1e6c8', 'italic bold'), backgroundColor: '#2e1d14', padding: { x: 14, y: 8 } })
+          .setOrigin(0.5)
+          .setDepth(DEPTH.flying);
+        this.note.setText(text).setVisible(true).setAlpha(1);
+      },
+      step: (k) => this.note?.setAlpha(k < 0.7 ? 1 : 1 - (k - 0.7) / 0.3),
+      end: () => this.note?.setVisible(false),
+    };
   }
 
   /** Moves every tile to its cell on `board`; new tiles drop in from above the board. */
@@ -374,7 +438,8 @@ export class GameScene extends Phaser.Scene {
       saveProgress(progressOf(s));
       this.showSold();
     } else if (s.phase === 'failed') {
-      this.showResult('Out of moves', `The ${POTION_NAMES[s.current.potion]} wasn't finished.`, 'No stars this time.', 'Try again', 0);
+      const what = s.current.stages ? 'royal commission' : s.current.second ? 'two orders' : POTION_NAMES[s.current.potion];
+      this.showResult('Out of moves', `The ${what} ${s.current.second ? "weren't" : "wasn't"} finished.`, 'No stars this time.', 'Try again', 0);
     }
   }
 
@@ -538,31 +603,45 @@ export class GameScene extends Phaser.Scene {
     this.panel?.destroy();
     this.needTexts.clear();
     const s = this.state;
+    const o = s.current;
     const mid = PANEL.x + PANEL.w / 2;
+    const title = o.stages ? (o.last ? "The crown's last order" : 'Royal commission') : o.second ? `Order ${o.number}: two customers` : `Order ${o.number}`;
     const items: Phaser.GameObjects.GameObject[] = [
-      this.add.text(mid, 62, `Order ${s.current.number}`, ink(28, SEPIA, 'bold')).setOrigin(0.5),
-      shown(this.add.image(606, 145, potionTexture(s.current.potion))).setOrigin(POTION_ORIGIN.x, POTION_ORIGIN.y),
-      this.add.text(606, 164.5, `No. ${s.current.number}`, ink(9, RUST, 'italic bold')).setOrigin(0.5),
-      this.add.text(666, 124, POTION_NAMES[s.current.potion], ink(22, SEPIA, 'italic bold')).setOrigin(0, 0.5),
-      this.add.text(666, 152, `Pays ${s.current.price} coins`, ink(15, BROWN)).setOrigin(0, 0.5),
+      this.add.text(mid, 62, title, ink(o.stages || o.second ? 24 : 28, SEPIA, 'bold')).setOrigin(0.5),
+      shown(this.add.image(606, 145, potionTexture(o.potion))).setOrigin(POTION_ORIGIN.x, POTION_ORIGIN.y),
+      this.add.text(606, 164.5, `No. ${o.number}`, ink(9, RUST, 'italic bold')).setOrigin(0.5),
+      this.add.text(666, 124, POTION_NAMES[o.potion], ink(22, SEPIA, 'italic bold')).setOrigin(0, 0.5),
+      this.add.text(666, 152, `Pays ${o.price} coins`, ink(15, BROWN)).setOrigin(0, 0.5),
       this.add.text(666, 174, `+${MOVE_BONUS} per move left`, ink(15, BROWN)).setOrigin(0, 0.5),
     ];
-    // The order's twist, if it has one, under the price.
-    const twist = s.current.rush
-      ? `Rush order: ${RUSH_MOVES} fewer moves, +${RUSH_COINS} coins`
-      : s.current.forbid
-        ? `No ${KIND_NAMES[s.current.forbid]}: matching it costs a move`
-        : '';
-    if (twist) items.push(this.add.text(666, 196, twist, ink(13, RUST, 'italic bold')).setOrigin(0, 0.5));
-    Object.keys(s.current.needs).forEach((kind, i) => {
-      const y = NEEDS.y + i * NEEDS.row;
-      items.push(shown(this.add.image(NEEDS.x, y, needTexture(kind as Kind))));
-      items.push(this.add.text(NEEDS.barX, y - 17, KIND_NAMES[kind as Kind], ink(13, BROWN, 'italic bold')).setOrigin(0, 0.5));
+    // The order's twist, stage or second customer, under the price.
+    const line = o.stages
+      ? `Stage ${s.stage + 1} of ${o.stages.length}: the moves carry over`
+      : o.second
+        ? `and a ${POTION_NAMES[o.second.potion]} for a second customer`
+        : o.rush
+          ? `Rush order: ${RUSH_MOVES} fewer moves, +${RUSH_COINS} coins`
+          : o.forbid
+            ? `No ${KIND_NAMES[o.forbid]}: matching it costs a move`
+            : '';
+    if (line) items.push(this.add.text(666, 196, line, ink(13, RUST, 'italic bold')).setOrigin(0, 0.5));
+    this.rows = Object.keys(o.needs) as Kind[];
+    const second = o.second ? Object.keys(o.second.needs) : [];
+    this.rows.forEach((kind, i) => {
+      const y = this.rowY(i);
+      items.push(shown(this.add.image(NEEDS.x, y, needTexture(kind))));
+      const who = second.includes(kind) ? ` (${POTION_NAMES[o.second!.potion]})` : o.second ? ` (${POTION_NAMES[o.potion]})` : '';
+      items.push(this.add.text(NEEDS.barX, y - 17, `${KIND_NAMES[kind]}${who}`, ink(o.second ? 11 : 13, BROWN, 'italic bold')).setOrigin(0, 0.5));
       const text = this.add.text(906, y + 2, '', ink(18, SEPIA, 'bold')).setOrigin(1, 0.5);
-      this.needTexts.set(kind as Kind, text);
+      this.needTexts.set(kind, text);
       items.push(text);
     });
     this.panel = this.add.container(0, 0, items).setDepth(DEPTH.panel);
+  }
+
+  /** Where row `i` of the label's ingredients sits: a twin order's four rows are closer together. */
+  private rowY(i: number) {
+    return this.state.current.second ? NEEDS.twinY + i * NEEDS.twinRow : NEEDS.y + i * NEEDS.row;
   }
 
   private refresh() {
@@ -572,6 +651,7 @@ export class GameScene extends Phaser.Scene {
     this.refreshTools();
     this.coinsText.setText(`${this.state.coins}`);
     this.coinIcon.setX(this.coinsText.x - this.coinsText.width - 18);
+    this.refreshPantry();
     this.refreshCaption();
     this.drawCursor();
     if (!this.busy) this.showBands(true);
@@ -590,13 +670,35 @@ export class GameScene extends Phaser.Scene {
 
   private refreshNeeds() {
     this.bars.clear();
-    Object.entries(this.state.current.needs).forEach(([kind, n], i) => {
+    this.rows.forEach((kind, i) => {
+      const n = this.state.current.needs[kind] ?? 0;
       const have = Math.min(this.shown[kind] ?? 0, n);
-      const y = NEEDS.y + i * NEEDS.row;
+      const y = this.rowY(i);
       const done = have >= n;
-      this.needTexts.get(kind as Kind)!.setText(`${have}/${n}`).setColor(done ? '#3d6a32' : SEPIA);
+      this.needTexts.get(kind)?.setText(`${have}/${n}`).setColor(done ? '#3d6a32' : SEPIA);
       this.bar(NEEDS.barX - 1.5, y - 5.5, NEEDS.barW + 3, NEEDS.barH + 3, have / n, done ? MOSS : OCHRE, this.bars);
     });
+  }
+
+  /** What the pantry holds, at the foot of the label: a small icon and count per kind (nothing when it is empty). */
+  private refreshPantry() {
+    const held = Object.entries(this.state.pantry).filter(([, n]) => n > 0) as [Kind, number][];
+    const key = held.map(([k, n]) => `${k}${n}`).join();
+    if (key === this.pantryShown) return;
+    this.pantryShown = key;
+    this.pantry?.destroy();
+    this.pantry = undefined;
+    if (held.length === 0) return;
+    const items: Phaser.GameObjects.GameObject[] = [];
+    let x = 0;
+    for (const [kind, n] of [...held].reverse()) {
+      items.push(this.add.text(x, 0, `${n}`, ink(12, SEPIA, 'bold')).setOrigin(1, 0.5));
+      x -= 14;
+      items.push(shown(this.add.image(x - 9, 0, needTexture(kind)), 0.45));
+      x -= 24;
+    }
+    items.push(this.add.text(x - 2, 0, 'Pantry', ink(11, BROWN, 'italic')).setOrigin(1, 0.5));
+    this.pantry = this.add.container(PANTRY.x, PANTRY.y, items).setDepth(DEPTH.panel);
   }
 
   /** A rounded progress bar: a pale track with a sepia rim and a fill with a light streak. */
@@ -613,13 +715,13 @@ export class GameScene extends Phaser.Scene {
     const stars = this.state.stars;
     const at = rankOf(stars);
     const next = RANKS[at + 1];
-    this.rankTitle.setText(RANKS[at].title);
+    this.rankTitle.setText(this.state.royal ? ROYAL_TITLE : RANKS[at].title);
     const barX = Math.max(RIBBON.barX, this.rankTitle.x + this.rankTitle.width + 10);
     this.rankBar.clear();
     this.bar(barX, RIBBON.y + 7.5, RIBBON.barW, 8, next ? stars / next.stars : 1, OCHRE, this.rankBar);
     this.rankCount.setText(next ? `${stars}/${next.stars}` : `${stars}`).setX(barX + RIBBON.barW + 7);
     this.rankNext
-      .setText(next ? `Next: ${next.title}: a new recipe` : 'Every recipe unlocked')
+      .setText(next ? `Next: ${next.title}: a new recipe` : this.state.royal ? 'Every order filled for the crown' : "Every recipe unlocked: the crown's last order is next")
       .setX(this.rankCount.x + this.rankCount.width + 9);
   }
 
@@ -633,14 +735,21 @@ export class GameScene extends Phaser.Scene {
   /** The caption: what a picked-up tool wants, a hovered tool's tip, or a tip for this order. */
   private refreshCaption() {
     const s = this.state;
-    const blockers = s.board.some((row) => row.some(stuck));
+    const blockers = s.board.some((row) => row.some((t) => t.jar || t.resin));
+    const mould = s.board.some((row) => row.some((t) => t.mould));
     const forbid = s.current.forbid;
+    const given = Object.entries(s.fromPantry);
     let text = CAPTION_TIP;
     if (this.armed === 'sift') text = CAPTION_SIFT;
     else if (this.armed === 'pestle') text = CAPTION_PESTLE;
     else if (this.armed === 'funnel') text = this.funnelFrom ? CAPTION_FUNNEL_TO : CAPTION_FUNNEL;
     else if (this.hoverTool) text = `${TOOLS[this.hoverTool].tip} (${TOOLS[this.hoverTool].cost} coins)`;
+    else if (given.length > 0 && Object.values(s.got).every((n, i) => n === (s.fromPantry[Object.keys(s.got)[i] as Kind] ?? 0)))
+      text = `The pantry put in ${given.map(([k, n]) => `${n} ${KIND_NAMES[k as Kind].toLowerCase()}`).join(' and ')} to start`;
+    else if (s.current.stages) text = CAPTION_ROYAL;
+    else if (s.current.second) text = CAPTION_TWIN;
     else if (forbid) text = `No ${KIND_NAMES[forbid]} in this order: a swap that matches it costs a move`;
+    else if (mould) text = CAPTION_MOULD;
     else if (blockers) text = CAPTION_BLOCKERS;
     else if (s.current.rush) text = `Rush order: ${RUSH_MOVES} fewer moves than usual, and ${RUSH_COINS} more coins`;
     this.setCaption(text);
@@ -680,34 +789,102 @@ export class GameScene extends Phaser.Scene {
   private createResult() {
     const size = BOARD.cell * COLS;
     const card = shown(this.add.image(0, 0, 'result-card'));
-    this.resultTitle = this.add.text(0, -76, '', ink(24, SEPIA, 'italic bold')).setOrigin(0.5);
-    for (let k = 0; k < 3; k++) this.resultStars.push(shown(this.add.image((k - 1) * 34, -38, 'star-off'), 1.15));
-    this.resultText = this.add.text(0, -4, '', ink(14, BROWN)).setOrigin(0.5).setWordWrapWidth(340).setAlign('center');
-    this.resultRank = this.add.text(0, 24, '', ink(13, RUST, 'italic bold')).setOrigin(0.5).setWordWrapWidth(340).setAlign('center');
-    this.resultButton = makeButton(this, 0, 68, '', () => this.begin(nextOrder(this.state)));
+    this.resultTitle = this.add.text(0, -82, '', ink(24, SEPIA, 'italic bold')).setOrigin(0.5);
+    for (let k = 0; k < 3; k++) this.resultStars.push(shown(this.add.image((k - 1) * 34, -48, 'star-off'), 1.15));
+    this.resultText = this.add.text(0, -16, '', ink(13, BROWN)).setOrigin(0.5).setWordWrapWidth(340).setAlign('center');
+    this.resultRank = this.add.text(0, 22, '', ink(13, RUST, 'italic bold')).setOrigin(0.5).setWordWrapWidth(340).setAlign('center');
+    this.resultButton = makeButton(this, 0, 56, '', () => this.begin(nextOrder(this.state)));
     this.result = this.add
       .container(BOARD.x + size / 2, BOARD.y + size / 2, [card, this.resultTitle, ...this.resultStars, this.resultText, this.resultRank, this.resultButton])
       .setDepth(UI_DEPTH);
   }
 
+  // ---- The workbench ----
+
+  /** The result card's link to the workbench, made the first time the card shows. */
+  private createBenchLink() {
+    if (this.resultBench) return;
+    this.resultBench = this.add
+      .text(0, 88, 'Workbench: lasting upgrades', ink(12, RUST, 'italic bold'))
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => this.openBench())
+      .on('pointerover', () => this.resultBench?.setAlpha(0.7))
+      .on('pointerout', () => this.resultBench?.setAlpha(1));
+    this.result.add(this.resultBench);
+  }
+
+  /** The workbench card over the board: one row per lasting upgrade, each with its price, and a way back. */
+  private createBench() {
+    const size = BOARD.cell * COLS;
+    const card = shown(this.add.image(0, 0, 'result-card'));
+    const title = this.add.text(0, -92, 'Workbench', ink(24, SEPIA, 'italic bold')).setOrigin(0.5);
+    this.benchCoins = this.add.text(0, -68, '', ink(13, BROWN, 'italic')).setOrigin(0.5);
+    this.benchRows = this.add.container(0, 0);
+    const back = makeButton(this, 0, 86, 'Back', () => this.closeBench());
+    this.bench = this.add.container(BOARD.x + size / 2, BOARD.y + size / 2, [card, title, this.benchCoins, this.benchRows, back]).setDepth(UI_DEPTH);
+  }
+
+  private openBench() {
+    if (!this.bench) this.createBench();
+    this.result.setVisible(false);
+    this.bench!.setVisible(true);
+    this.refreshBench();
+  }
+
+  private closeBench() {
+    this.bench?.setVisible(false);
+    this.result.setVisible(true);
+  }
+
+  private buy(id: UpgradeId) {
+    if (!buyUpgrade(this.state, id)) return;
+    saveProgress(progressOf(this.state));
+    this.refresh();
+    this.refreshBench();
+  }
+
+  /** One row per upgrade: its name and effect, a pip per level and a button with the next level's price. */
+  private refreshBench() {
+    if (!this.benchRows || !this.benchCoins) return;
+    this.benchRows.removeAll(true);
+    const u = this.state.upgrades;
+    this.benchCoins.setText(`${this.state.coins} coins to spend`);
+    UPGRADE_ORDER.forEach((id, i) => {
+      const y = -42 + i * 36;
+      const level = u[id];
+      const top = UPGRADES[id].costs.length;
+      const cost = upgradeCost(u, id);
+      const pips = Array.from({ length: top }, (_, k) => (k < level ? '●' : '○')).join('');
+      this.benchRows!.add(this.add.text(-172, y - 9, `${UPGRADES[id].name}  ${pips}`, ink(14, SEPIA, 'italic bold')).setOrigin(0, 0.5));
+      this.benchRows!.add(this.add.text(-172, y + 8, UPGRADES[id].what, ink(11, BROWN)).setOrigin(0, 0.5));
+      const button = makeButton(this, 118, y, cost === null ? 'Bought' : `Buy for ${cost}`, () => this.buy(id)).setScale(0.6);
+      if (cost === null || this.state.coins < cost) button.setAlpha(0.45);
+      this.benchRows!.add(button);
+    });
+  }
+
   private showSold() {
     const s = this.state;
+    const o = s.current;
     const before = rankOf(s.stars - s.orderStars);
     const at = rankOf(s.stars);
     const next = RANKS[at + 1];
-    const rank =
-      at > before
+    const rank = o.last
+      ? `${ROYAL_TITLE}! ${s.stars} stars in all`
+      : at > before
         ? `Now a ${RANKS[at].title}! New recipe: ${POTION_NAMES[RANKS[at].recipe!]}`
         : next
           ? `${s.stars} stars: ${next.stars - s.stars} more to ${next.title}`
-          : `${s.stars} stars, and every recipe unlocked`;
-    this.showResult(
-      `${POTION_NAMES[s.current.potion]} sold!`,
-      `+${s.current.price} coins, +${s.earned - s.current.price} for ${s.moves} moves left`,
-      rank,
-      'Next order',
-      s.orderStars,
-    );
+          : s.royal
+            ? `${s.stars} stars in all as ${ROYAL_TITLE}`
+            : `${s.stars} stars, and every recipe unlocked`;
+    const kept = Object.entries(s.toPantry).map(([k, n]) => `${n} ${KIND_NAMES[k as Kind].toLowerCase()}`);
+    const lines = [`+${o.price} coins, +${s.earned - o.price} for ${s.moves} moves left`];
+    if (s.speedBonus > 0) lines.push(`+${s.speedBonus} for serving the ${POTION_NAMES[s.served[0]]} first`);
+    if (kept.length > 0) lines.push(`${kept.join(', ')} kept in the pantry`);
+    const title = o.last ? "The crown's last order filled!" : o.stages ? 'Royal commission filled!' : o.second ? 'Both customers served!' : `${POTION_NAMES[o.potion]} sold!`;
+    this.showResult(title, lines.join('\n'), rank, s.royal && o.last ? 'Keep tinkering' : 'Next order', s.orderStars);
   }
 
   private showResult(title: string, text: string, rank: string, button: string, stars: number) {
@@ -716,6 +893,7 @@ export class GameScene extends Phaser.Scene {
     this.resultRank.setText(rank);
     this.resultStars.forEach((icon, k) => icon.setTexture(k < stars ? 'star-on' : 'star-off'));
     (this.resultButton.list[1] as Phaser.GameObjects.Text).setText(button);
+    this.createBenchLink();
     this.result.setVisible(true);
     if (!settings.reduceMotion) this.tweens.add({ targets: this.result, scale: { from: 0.92, to: 1 }, alpha: { from: 0, to: 1 }, duration: 220 });
   }

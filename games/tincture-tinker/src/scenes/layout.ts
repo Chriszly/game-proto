@@ -9,8 +9,10 @@ export const TRAY = { x: 36, y: 36, w: 468, h: 468 };
 export const RIBBON = { x: 46, y: 7, w: 458, h: 23, barX: 191, barW: 85 };
 /** The order panel on the right. */
 export const PANEL = { x: 536, y: 30, w: 394, h: 480 };
-/** One row per ingredient the order asks for, from the top. */
-export const NEEDS = { x: 566, y: 236, row: 56, barX: 608, barW: 220, barH: 14 };
+/** One row per ingredient the order asks for, from the top; a twin order's four rows sit closer. */
+export const NEEDS = { x: 566, y: 236, row: 56, barX: 608, barW: 220, barH: 14, twinY: 230, twinRow: 41 };
+/** The pantry's note, right-aligned at the foot of the order panel under the coins. */
+export const PANTRY = { x: 906, y: 490 };
 /** The four bench tool buttons in the order panel, `gap` apart: Stir, Sift, Pestle and Funnel. */
 export const TOOL = { x: 560, y: 393, w: 80, h: 43, gap: 88 };
 /** The caption cartouche under the tray. */
