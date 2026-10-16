@@ -5,6 +5,10 @@
 // It plays the AI's side, and in watch mode (`?watch`) the player's side too: `think` takes the side.
 import {
   BUILDINGS,
+  RAID_MAX_MS,
+  RAID_PARTY,
+  RAID_REST_MS,
+  RAID_TOWN_FROM,
   RELICS,
   TECHS,
   UNIQUE,
@@ -21,6 +25,7 @@ import {
   campSpots,
   canPlace,
   chooseBoon,
+  endRaid,
   hasBuilt,
   hasBuildingFor,
   holds,
@@ -38,6 +43,7 @@ import {
   unitCost,
   type Building,
   type GameState,
+  type RaidGoal,
   type Unit,
 } from './sim';
 import { WATER, inMap, idx, type Node } from './map';
@@ -52,6 +58,9 @@ const THINK_MS = 4000;
 const ACTIONS_PER_THINK = 2;
 const TARGET_VILLAGERS = 18;
 const ARMY_TO_ATTACK = 14;
+/** What an economy raid goes for, and how far from the enemy Town Center it must stand. */
+const RAID_ECONOMY: BuildingId[] = ['lumber', 'mine', 'farm', 'dock', 'grove'];
+const RAID_CLEAR = 8;
 const ARMY_CAP = 40;
 const RESEARCH_ORDER = ['axes', 'baskets', 'ironworks', 'fletching', 'age2', 'stirrups', 'bodkin', 'picks', 'age3'];
 /** `unique` stands for the faction's own building (Forge, Dock or Grove); the Monument waits for Age III. */
@@ -181,23 +190,38 @@ function plan(s: GameState) {
     }
   }
 
-  // 6. Attack, ahead of idle villagers, as a player would: once the army is big enough, attack-move
-  // on the player's Town Center, and keep sending idle soldiers after a fight. A standing player
-  // Monument draws everything the AI has, at once.
+  // 6. Raids, ahead of idle villagers, as a player would. A standing enemy Monument draws everything
+  // the AI has, at once. Otherwise a raid waits for its time gate and a big enough army, goes for one
+  // goal (the enemy's outlying economy, a relic it holds, later its Town Center) and comes home when
+  // the goal is done, half the party has fallen or it has dragged on, then the army rests a while.
   const army = military.filter((u) => u.hp > 0);
-  const monument = [...s.buildings.values()].find((b) => b.owner === FOE && b.type === 'monument');
-  const target = monument ?? [...s.buildings.values()].find((b) => b.owner === FOE && b.type === 'town');
-  const urgent = monument !== undefined && monumentLeft(s, FOE) !== null;
   const idleArmy = army.filter((u) => u.order.t === 'idle');
-  if ((army.length >= ARMY_TO_ATTACK || (urgent && army.length > 0)) && target) {
-    if ((urgent || idleArmy.length >= army.length / 2) && idleArmy.length > 0 && act(() => true)) {
-      const half = BUILDINGS[target.type].w / 2;
-      issue(s, ME, army.map((u) => u.id), { t: 'attackMove', x: target.tx + half, y: target.ty + half });
-      // The player is told about each new raid; the one under way keeps its raiders.
+  // Soldiers not in a fight: idle, or walking (a crowd at a rally flag can jostle on its way for good).
+  const ready = army.filter((u) => u.order.t === 'idle' || u.order.t === 'move');
+  const raid = s.aiRaid[ME];
+  const monument = [...s.buildings.values()].find((b) => b.owner === FOE && b.type === 'monument');
+  if (monument && monumentLeft(s, FOE) !== null && army.length > 0) {
+    if (idleArmy.length > 0 && act(() => true)) {
+      const half = BUILDINGS.monument.w / 2;
+      issue(s, ME, army.map((u) => u.id), { t: 'attackMove', x: monument.tx + half, y: monument.ty + half });
       startRaid(s, ME, FOE, army.map((u) => u.id));
-      log(monument ? `sends all ${army.length} soldiers at the enemy Monument` : `attacks with ${army.length} soldiers`);
+      log(`sends all ${army.length} soldiers at the enemy Monument`);
     }
-  } else if (army.length >= ARMY_FOR_RELIC && idleArmy.length >= army.length / 2) {
+  } else if (raid.goal) {
+    pressRaid(s, town);
+  } else if (s.time >= raid.next && army.length >= ARMY_TO_ATTACK && ready.length >= army.length / 2) {
+    const goal = raidGoal(s);
+    if (goal && act(() => true)) {
+      // An economy or relic raid takes a party, nearest the goal first; the Town Center gets everyone.
+      const party = goal.kind === 'town' ? army : [...army].sort((a, b) => Math.hypot(a.x - goal.x, a.y - goal.y) - Math.hypot(b.x - goal.x, b.y - goal.y)).slice(0, RAID_PARTY);
+      const ids = party.map((u) => u.id);
+      Object.assign(raid, { goal, party: ids, started: s.time, count: raid.count + 1 });
+      issue(s, ME, ids, { t: 'attackMove', x: goal.x, y: goal.y });
+      // The player is told about each new raid.
+      startRaid(s, ME, FOE, ids);
+      log(`raids the enemy's ${goalName(s, goal)} with ${ids.length} soldiers`);
+    }
+  } else if (army.length >= ARMY_FOR_RELIC && ready.length >= army.length / 2) {
     // 6b. Between raids, a fair-sized army goes to take the nearest relic the AI doesn't hold.
     const relic = s.camps
       .filter((c) => c.kind === 'relic' && !holds(s, ME, c.relic!))
@@ -217,6 +241,74 @@ function plan(s: GameState) {
 
   // 8. The Age II boon: the AI always holds a shieldwall.
   if (p.boonPending && chooseBoon(s, ME, 'shieldwall')) log('picks the Shieldwall boon');
+}
+
+/**
+ * The goal for the next raid. The first goes for the enemy's outlying economy, the second for a relic
+ * it holds (each falling back on the other), and from RAID_TOWN_FROM on, or in Age III, the Town
+ * Center. An unfinished or standing Monument is always the goal.
+ */
+function raidGoal(s: GameState): RaidGoal | null {
+  const mine = [...s.buildings.values()].find((b) => b.owner === ME && b.type === 'town');
+  const foeTown = [...s.buildings.values()].find((b) => b.owner === FOE && b.type === 'town');
+  if (!mine || !foeTown) return null;
+  const at = (b: Building, kind: RaidGoal['kind']): RaidGoal => ({ kind, x: b.tx + BUILDINGS[b.type].w / 2, y: b.ty + BUILDINGS[b.type].h / 2, b: b.id, camp: null });
+  const monument = [...s.buildings.values()].find((b) => b.owner === FOE && b.type === 'monument');
+  if (monument) return at(monument, 'town');
+  const raid = s.aiRaid[ME];
+  if (raid.count + 1 >= RAID_TOWN_FROM || s.players[ME].age >= 3) return at(foeTown, 'town');
+  // Economy: the enemy's camp, farm, Dock or Grove farthest from its Town Center, out of its arrows,
+  // or failing those any other outlying building of its (not a palisade).
+  const fx = foeTown.tx + 2;
+  const fy = foeTown.ty + 2;
+  const away = [...s.buildings.values()]
+    .filter((b) => b.owner === FOE && !BUILDINGS[b.type].palisade && Math.hypot(b.tx - fx, b.ty - fy) >= RAID_CLEAR)
+    .sort((a, b) => Math.hypot(b.tx - fx, b.ty - fy) - Math.hypot(a.tx - fx, a.ty - fy));
+  const outlying = away.find((b) => RAID_ECONOMY.includes(b.type)) ?? away[0];
+  const economy = outlying ? at(outlying, 'economy') : null;
+  // Relic: one the enemy holds, nearest the AI's own Town Center.
+  const camp = s.camps
+    .filter((c) => c.kind === 'relic' && c.holder === FOE)
+    .sort((a, b) => Math.hypot(a.tx - mine.tx, a.ty - mine.ty) - Math.hypot(b.tx - mine.tx, b.ty - mine.ty))[0];
+  const spot = camp ? campSpots(s, camp)[0] : undefined;
+  const relic: RaidGoal | null = camp && spot ? { kind: 'relic', x: spot.x, y: spot.y, b: null, camp: camp.id } : null;
+  const order = raid.count === 0 ? [economy, relic] : [relic, economy];
+  return order.find((g) => g !== null) ?? at(foeTown, 'town');
+}
+
+/** How a goal reads in the watch log. */
+function goalName(s: GameState, g: RaidGoal) {
+  if (g.camp !== null) return RELICS[s.camps.find((c) => c.id === g.camp)!.relic!].name;
+  return BUILDINGS[s.buildings.get(g.b!)!.type].name;
+}
+
+/**
+ * Keeps the raid under way going: idle raiders go at the goal, and once it is done, half the party
+ * has fallen or an economy or relic raid has dragged on, the party walks home and the army rests.
+ */
+function pressRaid(s: GameState, town: Building) {
+  const raid = s.aiRaid[ME];
+  const goal = raid.goal!;
+  const party = raid.party.map((id) => s.units.get(id)).filter((u): u is Unit => !!u && u.hp > 0);
+  const done = goal.b !== null ? !s.buildings.has(goal.b) : s.camps.find((c) => c.id === goal.camp)?.holder !== FOE;
+  const bled = party.length < raid.party.length / 2;
+  const late = goal.kind !== 'town' && s.time - raid.started > RAID_MAX_MS;
+  if (done || bled || late) {
+    if (party.length > 0) {
+      if (!act(() => true)) return;
+      const home = frontOf(s, town, 6);
+      issue(s, ME, party.map((u) => u.id), { t: 'move', x: home.x, y: home.y });
+    }
+    // Every raider fallen is repelled by the sim already; one turned back by losses is repelled too.
+    endRaid(s, ME, bled && !done);
+    log(bled && !done ? 'calls the raid back after its losses' : done ? 'raid done, heads home' : 'calls the raid off');
+    Object.assign(raid, { goal: null, party: [], next: s.time + RAID_REST_MS });
+    return;
+  }
+  const idle = party.filter((u) => u.order.t === 'idle');
+  if (idle.length === 0) return;
+  const ids = idle.map((u) => u.id);
+  act(() => (issue(s, ME, ids, goal.b !== null ? { t: 'attack', target: goal.b } : { t: 'attackMove', x: goal.x, y: goal.y }), true));
 }
 
 function farmCount(s: GameState) {

@@ -68,12 +68,22 @@ in code on 2D canvases (no image files), with `pixelArt` off.
 - The AI is a rule-based planner (`src/game/planner.ts`), not a full build-order search: it keeps
   villagers coming, builds houses before the cap, a farm, camps, barracks, range, stable, academy
   and watchtower, researches in a fixed order (Age III last, once its deeds are done), trains an
-  army, attack-moves once it has 14 units (starting a raid), and picks Shieldwall at Age II. It also
+  army, raids (below) and picks Shieldwall at Age II. It also
   builds its faction's building after its camps (a Dock on the nearest shore), sets each production
   building's rally flag in front of its base, lays a nine-stake diagonal palisade with a gate in the
   middle across its front in Age II (`buildWall`), sends an army of 8 or more to take the nearest
   relic it doesn't hold between raids, builds a Monument in Age III, and attacks a standing player
   Monument with everything at once.
+- AI raids (`raidGoal`, `pressRaid` in the planner, `GameState.aiRaid` per side): none before
+  `FIRST_RAID_MS` (10 min), and `RAID_REST_MS` (3 min) after one ends before the next; it needs 14
+  soldiers (`ARMY_TO_ATTACK`), half of them idle or walking. Each raid has a `RaidGoal`: the first the
+  enemy's outlying economy (a `RAID_ECONOMY` building at least `RAID_CLEAR` tiles from its Town
+  Center, else any outlying building), the second a relic it holds (each falling back on the other),
+  from `RAID_TOWN_FROM` (the third) or in Age III its Town Center; a Monument always comes first.
+  Economy and relic raids send the `RAID_PARTY` (10) soldiers nearest the goal; a Town Center raid
+  sends everyone. Idle raiders are sent at the goal again; the party walks home when the goal is
+  done, when half of it has fallen (`endRaid(s, by, true)`: repelled, the deed is done) or after
+  `RAID_MAX_MS` for a non-town raid (`endRaid(s, by, false)`: withdrawn).
 - Watch AI (`?watch`, `shared/watch.ts`): Boot skips the menu and starts `Game` with two random
   different factions; the planner plays both sides (`think(state, dt, PLAYER)` as well), both gather
   at the Normal rate, the whole map stays in sight (`sight.fill(2)` each frame), the sim runs
@@ -94,7 +104,8 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   the age techs), `GATHER_MS`, `CARRY`, `START`, `START_VILLAGERS`, `DEEDS`, `ARMY_DEED`,
   `AGE3_DAMAGE`, `BOONS`, `SHIELDWALL_TAKEN`, `HARVEST_RITES`, `BUILD_MORE`, `UNIQUE`,
   `UNIQUE_TEXT`, the Forge, Dock and Grove numbers, `UNIT_GAP`, `RELICS` and their bonuses,
-  `CLAIM_RANGE`, `LEASH`, `MONUMENT_MS`, `TILE` (32) and `MAP_SIZE` (128).
+  `CLAIM_RANGE`, `LEASH`, `MONUMENT_MS`, the raid pacing (`FIRST_RAID_MS`, `RAID_REST_MS`,
+  `RAID_PARTY`, `RAID_TOWN_FROM`, `RAID_MAX_MS`), `TILE` (32) and `MAP_SIZE` (128).
 - `src/game/map.ts`: `generateMap()` draws lakes, rock ridges, forests, bushes and mines, mirrors
   each one, adds each side's starting trees, bushes and mine, then clears the camps' patches. Terrain is `Uint8Array` of
   `GRASS`, `WATER`, `ROCK` and `DIRT`; `Node`s are the resources. `START_TILES` are the two Town
@@ -103,7 +114,7 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   `issue` gives unit orders, `placeBuilding`, `canPlace`, `train` and `research` queue things,
   `chooseBoon` takes the Age II boon, `startRaid` records a raid, `notAllowed` says why a building
   can't be placed at all, `unitCost` applies the Forge, `placeWall`/`wallLine` lay a palisade,
-  `setRally` plants a rally flag, `campAt`/`campSpots` find a camp and the tiles round it,
+  `setRally` plants a rally flag, `endRaid` ends a raid whose raiders turn back, `campAt`/`campSpots` find a camp and the tiles round it,
   `monumentLeft` reads a Monument's count, `deedCount` and `deedsDone` read
   the deeds, `findPath` is a breadth-first search on the tile grid, `updateSight` computes the
   player's sight, and `entityAt` finds what is under a point.
@@ -153,6 +164,8 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   `grow` events the sim pushes and the scene drains each frame (capped at 400 when nobody drains them).
 - `GameState.players` has a third entry, `NEUTRAL` (the camp guards); its `faction` is only a
   placeholder. Code that loops over players skips it where it matters (`updateDeeds`, `checkWinner`).
+- `GameState.aiRaid[side]`: `next` (earliest time of the next raid), `count`, `goal`, `party` and
+  `started`; the planner's memory, which changes no rule.
 - `Building.rally`, `doneAt` and `workMs` (the Dock's and Grove's timer); `Unit.post` (a guard's
   post); `GameState.gates`, `camps` and `winBy`.
 
@@ -206,8 +219,9 @@ in code on 2D canvases (no image files), with `pixelArt` off.
 - `research` refuses an age tech unless the player is in the age before it, and Age III unless
   `deedsDone`. Shieldwall is applied in `takenBy` (towers and soldiers alike), Harvest Rites in the
   gather step for farms, Age III in `ownBonus`. Hit points can be fractional under Shieldwall.
-- One raid is tracked at a time: the planner calls `startRaid` each time it attack-moves, which does
-  nothing while a raid is under way.
+- One raid is tracked at a time (`GameState.raid`): `startRaid` does nothing while a raid is under
+  way, so in watch mode a side's raid can go untracked while the other's is on. A raid ends when
+  every raider has fallen (repelled) or with `endRaid` when the planner calls its party home.
 - `speedOf` in `sim.ts` gives cavalry the Stirrups speed (`STIRRUPS_SPEED`) when they move.
 - The AI's gather rate is the only difficulty number: `byDifficulty(0.75, 1, 1.25)` in `GameScene`.
 - `canPlace(s, type, tx, ty, owner)` also refuses gate tiles, and a Dock away from water
