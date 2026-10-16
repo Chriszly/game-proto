@@ -4,11 +4,13 @@ import { expect, test, type Page } from '@playwright/test';
 // the island, as on a phone, nearest the surveyor first, while the supplies can pay for one (forests
 // and peaks cost 2, rivers and roads are free), checking what each survey costs and what its finds
 // add (a wreck's supplies, a cave's artifact, a storm's blocked tile). When nothing more can be paid
-// for it heads back to port, and checks the chart adds up (tiles, commission, artifacts, unused
-// supplies sold back and any isle milestone the voyage reached), taps Sell chart and checks the
-// coins and the isle goal, then taps Set sail and checks the second voyage starts with full
-// supplies on the same island. It pitches no camp, digs nothing and buys nothing at the harbor.
-// Game state is only read, through the `game` object the dev build puts on window.
+// for it heads back to port, and checks the chart adds up (tiles, features charted whole,
+// commission, artifacts, unused supplies sold back and any isle milestone the voyage reached), taps
+// Sell chart and checks the coins, the isle goal and that the harbor lays out a commission board and
+// three hands, then taps Set sail and checks the second voyage starts with full supplies on the same
+// island, with no hand aboard. It pitches no camp, digs nothing, hires nobody, picks no commission
+// and buys nothing at the harbor; the rival only lands from the third isle. Game state is only
+// read, through the `game` object the dev build puts on window.
 
 type Terrain = 'sea' | 'beach' | 'grass' | 'forest' | 'hills' | 'mountain' | 'river' | 'road' | 'village' | 'ruins' | 'port';
 type Find = 'wreck' | 'cave' | 'storm';
@@ -28,7 +30,10 @@ interface GameState {
   coins: number;
   ranks: Record<string, number>;
   surveyed: Point[];
-  commission: { terrain: Terrain; need: number; bonus: number } | null;
+  commission: Commission | null;
+  board: Commission[];
+  hands: string[];
+  hand: string | null;
   chart: {
     counts: Partial<Record<Terrain, number>>;
     base: number;
@@ -37,6 +42,10 @@ interface GameState {
     artifacts: number;
     artifactCoins: number;
     treasure: number;
+    features: { name: string; bonus: number }[];
+    featureCoins: number;
+    rivalTiles: number;
+    rivalLoss: number;
     unused: number;
     sellBack: number;
     milestones: number;
@@ -54,6 +63,17 @@ interface GameState {
   treasure: number;
   riddle: { at: Point; clues: string[]; known: boolean; found: boolean } | null;
   dug: Point[];
+  features: { kind: 'river' | 'road' | 'wood'; name: string; tiles: Point[]; bonus: number }[];
+  rival: unknown | null;
+  royal: unknown | null;
+}
+interface Commission {
+  terrain: Terrain;
+  need: number;
+  bonus: number;
+  voyages: number;
+  done: number;
+  left: number;
 }
 
 const VIEW = { w: 960, h: 540 };
@@ -70,6 +90,11 @@ const COST: Record<Terrain, number> = { sea: 1, beach: 1, grass: 1, forest: 2, h
 const WRECK_SUPPLIES = 3;
 const ARTIFACT_VALUE = 15;
 const SELL_BACK = 3;
+/** What charting a whole river, road or wood pays for each of its tiles (FEATURE_BONUS in state.ts), and how many forest tiles make a wood (WOOD_MIN). */
+const FEATURE_BONUS = 2;
+const WOOD_MIN = 3;
+/** How many hands the harbor offers (HANDS_OFFERED in hands.ts). */
+const HANDS_OFFERED = 3;
 /** The isle goal's milestones (MILESTONES in state.ts): percent charted and the coins each pays. */
 const MILESTONES = [
   { pct: 50, coins: 20 },
@@ -235,8 +260,26 @@ test('plays the first voyage', async ({ page }, testInfo) => {
     artifacts: 0,
     treasure: 0,
     dug: [],
+    board: [],
+    hands: [],
+    hand: null,
+    rival: null,
+    royal: null,
   });
   expect(at(s, s.port.x, s.port.y)).toEqual({ terrain: 'port', revealed: true });
+  // The isle's features: every river, road and wood (of WOOD_MIN or more forest tiles) is one, named,
+  // paying FEATURE_BONUS a tile once charted whole. A green isle has at least a river and a road.
+  expect(s.features.length, 'the isle has features').toBeGreaterThan(0);
+  expect(s.features.map((f) => f.kind), 'a green isle has a river and a road').toEqual(expect.arrayContaining(['river', 'road']));
+  for (const f of s.features) {
+    expect(f.name).not.toBe('');
+    expect(f.bonus, `${f.name} pays ${FEATURE_BONUS} a tile`).toBe(FEATURE_BONUS * f.tiles.length);
+    const terrain = f.kind === 'wood' ? 'forest' : f.kind;
+    for (const p of f.tiles) expect(at(s, p.x, p.y).terrain, `${f.name} is all ${terrain}`).toBe(terrain);
+    if (f.kind === 'wood') expect(f.tiles.length).toBeGreaterThanOrEqual(WOOD_MIN);
+  }
+  const names = s.features.map((f) => f.name);
+  expect(new Set(names).size, 'feature names are distinct').toBe(names.length);
   expect(revealedCount(s), 'only the port is charted').toBe(1);
   expect(s.surveyor).toEqual(s.port);
   expect(frontier(s).length, 'tiles next to the port can be surveyed').toBeGreaterThan(0);
@@ -302,7 +345,20 @@ test('plays the first voyage', async ({ page }, testInfo) => {
   const base = Object.entries(counts).reduce((sum, [t, n]) => sum + VALUE[t as Terrain] * n!, 0);
   const c = s.commission!;
   expect(c, 'the first voyage has a commission').not.toBeNull();
+  expect(c).toMatchObject({ voyages: 1, done: 0, left: 1 });
   const bonus = (counts[c.terrain] ?? 0) >= c.need ? c.bonus : 0;
+  // Features charted whole on this voyage (every tile revealed, at least one of them this voyage)
+  // pay their named bonus with the chart. The first voyage charts at least every tile of a free
+  // feature it walked, or none: either way the chart lists exactly those.
+  const whole = s.features.filter(
+    (f) => f.tiles.every((p) => at(s, p.x, p.y).revealed) && f.tiles.some((p) => s.surveyed.some((q) => q.x === p.x && q.y === p.y)),
+  );
+  const features = whole.map((f) => ({ name: f.name, bonus: f.bonus }));
+  const featureCoins = features.reduce((sum, f) => sum + f.bonus, 0);
+  for (const f of s.features) {
+    if (whole.includes(f)) continue;
+    expect(f.tiles.some((p) => !at(s, p.x, p.y).revealed), `${f.name} is not charted whole`).toBe(true);
+  }
   // Supplies too few for the stations left sell back, up to the tiles' worth; the voyage pays any
   // isle milestones it reached.
   const pct = islePercent(s);
@@ -321,12 +377,16 @@ test('plays the first voyage', async ({ page }, testInfo) => {
     artifacts: caves,
     artifactCoins: caves * ARTIFACT_VALUE,
     treasure: 0,
+    features,
+    featureCoins,
+    rivalTiles: 0,
+    rivalLoss: 0,
     unused,
     sellBack,
     milestones: reached.length,
     milestoneCoins,
     atlas: false,
-    total: base + bonus + caves * ARTIFACT_VALUE + sellBack + milestoneCoins,
+    total: base + featureCoins + bonus + caves * ARTIFACT_VALUE + sellBack + milestoneCoins,
   });
   expect(s.chart!.total).toBeGreaterThan(SUPPLIES);
   await play(500, async () => false);
@@ -337,7 +397,17 @@ test('plays the first voyage', async ({ page }, testInfo) => {
   let spots = await game.spots();
   await tap(spots.sell);
   expect(await play(1_000, async () => (s = await game.state()).phase === 'harbor'), 'chart sold').toBe(true);
-  expect(s).toMatchObject({ coins: total, lastSale: total, chart: null, surveyed: [], artifacts: 0, milestones: reached.length, atlas: [] });
+  expect(s).toMatchObject({ coins: total, lastSale: total, chart: null, surveyed: [], artifacts: 0, milestones: reached.length, atlas: [], hand: null });
+  // The harbor lays out a commission board, with the first one picked, and three hands to choose from.
+  expect(s.board.length, 'the board offers commissions').toBeGreaterThan(0);
+  expect(s.board.length).toBeLessThanOrEqual(3);
+  expect(s.commission, 'the first commission on the board is picked').toEqual(s.board[0]);
+  for (const b of s.board) {
+    expect(b.need, 'a long commission asks for more tiles').toBeGreaterThanOrEqual(b.voyages);
+    expect(b).toMatchObject({ done: 0, left: b.voyages });
+  }
+  expect(s.hands.length, 'three hands are offered').toBe(HANDS_OFFERED);
+  expect(new Set(s.hands).size).toBe(HANDS_OFFERED);
   await play(500, async () => false);
   await snap('3-harbor');
 
@@ -346,7 +416,8 @@ test('plays the first voyage', async ({ page }, testInfo) => {
   spots = await game.spots();
   await tap(spots.sail);
   expect(await play(1_000, async () => (s = await game.state()).phase === 'survey'), 'set sail').toBe(true);
-  expect(s).toMatchObject({ island: 1, voyage: 2, supplies: SUPPLIES, coins: total, ranks: {}, isleStart: 1, storms: [], camps: [] });
+  expect(s).toMatchObject({ island: 1, voyage: 2, supplies: SUPPLIES, coins: total, ranks: {}, isleStart: 1, storms: [], camps: [], hand: null, rival: null });
+  expect(s.commission, 'the picked commission sails with the voyage').toEqual(s.board[0]);
   expect(s.surveyor).toEqual(s.port);
   expect(revealedCount(s), 'the chart so far is kept').toBe(charted);
   await play(500, async () => false);

@@ -9,10 +9,13 @@ lines, hill shading, map symbols and place names, and the rest is blank, gridded
 Each voyage you have a sack of supplies, and every tile you survey costs one (two for forests and
 peaks, none along rivers and roads). Push inland across beaches, meadows and forests, climb hills
 and peaks to see the land around them, turn up wrecks, caves and storms, pitch base camps, solve
-the ruins' treasure riddle, and find the villages and ruins worth the most. When the supplies run out (or you turn back early), the surveyor
-sails home and draws what they found into a chart, which sells at the port. Spend the coins at the
-harbor, set sail again, and chart the whole isle to bind it into your atlas before a new one waits
-over the horizon: an archipelago, a volcanic isle or a jungle isle.
+the ruins' treasure riddle, chart rivers, roads and woods whole for their named bonuses, and find
+the villages and ruins worth the most. When the supplies run out (or you turn back early), the
+surveyor sails home and draws what they found into a chart, which sells at the port. Pick a
+commission off the board and a hand for the next voyage, spend the coins at the harbor, set sail
+again, and chart the whole isle to bind it into your atlas before a new one waits over the horizon:
+an archipelago, a volcanic isle or a jungle isle. From the third isle a rival surveyor charts
+alongside you, and binding one isle of every kind completes the Royal Atlas.
 
 ![Surveying the island](docs/screenshots/island.png)
 
@@ -25,7 +28,10 @@ over the horizon: an archipelago, a volcanic isle or a jungle isle.
 | Tap charted ground | Once the riddle chart is found, dig there for the treasure, for 1 supply |
 | Return to port | End the voyage (early, if you like: unused supplies sell back) and draw the chart |
 | Sell chart | Sell the voyage's chart at the port |
+| Tap a commission | Pick it off the harbor's board for the next voyage |
+| Tap a hand | Take them aboard for the next voyage (tap again to leave them ashore) |
 | Buy | Buy an upgrade at the harbor |
+| Keep charting, New atlas | On the Royal Atlas page: carry on, or start over and try for a better best |
 | Set sail | Start the next voyage with full supplies (to a new isle once this one is charted) |
 
 1. **Surveying**: a blank tile next to a charted land tile carries a magenta survey station
@@ -56,17 +62,36 @@ over the horizon: an archipelago, a volcanic isle or a jungle isle.
    none back.
 9. **Charts**: every tile revealed on a voyage, surveyed or seen from a lookout, goes on the chart,
    with any artifacts and the treasure.
-10. **Commissions**: each voyage a buyer at the port asks for a chart with enough of one terrain,
-   and pays a bonus if the chart has it.
-11. **Isle goal**: the panel's "Isle surveyed" bar shows how much of the isle is charted (its land
+10. **Whole features pay**: every river, road and wood (three or more forest tiles joined) is a
+   named feature. Pointing at the station that would chart its last tile says so ("finishes Mill
+   Stream +4c"), and the chart that charts the last tile of one pays 2 coins for each of its
+   tiles on top. Routes that follow a river or a road pay twice.
+11. **Commission board**: the first voyage comes with a commission; after that the harbor lays out
+   a board of up to three to pick from, with the first one picked for you. Most ask for so many
+   tiles of one terrain on the next voyage. A **long** one asks for more over two or three voyages
+   for a bigger pay: the tiles add up voyage to voyage, and the panel counts the voyages left.
+   The board stays hidden while a long commission runs.
+12. **Hire a hand**: the harbor also offers three of four hands, free, for the next voyage only.
+   A Woodsman makes forests cost 1; a Climber makes peaks cost 1 and lookouts see a tile further;
+   a Naturalist doubles what cave artifacts pay; a Boatman makes the sea free to chart and lets
+   you survey on from charted sea tiles. The sheet's header says who is aboard.
+13. **Isle goal**: the panel's "Isle surveyed" bar shows how much of the isle is charted (its land
    and the sea beside it). The voyage whose chart takes it past 50% pays +20 coins, past 75% +40
    coins, and at 100% the isle is bound into your atlas as a page; the atlas count shows beside the
    voyage in the panel and at the harbor.
-12. **Islands**: what you have charted stays charted between voyages. Once every tile you can reach
+14. **Islands**: what you have charted stays charted between voyages. Once every tile you can reach
    is charted, the next voyage sails to a new island with more villages and ruins. The isles take
    turns: a green isle, an archipelago (islets joined by sandbars, lots of beach), a volcanic isle
    (hills and peaks, little wood) and a jungle isle (thick forest cut by rivers, no roads). Each
    binds into the atlas as a page of its own colour.
+15. **The rival surveyor**: from the third isle a grey surveyor lands on the far shore. For every
+   two tiles you survey they chart one, heading for ruins, peaks and hills, and plant a grey
+   pennant on it that shows through the paper. A tile they charted first sells for half when you
+   chart it. Once they have charted the ruins they make for the treasure, and if they reach it
+   first it is gone.
+16. **The Royal Atlas**: binding one isle of each of the four kinds completes the Royal Atlas. Its
+   page shows the four pages and the voyages it took, keeps your best (fewest voyages) between
+   games, and lets you keep charting or start a new atlas.
 
 The game saves itself at every step.
 
@@ -96,6 +121,19 @@ The game saves itself at every step.
 | Storm | Blocks a blank tile nearby until the voyage ends |
 | Treasure | Dug up on the riddle's tile: +60 coins on the chart |
 
+| Feature | Bonus once charted whole |
+| --- | --- |
+| River | 2 coins a tile |
+| Road | 2 coins a tile |
+| Wood (3+ forest tiles) | 2 coins a tile |
+
+| Hand | For one voyage |
+| --- | --- |
+| Woodsman | Forests cost 1 supply |
+| Climber | Peaks cost 1 supply; hills and peaks see one tile further |
+| Naturalist | Artifacts from caves pay 30 instead of 15 |
+| Boatman | Sea costs nothing, and charted sea can be surveyed on from |
+
 ![A chart back at port](docs/screenshots/playthrough-2-chart.png)
 
 ![A wreck, a cave and a storm turned up on the way](docs/screenshots/finds.png)
@@ -111,6 +149,19 @@ the milestone are paid with the chart.
 
 ![A chart with sell-back and an isle milestone](docs/screenshots/isle-goal.png)
 
+The station that would finish a river, and the bonus once it is charted whole.
+
+![Pointing at the last tile of a river](docs/screenshots/feature-finish-hint.png)
+
+![A river charted whole](docs/screenshots/feature-charted-whole.png)
+
+The rival surveyor on a volcanic isle, with the tiles they charted first flagged, and a chart that
+lost half of three of them while a long commission paid.
+
+![The rival surveyor and their claims](docs/screenshots/rival-surveyor.png)
+
+![A chart with the rival's tiles and a long commission](docs/screenshots/chart-rival-and-long-commission.png)
+
 ### Upgrades
 
 | Upgrade | Ranks | Costs | What it does |
@@ -120,12 +171,16 @@ the milestone are paid with the chart.
 | Fine Ink | 3 | 50, 100, 180 | Charts sell for 25% more |
 | Lodestone Compass | 1 | 90 | Shows villages and ruins on blank paper as gold compass roses |
 
-![The harbor](docs/screenshots/harbor-upgrades.png)
+The harbor, with the commission board and the hands beside the upgrades.
+
+![The harbor](docs/screenshots/harbor-board-hands.png)
 
 Once an isle is charted in full, its atlas page shows at the harbor and the next voyage sails to a
-new isle.
+new isle; one page of every kind completes the Royal Atlas.
 
 ![The harbor after binding an atlas page](docs/screenshots/atlas.png)
+
+![The Royal Atlas](docs/screenshots/royal-atlas.png)
 
 ![An archipelago, a volcanic isle and a jungle isle, charted in full](docs/screenshots/isle-kinds.png)
 
@@ -136,15 +191,17 @@ The hub's Difficulty setting changes the supplies of a voyage: 16 on Easy, 12 on
 ## Code layout
 
 - `src/main.ts`: creates the game and applies the hub's settings.
-- `src/game/`: the rules, with no Phaser: `island.ts` rolls an island (rivers, roads, finds and the
-  riddle included), `sim.ts` surveys, camps, digs, charts, sells, buys and tracks the isle goal,
-  `state.ts` holds the state and numbers, `terrain.ts`, `kinds.ts` and `upgrades.ts` the tables,
-  `save.ts` the save.
+- `src/game/`: the rules, with no Phaser: `island.ts` rolls an island (rivers, roads, finds, the
+  riddle and the features included), `sim.ts` surveys, camps, digs, moves the rival, charts, sells,
+  lays out the board and the hands, buys and tracks the isle goal and the Royal Atlas, `state.ts`
+  holds the state and numbers, `terrain.ts`, `kinds.ts`, `upgrades.ts` and `hands.ts` the tables,
+  `save.ts` the save and the best.
 - `src/scenes/`: `BootScene` bakes the art, `GameScene` paints the island and draws the sheet,
   panel and overlays and takes the taps, `layout.ts` says where everything goes.
 - `src/art/`: the survey-sheet art, painted on canvases in code: `map.ts` (terrain, contours,
-  symbols, rivers, roads, blank paper, place names), `surveyor.ts`, `icons.ts` (also the finds,
-  camp, riddle and treasure marks), `paint.ts` (colours and helpers).
+  symbols, rivers, roads, blank paper, place names), `surveyor.ts` (the surveyor and the rival),
+  `icons.ts` (also the hands' icons and the finds, camp, claim, riddle and treasure marks),
+  `paint.ts` (colours and helpers).
 - `src/ui/Button.ts`: the flat ink button.
 - `e2e/playthrough.spec.ts`: plays the first voyage.
 
