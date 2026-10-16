@@ -307,3 +307,16 @@ export const LEASH = 7;
 
 /** The Monument (Age III): if it stands this long once built, its owner wins. */
 export const MONUMENT_MS = 180000;
+
+/**
+ * The AI's raids, paced so the opening is the player's to build: no raid before FIRST_RAID_MS of game time, and RAID_REST_MS between the end of one and the start of the next.
+ * A raid has a goal: the first ones go for the player's outlying economy, later ones for a relic the
+ * player holds, and from RAID_TOWN_FROM on (or in Age III) for the Town Center. An economy or relic
+ * raid sends a party of RAID_PARTY and keeps the rest home; it turns back when half the party has
+ * fallen, when its goal is done, or after RAID_MAX_MS.
+ */
+export const FIRST_RAID_MS = 600000;
+export const RAID_REST_MS = 180000;
+export const RAID_PARTY = 10;
+export const RAID_TOWN_FROM = 3;
+export const RAID_MAX_MS = 150000;

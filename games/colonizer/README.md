@@ -70,9 +70,9 @@ charge with a lowered lance.
   - **Shieldwall**: your melee infantry (Militia, Spearmen or Brutes) take 20% less damage.
   - **Harvest Rites**: farms gather 20% faster.
 - **Age III** is earned, not only bought. The **deeds card** under the top bar lists three deeds:
-  reach Age II, field 14 soldiers at once, and repel a raid (kill every raider the enemy sent). Once
-  all three are done, the Town Center can research Age III (500 food, 300 wood, 200 ore), and every
-  soldier then deals 2 more damage.
+  reach Age II, field 14 soldiers at once, and repel a raid (kill every raider the enemy sent, or
+  half of them so the rest turn back). Once all three are done, the Town Center can research Age III
+  (500 food, 300 wood, 200 ore), and every soldier then deals 2 more damage.
 
 The top bar's age track has a pip for each age; the next pip fills as its deeds are done.
 
@@ -80,11 +80,21 @@ The top bar's age track has a pip for each age; the next pip fills as its deeds 
 
 ## Raids
 
-When the enemy sends its army at your Town Center, a horn sounds: a toast under the top bar names
+The enemy leaves your opening alone: its first raid comes no sooner than ten minutes in, and its
+army rests three minutes after each raid before the next. Each raid has a goal. The first goes for
+your outlying economy (a Lumber or Mining Camp, a farm, a Dock or a Grove away from your Town
+Center's arrows), the second for a relic you hold, and those send a party of ten while the rest stay
+home. From the third raid on, or once the enemy reaches Age III, it comes for your Town Center with
+everything. A party turns home once its goal is done, once half of it has fallen (which counts as
+repelling it) or after two and a half minutes.
+
+When the enemy sends its army at you, a horn sounds: a toast under the top bar names
 the raid and the side it comes from, with an arrow pointing towards it, and the minimap pulses rings
 of red running stitch where the raiders are until the last of them falls. The deeds card counts
 how many have been routed. In a fight, every blow throws ochre sparks and a damage number, and
 arrows fly from the bows; every load a villager drops off pops a "+10" badge with its icon.
+
+![Watching the AI: a Tide Coven party of ten heads for the enemy's Lumber Camp at 10:00, as the log says](docs/screenshots/raid-goal.png)
 
 ## Rally flags and spacing
 

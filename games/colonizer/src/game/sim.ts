@@ -16,6 +16,7 @@ import {
   HARVEST_RITES,
   LEASH,
   MONUMENT_MS,
+  FIRST_RAID_MS,
   RELIC_DAMAGE,
   RELIC_GATHER,
   RELIC_SPEED,
@@ -84,7 +85,7 @@ export type SimEvent =
   | { t: 'drop'; x: number; y: number; res: Resource; n: number; owner: number }
   | { t: 'grow'; x: number; y: number };
 
-/** A raid: the AI's army sent at the player's Town Center. Repelling it is a deed for Age III. */
+/** A raid: the AI's army sent at the player, at a goal the planner picks. Repelling it is a deed for Age III. */
 export interface Raid {
   /** Counts up with each raid, so the scene can tell a new one. */
   n: number;
@@ -99,6 +100,28 @@ export interface Raid {
   y: number;
   /** Compass point it comes from, seen from the target's Town Center, such as 'south-east'. */
   from: string;
+  started: number;
+}
+
+/**
+ * What a side's planner is raiding for: the enemy's outlying economy (a camp, farm or the faction's
+ * building), a relic the enemy holds, or its Town Center. `b` is the building aimed at, if any.
+ */
+export interface RaidGoal {
+  kind: 'economy' | 'relic' | 'town';
+  x: number;
+  y: number;
+  b: number | null;
+  camp: number | null;
+}
+
+/** A side's planner memory for raids: the earliest time of the next, and the one under way. */
+export interface AiRaid {
+  next: number;
+  /** Raids launched so far, which picks the next goal. */
+  count: number;
+  goal: RaidGoal | null;
+  party: number[];
   started: number;
 }
 
@@ -175,6 +198,8 @@ export interface GameState {
   noticeMs: number;
   /** Each side's planner clock (the player's runs only in watch mode). */
   aiClock: number[];
+  /** Each side's planner memory for raids (`next` starts at the first raid's time gate). */
+  aiRaid: AiRaid[];
   /** The raid under way, if any, and how many raids have been launched and repelled. */
   raid: Raid | null;
   raids: number;
@@ -223,6 +248,7 @@ export function createGame(faction: FactionId, aiFaction: FactionId, aiGatherMul
     notice: '',
     noticeMs: 0,
     aiClock: [0, 0],
+    aiRaid: [0, 1].map(() => ({ next: FIRST_RAID_MS, count: 0, goal: null, party: [], started: 0 })),
     raid: null,
     raids: 0,
     repelled: 0,
@@ -776,7 +802,7 @@ export function soldierCount(s: GameState, owner: number) {
 
 const COMPASS = ['east', 'south-east', 'south', 'south-west', 'west', 'north-west', 'north', 'north-east'];
 
-/** Records a raid: `ids` sent by `by` at `target`'s Town Center. One raid is tracked at a time. */
+/** Records a raid: `ids` sent by `by` at `target`. One raid is tracked at a time. */
 export function startRaid(s: GameState, by: number, target: number, ids: number[]) {
   if (s.raid || ids.length === 0) return;
   const town = [...s.buildings.values()].find((b) => b.owner === target && b.type === 'town');
@@ -789,6 +815,21 @@ export function startRaid(s: GameState, by: number, target: number, ids: number[
   const from = COMPASS[(Math.round(a / (Math.PI / 4)) + 8) % 8];
   s.raids++;
   s.raid = { n: s.raids, by, target, ids: [...ids], size: ids.length, routed: 0, x, y, from, started: s.time };
+}
+
+/**
+ * Ends `by`'s raid with raiders still alive: turned back by losses, which counts as repelled (and
+ * does the deed), or withdrawn with its goal done.
+ */
+export function endRaid(s: GameState, by: number, repelled: boolean) {
+  const r = s.raid;
+  if (!r || r.by !== by) return;
+  s.raid = null;
+  if (repelled) {
+    s.players[r.target].deeds.raid = true;
+    s.repelled++;
+  }
+  if (r.target === PLAYER) say(s, repelled ? 'The raid is repelled' : 'The raiders withdraw');
 }
 
 /** Keeps the raid's count and position, and marks the deed when every raider has fallen. */
