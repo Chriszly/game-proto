@@ -832,7 +832,7 @@ const LOOKS: Record<string, Look> = {
     },
   },
 
-  // Tinker: a spark, a tesla pylon, jetpack flames, a storm cloud.
+  // Tinker: a spark, a coil pylon, jetpack flames, a storm cloud.
   'tinker.Q': {
     ms: 260,
     draw: ({ top }, f, k, a, n) => {

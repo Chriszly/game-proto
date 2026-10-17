@@ -37,7 +37,6 @@ import {
   WATCHSTONES,
   WARD,
 } from './data';
-import { championName } from './names';
 
 export type Phase = 'pick' | 'playing' | 'won' | 'lost';
 export type UnitKind = 'champion' | 'minion' | 'tower' | 'nexus' | 'camp' | 'beast' | 'inhibitor' | 'watchstone' | 'ward';
@@ -439,9 +438,7 @@ export function spawnChampion(s: GameState, def: ChampionDef, side: Team, x: num
 }
 
 export interface MatchOptions {
-  /** The player's champion's name (the pick card's); one is made up when it is missing. */
-  playerName?: string;
-  /** Draws the rosters and the names: Math.random in the game. */
+  /** Draws the rosters: Math.random in the game. */
   rnd?: () => number;
   /** Watch AI (`?watch`): the AI plays the player's champion too, in the top lane like red's fifth. */
   watch?: boolean;
@@ -449,7 +446,7 @@ export interface MatchOptions {
 
 /**
  * A fresh match: the player's champion and four allies on blue, five champions on red, every one a
- * different class drawn at random, each with a name of its own, and the map.
+ * different class drawn at random, each played by its own champion, and the map.
  */
 export function createGame(pick: ChampionDef, enemyDamage: number, opts: MatchOptions = {}): GameState {
   const rnd = opts.rnd ?? Math.random;
@@ -557,12 +554,6 @@ export function createGame(pick: ChampionDef, enemyDamage: number, opts: MatchOp
     const j = Math.floor(rnd() * (i + 1)) % (i + 1);
     [others[i], others[j]] = [others[j], others[i]];
   }
-  const taken: string[] = [];
-  const nameFor = (def: ChampionDef, given?: string) => {
-    const name = given ?? championName(def.id, rnd, taken);
-    taken.push(name);
-    return name;
-  };
   const offsets: Vec[] = [
     { x: 70, y: -40 },
     { x: 40, y: -90 },
@@ -573,13 +564,13 @@ export function createGame(pick: ChampionDef, enemyDamage: number, opts: MatchOp
   const blueAt = (i: number) => ({ x: BASE.blue.x + offsets[i].x, y: BASE.blue.y + offsets[i].y });
   const redAt = (i: number) => ({ x: BASE.red.x - offsets[i].x, y: BASE.red.y - offsets[i].y });
 
-  const player = spawnChampion(s, pick, 'blue', blueAt(0).x, blueAt(0).y, !opts.watch, opts.watch ? 'top' : null, nameFor(pick, opts.playerName));
+  const player = spawnChampion(s, pick, 'blue', blueAt(0).x, blueAt(0).y, !opts.watch, opts.watch ? 'top' : null, pick.hero);
   s.player = player.id;
   others.slice(0, 4).forEach((def, i) => {
-    spawnChampion(s, def, 'blue', blueAt(i + 1).x, blueAt(i + 1).y, false, ALLY_LANES[i], nameFor(def));
+    spawnChampion(s, def, 'blue', blueAt(i + 1).x, blueAt(i + 1).y, false, ALLY_LANES[i], def.hero);
   });
   others.slice(4, 9).forEach((def, i) => {
-    spawnChampion(s, def, 'red', redAt(i).x, redAt(i).y, false, ENEMY_LANES[i], nameFor(def));
+    spawnChampion(s, def, 'red', redAt(i).x, redAt(i).y, false, ENEMY_LANES[i], def.hero);
   });
 
   return s;

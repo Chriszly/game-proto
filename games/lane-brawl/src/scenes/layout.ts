@@ -60,9 +60,6 @@ export function pickCard(i: number) {
   const row = Math.floor(i / 5);
   return { x: (VIEW.w - total) / 2 + col * (PICK_CARD.w + PICK_CARD.gap), y: PICK_CARD.y + row * (PICK_CARD.h + PICK_CARD.gap), w: PICK_CARD.w, h: PICK_CARD.h };
 }
-/** The button under the cards that draws new names for the champions on offer. */
-export const REROLL = { x: VIEW.w / 2 - 70, y: 440, w: 140, h: 24 };
-
 /** The buffs the player's champion carries, as chips in a row above the portrait. */
 export function buffStrip(i: number) {
   return { x: 12 + i * 92, y: 388, w: 88, h: 18 };

@@ -1,11 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
 
-// Plays the first round of a match with real inputs: picks the Warden, buys a Long Sword at the
-// shop, walks down the middle lane, casts Slam at the first red tower on that lane and brings it
-// down, which is the match's first objective. Then it clears the jungle camp the next objective
-// marks, last-hits a gold-outlined minion in the middle lane and, on reaching level 2, picks the
-// first upgrade card. Game state is only read, through the `game` object the dev build puts on
-// window.
+// Plays the first round of a match with real inputs: picks the Warden (Hald Oathstone), buys a
+// Long Sword at the shop, walks down the middle lane, casts Gatefall (Q) at the first red tower on
+// that lane and brings it down, which is the match's first objective. Then it clears the jungle
+// camp the next objective marks, last-hits a gold-outlined minion in the middle lane and, on
+// reaching level 2, picks the first upgrade card. Game state is only read, through the `game`
+// object the dev build puts on window.
 
 interface Unit {
   id: number;
@@ -90,10 +90,11 @@ function scene(page: Page) {
 }
 
 test('plays the first round', async ({ page }, testInfo) => {
-  // Seeded like the other games' tests. Lane Brawl draws no random numbers, so this only keeps
-  // any randomness added later repeatable.
+  // Seeded like the other games' tests, so the rosters repeat: the seed is picked so blue fields the
+  // Harpooner, Tinker, Mage and Archer and red the Stalker, Wolfkin, Bruin, Blade and Berserker,
+  // the line-up this round was tuned with.
   await page.addInitScript(() => {
-    let seed = 1234567;
+    let seed = -1266694543;
     Math.random = () => {
       seed = (seed + 0x6d2b79f5) | 0;
       let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
@@ -232,9 +233,9 @@ test('plays the first round', async ({ page }, testInfo) => {
   }
 
   // Walk down the middle lane toward the red tower, clicking the ground on the way, and wait out of
-  // its reach for a minion wave; then go in with the wave and click the tower once in reach. Slam
+  // its reach for a minion wave; then go in with the wave and click the tower once in reach. Gatefall
   // is cast when it is ready and the tower is inside its radius.
-  let usedSlam = false;
+  let usedGatefall = false;
   while ((await state()).time < ROUND_LIMIT_MS && !tower().dead) {
     s = await state();
     const p = me();
@@ -254,7 +255,7 @@ test('plays the first round', async ({ page }, testInfo) => {
       await tick(STEP_MS);
       continue;
     }
-    // A red champion that comes for the Warden out of the tower's reach gets hit back, with Slam.
+    // A red champion that comes for the Warden out of the tower's reach gets hit back, with Gatefall.
     const foe = s.units
       .filter((u) => u.kind === 'champion' && u.side === 'red' && !u.dead && dist(u, p) < 240 && dist(u, t) > TOWER_REACH)
       .sort((a, b) => dist(p, a) - dist(p, b))[0];
@@ -277,7 +278,7 @@ test('plays the first round', async ({ page }, testInfo) => {
         await page.mouse.move(at.x, at.y);
         await page.keyboard.press('q');
         await tick(FRAME_MS);
-        usedSlam = usedSlam || (await state()).units.find((u) => u.player)!.cds.Q > 0;
+        usedGatefall = usedGatefall || (await state()).units.find((u) => u.player)!.cds.Q > 0;
       }
     } else if (p.moveTo === null && p.target === null) {
       // Wait outside the tower's reach until a blue minion wave gets to it, then go in with it.
@@ -288,7 +289,7 @@ test('plays the first round', async ({ page }, testInfo) => {
 
   s = await state();
   expect(tower().dead, `red mid tower down; state: ${JSON.stringify(me())}`).toBe(true);
-  expect(usedSlam, 'Slam cast on the tower').toBe(true);
+  expect(usedGatefall, 'Gatefall cast on the tower').toBe(true);
   expect(s.phase, 'match not over yet').toBe('playing');
   await tick(STEP_MS);
   s = await state();
@@ -318,7 +319,7 @@ test('plays the first round', async ({ page }, testInfo) => {
     }
     if (p.target !== c.id && dist(p, c) < 330 && (await onMap(c.x, c.y))) await clickWorld(c.x, c.y);
     else if (p.target === c.id && p.cds.Q === 0 && dist(p, c) <= 160 && (await onMap(c.x, c.y))) {
-      // Slam on the camp too, to clear it sooner.
+      // Gatefall on the camp too, to clear it sooner.
       const v = await onView(c.x, c.y);
       const at = await onPage(v.x, v.y);
       await page.mouse.move(at.x, at.y);
@@ -360,13 +361,13 @@ test('plays the first round', async ({ page }, testInfo) => {
   expect(s.bestStreak, 'last-hit streak').toBeGreaterThanOrEqual(1);
   expect(me().level, 'level 2').toBe(2);
 
-  // Level 2 offers two upgrades to Slam in the bottom bar: Wide Slam is the first card.
+  // Level 2 offers two upgrades to Gatefall in the bottom bar: Wide Gatefall is the first card.
   expect(s.upgradeOffers[0], 'upgrade offer at level 2').toEqual({ level: 2, options: ['wide-slam', 'stun-slam'] });
   await snap('3-upgrade');
   await clickView(UPGRADE_CARD_1.x, UPGRADE_CARD_1.y);
   await tick(FRAME_MS);
   s = await state();
-  expect(me().upgrades, 'Wide Slam chosen').toEqual(['wide-slam']);
+  expect(me().upgrades, 'Wide Gatefall chosen').toEqual(['wide-slam']);
   expect(s.upgradeOffers, 'no offer left').toEqual([]);
   expect(s.phase, 'match still playing').toBe('playing');
 
