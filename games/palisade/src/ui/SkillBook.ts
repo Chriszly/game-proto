@@ -6,6 +6,7 @@ import { SKILL_BOOK, UI_DEPTH, VIEW } from '../scenes/layout';
 import { RELIC_IDS, RELICS, SETS, setComplete, setRelics, type RelicId } from '../game/relics';
 import { BOOK_ORDER, UPGRADE_IDS, UPGRADES, type UpgradeId } from '../game/upgrades';
 import { drawPanel, makeButton, textStyle } from './panel';
+import { t } from '../i18n';
 
 /**
  * The skill book: a "Skill book" button in the top bar opens a page with a slot for every upgrade.
@@ -56,16 +57,16 @@ export class SkillBook {
     // The page swallows taps so only taps beside it close it.
     const page = scene.add.zone(VIEW.w / 2, VIEW.h / 2, p.w, p.h).setInteractive();
     const top = VIEW.h / 2 - p.h / 2;
-    const title = scene.add.text(VIEW.w / 2, top + 26, 'Skill book', textStyle(24, '#ffcf4a', 4)).setOrigin(0.5);
+    const title = scene.add.text(VIEW.w / 2, top + 26, t('skillBook'), textStyle(24, '#ffcf4a', 4)).setOrigin(0.5);
     const note = scene.add
-      .text(VIEW.w / 2, top + 50, 'Each page fills in the first time a level-up offers that skill. The battle waits while the book is open.', {
+      .text(VIEW.w / 2, top + 50, t('bookNote'), {
         ...textStyle(11, '#c9c3b6'),
         fontStyle: 'normal',
       })
       .setOrigin(0.5);
     this.slots = scene.add.container(0, 0);
     this.relics = scene.add.container(0, 0);
-    const close = makeButton(scene, VIEW.w / 2 + p.w / 2 - 100, VIEW.h / 2 + p.h / 2 - 28, 150, 34, 'Back', () => this.setOpen(false));
+    const close = makeButton(scene, VIEW.w / 2 + p.w / 2 - 100, VIEW.h / 2 + p.h / 2 - 28, 150, 34, t('back'), () => this.setOpen(false));
     this.relicTipBg = scene.add.graphics();
     this.relicTipText = scene.add.text(0, 0, '', { ...textStyle(12, '#e9e4d8'), fontStyle: 'normal', lineSpacing: 3 }).setOrigin(0);
     this.relicTip = scene.add.container(0, 0, [this.relicTipBg, this.relicTipText]).setVisible(false);
@@ -80,7 +81,7 @@ export class SkillBook {
    * has been found, taken or won changes.
    */
   show(found: ReadonlySet<UpgradeId>, ranks: Partial<Record<UpgradeId, number>>, relics: Partial<Record<RelicId, number>>, hidden: boolean) {
-    this.buttonText.setText(`Skill book ${found.size}/${UPGRADE_IDS.length}`);
+    this.buttonText.setText(t('skillBookCount', { found: found.size, total: UPGRADE_IDS.length }));
     this.button.setVisible(!hidden);
     if (hidden) this.setOpen(false);
     const key = BOOK_ORDER.map((id) => (found.has(id) ? ranks[id] ?? 0 : '-')).join() + '|' + RELIC_IDS.map((id) => relics[id] ?? 0).join();
@@ -104,12 +105,12 @@ export class SkillBook {
     const scene = this.scene;
     const y = VIEW.h / 2 + SKILL_BOOK.panel.h / 2 - 28;
     let x = VIEW.w / 2 - SKILL_BOOK.panel.w / 2 + 24;
-    const label = scene.add.text(x, y, 'Relics', textStyle(14, '#ffcf4a')).setOrigin(0, 0.5);
+    const label = scene.add.text(x, y, t('relics'), textStyle(14, '#ffcf4a')).setOrigin(0, 0.5);
     this.relics.add(label);
     x += label.width + 12;
     const owned = RELIC_IDS.filter((id) => (relics[id] ?? 0) > 0);
     if (owned.length === 0) {
-      const none = 'None yet: beat the boss at the end of the road to open its relic chest';
+      const none = t('relicsNone');
       this.relics.add(scene.add.text(x, y, none, { ...textStyle(12, '#c9c3b6'), fontStyle: 'normal' }).setOrigin(0, 0.5));
       return;
     }
@@ -119,7 +120,7 @@ export class SkillBook {
       const done = setComplete(relics, RELICS[id].set);
       this.relics.add(fit(scene.add.image(x + 12, y, relicTexture(id)), 0.45));
       const name = scene.add
-        .text(x + 28, y, n > 1 ? `${RELICS[id].name} x${n}` : RELICS[id].name, { ...textStyle(11, done ? '#8fdc6a' : '#e9e4d8'), fontStyle: done ? 'bold' : 'normal' })
+        .text(x + 28, y, n > 1 ? t('relicCount', { name: t(RELICS[id].name), n }) : t(RELICS[id].name), { ...textStyle(11, done ? '#8fdc6a' : '#e9e4d8'), fontStyle: done ? 'bold' : 'normal' })
         .setOrigin(0, 0.5);
       this.relics.add(name);
       const zone = scene.add.zone(x, y - 14, 30 + name.width, 28).setOrigin(0).setInteractive();
@@ -130,7 +131,7 @@ export class SkillBook {
     }
     const sets = Object.entries(SETS).filter(([id]) => setComplete(relics, id as keyof typeof SETS));
     if (sets.length > 0) {
-      const line = sets.map(([, set]) => `${set.name}: ${set.text}`).join('   ');
+      const line = sets.map(([, set]) => t('setBonus', { set: t(set.name), text: t(set.text) })).join('   ');
       this.relics.add(scene.add.text(VIEW.w / 2 - SKILL_BOOK.panel.w / 2 + 24, y - 22, line, textStyle(11, '#8fdc6a')).setOrigin(0, 0.5));
     }
   }
@@ -140,12 +141,12 @@ export class SkillBook {
     const relic = RELICS[id];
     const n = relics[id] ?? 0;
     const set = SETS[relic.set];
-    const others = setRelics(relic.set).filter((other) => other !== id).map((other) => RELICS[other].name);
+    const others = setRelics(relic.set).filter((other) => other !== id).map((other) => t(RELICS[other].name));
     const done = setComplete(relics, relic.set);
     this.relicTipText.setText([
-      n > 1 ? `${relic.name} x${n} (stacks)` : relic.name,
-      relic.text,
-      `${set.name} with ${others.join(' and ')}: ${set.text}${done ? ' (complete)' : ''}`,
+      n > 1 ? t('relicStacks', { name: t(relic.name), n }) : t(relic.name),
+      t(relic.text),
+      t(done ? 'setWithDone' : 'setWith', { set: t(set.name), others: others.reduce((a, b) => t('and', { a, b })), text: t(set.text) }),
     ]);
     const w = this.relicTipText.width + 16;
     const h = this.relicTipText.height + 12;
@@ -184,12 +185,12 @@ export class SkillBook {
       back,
       iconBack,
       fit(scene.add.image(x + 22, y + 18, iconTexture(u.icon)), 0.58).setAlpha(taken ? 1 : 0.55),
-      scene.add.text(x + 46, y, u.name, textStyle(14, taken ? '#ffcf4a' : '#c9c3b6')),
+      scene.add.text(x + 46, y, t(u.name), textStyle(14, taken ? '#ffcf4a' : '#c9c3b6')),
       scene.add
         .text(x + colW - 14, y + 1, rankText, textStyle(13, !u.filler && rank >= u.maxRank ? '#8fdc6a' : taken ? '#e9e4d8' : '#7a8294'))
         .setOrigin(1, 0),
       scene.add
-        .text(x + 46, y + 18, u.text, { ...textStyle(11, '#e9e4d8'), fontStyle: 'normal', wordWrap: { width: colW - 60 } })
+        .text(x + 46, y + 18, t(u.text), { ...textStyle(11, '#e9e4d8'), fontStyle: 'normal', wordWrap: { width: colW - 60 } })
         .setAlpha(taken ? 1 : 0.7),
     ]);
   }

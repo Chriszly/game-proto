@@ -4,6 +4,7 @@ import type { Tile } from '../game/board';
 import type { PotionId } from '../game/orders';
 import { TOOLS, type Tool } from '../game/sim';
 import { BOARD, BUTTON, PANEL, TOOL, TRAY, VIEW } from '../scenes/layout';
+import { t } from '../i18n';
 import {
   ART,
   bake,
@@ -218,7 +219,7 @@ function paintTable() {
     circle(x + 250, 126, 5, GOLD);
     circle(x + w - 250, 126, 5, GOLD);
     // The bench tools heading over the two buttons.
-    txt('Bench tools', x + w / 2, 762, `italic 700 24px ${SERIF}`, RUST, 'center');
+    txt(t('benchTools'), x + w / 2, 762, `italic 700 24px ${SERIF}`, RUST, 'center');
     line(x + 120, 762, x + 300, 762, GOLD, 2);
     line(x + w - 300, 762, x + w - 120, 762, GOLD, 2);
   }
@@ -442,7 +443,7 @@ function paintTool(tool: Tool, look: 'on' | 'off' | 'armed') {
     line(ix - 12, iy - 9, ix + 12, iy - 9, '#e6b07a', 2);
   }
   const ink = look === 'off' ? '#d6cfb8' : CREAM;
-  txt(TOOLS[tool].name, x + 64, y + 34, `italic 700 24px ${SERIF}`, ink);
+  txt(t(TOOLS[tool].name), x + 64, y + 34, `italic 700 24px ${SERIF}`, ink);
   if (look === 'off') coin(x + 74, y + 61, 10, '#b9b29a', '#8f8a76');
   else coin(x + 74, y + 61, 10);
   txt(`${TOOLS[tool].cost}`, x + 90, y + 63, `700 23px ${SERIF}`, look === 'off' ? '#d6cfb8' : GOLDL);

@@ -9,7 +9,7 @@ import { TRAITS } from '../game/elites';
 import { ENEMIES } from '../game/enemies';
 import { STAKE_FRONT, STAKE_HP, repairCost, type FortId } from '../game/forts';
 import { GUARDS, type GuardKind } from '../game/guards';
-import { HEAT_RULES, MAX_HEAT, WIN_WAVE } from '../game/heat';
+import { HEAT_UNLOCKED, MAX_HEAT, WIN_WAVE } from '../game/heat';
 import type { LegacyId } from '../game/legacy';
 import { MARCH_STARTS, canMarch } from '../game/march';
 import { OMENS, omenEffects } from '../game/omens';
@@ -67,6 +67,7 @@ import { LevelUp } from '../ui/LevelUp';
 import { OmenCard } from '../ui/OmenCard';
 import { RoadChoice } from '../ui/RoadChoice';
 import { chamferPts, drawPanel, makeButton, textStyle } from '../ui/panel';
+import { t } from '../i18n';
 import { SkillBook } from '../ui/SkillBook';
 import { AIM, BARRICADE, BARRICADE_BAR, BARRICADE_TIP_W, BOSS_BAR, CALTROPS, FORTIFY, GUARD_HIT, HEAT, HERO_FEET, HUD_HEIGHT, MARCH, OMEN_CHIP, RAIN, RAIN_HINT, REPAIR, ROAR_CHIP, SPEED, STREAK, TRACK, UI_DEPTH, VIEW, XP_BAR } from './layout';
 
@@ -294,11 +295,10 @@ export class GameScene extends Phaser.Scene {
     if (!held(s)) this.legacyPanel.close();
     // Retiring needs every skill learned or the siege lifted; until then the button stays dim.
     for (const b of this.retireButtons) b.setAlpha(canRetire(s) ? 1 : 0.45);
-    this.retireNote.setText(canRetire(s) ? '' : 'Learn every skill or lift the siege to retire for a legacy');
+    this.retireNote.setText(canRetire(s) ? '' : t('retireNote'));
     if (s.phase === 'over') {
       this.gameOverText.setText(
-        `The foes broke through and reached the hero on wave ${s.wave}${s.heat > 0 ? ` at Heat ${s.heat}` : ''}.\n${s.kills} foes slain this run, longest streak x${s.streak.best}, best wave cleared: ${s.bestWave}.\n\n` +
-          `The hero keeps level ${s.level}, every upgrade picked and every relic won.`,
+        t(s.heat > 0 ? 'fallenHeat' : 'fallen', { wave: s.wave, heat: s.heat, kills: s.kills, streak: s.streak.best, best: s.bestWave, level: s.level }),
       );
       this.drawHeatPicks();
       this.drawMarchPicks();
@@ -307,11 +307,12 @@ export class GameScene extends Phaser.Scene {
     if (s.phase === 'won') {
       const next = s.heat + 1;
       this.wonText.setText(
-        `The third boss has fallen on wave ${WIN_WAVE}${s.heat > 0 ? ` at Heat ${s.heat}` : ''}: the siege is lifted.\n${s.kills} foes slain this run, longest streak x${s.streak.best}.\n\n` +
-          (next <= MAX_HEAT ? `Heat ${next} is unlocked: ${HEAT_RULES[next - 1].toLowerCase()}, on top of ${next > 1 ? "the lower heats' rules" : 'the usual rules'}.` : 'Every heat is beaten. Fight on, or start again at any heat.'),
+        t(s.heat > 0 ? 'wonHeat' : 'won', { wave: WIN_WAVE, heat: s.heat, kills: s.kills, streak: s.streak.best }) +
+          '\n\n' +
+          t(next <= MAX_HEAT ? HEAT_UNLOCKED[next - 1] : 'wonAll'),
       );
       this.wonNext.setVisible(next <= MAX_HEAT);
-      this.wonNextText.setText(`Heat ${next}`);
+      this.wonNextText.setText(t('heat', { n: next }));
     }
   }
 
@@ -434,7 +435,7 @@ export class GameScene extends Phaser.Scene {
     g.fillStyle(trait.color).fillPoints(this.hexPts(x, y + 2, 5), true);
     let label = this.eliteLabels.get(e.id);
     if (!label) {
-      label = this.add.text(0, 0, trait.name, textStyle(9, trait.css, 2)).setOrigin(0.5, 1).setDepth(UI_DEPTH - 20);
+      label = this.add.text(0, 0, t(trait.name), textStyle(9, trait.css, 2)).setOrigin(0.5, 1).setDepth(UI_DEPTH - 20);
       this.eliteLabels.set(e.id, label);
     }
     label.setPosition(e.x, y - 2);
@@ -502,127 +503,127 @@ export class GameScene extends Phaser.Scene {
     const seen = new Set<number>();
     let inFlight = 0;
     for (const e of this.state.effects) {
-      const t = 1 - e.ms / e.total;
+      const life = 1 - e.ms / e.total;
       if (e.kind === 'blast' || e.kind === 'fireblast') {
         // A faceted starburst that swells and fades.
-        const r = (e.radius ?? 40) * (0.4 + 0.6 * t);
+        const r = (e.radius ?? 40) * (0.4 + 0.6 * life);
         const star = Array.from({ length: 16 }, (_, i) => {
           const a = (i / 16) * Math.PI * 2 + e.id;
           const rr = i % 2 ? r * 0.6 : r;
           return v(e.x + Math.cos(a) * rr, e.y + Math.sin(a) * rr * 0.75);
         });
-        g.fillStyle(e.kind === 'fireblast' ? FIRE.dark : FIRE.mid, 0.6 * (1 - t)).fillPoints(star, true);
-        g.fillStyle(FIRE.light, 0.7 * (1 - t)).fillPoints(star.map((p) => v(e.x + (p.x - e.x) * 0.55, e.y + (p.y - e.y) * 0.55)), true);
-        glow.lineStyle(3, FIRE.white, 0.7 * (1 - t)).strokeEllipse(e.x, e.y, r * 2, r * 1.5);
+        g.fillStyle(e.kind === 'fireblast' ? FIRE.dark : FIRE.mid, 0.6 * (1 - life)).fillPoints(star, true);
+        g.fillStyle(FIRE.light, 0.7 * (1 - life)).fillPoints(star.map((p) => v(e.x + (p.x - e.x) * 0.55, e.y + (p.y - e.y) * 0.55)), true);
+        glow.lineStyle(3, FIRE.white, 0.7 * (1 - life)).strokeEllipse(e.x, e.y, r * 2, r * 1.5);
       } else if (e.kind === 'bolt' && e.points) {
         // A jagged bolt down from the sky to the first foe, then on from foe to foe.
         const path = this.jag([{ x: e.points[0].x - 30, y: HUD_HEIGHT + 10 }, ...e.points], e.id);
         for (const [width, color, alpha] of [[10, STORM.mid, 0.45], [4, STORM.light, 0.9], [1.5, STORM.white, 1]] as const) {
-          glow.lineStyle(width, color, alpha * (1 - t)).strokePoints(path, false);
+          glow.lineStyle(width, color, alpha * (1 - life)).strokePoints(path, false);
         }
-        for (const p of e.points) glow.fillStyle(STORM.mid, 0.4 * (1 - t)).fillEllipse(p.x, p.y, 34, 20);
+        for (const p of e.points) glow.fillStyle(STORM.mid, 0.4 * (1 - life)).fillEllipse(p.x, p.y, 34, 20);
       } else if (e.kind === 'death') {
         // A puff of faceted dust shards where the foe fell.
-        const r = (e.radius ?? 16) * (0.8 + 1.2 * t);
+        const r = (e.radius ?? 16) * (0.8 + 1.2 * life);
         for (let k = 0; k < 7; k++) {
           const a = (k / 7) * Math.PI * 2 + e.id;
           const cx = e.x + Math.cos(a) * r;
-          const cy = e.y + Math.sin(a) * r * 0.6 - 6 - t * 10;
-          const s = 6 * (1 - t * 0.5);
-          g.fillStyle(0xe8e2d8, 0.6 * (1 - t)).fillTriangle(cx - s, cy, cx, cy - s, cx + s * 0.4, cy + s * 0.4);
-          g.fillStyle(0x9a9080, 0.6 * (1 - t)).fillTriangle(cx, cy - s, cx + s, cy, cx + s * 0.4, cy + s * 0.4);
+          const cy = e.y + Math.sin(a) * r * 0.6 - 6 - life * 10;
+          const s = 6 * (1 - life * 0.5);
+          g.fillStyle(0xe8e2d8, 0.6 * (1 - life)).fillTriangle(cx - s, cy, cx, cy - s, cx + s * 0.4, cy + s * 0.4);
+          g.fillStyle(0x9a9080, 0.6 * (1 - life)).fillTriangle(cx, cy - s, cx + s, cy, cx + s * 0.4, cy + s * 0.4);
         }
       } else if (e.kind === 'rain') {
         // The volley lands: a gold ring bursts outwards and the shafts stand in the road.
-        const k = 1 + 0.25 * t;
+        const k = 1 + 0.25 * life;
         const { rx, ry } = this.ring();
-        glow.lineStyle(4, GOLD.light, 0.8 * (1 - t)).strokeEllipse(e.x, e.y, rx * 2 * k, ry * 2 * k);
-        g.fillStyle(GOLD.mid, 0.25 * (1 - t)).fillEllipse(e.x, e.y, rx * 2, ry * 2);
+        glow.lineStyle(4, GOLD.light, 0.8 * (1 - life)).strokeEllipse(e.x, e.y, rx * 2 * k, ry * 2 * k);
+        g.fillStyle(GOLD.mid, 0.25 * (1 - life)).fillEllipse(e.x, e.y, rx * 2, ry * 2);
         for (let i = 0; i < 12; i++) {
           const [dx, dy] = this.scatter(e.id, i);
           const x = e.x + dx * rx * 0.9;
           const y = e.y + dy * ry * 0.9;
-          g.lineStyle(2, 0xfff2c4, 1 - t).lineBetween(x - 3, y - 12, x, y);
+          g.lineStyle(2, 0xfff2c4, 1 - life).lineBetween(x - 3, y - 12, x, y);
         }
       } else if (e.kind === 'block') {
         // An arrow glances off a shield: a burst of steel sparks.
         for (let k = 0; k < 5; k++) {
           const a = Math.PI * (0.6 + (k / 4) * 0.8) + e.id;
-          const r = 6 + t * 14;
-          glow.lineStyle(2, 0xfff2c4, 1 - t).lineBetween(e.x + Math.cos(a) * r * 0.4, e.y + Math.sin(a) * r * 0.4, e.x + Math.cos(a) * r, e.y + Math.sin(a) * r);
+          const r = 6 + life * 14;
+          glow.lineStyle(2, 0xfff2c4, 1 - life).lineBetween(e.x + Math.cos(a) * r * 0.4, e.y + Math.sin(a) * r * 0.4, e.x + Math.cos(a) * r, e.y + Math.sin(a) * r);
         }
-        glow.fillStyle(0xd8e8ff, 0.6 * (1 - t)).fillCircle(e.x, e.y, 5);
+        glow.fillStyle(0xd8e8ff, 0.6 * (1 - life)).fillCircle(e.x, e.y, 5);
       } else if (e.kind === 'heal' && e.points) {
         // The shaman's healing: a green ring swells round it and motes rise from the foes it mends.
-        const r = (e.radius ?? 100) * (0.3 + 0.7 * t);
-        glow.lineStyle(3, 0x5ad07a, 0.6 * (1 - t)).strokeEllipse(e.x, e.y, r * 2, r * 1.2);
+        const r = (e.radius ?? 100) * (0.3 + 0.7 * life);
+        glow.lineStyle(3, 0x5ad07a, 0.6 * (1 - life)).strokeEllipse(e.x, e.y, r * 2, r * 1.2);
         for (const p of e.points) {
           for (let k = 0; k < 3; k++) {
-            const my = p.y - 10 - t * 30 - k * 8;
+            const my = p.y - 10 - life * 30 - k * 8;
             const mx = p.x + Math.sin(e.id + k * 2.3) * 9;
-            g.fillStyle(0x8ff0a8, 0.9 * (1 - t)).fillTriangle(mx - 3, my, mx, my - 4, mx + 3, my);
-            g.fillStyle(0x3a9a5a, 0.9 * (1 - t)).fillTriangle(mx - 3, my, mx, my + 4, mx + 3, my);
+            g.fillStyle(0x8ff0a8, 0.9 * (1 - life)).fillTriangle(mx - 3, my, mx, my - 4, mx + 3, my);
+            g.fillStyle(0x3a9a5a, 0.9 * (1 - life)).fillTriangle(mx - 3, my, mx, my + 4, mx + 3, my);
           }
         }
       } else if (e.kind === 'stab' && e.points) {
         // The spearman's thrust: a bright streak along the spear to the foe.
         const [a, b] = e.points;
-        glow.lineStyle(4, 0xfff2c4, 0.8 * (1 - t)).lineBetween(a.x, a.y, b.x, b.y);
-        glow.fillStyle(0xffffff, 0.8 * (1 - t)).fillCircle(b.x, b.y, 6 * (1 - t) + 2);
+        glow.lineStyle(4, 0xfff2c4, 0.8 * (1 - life)).lineBetween(a.x, a.y, b.x, b.y);
+        glow.fillStyle(0xffffff, 0.8 * (1 - life)).fillCircle(b.x, b.y, 6 * (1 - life) + 2);
       } else if (e.kind === 'rockHit') {
         // A rock comes down: dust and stone chips fly.
-        const r = (e.radius ?? 20) * (0.5 + 1.5 * t);
-        g.fillStyle(0xb8ab98, 0.5 * (1 - t)).fillEllipse(e.x, e.y + 6, r * 2.2, r * 0.9);
+        const r = (e.radius ?? 20) * (0.5 + 1.5 * life);
+        g.fillStyle(0xb8ab98, 0.5 * (1 - life)).fillEllipse(e.x, e.y + 6, r * 2.2, r * 0.9);
         for (let k = 0; k < 6; k++) {
           const a = (k / 6) * Math.PI * 2 + e.id;
           const cx = e.x + Math.cos(a) * r;
-          const cy = e.y + Math.sin(a) * r * 0.5 - t * 24;
-          g.fillStyle(0x7d7872, 1 - t).fillTriangle(cx - 4, cy + 3, cx, cy - 4, cx + 4, cy + 3);
+          const cy = e.y + Math.sin(a) * r * 0.5 - life * 24;
+          g.fillStyle(0x7d7872, 1 - life).fillTriangle(cx - 4, cy + 3, cx, cy - 4, cx + 4, cy + 3);
         }
       } else if (e.kind === 'call') {
         // The Ogre Warlord's call: rings of sound roll out from it.
         for (let k = 0; k < 3; k++) {
-          const u = Math.max(0, t - k * 0.15);
+          const u = Math.max(0, life - k * 0.15);
           glow.lineStyle(3, 0xffb08a, 0.7 * (1 - u)).strokeEllipse(e.x, e.y - 30, 40 + u * 220, 24 + u * 120);
         }
       } else if (e.kind === 'roar') {
         // The Frost Giant's roar: a frosty shockwave towards the hero.
-        const r = (e.radius ?? 160) * t;
-        glow.lineStyle(5, 0xa8dcf8, 0.8 * (1 - t)).strokeEllipse(e.x - r * 0.4, e.y, r * 2.4, r * 1.2);
-        glow.lineStyle(2, 0xffffff, 0.6 * (1 - t)).strokeEllipse(e.x - r * 0.4, e.y, r * 1.6, r * 0.8);
+        const r = (e.radius ?? 160) * life;
+        glow.lineStyle(5, 0xa8dcf8, 0.8 * (1 - life)).strokeEllipse(e.x - r * 0.4, e.y, r * 2.4, r * 1.2);
+        glow.lineStyle(2, 0xffffff, 0.6 * (1 - life)).strokeEllipse(e.x - r * 0.4, e.y, r * 1.6, r * 0.8);
       } else if (e.kind === 'split') {
         // A Splitting foe falls apart: green shards burst sideways.
-        const r = (e.radius ?? 16) * (0.6 + 1.4 * t);
+        const r = (e.radius ?? 16) * (0.6 + 1.4 * life);
         for (let k = 0; k < 6; k++) {
           const a = (k / 6) * Math.PI * 2 + e.id;
           const cx = e.x + Math.cos(a) * r * 1.3;
           const cy = e.y + Math.sin(a) * r * 0.5 - 8;
-          glow.fillStyle(0x8fdc6a, 0.9 * (1 - t)).fillTriangle(cx - 4, cy + 3, cx, cy - 5, cx + 4, cy + 3);
+          glow.fillStyle(0x8fdc6a, 0.9 * (1 - life)).fillTriangle(cx - 4, cy + 3, cx, cy - 5, cx + 4, cy + 3);
         }
       } else if (e.kind === 'arcane') {
         // The mage's bolt bursts: a teal starburst.
-        const r = (e.radius ?? 40) * (0.4 + 0.6 * t);
+        const r = (e.radius ?? 40) * (0.4 + 0.6 * life);
         const star = Array.from({ length: 12 }, (_, i) => {
           const a = (i / 12) * Math.PI * 2 + e.id;
           const rr = i % 2 ? r * 0.55 : r;
           return v(e.x + Math.cos(a) * rr, e.y + Math.sin(a) * rr * 0.75);
         });
-        g.fillStyle(0x2a9a9a, 0.5 * (1 - t)).fillPoints(star, true);
-        glow.lineStyle(3, 0x9ffff0, 0.7 * (1 - t)).strokeEllipse(e.x, e.y, r * 2, r * 1.5);
+        g.fillStyle(0x2a9a9a, 0.5 * (1 - life)).fillPoints(star, true);
+        glow.lineStyle(3, 0x9ffff0, 0.7 * (1 - life)).strokeEllipse(e.x, e.y, r * 2, r * 1.5);
       } else if (e.kind === 'crit' || e.kind === 'xp') {
         seen.add(e.id);
         let texts = this.pops.get(e.id);
         if (!texts) {
           texts =
             e.kind === 'crit'
-              ? [this.add.text(e.x, e.y, 'Crit!', textStyle(15, '#ffd84a', 4)).setOrigin(0.5)]
-              : [this.add.text(e.x, e.y, `+${Math.round(e.amount ?? 0)} XP`, textStyle(17, '#ffe07a', 4)).setOrigin(0.5)];
+              ? [this.add.text(e.x, e.y, t('crit'), textStyle(15, '#ffd84a', 4)).setOrigin(0.5)]
+              : [this.add.text(e.x, e.y, t('xpPop', { n: Math.round(e.amount ?? 0) }), textStyle(17, '#ffe07a', 4)).setOrigin(0.5)];
           if (e.kind === 'xp' && (e.streak ?? 0) >= 2) texts.push(this.add.text(e.x, e.y, `x${e.streak}`, textStyle(13, '#ff9b3a', 4)).setOrigin(0, 0.5));
           for (const text of texts) text.setDepth(UI_DEPTH - 10);
           this.pops.set(e.id, texts);
         }
-        const rise = e.kind === 'crit' ? 20 + t * 18 : 4 + t * 26;
-        const alpha = t < 0.7 ? 1 : 1 - (t - 0.7) / 0.3;
+        const rise = e.kind === 'crit' ? 20 + life * 18 : 4 + life * 26;
+        const alpha = life < 0.7 ? 1 : 1 - (life - 0.7) / 0.3;
         texts[0].setPosition(e.x, e.y - rise).setAlpha(alpha);
         texts[1]?.setPosition(e.x + texts[0].width / 2 + 2, e.y - rise - 10).setAlpha(alpha);
       } else if (e.kind === 'autoPick' && e.upgrade) {
@@ -632,21 +633,21 @@ export class GameScene extends Phaser.Scene {
         if (!texts) {
           const u = UPGRADES[e.upgrade];
           const rank = this.state.ranks[e.upgrade] ?? 0;
-          const name = u.filler ? u.name : `${u.name} (rank ${rank})`;
+          const name = u.filler ? t(u.name) : t('autoPickedRank', { name: t(u.name), n: rank });
           texts = [
-            this.add.text(e.x, e.y, 'Auto-picked', textStyle(15, '#c9c3b6', 4)).setOrigin(0.5),
+            this.add.text(e.x, e.y, t('autoPicked'), textStyle(15, '#c9c3b6', 4)).setOrigin(0.5),
             this.add.text(e.x, e.y, name, textStyle(22, '#ffcf4a', 5)).setOrigin(0.5),
           ];
           for (const text of texts) text.setDepth(UI_DEPTH - 10);
           this.pops.set(e.id, texts);
         }
-        const rise = Math.min(1, t * 6) * 12 + t * 10;
-        const alpha = t < 0.8 ? 1 : 1 - (t - 0.8) / 0.2;
+        const rise = Math.min(1, life * 6) * 12 + life * 10;
+        const alpha = life < 0.8 ? 1 : 1 - (life - 0.8) / 0.2;
         texts[0].setPosition(e.x, e.y - rise - 16).setAlpha(alpha);
         texts[1].setPosition(e.x, e.y - rise + 6).setAlpha(alpha);
       } else if (e.kind === 'orb') {
         inFlight += e.amount ?? 0;
-        this.drawOrbs(e.x, e.y, t);
+        this.drawOrbs(e.x, e.y, life);
       }
     }
     for (const [id, texts] of this.pops) {
@@ -729,7 +730,7 @@ export class GameScene extends Phaser.Scene {
     const top = (x: number, text: string, color = '#e9e4d8', size = 14) =>
       this.add.text(x, 19, text, textStyle(size, color)).setOrigin(0, 0.5).setDepth(UI_DEPTH + 1);
     this.waveText = top(18, '', '#ffcf4a', 20).setStroke('#141820', 3);
-    top(140, 'Barricade');
+    top(140, t('barricade'));
     this.createBarricadeTip();
     this.foesText = top(612, '');
     this.slainText = top(716, '');
@@ -776,9 +777,9 @@ export class GameScene extends Phaser.Scene {
     const st = stats(s);
     const timber = s.ranks.timber ?? 0;
     this.barricadeTipText.setText([
-      `Health ${Math.ceil(Math.max(0, s.barricade.hp))} / ${s.barricade.max}`,
-      timber > 0 ? `Stout Timber rank ${timber}: +${timber * 25}% health` : 'Stout Timber adds 25% health a rank',
-      `Repairs ${Math.round(st.repair * 100)}% after each wave`,
+      t('tipHealth', { hp: Math.ceil(Math.max(0, s.barricade.hp)), max: s.barricade.max }),
+      timber > 0 ? t('tipTimber', { n: timber, bonus: timber * 25 }) : t('tipTimberNone'),
+      t('tipRepair', { n: Math.round(st.repair * 100) }),
     ]);
   }
 
@@ -786,7 +787,7 @@ export class GameScene extends Phaser.Scene {
     const s = this.state;
     const g = this.hud;
     g.clear();
-    this.waveText.setText(`Wave ${s.wave}`);
+    this.waveText.setText(t('wave', { n: s.wave }));
     this.drawBarricadeTip();
 
     // The barricade's health in the top bar.
@@ -799,10 +800,10 @@ export class GameScene extends Phaser.Scene {
     g.fillStyle(BAR.barricadeShine).fillRect(bx, 13, fw, 6);
     g.lineStyle(1.5, 0x5a3214, 0.35);
     for (let x = bx + 15; x < bx + fw; x += 22) g.lineBetween(x, 14, x - 4, 26);
-    this.foesText.setText(`Foes left ${s.toSpawn.length + s.enemies.length}`);
-    this.slainText.setText(`Slain ${s.kills}`);
+    this.foesText.setText(t('foesLeft', { n: s.toSpawn.length + s.enemies.length }));
+    this.slainText.setText(t('slain', { n: s.kills }));
     this.coinsText.setText(String(s.coins));
-    this.bestText.setText(`Best wave ${s.bestWave}`);
+    this.bestText.setText(t('bestWave', { n: s.bestWave }));
 
     // Experience along the bottom: the blue fill, and a gold preview of the experience still
     // flying in as orbs.
@@ -823,14 +824,14 @@ export class GameScene extends Phaser.Scene {
       g.lineStyle(1.5, 0xffffff, 0.5);
       for (let x = X.x + 2 + blue; x < X.x + blue + gold - 2; x += 7) g.lineBetween(x + 2, X.y + X.h - 2, x + 6, X.y + 2);
     }
-    this.levelText.setText(`Level ${s.level}`);
-    this.xpText.setText(`${Math.floor(s.xp)} / ${need} XP`);
+    this.levelText.setText(t('level', { n: s.level }));
+    this.xpText.setText(t('xp', { xp: Math.floor(s.xp), need }));
 
     // The kill streak chip, while a streak of two or more runs.
     const streak = s.streak.count >= 2 && !held(s);
     this.streakFlame.setVisible(streak);
-    this.streakText.setVisible(streak).setText(`Streak x${s.streak.count}`);
-    this.streakBonusText.setVisible(streak).setText(`+${Math.round(streakBonus(s.streak.count) * 100)}% XP`);
+    this.streakText.setVisible(streak).setText(t('streak', { n: s.streak.count }));
+    this.streakBonusText.setVisible(streak).setText(t('streakBonus', { n: Math.round(streakBonus(s.streak.count) * 100) }));
     if (streak) {
       const { x, y, w, h } = STREAK;
       g.fillStyle(0xff8a2a, 0.15 + 0.25 * this.pulse(700)).fillPoints(chamferPts(x - w / 2 - 4, y - h / 2 - 4, w + 8, h + 8, 7), true);
@@ -844,7 +845,7 @@ export class GameScene extends Phaser.Scene {
     const breaking = s.phase === 'break' && !s.choices && !s.relicFound && !s.roadChoices && !this.hirePanel.open && !this.fortifyPanel.open;
     this.banner
       .setVisible(breaking)
-      .setText(isBossWave(s.wave) ? `Wave ${s.wave}\nThe ${ENEMIES[this.track.boss].name} comes!` : `Wave ${s.wave}`)
+      .setText(isBossWave(s.wave) ? t('bossComes', { n: s.wave, boss: t(ENEMIES[this.track.boss].name) }) : t('wave', { n: s.wave }))
       .setAlpha(breaking ? Math.min(1, s.breakMs / 500) : 0);
 
     // The boss's stacked health bars: the bar in front empties to show the next one's colour.
@@ -860,7 +861,7 @@ export class GameScene extends Phaser.Scene {
       g.fillStyle(BOSS_BARS[left % BOSS_BARS.length]).fillRect(x, BOSS_BAR.y, Math.round(BOSS_BAR.w * fill), BOSS_BAR.h);
       g.fillStyle(0xffffff, 0.3).fillRect(x, BOSS_BAR.y, Math.round(BOSS_BAR.w * fill), 4);
       g.lineStyle(1.5, GOLD.mid).strokePoints(chamferPts(x - 3, BOSS_BAR.y - 3, BOSS_BAR.w + 6, BOSS_BAR.h + 6, 4), true);
-      this.bossName.setText(`${ENEMIES[boss.kind].name}   x${left + 1}`);
+      this.bossName.setText(t('bossBars', { boss: t(ENEMIES[boss.kind].name), n: left + 1 }));
     }
 
     // The relic chest's reward, during the break after a boss: one relic, or two after a Hardened
@@ -872,10 +873,10 @@ export class GameScene extends Phaser.Scene {
       fit(this.relicIcon.setTexture(relicTexture(a)), 0.7).setPosition(b ? -188 : -168, b ? -14 : -18);
       this.relicIcon2.setVisible(!!b);
       if (b) fit(this.relicIcon2.setTexture(relicTexture(b)), 0.7);
-      this.relicName.setText(b ? `${RELICS[a].name} and ${RELICS[b].name}` : RELICS[a].name);
-      this.relicText.setText(b ? 'Two relics from the Hardened Road, from now on.' : `${RELICS[a].text}, from now on.`);
+      this.relicName.setText(b ? t('and', { a: t(RELICS[a].name), b: t(RELICS[b].name) }) : t(RELICS[a].name));
+      this.relicText.setText(b ? t('twoRelics') : t('relicFromNow', { text: t(RELICS[a].text) }));
       const set = found.map((id) => RELICS[id].set).find((id) => setComplete(s.relics, id));
-      this.relicSet.setText(set ? `${SETS[set].name} complete: ${SETS[set].text}` : '');
+      this.relicSet.setText(set ? t('setComplete', { set: t(SETS[set].name), text: t(SETS[set].text) }) : '');
     }
   }
 
@@ -901,21 +902,21 @@ export class GameScene extends Phaser.Scene {
     const g = this.trackG;
     g.clear();
     drawPanel(g, TRACK.x, TRACK.y, TRACK.w, TRACK.h, { c: 8, fill: 0x222630, alpha: 0.9, edge: GOLD.mid, lw: 1.5 });
-    const boss = ENEMIES[tr.boss].name;
+    const boss = t(ENEMIES[tr.boss].name);
     // The road's twist names the road ("Golden Road to the Ogre Warlord").
     const finished = !!(s.relicFound || s.roadChoices);
-    this.trackTitle.setText(s.road && !finished ? `${ROADS[s.road].name} to the ${boss}` : `Road to the ${boss}`);
+    this.trackTitle.setText(s.road && !finished ? t('roadToTwist', { road: t(ROADS[s.road].name), boss }) : t('roadTo', { boss }));
     const step = finished ? 11 : tr.step;
     this.trackNote.setText(
       s.relicFound
-        ? `Relic chest: ${s.relicFound.length > 1 ? `${s.relicFound.length} relics` : RELICS[s.relicFound[0]].name}`
+        ? s.relicFound.length > 1 ? t('trackRelics', { n: s.relicFound.length }) : t('trackChest', { name: t(RELICS[s.relicFound[0]].name) })
         : s.roadChoices
-          ? 'Choose the next road'
+          ? t('chooseRoad')
           : tr.step === 10
-            ? 'Boss wave! Relic chest next'
+            ? t('trackBossWave')
             : s.road
-              ? `Wave ${tr.last}: boss`
-              : `Wave ${tr.last}: boss, Relic chest`,
+              ? t('trackBoss', { n: tr.last })
+              : t('trackBossChest', { n: tr.last }),
     );
     const y = TRACK.markY;
     const x0 = TRACK.x + TRACK.markX;
@@ -955,7 +956,7 @@ export class GameScene extends Phaser.Scene {
     const chest = fit(this.add.image(-168, 12, 'chest-open'), 1.4);
     this.relicIcon = fit(this.add.image(-168, -18, 'relic-crown'), 0.7);
     this.relicIcon2 = fit(this.add.image(-148, -22, 'relic-crown'), 0.7).setVisible(false);
-    const title = this.add.text(-112, -38, 'Relic chest!', textStyle(20, '#ffcf4a', 4)).setOrigin(0, 0.5);
+    const title = this.add.text(-112, -38, t('relicChest'), textStyle(20, '#ffcf4a', 4)).setOrigin(0, 0.5);
     this.relicName = this.add.text(-112, -12, '', textStyle(15, '#ffe7a0')).setOrigin(0, 0.5);
     this.relicText = this.add.text(-112, 12, '', { ...textStyle(13, '#e9e4d8'), fontStyle: 'normal', wordWrap: { width: 340 } }).setOrigin(0, 0.5);
     this.relicSet = this.add.text(-112, 36, '', textStyle(12, '#8fdc6a')).setOrigin(0, 0.5);
@@ -970,9 +971,9 @@ export class GameScene extends Phaser.Scene {
   private createRain() {
     const depth = UI_DEPTH - 6;
     this.rainButton = fit(this.add.image(RAIN.x, RAIN.y, 'rain-charging')).setDepth(depth);
-    this.add.text(RAIN.x, RAIN.y - RAIN.r - 17, 'Arrow Rain', textStyle(10, '#ffe7a0')).setOrigin(0.5).setDepth(depth + 1);
+    this.add.text(RAIN.x, RAIN.y - RAIN.r - 17, t('arrowRain'), textStyle(10, '#ffe7a0')).setOrigin(0.5).setDepth(depth + 1);
     this.rainBadge = this.add.text(RAIN.x + RAIN.r + 27, RAIN.y, '', textStyle(9, '#2b2010')).setOrigin(0.5).setDepth(depth + 1);
-    this.rainHint = this.add.text(RAIN_HINT.x, RAIN_HINT.y, 'Drag onto the horde, let go to loose', textStyle(11, '#fff3d0')).setOrigin(0.5).setDepth(depth + 1);
+    this.rainHint = this.add.text(RAIN_HINT.x, RAIN_HINT.y, t('rainHint'), textStyle(11, '#fff3d0')).setOrigin(0.5).setDepth(depth + 1);
     const hit = this.add.circle(RAIN.x, RAIN.y, RAIN.r + 6, 0x000000, 0.001).setDepth(depth + 2);
     hit.setInteractive({ useHandCursor: true }).on('pointerdown', (p: Phaser.Input.Pointer) => {
       if (!this.rainReady()) return;
@@ -981,7 +982,7 @@ export class GameScene extends Phaser.Scene {
     });
     // The caltrops button above it is dragged onto the road the same way.
     this.caltropsButton = fit(this.add.image(CALTROPS.x, CALTROPS.y, 'caltrops-charging')).setDepth(depth);
-    this.add.text(CALTROPS.x, CALTROPS.y - CALTROPS.r - 15, 'Caltrops', textStyle(10, '#ffe7a0')).setOrigin(0.5).setDepth(depth + 1);
+    this.add.text(CALTROPS.x, CALTROPS.y - CALTROPS.r - 15, t('caltrops'), textStyle(10, '#ffe7a0')).setOrigin(0.5).setDepth(depth + 1);
     this.caltropsBadge = this.add.text(CALTROPS.x + CALTROPS.r + 27, CALTROPS.y, '', textStyle(9, '#2b2010')).setOrigin(0.5).setDepth(depth + 1);
     const hitC = this.add.circle(CALTROPS.x, CALTROPS.y, CALTROPS.r + 6, 0x000000, 0.001).setDepth(depth + 2);
     hitC.setInteractive({ useHandCursor: true }).on('pointerdown', (p: Phaser.Input.Pointer) => {
@@ -1031,7 +1032,7 @@ export class GameScene extends Phaser.Scene {
       .on('pointerdown', () => this.cycleAim());
     const f = FORTIFY;
     this.fortifyBg = this.add.graphics().setDepth(UI_DEPTH - 6);
-    this.fortifyText = this.add.text(f.x, f.y, 'Fortify', textStyle(12, '#ffe7a0')).setOrigin(0.5).setDepth(UI_DEPTH - 5);
+    this.fortifyText = this.add.text(f.x, f.y, t('fortify'), textStyle(12, '#ffe7a0')).setOrigin(0.5).setDepth(UI_DEPTH - 5);
     this.add
       .zone(f.x, f.y, f.w, f.h)
       .setDepth(UI_DEPTH - 4)
@@ -1043,11 +1044,11 @@ export class GameScene extends Phaser.Scene {
         const note =
           s.phase !== 'break'
             ? s.forts.queued
-              ? 'Bought for the next break. That break sells no other.'
-              : 'Buy one now: it is set up when the next break starts.'
+              ? t('noteQueued')
+              : t('noteAhead')
             : canFortify(s)
-              ? 'One fortification a break. Coins also hire guards.'
-              : 'Bought this break. The next break sells another.';
+              ? t('noteOpen')
+              : t('noteBought');
         this.fortifyPanel.show(s.forts, s.coins, note, (id) => canBuyFort(s, id));
       });
     // Paid repairs, right of the Fortify button: lit during a break while the coins are there.
@@ -1063,7 +1064,7 @@ export class GameScene extends Phaser.Scene {
       });
     this.omenText = this.add.text(OMEN_CHIP.x, OMEN_CHIP.y, '', textStyle(10, '#e6ccff')).setOrigin(0.5).setDepth(UI_DEPTH - 5);
     this.heatText = this.add.text(HEAT.x, HEAT.y, '', textStyle(11, '#ffb08a')).setOrigin(0.5).setDepth(UI_DEPTH - 4);
-    this.roarText = this.add.text(ROAR_CHIP.x, ROAR_CHIP.y, 'Chilled bow: slow shots', textStyle(10, '#d8f0ff')).setOrigin(0.5).setDepth(UI_DEPTH - 5);
+    this.roarText = this.add.text(ROAR_CHIP.x, ROAR_CHIP.y, t('chilledBow'), textStyle(10, '#d8f0ff')).setOrigin(0.5).setDepth(UI_DEPTH - 5);
   }
 
   private drawAimToggle() {
@@ -1072,29 +1073,29 @@ export class GameScene extends Phaser.Scene {
     g.clear();
     const { x, y, w, h } = AIM;
     drawPanel(g, x - w / 2, y - h / 2, w, h, { c: 5, fill: 0x1e222c, alpha: 0.92, edge: s.aimMode === 'nearest' ? GOLD.dark : GOLD.light, lw: 1.5 });
-    this.aimText.setText(`Aim: ${AIMS[s.aimMode].name}`);
+    this.aimText.setText(t('aim', { mode: t(AIMS[s.aimMode].name) }));
     // The Fortify button is always there; lit while one can still be bought (in a break, or queued
     // during a wave for the next one).
     const f = FORTIFY;
     const fg = this.fortifyBg;
     fg.clear();
     const open = canFortify(s);
-    this.fortifyText.setColor(open ? '#ffe7a0' : '#9aa0ac').setText(open ? 'Fortify' : s.forts.queued ? 'Queued' : 'Fortified');
+    this.fortifyText.setColor(open ? '#ffe7a0' : '#9aa0ac').setText(open ? t('fortify') : s.forts.queued ? t('fortifyQueued') : t('fortified'));
     drawPanel(fg, f.x - f.w / 2, f.y - f.h / 2, f.w, f.h, { c: 5, fill: open ? SLATE.light : 0x1e222c, alpha: 0.95, edge: open ? GOLD.light : 0x4a5060, lw: open ? 2 : 1 });
     if (open) fg.fillStyle(GOLD.light, 0.1 + 0.15 * this.pulse(900)).fillPoints(chamferPts(f.x - f.w / 2, f.y - f.h / 2, f.w, f.h, 5), true);
     // The Repair button: 15% of the barricade for coins, dearer with each repair of the run.
     const rg = this.repairBg;
     rg.clear();
     const fix = canRepair(s);
-    this.repairText.setColor(fix ? '#ffe7a0' : '#9aa0ac').setText(`Repair: ${repairCost(s.repairs)} coins`);
+    this.repairText.setColor(fix ? '#ffe7a0' : '#9aa0ac').setText(t('repair', { n: repairCost(s.repairs) }));
     drawPanel(rg, REPAIR.x - REPAIR.w / 2, REPAIR.y - REPAIR.h / 2, REPAIR.w, REPAIR.h, { c: 5, fill: fix ? SLATE.light : 0x1e222c, alpha: 0.95, edge: fix ? GOLD.light : 0x4a5060, lw: fix ? 2 : 1 });
     // The accepted omen's chip, over the ranger, until its wave is cleared.
     const omen = s.omen?.accepted && !held(s) ? s.omen.id : null;
-    this.omenText.setVisible(!!omen).setText(omen ? `Omen: ${OMENS[omen].name}` : '');
+    this.omenText.setVisible(!!omen).setText(omen ? t('omenChip', { omen: t(OMENS[omen].name) }) : '');
     if (omen) drawPanel(g, OMEN_CHIP.x - OMEN_CHIP.w / 2, OMEN_CHIP.y - OMEN_CHIP.h / 2, OMEN_CHIP.w, OMEN_CHIP.h, { c: 5, fill: 0x2a2036, alpha: 0.95, edge: 0xc59af0, lw: 1.5 });
     // The heat chip beside the wave track, and the chilled-bow chip while the Frost Giant's roar lasts.
     const heat = s.heat > 0;
-    this.heatText.setVisible(heat).setText(`Heat ${s.heat}`);
+    this.heatText.setVisible(heat).setText(t('heat', { n: s.heat }));
     if (heat) drawPanel(g, HEAT.x - HEAT.w / 2, HEAT.y - HEAT.h / 2, HEAT.w, HEAT.h, { c: 5, fill: 0x3a2414, alpha: 0.95, edge: 0xff9b3a, lw: 1.5 });
     const roar = s.roarMs > 0 && !held(s);
     this.roarText.setVisible(roar);
@@ -1143,7 +1144,7 @@ export class GameScene extends Phaser.Scene {
       g.fillStyle(0x6a4424).fillRect(x - 2, y - 26, 4, 34);
       g.fillStyle(GOLD.mid).fillTriangle(x + 2, y - 26, x + 20 + 2 * this.pulse(600), y - 21, x + 2, y - 15);
     }
-    this.fortLabel.setText(f.lookout > 0 ? `Lookout: ${f.lookout} wave${f.lookout > 1 ? 's' : ''}` : '');
+    this.fortLabel.setText(f.lookout > 0 ? t('lookoutLeft', { n: f.lookout }) : '');
   }
 
   private caltropsReady() {
@@ -1172,7 +1173,7 @@ export class GameScene extends Phaser.Scene {
     // The label above, and a READY badge or the kills still needed beside it.
     drawPanel(g, RAIN.x - 36, RAIN.y - RAIN.r - 25, 72, 16, { c: 4, fill: 0x1e222c, alpha: 0.9, edge: GOLD.mid, lw: 1 });
     drawPanel(g, RAIN.x + RAIN.r + 5, RAIN.y - 8, 44, 16, { c: 4, fill: ready ? GOLD.mid : 0x1e222c, alpha: ready ? 1 : 0.9, edge: GOLD.mid, lw: 1 });
-    this.rainBadge.setText(ready ? 'READY' : `${s.rain.charge}/${s.rain.need}`).setColor(ready ? '#2b2010' : '#ffe7a0');
+    this.rainBadge.setText(ready ? t('ready') : `${s.rain.charge}/${s.rain.need}`).setColor(ready ? '#2b2010' : '#ffe7a0');
     // The charge fills the octagon's rim, edge by edge.
     if (!ready) {
       const ring = Array.from({ length: 8 }, (_, i) => v(RAIN.x + Math.cos(Math.PI / 8 + (i * Math.PI) / 4) * 27, RAIN.y + Math.sin(Math.PI / 8 + (i * Math.PI) / 4) * 27));
@@ -1187,7 +1188,7 @@ export class GameScene extends Phaser.Scene {
     }
     // The hint over the field, for Arrow Rain first, else for the caltrops.
     const hint = ready || this.caltropsReady();
-    this.rainHint.setVisible(hint).setText(ready ? 'Drag onto the horde, let go to loose' : 'Drag the caltrops onto the road');
+    this.rainHint.setVisible(hint).setText(ready ? t('rainHint') : t('caltropsHint'));
     if (hint) drawPanel(g, RAIN_HINT.x - 118, RAIN_HINT.y - 12, 236, 24, { c: 6, fill: 0x1e222c, alpha: 0.88, edge: GOLD.mid, lw: 1.5 });
 
     // While dragged: a dashed arc from the button up over the field to a gold ring on the road.
@@ -1294,7 +1295,7 @@ export class GameScene extends Phaser.Scene {
     fit(this.caltropsButton.setTexture(ready ? 'caltrops-ready' : 'caltrops-charging'), grow);
     drawPanel(g, CALTROPS.x - 32, CALTROPS.y - CALTROPS.r - 23, 64, 16, { c: 4, fill: 0x1e222c, alpha: 0.9, edge: GOLD.mid, lw: 1 });
     drawPanel(g, CALTROPS.x + CALTROPS.r + 5, CALTROPS.y - 8, 44, 16, { c: 4, fill: ready ? GOLD.mid : 0x1e222c, alpha: ready ? 1 : 0.9, edge: GOLD.mid, lw: 1 });
-    this.caltropsBadge.setText(ready ? 'READY' : `${c.charge}/${c.need}`).setColor(ready ? '#2b2010' : '#ffe7a0');
+    this.caltropsBadge.setText(ready ? t('ready') : `${c.charge}/${c.need}`).setColor(ready ? '#2b2010' : '#ffe7a0');
     if (!ready) {
       // The charge fills the octagon's rim, edge by edge, as on Arrow Rain's button.
       const ring = Array.from({ length: 8 }, (_, i) => v(CALTROPS.x + Math.cos(Math.PI / 8 + (i * Math.PI) / 4) * 21, CALTROPS.y + Math.sin(Math.PI / 8 + (i * Math.PI) / 4) * 21));
@@ -1379,7 +1380,7 @@ export class GameScene extends Phaser.Scene {
           const a1 = ((k + 1) / 12) * Math.PI * 2;
           g.lineStyle(2, afford ? GOLD.light : 0x9aa0ac, alpha).lineBetween(slot.x + Math.cos(a0) * 20, slot.y - 22 + Math.sin(a0) * 20, slot.x + Math.cos(a1) * 20, slot.y - 22 + Math.sin(a1) * 20);
         }
-        label.setText('Hire').setPosition(slot.x, slot.y - 22).setColor(afford ? '#ffe07a' : '#c9c3b6');
+        label.setText(t('hire')).setPosition(slot.x, slot.y - 22).setColor(afford ? '#ffe07a' : '#c9c3b6');
         return;
       }
       // A guard lunges a little each time it strikes.
@@ -1392,7 +1393,7 @@ export class GameScene extends Phaser.Scene {
         .setPosition(slot.x + this.guardFlash[i] * 5, slot.y)
         .setDepth(slot.y);
       // Its level as gold pips over its head, and a ring of stars while it is stunned.
-      label.setText(guard.stunMs > 0 ? 'Stunned' : '').setPosition(slot.x, slot.y - fig.height - 20).setColor('#ffe7a0');
+      label.setText(guard.stunMs > 0 ? t('stunned') : '').setPosition(slot.x, slot.y - fig.height - 20).setColor('#ffe7a0');
       if (guard.stunMs > 0) {
         for (let k = 0; k < 4; k++) {
           const a = (this.clock / 500 + k / 4) * Math.PI * 2;
@@ -1419,23 +1420,23 @@ export class GameScene extends Phaser.Scene {
     const dim = this.add.rectangle(cx, cy, VIEW.w, VIEW.h, 0x0e1218, 0.7).setInteractive();
     const panel = this.add.graphics();
     drawPanel(panel, cx - 300, cy - 180, 600, 360, { c: 18, fill: SLATE.mid, alpha: 1, lw: 3 });
-    const title = this.add.text(cx, cy - 145, 'The hero has fallen', textStyle(30, '#ff9a7a', 5)).setOrigin(0.5);
+    const title = this.add.text(cx, cy - 145, t('fallenTitle'), textStyle(30, '#ff9a7a', 5)).setOrigin(0.5);
     this.gameOverText = this.add
       .text(cx, cy - 62, '', { ...textStyle(15, '#e9e4d8'), fontStyle: 'normal', align: 'center' })
       .setOrigin(0.5);
-    const again = makeButton(this, cx - 195, cy + 112, 170, 40, 'Fight again', () => this.restart(false));
-    const reset = makeButton(this, cx, cy + 112, 170, 40, 'New hero', () => this.restart(true));
-    const retire = makeButton(this, cx + 195, cy + 112, 170, 40, 'Retire', () => this.openRetire());
+    const again = makeButton(this, cx - 195, cy + 112, 170, 40, t('fightAgain'), () => this.restart(false));
+    const reset = makeButton(this, cx, cy + 112, 170, 40, t('newHero'), () => this.restart(true));
+    const retire = makeButton(this, cx + 195, cy + 112, 170, 40, t('retire'), () => this.openRetire());
     this.retireButtons.push(retire);
     this.retireNote = this.add.text(cx + 195, cy + 150, '', { ...textStyle(10, '#9aa0ac'), fontStyle: 'normal', align: 'center', wordWrap: { width: 190 } }).setOrigin(0.5, 0);
     // The heat the next run plays at: one button per heat, the locked ones dimmed.
-    const heatLabel = this.add.text(cx - 260, cy + 14, 'Next run at', textStyle(13, '#c9c3b6')).setOrigin(0, 0.5);
+    const heatLabel = this.add.text(cx - 260, cy + 14, t('nextRunAt'), textStyle(13, '#c9c3b6')).setOrigin(0, 0.5);
     const picks: Phaser.GameObjects.GameObject[] = [];
     for (let h = 0; h <= MAX_HEAT; h++) {
       const x = cx - 110 + h * 92;
       const y = cy + 14;
       const bg = this.add.graphics();
-      const text = this.add.text(x, y, `Heat ${h}`, textStyle(12, '#ffe7a0')).setOrigin(0.5);
+      const text = this.add.text(x, y, t('heat', { n: h }), textStyle(12, '#ffe7a0')).setOrigin(0.5);
       const zone = this.add.zone(x, y, 84, 26).setInteractive({ useHandCursor: true }).on('pointerdown', () => {
         if (h <= this.state.heatUnlocked) this.restartAt(h, this.startWave);
       });
@@ -1443,7 +1444,7 @@ export class GameScene extends Phaser.Scene {
       picks.push(bg, text, zone);
     }
     // Forced march: the wave the next run starts on, wave 11 or 21 once the boss before it is beaten.
-    const marchLabel = this.add.text(cx - 260, cy + 52, 'Start at', textStyle(13, '#c9c3b6')).setOrigin(0, 0.5);
+    const marchLabel = this.add.text(cx - 260, cy + 52, t('startAt'), textStyle(13, '#c9c3b6')).setOrigin(0, 0.5);
     MARCH_STARTS.forEach((m, i) => {
       const x = cx - 105 + i * MARCH.step;
       const y = cy + 52;
@@ -1473,7 +1474,7 @@ export class GameScene extends Phaser.Scene {
       drawPanel(bg, zone.x - MARCH.w / 2, zone.y - MARCH.h / 2, MARCH.w, MARCH.h, { c: 5, fill: current ? GOLD.mid : open ? SLATE.light : SLATE.panel, alpha: 1, edge: open ? GOLD.mid : 0x4a5060, lw: 1.5 });
       text
         .setColor(current ? '#2b2010' : open ? '#ffe7a0' : '#7a8294')
-        .setText(m.coins === 0 ? `Wave ${m.wave}` : open ? `Wave ${m.wave}, ${m.coins} coins` : `Wave ${m.wave} (beat wave ${m.wave - 1})`);
+        .setText(m.coins === 0 ? t('marchWave', { n: m.wave }) : open ? t('marchCoins', { n: m.wave, coins: m.coins }) : t('marchLocked', { n: m.wave, before: m.wave - 1 }));
     });
   }
 
@@ -1505,7 +1506,7 @@ export class GameScene extends Phaser.Scene {
       const current = h === s.heat;
       bg.clear();
       drawPanel(bg, x - 42, y - 13, 84, 26, { c: 5, fill: current ? GOLD.mid : unlocked ? SLATE.light : SLATE.panel, alpha: 1, edge: unlocked ? GOLD.mid : 0x4a5060, lw: 1.5 });
-      text.setColor(current ? '#2b2010' : unlocked ? '#ffe7a0' : '#7a8294').setText(unlocked ? `Heat ${h}` : `Heat ${h} (locked)`);
+      text.setColor(current ? '#2b2010' : unlocked ? '#ffe7a0' : '#7a8294').setText(unlocked ? t('heat', { n: h }) : t('heatLocked', { n: h }));
     });
   }
 
@@ -1514,15 +1515,15 @@ export class GameScene extends Phaser.Scene {
     const dim = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x0e1218, 0.7).setInteractive();
     const panel = this.add.graphics();
     drawPanel(panel, VIEW.w / 2 - 290, VIEW.h / 2 - 150, 580, 300, { c: 18, fill: SLATE.mid, alpha: 1, lw: 3 });
-    const title = this.add.text(VIEW.w / 2, VIEW.h / 2 - 110, 'The siege is lifted!', textStyle(30, '#ffcf4a', 5)).setOrigin(0.5);
+    const title = this.add.text(VIEW.w / 2, VIEW.h / 2 - 110, t('wonTitle'), textStyle(30, '#ffcf4a', 5)).setOrigin(0.5);
     this.wonText = this.add
       .text(VIEW.w / 2, VIEW.h / 2 - 25, '', { ...textStyle(15, '#e9e4d8'), fontStyle: 'normal', align: 'center', wordWrap: { width: 520 } })
       .setOrigin(0.5);
-    const on = makeButton(this, VIEW.w / 2 - 195, VIEW.h / 2 + 100, 170, 40, 'Keep fighting', () => keepFighting(this.state));
-    this.wonNext = makeButton(this, VIEW.w / 2, VIEW.h / 2 + 100, 170, 40, 'Heat 1', () => this.restartAt(this.state.heat + 1));
+    const on = makeButton(this, VIEW.w / 2 - 195, VIEW.h / 2 + 100, 170, 40, t('keepFighting'), () => keepFighting(this.state));
+    this.wonNext = makeButton(this, VIEW.w / 2, VIEW.h / 2 + 100, 170, 40, t('heat', { n: 1 }), () => this.restartAt(this.state.heat + 1));
     this.wonNextText = this.wonNext.getAt(1) as Phaser.GameObjects.Text;
     // Lifting the siege earns the right to retire for a legacy.
-    const retire = makeButton(this, VIEW.w / 2 + 195, VIEW.h / 2 + 100, 170, 40, 'Retire', () => this.openRetire());
+    const retire = makeButton(this, VIEW.w / 2 + 195, VIEW.h / 2 + 100, 170, 40, t('retire'), () => this.openRetire());
     this.retireButtons.push(retire);
     this.won = this.add.container(0, 0, [dim, panel, title, this.wonText, on, this.wonNext, retire]).setDepth(UI_DEPTH + 20).setVisible(false);
   }

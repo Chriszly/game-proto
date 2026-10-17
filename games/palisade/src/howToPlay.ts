@@ -1,6 +1,8 @@
 import type { HowToPlay } from '../../../shared/howToPlay';
+import { byLanguage } from '../../../shared/i18n';
 
-export const howToPlay: HowToPlay = {
+/** British English; US English reads the same, so it falls back to this. */
+const en: HowToPlay = {
   goal: 'Hold the barricade against waves of foes and lift the siege on wave 30 to win. The run ends if a foe reaches your ranger.',
   controls: [
     {
@@ -39,3 +41,45 @@ export const howToPlay: HowToPlay = {
     'A hero who knows every skill or lifted the siege can retire: the next hero keeps a legacy.',
   ],
 };
+
+const de: HowToPlay = {
+  goal: 'Halte die Barrikade gegen Wellen von Feinden und brich in Welle 30 die Belagerung, um zu gewinnen. Der Lauf endet, wenn ein Feind deinen Waldläufer erreicht.',
+  controls: [
+    {
+      input: 'Pfeilregen aufs Feld ziehen, oder R / Leertaste',
+      action: 'Eine Salve auf den goldenen Ring schießen, sobald BEREIT dasteht',
+    },
+    { input: 'Krähenfüße auf den Weg ziehen, oder C', action: 'Stacheln streuen, die Feinde bremsen und verletzen, sobald BEREIT dasteht' },
+    { input: 'Ziel-Schalter, oder T', action: 'Wählen, auf wen zuerst geschossen wird: Nächste, Stärkste, Flieger oder Heiler' },
+    {
+      input: 'Einen Anheuern-Platz auf der Barrikade antippen',
+      action: 'Einen Speerträger oder Magier für Münzen anheuern, oder eine Wache ausbilden',
+    },
+    { input: 'Befestigen, in einer Pause', action: 'Eine Pfahlreihe, einen Öltopf oder einen Ausguck kaufen, einen pro Pause' },
+    { input: 'Reparieren, in einer Pause', action: '15 % der Barrikade für Münzen reparieren, jedes Mal etwas teurer' },
+    { input: 'Ein Omen annehmen oder ablehnen', action: 'Ab Welle 4 eine härtere Welle für 30 % mehr Erfahrung wagen' },
+    { input: 'Eine Karte antippen', action: 'Diese Verbesserung beim Stufenaufstieg nehmen, oder diesen Weg nach einem Boss' },
+    { input: '1x / 2x', action: 'Den Kampf zwischen normaler und doppelter Geschwindigkeit wechseln' },
+    { input: 'Fertigkeiten-Taste', action: 'Jede gefundene Verbesserung und Reliquie ansehen' },
+  ],
+  loop: [
+    'Feinde marschieren von rechts heran und hacken auf die Barrikade ein, während dein Waldläufer von selbst schießt.',
+    'Jeder Sieg bringt Erfahrung, Münzen und Ladung für Pfeilregen und Krähenfüße.',
+    'Ein voller Erfahrungsbalken hält den Kampf an, und du wählst aus drei Verbesserungen.',
+    'Zwischen den Wellen gibst du Münzen für Wachen oder eine Befestigung aus, und die Barrikade heilt ein wenig.',
+    'Welle 10 bringt einen Boss; besiege ihn, um eine Reliquientruhe zu öffnen und den nächsten Weg zu wählen.',
+  ],
+  tips: [
+    'Dein Held behält Stufe, Verbesserungen und Reliquien von Lauf zu Lauf.',
+    'Schnell aufeinanderfolgende Siege bauen eine Serie auf, die bis zu 50 % mehr Erfahrung bringt.',
+    'Harpyien fliegen über die Barrikade direkt auf deinen Waldläufer zu, also schieß sie zuerst ab.',
+    'Schildträger trotzen Pfeilen; Pfeilregen, Krähenfüße und Wachen kommen durch.',
+    'Schamanen heilen die Feinde um sich herum, also ziele auf Heiler, wenn sie auftauchen.',
+    'Ein Stufenaufstieg wählt nach 10 Sekunden eine zufällige Karte, außer du nimmst den Haken bei Auto-Wahl weg.',
+    'Eine gebrochene Belagerung schaltet für den nächsten Lauf eine härtere Hitze frei.',
+    'Ist ein Boss gefallen, kann der nächste Lauf mit einem Münzeinsatz beim folgenden Weg beginnen.',
+    'Ein Held, der jede Fertigkeit kennt oder die Belagerung gebrochen hat, kann sich zur Ruhe setzen: der nächste Held behält ein Vermächtnis.',
+  ],
+};
+
+export const howToPlay: HowToPlay = byLanguage({ en, de });

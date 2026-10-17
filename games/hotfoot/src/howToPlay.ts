@@ -1,6 +1,7 @@
 import type { HowToPlay } from '../../../shared/howToPlay';
+import { byLanguage } from '../../../shared/i18n';
 
-export const howToPlay: HowToPlay = {
+const en: HowToPlay = {
   goal: 'Your knight never stops running: jump and slide past traps and foes to get as far as you can. The run ends with the last heart.',
   controls: [
     {
@@ -42,3 +43,57 @@ export const howToPlay: HowToPlay = {
     'Some boons cost you something, and two boons held together can unlock a hidden bonus.',
   ],
 };
+
+/** US English only changes the spelling. */
+const us = (text: string) => text.replace(/Armoury/g, 'Armory').replace(/armoury/g, 'armory');
+const enUS: HowToPlay = {
+  goal: us(en.goal),
+  controls: en.controls.map((c) => ({ input: us(c.input), action: us(c.action) })),
+  loop: en.loop.map(us),
+  tips: en.tips.map(us),
+};
+
+const de: HowToPlay = {
+  goal: 'Dein Ritter hört nie auf zu laufen: Spring und rutsch an Fallen und Feinden vorbei, so weit du kannst. Der Lauf endet mit dem letzten Herz.',
+  controls: [
+    {
+      input: 'Obere Hälfte antippen, oder Leertaste / Hoch / W',
+      action: 'Springen (mit Zweiter Satz noch einmal in der Luft)',
+    },
+    {
+      input: 'Untere Hälfte antippen, oder Runter / S',
+      action: 'Rutschen; in der Luft schnell fallen und bei der Landung rutschen',
+    },
+    { input: 'Eine Gabenkarte antippen', action: 'Diese Gabe an einem Rastplatz nehmen' },
+    {
+      input: 'Eine Wegkarte antippen',
+      action: 'Den Höhenweg oder den Talweg für die nächste Etappe wählen',
+    },
+    {
+      input: 'Neuer Lauf oder Tagesstrecke',
+      action: 'Nach einem Sturz einen neuen Lauf oder die Strecke des Tages beginnen',
+    },
+    {
+      input: 'Rüstkammer',
+      action: 'Nach einem Sturz gesparte Münzen für dauerhafte Verbesserungen ausgeben',
+    },
+  ],
+  loop: [
+    'Spring über Stacheln, Gruben und Kobolde, und rutsch unter den hängenden Stachelstämmen durch.',
+    'Sammle unterwegs Münzen, und nimm sie in Folge, um eine Serie aufzubauen.',
+    'Erreiche alle 100 m die Rastplatzfahne und wähle eine der angebotenen Gaben.',
+    'Jede weitere Etappe läuft etwas schneller, auf neuem Boden mit eigener Regel.',
+    'Wenn du fällst, werden die gesammelten Münzen für die Rüstkammer und den nächsten Lauf gespart.',
+  ],
+  tips: [
+    'Jeder Treffer kostet ein Herz und setzt deine Münzserie zurück; danach blinkst du und bist kurz sicher.',
+    'Wer von oben auf einem Kobold oder einer Fledermaus landet, schaltet ihn für eine Münze aus und federt wieder hoch.',
+    'Feueröffnungen brennen nur zeitweise: spring darüber, oder lauf hinüber, wenn sie aus sind.',
+    'Ab Etappe 2 rutsch in einen Wegschrein, um 15 Münzen gegen ein Herz zu tauschen.',
+    'Erfülle die Mutprobe des Herolds auf einer Etappe für 20 Münzen und eine dritte Gabenkarte.',
+    'Jede fünfte Etappe versperrt ein Torwächter den Weg: weiche seinen Fässern und Äxten aus und zertritt dann dreimal seinen Helm.',
+    'Manche Gaben kosten dich etwas, und zwei Gaben zusammen können einen verborgenen Bonus freischalten.',
+  ],
+};
+
+export const howToPlay: HowToPlay = byLanguage({ en, 'en-US': enUS, de });

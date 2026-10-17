@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { viewPoint } from '../../../../shared/scaling';
+import { formatDate } from '../../../../shared/i18n';
 import { settings } from '../../../../shared/settings';
 import { BOSS_ART, GOBLIN_ART } from '../art/foes';
 import { bakePanel } from '../art/hud';
@@ -22,7 +23,7 @@ import {
   RUNNER,
   SHRINE,
   STREAK,
-  dareText,
+  DARE_TEXT,
   flameOf,
   floorAt,
   metres,
@@ -31,11 +32,14 @@ import {
   streakMult,
   today,
   trackOf,
+  type Dare,
+  type Effect,
   type GameState,
   type Road,
   type Shrine,
   type Trap,
 } from '../game/state';
+import { t, type TextKey } from '../i18n';
 import { BoonCards } from '../ui/BoonCards';
 import { makeButton } from '../ui/Button';
 import { ARMOURY_PANEL, DARE_TAG, FONT, FRAME, GROUND_Y, MARGIN, RUNNER_X, STAGE_TITLE, STREAK_CHIP, TAG, TAP_SPLIT_Y, TRACK, UI_DEPTH, VIEW } from './layout';
@@ -60,11 +64,17 @@ const BOULDERS = [
   { scale: 0.6, back: 168 },
 ];
 
-/** A daily course's date for the panel: "14 Oct". */
+/** A daily course's date for the panel: "14 Oct" ("Oct 14" in US English, "14. Okt." in German). */
 const dayName = (date: string) => {
-  const [, m, d] = date.split('-').map(Number);
-  return `${d} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][m - 1]}`;
+  const [y, m, d] = date.split('-').map(Number);
+  return formatDate(new Date(y, m - 1, d), { day: 'numeric', month: 'short' });
 };
+
+/** The words over the road of a pop, a shrine's heart or a shrine's refusal. */
+const wordsOf = (e: Effect) => (e.kind === 'heal' ? t('healPop') : e.text ? t(e.text, { n: e.n ?? 0 }) : '');
+
+/** A dare in the herald's words: "Stomp 2 foes". */
+const dareText = (d: Dare) => t(DARE_TEXT[d.kind], { n: d.goal });
 
 const textStyle = (size: number, color: string = C.goldPale, stroke = 3): Phaser.Types.GameObjects.Text.TextStyle => ({
   fontFamily: FONT,
@@ -108,6 +118,7 @@ export class GameScene extends Phaser.Scene {
   private stageText!: Phaser.GameObjects.Text;
   private distText!: Phaser.GameObjects.Text;
   private coinText!: Phaser.GameObjects.Text;
+  private coinsLabel!: Phaser.GameObjects.Text;
   private bestText!: Phaser.GameObjects.Text;
   private medalText!: Phaser.GameObjects.Text;
   private streakText!: Phaser.GameObjects.Text;
@@ -246,26 +257,28 @@ export class GameScene extends Phaser.Scene {
   /** The game-over panel: the run's result, the boon missed at the last checkpoint, and the shop. */
   private drawGameOver() {
     const s = this.state;
-    const boons = (Object.entries(s.ranks) as [BoonId, number][]).map(([id, n]) => (n > 1 ? `${BOONS[id].name} x${n}` : BOONS[id].name));
-    const pairs = pairsOf(s.ranks).map((id) => PAIRS.find((p) => p.id === id)!.name);
-    const missed = s.missed ? `\nMissed at the last checkpoint: ${BOONS[s.missed].name}.` : '';
-    const beaten = s.bosses ? ` Gatekeepers beaten: ${s.bosses}.` : '';
-    const dragon = s.dragonBeaten ? ' The dragon is beaten!' : '';
-    const best = s.daily ? `Best on the daily course of ${dayName(s.daily)}: ${s.best} m.` : `Best run: ${s.best} m.`;
-    const crown = s.crown ? ' Crowned at the Dragon\'s Keep.' : '';
+    const boons = (Object.entries(s.ranks) as [BoonId, number][]).map(([id, n]) => (n > 1 ? t('boonRanks', { boon: t(BOONS[id].name), n }) : t(BOONS[id].name)));
+    const pairs = pairsOf(s.ranks).map((id) => t(PAIRS.find((p) => p.id === id)!.name));
+    const missed = s.missed ? `\n${t('missed', { boon: t(BOONS[s.missed].name) })}` : '';
+    const fell = [
+      t('fellAt', { m: metres(s.distance), stage: s.stage, coins: s.coins, bank: s.bank }),
+      s.bosses ? t('gatesBeaten', { n: s.bosses }) : '',
+      s.dragonBeaten ? t('dragonDown') : '',
+    ];
+    const best = [s.daily ? t('bestDaily', { date: dayName(s.daily), n: s.best }) : t('bestRun', { n: s.best }), s.crown ? t('crowned') : ''];
+    const join = (parts: string[]) => parts.filter(Boolean).join(' ');
     this.gameOverText.setText(
-      `Fell at ${metres(s.distance)} m on stage ${s.stage}, with ${s.coins} coins (${s.bank} banked).${beaten}${dragon}\n${best}${crown}\n\n` +
-        `Boons: ${boons.length ? boons.join(', ') : 'none'}${pairs.length ? ` (${pairs.join(', ')})` : ''}${missed}`,
+      `${join(fell)}\n${join(best)}\n\n` + `${t('boons', { boons: boons.length ? boons.join(', ') : t('boonsNone') })}${pairs.length ? ` (${pairs.join(', ')})` : ''}${missed}`,
     );
-    const missedName = s.missed ? BOONS[s.missed].name : '';
+    const missedName = s.missed ? t(BOONS[s.missed].name) : '';
     let line: string;
     let canBuy = false;
-    if (s.pending) line = `The next ordinary run starts with ${BOONS[s.pending].name}.`;
-    else if (!s.missed) line = 'Reach a checkpoint to be offered a boon for sale.';
-    else if (!forSale(s.missed)) line = `${missedName} is not for sale.`;
-    else if (s.bank < BOON_PRICE) line = `${missedName} is for sale for ${BOON_PRICE} coins; you have ${s.bank}.`;
+    if (s.pending) line = t('shopPending', { boon: t(BOONS[s.pending].name) });
+    else if (!s.missed) line = t('shopReach');
+    else if (!forSale(s.missed)) line = t('shopNotForSale', { boon: missedName });
+    else if (s.bank < BOON_PRICE) line = t('shopTooDear', { boon: missedName, price: BOON_PRICE, n: s.bank });
     else {
-      line = `Start the next run with ${missedName} for ${BOON_PRICE} coins.`;
+      line = t('shopBuy', { boon: missedName, price: BOON_PRICE });
       canBuy = true;
     }
     this.shopText.setText(line);
@@ -388,8 +401,8 @@ export class GameScene extends Phaser.Scene {
     const line = this.add.graphics();
     for (let dy = 22; dy < 150 - 80 - 8; dy += 5) line.lineStyle(1, N.ink).lineBetween(0, dy, 0, dy + 2.5);
     const scroll = this.add.image(0, 0, 'banderole');
-    const title = this.add.text(0, -7, 'Wayside shrine', { fontFamily: FONT, fontSize: '13px', fontStyle: 'bold', color: '#2f7a4a' }).setOrigin(0.5);
-    const rule = this.add.text(0, 8, `Slide in: ${SHRINE.price} coins = 1 heart`, { fontFamily: FONT, fontSize: '11.5px', fontStyle: 'italic', color: C.ink }).setOrigin(0.5);
+    const title = this.add.text(0, -7, t('shrineName'), { fontFamily: FONT, fontSize: '13px', fontStyle: 'bold', color: '#2f7a4a' }).setOrigin(0.5);
+    const rule = this.add.text(0, 8, t('shrineRule', { n: SHRINE.price }), { fontFamily: FONT, fontSize: '11.5px', fontStyle: 'italic', color: C.ink }).setOrigin(0.5);
     const label = this.add.container(0, y, [line, scroll, title, rule]).setDepth(4.2);
     return { image, label };
   }
@@ -564,15 +577,16 @@ export class GameScene extends Phaser.Scene {
         seen.add(e.id);
         let word = this.words.get(e.id);
         if (!word) {
-          const big = (e.text ?? '').length > 6;
+          const words = wordsOf(e);
+          const big = words.length > 6;
           const style =
             e.kind === 'pop' ? textStyle(big ? 22 : 24, C.goldLight, 4) : e.kind === 'heal' ? textStyle(18, '#7fd08a', 4) : { ...textStyle(15, C.goldPale, 4), fontStyle: 'bold italic' };
-          word = this.add.text(0, 0, e.kind === 'heal' ? '+1 heart' : e.text ?? '', style).setOrigin(0.5).setDepth(6.5);
+          word = this.add.text(0, 0, words, style).setOrigin(0.5).setDepth(6.5);
           this.words.set(e.id, word);
         }
         const rise = still || e.kind === 'refuse' ? 0 : 30 * t;
         // A pop sits up by the knight's sword hand, clear of the helm.
-        const lift = e.kind === 'pop' && (e.text ?? '').length <= 6 ? 34 : 0;
+        const lift = e.kind === 'pop' && word.text.length <= 6 ? 34 : 0;
         word.setPosition(x + lift, y - lift - rise).setAlpha(t < 0.7 ? 1 : (1 - t) / 0.3);
         if (e.kind === 'heal') {
           g.lineStyle(4, N.ink, 1 - t).strokeCircle(x, GROUND_Y - 40, 20 + 20 * t);
@@ -651,7 +665,7 @@ export class GameScene extends Phaser.Scene {
     this.distText = this.add.text(719, 21, '', textStyle(17, C.goldPale, 0)).setOrigin(0.5).setDepth(d + 1);
     this.add.image(765, 21, 'coin-0').setDepth(d + 1);
     this.coinText = this.add.text(794, 21, '', textStyle(17, C.goldLight, 0)).setOrigin(0.5).setDepth(d + 1);
-    this.add.text(815, 22, 'Coins', { fontFamily: FONT, fontSize: '13px', fontStyle: 'italic', color: C.frost }).setOrigin(0, 0.5).setDepth(d + 1);
+    this.coinsLabel = this.add.text(815, 22, t('coins'), { fontFamily: FONT, fontSize: '13px', fontStyle: 'italic', color: C.frost }).setOrigin(0, 0.5).setDepth(d + 1);
     this.bestText = this.add.text(905, 21, '', textStyle(16, C.frost, 0)).setOrigin(0.5).setDepth(d + 1);
 
     // The streak chip: a gold medallion with the multiplier, its name, and a bar to the next one.
@@ -683,10 +697,11 @@ export class GameScene extends Phaser.Scene {
     const max = stats(s).maxHearts;
     while (this.hearts.length < max) this.hearts.push(this.add.image(23 + this.hearts.length * 36, 19, 'heart-full').setDepth(d + 1));
     this.hearts.forEach((h, i) => h.setVisible(i < max).setTexture(i < s.hearts ? 'heart-full' : 'heart-empty'));
-    this.stageText.setText(`tage ${s.stage}`);
-    this.distText.setText(`${metres(s.distance)} m`);
+    this.stageText.setText(t('stageRest', { n: s.stage }));
+    this.distText.setText(t('metres', { n: metres(s.distance) }));
     this.coinText.setText(`${s.coins}`);
-    this.bestText.setText(`Best ${s.best} m`);
+    const best = t('best', { n: s.best });
+    if (this.bestText.text !== best) this.fitBest(best);
 
     // The coin streak, capped by the road.
     const cap = streakMax(s.road);
@@ -695,8 +710,8 @@ export class GameScene extends Phaser.Scene {
     const maxed = mult >= cap;
     const into = maxed ? STREAK.step : s.streak % STREAK.step;
     this.medalText.setText(`x${mult}`);
-    this.streakText.setText(`Streak x${mult}`);
-    this.streakNext.setText(maxed ? 'max' : `${STREAK.step - into} to x${mult + 1}`);
+    this.streakText.setText(t('streak', { n: mult }));
+    this.streakNext.setText(maxed ? t('streakMax') : t('streakNext', { n: STREAK.step - into, mult: mult + 1 }));
     const bar = { x: c.x + 25, y: c.y + 15, w: 42, h: 4 };
     g.fillStyle(N.vellumDark).fillRect(bar.x, bar.y, bar.w, bar.h);
     g.fillStyle(N.verm).fillRect(bar.x, bar.y, (bar.w * into) / STREAK.step, bar.h);
@@ -730,13 +745,14 @@ export class GameScene extends Phaser.Scene {
     }
     g.fillStyle(N.lapis).fillCircle(at(tr.at), ly, 4).lineStyle(1, N.ink).strokeCircle(at(tr.at), ly, 4);
     g.fillStyle(N.goldLight).fillCircle(at(tr.at), ly, 1.5);
-    const bossName = s.boss ? bossOf(s.boss).name : '';
-    this.trackNext.setText(s.boss && bossStands(s) ? (s.boss.kind === 'dragon' ? 'Beat the dragon' : 'Beat the Gatekeeper') : tr.next > 0 ? `Next banner ${tr.next} m` : 'At the banner');
+    const dragon = s.boss?.kind === 'dragon';
+    this.trackNext.setText(s.boss && bossStands(s) ? t(dragon ? 'dragonTrack' : 'gateTrack') : tr.next > 0 ? t('trackNext', { n: tr.next }) : t('trackAt'));
 
     // The stage's tag (its ground and road), and the boss's stomps left as pips while it stands.
-    const daily = s.daily ? 'Daily · ' : '';
+    const daily = s.daily ? t('daily') : '';
+    const tag = (...parts: string[]) => parts.filter(Boolean).join(' · ');
     if (s.boss && bossStands(s)) {
-      this.tagText.setText(`${daily}${bossName}`);
+      this.tagText.setText(tag(daily, t(bossOf(s.boss).name)));
       const hp = bossOf(s.boss).hp;
       for (let i = 0; i < hp; i++) {
         const x = TAG.x + TAG.w - 16 - i * 16;
@@ -745,19 +761,18 @@ export class GameScene extends Phaser.Scene {
         g.fillStyle(i < s.boss.hp ? N.madder : N.vellumDark).fillPoints(pip, true).lineStyle(1, N.ink).strokePoints(pip, true);
       }
     } else {
-      const t = TERRAIN[s.terrain];
-      const road = s.road ? ` · ${ROADS[s.road].name.replace('The ', '')}` : '';
-      this.tagText.setText(`${daily}${s.boss ? `${bossName} is beaten` : s.rockfall ? `${t.name} · Rockfall!` : t.name}${road}`);
+      const ground = s.boss ? t(dragon ? 'dragonBeatenTag' : 'gateBeatenTag') : t(TERRAIN[s.terrain].name);
+      this.tagText.setText(tag(daily, ground, s.rockfall && !s.boss ? t('rockfall') : '', s.road ? t(ROADS[s.road].short) : ''));
     }
-    this.trackBest.setText(tr.best === 0 ? 'First run' : tr.at > tr.best ? 'New best!' : `Best ${tr.best} m`);
+    this.trackBest.setText(tr.best === 0 ? t('trackFirst') : tr.at > tr.best ? t('trackNewBest') : t('best', { n: tr.best }));
 
     // The herald's dare and its progress.
     const dare = s.dare;
     this.dareTag.setVisible(!!dare);
     this.dareText.setVisible(!!dare);
     if (dare) {
-      const progress = dare.done ? 'met!' : dare.failed ? 'lost' : dare.kind === 'nohit' ? 'so far' : dare.kind === 'streak' ? `x${dare.progress}` : `${dare.progress}/${dare.goal}`;
-      const words = `Dare: ${dareText(dare)} · ${progress}`;
+      const progress = dare.done ? t('dareMet') : dare.failed ? t('dareLost') : dare.kind === 'nohit' ? t('dareSoFar') : dare.kind === 'streak' ? `x${dare.progress}` : `${dare.progress}/${dare.goal}`;
+      const words = t('dareTag', { dare: dareText(dare), progress });
       if (this.dareText.text !== words) this.dareText.setText(words);
       this.dareText.setColor(dare.done ? '#2f7a4a' : dare.failed ? C.iron : C.madder);
     }
@@ -770,16 +785,32 @@ export class GameScene extends Phaser.Scene {
     const intoStage = s.distance - s.stageStart;
     const shown = s.stage > 1 && s.phase === 'running' ? (TITLE_UNTIL - intoStage) / 200 : 0;
     if (shown > 0) {
-      const dragon = s.boss?.kind === 'dragon';
-      const name = dragon ? "The Dragon's Keep" : s.boss ? 'The Gatekeeper bars the road' : TERRAIN[s.terrain].name;
+      const name = t(dragon ? 'dragonTitle' : s.boss ? 'gateTitle' : TERRAIN[s.terrain].name);
+      const rule = TERRAIN[s.terrain].rule;
+      // The dare reads on after a colon, so it starts small: "The herald's dare: stomp 2 foes".
+      const dare = s.dare ? dareText(s.dare) : '';
       const lines = s.boss
-        ? [dragon ? 'Stomp the dragon three times: jump its fire, slide under its tail' : 'Stomp it three times; jump its barrels, slide under its axes']
-        : [TERRAIN[s.terrain].rule, s.road ? `${ROADS[s.road].name}: ${s.road === 'high' ? 'more coins, more foes' : 'the safer way'}` : '', s.rockfall ? 'A rockfall follows: every hit or skid lets it gain' : '', s.dare ? `The herald's dare: ${dareText(s.dare).toLowerCase()}` : ''];
-      const rule = lines.filter(Boolean).join('\n');
-      if (this.titleName.text !== `Stage ${s.stage}: ${name}`) this.titleName.setText(`Stage ${s.stage}: ${name}`);
-      if (this.titleRule.text !== rule) this.titleRule.setText(rule);
+        ? [t(dragon ? 'dragonTitleRule' : 'gateTitleRule')]
+        : [rule ? t(rule) : '', s.road ? t(ROADS[s.road].title) : '', s.rockfall ? t('rockfallTitle') : '', dare ? t('dareTitle', { dare: dare[0].toLowerCase() + dare.slice(1) }) : ''];
+      const rules = lines.filter(Boolean).join('\n');
+      const title = t('stageTitle', { n: s.stage, name });
+      if (this.titleName.text !== title) this.titleName.setText(title);
+      if (this.titleRule.text !== rules) this.titleRule.setText(rules);
     }
     this.title.setAlpha(Phaser.Math.Clamp(shown, 0, 1));
+  }
+
+  /**
+   * The best run in the HUD, centred where it was designed to sit, but moved left of the edge and
+   * shrunk where a longer text (German's "Rekord") would run into the coins' label.
+   */
+  private fitBest(words: string) {
+    const text = this.bestText.setText(words).setScale(1);
+    const left = this.coinsLabel.x + this.coinsLabel.width + 8;
+    const right = VIEW.w - 10;
+    const scale = Math.min(1, (right - left) / text.width);
+    const half = (text.width * scale) / 2;
+    text.setScale(scale).setX(Phaser.Math.Clamp(905, left + half, right - half));
   }
 
   private createTitle() {
@@ -792,24 +823,24 @@ export class GameScene extends Phaser.Scene {
   private drawCaption() {
     const s = this.state;
     let line: string;
-    if (s.phase === 'over') line = 'Here the knight falleth, and the goblins make merry.';
-    else if (s.phase === 'checkpoint') line = s.roads ? 'Here the knight looketh out from the banner, and chooseth the road ahead.' : 'Here the knight resteth by the banner, and chooseth a boon.';
-    else if (s.stage === 1 && s.distance < HINT_UNTIL) line = 'Here the knight setteth out upon the old road at dusk.';
+    if (s.phase === 'over') line = t('captionOver');
+    else if (s.phase === 'checkpoint') line = t(s.roads ? 'captionRoads' : 'captionBoons');
+    else if (s.stage === 1 && s.distance < HINT_UNTIL) line = t('captionStart');
     else if (s.boss && bossStands(s)) {
       const b = s.boss;
       const thrown = s.traps.find((t) => MISSILES.includes(t.kind) && t.x + t.w > s.distance - 20);
       if (b.kind === 'dragon') {
-        if (b.mode === 'wait') line = 'Here the dragon of the Keep awaiteth the knight upon the road.';
-        else if (b.mode === 'tired' && b.ms <= 0) line = 'Here the dragon tireth and loweth its head: now leap upon it!';
-        else if (thrown?.kind === 'fire') line = 'Here the dragon breatheth fire along the road.';
-        else if (thrown?.kind === 'tail') line = 'Here the dragon lasheth its tail at the knight.';
-        else line = 'Here the knight giveth chase to the dragon.';
-      } else if (b.mode === 'wait') line = 'Here the Gatekeeper barreth the road, and will not let the knight pass.';
-      else if (b.mode === 'tired' && b.ms <= 0) line = 'Here the Gatekeeper tireth: now leap upon his helm!';
-      else if (thrown?.kind === 'barrel') line = 'Here the Gatekeeper rolleth a barrel at the knight.';
-      else if (thrown?.kind === 'axe') line = 'Here the Gatekeeper hurleth an axe at the knight.';
-      else line = 'Here the knight giveth chase to the Gatekeeper.';
-    } else if (s.rockfall && s.rockfall.x > s.distance - RUNNER.w / 2 - 110) line = 'Here the rockfall gaineth upon the knight: run clean!';
+        if (b.mode === 'wait') line = t('captionDragonWait');
+        else if (b.mode === 'tired' && b.ms <= 0) line = t('captionDragonTired');
+        else if (thrown?.kind === 'fire') line = t('captionDragonFire');
+        else if (thrown?.kind === 'tail') line = t('captionDragonTail');
+        else line = t('captionDragonChase');
+      } else if (b.mode === 'wait') line = t('captionGateWait');
+      else if (b.mode === 'tired' && b.ms <= 0) line = t('captionGateTired');
+      else if (thrown?.kind === 'barrel') line = t('captionGateBarrel');
+      else if (thrown?.kind === 'axe') line = t('captionGateAxe');
+      else line = t('captionGateChase');
+    } else if (s.rockfall && s.rockfall.x > s.distance - RUNNER.w / 2 - 110) line = t('captionRockfall');
     else {
       const ahead = (x: number) => x > s.distance && x < s.distance + 700;
       const trap = s.traps.find((t) => t.x + t.w > s.distance - 20 && t.x < s.distance + 700);
@@ -822,27 +853,27 @@ export class GameScene extends Phaser.Scene {
       ]
         .filter((n): n is { x: number; kind: string } => !!n)
         .sort((a, b) => a.x - b.x)[0];
-      const lines: Record<string, string> = {
-        spikes: 'Here the knight leapeth the spikes.',
-        pit: 'Here the knight leapeth the pit.',
-        blade: 'Here the knight stoopeth under the hanging log.',
-        flames: 'Here the knight leapeth the flame.',
-        goblin: 'Here the knight leapeth the goblin, that awaiteth him.',
-        bat: 'Here the bat flieth at the knight.',
-        wall: 'Here the knight climbeth the old wall.',
-        shrine: 'Here standeth a wayside shrine, where a knight may be healed.',
-        barrel: 'Here the knight leapeth the rolling barrel.',
-        axe: 'Here the knight stoopeth under the flying axe.',
-        fire: "Here the knight leapeth the dragon's fire.",
-        tail: "Here the knight stoopeth under the dragon's tail.",
+      const lines: Record<string, TextKey> = {
+        spikes: 'captionSpikes',
+        pit: 'captionPit',
+        blade: 'captionBlade',
+        flames: 'captionFlames',
+        goblin: 'captionGoblin',
+        bat: 'captionBat',
+        wall: 'captionWall',
+        shrine: 'captionShrine',
+        barrel: 'captionBarrel',
+        axe: 'captionAxe',
+        fire: 'captionFire',
+        tail: 'captionTail',
       };
-      const onward: Record<GameState['terrain'], string> = {
-        road: 'Here the knight runneth on toward the next banner.',
-        ice: 'Here the knight skateth over the frozen pass.',
-        marsh: 'Here the knight wadeth through the fen.',
-        wind: 'Here the knight leaneth into the wind.',
+      const onward: Record<GameState['terrain'], TextKey> = {
+        road: 'captionRoad',
+        ice: 'captionIce',
+        marsh: 'captionMarsh',
+        wind: 'captionWind',
       };
-      line = next ? lines[next.kind] : s.boss ? `Here the knight passeth the fallen ${s.boss.kind === 'dragon' ? 'dragon, and weareth the crown' : 'Gatekeeper'}.` : onward[s.terrain];
+      line = t(next ? lines[next.kind] : s.boss ? (s.boss.kind === 'dragon' ? 'captionPastDragon' : 'captionPastGate') : onward[s.terrain]);
     }
     if (this.caption.text !== line) this.caption.setText(line);
   }
@@ -850,8 +881,8 @@ export class GameScene extends Phaser.Scene {
   private createHint() {
     const g = this.add.graphics();
     g.lineStyle(2, N.goldPale, 0.5).lineBetween(FRAME.x, TAP_SPLIT_Y, FRAME.x + FRAME.w, TAP_SPLIT_Y);
-    const up = this.add.text(VIEW.w / 2 + 100, TAP_SPLIT_Y - 70, 'Tap up here to jump\n(Space / Up)', textStyle(19, C.goldPale, 4)).setOrigin(0.5).setAlign('center');
-    const down = this.add.text(VIEW.w / 2 + 100, TAP_SPLIT_Y + 70, 'Tap down here to slide\n(Down / S)', textStyle(19, C.goldPale, 4)).setOrigin(0.5).setAlign('center');
+    const up = this.add.text(VIEW.w / 2 + 100, TAP_SPLIT_Y - 70, t('hintJump'), textStyle(19, C.goldPale, 4)).setOrigin(0.5).setAlign('center');
+    const down = this.add.text(VIEW.w / 2 + 100, TAP_SPLIT_Y + 70, t('hintSlide'), textStyle(19, C.goldPale, 4)).setOrigin(0.5).setAlign('center');
     this.hint = this.add.container(0, 0, [g, up, down]).setDepth(UI_DEPTH - 5);
   }
 
@@ -860,7 +891,7 @@ export class GameScene extends Phaser.Scene {
     const dim = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, N.ink, 0.6).setInteractive();
     const panel = this.add.image(VIEW.w / 2, VIEW.h / 2, 'over-panel');
     const title = this.add
-      .text(VIEW.w / 2, VIEW.h / 2 - 160, 'The knight has fallen', { fontFamily: FONT, fontSize: '30px', fontStyle: 'bold', color: C.madder })
+      .text(VIEW.w / 2, VIEW.h / 2 - 160, t('fallen'), { fontFamily: FONT, fontSize: '30px', fontStyle: 'bold', color: C.madder })
       .setOrigin(0.5);
     this.gameOverText = this.add
       .text(VIEW.w / 2, VIEW.h / 2 - 70, '', { fontFamily: FONT, fontSize: '16px', color: C.ink, align: 'center', wordWrap: { width: 540 } })
@@ -868,10 +899,10 @@ export class GameScene extends Phaser.Scene {
     this.shopText = this.add
       .text(VIEW.w / 2, VIEW.h / 2 + 32, '', { fontFamily: FONT, fontSize: '16px', fontStyle: 'italic', color: C.lapis, align: 'center', wordWrap: { width: 540 } })
       .setOrigin(0.5);
-    this.buyButton = makeButton(this, VIEW.w / 2, VIEW.h / 2 + 80, `Buy for ${BOON_PRICE} coins`, () => this.buy(), 400);
-    this.armouryButton = makeButton(this, VIEW.w / 2 - 190, VIEW.h / 2 + 150, 'Armoury', () => this.openArmoury());
-    const again = makeButton(this, VIEW.w / 2, VIEW.h / 2 + 150, 'Run again', () => this.restart(null));
-    const daily = makeButton(this, VIEW.w / 2 + 190, VIEW.h / 2 + 150, 'Daily course', () => this.restart(today()));
+    this.buyButton = makeButton(this, VIEW.w / 2, VIEW.h / 2 + 80, t('buy', { n: BOON_PRICE }), () => this.buy(), 400);
+    this.armouryButton = makeButton(this, VIEW.w / 2 - 190, VIEW.h / 2 + 150, t('armoury'), () => this.openArmoury());
+    const again = makeButton(this, VIEW.w / 2, VIEW.h / 2 + 150, t('runAgain'), () => this.restart(null));
+    const daily = makeButton(this, VIEW.w / 2 + 190, VIEW.h / 2 + 150, t('dailyCourse'), () => this.restart(today()));
     this.gameOver = this.add
       .container(0, 0, [dim, panel, title, this.gameOverText, this.shopText, this.buyButton, this.armouryButton, again, daily])
       .setDepth(UI_DEPTH + 20)
@@ -905,38 +936,38 @@ export class GameScene extends Phaser.Scene {
     const cy = VIEW.h / 2;
     const dim = this.add.rectangle(cx, cy, VIEW.w, VIEW.h, N.ink, 0.4).setInteractive();
     const panel = this.add.image(cx, cy, 'armoury-panel');
-    const title = this.add.text(cx, cy - h / 2 + 42, 'The Armoury', { fontFamily: FONT, fontSize: '28px', fontStyle: 'bold', color: C.madder }).setOrigin(0.5);
+    const title = this.add.text(cx, cy - h / 2 + 42, t('armouryTitle'), { fontFamily: FONT, fontSize: '28px', fontStyle: 'bold', color: C.madder }).setOrigin(0.5);
     this.armouryBank = this.add.text(cx, cy - h / 2 + 76, '', { fontFamily: FONT, fontSize: '15px', fontStyle: 'italic', color: C.lapis }).setOrigin(0.5);
     const parts: Phaser.GameObjects.GameObject[] = [dim, panel, title, this.armouryBank];
     ARMOURY_IDS.forEach((id, i) => {
       const y = cy + rowY[i];
       const item = ARMOURY[id];
       const icon = this.add.image(cx - w / 2 + 64, y, armouryIcon(id));
-      const name = this.add.text(cx - w / 2 + 108, y - 16, item.name, { fontFamily: FONT, fontSize: '19px', fontStyle: 'bold', color: C.madder }).setOrigin(0, 0.5);
-      const text = this.add.text(cx - w / 2 + 108, y + 10, item.text, { fontFamily: FONT, fontSize: '14px', color: C.ink, wordWrap: { width: 270 } }).setOrigin(0, 0.5);
+      const name = this.add.text(cx - w / 2 + 108, y - 16, t(item.name), { fontFamily: FONT, fontSize: '19px', fontStyle: 'bold', color: C.madder }).setOrigin(0, 0.5);
+      const text = this.add.text(cx - w / 2 + 108, y + 10, t(item.text), { fontFamily: FONT, fontSize: '14px', color: C.ink, wordWrap: { width: 270 } }).setOrigin(0, 0.5);
       const level = this.add.text(cx + 150, y - 28, '', { fontFamily: FONT, fontSize: '13px', fontStyle: 'italic', color: '#2f7a4a' }).setOrigin(0.5);
       const buy = makeButton(this, cx + 150, y + 6, '', () => this.buyArmoury(id), 190);
-      const full = this.add.text(cx + 150, y + 6, 'Fully forged', { fontFamily: FONT, fontSize: '16px', fontStyle: 'bold italic', color: C.lapis }).setOrigin(0.5);
+      const full = this.add.text(cx + 150, y + 6, t('fullyForged'), { fontFamily: FONT, fontSize: '16px', fontStyle: 'bold italic', color: C.lapis }).setOrigin(0.5);
       parts.push(icon, name, text, level, buy, full);
       this.armouryRows.push({ id, level, buy, full });
     });
-    const back = makeButton(this, cx, cy + h / 2 - 44, 'Back', () => this.armouryPanel.setVisible(false));
+    const back = makeButton(this, cx, cy + h / 2 - 44, t('back'), () => this.armouryPanel.setVisible(false));
     parts.push(back);
     this.armouryPanel = this.add.container(0, 0, parts).setDepth(UI_DEPTH + 30).setVisible(false);
   }
 
   private drawArmoury() {
     const s = this.state;
-    this.armouryBank.setText(`${s.bank} coins banked. Every ordinary run after starts with what you forge here.`);
+    this.armouryBank.setText(t('armouryBank', { n: s.bank }));
     for (const row of this.armouryRows) {
       const lv = s.armoury[row.id];
       const max = ARMOURY[row.id].prices.length;
       const price = nextPrice(s.armoury, row.id);
-      row.level.setText(`Level ${lv} of ${max}`);
+      row.level.setText(t('level', { n: lv, max }));
       row.full.setVisible(price === null);
       row.buy.setVisible(price !== null).setAlpha(price !== null && s.bank >= price ? 1 : 0.45);
       const caption = row.buy.getAt(1) as Phaser.GameObjects.Text;
-      const words = price === null ? '' : `Forge for ${price} coins`;
+      const words = price === null ? '' : t('forge', { n: price });
       if (caption.text !== words) caption.setText(words);
     }
   }

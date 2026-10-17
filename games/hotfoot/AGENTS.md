@@ -19,6 +19,8 @@ in.
   boon cards, eight boons plus the Field Dressing filler, a game-over panel with a coin shop and
   "Run again", a fading controls hint on stage 1, and progress saved between runs (best distance,
   banked coins and a bought boon).
+- Languages: every text on screen and How to play follow the hub's Language setting: British
+  English, US English and German (`src/i18n/`).
 - Loop extras: a **coin streak** (every 10 coins taken in a row without a hit raise a multiplier, up
   to x5, shown in a HUD chip, with "+N" pops and a trail of gold stars; any hit resets it), a
   **wayside shrine** once a stage from stage 2 (slide into it to trade 15 run coins for a heart when
@@ -76,16 +78,27 @@ in.
 
 ### File map
 
-- `src/howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips), handed to
-  `setupGame(game, { howToPlay })` in `src/main.ts`; update it when the controls or the first round change.
+- `src/howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips) in British
+  English, US English (the same with "Armory", made by `us`) and German, picked with `byLanguage`
+  and handed to `setupGame(game, { howToPlay })` in `src/main.ts`; update every language when the
+  controls or the first round change.
+- `src/i18n.ts` and `src/i18n/`: the game's texts (`shared/i18n.ts`). `i18n/en.ts` is the British
+  English source, `i18n/de.ts` the German (with `keepEnglish` for the texts that stay the same) and
+  `i18n/en-US.ts` only "Armory". `t(key, vars)` shows a text in the hub's language; `TextKey` types
+  the keys. Every text on screen goes through `t`, and the catalogues (`BOONS`, `PAIRS`,
+  `ARMOURY`, `BOSS`, `ROADS`, `TERRAIN`, `DARE_TEXT`) and the sim's word effects name their texts
+  by key, never by English words. Numbers come out formatted for the language (2,000 m or
+  2.000 m), and the daily course's date through `formatDate`.
 - `src/main.ts`: creates the `Phaser.Game` (960x540, `Scale.FIT`, `pixelArt: false`) with `BootScene`
   then `GameScene`, calls `setupGame(game)` and `setupScaling(game)` (see Screen scaling), and puts
   `game` on `window` in dev builds.
 - `src/game/state.ts`: `GameState` and its parts (`Trap`, `Ledge`, `Shrine`, `Boss` with its
   `BossKind`, `Rockfall`, `Dare`, `Coin`, `Effect`, `Runner`), the terrains (`Terrain`, `TERRAIN`
-  names and rules, `ICE`, `MARSH`, `WIND`, `terrainOf`), the roads (`Road`, `ROADS` names and card
-  text, `ROAD` (first stage, streak and gap changes), `streakMax`), the dares (`DareKind`, `DARE`
-  (first stage, reward, kinds in turn, goals), `dareOf`, `dareText`), the rockfall (`ROCK`,
+  names and rules as `TextKey`s, `ICE`, `MARSH`, `WIND`, `terrainOf`), the roads (`Road`, `ROADS`:
+  name, short name for the tag, card text, the card's kind line and the stage title's line, all
+  `TextKey`s; `ROAD` (first stage, streak and gap changes), `streakMax`), the dares (`DareKind`, `DARE`
+  (first stage, reward, kinds in turn, goals), `dareOf`, `DARE_TEXT` (each kind's text key, filled
+  in with the goal as `n`)), the rockfall (`ROCK`,
   `isRockStage`), `DRAGON_AT` and `HARDER` (the run after the dragon), `BOSS_EVERY` and
   `isBossStage`, the daily course's randomness (`rand`, `seedOf`, `today`), the physics and size
   constants, `BOON_PRICE`, `STREAK` and `streakMult` (the coin multiplier, capped by the road),
@@ -102,11 +115,13 @@ in.
   the dare's progress and reward (`dared`, `meetDare`), shrines (`visitShrines`) and damage
   (`hurt`, which also takes `'wall'` for a ledge's side, `'boss'` and `'rock'`, resets the streak,
   loses a no-hit dare and, with Bulwark, knocks foes away on a block).
-- `src/game/boss.ts`: both bosses' numbers (`BOSS` by `BossKind`, each with its `missiles`),
+- `src/game/boss.ts`: both bosses' numbers (`BOSS` by `BossKind`, each with its name as a
+  `TextKey` and its `missiles`),
   `bossOf`, `MISSILES` (the thrown trap kinds), `moveBoss` (its modes and throws) and `bossStands`.
-- `src/game/pairs.ts`: the `PAIRS` table (`PairId`, name, the two boons, text), `pairsOf` (the
+- `src/game/pairs.ts`: the `PAIRS` table (`PairId`, name, the two boons, text, and the `pop` words
+  shown when the pair is made, all `TextKey`s but the boons), `pairsOf` (the
   pairs completed by a run's ranks) and `pairFor` (a boon's pair and partner, for the card hint).
-- `src/game/armoury.ts`: the `ARMOURY` table (name, text, price per level), `ARMOURY_EACH` (what a
+- `src/game/armoury.ts`: the `ARMOURY` table (name and text as `TextKey`s, price per level), `ARMOURY_EACH` (what a
   level adds), `noArmoury` and `nextPrice`.
 - `src/game/course.ts`: `buildStage` lays out a stage's pieces (`Piece`: each trap kind, `ledge`
   and `steps`) and their coins (more on the High Road), from `SHRINE.from` its shrine
@@ -117,7 +132,8 @@ in.
   dragon's, `buildBossStage` lays out a boss's stage (the road terrain, no road), `nextStage` moves
   to the next stage (and sets its speed and terrain), and `roadChoiceDue` says whether a checkpoint
   asks for a road (the next stage is ordinary and at least `ROAD.from`).
-- `src/game/boons.ts`: the `BOONS` table (name, text, `maxRank`, `filler`, `cursed`), `BOON_IDS`,
+- `src/game/boons.ts`: the `BOONS` table (name and text as `TextKey`s, `maxRank`, `filler`,
+  `cursed`), `BOON_IDS`,
   `forSale` and `CURSE` (from which stage, how often).
 - `src/game/save.ts`: `loadProgress` and `saveProgress` (best distance, banked coins, the bought
   boon, the armoury, the daily best, the crown).
@@ -153,12 +169,15 @@ in.
 - `src/art/icons.ts`: one 64x64 icon per boon (`iconTexture`), per road (`roadIcon`), the
   armoury's (`armouryIcon`: the purse's own, Iron Heart and Lodestone Charm reuse Hearty Ale's and
   Lodestone's), and the HUD's `heart-full` and `heart-empty`.
-- `src/art/hud.ts`: `bakeHud` (the `hud-band`, the illuminated `initial`, the `streak-chip` and its
+- `src/art/hud.ts`: `bakeHud` (the `hud-band`, the illuminated `initial` (the first letter of
+  "Stage", `stageInitial`: S, or E for German "Etappe"; the HUD writes the rest, `stageRest`), the `streak-chip` and its
   `medallion`, the `track-strip`, the `tag-strip` and `dare-strip`), `bakePanel` (vellum panels:
   cards, the title strip, the game-over panel) and `bakeButton`.
 - `shared/setupGame.ts` and `shared/settings.ts` (outside the game folder): the hub's settings.
   `main.ts` imports `setupGame`; `state.ts` imports `byDifficulty`. `shared/scaling.ts`:
   `main.ts` imports `setupScaling`, `ink.ts` imports `sharpRes`, `GameScene` imports `viewPoint`.
+  `shared/i18n.ts`: `i18n.ts` imports `translator`, `howToPlay.ts` `byLanguage`, the `i18n/`
+  files `Translation`, and `GameScene` `formatDate`.
 
 ### How it runs
 
@@ -427,7 +446,15 @@ key (see Hub settings).
 
 ## Making common changes
 
-- Add a boon: add the id to `BoonId` and an entry to `BOONS` in `src/game/boons.ts`; apply its
+- Add or change a text: its key in `src/i18n/en.ts`, the German in `src/i18n/de.ts` (the build
+  fails without it) and, when the US spelling differs (armoury), the US one in `src/i18n/en-US.ts`;
+  run `node scripts/check-translations.mjs`. German runs longer than English: the tightest spots
+  are the HUD's best run (`fitBest` shrinks it clear of the coins' label), the stage's tag on a
+  daily High Road rockfall stage, the shrine's banderole, the road cards' kind line and the stage
+  title's lines, so check a new text with `?lang=de`.
+
+- Add a boon: add the id to `BoonId` and an entry to `BOONS` in `src/game/boons.ts` (its name and
+  text in the `i18n/` files); apply its
   effect in `stats` in `src/game/state.ts` (or in `pick` for a one-off effect like heart and mend);
   draw it in `ICONS` in `src/art/icons.ts` (the `Record` type forces this); update the README table.
 - Add a trap or foe: add the kind to `TrapKind` and a `TRAP_SPAN` entry (pits are special-cased
@@ -463,7 +490,7 @@ key (see Hub settings).
 - Add a boon pair: a `PAIRS` entry in `pairs.ts`, a flag in `stats` and its effect in `sim.ts`
   (as `GLIDE`, `HOARD` and `BULWARK_REACH` are applied). The card hint and the game-over listing
   follow on their own.
-- Add a dare: a `DareKind` with its goal in `DARE.goals`, its words in `dareText`, a place in
+- Add a dare: a `DareKind` with its goal in `DARE.goals`, its words in `DARE_TEXT` (and the `i18n/` files), a place in
   `DARE.kinds` (the order by stage) and a `dared(s, kind, n)` call where it moves on, or a check
   at the checkpoint like the no-hit dare's. Its progress string is in `drawHud`.
 - Tune the roads: `ROAD` in `state.ts` (first stage, streak cap, gaps), the pool in `piecesOf`,

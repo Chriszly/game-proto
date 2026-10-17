@@ -1,6 +1,7 @@
 import type { HowToPlay } from '../../../shared/howToPlay';
+import { byLanguage } from '../../../shared/i18n';
 
-export const howToPlay: HowToPlay = {
+const en: HowToPlay = {
   goal:
     'Lay track and fly the wyrm to carry goods between villages before orders run out. ' +
     'A late order costs a heart, and losing all three ends the game.',
@@ -33,3 +34,40 @@ export const howToPlay: HowToPlay = {
     'The festival earns a medal for its time and hearts left; your best medal gives the next game a boon.',
   ],
 };
+
+const de: HowToPlay = {
+  goal:
+    'Lege Gleise und lass den Lindwurm Waren zwischen Dörfern tragen, bevor die Aufträge ablaufen. ' +
+    'Ein verspäteter Auftrag kostet ein Herz, und wer alle drei verliert, hat verloren.',
+  controls: [
+    { input: 'Felder neben der Strecke anklicken, antippen oder überziehen', action: 'Dort Gleise legen' },
+    { input: 'Einen Auftrag anklicken oder antippen', action: 'Den Lindwurm schicken, ihn abzuholen und zu liefern' },
+    { input: 'Eine Weiche anklicken oder antippen', action: 'Sie umstellen, um den Lindwurm zu lenken' },
+    { input: 'Ein Dorf anklicken oder antippen', action: 'Einen freien Lindwurm mit Geschenken (5 Münzen) schicken, um es aufzuheitern (ab Runde 2)' },
+    { input: 'Abbauen', action: 'Umschalter: Gleise antippen, um sie für die Hälfte ihrer Kosten abzubauen' },
+    { input: 'Schlicht', action: 'Umschalter: Gleise legen, die nur ans Stück davor anschließen' },
+    { input: 'Ausbau-Tasten', action: 'Flinke Flügel, Goldhort oder einen zweiten Lindwurm kaufen' },
+    { input: 'Depot, dann ein Dorf', action: 'Dort ein Depot bauen: Waren warten halb so schnell und laden sofort' },
+    { input: 'Eine Freibriefkarte', action: 'Die Regeln der Runde wählen (ab Runde 3)' },
+  ],
+  loop: [
+    'Lege Gleise vom Horst nach Millbrook und Ashford.',
+    'Tippe den Getreideauftrag an, um den Lindwurm nach Millbrook zu schicken.',
+    'Der Lindwurm lädt das Getreide und trägt es nach Ashford.',
+    'Die Lieferung bringt Münzen und beendet die Runde.',
+    'Jede Runde kommt ein neues Dorf dazu, also verlängere die Strecke bis dorthin.',
+  ],
+  tips: [
+    'Gleise kosten 2 Münzen auf Wiese, 4 im Wald, 6 für eine Brücke und 20 für einen Tunnel durch einen Berg.',
+    'Der Lindwurm zieht zwei Wagen und kann also zwei Aufträge zugleich tragen.',
+    'Eine Weiche sperrt einen Arm einer Abzweigung, und der Lindwurm fährt nie durch einen gesperrten Arm.',
+    'Der Lindwurm wird beim Fliegen hungrig und kehrt zum Fressen in den Horst zurück.',
+    'Dörfer schmollen, wenn du sie vernachlässigst, und ein verbittertes Dorf kostet dich ein Herz.',
+    'Ab Runde 3 können Fluten und Steinschläge Gleise auf Brücken und an Berghängen zerstören; Tunnel sind sicher.',
+    'Runde 9 ist das Fest in Kettlecross: zehn Lieferungen gewinnen das Spiel.',
+    'Das Fest bringt eine Medaille für Zeit und übrige Herzen; deine beste Medaille gibt dem nächsten Spiel einen Bonus.',
+  ],
+};
+
+/** US English spells every text here the same as British English. */
+export const howToPlay: HowToPlay = byLanguage({ en, 'en-US': en, de });

@@ -2,18 +2,21 @@
 // the hero may accept or refuse. An accepted omen makes the wave harder in its own way and pays
 // more experience for it; a refused one (or one left alone until the break ends) changes nothing.
 
+import type { TextKey } from '../i18n';
+
 export type OmenId = 'night' | 'blood' | 'plunder';
 
 export interface Omen {
-  name: string;
+  /** Name and text, keys of `i18n/en.ts`. */
+  name: TextKey;
   /** What it does to the wave. */
-  text: string;
+  text: TextKey;
 }
 
 export const OMENS: Record<OmenId, Omen> = {
-  night: { name: 'Night', text: 'Foes stay unseen, and out of the ranger’s aim, until they reach mid-field' },
-  blood: { name: 'Blood Moon', text: 'Twice as many elite foes' },
-  plunder: { name: 'Rich Plunder', text: 'Foes drop 50% more coins, but walk 25% faster' },
+  night: { name: 'nightName', text: 'nightText' },
+  blood: { name: 'bloodName', text: 'bloodText' },
+  plunder: { name: 'plunderName', text: 'plunderText' },
 };
 
 export const OMEN_IDS = Object.keys(OMENS) as OmenId[];

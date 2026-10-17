@@ -4,6 +4,7 @@ import { iconTexture, roadIcon } from '../art/icons';
 import { C, N } from '../art/ink';
 import { BOONS, type BoonId } from '../game/boons';
 import { pairFor } from '../game/pairs';
+import { t } from '../i18n';
 import { ROADS, type Road } from '../game/state';
 import { CARDS, FONT, UI_DEPTH, VIEW } from '../scenes/layout';
 
@@ -54,11 +55,11 @@ export class BoonCards {
     this.cards = [];
     this.root.setVisible(!!key);
     if (choices) {
-      this.title.setText(`Checkpoint ${stage}! Choose a boon`);
+      this.title.setText(t('checkpointTitle', { n: stage }));
       const xs = CARDS.xs[choices.length] ?? CARDS.xs[2];
       choices.forEach((id, i) => this.addCard(id, xs[i], ranks[id] ?? 0, ranks));
     } else if (roads) {
-      this.title.setText(`Choose your road for stage ${stage + 1}`);
+      this.title.setText(t('roadTitle', { n: stage + 1 }));
       roads.forEach((road, i) => this.addRoadCard(road, CARDS.xs[2][i]));
     }
   }
@@ -86,26 +87,27 @@ export class BoonCards {
     const b = BOONS[id];
     const { w, h } = CARDS;
     const scene = this.scene;
-    const rankText = b.cursed ? 'Cursed: a gift with a price' : b.filler ? 'Heal' : rank === 0 ? (b.maxRank === 1 ? 'New' : `New, ${b.maxRank} ranks`) : `Rank ${rank + 1} of ${b.maxRank}`;
+    const rankText = b.cursed ? t('cursed') : b.filler ? t('heal') : rank === 0 ? (b.maxRank === 1 ? t('newBoon') : t('newRanks', { n: b.maxRank })) : t('rank', { n: rank + 1, max: b.maxRank });
     const ranked = scene.add
       .text(0, -h / 2 + 148, rankText, { fontFamily: FONT, fontSize: '14px', fontStyle: b.cursed ? 'bold italic' : 'italic', color: b.cursed ? C.madder : rank === 0 ? '#2f7a4a' : C.lapis })
       .setOrigin(0.5);
     const text = scene.add
-      .text(0, -h / 2 + 172, b.text, { fontFamily: FONT, fontSize: '17px', color: C.ink, align: 'center', wordWrap: { width: w - 44 } })
+      .text(0, -h / 2 + 172, t(b.text), { fontFamily: FONT, fontSize: '17px', color: C.ink, align: 'center', wordWrap: { width: w - 44 } })
       .setOrigin(0.5, 0);
     const parts: Phaser.GameObjects.GameObject[] = [ranked, text];
     // The hint of a pair: what holding this boon with its partner unlocks.
     const pair = pairFor(id);
     if (pair) {
       const held = (ranks[pair.partner] ?? 0) > 0;
-      const hint = held ? `With ${BOONS[pair.partner].name}: ${pair.pair.name}, ${pair.pair.text}` : `Pairs with ${BOONS[pair.partner].name}: ${pair.pair.text}`;
+      const partner = t(BOONS[pair.partner].name);
+      const hint = held ? t('pairHeld', { partner, pair: t(pair.pair.name), text: t(pair.pair.text) }) : t('pairHint', { partner, text: t(pair.pair.text) });
       parts.push(
         scene.add
           .text(0, h / 2 - 16, hint, { fontFamily: FONT, fontSize: '11.5px', fontStyle: held ? 'bold italic' : 'italic', color: held ? '#2f7a4a' : C.lapis, align: 'center', wordWrap: { width: w - 40 } })
           .setOrigin(0.5, 1),
       );
     }
-    this.card(id, x, b.cursed ? 'card-cursed' : 'card', iconTexture(id), b.name, parts, () => this.onPick(id));
+    this.card(id, x, b.cursed ? 'card-cursed' : 'card', iconTexture(id), t(b.name), parts, () => this.onPick(id));
   }
 
   private addRoadCard(road: Road, x: number) {
@@ -113,11 +115,11 @@ export class BoonCards {
     const { w, h } = CARDS;
     const scene = this.scene;
     const kind = scene.add
-      .text(0, -h / 2 + 148, road === 'high' ? 'Bolder: more coins, more foes' : 'Safer: fewer foes, a shrine', { fontFamily: FONT, fontSize: '14px', fontStyle: 'italic', color: road === 'high' ? C.madder : '#2f7a4a' })
+      .text(0, -h / 2 + 148, t(r.kind), { fontFamily: FONT, fontSize: '14px', fontStyle: 'italic', color: road === 'high' ? C.madder : '#2f7a4a' })
       .setOrigin(0.5);
     const text = scene.add
-      .text(0, -h / 2 + 172, r.text, { fontFamily: FONT, fontSize: '17px', color: C.ink, align: 'center', wordWrap: { width: w - 44 } })
+      .text(0, -h / 2 + 172, t(r.text), { fontFamily: FONT, fontSize: '17px', color: C.ink, align: 'center', wordWrap: { width: w - 44 } })
       .setOrigin(0.5, 0);
-    this.card(road, x, 'card', roadIcon(road), r.name, [kind, text], () => this.onRoad(road));
+    this.card(road, x, 'card', roadIcon(road), t(r.name), [kind, text], () => this.onRoad(road));
   }
 }
