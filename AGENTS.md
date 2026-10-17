@@ -113,7 +113,9 @@ and tries to link it to the repo (the run summary says if the link has to be mad
   and it is played by the shared `.github/workflows/playthrough.yml`, which finds every
   `games/<name>/e2e/playthrough.spec.ts` on its own, so a new game needs no workflow of its own. Give it a `favicon.svg` linked from its `index.html`: the orange bear from the hub's
   `favicon.svg` (same ears, head, dot eyes and muzzle, 32x32 viewBox) with one prop for the game,
-  like Apothecary's plague doctor hat and beak. Then add a card for it in the hub's `index.html` and in `e2e/hub.spec.ts`, a
+  like Apothecary's plague doctor hat and beak. Then add a card for it in the hub's `index.html` (with its text and cover description in
+  `shared/i18n/en.ts` and `de.ts` as `<game>Card` and `<game>Cover`, marked `data-i18n` and
+  `data-i18n-alt`) and in `e2e/hub.spec.ts`, a
   Playwright project in `playwright.config.ts`, a row in the README's table of games and a row in
   the table of guides above. Add its Game label (its folder name, description `Game: <Name>`) to `.github/labels.json` (the Labels
   workflow creates it on main), its Project (title, short description and README) to `.github/projects.json`, its name to the
@@ -139,6 +141,25 @@ and tries to link it to the repo (the run summary says if the link has to be mad
   README. Skip camera shake and flashes, and hold blinking or jittering effects still, when
   `settings.reduceMotion` is on. A new setting goes into `shared/settings.ts` (its type, default and
   `SETTING_FIELDS` row, which the hub panel shows on its own) and then into every game.
+- **Speak the player's language.** The hub's Language setting (`shared/settings.ts`) picks British
+  English (`en`, the source), US English (`en-US`) or German (`de`), and `shared/i18n.ts` translates
+  with it: `translator({ en, 'en-US': enUS, de })` gives a `t(key, vars)` for a set of texts kept in
+  an `i18n/` folder, `en.ts` with the British English source, `de.ts` typed
+  `Translation<typeof en>` (so `npm run build` fails on a missing key) and `en-US.ts` typed
+  `Partial<Translation<typeof en>>` with only the texts spelled differently in US English. Texts take
+  `{name}` placeholders and plural forms (`{ one: '{n} play', other: '{n} plays' }`); show numbers
+  and dates with `formatNumber` and `formatDate` (or `toLocaleString(locale())`), never by hand. The
+  shared texts (hub page, Settings panel, loading, start, pause and How to play screens) are in
+  `shared/i18n/`; the hub page marks its text with `data-i18n="key"` (`data-i18n-alt` for an
+  image's alt text). A game moves its own text into `games/<name>/src/i18n/` one game per PR, like
+  screen scaling, and from then on gives every new text its German (and, where the spelling
+  differs, US English) entry in the same PR; game logic compares ids, never translated text. The
+  **Translations** workflow (`.github/workflows/translations.yml`, running
+  `scripts/check-translations.mjs`) fails a PR whose translation has other placeholders or plural
+  forms than English, or is left the same as English (a text that really is the same goes in that
+  file's `keepEnglish`), and warns where a text is much longer than English; run
+  `node scripts/check-translations.mjs` before pushing. Playthroughs and other tests run in the
+  browser's US English.
 - **Play counts come for free.** `setupGame` also bumps the game's public play counter
   (`shared/playCount.ts`, keyed by the game's folder name) and the hub shows the count on its card,
   so a new game needs nothing for it. Tests never count: browser automation skips it.

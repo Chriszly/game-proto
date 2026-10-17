@@ -36,6 +36,15 @@ The hub's **Settings** button opens the settings every game shares. They are sav
 
 ![The hub's settings](docs/screenshots/hub-settings.webp)
 
+- **Language**: English (UK), English (US) or Deutsch, picked from the browser's language at first.
+  The hub switches at once; the start, pause and How to play screens of every game follow the next
+  time it opens, and so does each game whose own text has been translated. Numbers and dates match
+  the language: 1,234.5 and 17/10/2026 in British English, 1,234.5 and 10/17/2026 in US English,
+  1.234,5 and 17.10.2026 in German. Adding `?lang=de` (or `en`, `en-US`) to a URL shows that
+  language without changing the setting.
+
+  ![The hub and its settings in German](docs/screenshots/hub-language.webp)
+
 - **Difficulty**: Easy, Normal or Hard. Normal is each game as designed; each game picks what it scales:
 
   | Game | Easy | Hard |
@@ -104,7 +113,7 @@ npm run preview   # serve the production build
 - `shared/`: the settings every game shares (`settings.ts`), the hub's Settings panel
   (`settingsPanel.ts`), `setupGame.ts`, which each game calls to apply the frame cap, the FPS readout, reduced motion and full screen
   and to add the loading, start and pause screens (`startScreen.ts`) with the game's How to play (`howToPlay.ts`), `watch.ts`, the Watch AI panel and its `?watch` flag,
-  `playCount.ts`, the play counters (see Play counts), and `scaling.ts`, which keeps a game sharp from a phone to a 4K screen (`grep -l setupScaling games/*/src/main.ts` lists the games that use it).
+  `playCount.ts`, the play counters (see Play counts), `i18n.ts` with the shared texts in `i18n/`, the translations and number and date formats (see Language), and `scaling.ts`, which keeps a game sharp from a phone to a 4K screen (`grep -l setupScaling games/*/src/main.ts` lists the games that use it).
 - `e2e/hub.spec.ts`: checks that the hub lists every game, that each card opens it, and that the
   settings are saved and reach a game, that a game starts and pauses, and that the cards show play counts. `e2e/screens.spec.ts` opens each game that uses
   `shared/scaling.ts` on an upright and a sideways phone, a tablet, a laptop and a 4K screen.

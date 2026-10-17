@@ -1,0 +1,25 @@
+name: Translations
+
+# Checks every translation against its British English source on each PR: placeholders, plural
+# forms and texts left in English fail it, a much longer text gets a warning on the file
+# (scripts/check-translations.mjs). Missing keys already fail `npm run build`.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: translations-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  translations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+      - run: node scripts/check-translations.mjs

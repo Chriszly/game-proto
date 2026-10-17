@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { settings } from './settings';
+import { language, setLanguage, t } from './i18n';
 import { addStartScreen } from './startScreen';
 import type { HowToPlay } from './howToPlay';
 import { countPlay } from './playCount';
@@ -16,6 +17,7 @@ const SLACK_MS = 1;
  * on the game's public play counter (`playCount.ts`).
  */
 export function setupGame(game: Phaser.Game, options: { howToPlay?: HowToPlay } = {}) {
+  setLanguage(language());
   capFrameRate(game, settings.fps);
   if (settings.showFps) showFps(game);
   if (settings.reduceMotion) reduceMotion();
@@ -40,7 +42,7 @@ function addFullscreen() {
     '<svg viewBox="0 0 16 16" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">' +
     '<path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg>';
   const label = (on: boolean) => {
-    const text = on ? 'Exit full screen (F)' : 'Full screen (F)';
+    const text = t(on ? 'exitFullScreenButton' : 'fullScreenButton');
     button.title = text;
     button.setAttribute('aria-label', text);
     button.setAttribute('aria-pressed', String(on));
@@ -102,8 +104,8 @@ function showFps(game: Phaser.Game) {
     'font:12px ui-monospace,monospace;color:#f3e9d2;background:rgba(0,0,0,0.55)';
   document.body.append(label);
   game.events.on(Phaser.Core.Events.POST_RENDER, () => {
-    const fps = Math.round(game.loop.actualFps);
-    if (label.textContent !== `${fps} FPS`) label.textContent = `${fps} FPS`;
+    const text = t('fpsReadout', { fps: Math.round(game.loop.actualFps) });
+    if (label.textContent !== text) label.textContent = text;
   });
 }
 

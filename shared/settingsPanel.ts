@@ -1,14 +1,20 @@
 import { DEFAULTS, SETTING_FIELDS, SETTINGS_KEY, loadSettings, saveSettings, type Settings } from './settings';
+import { language, setLanguage, t } from './i18n';
 
 /**
  * Builds the hub's Settings panel inside `root` from `SETTING_FIELDS`, so a new setting shows up
- * without touching the page. Changes save at once and apply the next time a game opens.
+ * without touching the page. Changes save at once and apply the next time a game opens, except
+ * the language, which the hub switches to at once: `onLanguage` is called to translate the page.
  */
-export function mountSettingsPanel(root: HTMLElement) {
+export function mountSettingsPanel(root: HTMLElement, onLanguage: () => void = () => {}) {
   let current = loadSettings();
   const set = (patch: Partial<Settings>) => {
     current = { ...current, ...patch };
     saveSettings(current);
+    if (current.language !== language()) {
+      setLanguage(current.language);
+      onLanguage();
+    }
     render();
   };
 
@@ -18,35 +24,43 @@ export function mountSettingsPanel(root: HTMLElement) {
 
   const actions = document.createElement('div');
   actions.className = 'settings-actions';
-  actions.append(
-    action('Restore defaults', 'restore-defaults', () => set(DEFAULTS)),
-    action('Reset all progress', 'reset-progress', () => {
-      if (!confirm('Erase the saved progress of every game? Settings are kept.')) return;
-      clearProgress();
-    }),
-  );
+  const restore = action('restore-defaults', () => set(DEFAULTS));
+  const reset = action('reset-progress', () => {
+    if (!confirm(t('resetProgressConfirm'))) return;
+    clearProgress();
+  });
+  actions.append(restore, reset);
   root.append(actions);
 
   function render() {
+    restore.textContent = t('restoreDefaults');
+    reset.textContent = t('resetProgress');
     rows.replaceChildren(
       ...SETTING_FIELDS.map((field) => {
         const row = document.createElement('div');
         row.className = 'setting';
         const name = document.createElement('div');
         name.className = 'setting-name';
-        name.textContent = field.label;
+        const label = t(field.label);
+        name.textContent = label;
         const hint = document.createElement('div');
         hint.className = 'setting-hint';
-        hint.textContent = field.hint;
+        hint.textContent = t(field.hint);
         const choices = document.createElement('div');
         choices.className = 'setting-choices';
         choices.setAttribute('role', 'group');
-        choices.setAttribute('aria-label', field.label);
-        const options = field.kind === 'toggle' ? [{ value: false, label: 'Off' }, { value: true, label: 'On' }] : field.options;
+        choices.setAttribute('aria-label', label);
+        const options =
+          field.kind === 'toggle'
+            ? [
+                { value: false, text: t('off') },
+                { value: true, text: t('on') },
+              ]
+            : field.options.map((o) => ({ value: o.value, text: 'text' in o ? o.text : t(o.label) }));
         for (const option of options) {
           const button = document.createElement('button');
           button.type = 'button';
-          button.textContent = option.label;
+          button.textContent = option.text;
           const chosen = current[field.key] === option.value;
           button.setAttribute('aria-pressed', String(chosen));
           button.addEventListener('click', () => set({ [field.key]: option.value } as Partial<Settings>));
@@ -60,11 +74,10 @@ export function mountSettingsPanel(root: HTMLElement) {
   render();
 }
 
-function action(label: string, id: string, onClick: () => void) {
+function action(id: string, onClick: () => void) {
   const button = document.createElement('button');
   button.type = 'button';
   button.id = id;
-  button.textContent = label;
   button.addEventListener('click', onClick);
   return button;
 }

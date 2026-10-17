@@ -1,3 +1,5 @@
+import { t } from './i18n';
+
 /**
  * Play counts per game, kept by Abacus, a free open source counter service that needs no account.
  * Each game has one public counter, `<game folder>` in the `NAMESPACE` namespace: `countPlay` adds
@@ -46,7 +48,8 @@ export function showPlayCounts(cards: Iterable<HTMLAnchorElement>) {
         if (typeof value !== 'number' || value < 1) return;
         const line = document.createElement('p');
         line.className = 'plays';
-        line.textContent = `${value.toLocaleString('en')} ${value === 1 ? 'play' : 'plays'}`;
+        line.dataset.plays = String(value);
+        line.textContent = t('plays', { n: value });
         card.append(line);
       })
       .catch(() => {});
