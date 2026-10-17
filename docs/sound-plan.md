@@ -400,6 +400,9 @@ and shakers.
 Notes:
 - Throws are the busiest sound, and 2x speed doubles them, so play at most one per golem kind
   every 70 ms.
+- Done: `games/golem-garden/src/audio.ts`, played from `GameScene` (see the game's AGENTS.md).
+  Build and waves are two songs (96 and 132 BPM); the harvest sting has one part per star count.
+  Also a hedge-planted rustle, a level-up pitch per level and a bud chime rising per bud.
 
 ### Hotfoot
 Endless auto-runner with boons and bosses; lively manuscript adventure.
