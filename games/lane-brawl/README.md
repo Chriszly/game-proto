@@ -185,49 +185,49 @@ each team sends one healthy champion into the jungle for a brute's buff on its h
 watchstone it lacks. Ranged champions keep their distance from melee ones, and every champion keeps
 its finisher (R) for champions and the beast and its escape for when it falls back.
 
-![The pick screen: fifteen classes in three rows, from the Warden to the Gunslinger, the Automaton, the Tinker, the Wolfkin and the Bruin, each card with a random name, class and role and passive; the line under the cards tells about the one under the pointer](docs/screenshots/playthrough-1-pick.png)
+![The pick screen: fifteen classes in three rows, from the Warden to the Gunslinger, the Automaton, the Tinker, the Wolfkin and the Bruin, each card with a random name, class and role and passive; the line under the cards tells about the one under the pointer](docs/screenshots/playthrough-1-pick.webp)
 
-![The five steampunk and beast classes in one brawl by the river: Gunslinger, Automaton, Tinker, Wolfkin and Bruin](docs/screenshots/new-cast.png)
+![The five steampunk and beast classes in one brawl by the river: Gunslinger, Automaton, Tinker, Wolfkin and Bruin](docs/screenshots/new-cast.webp)
 
-![Fog of war: the Warden by the river sees a circle around him; the far bank and the jungle beyond lie in a dark fog, on the map and the minimap](docs/screenshots/fog-of-war.png)
+![Fog of war: the Warden by the river sees a circle around him; the far bank and the jungle beyond lie in a dark fog, on the map and the minimap](docs/screenshots/fog-of-war.webp)
 
-![The Warden takes on the ember brute in its clearing with the glowing ring, a boar camp below; the jungle past his sight is fogged](docs/screenshots/jungle-brute.png)
+![The Warden takes on the ember brute in its clearing with the glowing ring, a boar camp below; the jungle past his sight is fogged](docs/screenshots/jungle-brute.webp)
 
-![The Warden stands by a watchstone on its river island: the ring fills as he takes it for blue](docs/screenshots/watchstone.png)
+![The Warden stands by a watchstone on its river island: the ring fills as he takes it for blue](docs/screenshots/watchstone.webp)
 
-![The guardian beast in its pit hurls a rock while the Warden and the Mage come to fight it](docs/screenshots/upgrade-beast.png)
+![The guardian beast in its pit hurls a rock while the Warden and the Mage come to fight it](docs/screenshots/upgrade-beast.webp)
 
-![The Warden waits in the tall grass by the middle lane, half see-through: the red Mage walking past can't see him](docs/screenshots/upgrade-bush.png)
+![The Warden waits in the tall grass by the middle lane, half see-through: the red Mage walking past can't see him](docs/screenshots/upgrade-bush.webp)
 
-![Red's mid inhibitor falls to rubble with a notice; the red Nexus loses its ward while the top inhibitor keeps its ring. The bag shows four items and the Dash button counts down](docs/screenshots/upgrade-inhibitor.png)
+![Red's mid inhibitor falls to rubble with a notice; the red Nexus loses its ward while the top inhibitor keeps its ring. The bag shows four items and the Dash button counts down](docs/screenshots/upgrade-inhibitor.webp)
 
-![Blue super minions march the middle lane after red's mid inhibitor fell, bigger and ringed in gold](docs/screenshots/upgrade-super-minions.png)
+![Blue super minions march the middle lane after red's mid inhibitor fell, bigger and ringed in gold](docs/screenshots/upgrade-super-minions.webp)
 
-![The first objective: a card names the red mid tower, a marker floats over it and a star marks it on the minimap](docs/screenshots/loop-objective.png)
+![The first objective: a card names the red mid tower, a marker floats over it and a star marks it on the minimap](docs/screenshots/loop-objective.webp)
 
-![A last hit pops a coin with +24g; the next minion the Warden would kill is outlined in gold, and the chip by the gold counter shows an x4 streak](docs/screenshots/loop-last-hit.png)
+![A last hit pops a coin with +24g; the next minion the Warden would kill is outlined in gold, and the chip by the gold counter shows an x4 streak](docs/screenshots/loop-last-hit.webp)
 
-![Level 2 offers Wide Slam or Stun Slam in the bottom bar; the Q box carries the gold diamond](docs/screenshots/playthrough-4-upgrade.png)
+![Level 2 offers Wide Slam or Stun Slam in the bottom bar; the Q box carries the gold diamond](docs/screenshots/playthrough-4-upgrade.webp)
 
-![The shop: twelve items in four columns, the parts first, with what each builds into or from](docs/screenshots/playthrough-2-shop.png)
+![The shop: twelve items in four columns, the parts first, with what each builds into or from](docs/screenshots/playthrough-2-shop.webp)
 
-![The shop with the Vision Ward card in its fourth row: a 75 gold consumable, carried two at a time; the top bar has the Recall home button right of the clock, and the V button sits beside D and H](docs/screenshots/round2-shop-ward.png)
+![The shop with the Vision Ward card in its fourth row: a 75 gold consumable, carried two at a time; the top bar has the Recall home button right of the clock, and the V button sits beside D and H](docs/screenshots/round2-shop-ward.webp)
 
-![A vision ward planted at the edge of a bush by the middle lane: a stake with a blue gem eye and three pips, its dashed sight ring round it, and the red Gunslinger hiding in the grass shown by it](docs/screenshots/round2-ward.png)
+![A vision ward planted at the edge of a bush by the middle lane: a stake with a blue gem eye and three pips, its dashed sight ring round it, and the red Gunslinger hiding in the grass shown by it](docs/screenshots/round2-ward.webp)
 
-![The Warden recalling by the river: a Recalling bar fills under his health bar and the top bar button counts down 1.2 s](docs/screenshots/round2-recall.png)
+![The Warden recalling by the river: a Recalling bar fills under his health bar and the top bar button counts down 1.2 s](docs/screenshots/round2-recall.webp)
 
-![Red's Dunandis carries a BOUNTY 150g label over his bar after four kills; the notice names the streak](docs/screenshots/round2-bounty.png)
+![Red's Dunandis carries a BOUNTY 150g label over his bar after four kills; the notice names the streak](docs/screenshots/round2-bounty.webp)
 
-![Dead at the Nexus with 8 s to respawn: the top bar offers Buy back 150g [X] in gold](docs/screenshots/round2-buyback.png)
+![Dead at the Nexus with 8 s to respawn: the top bar offers Buy back 150g [X] in gold](docs/screenshots/round2-buyback.webp)
 
-![Watch AI with the log open: every champion buys the Healing Flask at 0:00, then wards the river, recalls and buys its build](docs/screenshots/round2-watch-ai-shops.png)
+![Watch AI with the log open: every champion buys the Healing Flask at 0:00, then wards the river, recalls and buys its build](docs/screenshots/round2-watch-ai-shops.webp)
 
-![Ten champions in one brawl by the river: Warden, Witch, Stalker, Lancer and Berserker among them, each under its own name](docs/screenshots/ten-classes.png)
+![Ten champions in one brawl by the river: Warden, Witch, Stalker, Lancer and Berserker among them, each under its own name](docs/screenshots/ten-classes.webp)
 
-![Each ability's own effect: the Warden's Slam splits the ground, the Mage's Meteor falls from the sky, the Priest's Sanctuary raises a column of light](docs/screenshots/skill-looks-1.png)
+![Each ability's own effect: the Warden's Slam splits the ground, the Mage's Meteor falls from the sky, the Priest's Sanctuary raises a column of light](docs/screenshots/skill-looks-1.webp)
 
-![Holding an ability's key shows its range and where it lands: areas, bolt lanes and dash lines](docs/screenshots/aim-indicators.png)
+![Holding an ability's key shows its range and where it lands: areas, bolt lanes and dash lines](docs/screenshots/aim-indicators.webp)
 
 ### Champions
 
@@ -286,7 +286,7 @@ team's roams, jungle trips, retreats, upgrades, kills, towers and inhibitors. Ob
 run in a watched match, so blue gets no extra gold or siege banner, and red deals normal damage
 whatever the difficulty. **Watch another** on the end screen starts the next match.
 
-![Watching the AI play, with the log open](docs/screenshots/watch-ai.png)
+![Watching the AI play, with the log open](docs/screenshots/watch-ai.webp)
 
 ### Difficulty
 

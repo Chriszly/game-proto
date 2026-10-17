@@ -405,12 +405,12 @@ generator (`seeded` in `lowpoly.ts`); `performance.now` only times the bake for 
   (100 s), so neither touches it; keep `BEAST.firstAt` and `GANK.firstAt` past it, and keep the
   bushes off the middle lane's paving and the path to the camp by the red mid tower. Copy them into
   `docs/screenshots/` as `playthrough-1-pick` to `playthrough-4-upgrade` when the look changes.
-  `cover.png` (a copy of `new-cast.png`), `new-cast.png` (the shuffle steered with a fixed
-  `Math.random` sequence so blue fields the five new classes), `ten-classes.png`, `fog-of-war.png`,
-  `jungle-brute.png`, `watchstone.png`, `watch-ai.png` (a `?watch` match at 8x with the log open), `skill-looks-1.png` to
-  `skill-looks-3.png` (every ability's effect, five classes each), `aim-indicators.png`,
-  `home-heal-and-dead-shop.png`, `loop-objective.png`, `loop-last-hit.png` and
-  `upgrade-*.png` and `round2-*.png` (the ward in the shop and planted by a bush, a recall, a
+  `cover.png` (a copy of `new-cast.webp`), `new-cast.webp` (the shuffle steered with a fixed
+  `Math.random` sequence so blue fields the five new classes), `ten-classes.webp`, `fog-of-war.webp`,
+  `jungle-brute.webp`, `watchstone.webp`, `watch-ai.webp` (a `?watch` match at 8x with the log open), `skill-looks-1.webp` to
+  `skill-looks-3.webp` (every ability's effect, five classes each), `aim-indicators.webp`,
+  `home-heal-and-dead-shop.webp`, `loop-objective.webp`, `loop-last-hit.webp` and
+  `upgrade-*.webp` and `round2-*.webp` (the ward in the shop and planted by a bush, a recall, a
   bounty, the buy back button and the watch log of the AI shopping) are staged docs shots (a scratch
   Playwright script that places units through
   `window.game` and lets the match run), not test output. The `loop-*` and `upgrade-*` ones predate

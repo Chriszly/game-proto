@@ -17,7 +17,7 @@ again, and chart the whole isle to bind it into your atlas before a new one wait
 an archipelago, a volcanic isle or a jungle isle. From the third isle a rival surveyor charts
 alongside you, and binding one isle of every kind completes the Royal Atlas.
 
-![Surveying the island](docs/screenshots/island.png)
+![Surveying the island](docs/screenshots/island.webp)
 
 ## How to play
 
@@ -95,9 +95,9 @@ alongside you, and binding one isle of every kind completes the Royal Atlas.
 
 The game saves itself at every step.
 
-![A lookout's viewshed gathering into its tally](docs/screenshots/viewshed.png)
+![A lookout's viewshed gathering into its tally](docs/screenshots/viewshed.webp)
 
-![The start of a voyage](docs/screenshots/playthrough-0-start.png)
+![The start of a voyage](docs/screenshots/playthrough-0-start.webp)
 
 ### What tiles are worth
 
@@ -134,33 +134,33 @@ The game saves itself at every step.
 | Naturalist | Artifacts from caves pay 30 instead of 15 |
 | Boatman | Sea costs nothing, and charted sea can be surveyed on from |
 
-![A chart back at port](docs/screenshots/playthrough-2-chart.png)
+![A chart back at port](docs/screenshots/playthrough-2-chart.webp)
 
-![A wreck, a cave and a storm turned up on the way](docs/screenshots/finds.png)
+![A wreck, a cave and a storm turned up on the way](docs/screenshots/finds.webp)
 
-![A base camp, with survey stations two steps out from it](docs/screenshots/camp.png)
+![A base camp, with survey stations two steps out from it](docs/screenshots/camp.webp)
 
-![The riddle chart's clues in the panel, and a dig that found nothing](docs/screenshots/riddle.png)
+![The riddle chart's clues in the panel, and a dig that found nothing](docs/screenshots/riddle.webp)
 
-![A chart with an artifact and the treasure](docs/screenshots/chart-finds.png)
+![A chart with an artifact and the treasure](docs/screenshots/chart-finds.webp)
 
 A voyage that turned back with supplies left and took the isle past 50%: the unused supplies and
 the milestone are paid with the chart.
 
-![A chart with sell-back and an isle milestone](docs/screenshots/isle-goal.png)
+![A chart with sell-back and an isle milestone](docs/screenshots/isle-goal.webp)
 
 The station that would finish a river, and the bonus once it is charted whole.
 
-![Pointing at the last tile of a river](docs/screenshots/feature-finish-hint.png)
+![Pointing at the last tile of a river](docs/screenshots/feature-finish-hint.webp)
 
-![A river charted whole](docs/screenshots/feature-charted-whole.png)
+![A river charted whole](docs/screenshots/feature-charted-whole.webp)
 
 The rival surveyor on a volcanic isle, with the tiles they charted first flagged, and a chart that
 lost half of three of them while a long commission paid.
 
-![The rival surveyor and their claims](docs/screenshots/rival-surveyor.png)
+![The rival surveyor and their claims](docs/screenshots/rival-surveyor.webp)
 
-![A chart with the rival's tiles and a long commission](docs/screenshots/rival-chart.png)
+![A chart with the rival's tiles and a long commission](docs/screenshots/rival-chart.webp)
 
 ### Upgrades
 
@@ -173,16 +173,16 @@ lost half of three of them while a long commission paid.
 
 The harbor, with the commission board and the hands beside the upgrades.
 
-![The harbor](docs/screenshots/harbor-board-hands.png)
+![The harbor](docs/screenshots/harbor-board-hands.webp)
 
 Once an isle is charted in full, its atlas page shows at the harbor and the next voyage sails to a
 new isle; one page of every kind completes the Royal Atlas.
 
-![The harbor after binding an atlas page](docs/screenshots/atlas.png)
+![The harbor after binding an atlas page](docs/screenshots/atlas.webp)
 
-![The Royal Atlas](docs/screenshots/royal-atlas.png)
+![The Royal Atlas](docs/screenshots/royal-atlas.webp)
 
-![An archipelago, a volcanic isle and a jungle isle, charted in full](docs/screenshots/isle-kinds.png)
+![An archipelago, a volcanic isle and a jungle isle, charted in full](docs/screenshots/isle-kinds.webp)
 
 ## Difficulty
 

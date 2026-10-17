@@ -14,7 +14,7 @@ merchant. Beating the Hollow Queen opens the next depth, a harder run with one m
 best depth reached is saved. Everything is painted in a painterly style, with brush strokes drawn
 in code.
 
-![The map of the Crypt](docs/screenshots/playthrough-0-map.png)
+![The map of the Crypt](docs/screenshots/playthrough-0-map.webp)
 
 ## How to play
 
@@ -31,7 +31,7 @@ in code.
 | Tap a choice | In a mystery room: take one of its two choices |
 | Tap a relic in the top bar | Show its name and what it does |
 
-![Choosing the hero, with the depth ladder open](docs/screenshots/heroes.png)
+![Choosing the hero, with the depth ladder open](docs/screenshots/heroes.webp)
 
 1. **The hero**: a run starts by picking one of two. The **Knight** has 50 health and sets out
    with five Strikes, four Defends, a Bash and a Stoneskin Flask. The **Hunter** has 40 health and
@@ -98,31 +98,31 @@ in code.
     | 3 | The deck starts with a Wound curse |
     | 4 and down | Foes have 20% more health again, and again each depth |
 
-![A Crypt with every kind of room, gold and relics in the top bar](docs/screenshots/map.png)
+![A Crypt with every kind of room, gold and relics in the top bar](docs/screenshots/map.webp)
 
-![A fight with the slime](docs/screenshots/playthrough-1-fight.png)
+![A fight with the slime](docs/screenshots/playthrough-1-fight.webp)
 
-![Picking a card after the fight](docs/screenshots/playthrough-2-reward.png)
+![Picking a card after the fight](docs/screenshots/playthrough-2-reward.webp)
 
-![Resting, tempering or burning a card at a campfire](docs/screenshots/campfire.png)
+![Resting, tempering or burning a card at a campfire](docs/screenshots/campfire.webp)
 
-![Picking the card to temper, shown as it will be](docs/screenshots/campfire-temper.png)
+![Picking the card to temper, shown as it will be](docs/screenshots/campfire-temper.webp)
 
-![Picking the card to burn](docs/screenshots/campfire-remove.png)
+![Picking the card to burn](docs/screenshots/campfire-remove.webp)
 
-![A Hunter's fight: flasks down the left, two powers in play, a Wound in hand and a Grave Knight threatening a curse](docs/screenshots/flasks-and-powers.png)
+![A Hunter's fight: flasks down the left, two powers in play, a Wound in hand and a Grave Knight threatening a curse](docs/screenshots/flasks-and-powers.webp)
 
-![The merchant, with flasks for sale](docs/screenshots/shop.png)
+![The merchant, with flasks for sale](docs/screenshots/shop.webp)
 
-![A mystery room](docs/screenshots/event.png)
+![A mystery room](docs/screenshots/event.webp)
 
-![Curses and powers among the cards to burn at a campfire](docs/screenshots/curses.png)
+![Curses and powers among the cards to burn at a campfire](docs/screenshots/curses.webp)
 
-![An elite with statuses on both sides](docs/screenshots/elite-fight.png)
+![An elite with statuses on both sides](docs/screenshots/elite-fight.webp)
 
-![The descent after the Bone King](docs/screenshots/descend.png)
+![The descent after the Bone King](docs/screenshots/descend.webp)
 
-![The Sunken Tombs](docs/screenshots/act2-map.png)
+![The Sunken Tombs](docs/screenshots/act2-map.webp)
 
 ### Foes
 
@@ -142,11 +142,11 @@ in code.
 | Gargoyle (elite) | 2 | 82 | 50 | Block 16, attack 17, attack 5 three times, curse (Rust) |
 | Hollow Queen (boss) | 2 | 130 | 100 | 4 Poison, attack 15, attack 6 three times and 1 Vulnerable, block 15, grow 3 stronger |
 
-![The Bone King](docs/screenshots/boss.png)
+![The Bone King](docs/screenshots/boss.webp)
 
-![Foes of the Sunken Tombs](docs/screenshots/tombs-foes.png)
+![Foes of the Sunken Tombs](docs/screenshots/tombs-foes.webp)
 
-![The Hollow Queen](docs/screenshots/hollow-queen.png)
+![The Hollow Queen](docs/screenshots/hollow-queen.webp)
 
 ### Cards
 
@@ -210,9 +210,9 @@ Rare cards come from treasure chests, elites, the merchant and the altar.
 | Bone Charm | Every foe starts each fight with 2 Vulnerable |
 | Venom Gland | Poison you apply is 2 higher |
 
-![A treasure chest's rare cards](docs/screenshots/treasure.png)
+![A treasure chest's rare cards](docs/screenshots/treasure.webp)
 
-![Victory over the Hollow Queen at depth 1, with depth 2 opened](docs/screenshots/victory.png)
+![Victory over the Hollow Queen at depth 1, with depth 2 opened](docs/screenshots/victory.webp)
 
 The difficulty, set on the hub page's Settings, changes one thing: foes have 25% less health on Easy and 30% more on Hard.
 

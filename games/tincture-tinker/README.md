@@ -10,7 +10,7 @@ or more of a kind: the matched tiles are gathered for the order, the tiles above
 and new ones drop in from the top, which can set off more matches. Gather everything on the order
 before the moves run out and the potion sells, for coins and one to three stars.
 
-![The first order](docs/screenshots/playthrough-0-order.png)
+![The first order](docs/screenshots/playthrough-0-order.webp)
 
 ## How to play
 
@@ -96,68 +96,68 @@ before the moves run out and the potion sells, for coins and one to three stars.
 Progress (the next order, coins, potions sold, stars, the pantry, the workbench upgrades and the
 royal title) is saved in the browser, after each sale and each tool or upgrade bought.
 
-![A match being gathered](docs/screenshots/playthrough-1-match.png)
+![A match being gathered](docs/screenshots/playthrough-1-match.webp)
 
 A Catalyst on row 7, its row marked with the gold band, and a tile picked to swap:
 
-![A Catalyst and the Journeyman rank](docs/screenshots/catalyst.png)
+![A Catalyst and the Journeyman rank](docs/screenshots/catalyst.webp)
 
 A rush order on a board with corked jars and resin-held tiles:
 
-![Jars, resin and a rush order](docs/screenshots/blockers-rush.png)
+![Jars, resin and a rush order](docs/screenshots/blockers-rush.webp)
 
 An order that forbids mandrake:
 
-![A forbidden ingredient](docs/screenshots/forbidden.png)
+![A forbidden ingredient](docs/screenshots/forbidden.webp)
 
 The four bench tools with the Pestle picked up, and a Bloom (bottom left) next to a Catalyst:
 
-![The bench tools and a Bloom](docs/screenshots/bench-tools.png)
+![The bench tools and a Bloom](docs/screenshots/bench-tools.webp)
 
 The Bloom smashed with the Pestle clears the 3x3 around it; the mandrake and sage it gathers fly to
 the label, the wheat and moonpetal the order doesn't need just pop:
 
-![A Bloom firing](docs/screenshots/bloom.png)
+![A Bloom firing](docs/screenshots/bloom.webp)
 
 The Funnel with its first tile picked, waiting for the second:
 
-![The Funnel](docs/screenshots/funnel.png)
+![The Funnel](docs/screenshots/funnel.webp)
 
 A sale that earns three stars and reaches Journeyman Tinker, unlocking the Amber Cordial:
 
-![A rank reached](docs/screenshots/rank-up.png)
+![A rank reached](docs/screenshots/rank-up.webp)
 
 The fifth order is a royal commission: three potions in turn on one board, with two patches of mould
 on it (bottom left):
 
-![A royal commission](docs/screenshots/royal-commission.png)
+![A royal commission](docs/screenshots/royal-commission.webp)
 
 Its first stage filled: the label turns to the Amber Cordial, the 30 moves left carry over, and the
 mould has crept to a third tile:
 
-![The second stage](docs/screenshots/royal-stage.png)
+![The second stage](docs/screenshots/royal-stage.webp)
 
 Two customers on order 7, a Healing Draught and a Sleeping Tonic, with four rows on the label; the
 pantry put 4 sage and 5 wheat in to start, and the Bloom starter's Bloom sits bottom right:
 
-![Two customers](docs/screenshots/twin-order.png)
+![Two customers](docs/screenshots/twin-order.webp)
 
 The Healing Draught's customer is served first and pays 20 coins more:
 
-![A customer served](docs/screenshots/twin-served.png)
+![A customer served](docs/screenshots/twin-served.webp)
 
 Both served: the result card lists the speed bonus and what went into the pantry (shown at the foot
 of the label), while the mould has crept over much of the left side of the board:
 
-![Mould and the pantry](docs/screenshots/mould-and-pantry.png)
+![Mould and the pantry](docs/screenshots/mould-and-pantry.webp)
 
 The workbench, with one level of Steady hands and the Bloom starter bought:
 
-![The workbench](docs/screenshots/workbench.png)
+![The workbench](docs/screenshots/workbench.webp)
 
 The crown's last order filled: Royal Apothecary, with the total stars on the ribbon:
 
-![Royal Apothecary](docs/screenshots/royal-apothecary.png)
+![Royal Apothecary](docs/screenshots/royal-apothecary.webp)
 
 ### Orders
 
@@ -180,11 +180,11 @@ plain.
 | Starlight Elixir (Master) | 16 moonpetal, 14 sage, 12 wheat | 19 | 75 |
 | Philosopher's Draught (Grand Master) | 18 ember salt, 16 moonpetal, 16 mandrake | 22 | 100 |
 
-![The potion sold](docs/screenshots/playthrough-2-sold.png)
+![The potion sold](docs/screenshots/playthrough-2-sold.webp)
 
 The favicon is the hub's bear with three potions lined up: a match of three.
 
-![The favicon](docs/screenshots/favicon.png)
+![The favicon](docs/screenshots/favicon.webp)
 
 The difficulty, set on the hub page's Settings, changes one thing: each order gives 5 more moves on Easy and 3 fewer on Hard.
 

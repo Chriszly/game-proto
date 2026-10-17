@@ -3,7 +3,7 @@
 A hub of small game prototypes built with [Phaser 4](https://phaser.io), TypeScript and Vite. The
 start page lists the games; each one lives in its own folder under `games/`.
 
-![The hub page](docs/screenshots/hub.png)
+![The hub page](docs/screenshots/hub.webp)
 
 | Game | What it is |
 | --- | --- |
@@ -31,7 +31,7 @@ start page lists the games; each one lives in its own folder under `games/`.
 The hub's **Settings** button opens the settings every game shares. They are saved in the browser
 (`shared/settings.ts`) and apply to a game the next time it opens.
 
-![The hub's settings](docs/screenshots/hub-settings.png)
+![The hub's settings](docs/screenshots/hub-settings.webp)
 
 - **Difficulty**: Easy, Normal or Hard. Normal is each game as designed; each game picks what it scales:
 
@@ -120,7 +120,8 @@ One playthrough workflow (`.github/workflows/playthrough.yml`) plays each game w
 changed, on pull requests only, under a single required `Playthrough` check, and uploads videos and
 screenshots as the `playthrough-<name>` artifact. The Hub workflow runs the hub test, opening each game from its
 card in one job per game, on pull requests only for the games whose folder changed. The Screens workflow checks each game that uses `shared/scaling.ts` on five screens,
-one job per game, on pull requests only for the games whose folder changed. Each CI run also uploads a `game-build` artifact: download it from
+one job per game, on pull requests only for the games whose folder changed. The Screenshots workflow fails a pull request that adds more than 4
+screenshots or images over the size limits (WebP screenshots of at most 200 KB; `npm run screenshots -- <file>` converts one). Each CI run also uploads a `game-build` artifact: download it from
 the run's summary page, unzip it and serve the folder (for example with `npx serve`) to play. Dependabot
 (`.github/dependabot.yml`) opens update PRs: npm weekly, GitHub Actions and the Docker base image
 monthly, with minor and patch updates grouped into one PR. PR Links and the template check skip

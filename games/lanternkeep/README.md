@@ -119,43 +119,43 @@ stone joints, the lanterns have coloured-glass panes and the moths are lace-wing
     - **Chapel Hill**: vespers pay 2 more coins a lantern, but three lanterns in four must burn.
     - **The Market**: close calls and window calls pay double, and oil burns 15% faster.
 
-![The first lantern lit](docs/screenshots/playthrough-1-first-lantern.png)
+![The first lantern lit](docs/screenshots/playthrough-1-first-lantern.webp)
 
-![The herald's order: two close calls asked, one made](docs/screenshots/loop-herald-order.png)
+![The herald's order: two close calls asked, one made](docs/screenshots/loop-herald-order.webp)
 
-![A heavy moth sitting on the left wall's lantern to shield it from a gust](docs/screenshots/loop-gust-shield.png)
+![A heavy moth sitting on the left wall's lantern to shield it from a gust](docs/screenshots/loop-gust-shield.webp)
 
-![A close call just paid on the keep's sconce, and the far left lantern waiting to be saved](docs/screenshots/loop-close-call.png)
+![A close call just paid on the keep's sconce, and the far left lantern waiting to be saved](docs/screenshots/loop-close-call.webp)
 
-![A foggy night: mist over the castle and the plaque saying oil burns faster](docs/screenshots/loop-foggy-night.png)
+![A foggy night: mist over the castle and the plaque saying oil burns faster](docs/screenshots/loop-foggy-night.webp)
 
-![A feast night with bunting, two chains lit amber and a bat coming in from the left](docs/screenshots/loop-feast-chains.png)
+![A feast night with bunting, two chains lit amber and a bat coming in from the left](docs/screenshots/loop-feast-chains.webp)
 
-![A stormy night: rain and a gust coming for the keep's sconce](docs/screenshots/loop-stormy-night.png)
+![A stormy night: rain and a gust coming for the keep's sconce](docs/screenshots/loop-stormy-night.webp)
 
-![A bat flying for the far left lantern, and a moth on its way to chase it off](docs/screenshots/loop-bat-chase.png)
+![A bat flying for the far left lantern, and a moth on its way to chase it off](docs/screenshots/loop-bat-chase.webp)
 
-![A firefly flying on from the far left lantern it lit to light the left tower](docs/screenshots/loop-firefly.png)
+![A firefly flying on from the far left lantern it lit to light the left tower](docs/screenshots/loop-firefly.webp)
 
-![The Great Festival](docs/screenshots/loop-great-festival.png)
+![The Great Festival](docs/screenshots/loop-great-festival.webp)
 
-![A window calling for the left wall's lantern on night 2](docs/screenshots/loop-window-call.png)
+![A window calling for the left wall's lantern on night 2](docs/screenshots/loop-window-call.webp)
 
-![Night 3: the cask is dry, a refill failed and a window calls](docs/screenshots/loop-oil-cask.png)
+![Night 3: the cask is dry, a refill failed and a window calls](docs/screenshots/loop-oil-cask.webp)
 
-![Night 6 with a bell, a beacon and a candle lantern](docs/screenshots/loop-lantern-kinds.png)
+![Night 6 with a bell, a beacon and a candle lantern](docs/screenshots/loop-lantern-kinds.webp)
 
-![The Great Owl warned for the wall's row](docs/screenshots/loop-great-owl-warned.png)
+![The Great Owl warned for the wall's row](docs/screenshots/loop-great-owl-warned.webp)
 
-![The Great Owl sweeping the row and snuffing its lanterns](docs/screenshots/loop-great-owl.png)
+![The Great Owl sweeping the row and snuffing its lanterns](docs/screenshots/loop-great-owl.webp)
 
-![The fifth nightfall's choice of district](docs/screenshots/loop-district-choice.png)
+![The fifth nightfall's choice of district](docs/screenshots/loop-district-choice.webp)
 
-![The Docks](docs/screenshots/loop-docks.png)
+![The Docks](docs/screenshots/loop-docks.webp)
 
-![Chapel Hill on a feast night](docs/screenshots/loop-chapel.png)
+![Chapel Hill on a feast night](docs/screenshots/loop-chapel.webp)
 
-![The Market on a stormy night](docs/screenshots/loop-market.png)
+![The Market on a stormy night](docs/screenshots/loop-market.webp)
 
 ### Upgrades
 
@@ -168,7 +168,7 @@ stone joints, the lanterns have coloured-glass panes and the moths are lace-wing
 | Firefly | One more firefly in the jar | 25, 45 |
 | Cask | One more fill of oil (up to 6) | 3 each |
 
-![A nightfall's tally, the next night's kind and the upgrades, with the cask's card](docs/screenshots/loop-night-panel.png)
+![A nightfall's tally, the next night's kind and the upgrades, with the cask's card](docs/screenshots/loop-night-panel.webp)
 
 The difficulty, set on the hub page's Settings, changes one thing: lanterns burn 26 seconds on
 Easy and 16 on Hard, instead of 20. (A heavy moth's lanterns burn 50% longer on every setting.)

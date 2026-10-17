@@ -130,7 +130,7 @@ Missing or rough:
   hand.
 - Canvas `filter: blur` (the card's soft shadows and the far hills) is ignored by Safari, so those
   edges are hard there.
-- `docs/screenshots/hub-card.png` and `favicon.png` are old captures of the hub card and favicon,
+- `docs/screenshots/hub-card.webp` and `favicon.webp` are old captures of the hub card and favicon,
   not referenced anywhere.
 
 ## Architecture
@@ -305,8 +305,8 @@ seeded generator in `puppet.ts`. Popups, flares and sparks are cosmetic Phaser t
   `MOTH_KINDS`, `LANTERN_SPOTS`, `JAR`, `mothRest`, `gustsFor`, `GUST_WARN_MS` or `CLOSE_CALL`.
 - It saves `playthrough-0-dusk`, `-1-first-lantern`, `-2-gust-shield`, `-3-all-lit` and
   `-4-night` screenshots; copy them into `docs/screenshots/` when the look changes.
-- `cover.png` and `docs/screenshots/loop-herald-order.png`, `loop-gust-shield.png` and
-  `loop-close-call.png` were staged with a scratch Playwright script against the dev server: it
+- `cover.png` and `docs/screenshots/loop-herald-order.webp`, `loop-gust-shield.webp` and
+  `loop-close-call.webp` were staged with a scratch Playwright script against the dev server: it
   sets `state` fields through `window.game` (night 4 at 17 s left, eight lanterns, four moths, a
   warned gust, a queued tap; for the order shot night 3 with the close-call order at 1/2) and
   pushes a `closeCall` event onto `state.events`. Refresh them the same way.

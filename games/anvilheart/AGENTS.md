@@ -337,7 +337,7 @@ capped at `ORDER_TOP`) and the difficulty, reputation and Haggler multipliers on
   round meets none of the round-2 rules: no stars (so prices are unchanged), no trait on the
   first order, a tier 2 sale (no returning hero), and 15s of play (no rust).
 - Its screenshots are `0-forged`, `1-dragging`, `2-merged`, `3-exact-fit` (the sale drag midway,
-  showing the tag) and `4-sold`; copy them to `docs/screenshots/playthrough-*.png`.
+  showing the tag) and `4-sold`; copy them to `docs/screenshots/playthrough-*.webp`.
 - It seeds `Math.random`, so adding or reordering random calls changes orders and looks but must
   not change the first round.
 

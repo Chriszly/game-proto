@@ -103,7 +103,7 @@ three stars each. Run out of tiles or room and the kingdom is finished.
     to finish the kingdom. The castle then pays its bonus, and the best final score and the
     crowns are saved in the browser.
 
-![Hovering a cell beside the castle: the house would score 1 from the forest and join the castle's chain](docs/screenshots/playthrough-1-preview.png)
+![Hovering a cell beside the castle: the house would score 1 from the forest and join the castle's chain](docs/screenshots/playthrough-1-preview.webp)
 
 ### Scoring
 
@@ -124,53 +124,53 @@ three stars each. Run out of tiles or room and the kingdom is finished.
 
 ### The three loop changes
 
-![The decree fulfilled: the third farm on Eastmere's shore pays +8 and a crown, and reaches the goal](docs/screenshots/playthrough-2-decree.png)
+![The decree fulfilled: the third farm on Eastmere's shore pays +8 and a crown, and reaches the goal](docs/screenshots/playthrough-2-decree.webp)
 
-![Neighbour links: the farm pays +2 and the forest +1 into the house](docs/screenshots/playthrough-3-links.png)
+![Neighbour links: the farm pays +2 and the forest +1 into the house](docs/screenshots/playthrough-3-links.webp)
 
-![The round's goal reached: choose a royal gift](docs/screenshots/playthrough-4-gift.png)
+![The round's goal reached: choose a royal gift](docs/screenshots/playthrough-4-gift.webp)
 
-![The windmill won: its button joins the panel, and a farm beside it links +2](docs/screenshots/windmill.png)
+![The windmill won: its button joins the panel, and a farm beside it links +2](docs/screenshots/windmill.webp)
 
-![Island 324 with its first decree](docs/screenshots/island-324.png)
+![Island 324 with its first decree](docs/screenshots/island-324.webp)
 
-![Island 7409 with its first decree](docs/screenshots/island-7409.png)
+![Island 7409 with its first decree](docs/screenshots/island-7409.webp)
 
-![The kingdom is built](docs/screenshots/game-over.png)
+![The kingdom is built](docs/screenshots/game-over.webp)
 
 ### The hand, the castle, omens, trades and clearing woods
 
-![A new kingdom: the hand of three drawn from the pouch (two houses and a tower), the castle on the island and the pouch line](docs/screenshots/playthrough-0-start.png)
+![A new kingdom: the hand of three drawn from the pouch (two houses and a tower), the castle on the island and the pouch line](docs/screenshots/playthrough-0-start.webp)
 
-![Hovering beside the castle: the house's preview shows "castle +1"](docs/screenshots/castle-preview.png)
+![Hovering beside the castle: the house's preview shows "castle +1"](docs/screenshots/castle-preview.webp)
 
-![A road placed: gold beads mark the house, the farm and the road joined to the castle](docs/screenshots/road-chain.png)
+![A road placed: gold beads mark the house, the farm and the road joined to the castle](docs/screenshots/road-chain.webp)
 
-![Round 4: the omen strip warns that Westmere will flood the marked cell when round 5 begins](docs/screenshots/omen-flood.png)
+![Round 4: the omen strip warns that Westmere will flood the marked cell when round 5 begins](docs/screenshots/omen-flood.webp)
 
-![Round 5 begins: the flood took the cell, and a new omen marks a farm](docs/screenshots/omen-struck.png)
+![Round 5 begins: the flood took the cell, and a new omen marks a farm](docs/screenshots/omen-struck.webp)
 
-![The market trade card: two farms picked to give, a lumber camp to take](docs/screenshots/trade-card.png)
+![The market trade card: two farms picked to give, a lumber camp to take](docs/screenshots/trade-card.webp)
 
-![Clearing a wood: with the lumber camp picked, the wood beside the camp shows what clearing it costs](docs/screenshots/clear-wood.png)
+![Clearing a wood: with the lumber camp picked, the wood beside the camp shows what clearing it costs](docs/screenshots/clear-wood.webp)
 
 ### New buildings, manors, seasons and islands
 
-![All four gift buildings won: the panel switches to two columns, with the picked building's rule under them](docs/screenshots/new-buildings.png)
+![All four gift buildings won: the panel switches to two columns, with the picked building's rule under them](docs/screenshots/new-buildings.webp)
 
-![Spring fair: a harbor on the shore scores double, shown by the x2 on its preview](docs/screenshots/season-harbor.png)
+![Spring fair: a harbor on the shore scores double, shown by the x2 on its preview](docs/screenshots/season-harbor.webp)
 
-![Timber season: a lumber camp beside two forests, doubled](docs/screenshots/season-lumber.png)
+![Timber season: a lumber camp beside two forests, doubled](docs/screenshots/season-lumber.webp)
 
-![Merging two houses: the manor's ghost and what it adds](docs/screenshots/merge-preview.png)
+![Merging two houses: the manor's ghost and what it adds](docs/screenshots/merge-preview.webp)
 
-![The manor stands, and the cell beside it is grass again](docs/screenshots/manor.png)
+![The manor stands, and the cell beside it is grass again](docs/screenshots/manor.webp)
 
-![The islands card: campaign levels with stars, the island of the day and a keypad for an island number](docs/screenshots/islands-card.png)
+![The islands card: campaign levels with stars, the island of the day and a keypad for an island number](docs/screenshots/islands-card.webp)
 
-![No tile has room left, but two houses could still merge](docs/screenshots/no-room.png)
+![No tile has room left, but two houses could still merge](docs/screenshots/no-room.webp)
 
-![A campaign level finished with one star](docs/screenshots/campaign-over.png)
+![A campaign level finished with one star](docs/screenshots/campaign-over.webp)
 
 The difficulty, set on the hub page's Settings, changes one thing: round goals are 20% lower on Easy and 20% higher on Hard.
 
@@ -201,7 +201,7 @@ workflow, and uploads the video and screenshots as the `playthrough-tiny-kingdom
 npx playwright test --project tiny-kingdom
 ```
 
-![Round 2 with the windmill and a new decree](docs/screenshots/playthrough-5-round-2.png)
+![Round 2 with the windmill and a new decree](docs/screenshots/playthrough-5-round-2.webp)
 
 ## Code layout
 

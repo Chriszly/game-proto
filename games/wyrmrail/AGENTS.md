@@ -277,10 +277,10 @@ Data tables (where to tune):
   `track`, `queue`, `switches`, `orders` (`id`, `cargo`, `from`, `to`, `pay`, `status`) and
   `wyrms[0]` (`at`, `job`, `switchMs`).
 - Screenshots are saved as `playthrough-0-valley` through `playthrough-3-delivered` in
-  `docs/screenshots/`; refresh them when the look of the first round changes. `round-2.png`,
-  `remove-track.png`, `game-over.png`, `new-valley-1.png`, `new-valley-2.png`, `steering.png`,
-  `workshops-two-wyrms.png`, `festival.png`, `festival-won.png`, `moods.png`, `washout.png`,
-  `plain-track.png`, `charter.png`, `passengers.png` and `cover.png` are not made by
+  `docs/screenshots/`; refresh them when the look of the first round changes. `round-2.webp`,
+  `remove-track.webp`, `game-over.webp`, `new-valley-1.webp`, `new-valley-2.webp`, `steering.webp`,
+  `workshops-two-wyrms.webp`, `festival.webp`, `festival-won.webp`, `moods.webp`, `washout.webp`,
+  `plain-track.webp`, `charter.webp`, `passengers.webp` and `cover.png` are not made by
   the test: play the dev build and capture them by hand (a script can set up later rounds through
   the dev server's `/games/wyrmrail/src/game/sim.ts` module, the same instance the game uses).
 - Moods, hazards, charters and passengers all start after round 1 (`MOOD_ROUND` 2, the rest 3),

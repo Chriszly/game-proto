@@ -91,7 +91,7 @@ current counts.
 
 A kill or a razed building counts for you when your ship or turret landed the last hit.
 
-![The command bar's contract panel on its third contract, Hold the Relay, at 23 of 60 seconds, after the second contract paid 120 crystal and a perk](docs/screenshots/contract.png)
+![The command bar's contract panel on its third contract, Hold the Relay, at 23 of 60 seconds, after the second contract paid 120 crystal and a perk](docs/screenshots/contract.webp)
 
 ### The relay beacon
 
@@ -101,7 +101,7 @@ faction's. The owner earns 3 crystal every second while one of its warships stay
 you choose between keeping ships out at the beacon and keeping them home to defend. A floating +3
 rises from the beacon each time it pays you.
 
-![Two Solar Concord ships capturing the relay beacon, its ring 63% full](docs/screenshots/beacon.png)
+![Two Solar Concord ships capturing the relay beacon, its ring 63% full](docs/screenshots/beacon.webp)
 
 ### Fog of war
 
@@ -112,7 +112,7 @@ times, harvesters 80 pixels, a hub 175 and other buildings 110 past their edge. 
 and the crystal fields show once you have seen them, and you can only build on ground you have
 scouted. The rivals are not limited by the fog.
 
-![A Lancer scouting east from the base: the space it has flown through is dimmed, the unseen map beyond is near black, and the relay beacon it found sits in the open](docs/screenshots/fog.png)
+![A Lancer scouting east from the base: the space it has flown through is dimmed, the unseen map beyond is near black, and the relay beacon it found sits in the open](docs/screenshots/fog.webp)
 
 ### Nebulae
 
@@ -123,7 +123,7 @@ seconds. Enemies chasing a ship into a nebula lose it until they are close, and 
 inside one ambushes whatever passes. Your own hidden ships are drawn faintly, and a faint dashed
 ring marks each nebula's edge. The lane from your start to the relay beacon is always clear of them.
 
-![A Solar Concord wing lying hidden inside a nebula, drawn faintly, while two Ferrox Hive raiders pass by outside without seeing it](docs/screenshots/nebula.png)
+![A Solar Concord wing lying hidden inside a nebula, drawn faintly, while two Ferrox Hive raiders pass by outside without seeing it](docs/screenshots/nebula.webp)
 
 ### Veterans
 
@@ -132,7 +132,7 @@ The ship whose shot destroys an enemy ship gets the kill. At 3 kills it is a **V
 chevrons above a ship show its rank and its hover label names it. Turrets, mines and derelict guns
 earn no ranks, so a veteran is worth pulling back from a losing fight.
 
-![A Halo Cruiser that is an Ace, two chevrons over it and its label, as an Aegis beside the hub becomes a Veteran](docs/screenshots/veterans.png)
+![A Halo Cruiser that is an Ace, two chevrons over it and its label, as an Aegis beside the hub becomes a Veteran](docs/screenshots/veterans.webp)
 
 ### Repair and fall back
 
@@ -141,7 +141,7 @@ points a second, with a green cross beside it while it heals. The **Fall back** 
 end of the message line (or F) sends the selected ships to a point just short of their nearest hub
 or Depot. Rivals pull their hurt ships home too.
 
-![Three hurt Lancers selected and falling back toward the hub, where a Halo Cruiser and an Aegis already repair under green crosses](docs/screenshots/repair.png)
+![Three hurt Lancers selected and falling back toward the hub, where a Halo Cruiser and an Aegis already repair under green crosses](docs/screenshots/repair.webp)
 
 ### Derelict stations
 
@@ -157,7 +157,7 @@ claim the stations near their hubs.
 | Shipyard | Trains the owner's combat units out there, like a second Barracks |
 | Gun Platform | Shoots the owner's enemies within 170 pixels for 14 a second |
 
-![A Solar Concord wing claiming a derelict Wide Sensors station, its claim arc at 70%](docs/screenshots/derelict.png)
+![A Solar Concord wing claiming a derelict Wide Sensors station, its claim arc at 70%](docs/screenshots/derelict.webp)
 
 ### Truces and tribute
 
@@ -170,7 +170,7 @@ also shows each rival's grudge, and for 60 crystal of **tribute** turns that gru
 faction nearest it, held there for 60 seconds whatever hits it, its ships already on their way to
 you turning on that faction's hub instead.
 
-![The rivals panel: the Ferrox Hive offering a truce with Accept and Decline, a truce with the Iron Dominion under way, and tribute buttons for the Veil Syndicate and Nomad Freight](docs/screenshots/truce.png)
+![The rivals panel: the Ferrox Hive offering a truce with Accept and Decline, a truce with the Iron Dominion under way, and tribute buttons for the Veil Syndicate and Nomad Freight](docs/screenshots/truce.webp)
 
 ### Expansions
 
@@ -180,7 +180,7 @@ other hubs, on ground you have scouted. A finished outpost trains harvesters, wh
 nearest it; every harvester drops its crystal at the nearest hub, outpost or Depot; and you can
 build within 240 pixels of it. Losing an outpost does not end the battle.
 
-![A Sun Outpost finished beside a far crystal field, its harvesters mining nearby](docs/screenshots/expansion.png)
+![A Sun Outpost finished beside a far crystal field, its harvesters mining nearby](docs/screenshots/expansion.webp)
 
 ### Research
 
@@ -189,7 +189,7 @@ Three tracks are researched at your hub with crystal, one level at a time, 20 se
 speed). Each track has three levels costing 100, 160 and 240 crystal (times the faction's cost
 multiplier). The button fills while its level is researched, and its pips show the levels done.
 
-![The research column: Hull at level 1, Weapons being researched with 13 seconds left, and its tooltip](docs/screenshots/research.png)
+![The research column: Hull at level 1, Weapons being researched with 13 seconds left, and its tooltip](docs/screenshots/research.webp)
 
 ### Salvage
 
@@ -199,7 +199,7 @@ a +8 flashes next to your crystal count. A shard nobody reaches fades after 45 s
 shards work the same way for them, and their idle warships go to fetch them. Nomad
 Freight's Salvage Yard still pays its own 8 crystal on top for enemy ships destroyed near it.
 
-![A Solar Concord fleet breaking a Ferrox raid: a +8 floats over the wreck and +16 flashes by the crystal count, while a Veil Syndicate picket holds the relay beacon](docs/screenshots/salvage.png)
+![A Solar Concord fleet breaking a Ferrox raid: a +8 floats over the wreck and +16 flashes by the crystal count, while a Veil Syndicate picket holds the relay beacon](docs/screenshots/salvage.webp)
 
 ### The factions
 
@@ -219,31 +219,31 @@ while it isn't hacked, up to 4 at a time. A rival's mine is hidden until one of 
 60 pixels of it. An enemy ship that comes within 16 pixels sets it off: 45 damage to every enemy
 ship within 40 pixels.
 
-![A Mine Lattice's minefield beside the Veil Syndicate base, one mine going off under a Ferrox Hive gunship that flew in](docs/screenshots/mines.png)
+![A Mine Lattice's minefield beside the Veil Syndicate base, one mine going off under a Ferrox Hive gunship that flew in](docs/screenshots/mines.webp)
 
 Each Hack Frigate hit puts a turret out for 6 seconds and fills a ring round it; 6 hits before it
 comes back on take it over, and it becomes the hacker's own turret, as damaged as it was.
 
-![Three Hack Frigates filling the hack ring on a Solar Concord turret beside its hub](docs/screenshots/hack.png)
+![Three Hack Frigates filling the hack ring on a Solar Concord turret beside its hub](docs/screenshots/hack.webp)
 
-![The same turret taken over: it is a Veil Syndicate Mine Lattice now](docs/screenshots/hack-taken.png)
+![The same turret taken over: it is a Veil Syndicate Mine Lattice now](docs/screenshots/hack-taken.webp)
 
 Rivals fight each other as well as you:
 
-![Warships of two rival factions fighting out in the open, watched by a lone Solar Concord scout](docs/screenshots/rivals.png)
+![Warships of two rival factions fighting out in the open, watched by a lone Solar Concord scout](docs/screenshots/rivals.webp)
 
 Each faction's stats are a few multipliers on the base game (hit points, damage, speed, cost, and
 how much a harvester carries).
 
-![All five factions' warships clashing in open space, with beams, shield rings and exhaust flames](docs/screenshots/abilities.png)
+![All five factions' warships clashing in open space, with beams, shield rings and exhaust flames](docs/screenshots/abilities.webp)
 
 Every faction's four ships and four buildings:
 
-![A grid of each faction's harvester, scout, gunship and heavy, then its hub, depot, barracks and turret](docs/screenshots/fleets.png)
+![A grid of each faction's harvester, scout, gunship and heavy, then its hub, depot, barracks and turret](docs/screenshots/fleets.webp)
 
 The same ships side by side at their true sizes; every faction's heavy is the same size, the biggest ships in the game:
 
-![Every faction's four ships at one scale, with the five heavies all the same size and larger than the rest](docs/screenshots/fleets-scale.png)
+![Every faction's four ships at one scale, with the five heavies all the same size and larger than the rest](docs/screenshots/fleets-scale.webp)
 
 ## Watch AI
 
@@ -253,7 +253,7 @@ or WASD as usual. The panel in the top right holds the battle still, plays it fr
 (**[** and **]**) and opens a log of every build, outpost, research and attack (**L**). Contracts
 don't run in a watched battle, so no faction gets their perks. Tap the end screen to watch another.
 
-![Watching five AIs fight, with the log open](docs/screenshots/watch-ai.png)
+![Watching five AIs fight, with the log open](docs/screenshots/watch-ai.webp)
 
 ## Difficulty
 
@@ -269,11 +269,11 @@ attacks.
 The map is 1600 by 1000 pixels. Each faction's hub starts at its own spot, the player's at the
 bottom left, the other four at the other corners and in the middle, nudged a little at random.
 
-![The faction picker: five cream cards, each with the faction's hub, its three warships, its barracks and its ability](docs/screenshots/playthrough-0-start.png)
+![The faction picker: five cream cards, each with the faction's hub, its three warships, its barracks and its ability](docs/screenshots/playthrough-0-start.webp)
 
-![A command button's tooltip above the bar: the Lancer's cost, hit points, speed, damage, range and reload](docs/screenshots/tooltips.png)
+![A command button's tooltip above the bar: the Lancer's cost, hit points, speed, damage, range and reload](docs/screenshots/tooltips.webp)
 
-![The first contract done: the Orbital Dock stands beside the hub, +60 flashes by the crystal count and the second contract is up](docs/screenshots/playthrough-2-barracks.png)
+![The first contract done: the Orbital Dock stands beside the hub, +60 flashes by the crystal count and the second contract is up](docs/screenshots/playthrough-2-barracks.webp)
 
 With Reduce motion on, the explosions are left out, shots stay at a steady brightness instead of
 fading, exhaust flames, shards and the beacon's glow hold still, floating numbers fade in place

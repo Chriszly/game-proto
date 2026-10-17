@@ -82,12 +82,23 @@ to its log and run summary.
   `CLAUDE.md` next to it imports it (`@AGENTS.md`), like the root one does.
 - **Say which game a PR is for** in its title or summary, and keep its screenshots in that game's
   `docs/screenshots/`.
-- **Keep screenshots small.** Every committed image stays in the history and in every clone, and
-  screenshots already make up most of the repo's size. Save PR screenshots at 960x540 (540x960 for
-  an upright game) unless a detail needs more, never wider or taller than 1280 pixels, and under
-  500 KB each (a 4K or phone-resolution capture is scaled down first). Show only what the PR adds,
-  reuse a screenshot already in the folder when it still shows the change, and replace an outdated
-  file under the same name rather than adding a new one.
+- **Keep screenshots few and small.** Every committed image stays in the history and in every
+  clone, even after it is deleted, and screenshots already make up most of the repo's size. So:
+  - **Few:** add at most 4 new screenshots per PR, one per thing the PR adds that a reader can't
+    picture from the summary. Show only the new element, reuse a screenshot already in the folder
+    when it still shows the change, and replace an outdated one under the same name (it doesn't
+    count as new) rather than adding another. A refactor, fix or balance change with nothing new to
+    see gets none.
+  - **Small:** save screenshots as WebP, at most 200 KB each and at 960x540 (540x960 for an
+    upright game) unless a detail needs more, never wider or taller than 1280 pixels. Capture as
+    usual, then run `npm run screenshots -- <file>...`: it scales each image down to 960 pixels on
+    its longer side (`--max 1280` for a detail), writes `<name>.webp` next to it (a 960x540 game
+    shot is usually 40-80 KB, against 300-500 KB as PNG) and deletes the original (`--keep` keeps
+    it). Any other committed image, like a game's `cover.png`, stays under 500 KB and 1280 pixels.
+  - The **Screenshots** workflow (`.github/workflows/screenshots.yml`, running
+    `scripts/check-screenshots.mjs`) fails a PR that breaks these limits; run
+    `node scripts/check-screenshots.mjs origin/main` to check before pushing. GitHub shows WebP
+    images in PR descriptions and READMEs like any other image.
 - **Add a game** by creating `games/<name>/` with an `index.html` that loads `./src/main.ts`, a
   `README.md`, an `AGENTS.md` (current state and architecture) with a `CLAUDE.md` that imports it,
   a `cover.png` (a 16:9 screenshot), a `src/howToPlay.ts` handed to `setupGame(game, { howToPlay })` and an `e2e/playthrough.spec.ts` that plays its first round,
@@ -197,7 +208,8 @@ playthrough is the check that the core loop can still be played, so it has to st
   of each run logs the speed it reached (`Played 47s of game time at 4.0x`); a busy runner can fall
   short of 4x, which slows the video but never changes the result.
 - **Keep the PR screenshots honest.** The test saves milestone screenshots; when the look of the
-  loop changes, refresh the `games/apothecary/docs/screenshots/playthrough-*.png` files from a fresh run.
+  loop changes, refresh the `games/apothecary/docs/screenshots/playthrough-*` files from a fresh run
+  (shrunk to WebP with `npm run screenshots`, and the README's links updated to match).
 
 ## Run it locally
 
