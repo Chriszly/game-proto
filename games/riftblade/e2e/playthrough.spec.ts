@@ -1,8 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 
-// Plays the first minute of a run with real inputs: picks Captain Rook on the hero select screen,
-// then walks him in a wide circle by holding the mouse down at a point that turns around him, as a
-// thumb on a phone would, while his pistols fire on their own. Droids die and drop lumen shards he
+// Plays the first minute of a run with real inputs: on the hero select screen, where the three
+// soldiers are open and the seven knights still locked, waits for the game to settle, taps Captain
+// Rook's card and then Fight. Then walks him in a wide circle by holding the mouse down at a point
+// that turns around him, as a thumb on a phone would, while his pistols fire on their own. Droids die and drop lumen shards he
 // picks up, the first level-up pauses the run on three cards, and the test taps the first one and
 // checks the upgrade was taken. It fires the signature move from its round button, then plays on
 // to the one-minute mark, taking the first card at each later level-up.
@@ -25,13 +26,16 @@ interface GameState {
   signatures: number;
   damageTaken: number;
 }
-type Spot = { id: string; x: number; y: number; w: number; h: number };
+type Spot = { id: string; x: number; y: number; w: number; h: number; locked?: boolean };
 
 const VIEW = { w: 960, h: 540 };
 /** The hero stands in the middle of the view (layout.ts CENTER). */
 const CENTER = { x: 480, y: 270 };
 /** The round signature button, bottom right (layout.ts SIG_BUTTON). */
 const SIG_BUTTON = { x: 890, y: 470 };
+/** The heroes on the select screen, in order: the soldiers open, the knights unlocked by deeds. */
+const SOLDIERS = ['rook', 'tr9', 'bram'];
+const KNIGHTS = ['kael', 'vharn', 'oom', 'corvin', 'veyl', 'kresh', 'joren'];
 /** Captain Rook's health (heroes.ts) and how long his Rally Order lasts (sim.ts). */
 const ROOK = { hp: 100, rallyMs: 5000 };
 /** Where the test holds the mouse: this far from the hero, turning once every `turnMs` of game time. */
@@ -44,6 +48,11 @@ const PLAY_MS = 60_000;
  * the game can play at SPEED on a CI runner without a GPU.
  */
 const FRAME_MS = 64;
+/**
+ * How many frames Phaser takes to settle after starting: it cuts each step short for its first 120
+ * frames (`panicMax`), then averages steps over the last 10. A few more for good measure.
+ */
+const STARTUP_FRAMES = 140;
 /**
  * How many times faster than real time the game plays, so the recorded video runs at that speed.
  * CI plays at 4x. A machine that can't keep up plays as fast as it can; the end of the run logs the
@@ -91,7 +100,16 @@ test('plays the first minute', async ({ page }, testInfo) => {
   await page.clock.install({ time: start });
   await page.clock.pauseAt(new Date(start.getTime() + 1_000));
   await page.addInitScript((frameMs) => {
-    window.requestAnimationFrame = (cb) => window.setTimeout(() => cb(performance.now()), frameMs);
+    // Animation frames fall on a fixed grid of frameMs steps of game time. The fake clock's timers
+    // can fire a little late when a frame takes long in real time; aiming each frame at the next
+    // grid point, and stamping it with that point, keeps every step the same length.
+    let origin: number | null = null;
+    window.requestAnimationFrame = (cb) => {
+      const now = performance.now();
+      origin ??= now;
+      const due = origin + (Math.floor((now - origin) / frameMs) + 1) * frameMs;
+      return window.setTimeout(() => cb(due), due - now);
+    };
     window.cancelAnimationFrame = (id) => window.clearTimeout(id);
     // Phaser falls back to its canvas renderer. CI has no GPU, and WebGL in software is too slow to
     // play at SPEED; the game and its rules are the same either way.
@@ -145,16 +163,30 @@ test('plays the first minute', async ({ page }, testInfo) => {
   }
   const middle = (r: Spot) => ({ x: r.x + r.w / 2, y: r.y + r.h / 2 });
 
-  // The hero select screen: three soldiers, all open, and no run yet.
-  await play(500, async () => false);
+  // The hero select screen: ten heroes and the Fight button, and no run yet. On a fresh save the
+  // three soldiers are open and the seven knights locked behind their deeds. The test waits here
+  // until Phaser's start-up easing is over (its first STARTUP_FRAMES steps are cut short), so the
+  // run always starts at full step length, however long the page took to load.
+  await play(STARTUP_FRAMES * FRAME_MS, async () => false);
   let s = await game.state();
   expect(s).toMatchObject({ phase: 'select', hero: null, level: 1, kills: 0 });
   let spots = await game.spots();
-  expect(spots.map((c) => c.id)).toEqual(['rook', 'tr9', 'bram']);
+  expect(spots.map((c) => c.id)).toEqual([...SOLDIERS, ...KNIGHTS, 'fight']);
+  expect(spots.filter((c) => c.locked).map((c) => c.id), 'the knights start locked').toEqual(KNIGHTS);
   await snap('0-select');
 
-  // Tapping Captain Rook's card starts the run.
+  // Tapping Captain Rook's card chooses him; it does not start the run yet.
   await tap(middle(spots[0]));
+  await play(FRAME_MS, async () => false);
+  s = await game.state();
+  expect(s.phase, 'still choosing').toBe('select');
+  expect(await page.evaluate(() => (window as any).game.scene.getScene('Game').chosen)).toBe('rook');
+
+  // Tapping Fight starts the run as Rook.
+  spots = await game.spots();
+  const fight = spots.find((c) => c.id === 'fight')!;
+  expect(fight, 'a Fight button').toBeTruthy();
+  await tap(middle(fight));
   await play(FRAME_MS, async () => false);
   s = await game.state();
   expect(s).toMatchObject({ phase: 'run', hero: 'rook', level: 1, ranks: {}, choices: null });

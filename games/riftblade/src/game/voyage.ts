@@ -7,6 +7,7 @@ import { ELITE, WAVES, statsOf, type EventState, type GameState } from './state'
 import { collectAll, heal, lower, nextPick, pop, raise, refreshHealth, spawnElite, tick, type Input } from './sim';
 import { FILLER, MAX_TIER, UPGRADES, UPGRADE_IDS, canOffer, rollChoices } from './upgrades';
 import { t } from '../i18n';
+import { checkDeeds } from './blades';
 import { CREDITS, LAST_PLANET, NODE_INFO, PLANETS, REST_HEAL, TRADE, arenaElites, type EventId, type NodeKind } from './planets';
 
 /** One frame of the game: the sim while a fight is on, then whatever follows a cleared fight. */
@@ -14,6 +15,7 @@ export function frame(s: GameState, dtMs: number, input: Input) {
   tick(s, dtMs, input);
   if (s.phase === 'cleared') afterClear(s);
   if (s.phase === 'travel') nextPlanet(s);
+  if (s.hero) checkDeeds(s);
 }
 
 /** Empties the field between fights (the hero, their kit and allies stay). */
@@ -29,7 +31,11 @@ function clearField(s: GameState) {
   s.player.dashMs = 0;
   s.player.slowMs = 0;
   s.player.slowPct = 0;
-  s.allies = s.allies.filter((a) => a.kind !== 'sentry');
+  s.slashes = [];
+  s.zaps = [];
+  s.mark = 0;
+  s.platform = null;
+  s.allies = s.allies.filter((a) => a.kind !== 'sentry' && a.kind !== 'fighter' && a.kind !== 'puppet');
 }
 
 /** A boss (or the arena) has fallen: take what is lying about, then the cards, the map or the win. */
@@ -39,6 +45,7 @@ export function afterClear(s: GameState) {
   if (s.arena) {
     s.arena = false;
     if (s.arenaWon) {
+      s.arenaWins += 1;
       s.credits += CREDITS.arena;
       s.rewardPicks += 1;
       pop(s, t('arenaWon', { n: CREDITS.arena }), '#ffe066');
@@ -46,6 +53,8 @@ export function afterClear(s: GameState) {
     s.after = 'travel';
   } else {
     s.credits += CREDITS.clear;
+    // Elder Corvin Hale's deed: the Swamp world cleared with few hits from toad globs.
+    if (s.planet === 1 && s.globHits <= 5) s.cleanSwamp = true;
     if (s.planet >= LAST_PLANET) {
       s.phase = 'won';
       return;
@@ -249,6 +258,8 @@ export function nextPlanet(s: GameState) {
   s.nextVent = 8000;
   s.bossSpawned = false;
   s.arena = false;
+  s.globHits = 0;
+  s.player.saved = false;
   s.allies = s.allies.filter((a) => a.kind !== 'escort');
   if (s.escort) {
     s.escort = false;

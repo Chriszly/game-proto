@@ -1,11 +1,13 @@
 /**
- * Every texture of the game, painted once at boot: the three soldiers (a game-sized sprite and a
- * big portrait each), their allies, the Scrap droids and the Grinder Crawler, bolts, shards and
- * pickups. Heroes take their colours from their scheme (`schemeOf`), so a new scheme needs no art.
+ * Every texture of the game, painted once at boot: the heroes (a game-sized sprite per colour
+ * scheme and a big portrait each; the knights are drawn in `knights.ts`), the soldiers' allies, the
+ * Scrap droids and the Grinder Crawler, bolts, shards and pickups. Heroes take their colours from
+ * their scheme (`schemeOf`), so a new scheme needs no art.
  */
 import Phaser from 'phaser';
-import { HERO_IDS, schemeOf, type HeroId, type HeroScheme } from '../game/heroes';
+import { HEROES, HERO_IDS, isKnight, schemeOf, type HeroId, type HeroScheme } from '../game/heroes';
 import { C, beam, glow, outline, paint, shade, shape, type Ctx } from './glow';
+import { drawKnight } from './knights';
 
 /** How big a hero is drawn in play (their art is laid out at 1 for the portraits). */
 export const HERO_SCALE = 0.46;
@@ -43,6 +45,10 @@ function torso(ctx: Ctx, x: number, y: number, sch: HeroScheme, z: number) {
 
 /** Draws a hero at (x, y) in art units, facing right; `bolts` adds their shots, for portraits. */
 export function drawHero(ctx: Ctx, id: HeroId, x: number, y: number, z: number, bolts: boolean, sch = schemeOf(id)) {
+  if (isKnight(id)) {
+    drawKnight(ctx, id, x, y, z, bolts, sch);
+    return;
+  }
   const mark = sch.mark ?? shade(sch.accent, -0.15);
   if (id === 'rook') {
     torso(ctx, x, y, sch, z);
@@ -92,14 +98,14 @@ export function drawHero(ctx: Ctx, id: HeroId, x: number, y: number, z: number, 
   }
 }
 
-/** The texture key of a hero's in-play sprite and portrait. */
-export const heroKey = (id: HeroId) => `rb-hero-${id}`;
+/** The texture key of a hero's in-play sprite (in scheme `variant`) and portrait. */
+export const heroKey = (id: HeroId, variant = 0) => (variant ? `rb-hero-${id}-${variant}` : `rb-hero-${id}`);
 export const portraitKey = (id: HeroId) => `rb-portrait-${id}`;
 
-function bakeHero(scene: Phaser.Scene, key: string, id: HeroId, scale: number, box: typeof HERO_BOX, bolts: boolean) {
+function bakeHero(scene: Phaser.Scene, key: string, id: HeroId, scale: number, box: typeof HERO_BOX, bolts: boolean, sch = schemeOf(id)) {
   paint(scene, key, box.w * scale, box.h * scale, (ctx) => {
     ctx.scale(scale, scale);
-    drawHero(ctx, id, -box.x, -box.y, scale, bolts);
+    drawHero(ctx, id, -box.x, -box.y, scale, bolts, sch);
   });
 }
 
@@ -232,7 +238,7 @@ export const BOLT_COLOR = { drone: '#7df9ff', rocket: '#ffd36b', shell: '#c77dff
 
 export function bakeSprites(scene: Phaser.Scene) {
   for (const id of HERO_IDS) {
-    bakeHero(scene, heroKey(id), id, HERO_SCALE, HERO_BOX, false);
+    HEROES[id].schemes.forEach((sch, v) => bakeHero(scene, heroKey(id, v), id, HERO_SCALE, HERO_BOX, false, sch));
     bakeHero(scene, portraitKey(id), id, 1, PORTRAIT_BOX, true);
   }
   // Allies: Rook's troopers are smaller copies of him; Bram's brothers are identical to him.
