@@ -28,6 +28,22 @@ export interface ShopSlot {
   gilded: OriginId | null;
 }
 
+export interface MeterRow {
+  defId: string;
+  star: number;
+  dealt: number;
+  taken: number;
+  alive: boolean;
+}
+
+/** The player's side of a fight as damage meter rows, most damage dealt first. */
+export function meterOf(b: Battle): MeterRow[] {
+  return b.units
+    .filter((u) => u.team === 0 && u.defId)
+    .map((u) => ({ defId: u.defId!, star: u.star, dealt: Math.round(u.dealt), taken: Math.round(u.taken), alive: u.alive }))
+    .sort((a, b) => b.dealt - a.dealt);
+}
+
 export interface Player {
   seat: number;
   name: string;
@@ -50,6 +66,8 @@ export interface Player {
   /** Final place, 1 to 8, once out (or the winner). */
   place: number;
   scrapTokens: number;
+  /** The shop stays as it is at the next plan phase (a reroll unlocks it). */
+  shopLocked: boolean;
   lastOpponent: number;
   /** The last round's outcome, for the list on the right. */
   last: 'win' | 'loss' | 'draw' | null;
@@ -109,6 +127,8 @@ export interface Match {
   taunt: { seat: number; text: string; until: number } | null;
   /** The last round's outcome for the player, shown in the result phase. */
   result: { outcome: 'win' | 'loss' | 'draw'; damage: number; gold: number } | null;
+  /** The player's robots in their last fight, by damage dealt: the damage meter. */
+  meter: MeterRow[];
   /** Fights of other seats this round, for the list on the right. */
   nextUid: number;
   roundsPlayed: number;
@@ -132,12 +152,12 @@ export function newMatch(opts: MatchOptions): Match {
     players.push({
       seat, name: seat === 0 ? 'You' : commander.name, commander, human: seat === 0 && !opts.watch,
       hp: seat === 0 ? startHp : 100, gold: ECONOMY.startGold, level: 1, xp: 0, board: {}, bench: Array(BENCH_SLOTS).fill(null),
-      shop: [], items: [], augments: [], augmentOffer: null, streak: 0, alive: true, place: 0, scrapTokens: 0, lastOpponent: -1, last: null,
+      shop: [], items: [], augments: [], augmentOffer: null, streak: 0, alive: true, place: 0, scrapTokens: 0, shopLocked: false, lastOpponent: -1, last: null,
     });
   }
   const m: Match = {
     opts, players, stage: 1, index: 0, round: stageRounds(1)[0], phase: 'plan', time: 0, phaseEnds: Infinity, battle: null,
-    opponent: -1, ghost: false, drops: [], terrain: {}, draft: null, taunt: null, result: null, nextUid: 1, roundsPlayed: 0,
+    opponent: -1, ghost: false, drops: [], terrain: {}, draft: null, taunt: null, result: null, meter: [], nextUid: 1, roundsPlayed: 0,
   };
   for (const p of players) rollShop(m, p);
   return m;
@@ -187,10 +207,15 @@ export function rollShop(m: Match, p: Player) {
 
 export const rerollCost = (p: Player) => (p.augments.includes('recycler') ? 1 : ECONOMY.rerollCost);
 
+export function toggleShopLock(p: Player) {
+  p.shopLocked = !p.shopLocked;
+}
+
 export function reroll(m: Match, p: Player): boolean {
   const cost = rerollCost(p);
   if (p.gold < cost) return false;
   p.gold -= cost;
+  p.shopLocked = false;
   rollShop(m, p);
   return true;
 }
@@ -305,6 +330,13 @@ export function moveUnit(p: Player, from: Spot, to: Spot): boolean {
 }
 
 /** Bolts the part or item at `index` of the item bench onto `o`; two parts make a finished item. */
+/** What bolting part or item `id` onto `o` would give it: the finished item or the part itself, or null if it is full. */
+export function equipPreview(id: string, o: Owned): string | null {
+  const lone = o.items.find((i) => isPart(i));
+  if (isPart(id) && lone) return comboOf(lone as PartId, id).id;
+  return o.items.length >= MAX_ITEMS ? null : id;
+}
+
 export function equip(p: Player, index: number, o: Owned): boolean {
   const id = p.items[index];
   if (!id) return false;
@@ -368,7 +400,7 @@ export function startPlan(m: Match, planS: number, income = true) {
       p.gold += (m.stage === 1 ? ECONOMY.stageOneIncome : ECONOMY.baseIncome) + Math.min(Math.floor(p.gold / ECONOMY.interestPer), interestCap) + streak;
       if (p.seat !== 0) p.gold = Math.max(0, p.gold + byDifficulty(-1, 0, 1));
       gainXp(p, ECONOMY.xpPerRound);
-      rollShop(m, p);
+      if (!p.shopLocked) rollShop(m, p);
     }
     if (m.round.augment) offerAugments(p);
   }
@@ -484,7 +516,14 @@ export function startFight(m: Match) {
     }
     for (const pr of pairings) pr.drops = rollDrops(m, pr.battle);
   }
-  const mine = pairings.find((pr) => pr.a === 0) ?? pairings.find((pr) => pr.b === 0 && !pr.ghost)!;
+  const mine = pairings.find((pr) => pr.a === 0) ?? pairings.find((pr) => pr.b === 0 && !pr.ghost);
+  // Seat 0 is out (only a headless run of the rivals gets here): every fight runs at once.
+  if (!mine) {
+    for (const pr of pairings) pr.battle.runToEnd();
+    m.battle = null;
+    m.opponent = -1;
+    return;
+  }
   // The player's fight is always seen from the bottom: swap the sides if the player is side 1.
   if (mine.b === 0) {
     mine.battle = new Battle(sideOf(m, m.players[0], false), sideOf(m, m.players[mine.a], true), terrainMap(m));
@@ -567,6 +606,7 @@ export function endFight(m: Match) {
       if (wonA === false) m.taunt = { seat: rival.seat, text: pick(rival.commander.taunts.length ? rival.commander.taunts : ['Ha!']), until: m.time + 3 };
     }
   }
+  if (m.battle) m.meter = meterOf(m.battle);
   knockOuts(m);
   m.phase = 'result';
   m.roundsPlayed++;

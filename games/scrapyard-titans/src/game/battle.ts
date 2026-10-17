@@ -113,6 +113,9 @@ export interface BUnit {
   manaGainMul: number;
   /** Rat gold already shaken loose. */
   goldOut: number;
+  /** Damage this unit dealt to the other side and took, for the damage meter. */
+  dealt: number;
+  taken: number;
 }
 
 interface Projectile {
@@ -176,7 +179,7 @@ export class Battle {
     const base = {
       id: this.nextId++, team, star: f.star, items: [...f.items], col: f.col, row: f.row, fromCol: f.col, fromRow: f.row,
       moveT: 1, moveDur: 0, shield: 0, shieldUntil: 0, stunUntil: 0, castLock: 0, target: null, alive: true, sp: {},
-      rampAs: 0, revived: false, regenPerS: 0, manaRegen: 0, manaGainMul: 1, goldOut: 0, dmgMul: 1, powerMul: 1,
+      rampAs: 0, revived: false, regenPerS: 0, manaRegen: 0, manaGainMul: 1, goldOut: 0, dealt: 0, taken: 0, dmgMul: 1, powerMul: 1,
       attackTimer: ((this.nextId * 0.137) % 0.5),
     };
     if (f.monster) {
@@ -424,7 +427,11 @@ export class Battle {
       dst.shield -= used;
       left -= used;
     }
+    // Overkill doesn't count toward the damage meter.
+    const real = amount - left + Math.min(left, Math.max(0, dst.hp));
     dst.hp -= left;
+    dst.taken += real;
+    if (src && src.team !== dst.team) src.dealt += real;
     if (show) this.events.push({ t: 'dmg', id: dst.id, amount: Math.round(amount), crit, ability });
     this.gainMana(dst, Math.min(MANA_PER_HIT_CAP, amount * MANA_PER_DAMAGE), false);
     if (dst.hp > 0) return;
