@@ -1,5 +1,7 @@
 // The world of a match: its units, projectiles and what the view should show. No Phaser here.
 
+import type { TextKey } from '../i18n';
+
 import {
   GANK,
   JUNGLE,
@@ -157,7 +159,7 @@ export interface Unit {
 }
 
 export interface Buff {
-  /** What gave it: an ability's name, or 'ember' or 'moss' for a jungle buff. */
+  /** What gave it: an ability's or an elixir's name (a text key), or 'ember' or 'moss' for a jungle buff. */
   id: string;
   ms: number;
   def: BuffDef;
@@ -227,11 +229,17 @@ export type Fx =
    */
   | { kind: 'skill'; look: string; x: number; y: number; x2: number; y2: number; r: number; a: number; color: string; ms: number };
 
+/** An objective's title: a text key, with the key of the champion's name to fill in `{name}`. */
+export interface ObjectiveTitle {
+  key: TextKey;
+  name?: TextKey;
+}
+
 /** The goal the player's team is chasing now. `target` is the unit to bring down. */
 export interface Objective {
   kind: ObjectiveKind;
   target: number;
-  title: string;
+  title: ObjectiveTitle;
   gold: number;
   banner: 'siege' | null;
   startAt: number;
@@ -270,7 +278,7 @@ export interface GameState {
   nextObjectiveAt: number;
   objectivesDone: number;
   /** How the last objective ended, for the card's message. */
-  lastObjective: { title: string; done: boolean; gold: number; at: number } | null;
+  lastObjective: { title: ObjectiveTitle; done: boolean; gold: number; at: number } | null;
   /** The siege banner lasts until this game time. */
   siegeUntil: number;
   /** The enemy minion the player's next hit would kill, outlined in gold. */
