@@ -1,11 +1,13 @@
 import Phaser from 'phaser';
+import { ui } from '../../../../shared/audio';
 import { fit } from '../art/glass';
 import { buttonTexture, type ButtonState, type ButtonStyle } from '../art/ui';
 import { FONT } from '../scenes/layout';
 
 /**
  * A leaded-glass button with a caption: lit while the pointer is over it, dimmed when disabled.
- * Fires on `pointerdown`. Its textures are baked by `bakeUi` for its style and size.
+ * Fires on `pointerdown`; a press while disabled plays the shared refusal buzz. Its textures are
+ * baked by `bakeUi` for its style and size.
  */
 export class Button {
   readonly root: Phaser.GameObjects.Container;
@@ -34,6 +36,8 @@ export class Button {
         align: 'center',
         stroke: '#17131c',
         strokeThickness: 3,
+        // The upgrade buttons' two lines sit closer, to fit their short panes.
+        lineSpacing: style === 'upgrade' ? -3 : 0,
       })
       .setOrigin(0.5);
     this.root = scene.add.container(x, y, [this.bg, this.text]);
@@ -41,7 +45,7 @@ export class Button {
       .setInteractive({ useHandCursor: true })
       .on('pointerover', () => ((this.over = true), this.paint()))
       .on('pointerout', () => ((this.over = false), this.paint()))
-      .on('pointerdown', () => this.enabled && onClick());
+      .on('pointerdown', () => (this.enabled ? onClick() : ui('refuse')));
   }
 
   set(caption: string, enabled: boolean, fontSize = 18) {
