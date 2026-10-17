@@ -1,29 +1,55 @@
 import { settings } from '../../../../shared/settings';
 import Phaser from 'phaser';
 import { ADVENTURER, adventurerTexture } from '../art/characters';
-import { itemTexture, swordScale, swordTexture } from '../art/swords';
+import { itemTexture, shieldTexture, swordScale, swordTexture } from '../art/swords';
 import { fit, shown } from '../art/glass';
 import { EMBLEMS, emblemTexture } from '../art/ui';
+import { EDICTS, PERKS, PERK_IDS, type Edict, type Perk } from '../game/charter';
 import { commissionTitle } from '../game/commissions';
-import { combine, isGem, tierOf } from '../game/items';
+import { combine, isMaster, isShield, isSword, tierOf } from '../game/items';
 import { clearProgress, loadProgress, saveProgress } from '../game/save';
-import { buy, chooseCommission, deliver, deliverable, drop, forge, foundCharter, itemAt, offers, sell, standing, tick, toggleAutoForge } from '../game/sim';
+import { shieldOf } from '../game/shields';
+import {
+  buy,
+  buyPerk,
+  chooseCommission,
+  chooseEdict,
+  deliver,
+  deliverable,
+  drop,
+  edictOffers,
+  forge,
+  foundCharter,
+  itemAt,
+  offers,
+  sell,
+  standing,
+  takes,
+  tick,
+  toggleAutoForge,
+  toggleShieldMode,
+} from '../game/sim';
 import {
   BARREL as BARREL_PLACE,
-  DESKS,
+  MASTER_MS,
+  MAX_DESKS,
   MAX_SLOTS,
   REP_MAX,
   STAR_PRICE,
   STREAK_MS,
+  desksOf,
   dull,
-  fitOf,
   forgeMs,
+  freeStars,
   freshProgress,
   newShop,
   orderPrice,
   payFor,
   progressOf,
   rustLeft,
+  setPay,
+  shieldPrice,
+  shieldsAbout,
   type Adventurer,
   type Fit,
   type GameState,
@@ -36,11 +62,15 @@ import {
   BANNER,
   BARREL,
   CELL_SCALE,
+  DESK,
+  EDICT_PLAQUE,
   FONT,
   FORGE_BUTTON,
   FURNACE_WINDOW,
   HEAT_BAR,
+  MODE_BUTTON,
   ORDER,
+  PERK_LINK,
   PATIENCE,
   REPUTATION,
   ROW_BOX,
@@ -53,6 +83,7 @@ import {
   deskAt,
   deskBox,
   deskCentre,
+  deskScale,
   discoveredCentre,
   onBanner,
   placeAt,
@@ -96,7 +127,8 @@ function roman(n: number) {
 }
 
 /** The fit tag's first line: how the held sword fits the order, and what the buyer's trait makes of it. */
-function tagLine(fit: Fit, trait: Trait) {
+function tagLine(fit: Fit, trait: Trait, master: boolean) {
+  if (master) return fit === 'exact' ? 'Masterwork fit' : 'Masterwork';
   if (fit === 'lesser') return 'One below: taken';
   if (fit !== 'exact') return 'Overkill';
   return trait === 'noble' ? 'Exact fit ×3' : trait === 'haggler' ? 'Exact fit, haggled' : 'Exact fit +50%';
@@ -111,6 +143,10 @@ interface Held {
 /** What is drawn for one adventurer at the counter, and the tag that shows what they would pay. */
 interface Visitor {
   root: Phaser.GameObjects.Container;
+  /** For a set order, the sword and buckler on the card, dimmed and ticked once handed over. */
+  setSword: Phaser.GameObjects.Image | null;
+  setShield: Phaser.GameObjects.Image | null;
+  ticks: Phaser.GameObjects.Image[];
   tag: Phaser.GameObjects.Container;
   tagImage: Phaser.GameObjects.Image;
   tagTop: Phaser.GameObjects.Text;
@@ -153,6 +189,20 @@ export class GameScene extends Phaser.Scene {
   /** The crown's two offers for the next commission, and the button for each. */
   private chooser!: Phaser.GameObjects.Container;
   private chooserButtons: Button[] = [];
+  /** The guild perks window and its button per perk, and the link that opens it. */
+  private perkWindow!: Phaser.GameObjects.Container;
+  private perkButtons = new Map<Perk, Button>();
+  private perkLink!: Phaser.GameObjects.Text;
+  /** The new charter's edict window, its two buttons, and the plaque naming the edict in force. */
+  private edictWindow!: Phaser.GameObjects.Container;
+  private edictButtons: Button[] = [];
+  private edictName!: Phaser.GameObjects.Text;
+  private edictLine!: Phaser.GameObjects.Text;
+  /** The counter's desk frames, three or four, and how many the visitors were drawn for. */
+  private counter!: Phaser.GameObjects.Image;
+  private drawnDesks = 0;
+  /** The switch between forging swords and bucklers. */
+  private modeButton!: Button;
   private emblems = new Map<UpgradeId, Phaser.GameObjects.Image>();
   private marks!: Phaser.GameObjects.Graphics;
   private hud!: Phaser.GameObjects.Graphics;
@@ -182,10 +232,11 @@ export class GameScene extends Phaser.Scene {
     return {
       forge: { x: FORGE_BUTTON.x, y: FORGE_BUTTON.y },
       slots: [...Array(MAX_SLOTS).keys()].map((slot) => ({ x: slotCentre(slot).x, y: slotCentre(slot).y - SWORD_LIFT })),
-      desks: [...Array(DESKS).keys()].map(deskCentre),
+      desks: [...Array(desksOf(this.state)).keys()].map((d) => deskCentre(d, desksOf(this.state))),
       banner: { x: BANNER.x + BANNER.w / 2, y: BANNER.y + BANNER.h / 2 },
       barrel: { x: BARREL.x, y: BARREL.y },
       row: { x: ROW_BUTTON.x, y: ROW_BUTTON.y },
+      mode: { x: MODE_BUTTON.x, y: MODE_BUTTON.y },
     };
   }
 
@@ -202,6 +253,8 @@ export class GameScene extends Phaser.Scene {
     this.state = newShop(loadProgress());
 
     this.image(0, 0, 'background').setOrigin(0);
+    this.drawnDesks = 0;
+    this.counter = this.image(DESK.x, DESK.y, `counter-${desksOf(this.state)}`).setOrigin(0).setDepth(1);
     this.furnace = this.image(FURNACE_WINDOW.x, FURNACE_WINDOW.y, 'furnace-0').setOrigin(0);
     this.marks = this.add.graphics().setDepth(5);
     this.mergeFrames = [...Array(MAX_SLOTS).keys()].map((slot) => {
@@ -215,12 +268,10 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(7);
     this.createRowCover();
-    this.buyerFrames = [...Array(DESKS).keys()].map((desk) => {
-      const c = deskCentre(desk);
-      return this.image(c.x, c.y, 'frame-green').setDepth(25).setVisible(false);
-    });
+    this.buyerFrames = [...Array(MAX_DESKS).keys()].map(() => this.image(0, 0, 'frame-green').setDepth(25).setVisible(false));
 
     this.forgeButton = new Button(this, FORGE_BUTTON.x, FORGE_BUTTON.y, 'forge', 'Forge', () => this.forge());
+    this.modeButton = new Button(this, MODE_BUTTON.x, MODE_BUTTON.y, 'mode', '', () => this.switchMode());
     FORGE_UPGRADES.forEach((id, i) => {
       const b = UPGRADE_BUTTONS;
       const button = new Button(this, b.x, b.ys[i], 'upgrade', '', () => this.buy(id), 13);
@@ -234,6 +285,8 @@ export class GameScene extends Phaser.Scene {
     this.createReset();
     this.createWin();
     this.createChooser();
+    this.createPerks();
+    this.createEdicts();
     // An offer still waiting from the last visit opens at once.
     this.chooser.setVisible(this.state.choosing);
 
@@ -261,10 +314,15 @@ export class GameScene extends Phaser.Scene {
     this.drawHud();
     this.drawForge();
     this.drawChooser();
+    this.drawEdicts();
   }
 
   private forge() {
     if (forge(this.state)) this.save();
+  }
+
+  private switchMode() {
+    if (!this.windowOpen && toggleShieldMode(this.state)) this.save();
   }
 
   /** Where a place's sword lies on screen: on its anvil, or on the barrel's mouth. */
@@ -274,12 +332,12 @@ export class GameScene extends Phaser.Scene {
     return { x: c.x, y: c.y - SWORD_LIFT };
   }
 
-  /** Buys an upgrade; a bought Auto Forge's button switches it on and off instead. */
-  /** Whether a window (the win or the crown's offer) is open over the board. */
+  /** Whether a window (the win, the crown's offer, the guild perks or the edicts) is open over the board. */
   private get windowOpen() {
-    return this.win.visible || this.chooser.visible;
+    return this.win.visible || this.chooser.visible || this.perkWindow.visible || this.edictWindow.visible;
   }
 
+  /** Buys an upgrade; a bought Auto Forge's button switches it on and off instead. */
   private buy(id: UpgradeId) {
     if (this.windowOpen) return;
     const done = id === 'auto' && this.state.ranks.auto > 0 ? toggleAutoForge(this.state) : buy(this.state, id);
@@ -322,7 +380,7 @@ export class GameScene extends Phaser.Scene {
     this.spriteAt(held.slot)?.setVisible(true);
     if (!p) return;
     const place = placeAt(p.worldX, p.worldY);
-    const desk = deskAt(p.worldX, p.worldY);
+    const desk = deskAt(p.worldX, p.worldY, desksOf(this.state));
     const buyer = desk === null ? undefined : this.state.adventurers.find((a) => a.desk === desk);
     let done = false;
     if (place !== null) done = drop(this.state, held.slot, place);
@@ -353,6 +411,22 @@ export class GameScene extends Phaser.Scene {
   }
 
   private drawVisitors() {
+    // A fourth desk redraws the counter smaller, with every visitor in their new place.
+    const desks = desksOf(this.state);
+    if (desks !== this.drawnDesks) {
+      this.drawnDesks = desks;
+      this.counter.setTexture(`counter-${desks}`);
+      fit(this.counter);
+      for (const v of this.visitors.values()) v.root.destroy();
+      this.visitors.clear();
+      this.buyerFrames.forEach((frame, desk) => {
+        const c = deskCentre(desk, desks);
+        frame.setPosition(c.x, c.y);
+        fit(frame, deskScale(desks));
+      });
+      const hint = deskCentre(0, desks);
+      this.hint.setPosition(hint.x, hint.y);
+    }
     const here = new Set(this.state.adventurers.map((a) => a.id));
     for (const [id, v] of this.visitors) {
       if (here.has(id)) continue;
@@ -365,31 +439,37 @@ export class GameScene extends Phaser.Scene {
   }
 
   private makeVisitor(a: Adventurer): Visitor {
-    const b = deskBox(a.desk);
+    const desks = desksOf(this.state);
+    const b = deskBox(a.desk, desks);
     const sword = swordOf(a.wants);
+    const set = a.shield > 0;
     const mid = ORDER.x + ORDER.w / 2;
     const body = this.image(ADVENTURER.x, ADVENTURER.y, adventurerTexture(a.look)).setOrigin(0);
     const card = this.image(ORDER.x - 13, ORDER.y - 2, 'order-card').setOrigin(0);
-    // A gem order shows the gemmed sword, a loose gem beside it and the doubled price.
-    const price = this.add
-      .text(mid, ORDER.y + 17, `${orderPrice(a, this.state.stars)} coins${a.gem ? ' (×2)' : ''}`, { fontFamily: FONT, fontStyle: 'bold', fontSize: '14px', color: '#9a5a10' })
-      .setOrigin(0.5);
-    const wants = this.image(mid, ORDER.y + 49, swordTexture(a.wants, a.gem), swordScale(0.82));
+    // A gem order shows the gemmed sword, a loose gem beside it and the doubled price; a set order
+    // shows the sword and the buckler side by side, and what the two pay before the set bonus.
+    const coins = set ? `${orderPrice(a, this.state) + shieldPrice(a, this.state)} coins +50%` : `${orderPrice(a, this.state)} coins${a.gem ? ' (×2)' : ''}`;
+    const price = this.add.text(mid, ORDER.y + 17, coins, { fontFamily: FONT, fontStyle: 'bold', fontSize: '14px', color: '#9a5a10' }).setOrigin(0.5);
+    const wants = this.image(set ? mid - 30 : mid, ORDER.y + 49, swordTexture(a.wants, a.gem), swordScale(set ? 0.7 : 0.82));
     const gem = this.image(mid + 50, ORDER.y + 52, 'gem', 0.5).setVisible(a.gem);
+    const buckler = set ? this.image(mid + 34, ORDER.y + 50, shieldTexture(a.shield), 0.5) : null;
+    const ticks = set ? [mid - 30, mid + 34].map((x) => this.image(x, ORDER.y + 50, 'tick').setVisible(false)) : [];
+    const label = a.gem ? `${sword.name} + gem` : set ? `${sword.name} + ${shieldOf(a.shield).name}` : sword.name;
     const name = this.add
-      .text(mid, ORDER.y + 86, a.gem ? `${sword.name} + gem` : sword.name, { fontFamily: FONT, fontStyle: 'bold', fontSize: a.gem ? '12px' : '13px', color: '#2a1a14' })
+      .text(mid, ORDER.y + 86, label, { fontFamily: FONT, fontStyle: 'bold', fontSize: label.length > 28 ? '9px' : label.length > 24 ? '10.5px' : a.gem || set ? '12px' : '13px', color: '#2a1a14' })
       .setOrigin(0.5);
-    // Between the order card and the patience bar: the trait, or that this hero is back from a quest.
-    const line = a.trait !== 'none' ? TRAIT_LINES[a.trait] : a.returned ? 'Back from the quest' : '';
-    const trait = this.add.text(mid, ORDER.y + ORDER.h + 8.5, line, textStyle(11, TRAIT_COLOURS[a.trait], 2.5)).setOrigin(0.5);
+    // Between the order card and the patience bar: the trait, that this is a set order, or that this hero is back from a quest.
+    const line = a.trait !== 'none' ? TRAIT_LINES[a.trait] : set ? 'Set: sword and buckler, +50%' : a.returned ? 'Back from the quest' : '';
+    const trait = this.add.text(mid, ORDER.y + ORDER.h + 8.5, line, textStyle(11, set ? '#ffd36a' : TRAIT_COLOURS[a.trait], 2.5)).setOrigin(0.5);
     const tagImage = this.image(0, 0, 'tag-exact').setOrigin(0);
     const tagTop = this.add.text(TAG.w / 2 + 1, 11.5, '', textStyle(10, '#eaffd8', 2)).setOrigin(0.5);
     const tagBottom = this.add.text(TAG.w / 2 + 1, 23.5, '', textStyle(11, '#ffe27a', 2)).setOrigin(0.5);
     const tag = this.add.container(TAG.x, TAG.y, [tagImage, tagTop, tagBottom]).setVisible(false);
-    const root = this.add.container(b.x, b.y, [body, card, price, wants, gem, name, trait, tag]).setDepth(20);
+    const parts = [body, card, price, wants, gem, ...(buckler ? [buckler] : []), ...ticks, name, trait, tag];
+    const root = this.add.container(b.x, b.y, parts).setDepth(20).setScale(deskScale(desks));
     root.setAlpha(0);
     this.tweens.add({ targets: root, alpha: 1, duration: 300 });
-    return { root, tag, tagImage, tagTop, tagBottom };
+    return { root, setSword: set ? wants : null, setShield: buckler, ticks, tag, tagImage, tagTop, tagBottom };
   }
 
   /**
@@ -403,6 +483,10 @@ export class GameScene extends Phaser.Scene {
     const done = events.some((e) => e.kind === 'commission');
     for (const e of events) {
       if (e.kind === 'forged' || e.kind === 'merged' || e.kind === 'set' || e.kind === 'repaired') {
+        if (e.kind === 'merged' && e.master) {
+          const at = this.placeSpot(e.slot);
+          this.float(at.x, at.y + 62, 'Masterwork! Pays +50%, never rusts', '#ffe27a', 1800);
+        }
         const sprite = this.spriteAt(e.slot);
         const at = this.placeSpot(e.slot);
         if (!sprite) continue;
@@ -419,12 +503,12 @@ export class GameScene extends Phaser.Scene {
         const at = this.placeSpot(e.slot);
         this.float(at.x, at.y - 20, `Rusted down to a ${swordOf(e.tier).name}`, '#e08a5a', 1800);
       } else if (e.kind === 'returned') {
-        const c = deskCentre(e.desk);
+        const c = deskCentre(e.desk, desksOf(this.state));
         this.float(c.x, c.y + 24, `Back from the quest! +${e.trophy}c trophy`, '#9ad0ff', 2000);
         const at = this.placeSpot(e.slot);
         this.float(at.x, at.y - 20, `A battered ${swordOf(e.tier).name}`, '#9ad0ff', 2000);
       } else if (e.kind === 'charter') {
-        this.float(VIEW.w / 2, VIEW.h / 2, `A new charter: ${this.state.stars} guild stars, +${Math.round(STAR_PRICE * 100 * this.state.stars)}% on every sale`, '#ffd36a', 2600);
+        this.float(VIEW.w / 2, VIEW.h / 2 - 170, `A new charter: ${freeStars(this.state)} guild stars, +${Math.round(STAR_PRICE * 100 * freeStars(this.state))}% on every sale`, '#ffd36a', 2600);
       } else if (e.kind === 'streak') {
         this.hammerStreak(e.slot, e.streak, e.coins);
       } else if (e.kind === 'delivered') {
@@ -432,12 +516,19 @@ export class GameScene extends Phaser.Scene {
       } else if (e.kind === 'commission') {
         this.commissionDone(e.reward, e.won);
       } else if (e.kind === 'sold') {
-        const c = deskCentre(e.desk);
+        const c = deskCentre(e.desk, desksOf(this.state));
         const message = e.fit === 'exact' ? `Exact fit! +${e.coins} coins` : e.fit === 'lesser' ? `+${e.coins} coins (one below)` : `+${e.coins} coins (overkill)`;
         this.float(c.x + 40, c.y, message, e.fit === 'exact' ? '#ffd36a' : '#d8d0e0');
       } else if (e.kind === 'left') {
-        const c = deskCentre(e.desk);
+        const c = deskCentre(e.desk, desksOf(this.state));
         this.float(c.x, c.y, 'Left unhappy: reputation down', '#ff8a6a');
+      } else if (e.kind === 'handed') {
+        const c = deskCentre(e.desk, desksOf(this.state));
+        this.float(c.x, c.y, e.shield ? 'Buckler taken: now the sword' : 'Sword taken: now the buckler', '#ffe7a8');
+      } else if (e.kind === 'perk') {
+        this.float(VIEW.w / 2, VIEW.h / 2 + 150, `${PERKS[e.perk].name}: ${PERKS[e.perk].blurb}`, '#ffd36a', 2200);
+      } else if (e.kind === 'edict') {
+        this.float(VIEW.w / 2, VIEW.h / 2, `By edict: ${EDICTS[e.edict].name}`, '#ffd36a', 2200);
       }
     }
   }
@@ -504,28 +595,32 @@ export class GameScene extends Phaser.Scene {
     const g = this.marks;
     const s = this.state;
     g.clear();
+    const desks = desksOf(s);
+    const k = deskScale(desks);
     for (const a of s.adventurers) {
-      const b = deskBox(a.desk);
+      const b = deskBox(a.desk, desks);
       const left = Math.max(0, a.patienceMs / a.patience);
       const n = PATIENCE.segments;
       const on = Math.ceil(n * left);
       const col = left > 0.5 ? 0x4ac060 : left > 0.2 ? 0xf0c040 : 0xe05040;
-      const w = PATIENCE.w / n;
-      for (let k = 0; k < n; k++) {
-        const x = b.x + PATIENCE.x + k * w;
-        const y = b.y + PATIENCE.y;
-        g.fillStyle(k < on ? col : 0x2a2436).fillRect(x, y, w, PATIENCE.h);
-        if (k < on) g.fillStyle(0xffffff, 0.25).fillRect(x + 1, y + 1, w - 2, 3);
-        g.lineStyle(1.5, LEAD).strokeRect(x, y, w, PATIENCE.h);
+      const w = (PATIENCE.w / n) * k;
+      const h = PATIENCE.h * k;
+      for (let j = 0; j < n; j++) {
+        const x = b.x + PATIENCE.x * k + j * w;
+        const y = b.y + PATIENCE.y * k;
+        g.fillStyle(j < on ? col : 0x2a2436).fillRect(x, y, w, h);
+        if (j < on) g.fillStyle(0xffffff, 0.25).fillRect(x + 1, y + 1, w - 2, 3 * k);
+        g.lineStyle(1.5, LEAD).strokeRect(x, y, w, h);
       }
     }
     if (s.streakMs > 0) {
-      // The streak's timer ring round the anvil of the last merge, draining until the chain breaks.
+      // The streak's timer ring round the anvil of the last merge, draining until the chain breaks;
+      // it turns gold for its last second, when a merge strikes a Masterwork.
       const c = this.placeSpot(s.streakSlot);
       const r = 40;
       const start = -Math.PI / 2;
       g.lineStyle(8, LEAD).strokeCircle(c.x, c.y + 4, r);
-      g.lineStyle(4.5, 0xff8a2a);
+      g.lineStyle(4.5, s.streakMs <= MASTER_MS ? 0xffe27a : 0xff8a2a);
       g.beginPath();
       g.arc(c.x, c.y + 4, r, start, start + Math.PI * 2 * (s.streakMs / STREAK_MS));
       g.strokePath();
@@ -556,16 +651,30 @@ export class GameScene extends Phaser.Scene {
     const buyers = new Set<number>();
     for (const a of s.adventurers) {
       const v = this.visitors.get(a.id);
-      const buys = item !== null && fitOf(item, a) !== 'short';
+      const fit = takes(a, item);
+      const buys = fit !== 'short';
       if (buys) buyers.add(a.desk);
       if (!v) continue;
+      // A set order ticks off the half already handed over.
+      v.setSword?.setAlpha(a.given.sword !== null ? 0.35 : 1);
+      v.setShield?.setAlpha(a.given.shield !== null ? 0.35 : 1);
+      v.ticks.forEach((tick, j) => tick.setVisible((j === 0 ? a.given.sword : a.given.shield) !== null));
       v.tag.setVisible(buys);
-      if (!buys) continue;
-      const fit = fitOf(item, a);
+      if (!buys || item === null) continue;
+      if (a.shield > 0) {
+        // The second half completes the set and shows what it pays; the first only promises it.
+        const swordItem = isShield(item) ? a.given.sword : item;
+        const completes = swordItem !== null && (isShield(item) || a.given.shield !== null);
+        v.tagImage.setTexture(completes ? 'tag-exact' : 'tag-overkill');
+        v.tagTop.setText(completes ? 'Set complete' : 'Set: 1 of 2').setFontSize(10).setColor(completes ? '#eaffd8' : '#d8d0e0');
+        v.tagBottom.setText(completes ? `${setPay(swordItem!, a, s)}c` : 'pays at 2/2').setColor(completes ? '#ffe27a' : '#b8acc4');
+        continue;
+      }
       const exact = fit === 'exact';
-      const pay = payFor(item, a, s.stars);
+      const pay = payFor(item, a, s);
       v.tagImage.setTexture(exact ? 'tag-exact' : 'tag-overkill');
-      v.tagTop.setText(tagLine(fit, a.trait)).setColor(exact ? '#eaffd8' : '#d8d0e0');
+      const line = tagLine(fit, a.trait, isMaster(item));
+      v.tagTop.setText(line).setFontSize(line.length > 13 ? 9 : 10).setColor(exact ? '#eaffd8' : '#d8d0e0');
       v.tagBottom.setText(exact ? `${pay}c` : `pays ${pay}c`).setColor(exact ? '#ffe27a' : '#b8acc4');
     }
     this.buyerFrames.forEach((frame, desk) => frame.setVisible(buyers.has(desk)).setAlpha(pulse));
@@ -580,6 +689,9 @@ export class GameScene extends Phaser.Scene {
     const full = !s.slots.includes(null);
     this.drawReputation();
     this.forgeButton.set(full ? 'Board full' : hot ? 'Forge' : 'Heating...', hot && !full, full || !hot ? 20 : 25);
+    // Once bucklers are about, a switch under the furnace says what the forge makes.
+    this.modeButton.root.setVisible(shieldsAbout(s));
+    this.modeButton.set(s.shieldMode ? 'Making bucklers · switch' : 'Making swords · switch', true, 12);
     // The heat bar: six jewel panes that light up as the forge gets hot again.
     const g = this.hud;
     const fill = Phaser.Math.Clamp(1 - s.heatMs / forgeMs(s), 0, 1);
@@ -676,6 +788,89 @@ export class GameScene extends Phaser.Scene {
     this.save();
   }
 
+  /** The window where guild stars buy lasting perks, opened from the link at the bottom or the stars in the top bar. */
+  private createPerks() {
+    const items = [
+      this.image(0, 0, 'tall-panel'),
+      this.add.text(0, -80, 'Guild perks', textStyle(22, '#ffd36a', 4)).setOrigin(0.5),
+      this.add
+        .text(0, -50, 'Spend guild stars on perks kept in every charter.\nA spent star no longer raises prices.', { ...textStyle(13, '#fff1d0', 3), align: 'center', fontStyle: 'normal' })
+        .setOrigin(0.5),
+    ];
+    PERK_IDS.forEach((id, i) => this.perkButtons.set(id, new Button(this, 0, -2 + i * 50, 'wide', '', () => this.buyPerk(id))));
+    const close = this.add
+      .text(0, 134, 'Close', { ...textStyle(13, '#fff6e0', 3.5), fontStyle: 'normal' })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+    close.on('pointerdown', () => this.perkWindow.setVisible(false));
+    this.perkWindow = this.add
+      .container(WIN.x, WIN.y, [...items, ...[...this.perkButtons.values()].map((b) => b.root), close])
+      .setDepth(UI_DEPTH + 5)
+      .setVisible(false);
+    this.perkLink = this.add
+      .text(PERK_LINK.x, PERK_LINK.y, '', { ...textStyle(12, '#ffe27a', 3.5), fontStyle: 'normal' })
+      .setOrigin(0, 0.5)
+      .setDepth(UI_DEPTH + 1)
+      .setInteractive({ useHandCursor: true });
+    this.perkLink.on('pointerdown', () => !this.windowOpen && this.perkWindow.setVisible(true));
+  }
+
+  private buyPerk(perk: Perk) {
+    if (buyPerk(this.state, perk)) this.save();
+  }
+
+  /** Fills the perk buttons: what each does, what it costs, and whether it is bought. */
+  private drawPerks() {
+    const s = this.state;
+    const free = freeStars(s);
+    this.perkLink.setText(s.stars > 0 ? `Guild perks: ${free} star${free === 1 ? '' : 's'} to spend` : '');
+    if (!this.perkWindow.visible) return;
+    for (const id of PERK_IDS) {
+      const p = PERKS[id];
+      const cost = `${p.stars} star${p.stars === 1 ? '' : 's'}`;
+      const caption = s.perks[id] ? `${p.name}: yours\n${p.blurb}` : `${p.name}: ${cost}\n${p.blurb}`;
+      this.perkButtons.get(id)!.set(caption, !s.perks[id] && free >= p.stars, 13);
+    }
+  }
+
+  /** The window where a new charter takes one of its two edicts; it stays open until one is chosen. */
+  private createEdicts() {
+    const items = [
+      this.image(0, 0, 'tall-panel'),
+      this.add.text(0, -80, 'A new charter, a new edict', textStyle(22, '#ffd36a', 4)).setOrigin(0.5),
+      this.add
+        .text(0, -50, 'The crown offers two. The one you take rules\nthis smithy until the next charter.', { ...textStyle(13, '#fff1d0', 3), align: 'center', fontStyle: 'normal' })
+        .setOrigin(0.5),
+    ];
+    this.edictButtons = [0, 1].map((k) => new Button(this, 0, 6 + k * 56, 'wide', '', () => this.chooseEdict(k)));
+    this.edictWindow = this.add
+      .container(WIN.x, WIN.y, [...items, ...this.edictButtons.map((b) => b.root)])
+      .setDepth(UI_DEPTH + 5)
+      .setVisible(false);
+    this.edictName = this.add.text(EDICT_PLAQUE.x, EDICT_PLAQUE.y - 9, '', textStyle(13, '#ffd36a', 3.5)).setOrigin(0.5).setDepth(UI_DEPTH + 1);
+    this.edictLine = this.add
+      .text(EDICT_PLAQUE.x, EDICT_PLAQUE.y + 9, '', { ...textStyle(11.5, '#fff1d0', 3.5), fontStyle: 'normal' })
+      .setOrigin(0.5)
+      .setDepth(UI_DEPTH + 1);
+  }
+
+  private chooseEdict(k: number) {
+    const two = edictOffers(this.state);
+    if (two && chooseEdict(this.state, two[k])) this.save();
+  }
+
+  /** Shows the edict window while a new charter waits for its edict, and the plaque with the one in force. */
+  private drawEdicts() {
+    const s = this.state;
+    const two = edictOffers(s);
+    this.edictWindow.setVisible(two !== null && !this.win.visible);
+    two?.forEach((id: Edict, k) => this.edictButtons[k].set(`${EDICTS[id].name}\n${EDICTS[id].blurb}`, true, 13));
+    const rule = s.edict ? EDICTS[s.edict] : null;
+    this.edictName.setText(rule ? `Edict: ${rule.name}` : '');
+    this.edictLine.setText(rule ? rule.short : '');
+    this.drawPerks();
+  }
+
   /** The window with the crown's two offers for the next commission: as it stands, or grand (gemmed) for much more. */
   private createChooser() {
     const items = [
@@ -734,6 +929,8 @@ export class GameScene extends Phaser.Scene {
     this.soldText = top(14.5).setOrigin(1, 0.5);
     this.starsText = top(15).setOrigin(1, 0.5);
     this.star = this.image(0, 20, 'star').setDepth(UI_DEPTH + 1);
+    // Tapping the stars opens the guild perks too.
+    this.star.setInteractive({ useHandCursor: true }).on('pointerdown', () => !this.windowOpen && this.perkWindow.setVisible(true));
     this.createBanner();
     this.bannerFrame = this.image(BANNER.x + BANNER.w / 2, BANNER.y + BANNER.h / 2, 'frame-banner').setDepth(UI_DEPTH + 2).setVisible(false);
     const r = REPUTATION;
@@ -770,7 +967,9 @@ export class GameScene extends Phaser.Scene {
     this.coinsText.setText(`Coins ${s.coins}`);
     this.bestText.setText(`Best sword: ${s.bestTier > 0 ? swordOf(s.bestTier).name : 'none yet'}`);
     this.soldText.setText(`Sold ${s.sold}`).setX(this.bestText.x - this.bestText.width - 16);
-    this.starsText.setText(s.stars > 0 ? `${s.stars} · +${Math.round(STAR_PRICE * 100 * s.stars)}%` : '').setX(this.soldText.x - this.soldText.width - 12);
+    // The stars still raising prices; the edict's price change is on its plaque.
+    const free = freeStars(s);
+    this.starsText.setText(s.stars > 0 ? `${free} · +${Math.round(STAR_PRICE * 100 * free)}%` : '').setX(this.soldText.x - this.soldText.width - 12);
     this.star.setVisible(s.stars > 0).setX(this.starsText.x - this.starsText.width - 12);
     this.hint.setText(s.adventurers.length === 0 && s.sold === 0 ? 'An adventurer is on the way...' : '');
     this.discovered.forEach(({ frame, sword }, i) => {
@@ -801,7 +1000,7 @@ export class GameScene extends Phaser.Scene {
     b.title.setText(title).setFontSize(title.length > 14 ? 11.5 : 13);
     if (c.count === 1 && !c.gem) {
       need = 2;
-      have = ready ? need : Math.min(need, items.filter((item) => item !== null && !isGem(item) && tierOf(item) === c.tier - 1).length);
+      have = ready ? need : Math.min(need, items.filter((item) => item !== null && isSword(item) && tierOf(item) === c.tier - 1).length);
       b.progress.setText(ready ? 'Ready: drag it here' : `${swordOf(c.tier - 1).name}s ${have}/${need}`);
     } else {
       need = c.count;
@@ -842,5 +1041,6 @@ export class GameScene extends Phaser.Scene {
     this.swords.fill(null);
     this.win.setVisible(false);
     this.chooser.setVisible(false);
+    this.perkWindow.setVisible(false);
   }
 }

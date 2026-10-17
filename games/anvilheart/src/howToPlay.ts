@@ -25,6 +25,14 @@ export const howToPlay: HowToPlay = {
     },
     { input: 'Drag a gem onto a plain sword', action: 'Set the gem in it' },
     {
+      input: 'Tap the switch under the furnace',
+      action: 'Forge bucklers instead of swords, once you have made a Knight\'s Blade',
+    },
+    {
+      input: 'Tap Guild perks or the stars',
+      action: 'Spend guild stars on lasting perks',
+    },
+    {
       input: 'Tap an upgrade, the barrel or the fifth row',
       action: 'Buy it with your coins',
     },
@@ -39,9 +47,12 @@ export const howToPlay: HowToPlay = {
   tips: [
     'The exact sword an adventurer asked for pays 50% more; a better one only pays what they asked.',
     'Merges within 4 seconds of each other build a hammer streak that pays bonus coins.',
+    "A merge while the streak's ring glows gold, in its last second, makes a Masterwork: it pays 50% more and never rusts.",
     'Adventurers leave if they wait too long, and that lowers your guild reputation.',
     'A good reputation brings adventurers more often and makes them wait longer.',
     'A sword left alone on an anvil for 3 minutes dulls and then drops a tier; the quench barrel keeps it safe.',
     'Two Dragonslayers merge into the Anvilheart, which the Crown Blade commission asks for.',
+    'Some adventurers order a sword and buckler set: hand over both, in either order, for a 50% bonus.',
+    'Each new charter after the win makes you choose one of two edicts that change its rules.',
   ],
 };

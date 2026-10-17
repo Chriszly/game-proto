@@ -1,6 +1,8 @@
-import { isGem, isGemmed, tierOf, validItem } from './items';
+import { isGem, isGemmed, isMaster, isShield, isSword, tierOf, validItem } from './items';
 import { swordOf } from './swords';
+import { SHIELD_TOP, shieldOf } from './shields';
 import { COMMISSIONS } from './commissions';
+import { EDICT_IDS, edictRule, noPerks, spentStars, type Edict, type Perk } from './charter';
 import type { UpgradeId } from './upgrades';
 
 /**
@@ -12,8 +14,9 @@ export const SLOTS = GRID.cols * GRID.rows;
 export const MAX_SLOTS = GRID.cols * GRID.maxRows;
 /** Where the quench barrel is, wherever a place on the board (0 to `MAX_SLOTS - 1`) can be given. */
 export const BARREL = -1;
-/** How many adventurers fit at the counter at once. */
+/** How many adventurers fit at the counter at once, and with the Fourth desk perk. */
 export const DESKS = 3;
+export const MAX_DESKS = 4;
 /** How many adventurer pictures there are: a knight, a ranger, a viking and a mage. */
 export const LOOKS = 4;
 
@@ -35,6 +38,9 @@ export const STREAK_MS = 4000;
 export const STREAK_COINS = 5;
 /** The longest streak that still raises the bonus, so a long chain pays at most `STREAK_COINS * STREAK_TOP` a merge. */
 export const STREAK_TOP = 5;
+/** A merge in the streak ring's last this-many milliseconds strikes a Masterwork, which pays this much more and never rusts. */
+export const MASTER_MS = 1000;
+export const MASTER_PAY = 1.5;
 
 /** Guild reputation, from 0 to `REP_MAX`: where a new smithy starts, and what moves it. */
 export const REP_MAX = 100;
@@ -79,6 +85,16 @@ export const RETURN_MS = 30_000;
 export const TROPHY_PAY = 0.1;
 export const REPAIR_PAY = 0.2;
 
+/**
+ * Bucklers: once the smithy has made a Knight's Blade the forge can switch to making them, and some
+ * adventurers ordering a Shortsword or better want a sword and shield set, which pays the sword and
+ * the buckler with a bonus on top, and gives them more patience.
+ */
+export const SHIELD_TIER = 4;
+export const SET_ORDER_CHANCE = 0.2;
+export const SET_PAY = 1.5;
+export const SET_PATIENCE = 1.4;
+
 /** What an adventurer asks for. */
 export interface Order {
   /** The least tier they will take. */
@@ -86,6 +102,8 @@ export interface Order {
   /** Whether they want a gem set in it, which pays double. */
   gem: boolean;
   trait: Trait;
+  /** The least buckler tier they want with it as a set, or 0 for a sword alone. */
+  shield: number;
 }
 
 export interface Adventurer extends Order {
@@ -98,6 +116,8 @@ export interface Adventurer extends Order {
   look: number;
   /** Whether this is a hero back from a quest with a battered sword. */
   returned: boolean;
+  /** The half of a set already handed over: the sword and the buckler, or null for neither yet. */
+  given: { sword: number | null; shield: number | null };
 }
 
 /** A hero on the way back with a battered sword, and the trophy they bring. */
@@ -148,13 +168,20 @@ export interface GameState {
   streak: number;
   streakSlot: number;
   streakMs: number;
+  /** Whether the forge makes bucklers instead of swords, and the best buckler made so far. */
+  shieldMode: boolean;
+  bestShield: number;
+  /** The guild perks bought with stars; kept across charters. */
+  perks: Record<Perk, boolean>;
+  /** This charter's edict, or null (the first smithy has none, and a new charter's waits for a choice). */
+  edict: Edict | null;
   /** Things that just happened, for the scene to animate; it empties the list as it draws them. */
   events: GameEvent[];
 }
 
 export type GameEvent =
   | { kind: 'forged'; slot: number; tier: number }
-  | { kind: 'merged'; slot: number; tier: number }
+  | { kind: 'merged'; slot: number; tier: number; master: boolean }
   | { kind: 'set'; slot: number }
   | { kind: 'repaired'; slot: number; tier: number; coins: number }
   | { kind: 'rusted'; slot: number; tier: number }
@@ -164,6 +191,9 @@ export type GameEvent =
   | { kind: 'charter'; charter: number }
   | { kind: 'sold'; desk: number; tier: number; coins: number; fit: Fit }
   | { kind: 'returned'; desk: number; slot: number; tier: number; trophy: number }
+  | { kind: 'handed'; desk: number; shield: boolean }
+  | { kind: 'perk'; perk: Perk }
+  | { kind: 'edict'; edict: Edict }
   | { kind: 'left'; desk: number };
 
 /** What is kept between visits: the board, the coins and the upgrades. */
@@ -182,6 +212,10 @@ export interface Progress {
   barrel: number | null;
   reputation: number;
   won: boolean;
+  shieldMode: boolean;
+  bestShield: number;
+  perks: Record<Perk, boolean>;
+  edict: Edict | null;
 }
 
 export const freshProgress = (): Progress => ({
@@ -199,6 +233,10 @@ export const freshProgress = (): Progress => ({
   barrel: null,
   reputation: REP_START,
   won: false,
+  shieldMode: false,
+  bestShield: 0,
+  perks: noPerks(),
+  edict: null,
 });
 
 /** How many anvils the smithy has: 16, or 20 with the fifth row. */
@@ -234,6 +272,10 @@ export function newShop(progress: Progress): GameState {
     streak: 0,
     streakSlot: 0,
     streakMs: 0,
+    shieldMode: progress.shieldMode === true,
+    bestShield: Math.min(SHIELD_TOP, count(progress.bestShield)),
+    perks: { barrel: progress.perks?.barrel === true, rust: progress.perks?.rust === true, desk: progress.perks?.desk === true },
+    edict: EDICT_IDS.includes(progress.edict as Edict) ? progress.edict : null,
     events: [],
   };
 }
@@ -253,6 +295,10 @@ export const progressOf = (s: GameState): Progress => ({
   barrel: s.barrel,
   reputation: s.reputation,
   won: s.won,
+  shieldMode: s.shieldMode,
+  bestShield: s.bestShield,
+  perks: { ...s.perks },
+  edict: s.edict,
 });
 
 /** A whole number of at least 0 from a save, or 0. */
@@ -266,44 +312,69 @@ const count = (n: unknown) => (typeof n === 'number' && Number.isFinite(n) && n 
 export type Fit = 'exact' | 'overkill' | 'lesser' | 'short';
 export function fitOf(item: number, order: Order): Fit {
   const tier = tierOf(item);
+  // A buckler only goes with a set order: one at least as good as the one asked for.
+  if (isShield(item)) return order.shield === 0 || tier < order.shield ? 'short' : tier === order.shield ? 'exact' : 'overkill';
   if (isGem(item) || (order.gem && !isGemmed(item))) return 'short';
   if (tier === order.wants) return 'exact';
   if (tier > order.wants) return order.trait === 'noble' ? 'short' : 'overkill';
   return order.trait === 'veteran' && tier === order.wants - 1 ? 'lesser' : 'short';
 }
+/** What sets prices besides the order: the guild stars not spent on perks, and the charter's edict. */
+export type Market = Pick<GameState, 'stars' | 'perks' | 'edict'>;
+/** Guild stars still raising prices: those not spent on perks. */
+export const freeStars = (m: Market) => Math.max(0, m.stars - spentStars(m.perks));
+/** How much every price is raised: 5% per unspent guild star, times the edict's. */
+export const priceFactor = (m?: Market, gem = false) => {
+  if (!m) return 1;
+  const rule = edictRule(m.edict);
+  return (1 + STAR_PRICE * freeStars(m)) * rule.pay * (gem ? 1 : rule.plainPay);
+};
 /** What an order is worth: the sword's price, doubled for a gemmed one, raised a little per guild star. */
-export const orderPrice = (order: Order, stars = 0) => Math.floor(swordOf(order.wants).price * (order.gem ? GEM_PAY : 1) * (1 + STAR_PRICE * stars));
+export const orderPrice = (order: Order, m?: Market) => Math.floor(swordOf(order.wants).price * (order.gem ? GEM_PAY : 1) * priceFactor(m, order.gem));
+/** What a set order's buckler adds, before the set bonus. */
+export const shieldPrice = (order: Order, m?: Market) => (order.shield > 0 ? Math.floor(shieldOf(order.shield).price * priceFactor(m)) : 0);
 /**
  * What an adventurer pays for a sword: the order's price with a tip for an exact fit (triple for a
  * Noble), and only the order's price for a better or, to a Veteran, a lesser one. A Haggler pays a
- * share of any of those. A sword that does not fit is not bought.
+ * share of any of those, and a Masterwork pays half again. A sword that does not fit is not bought.
  */
-export function payFor(item: number, order: Order, stars = 0) {
+export function payFor(item: number, order: Order, m?: Market) {
   const fit = fitOf(item, order);
-  if (fit === 'short') return 0;
-  const price = orderPrice(order, stars);
-  const paid = fit !== 'exact' ? price : order.trait === 'noble' ? price * NOBLE_PAY : Math.floor(price * (1 + EXACT_TIP));
+  if (fit === 'short' || isShield(item)) return 0;
+  const price = orderPrice(order, m);
+  const tipped = fit !== 'exact' ? price : order.trait === 'noble' ? price * NOBLE_PAY : Math.floor(price * (1 + EXACT_TIP));
+  const paid = isMaster(item) ? Math.floor(tipped * MASTER_PAY) : tipped;
   return order.trait === 'haggler' ? Math.floor(paid * HAGGLER_PAY) : paid;
 }
+/** What a set pays once both halves are in: the sword's pay and the buckler's price, with the set bonus. */
+export const setPay = (swordItem: number, order: Order, m?: Market) => Math.floor((payFor(swordItem, order, m) + shieldPrice(order, m)) * SET_PAY);
 
-/** The forge's heat-up time with the bellows bought so far. */
-export const forgeMs = (s: GameState) => Math.round(FORGE_MS * Math.pow(0.8, s.ranks.bellows));
+/** The forge's heat-up time with the bellows bought so far (and the edict's). */
+export const forgeMs = (s: GameState) => Math.round(FORGE_MS * Math.pow(0.8, s.ranks.bellows) * edictRule(s.edict).forge);
 /** The chance the forge makes an Iron Shortsword rather than a dagger. */
 export const oreChance = (s: GameState) => 0.2 * s.ranks.ore;
 /** Whether the forge makes swords by itself: the Auto Forge is bought and switched on. */
 export const autoForging = (s: GameState) => s.ranks.auto > 0 && s.autoForge;
 /** Whether gems turn up yet: once the smithy has made a Steel Sword. */
 export const gemsAbout = (s: GameState) => s.bestTier >= GEM_TIER;
+/** The chance a forge makes a gem, once gems are about. */
+export const gemChance = (s: GameState) => GEM_CHANCE * edictRule(s.edict).gems;
+/** Whether the forge can make bucklers yet: once the smithy has made a Knight's Blade. */
+export const shieldsAbout = (s: GameState) => s.bestTier >= SHIELD_TIER;
+/** How many desks the counter has: three, or four with the perk. */
+export const desksOf = (s: Pick<GameState, 'perks'>) => (s.perks.desk ? MAX_DESKS : DESKS);
 /** How long after a visitor the next one comes: half again as long at no reputation, half as long at full. */
-export const visitorEveryMs = (s: GameState) => Math.round(VISITOR_EVERY_MS * (1.5 - s.reputation / REP_MAX));
+export const visitorEveryMs = (s: GameState) => Math.round((VISITOR_EVERY_MS * (1.5 - s.reputation / REP_MAX)) / edictRule(s.edict).visitors);
 /** How much longer than usual adventurers wait: 25% less at no reputation, 25% more at full. */
 export const patienceFactor = (s: GameState) => 0.75 + s.reputation / (2 * REP_MAX);
-/** Whether an anvil's sword can rust: a sword above the Rusty Dagger (gems and daggers never rust). */
-export const rusts = (item: number | null) => item !== null && !isGem(item) && tierOf(item) > 1;
-/** Whether the sword on an anvil has dulled: it has lain `RUST_MS` untouched. */
-export const dull = (s: GameState, slot: number) => rusts(s.slots[slot] ?? null) && s.idle[slot] >= RUST_MS;
+/** Whether an anvil's item can rust: a sword above the Rusty Dagger that is no Masterwork (gems, daggers and bucklers never rust). */
+export const rusts = (item: number | null) => item !== null && isSword(item) && tierOf(item) > 1 && !isMaster(item);
+/** How long a sword lies before it dulls: twice as long with oiled anvils. */
+export const rustMs = (s: GameState) => RUST_MS * (s.perks.rust ? 2 : 1);
+/** Whether the sword on an anvil has dulled: it has lain `rustMs` untouched. */
+export const dull = (s: GameState, slot: number) => rusts(s.slots[slot] ?? null) && s.idle[slot] >= rustMs(s);
 /** How far a dulled sword is from dropping a tier, 1 just dulled down to 0. */
-export const rustLeft = (s: GameState, slot: number) => Math.max(0, 1 - (s.idle[slot] - RUST_MS) / RUST_DROP_MS);
+export const rustLeft = (s: GameState, slot: number) => Math.max(0, 1 - (s.idle[slot] - rustMs(s)) / RUST_DROP_MS);
 /** What a hero's trophy is worth, and what repairing a battered sword pays: shares of the sword's price. */
 export const trophyFor = (tier: number) => Math.floor(swordOf(tier).price * TROPHY_PAY);
 export const repairPay = (item: number) => Math.floor(swordOf(tierOf(item)).price * REPAIR_PAY);
