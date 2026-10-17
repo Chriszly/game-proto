@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
+import { playMusic, playSting, ui } from '../../../../shared/audio';
 import { settings } from '../../../../shared/settings';
+import { CALM, STINGS, WAVES, sfx } from '../audio';
 import { TREE_FLOWERS, bakeGarden, gardenBg } from '../art/textures';
 import { GARDENS, cellAt, pathPoint } from '../game/board';
 import {
@@ -17,6 +19,7 @@ import {
   HEDGE,
   MAX_LEVEL,
   MOVE_FEE,
+  PEST_INFO,
   PESTS,
   SEEDS,
   STAR_LEAVES,
@@ -177,6 +180,8 @@ export class GameScene extends Phaser.Scene {
   private boonBox: Phaser.GameObjects.Container | null = null;
   /** The warm stripes on the rows the Sunny row boons shine on. */
   private sunGfx!: Phaser.GameObjects.Graphics;
+  /** The music part playing: calm between waves, battle or boss while pests come. */
+  private musicPart: 'calm' | 'battle' | 'boss' | null = null;
 
   constructor() {
     super('Game');
@@ -233,6 +238,8 @@ export class GameScene extends Phaser.Scene {
       .setDepth(UI_DEPTH)
       .setAlpha(0);
     this.refresh();
+    this.musicPart = null;
+    this.syncMusic();
   }
 
   update(time: number) {
@@ -241,13 +248,22 @@ export class GameScene extends Phaser.Scene {
     this.lastFrame = time;
     const s = this.state;
     const { wave, heart, phase, bloom, harvest } = s;
+    const before = this.soundWatch();
     // The garden picker (and the harvest and game-over screens) and a boon pick waiting to be made
     // hold the game still behind them.
     tick(s, this.picker || s.offer.length ? 0 : dt * (s.fast ? FAST : 1));
+    this.tickSounds(before);
     if (s.heart < heart) this.heartHit();
     if (s.wave > wave) this.waveDone(wave, bloom, false);
-    if (s.harvest && !harvest) this.showPicker('harvest');
-    if (s.phase === 'over' && phase !== 'over') this.showPicker('over');
+    if (s.harvest && !harvest) {
+      playSting(STINGS, `harvest${s.harvest}`);
+      this.showPicker('harvest');
+    }
+    if (s.phase === 'over' && phase !== 'over') {
+      playSting(STINGS, 'lose');
+      this.showPicker('over');
+    }
+    this.syncMusic();
     // The boon pick waits for the harvest screen to close.
     if (s.offer.length && !this.picker && !this.boonBox) this.showBoons();
     for (const pop of s.pops) this.sapPop(pop);
@@ -261,6 +277,47 @@ export class GameScene extends Phaser.Scene {
     this.drawShots();
     this.drawHover();
     this.refresh();
+  }
+
+  /** What the frame's sounds are told from: the next id, seeds still growing, hedges and armoured pests' health. */
+  private soundWatch() {
+    const s = this.state;
+    return {
+      nextId: s.nextId,
+      growing: new Set(s.golems.filter((g) => g.growMs > 0).map((g) => g.id)),
+      hedges: new Set(s.hedges.map((h) => h.id)),
+      armoured: new Map(s.pests.filter((p) => PEST_INFO[p.kind].armour).map((p) => [p.id, p.hp])),
+    };
+  }
+
+  /**
+   * The sounds of what the rules just did, at most one of each a frame: throws (one per golem
+   * kind), seeds grown, pests coming in, armour clinks, hedges chewed through and pests squashed.
+   */
+  private tickSounds(before: ReturnType<GameScene['soundWatch']>) {
+    const s = this.state;
+    const thrown = new Set(s.shots.filter((shot) => shot.id >= before.nextId).map((shot) => shot.kind));
+    for (const kind of thrown) sfx(kind);
+    if (s.golems.some((g) => before.growing.has(g.id) && g.growMs === 0)) sfx('grown');
+    const come = new Set(s.pests.filter((p) => p.id >= before.nextId).map((p) => p.kind));
+    if (come.has('crow')) sfx('caw');
+    if (come.has('mole')) sfx('dig');
+    if (come.has('queen')) sfx('groan');
+    if (s.pests.some((p) => (before.armoured.get(p.id) ?? 0) > p.hp)) sfx('clink');
+    if ([...before.hedges].some((id) => !s.hedges.some((h) => h.id === id))) sfx('snap');
+    if (s.pops.length) {
+      sfx('squash');
+      sfx('sap');
+    }
+  }
+
+  /** Plays the calm part between waves, battle while pests come, and boss on a Queen Slug wave. */
+  private syncMusic() {
+    const s = this.state;
+    const part = s.phase === 'wave' ? (s.wave % BOSS_EVERY === 0 ? 'boss' : 'battle') : 'calm';
+    if (part === this.musicPart) return;
+    this.musicPart = part;
+    playMusic(part === 'calm' ? CALM : WAVES, part);
   }
 
   /** A pressed clay label: bold text with a light lower edge, as if stamped into the clay. */
@@ -298,16 +355,31 @@ export class GameScene extends Phaser.Scene {
     this.moving = null;
     this.formMenu = false;
     if (moving) {
-      move(s, moving, col, row);
+      if (move(s, moving, col, row)) sfx('move');
+      else ui('refuse');
       this.picked = null;
     } else {
       const golem = golemAt(s, col, row);
-      if (golem) this.picked = this.picked === golem.id ? null : golem.id;
-      else if (this.picked !== null) this.picked = null;
-      else if (gardenOf(s).map[row][col] === 'heart') regrow(s);
-      else plant(s, col, row);
+      if (golem) {
+        this.picked = this.picked === golem.id ? null : golem.id;
+        ui('click');
+      } else if (this.picked !== null) this.picked = null;
+      else if (gardenOf(s).map[row][col] === 'heart') this.regrowLeaf();
+      else {
+        const kind = s.selected;
+        if (plant(s, col, row)) sfx(kind === 'hedge' ? 'rustle' : 'plant');
+        else ui('refuse');
+      }
     }
     this.refresh();
+  }
+
+  /** Regrows a Heartwood leaf (a tap on the tree or the leaf tag), or buzzes when it can't. */
+  private regrowLeaf() {
+    if (regrow(this.state)) {
+      sfx('rustle');
+      sfx('chime');
+    } else ui('refuse');
   }
 
   private golemById(id: number | null) {
@@ -318,7 +390,10 @@ export class GameScene extends Phaser.Scene {
     const ink = '#4a2e18';
     this.press(HUD.title.x, HUD.title.y, t('title'), 19, '#f2c44a');
     const garden = this.add.image(HUD.garden.x, HUD.garden.y, 'pill');
-    garden.setInteractive({ useHandCursor: true }).on('pointerdown', () => this.showPicker('choose'));
+    garden.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+      ui('click');
+      this.showPicker('choose');
+    });
     const tagText = t(this.state.thorny ? 'gardenTagThorny' : 'gardenTag', { garden: t(gardenOf(this.state).name) });
     this.press(HUD.garden.x, HUD.garden.y, tagText, 10.5, this.state.thorny ? '#7a2a4a' : '#4a2e18', [0.5, 0.5]);
     // The leaf tag regrows a leaf too, like a tap on the Heartwood.
@@ -327,7 +402,7 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => {
-        regrow(this.state);
+        this.regrowLeaf();
         this.refresh();
       });
     const flowers = Array.from({ length: BLOOM_GOAL }, (_, i) => this.add.image(HUD.bloom.flowers + i * HUD.bloom.gap, HUD.y, 'bud').setScale(0.92));
@@ -349,6 +424,7 @@ export class GameScene extends Phaser.Scene {
     };
     const bg = this.add.image(SPEED_BUTTON.x, SPEED_BUTTON.y, 'speed');
     bg.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+      ui('click');
       this.state.fast = !this.state.fast;
       this.refresh();
     });
@@ -365,7 +441,8 @@ export class GameScene extends Phaser.Scene {
       const rim = this.add.image(x, y, `rim-${h}`).setVisible(false);
       const card = this.add.image(x, y, `card-${h}`);
       card.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
-        select(this.state, kind);
+        if (select(this.state, kind)) sfx('select');
+        else ui('refuse');
         this.moving = null;
         this.refresh();
       });
@@ -438,6 +515,9 @@ export class GameScene extends Phaser.Scene {
       const s = this.state;
       const { wave, bloom } = s;
       const did = startWave(s);
+      if (did === 'start') sfx('horn');
+      else if (did === 'early') sfx('whistle');
+      else ui('refuse');
       if (did === 'early') this.waveDone(wave, bloom, true);
       else if (did === 'start' && s.wave % BOSS_EVERY === 0) this.announce([t('queenWave', { n: s.wave })]);
       this.refresh();
@@ -485,21 +565,36 @@ export class GameScene extends Phaser.Scene {
     if (this.formMenu) {
       const forms = formsOf(g.kind);
       if (i < forms.length) {
-        if (upgrade(s, g, forms[i])) this.formMenu = false;
-      } else if (i === forms.length) this.formMenu = false;
+        if (upgrade(s, g, forms[i])) {
+          this.formMenu = false;
+          sfx('form');
+        } else ui('refuse');
+      } else if (i === forms.length) {
+        this.formMenu = false;
+        ui('click');
+      }
       return;
     }
     if (i === 0) {
-      if (picksForm(g)) this.formMenu = upgradeCost(g) !== null && s.sap >= upgradeCost(g)!;
-      else upgrade(s, g);
+      if (picksForm(g)) {
+        this.formMenu = upgradeCost(g) !== null && s.sap >= upgradeCost(g)!;
+        if (this.formMenu) ui('click');
+        else ui('refuse');
+      } else if (upgrade(s, g)) sfx('raise', { pitch: 2 ** ((g.level - 2) * 4 / 12) });
+      else ui('refuse');
     } else if (i === 1) {
-      setTarget(s, g, nextTarget(g));
+      if (setTarget(s, g, nextTarget(g))) sfx('aim');
+      else ui('refuse');
     } else if (i === 2) {
-      if (s.sap < MOVE_FEE) return;
+      if (s.sap < MOVE_FEE) return ui('refuse');
+      ui('click');
       this.moving = g.id;
       this.picked = null;
     } else {
-      uproot(s, g);
+      if (uproot(s, g)) {
+        sfx('uproot');
+        ui('coin');
+      }
       this.picked = null;
     }
   }
@@ -553,6 +648,7 @@ export class GameScene extends Phaser.Scene {
       if (here) parts.push(this.add.image(x, y, 'gcard-rim'));
       const card = this.add.image(x, y, open ? 'gcard' : 'gcard-locked');
       const plantIt = (thorny: boolean) => {
+        ui('click');
         saveGarden(i);
         saveThorny(thorny);
         this.scene.restart();
@@ -579,7 +675,12 @@ export class GameScene extends Phaser.Scene {
       parts.push(caption);
     });
     if (mode !== 'over') {
-      parts.push(makeButton(this, VIEW.w / 2, 492, t(mode === 'harvest' ? 'keepGoing' : 'back'), () => this.closePicker()));
+      parts.push(
+        makeButton(this, VIEW.w / 2, 492, t(mode === 'harvest' ? 'keepGoing' : 'back'), () => {
+          ui('click');
+          this.closePicker();
+        }),
+      );
     }
     return this.add.container(0, 0, parts).setDepth(UI_DEPTH + 10);
   }
@@ -617,7 +718,7 @@ export class GameScene extends Phaser.Scene {
       const x = VIEW.w / 2 + (i - (s.offer.length - 1) / 2) * (w + gap);
       const card = this.add.image(x, y, 'gcard');
       card.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
-        takeBoon(s, boon);
+        if (takeBoon(s, boon)) sfx('boon');
         this.boonBox?.destroy();
         this.boonBox = null;
         this.announce([t('boonBanner', { name: t(BOON_INFO[boon].name) }), t(BOON_INFO[boon].blurb)]);
@@ -1142,6 +1243,11 @@ export class GameScene extends Phaser.Scene {
     if (s.bloom > bloomBefore) lines.push(s.bloom >= BLOOM_GOAL ? t('bloomBanner') : t('budBanner', { n: s.bloom, goal: BLOOM_GOAL }));
     if (early && s.wave % BOSS_EVERY === 0) lines.push(t('queenComing'));
     this.announce(lines);
+    // A natural clear jingles (a call early has just whistled); a bud chimes higher for each one
+    // open, and the full bloom rings a chord.
+    if (!early) sfx('cleared');
+    if (s.bloom >= BLOOM_GOAL && bloomBefore < BLOOM_GOAL) sfx('bloom');
+    else if (s.bloom > bloomBefore) sfx('bud', { pitch: [1, 9 / 8, 5 / 4, 3 / 2, 5 / 3][s.bloom - 1] ?? 1 });
   }
 
   /** Shows the banner over the garden for a moment. */
@@ -1152,6 +1258,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private heartHit() {
+    sfx('bite');
     this.cameras.main.shake(160, 0.006);
     if (settings.reduceMotion) return;
     this.tree.setTint(0xffb08a);
