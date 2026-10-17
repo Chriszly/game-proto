@@ -62,6 +62,7 @@ import {
 } from './sim';
 import { WATER, inMap, idx, type Node } from './map';
 import { aiLog } from '../../../../shared/watch';
+import { t } from '../i18n';
 
 /**
  * The AI plays at a human pace: it looks at its side every THINK_MS and gives at most
@@ -143,9 +144,9 @@ function plan(s: GameState) {
   // and the towers, and once the base is clear again they go back to work.
   const threat = [...s.units.values()].some((u) => u.owner !== ME && u.owner !== NEUTRAL && u.hp > 0 && isSoldier(UNITS[u.type].role) && Math.hypot(u.x - town.tx - 2, u.y - town.ty - 2) <= BELL_RANGE);
   if (threat && !p.bell) {
-    if (act(() => ringBell(s, ME) > 0)) log('rings the town bell');
+    if (act(() => ringBell(s, ME) > 0)) log(t('logRingBell'));
   } else if (!threat && p.bell) {
-    if (act(() => (releaseBell(s, ME), true))) log('sends the villagers back to work');
+    if (act(() => (releaseBell(s, ME), true))) log(t('logReleaseBell'));
   }
 
   // 0. Every unfinished building gets a builder, so none is left waiting for one. A palisade gets one
@@ -162,7 +163,7 @@ function plan(s: GameState) {
 
   // 1. Economy: villagers from the Town Center until the target, when it's idle.
   if (town.queue.length === 0 && villagers.length + garrisoned(s, ME) < TARGET_VILLAGERS && affordable(p, UNITS.villager.cost)) {
-    if (act(() => train(s, ME, town.id, 'villager'))) log('trains a villager');
+    if (act(() => train(s, ME, town.id, 'villager'))) log(t('logTrain', { unit: t('villager') }));
   }
 
   // 2. Population: a house before the cap is hit.
@@ -194,7 +195,7 @@ function plan(s: GameState) {
 
   // 3b. A palisade with a gate across the side its foe comes from, from the temperament's age.
   if (T.wall && p.age >= T.wall.age && hasBuilt(s, ME, 'barracks') && !hasBuildingFor(s, ME, 'gate') && p.res.wood >= 60 + T.wall.half * 15) {
-    if (act(() => buildWall(s, town))) log('lays a palisade with a gate');
+    if (act(() => buildWall(s, town))) log(t('logWall'));
   }
 
   // 3c. Rally flags: each production building sends its soldiers to a spot in front of the base.
@@ -214,7 +215,7 @@ function plan(s: GameState) {
       const done = id === 'age2' ? p.age >= 2 : p.techs.includes(id);
       return def.at === at && !done && (!def.age2 || p.age >= 2) && affordable(p, def.cost);
     });
-    if (tech && act(() => research(s, ME, b.id, tech))) log(`researches ${TECHS[tech].name}`);
+    if (tech && act(() => research(s, ME, b.id, tech))) log(t('logResearch', { tech: t(TECHS[tech].name) }));
   }
 
   // 5. Military: train from each production building in turn, while the army is under the cap. In
@@ -230,7 +231,7 @@ function plan(s: GameState) {
       if (!producer) continue;
       const cost = unitCost(s, ME, def);
       if (!affordable(p, cost)) continue;
-      if (act(() => train(s, ME, producer.id, def.id))) log(`trains a ${def.name}`);
+      if (act(() => train(s, ME, producer.id, def.id))) log(t('logTrain', { unit: t(def.name) }));
     }
   }
 
@@ -238,13 +239,13 @@ function plan(s: GameState) {
   const market = [...s.buildings.values()].find((b) => b.owner === ME && b.type === 'market' && b.built);
   if (market) {
     if (market.queue.length === 0 && unitCount(s, ME, 'cart') < AI_CARTS && affordable(p, UNITS.cart.cost)) {
-      if (act(() => train(s, ME, market.id, 'cart'))) log('trains a Trade Cart');
+      if (act(() => train(s, ME, market.id, 'cart'))) log(t('logTrain', { unit: t('cart') }));
     }
     for (const res of ['wood', 'food'] as const) {
       if (p.res.ore < 100 && p.res[res] >= SWAP_HIGH) {
-        if (act(() => trade(s, ME, res, 'sell'))) log(`sells ${res} at the Market`);
+        if (act(() => trade(s, ME, res, 'sell'))) log(t('logSell', { res: t(res) }));
       } else if (p.res[res] < SWAP_LOW && p.res.ore >= 250) {
-        if (act(() => trade(s, ME, res, 'buy'))) log(`buys ${res} at the Market`);
+        if (act(() => trade(s, ME, res, 'buy'))) log(t('logBuy', { res: t(res) }));
       }
     }
   }
@@ -270,7 +271,7 @@ function plan(s: GameState) {
         Object.assign(raid, { goal: { kind: 'town', x: monument.tx + half, y: monument.ty + half, b: monument.id, camp: null }, foe: FOE, party: ids, started: s.time, count: raid.count + 1 });
       }
       startRaid(s, ME, FOE, ids);
-      log(`sends all ${army.length} soldiers at the enemy Monument`);
+      log(t('logMonumentRush', { n: army.length }));
     }
   } else if (raid.goal) {
     pressRaid(s, town);
@@ -284,7 +285,7 @@ function plan(s: GameState) {
       issue(s, ME, ids, { t: 'attackMove', x: goal.x, y: goal.y });
       // The player is told about each new raid.
       startRaid(s, ME, FOE, ids);
-      log(`raids the ${FACTIONS[s.players[FOE].faction].name}'s ${goalName(s, goal)} with ${ids.length} soldiers`);
+      log(t('logRaid', { faction: t(FACTIONS[s.players[FOE].faction].name), goal: goalName(s, goal), n: ids.length }));
     }
   } else if (army.length >= ARMY_FOR_RELIC && ready.length >= army.length / 2) {
     // 6b. Between raids, a fair-sized army goes to take the nearest relic the AI doesn't hold.
@@ -293,7 +294,7 @@ function plan(s: GameState) {
       .sort((a, b) => Math.hypot(a.tx - town.tx, a.ty - town.ty) - Math.hypot(b.tx - town.tx, b.ty - town.ty))[0];
     const spot = relic ? campSpots(s, relic)[0] : undefined;
     if (spot && act(() => (issue(s, ME, army.map((u) => u.id), { t: 'attackMove', x: spot.x, y: spot.y }), true))) {
-      log(`sends ${army.length} soldiers for the ${RELICS[relic.relic!].name}`);
+      log(t('logRelic', { n: army.length, relic: t(RELICS[relic.relic!].name) }));
     }
   }
 
@@ -305,8 +306,8 @@ function plan(s: GameState) {
   }
 
   // 8. The Age II boon and the Age III edge, as the temperament likes them.
-  if (p.boonPending && chooseBoon(s, ME, T.boon)) log(`picks the ${BOONS[T.boon].name} boon`);
-  if (p.edgePending && chooseEdge(s, ME, T.edge)) log(`picks ${EDGES[T.edge].name} for Age III`);
+  if (p.boonPending && chooseBoon(s, ME, T.boon)) log(t('logBoon', { boon: t(BOONS[T.boon].name) }));
+  if (p.edgePending && chooseEdge(s, ME, T.edge)) log(t('logEdge', { edge: t(EDGES[T.edge].name) }));
 }
 
 /**
@@ -344,8 +345,8 @@ function raidGoal(s: GameState): RaidGoal | null {
 
 /** How a goal reads in the watch log. */
 function goalName(s: GameState, g: RaidGoal) {
-  if (g.camp !== null) return RELICS[s.camps.find((c) => c.id === g.camp)!.relic!].name;
-  return BUILDINGS[s.buildings.get(g.b!)!.type].name;
+  if (g.camp !== null) return t(RELICS[s.camps.find((c) => c.id === g.camp)!.relic!].name);
+  return t(BUILDINGS[s.buildings.get(g.b!)!.type].name);
 }
 
 /**
@@ -367,7 +368,7 @@ function pressRaid(s: GameState, town: Building) {
     }
     // Every raider fallen is repelled by the sim already; one turned back by losses is repelled too.
     endRaid(s, ME, bled && !done);
-    log(bled && !done ? 'calls the raid back after its losses' : done ? 'raid done, heads home' : 'calls the raid off');
+    log(t(bled && !done ? 'logRaidBack' : done ? 'logRaidDone' : 'logRaidOff'));
     Object.assign(raid, { goal: null, party: [], next: s.time + T.rest });
     return;
   }
@@ -485,7 +486,7 @@ function buildWall(s: GameState, town: Building): boolean {
 function startBuild(s: GameState, owner: number, type: BuildingId, spot: { tx: number; ty: number }, idle: Unit[]) {
   const id = placeBuilding(s, owner, type, spot.tx, spot.ty);
   if (id === null) return false;
-  log(`builds a ${BUILDINGS[type].name}`);
+  log(t('logBuild', { building: t(BUILDINGS[type].name) }));
   const builder = nearestUnit(idle, spot.tx, spot.ty) ?? nearestVillager(s, owner, spot.tx, spot.ty);
   if (builder) issue(s, owner, [builder.id], { t: 'build', b: id });
   return true;

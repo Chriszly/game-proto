@@ -1,7 +1,8 @@
 import type { HowToPlay } from '../../../shared/howToPlay';
+import { byLanguage } from '../../../shared/i18n';
 
-export const howToPlay: HowToPlay = {
-  goal: 'Destroy the enemy Town Center (both of them in a three-way match), or hold a Monument for three minutes. If your own Town Center falls, you lose.',
+const en: HowToPlay = {
+  goal: 'Destroy the enemy Town Centre (both of them in a three-way match), or hold a Monument for three minutes. If your own Town Centre falls, you lose.',
   controls: [
     { input: 'Left click, or drag a box', action: 'Select units or a building; Shift adds to the selection' },
     { input: 'Right click', action: 'Gather, build, attack or walk; with a building selected, set its rally flag' },
@@ -17,17 +18,60 @@ export const howToPlay: HowToPlay = {
     'Pick the map kind and one or two AI rivals, then a faction on the menu.',
     'Send villagers to chop wood, gather food and mine ore.',
     'Build houses for population, then train more villagers and soldiers.',
-    'Research Age II at the Town Center and pick your boon.',
-    'Complete the three deeds to reach Age III, pick its edge, then march on the enemy Town Center.',
+    'Research Age II at the Town Centre and pick your boon.',
+    'Complete the three deeds to reach Age III, pick its edge, then march on the enemy Town Centre.',
   ],
   tips: [
-    'Villagers carry ten at a time to the Town Center, or to a Lumber or Mining Camp.',
+    'Villagers carry ten at a time to the Town Centre, or to a Lumber or Mining Camp.',
     "The enemy's first raid comes no sooner than six minutes in, and a horn warns you.",
-    'Each AI is a Raider, a Builder or a Warden; scout its Town Center to learn which.',
-    'Ring the bell at the Town Center to shelter villagers; press Back to work when the raid is over.',
+    'Each AI is a Raider, a Builder or a Warden; scout its Town Centre to learn which.',
+    'Ring the bell at the Town Centre to shelter villagers; press Back to work when the raid is over.',
     'Kill the guards at a camp to claim its cart of ore or food, or hold its relic for a bonus.',
     'Soldiers earn ranks from kills, adding health and damage.',
     'Rams break buildings and walls but cannot hurt units, so give them an escort.',
     'Each faction has its own building, shown last on the first page of the build list.',
   ],
 };
+
+/** US English only changes the spelling. */
+const us = (text: string) => text.replace(/Town Centre/g, 'Town Center');
+const enUS: HowToPlay = {
+  goal: us(en.goal),
+  controls: en.controls.map((c) => ({ input: us(c.input), action: us(c.action) })),
+  loop: en.loop.map(us),
+  tips: en.tips.map(us),
+};
+
+const de: HowToPlay = {
+  goal: 'Zerstöre das feindliche Stadtzentrum (beide in einem Spiel zu dritt) oder halte ein Denkmal drei Minuten lang. Fällt dein eigenes Stadtzentrum, verlierst du.',
+  controls: [
+    { input: 'Linksklick oder Rahmen ziehen', action: 'Einheiten oder ein Gebäude wählen; Umschalt fügt zur Auswahl hinzu' },
+    { input: 'Rechtsklick', action: 'Sammeln, bauen, angreifen oder laufen; mit gewähltem Gebäude seine Sammelflagge setzen' },
+    { input: 'Tippen, auf einem Touchscreen', action: 'Mit gewählten Einheiten den Rechtsklick-Befehl geben; eigene Einheit oder eigenes Gebäude antippen, um es zu wählen' },
+    { input: 'A, dann Linksklick', action: 'Angriffsmarsch: dorthin laufen und unterwegs kämpfen' },
+    { input: 'S', action: 'Die gewählten Einheiten anhalten' },
+    { input: 'B oder die untere Leiste', action: 'Mit gewählten Dorfbewohnern die Bauliste öffnen, dann einen Platz anklicken' },
+    { input: '1 bis 9 (Strg zum Speichern)', action: 'Eine Gruppe wählen oder die Auswahl darin speichern' },
+    { input: 'Pfeiltasten, Bildschirmrand oder Minikarte', action: 'Die Karte verschieben' },
+    { input: 'Esc', action: 'Setzen eines Gebäudes oder Angriffsmarsch abbrechen' },
+  ],
+  loop: [
+    'Wähle im Menü die Kartenart und eine oder zwei KI-Gegner, dann ein Volk.',
+    'Schick Dorfbewohner zum Holzfällen, Nahrungsammeln und Erzabbau.',
+    'Baue Häuser für mehr Bevölkerung, dann bilde weitere Dorfbewohner und Soldaten aus.',
+    'Erforsche Zeitalter II im Stadtzentrum und wähle deine Gabe.',
+    'Vollbringe die drei Taten für Zeitalter III, wähle dessen Vorzug und zieh dann gegen das feindliche Stadtzentrum.',
+  ],
+  tips: [
+    'Dorfbewohner tragen je zehn zum Stadtzentrum oder zu einem Holz- oder Erzlager.',
+    'Der erste feindliche Überfall kommt frühestens nach sechs Minuten, und ein Horn warnt dich.',
+    'Jede KI ist Plünderer, Baumeister oder Wächter; erkunde ihr Stadtzentrum, um es herauszufinden.',
+    'Läute die Glocke im Stadtzentrum, damit Dorfbewohner Schutz suchen; drück An die Arbeit, wenn der Überfall vorbei ist.',
+    'Besiege die Wachen eines Lagers, um seinen Vorrat an Erz oder Nahrung zu holen, oder halte sein Relikt für einen Bonus.',
+    'Soldaten steigen durch Siege im Rang auf und gewinnen Leben und Schaden.',
+    'Rammböcke zerschlagen Gebäude und Mauern, können Einheiten aber nichts tun, also gib ihnen Geleitschutz.',
+    'Jedes Volk hat ein eigenes Gebäude, als letztes auf der ersten Seite der Bauliste.',
+  ],
+};
+
+export const howToPlay: HowToPlay = byLanguage({ en, 'en-US': enUS, de });

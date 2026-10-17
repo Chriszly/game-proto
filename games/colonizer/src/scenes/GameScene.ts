@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { renderScale, splitHudCamera, viewPoint } from '../../../../shared/scaling';
 import {
+  AURA_DMG,
   AURA_RANGE,
   BOONS,
   BUILD_MORE,
@@ -13,6 +14,7 @@ import {
   HEAL_RANGE,
   MAP_SIZE,
   MARKET_LOT,
+  RANK_KILLS,
   RANK_NAMES,
   RELICS,
   TECHS,
@@ -20,7 +22,7 @@ import {
   TEMPERAMENTS,
   TILE,
   UNIQUE,
-  UNIQUE_TEXT,
+  UNIQUE_EFFECT,
   UNITS,
   isSoldier,
   unitFor,
@@ -29,7 +31,7 @@ import {
   type EdgeId,
   type FactionId,
   type MapKind,
-  type Resource,
+  type Cost,
 } from '../game/data';
 import { generateMap, idx } from '../game/map';
 import {
@@ -78,6 +80,7 @@ import {
 import { think } from '../game/planner';
 import { byDifficulty, settings } from '../../../../shared/settings';
 import { mountWatch, watching, watchSteps } from '../../../../shared/watch';
+import { t, type TextKey } from '../i18n';
 import { FEET, FRAME, WOOL } from '../art/figures';
 import { BUILDING_TOP, CAMP_TOP, CHUNK, paintChunk, TREE_TOP } from '../art/scenery';
 import { hexNum, SERIF, T } from '../art/stitch';
@@ -92,6 +95,9 @@ const RAID_TOAST_MS = 10_000;
 const FOG_RES = 256;
 
 interface Hud {
+  /** What the button does, in no language: a unit, building, tech, boon or edge id, or an action such as 'build'. */
+  id: string;
+  /** The text on the button, its name and the line under it. */
   label: string;
   x: number;
   y: number;
@@ -125,7 +131,7 @@ export class GameScene extends Phaser.Scene {
   status!: StatusCard;
   /** Buttons in the bottom panel (and the boon cards), in screen coordinates, for the test and for hit-testing. */
   hud: Hud[] = [];
-  /** Drop-off badges shown for the player, newest last, such as '+10 wood'. */
+  /** Drop-off badges shown for the player, newest last, such as '+10 wood' (by resource id, in no language). */
   popLog: string[] = [];
   /** Raid toasts shown, newest last. */
   toastLog: string[] = [];
@@ -240,7 +246,7 @@ export class GameScene extends Phaser.Scene {
     this.state = createGame(sides, map, watching);
     const side = (k: number) => {
       const p = this.state.players[k];
-      return { name: `${FACTIONS[p.faction].name} (${TEMPERAMENTS[p.temperament ?? 'builder'].name})`, color: WOOL[p.faction].cloth };
+      return { name: `${t(FACTIONS[p.faction].name)} (${t(TEMPERAMENTS[p.temperament ?? 'builder'].name)})`, color: WOOL[p.faction].cloth };
     };
     mountWatch({ sides: Object.fromEntries([PLAYER, ...this.aiSides.filter((k) => k !== PLAYER)].map((k) => [k, side(k)])), time: () => this.state.time });
     const town = [...this.state.buildings.values()].find((b) => b.owner === PLAYER && b.type === 'town')!;
@@ -667,7 +673,7 @@ export class GameScene extends Phaser.Scene {
       // A production building on its own: a right click plants its rally flag.
       const b = this.selectedBuilding();
       if (b && this.selectedUnits().length === 0 && BUILDINGS[b.type].trains) {
-        if (setRally(this.state, PLAYER, b.id, tx, ty)) say(this.state, 'Rally flag set');
+        if (setRally(this.state, PLAYER, b.id, tx, ty)) say(this.state, t('rallySet'));
         return;
       }
       this.commandAt(tx, ty);
@@ -732,7 +738,7 @@ export class GameScene extends Phaser.Scene {
         if (!additive) this.selectOwn([]);
         const camp = campAt(this.state, b.x, b.y);
         if (camp) say(this.state, this.campText(camp));
-        else if (postAt(this.state, b.x, b.y)) say(this.state, 'A trading post: trade carts from a Market load ore here');
+        else if (postAt(this.state, b.x, b.y)) say(this.state, t('tradingPost'));
         return;
       }
       if (hit.owner !== PLAYER && hit.kind !== 'node') {
@@ -776,17 +782,17 @@ export class GameScene extends Phaser.Scene {
     }
     const b = this.selectedBuilding();
     if (!b || !BUILDINGS[b.type].trains || (own && !farm)) return false;
-    if (setRally(this.state, PLAYER, b.id, tx, ty)) say(this.state, 'Rally flag set');
+    if (setRally(this.state, PLAYER, b.id, tx, ty)) say(this.state, t('rallySet'));
     return true;
   }
 
   /** What a camp is, for the notice shown when it is clicked. */
   private campText(c: Camp) {
     const guarded = c.guards.some((id) => this.state.units.has(id));
-    if (c.kind === 'cache') return `A cache of ${c.amount} ${c.res}${guarded ? ', guarded by brigands' : ': stand by it to take it'}`;
+    if (c.kind === 'cache') return t(guarded ? 'cacheGuarded' : 'cacheFree', { n: c.amount, res: t(c.res!) });
     const r = RELICS[c.relic!];
-    const by = c.holder === null ? (guarded ? 'guarded' : 'nobody holds it') : c.holder === PLAYER ? 'yours' : 'held by the enemy';
-    return `${r.name}: ${r.text.toLowerCase()} (${by})`;
+    const by = c.holder === null ? (guarded ? 'relicGuarded' : 'relicNobody') : c.holder === PLAYER ? 'relicYours' : 'relicEnemy';
+    return t('campRelic', { relic: t(r.name), effect: t(r.text), by: t(by) });
   }
 
   /** A right click: attack, gather, build, or walk, depending on what is under it. */
@@ -852,11 +858,11 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     if (!affordable(p, def.cost)) {
-      say(this.state, 'Not enough resources');
+      say(this.state, t('notEnoughResources'));
       return;
     }
     if (!canPlace(this.state, type, ox, oy, PLAYER)) {
-      say(this.state, def.shore ? 'A Dock must stand on the shore' : "Can't build there");
+      say(this.state, t(def.shore ? 'dockShore' : 'cantBuild'));
       return;
     }
     const id = placeBuilding(this.state, PLAYER, type, ox, oy);
@@ -871,7 +877,7 @@ export class GameScene extends Phaser.Scene {
   private tryWall(from: { tx: number; ty: number }, to: { tx: number; ty: number }, keep: boolean) {
     const ids = placeWall(this.state, PLAYER, wallLine(from.tx, from.ty, to.tx, to.ty));
     if (ids.length === 0) {
-      say(this.state, affordable(this.state.players[PLAYER], BUILDINGS.wall.cost) ? "Can't build there" : 'Not enough wood');
+      say(this.state, t(affordable(this.state.players[PLAYER], BUILDINGS.wall.cost) ? 'cantBuild' : 'notEnoughWood'));
       return;
     }
     const builders = this.selectedUnits().filter((u) => UNITS[u.type].role === 'villager');
@@ -934,7 +940,7 @@ export class GameScene extends Phaser.Scene {
     if (r && r.target === PLAYER && r.n !== this.lastRaid) {
       this.lastRaid = r.n;
       this.raidToastUntil = s.time + RAID_TOAST_MS;
-      this.toastLog.push(`HERE THE ${FACTIONS[s.players[r.by].faction].name.toUpperCase()} RAID FROM THE ${r.from.toUpperCase()}`);
+      this.toastLog.push(t('raidToast', { faction: t(FACTIONS[s.players[r.by].faction].name), from: t(r.from) }).toUpperCase());
     }
     if (r && r.target === PLAYER && s.time < this.raidToastUntil) {
       const v = this.cameras.main.worldView;
@@ -950,23 +956,23 @@ export class GameScene extends Phaser.Scene {
     for (const f of this.selFigs) f.setVisible(false);
     this.selBig.setVisible(false);
     if (this.placing || this.attackMode) {
-      this.selTitle.setText(this.placing ? `PLACE ${BUILDINGS[this.placing].name.toUpperCase()}` : 'ATTACK-MOVE');
+      this.selTitle.setText((this.placing ? t('placeTitle', { building: t(BUILDINGS[this.placing].name) }) : t('attackMoveTitle')).toUpperCase());
       const how =
         this.placing === 'wall'
-          ? 'Drag a line on the map: 4 wood a stake.\nRight click or Esc to cancel.'
+          ? t('placeWall', { n: BUILDINGS.wall.cost.wood ?? 0 })
           : this.placing === 'gate'
-            ? 'Click a gap or your own palisade.\nOnly your units pass through it.'
+            ? t('placeGate')
             : this.placing === 'dock'
-              ? 'Click a spot on the shore.\nRight click or Esc to cancel.'
+              ? t('placeDock')
               : this.placing
-                ? 'Click the map where it should stand.\nRight click or Esc to cancel.'
-                : 'Click where the army should go.\nRight click or Esc to cancel.';
-      this.selInfo.setPosition(SEL.x + 2, SEL.y + 24).setText(how);
+                ? t('placeAny')
+                : t('attackHow');
+      this.info(2, 24, how);
       return;
     }
     const units = this.selectedUnits();
     if (units.length > 1) {
-      this.selTitle.setText(`${units.length} UNITS`);
+      this.selTitle.setText(t('unitsTitle', { n: units.length }).toUpperCase());
       this.selInfo.setText('');
       [...units]
         .sort((a, b) => (a.type < b.type ? -1 : a.type > b.type ? 1 : a.id - b.id))
@@ -984,51 +990,56 @@ export class GameScene extends Phaser.Scene {
     if (units.length === 1) {
       const u = units[0];
       const def = UNITS[u.type];
-      this.selTitle.setText(def.name.toUpperCase());
+      this.selTitle.setText(t(def.name).toUpperCase());
       this.selBig.setTexture(figKey(u.type, this.faction), this.frameOf(u)).setOrigin(FEET.x / FRAME, FEET.y / FRAME).setScale(1.3).setPosition(SEL.x + 34, SEL.y + 96).setVisible(true);
-      const lines = [`Health ${Math.ceil(u.hp)} of ${maxHp(u)}`];
-      if (u.carry && u.amount > 0) lines.push(`Carrying ${u.amount} ${u.carry}`);
-      if (u.rank > 0) lines.push(`${RANK_NAMES[u.rank]}, rank ${['', 'I', 'II', 'III'][u.rank]}: ${u.kills} kills`);
-      else if (def.role !== 'villager' && def.role !== 'cart' && def.role !== 'siege') lines.push(`${u.kills} kill${u.kills === 1 ? '' : 's'}: rank I at 2`);
-      if (def.gift === 'aura') lines.push('Soldiers near it deal +2 damage');
-      if (def.gift === 'sight') lines.push('Sees far across the fog');
-      if (def.gift === 'heal') lines.push('Mends units near it');
-      if (def.role === 'siege') lines.push('Smashes buildings, walls and gates; harmless to units');
-      if (inAura(this.state, u) && def.gift !== 'aura') lines.push('In the Warlord\'s aura');
+      const lines = [t('health', { hp: Math.ceil(u.hp), max: maxHp(u) })];
+      if (u.carry && u.amount > 0) lines.push(t('carrying', { n: u.amount, res: t(u.carry) }));
+      if (u.rank > 0) lines.push(t('rankLine', { rank: t(RANK_NAMES[u.rank - 1]), numeral: ['I', 'II', 'III'][u.rank - 1], n: u.kills }));
+      else if (def.role !== 'villager' && def.role !== 'cart' && def.role !== 'siege') lines.push(t('killsLine', { n: u.kills, at: RANK_KILLS[0] }));
+      if (def.gift === 'aura') lines.push(t('giftAura', { n: AURA_DMG }));
+      if (def.gift === 'sight') lines.push(t('giftSight'));
+      if (def.gift === 'heal') lines.push(t('giftHeal'));
+      if (def.role === 'siege') lines.push(t('ramInfo'));
+      if (inAura(this.state, u) && def.gift !== 'aura') lines.push(t('inAura'));
       lines.push(doing(u));
-      this.selInfo.setPosition(SEL.x + 76, SEL.y + 26).setText(lines.join('\n'));
+      this.info(76, 26, lines.join('\n'));
       return;
     }
     const b = this.selectedBuilding();
     if (b) {
       const def = BUILDINGS[b.type];
-      this.selTitle.setText(def.name.toUpperCase());
+      this.selTitle.setText(t(def.name).toUpperCase());
       const key = buildingKey(this.faction, b.type);
       const src = this.textures.get(key).getSourceImage();
       const k = Math.min(70 / src.width, 70 / src.height);
       this.selBig.setTexture(key).setOrigin(0, 0).setScale(k).setPosition(SEL.x, SEL.y + 22).setVisible(true);
-      const lines = [b.built ? `Health ${Math.ceil(b.hp)} of ${buildingHp(this.state, b)}` : `Building, ${Math.floor((1 - b.buildLeft / def.time) * 100)}% done`];
+      const lines = [b.built ? t('health', { hp: Math.ceil(b.hp), max: buildingHp(this.state, b) }) : t('underConstruction', { pct: Math.floor((1 - b.buildLeft / def.time) * 100) })];
       const head = b.queue[0];
       if (head) {
-        const name = head.kind === 'unit' ? UNITS[head.key].name : TECHS[head.key].name;
+        const name = t(head.kind === 'unit' ? UNITS[head.key].name : TECHS[head.key].name);
         const total = head.kind === 'unit' ? UNITS[head.key].time : TECHS[head.key].time;
-        lines.push(`${name}: ${Math.ceil(head.left / 1000)}s`);
+        lines.push(t('queueHead', { name, s: Math.ceil(head.left / 1000) }));
         stitchLine(g, SEL.x + 84, SEL.y + 70, SEL.x + 200, SEL.y + 70, 3, hexNum('#c8b890'));
         stitchLine(g, SEL.x + 84, SEL.y + 70, SEL.x + 84 + 116 * (1 - head.left / total), SEL.y + 70, 3, hexNum(T.red));
-        if (b.queue.length > 1) lines.push(`and ${b.queue.length - 1} more queued`);
+        if (b.queue.length > 1) lines.push(t('queueMore', { n: b.queue.length - 1 }));
       }
       const unique = (Object.keys(UNIQUE) as FactionId[]).find((f) => UNIQUE[f] === b.type);
-      if (unique && !head) lines.push(UNIQUE_TEXT[unique].split(': ')[1]);
-      if (b.type === 'monument' && b.built) lines.push('Stands for 3 minutes: victory');
-      if (b.type === 'gate' && b.built) lines.push('Only your units pass');
-      if (def.shelter && b.built) lines.push(b.garrison.length > 0 ? `${b.garrison.length} villager${b.garrison.length === 1 ? '' : 's'} inside, each adds an arrow` : `Shelters ${def.shelter} villagers when the bell rings`);
-      if (def.market && b.built && !head) lines.push('Ore buys wood and food;\nevery trade moves the price');
-      if (def.trains && b.built && !head) lines.push(b.rally ? 'Right click moves the rally flag' : 'Right click sets a rally flag');
-      this.selInfo.setPosition(SEL.x + 84, SEL.y + 24).setText(lines.join('\n'));
+      if (unique && !head) lines.push(t(UNIQUE_EFFECT[unique]));
+      if (b.type === 'monument' && b.built) lines.push(t('monumentInfo'));
+      if (b.type === 'gate' && b.built) lines.push(t('gateInfo'));
+      if (def.shelter && b.built) lines.push(b.garrison.length > 0 ? t('garrisonInside', { n: b.garrison.length }) : t('shelters', { n: def.shelter }));
+      if (def.market && b.built && !head) lines.push(t('marketInfo'));
+      if (def.trains && b.built && !head) lines.push(t(b.rally ? 'rallyMove' : 'rallyHint'));
+      this.info(84, 24, lines.join('\n'));
       return;
     }
-    this.selTitle.setText('NOTHING SELECTED');
-    this.selInfo.setPosition(SEL.x + 2, SEL.y + 24).setText('Drag or click your units,\nor click a building.');
+    this.selTitle.setText(t('nothingSelected').toUpperCase());
+    this.info(2, 24, t('nothingHint'));
+  }
+
+  /** The selection's lines, `dx` right of the panel's left edge, wrapped before the buttons. */
+  private info(dx: number, dy: number, lines: string) {
+    this.selInfo.setPosition(SEL.x + dx, SEL.y + dy).setWordWrapWidth(SEL.w - dx - 4).setText(lines);
   }
 
   /** Rebuilds the panel's buttons when the selection, the menus or what they show changes. */
@@ -1058,9 +1069,8 @@ export class GameScene extends Phaser.Scene {
         const x = BUTTONS.x + (i % BUTTONS.cols) * BUTTONS.dx;
         const y = BUTTONS.y + Math.floor(i / BUTTONS.cols) * BUTTONS.dy;
         const bg = this.add.image(x - 2, y - 2, a.enabled ? 'btn-on' : 'btn-off').setOrigin(0, 0).setScrollFactor(0).setDepth(10001);
-        const [name, cost] = splitLabel(a.label);
-        const label = this.add.text(x + 9, y + 9.5, name.toUpperCase(), text(10.5, a.enabled ? T.ink : T.faded, true)).setOrigin(0, 0.5).setScrollFactor(0).setDepth(10002);
-        const sub = this.add.text(x + 9, y + 21.5, cost, text(9.5, a.enabled ? '#5a3a20' : '#9a8a70')).setOrigin(0, 0.5).setScrollFactor(0).setDepth(10002);
+        const label = fitWidth(this.add.text(x + 9, y + 9.5, a.name.toUpperCase(), text(10.5, a.enabled ? T.ink : T.faded, true)).setOrigin(0, 0.5).setScrollFactor(0).setDepth(10002), BUTTONS.w - 14);
+        const sub = fitWidth(this.add.text(x + 9, y + 21.5, a.sub, text(9.5, a.enabled ? '#5a3a20' : '#9a8a70')).setOrigin(0, 0.5).setScrollFactor(0).setDepth(10002), BUTTONS.w - 14);
         if (a.enabled) {
           bg.setInteractive({ useHandCursor: true });
           bg.on('pointerover', () => bg.setTexture('btn-hot'));
@@ -1068,14 +1078,14 @@ export class GameScene extends Phaser.Scene {
           bg.on('pointerdown', () => a.run());
         }
         this.buttonObjects.push(bg, label, sub);
-        this.hud.push({ label: a.label, x, y, w: BUTTONS.w, h: BUTTONS.h });
+        this.hud.push({ id: a.id, label: a.sub ? `${a.name} ${a.sub}` : a.name, x, y, w: BUTTONS.w, h: BUTTONS.h });
       });
   }
 
   /** The Age II boon, or the Age III edge: two cards in place of the buttons until one is picked. */
   private renderPick() {
     const age3 = !this.state.players[PLAYER].boonPending;
-    const title = this.add.text(BOON.x + 2, BOON.y - 10, age3 ? 'AGE III EDGE · PICK ONE' : 'AGE II BOON · PICK ONE', text(11, T.red, true)).setOrigin(0, 0.5).setScrollFactor(0).setDepth(10002);
+    const title = this.add.text(BOON.x + 2, BOON.y - 10, t(age3 ? 'edgeTitle' : 'boonTitle').toUpperCase(), text(11, T.red, true)).setOrigin(0, 0.5).setScrollFactor(0).setDepth(10002);
     this.buttonObjects.push(title);
     const picks = age3 ? (Object.keys(EDGES) as EdgeId[]) : (Object.keys(BOONS) as BoonId[]);
     const icons: Record<BoonId | EdgeId, string> = { shieldwall: 'icon-shield', harvest: 'icon-wheat', masonry: 'icon-stone', muster: 'icon-drum' };
@@ -1085,18 +1095,18 @@ export class GameScene extends Phaser.Scene {
       const y = BOON.y;
       const bg = this.add.image(x - 2, y - 2, 'card-boon').setOrigin(0, 0).setScrollFactor(0).setDepth(10001).setInteractive({ useHandCursor: true });
       const icon = this.add.image(x + 18, y + 20, icons[id]).setScrollFactor(0).setDepth(10002);
-      const name = this.add.text(x + 34, y + 18, pick.name.toUpperCase(), text(12, T.red, true)).setOrigin(0, 0.5).setScrollFactor(0).setDepth(10002);
-      const body = id === 'shieldwall' ? `Your ${unitFor(this.faction, 'melee').name} take 20% less damage` : pick.text;
+      const name = fitWidth(this.add.text(x + 34, y + 18, t(pick.name).toUpperCase(), text(12, T.red, true)).setOrigin(0, 0.5).setScrollFactor(0).setDepth(10002), BOON.w - 44);
+      const body = id === 'shieldwall' ? t('shieldwallText', { unit: t(unitFor(this.faction, 'melee').name) }) : t(pick.text);
       const words = this.add.text(x + 12, y + 36, body, { ...text(11), wordWrap: { width: BOON.w - 24 } }).setScrollFactor(0).setDepth(10002);
-      const choose = this.add.text(x + BOON.w / 2, y + BOON.h - 9, 'CHOOSE', text(9.5, T.green, true)).setOrigin(0.5).setScrollFactor(0).setDepth(10002);
+      const choose = this.add.text(x + BOON.w / 2, y + BOON.h - 9, t('choose').toUpperCase(), text(9.5, T.green, true)).setOrigin(0.5).setScrollFactor(0).setDepth(10002);
       bg.on('pointerover', () => bg.setTexture('card-boon-hot').setPosition(x - 5, y - 5));
       bg.on('pointerout', () => bg.setTexture('card-boon').setPosition(x - 2, y - 2));
       bg.on('pointerdown', () => {
         const done = age3 ? chooseEdge(this.state, PLAYER, id as EdgeId) : chooseBoon(this.state, PLAYER, id as BoonId);
-        if (done) say(this.state, `${pick.name} chosen`);
+        if (done) say(this.state, t('picked', { name: t(pick.name) }));
       });
       this.buttonObjects.push(bg, icon, name, words, choose);
-      this.hud.push({ label: pick.name, x, y, w: BOON.w, h: BOON.h });
+      this.hud.push({ id, label: t(pick.name), x, y, w: BOON.w, h: BOON.h });
     });
   }
 
@@ -1116,12 +1126,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** What the panel offers for the current selection, as buttons. */
-  private actions(): { label: string; enabled: boolean; run: () => void }[] {
+  private actions(): Action[] {
     const s = this.state;
     const p = s.players[PLAYER];
-    const out: { label: string; enabled: boolean; run: () => void }[] = [];
-    const costOf = (cost: Partial<Record<Resource, number>>) => Object.entries(cost).map(([r, n]) => `${n}${r[0]}`).join(' ');
-    if (this.placing) return [{ label: 'Cancel', enabled: true, run: () => (this.placing = null) }];
+    const out: Action[] = [];
+    const ageName = (age: 2 | 3) => t(age === 3 ? 'age3' : 'age2');
+    if (this.placing) return [{ id: 'cancel', name: t('cancel'), sub: '', enabled: true, run: () => (this.placing = null) }];
     if (this.buildMenu) {
       // Page one: the usual buildings and the faction's own; page two: palisade, gate and Monument.
       const list = this.buildPage === 0 ? [...BUILD_ORDER, UNIQUE[this.faction]] : BUILD_MORE;
@@ -1129,7 +1139,9 @@ export class GameScene extends Phaser.Scene {
         const def = BUILDINGS[type];
         const why = notAllowed(s, PLAYER, type);
         out.push({
-          label: why && def.age ? `${def.name} (Age III)` : `${def.name} ${costOf(def.cost)}`,
+          id: type,
+          name: t(def.name),
+          sub: why && def.age ? ageName(def.age) : costText(def.cost),
           enabled: !why && affordable(p, def.cost),
           run: () => {
             this.buildMenu = false;
@@ -1138,19 +1150,19 @@ export class GameScene extends Phaser.Scene {
           },
         });
       }
-      if (this.buildPage === 0) out.push({ label: 'Walls & More', enabled: true, run: () => (this.buildPage = 1) });
-      out.push({ label: 'Back', enabled: true, run: () => (this.buildPage === 1 ? (this.buildPage = 0) : (this.buildMenu = false)) });
+      if (this.buildPage === 0) out.push({ id: 'more', name: t('wallsMore'), sub: '', enabled: true, run: () => (this.buildPage = 1) });
+      out.push({ id: 'back', name: t('back'), sub: '', enabled: true, run: () => (this.buildPage === 1 ? (this.buildPage = 0) : (this.buildMenu = false)) });
       return out;
     }
     const units = this.selectedUnits();
     const villagers = units.filter((u) => UNITS[u.type].role === 'villager');
     const carts = units.filter((u) => UNITS[u.type].role === 'cart');
     const army = units.filter((u) => isSoldier(UNITS[u.type].role));
-    if (villagers.length > 0) out.push({ label: 'Build (B)', enabled: true, run: () => (this.buildMenu = true) });
-    if (carts.length > 0) out.push({ label: 'Trade', enabled: true, run: () => issue(this.state, PLAYER, carts.map((u) => u.id), { t: 'trade' }) });
+    if (villagers.length > 0) out.push({ id: 'build', name: t('build'), sub: '', enabled: true, run: () => (this.buildMenu = true) });
+    if (carts.length > 0) out.push({ id: 'trade', name: t('trade'), sub: '', enabled: true, run: () => issue(this.state, PLAYER, carts.map((u) => u.id), { t: 'trade' }) });
     if (army.length > 0) {
-      out.push({ label: 'Attack (A)', enabled: true, run: () => (this.attackMode = true) });
-      out.push({ label: 'Stop (S)', enabled: true, run: () => issue(this.state, PLAYER, units.map((u) => u.id), { t: 'stop' }) });
+      out.push({ id: 'attack', name: t('attack'), sub: '', enabled: true, run: () => (this.attackMode = true) });
+      out.push({ id: 'stop', name: t('stop'), sub: '', enabled: true, run: () => issue(this.state, PLAYER, units.map((u) => u.id), { t: 'stop' }) });
     }
     const b = this.selectedBuilding();
     if (b && b.built) {
@@ -1162,10 +1174,12 @@ export class GameScene extends Phaser.Scene {
         const atLimit = unit.limit !== undefined && unitCount(s, PLAYER, unit.id) >= unit.limit;
         const ok = !tooEarly && !atLimit && affordable(p, cost) && popUsed(this.state, PLAYER) < popCap(this.state, PLAYER);
         out.push({
-          label: tooEarly ? `${unit.name} (Age ${unit.age === 3 ? 'III' : 'II'})` : atLimit ? `${unit.name} (one only)` : `${unit.name} ${costOf(cost)}`,
+          id: unit.id,
+          name: t(unit.name),
+          sub: tooEarly ? ageName(unit.age!) : atLimit ? t('oneOnly') : costText(cost),
           enabled: ok,
           run: () => {
-            if (!train(this.state, PLAYER, b.id, unit.id)) say(this.state, 'Not enough resources or population');
+            if (!train(this.state, PLAYER, b.id, unit.id)) say(this.state, t('notEnoughPop'));
           },
         });
       }
@@ -1173,26 +1187,29 @@ export class GameScene extends Phaser.Scene {
         // The town bell: villagers near the Town Center and the towers shelter inside until released.
         out.push(
           p.bell
-            ? { label: 'Back to work', enabled: true, run: () => void releaseBell(this.state, PLAYER) }
-            : { label: 'Ring the bell', enabled: true, run: () => void ringBell(this.state, PLAYER) },
+            ? { id: 'release', name: t('backToWork'), sub: '', enabled: true, run: () => void releaseBell(this.state, PLAYER) }
+            : { id: 'bell', name: t('ringBell'), sub: '', enabled: true, run: () => void ringBell(this.state, PLAYER) },
         );
       }
       if (def.market) {
         for (const res of ['wood', 'food'] as const) {
           const buy = marketPrice(s, PLAYER, res, 'buy');
           const sell = marketPrice(s, PLAYER, res, 'sell');
-          out.push({ label: `Buy ${MARKET_LOT} ${res} ${buy}o`, enabled: p.res.ore >= buy, run: () => void trade(this.state, PLAYER, res, 'buy') });
-          out.push({ label: `Sell ${MARKET_LOT} ${res} ${sell}o`, enabled: p.res[res] >= MARKET_LOT, run: () => void trade(this.state, PLAYER, res, 'sell') });
+          const lot = { n: MARKET_LOT, res: t(res) };
+          out.push({ id: `buy-${res}`, name: t('buy', lot), sub: costText({ ore: buy }), enabled: p.res.ore >= buy, run: () => void trade(this.state, PLAYER, res, 'buy') });
+          out.push({ id: `sell-${res}`, name: t('sell', lot), sub: costText({ ore: sell }), enabled: p.res[res] >= MARKET_LOT, run: () => void trade(this.state, PLAYER, res, 'sell') });
         }
       }
       if (def.research) {
         for (const tech of Object.values(TECHS)) {
           if (tech.at !== 'academy') continue;
           out.push({
-            label: `${tech.name} ${costOf(tech.cost)}`,
+            id: tech.id,
+            name: t(tech.name),
+            sub: costText(tech.cost),
             enabled: affordable(p, tech.cost) && !p.techs.includes(tech.id) && (!tech.age2 || p.age >= 2),
             run: () => {
-              if (!research(this.state, PLAYER, b.id, tech.id)) say(this.state, "Can't research that yet");
+              if (!research(this.state, PLAYER, b.id, tech.id)) say(this.state, t('cantResearch'));
             },
           });
         }
@@ -1201,10 +1218,12 @@ export class GameScene extends Phaser.Scene {
         const next = p.age === 1 ? TECHS.age2 : TECHS.age3;
         const ready = p.age === 1 || deedsDone(p);
         out.push({
-          label: `${next.name} ${costOf(next.cost)}`,
+          id: next.id,
+          name: t(next.name),
+          sub: costText(next.cost),
           enabled: ready && affordable(p, next.cost) && !b.queue.some((q) => q.key === next.id),
           run: () => {
-            if (!research(this.state, PLAYER, b.id, next.id)) say(this.state, p.age === 2 ? 'Do the three deeds first' : "Can't advance yet");
+            if (!research(this.state, PLAYER, b.id, next.id)) say(this.state, t(p.age === 2 ? 'deedsFirst' : 'cantAdvance'));
           },
         });
       }
@@ -1254,19 +1273,13 @@ export class GameScene extends Phaser.Scene {
     const won = this.state.winner === PLAYER;
     const bg = this.add.rectangle(480, 270, 960, 540, hexNum(T.linen), 0.72).setScrollFactor(0);
     const card = this.add.image(480, 270, 'card-end').setScrollFactor(0);
-    const title = this.add.text(480, 245, won ? 'VICTORY' : 'DEFEAT', { ...text(44, won ? T.green : T.red, true) }).setOrigin(0.5).setScrollFactor(0);
+    const title = this.add.text(480, 245, t(won ? 'victory' : 'defeat').toUpperCase(), { ...text(44, won ? T.green : T.red, true) }).setOrigin(0.5).setScrollFactor(0);
     const how =
       this.state.winBy === 'monument'
-        ? won
-          ? 'Your Monument stood for three minutes'
-          : 'The enemy Monument stood for three minutes'
-        : won
-          ? this.rival2
-            ? 'Both rival Town Centers have fallen'
-            : 'The enemy Town Center has fallen'
-          : 'Your Town Center has fallen';
+        ? t(won ? 'endMonumentOwn' : 'endMonumentFoe')
+        : t(won ? (this.rival2 ? 'endBothFallen' : 'endFoeFallen') : 'townFallen');
     const why = this.add.text(480, 284, how, { ...text(15, T.ink), fontStyle: 'italic' }).setOrigin(0.5).setScrollFactor(0);
-    const sub = this.add.text(480, 312, 'Click to choose another faction', text(14, T.faded)).setOrigin(0.5).setScrollFactor(0);
+    const sub = this.add.text(480, 312, t('endAgain'), text(14, T.faded)).setOrigin(0.5).setScrollFactor(0);
     this.endPanel = this.add.container(0, 0, [bg, card, title, why, sub]).setScrollFactor(0).setDepth(11000);
   }
   /** The end of a watched match: which faction won and how, and a click starts another. */
@@ -1275,32 +1288,45 @@ export class GameScene extends Phaser.Scene {
     const loser = this.state.winner === PLAYER ? this.aiFaction : this.faction;
     const bg = this.add.rectangle(480, 270, 960, 540, hexNum(T.linen), 0.72).setScrollFactor(0);
     const card = this.add.image(480, 270, 'card-end').setScrollFactor(0);
-    const title = this.add.text(480, 245, `${FACTIONS[winner].name.toUpperCase()} WINS`, { ...text(34, WOOL[winner].cloth, true) }).setOrigin(0.5).setScrollFactor(0);
-    const how = this.state.winBy === 'monument' ? 'Its Monument stood for three minutes' : this.rival2 ? "Both rivals' Town Centers have fallen" : `The ${FACTIONS[loser].name} Town Center has fallen`;
+    const title = this.add.text(480, 245, t('watchWins', { faction: t(FACTIONS[winner].name) }).toUpperCase(), { ...text(34, WOOL[winner].cloth, true) }).setOrigin(0.5).setScrollFactor(0);
+    const how = this.state.winBy === 'monument' ? t('watchMonument') : this.rival2 ? t('watchBothFallen') : t('watchFallen', { faction: t(FACTIONS[loser].name) });
     const why = this.add.text(480, 284, how, { ...text(15, T.ink), fontStyle: 'italic' }).setOrigin(0.5).setScrollFactor(0);
-    const sub = this.add.text(480, 312, 'Click to watch another match', text(14, T.faded)).setOrigin(0.5).setScrollFactor(0);
+    const sub = this.add.text(480, 312, t('watchAgain'), text(14, T.faded)).setOrigin(0.5).setScrollFactor(0);
     this.endPanel = this.add.container(0, 0, [bg, card, title, why, sub]).setScrollFactor(0).setDepth(11000);
   }
 
 }
 
-/** A button label is its name and then its cost, such as 'Archery Range 170w'. */
-function splitLabel(label: string): [string, string] {
-  const m = /^(.*?)((?: \d+[wfo])+)$/.exec(label);
-  if (!m) return [label, ''];
-  const names: Record<string, string> = { w: 'wood', f: 'food', o: 'ore' };
-  return [m[1], m[2].trim().split(' ').map((c) => `${c.slice(0, -1)} ${names[c.slice(-1)]}`).join(' · ')];
+/** A panel button: `id` names what it does in no language, `sub` is the line under its name (a cost or why it is locked). */
+interface Action {
+  id: string;
+  name: string;
+  sub: string;
+  enabled: boolean;
+  run: () => void;
+}
+
+/** A cost as the line under a button reads it, such as '170 wood · 50 ore'. */
+function costText(cost: Cost) {
+  return Object.entries(cost)
+    .map(([res, n]) => t('costPart', { n, res: t(res as TextKey) }))
+    .join(' · ');
+}
+
+/** Shrinks a text that would run past `width`, so a long name in another language still fits its button. */
+function fitWidth(label: Phaser.GameObjects.Text, width: number) {
+  if (label.width > width) label.setScale(width / label.width, 1);
+  return label;
 }
 
 /** What a unit is doing, in words, for the panel. */
 function doing(u: Unit) {
-  if (u.act === 'gather') return u.carry === 'wood' ? 'Chopping wood' : u.carry === 'ore' ? 'Mining ore' : 'Gathering food';
-  if (u.act === 'build') return 'Building';
-  if (u.act === 'fight') return 'Fighting';
-  if (u.order.t === 'garrison') return 'Running for shelter';
-  if (u.order.t === 'trade') return 'Driving to the trading post';
-  if (u.order.t === 'return') return UNITS[u.type].role === 'cart' ? 'Bringing the ore home' : 'Carrying the load home';
-  if (u.act === 'walk') return 'Walking';
-  return 'Standing by';
+  if (u.act === 'gather') return t(u.carry === 'wood' ? 'chopping' : u.carry === 'ore' ? 'mining' : 'foraging');
+  if (u.act === 'build') return t('building');
+  if (u.act === 'fight') return t('fighting');
+  if (u.order.t === 'garrison') return t('sheltering');
+  if (u.order.t === 'trade') return t('driving');
+  if (u.order.t === 'return') return t(UNITS[u.type].role === 'cart' ? 'bringingOre' : 'carryingHome');
+  if (u.act === 'walk') return t('walking');
+  return t('standing');
 }
-
