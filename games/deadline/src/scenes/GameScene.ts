@@ -67,11 +67,13 @@ import {
   isBoss,
   isBossWave,
   laneAt,
+  laneMid,
   medalOf,
   outpostCost,
   perksOf,
   planWave,
   riotShield,
+  seamAt,
   supplyPick,
   toughness,
   waveTotal,
@@ -957,7 +959,7 @@ export class GameScene extends Phaser.Scene {
           if (this.volleys % MARKSMAN.every) continue;
           const t = this.toughestEnemy(y);
           shoot(x, y, t ? Math.atan2(t.x - x, y - t.y) : 0, { mult: MARKSMAN.mult, pierce: MARKSMAN.pierce });
-        } else shoot(x, y, 0, { grenade: role === 'grenadier' && this.volleys % GRENADE.every === 0 });
+        } else if (!this.survivorAhead(x, y)) shoot(x, y, 0, { grenade: role === 'grenadier' && this.volleys % GRENADE.every === 0 });
         if (i === 0) for (let k = 1; k <= this.state.pellets; k++) [-1, 1].forEach((side) => shoot(x, y, side * k * SHOTGUN.angle));
         this.effect('muzzle', x, y, { life: 70 });
       }
@@ -967,6 +969,11 @@ export class GameScene extends Phaser.Scene {
         this.effect('sfx-blam', x, REACH_Y - 50 - (this.volleys % 3) * 8, { life: 380, grow: 0.15, angle: side * 7 });
       }
     }
+  }
+
+  /** A survivor in the line of a rifle at x, y: it holds its straight shot so as not to hit them. */
+  private survivorAhead(x: number, y: number) {
+    return this.survivors.all.some((v) => v.alive && v.y < y && Math.abs(v.x - x) <= SURVIVOR.radius + BULLET.radius);
   }
 
   /** The zombie on the road with the most hit points left, ahead of a rifle at y (null when none). */
@@ -989,9 +996,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * The horde walks down, each one veering towards the hero. Each aims a little to one side, so they
-   * come as a crowd rather than in single file. Reaching the hero's line ends the game (and
-   * returns true, so the rest of the frame is skipped).
+   * The horde walks down, each one veering into the middle of its lane to go for that lane's
+   * sandbags: it never chases the hero, so the player moves the squad under the lane that needs it.
+   * Each aims a little to one side, so a lane comes as a crowd rather than in single file. Reaching
+   * the hero's line ends the game (and returns true, so the rest of the frame is skipped).
    */
   private moveEnemies(dt: number): boolean {
     for (const e of this.enemies.all) {
@@ -1026,9 +1034,8 @@ export class GameScene extends Phaser.Scene {
             this.lobAcid(e.x, e.y - 4, SPITTER.poolRadius, SPITTER.warnMs, SPITTER.poolMs);
           }
         } else if (!e.flank) {
-          // The aim point stays inside the rifles' reach, so nothing (a spitter above all) stops where no bullet can get it.
-          const aside = boss ? 0 : ((e.id * 53) % 81) - 40;
-          const dx = Phaser.Math.Clamp(this.player.x + aside, HERO.minX, HERO.maxX) - e.x, maxStep = (steer * dt) / 1000;
+          const aside = boss ? 0 : ((e.id * 53) % 25) - 12;
+          const dx = laneMid(laneAt(e.x)) + aside - e.x, maxStep = (steer * dt) / 1000;
           e.x += Phaser.Math.Clamp(dx, -maxStep, maxStep);
         }
       }
@@ -1048,8 +1055,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * Survivors walk down towards the squad like the zombies do (a little to one side, so they are
-   * in the line of fire as often as not). One who reaches the sandbags is rescued.
+   * Survivors walk down the nearest seam between two lanes, out of the horde's columns, so the
+   * player can keep the squad's fire off them. One who reaches the sandbags is rescued.
    */
   private moveSurvivors(dt: number) {
     for (const v of this.survivors.all) {
@@ -1057,8 +1064,8 @@ export class GameScene extends Phaser.Scene {
       if (this.state.phase === 'role') return;
       if (!v.alive) continue;
       v.y += (SURVIVOR.speed * dt) / 1000;
-      const aside = ((v.id * 53) % 81) - 40, maxStep = (SURVIVOR.steer * dt) / 1000;
-      v.x += Phaser.Math.Clamp(this.player.x + aside - v.x, -maxStep, maxStep);
+      const maxStep = (SURVIVOR.steer * dt) / 1000;
+      v.x += Phaser.Math.Clamp(seamAt(v.x) - v.x, -maxStep, maxStep);
       const seen = this.visibility(v.x, v.y);
       v.sprite.setPosition(v.x, v.y).setDepth(DEPTH.enemies + v.y / VIEW.h).setAlpha(seen);
       v.label.setPosition(v.x, v.y - SURVIVOR.radius - 30).setAlpha(seen);
