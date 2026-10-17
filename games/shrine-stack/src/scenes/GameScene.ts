@@ -54,6 +54,8 @@ import {
   type GameState,
 } from '../game/state';
 import { makeButton } from '../ui/Button';
+import { playMusic, playSting, ui } from '../../../../shared/audio';
+import { bellPitch, sfx, SONG } from '../audio';
 import {
   BUILD_ON,
   CARDS,
@@ -304,6 +306,10 @@ export class GameScene extends Phaser.Scene {
   private goalPips!: Phaser.GameObjects.Graphics;
   /** Game time since the shrine was crowned. */
   private crownedMs = 0;
+  /** The song part playing, so the music only switches when the phase calls for another. */
+  private musicPart = '';
+  /** The wind of the stone in hand last frame, to hear a new gust once. */
+  private lastWind = 0;
 
   constructor() {
     super('Game');
@@ -327,6 +333,8 @@ export class GameScene extends Phaser.Scene {
     this.patronShown = false;
     this.crown = null;
     this.crownedMs = 0;
+    this.musicPart = '';
+    this.lastWind = 0;
     this.movingKey = '';
     this.offerKey = '';
     this.cameras.main.setScroll(0, 0);
@@ -355,9 +363,9 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0)
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => drop(this.state));
+      .on('pointerdown', () => drop(this.state) && sfx('whoosh'));
     // R swaps the stone in hand with the reserve, like the panel's button.
-    this.input.keyboard?.on('keydown-R', () => swapReserve(this.state));
+    this.input.keyboard?.on('keydown-R', () => this.trySwap());
 
     this.offerParts = [];
     this.createGameOver();
@@ -372,6 +380,7 @@ export class GameScene extends Phaser.Scene {
     tick(s, dt);
     if (s.phase === 'crowned') this.crownedMs += dt;
     for (const e of s.events.splice(0)) this.show(e);
+    this.updateSound();
 
     // The camera follows the temple's top up, easing so each new stone slides the view gently.
     const target = Math.min(0, PLINTH_Y - stackHeight(s) - TOP_SCREEN_Y);
@@ -470,7 +479,7 @@ export class GameScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true })
       .on('pointerover', () => canSwap(this.state) && swapBg.setFillStyle(0x6a5a9a))
       .on('pointerout', () => swapBg.setFillStyle(0x4a3a6a))
-      .on('pointerdown', () => swapReserve(this.state));
+      .on('pointerdown', () => this.trySwap());
     this.reserveParts = [swapBg, swapLabel];
     this.trialText = fixed(this.add.text(PANEL.x + 16, PANEL.y + 186, '', small('#9ad46a')));
     this.curseText = fixed(this.add.text(PANEL.x + 16, PANEL.y + 203, '', small('#e8a0d4')));
@@ -514,6 +523,26 @@ export class GameScene extends Phaser.Scene {
     g.fillStyle(0xf3e9d2).fillRect(Math.round(px) - 1, y - 2, 3, h + 4);
   }
 
+  /** Switches the song's part with the phase and hears a gust pick up around a new stone. */
+  private updateSound() {
+    const s = this.state;
+    const playing = s.phase === 'swinging' || s.phase === 'falling';
+    const part = !playing ? 'break' : s.endless ? 'sky' : s.tier === GILDED_TIER ? 'gilded' : 'calm';
+    if (part !== this.musicPart) {
+      this.musicPart = part;
+      playMusic(SONG, part);
+    }
+    if (s.wind !== this.lastWind && s.wind !== 0 && playing) sfx('gust');
+    this.lastWind = s.wind;
+  }
+
+  /** The panel's Swap button and the R key: swap, or buzz while stacking when it isn't allowed. */
+  private trySwap() {
+    const s = this.state;
+    if (swapReserve(s)) return;
+    if (s.phase === 'swinging' || s.phase === 'falling') ui('refuse');
+  }
+
   private createGameOver() {
     const dim = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x0c0916, 0.7).setInteractive();
     const panel = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, 520, 260, 0x231c38).setStrokeStyle(4, 0x6a5a9a);
@@ -522,10 +551,18 @@ export class GameScene extends Phaser.Scene {
       .text(VIEW.w / 2, VIEW.h / 2 - 10, '', { fontFamily: FONT, fontSize: '16px', color: '#f1e3c6', align: 'center' })
       .setOrigin(0.5);
     this.gameOver = [dim, panel, title, this.gameOverText];
-    const restart = () => this.scene.restart();
+    const restart = () => {
+      ui('click');
+      this.scene.restart();
+    };
     this.againButton = makeButton(this, VIEW.w / 2, VIEW.h / 2 + 80, t('buildAgain'), restart);
     this.againBeside = makeButton(this, VIEW.w / 2 - 115, VIEW.h / 2 + 80, t('buildAgain'), restart);
-    this.keepBuildingButton = makeButton(this, VIEW.w / 2 + 115, VIEW.h / 2 + 80, t('keepBuilding'), () => keepBuilding(this.state) && this.onKeepBuilding());
+    this.keepBuildingButton = makeButton(this, VIEW.w / 2 + 115, VIEW.h / 2 + 80, t('keepBuilding'), () => {
+      if (keepBuilding(this.state)) {
+        sfx('rise');
+        this.onKeepBuilding();
+      }
+    });
     for (const part of [...this.gameOver, ...this.againButton, ...this.againBeside, ...this.keepBuildingButton]) {
       part.setScrollFactor(0).setDepth(UI_DEPTH + 20).setVisible(false);
     }
@@ -548,25 +585,35 @@ export class GameScene extends Phaser.Scene {
       for (const piece of e.cut) this.debris(piece.x, this.worldY(i * STONE_H), piece.w, stone.tier, stone.kind, stone.material);
       this.popup(stone.x, this.worldY((i + 1) * STONE_H) - 6, e.drop.perfect ? t('perfectPopup', { n: e.favor }) : `+${e.favor}`, e.drop.perfect);
       if (e.drop.perfect) this.glow(stone.x, this.worldY(i * STONE_H), stone.w);
+      sfx('thud', { pitch: stone.kind === 'heavy' ? 0.8 : stone.kind === 'light' ? 1.25 : 1 });
+      if (e.drop.perfect) sfx('bell', { pitch: bellPitch(s.chain) });
+      else if (e.cut.length) sfx('crack');
     } else if (e.type === 'missed') {
+      sfx(e.drop.caught ? 'saved' : 'crash');
+      if (s.phase === 'over') playSting(SONG, 'fall');
       this.debris(e.drop.x, this.worldY(stackHeight(s)), e.drop.w, s.tier, s.moving.kind, s.moving.material);
       this.cameras.main.shake(200, 0.006);
       if (e.drop.caught) this.announce([t('graceName'), t('caught')]);
       if (s.phase === 'over') saveBest(s.best);
     } else if (e.type === 'rerolled') {
+      sfx('shuffle');
       this.popup(PANEL.x + 150, PANEL.y + 126, `-${REROLL_COST}`, false);
     } else if (e.type === 'bought') {
+      ui('coin');
       this.popup(PANEL.x + 150, PANEL.y + 126, `-${SHOP_INFO[e.item].cost}`, false);
       if (e.item === 'wider') this.redrawTop();
     } else if (e.type === 'trial') {
       const top = s.stones.at(-1)!;
       const y = this.worldY(stackHeight(s)) - 34;
+      sfx(e.passed ? 'sparkle' : 'blip');
       this.popup(top.x, y, e.passed ? t('trialPassed', { n: e.favor }) : t('trialFailedPopup'), e.passed);
     } else if (e.type === 'toppled') {
       // The tier's stones tumble off the way the temple was leaning.
       const side = e.lean > 0 ? 1 : -1;
       for (const g of this.stoneViews.splice(this.stoneViews.length - e.count, e.count)) this.tumble(g, side);
       this.cameras.main.shake(250, 0.008);
+      sfx('rumble');
+      sfx('tumble');
       const right = side > 0;
       this.announce([
         t('toppled'),
@@ -575,15 +622,19 @@ export class GameScene extends Phaser.Scene {
           : t(right ? 'toppledRight' : 'toppledLeft', { n: Math.abs(Math.round(e.lean)) }),
       ]);
     } else if (e.type === 'regrown') {
+      sfx('shimmer');
       this.redrawTop();
       this.popup(s.stones.at(-1)!.x, this.worldY(stackHeight(s)) - 34, t('regrown', { n: e.px }), true);
     } else if (e.type === 'swapped') {
+      sfx('swish');
       this.popup(PANEL.x + PANEL.w + 90, RESERVE_BUTTON.y + 8, t('inHand', { kind: t(KIND_INFO[e.kind].name) }), false);
     } else if (e.type === 'patron') {
       const info = PATRON_INFO[e.patron];
+      sfx('gong');
       this.announce([t('watchesOver', { patron: t(info.name) }), t(info.boon)]);
     } else {
       if (e.balanced) this.ornament(e.tier);
+      if (s.phase !== 'crowned') sfx(e.balanced ? 'chime' : 'meh');
       if (s.phase === 'crowned') this.crownTemple();
       // A break between tiers says so itself; only a wobbly tier with nothing to buy goes straight on.
       else if (s.phase !== 'blessing') this.announce([`Tier ${e.tier} is wobbly`, e.tier + 1 === GILDED_TIER ? `Tier ${GILDED_TIER} is gilded: x${GILDED_MULT} favor` : 'No blessing this time']);
@@ -604,6 +655,7 @@ export class GameScene extends Phaser.Scene {
     g.fillStyle(0x6ac0e8).fillCircle(0, -6, 3);
     g.fillStyle(0x8ad06a).fillCircle(-18, -6, 2.5).fillCircle(18, -6, 2.5);
     this.glow(top.x, y, top.w);
+    playSting(SONG, 'crown');
     this.announce([t('crowned'), t('tierStands', { tier: GOAL_TIER })]);
   }
 
@@ -855,7 +907,7 @@ export class GameScene extends Phaser.Scene {
     bg.setInteractive({ useHandCursor: afford })
       .on('pointerover', () => afford && bg.setFillStyle(0x3a3060))
       .on('pointerout', () => bg.setFillStyle(0x2c2446))
-      .on('pointerdown', () => reroll(this.state) && this.rebuildOffer());
+      .on('pointerdown', () => (reroll(this.state) ? this.rebuildOffer() : ui('refuse')));
     this.rerollButton = { x, y, w, h };
     return button;
   }
@@ -882,7 +934,7 @@ export class GameScene extends Phaser.Scene {
       bg.setInteractive({ useHandCursor: afford })
         .on('pointerover', () => afford && bg.setFillStyle(0x3a3060))
         .on('pointerout', () => !bought && bg.setFillStyle(0x2c2446))
-        .on('pointerdown', () => buy(this.state, id) && this.rebuildOffer());
+        .on('pointerdown', () => (buy(this.state, id) ? this.rebuildOffer() : ui('refuse')));
       parts.push(...button);
       this.shopButtons.push({ id, x, y, w, h });
     });
@@ -926,7 +978,11 @@ export class GameScene extends Phaser.Scene {
       bg.setInteractive({ useHandCursor: true })
         .on('pointerover', () => bg.setFillStyle(0x3a3060))
         .on('pointerout', () => !picked && bg.setFillStyle(0x2c2446))
-        .on('pointerdown', () => chooseMaterial(this.state, id) && this.rebuildOffer());
+        .on('pointerdown', () => {
+          if (!chooseMaterial(this.state, id)) return;
+          sfx('stone');
+          this.rebuildOffer();
+        });
       parts.push(...place([bg, swatch, name, text], x, y));
       this.materialButtons.push({ id, x, y, w, h });
     });
@@ -1013,7 +1069,12 @@ export class GameScene extends Phaser.Scene {
       .text(bx + 18, 0, t('takeCurse', { tier: s.tier, curse: t(info.name), text: t(info.text), mult: CURSE_MULT }), textStyle(14, '#e8a0d4'))
       .setOrigin(0, 0.5);
     const button = place([bg, box, label], x, y);
-    bg.setInteractive({ useHandCursor: true }).on('pointerdown', () => toggleCurse(this.state) && this.rebuildOffer());
+    bg.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+      if (!toggleCurse(this.state)) return;
+      if (this.state.cursed) sfx('pluck');
+      else ui('click');
+      this.rebuildOffer();
+    });
     this.curseToggle = { x, y, w, h };
     return button;
   }
@@ -1027,7 +1088,9 @@ export class GameScene extends Phaser.Scene {
       .on('pointerover', () => bg.setFillStyle(0x6a5a9a))
       .on('pointerout', () => bg.setFillStyle(0x4a3a6a))
       .on('pointerdown', () => {
-        if (buildOn(this.state) && this.state.tier === GILDED_TIER) this.announce([t('gildedTier', { tier: GILDED_TIER }), t('gildedFavour', { mult: GILDED_MULT })]);
+        if (!buildOn(this.state)) return;
+        sfx('rise');
+        if (this.state.tier === GILDED_TIER) this.announce([t('gildedTier', { tier: GILDED_TIER }), t('gildedFavour', { mult: GILDED_MULT })]);
       });
     this.buildOnButton = { x, y, w, h };
     return place([bg, label], x, y);
@@ -1052,6 +1115,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private onChosen(id: BlessingId, cursed: string | null) {
+    sfx('choir');
     if (id === 'broad') this.redrawTop();
     const gilded = this.state.tier === GILDED_TIER;
     const curse = cursed ? t('cursedWith', { curse: t(CURSE_INFO[this.state.curse!.id].name), mult: CURSE_MULT }) : null;

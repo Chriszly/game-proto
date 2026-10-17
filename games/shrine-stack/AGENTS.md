@@ -98,7 +98,7 @@ Implemented today:
 
 Missing or rough:
 
-- No title screen, sound or pause. Only the best height persists; a reload starts a new temple.
+- The title, pause and sound buttons are the shared ones from `setupGame`. Only the best height persists; a reload starts a new temple.
 - The endless sky has no blessings or shop past what tiers give; gusts are the only new pressure.
 - A tap is ignored while a stone falls; a tap during the blessing choice lands on the dim.
 - The clouds stop about 16000 pixels up (`createBackdrop`), roughly 190 tiers.
@@ -122,6 +122,7 @@ File map (`src/`):
   "favour" in them, spelled "favor". `t(key, vars)` shows a text in the hub's language; `TextKey`
   types the keys. Every text on screen goes through `t`, and a new one gets its German entry (and
   a US one if its spelling differs) in the same PR.
+- `audio.ts`: the game's sound (see Sound below): `SONG`, the `sfx` table and `bellPitch`.
 - `main.ts`: creates the `Phaser.Game` (960x540 from `VIEW`, `Phaser.Scale.FIT`,
   `pixelArt: true`) with `GameScene` only, calls `setupGame(game)` from `shared/setupGame.ts` and
   then `setupScaling(game)` from `shared/scaling.ts`, and in dev builds puts `game` on `window`.
@@ -162,7 +163,7 @@ File map (`src/`):
 - `ui/Button.ts`: `makeButton`, the captioned buttons on the end panel (returned as loose parts).
 
 Shared code it imports (outside the game folder): `shared/setupGame.ts` (`setupGame`),
-`shared/scaling.ts` (`setupScaling`), `shared/settings.ts` (`byDifficulty`, `settings`) and
+`shared/scaling.ts` (`setupScaling`), `shared/audio.ts` (`sounds`, `playMusic`, `playSting`, `ui`), `shared/settings.ts` (`byDifficulty`, `settings`) and
 `shared/i18n.ts` (`translator`, `byLanguage`, `Translation`).
 
 How it runs:
@@ -252,6 +253,50 @@ from `tick`; tweens are cosmetic only.
   the chosen patron's pace.
 - Keep the Shrine Stack row of the root README's difficulty table, and the difficulty line in this
   game's README, in sync with the `byDifficulty` values.
+
+## Sound
+
+All sound is made in code by `shared/audio.ts`; `src/audio.ts` holds the song and the effects,
+and only `GameScene` plays them (the rules in `src/game/` have no sound). Nothing plays under
+browser automation, so the playthrough is unchanged.
+
+Music, `SONG`: 80 BPM in D Dorian, a soft pulse lead with its own echo on the square voice (the
+lead three sixteenths later, made by `echo`), a triangle drone and light drums. `updateSound` picks
+the part each frame from the phase and switches only when it changes (the engine waits for the next
+bar):
+
+- `calm` (8 bars): stacking (`swinging`/`falling`) on every tier but the gilded one.
+- `gilded` (4 bars, D major, busier beat): stacking on tier `GILDED_TIER`.
+- `sky` (4 bars, high and sparse): stacking in the endless sky.
+- `break` (4 bars, harp-like arpeggios over held notes): the patron pick, the breaks between tiers
+  and the end panels.
+- Stings: `crown` in `crownTemple`, `fall` on the `missed` event that ends the run.
+
+Effects, `sfx` (all from `GameScene`):
+
+| Sound | Where |
+| --- | --- |
+| `whoosh` | the tap zone, when `drop` lets the stone go |
+| `thud` | every `placed` event, lower for heavy and higher for light stones |
+| `bell` | a perfect `placed`, a pentatonic step higher with each perfect in a row (`bellPitch(chain)`) |
+| `crack` | a `placed` event that cut pieces off |
+| `shimmer` | `regrown` |
+| `chime` / `meh` | `tier`, balanced / wobbly (not on the crowning tier, which has the sting) |
+| `sparkle` / `blip` | `trial`, passed / failed |
+| `rumble` + `tumble` | `toppled` |
+| `saved` / `crash` | `missed`, caught by Mason's Grace / not |
+| `swish` | `swapped` |
+| `gong` | `patron` |
+| `choir` | `onChosen` (a blessing taken) |
+| `shuffle` | `rerolled` |
+| `stone` | a material button that changed the pick |
+| `pluck` | the curse toggle taking the curse (`ui('click')` when untaking it) |
+| `rise` | "Build on" and "Keep building" |
+| `gust` | `updateSound`, when a stone in hand gets a new, non-zero `wind` |
+
+Shared sounds: `ui('coin')` on `bought`, `ui('click')` on "Build again", and `ui('refuse')` for a
+Reroll or shop button that can't be used, and for the Swap button or R while stacking when
+`canSwap` is false.
 
 ## Testing hooks
 
