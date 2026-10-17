@@ -28,6 +28,8 @@ export const MARGIN = { scrollY: 487, captionX: 35, captionY: 525 };
 /** The boon cards at a checkpoint, by their centres: two of them, or three after a met dare. The road cards use the two. */
 export const CARDS = { xs: { 2: [330, 630], 3: [205, 480, 755] } as Record<number, number[]>, y: 300, w: 250, h: 260 };
 export const BUTTON = { w: 180, h: 40 };
+/** The round Slide and Jump buttons in the margin's bottom right, shown on touch screens: their centres and radius. */
+export const ACTION_BUTTONS = { y: 490, r: 40, slideX: 780, jumpX: 890 };
 
 export const UI_DEPTH = 10_000;
 export const FONT = 'Georgia, "Times New Roman", "DejaVu Serif", serif';

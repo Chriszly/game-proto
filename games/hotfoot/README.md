@@ -32,15 +32,18 @@ keeps its own best distance.
 
 | Control | Action |
 | --- | --- |
-| Tap the top half of the screen, or Space / Up / W | Jump (again in the air with Second Leap) |
-| Tap the bottom half of the screen, or Down / S | Slide; in the air, drop fast and slide on landing |
+| Tap the top half of the screen or the Jump button, or Space / Up / W | Jump (again in the air with Second Leap) |
+| Tap the bottom half of the screen or the Slide button, or Down / S | Slide; in the air, drop fast and slide on landing |
 | Tap a card | Take that boon at a checkpoint |
 | Tap a road card | From stage 3: pick the road the next stage runs on, once the boon is taken |
 | Run again | After a fall: a new run from the start, with no boons (or the one bought on the game-over panel) |
 | Daily course | After a fall: a run on the day's own course |
 | Armoury | After a fall: spend banked coins on lasting upgrades |
 
-A hint on the first stretch of the run shows where to tap.
+A hint on the first stretch of the run shows where to tap. On a touch screen, round Slide and Jump
+buttons in the bottom right of the margin do the same while the knight runs.
+
+![The Slide and Jump buttons](docs/screenshots/action-buttons.webp)
 
 ![Where to tap](docs/screenshots/controls.webp)
 
