@@ -11,7 +11,8 @@ export const howToPlay: HowToPlay = {
     { input: 'Click or tap a golem', action: 'Open its menu: Raise, Aim, Move or Uproot' },
     { input: 'Start wave / Call wave now', action: 'Send the next wave, or call it early for bonus sap' },
     { input: '1x / 2x button', action: 'Play at double speed, or back to normal' },
-    { input: 'Garden tag under the title', action: 'Pick a garden to plant' },
+    { input: 'Garden tag under the title', action: 'Pick a garden to plant, or its thorny variant' },
+    { input: 'Click or tap the Heartwood', action: 'Between waves, regrow a lost leaf for sap' },
   ],
   loop: [
     'Pick the Pebble golem seed and plant it on soil next to the path.',
@@ -29,5 +30,7 @@ export const howToPlay: HowToPlay = {
     'From wave 3, unspent sap earns a little compost interest each wave.',
     'Crows fly over hedges, moles tunnel out of reach, and snails shrug off small hits.',
     'Wave 30 is the harvest: stars for the leaves you kept unlock new gardens.',
+    'After every Queen Slug you pick one of three boons for the rest of the garden.',
+    'Three stars on a garden open its thorny variant; harvest it to win a laurel.',
   ],
 };
