@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>Scrapyard Titans</title>
+  <path d="M16 6 V1.8" stroke="#8a93a6" stroke-width="1.6" stroke-linecap="round"/>
+  <circle cx="16" cy="2.2" r="2" fill="#5cf2ff" stroke="#1d2430" stroke-width="0.8"/>
+  <circle cx="7" cy="7" r="5" fill="#e37100"/>
+  <circle cx="25" cy="7" r="5" fill="#e37100"/>
+  <circle cx="7" cy="7" r="2.4" fill="#ffb787"/>
+  <circle cx="25" cy="7" r="2.4" fill="#ffb787"/>
+  <ellipse cx="16" cy="16.5" rx="13" ry="12" fill="#e37100"/>
+  <rect x="12.5" y="5.6" width="7" height="2.6" rx="1" fill="#8a93a6" stroke="#1d2430" stroke-width="0.6"/>
+  <circle cx="10.5" cy="14.0" r="2.3" fill="#0d1117"/>
+  <circle cx="21.5" cy="14.0" r="2.3" fill="#0d1117"/>
+  <circle cx="11.3" cy="13.2" r="0.8" fill="#ffffff"/>
+  <circle cx="22.3" cy="13.2" r="0.8" fill="#ffffff"/>
+  <ellipse cx="16" cy="20.5" rx="4.6" ry="3.3" fill="#ffdcc7"/>
+  <ellipse cx="16" cy="19.5" rx="2.2" ry="1.4" fill="#311300"/>
+  <g transform="translate(26 26)" fill="#a7b0c2" stroke="#1d2430" stroke-width="0.7">
+    <path d="M-1.2 -5.5 H1.2 L1.5 -3.6 L3.3 -2.6 L4.9 -3.7 L5.6 -1.4 L4 0 L5.6 1.4 L4.9 3.7 L3.3 2.6 L1.5 3.6 L1.2 5.5 H-1.2 L-1.5 3.6 L-3.3 2.6 L-4.9 3.7 L-5.6 1.4 L-4 0 L-5.6 -1.4 L-4.9 -3.7 L-3.3 -2.6 L-1.5 -3.6 Z"/>
+    <circle r="1.6" fill="#1d2430"/>
+  </g>
+</svg>
