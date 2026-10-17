@@ -1,4 +1,4 @@
-import { MAP_SIZE, type RelicId, type Resource } from './data';
+import { MAP_SIZE, type MapKind, type RelicId, type Resource } from './data';
 
 export const GRASS = 0;
 export const WATER = 1;
@@ -39,6 +39,8 @@ export interface MapData {
   nodes: Node[];
   camps: CampSpot[];
   posts: PostSpot[];
+  /** Each side's Town Center corner, in side order: the player, the AI and, in a three-way match, the second AI. */
+  starts: { tx: number; ty: number }[];
 }
 
 const B = 'wild-brigand';
@@ -57,6 +59,14 @@ const CAMP_PLAN: (CampSpot & { mirrorRelic?: RelicId })[] = [
 /** Tiles cleared around a camp's footprint, so its guards and visitors can stand there. */
 const CAMP_CLEAR = 3;
 /**
+ * A three-way match's extra caches, near the top-right corner where the second AI starts; their
+ * mirrors lie by the free bottom-left corner.
+ */
+const THIRD_CAMPS: typeof CAMP_PLAN = [
+  { kind: 'cache', tx: MAP_SIZE - 40, ty: 18, res: 'ore', amount: 250, guards: [B, B, B] },
+  { kind: 'cache', tx: MAP_SIZE - 18, ty: 40, res: 'food', amount: 300, guards: [B, B, B] },
+];
+/**
  * The first trading post; the second is its point mirror. Both lie on the line across the middle of
  * the map that is the same distance from either Town Center, so a cart's trip is as long for both sides.
  */
@@ -67,6 +77,15 @@ export const START_TILES = [
   { tx: 13, ty: 13 },
   { tx: MAP_SIZE - 17, ty: MAP_SIZE - 17 },
 ];
+/**
+ * In a three-way match the second AI starts in the top-right corner. The bottom-left corner, its
+ * point mirror, gets the same trees, bushes and mine but no Town Center: free land to expand to.
+ */
+export const THIRD_START = { tx: MAP_SIZE - 17, ty: 13 };
+const FOURTH_CORNER = { tx: MAP_SIZE - THIRD_START.tx - 4, ty: MAP_SIZE - THIRD_START.ty - 4 };
+/** Where Highlands' two long ridges cross each side's half of the map (tiles with x + y on these lines), and their passes. */
+const HIGH_RIDGE = 88;
+const HIGH_PASSES = [20, 44, 68];
 
 export const idx = (x: number, y: number) => y * MAP_SIZE + x;
 export const inMap = (x: number, y: number) => x >= 0 && y >= 0 && x < MAP_SIZE && y < MAP_SIZE;
@@ -75,23 +94,57 @@ export const AMOUNT = { tree: 120, bush: 150, mine: 900 } as const;
 const RESOURCE = { tree: 'wood', bush: 'food', mine: 'ore' } as const;
 
 /**
- * Builds a fair random map: lakes, rock ridges, forests, berry bushes and gold mines are drawn in
- * the whole map and each one is copied to its point mirror, plus each side's starting trees, bushes
- * and mine. Uses Math.random, so a seeded run gives the same map.
+ * Builds a fair random map of a kind: lakes, rock ridges, forests, berry bushes and gold mines are
+ * drawn in the whole map and each one is copied to its point mirror, plus each side's starting trees,
+ * bushes and mine. Uses Math.random, so a seeded run gives the same map. A map whose water and rock
+ * cut a Town Center, camp or trading post off from the rest is drawn again.
  */
-export function generateMap(): MapData {
+export function generateMap(kind: MapKind = 'lowlands', sides: 2 | 3 = 2): MapData {
+  let map = drawMap(kind, sides);
+  for (let tries = 1; tries < 30 && !connected(map); tries++) map = drawMap(kind, sides);
+  return map;
+}
+
+/** Whether every Town Center corner, camp and trading post can be walked to from the first side's start. */
+function connected(map: MapData) {
+  const seen = new Uint8Array(MAP_SIZE * MAP_SIZE);
+  const open = (x: number, y: number) => inMap(x, y) && map.terrain[idx(x, y)] !== WATER && map.terrain[idx(x, y)] !== ROCK;
+  const from = map.starts[0];
+  const todo = [idx(from.tx + 4, from.ty + 1)];
+  seen[todo[0]] = 1;
+  while (todo.length > 0) {
+    const i = todo.pop()!;
+    const x = i % MAP_SIZE;
+    const y = (i - x) / MAP_SIZE;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (!open(nx, ny) || seen[idx(nx, ny)]) continue;
+      seen[idx(nx, ny)] = 1;
+      todo.push(idx(nx, ny));
+    }
+  }
+  const spots = [...map.starts.map((t) => ({ x: t.tx + 4, y: t.ty + 1 })), ...map.camps.map((c) => ({ x: c.tx - 1, y: c.ty })), ...map.posts.map((p) => ({ x: p.tx - 1, y: p.ty }))];
+  return spots.every((p) => inMap(p.x, p.y) && seen[idx(p.x, p.y)] === 1);
+}
+
+function drawMap(kind: MapKind, sides: 2 | 3): MapData {
   const terrain = new Uint8Array(MAP_SIZE * MAP_SIZE);
   const taken = new Uint8Array(MAP_SIZE * MAP_SIZE);
   const nodes: Node[] = [];
   const rand = (lo: number, hi: number) => lo + Math.floor(Math.random() * (hi - lo + 1));
+  // Every corner with a Town Center (or, in a three-way match, the free fourth corner) stays clear.
+  const corners = sides === 3 ? [...START_TILES, THIRD_START, FOURTH_CORNER] : START_TILES;
   const nearStart = (x: number, y: number) =>
-    START_TILES.some((s) => Math.hypot(x - s.tx - 1.5, y - s.ty - 1.5) < 11);
+    corners.some((s) => Math.hypot(x - s.tx - 1.5, y - s.ty - 1.5) < 11);
 
   /** Whether every tile of a footprint and its mirror is free and clear of the starts. */
   const free = (tiles: { x: number; y: number }[]) =>
     tiles.every((t) => inMap(t.x, t.y) && !taken[idx(t.x, t.y)] && !nearStart(t.x, t.y));
 
   const mirrorTile = (t: { x: number; y: number }, size = 1) => ({ x: MAP_SIZE - t.x - size, y: MAP_SIZE - t.y - size });
+  /** The left-right mirror of a tile, from the first side's corner to the second AI's. */
+  const flipTile = (t: { x: number; y: number }, size = 1) => ({ x: MAP_SIZE - t.x - size, y: t.y });
 
   /** Terrain: every tile of a shape, and of its mirror. */
   function shape(tiles: { x: number; y: number }[], kind: typeof WATER | typeof ROCK) {
@@ -101,6 +154,15 @@ export function generateMap(): MapData {
       taken[idx(t.x, t.y)] = 1;
       terrain[idx(t.x, t.y)] = kind;
     }
+  }
+
+  /** A round lake with ragged edges, and its mirror. */
+  function lake(cx: number, cy: number, r: number) {
+    const tiles: { x: number; y: number }[] = [];
+    for (let y = cy - r - 1; y <= cy + r + 1; y++)
+      for (let x = cx - r - 1; x <= cx + r + 1; x++)
+        if (Math.hypot(x - cx, y - cy) <= r + (Math.random() < 0.3 ? 0.9 : 0)) tiles.push({ x, y });
+    shape(tiles, WATER);
   }
 
   /** A resource node of `size` x `size` tiles at `origin`, and the mirrored one. */
@@ -124,20 +186,37 @@ export function generateMap(): MapData {
     }
   }
 
+  if (kind === 'highlands') {
+    // Two long ridges, one across each side's half of the map, each broken by three narrow passes;
+    // the passes and the ground either side of them are kept free of rock, water and trees.
+    const ridge: { x: number; y: number }[] = [];
+    for (const sum of [HIGH_RIDGE, HIGH_RIDGE + 1])
+      for (let x = 0; x <= sum; x++) if (!HIGH_PASSES.some((p) => x >= p - 2 && x <= p + 1)) ridge.push({ x, y: sum - x });
+    shape(ridge, ROCK);
+    for (const p of HIGH_PASSES)
+      for (let y = HIGH_RIDGE - p - 4; y <= HIGH_RIDGE - p + 5; y++)
+        for (let x = p - 4; x <= p + 4; x++)
+          for (const t of [{ x, y }, mirrorTile({ x, y })]) if (inMap(t.x, t.y) && terrain[idx(t.x, t.y)] !== ROCK) taken[idx(t.x, t.y)] = 1;
+  }
+  if (kind === 'lakes') {
+    // Two wide lakes either side of the middle, so the way across runs between waters, and a pond by
+    // each start for the Dock.
+    lake(44, 64, 6);
+    lake(64, 44, 6);
+    lake(28, 24, 3);
+    if (sides === 3) lake(MAP_SIZE - 29, 24, 3);
+  }
+
   // Lakes: round blobs with ragged edges.
-  for (let n = 0; n < 7; n++) {
+  const lakes = kind === 'lakes' ? { n: 12, lo: 3, hi: 6 } : kind === 'highlands' ? { n: 4, lo: 2, hi: 4 } : { n: 7, lo: 2, hi: 4 };
+  for (let n = 0; n < lakes.n; n++) {
     const cx = rand(8, 60);
     const cy = rand(8, 60);
-    const r = rand(2, 4);
-    const tiles: { x: number; y: number }[] = [];
-    for (let y = cy - r - 1; y <= cy + r + 1; y++)
-      for (let x = cx - r - 1; x <= cx + r + 1; x++)
-        if (Math.hypot(x - cx, y - cy) <= r + (Math.random() < 0.3 ? 0.9 : 0)) tiles.push({ x, y });
-    shape(tiles, WATER);
+    lake(cx, cy, rand(lakes.lo, lakes.hi));
   }
 
   // Rock ridges: short two-tile-thick lines.
-  for (let n = 0; n < 6; n++) {
+  for (let n = 0; n < (kind === 'highlands' ? 9 : kind === 'lakes' ? 3 : 6); n++) {
     const x0 = rand(6, 56);
     const y0 = rand(6, 56);
     const horizontal = Math.random() < 0.5;
@@ -172,8 +251,10 @@ export function generateMap(): MapData {
   startNode({ x: s.tx - 4, y: s.ty + 6 }, 'mine', 2);
 
   function startNode(origin: { x: number; y: number }, kind: Node['kind'], size = 1) {
-    const m = mirrorTile(origin, size);
-    for (const o of [origin, m]) {
+    // In a three-way match the top-right and bottom-left corners get the same, flipped left to right.
+    const flip = flipTile(origin, size);
+    const all = sides === 3 ? [origin, flip] : [origin];
+    for (const o of all.flatMap((t) => [t, mirrorTile(t, size)])) {
       for (let j = 0; j < size; j++) for (let i = 0; i < size; i++) taken[idx(o.x + i, o.y + j)] = 1;
       nodes.push({ id: nodes.length + 1, kind, res: RESOURCE[kind], tx: o.x, ty: o.y, w: size, h: size, amount: AMOUNT[kind] });
     }
@@ -183,7 +264,7 @@ export function generateMap(): MapData {
   // This uses no Math.random, so the rest of the map is the same as without camps.
   const camps: CampSpot[] = [];
   const cleared = new Uint8Array(MAP_SIZE * MAP_SIZE);
-  for (const plan of CAMP_PLAN) {
+  for (const plan of sides === 3 ? [...CAMP_PLAN, ...THIRD_CAMPS] : CAMP_PLAN) {
     const { mirrorRelic, ...spot } = plan;
     const m = mirrorTile({ x: spot.tx, y: spot.ty }, 2);
     const spots = m.x === spot.tx && m.y === spot.ty ? [spot] : [spot, { ...spot, tx: m.x, ty: m.y, relic: mirrorRelic ?? spot.relic }];
@@ -219,5 +300,6 @@ export function generateMap(): MapData {
     if (terrain[idx(x, y)] === GRASS && !taken[idx(x, y)]) terrain[idx(x, y)] = DIRT;
   }
 
-  return { terrain, nodes: kept, camps, posts };
+  const starts = sides === 3 ? [...START_TILES, THIRD_START] : [...START_TILES];
+  return { terrain, nodes: kept, camps, posts, starts };
 }

@@ -391,15 +391,13 @@ export const HEAL_MS = 1500;
 export const MONUMENT_MS = 180000;
 
 /**
- * The AI's raids, paced so the opening is the player's to build: no raid before FIRST_RAID_MS of game time, and RAID_REST_MS between the end of one and the start of the next.
+ * The AI's raids. Each temperament (TEMPERAMENTS, below) sets when the first may start, the rest
+ * between the end of one and the start of the next, the army it waits for and the party it sends.
  * A raid has a goal: the first ones go for the player's outlying economy, later ones for a relic the
  * player holds, and from RAID_TOWN_FROM on (or in Age III) for the Town Center. An economy or relic
- * raid sends a party of RAID_PARTY and keeps the rest home; it turns back when half the party has
- * fallen, when its goal is done, or after RAID_MAX_MS.
+ * raid sends a party and keeps the rest home; it turns back when half the party has fallen, when its
+ * goal is done, or after RAID_MAX_MS.
  */
-export const FIRST_RAID_MS = 600000;
-export const RAID_REST_MS = 180000;
-export const RAID_PARTY = 10;
 export const RAID_TOWN_FROM = 3;
 export const RAID_MAX_MS = 150000;
 /**
@@ -409,3 +407,78 @@ export const RAID_MAX_MS = 150000;
  */
 export const ASSAULT_MIN = 3;
 export const ASSAULT_CLEAR = 20;
+
+/** The one-time pick offered when a player reaches Age III, like the Age II boon. */
+export const EDGES = {
+  masonry: { id: 'masonry', name: 'Masonry', text: 'Buildings and walls have 30% more health' },
+  muster: { id: 'muster', name: 'Muster', text: 'Soldiers train 25% faster' },
+} as const;
+export type EdgeId = keyof typeof EDGES;
+/** Building health under Masonry. */
+export const MASONRY_HP = 1.3;
+/** Soldier training speed under Muster. */
+export const MUSTER_SPEED = 1.25;
+
+/** The map kinds picked on the menu. Lowlands is the map as first designed. */
+export const MAP_KINDS = {
+  lowlands: { id: 'lowlands', name: 'Lowlands', text: 'Open fields with a few lakes and ridges' },
+  lakes: { id: 'lakes', name: 'Lakes', text: 'Wide waters: Docks and shore walls matter' },
+  highlands: { id: 'highlands', name: 'Highlands', text: 'Rock ridges with narrow passes for walls and rams' },
+} as const;
+export type MapKind = keyof typeof MAP_KINDS;
+export const MAP_KIND_IDS = Object.keys(MAP_KINDS) as MapKind[];
+
+/**
+ * Each AI side draws a temperament per match, which sets its build, raid timing and picks. The player
+ * learns which once they have seen the AI's Town Center.
+ */
+export interface Temperament {
+  id: 'raider' | 'builder' | 'warden';
+  name: string;
+  text: string;
+  /** The earliest first raid, the rest after each, the army it waits for and the party it sends. */
+  firstRaid: number;
+  rest: number;
+  army: number;
+  party: number;
+  /** The soldiers it trains, in order of preference. */
+  roles: Role[];
+  /** Its buildings in order; `unique` stands for the faction's own building. */
+  plan: (BuildingId | 'unique')[];
+  research: string[];
+  /** Watchtowers it keeps. */
+  towers: number;
+  /** Its palisade across the front of the base: from which age, and how many stakes each side of the gate. */
+  wall: { age: 1 | 2; half: number } | null;
+  boon: BoonId;
+  edge: EdgeId;
+}
+
+export const TEMPERAMENTS: Record<Temperament['id'], Temperament> = {
+  raider: {
+    id: 'raider', name: 'Raider', text: 'Early small raids, cavalry heavy',
+    firstRaid: 360000, rest: 120000, army: 8, party: 6,
+    roles: ['cavalry', 'melee', 'siege', 'champion', 'ranged'],
+    plan: ['farm', 'lumber', 'mine', 'barracks', 'stable', 'unique', 'academy', 'range', 'market', 'watchtower', 'monument'],
+    research: ['axes', 'baskets', 'age2', 'stirrups', 'ironworks', 'picks', 'fletching', 'bodkin', 'age3'],
+    towers: 1, wall: null, boon: 'shieldwall', edge: 'muster',
+  },
+  builder: {
+    id: 'builder', name: 'Builder', text: 'A late big army, the Monument first',
+    firstRaid: 840000, rest: 240000, army: 20, party: 14,
+    roles: ['siege', 'melee', 'ranged', 'cavalry', 'champion'],
+    plan: ['monument', 'farm', 'lumber', 'mine', 'unique', 'academy', 'barracks', 'range', 'stable', 'market', 'watchtower'],
+    research: ['axes', 'baskets', 'picks', 'age2', 'ironworks', 'fletching', 'bodkin', 'stirrups', 'age3'],
+    towers: 1, wall: { age: 2, half: 4 }, boon: 'shieldwall', edge: 'masonry',
+  },
+  warden: {
+    id: 'warden', name: 'Warden', text: 'Walls, towers and Harvest Rites',
+    firstRaid: 720000, rest: 180000, army: 14, party: 10,
+    roles: ['ranged', 'melee', 'siege', 'cavalry', 'champion'],
+    plan: ['farm', 'lumber', 'mine', 'barracks', 'watchtower', 'academy', 'unique', 'range', 'stable', 'market', 'monument'],
+    research: ['axes', 'baskets', 'fletching', 'age2', 'bodkin', 'ironworks', 'picks', 'stirrups', 'age3'],
+    towers: 3, wall: { age: 1, half: 6 }, boon: 'harvest', edge: 'masonry',
+  },
+};
+export type TemperamentId = Temperament['id'];
+export const TEMPERAMENT_IDS = Object.keys(TEMPERAMENTS) as TemperamentId[];

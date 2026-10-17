@@ -2,9 +2,9 @@
 // the deeds card, the horn toast and the minimap. Each is a small class the GameScene updates every
 // frame; all of them are fixed to the screen (scroll factor 0).
 import Phaser from 'phaser';
-import { ARMY_DEED, BUILDINGS, DEEDS, FACTIONS, MAP_SIZE, RELICS, RESOURCES, TILE, type FactionId, type RelicId } from '../game/data';
+import { ARMY_DEED, BUILDINGS, DEEDS, EDGES, FACTIONS, MAP_SIZE, RELICS, RESOURCES, TEMPERAMENTS, TILE, type FactionId, type RelicId } from '../game/data';
 import { DIRT, ROCK, WATER } from '../game/map';
-import { AI, deedCount, monumentLeft, NEUTRAL, PLAYER, popCap, popUsed, type GameState, type Player } from '../game/sim';
+import { deedCount, monumentLeft, NEUTRAL, PLAYER, popCap, popUsed, type GameState, type Player } from '../game/sim';
 import { WOOL } from '../art/figures';
 import { hexNum, mix, SERIF, T } from '../art/stitch';
 import { settings } from '../../../../shared/settings';
@@ -51,6 +51,7 @@ export class TopBar {
   private pips: Phaser.GameObjects.Graphics;
   private pipText: Phaser.GameObjects.Text[] = [];
   private boonIcon: Phaser.GameObjects.Image;
+  private edgeIcon: Phaser.GameObjects.Image;
 
   constructor(scene: Phaser.Scene, faction: FactionId) {
     fixed(scene.add.image(0, 0, 'topbar').setOrigin(0, 0), 0);
@@ -68,6 +69,7 @@ export class TopBar {
     fixed(scene.add.image(TOP_SLOTS.faction + 8, 15, `icon-banner-${faction}`), 2);
     fixed(scene.add.text(TOP_SLOTS.faction + 20, 15, FACTIONS[faction].name.toUpperCase(), ink(12.5, WOOL[faction].cloth)).setOrigin(0, 0.5), 2);
     this.boonIcon = fixed(scene.add.image(722, 15, 'icon-shield').setVisible(false), 2);
+    this.edgeIcon = fixed(scene.add.image(752, 15, 'icon-stone').setVisible(false), 2);
   }
 
   update(s: GameState) {
@@ -93,6 +95,7 @@ export class TopBar {
       this.pipText[k].setColor(done ? T.ink : T.faded);
     }
     if (p.boon) this.boonIcon.setTexture(p.boon === 'shieldwall' ? 'icon-shield' : 'icon-wheat').setVisible(true);
+    if (p.edge) this.edgeIcon.setTexture(p.edge === 'masonry' ? 'icon-stone' : 'icon-drum').setVisible(true);
   }
 
   private set(key: string, v: string) {
@@ -160,7 +163,7 @@ export class DeedCard {
     this.count.setText(`${n} / 3`);
     if (p.age >= 3) {
       this.title.setText('AGE III REACHED');
-      this.foot.setText('Every soldier deals +2 damage');
+      this.foot.setText(`Every soldier deals +2 damage${p.edge ? ` · ${EDGES[p.edge].name}` : p.edgePending ? ' · pick an edge' : ''}`);
     } else if (n === 3) this.foot.setText('Research Age III at the Town Center');
     else this.foot.setText('Then Age III: soldiers deal +2 damage');
   }
@@ -172,25 +175,39 @@ export class DeedCard {
 
 const RELIC_ICON: Record<RelicId, string> = { plenty: 'icon-wheat', valor: 'icon-sword', haste: 'icon-feather' };
 
-/** Who holds each relic (a green ring for yours, the enemy's colour for theirs), and a standing Monument's count. */
+/**
+ * Who holds each relic (a green ring for yours, the holder's colour for a rival's), each rival's
+ * temperament once its Town Center has been seen, and a standing Monument's count.
+ */
 export class StatusCard {
   private bg: Phaser.GameObjects.Image;
   private g: Phaser.GameObjects.Graphics;
   private icons: Phaser.GameObjects.Image[] = [];
   private held: Phaser.GameObjects.Text;
   private monument: Phaser.GameObjects.Text;
+  private rivals: { id: number; name: Phaser.GameObjects.Text }[] = [];
   private relics = Object.keys(RELICS) as RelicId[];
   /** The Monument line on show, for the test and the screenshots. */
   shown = '';
+  /** Each rival's temperament as the card shows it ('?' until scouted), for the test and the screenshots. */
+  temperaments: string[] = [];
 
-  constructor(scene: Phaser.Scene, private foeCloth: string) {
+  constructor(scene: Phaser.Scene, s: GameState) {
     const { x, y } = STATUS_CARD;
     this.bg = fixed(scene.add.image(x - 2, y - 2, 'card-status').setOrigin(0, 0), 0);
     this.g = fixed(scene.add.graphics(), 1);
     fixed(scene.add.text(x + 9, y + 15, 'RELICS', ink(11.5, T.red)).setOrigin(0, 0.5), 2);
     this.relics.forEach((r, i) => this.icons.push(fixed(scene.add.image(x + 84 + i * 26, y + 15, RELIC_ICON[r]), 2)));
     this.held = fixed(scene.add.text(x + STATUS_CARD.w - 9, y + 15.5, '', ink(9, T.faded, false)).setOrigin(1, 0.5), 2);
-    this.monument = fixed(scene.add.text(x + 9, y + 38, '', ink(11, T.red)).setOrigin(0, 0.5), 2);
+    fixed(scene.add.text(x + 9, y + 37, 'RIVALS', ink(11.5, T.red)).setOrigin(0, 0.5), 2);
+    s.players
+      .filter((p) => p.id !== PLAYER && p.id !== NEUTRAL)
+      .forEach((p, k) => {
+        const rx = x + 74 + k * 82;
+        fixed(scene.add.image(rx, y + 37, `icon-banner-${p.faction}`).setScale(0.8), 2);
+        this.rivals.push({ id: p.id, name: fixed(scene.add.text(rx + 10, y + 37.5, '', ink(10, T.faded)).setOrigin(0, 0.5), 2) });
+      });
+    this.monument = fixed(scene.add.text(x + 9, y + 60, '', ink(11, T.red)).setOrigin(0, 0.5), 2);
   }
 
   update(s: GameState) {
@@ -200,18 +217,27 @@ export class StatusCard {
     this.relics.forEach((r, i) => {
       const holder = s.camps.find((c) => c.relic === r)?.holder ?? null;
       if (holder === PLAYER) mine++;
-      const col = holder === PLAYER ? T.green : holder === null ? '#c8b890' : this.foeCloth;
+      const col = holder === PLAYER ? T.green : holder === null ? '#c8b890' : WOOL[s.players[holder].faction].cloth;
       stitchEllipse(g, x + 84 + i * 26, y + 15, 10, 10, holder === null ? 0.9 : 1.8, hexNum(col));
     });
     this.held.setText(`${mine} held`);
+    stitchLine(g, x + 4, y + 26, x + STATUS_CARD.w - 4, y + 26, 0.8, hexNum(T.ochre));
+    // A rival's temperament shows once its Town Center has been seen; one that has fallen says so.
+    this.temperaments = this.rivals.map(({ id, name }) => {
+      const p = s.players[id];
+      const word = p.out ? 'fallen' : p.scouted && p.temperament ? TEMPERAMENTS[p.temperament].name : '?';
+      name.setText(word.toUpperCase()).setColor(p.scouted && !p.out ? WOOL[p.faction].cloth : T.faded);
+      return word;
+    });
     const own = monumentLeft(s, PLAYER);
-    const foe = monumentLeft(s, AI);
+    const left = this.rivals.map((r) => monumentLeft(s, r.id)).filter((ms): ms is number => ms !== null);
+    const foe = left.length > 0 ? Math.min(...left) : null;
     const clock = (ms: number) => `${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, '0')}`;
     const line = own !== null && (foe === null || own <= foe) ? `YOUR MONUMENT · ${clock(own)} TO VICTORY` : foe !== null ? `ENEMY MONUMENT · ${clock(foe)} TO DESTROY IT` : '';
     this.shown = line;
     this.monument.setText(line).setColor(own !== null && line.startsWith('YOUR') ? T.green : T.red);
     this.bg.setTexture(line ? 'card-status-tall' : 'card-status');
-    if (line) stitchLine(g, x + 4, y + 28, x + STATUS_CARD.w - 4, y + 28, 0.8, hexNum(T.ochre));
+    if (line) stitchLine(g, x + 4, y + 48, x + STATUS_CARD.w - 4, y + 48, 0.8, hexNum(T.ochre));
   }
 
   contains(px: number, py: number) {
@@ -281,10 +307,10 @@ export class Minimap {
   private small: HTMLCanvasElement;
   private data: ImageData;
   private g: Phaser.GameObjects.Graphics;
-  private hint: Phaser.GameObjects.Text;
+  private hints: Phaser.GameObjects.Text[] = [];
   private clock = 1e9;
 
-  constructor(scene: Phaser.Scene, private terrain: Uint8Array, aiFaction: FactionId, faction: FactionId) {
+  constructor(scene: Phaser.Scene, private terrain: Uint8Array, s: GameState) {
     if (scene.textures.exists('minimap')) scene.textures.remove('minimap');
     this.tex = scene.textures.createCanvas('minimap', MINI.s, MINI.s)!;
     fixed(scene.add.image(MINI.x, MINI.y, 'minimap').setOrigin(0, 0), 1);
@@ -293,13 +319,12 @@ export class Minimap {
     this.small.height = MAP_SIZE;
     this.data = new ImageData(MAP_SIZE, MAP_SIZE);
     this.g = fixed(scene.add.graphics(), 2);
-    this.hint = fixed(scene.add.text(0, 0, '?', ink(10, T.indigo)).setOrigin(0.5, 0.5), 3);
-    this.own = rgb(WOOL[faction].cloth);
-    this.foe = rgb(WOOL[aiFaction].cloth);
+    for (let k = 0; k < s.players.length; k++) this.hints.push(fixed(scene.add.text(0, 0, '?', ink(10, T.indigo)).setOrigin(0.5, 0.5).setVisible(false), 3));
+    this.colours = s.players.map((p) => rgb(WOOL[p.faction].cloth));
   }
 
-  private own: [number, number, number];
-  private foe: [number, number, number];
+  /** Each side's colour, by its index. */
+  private colours: [number, number, number][];
 
   update(s: GameState, dt: number, view: Phaser.Geom.Rectangle) {
     this.clock += dt;
@@ -318,15 +343,15 @@ export class Minimap {
     stitchLine(g, vx + vw, vy, vx + vw, vy + vh, 0.8, hexNum(T.ink));
     stitchLine(g, vx + vw, vy + vh, vx, vy + vh, 0.8, hexNum(T.ink));
     stitchLine(g, vx, vy + vh, vx, vy, 0.8, hexNum(T.ink));
-    // The enemy's corner, marked until it has been seen.
-    const foeTown = [...s.buildings.values()].find((b) => b.owner !== PLAYER && b.type === 'town');
-    const seen = foeTown ? s.sight[foeTown.ty * MAP_SIZE + foeTown.tx] > 0 : true;
-    if (foeTown && !seen) {
-      const hx = MINI.x + (foeTown.tx + 2) * k;
-      const hy = MINI.y + (foeTown.ty + 2) * k;
+    // Each rival's corner, marked until it has been seen.
+    for (const hint of this.hints) hint.setVisible(false);
+    for (const town of s.buildings.values()) {
+      if (town.type !== 'town' || town.owner === PLAYER || s.sight[town.ty * MAP_SIZE + town.tx] > 0) continue;
+      const hx = MINI.x + (town.tx + 2) * k;
+      const hy = MINI.y + (town.ty + 2) * k;
       stitchEllipse(g, hx, hy, 8, 8, 1, hexNum(T.indigo));
-      this.hint.setPosition(hx, hy + 0.5).setVisible(true);
-    } else this.hint.setVisible(false);
+      this.hints[town.owner].setPosition(hx, hy + 0.5).setVisible(true);
+    }
     // A raid pulses rings of running stitch where it is.
     const r = s.raid;
     if (r && r.target === PLAYER) {
@@ -373,7 +398,7 @@ export class Minimap {
     const pale: [number, number, number] = [239, 228, 198];
     for (const c of s.camps) {
       if (c.claimed || s.sight[c.ty * MAP_SIZE + c.tx] === 0) continue;
-      const col = c.holder === PLAYER ? this.own : c.holder === null ? (c.kind === 'relic' ? pale : gold) : this.foe;
+      const col = c.holder === null ? (c.kind === 'relic' ? pale : gold) : this.colours[c.holder];
       for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) put(c.tx + i, c.ty + j, col);
     }
     // The trading posts are marked for everyone, like a landmark on a chart.
@@ -382,13 +407,13 @@ export class Minimap {
       // A Monument shows on every map once it is begun, as it does in the fog for everyone.
       if (b.owner !== PLAYER && b.type !== 'monument' && s.sight[b.ty * MAP_SIZE + b.tx] === 0) continue;
       const def = BUILDINGS[b.type];
-      for (let j = 0; j < def.h; j++) for (let i = 0; i < def.w; i++) put(b.tx + i, b.ty + j, b.owner === PLAYER ? this.own : this.foe);
+      for (let j = 0; j < def.h; j++) for (let i = 0; i < def.w; i++) put(b.tx + i, b.ty + j, this.colours[b.owner]);
     }
     for (const u of s.units.values()) {
       const tx = Math.floor(u.x);
       const ty = Math.floor(u.y);
       if (u.owner !== PLAYER && s.sight[ty * MAP_SIZE + tx] !== 2) continue;
-      const c = u.owner === PLAYER ? this.own : u.owner === NEUTRAL ? wild : this.foe;
+      const c = u.owner === NEUTRAL ? wild : this.colours[u.owner];
       put(tx, ty, c);
       put(tx + 1, ty, c);
       put(tx, ty + 1, c);

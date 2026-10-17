@@ -2,21 +2,25 @@
 // same commands a player would (train, place, research, gather, attack), in priority order: keep
 // villagers coming, keep houses ahead of the population cap, feed and wood up, build the production
 // line, research, then train and send the army. Only the AI's own units and buildings are touched.
-// It plays the AI's side, and in watch mode (`?watch`) the player's side too: `think` takes the side.
+// It plays the AI's side (both AIs in a three-way match), and in watch mode (`?watch`) the player's
+// side too: `think` takes the side. Each side's temperament (TEMPERAMENTS) sets its build, research,
+// soldiers, raid timing and picks.
 import {
   BELL_RANGE,
+  BOONS,
   BUILDINGS,
+  EDGES,
+  FACTIONS,
   RAID_MAX_MS,
-  RAID_PARTY,
-  RAID_REST_MS,
   RAID_TOWN_FROM,
   RELICS,
   TECHS,
+  TEMPERAMENTS,
   UNIQUE,
   UNITS,
   type BuildingId,
   type Resource,
-  type Role,
+  type Temperament,
   isSoldier,
   unitFor,
 } from './data';
@@ -27,6 +31,7 @@ import {
   campSpots,
   canPlace,
   chooseBoon,
+  chooseEdge,
   endRaid,
   garrisoned,
   hasBuilt,
@@ -34,6 +39,7 @@ import {
   holds,
   issue,
   monumentLeft,
+  NEUTRAL,
   notAllowed,
   placeBuilding,
   placeWall,
@@ -42,6 +48,7 @@ import {
   releaseBell,
   research,
   ringBell,
+  rivalsOf,
   setRally,
   startRaid,
   trade,
@@ -64,39 +71,50 @@ import { aiLog } from '../../../../shared/watch';
 const THINK_MS = 4000;
 const ACTIONS_PER_THINK = 2;
 const TARGET_VILLAGERS = 18;
-const ARMY_TO_ATTACK = 14;
 /** What an economy raid goes for, and how far from the enemy Town Center it must stand. */
 const RAID_ECONOMY: BuildingId[] = ['lumber', 'mine', 'farm', 'dock', 'grove', 'market'];
 const RAID_CLEAR = 8;
 const ARMY_CAP = 40;
-const RESEARCH_ORDER = ['axes', 'baskets', 'ironworks', 'fletching', 'age2', 'stirrups', 'bodkin', 'picks', 'age3'];
-/** `unique` stands for the faction's own building (Forge, Dock or Grove); the Monument waits for Age III. */
-const BUILD_PLAN: (BuildingId | 'unique')[] = ['farm', 'lumber', 'mine', 'unique', 'barracks', 'academy', 'range', 'stable', 'watchtower', 'market', 'monument'];
 /** Trade carts the AI keeps on the road once it has a Market, and rams it keeps with its army in Age II. */
 const AI_CARTS = 3;
 const AI_RAMS = 2;
 /** Market swaps: sell a lot when a resource piles up this high while ore is short, buy one when it runs this low. */
 const SWAP_HIGH = 600;
 const SWAP_LOW = 60;
-/** The AI's palisade: a short diagonal line this far from its Town Center, towards the player, with a gate in the middle. */
+/** The AI's palisade: a short diagonal line this far from its Town Center, towards its foe, with a gate in the middle. */
 const WALL_OFFSET = 9;
-const WALL_HALF = 4;
 /** The army goes for an unheld relic once it has this many soldiers, between raids. */
 const ARMY_FOR_RELIC = 8;
 
-/** The side the planner is thinking for, and the side it plays against; set by `think`. */
+/** The side the planner is thinking for, the side it plays against and its temperament; set by `think`. */
 let ME = AI;
 let FOE = PLAYER;
+let T: Temperament = TEMPERAMENTS.builder;
 
 /** Runs the planner for one side (the AI's unless told) once every THINK_MS of game time. */
 export function think(s: GameState, dt: number, side = AI) {
-  if (s.winner !== null) return;
+  if (s.winner !== null || s.players[side].out) return;
   s.aiClock[side] += dt;
   if (s.aiClock[side] < THINK_MS) return;
   s.aiClock[side] = 0;
   ME = side;
-  FOE = side === AI ? PLAYER : AI;
+  FOE = foeFor(s, side);
+  T = TEMPERAMENTS[s.players[side].temperament ?? 'builder'];
   plan(s);
+}
+
+/**
+ * The rival a side plays against this think: the one its raid under way goes for, else a rival with
+ * a standing Monument, else the next rival in turn by raids launched, so in a three-way match an AI
+ * raids each of the others by turns.
+ */
+function foeFor(s: GameState, side: number) {
+  const rivals = rivalsOf(s, side);
+  const raid = s.aiRaid[side];
+  if (rivals.length === 0) return raid.foe;
+  if (raid.goal && rivals.includes(raid.foe)) return raid.foe;
+  const monument = rivals.find((r) => [...s.buildings.values()].some((b) => b.owner === r && b.type === 'monument'));
+  return monument ?? rivals[raid.count % rivals.length];
 }
 
 /** Writes a decision to the watch log (`?watch` only), naming the building or unit's display name. */
@@ -123,7 +141,7 @@ function plan(s: GameState) {
 
   // 0a. The town bell: enemy soldiers near the base send the villagers to shelter in the Town Center
   // and the towers, and once the base is clear again they go back to work.
-  const threat = [...s.units.values()].some((u) => u.owner === FOE && u.hp > 0 && isSoldier(UNITS[u.type].role) && Math.hypot(u.x - town.tx - 2, u.y - town.ty - 2) <= BELL_RANGE);
+  const threat = [...s.units.values()].some((u) => u.owner !== ME && u.owner !== NEUTRAL && u.hp > 0 && isSoldier(UNITS[u.type].role) && Math.hypot(u.x - town.tx - 2, u.y - town.ty - 2) <= BELL_RANGE);
   if (threat && !p.bell) {
     if (act(() => ringBell(s, ME) > 0)) log('rings the town bell');
   } else if (!threat && p.bell) {
@@ -156,10 +174,10 @@ function plan(s: GameState) {
   // 3. Buildings in plan order, one at a time, as soon as the AI can pay for each.
   const under = [...s.buildings.values()].some((b) => b.owner === ME && !b.built && !BUILDINGS[b.type].palisade);
   if (!under && budget > 0) {
-    for (const step of BUILD_PLAN) {
+    for (const step of T.plan) {
       const type = step === 'unique' ? UNIQUE[p.faction] : step;
-      if (hasBuildingFor(s, ME, type) && type !== 'farm') continue;
-      if (type === 'farm' && farmCount(s) >= 4) continue;
+      // Four farms, the temperament's towers, one of everything else.
+      if (count(s, type) >= (type === 'farm' ? 4 : type === 'watchtower' ? T.towers : 1)) continue;
       if (notAllowed(s, ME, type)) continue;
       if (!affordable(p, BUILDINGS[type].cost)) break;
       if (type === 'lumber' || type === 'mine') {
@@ -174,8 +192,8 @@ function plan(s: GameState) {
     }
   }
 
-  // 3b. A short palisade with a gate across the side the player comes from, once in Age II.
-  if (p.age >= 2 && hasBuilt(s, ME, 'barracks') && !hasBuildingFor(s, ME, 'gate') && p.res.wood >= 120) {
+  // 3b. A palisade with a gate across the side its foe comes from, from the temperament's age.
+  if (T.wall && p.age >= T.wall.age && hasBuilt(s, ME, 'barracks') && !hasBuildingFor(s, ME, 'gate') && p.res.wood >= 60 + T.wall.half * 15) {
     if (act(() => buildWall(s, town))) log('lays a palisade with a gate');
   }
 
@@ -191,7 +209,7 @@ function plan(s: GameState) {
     if (b.owner !== ME || !b.built || b.queue.length > 0) continue;
     if (b.type !== 'academy' && b.type !== 'town') continue;
     const at = b.type === 'town' ? 'town' : 'academy';
-    const tech = RESEARCH_ORDER.find((id) => {
+    const tech = T.research.find((id) => {
       const def = TECHS[id];
       const done = id === 'age2' ? p.age >= 2 : p.techs.includes(id);
       return def.at === at && !done && (!def.age2 || p.age >= 2) && affordable(p, def.cost);
@@ -201,10 +219,9 @@ function plan(s: GameState) {
 
   // 5. Military: train from each production building in turn, while the army is under the cap. In
   // Age II a couple of rams join the army, in Age III the faction's champion.
-  // Rams come first in the list so the Barracks' queue isn't always taken by infantry.
-  const roles: Role[] = ['siege', 'melee', 'ranged', 'cavalry', 'champion'];
+  // The temperament says which come first.
   if (military.length < ARMY_CAP) {
-    for (const role of roles) {
+    for (const role of T.roles) {
       const def = unitFor(s.players[ME].faction, role);
       if (def.age && p.age < def.age) continue;
       if (role === 'siege' && unitCount(s, ME, def.id) >= AI_RAMS) continue;
@@ -250,24 +267,24 @@ function plan(s: GameState) {
       // The rush is a raid on the Monument, so `pressRaid` ends it (and the raid it records) once
       // the Monument falls, instead of leaving the record open and every later raid unrecorded.
       if (raid.goal?.b !== monument.id) {
-        Object.assign(raid, { goal: { kind: 'town', x: monument.tx + half, y: monument.ty + half, b: monument.id, camp: null }, party: ids, started: s.time, count: raid.count + 1 });
+        Object.assign(raid, { goal: { kind: 'town', x: monument.tx + half, y: monument.ty + half, b: monument.id, camp: null }, foe: FOE, party: ids, started: s.time, count: raid.count + 1 });
       }
       startRaid(s, ME, FOE, ids);
       log(`sends all ${army.length} soldiers at the enemy Monument`);
     }
   } else if (raid.goal) {
     pressRaid(s, town);
-  } else if (s.time >= raid.next && army.length >= ARMY_TO_ATTACK && ready.length >= army.length / 2) {
+  } else if (s.time >= raid.next && army.length >= T.army && ready.length >= army.length / 2) {
     const goal = raidGoal(s);
     if (goal && act(() => true)) {
       // An economy or relic raid takes a party, nearest the goal first; the Town Center gets everyone.
-      const party = goal.kind === 'town' ? army : [...army].sort((a, b) => Math.hypot(a.x - goal.x, a.y - goal.y) - Math.hypot(b.x - goal.x, b.y - goal.y)).slice(0, RAID_PARTY);
+      const party = goal.kind === 'town' ? army : [...army].sort((a, b) => Math.hypot(a.x - goal.x, a.y - goal.y) - Math.hypot(b.x - goal.x, b.y - goal.y)).slice(0, T.party);
       const ids = party.map((u) => u.id);
-      Object.assign(raid, { goal, party: ids, started: s.time, count: raid.count + 1 });
+      Object.assign(raid, { goal, foe: FOE, party: ids, started: s.time, count: raid.count + 1 });
       issue(s, ME, ids, { t: 'attackMove', x: goal.x, y: goal.y });
       // The player is told about each new raid.
       startRaid(s, ME, FOE, ids);
-      log(`raids the enemy's ${goalName(s, goal)} with ${ids.length} soldiers`);
+      log(`raids the ${FACTIONS[s.players[FOE].faction].name}'s ${goalName(s, goal)} with ${ids.length} soldiers`);
     }
   } else if (army.length >= ARMY_FOR_RELIC && ready.length >= army.length / 2) {
     // 6b. Between raids, a fair-sized army goes to take the nearest relic the AI doesn't hold.
@@ -287,8 +304,9 @@ function plan(s: GameState) {
     if (src) act(() => (issue(s, ME, [u.id], { t: 'gather', node: src }), true));
   }
 
-  // 8. The Age II boon: the AI always holds a shieldwall.
-  if (p.boonPending && chooseBoon(s, ME, 'shieldwall')) log('picks the Shieldwall boon');
+  // 8. The Age II boon and the Age III edge, as the temperament likes them.
+  if (p.boonPending && chooseBoon(s, ME, T.boon)) log(`picks the ${BOONS[T.boon].name} boon`);
+  if (p.edgePending && chooseEdge(s, ME, T.edge)) log(`picks ${EDGES[T.edge].name} for Age III`);
 }
 
 /**
@@ -350,7 +368,7 @@ function pressRaid(s: GameState, town: Building) {
     // Every raider fallen is repelled by the sim already; one turned back by losses is repelled too.
     endRaid(s, ME, bled && !done);
     log(bled && !done ? 'calls the raid back after its losses' : done ? 'raid done, heads home' : 'calls the raid off');
-    Object.assign(raid, { goal: null, party: [], next: s.time + RAID_REST_MS });
+    Object.assign(raid, { goal: null, party: [], next: s.time + T.rest });
     return;
   }
   const idle = party.filter((u) => u.order.t === 'idle');
@@ -359,9 +377,9 @@ function pressRaid(s: GameState, town: Building) {
   act(() => (issue(s, ME, ids, goal.b !== null ? { t: 'attack', target: goal.b } : { t: 'attackMove', x: goal.x, y: goal.y }), true));
 }
 
-function farmCount(s: GameState) {
+function count(s: GameState, type: BuildingId) {
   let n = 0;
-  for (const b of s.buildings.values()) if (b.owner === ME && b.type === 'farm') n++;
+  for (const b of s.buildings.values()) if (b.owner === ME && b.type === type) n++;
   return n;
 }
 
@@ -449,7 +467,8 @@ function buildWall(s: GameState, town: Building): boolean {
   const foe = [...s.buildings.values()].find((b) => b.owner === FOE && b.type === 'town');
   const sx = foe && Math.sign(foe.tx - town.tx) === Math.sign(foe.ty - town.ty) ? 1 : -1;
   const tiles: { tx: number; ty: number }[] = [];
-  for (let k = -WALL_HALF; k <= WALL_HALF; k++) tiles.push({ tx: mx + k, ty: my - k * sx });
+  const half = T.wall?.half ?? 4;
+  for (let k = -half; k <= half; k++) tiles.push({ tx: mx + k, ty: my - k * sx });
   const ids = placeWall(s, ME, tiles);
   // The gate goes on the middle piece, or the piece of the line nearest it.
   const pieces = [...s.buildings.values()]
