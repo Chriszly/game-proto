@@ -13,11 +13,19 @@ export const howToPlay: HowToPlay = {
     },
     {
       input: 'Click or tap an upgrade',
-      action: 'Between nights: buy its next level, or put a fill in the cask',
+      action: 'Between nights: buy its next level, put a fill in the cask or rekindle a hearth',
+    },
+    {
+      input: 'Click or tap a resting moth',
+      action: 'With the second jar bought: move it to rest at the other jar',
     },
     {
       input: 'Click or tap a district',
       action: 'At every fifth nightfall: move the keep there, or stay',
+    },
+    {
+      input: 'Click or tap a curse / Go on',
+      action: 'After the Great Festival: take a curse for more pay, or take none',
     },
     { input: 'Next dusk', action: "Start the next night's dusk" },
     {
@@ -40,5 +48,8 @@ export const howToPlay: HowToPlay = {
     'A tap while every moth is busy waits in line, up to two taps.',
     'From night 3 bats come to snuff lanterns, and refills draw on the oil cask.',
     'Lanterns side by side form chains that pay 8 coins when all of them burn at nightfall.',
+    'From night 6 a moth rests 6 seconds after its fourth flight of a dusk; Nectar shortens it.',
+    'Lost a hearth? The Hearth card rekindles it between nights for 40, then 80, then 120 coins.',
+    'After the Festival each curse you take makes the nights harder and every nightfall pay 25% more.',
   ],
 };

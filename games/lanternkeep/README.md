@@ -12,9 +12,11 @@ saves a nearly dry lantern pays on the spot. Every night is of a kind (foggy, a 
 bats come to snuff the lanterns, and lanterns side by side form chains that pay when all of them
 burn. Cottage windows call for a lantern, refills draw on a cask of oil, some spots hold a beacon,
 a candle or a bell, every fifth night the Great Owl sweeps a row, and at every fifth nightfall the
-keep can move to the Docks, Chapel Hill or the Market. Spend the coins between nights on better
-wicks, more oil, more and faster moths, fireflies and the cask. Keep ten nights to reach the Great
-Festival; the nights go on after it.
+keep can move to the Docks, Chapel Hill or the Market. From night 6 a moth tires after four
+flights. Spend the coins between nights on better wicks, more oil, more and faster moths,
+fireflies, nectar, a second jar, the cask and rekindling a lost hearth. Keep ten nights to reach
+the Great Festival; the nights go on after it, and every nightfall after it offers two curses that
+make the nights harder and pay more.
 
 It is played as a shadow-puppet theatre: the keep is black cut card in front of a backlit paper
 screen that turns from saffron to indigo as dusk falls, light shows through its arrow slits and
@@ -28,8 +30,10 @@ stone joints, the lanterns have coloured-glass panes and the moths are lace-wing
 | --- | --- |
 | Tap or click a lantern | Send an idle moth to light it, or to refill a lit one's oil; with every moth busy, the tap waits in line |
 | Tap or click a bat | Send an idle moth to chase it off |
+| Tap or click a moth resting on a jar | With the second jar bought: send it to rest at the other jar |
 | Tap or click an upgrade | Between nights: buy its next level, or put a fill in the cask |
 | Tap or click a district | At a fifth nightfall: move the keep there (or stay) |
+| Tap or click a curse | At a nightfall from the tenth: take it (or press Go on to take none) |
 | Next dusk | Between nights: start the next night's dusk |
 | Keep going | After the Great Festival: play on |
 | New keep | After the game ends: start again |
@@ -119,6 +123,23 @@ stone joints, the lanterns have coloured-glass panes and the moths are lace-wing
     - **The Docks**: a sea wind, so each gust blows out a second lantern (the next with most oil).
     - **Chapel Hill**: vespers pay 2 more coins a lantern, but three lanterns in four must burn.
     - **The Market**: close calls and window calls pay double, and oil burns 15% faster.
+19. **Tired moths**: from night 6 a moth that comes home from its fourth flight of the dusk (a
+    chase counts; a firefly's second lantern does not) rests 6 seconds in its jar, wings folded,
+    with a lilac ring filling and a "zz" countdown, before it can fly again. Then it counts afresh.
+    Each Nectar level takes 1.5 seconds off the rest.
+20. **The second jar**: the Jar card (120 coins, once) puts a second moth jar by the east wall.
+    Every other moth rests there to start with, so its flights to the east side are shorter. Tap
+    a moth resting on a jar during dusk and it flies over to rest at the other one, from then on.
+21. **Rekindle a hearth**: between nights the Hearth card lights a hearth that went out, for 40
+    coins, then 80, then 120. Three rekindles a game at most.
+22. **Pick your peril**: every nightfall from the tenth (before night 11 on) a panel offers two
+    of four curses. Take one, both or neither ("Go on"). Each curse lasts the rest of the game
+    and raises the pay of every nightfall by 25% (x1.25 for one, x1.5 for two, ...), and the best
+    multiplier reached is saved in the browser.
+    - **Wet wicks**: lighting a lantern takes 50% longer.
+    - **Restless bats**: one more bat comes every night.
+    - **Thin oil**: oil burns 25% faster.
+    - **Watchful lord**: one more lantern must burn at nightfall to keep the hearths.
 
 ![The first lantern lit](docs/screenshots/playthrough-1-first-lantern.webp)
 
@@ -158,6 +179,10 @@ stone joints, the lanterns have coloured-glass panes and the moths are lace-wing
 
 ![The Market on a stormy night](docs/screenshots/loop-market.webp)
 
+![Night 6: three tired moths resting, two of them at the second jar by the east wall](docs/screenshots/loop-tired-moths.webp)
+
+![Night 10 falls: Restless bats taken, Watchful lord still offered](docs/screenshots/loop-peril.webp)
+
 ### Upgrades
 
 | Upgrade | Each level | Costs |
@@ -167,9 +192,12 @@ stone joints, the lanterns have coloured-glass panes and the moths are lace-wing
 | Moths | One more moth in the jar (kinds keep cycling fast, slow, heavy) | 15, 30, 50 |
 | Wings | Moths fly 20% faster | 10, 20, 35 |
 | Firefly | One more firefly in the jar | 25, 45 |
+| Nectar | Tired moths rest 1.5 seconds less (from night 6) | 15, 30, 50 |
+| Jar | A second moth jar by the east wall (once) | 120 |
 | Cask | One more fill of oil (up to 6) | 3 each |
+| Hearth | Rekindle a hearth that went out (three a game) | 40, 80, 120 |
 
-![A nightfall's tally, the next night's kind and the upgrades, with the cask's card](docs/screenshots/loop-night-panel.webp)
+![A nightfall's tally, the next night's kind and the nine cards: upgrades, the cask and the hearth](docs/screenshots/loop-night-panel.webp)
 
 The difficulty, set on the hub page's Settings, changes one thing: lanterns burn 26 seconds on
 Easy and 16 on Hard, instead of 20. (A heavy moth's lanterns burn 50% longer on every setting.)

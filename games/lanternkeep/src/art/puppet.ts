@@ -226,9 +226,7 @@ function gateway(x0: number, x1: number, top = 400) {
 }
 
 /** The moth jar in front of the gate: a card outline with pale blue gel glass. */
-function paintJar() {
-  const jx = JAR.x;
-  const jy = JAR.y - 20;
+function paintJar(jx = JAR.x, jy = JAR.y - 20) {
   ctx.save();
   ctx.globalAlpha = 0.85;
   poly([[jx - 16, jy - 10], [jx + 16, jy - 10], [jx + 16, jy + 18], [jx - 16, jy + 18]], '#a8d0dc');
@@ -1044,6 +1042,8 @@ export function bakeTextures(scene: Phaser.Scene) {
   bake(scene, 'cask-full', 30, 30, () => paintCask(true), 15, 15);
   bake(scene, 'cask-empty', 30, 30, () => paintCask(false), 15, 15);
   bake(scene, 'sky-lantern', 56, 56, paintSkyLantern, 28, 28);
+  // The second jar (LK14), drawn by the scene where JARS puts it; its foot is 22 below the centre.
+  bake(scene, 'jar', 48, 56, () => paintJar(0, 0), 24, 28);
   bake(scene, 'fog', W, H, paintFog, 0, 0, BACK_RES);
   bake(scene, 'bunting', W, H, paintBunting, 0, 0, BACK_RES);
   for (const kind of ['clear', 'fog', 'feast', 'storm'] as const satisfies readonly NightKind[]) {
