@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
+import { playMusic, playSting, ui } from '../../../../shared/audio';
 import { settings } from '../../../../shared/settings';
+import { BOSS_SONG, SONG, sfx } from '../audio';
 import { Backdrop, type BackdropInfo } from '../art/backdrop';
 import { bakeComic } from '../art/comic';
 import { bakeNightVision } from '../art/nightvision';
@@ -124,6 +126,8 @@ const SPLAT_MS = 900;
 const BLAM_EVERY = 6;
 /** A SPLUT! on every this many kills (comic only). */
 const SPLUT_EVERY = 4;
+/** The pitch of a zombie's death sound: the small ones squeak, the big ones thud (bosses have their own). */
+const KILL_PITCH: Partial<Record<EnemyKind, number>> = { crawler: 1.4, runner: 1.15, spitter: 1.05, brute: 0.75, riot: 0.85 };
 
 interface Enemy {
   alive: boolean;
@@ -619,6 +623,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Switches between the comic and the night-vision feed, and saves the choice. */
   switchStyle() {
+    ui('click');
     this.style = this.style === 'comic' ? 'nv' : 'comic';
     saveStyle(this.style);
     this.bakeStyle(this.style);
@@ -700,7 +705,7 @@ export class GameScene extends Phaser.Scene {
     // V switches the art style, like the switch in the top bar.
     kb.addKey(K.V).on('down', () => this.switchStyle());
     // S drops a sandbag wall in the hero's lane; 1, 2 and 3 pick a supply.
-    kb.addKey(K.S).on('down', () => this.state.phase === 'wave' && this.placeWall(laneAt(this.player.x)));
+    kb.addKey(K.S).on('down', () => this.state.phase === 'wave' && !this.placeWall(laneAt(this.player.x)) && ui('refuse'));
     // 1, 2 and 3 also pick a joining survivor's role.
     [K.ONE, K.TWO, K.THREE].forEach((code, i) =>
       kb.addKey(code).on('down', () => {
@@ -724,17 +729,23 @@ export class GameScene extends Phaser.Scene {
       else if (s.phase === 'over') {
         const button = this.shop.find((b) => inBox(x, y, b));
         if (button) button.act();
-        else this.scene.restart();
+        else {
+          ui('click');
+          this.scene.restart();
+        }
       } else if (s.phase === 'supply') {
         const card = this.cards.find((c) => inBox(x, y, c));
         if (card) this.pickSupply(card.kind);
       } else if (s.phase === 'role') {
         const card = this.roleCards.find((c) => inBox(x, y, c));
         if (card) this.pickRole(card.role);
-      } else if (this.hud.onKit(x, y) && ((s.phase === 'wave' && s.sandbags > 0) || s.placing)) s.placing = !s.placing;
-      else if (s.placing) {
+      } else if (this.hud.onKit(x, y) && ((s.phase === 'wave' && s.sandbags > 0) || s.placing)) {
+        s.placing = !s.placing;
+        ui('click');
+      } else if (s.placing) {
         // A tap on the road puts the wall in that lane; anywhere else puts the sandbags away.
         if (y > HUD_HEIGHT + 30 && y < REACH_Y) this.placeWall(laneAt(x));
+        else ui('click');
         s.placing = false;
       } else {
         this.pressOnUi = false;
@@ -782,6 +793,23 @@ export class GameScene extends Phaser.Scene {
     this.showBanner(lines.filter(Boolean).join('\n'));
     this.applyCondition();
     this.refreshBackdrop();
+    // A boss wave opens on a low horn, any other on a drum hit.
+    if (this.state.bossKind) playSting(SONG, 'warn');
+    else if (wave > 1) sfx('waveStart');
+    this.music();
+  }
+
+  /**
+   * Plays the part of the music that fits the phase: the boss song through a boss wave, the battle
+   * (the frenzy's, or the dark one under a blackout or blood moon) in a wave, calm otherwise.
+   */
+  private music() {
+    const s = this.state;
+    if (s.phase === 'role') return;
+    if (s.phase !== 'wave') playMusic(SONG, 'calm');
+    else if (s.bossKind) playMusic(BOSS_SONG, 'boss');
+    else if (s.frenzyMs > 0) playMusic(SONG, 'frenzy');
+    else playMusic(SONG, s.condition === 'blackout' || s.condition === 'bloodmoon' ? 'dark' : 'battle');
   }
 
   /** The blackout's dark and the blood moon's red cast come and go with the wave's condition. */
@@ -952,6 +980,7 @@ export class GameScene extends Phaser.Scene {
     while (this.fireClock >= interval) {
       this.fireClock -= interval;
       this.volleys++;
+      sfx('shot');
       for (let i = 0; i <= this.squad.length; i++) {
         const x = this.player.x + SQUAD_SLOTS[i].dx, y = HERO.y + SQUAD_SLOTS[i].dy - 30;
         const role = i === 0 ? 'gunner' : this.state.roles[i - 1];
@@ -1077,6 +1106,7 @@ export class GameScene extends Phaser.Scene {
   private rescue(v: Survivor) {
     this.survivors.release(v);
     this.state.survivorsSaved++;
+    sfx('rescue');
     if (this.state.stats.companions < MAX_COMPANIONS) {
       this.rolePrev = this.state.phase;
       this.state.phase = 'role';
@@ -1094,7 +1124,11 @@ export class GameScene extends Phaser.Scene {
   private hurtSurvivor(v: Survivor, damage: number) {
     v.hp -= damage;
     this.effect('', v.x + SURVIVOR.radius + 4, v.y - 6, { life: 520, rise: 36, text: `-${damage}` });
-    if (v.hp > 0) return;
+    if (v.hp > 0) {
+      sfx('yelp');
+      return;
+    }
+    sfx('survivorLost');
     this.survivors.release(v);
     this.state.survivorsLost++;
     const s = this.splats.take();
@@ -1106,6 +1140,7 @@ export class GameScene extends Phaser.Scene {
   /** The squad patches up and throws back every zombie near the line. */
   private useMedkit() {
     this.state.medkits--;
+    sfx('medkit');
     for (const e of this.enemies.all) {
       if (!e.alive || e.y < REACH_Y - MEDKIT.reach) continue;
       e.y -= MEDKIT.push;
@@ -1131,6 +1166,7 @@ export class GameScene extends Phaser.Scene {
       const tx = Phaser.Math.Clamp(this.player.x, LANES[0].x0 + 40, LANES[2].x1 - 40);
       this.bossAct = { move, ms: 0, acting: false, tx, fromX: boss.x, fromY: boss.y };
       this.state.bossMove = move;
+      sfx('siren');
       const calls: Record<BossMove, [TextKey, TextKey]> = { charge: ['callCharge', 'nvCallCharge'], spit: ['callSpit', 'nvCallSpit'], call: boss.kind === 'brood' ? ['callBrood', 'nvCallBrood'] : ['callPack', 'nvCallPack'] };
       const call = calls[move];
       this.bossCall.setText(tr(call[this.style === 'comic' ? 0 : 1])).setVisible(true);
@@ -1191,6 +1227,8 @@ export class GameScene extends Phaser.Scene {
   private lobAcid(x: number, y: number, r: number, flightMs: number, poolMs: number, tx = this.player.x) {
     const a = this.acids.take();
     Object.assign(a, { x: tx, r, fromX: x, fromY: y, flight: flightMs, flightMs, life: poolMs });
+    // A spitter hidden by a blackout lobs unheard; the glob is still seen landing.
+    if (this.visibility(x, y) > 0) sfx('spit');
     a.glob.setPosition(x, y).setVisible(true);
     a.sprite.setPosition(tx, HERO.y + 6).setScale((GEOM.acid.w / a.sprite.frame.width) * (r / 78)).setAlpha(1).setVisible(false);
   }
@@ -1207,6 +1245,7 @@ export class GameScene extends Phaser.Scene {
         if (a.flight <= 0) {
           a.glob.setVisible(false);
           a.sprite.setVisible(true);
+          sfx('sizzle');
         }
         continue;
       }
@@ -1222,9 +1261,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Drops a sandbag wall across a lane (or tops up the one already there). */
-  private placeWall(lane: number) {
+  private placeWall(lane: number): boolean {
     // Not in the break: the wall would run out before the next wave reaches it.
-    if (this.state.sandbags <= 0 || this.state.phase !== 'wave') return;
+    if (this.state.sandbags <= 0 || this.state.phase !== 'wave') return false;
+    sfx('wall');
     this.state.sandbags--;
     this.state.walls++;
     let w = this.walls.all.find((o) => o.alive && o.lane === lane);
@@ -1239,6 +1279,7 @@ export class GameScene extends Phaser.Scene {
     w.ms = WALL.ms;
     w.sprite.setAlpha(1);
     this.state.placing = false;
+    return true;
   }
 
   private moveWalls(dt: number) {
@@ -1251,6 +1292,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private smashWall(w: Wall) {
+    sfx('wallSmash');
     this.effect('', w.sprite.x, WALL.y - 20, { life: 600, rise: 30, text: tr(this.style === 'comic' ? 'fxWallDown' : 'nvFxWallDown') });
     this.walls.release(w);
   }
@@ -1263,6 +1305,7 @@ export class GameScene extends Phaser.Scene {
     if (!close) return;
     this.state.flames--;
     this.flameClock = FLAMER.cooldownMs;
+    sfx('flame');
     const caught = this.enemies.all.filter((e) => e.alive && e.y >= REACH_Y - FLAMER.reach);
     for (const e of caught) this.hurt(e, FLAMER.damage(this.state.wave));
     this.effect('flame', VIEW.w / 2, REACH_Y, settings.reduceMotion ? { life: 700 } : { life: 700, grow: 0.08 });
@@ -1377,6 +1420,7 @@ export class GameScene extends Phaser.Scene {
           b.vx = Math.sin(ang) * BULLET.speed;
           b.vy = Math.cos(ang) * BULLET.speed;
           b.sprite.setPosition(b.x, b.y).setRotation(ang);
+          sfx('ricochet');
           this.effect('', from.x, from.y - 16, { life: 400, rise: 20, text: tr(this.style === 'comic' ? 'fxRicochet' : 'nvFxRicochet') });
           continue;
         }
@@ -1407,6 +1451,7 @@ export class GameScene extends Phaser.Scene {
   /** A grenadier's grenade bursts: every zombie within `GRENADE.radius` takes its damage, past any shield. */
   private grenade(x: number, y: number) {
     const dmg = GRENADE.damage(this.state.wave);
+    sfx('grenade');
     const caught = this.enemies.all.filter((e) => e.alive && Math.hypot(e.x - x, e.y - y) <= GRENADE.radius + ENEMIES[e.kind].radius);
     for (const e of caught) this.hurt(e, dmg);
     this.effect('blast', x, y, settings.reduceMotion ? { life: 380, baseScale: 0.42 } : { life: 380, grow: 0.4, baseScale: 0.3 });
@@ -1431,9 +1476,11 @@ export class GameScene extends Phaser.Scene {
     e.shield = Math.max(0, e.shield - damage);
     const r = ENEMIES[e.kind].radius;
     if (e.shield > 0) {
+      sfx('block');
       if (this.volleys % 3 === 0) this.effect('', e.x, e.y + r, { life: 360, rise: 20, text: tr(this.style === 'comic' ? 'fxBlock' : 'nvFxBlock') });
       return;
     }
+    sfx('shieldDown');
     this.skin(e.sprite, 'riot-bare');
     this.effect('', e.x, e.y - r - 10, { life: 700, rise: 30, text: tr(this.style === 'comic' ? 'fxShieldDown' : 'nvFxShieldDown') });
   }
@@ -1441,6 +1488,7 @@ export class GameScene extends Phaser.Scene {
   /** Takes hit points off an enemy, with a little damage number, and kills it at 0. */
   private hurt(e: Enemy, damage: number) {
     e.hp -= damage;
+    if (e.hp > 0) sfx('hit');
     const r = ENEMIES[e.kind].radius;
     this.effect('', e.x + r * 0.8 + 4, e.y - r * 0.4, { life: 520, rise: 36, text: `-${damage}` });
     if (e.hp <= 0) this.kill(e);
@@ -1457,7 +1505,11 @@ export class GameScene extends Phaser.Scene {
       this.state.frenzyMs = FRENZY.ms;
       this.state.frenzies++;
       this.showBanner(tr(this.style === 'comic' ? 'frenzyBanner' : 'nvFrenzyBanner'));
+      sfx('frenzy');
+      this.music();
     }
+    if (isBoss(e.kind)) sfx('bossKill');
+    else sfx('kill', { pitch: KILL_PITCH[e.kind] ?? 1 });
     const n = this.state.streak;
     if (n >= 3 && n % 3 === 0) this.effect('streak', e.x + 12, e.y + 2, { life: 700, text: `x${n}`, grow: 0.1 });
     const s = this.splats.take();
@@ -1478,6 +1530,7 @@ export class GameScene extends Phaser.Scene {
   /** A fuel drum goes up: every zombie in its ring takes the blast. */
   private explode(d: Drum) {
     const caught = this.inBlast(d), dmg = blastDamage(this.state.wave);
+    sfx('boom');
     let killed = 0;
     for (const e of caught) {
       this.hurt(e, dmg);
@@ -1493,6 +1546,7 @@ export class GameScene extends Phaser.Scene {
 
   private collect(p: Pickup) {
     this.pickups.release(p);
+    sfx('crate');
     // A sandbag crate goes into the kit, to be placed in a lane.
     if (p.upgrade === 'sandbag') {
       this.state.sandbags++;
@@ -1508,6 +1562,7 @@ export class GameScene extends Phaser.Scene {
     // The third crate of a kind evolves its stat into a perk.
     const perks = perksOf(this.state.collected), gained = perks.find((p) => !this.state.perks.includes(p));
     this.state.perks = perks;
+    if (gained) sfx('perk');
     if (gained) this.showBanner(`${tr(PERKS[gained].label).toUpperCase()}!\n${tr(PERKS[gained].detail).toUpperCase()}`);
     this.refreshBackdrop();
   }
@@ -1538,7 +1593,10 @@ export class GameScene extends Phaser.Scene {
     this.sinceKill += dt;
     if (this.state.frenzyMs > 0) {
       this.state.frenzyMs = Math.max(0, this.state.frenzyMs - dt);
-      if (this.state.frenzyMs === 0) this.state.streak = 0;
+      if (this.state.frenzyMs === 0) {
+        this.state.streak = 0;
+        this.music();
+      }
     } else if (this.sinceKill > FRENZY.gapMs) this.state.streak = 0;
   }
 
@@ -1590,6 +1648,7 @@ export class GameScene extends Phaser.Scene {
         // The wave's scrap is banked.
         saveScrap(this.state.bank + this.state.scrap);
         this.showBanner(tr('waveCleared', { wave: this.state.wave }));
+        sfx('cleared');
         this.recordOperation(this.state.wave);
         // An operation's last wave cleared wins it.
         const op = OPERATIONS[this.state.operation];
@@ -1599,7 +1658,9 @@ export class GameScene extends Phaser.Scene {
           this.state.phase = 'supply';
           this.state.offer = supplyPick(this.state.pellets >= SHOTGUN.maxPairs);
           this.showSupply();
-        }
+          sfx('supply');
+          this.music();
+        } else this.music();
       }
     } else if (this.state.phase === 'break') {
       this.breakClock += dt;
@@ -1824,6 +1885,8 @@ export class GameScene extends Phaser.Scene {
     // The run's scrap goes in the bank, to spend on starting crates and the outpost.
     this.state.bank += this.state.scrap;
     saveScrap(this.state.bank);
+    playMusic(SONG, 'calm');
+    playSting(SONG, 'lose');
     this.updateHud();
     this.showGameOver();
     this.refreshBackdrop();
@@ -1944,10 +2007,15 @@ export class GameScene extends Phaser.Scene {
     if (s.nextKit.includes(kind)) {
       s.nextKit = s.nextKit.filter((k) => k !== kind);
       s.bank += KIT_COSTS[kind];
+      ui('click');
     } else if (s.bank >= KIT_COSTS[kind]) {
       s.nextKit = [...s.nextKit, kind];
       s.bank -= KIT_COSTS[kind];
-    } else return;
+      ui('coin');
+    } else {
+      ui('refuse');
+      return;
+    }
     saveScrap(s.bank);
     saveKit(s.nextKit);
     this.redrawGameOver();
@@ -1956,7 +2024,11 @@ export class GameScene extends Phaser.Scene {
   /** Buys the next level of an outpost upgrade, for good. */
   private buyOutpost(kind: OutpostKind) {
     const s = this.state, cost = outpostCost(kind, s.outpost[kind]);
-    if (cost === null || s.bank < cost) return;
+    if (cost === null || s.bank < cost) {
+      ui('refuse');
+      return;
+    }
+    ui('coin');
     s.bank -= cost;
     s.outpost = { ...s.outpost, [kind]: s.outpost[kind] + 1 };
     saveScrap(s.bank);
@@ -1966,6 +2038,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Picks the operation the next run plays. */
   private pickOperation(kind: OperationKind) {
+    ui('click');
     this.state.nextOperation = kind;
     saveOperation(kind);
     this.redrawGameOver();
@@ -2053,6 +2126,8 @@ export class GameScene extends Phaser.Scene {
     this.bossCall.setVisible(false);
     s.bank += s.payout;
     saveScrap(s.bank);
+    playMusic(SONG, 'calm');
+    playSting(SONG, 'win');
     this.updateHud();
     this.showGameOver();
     this.refreshBackdrop();
@@ -2061,6 +2136,7 @@ export class GameScene extends Phaser.Scene {
   private pickSupply(kind: SupplyKind | 'extract' | undefined) {
     const s = this.state;
     if (!kind || s.phase !== 'supply') return;
+    sfx('confirm');
     if (kind === 'extract') {
       this.extract();
       return;
@@ -2077,6 +2153,7 @@ export class GameScene extends Phaser.Scene {
     s.phase = 'break';
     this.breakClock = 0;
     this.pop(tr(SUPPLIES[kind].label).toUpperCase(), this.style === 'comic' ? '#ffe04a' : this.theme().accent);
+    this.music();
   }
 
   /** A survivor reached the sandbags: three cards for the role they take in the squad. */
@@ -2140,6 +2217,7 @@ export class GameScene extends Phaser.Scene {
   private pickRole(role: Role | undefined) {
     const s = this.state;
     if (!role || s.phase !== 'role') return;
+    sfx('confirm');
     s.stats = applyUpgrade(s.stats, 'companion');
     s.roles.push(role);
     this.addCompanions();
