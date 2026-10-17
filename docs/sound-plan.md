@@ -132,6 +132,12 @@ Notes:
 - Auto Forge forges about every 1.2 s, so keep the forge sound quiet while it is on.
 - Ambience: a furnace crackle loop.
 
+**Done** (see `games/anvilheart/AGENTS.md`, "Sound"): parts `calm`, `streak`, `tense` and the
+stings `win` and `charter`, in `src/audio.ts`. The forge refusals, failed buys and drops a target
+won't take play the shared `refuse` buzz rather than a click, and an adventurer's door bell plays
+from `GameScene.drawVisitors` (there is no `arrive` event). The left button column moved up and
+right, clear of the corner. No furnace ambience loop, since the engine has none.
+
 ### Apothecary
 Cosy crafting and shop automation; a calm herbalist's almanac.
 

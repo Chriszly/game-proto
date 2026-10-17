@@ -1,6 +1,8 @@
+import { playMusic, playSting, ui } from '../../../../shared/audio';
 import { settings } from '../../../../shared/settings';
 import Phaser from 'phaser';
 import { ADVENTURER, adventurerTexture } from '../art/characters';
+import { SONG, sfx } from '../audio';
 import { itemTexture, shieldTexture, swordScale, swordTexture } from '../art/swords';
 import { fit, shown } from '../art/glass';
 import { EMBLEMS, emblemTexture } from '../art/ui';
@@ -218,6 +220,8 @@ export class GameScene extends Phaser.Scene {
   private discovered: { frame: Phaser.GameObjects.Image; sword: Phaser.GameObjects.Image }[] = [];
   private clock = 0;
   private lastFrame: number | null = null;
+  /** The part of the song playing: calm, a hammer streak's busier groove, or tense while the crown or a charter waits on a choice. */
+  private musicPart = '';
 
   constructor() {
     super('Game');
@@ -290,6 +294,16 @@ export class GameScene extends Phaser.Scene {
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => this.held?.sprite.setPosition(p.worldX, p.worldY));
     this.input.on('pointerup', (p: Phaser.Input.Pointer) => this.putDown(p));
     this.input.on('gameout', () => this.putDown(null));
+    this.musicPart = '';
+    this.playPart();
+  }
+
+  /** Keeps the song's part in step with the shop: tense while a choice waits, busier during a hammer streak. */
+  private playPart() {
+    const part = this.chooser.visible || this.edictWindow.visible ? 'tense' : this.state.streak >= 2 ? 'streak' : 'calm';
+    if (part === this.musicPart) return;
+    this.musicPart = part;
+    playMusic(SONG, part);
   }
 
   update(time: number) {
@@ -311,14 +325,19 @@ export class GameScene extends Phaser.Scene {
     this.drawForge();
     this.drawChooser();
     this.drawEdicts();
+    this.playPart();
   }
 
   private forge() {
     if (forge(this.state)) this.save();
+    else ui('refuse');
   }
 
   private switchMode() {
-    if (!this.windowOpen && toggleShieldMode(this.state)) this.save();
+    if (this.windowOpen) return;
+    if (!toggleShieldMode(this.state)) return ui('refuse');
+    ui('click');
+    this.save();
   }
 
   /** Where a place's sword lies on screen: on its anvil, or on the barrel's mouth. */
@@ -336,8 +355,12 @@ export class GameScene extends Phaser.Scene {
   /** Buys an upgrade; a bought Auto Forge's button switches it on and off instead. */
   private buy(id: UpgradeId) {
     if (this.windowOpen) return;
-    const done = id === 'auto' && this.state.ranks.auto > 0 ? toggleAutoForge(this.state) : buy(this.state, id);
-    if (done) this.save();
+    const toggle = id === 'auto' && this.state.ranks.auto > 0;
+    const done = toggle ? toggleAutoForge(this.state) : buy(this.state, id);
+    if (!done) return ui('refuse');
+    if (toggle) ui('click');
+    else sfx('buy');
+    this.save();
   }
 
   private save() {
@@ -352,6 +375,8 @@ export class GameScene extends Phaser.Scene {
       if (!onBanner(p.worldX, p.worldY)) return;
       if (this.state.choosing) this.chooser.setVisible(true);
       else if (this.state.won) this.win.setVisible(true);
+      else return;
+      ui('click');
       return;
     }
     // Tapping the barrel before it is bought buys it.
@@ -361,6 +386,7 @@ export class GameScene extends Phaser.Scene {
     this.spriteAt(place)?.setVisible(false);
     const sprite = this.image(p.worldX, p.worldY, itemTexture(item), swordScale(1.35)).setDepth(UI_DEPTH - 1);
     this.held = { slot: place, sprite };
+    sfx('pick');
   }
 
   private spriteAt(place: number) {
@@ -379,10 +405,16 @@ export class GameScene extends Phaser.Scene {
     const desk = deskAt(p.worldX, p.worldY, desksOf(this.state));
     const buyer = desk === null ? undefined : this.state.adventurers.find((a) => a.desk === desk);
     let done = false;
+    const before = this.state.events.length;
     if (place !== null) done = drop(this.state, held.slot, place);
     else if (onBanner(p.worldX, p.worldY)) done = deliver(this.state, held.slot);
     else if (buyer) done = sell(this.state, held.slot, buyer.id);
     if (done) this.save();
+    // A move or swap clunks (a merge, gem or repair sounds in drawEvents); a sword the anvil, the
+    // crown or the buyer won't take buzzes; one let go anywhere else goes back with a clunk.
+    const tried = place !== null ? place !== held.slot : onBanner(p.worldX, p.worldY) || !!buyer;
+    if (done ? place !== null && this.state.events.length === before : !tried) sfx('place');
+    else if (!done) ui('refuse');
   }
 
   private drawSwords() {
@@ -409,7 +441,8 @@ export class GameScene extends Phaser.Scene {
   private drawVisitors() {
     // A fourth desk redraws the counter smaller, with every visitor in their new place.
     const desks = desksOf(this.state);
-    if (desks !== this.drawnDesks) {
+    const redraw = desks !== this.drawnDesks;
+    if (redraw) {
       this.drawnDesks = desks;
       this.counter.setTexture(`counter-${desks}`);
       fit(this.counter);
@@ -430,7 +463,10 @@ export class GameScene extends Phaser.Scene {
       this.visitors.delete(id);
     }
     for (const a of this.state.adventurers) {
-      if (!this.visitors.has(a.id)) this.visitors.set(a.id, this.makeVisitor(a));
+      if (this.visitors.has(a.id)) continue;
+      this.visitors.set(a.id, this.makeVisitor(a));
+      // A returning hero has their own motif (the `returned` event).
+      if (!redraw && !a.returned) sfx('bell');
     }
   }
 
@@ -479,6 +515,7 @@ export class GameScene extends Phaser.Scene {
     const events = this.state.events.splice(0);
     // A delivery that completes the commission only shows the commission's message.
     const done = events.some((e) => e.kind === 'commission');
+    this.playEvents(events, done);
     for (const e of events) {
       if (e.kind === 'forged' || e.kind === 'merged' || e.kind === 'set' || e.kind === 'repaired') {
         if (e.kind === 'merged' && e.master) {
@@ -527,6 +564,77 @@ export class GameScene extends Phaser.Scene {
         this.float(VIEW.w / 2, VIEW.h / 2 + 150, `${t(PERKS[e.perk].name)}: ${t(PERKS[e.perk].blurb)}`, '#ffd36a', 2200);
       } else if (e.kind === 'edict') {
         this.float(VIEW.w / 2, VIEW.h / 2, t('byEdict', { name: t(EDICTS[e.edict].name) }), '#ffd36a', 2200);
+      }
+    }
+  }
+
+  /**
+   * One sound per kind of event this frame. Everything here is the player's own smithy and on
+   * screen; the Auto Forge's forging plays at half volume, since it forges every second or so.
+   */
+  private playEvents(events: GameState['events'], done: boolean) {
+    const s = this.state;
+    const auto = s.ranks.auto > 0 && s.autoForge;
+    const heard = new Set<string>();
+    for (const e of events) {
+      if (heard.has(e.kind)) continue;
+      heard.add(e.kind);
+      switch (e.kind) {
+        case 'forged':
+          sfx('hiss', { volume: auto ? 0.5 : 1 });
+          sfx('clink', { volume: auto ? 0.5 : 1 });
+          break;
+        case 'merged':
+          // The clang climbs two semitones a tier; a Masterwork rings its bell over it.
+          sfx('clang', { pitch: 2 ** ((Math.min(e.tier, MAX_TIER) - 2) / 6) });
+          if (e.master) sfx('master');
+          break;
+        case 'streak':
+          sfx('streak', { pitch: 2 ** ((Math.min(e.streak, 6) - 2) / 12) });
+          break;
+        case 'set':
+          sfx('gem');
+          break;
+        case 'repaired':
+          sfx('tap');
+          this.time.delayedCall(110, () => sfx('tap', { pitch: 1.12 }));
+          this.time.delayedCall(220, () => ui('coin'));
+          break;
+        case 'rusted':
+          sfx('rust');
+          break;
+        case 'sold':
+          if (e.fit === 'exact') sfx('exact');
+          else ui('coin');
+          break;
+        case 'handed':
+          sfx('handed');
+          break;
+        case 'returned':
+          sfx('hero');
+          break;
+        case 'left':
+          sfx('grumble');
+          break;
+        case 'delivered':
+          if (!done) sfx('chime');
+          break;
+        case 'commission':
+          if (e.won) playSting(SONG, 'win');
+          else {
+            sfx('fanfare');
+            ui('coin');
+          }
+          break;
+        case 'charter':
+          playSting(SONG, 'charter');
+          break;
+        case 'perk':
+          sfx('buy');
+          break;
+        case 'edict':
+          sfx('seal');
+          break;
       }
     }
   }
@@ -714,13 +822,13 @@ export class GameScene extends Phaser.Scene {
       const image = this.emblems.get(id)!;
       if (image.texture.key !== emblem) image.setTexture(emblem);
       if (id === 'auto' && rank > 0) {
-        button.set(t(s.autoForge ? 'autoOn' : 'autoOff', { name: t(u.name) }), true, 14);
+        button.set(t(s.autoForge ? 'autoOn' : 'autoOff', { name: t(u.name) }), true, 12.5);
         return;
       }
       const name = u.prices.length > 1 ? `${t(u.name)} ${rank + 1}` : t(u.name);
       const blurb = isLocked ? t('maxBellowsFirst') : t(u.blurb);
       const caption = price === null ? t('upgradeMaxed', { name: t(u.name), blurb: t(u.blurb) }) : t('upgradePrice', { name, price, blurb });
-      button.set(caption, price !== null && s.coins >= price && !isLocked, 14);
+      button.set(caption, price !== null && s.coins >= price && !isLocked, 12.5);
     });
     // The fifth row and the barrel are bought where they go.
     const rowPrice = nextPrice('row', s.ranks.row);
@@ -772,7 +880,7 @@ export class GameScene extends Phaser.Scene {
         .text(0, 6, t('winText'), { ...textStyle(15, '#fff1d0', 3), align: 'center', fontStyle: 'normal' })
         .setOrigin(0.5),
     ];
-    const keep = new Button(this, -100, 70, 'forge', t('keepSmithing'), () => this.win.setVisible(false));
+    const keep = new Button(this, -100, 70, 'forge', t('keepSmithing'), () => (ui('click'), this.win.setVisible(false)));
     keep.set(t('keepSmithing'), true, 16);
     const found = new Button(this, 100, 70, 'forge', t('foundSmithy'), () => this.found(), 0);
     found.set(t('foundSmithy'), true, 16);
@@ -781,7 +889,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Founds a new smithy under a new charter: the board is cleared, the guild stars stay. */
   private found() {
-    if (!foundCharter(this.state)) return;
+    if (!foundCharter(this.state)) return ui('refuse');
     this.clearBoard();
     this.win.setVisible(false);
     this.save();
@@ -801,7 +909,7 @@ export class GameScene extends Phaser.Scene {
       .text(0, 134, t('close'), { ...textStyle(13, '#fff6e0', 3.5), fontStyle: 'normal' })
       .setOrigin(0.5)
       .setInteractive({ useHandCursor: true });
-    close.on('pointerdown', () => this.perkWindow.setVisible(false));
+    close.on('pointerdown', () => (ui('click'), this.perkWindow.setVisible(false)));
     this.perkWindow = this.add
       .container(WIN.x, WIN.y, [...items, ...[...this.perkButtons.values()].map((b) => b.root), close])
       .setDepth(UI_DEPTH + 5)
@@ -811,11 +919,18 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0, 0.5)
       .setDepth(UI_DEPTH + 1)
       .setInteractive({ useHandCursor: true });
-    this.perkLink.on('pointerdown', () => !this.windowOpen && this.perkWindow.setVisible(true));
+    this.perkLink.on('pointerdown', () => this.openPerks());
+  }
+
+  private openPerks() {
+    if (this.windowOpen) return;
+    ui('click');
+    this.perkWindow.setVisible(true);
   }
 
   private buyPerk(perk: Perk) {
     if (buyPerk(this.state, perk)) this.save();
+    else ui('refuse');
   }
 
   /** Fills the perk buttons: what each does, what it costs, and whether it is bought. */
@@ -884,7 +999,7 @@ export class GameScene extends Phaser.Scene {
       .text(0, 98, t('decideLater'), { ...textStyle(12, '#fff6e0', 3.5), fontStyle: 'normal' })
       .setOrigin(0.5)
       .setInteractive({ useHandCursor: true });
-    later.on('pointerdown', () => this.chooser.setVisible(false));
+    later.on('pointerdown', () => (ui('click'), this.chooser.setVisible(false)));
     this.chooser = this.add
       .container(WIN.x, WIN.y, [...items, ...this.chooserButtons.map((b) => b.root), later])
       .setDepth(UI_DEPTH + 5)
@@ -892,7 +1007,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private choose(grand: boolean) {
-    if (!chooseCommission(this.state, grand)) return;
+    if (!chooseCommission(this.state, grand)) return ui('refuse');
+    sfx('seal');
     this.chooser.setVisible(false);
     this.save();
   }
@@ -929,7 +1045,7 @@ export class GameScene extends Phaser.Scene {
     this.starsText = top(15).setOrigin(1, 0.5);
     this.star = this.image(0, 20, 'star').setDepth(UI_DEPTH + 1);
     // Tapping the stars opens the guild perks too.
-    this.star.setInteractive({ useHandCursor: true }).on('pointerdown', () => !this.windowOpen && this.perkWindow.setVisible(true));
+    this.star.setInteractive({ useHandCursor: true }).on('pointerdown', () => this.openPerks());
     this.createBanner();
     this.bannerFrame = this.image(BANNER.x + BANNER.w / 2, BANNER.y + BANNER.h / 2, 'frame-banner').setDepth(UI_DEPTH + 2).setVisible(false);
     const r = REPUTATION;
@@ -1030,6 +1146,7 @@ export class GameScene extends Phaser.Scene {
       .setDepth(UI_DEPTH + 1)
       .setInteractive({ useHandCursor: true });
     text.on('pointerdown', () => {
+      ui('click');
       clearProgress();
       this.state = newShop(freshProgress());
       this.clearBoard();

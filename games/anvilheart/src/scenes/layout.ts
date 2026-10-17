@@ -8,21 +8,27 @@ export const HUD_HEIGHT = 40;
 
 /** The furnace's flame window (its texture's top left corner and size), and the Forge button with its heat bar below it. */
 export const FURNACE_WINDOW = { x: 80, y: 160, w: 100, h: 130 };
-export const FORGE_BUTTON = { x: 130, y: 344, w: 180, h: 48 };
-export const HEAT_BAR = { x: 40, y: 374, w: 180, h: 10 };
+/**
+ * The column of buttons under the furnace (mode, Forge, heat bar, upgrades) spans x 54 to 226 and
+ * ends at y 492, so it stays clear of the shared corner buttons (full screen, sound, pause) in the
+ * bottom left on a 16:9 screen and on a sideways phone.
+ */
+const COLUMN = { x: 140, w: 172 };
+export const FORGE_BUTTON = { x: COLUMN.x, y: 342, w: COLUMN.w, h: 44 };
+export const HEAT_BAR = { x: COLUMN.x - COLUMN.w / 2, y: 370, w: COLUMN.w, h: 10 };
 /** The royal commission's banner in the top bar, by its top left corner. Swords are delivered by dropping them on it. */
 export const BANNER = { x: 316, y: 4, w: 330, h: 32 };
 export const onBanner = (x: number, y: number) => x >= BANNER.x && x < BANNER.x + BANNER.w && y >= 0 && y < BANNER.y + BANNER.h + 6;
 /** The guild reputation meter, top left above the furnace, by its top left corner. */
 export const REPUTATION = { x: 30, y: 50, w: 200, h: 46, segments: 10 };
 /** The switch between forging swords and bucklers, by its centre, between the furnace and the Forge button. */
-export const MODE_BUTTON = { x: 130, y: 304, w: 170, h: 26 };
+export const MODE_BUTTON = { x: COLUMN.x, y: 304, w: 160, h: 26 };
 /** The charter's edict, written over the lancet under the reputation meter, by its centre. */
 export const EDICT_PLAQUE = { x: 130, y: 122 };
 /** The wide buttons of the guild perk and edict windows. */
 export const WIDE_BUTTON = { w: 360, h: 42 };
 /** The upgrade buttons, by their centres. */
-export const UPGRADE_BUTTONS = { x: 130, ys: [410, 458, 506], w: 200, h: 42 };
+export const UPGRADE_BUTTONS = { x: COLUMN.x, ys: [401, 438, 475], w: COLUMN.w, h: 34 };
 
 /** The anvil board (five rows, the last one bought): its top left corner and the size of each cell. */
 export const BOARD = { x: 244, y: 50, cell: 86 };

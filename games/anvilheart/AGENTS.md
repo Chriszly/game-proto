@@ -154,7 +154,7 @@ Implemented today:
 
 Missing or rough:
 
-- No title screen and no in-game settings (they are on the hub page), no sound.
+- No title screen and no in-game settings (they are on the hub page). No furnace ambience loop.
 - Half a set handed to an adventurer is lost if they walk off, and lives only on the adventurer, so
   a reload loses it too.
 - With a long best sword name the top bar's stars slide under the banner, so their star can't be
@@ -175,6 +175,7 @@ Missing or rough:
 
 File map (`src/`):
 
+- `audio.ts`: the song (`SONG`) and the sound table (`sfx`); see "Sound" below.
 - `howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips) in British
   English and German (US English spells it the same), picked with `byLanguage` and handed to
   `setupGame(game, { howToPlay })` in `main.ts`; update both languages when the controls or the
@@ -393,6 +394,53 @@ capped at `ORDER_TOP`) and the difficulty, reputation and Haggler multipliers on
 - Texts are drawn at `renderScale` by `shared/scaling.ts`; Graphics are sharp on their own.
 - `index.html` has the shared `100dvh` and `touch-action: none` styles. A phone held upright gets
   the shared hint to turn it. `e2e/screens.spec.ts` at the root opens the game on five screens.
+- The shared corner buttons (full screen, sound, pause) sit in the bottom left, 12 to 114 CSS
+  pixels across and 12 to 42 up. The left column under the furnace (`COLUMN` in `layout.ts`: the
+  mode switch, Forge button, heat bar and the three upgrade buttons, 34px tall with 12.5px
+  captions) spans x 54 to 226 and ends at y 492, so it clears them on a 960x540 window, any larger
+  16:9 screen and a sideways phone. Keep anything new out of that corner
+  (`docs/screenshots/sound-corner.webp`).
+
+### Sound
+
+`src/audio.ts` holds it all, played through `shared/audio.ts`; the sim has no sound in it.
+`GameScene` plays effects from the events `drawEvents` drains (`playEvents`, one sound per kind of
+event a frame) and from the player's own taps, and `Button` plays the shared `ui('refuse')` for a
+press while disabled (Forge while heating or the board is full, an upgrade or row too dear, a
+bought perk). Nothing plays under browser automation, so the playthrough is unchanged.
+
+Music, `SONG`: a folk groove in C major at 108 BPM (square lead, 12% pulse plucks, triangle bass,
+hammer-clink drums). `playPart` (called from `create` and every `update`) picks the part:
+- `calm` (eight bars, C F G C Am F G C), the smithy at work;
+- `streak` (two bars, the same chords busier) while a hammer streak of two or more runs;
+- `tense` (four bars in A minor, high and held) while the crown's offer or a new charter's edict
+  window is open;
+- stings: `win` (a fanfare with a Lydian lift, D major over C) when the Crown Blade completes the
+  last commission, `charter` (a rising arpeggio) when a new smithy is founded.
+
+Effects (`sfx`, plus the shared `ui`):
+
+| Sound | Plays |
+| --- | --- |
+| `hiss` + `clink` | `forged` (half volume while the Auto Forge is on) |
+| `pick` | a sword, gem or buckler picked up (`pickUp`) |
+| `place` | a move or swap, or a sword let go off any target and put back (`putDown`) |
+| `clang` | `merged`, two semitones higher per tier; `master` over it for a Masterwork |
+| `streak` | `streak`, a semitone higher per step |
+| `gem` | `set` |
+| `tap` x2 + `ui('coin')` | `repaired` |
+| `rust` | `rusted` |
+| `exact` / `ui('coin')` | `sold` as an exact fit / any other sale |
+| `handed` | `handed` (half a set) |
+| `bell` | a new adventurer at the counter (`drawVisitors`, not a returning hero or a redraw) |
+| `hero` | `returned` |
+| `grumble` | `left` |
+| `chime` | `delivered` (unless it completes the commission) |
+| `fanfare` + `ui('coin')` | `commission` (the `win` sting instead once won) |
+| `seal` | a commission offer chosen (`choose`), `edict` |
+| `buy` | an upgrade, the row or the barrel bought (`buy`), `perk` |
+| `ui('click')` | mode switch, Auto Forge on/off, opening the offer, win or perk window, their close links, Keep smithing, New smithy |
+| `ui('refuse')` | a refused forge, buy, perk, charter or offer, a disabled button, a sword dropped where the anvil, crown or buyer won't take it |
 
 ## Testing hooks
 
@@ -461,14 +509,15 @@ capped at `ORDER_TOP`) and the difficulty, reputation and Haggler multipliers on
   if it waits for others), its rank 0 in `freshProgress` in `src/game/state.ts`, its effect where
   the rule lives (a helper like `forgeMs`). A forge upgrade also goes in `FORGE_UPGRADES` with a y
   in `UPGRADE_BUTTONS.ys` in `src/scenes/layout.ts`; the three buttons already fill the left column
-  down to the bottom edge, so a fourth needs a new place (like the row and barrel, bought where
+  down to the corner buttons, so a fourth needs a new place (like the row and barrel, bought where
   they go).
 - Retune timing or prices: edit the constants above. Check the test still holds (first visitor
   within 5s, forge time above 192ms and under 5s, Shortsword price matching `SHORTSWORD_PRICE`).
 - Add an adventurer look: raise `LOOKS` in `src/game/state.ts` and add a branch to `figure` in
   `src/art/characters.ts`.
 - Add an effect for a new rule: push a new `GameEvent` kind from `src/game/sim.ts` and handle it
-  in `GameScene.drawEvents`.
+  in `GameScene.drawEvents`, and its sound in `playEvents` (a new effect goes in `sfx` in
+  `src/audio.ts`).
 - Change the art: all textures are painted in `src/art/`, in art units (twice the view's pixels),
   and shown with `fit` (see "Screens").
   Positions inside the background follow `layout.ts` through `a(n)`; a texture that must line up
@@ -478,7 +527,8 @@ capped at `ORDER_TOP`) and the difficulty, reputation and Haggler multipliers on
 
 - `drawHud` clears the `hud` graphics and `drawForge` then paints the heat bar into it, so
   `drawForge` must run after `drawHud` in `update`.
-- `HEAT_BAR.x` is hand-matched to `FORGE_BUTTON` (130 - 90); move them together.
+- `FORGE_BUTTON`, `HEAT_BAR`, `MODE_BUTTON` and `UPGRADE_BUTTONS` all take their x from `COLUMN` in
+  `layout.ts`; move the column, not one of them.
 - Button textures are baked per style at the sizes `BootScene` passes to `bakeUi`
   (`FORGE_BUTTON`, `UPGRADE_BUTTONS`); a button of a new size needs a new style.
 - The furnace window's flames are their own texture over the background's arch, positioned by
