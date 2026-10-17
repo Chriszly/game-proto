@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { locale } from '../../../../shared/i18n';
 import { renderScale } from '../../../../shared/scaling';
 import { SHEET_RES } from '../art/art';
 import { BOUNTIES } from '../game/bounties';
@@ -12,8 +13,9 @@ import { SHOTS } from '../game/shot';
 import { ISLANDS, rank, type GameState, type Side } from '../game/state';
 import { costOf, HIRE, REPAIR_COST, UPGRADE_IDS, UPGRADES, type UpgradeId } from '../game/upgrades';
 import { COURSE, DRAFT, FONT, HARBOR, UI_DEPTH, VIEW } from '../scenes/layout';
+import { t } from '../i18n';
 import { makeButton } from './Button';
-import { pinToScreen } from './screen';
+import { fitWidth, pinToScreen } from './screen';
 
 export type HarborAction = UpgradeId | 'repair' | 'hire' | 'keep' | 'sail' | `sail-${CourseId}` | `load-${Side}` | `draft-${PerkId}`;
 export interface HarborButton {
@@ -127,18 +129,18 @@ export class Harbor {
       this.ledgerButtons.push({ id, x, y, w: loadW, h: HARBOR.rowH });
       parts.push(bg, name, desc, swap);
     });
-    const loadLabel = scene.add.text(HARBOR.x, HARBOR.loadY - HARBOR.rowH / 2 - 10, 'Load the guns: tap a side to change its shot', style(12, '#6a4410', 'italic')).setOrigin(0.5);
+    const loadLabel = scene.add.text(HARBOR.x, HARBOR.loadY - HARBOR.rowH / 2 - 10, t('loadGuns'), style(12, '#6a4410', 'italic')).setOrigin(0.5);
     parts.push(loadLabel);
 
     const sailY = HARBOR.y + HARBOR.h / 2 - 34;
-    const sail = makeButton(scene, HARBOR.x, sailY, 'Set sail', () => onAction('sail'));
+    const sail = makeButton(scene, HARBOR.x, sailY, t('setSail'), () => onAction('sail'));
     this.sail = { button: sail.button, hit: { id: 'sail', x: HARBOR.x, y: sailY, w: sail.bg.width, h: sail.bg.height } };
     parts.push(sail.button);
     // From wave 6, two sail buttons instead, one per charted course, each with what it brings.
     COURSE_IDS.forEach((course, i) => {
       const x = HARBOR.x + (i === 0 ? -1 : 1) * (COURSE.w / 2 + COURSE.gap / 2);
       const id = `sail-${course}` as const;
-      const b = makeButton(scene, x, sailY, `${COURSES[course].name}\n${COURSES[course].desc}`, () => onAction(id), COURSE.w, COURSE.h);
+      const b = makeButton(scene, x, sailY, `${t(COURSES[course].name)}\n${t(COURSES[course].desc)}`, () => onAction(id), COURSE.w, COURSE.h);
       b.text.setFontSize(15).setAlign('center').setLineSpacing(1);
       parts.push(b.button);
       this.courses.push({ button: b.button, hit: { id, x, y: sailY, w: COURSE.w, h: COURSE.h } });
@@ -148,7 +150,7 @@ export class Harbor {
     // The prize draft: three or four cards over the dimmed chart, one to be picked before the ledger opens.
     const draftDim = scene.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x3a2a18, 0.45).setInteractive();
     this.draftTitle = scene.add.text(DRAFT.x, DRAFT.titleY, '', style(24, '#f6ecd2', 'bold')).setOrigin(0.5).setStroke('#2b2118', 5);
-    const hint = scene.add.text(DRAFT.x, DRAFT.titleY + 30, 'Tap a card to keep that perk for the rest of the run', style(13, '#f6ecd2', 'italic')).setOrigin(0.5).setStroke('#2b2118', 4);
+    const hint = scene.add.text(DRAFT.x, DRAFT.titleY + 30, t('draftHint'), style(13, '#f6ecd2', 'italic')).setOrigin(0.5).setStroke('#2b2118', 4);
     const draftParts: Phaser.GameObjects.GameObject[] = [draftDim, this.draftTitle, hint];
     for (let i = 0; i < MAX_CARDS; i++) {
       // Placed in `show`, centred by how many cards the draft has.
@@ -156,10 +158,10 @@ export class Harbor {
       const y = DRAFT.y;
       const bg = scene.add.rectangle(x, y, DRAFT.w, DRAFT.h, ROW, 0.97).setStrokeStyle(2, INK);
       const rule = scene.add.rectangle(x, y, DRAFT.w - 14, DRAFT.h - 14).setStrokeStyle(1, INK, 0.5);
-      const head = scene.add.text(x, y - DRAFT.h / 2 + 26, 'Prize', style(12, '#6a4410', 'bold italic')).setOrigin(0.5);
+      const head = scene.add.text(x, y - DRAFT.h / 2 + 26, t('prize'), style(12, '#6a4410', 'bold italic')).setOrigin(0.5);
       const name = scene.add.text(x, y - DRAFT.h / 2 + 62, '', { ...style(18, '#2b2118', 'bold'), align: 'center', wordWrap: { width: DRAFT.w - 30 } }).setOrigin(0.5);
       const desc = scene.add.text(x, y + 10, '', { ...style(13, '#5a4a38', 'italic'), align: 'center', wordWrap: { width: DRAFT.w - 30 }, lineSpacing: 3 }).setOrigin(0.5);
-      const foot = scene.add.text(x, y + DRAFT.h / 2 - 24, 'Keep this one', style(13, '#6a4410', 'bold italic')).setOrigin(0.5);
+      const foot = scene.add.text(x, y + DRAFT.h / 2 - 24, t('keepThis'), style(13, '#6a4410', 'bold italic')).setOrigin(0.5);
       const card: Card = { bg, name, desc, head, rule, foot, parts: [bg, rule, head, name, desc, foot], perk: null };
       bg.setInteractive({ useHandCursor: true })
         .on('pointerover', () => bg.setFillStyle(ROW_LIT, 0.98))
@@ -177,15 +179,15 @@ export class Harbor {
     this.draftContainer.setVisible(drafting);
     if (!s) return;
     if (drafting) {
-      this.draftTitle.setText(`Wave ${s.wave} beaten: the prize draft`);
+      this.draftTitle.setText(t('draftTitle', { wave: s.wave }));
       this.cards.forEach((card, i) => {
         const perk = s.draft[i] ?? null;
         card.perk = perk;
         // A perk already held is offered at its second rank.
         const second = !!perk && perkRank(s.perks, perk) > 0;
-        card.head.setText(second ? 'Prize: rank 2' : 'Prize');
-        card.name.setText(perk ? `${PERKS[perk].name}${second ? ' II' : ''}` : '');
-        card.desc.setText(perk ? (second ? PERKS[perk].desc2 : PERKS[perk].desc) : '');
+        card.head.setText(t(second ? 'prizeRank2' : 'prize'));
+        card.name.setText(perk ? `${t(PERKS[perk].name)}${second ? ' II' : ''}` : '');
+        card.desc.setText(perk ? t(second ? PERKS[perk].desc2 : PERKS[perk].desc) : '');
         for (const part of card.parts) part.setVisible(!!perk);
         const x = DRAFT.x + (i - (s.draft.length - 1) / 2) * (DRAFT.w + DRAFT.gap);
         for (const part of card.parts) part.setX(x);
@@ -198,21 +200,26 @@ export class Harbor {
     this.sail.button.setVisible(!choose);
     for (const c of this.courses) c.button.setVisible(choose);
     this.buttons = [...this.ledgerButtons, ...(choose ? this.courses.map((c) => c.hit) : [this.sail.hit])];
-    this.title.setText(`Harbor: wave ${s.wave} beaten`);
-    this.gold.setText(`Gold ${s.gold}   ❦   Hull ${Math.ceil(s.player.hp)} / ${s.player.maxHp}   ❦   Crew ${s.player.crew} / ${s.player.maxCrew}`);
-    const held = s.perks.filter((id, i) => s.perks.indexOf(id) === i).map((id) => `${PERKS[id].name}${perkRank(s.perks, id) > 1 ? ' II' : ''}`);
-    this.perks.setText(held.length ? `Perks: ${held.join(', ')}` : 'No perks yet');
+    this.title.setText(t('harborTitle', { wave: s.wave }));
+    this.gold.setText(t('harborGold', { gold: s.gold, hp: Math.ceil(s.player.hp), max: s.player.maxHp, crew: s.player.crew, maxCrew: s.player.maxCrew }));
+    const held = s.perks.filter((id, i) => s.perks.indexOf(id) === i).map((id) => `${t(PERKS[id].name)}${perkRank(s.perks, id) > 1 ? ' II' : ''}`);
+    this.perks.setText(held.length ? t('perksHeld', { perks: held.join(', ') }) : t('noPerks'));
     const news: string[] = [];
-    if (s.bounty) news.push(s.bountyPaid ? `Bounty met (${BOUNTIES[s.bounty].desc(s).toLowerCase()}): +${s.bountyPaid} gold` : 'Bounty missed');
-    if (s.convoy) news.push(s.convoy.state === 'arrived' ? `Convoy safe to ${ISLANDS[s.convoy.island].name}: +${s.convoy.cargo} gold` : 'Convoy lost');
-    if (s.wages) news.push(`Consorts' wages: -${s.wages} gold`);
-    this.bounty.setText(news.join('   ❦   '));
+    if (s.bounty) {
+      // In the middle of the sentence, so with a small first letter.
+      const bounty = BOUNTIES[s.bounty];
+      const asked = t(bounty.desc, bounty.vars?.(s));
+      news.push(s.bountyPaid ? t('bountyMet', { bounty: asked.charAt(0).toLocaleLowerCase(locale()) + asked.slice(1), gold: s.bountyPaid }) : t('bountyMissed'));
+    }
+    if (s.convoy) news.push(s.convoy.state === 'arrived' ? t('convoySafe', { island: t(ISLANDS[s.convoy.island].name), gold: s.convoy.cargo }) : t('convoyLost'));
+    if (s.wages) news.push(t('wages', { gold: s.wages }));
+    fitWidth(this.bounty.setText(news.join('   ❦   ')), HARBOR.w - 40);
     for (const row of this.rows) {
       if (row.id === 'repair') {
         const needed = s.player.hp < s.player.maxHp;
-        row.name.setText('Patch the hull');
-        row.desc.setText(needed ? 'Repair the ship to full' : 'The hull is sound');
-        row.cost.setText(needed ? `${REPAIR_COST} gold` : '-');
+        row.name.setText(t('patchHull'));
+        row.desc.setText(t(needed ? 'repairFull' : 'hullSound'));
+        row.cost.setText(needed ? t('goldCost', { gold: REPAIR_COST }) : '-');
         row.bg.setAlpha(needed && s.gold >= REPAIR_COST ? 1 : 0.5);
         continue;
       }
@@ -220,41 +227,41 @@ export class Harbor {
         // The richest prize sold here can be bought back and kept as a consort.
         const prize = s.moored[0];
         const why = keepBlocked(s);
-        const name = prize ? ENEMIES[prize.kind as EnemyKind].name.toLowerCase() : '';
-        row.name.setText(`Keep a consort   ${s.consorts.length}/${CONSORT_MAX}`);
+        const ship = prize ? t(ENEMIES[prize.kind as EnemyKind].called) : '';
+        row.name.setText(t('keepConsort', { n: s.consorts.length, max: CONSORT_MAX }));
         row.desc.setText(
-          why === 'none' ? 'Bring a prize to harbor to keep her: she sails on with you for a wage'
-          : why === 'full' ? 'Every berth is taken'
-          : why === 'crew' ? `Too few sailors to man the ${name}`
-          : `Keep the ${name}: she sails on with you, ${consortWage(prize!.kind as EnemyKind)} gold wage a harbor`,
+          why === 'none' ? t('keepNone')
+          : why === 'full' ? t('keepFull')
+          : why === 'crew' ? t('keepCrew', { ship })
+          : t('keepShip', { ship, wage: consortWage(prize!.kind as EnemyKind) }),
         );
-        row.cost.setText(prize && why !== 'full' ? `${keepCost(s, prize)} gold` : '-');
+        row.cost.setText(prize && why !== 'full' ? t('goldCost', { gold: keepCost(s, prize) }) : '-');
         row.bg.setAlpha(why ? 0.5 : 1);
         continue;
       }
       if (row.id === 'hire') {
         const short = s.player.maxCrew - s.player.crew;
-        row.name.setText(`Hire sailors   ${s.player.crew}/${s.player.maxCrew}`);
-        row.desc.setText(short > 0 ? `${Math.min(HIRE.crew, short)} more hands aboard: fewer sailors reload slower` : 'A full crew');
-        row.cost.setText(short > 0 ? `${HIRE.cost} gold` : '-');
+        row.name.setText(t('hireSailors', { crew: s.player.crew, max: s.player.maxCrew }));
+        row.desc.setText(short > 0 ? t('hireMore', { n: Math.min(HIRE.crew, short) }) : t('fullCrew'));
+        row.cost.setText(short > 0 ? t('goldCost', { gold: HIRE.cost }) : '-');
         row.bg.setAlpha(short > 0 && s.gold >= HIRE.cost ? 1 : 0.5);
         continue;
       }
       const u = UPGRADES[row.id];
       const r = rank(s, row.id);
       const cost = costOf(row.id, r);
-      row.name.setText(`${u.name}   ${r}/${u.maxRank}`);
-      row.desc.setText(u.desc);
-      row.cost.setText(cost === null ? 'Maxed' : `${cost} gold`);
+      row.name.setText(t('upgradeRank', { name: t(u.name), rank: r, max: u.maxRank }));
+      row.desc.setText(t(u.desc));
+      row.cost.setText(cost === null ? t('maxed') : t('goldCost', { gold: cost }));
       row.bg.setAlpha(cost !== null && s.gold >= cost ? 1 : 0.5);
     }
     for (const load of this.loads) {
-      const side = load.side === 'port' ? 'Port' : 'Starboard';
+      const side = t(load.side === 'port' ? 'sidePort' : 'sideStarboard');
       // A Bomb Ketch's mortar side carries no guns to load.
       const mortar = HULLS[s.hull].mortarSide === load.side;
       const shot = SHOTS[s.loadout[load.side]];
-      load.name.setText(mortar ? `${side}: Mortar` : `${side}: ${shot.name}`);
-      load.desc.setText(mortar ? 'A shell lobbed to where the arc reaches' : shot.desc);
+      load.name.setText(t('loadSide', { side, shot: t(mortar ? 'mortar' : shot.name) }));
+      load.desc.setText(t(mortar ? 'mortarLoad' : shot.desc));
       load.swap.setVisible(!mortar);
     }
   }

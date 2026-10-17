@@ -175,8 +175,16 @@ Missing or rough:
 
 File map (`src/`):
 
-- `howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips), handed to
-  `setupGame(game, { howToPlay })` in `main.ts`; update it when the controls or the first round change.
+- `howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips) in British
+  English and German (US English spells it the same), picked with `byLanguage` and handed to
+  `setupGame(game, { howToPlay })` in `main.ts`; update both languages when the controls or the
+  first round change.
+- `i18n.ts` and `i18n/`: the game's texts (`shared/i18n.ts`). `i18n/en.ts` is the British English
+  source, `i18n/de.ts` the German (coins are Münzen, a price ends in "M" where English has "c")
+  and `i18n/en-US.ts` the texts spelled differently in US English (none yet). `t(key, vars)` shows
+  a text in the hub's language, formatting numbers for it (1,600 or 1.600); `TextKey` types the
+  keys. Every text on screen goes through `t`, and a new one gets its German entry (and a US one
+  if its spelling differs) in the same PR.
 - `main.ts`: creates the `Phaser.Game` (960x540, `Scale.FIT`, `pixelArt: false`) with `BootScene` and
   `GameScene`, calls `setupGame(game)` and then `setupScaling(game)` from `shared/scaling.ts`, and
   exposes `game` on window in dev builds.
@@ -202,11 +210,16 @@ File map (`src/`):
   `PERK_IDS`, `noPerks` and `spentStars`.
 - `game/shields.ts`: the `SHIELDS` table (name, price per tier), `SHIELD_TOP`, `shieldOf`.
 - `game/commissions.ts`: `Commission`, `COMMISSIONS`, `GRAND_PAY`,
-  `commissionAt(level, charter)`, `grandOf`, `commissionTitle` and `offered`.
-- `game/swords.ts`: the `SWORDS` table (name, price per tier), `MAX_TIER`, `ORDER_TOP`, `swordOf`.
+  `commissionAt(level, charter)`, `grandOf`, `commissionTitle` (the banner's title, already
+  translated with `t`) and `offered`. A titled commission (the Crown Blade) names its `title` and
+  `grandTitle` as `TextKey`s.
+- `game/swords.ts`: the `SWORDS` table (name, plural name for the banner's counts, price per
+  tier), `MAX_TIER`, `ORDER_TOP`, `swordOf`.
 - `game/upgrades.ts`: the `UPGRADES` table (name, blurb, price per rank, and `after`: the upgrades
   that must be maxed first), `UPGRADE_IDS`, `FORGE_UPGRADES` (the three on the forge buttons),
   `nextPrice`, `locked`.
+- Every name, blurb and short line in these tables is a `TextKey` of `i18n/en.ts`, which the scene
+  shows with `t`; game logic compares ids and tiers, never the texts.
 - `game/save.ts`: `loadProgress`, `saveProgress`, `clearProgress`.
 - `scenes/BootScene.ts`: bakes all textures, then starts `Game`.
 - `scenes/GameScene.ts`: draws the smithy, turns pointer input into sim calls, animates events,
@@ -236,8 +249,9 @@ File map (`src/`):
   edict windows) textures.
 
 Shared code the game imports (repo root, outside `src/`): `shared/setupGame.ts` (`setupGame`),
-`shared/scaling.ts` (`setupScaling`, `sharpRes`) and `shared/settings.ts` (`settings`,
-`byDifficulty`). See "Hub settings" and "Screens" below.
+`shared/scaling.ts` (`setupScaling`, `sharpRes`), `shared/settings.ts` (`settings`,
+`byDifficulty`) and `shared/i18n.ts` (`translator`, `byLanguage`, `Translation`). See "Hub
+settings" and "Screens" below.
 
 How it runs:
 
@@ -415,8 +429,13 @@ capped at `ORDER_TOP`) and the difficulty, reputation and Haggler multipliers on
 
 ## Making common changes
 
-- Add a sword tier: append to `SWORDS` in `src/game/swords.ts` and an entry to both `SHAPES` and
-  `COLOURS` in `src/art/swords.ts` (one per tier, or `bakeSwords` crashes). The tier 8 and 9
+- Add or change a text: its key in `src/i18n/en.ts`, the German in `src/i18n/de.ts` (the build
+  fails without it) and, if US English spells it differently, `src/i18n/en-US.ts`; run
+  `node scripts/check-translations.mjs`. German runs longer than English: the edict buttons, the
+  fit tags over the desks, the trait line under an order card and the banner's title are the
+  tightest spots, so check a new text with `?lang=de`.
+- Add a sword tier: append to `SWORDS` in `src/game/swords.ts` (its name and plural in `i18n/`)
+  and an entry to both `SHAPES` and `COLOURS` in `src/art/swords.ts` (one per tier, or `bakeSwords` crashes). The tier 8 and 9
   swords nearly fill their 100px texture, so a longer one needs a bigger `SWORD_SIZE`. `MAX_TIER`
   is the Anvilheart (the commission shortcut in `deliver`), `ORDER_TOP` caps orders, the Crown
   Blade in `COMMISSIONS` uses `MAX_TIER`, and `SET` (100) must stay above `MAX_TIER`. The
@@ -426,8 +445,8 @@ capped at `ORDER_TOP`) and the difficulty, reputation and Haggler multipliers on
   `commissionAt` adds one sword per charter, and the banner's four pips give way to its text past four.
   A commission whose title is over 14 characters (the grand way adds "Gemmed ") draws smaller.
 - Add a trait: add it to `Trait` and `TRAITS` in `src/game/state.ts`, its rule in `fitOf`,
-  `payFor` or `arrive`, its card line in `TRAIT_LINES` and `TRAIT_COLOURS` and, if it changes a
-  fit's wording, `tagLine` in `GameScene.ts`.
+  `payFor` or `arrive`, its card line in `TRAIT_LINES` (a `TextKey`, with its texts in `i18n/`)
+  and `TRAIT_COLOURS` and, if it changes a fit's wording, `tagLine` in `GameScene.ts`.
 - Add a sword flag: like `MASTER` in `src/game/items.ts` (the next power of two times 100, below
   `SHIELD`, so `tierOf` stays `item % 100` and `flag` reads it as a bit), a texture suffix in
   `swordTexture`/`itemTexture` (and its bake loop in `bakeSwords`) and a look in `drawSword`, and
@@ -464,6 +483,8 @@ capped at `ORDER_TOP`) and the difficulty, reputation and Haggler multipliers on
   (`FORGE_BUTTON`, `UPGRADE_BUTTONS`); a button of a new size needs a new style.
 - The furnace window's flames are their own texture over the background's arch, positioned by
   `FURNACE_WINDOW`; the arch's art-unit coordinates in `scenery.ts` are hand-matched to it.
+- The top bar's coins text shrinks below 16px when it would reach the banner (a long count, or
+  German's "Münzen"); `drawHud` only re-measures it when the text changes.
 - The top bar's right-hand texts are laid out right to left each frame (best sword, sold, stars),
   so a long sword name pushes them left towards the banner.
 - `deskAt` and `slotAt` hit whole cells and boxes, while sprites sit `SWORD_LIFT` above an anvil's
