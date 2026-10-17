@@ -179,6 +179,8 @@ export interface GameState {
   totalDelivered: number;
   /** Tiles with track, as "c,r" keys. */
   track: string[];
+  /** What each track tile cost when it was laid, by its key; taking it up refunds half. */
+  paid: Record<string, number>;
   orders: Order[];
   /** Order ids sent to the wyrms that no wyrm has set off to fetch yet, first first. */
   queue: number[];
