@@ -4,7 +4,7 @@
  * changes like `sim.ts`; randomness from Math.random.
  */
 import { ELITE, WAVES, statsOf, type EventState, type GameState } from './state';
-import { collectAll, heal, lower, nextPick, pop, raise, refreshHealth, spawnElite, tick, type Input } from './sim';
+import { collectAll, heal, lower, nextPick, pop, raise, refreshHealth, spawnElite, tick, SHORT_LIVED, type Input } from './sim';
 import { FILLER, MAX_TIER, UPGRADES, UPGRADE_IDS, canOffer, rollChoices } from './upgrades';
 import { t } from '../i18n';
 import { checkDeeds } from './blades';
@@ -35,7 +35,8 @@ function clearField(s: GameState) {
   s.zaps = [];
   s.mark = 0;
   s.platform = null;
-  s.allies = s.allies.filter((a) => a.kind !== 'sentry' && a.kind !== 'fighter' && a.kind !== 'puppet');
+  s.flag = null;
+  s.allies = s.allies.filter((a) => !SHORT_LIVED.includes(a.kind));
 }
 
 /** A boss (or the arena) has fallen: take what is lying about, then the cards, the map or the win. */
@@ -53,7 +54,7 @@ export function afterClear(s: GameState) {
     s.after = 'travel';
   } else {
     s.credits += CREDITS.clear;
-    // Elder Corvin Hale's deed: the Swamp world cleared with few hits from toad globs.
+    // Master Oom's deed: the Swamp world cleared with few hits from toad globs.
     if (s.planet === 1 && s.globHits <= 5) s.cleanSwamp = true;
     if (s.planet >= LAST_PLANET) {
       s.phase = 'won';
