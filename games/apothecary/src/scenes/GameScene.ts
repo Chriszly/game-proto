@@ -1,6 +1,7 @@
 import { upgradePad, type UpgradeIcon } from '../art/markers';
 import Phaser from 'phaser';
 import { settings as hubSettings } from '../../../../shared/settings';
+import { formatNumber } from '../../../../shared/i18n';
 import { renderScale, scrollingCamera, viewSize } from '../../../../shared/scaling';
 import { PIXIE_FRAMES, drawFairyPaths, laneOffset, pointAlong } from '../art/pixies';
 import { plantTexture } from '../art/garden';
@@ -94,6 +95,7 @@ import {
   type Weather,
   DAY_MS as DAY,
   GARDEN_NAMES,
+  GARDEN_NAMES_IN,
   SEAL_PRICE,
   SEASON_GAP,
   herbBuyPrice,
@@ -120,6 +122,7 @@ import { Shelf } from '../ui/Shelf';
 import { RecipeBook } from '../ui/RecipeBook';
 import { Settings } from '../ui/Settings';
 import { ProgressBar } from '../ui/ProgressBar';
+import { itemName, potionCount, t, type TextKey } from '../i18n';
 import {
   BELT_BUILD,
   BELT_PATHS,
@@ -273,6 +276,9 @@ interface Marker {
   pays?: boolean;
 }
 
+/** A whole percentage or price change with its sign, such as +20 or -15, in the player's language. */
+const signed = (n: number) => `${n > 0 ? '+' : ''}${formatNumber(n)}`;
+
 /** A purple level marker's icon: the station for a station's level, otherwise the upgrade's own. */
 const upgradeIcon = (id: UpgradeId): UpgradeIcon =>
   id === 'refiner' || id === 'refiner2' ? 'refiner' : id === 'cauldron' || id === 'cauldron2' ? 'cauldron' : id;
@@ -405,7 +411,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private startOver() {
-    if (!window.confirm('Start a new game? Your saved progress will be lost.')) return;
+    if (!window.confirm(t('confirmNewGame'))) return;
     this.startingOver = true;
     clearSave();
     this.scene.restart();
@@ -505,7 +511,7 @@ export class GameScene extends Phaser.Scene {
       const plant = gardenPlant(this.state, garden);
       if (plant === shown) return;
       shown = plant;
-      name.setText(GARDEN_NAMES[plant]);
+      name.setText(t(GARDEN_NAMES[plant]));
       icon.setTexture(itemTexture(plant)).setX(name.x - name.width / 2 - 10);
     });
   }
@@ -546,9 +552,9 @@ export class GameScene extends Phaser.Scene {
     const sign = this.card(at.x, at.y, 'small', signTexture(this, PRIORITY_SIGN_W, true)).setDepth(-910);
     const left = at.x - PRIORITY_SIGN_W / 2 + 10;
     const style = { fontFamily: SERIF, fontSize: '12px', fontStyle: 'bold', color: INK };
-    const caption = this.add.text(left, at.y, 'First:', style).setOrigin(0, 0.5).setDepth(-900);
+    const caption = this.add.text(left, at.y, t('first'), style).setOrigin(0, 0.5).setDepth(-900);
     const choiceX = left + caption.width + 6;
-    const any = this.add.text(choiceX, at.y, 'any', style).setOrigin(0, 0.5).setDepth(-900);
+    const any = this.add.text(choiceX, at.y, t('any'), style).setOrigin(0, 0.5).setDepth(-900);
     const icon = fit(this.add.image(choiceX + 8, at.y, itemTexture('wheat')).setDepth(-900));
     sign.setInteractive({ useHandCursor: true }).on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
       e.stopPropagation();
@@ -599,7 +605,7 @@ export class GameScene extends Phaser.Scene {
 
     for (const block of SHOP_BLOCKS) this.obstacles.add(this.add.zone(block.x + block.w / 2, block.y + block.h / 2, block.w, block.h));
 
-    this.label(SHOP_SIGN.x, SHOP_SIGN.y, 'Storefront');
+    this.label(SHOP_SIGN.x, SHOP_SIGN.y, t('storefront'));
   }
 
   private createPlots() {
@@ -642,15 +648,15 @@ export class GameScene extends Phaser.Scene {
   /** A refining table, fed by belt `beltIn` and emptied by belt `beltOut` once those are built. */
   private addRefiner(id: RefinerId, at: Point, m: StationMarkers, label: Point, beltIn: BeltId, beltOut: BeltId) {
     const refiner = this.state[id];
-    this.label(label.x, label.y, 'Refining table');
+    this.label(label.x, label.y, t('refiningTable'));
     this.addPrioritySign(id, PRIORITY_SIGNS[id]);
     this.addObstacle(at.x, at.y, 'table', 84, 30);
     this.addPallets(id, PALLETS[id], [PLANTS, REFINED], [() => refiner.queue, () => refiner.output]);
     const progress = new ProgressBar(this, at.x, at.y + 30, 60, REFINING_BAR, WORLD_UI_DEPTH, REFINING_BAR_H);
     // A second craftsman's pipe shows its own bar just below.
     const progress2 = new ProgressBar(this, at.x, at.y + 41, 60, REFINING_BAR, WORLD_UI_DEPTH, REFINING_BAR_H);
-    this.addMarker(m.pickUp, 'pad-out', 'Pick up', () => pickUpFromRefiner(this.state, id), () => this.state.belts[beltOut].built);
-    this.addMarker(m.drop, 'pad-in', 'Drop', () => dropAtRefiner(this.state, id), () => this.state.belts[beltIn].built && !this.carries(isPlant));
+    this.addMarker(m.pickUp, 'pad-out', t('pickUp'), () => pickUpFromRefiner(this.state, id), () => this.state.belts[beltOut].built);
+    this.addMarker(m.drop, 'pad-in', t('drop'), () => dropAtRefiner(this.state, id), () => this.state.belts[beltIn].built && !this.carries(isPlant));
     this.addWorkSpot(m.work, id);
     this.addUpgradeMarker(m.upgrade, id);
     this.addCraftsmen(id);
@@ -664,7 +670,7 @@ export class GameScene extends Phaser.Scene {
   /** A cauldron, fed by belt `beltIn` and emptied by belt `beltOut` once those are built. */
   private addCauldron(id: CauldronId, at: Point, m: StationMarkers, label: Point, beltIn: BeltId, beltOut: BeltId) {
     const cauldron = this.state[id];
-    this.label(label.x, label.y, 'Cauldron');
+    this.label(label.x, label.y, t('cauldron'));
     this.addPrioritySign(id, PRIORITY_SIGNS[id]);
     const pot = this.addObstacle(at.x, at.y, 'cauldron', 60, 28);
     // The boil flickers its flames and bubbles, so reduced motion holds it on the still frame.
@@ -673,8 +679,8 @@ export class GameScene extends Phaser.Scene {
     // The end of the bar is the fine window: picked up then, the potion comes out fine.
     const brewing = new ProgressBar(this, at.x, at.y + 34, 60, 0x58a35a, WORLD_UI_DEPTH).setZone(1 - FINE_SHARE, 0xe8b830);
     const brewing2 = new ProgressBar(this, at.x, at.y + 42, 60, 0x58a35a, WORLD_UI_DEPTH).setZone(1 - FINE_SHARE, 0xe8b830);
-    this.addMarker(m.pickUp, 'pad-out', 'Pick up', () => pickUpFromCauldron(this.state, id), () => this.state.belts[beltOut].built);
-    this.addMarker(m.drop, 'pad-in', 'Drop', () => dropInCauldron(this.state, id), () => this.state.belts[beltIn].built && !this.carries(isRefined));
+    this.addMarker(m.pickUp, 'pad-out', t('pickUp'), () => pickUpFromCauldron(this.state, id), () => this.state.belts[beltOut].built);
+    this.addMarker(m.drop, 'pad-in', t('drop'), () => dropInCauldron(this.state, id), () => this.state.belts[beltIn].built && !this.carries(isRefined));
     this.addWorkSpot(m.work, id);
     this.addUpgradeMarker(m.upgrade, id);
     this.addCraftsmen(id);
@@ -756,12 +762,12 @@ export class GameScene extends Phaser.Scene {
 
   /** The spot the doctor stands on to make the station work, gone once a craftsman is hired there. */
   private addWorkSpot(at: { x: number; y: number }, station: StationId) {
-    this.addMarker(at, 'pad-work', 'Work', () => null, () => this.state.craftsmen[station].level > 0);
+    this.addMarker(at, 'pad-work', t('work'), () => null, () => this.state.craftsmen[station].level > 0);
     this.workSpots.push({ zone: new Phaser.Geom.Rectangle(at.x - 22, at.y - 22, 44, 44), station });
   }
 
   /** An upgrade marker, captioned with the next level and its price, after `name` if given. */
-  private addUpgradeMarker(at: Point, id: UpgradeId, name = 'Lv') {
+  private addUpgradeMarker(at: Point, id: UpgradeId, name?: TextKey) {
     this.addLevelMarker(
       at,
       upgradeIcon(id),
@@ -769,7 +775,7 @@ export class GameScene extends Phaser.Scene {
       UPGRADES[id].max,
       (level) => upgradeCost(id, level),
       () => payUpgrade(this.state, id),
-      (level, left) => `${name} ${level + 2}: ${left}c`,
+      (level, left) => (name ? t('levelCost', { name: t(name), level: level + 2, coins: left }) : t('stationLevelCost', { level: level + 2, coins: left })),
       () => unlocked(this.state, `level-${id}`),
     );
   }
@@ -830,7 +836,7 @@ export class GameScene extends Phaser.Scene {
       MAX_CRAFTSMEN,
       craftsmanCost,
       () => payCraftsman(this.state, id),
-      (_level, left) => `Hire ${left}c`,
+      (_level, left) => t('hireCost', { coins: left }),
       () => unlocked(this.state, `hire-${id}`),
     );
     stand.forEach((at, i) => {
@@ -864,7 +870,7 @@ export class GameScene extends Phaser.Scene {
    * A purple build marker captioned with the coins still to pay for the build, shown while `shown`
    * holds; standing still on it pays towards the build.
    */
-  private addBuildMarker(at: Point, icon: UpgradeIcon, caption: string, cost: number, build: Build, shown: () => boolean, act: () => Feedback | null) {
+  private addBuildMarker(at: Point, icon: UpgradeIcon, caption: TextKey, cost: number, build: Build, shown: () => boolean, act: () => Feedback | null) {
     const pad = fit(this.add.image(at.x, at.y, upgradePad(icon)).setDepth(-400));
     const text = this.add
       .text(at.x, at.y + 26, '', { ...CAPTION, color: CAPTION_PAY })
@@ -874,7 +880,7 @@ export class GameScene extends Phaser.Scene {
     this.views.push(() => {
       const show = shown();
       pad.setVisible(show);
-      text.setVisible(show).setText(`${caption}: ${cost - build.paid}c`);
+      text.setVisible(show).setText(t('buildCost', { name: t(caption), coins: cost - build.paid }));
     });
   }
 
@@ -884,10 +890,10 @@ export class GameScene extends Phaser.Scene {
    */
   private createExpansion() {
     const { expansion } = this.state;
-    this.addBuildMarker(EXPANSION_LAND, 'land', 'Land', EXPANSION_COST.land, expansion.land, () => !expansion.land.built && unlocked(this.state, 'land'), () =>
+    this.addBuildMarker(EXPANSION_LAND, 'land', 'land', EXPANSION_COST.land, expansion.land, () => !expansion.land.built && unlocked(this.state, 'land'), () =>
       payExpansion(this.state, 'land'),
     );
-    const parts: { part: ExpansionPart; at: Point; icon: UpgradeIcon; caption: string; cost: number; build: Build }[] = [
+    const parts: { part: ExpansionPart; at: Point; icon: UpgradeIcon; caption: TextKey; cost: number; build: Build }[] = [
       ...expansion.fields.map((build, i) => {
         const area = GARDEN_AREAS[LINE2_GARDEN + i];
         return {
@@ -900,8 +906,8 @@ export class GameScene extends Phaser.Scene {
         };
       }),
       // The stations are bought from where their work spots will be, clear of where they will stand.
-      { part: 'refiner', at: REFINER2_MARKERS.work, icon: 'refiner', caption: 'Table', cost: EXPANSION_COST.refiner, build: expansion.refiner },
-      { part: 'cauldron', at: CAULDRON2_MARKERS.work, icon: 'cauldron', caption: 'Cauldron', cost: EXPANSION_COST.cauldron, build: expansion.cauldron },
+      { part: 'refiner', at: REFINER2_MARKERS.work, icon: 'refiner', caption: 'table', cost: EXPANSION_COST.refiner, build: expansion.refiner },
+      { part: 'cauldron', at: CAULDRON2_MARKERS.work, icon: 'cauldron', caption: 'cauldron', cost: EXPANSION_COST.cauldron, build: expansion.cauldron },
     ];
     for (const { part, at, icon, caption, cost, build } of parts) {
       this.addBuildMarker(at, icon, caption, cost, build, () => expansion.land.built && !build.built, () => payExpansion(this.state, part));
@@ -912,7 +918,7 @@ export class GameScene extends Phaser.Scene {
     ([0, 1] as const).forEach((line) => {
       const area = GARDEN_AREAS[SHADE_GARDEN + line];
       const shown = () => !shade[line].built && (line === 0 ? unlocked(this.state, 'shade') : expansion.land.built);
-      this.addBuildMarker({ x: area.x + area.w / 2, y: area.y + area.h / 2 + 10 }, 'shade', 'Shade garden', SHADE_COST[line], shade[line], shown, () =>
+      this.addBuildMarker({ x: area.x + area.w / 2, y: area.y + area.h / 2 + 10 }, 'shade', 'shadeGarden', SHADE_COST[line], shade[line], shown, () =>
         payShade(this.state, line),
       );
     });
@@ -938,7 +944,7 @@ export class GameScene extends Phaser.Scene {
 
     for (const id of BELTS) {
       const belt = this.state.belts[id];
-      this.addBuildMarker(BELT_BUILD[id], 'pixies', 'Pixies', BELT_COST[id], belt, () => !belt.built && beltBuildable(this.state, id) && unlocked(this.state, `belt-${id}`), () =>
+      this.addBuildMarker(BELT_BUILD[id], 'pixies', 'pixies', BELT_COST[id], belt, () => !belt.built && beltBuildable(this.state, id) && unlocked(this.state, `belt-${id}`), () =>
         payBelt(this.state, id),
       );
       const riding: { pixie: Phaser.GameObjects.Image; icon: Phaser.GameObjects.Image }[] = [];
@@ -1021,16 +1027,16 @@ export class GameScene extends Phaser.Scene {
 
   /** The outfitter's stall right of the shop: upgrades for the doctor's pack, boots and sickle. */
   private createOutfitter() {
-    this.label(OUTFITTER.sign.x, OUTFITTER.sign.y, 'Outfitter');
+    this.label(OUTFITTER.sign.x, OUTFITTER.sign.y, t('outfitter'));
     for (const id of DOCTOR_UPGRADES) this.addUpgradeMarker(OUTFITTER[id], id, UPGRADES[id].name);
   }
 
   /** The guild in the corner of the yard: upgrades for the gardens, the belts and the shop. */
   private createGuild() {
-    this.label(GUILD.sign.x, GUILD.sign.y, 'Guild');
+    this.label(GUILD.sign.x, GUILD.sign.y, t('guild'));
     // Its upgrades go up for sale once the doctor has paid to join.
     const { guild } = this.state;
-    this.addBuildMarker(GUILD.join, 'guild', 'Join guild', GUILD_COST, guild, () => !guild.built && unlocked(this.state, 'guild'), () => joinGuild(this.state));
+    this.addBuildMarker(GUILD.join, 'guild', 'joinGuild', GUILD_COST, guild, () => !guild.built && unlocked(this.state, 'guild'), () => joinGuild(this.state));
     for (const id of GUILD_UPGRADES) this.addUpgradeMarker(GUILD[id], id, UPGRADES[id].name);
   }
 
@@ -1039,7 +1045,7 @@ export class GameScene extends Phaser.Scene {
    * recipe in `RESEARCH_ORDER`, captioned with its name.
    */
   private createStudy() {
-    this.label(STUDY.sign.x, STUDY.sign.y, 'Study');
+    this.label(STUDY.sign.x, STUDY.sign.y, t('study'));
     this.addObstacle(STUDY.desk.x, STUDY.desk.y, 'study', 60, 16);
     this.addLevelMarker(
       STUDY.learn,
@@ -1048,7 +1054,7 @@ export class GameScene extends Phaser.Scene {
       UPGRADES.research.max,
       (level) => upgradeCost('research', level),
       () => payUpgrade(this.state, 'research'),
-      (level, left) => `${ITEMS[RESEARCH_ORDER[level]].name}: ${left}c`,
+      (level, left) => t('learnCost', { potion: itemName(RESEARCH_ORDER[level]), coins: left }),
       () => unlocked(this.state, 'level-research'),
     );
   }
@@ -1086,14 +1092,14 @@ export class GameScene extends Phaser.Scene {
         const rival = rivalUndercuts(this.state, potion);
         const factor = stockFactor(stocked, storage(this.state)) * SIGN_PAY[signOf(this.state, potion)] * (rival ? 1 - RIVAL_CUT : 1);
         const off = Math.round(100 * (factor - 1));
-        cuts[i].setText(off === 0 ? '' : `${rival ? 'rival ' : ''}${off > 0 ? '+' : ''}${off}%`).setColor(off > 0 ? '#2f6a1a' : '#8a3a10');
+        cuts[i].setText(off === 0 ? '' : rival ? t('rivalCut', { n: signed(off) }) : `${signed(off)}%`).setColor(off > 0 ? '#2f6a1a' : '#8a3a10');
       });
     });
     // Potions are stocked by hand until every cauldron standing has its belt to the counter, and
     // whenever the doctor carries one.
     const allBelted = () => !doneByHand(this.state, 'cauldron') && !doneByHand(this.state, 'cauldron2');
-    this.addMarker(COUNTER_MARKERS.drop, 'pad-in', 'Drop', () => stockShelf(this.state), () => allBelted() && !this.carries(isSellable));
-    this.addMarker(COUNTER_MARKERS.pickUp, 'pad-out', 'Coins', () => collectTill(this.state));
+    this.addMarker(COUNTER_MARKERS.drop, 'pad-in', t('drop'), () => stockShelf(this.state), () => allBelted() && !this.carries(isSellable));
+    this.addMarker(COUNTER_MARKERS.pickUp, 'pad-out', t('coins'), () => collectTill(this.state));
     this.addWorkSpot(COUNTER_MARKERS.work, 'counter');
     this.addUpgradeMarker(COUNTER_MARKERS.upgrade, 'counter');
     this.addCraftsmen('counter');
@@ -1112,7 +1118,7 @@ export class GameScene extends Phaser.Scene {
     this.views.push(() => {
       const { counter } = this.state;
       tillCoin.setVisible(counter.till > 0);
-      till.setText(counter.till > 0 ? `${counter.till}` : '');
+      till.setText(counter.till > 0 ? formatNumber(counter.till) : '');
     });
 
     // How far the counter's craftsmen are with handing over the next potion.
@@ -1171,7 +1177,7 @@ export class GameScene extends Phaser.Scene {
     const COLOURS = { cheap: '#2f6a1a', fair: INK, dear: '#8a3a10' };
     this.views.push(() => {
       const sign = signOf(this.state, potion);
-      text.setText(SIGN_NAMES[sign]).setColor(COLOURS[sign]);
+      text.setText(t(SIGN_NAMES[sign])).setColor(COLOURS[sign]);
     });
     return (shown: boolean) => {
       sign.setVisible(shown);
@@ -1223,7 +1229,7 @@ export class GameScene extends Phaser.Scene {
       patience.set(order.patience / order.maxPatience);
       const left01 = tipLeft(order);
       const tip = tipNow(order);
-      tipText.setText(tip > 0 ? `tip +${tip}` : 'no tip').setColor(left01 < 0.4 ? '#b04a10' : '#7a4a00');
+      tipText.setText(tip > 0 ? t('tip', { n: tip }) : t('noTip')).setColor(left01 < 0.4 ? '#b04a10' : '#7a4a00');
       // Redraw the ring only when it has visibly shrunk.
       const key = `${n}:${Math.round(left01 * 48)}`;
       if (key === drawn) return;
@@ -1272,13 +1278,12 @@ export class GameScene extends Phaser.Scene {
       if (c.day !== day) {
         // A new day's contract: say how the last one went.
         const paid = c.kept > kept;
-        note.setText(paid ? 'Contract kept!' : 'Dusk: contract missed').setColor(paid ? '#2f6a1a' : '#8a3a10').setAlpha(1);
+        note.setText(paid ? t('contractKept') : t('contractMissed')).setColor(paid ? '#2f6a1a' : '#8a3a10').setAlpha(1);
         this.tweens.killTweensOf(note);
         this.tweens.add({ targets: note, alpha: 0, delay: 2_500, duration: 800 });
         day = c.day;
         kept = c.kept;
       }
-      const named = (potion: typeof c.potion, n: number) => `${n} ${ITEMS[potion].name}${n === 1 ? '' : 's'}`;
       // A bundle day's second potion follows the first, on the title and in the pips.
       const parts = [{ potion: c.potion, need: c.need, made: c.made }, ...(c.bundle ? [c.bundle] : [])];
       const need = parts.reduce((n, part) => n + part.need, 0);
@@ -1287,7 +1292,8 @@ export class GameScene extends Phaser.Scene {
       if (key === drawn) return;
       drawn = key;
       icon.setTexture(itemTexture(c.potion));
-      title.setText(`Contract: ${parts.map((part) => named(part.potion, part.need)).join(' + ')}${c.bundle ? '' : ' by dusk'}`);
+      const potions = potionCount(c.potion, c.need);
+      title.setText(c.bundle ? t('contractBundle', { potions, more: potionCount(c.bundle.potion, c.bundle.need) }) : t('contract', { potions }));
       // The title stops short of the dusk dial, in a smaller hand when a long one would run into it.
       title.setFontSize(13);
       for (let size = 12; title.width > w - 42 - 40 && size >= 10; size--) title.setFontSize(size);
@@ -1303,7 +1309,7 @@ export class GameScene extends Phaser.Scene {
         }
       }
       count.setText(`${made}/${need}`).setX(x + 48 + need * gap - gap / 2 + 4);
-      reward.setText(`Reward ${c.reward}`);
+      reward.setText(t('reward', { n: c.reward }));
       rewardCoin.setX(x + w - 10 - reward.width - 9);
       // The dusk dial: a sun sinking to the horizon over the day, gone at dusk.
       const dx = x + w - 22, hy = y + 15, sr = 7;
@@ -1369,13 +1375,13 @@ export class GameScene extends Phaser.Scene {
       if (plague.cured && !seen?.cured) {
         // The first cure is the game's ending; a later season's earns a town seal.
         if (season === 0) {
-          say('The Panacea is brewed: the town is cured!', true);
+          say(t('panaceaBrewed'), true);
           this.showWin();
-        } else say(`Season cured: a town seal! Prices +${Math.round(SEAL_PRICE * 100)}%`, true);
-      } else if (seen && season > seen.season) say('A new season, a stronger sickness!', false);
-      else if (seen && plague.stage > seen.stage) say(plague.stage < stages ? 'Stage beaten, but the sickness moves on' : 'Every stage beaten: the Panacea is unlocked!', true);
-      else if (seen && plague.relapses > seen.relapses) say('Too late: the sickness comes back worse', false);
-      else if (!seen) say('A sickness spreads in the town!', false);
+        } else say(t('seasonCured', { n: Math.round(SEAL_PRICE * 100) }), true);
+      } else if (seen && season > seen.season) say(t('newSeason'), false);
+      else if (seen && plague.stage > seen.stage) say(plague.stage < stages ? t('stageBeaten') : t('panaceaUnlocked'), true);
+      else if (seen && plague.relapses > seen.relapses) say(t('relapse'), false);
+      else if (!seen) say(t('sicknessSpreads'), false);
       seen = { stage: plague.stage, relapses: plague.relapses, cured: plague.cured, season };
       const stage = plagueStage(this.state);
       const key = `${season}:${plague.stage}:${plague.need}:${plague.made}:${plague.cured}:${this.state.seals}:${Math.ceil(plague.left / (DAY / 4))}`;
@@ -1389,19 +1395,20 @@ export class GameScene extends Phaser.Scene {
       if (plague.cured) {
         bell.setVisible(false);
         const seals = this.state.seals ?? 0;
-        title.setText(seals > 0 ? `The town is cured! Seals: ${seals}, prices +${Math.round(SEAL_PRICE * seals * 100)}%` : 'The town is cured!');
+        title.setText(seals > 0 ? t('townCuredSeals', { seals, n: Math.round(SEAL_PRICE * seals * 100) }) : t('townCured'));
         title.setFontSize(13);
         for (let size = 12; title.width > w - 46 && size >= 10; size--) title.setFontSize(size);
         const next = (plague.curedDay ?? this.state.contract.day) + SEASON_GAP;
-        count.setText(`Next season's sickness comes on day ${next}`).setX(x + 36);
+        count.setText(t('nextSeason', { day: next })).setX(x + 36);
         side.setText('');
       } else if (!stage) {
-        title.setText('Panacea unlocked: brew the cure');
-        count.setText('in a cauldron').setX(x + 46 + cure.length * 26 - 6);
+        title.setText(t('brewTheCure'));
+        count.setText(t('inACauldron')).setX(x + 46 + cure.length * 26 - 6);
         side.setText('');
       } else {
-        const what = stage.potion ? `${ITEMS[stage.potion].name}${plague.need === 1 ? '' : 's'}` : 'potions of any kind';
-        title.setText(`${season > 0 ? `Season ${season + 1} plague` : 'Plague'} ${plague.stage + 1}/${stages}: ${plague.need} ${what}`);
+        const need = stage.potion ? potionCount(stage.potion, plague.need) : t('anyPotionCount', { n: plague.need });
+        const at = { stage: plague.stage + 1, stages, need };
+        title.setText(season > 0 ? t('seasonPlagueStage', { season: season + 1, ...at }) : t('plagueStage', at));
         title.setFontSize(13);
         for (let size = 12; title.width > w - 46 && size >= 10; size--) title.setFontSize(size);
         const gap = plague.need > 8 ? 11 : 15;
@@ -1413,7 +1420,7 @@ export class GameScene extends Phaser.Scene {
         }
         count.setText(`${plague.made}/${plague.need}`).setX(x + 48 + plague.need * gap - gap / 2 + 4);
         const days = plague.left / DAY;
-        side.setText(days >= 1 ? `${Math.ceil(days)} day${days > 1 ? 's' : ''} left` : 'last day!');
+        side.setText(days >= 1 ? t('daysLeft', { n: Math.ceil(days) }) : t('lastDay'));
       }
     });
   }
@@ -1432,12 +1439,12 @@ export class GameScene extends Phaser.Scene {
     const parts: Phaser.GameObjects.GameObject[] = [
       bg,
       fit(this.add.image(0, -46, 'bell')),
-      this.add.text(0, -18, 'The town is cured!', { ...HUD_TEXT, fontSize: '20px', color: '#7a4a10' }).setOrigin(0.5),
+      this.add.text(0, -18, t('townCured'), { ...HUD_TEXT, fontSize: '20px', color: '#7a4a10' }).setOrigin(0.5),
       this.add
-        .text(0, 12, `Your Panacea ended the plague on day ${this.state.contract.day}.\nThe apothecary stays open: keep trading.`, { ...HUD_TEXT, fontSize: '13px', fontStyle: 'normal', align: 'center' })
+        .text(0, 12, t('winText', { day: this.state.contract.day }), { ...HUD_TEXT, fontSize: '13px', fontStyle: 'normal', align: 'center' })
         .setOrigin(0.5),
       this.card(0, 52, 'button', cardTexture(this, 'button', 120, 28)),
-      this.add.text(0, 52, 'Keep trading', { ...HUD_TEXT, fontSize: '14px' }).setOrigin(0.5),
+      this.add.text(0, 52, t('keepTrading'), { ...HUD_TEXT, fontSize: '14px' }).setOrigin(0.5),
     ];
     this.winPanel = this.add
       .container(width / 2, height / 2, parts)
@@ -1454,7 +1461,7 @@ export class GameScene extends Phaser.Scene {
     const stall = fit(this.add.image(RIVAL.x, RIVAL.y, 'rival-stall').setOrigin(0.5, 1).setDepth(RIVAL.y)).setVisible(false);
     const sign = this.card(RIVAL.sign.x, RIVAL.sign.y, 'sign', signTexture(this, 118)).setDepth(RIVAL.y + 0.1).setVisible(false);
     const name = this.add
-      .text(RIVAL.sign.x, RIVAL.sign.y, 'Rival apothecary', { fontFamily: SERIF, fontSize: '13px', fontStyle: 'bold', color: INK })
+      .text(RIVAL.sign.x, RIVAL.sign.y, t('rivalApothecary'), { fontFamily: SERIF, fontSize: '13px', fontStyle: 'bold', color: INK })
       .setOrigin(0.5)
       .setDepth(RIVAL.y + 0.2)
       .setVisible(false);
@@ -1475,11 +1482,11 @@ export class GameScene extends Phaser.Scene {
       icon.setVisible(!!rival.potion);
       if (rival.potion) {
         icon.setTexture(itemTexture(rival.potion));
-        offer.setText(`Today ${Math.round(RIVAL_CUT * 100)}% off`);
-        streak.setText(`Outsold ${rival.streak}/${RIVAL_MONTH_DAYS} days, ${rival.sold}/${RIVAL_SALES + 1} today`);
+        offer.setText(t('rivalOffer', { n: Math.round(RIVAL_CUT * 100) }));
+        streak.setText(t('rivalStreak', { streak: rival.streak, days: RIVAL_MONTH_DAYS, sold: rival.sold, sales: RIVAL_SALES + 1 }));
       } else {
-        offer.setText(rival.open ? '' : 'Closed for good');
-        streak.setText(rival.open ? '' : 'The street is yours');
+        offer.setText(rival.open ? '' : t('rivalClosed'));
+        streak.setText(rival.open ? '' : t('streetIsYours'));
       }
     });
   }
@@ -1511,9 +1518,9 @@ export class GameScene extends Phaser.Scene {
       drawn = key;
       for (const part of [wagon, want, icon, left]) part.setVisible(here);
       if (!here || !w) return;
-      want.setText(`Wagon buys ${w.crate} ${ITEMS[w.potion].name}s at ${w.pay}c each`);
+      want.setText(t('wagonBuys', { crate: potionCount(w.potion, w.crate), pay: w.pay }));
       icon.setTexture(itemTexture(w.potion)).setX(want.x - want.width / 2 - 12);
-      left.setText(`On the shelf ${Math.min(have, w.crate)}/${w.crate}${have >= w.crate ? ': tap to sell' : ''}, leaves in ${Math.ceil(w.left / 1000)}s`);
+      left.setText(t(have >= w.crate ? 'wagonReady' : 'wagonWaiting', { have: Math.min(have, w.crate), crate: w.crate, s: Math.ceil(w.left / 1000) }));
       left.setColor(have >= w.crate ? '#2f6a1a' : INK);
     });
   }
@@ -1527,7 +1534,7 @@ export class GameScene extends Phaser.Scene {
     const open = () => marketOpen(this.state);
     const stall = fit(this.add.image(HERB_MARKET.stall.x, HERB_MARKET.stall.y, 'herb-stall').setOrigin(0.5, 1).setDepth(HERB_MARKET.stall.y));
     const name = this.add
-      .text(HERB_MARKET.label.x, HERB_MARKET.label.y, 'Herb market', { fontFamily: SERIF, fontSize: '13px', fontStyle: 'bold', color: INK })
+      .text(HERB_MARKET.label.x, HERB_MARKET.label.y, t('herbMarket'), { fontFamily: SERIF, fontSize: '13px', fontStyle: 'bold', color: INK })
       .setOrigin(0.5)
       .setDepth(-900);
     const board = this.card(HERB_MARKET.label.x, HERB_MARKET.label.y, 'sign', signTexture(this, name.width + 16)).setDepth(-910);
@@ -1564,8 +1571,8 @@ export class GameScene extends Phaser.Scene {
       for (const part of [stall, name, board, sellText, buyText, pick, pickIcon]) part.setVisible(shown);
       if (!shown) return;
       pickIcon.setTexture(itemTexture(herb));
-      buyText.setText(`Buy ${ITEMS[herb].name}: ${herbBuyPrice(day, herb)}c`);
-      sellText.setText(top && (isPlant(top) || isRefined(top)) ? `Sell ${ITEMS[top].name}: ${herbSellPrice(day, top)}c` : 'Sell herbs');
+      buyText.setText(t('buyHerb', { item: itemName(herb), coins: herbBuyPrice(day, herb) }));
+      sellText.setText(top && (isPlant(top) || isRefined(top)) ? t('sellHerb', { item: itemName(top), coins: herbSellPrice(day, top) }) : t('sellHerbs'));
     });
   }
 
@@ -1581,7 +1588,7 @@ export class GameScene extends Phaser.Scene {
     this.card(x + w / 2, y + h / 2, 'town', cardTexture(this, 'town', w, h)).setDepth(d);
     const icon = fit(this.add.image(x + 19, y + h / 2, 'weather-mild')).setDepth(d + 0.1);
     const title = this.add.text(x + 36, y + 13, '', { ...HUD_TEXT, fontSize: '13px' }).setOrigin(0, 0.5).setDepth(d + 0.1);
-    const label = this.add.text(x + 36, y + 31, 'Reputation', { ...HUD_TEXT, fontSize: '12px', fontStyle: 'normal' }).setOrigin(0, 0.5).setDepth(d + 0.1);
+    const label = this.add.text(x + 36, y + 31, t('reputation'), { ...HUD_TEXT, fontSize: '12px', fontStyle: 'normal' }).setOrigin(0, 0.5).setDepth(d + 0.1);
     const barW = 70;
     const reputation = new ProgressBar(this, label.x + label.width + 6 + barW / 2, y + 28, barW, 0x58a35a, d + 0.1);
     const side = this.add.text(x + w - 10, y + 31, '', { ...HUD_TEXT, fontSize: '12px' }).setOrigin(1, 0.5).setDepth(d + 0.1);
@@ -1606,30 +1613,30 @@ export class GameScene extends Phaser.Scene {
       // Blight striking a bed: say which garden.
       const blighted = new Set(this.state.plots.flatMap((p, i) => (p.blighted ? [i] : [])));
       const struck = [...blighted].find((i) => !blightSeen.has(i));
-      if (struck !== undefined) say(`Blight in the ${GARDEN_NAMES[gardenPlant(this.state, gardenOf(struck))].toLowerCase()}! Clear it with the sickle`, false);
+      if (struck !== undefined) say(t('blightIn', { garden: t(GARDEN_NAMES_IN[gardenPlant(this.state, gardenOf(struck))]) }), false);
       blightSeen = blighted;
       const rushNow = JSON.stringify(rush);
       if (rushNow !== rushSeen && rush) {
         const before = rushSeen === 'null' ? null : (JSON.parse(rushSeen) as typeof rush);
         const sameRush = before?.day === rush.day;
-        if (rush.paid && !(sameRush && before.paid)) say(`Market crowd served: +${RUSH_BONUS * rush.size} coins!`, true);
-        else if (rush.lost && rush.size > 0 && !(sameRush && before.lost)) say('A customer walked off: no market bonus', false);
-        else if (!sameRush) say(rush.size > 0 ? 'Market day: a crowd comes in!' : 'Market day: no room for the crowd', rush.size > 0);
+        if (rush.paid && !(sameRush && before.paid)) say(t('crowdBonus', { n: RUSH_BONUS * rush.size }), true);
+        else if (rush.lost && rush.size > 0 && !(sameRush && before.lost)) say(t('crowdWalkedOff'), false);
+        else if (!sameRush) say(rush.size > 0 ? t('crowdComes') : t('crowdNoRoom'), rush.size > 0);
       }
       rushSeen = rushNow;
       const weather = WEATHER[weatherFor(day)];
       let status: string;
-      if (!isMarketDay(day)) status = `Tomorrow: ${WEATHER[weatherFor(day + 1)].name}`;
-      else if (rush?.day !== day) status = 'Crowd at midday';
-      else if (rush.paid) status = 'Crowd served!';
-      else if (rush.lost) status = 'Crowd: bonus lost';
-      else status = `Crowd: ${rush.served}/${rush.size} served`;
+      if (!isMarketDay(day)) status = t('tomorrow', { weather: t(WEATHER[weatherFor(day + 1)].name) });
+      else if (rush?.day !== day) status = t('crowdAtMidday');
+      else if (rush.paid) status = t('crowdServed');
+      else if (rush.lost) status = t('crowdLost');
+      else status = t('crowdCount', { served: rush.served, size: rush.size });
       reputation.set(this.state.reputation / 100);
       const key = `${day}:${status}`;
       if (key === drawn) return;
       drawn = key;
       icon.setTexture(`weather-${weatherFor(day)}`);
-      title.setText(`${isMarketDay(day) ? 'Market day' : `Day ${day}`}, ${weather.name.toLowerCase()}: ${weather.effect}`);
+      title.setText(t(isMarketDay(day) ? 'marketDayWeather' : 'dayWeather', { day, weather: t(weather.today) }));
       side.setText(status);
     });
   }
@@ -1726,9 +1733,8 @@ export class GameScene extends Phaser.Scene {
     // The chip keeps its right edge and grows to the left when the numbers are long.
     const { y, h } = AWAY_CHIP;
     const d = UI_DEPTH;
-    const potions = `${away.potions} potion${away.potions === 1 ? '' : 's'}`;
-    const lead = this.add.text(0, y + h / 2, 'While you were away:', { ...HUD_TEXT, fontSize: '13px', fontStyle: 'normal' }).setOrigin(0, 0.5).setDepth(d + 0.1);
-    const sum = this.add.text(0, y + h / 2, `+${away.coins} coins, ${potions}`, { ...HUD_TEXT, fontSize: '13px', color: '#6a2c90' }).setOrigin(0, 0.5).setDepth(d + 0.1);
+        const lead = this.add.text(0, y + h / 2, t('awayLead'), { ...HUD_TEXT, fontSize: '13px', fontStyle: 'normal' }).setOrigin(0, 0.5).setDepth(d + 0.1);
+    const sum = this.add.text(0, y + h / 2, t('awaySum', { coins: away.coins, n: away.potions }), { ...HUD_TEXT, fontSize: '13px', color: '#6a2c90' }).setOrigin(0, 0.5).setDepth(d + 0.1);
     const w = Math.max(AWAY_CHIP.w, Math.ceil(lead.width + sum.width + 46));
     const x = AWAY_CHIP.x + AWAY_CHIP.w - w;
     lead.setX(x + 28);
@@ -1760,24 +1766,24 @@ export class GameScene extends Phaser.Scene {
     const style = HUD_TEXT;
     fit(this.add.image(26, HUD_HEIGHT / 2 - 1, 'coin'), 1.6).setDepth(UI_DEPTH);
     const coins = this.add.text(42, HUD_HEIGHT / 2 - 1, '', style).setOrigin(0, 0.5).setDepth(UI_DEPTH);
-    this.add.text(width / 2 - 92, HUD_HEIGHT / 2, 'Hands', style).setOrigin(1, 0.5).setDepth(UI_DEPTH);
+    this.add.text(width / 2 - 92, HUD_HEIGHT / 2, t('hands'), style).setOrigin(1, 0.5).setDepth(UI_DEPTH);
     this.add
       // Right of the last slot the biggest pack fills, so a full pack never runs into it.
-      .text(width / 2 - 60 + MAX_CARRY * 40 - 12, HUD_HEIGHT / 2, 'Walk: WASD / tap\nHarvest: walk past ripe plants', { ...style, fontSize: '12px', fontStyle: 'normal', color: '#4a3424' })
+      .text(width / 2 - 60 + MAX_CARRY * 40 - 12, HUD_HEIGHT / 2, t('hint'), { ...style, fontSize: '12px', fontStyle: 'normal', color: '#4a3424' })
       .setOrigin(0, 0.5)
       .setDepth(UI_DEPTH);
-    this.hudButton(width - 16, 'Settings', () => {
+    this.hudButton(width - 16, t('settings'), () => {
       const open = this.settings.visible;
       this.closePanels();
       this.settings.toggle(!open);
     });
     // Empties the doctor's hands, for goods that are no longer needed.
-    const drop = this.hudButton(width / 2 - 150, 'Drop all', () => {
+    const drop = this.hudButton(width / 2 - 150, t('dropAll'), () => {
       const feedback = dropAll(this.state);
       if (feedback) this.showFeedback(feedback);
     });
     // What each station makes from what, in a panel over the map.
-    this.hudButton(width / 2 - 230, 'Recipes', () => {
+    this.hudButton(width / 2 - 230, t('recipes'), () => {
       const open = this.recipes.visible;
       this.closePanels();
       this.recipes.toggle(!open);
@@ -1797,7 +1803,7 @@ export class GameScene extends Phaser.Scene {
     this.settings = new Settings(this, UI_DEPTH + 1, () => this.startOver());
 
     this.views.push(() => {
-      coins.setText(`Coins: ${this.state.coins}`);
+      coins.setText(t('coinsHud', { n: this.state.coins }));
       for (const part of drop) part.setAlpha(this.state.carrying.length > 0 ? 1 : 0.5);
       frames.forEach((frame, i) => frame.setVisible(i < carryCapacity(this.state)));
       slots.forEach((slot, i) => {

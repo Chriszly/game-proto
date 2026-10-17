@@ -13,31 +13,31 @@ export type ItemId = PlantId | RefinedId | PotionId | FineId;
 /** What can stand on the counter's shelf for sale: a potion, plain or fine. */
 export type SellableId = PotionId | FineId;
 
+/** An item's kind and colour; its name is the text keyed by its id (`itemName` in `i18n.ts`). */
 export interface ItemDef {
-  name: string;
   kind: 'plant' | 'refined' | 'potion' | 'fine';
   color: number;
 }
 
 export const ITEMS: Record<ItemId, ItemDef> = {
-  wheat: { name: 'Wheat', kind: 'plant', color: 0xd9b24a },
-  mandrake: { name: 'Mandrake', kind: 'plant', color: 0xb07a4a },
-  nightshade: { name: 'Nightshade', kind: 'plant', color: 0x4a3060 },
-  flour: { name: 'Wheat Flour', kind: 'refined', color: 0xf1e8d0 },
-  mandrakeSeeds: { name: 'Mandrake Seeds', kind: 'refined', color: 0x6b4426 },
-  nightshadeExtract: { name: 'Nightshade Extract', kind: 'refined', color: 0x5a3a78 },
-  healingDraught: { name: 'Healing Draught', kind: 'potion', color: 0xd9434b },
-  sleepingTonic: { name: 'Sleeping Tonic', kind: 'potion', color: 0x6a5bd6 },
-  vigourTonic: { name: 'Vigour Tonic', kind: 'potion', color: 0xe0862e },
-  shadowElixir: { name: 'Shadow Elixir', kind: 'potion', color: 0x2f8a72 },
-  moonlightSalve: { name: 'Moonlight Salve', kind: 'potion', color: 0x6fa8d6 },
-  witchsBrew: { name: "Witch's Brew", kind: 'potion', color: 0x7a8f22 },
-  fineHealingDraught: { name: 'Fine Healing Draught', kind: 'fine', color: 0xd9434b },
-  fineSleepingTonic: { name: 'Fine Sleeping Tonic', kind: 'fine', color: 0x6a5bd6 },
-  fineVigourTonic: { name: 'Fine Vigour Tonic', kind: 'fine', color: 0xe0862e },
-  fineShadowElixir: { name: 'Fine Shadow Elixir', kind: 'fine', color: 0x2f8a72 },
-  fineMoonlightSalve: { name: 'Fine Moonlight Salve', kind: 'fine', color: 0x6fa8d6 },
-  fineWitchsBrew: { name: "Fine Witch's Brew", kind: 'fine', color: 0x7a8f22 },
+  wheat: { kind: 'plant', color: 0xd9b24a },
+  mandrake: { kind: 'plant', color: 0xb07a4a },
+  nightshade: { kind: 'plant', color: 0x4a3060 },
+  flour: { kind: 'refined', color: 0xf1e8d0 },
+  mandrakeSeeds: { kind: 'refined', color: 0x6b4426 },
+  nightshadeExtract: { kind: 'refined', color: 0x5a3a78 },
+  healingDraught: { kind: 'potion', color: 0xd9434b },
+  sleepingTonic: { kind: 'potion', color: 0x6a5bd6 },
+  vigourTonic: { kind: 'potion', color: 0xe0862e },
+  shadowElixir: { kind: 'potion', color: 0x2f8a72 },
+  moonlightSalve: { kind: 'potion', color: 0x6fa8d6 },
+  witchsBrew: { kind: 'potion', color: 0x7a8f22 },
+  fineHealingDraught: { kind: 'fine', color: 0xd9434b },
+  fineSleepingTonic: { kind: 'fine', color: 0x6a5bd6 },
+  fineVigourTonic: { kind: 'fine', color: 0xe0862e },
+  fineShadowElixir: { kind: 'fine', color: 0x2f8a72 },
+  fineMoonlightSalve: { kind: 'fine', color: 0x6fa8d6 },
+  fineWitchsBrew: { kind: 'fine', color: 0x7a8f22 },
 };
 
 /**
@@ -71,11 +71,10 @@ export interface Recipe {
 export const PANACEA = 'panacea';
 /** What a cauldron can brew: a potion, or the Panacea. */
 export type BrewOut = PotionId | typeof PANACEA;
-export const PANACEA_RECIPE: { out: typeof PANACEA; inputs: RefinedId[]; ms: number; name: string } = {
+export const PANACEA_RECIPE: { out: typeof PANACEA; inputs: RefinedId[]; ms: number } = {
   out: PANACEA,
   inputs: ['flour', 'mandrakeSeeds', 'nightshadeExtract'],
   ms: 9_000,
-  name: 'Panacea',
 };
 
 // A cauldron brews whichever of these the shop is shortest of; ties go in this order, rarer ingredient first.
