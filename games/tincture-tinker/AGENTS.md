@@ -58,6 +58,8 @@ bottle green, serif italics), all painted in code on 2D canvases. It shares no c
 
 ### File map
 
+- `src/howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips), handed to
+  `setupGame(game, { howToPlay })` in `src/main.ts`; update it when the controls or the first round change.
 - `src/main.ts`: creates the `Phaser.Game` (960x540, FIT scaling, `pixelArt: false`) with
   `BootScene` and `GameScene`, calls `setupGame(game)` and `setupScaling(game)` from
   `shared/scaling.ts`, and puts `game` on `window` in dev builds.

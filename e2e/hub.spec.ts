@@ -65,6 +65,9 @@ for (const { name, path } of GAMES.filter((g) => !ONLY || g.path === `/games/${O
     // The game's own canvas; a page may also paint a decorative backdrop canvas, marked data-backdrop.
     await expect(page.locator('canvas:not([data-backdrop])')).toBeVisible();
     await expectFavicon(page);
+    // Every game has a How to play behind its start and pause screens.
+    await expect(page.locator('.game-help h2')).toHaveText(`How to play ${name}`);
+    await expect(page.locator('.game-help li').first()).not.toBeEmpty();
     // A game with a watch mode shows the watch panel when opened with ?watch.
     if (!WATCH.includes(path)) return;
     await page.goto(`${path}?watch`);
@@ -153,6 +156,15 @@ test('games have start and pause screens', async ({ page }, testInfo) => {
   await expect(page.locator('.game-overlay-title')).toHaveText('Apothecary');
   expect(await running(), 'paused on the start screen').toBe(false);
   testInfo.attach('start', { body: await page.screenshot({ path: testInfo.outputPath('start.png') }), contentType: 'image/png' });
+
+  // How to play opens from the start screen, keeps the game paused, and Esc goes back.
+  await page.getByRole('button', { name: 'How to play' }).click();
+  await expect(page.getByRole('heading', { name: 'How to play Apothecary' })).toBeVisible();
+  await expect(page.locator('.game-start-button')).toBeHidden();
+  expect(await running(), 'paused while reading How to play').toBe(false);
+  testInfo.attach('how to play', { body: await page.screenshot({ path: testInfo.outputPath('how-to-play.png') }), contentType: 'image/png' });
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.game-start-button')).toBeVisible();
 
   await page.locator('.game-start-button').click();
   await expect(overlay).toBeHidden();
