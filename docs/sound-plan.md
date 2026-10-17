@@ -268,6 +268,11 @@ Notes:
 ### Catacomb
 Turn-based dungeon deckbuilder; dark and gothic.
 
+**Done:** see the Sound section of `games/catacomb/AGENTS.md`. It differs from this plan in a few
+places: the map and the fights are two songs (80 and 120 BPM), elites share the bosses' `boss`
+part, the Bone King's fall gets a `triumph` sting, and every sound is started from the scene (the
+tap handlers and a per-frame `Cues` diff of the state), not from `sim.ts`, which stays free of sound.
+
 **Music:** A dirge in A minor (harmonic minor).
 - Map: about 80 BPM over a triangle drone.
 - Fights: about 120 BPM with drums. Elite and boss fights (Bone King, Hollow Queen) get a heavier
