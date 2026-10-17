@@ -43,7 +43,7 @@ export function addStartScreen(game: Phaser.Game, howToPlay?: HowToPlay) {
   const startButton = overlay.querySelector<HTMLButtonElement>('.game-start-button')!;
   const resumeButton = overlay.querySelector<HTMLButtonElement>('.game-resume-button')!;
   const hint = overlay.querySelector<HTMLDivElement>('.game-overlay-hint')!;
-  const help = overlay.querySelector<HTMLElement>('.game-help');
+  const help = overlay.querySelector<HTMLElement>('.game-help-body');
 
   const pauseButton = document.createElement('button');
   pauseButton.type = 'button';
@@ -207,14 +207,17 @@ function helpHtml(howToPlay: HowToPlay) {
   ];
   const list = (items: string[]) => items.map((item) => `<li>${escapeHtml(item)}</li>`).join('');
   return (
-    '<section class="game-help" tabindex="-1" aria-labelledby="game-help-title">' +
+    '<section class="game-help" aria-labelledby="game-help-title">' +
     `<h2 id="game-help-title">How to play ${escapeHtml(document.title)}</h2>` +
+    // Only the text between the title and Back scrolls.
+    '<div class="game-help-body" tabindex="-1">' +
     `<p class="game-help-goal">${escapeHtml(howToPlay.goal)}</p>` +
     '<h3>Controls</h3><table class="game-help-controls"><tbody>' +
     controls.map((c) => `<tr><th scope="row">${escapeHtml(c.input)}</th><td>${escapeHtml(c.action)}</td></tr>`).join('') +
     '</tbody></table>' +
     `<h3>How a round goes</h3><ol>${list(howToPlay.loop)}</ol>` +
     (howToPlay.tips.length ? `<h3>Good to know</h3><ul>${list(howToPlay.tips)}</ul>` : '') +
+    '</div>' +
     '<button type="button" class="game-overlay-button game-help-back">Back</button>' +
     '</section>'
   );
@@ -251,11 +254,12 @@ function injectStyles() {
 .game-overlay-link { padding: 4px 8px; font: 15px system-ui, sans-serif; cursor: pointer; color: #f3e9d2;
   background: none; border: none; text-decoration: underline; text-underline-offset: 3px; }
 .game-overlay-link:hover, .game-overlay-link:focus-visible { color: #ffc04d; outline: none; }
-.game-help { display: none; box-sizing: border-box; width: min(600px, 100%); max-height: 100%; overflow-y: auto;
+.game-help { display: none; flex-direction: column; box-sizing: border-box; width: min(600px, 100%); max-height: 100%;
   padding: 20px 24px; line-height: 1.4; background: rgba(20, 16, 12, 0.92);
-  border: 1px solid rgba(243, 233, 210, 0.35); border-radius: 8px; outline: none; }
+  border: 1px solid rgba(243, 233, 210, 0.35); border-radius: 8px; }
+.game-help-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; outline: none; }
 .game-overlay.help .game-overlay-card { display: none; }
-.game-overlay.help .game-help { display: block; }
+.game-overlay.help .game-help { display: flex; }
 .game-help h2 { margin: 0 0 8px; font-size: 22px; }
 .game-help h3 { margin: 16px 0 6px; font-size: 15px; color: #f0a830; text-transform: uppercase; letter-spacing: 0.06em; }
 .game-help-goal { margin: 0; }
@@ -265,7 +269,7 @@ function injectStyles() {
 .game-help-controls th, .game-help-controls td { padding: 4px 0; vertical-align: top; text-align: left;
   border-top: 1px solid rgba(243, 233, 210, 0.15); }
 .game-help-controls th { width: 45%; padding-right: 12px; font-weight: 600; }
-.game-help-back { display: block; margin: 20px auto 0; }
+.game-help-back { flex: none; display: block; margin: 16px auto 0; }
 .game-overlay:not(.loading) .game-overlay-loading,
 .game-overlay:not(.start) .game-start-button,
 .game-overlay:not(.paused) .game-resume-button,
