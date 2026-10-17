@@ -3,6 +3,7 @@ import { byDifficulty } from '../../../../shared/settings';
 import { HEROES, type HeroId } from './heroes';
 import { at, capstonesOf, crossoversOf } from './upgrades';
 import type { EventId, FoeKind, NodeKind } from './planets';
+import type { TextKey } from '../i18n';
 
 /** Each planet lasts this long before its boss comes, ms. */
 export const RUN_MS = 5 * 60_000;
@@ -251,9 +252,10 @@ export type Phase = 'select' | 'run' | 'levelup' | 'cleared' | 'map' | 'trader' 
 /** An event on offer: its id, its two options and, for the shrine, the tier it takes and the one it raises twice. */
 export interface EventState {
   id: EventId;
-  title: string;
-  text: string;
-  options: { label: string; text: string }[];
+  /** Keys of `i18n/en.ts`; the shrine's trade text names `lose` and `gain` with `{lose}` and `{gain}`. */
+  title: TextKey;
+  text: TextKey;
+  options: { label: TextKey; text: TextKey }[];
   lose?: string;
   gain?: string;
 }
