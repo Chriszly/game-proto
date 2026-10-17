@@ -63,7 +63,7 @@ Implemented today:
 
 Missing or rough:
 
-- No sound. No pathing beyond one tile step at a time toward the target.
+- No pathing beyond one tile step at a time toward the target.
 - AI rivals use a simple scored plan (`aiPlan`). Balance is checked with AI-only matches (see
   Gotchas); every origin's average place sits between about 4.0 and 4.9 of 8, and matches end
   around stages 5 and 6.
@@ -84,6 +84,8 @@ File map (`src/`):
   just 3 in German, where the text says "Platz"). Every text on screen goes through `t`, and a new
   one gets its German entry (and a US one if its spelling differs) in the same PR. The watch
   panel's title and `aiLog` lines stay English, with the names inside them translated.
+- `audio.ts`: the songs (`PLAN_SONG`, `FIGHT_SONG`) and the sound table (`play`, typed `Sfx`); see
+  Sound below.
 - `game/data.ts`: every rule and number (see above). Every name and text in its tables (robots,
   seasons, abilities, traits, parts and items, power cards, skills, commanders and taunts,
   monsters, terrain) is a `TextKey` of `i18n/en.ts`, which the scene shows with `t`. No Phaser.
@@ -109,7 +111,7 @@ The phase flow: `plan` (timed by `PLAN_S`) → `fight` → `result` → next rou
 `won`/`lost` end the match. `GameScene.tick` drives it with the frame's delta; the fight advances
 in `STEP_S` steps times the playback speed.
 
-Shared code it imports: `shared/setupGame.ts`, `shared/scaling.ts` (`setupScaling`, `sharpRes`,
+Shared code it imports: `shared/audio.ts`, `shared/setupGame.ts`, `shared/scaling.ts` (`setupScaling`, `sharpRes`,
 `viewPoint`), `shared/settings.ts` (`byDifficulty`, `settings`), `shared/i18n.ts` (`translator`,
 `byLanguage`, `Translation`) and `shared/watch.ts`.
 
@@ -122,6 +124,49 @@ Shared code it imports: `shared/setupGame.ts`, `shared/scaling.ts` (`setupScalin
   terrain, seat 0 is AI-run (`human` false: `aiPlan` near the end of each plan phase, skill at 3 s),
   and `mountWatch` shows the panel; `watchSteps()` ticks per frame. Watch another on the end screen
   starts the next match.
+
+### Sound
+
+All of it is in `src/audio.ts` and played from `GameScene`; the sim in `game/` has no audio. The
+scene's `sfx(name)` wraps `play`: in `?watch` it drops `WATCH_QUIET` (hits, punches, shots, heals,
+shields, dodges, the plan tick) and plays the rest at 0.6 volume. Only the player's own fight is
+played back, so the other pairings (`runToEnd`) make no sound.
+
+Music, industrial chiptune in E minor, two songs since the tempos differ (`playMusic` fades from
+one to the other):
+
+- `PLAN_SONG`, 110 BPM: `calm` (8 bars) from the menu (`create`) and every plan phase
+  (`beginPlan`, and Play again); `draft` (4 bars, arpeggios) when a draft round starts
+  (`afterResult`).
+- `FIGHT_SONG`, 140 BPM: `battle` (8 bars) in `goFight`, `rat` (4 bars, chromatic chase) for the
+  Scrap Rat round. Its stings: `roundWin`, `roundLoss`, `roundDraw` in `finishFight`; `matchWon` or
+  `eliminated` in `afterResult` (after `stopMusic`), and `watchEnd` instead of both in `?watch`.
+
+Sound table and where each plays:
+
+| Sound | Where |
+| --- | --- |
+| `buy`, `starUp` (when the buy merges three) | `doBuy` |
+| `reroll`, `xp`, `levelUp` | `doReroll`, `doXp`; `levelUp` also in `beginPlan` when income XP levels up |
+| `sell` | `doSellUnit` (Sell button, E, drag to the sell zone) |
+| `place` | `doMove` (a robot moved or swapped by tap or drag) |
+| `bolt`, `itemBuilt` (two parts make an item) | `doEquip` |
+| `latch` | `toggleLock`, `toggleSpeed` |
+| `tick` | `tick`, each of the plan phase's last 3 seconds (player only) |
+| `fight` | `goFight` |
+| `augment`, `draft` | `doAugment`; the player's draft pick in `onDown` and its timeout pick in `tickDraft` |
+| `punch`, `shot`, `shell`, `snipe` | `consume`: `attack` (melee only), `proj` by kind |
+| `hit`, `crit` | `consume`: `dmg` |
+| `castShield`, `castSlam`, `castBarrage`, `castSnipe`, `blink`, `castRepair` | `consume`: `cast` by ability (`CAST_SOUND`); `blink` also on `blink` |
+| `lightning`, `heal`, `shield`, `stun`, `dodge`, `revive`, `death`, `escape` | `consume`, the event of that name |
+| `skill` | `consume`: `skill` (the rival's at 0.6 volume) |
+| `zap` | `onDown`, the player's tap on the Scrap Rat |
+| `orb` | `drawCommanders`, when the avatar picks an orb up |
+
+Shared sounds: `ui('coin')` for the player's `gold` events in a fight; `ui('click')` for the menu
+choices, START MATCH, Play again, scouting a rival and flipping the info panel; `ui('refuse')` for
+a refused buy, reroll, Buy XP, skill, move (board full) or equip (robot full), and for a tap on any
+greyed-out button or shop card (`button` pushes a refusal for them).
 
 ## Testing hooks
 

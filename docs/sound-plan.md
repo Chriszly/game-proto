@@ -633,6 +633,10 @@ Board auto-battler of junk robots; punchy, mechanical arcade.
 Notes:
 - Other players' fights run without playback, so they make no sound.
 - Fights at 2x speed with 16+ robots need rate limits.
+- Done: see the Sound section of `games/scrapyard-titans/AGENTS.md`. Two songs, since the tempos
+  differ (`PLAN_SONG` with calm and draft, `FIGHT_SONG` with battle, rat and the stings). Level-up
+  is heard in the scene (`doXp`, `beginPlan`), not in `gainXp`; place, merge and equip in the
+  scene's `doMove`, `doBuy`, `doEquip`. The plan timer ticks only in its last 3 seconds.
 
 ### Shrine Stack
 One-button temple stacking at dusk; calm and mystical, tense as it leans.
