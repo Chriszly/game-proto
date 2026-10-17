@@ -13,7 +13,7 @@ carry orders between villages before their time runs out.
 - **Implemented:** a new valley every game (`generateValley` in `src/game/map.ts`: a winding
   river, mountains in the east, scattered forest, places for the villages after the first two) of
   grass, forest, river and mountain tiles; laying track by tap or drag next to the line, priced by
-  terrain; taking track up for half its cost (Remove track toggle); switches on junctions (track
+  terrain; taking track up for half what it cost when laid (Remove track toggle); switches on junctions (track
   with three or four arms), set against one arm and thrown by a tap; routes that follow the
   switches (WR1: a strict BFS that never uses a barred arm, replanned on every tile, falling back
   to the shortest way with a `SWITCH_MS` stop at each junction set against it), drawn as a dotted
@@ -131,14 +131,17 @@ How it runs:
   pixels per game pixel) and zooms the camera, which never scrolls, to match. Every texture is
   baked at `sharpRes` through `bakeCanvas`, so every image showing one is sized with `fit` (a scale
   of its own goes through `fit` too, like the wings' flap and the small cargo icons).
-- **Input:** a scene-wide `pointerdown` (and `pointermove` while held) on the board finds the
+- **Input:** a scene-wide `pointerdown` (and `pointermove` while held) on the board, unless the
+  tap is on a card or button (the charter cards sit over the board), finds the
   tile under `pointer.worldX/Y` with `tileAt` and calls `buildTrack` (plain while the Plain toggle
-  is on, continuing from `lastLaid`, the tile track was last laid on), or `removeTrack` while
+  is on, continuing from `lastLaid`, the last line tile touched: one track was just laid on, or
+  track or a station already there, so a drag that starts on the line continues from it), or `removeTrack` while
   Remove is on; a `pointerdown` on a junction calls `throwSwitch` instead. Dragging acts once per
   new tile. Order cards call `dispatch`; the upgrade buttons `buyUpgrade`; the charter cards
   `pickCharter`; Remove and Plain set the scene's `mode` (`auto`, `plain` or `remove`), which
   lives in the scene, not the state. Sim functions check the phase and return false when the
-  action is not allowed.
+  action is not allowed; `canBuild`, `canRemove` and `throwSwitch` also refuse while
+  `charterOffer` is set.
 - **Rendering:** the valley is one image, baked for each game; props are images sorted with the wyrm by
   `groundDepth` (screen y of the point they stand on), village cottages a little behind their
   tile so the wyrm passes in front. Pines on a tile with track are hidden. The rails are redrawn
@@ -161,7 +164,8 @@ State model (`src/game/state.ts`):
 
 - `GameState` is plain data: `phase` (`play`, `over` or `won`), `valley` (`terrain` rows and
   `villages` with their places), `coins`, `hearts`, `round`, `delivered` (this round),
-  `totalDelivered`, `track` ("c,r" keys), `orders`, `queue` (sent order ids no wyrm has set off to
+  `totalDelivered`, `track` ("c,r" keys), `paid` (what each track tile cost when laid, for the
+  refund), `orders`, `queue` (sent order ids no wyrm has set off to
   fetch yet), `switches` (junction key to the key of the arm its switch is set against), `cuts`
   ("c,r|c,r" pairs of neighbouring line tiles not joined, lower key first), `crossings` (tile
   keys), `moods` and `idleMs` (by village index), `hazard` and `hazardTimerMs`, `charter` and
@@ -189,14 +193,15 @@ State model (`src/game/state.ts`):
   `-MOOD_MAX` the village costs a heart and is set to `1 - MOOD_MAX`. A delivery cheers `o.to`
   by one; `failOrder` sours `o.to` by one; `tickMoods` sours a village whose `idleMs` passes
   `MOOD_GAP_MS + MOOD_GAP_PER_VILLAGE_MS * open villages` (a pickup or a delivery resets it, and a
-  village's joining the line). `addOrder` reads `moodOf(s, from)`: pay times `MOOD_PAY[mood]`
+  village's joining the line); in the festival `tickMoods` does nothing, since every order goes to
+  the host. `addOrder` reads `moodOf(s, from)`: pay times `MOOD_PAY[mood]`
   above zero, time times `MOOD_RUSH` below.
 - Hazards (from `HAZARD_ROUND`): every `HAZARD_EVERY_MS` `tickHazard` picks a track tile that is a
   bridge (washout) or beside a mountain (rockfall), if any, and sets `hazard` with
   `HAZARD_WARN_MS`. `strikeHazard` waits while a wyrm is on the tile or moving onto it, then takes
   the track (no refund), cuts each wyrm's `path` short of it and drops its job (`dropJob`: a
-  pickup goes back to the front of the queue, cargo stays aboard). Removing the tile first cancels
-  the hazard.
+  pickup goes back to the front of the queue, cargo stays aboard). Removing the tile first doesn't
+  cancel the hazard, and `trackCost` refuses the hazard's tile until it has struck.
 - Charters (from `CHARTER_ROUND`): `nextRound` clears `charter` and sets `charterOffer` to two
   distinct entries of `CHARTERS` (`offerCharters`; a `cargo` charter gets a cargo an open village
   sends and its `%c` filled in). `pickCharter` sets `charter`. It scales `addOrder`'s pay

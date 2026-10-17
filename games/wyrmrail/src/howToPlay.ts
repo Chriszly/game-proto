@@ -8,7 +8,7 @@ export const howToPlay: HowToPlay = {
     { input: 'Click, tap or drag over tiles next to the line', action: 'Lay track there' },
     { input: 'Click or tap an order', action: 'Send the wyrm to fetch and deliver it' },
     { input: 'Click or tap a junction', action: 'Throw its switch to steer the wyrm' },
-    { input: 'Remove', action: 'Toggle: tap track to take it up for half its cost' },
+    { input: 'Remove', action: 'Toggle: tap track to take it up for half what it cost' },
     { input: 'Plain', action: 'Toggle: lay track that joins only the piece it continues' },
     { input: 'Upgrade buttons', action: 'Buy Swift wings, Golden hoard or a Second wyrm' },
     { input: 'A charter card', action: 'Pick the rules for the round (from round 3)' },
