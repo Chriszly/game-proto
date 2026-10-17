@@ -49,7 +49,8 @@ under a new charter, keeping the guild stars that raise every price.
 5. **Hammer streak.** A merge within 4 seconds of the one before chains into a streak. A ring of
    orange glass round the anvil of the last merge drains to show the time left. From the second
    merge on, each one bursts into sparks and pays 5 coins times the streak's length ("Hammer
-   streak ×3 +15c"), so a quick run of merges pays 10, then 15, then 20 coins and so on.
+   streak ×3 +15c"), so a quick run of merges pays 10, then 15, then 20, then 25 coins a merge,
+   where it stays however long the streak runs.
 6. **Royal commission.** The banner in the top bar names the great sword the crown wants, starting
    with a Golden Claymore, and shows how many of the sword below it (two Silver Sabers make one) are
    on your anvils, or "Ready" once the sword is made. Drag it onto the banner to deliver it: it

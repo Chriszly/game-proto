@@ -1,5 +1,6 @@
 import { isGem, isGemmed, tierOf, validItem } from './items';
 import { swordOf } from './swords';
+import { COMMISSIONS } from './commissions';
 import type { UpgradeId } from './upgrades';
 
 /**
@@ -30,8 +31,10 @@ export const FIRST_ORDER = 2;
 export const EXACT_TIP = 0.5;
 /** How long after a merge the next one still chains into a hammer streak. */
 export const STREAK_MS = 4000;
-/** Bonus coins per merge in a streak, times the streak's length, from its second merge on. */
+/** Bonus coins per merge in a streak, times the streak's length (up to `STREAK_TOP`), from its second merge on. */
 export const STREAK_COINS = 5;
+/** The longest streak that still raises the bonus, so a long chain pays at most `STREAK_COINS * STREAK_TOP` a merge. */
+export const STREAK_TOP = 5;
 
 /** Guild reputation, from 0 to `REP_MAX`: where a new smithy starts, and what moves it. */
 export const REP_MAX = 100;
@@ -226,7 +229,8 @@ export function newShop(progress: Progress): GameState {
     stars: count(progress.stars),
     charter: count(progress.charter),
     reputation: typeof rep === 'number' && Number.isFinite(rep) ? Math.min(REP_MAX, Math.max(0, Math.round(rep))) : REP_START,
-    won: progress.won === true,
+    // A save past the last commission is won, even one from before `won` was saved.
+    won: progress.won === true || count(progress.commission?.level) >= COMMISSIONS.length,
     streak: 0,
     streakSlot: 0,
     streakMs: 0,
