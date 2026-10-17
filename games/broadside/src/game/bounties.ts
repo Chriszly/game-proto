@@ -1,6 +1,7 @@
 // The Admiralty's bounties: from wave 2, one optional side goal per wave that pays a share of the
 // wave's loot on top when it is met.
 
+import { isConvoyWave } from './convoy';
 import { ENEMIES, type EnemyKind } from './ships';
 import type { GameState } from './state';
 import { waveShips } from './waves';
@@ -24,15 +25,15 @@ export interface Bounty {
 export const BOUNTY_HULL = 20;
 /** The share of the wave's loot a met bounty pays on top. */
 export const BOUNTY_SHARE = 0.5;
-/** The time a `swift` bounty allows: a base plus some seconds a ship. */
-export const swiftMs = (wave: number) => (30 + 8 * waveShips(wave).length) * 1000;
+/** The time a `swift` bounty allows: a base plus some seconds a ship on the wave's course. */
+export const swiftMs = (s: GameState) => (30 + 8 * waveShips(s.wave, s.course).length) * 1000;
 
 const firstSunk = (s: GameState, kind: EnemyKind) => s.waveSunk.indexOf(kind);
 
 export const BOUNTIES: Record<BountyId, Bounty> = {
   hull: { desc: () => `Lose no more than ${BOUNTY_HULL} hull`, kind: 'keep', met: (s) => s.waveDamage <= BOUNTY_HULL },
   aground: { desc: () => 'Never run aground', kind: 'keep', met: (s) => s.waveAground === 0 },
-  swift: { desc: (s) => `Beat the wave within ${Math.round(swiftMs(s.wave) / 1000)} seconds`, kind: 'keep', met: (s) => s.waveMs <= swiftMs(s.wave) },
+  swift: { desc: (s) => `Beat the wave within ${Math.round(swiftMs(s) / 1000)} seconds`, kind: 'keep', met: (s) => s.waveMs <= swiftMs(s), offered: (wave) => !isConvoyWave(wave) },
   prize: { desc: () => 'Board a ship and take her as a prize', kind: 'do', met: (s) => s.wavePrizes > 0 },
   ketch: {
     desc: () => `Sink the ${ENEMIES.ketch.name.toLowerCase()} before any brig`,

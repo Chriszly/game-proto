@@ -12,7 +12,10 @@ and a cheap hedge seed blocks the path until the pests chew through it. Golems s
 moss golem combo, moles tunnel, snails wear armour, aphids swarm, and every tenth wave the Queen
 Slug slimes the garden. From wave 3 a compost heap pays interest on unspent sap. Wave 30 is the
 garden's harvest: one to three stars by the leaves kept, which unlock new gardens with forked
-paths, and then the waves go on without end. Hold out as many waves as you can.
+paths, and then the waves go on without end. After each Queen Slug you pick one of three boons
+that shape the rest of the run, lost leaves can be regrown for sap between waves, and three stars
+on a garden open its thorny variant, a harder twist with a laurel to win. Hold out as many waves
+as you can.
 
 Everything is claymation: hand-rolled plasticine on a studio table, with fingerprint smudges and
 soft highlights, lumpy golems with bead eyes, a pressed clay path, soil pads with tool-cut furrows
@@ -39,6 +42,9 @@ and pressed lettering on clay tags. It is all painted in code at startup; there 
 | Call wave N now | Once the current wave has all come in, send the next one early for bonus sap |
 | A garden card | After the Heartwood falls, or at the harvest: plant that garden afresh |
 | Keep going | At the harvest: carry on in this garden, without end |
+| Tap the Heartwood (or the leaf tag) | Between waves: regrow a lost leaf for sap, dearer each time |
+| A boon card | After a Queen Slug wave: take that boon for the rest of the garden |
+| A garden's Thorny tag | In the garden picker, once the garden has 3 stars: plant its thorny variant |
 
 1. **Seeds grow first.** A seed takes a few seconds to grow into a golem, and only a grown golem
    fights. You can plant between waves and during them.
@@ -132,6 +138,33 @@ and pressed lettering on clay tags. It is all painted in code at startup; there 
     droplets fly in an arc to the sap counter, which glows as they land. With reduced motion on (hub
     Settings) the splat and "+N" stay put and fade, without the flying droplets or the glow.
 
+16. **Boons after each boss.** Clearing a Queen Slug wave (10, 20, 30 and on) stops the garden
+    until you take one of three boons, which lasts until you plant another garden. The offers
+    alternate between two sets of three, and a boon taken twice counts twice:
+
+    | Boon | What it does |
+    | --- | --- |
+    | Long moss | every slow lasts half again as long |
+    | Sunny row | golems on the row with the most grown golems reach 20px further (the row glows) |
+    | New growth | two Heartwood leaves grow back, up to 10 |
+    | Thick hedges | hedges planted from now have half again the health (90) |
+    | Sharp rocks | pebble golems do 20% more damage |
+    | Rich compost | compost pays up to 15 sap more |
+
+    Wave 10, 30, 50 and on offer the first three, wave 20, 40 and on the last three.
+17. **Regrow a leaf.** Between waves, tap the Heartwood (or the leaf tag, which shows a green plus
+    when you can) to grow back a lost leaf: 25 sap for the first in a garden, 25 more for each one
+    after. Three stars need all 10 leaves at the harvest, so they are now a sap trade-off.
+18. **Thorny variants.** A garden with three stars opens its thorny variant, a tag under its card
+    in the garden picker. It plays the same garden with one twist, and its harvest at wave 30 wins
+    the garden's laurel, shown on that tag from then on:
+
+    | Garden | Twist |
+    | --- | --- |
+    | Meadow | No hedges: the hedge seed is gone |
+    | Forked Brook | Double crows: every crow comes with a twin |
+    | Two Gates | Lean start: start with 30 sap instead of 60 |
+
 ![A seed just planted, growing](docs/screenshots/playthrough-1-sprout.webp)
 
 ![Wave 1's beetles coming down the path](docs/screenshots/playthrough-2-wave.webp)
@@ -165,6 +198,14 @@ and pressed lettering on clay tags. It is all painted in code at startup; there 
 ![Forked Brook at 2x speed](docs/screenshots/forked-brook.webp)
 
 ![Two Gates](docs/screenshots/two-gates.webp)
+
+![Three boons to pick from after the Queen Slug's wave](docs/screenshots/boons.webp)
+
+![Regrowing a leaf: the hint names the price and the leaf tag shows a green plus](docs/screenshots/regrow-leaf.webp)
+
+![The garden picker with thorny variant tags under three-star gardens, one with its laurel](docs/screenshots/thorny-picker.webp)
+
+![The thorny Meadow: the hedge seed is faded out and the wave tag counts to the laurel](docs/screenshots/thorny-meadow.webp)
 
 The difficulty, set on the hub page's Settings, changes one thing: pests have 25% less health on
 Easy and 30% more on Hard.

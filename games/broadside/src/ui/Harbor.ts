@@ -2,16 +2,20 @@ import Phaser from 'phaser';
 import { renderScale } from '../../../../shared/scaling';
 import { SHEET_RES } from '../art/art';
 import { BOUNTIES } from '../game/bounties';
+import { CONSORT_MAX, consortWage } from '../game/consorts';
+import { COURSE_IDS, COURSES, coursesFor, HUNTER_CARDS, type CourseId } from '../game/courses';
 import { HULLS } from '../game/hulls';
-import { DRAFT_SIZE, PERKS, type PerkId } from '../game/perks';
+import { DRAFT_SIZE, perkRank, PERKS, type PerkId } from '../game/perks';
+import { ENEMIES, type EnemyKind } from '../game/ships';
+import { keepBlocked, keepCost } from '../game/sim';
 import { SHOTS } from '../game/shot';
-import { rank, type GameState, type Side } from '../game/state';
+import { ISLANDS, rank, type GameState, type Side } from '../game/state';
 import { costOf, HIRE, REPAIR_COST, UPGRADE_IDS, UPGRADES, type UpgradeId } from '../game/upgrades';
-import { DRAFT, FONT, HARBOR, UI_DEPTH, VIEW } from '../scenes/layout';
+import { COURSE, DRAFT, FONT, HARBOR, UI_DEPTH, VIEW } from '../scenes/layout';
 import { makeButton } from './Button';
 import { pinToScreen } from './screen';
 
-export type HarborAction = UpgradeId | 'repair' | 'hire' | 'sail' | `load-${Side}` | `draft-${PerkId}`;
+export type HarborAction = UpgradeId | 'repair' | 'hire' | 'keep' | 'sail' | `sail-${CourseId}` | `load-${Side}` | `draft-${PerkId}`;
 export interface HarborButton {
   id: HarborAction;
   x: number;
@@ -21,7 +25,7 @@ export interface HarborButton {
 }
 
 interface Row {
-  id: UpgradeId | 'repair' | 'hire';
+  id: UpgradeId | 'repair' | 'hire' | 'keep';
   bg: Phaser.GameObjects.Rectangle;
   name: Phaser.GameObjects.Text;
   desc: Phaser.GameObjects.Text;
@@ -40,14 +44,21 @@ interface Card {
   desc: Phaser.GameObjects.Text;
   /** Everything drawn for the card, hidden together when the draft has fewer cards. */
   parts: (Phaser.GameObjects.Rectangle | Phaser.GameObjects.Text)[];
+  head: Phaser.GameObjects.Text;
+  rule: Phaser.GameObjects.Rectangle;
+  foot: Phaser.GameObjects.Text;
   /** Which perk the card shows right now; the draft changes every wave. */
   perk: PerkId | null;
 }
 
+/** The most cards a draft can have: one more after a Hunter patrol. */
+const MAX_CARDS = DRAFT_SIZE + HUNTER_CARDS;
+
 /**
  * The harbor between waves, as a ledger on a sheet of parchment: spend the plunder on the ship,
- * patch the hull, hire sailors, and set sail. While the wave's prize draft is on offer, three
- * cards cover the ledger instead, and one must be picked.
+ * patch the hull, hire sailors, keep a prize as a consort, and set sail (from wave 6 on one of two
+ * courses). While the wave's prize draft is on offer, its cards cover the ledger instead, and one
+ * must be picked.
  */
 export class Harbor {
   /**
@@ -61,6 +72,9 @@ export class Harbor {
   private title: Phaser.GameObjects.Text;
   private gold: Phaser.GameObjects.Text;
   private bounty: Phaser.GameObjects.Text;
+  private perks: Phaser.GameObjects.Text;
+  private sail: { button: Phaser.GameObjects.Container; hit: HarborButton };
+  private courses: { button: Phaser.GameObjects.Container; hit: HarborButton }[] = [];
   private draftTitle: Phaser.GameObjects.Text;
   private cards: Card[] = [];
   private rows: Row[] = [];
@@ -71,13 +85,14 @@ export class Harbor {
     const dim = scene.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x3a2a18, 0.45).setInteractive();
     const panel = scene.add.image(HARBOR.x, HARBOR.y, 'panel-harbor').setScale(1 / SHEET_RES);
     const top = HARBOR.y - HARBOR.h / 2;
-    this.title = scene.add.text(HARBOR.x, top + 28, '', style(26, '#2b2118', 'bold')).setOrigin(0.5);
-    this.gold = scene.add.text(HARBOR.x, top + 54, '', style(16, '#6a4410', 'italic')).setOrigin(0.5);
-    this.bounty = scene.add.text(HARBOR.x, top + 73, '', style(12, '#3f6e48', 'bold italic')).setOrigin(0.5);
-    const rule = scene.add.rectangle(HARBOR.x, top + 86, HARBOR.rowW, 1, INK, 0.6);
-    const parts: Phaser.GameObjects.GameObject[] = [dim, panel, this.title, this.gold, this.bounty, rule];
+    this.title = scene.add.text(HARBOR.x, top + 26, '', style(26, '#2b2118', 'bold')).setOrigin(0.5);
+    this.gold = scene.add.text(HARBOR.x, top + 50, '', style(16, '#6a4410', 'italic')).setOrigin(0.5);
+    this.bounty = scene.add.text(HARBOR.x, top + 68, '', style(12, '#3f6e48', 'bold italic')).setOrigin(0.5);
+    this.perks = scene.add.text(HARBOR.x, top + 84, '', style(12, '#5a4a38', 'italic')).setOrigin(0.5);
+    const rule = scene.add.rectangle(HARBOR.x, top + 96, HARBOR.rowW, 1, INK, 0.6);
+    const parts: Phaser.GameObjects.GameObject[] = [dim, panel, this.title, this.gold, this.bounty, this.perks, rule];
 
-    const ids: (UpgradeId | 'repair' | 'hire')[] = [...UPGRADE_IDS, 'repair', 'hire'];
+    const ids: (UpgradeId | 'repair' | 'hire' | 'keep')[] = [...UPGRADE_IDS, 'repair', 'hire', 'keep'];
     ids.forEach((id, i) => {
       const y = HARBOR.firstRowY + i * HARBOR.rowGap;
       const left = HARBOR.x - HARBOR.rowW / 2;
@@ -117,17 +132,27 @@ export class Harbor {
 
     const sailY = HARBOR.y + HARBOR.h / 2 - 34;
     const sail = makeButton(scene, HARBOR.x, sailY, 'Set sail', () => onAction('sail'));
-    this.ledgerButtons.push({ id: 'sail', x: HARBOR.x, y: sailY, w: sail.bg.width, h: sail.bg.height });
+    this.sail = { button: sail.button, hit: { id: 'sail', x: HARBOR.x, y: sailY, w: sail.bg.width, h: sail.bg.height } };
     parts.push(sail.button);
+    // From wave 6, two sail buttons instead, one per charted course, each with what it brings.
+    COURSE_IDS.forEach((course, i) => {
+      const x = HARBOR.x + (i === 0 ? -1 : 1) * (COURSE.w / 2 + COURSE.gap / 2);
+      const id = `sail-${course}` as const;
+      const b = makeButton(scene, x, sailY, `${COURSES[course].name}\n${COURSES[course].desc}`, () => onAction(id), COURSE.w, COURSE.h);
+      b.text.setFontSize(15).setAlign('center').setLineSpacing(1);
+      parts.push(b.button);
+      this.courses.push({ button: b.button, hit: { id, x, y: sailY, w: COURSE.w, h: COURSE.h } });
+    });
     this.container = pinToScreen(scene.add.container(0, 0, parts)).setDepth(UI_DEPTH + 10).setVisible(false);
 
-    // The prize draft: three cards over the dimmed chart, one to be picked before the ledger opens.
+    // The prize draft: three or four cards over the dimmed chart, one to be picked before the ledger opens.
     const draftDim = scene.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x3a2a18, 0.45).setInteractive();
     this.draftTitle = scene.add.text(DRAFT.x, DRAFT.titleY, '', style(24, '#f6ecd2', 'bold')).setOrigin(0.5).setStroke('#2b2118', 5);
     const hint = scene.add.text(DRAFT.x, DRAFT.titleY + 30, 'Tap a card to keep that perk for the rest of the run', style(13, '#f6ecd2', 'italic')).setOrigin(0.5).setStroke('#2b2118', 4);
     const draftParts: Phaser.GameObjects.GameObject[] = [draftDim, this.draftTitle, hint];
-    for (let i = 0; i < DRAFT_SIZE; i++) {
-      const x = DRAFT.x + (i - (DRAFT_SIZE - 1) / 2) * (DRAFT.w + DRAFT.gap);
+    for (let i = 0; i < MAX_CARDS; i++) {
+      // Placed in `show`, centred by how many cards the draft has.
+      const x = DRAFT.x;
       const y = DRAFT.y;
       const bg = scene.add.rectangle(x, y, DRAFT.w, DRAFT.h, ROW, 0.97).setStrokeStyle(2, INK);
       const rule = scene.add.rectangle(x, y, DRAFT.w - 14, DRAFT.h - 14).setStrokeStyle(1, INK, 0.5);
@@ -135,7 +160,7 @@ export class Harbor {
       const name = scene.add.text(x, y - DRAFT.h / 2 + 62, '', { ...style(18, '#2b2118', 'bold'), align: 'center', wordWrap: { width: DRAFT.w - 30 } }).setOrigin(0.5);
       const desc = scene.add.text(x, y + 10, '', { ...style(13, '#5a4a38', 'italic'), align: 'center', wordWrap: { width: DRAFT.w - 30 }, lineSpacing: 3 }).setOrigin(0.5);
       const foot = scene.add.text(x, y + DRAFT.h / 2 - 24, 'Keep this one', style(13, '#6a4410', 'bold italic')).setOrigin(0.5);
-      const card: Card = { bg, name, desc, parts: [bg, rule, head, name, desc, foot], perk: null };
+      const card: Card = { bg, name, desc, head, rule, foot, parts: [bg, rule, head, name, desc, foot], perk: null };
       bg.setInteractive({ useHandCursor: true })
         .on('pointerover', () => bg.setFillStyle(ROW_LIT, 0.98))
         .on('pointerout', () => bg.setFillStyle(ROW, 0.97))
@@ -156,19 +181,32 @@ export class Harbor {
       this.cards.forEach((card, i) => {
         const perk = s.draft[i] ?? null;
         card.perk = perk;
-        card.name.setText(perk ? PERKS[perk].name : '');
-        card.desc.setText(perk ? PERKS[perk].desc : '');
+        // A perk already held is offered at its second rank.
+        const second = !!perk && perkRank(s.perks, perk) > 0;
+        card.head.setText(second ? 'Prize: rank 2' : 'Prize');
+        card.name.setText(perk ? `${PERKS[perk].name}${second ? ' II' : ''}` : '');
+        card.desc.setText(perk ? (second ? PERKS[perk].desc2 : PERKS[perk].desc) : '');
         for (const part of card.parts) part.setVisible(!!perk);
+        const x = DRAFT.x + (i - (s.draft.length - 1) / 2) * (DRAFT.w + DRAFT.gap);
+        for (const part of card.parts) part.setX(x);
       });
       this.buttons = this.cards.filter((c) => c.perk).map((c) => ({ id: `draft-${c.perk!}` as const, x: c.bg.x, y: c.bg.y, w: DRAFT.w, h: DRAFT.h }));
       return;
     }
-    this.buttons = this.ledgerButtons;
+    // The haven's harbor and those before wave 6 have one "Set sail"; later ones a button per course.
+    const choose = coursesFor(s.wave + 1);
+    this.sail.button.setVisible(!choose);
+    for (const c of this.courses) c.button.setVisible(choose);
+    this.buttons = [...this.ledgerButtons, ...(choose ? this.courses.map((c) => c.hit) : [this.sail.hit])];
     this.title.setText(`Harbor: wave ${s.wave} beaten`);
     this.gold.setText(`Gold ${s.gold}   ❦   Hull ${Math.ceil(s.player.hp)} / ${s.player.maxHp}   ❦   Crew ${s.player.crew} / ${s.player.maxCrew}`);
-    const perks = s.perks.length ? `Perks: ${s.perks.map((id) => PERKS[id].name).join(', ')}` : 'No perks yet';
-    const bounty = s.bounty ? (s.bountyPaid ? `Bounty met (${BOUNTIES[s.bounty].desc(s).toLowerCase()}): +${s.bountyPaid} gold` : 'Bounty missed') : '';
-    this.bounty.setText(bounty ? `${bounty}   ❦   ${perks}` : perks);
+    const held = s.perks.filter((id, i) => s.perks.indexOf(id) === i).map((id) => `${PERKS[id].name}${perkRank(s.perks, id) > 1 ? ' II' : ''}`);
+    this.perks.setText(held.length ? `Perks: ${held.join(', ')}` : 'No perks yet');
+    const news: string[] = [];
+    if (s.bounty) news.push(s.bountyPaid ? `Bounty met (${BOUNTIES[s.bounty].desc(s).toLowerCase()}): +${s.bountyPaid} gold` : 'Bounty missed');
+    if (s.convoy) news.push(s.convoy.state === 'arrived' ? `Convoy safe to ${ISLANDS[s.convoy.island].name}: +${s.convoy.cargo} gold` : 'Convoy lost');
+    if (s.wages) news.push(`Consorts' wages: -${s.wages} gold`);
+    this.bounty.setText(news.join('   ❦   '));
     for (const row of this.rows) {
       if (row.id === 'repair') {
         const needed = s.player.hp < s.player.maxHp;
@@ -176,6 +214,22 @@ export class Harbor {
         row.desc.setText(needed ? 'Repair the ship to full' : 'The hull is sound');
         row.cost.setText(needed ? `${REPAIR_COST} gold` : '-');
         row.bg.setAlpha(needed && s.gold >= REPAIR_COST ? 1 : 0.5);
+        continue;
+      }
+      if (row.id === 'keep') {
+        // The richest prize sold here can be bought back and kept as a consort.
+        const prize = s.moored[0];
+        const why = keepBlocked(s);
+        const name = prize ? ENEMIES[prize.kind as EnemyKind].name.toLowerCase() : '';
+        row.name.setText(`Keep a consort   ${s.consorts.length}/${CONSORT_MAX}`);
+        row.desc.setText(
+          why === 'none' ? 'Bring a prize to harbor to keep her: she sails on with you for a wage'
+          : why === 'full' ? 'Every berth is taken'
+          : why === 'crew' ? `Too few sailors to man the ${name}`
+          : `Keep the ${name}: she sails on with you, ${consortWage(prize!.kind as EnemyKind)} gold wage a harbor`,
+        );
+        row.cost.setText(prize && why !== 'full' ? `${keepCost(s, prize)} gold` : '-');
+        row.bg.setAlpha(why ? 0.5 : 1);
         continue;
       }
       if (row.id === 'hire') {

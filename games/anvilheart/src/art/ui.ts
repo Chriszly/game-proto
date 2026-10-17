@@ -3,7 +3,8 @@ import { BANNER, BARREL, BOARD, DESK, DISCOVERED, ORDER, ROW_BOX, TAG, WIN } fro
 import { ART, PI, bake, ctx, diamond, glass, glow, glowFrame, label, lit, mix, panel, rect, reseed, ring, type Pt } from './glass';
 
 // The leaded-glass interface: buttons, the order cards, the fit tags, the commission banner, the
-// merge and buyer frames, the discovered row's frames, and the streak's burst and sparks.
+// merge and buyer frames, the discovered row's frames, the set order's tick, and the streak's burst
+// and sparks.
 
 const a = (n: number) => n * ART;
 
@@ -17,6 +18,8 @@ export const BUTTON_STYLES = {
   forge: { frame: '#c8962e', pane: '#a8381c', border: 12, diamonds: true },
   upgrade: { frame: '#6a5a3a', pane: '#2a3a5a', border: 8, diamonds: false },
   row: { frame: '#6a5a3a', pane: '#2a3a5a', border: 7, diamonds: false },
+  wide: { frame: '#c8962e', pane: '#4a2a6a', border: 9, diamonds: false },
+  mode: { frame: '#6a5a3a', pane: '#3a2a20', border: 6, diamonds: false },
 };
 export type ButtonStyle = keyof typeof BUTTON_STYLES;
 
@@ -114,6 +117,8 @@ export function bakeUi(scene: Phaser.Scene, sizes: Record<ButtonStyle, { w: numb
       glass([at(48, -0.17), at(88, 0), at(48, 0.17)], k % 2 ? '#ffb02e' : '#ffe08a', { lw: 3, flat: true });
     }
   });
+  // The green tick over the half of a set order already handed over.
+  bake(scene, 'tick', 30, 30, () => glass([[8, 30], [20, 20], [28, 32], [50, 8], [56, 16], [28, 48]], '#5ad06a', { lw: 4, flat: true, hi: 0.4 }));
   bake(scene, 'spark', 10, 10, () => glass([[4, 10], [16, 4], [12, 16]], '#ffd36a', { lw: 2, flat: true }));
 
   // A soft light for the commission's completion.
@@ -133,14 +138,17 @@ export function bakeUi(scene: Phaser.Scene, sizes: Record<ButtonStyle, { w: numb
   // The quench barrel, bought and not yet bought.
   for (const off of [false, true]) bake(scene, off ? 'barrel-off' : 'barrel', BARREL.w, BARREL.h, () => barrel(off));
 
-  // The win window: purple glass in a gold frame, with a crowned ruby seal like the banner's.
-  bake(scene, 'win-panel', WIN.w, WIN.h, () => {
-    reseed(16);
-    const w = a(WIN.w);
-    panel(0, 0, w, a(WIN.h), '#c8962e', '#3a1e5a', 14);
-    glass(ring(w / 2, 70, 40, 14), '#c03050', { lw: 5, hi: 0.5 });
-    glass([[w / 2 - 22, 84], [w / 2 - 18, 52], [w / 2, 68], [w / 2 + 18, 52], [w / 2 + 22, 84]], '#ffd36a', { lw: 3, flat: true });
-  });
+  // The win window: purple glass in a gold frame, with a crowned ruby seal like the banner's; and a
+  // taller one for the guild perks and the charter's edicts.
+  for (const [key, h] of [['win-panel', WIN.h], ['tall-panel', WIN.tallH]] as const) {
+    bake(scene, key, WIN.w, h, () => {
+      reseed(16);
+      const w = a(WIN.w);
+      panel(0, 0, w, a(h), '#c8962e', '#3a1e5a', 14);
+      glass(ring(w / 2, 70, 40, 14), '#c03050', { lw: 5, hi: 0.5 });
+      glass([[w / 2 - 22, 84], [w / 2 - 18, 52], [w / 2, 68], [w / 2 + 18, 52], [w / 2 + 22, 84]], '#ffd36a', { lw: 3, flat: true });
+    });
+  }
 }
 
 /** A barrel of leaded staves and iron bands, with dark quench water at its mouth; dim before it is bought. */

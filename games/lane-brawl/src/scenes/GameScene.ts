@@ -13,6 +13,9 @@ import {
   FOUNTAIN,
   ChampionDef,
   ITEMS,
+  MASTERY_WINS,
+  ELIXIR,
+  ELIXIR_COLOR,
   ItemDef,
   LANES,
   RIVER,
@@ -21,7 +24,6 @@ import {
   STREAK,
   Team,
   TOWERS,
-  UPGRADES,
   Vec,
   WORLD,
   XP_FOR_LEVEL,
@@ -31,15 +33,19 @@ import {
   WARD,
   bountyOf,
   upgradeById,
+  ultRank,
+  ULT_RANK_LEVELS,
   bushAt,
 } from '../game/data';
 import { Fx, GameState, Phase, Unit, createGame, dist, getUnit } from '../game/state';
+import { loadMastery, masteryRank, recordWin } from '../game/mastery';
 import { abilityFor, atFountain, atShop, buy, buyBack, buybackCost, cast, chooseUpgrade, commandAttack, commandMove, hiddenFrom, invulnerable, priceFor, startRecall, stealthed, tick, useActive, viewers } from '../game/sim';
 import { FxLayers, drawAura, drawProjectile, drawSkill, drawZone, skillMs } from './skillFx';
-import { championName, shortName } from '../game/names';
+import { shortName } from '../game/names';
 import {
   BEAST_CELL,
   BEAST_KEY,
+  ELDER_KEY,
   INHIB_CELL,
   BOAR,
   BOAR_CELL,
@@ -57,6 +63,7 @@ import {
   WOLF,
   WOLF_CELL,
   bakeChampions,
+  bakeElder,
   bakeUnits,
   bruteKey,
   champKey,
@@ -83,7 +90,6 @@ import {
   PLAY_AGAIN,
   PORTRAIT,
   RECALL_BUTTON,
-  REROLL,
   SHOP_BUTTON,
   SHOP_PANEL,
   STREAK_CHIP,
@@ -182,6 +188,12 @@ function describe(item: ItemDef): string {
   if (item.atk) parts.push(`+${item.atk}% attack speed`);
   if (item.cdr) parts.push(`-${item.cdr}% cooldowns`);
   if (item.ward) parts.push(`[V] plant: sees ${SIGHT.ward}px for ${WARD.ms / 1000}s, ${WARD.hits} hits`);
+  const e = item.elixir;
+  if (e?.dmg) parts.push(`+${e.dmg}% damage`);
+  if (e?.armor) parts.push(`+${e.armor} armor`);
+  if (e?.regen) parts.push(`+${e.regen} health a second`);
+  if (e?.speed) parts.push(`+${e.speed}% speed`);
+  if (e?.atk) parts.push(`+${e.atk}% attack speed`);
   if (active) parts.push(active.id === 'dash' ? `[${active.key}] dash ${active.range}px` : `[${active.key}] heal ${active.heal}`);
   return parts.join(', ');
 }
@@ -190,6 +202,7 @@ function describe(item: ItemDef): string {
 function itemTint(item: ItemDef): string {
   if (item.active === 'flask') return '#62d86f';
   if (item.ward) return '#9fd8ff';
+  if (item.elixir) return ELIXIR_COLOR[item.id] ?? '#c49bff';
   return item.dmg ? '#ff8a5c' : item.armor ? '#b9c3cf' : item.hp ? '#e0556f' : item.speed ? '#7fb6ff' : item.atk ? '#f2c14e' : '#c49bff';
 }
 
@@ -239,7 +252,6 @@ export class GameScene extends Phaser.Scene {
   private pickBg!: Phaser.GameObjects.Image;
   private texts = new Map<string, Phaser.GameObjects.Text>();
   /** The names on the pick cards, drawn anew each time the pick screen opens. */
-  private pickNames: string[] = [];
   /** The pick card under the pointer, or -1. */
   private hoverPick = -1;
   /** The fog of war: how much each cell is hidden from blue (0 clear, 1 hidden), and its images. */
@@ -247,7 +259,11 @@ export class GameScene extends Phaser.Scene {
   private fogG!: Phaser.GameObjects.Graphics;
   private fogMini!: Phaser.GameObjects.Graphics;
   private used = new Set<string>();
-  private keys!: Record<AbilityKey | 'B' | 'D' | 'H' | 'V' | 'T' | 'X' | 'ESC' | 'ONE' | 'TWO', Phaser.Input.Keyboard.Key>;
+  private keys!: Record<AbilityKey | 'B' | 'D' | 'H' | 'V' | 'T' | 'X' | 'ESC' | 'ONE' | 'TWO' | 'THREE', Phaser.Input.Keyboard.Key>;
+  /** The player's wins per class (`loadMastery`), read when the pick screen shows. */
+  private mastery: Record<string, number> = {};
+  /** Whether this match's win was counted toward mastery yet, and the class's wins after it. */
+  private winCounted: number | null = null;
 
   constructor() {
     super('Game');
@@ -259,6 +275,7 @@ export class GameScene extends Phaser.Scene {
     paintMap(this);
     if (import.meta.env.DEV) console.info(`Lane Brawl art baked in ${Math.round(performance.now() - t0)} ms (units ${Math.round(unitsMs)} ms)`);
     this.paintPickBackdrop();
+    this.mastery = loadMastery();
     // The world camera follows the champion; the HUD (scroll factor 0) gets a fixed camera.
     splitHudCamera(this);
     this.cameras.main.setBounds(0, 0, WORLD.w, WORLD.h);
@@ -288,12 +305,11 @@ export class GameScene extends Phaser.Scene {
           .setDepth(11),
       );
     });
-    this.rollNames();
     // The fog of war, over the world (above the figures, under the bars) and over the minimap.
     this.fogG = this.add.graphics().setDepth(3.6);
     this.fogMini = this.add.graphics().setScrollFactor(0).setDepth(10.5);
 
-    this.keys = this.input.keyboard!.addKeys('Q,W,E,R,B,D,H,V,T,X,ESC,ONE,TWO') as typeof this.keys;
+    this.keys = this.input.keyboard!.addKeys('Q,W,E,R,B,D,H,V,T,X,ESC,ONE,TWO,THREE') as typeof this.keys;
     // Watching the AI, the keys play no champion.
     if (!watching) {
       // Holding an ability's key aims it (its range shows); letting go casts it at the cursor.
@@ -311,6 +327,7 @@ export class GameScene extends Phaser.Scene {
       });
       this.keys.ONE.on('down', () => this.pickUpgrade(0));
       this.keys.TWO.on('down', () => this.pickUpgrade(1));
+      this.keys.THREE.on('down', () => this.pickUpgrade(2));
     }
 
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
@@ -361,19 +378,8 @@ export class GameScene extends Phaser.Scene {
     this.refreshZones();
   }
 
-  /** New names for the champions on the pick cards. */
-  private rollNames() {
-    const taken: string[] = [];
-    this.pickNames = CHAMPIONS.map((c) => {
-      const name = championName(c.id, Math.random, taken);
-      taken.push(name);
-      return name;
-    });
-  }
-
   /** Watch AI: a new match with a random champion for blue, which the AI plays like the other nine. */
   private watchMatch() {
-    this.rollNames();
     this.startMatch(CHAMPIONS[Math.floor(Math.random() * CHAMPIONS.length)]);
     mountWatch({
       title: 'Watching AI · Lane Brawl',
@@ -384,7 +390,8 @@ export class GameScene extends Phaser.Scene {
 
   private startMatch(def: ChampionDef) {
     // Watching, neither side gets the difficulty's damage, so the match is even.
-    this.state = createGame(def, watching ? 1 : ENEMY_DAMAGE, { playerName: this.pickNames[CHAMPIONS.indexOf(def)], watch: watching });
+    this.state = createGame(def, watching ? 1 : ENEMY_DAMAGE, { watch: watching, mastery: masteryRank(this.mastery[def.id] ?? 0) });
+    this.winCounted = null;
     // Each champion in the match gets its sheet in its team's colours, once.
     const ms = bakeChampions(
       this,
@@ -399,7 +406,7 @@ export class GameScene extends Phaser.Scene {
 
   private resetToPick() {
     this.state = null;
-    this.rollNames();
+    this.mastery = loadMastery();
     this.shopOpen = false;
     this.liveFx = [];
     this.cameras.main.centerOn(WORLD.w / 2, WORLD.h / 2);
@@ -465,15 +472,14 @@ export class GameScene extends Phaser.Scene {
 
   /** The zones the pointer can press, rebuilt when the screen they belong to changes. */
   private refreshZones() {
-    const offer = this.state?.upgradeOffers.length ?? 0;
-    const key = `${this.phase}|${this.shopOpen}|${offer > 0}`;
+    const offer = this.state?.upgradeOffers[0]?.options.length ?? 0;
+    const key = `${this.phase}|${this.shopOpen}|${offer}`;
     if (key === this.zoneKey) return;
     this.zoneKey = key;
     this.zones = [];
     const phase = this.phase;
     if (phase === 'pick') {
       CHAMPIONS.forEach((def, i) => this.zones.push({ ...pickCard(i), run: () => this.startMatch(def) }));
-      this.zones.push({ ...REROLL, run: () => this.rollNames() });
       return;
     }
     if (phase === 'won' || phase === 'lost') {
@@ -489,7 +495,7 @@ export class GameScene extends Phaser.Scene {
     this.zones.push({ ...RECALL_BUTTON, run: () => (this.player()?.dead ? this.buyBack() : this.recall()) });
     ABILITY_KEYS.forEach((k, i) => this.zones.push({ ...abilityBox(i), run: () => this.castAtCursor(k) }));
     ACTIVES.forEach((a, i) => this.zones.push({ ...activeButton(i), run: () => this.activeAtCursor(a) }));
-    if (offer > 0) [0, 1].forEach((i) => this.zones.push({ ...upgradeCard(i), run: () => this.pickUpgrade(i) }));
+    for (let i = 0; i < offer; i++) this.zones.push({ ...upgradeCard(i, offer), run: () => this.pickUpgrade(i) });
     if (this.shopOpen) {
       this.zones.push({ ...SHOP_PANEL, run: noop });
       ITEMS.forEach((item, i) => this.zones.push({ ...shopRow(i), run: () => this.player() && this.state && buy(this.player()!, item.id) }));
@@ -932,7 +938,9 @@ export class GameScene extends Phaser.Scene {
         cell = WATCH_CELL;
         break;
       case 'beast':
-        key = BEAST_KEY;
+        // The elder form's sheet is baked the first time it shows.
+        if (s.beastElder) bakeElder(this);
+        key = s.beastElder ? ELDER_KEY : BEAST_KEY;
         frame = frameName(dirFor(u.facing), pose(14) === 'c0' ? 'idle' : pose(14));
         cell = BEAST_CELL;
         break;
@@ -950,7 +958,7 @@ export class GameScene extends Phaser.Scene {
     }
     const depth = 2 + fy / WORLD.h;
     // Super minions stand taller; the player's allies in a bush show through the grass.
-    const scale = (u.kind === 'minion' && u.power > 1 ? 1.5 : u.kind === 'inhibitor' && u.dead ? 0.7 : u.campKind === 'pup' ? 0.72 : 1) / RES;
+    const scale = (u.kind === 'minion' && u.power > 1 ? 1.5 : u.kind === 'inhibitor' && u.dead ? 0.7 : u.campKind === 'pup' ? 0.72 : u.kind === 'beast' && s.beastElder ? 1.12 : 1) / RES;
     const inBush = u.kind === 'champion' && u.side === 'blue' && bushAt(u) >= 0;
     // Blue's champions in a bush or in stealth show through, half seen.
     const ghost = u.kind === 'champion' && u.side === 'blue' && stealthed(u) ? 0.38 : inBush ? 0.6 : 1;
@@ -1122,19 +1130,24 @@ export class GameScene extends Phaser.Scene {
       g.fillStyle(col(c.color), 1).fillRect(r.x + 2, r.y + 2, r.w - 4, 4);
       g.fillStyle(col('#3b7be8'), 0.25).fillEllipse(r.x + r.w / 2, r.y + 56, 50, 14);
       g.lineStyle(2, col('#3b7be8'), 0.9).strokeEllipse(r.x + r.w / 2, r.y + 56, 50, 14);
-      const name = this.pickNames[i] ?? c.name;
-      this.t(`pick-name-${i}`, r.x + r.w / 2, r.y + 60, name, name.length > 18 ? 11 : 12, UI.text, 'center', true);
+      this.t(`pick-name-${i}`, r.x + r.w / 2, r.y + 60, c.hero, c.hero.length > 18 ? 11 : 12, UI.text, 'center', true);
       this.t(`pick-role-${i}`, r.x + r.w / 2, r.y + 75, `${c.name} · ${c.role}`.toUpperCase(), 9, c.color, 'center', true);
       this.t(`pick-pas-${i}`, r.x + r.w / 2, r.y + 87, c.passive.name, 10, UI.gold, 'center', true);
       this.t(`pick-desc-${i}`, r.x + r.w / 2, r.y + 100, c.passive.desc, 9, UI.dim, 'center');
+      // Mastery: one gold diamond per rank in the card's top right corner.
+      const rank = masteryRank(this.mastery[c.id] ?? 0);
+      for (let k = 0; k < rank; k++) {
+        const dx = r.x + r.w - 10 - k * 11, dy = r.y + 15;
+        g.fillStyle(col(UI.goldDeep), 1).fillPoints(pts2([{ x: dx, y: dy - 5 }, { x: dx + 5, y: dy }, { x: dx, y: dy + 5 }, { x: dx - 5, y: dy }]), true);
+        g.fillStyle(col(UI.gold), 1).fillPoints(pts2([{ x: dx, y: dy - 3.5 }, { x: dx + 3.5, y: dy }, { x: dx, y: dy + 3.5 }, { x: dx - 3.5, y: dy }]), true);
+      }
     });
-    const b = REROLL;
-    this.panel(g, b.x, b.y, b.w, b.h, '#3a4660');
-    this.t('reroll', b.x + b.w / 2, b.y + 5, 'New names', 12, UI.text, 'center', true);
+    // The champion under the pointer: who they are and what they play like, then why they fight.
     const h = CHAMPIONS[this.hoverPick];
-    this.t('pick-blurb', VIEW.w / 2, 471, h ? `${this.pickNames[this.hoverPick] ?? h.name}, ${h.name.toLowerCase()}: ${h.blurb.toLowerCase()}` : 'Point at a card to learn more about its champion.', 12, h ? h.color : UI.muted, 'center', true);
+    this.t('pick-blurb', VIEW.w / 2, 444, h ? `${h.hero}, ${h.title}. ${h.name}: ${h.blurb.toLowerCase()}.${h.perk ? ` ${h.perk.desc}.` : ''}` : 'Point at a card to meet its champion.', 12, h ? h.color : UI.muted, 'center', true);
+    this.t('pick-motive', VIEW.w / 2, 464, h ? h.motive : 'Two banners, Dawn and Dusk, fight the Contest of Lanes for the Riftwell of Kessmoor.', 12, h ? UI.text : UI.dim, 'center', true);
     this.t('hint', VIEW.w / 2, 491, 'Click a champion to start. Click the ground to walk, an enemy to attack. Q W E R cast at the cursor, D and H use item actives.', 11, UI.dim, 'center');
-    this.t('hint2', VIEW.w / 2, 506, 'B opens the shop at your Nexus, 1 or 2 picks an upgrade, V plants a vision ward, T recalls home, X buys back while dead.', 11, UI.dim, 'center');
+    this.t('hint2', VIEW.w / 2, 506, 'B opens the shop at your Nexus, 1, 2 or 3 picks an upgrade, V plants a vision ward, T recalls home, X buys back while dead.', 11, UI.dim, 'center');
     this.t('hint3', VIEW.w / 2, 521, 'You only see what your team sees. Slay the brutes for buffs, take the watchstones for sight, and the beast for stronger minions.', 11, UI.dim, 'center');
   }
 
@@ -1232,7 +1245,7 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** A chip for each team whose minions the guardian beast empowered, with the time left. */
+  /** A chip for each team whose minions the guardian beast empowered, and one for each team with the elder blessing, with the time left. */
   private drawBuffs(g: Phaser.GameObjects.Graphics, s: GameState) {
     let i = 0;
     for (const team of ['blue', 'red'] as Team[]) {
@@ -1247,6 +1260,19 @@ export class GameScene extends Phaser.Scene {
       g.fillStyle(0xb98cff, 1).fillPoints([new Phaser.Math.Vector2(cx, cy - 7), new Phaser.Math.Vector2(cx + 5, cy), new Phaser.Math.Vector2(cx, cy + 7), new Phaser.Math.Vector2(cx - 5, cy)], true);
       g.fillStyle(0xffffff, 0.45).fillTriangle(cx, cy - 7, cx - 5, cy, cx, cy);
       this.t(`buff-${team}`, c.x + 24, c.y + 4, `${team === 'blue' ? 'Your' : 'Red'} minions empowered ${clock(left)}`, 10, team === 'blue' ? UI.blue : UI.red, 'left', true);
+    }
+    // The elder's blessing, in gold.
+    for (const team of ['blue', 'red'] as Team[]) {
+      const left = s.elderBuff[team] - s.time;
+      if (left <= 0) continue;
+      const c = buffChip(i++);
+      g.fillStyle(col(UI.edge), 1).fillRect(c.x - 1, c.y - 1, c.w + 2, c.h + 2);
+      g.fillStyle(col('#4a3a1c'), 1).fillRect(c.x, c.y, c.w, c.h);
+      g.lineStyle(1, col(SIDE_COLOR[team]), 1).strokeRect(c.x + 1, c.y + 1, c.w - 2, c.h - 2);
+      const cx = c.x + 12, cy = c.y + c.h / 2;
+      g.fillStyle(0xffc93d, 1).fillPoints([new Phaser.Math.Vector2(cx, cy - 7), new Phaser.Math.Vector2(cx + 5, cy), new Phaser.Math.Vector2(cx, cy + 7), new Phaser.Math.Vector2(cx - 5, cy)], true);
+      g.fillStyle(0xffffff, 0.45).fillTriangle(cx, cy - 7, cx - 5, cy, cx, cy);
+      this.t(`elder-${team}`, c.x + 24, c.y + 4, `${team === 'blue' ? 'Your' : 'Red'} elder blessing ${clock(left)}`, 10, UI.gold, 'left', true);
     }
   }
 
@@ -1326,7 +1352,7 @@ export class GameScene extends Phaser.Scene {
       const label = locked ? `Lv${ab.level}` : cd > 0 ? `${Math.ceil(cd / 1000)}` : '';
       this.t(`abcd-${k}`, box.x + box.w / 2, box.y + 14, label, 18, UI.text, 'center', true);
       // Chosen upgrades as gold pips, and a gold diamond on an ability the offer would change.
-      const pips = me.upgrades.filter((id) => upgradeById(id)?.key === k).length;
+      const pips = me.upgrades.filter((id) => upgradeById(id)?.key === k).length + (k === 'R' ? ultRank(me.level) : 0);
       for (let p = 0; p < pips; p++) g.fillStyle(col(UI.gold), 1).fillRect(box.x + box.w - 9 - p * 6, box.y + box.h - 9, 4, 4);
       if (marked) {
         const dx = box.x + box.w - 6, dy = box.y - 2;
@@ -1377,24 +1403,36 @@ export class GameScene extends Phaser.Scene {
     if (offer) {
       this.goldFrame(g, up.x, up.y, up.w, up.h, true);
       this.t('up-head', up.x + 8, up.y + 6, `LEVEL ${offer.level} · CHOOSE AN UPGRADE`, 9, UI.gold, 'left', true);
+      const n = offer.options.length;
       offer.options.forEach((id, i) => {
         const u = upgradeById(id)!;
-        const r = upgradeCard(i);
-        this.panel(g, r.x, r.y, r.w, r.h, '#3a4660');
-        g.fillStyle(col(UI.goldDeep), 1).fillRect(r.x + 5, r.y + 8, 24, 26);
-        g.fillStyle(col(UI.gold), 1).fillRect(r.x + 6, r.y + 9, 22, 24);
-        this.t(`up-key-${i}`, r.x + 17, r.y + 13, u.key, 14, '#3a2a08', 'center', true);
-        this.t(`up-name-${i}`, r.x + 36, r.y + 6, u.name, 12, UI.text, 'left', true);
-        this.t(`up-desc-${i}`, r.x + 36, r.y + 23, u.desc, 9, UI.dim);
-        this.t(`up-num-${i}`, r.x + r.w - 6, r.y + 6, String(i + 1), 9, UI.muted, 'right', true);
+        const r = upgradeCard(i, n);
+        // A third card, from the class's mastery, has a gold edge.
+        this.panel(g, r.x, r.y, r.w, r.h, i === 2 ? '#4a4630' : '#3a4660');
+        if (n === 3) {
+          // Three slim cards: a small key box, the name and the effect on two short lines.
+          g.fillStyle(col(UI.goldDeep), 1).fillRect(r.x + 4, r.y + 5, 19, 19);
+          g.fillStyle(col(UI.gold), 1).fillRect(r.x + 5, r.y + 6, 17, 17);
+          this.t(`up-key-${i}`, r.x + 13.5, r.y + 7, u.key, 11, '#3a2a08', 'center', true);
+          this.t(`up-name-${i}`, r.x + 28, r.y + 2, u.name, 11, UI.text, 'left', true);
+          this.t(`up-desc-${i}`, r.x + 28, r.y + 16, u.desc, 9, UI.dim);
+        } else {
+          g.fillStyle(col(UI.goldDeep), 1).fillRect(r.x + 5, r.y + 8, 24, 26);
+          g.fillStyle(col(UI.gold), 1).fillRect(r.x + 6, r.y + 9, 22, 24);
+          this.t(`up-key-${i}`, r.x + 17, r.y + 13, u.key, 14, '#3a2a08', 'center', true);
+          this.t(`up-name-${i}`, r.x + 36, r.y + 6, u.name, 12, UI.text, 'left', true);
+          this.t(`up-desc-${i}`, r.x + 36, r.y + 23, u.desc, 9, UI.dim);
+        }
+        this.t(`up-num-${i}`, r.x + r.w - 6, r.y + (n === 3 ? 3 : 6), String(i + 1), 9, i === 2 ? UI.gold : UI.muted, 'right', true);
       });
     } else {
       this.panel(g, up.x, up.y, up.w, up.h, UI.slate);
-      const next = me.level < MAX_LEVEL ? UPGRADES[c.id]?.[me.level - 1] : undefined;
+      const nextLevel = me.level + 1;
       this.t('up-head', up.x + 10, up.y + 8, 'UPGRADES', 9, UI.goldDeep, 'left', true);
       const chosen = me.upgrades.map((id) => upgradeById(id)?.name ?? id);
       this.t('up-chosen', up.x + 10, up.y + 26, chosen.length ? chosen.join('\n') : 'None yet', 10, chosen.length ? UI.text : UI.muted, 'left', true);
-      this.t('up-next', up.x + 10, up.y + up.h - 18, next ? `Next at level ${me.level + 1}` : 'All levels reached', 9, UI.muted);
+      const nextText = me.level >= MAX_LEVEL ? 'All levels reached' : ULT_RANK_LEVELS.includes(nextLevel) ? `Level ${nextLevel} ranks up R` : `Next at level ${nextLevel}`;
+      this.t('up-next', up.x + 10, up.y + up.h - 18, nextText, 9, UI.muted);
     }
   }
 
@@ -1543,10 +1581,11 @@ export class GameScene extends Phaser.Scene {
     this.t('shop-note', p.x + 90, p.y + 14, note, 11, open ? UI.dim : UI.red);
     ITEMS.forEach((item, i) => {
       const r = shopRow(i);
-      const has = !item.ward && me.items.includes(item.id);
+      const has = !item.ward && !item.elixir && me.items.includes(item.id);
+      const drinking = item.elixir ? me.buffs.find((b) => b.elixir && b.id === item.name) : undefined;
       const price = priceFor(me, item);
       const parts = (item.from ?? []).filter((id) => me.items.includes(id));
-      const fits = item.ward ? me.wards < WARD.carry : me.items.length - parts.length < MAX_ITEMS;
+      const fits = item.elixir ? true : item.ward ? me.wards < WARD.carry : me.items.length - parts.length < MAX_ITEMS;
       const afford = me.gold >= price;
       this.panel(g, r.x, r.y, r.w, r.h, has ? '#2a3140' : item.from ? '#41496a' : '#3a4660');
       // Items that build from parts get a gold top edge.
@@ -1561,15 +1600,19 @@ export class GameScene extends Phaser.Scene {
       if (!has && parts.length) this.t(`shop-save-${i}`, r.x + r.w - 8, r.y + 20, `-${item.cost - price}g parts`, 9, UI.green, 'right', true);
       this.t(`shop-desc-${i}`, r.x + 10, r.y + 37, describe(item), 10, UI.dim);
       const into = ITEMS.filter((it) => it.from?.includes(item.id));
-      const recipe = item.ward
-        ? `Consumable: carrying ${me.wards} of ${WARD.carry}`
-        : item.from
-          ? `From ${item.from.map((id) => ITEMS.find((it) => it.id === id)?.name ?? id).join(' + ')}`
-          : into.length === 1
-            ? `Builds into ${into[0].name}`
-            : into.length
-              ? `Builds into ${into.length} items`
-              : 'Active item';
+      const recipe = drinking
+        ? `Active: ${clock(drinking.ms)} left`
+        : item.elixir
+          ? `Elixir: ${ELIXIR.ms / 60_000} minutes, one at a time`
+          : item.ward
+            ? `Consumable: carrying ${me.wards} of ${WARD.carry}`
+            : item.from
+              ? `From ${item.from.map((id) => ITEMS.find((it) => it.id === id)?.name ?? id).join(' + ')}`
+              : into.length === 1
+                ? `Builds into ${into[0].name}`
+                : into.length
+                  ? `Builds into ${into.length} items`
+                  : 'Active item';
       this.t(`shop-recipe-${i}`, r.x + 10, r.y + 54, recipe, 9, item.from ? UI.gold : UI.muted, 'left', !!item.from);
     });
   }
@@ -1588,6 +1631,19 @@ export class GameScene extends Phaser.Scene {
       this.t('end-sub', VIEW.w / 2, p.y + 72, won ? 'The red Nexus has fallen.' : 'Your Nexus has fallen.', 13, UI.dim, 'center');
     }
     this.t('end-stats', VIEW.w / 2, p.y + 94, `${this.player()?.kills ?? 0} kills, ${this.player()?.deaths ?? 0} deaths   Objectives ${s.objectivesDone}   Last hits ${s.lastHits}   Best streak x${s.bestStreak}   Beasts ${s.beastKills.blue}`, 11, UI.muted, 'center');
+    // A win counts toward the class's mastery, once per match.
+    const me = this.player();
+    if (!watching && won && me?.champ) {
+      if (this.winCounted === null) {
+        this.winCounted = recordWin(me.champ.id);
+        this.mastery = loadMastery();
+      }
+      const wins = this.winCounted;
+      const rank = masteryRank(wins);
+      const next = MASTERY_WINS[rank];
+      const line = `${me.champ.short} mastery rank ${rank}: ${wins} ${wins === 1 ? 'win' : 'wins'}${next ? `, rank ${rank + 1} at ${next}` : ', fully mastered'}`;
+      this.t('end-mastery', VIEW.w / 2, p.y + 112, line, 11, UI.gold, 'center', true);
+    }
     this.panel(g, PLAY_AGAIN.x, PLAY_AGAIN.y, PLAY_AGAIN.w, PLAY_AGAIN.h, '#4a5876');
     this.t('again-label', PLAY_AGAIN.x + PLAY_AGAIN.w / 2, PLAY_AGAIN.y + 12, watching ? 'Watch another' : 'Play again', 16, UI.text, 'center', true);
   }

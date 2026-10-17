@@ -37,7 +37,6 @@ import {
   WATCHSTONES,
   WARD,
 } from './data';
-import { championName } from './names';
 
 export type Phase = 'pick' | 'playing' | 'won' | 'lost';
 export type UnitKind = 'champion' | 'minion' | 'tower' | 'nexus' | 'camp' | 'beast' | 'inhibitor' | 'watchstone' | 'ward';
@@ -165,6 +164,8 @@ export interface Buff {
   color: string;
   /** The look of the ability that gave it (`${championId}.${key}`), for its aura; none for a jungle buff. */
   look?: string;
+  /** An elixir: kept through death, and replaced by the next one bought. */
+  elixir?: boolean;
 }
 
 /** A patch on the ground from a zone ability: it hurts and slows the other team's units inside. */
@@ -240,7 +241,8 @@ export interface Objective {
 /** Two upgrades on offer after the player's champion reached `level`. */
 export interface UpgradeOffer {
   level: number;
-  options: [string, string];
+  /** Two upgrade ids, or three where the class's mastery adds one. */
+  options: string[];
 }
 
 export interface GameState {
@@ -259,6 +261,8 @@ export interface GameState {
   player: number;
   /** Watch AI: the AI plays the player's champion as well, and no objectives run. */
   watch: boolean;
+  /** The player's mastery rank with its class: its first `mastery` upgrade offers get a third card. */
+  mastery: number;
   /** The objective in progress, or null between two. */
   objective: Objective | null;
   /** Index into `OBJECTIVES` of the next objective to start, and when it starts. */
@@ -282,6 +286,10 @@ export interface GameState {
   beastBuff: Record<Team, number>;
   /** Beasts each team slew. */
   beastKills: Record<Team, number>;
+  /** Whether the beast is in its elder form (from `ELDER.at`). */
+  beastElder: boolean;
+  /** Game time each team's elder blessing lasts until (0 when it has none). */
+  elderBuff: Record<Team, number>;
   /** The AI champions sent to fight over the beast now. */
   contesters: number[];
   /** When the AI next sends gankers, and next sends a champion into the jungle. */
@@ -439,17 +447,17 @@ export function spawnChampion(s: GameState, def: ChampionDef, side: Team, x: num
 }
 
 export interface MatchOptions {
-  /** The player's champion's name (the pick card's); one is made up when it is missing. */
-  playerName?: string;
-  /** Draws the rosters and the names: Math.random in the game. */
+  /** Draws the rosters: Math.random in the game. */
   rnd?: () => number;
   /** Watch AI (`?watch`): the AI plays the player's champion too, in the top lane like red's fifth. */
   watch?: boolean;
+  /** The player's mastery rank with the picked class (`masteryRank`), 0 when none. */
+  mastery?: number;
 }
 
 /**
  * A fresh match: the player's champion and four allies on blue, five champions on red, every one a
- * different class drawn at random, each with a name of its own, and the map.
+ * different class drawn at random, each played by its own champion, and the map.
  */
 export function createGame(pick: ChampionDef, enemyDamage: number, opts: MatchOptions = {}): GameState {
   const rnd = opts.rnd ?? Math.random;
@@ -465,6 +473,7 @@ export function createGame(pick: ChampionDef, enemyDamage: number, opts: MatchOp
     enemyDamage,
     player: 0,
     watch: !!opts.watch,
+    mastery: opts.watch ? 0 : (opts.mastery ?? 0),
     objective: null,
     objectiveIndex: 0,
     nextObjectiveAt: 0,
@@ -479,6 +488,8 @@ export function createGame(pick: ChampionDef, enemyDamage: number, opts: MatchOp
     beast: 0,
     beastBuff: { blue: 0, red: 0 },
     beastKills: { blue: 0, red: 0 },
+    beastElder: false,
+    elderBuff: { blue: 0, red: 0 },
     contesters: [],
     nextGank: GANK.firstAt,
     nextJungle: JUNGLE.firstAt,
@@ -557,12 +568,6 @@ export function createGame(pick: ChampionDef, enemyDamage: number, opts: MatchOp
     const j = Math.floor(rnd() * (i + 1)) % (i + 1);
     [others[i], others[j]] = [others[j], others[i]];
   }
-  const taken: string[] = [];
-  const nameFor = (def: ChampionDef, given?: string) => {
-    const name = given ?? championName(def.id, rnd, taken);
-    taken.push(name);
-    return name;
-  };
   const offsets: Vec[] = [
     { x: 70, y: -40 },
     { x: 40, y: -90 },
@@ -573,13 +578,13 @@ export function createGame(pick: ChampionDef, enemyDamage: number, opts: MatchOp
   const blueAt = (i: number) => ({ x: BASE.blue.x + offsets[i].x, y: BASE.blue.y + offsets[i].y });
   const redAt = (i: number) => ({ x: BASE.red.x - offsets[i].x, y: BASE.red.y - offsets[i].y });
 
-  const player = spawnChampion(s, pick, 'blue', blueAt(0).x, blueAt(0).y, !opts.watch, opts.watch ? 'top' : null, nameFor(pick, opts.playerName));
+  const player = spawnChampion(s, pick, 'blue', blueAt(0).x, blueAt(0).y, !opts.watch, opts.watch ? 'top' : null, pick.hero);
   s.player = player.id;
   others.slice(0, 4).forEach((def, i) => {
-    spawnChampion(s, def, 'blue', blueAt(i + 1).x, blueAt(i + 1).y, false, ALLY_LANES[i], nameFor(def));
+    spawnChampion(s, def, 'blue', blueAt(i + 1).x, blueAt(i + 1).y, false, ALLY_LANES[i], def.hero);
   });
   others.slice(4, 9).forEach((def, i) => {
-    spawnChampion(s, def, 'red', redAt(i).x, redAt(i).y, false, ENEMY_LANES[i], nameFor(def));
+    spawnChampion(s, def, 'red', redAt(i).x, redAt(i).y, false, ENEMY_LANES[i], def.hero);
   });
 
   return s;

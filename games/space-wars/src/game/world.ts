@@ -2,8 +2,11 @@ import { byDifficulty } from '../../../../shared/settings';
 import { aiLog } from '../../../../shared/watch';
 import { ARENA, BUILD_RANGE, NODE_AMOUNT, NODE_CLEARANCE } from './arena';
 import { COMBAT_UNITS, FACTIONS, type Ability, type Faction, type Role, type UnitId } from './factions';
-import { beaconNode, type DerelictKind, type MapLayout, type Point } from './map';
-import { CONTRACTS, NO_PERKS, type Perks } from './contracts';
+import { beaconNode, localRandom, type DerelictKind, type MapLayout, type Point } from './map';
+import {
+  BOARD_MS, CONTRACT_STEPS, FLAGSHIP_STEP, NO_PERKS, RANKS, boardOffer, contractOf, type Contract, type Goal, type Perks,
+} from './contracts';
+import { SECTORS, type Sector } from './campaign';
 import { Fog } from './fog';
 import {
   RESEARCH_COSTS, RESEARCH_LEVELS, RESEARCH_MS, RESEARCH_STEP, TRACKS, TRACK_DEFS, noResearch, researchBonus,
@@ -121,6 +124,32 @@ const AI_MAX_ARMY = 20;
 const AI_HOME_GUARD = 2;
 /** How far an idle AI warship goes to fetch its faction's salvage shard. */
 const AI_SALVAGE_REACH = 360;
+/**
+ * The flagship the third contract unlocks, one per battle: what it costs and takes to build at the
+ * hub, and how it scales its faction's heavy's hit points, damage, speed and range.
+ */
+export const FLAGSHIP_COST = 400;
+export const FLAGSHIP_MS = 25000;
+export const FLAGSHIP_HP = 3;
+export const FLAGSHIP_DAMAGE = 1.6;
+export const FLAGSHIP_SPEED = 0.7;
+export const FLAGSHIP_RANGE = 20;
+/** The convoy contract: how many harvesters fly, how far off their field lies, and how many raiders the nearest rival sends at them. */
+export const CONVOY_SIZE = 3;
+const CONVOY_NEAR = 420;
+const CONVOY_FAR = 820;
+const CONVOY_DIST = 600;
+const CONVOY_RAIDERS = 3;
+/**
+ * The last-stand pact: once only two rivals are left, or the player holds more than this share of
+ * the finished hubs, the rivals make peace with each other, get some crystal, and raid the player
+ * together when the countdown runs out, then again every PACT_WAVE_MS.
+ */
+export const PACT_MS = 60000;
+export const PACT_WAVE_MS = 45000;
+const PACT_FUNDS = 100;
+const PACT_HUB_SHARE = 1 / 3;
+const PACT_RIVALS = 2;
 
 /** Where a unit is going: a point to move to, or an entity to attack. */
 export type Order = { kind: 'move'; x: number; y: number } | { kind: 'attack'; id: number; auto: boolean };
@@ -163,6 +192,10 @@ export interface Unit {
   nebula: boolean;
   /** Whether it got repair this update, beside a hub or Depot. */
   repairing: boolean;
+  /** The player's flagship: its faction's heavy, scaled up, with the flagship's ability. */
+  flagship: boolean;
+  /** A convoy harvester still flying to the convoy's field. */
+  convoy: boolean;
 }
 
 /** What a faction can build: the buildings beside a hub, and an expansion (a second hub) at a far crystal field. */
@@ -272,6 +305,8 @@ export interface Side {
   pressure: number;
   /** The warship this rival has sent to claim a derelict station, or -1. */
   claimer: number;
+  /** The flagship (the player's only): locked until the third contract, then ready, building, out, or lost for good. */
+  flagship: { state: 'locked' | 'ready' | 'building' | 'out' | 'lost'; left: number };
 }
 
 /**
@@ -306,10 +341,26 @@ export interface Pop extends Point {
   life: number;
 }
 
-/** The current contract: its index in CONTRACTS (CONTRACTS.length once all are done) and progress. */
+/**
+ * The contract chain: `index` is the step (0 for the first contract, CONTRACT_STEPS once all are
+ * done), `goal` the contract being worked on (null while the board is up), `offer` the board's
+ * cards and `boardMs` the time left before it takes the first, `done` and `taken` the goals
+ * finished and picked so far (a failed one is taken but not done).
+ */
 export interface ContractState {
   index: number;
   progress: number;
+  goal: Goal | null;
+  offer: Goal[];
+  boardMs: number;
+  done: Goal[];
+  taken: Goal[];
+}
+
+/** The last-stand pact once signed: time to the next raid, and the raids so far. */
+export interface Pact {
+  ms: number;
+  waves: number;
 }
 
 /** Things the scene shows once: a notice on the command bar, or crystal gained (flashed by the count). */
@@ -335,11 +386,11 @@ export function unitStats(side: Side, type: UnitId) {
   const r = side.research;
   return {
     name: d.name,
-    cost: Math.round(d.cost * t.cost),
+    cost: Math.round(d.cost * t.cost * p.cost),
     trainMs: Math.round(d.trainMs * p.train),
     hp: Math.round(d.hp * t.hp * p.hp * researchBonus(r, 'hull')),
     speed: d.speed * t.speed * p.speed * researchBonus(r, 'engines'),
-    sight: d.sight,
+    sight: Math.round(d.sight * p.sight),
     weapon: d.weapon && {
       damage: Math.round(d.weapon.damage * t.damage * p.damage * researchBonus(r, 'weapons')),
       range: d.weapon.range,
@@ -357,7 +408,25 @@ export function buildingStats(side: Side, role: Role) {
     cost: Math.round(d.cost * t.cost),
     hp: Math.round(d.hp * t.hp),
     radius: d.radius,
-    weapon: d.weapon && { damage: Math.round(d.weapon.damage * t.damage), range: Math.round(d.weapon.range * side.perks.turretRange), cooldownMs: d.weapon.cooldownMs },
+    weapon: d.weapon && {
+      damage: Math.round(d.weapon.damage * t.damage * side.perks.turretDamage),
+      range: Math.round(d.weapon.range * side.perks.turretRange),
+      cooldownMs: d.weapon.cooldownMs,
+    },
+  };
+}
+
+/** The flagship's numbers in a faction: its heavy's, scaled up into a slow capital ship. */
+export function flagshipStats(side: Side) {
+  const heavy = unitStats(side, 'heavy');
+  return {
+    ...heavy,
+    name: side.def.flagship.name,
+    cost: Math.round(FLAGSHIP_COST * side.def.tune.cost * side.perks.cost),
+    trainMs: FLAGSHIP_MS,
+    hp: Math.round(heavy.hp * FLAGSHIP_HP),
+    speed: heavy.speed * FLAGSHIP_SPEED,
+    weapon: heavy.weapon && { ...heavy.weapon, damage: Math.round(heavy.weapon.damage * FLAGSHIP_DAMAGE), range: heavy.weapon.range + FLAGSHIP_RANGE },
   };
 }
 
@@ -413,8 +482,14 @@ export class World {
   readonly fog = new Fog();
   /** Rival buildings the player has seen, which stay drawn under the fog. */
   readonly known = new Set<number>();
-  /** The contract chain's place: which contract is current and how far along it is. */
-  contract: ContractState = { index: 0, progress: 0 };
+  /** The contract chain's place: which contract is current or on the board, and how far along it is. */
+  contract: ContractState = { index: 0, progress: 0, goal: 'barracks', offer: [], boardMs: 0, done: [], taken: ['barracks'] };
+  /** Where the convoy contract's harvesters are flying (a crystal node), while one is under way. */
+  convoyTo: (Point & { node: number }) | null = null;
+  /** The last-stand pact, once the rivals have signed it. */
+  pact: Pact | null = null;
+  /** The campaign sector this battle is in (an index into SECTORS). */
+  readonly sector: number;
   /** Crystal the player has collected from salvage shards. */
   salvaged = 0;
   /** Enemy ships the player has destroyed. */
@@ -427,18 +502,25 @@ export class World {
   winner = -1;
   /** Which factions can see each ship hiding in a nebula this update (by unit id), from `updateCover`. */
   private spotted = new Map<number, Set<number>>();
+  /** The board's own generator, so drawing contracts leaves the battle's Math.random as it was. */
+  private readonly rng: () => number;
 
   /**
    * `pick` is the faction the player commands, an index into `FACTIONS`. It takes the player's start
    * point (slot 0); the other factions fill the rest in their usual order. With `watch` the AI plays
-   * slot 0 too, nothing is fogged, and the battle ends when one faction is left (`winner`).
+   * slot 0 too, nothing is fogged, and the battle ends when one faction is left (`winner`). `sector`
+   * is the campaign sector (its rivals start stronger) and `kept` the perks the campaign carries in.
    */
-  constructor(readonly layout: MapLayout, pick = 0, readonly watch = false) {
+  constructor(readonly layout: MapLayout, pick = 0, readonly watch = false, sector = 0, kept: readonly Goal[] = []) {
+    this.sector = sector;
     const order = [pick, ...FACTIONS.map((_, i) => i).filter((i) => i !== pick)];
     this.sides = order.map((f, index) => ({
       index, def: FACTIONS[f], crystal: START_CRYSTAL, alive: true, thinkMs: 0, attackMs: 0, perks: { ...NO_PERKS }, picket: -1,
       research: noResearch(), grudge: -1, grudgeLockMs: 0, truceMs: 0, offerMs: 0, offerCooldownMs: 0, pressure: 0, claimer: -1,
+      flagship: { state: 'locked', left: 0 },
     }));
+    for (const goal of kept) contractOf(goal).apply(this.sides[PLAYER].perks);
+    this.rng = localRandom((layout.homes[0].x * 3.7 + layout.homes[0].y) % 1);
     const nodes = layout.nodes.map((n) => ({ id: this.id(), x: n.x, y: n.y, amount: n.amount }));
     // One loose crystal node partway to the centre becomes the relay beacon and is no longer mined.
     const spot = nodes[beaconNode(layout.homes, layout.nodes)];
@@ -458,6 +540,14 @@ export class World {
       this.buildings.push(hub);
       this.spawn(index, 'harvester', home.x - 30, home.y + 34).home = hub.id;
       this.spawn(index, 'harvester', home.x + 30, home.y + 34).home = hub.id;
+    });
+    // A harder campaign sector: rivals start richer, further researched, and some with an outpost.
+    const setup: Sector = SECTORS[sector] ?? SECTORS[0];
+    this.sides.forEach((side, index) => {
+      if (index === PLAYER) return;
+      side.crystal += setup.rivalCrystal;
+      for (const t of TRACKS) side.research.levels[t] = setup.rivalResearch;
+      if (index <= setup.outposts) this.seedOutpost(index);
     });
     this.updateFog();
   }
@@ -499,10 +589,42 @@ export class World {
     return this.derelicts.find((d) => dist(d, { x, y }) <= DERELICT_RADIUS && (this.watch || this.fog.knows(d))) ?? null;
   }
 
-  /** Whether two factions are under a truce (only the player makes truces, with one rival at a time each). */
+  /** Whether two factions are under a truce (the player with one rival), or both rivals in the last-stand pact. */
   atPeace(a: number, b: number) {
     if (a === b) return false;
+    if (this.pact && a !== PLAYER && b !== PLAYER) return true;
     return (a === PLAYER && this.sides[b].truceMs > 0) || (b === PLAYER && this.sides[a].truceMs > 0);
+  }
+
+  /** The contract being worked on, or null while the board is up or once the chain is done. */
+  currentContract(): Contract | null {
+    return this.contract.goal ? contractOf(this.contract.goal) : null;
+  }
+
+  /** The player picks one of the board's two contracts; it starts at once. */
+  pickContract(goal: Goal): string | null {
+    if (this.phase !== 'playing') return 'The battle is over';
+    if (this.contract.goal || !this.contract.offer.includes(goal)) return 'That contract is not on the board';
+    this.startContract(goal);
+    return null;
+  }
+
+  /** Starts building the flagship at the player's hub, once the third contract has unlocked it. One per battle. */
+  buildFlagship(): string | null {
+    if (this.phase !== 'playing') return 'The battle is over';
+    const side = this.sides[PLAYER];
+    const f = side.flagship;
+    if (f.state === 'locked') return `Finish contract ${FLAGSHIP_STEP} to unlock the flagship`;
+    if (f.state === 'building') return 'The flagship is already being built';
+    if (f.state === 'out') return 'Your flagship is already flying';
+    if (f.state === 'lost') return 'Your flagship was lost: only one per battle';
+    if (!this.hubOf(PLAYER)) return 'No hub';
+    const cost = flagshipStats(side).cost;
+    if (side.crystal < cost) return 'Not enough crystal';
+    side.crystal -= cost;
+    f.state = 'building';
+    f.left = FLAGSHIP_MS;
+    return null;
   }
 
   /** A ship's veteran rank: how many of VETERAN_RANKS its kills have reached. */
@@ -684,7 +806,7 @@ export class World {
   /** The faction a bribed rival turns on: the living faction nearest its hub, other than the player and itself. */
   bribeTarget(faction: number): Side | null {
     const hub = this.hubOf(faction);
-    if (!hub) return null;
+    if (!hub || this.pact) return null;
     return this.sides
       .filter((s) => s.alive && s.index !== faction && s.index !== PLAYER && this.hubOf(s.index))
       .reduce<Side | null>((best, s) => (!best || dist(this.hubOf(s.index)!, hub) < dist(this.hubOf(best.index)!, hub) ? s : best), null);
@@ -695,6 +817,7 @@ export class World {
     if (this.phase !== 'playing') return 'The battle is over';
     const side = this.sides[faction];
     if (faction === PLAYER || !side.alive) return 'No such rival';
+    if (this.pact) return 'The rivals are in a pact: tribute will not turn them';
     const target = this.bribeTarget(faction);
     if (!target) return 'No other faction left to turn it on';
     const me = this.sides[PLAYER];
@@ -796,13 +919,15 @@ export class World {
         this.think(side);
       }
     }
+    this.updatePact(dt);
     this.updateMines();
     this.removeDead();
     this.updateResearch(dt);
+    this.updateFlagship(dt);
     this.updateBeacon(dt);
     this.updateShards(dt);
     // Contracts are the player's; a watched battle gives nobody their perks.
-    if (!this.watch) this.updateContract();
+    if (!this.watch) this.updateContract(dt);
     this.updateFog();
     if (this.watch) {
       const left = this.sides.filter((s) => s.alive);
@@ -855,8 +980,14 @@ export class World {
     }
   }
 
+  /** A unit's numbers: its type's in its faction, or the flagship's. */
+  private statsOf(u: Unit) {
+    const side = this.sides[u.faction];
+    return u.flagship ? flagshipStats(side) : unitStats(side, u.type);
+  }
+
   private updateUnit(u: Unit, dt: number) {
-    const stats = unitStats(this.sides[u.faction], u.type);
+    const stats = this.statsOf(u);
     const ability = this.abilityOf(u);
     u.cooldown -= dt;
     u.revealMs = Math.max(0, u.revealMs - dt);
@@ -871,7 +1002,7 @@ export class World {
     const speed = u.nebula ? stats.speed * NEBULA_SLOW : stats.speed;
     // Beside a hub or Depot of its own, a ship slowly repairs.
     if (u.hp < u.maxHp && this.repairSpots(u.faction).some((b) => dist(b, u) <= REPAIR_RANGE)) {
-      u.hp = Math.min(u.maxHp, u.hp + (u.maxHp * REPAIR_RATE * dt) / 1000);
+      u.hp = Math.min(u.maxHp, u.hp + (u.maxHp * REPAIR_RATE * this.sides[u.faction].perks.repair * dt) / 1000);
       u.repairing = true;
     }
     if (ability?.kind === 'decoy' || ability?.kind === 'brood') {
@@ -880,6 +1011,10 @@ export class World {
         u.timer = 0;
         this.ability(u, ability);
       }
+    }
+    if (u.convoy) {
+      this.escort(u, dt, speed);
+      return;
     }
     if (u.type === 'harvester') {
       this.harvest(u, dt, speed);
@@ -915,11 +1050,12 @@ export class World {
     }
   }
 
-  /** The ability a unit or building carries, from its faction's definition. */
-  private abilityOf(e: Shooter): Ability | undefined {
+  /** The ability a unit or building carries, from its faction's definition; a flagship carries the faction's flagship ability. */
+  abilityOf(e: Shooter): Ability | undefined {
     if (e.kind === 'derelict') return undefined;
     const def = this.sides[e.faction].def;
-    return e.kind === 'unit' ? def.units[e.type].ability : def.buildings[e.type].ability;
+    if (e.kind === 'building') return def.buildings[e.type].ability;
+    return e.flagship ? def.flagship.ability : def.units[e.type].ability;
   }
 
   /**
@@ -1045,7 +1181,7 @@ export class World {
 
   /** A rival holding a grudge against the player sues for peace when it is under pressure. */
   private considerTruce(side: Side) {
-    if (this.watch || side.grudge !== PLAYER || side.truceMs > 0 || side.offerMs > 0 || side.offerCooldownMs > 0) return;
+    if (this.watch || this.pact || side.grudge !== PLAYER || side.truceMs > 0 || side.offerMs > 0 || side.offerCooldownMs > 0) return;
     if (side.crystal < TRUCE_TRIBUTE) return;
     const hub = this.hubOf(side.index);
     const pressed = (hub && hub.hp < hub.maxHp * PRESSURE_HUB) || side.pressure >= PRESSURE_LOSSES;
@@ -1214,7 +1350,7 @@ export class World {
     fog.clear();
     for (const u of this.units) {
       if (u.faction !== PLAYER) continue;
-      const sight = this.sides[PLAYER].def.units[u.type].sight;
+      const sight = this.statsOf(u).sight;
       fog.stamp(u.x, u.y, u.type === 'harvester' ? HARVESTER_VISION : sight * (u.type === 'scout' ? SCOUT_VISION : SHIP_VISION));
     }
     for (const b of this.buildings) {
@@ -1282,7 +1418,7 @@ export class World {
         m.timer -= MINE_MS;
         node.amount -= 1;
         u.carry += 1;
-        if (u.carry >= side.def.tune.carry) {
+        if (u.carry >= Math.round(side.def.tune.carry * side.perks.carry)) {
           m.phase = 'return';
           break;
         }
@@ -1301,15 +1437,16 @@ export class World {
     }
   }
 
-  /** Makes a unit of `faction` at (x, y), kept on the field; a decoy when `decoyMs` is given. */
-  private spawn(faction: number, type: UnitId, x: number, y: number, decoyMs: number | null = null): Unit {
-    const stats = unitStats(this.sides[faction], type);
+  /** Makes a unit of `faction` at (x, y), kept on the field; a decoy when `decoyMs` is given, the flagship (a heavy) with `flagship`. */
+  private spawn(faction: number, type: UnitId, x: number, y: number, decoyMs: number | null = null, flagship = false): Unit {
+    const stats = flagship ? flagshipStats(this.sides[faction]) : unitStats(this.sides[faction], type);
     const unit: Unit = {
       kind: 'unit', id: this.id(), faction, type,
       x: Math.min(ARENA.x + ARENA.w - 12, Math.max(ARENA.x + 12, x)),
       y: Math.min(ARENA.y + ARENA.h - 12, Math.max(ARENA.y + 12, y)),
       angle: -Math.PI / 2, hp: stats.hp, maxHp: stats.hp, cooldown: 0, order: null, mining: null, carry: 0,
       timer: 0, revealMs: 0, decoyMs, lastHit: -1, lastHitBy: -1, home: -1, kills: 0, nebula: false, repairing: false,
+      flagship, convoy: false,
     };
     unit.nebula = this.inNebula(unit);
     this.units.push(unit);
@@ -1426,24 +1563,43 @@ export class World {
 
   /** An AI expansion: a second hub beside the richest-looking crystal field away from everyone. */
   private expand(f: number): boolean {
+    const spot = this.expansionSpot(f);
+    return !!spot && this.build('expansion', spot.x, spot.y, f) === null;
+  }
+
+  /** A harder campaign sector starts a rival with an outpost already standing, built for free, at any field that fits. */
+  private seedOutpost(f: number) {
+    const spot = this.expansionSpot(f, AI_EXPAND_RIVAL_GAP, Infinity) ?? this.expansionSpot(f, AI_EXPAND_RIVAL_GAP / 2, Infinity);
+    if (!spot) return;
+    const stats = expansionStats(this.sides[f]);
+    this.buildings.push({
+      kind: 'building', id: this.id(), faction: f, type: 'hub', x: spot.x, y: spot.y, hp: stats.hp, maxHp: stats.hp,
+      done: true, buildLeft: 0, queue: [], trainLeft: 0, cooldown: 0, disabledMs: 0, hacks: 0, layMs: 0,
+      lastHit: -1, expansion: true, buildMs: stats.buildMs,
+    });
+  }
+
+  /**
+   * Where an AI expansion goes: a clear spot beside one of the `fields` nearest rich crystal fields
+   * at least `rivalGap` from every other faction's hubs, or null.
+   */
+  private expansionSpot(f: number, rivalGap = AI_EXPAND_RIVAL_GAP, fields = 3): Point | null {
     const hub = this.hubOf(f)!;
     const others = this.buildings.filter((b) => b.type === 'hub' && b.faction !== f);
     const sites = this.nodes
       .filter((n) => n.amount > NODE_AMOUNT / 3 && dist(n, hub) >= EXPANSION_GAP && dist(n, this.beacon) >= 150
-        && others.every((o) => dist(o, n) >= AI_EXPAND_RIVAL_GAP))
+        && others.every((o) => dist(o, n) >= rivalGap))
       .sort((a, b) => dist(a, hub) - dist(b, hub));
-    for (const n of sites.slice(0, 3)) {
+    for (const n of sites.slice(0, fields)) {
       for (let tries = 0; tries < 8; tries++) {
         const angle = Math.random() * Math.PI * 2;
         const d = 50 + Math.random() * 50;
         const x = n.x + Math.cos(angle) * d;
         const y = n.y + Math.sin(angle) * d;
-        if (this.placementProblem('expansion', x, y, f) === null) {
-          return this.build('expansion', x, y, f) === null;
-        }
+        if (this.placementProblem('expansion', x, y, f) === null) return { x, y };
       }
     }
-    return false;
+    return null;
   }
 
   /**
@@ -1507,12 +1663,18 @@ export class World {
       if (b.faction !== PLAYER && b.lastHit === PLAYER) {
         this.score('razes');
         if (main) this.score('hubs');
+        if (this.abilityOf(b)?.kind === 'mines') this.score('lattice');
       }
     }
     for (const u of this.units) {
       if (u.hp > 0) continue;
       this.salvage(u);
       this.wreck(u);
+      // A lost flagship is gone for the rest of the battle.
+      if (u.flagship && u.faction === PLAYER) {
+        this.sides[PLAYER].flagship.state = 'lost';
+        this.events.push({ kind: 'notice', text: `Your flagship, the ${this.sides[PLAYER].def.flagship.name}, is lost` });
+      }
       // A destroyed ship leaves a salvage shard for whoever destroyed it; the player's count as kills.
       if (u.decoyMs !== null || u.lastHit < 0 || u.lastHit === u.faction) continue;
       this.shards.push({ id: this.id(), faction: u.lastHit, x: u.x, y: u.y, value: SHARD_VALUE, life: SHARD_LIFE_MS });
@@ -1553,21 +1715,20 @@ export class World {
     }
   }
 
-  /** A salvage yard pays its faction for each enemy unit destroyed within its range. */
+  /** A salvage yard (or a salvage flagship) pays its faction for each enemy unit destroyed within its range. */
   private salvage(u: Unit) {
     if (u.decoyMs !== null) return;
-    for (const b of this.buildings) {
-      const ability = this.abilityOf(b);
-      if (b.done && b.faction !== u.faction && ability?.kind === 'salvage' && dist(b, u) <= ability.range) {
-        this.sides[b.faction].crystal += ability.pay;
+    for (const e of [...this.buildings, ...this.units]) {
+      const ability = this.abilityOf(e);
+      if ((e.kind === 'unit' ? e.hp > 0 : e.done) && e.faction !== u.faction && ability?.kind === 'salvage' && dist(e, u) <= ability.range) {
+        this.sides[e.faction].crystal += ability.pay;
       }
     }
   }
 
   /** Counts one more toward the current contract when it is of `goal`. */
-  private score(goal: 'kills' | 'razes' | 'hubs') {
-    const c = CONTRACTS[this.contract.index];
-    if (c?.goal === goal) this.contract.progress += 1;
+  private score(goal: 'kills' | 'razes' | 'hubs' | 'lattice' | 'convoy') {
+    if (this.contract.goal === goal) this.contract.progress += 1;
   }
 
   /**
@@ -1609,7 +1770,7 @@ export class World {
       bc.payMs = 0;
       return;
     }
-    if (bc.owner === PLAYER && CONTRACTS[this.contract.index]?.goal === 'hold') this.contract.progress += dt / 1000;
+    if (bc.owner === PLAYER && this.contract.goal === 'hold') this.contract.progress += dt / 1000;
     bc.payMs += dt;
     while (bc.payMs >= BEACON_PAY_MS) {
       bc.payMs -= BEACON_PAY_MS;
@@ -1649,20 +1810,226 @@ export class World {
     });
   }
 
-  /** Checks the current contract; when it is met, pays its reward and perk and starts the next one. */
-  private updateContract() {
-    const c = CONTRACTS[this.contract.index];
-    if (!c) return;
-    if (c.goal === 'barracks') {
-      this.contract.progress = this.buildings.some((b) => b.faction === PLAYER && b.type === 'barracks' && b.done) ? 1 : 0;
+  /**
+   * Runs the board's countdown while it is up (taking the first card when it runs out), counts the
+   * current contract, fails a convoy that can no longer arrive, and when the contract is met pays its
+   * reward and perk, unlocks the flagship after the third, and puts up the board for the next.
+   */
+  private updateContract(dt: number) {
+    const state = this.contract;
+    if (!state.goal) {
+      if (!state.offer.length) return;
+      state.boardMs -= dt;
+      if (state.boardMs <= 0) this.startContract(state.offer[0]);
+      return;
     }
-    if (this.contract.progress < c.target) return;
+    const c = contractOf(state.goal);
+    if (c.goal === 'barracks') {
+      state.progress = this.buildings.some((b) => b.faction === PLAYER && b.type === 'barracks' && b.done) ? 1 : 0;
+    } else if (c.goal === 'derelicts') {
+      state.progress = this.derelicts.filter((d) => d.owner === PLAYER).length;
+    } else if (c.goal === 'nebula') {
+      if (this.nebulaHeld()) state.progress += dt / 1000;
+    } else if (c.goal === 'survive') {
+      state.progress += dt / 1000;
+    } else if (c.goal === 'convoy' && state.progress + this.units.filter((u) => u.convoy).length < c.target) {
+      this.failContract('the convoy was lost');
+      return;
+    }
+    if (state.progress < c.target) return;
     const side = this.sides[PLAYER];
     side.crystal += c.reward;
     c.apply(side.perks);
     this.events.push({ kind: 'gain', amount: c.reward });
-    this.events.push({ kind: 'notice', text: `Contract done: +${c.reward} crystal and ${c.perk(side.def)}` });
-    this.contract = { index: this.contract.index + 1, progress: 0 };
+    const rank = RANKS[state.index];
+    state.done.push(c.goal);
+    state.index += 1;
+    this.endConvoy();
+    let text = `Contract done: +${c.reward} crystal and Rank ${rank}: ${c.perk(side.def)}`;
+    if (state.index === FLAGSHIP_STEP && side.flagship.state === 'locked') {
+      side.flagship.state = 'ready';
+      text += `. Flagship unlocked: build the ${side.def.flagship.name} at your hub`;
+    }
+    this.events.push({ kind: 'notice', text });
+    this.openBoard();
+  }
+
+  /** Puts up the board for the next contract: two cards from the pool, or the chain's end. */
+  private openBoard() {
+    const state = this.contract;
+    state.goal = null;
+    state.progress = 0;
+    state.offer = state.index < CONTRACT_STEPS ? boardOffer(state.index, state.taken, (g) => this.contractOpen(g), this.rng) : [];
+    state.boardMs = BOARD_MS;
+    if (!state.offer.length) state.index = CONTRACT_STEPS;
+  }
+
+  /** Starts a contract from the board: a convoy sets off, a raid comes. */
+  private startContract(goal: Goal) {
+    const state = this.contract;
+    state.goal = goal;
+    state.offer = [];
+    state.boardMs = 0;
+    state.progress = 0;
+    state.taken.push(goal);
+    if (goal === 'convoy') this.launchConvoy();
+    if (goal === 'survive') this.raidPlayer();
+    this.events.push({ kind: 'notice', text: `Contract ${RANKS[state.index]}: ${contractOf(goal).brief(this.sides[PLAYER].def)}` });
+  }
+
+  /** A contract that can no longer be met: the board offers the next two in its place. */
+  private failContract(why: string) {
+    this.endConvoy();
+    this.events.push({ kind: 'notice', text: `Contract failed: ${why}. Pick another from the board` });
+    this.openBoard();
+  }
+
+  /** Whether a contract from the pool can be played in this battle as it stands. */
+  private contractOpen(goal: Goal) {
+    const rivals = this.sides.filter((s) => s.index !== PLAYER && s.alive);
+    if (goal === 'lattice') return rivals.some((s) => s.def.buildings.turret.ability?.kind === 'mines');
+    if (goal === 'convoy') return !!this.convoyField();
+    if (goal === 'derelicts') return this.derelicts.filter((d) => d.owner === PLAYER).length < 2;
+    return rivals.length > 0;
+  }
+
+  /** Whether a player warship holds a nebula: it is inside one that no enemy warship is in. */
+  private nebulaHeld() {
+    return this.layout.nebulae.some((n) => {
+      let mine = false;
+      for (const u of this.units) {
+        if (u.type === 'harvester' || u.decoyMs !== null || dist(u, n) > n.r) continue;
+        if (u.faction !== PLAYER) return false;
+        mine = true;
+      }
+      return mine;
+    });
+  }
+
+  /** The convoy's field: a crystal node between CONVOY_NEAR and CONVOY_FAR from the player's hub, nearest CONVOY_DIST. */
+  private convoyField(): Node | null {
+    const hub = this.hubOf(PLAYER);
+    if (!hub) return null;
+    const off = (n: Node) => Math.abs(dist(n, hub) - CONVOY_DIST);
+    return this.nodes
+      .filter((n) => n.amount > NODE_AMOUNT / 3 && dist(n, hub) >= CONVOY_NEAR && dist(n, hub) <= CONVOY_FAR)
+      .reduce<Node | null>((best, n) => (!best || off(n) < off(best) ? n : best), null);
+  }
+
+  /**
+   * The convoy contract: CONVOY_SIZE harvesters leave the hub for a far field, and the rival whose
+   * hub is nearest that field sends a few warships to hunt them.
+   */
+  private launchConvoy() {
+    const hub = this.hubOf(PLAYER);
+    const field = this.convoyField();
+    if (!hub || !field) return;
+    this.convoyTo = { x: field.x, y: field.y, node: field.id };
+    const r = buildingStats(this.sides[PLAYER], 'hub').radius + 14;
+    const convoy: Unit[] = [];
+    for (let i = 0; i < CONVOY_SIZE; i++) {
+      const u = this.spawn(PLAYER, 'harvester', hub.x + (i - 1) * 18, hub.y + r);
+      u.convoy = true;
+      u.home = hub.id;
+      convoy.push(u);
+    }
+    const hunter = this.sides
+      .filter((s) => s.index !== PLAYER && s.alive && this.hubOf(s.index) && !this.atPeace(PLAYER, s.index))
+      .reduce<Side | null>((best, s) => (!best || dist(this.hubOf(s.index)!, field) < dist(this.hubOf(best.index)!, field) ? s : best), null);
+    if (!hunter) return;
+    const raiders = this.units
+      .filter((u) => u.faction === hunter.index && u.type !== 'harvester' && u.decoyMs === null && u.id !== hunter.picket && u.id !== hunter.claimer)
+      .sort((a, b) => dist(a, field) - dist(b, field))
+      .slice(0, CONVOY_RAIDERS);
+    raiders.forEach((u, k) => { u.order = { kind: 'attack', id: convoy[k % convoy.length].id, auto: false }; });
+    if (raiders.length) this.events.push({ kind: 'notice', text: `The ${hunter.def.name} sends ${raiders.length} ships to hunt your convoy` });
+  }
+
+  /** A convoy harvester flies to the far field; once there it starts mining it like any harvester. */
+  private escort(u: Unit, dt: number, speed: number) {
+    const to = this.convoyTo;
+    if (to && !this.approach(u, to.x, to.y, 14, dt, speed)) return;
+    u.convoy = false;
+    if (!to) return;
+    u.mining = { node: to.node, phase: 'mine', timer: 0 };
+    this.score('convoy');
+  }
+
+  /** The convoy contract is over: harvesters still flying go back to plain harvesting. */
+  private endConvoy() {
+    this.convoyTo = null;
+    for (const u of this.units) u.convoy = false;
+  }
+
+  /** Every rival not under truce turns on the player and sends its fleet, less its picket and claimer, at the player's hub. */
+  private raidPlayer() {
+    const hub = this.hubOf(PLAYER);
+    if (!hub) return;
+    for (const side of this.sides) {
+      if (side.index === PLAYER || !side.alive || this.atPeace(PLAYER, side.index)) continue;
+      side.grudge = PLAYER;
+      side.attackMs = 0;
+      for (const u of this.units) {
+        if (u.faction !== side.index || u.type === 'harvester' || u.decoyMs !== null || u.id === side.picket || u.id === side.claimer) continue;
+        u.order = { kind: 'attack', id: hub.id, auto: false };
+      }
+    }
+  }
+
+  /**
+   * The last-stand pact: signed once only PACT_RIVALS rivals are left, or the player holds more than
+   * PACT_HUB_SHARE of the finished hubs (after the opening). Then the rivals raid together on a countdown.
+   */
+  private updatePact(dt: number) {
+    if (this.watch || this.elapsedMs < AI_GRACE_MS) return;
+    if (!this.pact) {
+      const rivals = this.sides.filter((s) => s.index !== PLAYER && s.alive);
+      const hubs = this.buildings.filter((b) => b.type === 'hub' && b.done);
+      const mine = hubs.filter((b) => b.faction === PLAYER).length;
+      if (!rivals.length || (rivals.length > PACT_RIVALS && mine <= hubs.length * PACT_HUB_SHARE)) return;
+      this.signPact(rivals);
+      return;
+    }
+    this.pact.ms -= dt;
+    if (this.pact.ms > 0) return;
+    this.pact.waves += 1;
+    this.pact.ms = PACT_WAVE_MS;
+    this.raidPlayer();
+    this.events.push({ kind: 'notice', text: `The pact raids: every rival fleet is coming for your hub. Next wave in ${PACT_WAVE_MS / 1000} s` });
+  }
+
+  /** The rivals sign the pact: truces end, their grudges turn on the player, they get crystal, and they stop fighting each other. */
+  private signPact(rivals: Side[]) {
+    this.pact = { ms: PACT_MS, waves: 0 };
+    for (const s of rivals) {
+      s.truceMs = 0;
+      s.offerMs = 0;
+      s.grudge = PLAYER;
+      s.grudgeLockMs = 0;
+      s.crystal += PACT_FUNDS;
+    }
+    // Ships already sent at each other are called off.
+    for (const u of this.units) {
+      if (u.order?.kind !== 'attack') continue;
+      const target = this.unit(u.order.id) ?? this.building(u.order.id);
+      if (target && this.atPeace(u.faction, target.faction)) u.order = null;
+    }
+    const names = rivals.map((s) => `the ${s.def.name}`);
+    const who = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0];
+    this.events.push({ kind: 'notice', text: `Last stand: ${who} sign a pact and raid you together in ${PACT_MS / 1000} s` });
+  }
+
+  /** The flagship being built at the hub: when it is done it launches beside the hub. */
+  private updateFlagship(dt: number) {
+    const side = this.sides[PLAYER];
+    const f = side.flagship;
+    if (f.state !== 'building') return;
+    f.left -= dt;
+    const hub = this.hubOf(PLAYER);
+    if (f.left > 0 || !hub) return;
+    this.spawn(PLAYER, 'heavy', hub.x, hub.y + buildingStats(side, 'hub').radius + 24, null, true);
+    f.state = 'out';
+    this.events.push({ kind: 'notice', text: `Flagship launched: the ${side.def.flagship.name}. Lose it and it is gone for this battle` });
   }
 
   private wreck(e: Unit | Building) {

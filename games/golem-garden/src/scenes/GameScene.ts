@@ -4,11 +4,14 @@ import { TREE_FLOWERS, bakeGarden, gardenBg } from '../art/textures';
 import { GARDENS, cellAt, pathPoint } from '../game/board';
 import {
   BLOOM_GOAL,
+  BOON,
+  BOON_INFO,
   BOSS_EVERY,
   COMPOST,
   EARLY_BONUS,
   FAST,
   FORM_INFO,
+  GARDEN_TWISTS,
   GOLEM_INFO,
   HARVEST_WAVE,
   HEDGE,
@@ -18,19 +21,37 @@ import {
   SEEDS,
   STAR_LEAVES,
   TARGET_INFO,
+  THORNY_STARS,
+  TWIST_INFO,
   formsOf,
-  golemStats,
   waveBonus,
   waveCounts,
+  type Boon,
   type PestKind,
   type SeedKind,
 } from '../game/data';
-import { loadBest, loadBloom, loadGarden, loadStars, saveBest, saveBloom, saveGarden, saveStars } from '../game/save';
+import {
+  loadBest,
+  loadBloom,
+  loadGarden,
+  loadLaurels,
+  loadStars,
+  loadThorny,
+  saveBest,
+  saveBloom,
+  saveGarden,
+  saveLaurels,
+  saveStars,
+  saveThorny,
+} from '../game/save';
 import {
   SHOT_MS,
+  boonCount,
+  boonedStats,
   canCallEarly,
   canMove,
   canPlant,
+  canRegrow,
   comboAt,
   gardenOf,
   gardenOpen,
@@ -42,13 +63,19 @@ import {
   nextWave,
   picksForm,
   plant,
+  regrow,
+  regrowPrice,
   seedCost,
   select,
   setTarget,
   startWave,
   statsOf,
+  sunRow,
+  takeBoon,
+  thornyOpen,
   tick,
   totalStars,
+  twistOf,
   unlocked,
   upgrade,
   upgradeCost,
@@ -121,6 +148,7 @@ export class GameScene extends Phaser.Scene {
   private savedBest = 0;
   private savedBloom = 0;
   private savedStars = '';
+  private savedLaurels = '';
   private golems = new Map<number, Image>();
   private hedges = new Map<number, Image>();
   private pests = new Map<number, { body: Image; slow: Image; mound: Image }>();
@@ -131,7 +159,7 @@ export class GameScene extends Phaser.Scene {
   private bars!: Phaser.GameObjects.Graphics;
   private hoverGfx!: Phaser.GameObjects.Graphics;
   private ghost!: Image;
-  private hud!: { wave: Text; waveSub: Text; heart: Text; sap: Text; best: Text; stars: Text; bloom: Text; bloomSub: Text; flowers: Image[]; glow: Image };
+  private hud!: { wave: Text; waveSub: Text; heart: Text; regrow: Text; sap: Text; best: Text; stars: Text; bloom: Text; bloomSub: Text; flowers: Image[]; glow: Image };
   private speed!: { bg: Image; text: Text };
   private cards: { kind: SeedKind; rim: Image; card: Image; open: Phaser.GameObjects.Container; locked?: Phaser.GameObjects.Container }[] = [];
   private lockPips!: Phaser.GameObjects.Graphics;
@@ -144,16 +172,21 @@ export class GameScene extends Phaser.Scene {
   private menu!: { box: Phaser.GameObjects.Container; chips: Chip[] };
   private banner!: Text;
   private picker: Phaser.GameObjects.Container | null = null;
+  /** The boon pick after a Queen Slug wave, while it is open. */
+  private boonBox: Phaser.GameObjects.Container | null = null;
+  /** The warm stripes on the rows the Sunny row boons shine on. */
+  private sunGfx!: Phaser.GameObjects.Graphics;
 
   constructor() {
     super('Game');
   }
 
   create() {
-    this.state = newGame(loadBest(), loadBloom(), loadGarden(), loadStars());
+    this.state = newGame(loadBest(), loadBloom(), loadGarden(), loadStars(), loadThorny(), loadLaurels());
     this.savedBest = this.state.best;
     this.savedBloom = this.state.bloom;
     this.savedStars = this.state.stars.join(',');
+    this.savedLaurels = this.state.laurels.join(',');
     this.lastFrame = null;
     // A restart (a new garden) reuses this scene object, so start these afresh.
     this.hover = null;
@@ -161,6 +194,7 @@ export class GameScene extends Phaser.Scene {
     this.moving = null;
     this.formMenu = false;
     this.picker = null;
+    this.boonBox = null;
     this.cards = [];
     this.treeFlowers = [];
     this.golems.clear();
@@ -171,6 +205,7 @@ export class GameScene extends Phaser.Scene {
 
     bakeGarden(this, this.state.garden);
     this.add.image(0, 0, gardenBg(this.state.garden)).setOrigin(0);
+    this.sunGfx = this.add.graphics().setDepth(1);
     this.createBoard();
     this.bars = this.add.graphics().setDepth(UI_DEPTH - 20);
     this.hoverGfx = this.add.graphics().setDepth(UI_DEPTH - 30);
@@ -205,15 +240,19 @@ export class GameScene extends Phaser.Scene {
     this.lastFrame = time;
     const s = this.state;
     const { wave, heart, phase, bloom, harvest } = s;
-    // The garden picker (and the harvest and game-over screens) holds the game still behind it.
-    tick(s, this.picker ? 0 : dt * (s.fast ? FAST : 1));
+    // The garden picker (and the harvest and game-over screens) and a boon pick waiting to be made
+    // hold the game still behind them.
+    tick(s, this.picker || s.offer.length ? 0 : dt * (s.fast ? FAST : 1));
     if (s.heart < heart) this.heartHit();
     if (s.wave > wave) this.waveDone(wave, bloom, false);
     if (s.harvest && !harvest) this.showPicker('harvest');
     if (s.phase === 'over' && phase !== 'over') this.showPicker('over');
+    // The boon pick waits for the harvest screen to close.
+    if (s.offer.length && !this.picker && !this.boonBox) this.showBoons();
     for (const pop of s.pops) this.sapPop(pop);
     s.pops = [];
     this.bars.clear();
+    this.drawSun();
     this.drawSlime();
     this.drawHedges();
     this.drawGolems();
@@ -250,7 +289,7 @@ export class GameScene extends Phaser.Scene {
 
   /**
    * A tap on the board: moves the golem being moved there, or opens (or closes) the menu of the
-   * golem on the cell, or plants the picked seed.
+   * golem on the cell, or regrows a leaf on the Heartwood, or plants the picked seed.
    */
   private tapCell(col: number, row: number) {
     const s = this.state;
@@ -264,6 +303,7 @@ export class GameScene extends Phaser.Scene {
       const golem = golemAt(s, col, row);
       if (golem) this.picked = this.picked === golem.id ? null : golem.id;
       else if (this.picked !== null) this.picked = null;
+      else if (gardenOf(s).map[row][col] === 'heart') regrow(s);
       else plant(s, col, row);
     }
     this.refresh();
@@ -278,7 +318,17 @@ export class GameScene extends Phaser.Scene {
     this.press(HUD.title.x, HUD.title.y, 'Golem Garden', 19, '#f2c44a');
     const garden = this.add.image(HUD.garden.x, HUD.garden.y, 'pill');
     garden.setInteractive({ useHandCursor: true }).on('pointerdown', () => this.showPicker('choose'));
-    this.press(HUD.garden.x, HUD.garden.y, `${gardenOf(this.state).name}  ·  gardens`, 10.5, '#4a2e18', [0.5, 0.5]);
+    const tagText = `${gardenOf(this.state).name}  ·  ${this.state.thorny ? 'thorny' : 'gardens'}`;
+    this.press(HUD.garden.x, HUD.garden.y, tagText, 10.5, this.state.thorny ? '#7a2a4a' : '#4a2e18', [0.5, 0.5]);
+    // The leaf tag regrows a leaf too, like a tap on the Heartwood.
+    this.add
+      .zone(HUD.leaf.x, HUD.y - 18, HUD.leaf.w, 36)
+      .setOrigin(0)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => {
+        regrow(this.state);
+        this.refresh();
+      });
     const flowers = Array.from({ length: BLOOM_GOAL }, (_, i) => this.add.image(HUD.bloom.flowers + i * HUD.bloom.gap, HUD.y, 'bud').setScale(0.92));
     const glow = this.add.image(HUD.sap.icon, HUD.y, 'glow').setAlpha(0).setDepth(UI_DEPTH - 2);
     this.add.image(HUD.leaf.icon, HUD.y, 'leaf');
@@ -287,6 +337,7 @@ export class GameScene extends Phaser.Scene {
       wave: this.press(HUD.wave.x + HUD.wave.w / 2, HUD.y - 5, '', 18, ink, [0.5, 0.5]),
       waveSub: this.press(HUD.wave.x + HUD.wave.w / 2, HUD.y + 11, '', 8.5, '#6a4a2a', [0.5, 0.5]),
       heart: this.press(HUD.leaf.text, HUD.y, '', 20, ink),
+      regrow: this.press(HUD.leaf.x + HUD.leaf.w - 11, HUD.y - 1, '+', 16, '#3e8c3e', [0.5, 0.5]),
       sap: this.press(HUD.sap.text, HUD.y, '', 20, ink).setDepth(UI_DEPTH - 1),
       bloom: this.press(HUD.bloom.text, HUD.y - 7, '', 10.5, '#3a3014'),
       bloomSub: this.press(HUD.bloom.text, HUD.y + 7, '', 9, '#4a6a24'),
@@ -470,33 +521,54 @@ export class GameScene extends Phaser.Scene {
     if (mode === 'over') {
       title.setText('The Heartwood has fallen');
       text.setText(`Pests ate the Heartwood on wave ${s.wave}. ${s.kills} pests squashed.\nBest: ${s.best} waves cleared. Pick a garden to plant again.`);
+    } else if (mode === 'harvest' && s.thorny) {
+      title.setText('Thorny harvest: laurel won!');
+      text.setText(
+        `Wave ${HARVEST_WAVE} cleared in the thorny ${gardenOf(s).name} with ${s.heart} of ${START_HEART} leaves kept.\n` +
+          'Its laurel now crowns the garden\'s card. The waves go on: keep going, or plant another garden.',
+      );
     } else if (mode === 'harvest') {
       const n = s.harvest;
       title.setText(`Harvest: ${this.starText(n)}`);
       const kept = `${s.heart} of ${START_HEART} leaves kept`;
       const next = GARDENS.find((g) => g.unlockStars > stars);
+      const thorny = s.stars[s.garden] >= THORNY_STARS ? `Its thorny variant is open. ` : '';
       text.setText(
         `Wave ${HARVEST_WAVE} cleared with ${kept}: ${n} star${n === 1 ? '' : 's'} for the ${gardenOf(s).name}.\n` +
+          thorny +
           (next ? `${next.name} opens at ${next.unlockStars} stars; you have ${stars}. ` : 'Every garden is open. ') +
           'The waves go on: keep going, or plant another garden.',
       );
     } else {
       title.setText('Choose a garden');
-      text.setText(`A new garden starts from wave 1; this one is left behind.\nYour best (${s.best} waves), your stars and the Heartwood's bloom carry over.`);
+      text.setText(
+        `A new garden starts from wave 1; this one is left behind. Your best (${s.best} waves),\n` +
+          `your stars and the Heartwood's bloom carry over. ${THORNY_STARS} stars open a garden's thorny variant.`,
+      );
     }
     const parts: Phaser.GameObjects.GameObject[] = [dim, title, text];
     const { y, w, gap } = GARDEN_CARD;
     GARDENS.forEach((garden, i) => {
       const x = VIEW.w / 2 + (i - (GARDENS.length - 1) / 2) * (w + gap);
       const open = gardenOpen(s, i);
-      const here = i === s.garden;
+      const here = i === s.garden && !s.thorny;
       if (here) parts.push(this.add.image(x, y, 'gcard-rim'));
       const card = this.add.image(x, y, open ? 'gcard' : 'gcard-locked');
-      if (open) {
-        card.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
-          saveGarden(i);
-          this.scene.restart();
-        });
+      const plantIt = (thorny: boolean) => {
+        saveGarden(i);
+        saveThorny(thorny);
+        this.scene.restart();
+      };
+      if (open) card.setInteractive({ useHandCursor: true }).on('pointerdown', () => plantIt(false));
+      if (thornyOpen(s, i)) {
+        // Three stars open the garden's thorny variant: a tag under its card, with its twist and laurel.
+        const twist = TWIST_INFO[GARDEN_TWISTS[i]];
+        const ty = y + GARDEN_CARD.h / 2 + 24;
+        if (i === s.garden && s.thorny) parts.push(this.add.image(x, ty, 'pill').setScale(1.42, 1.9).setTint(0xf2c44a));
+        const tag = this.add.image(x, ty, 'pill').setScale(1.3, 1.6);
+        tag.setInteractive({ useHandCursor: true }).on('pointerdown', () => plantIt(true));
+        const won = s.laurels[i] ? ' · laurel won' : '';
+        parts.push(tag, this.press(x, ty, `Thorny · ${twist.name}${won}`, 10.5, '#7a2a4a', [0.5, 0.5]));
       }
       parts.push(card, this.press(x, y - 80, garden.name, 18, '#3a2a18', [0.5, 0.5]), this.miniMap(i, x, y - 18, open));
       parts.push(this.press(x, y + 50, garden.blurb, 10, '#7a5a34', [0.5, 0.5]).setAlign('center').setWordWrapWidth(w - 24));
@@ -505,9 +577,85 @@ export class GameScene extends Phaser.Scene {
       parts.push(caption);
     });
     if (mode !== 'over') {
-      parts.push(makeButton(this, VIEW.w / 2, 478, mode === 'harvest' ? 'Keep going' : 'Back', () => this.closePicker()));
+      parts.push(makeButton(this, VIEW.w / 2, 492, mode === 'harvest' ? 'Keep going' : 'Back', () => this.closePicker()));
     }
     return this.add.container(0, 0, parts).setDepth(UI_DEPTH + 10);
+  }
+
+  /**
+   * The boon pick after a Queen Slug wave: three cards, one taken for the rest of the garden. The
+   * game stands still until one is picked.
+   */
+  private showBoons() {
+    const s = this.state;
+    this.picked = null;
+    this.moving = null;
+    this.formMenu = false;
+    // The wave's banner would show through behind the title; the pick's own banner follows it.
+    this.tweens.killTweensOf(this.banner);
+    this.banner.setAlpha(0);
+    const dim = this.add.rectangle(0, 0, VIEW.w, VIEW.h, 0x1a0e06, 0.76).setOrigin(0).setInteractive();
+    const title = this.add
+      .text(VIEW.w / 2, 104, 'The Queen Slug is squashed!', { fontFamily: FONT, fontStyle: 'bold', fontSize: '30px', color: '#f2c44a', stroke: '#3a2008', strokeThickness: 6 })
+      .setOrigin(0.5);
+    const taken = s.boons.length ? `\nTaken so far: ${s.boons.map((b) => BOON_INFO[b].name).join(', ')}.` : '';
+    const text = this.add
+      .text(VIEW.w / 2, 166, `Pick a boon for this garden; it lasts until you plant another.${taken}`, {
+        fontFamily: FONT,
+        fontStyle: 'bold',
+        fontSize: '15px',
+        color: '#fbefd6',
+        align: 'center',
+      })
+      .setOrigin(0.5)
+      .setLineSpacing(5);
+    const parts: Phaser.GameObjects.GameObject[] = [dim, title, text];
+    const { y, w, gap } = GARDEN_CARD;
+    s.offer.forEach((boon, i) => {
+      const x = VIEW.w / 2 + (i - (s.offer.length - 1) / 2) * (w + gap);
+      const card = this.add.image(x, y, 'gcard');
+      card.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+        takeBoon(s, boon);
+        this.boonBox?.destroy();
+        this.boonBox = null;
+        this.announce([`Boon: ${BOON_INFO[boon].name}!`, BOON_INFO[boon].blurb]);
+        this.refresh();
+      });
+      const info = BOON_INFO[boon];
+      parts.push(card, this.press(x, y - 76, info.name, 18, '#3a2a18', [0.5, 0.5]), this.boonIcon(boon, x, y - 22));
+      parts.push(this.press(x, y + 36, info.blurb, 11, '#7a5a34', [0.5, 0.5]).setAlign('center').setWordWrapWidth(w - 28));
+      parts.push(this.press(x, y + 76, this.boonDetail(boon), 12.5, '#4a6a24', [0.5, 0.5]));
+    });
+    this.boonBox = this.add.container(0, 0, parts).setDepth(UI_DEPTH + 10);
+    this.refresh();
+  }
+
+  /** A boon card's picture: the golem, hedge, flower, leaf or sap drop it is about. */
+  private boonIcon(boon: Boon, x: number, y: number) {
+    if (boon === 'moss' || boon === 'pebble') return this.add.image(x, y + 26, `golem-${boon}`).setOrigin(GOLEM_ORIGIN.x, GOLEM_ORIGIN.y);
+    if (boon === 'hedge') return this.add.image(x, y + 22, 'hedge').setOrigin(0.5, 54 / 64);
+    return this.add.image(x, y, boon === 'sun' ? 'bloom' : boon === 'leaf' ? 'leaf' : 'sap').setScale(2);
+  }
+
+  /** What a boon would do in this garden now, under its blurb. */
+  private boonDetail(boon: Boon) {
+    const s = this.state;
+    const times = boonCount(s, boon);
+    const again = times ? ` (taken ${times}x)` : '';
+    if (boon === 'sun') return `Shines on row ${sunRow(s) + 1}`;
+    if (boon === 'leaf') return `${s.heart} of ${START_HEART} leaves now`;
+    if (boon === 'moss') return `Slows last ${Math.round((1 + BOON.mossSlow * (times + 1)) * 100)}%${again}`;
+    if (boon === 'hedge') return `Hedges hold ${Math.round(HEDGE.hp * (1 + BOON.hedgeHp * (times + 1)))}${again}`;
+    if (boon === 'pebble') return `Pebble damage +${Math.round(BOON.pebbleDamage * (times + 1) * 100)}%${again}`;
+    return `Compost up to ${COMPOST.cap + BOON.compostCap * (times + 1)}${again}`;
+  }
+
+  /** A warm stripe along each row a Sunny row boon shines on. */
+  private drawSun() {
+    const g = this.sunGfx.clear();
+    for (const row of this.state.sunRows) {
+      g.fillStyle(0xffe08a, 0.14).fillRect(GRID.x, GRID.y + row * GRID.cell, GRID.cols * GRID.cell, GRID.cell);
+    }
   }
 
   /** `n` of three stars, as filled and empty stars. */
@@ -566,9 +714,15 @@ export class GameScene extends Phaser.Scene {
       this.savedStars = s.stars.join(',');
       saveStars(s.stars);
     }
+    if (s.laurels.join(',') !== this.savedLaurels) {
+      this.savedLaurels = s.laurels.join(',');
+      saveLaurels(s.laurels);
+    }
     this.hud.wave.setText(`Wave ${s.wave}`);
-    this.hud.waveSub.setText(s.harvest ? `harvested ${this.starText(s.harvest)}` : `harvest at ${HARVEST_WAVE}`);
+    const prize = s.thorny ? 'laurel' : 'harvest';
+    this.hud.waveSub.setText(s.harvest ? `harvested ${this.starText(s.harvest)}` : `${prize} at ${HARVEST_WAVE}`);
     this.hud.heart.setText(String(s.heart));
+    this.hud.regrow.setVisible(canRegrow(s));
     this.hud.sap.setText(String(s.sap));
     this.hud.best.setText(`Best: ${s.best}`);
     this.hud.stars.setText(`${totalStars(s)} ★`);
@@ -584,8 +738,10 @@ export class GameScene extends Phaser.Scene {
       const h = SEED_BUTTONS.hs[SEEDS.indexOf(kind)];
       const isOpen = unlocked(s, kind);
       rim.setVisible(isOpen && s.selected === kind);
-      card.setVisible(isOpen).setTexture(s.sap >= seedCost(kind) ? `card-${h}` : `card-${h}-dim`);
-      open.setVisible(isOpen);
+      // The hedge strip of a thorny garden without hedges stays, faded, and picks nothing.
+      const faded = kind === 'hedge' && !isOpen;
+      card.setVisible(isOpen || faded).setTexture(isOpen && s.sap >= seedCost(kind) ? `card-${h}` : `card-${h}-dim`);
+      open.setVisible(isOpen || faded).setAlpha(faded ? 0.35 : 1);
       locked?.setVisible(!isOpen);
     }
     if (this.lockPips) {
@@ -623,7 +779,7 @@ export class GameScene extends Phaser.Scene {
   /** The next wave's preview: its pests and how many of each, and the Queen Slug in the title. */
   private refreshPreview() {
     const n = nextWave(this.state);
-    const counts = waveCounts(n);
+    const counts = waveCounts(n, twistOf(this.state));
     const boss = counts.queen > 0;
     this.preview.title.setText(boss ? `Wave ${n}: Queen Slug!` : `Next: wave ${n}`).setColor(boss ? '#ffd27a' : '#fbefd6');
     const kinds = PREVIEW_PESTS.filter((kind) => counts[kind] > 0);
@@ -675,7 +831,7 @@ export class GameScene extends Phaser.Scene {
     this.formMenu = false;
     const top = g.form ? FORM_INFO[g.form].name : 'max level';
     set(0, cost === null ? (g.growMs > 0 ? 'Raise\ngrowing' : `Raise\n${top}`) : `${picksForm(g) ? 'Form' : 'Raise'}\n${cost} sap`, cost !== null && s.sap >= cost);
-    const area = statsOf(g).area;
+    const area = statsOf(s, g).area;
     set(1, area ? 'Aim\nall near' : `Aim\n${TARGET_INFO[g.target].name}`, !area);
     set(2, `Move\n${MOVE_FEE} sap`, s.sap >= MOVE_FEE);
     set(3, `Uproot\n+${uprootValue(g)} sap`, true);
@@ -699,13 +855,22 @@ export class GameScene extends Phaser.Scene {
       if (hovered.form) return `${FORM_INFO[hovered.form].name} ${name.toLowerCase()}: ${FORM_INFO[hovered.form].blurb}`;
       const level = hovered.growMs > 0 ? `${name}, still growing` : `${name}, level ${hovered.level}`;
       if (combo) return `${name} lv ${hovered.level}: moss combo, ${combo === 'slowed' ? 'harder on slowed pests' : 'pricks twice'}`;
-      if (picked && !statsOf(picked).area) return `${level}, aims at ${TARGET_INFO[picked.target].blurb}`;
+      if (picked && !statsOf(s, picked).area) return `${level}, aims at ${TARGET_INFO[picked.target].blurb}`;
       if (picked && picksForm(picked)) return `${level}. Level 3 picks a form: ${formsOf(picked.kind).map((f) => FORM_INFO[f].name).join(' or ')}`;
       return picked ? `${level}. Tap it again to close` : `${level}. Tap it to raise, aim, move or uproot`;
     }
     const hedge = this.hover && hedgeAt(s, this.hover.col, this.hover.row);
     if (hedge) return `A hedge: pests stop and chew on it (${Math.ceil(hedge.hp)} left)`;
+    const twist = twistOf(s);
+    if (twist === 'hedges' && this.hover && gardenOf(s).map[this.hover.row][this.hover.col] === 'path') return 'Thorny garden: no hedges here';
     if (s.selected === 'hedge') return 'Tap a path cell to plant a hedge there; pests chew through it';
+    const onHeart = this.hover && gardenOf(s).map[this.hover.row][this.hover.col] === 'heart';
+    const lost = s.heart < START_HEART;
+    if (onHeart || (lost && s.phase === 'build')) {
+      if (!lost) return 'The Heartwood has all its leaves';
+      if (s.phase !== 'build') return 'Leaves regrow between waves';
+      return `Tap the Heartwood to regrow a leaf: ${regrowPrice(s)} sap${s.sap < regrowPrice(s) ? ' (not enough)' : ''}`;
+    }
     if (s.phase === 'build' && nextWave(s) % BOSS_EVERY === 0) return 'The Queen Slug slimes golems beside her trail';
     if (s.phase === 'build' && s.wave >= COMPOST.fromWave) return `Compost: clearing pays ${Math.round(COMPOST.rate * 100)}% of unspent sap (up to ${COMPOST.cap})`;
     return s.golems.length ? 'Golems side by side with a moss golem combo' : 'Tap soil to plant the picked seed';
@@ -892,7 +1057,7 @@ export class GameScene extends Phaser.Scene {
     const picked = this.golemById(this.picked) ?? this.golemById(this.moving);
     if (picked) {
       const at = cellCentre(picked.col, picked.row);
-      if (this.picked !== null) reach(at.x, at.y, golemStats(picked.kind, picked.level).range);
+      if (this.picked !== null) reach(at.x, at.y, statsOf(s, picked).range);
       outline(at.x, at.y, 0xf2c44a);
     }
     if (!this.hover) return;
@@ -901,7 +1066,7 @@ export class GameScene extends Phaser.Scene {
     const golem = golemAt(s, col, row);
     if (golem) {
       if (golem !== picked) {
-        reach(x, y, golemStats(golem.kind, golem.level).range);
+        reach(x, y, statsOf(s, golem).range);
         outline(x, y, 0xf2c44a);
       }
       return;
@@ -919,7 +1084,7 @@ export class GameScene extends Phaser.Scene {
     if (gardenOf(s).map[row][col] !== 'soil') return;
     const ok = moving ? canMove(s, moving, col, row) : this.picked === null && canPlant(s, col, row);
     if (ok) {
-      reach(x, y, golemStats(kind, moving?.level ?? 1, moving?.form).range);
+      reach(x, y, boonedStats(s, kind, moving?.level ?? 1, moving?.form ?? null, row).range);
       this.ghost.setTexture(`golem-${kind}`).setOrigin(GOLEM_ORIGIN.x, GOLEM_ORIGIN.y).setPosition(x, y + FEET).setVisible(true);
     }
     outline(x, y, ok ? 0xfbefd6 : 0x8a7a6a);

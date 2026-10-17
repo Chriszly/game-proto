@@ -1,4 +1,5 @@
 import { addBlockers, freshBoard, stuck, type Board, type Cell, type Tile } from './board';
+import { EXAMS, examOrder, examSeed, seeded } from './exams';
 import { KINDS, randomKind, type Kind } from './kinds';
 import { orderFor, type Needs, type Order, type PotionId } from './orders';
 import { unlockedRecipes } from './ranks';
@@ -19,6 +20,10 @@ export interface Progress {
   upgrades: Upgrades;
   /** True once the crown's last order is filled: the tinker is Royal Apothecary. */
   royal: boolean;
+  /** Guild examinations passed, one seal each; the next one to sit is `EXAMS[seals]`. */
+  seals: number;
+  /** The next order was picked rich on the result card. */
+  rich: boolean;
 }
 
 export interface GameState extends Progress {
@@ -55,33 +60,60 @@ export interface GameState extends Progress {
   toPantry: Needs;
   /** The pantry as the order found it: what is saved (and given back) until the order sells. */
   startPantry: Needs;
+  /** On a guild examination, whether the sale earned the stars it asked for. */
+  passed: boolean;
   board: Board;
   nextId: number;
 }
 
 /** The most of one kind the pantry keeps. */
 export const PANTRY_MAX = 5;
+/** What the herbalist charges for one ingredient put in the pantry between orders. */
+export const HERB_COST = 8;
 
-export const freshProgress = (): Progress => ({ order: 1, coins: 0, sold: 0, stars: 0, pantry: {}, upgrades: freshUpgrades(), royal: false });
+export const freshProgress = (): Progress => ({ order: 1, coins: 0, sold: 0, stars: 0, pantry: {}, upgrades: freshUpgrades(), royal: false, seals: 0, rich: false });
 /** The progress to save or carry on with. Until the order sells, its pantry draws are given back. */
-export const progressOf = ({ order, coins, sold, stars, pantry, startPantry, phase, upgrades, royal }: GameState): Progress => ({
+export const progressOf = ({ order, coins, sold, stars, pantry, startPantry, phase, upgrades, royal, seals, rich }: GameState): Progress => ({
   order,
   coins,
   sold,
   stars,
-  pantry: { ...(phase === 'sold' ? pantry : startPantry) },
+  pantry: { ...heldPantry({ pantry, startPantry, phase }) },
   upgrades: { ...upgrades },
   royal,
+  seals,
+  rich,
 });
+
+/** The pantry as it stands between orders: after a sale what it holds, otherwise what the order found. */
+export const heldPantry = (s: Pick<GameState, 'pantry' | 'startPantry' | 'phase'>): Needs => (s.phase === 'sold' ? s.pantry : s.startPantry);
+
+/** True when there is a guild examination to sit: the tinker is Royal Apothecary and has seals still to earn. */
+export const examOpen = (p: Progress) => p.royal && p.seals < EXAMS.length;
+
+/**
+ * The herbalist, between orders: one `kind` into the pantry for `HERB_COST` coins, up to `PANTRY_MAX`.
+ * False while an order is being played, when it can't be afforded or the pantry is full of it.
+ */
+export function buyHerb(s: GameState, kind: Kind): boolean {
+  const store = heldPantry(s);
+  if (s.phase === 'play' || s.coins < HERB_COST || (store[kind] ?? 0) >= PANTRY_MAX) return false;
+  s.coins -= HERB_COST;
+  store[kind] = (store[kind] ?? 0) + 1;
+  return true;
+}
 
 export const tileMaker = (s: GameState) => (): Tile => ({ id: s.nextId++, kind: randomKind() });
 
-/** The orders' view of the progress: the recipes unlocked, the workbench's moves and the royal title. */
-export const standingOf = (p: Progress) => ({ unlocked: unlockedRecipes(p.stars), extraMoves: p.upgrades.hands, royal: p.royal });
+/** The orders' view of the progress: the recipes unlocked, the workbench's moves, the royal title and a rich pick. */
+export const standingOf = (p: Progress) => ({ unlocked: unlockedRecipes(p.stars), extraMoves: p.upgrades.hands, royal: p.royal, rich: p.rich });
 
-/** Starts the order `progress.order` on a new board with all its moves. */
-export function startOrder(progress: Progress): GameState {
-  const current = orderFor(progress.order, standingOf(progress));
+/**
+ * Starts the order `progress.order` on a new board with all its moves, or with `exam` the next guild
+ * examination on its fixed board (no Bloom starter, no pantry).
+ */
+export function startOrder(progress: Progress, exam = false): GameState {
+  const current = exam ? examOrder(progress.seals, progress.order) : orderFor(progress.order, standingOf(progress));
   const s: GameState = {
     ...progress,
     pantry: { ...progress.pantry },
@@ -106,9 +138,15 @@ export function startOrder(progress: Progress): GameState {
     fromPantry: {},
     toPantry: {},
     startPantry: { ...progress.pantry },
+    passed: false,
     board: [],
     nextId: 1,
   };
+  if (exam) {
+    const rand = seeded(examSeed(progress.seals));
+    s.board = addBlockers(freshBoard(() => ({ id: s.nextId++, kind: randomKind(rand) }), rand), current.jars, current.resin, current.mould, rand);
+    return s;
+  }
   s.board = addBlockers(freshBoard(tileMaker(s)), current.jars, current.resin, current.mould);
   if (s.upgrades.bloom > 0) s.board = withBloom(s.board);
   drawPantry(s);

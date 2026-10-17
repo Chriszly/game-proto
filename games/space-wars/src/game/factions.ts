@@ -67,6 +67,8 @@ export interface Faction {
   tune: { hp: number; damage: number; speed: number; cost: number; carry: number };
   units: Record<UnitId, UnitDef>;
   buildings: Record<Role, BuildingDef>;
+  /** The flagship the third contract unlocks: a slow capital ship built on the heavy's hull, with a stronger take on the faction's ability. */
+  flagship: { name: string; ability: Ability };
 }
 
 /** Units the barracks train, in the order the buttons show them. */
@@ -90,6 +92,7 @@ export const FACTIONS: readonly Faction[] = [
       barracks: { name: 'Orbital Dock', cost: 100, buildMs: 8000, hp: 400, radius: 18, shape: [[-16, -10], [16, -10], [16, 4], [8, 10], [-8, 10], [-16, 4]] },
       turret: { name: 'Mirror Pylon', cost: 90, buildMs: 6000, hp: 350, radius: 12, weapon: { damage: 14, range: 150, cooldownMs: 1000 }, shape: [[0, -16], [8, 0], [0, 16], [-8, 0]] },
     },
+    flagship: { name: 'Dawn Throne', ability: { kind: 'shield', range: 120, share: 0.35 } },
   },
   {
     name: 'Ferrox Hive',
@@ -108,6 +111,7 @@ export const FACTIONS: readonly Faction[] = [
       barracks: { name: 'Brood Pit', cost: 95, buildMs: 7500, hp: 380, radius: 17, shape: [[-16, -10], [16, -10], [10, 10], [-10, 10]] },
       turret: { name: 'Spine Spire', cost: 80, buildMs: 5500, hp: 330, radius: 12, weapon: { damage: 13, range: 150, cooldownMs: 950 }, shape: [[0, -18], [7, 8], [0, 4], [-7, 8]] },
     },
+    flagship: { name: 'Brood Mother', ability: { kind: 'brood', everyMs: 6000, cap: 10 } },
   },
   {
     name: 'Iron Dominion',
@@ -126,6 +130,7 @@ export const FACTIONS: readonly Faction[] = [
       barracks: { name: 'Forge Works', cost: 110, buildMs: 8500, hp: 450, radius: 18, shape: [[-16, -16], [-4, -16], [-4, 0], [16, 0], [16, 14], [-16, 14]] },
       turret: { name: 'Howitzer Fort', cost: 100, buildMs: 6500, hp: 420, radius: 13, weapon: { damage: 18, range: 170, cooldownMs: 1400 }, shape: [[-12, -8], [-4, -8], [-4, -14], [4, -14], [4, -8], [12, -8], [12, 8], [-12, 8]] },
     },
+    flagship: { name: 'Iron Citadel', ability: { kind: 'splash', radius: 55, share: 0.7 } },
   },
   {
     name: 'Veil Syndicate',
@@ -144,6 +149,7 @@ export const FACTIONS: readonly Faction[] = [
       barracks: { name: 'Cloak Works', cost: 95, buildMs: 7000, hp: 360, radius: 16, shape: [[-16, 0], [-8, -12], [8, -12], [16, 0], [8, 12], [-8, 12]] },
       turret: { name: 'Mine Lattice', cost: 85, buildMs: 6000, hp: 300, radius: 14, dome: 4, weapon: { damage: 12, range: 140, cooldownMs: 800 }, ability: { kind: 'mines', everyMs: 8000, cap: 4, reach: 130, trigger: 16, radius: 40, damage: 45 }, shape: [[-12, -12], [12, -12], [12, 12], [-12, 12]] },
     },
+    flagship: { name: 'Night Shroud', ability: { kind: 'cloak', revealMs: 1000 } },
   },
   {
     name: 'Nomad Freight',
@@ -162,5 +168,6 @@ export const FACTIONS: readonly Faction[] = [
       barracks: { name: 'Salvage Yard', cost: 90, buildMs: 7000, hp: 360, radius: 16, ability: { kind: 'salvage', range: 200, pay: 8 }, shape: [[-16, -12], [16, -12], [16, 12], [-16, 12]] },
       turret: { name: 'Flak Tower', cost: 75, buildMs: 5500, hp: 280, radius: 12, weapon: { damage: 11, range: 140, cooldownMs: 900 }, shape: [[0, -15], [5, -5], [12, -4], [8, 4], [10, 12], [0, 8], [-10, 12], [-8, 4], [-12, -4], [-5, -5]] },
     },
+    flagship: { name: 'Caravan Prime', ability: { kind: 'salvage', range: 260, pay: 12 } },
   },
 ];

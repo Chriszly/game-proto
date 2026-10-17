@@ -1,9 +1,11 @@
+import { EXAMS } from './exams';
 import { KINDS, type Kind } from './kinds';
 import { freshProgress, PANTRY_MAX, type Progress } from './state';
 import { UPGRADE_ORDER, UPGRADES } from './upgrades';
 
 // Only the progress between orders is saved: which order is next, the coins, potions sold, stars,
-// the pantry, the workbench upgrades and whether the tinker is Royal Apothecary.
+// the pantry, the workbench upgrades, whether the tinker is Royal Apothecary, the guild seals and
+// whether the next order was picked rich.
 const KEY = 'tincture-tinker-progress';
 
 export function loadProgress(): Progress {
@@ -31,6 +33,10 @@ export function loadProgress(): Progress {
       if (ok(level, 0) && Number.isInteger(level)) saved.upgrades[id] = Math.min(level as number, UPGRADES[id].costs.length);
     }
     saved.royal = saved.royal === true;
+    if (!ok(saved.seals, 0) || !Number.isInteger(saved.seals)) saved.seals = fresh.seals;
+    saved.seals = Math.min(saved.seals, EXAMS.length);
+    // The first order is never rich.
+    saved.rich = saved.rich === true && saved.order > 1;
     return saved;
   } catch {
     return fresh;

@@ -1,11 +1,12 @@
 import Phaser from 'phaser';
-import { DESKS, GRID, MAX_SLOTS } from '../game/state';
-import { BOARD, CELL_SCALE, FORGE_BUTTON, FURNACE_WINDOW, HUD_HEIGHT, REPUTATION, VIEW, deskBox, slotCentre } from '../scenes/layout';
+import { DESKS, GRID, MAX_DESKS, MAX_SLOTS } from '../game/state';
+import { BOARD, CELL_SCALE, DESK, FORGE_BUTTON, FURNACE_WINDOW, HUD_HEIGHT, REPUTATION, VIEW, deskBox, deskScale, slotCentre } from '../scenes/layout';
 import { ART, LEAD, PI, bake, ctx, diamond, glass, glow, mix, panel, path, rect, reseed, ring, rnd, type Pt } from './glass';
 
 // The smithy as one great window: a mosaic of glass behind everything, glowing orange round the
 // furnace, cobalt panes under the anvils and amber behind the counter. Painted once into the
-// `background` texture, with the furnace's flame window in two frames (`furnace-0/1`) on top.
+// `background` texture, with the furnace's flame window in two frames (`furnace-0/1`) and the
+// counter's desk frames (`counter-3`, or `counter-4` with the fourth desk) on top.
 
 const W = VIEW.w * ART;
 /** A point of the view in art units. */
@@ -17,9 +18,11 @@ export function bakeScenery(scene: Phaser.Scene) {
     furnaceStones();
     board();
     reputationPanel();
-    counter();
     hudBar();
   });
+  // The counter's column, from its top left corner, with three desks or four smaller ones.
+  const colH = DESKS * DESK.h + (DESKS - 1) * DESK.gap;
+  for (const desks of [DESKS, MAX_DESKS]) bake(scene, `counter-${desks}`, DESK.w, colH, () => counter(desks));
   for (let frame = 0; frame < 2; frame++) {
     const f = FURNACE_WINDOW;
     bake(scene, `furnace-${frame}`, f.w, f.h, () => {
@@ -162,16 +165,19 @@ function anvil(cx: number, cy: number) {
   glass([[cx - 62, cy + 48], [cx + 62, cy + 48], [cx + 70, cy + 70], [cx - 70, cy + 70]], '#4a2e14', { lw: 4 });
 }
 
-/** The counter: a window frame per desk with an empty lancet, which an adventurer's figure fills. */
-function counter() {
-  for (let desk = 0; desk < DESKS; desk++) {
-    const b = deskBox(desk);
-    const x = a(b.x);
-    const y = a(b.y);
-    const h = a(b.h);
+/** The counter: a window frame per desk with an empty lancet, which an adventurer's figure fills. Drawn relative to the column's corner. */
+function counter(desks: number) {
+  const k = deskScale(desks);
+  for (let desk = 0; desk < desks; desk++) {
+    const b = deskBox(desk, desks);
+    ctx.save();
+    ctx.translate(a(b.x - DESK.x), a(b.y - DESK.y));
+    ctx.scale(k, k);
+    const h = a(DESK.h);
     reseed(40 + desk);
-    panel(x, y, a(b.w), h, '#8a5e30', '#3a3266', 10);
-    glass([[x + 14, y + h - 12], [x + 14, y + 80], [x + 94, y + 16], [x + 174, y + 80], [x + 174, y + h - 12]], '#2e4a8a', { hi: 0.3, lo: 0.15, lw: 5 });
+    panel(0, 0, a(DESK.w), h, '#8a5e30', '#3a3266', 10);
+    glass([[14, h - 12], [14, 80], [94, 16], [174, 80], [174, h - 12]], '#2e4a8a', { hi: 0.3, lo: 0.15, lw: 5 });
+    ctx.restore();
   }
 }
 

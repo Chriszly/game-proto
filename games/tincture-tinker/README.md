@@ -23,8 +23,11 @@ before the moves run out and the potion sells, for coins and one to three stars.
 | Sift, then a tile | Spend 25 coins to reroll that tile's row (tap Sift again to put it away) |
 | Pestle, then a tile | Spend 30 coins to smash that tile, without a move |
 | Funnel, then two tiles | Spend 35 coins to swap any two tiles, without a move |
-| Next order / Try again | After an order: start the next one, or the same one again |
+| Modest order / Rich order | After a sale: start the next order as usual, or rich (more coins, more risk) |
+| Try again | After running out of moves: the same order again |
 | Workbench, then Buy | After an order: spend coins on a lasting upgrade |
+| Herbalist, then Buy | After an order: spend coins to stock the pantry |
+| Guild examination | Once Royal Apothecary: sit the next examination |
 
 1. **Swaps** only count when they make a match. A swap that doesn't slides back and costs no move.
 2. **Matches** of three or more in a row or column, across or down, are gathered. Only the
@@ -35,8 +38,10 @@ before the moves run out and the potion sells, for coins and one to three stars.
    matched it clears its whole row, which is marked with a dotted gold band, and every tile in that
    row counts towards the order.
    **Blooms**: an L or T of one kind leaves a Bloom, ringed in rose petals, where its two lines
-   cross. Matched, it clears the 3x3 around it. **Two Catalysts swapped together** clear the row
-   and the column where the moved one lands.
+   cross. Matched, it clears the 3x3 around it. **Two specials swapped together** go off without
+   needing a match: two Catalysts clear the row and the column where the moved one lands, a
+   Catalyst and a Bloom clear that row and the rows above and below it, and two Blooms clear the
+   5x5 around it.
 4. **Blockers**, from the second order on: a **corked jar** holds one ingredient. It can't be
    swapped and never matches; a match right next to it opens it and gathers what's inside.
    **Resin** (from the third order) holds a tile in place: it can't be swapped and the other tiles
@@ -73,10 +78,17 @@ before the moves run out and the potion sells, for coins and one to three stars.
    melts, a Catalyst or Bloom fires) and **Funnel** swaps any two tiles for 35 coins (not jars or
    resin), and neither of those spends a move. Hover a tool to read what it does in the caption. A
    tool you can't afford is greyed out.
-11. **Workbench**: after an order, "Workbench: lasting upgrades" on the result card opens three
+11. **Workbench**: after an order, "Workbench" on the result card opens three
    upgrades that stay bought: **Steady hands** (+1 move on every order, three levels for 60, 100 and
    150 coins), **Potent Catalysts** (a fired Catalyst clears its column as well as its row, 120
    coins) and **Bloom starter** (every order's board starts with a Bloom, 90 coins).
+   **Herbalist**: next to it, "Herbalist" sells ingredients for the pantry, 8 coins each, up to its
+   5 of a kind; the ones the next order needs are marked.
+   **Pick your next order**: after a sale the result card offers a **modest order** (the next order
+   as usual) or a **rich order**, which pays half as much again but has 4 fewer moves (even orders)
+   or 2 more jars and 2 more resin, and one more mould patch once there is mould (odd orders). The
+   caption says which. The pick is kept if the order has to be tried again. The first order is
+   never rich.
 12. **Stars**: a sold order earns 3 stars with 8 or more moves left, 2 with 4 to 7 and 1 otherwise.
    The stars next to the moves show what the order is worth right now.
 13. **Tinker rank**: the stars add up on the ribbon above the board. Each rank unlocks a new recipe,
@@ -89,12 +101,19 @@ before the moves run out and the potion sells, for coins and one to three stars.
    | Master Tinker | 12 | Starlight Elixir |
    | Grand Master Tinker | 24 | Philosopher's Draught |
 
-14. **Hints**: after a few idle seconds, two tiles that would match swell and settle (with the hub's
+14. **Guild examinations**: once Royal Apothecary, the result card offers the next of eight guild
+   examinations: a fixed board (the same every time it is tried, though the tiles that drop in
+   later vary) that must be sold with 2 or 3 stars, as its label says. A pass pays its coins and
+   moves bonus and adds a wax seal to the ribbon; selling it short of the stars, or running out of
+   moves, pays nothing, and it can be tried again or left for the orders. Examinations leave the
+   orders, the stars and the pantry as they were.
+15. **Hints**: after a few idle seconds, two tiles that would match swell and settle (with the hub's
    reduced motion on, they hold still, a little larger).
-15. If the board is left with no move to make, its tiles are shuffled.
+16. If the board is left with no move to make, its tiles are shuffled.
 
-Progress (the next order, coins, potions sold, stars, the pantry, the workbench upgrades and the
-royal title) is saved in the browser, after each sale and each tool or upgrade bought.
+Progress (the next order, coins, potions sold, stars, the pantry, the workbench upgrades, the
+royal title, the guild seals and a rich pick) is saved in the browser, after each sale, each tool,
+upgrade or ingredient bought and each pick of the next order.
 
 ![A match being gathered](docs/screenshots/playthrough-1-match.webp)
 
@@ -159,6 +178,35 @@ The crown's last order filled: Royal Apothecary, with the total stars on the rib
 
 ![Royal Apothecary](docs/screenshots/royal-apothecary.webp)
 
+After a sale, the next order modest or rich; the caption says what the rich one risks:
+
+![Pick your next order](docs/screenshots/rich-order.webp)
+
+The herbalist, with the ingredients the next order needs marked:
+
+![The herbalist](docs/screenshots/herbalist.webp)
+
+The fourth guild examination, with three seals already on the ribbon:
+
+![A guild examination](docs/screenshots/guild-examination.webp)
+
+Two Blooms swapped together clear the 5x5 around them:
+
+![Mixed specials](docs/screenshots/mixed-specials.webp)
+
+### Guild examinations
+
+| Exam | Potion | Needs | Moves | Stars | Jars, resin, mould | Pays |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | Healing Draught | 14 ember salt, 14 sage | 14 | 2 | none | 60 |
+| 2 | Sleeping Tonic | 16 moonpetal, 14 wheat | 16 | 2 | 3, 0, 0 | 80 |
+| 3 | Mandrake Tincture | 14 mandrake, 12 sage, 12 ember salt | 14 | 2 | 2, 4, 0 | 100 |
+| 4 | Golden Elixir | 18 wheat, 16 ember salt, 16 moonpetal | 21 | 3 | 4, 4, 0 | 120 |
+| 5 | Moonlit Philter | 20 moonpetal, 18 mandrake, 16 sage | 17 | 2 | 3, 3, 2 | 140 |
+| 6 | Amber Cordial | 18 wheat, 16 mandrake, 16 ember salt | 21 | 3 | 0, 5, 2 | 160 |
+| 7 | Starlight Elixir | 20 moonpetal, 18 sage, 16 wheat | 18 | 3 | 5, 5, 3 | 180 |
+| 8 | Philosopher's Draught | 22 ember salt, 20 moonpetal, 20 mandrake | 20 | 3 | 6, 6, 3 | 200 |
+
 ### Orders
 
 The orders come round again with 3 more of each ingredient and 15 more coins every five orders.
@@ -186,7 +234,7 @@ The favicon is the hub's bear with three potions lined up: a match of three.
 
 ![The favicon](docs/screenshots/favicon.webp)
 
-The difficulty, set on the hub page's Settings, changes one thing: each order gives 5 more moves on Easy and 3 fewer on Hard.
+The difficulty, set on the hub page's Settings, changes one thing: each order (and each guild examination) gives 5 more moves on Easy and 3 fewer on Hard.
 
 ## Running locally
 
@@ -217,9 +265,10 @@ All paths are inside `games/tincture-tinker/`.
 
 - `src/game/`: the rules in plain TypeScript with no Phaser dependency. `kinds.ts` lists the
   ingredients, `orders.ts` the potion orders, the recipes ranks unlock, royal commissions and twin
-  orders, `ranks.ts` the stars and ranks, `upgrades.ts` the workbench, `board.ts` finds runs,
+  orders (rich ones too), `exams.ts` the guild examinations, `ranks.ts` the stars and ranks,
+  `upgrades.ts` the workbench, `board.ts` finds runs,
   matches and moves, lets tiles fall, shuffles, places jars, resin and mould and lets mould creep,
-  `state.ts` holds the order being played and the pantry, `sim.ts` plays a swap out step by step
+  `state.ts` holds the order being played, the pantry and the herbalist, `sim.ts` plays a swap out step by step
   (Catalysts, Blooms, jars, resin, mould, stages and customers included) and runs the bench tools,
   and `save.ts` keeps the progress.
 - `src/scenes/`: `BootScene` paints the textures, `GameScene` draws the board, the rank ribbon and
@@ -227,7 +276,7 @@ All paths are inside `games/tincture-tinker/`.
   `layout.ts` says where things are drawn.
 - `src/art/`: `nouveau.ts`, the label toolkit (sepia contours, gold whiplashes, the ingredient
   shapes), and `textures.ts`, which paints every texture on 2D canvases at startup.
-- `src/ui/`: the result card's button.
+- `src/ui/`: the result card's buttons.
 
 Adding an order is an entry in `ORDERS` in `src/game/orders.ts`; a new potion also needs its name
 there and its colour in `BREWS` in `src/art/textures.ts`.

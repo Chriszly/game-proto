@@ -1,6 +1,6 @@
 // The enemy ships. Speeds are pixels per second, turning radians per second, times milliseconds.
 
-export type EnemyKind = 'sloop' | 'brig' | 'galleon' | 'fireship' | 'ketch' | 'flagship' | 'admiral';
+export type EnemyKind = 'sloop' | 'brig' | 'galleon' | 'fireship' | 'ketch' | 'flagship' | 'admiral' | 'merchant';
 
 export interface ShipType {
   name: string;
@@ -19,9 +19,10 @@ export interface ShipType {
   /**
    * How it fights, when not with broadsides: a fireship sails straight at you and blows up on
    * touching (or when sunk); a mortar ketch keeps its distance and lobs shells (`damage` each,
-   * every `reloadMs`, up to `range` away) that land where it marked.
+   * every `reloadMs`, up to `range` away) that land where it marked; a merchantman carries no guns
+   * and runs from the player (on the Merchant lane), or sails for her island (a convoy).
    */
-  role?: 'fireship' | 'mortar';
+  role?: 'fireship' | 'mortar' | 'merchant';
   /** Sailors aboard with a full crew; a prize needs half of them from the player's crew. */
   crew: number;
   /** Loads grapeshot when within `GRAPE_RANGE` of its target, which kills sailors on a hit. */
@@ -36,6 +37,7 @@ export const ENEMIES: Record<EnemyKind, ShipType> = {
   ketch: { name: 'Mortar ketch', hp: 45, radius: 22, speed: 52, turn: 0.9, guns: 0, damage: 20, reloadMs: 4200, range: 380, loot: 30, role: 'mortar', crew: 10 },
   flagship: { name: 'Flagship', hp: 300, radius: 38, speed: 42, turn: 0.55, guns: 4, damage: 9, reloadMs: 3000, range: 280, loot: 150, crew: 32, grape: true },
   admiral: { name: "Admiral's flagship", hp: 440, radius: 40, speed: 40, turn: 0.5, guns: 5, damage: 10, reloadMs: 2800, range: 290, loot: 300, crew: 40, grape: true },
+  merchant: { name: 'Merchantman', hp: 50, radius: 24, speed: 74, turn: 0.9, guns: 0, damage: 0, reloadMs: 0, range: 0, loot: 40, role: 'merchant', crew: 10 },
 };
 
 /** Ships that carry grapeshot load it against a target this close, raking its deck. */

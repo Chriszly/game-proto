@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 // Plays the first round with real inputs: the crystal harvesters mine and carry crystal home, the
 // player raises a Barracks beside the hub (the first contract, which pays its reward and rank
-// perk), trains a wing of three Lancers from it, box-selects them, flies them into the fog of war
+// perk), picks Break the raid from the contract board, trains a wing of three Lancers from it, box-selects them, flies them into the fog of war
 // to find the relay beacon and takes it until it pays, fights off the rival picket and collects its
 // salvage shard, then attacks the nearest enemy base. The map is bigger than the screen, so the test pans it with the arrow
 // keys to reach what it needs to tap. Game state is only read, through the `game` object the dev
@@ -48,7 +48,7 @@ interface GameState {
   beacon: { x: number; y: number; owner: number; capture: number; held: boolean; paid: number };
   shards: { id: number; faction: number; x: number; y: number; value: number }[];
   fog: { explored: number };
-  contract: { index: number; progress: number };
+  contract: { index: number; progress: number; goal: string | null; offer: string[] };
   salvaged: number;
   kills: number;
 }
@@ -90,6 +90,10 @@ function scene(page: Page) {
     /** The faction picker's cards, in view pixels. */
     pickCards: () => read<{ x: number; y: number; w: number; h: number; faction: number }[]>((s) =>
       JSON.parse(JSON.stringify(s.pickCards)),
+    ),
+    /** The contract board's cards while it is up, in view pixels. */
+    boardCards: () => read<{ x: number; y: number; w: number; h: number; goal: string }[]>((s) =>
+      JSON.parse(JSON.stringify(s.boardCards)),
     ),
     /** Where the map camera is scrolled to, in battlefield pixels. */
     /** The ids of the units the player has selected. */
@@ -246,7 +250,9 @@ test('plays the first round', async ({ page }, testInfo) => {
   expect(s.sides[PLAYER].crystal).toBe(START_CRYSTAL);
   expect(mine(s, 'harvester')).toHaveLength(2);
   // The contract chain starts at its first contract, and the relay beacon is unclaimed.
-  expect(s.contract).toEqual({ index: 0, progress: 0 });
+  expect(s.contract.index).toBe(0);
+  expect(s.contract.goal).toBe('barracks');
+  expect(s.contract.progress).toBe(0);
   expect(s.beacon.owner).toBe(-1);
   // A dozen frames first, so the start screenshot shows the map drawn.
   await play(FRAME_MS * 12, async () => false);
@@ -284,13 +290,21 @@ test('plays the first round', async ({ page }, testInfo) => {
   await tapWorld(spot!.x, spot!.y);
   await until('barracks built', 30_000, (st) => !!barracks(st)?.done);
   // Finishing the Barracks completes the first contract: its reward is paid, the rank perk applies
-  // and the second contract starts.
+  // and the contract board offers two contracts for the second, Break the raid first.
   await until('first contract paid', 1_000, (st) => st.contract.index === 1);
   s = await game.state();
   expect(s.sides[PLAYER].perks.train, 'rank I perk: ships train faster').toBeCloseTo(0.8);
   expect(s.sides[PLAYER].crystal).toBeGreaterThanOrEqual(FIRST_REWARD);
-  expect(s.contract.progress).toBe(0);
+  expect(s.contract.goal, 'the board is up').toBeNull();
+  expect(s.contract.offer, 'the board offers two contracts').toHaveLength(2);
+  expect(s.contract.offer[0], 'the second board always offers Break the raid').toBe('kills');
   await snap('playthrough-2-barracks');
+  // Pick Break the raid by tapping its card on the board.
+  const raid = (await game.boardCards()).find((c) => c.goal === 'kills')!;
+  await tap(raid.x + raid.w / 2, raid.y + raid.h / 2);
+  s = await game.state();
+  expect(s.contract.goal, 'the picked contract starts').toBe('kills');
+  expect(s.contract.progress).toBe(0);
 
   // Train a wing of three Lancers from the Barracks; with the contract's reward the bank covers them.
   s = await game.state();

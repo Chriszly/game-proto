@@ -10,14 +10,17 @@ Lane Brawl is a single-player MOBA on one 2800x2800 square map with three lanes,
 inhibitors, minion waves, a jungle of twelve camps, watchstones, a guardian beast, tall grass, fog of
 war, two Nexuses, five champions a side and a shop. The player picks one of fifteen champion classes,
 from medieval fantasy to steampunk and beasts,
-and fights with four AI allies against five AI champions on red; every champion gets a random name. The art is low-poly 3D: every unit is a small mesh built in code and rendered at boot by a
-software renderer into sprite frames; there are no image assets besides the cover and favicon.
+and fights with four AI allies against five AI champions on red. Each class is played by one named
+champion with a story (`hero`, `title`, `motive` in `CHAMPIONS`), the same in every match. The art is toon low-poly 3D: every unit is a small mesh built in code and rendered at boot by a
+software renderer into sprite frames, in three cel bands with a dark ink outline, and each champion
+has an oversized hero head and a prop from their story; there are no image assets besides the cover and favicon.
 
 Implemented today:
 
-- Pick screen with the fifteen classes in three rows of five cards (3D figure, the champion's random
-  name, class and role, passive), a line under them with the blurb of the card under the pointer
-  (`hoverPick`) and a New names button (`REROLL`), then one match.
+- Pick screen with the fifteen classes in three rows of five cards (3D figure, the champion's name,
+  class and role, passive), two lines under them for the card under the pointer (`hoverPick`): the
+  champion's name, title, class, blurb and story perk, then their motive; with no card under the pointer, the
+  setting in one line. Then one match.
 - Map (`WORLD` 2800x2800): the blue Nexus at the bottom left, the red at the top right; top and
   bottom lanes along the edges, the middle lane on the diagonal. Everything red is blue mirrored
   through the centre (`mirror`, `both` in `data.ts`), with top and bottom lanes swapped. Two towers
@@ -33,10 +36,18 @@ Implemented today:
   hit where it lands), `ally` (heal, shield and optional `buff` for allied champions), `buff` (a
   timed `BuffDef` on the caster: attack speed, damage, speed, lifesteal, armor, cooldowns, regen,
   slowing hits or stealth) and `zone` (a lingering circle that hurts enemies by `dps` and slows
-  them, in `s.zones`). R unlocks at level 3; levels run 1 to 5.
-- Names (`names.ts`): `championName(classId, rnd, taken)` joins a syllable first name (for the
-  Automaton a maker's mark and number, like KR-6) to a byname for the class; `createGame` names every champion (the player's from the pick card), no two alike.
-  `shortName` drops the byname for the portrait and notices.
+  them, in `s.zones`). R unlocks at level 3; levels run 1 to 8 (`XP_FOR_LEVEL`).
+- Champions and lore: each `ChampionDef` carries `hero` (the full name, like Hald Oathstone, which
+  `createGame` gives the unit as `name`), `short` (the first name for labels, the portrait and
+  notices, through `shortName` in `names.ts`), `title` and `motive` (one line, at most 90
+  characters, for the pick screen). A class shows up at most once per match, so names never clash.
+  Three champions carry a `perk` (`StoryPerk`) from their story, applied in `sim.ts`: Morrow's
+  `beastDmg` (25% more damage to the guardian beast, in `damage`), Kaida's `captureRate` (takes
+  watchstones twice as fast, in `updateWatchstones`) and Rook's `bountyGold` (50% more gold from a
+  bounty he claims, in `kill`).
+  The setting (the Contest of Kessmoor) and each champion's story are in the README; ability,
+  passive and upgrade names follow the stories, while ids (`wide-slam` and so on) keep the old
+  names.
 - Jungle (LB6): camps of five kinds (`CAMP_KINDS`): boars, wolf packs (an alpha and two pups, one
   `group`), and per side one ember and one moss brute, whose slayer gets a 60 s buff (`BUFFS`, in
   `Unit.buffs`). Hitting one camp wakes its pack; a camp heals 5% a second when left alone and
@@ -52,17 +63,21 @@ Implemented today:
   `paintFog`) and skips hidden units, effects, projectiles and zones there.
 - Gold (passive plus last hits and kills), XP shared by nearby champions, respawns that scale with
   level.
-- Items (LB4): thirteen in `ITEMS`, bought near the Nexus (`atShop`, `SHOP_RANGE`) or anywhere while
+- Items (LB4): sixteen in `ITEMS`, bought near the Nexus (`atShop`, `SHOP_RANGE`) or anywhere while
   the champion is dead (`buy` skips the distance then), each owned once, at most `MAX_ITEMS` (6) in
   the bag. Seven are parts (the Healing Flask among them); five build `from` parts: buying one uses
-  up the parts owned and takes their cost off its price (`priceFor`, `buy`); the thirteenth is the
-  Vision Ward (below). Items add flat damage,
+  up the parts owned and takes their cost off its price (`priceFor`, `buy`); then the Vision Ward
+  (below) and three elixirs. Items add flat damage,
   armor, health and speed, plus percent attack speed (`atk`) and cooldown reduction (`cdr`). Two add
   an `active` (`ACTIVES`): Phase Boots dash 220 px on D, the Healing Flask heals 220 on H (F is the
   hub's full screen key), through `useActive`, with cooldowns in `Unit.activeCds`; the third
   `ACTIVES` row is the ward on V. The shop is a 4x4
-  grid of cards (the last row holds the ward alone); the bag shows as six slots in the portrait card
+  grid of cards (the last row holds the ward and the elixirs); the bag shows as six slots in the portrait card
   and the actives as three narrow buttons under the shop button.
+- Elixirs (#290): the Wrath, Iron and Swift Elixirs (`ItemDef.elixir`, a `BuffDef`) cost 400 and
+  take no bag slot: `buy` swaps any elixir buff for a new `Buff` with `elixir: true` lasting
+  `ELIXIR.ms` (3 minutes), named after the item and coloured by `ELIXIR_COLOR`. `kill` and `revive`
+  keep elixir buffs, so they last through death. The shop card shows the time left of the one drunk.
 - Vision wards (LB6, round 2): the `'ward'` item (`ItemDef.ward`) is a consumable: `buy` adds one to
   `Unit.wards` (up to `WARD.carry`) and takes no bag slot. `useActive(..., 'ward', aim)` calls
   `plantWard`, which spawns a `'ward'` unit (`spawnWard` in `state.ts`) within `WARD.range` of the
@@ -94,7 +109,9 @@ Implemented today:
 - AI shopping (LB9, round 2): `aiShop` runs for every AI champion each tick it is dead or `atShop`:
   it buys `nextBuy(u)`, the first item of `AI_BUILDS[AI_BUILD_FOR[role] ?? 'fighter']` not owned
   and not a part of an owned item, when it can pay (the build order is kept, so gold is saved for
-  the next item), else a ward when it carries none. Every build starts with the Healing Flask, which
+  the next item); with the build done, an elixir (`AI_ELIXIR` by build: tank Iron, fighter Wrath,
+  caster Swift) when it has none and `ELIXIR.aiSpare` gold over its price; else a ward when it
+  carries none. Every build starts with the Healing Flask, which
   `aiAct` drinks under 40% health. `aiLog` reports each purchase.
 - Buy back (LB10, round 2): `buyBack` lets a dead champion pay `buybackCost` (`BUYBACK.base` plus
   `perLevel` per level) to `revive` at once, then sets `buybackReadyAt` `BUYBACK.cd` ahead. The
@@ -111,6 +128,14 @@ Implemented today:
   forgets an attacker past `BEAST.leash` and heals while nobody fights it. Its slayer's team gets
   `beastBuff[team]` for 90 s: its minions deal 1.5x and take 0.65x (`attack`, `takenMult`), drawn
   with a violet glow, with a chip per team at the top right (`buffChip`).
+- The elder beast (#291): from `ELDER.at` (14:00) the beast turns into the Elder Guardian for good
+  (`s.beastElder`, `makeElder`: `ELDER.hpMult` health and `ELDER.dmgMult` damage), when it wakes or,
+  if awake, the first tick nobody is fighting it at full health. Its slayer's team gets the usual
+  rewards plus `ELDER.gold` and `elderBuff[team]` for `ELDER.buffMs` (60 s): in `damage`, that
+  team's champions (`elderBlessed`) deal `ELDER.structMult` to towers, inhibitors and the Nexus, and
+  an enemy champion they leave under `ELDER.execute` of its health dies. The view draws it from
+  its own sheet (`ELDER_KEY`, `beastModel(pose, true)` with gold crystals, baked by `bakeElder` the
+  first time it shows) at 1.12 scale, and a gold chip per blessed team under the violet ones.
 - Bushes (LB2): `updateVision` hides enemy champions in a bush (`bushAt`) that no unit of that team
   sees in the same bush or within `BUSH_REVEAL`. `nearest`,
   the player's target, AI ganks and clicks skip hidden units; the view draws no sprite, bar, marker
@@ -148,12 +173,27 @@ Implemented today:
   starts 4 s later. A card under the top bar shows it (title, time left, the target's damage as a
   bar, the reward), a gold pill and dashed ring mark the target in the world and a star marks it on
   the minimap.
-- Upgrade choice on level-up: each new level of the player's champion queues an offer of two
-  upgrades (`UPGRADES[champion][level - 2]`); two cards in the bottom bar (between the shop button
+- Upgrade choice on level-up: levels 2, 3, 4, 5 and 7 (`UPGRADE_LEVELS`) of the player's champion
+  each queue an offer of two upgrades (`upgradePairAt(champion, level)`, the matching pair in
+  `UPGRADES`); two cards in the bottom bar (between the shop button
   and the minimap) show the first offer, and the ability box an option changes gets a gold diamond.
-  Clicking a card or pressing 1 or 2 keeps it. Upgrades scale an ability's radius, damage, range,
+  Clicking a card or pressing 1, 2 or 3 keeps it. Upgrades scale an ability's radius, damage, range,
   heal, shield or cooldown by a percent, add a stun or a slow, or add bolts (`abilityFor` applies
-  them). Gold pips under an ability box count its upgrades. AI champions pick theirs on their own.
+  them). Levels 6 and 8 (`ULT_RANK_LEVELS`) offer nothing but rank up the R instead: each rank adds
+  `ULT_RANK` (+20% damage, heal and shield, -15% cooldown), applied in `abilityFor` through
+  `ultRank(level)`, with a notice for the player. Gold pips under an ability box count its upgrades
+  and, on R, its ranks; the upgrade panel names what the next level brings. AI champions pick theirs
+  on their own.
+- Class mastery (#292): `mastery.ts` keeps the player's wins per class under the save key
+  `lane-brawl-mastery` (`loadMastery`, `recordWin`; JSON `{ classId: wins }`, every read and write
+  in try/catch). `masteryRank` turns wins into a rank by `MASTERY_WINS` (1, 2, 4, 6, 9 wins for
+  ranks 1 to 5). `startMatch` passes the picked class's rank to `createGame` (`MatchOptions.mastery`,
+  `s.mastery`; always 0 when watching), and `gainXp` offers the player `offerFor(class, level,
+  owned, 3)` at the first `s.mastery` of `UPGRADE_LEVELS`, else 2: the level's pair less what it
+  owns, topped up from its other pairs, later ones first. `UpgradeOffer.options` is two or three
+  ids; three show as slimmer cards (`upgradeCard(i, 3)`), the third with a gold edge, kept with 3.
+  The end panel counts a win once (`winCounted`) and shows the rank and the wins to the next; pick
+  cards show one gold diamond per rank. The playthrough starts with no save, so it sees pairs.
 - Last hits: after every tick the enemy minion within the player's reach plus 140 px that its next
   hit would kill is `lastHitMark` and gets a gold outline. A last hit by the player grows the streak
   (`streak`, shown in a chip by the gold counter) and pops a coin fx with the gold; from x4 on it
@@ -191,7 +231,7 @@ Implemented today:
 Missing or rough:
 
 - No pathing or collisions: units overlap and walk straight lines.
-- No sound, pause, title or save. Nothing is persisted, so there are no save keys.
+- No sound or title. The only save is class mastery (below).
 - Bushes hide champions only, not minions. The camera follows the player's champion.
 - AI champions don't use bushes on purpose, and their wards go only to the fixed `WARD_SPOTS`.
 - Balance is tuned with AI-only matches (every class within roughly 35% to 65% wins over 80
@@ -226,7 +266,9 @@ File map (`src/`):
   `swing`), a `Model` with a transform stack (`at`), primitives (`box` with a taper, `prism`,
   `gem`, `ico`, `slab`) whose faces get outward normals from each primitive's centre, and `render`:
   turn by yaw, cull back faces, Lambert light from the top left (`LIGHT`), painter's sort, fill.
-  The camera looks down from the south at `ELEVATION` radians. Also `seeded`, the art's own random
+  The toon look snaps the light to three cel bands (`CEL`) and saturates the colours (`SATURATE`);
+  `flat` gives the old smooth shading, and `noInk` skips the per-face `INK` stroke (the bake inks
+  whole sheets instead). The camera looks down from the south at `ELEVATION` radians. Also `seeded`, the art's own random
   generator.
 - `art/models.ts`: every model as a function of a pose. `figure` builds a humanoid (legs or a robe,
   a tunic in the team's cloth, head, arms on shoulder joints) from a `Kit` per class: the Warden's
@@ -236,8 +278,14 @@ File map (`src/`):
   harpoon, the Witch's antlered hood, shawl and branch staff, the Stalker's straw hat, scarf, curved
   sword and throwing star, the Lancer's crested helm, pennant spear and banded shield, the
   Gunslinger's wide hat, bandana, duster and revolver, the Automaton's brass head with glowing eyes,
-  boiler and piston fists, the Tinker's goggles, tesla-coil backpack, spark gun and wrench, the
-  Wolfkin's wolf head, mane, tail and claws, and the Bruin's bear head, belly and claws. Also
+  boiler and piston fists, the Tinker's goggles, storm-coil backpack, spark gun and wrench, the
+  Wolfkin's wolf head, mane, tail and claws, and the Bruin's bear head, belly and claws. Champions
+  get `hero: true`, which scales the head by `HERO_HEAD` and lifts it by `HERO_LIFT`, and a prop
+  from their story: Hald's gate key and gate shield, Vesna's torn sash, Tamsin's leaf cloak, Elowen's
+  half-ice crystal, Maren's sun disc, Torvik's wrist chains (`chainLinks`), Morrow's whale tooth,
+  Gwyth's moths and moss, Kaida's watchstone charm, Liora's plume and swallow-tail pennant, Rook's
+  bandolier, AX-9's aether core, Winnie's lightning rod and copper gauntlets, Fenra's moon mark and
+  arm band, and Grumm's oak sapling and honey pot. Also
   `wolfModel`, `bruteModel` (ember or moss), `watchstoneModel` (per side or neutral) and
   `ruinModel`. `classPose`
   gives the joint angles for `idle`, the walk `w0`..`w3`, the attack `a0` (wind-up) and `a1`
@@ -251,7 +299,9 @@ File map (`src/`):
   of the red minion sheet for the last-hit outline, towers, inhibitors, the Nexus, rubble and the
   coin. The champions' full sheets (both teams' cloth) are baked when a match starts, only for
   the classes in it (`bakeChampions`, kept for later matches). Frames are named `${dir}:${pose}` (`frameName`); dir 0 faces right and each step turns 45
-  degrees clockwise on screen (`dirFor` maps a facing angle). Sheets render at `RES` and are
+  degrees clockwise on screen (`dirFor` maps a facing angle). Each sheet gets its ink outline in
+  one pass (`inkOutline`: its silhouette in `INK`, drawn under it at eight small offsets), much
+  cheaper than stroking every face. `CHAMP_CELL` is 76x98 to fit the hero heads and props. Sheets render at `RES` and are
   drawn at 1/RES: 2 on a screen that needs no scaling, up to 3 on a big or dense one (`sharpRes`
   in half steps, held to what the beast's sheet can load). Pick cards and the portrait scale by
   `1.3 / RES` and `1.2 / RES`; each `*_CELL` gives a frame's size and where the feet sit.
@@ -262,13 +312,15 @@ File map (`src/`):
   the river (faceted water, banks and glints), clearings for the camps (a glowing ring for the
   brutes, bones for the wolves), watchstone islands, ruins, flowers and mushrooms and up to 620
   pines and rocks, from a fixed seed; then the beast's pit and the bushes (tall faceted grass).
-- `game/names.ts`: the random names (`championName`, `firstName`, `shortName`).
+- `game/names.ts`: `shortName`, a champion's first name from its full name.
+- `game/mastery.ts`: class mastery, the save key `lane-brawl-mastery` (`loadMastery`, `recordWin`,
+  `masteryRank`).
 - `game/data.ts`: plain data. `WORLD`, `LANES`, `BASE`, `TOWERS`, `RIVER`, `CAMPS`, `CAMP_KINDS`,
   `PUPS`, `SIGHT`, `WATCHSTONES`, `WATCH`, `BUFFS`, `JUNGLE`, `KITE`, the balance constants (`TOWER`,
   `CAMP`, `MINION`, `KILL`, `XP_FOR_LEVEL`, respawn times), `CHAMPIONS` with their `AbilityDef`s,
   `ITEMS`, `ALLY_LANES`, `ENEMY_LANES`, `SIDE_COLOR`, and the loop's data: `OBJECTIVES`,
   `OBJECTIVE_GAP_MS`, `SIEGE`, `UPGRADES` (with `upgradeById`), `STREAK` and `LAST_HIT_LOOK`, plus
-  `ACTIVES`, `MAX_ITEMS`, `BEAST`, `BEAST_BUFF`, `BEAST_CONTESTERS`, `INHIBITORS`, `INHIBITOR`,
+  `ACTIVES`, `MAX_ITEMS`, `BEAST`, `BEAST_BUFF`, `ELDER`, `BEAST_CONTESTERS`, `INHIBITORS`, `INHIBITOR`,
   `SUPER_MINION`, `BUSHES` (with `bushAt`), `BUSH_REVEAL`, `REVEAL_MS`, `GANK` and `RETREAT`, and
   round 2's `WARD`, `WARD_SPOTS`, `WARD_AI`, `RECALL`, `BUYBACK`, `BOUNTY` (with `bountyOf`),
   `AI_BUILDS` and `AI_BUILD_FOR`.
@@ -354,8 +406,8 @@ How it runs:
   bottom bar, the Recall/Buy back button in the top bar). Anything else is a world click: a
   hostile unit under the cursor becomes the player's target, otherwise the point becomes a move.
 
-Randomness and timing: `Math.random` only draws the rosters and names, in `createGame` and the
-pick screen's `rollNames` (the test seeds it); no `Date.now` or `performance.now` in the rules. Game time
+Randomness and timing: `Math.random` only draws the rosters, in `createGame` (the test seeds it, with
+a seed picked for the roster the round was tuned with); no `Date.now` or `performance.now` in the rules. Game time
 advances only through `tick`, which the scene drives from frame times. The art uses its own seeded
 generator (`seeded` in `lowpoly.ts`); `performance.now` only times the bake for a dev log.
 
@@ -387,19 +439,24 @@ generator (`seeded` in `lowpoly.ts`); `performance.now` only times the bake for 
   upgrade card coordinates in `playthrough.spec.ts` (`WARDEN_CARD` (120, 133), `SWORD_ROW`,
   `RED_MID_TOWER` (1793, 1007), `OBJECTIVE_CARD`, `UPGRADE_CARD_1`) against `layout.ts` and
   `TOWERS`, `TOWER_REACH` against `TOWER.range`, `CAMP_GOLD` against `CAMP_KINDS`, the Warden's
-  stats and Slam radius (`CHAMPIONS`), the Long Sword cost and damage (`ITEMS`), the first two
+  stats and Gatefall (Q) radius (`CHAMPIONS`), the Long Sword cost and damage (`ITEMS`), the first two
   `OBJECTIVES` (the tower: 150 s and 200 gold with the banner; then a camp, whose kind's gold plus
   120 the test checks; with the seeded roster it is the boar at (1280, 1900)),
   the Warden's level 2 `UPGRADES` pair (`wide-slam`, `stun-slam`), and the 240 s game-time budget.
+- The seed in `addInitScript` is picked so the shuffle in `createGame` fields Harpooner, Tinker,
+  Mage and Archer on blue and Stalker, Wolfkin, Bruin, Blade and Berserker on red, the roster the
+  round was tuned with (about 2100 `Math.random` calls come before the shuffle in the browser).
+  Anything that adds or removes draws before the shuffle, or a sixteenth class, changes the roster:
+  pick a new seed by replaying the generator and the shuffle in node, or re-tune the round.
 - It asserts the first objective and its target, the objective paid and the siege banner after
   the tower falls, the camp objective, at least one last hit and a streak, level 2's offer, and
-  Wide Slam kept from the card.
+  Wide Gatefall (`wide-slam`) kept from the card.
 - Round 2 stays out of the first round: the AI buys only a Healing Flask at 0:00 (its wards and
   recalls change nothing the test asserts), `GANK.firstAt` keeps bounty hunts past it, and the
   player never recalls, wards or buys back.
 - On the way to the tower the Warden waits out of its reach until a blue minion reaches it (and
   steps back out when none is left there, until the tower is under 200 health), and hits back (with
-  Slam) at a red champion that comes within 240 px out of the tower's reach. It Slams the camp too.
+  Gatefall) at a red champion that comes within 240 px out of the tower's reach. It casts Gatefall on the camp too.
 - It saves `0-pick`, `1-shop`, `2-tower-down` and `3-upgrade` screenshots. `SWORD_ROW` is a point inside the Long
   Sword's card in the four-column shop (`shopRow(0)`, so the Long Sword stays first in `ITEMS`;
   the card is 74 px tall from y 86, so the click at y 146 lands in its lower half). The round ends near 40 s of game time, before the beast wakes (90 s) and the first gank
@@ -419,12 +476,15 @@ generator (`seeded` in `lowpoly.ts`); `performance.now` only times the bake for 
 
 ## Making common changes
 
-- **Add a champion**: add a `ChampionDef` to `CHAMPIONS` with a blurb (32 characters at most, for
-  the card), a `PassiveDef` (a short desc) and four `AbilityDef`s (keys Q, W, E, R; R at level 3),
-  its four upgrade pairs to `UPGRADES`, four looks in `skillFx.ts`, bynames in `names.ts`, a `Kit` in `KITS` and its pose in
+- **Add a champion**: add a `ChampionDef` to `CHAMPIONS` with its `hero`, `short`, `title` and
+  `motive` (90 characters at most), a blurb (32 characters at most, for the card), a `PassiveDef` (a
+  short desc), optionally a `perk` that fits the story, and four `AbilityDef`s (keys Q, W, E, R; R at level 3) named to fit the story,
+  its five upgrade pairs to `UPGRADES`, four looks in `skillFx.ts`, a `Kit` in `KITS` and its pose in
   `classPose` (`models.ts`) and its id to `ChampId`. `createGame` shuffles the classes other than the
   player's, gives blue the first four and red the next five, so any roster of ten or more works;
   the pick screen lays out `pickCard(i)` in three rows of five, so a sixteenth needs a new layout.
+  Add the champion's row to the README's story table too. A new champion changes the shuffle, so the
+  playthrough's seed may need picking again (see Testing hooks).
   A machine or beast sets `ownHead` on its `Kit` (the head draws its own skull and face) and
   `skin`, `legs` and `feet` for its hands, legs and feet. Update
   the README's champion and upgrade tables. Then run the balance check (see Gotchas).
@@ -442,7 +502,8 @@ generator (`seeded` in `lowpoly.ts`); `performance.now` only times the bake for 
   `updateObjective` and give the marker a height in `HEAD` if the target is a new kind of unit.
 - **Change a model**: edit its builder in `models.ts`; the preview is the game itself. Keep the feet
   at the origin and the figure inside its `*_CELL` in `bake.ts` (raise the cell if a pose clips).
-  More poses or directions multiply the boot bake (one to two seconds in headless Chrome now).
+  More poses or directions multiply the boot bake (about two seconds in headless Chrome now, and a
+  match's champions about one more).
 - **Tune the map**: edit `LANES`, `TOWERS`, `CAMPS`, `WATCHSTONES`, `BUSHES` and `RIVER` in
   `data.ts`; `map.ts` paints from them. Give only blue's half and build red's with `both`/`mirror`,
   so the map stays fair, and check the playthrough still reaches the red mid tower at (1793, 1007).
@@ -456,7 +517,7 @@ generator (`seeded` in `lowpoly.ts`); `performance.now` only times the bake for 
 - **Tune round 2**: `WARD` (carry, range, life, hits), `WARD_SPOTS` and `WARD_AI` for the AI's
   warding, `RECALL` (channel time and the AI's reasons to go home), `BUYBACK` (price and cooldown),
   `BOUNTY` (streak, gold) and `AI_BUILDS` / `AI_BUILD_FOR` (what each role buys), all in `data.ts`.
-- **Tune the beast or the AI plans**: `BEAST`, `BEAST_BUFF`, `BEAST_CONTESTERS`, `GANK` and
+- **Tune the beast or the AI plans**: `BEAST`, `BEAST_BUFF`, `ELDER`, `BEAST_CONTESTERS`, `GANK` and
   `RETREAT` in `data.ts`. Move the pit with `BEAST.x`/`y`; `map.ts` paints it there.
 - **Add a bush**: add it to `BUSHES` (blue's half; `both` adds the mirror); `map.ts` paints it and
   keeps pines out of it.

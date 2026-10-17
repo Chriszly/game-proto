@@ -4,12 +4,13 @@ import { CASK_MS, MAX_CASKS, type Cask } from './mead';
 import { MEADOWS } from './meadows';
 import { YEAR_MS } from './seasons';
 import { freshProgress, type Progress } from './state';
-import { MAX_HIVES } from './swarm';
+import { FAIR_CLASSES } from './fair';
+import { MAX_HIVES, QUEEN_IDS, type Queen } from './swarm';
 import { UPGRADES, UPGRADE_IDS } from './upgrades';
 
 // The comb, the coins, the jars, the wax, the bees, the upgrades, the meadows unlocked, where the
-// bees forage, the season and years, the casks, the hives, the fair entries, the bees lent to the
-// orchard and when the hive was last seen are saved; bees out foraging come home on load, and
+// bees forage, the season and years, the casks, the hives and the queen, the fair entries and fairs held,
+// the tired meadows, the bees lent to the orchard and when the hive was last seen are saved; bees out foraging come home on load, and
 // wasps, the market, village orders, contract offers and a swarm start afresh.
 const KEY = 'beehive-baron-progress';
 
@@ -42,8 +43,15 @@ export function loadProgress(): Progress {
         KINDS.includes(c?.kind as Kind) ? [{ kind: c.kind as Kind, agingMs: Math.min(CASK_MS, num(c.agingMs, 0)), value: num(c.value, 0) }] : [],
       ).slice(0, MAX_CASKS),
       hives: Math.max(1, Math.min(MAX_HIVES, num(saved.hives, fresh.hives))),
-      fair: Object.fromEntries(KINDS.map((k) => [k, typeof saved.fair?.[k] === 'number' ? num(saved.fair[k], 0) : null])) as Progress['fair'],
+      queen: QUEEN_IDS.includes(saved.queen as Queen) ? (saved.queen as Queen) : null,
+      queenBees: num(saved.queenBees, fresh.queenBees),
+      fair: Object.fromEntries(FAIR_CLASSES.map((k) => [k, typeof saved.fair?.[k] === 'number' ? num(saved.fair[k], 0) : null])) as Progress['fair'],
+      // Saves from before the yearly fair count a Baron's fair as held and won.
+      fairs: num(saved.fairs, saved.baron === true ? 1 : 0),
+      golds: num(saved.golds, saved.baron === true ? 1 : 0),
       baron: saved.baron === true,
+      tired: Object.fromEntries(KINDS.map((k) => [k, num(saved.tired?.[k], 0)])) as Progress['tired'],
+      wilted: Object.fromEntries(KINDS.map((k) => [k, saved.wilted?.[k] === true])) as Progress['wilted'],
       lent:
         saved.lent && typeof saved.lent === 'object' && num(saved.lent.bees, 0) > 0
           ? { bees: num(saved.lent.bees, 0), leftMs: Math.min(CONTRACT_MS, num(saved.lent.leftMs, CONTRACT_MS)) }

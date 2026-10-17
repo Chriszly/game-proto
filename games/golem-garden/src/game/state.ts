@@ -3,32 +3,41 @@
 import { GARDENS, cellAt, cellCentre, pathPoint, routeDist, type Garden } from './board';
 import {
   BLOOM_GOAL,
+  BOON,
+  BOSS_EVERY,
   CHEW_PER_BITE,
   COMBO,
   COMPOST,
   EARLY_BONUS,
   FORM_INFO,
+  GARDEN_TWISTS,
   GOLEM_INFO,
   HARVEST_WAVE,
   HEDGE,
+  LEAN_SAP,
   MAX_LEVEL,
   MOVE_FEE,
   PEST_INFO,
   SLIME,
   START,
   TARGETS,
+  THORNY_STARS,
   UPGRADE_COST,
   UPROOT_REFUND,
+  boonOffer,
   golemStats,
   harvestStars,
+  regrowCost,
   waveBonus,
   waveFor,
+  type Boon,
   type FormKind,
   type GolemKind,
   type PestKind,
   type SeedKind,
   type Spawn,
   type Target,
+  type Twist,
 } from './data';
 
 export interface Golem {
@@ -142,6 +151,18 @@ export interface GameState {
   stars: number[];
   /** The stars this garden's harvest earned at wave HARVEST_WAVE, or 0 before it. */
   harvest: number;
+  /** Playing the garden's thorny variant, with its twist (`twistOf`). */
+  thorny: boolean;
+  /** Each garden's laurel (0 or 1), won by harvesting its thorny variant, in GARDENS order. */
+  laurels: number[];
+  /** Boons taken this garden, one per Queen Slug wave cleared; a boon taken twice counts twice. */
+  boons: Boon[];
+  /** The rows the Sunny row boons shine on, one per Sunny row taken. */
+  sunRows: number[];
+  /** The three boons to pick from after a Queen Slug wave, or empty when there is no pick to make. */
+  offer: Boon[];
+  /** Leaves regrown this garden; each makes the next one dearer. */
+  regrown: number;
   nextId: number;
 }
 
@@ -154,13 +175,15 @@ export const SHOT_MS = 160;
 /** How long a pest flashes after a hit, in ms. */
 const HIT_MS = 120;
 
-export function newGame(best: number, bloom = 0, garden = 0, stars: number[] = []): GameState {
+export function newGame(best: number, bloom = 0, garden = 0, stars: number[] = [], thorny = false, laurels: number[] = []): GameState {
+  const n = GARDENS[garden] ? garden : 0;
+  const isThorny = thorny && (stars[n] ?? 0) >= THORNY_STARS;
   return {
-    garden: GARDENS[garden] ? garden : 0,
+    garden: n,
     wave: 1,
     phase: 'build',
     heart: START.heart,
-    sap: START.sap,
+    sap: isThorny && GARDEN_TWISTS[n] === 'sap' ? LEAN_SAP : START.sap,
     selected: 'pebble',
     golems: [],
     hedges: [],
@@ -179,6 +202,12 @@ export function newGame(best: number, bloom = 0, garden = 0, stars: number[] = [
     compost: 0,
     stars: GARDENS.map((_, i) => stars[i] ?? 0),
     harvest: 0,
+    thorny: isThorny,
+    laurels: GARDENS.map((_, i) => laurels[i] ?? 0),
+    boons: [],
+    sunRows: [],
+    offer: [],
+    regrown: 0,
     nextId: 1,
   };
 }
@@ -191,8 +220,21 @@ export const totalStars = (s: GameState) => s.stars.reduce((a, b) => a + b, 0);
 /** Whether garden `n` can be planted: enough harvest stars have been earned. */
 export const gardenOpen = (s: GameState, n: number) => totalStars(s) >= GARDENS[n].unlockStars;
 
-/** Whether this seed can be picked: the Thorn golem only once the Heartwood is in full bloom. */
-export const unlocked = (s: GameState, kind: SeedKind) => kind === 'hedge' || !GOLEM_INFO[kind].locked || s.bloom >= BLOOM_GOAL;
+/** Whether garden `n`'s thorny variant can be planted: it has THORNY_STARS stars. */
+export const thornyOpen = (s: GameState, n: number) => s.stars[n] >= THORNY_STARS;
+
+/** The twist this garden is played with: its own in its thorny variant, none otherwise. */
+export const twistOf = (s: GameState): Twist | null => (s.thorny ? GARDEN_TWISTS[s.garden] : null);
+
+/** How many times boon `boon` has been taken this garden. */
+export const boonCount = (s: GameState, boon: Boon) => s.boons.filter((b) => b === boon).length;
+
+/**
+ * Whether this seed can be picked: the Thorn golem only once the Heartwood is in full bloom, the
+ * hedge unless the thorny variant's twist took it away.
+ */
+export const unlocked = (s: GameState, kind: SeedKind) =>
+  kind === 'hedge' ? twistOf(s) !== 'hedges' : !GOLEM_INFO[kind].locked || s.bloom >= BLOOM_GOAL;
 
 /** What a seed costs to plant. */
 export const seedCost = (kind: SeedKind) => (kind === 'hedge' ? HEDGE.cost : GOLEM_INFO[kind].cost);
@@ -227,7 +269,8 @@ export function plant(s: GameState, col: number, row: number) {
       const at = routeDist(route, col, row);
       return at === null ? null : at - HEDGE_STOP;
     });
-    s.hedges.push({ id: s.nextId++, col, row, hp: HEDGE.hp, maxHp: HEDGE.hp, stops });
+    const hp = HEDGE.hp * (1 + BOON.hedgeHp * boonCount(s, 'hedge'));
+    s.hedges.push({ id: s.nextId++, col, row, hp, maxHp: hp, stops });
     return true;
   }
   const info = GOLEM_INFO[s.selected];
@@ -260,12 +303,24 @@ export function upgrade(s: GameState, g: Golem, form: FormKind | null = null) {
   return true;
 }
 
+/**
+ * The stats a golem of `kind` at `level` and `form` throws with on `row` of this garden: its own,
+ * with the garden's boons (Sharp rocks, Long moss, Sunny row) folded in.
+ */
+export function boonedStats(s: GameState, kind: GolemKind, level: number, form: FormKind | null, row: number) {
+  const stats = golemStats(kind, level, form);
+  if (kind === 'pebble') stats.damage *= 1 + BOON.pebbleDamage * boonCount(s, 'pebble');
+  if (stats.slow) stats.slow = { factor: stats.slow.factor, ms: stats.slow.ms * (1 + BOON.mossSlow * boonCount(s, 'moss')) };
+  stats.range += BOON.sunReach * s.sunRows.filter((r) => r === row).length;
+  return stats;
+}
+
 /** The stats this golem throws with now. */
-export const statsOf = (g: Golem) => golemStats(g.kind, g.level, g.form);
+export const statsOf = (s: GameState, g: Golem) => boonedStats(s, g.kind, g.level, g.form, g.row);
 
 /** Sets how a golem picks its target; a golem that hits everything in reach has no pick to make. */
 export function setTarget(s: GameState, g: Golem, target: Target) {
-  if (!s.golems.includes(g) || statsOf(g).area) return false;
+  if (!s.golems.includes(g) || statsOf(s, g).area) return false;
   g.target = target;
   return true;
 }
@@ -321,8 +376,39 @@ export const canCallEarly = (s: GameState) => s.phase === 'wave' && s.queue.leng
 /** The wave the wave button would send next. */
 export const nextWave = (s: GameState) => (s.phase === 'build' ? s.wave : s.wave + 1);
 
+/** What regrowing a Heartwood leaf costs now. */
+export const regrowPrice = (s: GameState) => regrowCost(s.regrown);
+
+/** Whether a leaf can be regrown now: between waves, with a leaf lost and the sap for it. */
+export const canRegrow = (s: GameState) => s.phase === 'build' && s.offer.length === 0 && s.heart < START.heart && s.sap >= regrowPrice(s);
+
+/** Regrows one Heartwood leaf for `regrowPrice` sap, which then rises. */
+export function regrow(s: GameState) {
+  if (!canRegrow(s)) return false;
+  s.sap -= regrowPrice(s);
+  s.regrown++;
+  s.heart++;
+  return true;
+}
+
+/** The row Sunny row would shine on: the one with the most grown golems (the top one of a tie). */
+export function sunRow(s: GameState) {
+  const counts = Array.from({ length: gardenOf(s).map.length }, (_, row) => s.golems.filter((g) => g.row === row && g.growMs === 0).length);
+  return counts.indexOf(Math.max(...counts));
+}
+
+/** Takes one of the boons offered after a Queen Slug wave. */
+export function takeBoon(s: GameState, boon: Boon) {
+  if (!s.offer.includes(boon)) return false;
+  s.boons.push(boon);
+  if (boon === 'sun') s.sunRows.push(sunRow(s));
+  if (boon === 'leaf') s.heart = Math.min(START.heart, s.heart + BOON.leaves);
+  s.offer = [];
+  return true;
+}
+
 function beginWave(s: GameState) {
-  const { spawns, hpScale } = waveFor(s.wave);
+  const { spawns, hpScale } = waveFor(s.wave, twistOf(s));
   s.phase = 'wave';
   s.queue = spawns;
   s.waveHpScale = hpScale;
@@ -331,17 +417,21 @@ function beginWave(s: GameState) {
 
 /**
  * Counts wave `s.wave` as done: its bonus, compost on the sap unspent (from COMPOST.fromWave), a bud
- * on the Heartwood, the best, and at HARVEST_WAVE the garden's harvest stars, and moves on.
+ * on the Heartwood, the best, after a Queen Slug wave three boons to pick from, and at HARVEST_WAVE
+ * the garden's harvest stars (and in its thorny variant, its laurel), and moves on.
  */
 function finishWave(s: GameState) {
-  s.compost = s.wave >= COMPOST.fromWave ? Math.min(COMPOST.cap, Math.floor(s.sap * COMPOST.rate)) : 0;
+  const cap = COMPOST.cap + BOON.compostCap * boonCount(s, 'compost');
+  s.compost = s.wave >= COMPOST.fromWave ? Math.min(cap, Math.floor(s.sap * COMPOST.rate)) : 0;
   s.sap += waveBonus(s.wave) + s.compost;
   s.bloom = Math.min(BLOOM_GOAL, s.bloom + 1);
   s.best = Math.max(s.best, s.wave);
   if (s.wave === HARVEST_WAVE) {
     s.harvest = harvestStars(s.heart);
     s.stars[s.garden] = Math.max(s.stars[s.garden], s.harvest);
+    if (s.thorny) s.laurels[s.garden] = 1;
   }
+  if (s.wave % BOSS_EVERY === 0) s.offer = boonOffer(s.wave / BOSS_EVERY);
   s.wave++;
 }
 
@@ -464,7 +554,7 @@ function step(s: GameState, dt: number) {
     }
     g.cooldownMs = Math.max(0, g.cooldownMs - dt * (slimed(s, g.col, g.row) ? SLIME.slow : 1));
     if (g.cooldownMs > 0) continue;
-    const stats = statsOf(g);
+    const stats = statsOf(s, g);
     const at = cellCentre(g.col, g.row);
     const where = (p: Pest) => pathPoint(routes[p.route], p.dist);
     const inReach = s.pests.filter((p) => {

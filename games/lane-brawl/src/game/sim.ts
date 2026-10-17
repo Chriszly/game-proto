@@ -11,6 +11,9 @@ import {
   CAMP_KINDS,
   CHAMP_AGGRO,
   ITEMS,
+  ELIXIR,
+  ELIXIR_COLOR,
+  AI_ELIXIR,
   KILL,
   MINION,
   RESPAWN_BASE_MS,
@@ -31,12 +34,18 @@ import {
   SIEGE,
   STREAK,
   TOWERS,
-  UPGRADES,
   upgradeById,
+  upgradePairAt,
+  offerFor,
+  UPGRADE_LEVELS,
+  ultRank,
+  ULT_RANK,
+  ULT_RANK_LEVELS,
   ACTIVES,
   ActiveId,
   BEAST,
   BEAST_BUFF,
+  ELDER,
   BEAST_CONTESTERS,
   BUSH_REVEAL,
   GANK,
@@ -95,12 +104,20 @@ export function tick(s: GameState, dt: number) {
   updateLastHitMark(s);
 }
 
-/** An ability as the champion casts it now: its definition with the upgrades it chose applied. */
+/** An ability as the champion casts it now: its definition with the upgrades it chose and the R's ranks applied. */
 export function abilityFor(u: Unit, key: AbilityKey): AbilityDef | undefined {
   const base = u.champ?.abilities.find((a) => a.key === key);
-  if (!base || u.upgrades.length === 0) return base;
+  const ranks = key === 'R' ? ultRank(u.level) : 0;
+  if (!base || (u.upgrades.length === 0 && ranks === 0)) return base;
   const ab: AbilityDef = { ...base };
   const pct = (v: number | undefined, p: number | undefined) => (v === undefined || !p ? v : v * (1 + p / 100));
+  for (let r = 0; r < ranks; r++) {
+    ab.damage = pct(ab.damage, ULT_RANK.damage);
+    ab.dps = pct(ab.dps, ULT_RANK.damage);
+    ab.heal = pct(ab.heal, ULT_RANK.heal);
+    ab.shield = pct(ab.shield, ULT_RANK.shield);
+    ab.cd *= 1 + ULT_RANK.cd / 100;
+  }
   for (const id of u.upgrades) {
     const up = upgradeById(id);
     if (!up || up.key !== key) continue;
@@ -119,12 +136,13 @@ export function abilityFor(u: Unit, key: AbilityKey): AbilityDef | undefined {
   return ab;
 }
 
-/** The player keeps one of the two upgrades on offer (0 or 1). Returns false if none is on offer. */
+/** The player keeps one of the upgrades on offer (0, 1, or 2 on a third card). Returns false if there is no such option. */
 export function chooseUpgrade(s: GameState, choice: number): boolean {
   const p = getUnit(s, s.player);
   const offer = s.upgradeOffers[0];
-  if (!p || !offer || (choice !== 0 && choice !== 1)) return false;
-  p.upgrades.push(offer.options[choice]);
+  if (!p || !offer || !(choice >= 0 && choice < offer.options.length)) return false;
+  // Offers queued together can share a borrowed card; one already kept is not kept twice.
+  if (!p.upgrades.includes(offer.options[choice])) p.upgrades.push(offer.options[choice]);
   s.upgradeOffers.shift();
   return true;
 }
@@ -302,6 +320,14 @@ export function buy(u: Unit, id: string): boolean {
   if (!item || u.side === 'neutral' || (!item.ward && u.items.includes(id))) return false;
   // A champion shops at its Nexus, or anywhere while it waits to respawn.
   if (!u.dead && !atShop(u)) return false;
+  if (item.elixir) {
+    if (u.gold < item.cost) return false;
+    u.gold -= item.cost;
+    u.buffs = u.buffs.filter((b) => !b.elixir);
+    u.buffs.push({ id: item.name, ms: ELIXIR.ms, def: item.elixir, color: ELIXIR_COLOR[item.id] ?? '#c49bff', elixir: true });
+    refreshStats(u);
+    return true;
+  }
   if (item.ward) {
     if (u.wards >= WARD.carry || u.gold < item.cost) return false;
     u.gold -= item.cost;
@@ -562,6 +588,11 @@ export function damage(s: GameState, t: Unit, amount: number, sourceId: number):
   }
   // The siege banner, an objective's reward, makes the player's champion hit structures harder.
   if (sourceId === s.player && s.time < s.siegeUntil && (t.kind === 'tower' || t.kind === 'nexus')) amount *= SIEGE.mult;
+  // The elder's blessing: its team's champions hit structures harder.
+  const blessed = elderBlessed(s, getUnit(s, sourceId));
+  if (blessed && (t.kind === 'tower' || t.kind === 'inhibitor' || t.kind === 'nexus')) amount *= ELDER.structMult;
+  // Morrow's grudge: the Whaler hits the beast that sank his ship harder.
+  if (t.kind === 'beast') amount *= 1 + (getUnit(s, sourceId)?.champ?.perk?.beastDmg ?? 0) / 100;
   let rest = ((amount * 100) / (100 + Math.max(0, armorOf(t)))) * takenMult(s, t);
   if (t.champ?.passive.tough) rest *= 1 - t.champ.passive.tough / 100;
   if (t.shield > 0) {
@@ -571,6 +602,11 @@ export function damage(s: GameState, t: Unit, amount: number, sourceId: number):
   }
   const lost = Math.min(Math.max(0, t.hp), rest);
   t.hp -= rest;
+  // ...and finish an enemy champion they leave nearly dead.
+  if (blessed && t.kind === 'champion' && t.hp > 0 && t.hp < t.maxHp * ELDER.execute) {
+    t.hp = 0;
+    s.fx.push({ kind: 'ring', x: t.x, y: t.y, r: 60, color: '#ffc93d', ms: 600 });
+  }
   t.flash = 120;
   t.lastHitBy = sourceId;
   // Hurting a champion draws the fire of that champion's towers, and breaks its recall.
@@ -585,6 +621,11 @@ export function damage(s: GameState, t: Unit, amount: number, sourceId: number):
   }
   if (t.hp <= 0) kill(s, t, sourceId);
   return lost;
+}
+
+/** Whether a unit is a champion whose team has the elder's blessing now. */
+function elderBlessed(s: GameState, u: Unit | undefined | null): boolean {
+  return !!u && u.kind === 'champion' && u.side !== 'neutral' && s.elderBuff[u.side] > s.time;
 }
 
 /** Damage a unit takes is scaled by this: minions empowered by the beast take less. */
@@ -628,8 +669,9 @@ function updateUnit(s: GameState, u: Unit, dt: number) {
   }
   if (u.dead) {
     if ((u.kind === 'champion' || u.kind === 'camp' || u.kind === 'beast') && s.time >= u.respawnAt) {
+      if (u.kind === 'beast' && s.time >= ELDER.at && !s.beastElder) makeElder(s, u);
       revive(u);
-      if (u.kind === 'beast') notice(s, 'The guardian beast has awoken', '#f2c14e');
+      if (u.kind === 'beast') notice(s, s.beastElder ? 'The Elder Guardian has awoken' : 'The guardian beast has awoken', '#f2c14e');
     } else if (u.kind === 'champion' && !u.player) {
       // A dead AI champion spends its wait at the shop, and buys back when its base is in danger.
       aiShop(u);
@@ -726,7 +768,7 @@ function revive(u: Unit) {
   u.slowMs = 0;
   u.stunMs = 0;
   u.shield = 0;
-  u.buffs = [];
+  u.buffs = u.buffs.filter((b) => b.elixir);
   u.lastHitBy = null;
   u.hasteMs = 0;
   u.recallMs = 0;
@@ -738,7 +780,7 @@ function kill(s: GameState, t: Unit, killerId: number) {
   t.dead = true;
   t.target = null;
   t.moveTo = null;
-  t.buffs = [];
+  t.buffs = t.buffs.filter((b) => b.elixir);
   const killer = getUnit(s, killerId);
   const champKiller = killer && killer.kind === 'champion' ? killer : null;
   switch (t.kind) {
@@ -787,8 +829,16 @@ function kill(s: GameState, t: Unit, killerId: number) {
         champKiller.gold += BEAST.gold;
         gainXp(s, champKiller, BEAST.xp);
         const secs = Math.round(BEAST.buffMs / 1000);
-        aiLog(team, `${shortName(champKiller.name)} slays the guardian beast`);
-        notice(s, team === 'blue' ? `Blue slew the guardian beast: your minions are empowered for ${secs}s` : `Red slew the guardian beast: red minions are empowered for ${secs}s`, SIDE_COLOR[team]);
+        if (s.beastElder) {
+          // The elder blesses the slayers' whole team: siege damage and an execute.
+          s.elderBuff[team] = s.time + ELDER.buffMs;
+          champKiller.gold += ELDER.gold;
+          aiLog(team, `${shortName(champKiller.name)} slays the Elder Guardian`);
+          notice(s, team === 'blue' ? `Blue slew the Elder Guardian: your champions are blessed for ${ELDER.buffMs / 1000}s` : `Red slew the Elder Guardian: red champions are blessed for ${ELDER.buffMs / 1000}s`, SIDE_COLOR[team]);
+        } else {
+          aiLog(team, `${shortName(champKiller.name)} slays the guardian beast`);
+          notice(s, team === 'blue' ? `Blue slew the guardian beast: your minions are empowered for ${secs}s` : `Red slew the guardian beast: red minions are empowered for ${secs}s`, SIDE_COLOR[team]);
+        }
       }
       s.fx.push({ kind: 'ring', x: t.x, y: t.y, r: 90, color: '#c79bff', ms: 800 });
       break;
@@ -820,9 +870,11 @@ function kill(s: GameState, t: Unit, killerId: number) {
     case 'champion': {
       t.deaths++;
       t.recallMs = 0;
-      const bounty = bountyOf(t.killStreak);
+      const streak = t.killStreak;
       t.killStreak = 0;
       if (champKiller && champKiller.side !== t.side) {
+        // Rook, the bounty hunter, gets more for a head with a price on it.
+        const bounty = Math.round(bountyOf(streak) * (1 + (champKiller.champ?.perk?.bountyGold ?? 0) / 100));
         champKiller.gold += KILL.gold + bounty;
         champKiller.kills++;
         champKiller.killStreak++;
@@ -850,11 +902,21 @@ function gainXp(s: GameState, c: Unit, amount: number) {
   const level = Math.min(levelFor(c.xp), MAX_LEVEL);
   if (level > c.level) {
     for (let l = c.level + 1; l <= level && c.champ; l++) {
-      const pair = UPGRADES[c.champ.id]?.[l - 2];
+      if (ULT_RANK_LEVELS.includes(l)) {
+        const r = c.champ.abilities.find((a) => a.key === 'R')!;
+        if (c.player) notice(s, `Level ${l}: ${r.name} ranks up`, '#f2c14e');
+        aiLog(c.side, `${shortName(c.name)} ranks up ${r.name} at level ${l}`);
+        continue;
+      }
+      const pair = upgradePairAt(c.champ.id, l);
       if (!pair) continue;
-      // The player chooses on the cards; an AI champion takes the one it rates higher.
-      if (c.player) s.upgradeOffers.push({ level: l, options: [pair[0].id, pair[1].id] });
-      else {
+      // The player chooses on the cards (a third one where its class's mastery reaches this
+      // level); an AI champion takes the one it rates higher.
+      if (c.player) {
+        const third = UPGRADE_LEVELS.indexOf(l) < s.mastery;
+        const options = offerFor(c.champ.id, l, c.upgrades, third ? 3 : 2);
+        if (options.length) s.upgradeOffers.push({ level: l, options });
+      } else {
         const up = aiRate(pair[1]) > aiRate(pair[0]) ? pair[1] : pair[0];
         c.upgrades.push(up.id);
         aiLog(c.side, `${shortName(c.name)} takes ${up.name} at level ${l}`);
@@ -1065,6 +1127,12 @@ function aiShop(u: Unit) {
     aiLog(u.side, `${shortName(u.name)} buys the ${next.name}`);
     return;
   }
+  // With the build done, spare gold goes on an elixir for the next push.
+  const elixir = ITEMS.find((it) => it.id === AI_ELIXIR[AI_BUILD_FOR[u.champ?.role ?? ''] ?? 'fighter']);
+  if (!next && elixir && !u.buffs.some((b) => b.elixir) && u.gold >= elixir.cost + ELIXIR.aiSpare && buy(u, elixir.id)) {
+    aiLog(u.side, `${shortName(u.name)} drinks a ${elixir.name}`);
+    return;
+  }
   if (u.wards === 0 && buy(u, 'ward')) aiLog(u.side, `${shortName(u.name)} buys a ward`);
 }
 
@@ -1166,7 +1234,13 @@ function updateWatchstones(s: GameState, dt: number) {
   for (const w of s.units) {
     if (w.kind !== 'watchstone') continue;
     const near = new Set<Team>();
-    for (const c of s.units) if (c.kind === 'champion' && !c.dead && dist(c, w) <= WATCH.radius) near.add(c.side as Team);
+    // Kaida, a watchstone keeper, takes one faster: the fastest champion there sets the pace.
+    let rate = 1;
+    for (const c of s.units) {
+      if (c.kind !== 'champion' || c.dead || dist(c, w) > WATCH.radius) continue;
+      near.add(c.side as Team);
+      rate = Math.max(rate, 1 + (c.champ?.perk?.captureRate ?? 0) / 100);
+    }
     if (near.size !== 1) {
       // Nobody there drops the progress; both teams there hold it where it is.
       if (near.size === 0) w.capture = null;
@@ -1178,7 +1252,7 @@ function updateWatchstones(s: GameState, dt: number) {
       continue;
     }
     if (!w.capture || w.capture.team !== team) w.capture = { team, ms: 0 };
-    w.capture.ms += dt;
+    w.capture.ms += dt * rate;
     if (w.capture.ms >= WATCH.captureMs) {
       w.side = team;
       w.capture = null;
@@ -1246,8 +1320,22 @@ function updateVision(s: GameState) {
   }
 }
 
+/** The beast's elder form, for good: more health and harder blows. */
+function makeElder(s: GameState, u: Unit) {
+  s.beastElder = true;
+  u.maxHp = BEAST.hp * ELDER.hpMult;
+  u.dmg = BEAST.dmg * ELDER.dmgMult;
+  aiLog('blue', 'The guardian beast is now the Elder Guardian');
+}
+
 /** The guardian beast: claws whoever hurt it last (and those beside them), hurls rocks at range, and heals when left alone. */
 function beastAct(s: GameState, u: Unit, dt: number) {
+  // An awake beast that nobody is fighting grows into the elder form when its time comes.
+  if (!s.beastElder && s.time >= ELDER.at && u.lastHitBy === null && u.hp >= u.maxHp) {
+    makeElder(s, u);
+    u.hp = u.maxHp;
+    notice(s, 'The guardian beast grows into the Elder Guardian', '#f2c14e');
+  }
   const who = getUnit(s, u.lastHitBy);
   if (!who || who.dead || dist(who, u) > BEAST.leash) {
     u.lastHitBy = null;

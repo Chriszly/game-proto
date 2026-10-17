@@ -24,9 +24,10 @@ export const OBJECTIVE_CARD = { x: 10, y: 42, w: 236, h: 62 };
 /** The last-hit streak chip, right of the gold counter. */
 export const STREAK_CHIP = { x: 96, y: 6, w: 118, h: 22 };
 
-/** The upgrade choice in the bottom bar, between the shop button and the minimap: two cards. */
+/** The upgrade choice in the bottom bar, between the shop button and the minimap: two cards, or three slimmer ones. */
 export const UPGRADE_PANEL = { x: 614, y: 420, w: 168, h: 112 };
-export function upgradeCard(i: number) {
+export function upgradeCard(i: number, n = 2) {
+  if (n === 3) return { x: UPGRADE_PANEL.x + 6, y: UPGRADE_PANEL.y + 19 + i * 31, w: UPGRADE_PANEL.w - 12, h: 29 };
   return { x: UPGRADE_PANEL.x + 6, y: UPGRADE_PANEL.y + 20 + i * 46, w: UPGRADE_PANEL.w - 12, h: 42 };
 }
 
@@ -38,7 +39,7 @@ export function activeButton(i: number) {
 /** The recall button in the top bar, right of the clock; while the champion is dead it is the buy back button. */
 export const RECALL_BUTTON = { x: 530, y: 4, w: 118, h: 26 };
 
-/** The shop panel, opened with the button or the B key: thirteen item cards in four columns. */
+/** The shop panel, opened with the button or the B key: sixteen item cards in four columns. */
 export const SHOP_PANEL = { x: 100, y: 38, w: 760, h: 368 };
 const SHOP_COL_W = (SHOP_PANEL.w - 28 - 30) / 4;
 export function shopRow(i: number) {
@@ -60,9 +61,6 @@ export function pickCard(i: number) {
   const row = Math.floor(i / 5);
   return { x: (VIEW.w - total) / 2 + col * (PICK_CARD.w + PICK_CARD.gap), y: PICK_CARD.y + row * (PICK_CARD.h + PICK_CARD.gap), w: PICK_CARD.w, h: PICK_CARD.h };
 }
-/** The button under the cards that draws new names for the champions on offer. */
-export const REROLL = { x: VIEW.w / 2 - 70, y: 440, w: 140, h: 24 };
-
 /** The buffs the player's champion carries, as chips in a row above the portrait. */
 export function buffStrip(i: number) {
   return { x: 12 + i * 92, y: 388, w: 88, h: 18 };

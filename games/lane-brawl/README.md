@@ -5,29 +5,31 @@ the [game hub](../../README.md).
 
 You pick one of fifteen champions and lead a team of five down three lanes of a big square map.
 The cast runs from medieval fantasy to steampunk: knights, archers and witches fight beside
-gunslingers, brass automatons, tinkers with tesla coils, wolf-folk and a great bear. Four
-allies walk the lanes with you, and five NPC champions on the red team fight you. Every champion has
-a name of its own, drawn fresh for each match (like Ilmisdor the Unbroken, a Warden, or Fiath
-Thornmother, a Witch), and its class gives it a passive and four abilities. Farm minions for gold,
+gunslingers, brass automatons, tinkers with lightning coils, wolf-folk and a great bear. Four
+allies walk the lanes with you, and five NPC champions on the red team fight you. Every champion is
+one character with a story and a reason to fight (like Hald Oathstone, the Warden, or Gwyth of the
+Mire, the Witch), and their class gives them a passive and four abilities. Farm minions for gold,
 level up on XP, hunt the jungle between the lanes for gold and buffs, hold the watchstones on the
 river for sight, fight over the guardian beast, ambush from the tall grass and the fog of war, and
 push the lanes through the towers and an inhibitor until the red Nexus falls. There is no multiplayer.
 
-Everything is low-poly 3D: the champions, minions, the jungle's boars, wolves and brutes, the
+Everything is toon low-poly 3D: the champions, minions, the jungle's boars, wolves and brutes, the
 watchstones, the guardian beast, the towers, the inhibitors and the Nexus are small
 faceted models built in code and rendered by a tiny software renderer at start-up into sprites from
-eight directions, with a walk cycle, attack poses and a cast pose. The map has faceted grass, flagstone
+eight directions, cel-shaded with a dark ink outline (the champions get big hero heads and a prop
+from their story), with a walk cycle, attack poses and a cast pose. The map has faceted grass, flagstone
 lanes with stone kerbs, a river from corner to corner, ruins, flowers and pines, lit from the top
 left, under bevelled slate panels.
 
 ![A Gunslinger, an Automaton, a Tinker, a Wolfkin and a Bruin on blue clash with red on the middle lane by the river, each with a name over its health bar](cover.png)
+
+![The toon look: Tamsin in her leaf cloak and Fenra with her moon mark fight by the river, each with a dark ink outline and an oversized hero head](docs/screenshots/toon-heroes.webp)
 
 ## How to play
 
 | Control | Action |
 | --- | --- |
 | Click a champion card | Pick your champion and start the match |
-| New names | Draw new names for the champions on the pick screen |
 | Click the ground | Walk there |
 | Click an enemy | Walk to it and attack it until it dies or you stop it by clicking the ground |
 | Hold Q, W, E or R, then let go | Show the ability's range and where it will land while held; cast it at the cursor on letting go |
@@ -36,7 +38,7 @@ left, under bevelled slate panels.
 | V, or click its button | Plant a Vision Ward at the cursor (within 600 px), if you carry one |
 | T, or Recall home in the top bar | Channel 4 seconds standing still, then appear at your Nexus; damage, moving, attacking or casting cancels it |
 | X, or Buy back in the top bar | While dead: pay to respawn at once (100 gold + 50 per level), once every 2:30 |
-| 1 or 2, or click an upgrade card | Keep one of the two upgrades a new level offers |
+| 1, 2 or 3, or click an upgrade card | Keep one of the upgrades a new level offers |
 | B, or Shop | Open or close the shop; buy an item by clicking it |
 | Esc | Close the shop |
 | Play again | After a match: pick a champion again |
@@ -90,19 +92,35 @@ left, under bevelled slate panels.
    **empowered minions** for 90 seconds (they hit 50% harder and take 35% less damage; they glow
    violet, and a chip at the top right shows the time left); the slayer takes 150 gold and 250 XP.
    Two AI champions from each side go to fight over it while it is awake.
+   **The Elder Guardian**: from 14:00 the beast wakes (or, awake and left alone, grows) into its
+   elder form, darker with gold crystals, with 60% more health and 40% harder blows. Slaying it
+   gives the usual rewards plus 150 gold and the **elder blessing** to the slayers' whole team for
+   60 seconds: champions deal 50% more damage to towers, inhibitors and the Nexus, and an enemy
+   champion they leave under 15% health dies. A gold chip at the top right shows the time left. It
+   is a closing objective for a stalled match.
+
+   ![The Elder Guardian in its pit by the river: the beast darker, with gold crystals along its back and pale gold horns](docs/screenshots/elder-beast.webp)
    **Tall grass**: eighteen bushes in the jungle and beside the lanes. A champion inside one can't be seen or targeted by
    enemies unless one of them stands in the same bush or right next to it; your own champion shows
    through the grass. Attacking or casting shows the champion for 1.5 seconds. A target that slips
    into a bush is lost.
-9. **Champions** level from 1 to 5 on XP. R unlocks at level 3. Each level adds health and damage.
+9. **Champions** level from 1 to 8 on XP. R unlocks at level 3, and levels 6 and 8 rank it up (+20%
+   damage, heal and shield, -15% cooldown each, shown as gold pips on the R box). Each level adds health and damage.
    Each class has a passive (in the table below) and its own mix of abilities: bursts, bolts,
-   dashes, heals and shields, plus self buffs (Frenzy, Vanish), lingering zones that hurt and slow
-   (Blight, Arrow Rain), a harpoon that pulls its target in, knock-backs, and finishers that hit
-   twice as hard on a champion under 40% health (Execute, Final Mark). The Stalker's Vanish hides
+   dashes, heals and shields, plus self buffs (Blood Up, Vanish), lingering zones that hurt and slow
+   (Mire Rot, Hailstorm), a harpoon that pulls its target in, knock-backs, and finishers that hit
+   twice as hard on a champion under 40% health (Last Word, Final Mark). The Stalker's Vanish hides
    it from enemies and their towers and camps until it attacks.
-10. **Upgrades**: each new level puts two upgrade cards in the bottom bar and marks the ability box
+10. **Upgrades**: levels 2, 3, 4, 5 and 7 each put two upgrade cards in the bottom bar and marks the ability box
    they change with a gold diamond. Keep one; it changes that ability for the rest of the match (gold
    pips under a box count the upgrades it has). The choices per champion are in the table below.
+   **Class mastery**: each win with a champion counts toward its mastery, saved in your browser.
+   At 1, 2, 4, 6 and 9 wins it reaches ranks 1 to 5, shown as gold diamonds on its pick card, and
+   each rank puts a third card in one more of its offers (rank 1 at level 2, rank 2 at levels 2
+   and 3, and so on). The third card is an upgrade from the champion's other levels that you don't
+   have yet, and the end panel says how far the next rank is.
+
+   ![The upgrade panel with three slim cards at level 3 for Hald, the third from his mastery](docs/screenshots/mastery-offer.webp)
 11. **Objectives**: a card under the top bar names one goal at a time with a timer and a reward, a
    gold marker floats over its target and a star marks it on the minimap. They come in turn: topple
    the nearest red tower (2:30, 200 gold and the siege banner, +25% damage to towers and the Nexus
@@ -110,7 +128,7 @@ left, under bevelled slate panels.
    you (2:00, 150 gold), slay the guardian beast (2:00, 250 gold; only when your team slays it).
    A goal counts however its target falls; a late one is missed, and one with nothing to aim at
    (the beast asleep) is skipped. The next goal comes 4 seconds after one ends.
-12. **Items**: twelve of them plus the Vision Ward, bought within reach of your Nexus or anywhere
+12. **Items**: twelve of them plus the Vision Ward and three elixirs, bought within reach of your Nexus or anywhere
     while you wait to respawn, at most six in your bag (the slots
     under your health bar). Cheap parts build into bigger items: buying a big item uses up the parts
     you own and takes their cost off its price (the shop shows the saving).
@@ -130,6 +148,14 @@ left, under bevelled slate panels.
    | Sage's Cloak | 900 | -20% ability cooldowns, +120 health | Sapphire + Ruby Crystal |
    | Giant's Belt | 700 | +320 health | Ruby Crystal |
    | Vision Ward | 75 | Consumable: carry up to two, plant with V | |
+   | Wrath Elixir | 400 | Elixir: +20% damage for 3 minutes | |
+   | Iron Elixir | 400 | Elixir: +15 armor and 4 health a second for 3 minutes | |
+   | Swift Elixir | 400 | Elixir: +15% speed and +20% attack speed for 3 minutes | |
+
+   Elixirs take no bag slot and last through death; you drink one at a time, and a new one replaces
+   the one you have. Once the bag is full they are where late gold goes before a push.
+
+   ![The shop's last row: the Vision Ward and the three elixirs, the Wrath Elixir active with 2:59 left and a Wrath chip by the portrait](docs/screenshots/elixir-shop.webp)
 
 13. **Vision wards**: a planted ward is a stake with a gem eye that gives your team sight 420 px
     around it for 90 seconds, tall grass included, so a champion hiding in a bush near it is seen.
@@ -155,7 +181,7 @@ left, under bevelled slate panels.
 17. **Winning** destroys the red Nexus. Losing means your Nexus falls first.
 
 Every ability has an animation of its own (a hammer that splits the ground, a meteor from the
-sky, a harpoon on its rope, a tesla pylon arcing, a blood moon rising and so on), and so do bolts in
+sky, a harpoon on its rope, a coil pylon arcing, a blood moon rising and so on), and so do bolts in
 flight, where they strike, zones while they last and buffs while they glow. A dashed ring round your
 champion shows how far it attacks; hovering another champion shows its reach.
 
@@ -170,12 +196,13 @@ camp, watchstone, bush, ward, the beast and the champions you can see, under the
 
 ### The AI
 
-The AI champions take an upgrade at each level (the one they rate higher: stuns and damage first).
+The AI champions take an upgrade at each level that offers one (the one they rate higher: stuns and damage first).
 They shop whenever they are home or dead, following a build for their class's role (tanks, bruisers,
 brawlers and catchers go Cloth Armor, Ruby Crystal, Thornmail, Swift Boots, Giant's Belt and on;
 casters and supports go Sapphire, Sage's Cloak and on; everyone else goes Long Sword, Dagger,
 Brutal Edge, Phase Boots and on), each starting with a Healing Flask they drink under 40% health,
-and buy a Vision Ward whenever they have none. They recall home when hurt with no enemy near, or
+and buy a Vision Ward whenever they have none. With the build done and gold to spare they drink an
+elixir before heading out (tanks the Iron Elixir, casters the Swift Elixir, the rest Wrath). They recall home when hurt with no enemy near, or
 with 900 gold and something to buy, and buy back when an enemy champion is at their Nexus.
 Every 70 seconds from 1:40, each team sends one healthy champion from another lane to gang up on
 the weakest enemy champion it can see. A champion that is low on health with an enemy champion
@@ -185,7 +212,7 @@ each team sends one healthy champion into the jungle for a brute's buff on its h
 watchstone it lacks. Ranged champions keep their distance from melee ones, and every champion keeps
 its finisher (R) for champions and the beast and its escape for when it falls back.
 
-![The pick screen: fifteen classes in three rows, from the Warden to the Gunslinger, the Automaton, the Tinker, the Wolfkin and the Bruin, each card with a random name, class and role and passive; the line under the cards tells about the one under the pointer](docs/screenshots/playthrough-1-pick.webp)
+![The pick screen: fifteen classes in three rows, from the Warden to the Gunslinger, the Automaton, the Tinker, the Wolfkin and the Bruin, each card with the champion's name, class and role and passive; the lines under the cards tell who the one under the pointer is and why they fight](docs/screenshots/playthrough-1-pick.webp)
 
 ![The five steampunk and beast classes in one brawl by the river: Gunslinger, Automaton, Tinker, Wolfkin and Bruin](docs/screenshots/new-cast.webp)
 
@@ -207,7 +234,7 @@ its finisher (R) for champions and the beast and its escape for when it falls ba
 
 ![A last hit pops a coin with +24g; the next minion the Warden would kill is outlined in gold, and the chip by the gold counter shows an x4 streak](docs/screenshots/loop-last-hit.webp)
 
-![Level 2 offers Wide Slam or Stun Slam in the bottom bar; the Q box carries the gold diamond](docs/screenshots/playthrough-4-upgrade.webp)
+![Level 2 offers Wide Gatefall or Stun Gatefall in the bottom bar; the Q box carries the gold diamond](docs/screenshots/playthrough-4-upgrade.webp)
 
 ![The shop: twelve items in four columns, the parts first, with what each builds into or from](docs/screenshots/playthrough-2-shop.webp)
 
@@ -217,7 +244,7 @@ its finisher (R) for champions and the beast and its escape for when it falls ba
 
 ![The Warden recalling by the river: a Recalling bar fills under his health bar and the top bar button counts down 1.2 s](docs/screenshots/round2-recall.webp)
 
-![Red's Dunandis carries a BOUNTY 150g label over his bar after four kills; the notice names the streak](docs/screenshots/round2-bounty.webp)
+![A red champion carries a BOUNTY 150g label over the health bar after four kills; the notice names the streak](docs/screenshots/round2-bounty.webp)
 
 ![Dead at the Nexus with 8 s to respawn: the top bar offers Buy back 150g [X] in gold](docs/screenshots/round2-buyback.webp)
 
@@ -225,54 +252,86 @@ its finisher (R) for champions and the beast and its escape for when it falls ba
 
 ![Ten champions in one brawl by the river: Warden, Witch, Stalker, Lancer and Berserker among them, each under its own name](docs/screenshots/ten-classes.webp)
 
-![Each ability's own effect: the Warden's Slam splits the ground, the Mage's Meteor falls from the sky, the Priest's Sanctuary raises a column of light](docs/screenshots/skill-looks-1.webp)
+![Each ability's own effect: Hald's Gatefall splits the ground, Elowen's Starfall falls from the sky, Maren's Noon Bell raises a column of light](docs/screenshots/skill-looks-1.webp)
 
 ![Holding an ability's key shows its range and where it lands: areas, bolt lanes and dash lines](docs/screenshots/aim-indicators.webp)
 
 ### Champions
 
-| Class | Role | Passive | Q | W | E | R (level 3) |
-| --- | --- | --- | --- | --- | --- | --- |
-| Warden | Tank | Stalwart: takes 15% less damage | Slam: burst around self, slows | Bulwark: shields allies near the cursor | Charge: dash, hits and stuns where it lands | Last Stand: big burst, slows |
-| Blade | Assassin | Keen Edge: every 3rd attack hits 2x | Dash Strike: dash and hit | Whirl: burst around self | Shadow Step: dash | Execute: heavy hit at the cursor, double under 40% health |
-| Archer | Marksman | Fleetfoot: runs 30% faster for 1.5 s after a shot | Piercing Arrow: long bolt through enemies | Volley: three arrows in a fan | Roll: short dash | Arrow Rain: zone at the cursor, hurts and slows |
-| Mage | Burst | Arcane Power: abilities deal 20% more | Fireball: bolt | Frost Nova: burst around self, slows | Blink: dash | Meteor: big burst at the cursor |
-| Priest | Support | Blessed Aura: allies near heal 2 a second | Smite: bolt | Mend: heals allies near the cursor | Ward: shields allies near the cursor | Sanctuary: heals and shields a wide area |
-| Berserker | Fighter | Bloodthirst: heals 10% of attack damage | Cleave: burst around self | Frenzy: +45% attack speed for 4 s | Leap: dash, hits and slows | Rampage: +30 damage, +20% lifesteal, +20% speed for 6 s |
-| Harpooner | Catcher | Sea Legs: heals 4 a second | Harpoon: bolt that pulls its target in and stuns | Riptide: burst around self, knocks back | Brace: +20 armor and a shield for 3 s | Maelstrom: zone at the cursor, hurts and slows |
-| Witch | Controller | Hex: attacks slow for 0.6 s | Hex Bolt: bolt, slows | Blight: zone at the cursor, hurts | Bramble Snare: roots foes at the cursor | Plague Field: wide zone, hurts and slows |
-| Stalker | Ambusher | Ambush: the first hit after a 2 s lull or out of Vanish hits 2.3x | Shuriken Fan: three stars in a fan | Vanish: unseen and +30% speed for 3 s | Pounce: dash, hits and stuns | Final Mark: bolt, double under 40% health |
-| Gunslinger | Marksman | Ricochet: shots hit foes beside the target for 35% | Fan the Hammer: three quick shots in a fan | Smoke Bomb: zone at the cursor, slows | Dodge Roll: short dash | Deadeye: very long shot, more than double under 30% health |
-| Automaton | Tank | Iron Hull: takes 12% less damage | Steam Vent: burst around self, slows | Overclock: +40% attack speed and +15 armor for 4 s | Rocket Fist: bolt that pulls its target in and stuns | Overload: big burst around self, stuns |
-| Tinker | Controller | Overcharge: abilities deal 15% more | Spark Bolt: bolt, stuns briefly | Tesla Field: zone at the cursor, hurts and slows | Jetpack: long dash | Lightning Storm: wide zone, hurts and slows |
-| Wolfkin | Hunter | Feral Hunger: heals 12% of attack damage | Lunge: dash, hits and slows | Howl: +30% attack speed and +20% speed for 4 s | Rend: burst around self, slows | Blood Moon: +25 damage, +25% lifesteal, +25% speed for 6 s |
-| Bruin | Brawler | Thick Hide: heals 6 a second | Maul: burst around self | Roar: wide burst, slows | Bull Rush: dash, hits and stuns | Grizzly Wrath: shield, +25 damage, +30% attack speed, +15 armor for 6 s |
-| Lancer | Bruiser | Wide Reach: attacks hit foes beside the target for 40% | Thrust: short bolt through enemies | Sweep: burst around self, knocks back | Vault: dash, hits and stuns | Phalanx: shields allies around and gives +15 armor for 6 s |
+| Champion | Class | Role | Passive | Q | W | E | R (level 3) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Hald Oathstone, the Last Gate | Warden | Tank | Oathbound: takes 15% less damage | Gatefall: burst around self, slows | Oathguard: shields allies near the cursor | Gate Rush: dash, hits and stuns where it lands | Last Gate: big burst, slows |
+| Vesna Duskedge, the Unpaid Knife | Blade | Assassin | Third Cut: every 3rd attack hits 2x | Quick Cut: dash and hit | Cutwind: burst around self | Shadow Step: dash | Last Word: heavy hit at the cursor, double under 40% health |
+| Tamsin Farrow, Ranger of the Greenmarch | Archer | Marksman | Fleetfoot: runs 30% faster for 1.5 s after a shot | Heartseeker: long bolt through enemies | Featherfall: three arrows in a fan | Tumble: short dash | Hailstorm: zone at the cursor, hurts and slows |
+| Elowen Vey, the Rift Scholar | Mage | Burst | Rift-Touched: abilities deal 20% more | Riftflame: bolt | Rime Ring: burst around self, slows | Fold Step: dash | Starfall: big burst at the cursor |
+| Sister Maren, the Daykeeper | Priest | Support | Dawnlight: allies near heal 2 a second | Sunlance: bolt | Mend: heals allies near the cursor | Dawn Veil: shields allies near the cursor | Noon Bell: heals and shields a wide area |
+| Torvik the Unchained, Chief of the Skarn | Berserker | Fighter | Bloodthirst: heals 10% of attack damage | Cleave: burst around self | Blood Up: +45% attack speed for 4 s | Skyfall: dash, hits and slows | Unchained: +30 damage, +20% lifesteal, +20% speed for 6 s |
+| Morrow Deepline, the Whaler | Harpooner | Catcher | Sea Legs: heals 4 a second | Harpoon: bolt that pulls its target in and stuns | Riptide: burst around self, knocks back | Hold Fast: +20 armor and a shield for 3 s | Maelstrom: zone at the cursor, hurts and slows |
+| Gwyth of the Mire, the Bog Witch | Witch | Controller | Hex: attacks slow for 0.6 s | Hex Bolt: bolt, slows | Mire Rot: zone at the cursor, hurts | Bramble Snare: roots foes at the cursor | Mire Bloom: wide zone, hurts and slows |
+| Kaida Mistwalker, Last of the Mistwalkers | Stalker | Ambusher | Ambush: the first hit after a 2 s lull or out of Vanish hits 2.3x | Mist Stars: three stars in a fan | Vanish: unseen and +30% speed for 3 s | Pounce: dash, hits and stuns | Final Mark: bolt, double under 40% health |
+| Rook Calloway, the Bounty Hunter | Gunslinger | Marksman | Ricochet: shots hit foes beside the target for 35% | Fan the Hammer: three quick shots in a fan | Smoke Bomb: zone at the cursor, slows | Dodge Roll: short dash | Last Round: very long shot, more than double under 30% health |
+| AX-9 Boilerheart, the Waking Engine | Automaton | Tank | Iron Hull: takes 12% less damage | Steam Vent: burst around self, slows | Overclock: +40% attack speed and +15 armor for 4 s | Rocket Fist: bolt that pulls its target in and stuns | Heartburst: big burst around self, stuns |
+| Winnie Voltwick, Storm Engineer | Tinker | Controller | Overcharge: abilities deal 15% more | Spark Bolt: bolt, stuns briefly | Coil Field: zone at the cursor, hurts and slows | Jetpack: long dash | Storm Engine: wide zone, hurts and slows |
+| Fenra Moonfang, Packleader of the Greywood | Wolfkin | Hunter | Feral Hunger: heals 12% of attack damage | Lunge: dash, hits and slows | Pack Howl: +30% attack speed and +20% speed for 4 s | Rend: burst around self, slows | Blood Moon: +25 damage, +25% lifesteal, +25% speed for 6 s |
+| Old Grumm Oakback, Keeper of the Hives | Bruin | Brawler | Thick Hide: heals 6 a second | Maul: burst around self | Roar: wide burst, slows | Oak Charge: dash, hits and stuns | Grovewrath: shield, +25 damage, +30% attack speed, +15 armor for 6 s |
+| Dame Liora Highbanner, Knight of the Concord | Lancer | Bruiser | Wide Reach: attacks hit foes beside the target for 40% | Thrust: short bolt through enemies | Sweep: burst around self, knocks back | Vault: dash, hits and stuns | Rally: shields allies around and gives +15 armor for 6 s |
 
-Champions are characters, not just classes: each gets a first name drawn from syllables and a
-byname that fits its class (a Warden is "the Unbroken" or "Stonehide", a Witch "Thornmother" or
-"Hexweaver", a Bruin "Honeypaw"), and an Automaton gets a maker's mark and a number instead, like
-"KR-6 Boilerplate", so no two matches field the same faces. **New names** on the pick screen draws again.
+### The Contest of Kessmoor
+
+Kessmoor is a valley with a crack at its heart, the Riftwell, where raw aether rises. Whoever holds
+it can power a city, heal a land or flood it with monsters. After a war over it burned half the
+realm, the Kessmoor Concord settled it: every season two banners, Dawn (blue) and Dusk (red), each
+raise a Nexus over a tap of the Riftwell and fight the Contest of Lanes, and the banner whose Nexus
+stands holds the Riftwell until the next one. Champions are sworn for one season, not born to a
+side, so any of them can fight for either banner. The minions are wardlings raised from Riftwell
+clay, the watchstones are old Concord shrines, the jungle is the Greywood gone wild from the Rift's
+overflow, and the guardian beast is the Rift Guardian, the Riftwell's own guard. Three peoples meet
+there: the old kingdoms, the steam city of Cogsport, which drains aether for its machines, and the
+beastfolk of the Greywood, whose forest is dying from the overflow.
+
+![The pick screen with the pointer on Hald Oathstone's card: the lines under the cards give his title, class and blurb, then why he fights](docs/screenshots/champion-lore.webp)
+
+| Champion | Story | Fights for |
+| --- | --- | --- |
+| Hald Oathstone, the Last Gate | Captain of the old Kessmoor gate when the Rift Guardian broke through; he alone walked out | Atonement: he signs with whichever banner is losing |
+| Vesna Duskedge, the Unpaid Knife | The best knife of the Hushed Guild, hunted by it since she refused to kill a Concord judge | The pardon the winning banner can grant |
+| Tamsin Farrow, Ranger of the Greenmarch | A ranger of the Greywood, where the boars and wolves grew wild and huge when the Rift woke | A banner that will drain the overflow |
+| Elowen Vey, the Rift Scholar | The youngest master of the Spire of Lanterns, who pulls fire and frost straight from the Riftwell | A key to the Riftwell, whoever hands it over |
+| Sister Maren, the Daykeeper | Keeper of the Sunward chapel, who tends the wounded of both banners | Keeping the contest from turning into war |
+| Torvik the Unchained, Chief of the Skarn | Rift ice swallowed his clan's hold in the hills | Land in the valley for his clan |
+| Morrow Deepline, the Whaler | A whaler from Saltreach whose ship the Rift Guardian dragged under | A shot at the beast |
+| Gwyth of the Mire, the Bog Witch | The hedge witch of Thornmere bog, older than the Concord, whose mire the overflow rots | Sealing the Riftwell for good |
+| Kaida Mistwalker, Last of the Mistwalkers | The last of the scouts who kept the watchstones; someone sold out their hidden hall | Finding the traitor among the champions |
+| Dame Liora Highbanner, Knight of the Concord | A knight of the Concord's own guard, given to one side by lot each season | Glory, and proof that an oath still means something |
+| Rook Calloway, the Bounty Hunter | A drifter from the rail towns beyond Cogsport | Gold, and every bounty on the field |
+| AX-9 Boilerheart, the Waking Engine | A guard engine of Cogsport whose boiler took in raw aether, and woke | Learning whether it is alive |
+| Winnie Voltwick, Storm Engineer | A Cogsport inventor whose storm engine makes lightning from thin air; she built AX-9's boiler | Proving her engine can replace the Rift taps |
+| Fenra Moonfang, Packleader of the Greywood | Leader of the wolfkin, whose kin are the feral wolf packs in the camps | Drawing the Rift out of her pack |
+| Old Grumm Oakback, Keeper of the Hives | The eldest bear of the Greywood, whose grove Cogsport's loggers are cutting | A voice for the forest in the Concord |
+
+Three stories give their champion a small edge on top of the class, shown on the pick screen:
+Morrow deals 25% more damage to the Rift Guardian, Kaida takes watchstones twice as fast, and Rook
+claims 50% more gold from a bounty.
 
 ### Upgrades
 
-| Champion | Level 2 | Level 3 | Level 4 | Level 5 |
-| --- | --- | --- | --- | --- |
-| Warden | Wide Slam (Q radius +30%) or Stun Slam (Q stuns 0.6s) | Iron Bulwark (W shield +40%) or Long Charge (E range +30%) | Titan Stand (R damage +25%) or Quick Slam (Q cooldown -25%) | Crushing Charge (E damage +40%) or Wide Bulwark (W radius +40%) |
-| Blade | Deep Strike (Q range +30%) or Keen Strike (Q damage +30%) | Wide Whirl (W radius +30%) or Quick Step (E cooldown -30%) | Brutal Execute (R damage +25%) or Crippling Whirl (W slows 1.2s) | Swift Strike (Q cooldown -25%) or Long Step (E range +30%) |
-| Archer | Heavy Arrow (Q damage +30%) or Wide Volley (W two more arrows) | Long Roll (E range +40%) or Quick Arrow (Q cooldown -25%) | Wide Rain (R radius +30%) or Hard Volley (W damage +30%) | Pinning Arrow (Q stuns 0.5s) or Heavy Rain (R damage +25%) |
-| Mage | Big Fireball (Q damage +30%) or Swift Fireball (Q cooldown -25%) | Deep Freeze (W stuns 0.6s) or Far Blink (E range +30%) | Huge Meteor (R radius +30%) or Wide Nova (W radius +30%) | Long Fireball (Q range +30%) or Heavy Meteor (R damage +25%) |
-| Priest | Deep Mend (W heals +30%) or Wide Mend (W radius +30%) | Holy Smite (Q damage +30%) or Strong Ward (E shield +40%) | Wide Sanctuary (R radius +25%) or Quick Ward (E cooldown -25%) | Binding Smite (Q stuns 0.5s) or Quick Mend (W cooldown -25%) |
-| Berserker | Wide Cleave (Q radius +30%) or Savage Cleave (Q damage +30%) | Long Frenzy (W lasts 50% longer) or Far Leap (E range +30%) | Endless Rampage (R lasts 40% longer) or Crushing Leap (E stuns 0.5s) | Quick Cleave (Q cooldown -25%) or Quick Frenzy (W cooldown -30%) |
-| Harpooner | Long Harpoon (Q range +25%) or Barbed Harpoon (Q damage +40%) | Deep Riptide (W radius +30%) or Iron Brace (E shield +50%) | Wide Maelstrom (R radius +25%) or Quick Harpoon (Q cooldown -25%) | Stunning Riptide (W stuns 0.5s) or Raging Maelstrom (R damage +30%) |
-| Witch | Cruel Hex (Q damage +30%) or Lasting Blight (W lasts 40% longer) | Wide Snare (E radius +40%) or Quick Hex (Q cooldown -25%) | Wide Plague (R radius +25%) or Foul Blight (W damage +35%) | Deep Roots (E holds 0.5s longer) or Long Plague (R lasts 30% longer) |
-| Stalker | Sharp Shuriken (Q damage +30%) or Wide Fan (Q two more stars) | Long Vanish (W lasts 50% longer) or Far Pounce (E range +30%) | Deadly Mark (R damage +25%) or Quick Vanish (W cooldown -30%) | Stunning Pounce (E stuns 0.4s longer) or Quick Shuriken (Q cooldown -25%) |
-| Gunslinger | Six Shooter (Q two more shots) or Hot Lead (Q damage +30%) | Thick Smoke (W radius +30%) or Quick Roll (E cooldown -30%) | Steady Aim (R damage +25%) or Long Smoke (W lasts 40% longer) | Stunning Shot (Q stuns 0.3s) or Quick Hammer (Q cooldown -25%) |
-| Automaton | Wide Vent (Q radius +30%) or Scalding Vent (Q damage +30%) | Long Overclock (W lasts 50% longer) or Long Fist (E range +25%) | Big Overload (R radius +25%) or Quick Vent (Q cooldown -25%) | Heavy Fist (E damage +40%) or Quick Overclock (W cooldown -30%) |
-| Tinker | Hot Spark (Q damage +30%) or Quick Spark (Q cooldown -25%) | Wide Field (W radius +30%) or Long Jet (E range +30%) | Wide Storm (R radius +25%) or Strong Field (W damage +35%) | Stunning Spark (Q stuns 0.4s longer) or Long Storm (R lasts 30% longer) |
-| Wolfkin | Far Lunge (Q range +30%) or Savage Lunge (Q damage +30%) | Long Howl (W lasts 50% longer) or Wide Rend (E radius +30%) | Long Moon (R lasts 40% longer) or Quick Lunge (Q cooldown -25%) | Deep Rend (E damage +40%) or Quick Howl (W cooldown -30%) |
-| Bruin | Wide Maul (Q radius +30%) or Heavy Maul (Q damage +30%) | Loud Roar (W radius +25%) or Long Rush (E range +30%) | Long Wrath (R lasts 40% longer) or Quick Maul (Q cooldown -25%) | Stunning Roar (W stuns 0.5s) or Crushing Rush (E damage +40%) |
-| Lancer | Long Thrust (Q range +30%) or Hard Thrust (Q damage +30%) | Wide Sweep (W radius +25%) or High Vault (E range +30%) | Iron Phalanx (R shield +40%) or Crippling Sweep (W slows 1.2s) | Stunning Vault (E stuns 0.4s longer) or Quick Thrust (Q cooldown -25%) |
+| Champion | Level 2 | Level 3 | Level 4 | Level 5 | Level 7 |
+| --- | --- | --- | --- | --- | --- |
+| Hald (Warden) | Wide Gatefall (Q radius +30%) or Stun Gatefall (Q stuns 0.6s) | Iron Oath (W shield +40%) or Long Rush (E range +30%) | Iron Gate (R damage +25%) or Quick Gatefall (Q cooldown -25%) | Crushing Rush (E damage +40%) or Wide Oath (W radius +40%) | Unbroken Oath (W cooldown -30%) or Gatebreaker (E stuns 0.4s longer) |
+| Vesna (Blade) | Deep Cut (Q range +30%) or Keen Cut (Q damage +30%) | Wide Wind (W radius +30%) or Quick Step (E cooldown -30%) | Final Word (R damage +25%) or Crippling Wind (W slows 1.2s) | Swift Cut (Q cooldown -25%) or Long Step (E range +30%) | Debt Collected (R cooldown -30%) or Twin Wind (W damage +40%) |
+| Tamsin (Archer) | Heavy Seeker (Q damage +30%) or Wide Feathers (W two more arrows) | Long Tumble (E range +40%) or Quick Seeker (Q cooldown -25%) | Wide Hail (R radius +30%) or Hard Feathers (W damage +30%) | Pinning Seeker (Q stuns 0.5s) or Heavy Hail (R damage +25%) | Long Hail (R lasts 40% longer) or Quick Tumble (E cooldown -30%) |
+| Elowen (Mage) | Big Riftflame (Q damage +30%) or Swift Riftflame (Q cooldown -25%) | Deep Rime (W stuns 0.6s) or Far Fold (E range +30%) | Huge Starfall (R radius +30%) or Wide Ring (W radius +30%) | Long Riftflame (Q range +30%) or Heavy Starfall (R damage +25%) | Quick Fold (E cooldown -30%) or Hard Rime (W damage +40%) |
+| Maren (Priest) | Deep Mend (W heals +30%) or Wide Mend (W radius +30%) | Bright Lance (Q damage +30%) or Strong Veil (E shield +40%) | Loud Bell (R radius +25%) or Quick Veil (E cooldown -25%) | Binding Lance (Q stuns 0.5s) or Quick Mend (W cooldown -25%) | Bright Bell (R heals +40%) or Long Lance (Q range +30%) |
+| Torvik (Berserker) | Wide Cleave (Q radius +30%) or Savage Cleave (Q damage +30%) | Long Blood (W lasts 50% longer) or Far Skyfall (E range +30%) | Endless Chains (R lasts 40% longer) or Crushing Skyfall (E stuns 0.5s) | Quick Cleave (Q cooldown -25%) or Quick Blood (W cooldown -30%) | Quick Skyfall (E cooldown -30%) or Quick Chains (R cooldown -30%) |
+| Morrow (Harpooner) | Long Harpoon (Q range +25%) or Barbed Harpoon (Q damage +40%) | Deep Riptide (W radius +30%) or Iron Grip (E shield +50%) | Wide Maelstrom (R radius +25%) or Quick Harpoon (Q cooldown -25%) | Stunning Riptide (W stuns 0.5s) or Raging Maelstrom (R damage +30%) | Long Maelstrom (R lasts 40% longer) or Quick Hold (E cooldown -30%) |
+| Gwyth (Witch) | Cruel Hex (Q damage +30%) or Lasting Rot (W lasts 40% longer) | Wide Snare (E radius +40%) or Quick Hex (Q cooldown -25%) | Wide Bloom (R radius +25%) or Foul Rot (W damage +35%) | Deep Roots (E holds 0.5s longer) or Long Bloom (R lasts 30% longer) | Wide Rot (W radius +30%) or Quick Snare (E cooldown -30%) |
+| Kaida (Stalker) | Sharp Stars (Q damage +30%) or Wide Stars (Q two more stars) | Long Vanish (W lasts 50% longer) or Far Pounce (E range +30%) | Deadly Mark (R damage +25%) or Quick Vanish (W cooldown -30%) | Stunning Pounce (E stuns 0.4s longer) or Quick Stars (Q cooldown -25%) | Quick Pounce (E cooldown -30%) or Long Stars (Q range +30%) |
+| Rook (Gunslinger) | Six Shooter (Q two more shots) or Hot Lead (Q damage +30%) | Thick Smoke (W radius +30%) or Quick Roll (E cooldown -30%) | Steady Aim (R damage +25%) or Long Smoke (W lasts 40% longer) | Stunning Shot (Q stuns 0.3s) or Quick Hammer (Q cooldown -25%) | Quick Draw (R cooldown -30%) or Far Roll (E range +30%) |
+| AX-9 (Automaton) | Wide Vent (Q radius +30%) or Scalding Vent (Q damage +30%) | Long Overclock (W lasts 50% longer) or Long Fist (E range +25%) | Big Heartburst (R radius +25%) or Quick Vent (Q cooldown -25%) | Heavy Fist (E damage +40%) or Quick Overclock (W cooldown -30%) | Quick Fist (E cooldown -30%) or Hot Heart (R damage +30%) |
+| Winnie (Tinker) | Hot Spark (Q damage +30%) or Quick Spark (Q cooldown -25%) | Wide Coil (W radius +30%) or Long Jet (E range +30%) | Wide Storm (R radius +25%) or Strong Coil (W damage +35%) | Stunning Spark (Q stuns 0.4s longer) or Long Storm (R lasts 30% longer) | Quick Coil (W cooldown -30%) or Long Spark (Q range +30%) |
+| Fenra (Wolfkin) | Far Lunge (Q range +30%) or Savage Lunge (Q damage +30%) | Long Howl (W lasts 50% longer) or Wide Rend (E radius +30%) | Long Moon (R lasts 40% longer) or Quick Lunge (Q cooldown -25%) | Deep Rend (E damage +40%) or Quick Howl (W cooldown -30%) | Quick Rend (E cooldown -30%) or Red Moon (R cooldown -30%) |
+| Grumm (Bruin) | Wide Maul (Q radius +30%) or Heavy Maul (Q damage +30%) | Loud Roar (W radius +25%) or Long Charge (E range +30%) | Long Wrath (R lasts 40% longer) or Quick Maul (Q cooldown -25%) | Stunning Roar (W stuns 0.5s) or Crushing Charge (E damage +40%) | Quick Roar (W cooldown -30%) or Quick Wrath (R cooldown -30%) |
+| Liora (Lancer) | Long Thrust (Q range +30%) or Hard Thrust (Q damage +30%) | Wide Sweep (W radius +25%) or High Vault (E range +30%) | Iron Rally (R shield +40%) or Crippling Sweep (W slows 1.2s) | Stunning Vault (E stuns 0.4s longer) or Quick Thrust (Q cooldown -25%) | Quick Rally (R cooldown -30%) or Hard Sweep (W damage +40%) |
 
 A stunned champion or minion neither moves nor attacks. AI champions take upgrades too (see The AI).
 
@@ -298,7 +357,7 @@ minions and towers deal 20% less damage, Hard 25% more. Normal is the game as de
 `npm run dev` at the repo root, then open `/games/lane-brawl/` (or pick Lane Brawl on the hub).
 The playthrough runs with `npx playwright test --project lane-brawl`: it picks the Warden, buys a
 Long Sword, topples the red mid tower (the first objective), clears the camp the next objective
-marks, last-hits a gold-outlined minion and, at level 2, keeps Wide Slam. On the way it waits out
+marks, last-hits a gold-outlined minion and, at level 2, keeps Wide Gatefall. On the way it waits out
 of the red tower's reach for the first minion wave and hits back at a red champion that comes for
 it.
 
@@ -309,7 +368,7 @@ it.
   where everything sits on screen.
 - `src/game/`: the rules, free of Phaser: `data.ts` (map, river, camps, watchstones, sight,
   champions and their passives, items, objectives, upgrades, buffs, the beast, inhibitors, bushes
-  and AI plans), `names.ts` (the champions' random names), `state.ts` (types and a new match) and
+  and AI plans), `names.ts` (the champions' short names), `mastery.ts` (saved wins per class), `state.ts` (types and a new match) and
   `sim.ts` (the rules, vision and the AI).
 - `src/art/`: `lowpoly.ts` (the software renderer), `models.ts` (every low-poly model), `bake.ts`
   (renders the models into sprite sheets at start-up) and `map.ts` (paints the map).

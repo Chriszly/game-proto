@@ -11,4 +11,5 @@ export const KIND_NAMES: Record<Kind, string> = {
   moonpetal: 'Moonpetal',
 };
 
-export const randomKind = (): Kind => KINDS[Math.floor(Math.random() * KINDS.length)];
+/** A random ingredient, from `rand` (Math.random unless a guild examination's fixed board is being laid). */
+export const randomKind = (rand: () => number = Math.random): Kind => KINDS[Math.floor(rand() * KINDS.length)];

@@ -173,7 +173,13 @@ interface Kit {
   leftHand?: (md: Model, arm: number) => void;
   back?: (md: Model) => void;
   over?: (md: Model) => void;
+  /** A champion: a bigger head (`HERO_HEAD`), so faces and hats read at sprite size. */
+  hero?: boolean;
 }
+
+/** How much bigger a champion's head and headgear are than a minion's, and how far it sits higher. */
+const HERO_HEAD = 1.3;
+const HERO_LIFT = 2;
 
 /** A standing figure, feet at the origin, facing +z. About 54 units tall. */
 function figure(kit: Kit, pose: Pose): Model {
@@ -197,8 +203,8 @@ function figure(kit: Kit, pose: Pose): Model {
       box(md, -6.8 * w, hip, -4, 6.8 * w, hip + 15, 4, kit.cloth, 1.18);
       box(md, -7.1 * w, hip, -4.3, 7.1 * w, hip + 2.6, 4.3, LEATHER);
       kit.back?.(md);
-      // Head.
-      md.at(T(0, 40, 0), () => {
+      // Head, bigger on a champion.
+      md.at(kit.hero ? chain(T(0, 40 + HERO_LIFT, 0), S(HERO_HEAD)) : T(0, 40, 0), () => {
         if (!kit.ownHead) {
           ico(md, 6.6, SKIN);
           box(md, -3.1, -1.4, 5.5, -1.5, 0.6, 6.5, EYE);
@@ -230,6 +236,12 @@ const upright = (arm: number, tip = 0) => Rx(arm + tip);
 /** Holds a weapon out in front of the hand, so it swings with the arm. */
 const grip = (tip = 0.3) => Rx(Math.PI / 2 - tip);
 
+/** Broken chain links hanging from a wrist (the Berserker's). */
+function chainLinks(md: Model) {
+  md.at(T(0, 3.5, 0), () => prism(md, 2.8, 2.8, -0.6, 0.8, 6, DARK_STEEL));
+  for (let i = 0; i < 3; i++) md.at(chain(T(2.4, 3 - i * 2.2, 0), Rz(0.3)), () => box(md, -0.5, -1.2, -0.9, 0.5, 1.2, 0.9, DARK_STEEL));
+}
+
 const KITS: Record<ChampId, (cloth: RGB) => Kit> = {
   warden: (cloth) => {
     const bronze = rgb('#c98b3b');
@@ -248,6 +260,12 @@ const KITS: Record<ChampId, (cloth: RGB) => Kit> = {
       over: (md) => {
         // Pauldrons on both shoulders.
         for (const side of [-1, 1]) md.at(T(side * 10.2, 32.5, 0), () => gem(md, 4.6, -2.6, 0.6, 3.6, 6, bronze));
+        // The key of the gate he lost, hanging from his belt.
+        md.at(T(4.5, 15.5, 4.8), () => {
+          md.at(Rx(Math.PI / 2), () => prism(md, 1.7, 1.7, -0.5, 0.5, 6, GOLD));
+          box(md, -0.5, -7, -0.5, 0.5, -1.4, 0.5, GOLD);
+          box(md, -0.5, -7, -0.5, 2.2, -5.6, 0.5, GOLD);
+        });
       },
       rightHand: (md) => {
         // A war hammer.
@@ -264,7 +282,9 @@ const KITS: Record<ChampId, (cloth: RGB) => Kit> = {
           const kite = (k: number): [number, number][] => [[0, 11 * k], [8 * k, 6 * k], [7 * k, -5 * k], [0, -13 * k], [-7 * k, -5 * k], [-8 * k, 6 * k]];
           slab(md, kite(1), 0, 2.2, bronze);
           md.at(T(0, -0.5, 0), () => slab(md, kite(0.72), 2, 3.1, cloth));
-          md.at(T(0, 0, 0), () => gem(md, 1.9, 3, 3.1, 4.4, 6, bronze));
+          // A gate painted on the field: an arch and bars, one of them broken.
+          for (const x of [-3, -1, 1, 3]) box(md, x - 0.4, x === 3 ? -2 : -6, 3.1, x + 0.4, 2, 3.5, EYE);
+          box(md, -3.4, 2, 3.1, 3.4, 3, 3.5, EYE);
         });
       },
     };
@@ -291,6 +311,11 @@ const KITS: Record<ChampId, (cloth: RGB) => Kit> = {
         // A short violet cape.
         md.at(chain(T(0, 31, -4.2), Rx(-0.12)), () => slab(md, [[-7.5, 0], [7.5, 0], [6, -17], [0, -20], [-6, -17]], -1, 0, violet));
       },
+      over: (md) => {
+        // The torn sash of the guild that hunts her, across the chest.
+        md.at(chain(T(0, 25, 4.3), Rz(-0.75)), () => box(md, -1.3, -10, 0, 1.3, 9, 1, violet));
+        md.at(chain(T(5.5, 19.5, 4.6), Rz(0.4)), () => slab(md, [[-1.3, 0], [1.3, 0], [0.4, -5], [-0.6, -3]], 0, 0.6, violet));
+      },
       rightHand: dagger,
       leftHand: dagger,
     };
@@ -309,6 +334,10 @@ const KITS: Record<ChampId, (cloth: RGB) => Kit> = {
         md.at(chain(T(5, 5, -1), Rz(-0.5)), () => slab(md, [[0, 0], [1.6, 4], [1, 12], [-0.6, 5]], -0.4, 0.4, rgb('#e2553a')));
       },
       back: (md) => {
+        // A short green cloak with leaf-cut edges.
+        md.at(chain(T(0, 32, -4.3), Rx(-0.1)), () =>
+          slab(md, [[-8, 0], [8, 0], [9, -13], [6, -11], [4.5, -16], [1.5, -12], [0, -17], [-1.5, -12], [-4.5, -16], [-6, -11], [-9, -13]], -1.1, 0, rgb('#4f8a3a')),
+        );
         // A quiver of arrows across the back.
         md.at(chain(T(3, 27, -6), Rz(-0.35)), () => {
           prism(md, 2.6, 2.6, -8, 6, 6, LEATHER);
@@ -321,7 +350,7 @@ const KITS: Record<ChampId, (cloth: RGB) => Kit> = {
           const pts: [number, number][] = [];
           for (let i = 0; i <= 6; i++) {
             const t = -1 + i / 3;
-            pts.push([t * 17, Math.cos(t * 1.25) * 5.5]);
+            pts.push([t * 21, Math.cos(t * 1.25) * 6]);
           }
           for (let i = 0; i < 6; i++) {
             const [y0, z0] = pts[i];
@@ -329,7 +358,7 @@ const KITS: Record<ChampId, (cloth: RGB) => Kit> = {
             const ang = Math.atan2(z1 - z0, y1 - y0);
             md.at(chain(T(0, y0, z0), Rx(ang)), () => box(md, -1.1, 0, -1.1, 1.1, Math.hypot(y1 - y0, z1 - z0) + 0.4, 1.1, WOOD));
           }
-          box(md, -0.3, -17, -0.3 + pts[0][1], 0.3, 17, 0.3 + pts[0][1], CREAM);
+          box(md, -0.3, -21, -0.3 + pts[0][1], 0.3, 21, 0.3 + pts[0][1], CREAM);
         });
       },
       rightHand: (md, arm) => {
@@ -354,7 +383,11 @@ const KITS: Record<ChampId, (cloth: RGB) => Kit> = {
         // A staff topped by a glowing crystal.
         md.at(upright(arm, 0.15), () => {
           prism(md, 1.2, 1.1, -12, 26, 5, WOOD);
-          md.at(T(0, 30, 0), () => gem(md, 3.8, -5, 0, 6, 6, cyan, 0.55));
+          // Fire and frost pulled from the Riftwell: the crystal is half of each.
+          md.at(T(0, 30, 0), () => {
+            md.at(T(-1.6, 0, 0), () => gem(md, 2.8, -5, 0, 6, 5, rgb('#ff9a3c'), 0.6));
+            md.at(T(1.6, 0, 0), () => gem(md, 2.8, -5, 0, 6, 5, rgb('#9fe6ff'), 0.6));
+          });
         });
       },
     };
@@ -379,8 +412,15 @@ const KITS: Record<ChampId, (cloth: RGB) => Kit> = {
         md.at(chain(T(0, 32, -4.4), Rx(-0.1)), () => slab(md, [[-9, 0], [9, 0], [11.5, -27], [0, -29], [-11.5, -27]], -1.2, 0, cloth));
       },
       over: (md) => {
-        // A stole down the front in the team's colour.
+        // A stole down the front in the team's colour, and the Daykeeper's sun on her chest.
         for (const side of [-1, 1]) box(md, side * 3.2 - 1.3, 4, 4.6, side * 3.2 + 1.3, 32, 5.6, cloth);
+        md.at(chain(T(0, 26, 5), Rx(Math.PI / 2)), () => {
+          prism(md, 2.2, 2.2, -0.4, 0.6, 8, GOLD, 0);
+          for (let i = 0; i < 8; i++) {
+            const a = (i * Math.PI) / 4;
+            md.at(T(Math.cos(a) * 3.3, 0, Math.sin(a) * 3.3), () => box(md, -0.6, -0.3, -0.6, 0.6, 0.5, 0.6, GOLD));
+          }
+        });
       },
       rightHand: (md, arm) => {
         // A staff with a golden sunburst and a green orb.
@@ -422,7 +462,9 @@ const KITS: Record<ChampId, (cloth: RGB) => Kit> = {
           md.at(T(Math.cos(a) * 9.5, 31.5, -Math.sin(a) * 2 - 1), () => gem(md, 3.4, -2, 0.5, 3.2, 5, i % 2 ? fur : furD));
         }
       },
+      leftHand: (md) => chainLinks(md),
       rightHand: (md) => {
+        chainLinks(md);
         // A great axe: a long haft and a broad crescent blade.
         md.at(grip(0.25), () => {
           prism(md, 1.3, 1.2, -8, 26, 5, WOOD);
@@ -470,6 +512,11 @@ const KITS: Record<ChampId, (cloth: RGB) => Kit> = {
         });
       },
       leftHand: (md) => md.at(T(0, 0, 1.4), () => ico(md, 2.4, SKIN)),
+      over: (md) => {
+        // A whale tooth on a cord round his neck.
+        md.at(T(0, 30, 4.4), () => box(md, -3, -0.3, 0, 3, 0.3, 0.6, rope));
+        md.at(chain(T(0, 29.5, 4.6), Rz(Math.PI)), () => slab(md, [[-1.3, 0], [1.3, 0], [0.6, 4.5], [-0.2, 5]], 0, 1, CREAM));
+      },
     };
   },
   witch: (cloth) => {
@@ -494,6 +541,8 @@ const KITS: Record<ChampId, (cloth: RGB) => Kit> = {
       back: (md) => {
         // A ragged shawl in her own colour.
         md.at(chain(T(0, 32, -4.4), Rx(-0.1)), () => slab(md, [[-9, 0], [9, 0], [10, -14], [5, -11], [0, -18], [-5, -11], [-10, -14]], -1.2, 0, magenta));
+        // Bog moss clinging to the shoulders.
+        for (const [x, z] of [[-7, -2], [6.5, -1], [-3, -3.5]]) md.at(T(x, 32.5, z), () => gem(md, 2.2, -1, 0.4, 1.6, 5, rgb('#5f8a3c')));
       },
       rightHand: (md, arm) => {
         // A crooked branch staff with a glowing orb caught in its fork.
@@ -502,6 +551,8 @@ const KITS: Record<ChampId, (cloth: RGB) => Kit> = {
           md.at(chain(T(0, 14, 0), Rz(0.25)), () => prism(md, 1, 0.9, 0, 10, 5, bark));
           md.at(chain(T(-1.5, 24, 0), Rz(-0.5)), () => prism(md, 0.8, 0.3, 0, 6, 4, bark));
           md.at(T(1, 28, 0), () => ico(md, 3.4, magenta, 0.7));
+          // Pale moths drawn to the orb.
+          for (const [x, y, z] of [[-4, 31, 1], [5, 26, 2], [3, 33, -1]]) md.at(T(x, y, z), () => slab(md, [[-1.6, 0.8], [0, 0], [1.6, 0.8], [0, -0.8]], -0.2, 0.2, CREAM, 0.4));
         });
       },
       leftHand: (md) => md.at(T(0, 0, 1.5), () => ico(md, 2.2, magenta, 0.6)),
@@ -519,6 +570,10 @@ const KITS: Record<ChampId, (cloth: RGB) => Kit> = {
         // A wide conical straw hat over a dark mask.
         md.at(T(0, 4.5, 0), () => prism(md, 13, 0.5, 0, 6.5, 10, straw, Math.PI / 10));
         box(md, -5.4, -5.6, 3.6, 5.4, -0.8, 6.9, rgb('#2b3140'));
+      },
+      over: (md) => {
+        // A small watchstone charm at her neck, the Mistwalkers' token.
+        md.at(T(0, 30, 4.6), () => gem(md, 1.4, -1.8, 0, 1.8, 4, rgb('#9fe6ff'), 0.7));
       },
       back: (md) => {
         // A long scarf streaming behind.
@@ -540,7 +595,7 @@ const KITS: Record<ChampId, (cloth: RGB) => Kit> = {
   },
   lancer: (cloth) => {
     const ivory = rgb('#d8cfb4');
-    const plume = rgb('#f2c14e');
+    const plume = rgb('#e3e8ef');
     return {
       cloth,
       accent: ivory,
@@ -561,7 +616,7 @@ const KITS: Record<ChampId, (cloth: RGB) => Kit> = {
         md.at(upright(arm, 0.2), () => {
           prism(md, 1, 0.9, -14, 36, 5, WOOD);
           md.at(T(0, 36, 0), () => gem(md, 2.4, 0, 2, 10, 4, STEEL));
-          md.at(T(0, 30, 0), () => slab(md, [[0.6, 0], [10, -2.5], [0.6, -5]], -0.4, 0.4, cloth));
+          md.at(T(0, 31, 0), () => slab(md, [[0.6, 0], [15, -1], [11, -4], [15, -7], [0.6, -8]], -0.4, 0.4, cloth));
         });
       },
       leftHand: (md, arm) => {
@@ -596,6 +651,11 @@ const KITS: Record<ChampId, (cloth: RGB) => Kit> = {
         md.at(chain(T(0, 32, -4.4), Rx(-0.08)), () => slab(md, [[-8.5, 0], [8.5, 0], [10.5, -26], [0, -27], [-10.5, -26]], -1.2, 0, coat));
       },
       over: (md) => {
+        // A bandolier of brass rounds across the chest.
+        md.at(chain(T(0, 24.5, 4.3), Rz(0.7)), () => {
+          box(md, -1.3, -11, 0, 1.3, 11, 1, LEATHER);
+          for (let i = -4; i <= 4; i++) md.at(T(0, i * 2.3, 1), () => box(md, -0.6, -0.7, 0, 0.6, 0.7, 0.9, brass));
+        });
         // A gun belt with a holster on the hip.
         box(md, 6.2, 12, -1.6, 9, 19, 2.2, LEATHER);
         md.at(T(0, 21, 4.6), () => gem(md, 1.6, -0.6, 0, 0.6, 6, brass));
@@ -641,8 +701,9 @@ const KITS: Record<ChampId, (cloth: RGB) => Kit> = {
         });
       },
       over: (md) => {
-        // A pressure gauge on the chest and brass shoulder plates.
-        md.at(T(0, 26, 4.6), () => ico(md, 2.2, CREAM));
+        // The aether core that woke it, glowing through a grille in the chest, and brass shoulder plates.
+        md.at(T(0, 26, 4.4), () => ico(md, 2.8, rgb('#7ff3ff'), 0.9));
+        for (const y of [-1.4, 1.4]) box(md, -3, 26 + y - 0.3, 6.4, 3, 26 + y + 0.3, 7, DARK_STEEL);
         for (const side of [-1, 1]) md.at(T(side * 10.2, 32.5, 0), () => gem(md, 4.6, -2.6, 0.6, 3.6, 6, brass));
       },
       rightHand: (md) => box(md, -3.2, -4, -3.2, 3.2, 2.5, 3.2, DARK_STEEL, 0.85),
@@ -658,6 +719,8 @@ const KITS: Record<ChampId, (cloth: RGB) => Kit> = {
       accent: spark,
       robe: false,
       heavy: false,
+      // Copper gauntlets.
+      skin: copper,
       head: (md) => {
         // A leather cap with brass goggles pushed up on the brow.
         prism(md, 7, 5.6, 2, 8.2, 8, LEATHER, Math.PI / 8);
@@ -668,12 +731,13 @@ const KITS: Record<ChampId, (cloth: RGB) => Kit> = {
         });
       },
       back: (md) => {
-        // A backpack with a crackling tesla coil.
+        // A backpack with a crackling storm coil.
         box(md, -5, 17, -9, 5, 30, -4, LEATHER);
         md.at(T(0, 30, -6.5), () => {
           prism(md, 1, 0.8, 0, 9, 6, copper);
-          for (const y of [2, 4.5, 7]) md.at(T(0, y, 0), () => prism(md, 2.2, 2.2, 0, 0.8, 8, brass));
-          md.at(T(0, 10.5, 0), () => ico(md, 2.4, spark, 0.9));
+          for (const y of [2, 4.5, 7, 9.5]) md.at(T(0, y, 0), () => prism(md, 2.2, 2.2, 0, 0.8, 8, brass));
+          md.at(T(0, 9, 0), () => prism(md, 0.4, 0.3, 0, 8, 4, DARK_STEEL));
+          md.at(T(0, 17.5, 0), () => ico(md, 2.4, spark, 0.9));
         });
       },
       over: (md) => box(md, -5.5, 8, 4.2, 5.5, 26, 5.2, LEATHER),
@@ -718,6 +782,8 @@ const KITS: Record<ChampId, (cloth: RGB) => Kit> = {
           md.at(T(side * 2.5, 1.6, 5.4), () => ico(md, 1.1, rgb('#ffd34a'), 0.8));
           md.at(chain(T(side * 3.8, 4.6, -0.5), Rz(side * -0.25)), () => gem(md, 2.2, 0, 0.4, 7.5, 4, furD));
         }
+        // A pale moon painted on the brow.
+        md.at(T(0, 4, 5.4), () => slab(md, [[-1.8, 1], [0, 2], [1.8, 1], [0.8, 0.4], [0, 1], [-0.8, 0.4]], 0, 0.8, rgb('#eef3ff'), 0.4));
       },
       back: (md) => {
         // A bushy tail.
@@ -731,7 +797,11 @@ const KITS: Record<ChampId, (cloth: RGB) => Kit> = {
         }
       },
       rightHand: claw,
-      leftHand: claw,
+      leftHand: (md) => {
+        claw(md);
+        // A strip of torn cloth tied round the arm.
+        md.at(T(0, 4, 0), () => prism(md, 2.6, 2.6, -0.8, 0.8, 6, rgb('#5a8bd6')));
+      },
     };
   },
   bruin: (cloth) => {
@@ -764,8 +834,22 @@ const KITS: Record<ChampId, (cloth: RGB) => Kit> = {
         // A pale belly under the vest, and a leather strap across it.
         box(md, -4.4, 19, 4, 4.4, 28, 4.9, muzzle);
         md.at(chain(T(0, 25, 4.3), Rz(0.7)), () => box(md, -1.2, -11, 0, 1.2, 11, 1.2, LEATHER));
+        // A honey pot on his belt, and moss on one shoulder.
+        md.at(T(-6.5, 15, 4), () => {
+          ico(md, 2.6, rgb('#e8a531'));
+          prism(md, 1.6, 1.6, 1.8, 3, 6, rgb('#6b4a2e'));
+        });
+        md.at(T(-10, 33, 0), () => gem(md, 2.8, -1, 0.5, 1.8, 5, rgb('#5f8a3c')));
       },
-      back: (md) => md.at(T(0, 17, -4.4), () => ico(md, 2.2, fur)),
+      back: (md) => {
+        md.at(T(0, 17, -4.4), () => ico(md, 2.2, fur));
+        // An oak sapling growing from the moss on his back.
+        md.at(T(3, 28, -5), () => {
+          gem(md, 3, -1, 0.5, 1.5, 6, rgb('#5f8a3c'));
+          prism(md, 0.8, 0.6, 0, 12, 5, rgb('#6b4a2e'));
+          for (const [x, y, z, r] of [[0, 14, 0, 3.2], [-2.4, 12, 1, 2.4], [2.4, 11.5, -1, 2.4]]) md.at(T(x, y, z), () => ico(md, r, rgb('#6aa84f')));
+        });
+      },
       rightHand: claw,
       leftHand: claw,
     };
@@ -775,7 +859,7 @@ const KITS: Record<ChampId, (cloth: RGB) => Kit> = {
 /** A champion of class `id` in a team's cloth, in one pose. */
 export function championModel(id: string, team: TeamName, pose: PoseName): Model {
   const kit = (KITS[id as ChampId] ?? KITS.warden)(rgb(TEAM_CLOTH[team]));
-  return figure(kit, classPose(id as ChampId, pose));
+  return figure({ ...kit, hero: true }, classPose(id as ChampId, pose));
 }
 
 /** A minion: a small soldier with a helmet, a sword and a round shield in the team's colour. */
@@ -948,13 +1032,14 @@ export function watchstoneModel(team: TeamName | 'neutral'): Model {
  * The guardian beast: a hulking horned quadruped of slate hide with violet crystals growing along
  * its back, built like the boar but heavier, and drawn about twice its size.
  */
-export function beastModel(pose: PoseName): Model {
+export function beastModel(pose: PoseName, elder = false): Model {
   const md = new Model();
-  const hide = rgb('#5d5a72');
-  const dark = rgb('#3a3850');
-  const belly = rgb('#8a84a0');
-  const horn = rgb('#efe6cf');
-  const crystal = rgb('#b98cff');
+  // The elder form is darker, with gold crystals and pale gold horns.
+  const hide = rgb(elder ? '#4b4460' : '#5d5a72');
+  const dark = rgb(elder ? '#2e2a40' : '#3a3850');
+  const belly = rgb(elder ? '#a08a74' : '#8a84a0');
+  const horn = rgb(elder ? '#fff0b8' : '#efe6cf');
+  const crystal = rgb(elder ? '#ffc93d' : '#b98cff');
   const k = pose[0] === 'w' ? WALK[Number(pose[1])] : 0;
   const lunge = pose === 'a1' ? 5 : pose === 'a0' ? -3 : 0;
   const rear = pose === 'a0' ? -0.18 : pose === 'a1' ? 0.12 : 0;

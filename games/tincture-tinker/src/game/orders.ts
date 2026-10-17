@@ -57,7 +57,14 @@ export interface Order {
   last?: boolean;
   /** A second customer sharing the board and the moves: its potion, its own kinds among `needs` and its price. */
   second?: { potion: PotionId; needs: Needs; price: number };
+  /** A rich order, picked on the result card: it pays more for fewer moves or more blockers. */
+  rich?: Risk;
+  /** A guild examination: its index in `EXAMS` (see exams.ts) and the stars it must be sold with. */
+  exam?: { index: number; stars: number };
 }
+
+/** What a rich order risks: fewer moves, or more jars, resin and mould. */
+export type Risk = 'moves' | 'blockers';
 
 type Recipe = Omit<Order, 'number' | 'jars' | 'resin' | 'mould'>;
 
@@ -87,6 +94,10 @@ export const TWIN_BONUS = 20;
 export const TWIN_AT = 2;
 /** The moves a second customer brings, as a share of its recipe's. */
 const TWIN_MOVES = 0.5;
+/** A rich order pays this share more, for this many fewer moves or this many more of each blocker. */
+export const RICH_SHARE = 0.5;
+export const RICH_MOVES = 4;
+export const RICH_BLOCKERS = 2;
 
 const ORDERS: Recipe[] = [
   { potion: 'healingDraught', needs: { ember: 12, sage: 12 }, moves: 15, price: 30 },
@@ -132,6 +143,9 @@ export const blockersFor = (number: number) => ({
   mould: number < MOULD_FROM ? 0 : Math.min(2 + Math.floor((number - MOULD_FROM) / 5), 5),
 });
 
+/** What order `number` risks if it is picked rich: fewer moves on even orders, more blockers on odd ones. */
+export const riskFor = (number: number): Risk => (number % 2 === 0 ? 'moves' : 'blockers');
+
 /** `needs` with every count scaled by `share` (at least 1). */
 const scaled = (needs: Needs, share: number): Needs =>
   Object.fromEntries(Object.entries(needs).map(([kind, n]) => [kind, Math.max(1, Math.round(n * share))]));
@@ -148,6 +162,8 @@ export interface Standing {
   extraMoves?: number;
   /** The tinker is already Royal Apothecary: no royal commission is the last one any more. */
   royal?: boolean;
+  /** The order was picked rich on the result card (never order 1). */
+  rich?: boolean;
 }
 
 /**
@@ -155,9 +171,10 @@ export interface Standing {
  * round and round. Needs and price grow every five orders, however many recipes are unlocked. Every
  * fifth order is a royal commission of three stages (the last one, once every recipe is unlocked,
  * ends the game), and from Journeyman on every fifth order after the second serves two customers.
+ * A rich order (any but the first) pays half as much again for fewer moves or more blockers.
  */
 export function orderFor(number: number, standing: Standing | PotionId[] = {}): Order {
-  const { unlocked = [], extraMoves = 0, royal = false } = Array.isArray(standing) ? { unlocked: standing } : standing;
+  const { unlocked = [], extraMoves = 0, royal = false, rich = false } = Array.isArray(standing) ? { unlocked: standing } : standing;
   const list = [...ORDERS, ...unlocked.flatMap((p) => (RANK_RECIPES[p] ? [RANK_RECIPES[p]] : []))];
   const round = Math.floor((number - 1) / ORDERS.length);
   const grown = (i: number): Recipe => {
@@ -192,8 +209,17 @@ export function orderFor(number: number, standing: Standing | PotionId[] = {}): 
   // A royal commission's forbidden kind must be one none of its stages needs.
   const needed = recipe.stages ? Object.assign({}, ...recipe.stages.map((st) => st.needs)) : recipe.needs;
   const twist = twistFor(number, needed, unlocked);
+  const risk = rich && number > 1 ? riskFor(number) : undefined;
   // Easy gives five more moves, Hard three fewer.
-  const moves = Math.max(MIN_MOVES, recipe.moves + extraMoves + byDifficulty(5, 0, -3) - (twist.rush ? RUSH_MOVES : 0));
-  const price = recipe.price + (twist.rush ? RUSH_COINS : 0);
-  return { ...recipe, ...twist, ...blockersFor(number), number, moves, price };
+  const cut = (twist.rush ? RUSH_MOVES : 0) + (risk === 'moves' ? RICH_MOVES : 0);
+  const moves = Math.max(MIN_MOVES, recipe.moves + extraMoves + byDifficulty(5, 0, -3) - cut);
+  const base = recipe.price + (twist.rush ? RUSH_COINS : 0);
+  const price = risk ? base + Math.round(base * RICH_SHARE) : base;
+  const blockers = blockersFor(number);
+  if (risk === 'blockers') {
+    blockers.jars += RICH_BLOCKERS;
+    blockers.resin += RICH_BLOCKERS;
+    if (blockers.mould > 0) blockers.mould += 1;
+  }
+  return { ...recipe, ...twist, ...blockers, number, moves, price, ...(risk ? { rich: risk } : {}) };
 }
