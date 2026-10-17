@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { settings } from '../../../../shared/settings';
+import { t } from '../i18n';
 import { BLESSING_INFO, BLESSINGS, type BlessingId } from '../game/blessings';
 import {
   CURSE_INFO,
@@ -40,6 +41,7 @@ import {
   REROLL_COST,
   reroll,
   RESERVE_FROM_TIER,
+  TRIALS_FROM_TIER,
   shopFor,
   stackHeight,
   STONE_H,
@@ -336,7 +338,7 @@ export class GameScene extends Phaser.Scene {
     this.createPanel();
 
     this.hint = this.add
-      .text(TOWER_X, VIEW.h - 18, 'Tap anywhere to drop the stone', textStyle(14, '#d8cbe8'))
+      .text(TOWER_X, VIEW.h - 18, t('hint'), textStyle(14, '#d8cbe8'))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(UI_DEPTH);
@@ -452,7 +454,7 @@ export class GameScene extends Phaser.Scene {
       o.setScrollFactor(0).setDepth(UI_DEPTH);
     const small = (color: string) => ({ fontFamily: FONT, fontSize: '13px', color, stroke: '#14101f', strokeThickness: 2 });
     fixed(this.add.rectangle(PANEL.x, PANEL.y, PANEL.w, PANEL.h, 0x231c38, 0.92).setOrigin(0).setStrokeStyle(3, 0x4a3a6a));
-    fixed(this.add.text(PANEL.x + PANEL.w / 2, PANEL.y + 20, 'Shrine Stack', textStyle(22, '#f3c64e')).setOrigin(0.5));
+    fixed(this.add.text(PANEL.x + PANEL.w / 2, PANEL.y + 20, t('title'), textStyle(22, '#f3c64e')).setOrigin(0.5));
     this.patronText = fixed(this.add.text(PANEL.x + PANEL.w / 2, PANEL.y + 42, '', { fontFamily: FONT, fontSize: '12px', color: '#d8cbe8' }).setOrigin(0.5));
     this.tierText = fixed(this.add.text(PANEL.x + 16, PANEL.y + 56, '', textStyle(18)));
     this.pips = fixed(this.add.graphics());
@@ -463,7 +465,7 @@ export class GameScene extends Phaser.Scene {
     // The reserve's swap button, lit while a swap is allowed.
     const { x: rx, y: ry, w: rw, h: rh } = RESERVE_BUTTON;
     const swapBg = fixed(this.add.rectangle(rx, ry, rw, rh, 0x4a3a6a).setStrokeStyle(2, GOLD));
-    const swapLabel = fixed(this.add.text(rx, ry, 'Swap (R)', { fontFamily: FONT, fontSize: '10px', color: '#f3e9d2' }).setOrigin(0.5));
+    const swapLabel = fixed(this.add.text(rx, ry, t('swap'), { fontFamily: FONT, fontSize: '10px', color: '#f3e9d2' }).setOrigin(0.5));
     swapBg
       .setInteractive({ useHandCursor: true })
       .on('pointerover', () => canSwap(this.state) && swapBg.setFillStyle(0x6a5a9a))
@@ -472,20 +474,20 @@ export class GameScene extends Phaser.Scene {
     this.reserveParts = [swapBg, swapLabel];
     this.trialText = fixed(this.add.text(PANEL.x + 16, PANEL.y + 186, '', small('#9ad46a')));
     this.curseText = fixed(this.add.text(PANEL.x + 16, PANEL.y + 203, '', small('#e8a0d4')));
-    this.leanLabel = fixed(this.add.text(PANEL.x + 16, PANEL.y + 220, 'Lean', small('#d8cbe8')));
+    this.leanLabel = fixed(this.add.text(PANEL.x + 16, PANEL.y + 220, t('lean'), small('#d8cbe8')));
     this.leanBar = fixed(this.add.graphics());
-    fixed(this.add.text(PANEL.x + 16, PANEL.y + 244, 'Blessings', textStyle(16, '#f3c64e')));
+    fixed(this.add.text(PANEL.x + 16, PANEL.y + 244, t('blessings'), textStyle(16, '#f3c64e')));
     this.blessingsText = fixed(
       this.add.text(PANEL.x + 16, PANEL.y + 266, '', { fontFamily: FONT, fontSize: '12px', color: '#f3e9d2', lineSpacing: 3 }),
     );
     // The run's goal: a pip per tier up to the crown, the gilded one framed in gold.
     const goal = PANEL.y + GOAL.y;
     fixed(this.add.rectangle(PANEL.x + 10, goal, PANEL.w - 20, 76, 0x2c2446).setOrigin(0).setStrokeStyle(2, 0x6a5a9a));
-    fixed(this.add.text(PANEL.x + 18, goal + 6, `Goal: crown tier ${GOAL_TIER}`, textStyle(14, '#f3c64e')));
+    fixed(this.add.text(PANEL.x + 18, goal + 6, t('goal', { tier: GOAL_TIER }), textStyle(14, '#f3c64e')));
     this.goalPips = fixed(this.add.graphics());
-    fixed(this.add.text(PANEL.x + 18, goal + 52, `Tier ${GILDED_TIER} gilded: x${GILDED_MULT} favor`, { fontFamily: FONT, fontSize: '12px', color: '#e9b949' }));
+    fixed(this.add.text(PANEL.x + 18, goal + 52, t('gildedGoal', { tier: GILDED_TIER, mult: GILDED_MULT }), { fontFamily: FONT, fontSize: '12px', color: '#e9b949' }));
     fixed(
-      this.add.text(PANEL.x + 16, PANEL.y + PANEL.h - 68, 'Tap to drop a stone.\nOverhangs break off.\nLand 3/4 on to balance.', {
+      this.add.text(PANEL.x + 16, PANEL.y + PANEL.h - 68, t('rules'), {
         fontFamily: FONT,
         fontSize: '12px',
         color: '#a99cc0',
@@ -500,7 +502,7 @@ export class GameScene extends Phaser.Scene {
     const { x, y, w, h } = LEAN_BAR;
     const g = this.leanBar.clear();
     const on = s.tier >= LEAN_FROM_TIER;
-    this.leanLabel.setText(on ? 'Lean' : `Lean from tier ${LEAN_FROM_TIER}`).setColor(on ? '#d8cbe8' : '#8a7ea0');
+    this.leanLabel.setText(on ? t('lean') : t('leanFrom', { tier: LEAN_FROM_TIER })).setColor(on ? '#d8cbe8' : '#8a7ea0');
     if (!on) return;
     g.fillStyle(OUTLINE).fillRect(x - 1, y - 1, w + 2, h + 2);
     g.fillStyle(0x3a3052).fillRect(x, y, w, h);
@@ -521,9 +523,9 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5);
     this.gameOver = [dim, panel, title, this.gameOverText];
     const restart = () => this.scene.restart();
-    this.againButton = makeButton(this, VIEW.w / 2, VIEW.h / 2 + 80, 'Build again', restart);
-    this.againBeside = makeButton(this, VIEW.w / 2 - 115, VIEW.h / 2 + 80, 'Build again', restart);
-    this.keepBuildingButton = makeButton(this, VIEW.w / 2 + 115, VIEW.h / 2 + 80, 'Keep building', () => keepBuilding(this.state) && this.onKeepBuilding());
+    this.againButton = makeButton(this, VIEW.w / 2, VIEW.h / 2 + 80, t('buildAgain'), restart);
+    this.againBeside = makeButton(this, VIEW.w / 2 - 115, VIEW.h / 2 + 80, t('buildAgain'), restart);
+    this.keepBuildingButton = makeButton(this, VIEW.w / 2 + 115, VIEW.h / 2 + 80, t('keepBuilding'), () => keepBuilding(this.state) && this.onKeepBuilding());
     for (const part of [...this.gameOver, ...this.againButton, ...this.againBeside, ...this.keepBuildingButton]) {
       part.setScrollFactor(0).setDepth(UI_DEPTH + 20).setVisible(false);
     }
@@ -544,12 +546,12 @@ export class GameScene extends Phaser.Scene {
       drawStone(g, stone.w, stone.tier, stone.perfect, stone.kind, stone.material);
       this.stoneViews.push(g);
       for (const piece of e.cut) this.debris(piece.x, this.worldY(i * STONE_H), piece.w, stone.tier, stone.kind, stone.material);
-      this.popup(stone.x, this.worldY((i + 1) * STONE_H) - 6, e.drop.perfect ? `Perfect! +${e.favor}` : `+${e.favor}`, e.drop.perfect);
+      this.popup(stone.x, this.worldY((i + 1) * STONE_H) - 6, e.drop.perfect ? t('perfectPopup', { n: e.favor }) : `+${e.favor}`, e.drop.perfect);
       if (e.drop.perfect) this.glow(stone.x, this.worldY(i * STONE_H), stone.w);
     } else if (e.type === 'missed') {
       this.debris(e.drop.x, this.worldY(stackHeight(s)), e.drop.w, s.tier, s.moving.kind, s.moving.material);
       this.cameras.main.shake(200, 0.006);
-      if (e.drop.caught) this.announce(["Mason's Grace", 'The stone is caught: try again']);
+      if (e.drop.caught) this.announce([t('graceName'), t('caught')]);
       if (s.phase === 'over') saveBest(s.best);
     } else if (e.type === 'rerolled') {
       this.popup(PANEL.x + 150, PANEL.y + 126, `-${REROLL_COST}`, false);
@@ -559,22 +561,27 @@ export class GameScene extends Phaser.Scene {
     } else if (e.type === 'trial') {
       const top = s.stones.at(-1)!;
       const y = this.worldY(stackHeight(s)) - 34;
-      this.popup(top.x, y, e.passed ? `Trial passed! +${e.favor}` : 'Trial failed', e.passed);
+      this.popup(top.x, y, e.passed ? t('trialPassed', { n: e.favor }) : t('trialFailedPopup'), e.passed);
     } else if (e.type === 'toppled') {
       // The tier's stones tumble off the way the temple was leaning.
       const side = e.lean > 0 ? 1 : -1;
       for (const g of this.stoneViews.splice(this.stoneViews.length - e.count, e.count)) this.tumble(g, side);
       this.cameras.main.shake(250, 0.008);
-      const dir = side > 0 ? 'right' : 'left';
-      this.announce(['The tier topples!', e.favor ? `Leaned too far ${dir}: -${e.favor} favor` : `The temple leaned ${Math.abs(Math.round(e.lean))} too far ${dir}`]);
+      const right = side > 0;
+      this.announce([
+        t('toppled'),
+        e.favor
+          ? t(right ? 'toppledFavourRight' : 'toppledFavourLeft', { n: e.favor })
+          : t(right ? 'toppledRight' : 'toppledLeft', { n: Math.abs(Math.round(e.lean)) }),
+      ]);
     } else if (e.type === 'regrown') {
       this.redrawTop();
-      this.popup(s.stones.at(-1)!.x, this.worldY(stackHeight(s)) - 34, `Regrown +${e.px}`, true);
+      this.popup(s.stones.at(-1)!.x, this.worldY(stackHeight(s)) - 34, t('regrown', { n: e.px }), true);
     } else if (e.type === 'swapped') {
-      this.popup(PANEL.x + PANEL.w + 90, RESERVE_BUTTON.y + 8, `${KIND_INFO[e.kind].name} in hand`, false);
+      this.popup(PANEL.x + PANEL.w + 90, RESERVE_BUTTON.y + 8, t('inHand', { kind: t(KIND_INFO[e.kind].name) }), false);
     } else if (e.type === 'patron') {
       const info = PATRON_INFO[e.patron];
-      this.announce([`${info.name} watches over you`, info.boon]);
+      this.announce([t('watchesOver', { patron: t(info.name) }), t(info.boon)]);
     } else {
       if (e.balanced) this.ornament(e.tier);
       if (s.phase === 'crowned') this.crownTemple();
@@ -597,7 +604,7 @@ export class GameScene extends Phaser.Scene {
     g.fillStyle(0x6ac0e8).fillCircle(0, -6, 3);
     g.fillStyle(0x8ad06a).fillCircle(-18, -6, 2.5).fillCircle(18, -6, 2.5);
     this.glow(top.x, y, top.w);
-    this.announce(['The shrine is crowned!', `Tier ${GOAL_TIER} stands`]);
+    this.announce([t('crowned'), t('tierStands', { tier: GOAL_TIER })]);
   }
 
   /** A broken piece or a missed stone, tumbling down off the temple. */
@@ -697,7 +704,7 @@ export class GameScene extends Phaser.Scene {
 
   private refresh() {
     const s = this.state;
-    this.tierText.setText(s.endless ? `Tier ${s.tier}  Sky` : `Tier ${Math.min(s.tier, GOAL_TIER)}`);
+    this.tierText.setText(s.endless ? t('tierSky', { tier: s.tier }) : t('tier', { tier: Math.min(s.tier, GOAL_TIER) }));
     this.pips.clear();
     for (let i = 0; i < STONES_PER_TIER; i++) {
       const x = PANEL.x + 16 + i * 30;
@@ -713,35 +720,41 @@ export class GameScene extends Phaser.Scene {
       if (t === GILDED_TIER) this.goalPips.lineStyle(2, GILT).strokeRect(x - 1, y - 1, GOAL.pip + 2, GOAL.pip + 2);
       if (t === s.tier && s.phase !== 'crowned') this.goalPips.fillStyle(0xf3e9d2).fillRect(x, y + GOAL.pip + 2, GOAL.pip, 2);
     }
-    this.favorText.setText(`Favor ${s.favor}`);
-    this.builtText.setText(`Built ${s.tiersBuilt}  Best ${s.best}`);
+    this.favorText.setText(t('favour', { n: s.favor }));
+    this.builtText.setText(t('built', { built: s.tiersBuilt, best: s.best }));
     const next = KIND_INFO[s.nextKind];
-    this.nextText.setText(`Next: ${next.name}`).setColor(next.color);
-    const t = s.trial;
+    this.nextText.setText(t('next', { kind: t(next.name) })).setColor(next.color);
+    const trial = s.trial;
     this.trialText
-      .setText(t ? (t.failed ? `Failed: ${TRIAL_INFO[t.id].short}` : `Trial: ${TRIAL_INFO[t.id].short} ${t.done}/${STONES_PER_TIER}`) : 'Trials from tier 2')
-      .setColor(t && !t.failed ? '#9ad46a' : '#8a7ea0');
+      .setText(
+        trial
+          ? trial.failed
+            ? t('trialFailed', { trial: t(TRIAL_INFO[trial.id].short) })
+            : t('trial', { trial: t(TRIAL_INFO[trial.id].short), done: trial.done, of: STONES_PER_TIER })
+          : t('trialsFrom', { tier: TRIALS_FROM_TIER }),
+      )
+      .setColor(trial && !trial.failed ? '#9ad46a' : '#8a7ea0');
     const curse = curseNow(s);
-    const material = s.material !== 'limestone' ? `${MATERIAL_INFO[s.material].name} tier` : '';
-    this.curseText.setText([curse ? `Curse: ${CURSE_INFO[curse].name} (x${CURSE_MULT})` : '', material].filter(Boolean).join('  '));
-    this.patronText.setText(s.patron ? `Patron: ${PATRON_INFO[s.patron].name}` : 'Choose a patron');
+    const material = s.material !== 'limestone' ? t('materialTier', { material: t(MATERIAL_INFO[s.material].name) }) : '';
+    this.curseText.setText([curse ? t('curse', { curse: t(CURSE_INFO[curse].name), mult: CURSE_MULT }) : '', material].filter(Boolean).join('  '));
+    this.patronText.setText(s.patron ? t('patron', { patron: t(PATRON_INFO[s.patron].name) }) : t('choosePatron'));
     const reserveOn = s.tier >= RESERVE_FROM_TIER;
     this.reserveText
-      .setText(reserveOn ? `Hold: ${s.reserve ? KIND_INFO[s.reserve].name.replace(' stone', '') : 'nothing'}` : `Reserve from tier ${RESERVE_FROM_TIER}`)
+      .setText(reserveOn ? (s.reserve ? t('hold', { kind: t(KIND_INFO[s.reserve].short) }) : t('holdNothing')) : t('reserveFrom', { tier: RESERVE_FROM_TIER }))
       .setColor(reserveOn ? '#d8cbe8' : '#8a7ea0');
     const swappable = canSwap(s);
     for (const part of this.reserveParts) part.setVisible(reserveOn).setAlpha(swappable ? 1 : 0.4);
     this.reserveButton = swappable ? { ...RESERVE_BUTTON } : null;
     this.drawLean();
     const playing = s.phase === 'swinging' || s.phase === 'falling';
-    this.windText.setText(gusty(s) && playing ? (s.wind ? `Gust ${s.wind > 0 ? '>>>' : '<<<'} ${Math.abs(s.wind)}` : 'Calm air') : '');
+    this.windText.setText(gusty(s) && playing ? (s.wind ? t('gust', { arrows: s.wind > 0 ? '>>>' : '<<<', n: Math.abs(s.wind) }) : t('calmAir')) : '');
     const counts = BLESSINGS.filter((b) => s.blessings.includes(b)).map((b) => {
       const n = s.blessings.filter((x) => x === b).length;
-      const held = b === 'grace' && s.grace ? ` (${s.grace} held)` : '';
-      return `${BLESSING_INFO[b].name}${n > 1 ? ` x${n}` : ''}${held}`;
+      const name = n > 1 ? t('blessingCount', { blessing: t(BLESSING_INFO[b].name), n }) : t(BLESSING_INFO[b].name);
+      return b === 'grace' && s.grace ? t('graceHeld', { blessing: name, n: s.grace }) : name;
     });
-    if (s.grace && !s.blessings.includes('grace')) counts.push(`Grace bought (${s.grace} held)`);
-    this.blessingsText.setText(counts.length ? counts : ['None yet']);
+    if (s.grace && !s.blessings.includes('grace')) counts.push(t('graceBought', { n: s.grace }));
+    this.blessingsText.setText(counts.length ? counts : [t('noBlessings')]);
     // The hint shows until the first drop, while the temple is still too short to reach it.
     this.hint.setVisible(s.dropped === 0 && s.phase === 'swinging');
 
@@ -762,19 +775,14 @@ export class GameScene extends Phaser.Scene {
     for (const part of [...this.againBeside, ...this.keepBuildingButton]) part.setVisible(ended && crowned);
     this.keepButton = crowned && ended ? { x: VIEW.w / 2 + 115, y: VIEW.h / 2 + 80, w: 200, h: 40 } : null;
     if (s.phase === 'over' && s.endless) {
-      this.gameOverTitle.setText('The stone has fallen');
-      this.gameOverText.setText(
-        `Your crowned shrine climbed the sky\nto ${s.tiersBuilt} tiers, for ${s.favor} favor.\n\nBest ${s.best} tiers.`,
-      );
+      this.gameOverTitle.setText(t('fallen'));
+      this.gameOverText.setText(t('fallenSky', { tiers: s.tiersBuilt, favour: s.favor, best: s.best }));
     } else if (s.phase === 'over') {
-      this.gameOverTitle.setText('The stone has fallen');
-      this.gameOverText.setText(
-        `Your shrine stood ${s.tiersBuilt} tier${s.tiersBuilt === 1 ? '' : 's'} tall,\n` +
-          `${s.balancedTiers} of them balanced, for ${s.favor} favor.\n\nBest ${s.best} tiers.`,
-      );
+      this.gameOverTitle.setText(t('fallen'));
+      this.gameOverText.setText(t('fallenStood', { n: s.tiersBuilt, balanced: s.balancedTiers, favour: s.favor, best: s.best }));
     } else if (s.phase === 'crowned') {
-      this.gameOverTitle.setText('The shrine is crowned!');
-      this.gameOverText.setText(`All ${GOAL_TIER} tiers stand,\n${s.balancedTiers} of them balanced, for ${s.favor} favor.\n\nKeep building into the windy sky?`);
+      this.gameOverTitle.setText(t('crowned'));
+      this.gameOverText.setText(t('crownedText', { tiers: GOAL_TIER, balanced: s.balancedTiers, favour: s.favor }));
     }
   }
 
@@ -795,12 +803,12 @@ export class GameScene extends Phaser.Scene {
     if (canPickMaterial(s)) this.addOffer(...this.makeMaterials());
     if (!s.offer.length) {
       const sky = s.endless && s.tier === GOAL_TIER + 1;
-      const text = sky ? 'Into the endless sky: pick a stone' : `Tier ${s.tier - 1} is wobbly: no blessing this time`;
+      const text = sky ? t('skyPick') : t('wobbly', { tier: s.tier - 1 });
       const title = this.add.text(OFFER_TITLE.x + 70, OFFER_TITLE.y, text, textStyle(20, '#d8cbe8')).setOrigin(0.5);
       this.addOffer(title, ...this.makeBuildOn());
       return;
     }
-    const title = this.add.text(OFFER_TITLE.x, OFFER_TITLE.y, `Tier ${s.tier - 1} balanced: choose a blessing`, textStyle(20, '#f3c64e')).setOrigin(0.5);
+    const title = this.add.text(OFFER_TITLE.x, OFFER_TITLE.y, t('balanced', { tier: s.tier - 1 }), textStyle(20, '#f3c64e')).setOrigin(0.5);
     this.addOffer(title, ...this.makeReroll());
     if (s.curseOffer) this.addOffer(...this.makeCurse());
     const cards = s.offer.length > CARDS.xs.length ? CARDS_FOUR : CARDS;
@@ -811,9 +819,9 @@ export class GameScene extends Phaser.Scene {
       const bg = this.add.rectangle(x, y, w, h, 0x2c2446).setStrokeStyle(3, 0x6a5a9a);
       const icon = this.add.graphics().setPosition(x, y - 50);
       this.drawBlessingIcon(icon, id, info.color);
-      const name = this.add.text(x, y + 6, info.name, textStyle(w < 200 ? 15 : 17, '#f3c64e')).setOrigin(0.5);
+      const name = this.add.text(x, y + 6, t(info.name), textStyle(w < 200 ? 15 : 17, '#f3c64e')).setOrigin(0.5);
       const text = this.add
-        .text(x, y + 30, info.text, { fontFamily: FONT, fontSize: '13px', color: '#e8dcf4', align: 'center', wordWrap: { width: w - 24 }, lineSpacing: 3 })
+        .text(x, y + 30, t(info.text), { fontFamily: FONT, fontSize: '13px', color: '#e8dcf4', align: 'center', wordWrap: { width: w - 24 }, lineSpacing: 3 })
         .setOrigin(0.5, 0);
       bg.setInteractive({ useHandCursor: true })
         .on('pointerover', () => bg.setStrokeStyle(3, GOLD))
@@ -841,7 +849,7 @@ export class GameScene extends Phaser.Scene {
     coin.fillStyle(GOLD).fillCircle(-w / 2 + 20, 0, 10);
     coin.fillStyle(shade(GOLD, -0.35)).fillCircle(-w / 2 + 20, 0, 6);
     coin.fillStyle(GOLD).fillRect(-w / 2 + 19, -4, 2, 8);
-    const label = this.add.text(-w / 2 + 38, 0, 'Reroll', textStyle(17)).setOrigin(0, 0.5);
+    const label = this.add.text(-w / 2 + 38, 0, t('reroll'), textStyle(17)).setOrigin(0, 0.5);
     const cost = this.add.text(w / 2 - 12, 0, String(REROLL_COST), textStyle(17, '#f3c64e')).setOrigin(1, 0.5);
     const button = place([bg, coin, label, cost], x, y, afford ? 1 : 0.5);
     bg.setInteractive({ useHandCursor: afford })
@@ -855,7 +863,7 @@ export class GameScene extends Phaser.Scene {
   /** The shop's row: one button per item, dimmed when it can't be bought, marked once bought. */
   private makeShop() {
     const s = this.state;
-    const title = this.add.text(SHOP_TITLE.x, SHOP_TITLE.y, `Spend favor (you have ${s.favor})`, textStyle(14, '#d8cbe8')).setOrigin(0.5);
+    const title = this.add.text(SHOP_TITLE.x, SHOP_TITLE.y, t('spendFavour', { n: s.favor }), textStyle(14, '#d8cbe8')).setOrigin(0.5);
     const parts: UiPart[] = [title];
     const items = shopFor(s);
     items.forEach((id, i) => {
@@ -868,8 +876,8 @@ export class GameScene extends Phaser.Scene {
       const bg = this.add.rectangle(0, 0, w, h, bought ? 0x3a3060 : 0x2c2446).setStrokeStyle(3, bought ? GOLD : afford ? info.color : 0x4a3a6a);
       const icon = this.add.graphics();
       this.drawShopIcon(icon, id, -w / 2 + 20, info.color);
-      const label = this.add.text(-w / 2 + 38, 0, info.name, textStyle(14)).setOrigin(0, 0.5);
-      const cost = this.add.text(w / 2 - 10, 0, bought ? 'ok' : String(info.cost), textStyle(15, '#f3c64e')).setOrigin(1, 0.5);
+      const label = this.add.text(-w / 2 + 38, 0, t(info.name), textStyle(14)).setOrigin(0, 0.5);
+      const cost = this.add.text(w / 2 - 10, 0, bought ? t('bought') : String(info.cost), textStyle(15, '#f3c64e')).setOrigin(1, 0.5);
       const button = place([bg, icon, label, cost], x, y, afford || bought ? 1 : 0.5);
       bg.setInteractive({ useHandCursor: afford })
         .on('pointerover', () => afford && bg.setFillStyle(0x3a3060))
@@ -900,7 +908,7 @@ export class GameScene extends Phaser.Scene {
   private makeMaterials() {
     const s = this.state;
     const title = this.add
-      .text(MATERIAL_TITLE.x, MATERIAL_TITLE.y, `Stone for tier ${s.tier}: ${MATERIAL_INFO[s.material].name}`, { fontFamily: FONT, fontSize: '12px', color: '#d8cbe8' })
+      .text(MATERIAL_TITLE.x, MATERIAL_TITLE.y, t('stoneFor', { tier: s.tier, material: t(MATERIAL_INFO[s.material].name) }), { fontFamily: FONT, fontSize: '12px', color: '#d8cbe8' })
       .setOrigin(0.5);
     const parts: UiPart[] = [title];
     MATERIAL_PICKS.forEach((id, i) => {
@@ -913,8 +921,8 @@ export class GameScene extends Phaser.Scene {
       swatch.fillStyle(OUTLINE).fillRect(-w / 2 + 9, -8, 22, 16);
       swatch.fillStyle(info.color).fillRect(-w / 2 + 10, -7, 20, 14);
       swatch.fillStyle(shade(info.color, 0.3)).fillRect(-w / 2 + 10, -7, 20, 2);
-      const name = this.add.text(-w / 2 + 38, -8, info.name, textStyle(14, picked ? '#f3c64e' : '#f3e9d2')).setOrigin(0, 0.5);
-      const text = this.add.text(-w / 2 + 38, 7, info.short, { fontFamily: FONT, fontSize: '11px', color: '#d8cbe8' }).setOrigin(0, 0.5);
+      const name = this.add.text(-w / 2 + 38, -8, t(info.name), textStyle(14, picked ? '#f3c64e' : '#f3e9d2')).setOrigin(0, 0.5);
+      const text = this.add.text(-w / 2 + 38, 7, t(info.short), { fontFamily: FONT, fontSize: '11px', color: '#d8cbe8' }).setOrigin(0, 0.5);
       bg.setInteractive({ useHandCursor: true })
         .on('pointerover', () => bg.setFillStyle(0x3a3060))
         .on('pointerout', () => !picked && bg.setFillStyle(0x2c2446))
@@ -933,8 +941,8 @@ export class GameScene extends Phaser.Scene {
     const s = this.state;
     if (s.phase !== 'patron') return;
     const dim = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x0c0916, 0.55).setInteractive();
-    const title = this.add.text(PATRON_TITLE.x, PATRON_TITLE.y, 'Choose a patron for this temple', textStyle(22, '#f3c64e')).setOrigin(0.5);
-    const sub = this.add.text(PATRON_TITLE.x, PATRON_TITLE.y + 30, 'Their rule holds for the whole run', textStyle(14, '#d8cbe8')).setOrigin(0.5);
+    const title = this.add.text(PATRON_TITLE.x, PATRON_TITLE.y, t('patronTitle'), textStyle(22, '#f3c64e')).setOrigin(0.5);
+    const sub = this.add.text(PATRON_TITLE.x, PATRON_TITLE.y + 30, t('patronSub'), textStyle(14, '#d8cbe8')).setOrigin(0.5);
     const parts: UiPart[] = [dim, title, sub];
     s.patronOffer.forEach((id, i) => {
       const info = PATRON_INFO[id];
@@ -943,10 +951,10 @@ export class GameScene extends Phaser.Scene {
       const bg = this.add.rectangle(x, y, w, h, 0x2c2446).setStrokeStyle(3, 0x6a5a9a);
       const icon = this.add.graphics().setPosition(x, y - 56);
       this.drawPatronIcon(icon, id, info.color);
-      const name = this.add.text(x, y - 4, info.name, textStyle(16, '#f3c64e')).setOrigin(0.5);
+      const name = this.add.text(x, y - 4, t(info.name), textStyle(16, '#f3c64e')).setOrigin(0.5);
       const style = (color: string) => ({ fontFamily: FONT, fontSize: '12px', color, align: 'center', wordWrap: { width: w - 24 }, lineSpacing: 2 });
-      const boon = this.add.text(x, y + 16, info.boon, style('#9ad46a')).setOrigin(0.5, 0);
-      const bane = this.add.text(x, y + 54, info.bane, style('#e8a0d4')).setOrigin(0.5, 0);
+      const boon = this.add.text(x, y + 16, t(info.boon), style('#9ad46a')).setOrigin(0.5, 0);
+      const bane = this.add.text(x, y + 54, t(info.bane), style('#e8a0d4')).setOrigin(0.5, 0);
       bg.setInteractive({ useHandCursor: true })
         .on('pointerover', () => bg.setStrokeStyle(3, GOLD))
         .on('pointerout', () => bg.setStrokeStyle(3, 0x6a5a9a))
@@ -1002,7 +1010,7 @@ export class GameScene extends Phaser.Scene {
       box.lineStyle(3, 0xf3e9d2).lineBetween(bx - 4, 0, bx - 1, 4).lineBetween(bx - 1, 4, bx + 5, -4);
     }
     const label = this.add
-      .text(bx + 18, 0, `Take a curse on tier ${s.tier}: ${info.name}, ${info.text}. Earn x${CURSE_MULT} favor.`, textStyle(14, '#e8a0d4'))
+      .text(bx + 18, 0, t('takeCurse', { tier: s.tier, curse: t(info.name), text: t(info.text), mult: CURSE_MULT }), textStyle(14, '#e8a0d4'))
       .setOrigin(0, 0.5);
     const button = place([bg, box, label], x, y);
     bg.setInteractive({ useHandCursor: true }).on('pointerdown', () => toggleCurse(this.state) && this.rebuildOffer());
@@ -1014,12 +1022,12 @@ export class GameScene extends Phaser.Scene {
   private makeBuildOn() {
     const { x, y, w, h } = BUILD_ON;
     const bg = this.add.rectangle(0, 0, w, h, 0x4a3a6a).setStrokeStyle(3, GOLD);
-    const label = this.add.text(0, 0, 'Build on', textStyle(20)).setOrigin(0.5);
+    const label = this.add.text(0, 0, t('buildOn'), textStyle(20)).setOrigin(0.5);
     bg.setInteractive({ useHandCursor: true })
       .on('pointerover', () => bg.setFillStyle(0x6a5a9a))
       .on('pointerout', () => bg.setFillStyle(0x4a3a6a))
       .on('pointerdown', () => {
-        if (buildOn(this.state) && this.state.tier === GILDED_TIER) this.announce([`Tier ${GILDED_TIER} is gilded`, `x${GILDED_MULT} favor`]);
+        if (buildOn(this.state) && this.state.tier === GILDED_TIER) this.announce([t('gildedTier', { tier: GILDED_TIER }), t('gildedFavour', { mult: GILDED_MULT })]);
       });
     this.buildOnButton = { x, y, w, h };
     return place([bg, label], x, y);
@@ -1046,11 +1054,11 @@ export class GameScene extends Phaser.Scene {
   private onChosen(id: BlessingId, cursed: string | null) {
     if (id === 'broad') this.redrawTop();
     const gilded = this.state.tier === GILDED_TIER;
-    const curse = cursed ? `Cursed with ${CURSE_INFO[this.state.curse!.id].name}: x${CURSE_MULT} favor` : null;
+    const curse = cursed ? t('cursedWith', { curse: t(CURSE_INFO[this.state.curse!.id].name), mult: CURSE_MULT }) : null;
     this.announce(
       gilded
-        ? [`${BLESSING_INFO[id].name} is yours`, curse ?? `Tier ${GILDED_TIER} is gilded: x${GILDED_MULT} favor`]
-        : [`${BLESSING_INFO[id].name} is yours`, curse ?? ''].filter(Boolean),
+        ? [t('blessingYours', { blessing: t(BLESSING_INFO[id].name) }), curse ?? t('gildedTierFavour', { tier: GILDED_TIER, mult: GILDED_MULT })]
+        : [t('blessingYours', { blessing: t(BLESSING_INFO[id].name) }), curse ?? ''].filter(Boolean),
     );
   }
 
@@ -1058,7 +1066,7 @@ export class GameScene extends Phaser.Scene {
   private onKeepBuilding() {
     this.crown?.destroy();
     this.crown = null;
-    this.announce(['Into the endless sky', 'Mind the gusts']);
+    this.announce([t('intoSky'), t('mindGusts')]);
   }
 
   /** A small emblem for each blessing, centred on the graphics' origin. */
