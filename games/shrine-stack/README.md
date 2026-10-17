@@ -45,7 +45,7 @@ sky.
    three quarters of its width; it earns 5 favor and offers three blessings to choose from. A
    wobbly tier earns nothing extra. Each tier swings 5% faster than the one before.
 5. **Reroll**: while choosing, spend 5 favor to draw new blessings (and a new curse), as often as
-   favor lasts.
+   favor lasts. A new curse comes untaken.
 6. **Spend favor** between tiers on one-time help, each at most once per break: a **Slow drop** (4
    favor: the next stone swings at half speed), a **Wider stone** (6: the top stone grows 20 wider,
    up to the plinth) or **Mason's Grace** (8: the next miss is caught). The shop also opens after a
@@ -62,7 +62,7 @@ sky.
    keeping at least 80% of its width. Meet it for 6 extra favor; the panel tracks it.
 10. **The temple leans**: from tier 3, every stone that lands off the centre of the one below adds
     its offset to the lean meter in the panel (left or right). Past 60 pixels the tier being built
-    topples: its stones tumble off (favor already earned stays) and the tier starts over. A finished
+    topples: its stones tumble off, taking the favor they earned with them, and the tier starts over. A finished
     tier settles, halving the lean. Perfect drops add nothing, and a drop to the other side leans it
     back, so the widest drop is not always the right one.
 11. **Perfect chains**: from tier 3, the third perfect drop in a row, and every perfect drop after it,
@@ -79,7 +79,7 @@ sky.
     stones are leaf gold, and every stone and its balance bonus earn double favor. Finishing tier 12
     crowns the shrine and wins the run.
 15. **The endless sky**: after the crown, **Keep building** lifts the crown off, a break picks the
-    first sky tier's stone, and the temple climbs on. Gusts now push the falling stone sideways (the
+    first sky tier's stone (and a blessing, if tier 12 was balanced), and the temple climbs on. Gusts now push the falling stone sideways (the
     top of the screen and the streaks by the stone show which way and how hard), stronger the higher
     you go. Aim upwind.
 16. **The end** comes when a stone misses the temple. The most tiers built in one temple are saved
@@ -137,7 +137,7 @@ Blessings can be taken more than once, and they add up.
 
 ![The lean meter filling on a marble tier](docs/screenshots/lean-meter.webp)
 
-![The tier topples](docs/screenshots/toppled.webp)
+![The tier topples and takes its favor](docs/screenshots/toppled.webp)
 
 ![A chain of perfect drops grows the stone back](docs/screenshots/regrown.webp)
 
@@ -148,6 +148,8 @@ Blessings can be taken more than once, and they add up.
 ![The gilded tenth tier going up](docs/screenshots/gilded.webp)
 
 ![The shrine crowned at tier 12](docs/screenshots/crowned.webp)
+
+![After a balanced crown, Keep building offers tier 12's blessing](docs/screenshots/crowned-blessing.webp)
 
 ![The temple has fallen](docs/screenshots/game-over.webp)
 

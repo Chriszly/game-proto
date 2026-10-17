@@ -37,7 +37,7 @@ export const howToPlay: HowToPlay = {
     'A drop within 5 pixels of the stone below is perfect: it keeps its full width and earns 2 extra favor.',
     'A tier is balanced when every stone in it kept at least three quarters of its width.',
     'Heavy stones swing slower but crack more off; light stones swing faster and earn 1 more favor.',
-    'From tier 3 off-centre drops make the temple lean, and past 60 pixels the tier topples and starts over.',
+    'From tier 3 off-centre drops make the temple lean, and past 60 pixels the tier topples, losing its favor, and starts over.',
     'From tier 3, three perfect drops in a row start growing the stone back.',
     'Ticking a curse before you choose a blessing doubles everything the next tier earns.',
     'Tier 10 is gilded for double favor, and after the crown you can keep building into a windy sky.',

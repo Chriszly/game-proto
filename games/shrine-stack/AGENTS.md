@@ -40,7 +40,8 @@ Implemented today:
   Many-Handed, never Mason's Grace under the Gilded Hand), repeatable.
 - Swing speed rises 5% per tier (`TIER_SPEEDUP`); `swingSpeed` adds the stone's kind, Basalt, a slow
   drop and Haste on top of `speed`, which stays the tier's speed (with the patron's pace in it).
-- Reroll: `reroll` spends `REROLL_COST` (5) favor for a new offer (and a new curse) while choosing.
+- Reroll: `reroll` spends `REROLL_COST` (5) favor for a new offer (and a new curse, untaken:
+  `cursed` resets) while choosing.
 - Favor shop (SS1): `buy` spends favor during a break on `SHOP` items (`src/game/catalog.ts`),
   each once per break (`bought`): `slow` (the stone in hand swings at `SLOW_MULT`, cleared when it
   lands), `wider` (top stone grows `WIDER_PX`, up to `PLINTH_W`) and `grace` (+1 grace). `shopFor`
@@ -57,8 +58,9 @@ Implemented today:
   `WIND_PER_TIER` per tier past 13, up to `WIND_MAX`) that pushes it sideways while it falls.
 - The temple leans (SS6): from `LEAN_FROM_TIER` (3) `land` adds each placed stone's offset from the
   one below to `lean` (+ right; a perfect drop adds 0). Past `LEAN_MAX` (60) `topple` removes the
-  tier's stones placed so far (`inTier` of them), pushes a `toppled` event, resets `inTier`,
-  `wobbly`, `lean`, `chain` and the trial's progress, and the tier starts over (favor stays). A
+  tier's stones placed so far (`inTier` of them), takes back the favor they earned (`tierFavor`,
+  which a tier end resets), pushes a `toppled` event (with that favor), resets `inTier`, `wobbly`,
+  `lean`, `chain` and the trial's progress, and the tier starts over. A
   finished tier keeps `LEAN_SETTLE` (half) of its lean, truncated.
 - Perfect chains (SS7): `chain` counts perfect drops in a row (a cut or a miss resets it; it carries
   across tiers). From `CHAIN_FROM_TIER` (3) the `CHAIN_LEN`th (3rd) perfect drop and each one after
@@ -80,7 +82,7 @@ Implemented today:
   and `shopFor`; the Many-Handed (`hands`) offers `HANDS_OFFER` (4) blessings (`offerSize`) and
   swings at `HANDS_SPEED`; the Patient Mason (`patient`) swings at `PATIENT_SPEED` and earns no
   `PERFECT_FAVOR`; the Storm Caller (`storm`) adds `STORM_PERFECT` to `perfectPx` and gets gusts
-  from `STORM_FROM_TIER` (`gustFor`). `speedFor` takes the patron (`patronSpeed`).
+  from `STORM_FROM_TIER` (`gusty`, `gustFor`); the gust readout shows whenever `gusty` is true. `speedFor` takes the patron (`patronSpeed`).
 - Curses (SS5): a balanced tier's break offers `curseOffer` (`haste`, `brittle`, `dim`);
   `toggleCurse` sets `cursed`, and `chooseBlessing` then puts `curse` on the tier being started.
   `curseNow` says if it is in force; `favorMult` doubles (`CURSE_MULT`) every favor of that tier.
@@ -88,7 +90,9 @@ Implemented today:
   Dimness hides the drop guide (scene only).
 - Gilded tier: stones placed on tier `GILDED_TIER` (10), and its balance bonus, earn
   `GILDED_MULT` (2) times the favor (`gild`, `stoneFavor`).
-- Goal: finishing tier `GOAL_TIER` (12) sets phase `crowned`, the win; no blessing is offered then.
+- Goal: finishing tier `GOAL_TIER` (12) sets phase `crowned`, the win. A balanced crowning tier
+  still rolls its `offer` and `curseOffer`, and `keepBuilding` opens the break with them (the
+  material row and shop too); a wobbly one opens it with an empty offer.
   In the endless sky the run ends only on a miss; `best` keeps counting tiers.
 - The game ends on a miss (a stone keeping less than `MIN_W`) unless Mason's Grace catches it.
 
@@ -101,7 +105,7 @@ Missing or rough:
 - `docs/screenshots/game-over.webp`, `gilded.webp`, `crowned.webp`, `wobbly-break.webp`,
   `shop-bought.webp`, `curse-taken.webp`, `stone-kinds.webp`, `endless-gust.webp`, `four-blessings.webp`,
   `material-pick.webp`, `reserve.webp`, `lean-meter.webp`, `toppled.webp`, `regrown.webp`,
-  `storm-gust.webp` and `cover.png` (a copy of `gilded.webp`) are not produced by the test; refresh
+  `storm-gust.webp`, `crowned-blessing.webp` and `cover.png` (a copy of `gilded.webp`) are not produced by the test; refresh
   them by hand (play several tiers in the dev build, or drive it with a Playwright script that taps
   like the test does) if the look changes.
 
@@ -130,7 +134,7 @@ File map (`src/`):
   `stackHeight`, `topOf`, `curseNow`, `swingSpeed`, `perfectWindow`, `canSwap`, `swapReserve`,
   `tick`, `drop`, `canPickMaterial`, `chooseMaterial`, `chooseBlessing`, `canReroll`, `reroll`,
   `canBuy`, `buy`, `toggleCurse`, `buildOn`, `keepBuilding`, `gild`, `materialMult`, `favorMult`,
-  `stoneFavor`; `pickPatrons`, `spawn`, `gustFor`, `kindFor`, `gust`, `land`, `topple`,
+  `stoneFavor`, `gusty`; `pickPatrons`, `spawn`, `gustFor`, `kindFor`, `gust`, `land`, `topple`,
   `pickOffer`, `pickCurse`, `widenTop` and `endBreak` are private). No Phaser; `speedFor` reads
   `byDifficulty` from `shared/settings.ts`.
 - `game/blessings.ts`: `BLESSINGS`, `BlessingId` and `BLESSING_INFO` (name, card text, colour).
@@ -168,14 +172,14 @@ How it runs:
   regrows the stone, adds the lean and topples the tier if it is too far (then spawns and returns),
   updates the trial, and on the third stone of a tier finishes it: a met trial adds `TRIAL_FAVOR`
   and a balanced tier `TIER_FAVOR` (both times `favorMult`, rounded up), `tier` goes up, the curse
-  ends, the swap and material reset, the lean settles and the next trial is rolled. The goal
-  tier then moves to `crowned` and stops (unless `endless`); otherwise a balanced tier moves to
-  the `blessing` phase with `offer` and `curseOffer` set, and a wobbly one does too, with an empty
+  ends, the swap, material and `tierFavor` reset, the lean settles and the next trial is rolled. A
+  balanced tier rolls `offer` and `curseOffer`. The goal tier then moves to `crowned` and stops
+  (unless `endless`); otherwise a balanced tier moves to the `blessing` phase, and a wobbly one does too, with an empty
   offer, when favor reaches `CHEAPEST` or from `MATERIAL_FROM_TIER`. Then it spawns the next stone
   from the side opposite the last.
 - Events: the rules push `GameEvent`s (`placed` with the favor it earned, `missed`, `tier`,
   `trial` (failed mid-tier, or passed with its favor), `rerolled`, `bought`, `toppled` (how many
-  stones, and the lean), `regrown`, `swapped` (the kind now in hand), `patron`) onto
+  stones, the lean and the favor lost), `regrown`, `swapped` (the kind now in hand), `patron`) onto
   `state.events`; the scene drains them each frame in `show`, which draws the new
   stone, debris, popups, glow, lanterns, the crown and banners, and on `toppled` sends the last
   stone views tumbling (`tumble`). Nothing else in the scene changes state.
@@ -208,7 +212,7 @@ How it runs:
 
 State model (`GameState`): `phase` (`patron`, `swinging`, `falling`, `blessing`, `over`,
 `crowned`), `stones` (bottom first), `moving`, `tier` and `inTier`, `wobbly`, `tiersBuilt`,
-`balancedTiers`, `favor`, `blessings` (in the order chosen) and `offer`, the blessing-driven
+`balancedTiers`, `favor`, `tierFavor`, `blessings` (in the order chosen) and `offer`, the blessing-driven
 `speed`, `perfectPx`, `favorPerStone` and `grace`, `dropped` (misses included), `lastDrop`, `best`,
 `nextKind`, `slow`, `bought`, `trial`, `curseOffer`, `cursed`, `curse` (`{ id, tier }`), `endless`,
 `wind`, `lean`, `chain`, `material`, `reserve` and `swapped`, `patronOffer` and `patron`, and
