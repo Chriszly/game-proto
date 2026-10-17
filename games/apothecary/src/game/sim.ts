@@ -931,11 +931,25 @@ export function payBelt(state: GameState, id: BeltId): Feedback | null {
 }
 
 /** Drops everything the doctor carries; the goods are gone. */
-export function dropAll(state: GameState): Feedback | null {
-  if (state.carrying.length === 0) return null;
-  const dropped = state.carrying.length;
-  state.carrying = [];
-  return [t('dropped', { n: dropped })];
+/** Throws away the `i`th thing the doctor carries (bottom first), for goods that are no longer needed. */
+export function dropItem(state: GameState, i: number): Feedback | null {
+  const [item] = state.carrying.splice(i, 1);
+  return item ? [t('droppedItem', { item: itemName(item) })] : null;
+}
+
+/**
+ * Serving by hand: the customer of order `id`, once at the counter, gets everything they want that
+ * is on the shelf at once, as the doctor on the counter's work spot hands it over.
+ */
+export function serveOrder(state: GameState, id: number): Feedback | null {
+  const order = state.orders.find((o) => o.id === id);
+  if (!order) return null;
+  const wanted = [...order.wants];
+  serveFromShelf(state, (o) => o.id === id);
+  const left = state.orders.find((o) => o.id === id)?.wants ?? [];
+  const given = [...wanted];
+  for (const want of left) given.splice(given.indexOf(want), 1);
+  return given.length > 0 ? given.map((p) => t('handedOver', { item: itemName(p) })) : [t('notOnShelf')];
 }
 
 /** What can be built on the expansion: its land first, then a field, the table or the cauldron. */

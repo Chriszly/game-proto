@@ -117,7 +117,9 @@ const en = {
   welcomeGuild: 'Welcome to the guild!',
   pixiesHired: '{pixies} hired!',
   toPixies: '{n} to the pixies',
-  dropped: 'Dropped {n}',
+  droppedItem: 'Threw away {item}',
+  notOnShelf: 'Not on the shelf yet',
+  serveInShop: 'Step into the shop to serve',
   landBought: 'New land bought!',
   tableBuilt: 'Refining table built!',
   cauldronBuilt: 'Cauldron built!',
@@ -132,9 +134,9 @@ const en = {
 
   // Top bar and panels
   hands: 'Hands',
+  dayClock: 'Day {day}',
   hint: 'Walk: WASD / tap\nHarvest: walk past ripe plants',
   settings: 'Settings',
-  dropAll: 'Drop all',
   recipes: 'Recipes',
   settingsLine: 'Difficulty: {difficulty}   Frame rate: {fps} FPS',
   changeOnHub: 'Change these on the hub page',

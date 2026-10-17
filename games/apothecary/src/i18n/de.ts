@@ -119,7 +119,9 @@ const de: Translation<typeof en> = {
   welcomeGuild: 'Willkommen in der Gilde!',
   pixiesHired: '{pixies} angeheuert!',
   toPixies: '{n} an die Feen',
-  dropped: '{n} abgelegt',
+  droppedItem: '{item} weggeworfen',
+  notOnShelf: 'Noch nicht im Regal',
+  serveInShop: 'Zum Bedienen in den Laden gehen',
   landBought: 'Neues Land gekauft!',
   tableBuilt: 'Mahltisch gebaut!',
   cauldronBuilt: 'Kessel gebaut!',
@@ -134,9 +136,9 @@ const de: Translation<typeof en> = {
 
   // Top bar and panels
   hands: 'Hände',
+  dayClock: 'Tag {day}',
   hint: 'Gehen: WASD / tippen\nErnten: an reifen Pflanzen vorbei',
   settings: 'Einstellungen',
-  dropAll: 'Ablegen',
   recipes: 'Rezepte',
   settingsLine: 'Schwierigkeit: {difficulty}   Bildrate: {fps} FPS',
   changeOnHub: 'Diese änderst du auf der Startseite',
