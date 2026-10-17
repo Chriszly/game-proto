@@ -668,7 +668,7 @@ const KITS: Record<ChampId, (cloth: RGB) => Kit> = {
         });
       },
       back: (md) => {
-        // A backpack with a crackling tesla coil.
+        // A backpack with a crackling storm coil.
         box(md, -5, 17, -9, 5, 30, -4, LEATHER);
         md.at(T(0, 30, -6.5), () => {
           prism(md, 1, 0.8, 0, 9, 6, copper);

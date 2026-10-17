@@ -36,7 +36,7 @@ import {
 import { Fx, GameState, Phase, Unit, createGame, dist, getUnit } from '../game/state';
 import { abilityFor, atFountain, atShop, buy, buyBack, buybackCost, cast, chooseUpgrade, commandAttack, commandMove, hiddenFrom, invulnerable, priceFor, startRecall, stealthed, tick, useActive, viewers } from '../game/sim';
 import { FxLayers, drawAura, drawProjectile, drawSkill, drawZone, skillMs } from './skillFx';
-import { championName, shortName } from '../game/names';
+import { shortName } from '../game/names';
 import {
   BEAST_CELL,
   BEAST_KEY,
@@ -83,7 +83,6 @@ import {
   PLAY_AGAIN,
   PORTRAIT,
   RECALL_BUTTON,
-  REROLL,
   SHOP_BUTTON,
   SHOP_PANEL,
   STREAK_CHIP,
@@ -239,7 +238,6 @@ export class GameScene extends Phaser.Scene {
   private pickBg!: Phaser.GameObjects.Image;
   private texts = new Map<string, Phaser.GameObjects.Text>();
   /** The names on the pick cards, drawn anew each time the pick screen opens. */
-  private pickNames: string[] = [];
   /** The pick card under the pointer, or -1. */
   private hoverPick = -1;
   /** The fog of war: how much each cell is hidden from blue (0 clear, 1 hidden), and its images. */
@@ -288,7 +286,6 @@ export class GameScene extends Phaser.Scene {
           .setDepth(11),
       );
     });
-    this.rollNames();
     // The fog of war, over the world (above the figures, under the bars) and over the minimap.
     this.fogG = this.add.graphics().setDepth(3.6);
     this.fogMini = this.add.graphics().setScrollFactor(0).setDepth(10.5);
@@ -361,19 +358,8 @@ export class GameScene extends Phaser.Scene {
     this.refreshZones();
   }
 
-  /** New names for the champions on the pick cards. */
-  private rollNames() {
-    const taken: string[] = [];
-    this.pickNames = CHAMPIONS.map((c) => {
-      const name = championName(c.id, Math.random, taken);
-      taken.push(name);
-      return name;
-    });
-  }
-
   /** Watch AI: a new match with a random champion for blue, which the AI plays like the other nine. */
   private watchMatch() {
-    this.rollNames();
     this.startMatch(CHAMPIONS[Math.floor(Math.random() * CHAMPIONS.length)]);
     mountWatch({
       title: 'Watching AI · Lane Brawl',
@@ -384,7 +370,7 @@ export class GameScene extends Phaser.Scene {
 
   private startMatch(def: ChampionDef) {
     // Watching, neither side gets the difficulty's damage, so the match is even.
-    this.state = createGame(def, watching ? 1 : ENEMY_DAMAGE, { playerName: this.pickNames[CHAMPIONS.indexOf(def)], watch: watching });
+    this.state = createGame(def, watching ? 1 : ENEMY_DAMAGE, { watch: watching });
     // Each champion in the match gets its sheet in its team's colours, once.
     const ms = bakeChampions(
       this,
@@ -399,7 +385,6 @@ export class GameScene extends Phaser.Scene {
 
   private resetToPick() {
     this.state = null;
-    this.rollNames();
     this.shopOpen = false;
     this.liveFx = [];
     this.cameras.main.centerOn(WORLD.w / 2, WORLD.h / 2);
@@ -473,7 +458,6 @@ export class GameScene extends Phaser.Scene {
     const phase = this.phase;
     if (phase === 'pick') {
       CHAMPIONS.forEach((def, i) => this.zones.push({ ...pickCard(i), run: () => this.startMatch(def) }));
-      this.zones.push({ ...REROLL, run: () => this.rollNames() });
       return;
     }
     if (phase === 'won' || phase === 'lost') {
@@ -1122,17 +1106,15 @@ export class GameScene extends Phaser.Scene {
       g.fillStyle(col(c.color), 1).fillRect(r.x + 2, r.y + 2, r.w - 4, 4);
       g.fillStyle(col('#3b7be8'), 0.25).fillEllipse(r.x + r.w / 2, r.y + 56, 50, 14);
       g.lineStyle(2, col('#3b7be8'), 0.9).strokeEllipse(r.x + r.w / 2, r.y + 56, 50, 14);
-      const name = this.pickNames[i] ?? c.name;
-      this.t(`pick-name-${i}`, r.x + r.w / 2, r.y + 60, name, name.length > 18 ? 11 : 12, UI.text, 'center', true);
+      this.t(`pick-name-${i}`, r.x + r.w / 2, r.y + 60, c.hero, c.hero.length > 18 ? 11 : 12, UI.text, 'center', true);
       this.t(`pick-role-${i}`, r.x + r.w / 2, r.y + 75, `${c.name} · ${c.role}`.toUpperCase(), 9, c.color, 'center', true);
       this.t(`pick-pas-${i}`, r.x + r.w / 2, r.y + 87, c.passive.name, 10, UI.gold, 'center', true);
       this.t(`pick-desc-${i}`, r.x + r.w / 2, r.y + 100, c.passive.desc, 9, UI.dim, 'center');
     });
-    const b = REROLL;
-    this.panel(g, b.x, b.y, b.w, b.h, '#3a4660');
-    this.t('reroll', b.x + b.w / 2, b.y + 5, 'New names', 12, UI.text, 'center', true);
+    // The champion under the pointer: who they are and what they play like, then why they fight.
     const h = CHAMPIONS[this.hoverPick];
-    this.t('pick-blurb', VIEW.w / 2, 471, h ? `${this.pickNames[this.hoverPick] ?? h.name}, ${h.name.toLowerCase()}: ${h.blurb.toLowerCase()}` : 'Point at a card to learn more about its champion.', 12, h ? h.color : UI.muted, 'center', true);
+    this.t('pick-blurb', VIEW.w / 2, 444, h ? `${h.hero}, ${h.title}. ${h.name}: ${h.blurb.toLowerCase()}.` : 'Point at a card to meet its champion.', 12, h ? h.color : UI.muted, 'center', true);
+    this.t('pick-motive', VIEW.w / 2, 464, h ? h.motive : 'Two banners, Dawn and Dusk, fight the Contest of Lanes for the Riftwell of Kessmoor.', 12, h ? UI.text : UI.dim, 'center', true);
     this.t('hint', VIEW.w / 2, 491, 'Click a champion to start. Click the ground to walk, an enemy to attack. Q W E R cast at the cursor, D and H use item actives.', 11, UI.dim, 'center');
     this.t('hint2', VIEW.w / 2, 506, 'B opens the shop at your Nexus, 1 or 2 picks an upgrade, V plants a vision ward, T recalls home, X buys back while dead.', 11, UI.dim, 'center');
     this.t('hint3', VIEW.w / 2, 521, 'You only see what your team sees. Slay the brutes for buffs, take the watchstones for sight, and the beast for stronger minions.', 11, UI.dim, 'center');
