@@ -4,10 +4,12 @@ import { Backdrop, type BackdropInfo } from '../art/backdrop';
 import { bakeComic } from '../art/comic';
 import { bakeNightVision } from '../art/nightvision';
 import { GEOM, GRAIN_TILE, geomOf, num, tex } from '../art/paint';
-import { ACID_COLOR, BURN_COLOR, CRATE_COLORS, SHIELD_COLOR, SURVIVOR_COLOR, THEMES, UPGRADE_COLORS, type Theme } from '../art/theme';
+import { ACID_COLOR, BURN_COLOR, CRATE_COLORS, OPERATION_COLORS, OUTPOST_COLORS, ROLE_COLORS, SHIELD_COLOR, SURVIVOR_COLOR, THEMES, UPGRADE_COLORS, type Theme } from '../art/theme';
 import { Pool } from '../game/pool';
 import {
   ACID_SLOW,
+  ADAPT,
+  ADAPTS,
   BASE_STATS,
   BLOATER,
   BOSS,
@@ -23,17 +25,27 @@ import {
   FIRE_ROUNDS,
   FLAMER,
   FRENZY,
+  GRENADE,
   HEADSHOT,
   HERO,
   HUD_HEIGHT,
   KIT_COSTS,
   LANES,
+  MARKSMAN,
   MAX_COMPANIONS,
   MEDKIT,
+  OPERATION_BONUS,
+  OPERATION_KINDS,
+  OPERATIONS,
+  OUTPOST,
+  OUTPOST_KINDS,
+  OUTPOST_MAX,
   PERKS,
   PICKUP,
   REACH_Y,
   RICOCHET,
+  ROLES,
+  ROLE_KINDS,
   SCRAP,
   SHOTGUN,
   SPAWN_Y,
@@ -45,6 +57,7 @@ import {
   UPGRADES,
   VIEW,
   WALL,
+  adaptTo,
   applyUpgrade,
   blastDamage,
   bossKind,
@@ -54,24 +67,47 @@ import {
   isBoss,
   isBossWave,
   laneAt,
+  medalOf,
+  outpostCost,
   perksOf,
   planWave,
   riotShield,
   supplyPick,
   toughness,
   waveTotal,
+  type Adapt,
   type BossKind,
   type BossMove,
   type Condition,
   type CrateKind,
   type EnemyKind,
+  type OperationKind,
+  type Outpost,
+  type OutpostKind,
   type Perk,
+  type Role,
   type Spawn,
   type Stats,
   type SupplyKind,
   type UpgradeKind,
 } from '../game/rules';
-import { loadBest, loadKit, loadScrap, loadStyle, saveBest, saveKit, saveScrap, saveStyle, type ArtStyle } from '../game/save';
+import {
+  loadBest,
+  loadKit,
+  loadOperation,
+  loadOperationBests,
+  loadOutpost,
+  loadScrap,
+  loadStyle,
+  saveBest,
+  saveKit,
+  saveOperation,
+  saveOperationBests,
+  saveOutpost,
+  saveScrap,
+  saveStyle,
+  type ArtStyle,
+} from '../game/save';
 import { HUD_DEPTH, Hud } from './Hud';
 
 const DEPTH = {
@@ -103,6 +139,9 @@ interface Enemy {
   /** Fire rounds: burn time left, and the clock towards its next tick of burn damage. */
   burn: number;
   burnTick: number;
+  /** The horde adapts: an armoured brute stops every bullet that hits it; a flank spitter keeps to its edge of the road. */
+  armoured: boolean;
+  flank: boolean;
   sprite: Phaser.GameObjects.Image;
 }
 
@@ -162,6 +201,9 @@ interface Bullet {
   hit: number[];
   /** Ricochets left: with the perk, a spent bullet jumps once to the nearest zombie. */
   ricochets: number;
+  /** Its damage as a multiple of the squad's (a marksman's shot), and whether it is a grenadier's grenade. */
+  mult: number;
+  grenade: boolean;
   sprite: Phaser.GameObjects.Image;
 }
 
@@ -209,8 +251,11 @@ interface Fx {
   text: Phaser.GameObjects.Text;
 }
 
-/** What the game is doing: fighting a wave, the pause after one, picking a boss's supply drop, or overrun. */
-export type Phase = 'wave' | 'break' | 'supply' | 'over';
+/**
+ * What the game is doing: fighting a wave, the pause after one, picking a boss's supply drop,
+ * picking a joining survivor's role, or overrun.
+ */
+export type Phase = 'wave' | 'break' | 'supply' | 'role' | 'over';
 
 export interface GameState {
   wave: number;
@@ -263,9 +308,19 @@ export interface GameState {
   survivorsLost: number;
   /** This wave's condition. */
   condition: Condition;
-  /** The run ended by extraction (a win), and the scrap it paid. */
+  /** The run ended by extraction or a completed operation (a win), and the scrap it paid. */
   extracted: boolean;
   payout: number;
+  /** The outpost upgrades' levels (saved, lasting), applied at the run's start. */
+  outpost: Outpost;
+  /** Each companion's role, in squad order (`squad`'s order). */
+  roles: Role[];
+  /** The operation this run plays, the one picked for the next run, and each operation's best (waves cleared). */
+  operation: OperationKind;
+  nextOperation: OperationKind;
+  operationBests: Record<OperationKind, number>;
+  /** What the horde answers the squad with this wave (null before wave 8, or when no stat stands out). */
+  adapt: Adapt | null;
 }
 
 export class GameScene extends Phaser.Scene {
@@ -316,7 +371,11 @@ export class GameScene extends Phaser.Scene {
   /** The supply drop's cards, and the game over screen's kit buttons, as tap boxes. */
   private supplyUi: Phaser.GameObjects.GameObject[] = [];
   private cards: { kind: SupplyKind | 'extract'; x: number; y: number; w: number; h: number }[] = [];
-  private shop: { kind: UpgradeKind; x: number; y: number; w: number; h: number }[] = [];
+  /** The game over screen's buttons: starting crates, outpost upgrades and operations. */
+  private shop: { act: () => void; x: number; y: number; w: number; h: number }[] = [];
+  /** The role cards while a survivor picks one, and the phase to go back to after. */
+  private roleCards: { role: Role; x: number; y: number; w: number; h: number }[] = [];
+  private rolePrev: Phase = 'wave';
   private bossCall!: Phaser.GameObjects.Text;
   private placeHint!: Phaser.GameObjects.Text;
   /** The blackout's darkness over the road, and the blood moon's red cast. */
@@ -370,7 +429,16 @@ export class GameScene extends Phaser.Scene {
       condition: 'clear',
       extracted: false,
       payout: 0,
+      outpost: loadOutpost(),
+      roles: [],
+      operation: loadOperation(),
+      nextOperation: 'road',
+      operationBests: loadOperationBests(),
+      adapt: null,
     };
+    this.state.nextOperation = this.state.operation;
+    // An operation shows its own best (waves cleared) in place of the Open Road's.
+    if (this.state.operation !== 'road') this.state.best = this.bestAtStart = this.state.operationBests[this.state.operation];
     // The starting crates bought last run are spent now; they count towards the perks.
     saveKit([]);
     for (const kind of this.state.startKit) {
@@ -378,6 +446,12 @@ export class GameScene extends Phaser.Scene {
       this.state.collected[kind]++;
     }
     this.state.perks = perksOf(this.state.collected);
+    // The outpost: sandbag walls and medkits to start with, and veteran companions (Gunners).
+    const o = this.state.outpost;
+    this.state.sandbags = o.barricade;
+    this.state.medkits = o.medic;
+    for (let i = 0; i < o.veteran; i++) this.state.stats = applyUpgrade(this.state.stats, 'companion');
+    this.roleCards = [];
     this.bulletHits = 0;
     this.bossClock = 0;
     this.bossAct = null;
@@ -415,7 +489,7 @@ export class GameScene extends Phaser.Scene {
 
     const text = (depth: number) => this.add.text(0, 0, '').setOrigin(0.5).setDepth(depth).setVisible(false);
     this.enemies = new Pool<Enemy>(
-      () => ({ alive: false, id: 0, kind: 'grunt', hp: 0, maxHp: 0, x: 0, y: 0, inBlast: false, shield: 0, maxShield: 0, clock: 0, burn: 0, burnTick: 0, sprite: this.add.image(0, 0, '__DEFAULT') }),
+      () => ({ alive: false, id: 0, kind: 'grunt', hp: 0, maxHp: 0, x: 0, y: 0, inBlast: false, shield: 0, maxShield: 0, clock: 0, burn: 0, burnTick: 0, armoured: false, flank: false, sprite: this.add.image(0, 0, '__DEFAULT') }),
       (e) => e.sprite.setVisible(false),
     );
     this.pickups = new Pool<Pickup>(
@@ -437,7 +511,7 @@ export class GameScene extends Phaser.Scene {
       (d) => [d.sprite, d.ring, d.label].forEach((o) => o.setVisible(false)),
     );
     this.bullets = new Pool<Bullet>(
-      () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, prevX: 0, prevY: 0, pierces: false, hitsLeft: 0, hit: [], ricochets: 0, sprite: this.skin(this.add.image(0, 0, '__DEFAULT'), 'bullet').setDepth(DEPTH.bullets) }),
+      () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, prevX: 0, prevY: 0, pierces: false, hitsLeft: 0, hit: [], ricochets: 0, mult: 1, grenade: false, sprite: this.skin(this.add.image(0, 0, '__DEFAULT'), 'bullet').setDepth(DEPTH.bullets) }),
       (b) => b.sprite.setVisible(false),
     );
     this.splats = new Pool<Splat>(
@@ -482,7 +556,7 @@ export class GameScene extends Phaser.Scene {
 
   /** The enemies in play, for the playthrough test. */
   liveEnemies() {
-    return this.enemies.live().map(({ id, kind, hp, maxHp, x, y, shield }) => ({ id, kind, hp, maxHp, x, y, shield }));
+    return this.enemies.live().map(({ id, kind, hp, maxHp, x, y, shield, armoured, flank }) => ({ id, kind, hp, maxHp, x, y, shield, armoured, flank }));
   }
 
   /** The acid on the squad's line: where, how wide, and whether it has landed yet. */
@@ -569,6 +643,7 @@ export class GameScene extends Phaser.Scene {
     this.overText = [];
     if (this.state.phase === 'over') this.showGameOver();
     if (this.state.phase === 'supply') this.showSupply();
+    if (this.state.phase === 'role') this.showRoles();
     this.hud.setStyle(this.style);
     GameScene.backdrop?.setStyle(this.style);
     this.refreshBackdrop();
@@ -615,13 +690,19 @@ export class GameScene extends Phaser.Scene {
     // V switches the art style, like the switch in the top bar.
     kb.addKey(K.V).on('down', () => this.switchStyle());
     // S drops a sandbag wall in the hero's lane; 1, 2 and 3 pick a supply.
-    kb.addKey(K.S).on('down', () => this.state.phase !== 'over' && this.state.phase !== 'supply' && this.placeWall(laneAt(this.player.x)));
-    [K.ONE, K.TWO, K.THREE].forEach((code, i) => kb.addKey(code).on('down', () => this.state.phase === 'supply' && this.pickSupply(this.state.offer[i])));
+    kb.addKey(K.S).on('down', () => this.state.phase === 'wave' && this.placeWall(laneAt(this.player.x)));
+    // 1, 2 and 3 also pick a joining survivor's role.
+    [K.ONE, K.TWO, K.THREE].forEach((code, i) =>
+      kb.addKey(code).on('down', () => {
+        if (this.state.phase === 'supply') this.pickSupply(this.state.offer[i]);
+        else if (this.state.phase === 'role') this.pickRole(ROLE_KINDS[i]);
+      }),
+    );
     // 4 takes the extraction, when it is on offer.
     kb.addKey(K.FOUR).on('down', () => this.state.phase === 'supply' && this.cards.some((c) => c.kind === 'extract') && this.pickSupply('extract'));
     // Tap or drag anywhere: the hero walks along their line to below that spot.
     const aim = (p: Phaser.Input.Pointer) => {
-      if (this.state.phase === 'over' || this.state.phase === 'supply') return;
+      if (this.state.phase === 'over' || this.state.phase === 'supply' || this.state.phase === 'role') return;
       const [minX, maxX] = this.heroRange();
       this.pointerTarget = Phaser.Math.Clamp(p.worldX, minX, maxX);
     };
@@ -632,11 +713,14 @@ export class GameScene extends Phaser.Scene {
       if (this.hud.onSwitch(x, y)) this.switchStyle();
       else if (s.phase === 'over') {
         const button = this.shop.find((b) => inBox(x, y, b));
-        if (button) this.buyKit(button.kind);
+        if (button) button.act();
         else this.scene.restart();
       } else if (s.phase === 'supply') {
         const card = this.cards.find((c) => inBox(x, y, c));
         if (card) this.pickSupply(card.kind);
+      } else if (s.phase === 'role') {
+        const card = this.roleCards.find((c) => inBox(x, y, c));
+        if (card) this.pickRole(card.role);
       } else if (this.hud.onKit(x, y) && ((s.phase === 'wave' && s.sandbags > 0) || s.placing)) s.placing = !s.placing;
       else if (s.placing) {
         // A tap on the road puts the wall in that lane; anywhere else puts the sandbags away.
@@ -657,21 +741,34 @@ export class GameScene extends Phaser.Scene {
     this.state.waveTotal = waveTotal(wave);
     // The condition is drawn before the plan, as an ammo shortage adds drums to it. Neither draws
     // anything before wave 6, so the first waves are the same as without conditions.
-    this.state.condition = drawCondition(wave);
-    this.plan = planWave(wave, Math.random, this.state.condition);
+    // An operation can fix the condition (Lights Out's blackout); then nothing is drawn for it.
+    const op = OPERATIONS[this.state.operation];
+    this.state.condition = op.condition ?? drawCondition(wave);
+    // From wave 8 the horde answers the squad's strongest stat.
+    this.state.adapt = wave >= ADAPT.fromWave ? adaptTo(this.state.stats) : null;
+    this.plan = planWave(wave, Math.random, this.state.condition, {
+      extraDrums: this.state.outpost.depot,
+      drums: op.drums,
+      survivors: op.survivors,
+      survivorsFrom: op.survivorsFrom,
+      adapt: this.state.adapt,
+    });
     this.waveClock = 0;
     this.bossClock = 0;
     this.bossAct = null;
     this.state.bossMove = null;
     this.state.bossMoves = 0;
     this.state.bossKind = isBossWave(wave) ? bossKind(wave) : null;
-    if (wave > this.state.best) {
+    // The Open Road's best is the wave reached; an operation's is the waves cleared (saved on clearing them).
+    if (this.state.operation === 'road' && wave > this.state.best) {
       this.state.best = wave;
       saveBest(wave);
     }
     const bossName = this.state.bossKind ? BOSSES[this.state.bossKind].name.toUpperCase() : '';
-    const lines = [`WAVE ${wave}`, isBossWave(wave) ? `${bossName} INCOMING!` : isBossWave(wave + 1) ? 'BOSS NEXT WAVE' : ''];
+    const of = op.waves ? ` OF ${op.waves}` : '';
+    const lines = [`WAVE ${wave}${of}`, isBossWave(wave) ? `${bossName} INCOMING!` : isBossWave(wave + 1) ? 'BOSS NEXT WAVE' : ''];
     if (this.state.condition !== 'clear') lines.push(`${CONDITIONS[this.state.condition].label.toUpperCase()}!`);
+    if (this.state.adapt) lines.push(`THE HORDE ADAPTS:\n${ADAPTS[this.state.adapt].label.toUpperCase()}`);
     this.showBanner(lines.filter(Boolean).join('\n'));
     this.applyCondition();
     this.refreshBackdrop();
@@ -703,8 +800,8 @@ export class GameScene extends Phaser.Scene {
   update(_time: number, delta: number) {
     const dt = Math.min(delta, 100);
     this.animateFeed();
-    // Nothing moves while the game is over or a supply drop is being picked.
-    if (this.state.phase === 'over' || this.state.phase === 'supply') return;
+    // Nothing moves while the game is over, or a supply drop or a survivor's role is being picked.
+    if (this.state.phase === 'over' || this.state.phase === 'supply' || this.state.phase === 'role') return;
     this.runMs += dt;
     this.moveHero(dt);
     this.spawn(dt);
@@ -779,7 +876,9 @@ export class GameScene extends Phaser.Scene {
     while (this.plan.length && this.plan[0].at <= this.waveClock) {
       const s = this.plan.shift()!;
       if (s.type === 'enemy') {
-        this.addEnemy(s.kind, s.hp, s.x, SPAWN_Y);
+        const e = this.addEnemy(s.kind, s.hp, s.x, SPAWN_Y);
+        e.armoured = !!s.armoured;
+        e.flank = !!s.flank;
       } else if (s.type === 'pickup') {
         // Once every slot in the squad is filled, a companion crate brings extra damage instead.
         const upgrade: CrateKind = s.upgrade === 'companion' && this.state.stats.companions >= MAX_COMPANIONS ? 'damage' : s.upgrade;
@@ -808,39 +907,49 @@ export class GameScene extends Phaser.Scene {
   private addEnemy(kind: EnemyKind, hp: number, x: number, y: number) {
     const e = this.enemies.take();
     const shield = kind === 'riot' ? riotShield(this.state.wave) : 0;
-    Object.assign(e, { id: this.nextId++, kind, hp, maxHp: hp, x, y, inBlast: false, shield, maxShield: shield, clock: SPITTER.everyMs - SPITTER.firstMs, burn: 0, burnTick: 0 });
+    Object.assign(e, { id: this.nextId++, kind, hp, maxHp: hp, x, y, inBlast: false, shield, maxShield: shield, clock: SPITTER.everyMs - SPITTER.firstMs, burn: 0, burnTick: 0, armoured: false, flank: false });
     this.skin(e.sprite, kind).setPosition(e.x, e.y).setAlpha(1).setVisible(true);
     return e;
   }
 
   /**
    * Fires a volley every so often: one bullet straight up from the hero and from each companion, and
-   * with the shotgun pairs of bullets fanning out from the hero's rifle. A frenzy fires
-   * `FRENZY.rate` times as fast; standing in acid, `ACID_SLOW` times slower.
+   * with the shotgun pairs of bullets fanning out from the hero's rifle. A grenadier throws a grenade
+   * in place of every so many bullets, and a marksman only fires every few volleys, at the toughest
+   * zombie. A frenzy fires `FRENZY.rate` times as fast; standing in acid, `ACID_SLOW` times slower.
    */
   private fire(dt: number) {
     this.fireClock += dt;
     const { pierce } = this.state.stats;
     const interval = (this.state.stats.fireInterval / (this.state.frenzyMs > 0 ? FRENZY.rate : 1)) * (this.state.inAcid ? ACID_SLOW : 1) * (this.state.condition === 'shortage' ? CONDITION.shortageFire : 1);
     const ricochets = this.state.perks.includes('ricochet') ? 1 : 0;
-    const shoot = (x: number, y: number, angle: number) => {
+    const shoot = (x: number, y: number, angle: number, o: { mult?: number; pierce?: number; grenade?: boolean } = {}) => {
       const b = this.bullets.take();
       b.x = b.prevX = x;
       b.y = b.prevY = y;
       b.vx = Math.sin(angle) * BULLET.speed;
       b.vy = Math.cos(angle) * BULLET.speed;
-      b.hitsLeft = 1 + pierce;
-      b.pierces = pierce > 0;
+      b.hitsLeft = 1 + pierce + (o.pierce ?? 0);
+      b.pierces = pierce + (o.pierce ?? 0) > 0;
       b.ricochets = ricochets;
+      b.mult = o.mult ?? 1;
+      b.grenade = !!o.grenade;
       b.hit.length = 0;
       b.sprite.setPosition(b.x, b.y).setRotation(angle).setVisible(true);
+      // A grenade and a marksman's round show bigger than a bullet.
+      b.sprite.setScale(this.unit(b.sprite) * (b.grenade ? 2 : b.mult > 1 ? 1.5 : 1));
     };
     while (this.fireClock >= interval) {
       this.fireClock -= interval;
       this.volleys++;
       for (let i = 0; i <= this.squad.length; i++) {
         const x = this.player.x + SQUAD_SLOTS[i].dx, y = HERO.y + SQUAD_SLOTS[i].dy - 30;
-        shoot(x, y, 0);
+        const role = i === 0 ? 'gunner' : this.state.roles[i - 1];
+        if (role === 'marksman') {
+          if (this.volleys % MARKSMAN.every) continue;
+          const t = this.toughestEnemy(y);
+          shoot(x, y, t ? Math.atan2(t.x - x, y - t.y) : 0, { mult: MARKSMAN.mult, pierce: MARKSMAN.pierce });
+        } else shoot(x, y, 0, { grenade: role === 'grenadier' && this.volleys % GRENADE.every === 0 });
         if (i === 0) for (let k = 1; k <= this.state.pellets; k++) [-1, 1].forEach((side) => shoot(x, y, side * k * SHOTGUN.angle));
         this.effect('muzzle', x, y, { life: 70 });
       }
@@ -850,6 +959,13 @@ export class GameScene extends Phaser.Scene {
         this.effect('sfx-blam', x, REACH_Y - 50 - (this.volleys % 3) * 8, { life: 380, grow: 0.15, angle: side * 7 });
       }
     }
+  }
+
+  /** The zombie on the road with the most hit points left, ahead of a rifle at y (null when none). */
+  private toughestEnemy(y: number) {
+    let best: Enemy | null = null;
+    for (const e of this.enemies.all) if (e.alive && e.y < y - 40 && e.y > HUD_HEIGHT && (!best || e.hp > best.hp)) best = e;
+    return best;
   }
 
   private moveBullets(dt: number) {
@@ -901,7 +1017,7 @@ export class GameScene extends Phaser.Scene {
             e.clock = 0;
             this.lobAcid(e.x, e.y - 4, SPITTER.poolRadius, SPITTER.warnMs, SPITTER.poolMs);
           }
-        } else {
+        } else if (!e.flank) {
           // The aim point stays inside the rifles' reach, so nothing (a spitter above all) stops where no bullet can get it.
           const aside = boss ? 0 : ((e.id * 53) % 81) - 40;
           const dx = Phaser.Math.Clamp(this.player.x + aside, HERO.minX, HERO.maxX) - e.x, maxStep = (steer * dt) / 1000;
@@ -929,6 +1045,8 @@ export class GameScene extends Phaser.Scene {
    */
   private moveSurvivors(dt: number) {
     for (const v of this.survivors.all) {
+      // A second survivor reaching the line while the first picks a role waits for the next frame.
+      if (this.state.phase === 'role') return;
       if (!v.alive) continue;
       v.y += (SURVIVOR.speed * dt) / 1000;
       const aside = ((v.id * 53) % 81) - 40, maxStep = (SURVIVOR.steer * dt) / 1000;
@@ -940,14 +1058,16 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** A survivor made it: they join the squad, or hand over scrap when it is full. */
+  /** A survivor made it: they join the squad (picking a role first), or hand over scrap when it is full. */
   private rescue(v: Survivor) {
     this.survivors.release(v);
     this.state.survivorsSaved++;
     if (this.state.stats.companions < MAX_COMPANIONS) {
-      this.state.stats = applyUpgrade(this.state.stats, 'companion');
-      this.addCompanions();
-      this.pop(this.style === 'comic' ? 'SURVIVOR JOINS THE SQUAD!' : 'SURVIVOR JOINED SQUAD', SURVIVOR_COLOR);
+      this.rolePrev = this.state.phase;
+      this.state.phase = 'role';
+      this.state.placing = false;
+      this.pointerTarget = null;
+      this.showRoles();
     } else {
       this.state.scrap += SURVIVOR.scrap;
       this.pop(this.style === 'comic' ? `SURVIVOR SAVED! +${SURVIVOR.scrap} SCRAP` : `SURVIVOR SAVED · +${SURVIVOR.scrap} SCRAP`, SURVIVOR_COLOR);
@@ -1175,10 +1295,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   private hitTargets() {
-    const damage = this.state.stats.damage, perks = this.state.perks;
+    const perks = this.state.perks;
     const fire = perks.includes('fire'), headshots = perks.includes('headshot');
     for (const b of this.bullets.all) {
       if (!b.alive) continue;
+      const damage = this.state.stats.damage * b.mult;
       // Swept along the stretch from prevY up to y, so a long frame can't carry a bullet through a
       // target; the nearest ones (largest y) are hit first. Survivors are in the way like zombies.
       const sx = b.x - b.prevX, sy = b.y - b.prevY, len2 = sx * sx + sy * sy || 1;
@@ -1197,6 +1318,13 @@ export class GameScene extends Phaser.Scene {
       let last: Enemy | null = null;
       for (const e of hits) {
         b.hit.push(e.id);
+        // A grenade bursts on the first zombie it hits.
+        if (b.grenade && 'kind' in e) {
+          this.grenade(e.x, e.y);
+          b.hitsLeft = 0;
+          b.ricochets = 0;
+          break;
+        }
         if (!('kind' in e)) this.hurtSurvivor(e, damage);
         // A riot shield stops a bullet without pierce, and takes the hit itself.
         else if (e.shield > 0 && !b.pierces) this.chipShield(e, damage);
@@ -1210,6 +1338,13 @@ export class GameScene extends Phaser.Scene {
           }
           if (fire) e.burn = FIRE_ROUNDS.ms;
           this.hurt(e, head ? damage * HEADSHOT.mult : damage);
+          // An armoured brute stops the bullet, pierce or not, and nothing ricochets off it.
+          if (e.armoured) {
+            b.hitsLeft = 0;
+            b.ricochets = 0;
+            if (this.volleys % 3 === 0) this.effect('', e.x, e.y + ENEMIES[e.kind].radius, { life: 360, rise: 20, text: this.style === 'comic' ? 'TONK' : 'ARMOUR' });
+            break;
+          }
         }
         if (--b.hitsLeft <= 0) break;
       }
@@ -1251,6 +1386,14 @@ export class GameScene extends Phaser.Scene {
       }
       if (b.hitsLeft <= 0) this.bullets.release(b);
     }
+  }
+
+  /** A grenadier's grenade bursts: every zombie within `GRENADE.radius` takes its damage, past any shield. */
+  private grenade(x: number, y: number) {
+    const dmg = GRENADE.damage(this.state.wave);
+    const caught = this.enemies.all.filter((e) => e.alive && Math.hypot(e.x - x, e.y - y) <= GRENADE.radius + ENEMIES[e.kind].radius);
+    for (const e of caught) this.hurt(e, dmg);
+    this.effect('blast', x, y, settings.reduceMotion ? { life: 380, baseScale: 0.42 } : { life: 380, grow: 0.4, baseScale: 0.3 });
   }
 
   /** The nearest living zombie to x, y within `range`, skipping the ids in `not`. */
@@ -1362,8 +1505,9 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: pop, y: pop.y - 60, alpha: 0, duration: 1200, onComplete: () => pop.destroy() });
   }
 
-  /** Brings in companions until the squad matches the stats, each in the next free slot. */
+  /** Brings in companions until the squad matches the stats, each in the next free slot (a Gunner unless a role was picked). */
   private addCompanions() {
+    while (this.state.roles.length < this.state.stats.companions) this.state.roles.push('gunner');
     while (this.squad.length < this.state.stats.companions) {
       const slot = SQUAD_SLOTS[this.squad.length + 1];
       const c = this.skin(this.add.image(this.player.x + slot.dx, HERO.y + slot.dy, '__DEFAULT'), 'companion').setDepth(this.squadDepth(this.squad.length + 1));
@@ -1430,8 +1574,12 @@ export class GameScene extends Phaser.Scene {
         // The wave's scrap is banked.
         saveScrap(this.state.bank + this.state.scrap);
         this.showBanner(`WAVE ${this.state.wave} CLEARED!`);
+        this.recordOperation(this.state.wave);
+        // An operation's last wave cleared wins it.
+        const op = OPERATIONS[this.state.operation];
+        if (op.waves && this.state.wave >= op.waves) this.completeOperation();
         // A boss leaves a supply drop behind: the game waits for a pick.
-        if (isBossWave(this.state.wave)) {
+        else if (isBossWave(this.state.wave)) {
           this.state.phase = 'supply';
           this.state.offer = supplyPick(this.state.pellets >= SHOTGUN.maxPairs);
           this.showSupply();
@@ -1468,6 +1616,12 @@ export class GameScene extends Phaser.Scene {
           const top = e.y - r - 11;
           m.lineStyle(1.4, num(th.accent)).strokeTriangle(e.x, top + 6, e.x + (r + 5) * 0.5, top, e.x - (r + 5) * 0.5, top);
         }
+      }
+      // An armoured brute's plate across its chest.
+      if (e.armoured) {
+        const pw = r * 1.3, ph = r * 0.75, px = e.x - pw / 2, py = e.y - r * 0.15;
+        g.fillStyle(num(comic ? '#9aa6b4' : th.text), comic ? 1 : 0.35).fillRoundedRect(px, py, pw, ph, 3);
+        g.lineStyle(comic ? 2 : 1, num(comic ? th.ink : th.text)).strokeRoundedRect(px, py, pw, ph, 3);
       }
       // A riot shield's points, in blue under the health bar.
       if (e.shield > 0 && e.shield < e.maxShield) {
@@ -1507,6 +1661,19 @@ export class GameScene extends Phaser.Scene {
         g.fillStyle(num(SURVIVOR_COLOR)).fillRect(v.x - w / 2 + 0.5, top + 0.5, ((w - 1) * v.hp) / v.maxHp, 3);
       }
     }
+    // Squad roles: a badge on each grenadier (a round grenade) and marksman (a long scope).
+    this.squad.forEach((c, i) => {
+      const role = this.state.roles[i];
+      if (role === 'gunner') return;
+      const col = num(comic ? ROLE_COLORS[role] : th.accent), bx = c.x + 12, by = c.y - 26;
+      if (role === 'grenadier') {
+        g.fillStyle(col).fillCircle(bx, by, 5);
+        g.lineStyle(1.5, num(comic ? th.ink : '#020a05')).strokeCircle(bx, by, 5);
+      } else {
+        g.fillStyle(col).fillRoundedRect(bx - 7, by - 3, 14, 6, 2);
+        g.lineStyle(1.5, num(comic ? th.ink : '#020a05')).strokeRoundedRect(bx - 7, by - 3, 14, 6, 2);
+      }
+    });
     // Drum labels sit on a balloon in the comic, on a dark tag in night vision.
     for (const d of this.drums.all) {
       if (!d.alive) continue;
@@ -1596,7 +1763,9 @@ export class GameScene extends Phaser.Scene {
       inAcid: s.inAcid,
       perks: s.perks,
       condition: s.condition,
+      adapt: s.adapt,
       bossLive: this.enemies.all.some((e) => e.alive && isBoss(e.kind)),
+      operation: s.operation === 'road' ? null : { label: OPERATIONS[s.operation].label, waves: OPERATIONS[s.operation].waves ?? 0 },
     });
   }
 
@@ -1636,7 +1805,7 @@ export class GameScene extends Phaser.Scene {
     this.state.placing = false;
     this.pointerTarget = null;
     this.bossCall.setVisible(false);
-    // The run's scrap goes in the bank, to spend on starting crates for the next run.
+    // The run's scrap goes in the bank, to spend on starting crates and the outpost.
     this.state.bank += this.state.scrap;
     saveScrap(this.state.bank);
     this.updateHud();
@@ -1644,55 +1813,110 @@ export class GameScene extends Phaser.Scene {
     this.refreshBackdrop();
   }
 
+  /** An operation's best is the most of its waves cleared; saved as soon as a run beats it. */
+  private recordOperation(cleared: number) {
+    const s = this.state;
+    if (s.operation === 'road' || cleared <= s.operationBests[s.operation]) return;
+    s.operationBests = { ...s.operationBests, [s.operation]: cleared };
+    s.best = cleared;
+    saveOperationBests(s.operationBests);
+  }
+
+  /** The operation's last wave is cleared: the run ends as a win, its scrap paid `OPERATION_BONUS` times. */
+  private completeOperation() {
+    const s = this.state;
+    s.payout = Math.round(s.scrap * OPERATION_BONUS);
+    this.endAsWin();
+  }
+
   private showGameOver() {
     const th = this.theme(), comic = this.style === 'comic', s = this.state;
+    const op = OPERATIONS[s.operation], onOp = s.operation !== 'road';
     const shade = this.add.rectangle(0, 0, VIEW.w, VIEW.h, comic ? 0x15121a : 0x000000, comic ? 0.6 : 0.65).setOrigin(0).setDepth(DEPTH.hud + 1);
     const won = s.extracted;
-    const title = this.add.text(VIEW.w / 2, 250, won ? (comic ? 'EXTRACTED!' : 'EXTRACTION COMPLETE') : comic ? 'OVERRUN!' : 'FEED LOST: OVERRUN').setOrigin(0.5).setDepth(DEPTH.hud + 2);
-    if (comic) this.font(title, won ? 48 : 52, won ? '#8cd05a' : '#e8402a', { stroke: th.ink, sw: 9 });
+    const winTitle = onOp ? (comic ? 'OPERATION WON!' : 'OPERATION COMPLETE') : comic ? 'EXTRACTED!' : 'EXTRACTION COMPLETE';
+    const title = this.add.text(VIEW.w / 2, 120, won ? winTitle : comic ? 'OVERRUN!' : 'FEED LOST: OVERRUN').setOrigin(0.5).setDepth(DEPTH.hud + 2);
+    if (comic) this.font(title, won ? 46 : 52, won ? '#8cd05a' : '#e8402a', { stroke: th.ink, sw: 9 });
     else this.font(title, 30, won ? '#6ae06a' : th.warn, { glow: won ? '#6ae06a' : th.warn });
-    const best = s.wave >= s.best && this.bestAtStart < s.wave ? 'A new best!' : `Best: wave ${s.best}`;
-    const scrap = won ? `Scrap ${s.scrap} paid ${EXTRACT.bonus(s.wave)}x: +${s.payout}  ·  banked ${s.bank}` : `Scrap +${s.scrap}  ·  banked ${s.bank}`;
+    const medal = medalOf(s.best);
+    const best = onOp
+      ? `${op.label}: best ${s.best} of ${op.waves} cleared${medal ? `, ${medal} medal` : ''}`
+      : s.wave >= s.best && this.bestAtStart < s.wave ? 'A new best!' : `Best: wave ${s.best}`;
+    const bonus = onOp ? OPERATION_BONUS : EXTRACT.bonus(s.wave);
+    const scrap = won ? `Scrap ${s.scrap} paid ${bonus}x: +${s.payout}  ·  banked ${s.bank}` : `Scrap +${s.scrap}  ·  banked ${s.bank}`;
     const info = this.add
-      .text(VIEW.w / 2, 310, `${won ? 'Got out at' : 'Reached'} wave ${s.wave} with ${s.kills} kills\n${best}\n${scrap}`, { align: 'center' })
+      .text(VIEW.w / 2, 158, `${won ? (onOp ? 'Held to' : 'Got out at') : 'Reached'} wave ${s.wave} with ${s.kills} kills\n${best}\n${scrap}`, { align: 'center' })
       .setOrigin(0.5, 0)
       .setDepth(DEPTH.hud + 2);
     const body = (t: Phaser.GameObjects.Text, size: number, color = comic ? '#fff8e8' : th.text) =>
       this.font(t, size, color, comic ? { stroke: th.ink, sw: 5 } : { glow: color });
-    body(info, 20);
-    // The scrap shop: starting crates for the next run, each bought once, tapped again to refund.
-    const head = this.add.text(VIEW.w / 2, 440, comic ? 'SPEND SCRAP: START THE NEXT RUN WITH...' : 'NEXT RUN LOADOUT (SCRAP)').setOrigin(0.5).setDepth(DEPTH.hud + 2);
-    body(head, 14, comic ? '#ffe04a' : th.accent);
+    body(info, 18);
     const g = this.add.graphics().setDepth(DEPTH.hud + 2);
-    const objs: Phaser.GameObjects.GameObject[] = [shade, title, info, head, g];
+    const objs: Phaser.GameObjects.GameObject[] = [shade, title, info, g];
     this.shop = [];
-    UPGRADE_KINDS.forEach((kind, i) => {
-      const w = 220, h = 54, x = i % 2 ? VIEW.w / 2 + 8 : VIEW.w / 2 - 8 - w, y = 466 + Math.floor(i / 2) * (h + 14);
-      const bought = s.nextKit.includes(kind), afford = bought || s.bank >= KIT_COSTS[kind];
-      const col = UPGRADE_COLORS[kind];
+    const heading = (y: number, comicText: string, nvText: string) => {
+      const t = this.add.text(VIEW.w / 2, y, comic ? comicText : nvText).setOrigin(0.5).setDepth(DEPTH.hud + 2);
+      body(t, 13, comic ? '#ffe04a' : th.accent);
+      objs.push(t);
+    };
+    // A button: lit when picked, greyed out when it can't be had, with a colour band, a name and a note.
+    const button = (x: number, y: number, w: number, h: number, col: string, lit: boolean, live: boolean, name: string, note: string, act: () => void) => {
       if (comic) {
         g.fillStyle(num(th.ink)).fillRect(x + 4, y + 4, w, h);
-        g.fillStyle(num(bought ? col : afford ? '#fff8e8' : '#8a8494')).fillRect(x, y, w, h);
+        g.fillStyle(num(lit ? col : live ? '#fff8e8' : '#8a8494')).fillRect(x, y, w, h);
         g.lineStyle(2.5, num(th.ink)).strokeRect(x, y, w, h);
         g.fillStyle(num(col)).fillRect(x + 8, y + 8, 12, h - 16);
         g.lineStyle(1.4, num(th.ink)).strokeRect(x + 8, y + 8, 12, h - 16);
       } else {
-        g.fillStyle(num(bought ? col : '#020a05'), bought ? 0.3 : 0.8).fillRoundedRect(x, y, w, h, 3);
-        g.lineStyle(1.5, num(afford ? col : th.muted), afford ? 1 : 0.5).strokeRoundedRect(x, y, w, h, 3);
+        g.fillStyle(num(lit ? col : '#020a05'), lit ? 0.3 : 0.8).fillRoundedRect(x, y, w, h, 3);
+        g.lineStyle(1.5, num(live ? col : th.muted), live ? 1 : 0.5).strokeRoundedRect(x, y, w, h, 3);
         g.fillStyle(num(col)).fillRect(x + 8, y + 10, 5, h - 20);
       }
-      const ink = comic ? th.ink : afford ? th.text : th.muted;
-      const name = this.add.text(x + 30, y + 17, UPGRADES[kind].label.toUpperCase()).setOrigin(0, 0.5).setDepth(DEPTH.hud + 3);
-      this.font(name, 14, ink, comic ? {} : { glow: ink });
-      const cost = this.add.text(x + 30, y + 38, bought ? (comic ? 'BOUGHT! TAP TO REFUND' : 'LOADED · TAP TO REFUND') : `${KIT_COSTS[kind]} SCRAP`).setOrigin(0, 0.5).setDepth(DEPTH.hud + 3);
-      this.font(cost, 11, comic ? th.ink : afford ? th.accent : th.muted);
-      objs.push(name, cost);
-      this.shop.push({ kind, x, y, w, h });
+      const ink = comic ? th.ink : live ? th.text : th.muted;
+      const n = this.add.text(x + 28, y + 15, name).setOrigin(0, 0.5).setDepth(DEPTH.hud + 3);
+      this.font(n, 13, ink, comic ? {} : { glow: ink });
+      const c = this.add.text(x + 28, y + 26, note).setOrigin(0, 0).setDepth(DEPTH.hud + 3);
+      this.font(c, 10, comic ? th.ink : live ? th.accent : th.muted);
+      objs.push(n, c);
+      this.shop.push({ act, x, y, w, h });
+    };
+    const grid = (i: number, top: number, step: number) => ({ x: i % 2 ? VIEW.w / 2 + 8 : VIEW.w / 2 - 8 - 220, y: top + Math.floor(i / 2) * step });
+    // The scrap shop: starting crates for the next run, each bought once, tapped again to refund.
+    heading(262, 'SPEND SCRAP: START THE NEXT RUN WITH...', 'NEXT RUN LOADOUT (SCRAP)');
+    UPGRADE_KINDS.forEach((kind, i) => {
+      const { x, y } = grid(i, 280, 58), bought = s.nextKit.includes(kind), afford = bought || s.bank >= KIT_COSTS[kind];
+      const note = bought ? (comic ? 'BOUGHT! TAP TO REFUND' : 'LOADED · TAP TO REFUND') : `${KIT_COSTS[kind]} SCRAP`;
+      button(x, y, 220, 48, UPGRADE_COLORS[kind], bought, afford, UPGRADES[kind].label.toUpperCase(), note, () => this.buyKit(kind));
     });
-    const again = this.add.text(VIEW.w / 2, 640, 'Tap anywhere else to try again').setOrigin(0.5).setDepth(DEPTH.hud + 2);
-    body(again, 20);
+    // The outpost: lasting upgrades, three levels each, bought for good.
+    heading(410, 'BUILD THE OUTPOST: FOR EVERY RUN TO COME', 'OUTPOST UPGRADES (PERMANENT)');
+    OUTPOST_KINDS.forEach((kind, i) => {
+      const { x, y } = grid(i, 428, 62), lv = s.outpost[kind], cost = outpostCost(kind, lv), afford = cost !== null && s.bank >= cost;
+      const note = `${OUTPOST[kind].detail.toUpperCase()}\nLV ${lv}/${OUTPOST_MAX}${cost === null ? ' · MAXED' : ` · NEXT ${cost} SCRAP`}`;
+      button(x, y, 220, 54, OUTPOST_COLORS[kind], lv > 0, afford, OUTPOST[kind].label.toUpperCase(), note, () => this.buyOutpost(kind));
+    });
+    // The operation the next run plays: the Open Road, or a 10-wave operation with its own rules.
+    heading(568, 'NEXT RUN: PICK THE OPERATION', 'NEXT OPERATION');
+    OPERATION_KINDS.forEach((kind, i) => {
+      const w = 160, x = 18 + i * (w + 11), y = 586, rec = s.operationBests[kind], m = medalOf(rec);
+      const record = kind === 'road' ? `BEST WAVE ${kind === s.operation ? s.best : this.roadBest()}` : `BEST ${rec}/${OPERATIONS[kind].waves}${m ? ` · ${m.toUpperCase()}` : ''}`;
+      button(x, y, w, 76, OPERATION_COLORS[kind], s.nextOperation === kind, true, OPERATIONS[kind].label.toUpperCase(), `${OPERATIONS[kind].detail}\n${record}`, () => this.pickOperation(kind));
+    });
+    const again = this.add.text(VIEW.w / 2, 702, `Tap anywhere else to start ${OPERATIONS[s.nextOperation].label}`).setOrigin(0.5).setDepth(DEPTH.hud + 2);
+    body(again, 18);
     objs.push(again);
     this.overText = objs;
+  }
+
+  /** The Open Road's best wave, saved under `deadline-best`. */
+  private roadBest() {
+    return Math.max(loadBest(), this.state.operation === 'road' ? this.state.best : 0);
+  }
+
+  /** Rebuilds the game over screen after a purchase or a pick. */
+  private redrawGameOver() {
+    for (const t of this.overText) t.destroy();
+    this.showGameOver();
   }
 
   /** Buys a starting crate for the next run with banked scrap, or refunds it. */
@@ -1707,8 +1931,25 @@ export class GameScene extends Phaser.Scene {
     } else return;
     saveScrap(s.bank);
     saveKit(s.nextKit);
-    for (const t of this.overText) t.destroy();
-    this.showGameOver();
+    this.redrawGameOver();
+  }
+
+  /** Buys the next level of an outpost upgrade, for good. */
+  private buyOutpost(kind: OutpostKind) {
+    const s = this.state, cost = outpostCost(kind, s.outpost[kind]);
+    if (cost === null || s.bank < cost) return;
+    s.bank -= cost;
+    s.outpost = { ...s.outpost, [kind]: s.outpost[kind] + 1 };
+    saveScrap(s.bank);
+    saveOutpost(s.outpost);
+    this.redrawGameOver();
+  }
+
+  /** Picks the operation the next run plays. */
+  private pickOperation(kind: OperationKind) {
+    this.state.nextOperation = kind;
+    saveOperation(kind);
+    this.redrawGameOver();
   }
 
   /** The supply drop after a boss: three cards to pick one from. */
@@ -1775,6 +2016,12 @@ export class GameScene extends Phaser.Scene {
   private extract() {
     const s = this.state;
     s.payout = Math.round(s.scrap * EXTRACT.bonus(s.wave));
+    this.endAsWin();
+  }
+
+  /** Ends the run as a win (an extraction or a won operation), banking `payout`. */
+  private endAsWin() {
+    const s = this.state;
     s.extracted = true;
     s.offer = [];
     for (const o of this.supplyUi) o.destroy();
@@ -1811,5 +2058,78 @@ export class GameScene extends Phaser.Scene {
     s.phase = 'break';
     this.breakClock = 0;
     this.pop(SUPPLIES[kind].label.toUpperCase(), this.style === 'comic' ? '#ffe04a' : this.theme().accent);
+  }
+
+  /** A survivor reached the sandbags: three cards for the role they take in the squad. */
+  private showRoles() {
+    for (const o of this.supplyUi) o.destroy();
+    this.tweens.killTweensOf(this.banner);
+    this.banner.setAlpha(0);
+    const th = this.theme(), comic = this.style === 'comic';
+    const shade = this.add.rectangle(0, 0, VIEW.w, VIEW.h, comic ? 0x15121a : 0x000000, comic ? 0.5 : 0.55).setOrigin(0).setDepth(DEPTH.hud + 1);
+    const title = this.add.text(VIEW.w / 2, 300, comic ? 'A SURVIVOR JOINS!\nPICK THEIR ROLE' : 'SURVIVOR RECRUITED\nASSIGN ROLE', { align: 'center' }).setOrigin(0.5).setDepth(DEPTH.hud + 2);
+    if (comic) this.font(title, 32, '#ffe04a', { stroke: th.ink, sw: 8 });
+    else this.font(title, 24, th.accent, { glow: th.accent });
+    const g = this.add.graphics().setDepth(DEPTH.hud + 2);
+    this.supplyUi = [shade, title, g];
+    this.roleCards = [];
+    ROLE_KINDS.forEach((role, i) => {
+      const w = 160, h = 210, x = 18 + i * (w + 11), y = 370, col = num(comic ? ROLE_COLORS[role] : th.accent), cx = x + w / 2, cy = y + 78;
+      if (comic) {
+        g.fillStyle(num(th.ink)).fillRect(x + 5, y + 5, w, h);
+        g.fillStyle(num('#fff8e8')).fillRect(x, y, w, h);
+        g.lineStyle(3, num(th.ink)).strokeRect(x, y, w, h);
+        g.fillStyle(num(ROLE_COLORS[role])).fillRect(x, y, w, 30);
+        g.lineStyle(2, num(th.ink)).lineBetween(x, y + 30, x + w, y + 30);
+      } else {
+        g.fillStyle(num('#020a05'), 0.85).fillRoundedRect(x, y, w, h, 4);
+        g.lineStyle(1.5, num(th.accent)).strokeRoundedRect(x, y, w, h, 4);
+      }
+      // The role's sign: three rounds, a grenade with its burst, or a long scoped round.
+      const line = num(comic ? th.ink : th.text);
+      g.lineStyle(2, line);
+      if (role === 'gunner') {
+        for (const dx of [-16, 0, 16]) {
+          g.fillStyle(col).fillRoundedRect(cx + dx - 4, cy - 16, 8, 32, 4);
+          g.strokeRoundedRect(cx + dx - 4, cy - 16, 8, 32, 4);
+        }
+      } else if (role === 'grenadier') {
+        for (let k = 0; k < 8; k++) {
+          const a = (k / 8) * Math.PI * 2;
+          g.lineBetween(cx + Math.cos(a) * 22, cy + Math.sin(a) * 22, cx + Math.cos(a) * 30, cy + Math.sin(a) * 30);
+        }
+        g.fillStyle(col).fillCircle(cx, cy, 16);
+        g.strokeCircle(cx, cy, 16);
+      } else {
+        g.fillStyle(col).fillRoundedRect(cx - 34, cy - 6, 68, 12, 4);
+        g.strokeRoundedRect(cx - 34, cy - 6, 68, 12, 4);
+        g.fillStyle(col).fillRoundedRect(cx - 12, cy - 16, 26, 9, 3);
+        g.strokeRoundedRect(cx - 12, cy - 16, 26, 9, 3);
+      }
+      const key = this.add.text(cx, y + 15, `${i + 1}`).setOrigin(0.5).setDepth(DEPTH.hud + 3);
+      this.font(key, 14, comic ? th.ink : th.accent, comic ? {} : { glow: th.accent });
+      const name = this.add.text(cx, y + 126, ROLES[role].label.toUpperCase()).setOrigin(0.5).setDepth(DEPTH.hud + 3);
+      this.font(name, comic ? 17 : 15, comic ? th.ink : th.text, comic ? {} : { glow: th.text });
+      const detail = this.add.text(cx, y + 146, ROLES[role].detail, { align: 'center' }).setOrigin(0.5, 0).setDepth(DEPTH.hud + 3);
+      this.font(detail, 11, comic ? th.ink : th.muted);
+      this.supplyUi.push(key, name, detail);
+      this.roleCards.push({ role, x, y, w, h });
+    });
+  }
+
+  /** The survivor joins the squad in the role picked, and the game goes on. */
+  private pickRole(role: Role | undefined) {
+    const s = this.state;
+    if (!role || s.phase !== 'role') return;
+    s.stats = applyUpgrade(s.stats, 'companion');
+    s.roles.push(role);
+    this.addCompanions();
+    for (const o of this.supplyUi) o.destroy();
+    this.supplyUi = [];
+    this.roleCards = [];
+    s.phase = this.rolePrev;
+    const label = ROLES[role].label.toUpperCase();
+    this.pop(this.style === 'comic' ? `${label} JOINS THE SQUAD!` : `${label} JOINED SQUAD`, SURVIVOR_COLOR);
+    this.refreshBackdrop();
   }
 }

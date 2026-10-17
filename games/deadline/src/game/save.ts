@@ -1,13 +1,17 @@
-import { UPGRADE_KINDS, type UpgradeKind } from './rules';
+import { NO_OUTPOST, OPERATION_KINDS, OUTPOST_KINDS, OUTPOST_MAX, type OperationKind, type Outpost, type UpgradeKind, UPGRADE_KINDS } from './rules';
 
 // What Deadline keeps between visits: the best wave reached, the chosen art style, the scrap banked
-// from kills and the starting crates bought with it for the next run. Every game shares the hub's
+// from kills, the starting crates and outpost upgrades bought with it, the operation picked for the
+// next run and each operation's best. Every game shares the hub's
 // origin, so every key starts with the game's name.
 
 export const BEST_KEY = 'deadline-best';
 export const STYLE_KEY = 'deadline-style';
 export const SCRAP_KEY = 'deadline-scrap';
 export const KIT_KEY = 'deadline-kit';
+export const OUTPOST_KEY = 'deadline-outpost';
+export const OPERATION_KEY = 'deadline-operation';
+export const OPERATION_BEST_KEY = 'deadline-operation-best';
 
 /** The two looks the game can be drawn in: a pulp horror comic, or a night-vision camera feed. */
 export type ArtStyle = 'comic' | 'nv';
@@ -84,4 +88,63 @@ export function saveKit(kit: UpgradeKind[]) {
   } catch {
     // As above.
   }
+}
+
+/** Reads a saved JSON object, or null when there is none (or it was broken). */
+function loadObject(key: string): Record<string, unknown> | null {
+  try {
+    const v: unknown = JSON.parse(localStorage.getItem(key) ?? 'null');
+    return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveObject(key: string, v: object) {
+  try {
+    localStorage.setItem(key, JSON.stringify(v));
+  } catch {
+    // As above.
+  }
+}
+
+/** A whole number from 0 to `max`, or 0 for anything else. */
+const level = (v: unknown, max: number) => (typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.min(max, Math.floor(v))) : 0);
+
+/** The outpost upgrades' levels; every one at 0 on a fresh save, and anything broken loads as 0. */
+export function loadOutpost(): Outpost {
+  const o = loadObject(OUTPOST_KEY) ?? {};
+  return Object.fromEntries(OUTPOST_KINDS.map((k) => [k, level(o[k], OUTPOST_MAX)])) as Outpost;
+}
+
+export function saveOutpost(outpost: Outpost) {
+  saveObject(OUTPOST_KEY, { ...NO_OUTPOST, ...outpost });
+}
+
+/** The operation the next run plays; the Open Road when none (or an unknown one) is saved. */
+export function loadOperation(): OperationKind {
+  try {
+    const op = localStorage.getItem(OPERATION_KEY);
+    return OPERATION_KINDS.find((k) => k === op) ?? 'road';
+  } catch {
+    return 'road';
+  }
+}
+
+export function saveOperation(op: OperationKind) {
+  try {
+    localStorage.setItem(OPERATION_KEY, op);
+  } catch {
+    // As above.
+  }
+}
+
+/** Each operation's best: the most of its waves a run has cleared (0 when none is saved). */
+export function loadOperationBests(): Record<OperationKind, number> {
+  const o = loadObject(OPERATION_BEST_KEY) ?? {};
+  return Object.fromEntries(OPERATION_KINDS.map((k) => [k, level(o[k], 1000)])) as Record<OperationKind, number>;
+}
+
+export function saveOperationBests(bests: Record<OperationKind, number>) {
+  saveObject(OPERATION_BEST_KEY, bests);
 }
