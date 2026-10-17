@@ -13,14 +13,17 @@ level up on XP, hunt the jungle between the lanes for gold and buffs, hold the w
 river for sight, fight over the guardian beast, ambush from the tall grass and the fog of war, and
 push the lanes through the towers and an inhibitor until the red Nexus falls. There is no multiplayer.
 
-Everything is low-poly 3D: the champions, minions, the jungle's boars, wolves and brutes, the
+Everything is toon low-poly 3D: the champions, minions, the jungle's boars, wolves and brutes, the
 watchstones, the guardian beast, the towers, the inhibitors and the Nexus are small
 faceted models built in code and rendered by a tiny software renderer at start-up into sprites from
-eight directions, with a walk cycle, attack poses and a cast pose. The map has faceted grass, flagstone
+eight directions, cel-shaded with a dark ink outline (the champions get big hero heads and a prop
+from their story), with a walk cycle, attack poses and a cast pose. The map has faceted grass, flagstone
 lanes with stone kerbs, a river from corner to corner, ruins, flowers and pines, lit from the top
 left, under bevelled slate panels.
 
 ![A Gunslinger, an Automaton, a Tinker, a Wolfkin and a Bruin on blue clash with red on the middle lane by the river, each with a name over its health bar](cover.png)
+
+![The toon look: Tamsin in her leaf cloak and Fenra with her moon mark fight by the river, each with a dark ink outline and an oversized hero head](docs/screenshots/toon-heroes.webp)
 
 ## How to play
 

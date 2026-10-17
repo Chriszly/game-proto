@@ -6,7 +6,7 @@
 
 import Phaser from 'phaser';
 import { sharpRes } from '../../../../shared/scaling';
-import { Model, render } from './lowpoly';
+import { INK, INK_WIDTH, Model, render } from './lowpoly';
 import { POSES, PoseName, TeamName, beastModel, bruteModel, inhibitorModel, boarModel, championModel, coinModel, minionModel, nexusModel, rubbleModel, towerModel, watchstoneModel, wolfModel } from './models';
 import { CHAMPIONS } from '../game/data';
 
@@ -26,7 +26,7 @@ export interface SheetInfo {
   footY: number;
 }
 
-export const CHAMP_CELL = { w: 76, h: 84, footY: 66 };
+export const CHAMP_CELL = { w: 76, h: 98, footY: 80 };
 export const MINION_CELL = { w: 48, h: 56, footY: 42 };
 export const BOAR_CELL = { w: 84, h: 72, footY: 44 };
 export const WOLF_CELL = { w: 80, h: 66, footY: 44 };
@@ -78,9 +78,10 @@ function bake(scene: Phaser.Scene, key: string, cell: { w: number; h: number; fo
     ctx.beginPath();
     ctx.rect(x, y, cw, ch);
     ctx.clip();
-    render(ctx, c.model(), x + cw / 2, y + cell.footY * RES, RES, { yaw: c.yaw });
+    render(ctx, c.model(), x + cw / 2, y + cell.footY * RES, RES, { yaw: c.yaw, noInk: true });
     ctx.restore();
   });
+  canvas = inkOutline(canvas);
   if (post) canvas = post(canvas);
   if (scene.textures.exists(key)) scene.textures.remove(key);
   const tex = scene.textures.addCanvas(key, canvas)!;
@@ -95,6 +96,28 @@ function movingCells(model: (pose: PoseName) => Model): Cell[] {
     for (const pose of POSES) cells.push({ name: frameName(dir, pose), model: () => model(pose), yaw: Math.PI / 2 - dirAngle(dir) });
   }
   return cells;
+}
+
+/**
+ * The toon look's ink outline for a whole sheet at once: the sheet's silhouette in ink, drawn a
+ * little out in eight directions, under the sheet. Much cheaper than stroking every face.
+ */
+function inkOutline(src: HTMLCanvasElement): HTMLCanvasElement {
+  const ink = makeCanvas(src.width, src.height);
+  const ictx = ink.getContext('2d')!;
+  ictx.drawImage(src, 0, 0);
+  ictx.globalCompositeOperation = 'source-in';
+  ictx.fillStyle = INK;
+  ictx.fillRect(0, 0, ink.width, ink.height);
+  const out = makeCanvas(src.width, src.height);
+  const ctx = out.getContext('2d')!;
+  const r = Math.max(1, (INK_WIDTH * RES) / 2);
+  for (let i = 0; i < 8; i++) {
+    const a = (i * Math.PI) / 4;
+    ctx.drawImage(ink, Math.round(Math.cos(a) * r), Math.round(Math.sin(a) * r));
+  }
+  ctx.drawImage(src, 0, 0);
+  return out;
 }
 
 /** A gold silhouette two and a half pixels wider than each frame of a sheet, for the last-hit outline. */
