@@ -30,3 +30,7 @@ export const OIL_HIT = 15;
 /** The lookout lasts this many waves and makes Arrow Rain's ring this many times wider. */
 export const LOOKOUT_WAVES = 3;
 export const LOOKOUT_RING = 1.4;
+
+/** Paid repairs: during a break coins mend this share of the barricade, at a price that rises with each repair of the run. */
+export const REPAIR_SHARE = 0.15;
+export const repairCost = (repairs: number) => 15 + 10 * repairs;

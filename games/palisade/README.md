@@ -27,6 +27,8 @@ wave 30 lifts the siege, which wins the run and unlocks the next heat.
 | C | Strew charged caltrops in front of the thickest crowd |
 | Tap a slot on the barricade ("Hire") | Hire a spearman or a mage for coins, or train a hired guard; the battle waits until the panel closes |
 | Fortify (under the wave track) | Buy one fortification for the coming waves: a stake line, an oil pot or a lookout; one per break (bought during a wave, it is set up when the next break starts) |
+| Repair (right of Fortify) | During a break, mend 15% of the barricade for coins; each repair of the run costs 10 more |
+| Accept / Refuse on an omen card | From wave 4, take on (or turn down) the coming wave's omen for 30% more experience; left alone it is refused |
 | Aim toggle (above the caltrops) or T | Cycle who the ranger shoots first: Nearest, Strongest, Flyers or Healers |
 | Keep fighting / Heat N | After the siege is lifted on wave 30: fight on past it, or start a new run at the next heat |
 | Tap a road card | After a boss, take that road for the next ten waves (after 10 seconds one is taken at random) |
@@ -35,7 +37,8 @@ wave 30 lifts the siege, which wins the run and unlocks the next heat.
 | 1x / 2x (bottom right) | Switch the battle between normal and double speed; the level-up countdown stays 10 real seconds |
 | Skill book (in the top bar) | Open the skill book; the battle waits until Back |
 | Hover over (or tap) the barricade's bar | Show its health, what Stout Timber adds and how much it mends after each wave |
-| Fight again / New hero | After a fall: start again from wave 1 keeping the hero, or with a new one; the "Next run at" row picks the heat |
+| Fight again / New hero | After a fall: start again keeping the hero, or with a new one; the "Next run at" row picks the heat and the "Start at" row the wave (a forced march) |
+| Retire | After a fall or on the victory panel, once every skill is learned or the siege lifted: start a new hero from scratch who keeps a legacy picked from three |
 
 1. **Waves**: each wave brings more foes than the last, with more health. A short break with the
    wave's banner comes before each, and the barricade gets a tenth of its health back.
@@ -48,8 +51,8 @@ wave 30 lifts the siege, which wins the run and unlocks the next heat.
    while three different upgrades are offered. A countdown under the cards shows the time left:
    after 10 seconds without a tap, one of them is taken at random.
 4. **The hero is kept**: level, experience, every upgrade picked and every relic won carry over to
-   the next run, which starts again at wave 1. They are saved in the browser. "New hero" starts
-   from scratch.
+   the next run, which starts again at wave 1 (or, on a forced march, at a later road). They are
+   saved in the browser. "New hero" starts from scratch, keeping only what retired heroes left.
 
 ![Three upgrades to pick from](docs/screenshots/playthrough-1-level-up.webp)
 
@@ -110,7 +113,38 @@ shows the heat the run is on.
 
 ![The siege is lifted](docs/screenshots/siege-lifted.webp)
 ![A new run at Heat 1](docs/screenshots/heat-1.webp)
-![The game-over panel with the heats](docs/screenshots/game-over-heats.webp)
+![The game-over panel with the heats and the forced march](docs/screenshots/game-over-heats.webp)
+
+### Forced march
+
+A hero who has beaten a road's boss doesn't have to walk the early waves again. The game-over
+panel's "Start at" row picks the wave the next run starts on: wave 1, wave 11 once the Troll King
+has fallen (the best wave cleared is 10 or more) or wave 21 once the Ogre Warlord has. A march
+starts on a road with no twist, with a stake of coins in place of what the skipped
+waves would have paid, and no relic from their chests. "New hero" always starts on wave 1.
+
+| Start at | Needs | Coins at the start |
+| --- | --- | --- |
+| Wave 1 | Nothing | 0 |
+| Wave 11 | Best wave 10 | 120 |
+| Wave 21 | Best wave 20 | 300 |
+
+### Retire for a legacy
+
+Once the hero knows every skill, or has lifted the siege, the game-over panel and the victory panel
+offer **Retire**. The next hero starts from scratch (level 1, no skills, relics, heats or best
+wave) but keeps one legacy picked from three, on top of everything earlier retired heroes left.
+The relic card names a relic rolled when the panel opens; the other two can be kept once each.
+
+| Legacy | What every new hero gets |
+| --- | --- |
+| A first relic | Starts with that relic (it can be kept again on a later retirement, a different relic or the same) |
+| Third guard slot | A third slot on the barricade, between the two others, to hire a guard on |
+| Quick Arrow Rain | Arrow Rain charges with 25% fewer kills |
+
+Legacies are saved with the hero and survive "New hero".
+
+![Retiring the hero: three legacies to keep](docs/screenshots/retire-legacy.webp)
 
 ### Road choice
 
@@ -126,6 +160,23 @@ road has no twist, and a new run starts on it again.
 | Golden Road | Foes walk 15% faster | Foes drop twice the coins |
 
 ![The wave track on a Golden Road](docs/screenshots/golden-road.webp)
+
+### Omens
+
+From wave 4, the break before a wave names an omen for it (except the break after a boss, which
+has the relic chest and the road choice). The card shows what it does with Accept and Refuse, and
+the break lasts 6 seconds instead of 3 while it is up (deciding cuts it short). An accepted omen
+makes its wave harder and pays 30% more experience for every kill in it, and a chip over the
+ranger names it until the wave is cleared. Left alone, an omen is refused.
+
+| Omen | What it does to the wave |
+| --- | --- |
+| Night | Foes stay unseen, and out of the ranger's and the mage's aim, until they reach mid-field |
+| Blood Moon | Twice as many elite foes |
+| Rich Plunder | Foes drop 50% more coins, but walk 25% faster |
+
+![An omen named during the break, and the Repair button](docs/screenshots/omen-card.webp)
+![A Night wave: the foes beyond mid-field are hidden](docs/screenshots/night-omen.webp)
 
 ### Arrow Rain
 
@@ -168,6 +219,7 @@ Every kill pays coins (shown in the top bar): 1 for a goblin, 2 for an orc or a 
 shield bearer, 4 for a dark knight or a shaman and 30 for a boss. Two slots on the barricade, one
 high and one low, read "Hire" and glow once a guard can be afforded. Tapping one opens a panel to
 hire a guard for this run, and tapping a hired guard trains it (twice, each time 60% more damage).
+A hero with the Third guard slot legacy (see Retire for a legacy) has a third slot between them.
 The battle waits while the panel is open; a tap beside it closes it.
 
 | Guard | Cost | Training | What it does |
@@ -195,6 +247,10 @@ the panel is open.
 ![A lookout bought during a wave, queued for the next break](docs/screenshots/fortify-queued.webp)
 ![An oil pot and a lookout on the barricade](docs/screenshots/fortifications.webp)
 ![Foes hacking at the stake line after the barricade fell](docs/screenshots/stake-line.webp)
+
+**Paid repairs.** The "Repair" button beside Fortify mends 15% of the barricade's health during a
+break, for 15 coins, then 25, 35 and so on within the run, so coins go to repairs, guards or a
+fortification. It is lit while the barricade is hurt and the coins are there.
 
 ### Kill streak
 
@@ -341,12 +397,13 @@ All paths are inside `games/palisade/`.
 
 - `src/game/`: the rules in plain TypeScript with no Phaser dependency. `enemies.ts`,
   `upgrades.ts`, `relics.ts` (with the relic sets), `guards.ts`, `roads.ts`, `forts.ts` (the
-  fortifications), `elites.ts` (the traits), `bosses.ts` (the bosses' moves), `heat.ts` (the heats
+  fortifications and paid repairs), `elites.ts` (the traits), `omens.ts` (the omens), `march.ts` (the forced
+  march's starts), `legacy.ts` (the legacies), `bosses.ts` (the bosses' moves), `heat.ts` (the heats
   and the winning wave) and `aim.ts` (the aim priority) are data tables, `waves.ts` says what each wave brings and which
   road and boss it is on, `state.ts` holds the run and works out the hero's stats from the upgrade
   ranks, relics and heat, `sim.ts` moves the battle on, takes upgrades and roads, looses Arrow Rain, strews caltrops,
-  hires and trains guards, buys fortifications and lifts the siege, and
-  `save.ts` keeps the hero's progress, the speed and the aim priority.
+  hires and trains guards, buys fortifications and repairs, decides omens, lifts the siege and
+  retires the hero, and `save.ts` keeps the hero's progress (with the legacies), the speed and the aim priority.
 - `src/scenes/`: `BootScene` paints the textures, `GameScene` draws the battle, the HUD, the wave
   track, Arrow Rain, the caltrops and the guard slots and wires taps and drags to the rules, `layout.ts` says where things are
   drawn.
@@ -356,7 +413,7 @@ All paths are inside `games/palisade/`.
   breaks up in stages), and `icons.ts` the upgrade and relic icons, the chest, the boss marks,
   the Arrow Rain and caltrops buttons, the coin and the road icons.
 - `src/ui/`: the level-up cards, the road cards (`RoadChoice`), the hire panel (`HirePanel`), the
-  fortify panel (`FortifyPanel`), the skill book, and `panel.ts` with the slate-and-gold panels,
+  fortify panel (`FortifyPanel`), the omen card (`OmenCard`), the legacy cards (`LegacyPanel`), the skill book, and `panel.ts` with the slate-and-gold panels,
   buttons and text style.
 
 Adding an upgrade is an entry in `src/game/upgrades.ts` and its effect in `stats` in
