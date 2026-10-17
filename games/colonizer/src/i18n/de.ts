@@ -186,6 +186,11 @@ const de: Translation<typeof en> = {
   relicHeld: 'Du hältst das {relic}: {effect}',
   relicTaken: 'Der Feind nahm das {relic}',
   rallySet: 'Sammelflagge gesetzt',
+  rallyCleared: 'Sammelflagge eingeholt',
+  alertVillagers: 'Angriff auf Dorfbewohner',
+  alertSoldiers: 'Angriff auf Soldaten',
+  alertBuilding: 'Angriff auf {building}',
+  alertAny: 'Angriff!',
   tradingPost: 'Ein Handelsposten: Handelskarren vom Markt laden hier Erz',
   cacheGuarded: 'Ein Vorrat von {n} {res}, von Räubern bewacht',
   cacheFree: 'Ein Vorrat von {n} {res}: stell dich daneben, um ihn zu nehmen',
@@ -233,8 +238,10 @@ const de: Translation<typeof en> = {
   },
   shelters: 'Schützt {n} Dorfbewohner, wenn die Glocke läutet',
   marketInfo: 'Erz kauft Holz und Nahrung;\njeder Handel bewegt den Preis',
-  rallyMove: 'Rechtsklick versetzt die Sammelflagge',
+  rallyMove: 'Rechtsklick versetzt die Sammelflagge,\nRechtsklick aufs Gebäude holt sie ein',
   rallyHint: 'Rechtsklick setzt eine Sammelflagge',
+  rallyTitle: 'Sammelflagge',
+  rallyHow: 'Klicke, wo sich neue Einheiten sammeln.\nAuf Baum, Busch, Mine, Feld oder Lager\narbeiten neue Dorfbewohner dort.\nRechtsklick oder Esc bricht ab.',
   nothingSelected: 'Nichts gewählt',
   nothingHint: 'Zieh über deine Einheiten oder klick sie an,\noder klick ein Gebäude.',
 
@@ -253,6 +260,9 @@ const de: Translation<typeof en> = {
 
   // Panel buttons
   cancel: 'Abbrechen',
+  rallyFlag: 'Sammelflagge',
+  rallySetSub: 'setzen',
+  rallyMoveSub: 'versetzen',
   wallsMore: 'Mauern & mehr',
   back: 'Zurück',
   build: 'Bauen (B)',

@@ -5,7 +5,9 @@ const en: HowToPlay = {
   goal: 'Destroy the enemy Town Centre (both of them in a three-way match), or hold a Monument for three minutes. If your own Town Centre falls, you lose.',
   controls: [
     { input: 'Left click, or drag a box', action: 'Select units or a building; Shift adds to the selection' },
-    { input: 'Right click', action: 'Gather, build, attack or walk; with a building selected, set its rally flag' },
+    { input: 'Right click', action: 'Gather, build, attack or walk; with buildings selected, set their rally flag (on the building, take it down)' },
+    { input: 'Rally flag button', action: 'Then click where new units gather; on a tree, bush, mine, farm or camp, new villagers work there' },
+    { input: 'Space, or a red marker at the edge', action: 'Jump to where you are under attack' },
     { input: 'Tap, on a touch screen', action: 'With units selected, give the right click order; tap your own unit or building to select it' },
     { input: 'A, then left click', action: 'Attack-move: walk there and fight on the way' },
     { input: 'S', action: 'Stop the selected units' },
@@ -24,6 +26,7 @@ const en: HowToPlay = {
   tips: [
     'Villagers carry ten at a time to the Town Centre, or to a Lumber or Mining Camp.',
     "The enemy's first raid comes no sooner than six minutes in, and a horn warns you.",
+    'When your villagers, soldiers or buildings are hit out of sight, a toast says so and a red arrow at the edge points the way.',
     'Each AI is a Raider, a Builder or a Warden; scout its Town Centre to learn which.',
     'Ring the bell at the Town Centre to shelter villagers; press Back to work when the raid is over.',
     'Kill the guards at a camp to claim its cart of ore or food, or hold its relic for a bonus.',
@@ -46,7 +49,9 @@ const de: HowToPlay = {
   goal: 'Zerstöre das feindliche Stadtzentrum (beide in einem Spiel zu dritt) oder halte ein Denkmal drei Minuten lang. Fällt dein eigenes Stadtzentrum, verlierst du.',
   controls: [
     { input: 'Linksklick oder Rahmen ziehen', action: 'Einheiten oder ein Gebäude wählen; Umschalt fügt zur Auswahl hinzu' },
-    { input: 'Rechtsklick', action: 'Sammeln, bauen, angreifen oder laufen; mit gewähltem Gebäude seine Sammelflagge setzen' },
+    { input: 'Rechtsklick', action: 'Sammeln, bauen, angreifen oder laufen; mit gewählten Gebäuden ihre Sammelflagge setzen (aufs Gebäude: einholen)' },
+    { input: 'Knopf Sammelflagge', action: 'Dann klicken, wo sich neue Einheiten sammeln; auf Baum, Busch, Mine, Feld oder Lager arbeiten neue Dorfbewohner dort' },
+    { input: 'Leertaste oder roter Pfeil am Rand', action: 'Dorthin springen, wo du angegriffen wirst' },
     { input: 'Tippen, auf einem Touchscreen', action: 'Mit gewählten Einheiten den Rechtsklick-Befehl geben; eigene Einheit oder eigenes Gebäude antippen, um es zu wählen' },
     { input: 'A, dann Linksklick', action: 'Angriffsmarsch: dorthin laufen und unterwegs kämpfen' },
     { input: 'S', action: 'Die gewählten Einheiten anhalten' },
@@ -65,6 +70,7 @@ const de: HowToPlay = {
   tips: [
     'Dorfbewohner tragen je zehn zum Stadtzentrum oder zu einem Holz- oder Erzlager.',
     'Der erste feindliche Überfall kommt frühestens nach sechs Minuten, und ein Horn warnt dich.',
+    'Werden deine Dorfbewohner, Soldaten oder Gebäude außer Sicht getroffen, meldet es eine Nachricht, und ein roter Pfeil am Rand zeigt die Richtung.',
     'Jede KI ist Plünderer, Baumeister oder Wächter; erkunde ihr Stadtzentrum, um es herauszufinden.',
     'Läute die Glocke im Stadtzentrum, damit Dorfbewohner Schutz suchen; drück An die Arbeit, wenn der Überfall vorbei ist.',
     'Besiege die Wachen eines Lagers, um seinen Vorrat an Erz oder Nahrung zu holen, oder halte sein Relikt für einen Bonus.',

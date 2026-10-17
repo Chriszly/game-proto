@@ -118,7 +118,7 @@ export interface Unit {
 
 /** Things that happened this tick, for the scene's effects; the scene empties the list each frame. */
 export type SimEvent =
-  | { t: 'hit'; x: number; y: number; fromX: number; fromY: number; dmg: number; ranged: boolean; owner: number }
+  | { t: 'hit'; x: number; y: number; fromX: number; fromY: number; dmg: number; ranged: boolean; owner: number; victim: number; target: number }
   | { t: 'drop'; x: number; y: number; res: Resource; n: number; owner: number }
   | { t: 'grow'; x: number; y: number };
 
@@ -902,6 +902,14 @@ export function setRally(s: GameState, owner: number, bid: number, x: number, y:
   return true;
 }
 
+/** Takes a production building's rally flag down, so its new units go to work on their own again. */
+export function clearRally(s: GameState, owner: number, bid: number): boolean {
+  const b = s.buildings.get(bid);
+  if (!b || b.owner !== owner || !b.rally) return false;
+  b.rally = null;
+  return true;
+}
+
 /** Queues a unit at a finished building the owner controls. */
 export function train(s: GameState, owner: number, bid: number, type: string): boolean {
   const b = s.buildings.get(bid);
@@ -1241,7 +1249,7 @@ function updateBuilding(s: GameState, b: Building, dt: number) {
         target.hp -= dmg;
         b.cool = def.tower.cooldown;
         const at = centre(footprint(target));
-        emit(s, { t: 'hit', x: at.x, y: at.y, fromX: b.tx + def.w / 2, fromY: b.ty + 0.5, dmg, ranged: true, owner: b.owner });
+        emit(s, { t: 'hit', x: at.x, y: at.y, fromX: b.tx + def.w / 2, fromY: b.ty + 0.5, dmg, ranged: true, owner: b.owner, victim: target.owner, target: target.id });
       }
     }
   }
@@ -1283,16 +1291,28 @@ function updateBuilding(s: GameState, b: Building, dt: number) {
   }
 }
 
-/** A new unit walks to its building's rally flag; a villager whose flag is on a tree, bush, mine or farm gathers there. */
+/**
+ * A new unit walks to its building's rally flag. A villager whose flag is on a tree, bush, mine or
+ * farm gathers there, and one whose flag is on an own Lumber or Mining Camp gathers the nearest wood
+ * or ore to it.
+ */
 function sendToRally(s: GameState, b: Building, u: Unit) {
   const r = b.rally!;
   const role = UNITS[u.type].role;
   if (role === 'villager') {
     const hit = entityAt(s, r.x, r.y);
-    const farm = hit?.kind === 'building' ? s.buildings.get(hit.id) : undefined;
-    if (hit?.kind === 'node' || (farm && farm.owner === b.owner && farm.built && BUILDINGS[farm.type].farm)) {
-      u.home = hit!.id;
-      u.order = { t: 'gather', node: hit!.id };
+    const own = hit?.kind === 'building' ? s.buildings.get(hit.id) : undefined;
+    const mine = own && own.owner === b.owner && own.built ? own : undefined;
+    const drops = mine ? BUILDINGS[mine.type].drops : undefined;
+    const src =
+      hit?.kind === 'node' || (mine && BUILDINGS[mine.type].farm)
+        ? { id: hit!.id }
+        : mine && Array.isArray(drops) && drops.length === 1
+          ? nearestSource(s, b.owner, drops[0], mine.tx + BUILDINGS[mine.type].w / 2, mine.ty + BUILDINGS[mine.type].h / 2)
+          : null;
+    if (src) {
+      u.home = src.id;
+      u.order = { t: 'gather', node: src.id };
       return;
     }
   }
@@ -1793,7 +1813,7 @@ function strike(s: GameState, u: Unit, def: UnitDef, target: Unit | Building) {
     }
   }
   const at = centre(footprint(target));
-  emit(s, { t: 'hit', x: at.x, y: at.y, fromX: u.x, fromY: u.y, dmg, ranged: def.range > 1, owner: u.owner });
+  emit(s, { t: 'hit', x: at.x, y: at.y, fromX: u.x, fromY: u.y, dmg, ranged: def.range > 1, owner: u.owner, victim: target.owner, target: target.id });
 }
 
 /** The damage a target really takes: Shieldwall, the Age II boon, shields melee infantry. */

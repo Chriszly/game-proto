@@ -69,9 +69,12 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   soldiers within `AURA_RANGE` get `AURA_DMG` in `ownBonus`, `inAura`), the Tide Seer (`sight` 14),
   the Thorn Druid (`heal`: `HEAL_HP` to own units within `HEAL_RANGE` every `HEAL_MS`, `Unit.pulse`).
   The scene rings the aura and heal ranges with a faint ellipse.
-- Rally flags (`Building.rally`): a right click with a production building selected (and no units)
-  plants it; new units walk to a ring of spots round it (`RALLY_SPOTS`), and a villager whose flag is
-  on a node or own farm gathers there. Units push apart where closer than `UNIT_GAP` (`separate` in
+- Rally flags (`Building.rally`): a right click with production buildings selected (and no units),
+  or the `rally` button and a click (`GameScene.rallyMode`), plants it on every selected one
+  (`plantRally`); on one of those buildings it takes them down (`clearRally`). New units walk to a
+  ring of spots round it (`RALLY_SPOTS`), a villager whose flag is on a node or own farm gathers
+  there, and one whose flag is on an own one-resource drop-off (Lumber or Mining Camp, Grove, Market)
+  gathers the nearest node of that resource to it. Units push apart where closer than `UNIT_GAP` (`separate` in
   the sim); villagers at work hold their place.
 - Walls: a palisade is dragged out as a line (`wallLine`, `placeWall`, up to 40 stakes). A gate goes
   in a gap or on an own stake (replacing it). A finished gate is not solid: `GameState.gates` holds
@@ -129,6 +132,14 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   `BELL_RANGE` of its Town Center start one, and once none of them is within `ASSAULT_CLEAR` (20)
   tiles it ends, repelled if at least half of them fell. The AI's Monument rush is a raid with the
   Monument as its goal, so it ends like any other once the Monument falls.
+- Attack alerts (scene only, `GameScene.alarm`, `renderAlerts`): every `hit` event whose `victim` is
+  the player and whose striker is a rival (not `NEUTRAL`) starts an `Alert` or refreshes the live one
+  within `ALERT_NEAR` (12) tiles; it lives until `ALERT_MS` (8 s) after its last hit. Each draws
+  pulsing red rings on the ground and the minimap (`Minimap.ping`), and a red triangle at the edge of
+  the view (`edgeMarks`, clickable) while out of sight. A new one out of sight shows the toast for
+  `ALERT_TOAST_MS` (5 s) naming what was hit (`alertVillagers`, `alertSoldiers`, `alertBuilding`),
+  below a raid's toast and above notices. Space, the toast or a marker jump the camera there (`jumpTo`).
+  None in watch mode.
 - Feedback: hits throw ochre sparks, arrows fly from ranged attackers and towers, damage numbers
   rise, and every load the player drops off pops a "+N" badge with the resource's icon.
 - The AI is a rule-based planner (`src/game/planner.ts`), not a full build-order search: it keeps
@@ -204,7 +215,7 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   building can't be placed at all (a translated text, or null), `unitCost` applies the Forge, `placeWall`/`wallLine` lay a palisade,
   `ringBell`/`releaseBell` run the garrison, `trade`/`marketPrice` the Market, `maxHp`, `unitCount`,
   `garrisoned`, `shelters`, `inAura` and `postAt` read things,
-  `setRally` plants a rally flag, `endRaid` ends a raid whose raiders turn back, `campAt`/`campSpots` find a camp and the tiles round it,
+  `setRally` plants a rally flag and `clearRally` takes it down, `endRaid` ends a raid whose raiders turn back, `campAt`/`campSpots` find a camp and the tiles round it,
   `monumentLeft` reads a Monument's count, `deedCount` and `deedsDone` read
   the deeds, `findPath` is a breadth-first search on the tile grid, `updateSight` computes the
   player's sight, and `entityAt` finds what is under a point.
@@ -263,8 +274,8 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   `Player.temperament`, `Player.scouted` and `Player.out`; `Player.bell` (the bell is ringing) and
   `Player.rates` (the Market's wood and food rates).
 - `GameState.raid` (`Raid | null`), `raids` and `repelled` counters, `assault` (per AI side, by
-  index: the ids of other sides' soldiers attacking its base, or null), `toLast`, and `events`: `hit`, `drop` and
-  `grow` events the sim pushes and the scene drains each frame (capped at 400 when nobody drains them).
+  index: the ids of other sides' soldiers attacking its base, or null), `toLast`, and `events`: `hit`
+  (with the striker's `owner`, the struck side `victim` and its `target` id), `drop` and `grow` events the sim pushes and the scene drains each frame (capped at 400 when nobody drains them).
 - `GameState.players` has a third entry, `NEUTRAL` (the camp guards); its `faction` is only a
   placeholder. Code that loops over players skips it where it matters (`updateDeeds`, `checkWinner`).
   A three-way match has a fourth, `AI2`; per-side arrays (`aiClock`, `aiRaid`, `assault`) have one
@@ -292,13 +303,15 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   turn the pointer into game-space screen points with `viewPoint(pointer)`; `toWorld` and
   `toScreen` go through the main camera and its `worldView`.
 - Input: `pointerdown` and `pointerup` on the scene. Clicks on the minimap move the camera, on the
-  toast jump to the raid, and in the top bar, the deeds card or the panel are left to the HUD. A
+  toast jump to the raid or alert it shows (`toastAt`), on an edge marker to its alert, and in the top bar, the deeds card or the panel are left to the HUD. A
   click under 5 px is a click; otherwise it is a box select. Right click calls `commandAt`.
 - Placement: `placing` holds a building type. A click calls `tryPlace`, which centres the footprint
   on the tile under the cursor and sends the nearest selected villager to build it. For the Palisade
   the press records `wallStart` and the release calls `tryWall` with the dragged line; the ghost is a
   stitched square per stake. Ghosts sit above the fog.
-- A right click with a production building selected and no units calls `setRally`. A right click on
+- A right click with production buildings selected and no units calls `plantRally` (`setRally` on
+  each, or `clearRally` when the click is on one of them); so does a left click or tap in
+  `rallyMode`, which the `rally` panel button turns on (right click or Esc cancels it). A right click on
   a camp sends the selection to its free tiles (soldiers attack-move). A left click on a camp shows
   what it is in the toast.
 - The build list's page is `buildPage` (0 or 1); its second page is behind the `Walls & More`
@@ -314,7 +327,7 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   and the champion count). While `boonPending` (or `edgePending`), `renderPick` puts the two boon
   (or edge) cards in the buttons' place, with `hud` ids `shieldwall` and `harvest` (or
   `masonry` and `muster`). The Town Center's buttons
-  are the Villager, the champion, `Ring the bell` or `Back to work`, and the age; a Market's are the
+  are the Villager, the champion, `Ring the bell` or `Back to work`, the `rally` button (every production building has it) and the age; a Market's are the
   Trade Cart and `Buy 100 wood` / `70 ore` buy and sell buttons with the live price; selected carts
   get `Trade`. A unit whose age is too low shows the age under its name (`Ram`, `Age II`), a
   champion at its limit `one only`.
@@ -368,7 +381,8 @@ None: there is no save. Settings come from the hub (`shared/settings.ts`).
   or boon cards, in game-space screen coordinates with `id`, `label`, `x`, `y`, `w`, `h`; the test
   finds a button by its `id`, so it plays in any language, and `label` is the translated text),
   `popLog` (the player's drop-off badges by resource id, such as `+10 wood`, in no language),
-  `toastLog` (raid toasts shown, translated), `toast.shown`,
+  `toastLog` (raid toasts shown, translated), `alertLog` (attack alert toasts, translated), `alerts`
+  (the live alerts' `x`, `y`, `last`), `rallyMode`, `toast.shown`,
   `placing`, `attackMode`, `buildMenu`, `buildPage`, `status.shown` (the Monument line),
   `status.temperaments` (each rival's temperament as the card shows it, translated, `?` until scouted),
   `cameras.main.worldView.x/y` (not `scrollX/Y`, which differ once `renderScale` zooms the
