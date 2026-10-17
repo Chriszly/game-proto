@@ -68,14 +68,14 @@ export const FIREFLY_LANTERNS = 2;
 export const QUEUE_MAX = 2;
 
 /**
- * The kinds of lantern (LK6). From LANTERN_KINDS_NIGHT some spots hold one: a beacon burns its oil
- * faster but pays triple at nightfall, a candle catches at once but holds half the oil, and a bell
+ * The kinds of lantern (LK6). From LANTERN_KINDS_NIGHT some spots hold one: a beacon holds 40% less
+ * oil but pays triple at nightfall, a candle catches at once but holds half the oil, and a bell
  * stuns every bat within BELL_RANGE of it while it is lit. Each multiplies the oil a fill gives,
  * the wick time and the pay a lantern.
  */
 export const LANTERN_KINDS = {
   plain: { name: 'Lantern', blurb: '', oil: 1, wick: 1, pay: 1 },
-  beacon: { name: 'Beacon', blurb: 'Burns fast, pays triple', oil: 0.6, wick: 1, pay: 3 },
+  beacon: { name: 'Beacon', blurb: 'Less oil, pays triple', oil: 0.6, wick: 1, pay: 3 },
   candle: { name: 'Candle', blurb: 'Lights at once, half the oil', oil: 0.5, wick: 0, pay: 1 },
   bell: { name: 'Bell', blurb: 'Stuns bats near it while lit', oil: 1, wick: 1, pay: 1 },
 } as const;
