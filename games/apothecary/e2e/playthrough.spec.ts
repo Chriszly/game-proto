@@ -55,7 +55,7 @@ const BETWEEN_GARDENS = { x: 152, y: 292 };
 const WHEAT_CUT = [7, 8];
 const MANDRAKE_CUT = [10, 11];
 /** How long wheat and mandrake take to grow, from src/game/items.ts. */
-const GROW_MS = { wheat: 24_000, mandrake: 42_000 };
+const GROW_MS = { wheat: 24_000, mandrake: 30_000 };
 /** Each station's drop and pick-up markers stand in a row north of it, its work spot just above it. */
 const REFINER = { drop: { x: 290, y: 250 }, work: { x: 350, y: 288 }, pickUp: { x: 414, y: 250 } };
 const CAULDRON = { drop: { x: 492, y: 250 }, work: { x: 552, y: 288 }, pickUp: { x: 624, y: 250 } };

@@ -14,6 +14,8 @@ export const howToPlay: HowToPlay = {
       action: 'Hire a spearman or a mage with coins, or train one you have',
     },
     { input: 'Fortify button, during a break', action: 'Buy a stake line, an oil pot or a lookout, one per break' },
+    { input: 'Repair button, during a break', action: 'Mend 15% of the barricade for coins, a little dearer each time' },
+    { input: 'Accept or Refuse an omen', action: 'From wave 4, take on a harder wave for 30% more experience' },
     { input: 'Tap a card', action: 'Take that upgrade at a level-up, or that road after a boss' },
     { input: '1x / 2x button', action: 'Switch the battle between normal and double speed' },
     { input: 'Skill book button', action: 'See every upgrade and relic you have found' },
@@ -33,5 +35,7 @@ export const howToPlay: HowToPlay = {
     'Shamans heal the foes around them, so aim at Healers when they show up.',
     'A level-up picks a card at random after 10 seconds unless you untick Auto-pick.',
     'Lifting the siege unlocks a harder heat for your next run.',
+    'Once a boss has fallen, the next run can start at the following road with a stake of coins.',
+    'A hero who knows every skill or lifted the siege can retire: the next hero keeps a legacy.',
   ],
 };

@@ -7,10 +7,13 @@ import { BAR, BOSS_BARS, FIRE, GOLD, SLATE, STORM, XP } from '../art/palette';
 import { AIMS, nextAim } from '../game/aim';
 import { TRAITS } from '../game/elites';
 import { ENEMIES } from '../game/enemies';
-import { STAKE_FRONT, STAKE_HP, type FortId } from '../game/forts';
+import { STAKE_FRONT, STAKE_HP, repairCost, type FortId } from '../game/forts';
 import { GUARDS, type GuardKind } from '../game/guards';
 import { HEAT_RULES, MAX_HEAT, WIN_WAVE } from '../game/heat';
-import { RELICS, SETS, setComplete } from '../game/relics';
+import type { LegacyId } from '../game/legacy';
+import { MARCH_STARTS, canMarch } from '../game/march';
+import { OMENS, omenEffects } from '../game/omens';
+import { RELICS, SETS, setComplete, type RelicId } from '../game/relics';
 import { ROADS, type RoadId } from '../game/roads';
 import { clearProgress, loadAim, loadAutoPick, loadFound, loadProgress, loadSpeed, saveAim, saveAutoPick, saveFound, saveProgress, saveSpeed } from '../game/save';
 import {
@@ -19,7 +22,10 @@ import {
   RAIN_RING,
   canBuyFort,
   canFortify,
+  canRepair,
+  canRetire,
   crowdSpot,
+  decideOmen,
   fightAgain,
   fortify,
   held,
@@ -30,6 +36,9 @@ import {
   pickRoad,
   rainRingOf,
   reoffer,
+  repair,
+  retire,
+  rollLegacyRelic,
   setAim,
   startHeat,
   strew,
@@ -53,11 +62,13 @@ import { FILLERS, UPGRADES, type UpgradeId } from '../game/upgrades';
 import { isBossWave, waveTrack } from '../game/waves';
 import { FortifyPanel } from '../ui/FortifyPanel';
 import { HirePanel } from '../ui/HirePanel';
+import { LegacyPanel } from '../ui/LegacyPanel';
 import { LevelUp } from '../ui/LevelUp';
+import { OmenCard } from '../ui/OmenCard';
 import { RoadChoice } from '../ui/RoadChoice';
 import { chamferPts, drawPanel, makeButton, textStyle } from '../ui/panel';
 import { SkillBook } from '../ui/SkillBook';
-import { AIM, BARRICADE, BARRICADE_BAR, BARRICADE_TIP_W, BOSS_BAR, CALTROPS, FORTIFY, GUARD_HIT, HEAT, HERO_FEET, HUD_HEIGHT, RAIN, RAIN_HINT, ROAR_CHIP, SPEED, STREAK, TRACK, UI_DEPTH, VIEW, XP_BAR } from './layout';
+import { AIM, BARRICADE, BARRICADE_BAR, BARRICADE_TIP_W, BOSS_BAR, CALTROPS, FORTIFY, GUARD_HIT, HEAT, HERO_FEET, HUD_HEIGHT, MARCH, OMEN_CHIP, RAIN, RAIN_HINT, REPAIR, ROAR_CHIP, SPEED, STREAK, TRACK, UI_DEPTH, VIEW, XP_BAR } from './layout';
 
 /** Longest simulated step, so a backgrounded tab doesn't jump the battle forward. */
 const MAX_STEP_MS = 250;
@@ -97,6 +108,21 @@ export class GameScene extends Phaser.Scene {
   hirePanel!: HirePanel;
   /** The panel the "Fortify" button opens during a break. */
   fortifyPanel!: FortifyPanel;
+  /** The omen card during a break from wave 4. */
+  omenCard!: OmenCard;
+  /** The legacy cards when the hero retires. */
+  legacyPanel!: LegacyPanel;
+  /** The wave the next run starts on, picked on the game-over panel's "Start at" row (a forced march). */
+  startWave = 1;
+  /** The relic the "A first relic" legacy card offers, rolled when the retire panel opens. */
+  private legacyRelic: RelicId = 'crown';
+  private repairBg!: Phaser.GameObjects.Graphics;
+  private repairText!: Phaser.GameObjects.Text;
+  private omenText!: Phaser.GameObjects.Text;
+  private nightG!: Phaser.GameObjects.Graphics;
+  private marchPicks: { bg: Phaser.GameObjects.Graphics; text: Phaser.GameObjects.Text; zone: Phaser.GameObjects.Zone }[] = [];
+  private retireButtons: Phaser.GameObjects.Container[] = [];
+  private retireNote!: Phaser.GameObjects.Text;
   private eliteLabels = new Map<number, Phaser.GameObjects.Text>();
   private aimBg!: Phaser.GameObjects.Graphics;
   private aimText!: Phaser.GameObjects.Text;
@@ -196,6 +222,8 @@ export class GameScene extends Phaser.Scene {
     this.fx = this.add.graphics().setDepth(UI_DEPTH - 30);
     this.glow = this.add.graphics().setDepth(UI_DEPTH - 29).setBlendMode(Phaser.BlendModes.ADD);
     this.aimG = this.add.graphics().setDepth(UI_DEPTH - 8);
+    // The dark of a Night wave lies over the foes, under their bars and the effects.
+    this.nightG = this.add.graphics().setDepth(UI_DEPTH - 40);
     this.createHud();
     this.createTrack();
     this.createRain();
@@ -212,6 +240,8 @@ export class GameScene extends Phaser.Scene {
       (slot) => this.train(slot),
     );
     this.fortifyPanel = new FortifyPanel(this, (id) => this.fortify(id));
+    this.omenCard = new OmenCard(this, (accept) => decideOmen(this.state, accept));
+    this.legacyPanel = new LegacyPanel(this, (id) => this.retire(id));
     this.createAimToggle();
     this.found = new Set(loadFound());
     this.skillBook = new SkillBook(this);
@@ -255,16 +285,23 @@ export class GameScene extends Phaser.Scene {
     this.drawForts();
     this.drawAimToggle();
     this.roadChoice.show(s.phase === 'break' ? s.roadChoices : null, s.roadMs);
+    const omen = s.phase === 'break' && s.omen && !s.omen.accepted && !s.choices && !this.hirePanel.open && !this.fortifyPanel.open ? s.omen.id : null;
+    this.omenCard.show(omen, s.wave);
     this.levelUp.show(held(s) ? null : s.choices, s.ranks, s.level - s.levelUps + 1, s.levelUps, s.pickMs);
     this.discover();
     this.skillBook.show(this.found, s.ranks, s.relics, held(s));
     this.gameOver.setVisible(s.phase === 'over');
+    if (!held(s)) this.legacyPanel.close();
+    // Retiring needs every skill learned or the siege lifted; until then the button stays dim.
+    for (const b of this.retireButtons) b.setAlpha(canRetire(s) ? 1 : 0.45);
+    this.retireNote.setText(canRetire(s) ? '' : 'Learn every skill or lift the siege to retire for a legacy');
     if (s.phase === 'over') {
       this.gameOverText.setText(
         `The foes broke through and reached the hero on wave ${s.wave}${s.heat > 0 ? ` at Heat ${s.heat}` : ''}.\n${s.kills} foes slain this run, longest streak x${s.streak.best}, best wave cleared: ${s.bestWave}.\n\n` +
           `The hero keeps level ${s.level}, every upgrade picked and every relic won.`,
       );
       this.drawHeatPicks();
+      this.drawMarchPicks();
     }
     this.won.setVisible(s.phase === 'won');
     if (s.phase === 'won') {
@@ -332,6 +369,15 @@ export class GameScene extends Phaser.Scene {
   private drawFoes() {
     const seen = new Set<number>();
     this.bars.clear();
+    // On a Night wave the field beyond mid-field lies in the dark, and the foes in it are unseen.
+    const sight = omenEffects(this.state.omen).sight;
+    const night = this.nightG.clear();
+    if (sight < Infinity && !held(this.state)) {
+      const h = XP_BAR.y - 10 - HUD_HEIGHT;
+      night.fillStyle(0x08101e, 0.3).fillRect(0, HUD_HEIGHT, VIEW.w, h);
+      // Strips that overlap towards the right darken it from mid-field on, with a soft edge.
+      for (let i = 0; i < 6; i++) night.fillStyle(0x08101e, 0.16).fillRect(sight + i * 8, HUD_HEIGHT, VIEW.w, h);
+    }
     for (const e of this.state.enemies) {
       seen.add(e.id);
       let sprite = this.foes.get(e.id);
@@ -339,6 +385,10 @@ export class GameScene extends Phaser.Scene {
         sprite = this.add.image(e.x, e.y, foeTexture(e.kind, 0));
         this.foes.set(e.id, sprite);
       }
+      const hidden = e.x >= sight;
+      sprite.setVisible(!hidden);
+      this.eliteLabels.get(e.id)?.setVisible(!hidden);
+      if (hidden) continue;
       const type = ENEMIES[e.kind];
       const pace = e.slowMs > 0 ? 1 - e.slow : 1;
       // Walk in two frames with a bob; at the barricade, lunge at it in time with the blows.
@@ -1000,6 +1050,18 @@ export class GameScene extends Phaser.Scene {
               : 'Bought this break. The next break sells another.';
         this.fortifyPanel.show(s.forts, s.coins, note, (id) => canBuyFort(s, id));
       });
+    // Paid repairs, right of the Fortify button: lit during a break while the coins are there.
+    this.repairBg = this.add.graphics().setDepth(UI_DEPTH - 6);
+    this.repairText = this.add.text(REPAIR.x, REPAIR.y, '', textStyle(12, '#ffe7a0')).setOrigin(0.5).setDepth(UI_DEPTH - 5);
+    this.add
+      .zone(REPAIR.x, REPAIR.y, REPAIR.w, REPAIR.h)
+      .setDepth(UI_DEPTH - 4)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => {
+        if (this.aim || this.skillBook.open || this.hirePanel.open || this.fortifyPanel.open) return;
+        repair(this.state);
+      });
+    this.omenText = this.add.text(OMEN_CHIP.x, OMEN_CHIP.y, '', textStyle(10, '#e6ccff')).setOrigin(0.5).setDepth(UI_DEPTH - 5);
     this.heatText = this.add.text(HEAT.x, HEAT.y, '', textStyle(11, '#ffb08a')).setOrigin(0.5).setDepth(UI_DEPTH - 4);
     this.roarText = this.add.text(ROAR_CHIP.x, ROAR_CHIP.y, 'Chilled bow: slow shots', textStyle(10, '#d8f0ff')).setOrigin(0.5).setDepth(UI_DEPTH - 5);
   }
@@ -1020,6 +1082,16 @@ export class GameScene extends Phaser.Scene {
     this.fortifyText.setColor(open ? '#ffe7a0' : '#9aa0ac').setText(open ? 'Fortify' : s.forts.queued ? 'Queued' : 'Fortified');
     drawPanel(fg, f.x - f.w / 2, f.y - f.h / 2, f.w, f.h, { c: 5, fill: open ? SLATE.light : 0x1e222c, alpha: 0.95, edge: open ? GOLD.light : 0x4a5060, lw: open ? 2 : 1 });
     if (open) fg.fillStyle(GOLD.light, 0.1 + 0.15 * this.pulse(900)).fillPoints(chamferPts(f.x - f.w / 2, f.y - f.h / 2, f.w, f.h, 5), true);
+    // The Repair button: 15% of the barricade for coins, dearer with each repair of the run.
+    const rg = this.repairBg;
+    rg.clear();
+    const fix = canRepair(s);
+    this.repairText.setColor(fix ? '#ffe7a0' : '#9aa0ac').setText(`Repair: ${repairCost(s.repairs)} coins`);
+    drawPanel(rg, REPAIR.x - REPAIR.w / 2, REPAIR.y - REPAIR.h / 2, REPAIR.w, REPAIR.h, { c: 5, fill: fix ? SLATE.light : 0x1e222c, alpha: 0.95, edge: fix ? GOLD.light : 0x4a5060, lw: fix ? 2 : 1 });
+    // The accepted omen's chip, over the ranger, until its wave is cleared.
+    const omen = s.omen?.accepted && !held(s) ? s.omen.id : null;
+    this.omenText.setVisible(!!omen).setText(omen ? `Omen: ${OMENS[omen].name}` : '');
+    if (omen) drawPanel(g, OMEN_CHIP.x - OMEN_CHIP.w / 2, OMEN_CHIP.y - OMEN_CHIP.h / 2, OMEN_CHIP.w, OMEN_CHIP.h, { c: 5, fill: 0x2a2036, alpha: 0.95, edge: 0xc59af0, lw: 1.5 });
     // The heat chip beside the wave track, and the chilled-bow chip while the Frost Giant's roar lasts.
     const heat = s.heat > 0;
     this.heatText.setVisible(heat).setText(`Heat ${s.heat}`);
@@ -1257,7 +1329,7 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  // ---- Hired guards: two slots on the barricade.
+  // ---- Hired guards: two slots on the barricade, three with the legacy.
 
   private createGuards() {
     this.slotG = this.add.graphics().setDepth(3);
@@ -1272,7 +1344,7 @@ export class GameScene extends Phaser.Scene {
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => {
           const s = this.state;
-          if (s.choices || held(s) || this.aim || this.fortifyPanel.open) return;
+          if (i >= s.guards.length || s.choices || held(s) || this.aim || this.fortifyPanel.open) return;
           this.hirePanel.show(i, s.guards[i], s.coins);
         });
     });
@@ -1287,6 +1359,12 @@ export class GameScene extends Phaser.Scene {
       const guard = s.guards[i];
       const sprite = this.guardSprites[i];
       const label = this.slotLabels[i];
+      // The third slot is only there for a hero with its legacy.
+      label.setVisible(i < s.guards.length);
+      if (i >= s.guards.length) {
+        sprite.setVisible(false);
+        return;
+      }
       // A wooden platform lashed to the barricade under each slot.
       g.fillStyle(0x5e3f24).fillEllipse(slot.x + 2, slot.y + 2, 46, 14);
       g.fillStyle(0x93653a).fillEllipse(slot.x, slot.y, 44, 12);
@@ -1336,30 +1414,85 @@ export class GameScene extends Phaser.Scene {
   // ---- After a fall, and the speed switch.
 
   private createGameOver() {
-    const dim = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x0e1218, 0.7).setInteractive();
+    const cx = VIEW.w / 2;
+    const cy = VIEW.h / 2;
+    const dim = this.add.rectangle(cx, cy, VIEW.w, VIEW.h, 0x0e1218, 0.7).setInteractive();
     const panel = this.add.graphics();
-    drawPanel(panel, VIEW.w / 2 - 290, VIEW.h / 2 - 150, 580, 300, { c: 18, fill: SLATE.mid, alpha: 1, lw: 3 });
-    const title = this.add.text(VIEW.w / 2, VIEW.h / 2 - 110, 'The hero has fallen', textStyle(30, '#ff9a7a', 5)).setOrigin(0.5);
+    drawPanel(panel, cx - 300, cy - 180, 600, 360, { c: 18, fill: SLATE.mid, alpha: 1, lw: 3 });
+    const title = this.add.text(cx, cy - 145, 'The hero has fallen', textStyle(30, '#ff9a7a', 5)).setOrigin(0.5);
     this.gameOverText = this.add
-      .text(VIEW.w / 2, VIEW.h / 2 - 20, '', { ...textStyle(15, '#e9e4d8'), fontStyle: 'normal', align: 'center' })
+      .text(cx, cy - 62, '', { ...textStyle(15, '#e9e4d8'), fontStyle: 'normal', align: 'center' })
       .setOrigin(0.5);
-    const again = makeButton(this, VIEW.w / 2 - 100, VIEW.h / 2 + 100, 180, 40, 'Fight again', () => this.restart(false));
-    const reset = makeButton(this, VIEW.w / 2 + 100, VIEW.h / 2 + 100, 180, 40, 'New hero', () => this.restart(true));
+    const again = makeButton(this, cx - 195, cy + 112, 170, 40, 'Fight again', () => this.restart(false));
+    const reset = makeButton(this, cx, cy + 112, 170, 40, 'New hero', () => this.restart(true));
+    const retire = makeButton(this, cx + 195, cy + 112, 170, 40, 'Retire', () => this.openRetire());
+    this.retireButtons.push(retire);
+    this.retireNote = this.add.text(cx + 195, cy + 150, '', { ...textStyle(10, '#9aa0ac'), fontStyle: 'normal', align: 'center', wordWrap: { width: 190 } }).setOrigin(0.5, 0);
     // The heat the next run plays at: one button per heat, the locked ones dimmed.
-    const heatLabel = this.add.text(VIEW.w / 2 - 250, VIEW.h / 2 + 52, 'Next run at', textStyle(13, '#c9c3b6')).setOrigin(0, 0.5);
+    const heatLabel = this.add.text(cx - 260, cy + 14, 'Next run at', textStyle(13, '#c9c3b6')).setOrigin(0, 0.5);
     const picks: Phaser.GameObjects.GameObject[] = [];
     for (let h = 0; h <= MAX_HEAT; h++) {
-      const x = VIEW.w / 2 - 110 + h * 92;
-      const y = VIEW.h / 2 + 52;
+      const x = cx - 110 + h * 92;
+      const y = cy + 14;
       const bg = this.add.graphics();
       const text = this.add.text(x, y, `Heat ${h}`, textStyle(12, '#ffe7a0')).setOrigin(0.5);
       const zone = this.add.zone(x, y, 84, 26).setInteractive({ useHandCursor: true }).on('pointerdown', () => {
-        if (h <= this.state.heatUnlocked) this.restartAt(h);
+        if (h <= this.state.heatUnlocked) this.restartAt(h, this.startWave);
       });
       this.heatPicks.push({ bg, text, zone });
       picks.push(bg, text, zone);
     }
-    this.gameOver = this.add.container(0, 0, [dim, panel, title, this.gameOverText, heatLabel, ...picks, again, reset]).setDepth(UI_DEPTH + 20).setVisible(false);
+    // Forced march: the wave the next run starts on, wave 11 or 21 once the boss before it is beaten.
+    const marchLabel = this.add.text(cx - 260, cy + 52, 'Start at', textStyle(13, '#c9c3b6')).setOrigin(0, 0.5);
+    MARCH_STARTS.forEach((m, i) => {
+      const x = cx - 105 + i * MARCH.step;
+      const y = cy + 52;
+      const bg = this.add.graphics();
+      const text = this.add.text(x, y, '', textStyle(11, '#ffe7a0')).setOrigin(0.5);
+      const zone = this.add.zone(x, y, MARCH.w, MARCH.h).setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+        if (canMarch(this.state.bestWave, m.wave)) this.startWave = m.wave;
+      });
+      this.marchPicks.push({ bg, text, zone });
+      picks.push(bg, text, zone);
+    });
+    this.gameOver = this.add
+      .container(0, 0, [dim, panel, title, this.gameOverText, heatLabel, marchLabel, ...picks, again, reset, retire, this.retireNote])
+      .setDepth(UI_DEPTH + 20)
+      .setVisible(false);
+  }
+
+  /** The "Start at" buttons on the game-over panel: the chosen start lit gold, the earned ones tappable with their coin stake, the rest dim. */
+  private drawMarchPicks() {
+    const s = this.state;
+    if (!canMarch(s.bestWave, this.startWave)) this.startWave = 1;
+    this.marchPicks.forEach(({ bg, text, zone }, i) => {
+      const m = MARCH_STARTS[i];
+      const open = canMarch(s.bestWave, m.wave);
+      const current = m.wave === this.startWave;
+      bg.clear();
+      drawPanel(bg, zone.x - MARCH.w / 2, zone.y - MARCH.h / 2, MARCH.w, MARCH.h, { c: 5, fill: current ? GOLD.mid : open ? SLATE.light : SLATE.panel, alpha: 1, edge: open ? GOLD.mid : 0x4a5060, lw: 1.5 });
+      text
+        .setColor(current ? '#2b2010' : open ? '#ffe7a0' : '#7a8294')
+        .setText(m.coins === 0 ? `Wave ${m.wave}` : open ? `Wave ${m.wave}, ${m.coins} coins` : `Wave ${m.wave} (beat wave ${m.wave - 1})`);
+    });
+  }
+
+  /** Opens the legacy cards, with a first relic rolled for the relic card. */
+  private openRetire() {
+    if (!held(this.state) || !canRetire(this.state)) return;
+    this.legacyRelic = rollLegacyRelic();
+    this.legacyPanel.show(this.state.legacy, this.legacyRelic);
+  }
+
+  /** Retires the hero for a legacy: the next hero starts from scratch on wave 1, keeping it. */
+  private retire(id: LegacyId) {
+    const next = retire(this.state, id, this.legacyRelic);
+    if (!next) return;
+    this.legacyPanel.close();
+    this.state = next;
+    this.startWave = 1;
+    saveProgress(progressOf(this.state));
+    this.clearSprites();
   }
 
   /** The heat buttons on the game-over panel: the current heat lit gold, the unlocked ones tappable, the rest dim. */
@@ -1385,15 +1518,18 @@ export class GameScene extends Phaser.Scene {
     this.wonText = this.add
       .text(VIEW.w / 2, VIEW.h / 2 - 25, '', { ...textStyle(15, '#e9e4d8'), fontStyle: 'normal', align: 'center', wordWrap: { width: 520 } })
       .setOrigin(0.5);
-    const on = makeButton(this, VIEW.w / 2 - 100, VIEW.h / 2 + 100, 180, 40, 'Keep fighting', () => keepFighting(this.state));
-    this.wonNext = makeButton(this, VIEW.w / 2 + 100, VIEW.h / 2 + 100, 180, 40, 'Heat 1', () => this.restartAt(this.state.heat + 1));
+    const on = makeButton(this, VIEW.w / 2 - 195, VIEW.h / 2 + 100, 170, 40, 'Keep fighting', () => keepFighting(this.state));
+    this.wonNext = makeButton(this, VIEW.w / 2, VIEW.h / 2 + 100, 170, 40, 'Heat 1', () => this.restartAt(this.state.heat + 1));
     this.wonNextText = this.wonNext.getAt(1) as Phaser.GameObjects.Text;
-    this.won = this.add.container(0, 0, [dim, panel, title, this.wonText, on, this.wonNext]).setDepth(UI_DEPTH + 20).setVisible(false);
+    // Lifting the siege earns the right to retire for a legacy.
+    const retire = makeButton(this, VIEW.w / 2 + 195, VIEW.h / 2 + 100, 170, 40, 'Retire', () => this.openRetire());
+    this.retireButtons.push(retire);
+    this.won = this.add.container(0, 0, [dim, panel, title, this.wonText, on, this.wonNext, retire]).setDepth(UI_DEPTH + 20).setVisible(false);
   }
 
-  /** A new run at an unlocked heat, from wave 1 with the hero kept. */
-  private restartAt(heat: number) {
-    this.state = startHeat(this.state, heat);
+  /** A new run at an unlocked heat, from wave 1 (or a forced march's start) with the hero kept. */
+  private restartAt(heat: number, start = 1) {
+    this.state = startHeat(this.state, heat, start);
     saveProgress(progressOf(this.state));
     this.clearSprites();
   }
@@ -1424,10 +1560,14 @@ export class GameScene extends Phaser.Scene {
     drawPanel(this.speedBg, x - w / 2, y - h / 2, w, h, { c: 5, fill: this.speed === 2 ? GOLD.mid : SLATE.light, alpha: 1, edge: GOLD.mid });
   }
 
-  /** A new run from wave 1: with the hero's level and upgrades, or with a new hero from scratch. */
+  /**
+   * A new run: with the hero's level and upgrades (from the chosen start), or with a new hero from
+   * scratch on wave 1, who keeps what retired heroes left.
+   */
   private restart(newHero: boolean) {
     if (newHero) clearProgress();
-    this.state = newHero ? newRun(freshProgress(), this.state.aimMode) : fightAgain(this.state);
+    this.state = newHero ? newRun(freshProgress(this.state.legacy), this.state.aimMode) : fightAgain(this.state, this.startWave);
+    this.startWave = 1;
     saveProgress(progressOf(this.state));
     this.clearSprites();
   }

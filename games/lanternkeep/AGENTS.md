@@ -22,7 +22,9 @@ Great Festival, a win, with endless nights after. From night 2 cottage windows c
 (LK8), from night 3 refills draw on a cask of oil (LK9), from night 4 some spots hold a beacon, a
 candle or a bell (LK6), every fifth night the Great Owl sweeps a row (LK7), and at every fifth
 nightfall the keep can move to the Docks, Chapel Hill or the Market, each with its own spots,
-chains and rule (LK10).
+chains and rule (LK10). From night 6 a moth rests after its fourth flight of a dusk (LK13), a
+second jar can be bought (LK14), a lost hearth can be rekindled between nights (LK12), and every
+nightfall from the tenth offers two curses that raise the pay (LK11).
 
 Implemented today:
 
@@ -78,8 +80,8 @@ Implemented today:
   and it flies on (unless a gust makes it guard).
 - The Great Festival (LK5): the nightfall that brings `kept` to `FESTIVAL_NIGHTS` (10) sets
   `state.festival`, `report.festival` and phase `'festival'`; `carryOn` moves on to `'night'`.
-- Five upgrades (four of three levels, Firefly of two), bought between nights. Only the most
-  nights kept persists.
+- Seven upgrades (five of three levels, Firefly of two, Jar of one), bought between nights, plus
+  the Cask and Hearth cards. Only the most nights kept and the best peril multiplier persist.
 - Kinds of lantern (LK6): `LANTERN_KINDS` (`plain`, `beacon`, `candle`, `bell`), each with `oil`,
   `wick` and `pay` multipliers. `lanternKindsFor(night, count)` deals `min(LANTERN_KINDS_MAX,
   night - LANTERN_KINDS_NIGHT + 1)` special spots from `LANTERN_KINDS_NIGHT` (4), at indexes
@@ -116,11 +118,36 @@ Implemented today:
   picks and goes to `'night'`, and `nextDusk` moves in and builds the lanterns from the district's
   spots. `orderFor(night, district)` keeps the keep's order texts and names another district's
   spots. `districtOf(s)`, `chainsOf(s)` and `chainsFor` read the current district.
+- Pick your peril (LK11): `nightfall` on a night with `night + 1 >= PERIL_NIGHT` (11) sets
+  `state.offer` to two different `CURSES` (`wet`, `bats`, `thin`, `watch`, drawn by `drawOffer`
+  with `Math.random`) and, after `'festival'` and `'move'` (`afterPanels`), phase `'peril'`.
+  `takeCurse(s, id)` adds to `state.curses[id]` (lasting, stackable), drops it from the offer
+  (phase `'night'` once both are taken) and raises `bestPeril`; `endPeril` leaves the rest.
+  `perilMult(s)` = 1 + `PERIL_STEP` (0.25) per curse taken multiplies (and rounds) what each
+  nightfall earns; `paidMult` keeps the one the last nightfall used. Effects: `WET_WICK` (1.5x)
+  per Wet wicks in `mothLightMs`, `RESTLESS_BATS` times added by `batsFor(night, restless)`,
+  `THIN_BURN` (1.25x) per Thin oil in `tick`, and one more lantern per Watchful lord in
+  `required(s)` (capped at the count; use it rather than `requiredFor` for the night's quota).
+- Rekindle a hearth (LK12): `hearthCost(s)` is `HEARTH_COSTS[rekindled]` (40, 80, 120) while a
+  hearth is out, else null; `rekindle(s)` buys it in the night phase. The shop's Hearth card.
+- Tired moths (LK13): `dispatch` from idle and `chase` count `moth.flights` (a firefly's next hop
+  does not). From `TIRED_NIGHT` (6) a moth that gets home with `TIRED_FLIGHTS` (4) or more goes to
+  task `rest` for `restMs(s)` (`TIRED_MS` 6 s less `NECTAR_MS` 1.5 s per `nectar` level) and its
+  count starts again. The scene folds its wings, dims its halo and draws a lilac ring and a
+  "zz Ns" label.
+- The second jar (LK14): the `jar` upgrade (one level, 120). `JARS` in `places.ts` holds both
+  jars; `state.homes[i]` says which moth rests where (kept across nights; `buy` sets every other
+  moth to jar 1). `restOf(s, i)` spaces the moths of each jar on its rim (used by `makeMoths`, the
+  flight home and idle moths, which glide to their spot when a jar's moths change).
+  `swapJar(s, i)` sends an idle moth to rest at the other jar; the scene gives each moth a tap
+  `Zone` (`MOTH_HIT`) only while it is idle on a jar with the second jar bought, and draws the
+  `jar` texture at `JARS[1]`.
 
 Missing or rough:
 
 - No title screen, sound or pause. The kinds, bats, chains, fireflies, the festival, the window
-  calls, the cask, the kinds of lantern, the owl and the districts are not exercised by the
+  calls, the cask, the kinds of lantern, the owl, the districts, tired moths, the second jar,
+  rekindling and the curses are not exercised by the
   playthrough (night 1 is clear with no bats, chains, calls, cask use or special lanterns), only
   by hand and the scratch staging script.
 - The feast bunting is strung between the keep's towers in every district, so it floats over the
@@ -144,19 +171,20 @@ File map (`src/`):
   `setupScaling(game)` from `shared/scaling.ts`, and in dev builds puts `game` on `window`.
 - `scenes/BootScene.ts`: calls `bakeTextures`, then starts `Game`.
 - `scenes/GameScene.ts`: builds the world, order card, gust, owl and window plaques, HUD and
-  panels (night, move, game over, festival) once; `update` ticks the rules, turns `state.events`
+  panels (night, move, peril, game over, festival) once; `update` ticks the rules, turns `state.events`
   into popups and redraws from state. `drawDistrict` swaps the scenery texture when the keep moves
   (baking it with `bakeScenery` the first time), and `drawLanterns` moves each lantern's images,
   tag, kind label and tap zone to where the district hangs it.
-- `scenes/layout.ts`: `VIEW`, `HUD`, `DUSK_BAR`, `NIGHT_PANEL`, `SHOP` (two columns, three rows,
-  the five upgrades and the cask), `NEXT_BUTTON`, `SMALL_PANEL` (game over and festival),
-  `MOVE_PANEL` and `MOVE_CARDS` (the choice of district), `BUTTON`, `ORDER` (the order card),
+- `scenes/layout.ts`: `VIEW`, `HUD`, `DUSK_BAR`, `NIGHT_PANEL`, `SHOP` (three columns, three
+  rows: the seven upgrades, the cask and the hearth), `NEXT_BUTTON`, `SMALL_PANEL` (game over and festival),
+  `MOVE_PANEL` and `MOVE_CARDS` (the choice of district; the peril panel reuses the panel and
+  the first row's x), `BUTTON`, `ORDER` (the order card),
   `KIND_TAG` (the night-kind plaque), `GUST_TAG` (the gust and owl plaques' size), `CALL_TAG` (the
-  window plaque), `CASK_HUD`, `LANTERN_HIT`, `BAT_HIT`, `UI_DEPTH` and `FONT` (Georgia / DejaVu
+  window plaque), `CASK_HUD`, `LANTERN_HIT`, `BAT_HIT`, `MOTH_HIT`, `UI_DEPTH` and `FONT` (Georgia / DejaVu
   Serif / serif).
-- `game/places.ts`: `JAR`, `DISTRICTS` (each district's `spots` in view pixels, in the order
+- `game/places.ts`: `JAR`, `JARS` (the gate's jar and the second one), `DISTRICTS` (each district's `spots` in view pixels, in the order
   nights add them, with names, its `chains` and `rule`), `DISTRICT_IDS`, `LANTERN_SPOTS` and
-  `CHAINS` (the keep's) and `mothRest` (30 px apart on the jar's rim).
+  `CHAINS` (the keep's) and `mothRest` (30 px apart on a jar's rim).
 - `game/state.ts`: `GameState`, `Lantern`, `Moth`, `Bat`, `Gust`, `GameEvent`, `Order`,
   `OrderGoal`, `NightReport`, `NightKind`, the balance constants, `MOTH_KINDS`, `KIND_ORDER`,
   `FIREFLY_LANTERNS`, `QUEUE_MAX`, `GUST_WARN_MS`, `gustsFor`, `NIGHT_KINDS`, `drawKind`,
@@ -165,10 +193,13 @@ File map (`src/`):
   `CLOSE_CALL`, `CLOSE_CALL_PAY`, `closeCallPay`, `ORDERS`, `orderFor`, `orderProgress`,
   `UPGRADES`, `stats`, `mothSpeed`, `mothLightMs`, `LANTERN_KINDS`, `lanternKindsFor`,
   `BELL_RANGE`, `stunned`, `lanternPay`, `OWL_*`, `owlsFor`, `threatened`, `CALL_*`, `callsFor`,
-  `callPay`, `CASK_*`, `usesCask`, `MOVE_EVERY`, `VESPERS_*`, `TRADE_BURN`, `newGame`, `send`,
-  `chase`, `tick`, `nextCost`, `buy`, `topUp`, `carryOn`, `moveTo` and `nextDusk`. No Phaser;
+  `callPay`, `CASK_*`, `usesCask`, `MOVE_EVERY`, `VESPERS_*`, `TRADE_BURN`, `TIRED_*`,
+  `NECTAR_MS`, `restMs`, `HEARTH_COSTS`, `hearthCost`, `PERIL_*`, `CURSES`, `WET_WICK`,
+  `THIN_BURN`, `RESTLESS_BATS`, `perilMult`, `required`, `restOf`, `newGame`, `send`, `chase`,
+  `swapJar`, `tick`, `nextCost`, `buy`, `rekindle`, `topUp`, `carryOn`, `moveTo`, `takeCurse`,
+  `endPeril` and `nextDusk`. No Phaser;
   `baseBurnMs` reads `byDifficulty` from `shared/settings.ts`.
-- `game/save.ts`: `loadBest` and `saveBest`.
+- `game/save.ts`: `loadBest`, `saveBest`, `loadBestPeril` and `saveBestPeril`.
 - `art/puppet.ts`: `bakeTextures`, `bakeScenery(scene, district)` and the painters. Full-screen
   layers are painted at `BACK_RES` (1 on a screen that needs no scaling, up to 4 on a 4K screen)
   and drawn at 1 / `BACK_RES` by `GameScene.backdrop` (`screen-0/1/2`, `castle-<district>` with
@@ -182,7 +213,7 @@ File map (`src/`):
   dusk left), `dusk-rim`, `sun`, `hearth-lit`/`-out`, `coin`, `cask-full`/`-empty`, `order-card`,
   `pip-lit`/`-dark`, `gust-tag`, `owl-tag`, `call-tag`, `kind-tag`, `kind-<kind>` (the plaque's
   emblems), `save-tag`, `spark`, `bat-up`/`-down`, `owl-up`/`-down`, `sky-lantern`, `panel`,
-  `panel-small`, `panel-move`, `card-on`/`-off`, `card-wide-on`/`-off` (the district cards),
+  `panel-small`, `panel-move`, `jar` (the second jar), `card-on`/`-off`, `card-wide-on`/`-off` (the district cards),
   `btn`/`btn-hover`. The glows stay at 1x, as they are soft anyway. Plaques, cards and panels are
   baked with `PAD` pixels of room for their shadow; place them at (x - `PAD`, y - `PAD`) with origin 0. Also exports `INK`,
   `INK_HEX`, `DUSK` (layout's `DUSK_BAR`) and `SCREENS`.
@@ -219,20 +250,24 @@ How it runs:
   checks the festival and whether the district can move. A lantern lit on the last tick counts.
 - Input: one `Zone` per lantern spot calls `send`; one `Zone` per bat (depth 7.5, above the
   lanterns' zones, moved off screen when unused) calls `chase`; the shop cards' zones call `buy`
-  (the Cask card `topUp`); the move panel's district cards call `moveTo`; "Next dusk" calls
+  (the Cask card `topUp`, the Hearth card `rekindle`); the move panel's district cards call
+  `moveTo`; the peril panel's two cards `takeCurse` (and save the best multiplier) and "Go on"
+  `endPeril`; a moth's zone calls `swapJar`; "Next dusk" calls
   `nextDusk`, "Keep going" `carryOn`, and "New keep" `restart`.
 - Panels open `PANEL_DELAY_MS` after nightfall so the popups show first; `panelOpen` says when.
 
 State model (`GameState` in `src/game/state.ts`):
 
 - `phase` is `'dusk'`, `'night'` (panel open, shop live), `'festival'` (the Great Festival's
-  panel, once), `'move'` (a fifth nightfall's choice of district) or `'over'`. `duskMs` counts
+  panel, once), `'move'` (a fifth nightfall's choice of district), `'peril'` (the curses offered)
+  or `'over'`. `duskMs` counts
   down.
 - `lanterns[i]` sits at the district's `spots[i]`: `kind`, `lit`, `oilMs` left of `oilMaxMs`,
   `claimed` while a moth is on its way to it, lighting it or guarding it.
 - `moths[i]` has a `kind`, a position, a `task` (`idle`, `out`, `lighting`, `guard`, `chase`,
-  `home`), its `target` lantern, `lightingMs`, `closeCall` (set when it arrived at a nearly dry
-  lantern), `bat` (the id it chases) and `hops` (lanterns left on a firefly's flight).
+  `home`, `rest`), its `target` lantern, `lightingMs`, `closeCall` (set when it arrived at a nearly
+  dry lantern), `bat` (the id it chases), `hops` (lanterns left on a firefly's flight), `flights`
+  (since it last rested) and `restMs`.
 - `kind` and `nextKind` are this night's and the next night's kind. `batTimes` are the bats still
   to come, `bats` those on screen (`id`, position, `target`, `task` `fly` or `flee`), `nextBat`
   the next id and `chased` the bats chased off this dusk. `festival` is set once the Great
@@ -247,18 +282,20 @@ State model (`GameState` in `src/game/state.ts`):
   kept), `call` (kept or run out) and `dry` events since the scene last looked; the scene empties
   it.
 - `owls` and `owl`, `callTimes`, `call` and `callsKept`, `cask`, `district`, `nextDistrict` and
-  `moveDue` are described under their upgrades above.
+  `moveDue`, `homes`, `rekindled`, `curses`, `offer`, `paidMult` and `bestPeril` are described
+  under their upgrades above.
 - `levels` per upgrade; `stats(s)` turns them into moth count, speed, wick time and burn time.
 - `report` is the last nightfall's tally (`lit`, `count`, `required`, `earned` with the order's
   reward, `lostHearth`, `orderMet`, `chains` lit, `festival`); `kept` counts nights that met the
   quota, `best` the most.
 
-Persistence: one `localStorage` key, `lanternkeep-best`, holding the most nights kept, written when
-nightfall ends a dusk (to night or game over). The hub's settings are read from the shared
+Persistence: two `localStorage` keys: `lanternkeep-best`, the most nights kept, written when
+nightfall ends a dusk (to night or game over), and `lanternkeep-best-peril`, the best pay
+multiplier reached with curses, written when a curse is taken. The hub's settings are read from the shared
 `hub-settings` key.
 
-Randomness and timing: the only `Math.random` in the rules is `drawKind` (never on night 1, so the
-playthrough's night is fixed, and the test seeds it anyway); no `Date.now` or `performance.now`.
+Randomness and timing: the only `Math.random` in the rules are `drawKind` (never on night 1, so the
+playthrough's night is fixed, and the test seeds it anyway) and `drawOffer` (only from night 10); no `Date.now` or `performance.now`.
 Gust and bat targets, bat edges and orders are deterministic. Game time is the frame timestamps `update` receives. The art uses a
 seeded generator in `puppet.ts`. Popups, flares and sparks are cosmetic Phaser tweens.
 
@@ -273,7 +310,7 @@ seeded generator in `puppet.ts`. Popups, flares and sparks are cosmetic Phaser t
   lantern glow's and flame's flicker, the pulse of the close-call rings, the spin of the gust's
   dashed ring and the travelling gust along its wind curls, the rise of popups (they only fade)
   and the spread of the close-call sparks, the drift of the fog, the falling rain (drawn still),
-  the bats' flapping and bobbing, the owl's flapping and bobbing and the travelling dashes of its
+  the bats' flapping and bobbing (a resting moth's wings stay folded either way), the owl's flapping and bobbing and the travelling dashes of its
   row line, the pulse of a window call's ring and the rising sky lanterns. The game uses no camera
   shake or flash.
 - Keep the Lanternkeep row of the difficulty table in the root README and the line in this game's
@@ -283,7 +320,8 @@ seeded generator in `puppet.ts`. Popups, flares and sparks are cosmetic Phaser t
 
 - `window.game` in dev builds. The test reads `game.scene.getScene('Game')` and its `state`
   (copied through JSON) and `panelOpen`. `shopButtons`, `nextButton` and `carryOnButton` give the
-  panel buttons in view pixels, for tests that go past the first night.
+  panel buttons in view pixels, for tests that go past the first night; `perilButtons` (the two
+  curse cards, in `state.offer` order when the panel opens) and `goOnButton` the peril panel's.
 - Inputs: it clicks lanterns at their `x`, `y` from state, scaled by the canvas bounding box.
 - The test mirrors these, so change them together: `DUSK_MS` (45 s), the first night's five
   lanterns and quota of three, three moths in kind order (fast, slow, heavy), three lives, the 20 s
@@ -293,7 +331,8 @@ seeded generator in `puppet.ts`. Popups, flares and sparks are cosmetic Phaser t
   `'clear'`, empty `batTimes`, and the report's `chains` 0 and `festival` false too). It checks
   `report` with `toEqual`, so a new report field changes the test. Night 1 has no window call,
   no cask use (refills are free before `CASK_NIGHT`), plain lanterns, no owl and the keep, so
-  none of the round-2 systems touch it. `moveButtons` gives the district cards for tests that
+  none of the round-2 systems touch it, nor do tired moths (night 6), the jar, the hearth or the
+  curses (no offer before night 10, `perilMult` 1). `moveButtons` gives the district cards for tests that
   play five nights.
 - The timing matters. It lights lantern 0 at the start (lit about 41 s left); when the gust is
   warned (39 s left) it taps lantern 0 again, and the fast moth refills it and guards it until the
@@ -320,6 +359,10 @@ seeded generator in `puppet.ts`. Popups, flares and sparks are cosmetic Phaser t
   staged the same way: set `night`, `nextDistrict` and `district` before ending a dusk and click
   "Next dusk", light lanterns through state, set `duskMs` just before a call, the owl's warning
   or its sweep, set `cask` to 0 and push a `dry` event, and end night 5 for the move panel.
+- `loop-night-panel`, `loop-tired-moths` and `loop-peril` were staged the same way: coins and
+  `lives` set and night 4 ended to click the Jar, Hearth and Nectar cards, `night` set to 6 and
+  every moth's `flights` to 3 before tapping three lanterns, then `night` 10 with `festival` set
+  ended to pick a district and take the first curse.
 
 ## Making common changes
 
@@ -330,7 +373,9 @@ seeded generator in `puppet.ts`. Popups, flares and sparks are cosmetic Phaser t
   pips; a goal with more needs more `orderPips`. Night 1's order is mirrored in the test.
 - **Retune gusts**: `gustsFor` and `GUST_WARN_MS` in `state.ts`; night 1's gust is in the test.
 - **Add an upgrade**: add its id to `UPGRADE_IDS`, its row to `UPGRADES` and `levels`, apply it in
-  `stats`, and give `SHOP` a fourth row (the three rows hold the five upgrades and the cask).
+  `stats` (or where it acts), and give `SHOP` a fourth row (the three rows of three are full).
+- **Add a curse**: a row in `CURSES`, its count in `newGame`'s `curses`, and its effect where the
+  rule lives (`mothLightMs`, `batsFor`, `tick`, `required`); the panel shows it on its own.
 - **Add a kind of lantern**: a row in `LANTERN_KINDS` (its `oil`, `wick` and `pay`), its id in
   `SPECIAL_KINDS`, its gels in `LANTERN_GELS` and any emblem in `paintLantern`, and its textures in
   the `bakeTextures` loop; a rule beyond those multipliers goes in `tick` or `raiders` like the

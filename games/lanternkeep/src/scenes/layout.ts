@@ -9,10 +9,10 @@ export const DUSK_BAR = { x: 330, y: 12, w: 300, h: 16 };
 /** The panel shown between nights, with the night's tally and the upgrades. */
 export const NIGHT_PANEL = { x: 480, y: 280, w: 600, h: 460 };
 /**
- * The upgrade buttons in that panel, by their centres: the UPGRADE_IDS and then the cask, two by
- * two (a last one on its own row sits in the middle).
+ * The upgrade buttons in that panel, by their centres: the UPGRADE_IDS, then the cask and the
+ * hearth, three by three.
  */
-export const SHOP = { xs: [345, 615], ys: [254, 314, 374], w: 250, h: 52 };
+export const SHOP = { xs: [288, 480, 672], ys: [254, 314, 374], w: 184, h: 52 };
 /** The panel's "Next dusk" button, and the game-over "New keep" button. */
 export const NEXT_BUTTON = { x: 480, y: 448 };
 /** The game-over and Great Festival panels, centred on the view. */
@@ -26,7 +26,7 @@ export const KIND_TAG = { x: 738, y: 50, w: 210, h: 40 };
 export const GUST_TAG = { w: 132, h: 40 };
 /** The window-call plaque, beside the lantern a window asks for. */
 export const CALL_TAG = { w: 150, h: 40 };
-/** The panel of a fifth nightfall's choice of district, centred on the view. */
+/** The panel of a fifth nightfall's choice of district, centred on the view; the curses' panel is the same. */
 export const MOVE_PANEL = { w: 600, h: 330 };
 /** The district cards in that panel, by their centres, in the order of DISTRICT_IDS (two by two). */
 export const MOVE_CARDS = { xs: [335, 625], ys: [236, 316], w: 280, h: 62 };
@@ -35,6 +35,8 @@ export const CASK_HUD = { x: 296, y: 20 };
 /** The tap area around each lantern, and around a bat. */
 export const LANTERN_HIT = { w: 64, h: 72 };
 export const BAT_HIT = { w: 64, h: 52 };
+/** The tap area around a moth resting on a jar, to swap it to the other jar. */
+export const MOTH_HIT = { w: 28, h: 36 };
 
 export const UI_DEPTH = 10_000;
 /** A system serif stack (no web fonts): the lettering of a carved puppet-theatre plaque. */

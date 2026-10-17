@@ -5,6 +5,9 @@ import type { FortId } from './forts';
 import { FIRST_BREAK_MS } from './waves';
 import type { GuardKind } from './guards';
 import { heatRules } from './heat';
+import { QUICK_RAIN, freshLegacy, type Legacy } from './legacy';
+import { marchCoins } from './march';
+import type { OmenId } from './omens';
 import { setComplete, type RelicId } from './relics';
 import type { RoadId } from './roads';
 import { UPGRADES, UPGRADE_IDS, type UpgradeId } from './upgrades';
@@ -20,11 +23,17 @@ export const BOW = { x: 88, y: 382 };
 export const HERO_FRONT = 96;
 /** The barricade's face towards the foes. */
 export const BARRICADE_FRONT = 214;
-/** Where the two hired guards stand on the barricade, by their feet: one high, one low. */
+/**
+ * Where hired guards stand on the barricade, by their feet: one high, one low, and a third between
+ * them for a hero with the Third guard slot legacy.
+ */
 export const GUARD_SLOTS = [
   { x: 158, y: 350 },
   { x: 158, y: 470 },
+  { x: 176, y: 410 },
 ];
+/** Guard slots every hero has; the legacy adds the third. */
+export const BASE_GUARD_SLOTS = 2;
 
 /** Experience needed to go up from `level` to the next. */
 export const xpToNext = (level: number) => 8 + 6 * (level - 1);
@@ -172,6 +181,8 @@ export interface GameState {
   /** The heat this run plays at (0 to MAX_HEAT), and the highest one unlocked by lifting the siege. */
   heat: number;
   heatUnlocked: number;
+  /** What retired heroes left to this one (see legacy.ts). */
+  legacy: Legacy;
 
   // This run.
   wave: number;
@@ -221,6 +232,10 @@ export interface GameState {
   forts: Forts;
   /** Whether this run has lifted the siege (cleared wave 30), so going on past it never wins again. */
   won: boolean;
+  /** Paid repairs bought this run; each costs more than the last. */
+  repairs: number;
+  /** The omen named for the coming (or current) wave, and whether it was accepted; null for none. */
+  omen: { id: OmenId; accepted: boolean } | null;
   nextId: number;
 }
 
@@ -239,7 +254,7 @@ export const streakBonus = (count: number) => (count >= 2 ? Math.min(0.5, 0.05 *
 export const STREAK_MS = 2_500;
 
 /** Everything the upgrades and relics change, worked out from their ranks and counts. */
-export function stats(state: Pick<GameState, 'ranks' | 'relics' | 'heat'>) {
+export function stats(state: Pick<GameState, 'ranks' | 'relics' | 'heat'> & Partial<Pick<GameState, 'legacy'>>) {
   const r = (id: UpgradeId) => rank(state, id);
   const relic = (id: RelicId) => state.relics?.[id] ?? 0;
   const relics = state.relics ?? {};
@@ -261,7 +276,7 @@ export function stats(state: Pick<GameState, 'ranks' | 'relics' | 'heat'>) {
     barricadeMax: Math.round(BASE_BARRICADE_HP * (1 + 0.25 * r('timber')) * (1 + 0.3 * relic('oakheart'))),
     xpGain: (1 + 0.2 * r('lore')) * (1 + 0.15 * relic('crown')),
     /** Arrow Rain's kills to charge, as a share of the wave's (see `rainNeed` in sim.ts). */
-    rainCharge: 0.8 ** relic('quiver'),
+    rainCharge: 0.8 ** relic('quiver') * (state.legacy?.rain ? QUICK_RAIN : 1),
     /** Arrow Rain hits every foe in its ring for this many times an arrow's damage. */
     rainDamage: 4 * (setComplete(relics, 'hunter') ? 1.5 : 1) * (1 + 0.25 * r('cloudburst')),
     /** Share of the barricade mended after each wave (half as much from Heat 3). */
@@ -295,16 +310,19 @@ export type Stats = ReturnType<typeof stats>;
 export const rainNeed = (wave: number, s: Stats) => Math.max(2, Math.round((RAIN_KILLS + Math.floor((wave - 1) / 2)) * s.rainCharge));
 
 /** The hero's level and upgrades, kept from one run to the next. */
-export type Progress = Pick<GameState, 'level' | 'xp' | 'ranks' | 'levelUps' | 'bestWave' | 'runs' | 'relics' | 'mastered' | 'heat' | 'heatUnlocked' | 'choices'>;
+export type Progress = Pick<GameState, 'level' | 'xp' | 'ranks' | 'levelUps' | 'bestWave' | 'runs' | 'relics' | 'mastered' | 'heat' | 'heatUnlocked' | 'legacy' | 'choices'>;
 
-export function freshProgress(): Progress {
-  return { level: 1, xp: 0, ranks: {}, levelUps: 0, bestWave: 0, runs: 0, relics: {}, mastered: false, heat: 0, heatUnlocked: 0, choices: null };
+/** A hero from scratch, with what retired heroes left: their first relics among the relics. */
+export function freshProgress(legacy: Legacy = freshLegacy()): Progress {
+  const relics: Progress['relics'] = {};
+  for (const id of legacy.relics) relics[id] = (relics[id] ?? 0) + 1;
+  return { level: 1, xp: 0, ranks: {}, levelUps: 0, bestWave: 0, runs: 0, relics, mastered: false, heat: 0, heatUnlocked: 0, legacy, choices: null };
 }
 
 export const freshForts = (): Forts => ({ stakeHp: 0, oil: false, lookout: 0, boughtWave: 0, queued: null });
 
-/** A new run from wave 1, with the hero's progress kept. */
-export function newRun(progress: Progress, aimMode: AimMode = 'nearest'): GameState {
+/** A new run from wave 1 (or a forced march's start, with its coins), with the hero's progress kept. */
+export function newRun(progress: Progress, aimMode: AimMode = 'nearest', start = 1): GameState {
   const s = stats(progress);
   const barricadeMax = s.barricadeMax;
   return {
@@ -312,7 +330,8 @@ export function newRun(progress: Progress, aimMode: AimMode = 'nearest'): GameSt
     ...progress,
     ranks: { ...progress.ranks },
     relics: { ...progress.relics },
-    wave: 1,
+    legacy: { ...progress.legacy, relics: [...progress.legacy.relics] },
+    wave: start,
     phase: 'break',
     breakMs: FIRST_BREAK_MS,
     toSpawn: [],
@@ -325,10 +344,10 @@ export function newRun(progress: Progress, aimMode: AimMode = 'nearest'): GameSt
     choices: null,
     pickMs: 0,
     kills: 0,
-    rain: { charge: 0, need: rainNeed(1, s), volleys: [] },
+    rain: { charge: 0, need: rainNeed(start, s), volleys: [] },
     caltrops: { charge: 0, need: CALTROP_KILLS, patches: [] },
-    coins: 0,
-    guards: GUARD_SLOTS.map(() => null),
+    coins: marchCoins(start),
+    guards: GUARD_SLOTS.slice(0, BASE_GUARD_SLOTS + (progress.legacy.slot ? 1 : 0)).map(() => null),
     road: null,
     roadChoices: null,
     roadMs: 0,
@@ -338,14 +357,19 @@ export function newRun(progress: Progress, aimMode: AimMode = 'nearest'): GameSt
     roarMs: 0,
     forts: freshForts(),
     won: false,
+    repairs: 0,
+    omen: null,
     nextId: 1,
   };
 }
 
 export function progressOf(state: GameState): Progress {
-  const { level, xp, ranks, levelUps, bestWave, runs, relics, mastered, heat, heatUnlocked, choices } = state;
+  const { level, xp, ranks, levelUps, bestWave, runs, relics, mastered, heat, heatUnlocked, legacy, choices } = state;
   // The cards up for a pending level-up are kept too, so a reload shows the same three.
-  return { level, xp, ranks: { ...ranks }, levelUps, bestWave, runs, relics: { ...relics }, mastered, heat, heatUnlocked, choices: choices && [...choices] };
+  return {
+    level, xp, ranks: { ...ranks }, levelUps, bestWave, runs, relics: { ...relics }, mastered, heat, heatUnlocked,
+    legacy: { ...legacy, relics: [...legacy.relics] }, choices: choices && [...choices],
+  };
 }
 
 /** Upgrades that can still be offered: not maxed, and with what they build on already picked. */

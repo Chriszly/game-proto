@@ -3,6 +3,8 @@
 
 /** The moth jar in front of the gate, where idle moths wait and return to. */
 export const JAR = { x: 480, y: 500 };
+/** The jars moths can rest at: the one at the gate, and the second jar by the east wall, once bought (LK14). */
+export const JARS = [JAR, { x: 800, y: 500 }] as const;
 
 /** A lantern spot: where it hangs, and a short name for the herald's orders. */
 export interface Spot {
@@ -139,7 +141,7 @@ export const LANTERN_SPOTS: readonly Spot[] = DISTRICTS.keep.spots;
 /** The keep's chains. */
 export const CHAINS: readonly Chain[] = DISTRICTS.keep.chains;
 
-/** Where idle moth `i` of `n` rests on the jar's rim. */
-export function mothRest(i: number, n: number) {
-  return { x: JAR.x + (i - (n - 1) / 2) * 30, y: JAR.y - 30 };
+/** Where idle moth `i` of the `n` resting at `jar` sits on its rim. */
+export function mothRest(i: number, n: number, jar: { x: number; y: number } = JAR) {
+  return { x: jar.x + (i - (n - 1) / 2) * 30, y: jar.y - 30 };
 }

@@ -1,5 +1,5 @@
 import { byDifficulty } from '../../../../shared/settings';
-import { DISTRICTS, type DistrictId, LANTERN_SPOTS, mothRest } from './places';
+import { DISTRICTS, type DistrictId, JARS, LANTERN_SPOTS, mothRest } from './places';
 
 // The rules in plain TypeScript, with no Phaser. Each night begins with a dusk: tap a lantern and
 // an idle moth flies from the jar to light it, then flies home. A lit lantern burns its oil and
@@ -12,9 +12,11 @@ import { DISTRICTS, type DistrictId, LANTERN_SPOTS, mothRest } from './places';
 // nights after. From the second night cottage windows call for a named lantern, from the third
 // refills draw on a cask of oil topped up between nights, from the fourth some spots hold a
 // beacon, a candle or a bell, every fifth night the Great Owl sweeps a row of lanterns, and at
-// every fifth nightfall the keep can move to another district with its own spots and rule.
+// every fifth nightfall the keep can move to another district with its own spots and rule. Late
+// nights add tired moths (from the sixth), a second jar to buy, lost hearths to rekindle and, after
+// the Festival, curses to pick that raise the pay.
 
-export const UPGRADE_IDS = ['wick', 'oil', 'moths', 'wings', 'firefly'] as const;
+export const UPGRADE_IDS = ['wick', 'oil', 'moths', 'wings', 'firefly', 'nectar', 'jar'] as const;
 export type UpgradeId = (typeof UPGRADE_IDS)[number];
 
 export interface Upgrade {
@@ -31,7 +33,54 @@ export const UPGRADES: Record<UpgradeId, Upgrade> = {
   moths: { name: 'Moths', blurb: 'One more moth in the jar', costs: [15, 30, 50] },
   wings: { name: 'Wings', blurb: 'Moths fly 20% faster', costs: [10, 20, 35] },
   firefly: { name: 'Firefly', blurb: 'Lights two lanterns a flight', costs: [25, 45] },
+  nectar: { name: 'Nectar', blurb: 'Tired moths rest 1.5s less', costs: [15, 30, 50] },
+  jar: { name: 'Jar', blurb: 'A second jar by the east wall', costs: [120] },
 };
+
+/**
+ * Tired moths (LK13): from TIRED_NIGHT a moth that comes home from its TIRED_FLIGHTS-th flight of
+ * the dusk rests TIRED_MS in the jar before it can fly again; each Nectar level takes NECTAR_MS off.
+ */
+export const TIRED_NIGHT = 6;
+export const TIRED_FLIGHTS = 4;
+export const TIRED_MS = 6_000;
+export const NECTAR_MS = 1_500;
+/** How long a tired moth rests, with the Nectar bought. */
+export const restMs = (s: GameState) => Math.max(0, TIRED_MS - NECTAR_MS * s.levels.nectar);
+
+/** Rekindle a hearth (LK12): between nights coins buy back a lost hearth, at these prices in turn. */
+export const HEARTH_COSTS = [40, 80, 120] as const;
+/** The price of rekindling a hearth now, or null when none is out or all three rekindles are spent. */
+export const hearthCost = (s: GameState) => (s.lives < LIVES ? (HEARTH_COSTS[s.rekindled] ?? null) : null);
+
+/**
+ * Pick your peril (LK11): every nightfall before a night from PERIL_NIGHT offers two curses drawn
+ * from CURSES. Each one taken lasts the rest of the game and adds PERIL_STEP to the multiplier on
+ * what every nightfall pays; the best multiplier reached is saved.
+ */
+export const PERIL_NIGHT = 11;
+export const PERIL_STEP = 0.25;
+export const CURSES = {
+  wet: { name: 'Wet wicks', blurb: 'Lighting a lantern takes 50% longer' },
+  bats: { name: 'Restless bats', blurb: 'One more bat comes every night' },
+  thin: { name: 'Thin oil', blurb: 'Oil burns 25% faster' },
+  watch: { name: 'Watchful lord', blurb: 'One more lantern must burn at nightfall' },
+} as const;
+export type CurseId = keyof typeof CURSES;
+export const CURSE_IDS = Object.keys(CURSES) as CurseId[];
+/** What each Wet wicks multiplies the wick time by, and each Thin oil the burn. */
+export const WET_WICK = 1.5;
+export const THIN_BURN = 1.25;
+/** When the bats of Restless bats come, as dusk left, one more for each taken. */
+export const RESTLESS_BATS = [22_000, 8_000, 36_000, 12_000, 26_000, 4_000];
+/** What every nightfall's pay is multiplied by, for the curses taken. */
+export const perilMult = (s: GameState) => 1 + PERIL_STEP * CURSE_IDS.reduce((n, id) => n + s.curses[id], 0);
+/** Two different curses, drawn with Math.random. */
+function drawOffer(): CurseId[] {
+  const ids = [...CURSE_IDS];
+  const first = ids.splice(Math.floor(Math.random() * ids.length), 1)[0];
+  return [first, ids[Math.floor(Math.random() * ids.length)]];
+}
 
 /** The view's width in pixels, where bats and the owl come in and leave. */
 const VIEW_W = 960;
@@ -191,7 +240,8 @@ export const BAT_Y = 140;
  * When each bat comes, as dusk left in milliseconds: none on the first two nights, one on nights
  * 3 to 5, then two.
  */
-export const batsFor = (night: number) => (night < 3 ? [] : night < 6 ? [28_000] : [30_000, 16_000]);
+export const batsFor = (night: number, restless = 0) =>
+  [...(night < 3 ? [] : night < 6 ? [28_000] : [30_000, 16_000]), ...RESTLESS_BATS.slice(0, restless)].sort((a, b) => b - a);
 
 /** What each lantern chain with every lantern lit at nightfall pays. */
 export const CHAIN_BONUS = 8;
@@ -251,6 +301,8 @@ export function orderProgress(s: GameState) {
 export const lanternsFor = (night: number) => Math.min(4 + night, LANTERN_SPOTS.length);
 /** Lanterns that must be lit at nightfall to keep every hearth: three in five, or three in four on Chapel Hill. */
 export const requiredFor = (count: number, district: DistrictId = 'keep') => Math.ceil(count * (DISTRICTS[district].rule === 'vespers' ? VESPERS_QUOTA : 0.6));
+/** Lanterns that must be lit tonight: the district's share, plus one for each Watchful lord taken. */
+export const required = (s: GameState) => Math.min(s.lanterns.length, requiredFor(s.lanterns.length, s.district) + s.curses.watch);
 
 export interface Lantern {
   x: number;
@@ -272,10 +324,10 @@ export interface Moth {
   y: number;
   /**
    * Waiting in the jar, flying out, lighting a wick, guarding the lantern a gust or the owl is
-   * coming for (it stays after lighting it until the threat has passed), chasing a bat, or flying
-   * home.
+   * coming for (it stays after lighting it until the threat has passed), chasing a bat, flying
+   * home, or resting in the jar once tired.
    */
-  task: 'idle' | 'out' | 'lighting' | 'guard' | 'chase' | 'home';
+  task: 'idle' | 'out' | 'lighting' | 'guard' | 'chase' | 'home' | 'rest';
   /** The lantern it is flying to or lighting, or -1. */
   target: number;
   /** How long it has been lighting, in milliseconds. */
@@ -286,6 +338,9 @@ export interface Moth {
   bat: number;
   /** More lanterns it lights on this flight before flying home: a firefly's second. */
   hops: number;
+  /** Flights out of the jar since it last rested this dusk, and the rest left while tired. */
+  flights: number;
+  restMs: number;
 }
 
 /** A bat flying to a lit lantern to snuff it, or fleeing off the screen. */
@@ -357,9 +412,10 @@ export interface GameState {
   night: number;
   /**
    * `festival` is the night the Great Festival is reached: its panel shows before the night
-   * panel. `move` is a fifth nightfall's choice of district, shown before the night panel too.
+   * panel. `move` is a fifth nightfall's choice of district and `peril` the curses offered from
+   * PERIL_NIGHT, shown in that order before the night panel too.
    */
-  phase: 'dusk' | 'night' | 'festival' | 'move' | 'over';
+  phase: 'dusk' | 'night' | 'festival' | 'move' | 'peril' | 'over';
   /** Dusk left before night falls, in milliseconds. */
   duskMs: number;
   coins: number;
@@ -412,6 +468,17 @@ export interface GameState {
   nextDistrict: DistrictId;
   /** True from a fifth nightfall until the district for the next night is chosen. */
   moveDue: boolean;
+  /** Which jar each moth rests at, by index (0 the gate's, 1 the second jar's); kept from night to night. */
+  homes: number[];
+  /** Hearths rekindled this game. */
+  rekindled: number;
+  /** Curses taken, by id, and the two offered at this nightfall (empty when none). */
+  curses: Record<CurseId, number>;
+  offer: CurseId[];
+  /** The curses' multiplier the last nightfall paid at. */
+  paidMult: number;
+  /** The best pay multiplier reached in any game, saved in the browser. */
+  bestPeril: number;
 }
 
 /** Moth count, flight speed, wick time and burn time with the bought upgrades. */
@@ -429,7 +496,7 @@ export function stats(s: GameState) {
 export const mothSpeed = (s: GameState, m: Moth) => stats(s).speed * MOTH_KINDS[m.kind].speed;
 /** How long moth `m` takes to catch a wick, in milliseconds: none at all on a candle. */
 export const mothLightMs = (s: GameState, m: Moth) =>
-  Math.round(stats(s).lightMs * MOTH_KINDS[m.kind].wick * (LANTERN_KINDS[s.lanterns[m.target]?.kind ?? 'plain'].wick));
+  Math.round(stats(s).lightMs * MOTH_KINDS[m.kind].wick * LANTERN_KINDS[s.lanterns[m.target]?.kind ?? 'plain'].wick * WET_WICK ** s.curses.wet);
 
 function makeLanterns(night: number, district: DistrictId): Lantern[] {
   const count = lanternsFor(night);
@@ -437,22 +504,36 @@ function makeLanterns(night: number, district: DistrictId): Lantern[] {
   return DISTRICTS[district].spots.slice(0, count).map(({ x, y }, i) => ({ x, y, kind: kinds[i], lit: false, oilMs: 0, oilMaxMs: 0, claimed: false }));
 }
 
-/** `n` moths in KIND_ORDER, then `fireflies` fireflies, at rest on the jar. */
-function makeMoths(n: number, fireflies: number): Moth[] {
-  const total = n + fireflies;
-  return Array.from({ length: total }, (_, i) => ({
+/** The jar moth `i` rests at. */
+const homeOf = (s: GameState, i: number) => (s.levels.jar > 0 ? (s.homes[i] ?? 0) : 0);
+
+/** Where moth `i` rests: spaced out on its jar's rim among the moths that share that jar. */
+export function restOf(s: GameState, i: number) {
+  const jar = homeOf(s, i);
+  const mates = s.moths.map((_, k) => k).filter((k) => homeOf(s, k) === jar);
+  return mothRest(mates.indexOf(i), mates.length, JARS[jar]);
+}
+
+/** The moths with the bought upgrades, `moths` in KIND_ORDER then the fireflies, at rest on their jars. */
+function makeMoths(s: GameState) {
+  const { moths: n, fireflies } = stats(s);
+  s.moths = Array.from({ length: n + fireflies }, (_, i) => ({
     kind: i < n ? KIND_ORDER[i % KIND_ORDER.length] : ('firefly' as const),
-    ...mothRest(i, total),
+    x: 0,
+    y: 0,
     task: 'idle' as const,
     target: -1,
     lightingMs: 0,
     closeCall: false,
     bat: -1,
     hops: 0,
+    flights: 0,
+    restMs: 0,
   }));
+  s.moths.forEach((m, i) => Object.assign(m, restOf(s, i)));
 }
 
-export function newGame(best = 0): GameState {
+export function newGame(best = 0, bestPeril = 1): GameState {
   const s: GameState = {
     night: 1,
     phase: 'dusk',
@@ -461,7 +542,7 @@ export function newGame(best = 0): GameState {
     lives: LIVES,
     lanterns: makeLanterns(1, 'keep'),
     moths: [],
-    levels: { wick: 0, oil: 0, moths: 0, wings: 0, firefly: 0 },
+    levels: { wick: 0, oil: 0, moths: 0, wings: 0, firefly: 0, nectar: 0, jar: 0 },
     report: null,
     kept: 0,
     best,
@@ -488,9 +569,14 @@ export function newGame(best = 0): GameState {
     district: 'keep',
     nextDistrict: 'keep',
     moveDue: false,
+    homes: [],
+    rekindled: 0,
+    curses: { wet: 0, bats: 0, thin: 0, watch: 0 },
+    offer: [],
+    paidMult: 1,
+    bestPeril,
   };
-  const { moths, fireflies } = stats(s);
-  s.moths = makeMoths(moths, fireflies);
+  makeMoths(s);
   return s;
 }
 
@@ -499,6 +585,8 @@ export function newGame(best = 0): GameState {
  * the jar lights FIREFLY_LANTERNS on the flight; `hops` is how many more after this one.
  */
 function dispatch(s: GameState, moth: Moth, i: number, hops = moth.kind === 'firefly' ? FIREFLY_LANTERNS - 1 : 0) {
+  // Leaving the jar is a flight; a firefly flying on from its first lantern is the same one.
+  if (moth.task === 'idle') moth.flights++;
   moth.task = 'out';
   moth.target = i;
   moth.hops = hops;
@@ -554,6 +642,19 @@ export function chase(s: GameState, id: number) {
   if (!moth) return false;
   moth.task = 'chase';
   moth.bat = id;
+  moth.flights++;
+  return true;
+}
+
+/**
+ * Once the second jar is bought, sends idle moth `i` to rest at the other jar from now on (and on
+ * later nights). False when there is no second jar, it is not dusk or the moth is not idle.
+ */
+export function swapJar(s: GameState, i: number) {
+  const moth = s.moths[i];
+  if (s.phase !== 'dusk' || s.levels.jar === 0 || moth?.task !== 'idle') return false;
+  s.homes[i] = 1 - homeOf(s, i);
+  moth.task = 'home';
   return true;
 }
 
@@ -766,7 +867,7 @@ function answerCall(s: GameState, i: number) {
 export function tick(s: GameState, dt: number) {
   if (s.phase !== 'dusk') return;
   const { burnMs } = stats(s);
-  const burn = (s.kind === 'fog' ? FOG_BURN : 1) * (districtOf(s).rule === 'trade' ? TRADE_BURN : 1);
+  const burn = (s.kind === 'fog' ? FOG_BURN : 1) * (districtOf(s).rule === 'trade' ? TRADE_BURN : 1) * THIN_BURN ** s.curses.thin;
   s.lanterns.forEach((lantern, i) => {
     // A moth refilling a lantern holds its flame, so it burns no oil meanwhile.
     if (!lantern.lit || sitting(s, i)) return;
@@ -832,8 +933,24 @@ export function tick(s: GameState, dt: number) {
         m.bat = -1;
       }
     } else if (m.task === 'home') {
-      const rest = mothRest(i, s.moths.length);
-      if (flyTo(m, rest.x, rest.y, step)) m.task = 'idle';
+      const rest = restOf(s, i);
+      if (flyTo(m, rest.x, rest.y, step)) {
+        // From TIRED_NIGHT a moth home from its fourth flight of the dusk rests a while.
+        const tired = s.night >= TIRED_NIGHT && m.flights >= TIRED_FLIGHTS && restMs(s) > 0;
+        m.task = tired ? 'rest' : 'idle';
+        m.restMs = tired ? restMs(s) : 0;
+        if (tired) m.flights = 0;
+      }
+    } else if (m.task === 'rest') {
+      m.restMs -= dt;
+      if (m.restMs <= 0) {
+        m.restMs = 0;
+        m.task = 'idle';
+      }
+    } else if (m.task === 'idle') {
+      // A moth moved along the rim when another joins or leaves its jar.
+      const rest = restOf(s, i);
+      flyTo(m, rest.x, rest.y, step);
     }
   });
   wind(s);
@@ -857,13 +974,14 @@ function nightfall(s: GameState) {
   const count = s.lanterns.length;
   const litLanterns = s.lanterns.filter((l) => l.lit);
   const lit = litLanterns.length;
-  const required = requiredFor(count, s.district);
+  const need = required(s);
   const { done, of } = orderProgress(s);
   const orderMet = done >= of;
   const chains = chainsFor(s).filter((i) => chainLit(s, i)).length;
   const lanternPayTotal = litLanterns.reduce((sum, l) => sum + lanternPay(s, l), 0) + (lit === count ? ALL_LIT_BONUS : 0) + chains * CHAIN_BONUS;
-  const earned = lanternPayTotal * (s.kind === 'feast' ? FEAST_PAY : 1) + (orderMet ? s.order.reward : 0);
-  const lostHearth = lit < required;
+  s.paidMult = perilMult(s);
+  const earned = Math.round((lanternPayTotal * (s.kind === 'feast' ? FEAST_PAY : 1) + (orderMet ? s.order.reward : 0)) * perilMult(s));
+  const lostHearth = lit < need;
   s.queue = [];
   s.gust = null;
   s.gusts = [];
@@ -879,16 +997,38 @@ function nightfall(s: GameState) {
   s.best = Math.max(s.best, s.kept);
   const festival = !s.festival && s.kept >= FESTIVAL_NIGHTS && s.lives > 0;
   if (festival) s.festival = true;
-  s.report = { lit, count, required, earned, lostHearth, orderMet, chains, festival };
+  s.report = { lit, count, required: need, earned, lostHearth, orderMet, chains, festival };
   s.nextKind = drawKind(s.night + 1);
   s.moveDue = s.lives > 0 && s.night % MOVE_EVERY === 0;
-  s.phase = s.lives <= 0 ? 'over' : festival ? 'festival' : s.moveDue ? 'move' : 'night';
+  s.offer = s.lives > 0 && s.night + 1 >= PERIL_NIGHT ? drawOffer() : [];
+  s.phase = s.lives <= 0 ? 'over' : festival ? 'festival' : afterPanels(s);
 }
+
+/** The panel after the festival's: the choice of district if due, then the curses if offered, then the night panel. */
+const afterPanels = (s: GameState): GameState['phase'] => (s.moveDue ? 'move' : s.offer.length ? 'peril' : 'night');
 
 /** Leaves the Great Festival's panel for the choice of district or the night panel; the nights go on. */
 export function carryOn(s: GameState) {
   if (s.phase !== 'festival') return false;
-  s.phase = s.moveDue ? 'move' : 'night';
+  s.phase = afterPanels(s);
+  return true;
+}
+
+/** Takes curse `id` from this nightfall's offer: it lasts the rest of the game and raises the pay. */
+export function takeCurse(s: GameState, id: CurseId) {
+  if (s.phase !== 'peril' || !s.offer.includes(id)) return false;
+  s.curses[id]++;
+  s.offer = s.offer.filter((c) => c !== id);
+  s.bestPeril = Math.max(s.bestPeril, perilMult(s));
+  if (!s.offer.length) s.phase = 'night';
+  return true;
+}
+
+/** Leaves the curses not taken and goes on to the night panel. */
+export function endPeril(s: GameState) {
+  if (s.phase !== 'peril') return false;
+  s.offer = [];
+  s.phase = 'night';
   return true;
 }
 
@@ -897,7 +1037,7 @@ export function moveTo(s: GameState, district: DistrictId) {
   if (s.phase !== 'move') return false;
   s.nextDistrict = district;
   s.moveDue = false;
-  s.phase = 'night';
+  s.phase = afterPanels(s);
   return true;
 }
 
@@ -910,6 +1050,18 @@ export function buy(s: GameState, id: UpgradeId) {
   if (s.phase !== 'night' || cost === null || s.coins < cost) return false;
   s.coins -= cost;
   s.levels[id]++;
+  // The second jar takes every other moth to start with; a tap on a resting moth swaps it.
+  if (id === 'jar') s.homes = s.moths.map((_, i) => i % 2);
+  return true;
+}
+
+/** Rekindles a hearth that went out, between nights, for hearthCost; false when none is out, too dear or spent. */
+export function rekindle(s: GameState) {
+  const cost = hearthCost(s);
+  if (s.phase !== 'night' || cost === null || s.coins < cost) return false;
+  s.coins -= cost;
+  s.lives++;
+  s.rekindled++;
   return true;
 }
 
@@ -929,14 +1081,13 @@ export function nextDusk(s: GameState) {
   s.duskMs = DUSK_MS;
   s.district = s.nextDistrict;
   s.lanterns = makeLanterns(s.night, s.district);
-  const { moths, fireflies } = stats(s);
-  s.moths = makeMoths(moths, fireflies);
+  makeMoths(s);
   s.queue = [];
   s.report = null;
   s.order = orderFor(s.night, s.district);
   s.kind = s.nextKind;
   s.gusts = gustsFor(s.night, s.kind);
-  s.batTimes = batsFor(s.night);
+  s.batTimes = batsFor(s.night, s.curses.bats);
   s.bats = [];
   s.chased = 0;
   s.gust = null;

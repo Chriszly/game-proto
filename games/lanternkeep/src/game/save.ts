@@ -1,19 +1,26 @@
-// Only the most nights kept is saved; every game starts at the first dusk.
+// Only the most nights kept and the best peril multiplier are saved; every game starts at the first dusk.
 const KEY = 'lanternkeep-best';
+const PERIL_KEY = 'lanternkeep-best-peril';
 
-export function loadBest() {
+function load(key: string, floor: number) {
   try {
-    const best = Math.floor(Number(localStorage.getItem(KEY)));
-    return Number.isFinite(best) && best > 0 ? best : 0;
+    const value = Number(localStorage.getItem(key));
+    return Number.isFinite(value) && value > floor ? value : floor;
   } catch {
-    return 0;
+    return floor;
   }
 }
 
-export function saveBest(best: number) {
+function save(key: string, value: number) {
   try {
-    localStorage.setItem(KEY, String(best));
+    localStorage.setItem(key, String(value));
   } catch {
     // Storage can be full or blocked (private mode); the game keeps running unsaved.
   }
 }
+
+export const loadBest = () => Math.floor(load(KEY, 0));
+export const saveBest = (best: number) => save(KEY, best);
+/** The best pay multiplier reached with curses taken after the Festival (1 when none). */
+export const loadBestPeril = () => load(PERIL_KEY, 1);
+export const saveBestPeril = (mult: number) => save(PERIL_KEY, mult);
