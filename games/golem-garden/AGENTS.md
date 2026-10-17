@@ -124,6 +124,8 @@ Missing or rough:
 - Calling early counts the current wave as done even though its last pests are still walking:
   they can still bite the Heartwood, but its bonus and bud are already paid.
 - Canvas `filter: blur` (the clay's soft shadows) is ignored by Safari, so shadows are hard there.
+- The longest hints (a level-3 golem's form, a target's blurb) wrap to three lines and run into
+  the top of the wave button, in English as in German.
 - The cover and the loop screenshots (`heartwood-bloom`, `call-early`, `sap-pops`, `golem-menu`,
   `golem-move`, `new-pests`, `queen-slug`, `garden-picker`, `forked-brook`, `two-gates`,
   `level-3-forms`, `targeting`, `hedge`, `compost`, `harvest`, `harvest-wave`, `boons`,
@@ -136,8 +138,13 @@ Missing or rough:
 
 File map (`src/`):
 
-- `howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips), handed to
-  `setupGame(game, { howToPlay })` in `main.ts`; update it when the controls or the first round change.
+- `howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips) in English and
+  German, picked with `byLanguage` and handed to `setupGame(game, { howToPlay })` in `main.ts`;
+  update both when the controls or the first round change.
+- `i18n.ts`: `t(key, vars)`, the game's translator (`translator` from `shared/i18n.ts`), and
+  `TextKey`, a key of its texts.
+- `i18n/en.ts`: every on-screen text in British English, the source; `i18n/de.ts` (German, typed
+  `Translation<typeof en>`, with `keepEnglish` for the title) and `i18n/en-US.ts` (only "armor").
 - `main.ts`: creates the `Phaser.Game` (960x540, `Phaser.Scale.FIT`, `pixelArt: false`) with
   `BootScene` and `GameScene`, calls `setupGame(game)` from `shared/setupGame.ts` and
   `setupScaling(game)` from `shared/scaling.ts`, and in dev builds puts `game` on `window`.
@@ -155,7 +162,7 @@ File map (`src/`):
   card, in `SEEDS` order), `PREVIEW`, `HINT`, `WAVE_BUTTON`, `BUTTON`, `UI_DEPTH`, `FONT` (a system sans stack), and
   re-exports `GRID` and `cellCentre` from `game/board.ts`.
 - `game/board.ts`: `GRID`, the `Cell`, `Route` and `Garden` types, `GARDENS` (each with its
-  name, blurb, `unlockStars`, `routes`, `map` and `heart`, built from corner lists), `cellCentre`,
+  name and blurb as `TextKey`s, `unlockStars`, `routes`, `map` and `heart`, built from corner lists), `cellCentre`,
   `cellAt`, `routeDist(route, col, row)` (how far along a route a cell's centre is, or null) and
   `pathPoint(route, dist)` (position and facing at a distance along a route).
 - `game/data.ts`: `GOLEMS`, `SEEDS`/`SeedKind`, `GOLEM_INFO` (with `area` and `locked` for the
@@ -166,7 +173,9 @@ File map (`src/`):
   `slime`, `boss`, `flies`), `BOSS_EVERY`, `SLIME`, `PEST_HP_SCALE` (difficulty), `waveFor(n, twist)`,
   `waveCounts(n, twist)`, `waveBonus`, `START`, `REGROW`/`regrowCost`, `BOONS`/`Boon`,
   `BOON_INFO`, `BOON`, `boonOffer`, `TWISTS`/`Twist`, `TWIST_INFO`, `GARDEN_TWISTS`,
-  `THORNY_STARS` and `LEAN_SAP`.
+  `THORNY_STARS` and `LEAN_SAP`. Every name and blurb in the catalogues (golems, with `lower` for
+  inside a sentence and `card` for a tall seed card's two lines, the hedge, forms, targets, boons and
+  twists) is a `TextKey`, shown with `t`.
 - `game/state.ts`: `GameState`, `Golem` (with `form` and `target`), `Hedge`, `Pest` (with
   `chewing`), `Shot`, `Pop`, `Slime`, `SHOT_MS`, `newGame(best, bloom, garden, stars, thorny, laurels)`,
   `gardenOf`, `totalStars`, `gardenOpen`, `thornyOpen`, `twistOf`, `boonCount`, `unlocked`, `seedCost`, `select`, `golemAt`, `hedgeAt`,
@@ -196,8 +205,8 @@ File map (`src/`):
 - `ui/Button.ts`: `makeButton`, the clay button used by the garden picker's Back.
 
 Shared code it imports (outside the game folder): `shared/setupGame.ts` (`setupGame`),
-`shared/scaling.ts` (`setupScaling`, `sharpRes`) and `shared/settings.ts` (`byDifficulty`,
-`settings`).
+`shared/scaling.ts` (`setupScaling`, `sharpRes`), `shared/settings.ts` (`byDifficulty`,
+`settings`) and `shared/i18n.ts` (`translator`, `byLanguage`).
 
 Screens: `setupScaling` gives the canvas `renderScale` canvas pixels per game pixel (up to 4 on a
 4K screen) and zooms the one camera to match from its top-left; it never scrolls, so the scene
@@ -274,7 +283,9 @@ Phaser passes to `update`; the pops' tweens run on Phaser's clock and are cosmet
 - `src/main.ts` exposes `window.game` in dev builds. The test reads `game.scene.getScene('Game')`
   and its `state` (copied through JSON), `seedButtons` (`{ kind, x, y, w, h }` per card),
   `waveButton` (`{ x, y, w, h }`), all in view pixels, and `waveLabel` (the wave button's text on
-  one line, such as `Start wave 1` or `Call wave 2 now, +15 early`).
+  one line, such as `Start wave 1` or `Call wave 2 now, +15 early`). `waveLabel` is in the
+  player's language; the playthrough runs in the browser's US English, so it reads the English
+  `startWave`, `callWave` and `earlyBonus` texts.
 - Inputs: it clicks the seed cards, cell centres and the wave button, scaling view pixels by the
   canvas bounding box. It never plants a hedge, raises a golem or opens the menu: forms,
   targeting, hedges, compost (from wave 3) and the harvest (wave 30) stay out of its first round.
@@ -318,6 +329,11 @@ Phaser passes to `update`; the pops' tweens run on Phaser's clock and are cosmet
   `EARLY_BONUS` mirrors the bonus.
 - **Change a path**: edit its garden's corner lists in `GARDENS`; the `map` and the painted path
   follow. For the Meadow, re-pick the test's `PLANTS` and `PATH_CELL`.
+- **Add or change a text**: add its key to `i18n/en.ts` and its German to `i18n/de.ts` (the build
+  fails on a missing key), and its US spelling to `i18n/en-US.ts` if it differs; show it with
+  `t(key, vars)`, numbers as `{placeholders}` so they are formatted for the language. Compare ids,
+  never translated text. Run `node scripts/check-translations.mjs`, and look at the German on
+  screen (`?lang=de`): the seed cards, menu chips and hint are narrow.
 - **Restyle**: shapes live in `clay.ts`, placements and the static `bg` in `textures.ts`; texture
   sizes and anchors there must match the origins in `GameScene` (`GOLEM_ORIGIN`, `PEST_ORIGIN`,
   the sprout's and the tree's origins).
