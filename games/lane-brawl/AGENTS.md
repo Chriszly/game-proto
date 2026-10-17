@@ -78,7 +78,7 @@ Implemented today:
 - Recall (LB7, round 2): `startRecall` sets `Unit.recallMs` to `RECALL.ms` (and `lastRecallAt`);
   `updateUnit` counts it down and `finishRecall` moves the champion to its spawn point (its lane
   walk restarts at `wp` 1). `damage` on a champion, `commandMove`, `commandAttack`, `cast` and
-  `useActive` zero `recallMs`; `playerAct` and `championPlan` stand still while it runs, and `free`
+  `useActive` (planting a ward included) zero `recallMs`; `playerAct` and `championPlan` stand still while it runs, and `free`
   keeps a recalling champion off team plans. The player recalls with T or the top bar's
   `RECALL_BUTTON` (`drawRecallButton`), which fills as the channel runs; a bar and "Recalling" show
   under any recalling champion's health bar. AI champions recall (in `championPlan`) when free of
@@ -142,8 +142,9 @@ Implemented today:
   tower nearest the blue Nexus (150 s, 200 gold and the siege banner: the player's champion deals
   +25% to towers and the Nexus for 60 s), clear the boar or wolf pack nearest the player on blue's half (`ownHalf`) (90 s, 120 gold), defeat
   the red champion nearest the player (120 s, 150 gold), slay the guardian beast (120 s, 250 gold;
-  done only when blue slew it, read from `beastBuff.blue`; skipped while it sleeps). The goal is
-  done when its target is dead, however it fell; when its time runs out it is missed. The next one
+  done only when blue slew it, read from `beastBuff.blue`, and missed at once when red slays it; skipped
+  while it sleeps). The goal is done when its target is dead, however it fell (a wolf pack's goal
+  moves from the alpha to a pup still up, so the whole pack has to fall); when its time runs out it is missed. The next one
   starts 4 s later. A card under the top bar shows it (title, time left, the target's damage as a
   bar, the reward), a gold pill and dashed ring mark the target in the world and a star marks it on
   the minimap.
@@ -363,7 +364,7 @@ generator (`seeded` in `lowpoly.ts`); `performance.now` only times the bake for 
 - `main.ts` calls `setupGame(game)` right after creating the game (frame cap, FPS readout, reduced
   motion and full screen).
 - Difficulty scales red's damage: `ENEMY_DAMAGE = byDifficulty(0.8, 1, 1.25)` in `GameScene.ts`,
-  applied through `dealt` in `sim.ts`. Normal stays 1, which the playthrough expects.
+  applied through `dealt` in `sim.ts` to every red attacker (champions, minions and towers). Normal stays 1, which the playthrough expects.
 - `settings.reduceMotion` skips the effect rings, attack lines and skill effects (`collectFx`) and
   holds zones' and auras' motion still but keeps the
   last-hit coins (they hold still instead of rising), turns off the hit flash, the objective

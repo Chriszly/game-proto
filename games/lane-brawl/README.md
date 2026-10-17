@@ -290,8 +290,8 @@ whatever the difficulty. **Watch another** on the end screen starts the next mat
 
 ### Difficulty
 
-The difficulty, set on the hub page's Settings, changes how hard red hits: Easy has red's champions
-and minions deal 20% less damage, Hard 25% more. Normal is the game as designed.
+The difficulty, set on the hub page's Settings, changes how hard red hits: Easy has red's champions,
+minions and towers deal 20% less damage, Hard 25% more. Normal is the game as designed.
 
 ## Running locally
 
