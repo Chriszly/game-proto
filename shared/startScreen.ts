@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { settings } from './settings';
+import { t } from './i18n';
 import type { HowToPlay } from './howToPlay';
 
 /** The key that pauses the game and resumes it. Esc is left to the games, some of which close panels with it. */
@@ -30,13 +31,13 @@ export function addStartScreen(game: Phaser.Game, howToPlay?: HowToPlay) {
   overlay.innerHTML =
     '<div class="game-overlay-card">' +
     `<img class="game-overlay-icon" alt="" src="${iconUrl()}">` +
-    `<div class="game-overlay-title">${escapeHtml(document.title)}</div>` +
-    '<div class="game-overlay-loading" role="status">Loading<span>.</span><span>.</span><span>.</span></div>' +
-    '<button type="button" class="game-overlay-button game-start-button">Start</button>' +
-    '<button type="button" class="game-overlay-button game-resume-button">Resume</button>' +
-    (howToPlay ? '<button type="button" class="game-overlay-link game-help-button">How to play</button>' : '') +
+    `<div class="game-overlay-title" data-paused="${escapeHtml(t('paused'))}">${escapeHtml(document.title)}</div>` +
+    `<div class="game-overlay-loading" role="status">${escapeHtml(t('loading'))}<span>.</span><span>.</span><span>.</span></div>` +
+    `<button type="button" class="game-overlay-button game-start-button">${escapeHtml(t('start'))}</button>` +
+    `<button type="button" class="game-overlay-button game-resume-button">${escapeHtml(t('resume'))}</button>` +
+    (howToPlay ? `<button type="button" class="game-overlay-link game-help-button">${escapeHtml(t('howToPlay'))}</button>` : '') +
     '<div class="game-overlay-hint"></div>' +
-    '<a class="game-overlay-hub" href="../../">All games</a>' +
+    `<a class="game-overlay-hub" href="../../">${escapeHtml(t('allGames'))}</a>` +
     '</div>' +
     (howToPlay ? helpHtml(howToPlay) : '');
   document.body.append(overlay);
@@ -48,8 +49,8 @@ export function addStartScreen(game: Phaser.Game, howToPlay?: HowToPlay) {
   const pauseButton = document.createElement('button');
   pauseButton.type = 'button';
   pauseButton.className = 'pause-button';
-  pauseButton.title = 'Pause (P)';
-  pauseButton.setAttribute('aria-label', 'Pause (P)');
+  pauseButton.title = t('pauseButton');
+  pauseButton.setAttribute('aria-label', t('pauseButton'));
   pauseButton.innerHTML =
     '<svg viewBox="0 0 16 16" width="18" height="18" fill="currentColor" aria-hidden="true">' +
     '<rect x="3" y="2" width="3.5" height="12"/><rect x="9.5" y="2" width="3.5" height="12"/></svg>';
@@ -70,12 +71,11 @@ export function addStartScreen(game: Phaser.Game, howToPlay?: HowToPlay) {
     overlay.className = `game-overlay ${next}`;
     overlay.hidden = next === 'playing';
     pauseButton.hidden = next !== 'playing';
-    const helpHint = help ? ' \u00b7 H for how to play' : '';
     hint.textContent =
       next === 'start'
-        ? `Press P to pause${helpHint}`
+        ? t(help ? 'hintStartHelp' : 'hintStart')
         : next === 'paused'
-          ? `Press P, Space or Esc to play on${helpHint}`
+          ? t(help ? 'hintPausedHelp' : 'hintPaused')
           : '';
     // The help scrolls on its own, from the top, and takes the focus so arrow keys scroll it.
     if (next === 'help' && help) {
@@ -202,23 +202,23 @@ function iconUrl() {
 function helpHtml(howToPlay: HowToPlay) {
   const controls = [
     ...howToPlay.controls,
-    { input: 'P or the pause button', action: 'Pause' },
-    ...(document.fullscreenEnabled ? [{ input: 'F or the corner button', action: 'Full screen' }] : []),
+    { input: t('pauseInput'), action: t('pauseAction') },
+    ...(document.fullscreenEnabled ? [{ input: t('fullScreenInput'), action: t('fullScreenAction') }] : []),
   ];
   const list = (items: string[]) => items.map((item) => `<li>${escapeHtml(item)}</li>`).join('');
   return (
     '<section class="game-help" aria-labelledby="game-help-title">' +
-    `<h2 id="game-help-title">How to play ${escapeHtml(document.title)}</h2>` +
+    `<h2 id="game-help-title">${escapeHtml(t('howToPlayTitle', { game: document.title }))}</h2>` +
     // Only the text between the title and Back scrolls.
     '<div class="game-help-body" tabindex="-1">' +
     `<p class="game-help-goal">${escapeHtml(howToPlay.goal)}</p>` +
-    '<h3>Controls</h3><table class="game-help-controls"><tbody>' +
+    `<h3>${escapeHtml(t('controls'))}</h3><table class="game-help-controls"><tbody>` +
     controls.map((c) => `<tr><th scope="row">${escapeHtml(c.input)}</th><td>${escapeHtml(c.action)}</td></tr>`).join('') +
     '</tbody></table>' +
-    `<h3>How a round goes</h3><ol>${list(howToPlay.loop)}</ol>` +
-    (howToPlay.tips.length ? `<h3>Good to know</h3><ul>${list(howToPlay.tips)}</ul>` : '') +
+    `<h3>${escapeHtml(t('roundSteps'))}</h3><ol>${list(howToPlay.loop)}</ol>` +
+    (howToPlay.tips.length ? `<h3>${escapeHtml(t('goodToKnow'))}</h3><ul>${list(howToPlay.tips)}</ul>` : '') +
     '</div>' +
-    '<button type="button" class="game-overlay-button game-help-back">Back</button>' +
+    `<button type="button" class="game-overlay-button game-help-back">${escapeHtml(t('back'))}</button>` +
     '</section>'
   );
 }
@@ -240,7 +240,7 @@ function injectStyles() {
 .game-overlay.loading .game-overlay-card { background: none; border-color: transparent; }
 .game-overlay-icon { width: 64px; height: 64px; }
 .game-overlay-title { font-size: 26px; font-weight: 700; letter-spacing: 0.02em; }
-.game-overlay.paused .game-overlay-title::after { content: ' \\00b7  Paused'; font-weight: 400; }
+.game-overlay.paused .game-overlay-title::after { content: ' \\00b7  ' attr(data-paused); font-weight: 400; }
 .game-overlay-loading span { animation: game-overlay-dot 1.2s infinite; }
 .game-overlay-loading span:nth-child(2) { animation-delay: 0.2s; }
 .game-overlay-loading span:nth-child(3) { animation-delay: 0.4s; }

@@ -25,6 +25,9 @@ the nearer they stand, and the commanders walk around the board's edge.
 | Drag a part onto a robot, or tap the part and then the robot | Bolt it on; two parts on one robot build a finished item |
 | Drag a robot onto the shop, or E with it selected | Sell it |
 | R, or Reroll | New robots in the shop for 2 gold |
+| L, or Lock | Keep the shop as it is for the next round; a reroll unlocks it |
+| Tap a rival in the list on the right | During planning, show its board on the far half, with its level, gold, traits and power cards |
+| Tap the panel under the list | Switch between the last fight's damage meter and your power cards |
 | X, or Buy XP | 4 XP for 4 gold; each level lets one more robot onto the board |
 | Space, or FIGHT! | Start the fight early; during a fight, use your commander's skill once |
 | T, or Speed | Play fights at 1x or 2x |
@@ -68,7 +71,10 @@ terrain tiles. The plan phase lasts 30 seconds; when it runs out the fight start
 
 - **Parts and items.** Six parts (Buzzsaw, Servo, Plating, Fuel Cell, Capacitor, Scope) each add a
   stat; any two on one robot build one of 21 finished items with a special effect (like the Chain
-  Saw's cleave or the Reactor Core's restart). A robot carries 3 items.
+  Saw's cleave or the Reactor Core's restart). A robot carries 3 items. With a part picked up, a tag
+  over each robot names what it would build there, and the panel lists every recipe for that part.
+- **Damage meter.** After each fight the panel under the players list ranks your robots by the
+  damage they dealt, and names the one that took the most.
 - **Power cards.** At rounds 2-1, 3-2 and 4-2 every commander picks one of three power cards
   (15 in all, like Thick Hull, Recycler or War Chest) that last the whole match.
 - **Commanders.** Foreman Grit (Overclock: robots attack 40% faster for 5 seconds), Sparks Malone
@@ -112,3 +118,9 @@ shows your seat's fights on the board.
 ![A draft round: robots carrying parts on the board, picked lowest health first](docs/screenshots/draft.webp)
 
 ![The Scrap Rat chase: the squad hunts the rat across the board](docs/screenshots/scrap-rat.webp)
+
+![Scouting a rival: its board on the far half and its traits in the panel](docs/screenshots/scout.webp)
+
+![A picked-up part: tags over each robot name what it would build, and the panel lists the recipes](docs/screenshots/part-preview.webp)
+
+![The damage meter after a fight](docs/screenshots/damage-meter.webp)

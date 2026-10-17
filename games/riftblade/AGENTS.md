@@ -58,7 +58,7 @@ world), a five-minute run ending in a boss.
   (`rb-bolt-<HeroId>`, `-drone`, `-heavy`, `-rocket`, `-shell`), shards, `rb-medkit` (a green
   cross), `rb-chest`, `rb-sentry`, `rb-drone`, `rb-charge`, `rb-grenade`, `rb-crate`, `rb-shadow`.
 - `src/scenes/layout.ts`: `VIEW`, `CENTER`, HUD places (`XP_BAR`, `HP_BAR`, `KIT`, `TIMER`,
-  `LEVEL`, `BOSS_BAR`, `SIG_BUTTON`), card rectangles (`heroCardRect`, `levelCardRect`, `AGAIN`),
+  `LEVEL`, `BOSS_BAR`, `SIG_BUTTON`, `STICK`), card rectangles (`heroCardRect`, `levelCardRect`, `AGAIN`),
   `DEPTH`, `inside`.
 - `src/scenes/GameScene.ts`: owns `state`, reads input, ticks the sim, follows the hero with the
   camera and draws: the ground (grid and dune ridges from a hash, so the rules' `Math.random` is
@@ -75,8 +75,12 @@ the phase or `choices` change. Run again resets to a fresh `select` state.
 
 ### Input
 
-Keys WASD / arrows walk; a pointer held on the field walks toward
-`cameras.main.getWorldPoint(pointer)` (full speed from 40 px out). A pointerdown inside
+Keys WASD / arrows walk; a mouse held on the field walks toward
+`cameras.main.getWorldPoint(pointer)` (full speed from 40 px out). A touch on the field (`pointer.wasTouch`)
+instead opens the floating stick, `GameScene.stick`: its base sits where the finger went down, the
+knob follows that pointer id (`dragStick`, dragging the base along past the rim) and `moveInput`
+walks the way of knob minus base, full speed at `STICK.r`, nothing inside `STICK.dead`; `drawHud`
+draws it. A second touch pointer (`addPointer(1)`) lets the other thumb tap the signature. A pointerdown inside
 `SIG_BUTTON` (or Space) queues the signature. Panel cards are hit-tested with `viewPoint` against
 `panel.spots`; 1/2/3 pick, Enter runs again.
 

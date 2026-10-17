@@ -46,13 +46,27 @@ Implemented today:
 - Scrap Rat round: the rat runs about the board; the player taps it to zap it (`zapRat`), and each
   hit on it shakes gold loose until it escapes.
 - Speed button (1x/2x, T), reduced motion (no shake, flash, bob or idle sway).
+- Shop lock (`Player.shopLocked`, `toggleShopLock`, the Lock button `BUTTONS.lock` or L):
+  `startPlan` skips `rollShop` for a locked shop; `reroll` unlocks it. The AI never locks.
+- Scouting: during planning a tap on a rival's row in the players list sets `GameScene.scout`;
+  `syncViews` draws that rival's board mirrored onto rows 0-3 (views keyed `s<uid>`) and the info
+  panel shows its level, gold, active traits and power cards. Cleared when a plan or fight starts.
+- Damage meter: `BUnit.dealt` and `taken` (counted in `Battle.hurt`, overkill left out);
+  `endFight` stores the player's side as `Match.meter` (`meterOf`, `MeterRow`), which the info
+  panel shows in the result and plan phases (`buildMeter`). A tap on the panel switches it to the
+  power cards (`infoPage`).
+- Part preview: with a part or item selected or dragged, `buildPreview` tags each robot with
+  `equipPreview(id, robot)` (the finished item, the part, or full), and the info panel lists the
+  part's six recipes.
 - Stats (matches, wins, best place) saved under `scrapyard-titans-stats`; watched matches never
   count.
 
 Missing or rough:
 
 - No sound. No pathing beyond one tile step at a time toward the target.
-- AI rivals use a simple scored plan (`aiPlan`); balance was only checked with watch-mode runs.
+- AI rivals use a simple scored plan (`aiPlan`). Balance is checked with AI-only matches (see
+  Gotchas); every origin's average place sits between about 4.0 and 4.9 of 8, and matches end
+  around stages 5 and 6.
 - Seasons are picked on the menu; nothing rotates them.
 
 ## Architecture
@@ -101,17 +115,19 @@ Shared code it imports: `shared/setupGame.ts`, `shared/scaling.ts` (`setupScalin
 ## Testing hooks
 
 - `window.game` in dev builds; the test reads `game.scene.getScene('Game').state` (the `Match`)
-  and waits for its `menu` field.
+  and waits until the scene is active and the shared loading screen is gone.
 - `e2e/playthrough.spec.ts` plays round 1-1: START MATCH (`START_BUTTON` 635,404), the first shop
   card (`SHOP_CARD_1`), bench slot 0 (`BENCH_SLOT_1`), tile 3,4 (`FRONT_TILE`), FIGHT
   (`FIGHT_BUTTON`); it asserts the bought robot moves bench → board, the fight is won with no
-  damage, a part drops, and round 1-2's plan starts with income paid. Change these together with
+  damage, a part drops, the damage meter (`Match.meter`) lists the robot with damage dealt, and
+  round 1-2's plan starts with income paid. Change these together with
   `layout.ts` (`SHOP`, `BENCH`, `BUTTONS.fight`, `BOARD_VIEW`), the menu's START MATCH rect in
   `buildMenu`, `ECONOMY.startGold`, and round 1-1's monsters (`MONSTERS.mite`), which every 1-cost
   robot must beat alone.
 - Screenshots: `docs/screenshots/menu.webp` is the test's `0-menu`; `fight.webp` (also
   `cover.png`), `draft.webp` and `scrap-rat.webp` are from a scratch `?watch` run with the watch
-  panel hidden.
+  panel hidden; `scout.webp`, `part-preview.webp` and `damage-meter.webp` from a scratch run that
+  plays round 1-1 with real clicks.
 
 ## Making common changes
 
@@ -124,3 +140,13 @@ Shared code it imports: `shared/setupGame.ts`, `shared/scaling.ts` (`setupScalin
 - **Add a power card**: add it to `AugmentId`, `AUGMENTS` and `AUGMENT_TASTE` in `ai.ts`, then
   apply it in `match.ts` (one-off) or `battle.ts` (in fights).
 - **Change rounds or damage**: `stageRounds`, `stageDamage`, `SURVIVOR_DAMAGE`.
+
+## Gotchas
+
+- Balance: a scratch harness bundles `src/game` with rolldown (`node_modules/.bin/rolldown`),
+  stubs `location` and `localStorage`, and plays AI-only matches in node (`newMatch` with
+  `watch: true`, then `startPlan`/`aiPlan`, `startFight` and `runToEnd`, `endFight`, `advance`,
+  drafts through `aiDraft`), recording each seat's place and main origin. Run one after changing a
+  trait, a class or `stageDamage`. `startFight` copes with seat 0 being out for this.
+- The bench slots are drawn on the board layer (`drawBoard`), under the benched robots; HUD
+  graphics sit above every robot.

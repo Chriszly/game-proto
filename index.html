@@ -48,159 +48,166 @@
     <main>
       <header>
         <div>
-          <h1>Game hub</h1>
-          <p class="lede">Small game prototypes. Pick one to play.</p>
+          <h1 data-i18n="hubTitle">Game hub</h1>
+          <p class="lede" data-i18n="hubLede">Small game prototypes. Pick one to play.</p>
         </div>
-        <button type="button" id="open-settings">Settings</button>
+        <button type="button" id="open-settings" data-i18n="settings">Settings</button>
       </header>
       <!-- The settings every game reads; the rows come from shared/settings.ts. -->
       <dialog id="settings" aria-labelledby="settings-title">
         <div class="panel">
-          <h2 id="settings-title">Settings</h2>
-          <p class="lede">These apply to every game the next time it opens.</p>
-          <button type="button" id="close-settings">Close</button>
+          <h2 id="settings-title" data-i18n="settings">Settings</h2>
+          <p class="lede" data-i18n="settingsLede">These apply to every game the next time it opens.</p>
+          <button type="button" id="close-settings" data-i18n="close">Close</button>
         </div>
       </dialog>
       <!-- One entry per game in games/<name>; see AGENTS.md for adding a game. -->
       <ul class="games">
         <li class="game">
           <a href="games/anvilheart/">
-            <img class="cover" src="./games/anvilheart/cover.png" alt="The smithy with swords on anvils and adventurers at the counter" />
+            <img class="cover" data-i18n-alt="anvilheartCover" src="./games/anvilheart/cover.png" alt="The smithy with swords on anvils and adventurers at the counter" />
             <h2><img class="icon" src="./games/anvilheart/favicon.svg" alt="" />Anvilheart</h2>
-            <p>Run a smithy: forge swords, drag matching ones together to merge them into better blades, and sell them to adventurers.</p>
+            <p data-i18n="anvilheartCard">Run a smithy: forge swords, drag matching ones together to merge them into better blades, and sell them to adventurers.</p>
           </a>
         </li>
         <li class="game">
           <a href="games/apothecary/">
-            <img class="cover" src="./games/apothecary/cover.png" alt="The apothecary shop with a customer at the counter" />
+            <img class="cover" data-i18n-alt="apothecaryCover" src="./games/apothecary/cover.png" alt="The apothecary shop with a customer at the counter" />
             <h2><img class="icon" src="./games/apothecary/favicon.svg" alt="" />Apothecary</h2>
-            <p>Run a medieval apothecary as a plague doctor: grow herbs, refine them, brew potions and sell them.</p>
+            <p data-i18n="apothecaryCard">Run a medieval apothecary as a plague doctor: grow herbs, refine them, brew potions and sell them.</p>
           </a>
         </li>
         <li class="game">
           <a href="games/beehive-baron/">
-            <img class="cover" src="./games/beehive-baron/cover.png" alt="A hive of honeycomb cells beside a meadow where bees gather nectar from flowers" />
+            <img class="cover" data-i18n-alt="beehiveBaronCover" src="./games/beehive-baron/cover.png" alt="A hive of honeycomb cells beside a meadow where bees gather nectar from flowers" />
             <h2><img class="icon" src="./games/beehive-baron/favicon.svg" alt="" />Beehive Baron</h2>
-            <p>Run a hive: build comb cells, send foragers out to the flowers, harvest the honey and sell it to grow your colony.</p>
+            <p data-i18n="beehiveBaronCard">Run a hive: build comb cells, send foragers out to the flowers, harvest the honey and sell it to grow your colony.</p>
+          </a>
+        </li>
+        <li class="game">
+          <a href="games/bramblecrest/">
+            <img class="cover" data-i18n-alt="bramblecrestCover" src="./games/bramblecrest/cover.png" alt="A small knight in a lamplit village square at night, by a well, a pond and a cottage with glowing windows" />
+            <h2><img class="icon" src="./games/bramblecrest/favicon.svg" alt="" />Bramblecrest</h2>
+            <p data-i18n="bramblecrestCard">Explore an overgrown kingdom by lamplight as a small knight: cut back the thorns, find the tool in the sunken shrine, and hunt for hidden moonstones.</p>
           </a>
         </li>
         <li class="game">
           <a href="games/broadside/">
-            <img class="cover" src="./games/broadside/cover.png" alt="A pirate ship firing a broadside at an enemy sloop" />
+            <img class="cover" data-i18n-alt="broadsideCover" src="./games/broadside/cover.png" alt="A pirate ship firing a broadside at an enemy sloop" />
             <h2><img class="icon" src="./games/broadside/favicon.svg" alt="" />Broadside</h2>
-            <p>Captain a pirate ship: steer left and right, fire broadsides at enemy ships, and spend the plunder on your ship between waves.</p>
+            <p data-i18n="broadsideCard">Captain a pirate ship: steer left and right, fire broadsides at enemy ships, and spend the plunder on your ship between waves.</p>
           </a>
         </li>
         <li class="game">
           <a href="games/catacomb/">
-            <img class="cover" src="./games/catacomb/cover.png" alt="A knight with a hand of cards facing a slime in a dungeon room" />
+            <img class="cover" data-i18n-alt="catacombCover" src="./games/catacomb/cover.png" alt="A knight with a hand of cards facing a slime in a dungeon room" />
             <h2><img class="icon" src="./games/catacomb/favicon.svg" alt="" />Catacomb</h2>
-            <p>Fight through a short dungeon with a deck of cards: play a hand of five each turn, and add a new card after every fight.</p>
+            <p data-i18n="catacombCard">Fight through a short dungeon with a deck of cards: play a hand of five each turn, and add a new card after every fight.</p>
           </a>
         </li>
         <li class="game">
           <a href="games/colonizer/">
-            <img class="cover" src="./games/colonizer/cover.png" alt="An embroidered Bayeux-tapestry skirmish on linen: a Town Center, houses and archers meeting a raid, with the deeds card for Age III" />
+            <img class="cover" data-i18n-alt="colonizerCover" src="./games/colonizer/cover.png" alt="An embroidered Bayeux-tapestry skirmish on linen: a Town Center, houses and archers meeting a raid, with the deeds card for Age III" />
             <h2><img class="icon" src="./games/colonizer/favicon.svg" alt="" />Colonizer</h2>
-            <p>Build an embroidered empire: gather wood, food and ore, raise buildings and armies, research techs, and destroy the enemy Town Center before it destroys yours.</p>
+            <p data-i18n="colonizerCard">Build an embroidered empire: gather wood, food and ore, raise buildings and armies, research techs, and destroy the enemy Town Center before it destroys yours.</p>
           </a>
         </li>
         <li class="game">
           <a href="games/deadline/">
-            <img class="cover" src="./games/deadline/cover.png" alt="A soldier behind sandbags shooting a zombie horde coming down a road" />
+            <img class="cover" data-i18n-alt="deadlineCover" src="./games/deadline/cover.png" alt="A soldier behind sandbags shooting a zombie horde coming down a road" />
             <h2><img class="icon" src="./games/deadline/favicon.svg" alt="" />Deadline</h2>
-            <p>Hold the bottom of the road against waves of zombies: move left and right, and shoot crates open for upgrades.</p>
+            <p data-i18n="deadlineCard">Hold the bottom of the road against waves of zombies: move left and right, and shoot crates open for upgrades.</p>
           </a>
         </li>
         <li class="game">
           <a href="games/golem-garden/">
-            <img class="cover" src="./games/golem-garden/cover.png" alt="Stone and moss golems guarding a garden path as beetles crawl toward a great tree" />
+            <img class="cover" data-i18n-alt="golemGardenCover" src="./games/golem-garden/cover.png" alt="Stone and moss golems guarding a garden path as beetles crawl toward a great tree" />
             <h2><img class="icon" src="./games/golem-garden/favicon.svg" alt="" />Golem Garden</h2>
-            <p>Plant seeds beside the garden path that grow into golems, and keep the pests away from the Heartwood wave after wave.</p>
+            <p data-i18n="golemGardenCard">Plant seeds beside the garden path that grow into golems, and keep the pests away from the Heartwood wave after wave.</p>
           </a>
         </li>
         <li class="game">
           <a href="games/hotfoot/">
-            <img class="cover" src="./games/hotfoot/cover.png" alt="A knight leaping over coins on a road at dusk, a spiked log hanging ahead" />
+            <img class="cover" data-i18n-alt="hotfootCover" src="./games/hotfoot/cover.png" alt="A knight leaping over coins on a road at dusk, a spiked log hanging ahead" />
             <h2><img class="icon" src="./games/hotfoot/favicon.svg" alt="" />Hotfoot</h2>
-            <p>Run as a knight who never stops: tap to jump spikes and pits or slide under blades, and pick one of two boons at every checkpoint.</p>
+            <p data-i18n="hotfootCard">Run as a knight who never stops: tap to jump spikes and pits or slide under blades, and pick one of two boons at every checkpoint.</p>
           </a>
         </li>
         <li class="game">
           <a href="games/lane-brawl/">
-            <img class="cover" src="./games/lane-brawl/cover.png" alt="A low-poly 3D lane with blue and red champions fighting by a crystal-topped tower, with an objective card and upgrade choice" />
+            <img class="cover" data-i18n-alt="laneBrawlCover" src="./games/lane-brawl/cover.png" alt="A low-poly 3D lane with blue and red champions fighting by a crystal-topped tower, with an objective card and upgrade choice" />
             <h2><img class="icon" src="./games/lane-brawl/favicon.svg" alt="" />Lane Brawl</h2>
-            <p>Lead a team of five champions down three lanes against NPC teams: farm, level up, buy items, push the lanes and destroy the enemy Nexus.</p>
+            <p data-i18n="laneBrawlCard">Lead a team of five champions down three lanes against NPC teams: farm, level up, buy items, push the lanes and destroy the enemy Nexus.</p>
           </a>
         </li>
         <li class="game">
           <a href="games/lanternkeep/">
-            <img class="cover" src="./games/lanternkeep/cover.png" alt="A castle at nightfall with glowing lanterns on its towers and moths flying between them" />
+            <img class="cover" data-i18n-alt="lanternkeepCover" src="./games/lanternkeep/cover.png" alt="A castle at nightfall with glowing lanterns on its towers and moths flying between them" />
             <h2><img class="icon" src="./games/lanternkeep/favicon.svg" alt="" />Lanternkeep</h2>
-            <p>Send moths from their jar to light the castle's lanterns before night falls, and spend the coins on wicks, oil and more moths.</p>
+            <p data-i18n="lanternkeepCard">Send moths from their jar to light the castle's lanterns before night falls, and spend the coins on wicks, oil and more moths.</p>
           </a>
         </li>
         <li class="game">
           <a href="games/mapmaker/">
-            <img class="cover" src="./games/mapmaker/cover.png" alt="A bear surveyor charting a fog-covered island tile by tile" />
+            <img class="cover" data-i18n-alt="mapmakerCover" src="./games/mapmaker/cover.png" alt="A bear surveyor charting a fog-covered island tile by tile" />
             <h2><img class="icon" src="./games/mapmaker/favicon.svg" alt="" />Mapmaker</h2>
-            <p>Reveal a fog-covered island tile by tile on a limited store of supplies, and trade your charts at port for upgrades.</p>
+            <p data-i18n="mapmakerCard">Reveal a fog-covered island tile by tile on a limited store of supplies, and trade your charts at port for upgrades.</p>
           </a>
         </li>
         <li class="game">
           <a href="games/palisade/">
-            <img class="cover" src="./games/palisade/cover.png" alt="The ranger behind the barricade facing the Troll King" />
+            <img class="cover" data-i18n-alt="palisadeCover" src="./games/palisade/cover.png" alt="The ranger behind the barricade facing the Troll King" />
             <h2><img class="icon" src="./games/palisade/favicon.svg" alt="" />Palisade</h2>
-            <p>Hold the barricade as a ranger: arrows fly on their own, every level-up offers three upgrades, and a boss comes every ten waves.</p>
+            <p data-i18n="palisadeCard">Hold the barricade as a ranger: arrows fly on their own, every level-up offers three upgrades, and a boss comes every ten waves.</p>
           </a>
         </li>
         <li class="game">
           <a href="games/riftblade/">
-            <img class="cover" src="./games/riftblade/cover.png" alt="A neon-glow legionary on a dark desert grid, with a shield arc and a slowing cone, holding off a swarm of glowing scrap droids" />
+            <img class="cover" data-i18n-alt="riftbladeCover" src="./games/riftblade/cover.png" alt="A neon-glow legionary on a dark desert grid, with a shield arc and a slowing cone, holding off a swarm of glowing scrap droids" />
             <h2><img class="icon" src="./games/riftblade/favicon.svg" alt="" />Riftblade</h2>
-            <p>Hold out five minutes against scrap droids on a dune world as one of three blaster soldiers, then beat the boss; every level-up offers a new skill.</p>
+            <p data-i18n="riftbladeCard">Hold out five minutes against scrap droids on a dune world as one of three blaster soldiers, then beat the boss; every level-up offers a new skill.</p>
           </a>
         </li>
         <li class="game">
           <a href="games/scrapyard-titans/">
-            <img class="cover" src="./games/scrapyard-titans/cover.png" alt="A cel-shaded 8x8 arena tilted toward the viewer, with junk-built robots fighting scrap mites, a bench, a shop of robot cards and seven rival commanders" />
+            <img class="cover" data-i18n-alt="scrapyardTitansCover" src="./games/scrapyard-titans/cover.png" alt="A cel-shaded 8x8 arena tilted toward the viewer, with junk-built robots fighting scrap mites, a bench, a shop of robot cards and seven rival commanders" />
             <h2><img class="icon" src="./games/scrapyard-titans/favicon.svg" alt="" />Scrapyard Titans</h2>
-            <p>Buy junk-built robots, merge them, bolt on parts and watch them brawl on an 8x8 board against seven rival commanders until one is left.</p>
+            <p data-i18n="scrapyardTitansCard">Buy junk-built robots, merge them, bolt on parts and watch them brawl on an 8x8 board against seven rival commanders until one is left.</p>
           </a>
         </li>
         <li class="game">
           <a href="games/shrine-stack/">
-            <img class="cover" src="./games/shrine-stack/cover.png" alt="A temple of stacked stones with lanterns on its balanced tiers, a stone swinging above it at dusk" />
+            <img class="cover" data-i18n-alt="shrineStackCover" src="./games/shrine-stack/cover.png" alt="A temple of stacked stones with lanterns on its balanced tiers, a stone swinging above it at dusk" />
             <h2><img class="icon" src="./games/shrine-stack/favicon.svg" alt="" />Shrine Stack</h2>
-            <p>Drop swinging stones to stack a temple: overhangs break off, and every balanced tier of three earns a blessing.</p>
+            <p data-i18n="shrineStackCard">Drop swinging stones to stack a temple: overhangs break off, and every balanced tier of three earns a blessing.</p>
           </a>
         </li>
         <li class="game">
           <a href="games/space-wars/">
-            <img class="cover" src="./games/space-wars/cover.png" alt="A 70s paperback space battle: chrome 3D ships around a relay beacon on a violet nebula, with a contract pill in the top bar" />
+            <img class="cover" data-i18n-alt="spaceWarsCover" src="./games/space-wars/cover.png" alt="A 70s paperback space battle: chrome 3D ships around a relay beacon on a violet nebula, with a contract pill in the top bar" />
             <h2><img class="icon" src="./games/space-wars/favicon.svg" alt="" />Space Wars</h2>
-            <p>Build a base on a random star map, mine crystal and raise a fleet to take down four rival factions, each with its own ships and buildings.</p>
+            <p data-i18n="spaceWarsCard">Build a base on a random star map, mine crystal and raise a fleet to take down four rival factions, each with its own ships and buildings.</p>
           </a>
         </li>
         <li class="game">
           <a href="games/tincture-tinker/">
-            <img class="cover" src="./games/tincture-tinker/cover.png" alt="A board of herbs, roots and crystals next to an order for a Healing Draught" />
+            <img class="cover" data-i18n-alt="tinctureTinkerCover" src="./games/tincture-tinker/cover.png" alt="A board of herbs, roots and crystals next to an order for a Healing Draught" />
             <h2><img class="icon" src="./games/tincture-tinker/favicon.svg" alt="" />TinctureTinker</h2>
-            <p>Swap ingredients to match three or more and gather what each potion order asks for before the moves run out.</p>
+            <p data-i18n="tinctureTinkerCard">Swap ingredients to match three or more and gather what each potion order asks for before the moves run out.</p>
           </a>
         </li>
         <li class="game">
           <a href="games/tiny-kingdom/">
-            <img class="cover" src="./games/tiny-kingdom/cover.png" alt="A small island kingdom of farms, houses and towers between lakes and forests" />
+            <img class="cover" data-i18n-alt="tinyKingdomCover" src="./games/tiny-kingdom/cover.png" alt="A small island kingdom of farms, houses and towers between lakes and forests" />
             <h2><img class="icon" src="./games/tiny-kingdom/favicon.svg" alt="" />Tiny Kingdom</h2>
-            <p>Place farms, houses and towers on a small island. Each one scores against its neighbours, so plan the layout before the tiles run out.</p>
+            <p data-i18n="tinyKingdomCard">Place farms, houses and towers on a small island. Each one scores against its neighbours, so plan the layout before the tiles run out.</p>
           </a>
         </li>
         <li class="game">
           <a href="games/wyrmrail/">
-            <img class="cover" src="./games/wyrmrail/cover.png" alt="A green wyrm pulling a wagon of grain along a railway between villages" />
+            <img class="cover" data-i18n-alt="wyrmrailCover" src="./games/wyrmrail/cover.png" alt="A green wyrm pulling a wagon of grain along a railway between villages" />
             <h2><img class="icon" src="./games/wyrmrail/favicon.svg" alt="" />Wyrmrail</h2>
-            <p>Lay track across a valley and send a dragon-drawn train to carry cargo between villages before each order runs out of time.</p>
+            <p data-i18n="wyrmrailCard">Lay track across a valley and send a dragon-drawn train to carry cargo between villages before each order runs out of time.</p>
           </a>
         </li>
       </ul>
@@ -208,9 +215,19 @@
     <script type="module">
       import { mountSettingsPanel } from './shared/settingsPanel.ts';
       import { showPlayCounts } from './shared/playCount.ts';
+      import { language, setLanguage, t, translatePage } from './shared/i18n.ts';
 
+      // The page's text comes from shared/i18n (English in the markup is only the first paint), and
+      // switches at once when the language setting changes.
+      const translate = () => {
+        translatePage();
+        document.title = t('hubTitle');
+        for (const line of document.querySelectorAll('.plays')) line.textContent = t('plays', { n: Number(line.dataset.plays) });
+      };
+      setLanguage(language());
+      translate();
       const dialog = document.getElementById('settings');
-      mountSettingsPanel(dialog.querySelector('.panel'));
+      mountSettingsPanel(dialog.querySelector('.panel'), translate);
       document.getElementById('open-settings').addEventListener('click', () => dialog.showModal());
       document.getElementById('close-settings').addEventListener('click', () => dialog.close());
       // A click on the backdrop closes it too.
