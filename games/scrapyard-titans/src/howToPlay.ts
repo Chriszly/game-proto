@@ -1,6 +1,8 @@
 import type { HowToPlay } from '../../../shared/howToPlay';
+import { byLanguage } from '../../../shared/i18n';
 
-export const howToPlay: HowToPlay = {
+/** British English; US English spells it the same, so it falls back to this. */
+const en: HowToPlay = {
   goal: 'Build a squad of junk robots and outlast seven rival commanders. Every lost fight costs your commander health; the last one standing wins.',
   controls: [
     { input: 'Click or tap a shop card', action: 'Buy that robot onto your bench' },
@@ -34,3 +36,40 @@ export const howToPlay: HowToPlay = {
     'On the Scrap Rat round, tap the rat to zap gold out of it before it escapes.',
   ],
 };
+
+const de: HowToPlay = {
+  goal: 'Baue einen Trupp aus Schrottrobotern und überlebe sieben rivalisierende Kommandanten. Jeder verlorene Kampf kostet deinen Kommandanten Leben; wer zuletzt steht, gewinnt.',
+  controls: [
+    { input: 'Eine Shopkarte anklicken oder antippen', action: 'Diesen Roboter auf deine Bank kaufen' },
+    { input: 'Einen Roboter ziehen, oder ihn und dann ein Feld antippen', action: 'Ihn auf deine Bretthälfte stellen oder zwei Roboter tauschen' },
+    { input: 'Ein Teil auf einen Roboter ziehen, oder das Teil und dann den Roboter antippen', action: 'Es anschrauben; zwei Teile an einem Roboter ergeben einen fertigen Gegenstand' },
+    { input: 'Einen Roboter auf den Shop ziehen, oder E', action: 'Den Roboter verkaufen (mit E den ausgewählten)' },
+    { input: 'R, oder Würfeln', action: 'Neue Roboter im Shop für 2 Gold' },
+    { input: 'L, oder Halten', action: 'Diesen Shop für die nächste Runde behalten (neu würfeln hebt das auf)' },
+    { input: 'Einen Rivalen in der Liste rechts antippen', action: 'Sein Brett auf der fernen Hälfte ansehen, während du planst' },
+    { input: 'Das Feld unter der Liste antippen', action: 'Zwischen dem Schaden des letzten Kampfs und deinen Machtkarten wechseln' },
+    { input: 'X, oder XP für 4', action: '4 XP für 4 Gold; jede Stufe lässt einen Roboter mehr kämpfen' },
+    { input: 'Leertaste, oder KAMPF!', action: 'Den Kampf starten; im Kampf die Fähigkeit deines Kommandanten nutzen' },
+    { input: 'T, oder Tempo', action: 'Kämpfe mit 1x oder 2x ansehen' },
+    { input: '1, 2 oder 3', action: 'Eine Machtkarte wählen, wenn eine angeboten wird' },
+  ],
+  loop: [
+    'Wähle einen Kommandanten, eine Saison und ob das Brett Geländefelder hat.',
+    'Kaufe mit deinem Gold Roboter im Shop.',
+    'Stelle sie auf deine Bretthälfte: Tanks nach vorn, Schützen nach hinten.',
+    'Drücke KAMPF! und sieh zu, wie sie von selbst kämpfen.',
+    'Verdiene jede Runde Gold und XP, verschmelze drei Kopien zu einem stärkeren Roboter und wiederhole.',
+  ],
+  tips: [
+    'Roboter mit gleicher Herkunft oder Klasse schalten bei 2, 4 und 6 Merkmalsboni frei; tippe ein Merkmal für Details an.',
+    'Drei Kopien eines Roboters verschmelzen zu 2 Sternen; drei mit 2 Sternen ergeben 3 Sterne.',
+    'Gespartes Gold bringt Zinsen: 1 Gold je 10, die du hast, bis zu 5 pro Runde.',
+    'Monsterrunden lassen Teile fallen; dein Kommandant läuft hin und sammelt sie ein.',
+    'In Auswahlrunden wählen die schwächsten Kommandanten zuerst aus dem Ring.',
+    'Vergoldete Roboter im Shop zählen für zwei Herkünfte, verschmelzen aber nie.',
+    'Nimm ein Teil auf, um zu sehen, was es an jedem Roboter bauen würde, bevor du es anschraubst.',
+    'Tippe in der Schrottratten-Runde die Ratte an, um Gold aus ihr zu schocken, bevor sie entkommt.',
+  ],
+};
+
+export const howToPlay: HowToPlay = byLanguage({ en, de });

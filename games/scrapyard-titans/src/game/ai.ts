@@ -4,6 +4,7 @@
  * keep savings for interest from stage 3, bolt parts onto the best robot, tanks in front.
  */
 import { aiLog } from '../../../../shared/watch';
+import { t } from '../i18n';
 import { BENCH_SLOTS, CLASS_STATS, ECONOMY, UNIT_BY_ID, type AugmentId } from './data';
 import {
   allUnits, boardUnits, buy, buyXp, countTraits, draftPick, equip, pickAugment, removeUnit, reroll, sell, unitCost,
@@ -42,7 +43,7 @@ export function aiPlan(m: Match, p: Player) {
       const score = copies * 3 + synergy + def.cost * 0.6 + (s.gilded ? 3 : 0);
       const short = allUnits(p).length < p.level;
       const spend = p.gold - unitCost(s) >= reserve || copies >= 1 || short;
-      if ((score >= 1.5 || short) && spend && buy(m, p, i)) aiLog(`p${p.seat}`, `buys ${def.name}${copies ? ' (another copy)' : ''}`);
+      if ((score >= 1.5 || short) && spend && buy(m, p, i)) aiLog(`p${p.seat}`, `buys ${t(def.name)}${copies ? ' (another copy)' : ''}`);
     });
   };
   shop();
@@ -52,14 +53,14 @@ export function aiPlan(m: Match, p: Player) {
   const benched = p.bench.filter((b): b is Owned => !!b);
   if (benched.length >= BENCH_SLOTS - 1) {
     const weakest = benched.sort((a, b) => value(a) - value(b))[0];
-    aiLog(`p${p.seat}`, `sells ${UNIT_BY_ID[weakest.defId].name}`);
+    aiLog(`p${p.seat}`, `sells ${t(UNIT_BY_ID[weakest.defId].name)}`);
     sell(p, weakest);
   }
   arrange(p);
   // Parts onto the strongest robots on the board.
   const carriers = boardUnits(p).sort((a, b) => value(b) - value(a));
   for (const carrier of carriers) {
-    while (p.items.length && equip(p, 0, carrier)) aiLog(`p${p.seat}`, `bolts a part onto ${UNIT_BY_ID[carrier.defId].name}`);
+    while (p.items.length && equip(p, 0, carrier)) aiLog(`p${p.seat}`, `bolts a part onto ${t(UNIT_BY_ID[carrier.defId].name)}`);
   }
 }
 
@@ -102,7 +103,7 @@ export function aiDraft(m: Match, p: Player) {
     }
   });
   if (best >= 0) {
-    aiLog(`p${p.seat}`, `drafts ${UNIT_BY_ID[d.options[best].defId].name}`);
+    aiLog(`p${p.seat}`, `drafts ${t(UNIT_BY_ID[d.options[best].defId].name)}`);
     draftPick(m, p.seat, best);
   }
 }
