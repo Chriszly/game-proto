@@ -15,7 +15,7 @@ export const FONT = '"Avenir Next", Futura, "Century Gothic", "Trebuchet MS", "S
 
 export const BUTTON = { w: 116, h: 30 };
 
-export type ButtonKey = Role | UnitId | 'expansion' | Track | 'fallback' | 'flagship';
+export type ButtonKey = Role | UnitId | 'expansion' | Track | 'fallback' | 'flagship' | 'rally';
 
 /** The generic role of each building and unit type, as the buttons and hover labels name it: keys of `i18n/en.ts`. */
 export const ROLE_LABEL: Record<ButtonKey, TextKey> = {
@@ -33,6 +33,7 @@ export const ROLE_LABEL: Record<ButtonKey, TextKey> = {
   engines: 'roleResearch',
   fallback: 'roleCommand',
   flagship: 'roleFlagship',
+  rally: 'roleCommand',
 };
 
 export interface Button {
@@ -55,6 +56,8 @@ export const RESEARCH_COLUMN = { x: 494, y: 446, w: 112, h: 26, gap: 3 };
 export const FALL_BACK_BUTTON: Button = { kind: 'command', key: 'fallback', x: 868, y: 445, w: 84, h: 24 };
 /** The Flagship button, a slim pill above the build row: locked until the third contract, then builds the one flagship at the hub. */
 export const FLAGSHIP_BUTTON: Button = { kind: 'command', key: 'flagship', x: 300, y: 444, w: 186, h: 21 };
+/** The Rally button, a slim pill left of the Flagship button (also the R key): plants or moves the rally point for new warships. */
+export const RALLY_BUTTON: Button = { kind: 'command', key: 'rally', x: 150, y: 444, w: 144, h: 21 };
 
 /** The buttons of the command bar, in the top-left corner of each one. */
 export const BUTTONS: Button[] = [
@@ -66,6 +69,7 @@ export const BUTTONS: Button[] = [
   }),
   FALL_BACK_BUTTON,
   FLAGSHIP_BUTTON,
+  RALLY_BUTTON,
 ];
 /** Where the message line and the contract panel start, right of the research column. */
 export const PANEL_X = RESEARCH_COLUMN.x + RESEARCH_COLUMN.w + 8;
