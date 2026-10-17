@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { formatNumber, language } from '../../../../shared/i18n';
 import { settings } from '../../../../shared/settings';
 import { BACK_RES, bakeScenery, DUSK, INK, INK_HEX, PAD, RES, SCREENS } from '../art/puppet';
 import { DISTRICT_IDS, DISTRICTS, type DistrictId, JARS, LANTERN_SPOTS } from '../game/places';
@@ -50,8 +51,10 @@ import {
   type CurseId,
   type GameEvent,
   type GameState,
+  type Order,
   type UpgradeId,
 } from '../game/state';
+import { t, type TextKey } from '../i18n';
 import { makeButton } from '../ui/Button';
 import {
   BAT_HIT,
@@ -79,6 +82,9 @@ const MAX_STEP_MS = 100;
 const POPUP_MS = 1200;
 /** How long night shows the lit castle and its coins before the night panel opens, in milliseconds. */
 const PANEL_DELAY_MS = 1500;
+
+/** A pay multiplier with two decimals, like 1.25 (1,25 in German). */
+const mult2 = (n: number) => formatNumber(n, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 type TextOpts = { size: number; color?: string; bold?: boolean; glow?: boolean; stroke?: boolean };
 
@@ -224,15 +230,15 @@ export class GameScene extends Phaser.Scene {
 
   /** A line of serif lettering: `glow` lights it from behind like light through cut card. */
   private label(x: number, y: number, text: string, o: TextOpts) {
-    const t = this.add.text(x, y, text, {
+    const lettering = this.add.text(x, y, text, {
       fontFamily: FONT,
       fontSize: `${o.size}px`,
       fontStyle: o.bold ? 'bold' : 'normal',
       color: o.color ?? '#f4e2c8',
       ...(o.stroke ? { stroke: INK, strokeThickness: 4 } : {}),
     });
-    if (o.glow) t.setShadow(0, 0, 'rgba(255,150,70,0.85)', 6, !!o.stroke, true);
-    return t;
+    if (o.glow) lettering.setShadow(0, 0, 'rgba(255,150,70,0.85)', 6, !!o.stroke, true);
+    return lettering;
   }
 
   /** A sprite painted at RES canvas pixels per view pixel, drawn at view size. */
@@ -288,7 +294,7 @@ export class GameScene extends Phaser.Scene {
   private createOrderCard() {
     const { x, y, w } = ORDER;
     this.add.image(x - PAD, y - PAD, 'order-card').setOrigin(0).setScale(1 / RES).setDepth(UI_DEPTH);
-    this.label(x + 42, y + 15, "HERALD'S ORDER", { size: 10, bold: true, color: '#ffd08a', glow: true }).setOrigin(0, 0.5).setDepth(UI_DEPTH);
+    this.label(x + 42, y + 15, t('heraldsOrder'), { size: 10, bold: true, color: '#ffd08a', glow: true }).setOrigin(0, 0.5).setDepth(UI_DEPTH);
     this.orderText = this.label(x + 42, y + 29, '', { size: 10.5, glow: true }).setOrigin(0, 0.5).setDepth(UI_DEPTH);
     this.orderReward = this.label(x + w - 24, y + 18.5, '', { size: 8.5, bold: true, color: INK }).setOrigin(0.5).setDepth(UI_DEPTH);
     this.orderProgressText = this.label(x + 118, y + 45, '', { size: 9.5, color: '#c9a882' }).setOrigin(0, 0.5).setDepth(UI_DEPTH);
@@ -354,8 +360,8 @@ export class GameScene extends Phaser.Scene {
       const left = bx - SHOP.w / 2;
       const top = by - SHOP.h / 2;
       const bg = this.add.image(left - PAD, top - PAD, 'card-off').setOrigin(0).setScale(1 / RES);
-      const title = id === 'cask' ? 'Cask' : id === 'hearth' ? 'Hearth' : UPGRADES[id].name;
-      const text = id === 'cask' ? `One more refill (night ${CASK_NIGHT} on)` : id === 'hearth' ? 'Rekindle a hearth gone out' : UPGRADES[id].blurb;
+      const title = t(id === 'cask' ? 'caskName' : id === 'hearth' ? 'hearthName' : UPGRADES[id].name);
+      const text = id === 'cask' ? t('caskBlurb', { n: CASK_NIGHT }) : t(id === 'hearth' ? 'hearthBlurb' : UPGRADES[id].blurb);
       const name = this.label(left + 12, top + 7, title, { size: 15, bold: true, color: '#ffc870', glow: true });
       const level = this.label(left + 18 + name.width, top + 10, '', { size: 10, color: '#b8a8c8' });
       const blurb = this.label(left + 12, top + 31, text, { size: 10.5, color: '#e0cfb4' });
@@ -368,7 +374,7 @@ export class GameScene extends Phaser.Scene {
       this.shopButtons.push({ id, x: bx, y: by, w: SHOP.w, h: SHOP.h });
       parts.push(bg, name, level, blurb, cost, hit);
     });
-    parts.push(makeButton(this, NEXT_BUTTON.x, NEXT_BUTTON.y, 'Next dusk', () => nextDusk(this.state)));
+    parts.push(makeButton(this, NEXT_BUTTON.x, NEXT_BUTTON.y, t('nextDusk'), () => nextDusk(this.state)));
     this.nightPanel = this.add.container(0, 0, parts).setDepth(UI_DEPTH + 10).setVisible(false);
   }
 
@@ -379,7 +385,7 @@ export class GameScene extends Phaser.Scene {
     const dim = this.add.rectangle(cx, cy, VIEW.w, VIEW.h, 0x000000, 0.35).setInteractive();
     const panel = this.add.image(cx - MOVE_PANEL.w / 2 - PAD, cy - MOVE_PANEL.h / 2 - PAD, 'panel-move').setOrigin(0).setScale(1 / RES);
     this.moveTitle = this.label(cx, cy - MOVE_PANEL.h / 2 + 32, '', { size: 26, bold: true, color: '#ffc870', glow: true }).setOrigin(0.5);
-    const sub = this.label(cx, cy - MOVE_PANEL.h / 2 + 66, 'The keep can stand in another district from the next dusk, with its own lanterns, chains and rule.', {
+    const sub = this.label(cx, cy - MOVE_PANEL.h / 2 + 66, t('moveSub'), {
       size: 12.5,
     })
       .setOrigin(0.5)
@@ -391,9 +397,9 @@ export class GameScene extends Phaser.Scene {
       const left = bx - MOVE_CARDS.w / 2;
       const top = by - MOVE_CARDS.h / 2;
       const bg = this.add.image(left - PAD, top - PAD, 'card-wide-on').setOrigin(0).setScale(1 / RES);
-      const name = this.label(left + 14, top + 6, DISTRICTS[id].name, { size: 16, bold: true, color: '#ffc870', glow: true });
+      const name = this.label(left + 14, top + 6, t(DISTRICTS[id].name), { size: 16, bold: true, color: '#ffc870', glow: true });
       const note = this.label(left + MOVE_CARDS.w - 14, top + 10, '', { size: 11, color: '#b8a8c8' }).setOrigin(1, 0);
-      const blurb = this.label(left + 14, top + 30, DISTRICTS[id].blurb, { size: 11.5, color: '#e0cfb4' }).setWordWrapWidth(MOVE_CARDS.w - 28);
+      const blurb = this.label(left + 14, top + 30, t(DISTRICTS[id].blurb), { size: 11.5, color: '#e0cfb4' }).setWordWrapWidth(MOVE_CARDS.w - 28);
       const hit = this.add
         .zone(bx, by, MOVE_CARDS.w, MOVE_CARDS.h)
         .setInteractive({ useHandCursor: true })
@@ -402,7 +408,7 @@ export class GameScene extends Phaser.Scene {
       this.moveButtons.push({ id, x: bx, y: by, w: MOVE_CARDS.w, h: MOVE_CARDS.h });
       parts.push(bg, name, note, blurb, hit);
     });
-    parts.push(this.label(cx, cy + MOVE_PANEL.h / 2 - 28, 'Tap a district to move the keep there, or stay where it is.', { size: 11, color: '#c9a882' }).setOrigin(0.5));
+    parts.push(this.label(cx, cy + MOVE_PANEL.h / 2 - 28, t('moveHint'), { size: 11, color: '#c9a882' }).setOrigin(0.5));
     this.movePanel = this.add.container(0, 0, parts).setDepth(UI_DEPTH + 12).setVisible(false);
   }
 
@@ -413,7 +419,7 @@ export class GameScene extends Phaser.Scene {
     const dim = this.add.rectangle(cx, cy, VIEW.w, VIEW.h, 0x000000, 0.35).setInteractive();
     const panel = this.add.image(cx - MOVE_PANEL.w / 2 - PAD, cy - MOVE_PANEL.h / 2 - PAD, 'panel-move').setOrigin(0).setScale(1 / RES);
     this.perilTitle = this.label(cx, cy - MOVE_PANEL.h / 2 + 32, '', { size: 26, bold: true, color: '#ffc870', glow: true }).setOrigin(0.5);
-    const sub = this.label(cx, cy - MOVE_PANEL.h / 2 + 68, 'Each curse taken lasts the rest of the game,\nand every nightfall pays 25% more for it. Take one, both or neither.', {
+    const sub = this.label(cx, cy - MOVE_PANEL.h / 2 + 68, t('perilSub'), {
       size: 12.5,
     })
       .setOrigin(0.5)
@@ -440,7 +446,7 @@ export class GameScene extends Phaser.Scene {
       this.perilButtons.push({ x: bx, y: by, w: MOVE_CARDS.w, h: MOVE_CARDS.h });
       parts.push(bg, name, note, blurb, hit);
     }
-    parts.push(makeButton(this, this.goOnButton.x, this.goOnButton.y, 'Go on', () => endPeril(this.state)));
+    parts.push(makeButton(this, this.goOnButton.x, this.goOnButton.y, t('goOn'), () => endPeril(this.state)));
     this.perilPanel = this.add.container(0, 0, parts).setDepth(UI_DEPTH + 12).setVisible(false);
   }
 
@@ -449,9 +455,9 @@ export class GameScene extends Phaser.Scene {
     const cy = VIEW.h / 2;
     const dim = this.add.rectangle(cx, cy, VIEW.w, VIEW.h, 0x000000, 0.6).setInteractive();
     const panel = this.add.image(cx - SMALL_PANEL.w / 2 - PAD, cy - SMALL_PANEL.h / 2 - PAD, 'panel-small').setOrigin(0).setScale(1 / RES);
-    const title = this.label(cx, cy - 76, 'The keep went dark', { size: 28, bold: true, color: '#ffc870', glow: true }).setOrigin(0.5);
+    const title = this.label(cx, cy - 76, t('keepDark'), { size: 28, bold: true, color: '#ffc870', glow: true }).setOrigin(0.5);
     this.gameOverText = this.label(cx, cy - 10, '', { size: 16 }).setOrigin(0.5).setAlign('center');
-    const again = makeButton(this, cx, cy + 72, 'New keep', () => this.restart());
+    const again = makeButton(this, cx, cy + 72, t('newKeep'), () => this.restart());
     this.gameOver = this.add.container(0, 0, [dim, panel, title, this.gameOverText, again]).setDepth(UI_DEPTH + 20).setVisible(false);
   }
 
@@ -465,16 +471,11 @@ export class GameScene extends Phaser.Scene {
       this.skyLanterns.push(sky);
     }
     const panel = this.add.image(cx - SMALL_PANEL.w / 2 - PAD, cy - SMALL_PANEL.h / 2 - PAD, 'panel-small').setOrigin(0).setScale(1 / RES);
-    const title = this.label(cx, cy - 78, 'The Great Festival!', { size: 28, bold: true, color: '#ffc870', glow: true }).setOrigin(0.5);
-    const text = this.label(
-      cx,
-      cy - 12,
-      `${FESTIVAL_NIGHTS} nights kept: the whole valley comes\nto see the keep's lanterns.\n\nThe nights go on. How long can it hold?`,
-      { size: 15 },
-    )
+    const title = this.label(cx, cy - 78, t('festivalTitle'), { size: 28, bold: true, color: '#ffc870', glow: true }).setOrigin(0.5);
+    const text = this.label(cx, cy - 12, t('festivalText', { n: FESTIVAL_NIGHTS }), { size: 15 })
       .setOrigin(0.5)
       .setAlign('center');
-    const go = makeButton(this, this.carryOnButton.x, this.carryOnButton.y, 'Keep going', () => carryOn(this.state));
+    const go = makeButton(this, this.carryOnButton.x, this.carryOnButton.y, t('keepGoing'), () => carryOn(this.state));
     this.festival = this.add
       .container(0, 0, [dim, ...this.skyLanterns, panel, title, text, go])
       .setDepth(UI_DEPTH + 15)
@@ -541,8 +542,8 @@ export class GameScene extends Phaser.Scene {
     const s = this.state;
     const kind = NIGHT_KINDS[s.kind];
     this.kindIcon.setTexture(`kind-${s.kind}`);
-    this.kindName.setText(kind.name);
-    this.kindBlurb.setText(kind.blurb);
+    this.kindName.setText(t(kind.name));
+    this.kindBlurb.setText(t(kind.blurb));
     const still = settings.reduceMotion;
     this.fog.setVisible(s.kind === 'fog').setX(still ? 0 : Math.sin(this.clock / 6000) * 30);
     this.bunting.setVisible(s.kind === 'feast');
@@ -573,9 +574,9 @@ export class GameScene extends Phaser.Scene {
         const d = Math.hypot(b.x - a.x, b.y - a.y);
         const n = Math.floor(d / 7);
         for (let j = 2; j < n - 1; j++) {
-          const t = j / n;
-          const x = a.x + (b.x - a.x) * t;
-          const y = a.y - 22 + (b.y - a.y) * t + Math.sin(t * Math.PI) * 18;
+          const f = j / n;
+          const x = a.x + (b.x - a.x) * f;
+          const y = a.y - 22 + (b.y - a.y) * f + Math.sin(f * Math.PI) * 18;
           if (lit) g.fillStyle(0xffc870, 0.25).fillCircle(x, y, 3.2);
           g.fillStyle(lit ? 0xffd890 : 0xfff0c8, lit ? 1 : 0.35).fillCircle(x, y, lit ? 1.5 : 1.1);
         }
@@ -605,7 +606,7 @@ export class GameScene extends Phaser.Scene {
       const kind = lantern.kind === 'plain' ? '' : `${lantern.kind}-`;
       parts.lamp.setTexture(`lantern-${kind}${lantern.lit ? 'lit' : 'dark'}`);
       if (lantern.kind !== 'plain') {
-        parts.kindLabel.setVisible(true).setPosition(x, y + 38).setText(LANTERN_KINDS[lantern.kind].name);
+        parts.kindLabel.setVisible(true).setPosition(x, y + 38).setText(t(LANTERN_KINDS[lantern.kind].name));
       }
       // The flicker wavers the flame and the glow; reduce motion holds them still.
       const flicker = still ? 0 : Math.sin(this.clock / 90 + i * 1.7);
@@ -635,7 +636,7 @@ export class GameScene extends Phaser.Scene {
         g.lineStyle(1.8, 0xff8c3c, 0.95 * pulse).strokeCircle(x, y, 25);
         g.lineStyle(1.8, 0xff8c3c, 0.4 * pulse).strokeCircle(x, y, 31);
         parts.tag.setVisible(true).setY(y - 53);
-        parts.tagText.setText(`Save it +${closeCallPay(s)}c`);
+        parts.tagText.setText(t('saveIt', { n: closeCallPay(s) }));
       }
     });
   }
@@ -643,17 +644,17 @@ export class GameScene extends Phaser.Scene {
   /** The queue position badge numbers, made on demand. */
   private badges = new Map<number, Phaser.GameObjects.Text>();
   private queueBadge(i: number, queued: number) {
-    let t = this.badges.get(i);
+    let badge = this.badges.get(i);
     if (queued < 0) {
-      t?.setVisible(false);
+      badge?.setVisible(false);
       return;
     }
-    if (!t) {
-      t = this.label(0, 0, '', { size: 10, bold: true, color: '#ffb040' }).setOrigin(0.5).setDepth(6.1);
-      this.badges.set(i, t);
+    if (!badge) {
+      badge = this.label(0, 0, '', { size: 10, bold: true, color: '#ffb040' }).setOrigin(0.5).setDepth(6.1);
+      this.badges.set(i, badge);
     }
     const l = this.state.lanterns[i];
-    t.setVisible(true).setPosition(l.x + 20, l.y - 22).setText(String(queued + 1));
+    badge.setVisible(true).setPosition(l.x + 20, l.y - 22).setText(formatNumber(queued + 1));
   }
 
   /** A ring of punched holes round (x, y), the first `f` of them lit in `color`. */
@@ -691,8 +692,8 @@ export class GameScene extends Phaser.Scene {
       g.lineStyle(width, 0xffecd2, alpha * (still ? 0.85 : 0.45)).strokePoints(pts);
       if (!still) {
         // A brighter gust of air travels along the curl.
-        const t = (this.clock / 900 + phase) % 1;
-        const a = Math.floor(t * 34);
+        const along = (this.clock / 900 + phase) % 1;
+        const a = Math.floor(along * 34);
         g.lineStyle(width + 0.6, 0xfff6e8, alpha).strokePoints(pts.slice(a, a + 8));
       }
       g.lineStyle(width, 0xffecd2, alpha * 0.85).beginPath().arc(end.x + 4 * dir, end.y - 4, 4, Math.PI * 0.7, Math.PI * 2.1).strokePath();
@@ -717,9 +718,9 @@ export class GameScene extends Phaser.Scene {
     if (tx < ORDER.x + ORDER.w + 6 && ty < ORDER.y + ORDER.h + 6) ty = ORDER.y + ORDER.h + 8;
     this.gustTag.setPosition(tx, ty);
     const secs = Math.max(1, Math.ceil((s.duskMs - gust.atMs) / 1000));
-    this.gustTitle.setText(`Gust in ${secs}s`);
+    this.gustTitle.setText(t('gustIn', { n: secs }));
     const shielded = s.moths.some((m) => m.target === gust.target && (m.task === 'lighting' || m.task === 'guard'));
-    this.gustNote.setText(shielded ? 'a moth is shielding it' : 'a moth on it shields it');
+    this.gustNote.setText(t(shielded ? 'gustShielding' : 'gustShield'));
     // The plaque's pointer, a sliver of card reaching to the lantern.
     const px = tx + (fromRight ? 30 : GUST_TAG.w - 30);
     p.fillStyle(INK_HEX).fillTriangle(px - 6, ty + GUST_TAG.h - 1, px + 6, ty + GUST_TAG.h - 1, T.x + 14 * dir, T.y - 26);
@@ -755,8 +756,8 @@ export class GameScene extends Phaser.Scene {
       if (ty < KIND_TAG.y + KIND_TAG.h + 6) ty = KIND_TAG.y + KIND_TAG.h + 8;
       this.owlTag.setPosition(tx, ty);
       const secs = Math.max(1, Math.ceil((s.duskMs - owl.atMs) / 1000));
-      this.owlTitle.setText(`Owl in ${secs}s`);
-      this.owlNote.setText('a moth on a lantern of this row keeps it');
+      this.owlTitle.setText(t('owlIn', { n: secs }));
+      this.owlNote.setText(t('owlNote'));
       return;
     }
     const wingsUp = still || Math.floor(this.clock / 140) % 2 === 0;
@@ -782,8 +783,8 @@ export class GameScene extends Phaser.Scene {
     if (tx < ORDER.x + ORDER.w + 6 && ty < ORDER.y + ORDER.h + 6) ty = ORDER.y + ORDER.h + 8;
     if (tx + CALL_TAG.w > KIND_TAG.x - 6 && ty < KIND_TAG.y + KIND_TAG.h + 6) ty = KIND_TAG.y + KIND_TAG.h + 8;
     this.callTag.setPosition(tx, ty);
-    this.callTitle.setText(`A window calls: ${Math.max(1, Math.ceil(call.msLeft / 1000))}s`);
-    this.callNote.setText(`light this lantern in time: +${callPay(s)}c`);
+    this.callTitle.setText(t('windowCalls', { n: Math.max(1, Math.ceil(call.msLeft / 1000)) }));
+    this.callNote.setText(t('windowNote', { n: callPay(s) }));
   }
 
   private drawMoths() {
@@ -807,7 +808,7 @@ export class GameScene extends Phaser.Scene {
       m.hit.destroy();
       m.nap.destroy();
     }
-    const t = this.trails.clear();
+    const trail = this.trails.clear();
     const still = settings.reduceMotion;
     const twoJars = s.levels.jar > 0;
     this.jar2.setVisible(twoJars);
@@ -827,8 +828,8 @@ export class GameScene extends Phaser.Scene {
       parts.nap.setVisible(m.task === 'rest');
       if (m.task === 'rest') {
         // A lilac ring fills as it rests, under a "zz" countdown.
-        this.holes(t, m.x, m.y, 17, 1 - m.restMs / Math.max(1, restMs(s)), 0xd8c8ff, 1.4);
-        parts.nap.setPosition(m.x, m.y - 26).setText(`zz ${Math.ceil(m.restMs / 1000)}s`);
+        this.holes(trail, m.x, m.y, 17, 1 - m.restMs / Math.max(1, restMs(s)), 0xd8c8ff, 1.4);
+        parts.nap.setPosition(m.x, m.y - 26).setText(t('nap', { n: Math.ceil(m.restMs / 1000) }));
       }
       if (m.task === 'home') {
         // A dotted chalk trail back to its jar.
@@ -836,7 +837,7 @@ export class GameScene extends Phaser.Scene {
         const jx = jar.x;
         const jy = jar.y - 46;
         const d = Math.hypot(jx - m.x, jy - m.y);
-        for (let k = 10; k < d; k += 5.5) t.fillStyle(0xffe4b4, 0.45).fillCircle(m.x + ((jx - m.x) * k) / d, m.y + 6 + ((jy - m.y - 6) * k) / d, 0.8);
+        for (let k = 10; k < d; k += 5.5) trail.fillStyle(0xffe4b4, 0.45).fillCircle(m.x + ((jx - m.x) * k) / d, m.y + 6 + ((jy - m.y - 6) * k) / d, 0.8);
       }
     });
   }
@@ -874,7 +875,7 @@ export class GameScene extends Phaser.Scene {
       if (bat.task !== 'fly') return;
       // A dotted violet line to the lantern it is after.
       const d = Math.hypot(lantern.x - bat.x, lantern.y - bat.y);
-      for (let t = 24; t < d - 26; t += 9) g.fillStyle(0xd6c8ff, 0.55).fillCircle(bat.x + ((lantern.x - bat.x) * t) / d, bat.y + ((lantern.y - bat.y) * t) / d, 1.2);
+      for (let k = 24; k < d - 26; k += 9) g.fillStyle(0xd6c8ff, 0.55).fillCircle(bat.x + ((lantern.x - bat.x) * k) / d, bat.y + ((lantern.y - bat.y) * k) / d, 1.2);
       // A ring of holes round the bat: pale blue once a moth is chasing it, and a teal ring while a bell holds it.
       const chased = s.moths.some((m) => m.task === 'chase' && m.bat === bat.id);
       this.holes(g, bat.x, bat.y + bob, 22, chased ? 1 : 0, 0xbcd4ff, 1.4);
@@ -887,9 +888,9 @@ export class GameScene extends Phaser.Scene {
 
   private drawOrder() {
     const s = this.state;
-    const { goal, text, reward } = s.order;
-    this.orderText.setText(text);
-    this.orderReward.setText(`+${reward}c`);
+    const { goal, reward } = s.order;
+    this.orderText.setText(this.describeOrder(s.order));
+    this.orderReward.setText(t('reward', { n: reward }));
     const { done, of } = orderProgress(s);
     this.orderPips.forEach((pip, k) => {
       pip.setVisible(k < of);
@@ -898,38 +899,33 @@ export class GameScene extends Phaser.Scene {
     });
     this.orderProgressText.setX(ORDER.x + 50 + of * 22 + 2);
     const met = done >= of;
-    const line =
-      goal.kind === 'lit'
-        ? `${done}/${of} burning${met ? ' · hold till dark' : ''}`
-        : goal.kind === 'closeCalls'
-          ? `${done}/${of} saved in time`
-          : `${done}/${of} shielded`;
-    this.orderProgressText.setText(s.phase === 'dusk' ? line : s.report?.orderMet ? 'Order kept!' : 'Order missed');
+    const line = t(goal.kind === 'lit' ? (met ? 'progressLitMet' : 'progressLit') : goal.kind === 'closeCalls' ? 'progressSaved' : 'progressShielded', { done, of });
+    this.orderProgressText.setText(s.phase === 'dusk' ? line : t(s.report?.orderMet ? 'orderKept' : 'orderMissed'));
   }
 
   private drawHud() {
     const s = this.state;
-    this.nightText.setText(`Night ${s.night}`);
+    this.nightText.setText(t('night', { n: s.night }));
     this.hearths.forEach((h, i) => h.setTexture(i < s.lives ? 'hearth-lit' : 'hearth-out'));
-    this.coinsText.setText(String(s.coins));
+    this.coinsText.setText(formatNumber(s.coins));
     const lit = s.lanterns.filter((l) => l.lit).length;
     const need = required(s);
-    this.litText.setText(`Lit ${lit}/${s.lanterns.length}`);
-    this.needText.setText(`need ${need}`);
+    this.litText.setText(t('lit', { lit, count: s.lanterns.length }));
+    this.needText.setText(t('need', { n: need }));
     // setColor always redraws the text, so only set it when it changes.
     const litColour = lit >= need ? '#ffc870' : '#f4e2c8';
     if (this.litText.style.color !== litColour) this.litText.setColor(litColour);
 
     this.caskIcon.setTexture(s.cask > 0 ? 'cask-full' : 'cask-empty');
-    this.caskText.setText(String(s.cask));
+    this.caskText.setText(formatNumber(s.cask));
     // Grey until refills draw on it, orange once it is dry.
     const caskColour = !usesCask(s) ? '#8a7e8a' : s.cask <= 0 ? '#ff9a6a' : '#ffe4b8';
     if (this.caskText.style.color !== caskColour) this.caskText.setColor(caskColour);
     const f = s.phase === 'dusk' ? s.duskMs / DUSK_MS : 0;
     this.duskFill.setCrop(0, 0, DUSK.w * RES * f, DUSK.h * RES).setVisible(f > 0);
     this.duskSun.setX(DUSK.x + DUSK.w * f);
-    const queued = s.queue.length ? ` · ${s.queue.length} queued` : '';
-    this.duskText.setText(s.phase === 'dusk' ? `Nightfall in ${Math.ceil(s.duskMs / 1000)}s${queued}` : 'Night');
+    const secs = Math.ceil(s.duskMs / 1000);
+    this.duskText.setText(s.phase !== 'dusk' ? t('nightHasFallen') : t(s.queue.length ? 'nightfallQueued' : 'nightfallIn', { s: secs, n: s.queue.length }));
   }
 
   /** True once the night panel or the game-over panel is open; read by the playthrough test. */
@@ -945,7 +941,7 @@ export class GameScene extends Phaser.Scene {
     this.movePanel.setVisible(s.phase === 'move' && this.panelOpen);
     this.perilPanel.setVisible(s.phase === 'peril' && this.panelOpen);
     if (s.phase === 'peril') {
-      this.perilTitle.setText(`Night ${s.night} falls: pick your peril`);
+      this.perilTitle.setText(t('perilTitle', { n: s.night }));
       // A taken card stays where it was, greyed, until the panel closes.
       this.perilCards.forEach((card, k) => {
         const id = (card.name.getData('curse') as CurseId | undefined) ?? s.offer[k];
@@ -953,20 +949,20 @@ export class GameScene extends Phaser.Scene {
         if (!id) return;
         const taken = !s.offer.includes(id);
         card.bg.setTexture(taken ? 'card-wide-off' : 'card-wide-on');
-        card.name.setText(CURSES[id].name);
-        card.blurb.setText(CURSES[id].blurb);
-        card.note.setText(taken ? 'taken' : s.curses[id] ? `taken ${s.curses[id]}x` : '');
+        card.name.setText(t(CURSES[id].name));
+        card.blurb.setText(t(CURSES[id].blurb));
+        card.note.setText(taken ? t('taken') : s.curses[id] ? t('takenTimes', { n: s.curses[id] }) : '');
       });
-      this.perilMultText.setText(`Pay now x${perilMult(s).toFixed(2)}  ·  best x${s.bestPeril.toFixed(2)}`);
+      this.perilMultText.setText(t('perilMult', { mult: mult2(perilMult(s)), best: mult2(s.bestPeril) }));
     } else {
       for (const card of this.perilCards) card.name.setData('curse', undefined);
     }
     if (s.phase === 'move') {
-      this.moveTitle.setText(`Night ${s.night} falls: where next?`);
+      this.moveTitle.setText(t('moveTitle', { n: s.night }));
       for (const [id, parts] of this.moveCards) {
         const here = id === s.district;
         parts.bg.setTexture(here ? 'card-wide-off' : 'card-wide-on');
-        parts.note.setText(here ? 'stay here' : '');
+        parts.note.setText(here ? t('stayHere') : '');
       }
     }
     if (s.phase === 'festival') {
@@ -976,70 +972,77 @@ export class GameScene extends Phaser.Scene {
     }
     const r = s.report;
     if (s.phase === 'night' && r) {
-      this.nightTitle.setText(`Night ${s.night} falls`);
-      const verdict = r.lostHearth ? 'Too dark: one of the hearths went out.' : r.lit === r.count ? 'Every lantern lit: the keep blazes!' : 'The keep holds the dark at bay.';
+      this.nightTitle.setText(t('nightFalls', { n: s.night }));
+      const verdict = t(r.lostHearth ? 'verdictLost' : r.lit === r.count ? 'verdictAll' : 'verdictHeld');
       const mult = s.kind === 'feast' ? FEAST_PAY : 1;
-      const order = r.orderMet ? `Herald's order kept: +${s.order.reward}` : "Herald's order missed";
-      const chains = r.chains ? `  ·  ${r.chains} chain${r.chains > 1 ? 's' : ''} lit: +${r.chains * CHAIN_BONUS * mult}` : '';
-      const peril = s.paidMult > 1 ? `  ·  curses paid x${s.paidMult.toFixed(2)}` : '';
-      const during = [s.closeCalls ? `+${s.closeCalls * closeCallPay(s)} in close calls` : '', s.callsKept ? `+${s.callsKept * callPay(s)} from windows` : '']
+      const order = r.orderMet ? t('orderKeptLine', { n: s.order.reward }) : t('orderMissedLine');
+      const chains = r.chains ? t('chainsLit', { n: r.chains, coins: r.chains * CHAIN_BONUS * mult }) : '';
+      const peril = s.paidMult > 1 ? t('cursesPaid', { mult: mult2(s.paidMult) }) : '';
+      const during = [s.closeCalls ? t('closeCallsEarned', { n: s.closeCalls * closeCallPay(s) }) : '', s.callsKept ? t('windowsEarned', { n: s.callsKept * callPay(s) }) : '']
         .filter(Boolean)
         .join(', ');
-      const calls = during ? `  (${during})` : '';
-      const feast = mult > 1 ? '  ·  the feast pays double' : '';
-      const goal = s.festival ? 'The Great Festival was held: the nights go on.' : `Great Festival: ${s.kept} of ${FESTIVAL_NIGHTS} nights kept`;
+      const feast = mult > 1 ? t('feastDouble') : '';
+      const goal = s.festival ? t('festivalHeldGoal') : t('festivalGoal', { kept: s.kept, of: FESTIVAL_NIGHTS });
       const next = NIGHT_KINDS[s.nextKind];
-      const where = s.nextDistrict !== s.district ? ` at ${DISTRICTS[s.nextDistrict].name}` : '';
+      const where = s.nextDistrict !== s.district ? t('nextWhere', { district: t(DISTRICTS[s.nextDistrict].name) }) : '';
+      // English lowers the rule's first letter inside the brackets; German nouns keep their capital.
+      const blurb = t(next.blurb);
       this.tallyText.setText([
-        `${r.lit} of ${r.count} lanterns lit (${r.required} needed)${feast}`,
+        t('litLine', { lit: r.lit, count: r.count, need: r.required, feast }),
         order + chains,
-        `+${r.earned} coins${calls}${peril}`,
+        t('coinsLine', { n: r.earned, during: during ? `  (${during})` : '', peril }),
         verdict,
         goal,
-        `Next: ${next.name}${where} (${next.blurb.toLowerCase()})`,
+        t('nextNight', { kind: t(next.name), where, blurb: language() === 'de' ? blurb : blurb[0].toLowerCase() + blurb.slice(1) }),
       ]);
       for (const [id, parts] of this.shop) {
         const cost = id === 'cask' ? (s.cask >= CASK_MAX ? null : CASK_COST) : id === 'hearth' ? hearthCost(s) : nextCost(s, id);
         const affordable = cost !== null && s.coins >= cost;
         parts.bg.setTexture(affordable ? 'card-on' : 'card-off');
         parts.level.setText(
-          id === 'cask' ? `${s.cask}/${CASK_MAX}` : id === 'hearth' ? `${s.lives}/${LIVES} lit` : id === 'jar' ? '' : `Lv ${s.levels[id]}/${UPGRADES[id].costs.length}`,
+          id === 'cask'
+            ? t('caskLevel', { n: s.cask, max: CASK_MAX })
+            : id === 'hearth'
+              ? t('hearthLevel', { n: s.lives, max: LIVES })
+              : id === 'jar'
+                ? ''
+                : t('level', { n: s.levels[id], max: UPGRADES[id].costs.length }),
         );
-        const none = id === 'cask' ? 'Full' : id === 'hearth' ? (s.rekindled >= HEARTH_COSTS.length ? 'Spent' : 'All lit') : id === 'jar' ? 'Built' : 'Maxed';
-        parts.cost.setText(cost === null ? none : `${cost}c`);
+        const none: TextKey = id === 'cask' ? 'full' : id === 'hearth' ? (s.rekindled >= HEARTH_COSTS.length ? 'spent' : 'allLit') : id === 'jar' ? 'built' : 'maxed';
+        parts.cost.setText(cost === null ? t(none) : t('cost', { n: cost }));
         const costColour = affordable ? '#ffc870' : '#8a7e8a';
         if (parts.cost.style.color !== costColour) parts.cost.setColor(costColour);
       }
     }
     if (s.phase === 'over') {
-      const festival = s.festival ? '\nThe Great Festival was held.' : '';
-      const peril = s.bestPeril > 1 ? `  ·  best peril x${s.bestPeril.toFixed(2)}` : '';
-      this.gameOverText.setText(`The last hearth went out on night ${s.night}.\nNights kept: ${s.kept}.${festival}\n\nBest: ${s.best} nights${peril}.`);
+      const festival = s.festival ? t('festivalWasHeld') : '';
+      const peril = s.bestPeril > 1 ? t('bestPeril', { mult: mult2(s.bestPeril) }) : '';
+      this.gameOverText.setText(t('gameOver', { night: s.night, kept: s.kept, festival, n: s.best, peril }));
     }
   }
 
   /** Lettering that floats up and fades; reduce motion keeps it still and only fades it. */
   private popup(x: number, y: number, text: string, color: string, size = 13) {
-    const t = this.label(x, y, text, { size, bold: true, color, stroke: true, glow: true }).setOrigin(0.5).setDepth(UI_DEPTH - 1);
+    const lettering = this.label(x, y, text, { size, bold: true, color, stroke: true, glow: true }).setOrigin(0.5).setDepth(UI_DEPTH - 1);
     const rise = settings.reduceMotion ? 0 : 34;
-    this.tweens.add({ targets: t, y: y - rise, alpha: 0, duration: POPUP_MS, delay: 300, ease: 'Quad.easeIn', onComplete: () => t.destroy() });
+    this.tweens.add({ targets: lettering, y: y - rise, alpha: 0, duration: POPUP_MS, delay: 300, ease: 'Quad.easeIn', onComplete: () => lettering.destroy() });
   }
 
   private showEvent(e: GameEvent) {
     if (e.type === 'chased') {
-      this.popup(e.x, e.y - 26, 'Chased off!', '#dbe8ff');
+      this.popup(e.x, e.y - 26, t('chasedOff'), '#dbe8ff');
       return;
     }
     const l = this.state.lanterns[e.lantern];
     if (!l) return;
     if (e.type === 'bat') {
-      this.popup(l.x, l.y - 40, e.snuffed ? 'Snuffed!' : 'Driven off!', e.snuffed ? '#d8c0ff' : '#dbe8ff');
+      this.popup(l.x, l.y - 40, t(e.snuffed ? 'snuffed' : 'drivenOff'), e.snuffed ? '#d8c0ff' : '#dbe8ff');
     } else if (e.type === 'owl') {
-      this.popup(l.x, l.y - 40, e.shielded ? 'Kept!' : 'Snuffed!', e.shielded ? '#ffe6c0' : '#d8c0ff');
+      this.popup(l.x, l.y - 40, t(e.shielded ? 'keptPopup' : 'snuffed'), e.shielded ? '#ffe6c0' : '#d8c0ff');
     } else if (e.type === 'call') {
-      this.popup(l.x, l.y - 40, e.kept ? `+${e.coins}c window lit!` : 'The window darkens', e.kept ? '#ffd890' : '#b8a8c8');
+      this.popup(l.x, l.y - 40, e.kept ? t('windowLit', { n: e.coins }) : t('windowDarkens'), e.kept ? '#ffd890' : '#b8a8c8');
     } else if (e.type === 'dry') {
-      this.popup(l.x, l.y - 40, 'Cask dry!', '#ff9a6a');
+      this.popup(l.x, l.y - 40, t('caskDry'), '#ff9a6a');
     } else if (e.type === 'closeCall') {
       // A flare of light and sparks round the saved lantern.
       const flare = this.add.image(l.x, l.y, 'glow-pale').setBlendMode(Phaser.BlendModes.ADD).setScale(1.1).setDepth(4);
@@ -1058,9 +1061,9 @@ export class GameScene extends Phaser.Scene {
           onComplete: () => spark.destroy(),
         });
       }
-      this.popup(l.x, l.y - 40, `+${e.coins}c close call!`, '#ffe2a0');
+      this.popup(l.x, l.y - 40, t('closeCall', { n: e.coins }), '#ffe2a0');
     } else {
-      this.popup(l.x, l.y - 40, e.shielded ? 'Shielded!' : 'Blown out!', e.shielded ? '#dbe8ff' : '#ffb08a');
+      this.popup(l.x, l.y - 40, t(e.shielded ? 'shielded' : 'blownOut'), e.shielded ? '#dbe8ff' : '#ffb08a');
     }
   }
 
@@ -1074,9 +1077,17 @@ export class GameScene extends Phaser.Scene {
     for (const i of chainsFor(s)) {
       if (!chainLit(s, i)) continue;
       const [a, , b] = chainsOf(s)[i].lanterns.map((l) => s.lanterns[l]);
-      this.popup((a.x + b.x) / 2, (a.y + b.y) / 2 + 4, `+${Math.round(CHAIN_BONUS * mult)} chain`, '#ffd890', 15);
+      this.popup((a.x + b.x) / 2, (a.y + b.y) / 2 + 4, t('chainPay', { n: Math.round(CHAIN_BONUS * mult) }), '#ffd890', 15);
     }
-    if (r.orderMet) this.popup(ORDER.x + ORDER.w - 24, ORDER.y + ORDER.h + 14, `+${this.state.order.reward} order kept`, '#ffc870', 15);
+    if (r.orderMet) this.popup(ORDER.x + ORDER.w - 24, ORDER.y + ORDER.h + 14, t('orderPay', { n: this.state.order.reward }), '#ffc870', 15);
+  }
+
+  /** The order's text, naming the lanterns of the district the night is played in. */
+  private describeOrder(order: Order) {
+    const { goal } = order;
+    if (this.state.district === 'keep' || goal.kind !== 'lit') return t(order.text);
+    const spots = DISTRICTS[this.state.district].spots;
+    return t('orderLit', { names: goal.lanterns.map((i) => t(spots[i].name)).join(', ') });
   }
 
   private restart() {
