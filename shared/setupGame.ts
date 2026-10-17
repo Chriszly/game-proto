@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { settings } from './settings';
 import { addStartScreen } from './startScreen';
+import type { HowToPlay } from './howToPlay';
 
 /** Frames that come up to this early still run, so a display whose frames jitter keeps them all. */
 const SLACK_MS = 1;
@@ -9,14 +10,15 @@ const SLACK_MS = 1;
  * Applies the hub's settings that work the same in every game: the frame cap, the FPS readout and
  * reduced motion. Every game calls this right after creating its `Phaser.Game`. Full screen is
  * here too, as a button in the bottom left corner and the F key, in every game, and so are the
- * loading, start and pause screens (`startScreen.ts`).
+ * loading, start and pause screens (`startScreen.ts`), with the game's How to play behind a button on
+ * the start and pause screens when it passes `howToPlay` (`howToPlay.ts`).
  */
-export function setupGame(game: Phaser.Game) {
+export function setupGame(game: Phaser.Game, options: { howToPlay?: HowToPlay } = {}) {
   capFrameRate(game, settings.fps);
   if (settings.showFps) showFps(game);
   if (settings.reduceMotion) reduceMotion();
   addFullscreen();
-  addStartScreen(game);
+  addStartScreen(game, options.howToPlay);
 }
 
 /**

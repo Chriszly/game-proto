@@ -111,7 +111,10 @@ to its log and run summary.
 - **Honour the hub's settings.** Every game calls `setupGame(game)` from `shared/setupGame.ts`
   right after creating its `Phaser.Game`, which applies the frame cap, the FPS readout, reduced motion and full screen, and covers
   the page with the shared loading, start and pause screens (`shared/startScreen.ts`): the game's
-  scenes stand paused until Start is pressed, and the pause button, P or leaving the tab pause them. Each game also implements the difficulty itself: scale one or two of its own balance
+  scenes stand paused until Start is pressed, and the pause button, P or leaving the tab pause them. A game
+  hands its How to play (`games/<name>/src/howToPlay.ts`, typed by `shared/howToPlay.ts`) to
+  `setupGame(game, { howToPlay })`, and the start and pause screens show it behind a How to play
+  button; a change to the game's goal, controls or core loop updates that file in the same PR. Each game also implements the difficulty itself: scale one or two of its own balance
   numbers with `byDifficulty(easy, normal, hard)` from `shared/settings.ts`, keep Normal exactly as
   designed (the playthrough runs on Normal), and add the game's row to the difficulty table in the
   README. Skip camera shake and flashes, and hold blinking or jittering effects still, when

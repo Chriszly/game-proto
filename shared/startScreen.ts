@@ -1,8 +1,11 @@
 import Phaser from 'phaser';
 import { settings } from './settings';
+import type { HowToPlay } from './howToPlay';
 
 /** The key that pauses the game and resumes it. Esc is left to the games, some of which close panels with it. */
 const PAUSE_KEY = 'p';
+/** The key that opens How to play from the start and pause screens, and closes it again. */
+const HELP_KEY = 'h';
 
 /**
  * Covers the page while the game starts up, then shows a start screen, and gives every game a
@@ -16,9 +19,11 @@ const PAUSE_KEY = 'p';
  *   browser automation it is skipped (see `skipStart`).
  * - Pause: a button next to full screen, the P key, or leaving the tab pauses every running scene
  *   and shows Resume and a link back to all games. P, Enter, Space or Esc resume.
+ * - How to play: when the game hands over its `howToPlay`, the start and pause screens get a How to
+ *   play button (and the H key) that shows it in place of the card; Back, H or Esc go back.
  * While a screen is up, keys go to it and not to the game.
  */
-export function addStartScreen(game: Phaser.Game) {
+export function addStartScreen(game: Phaser.Game, howToPlay?: HowToPlay) {
   injectStyles();
   const overlay = document.createElement('div');
   overlay.className = 'game-overlay loading';
@@ -29,13 +34,16 @@ export function addStartScreen(game: Phaser.Game) {
     '<div class="game-overlay-loading" role="status">Loading<span>.</span><span>.</span><span>.</span></div>' +
     '<button type="button" class="game-overlay-button game-start-button">Start</button>' +
     '<button type="button" class="game-overlay-button game-resume-button">Resume</button>' +
+    (howToPlay ? '<button type="button" class="game-overlay-link game-help-button">How to play</button>' : '') +
     '<div class="game-overlay-hint"></div>' +
     '<a class="game-overlay-hub" href="../../">All games</a>' +
-    '</div>';
+    '</div>' +
+    (howToPlay ? helpHtml(howToPlay) : '');
   document.body.append(overlay);
   const startButton = overlay.querySelector<HTMLButtonElement>('.game-start-button')!;
   const resumeButton = overlay.querySelector<HTMLButtonElement>('.game-resume-button')!;
   const hint = overlay.querySelector<HTMLDivElement>('.game-overlay-hint')!;
+  const help = overlay.querySelector<HTMLElement>('.game-help');
 
   const pauseButton = document.createElement('button');
   pauseButton.type = 'button';
@@ -50,8 +58,10 @@ export function addStartScreen(game: Phaser.Game) {
   pauseButton.hidden = true;
   document.body.append(pauseButton);
 
-  type Mode = 'loading' | 'start' | 'paused' | 'playing';
+  type Mode = 'loading' | 'start' | 'paused' | 'help' | 'playing';
   let mode: Mode = 'loading';
+  /** The screen How to play was opened from, to go back to. */
+  let helpFrom: 'start' | 'paused' = 'start';
   /** The scenes this pause stopped, to start again on resume, and none the game paused itself. */
   let held: Phaser.Scene[] = [];
 
@@ -60,11 +70,27 @@ export function addStartScreen(game: Phaser.Game) {
     overlay.className = `game-overlay ${next}`;
     overlay.hidden = next === 'playing';
     pauseButton.hidden = next !== 'playing';
+    const helpHint = help ? ' \u00b7 H for how to play' : '';
     hint.textContent =
-      next === 'start' ? 'Press P to pause' : next === 'paused' ? 'Press P, Space or Esc to play on' : '';
+      next === 'start'
+        ? `Press P to pause${helpHint}`
+        : next === 'paused'
+          ? `Press P, Space or Esc to play on${helpHint}`
+          : '';
+    // The help scrolls on its own, from the top, and takes the focus so arrow keys scroll it.
+    if (next === 'help' && help) {
+      help.scrollTop = 0;
+      help.focus({ preventScroll: true });
+    }
     const button = next === 'start' ? startButton : next === 'paused' ? resumeButton : null;
     button?.focus({ preventScroll: true });
   };
+  const openHelp = () => {
+    if (!help || (mode !== 'start' && mode !== 'paused')) return;
+    helpFrom = mode;
+    show('help');
+  };
+  const closeHelp = () => show(helpFrom);
 
   const hold = () => {
     held = game.scene.getScenes(true);
@@ -100,6 +126,8 @@ export function addStartScreen(game: Phaser.Game) {
   startButton.addEventListener('click', play);
   resumeButton.addEventListener('click', play);
   pauseButton.addEventListener('click', pause);
+  overlay.querySelector('.game-help-button')?.addEventListener('click', openHelp);
+  overlay.querySelector('.game-help-back')?.addEventListener('click', closeHelp);
 
   // Captured on window, before the game's own listeners, so a screen that is up keeps its keys.
   window.addEventListener(
@@ -118,6 +146,15 @@ export function addStartScreen(game: Phaser.Game) {
       if (key === 'f') return;
       e.stopPropagation();
       if (e.repeat) return;
+      if (mode === 'help') {
+        // Arrow and page keys stay with the browser, to scroll the help.
+        if (key === HELP_KEY || key === 'escape' || key === 'enter') {
+          e.preventDefault();
+          closeHelp();
+        }
+        return;
+      }
+      if (key === HELP_KEY) return openHelp();
       const go = key === 'enter' || key === ' ';
       if ((mode === 'start' && go) || (mode === 'paused' && (go || key === PAUSE_KEY || key === 'escape'))) {
         e.preventDefault();
@@ -161,6 +198,28 @@ function iconUrl() {
   return document.querySelector<HTMLLinkElement>('link[rel="icon"]')?.href ?? '';
 }
 
+/** The How to play screen: the goal, the controls with the shared ones added, the loop and the tips. */
+function helpHtml(howToPlay: HowToPlay) {
+  const controls = [
+    ...howToPlay.controls,
+    { input: 'P or the pause button', action: 'Pause' },
+    ...(document.fullscreenEnabled ? [{ input: 'F or the corner button', action: 'Full screen' }] : []),
+  ];
+  const list = (items: string[]) => items.map((item) => `<li>${escapeHtml(item)}</li>`).join('');
+  return (
+    '<section class="game-help" tabindex="-1" aria-labelledby="game-help-title">' +
+    `<h2 id="game-help-title">How to play ${escapeHtml(document.title)}</h2>` +
+    `<p class="game-help-goal">${escapeHtml(howToPlay.goal)}</p>` +
+    '<h3>Controls</h3><table class="game-help-controls"><tbody>' +
+    controls.map((c) => `<tr><th scope="row">${escapeHtml(c.input)}</th><td>${escapeHtml(c.action)}</td></tr>`).join('') +
+    '</tbody></table>' +
+    `<h3>How a round goes</h3><ol>${list(howToPlay.loop)}</ol>` +
+    (howToPlay.tips.length ? `<h3>Good to know</h3><ul>${list(howToPlay.tips)}</ul>` : '') +
+    '<button type="button" class="game-overlay-button game-help-back">Back</button>' +
+    '</section>'
+  );
+}
+
 function escapeHtml(text: string) {
   return text.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 }
@@ -189,10 +248,29 @@ function injectStyles() {
 .game-overlay-hint { font-size: 13px; opacity: 0.7; }
 .game-overlay-hint:empty { display: none; }
 .game-overlay-hub { font-size: 14px; color: #f3e9d2; }
+.game-overlay-link { padding: 4px 8px; font: 15px system-ui, sans-serif; cursor: pointer; color: #f3e9d2;
+  background: none; border: none; text-decoration: underline; text-underline-offset: 3px; }
+.game-overlay-link:hover, .game-overlay-link:focus-visible { color: #ffc04d; outline: none; }
+.game-help { display: none; box-sizing: border-box; width: min(600px, 100%); max-height: 100%; overflow-y: auto;
+  padding: 20px 24px; line-height: 1.4; background: rgba(20, 16, 12, 0.92);
+  border: 1px solid rgba(243, 233, 210, 0.35); border-radius: 8px; outline: none; }
+.game-overlay.help .game-overlay-card { display: none; }
+.game-overlay.help .game-help { display: block; }
+.game-help h2 { margin: 0 0 8px; font-size: 22px; }
+.game-help h3 { margin: 16px 0 6px; font-size: 15px; color: #f0a830; text-transform: uppercase; letter-spacing: 0.06em; }
+.game-help-goal { margin: 0; }
+.game-help ol, .game-help ul { margin: 0; padding-left: 22px; }
+.game-help li + li { margin-top: 4px; }
+.game-help-controls { border-collapse: collapse; width: 100%; }
+.game-help-controls th, .game-help-controls td { padding: 4px 0; vertical-align: top; text-align: left;
+  border-top: 1px solid rgba(243, 233, 210, 0.15); }
+.game-help-controls th { width: 45%; padding-right: 12px; font-weight: 600; }
+.game-help-back { display: block; margin: 20px auto 0; }
 .game-overlay:not(.loading) .game-overlay-loading,
 .game-overlay:not(.start) .game-start-button,
 .game-overlay:not(.paused) .game-resume-button,
-.game-overlay:not(.paused) .game-overlay-hub { display: none; }
+.game-overlay:not(.paused) .game-overlay-hub,
+.game-overlay:not(.start):not(.paused) .game-help-button { display: none; }
 .pause-button { position: fixed; bottom: 4px; z-index: 10; width: 30px; height: 30px; padding: 5px; cursor: pointer;
   color: #f3e9d2; background: rgba(0, 0, 0, 0.55); border: 1px solid rgba(243, 233, 210, 0.35); border-radius: 3px; }
 .pause-button[hidden] { display: none; }
