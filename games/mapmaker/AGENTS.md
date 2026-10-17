@@ -46,8 +46,9 @@ voyages it took and a saved best, then Keep charting or New atlas.
   deeper hypsometric tints, softer hillshade highlights, lighter contours). The first visit follows
   the device's `prefers-color-scheme`; the moon or sun button beside the panel's logo switches it
   and saves the pick.
-- One scene does everything: no title screen, pause, audio or menu (only the theme button). The
-  hub's shared settings apply; see Hub settings below.
+- One scene does everything: no title screen, pause or menu of its own (only the theme button);
+  the shared start and pause screens and the sound button come from `setupGame`. Sound effects and
+  music are made in code (see Sound below). The hub's shared settings apply; see Hub settings below.
 - No TODOs or FIXMEs in the code.
 
 ## Architecture
@@ -63,6 +64,8 @@ voyages it took and a saved best, then Keep charting or New atlas.
   spelled differently in US English (harbor, artifact). `t(key, vars)` shows a text in the hub's
   language, `coins(n)` prints a coin amount (12c, 12 M in German) and `TextKey` types the keys.
   Every text on screen goes through `t`; the data tables name their texts by key.
+- `src/audio.ts`: the sound table `sfx` (`sounds` from `shared/audio.ts`) and the song `SONG`; see
+  Sound below.
 - `src/main.ts`: creates the `Phaser.Game` (960x540, `Scale.FIT`, smooth art) with `BootScene`
   then `GameScene`, calls `setupGame(game)` and `setupScaling(game)`, and puts `game` on `window`
   in dev builds.
@@ -110,8 +113,8 @@ voyages it took and a saved best, then Keep charting or New atlas.
   and `clueText` put commissions and riddle clues into words.
 - `src/scenes/layout.ts`: screen constants (`VIEW`, `MAP`, `PANEL`, `CAMP_BUTTON`, `RETURN_BUTTON`, `OVERLAY`,
   `OVERLAY_BUTTON`, `SHOP`, `HANDS_COLUMN`, `BOARD`, `BUTTON`, `SMALL_BUTTON`, `UI_DEPTH`, `FONT`) and `tileCentre`.
-- `src/ui/Button.ts`: `makeButton`, a flat ink button with an optional size, disabled look and
-  left-aligned caption.
+- `src/ui/Button.ts`: `makeButton`, a flat ink button with an optional size, disabled look (a tap
+  on a disabled one plays `ui('refuse')`) and left-aligned caption.
 - `src/art/paint.ts`: the palette, `PALETTES.light` and `PALETTES.dark` (`INK`, `ON_INK`,
   `MAGENTA`, `SHEET`, `VELLUM`, `CARD`, `TABLE`, `RULE`, the fog's colours, the overlay `DIM`...)
   exported as `let`s that `applyTheme(theme)` swaps (read them when drawing, never copy them into
@@ -310,6 +313,36 @@ shared `hub-settings` key.
   (`RIVER_NAMES`, `ROAD_NAMES`, `WOOD_NAMES`).
 - `src/game/sim.ts`: `COMMISSIONS`, `BOARD_SIZE`, `LONG_PAY`.
 - `src/art/map.ts`: terrain heights (`ELEV`), tint bands (`BANDS`), name lists.
+
+### Sound
+
+All sound is in `src/audio.ts` and played by `GameScene` (and `makeButton`), only from the player's
+own taps, so nothing plays while a save is loaded or the theme switch restarts the scene. The sim
+has no audio imports.
+
+- `SONG`, F Lydian at 92 BPM in eighth notes (`steps: 2`), pulse lead, square harmony, triangle
+  bass. `syncMusic` (end of `update`) picks the part: while surveying, the isle kind's own part
+  (`green`, `archipelago` (airier), `volcanic` (D Dorian, driving) or `jungle` (syncopated)), or
+  `rival` (an uneasy motif over D minor and E) once a rival is on the isle; at port, on the Royal
+  Atlas page and at the harbor, `harbor` (a bustling loop with a walking bass). Stings, played on
+  Sell chart: `royal` when the sale completes the Royal Atlas, else `page` when it binds an atlas
+  page.
+- `sfx`, by where it plays:
+  - `scratch` and `blip` on every survey, the blip at 1.26x pitch for a free tile and 0.8x for a
+    dear one (cost 2); a tap on fogged ground that can't be surveyed, or on ground that can't be
+    dug while the riddle is open, plays `ui('refuse')`.
+  - `sweep` when a lookout's viewshed starts (`startSweep`), `tick` as the ring reaches each tile
+    and `tally` when the values are added up (`ageSweep`); with reduced motion only `tally`.
+  - One news sound a survey, the most important of `NEWS_ORDER`: `riddle` (the ruins charted),
+    `rival` (the rival read the riddle or dug the treasure), `feature` (charted whole), `sparkle`
+    (a cave's artifact), `wreck` with `chime` (a wreck's stores), `thunder` (a storm settles).
+  - `dig`, then `treasure` or `thud`, on a dig; `flap` and `peg` on Camp.
+  - `horn` when the voyage ends (Return to port, or the last supplies spent); `swell` and `horn` on
+    Set sail.
+  - `coins` on Sell chart, plus `milestone` when the chart pays a milestone without binding a page.
+  - `buy` for an upgrade, `hire` for a hand taken aboard (`ui('click')` for one left ashore),
+    `flip` for a commission picked, `ui('click')` for the theme button, Keep charting and New
+    atlas. A tap on a disabled button (Camp, an upgrade too dear) plays `ui('refuse')`.
 
 ### Hub settings
 

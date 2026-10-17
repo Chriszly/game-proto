@@ -2,10 +2,11 @@ import Phaser from 'phaser';
 import { BUTTON, FONT } from '../scenes/layout';
 import { renderScale } from '../../../../shared/scaling';
 import { INK, INK_LIT, OFF, OFF_TEXT, ON_INK, hex } from '../art/paint';
+import { ui } from '../../../../shared/audio';
 
 /**
  * A flat ink button with a bold caption (white by day, dark at night), lit while the pointer is over
- * it and greyed while disabled. The caption sits left of centre when `align` is 'left' (to leave room
+ * it and greyed while disabled (a tap on it then plays the refusal buzz). The caption sits left of centre when `align` is 'left' (to leave room
  * for a tag).
  */
 export function makeButton(
@@ -34,6 +35,6 @@ export function makeButton(
     bg.on('pointerover', () => bg.setFillStyle(hex(INK_LIT)))
       .on('pointerout', () => bg.setFillStyle(hex(INK)))
       .on('pointerdown', onClick);
-  }
+  } else bg.on('pointerdown', () => ui('refuse'));
   return button;
 }

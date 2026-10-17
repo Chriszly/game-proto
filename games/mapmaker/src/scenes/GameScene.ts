@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { settings } from '../../../../shared/settings';
 import { formatNumber } from '../../../../shared/i18n';
 import { renderScale } from '../../../../shared/scaling';
+import { playMusic, playSting, ui } from '../../../../shared/audio';
+import { SONG, sfx } from '../audio';
 import { CANVAS, TS, nameColor, paintFog, paintTerrain, placeNames, tintOf } from '../art/map';
 import {
   BLUE,
@@ -161,7 +163,9 @@ interface Sweep {
   age: number;
   centre: Spot;
   radius: number;
-  tiles: { p: Spot; dist: number; value: number; chip: Phaser.GameObjects.Container }[];
+  tiles: { p: Spot; dist: number; value: number; chip: Phaser.GameObjects.Container; heard: boolean }[];
+  /** True once the tally's chime has played. */
+  tallied: boolean;
   total: number;
   tally: Phaser.GameObjects.Container;
   tallyCount: Phaser.GameObjects.Text;
@@ -231,6 +235,8 @@ export class GameScene extends Phaser.Scene {
   private hover: { x: number; y: number } | null = null;
   private clock = 0;
   private lastFrame: number | null = null;
+  /** The song part playing, from the phase, the isle kind and the rival. */
+  private musicPart = '';
 
   constructor() {
     super('Game');
@@ -251,6 +257,7 @@ export class GameScene extends Phaser.Scene {
     this.sweep = null;
     this.overlay = null;
     this.overlayKey = '';
+    this.musicPart = '';
     this.state = loadGame() ?? newGame();
 
     this.drawSheet();
@@ -295,18 +302,39 @@ export class GameScene extends Phaser.Scene {
         rivalRuins: !!s.rival?.ruins,
         rivalTreasure: !!s.riddle?.rival,
       };
+      const tile = s.tiles[indexOf(at.x, at.y)];
+      const cost = costOf(s, at.x, at.y);
       if (survey(s, at.x, at.y)) {
         saveGame(s);
         const fresh = s.surveyed.slice(before.surveyed);
+        // A pen stroke and a blip, lower for the dearer tiles and higher for the free ones.
+        sfx('scratch');
+        sfx('blip', { pitch: cost === 0 ? 1.26 : cost >= 2 ? 0.8 : 1 });
         this.announce(at, fresh);
-        this.announceFinds(fresh, before.storms, before.known);
-        this.announceFeatures(before.features);
-        this.announceRival(before.rivalRuins, before.rivalTreasure);
+        // One news sound a survey, the most important one (a lookout can turn up several).
+        const news = [
+          this.announceFinds(fresh, before.storms, before.known),
+          this.announceFeatures(before.features),
+          this.announceRival(before.rivalRuins, before.rivalTreasure),
+        ].filter((n): n is News => n !== null);
+        news.sort((a, b) => NEWS_ORDER.indexOf(a) - NEWS_ORDER.indexOf(b));
+        if (news.length) playNews(news[0]);
+        this.endedVoyage();
       } else if (dig(s, at.x, at.y)) {
         saveGame(s);
         const c = tileCentre(at.x, at.y);
-        if (s.riddle?.found) this.notice(c.x, c.y - 14, t('treasureFound', { n: TREASURE_VALUE }), true);
-        else this.notice(c.x, c.y - 14, t('nothingHere'));
+        sfx('dig');
+        if (s.riddle?.found) {
+          sfx('treasure');
+          this.notice(c.x, c.y - 14, t('treasureFound', { n: TREASURE_VALUE }), true);
+        } else {
+          sfx('thud');
+          this.notice(c.x, c.y - 14, t('nothingHere'));
+        }
+        this.endedVoyage();
+      } else if (s.phase === 'survey' && (!tile.revealed || (s.riddle?.known && !s.riddle.found))) {
+        // A fogged tile out of reach or too dear, or ground that can't be dug.
+        ui('refuse');
       }
     });
   }
@@ -326,6 +354,21 @@ export class GameScene extends Phaser.Scene {
     this.ageSweep(dt);
     this.updatePanel();
     this.syncOverlay();
+    this.syncMusic();
+  }
+
+  /** Plays the part for where the voyage stands: the isle's own, the rival's, or the harbor's. */
+  private syncMusic() {
+    const s = this.state;
+    const part = s.phase !== 'survey' ? 'harbor' : s.rival ? 'rival' : s.kind;
+    if (part === this.musicPart) return;
+    this.musicPart = part;
+    playMusic(SONG, part);
+  }
+
+  /** The ship's horn when an action ended the voyage (the last supplies spent, or Return to port). */
+  private endedVoyage() {
+    if (this.state.phase === 'chart') sfx('horn');
   }
 
   // ---- Helpers.
@@ -545,8 +588,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Notices for what the survey turned up: a wreck's stores, an artifact, a storm, the riddle chart. */
-  private announceFinds(fresh: Point[], stormsBefore: number, knewRiddle: boolean) {
+  private announceFinds(fresh: Point[], stormsBefore: number, knewRiddle: boolean): News | null {
     const s = this.state;
+    let news: News | null = null;
+    const heard = (n: News) => {
+      if (news === null || NEWS_ORDER.indexOf(n) < NEWS_ORDER.indexOf(news)) news = n;
+    };
     // Several notices from one survey (a lookout can turn up more than one find) stack upward.
     let n = 0;
     const say = (p: Point, caption: string, strong = false) => {
@@ -555,18 +602,29 @@ export class GameScene extends Phaser.Scene {
     };
     for (const p of fresh) {
       const find = s.tiles[indexOf(p.x, p.y)].find;
-      if (find === 'wreck') say(p, t('wreckFound', { n: WRECK_SUPPLIES }), true);
-      if (find === 'cave') say(p, t('caveFound', { n: artifactValue(s) }), true);
+      if (find === 'wreck') {
+        say(p, t('wreckFound', { n: WRECK_SUPPLIES }), true);
+        heard('wreck');
+      }
+      if (find === 'cave') {
+        say(p, t('caveFound', { n: artifactValue(s) }), true);
+        heard('cave');
+      }
       if (find === 'storm' && s.storms.length === stormsBefore) say(p, t('stormOver'));
     }
-    for (const st of s.storms.slice(stormsBefore)) say(st, t('stormBlocks'));
+    for (const st of s.storms.slice(stormsBefore)) {
+      say(st, t('stormBlocks'));
+      heard('storm');
+    }
     if (!knewRiddle && s.riddle?.known) {
       say(fresh.find((p) => s.tiles[indexOf(p.x, p.y)].terrain === 'ruins')!, t('riddleFound'), true);
+      heard('riddle');
     }
+    return news;
   }
 
   /** A notice for each feature the survey charted whole: its name and bonus, over its middle tile. */
-  private announceFeatures(doneBefore: string[]) {
+  private announceFeatures(doneBefore: string[]): News | null {
     const s = this.state;
     let n = 0;
     for (const f of featuresDone(s)) {
@@ -575,16 +633,19 @@ export class GameScene extends Phaser.Scene {
       const c = tileCentre(mid.x, mid.y);
       this.notice(c.x, c.y - 16 - 18 * n++, t('chartedWhole', { name: t(f.name), n: f.bonus }), true);
     }
+    return n > 0 ? 'feature' : null;
   }
 
   /** The rival's news: they have reached the ruins, or dug the treasure up first. */
-  private announceRival(hadRuins: boolean, hadTreasure: boolean) {
+  private announceRival(hadRuins: boolean, hadTreasure: boolean): News | null {
     const s = this.state;
     const r = s.rival;
-    if (!r) return;
+    if (!r) return null;
     const c = tileCentre(r.at.x, r.at.y);
     if (!hadTreasure && s.riddle?.rival) this.notice(c.x, c.y - 30, t('rivalDug'));
     else if (!hadRuins && r.ruins) this.notice(c.x, c.y - 30, t('rivalRead'));
+    else return null;
+    return 'rival';
   }
 
   /** A notice on the map: a magenta pill (or a white one with magenta type) that floats up and fades. */
@@ -617,7 +678,7 @@ export class GameScene extends Phaser.Scene {
       const c = tileCentre(p.x, p.y);
       const value = TERRAIN[s.tiles[indexOf(p.x, p.y)].terrain].value;
       const chip = this.chip(c.x + 11.5, c.y - 9.5, `+${value}`).setAlpha(0);
-      return { p: c, dist: Math.hypot(c.x - centre.x, c.y - centre.y), value, chip };
+      return { p: c, dist: Math.hypot(c.x - centre.x, c.y - centre.y), value, chip, heard: false };
     });
     const radius = Math.max(...tiles.map((t) => t.dist)) + MAP.tile * 0.55;
     const total = valueOf(s, fresh);
@@ -633,7 +694,8 @@ export class GameScene extends Phaser.Scene {
     const count = this.text(Math.max(-11, label.x + label.width + 6), 0, t('tiles', { n: fresh.length }), { size: 10, weight: 600, color: ON_MAGENTA }).setOrigin(0, 0.5);
     const sum = this.text(71, 0, '+0', { size: 15, weight: 900, color: ON_MAGENTA }).setOrigin(1, 0.5);
     const tally = this.add.container(tx, ty, [g, label, count, sum]).setDepth(7).setAlpha(0);
-    this.sweep = { age: 0, centre, radius, tiles, total, tally, tallyCount: sum, tallyAt: { x: tx, y: ty }, below };
+    this.sweep = { age: 0, centre, radius, tiles, total, tally, tallyCount: sum, tallyAt: { x: tx, y: ty }, below, tallied: false };
+    if (!settings.reduceMotion) sfx('sweep');
   }
 
   private endSweep() {
@@ -677,6 +739,11 @@ export class GameScene extends Phaser.Scene {
     let gathered = 0;
     sw.tiles.forEach((tile, n) => {
       const reached = r >= tile.dist;
+      // A tick as the ring passes each tile (the sound's own gap thins a crowd of them).
+      if (reached && !tile.heard && !still) {
+        tile.heard = true;
+        sfx('tick', { pitch: 1 + n * 0.03 });
+      }
       if (reached) g.fillStyle(hex(MAGENTA), fade).fillCircle(tile.p.x, tile.p.y, 1.75);
       const home = { x: tile.p.x + 11.5, y: tile.p.y - 9.5 };
       if (still) {
@@ -697,7 +764,12 @@ export class GameScene extends Phaser.Scene {
       tile.chip.setPosition(home.x + (sw.tallyAt.x + 50 - home.x) * e, home.y + (sw.tallyAt.y - home.y) * e);
       tile.chip.setAlpha(reached ? 1 - k * 0.6 : 0);
     });
-    const shown = still || age > GATHER_AT + sw.tiles.length * 40 + GATHER_MS ? sw.total : gathered;
+    const added = still || age > GATHER_AT + sw.tiles.length * 40 + GATHER_MS;
+    if (added && !sw.tallied) {
+      sw.tallied = true;
+      sfx('tally');
+    }
+    const shown = added ? sw.total : gathered;
     const caption = `+${Math.round(shown)}`;
     if (sw.tallyCount.text !== caption) sw.tallyCount.setText(caption);
   }
@@ -907,7 +979,10 @@ export class GameScene extends Phaser.Scene {
       RETURN_BUTTON.y,
       t('returnToPort'),
       () => {
-        if (returnToPort(this.state)) saveGame(this.state);
+        if (returnToPort(this.state)) {
+          saveGame(this.state);
+          this.endedVoyage();
+        } else ui('refuse');
       },
       RETURN_BUTTON,
     );
@@ -975,6 +1050,7 @@ export class GameScene extends Phaser.Scene {
       .on('pointerover', () => draw(true))
       .on('pointerout', () => draw(false))
       .on('pointerdown', () => {
+        ui('click');
         saveTheme(theme === 'dark' ? 'light' : 'dark');
         this.scene.start('Boot');
       });
@@ -994,7 +1070,11 @@ export class GameScene extends Phaser.Scene {
       CAMP_BUTTON.y,
       t('camp', { n: CAMP_COST }),
       () => {
-        if (pitchCamp(this.state)) saveGame(this.state);
+        if (!pitchCamp(this.state)) return ui('refuse');
+        saveGame(this.state);
+        sfx('flap');
+        sfx('peg');
+        this.endedVoyage();
       },
       CAMP_BUTTON,
       on,
@@ -1257,6 +1337,11 @@ export class GameScene extends Phaser.Scene {
         // The chart that completes the Royal Atlas sets a best if it is one.
         if (this.state.phase === 'atlas' && this.state.royal) saveBest(this.state.royal.voyage);
         saveGame(this.state);
+        sfx('coins');
+        // The Royal Atlas's fanfare, else a bound page's jingle, else a chime for a milestone.
+        if (this.state.phase === 'atlas') playSting(SONG, 'royal');
+        else if (chart.atlas) playSting(SONG, 'page');
+        else if (chart.milestones > 0) sfx('milestone');
       }),
     );
     this.spots.sell = { ...OVERLAY_BUTTON };
@@ -1304,11 +1389,14 @@ export class GameScene extends Phaser.Scene {
     );
     c.add(
       makeButton(this, OVERLAY_BUTTON.x - 110, OVERLAY_BUTTON.y, t('keepCharting'), () => {
-        if (closeAtlas(this.state)) saveGame(this.state);
+        if (!closeAtlas(this.state)) return;
+        ui('click');
+        saveGame(this.state);
       }),
     );
     c.add(
       makeButton(this, OVERLAY_BUTTON.x + 110, OVERLAY_BUTTON.y, t('newAtlas'), () => {
+        ui('click');
         this.state = newGame();
         saveGame(this.state);
         this.endSweep();
@@ -1357,7 +1445,9 @@ export class GameScene extends Phaser.Scene {
           y,
           label,
           () => {
-            if (buy(this.state, id)) saveGame(this.state);
+            if (!buy(this.state, id)) return ui('refuse');
+            saveGame(this.state);
+            sfx('buy');
           },
           SMALL_BUTTON,
           can,
@@ -1371,7 +1461,7 @@ export class GameScene extends Phaser.Scene {
     s.hands.forEach((id, n) => {
       const y = HANDS_COLUMN.y + n * HANDS_COLUMN.gap;
       const on = s.hand === id;
-      c.add(this.card(hx, y, HANDS_COLUMN.w, HANDS_COLUMN.h, on, () => hire(this.state, on ? null : id)));
+      c.add(this.card(hx, y, HANDS_COLUMN.w, HANDS_COLUMN.h, on, () => hire(this.state, on ? null : id), on ? 'click' : 'hire'));
       c.add(this.add.image(hx + 16, y, `hand-${id}`).setScale(0.9 / HI));
       c.add(this.text(hx + 32, y - 8, t(HANDS[id].name), { size: 11, weight: 800, color: on ? ON_INK : INK }).setOrigin(0, 0.5));
       c.add(this.text(hx + 32, y + 7, t(HANDS[id].text), { size: 8, weight: 500, color: on ? ON_INK_ACCENT : SLATE }).setOrigin(0, 0.5));
@@ -1387,7 +1477,7 @@ export class GameScene extends Phaser.Scene {
       s.board.forEach((b, n) => {
         const y = BOARD.y + n * BOARD.gap;
         const on = isPicked(s, n);
-        c.add(this.card(left, y, right - left, BOARD.h, on, () => pickCommission(this.state, n)));
+        c.add(this.card(left, y, right - left, BOARD.h, on, () => pickCommission(this.state, n), 'flip'));
         c.add(this.add.image(left + 14, y, `swatch-${b.terrain}`).setScale(0.8 / HI));
         c.add(this.text(left + 28, y, commissionText(b), { size: 10.5, weight: on ? 800 : 600, color: on ? ON_INK : INK }).setOrigin(0, 0.5));
         if (b.voyages > 1) c.add(this.text(right - 10, y, t('long'), { size: 7.5, weight: 800, color: on ? ON_INK_ACCENT : MAGENTA, ls: 1.5 }).setOrigin(1, 0.5));
@@ -1428,6 +1518,8 @@ export class GameScene extends Phaser.Scene {
       makeButton(this, OVERLAY_BUTTON.x, OVERLAY_BUTTON.y, caption, () => {
         if (!setSail(this.state)) return;
         saveGame(this.state);
+        sfx('swell');
+        sfx('horn');
         this.endSweep();
         // The surveyor starts the voyage at the port, not walking back from the last tile.
         this.walker = tileCentre(this.state.port.x, this.state.port.y);
@@ -1437,10 +1529,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** A pick card: a card-coloured box with a rule, inked when picked; a tap calls `onPick` and saves. */
-  private card(x: number, y: number, w: number, h: number, on: boolean, onPick: () => boolean) {
+  private card(x: number, y: number, w: number, h: number, on: boolean, onPick: () => boolean, sound: 'click' | 'hire' | 'flip') {
     const box = this.add.rectangle(x, y, w, h, on ? hex(INK) : hex(CARD)).setOrigin(0, 0.5).setStrokeStyle(1, hex(on ? INK : RULE));
     box.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
-      if (onPick()) saveGame(this.state);
+      if (!onPick()) return;
+      saveGame(this.state);
+      if (sound === 'click') ui('click');
+      else sfx(sound);
     });
     return box;
   }
@@ -1497,4 +1592,23 @@ function dashedRect(g: Phaser.GameObjects.Graphics, x: number, y: number, w: num
   edge(x + w, y, x + w, y + h);
   edge(x + w, y + h, x, y + h);
   edge(x, y + h, x, y);
+}
+
+/** What a survey turned up that has a sound; `NEWS_ORDER` puts the most important first. */
+type News = 'riddle' | 'rival' | 'feature' | 'cave' | 'wreck' | 'storm';
+const NEWS_ORDER: News[] = ['riddle', 'rival', 'feature', 'cave', 'wreck', 'storm'];
+
+function playNews(news: News) {
+  switch (news) {
+    case 'wreck':
+      sfx('wreck');
+      sfx('chime');
+      return;
+    case 'cave':
+      return sfx('sparkle');
+    case 'storm':
+      return sfx('thunder');
+    default:
+      return sfx(news);
+  }
 }
