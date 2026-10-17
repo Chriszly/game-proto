@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { ui } from '../../../../shared/audio';
 import { fit } from '../art/lowpoly';
 import { GOLD, SLATE } from '../art/palette';
 import { FORTIFY, UI_DEPTH, VIEW } from '../scenes/layout';
@@ -103,7 +104,7 @@ export class FortifyPanel {
         .on('pointerover', () => draw(true))
         .on('pointerout', () => draw(false))
         .on('pointerdown', () => this.onBuy(id));
-    }
+    } else hit.setInteractive().on('pointerdown', () => ui('refuse'));
     this.body.add([bg, caption, coinIcon, cost, hit]);
   }
 

@@ -175,8 +175,8 @@ seconds without a tap.
   - Progress is only saved when the phase, wave, level or pending level-ups change and on a pick
     (tapped or auto). Experience and kills gained mid-wave are lost on a reload.
   - `HERO` in `src/game/state.ts` is unused (the scene draws the hero at `HERO_FEET`).
-  - There is no sound, pause button or in-game settings panel (only the hub's shared settings, see
-    Hub settings), and the hero has a single frame. Arrow Rain can be loosed during a break, when
+  - There is no in-game settings panel of its own (the shared pause screen has the volumes, see
+    Hub settings and Sound), and the hero has a single frame. Arrow Rain can be loosed during a break, when
     there may be no foes to hit; the same goes for the caltrops.
   - The original balance lets a hero who always takes the first card reach wave 40 at a high level;
     the new foes, elites, boss moves and roads add pressure, and the heats are the ladder past the
@@ -199,6 +199,8 @@ seconds without a tap.
   the text itself, and the scene and `src/ui/` look them up with `t`. Game logic compares ids only.
   German joins a number and its unit (`25 %`, `3 s`) with a no-break space so wrapping never
   splits them.
+- `src/audio/`: `sfx.ts` (the sound table, `sfx(name)`) and `music.ts` (the songs `MARCH` and
+  `BOSS_MARCH`), see Sound.
 - `src/main.ts`: creates the `Phaser.Game` (960x540 from `VIEW`, `pixelArt: false`, FIT scaling)
   with `BootScene` and `GameScene`, calls `setupGame(game)` and `setupScaling(game)`, and puts
   `game` on `window` in the dev build.
@@ -250,6 +252,8 @@ seconds without a tap.
   the game-over panel with its heat buttons (`drawHeatPicks`), saves progress, handles restart
   (`restart`, `restartAt`) and the 1x/2x speed switch
   (`speed`, at `SPEED` in the bottom bar).
+- `src/scenes/BattleSounds.ts`: plays the battle's sounds and picks the music by comparing the
+  state before and after each `tick` (see Sound).
 - `src/scenes/layout.ts`: screen positions (`HERO_FEET`, `BARRICADE`, `XP_BAR`, `BOSS_BAR`,
   `TRACK`, `RAIN`, `CALTROPS`, `AIM`, `FORTIFY` (with its panel's size), `REPAIR`, `OMEN`,
   `OMEN_CHIP`, `LEGACY`, `MARCH`, `HEAT`, `ROAR_CHIP`,
@@ -497,11 +501,47 @@ fortifications' in `forts.ts` and the heats' in `heat.ts`. Arrow Rain's damage (
 - Texts are drawn at `renderScale` by `shared/scaling.ts`. An upright phone shows the shared hint
   to turn it, and `e2e/screens.spec.ts` at the root opens the game on five screens.
 
+### Sound
+
+Everything is synthesized by `shared/audio.ts`; there are no audio files, and nothing plays under
+browser automation. `src/game/` has no sound: `GameScene.update` calls `BattleSounds.mark(state)`
+before `tick` and `BattleSounds.play(state, ms)` after it, which plays what the tick changed (new
+effects and missiles are those with an id at least the `nextId` from before) and switches the
+music. A new state (a restart, a retirement, the save loaded at start) only sets the baseline, so
+nothing plays for it. The player's own taps play from `GameScene` and the panels.
+
+- **Music** (`src/audio/music.ts`): `MARCH`, A minor at 120 BPM, a thin pulse "fife" lead over a
+  marching triangle bass and snare rolls. `calm` in a break, `battle` during a wave, `pad` (held
+  chords) while a level-up's cards wait and under the game-over and victory panels, and the stings
+  `lose` (on a fall) and `win` (A major, when the siege is lifted). Boss waves play `BOSS_MARCH`'s
+  `boss` part instead: 100 BPM over a low ostinato. `BattleSounds.music_` picks the part each frame
+  and only calls `playMusic` when it changes. The 2x speed switch leaves the tempo alone.
+- **Effects** (`src/audio/sfx.ts`, at most one of each per frame), from `BattleSounds.play`:
+  `bow` (any arrows launched: one per volley), `hit` (an arrow gone mid-field), `crit`, `clank`
+  (`block`), `blast`, `boom` (`fireblast`: fireball, oil pot), `whoosh` (a fireball or a Troll King's
+  rock thrown), `magic` (a mage's bolt), `arcane`, `zap` (`bolt`), `stab`, `heal`, `thud`
+  (`rockHit`), `horn` (a wave starts; higher for the Ogre Warlord's `call`), `roar`, `pop` (a
+  `death`, lower for bigger foes) or `bossDown`, `split`, `xp` (pitched up with the streak),
+  `rainLand` (`rain`), `pick` (`autoPick`), `ready` (Arrow Rain or the caltrops just charged),
+  `chop` (every `CHOP_MS` while the barricade or stake line loses health), `crash` (either reaches
+  0), `levelUp` (the level went up), `cleared` (a wave cleared into a break) and `relic` (with the
+  chest). Effects right of a Night wave's `sight` stay silent.
+- **The player's taps:** `rainLoose` and `caltrops` when `loose`/`strew` succeed (drag, R, Space,
+  C), `pick` for a card, a road or a legacy, `build` with `ui('coin')` for `hire`, `train`,
+  `fortify` and `repair`, `omen` for an accepted omen, `ui('click')` for every `makeButton`, the aim
+  toggle, the speed switch, the Fortify button, a guard slot, the skill book button, the
+  auto-pick checkbox and a "Start at" pick. `ui('refuse')` for every refused action: a tap on an
+  uncharged Arrow Rain or caltrops button (or R, Space, C), letting go off the road, a repair or
+  purchase that fails, a greyed-out Hire, Train or Buy button or kept legacy card (their zones are
+  interactive only for that), a locked heat or march, and Retire while it is dim.
+
 ### Hub settings
 
 - `src/main.ts` calls `setupGame(game)` from `shared/setupGame.ts` right after creating the game.
   It applies the frame cap (skipped animation frames count towards the next frame's `dt`), the FPS
-  readout and reduced motion for camera shake and flash. Palisade uses neither shake nor flash.
+  readout, reduced motion for camera shake and flash, the corner buttons (full screen, sound, pause
+  in the bottom left, which is why the experience bar starts at x 132 with the level at its left
+  end) and the shared start and pause screens. Palisade uses neither shake nor flash.
 - **Difficulty:** `byDifficulty` scales one number, foe health. `foeHp` in `src/game/waves.ts`
   multiplies `ENEMIES` hp times `hpScale(wave)` by `byDifficulty(0.75, 1, 1.3)` (easy, normal,
   hard) before rounding, so it covers every foe and each boss bar. Nothing else changes.
@@ -636,6 +676,9 @@ fortifications' in `forts.ts` and the heats' in `heat.ts`. Arrow Rain's damage (
 - **Move HUD or overlay elements:** edit `src/scenes/layout.ts`. The rules' own positions are in
   `state.ts`, and the two must agree: `HERO_FEET` and `BARRICADE` are drawn to line up with
   `BOW`, `HERO_FRONT` and `BARRICADE_FRONT`.
+- **Add a sound:** add it to `sfx` in `src/audio/sfx.ts` and play it from `BattleSounds.play` (for
+  something the battle does, read from the state or a new effect kind) or where the scene handles the
+  tap; keep `src/game/` free of sound, and list it under Sound.
 - **Change the art:** every texture is painted in `src/art/` with the `lowpoly.ts` toolkit. Keep
   the light from the top left (`facet`, `gem`) and shadows to the lower right (`softShadow`). The
   background and barricade are painted in double units (as the approved mockup was) and scaled by

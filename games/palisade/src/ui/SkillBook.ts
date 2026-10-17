@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { ui } from '../../../../shared/audio';
 import { iconTexture, relicTexture } from '../art/icons';
 import { fit } from '../art/lowpoly';
 import { GOLD, SLATE } from '../art/palette';
@@ -43,7 +44,10 @@ export class SkillBook {
       .setInteractive({ useHandCursor: true })
       .on('pointerover', () => draw(true))
       .on('pointerout', () => draw(false))
-      .on('pointerdown', () => this.setOpen(true));
+      .on('pointerdown', () => {
+        ui('click');
+        this.setOpen(true);
+      });
     // Above the level-up overlay, so the book can be checked while choosing the next upgrade.
     this.button = scene.add.container(x, y, [bg, icon, this.buttonText, hit]).setDepth(UI_DEPTH + 15);
 

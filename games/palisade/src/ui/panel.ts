@@ -1,3 +1,4 @@
+import { ui } from '../../../../shared/audio';
 import Phaser from 'phaser';
 import { GOLD, SLATE } from '../art/palette';
 import { FONT } from '../scenes/layout';
@@ -46,7 +47,7 @@ export const textStyle = (size: number, color: string, stroke = 0): Phaser.Types
   strokeThickness: stroke,
 });
 
-/** A slate button with a gold edge, lit while the pointer is over it. */
+/** A slate button with a gold edge, lit while the pointer is over it, that clicks when tapped. */
 export function makeButton(scene: Phaser.Scene, x: number, y: number, w: number, h: number, caption: string, onClick: () => void) {
   const g = scene.add.graphics();
   const draw = (hover: boolean) => {
@@ -60,6 +61,9 @@ export function makeButton(scene: Phaser.Scene, x: number, y: number, w: number,
     .setInteractive({ useHandCursor: true })
     .on('pointerover', () => draw(true))
     .on('pointerout', () => draw(false))
-    .on('pointerdown', onClick);
+    .on('pointerdown', () => {
+      ui('click');
+      onClick();
+    });
   return scene.add.container(x, y, [g, text, hit]);
 }

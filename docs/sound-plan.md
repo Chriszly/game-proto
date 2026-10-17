@@ -532,6 +532,12 @@ Notes:
 ### Palisade
 Low-poly fixed-hero siege defence with level-up cards; heroic medieval.
 
+**Done.** Built as planned, with the boss waves on a song of their own (one tempo per song) and
+every sound played from the scene (`scenes/BattleSounds.ts` compares the state before and after
+each tick), so `game/` stays free of sound. No wind ambience. The level label moved into the left
+end of the experience bar, clear of the corner buttons. `games/palisade/AGENTS.md` (Sound) lists
+what plays where.
+
 **Music:** Martial march at about 120 BPM in A minor, turning major for the win. Voices are a fife
 lead, triangle bass and snare rolls.
 - Breaks: a lighter loop.

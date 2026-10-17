@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { ui } from '../../../../shared/audio';
 import { guardTexture } from '../art/characters';
 import { fit } from '../art/lowpoly';
 import { GOLD, SLATE } from '../art/palette';
@@ -116,7 +117,7 @@ export class HirePanel {
         .on('pointerover', () => draw(true))
         .on('pointerout', () => draw(false))
         .on('pointerdown', button.act);
-    }
+    } else hit.setInteractive().on('pointerdown', () => ui('refuse'));
     this.body.add([bg, caption, coinIcon, cost, hit]);
   }
 }
