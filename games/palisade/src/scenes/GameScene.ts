@@ -1,5 +1,7 @@
 import { settings } from '../../../../shared/settings';
 import Phaser from 'phaser';
+import { ui } from '../../../../shared/audio';
+import { sfx } from '../audio/sfx';
 import { FIGURES, foeTexture, guardTexture } from '../art/characters';
 import { bossNodeTexture, relicTexture } from '../art/icons';
 import { fit } from '../art/lowpoly';
@@ -69,6 +71,7 @@ import { RoadChoice } from '../ui/RoadChoice';
 import { chamferPts, drawPanel, makeButton, textStyle } from '../ui/panel';
 import { t } from '../i18n';
 import { SkillBook } from '../ui/SkillBook';
+import { BattleSounds } from './BattleSounds';
 import { AIM, BARRICADE, BARRICADE_BAR, BARRICADE_TIP_W, BOSS_BAR, CALTROPS, FORTIFY, GUARD_HIT, HEAT, HERO_FEET, HUD_HEIGHT, MARCH, OMEN_CHIP, RAIN, RAIN_HINT, REPAIR, ROAR_CHIP, SPEED, STREAK, TRACK, UI_DEPTH, VIEW, XP_BAR } from './layout';
 
 /** Longest simulated step, so a backgrounded tab doesn't jump the battle forward. */
@@ -196,6 +199,8 @@ export class GameScene extends Phaser.Scene {
   speed = 1;
   private speedBg!: Phaser.GameObjects.Graphics;
   private speedText!: Phaser.GameObjects.Text;
+  /** Plays the battle's sounds and picks the music, from what each tick changed. */
+  private sounds = new BattleSounds();
 
   constructor() {
     super('Game');
@@ -241,7 +246,9 @@ export class GameScene extends Phaser.Scene {
       (slot) => this.train(slot),
     );
     this.fortifyPanel = new FortifyPanel(this, (id) => this.fortify(id));
-    this.omenCard = new OmenCard(this, (accept) => decideOmen(this.state, accept));
+    this.omenCard = new OmenCard(this, (accept) => {
+      if (decideOmen(this.state, accept) && accept) sfx('omen');
+    });
     this.legacyPanel = new LegacyPanel(this, (id) => this.retire(id));
     this.createAimToggle();
     this.found = new Set(loadFound());
@@ -263,12 +270,16 @@ export class GameScene extends Phaser.Scene {
     // fortify panel is open.
     if (s.choices || held(s)) this.hirePanel.close();
     if (s.choices || held(s)) this.fortifyPanel.close();
+    this.sounds.mark(s);
+    let ticked = 0;
     if (!this.skillBook.open && !this.hirePanel.open && !this.fortifyPanel.open) {
       // The battle plays at the chosen speed; the auto-pick countdown stays in real seconds.
       const game = s.choices ? dt : dt * this.speed;
       tick(s, game, this.levelUp.autoPick);
       if (!s.choices && !held(s)) this.clock += game;
+      ticked = game;
     }
+    this.sounds.play(s, ticked);
     if (s.phase !== phase || s.wave !== wave || s.levelUps !== levelUps || s.level !== level) saveProgress(progressOf(s));
     // A level-up or a fall drops Arrow Rain from the hand.
     if (s.choices || held(s) || this.skillBook.open || this.hirePanel.open || this.fortifyPanel.open) this.aim = null;
@@ -329,23 +340,38 @@ export class GameScene extends Phaser.Scene {
   }
 
   private pick(id: UpgradeId) {
-    if (pick(this.state, id)) saveProgress(progressOf(this.state));
+    if (!pick(this.state, id)) return;
+    sfx('pick');
+    saveProgress(progressOf(this.state));
   }
 
   private pickRoad(id: RoadId) {
-    pickRoad(this.state, id);
+    if (pickRoad(this.state, id)) sfx('pick');
+  }
+
+  /** The hammer and the coins for something bought, or the buzz when it was refused. */
+  private bought(done: boolean) {
+    if (!done) return ui('refuse');
+    sfx('build');
+    ui('coin');
   }
 
   private hire(slot: number, kind: GuardKind) {
-    if (hire(this.state, slot, kind)) this.hirePanel.close();
+    const done = hire(this.state, slot, kind);
+    this.bought(done);
+    if (done) this.hirePanel.close();
   }
 
   private train(slot: number) {
-    if (train(this.state, slot)) this.hirePanel.show(slot, this.state.guards[slot], this.state.coins);
+    const done = train(this.state, slot);
+    this.bought(done);
+    if (done) this.hirePanel.show(slot, this.state.guards[slot], this.state.coins);
   }
 
   private fortify(id: FortId) {
-    if (fortify(this.state, id)) this.fortifyPanel.close();
+    const done = fortify(this.state, id);
+    this.bought(done);
+    if (done) this.fortifyPanel.close();
   }
 
   /** Cycles the aim priority, and keeps it for the next run and the next visit. */
@@ -353,6 +379,7 @@ export class GameScene extends Phaser.Scene {
     if (this.skillBook.open || this.hirePanel.open || this.fortifyPanel.open) return;
     setAim(this.state, nextAim(this.state.aimMode));
     saveAim(this.state.aimMode);
+    ui('click');
   }
 
   /** Blinks on and off every `ms`, or holds still with reduced motion. */
@@ -737,7 +764,12 @@ export class GameScene extends Phaser.Scene {
     fit(this.add.image(796, 19, 'hud-coin')).setDepth(UI_DEPTH + 1);
     this.coinsText = top(808, '', '#ffe07a');
     this.bestText = top(944, '').setOrigin(1, 0.5);
-    this.levelText = this.add.text(18, XP_BAR.y + XP_BAR.h / 2, '', textStyle(16, '#9fd3ff')).setOrigin(0, 0.5).setDepth(UI_DEPTH + 1);
+    // The level rides the left end of the experience bar, clear of the corner buttons (full screen,
+    // sound, pause) in the bottom left.
+    this.levelText = this.add
+      .text(XP_BAR.x + 8, XP_BAR.y + XP_BAR.h / 2, '', textStyle(12, '#cfe8ff', 3))
+      .setOrigin(0, 0.5)
+      .setDepth(UI_DEPTH + 1);
     this.xpText = this.add
       .text(XP_BAR.x + XP_BAR.w / 2, XP_BAR.y + XP_BAR.h / 2, '', textStyle(12, '#ffffff', 3))
       .setOrigin(0.5)
@@ -976,7 +1008,7 @@ export class GameScene extends Phaser.Scene {
     this.rainHint = this.add.text(RAIN_HINT.x, RAIN_HINT.y, t('rainHint'), textStyle(11, '#fff3d0')).setOrigin(0.5).setDepth(depth + 1);
     const hit = this.add.circle(RAIN.x, RAIN.y, RAIN.r + 6, 0x000000, 0.001).setDepth(depth + 2);
     hit.setInteractive({ useHandCursor: true }).on('pointerdown', (p: Phaser.Input.Pointer) => {
-      if (!this.rainReady()) return;
+      if (!this.rainReady()) return ui('refuse');
       this.aimKind = 'rain';
       this.aim = { x: p.worldX, y: p.worldY };
     });
@@ -986,7 +1018,7 @@ export class GameScene extends Phaser.Scene {
     this.caltropsBadge = this.add.text(CALTROPS.x + CALTROPS.r + 27, CALTROPS.y, '', textStyle(9, '#2b2010')).setOrigin(0.5).setDepth(depth + 1);
     const hitC = this.add.circle(CALTROPS.x, CALTROPS.y, CALTROPS.r + 6, 0x000000, 0.001).setDepth(depth + 2);
     hitC.setInteractive({ useHandCursor: true }).on('pointerdown', (p: Phaser.Input.Pointer) => {
-      if (!this.caltropsReady()) return;
+      if (!this.caltropsReady()) return ui('refuse');
       this.aimKind = 'caltrops';
       this.aim = { x: p.worldX, y: p.worldY };
     });
@@ -996,10 +1028,10 @@ export class GameScene extends Phaser.Scene {
     const release = (p: Phaser.Input.Pointer) => {
       if (!this.aim) return;
       this.aim = { x: p.worldX, y: p.worldY };
-      if (this.onField(this.aim)) {
-        if (this.aimKind === 'rain') loose(this.state, this.aim.x, this.aim.y);
-        else strew(this.state, this.aim.x, this.aim.y);
-      }
+      // Let go off the road, the active stays in hand for another try.
+      if (!this.onField(this.aim)) ui('refuse');
+      else if (this.aimKind === 'rain') this.loose(this.aim.x, this.aim.y);
+      else this.strew(this.aim.x, this.aim.y);
       this.aim = null;
     };
     this.input.on('pointerup', release);
@@ -1007,16 +1039,28 @@ export class GameScene extends Phaser.Scene {
     // From the keyboard, R or Space looses Arrow Rain on the thickest crowd.
     const key = () => {
       const spot = this.rainReady() ? crowdSpot(this.state) : null;
-      if (spot) loose(this.state, spot.x, spot.y);
+      if (spot) this.loose(spot.x, spot.y);
+      else ui('refuse');
     };
     this.input.keyboard?.on('keydown-R', key);
     this.input.keyboard?.on('keydown-SPACE', key);
     // C strews the caltrops in front of the thickest crowd, and T cycles the aim priority.
     this.input.keyboard?.on('keydown-C', () => {
       const spot = this.caltropsReady() ? crowdSpot(this.state) : null;
-      if (spot) strew(this.state, spot.x - 40, spot.y);
+      if (spot) this.strew(spot.x - 40, spot.y);
+      else ui('refuse');
     });
     this.input.keyboard?.on('keydown-T', () => this.cycleAim());
+  }
+
+  private loose(x: number, y: number) {
+    if (loose(this.state, x, y)) sfx('rainLoose');
+    else ui('refuse');
+  }
+
+  private strew(x: number, y: number) {
+    if (strew(this.state, x, y)) sfx('caltrops');
+    else ui('refuse');
   }
 
   // ---- The aim priority toggle, the Fortify button and the fortifications on the field.
@@ -1040,6 +1084,7 @@ export class GameScene extends Phaser.Scene {
       .on('pointerdown', () => {
         const s = this.state;
         if (held(s) || s.choices || this.aim || this.skillBook.open || this.hirePanel.open) return;
+        ui('click');
         // During a wave one is bought ahead, and set up when the next break starts.
         const note =
           s.phase !== 'break'
@@ -1060,7 +1105,7 @@ export class GameScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => {
         if (this.aim || this.skillBook.open || this.hirePanel.open || this.fortifyPanel.open) return;
-        repair(this.state);
+        this.bought(repair(this.state));
       });
     this.omenText = this.add.text(OMEN_CHIP.x, OMEN_CHIP.y, '', textStyle(10, '#e6ccff')).setOrigin(0.5).setDepth(UI_DEPTH - 5);
     this.heatText = this.add.text(HEAT.x, HEAT.y, '', textStyle(11, '#ffb08a')).setOrigin(0.5).setDepth(UI_DEPTH - 4);
@@ -1346,6 +1391,7 @@ export class GameScene extends Phaser.Scene {
         .on('pointerdown', () => {
           const s = this.state;
           if (i >= s.guards.length || s.choices || held(s) || this.aim || this.fortifyPanel.open) return;
+          ui('click');
           this.hirePanel.show(i, s.guards[i], s.coins);
         });
     });
@@ -1439,6 +1485,7 @@ export class GameScene extends Phaser.Scene {
       const text = this.add.text(x, y, t('heat', { n: h }), textStyle(12, '#ffe7a0')).setOrigin(0.5);
       const zone = this.add.zone(x, y, 84, 26).setInteractive({ useHandCursor: true }).on('pointerdown', () => {
         if (h <= this.state.heatUnlocked) this.restartAt(h, this.startWave);
+        else ui('refuse');
       });
       this.heatPicks.push({ bg, text, zone });
       picks.push(bg, text, zone);
@@ -1451,7 +1498,9 @@ export class GameScene extends Phaser.Scene {
       const bg = this.add.graphics();
       const text = this.add.text(x, y, '', textStyle(11, '#ffe7a0')).setOrigin(0.5);
       const zone = this.add.zone(x, y, MARCH.w, MARCH.h).setInteractive({ useHandCursor: true }).on('pointerdown', () => {
-        if (canMarch(this.state.bestWave, m.wave)) this.startWave = m.wave;
+        if (!canMarch(this.state.bestWave, m.wave)) return ui('refuse');
+        this.startWave = m.wave;
+        ui('click');
       });
       this.marchPicks.push({ bg, text, zone });
       picks.push(bg, text, zone);
@@ -1480,7 +1529,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Opens the legacy cards, with a first relic rolled for the relic card. */
   private openRetire() {
-    if (!held(this.state) || !canRetire(this.state)) return;
+    if (!held(this.state) || !canRetire(this.state)) return ui('refuse');
     this.legacyRelic = rollLegacyRelic();
     this.legacyPanel.show(this.state.legacy, this.legacyRelic);
   }
@@ -1488,7 +1537,8 @@ export class GameScene extends Phaser.Scene {
   /** Retires the hero for a legacy: the next hero starts from scratch on wave 1, keeping it. */
   private retire(id: LegacyId) {
     const next = retire(this.state, id, this.legacyRelic);
-    if (!next) return;
+    if (!next) return ui('refuse');
+    sfx('pick');
     this.legacyPanel.close();
     this.state = next;
     this.startWave = 1;
@@ -1548,6 +1598,7 @@ export class GameScene extends Phaser.Scene {
       .on('pointerdown', () => {
         this.speed = this.speed === 2 ? 1 : 2;
         saveSpeed(this.speed);
+        ui('click');
         this.showSpeed();
       });
     this.showSpeed();

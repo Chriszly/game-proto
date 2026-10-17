@@ -239,7 +239,7 @@ Implemented today:
 Missing or rough:
 
 - No pathing or collisions: units overlap and walk straight lines.
-- No sound or title. The only save is class mastery (below).
+- No title screen of its own. The only save is class mastery (below).
 - Bushes hide champions only, not minions. The camera follows the player's champion.
 - AI champions don't use bushes on purpose, and their wards go only to the fixed `WARD_SPOTS`.
 - Balance is tuned with AI-only matches (every class within roughly 35% to 65% wins over 80
@@ -264,6 +264,8 @@ File map (`src/`):
   `t(key, vars)` shows a text in the hub's language, `TextKey` types the keys and `english(key)`
   gives the English for the watch log. Every text on screen goes through `t`, and a new one gets its
   German entry (and a US one if its spelling differs) in the same PR.
+- `audio.ts`: the song (`SONG`) and the sound table (`sfx`, from `shared/audio.ts`), plus `BUSY`,
+  the combat sounds a watched match leaves out. See Sound below.
 - `main.ts`: creates the `Phaser.Game` (960x540, `Phaser.Scale.FIT`, smooth scaling) with
   `GameScene` only, calls `setupGame(game)` from `shared/setupGame.ts` and `setupScaling(game)`
   from `shared/scaling.ts`, and in dev builds puts `game` on `window`.
@@ -378,6 +380,8 @@ State model:
   `expiresAt`.
 - `Unit.lane` is the lane of a tower, inhibitor, minion or lane champion; `power` a minion's
   super multiplier.
+- `sounds` holds the `SoundEvent`s (`SoundId`, an optional world point, `mine` for the player's
+  own) raised since the scene last drained them, capped at 64; see Sound.
 - `projectiles` are bolts in flight (with an optional `stun`). `fx` holds the visuals raised since
   the scene last drained them: rings, lines, arcs, last-hit `coin`s and abilities' `skill` effects.
 - `Unit.side` is `'blue'`, `'red'` or `'neutral'` (camps and the beast). Hostile means a different
@@ -434,6 +438,49 @@ Randomness and timing: `Math.random` only draws the rosters, in `createGame` (th
 a seed picked for the roster the round was tuned with); no `Date.now` or `performance.now` in the rules. Game time
 advances only through `tick`, which the scene drives from frame times. The art uses its own seeded
 generator (`seeded` in `lowpoly.ts`); `performance.now` only times the bake for a dev log.
+
+### Sound
+
+All sound is made in code by `shared/audio.ts`; `audio.ts` holds the game's song and effects. The
+rules stay free of audio: `sound(s, id, at?, mine?)` in `sim.ts` pushes a `SoundEvent` onto
+`s.sounds`, and `GameScene.playSounds` drains it each frame, playing the player's own (`mine`) and
+ones with no place (no `x`) always and the rest only within the camera's view (plus 60 px) and out of
+blue's fog. Others' attacks play at 0.55 volume; watching (`?watch`), the `BUSY` combat sounds are
+skipped. The player's buttons play their sound straight from the scene.
+
+Song `SONG`, D Dorian, 128 BPM:
+
+- `pick`: the pick screen and the end panel, calm (Dm, C, G, Dm).
+- `lane`: the match, an eight-bar march (`startMatch`).
+- `tense`: an ostinato over driving bass while a blue tower, inhibitor or Nexus lost health in the
+  last 8 s or the guardian beast is being fought (`lastHitBy` set); `updateMusic` checks each frame.
+- Stings, when a Nexus falls (`updateMusic` sees the phase change, then back to `pick`): `win`,
+  `lose`, and `end` for a watched match.
+
+Effects (`sfx`), where they are raised:
+
+| Sound | Where |
+| --- | --- |
+| `pick` | a pick card pressed (`refreshZones`) |
+| `swing`, `shot`, `crit` | a champion's melee or ranged attack, a crit or ambush hit (`attack`) |
+| `towerShot`, `beastClaw` | a tower's or the beast's attack (`attack`); minions and camps are silent |
+| `burst`, `bolt`, `dash`, `ally`, `buff`, `zone` | a cast, by the ability's kind, once per cast (`cast`) |
+| `impact` | a bolt with a look striking (`updateProjectiles`) |
+| `lastHit` | the player's last hit (`kill`) |
+| `slain` / `youDie` | a champion falls / the player's falls (`kill`) |
+| `streak` | a kill that sets or claims a bounty (`kill`) |
+| `crash`, `wardBreak`, `nexus` | a tower or inhibitor, a ward, a Nexus falls (`kill`) |
+| `levelUp` | the player levels up (`gainXp`) |
+| `upgrade` | an upgrade card kept (`pickUpgrade`) |
+| `blink`, `flask`, `ward` | the Phase Boots dash, the flask, a ward planted (`useActive`, `plantWard`) |
+| `recall` / `recallHome` | the player starts a recall (`recall`) / anyone arrives home (`finishRecall`) |
+| `respawn`, `buyBack` | the player's champion respawns (`updateUnit`) / buys back (`buyBack`) |
+| `wave` | a minion wave spawns (`tick`) |
+| `watchstone`, `growl`, `beastSlain`, `brute` | a watchstone taken, the beast waking or turning elder, the beast slain, a brute's buff taken |
+| `objective` / `objectiveMissed` | the player's objective done / missed (`updateObjective`) |
+
+Shared `ui` sounds: `click` for the Shop button, B and Play again; `coin` for a purchase;
+`refuse` for a purchase, cast, item active, recall or buy back the rules turn down.
 
 ### Hub settings
 

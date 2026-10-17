@@ -5,6 +5,8 @@ import { FEET, FRAME, WOOL } from '../art/figures';
 import { hexNum, SERIF, T } from '../art/stitch';
 import { figKey } from './BootScene';
 import { MENU_OPTS } from './layout';
+import { playMusic, ui } from '../../../../shared/audio';
+import { COLONY } from '../audio/music';
 
 /** The menu's options, kept for the session so a new match starts with the last ones. */
 const options = { kind: 'lowlands' as MapKind, rivals: 1 as 1 | 2 };
@@ -23,6 +25,7 @@ export class MenuScene extends Phaser.Scene {
   }
 
   create() {
+    playMusic(COLONY, 'calm');
     this.add.image(0, 0, 'backdrop').setOrigin(0, 0);
     this.add.text(480, 78, t('title').toUpperCase(), { fontFamily: SERIF, fontSize: '46px', fontStyle: 'bold', color: T.red, stroke: T.linen, strokeThickness: 2 }).setOrigin(0.5);
     this.add
@@ -60,6 +63,7 @@ export class MenuScene extends Phaser.Scene {
     img.on('pointerover', () => !on() && img.setTexture('opt-hot'));
     img.on('pointerout', () => img.setTexture(on() ? 'opt-on' : 'opt-off'));
     img.on('pointerdown', () => {
+      ui('click');
       pick();
       this.refresh();
     });
@@ -99,6 +103,7 @@ export class MenuScene extends Phaser.Scene {
     box.on('pointerover', () => box.setTexture('card-faction-hot'));
     box.on('pointerout', () => box.setTexture('card-faction'));
     box.on('pointerdown', () => {
+      ui('click');
       const [ai, ai2] = rivalsFor(id);
       this.scene.start('Game', { faction: id, aiFaction: ai, rival2: options.rivals === 2 ? ai2 : null, kind: options.kind });
     });

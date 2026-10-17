@@ -329,7 +329,9 @@ All paths are inside `games/broadside/`.
   and `save.ts` keeps the best wave, the medals and the ship chosen.
 - `src/scenes/`: `BootScene` paints the textures, `GameScene` draws the chart, follows the ship
   with the camera across the wrapping sea and wires the helm wheels, fire controls and keys to the
-  rules, `layout.ts` says where things are drawn.
+  rules, `soundCues.ts` turns what each frame changed into sound and music, `layout.ts` says
+  where things are drawn.
+- `src/audio.ts`: the music (a sea-shanty jig in D Dorian) and the sound effects, all made in code.
 - `src/art/`: the chart, ships, shot, plunder, controls and panels, painted on canvases in code
   and added as textures at startup.
 - `src/ui/`: the harbor panel and buttons.

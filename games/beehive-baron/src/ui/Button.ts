@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { ui } from '../../../../shared/audio';
 import { addTexture, cut, rr, sketch } from '../art/paper';
 import { FONT } from '../scenes/layout';
 
@@ -61,7 +62,7 @@ export class Button {
     zone
       .on('pointerover', () => ((this.over = true), this.paint()))
       .on('pointerout', () => ((this.over = false), this.paint()))
-      .on('pointerdown', () => this.enabled && onClick());
+      .on('pointerdown', () => (this.enabled ? onClick() : ui('refuse')));
     this.paint();
   }
 

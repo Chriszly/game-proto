@@ -14,6 +14,9 @@ import { C, hex } from '../art/glow';
 import { heroKey } from '../art/sprites';
 import { t } from '../i18n';
 import { bladeKey } from '../art/knights';
+import { ui } from '../../../../shared/audio';
+import { SoundCues } from '../audio/cues';
+import { sfx } from '../audio/sfx';
 import { Panel, endScreen, eventPanel, heroSelect, levelUp, starMap, trader, unlockPanel } from '../ui/panels';
 import {
   BOSS_BAR, CENTER, CREDITS_TAG, DEPTH, FONT, HP_BAR, KIT, LEVEL, PLANET_TAG, SIG_BUTTON, STICK, TIMER, VIEW, XP_BAR, inside,
@@ -82,6 +85,8 @@ export class GameScene extends Phaser.Scene {
   unlocking: HeroId[] = [];
   /** Whether the run that ended has been saved. */
   private recorded = false;
+  /** Plays the run's sounds and music by watching the state frame to frame. */
+  private cues = new SoundCues();
 
   private ground!: Phaser.GameObjects.Graphics;
   private under!: Phaser.GameObjects.Graphics;
@@ -109,6 +114,7 @@ export class GameScene extends Phaser.Scene {
     this.shown = '';
     this.unlocking = [];
     this.progress = loadProgress();
+    this.cues = new SoundCues();
     // The world camera follows the hero; the HUD (scroll factor 0) gets a fixed camera.
     splitHudCamera(this);
     this.ground = this.add.graphics().setDepth(DEPTH.ground);
@@ -144,7 +150,7 @@ export class GameScene extends Phaser.Scene {
     const kb = this.input.keyboard!;
     this.keys = kb.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE,ONE,TWO,THREE,FOUR,FIVE,SIX,SEVEN,EIGHT,NINE,ZERO,MINUS,PLUS,ENTER') as Record<string, Phaser.Input.Keyboard.Key>;
     this.keys.SPACE.on('down', () => {
-      if (this.unlocking.length) this.unlocking.shift();
+      if (this.unlocking.length) this.closeUnlock();
       else this.sigQueued = true;
     });
     // 1-9 and 0 pick the first ten heroes, - and = the last two.
@@ -156,15 +162,15 @@ export class GameScene extends Phaser.Scene {
           if (HERO_IDS[i]) this.choose(HERO_IDS[i]);
         } else if (s.phase === 'levelup') {
           if (i < (s.choices?.length ?? 0)) this.pickIndex(i);
-        } else if (i === 3) reroll(s);
+        } else if (i === 3) this.reroll();
         else if (i < 3) this.pickIndex(i);
       });
     });
     this.keys.ENTER.on('down', () => {
-      if (this.unlocking.length) this.unlocking.shift();
+      if (this.unlocking.length) this.closeUnlock();
       else if (this.state.phase === 'won' || this.state.phase === 'lost') this.backToSelect();
       else if (this.state.phase === 'select') this.begin(this.chosen);
-      else leave(this.state);
+      else this.leave();
     });
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => this.pointerDown(p));
     // A second touch pointer, so a thumb can hit the signature button while the other steers.
@@ -198,7 +204,7 @@ export class GameScene extends Phaser.Scene {
     const spot = this.panel?.spots.find((r) => inside(v, r));
     if (!spot) return;
     if (this.unlocking.length) {
-      if (spot.id === 'continue') this.unlocking.shift();
+      if (spot.id === 'continue') this.closeUnlock();
       return;
     }
     if (s.phase === 'select') {
@@ -206,8 +212,8 @@ export class GameScene extends Phaser.Scene {
       else this.choose(spot.id as HeroId);
     }
     else if (s.phase === 'won' || s.phase === 'lost') this.backToSelect();
-    else if (spot.id === 'reroll') reroll(s);
-    else if (spot.id === 'leave') leave(s);
+    else if (spot.id === 'reroll') this.reroll();
+    else if (spot.id === 'leave') this.leave();
     else this.pickIndex(this.panel!.spots.indexOf(spot));
   }
 
@@ -226,20 +232,52 @@ export class GameScene extends Phaser.Scene {
 
   /** Shows a hero's details on the select screen (locked ones too, with their deed). */
   private choose(id: HeroId) {
+    if (isUnlocked(this.progress, id)) ui('click');
+    else ui('refuse');
     this.chosen = id;
+  }
+
+  private closeUnlock() {
+    this.unlocking.shift();
+    ui('click');
+  }
+
+  private reroll() {
+    if (this.state.phase !== 'trader') return;
+    if (reroll(this.state)) sfx('reroll');
+    else ui('refuse');
+  }
+
+  private leave() {
+    if (this.state.phase !== 'trader') return;
+    leave(this.state);
+    ui('click');
   }
 
   /** The card, node, offer or answer at `i` (a tap or the 1/2/3 keys). */
   private pickIndex(i: number) {
     const s = this.state;
-    if (s.phase === 'levelup') choose(s, i);
-    else if (s.phase === 'map') chooseNode(s, i);
-    else if (s.phase === 'trader') buy(s, i);
-    else if (s.phase === 'event') chooseEvent(s, i);
+    if (s.phase === 'levelup') {
+      if (s.choices?.[i]) sfx('card');
+      choose(s, i);
+    } else if (s.phase === 'map') {
+      if (s.nodes[i]) sfx('node');
+      chooseNode(s, i);
+    } else if (s.phase === 'trader') {
+      if (buy(s, i)) ui('coin');
+      else ui('refuse');
+    } else if (s.phase === 'event') {
+      if (s.event?.options[i]) sfx('event');
+      chooseEvent(s, i);
+    }
   }
 
   private begin(id: HeroId) {
-    if (!isUnlocked(this.progress, id)) return;
+    if (!isUnlocked(this.progress, id)) {
+      ui('refuse');
+      return;
+    }
+    ui('click');
     startRun(this.state, id, unlockedHeroes(this.progress));
     this.savedDeeds = 0;
     this.recorded = false;
@@ -250,6 +288,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private backToSelect() {
+    ui('click');
     this.state = freshState();
     this.hero.setVisible(false);
   }
@@ -297,17 +336,23 @@ export class GameScene extends Phaser.Scene {
     // A new hero's panel holds the game still until it is closed.
     if (!this.unlocking.length) {
       const move = s.phase === 'run' ? this.moveInput() : { mx: 0, my: 0 };
-      frame(s, delta, { ...move, signature: s.phase === 'run' && this.sigQueued });
+      const asked = s.phase === 'run' && this.sigQueued;
+      const used = s.signatures;
+      frame(s, delta, { ...move, signature: asked });
       if (s.phase === 'run') this.sigQueued = false;
+      // The signature still cooling down (or a knight's with nothing to act on).
+      if (asked && s.signatures === used) ui('refuse');
     }
     // A deed done this run unlocks a hero at once, even if the run is lost later, and is shown.
     if (s.deeds.length > this.savedDeeds) {
       this.unlocking.push(...s.deeds.slice(this.savedDeeds));
       this.savedDeeds = s.deeds.length;
       this.progress = recordUnlocks(s.deeds);
+      this.cues.unlock();
       this.walking = false;
       this.stick = null;
     }
+    this.cues.update(this.state);
     if (this.panelKey() !== this.shown) this.syncPanel();
     this.draw();
   }

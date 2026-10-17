@@ -105,6 +105,11 @@ File map (all under `src/` unless it starts with `shared/`):
 - `scenes/layout.ts`: `VIEW`, `BOARD`, the isometric projection (`ISO`, `iso`, `tileCenter`,
   `tileAt`, `groundDepth`), the panel, order card, button and charter card positions,
   `SEGMENT_GAPS` (where the wyrm's parts ride behind the head) and depths.
+- `audio/sounds.ts`: the sound table `sfx` (`shared/audio.ts`'s `sounds`) and the song `SONG`
+  (see Sound below).
+- `audio/events.ts`: `GameSounds`, which the scene makes in `create` and updates after every
+  `tick`: it compares the state with the last frame's, plays what the sim did on its own and picks
+  the music's part.
 - `ui/Button.ts`: `makeButton`, a wooden button with `setCaption`, `setLit` and `setEnabled`; a
   caption too wide for the button shrinks from 15 to at least 10 pixels.
 - `art/palette.ts`: colour constants for the track, the UI and the pixel icons.
@@ -307,6 +312,35 @@ Data tables (where to tune):
 - Keep Normal exactly as designed (multiplier 1): the playthrough runs on Normal.
 - Keep the Wyrmrail row of the difficulty table in the root `README.md` (and the difficulty line in
   this game's `README.md`) in sync with the multipliers.
+
+### Sound
+
+All sound comes from `shared/audio.ts` (no files, silent under browser automation). The sim has no
+audio import: the scene plays the player's own taps where it calls the sim, and `GameSounds`
+(`src/audio/events.ts`) plays what `tick` did by comparing the state with the last frame's
+(`Snapshot`: phase, round, hearts, deliveries, the charter offer, the hazard, moods, order statuses
+and each wyrm's eating, switch stop and courier visit). A restart makes a new `GameSounds`, which
+starts the music again.
+
+- **Song** (`SONG` in `src/audio/sounds.ts`): fiddle-like folk in G major pentatonic at 100 BPM.
+  `calm` plays a round without a charter, `travel` (the same tune with an arpeggio layer) once a
+  charter is picked, `charter` (a calmer loop) while the charter cards wait, `busy` (running
+  sixteenths) while a hazard is warned or an order has less than a quarter of its time left, and
+  `festival` in the last round (`partFor`). On game over or a won festival the music stops for a
+  sting: `lose`, or the medal's `gold`, `silver` or `bronze`.
+- **Scene (player's actions, `GameScene`):** `tok` per track tile laid (pitched by terrain with
+  `TOK_PITCH`, rising along a drag), `untok` and `ui('coin')` for track taken up, `switch` for a
+  switch thrown, `send` for an order card sent, `buy` for an upgrade or a depot (`roar` too for the
+  second wyrm), `courier` for a courier call, `stamp` for a charter picked, `ui('click')` for the
+  Remove, Plain and Depot toggles and Play again, and `ui('refuse')` for every refused tap: track
+  that can't go there, nothing to remove, a depot that can't be bought, an order card that can't
+  be sent, an upgrade not affordable or locked, and a courier call that can't go (from round 2).
+- **`GameSounds` (the sim's doing):** `order` for a new order (`workshop` for a workshop's goods),
+  `load` when goods are aboard, `deliver` for a delivery, `late` for an order out of time, `faith`
+  for a heart lost to a village at rock bottom, `sour` for a village souring, `munch` when a wyrm
+  eats, `switchStop` when a wyrm stops to throw a switch, `warn` for a hazard warned, `splash` or
+  `rumble` when a washout or rockfall strikes, `gifts` when a courier's visit ends, `round` for a
+  new round and `charter` when the charter cards appear.
 
 ## Testing hooks
 

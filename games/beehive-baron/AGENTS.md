@@ -146,7 +146,8 @@ Implemented today:
 
 Missing or rough:
 
-- No title or win screen and no in-game settings (they are on the hub page), no sound.
+- No title or win screen and no in-game settings (they are on the hub page). No ambience (hive hum,
+  birdsong) yet.
 - Bees out foraging are home again on load with their nectar lost (the away nectar stands in).
 - The build preview needs a pointer that hovers; on a phone a tap builds without one.
 - "New hive" resets at once with no confirmation.
@@ -176,6 +177,7 @@ File map (`src/`):
   `t`; each honey kind has its name (`clover`), `<kind>Honey`, `<kind>Nectar`, `<kind>Jars` and
   `<kind>Meadow` keys, the seasons and fair classes are keyed by their id, and the tables in
   `game/` hold keys, not text. Prices show as `price` ("15c", "15 T" for Taler in German).
+- `audio.ts`: the sound table (`sfx`, `SoundName`) and the song (`SONG`); see "Sound" below.
 - `main.ts`: creates the `Phaser.Game` (960x540, `Scale.FIT`, `pixelArt: false` since the art is
   smooth) with `BootScene` and `GameScene`, calls `setupGame(game)` and `setupScaling(game)`, and
   exposes `game` on window in dev builds.
@@ -223,7 +225,8 @@ File map (`src/`):
   spot of either comb), `hexPoints` and `cellAt` (a local spot), `homeSpot`, `flowerSpot`,
   `forageSpot`, and `FONT` (a system font stack).
 - `ui/Button.ts`: a paper card button (cream, golden "hot" for Send and Sell, flat when disabled)
-  with a bold first line and a lighter second line; it bakes its card textures on first use.
+  with a bold first line and a lighter second line; it bakes its card textures on first use. A tap
+  on a disabled button plays the shared refusal buzz.
 - `art/paper.ts`: the cut-paper toolkit: `cut` (a card shape with a hand-cut wobble, drop shadow,
   multiplied grain and a light rim), shape helpers (`rect`, `rr`, `circ`, `hex`, `smooth`),
   `outline`, `sketch`, `addTexture` and the `seeded` RNG. `sketch(w, h)` makes a canvas `sharpRes`
@@ -236,7 +239,8 @@ File map (`src/`):
   `CELL_TEX`, `CARD_PAD`, `meadowOrigin`). `art/bees.ts`: the bee and the wasp in two wing frames
   each (`BEE_TEX`, `WASP_TEX`).
 
-Shared code the game imports (repo root, outside `src/`): `shared/setupGame.ts` (`setupGame`),
+Shared code the game imports (repo root, outside `src/`): `shared/audio.ts` (`sounds`, `ui`,
+`playMusic`, `playSting`), `shared/setupGame.ts` (`setupGame`),
 `shared/settings.ts` (`settings`, `byDifficulty`), `shared/scaling.ts` (`setupScaling`,
 `sharpRes`) and `shared/i18n.ts` (`translator`, `byLanguage`, `Translation`). See "Hub settings" and "Screens" below.
 
@@ -341,6 +345,36 @@ market in `src/game/honey.ts`; raid timings in `src/game/wasps.ts`; order number
 (dance), and `raid` (guards); the seasons in `src/game/seasons.ts`, the casks in
 `src/game/mead.ts`, the swarm in `src/game/swarm.ts`, the contracts in `src/game/contracts.ts` and
 the fair's gold in `src/game/fair.ts`.
+
+### Sound
+
+All sound is made in code by `shared/audio.ts`; `src/audio.ts` holds the game's table and song, and
+only `GameScene` (and the refusal buzz in `ui/Button.ts`) plays them, so the sim has no audio.
+
+- Song `SONG`: lilting folk-pop at 104 BPM in C major, a square lead, triangle bass and soft
+  drums, eight bars a part. `playSeasonMusic` (each frame, on a change only) plays the season's
+  part: `spring` (bright), `summer` (full, arpeggios), `autumn` (mellow, D Dorian), `winter` (sparse,
+  A minor at half time), and `fair`, a jig, while the fair is on (`fairOn`). Stings: `unlock` (a
+  meadow unlocked), `gold` (a gold after the first) and `baron` (the first gold, with the end card).
+  "New hive" goes back to spring; there is no game over.
+- Effects (`sfx`), all played from `GameScene.playEvents` on the drained `GameEvent`s unless noted:
+  `build` (`built`, a step higher per touching edge), `send` (Send button), `nectar` (`nectar`, at
+  most one per 100ms), `capped`, `harvest` (`harvested`), `sell` (`sold`), `orderDone`, `buy` (an
+  upgrade bought, from the button), `sad` (`spilled`, `stolen`, `ate` a jar or cell,
+  `order-failed`, `contract-lapsed`, `judged`), `starve` (`ate` a bee), `wasp` (`wasp`, and every
+  `WASP_BUZZ_MS` while a wasp sits on the comb shown, `buzzWasps`), `swat` (`swatted`), `zap`
+  (`guarded`), `hatched`, `demand` (once a jar is sold), `wilted`, `ding` (`order`, `contract`),
+  `season`, `year`, `casked`, `mead`, `swarmReady` (`swarm-ready`), `swarmed`, `caught`, `returned`,
+  `fairOpen` (`fair-open`) and `stamp` (`entered`). `fair-closed` has no sound of its own, since the
+  autumn chime comes in the same step. `lent` plays the shared `ui('coin')`.
+- Shared `ui('click')`: the Brood cell toggle, a market pick, the fair card, a hive tab, the swarm
+  chip, closing the queen card or the end card, and "New hive". `ui('refuse')`: any action `act`
+  is told failed (build, harvest of a cell not capped, sell or send with nothing to do, an upgrade
+  or cask not affordable), a tap on a disabled button, a fair entry refused, and the swarm chip
+  without the coins to catch it.
+- Cell sounds (`nectar`, `capped`, `hatched`, `stolen`, `ate` a cell) play only for the comb
+  shown. The events of loading (the away nectar from `gatherAway`) are drained silently
+  (`hushed`). The Waggle Dance's own sends make no whoosh, only their nectar blips.
 
 ### Screens
 

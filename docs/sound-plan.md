@@ -132,8 +132,22 @@ Notes:
 - Auto Forge forges about every 1.2 s, so keep the forge sound quiet while it is on.
 - Ambience: a furnace crackle loop.
 
+**Done** (see `games/anvilheart/AGENTS.md`, "Sound"): parts `calm`, `streak`, `tense` and the
+stings `win` and `charter`, in `src/audio.ts`. The forge refusals, failed buys and drops a target
+won't take play the shared `refuse` buzz rather than a click, and an adventurer's door bell plays
+from `GameScene.drawVisitors` (there is no `arrive` event). The left button column moved up and
+right, clear of the corner. No furnace ambience loop, since the engine has none.
+
 ### Apothecary
 Cosy crafting and shop automation; a calm herbalist's almanac.
+
+**Done** (see `games/apothecary/AGENTS.md`, Sound). Differences from the plan below: the market
+rush is its own song (`RUSH_SONG`, 96 BPM) since a song has one tempo; every sound plays from
+`GameScene` (marker callbacks, and `createSound` comparing the state each frame for the sim's own
+events) rather than from `sim.ts`; a kept contract plays the `kept` fanfare sting in place of the
+new day's bell, a missed one two low notes and then the bell; the plague starting, a new season and
+a relapse share the tolling `relapse` sting; a sale plays a soft coin and a filled order the
+ka-ching; purple markers buzz once a visit when there are no coins. No ambience yet.
 
 **Music:** Modal folk at about 84 BPM in D Dorian. Voices are a soft pulse lead like a recorder,
 triangle bass, a plucked square arpeggio and light shakers.
@@ -198,6 +212,10 @@ Notes:
 - Nectar comes in bunches (up to 24 bees), so play at most one blip per 100 ms.
 - Ambience: a hive hum that follows the bees at home, and birdsong in spring and summer.
 
+Done: `games/beehive-baron/src/audio.ts`, played from `GameScene.playEvents` (see the game's
+`AGENTS.md`). Winter is half time rather than a slower tempo, a `gold` sting covers later golds,
+the season's part switch stands in for its motif (plus a chime), and the ambience is not built.
+
 ### Bramblecrest
 Top-down adventure in a lamplit village and woods at night; cosy, mysterious, moonlit.
 
@@ -236,6 +254,14 @@ Notes:
 ### Broadside
 Real-time naval battle on an engraved sea chart; swashbuckling and tense.
 
+**Done.** Built as planned, with these differences: the calm and the battle music are two songs
+(`HARBOR_SONG` at 66 and `BATTLE_SONG` at 112 dotted quarters, since a song has one tempo), the
+heavy `boss` part starts once a flagship or the admiral is on the sea, the wave start and harbor
+are stings, and the sounds are played by `scenes/soundCues.ts` from what each tick changed, so
+`sim.ts` has no audio. Hits near the player, a sail on the horizon (`pipe`), a full charge and a
+helm creak are added; there is no ambient wash. The helm wheels and fire controls moved up 36 and
+28 px to clear the corner buttons. Its table is in `games/broadside/AGENTS.md`.
+
 **Music:** Sea-shanty jig in 6/8, in D minor (Dorian). Voices are a square lead, a pulse
 "accordion", triangle bass and noise drums.
 - Harbor and the break before each wave: calm, at about 100 BPM.
@@ -267,6 +293,11 @@ Notes:
 
 ### Catacomb
 Turn-based dungeon deckbuilder; dark and gothic.
+
+**Done:** see the Sound section of `games/catacomb/AGENTS.md`. It differs from this plan in a few
+places: the map and the fights are two songs (80 and 120 BPM), elites share the bosses' `boss`
+part, the Bone King's fall gets a `triumph` sting, and every sound is started from the scene (the
+tap handlers and a per-frame `Cues` diff of the state), not from `sim.ts`, which stays free of sound.
 
 **Music:** A dirge in A minor (harmonic minor).
 - Map: about 80 BPM over a triangle drone.
@@ -303,6 +334,10 @@ Notes:
 ### Colonizer
 Base-building strategy drawn as a medieval tapestry; stately and slow-building.
 
+Done: see `games/colonizer/AGENTS.md` (Sound). The raid music is its own song at 132 BPM, the
+5-note age fanfare is a sting, and a selected unit, every trade and a building falling on screen
+have sounds too.
+
 **Music:** Medieval dance at about 96 BPM in D Dorian, turning Mixolydian in later ages. Voices
 are a square lead like a shawm, a triangle drone and noise drums.
 - Each age gets a fuller arrangement.
@@ -337,6 +372,11 @@ Notes:
 
 ### Deadline
 Upright zombie wave defence with auto-fire; tense pulp horror.
+
+**Done** (`games/deadline/src/audio.ts`, listed in the game's `AGENTS.md`). The boss song is a
+second `Song` at 150 BPM; blackout and blood moon share one `dark` part (low half steps, as the
+engine has no detune); the boss warning is the `warn` sting; survivor hits, rescues, ricochets
+and shield breaks have their own sounds.
 
 **Music:** Driving chiptune at about 140 BPM in E minor (Phrygian), with a square lead, a thin
 pulse arpeggio, a triangle bass ostinato and drums.
@@ -400,9 +440,17 @@ and shakers.
 Notes:
 - Throws are the busiest sound, and 2x speed doubles them, so play at most one per golem kind
   every 70 ms.
+- Done: `games/golem-garden/src/audio.ts`, played from `GameScene` (see the game's AGENTS.md).
+  Build and waves are two songs (96 and 132 BPM); the harvest sting has one part per star count.
+  Also a hedge-planted rustle, a level-up pitch per level and a bud chime rising per bud.
 
 ### Hotfoot
 Endless auto-runner with boons and bosses; lively manuscript adventure.
+
+**Done.** Built as planned in `games/hotfoot/src/audio/`, played from the scene (`SoundCues`), so
+the sim stays free of audio. Differences: the shrine's refusal uses the shared `refuse` buzz, the
+Gatekeeper's win is an effect rather than a sting, there is no separate wind ambience (the Windy
+Pass loop is airy instead), and the margin caption moved to the middle, clear of the corner.
 
 **Music:** Galloping chiptune at about 150 BPM in D Mixolydian, with a square lead, a pulse
 counter-melody, a triangle bass in a gallop rhythm and drums.
@@ -438,6 +486,10 @@ Notes:
 ### Lane Brawl
 Single-player five-against-five lane battler; bright and competitive.
 
+**Done:** built as planned (`src/audio.ts`; the list of sounds is in the game's `AGENTS.md`). The
+sim raises `SoundEvent`s in `s.sounds` for the scene to play, as fx already go; minion and camp
+attacks stay silent, and the pick theme also plays under the end panel.
+
 **Music:** Heroic march at about 128 BPM in D Dorian.
 - Champion pick: a calm theme.
 - Laning: the main loop.
@@ -471,6 +523,11 @@ Notes:
 Lantern-lighting against the clock in a shadow-puppet theatre; warm twilight folk, tense near
 nightfall.
 
+**Done** (see `games/lanternkeep/AGENTS.md`, Sound). Differs from the plan: the storm's rain is a
+running hat line in its music and there is no cricket ambience; a `late` part plays the last 10 s
+of every dusk instead of a layer over the kind's tune; the moths' and bats' sounds come from the
+scene comparing the state before and after `tick`, as the rules push no events for them.
+
 **Music:** Music-box folk at about 108 BPM in A minor. Voices are a triangle lead like a music
 box, a square pizzicato arpeggio and a soft shaker.
 - Dusk: rises as `duskMs` runs down, with a ticking layer in the last 10 s.
@@ -503,6 +560,9 @@ Notes:
 ### Mapmaker
 Fog-of-war island charting; calm, curious, a cartographer's desk.
 
+**Done:** built in `games/mapmaker/src/audio.ts` as planned, played from `GameScene`; the
+survey's sounds play in the scene (the sim has no audio), and its `AGENTS.md` lists them.
+
 **Music:** Light exploring tune at about 92 BPM in F Lydian, with a triangle bass and a plucky
 square lead.
 - Surveying: one sparse variation per isle kind.
@@ -531,6 +591,12 @@ Notes:
 
 ### Palisade
 Low-poly fixed-hero siege defence with level-up cards; heroic medieval.
+
+**Done.** Built as planned, with the boss waves on a song of their own (one tempo per song) and
+every sound played from the scene (`scenes/BattleSounds.ts` compares the state before and after
+each tick), so `game/` stays free of sound. No wind ambience. The level label moved into the left
+end of the experience bar, clear of the corner buttons. `games/palisade/AGENTS.md` (Sound) lists
+what plays where.
 
 **Music:** Martial march at about 120 BPM in A minor, turning major for the win. Voices are a fife
 lead, triangle bass and snare rolls.
@@ -566,6 +632,13 @@ Notes:
 - Ambience: wind in the pines.
 
 ### Riftblade (planned against PR #378)
+**Done.** Built on main after the heroes PR merged, as planned with these differences: the sim
+gets no `s.sfx` queue; `games/riftblade/src/audio/cues.ts` plays everything by comparing the state
+frame to frame (new entities by id, counts, phase). Each planet's song has its own calm part and
+shares tense, boss and pad parts moved into its key; the hero select, star map and trader share one
+90 BPM song. Elara and Triad-77 have their own shot and signature sounds. See
+`games/riftblade/AGENTS.md`, Sound.
+
 Survivor-style auto-attack roguelike in neon vector art; sci-fi and frantic.
 
 **Music:** Space-opera chiptune at 150-160 BPM, one key per world: Dune in D minor, Swamp in E
@@ -633,6 +706,10 @@ Board auto-battler of junk robots; punchy, mechanical arcade.
 Notes:
 - Other players' fights run without playback, so they make no sound.
 - Fights at 2x speed with 16+ robots need rate limits.
+- Done: see the Sound section of `games/scrapyard-titans/AGENTS.md`. Two songs, since the tempos
+  differ (`PLAN_SONG` with calm and draft, `FIGHT_SONG` with battle, rat and the stings). Level-up
+  is heard in the scene (`doXp`, `beginPlan`), not in `gainXp`; place, merge and equip in the
+  scene's `doMove`, `doBuy`, `doEquip`. The plan timer ticks only in its last 3 seconds.
 
 ### Shrine Stack
 One-button temple stacking at dusk; calm and mystical, tense as it leans.
@@ -660,6 +737,11 @@ with echo. The tempo creeps up each tier.
 
 Notes:
 - Ambience: wind in the endless sky that follows the gust strength.
+
+**Done** (see `games/shrine-stack/AGENTS.md`, Sound). Parts: `calm`, `gilded`, `sky`, `break`
+(patron pick and breaks), stings `crown` and `fall`. Differs from the plan: the tempo stays at 80
+(the engine plays a song at one tempo), and the wind is a one-shot `gust` whenever a new stone gets
+a gust rather than a steady ambience.
 
 ### Space Wars
 Five-faction real-time strategy on a star map; pulpy 1970s sci-fi.
@@ -728,9 +810,17 @@ triangle bass.
 
 Notes:
 - Nothing here is high-frequency. Play hover ticks only when the cell changes, or not at all.
+- Done: `src/audio.ts`, with the song's parts named after the seasons (`spring`, `summer`,
+  `autumn`, `winter`) and stings `omen`, `finished` and `best`; no hover ticks. The game's
+  `AGENTS.md` lists where each sound plays.
 
 ### TinctureTinker
 Match-3 potion brewing in Art Nouveau style; cosy and whimsical.
+
+**Done** (see `games/tincture-tinker/AGENTS.md`, Sound): as planned, in `src/audio.ts`. The stings
+are `sold1`-`sold3` (one chime per star), `rank` (also a passed exam, with a seal stamp), `crown` and
+`fail`; the tense part is a D minor turn of the waltz. The hint line (caption) now sits right-aligned
+under the order label, clear of the corner buttons.
 
 **Music:** Music-box waltz at about 90 BPM in F major, with a soft triangle lead, a square
 arpeggio and no drums.
@@ -759,6 +849,11 @@ Notes:
 - Fire sounds in the animation queue's `start` callbacks so they stay in sync.
 
 ### Wyrmrail
+**Done.** See the Sound section of `games/wyrmrail/AGENTS.md`. Differences from the plan below: the
+sim stays free of audio, so the scene plays the player's taps and `GameSounds` compares the state
+each frame for the rest; the busy part is sixteenths at 100 BPM (one tempo per song); there is no
+tunnel muffling (no wyrm sound plays inside a tunnel).
+
 Isometric railway builder with a dragon train; pastoral, mild time pressure.
 
 **Music:** Fiddle-like folk at about 100 BPM in G major pentatonic, with a pulse lead, triangle

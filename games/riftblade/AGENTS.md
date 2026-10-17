@@ -38,7 +38,8 @@ between them.
   unlocked.
 - The field is endless: the camera follows the hero, foes spawn on a ring just off screen and
   ones left far behind are brought round ahead again.
-- Not built yet: audio, Watch AI.
+- Sound effects and music (see Sound below).
+- Not built yet: Watch AI.
 - No TODOs or FIXMEs in the code.
 
 ## Architecture
@@ -128,6 +129,9 @@ between them.
 - `src/game/save.ts`: `SAVE_KEY`, `loadProgress`, `saveProgress`, `recordRun`, `recordUnlocks`,
   `isUnlocked` (TR-9, a deed done, a hero the save shows as played, or the old world deeds) and
   `unlockedHeroes`.
+- `src/audio/music.ts`: the songs (`PLANET_SONGS`, `MENU_SONG`, `STINGS`); `src/audio/sfx.ts`: the
+  sound table `sfx`; `src/audio/cues.ts`: `SoundCues`, which plays them by watching the state (see
+  Sound).
 - `src/art/glow.ts`: `C` (palette), `hex`, `shade`, `paint` (a canvas texture at `sharpRes`),
   `glow`, `shape`, `beam`, `outline`.
 - `src/art/factions.ts`: `bakeFactions` paints the later factions (`rb-mirerat`, `rb-toad`,
@@ -209,6 +213,51 @@ Space closes it.
 rate, on every planet. With `settings.reduceMotion`, the walk bob, the rush spin, the hit swell and
 the rising of floating text are off. Warnings fill steadily rather than blink. There is no camera
 shake or flash.
+
+## Sound
+
+All sound goes through `shared/audio.ts` and is silent under browser automation. The sim has no
+event list and imports no audio: `GameScene` calls `SoundCues.update(state)` after every frame,
+which compares the state with the frame before and plays at most one of each sound per frame:
+new bolts, slashes, zaps, bombs, blasts and hazards by id (`id >= nextId` of the frame before),
+counts that went up (`kills`, `elitesKilled`, `chests`, `signatures`, `damageTaken`, `credits`,
+`xp`, `capstones`, `crossovers`), `waves` and `nextElite`, a boss appearing or gone, and the phase.
+Enemy bolts, blasts and hazards play only on screen. The scene plays the input sounds itself.
+
+**Music** (`music.ts`): one song per planet, Dune in D minor (152 BPM), Swamp in E minor swung
+(150, three steps a beat, via `swing`), Ice in B minor sparse (156) and Lava in C minor heavy
+(160). Each has its own `calm` part, and `tense`, `boss` and `pad` written once in D minor and moved
+into its key (`transpose`). `MENU_SONG` (90 BPM) has `select`, `map` and `shop`. `SoundCues.pickMusic`:
+hero select `select`; a fight `calm`, `tense` for 25 s after a ring wave and in the elite arena,
+`boss` while a boss lives; level-up cards mid-fight `pad`, between planets `map`; star map and
+events `map`; trader `shop`; the end screen stops the music. `STINGS`: `cleared` (a boss falls or
+the arena is won), `unlock` (a new hero), `win`, `lose`.
+
+**Effects** (`sfx.ts`), and where they play:
+- Hero bolts by colour (`boltSound`): `pistol` (Rook), `carbine` (TR-9), `spread` (Bram),
+  `blaster` (Elara), `droidShot` (Triad-77, drones), `heavy`, `rocket`, `boomerang` (a spinning
+  thrown blade), `saber` (The Fall's wave).
+- Knights' swings, from new `slashes` by aim mode: `saber` (Kael and other slashes), `ripple`
+  (Oom), `spinHum` (Corvin), `flurry` with `ping` on every tenth (Joren); `crackle` for new `zaps`
+  (Veyl); `whir` every 0.7 s while a foe is near Kresh's staff.
+- Signatures (`SIGNATURE`, on `signatures` going up): `sigHorn`, `sigPulse`, `sigToss`, `sigSlam`,
+  `sigForce`, `sigDash`, `sigRing`, `sigStorm`, `sigFlare`, `sigShift`. A signature asked for that
+  does not go off plays `ui('refuse')`.
+- New bombs: `toss` (grenade, frag), `charge`, `whistle` (crate, orbital, carpet). New blasts:
+  `boom` (radius 90 and up, louder with size) or `pop`.
+- `kill`, `eliteKill`, `bossHit` (the boss's hit flash), `hurt`, `dodge` (a knight's Foresight),
+  `barrier`, `heal` (health up by more than 8), `shard` (pitch rises with a combo), `chest`,
+  `ui('coin')` for credits gained.
+- `levelUp` (into the cards), `card` (a pick), `capstone`, `crossover`.
+- `eliteHorn`, `siren` (ring wave), hazards `warn` (vent, shell), `stomp`, `fireRing`, `glob` (bog
+  pool and toad globs), `enemyShot`, `enemyVolley` (volley and slug bolts), `bossStab`,
+  `bossDown`.
+- Between fights: `node` (star map), `ui('coin')` / `ui('refuse')` (trader buy), `reroll` /
+  `ui('refuse')`, `event`, `warp` (on to a new planet or the arena), `ui('click')` for the hero
+  cards, Fight, Leave, Continue and Run again, `ui('refuse')` for a locked hero.
+
+To add a sound: add it to `sfx.ts`, then play it from `SoundCues` off a state change (keep the sim
+free of audio) or from the scene's input handler.
 
 ## Testing hooks
 

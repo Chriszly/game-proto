@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { ui } from '../../../../shared/audio';
 import { iconTexture } from '../art/icons';
 import { fit } from '../art/lowpoly';
 import { GOLD, SLATE } from '../art/palette';
@@ -57,6 +58,7 @@ export class LevelUp {
       .on('pointerdown', () => {
         this.autoPick = !this.autoPick;
         this.onAutoPick(this.autoPick);
+        ui('click');
       });
     this.root = scene.add
       .container(0, 0, [dim, this.title, this.countdown, this.timer, this.toggleBox, label, toggle])

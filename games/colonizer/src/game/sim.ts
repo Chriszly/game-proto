@@ -118,7 +118,7 @@ export interface Unit {
 
 /** Things that happened this tick, for the scene's effects; the scene empties the list each frame. */
 export type SimEvent =
-  | { t: 'hit'; x: number; y: number; fromX: number; fromY: number; dmg: number; ranged: boolean; owner: number; victim: number; target: number }
+  | { t: 'hit'; x: number; y: number; fromX: number; fromY: number; dmg: number; ranged: boolean; owner: number; victim: number; target: number; tower?: boolean }
   | { t: 'drop'; x: number; y: number; res: Resource; n: number; owner: number }
   | { t: 'grow'; x: number; y: number };
 
@@ -1249,7 +1249,7 @@ function updateBuilding(s: GameState, b: Building, dt: number) {
         target.hp -= dmg;
         b.cool = def.tower.cooldown;
         const at = centre(footprint(target));
-        emit(s, { t: 'hit', x: at.x, y: at.y, fromX: b.tx + def.w / 2, fromY: b.ty + 0.5, dmg, ranged: true, owner: b.owner, victim: target.owner, target: target.id });
+        emit(s, { t: 'hit', x: at.x, y: at.y, fromX: b.tx + def.w / 2, fromY: b.ty + 0.5, dmg, ranged: true, owner: b.owner, victim: target.owner, target: target.id, tower: true });
       }
     }
   }

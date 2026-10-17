@@ -110,7 +110,6 @@ Implemented today:
 
 Missing or rough:
 
-- No sound.
 - The preview fits six kinds; the Queen Slug is named in its title instead of an icon.
 - The golem menu can cover a neighbouring golem; it opens below golems in the top two rows.
 - On a touch screen the form chips have no hover, so the hint names the two forms but not what
@@ -138,6 +137,8 @@ Missing or rough:
 
 File map (`src/`):
 
+- `audio.ts`: the sound (see Sound below): `sfx`, the effects table (`sounds` from
+  `shared/audio.ts`), and the songs `CALM`, `WAVES` and `STINGS`.
 - `howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips) in English and
   German, picked with `byLanguage` and handed to `setupGame(game, { howToPlay })` in `main.ts`;
   update both when the controls or the first round change.
@@ -206,7 +207,8 @@ File map (`src/`):
 
 Shared code it imports (outside the game folder): `shared/setupGame.ts` (`setupGame`),
 `shared/scaling.ts` (`setupScaling`, `sharpRes`), `shared/settings.ts` (`byDifficulty`,
-`settings`) and `shared/i18n.ts` (`translator`, `byLanguage`).
+`settings`), `shared/i18n.ts` (`translator`, `byLanguage`) and `shared/audio.ts` (`sounds`, `ui`,
+`playMusic`, `playSting`).
 
 Screens: `setupScaling` gives the canvas `renderScale` canvas pixels per game pixel (up to 4 on a
 4K screen) and zooms the one camera to match from its top-left; it never scrolls, so the scene
@@ -266,6 +268,40 @@ The hub's settings are read from the shared `hub-settings` key.
 Randomness and timing: no `Math.random`, `Date.now` or `performance.now`. Waves are fixed by
 `waveFor`; art uses the seeded `rnd` in `art/clay.ts`. Game time is only the frame timestamps
 Phaser passes to `update`; the pops' tweens run on Phaser's clock and are cosmetic.
+
+### Sound
+
+Everything is in `src/audio.ts` and played by `GameScene`; `game/` has no sound. The scene finds
+what the rules did in a frame by diffing the state around `tick` (`soundWatch` before,
+`tickSounds` after: new shot and pest ids are those from the `nextId` before the tick), so each
+sound plays at most once a frame, and nothing plays while the picker or a boon pick holds the
+game still (it ticks by 0).
+
+Music (`syncMusic`, called in `create` and every `update`): `CALM` (96 BPM, G major pentatonic,
+part `calm`, chords G Em C D) between waves and after the Heartwood falls; `WAVES` (132 BPM)
+`battle` while a wave comes and `boss` (E minor) on a Queen Slug wave (`wave % BOSS_EVERY`).
+Changing song fades the old one; battle and boss switch at the next bar. `STINGS` (120 BPM):
+`harvest1` to `harvest3` (one rising note per star) when the harvest picker opens, `lose` when the
+Heartwood falls.
+
+| Sound | Where it plays |
+|---|---|
+| `select` / buzz | a seed card or the hedge strip picked / a locked one (`select` false) |
+| `plant`, `rustle` / buzz | `tapCell`: a golem seed / a hedge planted; `plant` refused |
+| `grown` | `tickSounds`: a seed's `growMs` reached 0 |
+| `raise` (higher per level), `form` / buzz | `menuTap`: Raise, a form chip; refused for lack of sap |
+| `aim`, `move`, `uproot` + `ui('coin')` | `menuTap` (Aim, Uproot), `tapCell` (the move landing); buzz when refused |
+| `pebble`, `moss`, `thorn` | `tickSounds`: new shots, one per golem kind a frame (70ms gap, so 2x speed doesn't double them) |
+| `clink` | `tickSounds`: an armoured pest (snail) lost health |
+| `squash` + `sap` | `tickSounds`: `state.pops` not empty |
+| `caw`, `dig`, `groan` | `tickSounds`: a crow, mole or Queen Slug came in |
+| `snap` | `tickSounds`: a hedge chewed through |
+| `bite` | `heartHit` |
+| `horn`, `whistle` / buzz | the wave button: `startWave` returned 'start', 'early' / null |
+| `cleared`, `bud` (higher per bud), `bloom` | `waveDone` (no jingle on a call early, which whistled) |
+| `rustle` + `chime` / buzz | `regrowLeaf` (the Heartwood's cell, the leaf tag) |
+| `boon` | a boon card taken |
+| `ui('click')` | opening a golem's menu, form-menu open and Back, Move chip, speed button, garden tag, garden and thorny cards, the picker's Back or Keep going |
 
 ### Hub settings
 

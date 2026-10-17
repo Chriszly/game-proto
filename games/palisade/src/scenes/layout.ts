@@ -7,7 +7,11 @@ export const HUD_HEIGHT = 40;
 export const HERO_FEET = { x: 66, y: 418 };
 /** The barricade texture's top left corner (its log stands at x 182, from y 264 down). */
 export const BARRICADE = { x: 112, y: 250 };
-export const XP_BAR = { x: 112, y: 514, w: 752, h: 16 };
+/**
+ * The experience bar along the bottom, with the level at its left end. It starts right of the corner
+ * buttons (full screen, sound, pause), which take the bottom left up to x 114 on a 960x540 window.
+ */
+export const XP_BAR = { x: 132, y: 514, w: 732, h: 16 };
 /** The 1x/2x speed switch, right of the experience bar, by its centre. */
 export const SPEED = { x: 908, y: 522, w: 60, h: 22 };
 /** The barricade's health bar in the top bar (its fill, inside a 3px frame, 14px tall at y 13). */

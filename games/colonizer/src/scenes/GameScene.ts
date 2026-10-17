@@ -91,6 +91,10 @@ import { buildingKey, figKey, relicKey, TREE_VARIANTS } from './BootScene';
 import { Effects } from './fx';
 import { DeedCard, Minimap, StatusCard, stitchEllipse, stitchLine, Toast, TopBar } from './hud';
 import { BOON, BUTTONS, PANEL_Y, SEL, TOP_H } from './layout';
+import { SoundCues } from './sound';
+import { sfx } from '../audio/sfx';
+import { COLONY } from '../audio/music';
+import { playSting, stopMusic, ui } from '../../../../shared/audio';
 
 const SCROLL_PX_PER_S = 520;
 /** How long a raid's horn toast stays up, in game time. */
@@ -176,6 +180,10 @@ export class GameScene extends Phaser.Scene {
   private rallyFlags: Phaser.GameObjects.Image[] = [];
   /** The latest alert that was announced, and until when its toast shows. */
   private alertAt: Alert | null = null;
+  /** Sounds and music for what changes in the sim (`scenes/sound.ts`). */
+  private cues!: SoundCues;
+  /** Counts frames, so watching plays the battle's sounds on one frame in three. */
+  private frame = 0;
   private alertText = '';
   private alertToastUntil = 0;
   /** Where the toast's arrow points, so a click on it jumps there. */
@@ -285,6 +293,7 @@ export class GameScene extends Phaser.Scene {
       ...(this.rival2 ? [{ faction: this.rival2, gatherMul: mul, temperament: temper() }] : []),
     ];
     this.state = createGame(sides, map, watching);
+    this.cues = new SoundCues(this.state, watching);
     const side = (k: number) => {
       const p = this.state.players[k];
       return { name: `${t(FACTIONS[p.faction].name)} (${t(TEMPERAMENTS[p.temperament ?? 'builder'].name)})`, color: WOOL[p.faction].cloth };
@@ -343,6 +352,8 @@ export class GameScene extends Phaser.Scene {
     this.paintGround();
     this.syncSprites();
     this.drainEvents();
+    const v = this.cameras.main.worldView;
+    this.cues.update(this.state, { x0: v.x / TILE, y0: v.y / TILE, x1: v.right / TILE, y1: v.bottom / TILE });
     this.fx.update(dt);
     this.renderFog(dt);
     this.renderRings();
@@ -502,19 +513,30 @@ export class GameScene extends Phaser.Scene {
   /** Turns what the sim reported this tick into sparks, numbers and drop-off badges. */
   private drainEvents() {
     const s = this.state;
+    // One sound of a kind a frame for the fights on screen, quieter when the player's side is not in
+    // it; watching, on one frame in three and quieter still.
+    const v = this.cameras.main.worldView;
+    const loud = !watching || this.frame++ % 3 === 0;
+    let blow: { name: 'clash' | 'thwip' | 'volley'; volume: number } | null = null;
     for (const e of s.events) {
       // A rival's blow on the player's side raises an alert, seen or not (the camp guards only fight back).
       if (e.t === 'hit' && e.victim === PLAYER && e.owner !== PLAYER && e.owner !== NEUTRAL && !watching) this.alarm(e);
       if (!visible(s, Math.floor(e.x), Math.floor(e.y))) continue;
-      if (e.t === 'hit') this.fx.hit(e.x, e.y, e.fromX, e.fromY, e.dmg, e.ranged);
-      else if (e.t === 'grow') continue;
-      else if (e.owner === PLAYER) {
+      if (e.t === 'hit') {
+        this.fx.hit(e.x, e.y, e.fromX, e.fromY, e.dmg, e.ranged);
+        const inView = e.x * TILE >= v.x && e.x * TILE <= v.right && e.y * TILE >= v.y && e.y * TILE <= v.bottom;
+        const volume = (e.owner === PLAYER || e.victim === PLAYER) && !watching ? 1 : watching ? 0.45 : 0.6;
+        if (inView && loud && (!blow || volume > blow.volume)) blow = { name: e.tower ? 'volley' : e.ranged ? 'thwip' : 'clash', volume };
+      } else if (e.t === 'grow') continue;
+      else if (e.owner === PLAYER && !watching) {
         this.fx.drop(e.x, e.y, e.res, e.n);
+        sfx(e.res === 'wood' ? 'dropWood' : e.res === 'food' ? 'dropFood' : 'dropOre');
         this.popLog.push(`+${e.n} ${e.res}`);
         if (this.popLog.length > 20) this.popLog.shift();
       }
     }
     s.events.length = 0;
+    if (blow) sfx(blow.name, { volume: blow.volume });
   }
 
   private renderFog(dt: number) {
@@ -711,14 +733,21 @@ export class GameScene extends Phaser.Scene {
     const all = this.rallyBuildings();
     const hit = entityAt(this.state, tx, ty);
     if (hit && hit.kind === 'building' && all.some((b) => b.id === hit.id)) {
-      if (all.filter((b) => clearRally(this.state, PLAYER, b.id)).length > 0) say(this.state, t('rallyCleared'));
+      if (all.filter((b) => clearRally(this.state, PLAYER, b.id)).length > 0) {
+        say(this.state, t('rallyCleared'));
+        sfx('flagDown');
+      }
       return;
     }
-    if (all.filter((b) => setRally(this.state, PLAYER, b.id, tx, ty)).length > 0) say(this.state, t('rallySet'));
+    if (all.filter((b) => setRally(this.state, PLAYER, b.id, tx, ty)).length > 0) {
+      say(this.state, t('rallySet'));
+      sfx('flag');
+    } else ui('refuse');
   }
 
   /** Centres the camera on a world tile, allowing for the panel and top bar. */
   private jumpTo(x: number, y: number) {
+    sfx('whoosh');
     this.cameras.main.centerOn(x * TILE, y * TILE + (540 - PANEL_Y - TOP_H) / 2);
   }
 
@@ -779,6 +808,7 @@ export class GameScene extends Phaser.Scene {
     if (this.attackMode) {
       const ids = this.selectedUnits().map((u) => u.id);
       issue(this.state, PLAYER, ids, { t: 'attackMove', x: tx, y: ty });
+      if (ids.length > 0) sfx('order');
       this.attackMode = false;
       return;
     }
@@ -837,6 +867,7 @@ export class GameScene extends Phaser.Scene {
         if (this.selected.has(hit.id)) this.selected.delete(hit.id);
         else this.selected.add(hit.id);
       } else this.selectOwn([hit.id]);
+      sfx('select');
       this.panelKey = '';
       return;
     }
@@ -848,6 +879,7 @@ export class GameScene extends Phaser.Scene {
     const inside = [...this.state.units.values()].filter((u) => u.owner === PLAYER && u.x >= x0 && u.x <= x1 && u.y >= y0 && u.y <= y1);
     if (!additive) this.selected.clear();
     for (const u of inside) this.selected.add(u.id);
+    if (inside.length > 0) sfx('select');
     this.panelKey = '';
   }
 
@@ -885,6 +917,7 @@ export class GameScene extends Phaser.Scene {
   private commandAt(tx: number, ty: number) {
     const units = this.selectedUnits();
     if (units.length === 0) return;
+    sfx('order');
     const camp = campAt(this.state, tx, ty);
     if (camp) {
       // To a camp: stand round it, close enough to take it once its guards are down.
@@ -941,18 +974,19 @@ export class GameScene extends Phaser.Scene {
     const why = notAllowed(this.state, PLAYER, type);
     if (why) {
       say(this.state, why);
-      return;
+      return void ui('refuse');
     }
     if (!affordable(p, def.cost)) {
       say(this.state, t('notEnoughResources'));
-      return;
+      return void ui('refuse');
     }
     if (!canPlace(this.state, type, ox, oy, PLAYER)) {
       say(this.state, t(def.shore ? 'dockShore' : 'cantBuild'));
-      return;
+      return void ui('refuse');
     }
     const id = placeBuilding(this.state, PLAYER, type, ox, oy);
-    if (id === null) return;
+    if (id === null) return void ui('refuse');
+    sfx('place');
     const builders = this.selectedUnits().filter((u) => UNITS[u.type].role === 'villager');
     const builder = builders[0] ?? [...this.state.units.values()].find((u) => u.owner === PLAYER && UNITS[u.type].role === 'villager');
     if (builder) issue(this.state, PLAYER, [builder.id], { t: 'build', b: id });
@@ -964,8 +998,9 @@ export class GameScene extends Phaser.Scene {
     const ids = placeWall(this.state, PLAYER, wallLine(from.tx, from.ty, to.tx, to.ty));
     if (ids.length === 0) {
       say(this.state, t(affordable(this.state.players[PLAYER], BUILDINGS.wall.cost) ? 'cantBuild' : 'notEnoughWood'));
-      return;
+      return void ui('refuse');
     }
+    sfx('place');
     const builders = this.selectedUnits().filter((u) => UNITS[u.type].role === 'villager');
     const crew = builders.length > 0 ? builders : [...this.state.units.values()].filter((u) => u.owner === PLAYER && UNITS[u.type].role === 'villager').slice(0, 1);
     // Each builder starts on its own piece; when done, each goes on to the next one nearby.
@@ -981,6 +1016,7 @@ export class GameScene extends Phaser.Scene {
       else {
         const ids = (this.groups.get(digit) ?? []).filter((id) => this.state.units.has(id) || this.state.buildings.has(id));
         this.selectOwn(ids);
+        if (ids.length > 0) sfx('select');
       }
       return;
     }
@@ -989,6 +1025,7 @@ export class GameScene extends Phaser.Scene {
         if (this.selectedUnits().some((u) => isSoldier(UNITS[u.type].role))) this.attackMode = true;
         break;
       case 's':
+        if (this.selectedUnits().length > 0) sfx('order');
         issue(this.state, PLAYER, this.selectedUnits().map((u) => u.id), { t: 'stop' });
         break;
       case 'b':
@@ -1065,8 +1102,11 @@ export class GameScene extends Phaser.Scene {
     const alert = { x: e.x, y: e.y, last: s.time };
     this.alerts.push(alert);
     // A fight on screen speaks for itself; one out of sight gets the toast, saying what is hit.
+    // A short horn, once per alert, louder when the fight is out of sight.
     const v = this.cameras.main.worldView;
-    if (e.x * TILE >= v.x && e.x * TILE <= v.right && e.y * TILE >= v.y && e.y * TILE <= v.bottom) return;
+    const inView = e.x * TILE >= v.x && e.x * TILE <= v.right && e.y * TILE >= v.y && e.y * TILE <= v.bottom;
+    sfx('alarm', { volume: inView ? 0.6 : 1 });
+    if (inView) return;
     const u = s.units.get(e.target);
     const b = s.buildings.get(e.target);
     const text = u
@@ -1241,8 +1281,11 @@ export class GameScene extends Phaser.Scene {
           bg.setInteractive({ useHandCursor: true });
           bg.on('pointerover', () => bg.setTexture('btn-hot'));
           bg.on('pointerout', () => bg.setTexture('btn-on'));
-          bg.on('pointerdown', () => a.run());
-        }
+          // An action that makes its own sound (or refuses) says so; the rest click.
+          bg.on('pointerdown', () => {
+            if (a.run() !== 'sounded') ui('click');
+          });
+        } else bg.setInteractive().on('pointerdown', () => ui('refuse'));
         this.buttonObjects.push(bg, label, sub);
         this.hud.push({ id: a.id, label: a.sub ? `${a.name} ${a.sub}` : a.name, x, y, w: BUTTONS.w, h: BUTTONS.h });
       });
@@ -1269,7 +1312,10 @@ export class GameScene extends Phaser.Scene {
       bg.on('pointerout', () => bg.setTexture('card-boon').setPosition(x - 2, y - 2));
       bg.on('pointerdown', () => {
         const done = age3 ? chooseEdge(this.state, PLAYER, id as EdgeId) : chooseBoon(this.state, PLAYER, id as BoonId);
-        if (done) say(this.state, t('picked', { name: t(pick.name) }));
+        if (done) {
+          say(this.state, t('picked', { name: t(pick.name) }));
+          sfx('pick');
+        }
       });
       this.buttonObjects.push(bg, icon, name, words, choose);
       this.hud.push({ id, label: t(pick.name), x, y, w: BOON.w, h: BOON.h });
@@ -1297,8 +1343,8 @@ export class GameScene extends Phaser.Scene {
     const p = s.players[PLAYER];
     const out: Action[] = [];
     const ageName = (age: 2 | 3) => t(age === 3 ? 'age3' : 'age2');
-    if (this.placing) return [{ id: 'cancel', name: t('cancel'), sub: '', enabled: true, run: () => (this.placing = null) }];
-    if (this.rallyMode) return [{ id: 'cancel', name: t('cancel'), sub: '', enabled: true, run: () => (this.rallyMode = false) }];
+    if (this.placing) return [{ id: 'cancel', name: t('cancel'), sub: '', enabled: true, run: () => void (this.placing = null) }];
+    if (this.rallyMode) return [{ id: 'cancel', name: t('cancel'), sub: '', enabled: true, run: () => void (this.rallyMode = false) }];
     if (this.buildMenu) {
       // Page one: the usual buildings and the faction's own; page two: palisade, gate and Monument.
       const list = this.buildPage === 0 ? [...BUILD_ORDER, UNIQUE[this.faction]] : BUILD_MORE;
@@ -1317,19 +1363,19 @@ export class GameScene extends Phaser.Scene {
           },
         });
       }
-      if (this.buildPage === 0) out.push({ id: 'more', name: t('wallsMore'), sub: '', enabled: true, run: () => (this.buildPage = 1) });
-      out.push({ id: 'back', name: t('back'), sub: '', enabled: true, run: () => (this.buildPage === 1 ? (this.buildPage = 0) : (this.buildMenu = false)) });
+      if (this.buildPage === 0) out.push({ id: 'more', name: t('wallsMore'), sub: '', enabled: true, run: () => void (this.buildPage = 1) });
+      out.push({ id: 'back', name: t('back'), sub: '', enabled: true, run: () => void (this.buildPage === 1 ? (this.buildPage = 0) : (this.buildMenu = false)) });
       return out;
     }
     const units = this.selectedUnits();
     const villagers = units.filter((u) => UNITS[u.type].role === 'villager');
     const carts = units.filter((u) => UNITS[u.type].role === 'cart');
     const army = units.filter((u) => isSoldier(UNITS[u.type].role));
-    if (villagers.length > 0) out.push({ id: 'build', name: t('build'), sub: '', enabled: true, run: () => (this.buildMenu = true) });
-    if (carts.length > 0) out.push({ id: 'trade', name: t('trade'), sub: '', enabled: true, run: () => issue(this.state, PLAYER, carts.map((u) => u.id), { t: 'trade' }) });
+    if (villagers.length > 0) out.push({ id: 'build', name: t('build'), sub: '', enabled: true, run: () => void (this.buildMenu = true) });
+    if (carts.length > 0) out.push({ id: 'trade', name: t('trade'), sub: '', enabled: true, run: () => order(issue(this.state, PLAYER, carts.map((u) => u.id), { t: 'trade' })) });
     if (army.length > 0) {
-      out.push({ id: 'attack', name: t('attack'), sub: '', enabled: true, run: () => (this.attackMode = true) });
-      out.push({ id: 'stop', name: t('stop'), sub: '', enabled: true, run: () => issue(this.state, PLAYER, units.map((u) => u.id), { t: 'stop' }) });
+      out.push({ id: 'attack', name: t('attack'), sub: '', enabled: true, run: () => void (this.attackMode = true) });
+      out.push({ id: 'stop', name: t('stop'), sub: '', enabled: true, run: () => order(issue(this.state, PLAYER, units.map((u) => u.id), { t: 'stop' })) });
     }
     const b = this.selectedBuilding();
     if (b && b.built) {
@@ -1346,7 +1392,9 @@ export class GameScene extends Phaser.Scene {
           sub: tooEarly ? ageName(unit.age!) : atLimit ? t('oneOnly') : costText(cost),
           enabled: ok,
           run: () => {
-            if (!train(this.state, PLAYER, b.id, unit.id)) say(this.state, t('notEnoughPop'));
+            if (train(this.state, PLAYER, b.id, unit.id)) return queued();
+            say(this.state, t('notEnoughPop'));
+            return refused();
           },
         });
       }
@@ -1354,8 +1402,8 @@ export class GameScene extends Phaser.Scene {
         // The town bell: villagers near the Town Center and the towers shelter inside until released.
         out.push(
           p.bell
-            ? { id: 'release', name: t('backToWork'), sub: '', enabled: true, run: () => void releaseBell(this.state, PLAYER) }
-            : { id: 'bell', name: t('ringBell'), sub: '', enabled: true, run: () => void ringBell(this.state, PLAYER) },
+            ? { id: 'release', name: t('backToWork'), sub: '', enabled: true, run: () => (releaseBell(this.state, PLAYER), 'sounded') }
+            : { id: 'bell', name: t('ringBell'), sub: '', enabled: true, run: () => (ringBell(this.state, PLAYER) > 0 ? 'sounded' : refused()) },
         );
       }
       if (def.market) {
@@ -1363,8 +1411,8 @@ export class GameScene extends Phaser.Scene {
           const buy = marketPrice(s, PLAYER, res, 'buy');
           const sell = marketPrice(s, PLAYER, res, 'sell');
           const lot = { n: MARKET_LOT, res: t(res) };
-          out.push({ id: `buy-${res}`, name: t('buy', lot), sub: costText({ ore: buy }), enabled: p.res.ore >= buy, run: () => void trade(this.state, PLAYER, res, 'buy') });
-          out.push({ id: `sell-${res}`, name: t('sell', lot), sub: costText({ ore: sell }), enabled: p.res[res] >= MARKET_LOT, run: () => void trade(this.state, PLAYER, res, 'sell') });
+          out.push({ id: `buy-${res}`, name: t('buy', lot), sub: costText({ ore: buy }), enabled: p.res.ore >= buy, run: () => coin(trade(this.state, PLAYER, res, 'buy')) });
+          out.push({ id: `sell-${res}`, name: t('sell', lot), sub: costText({ ore: sell }), enabled: p.res[res] >= MARKET_LOT, run: () => coin(trade(this.state, PLAYER, res, 'sell')) });
         }
       }
       if (def.research) {
@@ -1376,14 +1424,16 @@ export class GameScene extends Phaser.Scene {
             sub: costText(tech.cost),
             enabled: affordable(p, tech.cost) && !p.techs.includes(tech.id) && (!tech.age2 || p.age >= 2),
             run: () => {
-              if (!research(this.state, PLAYER, b.id, tech.id)) say(this.state, t('cantResearch'));
+              if (research(this.state, PLAYER, b.id, tech.id)) return queued();
+              say(this.state, t('cantResearch'));
+              return refused();
             },
           });
         }
       }
       if (def.trains) {
         const flags = this.rallyBuildings();
-        out.push({ id: 'rally', name: t('rallyFlag'), sub: t(flags.some((x) => x.rally) ? 'rallyMoveSub' : 'rallySetSub'), enabled: true, run: () => (this.rallyMode = true) });
+        out.push({ id: 'rally', name: t('rallyFlag'), sub: t(flags.some((x) => x.rally) ? 'rallyMoveSub' : 'rallySetSub'), enabled: true, run: () => void (this.rallyMode = true) });
       }
       if (b.type === 'town' && p.age < 3) {
         const next = p.age === 1 ? TECHS.age2 : TECHS.age3;
@@ -1394,7 +1444,9 @@ export class GameScene extends Phaser.Scene {
           sub: costText(next.cost),
           enabled: ready && affordable(p, next.cost) && !b.queue.some((q) => q.key === next.id),
           run: () => {
-            if (!research(this.state, PLAYER, b.id, next.id)) say(this.state, t(p.age === 2 ? 'deedsFirst' : 'cantAdvance'));
+            if (research(this.state, PLAYER, b.id, next.id)) return queued();
+            say(this.state, t(p.age === 2 ? 'deedsFirst' : 'cantAdvance'));
+            return refused();
           },
         });
       }
@@ -1440,8 +1492,13 @@ export class GameScene extends Phaser.Scene {
   // ----------------------------------------------------------- end of the match
 
   private showEnd() {
-    if (watching) return this.showWatchEnd();
+    stopMusic();
+    if (watching) {
+      playSting(COLONY, 'end');
+      return this.showWatchEnd();
+    }
     const won = this.state.winner === PLAYER;
+    playSting(COLONY, won ? 'win' : 'lose');
     const bg = this.add.rectangle(480, 270, 960, 540, hexNum(T.linen), 0.72).setScrollFactor(0);
     const card = this.add.image(480, 270, 'card-end').setScrollFactor(0);
     const title = this.add.text(480, 245, t(won ? 'victory' : 'defeat').toUpperCase(), { ...text(44, won ? T.green : T.red, true) }).setOrigin(0.5).setScrollFactor(0);
@@ -1474,7 +1531,27 @@ interface Action {
   name: string;
   sub: string;
   enabled: boolean;
-  run: () => void;
+  /** 'sounded' when it played its own sound (or the refusal); otherwise the button clicks. */
+  run: () => 'sounded' | void;
+}
+
+/** A panel action's sounds: a quill for something queued, the buzz for a refusal, coins for a trade, a blip for an order. */
+function queued(): 'sounded' {
+  sfx('queue');
+  return 'sounded';
+}
+function refused(): 'sounded' {
+  ui('refuse');
+  return 'sounded';
+}
+function coin(done: boolean): 'sounded' {
+  if (done) ui('coin');
+  else ui('refuse');
+  return 'sounded';
+}
+function order(_issued: unknown): 'sounded' {
+  sfx('order');
+  return 'sounded';
 }
 
 /** A cost as the line under a button reads it, such as '170 wood · 50 ore'. */
