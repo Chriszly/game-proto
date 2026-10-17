@@ -1,4 +1,4 @@
-import { BARREL as BARREL_PLACE, DESKS, GRID } from '../game/state';
+import { BARREL as BARREL_PLACE, DESKS, GRID, MAX_DESKS } from '../game/state';
 
 // Where things are drawn in the 960x540 view: the forge on the left, the anvils in the middle and
 // the counter with the adventurers on the right.
@@ -15,6 +15,12 @@ export const BANNER = { x: 316, y: 4, w: 330, h: 32 };
 export const onBanner = (x: number, y: number) => x >= BANNER.x && x < BANNER.x + BANNER.w && y >= 0 && y < BANNER.y + BANNER.h + 6;
 /** The guild reputation meter, top left above the furnace, by its top left corner. */
 export const REPUTATION = { x: 30, y: 50, w: 200, h: 46, segments: 10 };
+/** The switch between forging swords and bucklers, by its centre, between the furnace and the Forge button. */
+export const MODE_BUTTON = { x: 130, y: 304, w: 170, h: 26 };
+/** The charter's edict, written over the lancet under the reputation meter, by its centre. */
+export const EDICT_PLAQUE = { x: 130, y: 122 };
+/** The wide buttons of the guild perk and edict windows. */
+export const WIDE_BUTTON = { w: 360, h: 42 };
 /** The upgrade buttons, by their centres. */
 export const UPGRADE_BUTTONS = { x: 130, ys: [410, 458, 506], w: 200, h: 42 };
 
@@ -51,17 +57,28 @@ export const discoveredCentre = (tier: number, tiers: number) => ({
   y: DISCOVERED.y,
 });
 
-/** The spots at the counter, from the top: each is a box with the adventurer and their order. */
+/**
+ * The spots at the counter, from the top: each is a box with the adventurer and their order. With
+ * a fourth desk every desk is drawn smaller, by `deskScale`, to fit the same column.
+ */
 export const DESK = { x: 682, y: 54, w: 262, h: 152, gap: 4 };
-export const deskBox = (desk: number) => ({ x: DESK.x, y: DESK.y + desk * (DESK.h + DESK.gap), w: DESK.w, h: DESK.h });
-export const deskCentre = (desk: number) => {
-  const b = deskBox(desk);
+const COLUMN_H = DESKS * DESK.h + (DESKS - 1) * DESK.gap;
+export const deskScale = (desks = DESKS) => (desks <= DESKS ? 1 : (COLUMN_H - (desks - 1) * DESK.gap) / (desks * DESK.h));
+export const deskBox = (desk: number, desks = DESKS) => {
+  const k = deskScale(desks);
+  const w = DESK.w * k;
+  const h = DESK.h * k;
+  return { x: DESK.x + (DESK.w - w) / 2, y: DESK.y + desk * (h + DESK.gap), w, h };
+};
+export const deskCentre = (desk: number, desks = DESKS) => {
+  const b = deskBox(desk, desks);
   return { x: b.x + b.w / 2, y: b.y + b.h / 2 };
 };
-export function deskAt(x: number, y: number) {
-  if (x < DESK.x || x >= DESK.x + DESK.w) return null;
-  const desk = Math.floor((y - DESK.y) / (DESK.h + DESK.gap));
-  return desk >= 0 && desk < DESKS && y - deskBox(desk).y < DESK.h ? desk : null;
+export function deskAt(x: number, y: number, desks = DESKS) {
+  const first = deskBox(0, desks);
+  if (x < first.x || x >= first.x + first.w) return null;
+  const desk = Math.floor((y - DESK.y) / (first.h + DESK.gap));
+  return desk >= 0 && desk < Math.min(desks, MAX_DESKS) && y - deskBox(desk, desks).y < first.h ? desk : null;
 }
 
 /** Inside a desk, relative to its top left corner: the order card, its patience bar and the fit tag. */
@@ -69,8 +86,11 @@ export const ORDER = { x: 89, y: 8, w: 162, h: 100 };
 export const PATIENCE = { x: 89, y: 125, w: 162, h: 12, segments: 12 };
 export const TAG = { x: 9, y: 9, w: 75, h: 33 };
 
-/** The window shown when the Crown Blade is delivered, by its centre. */
-export const WIN = { x: 480, y: 270, w: 440, h: 230 };
+/** The bottom-right link to the guild perks, left of "New smithy". */
+export const PERK_LINK = { x: 700, y: 527 };
+
+/** The window shown when the Crown Blade is delivered (and the other windows), by its centre. */
+export const WIN = { x: 480, y: 270, w: 440, h: 230, tallH: 310 };
 
 export const UI_DEPTH = 10_000;
 export const FONT = 'Georgia, "Times New Roman", serif';

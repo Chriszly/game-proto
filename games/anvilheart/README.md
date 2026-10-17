@@ -11,7 +11,10 @@ them: the exact sword they asked for earns a tip and the guild's good name. Quic
 a hammer streak for bonus coins, and royal commissions in the top bar ask you to deliver great
 swords to the crown, ending with the Crown Blade, which wins the smithy. The coins buy upgrades for
 the forge, a fifth row of anvils and a quench barrel. After the win you can found a new smithy
-under a new charter, keeping the guild stars that raise every price.
+under a new charter, keeping the guild stars that raise every price or buy lasting perks, and
+choose an edict that changes the new charter's rules. Mid-game the forge learns to make bucklers for
+adventurers who order a sword and shield set, and a merge timed in a streak's last second strikes a
+Masterwork.
 
 ![The smithy as a stained-glass window, with a Steel Sword held over its two twins](cover.png)
 
@@ -29,6 +32,9 @@ under a new charter, keeping the guild stars that raise every price.
 | Drag a Rusty Dagger onto a battered sword | Repair it, for a bonus |
 | Drag a sword onto the quench barrel, once bought | Keep it there, off the anvils |
 | Tap the quench barrel or the fifth row's button | Buy it |
+| Tap the switch under the furnace, once shown | Forge bucklers instead of swords, or swords again |
+| Drag a buckler onto an adventurer with a set order | Hand it over; the set is paid once the sword follows |
+| Tap "Guild perks" (bottom right) or the stars in the top bar | Spend guild stars on lasting perks |
 | Tap an upgrade | Buy its next rank |
 | Tap Auto Forge, once bought | Switch the auto forge on or off |
 | New smithy (bottom right) | Throw the board, coins and upgrades away and start again |
@@ -51,6 +57,9 @@ under a new charter, keeping the guild stars that raise every price.
    merge on, each one bursts into sparks and pays 5 coins times the streak's length ("Hammer
    streak ×3 +15c"), so a quick run of merges pays 10, then 15, then 20, then 25 coins a merge,
    where it stays however long the streak runs.
+   **Masterwork strikes.** In the streak's last second the ring turns gold: a sword merged then is
+   a Masterwork, in a gold glow with a glint at its tip. It pays half again whatever it sells for
+   (an exact-fit Iron Shortsword pays 22 coins instead of 15) and never rusts.
 6. **Royal commission.** The banner in the top bar names the great sword the crown wants, starting
    with a Golden Claymore, and shows how many of the sword below it (two Silver Sabers make one) are
    on your anvils, or "Ready" once the sword is made. Drag it onto the banner to deliver it: it
@@ -100,9 +109,29 @@ under a new charter, keeping the guild stars that raise every price.
    more sword each (two Golden Claymores, then two Runeblades, and so on, paying as much more).
    The top bar names the charter: Anvilheart II, III and so on. "New smithy" in the corner still
    throws everything away, stars included.
-16. **The smithy is kept**: the board and barrel (and how long each sword has lain), coins, swords
-   sold, upgrades, the standing commission and its open offer, your guild stars and charter,
-   reputation and whether you have won are saved in the browser.
+16. **Charter edicts.** Each new charter offers two edicts, and you take one before the new smithy
+   opens; it rules that charter. **Iron shortage**: the forge is half again as slow, but every sale
+   pays 25% more. **Tournament season**: adventurers come twice as often, with a third less
+   patience. **Gem rush**: the forge makes three times the gems, but plain (ungemmed) orders pay 25%
+   less. The charters take the edicts in turn, two at a time. The edict in force is written under the
+   reputation meter.
+17. **Guild perks.** Guild stars can be spent, from "Guild perks" at the bottom right or by tapping
+   the stars, on perks kept in every charter: the **Guild barrel** (1 star, every smithy starts with
+   the quench barrel), **Oiled anvils** (2 stars, swords take twice as long to rust) and a **Fourth
+   desk** (3 stars, room for four adventurers at a smaller counter). A spent star no longer raises
+   prices, so the top bar counts only the stars left.
+18. **Bucklers.** Once you have made a Knight's Blade, a switch under the furnace sets the forge to
+   make Wooden Bucklers instead of daggers (Fine Ore makes Iron Bucklers too). Two bucklers of a
+   kind merge into the next: Wooden, Iron, Steel, Silver and Golden. Bucklers never rust and only
+   sell as half of a set: a fifth of the adventurers who ask for a Shortsword or better then want a
+   sword and shield set, with no gem or trait, and wait 40% longer. Hand them the sword and the
+   buckler (at least as good as asked) in either order; the second completes the set, which pays
+   the sword as usual plus the buckler's price, with 50% on top. Someone who walks off holding half
+   a set keeps it.
+19. **The smithy is kept**: the board and barrel (and how long each sword has lain), coins, swords
+   sold, upgrades, the forge's mode and best buckler, the standing commission and its open offer,
+   your guild stars, perks, charter and edict, reputation and whether you have won are saved in the
+   browser.
 
 ![While a Steel Sword is held, the knight who asked for one shows the tipped price and the ranger who asked for less shows Overkill](docs/screenshots/exact-fit-tip.webp)
 
@@ -146,6 +175,14 @@ under a new charter, keeping the guild stars that raise every price.
 
 ![In the new charter an Iron Shortsword asked for pays 13 coins instead of 10, and 19 as an exact fit](docs/screenshots/charter-prices.webp)
 
+![A merge in the streak ring's gold last second strikes a Masterwork Golden Claymore](docs/screenshots/masterwork-strike.webp)
+
+![A new charter offers two edicts: Iron shortage or Tournament season](docs/screenshots/edict-choice.webp)
+
+![The guild perks window, with the fourth desk bought and four adventurers at the smaller counter](docs/screenshots/guild-perks.webp)
+
+![A set order: the Iron Buckler is handed over, and the Knight's Blade held over the knight completes the set](docs/screenshots/shield-set.webp)
+
 ![Dragging a dagger onto its twin](docs/screenshots/playthrough-1-dragging.webp)
 
 ### Swords
@@ -178,6 +215,18 @@ double its price, and every guild star adds 5%.
 | Fifth row | 1 (800 coins) | Four more anvils under the board; bought with the button over the covered row |
 | Quench barrel | 1 (300 coins) | A barrel beside the board that holds one sword or gem; bought by tapping it |
 
+### Bucklers
+
+A buckler adds its price to a set order, before the set's 50% bonus.
+
+| Tier | Buckler | Price |
+| --- | --- | --- |
+| 1 | Wooden Buckler | 6 |
+| 2 | Iron Buckler | 15 |
+| 3 | Steel Buckler | 40 |
+| 4 | Silver Buckler | 100 |
+| 5 | Golden Buckler | 240 |
+
 ![Auto Forge, unlocked once Bellows is maxed, forging on its own](docs/screenshots/auto-forge-on.webp)
 
 The difficulty, set on the hub page's Settings, changes one thing: adventurers wait 50% longer on Easy and 30% less on Hard.
@@ -189,11 +238,13 @@ The difficulty, set on the hub page's Settings, changes one thing: adventurers w
 ## Playthrough test
 
 `e2e/playthrough.spec.ts` plays the first sale in headless Chromium: it checks the new smithy and
-its first royal commission, waits for the first adventurer and their Iron Shortsword order, taps
-Forge twice (checking the forge must heat up in between), drags one dagger onto the other and
-checks they merged and started a hammer streak, then drags the Shortsword onto the adventurer and
-checks the sale paid the exact-fit tip (15 coins) and raised the guild reputation from 50 to 55, and
-finally that the lone streak runs out. Like
+its first royal commission, waits for the first adventurer and their Iron Shortsword order, forges
+four daggers (checking the forge must heat up in between), drags one dagger onto another and
+checks they merged and started a hammer streak, then merges the other two in the streak ring's
+last second and checks that chained the streak (10 coins) and struck a Masterwork Shortsword. It
+drags the Masterwork onto the adventurer and checks the sale paid the exact-fit tip and the
+Masterwork's half again (22 coins) and raised the guild reputation from 50 to 55, and finally that
+the streak runs out. Like
 the other games' tests it owns the game clock and plays at 4x speed (`PLAYTHROUGH_SPEED`). The
 shared **Playthrough** workflow (`.github/workflows/playthrough.yml`) runs it on every pull request
 that changes `games/anvilheart/` or the workflow itself, and uploads the video and screenshots as

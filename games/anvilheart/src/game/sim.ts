@@ -1,15 +1,16 @@
 import { byDifficulty } from '../../../../shared/settings';
 import { commissionAt, grandOf, offered, type Commission } from './commissions';
-import { GEM, combine, isGem, isGemmed, sword, tierOf } from './items';
+import { edictRule, edictsFor, PERKS, type Edict, type Perk } from './charter';
+import { GEM, MASTER, combine, isGem, isGemmed, isShield, isSword, shield, sword, tierOf } from './items';
+import { SHIELD_TOP } from './shields';
 import {
   BARREL,
-  DESKS,
   FIRST_ORDER,
   FIRST_VISITOR_MS,
-  GEM_CHANCE,
   GEM_ORDER_CHANCE,
   HAGGLER_PATIENCE,
   LOOKS,
+  MASTER_MS,
   MAX_SLOTS,
   PATIENCE_MS,
   PATIENCE_PER_TIER_MS,
@@ -20,7 +21,8 @@ import {
   RETURN_MS,
   RETURN_TIER,
   RUST_DROP_MS,
-  RUST_MS,
+  SET_ORDER_CHANCE,
+  SET_PATIENCE,
   SLOTS,
   STREAK_COINS,
   STREAK_MS,
@@ -28,16 +30,24 @@ import {
   TRAITS,
   TRAIT_CHANCE,
   autoForging,
+  desksOf,
   fitOf,
   forgeMs,
+  freeStars,
+  gemChance,
   gemsAbout,
   oreChance,
   patienceFactor,
   payFor,
   repairPay,
+  rustMs,
   rusts,
+  setPay,
+  shieldsAbout,
   trophyFor,
   visitorEveryMs,
+  type Adventurer,
+  type Fit,
   type GameState,
   type Returning,
   type Trait,
@@ -47,9 +57,12 @@ import { locked, nextPrice, type UpgradeId } from './upgrades';
 
 /**
  * Moves the smithy on by `dt` milliseconds: the forge cools (and forges by itself with the Auto
- * Forge on), swords left lying rust, adventurers come, wait and leave, and heroes return.
+ * Forge on), swords left lying rust, adventurers come, wait and leave, and heroes return. Nothing
+ * moves while a new charter waits for its edict.
  */
 export function tick(s: GameState, dt: number) {
+  // A new charter's smithy stands still until its edict is chosen.
+  if (edictOffers(s)) return;
   s.heatMs = Math.max(0, s.heatMs - dt);
   if (autoForging(s)) forge(s);
   s.streakMs = Math.max(0, s.streakMs - dt);
@@ -66,12 +79,12 @@ export function tick(s: GameState, dt: number) {
 
   for (const hero of s.returning) hero.inMs -= dt;
   const back = s.returning.find((hero) => hero.inMs <= 0);
-  if (back && s.adventurers.length < DESKS && s.slots.includes(null)) {
+  if (back && s.adventurers.length < desksOf(s) && s.slots.includes(null)) {
     s.returning.splice(s.returning.indexOf(back), 1);
     comeBack(s, back);
   }
 
-  if (s.adventurers.length < DESKS) {
+  if (s.adventurers.length < desksOf(s)) {
     s.nextVisitorMs -= dt;
     if (s.nextVisitorMs <= 0) {
       arrive(s);
@@ -80,7 +93,7 @@ export function tick(s: GameState, dt: number) {
   }
 }
 
-/** Swords left on an anvil dull after `RUST_MS`, and `RUST_DROP_MS` later drop a tier; the barrel keeps them safe. */
+/** Swords left on an anvil dull after `rustMs`, and `RUST_DROP_MS` later drop a tier; the barrel keeps them safe. */
 function rust(s: GameState, dt: number) {
   for (let slot = 0; slot < s.slots.length; slot++) {
     const item = s.slots[slot];
@@ -89,7 +102,7 @@ function rust(s: GameState, dt: number) {
       continue;
     }
     s.idle[slot] += dt;
-    if (s.idle[slot] < RUST_MS + RUST_DROP_MS) continue;
+    if (s.idle[slot] < rustMs(s) + RUST_DROP_MS) continue;
     s.slots[slot] = item! - 1;
     s.idle[slot] = 0;
     s.events.push({ kind: 'rusted', slot, tier: tierOf(item! - 1) });
@@ -99,20 +112,42 @@ function rust(s: GameState, dt: number) {
 /** An adventurer walks up to the first free spot at the counter with an order; a hero back from a quest keeps their look. */
 function arrive(s: GameState, hero?: Returning) {
   const taken = new Set(s.adventurers.map((a) => a.desk));
-  const desk = [...Array(DESKS).keys()].find((d) => !taken.has(d));
+  const desk = [...Array(desksOf(s)).keys()].find((d) => !taken.has(d));
   if (desk === undefined) return null;
   // After the first order, they ask for anything up to one better than the best sword made yet.
   const top = Math.min(ORDER_TOP, Math.max(3, s.bestTier + 1));
   const wants = s.orders === 0 ? FIRST_ORDER : 1 + Math.floor(Math.random() * top);
   const look = hero ? hero.look : Math.floor(Math.random() * LOOKS);
+  // Once bucklers are about, some ask for a sword and shield set (never with a dagger), with no gem
+  // or trait, and a buckler up to one better than the best made yet.
+  const set = shieldsAbout(s) && wants >= 2 && Math.random() < SET_ORDER_CHANCE;
+  const shieldWanted = set ? 1 + Math.floor(Math.random() * Math.min(SHIELD_TOP, Math.max(2, s.bestShield + 1))) : 0;
   // Once gems are about, some ask for one set in their sword (never in a dagger).
-  const gem = gemsAbout(s) && wants >= 2 && Math.random() < GEM_ORDER_CHANCE;
+  const gem = !set && gemsAbout(s) && wants >= 2 && Math.random() < GEM_ORDER_CHANCE;
   // From the second order on, some come with a trait.
-  const trait = s.orders === 0 ? 'none' : rollTrait();
-  // Easier difficulties and a better reputation give adventurers more patience; a Haggler brings their own.
+  const trait = s.orders === 0 || set ? 'none' : rollTrait();
+  // Easier difficulties, a better reputation and a set order give adventurers more patience; a
+  // Haggler brings their own, and the edict may take some away.
   const patience =
-    (PATIENCE_MS + PATIENCE_PER_TIER_MS * wants) * byDifficulty(1.5, 1, 0.7) * patienceFactor(s) * (trait === 'haggler' ? HAGGLER_PATIENCE : 1);
-  const a = { id: s.nextId++, desk, wants, gem, trait, patience, patienceMs: patience, look, returned: hero !== undefined };
+    (PATIENCE_MS + PATIENCE_PER_TIER_MS * wants) *
+    byDifficulty(1.5, 1, 0.7) *
+    patienceFactor(s) *
+    (trait === 'haggler' ? HAGGLER_PATIENCE : 1) *
+    (set ? SET_PATIENCE : 1) *
+    edictRule(s.edict).patience;
+  const a = {
+    id: s.nextId++,
+    desk,
+    wants,
+    gem,
+    trait,
+    shield: shieldWanted,
+    patience,
+    patienceMs: patience,
+    look,
+    returned: hero !== undefined,
+    given: { sword: null, shield: null },
+  };
   s.adventurers.push(a);
   s.orders++;
   return a;
@@ -134,18 +169,35 @@ function comeBack(s: GameState, hero: Returning) {
   s.events.push({ kind: 'returned', desk: a.desk, slot, tier: tierOf(hero.item), trophy: hero.trophy });
 }
 
-/** Forges a new sword (or now and then a gem) onto the first empty anvil, if the forge is hot and there is room. */
+/**
+ * Forges a new sword (or, in buckler mode, a buckler, and now and then a gem) onto the first empty
+ * anvil, if the forge is hot and there is room.
+ */
 export function forge(s: GameState) {
   if (s.heatMs > 0) return false;
   const slot = s.slots.indexOf(null);
   if (slot < 0) return false;
   const tier = Math.random() < oreChance(s) ? 2 : 1;
-  const item = gemsAbout(s) && Math.random() < GEM_CHANCE ? GEM : tier;
+  const made = s.shieldMode && shieldsAbout(s) ? shield(tier) : tier;
+  const item = gemsAbout(s) && Math.random() < gemChance(s) ? GEM : made;
   s.slots[slot] = item;
   s.idle[slot] = 0;
-  s.bestTier = Math.max(s.bestTier, tierOf(item));
+  raiseBest(s, item);
   s.heatMs = forgeMs(s);
   s.events.push({ kind: 'forged', slot, tier: tierOf(item) });
+  return true;
+}
+
+/** Raises the best sword or buckler made so far to a new item's. */
+function raiseBest(s: GameState, item: number) {
+  if (isSword(item)) s.bestTier = Math.max(s.bestTier, tierOf(item));
+  if (isShield(item)) s.bestShield = Math.max(s.bestShield, tierOf(item));
+}
+
+/** Switches the forge between swords and bucklers, once bucklers are about. */
+export function toggleShieldMode(s: GameState) {
+  if (!shieldsAbout(s)) return false;
+  s.shieldMode = !s.shieldMode;
   return true;
 }
 
@@ -168,7 +220,8 @@ const placeable = (s: GameState, place: number) => (place === BARREL ? s.ranks.b
  * Drops what lies at `from` onto `to` (an anvil or the barrel): onto an empty place it moves, onto
  * a sword of the same tier the two merge into one of the next tier, a gem sets into a plain
  * sword, a Rusty Dagger repairs a battered sword for a bonus, and anything else swaps. A merge
- * soon after the last one chains a hammer streak.
+ * soon after the last one chains a hammer streak, and a sword merged in the streak's last second is
+ * a Masterwork.
  */
 export function drop(s: GameState, from: number, to: number) {
   const item = itemAt(s, from);
@@ -176,12 +229,13 @@ export function drop(s: GameState, from: number, to: number) {
   const there = itemAt(s, to);
   const made = there === null ? null : combine(item, there);
   if (made) {
+    const master = made.merged && isSword(made.item) && s.streakMs > 0 && s.streakMs <= MASTER_MS;
+    const item = master ? made.item + MASTER : made.item;
     put(s, from, null);
-    put(s, to, made.item);
+    put(s, to, item);
     if (made.merged) {
-      const tier = tierOf(made.item);
-      s.bestTier = Math.max(s.bestTier, tier);
-      s.events.push({ kind: 'merged', slot: to, tier });
+      raiseBest(s, item);
+      s.events.push({ kind: 'merged', slot: to, tier: tierOf(item), master });
       hammer(s, to);
     } else if (made.repaired) {
       const coins = repairPay(made.item);
@@ -235,6 +289,7 @@ export function chooseCommission(s: GameState, grand: boolean) {
 export function deliverable(s: GameState, item: number | null) {
   const c = standing(s);
   if (!c || s.choosing || item === null || isGem(item)) return false;
+  if (!isSword(item)) return false;
   const tier = tierOf(item);
   if (tier === MAX_TIER && c.tier !== MAX_TIER) return true;
   return tier === c.tier && (!c.gem || isGemmed(item));
@@ -264,28 +319,67 @@ export function deliver(s: GameState, from: number) {
   return true;
 }
 
+/** How an adventurer takes an item: as its fit, or 'short' if it doesn't fit or they already hold that half of their set. */
+export function takes(a: Adventurer, item: number | null): Fit {
+  if (item === null) return 'short';
+  if (a.given[isShield(item) ? 'shield' : 'sword'] !== null) return 'short';
+  return fitOf(item, a);
+}
+
 /**
  * Sells the sword at `from` to the adventurer `id`, if it fits their order. The exact sword asked
  * for pays a tip on top and raises the guild's reputation; a better one pays only the price asked.
- * The buyer of a fine sword may come back with it later, battered.
+ * A set order takes its sword and buckler one at a time, in either order, and pays for both with a
+ * bonus once it has the second. The buyer of a fine sword may come back with it later, battered.
  */
 export function sell(s: GameState, from: number, id: number) {
   const item = itemAt(s, from);
   const a = s.adventurers.find((a) => a.id === id);
   if (item === null || !a || !placeable(s, from)) return false;
-  const fit = fitOf(item, a);
-  if (fit === 'short') return false;
-  const coins = payFor(item, a, s.stars);
-  const tier = tierOf(item);
+  if (takes(a, item) === 'short') return false;
   put(s, from, null);
+  if (a.shield > 0) {
+    a.given[isShield(item) ? 'shield' : 'sword'] = item;
+    if (a.given.sword === null || a.given.shield === null) {
+      s.events.push({ kind: 'handed', desk: a.desk, shield: isShield(item) });
+      return true;
+    }
+  }
+  const sold = a.given.sword ?? item;
+  const fit = fitOf(sold, a);
+  const coins = a.shield > 0 ? setPay(sold, a, s) : payFor(sold, a, s);
+  const tier = tierOf(sold);
   s.coins += coins;
   s.sold++;
   if (fit === 'exact') s.reputation = Math.min(REP_MAX, s.reputation + REP_EXACT);
   s.adventurers.splice(s.adventurers.indexOf(a), 1);
   s.events.push({ kind: 'sold', desk: a.desk, tier, coins, fit });
   if (tier >= RETURN_TIER && Math.random() < RETURN_CHANCE) {
-    s.returning.push({ inMs: RETURN_MS, item: sword(tier - 1, isGemmed(item), true), trophy: trophyFor(tier), look: a.look });
+    s.returning.push({ inMs: RETURN_MS, item: sword(tier - 1, isGemmed(sold), true), trophy: trophyFor(tier), look: a.look });
   }
+  return true;
+}
+
+/** Spends guild stars on a lasting perk, if there are enough unspent ones; the Guild barrel brings the barrel at once. */
+export function buyPerk(s: GameState, perk: Perk) {
+  if (s.perks[perk] || freeStars(s) < PERKS[perk].stars) return false;
+  s.perks[perk] = true;
+  if (perk === 'barrel') s.ranks.barrel = Math.max(1, s.ranks.barrel);
+  s.events.push({ kind: 'perk', perk });
+  return true;
+}
+
+/** The two edicts the charter offers while it waits for a choice: from the second smithy on, until one is taken. */
+export const edictOffers = (s: GameState): [Edict, Edict] | null => (s.charter > 0 && s.edict === null ? edictsFor(s.charter) : null);
+
+/** Takes one of the charter's two edicts, which then rules it until the next charter. */
+export function chooseEdict(s: GameState, edict: Edict) {
+  const two = edictOffers(s);
+  if (!two || !two.includes(edict)) return false;
+  s.edict = edict;
+  // An edict that slows the forge also lengthens a heat-up under way.
+  s.heatMs = Math.min(s.heatMs, forgeMs(s));
+  s.events.push({ kind: 'edict', edict });
   return true;
 }
 
@@ -318,8 +412,9 @@ export function toggleAutoForge(s: GameState) {
 
 /**
  * Founds a new smithy under a new charter, once the Crown Blade is in: the board, barrel, coins
- * and upgrades go, the guild stars (and the better prices they bring), reputation and the count
- * of swords sold stay, and the commissions start over, asking for more.
+ * and upgrades go, the guild stars (and the better prices they bring), their perks, reputation and
+ * the count of swords sold stay, and the commissions start over, asking for more, under an edict
+ * still to be chosen.
  */
 export function foundCharter(s: GameState) {
   if (!s.won) return false;
@@ -334,7 +429,13 @@ export function foundCharter(s: GameState) {
   s.nextVisitorMs = FIRST_VISITOR_MS;
   s.bestTier = 0;
   for (const id of Object.keys(s.ranks) as UpgradeId[]) s.ranks[id] = 0;
+  // The guild barrel comes with every new smithy.
+  if (s.perks.barrel) s.ranks.barrel = 1;
   s.autoForge = false;
+  s.shieldMode = false;
+  s.bestShield = 0;
+  // A new edict is chosen for the new charter.
+  s.edict = null;
   s.commission = { level: 0, made: 0, grand: false };
   s.choosing = false;
   s.won = false;

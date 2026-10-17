@@ -11,7 +11,9 @@ Daggers (and, later, gems) onto a 4x4 board of anvils (4x5 once the fifth row is
 of the same tier merge into the next tier (nine tiers, the ninth the Anvilheart), and adventurers at
 a counter of three desks buy swords at least as good as the one they ask for. Coins buy forge
 upgrades, a fifth row and a quench barrel; royal commissions, delivered to the crown, set the long
-goal and end in a win, after which a new charter starts the smithy over with the guild stars kept.
+goal and end in a win, after which a new charter starts the smithy over with the guild stars kept
+(to raise prices or spend on perks) under an edict chosen from two. From the Knight's Blade on the
+forge can also make bucklers, for adventurers who order a sword and shield set.
 
 Implemented today:
 
@@ -26,6 +28,12 @@ Implemented today:
   25 a merge from the fifth on, so a long chain never outpays sales) and pushes a
   `streak` event (burst, sparks and a "Hammer streak ×N +Nc" tag). A timer ring round the last
   merge's anvil drains while `streakMs > 0`.
+- Masterwork strikes (AN12): a sword merge while `0 < streakMs <= MASTER_MS` (the ring's last
+  second, when `drawMarks` draws it gold) adds the `MASTER` flag (400) in `drop` (the `merged`
+  event carries `master`, which floats "Masterwork!"). `payFor` multiplies a Masterwork's pay by
+  `MASTER_PAY` (1.5, after the tip, before a Haggler's share), and `rusts` is false for it. The fit
+  tag reads "Masterwork fit" or "Masterwork". Textures `sword-<tier>[-gem]-master` (gold glow, gold
+  ridge line and a glint at the tip); a returning hero's battered sword drops the flag.
 - Royal commissions (`src/game/commissions.ts`, `COMMISSIONS`): Golden Claymore 500c, Runeblade
   1200c, Dragonslayer 3000c, 2 Dragonslayers 6000c, 3 Dragonslayers 9000c, then the Crown Blade (an
   Anvilheart, 20000c). `commissionAt(level)` returns null past the last. A sword is delivered by
@@ -57,15 +65,46 @@ Implemented today:
   `reputation`; it pushes `charter` (a floating line). `commissionAt(level, charter)` asks for
   `count + charter` swords (with no cap, so charters keep pace with the stars' price bonus; past the
   banner's four pips the banner reads `Given made/count`) and scales the reward with
-  the count. Every star raises `orderPrice` by `STAR_PRICE` (5%) (`payFor`, `orderPrice` and the
-  order card take `stars`). The top bar names the charter (`Anvilheart II`, `roman`). "New smithy"
+  the count. Every unspent star raises `orderPrice` by `STAR_PRICE` (5%) (`payFor`, `orderPrice`
+  and the order card take the `Market`: stars, perks and edict, which `GameState` is). The top bar names the charter (`Anvilheart II`, `roman`). "New smithy"
   in the corner still throws everything away, stars included.
+- Charter edicts (AN11, `src/game/charter.ts`): `edict` (null in the first smithy) is cleared by
+  `foundCharter`; while `edictOffers(s)` (charter > 0, no edict) returns the pair from
+  `edictsFor(charter)` (the three `EDICTS` in turn, two at a time) the edict window
+  (`createEdicts`/`drawEdicts`, no way to close it) stays open and `tick` does nothing, until
+  `chooseEdict` sets it (pushing `edict`). `edictRule(edict)` gives the multipliers: `forge`
+  (`forgeMs`), `pay` and `plainPay` (`priceFactor`, so `orderPrice` and `shieldPrice`), `visitors`
+  (`visitorEveryMs`), `patience` (in `arrive`) and `gems` (`gemChance`). Iron shortage 1.5x forge
+  and 1.25x pay, Tournament season 2x visitors and 0.67x patience, Gem rush 3x gems and 0.75x plain
+  pay. The plaque under the reputation meter (`EDICT_PLAQUE`) names the edict and its `short` line.
+- Guild perks (AN13, `PERKS` in `charter.ts`): `perks` (saved, kept by `foundCharter`, wiped only by
+  "New smithy") bought with `buyPerk` for unspent stars: `freeStars` is `stars - spentStars(perks)`,
+  and only free stars raise prices (`priceFactor`) or show in the top bar. `barrel` (1 star) sets
+  `ranks.barrel` now and in every `foundCharter`; `rust` (2) doubles `rustMs`; `desk` (3) makes
+  `desksOf` 4 (`MAX_DESKS`). The perk window (`createPerks`/`drawPerks`, `tall-panel`, three `wide`
+  buttons) opens from the "Guild perks" link (`PERK_LINK`, shown once `stars > 0`) or the top bar's
+  star. With four desks `deskBox(desk, desks)` shrinks each desk by `deskScale` and centres it in
+  the same column: the counter frames are their own textures (`counter-3`, `counter-4`), and
+  `drawVisitors` rebuilds the visitors, buyer frames and hint when the count changes.
+- Bucklers (AN14, `src/game/shields.ts`, `SHIELDS`: Wooden 6, Iron 15, Steel 40, Silver 100, Golden
+  240): once `shieldsAbout` (`bestTier >= SHIELD_TIER`, 4) the mode switch (`MODE_BUTTON`, style
+  `mode`) calls `toggleShieldMode`; with `shieldMode` on `forge` makes `shield(tier)` (`SHIELD` +
+  tier, 1000 up) instead of a dagger, with the same Fine Ore and gem rolls. `combine` merges two
+  bucklers of a tier up to `SHIELD_TOP`; they take no gems, never rust, never deliver, and raise
+  `bestShield`, not `bestTier`. `arrive` rolls a set order (`SET_ORDER_CHANCE` 20%, tier 2+ only,
+  then no gem or trait): `shield` is the least buckler tier, up to `max(2, bestShield + 1)`, and
+  patience is `SET_PATIENCE` (1.4x). `takes(a, item)` is `fitOf` (a buckler fits a set order at its
+  tier or better) unless that half is already in `a.given`; `sell` stores the first half (pushing
+  `handed`) and on the second pays `setPay`: `(payFor(sword) + shieldPrice) * SET_PAY` (1.5), with
+  the sword's fit deciding the reputation and the returning roll. The card shows both pictures,
+  greys and ticks (`tick` texture) the half handed, and the tag reads "Set: 1 of 2" or "Set
+  complete". Textures `shield-<tier>`.
 - Rust on idle anvils (AN8): `idle[]` (parallel to `slots`, saved) counts how long each anvil's
   sword has lain; `put` and `forge` zero it, `rust` in `tick` adds `dt` for anything `rusts`
   (a sword above tier 1; gems, Rusty Daggers and the barrel never rust). At `RUST_MS` (3 min) the
   sword is `dull` (drawn at 0.55 alpha, with a rust ring in `drawMarks` draining over `rustLeft`),
   and `RUST_DROP_MS` (1 min) later it drops a tier (keeping its flags) and pushes `rusted`.
-- Adventurers with traits (AN9): `Order` is `{ wants, gem, trait }`; `trait` (`Trait`, `TRAITS`)
+- Adventurers with traits (AN9): `Order` is `{ wants, gem, trait, shield }`; `trait` (`Trait`, `TRAITS`)
   is rolled in `arrive` after the gem roll with one `Math.random` (never for the first order):
   `TRAIT_CHANCE` (35%), split evenly. A `haggler` gets `HAGGLER_PATIENCE` (1.6x) and pays
   `HAGGLER_PAY` (70%) of anything; a `noble` pays `NOBLE_PAY` (3x the price) for an exact fit and
@@ -109,12 +148,17 @@ Implemented today:
   (one frame per tier, showing the sword's picture only, no name, once `bestTier` has reached it;
   a question mark before), and a "New smithy" reset link in the bottom right corner.
 - Persistence of the board and its idle times, barrel, coins, swords sold, best tier, upgrade
-  ranks, the Auto Forge switch, the standing commission (level, made, grand), the open offer
-  (`choosing`), guild stars, the charter, reputation and `won` in `localStorage`.
+  ranks, the Auto Forge switch, the forge mode and best buckler, the standing commission (level,
+  made, grand), the open offer (`choosing`), guild stars, perks, the charter, its edict, reputation
+  and `won` in `localStorage`.
 
 Missing or rough:
 
 - No title screen and no in-game settings (they are on the hub page), no sound.
+- Half a set handed to an adventurer is lost if they walk off, and lives only on the adventurer, so
+  a reload loses it too.
+- With a long best sword name the top bar's stars slide under the banner, so their star can't be
+  tapped; the "Guild perks" link still opens the perks.
 - `walkedOff` is counted but not saved (its cost is the reputation drop, which is: a walk-off
   saves at once, like a forge, rust or a returning hero). Heroes on
   their way back (`returning`) are not saved either, so a reload loses them.
@@ -137,20 +181,26 @@ File map (`src/`):
   `GameScene`, calls `setupGame(game)` and then `setupScaling(game)` from `shared/scaling.ts`, and
   exposes `game` on window in dev builds.
 - `game/state.ts`: types (`GameState`, `Order`, `Adventurer`, `Returning`, `GameEvent`,
-  `Progress`, `Fit`, `Trait`), board (`GRID`, `SLOTS`, `MAX_SLOTS`, `BARREL`, `anvilsOf`),
-  timing, tip, streak, reputation, gem, star, rust, trait and returning-hero constants
-  (`EXACT_TIP`, `STREAK_MS`, `STREAK_COINS`, `STREAK_TOP`, `LOOKS`, `REP_*`, `GEM_*`, `STAR_PRICE`, `RUST_*`,
-  `TRAITS`, `TRAIT_CHANCE`, `HAGGLER_*`, `NOBLE_PAY`, `RETURN_*`, `TROPHY_PAY`, `REPAIR_PAY`),
-  `freshProgress`, `newShop`, `progressOf`, the sale price rule `fitOf`, `orderPrice` and
-  `payFor`, and the formulas `forgeMs`, `oreChance`, `autoForging`, `gemsAbout`,
-  `visitorEveryMs`, `patienceFactor`, `rusts`, `dull`, `rustLeft`, `trophyFor` and `repairPay`.
-- `game/items.ts`: what lies on an anvil as one number (`GEM`, `SET`, `BATTERED`, `tierOf`,
-  `isGem`, `isGemmed`, `isBattered`, `sword`, `validItem`) and `combine`, the merge, gem-setting
-  and repair rule.
-- `game/sim.ts`: the rules as pure functions on `GameState`: `tick`, `forge`, `itemAt`, `drop`,
-  `standing`, `offers`, `chooseCommission`, `deliverable`, `deliver`, `sell`, `buy`,
-  `toggleAutoForge`, `foundCharter`, plus the private `rust`, `arrive`, `rollTrait`, `comeBack`,
-  `put` and `hammer` (streaks).
+  `Progress`, `Fit`, `Trait`, `Market`), board (`GRID`, `SLOTS`, `MAX_SLOTS`, `BARREL`, `anvilsOf`,
+  `DESKS`, `MAX_DESKS`, `desksOf`), timing, tip, streak, Masterwork, reputation, gem, star, rust,
+  trait, returning-hero and buckler constants (`EXACT_TIP`, `STREAK_MS`, `STREAK_COINS`,
+  `STREAK_TOP`, `MASTER_MS`, `MASTER_PAY`, `LOOKS`, `REP_*`, `GEM_*`, `STAR_PRICE`, `RUST_*`,
+  `TRAITS`, `TRAIT_CHANCE`, `HAGGLER_*`, `NOBLE_PAY`, `RETURN_*`, `TROPHY_PAY`, `REPAIR_PAY`,
+  `SHIELD_TIER`, `SET_ORDER_CHANCE`, `SET_PAY`, `SET_PATIENCE`), `freshProgress`, `newShop`,
+  `progressOf`, the sale price rules `fitOf`, `freeStars`, `priceFactor`, `orderPrice`,
+  `shieldPrice`, `payFor` and `setPay`, and the formulas `forgeMs`, `oreChance`, `autoForging`,
+  `gemsAbout`, `gemChance`, `shieldsAbout`, `visitorEveryMs`, `patienceFactor`, `rusts`, `rustMs`,
+  `dull`, `rustLeft`, `trophyFor` and `repairPay`.
+- `game/items.ts`: what lies on an anvil as one number (`GEM`, `SET`, `BATTERED`, `MASTER`,
+  `SHIELD`, `tierOf`, `isGem`, `isSword`, `isShield`, `isGemmed`, `isBattered`, `isMaster`, `sword`,
+  `shield`, `validItem`) and `combine`, the merge, gem-setting and repair rule.
+- `game/sim.ts`: the rules as pure functions on `GameState`: `tick`, `forge`, `toggleShieldMode`,
+  `itemAt`, `drop`, `standing`, `offers`, `chooseCommission`, `deliverable`, `deliver`, `takes`,
+  `sell`, `buy`, `toggleAutoForge`, `buyPerk`, `edictOffers`, `chooseEdict`, `foundCharter`, plus
+  the private `rust`, `arrive`, `rollTrait`, `comeBack`, `raiseBest`, `put` and `hammer` (streaks).
+- `game/charter.ts`: `Edict`, `EDICTS`, `EDICT_IDS`, `edictsFor`, `edictRule`, `Perk`, `PERKS`,
+  `PERK_IDS`, `noPerks` and `spentStars`.
+- `game/shields.ts`: the `SHIELDS` table (name, price per tier), `SHIELD_TOP`, `shieldOf`.
 - `game/commissions.ts`: `Commission`, `COMMISSIONS`, `GRAND_PAY`,
   `commissionAt(level, charter)`, `grandOf`, `commissionTitle` and `offered`.
 - `game/swords.ts`: the `SWORDS` table (name, price per tier), `MAX_TIER`, `ORDER_TOP`, `swordOf`.
@@ -161,25 +211,29 @@ File map (`src/`):
 - `scenes/BootScene.ts`: bakes all textures, then starts `Game`.
 - `scenes/GameScene.ts`: draws the smithy, turns pointer input into sim calls, animates events,
   saves, and offers `spots()` for the test.
-- `scenes/layout.ts`: every screen position (`VIEW`, `FURNACE_WINDOW`, `FORGE_BUTTON`,
-  `HEAT_BAR`, `BANNER`, `REPUTATION`, `UPGRADE_BUTTONS`, `BOARD` with `CELL_SCALE`, `ROW_BOX`,
-  `ROW_BUTTON`, `BARREL`, `DISCOVERED` with `discoveredCentre`, `DESK`, inside a desk `ORDER`,
-  `PATIENCE` and `TAG`, and `WIN`), the `FONT` stack (Georgia, serif) and hit tests `slotAt`,
-  `placeAt` (anvil or barrel), `onBanner` and `deskAt`.
-- `ui/Button.ts`: a leaded-glass caption button (style `forge`, `upgrade` or `row`, textures from
-  `bakeUi`) that fires on `pointerdown` and can be disabled.
+- `scenes/layout.ts`: every screen position (`VIEW`, `FURNACE_WINDOW`, `MODE_BUTTON`,
+  `FORGE_BUTTON`, `HEAT_BAR`, `BANNER`, `REPUTATION`, `EDICT_PLAQUE`, `UPGRADE_BUTTONS`,
+  `WIDE_BUTTON`, `BOARD` with `CELL_SCALE`, `ROW_BOX`, `ROW_BUTTON`, `BARREL`, `DISCOVERED` with
+  `discoveredCentre`, `DESK` with `deskScale`, `deskBox` and `deskCentre` (all taking the desk
+  count), inside a desk `ORDER`, `PATIENCE` and `TAG`, `PERK_LINK`, and `WIN` with `tallH`), the
+  `FONT` stack (Georgia, serif) and hit tests `slotAt`, `placeAt` (anvil or barrel), `onBanner` and
+  `deskAt`.
+- `ui/Button.ts`: a leaded-glass caption button (style `forge`, `upgrade`, `row`, `wide` or `mode`,
+  textures from `bakeUi`) that fires on `pointerdown` and can be disabled.
 - `art/glass.ts`: the painting kit: `bake` (paints a canvas in art units, twice the view's, at
   `sharpRes` canvas pixels per view pixel, and adds it with `textures.addCanvas`), `fit` and
   `shown` (the scale that shows a baked texture at its size in view pixels), `glass` (a gradient, mottled piece in lead), `panel`,
   `glowFrame`, `glow`, `paint`, `label`, shape helpers and the seeded `rnd`.
   `art/scenery.ts`: `background` (Voronoi mosaic wall, furnace stones, all twenty board panes and
-  anvils, the reputation pane, counter frames, top bar) and `furnace-0/1`. `art/swords.ts`:
-  `sword-<tier>`, `sword-<tier>-gem` (a gem on the guard) and their `-worn` (battered) twins, the
-  loose `gem`, `drawSword`, `drawGem`, `itemTexture`, `swordScale`.
+  anvils, the reputation pane, top bar), `furnace-0/1` and the counter frames `counter-3` and
+  `counter-4`. `art/swords.ts`: `sword-<tier>`, `sword-<tier>-gem` (a gem on the guard) and their
+  `-worn` (battered) and `-master` (Masterwork) twins, `shield-<tier>`, the loose `gem`,
+  `drawSword`, `drawShield`, `drawGem`, `itemTexture`, `shieldTexture`, `swordScale`.
   `art/characters.ts`: `adventurer-<look>` (lancet window with a knight, ranger, viking or mage).
   `art/ui.ts`: button, emblem, order card, fit tag, streak tag, banner, pip, star, frame (gold,
-  green, banner, barrel), discovered frame, burst, spark, halo, `row-locked`, `barrel`/`barrel-off`
-  and `win-panel` (also the offer window's pane) textures.
+  green, banner, barrel), discovered frame, tick, burst, spark, halo, `row-locked`,
+  `barrel`/`barrel-off`, `win-panel` (also the offer window's pane) and `tall-panel` (the perk and
+  edict windows) textures.
 
 Shared code the game imports (repo root, outside `src/`): `shared/setupGame.ts` (`setupGame`),
 `shared/scaling.ts` (`setupScaling`, `sharpRes`) and `shared/settings.ts` (`settings`,
@@ -227,9 +281,12 @@ State model (`src/game/state.ts`):
   for a hero's returned sword, or both (300); use the `items.ts` helpers, never compare raw
   numbers. `idle` has one entry per slot. `barrel` holds one item or null. A "place" is an anvil
   index or `BARREL`.
-- `adventurers` holds at most `DESKS` (3); each has a unique `desk`, `wants` (minimum tier),
-  `gem` (wants it gemmed), `trait`, `patienceMs` counting down from `patience`, `look` (0 to
-  `LOOKS - 1`) and `returned`. `returning` holds heroes on their way back.
+- `adventurers` holds at most `desksOf` (3, or 4 with the perk); each has a unique `desk`, `wants`
+  (minimum tier), `gem` (wants it gemmed), `trait`, `shield` (0, or the least buckler of a set
+  order), `given` (the set's halves handed over), `patienceMs` counting down from `patience`, `look`
+  (0 to `LOOKS - 1`) and `returned`. `returning` holds heroes on their way back.
+- `shieldMode` is the forge's mode, `bestShield` the best buckler made; `perks` the bought perks
+  and `edict` the charter's edict (null while a new charter's waits, and in the first smithy).
 - `streak` is the number of merges in the current hammer streak (0 when none), `streakSlot` the
   anvil of the last one, and `streakMs` the time left to chain; `tick` drains it and zeroes
   `streak` when it runs out.
@@ -246,14 +303,16 @@ State model (`src/game/state.ts`):
 - `orders` counts adventurers who arrived; when it is 0 the next one wants `FIRST_ORDER`. `newShop`
   sets it to `progress.sold`, so a returning player who has sold gets random orders at once.
 - Only `src/game/sim.ts` changes rules state; the scene replaces `state` wholesale only on load and
-    on "New smithy". `bestTier` is raised by `forge` and `drop` and only falls to 0 in
-  `foundCharter`. Coins come from `sell` (`payFor`), streak and repair bonuses in `drop`, heroes'
-  trophies in `tick` and commission rewards in `deliver`, and go on `buy`.
+    on "New smithy". `bestTier` and `bestShield` are raised by `forge` and `drop` (`raiseBest`) and
+  only fall to 0 in `foundCharter`. Coins come from `sell` (`payFor`, or `setPay` for a set),
+  streak and repair bonuses in `drop`, heroes' trophies in `tick` and commission rewards in
+  `deliver`, and go on `buy`. Stars go on `buyPerk`.
 
 Persistence: one key of its own, `anvilheart-progress`, holding `Progress` as JSON (`coins`,
 `slots`, `idle`, `sold`, `bestTier`, `ranks`, `autoForge`, `commission`, `choosing`, `stars`,
-`charter`, `barrel`, `reputation`, `won`). Adventurers, returning heroes, heat, the streak and
-timers are not saved. `loadProgress` merges over `freshProgress()`, so a new upgrade id in `ranks`
+`charter`, `barrel`, `reputation`, `won`, `shieldMode`, `bestShield`, `perks`, `edict`). Adventurers
+(and half sets they hold), returning heroes, heat, the streak and timers are not saved. An old save
+loads with no perks, swords mode and no edict, so a charter past the first asks for its edict. `loadProgress` merges over `freshProgress()`, so a new upgrade id in `ranks`
 loads as rank 0, `autoForge` as false, and an old save starts with no barrel, reputation 50, not
 won, no idle times, no open offer (its standing commission counts as the quick way) and charter
 0. `newShop` sizes `slots` by `anvilsOf` and drops anything `validItem` rejects. An old save's
@@ -263,23 +322,27 @@ multi-Dragonslayer ones or the win.
 Randomness and timing:
 
 - `Math.random` is only used in `src/game/sim.ts`: per `arrive`, the order tier (skipped for the
-  first order), the look (skipped for a returning hero), the gem order roll (only once `gemsAbout`
-  and for tier 2+), then the trait roll (skipped for the first order); per `forge` call, the Fine
+  first order), the look (skipped for a returning hero), the set roll and the buckler tier (only
+  once `shieldsAbout` and for tier 2+), the gem order roll (only once `gemsAbout`, for tier 2+ and
+  no set), then the trait roll (skipped for the first order and a set); per `forge` call, the Fine
   Ore roll (made even at rank 0) and then the gem roll (only once `gemsAbout`), including the
-  forges the Auto Forge makes in `tick`; per `sell` of tier `RETURN_TIER`+, the returning roll.
-  The gem, trait and returning rolls are skipped in the first round, so its random sequence is
-  unchanged.
+  forges the Auto Forge makes in `tick`; per completed `sell` of tier `RETURN_TIER`+, the returning
+  roll. The set, gem, trait and returning rolls are skipped in the first round, so its random
+  sequence is unchanged.
 - Art uses the seeded `rnd()` from `src/art/glass.ts`, not `Math.random`.
-- The streak, commissions, their offers, charters, rust and reputation add no randomness.
+- The streak, Masterworks, commissions, their offers, charters, their edicts (taken in turn),
+  perks, rust and reputation add no randomness.
 - Game time comes only from the `time` Phaser passes to `update`; tweens use Phaser's clock.
 
 Data tables: sword names and prices in `src/game/swords.ts`; upgrade prices and blurbs in
 `src/game/upgrades.ts`, with their effects in `forgeMs`, `oreChance` and `autoForging` in
 `src/game/state.ts`;
-forge time, visitor timing, patience, `FIRST_ORDER`, `EXACT_TIP`, `STREAK_MS`, `STREAK_COINS`, `STREAK_TOP`,
+forge time, visitor timing, patience, `FIRST_ORDER`, `EXACT_TIP`, `STREAK_MS`, `STREAK_COINS`,
+`STREAK_TOP`, `MASTER_MS`, `MASTER_PAY`, the buckler set numbers,
 board size, desk count, reputation and gem numbers in `src/game/state.ts`; commissions in
 `src/game/commissions.ts` (with `GRAND_PAY`); the star, rust, trait and
-returning-hero numbers in `src/game/state.ts`; the order range (`Math.max(3, bestTier + 1)`,
+returning-hero numbers in `src/game/state.ts`; buckler names and prices in `src/game/shields.ts`;
+edicts and perks in `src/game/charter.ts`; the order range (`Math.max(3, bestTier + 1)`,
 capped at `ORDER_TOP`) and the difficulty, reputation and Haggler multipliers on patience in
 `arrive`.
 
@@ -325,23 +388,28 @@ capped at `ORDER_TOP`) and the difficulty, reputation and Haggler multipliers on
   it matches `commission` with `toMatchObject`, so `grand` and the other new fields pass)
   and `spots()`, which returns the Forge button centre, each anvil's sword position (`slotCentre`
   minus `SWORD_LIFT`, all 20), each `deskCentre`, and the `banner`, `barrel` and fifth-row button
-  (`row`) centres. Positions therefore follow `layout.ts`.
+  (`row`) and forge mode switch (`mode`) centres; `desks` follows `desksOf`. Positions therefore
+  follow `layout.ts`.
 - Inputs: mouse clicks on Forge and mouse drags (down, eight moves, up) from anvil to anvil and
   anvil to desk, mapped from the 960x540 view to the scaled canvas.
 - The test mirrors these values; change them together: `VIEW` (960x540), `FIRST_ORDER` (2), the
-  Iron Shortsword price (10), the 50% exact-fit tip (`EXACT_TIP`, so the sale pays 15) and
-  `STREAK_MS` (4000), `REP_START` (50) and `REP_EXACT` (5). It also expects: 16 empty anvils, a
-  fresh `commission` of `{ level: 0, made: 0 }`, no stars, no streak and reputation 50; the first
-  adventurer within 5s at desk 0 with no gem order; a forged dagger on slot 0 and then
-  slot 1 (so `forge` fills the first empty slot and makes tier 1 at Fine Ore rank 0);
-  `heatMs > 0` after one forge and still above 0 one 192ms step later; heat back to 0 within 5s;
-  a merge landing on the target slot that starts a streak of 1 on that slot with no bonus coins;
-  `coins` (15), `sold`, `walkedOff` and `reputation` (55) exact after the sale; and the streak back to 0 within
+  Iron Shortsword price (10), the 50% exact-fit tip (`EXACT_TIP`), `MASTER_PAY` (1.5, so the
+  Masterwork sale pays 22), `STREAK_MS` (4000), `STREAK_COINS` (a second merge pays 10),
+  `MASTER_MS` (1000), `MASTER` (400), `REP_START` (50) and `REP_EXACT` (5). It also expects: 16
+  empty anvils, a fresh `commission` of `{ level: 0, made: 0 }`, no stars, no streak and reputation
+  50; the first adventurer within 5s at desk 0 with no gem order; a forged dagger on slot 0 and
+  none on slot 1 while the forge heats, then daggers on slots 0 to 3 (so `forge` fills the first
+  empty slot and makes tier 1 at Fine Ore rank 0); `heatMs > 0` after one forge; heat back to 0
+  within 5s each time; a merge of slot 1 onto 0 that starts a streak of 1 on that slot with no
+  bonus coins and no Masterwork; the merge of slot 3 onto 2, released in the ring's last second
+  (the drag starts at `MASTER_MS + 9 * STEP_MS` left, since `play` moves in whole 192ms steps and a
+  drag takes ten), making `2 + MASTER` with a streak of 2 and 10 coins; `coins` (32), `sold`,
+  `walkedOff` and `reputation` (55) exact after selling it; and the streak back to 0 within
   `STREAK_MS` + 1s with coins and the commission unchanged. It fails on any page error. The first
-  round meets none of the round-2 rules: no stars (so prices are unchanged), no trait on the
-  first order, a tier 2 sale (no returning hero), and 15s of play (no rust).
-- Its screenshots are `0-forged`, `1-dragging`, `2-merged`, `3-exact-fit` (the sale drag midway,
-  showing the tag) and `4-sold`; copy them to `docs/screenshots/playthrough-*.webp`.
+  round meets none of the later rules: no stars or edict (so prices are unchanged), no trait or set
+  on the first order, a tier 2 sale (no returning hero), and under 20s of play (no rust).
+- Its screenshots are `0-forged`, `1-dragging`, `2-merged`, `3-masterwork`, `4-exact-fit` (the
+  sale drag midway, showing the tag) and `5-sold`; copy them to `docs/screenshots/playthrough-*.webp`.
 - It seeds `Math.random`, so adding or reordering random calls changes orders and looks but must
   not change the first round.
 
@@ -360,9 +428,16 @@ capped at `ORDER_TOP`) and the difficulty, reputation and Haggler multipliers on
 - Add a trait: add it to `Trait` and `TRAITS` in `src/game/state.ts`, its rule in `fitOf`,
   `payFor` or `arrive`, its card line in `TRAIT_LINES` and `TRAIT_COLOURS` and, if it changes a
   fit's wording, `tagLine` in `GameScene.ts`.
-- Add a sword flag: like `BATTERED` in `src/game/items.ts` (a multiple of 100 above `SET`, so
-  `tierOf` stays `item % 100`), a texture suffix in `swordTexture`/`itemTexture` and a look in
-  `drawSword`, and `validItem`'s upper bound.
+- Add a sword flag: like `MASTER` in `src/game/items.ts` (the next power of two times 100, below
+  `SHIELD`, so `tierOf` stays `item % 100` and `flag` reads it as a bit), a texture suffix in
+  `swordTexture`/`itemTexture` (and its bake loop in `bakeSwords`) and a look in `drawSword`, and
+  `validItem`'s upper bound.
+- Add a buckler tier: append to `SHIELDS` in `src/game/shields.ts` and a colour to
+  `SHIELD_COLOURS` in `src/art/swords.ts`. Keep `SHIELD_TOP` under 100.
+- Add an edict or a perk: add it to `Edict`/`EDICTS` (a multiplier in `EdictRule` read where the
+  rule lives) or `Perk`/`PERKS` in `src/game/charter.ts`, and its effect where the rule lives
+  (`buyPerk`, `foundCharter`, `rustMs`, `desksOf`). A fourth perk needs a fourth button and a taller
+  window in `createPerks`.
 - Add an upgrade: add the id to `UpgradeId` and `UPGRADES` in `src/game/upgrades.ts` (with `after`
   if it waits for others), its rank 0 in `freshProgress` in `src/game/state.ts`, its effect where
   the rule lives (a helper like `forgeMs`). A forge upgrade also goes in `FORGE_UPGRADES` with a y
@@ -397,6 +472,11 @@ capped at `ORDER_TOP`) and the difficulty, reputation and Haggler multipliers on
 - Slot values can be negative (`GEM`) or above 100 (gemmed, battered, or both), so always go
   through `tierOf` and friends; `0` never appears, and `null` is empty. Rust lowers a sword with
   `item - 1`, which keeps its flags.
+- Bucklers share the item numbers' `tierOf` with swords, so code that means a sword must check
+  `isSword` (commission progress, `deliverable`, `raiseBest`, `rusts`), not just the tier.
+- Visitor containers, buyer frames, patience bars and the hint all go through `deskBox(desk,
+  desksOf(state))` and `deskScale`; a new desk-relative thing must too, or it lands wrong with four
+  desks.
 - `idle` must stay as long as `slots`: `buy('row')` pushes to both, `foundCharter` and `newShop`
   rebuild both. Only `put`, `forge` and `comeBack` touch `idle` besides `rust`.
 - A returning hero waits in `returning` until a desk and an anvil are both free, and then takes
