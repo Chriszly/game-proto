@@ -11,7 +11,9 @@ Broadside, in `games/broadside/`, TinctureTinker, in `games/tincture-tinker/`, C
 `games/catacomb/`, Golem Garden, in `games/golem-garden/`, Beehive Baron, in
 `games/beehive-baron/`, Wyrmrail, in `games/wyrmrail/`, Shrine Stack, in `games/shrine-stack/`,
 Mapmaker, in `games/mapmaker/`, Lanternkeep, in `games/lanternkeep/`, Space Wars, in
-`games/space-wars/`, Lane Brawl, in `games/lane-brawl/`, and Colonizer, in `games/colonizer/`.
+`games/space-wars/`, Lane Brawl, in `games/lane-brawl/`, Colonizer, in `games/colonizer/`, Riftblade,
+in `games/riftblade/`, Scrapyard Titans, in `games/scrapyard-titans/`, and Bramblecrest, in
+`games/bramblecrest/`.
 
 Each game's guide for agents, to read before changing it:
 
@@ -35,6 +37,9 @@ Each game's guide for agents, to read before changing it:
 | Space Wars | [games/space-wars/AGENTS.md](games/space-wars/AGENTS.md) |
 | Lane Brawl | [games/lane-brawl/AGENTS.md](games/lane-brawl/AGENTS.md) |
 | Colonizer | [games/colonizer/AGENTS.md](games/colonizer/AGENTS.md) |
+| Riftblade | [games/riftblade/AGENTS.md](games/riftblade/AGENTS.md) |
+| Scrapyard Titans | [games/scrapyard-titans/AGENTS.md](games/scrapyard-titans/AGENTS.md) |
+| Bramblecrest | [games/bramblecrest/AGENTS.md](games/bramblecrest/AGENTS.md) |
 
 ## Feedback and issues
 

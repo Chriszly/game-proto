@@ -27,10 +27,13 @@ body:
         - Space Wars
         - Lane Brawl
         - Colonizer
+        - Riftblade
+        - Scrapyard Titans
+        - Bramblecrest
         - Hub page
         - Shared / all games
       # Preselect Shared, so a report never lands on a game by accident.
-      default: 19
+      default: 22
     validations:
       required: true
   - type: textarea
