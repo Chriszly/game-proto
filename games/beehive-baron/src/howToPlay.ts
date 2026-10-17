@@ -1,6 +1,7 @@
 import type { HowToPlay } from '../../../shared/howToPlay';
+import { byLanguage } from '../../../shared/i18n';
 
-export const howToPlay: HowToPlay = {
+const en: HowToPlay = {
   goal:
     'Grow your hive, sell honey and win gold at the county honey fair to become the Beehive Baron. ' +
     'There is no way to lose.',
@@ -33,3 +34,40 @@ export const howToPlay: HowToPlay = {
     'Once every meadow is open, the county fair is held at the end of every summer: a cell scores 1 point per touching capped cell of its kind, and 14 points win the first gold. Each year after needs more and adds a class.',
   ],
 };
+
+const de: HowToPlay = {
+  goal:
+    'Lass dein Volk wachsen, verkaufe Honig und gewinne Gold bei der Honigschau, um der Beehive Baron zu werden. ' +
+    'Verlieren kannst du nicht.',
+  controls: [
+    { input: 'Einen freien Platz in der Wabe anklicken oder antippen', action: 'Dort eine Wabenzelle bauen (die erste ist gratis)' },
+    { input: 'Sammlerinnen senden', action: 'Jede Biene daheim nach Nektar ausschicken' },
+    { input: 'Eine verdeckelte Zelle anklicken oder antippen', action: 'Ihren Honig in ein Glas füllen, dazu ein Stück Wachs' },
+    { input: 'Verkaufen', action: 'Alle Gläser im Regal für Taler verkaufen' },
+    { input: 'Laden-Tasten', action: 'Brutzellen, Metfässer und Verbesserungen kaufen' },
+    { input: 'Einen Honig auf dem Markt anklicken oder antippen', action: 'Die Sammlerinnen auf diese Wiese schicken' },
+    { input: 'Eine Wespe anklicken oder antippen', action: 'Sie verscheuchen, bevor sie den Honig stiehlt' },
+    { input: 'Neuer Stock (unten rechts)', action: 'Sofort ganz von vorn beginnen' },
+  ],
+  loop: [
+    'Tipp auf einen freien Platz in der Wabe, um deine erste Zelle zu bauen.',
+    'Tipp auf Sammlerinnen senden, damit die Bienen Nektar in die Zelle bringen.',
+    'Eine volle Zelle reift zu Honig und wird mit hellem Wachs verdeckelt.',
+    'Tipp auf die verdeckelte Zelle, um ein Glas Honig abzufüllen.',
+    'Tipp auf Verkaufen, um deine Gläser in Taler zu verwandeln, und baue dann mehr Zellen.',
+  ],
+  tips: [
+    'Jede Kante, die sich zwei gebaute Zellen teilen, bringt 1 Taler mehr für jedes verkaufte Glas, also baue sie aneinander.',
+    'Ziele für verkaufte Gläser öffnen neue Wiesen, jede mit eigenem Honig und einem bleibenden Vorteil.',
+    'Bienen kann man nicht kaufen: Brutzellen brüten sie aus.',
+    'Das Wachs jeder Ernte bezahlt einen Teil des Preises einer neuen Zelle.',
+    'Im Winter bleiben die Bienen daheim und essen ein Glas für je 4 Bienen, also halte ein paar Gläser oder verdeckelte Zellen zurück.',
+    'Die Verbesserung Schwänzeltanz schickt die Bienen von allein los.',
+    'Eine Wiese, die eine Minute ohne Pause beflogen wird, welkt und gibt halb so viel Nektar, bis die Jahreszeit wechselt: Wechsle ab und zu die Sorte auf dem Markt.',
+    'Fängst du den Schwarm ein, wählst du die Königin des zweiten Stocks: Sanft (keine Wespen auf ihrer Wabe), Zäh (isst im Winter halb so viel) oder Fleißig (+1 Nektar pro Flug).',
+    'Sobald jede Wiese offen ist, findet am Ende jedes Sommers die Honigschau statt: Eine Zelle bringt 1 Punkt für jede angrenzende verdeckelte Zelle ihrer Sorte, und 14 Punkte gewinnen das erste Gold. Jedes Jahr danach braucht mehr und bringt eine Klasse dazu.',
+  ],
+};
+
+/** US English spells every text the same as British English. */
+export const howToPlay: HowToPlay = byLanguage({ en, de });

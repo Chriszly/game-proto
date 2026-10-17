@@ -2,18 +2,21 @@
 // They unlock in order; `GameState.meadows` counts how many are open. The benefits live in
 // `carry` (Lavender Field), `jarPrice` (Sunflower Ridge) and `ripenTime` (Heather Moor) in state.ts.
 
+import type { TextKey } from '../i18n';
+
 export interface Meadow {
-  name: string;
+  /** Its name's text (`i18n/en.ts`). */
+  name: TextKey;
   /** Jars sold, in all, that unlock it. */
   need: number;
   /** Its benefit, for the goal card and the unlock message. */
-  blurb: string;
+  blurb: TextKey;
 }
 
 export const MEADOWS: Meadow[] = [
-  { name: 'Lavender Field', need: 10, blurb: '+1 nectar a trip' },
-  { name: 'Sunflower Ridge', need: 30, blurb: '+5 coins a jar' },
-  { name: 'Heather Moor', need: 80, blurb: 'honey ripens twice as fast' },
+  { name: 'lavenderField', need: 10, blurb: 'plusNectar' },
+  { name: 'sunflowerRidge', need: 30, blurb: 'plusCoins' },
+  { name: 'heatherMoor', need: 80, blurb: 'ripensFaster' },
 ];
 
 /** Extra coins a jar once the Sunflower Ridge is open. */

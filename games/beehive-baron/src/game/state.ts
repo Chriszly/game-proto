@@ -1,5 +1,5 @@
 import { CONTRACT_GAP_MS, CONTRACT_MS, type Contract } from './contracts';
-import { FAIR_MS, classesFor, fairGold, noEntries, type FairEntries } from './fair';
+import { FAIR_MS, classesFor, fairGold, noEntries, type FairClass, type FairEntries } from './fair';
 import { DEMAND, HONEY, KINDS, MARKET_MS, noJars, type Kind } from './honey';
 import { CASK_MS, type Cask } from './mead';
 import { MEADOWS, SUNFLOWER_COINS } from './meadows';
@@ -164,7 +164,7 @@ export type GameEvent =
   | { kind: 'lent'; bees: number; coins: number }
   | { kind: 'returned'; bees: number }
   | { kind: 'contract-lapsed' }
-  | { kind: 'entered'; what: string; score: number }
+  | { kind: 'entered'; classes: FairClass[]; score: number }
   | { kind: 'judged'; total: number; gold: number }
   | { kind: 'fair-open' }
   | { kind: 'gold'; total: number; golds: number }

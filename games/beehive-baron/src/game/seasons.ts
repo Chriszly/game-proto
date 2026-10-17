@@ -5,7 +5,6 @@
 export type Season = 'spring' | 'summer' | 'autumn' | 'winter';
 
 export const SEASONS: Season[] = ['spring', 'summer', 'autumn', 'winter'];
-export const SEASON_NAME: Record<Season, string> = { spring: 'Spring', summer: 'Summer', autumn: 'Autumn', winter: 'Winter' };
 
 /** How long each season lasts, in game time; a year is four of them. */
 export const SEASON_MS = 120_000;

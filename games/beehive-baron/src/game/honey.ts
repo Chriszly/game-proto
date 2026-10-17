@@ -2,10 +2,13 @@
 // at its own price. The market board shifts which kind is in demand, so where the bees forage
 // matters.
 
+import type { TextKey } from '../i18n';
+
 export type Kind = 'clover' | 'lavender' | 'heather';
 
 export interface HoneyKind {
-  name: string;
+  /** Its name's text (`i18n/en.ts`). */
+  name: TextKey;
   /** How many meadows of `MEADOWS` must be open for the bees to forage it (clover grows by the hive). */
   meadows: number;
   /** What a jar sells for before the market, the Sunflower Ridge and the comb bonus. */
@@ -13,9 +16,9 @@ export interface HoneyKind {
 }
 
 export const HONEY: Record<Kind, HoneyKind> = {
-  clover: { name: 'Clover', meadows: 0, price: 15 },
-  lavender: { name: 'Lavender', meadows: 1, price: 18 },
-  heather: { name: 'Heather', meadows: 3, price: 22 },
+  clover: { name: 'clover', meadows: 0, price: 15 },
+  lavender: { name: 'lavender', meadows: 1, price: 18 },
+  heather: { name: 'heather', meadows: 3, price: 22 },
 };
 
 export const KINDS = Object.keys(HONEY) as Kind[];
