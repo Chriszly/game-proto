@@ -25,7 +25,7 @@ start page lists the games; each one lives in its own folder under `games/`.
 | [Space Wars](games/space-wars/README.md) | Command a fleet of 3D ships on a 70s paperback star map: build a base, raise units, work through a chain of contracts, hold the relay beacon and salvage wrecks while you fight rival factions, each with its own buildings and ships. |
 | [Lane Brawl](games/lane-brawl/README.md) | Lead a team of five low-poly 3D heroes down the lanes in a MOBA against NPC teams: chase objectives, chain last hits, pick an upgrade each level, build items from parts, fight over a guardian beast, ambush from tall grass, break an inhibitor and destroy the enemy base. |
 | [Colonizer](games/colonizer/README.md) | A base-building RTS embroidered like the Bayeux tapestry: gather wood, food and ore, build, research techs and raise armies of three factions, pick an Age II boon, earn Age III with three deeds, then destroy the enemy Town Center. |
-| [Riftblade](games/riftblade/README.md) | Survive waves across four planets as one of twelve blade knights and blaster soldiers; every level-up offers a new skill. |
+| [Riftblade](games/riftblade/README.md) | Hold out five minutes against scrap droids on a dune world as one of three blaster soldiers, then beat the boss; every level-up offers a new skill. |
 | [Scrapyard Titans](games/scrapyard-titans/README.md) | Build a squad of junk-built robots on an 8x8 board, bolt on parts and watch them brawl it out against seven rival commanders. |
 | [Bramblecrest](games/bramblecrest/README.md) | A small knight explores an overgrown kingdom by lamplight, finding a new tool in every dungeon that opens more of the world. |
 
@@ -57,6 +57,7 @@ The hub's **Settings** button opens the settings every game shares. They are sav
   | Mapmaker | 16 supplies a voyage | 9 supplies a voyage |
   | Lanternkeep | lanterns burn 30% longer | lanterns burn 20% shorter |
   | Colonizer | the AI gathers 25% slower | the AI gathers 25% faster |
+  | Riftblade | droids have 25% less health and come 25% slower | droids have 35% more health and come 25% faster |
 
 - **Frame rate (FPS)**: the most frames per second a game draws, 30 to 320 (60 by default).
 - **Show FPS**: a readout of the frame rate in each game's corner.

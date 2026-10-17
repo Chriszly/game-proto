@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>Riftblade</title>
+  <defs>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="1.1" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <circle cx="7" cy="7" r="5" fill="#e37100"/>
+  <circle cx="25" cy="7" r="5" fill="#e37100"/>
+  <circle cx="7" cy="7" r="2.4" fill="#ffb787"/>
+  <circle cx="25" cy="7" r="2.4" fill="#ffb787"/>
+  <ellipse cx="16" cy="16.5" rx="13" ry="12" fill="#e37100"/>
+  <circle cx="10.5" cy="14.0" r="2.3" fill="#0d1117"/>
+  <circle cx="21.5" cy="14.0" r="2.3" fill="#0d1117"/>
+  <circle cx="11.3" cy="13.2" r="0.8" fill="#ffffff"/>
+  <circle cx="22.3" cy="13.2" r="0.8" fill="#ffffff"/>
+  <ellipse cx="16" cy="20.5" rx="4.6" ry="3.3" fill="#ffdcc7"/>
+  <ellipse cx="16" cy="19.5" rx="2.2" ry="1.4" fill="#311300"/>
+  <line x1="23.2" y1="29.5" x2="30.2" y2="17.5" stroke="#4fb4ff" stroke-width="2.6" stroke-linecap="round" filter="url(#glow)"/>
+  <line x1="23.2" y1="29.5" x2="30.2" y2="17.5" stroke="#e8f6ff" stroke-width="0.9" stroke-linecap="round"/>
+  <rect x="20.6" y="28.4" width="4.2" height="2.6" rx="0.8" fill="#9aa3b5" transform="rotate(-59.7 22.7 29.7)"/>
+</svg>
