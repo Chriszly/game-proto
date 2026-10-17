@@ -21,7 +21,10 @@ export function loadProgress(): Progress {
     const relics = Object.fromEntries(
       Object.entries(saved.relics ?? {}).filter(([id]) => id in RELICS),
     ) as Progress['relics'];
-    return { ...fresh, ...saved, ranks, relics };
+    // The cards a level-up had up: kept only if they are still three known upgrades and a level-up
+    // is pending, otherwise new ones are rolled.
+    const choices = Array.isArray(saved.choices) && saved.choices.length === 3 && saved.choices.every((id) => id in UPGRADES) && (saved.levelUps ?? 0) > 0 ? saved.choices : null;
+    return { ...fresh, ...saved, ranks, relics, choices };
   } catch {
     return fresh;
   }

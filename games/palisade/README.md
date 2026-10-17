@@ -187,7 +187,7 @@ waits while the panel is open.
 | Fortification | Cost | What it does |
 | --- | --- | --- |
 | Stake line | 25 coins | A row of stakes behind the barricade. Once the barricade is down, foes stop at the stakes and hack through 80 of them before walking on (Spiked Stakes pricks them there too); buying it again sets it back to full |
-| Oil pot | 15 coins | Armed on the barricade. The first foe to reach it next wave bursts the pot: every foe near it takes 15 and burns for 6s, Warded elites aside |
+| Oil pot | 15 coins | Armed on the barricade (one at a time). The first foe to reach it next wave bursts the pot: every foe near it takes 15 and burns for 6s, Warded elites aside |
 | Lookout | 20 coins | A pennant on the barricade: Arrow Rain's ring is 40% wider for the next three waves (the one it was bought before included) |
 
 ![The fortify panel](docs/screenshots/fortify-panel.webp)
@@ -231,7 +231,7 @@ and carries one of three traits, named over its health bar:
 
 | Trait | What it does |
 | --- | --- |
-| Splitting | Falls apart into two goblins (with 60% of a goblin's health) where it fell, on the road even if it flew |
+| Splitting | Falls apart into two goblins (with 60% of a goblin's health) where it fell, on the road even if it flew, and never behind a standing barricade |
 | Enraged | Below half health it walks and hits 60% faster, and turns red |
 | Warded | Immune to burning and chill, with a violet rune ring on the road; Shatter's bonus never applies to it |
 

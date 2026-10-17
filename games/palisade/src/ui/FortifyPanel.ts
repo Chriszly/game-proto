@@ -33,8 +33,11 @@ export class FortifyPanel {
     this.root.setVisible(false);
   }
 
-  /** Opens (or redraws) the panel with what is held, the coins to spend and whether this break's buy is still open. */
-  show(forts: Forts, coins: number, canBuy: boolean) {
+  /**
+   * Opens (or redraws) the panel with what is held, the coins to spend, whether this break's buy is
+   * still open and which fortifications can be bought (an armed oil pot cannot be bought again).
+   */
+  show(forts: Forts, coins: number, canBuy: boolean, buyable: (id: FortId) => boolean) {
     this.open = true;
     this.root.setVisible(true);
     this.body.removeAll(true);
@@ -52,7 +55,7 @@ export class FortifyPanel {
       .setOrigin(0, 0.5);
     this.body.add([g, coinIcon, coinText, title, sub]);
     const held = (id: FortId) => (id === 'stakes' ? (forts.stakeHp > 0 ? `Standing, ${Math.ceil(forts.stakeHp)} left` : '') : id === 'oil' ? (forts.oil ? 'Armed' : '') : forts.lookout > 0 ? `${forts.lookout} wave${forts.lookout > 1 ? 's' : ''} left` : '');
-    FORT_IDS.forEach((id, i) => this.addRow(id, left, top + 62 + i * 66, w, held(id), canBuy && coins >= FORTS[id].cost));
+    FORT_IDS.forEach((id, i) => this.addRow(id, left, top + 62 + i * 66, w, held(id), buyable(id) && coins >= FORTS[id].cost));
   }
 
   /** A fortification's name, text and what is held, with a button that buys it for its cost. */

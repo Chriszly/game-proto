@@ -292,10 +292,10 @@ export type Stats = ReturnType<typeof stats>;
 export const rainNeed = (wave: number, s: Stats) => Math.max(2, Math.round((RAIN_KILLS + Math.floor((wave - 1) / 2)) * s.rainCharge));
 
 /** The hero's level and upgrades, kept from one run to the next. */
-export type Progress = Pick<GameState, 'level' | 'xp' | 'ranks' | 'levelUps' | 'bestWave' | 'runs' | 'relics' | 'mastered' | 'heat' | 'heatUnlocked'>;
+export type Progress = Pick<GameState, 'level' | 'xp' | 'ranks' | 'levelUps' | 'bestWave' | 'runs' | 'relics' | 'mastered' | 'heat' | 'heatUnlocked' | 'choices'>;
 
 export function freshProgress(): Progress {
-  return { level: 1, xp: 0, ranks: {}, levelUps: 0, bestWave: 0, runs: 0, relics: {}, mastered: false, heat: 0, heatUnlocked: 0 };
+  return { level: 1, xp: 0, ranks: {}, levelUps: 0, bestWave: 0, runs: 0, relics: {}, mastered: false, heat: 0, heatUnlocked: 0, choices: null };
 }
 
 export const freshForts = (): Forts => ({ stakeHp: 0, oil: false, lookout: 0, boughtWave: 0 });
@@ -340,8 +340,9 @@ export function newRun(progress: Progress, aimMode: AimMode = 'nearest'): GameSt
 }
 
 export function progressOf(state: GameState): Progress {
-  const { level, xp, ranks, levelUps, bestWave, runs, relics, mastered, heat, heatUnlocked } = state;
-  return { level, xp, ranks: { ...ranks }, levelUps, bestWave, runs, relics: { ...relics }, mastered, heat, heatUnlocked };
+  const { level, xp, ranks, levelUps, bestWave, runs, relics, mastered, heat, heatUnlocked, choices } = state;
+  // The cards up for a pending level-up are kept too, so a reload shows the same three.
+  return { level, xp, ranks: { ...ranks }, levelUps, bestWave, runs, relics: { ...relics }, mastered, heat, heatUnlocked, choices: choices && [...choices] };
 }
 
 /** Upgrades that can still be offered: not maxed, and with what they build on already picked. */

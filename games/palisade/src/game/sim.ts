@@ -574,7 +574,7 @@ export function hire(state: GameState, slot: number, kind: GuardKind) {
  */
 export function fortify(state: GameState, id: FortId) {
   const f = state.forts;
-  if (state.phase !== 'break' || state.choices || f.boughtWave === state.wave || state.coins < FORTS[id].cost) return false;
+  if (!canBuyFort(state, id) || state.coins < FORTS[id].cost) return false;
   state.coins -= FORTS[id].cost;
   f.boughtWave = state.wave;
   if (id === 'stakes') f.stakeHp = STAKE_HP;
@@ -585,6 +585,9 @@ export function fortify(state: GameState, id: FortId) {
 
 /** Whether a fortification can still be bought in this break. */
 export const canFortify = (state: GameState) => state.phase === 'break' && !state.choices && state.forts.boughtWave !== state.wave;
+
+/** Whether this fortification can be bought now: an oil pot only when none is armed. */
+export const canBuyFort = (state: GameState, id: FortId) => canFortify(state) && !(id === 'oil' && state.forts.oil);
 
 /** Sets who the ranger shoots first. */
 export function setAim(state: GameState, mode: AimMode) {
@@ -629,7 +632,11 @@ function removeDead(state: GameState) {
       const y = Math.min(FIELD.bottom - 8, Math.max(FIELD.top + 8, e.y));
       addEffect(state, { kind: 'split', x: e.x, y, radius });
       const hp = Math.max(1, Math.round(foeHp('goblin', state.wave, state.road, state.heat) * SPLIT_HP));
-      for (let i = 0; i < SPLIT_INTO; i++) addFoe(state, 'goblin', Math.max(HERO_FRONT + 20, e.x + 10), y + (i - (SPLIT_INTO - 1) / 2) * 22, hp, null);
+      // They land on the road's side of a standing barricade (or stake line), so one that flew over
+      // it does not drop goblins behind it, where nothing stops them reaching the hero.
+      const front = state.barricade.hp > 0 ? BARRICADE_FRONT : state.forts.stakeHp > 0 ? STAKE_FRONT : null;
+      const x = Math.max(front === null ? HERO_FRONT + 20 : front + ENEMIES.goblin.radius, e.x + 10);
+      for (let i = 0; i < SPLIT_INTO; i++) addFoe(state, 'goblin', x, y + (i - (SPLIT_INTO - 1) / 2) * 22, hp, null);
     }
     addEffect(state, { kind: 'xp', x: e.x, y: e.y - radius * 1.6, amount: base + bonus, streak: streak.count });
     addEffect(state, { kind: 'orb', x: e.x, y: e.y - radius, amount: base + bonus });
@@ -719,6 +726,17 @@ function gainXp(state: GameState, xp: number) {
 /** Puts three upgrades up for the next pending level-up and starts the time to pick one. */
 export function offer(state: GameState) {
   state.choices = rollChoices(state);
+  state.pickMs = AUTO_PICK_MS;
+}
+
+/**
+ * Puts the cards back up for a pending level-up, with the full time to pick: the same ones when they
+ * are kept (from the last run, or from the save on a reload), else new ones.
+ */
+export function reoffer(state: GameState, choices: UpgradeId[] | null) {
+  if (state.levelUps === 0) return;
+  if (!choices) return offer(state);
+  state.choices = choices;
   state.pickMs = AUTO_PICK_MS;
 }
 
@@ -814,8 +832,10 @@ export function keepFighting(state: GameState) {
 export function startHeat(state: GameState, heat: number): GameState {
   const progress = progressOf(state);
   progress.heat = Math.max(0, Math.min(progress.heatUnlocked, heat));
+  // Leaving a won run for a new heat ends it, so it counts like a fall does (which counted already).
+  if (state.phase !== 'over') progress.runs++;
   const next = newRun(progress, state.aimMode);
-  if (next.levelUps > 0) offer(next);
+  reoffer(next, state.choices);
   return next;
 }
 
@@ -837,13 +857,7 @@ function gameOver(state: GameState) {
 /** After a fall, a new run from wave 1 with the hero's level and upgrades kept. */
 export function fightAgain(state: GameState): GameState {
   const next = newRun(progressOf(state), state.aimMode);
-  if (next.levelUps > 0) {
-    // The same cards stay up, with the full time to pick again.
-    if (state.choices) {
-      next.choices = state.choices;
-      next.pickMs = AUTO_PICK_MS;
-    } else offer(next);
-  }
+  reoffer(next, state.choices);
   return next;
 }
 

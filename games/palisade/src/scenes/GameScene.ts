@@ -17,6 +17,7 @@ import {
   CALTROP_PATCH,
   RAIN_FALL_MS,
   RAIN_RING,
+  canBuyFort,
   canFortify,
   crowdSpot,
   fightAgain,
@@ -25,10 +26,10 @@ import {
   hire,
   keepFighting,
   loose,
-  offer,
   pick,
   pickRoad,
   rainRingOf,
+  reoffer,
   setAim,
   startHeat,
   strew,
@@ -181,8 +182,11 @@ export class GameScene extends Phaser.Scene {
     this.caltropPieces.clear();
     this.aim = null;
     this.eliteLabels.clear();
-    this.state = newRun(loadProgress(), loadAim());
-    if (this.state.levelUps > 0) offer(this.state);
+    const progress = loadProgress();
+    this.state = newRun(progress, loadAim());
+    // A pending level-up comes back with the cards it had up before the reload.
+    reoffer(this.state, progress.choices);
+    saveProgress(progressOf(this.state));
 
     fit(this.add.image(0, 0, 'background')).setOrigin(0);
     const hero = FIGURES.hero!;
@@ -985,7 +989,7 @@ export class GameScene extends Phaser.Scene {
       .on('pointerdown', () => {
         const s = this.state;
         if (s.phase !== 'break' || s.choices || this.aim || this.skillBook.open || this.hirePanel.open) return;
-        this.fortifyPanel.show(s.forts, s.coins, canFortify(s));
+        this.fortifyPanel.show(s.forts, s.coins, canFortify(s), (id) => canBuyFort(s, id));
       });
     this.heatText = this.add.text(HEAT.x, HEAT.y, '', textStyle(11, '#ffb08a')).setOrigin(0.5).setDepth(UI_DEPTH - 4);
     this.roarText = this.add.text(ROAR_CHIP.x, ROAR_CHIP.y, 'Chilled bow: slow shots', textStyle(10, '#d8f0ff')).setOrigin(0.5).setDepth(UI_DEPTH - 5);
