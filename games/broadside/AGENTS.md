@@ -125,8 +125,17 @@ and the player chooses a ship.
 
 File map (all under `src/`, plus the shared files it imports):
 
-- `howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips), handed to
-  `setupGame(game, { howToPlay })` in `main.ts`; update it when the controls or the first round change.
+- `howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips) in British
+  English, US English and German, picked with `byLanguage` and handed to `setupGame(game, { howToPlay })`
+  in `main.ts`; update all three when the controls or the first round change.
+- `i18n.ts` and `i18n/`: every on-screen text (`shared/i18n.ts`). `i18n/en.ts` is the British
+  English source, `i18n/de.ts` the German (typed `Translation<typeof en>`, with `keepEnglish` for
+  texts that stay the same) and `i18n/en-US.ts` only the US spellings (`harbor`). `i18n.ts`
+  exports `t` and `TextKey`. The tables in `game/` hold `TextKey`s, never text: `name`/`desc` in
+  `HULLS`, `UPGRADES`, `BOONS`, `SHOTS`, `PERKS` (and `desc2`), `COURSES`, `ORDERS` (`title`),
+  `ENEMIES` (`name`, and `called` for a ship named mid-sentence, lower case in English),
+  `BOUNTIES` (`desc`, filled with `vars(s)`) and `ISLANDS`; `windFrom` returns a compass point's
+  key (`windW`). The scene, `Harbor` and `art.ts` show them with `t`, and game logic compares ids only.
 - `main.ts`: creates the `Phaser.Game` (960x540, `Scale.FIT`, `pixelArt: false`, three active
   pointers for two-thumb play) with `BootScene` and `GameScene`, calls `setupGame(game)` and
   `setupScaling(game)` (`shared/scaling.ts`) and exposes `window.game` in dev builds.
@@ -189,7 +198,7 @@ File map (all under `src/`, plus the shared files it imports):
 - `game/ships.ts`: the `ENEMIES` table (name, hp, radius, speed, turn, guns, damage, reload,
   range, loot, `crew`, `grape` for ships that load grapeshot within `GRAPE_RANGE`, and `role`
   for the fireship and the mortar ketch, whose `damage`, `reloadMs` and `range` are the blast's
-  or the mortar's; `merchant` for the merchantman, with no guns). `name` labels a detour course and the scuttle button.
+  or the mortar's; `merchant` for the merchantman, with no guns). `name` labels a detour course; `called` names her in the scuttle button and the harbor's keep row.
 - `game/upgrades.ts`: the `UPGRADES` table, `UPGRADE_IDS`, `costOf`, `REPAIR_COST` and `HIRE`.
 - `game/waves.ts`: `waveShips(wave, course)` (which ships come, in order, on the course chosen), `hpScale(wave)`, `HAVEN_WAVE`,
   `FIRST_FORT_WAVE` and `fortsFor(wave)`.
@@ -221,7 +230,9 @@ File map (all under `src/`, plus the shared files it imports):
   each visible button's screen rectangle in `buttons` (the cards while drafting, else the
   ledger's).
 - `ui/Button.ts`: `makeButton`, a cream chart-label button ruled in ink.
-- `ui/screen.ts`: `pinToScreen`, which sets scroll factor 0 on a container and every child.
+- `ui/screen.ts`: `pinToScreen`, which sets scroll factor 0 on a container and every child, and
+  `fitWidth`, which shrinks a text to a width (the HUD's "Hull" label, the harbor's news line and
+  the end card's ship descriptions, which a translation or a busy harbor can make too long).
 - `shared/setupGame.ts` (imported by `main.ts`) and `shared/settings.ts` (`byDifficulty`, imported
   by `game/sim.ts`, and `settings`, read by `scenes/GameScene.ts` for reduce motion): the hub's
   settings, shared by every game. See "Hub settings" below.
@@ -514,6 +525,11 @@ Data tables, where to tune:
 - **Move or add an island:** edit `ISLANDS` in `state.ts`; the chart repaints it at boot and the
   steering and collision follow. Keep islands far enough apart that one detour doesn't lead onto
   another.
+- **Add or change a text:** add its key to `i18n/en.ts` (British spelling), its German to
+  `i18n/de.ts` (or the key to `keepEnglish` if it is the same) and, if US English spells it
+  differently, to `i18n/en-US.ts`, then show it with `t(key, vars)`. Run
+  `node scripts/check-translations.mjs`. Check German fits: it runs longer, and the end card's ship
+  buttons, the draft cards and the order card have the least room.
 - **New visual effect:** add a kind to `Effect['kind']`, emit it with `effect()` in `sim.ts`, and
   draw it in `GameScene.drawEffects`.
 
@@ -556,5 +572,8 @@ Data tables, where to tune:
   over (`copies` in `bakeSea`, and `parchment(..., wrap)` for the stains), or a seam shows.
 - `WORLD` must stay more than twice `VIEW` on each axis, or two copies of one thing could be on
   screen while only the nearest is drawn.
+- The island names on the chart, the compass letters and the helm and fire control labels are
+  painted into textures at boot, so they take the language the page loaded with; the rest is
+  translated each time it is drawn.
 - `drawPointers` draws into the same `hud` Graphics as the hull bar, so it must run after
   `hud.clear()` in `drawHud`.

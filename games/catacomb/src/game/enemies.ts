@@ -1,3 +1,4 @@
+import type { TextKey } from '../i18n';
 import type { CurseKind } from './cards';
 
 // The foes of the dungeon. Each one opens with its first move, then draws its next move at random
@@ -34,7 +35,8 @@ export type Intent =
   | { kind: 'curse'; curse: CurseKind };
 
 export interface EnemyType {
-  name: string;
+  /** Its name, a key of `i18n/en.ts`. */
+  name: TextKey;
   hp: number;
   /** Gold the hero finds once it falls. */
   gold: number;
@@ -47,45 +49,45 @@ export interface EnemyType {
 export const ENEMIES: Record<EnemyKind, EnemyType> = {
   // The Crypt, act one.
   slime: {
-    name: 'Slime',
+    name: 'slimeFoe',
     hp: 24,
     gold: 12,
     moves: [{ kind: 'attack', damage: 6 }, { kind: 'block', block: 5 }, { kind: 'attack', damage: 8 }],
   },
   rat: {
-    name: 'Giant Rat',
+    name: 'ratFoe',
     hp: 13,
     gold: 7,
     moves: [{ kind: 'attack', damage: 3, hits: 2 }, { kind: 'attack', damage: 4, apply: { status: 'poison', amount: 2 } }],
   },
   skeleton: {
-    name: 'Skeleton',
+    name: 'skeletonFoe',
     hp: 30,
     gold: 14,
     moves: [{ kind: 'block', block: 6 }, { kind: 'attack', damage: 9 }, { kind: 'attack', damage: 4, hits: 2 }],
   },
   cultist: {
-    name: 'Cultist',
+    name: 'cultistFoe',
     hp: 26,
     gold: 14,
     moves: [{ kind: 'buff', strength: 2 }, { kind: 'attack', damage: 6 }, { kind: 'debuff', status: 'weak', amount: 2 }],
   },
   graveKnight: {
-    name: 'Grave Knight',
+    name: 'graveKnightFoe',
     hp: 58,
     gold: 40,
     elite: true,
     moves: [{ kind: 'block', block: 10 }, { kind: 'attack', damage: 13 }, { kind: 'attack', damage: 6, hits: 2, apply: { status: 'vulnerable', amount: 2 } }, { kind: 'curse', curse: 'wound' }],
   },
   bogWitch: {
-    name: 'Bog Witch',
+    name: 'bogWitchFoe',
     hp: 46,
     gold: 40,
     elite: true,
     moves: [{ kind: 'debuff', status: 'weak', amount: 2 }, { kind: 'attack', damage: 7, apply: { status: 'poison', amount: 3 } }, { kind: 'attack', damage: 11 }, { kind: 'buff', strength: 2 }, { kind: 'curse', curse: 'doubt' }],
   },
   boneKing: {
-    name: 'Bone King',
+    name: 'boneKingFoe',
     hp: 90,
     gold: 60,
     boss: true,
@@ -99,38 +101,38 @@ export const ENEMIES: Record<EnemyKind, EnemyType> = {
   },
   // The Sunken Tombs, act two.
   ghoul: {
-    name: 'Ghoul',
+    name: 'ghoulFoe',
     hp: 34,
     gold: 16,
     moves: [{ kind: 'attack', damage: 8, apply: { status: 'weak', amount: 1 } }, { kind: 'attack', damage: 12 }, { kind: 'buff', strength: 2 }],
   },
   wraith: {
-    name: 'Wraith',
+    name: 'wraithFoe',
     hp: 28,
     gold: 15,
     moves: [{ kind: 'debuff', status: 'vulnerable', amount: 2 }, { kind: 'attack', damage: 5, hits: 2 }, { kind: 'block', block: 8 }],
   },
   spider: {
-    name: 'Tomb Spider',
+    name: 'spiderFoe',
     hp: 22,
     gold: 11,
     moves: [{ kind: 'attack', damage: 3, apply: { status: 'poison', amount: 3 } }, { kind: 'attack', damage: 7 }, { kind: 'block', block: 6 }],
   },
   mummy: {
-    name: 'Mummy',
+    name: 'mummyFoe',
     hp: 44,
     gold: 18,
     moves: [{ kind: 'block', block: 10 }, { kind: 'attack', damage: 13 }, { kind: 'debuff', status: 'weak', amount: 2 }],
   },
   gargoyle: {
-    name: 'Gargoyle',
+    name: 'gargoyleFoe',
     hp: 82,
     gold: 50,
     elite: true,
     moves: [{ kind: 'block', block: 16 }, { kind: 'attack', damage: 17 }, { kind: 'attack', damage: 5, hits: 3 }, { kind: 'curse', curse: 'rust' }],
   },
   hollowQueen: {
-    name: 'Hollow Queen',
+    name: 'hollowQueenFoe',
     hp: 130,
     gold: 100,
     boss: true,
