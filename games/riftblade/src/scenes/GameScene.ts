@@ -9,7 +9,7 @@ import { loadProgress, recordRun, type Progress } from '../game/save';
 import { C, hex } from '../art/glow';
 import { heroKey } from '../art/sprites';
 import { Panel, endScreen, heroSelect, levelUp } from '../ui/panels';
-import { BOSS_BAR, CENTER, DEPTH, FONT, HP_BAR, KIT, LEVEL, SIG_BUTTON, TIMER, VIEW, XP_BAR, inside } from './layout';
+import { BOSS_BAR, CENTER, DEPTH, FONT, HP_BAR, KIT, LEVEL, SIG_BUTTON, STICK, TIMER, VIEW, XP_BAR, inside } from './layout';
 
 /** A pool of images for one kind of thing on the field, reused frame to frame. */
 class Pool {
@@ -72,6 +72,8 @@ export class GameScene extends Phaser.Scene {
   /** Whether a pointer is held on the field to walk, and the signature asked for this frame. */
   private walking = false;
   private sigQueued = false;
+  /** The floating stick of a touch: where the finger first went down and where it is now, in view pixels. */
+  private stick: { id: number; ox: number; oy: number; x: number; y: number } | null = null;
 
   constructor() {
     super('Game');
@@ -122,8 +124,16 @@ export class GameScene extends Phaser.Scene {
       if (this.state.phase === 'won' || this.state.phase === 'lost') this.backToSelect();
     });
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => this.pointerDown(p));
-    this.input.on('pointerup', () => (this.walking = false));
-    this.input.on('pointermove', (p: Phaser.Input.Pointer) => this.panel?.hover(viewPoint(p)));
+    // A second touch pointer, so a thumb can hit the signature button while the other steers.
+    this.input.addPointer(1);
+    this.input.on('pointerup', (p: Phaser.Input.Pointer) => {
+      if (this.stick?.id === p.id) this.stick = null;
+      else if (!p.wasTouch) this.walking = false;
+    });
+    this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
+      if (this.stick?.id === p.id) this.dragStick(viewPoint(p));
+      else this.panel?.hover(viewPoint(p));
+    });
     this.syncPanel();
   }
 
@@ -136,7 +146,10 @@ export class GameScene extends Phaser.Scene {
     if (s.phase === 'run') {
       const d = Math.hypot(v.x - SIG_BUTTON.x, v.y - SIG_BUTTON.y);
       if (d <= SIG_BUTTON.r) this.sigQueued = true;
-      else this.walking = true;
+      else if (pointer.wasTouch) {
+        // A touch puts a stick under the finger; dragging from there steers.
+        if (!this.stick) this.stick = { id: pointer.id, ox: v.x, oy: v.y, x: v.x, y: v.y };
+      } else this.walking = true;
       return;
     }
     const spot = this.panel?.spots.find((r) => inside(v, r));
@@ -144,6 +157,19 @@ export class GameScene extends Phaser.Scene {
     if (s.phase === 'select') this.begin(spot.id as HeroId);
     else if (s.phase === 'levelup') this.pickIndex(this.panel!.spots.indexOf(spot));
     else this.backToSelect();
+  }
+
+  /** Moves the stick's knob to the finger; past the rim the base is dragged along behind it. */
+  private dragStick(v: { x: number; y: number }) {
+    const st = this.stick!;
+    st.x = v.x;
+    st.y = v.y;
+    const d = Math.hypot(st.x - st.ox, st.y - st.oy);
+    if (d > STICK.r) {
+      const k = (d - STICK.r) / d;
+      st.ox += (st.x - st.ox) * k;
+      st.oy += (st.y - st.oy) * k;
+    }
   }
 
   private pickIndex(i: number) {
@@ -158,6 +184,7 @@ export class GameScene extends Phaser.Scene {
     startRun(this.state, id);
     this.hero.setTexture(heroKey(id)).setVisible(true);
     this.walking = false;
+    this.stick = null;
     this.sigQueued = false;
   }
 
@@ -174,6 +201,15 @@ export class GameScene extends Phaser.Scene {
     if (mx || my) {
       const len = Math.hypot(mx, my);
       return { mx: mx / len, my: my / len };
+    }
+    if (this.stick) {
+      // The stick: full speed at the rim, slower nearer the middle, nothing inside the dead zone.
+      const dx = this.stick.x - this.stick.ox;
+      const dy = this.stick.y - this.stick.oy;
+      const d = Math.hypot(dx, dy);
+      if (d <= STICK.dead) return { mx: 0, my: 0 };
+      const k2 = Math.min(1, d / STICK.r) / d;
+      return { mx: dx * k2, my: dy * k2 };
     }
     const pointer = this.input.activePointer;
     if (this.walking && pointer.isDown) {
@@ -220,6 +256,7 @@ export class GameScene extends Phaser.Scene {
     this.shownPhase = s.phase;
     this.shownChoices = s.choices;
     this.walking = false;
+    this.stick = null;
   }
 
   private draw() {
@@ -471,6 +508,18 @@ export class GameScene extends Phaser.Scene {
     if (ready) g.lineStyle(10, accent, 0.18).strokeCircle(x, y, r - 2);
     this.texts.sig.setText(hero.signature.name).setColor(ready ? C.text : C.muted);
     this.texts.sigKey.setText(ready ? 'SPACE' : `${Math.ceil(p.sigMs / 1000)} s`);
+    // The floating stick under a steering finger: a faint ring and a knob in the hero's accent.
+    const st = this.stick;
+    if (st) {
+      const d = Math.hypot(st.x - st.ox, st.y - st.oy);
+      const k = d > STICK.r ? STICK.r / d : 1;
+      const kx = st.ox + (st.x - st.ox) * k;
+      const ky = st.oy + (st.y - st.oy) * k;
+      g.fillStyle(0x0d1426, 0.35).fillCircle(st.ox, st.oy, STICK.r);
+      g.lineStyle(3, accent, 0.45).strokeCircle(st.ox, st.oy, STICK.r);
+      g.fillStyle(accent, 0.7).fillCircle(kx, ky, STICK.knob);
+      g.lineStyle(2, 0xffffff, 0.6).strokeCircle(kx, ky, STICK.knob);
+    }
   }
 
   /** The hero's position on screen (always the middle of the view), for the test. */
