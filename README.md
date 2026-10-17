@@ -32,7 +32,8 @@ start page lists the games; each one lives in its own folder under `games/`.
 ## Settings
 
 The hub's **Settings** button opens the settings every game shares. They are saved in the browser
-(`shared/settings.ts`) and apply to a game the next time it opens.
+(`shared/settings.ts`) as soon as they change and apply to a game the next time it opens. The ✕ or
+**Done** closes the panel.
 
 ![The hub's settings](docs/screenshots/hub-settings.webp)
 
@@ -73,7 +74,20 @@ The hub's **Settings** button opens the settings every game shares. They are sav
 - **Frame rate (FPS)**: the most frames per second a game draws, 30 to 320 (60 by default).
 - **Show FPS**: a readout of the frame rate in each game's corner.
 - **Reduce motion**: turns off screen shake, flashes and blinking hit effects.
-- **Restore defaults** and **Reset all progress**, which erases every game's save and keeps the settings.
+- **Genre filter** (off by default, hub only): a row of genres above the cards (Action, Strategy,
+  Management, Puzzle, Adventure) that lists just the games of one. Each card's genres are its
+  `data-genres` in `index.html`.
+- **Saved progress**: **Delete all progress** erases every game's saves and keeps the settings.
+- **Restore defaults** puts the settings back, and **Done** closes the panel.
+
+Each card also has a **⚙** in its corner that opens that game's own settings: whether it has
+anything saved on this device, **Delete this game's progress** (its storage keys, which all start
+with its folder name, see `shared/progress.ts`) and **Play**.
+
+![A game's own settings](docs/screenshots/hub-game-settings.webp)
+
+Above the cards, **Continue playing** links the last three games played on this device, and a link
+at the bottom of the hub opens the bug and feedback forms. The covers load as they scroll into view.
 
 Every game also has a full screen button in its bottom left corner, and the **F** key toggles full screen. Browsers that cannot take a page full screen, such as iPhones, don't show the button.
 
@@ -113,9 +127,9 @@ npm run preview   # serve the production build
 - `shared/`: the settings every game shares (`settings.ts`), the hub's Settings panel
   (`settingsPanel.ts`), `setupGame.ts`, which each game calls to apply the frame cap, the FPS readout, reduced motion and full screen
   and to add the loading, start and pause screens (`startScreen.ts`) with the game's How to play (`howToPlay.ts`), `watch.ts`, the Watch AI panel and its `?watch` flag,
-  `playCount.ts`, the play counters (see Play counts), `i18n.ts` with the shared texts in `i18n/`, the translations and number and date formats (see Language), and `scaling.ts`, which keeps a game sharp from a phone to a 4K screen (`grep -l setupScaling games/*/src/main.ts` lists the games that use it).
+  `playCount.ts`, the play counters (see Play counts), `progress.ts`, each game's saved progress and the recently played games, `i18n.ts` with the shared texts in `i18n/`, the translations and number and date formats (see Language), and `scaling.ts`, which keeps a game sharp from a phone to a 4K screen (`grep -l setupScaling games/*/src/main.ts` lists the games that use it).
 - `e2e/hub.spec.ts`: checks that the hub lists every game, that each card opens it, and that the
-  settings are saved and reach a game, that a game starts and pauses, and that the cards show play counts. `e2e/screens.spec.ts` opens each game that uses
+  settings are saved and reach a game, that a game's ⚙ deletes just its progress, the genre filter and Continue playing row, that a game starts and pauses, and that the cards show play counts. `e2e/screens.spec.ts` opens each game that uses
   `shared/scaling.ts` on an upright and a sideways phone, a tablet, a laptop and a 4K screen.
 - `package.json`, `tsconfig.json`, `tsconfig.e2e.json`, `vite.config.ts` and `playwright.config.ts`
   are shared. `tsconfig.json` typechecks the games and `shared/`; `tsconfig.e2e.json` typechecks

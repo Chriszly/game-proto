@@ -89,10 +89,12 @@ export function byLanguage<T>(values: { en: T } & Partial<Record<Language, T>>):
 export const t = translator({ en, 'en-US': enUS, de });
 
 /**
- * Fills every element under `root` marked `data-i18n="key"` with that shared text, and every
- * `data-i18n-alt="key"` with it as its alt text. The hub page marks its text this way.
+ * Fills every element under `root` marked `data-i18n="key"` with that shared text, every
+ * `data-i18n-alt="key"` with it as its alt text and every `data-i18n-label="key"` with it as its
+ * `aria-label`. The hub page marks its text this way.
  */
 export function translatePage(root: ParentNode = document) {
   for (const el of root.querySelectorAll<HTMLElement>('[data-i18n]')) el.textContent = t(el.dataset.i18n as keyof typeof en);
   for (const el of root.querySelectorAll<HTMLImageElement>('[data-i18n-alt]')) el.alt = t(el.dataset.i18nAlt as keyof typeof en);
+  for (const el of root.querySelectorAll<HTMLElement>('[data-i18n-label]')) el.setAttribute('aria-label', t(el.dataset.i18nLabel as keyof typeof en));
 }

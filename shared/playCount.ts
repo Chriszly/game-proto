@@ -13,7 +13,7 @@ const API = 'https://abacus.jasoncameron.dev';
 const NAMESPACE = 'chriszly-game-proto';
 
 /** The game folder of a path like `/games/<name>/` or `games/<name>/`, or undefined. */
-function gameOf(path: string) {
+export function gameOf(path: string) {
   return /(?:^|\/)games\/([a-z0-9-]+)\//.exec(path)?.[1];
 }
 
