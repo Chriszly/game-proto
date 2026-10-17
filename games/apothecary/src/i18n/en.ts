@@ -1,0 +1,216 @@
+/**
+ * Apothecary's texts in British English, the source `de.ts` and `en-US.ts` translate (see
+ * `shared/i18n.ts`). Items are keyed by their `ItemId`, and the tables in `game/` name their texts
+ * by these keys.
+ */
+const en = {
+  // Items, by id
+  wheat: 'Wheat',
+  mandrake: 'Mandrake',
+  nightshade: 'Nightshade',
+  flour: 'Wheat Flour',
+  mandrakeSeeds: 'Mandrake Seeds',
+  nightshadeExtract: 'Nightshade Extract',
+  healingDraught: 'Healing Draught',
+  sleepingTonic: 'Sleeping Tonic',
+  vigourTonic: 'Vigour Tonic',
+  shadowElixir: 'Shadow Elixir',
+  moonlightSalve: 'Moonlight Salve',
+  witchsBrew: "Witch's Brew",
+  fineHealingDraught: 'Fine Healing Draught',
+  fineSleepingTonic: 'Fine Sleeping Tonic',
+  fineVigourTonic: 'Fine Vigour Tonic',
+  fineShadowElixir: 'Fine Shadow Elixir',
+  fineMoonlightSalve: 'Fine Moonlight Salve',
+  fineWitchsBrew: "Fine Witch's Brew",
+
+  // A number of a potion, by the potion's id and "Count"
+  healingDraughtCount: { one: '{n} Healing Draught', other: '{n} Healing Draughts' },
+  sleepingTonicCount: { one: '{n} Sleeping Tonic', other: '{n} Sleeping Tonics' },
+  vigourTonicCount: { one: '{n} Vigour Tonic', other: '{n} Vigour Tonics' },
+  shadowElixirCount: { one: '{n} Shadow Elixir', other: '{n} Shadow Elixirs' },
+  moonlightSalveCount: { one: '{n} Moonlight Salve', other: '{n} Moonlight Salves' },
+  witchsBrewCount: { one: "{n} Witch's Brew", other: "{n} Witch's Brews" },
+  anyPotionCount: { one: '{n} potion of any kind', other: '{n} potions of any kind' },
+
+  // Gardens: the sign, and the name inside a sentence
+  wheatField: 'Wheat field',
+  wheatFieldIn: 'wheat field',
+  mandrakePatch: 'Mandrake patch',
+  mandrakePatchIn: 'mandrake patch',
+  shadeGarden: 'Shade garden',
+  shadeGardenIn: 'shade garden',
+
+  // Upgrades
+  refiningTable: 'Refining table',
+  cauldron: 'Cauldron',
+  counter: 'Counter',
+  pack: 'Pack',
+  boots: 'Boots',
+  sickle: 'Sickle',
+  growth: 'Growth',
+  pixies: 'Pixies',
+  storage: 'Storage',
+  prices: 'Prices',
+  slots: 'Slots',
+  customers: 'Customers',
+  herbalist: 'Herbalist',
+  study: 'Study',
+
+  // Pixie routes
+  gardenPixies: 'Garden pixies',
+  tablePixies: 'Table pixies',
+  cauldronPixies: 'Cauldron pixies',
+
+  // Weather: its name, and what it does
+  mild: 'Mild',
+  mildToday: 'mild: no change',
+  rain: 'Rain',
+  rainToday: 'rain: plants grow faster',
+  fair: 'Fair',
+  fairToday: 'fair: more customers',
+  drought: 'Drought',
+  droughtToday: 'drought: plants grow slower',
+
+  // Price signs, on the sign and after a tap
+  cheap: 'Cheap',
+  cheapSet: '{potion}: cheap',
+  fairSign: 'Fair',
+  fairSet: '{potion}: fair',
+  dear: 'Dear',
+  dearSet: '{potion}: dear',
+
+  // Places and markers in the world
+  storefront: 'Storefront',
+  outfitter: 'Outfitter',
+  guild: 'Guild',
+  herbMarket: 'Herb market',
+  rivalApothecary: 'Rival apothecary',
+  pickUp: 'Pick up',
+  drop: 'Drop',
+  work: 'Work',
+  coins: 'Coins',
+  first: 'First:',
+  any: 'any',
+  land: 'Land',
+  table: 'Table',
+  joinGuild: 'Join guild',
+  levelCost: '{name} {level}: {coins}c',
+  stationLevelCost: 'Lv {level}: {coins}c',
+  buildCost: '{name}: {coins}c',
+  learnCost: '{potion}: {coins}c',
+  hireCost: 'Hire {coins}c',
+
+  // Feedback over the doctor
+  gained: '+ {item}',
+  gainedFine: '+ {item}!',
+  handedOver: '- {item}',
+  notRipe: 'Not ripe yet',
+  handsFull: 'Hands full',
+  blightCleared: 'Blight cleared',
+  learned: 'Learned {potion}!',
+  levelUp: '{name} level {level}!',
+  firstChoice: '{item} first',
+  anyOrder: 'Any order',
+  nothingToPlant: 'Nothing else to plant',
+  replanted: 'Replanted: {garden}',
+  craftsmanHired: 'Craftsman hired!',
+  welcomeGuild: 'Welcome to the guild!',
+  pixiesHired: '{pixies} hired!',
+  toPixies: '{n} to the pixies',
+  dropped: 'Dropped {n}',
+  landBought: 'New land bought!',
+  tableBuilt: 'Refining table built!',
+  cauldronBuilt: 'Cauldron built!',
+  fieldPlanted: 'Field planted!',
+  shadePlanted: 'Shade garden planted!',
+  coinsGained: '+{n} coins',
+  wagonWants: 'The wagon wants {crate}',
+  crateSold: 'Crate sold: +{n} coins',
+  marketPick: 'Market: {item}',
+  bought: '+ {item} -{coins}c',
+  sold: '- {item} +{coins}c',
+
+  // Top bar and panels
+  coinsHud: 'Coins: {n}',
+  hands: 'Hands',
+  hint: 'Walk: WASD / tap\nHarvest: walk past ripe plants',
+  settings: 'Settings',
+  dropAll: 'Drop all',
+  recipes: 'Recipes',
+  settingsLine: 'Difficulty: {difficulty}   Frame rate: {fps} FPS',
+  changeOnHub: 'Change these on the hub page',
+  newGame: 'New game',
+  tapOutside: 'Tap outside to close',
+  tapToClose: 'Tap to close',
+  confirmNewGame: 'Start a new game? Your saved progress will be lost.',
+  awayLead: 'While you were away:',
+  awaySum: { one: '+{coins} coins, {n} potion', other: '+{coins} coins, {n} potions' },
+
+  // Customers
+  tip: 'tip +{n}',
+  noTip: 'no tip',
+
+  // Contract card
+  contract: 'Contract: {potions} by dusk',
+  contractBundle: 'Contract: {potions} + {more}',
+  reward: 'Reward {n}',
+  contractKept: 'Contract kept!',
+  contractMissed: 'Dusk: contract missed',
+
+  // Plague card
+  panaceaBrewed: 'The Panacea is brewed: the town is cured!',
+  seasonCured: 'Season cured: a town seal! Prices +{n}%',
+  newSeason: 'A new season, a stronger sickness!',
+  stageBeaten: 'Stage beaten, but the sickness moves on',
+  panaceaUnlocked: 'Every stage beaten: the Panacea is unlocked!',
+  relapse: 'Too late: the sickness comes back worse',
+  sicknessSpreads: 'A sickness spreads in the town!',
+  townCured: 'The town is cured!',
+  townCuredSeals: 'The town is cured! Seals: {seals}, prices +{n}%',
+  nextSeason: "Next season's sickness comes on day {day}",
+  brewTheCure: 'Panacea unlocked: brew the cure',
+  inACauldron: 'in a cauldron',
+  plagueStage: 'Plague {stage}/{stages}: {need}',
+  seasonPlagueStage: 'Season {season} plague {stage}/{stages}: {need}',
+  daysLeft: { one: '{n} day left', other: '{n} days left' },
+  lastDay: 'last day!',
+  winText: 'Your Panacea ended the plague on day {day}.\nThe apothecary stays open: keep trading.',
+  keepTrading: 'Keep trading',
+
+  // Rival and wagon
+  rivalOffer: 'Today {n}% off',
+  rivalStreak: 'Outsold {streak}/{days} days, {sold}/{sales} today',
+  rivalClosed: 'Closed for good',
+  streetIsYours: 'The street is yours',
+  wagonBuys: 'Wagon buys {crate} at {pay}c each',
+  wagonWaiting: 'On the shelf {have}/{crate}, leaves in {s}s',
+  wagonReady: 'On the shelf {have}/{crate}: tap to sell, leaves in {s}s',
+
+  // Herb market
+  buyHerb: 'Buy {item}: {coins}c',
+  sellHerb: 'Sell {item}: {coins}c',
+  sellHerbs: 'Sell herbs',
+
+  // Town card
+  reputation: 'Reputation',
+  tomorrow: 'Tomorrow: {weather}',
+  crowdAtMidday: 'Crowd at midday',
+  crowdServed: 'Crowd served!',
+  crowdLost: 'Crowd: bonus lost',
+  crowdCount: 'Crowd: {served}/{size} served',
+  dayWeather: 'Day {day}, {weather}',
+  marketDayWeather: 'Market day, {weather}',
+  blightIn: 'Blight in the {garden}! Clear it with the sickle',
+  crowdBonus: 'Market crowd served: +{n} coins!',
+  crowdWalkedOff: 'A customer walked off: no market bonus',
+  crowdComes: 'Market day: a crowd comes in!',
+  crowdNoRoom: 'Market day: no room for the crowd',
+
+  // Shelves and the Recipes panel
+  rivalCut: 'rival {n}%',
+  coinPrice: '{n}c',
+  learnAtStudy: 'Study',
+};
+
+export default en;

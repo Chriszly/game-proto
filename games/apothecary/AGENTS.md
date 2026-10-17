@@ -56,12 +56,23 @@ study, shade gardens and a mirrored second production line.
 
 ### File map
 
-- `src/howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips), handed to
-  `setupGame(game, { howToPlay })` in `src/main.ts`; update it when the controls or the first round change.
+- `src/howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips) in British
+  English (which US English uses as it is) and German, picked with `byLanguage` and handed to
+  `setupGame(game, { howToPlay })` in `src/main.ts`; update both languages when the controls or the
+  first round change.
+- `src/i18n.ts` and `src/i18n/`: the game's texts (`shared/i18n.ts`). `i18n/en.ts` is the British
+  English source, `i18n/de.ts` the German (coins are Münzen, "M" after a price) and `i18n/en-US.ts`
+  only the Vigour Tonic, spelled Vigor. `t(key, vars)` shows a text in the hub's language and
+  `TextKey` types the keys. An item's name is the text keyed by its id (`itemName(id)`), and
+  `potionCount(potion, n)` gives "3 Healing Draughts" from the `<potion>Count` plural forms. Every
+  text on screen and every `Feedback` line goes through `t`; the tables in `game/` hold `TextKey`s
+  (`UPGRADES[id].name`, `WEATHER[w].name` and `.today`, `GARDEN_NAMES`, `GARDEN_NAMES_IN` for a
+  garden inside a sentence, `SIGN_NAMES`, `SIGN_SET`), as do `GARDEN_AREAS` in layout. A new text
+  gets its German entry (and a US one if its spelling differs) in the same PR.
 - `src/main.ts`: creates the `Phaser.Game` (960x540, FIT scaling, arcade physics with
   `fixedStep: false`, `pixelArt: false`, aged-paper background `PAPER`), registers `BootScene` and `GameScene`, calls `setupGame(game)`
   from `shared/setupGame.ts` and `setupScaling(game)` from `shared/scaling.ts`, and puts `game` on window in dev.
-- `src/game/items.ts`: item ids and defs (`ITEMS`), `GROW_MS`, `REFINE`, `RECIPES`,
+- `src/game/items.ts`: item ids and defs (`ITEMS`: kind and colour; names are in `i18n/`), `GROW_MS`, `REFINE`, `RECIPES`,
   `POTION_PRICE`, the `isPlant`/`isRefined`/`isPotion`/`isFine`/`isSellable` guards, the ordered
   lists `PLANTS`, `REFINED`, `POTIONS`, and the fine potions (`FineId`, `FINE`, `plainOf`; a
   `SellableId` is a plain or fine potion).
@@ -98,7 +109,7 @@ study, shade gardens and a mirrored second production line.
   `payCraftsman`, `payBelt`, `payExpansion`, `payShade`, `joinGuild`, `dropAll`, `cyclePriority`,
   `cycleSign`, `replantGarden`, `clearBlight`, `sellToWagon`, `cycleMarketPick`, `buyHerb`,
   `sellHerb`) and `harvest` each change
-  state and return `Feedback` lines. Also `refining`, `hasRoom`, `doneByHand` and `isBlighted`.
+  state and return `Feedback` lines, already translated with `t`. Also `refining`, `hasRoom`, `doneByHand` and `isBlighted`.
 - `src/game/save.ts`: `loadState`, `saveState` (stamps `lastSeen` with `Date.now()`), `clearSave`
   (key `apothecary-save`), and the `ontoOwnRuns`, `ontoColumns` and `ontoHeart` belt migrations.
 - `src/game/away.ts`: the autopilot. `catchUp(state, now, rand)` plays the time since `lastSeen`
@@ -136,7 +147,8 @@ study, shade gardens and a mirrored second production line.
   stacks, exposes `item` and `count`, `setVisible`), `Shelf` (a shop shelf of one potion, up to six bottles, fine
   ones first; exposes `item` and `count`), `ProgressBar` (redraws only when its fill changes;
   an optional last argument sets its height, 6 by default; `setZone` marks a golden end zone, used for the cauldron's fine window),
-  `RecipeBook` (exposes `lines`), `Settings` (read-only view of the hub's settings, and New game).
+  `RecipeBook` (exposes `lines`, in the game's language), `Settings` (read-only view of the hub's
+  settings, the difficulty named by the shared texts, and New game).
 
 ### How it runs
 
@@ -472,7 +484,7 @@ brew's `out` may be `PANACEA`.
   `player.body.center` (feet), `pointerTarget`, `away` (null on a fresh game), `pallets[id].in/out` (each `Pallet`'s `item` and
   `count`), `recipes.visible` and `recipes.lines`, `customers` (id, x, y, `arrived`) and
   `cameras.main.worldView.x/y` (not `scrollX/Y`, which differ once `renderScale` zooms the
-  camera). Several of these are private in TypeScript; renaming them breaks the
+  camera). The browser runs in US English, so the recipe lines spell "Vigor Tonic". Several of these are private in TypeScript; renaming them breaks the
   test without a type error.
 - Inputs: canvas clicks only (walking, the Recipes button at screen 219,22, a tap on the panel to
   close it). It
@@ -506,6 +518,13 @@ brew's `out` may be `PANACEA`.
 
 ## Making common changes
 
+- Add or change a text: its key in `src/i18n/en.ts`, the German in `src/i18n/de.ts` (the build
+  fails without it) and, when the US spelling differs, `src/i18n/en-US.ts`; run
+  `node scripts/check-translations.mjs`. German runs longer than English: a station's row of
+  purple markers is the tightest spot (their German captions put the price on a second line), then
+  the top bar's buttons and hint and the contract card's title (which shrinks its font to fit), so
+  check a new text with `?lang=de`. Never compare a translated text in game logic; compare ids.
+
 - Tune a number: edit the table in `src/game/items.ts` or `src/game/state.ts`; if it is a grow
   time, price, tip, carry size or recipe, update the matching expectation in the playthrough.
 - Add a potion recipe: add the `PotionId`, an `ITEMS` entry, a `RECIPES` entry (order breaks ties),
@@ -513,7 +532,8 @@ brew's `out` may be `PANACEA`.
   `src/art/paint.ts`, a cauldron out pallet position in `PALLETS` (one per potion, in `POTIONS`
   order), and either `KNOWN_RECIPES` or a place in `RESEARCH_ORDER` (raising the `research`
   upgrade's `max`), plus `NEEDS_NIGHTSHADE` if it does. Shelves and pixie lanes follow on their own.
-  Update the recipe lines in the test.
+  Give it a name, a `<potion>Count` and a fine name in each `src/i18n/` file. Update the recipe
+  lines in the test.
 - Add a plant: `PlantId`, `ITEMS`, `GROW_MS`, `REFINE` (and its refined item), plant art in
   `src/art/garden.ts` (`bakeGarden` and `plantTexture`), item art in `itemIcon`, gardens appended
   to `GARDENS` and `GARDEN_LINE` plus `GARDEN_AREAS` and `gardenBuilt`, new in and out pallet spots

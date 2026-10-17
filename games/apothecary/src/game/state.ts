@@ -1,4 +1,5 @@
 import { GROW_MS, PLANTS, POTION_PRICE, POTIONS, REFINED, type BrewOut, type ItemId, type PlantId, type PotionId, type RefinedId, type SellableId } from './items';
+import type { TextKey } from '../i18n';
 
 export interface Plot {
   plant: PlantId;
@@ -183,25 +184,25 @@ export const DOCTOR_UPGRADES = ['pack', 'boots', 'sickle'] as const;
 export const GUILD_UPGRADES = ['growth', 'belts', 'storage', 'prices', 'slots', 'customers', 'herbalist'] as const;
 
 /** Each upgrade's highest level (levels count from 0), its first cost, which doubles per level, and name. */
-export const UPGRADES: Record<UpgradeId, { max: number; cost: number; name: string }> = {
-  refiner: { max: 4, cost: 20, name: 'Refining table' },
-  cauldron: { max: 4, cost: 20, name: 'Cauldron' },
-  refiner2: { max: 4, cost: 20, name: 'Refining table' },
-  cauldron2: { max: 4, cost: 20, name: 'Cauldron' },
-  counter: { max: 4, cost: 20, name: 'Counter' },
-  pack: { max: 2, cost: 30, name: 'Pack' },
-  boots: { max: 2, cost: 25, name: 'Boots' },
-  sickle: { max: 2, cost: 25, name: 'Sickle' },
-  growth: { max: 2, cost: 20, name: 'Growth' },
-  belts: { max: 2, cost: 30, name: 'Pixies' },
-  storage: { max: 3, cost: 25, name: 'Storage' },
-  prices: { max: 2, cost: 20, name: 'Prices' },
-  slots: { max: 1, cost: 30, name: 'Slots' },
-  customers: { max: 2, cost: 25, name: 'Customers' },
+export const UPGRADES: Record<UpgradeId, { max: number; cost: number; name: TextKey }> = {
+  refiner: { max: 4, cost: 20, name: 'refiningTable' },
+  cauldron: { max: 4, cost: 20, name: 'cauldron' },
+  refiner2: { max: 4, cost: 20, name: 'refiningTable' },
+  cauldron2: { max: 4, cost: 20, name: 'cauldron' },
+  counter: { max: 4, cost: 20, name: 'counter' },
+  pack: { max: 2, cost: 30, name: 'pack' },
+  boots: { max: 2, cost: 25, name: 'boots' },
+  sickle: { max: 2, cost: 25, name: 'sickle' },
+  growth: { max: 2, cost: 20, name: 'growth' },
+  belts: { max: 2, cost: 30, name: 'pixies' },
+  storage: { max: 3, cost: 25, name: 'storage' },
+  prices: { max: 2, cost: 20, name: 'prices' },
+  slots: { max: 1, cost: 30, name: 'slots' },
+  customers: { max: 2, cost: 25, name: 'customers' },
   // The guild's herbalist tends the beds, so the blight never takes one.
-  herbalist: { max: 1, cost: 60, name: 'Herbalist' },
+  herbalist: { max: 1, cost: 60, name: 'herbalist' },
   // Each level learns the next recipe in RESEARCH_ORDER.
-  research: { max: 4, cost: 30, name: 'Study' },
+  research: { max: 4, cost: 30, name: 'study' },
 };
 export const UPGRADE_IDS = Object.keys(UPGRADES) as UpgradeId[];
 /** Coins needed to take an upgrade from `level` to the next: stations 20, 40, 80, 160. */
@@ -292,7 +293,9 @@ export const GARDEN_RUN = [0, 1, 0, 1, 2, 2];
 /** The gardens of each line, in the order of the belt's runs. */
 export const LINE_GARDENS = (line: number) => GARDENS.map((_, g) => g).filter((g) => GARDEN_LINE[g] === line);
 /** What a garden is called while it grows each plant. */
-export const GARDEN_NAMES: Record<PlantId, string> = { wheat: 'Wheat field', mandrake: 'Mandrake patch', nightshade: 'Shade garden' };
+export const GARDEN_NAMES: Record<PlantId, TextKey> = { wheat: 'wheatField', mandrake: 'mandrakePatch', nightshade: 'shadeGarden' };
+/** A garden's name inside a sentence, lower case in English. */
+export const GARDEN_NAMES_IN: Record<PlantId, TextKey> = { wheat: 'wheatFieldIn', mandrake: 'mandrakePatchIn', nightshade: 'shadeGardenIn' };
 /** The plant a garden grows: every bed in a garden grows the same one. */
 export const gardenPlant = (state: GameState, garden: number) => state.plots[garden * PLOTS_PER_GARDEN].plant;
 /**
@@ -383,11 +386,11 @@ export const REGULAR_BONUS = 3;
  * nothing.
  */
 export type Weather = 'mild' | 'rain' | 'fair' | 'drought';
-export const WEATHER: Record<Weather, { name: string; effect: string; growth: number; customers: number }> = {
-  mild: { name: 'Mild', effect: 'no change', growth: 1, customers: 1 },
-  rain: { name: 'Rain', effect: 'plants grow faster', growth: 1.5, customers: 1 },
-  fair: { name: 'Fair', effect: 'more customers', growth: 1, customers: 1.5 },
-  drought: { name: 'Drought', effect: 'plants grow slower', growth: 0.6, customers: 1 },
+export const WEATHER: Record<Weather, { name: TextKey; today: TextKey; growth: number; customers: number }> = {
+  mild: { name: 'mild', today: 'mildToday', growth: 1, customers: 1 },
+  rain: { name: 'rain', today: 'rainToday', growth: 1.5, customers: 1 },
+  fair: { name: 'fair', today: 'fairToday', growth: 1, customers: 1.5 },
+  drought: { name: 'drought', today: 'droughtToday', growth: 0.6, customers: 1 },
 };
 /** The almanac's week of weather from the second day on, round and round. */
 const FORECAST: Weather[] = ['rain', 'fair', 'drought', 'fair', 'rain', 'mild', 'fair'];
@@ -732,7 +735,9 @@ export const marketOpen = (state: GameState) => state.belts.garden.built;
  */
 export type PriceSign = 'cheap' | 'fair' | 'dear';
 export const PRICE_SIGNS: PriceSign[] = ['cheap', 'fair', 'dear'];
-export const SIGN_NAMES: Record<PriceSign, string> = { cheap: 'Cheap', fair: 'Fair', dear: 'Dear' };
+export const SIGN_NAMES: Record<PriceSign, TextKey> = { cheap: 'cheap', fair: 'fairSign', dear: 'dear' };
+/** What a tap on a price sign says, with the potion's name. */
+export const SIGN_SET: Record<PriceSign, TextKey> = { cheap: 'cheapSet', fair: 'fairSet', dear: 'dearSet' };
 export const SIGN_PAY: Record<PriceSign, number> = { cheap: 0.75, fair: 1, dear: 1.4 };
 export const SIGN_DEMAND: Record<PriceSign, number> = { cheap: 2, fair: 1, dear: 1 };
 export const SIGN_REPUTATION: Record<PriceSign, number> = { cheap: 2, fair: 0, dear: 0 };

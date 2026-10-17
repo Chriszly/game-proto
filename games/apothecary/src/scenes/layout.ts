@@ -1,5 +1,6 @@
 import type { ItemId, PlantId } from '../game/items';
 import { BELT_MS, BELTS, PLOTS_PER_GARDEN, type BeltId } from '../game/state';
+import type { TextKey } from '../i18n';
 
 // World positions for the apothecary with its shop at the heart. The shop stands in the middle of
 // the map, and each production line runs sideways into it: the first line from the left, the
@@ -36,10 +37,10 @@ const COINS_GAP = 66;
  */
 const GARDEN = { x: 24, w: 200, h: 176 };
 const LINE1_GARDENS = [
-  { ...GARDEN, y: 64, name: 'Wheat field' },
-  { ...GARDEN, y: 256, name: 'Mandrake patch' },
+  { ...GARDEN, y: 64, name: 'wheatField' as TextKey },
+  { ...GARDEN, y: 256, name: 'mandrakePatch' as TextKey },
 ];
-const SHADE_GARDEN = { ...GARDEN, y: 448, name: 'Shade garden' };
+const SHADE_GARDEN = { ...GARDEN, y: 448, name: 'shadeGarden' as TextKey };
 const mirrorArea = <T extends { x: number; w: number }>(g: T) => ({ ...g, x: WORLD.w - g.x - g.w });
 export const GARDEN_AREAS = [...LINE1_GARDENS, ...LINE1_GARDENS.map(mirrorArea), SHADE_GARDEN, mirrorArea(SHADE_GARDEN)];
 /** A plot's bed is 56 by 44, and beds stand edge to edge. */

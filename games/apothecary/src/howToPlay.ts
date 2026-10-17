@@ -1,6 +1,8 @@
 import type { HowToPlay } from '../../../shared/howToPlay';
+import { byLanguage } from '../../../shared/i18n';
 
-export const howToPlay: HowToPlay = {
+/** British English, which US English uses as it is: none of it is spelled differently. */
+const en: HowToPlay = {
   goal: 'Grow herbs, brew potions and sell them to grow your apothecary. You win by brewing the Panacea that cures the town of the plague.',
   controls: [
     { input: 'Tap or click the ground, or WASD / arrow keys', action: 'Walk the plague doctor there' },
@@ -39,3 +41,45 @@ export const howToPlay: HowToPlay = {
     'The herb market below the outfitter buys and sells plants and refined goods at prices that change with the weather.',
   ],
 };
+
+const de: HowToPlay = {
+  goal: 'Baue Kräuter an, braue Tränke und verkaufe sie, um deine Apotheke wachsen zu lassen. Du gewinnst, wenn du das Allheilmittel braust, das die Stadt von der Seuche heilt.',
+  controls: [
+    { input: 'Boden antippen oder anklicken, oder WASD / Pfeiltasten', action: 'Den Pestdoktor dorthin gehen lassen' },
+    { input: 'An reifen Pflanzen vorbeigehen', action: 'Jedes reife Beet in Reichweite der Sichel ernten' },
+    {
+      input: 'Auf einer Bodenmarke stehen',
+      action: 'Grün legt Waren ab, Blau bedient die Station, Gold hebt Waren oder Münzen auf',
+    },
+    { input: 'Auf einer lila Marke stillstehen', action: 'Münzen für ein Upgrade, einen Handwerker oder ein neues Gebäude zahlen' },
+    { input: 'Mausrad, Tasten + / - oder zwei Finger', action: 'Die Karte heran- und wegzoomen' },
+    { input: 'Taste Rezepte', action: 'Zeigen, was jede Station herstellt und was jeder Trank einbringt' },
+    { input: 'Taste Ablegen', action: 'Alles wegwerfen, was der Doktor trägt' },
+    {
+      input: 'Ein Schild antippen',
+      action: 'Einen Garten neu bepflanzen, festlegen, was eine Station zuerst macht, ein Regal auf Billig, Fair oder Teuer stellen oder wählen, was der Kräutermarkt verkauft',
+    },
+  ],
+  loop: [
+    'Geh durch das Weizenfeld und das Alraunenbeet, um die reifen Pflanzen zu ernten.',
+    'Leg sie am Mahltisch ab und stell dich auf seinen Arbeitsplatz, um sie zu verarbeiten.',
+    'Trag die verarbeiteten Waren zum Kessel und stell dich auf seinen Arbeitsplatz, um Tränke zu brauen.',
+    'Leg die Tränke vor dem Laden ab und stell dich hinter den Ladentisch, um die Kundschaft zu bedienen.',
+    'Heb die Münzen auf und gib sie für Upgrades, Handwerker und Feen aus.',
+  ],
+  tips: [
+    'Tritt im goldenen Teil des Braubalkens vom Kessel und heb den Trank auf: so wird er ein Feiner Trank, der die Hälfte mehr wert ist.',
+    'Kundschaft gibt mehr Trinkgeld, je schneller du sie bedienst, und zufriedene Kundschaft kommt als Stammkundschaft wieder.',
+    'Erfülle den Tagesauftrag auf der oberen Karte bis zur Dämmerung, um seinen Lohn zu verdienen.',
+    'Die Studierstube lehrt neue Rezepte, und der Schattengarten liefert den Nachtschatten dafür.',
+    'Handwerker und Feen halten den Laden ohne dich am Laufen, sogar während das Spiel geschlossen ist.',
+    'Regen kann ein Beet mit Fäule befallen; geh daran vorbei, um sie zu beseitigen, bevor sie sich ausbreitet.',
+    'Ab Tag fünf verlangt die Seuche Tränke in drei Stufen; erfülle alle, um das Allheilmittel freizuschalten.',
+    'Nach der Heilung kommt jede Saison eine neue Krankheit; jede geheilte Saison bringt ein Stadtsiegel, das alle Preise hebt.',
+    'Halte 5 oder weniger von einem Trank im Regal: darüber verkauft ein überfüllter Laden ihn billiger, bis zum halben Preis, wenn es voll ist.',
+    'An manchen Tagen kauft ein Händlerwagen gegenüber eine ganze Kiste eines Tranks zu einem Aufpreis: tipp ihn an, um zu verkaufen.',
+    'Der Kräutermarkt unter dem Ausstatter kauft und verkauft Pflanzen und verarbeitete Waren zu Preisen, die sich mit dem Wetter ändern.',
+  ],
+};
+
+export const howToPlay: HowToPlay = byLanguage({ en, de });

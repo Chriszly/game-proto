@@ -258,7 +258,7 @@ export function bakeGround(scene: Phaser.Scene) {
   paint(scene, 'ground-expansion', yard.w + 2 * EXPANSION_MARGIN, yard.h + 2 * EXPANSION_MARGIN, drawExpansion, GROUND_RES);
   paint(scene, 'ground-walls', WALLS_BOX.w, WALLS_BOX.h, drawWalls, GROUND_RES);
   GARDEN_AREAS.forEach((area, i) =>
-    paint(scene, gardenTexture(i), area.w + 12, area.h + 12, (c) => drawGarden(c, area.w, area.h, area.name === 'Shade garden'), 2, 300 + (i % 2)),
+    paint(scene, gardenTexture(i), area.w + 12, area.h + 12, (c) => drawGarden(c, area.w, area.h, area.name === 'shadeGarden'), 2, 300 + (i % 2)),
   );
   ['#527a36', '#5e8a3e', '#466e30'].forEach((tint, i) => paint(scene, `tree-${i}`, 80, 88, (c) => drawTree(c, tint), 2, 500 + i));
   [0, 1].forEach((i) => paint(scene, `bush-${i}`, 48, 32, drawBush, 2, 600 + i));
