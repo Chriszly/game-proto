@@ -7,8 +7,8 @@ export const ROWS = 7;
 
 export type Terrain = 'grass' | 'forest' | 'river' | 'mountain';
 
-/** What a piece of track costs on each terrain; a river needs a bridge. Mountains can't be built on. */
-export const TRACK_COST: Record<Exclude<Terrain, 'mountain'>, number> = { grass: 2, forest: 4, river: 6 };
+/** What a piece of track costs on each terrain; a river needs a bridge and a mountain a tunnel (WR12). */
+export const TRACK_COST: Record<Terrain, number> = { grass: 2, forest: 4, river: 6, mountain: 20 };
 
 /** Goods a village sends, and the better goods its workshops make from them. */
 export type Cargo = 'grain' | 'tools' | 'timber' | 'ore' | 'fish' | 'flour' | 'planks' | 'iron' | 'passengers';

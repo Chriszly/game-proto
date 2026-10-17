@@ -3,9 +3,15 @@ import { settings } from '../../../../shared/settings';
 import { CARGO_NAMES, COLS, ROOST, ROWS, inGrid, key, terrainAt, type Tile } from '../game/map';
 import {
   arms,
+  boonNames,
   buildTrack,
+  buyDepot,
   buyUpgrade,
+  canBuyDepot,
   canRemove,
+  canSendCourier,
+  depotCost,
+  depotLocked,
   dispatch,
   festivalHost,
   isCrossing,
@@ -18,22 +24,27 @@ import {
   pickCharter,
   removeTrack,
   routable,
+  secondWyrmRound,
+  sendCourier,
   throwSwitch,
   tick,
   trackCost,
   upgradeCost,
   upgradeLocked,
+  villageAt,
   villages,
   workshopOf,
 } from '../game/sim';
+import { saveMedal, loadMedals } from '../game/medals';
 import {
+  COURIER_COST,
+  DEPOT_ROUND,
   FESTIVAL_GOAL,
   FESTIVAL_ROUND,
   HUNGRY,
   MOOD_PAY,
   MOOD_ROUND,
   POP_MS,
-  SECOND_WYRM_ROUND,
   isPassengers,
   roundGoal,
   type GameState,
@@ -114,8 +125,13 @@ const MOOD_LOOKS: { color: number; mouth: number }[] = [
   { color: 0x5ad06a, mouth: 1 },
 ];
 
-/** How taps on the valley act: laying track that joins its neighbours, plain track, or taking track up. */
-type Mode = 'auto' | 'plain' | 'remove';
+/** How taps on the valley act: laying track that joins its neighbours, plain track, taking track up, or building a depot at a village. */
+type Mode = 'auto' | 'plain' | 'remove' | 'depot';
+
+const MEDAL_NAMES = { bronze: 'Bronze', silver: 'Silver', gold: 'Gold' } as const;
+
+/** Minutes and seconds of game time, like 2:05. */
+const clock = (ms: number) => `${Math.floor(ms / 60_000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}`;
 
 export class GameScene extends Phaser.Scene {
   /** The game being played; read by the playthrough test. */
@@ -128,6 +144,10 @@ export class GameScene extends Phaser.Scene {
   private dragTile: string | null = null;
   /** The last tile track was laid on, which plain track continues from. */
   private lastLaid: Tile | null = null;
+  /** The village a tap went down on, for a courier call when it comes up there without dragging off. */
+  private pressedVillage: number | null = null;
+  /** Whether this game's festival medal has been saved. */
+  private medalSaved = false;
 
   private hints!: Phaser.GameObjects.Graphics;
   private rails!: Phaser.GameObjects.Graphics;
@@ -139,6 +159,10 @@ export class GameScene extends Phaser.Scene {
   private moodKey = '';
   /** The warning over a tile a washout or a rockfall is about to take. */
   private hazardMark!: Phaser.GameObjects.Text;
+  /** Each village's depot shed, by village index, shown once one is built there. */
+  private depotIcons: Phaser.GameObjects.Image[] = [];
+  /** The tunnel mouths, drawn in front of their mountain; redrawn with the track. */
+  private portals: Phaser.GameObjects.Graphics[] = [];
   /** The pines on each forest tile, by tile key; hidden once track is laid through them. */
   private pines = new Map<string, Phaser.GameObjects.Image>();
   private markers: Phaser.GameObjects.Image[] = [];
@@ -163,6 +187,7 @@ export class GameScene extends Phaser.Scene {
   private wingsButton!: Button;
   private hoardButton!: Button;
   private secondButton!: Button;
+  private depotButton!: Button;
   private removeButton!: Button;
   private plainButton!: Button;
   /** The round's two charters to choose from, over the board. */
@@ -182,9 +207,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   create() {
-    this.state = newGame();
+    this.state = newGame(loadMedals()[settings.difficulty] ?? null);
     this.mode = 'auto';
     this.lastLaid = null;
+    this.pressedVillage = null;
+    this.medalSaved = false;
+    this.depotIcons = [];
+    this.portals = [];
     this.trackKey = '';
     this.cardKey = '';
     this.moodKey = '';
@@ -215,7 +244,12 @@ export class GameScene extends Phaser.Scene {
     // A tap on a card or button (the charter cards sit over the board) is not a tap on the board.
     this.input.on('pointerdown', (p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => !over.length && this.onGridPointer(p, true));
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => p.isDown && this.onGridPointer(p, false));
-    this.input.on('pointerup', () => (this.dragTile = null));
+    this.input.on('pointerup', () => {
+      this.dragTile = null;
+      // A tap on a village that didn't drag off it sends a wyrm with gifts.
+      if (this.pressedVillage !== null) sendCourier(this.state, this.pressedVillage);
+      this.pressedVillage = null;
+    });
     this.draw();
   }
 
@@ -237,6 +271,12 @@ export class GameScene extends Phaser.Scene {
     if (!inGrid(t)) return;
     if (!down && (this.dragTile === null || this.dragTile === key(t))) return;
     this.dragTile = key(t);
+    const village = villageAt(this.state, t);
+    this.pressedVillage = down && this.mode !== 'remove' && this.mode !== 'depot' ? village : null;
+    if (this.mode === 'depot') {
+      if (down && village !== null && buyDepot(this.state, village)) this.mode = 'auto';
+      return;
+    }
     if (this.mode === 'remove') return void removeTrack(this.state, t);
     if (down && throwSwitch(this.state, t)) return;
     // Plain track continues from the line tile touched just before it (laid or already there), when that is next to it.
@@ -267,6 +307,9 @@ export class GameScene extends Phaser.Scene {
       const sprite = this.addProp(t, texture).setDepth(groundDepth(y) - (texture === 'roost' ? 0 : 12));
       const label = this.add.text(x, y + 16, name, textStyle(11)).setOrigin(0.5).setDepth(UI_DEPTH - 2);
       this.stations.push({ sprite, label, round });
+      if (texture !== 'roost') {
+        this.depotIcons.push(fit(this.add.image(x - label.width / 2 - 10, y + 15, 'depot')).setDepth(UI_DEPTH - 2).setVisible(false));
+      }
     };
     add(ROOST, 'roost', 'Roost', 1);
     for (const v of villages(this.state)) {
@@ -337,6 +380,7 @@ export class GameScene extends Phaser.Scene {
     this.hoardButton = button(BUTTONS.hoard, () => buyUpgrade(this.state, 'hoard'));
     this.secondButton = button(BUTTONS.second, () => buyUpgrade(this.state, 'second'));
     const toggle = (mode: Mode) => () => (this.mode = this.mode === mode ? 'auto' : mode);
+    this.depotButton = button(BUTTONS.depot, toggle('depot'));
     const dx = (PANEL.w - BUTTONS.half) / 2;
     this.removeButton = makeButton(this, PANEL.x - dx, BUTTONS.remove, BUTTONS.half, BUTTONS.h, 'Remove', toggle('remove'));
     this.plainButton = makeButton(this, PANEL.x + dx, BUTTONS.remove, BUTTONS.half, BUTTONS.h, 'Plain', toggle('plain'));
@@ -384,6 +428,7 @@ export class GameScene extends Phaser.Scene {
       st.label.setVisible(st.round <= s.round);
       st.sign?.setVisible(st.round <= s.round);
     }
+    this.depotIcons.forEach((icon, i) => icon.setVisible(s.depots.includes(i)));
     this.bunting.setVisible(s.round === FESTIVAL_ROUND);
     this.drawMoods();
     this.drawHazard();
@@ -396,7 +441,7 @@ export class GameScene extends Phaser.Scene {
     this.drawPanel();
     if (s.banner) {
       this.bannerText.setText(s.banner.text);
-      this.bannerBox.setSize(this.bannerText.width + 32, 40).setOrigin(0.5);
+      this.bannerBox.setSize(this.bannerText.width + 32, this.bannerText.height + 16).setOrigin(0.5);
     }
     this.banner.setVisible(!!s.banner);
     if (s.phase === 'over' && !this.overLayer.visible) {
@@ -404,7 +449,16 @@ export class GameScene extends Phaser.Scene {
     }
     if (s.phase === 'won' && !this.overLayer.visible) {
       const host = villages(s)[festivalHost(s)].name;
-      this.overText.setText(`The festival at ${host} is a triumph!\nThe whole valley rides the wyrm line.\n\n${s.totalDelivered} delivered, ${s.hearts} of 3 hearts left`);
+      const medal = s.medal ?? 'bronze';
+      // The best medal on this difficulty is kept, and its boons start the next game.
+      const best = this.medalSaved ? medal : saveMedal(settings.difficulty, medal);
+      this.medalSaved = true;
+      const level = settings.difficulty[0].toUpperCase() + settings.difficulty.slice(1);
+      this.overText.setText(
+        `The festival at ${host} is a triumph!\n${s.totalDelivered} delivered, ${s.hearts} of 3 hearts left\n\n` +
+          `${MEDAL_NAMES[medal]} medal: festival in ${clock(s.festivalMs)}\nBest on ${level}: ${MEDAL_NAMES[best]}\n` +
+          `Next game: ${boonNames(best).join(', ')}`,
+      );
     }
     this.overLayer.setVisible(s.phase !== 'play');
     this.drawCharters();
@@ -470,6 +524,7 @@ export class GameScene extends Phaser.Scene {
     if (k === this.trackKey) return;
     this.trackKey = k;
     for (const [tile, pines] of this.pines) pines.setVisible(!s.track.includes(tile));
+    this.drawPortals();
     const g = this.rails.clear();
     const tiles = [...s.track.map((k) => k.split(',').map(Number)), ...[ROOST, ...openVillages(s)].map((t) => [t.c, t.r])];
     // Each tile draws a half rail towards every arm it is joined to. Ballast and bridges first, then sleepers, then rails.
@@ -539,6 +594,31 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** A dark tunnel mouth on each side of a mountain the track runs through, in front of the peak. */
+  private drawPortals() {
+    const s = this.state;
+    for (const p of this.portals) p.destroy();
+    this.portals = [];
+    for (const k of s.track) {
+      const [c, r] = k.split(',').map(Number);
+      if (terrainAt(s.valley, { c, r }) !== 'mountain') continue;
+      const g = this.add.graphics().setDepth(groundDepth(tileCenter({ c, r }).y) + 1);
+      for (const n of arms(s, { c, r })) {
+        const m = iso(c + 0.5 + (n.c - c) * 0.4, r + 0.5 + (n.r - r) * 0.4);
+        g.fillStyle(0x6a6678).fillEllipse(m.x, m.y - 6, 26, 22);
+        g.fillStyle(0x1d1a24).fillEllipse(m.x, m.y - 4, 18, 16);
+        g.fillStyle(0x6a6678).fillRect(m.x - 13, m.y + 1, 26, 4);
+      }
+      this.portals.push(g);
+    }
+  }
+
+  /** Whether a point on the valley floor is inside a tunnel, where the wyrm is out of sight. */
+  private inTunnel(x: number, y: number) {
+    const t = tileAt(x, y);
+    return inGrid(t) && terrainAt(this.state.valley, t) === 'mountain' && this.state.track.includes(key(t));
+  }
+
   /** Outlines where track can go (or, while removing, which track can be taken up). */
   private drawHints() {
     const s = this.state;
@@ -551,6 +631,11 @@ export class GameScene extends Phaser.Scene {
         const t = { c, r };
         if (this.mode === 'remove') {
           if (canRemove(s, t)) g.lineStyle(2, 0xf0a050, 0.95).strokePoints(diamond(c, r), true);
+          continue;
+        }
+        if (this.mode === 'depot') {
+          const v = villageAt(s, t);
+          if (v !== null && canBuyDepot(s, v)) g.lineStyle(2.5, 0xf3c64e, 0.95).strokePoints(diamond(c, r), true);
           continue;
         }
         const cost = trackCost(s, t);
@@ -615,7 +700,7 @@ export class GameScene extends Phaser.Scene {
     segments.forEach((seg, i) => {
       const gap = SEGMENT_GAPS[i];
       const p = i === 0 ? head : trail[Math.min(gap, trail.length - 1)];
-      seg.setPosition(p.x, p.y).setDepth(groundDepth(p.y) + (i === 0 ? 0.5 : 0));
+      seg.setPosition(p.x, p.y).setDepth(groundDepth(p.y) + (i === 0 ? 0.5 : 0)).setVisible(!this.inTunnel(p.x, p.y));
       // The head is drawn in profile: it looks the way the wyrm is going across the screen.
       if (i === 0 && w.path.length && Math.abs(b.x - a.x) > 0.5) seg.setFlipX(b.x < a.x);
       if (i < 4) return;
@@ -627,7 +712,7 @@ export class GameScene extends Phaser.Scene {
       seg.setTexture(Math.cos(angle) * Math.sin(angle) > 0 ? 'wagon-u' : 'wagon-v');
     });
     const coil = segments[1];
-    wings.setPosition(coil.x, coil.y).setDepth(coil.depth + 0.2);
+    wings.setPosition(coil.x, coil.y).setDepth(coil.depth + 0.2).setVisible(coil.visible);
     const moving = w.path.length > 0 && w.switchMs <= 0 && w.waitMs <= 0;
     fit(wings, 1, moving && !settings.reduceMotion ? 0.75 + 0.25 * Math.sin(this.time.now / 90 + index) : 1);
     // What the wagons carry: the orders this wyrm has loaded, first loaded in the front wagon.
@@ -635,7 +720,7 @@ export class GameScene extends Phaser.Scene {
     wagonCargo.forEach((icon, i) => {
       const wagon = segments[4 + i];
       const o = carried[i] ?? (carried[0] && isPassengers(carried[0]) ? carried[0] : undefined);
-      icon.setVisible(!!o).setPosition(wagon.x, wagon.y - LOAD_LIFT).setDepth(wagon.depth + 0.1);
+      icon.setVisible(!!o && wagon.visible).setPosition(wagon.x, wagon.y - LOAD_LIFT).setDepth(wagon.depth + 0.1);
       if (o) icon.setTexture(`cargo-${o.cargo}`);
     });
   }
@@ -670,6 +755,7 @@ export class GameScene extends Phaser.Scene {
     if (w.waitMs > 0) return 'waiting at a junction';
     if (w.eatMs > 0) return 'eating at the Roost';
     if (w.job?.leg === 'feed') return 'hungry, off to the Roost';
+    if (w.job?.leg === 'visit') return `bringing gifts to ${vs[w.job.village].name}`;
     if (!job) return s.queue.length ? 'setting off' : 'resting';
     if (job.status === 'carrying') return `hauling ${cargo} to ${vs[job.to].name}`;
     if (job.status === 'loading') return `loading ${cargo}`;
@@ -705,11 +791,15 @@ export class GameScene extends Phaser.Scene {
         ? 'Tap track to take it up for half its cost. Tap Remove again to lay track.'
         : this.mode === 'plain'
           ? 'Plain track joins only the piece it continues. Track on all four sides makes a crossing.'
-          : s.hazard
-            ? `A ${s.hazard.kind} is coming: lay a way round it, or rebuild the track after.`
-            : Object.keys(s.switches).length
-              ? 'Tap a junction to set its switch: the wyrm goes the way the switches send it.'
-              : 'Tap or drag next to the line to lay track: grass 2, forest 4, bridge 6. Then tap an order.',
+          : this.mode === 'depot'
+            ? `Tap a village for a depot (${depotCost(s)}c): its goods wait at half speed and load at once.`
+            : s.hazard
+              ? `A ${s.hazard.kind} is coming: lay a way round it, or rebuild the track after.`
+              : s.round >= MOOD_ROUND && openVillages(s).some((v) => moodOf(s, villages(s).indexOf(v)) < 0 && canSendCourier(s, villages(s).indexOf(v)))
+                ? `A village is sulking: tap it to send a free wyrm with gifts (${COURIER_COST}c).`
+                : Object.keys(s.switches).length
+                  ? 'Tap a junction to set its switch: the wyrm goes the way the switches send it.'
+                  : 'Tap or drag to lay track: grass 2, forest 4, bridge 6, tunnel 20. Then tap an order.',
     );
   }
 
@@ -741,9 +831,15 @@ export class GameScene extends Phaser.Scene {
     this.hoardButton.setCaption(hoard === null ? 'Golden hoard: max' : `Golden hoard ${s.upgrades.hoard + 1}: ${hoard}c`);
     this.hoardButton.setEnabled(hoard !== null && hoard <= s.coins);
     this.secondButton.setCaption(
-      second === null ? 'Second wyrm: awake' : upgradeLocked(s, 'second') ? `Second wyrm: round ${SECOND_WYRM_ROUND}` : `Second wyrm: ${second}c`,
+      second === null ? 'Second wyrm: awake' : upgradeLocked(s, 'second') ? `Second wyrm: round ${secondWyrmRound(s)}` : `Second wyrm: ${second}c`,
     );
     this.secondButton.setEnabled(second !== null && second <= s.coins && !upgradeLocked(s, 'second'));
+    const depot = depotCost(s);
+    this.depotButton.setCaption(
+      this.mode === 'depot' ? 'Tap a village' : depotLocked(s) ? `Depot: round ${DEPOT_ROUND}` : `Depot ${s.depots.length + 1}: ${depot}c`,
+    );
+    this.depotButton.setLit(this.mode === 'depot');
+    this.depotButton.setEnabled(this.mode === 'depot' || (!depotLocked(s) && depot <= s.coins));
     this.removeButton.setCaption(this.mode === 'remove' ? 'Removing' : 'Remove');
     this.removeButton.setLit(this.mode === 'remove');
     this.plainButton.setCaption(this.mode === 'plain' ? 'Plain on' : 'Plain');

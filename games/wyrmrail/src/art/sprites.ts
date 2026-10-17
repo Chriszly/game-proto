@@ -17,6 +17,7 @@ export function bakeSprites(scene: Phaser.Scene) {
   bakePixelArt(scene, 'heart', HEART, ICON_COLORS, 3, INK);
   bakePixelArt(scene, 'heart-empty', HEART.map((r) => r.replace(/[rp]/g, 'x')), ICON_COLORS, 3, INK);
   bakePixelArt(scene, 'food', FOOD, ICON_COLORS, 2, INK);
+  bakePixelArt(scene, 'depot', DEPOT, ICON_COLORS, 2, INK);
 }
 
 /** Every wyrm texture is this size, with the ground point under the part at `x`, `y`. */
@@ -255,6 +256,9 @@ const CARGO_ICONS: Record<Cargo, string[]> = {
 
 /** The wyrm's belly on the HUD: a joint of meat on the bone. */
 const FOOD = ['....mm.', '...mMmm', '..mmmmm', '..mmmm.', '.Bm....', 'BB.....', '.B.....'];
+
+/** A village's depot (WR11): a wooden goods shed. */
+const DEPOT = ['...D...', '..DWD..', '.DWWWD.', 'DDDDDDD', '.wwDww.', '.wwDww.', '.wwDww.'];
 
 const COIN = ['.GGG.', 'GLGGG', 'GLGGG', 'GGGGG', '.GGG.'];
 const HEART = ['.rr.rr.', 'rpprrrr', 'rprrrrr', '.rrrrr.', '..rrr..', '...r...'];
