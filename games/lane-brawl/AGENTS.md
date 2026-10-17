@@ -11,8 +11,9 @@ inhibitors, minion waves, a jungle of twelve camps, watchstones, a guardian beas
 war, two Nexuses, five champions a side and a shop. The player picks one of fifteen champion classes,
 from medieval fantasy to steampunk and beasts,
 and fights with four AI allies against five AI champions on red. Each class is played by one named
-champion with a story (`hero`, `title`, `motive` in `CHAMPIONS`), the same in every match. The art is low-poly 3D: every unit is a small mesh built in code and rendered at boot by a
-software renderer into sprite frames; there are no image assets besides the cover and favicon.
+champion with a story (`hero`, `title`, `motive` in `CHAMPIONS`), the same in every match. The art is toon low-poly 3D: every unit is a small mesh built in code and rendered at boot by a
+software renderer into sprite frames, in three cel bands with a dark ink outline, and each champion
+has an oversized hero head and a prop from their story; there are no image assets besides the cover and favicon.
 
 Implemented today:
 
@@ -232,7 +233,9 @@ File map (`src/`):
   `swing`), a `Model` with a transform stack (`at`), primitives (`box` with a taper, `prism`,
   `gem`, `ico`, `slab`) whose faces get outward normals from each primitive's centre, and `render`:
   turn by yaw, cull back faces, Lambert light from the top left (`LIGHT`), painter's sort, fill.
-  The camera looks down from the south at `ELEVATION` radians. Also `seeded`, the art's own random
+  The toon look snaps the light to three cel bands (`CEL`) and saturates the colours (`SATURATE`);
+  `flat` gives the old smooth shading, and `noInk` skips the per-face `INK` stroke (the bake inks
+  whole sheets instead). The camera looks down from the south at `ELEVATION` radians. Also `seeded`, the art's own random
   generator.
 - `art/models.ts`: every model as a function of a pose. `figure` builds a humanoid (legs or a robe,
   a tunic in the team's cloth, head, arms on shoulder joints) from a `Kit` per class: the Warden's
@@ -243,7 +246,13 @@ File map (`src/`):
   sword and throwing star, the Lancer's crested helm, pennant spear and banded shield, the
   Gunslinger's wide hat, bandana, duster and revolver, the Automaton's brass head with glowing eyes,
   boiler and piston fists, the Tinker's goggles, storm-coil backpack, spark gun and wrench, the
-  Wolfkin's wolf head, mane, tail and claws, and the Bruin's bear head, belly and claws. Also
+  Wolfkin's wolf head, mane, tail and claws, and the Bruin's bear head, belly and claws. Champions
+  get `hero: true`, which scales the head by `HERO_HEAD` and lifts it by `HERO_LIFT`, and a prop
+  from their story: Hald's gate key and gate shield, Vesna's torn sash, Tamsin's leaf cloak, Elowen's
+  half-ice crystal, Maren's sun disc, Torvik's wrist chains (`chainLinks`), Morrow's whale tooth,
+  Gwyth's moths and moss, Kaida's watchstone charm, Liora's plume and swallow-tail pennant, Rook's
+  bandolier, AX-9's aether core, Winnie's lightning rod and copper gauntlets, Fenra's moon mark and
+  arm band, and Grumm's oak sapling and honey pot. Also
   `wolfModel`, `bruteModel` (ember or moss), `watchstoneModel` (per side or neutral) and
   `ruinModel`. `classPose`
   gives the joint angles for `idle`, the walk `w0`..`w3`, the attack `a0` (wind-up) and `a1`
@@ -257,7 +266,9 @@ File map (`src/`):
   of the red minion sheet for the last-hit outline, towers, inhibitors, the Nexus, rubble and the
   coin. The champions' full sheets (both teams' cloth) are baked when a match starts, only for
   the classes in it (`bakeChampions`, kept for later matches). Frames are named `${dir}:${pose}` (`frameName`); dir 0 faces right and each step turns 45
-  degrees clockwise on screen (`dirFor` maps a facing angle). Sheets render at `RES` and are
+  degrees clockwise on screen (`dirFor` maps a facing angle). Each sheet gets its ink outline in
+  one pass (`inkOutline`: its silhouette in `INK`, drawn under it at eight small offsets), much
+  cheaper than stroking every face. `CHAMP_CELL` is 76x98 to fit the hero heads and props. Sheets render at `RES` and are
   drawn at 1/RES: 2 on a screen that needs no scaling, up to 3 on a big or dense one (`sharpRes`
   in half steps, held to what the beast's sheet can load). Pick cards and the portrait scale by
   `1.3 / RES` and `1.2 / RES`; each `*_CELL` gives a frame's size and where the feet sit.
@@ -456,7 +467,8 @@ generator (`seeded` in `lowpoly.ts`); `performance.now` only times the bake for 
   `updateObjective` and give the marker a height in `HEAD` if the target is a new kind of unit.
 - **Change a model**: edit its builder in `models.ts`; the preview is the game itself. Keep the feet
   at the origin and the figure inside its `*_CELL` in `bake.ts` (raise the cell if a pose clips).
-  More poses or directions multiply the boot bake (one to two seconds in headless Chrome now).
+  More poses or directions multiply the boot bake (about two seconds in headless Chrome now, and a
+  match's champions about one more).
 - **Tune the map**: edit `LANES`, `TOWERS`, `CAMPS`, `WATCHSTONES`, `BUSHES` and `RIVER` in
   `data.ts`; `map.ts` paints from them. Give only blue's half and build red's with `both`/`mirror`,
   so the map stays fair, and check the playthrough still reaches the red mid tower at (1793, 1007).

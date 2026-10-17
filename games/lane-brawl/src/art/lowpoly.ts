@@ -1,6 +1,7 @@
 // A tiny software renderer for low-poly models: meshes are lists of flat polygons in 3D, built from
 // a few primitives (boxes, prisms, gems, slabs) under a transform stack. `render` turns them, lights
-// them flat from the top left (Lambert), sorts them back to front and fills them on a 2D canvas.
+// them from the top left in three toon steps, sorts them back to front, fills them on a 2D canvas
+// and rings the whole model in a dark ink outline.
 // Everything is baked once at boot into sprite frames; nothing here runs per game frame.
 
 export type V3 = [number, number, number];
@@ -238,7 +239,22 @@ export interface RenderOpts {
   yaw?: number;
   /** Extra light; 1 is normal. */
   bright?: number;
+  /** Plain Lambert shading with no outline, instead of the toon look. */
+  flat?: boolean;
+  /** Leaves out the ink outline of the toon look (a sprite sheet adds it afterwards, see `inkOutline`). */
+  noInk?: boolean;
 }
+
+/** The toon look: light falls into these steps (from dark to lit), colours are this much richer. */
+const CEL = [
+  { above: 0.95, b: 1.08 },
+  { above: 0.7, b: 0.88 },
+  { above: -Infinity, b: 0.66 },
+];
+const SATURATE = 1.25;
+/** The ink outline: its colour, and its width in model units. */
+export const INK = '#1a1220';
+export const INK_WIDTH = 1.1;
 
 /**
  * Draws a model on `ctx` with its origin (the feet) at (ox, oy), `scale` canvas pixels per model
@@ -247,6 +263,7 @@ export interface RenderOpts {
 export function render(ctx: CanvasRenderingContext2D, md: Model, ox: number, oy: number, scale: number, opts: RenderOpts = {}) {
   const yaw = opts.yaw ?? 0;
   const bright = opts.bright ?? 1;
+  const toon = !opts.flat;
   const rot = Ry(yaw);
   const items: { pts: [number, number][]; depth: number; fill: string }[] = [];
   md.polys.forEach((poly, i) => {
@@ -261,23 +278,42 @@ export function render(ctx: CanvasRenderingContext2D, md: Model, ox: number, oy:
     });
     const lambert = Math.max(0, dot(n, LIGHT));
     const facing = Math.max(0, dot(n, VIEW));
-    let b = (0.42 + 0.62 * lambert + 0.1 * facing) * bright;
+    let b = 0.42 + 0.62 * lambert + 0.1 * facing;
+    let [r, g, bl] = poly.color;
+    if (toon) {
+      // Light in three flat steps, and a little more colour.
+      b = CEL.find((c) => b > c.above)!.b;
+      const m = (r + g + bl) / 3;
+      [r, g, bl] = [m + (r - m) * SATURATE, m + (g - m) * SATURATE, m + (bl - m) * SATURATE];
+    }
+    b *= bright;
     b = b * (1 - poly.glow) + Math.max(b, 1.05) * poly.glow;
-    const [r, g, bl] = poly.color;
     const lift = Math.max(0, b - 1) * 60;
     const fill = `rgb(${clamp(r * b + lift)},${clamp(g * b + lift)},${clamp(bl * b + lift)})`;
     items.push({ pts, depth: depth / pts.length, fill });
   });
   items.sort((a, b) => a.depth - b.depth);
   ctx.lineJoin = 'round';
+  const path = (pts: [number, number][]) => {
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.closePath();
+  };
+  if (toon && !opts.noInk) {
+    // The ink outline: every face stroked fat in dark ink first, so the faces drawn over it leave
+    // only a rim round the silhouette.
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = Math.max(1, scale * INK_WIDTH);
+    for (const it of items) {
+      path(it.pts);
+      ctx.stroke();
+    }
+  }
   ctx.lineWidth = Math.max(0.6, scale * 0.35);
   for (const it of items) {
-    ctx.beginPath();
-    ctx.moveTo(it.pts[0][0], it.pts[0][1]);
-    for (let i = 1; i < it.pts.length; i++) ctx.lineTo(it.pts[i][0], it.pts[i][1]);
-    ctx.closePath();
-    ctx.fillStyle = it.fill;
-    ctx.strokeStyle = it.fill;
+    path(it.pts);
+    ctx.fillStyle = ctx.strokeStyle = it.fill;
     ctx.fill();
     ctx.stroke();
   }
