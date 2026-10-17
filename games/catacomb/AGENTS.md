@@ -61,6 +61,9 @@ with one more rule. The art is painterly: shapes and pixel grids drawn in code, 
 
 File map (all under `src/` unless it starts with `shared/`):
 
+- `audio/`: the sound (see Sound below). `sounds.ts` is the sound table (`sfx`, `SoundName`),
+  `music.ts` the two songs (`MAP_SONG`, `FIGHT_SONG`), `cues.ts` the `Cues` class that listens to
+  the run each frame and plays what happened, plus the music.
 - `howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips) in British
   English (also used for US English, which spells it the same) and German, picked with `byLanguage`
   and handed to `setupGame(game, { howToPlay })` in `main.ts`; update both languages when the
@@ -277,6 +280,69 @@ Data tables (where to tune):
   in this game's `README.md`) in sync with the multipliers.
 - The shared settings live under the `hub-settings` storage key, owned by `shared/settings.ts`;
   this game's own save is only `catacomb-best-depth`.
+
+## Sound
+
+All sound comes from `shared/audio.ts` (synthesized, no files; silent under browser automation).
+The sim has no sound: `GameScene` plays the hero's own actions in its tap handlers through
+`act(done, sound)` (the sound when the sim took the action, `ui('refuse')` when it returned
+false), and `Cues.hear(state, dt)` (called right after `tick` in `update`) plays everything else by
+comparing the state with the last frame: the phase, new pops (by `on`, `kind` and text), the fight's
+foe, hand and draw pile counts, the deck's curses and the gold. A frame plays each sound at most
+once, so an attack on every foe is one thwack. Nothing uses `Math.random` outside the engine
+(which only draws while sound is on), so the seeded playthrough is unchanged.
+
+Music, in A minor (harmonic), from `src/audio/music.ts`, chosen by `Cues.playTune`:
+
+- `MAP_SONG` (80 BPM, triangle drone): `calm` on the hero panel and the Crypt's map, `tombs` (lower,
+  with a heartbeat kick) on the Sunken Tombs' map, `camp` (warmer, leaning to C major) at the
+  campfire, the merchant and mystery rooms.
+- `FIGHT_SONG` (120 BPM, with drums): `battle` for a Crypt fight, `depths` for a Tombs fight (with a
+  half step B flat in the bass), `boss` for elites and both bosses. The `cleared` moment keeps the
+  fight music; the reward after it goes back to the map's.
+- Stings (`FIGHT_SONG`): `triumph` when the Bone King falls (`descend`), `win` when the Hollow Queen
+  falls (`won`), `lose` on defeat (`over`); the music stops for the end panels and starts again
+  with `calm` when Delve again restarts the scene.
+
+Sound table (`src/audio/sounds.ts`) and where each plays:
+
+| Sound | Where |
+| --- | --- |
+| `select` | a hero picked on the hero panel |
+| `ratchet` | the depth row's `<` or `>` |
+| `step` | every 175ms of walking on the map (`Cues`, alternating pitch) |
+| `door` | arriving at the merchant, a mystery room or a treasure room |
+| `fire` | arriving at a campfire |
+| `drip` | now and then on the hero panel and the map (every 2.6 to 6.8s, steady pattern) |
+| `descend` | the descent panel's Descend |
+| `fight`, `stab` | arriving at a fight; `stab` too for an elite or a boss |
+| `draw` | the hand grows (each turn's draw, a card that draws, the Foresight Flask) |
+| `shuffle` | the discard pile shuffled into the draw pile |
+| `attack`, `skill`, `power` | a hand card played, by its kind |
+| `hit` | a damage pop on a foe |
+| `die` | a foe leaves the fight |
+| `hurt` | a damage pop on the hero (a foe's hit, a Wound drawn, an altar or pool cost) |
+| `clang` | a "Blocked" pop on either side |
+| `shield` | a block pop on either side |
+| `status` | a status pop on a foe (Weak, Vulnerable, poison) |
+| `poison` | a poison bite (a status pop starting with `-`) on either side |
+| `heal` | a heal or strength pop on the hero (not after Rest, which has its own) |
+| `buff` | a foe's strength pop |
+| `hex` | a status pop on the hero on the foes' turn (a foe's debuff) |
+| `curse` | a curse joins the deck (a foe's curse move, the shrine, the chest, depth 3's Wound) |
+| `endTurn` | End turn |
+| `flask` | a flask drunk |
+| `cleared` | the last foe falls (phase `cleared`) |
+| `pick` | a reward card taken |
+| `rest`, `temper`, `burn` | the campfire's Rest, a card tempered, a card burned |
+| `buy` | a card, relic, flask or the removal bought from the merchant |
+| `mystery` | a mystery room's choice taken |
+| `ui('coin')` | the gold goes up (a fight's gold, the shrine, a boss's spare gold) |
+| `ui('click')` | Skip, Leave, Back, Delve again, and opening the temper, burn or removal picker |
+| `ui('refuse')` | an unplayable card, a flask off the hero's turn, a room out of reach, a ware too dear or with no slot, a greyed campfire or mystery choice, the depth at its end |
+
+To add a sound: add it to `sfx` in `sounds.ts`, then play it from the tap handler (through `act`)
+for the hero's own action, or from `Cues.hear` for something the run does on its own.
 
 ## Testing hooks
 
