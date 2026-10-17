@@ -110,7 +110,7 @@ study, shade gardens and a mirrored second production line.
   Panacea (`PANACEA`, `PANACEA_RECIPE`, `BrewOut`: what a brew can be, a potion or the Panacea).
 - `src/game/sim.ts`: the rules, free of Phaser. `tick` advances the world; marker actions
   (`dropAtRefiner`, `pickUpFromCauldron`, `stockShelf`, `collectTill`, `payUpgrade`,
-  `payCraftsman`, `payBelt`, `payExpansion`, `payShade`, `joinGuild`, `dropAll`, `cyclePriority`,
+  `payCraftsman`, `payBelt`, `payExpansion`, `payShade`, `joinGuild`, `dropItem`, `serveOrder`, `cyclePriority`,
   `cycleSign`, `replantGarden`, `clearBlight`, `sellToWagon`, `cycleMarketPick`, `buyHerb`,
   `sellHerb`) and `harvest` each change
   state and return `Feedback` lines, already translated with `t`. Also `refining`, `hasRoom`, `doneByHand` and `isBlighted`.
@@ -139,14 +139,17 @@ study, shade gardens and a mirrored second production line.
   (`ground-walls`, laid above the expansion yard so its edge doesn't cover the right wall), each garden and
   the scattered trees and bushes (`sceneryLayout`). `ui.ts` paints parchment cards on demand
   (`cardTexture(scene, kind, w, h)`: bar, button, contract, town, chip, bubble, sign, small, panel) and
-  `signTexture`, plus the `weather-<kind>` icons, the regular's `regular` star (`sparkle` in
+  `signTexture`, plus the `weather-<kind>` icons, the Settings button's `cog`, the hand slots' `bin`, the day bar's `moon`, the regular's `regular` star (`sparkle` in
   `paint.ts`, also on fine potions' icons), the plague card's `bell` and the `rival-stall`. `pixies.ts` paints the pixie (`PIXIE_FRAMES`, two wing
   beats) and the built routes' fairy-dust trails as one image (`drawFairyPaths`, re-painted when the
   set of built belts changes), and `pointAlong`/`laneOffset` place pixies on them. `stations.ts`
   also paints the study's desk (`study`) and the shop shelf (`shelf`); `TABLE_TOP` and
   `PALLET_DECK` are the light woods of the refining table and the pallets. `markers.ts` paints the
   floor markers (`pad-in`, `pad-out`, `pad-work`, `pad-up`) and one purple marker per
-  `UPGRADE_ICONS` entry (`upgradePad(icon)`, `pad-up-<icon>`).
+  `UPGRADE_ICONS` entry (`upgradePad(icon)`, `pad-up-<icon>`), and the pick-up markers that show what
+  they give beside the arrow (`pickUpPad(what)`, `pad-out-<sack|bottle|coin>`: the refining tables',
+  the cauldrons' and the till's). The counter's front panels each carry the shop's sign, Apothecary's
+  favicon (`shopSign` in `stations.ts`, drawn from the favicon's own shapes).
 - `src/ui/`: `BackStack` (items piled on the doctor), `IconRow` (customer wants), `Pallet` (crate
   stacks, exposes `item` and `count`, `setVisible`), `Shelf` (a shop shelf of one potion, up to six bottles, fine
   ones first; exposes `item` and `count`), `ProgressBar` (redraws only when its fill changes;
@@ -154,6 +157,17 @@ study, shade gardens and a mirrored second production line.
   `RecipeBook` (exposes `lines`, in the game's language), `coins` (`coined`: gold coins over the
   `{coin}` slots of a text), `Settings` (read-only view of the hub's
   settings, the difficulty named by the shared texts, and New game).
+
+- HUD: the top bar holds the purse (coin and number), Recipes (right edge at the bar's middle
+  minus 230, which the test clicks), the day bar (`createDayBar`, at `DAY_BAR` from the middle:
+  "Day 3", a dawn-to-dusk sky, the sun at the share of `DAY_MS` gone, the moon at its end, and a big
+  "Day N" across the screen when `contract.day` changes), the hint, and the Settings cogwheel
+  (`HUD_ICON_BUTTON`). `createWeather` also lays the evening light (`DUSK_FROM`, `DUSK_ALPHA`). The
+  hands bar (`HANDS_BAR`) sits at the bottom middle of the screen: a slot per `MAX_CARRY`, a `bin`
+  on each full one, and a tap on a slot calls `dropItem`. Both bars stop taps from walking.
+- Selling by hand: the doctor on the counter's work spot serves everyone, or a tap on a waiting
+  customer's order bubble calls `serveOrder` for that order, only while the doctor's feet are in the
+  shop (`inShop`), else "Step into the shop to serve".
 
 ### How it runs
 

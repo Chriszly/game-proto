@@ -15,7 +15,9 @@ const en: HowToPlay = {
     { input: 'Stand still on a purple marker', action: 'Pay coins towards an upgrade, a craftsman or a new building' },
     { input: 'Mouse wheel, + / - keys or pinch', action: 'Zoom the map in and out' },
     { input: 'Recipes button', action: 'Show what each station makes and what each potion sells for' },
-    { input: 'Drop all button', action: 'Throw away everything the doctor carries' },
+    { input: 'Tap a slot in the hands bar at the bottom', action: 'Throw that item away' },
+    { input: "Tap a waiting customer's order bubble", action: 'From inside the shop, hand them what they want from the shelf' },
+    { input: 'Cogwheel button', action: 'Open the settings' },
     {
       input: 'Tap a sign',
       action: 'Replant a garden, set what a station makes first, set a shelf to Cheap, Fair or Dear, or pick what the herb market sells',
@@ -25,7 +27,7 @@ const en: HowToPlay = {
     'Walk through the wheat field and mandrake patch to harvest the ripe plants.',
     'Drop them at the refining table and stand on its work spot to refine them.',
     'Carry the refined goods to the cauldron and stand on its work spot to brew potions.',
-    'Drop the potions outside the shop and stand behind the counter to serve customers.',
+    'Drop the potions outside the shop, then stand behind the counter or tap a customer\'s order bubble to serve them.',
     'Pick up the coins and spend them on upgrades, craftsmen and pixies.',
   ],
   tips: [
@@ -56,7 +58,9 @@ const de: HowToPlay = {
     { input: 'Auf einer lila Marke stillstehen', action: 'Münzen für ein Upgrade, einen Handwerker oder ein neues Gebäude zahlen' },
     { input: 'Mausrad, Tasten + / - oder zwei Finger', action: 'Die Karte heran- und wegzoomen' },
     { input: 'Taste Rezepte', action: 'Zeigen, was jede Station herstellt und was jeder Trank einbringt' },
-    { input: 'Taste Ablegen', action: 'Alles wegwerfen, was der Doktor trägt' },
+    { input: 'Ein Feld der Hände-Leiste unten antippen', action: 'Diese Ware wegwerfen' },
+    { input: 'Die Bestellblase einer wartenden Kundschaft antippen', action: 'Im Laden das Gewünschte aus dem Regal überreichen' },
+    { input: 'Zahnradtaste', action: 'Die Einstellungen öffnen' },
     {
       input: 'Ein Schild antippen',
       action: 'Einen Garten neu bepflanzen, festlegen, was eine Station zuerst macht, ein Regal auf Billig, Fair oder Teuer stellen oder wählen, was der Kräutermarkt verkauft',
@@ -66,7 +70,7 @@ const de: HowToPlay = {
     'Geh durch das Weizenfeld und das Alraunenbeet, um die reifen Pflanzen zu ernten.',
     'Leg sie am Mahltisch ab und stell dich auf seinen Arbeitsplatz, um sie zu verarbeiten.',
     'Trag die verarbeiteten Waren zum Kessel und stell dich auf seinen Arbeitsplatz, um Tränke zu brauen.',
-    'Leg die Tränke vor dem Laden ab und stell dich hinter den Ladentisch, um die Kundschaft zu bedienen.',
+    'Leg die Tränke vor dem Laden ab und stell dich hinter den Ladentisch oder tippe die Bestellblase an, um die Kundschaft zu bedienen.',
     'Heb die Münzen auf und gib sie für Upgrades, Handwerker und Feen aus.',
   ],
   tips: [

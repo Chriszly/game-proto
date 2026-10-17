@@ -100,7 +100,10 @@ function drawCounter(c: Ctx) {
   shadow(c, 104, 41, 96, 4, 0.18);
   both(c, rectPts(3, 12, 194, 28, 2), '#a86e3e', { layers: 3 }, { w: 1.3 });
   hatch(c, rectPts(3, 12, 194, 28), { gap: 3, alpha: 0.18, w: 0.5 });
-  for (let i = 0; i < 7; i++) ink(c, rectPts(9 + i * 27, 18, 22, 17, 1.5), { w: 0.8, alpha: 0.7 });
+  for (let i = 0; i < 7; i++) {
+    ink(c, rectPts(9 + i * 27, 18, 22, 17, 1.5), { w: 0.8, alpha: 0.7 });
+    shopSign(c, 20 + i * 27, 26.5, 15);
+  }
   both(c, rectPts(1, 7, 198, 9, 3), '#d9a46a', { layers: 3, bloom: 3, cx: 60, cy: 9 }, { w: 1.3 });
   // Brass scales.
   ink(c, [[18, 9], [18, -1 + 4]], { closed: false, w: 1.2 });
@@ -114,6 +117,58 @@ function drawCounter(c: Ctx) {
   c.fillRect(160, 0, 40, 30);
   both(c, ellPts(186, 10, 5, 1.8, 12), '#9a7a50', { layers: 1 }, { w: 0.7 });
   both(c, rectPts(184, 0.5, 4, 9), '#fff6e0', { layers: 1 }, { w: 0.7 });
+}
+
+/**
+ * The shop's sign on each panel of the counter's front: Apothecary's favicon (the orange bear in a
+ * plague doctor's hat and beak), `size` wide and centred on (x, y), drawn from its 32x32 shapes.
+ */
+function shopSign(c: Ctx, x: number, y: number, size: number) {
+  c.save();
+  c.translate(x - size / 2, y - size / 2);
+  c.scale(size / 32, size / 32);
+  const fill = (col: string, shape: () => void) => {
+    c.beginPath();
+    shape();
+    c.fillStyle = col;
+    c.fill();
+  };
+  const circle = (cx: number, cy: number, r: number) => () => c.arc(cx, cy, r, 0, Math.PI * 2);
+  const oval = (cx: number, cy: number, rx: number, ry: number) => () => c.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+  for (const ex of [7, 25]) {
+    fill('#e37100', circle(ex, 9, 5));
+    fill('#ffb787', circle(ex, 9, 2.4));
+  }
+  fill('#e37100', oval(16, 19.5, 13, 12));
+  fill('#311300', oval(16, 8, 15, 3));
+  fill('#311300', () => {
+    c.moveTo(9, 8);
+    c.lineTo(10.2, 1);
+    c.lineTo(21.8, 1);
+    c.lineTo(23, 8);
+    c.closePath();
+  });
+  fill('#964900', () => c.rect(9.8, 4.8, 12.4, 1.6));
+  for (const ex of [10.5, 21.5]) {
+    fill('#0d1117', circle(ex, 17.5, 2.3));
+    fill('#ffffff', circle(ex + 0.8, 16.7, 0.8));
+  }
+  fill('#ffdcc7', () => {
+    c.moveTo(11.5, 21);
+    c.bezierCurveTo(13, 19, 19, 19, 20.5, 21);
+    c.lineTo(17, 30.8);
+    c.bezierCurveTo(16.6, 31.6, 15.4, 31.6, 15, 30.8);
+    c.closePath();
+  });
+  c.beginPath();
+  c.moveTo(16, 22);
+  c.lineTo(16, 28.5);
+  c.strokeStyle = '#ffb787';
+  c.lineWidth = 1.2;
+  c.lineCap = 'round';
+  c.stroke();
+  for (const nx of [14.3, 17.7]) fill('#964900', circle(nx, 22.3, 0.6));
+  c.restore();
 }
 
 /** A wooden pallet, slats on blocks, seen from the front. 36x16 as shown. */
@@ -170,5 +225,5 @@ export function bakeStations(scene: Phaser.Scene) {
     frameRate: 5,
     repeat: -1,
   });
-  paint(scene, 'counter', 200, 44, drawCounter, 2);
+  paint(scene, 'counter', 200, 44, drawCounter, 3);
 }
