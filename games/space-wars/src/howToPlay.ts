@@ -8,9 +8,10 @@ export const howToPlay: HowToPlay = {
     { input: 'Tap empty space or an enemy', action: 'Move the selected ships there, or attack that target' },
     { input: 'Build button, then tap the map', action: 'Place a building near one of your hubs' },
     { input: 'Train and research buttons', action: 'Queue ships at your Barracks or hub, or research upgrades' },
-    { input: 'Fall back button', action: 'Send the selected ships home to repair' },
+    { input: 'Fall back button, or B', action: 'Send the selected ships home to repair' },
     { input: 'Rivals on the top bar, or T', action: 'Open the rivals panel to accept truces or pay tribute' },
-    { input: 'Arrow keys / WASD, H', action: 'Scroll the map; H centres it on your hub' },
+    { input: 'Arrow keys / WASD, or drag with two fingers', action: 'Scroll the map' },
+    { input: 'H', action: 'Centre the map on your hub' },
   ],
   loop: [
     'Your harvesters mine crystal on their own and carry it back to your hub.',
