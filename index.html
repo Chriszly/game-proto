@@ -29,7 +29,7 @@
       button:hover, button:focus-visible { border-color: #f3c64e; outline: none; }
       button[aria-pressed="true"] { background: #8f6a24; border-color: #f3c64e; color: #fff6dc; }
       #open-settings { flex: none; margin-top: 6px; }
-      dialog { width: min(560px, calc(100vw - 32px)); box-sizing: border-box; padding: 0; color: inherit;
+      dialog { width: min(620px, calc(100vw - 32px)); box-sizing: border-box; padding: 0; color: inherit;
         background: #2c2018; border: 3px solid #5a3f2a; box-shadow: 0 6px 0 #0e0a08; }
       .panel { position: relative; padding: 20px; }
       dialog::backdrop { background: rgba(10, 6, 4, 0.7); }
@@ -39,8 +39,10 @@
       .setting-name { margin-bottom: 8px; color: #f3c64e; }
       .setting-choices { display: flex; flex-wrap: wrap; gap: 8px; }
       .setting-hint { margin-top: 6px; font-size: 13px; color: #a8957a; }
-      .settings-actions { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 14px; border-top: 2px solid #3d2b1f; }
-      #reset-progress { margin-left: auto; color: #f0b48a; }
+      /* Both actions share one row at every width and language; a long label wraps inside its button. */
+      .settings-actions { display: flex; gap: 8px; padding-top: 14px; border-top: 2px solid #3d2b1f; }
+      .settings-actions button { flex: 1 1 0; min-width: 0; }
+      #reset-progress { color: #f0b48a; }
       #close-settings { position: absolute; top: 14px; right: 14px; }
     </style>
   </head>
