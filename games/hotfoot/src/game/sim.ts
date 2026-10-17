@@ -73,15 +73,19 @@ export interface Carry {
 
 /**
  * A new run: an ordinary one, or the daily course of the date given. A boon bought at the last
- * game over starts it with one rank of that boon, and the armoury's levels apply.
+ * game over starts an ordinary run with one rank of that boon, and the armoury's levels apply. A
+ * daily course starts bare, so every player runs it alike; the bought boon waits for the next
+ * ordinary run.
  */
 export function newRun({ best, bank, pending, armoury, crown }: Carry = { best: 0, bank: 0, pending: null, armoury: noArmoury(), crown: false }, daily: string | null = null): GameState {
   const s = freshState(best, bank, armoury, daily, crown);
-  if (pending) s.ranks[pending] = 1;
+  if (daily) s.pending = pending;
+  else if (pending) s.ranks[pending] = 1;
   const st = stats(s);
   s.hearts = st.maxHearts;
   s.shields = st.shields;
-  s.coins = armoury.purse * ARMOURY_EACH.purse;
+  s.purse = daily ? 0 : armoury.purse * ARMOURY_EACH.purse;
+  s.coins = s.purse;
   buildStage(s);
   return s;
 }
@@ -273,7 +277,8 @@ function hurt(s: GameState, kind: TrapKind | 'wall' | 'boss' | 'rock') {
     s.hearts = 0;
     s.phase = 'over';
     s.best = Math.max(s.best, metres(s.distance));
-    s.bank += s.coins;
+    // The Squire's Purse's coins are for the road, not the bank, so dying early can't farm them.
+    s.bank += Math.max(0, s.coins - s.purse);
   }
 }
 

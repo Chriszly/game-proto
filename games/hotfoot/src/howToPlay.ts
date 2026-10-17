@@ -30,7 +30,7 @@ export const howToPlay: HowToPlay = {
     'Pick up coins along the way, and take them in a row to build a streak.',
     'Reach the checkpoint banner every 100 m and choose one of the boons on offer.',
     'Each stage after runs a little faster, on new ground with its own rule.',
-    'When you fall, your coins are banked for the armoury and the next run.',
+    'When you fall, the coins you picked up are banked for the armoury and the next run.',
   ],
   tips: [
     'Every hit costs a heart and resets your coin streak; you blink and stay safe for a moment after.',

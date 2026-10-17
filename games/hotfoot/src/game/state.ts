@@ -291,6 +291,8 @@ export interface GameState {
   runner: Runner;
   hearts: number;
   coins: number;
+  /** The coins the run started with from the Squire's Purse; a fall banks only the coins above them. */
+  purse: number;
   /** Coins taken in a row since the last hit; sets the coin multiplier (`streakMult`). */
   streak: number;
   /** Hits taken this run, blocked ones included. */
@@ -322,7 +324,7 @@ export interface GameState {
   best: number;
   /** Coins banked from finished runs, to spend between runs. */
   bank: number;
-  /** A boon bought at the game-over screen, which the next run starts with. */
+  /** A boon bought at the game-over screen, which the next ordinary run starts with (kept through daily runs). */
   pending: BoonId | null;
   /** The boon offered at the last checkpoint and not taken, or null before any checkpoint. */
   missed: BoonId | null;
@@ -355,12 +357,12 @@ export function trackOf(s: Pick<GameState, 'distance' | 'checkpointX' | 'best' |
 }
 
 /**
- * The knight's numbers with the boons taken so far (cursed ones included), the armoury bought, and
- * the rule of the ground underfoot.
+ * The knight's numbers with the boons taken so far (cursed ones included), the armoury bought (not
+ * on a daily course, which everyone runs alike), and the rule of the ground underfoot.
  */
-export function stats(s: Pick<GameState, 'ranks' | 'armoury' | 'terrain'>) {
+export function stats(s: Pick<GameState, 'ranks' | 'armoury' | 'terrain' | 'daily'>) {
   const r = (id: BoonId) => s.ranks[id] ?? 0;
-  const a = s.armoury;
+  const a = s.daily ? noArmoury() : s.armoury;
   const pairs = pairsOf(s.ranks);
   // Jump height goes with the square of the speed off the ground.
   const height = (1 + 0.12 * r('boots') - 0.15 * r('oath')) * (s.terrain === 'marsh' ? MARSH.jump : 1);
@@ -428,6 +430,7 @@ export function freshState(best = 0, bank = 0, armoury: Armoury = noArmoury(), d
     runner: { h: 0, vh: 0, slideMs: 0, slideQueued: false, jumps: 1, hurtMs: 0, skidMs: 0, jumpQueued: false },
     hearts: START_HEARTS,
     coins: 0,
+    purse: 0,
     streak: 0,
     hits: 0,
     stomps: 0,
