@@ -17,6 +17,8 @@ export const LEVEL = { x: VIEW.w - 16, y: 22 };
 export const BOSS_BAR = { x: VIEW.w / 2 - 160, y: 56, w: 320, h: 10 };
 /** The round signature button, bottom right. */
 export const SIG_BUTTON = { x: VIEW.w - 70, y: VIEW.h - 70, r: 42 };
+/** The floating touch stick: rim radius (full speed there), knob radius and dead zone. */
+export const STICK = { r: 60, knob: 24, dead: 6 };
 
 /** The three hero cards of the select screen (centres). */
 export const HERO_CARD = { w: 284, h: 372, y: 300, gap: 302 };

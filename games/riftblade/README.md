@@ -17,10 +17,13 @@ droids and bolts.
 | Input | Action |
 | --- | --- |
 | WASD or arrow keys | Walk |
-| Hold anywhere on the field (mouse or touch) | Walk toward that point; the hero keeps walking while you hold |
+| Hold the mouse anywhere on the field | Walk toward that point; the hero keeps walking while you hold |
+| Touch: put a finger down anywhere and drag | A steering stick appears where the finger went down; walk the way you drag, faster the further out (the stick follows a finger that goes past its rim) |
 | Space, or the round button bottom right | Signature move, once charged |
 | Tap a card, or 1 / 2 / 3 | Choose a hero, or an upgrade at a level-up |
 | Run again, or Enter | After a run, back to the hero select screen |
+
+![The floating touch stick under a steering finger](docs/screenshots/touch-stick.webp)
 
 ![The hero select screen](docs/screenshots/hero-select.webp)
 

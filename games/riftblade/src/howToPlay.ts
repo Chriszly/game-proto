@@ -3,7 +3,8 @@ import type { HowToPlay } from '../../../shared/howToPlay';
 export const howToPlay: HowToPlay = {
   goal: 'Survive five minutes of Scrap droids on the Dune world, then destroy the Grinder Crawler to win. The run ends when your health runs out.',
   controls: [
-    { input: 'WASD / arrow keys, or hold anywhere on the field', action: 'Walk (toward where you hold)' },
+    { input: 'WASD / arrow keys, or hold the mouse on the field', action: 'Walk (toward where you hold)' },
+    { input: 'Touch: put a finger down anywhere and drag', action: 'A steering stick appears under it; walk the way you drag' },
     { input: 'Nothing', action: 'Your weapon fires on its own' },
     { input: 'Space, or the round button bottom right', action: 'Signature move, when charged' },
     { input: 'Tap a card, or 1 / 2 / 3', action: 'Choose a hero, or an upgrade at a level-up' },
