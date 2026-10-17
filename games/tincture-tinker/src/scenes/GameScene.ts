@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { playMusic, playSting, ui } from '../../../../shared/audio';
 import { renderScale } from '../../../../shared/scaling';
 import { settings } from '../../../../shared/settings';
 import { BROWN, GOLD, MOSS, num, OCHRE, RES, RUST, SEPIA, shown } from '../art/nouveau';
@@ -13,6 +14,7 @@ import { loadProgress, saveProgress } from '../game/save';
 import { canUse, funnel, nextExam, nextOrder, pestle, sift, stir, TOOL_ORDER, TOOLS, trySwap, type Step, type Tool } from '../game/sim';
 import { buyHerb, examOpen, heldPantry, HERB_COST, PANTRY_MAX, progressOf, standingOf, startOrder, type GameState } from '../game/state';
 import { buyUpgrade, UPGRADE_ORDER, upgradeCost, UPGRADES, type UpgradeId } from '../game/upgrades';
+import { sfx, SONG } from '../audio';
 import { t } from '../i18n';
 import { makeButton } from '../ui/Button';
 import { BOARD, CAPTION, cellX, cellY, NEEDS, PANEL, PANTRY, RIBBON, SERIF, TOOL, UI_DEPTH } from './layout';
@@ -101,6 +103,7 @@ export class GameScene extends Phaser.Scene {
   private rankNext!: Phaser.GameObjects.Text;
   private caption!: Phaser.GameObjects.Graphics;
   private captionText!: Phaser.GameObjects.Text;
+  private captionSun!: Phaser.GameObjects.Image;
   private result!: Phaser.GameObjects.Container;
   private resultTitle!: Phaser.GameObjects.Text;
   private resultText!: Phaser.GameObjects.Text;
@@ -209,7 +212,10 @@ export class GameScene extends Phaser.Scene {
     this.dragFrom = { cell, x: p.worldX, y: p.worldY };
     const picked = this.selected;
     if (picked && adjacent(picked, cell)) this.swap(picked, cell);
-    else this.selected = picked && picked.row === cell.row && picked.col === cell.col ? null : cell;
+    else {
+      this.selected = picked && picked.row === cell.row && picked.col === cell.col ? null : cell;
+      sfx('pick');
+    }
     this.drawCursor();
   }
 
@@ -235,18 +241,22 @@ export class GameScene extends Phaser.Scene {
     const ta = this.state.board[a.row][a.col];
     const tb = this.state.board[b.row][b.col];
     // Jars and resin hold their tiles: they don't move at all.
-    if (stuck(ta) || stuck(tb)) return this.drawCursor();
+    if (stuck(ta) || stuck(tb)) {
+      ui('refuse');
+      return this.drawCursor();
+    }
     const steps = trySwap(this.state, a, b);
     this.busy = true;
     this.showBands(false);
+    sfx('swap');
     this.queue.push(this.slide([{ id: ta.id, from: a, to: b }, { id: tb.id, from: b, to: a }]));
     if (!steps) {
-      // No match: the tiles slide back and no move is spent.
-      this.queue.push(this.slide([{ id: ta.id, from: b, to: a }, { id: tb.id, from: a, to: b }]));
+      // No match: the tiles slide back with a bonk and no move is spent.
+      this.queue.push({ ...this.slide([{ id: ta.id, from: b, to: a }, { id: tb.id, from: a, to: b }]), start: () => sfx('bonk') });
     } else {
       this.refreshMoves();
-      if (steps.some((st) => st.penalty)) this.pulse(this.movesText);
-      for (const step of steps) this.playStep(step);
+      this.penalised(steps);
+      this.playSteps(steps);
     }
     this.queue.push({ ms: 0, end: () => this.settle() });
   }
@@ -261,15 +271,32 @@ export class GameScene extends Phaser.Scene {
     this.showBands(false);
     this.refresh();
     if (opening) this.queue.push(opening);
-    if (steps.some((st) => st.penalty)) this.pulse(this.movesText);
-    for (const step of steps) this.playStep(step);
+    this.penalised(steps);
+    this.playSteps(steps);
     this.queue.push({ ms: 0, end: () => this.settle() });
+  }
+
+  /** The forbidden ingredient was matched: the moves pulse, with a buzz. */
+  private penalised(steps: Step[]) {
+    if (!steps.some((st) => st.penalty)) return;
+    this.pulse(this.movesText);
+    sfx('penalty');
+  }
+
+  /** Queues a swap's or tool's steps, each match's pop a little higher than the one before. */
+  private playSteps(steps: Step[]) {
+    let cascade = 0;
+    for (const step of steps) this.playStep(step, step.cleared.length > 0 ? cascade++ : cascade);
   }
 
   /** Pestle: the tapped tile is smashed and the board plays out, without a move. */
   private usePestle(cell: Cell) {
     const steps = pestle(this.state, cell);
-    if (!steps) return this.putAway();
+    if (!steps) {
+      ui('refuse');
+      return this.putAway();
+    }
+    sfx('pestle');
     this.playTool(steps);
   }
 
@@ -277,14 +304,23 @@ export class GameScene extends Phaser.Scene {
   private pickFunnel(cell: Cell) {
     const from = this.funnelFrom;
     if (!from) {
-      if (!stuck(this.state.board[cell.row][cell.col])) this.funnelFrom = cell;
+      if (stuck(this.state.board[cell.row][cell.col])) ui('refuse');
+      else {
+        this.funnelFrom = cell;
+        sfx('pick');
+      }
     } else if (from.row === cell.row && from.col === cell.col) {
       this.funnelFrom = null;
+      sfx('pick');
     } else {
       const ta = this.state.board[from.row][from.col];
       const tb = this.state.board[cell.row][cell.col];
       const steps = funnel(this.state, from, cell);
-      if (steps) return this.playTool(steps, this.slide([{ id: ta.id, from, to: cell }, { id: tb.id, from: cell, to: from }]));
+      if (steps) {
+        sfx('funnel');
+        return this.playTool(steps, this.slide([{ id: ta.id, from, to: cell }, { id: tb.id, from: cell, to: from }]));
+      }
+      ui('refuse');
     }
     this.refresh();
   }
@@ -314,7 +350,7 @@ export class GameScene extends Phaser.Scene {
    * Shows one round of a swap: a fired Catalyst's row lights up, the matched tiles pop while any
    * brewed Catalyst gets its halo, then the rest fall and new ones drop in.
    */
-  private playStep(step: Step) {
+  private playStep(step: Step, cascade: number) {
     if (step.cleared.length > 0) {
       // Looked up when it starts: a cascade can match tiles that only drop in on an earlier step.
       let popping: Phaser.GameObjects.Image[] = [];
@@ -335,6 +371,7 @@ export class GameScene extends Phaser.Scene {
             if (row < 0) popping.push(sprite);
             else flying.push({ sprite: sprite.setDepth(DEPTH.flying), x0: sprite.x, y0: sprite.y, x1: NEEDS.x, y1: this.rowY(row) });
           }
+          this.stepSounds(step, cascade);
           brewing = [...step.brewed, ...step.melted, ...step.scrubbed].map((t) => this.sprites.get(t.id)!.setTexture(tileTexture(t)).setDepth(special(t) ? DEPTH.catalyst : DEPTH.tile));
           flash = [
             ...step.rows.map((row) => this.bandAt(row)),
@@ -355,6 +392,7 @@ export class GameScene extends Phaser.Scene {
           flash.forEach((b) => b.setAlpha(settings.reduceMotion ? 1 : 0.4 + 0.6 * Math.abs(Math.sin(k * Math.PI * 2))));
         },
         end: () => {
+          if (flying.length > 0) sfx('tink');
           flash.forEach((b) => b.destroy());
           for (const t of step.cleared) {
             this.sprites.get(t.id)?.destroy();
@@ -371,7 +409,10 @@ export class GameScene extends Phaser.Scene {
       let sprite: Phaser.GameObjects.Image | undefined;
       this.queue.push({
         ms: MOULD_MS,
-        start: () => (sprite = this.sprites.get(grown.id)?.setTexture(tileTexture(grown)).setDepth(DEPTH.tile)),
+        start: () => {
+          sprite = this.sprites.get(grown.id)?.setTexture(tileTexture(grown)).setDepth(DEPTH.tile);
+          sfx('spread');
+        },
         step: (k) => sprite && shown(sprite, settings.reduceMotion ? 1 : 1 + 0.2 * Math.sin(Math.PI * k)),
       });
       return;
@@ -380,17 +421,30 @@ export class GameScene extends Phaser.Scene {
       // A customer is served: a note over the board, and their rows finish.
       const potion = step.served;
       const bonus = this.state.served[0] === potion && this.state.speedBonus > 0;
+      this.queue.push({ ms: 0, start: () => sfx('served') });
       this.queue.push(this.showNote(t(bonus ? 'servedFast' : 'served', { potion: t(POTION_NAMES[potion]), coins: TWIN_BONUS })));
       return;
     }
     if (step.stage) {
       // A royal commission moves on: the label is rebuilt for the next potion and the moves stay.
       const stage = step.stage;
-      this.queue.push({ ms: 0, end: () => ((this.shown = { ...this.state.got }), this.buildPanel(), this.refreshNeeds()) });
+      this.queue.push({ ms: 0, end: () => ((this.shown = { ...this.state.got }), this.buildPanel(), this.refreshNeeds(), sfx('stage')) });
       this.queue.push(this.showNote(t('nextStage', { stage: stage + 1, potion: t(POTION_NAMES[this.state.current.stages![stage].potion]) })));
       return;
     }
+    if (step.shuffled) this.queue.push({ ms: 0, start: () => sfx('shuffle') });
     this.queue.push(this.moveTo(step.board, step.shuffled ? SHUFFLE_MS : FALL_MS));
+  }
+
+  /** One match's sounds as it pops: a pop rising with the cascade, then what it brewed, fired or freed. */
+  private stepSounds(step: Step, cascade: number) {
+    sfx('pop', { pitch: 1.12 ** Math.min(cascade, 6) });
+    if (step.bursts.length > 0) sfx('burst');
+    else if (step.rows.length + step.cols.length + step.areas.length > 0) sfx('fire');
+    if (step.brewed.length > 0) sfx('brew');
+    if (step.cleared.some((t) => t.jar)) sfx('cork');
+    if (step.melted.length > 0) sfx('sizzle');
+    if (step.scrubbed.length > 0) sfx('scrub');
   }
 
   /** A line over the board for a moment: a served customer or a commission's next stage. */
@@ -452,8 +506,10 @@ export class GameScene extends Phaser.Scene {
       saveProgress(progressOf(s));
       this.showSold();
     } else if (s.current.exam && s.phase === 'failed') {
+      playSting(SONG, 'fail');
       this.showResult(t('outOfMoves'), t('potionUnfinished', { potion: t(POTION_NAMES[s.current.potion]) }), t('noSeal'), this.examRetry(), 0);
     } else if (s.phase === 'failed') {
+      playSting(SONG, 'fail');
       const what = s.current.stages ? t('royalUnfinished') : s.current.second ? t('twinUnfinished') : t('potionUnfinished', { potion: t(POTION_NAMES[s.current.potion]) });
       this.showResult(t('outOfMoves'), what, t('noStars'), [{ label: t('tryAgain'), act: () => this.begin(nextOrder(this.state)) }], 0);
     }
@@ -485,17 +541,21 @@ export class GameScene extends Phaser.Scene {
   // ---- Bench tools ----
 
   private useTool(tool: Tool) {
-    if (this.busy || this.state.phase !== 'play') return;
+    if (this.busy) return;
+    if (this.state.phase !== 'play') return ui('refuse');
     if (this.armed === tool) {
       this.armed = null;
       this.funnelFrom = null;
+      ui('click');
     } else if (!canUse(this.state, tool)) {
-      return;
+      return ui('refuse');
     } else if (tool === 'stir') {
       stir(this.state);
       saveProgress(progressOf(this.state));
       this.pulse(this.movesText);
+      sfx('stir');
     } else {
+      ui('click');
       this.armed = tool;
       this.funnelFrom = null;
       this.selected = null;
@@ -509,7 +569,11 @@ export class GameScene extends Phaser.Scene {
     const before = this.state.board.map((r) => r.map((t) => t.id));
     const old = sift(this.state, row);
     this.armed = null;
-    if (!old) return this.refresh();
+    if (!old) {
+      ui('refuse');
+      return this.refresh();
+    }
+    sfx('sift');
     saveProgress(progressOf(this.state));
     this.clearHint();
     this.busy = true;
@@ -557,6 +621,7 @@ export class GameScene extends Phaser.Scene {
       const [a, b] = validMoves(this.state.board)[0] ?? [];
       if (!a) return;
       this.hint = [this.state.board[a.row][a.col].id, this.state.board[b.row][b.col].id];
+      sfx('hint');
     }
     // The two tiles swell and settle; with reduced motion they hold still, a little larger.
     const swell = settings.reduceMotion ? 1.14 : 1.08 + Math.sin(this.clock / 110) * 0.08;
@@ -610,8 +675,8 @@ export class GameScene extends Phaser.Scene {
 
   private createCaption() {
     this.caption = this.add.graphics().setDepth(DEPTH.panel);
-    shown(this.add.image(CAPTION.x + 13, CAPTION.y + CAPTION.h / 2, 'sun')).setDepth(DEPTH.panel);
-    this.captionText = this.add.text(CAPTION.x + 25, CAPTION.y + CAPTION.h / 2, '', ink(11, SEPIA, 'italic')).setOrigin(0, 0.5).setDepth(DEPTH.panel);
+    this.captionSun = shown(this.add.image(0, CAPTION.y + CAPTION.h / 2, 'sun')).setDepth(DEPTH.panel);
+    this.captionText = this.add.text(0, CAPTION.y + CAPTION.h / 2, '', ink(11, SEPIA, 'italic')).setOrigin(0, 0.5).setDepth(DEPTH.panel);
   }
 
   /** The order card: the potion asked for and a row for each ingredient it needs. */
@@ -687,6 +752,8 @@ export class GameScene extends Phaser.Scene {
   /** The moves left, lit with the stars a sale would earn now, and what keeps the next star. */
   private refreshMoves() {
     const s = this.state;
+    // The waltz: statelier for a royal commission or an examination, tense with three moves or fewer left.
+    playMusic(SONG, s.phase === 'play' && s.moves <= 3 ? 'tense' : s.current.stages || s.current.exam ? 'royal' : 'calm');
     this.movesText.setText(t('moves', { n: s.moves })).setColor(s.moves <= 3 && s.phase === 'play' ? '#a8352a' : SEPIA);
     const lit = s.phase === 'sold' ? s.orderStars : s.phase === 'failed' ? 0 : starsFor(s.moves);
     this.starIcons.forEach((icon, k) => icon.setTexture(k < lit ? 'star-on' : 'star-off'));
@@ -802,9 +869,13 @@ export class GameScene extends Phaser.Scene {
     if (this.captionText.text === text) return;
     this.captionText.setText(text);
     const w = this.captionText.width + 38;
+    // Right-aligned, so it grows to the left, away from the corner buttons.
+    const x = CAPTION.right - w;
+    this.captionSun.setX(x + 13);
+    this.captionText.setX(x + 25);
     this.caption.clear();
-    this.caption.fillStyle(0xf1e6c8).fillRoundedRect(CAPTION.x, CAPTION.y, w, CAPTION.h, CAPTION.h / 2);
-    this.caption.lineStyle(1.25, num(SEPIA)).strokeRoundedRect(CAPTION.x, CAPTION.y, w, CAPTION.h, CAPTION.h / 2);
+    this.caption.fillStyle(0xf1e6c8).fillRoundedRect(x, CAPTION.y, w, CAPTION.h, CAPTION.h / 2);
+    this.caption.lineStyle(1.25, num(SEPIA)).strokeRoundedRect(x, CAPTION.y, w, CAPTION.h, CAPTION.h / 2);
   }
 
   private drawCursor() {
@@ -836,7 +907,7 @@ export class GameScene extends Phaser.Scene {
     for (let k = 0; k < 3; k++) this.resultStars.push(shown(this.add.image((k - 1) * 34, -48, 'star-off'), 1.15));
     this.resultText = this.add.text(0, -16, '', ink(13, BROWN)).setOrigin(0.5).setWordWrapWidth(340).setAlign('center');
     this.resultRank = this.add.text(0, 22, '', ink(13, RUST, 'italic bold')).setOrigin(0.5).setWordWrapWidth(340).setAlign('center');
-    this.resultButton = makeButton(this, 0, 56, '', () => this.resultAct());
+    this.resultButton = makeButton(this, 0, 56, '', () => (ui('click'), this.resultAct()));
     this.result = this.add
       .container(BOARD.x + size / 2, BOARD.y + size / 2, [card, this.resultTitle, ...this.resultStars, this.resultText, this.resultRank, this.resultButton])
       .setDepth(UI_DEPTH);
@@ -847,7 +918,7 @@ export class GameScene extends Phaser.Scene {
   /** A link on the result card, under its buttons. */
   private link(text: string, onClick: () => void) {
     const link = this.add.text(0, 92, text, ink(12, RUST, 'italic bold')).setOrigin(0.5).setInteractive({ useHandCursor: true });
-    link.on('pointerdown', onClick).on('pointerover', () => link.setAlpha(0.7)).on('pointerout', () => link.setAlpha(1));
+    link.on('pointerdown', () => (ui('click'), onClick())).on('pointerover', () => link.setAlpha(0.7)).on('pointerout', () => link.setAlpha(1));
     this.result.add(link);
     return link;
   }
@@ -873,7 +944,7 @@ export class GameScene extends Phaser.Scene {
 
   /** The two buttons after a sale: the next order, modest or rich (and, after a failed examination, a retry or back to the orders). */
   private createPair() {
-    this.resultPair = [0, 1].map((k) => makeButton(this, (k - 0.5) * 176, 56, '', () => this.pairActs[k]()).setScale(0.82));
+    this.resultPair = [0, 1].map((k) => makeButton(this, (k - 0.5) * 176, 56, '', () => (ui('click'), this.pairActs[k]())).setScale(0.82));
     this.result.add(this.resultPair);
   }
 
@@ -914,7 +985,7 @@ export class GameScene extends Phaser.Scene {
     const title = this.add.text(0, -92, t('herbalist'), ink(24, SEPIA, 'italic bold')).setOrigin(0.5);
     this.herbCoins = this.add.text(0, -68, '', ink(13, BROWN, 'italic')).setOrigin(0.5);
     this.herbRows = this.add.container(0, 0);
-    const back = makeButton(this, 0, 86, t('back'), () => this.closeHerbs());
+    const back = makeButton(this, 0, 86, t('back'), () => (ui('click'), this.closeHerbs()));
     this.herbs = this.add.container(BOARD.x + size / 2, BOARD.y + size / 2, [card, title, this.herbCoins, this.herbRows, back]).setDepth(UI_DEPTH);
   }
 
@@ -933,7 +1004,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private buyHerb(kind: Kind) {
-    if (!buyHerb(this.state, kind)) return;
+    if (!buyHerb(this.state, kind)) return ui('refuse');
+    ui('coin');
     saveProgress(progressOf(this.state));
     this.refresh();
     this.refreshHerbs();
@@ -969,7 +1041,7 @@ export class GameScene extends Phaser.Scene {
     const title = this.add.text(0, -92, t('workbench'), ink(24, SEPIA, 'italic bold')).setOrigin(0.5);
     this.benchCoins = this.add.text(0, -68, '', ink(13, BROWN, 'italic')).setOrigin(0.5);
     this.benchRows = this.add.container(0, 0);
-    const back = makeButton(this, 0, 86, t('back'), () => this.closeBench());
+    const back = makeButton(this, 0, 86, t('back'), () => (ui('click'), this.closeBench()));
     this.bench = this.add.container(BOARD.x + size / 2, BOARD.y + size / 2, [card, title, this.benchCoins, this.benchRows, back]).setDepth(UI_DEPTH);
   }
 
@@ -986,7 +1058,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private buy(id: UpgradeId) {
-    if (!buyUpgrade(this.state, id)) return;
+    if (!buyUpgrade(this.state, id)) return ui('refuse');
+    ui('coin');
     saveProgress(progressOf(this.state));
     this.refresh();
     this.refreshBench();
@@ -1018,15 +1091,20 @@ export class GameScene extends Phaser.Scene {
     if (o.exam) {
       const need = o.exam.stars === 3 ? STARS_3 : STARS_2;
       if (!s.passed) {
+        playSting(SONG, 'fail');
         this.showResult(t('examFailed'), t('examFailedText', { moves: s.moves, stars: o.exam.stars, need }), t('noSeal'), this.examRetry(), s.orderStars);
         return;
       }
       const rank = t(s.seals === EXAMS.length ? 'allSeals' : 'seal', { seals: s.seals, exams: EXAMS.length });
+      sfx('stamp');
+      playSting(SONG, 'rank');
       this.showResult(t('examPassed'), t('earned', { price: o.price, bonus: s.earned - o.price, moves: s.moves }), rank, this.orderChoice(), s.orderStars);
       return;
     }
     const before = rankOf(s.stars - s.orderStars);
     const at = rankOf(s.stars);
+    // The crown's last order is a fanfare, a new rank a short one, any other sale a cadence with a chime per star.
+    playSting(SONG, o.last ? 'crown' : at > before ? 'rank' : `sold${Math.max(1, Math.min(3, s.orderStars))}`);
     const next = RANKS[at + 1];
     const royalTitle = t('royalTitle');
     const rank = o.last

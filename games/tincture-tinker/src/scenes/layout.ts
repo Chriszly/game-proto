@@ -15,8 +15,12 @@ export const NEEDS = { x: 566, y: 236, row: 56, barX: 608, barW: 220, barH: 14, 
 export const PANTRY = { x: 906, y: 490 };
 /** The four bench tool buttons in the order panel, `gap` apart: Stir, Sift, Pestle and Funnel. */
 export const TOOL = { x: 560, y: 393, w: 80, h: 43, gap: 88 };
-/** The caption cartouche under the tray. */
-export const CAPTION = { x: 46, y: 511, h: 21 };
+/**
+ * The caption cartouche along the bottom, its right end under the order panel's: it grows to the
+ * left, so even the longest caption stays clear of the corner buttons (full screen, sound, pause)
+ * in the bottom left.
+ */
+export const CAPTION = { right: 930, y: 514, h: 21 };
 /** The button on the result card. */
 export const BUTTON = { w: 200, h: 44 };
 

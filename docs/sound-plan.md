@@ -770,6 +770,11 @@ Notes:
 ### TinctureTinker
 Match-3 potion brewing in Art Nouveau style; cosy and whimsical.
 
+**Done** (see `games/tincture-tinker/AGENTS.md`, Sound): as planned, in `src/audio.ts`. The stings
+are `sold1`-`sold3` (one chime per star), `rank` (also a passed exam, with a seal stamp), `crown` and
+`fail`; the tense part is a D minor turn of the waltz. The hint line (caption) now sits right-aligned
+under the order label, clear of the corner buttons.
+
 **Music:** Music-box waltz at about 90 BPM in F major, with a soft triangle lead, a square
 arpeggio and no drums.
 - Royal commissions and exams: a statelier variation.

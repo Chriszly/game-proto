@@ -36,7 +36,7 @@ bottle green, serif italics), all painted in code on 2D canvases. It shares no c
   clears its column too; Bloom starter: every board starts with a Bloom), a herbalist selling
   pantry ingredients between orders (8 coins each, up to the pantry's 5 a kind), 1-3
   stars per sale by moves left, a saved tinker rank on a ribbon above the board whose ranks unlock
-  three more recipes, a caption cartouche under the tray, and a result card ("Modest order" and
+  three more recipes, a caption cartouche along the bottom (right-aligned under the order label, clear of the corner buttons), and a result card ("Modest order" and
   "Rich order" after a sale, "Try again" after running out of moves, with links to the workbench,
   the herbalist and, once Royal Apothecary, the next guild examination) showing the stars and rank
   news. A rich order (from order 2, picked on the card) pays 50% more for 4 fewer moves (even
@@ -48,8 +48,9 @@ bottle green, serif italics), all painted in code on 2D canvases. It shares no c
   the rank (`src/game/ranks.ts`), and each rank's recipe joins the round of orders. The game has an
   ending (the crown's last order) but does not stop there: the guild examinations follow.
 - **Screens:** one scene (`GameScene`) with the rank ribbon and board on the left, the order label
-  on the right, a caption under the board and a result card over the board. No title screen, menu,
-  in-game settings or sound (the hub's settings apply, see Hub settings).
+  on the right, a caption along the bottom and a result card over the board. No title screen, menu
+  or in-game settings (the hub's settings apply, see Hub settings). Sound effects and a music-box
+  waltz, see Sound.
 - **Persistence:** progress is saved when an order sells, whenever a bench tool, a workbench
   upgrade or a pantry ingredient is bought and when the next order is picked. The
   board and moves left are not saved, so a reload restarts the current order on a fresh board (with
@@ -133,6 +134,7 @@ bottle green, serif italics), all painted in code on 2D canvases. It shares no c
   `tool-<tool>-<on|off|armed>`, `button`, `cursor`, `band` (a row), `band-col` (a column), `area`
   (a Bloom's 3x3), `sun`, `result-card`. Also `kindTexture`, `tileTexture`, `needTexture`,
   `potionTexture`, `toolTexture`, `POTION_ORIGIN`, `TOOL_PAD`.
+- `src/audio.ts`: `SONG`, the waltz and its stings, and `sfx`, the sound table (see Sound).
 - `src/ui/Button.ts`: `makeButton`, the bottle-green cartouche on the result card.
 - `shared/setupGame.ts` and `shared/settings.ts` (outside the game folder): the hub's settings,
   imported by `src/main.ts`, `src/game/orders.ts` and `src/scenes/GameScene.ts`.
@@ -387,6 +389,49 @@ seals or rich orders existed load with their defaults. The hub's settings are st
   round, and order 1 has no blockers or twist and starts with an empty pantry; what its sale puts
   in the pantry is not checked).
 
+## Sound
+
+All of it is made in code by `shared/audio.ts`; `GameScene` plays it and `src/game/` stays silent.
+Nothing plays while a board is laid out (`begin`, a reload or a retry), and nothing at all under
+browser automation, so the playthrough is unchanged.
+
+**Song** (`SONG` in `src/audio.ts`): a music-box waltz in F major at 90 beats a minute in 3/4, with a
+triangle lead, a thin `pulse12` arpeggio and a triangle bass. It is written at `bpm: 60` with
+`steps: 3`, so a step is an eighth note and the engine's bar (12 steps) holds two waltz bars.
+`refreshMoves` picks the part on every refresh with `playMusic`, which switches at the next bar:
+
+| Part | When |
+| --- | --- |
+| `calm` | every order (sixteen bars, no drums) |
+| `royal` | a royal commission or a guild examination: a statelier waltz with soft kick and hats |
+| `tense` | three moves or fewer left while playing: D minor, running eighths and busier hats |
+| `sold1`, `sold2`, `sold3` (stings) | a potion sold (`showSold`): a cadence and one chime per star |
+| `rank` (sting) | a sale that reaches a new rank, or a guild examination passed |
+| `crown` (sting) | the crown's last order sold: Royal Apothecary |
+| `fail` (sting) | out of moves (`settle`), or an examination sold with too few stars |
+
+**Effects** (`sfx` in `src/audio.ts`, plus the shared `ui`):
+
+| Sound | Where |
+| --- | --- |
+| `pick` | a tile picked or let go (`pointerDown`), a Funnel tile picked (`pickFunnel`) |
+| `swap` / `bonk` | every swap (`swap`) / the slide back of one that matches nothing |
+| `pop` | each step that clears tiles, in its `start` (`stepSounds`), pitch up 12% per cascade step |
+| `tink` | gathered ingredients reaching the label, at the end of the step |
+| `brew` | a Catalyst or Bloom brewed in the step |
+| `fire` / `burst` | a fired row, column or Bloom square / a 5x5 of two Blooms |
+| `cork`, `sizzle`, `scrub` | a jar opened, resin melted, mould scrubbed in the step |
+| `spread` | mould creeping onto a tile (the `spread` step) |
+| `penalty` | a swap or tool that matched the forbidden kind (`penalised`) |
+| `shuffle` | a step whose board was shuffled |
+| `served` / `stage` | a twin order's customer served / a royal commission's next stage |
+| `stir`, `sift`, `pestle`, `funnel` | the bench tools, when they act (`useTool`, `siftRow`, `usePestle`, `pickFunnel`) |
+| `stamp` | a guild seal won (`showSold`) |
+| `hint` | the idle hint appearing (`updateHint`) |
+| `ui('click')` | a tool picked up or put down, the result card's buttons and links, Back |
+| `ui('coin')` | a workbench upgrade or a herb bought |
+| `ui('refuse')` | a swap with a jar, resin or mould tile, a tool that can't be used or afforded, a Pestle or Funnel tap that can't act, a Sift that can't reroll, an upgrade not affordable |
+
 ## Making common changes
 
 - **Add or change a text:** its key in `src/i18n/en.ts`, the German in `src/i18n/de.ts` (the build
@@ -432,6 +477,9 @@ seals or rich orders existed load with their defaults. The hub's settings are st
   decide its effect in `gather` in `src/game/sim.ts`, record it in `Step`, paint its texture in
   `textures.ts` (and pick it in `tileTexture`) and animate it in `GameScene.playStep`. Mould is the
   model for a blocker that changes after the steps (`spreadMould`, a step with `spread`).
+- **Add a sound:** an entry in `sfx` in `src/audio.ts` and a call where it happens in `GameScene`
+  (for a board event, in `stepSounds` or the step's own `start`, so it plays in time with the
+  animation; once per step, never per tile). Add it to the Sound table above.
 - **Move or resize the board:** change `BOARD` and `TRAY` in `src/scenes/layout.ts` and the test's
   `BOARD`; the table texture paints from these.
 
