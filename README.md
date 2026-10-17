@@ -80,6 +80,8 @@ what each AI decides (**L**).
 
 ## Running locally
 
+Needs Node 26 (`.nvmrc`), the version CI and the builds use.
+
 ```sh
 npm install
 npm run dev       # dev server with hot reload; the hub is at /, each game at /games/<name>/
