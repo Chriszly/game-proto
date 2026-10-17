@@ -25,9 +25,9 @@ there makes you the Beehive Baron.
 4. **Sell**: tap **Sell** to sell every jar on the shelf. A clover jar is worth 15 coins, plus the
    comb bonus, plus 5 once the Sunflower Ridge is open; other kinds and the market change that.
 5. **The hive is kept**: the comb, coins, jars, wax, bees, upgrades, unlocked meadows, where
-   the bees forage, the season, the casks, the hives and the fair entries are saved in the
-   browser. Bees out foraging or lent come home when the page reloads, and wasps, the market's
-   timer, village orders, contracts and a gathering swarm start afresh. **New hive**, in the bottom
+   the bees forage, the season, the casks, the hives, the fair entries and the bees lent to the
+   orchard are saved in the browser. Bees out foraging come home when the page reloads, and
+   wasps, the market's timer, village orders, contract offers and a gathering swarm start afresh. **New hive**, in the bottom
    right corner, starts over.
 
 ![Foragers flying to the flowers](docs/screenshots/playthrough-1-foraging.webp)
@@ -83,7 +83,8 @@ button says which nectar they fetch. Bees already out finish their trip.
 From 3 jars sold, a note pinned to the board asks for 3 to 5 jars of one open kind within 2
 minutes, for example "Order: 4 Heather". Every jar of that kind you sell counts, and once the whole
 order is sold it pays a premium of 8 coins per jar on top of the jars' price. A lapsed order pays
-nothing, and a new one comes 20 seconds after the last ends.
+nothing, and a new one comes 20 seconds after the last ends. Lavender is only ordered while its
+field stays open at least another minute, and its order lapses when autumn shuts the field.
 
 ### Wasp raids
 
@@ -130,7 +131,7 @@ and how long it has left, and the hills change colour with it. Each season chang
 | Spring | The bees fly as usual. A new hive starts in early spring. |
 | Summer | Every forager brings 1 more drop a trip. |
 | Autumn | The Lavender Field shuts: no lavender nectar, and the market and orders skip it. Foragers sent there go back to clover. |
-| Winter | The bees stay home: no trips, no idle foraging, no away nectar, no orchard contracts. Every 20 seconds they eat a jar from the shelf (the cheapest kind first); with no jar they eat a capped cell's honey, and with no honey at all a bee starves (the last bee never). |
+| Winter | The bees stay home: no trips, no idle foraging, no away nectar, no orchard contracts, and brood cells rest. Every 20 seconds they eat a jar from the shelf for every 4 bees (at least one jar, the cheapest kind first); with no jar they eat a capped cell's honey, and with no honey at all a bee starves (the last bee never). |
 
 So selling everything before winter is a gamble: keep jars or capped cells back to feed the hive,
 or put honey in casks, which the bees never touch. Every spring the HUD counts another year
@@ -176,11 +177,12 @@ to the front, and the brood and build previews work on the comb shown.
 ### The county honey fair
 
 Once the Heather Moor is open, the goal card becomes the fair's. Tap it, then a capped cell, to
-enter that cell's honey: it scores one point for every built cell it touches (up to 6), the cell
+enter that cell's honey: it scores one point for every capped cell of the same honey it touches (up to 6), the cell
 gives its wax and starts over, and a higher entry replaces a lower one of the same kind. With one
 jar of each kind entered the honey is judged, and **14 points** in all win gold, which makes you
-the Beehive Baron, with an end card. Short of gold, enter better-joined honey. You can keep
-playing afterwards.
+the Beehive Baron, with an end card. Short of gold, enter honey from a bigger cluster. You can keep
+playing afterwards. A judge wants a cluster: cap a ring of one kind around a cell before you
+enter it.
 
 ![Entering honey: each capped cell shows the points it would score](docs/screenshots/fair-entering.webp)
 
@@ -191,7 +193,7 @@ playing afterwards.
 | Buy | Ranks | What it does |
 | --- | --- | --- |
 | Comb cell | one per spot (20 spots): free, then 12 coins, rising 25% per cell (wax pays up to half) | Room for 4 more drops of nectar, and comb bonus for each built cell it touches |
-| Brood cell | one per spot: a comb cell's price plus 30 coins (wax pays up to half) | A new bee every 45 seconds, up to 12 bees, and comb bonus like any cell |
+| Brood cell | one per spot: a comb cell's price plus 30 coins (wax pays up to half) | A new bee every 45 seconds (not in winter), up to 12 bees, and comb bonus like any cell |
 | Pollen Baskets | 3 (40, 120, 320 coins) | Every forager brings one more drop a trip |
 | Clover Patch | 3 (60, 180, 480 coins) | Trips take 20% less time per rank |
 | Waggle Dance | 1 (250 coins) | Bees at home fly out by themselves whenever the comb has room |

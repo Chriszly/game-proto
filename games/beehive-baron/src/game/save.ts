@@ -1,3 +1,4 @@
+import { CONTRACT_MS } from './contracts';
 import { KINDS, type Kind } from './honey';
 import { CASK_MS, MAX_CASKS, type Cask } from './mead';
 import { MEADOWS } from './meadows';
@@ -7,9 +8,9 @@ import { MAX_HIVES } from './swarm';
 import { UPGRADES, UPGRADE_IDS } from './upgrades';
 
 // The comb, the coins, the jars, the wax, the bees, the upgrades, the meadows unlocked, where the
-// bees forage, the season and years, the casks, the hives, the fair entries and when the hive was
-// last seen are saved; bees out foraging or lent come home on load, and wasps, the market, village
-// orders, orchard contracts and a swarm start afresh.
+// bees forage, the season and years, the casks, the hives, the fair entries, the bees lent to the
+// orchard and when the hive was last seen are saved; bees out foraging come home on load, and
+// wasps, the market, village orders, contract offers and a swarm start afresh.
 const KEY = 'beehive-baron-progress';
 
 export function loadProgress(): Progress {
@@ -43,6 +44,10 @@ export function loadProgress(): Progress {
       hives: Math.max(1, Math.min(MAX_HIVES, num(saved.hives, fresh.hives))),
       fair: Object.fromEntries(KINDS.map((k) => [k, typeof saved.fair?.[k] === 'number' ? num(saved.fair[k], 0) : null])) as Progress['fair'],
       baron: saved.baron === true,
+      lent:
+        saved.lent && typeof saved.lent === 'object' && num(saved.lent.bees, 0) > 0
+          ? { bees: num(saved.lent.bees, 0), leftMs: Math.min(CONTRACT_MS, num(saved.lent.leftMs, CONTRACT_MS)) }
+          : null,
       seen: num(saved.seen, fresh.seen),
     };
   } catch {

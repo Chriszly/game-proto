@@ -4,8 +4,8 @@ import { FAIR_GOLD } from './fair';
 import { KINDS, type Kind } from './honey';
 import { CASK_JARS, CASK_MS, MAX_CASKS, MEAD_MULT } from './mead';
 import { MEADOWS } from './meadows';
-import { ORDERS_FROM, ORDER_COINS_PER_JAR, ORDER_GAP_MS, ORDER_MS } from './orders';
-import { EAT_ORDER, WINTER_EAT_MS, YEAR_MS } from './seasons';
+import { ORDERS_FROM, ORDER_COINS_PER_JAR, ORDER_GAP_MS, ORDER_MIN_MS, ORDER_MS } from './orders';
+import { BEES_PER_MEAL, EAT_ORDER, WINTER_EAT_MS, YEAR_MS } from './seasons';
 import {
   AWAY_CAP,
   AWAY_MS_PER_DROP,
@@ -34,6 +34,8 @@ import {
   meadReady,
   meadValue,
   openKinds,
+  openLeft,
+  fairScore,
   ripenTime,
   room,
   season,
@@ -105,7 +107,8 @@ function turn(s: GameState, dt: number) {
   s.eatIn -= dt;
   if (s.eatIn > 0) return;
   s.eatIn = WINTER_EAT_MS;
-  eat(s);
+  // One meal for every `BEES_PER_MEAL` bees (at least one), so a big hive needs a big larder.
+  for (let meals = Math.ceil(s.bees.length / BEES_PER_MEAL); meals > 0; meals--) eat(s);
 }
 
 /** The bees eat: a jar of the cheapest kind on the shelf, else the honey of a capped cell, else a bee starves (the last one never). */
@@ -126,9 +129,9 @@ function eat(s: GameState) {
   s.events.push({ kind: 'ate', what: 'bee', slot: null });
 }
 
-/** A brood cell counts down to its next bee while the hive has room for one. */
+/** A brood cell counts down to its next bee while the hive has room for one; brood rests in winter. */
 function hatch(s: GameState, c: Extract<Cell, { type: 'brood' }>, slot: number, dt: number) {
-  if (s.bees.length >= maxBees(s)) return;
+  if (s.bees.length >= maxBees(s) || isWinter(s)) return;
   c.hatchMs = Math.max(0, c.hatchMs - dt);
   if (c.hatchMs > 0) return;
   c.hatchMs = BROOD_MS;
@@ -341,10 +344,11 @@ function orders(s: GameState, dt: number) {
   if (s.sold < ORDERS_FROM) return;
   s.orderIn -= dt;
   if (s.orderIn > 0) return;
-  const open = openKinds(s);
+  // Only kinds whose meadow stays open long enough to forage for the order; it lapses when its meadow shuts.
+  const open = openKinds(s).filter((k) => openLeft(s, k) >= ORDER_MIN_MS);
   const kind = open[Math.floor(Math.random() * open.length)];
   const count = 3 + Math.floor(Math.random() * 3);
-  s.order = { kind, count, done: 0, leftMs: ORDER_MS, premium: count * ORDER_COINS_PER_JAR };
+  s.order = { kind, count, done: 0, leftMs: Math.min(ORDER_MS, openLeft(s, kind)), premium: count * ORDER_COINS_PER_JAR };
   s.events.push({ kind: 'order', order: s.order });
 }
 
@@ -439,8 +443,8 @@ export function acceptContract(s: GameState) {
 }
 
 /**
- * Enters a capped cell's honey in the county fair (open once every meadow is): it scores the edges
- * its cell shares with built cells and replaces a lower entry of its kind; the cell gives its wax
+ * Enters a capped cell's honey in the county fair (open once every meadow is): it scores its
+ * neighbours capped with honey of its kind (`fairScore`) and replaces a lower entry of its kind; the cell gives its wax
  * and starts over. With every kind entered the jars are judged, and `FAIR_GOLD` points make the
  * player the Baron.
  */
@@ -448,7 +452,7 @@ export function enterFair(s: GameState, slot: number) {
   const c = s.cells[slot];
   if (!fairOpen(s) || !isHoney(c) || c.phase !== 'capped') return false;
   const honey = c.kind ?? 'clover';
-  const score = touching(s, slot);
+  const score = fairScore(s, slot);
   s.wax++;
   s.cells[slot] = emptyCell();
   s.fair[honey] = Math.max(s.fair[honey] ?? -1, score);

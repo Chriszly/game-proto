@@ -25,6 +25,7 @@ import {
   crowded,
   demand,
   fairOpen,
+  fairScore,
   fairTotal,
   freshProgress,
   hiveOf,
@@ -457,7 +458,7 @@ export class GameScene extends Phaser.Scene {
         // While the fair card is armed, each capped cell shows the points its honey would score.
         if (this.entering) {
           g.lineStyle(3, LIVE.fairPick, pulse).strokePoints(hexPoints(slot, 3), true);
-          label.setText(`${neighbours(slot).filter((n) => s.cells[n] !== null).length} pts`);
+          label.setText(`${fairScore(s, slot)} pts`);
           if (label.style.color !== '#1f4a18') label.setColor('#1f4a18');
           label.setAlpha(1);
         } else g.lineStyle(2, LIVE.cappedRim, pulse).strokePoints(hexPoints(slot, 3), true);
