@@ -11,6 +11,9 @@ import { talk, type TalkEffect } from '../game/talk';
 import { t, type TextKey } from '../i18n';
 import { settings } from '../../../../shared/settings';
 import { scrollingCamera, splitHudCamera, viewPoint } from '../../../../shared/scaling';
+import { playMusic, playSting, ui } from '../../../../shared/audio';
+import { sfx } from '../audio/sounds';
+import { BOSS, DEEP, STINGS, VILLAGE, WILDS } from '../audio/music';
 import { Hud } from './hud';
 import { NightLight, type Light } from './light';
 import {
@@ -46,6 +49,8 @@ const AFTER_BOSS: Record<string, string> = { 's-boss': 'boss', 'b-bell': 'wraith
 /** The order the belfry's bells must ring in, by voice (0 is the deepest). */
 const BELL_ORDER = [0, 2, 1];
 const BELL_SOUND: TextKey[] = ['bellLow', 'bellMid', 'bellHigh'];
+/** Each bell's pitch, against the bell sound's C: G, C and E, so the right tune is a falling chord. */
+const BELL_PITCH = [0.75, 1, 1.26];
 /** How high the Bellwraith's bell hangs while it hunts. */
 const BELL_LIFT = 72;
 
@@ -125,6 +130,10 @@ export class GameScene extends Phaser.Scene {
   private chaseT = 0;
   private fading = false;
   private now = 0;
+  /** Whether each door was shut last frame, so a room's door sounds as it slams or opens. */
+  private doorWas = new Map<string, boolean>();
+  /** When each bellseed's fuse ticks next, in ms left on its fuse. */
+  private ticks = new WeakMap<Bomb, number>();
 
   constructor() {
     super('Game');
@@ -181,6 +190,7 @@ export class GameScene extends Phaser.Scene {
     this.doorSprites.clear();
     this.stoneSprites.clear();
     this.dug.clear();
+    this.doorWas.clear();
     this.route = null;
     this.target = null;
     this.hook = null;
@@ -308,7 +318,24 @@ export class GameScene extends Phaser.Scene {
     cam.centerOn(x, y);
     this.hud.showPlace(map.name);
     this.updateDoors();
+    this.playAreaMusic();
     save(s);
+  }
+
+  /** The area's song, or the boss loop while a boss is awake. */
+  private playAreaMusic() {
+    if (this.boss?.awake) return playMusic(BOSS, 'thornmother');
+    if (this.wraith?.awake) return playMusic(BOSS, 'bellwraith');
+    switch (this.map.theme) {
+      case 'village':
+        return playMusic(VILLAGE, 'calm');
+      case 'woods':
+      case 'fen':
+        return playMusic(WILDS, this.map.theme);
+      case 'shrine':
+      case 'belfry':
+        return playMusic(DEEP, this.map.theme);
+    }
   }
 
   private addWorld<T extends Phaser.GameObjects.Image>(img: T, depth: number) {
@@ -378,11 +405,16 @@ export class GameScene extends Phaser.Scene {
 
   private updateDoors() {
     this.closedDoors.clear();
+    let slam = false;
     for (const d of this.map.doors) {
       const closed = this.doorClosed(d);
+      // Room doors only: a key door and bars have their own sounds (unlock, the solved chime).
+      if (d.kind === 'shut' && this.doorWas.has(d.id) && this.doorWas.get(d.id) !== closed) slam = true;
+      this.doorWas.set(d.id, closed);
       for (const img of this.doorSprites.get(d.id) ?? []) img.setVisible(closed);
       if (closed) for (let j = 0; j < d.h; j++) for (let i = 0; i < d.w; i++) this.closedDoors.add((d.y + j) * this.map.w + d.x + i);
     }
+    if (slam) sfx('door');
   }
 
   /** Whether the knight can't walk onto a tile. */
@@ -568,7 +600,10 @@ export class GameScene extends Phaser.Scene {
     const chest = this.map.chests.find((c) => c.x === tx && c.y === ty);
     if (chest) {
       if (!hasFlag(s, `chest-${chest.id}`)) this.openChest(chest.id, chest.item);
-      else this.hud.toast(t('empty'));
+      else {
+        ui('refuse');
+        this.hud.toast(t('empty'));
+      }
       return true;
     }
     const sign = this.map.signs.find((g) => g.x === tx && g.y === ty);
@@ -585,12 +620,16 @@ export class GameScene extends Phaser.Scene {
       if (door.kind === 'key' && s.keys > 0) {
         s.keys--;
         setFlag(s, `door-${door.id}`);
+        sfx('unlock');
         this.hud.toast(t('unlocked'));
         this.updateDoors();
         save(s);
-      } else if (door.kind === 'key') this.hud.toast(t('locked'));
-      else if (door.kind === 'bars') this.hud.toast(t('barred'));
-      else this.hud.toast(t('thornyDoor'));
+      } else {
+        ui('refuse');
+        if (door.kind === 'key') this.hud.toast(t('locked'));
+        else if (door.kind === 'bars') this.hud.toast(t('barred'));
+        else this.hud.toast(t('thornyDoor'));
+      }
       return true;
     }
     return false;
@@ -601,6 +640,8 @@ export class GameScene extends Phaser.Scene {
     setFlag(s, `chest-${id}`);
     this.chestSprites.get(id)?.setTexture('chest-open').setScale(texScale('chest-open'));
     give(s, item);
+    sfx('creak');
+    playSting(STINGS, 'item');
     const text: Record<ItemId, string> = {
       sword: t('foundSword'),
       hookvine: t('foundHookvine'),
@@ -617,13 +658,22 @@ export class GameScene extends Phaser.Scene {
     this.dialog = { speaker, lines, i: 0, then };
     this.route = null;
     this.target = null;
+    this.blip();
+  }
+
+  /** A line of talk's blip, pitched by who is speaking (the same speaker always sounds the same). */
+  private blip() {
+    const speaker = this.dialog?.speaker ?? '';
+    let hash = 0;
+    for (const ch of speaker) hash = (hash * 31 + ch.charCodeAt(0)) % 997;
+    sfx('blip', { pitch: speaker ? 0.75 + (hash % 11) * 0.06 : 1 });
   }
 
   private nextLine() {
     const d = this.dialog;
     if (!d) return;
     d.i++;
-    if (d.i < d.lines.length) return;
+    if (d.i < d.lines.length) return this.blip();
     this.dialog = null;
     if (d.then) this.effect(d.then);
   }
@@ -661,6 +711,7 @@ export class GameScene extends Phaser.Scene {
         break;
       case 'refill':
         s.seeds = MAX_SEEDS;
+        sfx('pod');
         this.hud.toast(t('seedsRefilled', { n: MAX_SEEDS }));
         break;
       case 'finish-two':
@@ -687,6 +738,8 @@ export class GameScene extends Phaser.Scene {
           : n >= 10
             ? t('endTwoSome')
             : t('endTwoFew');
+    const many = chapter === 1 ? 4 : 10;
+    playSting(STINGS, n >= total ? 'endAll' : n >= many ? 'endSome' : 'endFew');
     this.hud.showEnd(
       chapter === 1 ? t('chapterOne') : t('chapterTwo'),
       [t('endStats', { n, total, beaten: s.beaten, falls: s.falls }), ending],
@@ -705,6 +758,7 @@ export class GameScene extends Phaser.Scene {
     s.moonstones.push(id);
     this.stoneSprites.get(id)?.destroy();
     this.stoneSprites.delete(id);
+    sfx('stone');
     this.hud.toast(t('moonstone', { n: s.moonstones.length, total: stonesToFind(s) }));
     save(s);
   }
@@ -716,6 +770,7 @@ export class GameScene extends Phaser.Scene {
     if (!s.items.sword || this.swingCd > 0 || this.roll || this.hook) return;
     this.swing = { t: 0, dir: s.facing };
     this.swingCd = SWING_COOLDOWN_MS;
+    sfx('swing');
     const d = DIRS[s.facing];
     const hx = s.x + d.x * SWING_REACH;
     const hy = s.y - 10 + d.y * SWING_REACH;
@@ -739,6 +794,7 @@ export class GameScene extends Phaser.Scene {
       if (st.hidden === 'buried' && !this.dug.has(st.id) && Math.hypot((st.x + 0.5) * TILE - hx, (st.y + 0.5) * TILE - hy) < 30) {
         this.dug.add(st.id);
         this.stoneSprites.get(st.id)?.setVisible(true);
+        sfx('glint');
         this.hud.toast(t('glint'));
       }
   }
@@ -750,6 +806,7 @@ export class GameScene extends Phaser.Scene {
     setTile(this.map, tx, ty, thorns ? 'path' : 'grass');
     const k = ty * this.map.w + tx;
     const img = this.bushSprites.get(k);
+    sfx('cut', { pitch: thorns ? 0.8 : 1 });
     if (img) {
       this.puff(img.x, img.y - 10, thorns ? 0x7a3f5a : 0x4a8c44);
       img.destroy();
@@ -774,6 +831,7 @@ export class GameScene extends Phaser.Scene {
   private ringBell(bell: GameScene['bells'][number]) {
     const s = this.state;
     const c = centre(bell);
+    sfx('bell', { pitch: BELL_PITCH[bell.note] });
     this.hud.toast(t(BELL_SOUND[bell.note]));
     if (!settings.reduceMotion) {
       this.tweens.add({ targets: bell.sprite, angle: { from: -14, to: 14 }, duration: 160, yoyo: true, repeat: 1, onComplete: () => bell.sprite.setAngle(0) });
@@ -784,12 +842,18 @@ export class GameScene extends Phaser.Scene {
     const i = this.bellSeq.length - 1;
     if (this.bellSeq[i] !== BELL_ORDER[i]) {
       this.bellSeq = [];
-      this.time.delayedCall(500, () => this.hud.toast(t('bellsWrong')));
+      this.time.delayedCall(500, () => {
+        sfx('wrong');
+        this.hud.toast(t('bellsWrong'));
+      });
       return;
     }
     if (this.bellSeq.length < BELL_ORDER.length) return;
     setFlag(s, 'bells');
-    this.time.delayedCall(500, () => this.hud.toast(t('bellsRight')));
+    this.time.delayedCall(500, () => {
+      sfx('chime');
+      this.hud.toast(t('bellsRight'));
+    });
     save(s);
   }
 
@@ -800,6 +864,7 @@ export class GameScene extends Phaser.Scene {
     const s = this.state;
     if (!s.items.seeds || this.roll || this.hook || this.bombs.length >= 2) return;
     if (s.seeds <= 0) {
+      ui('refuse');
       this.hud.toast(t('noSeeds'));
       return;
     }
@@ -816,7 +881,10 @@ export class GameScene extends Phaser.Scene {
     s.seeds--;
     const sprite = this.add.image(x, y, 'bellseed').setOrigin(0.5, 19 / 22).setScale(texScale('bellseed')).setDepth(y);
     this.world.push(sprite);
-    this.bombs.push({ x, y, t: FUSE_MS, sprite });
+    const bomb = { x, y, t: FUSE_MS, sprite };
+    this.bombs.push(bomb);
+    this.ticks.set(bomb, FUSE_MS - 300);
+    sfx('plant');
     this.route = null;
     this.target = null;
   }
@@ -824,6 +892,11 @@ export class GameScene extends Phaser.Scene {
   private updateBombs(dt: number) {
     for (const b of this.bombs) {
       b.t -= dt;
+      // The fuse ticks every 300ms, then quickly once it starts to flicker.
+      if (b.t > 0 && b.t <= (this.ticks.get(b) ?? 0)) {
+        sfx('tick', { pitch: b.t < 450 ? 1.3 : 1 });
+        this.ticks.set(b, b.t - (b.t < 450 ? 100 : 300));
+      }
       const grow = 1 + (1 - b.t / FUSE_MS) * 0.45;
       b.sprite.setScale(texScale('bellseed') * grow);
       // It flickers just before it bursts; held steady with reduce motion on.
@@ -843,6 +916,7 @@ export class GameScene extends Phaser.Scene {
   /** A bellseed goes off: it breaks rock, cuts bushes, hurts foes (and the knight) and tips the Bellwraith's bell. */
   private burst(x: number, y: number) {
     const s = this.state;
+    sfx('boom');
     for (let i = 0; i < 12; i++) {
       const a = (i / 12) * Math.PI * 2;
       const dot = this.add.circle(x, y - 6, 4, i % 2 ? 0xd8f08a : 0xf0d070).setDepth(y + 2);
@@ -889,6 +963,7 @@ export class GameScene extends Phaser.Scene {
     this.bushSprites.get(k)?.destroy();
     this.bushSprites.delete(k);
     this.puff((tx + 0.5) * TILE, (ty + 0.5) * TILE, 0x8a8c94);
+    sfx('crumble');
     // A cracked wall is part of the ground's picture, so the ground is painted again.
     if (crack) {
       paintGround(this, this.map);
@@ -910,6 +985,7 @@ export class GameScene extends Phaser.Scene {
     const len = Math.hypot(d.x, d.y) || 1;
     this.roll = { t: 0, dx: d.x / len, dy: d.y / len };
     this.rollCd = ROLL_COOLDOWN_MS;
+    sfx('roll');
     this.route = null;
     this.target = null;
   }
@@ -919,6 +995,7 @@ export class GameScene extends Phaser.Scene {
     if (!s.items.hookvine || this.hook || this.roll) return;
     const d = DIRS[s.facing];
     this.hook = { x: s.x, y: s.y - 12, dx: d.x, dy: d.y, dist: 0, phase: 'out' };
+    sfx('vine');
     this.route = null;
     this.target = null;
   }
@@ -937,9 +1014,11 @@ export class GameScene extends Phaser.Scene {
     const c = centre(b);
     this.tweens.add({ targets: b.sprite, x: c.x, y: c.y + 16, duration: 200 });
     b.sprite.setDepth(c.y + 16);
+    sfx('scrape');
     const plate = this.map.plates.find((p) => p.x === nx && p.y === ny);
     if (plate && !hasFlag(s, plate.flag)) {
       setFlag(s, plate.flag);
+      sfx('chime');
       this.hud.toast(t('barsOpen'));
       save(s);
     }
@@ -1177,6 +1256,8 @@ export class GameScene extends Phaser.Scene {
         const c = centre(post);
         h.phase = 'pull';
         h.to = { x: c.x, y: c.y + 4 };
+        sfx('latch');
+        sfx('pull');
         this.route = null;
         return;
       }
@@ -1189,6 +1270,7 @@ export class GameScene extends Phaser.Scene {
       const foe = this.foes.find((f) => f.alive && Math.hypot(f.x - h.x, f.y - 10 - h.y) < 16);
       if (foe) {
         foe.stun = 1600;
+        sfx('latch');
         h.phase = 'back';
         return;
       }
@@ -1205,6 +1287,7 @@ export class GameScene extends Phaser.Scene {
     if (this.invuln > 0 || this.roll || this.hook?.phase === 'pull') return;
     s.hp = Math.max(0, s.hp - damage);
     this.invuln = HURT_MS;
+    sfx('hurt');
     const dx = s.x - from.x;
     const dy = s.y - from.y;
     const len = Math.hypot(dx, dy) || 1;
@@ -1219,8 +1302,10 @@ export class GameScene extends Phaser.Scene {
     s.falls++;
     s.hp = s.maxHp;
     const sp = s.spawn;
+    playSting(STINGS, 'fall');
     this.fadeTo(() => {
       this.enterMap(sp.map, sp.x, sp.y, sp.facing, true);
+      sfx('wake');
       this.hud.toast(t('wake'));
     });
   }
@@ -1244,6 +1329,7 @@ export class GameScene extends Phaser.Scene {
     if (!exit) return;
     this.route = null;
     this.target = null;
+    sfx('swell');
     this.fadeTo(() => this.enterMap(exit.to, (exit.tx + 0.5) * TILE, (exit.ty + 0.5) * TILE + 4, exit.facing, false));
   }
 
@@ -1252,12 +1338,14 @@ export class GameScene extends Phaser.Scene {
     this.hearts = this.hearts.filter((h) => {
       if (Math.hypot(h.x - s.x, h.y - s.y) > PICKUP_PX + 4) return true;
       s.hp = Math.min(s.maxHp, s.hp + 2);
+      sfx('heart');
       h.sprite.destroy();
       return false;
     });
     this.pods = this.pods.filter((p) => {
       if (Math.hypot(p.x - s.x, p.y - s.y) > PICKUP_PX + 4) return true;
       s.seeds = Math.min(MAX_SEEDS, s.seeds + 1);
+      sfx('pod');
       p.sprite.destroy();
       return false;
     });
@@ -1283,6 +1371,8 @@ export class GameScene extends Phaser.Scene {
     if (f.hurt > 0) return;
     f.hp--;
     f.hurt = 250;
+    // Only the knight hits foes (the sword and their own bellseeds), so every hit is theirs.
+    sfx(f.hp > 0 ? 'hit' : 'pop');
     for (let i = 0; i < 5; i++) if (foeFree(this.map, this.standing, f.x + d.x * 6, f.y + d.y * 6, FOES[f.kind].flies)) {
       f.x += d.x * 6;
       f.y += d.y * 6;
@@ -1358,6 +1448,7 @@ export class GameScene extends Phaser.Scene {
         }
       } else if (f.kind === 'thornling' && sees && f.t <= 0) {
         f.t = THORNLING_SHOT_MS;
+        sfx('spit');
         this.shoot(f.x, f.y - 16, dx / dist, dy / dist);
       }
       const nx = f.x + vx * sec;
@@ -1436,11 +1527,14 @@ export class GameScene extends Phaser.Scene {
     b.t = BULB_DOWN_MS;
     b.x = b.home.x + (dx / len) * Math.min(44, len - 20);
     b.y = b.home.y + (dy / len) * Math.min(44, len - 20);
+    sfx('latch');
+    sfx('twang');
     this.hud.toast(t('bulbDown'));
   }
 
   private hitBulb(b: Boss['bulbs'][number]) {
     b.hp--;
+    sfx('squelch', { pitch: b.hp > 0 ? 1 : 0.8 });
     this.puff(b.x, b.y - 12, 0xd8e86a);
     if (b.hp > 0) return;
     b.state = 'gone';
@@ -1455,6 +1549,8 @@ export class GameScene extends Phaser.Scene {
     this.puff(boss.x, boss.y, 0x8a3f62);
     this.tweens.add({ targets: boss.sprite, alpha: 0, scaleX: boss.sprite.scaleX * 0.6, scaleY: boss.sprite.scaleY * 0.6, duration: 900 });
     this.boss = null;
+    playSting(STINGS, 'victory');
+    this.playAreaMusic();
     for (const sd of this.seeds) sd.sprite.destroy();
     this.seeds = [];
     for (const f of this.foes) if (f.room === 'boss') {
@@ -1486,6 +1582,7 @@ export class GameScene extends Phaser.Scene {
     if (!boss.awake) {
       if (!this.inRoom('boss')) return;
       boss.awake = true;
+      this.playAreaMusic();
       this.hud.showPlace(t('thornmother'));
     }
     const left = boss.bulbs.filter((b) => b.state !== 'gone').length;
@@ -1514,6 +1611,7 @@ export class GameScene extends Phaser.Scene {
     boss.volleyT -= dt;
     if (boss.volleyT <= 0) {
       boss.volleyT = VOLLEY_MS[3 - left] ?? VOLLEY_MS[2];
+      sfx('volley');
       const turn = (this.now / 1000) % 1;
       for (let i = 0; i < 8; i++) {
         const a = ((i + turn) / 8) * Math.PI * 2;
@@ -1549,16 +1647,19 @@ export class GameScene extends Phaser.Scene {
     const w = this.wraith!;
     w.state = 'tipped';
     w.t = EXPOSED_MS;
+    sfx('topple');
     this.hud.toast(t('bellTipped'));
   }
 
   private hitWraith() {
     const w = this.wraith!;
     if (w.state !== 'tipped') {
+      sfx('bell', { pitch: 0.5, volume: 0.6 });
       this.hud.toast(t('clang'));
       return;
     }
     w.hp--;
+    sfx('wail', { pitch: w.hp > 0 ? 1 : 0.8 });
     this.puff(w.x, w.y - 24, 0xc8e8ff);
     if (!settings.reduceMotion) this.flashes.push({ x: w.x, y: w.y - 30, r: 160, col: [190, 230, 255], power: 1, t: 400 });
     if (w.hp <= 0) return this.wraithDown();
@@ -1573,6 +1674,8 @@ export class GameScene extends Phaser.Scene {
     this.puff(w.x, w.y - 20, 0xc8e8ff);
     this.tweens.add({ targets: [w.ghost, w.bell, w.shadow], alpha: 0, duration: 900 });
     this.wraith = null;
+    playSting(STINGS, 'victory');
+    this.playAreaMusic();
     for (const f of this.foes)
       if (f.room === 'boss') {
         f.alive = false;
@@ -1597,6 +1700,7 @@ export class GameScene extends Phaser.Scene {
     if (!w.awake) {
       if (!this.inRoom('boss')) return;
       w.awake = true;
+      this.playAreaMusic();
       this.hud.showPlace(t('bellwraith'));
     }
     const room = this.map.rooms.find((r) => r.id === 'boss')!;
@@ -1615,6 +1719,7 @@ export class GameScene extends Phaser.Scene {
       if (w.t <= 0) {
         w.state = 'drop';
         w.t = DROP_MS;
+        sfx('rattle');
       }
     } else if (w.state === 'drop') {
       // It shudders, then falls.
@@ -1623,6 +1728,7 @@ export class GameScene extends Phaser.Scene {
         w.state = 'down';
         w.t = BELL_DOWN_MS;
         w.lift = 0;
+        sfx('clang');
         this.puff(w.x, w.y - 4, 0x8a8c94);
         if (!settings.reduceMotion) this.cameras.main.shake(200, 0.008);
         if (Math.hypot(s.x - w.x, s.y - w.y) < SLAM_PX) this.hurt(Math.hypot(s.x - w.x, s.y - w.y) < 26 ? 2 : 1, w);
@@ -1691,6 +1797,7 @@ export class GameScene extends Phaser.Scene {
     if (w.i < path.length - 1) {
       w.i++;
       w.hop = 700;
+      sfx('wisp');
       const n = centre(path[w.i]);
       this.tweens.add({ targets: w.sprite, x: n.x, y: n.y - 10, duration: 650, ease: 'Sine.easeInOut' });
       return;

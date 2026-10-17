@@ -6,6 +6,7 @@ import Phaser from 'phaser';
 import { texScale } from '../art/paint';
 import { OBJECTIVES, stonesToFind, type GameState } from '../game/state';
 import { t } from '../i18n';
+import { ui } from '../../../../shared/audio';
 import { BUTTONS, STICK, VIEW } from './layout';
 
 const FONT = 'Georgia, "Times New Roman", serif';
@@ -162,6 +163,7 @@ export class Hud {
       const b = add.text(x, 400, label, { fontFamily: FONT, fontSize: '20px', color: '#10163a', backgroundColor: '#f0d890', padding: { x: 16, y: 8 } }).setOrigin(0.5);
       b.setInteractive({ useHandCursor: true }).on('pointerdown', (_p: unknown, _x: unknown, _y: unknown, e: Phaser.Types.Input.EventData) => {
         e.stopPropagation();
+        ui('click');
         c.destroy();
         this.endCard = null;
         fn();

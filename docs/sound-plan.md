@@ -201,6 +201,10 @@ Notes:
 ### Bramblecrest
 Top-down adventure in a lamplit village and woods at night; cosy, mysterious, moonlit.
 
+**Done** (see `games/bramblecrest/AGENTS.md`, Sound). Besides the table below it also has a fuse
+tick, a room door slamming, a dug-up glint, the wisp's hop and a boss-victory sting. Ambience and
+footsteps are left out.
+
 **Music:** Gentle themes at 72-90 BPM, one per area.
 - Mossford: a lullaby waltz in F major, with a triangle lead, a square pad and no drums.
 - Bramble Woods and Glimmer Fen: A minor or Dorian, with pulse arpeggios and a shaker.

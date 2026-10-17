@@ -71,10 +71,46 @@ Implemented today:
   the dialog box and the end card. The counters sit side by side, and a longer word (German
   "Schlüssel") pushes the next one along and widens their plate.
 
+## Sound
+
+All in code through `shared/audio.ts` (no audio files), in `src/audio/`:
+
+- `music.ts`: one `Song` per kind of place, picked by the map's theme in `GameScene.playAreaMusic`
+  (called at the end of `enterMap`, when a boss wakes and when one is beaten):
+  - `VILLAGE` (`calm`): Mossford, a lullaby waltz in F major at 120 BPM in eighths, a triangle
+    lead over a soft square pad, no drums.
+  - `WILDS` (`woods`, `fen`): 84 BPM, pulse arpeggios and a shaker; the Woods in A Dorian, the Fen
+    sparser in D Dorian. One song, so walking between them changes at the next bar.
+  - `DEEP` (`shrine`, `belfry`): 72 BPM slow minor loops over a bass drone with a drip for drums;
+    the Shrine in D minor, the Belfry in E minor with a bell-like lead.
+  - `BOSS` (`thornmother`, `bellwraith`): 140 BPM, plays while a boss is awake (A minor, E Phrygian).
+  - `STINGS`: `item` (a chest), `victory` (a boss beaten), `fall` (out of hearts) and the chapter
+    end card's `endAll`, `endSome` and `endFew`, by the same thresholds as its ending text.
+- `sounds.ts`: the effects table `sfx`, and where each plays in `GameScene.ts`: `swing`
+  (`startSwing`), `cut` (`cut`, lower for thorns), `roll` (`startRoll`), `vine` (`fireVine`),
+  `latch` and `pull` (`updateHook`, a post; `latch` alone on a foe), `plant` and `tick`
+  (`plantSeed`, `updateBombs`: every 300ms, then every 100ms while it flickers), `boom` (`burst`),
+  `crumble` (`breakRock`), `scrape` (`push`), `chime` (a plate, the bells' tune), `unlock` (a key
+  door), `door` (a room's shut door closing or opening, in `updateDoors`; never on entering a map),
+  `creak` (`openChest`, with the `item` sting), `stone` (`gainStone`), `glint` (a buried stone dug
+  up), `heart` and `pod` (`pickups`; `pod` also for Sedge's refill), `blip` (each line of talk, in
+  `openDialog` and `nextLine`, pitched by a hash of the speaker's name), `bell` (`ringBell`, pitched
+  G, C and E by the bell's `note` through `BELL_PITCH`, so the right tune is a falling chord; low
+  for the Bellwraith's bell struck while down), `wrong` (the wrong bell), `hit` and `pop`
+  (`hitFoe`: only the knight hits foes), `hurt` (`hurt`), `wake` (after a fall), `spit` (a
+  thornling), `volley` (one per Thornmother volley), `twang` (`yank`), `squelch` (`hitBulb`),
+  `rattle` and `clang` (the Bellwraith's drop and slam), `topple` (`tipBell`), `wail`
+  (`hitWraith`), `wisp` (the wisp hops on) and `swell` (`checkExits`, walking into another map).
+- `ui('refuse')` for a locked or barred door, the thorny door, an empty chest and no bellseeds left;
+  `ui('click')` for the end card's buttons (`hud.ts`).
+- Nothing plays while a map is built or a save loads (`enterMap` only starts the music). There is
+  no `?watch` mode, footsteps or ambience.
+
 ## Architecture
 
 - `src/main.ts` creates the game (960x540, `Phaser.AUTO`), calls `setupGame(game, { howToPlay })`
   and `setupScaling(game)`, and exposes `window.game` in dev builds.
+- `src/audio/`: the songs and the sound table (see Sound).
 - `src/howToPlay.ts`: the How to play text in British English and German, picked with `byLanguage`
   (US English uses the British one, since no word in it is spelled differently).
 - `src/i18n.ts` and `src/i18n/`: every text on screen (`shared/i18n.ts`). `i18n/en.ts` is the
