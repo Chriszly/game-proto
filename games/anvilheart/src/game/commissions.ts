@@ -1,3 +1,4 @@
+import { t, type TextKey } from '../i18n';
 import { MAX_TIER, swordOf } from './swords';
 
 // The royal commissions: one long goal pinned in the top bar. Each asks the smithy to deliver a
@@ -15,8 +16,9 @@ export interface Commission {
   gem: boolean;
   /** Coins paid on completion, on top of a guild star. */
   reward: number;
-  /** The banner's title, when it is not the sword's name. */
-  title?: string;
+  /** The banner's title, when it is not the sword's name, and the title of its grand (gemmed) way. */
+  title?: TextKey;
+  grandTitle?: TextKey;
 }
 
 export const COMMISSIONS: Commission[] = [
@@ -26,7 +28,7 @@ export const COMMISSIONS: Commission[] = [
   { tier: 8, count: 2, gem: false, reward: 6000 },
   { tier: 8, count: 3, gem: false, reward: 9000 },
   // The last: an Anvilheart for the crown. Delivering it wins the smithy.
-  { tier: MAX_TIER, count: 1, gem: false, reward: 20000, title: 'The Crown Blade' },
+  { tier: MAX_TIER, count: 1, gem: false, reward: 20000, title: 'crownBlade', grandTitle: 'gemmedCrownBlade' },
 ];
 
 /** What the grand (gemmed) way of a commission pays, against the plain one. */
@@ -45,14 +47,14 @@ export function commissionAt(level: number, charter = 0): Commission | null {
 }
 
 /** The grand way of a commission: every sword gemmed, for `GRAND_PAY` times the purse. */
-export const grandOf = (c: Commission): Commission => ({ ...c, gem: true, reward: Math.round(c.reward * GRAND_PAY), title: c.title ? `Gemmed ${c.title.replace(/^The /, '')}` : undefined });
+export const grandOf = (c: Commission): Commission => ({ ...c, gem: true, reward: Math.round(c.reward * GRAND_PAY), title: c.grandTitle });
 
-/** The banner's title for a commission: "The Crown Blade", "Gemmed Runeblade" or "2 Dragonslayers" (the banner's sword shows the gem). */
+/** The banner's title for a commission, in the hub's language: "The Crown Blade", "Gemmed Runeblade" or "2 Dragonslayers" (the banner's sword shows the gem). */
 export function commissionTitle(c: Commission) {
-  if (c.title) return c.title;
-  const name = swordOf(c.tier).name;
-  if (c.count > 1) return `${c.count} ${name}s`;
-  return c.gem ? `Gemmed ${name}` : name;
+  if (c.title) return t(c.title);
+  const sword = swordOf(c.tier);
+  if (c.count > 1) return `${c.count} ${t(sword.plural)}`;
+  return c.gem ? t('gemmed', { sword: t(sword.name) }) : t(sword.name);
 }
 
 /** Whether a commission's level is offered two ways: every one but the first. */
