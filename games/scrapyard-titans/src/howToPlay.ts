@@ -8,6 +8,9 @@ export const howToPlay: HowToPlay = {
     { input: 'Drag a part onto a robot, or tap the part and then the robot', action: 'Bolt it on; two parts on one robot build a finished item' },
     { input: 'Drag a robot onto the shop, or E', action: 'Sell the robot (the selected one with E)' },
     { input: 'R, or Reroll', action: 'New robots in the shop for 2 gold' },
+    { input: 'L, or Lock', action: 'Keep this shop for the next round (a reroll unlocks it)' },
+    { input: 'Tap a rival in the list on the right', action: 'Scout its board on the far half while you plan' },
+    { input: 'Tap the panel under the list', action: 'Switch between the last fight’s damage and your power cards' },
     { input: 'X, or Buy XP', action: '4 XP for 4 gold; each level lets one more robot fight' },
     { input: 'Space, or FIGHT!', action: 'Start the fight; during a fight, use your commander’s skill' },
     { input: 'T, or Speed', action: 'Watch fights at 1x or 2x' },
@@ -27,6 +30,7 @@ export const howToPlay: HowToPlay = {
     'Monster rounds drop parts; your commander walks over to pick them up.',
     'In draft rounds the weakest commanders pick first from the ring.',
     'Gilded robots in the shop count for two origins but never merge.',
+    'Pick up a part to see what it would build on each robot before you bolt it on.',
     'On the Scrap Rat round, tap the rat to zap gold out of it before it escapes.',
   ],
 };

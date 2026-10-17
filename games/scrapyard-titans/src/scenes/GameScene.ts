@@ -4,15 +4,16 @@ import { viewPoint } from '../../../../shared/scaling';
 import { aiLog, mountWatch, watching, watchSteps } from '../../../../shared/watch';
 import {
   AUGMENT_BY_ID, CLASS_STATS, COST_COLOR, DRAFT_PICK_S, ITEMS, MONSTERS, ORIGIN_COLOR, PLAN_S, PLAYER_COMMANDERS, RIVALS, SETS,
-  SKILLS, TERRAIN, TRAITS, UNIT_BY_ID, comboOf, isPart,
+  PARTS, SKILLS, TERRAIN, TRAITS, UNIT_BY_ID, comboOf, isPart,
   type PartId, type SetId, type TraitId,
 } from '../game/data';
 import { STEP_S, traitValue, type BEvent, type BUnit } from '../game/battle';
 import {
-  advance, boardCount, boardUnits, buy, buyXp, countTraits, draftPick, endFight, equip, matchOver, moveUnit, newDrops, newMatch,
+  advance, boardCount, boardUnits, buy, buyXp, countTraits, draftPick, endFight, equip, equipPreview, matchOver, moveUnit, newDrops, newMatch,
   pickAugment, player, rerollCost, reroll, roundLabel, sell, sellValue, startDraft, startFight, startPlan, unitAt, unitCost,
   xpToNext,
-  type Match, type Owned, type Spot,
+  toggleShopLock,
+  type Match, type MeterRow, type Owned, type Player, type Spot,
 } from '../game/match';
 import { aiDraft, aiPickAugment, aiPlan } from '../game/ai';
 import { CMD_TEX, INK, UNIT_TEX, bakeAll, cmdKey, itemKey, monsterKey, textureRes, unitKey } from '../art/paint';
@@ -163,6 +164,11 @@ export class GameScene extends Phaser.Scene {
   private dragging = false;
   private pointer = { x: 0, y: 0 };
   private infoTrait: TraitId | null = null;
+  /** The rival whose board is shown on the far half during the plan phase. */
+  scout: number | null = null;
+  /** What the info panel shows when nothing is selected: the damage meter or the power cards and season. */
+  private infoPage: 'meter' | 'cards' = 'meter';
+  private infoRect: { x: number; y: number; w: number; h: number } | null = null;
   private phaseShown = '';
   private zapReadyAt = 0;
   private resultUntil = 0;
@@ -223,6 +229,8 @@ export class GameScene extends Phaser.Scene {
   private beginPlan(income: boolean) {
     const m = this.state!;
     startPlan(m, watching ? 3 : PLAN_S, income);
+    this.scout = null;
+    this.infoPage = 'meter';
     for (const p of m.players) if (p.alive && !p.human) aiPlan(m, p);
     this.selected = null;
     this.held = null;
@@ -239,6 +247,7 @@ export class GameScene extends Phaser.Scene {
     this.selected = null;
     this.held = null;
     this.dragging = false;
+    this.scout = null;
     startFight(m);
     this.clearViews();
     this.fightDoneAt = 0;
@@ -583,6 +592,19 @@ export class GameScene extends Phaser.Scene {
         place(o, p.x, p.y, p.s);
       }
       me.bench.forEach((o, i) => o && place(o, benchX(i), BENCH.y + 20, 0.6));
+      // A scouted rival's board, mirrored onto the far half the way it would line up in a fight.
+      const rival = this.scout !== null && m.phase === 'plan' ? m.players[this.scout] : null;
+      if (rival) for (const [k, o] of Object.entries(rival.board)) {
+        const [col, row] = k.split(',').map(Number);
+        const p = project(7 - col, 7 - row);
+        const key = `s${o.uid}`;
+        seen.add(key);
+        const v = this.views.get(key) ?? this.makeView(key, unitKey(o.defId), 1, o.star, !!o.gilded);
+        v.x = p.x;
+        v.y = p.y;
+        v.s = p.s;
+        this.setItems(v, o.items);
+      }
       if (this.dragging && this.held?.kind === 'unit') {
         const o = unitAt(me, this.held.spot);
         const v = o && this.views.get(`o${o.uid}`);
@@ -667,6 +689,11 @@ export class GameScene extends Phaser.Scene {
         if (terr === 'plate') for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) g.fillStyle(0x2b2d42).fillCircle(ctr.x + dx * 14 * ctr.s, ctr.y + dy * 6 * ctr.s, 1.6);
         if (terr === 'oil') g.fillStyle(0x6a6aa0, 0.6).fillEllipse(ctr.x - 6, ctr.y - 2, 10 * ctr.s, 4 * ctr.s);
       }
+    }
+    // The bench slots, under the benched robots (the HUD would cover them).
+    for (let i = 0; i < BENCH.count; i++) {
+      g.fillStyle(0x15122e, 0.85).fillRoundedRect(benchX(i) - BENCH.w / 2, BENCH.y - BENCH.h / 2, BENCH.w, BENCH.h, 7);
+      g.lineStyle(1, C.panelLine, 1).strokeRoundedRect(benchX(i) - BENCH.w / 2, BENCH.y - BENCH.h / 2, BENCH.w, BENCH.h, 7);
     }
     const ml = boardPoint(0, 4);
     const mr = boardPoint(8, 4);
@@ -1010,11 +1037,6 @@ export class GameScene extends Phaser.Scene {
     const selUnit = this.selected?.kind === 'unit' ? unitAt(me, this.selected.spot) : null;
     if (selUnit && planning) this.button(g, BUTTONS.sell, `Sell for ${sellValue(selUnit)} (E)`, () => this.doSell(), { color: 0xffb703, size: 11 });
     else this.txt(80, 508, `Board ${boardCount(me)}/${me.level}`, 11, boardCount(me) > me.level ? '#ff8a7a' : C.dim);
-    // The bench.
-    for (let i = 0; i < BENCH.count; i++) {
-      g.fillStyle(0x15122e, 0.85).fillRoundedRect(benchX(i) - BENCH.w / 2, BENCH.y - BENCH.h / 2, BENCH.w, BENCH.h, 7);
-      g.lineStyle(1, C.panelLine, 1).strokeRoundedRect(benchX(i) - BENCH.w / 2, BENCH.y - BENCH.h / 2, BENCH.w, BENCH.h, 7);
-    }
     // The shop.
     me.shop.forEach((s, i) => {
       const x = shopCardX(i);
@@ -1052,6 +1074,14 @@ export class GameScene extends Phaser.Scene {
       g.fillStyle(p.seat === 0 ? C.cyan : C.good).fillRect(PLAYERS_PANEL.x + 26, y + 17, (hpW * Math.max(0, p.hp)) / 100 > hpW ? hpW : (hpW * Math.max(0, p.hp)) / 100, 5);
       this.txt(PLAYERS_PANEL.x + 110, y + 11, p.alive ? `${Math.max(0, p.hp)}` : `#${p.place}`, 11, p.alive ? '#ffffff' : C.dim, { fontStyle: 'bold' });
       if (p.last && p.alive) g.fillStyle(p.last === 'win' ? C.good : p.last === 'loss' ? C.bad : 0xffd166).fillCircle(PLAYERS_PANEL.x + PLAYERS_PANEL.w - 6, y + 6, 3);
+      if (this.scout === p.seat) g.lineStyle(2, 0xffd166, 1).strokeRoundedRect(PLAYERS_PANEL.x, y, PLAYERS_PANEL.w, PLAYERS_PANEL.rowH - 3, 6);
+      // Tap a rival during planning to scout its board.
+      if (planning && p.alive && p.seat !== 0) this.buttons.push({ x: PLAYERS_PANEL.x, y, w: PLAYERS_PANEL.w, h: PLAYERS_PANEL.rowH - 3, run: () => {
+        this.scout = this.scout === p.seat ? null : p.seat;
+        this.selected = null;
+        this.infoTrait = null;
+        this.dirty = true;
+      } });
     });
     this.buildInfo(g);
     // Right bottom: fight, skill and speed.
@@ -1063,14 +1093,42 @@ export class GameScene extends Phaser.Scene {
     }
     if (m.phase === 'fight' || m.phase === 'result' || m.phase === 'plan') this.button(g, BUTTONS.speed, `Speed ${this.speed}x`, () => this.toggleSpeed(), { size: 11 });
     if (m.opts.terrain) this.txt(170, 412, 'Terrain: dark oil slows, green pad charges, grey plate armours, orange grate burns', 9, C.dim);
+    if (planning) {
+      const locked = me.shopLocked;
+      this.button(g, BUTTONS.lock, locked ? 'Locked (L)' : 'Lock (L)', () => this.toggleLock(), { on: me.human, size: 10, color: locked ? 0xffd166 : C.panelLine });
+    }
+    this.buildPreview(me);
+  }
+
+  /** With a part or item picked up, a tag over each robot names what bolting it on would give. */
+  private buildPreview(me: Player) {
+    const held = this.dragging ? this.held : this.selected;
+    if (this.state?.phase !== 'plan' || held?.kind !== 'item') return;
+    const id = me.items[held.index];
+    if (!id) return;
+    const tag = (o: Owned, x: number, y: number) => {
+      const out = equipPreview(id, o);
+      const label = out === null ? 'full' : out === id ? `+ ${ITEMS[id].name}` : ITEMS[out].name;
+      const t = this.txt(x, y, label, 9, out === null ? C.dim : out === id ? '#d0d8e8' : '#c78bff', { fontStyle: 'bold', backgroundColor: '#0a0818cc', padding: { x: 3, y: 1 } });
+      t.setOrigin(0.5, 1);
+    };
+    for (const [k, o] of Object.entries(me.board)) {
+      const [col, row] = k.split(',').map(Number);
+      const p = project(col, row);
+      tag(o, p.x, p.y - 96 * p.s);
+    }
+    me.bench.forEach((o, i) => o && tag(o, benchX(i), BENCH.y - BENCH.h / 2 - 1));
   }
 
   private buildInfo(g: Phaser.GameObjects.Graphics) {
     const m = this.state!;
     const me = player(m);
     const r = INFO_PANEL;
+    this.infoRect = null;
     const unit = this.selected?.kind === 'unit' ? unitAt(me, this.selected.spot) : null;
     const item = this.selected?.kind === 'item' ? me.items[this.selected.index] : null;
+    const rival = this.scout !== null && m.phase === 'plan' ? m.players[this.scout] : null;
+    const meter = (m.phase === 'plan' || m.phase === 'result') && m.meter.length ? m.meter : null;
     let title = '';
     let body = '';
     if (unit) {
@@ -1082,22 +1140,52 @@ export class GameScene extends Phaser.Scene {
     } else if (item) {
       const def = ITEMS[item];
       title = def.name;
-      body = def.from.length ? `${def.text}\n${def.from.map((p) => ITEMS[p].text).join(', ')}` : `${def.text}\nTwo parts on one robot build a finished item.`;
+      body = def.from.length
+        ? `${def.text}\n${def.from.map((p) => ITEMS[p].text).join(', ')}`
+        : `${def.text}\nWith ${PARTS.filter((p) => p !== item).map((p) => `${ITEMS[p].name}: ${comboOf(item as PartId, p).name}`).concat(`another ${def.name}: ${comboOf(item as PartId, item as PartId).name}`).join('; ')}`;
     } else if (this.infoTrait) {
       const def = TRAITS[this.infoTrait];
       title = `${def.name} (${def.tiers.join(' / ')})`;
       body = def.text.replace('{v}', def.values.join('/'));
-    } else if (m.phase === 'plan' && me.augments.length) {
-      title = 'Power cards';
-      body = me.augments.map((a) => AUGMENT_BY_ID[a].name).join('\n');
+    } else if (rival) {
+      const traits = countTraits(boardUnits(rival));
+      const active = (Object.keys(traits) as TraitId[]).filter((t) => traitValue(traits, t) > 0).map((t) => `${TRAITS[t].name} ${traits[t]}`);
+      title = `${rival.name}'s board`;
+      body = `Lv ${rival.level} · ${rival.gold} gold · ${boardCount(rival)} robots\n${active.length ? active.join(', ') : 'No traits active'}${rival.augments.length ? `\n${rival.augments.map((a) => AUGMENT_BY_ID[a].name).join(', ')}` : ''}`;
+    } else if (meter && this.infoPage === 'meter') {
+      return this.buildMeter(g, meter, m.phase === 'plan');
     } else if (m.phase === 'plan') {
-      title = SETS.find((s) => s.id === m.opts.set)!.name;
-      body = `${SETS.find((s) => s.id === m.opts.set)!.blurb}${m.opts.set === 'scrap' ? `\nTokens: ${me.scrapTokens}/3` : ''}`;
+      const set = SETS.find((s) => s.id === m.opts.set)!;
+      title = me.augments.length ? 'Power cards' : set.name;
+      body = me.augments.length ? me.augments.map((a) => AUGMENT_BY_ID[a].name).join('\n') : `${set.blurb}${m.opts.set === 'scrap' ? `\nTokens: ${me.scrapTokens}/3` : ''}`;
+      if (meter) this.infoRect = r;
     } else return;
     g.fillStyle(C.panel, 0.95).fillRoundedRect(r.x, r.y, r.w, r.h, 8);
     g.lineStyle(1, C.panelLine, 1).strokeRoundedRect(r.x, r.y, r.w, r.h, 8);
     this.txt(r.x + 8, r.y + 6, title, 11, C.gold, { fontStyle: 'bold', wordWrap: { width: r.w - 14 } });
-    this.txt(r.x + 8, r.y + 24, body, 10, C.text, { wordWrap: { width: r.w - 14 }, lineSpacing: 2 });
+    this.txt(r.x + 8, r.y + 24, body, item && !ITEMS[item].from.length ? 9 : 10, C.text, { wordWrap: { width: r.w - 14 }, lineSpacing: 2 });
+    if (this.infoRect) this.txt(r.x + r.w - 8, r.y + r.h - 16, 'tap: damage', 9, C.dim).setOrigin(1, 0);
+  }
+
+  /** The damage meter: the player's robots in the last fight, by damage dealt (bar) and taken (number). */
+  private buildMeter(g: Phaser.GameObjects.Graphics, rows: MeterRow[], toggles: boolean) {
+    const r = INFO_PANEL;
+    g.fillStyle(C.panel, 0.95).fillRoundedRect(r.x, r.y, r.w, r.h, 8);
+    g.lineStyle(1, C.panelLine, 1).strokeRoundedRect(r.x, r.y, r.w, r.h, 8);
+    this.txt(r.x + 8, r.y + 6, 'Last fight: damage', 11, C.gold, { fontStyle: 'bold' });
+    const max = Math.max(1, ...rows.map((x) => x.dealt));
+    const n = Math.min(rows.length, Math.floor((r.h - 40) / 19));
+    rows.slice(0, n).forEach((row, i) => {
+      const y = r.y + 24 + i * 19;
+      const name = UNIT_BY_ID[row.defId].name;
+      this.txt(r.x + 8, y, `${name.length > 12 ? `${name.slice(0, 11)}.` : name}${'★'.repeat(row.star - 1)}`, 9, row.alive ? '#ffffff' : C.dim);
+      this.txt(r.x + r.w - 8, y, `${row.dealt}`, 9, C.gold, { fontStyle: 'bold' }).setOrigin(1, 0);
+      g.fillStyle(0x000000, 0.5).fillRect(r.x + 8, y + 12, r.w - 16, 3);
+      g.fillStyle(ORIGIN_COLOR[UNIT_BY_ID[row.defId].origin]).fillRect(r.x + 8, y + 12, ((r.w - 16) * row.dealt) / max, 3);
+    });
+    const tanked = [...rows].sort((a, b) => b.taken - a.taken)[0];
+    if (tanked) this.txt(r.x + 8, r.y + r.h - 16, `Took most: ${UNIT_BY_ID[tanked.defId].name} ${tanked.taken}`, 9, C.dim);
+    if (toggles) this.infoRect = r;
   }
 
   /** Text that changes every frame: the top bar. */
@@ -1259,6 +1347,13 @@ export class GameScene extends Phaser.Scene {
     this.dirty = true;
   }
 
+  private toggleLock() {
+    const m = this.state;
+    if (m?.phase !== 'plan' || !player(m).human) return;
+    toggleShopLock(player(m));
+    this.dirty = true;
+  }
+
   private toggleSpeed() {
     this.speed = this.speed === 1 ? 2 : 1;
     this.dirty = true;
@@ -1350,6 +1445,13 @@ export class GameScene extends Phaser.Scene {
         return;
       }
     }
+    const ir = this.infoRect;
+    if (ir && m.phase === 'plan' && v.x >= ir.x && v.x <= ir.x + ir.w && v.y >= ir.y && v.y <= ir.y + ir.h) {
+      this.infoPage = this.infoPage === 'meter' ? 'cards' : 'meter';
+      this.dirty = true;
+      this.down = null;
+      return;
+    }
     const b = hit(this.buttons);
     if (b) {
       b.run();
@@ -1439,6 +1541,7 @@ export class GameScene extends Phaser.Scene {
     else if (k === 'x') this.doXp();
     else if (k === 'e') this.doSell();
     else if (k === 't') this.toggleSpeed();
+    else if (k === 'l' && me.human) this.toggleLock();
   }
 }
 

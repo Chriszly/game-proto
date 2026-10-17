@@ -3,7 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 // Plays the first round of a match with real inputs: starts a match with the first commander,
 // buys the first robot in the shop, taps it on the bench and then a tile on the board, presses
 // FIGHT and watches the robot beat round 1-1's two scrap mites. The win keeps the commander at
-// full health and drops a part, and round 1-2's plan phase starts. Game state is only read,
+// full health, drops a part and fills the damage meter, and round 1-2's plan phase starts. Game state is only read,
 // through the `game` object the dev build puts on window.
 
 interface Owned { uid: number; defId: string; star: number; items: string[] }
@@ -22,6 +22,7 @@ interface MatchView {
   phase: 'plan' | 'fight' | 'result' | 'draft' | 'won' | 'lost';
   round: { stage: number; index: number; kind: string };
   result: { outcome: 'win' | 'loss' | 'draw'; damage: number; gold: number } | null;
+  meter: { defId: string; dealt: number; taken: number }[];
   me: Player;
 }
 
@@ -59,7 +60,7 @@ function view(page: Page) {
     const m = s.state;
     if (!m) return null;
     const copy = (x: unknown) => JSON.parse(JSON.stringify(x));
-    return { phase: m.phase, round: copy(m.round), result: copy(m.result), me: copy(m.players[0]) } as MatchView;
+    return { phase: m.phase, round: copy(m.round), result: copy(m.result), meter: copy(m.meter), me: copy(m.players[0]) } as MatchView;
   });
 }
 
@@ -184,6 +185,9 @@ test('plays the first round', async ({ page }, testInfo) => {
   expect(s.result?.outcome, 'round 1-1 won').toBe('win');
   expect(s.me.hp, 'no damage taken').toBe(100);
   expect(s.me.items.length, 'a part dropped').toBeGreaterThanOrEqual(1);
+  // The damage meter in the info panel credits the robot with the fight's damage.
+  expect(s.meter.map((r) => r.defId), 'damage meter rows').toEqual([bought]);
+  expect(s.meter[0].dealt, 'damage dealt').toBeGreaterThan(0);
   await snap('3-result');
 
   // The next round's plan phase starts on its own, with the robot back on its tile.

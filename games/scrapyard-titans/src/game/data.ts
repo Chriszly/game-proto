@@ -125,7 +125,7 @@ export interface ClassStats {
 }
 
 export const CLASS_STATS: Record<ClassId, ClassStats> = {
-  guardian: { hp: 760, atk: 45, as: 0.6, range: 1, armor: 40, mana: 80, startMana: 30, ability: 'shield', power: 320, abilityName: 'Plate Up: shields itself' },
+  guardian: { hp: 760, atk: 45, as: 0.6, range: 1, armor: 40, mana: 80, startMana: 30, ability: 'shield', power: 380, abilityName: 'Plate Up: shields itself' },
   brawler: { hp: 720, atk: 55, as: 0.65, range: 1, armor: 25, mana: 70, startMana: 20, ability: 'slam', power: 170, abilityName: 'Ground Pound: hits and stuns the tiles around it' },
   gunner: { hp: 520, atk: 48, as: 0.75, range: 3, armor: 15, mana: 60, startMana: 0, ability: 'barrage', power: 75, abilityName: 'Barrage: fires 4 shells at random enemies' },
   sniper: { hp: 460, atk: 62, as: 0.6, range: 4, armor: 10, mana: 70, startMana: 10, ability: 'snipe', power: 330, abilityName: 'Long Shot: a heavy round at the farthest enemy' },
@@ -156,17 +156,17 @@ export interface TraitDef {
 
 export const TRAITS: Record<TraitId, TraitDef> = {
   heavy: { id: 'heavy', name: 'Heavy', kind: 'origin', tiers: [2, 4, 6], values: [25, 50, 90], text: 'Heavy robots gain {v} armour.' },
-  drone: { id: 'drone', name: 'Drone', kind: 'origin', tiers: [2, 4, 6], values: [15, 30, 50], text: 'Drones dodge {v}% of attacks.' },
-  sparker: { id: 'sparker', name: 'Sparker', kind: 'origin', tiers: [2, 4, 6], values: [60, 130, 240], text: 'When a Sparker casts, lightning hits 3 enemies for {v}.' },
+  drone: { id: 'drone', name: 'Drone', kind: 'origin', tiers: [2, 4, 6], values: [20, 35, 55], text: 'Drones dodge {v}% of attacks.' },
+  sparker: { id: 'sparker', name: 'Sparker', kind: 'origin', tiers: [2, 4, 6], values: [80, 170, 300], text: 'When a Sparker casts, lightning hits 3 enemies for {v}.' },
   magnet: { id: 'magnet', name: 'Magnet', kind: 'origin', tiers: [2, 4, 6], values: [15, 30, 50], text: 'Enemies lose {v} armour.' },
-  salvager: { id: 'salvager', name: 'Salvager', kind: 'origin', tiers: [2, 4, 6], values: [10, 20, 35], text: 'Each time an ally falls, Salvagers gain {v}% attack speed.' },
-  neon: { id: 'neon', name: 'Neon', kind: 'origin', tiers: [2, 4, 6], values: [25, 55, 100], text: 'Neon abilities are {v}% stronger.' },
+  salvager: { id: 'salvager', name: 'Salvager', kind: 'origin', tiers: [2, 4, 6], values: [8, 16, 28], text: 'Each time an ally falls, Salvagers gain {v}% attack speed.' },
+  neon: { id: 'neon', name: 'Neon', kind: 'origin', tiers: [2, 4, 6], values: [30, 65, 115], text: 'Neon abilities are {v}% stronger.' },
   hacker: { id: 'hacker', name: 'Hacker', kind: 'origin', tiers: [2, 4, 6], values: [20, 35, 55], text: 'Enemies gain {v}% less charge.' },
-  guardian: { id: 'guardian', name: 'Guardian', kind: 'class', tiers: [2, 4], values: [15, 35], text: 'All your robots gain {v} armour.' },
+  guardian: { id: 'guardian', name: 'Guardian', kind: 'class', tiers: [2, 4], values: [25, 55], text: 'All your robots gain {v} armour.' },
   brawler: { id: 'brawler', name: 'Brawler', kind: 'class', tiers: [2, 4], values: [250, 550], text: 'Brawlers gain {v} health.' },
   gunner: { id: 'gunner', name: 'Gunner', kind: 'class', tiers: [2, 4], values: [20, 50], text: 'Gunners attack {v}% faster.' },
   sniper: { id: 'sniper', name: 'Sniper', kind: 'class', tiers: [2, 4], values: [20, 50], text: 'Snipers deal {v}% more damage.' },
-  saboteur: { id: 'saboteur', name: 'Saboteur', kind: 'class', tiers: [2, 4], values: [20, 40], text: 'Saboteurs gain {v}% critical chance.' },
+  saboteur: { id: 'saboteur', name: 'Saboteur', kind: 'class', tiers: [2, 4], values: [15, 30], text: 'Saboteurs gain {v}% critical chance.' },
   mechanic: { id: 'mechanic', name: 'Mechanic', kind: 'class', tiers: [2, 4], values: [15, 40], text: 'All your robots repair {v} health a second.' },
 };
 
@@ -450,7 +450,7 @@ export function stageRounds(stage: number): RoundDef[] {
 
 /** Base damage a lost fight costs a commander by stage, plus this much per surviving robot by its cost. */
 export function stageDamage(stage: number) {
-  return Math.min(2 + Math.max(0, stage - 2) * 2, 12);
+  return Math.min(3 + Math.max(0, stage - 2) * 3, 15);
 }
 export const SURVIVOR_DAMAGE = [0, 1, 1, 2, 2, 3];
 

@@ -67,6 +67,8 @@ export const BUTTONS = {
   speed: { x: 800, y: 496, w: 72, h: 30 },
   skill: { x: 800, y: 440, w: 150, h: 48 },
   watchSkill: { x: 878, y: 496, w: 72, h: 30 },
+  /** Right of the bench: keeps the shop for the next round. */
+  lock: { x: 736, y: 380, w: 62, h: 26 },
 };
 
 export const TRAITS_PANEL = { x: 8, y: 38, rowH: 21, maxRows: 9 };
