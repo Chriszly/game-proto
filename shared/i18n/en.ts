@@ -50,6 +50,12 @@ const en = {
   settingGenreFilterHint: 'Shows a row of genres above the games, to list just one kind.',
   settingReduceMotion: 'Reduce motion',
   settingReduceMotionHint: 'Turns off screen shake, flashes and blinking hit effects.',
+  settingMusic: 'Music',
+  settingMusicHint: 'How loud each game\'s music plays.',
+  settingEffects: 'Sound effects',
+  settingEffectsHint: 'How loud clicks, hits, coins and the other sounds play.',
+  settingMuted: 'Mute all sound',
+  settingMutedHint: 'Silences every game. The speaker button in a game\'s corner and the M key switch it too.',
 
   // Loading, start, pause and How to play screens
   loading: 'Loading',
@@ -75,6 +81,12 @@ const en = {
   pauseAction: 'Pause',
   fullScreenInput: 'F or the corner button',
   fullScreenAction: 'Full screen',
+  soundOffButton: 'Mute (M)',
+  soundOnButton: 'Sound on (M)',
+  soundInput: 'M or the speaker button',
+  soundAction: 'Sound on or off',
+  musicVolume: 'Music',
+  effectsVolume: 'Effects',
   turnSideways: 'Turn your phone sideways to play',
   turnUpright: 'Turn your phone upright to play',
 

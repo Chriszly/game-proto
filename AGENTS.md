@@ -131,7 +131,7 @@ and tries to link it to the repo (the run summary says if the link has to be mad
   game's folder name (`<name>-...`), since every game shares the hub's origin and the hub's ⚙ on a
   card deletes a game's progress by that prefix (`shared/progress.ts`).
 - **Honour the hub's settings.** Every game calls `setupGame(game)` from `shared/setupGame.ts`
-  right after creating its `Phaser.Game`, which applies the frame cap, the FPS readout, reduced motion and full screen, turns off the browser's right-click menu, and covers
+  right after creating its `Phaser.Game`, which applies the frame cap, the FPS readout, reduced motion, full screen and the sound button, turns off the browser's right-click menu, and covers
   the page with the shared loading, start and pause screens (`shared/startScreen.ts`): the game's
   scenes stand paused until Start is pressed, and the pause button, P or leaving the tab pause them. A game
   hands its How to play (`games/<name>/src/howToPlay.ts`, typed by `shared/howToPlay.ts`) to
@@ -142,6 +142,20 @@ and tries to link it to the repo (the run summary says if the link has to be mad
   README. Skip camera shake and flashes, and hold blinking or jittering effects still, when
   `settings.reduceMotion` is on. A new setting goes into `shared/settings.ts` (its type, default and
   `SETTING_FIELDS` row, which the hub panel shows on its own) and then into every game.
+- **Make sound in code.** `shared/audio.ts` plays every game's sound, with no audio files:
+  `sounds({ name: SoundDef })` gives a game a `play(name)` for its own table of synthesized effects
+  (each with its own rate limit, at most 12 at once), `ui` has the shared `click`, `coin` and the
+  `refuse` buzz that every game plays for an action it can't do, and `playMusic(song, part)`,
+  `playSting` and `stopMusic` play chiptune written as note text (a `Song` with calm, battle, boss
+  and sting parts). `setupGame` adds the sound button (and the M key) to the corner row
+  (`shared/corner.ts`: full screen, sound and pause, 12px plus the safe area from the edges), the
+  pause screen sets the Music and Effects volumes, and the hub's settings hold them (`music`,
+  `effects`, `muted`). Sound starts on the first tap or key press, and never under browser
+  automation, so playthroughs run as before. A game plays one sound per volley rather than per
+  bullet, only for what the player can see, only for the player's own actions where the AI shares
+  the code, and nothing while it replays time or restores a save; its `AGENTS.md` lists its songs,
+  its sound table and where they play. `docs/sound-plan.md` has the planned music and sound list
+  for every game, with where each sound is triggered.
 - **Speak the player's language.** The hub's Language setting (`shared/settings.ts`) picks British
   English (`en`, the source), US English (`en-US`) or German (`de`), and `shared/i18n.ts` translates
   with it: `translator({ en, 'en-US': enUS, de })` gives a `t(key, vars)` for a set of texts kept in

@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { settings } from './settings';
 import { t } from './i18n';
 import type { HowToPlay } from './howToPlay';
+import { cornerBar, volumeSliders } from './corner';
+import { resumeAudio, suspendAudio, ui, unlockAudio } from './audio';
 
 /** The key that pauses the game and resumes it. Esc is left to the games, some of which close panels with it. */
 const PAUSE_KEY = 'p';
@@ -19,7 +21,8 @@ const HELP_KEY = 'h';
  *   stand paused until Start is pressed (or Enter or Space), so nothing happens unseen. Under
  *   browser automation it is skipped (see `skipStart`).
  * - Pause: a button next to full screen, the P key, or leaving the tab pauses every running scene
- *   and shows Resume and a link back to all games. P, Enter, Space or Esc resume.
+ *   and shows Resume, the music and effects volumes and a link back to all games.
+ *   P, Enter, Space or Esc resume.
  * - How to play: when the game hands over its `howToPlay`, the start and pause screens get a How to
  *   play button (and the H key) that shows it in place of the card; Back, H or Esc go back.
  * While a screen is up, keys go to it and not to the game.
@@ -36,6 +39,7 @@ export function addStartScreen(game: Phaser.Game, howToPlay?: HowToPlay) {
     `<button type="button" class="game-overlay-button game-start-button">${escapeHtml(t('start'))}</button>` +
     `<button type="button" class="game-overlay-button game-resume-button">${escapeHtml(t('resume'))}</button>` +
     (howToPlay ? `<button type="button" class="game-overlay-link game-help-button">${escapeHtml(t('howToPlay'))}</button>` : '') +
+    '<div class="game-overlay-volumes"></div>' +
     '<div class="game-overlay-hint"></div>' +
     `<a class="game-overlay-hub" href="../../">${escapeHtml(t('allGames'))}</a>` +
     '</div>' +
@@ -45,19 +49,18 @@ export function addStartScreen(game: Phaser.Game, howToPlay?: HowToPlay) {
   const resumeButton = overlay.querySelector<HTMLButtonElement>('.game-resume-button')!;
   const hint = overlay.querySelector<HTMLDivElement>('.game-overlay-hint')!;
   const help = overlay.querySelector<HTMLElement>('.game-help-body');
+  overlay.querySelector('.game-overlay-volumes')!.append(...volumeSliders());
 
   const pauseButton = document.createElement('button');
   pauseButton.type = 'button';
-  pauseButton.className = 'pause-button';
+  pauseButton.className = 'pause-button corner-button';
   pauseButton.title = t('pauseButton');
   pauseButton.setAttribute('aria-label', t('pauseButton'));
   pauseButton.innerHTML =
     '<svg viewBox="0 0 16 16" width="18" height="18" fill="currentColor" aria-hidden="true">' +
     '<rect x="3" y="2" width="3.5" height="12"/><rect x="9.5" y="2" width="3.5" height="12"/></svg>';
-  // Beside the full screen button when there is one.
-  pauseButton.style.left = document.fullscreenEnabled ? '38px' : '4px';
   pauseButton.hidden = true;
-  document.body.append(pauseButton);
+  cornerBar().append(pauseButton);
 
   type Mode = 'loading' | 'start' | 'paused' | 'help' | 'playing';
   let mode: Mode = 'loading';
@@ -102,6 +105,8 @@ export function addStartScreen(game: Phaser.Game, howToPlay?: HowToPlay) {
     for (const scene of held) if (scene.sys.isPaused()) scene.sys.resume();
     held = [];
     game.sound.resumeAll();
+    // Start and Resume are a tap or a key press, which lets the browser play sound.
+    unlockAudio();
     show('playing');
     // A focused button is clicked by Space and Enter, which games use, so let go of the focus.
     (document.activeElement as HTMLElement | null)?.blur();
@@ -125,7 +130,14 @@ export function addStartScreen(game: Phaser.Game, howToPlay?: HowToPlay) {
 
   startButton.addEventListener('click', play);
   resumeButton.addEventListener('click', play);
-  pauseButton.addEventListener('click', pause);
+  pauseButton.addEventListener('click', () => {
+    ui('click');
+    pause();
+  });
+  // Any tap or key press lets the browser play sound, so a game asked for music early gets it then.
+  for (const type of ['pointerdown', 'keydown'] as const) {
+    window.addEventListener(type, unlockAudio, { capture: true });
+  }
   overlay.querySelector('.game-help-button')?.addEventListener('click', openHelp);
   overlay.querySelector('.game-help-back')?.addEventListener('click', closeHelp);
 
@@ -142,8 +154,8 @@ export function addStartScreen(game: Phaser.Game, howToPlay?: HowToPlay) {
         }
         return;
       }
-      // Full screen still works from any screen.
-      if (key === 'f') return;
+      // Full screen and sound still work from any screen.
+      if (key === 'f' || key === 'm') return;
       e.stopPropagation();
       if (e.repeat) return;
       if (mode === 'help') {
@@ -164,8 +176,13 @@ export function addStartScreen(game: Phaser.Game, howToPlay?: HowToPlay) {
     { capture: true },
   );
   window.addEventListener('keyup', (e) => mode !== 'playing' && e.stopPropagation(), { capture: true });
+  // The music plays on behind the pause screen, so its volume can be heard as it is set, but stops
+  // with the tab out of sight.
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) pause();
+    if (document.hidden) {
+      pause();
+      suspendAudio();
+    } else resumeAudio();
   });
 }
 
@@ -203,6 +220,7 @@ function helpHtml(howToPlay: HowToPlay) {
   const controls = [
     ...howToPlay.controls,
     { input: t('pauseInput'), action: t('pauseAction') },
+    { input: t('soundInput'), action: t('soundAction') },
     ...(document.fullscreenEnabled ? [{ input: t('fullScreenInput'), action: t('fullScreenAction') }] : []),
   ];
   const list = (items: string[]) => items.map((item) => `<li>${escapeHtml(item)}</li>`).join('');
@@ -248,6 +266,10 @@ function injectStyles() {
 .game-overlay-button { min-width: 160px; padding: 10px 24px; font: 700 20px system-ui, sans-serif; cursor: pointer;
   color: #1b1410; background: #f0a830; border: 2px solid #f3e9d2; border-radius: 6px; }
 .game-overlay-button:hover, .game-overlay-button:focus-visible { background: #ffc04d; outline: none; }
+.game-overlay-volumes { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 6px 12px;
+  width: 100%; font-size: 14px; text-align: left; }
+.game-overlay-volumes input { width: 100%; min-width: 120px; accent-color: #f0a830; }
+.game-overlay:not(.paused) .game-overlay-volumes { display: none; }
 .game-overlay-hint { font-size: 13px; opacity: 0.7; }
 .game-overlay-hint:empty { display: none; }
 .game-overlay-hub { font-size: 14px; color: #f3e9d2; }
@@ -275,9 +297,6 @@ function injectStyles() {
 .game-overlay:not(.paused) .game-resume-button,
 .game-overlay:not(.paused) .game-overlay-hub,
 .game-overlay:not(.start):not(.paused) .game-help-button { display: none; }
-.pause-button { position: fixed; bottom: 4px; z-index: 10; width: 30px; height: 30px; padding: 5px; cursor: pointer;
-  color: #f3e9d2; background: rgba(0, 0, 0, 0.55); border: 1px solid rgba(243, 233, 210, 0.35); border-radius: 3px; }
-.pause-button[hidden] { display: none; }
 ${settings.reduceMotion ? '.game-overlay-loading span { animation: none; }' : ''}
 `;
   document.head.append(style);

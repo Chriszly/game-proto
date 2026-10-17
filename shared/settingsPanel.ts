@@ -1,5 +1,6 @@
 import { DEFAULTS, SETTING_FIELDS, loadSettings, saveSettings, type Settings } from './settings';
 import { language, setLanguage, t } from './i18n';
+import { previewVolume } from './audio';
 import { clearAllProgress } from './progress';
 
 /**
@@ -64,6 +65,10 @@ export function mountSettingsPanel(root: HTMLElement, onChange: (settings: Setti
         const hint = document.createElement('div');
         hint.className = 'setting-hint';
         hint.textContent = t(field.hint);
+        if (field.kind === 'range') {
+          row.append(name, rangeInput(field, label), hint);
+          return row;
+        }
         const choices = document.createElement('div');
         choices.className = 'setting-choices';
         choices.setAttribute('role', 'group');
@@ -90,6 +95,30 @@ export function mountSettingsPanel(root: HTMLElement, onChange: (settings: Setti
       }),
     );
   }
+  /** A slider saves as it moves, without drawing the panel again, which would let go of it. */
+  function rangeInput(field: Extract<(typeof SETTING_FIELDS)[number], { kind: 'range' }>, label: string) {
+    const wrap = document.createElement('div');
+    wrap.className = 'setting-range';
+    const input = document.createElement('input');
+    input.type = 'range';
+    input.min = String(field.min);
+    input.max = String(field.max);
+    input.step = String(field.step);
+    input.value = String(current[field.key]);
+    input.setAttribute('aria-label', label);
+    const value = document.createElement('output');
+    value.textContent = input.value;
+    input.addEventListener('input', () => {
+      current = { ...current, [field.key]: Number(input.value) };
+      saveSettings(current);
+      value.textContent = input.value;
+    });
+    // Let go of the slider: play a sample at the new volume.
+    input.addEventListener('change', () => previewVolume(field.key, current));
+    wrap.append(input, value);
+    return wrap;
+  }
+
   render();
 }
 

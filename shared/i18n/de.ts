@@ -50,6 +50,12 @@ const de: Translation<typeof en> = {
   settingGenreFilterHint: 'Zeigt über den Spielen eine Reihe Genres, um nur eine Art aufzulisten.',
   settingReduceMotion: 'Bewegung reduzieren',
   settingReduceMotionHint: 'Schaltet Bildschirmwackeln, Blitze und blinkende Treffereffekte ab.',
+  settingMusic: 'Musik',
+  settingMusicHint: 'Wie laut die Musik in jedem Spiel spielt.',
+  settingEffects: 'Soundeffekte',
+  settingEffectsHint: 'Wie laut Klicks, Treffer, Münzen und die übrigen Geräusche spielen.',
+  settingMuted: 'Alle Töne stumm',
+  settingMutedHint: 'Schaltet jedes Spiel stumm. Der Lautsprecherknopf in der Ecke eines Spiels und die Taste M schalten es auch.',
 
   // Loading, start, pause and How to play screens
   loading: 'Lädt',
@@ -75,6 +81,12 @@ const de: Translation<typeof en> = {
   pauseAction: 'Pause',
   fullScreenInput: 'F oder die Taste in der Ecke',
   fullScreenAction: 'Vollbild',
+  soundOffButton: 'Stumm (M)',
+  soundOnButton: 'Ton an (M)',
+  soundInput: 'M oder der Lautsprecherknopf',
+  soundAction: 'Ton an oder aus',
+  musicVolume: 'Musik',
+  effectsVolume: 'Effekte',
   turnSideways: 'Dreh dein Handy quer, um zu spielen',
   turnUpright: 'Dreh dein Handy hochkant, um zu spielen',
 
