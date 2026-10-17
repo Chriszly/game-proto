@@ -1,23 +1,26 @@
 // The prize draft: after each wave the harbor offers three perks, and one is kept for the run.
 // Once few new perks are left, a draft also offers the second rank of a perk already held.
 
+import type { TextKey } from '../i18n';
+
 export type PerkId = 'ricochet' | 'salvage' | 'gunners' | 'mortar' | 'grapnels' | 'swivels' | 'carronades';
 
 export interface Perk {
-  name: string;
-  desc: string;
+  /** Keys of `i18n/en.ts`. */
+  name: TextKey;
+  desc: TextKey;
   /** What its second rank does, for the card that offers it. */
-  desc2: string;
+  desc2: TextKey;
 }
 
 export const PERKS: Record<PerkId, Perk> = {
-  ricochet: { name: 'Bouncing shot', desc: 'A ball that would splash skips once across the water and flies half as far again', desc2: 'Your shot skips twice across the water' },
-  salvage: { name: 'Salvage', desc: 'Every ship sunk patches 6 hull', desc2: 'Every ship sunk patches 12 hull' },
-  gunners: { name: 'Prize gun crews', desc: 'Your prizes reload twice as fast', desc2: 'Your prizes reload three times as fast' },
-  mortar: { name: 'A mortar of your own', desc: 'Every 6 seconds a shell is lobbed at the nearest enemy in range', desc2: 'The mortar fires every 4 seconds' },
-  grapnels: { name: 'Grapnels', desc: 'Boarding takes half the time and a prize needs half the crew', desc2: 'Boarding takes a quarter of the time and a prize a quarter of the crew' },
-  swivels: { name: 'Swivel guns', desc: 'Broadsides train half as wide again either side', desc2: 'Broadsides train twice as wide either side' },
-  carronades: { name: 'Carronades', desc: 'Shot at a ship inside half your reach hits 50% harder', desc2: 'Shot at a ship inside half your reach hits 75% harder' },
+  ricochet: { name: 'ricochetName', desc: 'ricochetDesc', desc2: 'ricochetDesc2' },
+  salvage: { name: 'salvageName', desc: 'salvageDesc', desc2: 'salvageDesc2' },
+  gunners: { name: 'gunnersName', desc: 'gunnersDesc', desc2: 'gunnersDesc2' },
+  mortar: { name: 'mortarName', desc: 'mortarDesc', desc2: 'mortarDesc2' },
+  grapnels: { name: 'grapnelsName', desc: 'grapnelsDesc', desc2: 'grapnelsDesc2' },
+  swivels: { name: 'swivelsName', desc: 'swivelsDesc', desc2: 'swivelsDesc2' },
+  carronades: { name: 'carronadesName', desc: 'carronadesDesc', desc2: 'carronadesDesc2' },
 };
 
 export const PERK_IDS = Object.keys(PERKS) as PerkId[];
