@@ -317,6 +317,8 @@ const de: Translation<typeof en> = {
   selectFirst: 'Wähle erst Schiffe, dann Rückzug',
   fallingBack: 'Rückzug zur Reparatur',
   rallyHow: 'Tippe, wo sich neue Kriegsschiffe sammeln; ein Tipp auf die Flagge entfernt sie',
+  fleetSelected: { one: 'Dein {n} Kriegsschiff gewählt', other: 'Alle {n} Kriegsschiffe gewählt' },
+  noFleet: 'Du hast noch keine Kriegsschiffe: Baue welche an deiner Kaserne',
   rallyPlanted: 'Sammelpunkt gesetzt: Neue Kriegsschiffe fliegen dorthin',
   rallyCleared: 'Sammelpunkt entfernt: Neue Kriegsschiffe warten an ihrer Kaserne',
   alertHarvesters: 'Deine Sammler werden angegriffen! Leertaste springt hin',

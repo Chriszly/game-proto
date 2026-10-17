@@ -8,6 +8,7 @@ const en: HowToPlay = {
     { input: 'Tap an open sector under the cards', action: 'Pick the campaign sector to fight in' },
     { input: 'Tap a card on the contract board', action: 'Take that contract as your next goal' },
     { input: 'Tap a ship, or drag a box over ships', action: 'Select your combat ships' },
+    { input: 'The army count on the top bar, or Q', action: 'Select every warship you have' },
     { input: 'Tap empty space or an enemy', action: 'Move the selected ships there, or attack that target' },
     { input: 'Build button, then tap the map', action: 'Place a building near one of your hubs' },
     { input: 'Train and research buttons', action: 'Queue ships at your Barracks or hub, or research upgrades' },
@@ -17,6 +18,7 @@ const en: HowToPlay = {
     { input: 'Flagship button', action: 'Build your one flagship at the hub, once three contracts are done' },
     { input: 'Rivals on the top bar, or T', action: 'Open the rivals panel to accept truces or pay tribute' },
     { input: 'Arrow keys / WASD, or drag with two fingers', action: 'Scroll the map' },
+    { input: 'Tap or drag on the minimap', action: 'Move the view there' },
     { input: 'H', action: 'Centre the map on your hub' },
   ],
   loop: [
@@ -55,6 +57,7 @@ const de: HowToPlay = {
     { input: 'Einen offenen Sektor unter den Karten antippen', action: 'Den Feldzugssektor wählen, in dem du kämpfst' },
     { input: 'Eine Karte auf dem Vertragsbrett antippen', action: 'Diesen Vertrag als nächstes Ziel annehmen' },
     { input: 'Ein Schiff antippen oder einen Rahmen über Schiffe ziehen', action: 'Deine Kampfschiffe wählen' },
+    { input: 'Die Flottenzahl in der oberen Leiste oder Q', action: 'Alle deine Kriegsschiffe wählen' },
     { input: 'Freien Raum oder einen Feind antippen', action: 'Die gewählten Schiffe dorthin fliegen lassen oder das Ziel angreifen' },
     { input: 'Bau-Taste, dann auf die Karte tippen', action: 'Ein Gebäude nahe einer deiner Basen setzen' },
     { input: 'Bau- und Forschungstasten', action: 'Schiffe an Kaserne oder Basis einreihen oder Verbesserungen erforschen' },
@@ -64,6 +67,7 @@ const de: HowToPlay = {
     { input: 'Flaggschiff-Taste', action: 'Dein einziges Flaggschiff an der Basis bauen, sobald drei Verträge erfüllt sind' },
     { input: 'Rivalen in der oberen Leiste oder T', action: 'Die Rivalenliste öffnen, um Waffenruhen anzunehmen oder Tribut zu zahlen' },
     { input: 'Pfeiltasten / WASD oder mit zwei Fingern ziehen', action: 'Die Karte verschieben' },
+    { input: 'Auf die Minikarte tippen oder darauf ziehen', action: 'Die Ansicht dorthin bewegen' },
     { input: 'H', action: 'Die Karte auf deine Basis zentrieren' },
   ],
   loop: [

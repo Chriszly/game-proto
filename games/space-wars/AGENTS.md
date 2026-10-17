@@ -46,8 +46,8 @@ Implemented today:
 - Attack alerts (`WorldEvent` kind `hit`, `World.alarm`, `GameScene.alerts`, `alarm`, `drawAlerts`,
   `jumpToAlert`): every rival hit on a player unit or building (a shot, a splash, a mine; not on a
   decoy, never in watch mode) pushes a `hit` event with the spot and what was hit (`Struck`:
-  `harvester`, `ship` or `building`). The scene refreshes the live alert within `ALERT_NEAR` (160 px)
-  or raises a new one, which says what is under attack on the message line (`alertHarvesters`,
+  `harvester`, `ship` or `building`). The scene moves the live alert within `ALERT_NEAR` (160 px)
+  to the newest hit or raises a new one, which says what is under attack on the message line (`alertHarvesters`,
   `alertShips`, `alertBuilding`); an alert lasts `ALERT_MS` (8 s of scene time) after its last hit.
   Each draws a pulsing `ALERT_COLOR` ring on the map (still with reduced motion), and one off screen
   an arrow on the map's edge (`edgeMarks`, drawn on `uiGfx`); Space (`keydown-SPACE`) or a tap on an
@@ -62,6 +62,17 @@ Implemented today:
   takes up targets in sight once it arrives. Harvesters and ships already flying are left alone.
   The flag is a mustard pennant with a dashed ring and a faint line from each finished Barracks. The
   AI never sets one.
+- Minimap (`MINIMAP` in `layout.ts`, `GameScene.drawMinimap`, `fromMini`, `miniDrag`, `MINI_KEY`):
+  a 160 by 100 box in the map's bottom-right corner, one pixel a fog cell. A canvas texture
+  repainted every `MINI_EVERY` (6) frames from `fog.visible` and `fog.explored` holds the
+  background; `miniGfx` draws known crystal, the beacon, known buildings (squares), seen ships
+  (dots, selected ones bigger), the alerts and the camera's window over it each frame. A press on
+  it centres the map there and a drag keeps following (in watch mode too); it is hidden on the
+  picker.
+- Select the fleet and spread a wing (`World.fleet`, `GameScene.selectFleet`, `ARMY_TAB` in
+  `layout.ts`): a tap on the army count on the top bar, or Q (`keydown-Q`), selects every warship.
+  `World.command` sends a wing of two or more on a move to the `RALLY_SPOTS` round the point, so it
+  fans out instead of stacking; an attack order is unchanged.
 - Derelict stations (`World.derelicts`, `Derelict`, `updateDerelict`, `DERELICT_DEFS`): three neutral
   wrecks per map, one of each `DerelictKind`: `sensors` (the owner sees 280 px round it,
   `SENSOR_RANGE`, stamped into the player's fog and spotting ships in nebulae), `shipyard` (it is a
@@ -231,10 +242,10 @@ Missing or rough:
 
 - No pathfinding (units move in straight lines and pass over rocks), no unit
   collision, no sound and no save.
-- No minimap and no edge scrolling: the map scrolls with the keys or a two-finger drag.
+- No edge scrolling: the map scrolls with the keys, a two-finger drag or the minimap.
 - The rivals' Barracks and Turrets are placed at random within 60 to 150 px of their hub.
 - Ships of a type spawn on the same spot and stack (no collision), so a fresh wing looks like one
-  ship until it moves, unless a rally point fans it out. A wing moved to one point stacks there too.
+  ship until it moves, unless a rally point fans it out.
 - The AI ignores contracts (beyond hunting a convoy and the survive raid) and sees through the fog
   (but not into nebulae). Rivals left alone wipe each other out fast: the centre faction usually
   falls first, until the last-stand pact turns the last two on the player.
@@ -306,7 +317,7 @@ File map (`src/`):
   `CONVOY_SIZE`, `PACT_MS`, `PACT_WAVE_MS`), `flagshipStats` and the types `Beacon`, `Shard`, `Mine`,
   `Pop`, `Build`, `ContractState`, `Pact`, `WorldEvent`, `Struck`, `Derelict`. Fields `fog`, `known`, `mines`,
   `derelicts`, `contract`, `convoyTo`, `pact`, `sector`. Methods the scene and test use: `update(dt)`, `build`, `train`, `research`,
-  `command`, `fallBack`, `setRally`, `clearRally`, `pickContract`, `currentContract`, `buildFlagship`, `abilityOf`, `acceptTruce`, `declineTruce`, `bribe`, `bribeTarget`, `selectableIn`,
+  `command`, `fallBack`, `setRally`, `clearRally`, `fleet`, `pickContract`, `currentContract`, `buildFlagship`, `abilityOf`, `acceptTruce`, `declineTruce`, `bribe`, `bribeTarget`, `selectableIn`,
   `selectable`, `entityAt`, `derelictAt`, `placementProblem`, `count`, `hubOf`, `hubsOf`,
   `seesUnit`, `knowsBuilding`, `seesMine`, `inNebula`, `atPeace`, `rankOf`, `veteranBonus`, `unit`,
   `building`. No Phaser import.
@@ -316,7 +327,7 @@ File map (`src/`):
   rivals panel and its buttons as last drawn), `boardCards` and `keepCards` (`GoalCard`s: the
   contract board's and the victory's perk cards as last drawn), `campaign`, `sector` and
   `sectorNodes`. The board, pact banner, convoy label, perk cards and sector strip texts, and the
-  Flagship and Rally buttons' captions, are made in `create` with `Math.random` swapped for a `localRandom`:
+  Flagship and Rally buttons' captions and the minimap, are made in `create` with `Math.random` swapped for a `localRandom`:
   every Phaser text draws its texture key from `Math.random`, so new texts made the ordinary way
   would shift the seeded playthrough's map and AI. `update(time)` steps the world by the frame
   gap (clamped to 100 ms), reads `World.events`, pans the camera from the keys and draws everything.
@@ -344,7 +355,7 @@ File map (`src/`):
   line), `FLAGSHIP_BUTTON` (kind `command`, key `flagship`, above the build row), `RALLY_BUTTON`
   (kind `command`, key `rally`, last in `BUTTONS`, left of the Flagship button),
   `BOARD` (the contract board's header and cards), `SECTOR_STRIP` (the picker's campaign strip),
-  `KEEP` (the victory's perk cards), `PANEL_X` (where the message line and contract panel start), `RIVALS_PANEL` and `RIVALS_TAB`
+  `KEEP` (the victory's perk cards), `MINIMAP` and `ARMY_TAB`, `PANEL_X` (where the message line and contract panel start), `RIVALS_PANEL` and `RIVALS_TAB`
   (the rivals panel's box and the top bar area that opens it), `ROLE_LABEL` (the generic
   name of each building and unit type as a `TextKey`, shown under the faction's own name), `FONT` (a system sans
   stack, bold italic for headings).

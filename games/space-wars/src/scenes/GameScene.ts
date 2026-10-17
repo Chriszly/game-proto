@@ -23,7 +23,7 @@ import { mountWatch, watching, watchSteps } from '../../../../shared/watch';
 import { renderScale, viewPoint } from '../../../../shared/scaling';
 // `tr` is the game's translator (`t` in the other files): `t` names the scene's text helpers here.
 import { t as tr } from '../i18n';
-import { BAR, BOARD, BUTTONS, FONT, KEEP, MAP_VIEW, PANEL_X, RIVALS_PANEL, RIVALS_TAB, ROLE_LABEL, SECTOR_STRIP, TOP, VIEW, type Button } from './layout';
+import { ARMY_TAB, BAR, BOARD, BUTTONS, FONT, KEEP, MAP_VIEW, MINIMAP, PANEL_X, RIVALS_PANEL, RIVALS_TAB, ROLE_LABEL, SECTOR_STRIP, TOP, VIEW, type Button } from './layout';
 
 // Game time for one step at most, so a hidden tab doesn't jump the battle ahead.
 const MAX_STEP_MS = 100;
@@ -93,6 +93,9 @@ const ALERT_MS = 8000;
 const ALERT_COLOR = 0xff5a2c;
 /** How close to the rally flag a tap in rally mode takes it down, in battlefield pixels. */
 const RALLY_GRAB = 22;
+/** The minimap's canvas texture, and how often it is repainted (in frames). */
+const MINI_KEY = 'space-wars-minimap';
+const MINI_EVERY = 6;
 const TAKEOVER = FACTIONS.map((f) => f.units.gunship.ability).find((a) => a?.kind === 'hack')?.takeover ?? 1;
 
 /** A place where a rival is hitting the player: a ring on the map, and an arrow on the map's edge while it is off screen. */
@@ -157,6 +160,12 @@ export class GameScene extends Phaser.Scene {
   alerts: Alert[] = [];
   /** The edge arrows of off-screen alerts as last drawn, in view pixels; tapping one jumps to its alert. */
   private edgeMarks: { x: number; y: number; alert: Alert }[] = [];
+  /** Whether a press on the minimap is being dragged: the map follows it. */
+  private miniDrag = false;
+  private miniTex!: Phaser.Textures.CanvasTexture;
+  private miniData!: ImageData;
+  private miniGfx!: Phaser.GameObjects.Graphics;
+  private miniImage!: Phaser.GameObjects.Image;
   /** Whether the faction picker is up: nothing moves until the player picks a faction. */
   picking = true;
   /** Whether the rivals panel (truces and tribute) is open over the map. */
@@ -362,6 +371,8 @@ export class GameScene extends Phaser.Scene {
     const playing = () => !this.picking && !watching && this.state.phase === 'playing';
     this.input.keyboard!.on('keydown-R', () => playing() && this.press(BUTTONS.find((b) => b.key === 'rally')!));
     this.input.keyboard!.on('keydown-SPACE', () => playing() && this.jumpToAlert());
+    // Q selects every warship.
+    this.input.keyboard!.on('keydown-Q', () => playing() && this.selectFleet());
     this.newGame();
     // Every Phaser text draws from Math.random for its texture's key, and the map and the AI draw from
     // it too: these are made on a generator of their own, so a seeded battle plays as it did before them.
@@ -369,6 +380,13 @@ export class GameScene extends Phaser.Scene {
     Math.random = localRandom(0.5);
     this.captions.push(caption(BUTTONS.find((b) => b.key === 'flagship')!));
     this.captions.push(caption(BUTTONS.find((b) => b.key === 'rally')!));
+    // The minimap: a canvas of one pixel a fog cell for the explored space, and the dots drawn over it.
+    this.miniTex = this.textures.exists(MINI_KEY)
+      ? this.textures.get(MINI_KEY) as Phaser.Textures.CanvasTexture
+      : this.textures.createCanvas(MINI_KEY, FOG_COLS, FOG_ROWS)!;
+    this.miniData = this.miniTex.context.createImageData(FOG_COLS, FOG_ROWS);
+    this.miniImage = this.onUi(this.add.image(MINIMAP.x, MINIMAP.y, MINI_KEY).setOrigin(0).setDisplaySize(MINIMAP.w, MINIMAP.h).setDepth(13));
+    this.miniGfx = this.onUi(this.add.graphics().setDepth(14));
     // The contract board: a header over two cards at the map's top while the next contract is picked.
     this.boardHead = t(VIEW.w / 2, BOARD.y, 11, INK_CSS.mustard, true, 22).setOrigin(0.5, 0).setStroke(INK_CSS.chocolate, 4);
     this.boardTexts = [0, 1].map(() => ({
@@ -451,6 +469,7 @@ export class GameScene extends Phaser.Scene {
     this.rallyMode = false;
     this.alerts = [];
     this.edgeMarks = [];
+    this.miniDrag = false;
     this.drag = null;
     this.touchPan = null;
     this.message = '';
@@ -530,12 +549,21 @@ export class GameScene extends Phaser.Scene {
   private alarm(x: number, y: number, struck: Struck) {
     const near = this.alerts.find((a) => Math.hypot(a.x - x, a.y - y) <= ALERT_NEAR);
     if (near) {
+      // The alert follows the fight as it moves.
+      near.x = x;
+      near.y = y;
       near.last = this.clock;
       return;
     }
     this.alerts.push({ x, y, first: this.clock, last: this.clock, struck });
     const key = struck === 'harvester' ? 'alertHarvesters' : struck === 'ship' ? 'alertShips' : 'alertBuilding';
     this.message = tr(key);
+  }
+
+  /** Selects every warship the player has (the army count on the top bar, or Q). */
+  private selectFleet() {
+    this.selected = new Set(this.state.fleet());
+    this.message = this.selected.size ? tr('fleetSelected', { n: this.selected.size }) : tr('noFleet');
   }
 
   /** Centres the map on the latest attack alert (Space, or a tap on its edge arrow). */
@@ -659,7 +687,79 @@ export class GameScene extends Phaser.Scene {
     this.drawPact();
     this.drawConvoy();
     this.drawKeep();
+    this.drawMinimap();
     this.drawPicker();
+  }
+
+  /** Where a view pixel on the minimap is on the battlefield. */
+  private fromMini(x: number, y: number) {
+    return { x: ARENA.x + ((x - MINIMAP.x) / MINIMAP.w) * ARENA.w, y: ARENA.y + ((y - MINIMAP.y) / MINIMAP.h) * ARENA.h };
+  }
+
+  /**
+   * The minimap in the map's bottom-right corner: unexplored space near black, explored space dim
+   * violet and what the player sees now lighter (repainted every MINI_EVERY frames), then crystal,
+   * the beacon, every known building as a square and every seen ship as a dot in its faction's
+   * colour, the attack alerts as orange rings and the map camera's window as a cream frame.
+   */
+  private drawMinimap() {
+    const g = this.miniGfx.clear();
+    const show = !this.picking;
+    this.miniImage.setVisible(show);
+    if (!show) return;
+    const s = this.state;
+    if (this.fogFrame % MINI_EVERY === 1) {
+      const d = this.miniData.data;
+      for (let i = 0; i < FOG_COLS * FOG_ROWS; i++) {
+        const [r, gr, b] = s.fog.visible[i] ? [74, 46, 104] : s.fog.explored[i] ? [44, 26, 64] : [16, 8, 26];
+        d[i * 4] = r;
+        d[i * 4 + 1] = gr;
+        d[i * 4 + 2] = b;
+        d[i * 4 + 3] = 255;
+      }
+      this.miniTex.context.putImageData(this.miniData, 0, 0);
+      this.miniTex.refresh();
+    }
+    const m = MINIMAP;
+    const kx = m.w / ARENA.w;
+    const ky = m.h / ARENA.h;
+    const at = (p: { x: number; y: number }) => ({ x: m.x + (p.x - ARENA.x) * kx, y: m.y + (p.y - ARENA.y) * ky });
+    g.fillStyle(INK.sky, 0.8);
+    for (const n of s.nodes) {
+      if (n.amount <= 0 || !s.fog.knows(n)) continue;
+      const q = at(n);
+      g.fillRect(q.x - 0.75, q.y - 0.75, 1.5, 1.5);
+    }
+    if (s.watch || s.fog.knows(s.beacon)) {
+      const q = at(s.beacon);
+      g.lineStyle(1, s.beacon.owner >= 0 ? s.sides[s.beacon.owner].def.color : INK.cream, 1);
+      g.strokeCircle(q.x, q.y, 3);
+    }
+    for (const b of s.buildings) {
+      if (!s.knowsBuilding(b)) continue;
+      const q = at(b);
+      const r = b.type === 'hub' ? 3.5 : 2;
+      g.fillStyle(s.sides[b.faction].def.color, 1);
+      g.fillRect(q.x - r, q.y - r, r * 2, r * 2);
+      g.lineStyle(1, INK.chocolate, 1);
+      g.strokeRect(q.x - r, q.y - r, r * 2, r * 2);
+    }
+    for (const u of s.units) {
+      if (!s.seesUnit(u)) continue;
+      const q = at(u);
+      g.fillStyle(s.sides[u.faction].def.color, 1);
+      g.fillCircle(q.x, q.y, u.faction === PLAYER && this.selected.has(u.id) ? 1.8 : 1.3);
+    }
+    for (const a of this.alerts) {
+      const q = at(a);
+      g.lineStyle(1.5, ALERT_COLOR, 1);
+      g.strokeCircle(q.x, q.y, settings.reduceMotion ? 5 : 4 + ((this.clock / 120) % 4));
+    }
+    // The map camera's window, and the frame round the minimap.
+    g.lineStyle(1, INK.cream, 0.9);
+    g.strokeRect(m.x + (this.camera.scrollX - ARENA.x) * kx, m.y + (this.camera.scrollY - ARENA.y) * ky, MAP_VIEW.w * kx, MAP_VIEW.h * ky);
+    g.lineStyle(2, INK.mustard, 1);
+    g.strokeRect(m.x - 1, m.y - 1, m.w + 2, m.h + 2);
   }
 
   /**
@@ -1733,6 +1833,13 @@ export class GameScene extends Phaser.Scene {
       this.newGame();
       return;
     }
+    // A press on the minimap centres the map there, and dragging it keeps following.
+    if (!this.picking && inside(MINIMAP)) {
+      const at = this.fromMini(p.x, p.y);
+      this.centreOn(at.x, at.y);
+      this.miniDrag = true;
+      return;
+    }
     // Watching, the AI gives every order; the map still pans.
     if (watching) return;
     if (this.picking) {
@@ -1758,6 +1865,11 @@ export class GameScene extends Phaser.Scene {
       this.rallyMode = false;
       this.selected.clear();
       this.rivalsOpen = false;
+      return;
+    }
+    // The army count on the top bar selects every warship.
+    if (p.y < TOP.h && p.x >= ARMY_TAB.x && p.x < ARMY_TAB.x + ARMY_TAB.w) {
+      this.selectFleet();
       return;
     }
     // The rivals area of the top bar opens the panel; its buttons answer offers and pay tribute.
@@ -1828,6 +1940,11 @@ export class GameScene extends Phaser.Scene {
       }
       return;
     }
+    if (this.miniDrag) {
+      const at = this.fromMini(Phaser.Math.Clamp(p.x, MINIMAP.x, MINIMAP.x + MINIMAP.w), Phaser.Math.Clamp(p.y, MINIMAP.y, MINIMAP.y + MINIMAP.h));
+      this.centreOn(at.x, at.y);
+      return;
+    }
     if (this.drag) {
       this.drag.x1 = p.x;
       this.drag.y1 = p.y;
@@ -1838,6 +1955,10 @@ export class GameScene extends Phaser.Scene {
     const p = viewPoint(pointer);
     const d = this.drag;
     this.drag = null;
+    if (this.miniDrag) {
+      this.miniDrag = false;
+      return;
+    }
     // Lifting either finger ends a two-finger scroll; the other finger's lift is not a tap.
     if (this.touchPan) {
       if (!this.twoFingers()) this.touchPan = null;

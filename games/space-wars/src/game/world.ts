@@ -788,11 +788,17 @@ export class World {
       side.grudge = PLAYER;
       this.events.push({ kind: 'notice', text: t('truceBroken', { faction: t(side.def.name) }) });
     }
-    for (const u of units) {
+    // A wing sent to one point fans out round it (RALLY_SPOTS) rather than stacking on it.
+    units.forEach((u, k) => {
+      const spot = units.length > 1 ? RALLY_SPOTS[k % RALLY_SPOTS.length] : { x: 0, y: 0 };
       u.order = target && target.faction !== PLAYER
         ? { kind: 'attack', id: target.id, auto: false }
-        : { kind: 'move', x, y };
-    }
+        : {
+          kind: 'move',
+          x: Math.min(ARENA.x + ARENA.w - 8, Math.max(ARENA.x + 8, x + spot.x)),
+          y: Math.min(ARENA.y + ARENA.h - 8, Math.max(ARENA.y + 8, y + spot.y)),
+        };
+    });
     return units.length > 0;
   }
 
@@ -929,6 +935,11 @@ export class World {
     return this.units
       .filter((u) => this.commandable(u) && u.x >= left && u.x <= right && u.y >= top && u.y <= bottom)
       .map((u) => u.id);
+  }
+
+  /** Every combat unit the player can command, for selecting the whole fleet. */
+  fleet(): number[] {
+    return this.units.filter((u) => this.commandable(u)).map((u) => u.id);
   }
 
   /** Whether a click on this unit selects it: only the player's combat units. */
