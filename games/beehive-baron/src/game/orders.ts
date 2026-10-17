@@ -9,6 +9,8 @@ export const ORDERS_FROM = 3;
 export const ORDER_GAP_MS = 20_000;
 /** How long the village waits for an order. */
 export const ORDER_MS = 120_000;
+/** An order only asks for a kind whose meadow stays open at least this long, and lapses when it shuts. */
+export const ORDER_MIN_MS = 60_000;
 /** The premium per jar ordered, paid once the whole order is sold. */
 export const ORDER_COINS_PER_JAR = 8;
 

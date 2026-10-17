@@ -12,7 +12,8 @@ export const SEASON_MS = 120_000;
 export const YEAR_MS = SEASON_MS * SEASONS.length;
 /** Each forager brings this much more nectar a trip in summer. */
 export const SUMMER_NECTAR = 1;
-/** In winter the bees eat one jar of honey this often; with no jar they eat a capped cell, and with none of those a bee starves. */
+/** In winter the bees eat this often, a jar of honey per `BEES_PER_MEAL` bees (at least one); with no jar they eat a capped cell, and with none of those a bee starves. */
 export const WINTER_EAT_MS = 20_000;
+export const BEES_PER_MEAL = 4;
 /** The kind the bees eat first: the cheapest jars go first. */
 export const EAT_ORDER = ['clover', 'lavender', 'heather'] as const;

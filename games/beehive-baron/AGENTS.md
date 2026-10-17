@@ -33,7 +33,8 @@ Implemented today:
   base price is multiplied by `DEMAND` (1.5); a `demand` event floats a message when it moves.
 - Village orders (`src/game/orders.ts`): from `ORDERS_FROM` (3) jars sold, an order for 3 to 5
   jars of an open kind comes `ORDER_GAP_MS` (20s) after the last one ended and lapses after
-  `ORDER_MS` (2 min). `sell` counts that kind's jars toward it and pays `premium` (8 a jar) once it
+  `ORDER_MS` (2 min), or sooner when its meadow shuts (`openLeft`; a kind is only ordered while its
+  meadow stays open at least `ORDER_MIN_MS`, 60s, so no lavender order comes late in summer). `sell` counts that kind's jars toward it and pays `premium` (8 a jar) once it
   is complete. The order card sits in the shop's sixth spot (`ORDER`). Not saved.
 - Wasp raids (`src/game/wasps.ts`): from `WASPS_FROM` (8) jars sold, while a cell is capped and no
   wasp is raiding, `waspIn` counts down (40s, then 40 to 80s at random) and a wasp flies in to a
@@ -42,7 +43,7 @@ Implemented today:
   `swat`; a harvest of its cell sends it off empty-handed; Guard Bees (`ranks.guards`) drive it off
   as it lands. Not saved.
 - Brood cells: `BroodCell` (`type: 'brood'`, `hatchMs`) holds no nectar, hatches a bee every
-  `BROOD_MS` (45s) while there are fewer than `MAX_BEES`, and counts for the comb bonus. The Brood
+  `BROOD_MS` (45s) while there are fewer than `MAX_BEES` and it is not winter, and counts for the comb bonus. The Brood
   cell shop button arms `placing` in the scene; the next tap on an empty spot calls `buildBrood`
   (price `broodPrice`: `cellPrice` plus `BROOD_EXTRA`, 30). Bees are no longer bought.
 - Wax: `harvest` adds one to `wax`; `withWax` lets wax pay `WAX_COINS` (3) each for up to half of
@@ -70,8 +71,9 @@ Implemented today:
   adds `SUMMER_NECTAR` to `carry`; in autumn `isOpen` shuts lavender (the market, orders and
   `openKinds` follow, and `tick` sends foragers of a shut kind back to clover); in winter
   (`isWinter`) `send` refuses, the Waggle Dance does nothing, `gatherAway` adds nothing, no
-  contracts come, and every `WINTER_EAT_MS` (20s, `eatIn`) `eat` takes a jar (`EAT_ORDER`, cheapest
-  first), else empties a capped cell, else removes a bee (never the last; bees at home first).
+  contracts come, brood rests, and every `WINTER_EAT_MS` (20s, `eatIn`) the bees have one meal per
+  `BEES_PER_MEAL` (4) bees, at least one: each `eat` takes a jar (`EAT_ORDER`, cheapest first),
+  else empties a capped cell, else removes a bee (never the last; bees at home first).
   `years` counts the years come through; a `year` event marks each. The HUD stats show "Year N ·
   Season m:ss"; `SEASON_TINT` in `src/art/palette.ts` tints the scenery (a rectangle over it at
   depth 0.5). A new hive starts at `seasonMs` 0.
@@ -102,10 +104,13 @@ Implemented today:
   shop's eighth spot) calls `acceptContract`: with that many bees `atHome` it marks them `lent`
   (`Bee.lent`), pays up front, and `phase` becomes `lent` for `CONTRACT_MS` (90s); then they are
   home again (`returned`). Lent bees are home but never sent, and the scene hides their sprites;
-  the HUD counts them. An offer not taken lapses (`contract-lapsed`). Not saved.
+  the HUD counts them. An offer not taken lapses (`contract-lapsed`). A contract whose bees are
+  away is saved (`Progress.lent`: bees and time left) and `newHive` marks that many bees lent
+  again, so a reload can't bring paid-for bees home early; offers are not saved.
 - The county fair (`src/game/fair.ts`): once `fairOpen` (every meadow open) the goal card is the
   fair's and a tap on it toggles `entering` in the scene; the next tap on a capped cell calls
-  `enterFair`, which scores `touching(slot)` (built neighbours, up to 6), takes the honey (wax, no
+  `enterFair`, which scores `fairScore(slot)` (neighbours capped with honey of the same kind, up
+  to 6), takes the honey (wax, no
   jar), and keeps the best score per kind in `fair` (`FairEntries`, null until entered). With all
   three kinds entered the total (`fairTotal`) is judged: `FAIR_GOLD` (14) or more sets `baron`
   and pushes `baron`, which shows the end card (`END_CARD`, tap to keep playing); less pushes
@@ -125,8 +130,9 @@ Missing or rough:
 - The build preview needs a pointer that hovers; on a phone a tap builds without one.
 - "New hive" resets at once with no confirmation.
 - `spilled` is not saved and only shows as floating text.
-- Brood cells do not hatch while the page is closed, casks do not age, the bees do not eat, and
-  the market timer, wasps, orders, contracts and a gathering swarm start afresh on load.
+- Brood cells do not hatch while the page is closed, casks do not age, the bees do not eat, lent
+  bees' contract time does not run, and the market timer, wasps, orders, contract offers and a
+  gathering swarm start afresh on load.
 - Lent bees are drawn nowhere (the orchard is off screen); the contract card and HUD count them.
 - A wasp raiding the comb not shown is hidden until its `wasp` event brings that comb to the
   front; a tab switch while it sits there hides it again (it still steals).
@@ -147,9 +153,9 @@ File map (`src/`):
   `emptyCell`, `newHive` (which also checks saved cells and moves old ones to clover), `progressOf`
   (stamps `seen` with `Date.now()`), and the formulas `isHoney`, `isBrood`, `isOpen`, `openKinds`,
   `demand`, `marketLeft`, `season`, `seasonLeft`, `isWinter`, `maxBees`, `atHome`, `crowded`,
-  `meadValue`, `meadReady`, `cellarValue`, `caskDone`, `fairTotal`, `fairOpen`, `carry`,
+  `meadValue`, `meadReady`, `cellarValue`, `caskDone`, `fairTotal`, `fairOpen`, `openLeft`, `carry`,
   `ripenTime`, `cellPrice` and `broodPrice` (per hive), `withWax`, `room` (per kind), `jarCount`,
-  `neighbours`, `touching`, `sharedEdges`, `combBonus`, `jarPrice` (per kind) and `shelfValue`
+  `neighbours`, `touching`, `fairScore`, `sharedEdges`, `combBonus`, `jarPrice` (per kind) and `shelfValue`
   (jars and ready mead).
 - `game/sim.ts`: the rules as pure functions on `GameState`: `tick`, `build`, `buildBrood`,
   `canPay`, `send`, `forage`, `harvest`, `sell` (which also sells ready mead, fills the order and
@@ -254,18 +260,19 @@ State model (`src/game/state.ts`):
 - `meadows` counts the unlocked entries of `MEADOWS`, in order. `sell` unlocks every meadow whose
   `need` the new `sold` reaches and pushes an `unlocked` event for each.
 - `bees` holds one `Bee` per bee owned: `tripMs` (0 while home), `trip` (the whole trip's length),
-  `flower`, `kind` and `lent`. Only the count is saved; `newHive` rebuilds them all at home.
+  `flower`, `kind` and `lent`. Only the count (and the lent contract) is saved; `newHive` rebuilds
+  them all at home, then marks the saved contract's bees lent.
 - `room` is the nectar of the foraged kind the filling cells can still take; `send` refuses when it
   is 0 or no bee is home, and `gatherAway` never adds more than it.
-- `wasps`, `waspIn`, `order`, `orderIn`, `contract`, `contractIn`, `swarmIn`, `eatIn` and
-  `marketMs` live only in the running state.
+- `wasps`, `waspIn`, `order`, `orderIn`, `contractIn`, `swarmIn`, `eatIn` and `marketMs` live
+  only in the running state, and `contract` too while it is an offer.
 - Only `src/game/sim.ts` changes rules state; the scene replaces `state` wholesale only on load and
   on "New hive".
 
 Persistence: one key of its own, `beehive-baron-progress`, holding `Progress` as JSON (`coins`,
 `cells`, `bees`, `jars` per kind, `wax`, `sold`, `ranks`, `meadows`, `forage`, `seasonMs`,
-`years`, `casks`, `hives`, `fair`, `baron`, `seen`). `seen` is the `Date.now()` of the last save, 0
-for a hive never saved (no away nectar then). Bee trips, `spilled`, wasps, orders, contracts, the
+`years`, `casks`, `hives`, `fair`, `baron`, `lent`, `seen`). `seen` is the `Date.now()` of the last save, 0
+for a hive never saved (no away nectar then). Bee trips, `spilled`, wasps, orders, contract offers, the
 swarm, the market's clock and events are not saved. Saves from before the honey kinds load with
 `jars` as a number (taken as clover), cells without `type`/`kind` (honey cells of clover) and no
 `wax`/`forage`; saves from before the seasons have none of the new fields and start in spring with
@@ -359,7 +366,7 @@ the fair's gold in `src/game/fair.ts`.
   `GameScene.ts`. The shop is a 2x4 grid (`SHOP_BUTTONS`, `shopSpot` in `layout.ts`) with the
   order and contract cards in the last two spots, so it is full: a new button needs a card moved
   or smaller buttons.
-- Retune the seasons: `SEASON_MS`, `SUMMER_NECTAR`, `WINTER_EAT_MS` and `EAT_ORDER` in
+- Retune the seasons: `SEASON_MS`, `SUMMER_NECTAR`, `WINTER_EAT_MS`, `BEES_PER_MEAL` and `EAT_ORDER` in
   `src/game/seasons.ts`; what each season does lives in `carry`, `isOpen` (`state.ts`) and `turn`,
   `eat`, `send`, `gatherAway`, `contracts` (`sim.ts`); the tints in `SEASON_TINT`. A season's
   message is in `drawEvents`. Update the README's season table.
@@ -370,7 +377,7 @@ the fair's gold in `src/game/fair.ts`.
   plaque.
 - Retune contracts: `src/game/contracts.ts`. Keep `CONTRACTS_FROM` above 1 like the raids and
   orders.
-- Retune the fair: `FAIR_GOLD` in `src/game/fair.ts`; the score is `touching` in `enterFair`.
+- Retune the fair: `FAIR_GOLD` in `src/game/fair.ts`; the score is `fairScore` in `state.ts`.
 - Add a honey kind: add it to `Kind` and `HONEY` in `src/game/honey.ts` (and `noJars`), a
   `KIND_CARD` entry in `src/art/palette.ts`, a meadow strip for it in `KIND_MEADOW` in
   `layout.ts`, and room for a fourth entry on the market (`MARKET.entry`).

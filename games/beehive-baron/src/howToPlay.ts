@@ -26,8 +26,8 @@ export const howToPlay: HowToPlay = {
     'Goals of jars sold unlock new meadows, each with its own honey and a lasting benefit.',
     'Bees are not bought: brood cells hatch them.',
     "Wax from each harvest pays part of a new cell's price.",
-    'In winter the bees stay home and eat honey, so keep some jars or capped cells back.',
+    'In winter the bees stay home and eat a jar for every 4 bees, so keep some jars or capped cells back.',
     'The Waggle Dance upgrade sends the bees out on their own.',
-    'Once every meadow is open, enter well-joined honey at the fair; 14 points win gold.',
+    'Once every meadow is open, enter honey at the fair: a cell scores 1 point per touching capped cell of its kind, and 14 points win gold.',
   ],
 };

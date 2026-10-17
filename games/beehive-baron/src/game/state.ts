@@ -1,4 +1,4 @@
-import { CONTRACT_GAP_MS, type Contract } from './contracts';
+import { CONTRACT_GAP_MS, CONTRACT_MS, type Contract } from './contracts';
 import { noEntries, type FairEntries } from './fair';
 import { DEMAND, HONEY, KINDS, MARKET_MS, noJars, type Kind } from './honey';
 import { CASK_MS, type Cask } from './mead';
@@ -173,6 +173,8 @@ export interface Progress {
   hives: number;
   fair: FairEntries;
   baron: boolean;
+  /** The orchard contract whose bees are away (paid up front), so a reload can't bring them home early; null if none. */
+  lent: { bees: number; leftMs: number } | null;
   /** When the hive was last seen (`Date.now()`), for the nectar gathered while away; 0 if never. */
   seen: number;
 }
@@ -193,6 +195,7 @@ export const freshProgress = (): Progress => ({
   hives: 1,
   fair: noEntries(),
   baron: false,
+  lent: null,
   seen: 0,
 });
 
@@ -251,6 +254,12 @@ export function newHive(progress: Progress): GameState {
     events: [],
   };
   if (isOpen(s, progress.forage)) s.forage = progress.forage;
+  // Bees lent to the orchard stay lent until their contract ends; the farmer paid for them already.
+  const lent = progress.lent && Math.min(progress.lent.bees, count - 1);
+  if (progress.lent && lent && lent > 0) {
+    for (const b of s.bees.slice(0, lent)) b.lent = true;
+    s.contract = { bees: lent, pay: 0, phase: 'lent', leftMs: Math.max(1, Math.min(CONTRACT_MS, progress.lent.leftMs)) };
+  }
   return s;
 }
 
@@ -270,6 +279,7 @@ export const progressOf = (s: GameState): Progress => ({
   hives: s.hives,
   fair: { ...s.fair },
   baron: s.baron,
+  lent: s.contract?.phase === 'lent' ? { bees: s.contract.bees, leftMs: s.contract.leftMs } : null,
   seen: Date.now(),
 });
 
@@ -301,6 +311,12 @@ export const isBrood = (c: Cell | null): c is BroodCell => c?.type === 'brood';
 /** Whether the bees can forage a kind now: its meadow is open, and the Lavender Field shuts for autumn. */
 export const isOpen = (s: GameState, kind: Kind) => s.meadows >= HONEY[kind].meadows && !(kind === 'lavender' && season(s) === 'autumn');
 export const openKinds = (s: GameState) => KINDS.filter((k) => isOpen(s, k));
+/** Game time until a kind's meadow shuts (only lavender shuts, in autumn): 0 while shut, Infinity if it never does. */
+export function openLeft(s: GameState, kind: Kind) {
+  if (!isOpen(s, kind)) return 0;
+  if (kind !== 'lavender') return Infinity;
+  return (SEASONS.indexOf('autumn') * SEASON_MS - s.seasonMs + YEAR_MS) % YEAR_MS;
+}
 /** The kind the market wants now, or null while only one kind is open. Each holds for `MARKET_MS`. */
 export function demand(s: GameState): Kind | null {
   const open = openKinds(s);
@@ -352,6 +368,15 @@ export function neighbours(slot: number) {
 }
 /** How many built cells a spot shares an edge with. */
 export const touching = (s: GameState, slot: number) => neighbours(slot).filter((n) => s.cells[n] !== null).length;
+/** What a capped cell's honey scores at the fair: one point per neighbour capped with honey of its kind, up to 6. */
+export function fairScore(s: GameState, slot: number) {
+  const c = s.cells[slot];
+  if (!isHoney(c) || c.phase !== 'capped') return 0;
+  return neighbours(slot).filter((n) => {
+    const o = s.cells[n];
+    return isHoney(o) && o.phase === 'capped' && o.kind === c.kind;
+  }).length;
+}
 /** Every edge two built cells share, as pairs of spots (lower spot first). Brood cells count too. */
 export const sharedEdges = (s: GameState) =>
   s.cells.flatMap((c, a) => (c ? neighbours(a).filter((b) => b > a && s.cells[b] !== null).map((b) => [a, b] as const) : []));
