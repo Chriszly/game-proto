@@ -304,7 +304,7 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
   const tapScreen = (p: Point) => page.mouse.click(box.x + (p.x * box.width) / VIEW.w, box.y + (p.y * box.width) / VIEW.w);
   await tapScreen(RECIPES_BUTTON);
   await play(STEP_MS, async () => false);
-  // The browser speaks US English, so the game does too: the Vigour Tonic is spelled Vigor.
+  // British English is the default language, so the Vigour Tonic is spelled the British way.
   expect(await game.recipes()).toEqual({
     open: true,
     lines: [
@@ -315,7 +315,7 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
       'Nightshade Extract + Mandrake Seeds = Shadow Elixir',
       'Nightshade Extract + Wheat Flour = Moonlight Salve',
       'Mandrake Seeds + Mandrake Seeds = Sleeping Tonic',
-      'Wheat Flour + Mandrake Seeds = Vigor Tonic',
+      'Wheat Flour + Mandrake Seeds = Vigour Tonic',
       'Wheat Flour + Wheat Flour = Healing Draught',
     ],
   });

@@ -26,13 +26,6 @@ export type Language = (typeof LANGUAGES)[number];
 /** Each language's own name, the same whatever language is chosen. */
 export const LANGUAGE_NAMES: Record<Language, string> = { en: 'English (UK)', 'en-US': 'English (US)', de: 'Deutsch' };
 
-/** The browser's language when one is offered (en-US, or any German), else British English. */
-function browserLanguage(): Language {
-  const code = (typeof navigator === 'undefined' ? '' : navigator.language).toLowerCase();
-  if (code === 'en-us') return 'en-US';
-  return code.startsWith('de') ? 'de' : 'en';
-}
-
 export interface Settings {
   /** How hard every game plays; each game decides what that scales. Normal is the game as designed. */
   difficulty: Difficulty;
@@ -46,7 +39,7 @@ export interface Settings {
   language: Language;
 }
 
-export const DEFAULTS: Settings = { difficulty: 'normal', fps: 60, showFps: false, reduceMotion: false, language: browserLanguage() };
+export const DEFAULTS: Settings = { difficulty: 'normal', fps: 60, showFps: false, reduceMotion: false, language: 'en' };
 
 /**
  * One row of the hub's Settings panel. Labels and hints are keys of the shared texts

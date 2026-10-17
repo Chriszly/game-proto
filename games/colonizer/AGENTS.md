@@ -374,8 +374,8 @@ None: there is no save. Settings come from the hub (`shared/settings.ts`).
   `cameras.main.worldView.x/y` (not `scrollX/Y`, which differ once `renderScale` zooms the
   camera), and `toScreen(tx, ty)`. `e2e/screens.spec.ts` at the root opens the game on five screens. `state.camps` lists the camps with `holder`, `state.posts` the trading posts,
   and each building's `garrison` the villagers inside it.
-- The playthrough runs in the browser's US English, and plays the same in German (Playwright's
-  `locale: 'de-DE'`), since it finds buttons by `id`.
+- The playthrough runs in British English, the default language, and plays the same in German
+  (`?lang=de`), since it finds buttons by `id`.
 - Inputs are canvas clicks (left and right), so the test drives the real controls. It never writes
   to game state.
 - It seeds `Math.random`, owns `page.clock`, makes `requestAnimationFrame` a 64 ms timer and forces

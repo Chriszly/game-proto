@@ -109,8 +109,8 @@ test('hub settings reach the games', async ({ page }, testInfo) => {
     fps: 30,
     showFps: true,
     reduceMotion: false,
-    // The browser under test speaks US English, so that is the default.
-    language: 'en-US',
+    // British English is the default, whatever language the browser speaks.
+    language: 'en',
   });
 
   // A game opened now shows the FPS readout.
@@ -226,7 +226,8 @@ test('hub switches language', async ({ page }, testInfo) => {
   await expect(page.locator('h1')).toHaveText('Game hub');
   await page.getByRole('button', { name: 'Settings' }).click();
   const dialog = page.getByRole('dialog', { name: 'Settings' });
-  await expect(dialog.getByRole('group', { name: 'Language' }).getByRole('button', { name: 'English (US)' })).toHaveAttribute('aria-pressed', 'true');
+  // A first visit is in British English, though the browser under test speaks US English.
+  await expect(dialog.getByRole('group', { name: 'Language' }).getByRole('button', { name: 'English (UK)' })).toHaveAttribute('aria-pressed', 'true');
   await dialog.getByRole('group', { name: 'Language' }).getByRole('button', { name: 'Deutsch' }).click();
 
   // The hub switches without a reload: the page, the panel, the cards and the play counts.

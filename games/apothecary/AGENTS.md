@@ -489,7 +489,7 @@ brew's `out` may be `PANACEA`.
   `player.body.center` (feet), `pointerTarget`, `away` (null on a fresh game), `pallets[id].in/out` (each `Pallet`'s `item` and
   `count`), `recipes.visible` and `recipes.lines`, `customers` (id, x, y, `arrived`) and
   `cameras.main.worldView.x/y` (not `scrollX/Y`, which differ once `renderScale` zooms the
-  camera). The browser runs in US English, so the recipe lines spell "Vigor Tonic". Several of these are private in TypeScript; renaming them breaks the
+  camera). The game runs in British English, the default language, so the recipe lines spell "Vigour Tonic". Several of these are private in TypeScript; renaming them breaks the
   test without a type error.
 - Inputs: canvas clicks only (walking, the Recipes button at screen 219,22, a tap on the panel to
   close it). It
