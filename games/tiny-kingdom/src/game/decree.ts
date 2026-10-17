@@ -12,9 +12,7 @@ export type At = [col: number, row: number];
 
 export interface Decree {
   kind: DecreeKind;
-  /** The decree in a line, for the banner. */
-  text: string;
-  /** The lake or wood it names ('' for a watch decree). */
+  /** The lake or wood it names, by its English name as an id ('' for a watch decree); the scene words the decree from kind, place and need. */
   place: string;
   /** The named lake's or wood's cells. */
   cells: At[];
@@ -86,7 +84,7 @@ function compass(cells: At[]) {
   return dy > 0 ? 'South' : 'North';
 }
 
-/** Every lake or wood with a name from where it lies: Eastmere, Westpool, Northwood, ... */
+/** Every lake or wood with a name from where it lies: Eastmere, Westpool, Northwood, ... The English name is its id; `placeName` in `i18n.ts` shows it in the hub's language. */
 export function namedPlaces(grid: Cell[][], kind: 'lake' | 'forest') {
   const endings = kind === 'lake' ? ['mere', 'pool', 'tarn', 'water'] : ['wood', 'grove', 'holt', 'shaw'];
   const used = new Map<string, number>();
@@ -129,22 +127,16 @@ export function decreeMarks(grid: Cell[][], decree: Decree): DecreeMarks {
 /** How many more a new decree asks for than the board already has. */
 const ASK = { shore: 3, wood: 2, watch: 3 };
 
-function plural(n: number, one: string, many: string) {
-  return `${n} ${n === 1 ? one : many}`;
-}
-
 function makeDecree(grid: Cell[][], kind: DecreeKind, place: string, cells: At[]): Decree | null {
-  const draft: Decree = { kind, text: '', place, cells, need: 0, done: false };
+  const draft: Decree = { kind, place, cells, need: 0, done: false };
   const now = decreeMarks(grid, draft);
   if (kind === 'watch') {
     // One tower with three houses around it; offered only while no tower has three yet.
     if (now.have >= ASK.watch || !grid.some((cells) => cells.includes('grass'))) return null;
-    return { ...draft, need: ASK.watch, text: `A tower watching ${ASK.watch} houses` };
+    return { ...draft, need: ASK.watch };
   }
   if (now.spots.length < ASK[kind]) return null;
-  const need = now.have + ASK[kind];
-  const text = kind === 'shore' ? `${plural(need, 'farm', 'farms')} on the shore of ${place}` : `${plural(need, 'house', 'houses')} by ${place}`;
-  return { ...draft, need, text };
+  return { ...draft, need: now.have + ASK[kind] };
 }
 
 /**

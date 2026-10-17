@@ -13,3 +13,8 @@ export function pinToScreen<T extends Phaser.GameObjects.Container>(container: T
   }
   return container;
 }
+
+/** Shrinks `text` to at most `max` pixels wide (a long translation, or a long line of news), never growing it. */
+export function fitWidth<T extends Phaser.GameObjects.Text>(text: T, max: number): T {
+  return text.setScale(Math.min(1, max / Math.max(1, text.width)));
+}

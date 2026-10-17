@@ -65,13 +65,21 @@ bottle green, serif italics), all painted in code on 2D canvases. It shares no c
 
 ### File map
 
-- `src/howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips), handed to
-  `setupGame(game, { howToPlay })` in `src/main.ts`; update it when the controls or the first round change.
+- `src/howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips) in British
+  English, US English (the same with US spelling, made by `us`: neighbor, mold) and German, picked
+  with `byLanguage` and handed to `setupGame(game, { howToPlay })` in `src/main.ts`; update every
+  language when the controls or the first round change.
+- `src/i18n.ts` and `src/i18n/`: the game's texts (`shared/i18n.ts`). `i18n/en.ts` is the British
+  English source, `i18n/de.ts` the German and `i18n/en-US.ts` only the texts spelled differently in
+  US English (the mould caption). `t(key, vars)` shows a text in the hub's language; `TextKey` types
+  the keys. Every text on screen goes through `t`, numbers in texts are formatted for the language,
+  and a new text gets its German entry (and a US one if its spelling differs) in the same PR.
 - `src/main.ts`: creates the `Phaser.Game` (960x540, FIT scaling, `pixelArt: false`) with
   `BootScene` and `GameScene`, calls `setupGame(game)` and `setupScaling(game)` from
   `shared/scaling.ts`, and puts `game` on `window` in dev builds.
-- `src/game/kinds.ts`: `KINDS`, the `Kind` type, `KIND_NAMES` and `randomKind(rand?)`.
-- `src/game/orders.ts`: `PotionId`, `POTION_NAMES`, `Needs`, `Stage`, the `Order` type (with
+- `src/game/kinds.ts`: `KINDS`, the `Kind` type, `KIND_NAMES` and `KIND_COUNTS` (each kind's name
+  and its count in a sentence, "3 wheat", as `TextKey`s) and `randomKind(rand?)`.
+- `src/game/orders.ts`: `PotionId`, `POTION_NAMES` (`TextKey`s, the same as the ids), `Needs`, `Stage`, the `Order` type (with
   `rush`, `forbid`, `jars`, `resin`, `mould`, `stages`, `last`, `second`, `rich`, `exam`), `Risk`,
   the `ORDERS` table,
   `RANK_RECIPES` (the three unlockable recipes), `MOVE_BONUS`, the per-round growth
@@ -85,10 +93,10 @@ bottle green, serif italics), all painted in code on 2D canvases. It shares no c
 - `src/game/exams.ts`: the `Exam` type, the `EXAMS` table, `seeded` (a mulberry32 generator),
   `examSeed(index)` and `examOrder(index, number)`, which turns an examination into an `Order` with
   `exam` set (and the difficulty's moves).
-- `src/game/ranks.ts`: `STARS_3`, `STARS_2`, `starsFor(movesLeft)`, the `RANKS` table, `rankOf` and
-  `unlockedRecipes`.
-- `src/game/upgrades.ts`: `UpgradeId`, `Upgrades`, the `UPGRADES` table (name, effect, the price of
-  each level), `UPGRADE_ORDER`, `freshUpgrades`, `upgradeCost` and `buyUpgrade`.
+- `src/game/ranks.ts`: `STARS_3`, `STARS_2`, `starsFor(movesLeft)`, the `RANKS` table (titles as
+  `TextKey`s), `rankOf` and `unlockedRecipes`.
+- `src/game/upgrades.ts`: `UpgradeId`, `Upgrades`, the `UPGRADES` table (name and effect as `TextKey`s,
+  the price of each level), `UPGRADE_ORDER`, `freshUpgrades`, `upgradeCost` and `buyUpgrade`.
 - `src/game/board.ts`: the `Board`, `Tile` (with optional `catalyst`, `bloom`, `jar`, `resin`,
   `mould`), `Cell` and `Run` types and pure board logic: `matchKind`, `stuck`, `special`, `swapped`,
   `findRuns`, `findMatches`, `matchesAt`, `swapWorks`, `validMoves`, `collapse`, `freshBoard`,
@@ -99,7 +107,7 @@ bottle green, serif italics), all painted in code on 2D canvases. It shares no c
   seeded board), `tileMaker`, `wanted`, `filled(s, needs?)`, `firstNeeds`, `drawPantry`, `stockPantry`.
 - `src/game/sim.ts`: `trySwap` (plays a swap out to completion through `resolve` and returns its
   `Step`s, brewing and firing specials, opening jars, melting resin and scrubbing mould in `gather`,
-  then letting mould creep), `CATALYST_RUN`, the bench tools (`Tool`, `TOOLS`, `TOOL_ORDER`,
+  then letting mould creep), `CATALYST_RUN`, the bench tools (`Tool`, `TOOLS` with price, name and tip, `TOOL_ORDER`,
   `STIR_MOVES`, `canUse`, `stir`, `sift`, `pestle`, `funnel`), `nextOrder` and `nextExam`.
 - `src/game/save.ts`: `loadProgress` and `saveProgress` in `localStorage`.
 - `src/scenes/BootScene.ts`: calls `bakeTextures`, then starts `Game`.
@@ -118,7 +126,7 @@ bottle green, serif italics), all painted in code on 2D canvases. It shares no c
   `goldStar`, `coin`) and `ingredient(kind, x, y, s)`, the five ingredient silhouettes.
 - `src/art/textures.ts`: `bakeTextures` and the texture keys: `table` (the whole static
   background: wall, tray and cells, ribbon band, order label with its crest and "Bench tools"
-  heading), `kind-<kind>`, `catalyst-<kind>` (sunburst halo), `bloom-<kind>` (rose petal
+  heading, painted in the hub's language at boot like the tool names), `kind-<kind>`, `catalyst-<kind>` (sunburst halo), `bloom-<kind>` (rose petal
   rosette), `jar-<kind>` (corked glass jar), `resin-<kind>` (amber coat), `mould-<kind>` (grey-green
   fuzz of spots), `need-<kind>`,
   `potion-<id>` (flask coloured from `BREWS`), `coin`, `star-on`, `star-off`,
@@ -129,7 +137,8 @@ bottle green, serif italics), all painted in code on 2D canvases. It shares no c
 - `shared/setupGame.ts` and `shared/settings.ts` (outside the game folder): the hub's settings,
   imported by `src/main.ts`, `src/game/orders.ts` and `src/scenes/GameScene.ts`.
   `shared/scaling.ts`: `setupScaling` (from `src/main.ts`), `sharpRes` (from `nouveau.ts`) and
-  `renderScale` (text resolution in `GameScene` and `Button.ts`).
+  `renderScale` (text resolution in `GameScene` and `Button.ts`). `shared/i18n.ts`: `translator`,
+  `byLanguage`, `Translation` and `formatNumber` (the coins).
 
 ### How it runs
 
@@ -314,10 +323,8 @@ seals or rich orders existed load with their defaults. The hub's settings are st
 - Ingredient kinds and names: `src/game/kinds.ts`. Board size: `ROWS`, `COLS` in
   `src/game/board.ts`.
 - Animation and hint timings: `SWAP_MS`, `CLEAR_MS`, `FALL_MS`, `SHUFFLE_MS`, `SIFT_MS`, `HINT_MS`,
-  `MOULD_MS`, `NOTE_MS`, `MAX_STEP_MS` at the top of `src/scenes/GameScene.ts`; captions
-  `CAPTION_TIP`, `CAPTION_BLOCKERS`, `CAPTION_MOULD`, `CAPTION_ROYAL`, `CAPTION_TWIN`,
-  `CAPTION_SIFT`, `CAPTION_PESTLE`, `CAPTION_FUNNEL`, `CAPTION_FUNNEL_TO`, `CAPTION_HERBS` (tool tips are
-  `TOOLS[].tip`); the royal title `ROYAL_TITLE`.
+  `MOULD_MS`, `NOTE_MS`, `MAX_STEP_MS` at the top of `src/scenes/GameScene.ts`. Every text (captions,
+  the label's lines, the result card, the royal title) is in `src/i18n/`.
 - Positions and sizes: `src/scenes/layout.ts`. Text offsets in the order label, the footer, the
   result card, the workbench card and the herbalist card are inline in `GameScene` (`buildPanel`,
   `createFooter`, `createResult`, `createPair`, `refreshLinks`, `createBench`, `refreshBench`,
@@ -382,8 +389,15 @@ seals or rich orders existed load with their defaults. The hub's settings are st
 
 ## Making common changes
 
+- **Add or change a text:** its key in `src/i18n/en.ts`, the German in `src/i18n/de.ts` (the build
+  fails without it) and, when the US spelling differs (mould, neighbour), the US one in
+  `src/i18n/en-US.ts`; run `node scripts/check-translations.mjs`. German runs longer than English:
+  the rank ribbon's "Next" line, the twin order's second-customer line, the workbench's effect lines
+  (beside their buttons), the herbalist's Buy links (76px apart) and the tool names on the buttons
+  (painted at boot) are the tightest spots, so check a new text with `?lang=de`. Changing the number
+  of Phaser Texts shifts the seeded boards (see Gotchas); swapping their strings does not.
 - **Add or retune an order:** edit `ORDERS` in `src/game/orders.ts` (its `moves` are Normal's;
-  `orderFor` adds the difficulty's). A new potion needs a `PotionId`, a `POTION_NAMES` entry and a
+  `orderFor` adds the difficulty's). A new potion needs a `PotionId`, a `POTION_NAMES` entry (its name in the `src/i18n/` files) and a
   colour in `BREWS` in `src/art/textures.ts`. Changing the first entry means updating `ORDER_1` in
   the test and the README's table. Keep orders to three needs: the label has room for three rows
   above the bench tools.
@@ -409,7 +423,8 @@ seals or rich orders existed load with their defaults. The hub's settings are st
 - **Add or retune a guild examination:** an entry in `EXAMS` in `src/game/exams.ts` (moves are
   Normal's). Its board follows from `examSeed(index)`, so inserting one changes the boards of
   those after it. The ribbon has room for about ten seals; update the README's table.
-- **Add an ingredient kind:** add it to `KINDS` and `KIND_NAMES` in `src/game/kinds.ts`, its shape
+- **Add an ingredient kind:** add it to `KINDS`, `KIND_NAMES` and `KIND_COUNTS` in `src/game/kinds.ts` (with its texts in
+  `src/i18n/`), its shape
   in `shapes` and colours in `COL` in `src/art/nouveau.ts`, and the `Kind` type in
   the test. More kinds change every seeded board, so rerun the playthrough and check order 1 still
   sells.

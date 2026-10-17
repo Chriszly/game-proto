@@ -1,19 +1,21 @@
 // Charted courses: from wave 6 the harbor offers two ways to sail into the next wave, and the
 // one chosen changes what comes over the horizon.
 
+import type { TextKey } from '../i18n';
 import { HAVEN_WAVE } from './waves';
 
 export type CourseId = 'merchant' | 'hunter';
 
 export interface Course {
-  name: string;
+  /** Keys of `i18n/en.ts`. */
+  name: TextKey;
   /** What the course brings, short enough for the harbor's sail button. */
-  desc: string;
+  desc: TextKey;
 }
 
 export const COURSES: Record<CourseId, Course> = {
-  merchant: { name: 'Merchant lane', desc: 'Merchantmen that flee, double loot' },
-  hunter: { name: 'Hunter patrol', desc: 'Extra brigs, an extra prize card' },
+  merchant: { name: 'merchantCourse', desc: 'merchantCourseDesc' },
+  hunter: { name: 'hunterCourse', desc: 'hunterCourseDesc' },
 };
 
 export const COURSE_IDS = Object.keys(COURSES) as CourseId[];

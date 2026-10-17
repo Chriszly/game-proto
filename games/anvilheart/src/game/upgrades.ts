@@ -1,11 +1,13 @@
 // What the coins buy: forge upgrades with a few ranks each, and two one-off additions to the smithy.
+// Names and blurbs are keys of `i18n/en.ts`, shown with `t`.
+import type { TextKey } from '../i18n';
 
 export type UpgradeId = 'bellows' | 'ore' | 'auto' | 'row' | 'barrel';
 
 export interface Upgrade {
-  name: string;
+  name: TextKey;
   /** What it does, for the button's second line. */
-  blurb: string;
+  blurb: TextKey;
   /** The price of each rank in turn; the upgrade is maxed once they run out. */
   prices: number[];
   /** Upgrades that must be maxed before this one can be bought. */
@@ -14,16 +16,16 @@ export interface Upgrade {
 
 export const UPGRADES: Record<UpgradeId, Upgrade> = {
   // Each rank takes 20% off the forge's heat-up time.
-  bellows: { name: 'Bellows', blurb: 'forge faster', prices: [40, 110, 260, 600] },
+  bellows: { name: 'bellowsName', blurb: 'bellowsBlurb', prices: [40, 110, 260, 600] },
   // Each rank gives a 20% chance that the forge makes an Iron Shortsword instead of a dagger, so at
   // the fifth rank it only makes Shortswords.
-  ore: { name: 'Fine Ore', blurb: 'better blades', prices: [90, 250, 700, 1500, 3000] },
+  ore: { name: 'oreName', blurb: 'oreBlurb', prices: [90, 250, 700, 1500, 3000] },
   // The last forge upgrade: the forge makes a sword by itself whenever it is hot and an anvil is free.
-  auto: { name: 'Auto Forge', blurb: 'forges by itself', prices: [1200], after: ['bellows'] },
+  auto: { name: 'autoName', blurb: 'autoBlurb', prices: [1200], after: ['bellows'] },
   // A fifth row of four anvils under the board.
-  row: { name: 'Fifth row', blurb: 'four more anvils', prices: [800] },
+  row: { name: 'rowName', blurb: 'rowBlurb', prices: [800] },
   // A barrel beside the board that holds one sword (or gem) off the anvils.
-  barrel: { name: 'Quench barrel', blurb: 'holds one sword', prices: [300] },
+  barrel: { name: 'barrelName', blurb: 'barrelBlurb', prices: [300] },
 };
 
 export const UPGRADE_IDS = Object.keys(UPGRADES) as UpgradeId[];

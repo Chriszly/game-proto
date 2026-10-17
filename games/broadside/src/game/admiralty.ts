@@ -1,12 +1,14 @@
 // The Admiralty's rewards between runs: medals earned by a run buy starting upgrades for the next.
 
+import type { TextKey } from '../i18n';
 import type { UpgradeId } from './upgrades';
 
 export type BoonId = 'purse' | 'hull' | 'shot' | 'sails' | 'guns';
 
 export interface Boon {
-  name: string;
-  desc: string;
+  /** Keys of `i18n/en.ts`. */
+  name: TextKey;
+  desc: TextKey;
   /** Medals it costs. */
   cost: number;
   /** Gold to start with. */
@@ -16,11 +18,11 @@ export interface Boon {
 }
 
 export const BOONS: Record<BoonId, Boon> = {
-  purse: { name: 'Letter of credit', desc: 'Start with 40 gold', cost: 2, gold: 40 },
-  hull: { name: 'Refitted hull', desc: 'Start with Oak Planking 1', cost: 3, rank: 'hull' },
-  shot: { name: 'Picked gun crews', desc: 'Start with Heavy Shot 1', cost: 3, rank: 'shot' },
-  sails: { name: 'New canvas', desc: 'Start with Fast Sails 1', cost: 3, rank: 'sails' },
-  guns: { name: 'An extra pair of guns', desc: 'Start with More Guns 1', cost: 5, rank: 'guns' },
+  purse: { name: 'purseName', desc: 'purseDesc', cost: 2, gold: 40 },
+  hull: { name: 'hullBoonName', desc: 'hullBoonDesc', cost: 3, rank: 'hull' },
+  shot: { name: 'shotBoonName', desc: 'shotBoonDesc', cost: 3, rank: 'shot' },
+  sails: { name: 'sailsBoonName', desc: 'sailsBoonDesc', cost: 3, rank: 'sails' },
+  guns: { name: 'gunsBoonName', desc: 'gunsBoonDesc', cost: 5, rank: 'guns' },
 };
 
 export const BOON_IDS = Object.keys(BOONS) as BoonId[];

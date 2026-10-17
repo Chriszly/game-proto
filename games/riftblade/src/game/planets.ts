@@ -1,7 +1,9 @@
 /**
  * The Rift Crusade: four planets in a row, each with its own faction, wave curve and boss, and the
- * numbers of the star map between them (credits, the trader, the elite arena and the events).
+ * numbers of the star map between them (credits, the trader, the elite arena and the events). Names
+ * and texts are keys of `i18n/en.ts`, shown with `t`.
  */
+import { t, type TextKey } from '../i18n';
 
 export type BossId = 'grinder' | 'bogmother' | 'siege' | 'champion';
 
@@ -10,12 +12,12 @@ export type FoeKind = 'clanker' | 'rollerbomb' | 'mirerat' | 'toad' | 'linetroop
 
 export interface PlanetDef {
   id: 'dune' | 'swamp' | 'ice' | 'lava';
-  name: string;
+  name: TextKey;
   /** Who lives there, for the map and the end screen. */
-  faction: string;
-  /** What the faction is called in the HUD's kill count, and the word for one of its elites. */
-  foes: string;
-  one: string;
+  faction: TextKey;
+  /** The HUD's kill count ("{n} droids"), and the pop when one of its elites comes. */
+  foes: TextKey;
+  elite: TextKey;
   /** Droid health, spawn rate and contact damage against the Dune world. */
   hp: number;
   spawn: number;
@@ -30,22 +32,22 @@ export interface PlanetDef {
 
 export const PLANETS: readonly PlanetDef[] = [
   {
-    id: 'dune', name: 'Dune world', faction: 'Scrap droids', foes: 'droids', one: 'droid', hp: 1, spawn: 1, dmg: 1,
+    id: 'dune', name: 'duneName', faction: 'duneFaction', foes: 'duneFoes', elite: 'duneElite', hp: 1, spawn: 1, dmg: 1,
     swarm: 'clanker', elites: ['clanker', 'rollerbomb'], boss: 'grinder',
     ground: { field: '#070b16', grid: '#508cff', deco: '#ffb347' },
   },
   {
-    id: 'swamp', name: 'Swamp world', faction: 'Wild beasts', foes: 'beasts', one: 'beast', hp: 4, spawn: 1.25, dmg: 1.5,
+    id: 'swamp', name: 'swampName', faction: 'swampFaction', foes: 'swampFoes', elite: 'swampElite', hp: 4, spawn: 1.25, dmg: 1.5,
     swarm: 'mirerat', elites: ['toad', 'mirerat'], boss: 'bogmother',
     ground: { field: '#06130f', grid: '#3ccf8e', deco: '#5fd6a0' },
   },
   {
-    id: 'ice', name: 'Ice world', faction: 'Iron Dominion', foes: 'troopers', one: 'trooper', hp: 7, spawn: 1.35, dmg: 1.7,
+    id: 'ice', name: 'iceName', faction: 'iceFaction', foes: 'iceFoes', elite: 'iceElite', hp: 7, spawn: 1.35, dmg: 1.7,
     swarm: 'linetrooper', elites: ['walker', 'linetrooper'], boss: 'siege',
     ground: { field: '#0a1424', grid: '#9fd4ff', deco: '#d6efff' },
   },
   {
-    id: 'lava', name: 'Lava world', faction: 'Hollow cult', foes: 'cultists', one: 'cultist', hp: 14, spawn: 1.5, dmg: 2.1,
+    id: 'lava', name: 'lavaName', faction: 'lavaFaction', foes: 'lavaFoes', elite: 'lavaElite', hp: 14, spawn: 1.5, dmg: 2.1,
     swarm: 'acolyte', elites: ['knight', 'acolyte'], boss: 'champion',
     ground: { field: '#160807', grid: '#ff6a3c', deco: '#ff8a3c' },
   },
@@ -54,10 +56,13 @@ export const PLANETS: readonly PlanetDef[] = [
 export const LAST_PLANET = PLANETS.length - 1;
 
 /** "2/4 Swamp world". */
-export const planetLabel = (i: number) => `${i + 1}/${PLANETS.length} ${PLANETS[i].name}`;
+export const planetLabel = (i: number) => t('planetLabel', { n: i + 1, of: PLANETS.length, planet: t(PLANETS[i].name) });
 
 export interface BossDef {
-  name: string;
+  /** Its name ("The Grinder Crawler"), the boss bar's label and the end screen's line when it falls last. */
+  name: TextKey;
+  bar: TextKey;
+  beaten: TextKey;
   r: number;
   hp: number;
   speed: number;
@@ -67,10 +72,10 @@ export interface BossDef {
 }
 
 export const BOSSES: Record<BossId, BossDef> = {
-  grinder: { name: 'The Grinder Crawler', r: 58, hp: 2600, speed: 42, dmg: 22, credits: 30 },
-  bogmother: { name: 'The Bog Mother', r: 60, hp: 17000, speed: 36, dmg: 24, credits: 30 },
-  siege: { name: 'The Siege Walker', r: 62, hp: 15000, speed: 32, dmg: 26, credits: 30 },
-  champion: { name: 'The Hollow Champion', r: 30, hp: 58000, speed: 92, dmg: 26, credits: 0 },
+  grinder: { name: 'grinderName', bar: 'grinderBar', beaten: 'grinderBeaten', r: 58, hp: 2600, speed: 42, dmg: 22, credits: 30 },
+  bogmother: { name: 'bogmotherName', bar: 'bogmotherBar', beaten: 'bogmotherBeaten', r: 60, hp: 17000, speed: 36, dmg: 24, credits: 30 },
+  siege: { name: 'siegeName', bar: 'siegeBar', beaten: 'siegeBeaten', r: 62, hp: 15000, speed: 32, dmg: 26, credits: 30 },
+  champion: { name: 'championName', bar: 'championBar', beaten: 'championBeaten', r: 30, hp: 58000, speed: 92, dmg: 26, credits: 0 },
 };
 
 /** The Bog Mother: globs, young and the bog pools she leaves. */
@@ -94,11 +99,11 @@ export const TRADE = { base: 25, perTier: 10, reroll: 8 };
 
 /** The kinds of node on the star map. */
 export type NodeKind = 'trader' | 'elite' | 'rest' | 'event';
-export const NODE_INFO: Record<NodeKind, { name: string; text: string; color: string }> = {
-  trader: { name: 'Trader', text: 'Spend credits on gear or an ability tier', color: '#ffd36b' },
-  elite: { name: 'Elite fight', text: 'A 60 s arena: beat the elites for a free tier and credits', color: '#ff7a8a' },
-  rest: { name: 'Rest', text: 'Heal half your health', color: '#7dffa0' },
-  event: { name: 'Event', text: 'Something strange in the rift: a choice with a twist', color: '#b48cff' },
+export const NODE_INFO: Record<NodeKind, { name: TextKey; text: TextKey; color: string }> = {
+  trader: { name: 'traderNode', text: 'traderNodeText', color: '#ffd36b' },
+  elite: { name: 'eliteNode', text: 'eliteNodeText', color: '#ff7a8a' },
+  rest: { name: 'restNode', text: 'restNodeText', color: '#7dffa0' },
+  event: { name: 'eventNode', text: 'eventNodeText', color: '#b48cff' },
 };
 
 /** Rest heals this share of max health. */

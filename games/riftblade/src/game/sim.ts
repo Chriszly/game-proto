@@ -11,6 +11,8 @@ import {
 } from './state';
 import { CAPSTONES, CROSSOVERS, FILLER, MAX_TIER, UPGRADES, at, rewardChoices, rollChoices } from './upgrades';
 import { ARENA_MS, BOG, BOSSES, CHAMPION, CREDITS, PLANETS, SIEGE, VENT, type FoeKind } from './planets';
+// `t` is a common local name here (targets, time), so the translator goes by `tr`.
+import { t as tr } from '../i18n';
 
 /** What the player is doing this frame: a move direction (length up to 1) and the signature key. */
 export interface Input {
@@ -97,7 +99,7 @@ export function raise(s: GameState, id: string) {
   for (const fresh of refreshUnlocks(s)) {
     const cap = CAPSTONES.find((c) => c.id === fresh);
     const cross = CROSSOVERS.find((c) => c.id === fresh);
-    pop(s, cap ? `Capstone: ${cap.name}` : `Crossover: ${cross!.name}`, cap ? '#ffe066' : '#b48cff');
+    pop(s, cap ? tr('capstonePop', { name: tr(cap.name) }) : tr('crossoverPop', { name: tr(cross!.name) }), cap ? '#ffe066' : '#b48cff');
   }
   st = statsOf(s);
   const p = s.player;
@@ -790,7 +792,7 @@ function director(s: GameState, ms: number) {
   if (s.time >= s.nextElite && !s.bossSpawned) {
     s.nextElite += ELITE.every;
     spawnElite(s);
-    pop(s, `Elite ${planet.one}`, '#ffe066');
+    pop(s, tr(planet.elite), '#ffe066');
   }
   while (s.waves.length && s.time >= s.waves[0]) {
     s.waves.shift();
@@ -799,7 +801,7 @@ function director(s: GameState, ms: number) {
       const a = (i / n) * Math.PI * 2;
       spawnAt(s, planet.swarm, s.player.x + Math.cos(a) * 440, s.player.y + Math.sin(a) * 440);
     }
-    pop(s, 'They surround you!', '#ff8a6a');
+    pop(s, tr('surround'), '#ff8a6a');
   }
   if (!s.bossSpawned && !s.arena && s.time >= RUN_MS) {
     s.bossSpawned = true;
@@ -817,7 +819,7 @@ function director(s: GameState, ms: number) {
       e.shellMs = CHAMPION.dashEvery;
       e.spawnMs = CHAMPION.ringMs;
     }
-    pop(s, BOSSES[planet.boss].name, '#ff9a3c');
+    pop(s, tr(BOSSES[planet.boss].name), '#ff9a3c');
   }
   // Lava vents: a warning glow near the hero, then an eruption.
   if (planet.id === 'lava' && s.time >= s.nextVent) {
@@ -1119,7 +1121,7 @@ function bossAttacks(s: GameState, e: Enemy, ms: number, ux: number, uy: number,
   // The Hollow Champion: blade dashes; below half health, rings of fire too.
   if (enraged && !e.phase2) {
     e.phase2 = true;
-    pop(s, 'The Champion burns!', '#ff9a3c');
+    pop(s, tr('championBurns'), '#ff9a3c');
   }
   if (e.phase2 && e.spawnMs <= 0) {
     e.spawnMs = CHAMPION.ringMs;
@@ -1199,7 +1201,7 @@ function kill(s: GameState, e: Enemy) {
     const credits = BOSSES[PLANETS[s.planet].boss].credits;
     if (credits > 0) {
       s.credits += credits;
-      pop(s, `+${credits} credits`, '#ffd36b');
+      pop(s, tr('plusCredits', { n: credits }), '#ffd36b');
     }
     s.blasts.push({ id: s.nextId++, x: e.x, y: e.y, r: 160, ms: 900, maxMs: 900, color: BLAST.hero });
     for (const o of s.enemies) if (o !== e && o.hp > 0) o.hp = 0;
@@ -1456,10 +1458,10 @@ function pickups(s: GameState, ms: number) {
 function take(s: GameState, k: Pickup) {
   if (k.kind === 'medkit') {
     heal(s, k.heal);
-    pop(s, `+${k.heal} health`, '#7dffa0');
+    pop(s, tr('plusHealth', { n: k.heal }), '#7dffa0');
   } else if (k.kind === 'credits') {
     s.credits += k.value;
-    pop(s, `+${k.value} credits`, '#ffd36b');
+    pop(s, tr('plusCredits', { n: k.value }), '#ffd36b');
   } else openChest(s);
 }
 
@@ -1489,12 +1491,12 @@ function openChest(s: GameState) {
   const held = Object.keys(s.ranks).filter((id) => s.ranks[id] < MAX_TIER);
   if (!held.length) {
     heal(s, 25);
-    pop(s, 'Supply chest: +50 health', '#ffe066');
+    pop(s, tr('supplyChest', { n: 50 }), '#ffe066');
     return;
   }
   const id = held[Math.floor(Math.random() * held.length)];
   raise(s, id);
-  pop(s, `Chest: ${UPGRADES[id].name} tier ${s.ranks[id]}`, '#ffe066');
+  pop(s, tr('chestPop', { name: tr(UPGRADES[id].name), n: s.ranks[id] }), '#ffe066');
 }
 
 export function pop(s: GameState, text: string, color: string) {

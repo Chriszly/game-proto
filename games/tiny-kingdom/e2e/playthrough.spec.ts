@@ -12,7 +12,6 @@ type Cell = 'grass' | 'lake' | 'forest' | 'castle' | Building | 'manor';
 type Gift = 'towers' | 'houses' | 'farms' | 'windmill' | 'windmills' | 'market' | 'markets' | 'harbor' | 'harbors' | 'lumber' | 'lumbers';
 interface Decree {
   kind: 'shore' | 'wood' | 'watch';
-  text: string;
   place: string;
   need: number;
   done: boolean;
@@ -77,7 +76,7 @@ const MAP = [
   '...~......',
 ];
 const TERRAIN: Record<string, Cell> = { '.': 'grass', '~': 'lake', T: 'forest', C: 'castle' };
-const FIRST_DECREE = { kind: 'shore', place: 'Eastmere', need: 3, done: false, text: '3 farms on the shore of Eastmere' };
+const FIRST_DECREE = { kind: 'shore', place: 'Eastmere', need: 3, done: false };
 
 /**
  * The first round's plan, as (col, row) cells on MAP, with what each placement adds to the board
@@ -342,7 +341,7 @@ test('plays the first round', async ({ page }, testInfo) => {
   expect(s).toMatchObject({ round: 2, goal: GOALS[1], phase: 'playing', giftsDue: 0, unlocked: ['windmill'], score, pouch: { ...roundPouch, windmill: WINDMILLS }, hand: ROUND_2_HAND });
   expect(s.gifts, 'round 2 offers two new gifts, not the windmill again').not.toContain('windmill');
   expect(s.decree, 'round 2 has a decree of its own').toMatchObject({ done: false });
-  expect(s.decree!.text).not.toBe(FIRST_DECREE.text);
+  expect({ kind: s.decree!.kind, place: s.decree!.place }, 'not the same decree again').not.toEqual({ kind: FIRST_DECREE.kind, place: FIRST_DECREE.place });
   expect((await game.buttons()).map((b) => b.kind), 'the tile buttons show the new hand').toEqual(kinds(ROUND_2_HAND));
   // Let the round's banner fade (BANNER_MS) before the screenshot.
   await play(2_600, async () => false);
