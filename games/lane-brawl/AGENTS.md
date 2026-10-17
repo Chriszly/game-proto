@@ -19,7 +19,7 @@ Implemented today:
 
 - Pick screen with the fifteen classes in three rows of five cards (3D figure, the champion's name,
   class and role, passive), two lines under them for the card under the pointer (`hoverPick`): the
-  champion's name, title, class and blurb, then their motive; with no card under the pointer, the
+  champion's name, title, class, blurb and story perk, then their motive; with no card under the pointer, the
   setting in one line. Then one match.
 - Map (`WORLD` 2800x2800): the blue Nexus at the bottom left, the red at the top right; top and
   bottom lanes along the edges, the middle lane on the diagonal. Everything red is blue mirrored
@@ -41,6 +41,10 @@ Implemented today:
   `createGame` gives the unit as `name`), `short` (the first name for labels, the portrait and
   notices, through `shortName` in `names.ts`), `title` and `motive` (one line, at most 90
   characters, for the pick screen). A class shows up at most once per match, so names never clash.
+  Three champions carry a `perk` (`StoryPerk`) from their story, applied in `sim.ts`: Morrow's
+  `beastDmg` (25% more damage to the guardian beast, in `damage`), Kaida's `captureRate` (takes
+  watchstones twice as fast, in `updateWatchstones`) and Rook's `bountyGold` (50% more gold from a
+  bounty he claims, in `kill`).
   The setting (the Contest of Kessmoor) and each champion's story are in the README; ability,
   passive and upgrade names follow the stories, while ids (`wide-slam` and so on) keep the old
   names.
@@ -443,7 +447,7 @@ generator (`seeded` in `lowpoly.ts`); `performance.now` only times the bake for 
 
 - **Add a champion**: add a `ChampionDef` to `CHAMPIONS` with its `hero`, `short`, `title` and
   `motive` (90 characters at most), a blurb (32 characters at most, for the card), a `PassiveDef` (a
-  short desc) and four `AbilityDef`s (keys Q, W, E, R; R at level 3) named to fit the story,
+  short desc), optionally a `perk` that fits the story, and four `AbilityDef`s (keys Q, W, E, R; R at level 3) named to fit the story,
   its four upgrade pairs to `UPGRADES`, four looks in `skillFx.ts`, a `Kit` in `KITS` and its pose in
   `classPose` (`models.ts`) and its id to `ChampId`. `createGame` shuffles the classes other than the
   player's, gives blue the first four and red the next five, so any roster of ten or more works;

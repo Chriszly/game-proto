@@ -239,6 +239,18 @@ export interface PassiveDef {
   splashRadius?: number;
 }
 
+/** A small edge from a champion's story, on top of the class's passive. Percents. */
+export interface StoryPerk {
+  /** One line for the pick screen. */
+  desc: string;
+  /** More damage to the guardian beast. */
+  beastDmg?: number;
+  /** Takes watchstones this much faster. */
+  captureRate?: number;
+  /** More gold from a bounty this champion claims. */
+  bountyGold?: number;
+}
+
 export interface ChampionDef {
   id: string;
   /** The class's name: Warden, Blade... */
@@ -254,6 +266,7 @@ export interface ChampionDef {
   motive: string;
   /** One line on how the class plays, for the pick card. */
   blurb: string;
+  perk?: StoryPerk;
   color: string;
   hp: number;
   hpPerLevel: number;
@@ -434,6 +447,7 @@ export const CHAMPIONS: ChampionDef[] = [
     title: 'the Whaler',
     motive: 'The Rift Guardian sank his ship; whoever lets him at the beast gets his harpoon.',
     blurb: 'Hooks foes in, holds the line',
+    perk: { desc: 'Deals 25% more to the Rift Guardian', beastDmg: 25 },
     color: '#2fb39a',
     hp: 580,
     hpPerLevel: 88,
@@ -486,6 +500,7 @@ export const CHAMPIONS: ChampionDef[] = [
     title: 'Last of the Mistwalkers',
     motive: 'Her order of watchstone keepers was sold out; the traitor is a champion.',
     blurb: 'Vanishes, strikes from nowhere',
+    perk: { desc: 'Takes watchstones twice as fast', captureRate: 100 },
     color: '#8fa0b8',
     hp: 520,
     hpPerLevel: 78,
@@ -538,6 +553,7 @@ export const CHAMPIONS: ChampionDef[] = [
     title: 'the Bounty Hunter',
     motive: 'A drifter from the rail towns; signs with whoever pays and hunts every bounty.',
     blurb: 'Six shots, smoke and a deadeye',
+    perk: { desc: 'Claims 50% more bounty gold', bountyGold: 50 },
     color: '#c9925a',
     hp: 480,
     hpPerLevel: 72,

@@ -562,6 +562,8 @@ export function damage(s: GameState, t: Unit, amount: number, sourceId: number):
   }
   // The siege banner, an objective's reward, makes the player's champion hit structures harder.
   if (sourceId === s.player && s.time < s.siegeUntil && (t.kind === 'tower' || t.kind === 'nexus')) amount *= SIEGE.mult;
+  // Morrow's grudge: the Whaler hits the beast that sank his ship harder.
+  if (t.kind === 'beast') amount *= 1 + (getUnit(s, sourceId)?.champ?.perk?.beastDmg ?? 0) / 100;
   let rest = ((amount * 100) / (100 + Math.max(0, armorOf(t)))) * takenMult(s, t);
   if (t.champ?.passive.tough) rest *= 1 - t.champ.passive.tough / 100;
   if (t.shield > 0) {
@@ -820,9 +822,11 @@ function kill(s: GameState, t: Unit, killerId: number) {
     case 'champion': {
       t.deaths++;
       t.recallMs = 0;
-      const bounty = bountyOf(t.killStreak);
+      const streak = t.killStreak;
       t.killStreak = 0;
       if (champKiller && champKiller.side !== t.side) {
+        // Rook, the bounty hunter, gets more for a head with a price on it.
+        const bounty = Math.round(bountyOf(streak) * (1 + (champKiller.champ?.perk?.bountyGold ?? 0) / 100));
         champKiller.gold += KILL.gold + bounty;
         champKiller.kills++;
         champKiller.killStreak++;
@@ -1166,7 +1170,13 @@ function updateWatchstones(s: GameState, dt: number) {
   for (const w of s.units) {
     if (w.kind !== 'watchstone') continue;
     const near = new Set<Team>();
-    for (const c of s.units) if (c.kind === 'champion' && !c.dead && dist(c, w) <= WATCH.radius) near.add(c.side as Team);
+    // Kaida, a watchstone keeper, takes one faster: the fastest champion there sets the pace.
+    let rate = 1;
+    for (const c of s.units) {
+      if (c.kind !== 'champion' || c.dead || dist(c, w) > WATCH.radius) continue;
+      near.add(c.side as Team);
+      rate = Math.max(rate, 1 + (c.champ?.perk?.captureRate ?? 0) / 100);
+    }
     if (near.size !== 1) {
       // Nobody there drops the progress; both teams there hold it where it is.
       if (near.size === 0) w.capture = null;
@@ -1178,7 +1188,7 @@ function updateWatchstones(s: GameState, dt: number) {
       continue;
     }
     if (!w.capture || w.capture.team !== team) w.capture = { team, ms: 0 };
-    w.capture.ms += dt;
+    w.capture.ms += dt * rate;
     if (w.capture.ms >= WATCH.captureMs) {
       w.side = team;
       w.capture = null;
