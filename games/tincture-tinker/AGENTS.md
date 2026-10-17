@@ -163,7 +163,7 @@ bottle green, serif italics), all painted in code on 2D canvases. It shares no c
   neighbour (not held, not a special) that leaves a move on the board, as a last step with
   `spread`. Tools never spread mould.
 - **Twists:** `twistFor` gives order 3, 6, 9... `rush` and 4, 7, 10... a `forbid` kind not in its
-  needs. `orderFor` takes `RUSH_MOVES` off and adds `RUSH_COINS` to the price. `resolve` takes one
+  needs (on a royal commission, not in any stage's needs; none if every kind is needed). `orderFor` takes `RUSH_MOVES` off and adds `RUSH_COINS` to the price. `resolve` takes one
   extra move (`penalties`) per swap or tool use whose steps match the forbidden kind; the step
   that did it has `penalty`, and the scene pulses the moves.
 - **Only wanted ingredients:** `gather` increments `got` only for kinds in the order's needs
@@ -182,8 +182,9 @@ bottle green, serif italics), all painted in code on 2D canvases. It shares no c
 - **Twin orders:** `isTwin` from Journeyman on every `ROYAL_EVERY`th order after `TWIN_AT`.
   `needs` holds both customers' kinds (always different kinds, two each: the first customer's are
   `firstNeeds(order)`, the second's `order.second.needs`), so `gather` and `filled` work unchanged.
-  `resolve` adds a customer to `served` once its kinds are filled, with `TWIN_BONUS` coins
-  (`speedBonus`) when the other isn't yet, and pushes a step with `served`. Twin orders get no
+  `resolve` adds a customer to `served` once its kinds are filled, setting `speedBonus` to
+  `TWIN_BONUS` when the other isn't yet (added to `coins` only with the sale, so a failed order
+  banks nothing), and pushes a step with `served`. Twin orders get no
   twist.
 - **Workbench:** `openBench` (the result card's link) shows the workbench card with a row per
   `UPGRADE_ORDER` entry; `buy` calls `buyUpgrade`, saves and redraws. `standingOf` passes
@@ -218,7 +219,7 @@ bottle green, serif italics), all painted in code on 2D canvases. It shares no c
   `moves`, `phase` (`play`, `sold`, `failed`), `earned`, `orderStars` (0 until sold), `brewed` and
   `fired` (Catalysts this order), `bloomed` and `bloomsFired`, `opened` (jars), `melted` (resin),
   `scrubbed` (mould), `penalties` (moves lost to the forbidden kind), `stage`, `served`,
-  `speedBonus`, `fromPantry`, `toPantry`, `board` and `nextId`.
+  `speedBonus`, `fromPantry`, `toPantry`, `startPantry`, `board` and `nextId`.
 - `Board` is `Tile[][]`, rows from the top. Each `Tile` has a unique `id` from `nextId`, which
   restarts at 1 for every order; the scene relies on ids to track sprites through falls. A brewed
   Catalyst or Bloom keeps its tile's id and gains `catalyst` or `bloom`; a melted tile keeps its id
@@ -230,7 +231,8 @@ bottle green, serif italics), all painted in code on 2D canvases. It shares no c
   returns `null` and changes nothing for a swap that makes no match; on a sale `order` already
   points at the next order, `earned = price + moves * MOVE_BONUS`, `orderStars = starsFor(moves)`
   and `stars` includes it. A failed order keeps the same `order`, so "Try again" replays it on a new
-  board (the pantry keeps what the failed order had drawn: it was given, not gathered). The order's
+  board. `progressOf` returns `startPantry` (the pantry as the order found it) until the order
+  sells, so a retry or a reload after a tool purchase gives back what the order drew. The order's
   recipe list comes from `unlockedRecipes(stars)`, so order 1 with no stars is always the Healing
   Draught, with no pantry, no upgrade and no mould.
 
@@ -392,8 +394,7 @@ existed load with their defaults. The hub's settings are stored separately under
 - Don't rotate tile sprites: in headless Chromium's software WebGL, slightly rotated canvas
   textures render torn, which is why the hint swells instead of wiggling.
 - Progress is saved in `settle` (after the sale animation), in `useTool` / `siftRow` and in `buy`,
-  not in `trySwap`. A twin order's speed bonus is added to `coins` in `resolve` but only saved with
-  the sale.
+  not in `trySwap`. A twin order's speed bonus is added to `coins` only on the sale.
 - `got` counts only the kinds in `needs`; the pop animation uses the step's own `needs` (a royal
   commission's needs change between steps), so a tile of another kind never moves a bar.
 - Mould never matches, so it can't be swapped into a run, but a Catalyst row, a Bloom square or the

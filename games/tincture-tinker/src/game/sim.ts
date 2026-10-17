@@ -133,10 +133,8 @@ function resolve(s: GameState, board: Board, prefer: Cell[], extra?: Extra): Ste
     for (const [potion, needs] of [[s.current.potion, firstNeeds(s.current)], [s.current.second.potion, s.current.second.needs]] as const) {
       if (s.served.includes(potion) || !filled(s, needs)) continue;
       s.served.push(potion);
-      if (!filled(s)) {
-        s.speedBonus = TWIN_BONUS;
-        s.coins += TWIN_BONUS;
-      }
+      // The bonus is paid with the sale, so a failed order banks nothing.
+      if (!filled(s)) s.speedBonus = TWIN_BONUS;
       steps.push({ ...emptyStep(s), served: potion });
     }
   }
@@ -155,7 +153,7 @@ function resolve(s: GameState, board: Board, prefer: Cell[], extra?: Extra): Ste
     stockPantry(s);
     s.phase = 'sold';
     s.earned = s.current.price + s.moves * MOVE_BONUS;
-    s.coins += s.earned;
+    s.coins += s.earned + s.speedBonus;
     s.orderStars = starsFor(s.moves);
     s.stars += s.orderStars;
     s.sold++;
