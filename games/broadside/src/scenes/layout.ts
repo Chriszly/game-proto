@@ -3,13 +3,16 @@
 
 export const VIEW = { w: 960, h: 540 };
 export const HUD_HEIGHT = 40;
-/** The two helm buttons, held to turn: port (left) and starboard (right), by their centres. */
-export const HELM = { port: { x: 86, y: 456 }, starboard: { x: 874, y: 456 }, r: 62 };
+/**
+ * The two helm buttons, held to turn: port (left) and starboard (right), by their centres. They sit
+ * high enough to keep clear of the shared corner buttons (full screen, sound, pause) at the bottom left.
+ */
+export const HELM = { port: { x: 86, y: 420 }, starboard: { x: 874, y: 420 }, r: 62 };
 /**
  * The two fire controls, held to aim and charge a broadside and let go to fire it: each above the
  * helm wheel on its own side, clear of it, so one thumb can steer while the other fires.
  */
-export const FIRE = { port: { x: 86, y: 314 }, starboard: { x: 874, y: 314 }, r: 44 };
+export const FIRE = { port: { x: 86, y: 286 }, starboard: { x: 874, y: 286 }, r: 44 };
 /** The captain's order card under the top bar, by its top-left corner. */
 export const ORDER_CARD = { x: 16, y: 50 };
 /** The harbor panel between waves, by its centre, with one row per thing to buy. */

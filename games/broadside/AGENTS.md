@@ -113,7 +113,8 @@ and the player chooses a ship.
   are set on the hub page.
 - **Persistence:** the best wave beaten, the banked medals and the ship chosen are saved. Each
   run starts fresh at wave 1, plus any starting upgrades bought with medals.
-- **Rough or unused:** there is no sound. Enemy captains still run aground now and then (pushed by
+- **Sound:** music and sound effects, made in code (see "Sound" below).
+- **Rough or unused:** Enemy captains still run aground now and then (pushed by
   another ship or the player, or cornered at close range), far less often than before the
   steering: a long scripted fight of wave-6 fleets saw 3 groundings where plain chasing saw 41.
   Detours are planned round one island at a time (the nearest blocking one). Medals can only be
@@ -143,7 +144,12 @@ File map (all under `src/`, plus the shared files it imports):
 - `scenes/GameScene.ts`: owns the run's `state`, reads input (`readInput`), calls `tick` each
   frame and draws everything (HUD, order card, helm wheels and fire controls with their charge
   rings, wakes, detour courses, effects, firing arcs, harbor and game-over overlays).
-- `scenes/layout.ts`: `VIEW`, `HUD_HEIGHT`, the `HELM` wheel centres, the `FIRE` control centres,
+- `audio.ts`: the songs (`HARBOR_SONG`, `BATTLE_SONG`, `STINGS`) and the sound table `sfx`
+  (`shared/audio.ts`). See "Sound" below.
+- `scenes/soundCues.ts`: `SoundCues`, which compares the state before and after each `tick` and
+  plays the sounds and music for what changed, so `game/` stays free of audio.
+- `scenes/layout.ts`: `VIEW`, `HUD_HEIGHT`, the `HELM` wheel centres (high enough to clear the
+  shared corner buttons at the bottom left), the `FIRE` control centres,
   `ORDER_CARD`, `BOUNTY` (the bounty line's left edge), `CONVOY` (the convoy's line under it), the
   `HARBOR` panel and row geometry (with `loadY` for the loading buttons), `COURSE` (the two course
   buttons), `DRAFT` (the prize draft's cards), the `OVER` (game-over)
@@ -440,6 +446,61 @@ Data tables, where to tune:
 - The settings live under the shared `hub-settings` storage key and are read once at page load.
   They are not part of this game's save, and "Sail again" does not reset them.
 
+## Sound
+
+All sound comes from `shared/audio.ts`, with no audio files: `src/audio.ts` holds the songs and the
+sound table, and `scenes/soundCues.ts` (`SoundCues`) plays them. `GameScene.update` calls
+`cues.before(state)` ahead of `readInput` and `tick`, and `cues.after(state, dt)` right after the
+tick; `after` compares the two (phase, the player's reload, charge, `agroundMs` and helm, the
+convoy's state, the enemy ids) and goes through the effects whose id is newer than the last one
+seen. Only effects within the screen (plus 40px) sound, and each kind at most once a frame. The
+sim (`game/`) never imports audio. Under browser automation every call is a no-op, and nothing
+here touches `Math.random` (the engine's pitch `vary` only runs once audio is unlocked).
+
+Music, a sea-shanty jig in D Dorian written in 6/8 (`steps: 3`, so a written bar is two 6/8
+measures), square lead, pulse "accordion" harmony, triangle bass and noise drums:
+
+| Song, part | Tempo | When |
+| --- | --- | --- |
+| `HARBOR_SONG` `calm` | 66 (dotted quarters) | from `create`, the `break` before each wave and the harbor; again after the win |
+| `BATTLE_SONG` `battle` | 112 | the `fighting` phase |
+| `BATTLE_SONG` `boss` | 112 | while a `flagship` or the `admiral` is among `enemies` (switches at the next bar) |
+| `STINGS` `wave` | 100 | `break` turns to `fighting`: drum roll and horn |
+| `STINGS` `harbor` | 100 | the harbor opens (not on "Sail on" from the end card) |
+| `STINGS` `win` | 100 | phase `won` (the haven razed) |
+| `STINGS` `lose` | 100 | phase `over`, after `stopMusic()`; "Sail again" restarts the scene, whose `create` starts `calm` |
+
+Effects (`sfx` in `audio.ts`, and the shared `ui` sounds), and where `SoundCues` plays them:
+
+| Sound | Where |
+| --- | --- |
+| `charge` | every frame a side is held and charging, its pitch rising with the charge (gap 85ms) |
+| `charged` | a side's charge reaches full |
+| `cannon` + `thump` | the player's broadside (the side's reload went up): up to 3 booms 70ms apart, louder with the charge |
+| `grape` | the player's broadside fired with grapeshot, over the booms |
+| `distant` | a new `smoke` effect (a gun's, 600ms) on screen away from the player: an enemy's or prize's broadside |
+| `mortar` | a new `smoke` effect of a lob (800ms): a ketch, a fort, the Mortar perk or the Bomb Ketch's mortar side |
+| `whistle` | a shell on screen with under 700ms to fall, once per shell |
+| `hit` / `hurt` | a new `hit` effect away from / at the player's ship |
+| `splash` | a new `splash` effect |
+| `blast` | a new `blast` effect (shell, fireship, razed fort) |
+| `aground` | the player's `agroundMs` went up (replaces `hurt` that frame) |
+| `sink` + `gurgle` | a new `sink` effect (sunk, rammed or scuttled) |
+| `ui('coin')` | a new `coins` effect (loot hauled, cargo, fort bounty, prizes sold) |
+| `prize` | a new `prize` effect (boarding) |
+| `bounty` | the harbor opens with `bountyPaid` |
+| `escape` | a new `escape` effect, or the convoy turning `lost` |
+| `bell` | the convoy turning `arrived` |
+| `pipe` | an enemy id not seen before (a sail on the horizon), once a frame |
+| `creak` | the helm put over from 0 while sailing |
+
+`GameScene` plays the shared `ui` sounds for its buttons: `harborAction` plays `coin` for a
+purchase (upgrade, repair, hire, keep), `click` for a choice (perk, loading, sail) and `refuse`
+when the sim function returns false; the end card's ship buttons and boon rows `click` or
+`refuse`, "Sail again" and "Sail on" `click`, and the scuttle button `refuse`s if it fails (the
+scuttle itself sounds through its `sink` and `coins` effects). To add a sound: an entry in `sfx`,
+then a check in `SoundCues.after` (or a case in `effects` for a new effect kind).
+
 ## Testing hooks
 
 - `src/main.ts` puts `game` on `window` in dev builds. State positions are always inside `WORLD`;
@@ -521,7 +582,8 @@ Data tables, where to tune:
 - **Change controls or the HUD:** the helm wheels and fire controls are built in `createControls`
   and drawn in `drawControls`, input is read in `readInput` (all in `GameScene.ts`), and their
   positions are `HELM` and `FIRE` in `layout.ts`. Update the test's `HELM` and `FIRE` copies
-  whenever they move, and keep the fire controls clear of the wheels for two-thumb play.
+  whenever they move, keep the fire controls clear of the wheels for two-thumb play, and keep the
+  port wheel clear of the shared corner buttons (bottom left, about 12-114 by 12-42 CSS pixels).
 - **Move or add an island:** edit `ISLANDS` in `state.ts`; the chart repaints it at boot and the
   steering and collision follow. Keep islands far enough apart that one detour doesn't lead onto
   another.
