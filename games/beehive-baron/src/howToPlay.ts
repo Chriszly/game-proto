@@ -28,6 +28,8 @@ export const howToPlay: HowToPlay = {
     "Wax from each harvest pays part of a new cell's price.",
     'In winter the bees stay home and eat a jar for every 4 bees, so keep some jars or capped cells back.',
     'The Waggle Dance upgrade sends the bees out on their own.',
-    'Once every meadow is open, enter honey at the fair: a cell scores 1 point per touching capped cell of its kind, and 14 points win gold.',
+    'A meadow foraged for a minute without a break wilts and gives half the nectar until the season turns: switch kinds on the market now and then.',
+    'Catching the swarm lets you pick the second hive\'s queen: Gentle (no wasps on her comb), Hardy (eats half in winter) or Busy (+1 nectar a trip).',
+    'Once every meadow is open, the county fair is held at the end of every summer: a cell scores 1 point per touching capped cell of its kind, and 14 points win the first gold. Each year after needs more and adds a class.',
   ],
 };

@@ -368,9 +368,14 @@ function bakeCards(scene: Phaser.Scene) {
   // The swarm chip under the hive, a warm card to tap while the swarm gathers.
   card('swarm-chip', SWARM.w, SWARM.h, (ctx) => cut(ctx, rr(0, 0, SWARM.w, SWARM.h, 8), CARD.roof, { depth: 4 }));
   // The end card, a big cream card with a gold rosette, when the fair makes the player the Baron.
-  card('end-card', END_CARD.w, END_CARD.h, (ctx) => {
+  const bigCard = (ctx: CanvasRenderingContext2D) => {
     cut(ctx, rr(0, 0, END_CARD.w, END_CARD.h, 14), CARD.goal, { depth: 6 });
     outline(ctx, rr(8, 8, END_CARD.w - 16, END_CARD.h - 16, 10), NOTE_CARD.edge, 1.5, [5, 4]);
+  };
+  // The queen card is the end card without the gold rosette.
+  card('queen-card', END_CARD.w, END_CARD.h, bigCard);
+  card('end-card', END_CARD.w, END_CARD.h, (ctx) => {
+    bigCard(ctx);
     const [rx, ry] = [END_CARD.w / 2, 46];
     for (let n = 0; n < 12; n++) {
       const t = (n / 12) * Math.PI * 2;
