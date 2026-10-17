@@ -547,6 +547,9 @@ Notes:
 ### Mapmaker
 Fog-of-war island charting; calm, curious, a cartographer's desk.
 
+**Done:** built in `games/mapmaker/src/audio.ts` as planned, played from `GameScene`; the
+survey's sounds play in the scene (the sim has no audio), and its `AGENTS.md` lists them.
+
 **Music:** Light exploring tune at about 92 BPM in F Lydian, with a triangle bass and a plucky
 square lead.
 - Surveying: one sparse variation per isle kind.
