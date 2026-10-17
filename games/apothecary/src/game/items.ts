@@ -40,11 +40,15 @@ export const ITEMS: Record<ItemId, ItemDef> = {
   fineWitchsBrew: { name: "Fine Witch's Brew", kind: 'fine', color: 0x7a8f22 },
 };
 
-/** How long a plot takes to go from freshly harvested to ripe. */
+/**
+ * How long a plot takes to go from freshly harvested to ripe. Every refined good goes into four of
+ * the six recipes' ingredients, so the gardens grow at close to the same pace: wheat a little faster,
+ * since the first recipes known lean on flour.
+ */
 export const GROW_MS: Record<PlantId, number> = {
   wheat: 24_000,
-  mandrake: 42_000,
-  nightshade: 54_000,
+  mandrake: 30_000,
+  nightshade: 32_000,
 };
 
 /** What the refining table turns each plant into, and how long one takes. */

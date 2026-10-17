@@ -138,6 +138,44 @@ function drawRivalStall(c: Ctx) {
   ink(c, [[41, 32], [56, 32]], { closed: false, w: 1, col: '#f4f0e6' });
 }
 
+/** The merchant wagon at the street door: a covered cart with crates on its tail and two big wheels. */
+function drawWagon(c: Ctx) {
+  shadow(c, 42, 56, 38, 4, 0.2);
+  // The canvas cover, arched over the bed.
+  both(c, [[12, 34], [12, 16], [20, 6], [62, 6], [70, 16], [70, 34]], '#d8cba4', { layers: 3, bloom: 2, cx: 40, cy: 14 }, { w: 1.2 });
+  for (const x of [26, 41, 56]) ink(c, [[x, 7], [x, 34]], { closed: false, w: 0.7, alpha: 0.45 });
+  // The bed and the shaft.
+  both(c, rectPts(8, 32, 68, 10, 2), WASH.wood, { layers: 3 }, { w: 1.2 });
+  ink(c, [[76, 38], [84, 44]], { closed: false, w: 1.6, alpha: 0.8 });
+  // A crate of potions on the tail.
+  both(c, rectPts(2, 22, 14, 12, 1), WASH.woodDark, { layers: 2 }, { w: 0.9 });
+  for (const [x, col] of [[5, '#6fa8d6'], [10, '#7a8f22']] as const) both(c, rectPts(x, 18, 3.5, 6, 1), col, { layers: 1 }, { w: 0.6 });
+  // Two spoked wheels.
+  for (const cx of [22, 60]) {
+    both(c, ellPts(cx, 46, 10, 10, 28), WASH.woodDark, { layers: 2 }, { w: 1.2 });
+    wash(c, ellPts(cx, 46, 7, 7, 24), '#cdb88c', { layers: 1, edge: 0 });
+    for (let k = 0; k < 4; k++) {
+      const a = (k * Math.PI) / 4;
+      ink(c, [[cx - Math.cos(a) * 7, 46 - Math.sin(a) * 7], [cx + Math.cos(a) * 7, 46 + Math.sin(a) * 7]], { closed: false, w: 0.8, alpha: 0.8 });
+    }
+    both(c, ellPts(cx, 46, 2, 2, 10), WASH.woodDark, { layers: 1 }, { w: 0.6 });
+  }
+}
+
+/** The herb market's stall by the outfitter: a green awning over a table of sacks and bundles. */
+function drawHerbStall(c: Ctx) {
+  shadow(c, 32, 49, 28, 3.5, 0.18);
+  for (const px of [6, 54]) both(c, rectPts(px, 12, 4, 36, 1), WASH.woodDark, { layers: 2 }, { w: 1 });
+  both(c, rectPts(4, 30, 56, 16, 2), WASH.wood, { layers: 3 }, { w: 1.2 });
+  both(c, [[2, 8], [62, 8], [62, 16], [2, 16]], '#4f6a2e', { layers: 2 }, { w: 1.1 });
+  for (let i = 0; i < 5; i++) wash(c, rectPts(4 + i * 12, 8, 6, 8), '#e8dcc0', { layers: 1, edge: 0 });
+  ink(c, [[2, 16], [62, 16]], { closed: false, w: 1, alpha: 0.7 });
+  // A sack of flour, a bundle of wheat and a mandrake on the table.
+  both(c, ellPts(17, 26, 7, 6, 18), '#f1e8d0', { layers: 2 }, { w: 0.8 });
+  for (let k = -2; k <= 2; k++) ink(c, [[32 + k, 30], [32 + k * 2, 19]], { closed: false, w: 1, col: '#d9b24a' });
+  both(c, ellPts(47, 26, 5, 4, 14), '#b07a4a', { layers: 2 }, { w: 0.8 });
+}
+
 /** The dusk dial: a sun half under the horizon, which the contract card moves down as the day passes. */
 function drawSun(c: Ctx) {
   c.save();
@@ -212,4 +250,6 @@ export function bakeUi(scene: Phaser.Scene) {
   paint(scene, 'sun', 16, 16, drawSun, 3);
   paint(scene, 'bell', 22, 22, drawBell, 3);
   paint(scene, 'rival-stall', 72, 64, drawRivalStall, 3);
+  paint(scene, 'wagon', 84, 60, drawWagon, 3);
+  paint(scene, 'herb-stall', 64, 52, drawHerbStall, 3);
 }

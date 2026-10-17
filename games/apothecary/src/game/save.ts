@@ -15,7 +15,8 @@ export function loadState(): GameState {
     // Fields added after the save was written fall back to their defaults, including new plots,
     // stations' upgrades, craftsmen and belts, the contract, sales and tips counts, the last-seen
     // time (0, so a save from before them catches up on nothing), the shade gardens, the
-    // reputation, the regulars, the market day's rush, the plague, the price signs and the rival.
+    // reputation, the regulars, the market day's rush, the plague, the price signs, the rival,
+    // the town seals, the merchant wagon and the herb market's pick.
     const state: GameState = {
       ...fresh,
       ...saved,

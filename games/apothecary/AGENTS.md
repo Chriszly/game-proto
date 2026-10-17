@@ -31,6 +31,11 @@ study, shade gardens and a mirrored second production line.
   from day 4 that undercuts one potion a day and closes after ten days outsold, and the plague
   from day 5, three stages on a card under the town card, ending in the Panacea: brewing it cures
   the town and wins the game, with "Keep trading" after. The game's first ending.
+- Round three: contracts from every potion customers ask for from day 3, with two-potion bundles;
+  seasons of sickness after the cure, each cured one earning a town seal that raises prices; the
+  merchant wagon across the street on wagon days; the herb market below the outfitter; an
+  overstock cut that starts past 5 of a potion on its shelf; cauldrons that brew what the shop is
+  shortest of, and gardens that grow at close to the same pace.
 - Gardens have nine beds each, three by three edge to edge (`PLOTS_PER_GARDEN`, `plotPosition`).
   Two shade gardens grow nightshade for the Shadow Elixir, Moonlight Salve and Witch's Brew. A brew's last quarter
   is its fine window: picked up then by hand, it becomes a Fine potion (its own item kind) worth
@@ -79,13 +84,20 @@ study, shade gardens and a mirrored second production line.
   `SIGN_NAMES`, `SIGN_PAY`, `SIGN_DEMAND`, `SIGN_REPUTATION`, `SIGN_PATIENCE`, `signOf`,
   `patienceRate`), the blight (`BLIGHT_DAY`, `BLIGHT_EVERY_MS`, `BLIGHT_SPREAD_MS`, `blightImmune`,
   `plotNeighbours`), the rival (`Rival`, `RIVAL_DAY`, `RIVAL_CUT`, `RIVAL_SALES`,
-  `RIVAL_MONTH_DAYS`, `rivalUndercuts`, `rivalPotionFor`) and replanting (`GARDEN_RUN`,
+  `RIVAL_MONTH_DAYS`, `rivalUndercuts`, `rivalPotionFor`), the overstock cut (`STOCK_FREE`,
+  `MAX_STOCK_CUT`, `stockFactor`, `stockedPay`), book contracts (`BOOK_CONTRACT_DAY`,
+  `BUNDLE_EVERY`, `CONTRACT_SHARE`, `NIGHTSHADE_CONTRACT_SHARE`, `contractWants`), seasons
+  (`SEASON_GAP`, `SEASON_EXTRA`, `SEAL_PRICE`, `SEASON_STAGES`, `stagesFor`), the wagon (`Wagon`,
+  `WAGON_DAY`, `WAGON_EVERY`, `WAGON_CRATE`, `WAGON_PREMIUM`, `WAGON_MS`, `WAGON_ARRIVES`,
+  `isWagonDay`, `wagonFor`, `wagonHere`), the herb market (`HerbId`, `HERBS`, `HERB_PRICE`,
+  `herbBuyPrice`, `herbSellPrice`, `marketOpen`) and replanting (`GARDEN_RUN`,
   `LINE_GARDENS`, `GARDEN_NAMES`, `gardenPlant`, `plantChoices`). `items.ts` also holds the
   Panacea (`PANACEA`, `PANACEA_RECIPE`, `BrewOut`: what a brew can be, a potion or the Panacea).
 - `src/game/sim.ts`: the rules, free of Phaser. `tick` advances the world; marker actions
   (`dropAtRefiner`, `pickUpFromCauldron`, `stockShelf`, `collectTill`, `payUpgrade`,
   `payCraftsman`, `payBelt`, `payExpansion`, `payShade`, `joinGuild`, `dropAll`, `cyclePriority`,
-  `cycleSign`, `replantGarden`, `clearBlight`) and `harvest` each change
+  `cycleSign`, `replantGarden`, `clearBlight`, `sellToWagon`, `cycleMarketPick`, `buyHerb`,
+  `sellHerb`) and `harvest` each change
   state and return `Feedback` lines. Also `refining`, `hasRoom`, `doneByHand` and `isBlighted`.
 - `src/game/save.ts`: `loadState`, `saveState` (stamps `lastSeen` with `Date.now()`), `clearSave`
   (key `apothecary-save`), and the `ontoOwnRuns`, `ontoColumns` and `ontoHeart` belt migrations.
@@ -216,11 +228,11 @@ study, shade gardens and a mirrored second production line.
   table's and cauldron's label; a tap calls `cyclePriority` (none, then each plant, or each
   researched potion, in `PLANTS`/`POTIONS` order) and stops propagation so the doctor doesn't walk. The sign shows the
   item's icon, or "any".
-- Stock pricing: `serveFromShelf` pays `stockedPay(order.pay[want], others)`, where `others` is
-  how many of that potion (plain or fine) stay on the shelf after the one sold; `stockFactor` (2.5%
-  off each, at least half) is in `src/game/state.ts`. A fine one of the wanted potion goes first and
-  pays `stockedPay(round(pay * FINE_BONUS), others)`. The scene shows the next sale's cut under
-  each shelf.
+- Stock pricing: `serveFromShelf` pays `stockedPay(pay, stocked, storage(state))`, where
+  `stocked` is how many of that potion (plain or fine) stood on the shelf, the one sold included;
+  `stockFactor` (no cut up to `STOCK_FREE` 5, then even steps to `MAX_STOCK_CUT` 50% on a full
+  shelf) is in `src/game/state.ts`. A fine one of the wanted potion goes first and pays
+  `FINE_BONUS` times as much before the cut. The scene shows the next sale's cut under each shelf.
 - Shelves: `createShopfront` builds a `Shelf` per potion at `shelfPosition(i)`, three on each side
   wall, each in its fixed spot, and shows those `researched`. They are not obstacles.
   `pallets.counter.in` holds the shelves standing, in `POTIONS` order, for the test. The shelf
@@ -273,6 +285,26 @@ study, shade gardens and a mirrored second production line.
   wants); `newOrder` draws from a hat with each potion in it `SIGN_DEMAND` times (all signs Fair
   leaves the draw as it was, so the playthrough's orders repeat). The cut text under a shelf shows
   the combined factor: stock, sign and rival.
+- Book contracts: `contractFor` keeps days 1 and 2 as Sleeping Tonics then Healing Draughts; from
+  `BOOK_CONTRACT_DAY` it picks from `orderable` by the day (no randomness), and every
+  `BUNDLE_EVERY`th day from there (4, 7, 10, ...) splits the potions into a `bundle` of a second
+  potion. `serveFromShelf` counts a sale while `contractWants` holds; `deliverForContract` keeps it
+  once both parts are met. The card titles both parts and colours each part's pips.
+- Seasons: `brew` cures the plague once (`cured`, `curedDay`, `seals++`); `tick` starts
+  `plagueAt(0, 0, 0, season + 1)` `SEASON_GAP` days after `curedDay` (set on the spot for a cured
+  save without it). `stagesFor(season)` gives the stages (`SEASON_STAGES` plus `SEASON_EXTRA` a
+  season), and `plagueStage` takes any potion for a stage whose potion isn't `orderable`.
+  `potionPrice` rises by `SEAL_PRICE` per seal. Only the first cure opens `showWin`; later ones
+  say so under the plague card.
+- Wagon: `tick` sets `state.wagon = wagonFor(state, day)` on an `isWagonDay` once `dayLeft` is
+  under `WAGON_ARRIVES` of the day, and counts its `left` down. `createWagon` draws it at `WAGON`
+  (out of the doctor's reach, a tappable image that stops propagation) while `wagonHere`; a tap
+  calls `sellToWagon`, which takes a full crate off the shelf, plain first, for `crate * pay` coins
+  into the purse. The scenery leaves trees off the street's right for it.
+- Herb market: `createHerbMarket` lays its stall, a sell marker (`pad-in`) and a buy marker
+  (`pad-out`) at `HERB_MARKET`, both with `pays` so walking over them trades nothing, and a
+  tappable sign that calls `cycleMarketPick`; all shown once `marketOpen` (the garden pixies
+  built). Captions show today's `herbBuyPrice` and `herbSellPrice`.
 - Blight: `spreadBlight` in `tick` rolls `rand` only when the blight can strike (from `BLIGHT_DAY`
   on a rainy day, not immune) or a blighted bed can spread, so day 1 uses the same randomness as
   before. A blighted plot (`blighted`, `blightMs`) doesn't grow and `isRipe` is false, so the
@@ -313,8 +345,11 @@ null), `guild` (a `Build`: entry to the guild), `expansion` (land, two fields, r
 handed over at the counter, ever), `tips` (tip coins ever), `lastSeen` (wall-clock ms of the last
 save or load, 0 in a new game), `reputation` (0 to 100), `regulars` (`face`, `wants`), `rush`
 (`day`, `size`, `served`, `lost`, `paid`, or null), `plague` (`stage`, `need`, `made`, `left`,
-`relapses`, `cured`, or null before day 5), `signs` (a `PriceSign` per potion, Fair when missing)
-and `rival` (`open`, `day`, `potion`, `sold`, `streak`, and `dayShare` once a kept contract ended the day early). Each order also has `tip`, its full tip (`maxTip`
+`relapses`, `cured`, or null before day 5), `signs` (a `PriceSign` per potion, Fair when missing),
+`rival` (`open`, `day`, `potion`, `sold`, `streak`, and `dayShare` once a kept contract ended the day early),
+`seals` (town seals), `wagon` (`day`, `potion`, `crate`, `pay`, `left`, `sold`, or null) and
+`marketPick` (the herb market's good to buy). The contract may have a `bundle` (`potion`, `need`,
+`made`); the plague may have `season` and `curedDay`. Each order also has `tip`, its full tip (`maxTip`
 of its size), and may have `asked`, `face`, `regular` and `rush`. `counter.shelf` and `carrying`
 can hold fine potions. A plot may be `blighted` with `blightMs`; a belt item may carry `run`; a
 brew's `out` may be `PANACEA`.
@@ -349,8 +384,9 @@ brew's `out` may be `PANACEA`.
   brew or served potion carries over to the next, so slow frame rates lose nothing.
 - `startBrew` (called by `brew` for either pipe) picks the recipe when work starts: the cauldron's priority potion if its inputs are
   in and its pallet has room, otherwise the potion with the fewest on the cauldron's output pallets
-  (a fine one counts as its plain potion); ties go in `RECIPES` order. A priority never makes
-  a station wait.
+  and the shop's shelf together (a fine one counts as its plain potion); ties go in `RECIPES`
+  order. A potion `BREW_LEAD` (6) or more ahead of the shortest `orderable` potion is skipped, so
+  its ingredients wait for the short one. A priority never makes a station wait.
 - Picking up (`pickUpOne`, for both pick-up markers) takes a mix: each time the kind the doctor
   carries fewest of, then the kind with the most waiting, then the first.
 
@@ -373,7 +409,7 @@ brew's `out` may be `PANACEA`.
 - Away: `GameScene.create` calls `catchUp(state, Date.now())` right after `loadState` and keeps the
   result in the public `away` field; `createAwayChip` shows it (top right, `AWAY_CHIP`) until tapped.
   The new fields (`contract`, `sold`, `tips`, `lastSeen`, `shade`, `reputation`, `regulars`,
-  `rush`, `plague`, `signs`, `rival`) come from `fresh` through the shallow merge, so `version` was
+  `rush`, `plague`, `signs`, `rival`, `seals`, `wagon`, `marketPick`) come from `fresh` through the shallow merge, so `version` was
   not bumped; old orders without `tip` tip nothing, and an old save's rival picks its potion on
   the next tick.
 - `apothecary-zoom`: the main camera's zoom, a view preference that "New game" keeps.
@@ -451,7 +487,7 @@ brew's `out` may be `PANACEA`.
   (refiner, cauldron and counter markers, `LEAVE_SHOP`, `STREET`, `FIRST_CUSTOMER` =
   `customerPosition(0)`, the counter's drop outside the north door), `WALK_SPEED`,
   `POTION_PRICE`, the counter bonus in `potionPay` (it assumes one of each potion on the shelf, so
-  no stock cut, and asserts it), grow times 24000/42000, the bed layout
+  no stock cut, and asserts it), grow times 24000/30000, the bed layout
   (`BESIDE_GARDENS`, `BETWEEN_GARDENS`, `WHEAT_CUT`, `MANDRAKE_CUT`: walking left along the line
   between the wheat field and the mandrake patch below it, the sickle's 72px reach from the
   doctor's middle takes the right-hand and middle beds of the rows either side, two wheat and two
@@ -512,9 +548,9 @@ brew's `out` may be `PANACEA`.
   kind without a position gets no pallet.
 - `layout.ts` mirrors line two with `mirror`; moving a line-one spot moves its twin. It must stay
   free of Phaser, since the sim and save import it.
-- Belt lanes do not mirror (heading east a belt's first lane is on its north side, heading west on
-  its south), so `mirrorPallets` flips each pallet column around `LINE_Y` (`flipColumn`) to keep
-  every kind at the end of its lane.
+- Pallet columns mirror left to right only (`mirrorPallets`), so both lines stack wheat, mandrake,
+  nightshade from the top. Heading west a belt's first lane would be on its south side, so
+  `createBelts` negates `laneOffset` for `LINE2_BELTS` to keep every kind at the end of its lane.
 - `atCounter` lives only in the scene; `tick` called without it serves every customer at once.
 - Garden belt build spots sit outside a maxed sickle's reach on purpose, so hands a new belt empties
   do not refill from the patch.

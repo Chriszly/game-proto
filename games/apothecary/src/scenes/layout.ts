@@ -172,6 +172,17 @@ export const SHOP_SIGN = { x: SHOP.x + 70, y: SHOP.y + SHOP.h };
  */
 export const RIVAL = { x: 740, y: 800, sign: { x: 740, y: 724 }, offer: { x: 740, y: 704 }, streak: { x: 740, y: 686 } };
 
+/**
+ * The merchant wagon's stop across the street, right of the street door and out of the doctor's
+ * reach (a tap sells it a crate): its feet and the lines above it saying what it wants.
+ */
+export const WAGON = { x: 950, y: 820, want: { x: 950, y: 728 }, left: { x: 950, y: 746 } };
+/**
+ * The herb market below the outfitter: its stall, the marker to sell plants and refined goods, the
+ * marker to buy the good its tappable sign shows, and that sign above the buy marker.
+ */
+export const HERB_MARKET = { stall: { x: 250, y: 842 }, label: { x: 250, y: 774 }, sell: { x: 340, y: 806 }, buy: { x: 430, y: 806 }, pick: { x: 430, y: 772 } };
+
 /** How thick the shop's stone walls are; each runs along an edge of the shop, half inside and half out. */
 const WALL = 16;
 /** Where the cauldrons' pixies fly in through the shop's side walls. */
@@ -245,11 +256,14 @@ const CAULDRON_PALLETS: StationPallets = {
   out: [...acrossRoute(OUT_X.cauldron - 14), ...acrossRoute(OUT_X.cauldron + 14)],
 };
 /**
- * The second line's pallets, mirrored. Its routes head left, so their first lane is on the south
- * side: each column is turned upside down to keep every kind at the end of its lane.
+ * The second line's pallets, mirrored left to right only, so both lines stack their kinds the same
+ * way from the top: wheat, mandrake, nightshade. Its routes head left, so the scene flies its pixies
+ * on the other side of the route (`LINE2_BELTS`) to keep every kind at the end of its lane.
  */
-const flipColumn = (column: { x: number; y: number }[]) => column.map((p) => ({ ...mirror(p), y: 2 * LINE_Y - p.y }));
-const mirrorPallets = (p: StationPallets): StationPallets => ({ in: flipColumn(p.in), out: flipColumn(p.out) });
+const mirrorColumn = (column: { x: number; y: number }[]) => column.map(mirror);
+const mirrorPallets = (p: StationPallets): StationPallets => ({ in: mirrorColumn(p.in), out: mirrorColumn(p.out) });
+/** The second line's belts, which head left, so a lane's side of the route is the other way round. */
+export const LINE2_BELTS: readonly BeltId[] = ['garden2', 'refiner2', 'cauldron2'];
 /**
  * The shop's shelves, one for each potion, stand along its side walls, where the pixies come in,
  * given by the middle of their bottom edge: the first three potions' on the left wall, the others'
