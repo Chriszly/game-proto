@@ -38,7 +38,7 @@ export function activeButton(i: number) {
 /** The recall button in the top bar, right of the clock; while the champion is dead it is the buy back button. */
 export const RECALL_BUTTON = { x: 530, y: 4, w: 118, h: 26 };
 
-/** The shop panel, opened with the button or the B key: thirteen item cards in four columns. */
+/** The shop panel, opened with the button or the B key: sixteen item cards in four columns. */
 export const SHOP_PANEL = { x: 100, y: 38, w: 760, h: 368 };
 const SHOP_COL_W = (SHOP_PANEL.w - 28 - 30) / 4;
 export function shopRow(i: number) {

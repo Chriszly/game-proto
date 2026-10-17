@@ -13,6 +13,8 @@ import {
   FOUNTAIN,
   ChampionDef,
   ITEMS,
+  ELIXIR,
+  ELIXIR_COLOR,
   ItemDef,
   LANES,
   RIVER,
@@ -182,6 +184,12 @@ function describe(item: ItemDef): string {
   if (item.atk) parts.push(`+${item.atk}% attack speed`);
   if (item.cdr) parts.push(`-${item.cdr}% cooldowns`);
   if (item.ward) parts.push(`[V] plant: sees ${SIGHT.ward}px for ${WARD.ms / 1000}s, ${WARD.hits} hits`);
+  const e = item.elixir;
+  if (e?.dmg) parts.push(`+${e.dmg}% damage`);
+  if (e?.armor) parts.push(`+${e.armor} armor`);
+  if (e?.regen) parts.push(`+${e.regen} health a second`);
+  if (e?.speed) parts.push(`+${e.speed}% speed`);
+  if (e?.atk) parts.push(`+${e.atk}% attack speed`);
   if (active) parts.push(active.id === 'dash' ? `[${active.key}] dash ${active.range}px` : `[${active.key}] heal ${active.heal}`);
   return parts.join(', ');
 }
@@ -190,6 +198,7 @@ function describe(item: ItemDef): string {
 function itemTint(item: ItemDef): string {
   if (item.active === 'flask') return '#62d86f';
   if (item.ward) return '#9fd8ff';
+  if (item.elixir) return ELIXIR_COLOR[item.id] ?? '#c49bff';
   return item.dmg ? '#ff8a5c' : item.armor ? '#b9c3cf' : item.hp ? '#e0556f' : item.speed ? '#7fb6ff' : item.atk ? '#f2c14e' : '#c49bff';
 }
 
@@ -1527,10 +1536,11 @@ export class GameScene extends Phaser.Scene {
     this.t('shop-note', p.x + 90, p.y + 14, note, 11, open ? UI.dim : UI.red);
     ITEMS.forEach((item, i) => {
       const r = shopRow(i);
-      const has = !item.ward && me.items.includes(item.id);
+      const has = !item.ward && !item.elixir && me.items.includes(item.id);
+      const drinking = item.elixir ? me.buffs.find((b) => b.elixir && b.id === item.name) : undefined;
       const price = priceFor(me, item);
       const parts = (item.from ?? []).filter((id) => me.items.includes(id));
-      const fits = item.ward ? me.wards < WARD.carry : me.items.length - parts.length < MAX_ITEMS;
+      const fits = item.elixir ? true : item.ward ? me.wards < WARD.carry : me.items.length - parts.length < MAX_ITEMS;
       const afford = me.gold >= price;
       this.panel(g, r.x, r.y, r.w, r.h, has ? '#2a3140' : item.from ? '#41496a' : '#3a4660');
       // Items that build from parts get a gold top edge.
@@ -1545,15 +1555,19 @@ export class GameScene extends Phaser.Scene {
       if (!has && parts.length) this.t(`shop-save-${i}`, r.x + r.w - 8, r.y + 20, `-${item.cost - price}g parts`, 9, UI.green, 'right', true);
       this.t(`shop-desc-${i}`, r.x + 10, r.y + 37, describe(item), 10, UI.dim);
       const into = ITEMS.filter((it) => it.from?.includes(item.id));
-      const recipe = item.ward
-        ? `Consumable: carrying ${me.wards} of ${WARD.carry}`
-        : item.from
-          ? `From ${item.from.map((id) => ITEMS.find((it) => it.id === id)?.name ?? id).join(' + ')}`
-          : into.length === 1
-            ? `Builds into ${into[0].name}`
-            : into.length
-              ? `Builds into ${into.length} items`
-              : 'Active item';
+      const recipe = drinking
+        ? `Active: ${clock(drinking.ms)} left`
+        : item.elixir
+          ? `Elixir: ${ELIXIR.ms / 60_000} minutes, one at a time`
+          : item.ward
+            ? `Consumable: carrying ${me.wards} of ${WARD.carry}`
+            : item.from
+              ? `From ${item.from.map((id) => ITEMS.find((it) => it.id === id)?.name ?? id).join(' + ')}`
+              : into.length === 1
+                ? `Builds into ${into[0].name}`
+                : into.length
+                  ? `Builds into ${into.length} items`
+                  : 'Active item';
       this.t(`shop-recipe-${i}`, r.x + 10, r.y + 54, recipe, 9, item.from ? UI.gold : UI.muted, 'left', !!item.from);
     });
   }

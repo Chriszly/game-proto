@@ -697,12 +697,14 @@ export interface ItemDef {
   active?: ActiveId;
   /** A consumable: buying it adds one to the champion's wards (`WARD.carry` at most) and takes no bag slot. */
   ward?: boolean;
+  /** An elixir: buying it gives this buff for `ELIXIR.ms`, through death, and takes no bag slot. */
+  elixir?: BuffDef;
 }
 
 /**
  * Bought at the shop by a champion standing near its Nexus. Each item can be owned once. The first
- * seven are parts (cheap, and the flask), the next five build from them, and the Vision Ward is a
- * consumable (see `WARD`).
+ * seven are parts (cheap, and the flask), the next five build from them, the Vision Ward is a
+ * consumable (see `WARD`), and the three elixirs are timed buffs, one at a time (see `ELIXIR`).
  */
 export const ITEMS: ItemDef[] = [
   { id: 'sword', name: 'Long Sword', cost: 350, dmg: 12 },
@@ -718,7 +720,19 @@ export const ITEMS: ItemDef[] = [
   { id: 'cloak', name: "Sage's Cloak", cost: 900, cdr: 20, hp: 120, from: ['sapphire', 'ruby'] },
   { id: 'belt', name: "Giant's Belt", cost: 700, hp: 320, from: ['ruby'] },
   { id: 'ward', name: 'Vision Ward', cost: 75, ward: true },
+  { id: 'wrath', name: 'Wrath Elixir', cost: 400, elixir: { dmg: 20 } },
+  { id: 'iron', name: 'Iron Elixir', cost: 400, elixir: { armor: 15, regen: 4 } },
+  { id: 'swift', name: 'Swift Elixir', cost: 400, elixir: { speed: 15, atk: 20 } },
 ];
+/**
+ * Elixirs last three minutes, through death; a new one replaces the one a champion has. An AI
+ * champion buys one (`AI_ELIXIR` for its build) once its build is done and it has this much gold
+ * to spare on top of the price.
+ */
+export const ELIXIR = { ms: 180_000, aiSpare: 300 };
+export const AI_ELIXIR: Record<string, string> = { tank: 'iron', fighter: 'wrath', caster: 'swift' };
+/** Each elixir's colour, for its buff chip and its gem in the shop. */
+export const ELIXIR_COLOR: Record<string, string> = { wrath: '#ff5c4d', iron: '#b9c3cf', swift: '#5ce0c8' };
 /** A champion carries at most this many items. */
 export const MAX_ITEMS = 6;
 

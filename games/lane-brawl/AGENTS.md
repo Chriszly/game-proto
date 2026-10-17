@@ -63,17 +63,21 @@ Implemented today:
   `paintFog`) and skips hidden units, effects, projectiles and zones there.
 - Gold (passive plus last hits and kills), XP shared by nearby champions, respawns that scale with
   level.
-- Items (LB4): thirteen in `ITEMS`, bought near the Nexus (`atShop`, `SHOP_RANGE`) or anywhere while
+- Items (LB4): sixteen in `ITEMS`, bought near the Nexus (`atShop`, `SHOP_RANGE`) or anywhere while
   the champion is dead (`buy` skips the distance then), each owned once, at most `MAX_ITEMS` (6) in
   the bag. Seven are parts (the Healing Flask among them); five build `from` parts: buying one uses
-  up the parts owned and takes their cost off its price (`priceFor`, `buy`); the thirteenth is the
-  Vision Ward (below). Items add flat damage,
+  up the parts owned and takes their cost off its price (`priceFor`, `buy`); then the Vision Ward
+  (below) and three elixirs. Items add flat damage,
   armor, health and speed, plus percent attack speed (`atk`) and cooldown reduction (`cdr`). Two add
   an `active` (`ACTIVES`): Phase Boots dash 220 px on D, the Healing Flask heals 220 on H (F is the
   hub's full screen key), through `useActive`, with cooldowns in `Unit.activeCds`; the third
   `ACTIVES` row is the ward on V. The shop is a 4x4
-  grid of cards (the last row holds the ward alone); the bag shows as six slots in the portrait card
+  grid of cards (the last row holds the ward and the elixirs); the bag shows as six slots in the portrait card
   and the actives as three narrow buttons under the shop button.
+- Elixirs (#290): the Wrath, Iron and Swift Elixirs (`ItemDef.elixir`, a `BuffDef`) cost 400 and
+  take no bag slot: `buy` swaps any elixir buff for a new `Buff` with `elixir: true` lasting
+  `ELIXIR.ms` (3 minutes), named after the item and coloured by `ELIXIR_COLOR`. `kill` and `revive`
+  keep elixir buffs, so they last through death. The shop card shows the time left of the one drunk.
 - Vision wards (LB6, round 2): the `'ward'` item (`ItemDef.ward`) is a consumable: `buy` adds one to
   `Unit.wards` (up to `WARD.carry`) and takes no bag slot. `useActive(..., 'ward', aim)` calls
   `plantWard`, which spawns a `'ward'` unit (`spawnWard` in `state.ts`) within `WARD.range` of the
@@ -105,7 +109,9 @@ Implemented today:
 - AI shopping (LB9, round 2): `aiShop` runs for every AI champion each tick it is dead or `atShop`:
   it buys `nextBuy(u)`, the first item of `AI_BUILDS[AI_BUILD_FOR[role] ?? 'fighter']` not owned
   and not a part of an owned item, when it can pay (the build order is kept, so gold is saved for
-  the next item), else a ward when it carries none. Every build starts with the Healing Flask, which
+  the next item); with the build done, an elixir (`AI_ELIXIR` by build: tank Iron, fighter Wrath,
+  caster Swift) when it has none and `ELIXIR.aiSpare` gold over its price; else a ward when it
+  carries none. Every build starts with the Healing Flask, which
   `aiAct` drinks under 40% health. `aiLog` reports each purchase.
 - Buy back (LB10, round 2): `buyBack` lets a dead champion pay `buybackCost` (`BUYBACK.base` plus
   `perLevel` per level) to `revive` at once, then sets `buybackReadyAt` `BUYBACK.cd` ahead. The
