@@ -5,8 +5,9 @@
  * calls `startFight`, `endFight` and `nextRound` as phases end.
  */
 import { byDifficulty } from '../../../../shared/settings';
+import type { TextKey } from '../i18n';
 import {
-  AUGMENTS, BENCH_SLOTS, BOARD, ECONOMY, GILDED, ITEM_BENCH, ITEMS, LEVEL_XP, MAX_ITEMS, MAX_LEVEL, PARTS, PLAYER_COMMANDERS,
+  AUGMENTS, BENCH_SLOTS, BOARD, ECONOMY, GILDED, ITEM_BENCH, LEVEL_XP, MAX_ITEMS, MAX_LEVEL, PARTS, PLAYER_COMMANDERS,
   PLAYERS, RIVALS, SCRAP_TOKENS_PER_PART, SETS, SHOP_ODDS, SHOP_SLOTS, SURVIVOR_DAMAGE, TERRAIN_TILES, UNIT_BY_ID, comboOf,
   isPart, rosterOf, stageDamage, stageRounds,
   type AugmentId, type CommanderDef, type MonsterId, type OriginId, type PartId, type RoundDef, type SetId, type TerrainId,
@@ -46,7 +47,7 @@ export function meterOf(b: Battle): MeterRow[] {
 
 export interface Player {
   seat: number;
-  name: string;
+  name: TextKey;
   commander: CommanderDef;
   human: boolean;
   hp: number;
@@ -124,7 +125,7 @@ export interface Match {
   terrain: Record<string, TerrainId>;
   draft: Draft | null;
   /** A rival's call-out over the board, until `until`. */
-  taunt: { seat: number; text: string; until: number } | null;
+  taunt: { seat: number; text: TextKey; until: number } | null;
   /** The last round's outcome for the player, shown in the result phase. */
   result: { outcome: 'win' | 'loss' | 'draw'; damage: number; gold: number } | null;
   /** The player's robots in their last fight, by damage dealt: the damage meter. */
@@ -150,7 +151,7 @@ export function newMatch(opts: MatchOptions): Match {
   for (let seat = 0; seat < PLAYERS; seat++) {
     const commander = seat === 0 ? PLAYER_COMMANDERS[opts.commander] : RIVALS[seat - 1];
     players.push({
-      seat, name: seat === 0 ? 'You' : commander.name, commander, human: seat === 0 && !opts.watch,
+      seat, name: seat === 0 ? 'you' : commander.name, commander, human: seat === 0 && !opts.watch,
       hp: seat === 0 ? startHp : 100, gold: ECONOMY.startGold, level: 1, xp: 0, board: {}, bench: Array(BENCH_SLOTS).fill(null),
       shop: [], items: [], augments: [], augmentOffer: null, streak: 0, alive: true, place: 0, scrapTokens: 0, shopLocked: false, lastOpponent: -1, last: null,
     });
@@ -537,7 +538,7 @@ export function startFight(m: Match) {
   for (const pr of pairings) if (pr !== mine) pr.battle.runToEnd();
   if (m.opponent >= 0) {
     const rival = m.players[m.opponent];
-    m.taunt = { seat: rival.seat, text: pick(rival.commander.taunts.length ? rival.commander.taunts : ['Let’s brawl!']), until: m.time + 2.5 };
+    m.taunt = { seat: rival.seat, text: pick(rival.commander.taunts.length ? rival.commander.taunts : ['tauntStart']), until: m.time + 2.5 };
   }
 }
 
@@ -603,7 +604,7 @@ export function endFight(m: Match) {
     if (pr.a === 0) {
       m.result = { outcome: wonA === null ? 'draw' : wonA ? 'win' : 'loss', damage: wonA ? 0 : takenA, gold: b.gold[0] };
       const rival = other;
-      if (wonA === false) m.taunt = { seat: rival.seat, text: pick(rival.commander.taunts.length ? rival.commander.taunts : ['Ha!']), until: m.time + 3 };
+      if (wonA === false) m.taunt = { seat: rival.seat, text: pick(rival.commander.taunts.length ? rival.commander.taunts : ['tauntWin']), until: m.time + 3 };
     }
   }
   if (m.battle) m.meter = meterOf(m.battle);
@@ -672,5 +673,3 @@ export function draftPick(m: Match, seat: number, option: number): boolean {
   d.turn++;
   return true;
 }
-
-export const itemName = (id: string) => ITEMS[id]?.name ?? id;
