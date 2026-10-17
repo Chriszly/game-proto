@@ -15,7 +15,8 @@ bottle green, serif italics), all painted in code on 2D canvases. It shares no c
   columns, gravity and refill, free cascades, only the order's ingredients counted (they fly to the
   label, the rest pop), Catalyst tiles (a run of four or more leaves one; a matched Catalyst clears
   its whole row), Bloom tiles (an L or T leaves one where its lines cross; matched, it clears the
-  3x3 around it), two Catalysts swapped together clearing a row and a column, corked jars (from
+  3x3 around it), two specials swapped together going off without a match (two Catalysts: a row and
+  a column; a Catalyst and a Bloom: three rows; two Blooms: a 5x5), corked jars (from
   order 2: never match or swap, opened and gathered by a match next to them) and resin (from order
   3: holds a tile in place, the first match it is in only melts it) and creeping mould (from order
   5: holds its tile, never matches, spreads to a neighbour after every move unless a match touched
@@ -32,21 +33,27 @@ bottle green, serif italics), all painted in code on 2D canvases. It shares no c
   (Stir: +3 moves for 40; Sift: reroll a row for 25; Pestle: smash a tile for 30; Funnel: swap
   any two tiles for 35; tips in the caption on hover), a workbench of lasting upgrades bought
   between orders (Steady hands: +1 move per order, three levels; Potent Catalysts: a fired Catalyst
-  clears its column too; Bloom starter: every board starts with a Bloom), 1-3
+  clears its column too; Bloom starter: every board starts with a Bloom), a herbalist selling
+  pantry ingredients between orders (8 coins each, up to the pantry's 5 a kind), 1-3
   stars per sale by moves left, a saved tinker rank on a ribbon above the board whose ranks unlock
-  three more recipes, a caption cartouche under the tray, and a result card ("Next order" or
-  "Try again", with a link to the workbench) showing the stars and rank news.
-- **Progression:** `order`, `coins`, `sold`, `stars`, `pantry`, `upgrades` and `royal` carry over.
-  Coins buy bench tools and workbench upgrades; stars set the rank (`src/game/ranks.ts`), and each
-  rank's recipe joins the round of orders. The game has an ending (the crown's last order) but
-  does not stop there.
+  three more recipes, a caption cartouche under the tray, and a result card ("Modest order" and
+  "Rich order" after a sale, "Try again" after running out of moves, with links to the workbench,
+  the herbalist and, once Royal Apothecary, the next guild examination) showing the stars and rank
+  news. A rich order (from order 2, picked on the card) pays 50% more for 4 fewer moves (even
+  orders) or 2 more jars and resin and one more mould patch if any (odd orders). Guild
+  examinations, after the crown, are eight fixed boards (seeded starting layout) that must be sold
+  with 2 or 3 stars; each pass adds a seal on the ribbon.
+- **Progression:** `order`, `coins`, `sold`, `stars`, `pantry`, `upgrades`, `royal`, `seals` and
+  `rich` carry over. Coins buy bench tools, workbench upgrades and pantry ingredients; stars set
+  the rank (`src/game/ranks.ts`), and each rank's recipe joins the round of orders. The game has an
+  ending (the crown's last order) but does not stop there: the guild examinations follow.
 - **Screens:** one scene (`GameScene`) with the rank ribbon and board on the left, the order label
   on the right, a caption under the board and a result card over the board. No title screen, menu,
   in-game settings or sound (the hub's settings apply, see Hub settings).
-- **Persistence:** progress is saved when an order sells and whenever a bench tool or a workbench
-  upgrade is bought. The
+- **Persistence:** progress is saved when an order sells, whenever a bench tool, a workbench
+  upgrade or a pantry ingredient is bought and when the next order is picked. The
   board and moves left are not saved, so a reload restarts the current order on a fresh board (with
-  the coins already spent gone).
+  the coins already spent gone); a reload during a guild examination goes back to the orders.
 - **Rough edges:** tiles fall past a resin-held tile (hopping over its cell) rather than piling on
   it. A shuffle that gives up returns a fresh board without jars, resin or mould. Unlocking a recipe lengthens the round, so the potion for a given order number can shift after a
   rank-up, and a royal commission's stages come from the round too. The caption shows one tip at a
@@ -63,15 +70,21 @@ bottle green, serif italics), all painted in code on 2D canvases. It shares no c
 - `src/main.ts`: creates the `Phaser.Game` (960x540, FIT scaling, `pixelArt: false`) with
   `BootScene` and `GameScene`, calls `setupGame(game)` and `setupScaling(game)` from
   `shared/scaling.ts`, and puts `game` on `window` in dev builds.
-- `src/game/kinds.ts`: `KINDS`, the `Kind` type, `KIND_NAMES` and `randomKind`.
+- `src/game/kinds.ts`: `KINDS`, the `Kind` type, `KIND_NAMES` and `randomKind(rand?)`.
 - `src/game/orders.ts`: `PotionId`, `POTION_NAMES`, `Needs`, `Stage`, the `Order` type (with
-  `rush`, `forbid`, `jars`, `resin`, `mould`, `stages`, `last`, `second`), the `ORDERS` table,
+  `rush`, `forbid`, `jars`, `resin`, `mould`, `stages`, `last`, `second`, `rich`, `exam`), `Risk`,
+  the `ORDERS` table,
   `RANK_RECIPES` (the three unlockable recipes), `MOVE_BONUS`, the per-round growth
   (`ROUND_NEEDS`, `ROUND_PRICE`), `RUSH_MOVES`, `RUSH_COINS`, the royal and twin numbers
   (`ROYAL_EVERY`, `MOULD_FROM`, `ROYAL_SHARE`, `ROYAL_COINS`, `ROYAL_MOVES`, `TWIN_SHARE`,
-  `TWIN_BONUS`, `TWIN_AT`, `TWIN_MOVES`), `isRoyal`, `isTwin`, `twistFor`, `blockersFor`, the
+  `TWIN_BONUS`, `TWIN_AT`, `TWIN_MOVES`), the rich numbers (`RICH_SHARE`, `RICH_MOVES`,
+  `RICH_BLOCKERS`), `isRoyal`, `isTwin`, `twistFor`, `blockersFor`, `riskFor`, the
   `Standing` type and `orderFor(number, standing)`, which builds a commission's stages or a twin
-  order's second customer and adds the workbench's and the difficulty's moves and the twist.
+  order's second customer and adds the workbench's and the difficulty's moves, the twist and a
+  rich pick's risk and price.
+- `src/game/exams.ts`: the `Exam` type, the `EXAMS` table, `seeded` (a mulberry32 generator),
+  `examSeed(index)` and `examOrder(index, number)`, which turns an examination into an `Order` with
+  `exam` set (and the difficulty's moves).
 - `src/game/ranks.ts`: `STARS_3`, `STARS_2`, `starsFor(movesLeft)`, the `RANKS` table, `rankOf` and
   `unlockedRecipes`.
 - `src/game/upgrades.ts`: `UpgradeId`, `Upgrades`, the `UPGRADES` table (name, effect, the price of
@@ -80,19 +93,20 @@ bottle green, serif italics), all painted in code on 2D canvases. It shares no c
   `mould`), `Cell` and `Run` types and pure board logic: `matchKind`, `stuck`, `special`, `swapped`,
   `findRuns`, `findMatches`, `matchesAt`, `swapWorks`, `validMoves`, `collapse`, `freshBoard`,
   `shuffle`, `addBlockers`, `neighbours`, `spreadMould`, `adjacent`, `inBoard`.
-- `src/game/state.ts`: `Progress`, `GameState`, `PANTRY_MAX`, `freshProgress`, `progressOf`,
-  `standingOf`, `startOrder` (which also places the Bloom starter's Bloom and draws on the
-  pantry), `tileMaker`, `wanted`, `filled(s, needs?)`, `firstNeeds`, `drawPantry`, `stockPantry`.
+- `src/game/state.ts`: `Progress`, `GameState`, `PANTRY_MAX`, `HERB_COST`, `freshProgress`,
+  `progressOf`, `heldPantry`, `examOpen`, `buyHerb`, `standingOf`, `startOrder(progress, exam?)`
+  (which also places the Bloom starter's Bloom and draws on the pantry, or lays an examination's
+  seeded board), `tileMaker`, `wanted`, `filled(s, needs?)`, `firstNeeds`, `drawPantry`, `stockPantry`.
 - `src/game/sim.ts`: `trySwap` (plays a swap out to completion through `resolve` and returns its
   `Step`s, brewing and firing specials, opening jars, melting resin and scrubbing mould in `gather`,
   then letting mould creep), `CATALYST_RUN`, the bench tools (`Tool`, `TOOLS`, `TOOL_ORDER`,
-  `STIR_MOVES`, `canUse`, `stir`, `sift`, `pestle`, `funnel`) and `nextOrder`.
+  `STIR_MOVES`, `canUse`, `stir`, `sift`, `pestle`, `funnel`), `nextOrder` and `nextExam`.
 - `src/game/save.ts`: `loadProgress` and `saveProgress` in `localStorage`.
 - `src/scenes/BootScene.ts`: calls `bakeTextures`, then starts `Game`.
 - `src/scenes/GameScene.ts`: draws everything, handles input and the tool buttons, animates steps
   and sifts, shows hints, the rank ribbon, the order's twist, stage or second-customer line, the
   caption, the pantry, the notes over the board (a served customer, a new stage), the result card
-  and the workbench card.
+  (with its pair of buttons and its links), the workbench card and the herbalist card.
 - `src/scenes/layout.ts`: `VIEW`, `BOARD`, `TRAY`, `RIBBON`, `PANEL`, `NEEDS` (with `twinY` and
   `twinRow` for a twin order's four rows), `PANTRY`, `TOOL`, `CAPTION`, `BUTTON`, `UI_DEPTH`,
   `SERIF`, `cellX`, `cellY`. It matches the approved mockup at half its 1920x1080 size.
@@ -149,8 +163,11 @@ bottle green, serif italics), all painted in code on 2D canvases. It shares no c
   pair of an across and a down run of one kind that share a cell brews a Bloom on that cell (if it
   is free) and those two runs brew no Catalyst. A matched Bloom adds the 3x3 around it. Specials
   match by `kind` like any tile, and only fire when they are in a run (or smashed by the Pestle);
-  ones swept up by a row or square are just gathered. A swap of two Catalysts (`swapWorks` allows
-  it without a match) passes `trySwap`'s `Extra`: the row and column through the moved one's cell.
+  ones swept up by a row or square are just gathered. A swap of two specials (`swapWorks` allows
+  it without a match) passes `trySwap` the `Extra` from `mixed`: two Catalysts the row and column
+  through the moved one's cell, a Catalyst and a Bloom that row and its neighbours, two Blooms the
+  5x5 around it (`bursts`, which the scene lights with the `area` texture at 5/3 size). The two
+  specials are swept, not fired, though one that also lands in a run fires as usual.
 - **Blockers:** `startOrder` calls `addBlockers` with the order's `jars`, `resin` and `mould` (none
   on order 1, so its `Math.random` calls are unchanged). `matchKind` is null for jars and mould, so
   `findRuns` never matches them; `stuck` tiles (jar, resin or mould) can't be swapped, funnelled or
@@ -186,6 +203,27 @@ bottle green, serif italics), all painted in code on 2D canvases. It shares no c
   `TWIN_BONUS` when the other isn't yet (added to `coins` only with the sale, so a failed order
   banks nothing), and pushes a step with `served`. Twin orders get no
   twist.
+- **Result card:** `showResult(title, text, rank, choices, stars)` shows the single `resultButton`
+  (made in `create`) for one choice, or the `resultPair` (made the first time) for two.
+  `orderChoice` offers Modest and Rich (`pick` sets `rich`, saves and starts the next order) and
+  sets `resultCaption`, which `refreshCaption` shows while the card is up; `examRetry` offers a
+  retry of the examination or the orders. `refreshLinks` lays out the Workbench, Herbalist and
+  Guild examination links (the last only while `examOpen`).
+- **Rich orders:** `orderFor` reads `standing.rich` (never on order 1) and `riskFor(number)`: it
+  takes `RICH_MOVES` off or adds `RICH_BLOCKERS` jars and resin (and one mould when the order has
+  mould), then adds `RICH_SHARE` of the price; `rich` on the order says which. The label's price
+  line says "rich order" and the caption names the risk.
+- **Herbalist:** `openHerbs` (the result card's link) shows a column per kind; `buyHerb` in
+  `state.ts` adds one to `heldPantry(s)` (the pantry after a sale, `startPantry` after a failure,
+  which is what `progressOf` saves) and the scene saves and redraws. Kinds the next order needs
+  (from `orderFor` with the current standing) are marked.
+- **Guild examinations:** `nextExam` starts `startOrder(progress, true)`: `examOrder(seals)` and a
+  board laid by `freshBoard` and `addBlockers` from `seeded(examSeed(seals))`, with no Bloom starter
+  and no pantry draw; refills use `Math.random` as usual. `resolve` sells a filled examination
+  without touching `order`, `sold`, `stars` or the pantry: `passed` is `orderStars >=
+  exam.stars`, which pays `price + moves * MOVE_BONUS` and adds a seal, otherwise `earned` is 0.
+  `nextOrder` afterwards goes back to the orders. The ribbon draws one circle per `EXAMS` entry
+  after "Guild seals", filled for each seal.
 - **Workbench:** `openBench` (the result card's link) shows the workbench card with a row per
   `UPGRADE_ORDER` entry; `buy` calls `buyUpgrade`, saves and redraws. `standingOf` passes
   `upgrades.hands` to `orderFor` as `extraMoves`; `gather` reads `upgrades.catalyst` to sweep a
@@ -212,20 +250,21 @@ bottle green, serif italics), all painted in code on 2D canvases. It shares no c
 
 ### State model
 
-- `Progress` (`order`, `coins`, `sold`, `stars`, `pantry`, `upgrades`, `royal`) is what is saved
-  and carried between orders.
+- `Progress` (`order`, `coins`, `sold`, `stars`, `pantry`, `upgrades`, `royal`, `seals`, `rich`) is
+  what is saved and carried between orders.
 - `GameState` extends it with `current` (the `Order` from `orderFor`, whose `potion` and `needs`
   follow the stage on a royal commission), `got` (per-kind counts for this order or stage),
   `moves`, `phase` (`play`, `sold`, `failed`), `earned`, `orderStars` (0 until sold), `brewed` and
   `fired` (Catalysts this order), `bloomed` and `bloomsFired`, `opened` (jars), `melted` (resin),
   `scrubbed` (mould), `penalties` (moves lost to the forbidden kind), `stage`, `served`,
-  `speedBonus`, `fromPantry`, `toPantry`, `startPantry`, `board` and `nextId`.
+  `speedBonus`, `fromPantry`, `toPantry`, `startPantry`, `passed` (an examination sold with its
+  stars), `board` and `nextId`.
 - `Board` is `Tile[][]`, rows from the top. Each `Tile` has a unique `id` from `nextId`, which
   restarts at 1 for every order; the scene relies on ids to track sprites through falls. A brewed
   Catalyst or Bloom keeps its tile's id and gains `catalyst` or `bloom`; a melted tile keeps its id
   and loses `resin`, a scrubbed one loses `mould` and one mould crept onto gains it.
-- Only `trySwap`, `stir`, `sift`, `pestle`, `funnel` and `startOrder` / `nextOrder` change the
-  rules state; the scene owns only view state (`busy`, `selected`, `armed` (with the `sifting`
+- Only `trySwap`, `stir`, `sift`, `pestle`, `funnel`, `buyHerb`, `buyUpgrade` and `startOrder` /
+  `nextOrder` / `nextExam` change the rules state (and `pick` sets `rich`); the scene owns only view state (`busy`, `selected`, `armed` (with the `sifting`
   getter), `funnelFrom`, `shown`, the queue, hints).
 - Invariants: a new, shuffled or sifted board has no matches and at least one valid move; `trySwap`
   returns `null` and changes nothing for a swap that makes no match; on a sale `order` already
@@ -242,15 +281,18 @@ One key of its own, `tincture-tinker-progress`, holding the JSON `Progress`. `lo
 it over `freshProgress()`, puts back the default of any field that is out of range (`order` and
 `stars` must be whole numbers, from 1 and 0; `coins` and `sold` finite numbers from 0; `pantry`
 keeps only known kinds with whole counts from 1, capped at `PANTRY_MAX`; `upgrades` only known
-ids with whole levels capped at their top; `royal` must be exactly `true`) and falls back to a
-fresh start on any error. Saves from before stars, the pantry, the workbench or the royal title
-existed load with their defaults. The hub's settings are stored separately under `hub-settings`.
+ids with whole levels capped at their top; `royal` must be exactly `true`; `seals` a whole number
+from 0, capped at `EXAMS.length`; `rich` exactly `true` and only from order 2) and falls back to a
+fresh start on any error. Saves from before stars, the pantry, the workbench, the royal title, the
+seals or rich orders existed load with their defaults. The hub's settings are stored separately under `hub-settings`.
 
 ### Randomness and timing
 
 - `Math.random` is used in `randomKind` (new tiles, the rerolls in `freshBoard` and `sift`), in
   `shuffle`, in `addBlockers` (only for orders with jars, resin or mould), in `spreadMould` (only
-  when mould is on the board) and in `startOrder` for the Bloom starter (only once bought). The order and number of calls decide the board the seeded test sees; a brewed Catalyst
+  when mould is on the board) and in `startOrder` for the Bloom starter (only once bought). A guild
+  examination's starting board comes from its own `seeded` generator instead, passed to
+  `randomKind`, `freshBoard` and `addBlockers` as `rand`. The order and number of calls decide the board the seeded test sees; a brewed Catalyst
   means one fewer new tile, and a fired row more. Phaser's `Text` objects also take one call each
   (their canvas texture's key), see Gotchas.
 - Animation and hint timing use only the `time` argument of `update`; the hint swell, the mould
@@ -266,17 +308,20 @@ existed load with their defaults. The hub's settings are stored separately under
   numbers, the twist cycle and the jars, resin and mould per order: `RUSH_MOVES`, `RUSH_COINS`,
   `twistFor`, `blockersFor` in `src/game/orders.ts`. Royal commissions and twin orders: `ROYAL_*`,
   `TWIN_*`, `MOULD_FROM` there too. Workbench upgrades and prices: `UPGRADES` in
-  `src/game/upgrades.ts`. The pantry's cap: `PANTRY_MAX` in `src/game/state.ts`.
+  `src/game/upgrades.ts`. The pantry's cap and the herbalist's price: `PANTRY_MAX`, `HERB_COST` in
+  `src/game/state.ts`. Rich orders: `RICH_*` and `riskFor` in `src/game/orders.ts`. Guild
+  examinations: `EXAMS` in `src/game/exams.ts`.
 - Ingredient kinds and names: `src/game/kinds.ts`. Board size: `ROWS`, `COLS` in
   `src/game/board.ts`.
 - Animation and hint timings: `SWAP_MS`, `CLEAR_MS`, `FALL_MS`, `SHUFFLE_MS`, `SIFT_MS`, `HINT_MS`,
   `MOULD_MS`, `NOTE_MS`, `MAX_STEP_MS` at the top of `src/scenes/GameScene.ts`; captions
   `CAPTION_TIP`, `CAPTION_BLOCKERS`, `CAPTION_MOULD`, `CAPTION_ROYAL`, `CAPTION_TWIN`,
-  `CAPTION_SIFT`, `CAPTION_PESTLE`, `CAPTION_FUNNEL`, `CAPTION_FUNNEL_TO` (tool tips are
+  `CAPTION_SIFT`, `CAPTION_PESTLE`, `CAPTION_FUNNEL`, `CAPTION_FUNNEL_TO`, `CAPTION_HERBS` (tool tips are
   `TOOLS[].tip`); the royal title `ROYAL_TITLE`.
 - Positions and sizes: `src/scenes/layout.ts`. Text offsets in the order label, the footer, the
-  result card and the workbench card are inline in `GameScene` (`buildPanel`, `createFooter`,
-  `createResult`, `createBench`, `refreshBench`), taken from the mockup at half scale. Potion
+  result card, the workbench card and the herbalist card are inline in `GameScene` (`buildPanel`,
+  `createFooter`, `createResult`, `createPair`, `refreshLinks`, `createBench`, `refreshBench`,
+  `createHerbs`, `refreshHerbs`), taken from the mockup at half scale. Potion
   colours: `BREWS` in `src/art/textures.ts`.
 
 ### Hub settings
@@ -286,7 +331,8 @@ existed load with their defaults. The hub's settings are stored separately under
   no-ops; this game uses neither).
 - Difficulty scales one number: the moves of every order. `orderFor` in `src/game/orders.ts` adds
   `byDifficulty(5, 0, -3)` to the order's `moves` (before a rush order's cut, never below 5), so Easy gives 5 more, Normal the table's value
-  and Hard 3 fewer. `ORDERS` and `RANK_RECIPES` themselves are unchanged.
+  and Hard 3 fewer. `examOrder` does the same for the guild examinations. `ORDERS`,
+  `RANK_RECIPES` and `EXAMS` themselves are unchanged.
 - `settings.reduceMotion` is read in `GameScene`: the hint tiles hold a fixed larger scale instead
   of swelling, a fired Catalyst's row band holds steady instead of blinking, brewed Catalysts don't
   bounce, a tile mould creeps onto doesn't swell, Stir doesn't pulse the moves and the result card
@@ -328,8 +374,9 @@ existed load with their defaults. The hub's settings are stored separately under
   with `src/game/orders.ts` and `src/game/ranks.ts`; `STIR` with `TOOL` and `TOOLS.stir.cost`;
   `VIEW` and `BOARD` with `src/scenes/layout.ts` and `ROWS`/`COLS`; the `Kind`, `Tile` and
   `GameState` shapes declared at the top of the test; the game's URL path in the test's `page.goto`.
-- Bench tools, the workbench, ranks above Apprentice, blockers, mould, twists, royal commissions,
-  twin orders and the pantry stay out of the playthrough (purchases are not part of the first
+- Bench tools, the workbench, the herbalist, rich orders, guild examinations, mixed specials,
+  ranks above Apprentice, blockers, mould, twists, royal commissions, twin orders and the pantry
+  stay out of the playthrough (purchases are not part of the first
   round, and order 1 has no blockers or twist and starts with an empty pantry; what its sale puts
   in the pantry is not checked).
 
@@ -356,7 +403,12 @@ existed load with their defaults. The hub's settings are stored separately under
   `gather` or `startOrder`). The workbench card lays its rows out 36px apart; a fourth row needs
   `refreshBench` and the card's title and button moved.
 - **Retune the pantry:** `PANTRY_MAX` in `src/game/state.ts`; `drawPantry` decides how much an
-  order may start with.
+  order may start with. The herbalist's price is `HERB_COST` there too.
+- **Retune rich orders:** `RICH_SHARE`, `RICH_MOVES`, `RICH_BLOCKERS` and `riskFor` in
+  `src/game/orders.ts`; the result card's caption and the label read them.
+- **Add or retune a guild examination:** an entry in `EXAMS` in `src/game/exams.ts` (moves are
+  Normal's). Its board follows from `examSeed(index)`, so inserting one changes the boards of
+  those after it. The ribbon has room for about ten seals; update the README's table.
 - **Add an ingredient kind:** add it to `KINDS` and `KIND_NAMES` in `src/game/kinds.ts`, its shape
   in `shapes` and colours in `COL` in `src/art/nouveau.ts`, and the `Kind` type in
   the test. More kinds change every seeded board, so rerun the playthrough and check order 1 still
@@ -386,7 +438,8 @@ existed load with their defaults. The hub's settings are stored separately under
   Phaser `Text`: each one takes a `Math.random` call for its canvas texture's key, so a Text made in
   `create` before `begin` shifts the first board, and one made between the first board and the sale
   (in `begin`, `refresh` or an animation) shifts the refills. The pantry line, the notes, the
-  workbench link and the workbench card are therefore made the first time they are needed, which on
+  result card's pair of buttons and links, the workbench card and the herbalist card are
+  therefore made the first time they are needed, which on
   a fresh save is after order 1 sells; `buildPanel` makes the same number of Texts for order 1 as
   before.
 - The test's `deadSwap` looks only at horizontal neighbours of different kinds, and its `runs` and

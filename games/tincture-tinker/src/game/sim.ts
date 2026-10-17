@@ -40,6 +40,8 @@ export interface Step {
   cols: number[];
   /** The middle of every Bloom that fired: the 3x3 around it was cleared. */
   areas: Cell[];
+  /** The middle of a 5x5 two Blooms swapped together cleared. */
+  bursts: Cell[];
   /** This round matched the forbidden ingredient, which cost a move. */
   penalty?: boolean;
   board: Board;
@@ -56,28 +58,47 @@ export interface Step {
 /** Runs of this length or longer brew a Catalyst. */
 export const CATALYST_RUN = 4;
 
-/** Tiles cleared on top of the matches: a Catalyst pair's row and column, or a tile a Pestle smashed. */
+/** Tiles cleared on top of the matches: what two specials swapped together clear, or a tile a Pestle smashed. */
 interface Extra {
   cells: Cell[];
   rows?: number[];
   cols?: number[];
+  bursts?: Cell[];
   /** Whether a Catalyst or Bloom among `cells` fires. */
   fire: boolean;
 }
 
 const rowCells = (row: number): Cell[] => Array.from({ length: COLS }, (_, col) => ({ row, col }));
 const colCells = (col: number): Cell[] => Array.from({ length: ROWS }, (_, row) => ({ row, col }));
+/** The cells of the square `reach` cells around `c` each way that are on the board. */
+const squareCells = (c: Cell, reach: number): Cell[] => {
+  const cells: Cell[] = [];
+  for (let dr = -reach; dr <= reach; dr++) for (let dc = -reach; dc <= reach; dc++) if (inBoard({ row: c.row + dr, col: c.col + dc })) cells.push({ row: c.row + dr, col: c.col + dc });
+  return cells;
+};
+
+/**
+ * What two specials swapped together clear around `at`, where the moved one lands: two Catalysts
+ * its row and column, a Catalyst and a Bloom its row and the rows above and below, two Blooms the
+ * 5x5 around it. Undefined unless both tiles are specials.
+ */
+function mixed(x: Tile, y: Tile, at: Cell): Extra | undefined {
+  if (!special(x) || !special(y)) return undefined;
+  if (x.catalyst && y.catalyst) return { cells: [...rowCells(at.row), ...colCells(at.col)], rows: [at.row], cols: [at.col], fire: false };
+  if (x.bloom && y.bloom) return { cells: squareCells(at, 2), bursts: [at], fire: false };
+  const rows = [at.row - 1, at.row, at.row + 1].filter((row) => row >= 0 && row < ROWS);
+  return { cells: rows.flatMap(rowCells), rows, fire: false };
+}
 
 /**
  * Swaps two neighbouring tiles. A swap that makes no match doesn't count and returns null; one that
  * does spends a move, gathers every match and the cascades after it, and returns them step by step.
- * Two Catalysts swapped together clear the row and the column where the moved one lands.
+ * Two specials swapped together clear more of the board (see `mixed`).
  */
 export function trySwap(s: GameState, a: Cell, b: Cell): Step[] | null {
   if (s.phase !== 'play' || !adjacent(a, b) || !swapWorks(s.board, a, b)) return null;
-  const pair = s.board[a.row][a.col].catalyst && s.board[b.row][b.col].catalyst;
   s.moves--;
-  const extra = pair ? { cells: [...rowCells(b.row), ...colCells(b.col)], rows: [b.row], cols: [b.col], fire: false } : undefined;
+  const extra = mixed(s.board[a.row][a.col], s.board[b.row][b.col], b);
   // On the swap's own match a Catalyst is brewed where the player moved a tile to, if it can be.
   const steps = resolve(s, swapped(s.board, a, b), [b, a], extra);
   // Mould creeps to a neighbour after every move, unless a match touched some this move.
@@ -100,6 +121,7 @@ const emptyStep = (s: GameState): Step => ({
   rows: [],
   cols: [],
   areas: [],
+  bursts: [],
   board: s.board,
 });
 
@@ -149,7 +171,16 @@ function resolve(s: GameState, board: Board, prefer: Cell[], extra?: Extra): Ste
     steps.push({ ...emptyStep(s), stage: s.stage });
   }
 
-  if (filled(s)) {
+  if (filled(s) && s.current.exam) {
+    // A guild examination pays, and earns its seal, only when sold with the stars it asks for. It
+    // leaves the orders, the stars and the pantry as they were.
+    s.phase = 'sold';
+    s.orderStars = starsFor(s.moves);
+    s.passed = s.orderStars >= s.current.exam.stars;
+    s.earned = s.passed ? s.current.price + s.moves * MOVE_BONUS : 0;
+    s.coins += s.earned;
+    if (s.passed) s.seals++;
+  } else if (filled(s)) {
     stockPantry(s);
     s.phase = 'sold';
     s.earned = s.current.price + s.moves * MOVE_BONUS;
@@ -270,6 +301,7 @@ function gather(s: GameState, board: Board, prefer: Cell[], extra?: Extra): Step
     rows: [...new Set([...rows, ...(extra?.rows ?? [])])],
     cols: [...new Set([...cols, ...(extra?.cols ?? [])])],
     areas,
+    bursts: extra?.bursts ?? [],
     penalty,
     board: next,
   };
@@ -344,5 +376,7 @@ export function funnel(s: GameState, a: Cell, b: Cell): Step[] | null {
   return resolve(s, swapped(s.board, a, b), [b, a]);
 }
 
-/** After a sale, the next order; after running out of moves, the same order again. */
+/** After a sale, the next order; after running out of moves, the same order again. After an examination, back to the orders. */
 export const nextOrder = (s: GameState) => startOrder(progressOf(s));
+/** The next guild examination (the same one again after a failed try). */
+export const nextExam = (s: GameState) => startOrder(progressOf(s), true);
