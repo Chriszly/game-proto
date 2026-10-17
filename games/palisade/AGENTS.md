@@ -54,10 +54,13 @@ seconds without a tap.
   `CALL_GOBLINS` goblins beside it (`call` effect). The Frost Giant sets `state.roarMs` to
   `ROAR_SLOW_MS` every `ROAR_MS` (`roar` effect); while it runs `shoot` multiplies the bow's
   cooldown by `ROAR_SLOW` and the scene shows the "Chilled bow" chip at `ROAR_CHIP`.
-- **Fortifications** (`forts.ts`, `state.forts`): during a break the "Fortify" button at `FORTIFY`
-  opens `FortifyPanel`; `fortify(state, id)` buys one per break (`forts.boughtWave` is the wave
-  whose break it was bought in; `canFortify`, and `canBuyFort` per fortification, which refuses an
-  oil pot while one is armed). `stakes` sets `forts.stakeHp` to `STAKE_HP`: in
+- **Fortifications** (`forts.ts`, `state.forts`): the "Fortify" button at `FORTIFY` (always shown,
+  lit while `canFortify`) opens `FortifyPanel`; `fortify(state, id)` buys one per break
+  (`forts.boughtWave` is the wave whose break it was bought in; `canFortify`, and `canBuyFort` per
+  fortification, which refuses an oil pot while one is armed). During a wave it pays at once and
+  sets `forts.queued`; `clearWave` sets the queued one up when the next break starts (`setUpFort`,
+  as that break's one) and clears it, so fortifications only change during breaks. One can be
+  queued at a time. `stakes` sets `forts.stakeHp` to `STAKE_HP`: in
   `moveEnemies`, once the barricade is down, walking foes stop at `STAKE_FRONT` and hack the stakes
   instead (Spiked Stakes counts there too); `oil` arms `forts.oil`, which `burstOil` spends on the
   first foe to start hacking at the standing barricade (`OIL_HIT`, `ignite` for `OIL_MS`, a
@@ -210,7 +213,8 @@ seconds without a tap.
   empty slot, or one row to train a hired guard, each with a button showing its cost (greyed out
   and not tappable when the coins are short), and a dim backdrop that closes it. `slot`/`open`
   tell the scene to hold everything still.
-- `src/ui/FortifyPanel.ts`: the panel the Fortify button opens during a break: a row per
+- `src/ui/FortifyPanel.ts`: the panel the Fortify button opens (a note under its title says when
+  one can be bought, and a queued one reads "Queued for the next break"): a row per
   fortification in `FORT_IDS` (a little picture, its text, what is held and a Buy button with its
   cost, greyed out when the coins are short or this break's one is bought) and a dim backdrop that
   closes it. `open` tells the scene to hold everything still.
@@ -284,9 +288,9 @@ seconds without a tap.
   calls `strew` 40px in front of it. A level-up, a fall, the open skill book or hire panel clears
   `aim`. A tap on a guard slot's zone (depth `UI_DEPTH - 3`, under every overlay) opens
   `HirePanel`, which calls `GameScene.hire`/`train`; the scene holds the battle while it is open and
-  closes it on a level-up or a fall. A tap on the Fortify button (shown only during a break) opens
-  `FortifyPanel`, which calls `GameScene.fortify`; the scene holds the break while it is open and
-  closes it when the wave comes on. A tap on the aim toggle (or T) calls `cycleAim`. A tap on a road card calls `pickRoad`. "Fight again" and "New hero" call
+  closes it on a level-up or a fall. A tap on the Fortify button (always shown; not after a fall or during a level-up) opens
+  `FortifyPanel`, which calls `GameScene.fortify`; the scene holds the battle while it is open and
+  closes it on a level-up or a fall. A tap on the aim toggle (or T) calls `cycleAim`. A tap on a road card calls `pickRoad`. "Fight again" and "New hero" call
   `restart`, the heat buttons on the game-over panel and "Heat N" on the victory panel call
   `restartAt`, and "Keep fighting" calls `keepFighting`. The "Skill book" button opens `SkillBook`; Back or a tap beside the book closes it.
   While it is open `GameScene.update` skips `tick` and its `clock`, so the battle, effects and the
@@ -320,7 +324,7 @@ seconds without a tap.
   `kills`, `rain` (`charge`, `need`, `volleys`), `caltrops` (`charge`, `need`, `patches`), `coins`,
   `guards`, `road`, `roadChoices`, `roadMs`, `streak` (`count`, `ms` left, `best`, `bonusXp`),
   `relicFound` (a list, or null), `aimMode`, `roarMs`, `forts` (`stakeHp`, `oil`, `lookout`,
-  `boughtWave`), `won` and `nextId`.
+  `boughtWave`, `queued`), `won` and `nextId`.
 - `Enemy` holds its position, `hp`/`maxHp`, boss `bars`, slow and burn timers, `attacking`,
   `hitMs`, `castMs` (a shaman's healing timer, a boss's move timer), `trait` (an elite's, or null)
   and `moved` (the Ogre Warlord's call). `Missile` is an arrow, a fireball, a mage's
@@ -349,7 +353,8 @@ seconds without a tap.
   `roadChoices` is set by `clearWave` on a boss wave and cleared by `pickRoad`, which restarts
   `breakMs`; the break never ends while it is set. `caltrops.charge` never exceeds `caltrops.need`.
   `hire` and `train` refuse during a level-up or a fall, or without the coins; `coins` never goes
-  below 0. `fortify` refuses outside a break, during a level-up, twice in one break or without the
+  below 0. `fortify` refuses after a fall or the win, during a level-up, twice in one break, with one
+  already queued during a wave, or without the
   coins. `phase` is `'won'` only between clearing `WIN_WAVE` and "Keep fighting" (or a new run);
   `won` stays set for the rest of the run, so wave 60 never wins again. `heat` never exceeds
   `heatUnlocked`. In

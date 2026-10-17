@@ -568,23 +568,31 @@ export function hire(state: GameState, slot: number, kind: GuardKind) {
 }
 
 /**
- * Buys a fortification during a break, one per break, if the coins are there: a stake line is set
- * up anew (or mended to full), an oil pot is armed, a lookout starts its waves over. Returns
- * whether it was bought.
+ * Buys a fortification, if the coins are there: during a break it is set up at once, one per
+ * break; during a wave it is paid now and queued, and set up when the next break starts (as that
+ * break's one). Returns whether it was bought.
  */
 export function fortify(state: GameState, id: FortId) {
   const f = state.forts;
   if (!canBuyFort(state, id) || state.coins < FORTS[id].cost) return false;
   state.coins -= FORTS[id].cost;
+  if (state.phase === 'break') setUpFort(state, id);
+  else f.queued = id;
+  return true;
+}
+
+/** A stake line is set up anew (or mended to full), an oil pot is armed, a lookout starts its waves over. */
+function setUpFort(state: GameState, id: FortId) {
+  const f = state.forts;
   f.boughtWave = state.wave;
   if (id === 'stakes') f.stakeHp = STAKE_HP;
   else if (id === 'oil') f.oil = true;
   else f.lookout = LOOKOUT_WAVES;
-  return true;
 }
 
-/** Whether a fortification can still be bought in this break. */
-export const canFortify = (state: GameState) => state.phase === 'break' && !state.choices && state.forts.boughtWave !== state.wave;
+/** Whether a fortification can still be bought: one a break, or one queued during a wave. */
+export const canFortify = (state: GameState) =>
+  !held(state) && !state.choices && (state.phase === 'break' ? state.forts.boughtWave !== state.wave : state.forts.queued === null);
 
 /** Whether this fortification can be bought now: an oil pot only when none is armed. */
 export const canBuyFort = (state: GameState, id: FortId) => canFortify(state) && !(id === 'oil' && state.forts.oil);
@@ -818,6 +826,11 @@ function clearWave(state: GameState) {
   const max = s.barricadeMax;
   if (max > state.barricade.max) state.barricade = { hp: state.barricade.hp + max - state.barricade.max, max };
   state.barricade.hp = Math.min(state.barricade.max, state.barricade.hp + state.barricade.max * s.repair);
+  // A fortification bought during the wave is set up now, as this break's one.
+  if (state.forts.queued) {
+    setUpFort(state, state.forts.queued);
+    state.forts.queued = null;
+  }
   if (won) state.phase = 'won';
 }
 

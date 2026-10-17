@@ -1,6 +1,7 @@
 import type { AimMode } from './aim';
 import type { Trait } from './elites';
 import type { EnemyKind } from './enemies';
+import type { FortId } from './forts';
 import { FIRST_BREAK_MS } from './waves';
 import type { GuardKind } from './guards';
 import { heatRules } from './heat';
@@ -143,6 +144,8 @@ export interface Forts {
   lookout: number;
   /** The wave whose break a fortification was bought in, so each break sells one. */
   boughtWave: number;
+  /** A fortification bought during a wave, set up when the next break starts. */
+  queued: FortId | null;
 }
 
 /** `'won'` is the pause on the victory panel after wave 30; "Keep fighting" goes back to `'break'`. */
@@ -298,7 +301,7 @@ export function freshProgress(): Progress {
   return { level: 1, xp: 0, ranks: {}, levelUps: 0, bestWave: 0, runs: 0, relics: {}, mastered: false, heat: 0, heatUnlocked: 0, choices: null };
 }
 
-export const freshForts = (): Forts => ({ stakeHp: 0, oil: false, lookout: 0, boughtWave: 0 });
+export const freshForts = (): Forts => ({ stakeHp: 0, oil: false, lookout: 0, boughtWave: 0, queued: null });
 
 /** A new run from wave 1, with the hero's progress kept. */
 export function newRun(progress: Progress, aimMode: AimMode = 'nearest'): GameState {
