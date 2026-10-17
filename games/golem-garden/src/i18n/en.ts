@@ -1,0 +1,188 @@
+/**
+ * Golem Garden's texts in British English, the source `de.ts` and `en-US.ts` translate (see
+ * `shared/i18n.ts`). The catalogues in `game/` name their texts by these keys.
+ */
+const en = {
+  // Golems: name, name inside a sentence, the tall seed card's two lines and what it does
+  pebbleName: 'Pebble golem',
+  pebbleLower: 'pebble golem',
+  pebbleCard: 'Pebble\ngolem',
+  pebbleBlurb: 'Throws rocks',
+  mossName: 'Moss golem',
+  mossLower: 'moss golem',
+  mossCard: 'Moss\ngolem',
+  mossBlurb: 'Slows pests',
+  thornName: 'Thorn golem',
+  thornLower: 'thorn golem',
+  thornCard: 'Thorn\ngolem',
+  thornBlurb: 'Pricks all near',
+  hedgeName: 'Hedge',
+
+  // Level 3 forms: name and what it does
+  boulderName: 'Boulder',
+  boulderBlurb: 'double damage, splashes, slower throws',
+  slingName: 'Sling',
+  slingBlurb: 'quick throws, far reach',
+  bogName: 'Bog',
+  bogBlurb: 'slows to a crawl for 3s',
+  sporeName: 'Spore',
+  sporeBlurb: 'slows every pest in reach',
+  brambleName: 'Bramble',
+  brambleBlurb: 'reaches 60px further',
+  barbName: 'Barb',
+  barbBlurb: 'deeper pricks, pierce armour',
+
+  // Targeting: the Aim chip's name and what the golem aims at
+  firstName: 'First',
+  firstBlurb: 'the pest furthest along the path',
+  strongestName: 'Strongest',
+  strongestBlurb: 'the pest with the most health left',
+  weakestName: 'Weakest',
+  weakestBlurb: 'the pest with the least health left',
+  flyersName: 'Flyers',
+  flyersBlurb: 'crows before anything else',
+
+  // Boons: name and card text
+  longMossName: 'Long moss',
+  longMossBlurb: 'Every slow lasts half again as long',
+  sunnyRowName: 'Sunny row',
+  sunnyRowBlurb: 'Golems on one row reach 20px further',
+  newGrowthName: 'New growth',
+  newGrowthBlurb: 'Two Heartwood leaves grow back',
+  thickHedgesName: 'Thick hedges',
+  thickHedgesBlurb: 'Hedges planted from now have half again the health',
+  sharpRocksName: 'Sharp rocks',
+  sharpRocksBlurb: 'Pebble golems do 20% more damage',
+  richCompostName: 'Rich compost',
+  richCompostBlurb: 'Compost pays up to 15 sap more',
+
+  // Thorny twists
+  noHedgesName: 'No hedges',
+  doubleCrowsName: 'Double crows',
+  leanStartName: 'Lean start',
+
+  // Gardens: name and card text
+  meadowName: 'Meadow',
+  meadowBlurb: 'One winding path',
+  forkedBrookName: 'Forked Brook',
+  forkedBrookBlurb: 'The path splits round a bed and meets again',
+  twoGatesName: 'Two Gates',
+  twoGatesBlurb: 'Pests come in by two gates',
+
+  // HUD
+  title: 'Golem Garden',
+  gardenTag: '{garden}  ·  gardens',
+  gardenTagThorny: '{garden}  ·  thorny',
+  waveTag: 'Wave {n}',
+  harvestAt: 'harvest at {wave}',
+  laurelAt: 'laurel at {wave}',
+  harvested: 'harvested {stars}',
+  best: 'Best: {n}',
+  bloomFull: 'Heartwood in bloom',
+  bloomCount: 'Heartwood bloom {n}/{goal}',
+  thornUnlocked: 'Thorn golem unlocked',
+  unlocksThorn: 'unlocks Thorn golem',
+
+  // Seed panel, preview and wave button
+  seeds: 'Seeds',
+  bloomsAfter: 'Blooms after',
+  bloomWaves: { one: '{n} wave', other: '{n} waves' },
+  previewNext: 'Next: wave {n}',
+  previewQueen: 'Wave {n}: Queen Slug!',
+  startWave: 'Start wave {n}',
+  callWave: 'Call wave {n} now',
+  earlyBonus: '+{n} early',
+  harvestWave: 'Harvest wave',
+  squashEvery: 'squash every pest',
+  waveComing: 'Wave {n}...',
+  stillComing: 'still coming in',
+  gardenLost: 'Garden lost',
+
+  // Golem menu chips
+  formChip: '{form}\n{cost} sap',
+  back: 'Back',
+  raiseGrowing: 'Raise\ngrowing',
+  raiseTop: 'Raise\n{top}',
+  maxLevel: 'max level',
+  raiseChip: 'Raise\n{cost} sap',
+  formPickChip: 'Form\n{cost} sap',
+  aimAll: 'Aim\nall near',
+  aimChip: 'Aim\n{target}',
+  moveChip: 'Move\n{cost} sap',
+  uprootChip: 'Uproot\n+{n} sap',
+
+  // Hints
+  hintMove: 'Tap soil to move the {golem} there for {cost} sap',
+  hintForm: '{form}: {blurb}',
+  hintFormPick: 'Level 3 picks its form for good: {a} or {b}',
+  hintFormed: '{form} {golem}: {blurb}',
+  hintGrowing: '{golem}, still growing',
+  hintLevel: '{golem}, level {n}',
+  hintComboSlowed: '{golem} lv {n}: moss combo, harder on slowed pests',
+  hintComboPricks: '{golem} lv {n}: moss combo, pricks twice',
+  hintAims: '{level}, aims at {target}',
+  hintPicksForm: '{level}. Level 3 picks a form: {a} or {b}',
+  hintTapAgain: '{level}. Tap it again to close',
+  hintTapGolem: '{level}. Tap it to raise, aim, move or uproot',
+  hintHedge: 'A hedge: pests stop and chew on it ({n} left)',
+  hintNoHedges: 'Thorny garden: no hedges here',
+  hintPlantHedge: 'Tap a path cell to plant a hedge there; pests chew through it',
+  hintAllLeaves: 'The Heartwood has all its leaves',
+  hintRegrowLater: 'Leaves regrow between waves',
+  hintRegrow: 'Tap the Heartwood to regrow a leaf: {n} sap',
+  hintRegrowPoor: 'Tap the Heartwood to regrow a leaf: {n} sap (not enough)',
+  hintQueen: 'The Queen Slug slimes golems beside her trail',
+  hintCompost: 'Compost: clearing pays {pct}% of unspent sap (up to {cap})',
+  hintCombo: 'Golems side by side with a moss golem combo',
+  hintPlant: 'Tap soil to plant the picked seed',
+
+  // Banners
+  waveCleared: 'Wave {n} cleared!  +{sap} sap',
+  waveCalled: 'Wave {n} called early!  +{sap} sap',
+  compostBonus: ', +{n} compost',
+  harvestBanner: { one: 'Harvest! {stars} with {n} leaf kept', other: 'Harvest! {stars} with {n} leaves kept' },
+  bloomBanner: 'The Heartwood is in bloom: Thorn golem unlocked!',
+  budBanner: 'A bud opens on the Heartwood ({n}/{goal})',
+  queenComing: 'The Queen Slug is coming!',
+  queenWave: 'Wave {n}: the Queen Slug is coming!',
+  boonBanner: 'Boon: {name}!',
+
+  // Garden picker, harvest and game over
+  overTitle: 'The Heartwood has fallen',
+  overText: 'Pests ate the Heartwood on wave {wave}. {kills} pests squashed.\nBest: {best} waves cleared. Pick a garden to plant again.',
+  thornyHarvestTitle: 'Thorny harvest: laurel won!',
+  thornyHarvestText:
+    "Wave {wave} cleared in the thorny {garden} with {heart} of {max} leaves kept.\nIts laurel now crowns the garden's card. The waves go on: keep going, or plant another garden.",
+  harvestTitle: 'Harvest: {stars}',
+  harvestCleared: {
+    one: 'Wave {wave} cleared with {heart} of {max} leaves kept: {n} star for the {garden}.',
+    other: 'Wave {wave} cleared with {heart} of {max} leaves kept: {n} stars for the {garden}.',
+  },
+  harvestThornyOpen: 'Its thorny variant is open.',
+  harvestNext: '{garden} opens at {need} stars; you have {stars}.',
+  harvestAllOpen: 'Every garden is open.',
+  harvestGoOn: 'The waves go on: keep going, or plant another garden.',
+  chooseTitle: 'Choose a garden',
+  chooseText:
+    "A new garden starts from wave 1; this one is left behind. Your best ({best} waves),\nyour stars and the Heartwood's bloom carry over. {thorny} stars open a garden's thorny variant.",
+  thornyTag: 'Thorny · {twist}',
+  thornyTagWon: 'Thorny · {twist} · laurel won',
+  plantHere: '{stars}  Plant here',
+  replantHere: '{stars}  Replant here',
+  needsStars: { one: 'Needs {n} star (you have {have})', other: 'Needs {n} stars (you have {have})' },
+  keepGoing: 'Keep going',
+
+  // Boon pick
+  boonTitle: 'The Queen Slug is squashed!',
+  boonText: 'Pick a boon for this garden; it lasts until you plant another.',
+  boonsTaken: 'Taken so far: {list}.',
+  boonSun: 'Shines on row {row}',
+  boonLeaves: '{heart} of {max} leaves now',
+  boonMoss: 'Slows last {pct}%',
+  boonHedge: 'Hedges hold {hp}',
+  boonPebble: 'Pebble damage +{pct}%',
+  boonCompost: 'Compost up to {cap}',
+  boonTaken: '{detail} (taken {n}x)',
+};
+
+export default en;
