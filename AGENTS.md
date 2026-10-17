@@ -131,6 +131,9 @@ to its log and run summary.
   README. Skip camera shake and flashes, and hold blinking or jittering effects still, when
   `settings.reduceMotion` is on. A new setting goes into `shared/settings.ts` (its type, default and
   `SETTING_FIELDS` row, which the hub panel shows on its own) and then into every game.
+- **Play counts come for free.** `setupGame` also bumps the game's public play counter
+  (`shared/playCount.ts`, keyed by the game's folder name) and the hub shows the count on its card,
+  so a new game needs nothing for it. Tests never count: browser automation skips it.
 - **Fit every screen.** A game stays sharp and fills the screen from an upright phone to a 4K
   monitor by calling `setupScaling(game)` from `shared/scaling.ts` right after `setupGame(game)`
   (`grep -l setupScaling games/*/src/main.ts` lists the games that do; bring the others over one game per PR). The canvas then has

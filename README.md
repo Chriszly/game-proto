@@ -97,9 +97,9 @@ npm run preview   # serve the production build
 - `shared/`: the settings every game shares (`settings.ts`), the hub's Settings panel
   (`settingsPanel.ts`), `setupGame.ts`, which each game calls to apply the frame cap, the FPS readout, reduced motion and full screen
   and to add the loading, start and pause screens (`startScreen.ts`) with the game's How to play (`howToPlay.ts`), `watch.ts`, the Watch AI panel and its `?watch` flag,
-  and `scaling.ts`, which keeps a game sharp from a phone to a 4K screen (`grep -l setupScaling games/*/src/main.ts` lists the games that use it).
+  `playCount.ts`, the play counters (see Play counts), and `scaling.ts`, which keeps a game sharp from a phone to a 4K screen (`grep -l setupScaling games/*/src/main.ts` lists the games that use it).
 - `e2e/hub.spec.ts`: checks that the hub lists every game, that each card opens it, and that the
-  settings are saved and reach a game, and that a game starts and pauses. `e2e/screens.spec.ts` opens each game that uses
+  settings are saved and reach a game, that a game starts and pauses, and that the cards show play counts. `e2e/screens.spec.ts` opens each game that uses
   `shared/scaling.ts` on an upright and a sideways phone, a tablet, a laptop and a 4K screen.
 - `package.json`, `tsconfig.json`, `tsconfig.e2e.json`, `vite.config.ts` and `playwright.config.ts`
   are shared. `tsconfig.json` typechecks the games and `shared/`; `tsconfig.e2e.json` typechecks
@@ -126,6 +126,15 @@ the run's summary page, unzip it and serve the folder (for example with `npx ser
 (`.github/dependabot.yml`) opens update PRs: npm weekly, GitHub Actions and the Docker base image
 monthly, with minor and patch updates grouped into one PR. PR Links and the template check skip
 Dependabot's PRs, since their descriptions quote release notes from other sites.
+
+## Play counts
+
+Each game counts how often it is played on a public counter at Abacus, a free open source counter
+service with no account (`shared/playCount.ts`). `setupGame` adds one to the game's counter
+(`chriszly-game-proto/<game folder>`) when a game opens, once per browser tab, and the hub shows
+each card's count as "N plays". Only the built site counts: the dev server, browser automation (so
+the playthroughs and e2e tests) and `?watch` matches never do. If the service can't be reached, the
+games play as usual and the cards simply show no count. Nothing else is sent.
 
 ## Play online
 

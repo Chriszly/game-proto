@@ -184,3 +184,27 @@ test('games have start and pause screens', async ({ page }, testInfo) => {
   await expect(overlay).toBeHidden();
   expect(await running(), 'playing after P twice').toBe(true);
 });
+
+// The hub shows each game's play count from its counter (shared/playCount.ts), here answered by a
+// stand-in so the test never reaches the real service. A game never played, or a counter that fails,
+// shows no line.
+test('hub shows play counts', async ({ page }, testInfo) => {
+  await page.addInitScript(() => Object.assign(window, { showPlayCounts: true }));
+  await page.route('https://abacus.jasoncameron.dev/get/**', (route) => {
+    const game = new URL(route.request().url()).pathname.split('/').pop();
+    if (game === 'deadline') return route.fulfill({ status: 404, json: { error: 'Key not found' } });
+    if (game === 'palisade') return route.abort();
+    return route.fulfill({ json: { value: game === 'apothecary' ? 1234 : 1 } });
+  });
+  await page.goto('/');
+  const plays = (path: string) => page.locator(`.game a[href="${path.slice(1)}"] .plays`);
+  await expect(plays('/games/apothecary/')).toHaveText('1,234 plays');
+  await expect(plays('/games/tiny-kingdom/')).toHaveText('1 play');
+  await expect(page.locator('.game .plays')).toHaveCount(GAMES.length - 2);
+  await expect(plays('/games/deadline/')).toHaveCount(0);
+  await expect(plays('/games/palisade/')).toHaveCount(0);
+  testInfo.attach('play counts', {
+    body: await page.locator('.game').first().screenshot({ path: testInfo.outputPath('play-counts.png') }),
+    contentType: 'image/png',
+  });
+});

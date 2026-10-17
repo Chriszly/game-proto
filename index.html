@@ -22,6 +22,7 @@
       .game h2 { display: flex; align-items: center; gap: 10px; margin: 12px 14px 4px; font-size: 20px; color: #f3c64e; }
       .game .icon { width: 32px; height: 32px; flex: none; image-rendering: pixelated; }
       .game p { margin: 0 14px 16px; color: #d8c7a6; }
+      .game .plays { margin-top: -10px; font-size: 13px; color: #a8957a; }
       header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
       button { font: inherit; color: #f1e3c6; background: #3d2b1f; border: 2px solid #5a3f2a; padding: 6px 12px;
         cursor: pointer; box-shadow: 0 3px 0 #0e0a08; }
@@ -192,6 +193,7 @@
     </main>
     <script type="module">
       import { mountSettingsPanel } from './shared/settingsPanel.ts';
+      import { showPlayCounts } from './shared/playCount.ts';
 
       const dialog = document.getElementById('settings');
       mountSettingsPanel(dialog.querySelector('.panel'));
@@ -199,6 +201,7 @@
       document.getElementById('close-settings').addEventListener('click', () => dialog.close());
       // A click on the backdrop closes it too.
       dialog.addEventListener('click', (e) => e.target === dialog && dialog.close());
+      showPlayCounts(document.querySelectorAll('.game a'));
     </script>
   </body>
 </html>
