@@ -57,6 +57,7 @@ The hub's **Settings** button opens the settings every game shares. They are sav
   | Mapmaker | 16 supplies a voyage | 9 supplies a voyage |
   | Lanternkeep | lanterns burn 30% longer | lanterns burn 20% shorter |
   | Colonizer | the AI gathers 25% slower | the AI gathers 25% faster |
+  | Riftblade | droids have 25% less health and come 25% slower | droids have 35% more health and come 25% faster |
 
 - **Frame rate (FPS)**: the most frames per second a game draws, 30 to 320 (60 by default).
 - **Show FPS**: a readout of the frame rate in each game's corner.
