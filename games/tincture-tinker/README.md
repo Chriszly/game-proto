@@ -46,7 +46,7 @@ before the moves run out and the potion sells, for coins and one to three stars.
    touched some mould that move. A match right next to a mouldy tile (or a Catalyst row, a Bloom or
    the Pestle hitting it) scrubs it clean and frees the tile.
 5. **Order twists**, from the third order on, in turn: a **rush order** gives 3 fewer moves and pays
-   20 more coins; the next **forbids** one ingredient it doesn't need, and a swap that matches it
+   20 more coins; the next **forbids** one ingredient it doesn't need (on a royal commission, one no stage needs), and a swap that matches it
    costs an extra move; the one after is plain. The twist is written under the order's price.
 6. **Orders** list the ingredients the potion needs, the moves allowed and what it pays. Filling one
    pays its price plus 5 coins for every move left; running out of moves means trying it again on a
@@ -61,12 +61,12 @@ before the moves run out and the potion sells, for coins and one to three stars.
 8. **Two customers**, from Journeyman on: every fifth order after the second (7, 12, 17...) serves
    two customers on one board with one pool of moves. Each wants two ingredients (the two biggest of
    their recipe, at 60%), of different kinds, so the label has four rows, each marked with its
-   potion. The customer whose rows fill first is served there and then and pays 20 coins for speed;
+   potion. The customer whose rows fill first is served there and then and earns 20 coins for speed, paid with the sale;
    the order sells when both are served. These orders have no twist.
 9. **Pantry**: whatever was gathered over what an order (or a stage) needed is kept, up to 5 of a
    kind, and put towards the next order or stage that needs that ingredient when it starts, short of
    filling any row by one. The caption says what the pantry put in, and the pantry's contents sit at
-   the foot of the label.
+   the foot of the label. An order that runs out of moves gives back what it drew from the pantry.
 10. **Bench tools** spend coins during an order: **Stir** gives 3 more moves for 40 coins, **Sift**
    rerolls one row of the board for 25 coins (its specials, jars and resin stay, and the new tiles
    never make a match by themselves), **Pestle** smashes one tile for 30 coins (a jar opens, resin

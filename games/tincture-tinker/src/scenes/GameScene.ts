@@ -366,7 +366,7 @@ export class GameScene extends Phaser.Scene {
       // A customer is served: a note over the board, and their rows finish.
       const potion = step.served;
       const bonus = this.state.served[0] === potion && this.state.speedBonus > 0;
-      this.queue.push(this.showNote(`${POTION_NAMES[potion]} served!${bonus ? ` +${TWIN_BONUS} coins for speed` : ''}`));
+      this.queue.push(this.showNote(`${POTION_NAMES[potion]} served!${bonus ? ` +${TWIN_BONUS} coins for speed with the sale` : ''}`));
       return;
     }
     if (step.stage) {

@@ -53,6 +53,8 @@ export interface GameState extends Progress {
   /** What the pantry put towards this order (or stage) when it started, and what the last sale put in it. */
   fromPantry: Needs;
   toPantry: Needs;
+  /** The pantry as the order found it: what is saved (and given back) until the order sells. */
+  startPantry: Needs;
   board: Board;
   nextId: number;
 }
@@ -61,12 +63,13 @@ export interface GameState extends Progress {
 export const PANTRY_MAX = 5;
 
 export const freshProgress = (): Progress => ({ order: 1, coins: 0, sold: 0, stars: 0, pantry: {}, upgrades: freshUpgrades(), royal: false });
-export const progressOf = ({ order, coins, sold, stars, pantry, upgrades, royal }: GameState): Progress => ({
+/** The progress to save or carry on with. Until the order sells, its pantry draws are given back. */
+export const progressOf = ({ order, coins, sold, stars, pantry, startPantry, phase, upgrades, royal }: GameState): Progress => ({
   order,
   coins,
   sold,
   stars,
-  pantry: { ...pantry },
+  pantry: { ...(phase === 'sold' ? pantry : startPantry) },
   upgrades: { ...upgrades },
   royal,
 });
@@ -102,6 +105,7 @@ export function startOrder(progress: Progress): GameState {
     speedBonus: 0,
     fromPantry: {},
     toPantry: {},
+    startPantry: { ...progress.pantry },
     board: [],
     nextId: 1,
   };
