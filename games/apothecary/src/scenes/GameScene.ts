@@ -36,6 +36,10 @@ import {
   tick,
   type ExpansionPart,
   cyclePriority,
+  buyHerb,
+  cycleMarketPick,
+  sellHerb,
+  sellToWagon,
   type Feedback,
 } from '../game/sim';
 import { clearSave, loadState, saveState } from '../game/save';
@@ -90,7 +94,14 @@ import {
   type Weather,
   DAY_MS as DAY,
   GARDEN_NAMES,
-  PLAGUE_STAGES,
+  SEAL_PRICE,
+  SEASON_GAP,
+  herbBuyPrice,
+  herbSellPrice,
+  marketOpen,
+  stagesFor,
+  storage,
+  wagonHere,
   RIVAL_CUT,
   RIVAL_MONTH_DAYS,
   RIVAL_SALES,
@@ -138,6 +149,9 @@ import {
   SHOP_DOORWAY,
   STREET,
   WORLD,
+  HERB_MARKET,
+  LINE2_BELTS,
+  WAGON,
   customerPosition,
   plotPosition,
   type StationMarkers,
@@ -317,7 +331,7 @@ export class GameScene extends Phaser.Scene {
   /** The panel shown once the town is cured, until tapped away. */
   private winPanel: Phaser.GameObjects.Container | null = null;
   /** The plague as it was saved, before the time away was played, so the card can tell what changed while away. */
-  private plagueSaved: { stage: number; relapses: number; cured: boolean } | null = null;
+  private plagueSaved: { stage: number; relapses: number; cured: boolean; season: number } | null = null;
 
   constructor() {
     super('Game');
@@ -326,7 +340,7 @@ export class GameScene extends Phaser.Scene {
   create() {
     this.state = loadState();
     const saved = this.state.plague;
-    this.plagueSaved = saved ? { stage: saved.stage, relapses: saved.relapses, cured: saved.cured } : null;
+    this.plagueSaved = saved ? { stage: saved.stage, relapses: saved.relapses, cured: saved.cured, season: saved.season ?? 0 } : null;
     // Play through the time away, before anything is drawn from the state.
     this.away = catchUp(this.state, Date.now());
     this.startingOver = false;
@@ -363,6 +377,8 @@ export class GameScene extends Phaser.Scene {
     this.createPlague();
     this.createTown();
     this.createRival();
+    this.createWagon();
+    this.createHerbMarket();
     this.createOrderStrip();
     this.createWeather();
     this.createAwayChip();
@@ -930,7 +946,9 @@ export class GameScene extends Phaser.Scene {
       // For each kind of goods: the run it gets on at, where on the main run that starts and joins,
       // and how far across the route its pixies fly.
       const lanes = BELT_LANES[id];
-      const offs = new Map(lanes.map((kind, lane) => [kind, laneOffset(lane, lanes.length)]));
+      // The second line's routes head left, so its lanes are counted from the other side to stay in the pallets' order.
+      const side = LINE2_BELTS.includes(id) ? -1 : 1;
+      const offs = new Map(lanes.map((kind, lane) => [kind, side * laneOffset(lane, lanes.length)]));
       const approach = BELT_MS[id] - PIXIE_APPROACH_MS;
       this.views.push(() => {
         while (riding.length < belt.items.length) {
@@ -1063,10 +1081,10 @@ export class GameScene extends Phaser.Scene {
       POTIONS.forEach((potion, i) => {
         if (!known.includes(potion)) return cuts[i].setText('');
         shelves[i].set(shelf);
-        const others = shelf.filter((p) => plainOf(p) === potion).length - 1;
+        const stocked = shelf.filter((p) => plainOf(p) === potion).length;
         // What the next plain one sells for against the price: the stock cut, the sign and the rival's cut.
         const rival = rivalUndercuts(this.state, potion);
-        const factor = stockFactor(Math.max(0, others)) * SIGN_PAY[signOf(this.state, potion)] * (rival ? 1 - RIVAL_CUT : 1);
+        const factor = stockFactor(stocked, storage(this.state)) * SIGN_PAY[signOf(this.state, potion)] * (rival ? 1 - RIVAL_CUT : 1);
         const off = Math.round(100 * (factor - 1));
         cuts[i].setText(off === 0 ? '' : `${rival ? 'rival ' : ''}${off > 0 ? '+' : ''}${off}%`).setColor(off > 0 ? '#2f6a1a' : '#8a3a10');
       });
@@ -1260,24 +1278,31 @@ export class GameScene extends Phaser.Scene {
         day = c.day;
         kept = c.kept;
       }
-      const name = ITEMS[c.potion].name;
-      const key = `${c.day}:${c.made}:${Math.floor((1 - c.dayLeft / DAY_MS) * 60)}`;
+      const named = (potion: typeof c.potion, n: number) => `${n} ${ITEMS[potion].name}${n === 1 ? '' : 's'}`;
+      // A bundle day's second potion follows the first, on the title and in the pips.
+      const parts = [{ potion: c.potion, need: c.need, made: c.made }, ...(c.bundle ? [c.bundle] : [])];
+      const need = parts.reduce((n, part) => n + part.need, 0);
+      const made = parts.reduce((n, part) => n + part.made, 0);
+      const key = `${c.day}:${made}:${Math.floor((1 - c.dayLeft / DAY_MS) * 60)}`;
       if (key === drawn) return;
       drawn = key;
       icon.setTexture(itemTexture(c.potion));
-      title.setText(`Contract: ${c.need} ${name}${c.need === 1 ? '' : 's'} by dusk`);
+      title.setText(`Contract: ${parts.map((part) => named(part.potion, part.need)).join(' + ')}${c.bundle ? '' : ' by dusk'}`);
       // The title stops short of the dusk dial, in a smaller hand when a long one would run into it.
       title.setFontSize(13);
       for (let size = 12; title.width > w - 42 - 40 && size >= 10; size--) title.setFontSize(size);
-      const gap = c.need > 8 ? 11 : 15;
-      const r = c.need > 8 ? 4.5 : 5.5;
+      const gap = need > 8 ? 11 : 15;
+      const r = need > 8 ? 4.5 : 5.5;
       pips.clear();
-      for (let k = 0; k < c.need; k++) {
-        const px = x + 48 + k * gap;
-        if (k < c.made) pips.fillStyle(c.potion === 'sleepingTonic' ? 0x6a5bd6 : 0xd9434b, 0.9).fillCircle(px, y + 31, r);
-        pips.lineStyle(1.1, 0x2a1d14, k < c.made ? 0.95 : 0.5).strokeCircle(px, y + 31, r);
+      let k = 0;
+      for (const part of parts) {
+        for (let n = 0; n < part.need; n++, k++) {
+          const px = x + 48 + k * gap;
+          if (n < part.made) pips.fillStyle(ITEMS[part.potion].color, 0.9).fillCircle(px, y + 31, r);
+          pips.lineStyle(1.1, 0x2a1d14, n < part.made ? 0.95 : 0.5).strokeCircle(px, y + 31, r);
+        }
       }
-      count.setText(`${c.made}/${c.need}`).setX(x + 48 + c.need * gap - gap / 2 + 4);
+      count.setText(`${made}/${need}`).setX(x + 48 + need * gap - gap / 2 + 4);
       reward.setText(`Reward ${c.reward}`);
       rewardCoin.setX(x + w - 10 - reward.width - 9);
       // The dusk dial: a sun sinking to the horizon over the day, gone at dusk.
@@ -1339,15 +1364,21 @@ export class GameScene extends Phaser.Scene {
         for (const part of parts) part.setVisible(false);
         return;
       }
+      const season = plague.season ?? 0;
+      const stages = stagesFor(season).length;
       if (plague.cured && !seen?.cured) {
-        say('The Panacea is brewed: the town is cured!', true);
-        this.showWin();
-      } else if (seen && plague.stage > seen.stage) say(plague.stage < PLAGUE_STAGES.length ? 'Stage beaten, but the sickness moves on' : 'Every stage beaten: the Panacea is unlocked!', true);
+        // The first cure is the game's ending; a later season's earns a town seal.
+        if (season === 0) {
+          say('The Panacea is brewed: the town is cured!', true);
+          this.showWin();
+        } else say(`Season cured: a town seal! Prices +${Math.round(SEAL_PRICE * 100)}%`, true);
+      } else if (seen && season > seen.season) say('A new season, a stronger sickness!', false);
+      else if (seen && plague.stage > seen.stage) say(plague.stage < stages ? 'Stage beaten, but the sickness moves on' : 'Every stage beaten: the Panacea is unlocked!', true);
       else if (seen && plague.relapses > seen.relapses) say('Too late: the sickness comes back worse', false);
       else if (!seen) say('A sickness spreads in the town!', false);
-      seen = { stage: plague.stage, relapses: plague.relapses, cured: plague.cured };
+      seen = { stage: plague.stage, relapses: plague.relapses, cured: plague.cured, season };
       const stage = plagueStage(this.state);
-      const key = `${plague.stage}:${plague.need}:${plague.made}:${plague.cured}:${Math.ceil(plague.left / (DAY / 4))}`;
+      const key = `${season}:${plague.stage}:${plague.need}:${plague.made}:${plague.cured}:${this.state.seals}:${Math.ceil(plague.left / (DAY / 4))}`;
       if (key === drawn) return;
       drawn = key;
       for (const part of parts) part.setVisible(true);
@@ -1357,8 +1388,12 @@ export class GameScene extends Phaser.Scene {
       pips.clear();
       if (plague.cured) {
         bell.setVisible(false);
-        title.setText('The town is cured!');
-        count.setText('Trade goes on; the plague is over').setX(x + 36);
+        const seals = this.state.seals ?? 0;
+        title.setText(seals > 0 ? `The town is cured! Seals: ${seals}, prices +${Math.round(SEAL_PRICE * seals * 100)}%` : 'The town is cured!');
+        title.setFontSize(13);
+        for (let size = 12; title.width > w - 46 && size >= 10; size--) title.setFontSize(size);
+        const next = (plague.curedDay ?? this.state.contract.day) + SEASON_GAP;
+        count.setText(`Next season's sickness comes on day ${next}`).setX(x + 36);
         side.setText('');
       } else if (!stage) {
         title.setText('Panacea unlocked: brew the cure');
@@ -1366,7 +1401,7 @@ export class GameScene extends Phaser.Scene {
         side.setText('');
       } else {
         const what = stage.potion ? `${ITEMS[stage.potion].name}${plague.need === 1 ? '' : 's'}` : 'potions of any kind';
-        title.setText(`Plague ${plague.stage + 1}/${PLAGUE_STAGES.length}: ${plague.need} ${what}`);
+        title.setText(`${season > 0 ? `Season ${season + 1} plague` : 'Plague'} ${plague.stage + 1}/${stages}: ${plague.need} ${what}`);
         title.setFontSize(13);
         for (let size = 12; title.width > w - 46 && size >= 10; size--) title.setFontSize(size);
         const gap = plague.need > 8 ? 11 : 15;
@@ -1446,6 +1481,91 @@ export class GameScene extends Phaser.Scene {
         offer.setText(rival.open ? '' : 'Closed for good');
         streak.setText(rival.open ? '' : 'The street is yours');
       }
+    });
+  }
+
+  /**
+   * The merchant wagon across the street on a wagon day, while it waits: what crate it wants and at
+   * what price, how many of them the shelf holds, and when it drives off. A tap on it sells the crate.
+   */
+  private createWagon() {
+    const wagon = fit(this.add.image(WAGON.x, WAGON.y, 'wagon').setOrigin(0.5, 1).setDepth(WAGON.y)).setVisible(false);
+    wagon.setInteractive({ useHandCursor: true }).on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
+      e.stopPropagation();
+      if (this.pinching()) return;
+      if (this.closePanels()) return;
+      const feedback = sellToWagon(this.state);
+      if (feedback) this.showFeedback(feedback);
+    });
+    const style = { fontFamily: SERIF, fontSize: '12px', fontStyle: 'bold', color: INK, stroke: TEXT_HALO, strokeThickness: 3 };
+    const want = this.add.text(WAGON.want.x + 10, WAGON.want.y, '', style).setOrigin(0.5).setDepth(WAGON.y + 0.2).setVisible(false);
+    const icon = fit(this.add.image(WAGON.want.x, WAGON.want.y, itemTexture('healingDraught'))).setDepth(WAGON.y + 0.2).setVisible(false);
+    const left = this.add.text(WAGON.left.x, WAGON.left.y, '', style).setOrigin(0.5).setDepth(WAGON.y + 0.2).setVisible(false);
+    let drawn = '';
+    this.views.push(() => {
+      const w = this.state.wagon;
+      const here = wagonHere(this.state);
+      const have = w ? this.state.counter.shelf.filter((p) => plainOf(p) === w.potion).length : 0;
+      const key = `${here}:${w?.potion}:${have}:${w ? Math.ceil(w.left / 10_000) : 0}`;
+      if (key === drawn) return;
+      drawn = key;
+      for (const part of [wagon, want, icon, left]) part.setVisible(here);
+      if (!here || !w) return;
+      want.setText(`Wagon buys ${w.crate} ${ITEMS[w.potion].name}s at ${w.pay}c each`);
+      icon.setTexture(itemTexture(w.potion)).setX(want.x - want.width / 2 - 12);
+      left.setText(`On the shelf ${Math.min(have, w.crate)}/${w.crate}${have >= w.crate ? ': tap to sell' : ''}, leaves in ${Math.ceil(w.left / 1000)}s`);
+      left.setColor(have >= w.crate ? '#2f6a1a' : INK);
+    });
+  }
+
+  /**
+   * The herb market below the outfitter, once the garden pixies are hired: a marker that sells the
+   * plants and refined goods the doctor carries, and one that buys the good its sign shows (a tap
+   * moves it on), both captioned with today's price.
+   */
+  private createHerbMarket() {
+    const open = () => marketOpen(this.state);
+    const stall = fit(this.add.image(HERB_MARKET.stall.x, HERB_MARKET.stall.y, 'herb-stall').setOrigin(0.5, 1).setDepth(HERB_MARKET.stall.y));
+    const name = this.add
+      .text(HERB_MARKET.label.x, HERB_MARKET.label.y, 'Herb market', { fontFamily: SERIF, fontSize: '13px', fontStyle: 'bold', color: INK })
+      .setOrigin(0.5)
+      .setDepth(-900);
+    const board = this.card(HERB_MARKET.label.x, HERB_MARKET.label.y, 'sign', signTexture(this, name.width + 16)).setDepth(-910);
+    // Walking over either marker trades nothing: like a purple marker, the doctor has to stand still on it.
+    this.addMarker(HERB_MARKET.sell, 'pad-in', '', () => sellHerb(this.state), () => !open());
+    this.markers[this.markers.length - 1].pays = true;
+    this.addMarker(HERB_MARKET.buy, 'pad-out', '', () => buyHerb(this.state), () => !open());
+    this.markers[this.markers.length - 1].pays = true;
+    const caption = (at: Point) =>
+      this.add
+        .text(at.x, at.y + 26, '', { ...CAPTION, color: CAPTION_INK })
+        .setOrigin(0.5, 0)
+        .setDepth(-400);
+    const sellText = caption(HERB_MARKET.sell);
+    const buyText = caption(HERB_MARKET.buy);
+    const pick = this.card(HERB_MARKET.pick.x, HERB_MARKET.pick.y, 'small', signTexture(this, PRICE_SIGN_W, true)).setDepth(-910);
+    const pickIcon = fit(this.add.image(HERB_MARKET.pick.x, HERB_MARKET.pick.y, itemTexture('flour'))).setDepth(-900);
+    pick.setInteractive({ useHandCursor: true }).on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
+      e.stopPropagation();
+      if (this.pinching()) return;
+      if (this.closePanels()) return;
+      this.showFeedback(cycleMarketPick(this.state));
+    });
+    let drawn = '';
+    this.views.push(() => {
+      const shown = open();
+      const day = this.state.contract.day;
+      const herb = this.state.marketPick;
+      // What the doctor would sell first: the topmost plant or refined good carried.
+      const top = [...this.state.carrying].reverse().find((id) => isPlant(id) || isRefined(id));
+      const key = `${shown}:${day}:${herb}:${top}`;
+      if (key === drawn) return;
+      drawn = key;
+      for (const part of [stall, name, board, sellText, buyText, pick, pickIcon]) part.setVisible(shown);
+      if (!shown) return;
+      pickIcon.setTexture(itemTexture(herb));
+      buyText.setText(`Buy ${ITEMS[herb].name}: ${herbBuyPrice(day, herb)}c`);
+      sellText.setText(top && (isPlant(top) || isRefined(top)) ? `Sell ${ITEMS[top].name}: ${herbSellPrice(day, top)}c` : 'Sell herbs');
     });
   }
 

@@ -37,7 +37,8 @@ bigger than the screen, so the camera follows the doctor.
 
 1. **Gardens**: each garden grows one kind of plant in nine beds, three rows of three edge to
    edge. Harvest ripe wheat in the wheat field and mandrake in the mandrake patch. Beds regrow on
-   their own: wheat in 24 seconds, mandrake in 42 and nightshade in 54. Tap a garden's sign to
+   their own: wheat in 24 seconds, mandrake in 30 and nightshade in 32, so the three goods come in
+   at close to the same pace (each goes into four of the six recipes). Tap a garden's sign to
    replant it with another plant of its line (see **Replanting** below).
 2. **Refining table**: drop off plants; wheat becomes wheat flour, mandrake becomes mandrake seeds
    and nightshade becomes nightshade extract.
@@ -47,7 +48,9 @@ bigger than the screen, so the camera follows the doctor.
    study (see below): wheat flour and mandrake seeds brew a Vigour Tonic, nightshade extract and
    mandrake seeds a Shadow Elixir, nightshade extract and wheat flour a Moonlight Salve, and two
    nightshade extract a Witch's Brew. Stand on the work spot while it brews. When work starts, the cauldron brews whichever
-   potion it has fewest of on its out pallets. The last quarter of each brew is
+   potion the shop has fewest of, on its out pallets and the shop's shelves together, and a potion
+   six or more ahead of the shortest one customers ask for waits, keeping its ingredients for the
+   short one. The last quarter of each brew is
    its fine window, gold on the brewing bar: step off the work spot then (which stops the brew
    where it is) and onto the pick-up marker, and the potion comes out **Fine**, worth half again
    as much. Left to finish, it comes out plain onto its pallet, as craftsmen always do.
@@ -59,9 +62,10 @@ bigger than the screen, so the camera follows the doctor.
    spot right behind the counter; customers pay for each potion as they get it and leave the coins
    on the pick-up marker beside it. Along the shop's side walls stands one shelf for each potion the
    apothecary has learned, showing up to
-   six bottles (and how many there are, past that). A well-stocked shop sells cheaper: a customer
-   pays 2.5% less for a potion for each other one of its kind still on the shelves, down to half
-   price, and the cut for the next sale shows under each shelf ("-30%"). A fine potion stands on
+   six bottles (and how many there are, past that). An overstocked shop sells cheaper: up to 5 of a
+   potion on its shelf sell at full price, and from there the cut grows in even steps to half price
+   on a full shelf (with the starting 10 a shelf: 10% off at 6, 50% at 10). The cut for the next
+   sale shows under each shelf ("-30%"). A fine potion stands on
    its plain potion's shelf, with a gold sparkle, and goes to the next customer who wants that
    potion first. Each shelf has a price sign beside it, Cheap, Fair or Dear (see **Price signs**
    below).
@@ -156,6 +160,15 @@ in a cauldron brew the town's cure (9 seconds) before anything else, and it goes
 town the moment it is done, never out early and never for sale. That cures the town and wins the
 game: a panel says so, and "Keep trading" carries on with the shop as it is.
 
+**Seasons of sickness**: five days after each cure a new, stronger outbreak comes. Its stages ask
+for 6 Moonlight Salves, 6 Witch's Brews and 12 potions of any kind, 2 more each season after (a
+stage asking for a potion customers can't get yet takes any kind instead), and it ends with the
+Panacea as before. Curing a season earns a **town seal**, every cure counting: each seal raises
+every potion's price by 10%. The plague card says how many seals the town has and on which day the
+next season's sickness comes.
+
+![A bundle contract and the second season's plague](docs/screenshots/contract-bundle-season.webp)
+
 ![Plague, stage one: two of six Healing Draughts sold, three days left](docs/screenshots/plague-stage.webp)
 
 ![The Panacea unlocked and brewing in the cauldron](docs/screenshots/panacea.webp)
@@ -186,8 +199,12 @@ needed while working out in the gardens.
 counter fills a pip. Fill them all and the reward goes straight into the purse and the next day's
 contract comes in at once; at dusk an unkept contract lapses and the next day starts. A day lasts
 four minutes, and the little sun on the right of the card sinks towards the horizon as dusk nears.
-Days alternate Sleeping Tonics and Healing Draughts, each kept contract asks for one more potion
-than the last (up to 12), and the reward is a little under half of what the potions sell for.
+The first two days ask for Sleeping Tonics and then Healing Draughts; from day 3 the potion goes
+round every one customers ask for, so learned recipes and the shade gardens pay off every day. On
+days 4, 7, 10 and so on the contract is a bundle of two potions ("Contract: 2 Moonlight Salves + 2
+Witch's Brews"), kept once both are delivered. Each kept contract asks for one more potion than
+the last (up to 12), and the reward is a little under half of what the potions sell for, three
+fifths for the nightshade potions.
 
 ![The daily contract: four of six Sleeping Tonics sold, 40 coins when the last two go](docs/screenshots/contract.webp)
 
@@ -203,12 +220,15 @@ carries them or a contract pays.
 pallet or shelf holds 10 of each kind at first; the guild's Storage upgrade raises that by 10 a
 level, up to 40. The refining table keeps its plants on pallets left of it and its refined goods
 on pallets right of it; the cauldron keeps the refined goods left of it and its potions on two
-columns of pallets right of it, and the counter keeps its potions on shelves. A pallet stands
+columns of pallets right of it, and the counter keeps its potions on shelves. On both lines the
+pallets stack the same way from the top: wheat, mandrake and nightshade (and their goods). A pallet stands
 only once its goods can be had: nightshade's once a shade garden grows, a potion's once it is
 learned. The drop and pick-up markers stand above the pallets they fill and empty. A full pallet takes nothing more: the doctor keeps the item and the
 pixies wait until there is room.
 
 ![Pallets at the refining tables and cauldrons](docs/screenshots/pallets-map.webp)
+
+![The second line's crop pallets: wheat on top, mandrake in the middle, nightshade at the bottom](docs/screenshots/line-two-pallets.webp)
 
 **Craftsmen** work a station so the doctor doesn't have to stand on its work spot. Each station
 takes up to two, hired one at a time on the purple marker beside it (30, then 60 coins); they
@@ -227,7 +247,8 @@ at once, and the second makes that twice as fast and also brings the coins from 
 **Priority**: each refining table and cauldron has a small "First:" sign by its name. Tap it to
 choose what the station makes first whenever it can: wheat, mandrake or nightshade at a table, a
 any potion learned at a cauldron, or "any" to leave it to the station (a table takes
-plants in the order they came, a table and a cauldron make what their out pallets hold fewest of). Tapping the
+plants in the order they came, a table makes what its out pallets hold fewest of and a cauldron
+what the shop holds fewest of). Tapping the
 sign doesn't walk the doctor. A station with nothing for its priority makes something else rather
 than wait.
 
@@ -257,6 +278,23 @@ pack carries one more item per level (30, then 60 coins), boots walk a fifth fas
 a longer sickle harvests from a quarter further away (25, then 50 coins each).
 
 ![The outfitter](docs/screenshots/outfitter.webp)
+
+The **herb market** below the outfitter opens once the garden pixies are hired. Stand still on its
+green marker to sell the plants and refined goods the doctor carries, one at a time, or on its gold
+marker to buy one of the good its sign shows (tap the sign to pick another). Prices change every
+day: rain makes plants cheap and a drought dear, refined goods swing half as much, and the market
+pays three fifths of what it charges. A starved line can be patched with coins, and a glut turned
+into cash.
+
+![The herb market: sell what you carry, or buy the good on the sign](docs/screenshots/herb-market.webp)
+
+**The merchant wagon** pulls up across the street on day 6 and every third day after, from
+mid-morning for a minute and a half. It wants a whole crate of 8 of one potion and pays 60% over
+the price for each. Tap it while the shelf holds 8 of that potion to sell the crate straight into
+the purse. The wagon's sale counts for no contract, plague stage or rival, so it is a choice
+between the wagon and the counter.
+
+![The merchant wagon wanting a crate of Shadow Elixirs](docs/screenshots/merchant-wagon.webp)
 
 The **guild** in the market below the second line sells upgrades for the rest of the apothecary:
 growth makes every garden grow a quarter faster per level (20, then 40 coins), pixies fly half again

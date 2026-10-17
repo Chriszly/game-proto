@@ -15,7 +15,7 @@ export const howToPlay: HowToPlay = {
     { input: 'Drop all button', action: 'Throw away everything the doctor carries' },
     {
       input: 'Tap a sign',
-      action: 'Replant a garden, set what a station makes first, or set a shelf to Cheap, Fair or Dear',
+      action: 'Replant a garden, set what a station makes first, set a shelf to Cheap, Fair or Dear, or pick what the herb market sells',
     },
   ],
   loop: [
@@ -33,5 +33,9 @@ export const howToPlay: HowToPlay = {
     'Craftsmen and pixies keep the shop running without you, even while the game is closed.',
     'Rain can blight a bed; walk past it to clear it before it spreads.',
     'From day five the plague asks for potions in three stages; meet them all to unlock the Panacea.',
+    'After the cure a new sickness comes each season; every season cured earns a town seal that raises all prices.',
+    'Keep 5 or fewer of a potion on its shelf: past that an overstocked shop sells it cheaper, down to half price when full.',
+    'Some days a merchant wagon across the street buys a whole crate of one potion at a premium: tap it to sell.',
+    'The herb market below the outfitter buys and sells plants and refined goods at prices that change with the weather.',
   ],
 };

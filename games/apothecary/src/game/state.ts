@@ -116,6 +116,8 @@ export interface Contract {
   dayLeft: number;
   /** Contracts kept so far; each one kept asks for one more potion the next day. */
   kept: number;
+  /** A second potion asked for with the first, on a bundle day; kept only once both are delivered. */
+  bundle?: { potion: PotionId; need: number; made: number };
 }
 
 /** The refining tables and cauldrons: one of each on the first production line, and on the second. */
@@ -268,6 +270,12 @@ export interface GameState {
   signs: Partial<Record<PotionId, PriceSign>>;
   /** The rival shop across the street. */
   rival: Rival;
+  /** Town seals, one for each season's plague cured; each raises every potion's price. */
+  seals: number;
+  /** The merchant wagon at the street door on a wagon day, or null before the first. */
+  wagon: Wagon | null;
+  /** What the herb market's buy marker sells. */
+  marketPick: HerbId;
 }
 
 /**
@@ -321,7 +329,7 @@ export const RESEARCH_ORDER: readonly PotionId[] = ['vigourTonic', 'shadowElixir
 export const researched = (state: GameState, potion: PotionId) =>
   KNOWN_RECIPES.includes(potion) || RESEARCH_ORDER.indexOf(potion) < state.upgrades.research.level;
 /** The potions brewed with nightshade, which customers ask for only once a shade garden grows it. */
-const NEEDS_NIGHTSHADE: readonly PotionId[] = ['shadowElixir', 'moonlightSalve', 'witchsBrew'];
+export const NEEDS_NIGHTSHADE: readonly PotionId[] = ['shadowElixir', 'moonlightSalve', 'witchsBrew'];
 /**
  * The potions customers ask for: those the apothecary has learned, and the ones brewed with
  * nightshade only once a shade garden grows it.
@@ -394,17 +402,24 @@ export const RUSH_SIZE = 5;
 export const RUSH_BONUS = 6;
 /** How fast belts run, and so how many items they carry a second: half again per belt level. */
 export const beltSpeed = (state: GameState) => 1 + 0.5 * state.upgrades.belts.level;
-/** What customers pay for a potion: a quarter more per price level, rounded. */
-export const potionPrice = (state: GameState, potion: PotionId) => Math.round(POTION_PRICE[potion] * (1 + 0.25 * state.upgrades.prices.level));
+/** What customers pay for a potion: a quarter more per price level and `SEAL_PRICE` more per town seal, rounded. */
+export const potionPrice = (state: GameState, potion: PotionId) =>
+  Math.round(POTION_PRICE[potion] * (1 + 0.25 * state.upgrades.prices.level) * (1 + SEAL_PRICE * (state.seals ?? 0)));
 
+/** A shelf can hold this many of a potion before an overstocked shop starts selling it cheaper. */
+export const STOCK_FREE = 5;
+/** The cut on a potion sold from a full shelf. */
+export const MAX_STOCK_CUT = 0.5;
 /**
- * What share of a potion's pay a customer gives when `others` more of it stay stocked in the shop:
- * a well-stocked shop sells cheaper, 2.5% less per other potion of the kind, down to half.
+ * What share of a potion's pay a customer gives when `stocked` of its kind (plain or fine, the one
+ * sold included) stand on its shelf, which holds `capacity`: full pay up to `STOCK_FREE`, then less
+ * in even steps down to `1 - MAX_STOCK_CUT` on a full shelf.
  */
-export const stockFactor = (others: number) => Math.max(0.5, 1 - 0.025 * others);
+export const stockFactor = (stocked: number, capacity: number) =>
+  1 - MAX_STOCK_CUT * Math.min(1, Math.max(0, stocked - STOCK_FREE) / Math.max(1, capacity - STOCK_FREE));
 
-/** What a customer agreed to pay for a potion, lowered by the stock of it left in the shop; at least a coin. */
-export const stockedPay = (pay: number, others: number) => Math.max(1, Math.round(pay * stockFactor(others)));
+/** What a customer agreed to pay for a potion, lowered by the stock of it in the shop; at least a coin. */
+export const stockedPay = (pay: number, stocked: number, capacity: number) => Math.max(1, Math.round(pay * stockFactor(stocked, capacity)));
 
 /** How many items the doctor carries: four, and one more per pack level. */
 export const carryCapacity = (state: GameState) => 4 + state.upgrades.pack.level;
@@ -542,16 +557,44 @@ export const MAX_CONTRACT = 12;
 /** Rounds to the nearest 5 coins, at least 5. */
 const roundFive = (n: number) => Math.max(5, Math.round(n / 5) * 5);
 
+/** From this day contracts draw from every potion customers ask for, not only the two known from the start. */
+export const BOOK_CONTRACT_DAY = 3;
+/** Every `BUNDLE_EVERY`th day from `BOOK_CONTRACT_DAY` on (days 4, 7, 10, ...) asks for two potions at once. */
+export const BUNDLE_EVERY = 3;
+/** The share of what the potions sell for a contract pays: more for potions brewed with nightshade. */
+export const CONTRACT_SHARE = 0.45;
+export const NIGHTSHADE_CONTRACT_SHARE = 0.6;
+
 /**
- * The contract for `day`: Sleeping Tonics on odd days and Healing Draughts on even ones, three of
- * them and one more for each contract kept before (up to `MAX_CONTRACT`), for a reward of about
- * nine twentieths of what the potions sell for: 3 Sleeping Tonics for 20 coins on day one.
+ * The contract for `day`: three potions and one more for each contract kept before (up to
+ * `MAX_CONTRACT`), for a reward of about nine twentieths of what they sell for (three fifths for a
+ * nightshade potion): 3 Sleeping Tonics for 20 coins on day one. The first days alternate Sleeping
+ * Tonics and Healing Draughts; from `BOOK_CONTRACT_DAY` the potion goes round every one customers
+ * ask for, and on a bundle day the potions are split between two of them. It is the same in every
+ * game with the same recipes, so it uses no randomness.
  */
 export function contractFor(state: GameState, day: number, kept: number): Contract {
-  const potion: PotionId = day % 2 === 1 ? 'sleepingTonic' : 'healingDraught';
-  const need = Math.min(MAX_CONTRACT, 3 + kept);
-  return { day, potion, need, made: 0, reward: roundFive(need * potionPrice(state, potion) * 0.45), dayLeft: DAY_MS, kept };
+  const total = Math.min(MAX_CONTRACT, 3 + kept);
+  const book = orderable(state);
+  const share = (potion: PotionId) => (NEEDS_NIGHTSHADE.includes(potion) ? NIGHTSHADE_CONTRACT_SHARE : CONTRACT_SHARE);
+  if (day < BOOK_CONTRACT_DAY || book.length === 0) {
+    const potion: PotionId = day % 2 === 1 ? 'sleepingTonic' : 'healingDraught';
+    return { day, potion, need: total, made: 0, reward: roundFive(total * potionPrice(state, potion) * share(potion)), dayLeft: DAY_MS, kept };
+  }
+  const first = (day * 5 + 3) % book.length;
+  const potion = book[first];
+  if ((day - BOOK_CONTRACT_DAY) % BUNDLE_EVERY !== 1 || book.length < 2) {
+    return { day, potion, need: total, made: 0, reward: roundFive(total * potionPrice(state, potion) * share(potion)), dayLeft: DAY_MS, kept };
+  }
+  const second = book[(first + 1 + (day % (book.length - 1))) % book.length];
+  const need = Math.ceil(total / 2);
+  const need2 = total - need;
+  const reward = roundFive(need * potionPrice(state, potion) * share(potion) + need2 * potionPrice(state, second) * share(second));
+  return { day, potion, need, made: 0, reward, dayLeft: DAY_MS, kept, bundle: { potion: second, need: need2, made: 0 } };
 }
+/** Whether a potion sold now counts towards today's contract. */
+export const contractWants = (contract: Contract, potion: PotionId) =>
+  (contract.potion === potion && contract.made < contract.need) || (contract.bundle?.potion === potion && contract.bundle.made < contract.bundle.need);
 /**
  * The plague: from `PLAGUE_DAY` a sickness spreads through the town in stages. Each stage asks for
  * `need` potions sold at the counter (any kind on the last stage) within `PLAGUE_STAGE_MS`; a stage
@@ -570,6 +613,10 @@ export interface Plague {
   relapses: number;
   /** Set once the Panacea is brewed: the town is cured. */
   cured: boolean;
+  /** Which outbreak this is: 0 (or missing) for the first, then one more each season after a cure. */
+  season?: number;
+  /** The day the town was cured; the next season's outbreak comes `SEASON_GAP` days later. */
+  curedDay?: number;
 }
 export const PLAGUE_DAY = 5;
 export const PLAGUE_STAGE_MS = 3 * DAY_MS;
@@ -582,19 +629,100 @@ export const PLAGUE_RELAPSE_EXTRA = 2;
 export const PLAGUE_RELAPSE_REPUTATION = 10;
 /** The most a relapsed stage asks for. */
 export const MAX_PLAGUE_NEED = 16;
-/** The plague stage at hand, or null before the plague, once the Panacea is unlocked, or after the cure. */
-export const plagueStage = (state: GameState) => (state.plague && !state.plague.cured ? (PLAGUE_STAGES[state.plague.stage] ?? null) : null);
+/**
+ * Seasons of sickness: `SEASON_GAP` days after each cure a new, stronger outbreak comes, asking for
+ * the nightshade potions learned at the study, and each needing `SEASON_EXTRA` more per season.
+ * Curing one earns a town seal, which raises every potion's price by `SEAL_PRICE`.
+ */
+export const SEASON_GAP = 5;
+export const SEASON_EXTRA = 2;
+export const SEAL_PRICE = 0.1;
+export const SEASON_STAGES: { name: string; potion: PotionId | null; need: number }[] = [
+  { name: 'A night cough returns', potion: 'moonlightSalve', need: 6 },
+  { name: 'Fever dreams haunt the town', potion: 'witchsBrew', need: 6 },
+  { name: 'The whole town lies ill again', potion: null, need: 12 },
+];
+/** The stages of an outbreak: the first season's, then the stronger ones of every season after. */
+export const stagesFor = (season = 0) =>
+  season === 0 ? PLAGUE_STAGES : SEASON_STAGES.map((s) => ({ ...s, need: Math.min(MAX_PLAGUE_NEED, s.need + SEASON_EXTRA * (season - 1)) }));
+/**
+ * The plague stage at hand, or null before the plague, once the Panacea is unlocked, or after the
+ * cure. A stage asking for a potion customers can't get yet takes potions of any kind instead.
+ */
+export const plagueStage = (state: GameState) => {
+  const plague = state.plague;
+  if (!plague || plague.cured) return null;
+  const stage = stagesFor(plague.season)[plague.stage];
+  if (!stage) return null;
+  return stage.potion && !orderable(state).includes(stage.potion) ? { ...stage, potion: null } : stage;
+};
 /** Whether the cauldrons may brew the Panacea: every stage is met and the town is still sick. */
-export const panaceaUnlocked = (state: GameState) => !!state.plague && state.plague.stage >= PLAGUE_STAGES.length && !state.plague.cured;
-/** The plague at `stage`, fresh. */
-export const plagueAt = (stage: number, relapses = 0, extra = 0): Plague => ({
+export const panaceaUnlocked = (state: GameState) => !!state.plague && state.plague.stage >= stagesFor(state.plague.season).length && !state.plague.cured;
+/** The plague at `stage` of `season`, fresh. */
+export const plagueAt = (stage: number, relapses = 0, extra = 0, season = 0): Plague => ({
   stage,
-  need: Math.min(MAX_PLAGUE_NEED, (PLAGUE_STAGES[stage]?.need ?? 0) + extra),
+  need: Math.min(MAX_PLAGUE_NEED, (stagesFor(season)[stage]?.need ?? 0) + extra),
   made: 0,
   left: PLAGUE_STAGE_MS,
   relapses,
   cured: false,
+  ...(season > 0 ? { season } : {}),
 });
+
+/**
+ * The merchant wagon: on a wagon day (every `WAGON_EVERY`th day from `WAGON_DAY`) a wagon stops at
+ * the street door from mid-morning for `WAGON_MS`, wanting a whole crate of `WAGON_CRATE` of one
+ * potion at `WAGON_PREMIUM` times its price each. A tap on it sells the crate from the shelf, if the
+ * shelf holds that many; the sale counts for no contract, plague stage or rival.
+ */
+export interface Wagon {
+  day: number;
+  potion: PotionId;
+  crate: number;
+  /** What the wagon pays for each potion of the crate. */
+  pay: number;
+  /** Milliseconds before it drives off. */
+  left: number;
+  sold: boolean;
+}
+export const WAGON_DAY = 6;
+export const WAGON_EVERY = 3;
+export const WAGON_CRATE = 8;
+export const WAGON_PREMIUM = 1.6;
+export const WAGON_MS = 90_000;
+/** How much of the day is left when the wagon pulls up. */
+export const WAGON_ARRIVES = 0.7;
+export const isWagonDay = (day: number) => day >= WAGON_DAY && day % WAGON_EVERY === 0;
+/** The wagon for `day`: the same in every game, going round what customers ask for. */
+export const wagonFor = (state: GameState, day: number): Wagon | null => {
+  const potions = orderable(state);
+  const potion = potions[(day * 11 + 1) % potions.length];
+  if (!potion) return null;
+  return { day, potion, crate: WAGON_CRATE, pay: Math.round(potionPrice(state, potion) * WAGON_PREMIUM), left: WAGON_MS, sold: false };
+};
+/** Whether the wagon waits at the street door now. */
+export const wagonHere = (state: GameState) => !!state.wagon && !state.wagon.sold && state.wagon.left > 0 && state.wagon.day === state.contract.day;
+
+/**
+ * The herb market at the outfitter: the doctor buys plants and refined goods for coins, or sells
+ * them, at prices that move with the day and the weather. Rain makes plants cheap and a drought
+ * dear; refined goods follow at half the swing. It opens with the garden pixies.
+ */
+export type HerbId = PlantId | RefinedId;
+export const HERBS: readonly HerbId[] = [...PLANTS, ...REFINED];
+export const HERB_PRICE: Record<HerbId, number> = { wheat: 2, mandrake: 3, nightshade: 6, flour: 4, mandrakeSeeds: 5, nightshadeExtract: 9 };
+const HERB_WEATHER: Record<Weather, number> = { mild: 1, rain: 0.7, fair: 1, drought: 1.6 };
+/** What the market sells a good for today, at least a coin. */
+export const herbBuyPrice = (day: number, herb: HerbId) => {
+  const plant = (PLANTS as readonly string[]).includes(herb);
+  const weather = HERB_WEATHER[weatherFor(day)];
+  // A day's swing of up to a fifth either way, the same in every game.
+  const swing = 0.8 + 0.4 * (((day * 7 + HERBS.indexOf(herb) * 3) % 11) / 10);
+  return Math.max(1, Math.round(HERB_PRICE[herb] * swing * (plant ? weather : 1 + (weather - 1) / 2)));
+};
+/** What the market pays for a good today: three fifths of what it sells it for, at least a coin. */
+export const herbSellPrice = (day: number, herb: HerbId) => Math.max(1, Math.floor(herbBuyPrice(day, herb) * 0.6));
+export const marketOpen = (state: GameState) => state.belts.garden.built;
 
 /**
  * Price signs: each shelf sells Cheap, Fair or Dear. A cheap potion pays `SIGN_PAY` of the price,
@@ -726,6 +854,9 @@ export function createInitialState(): GameState {
     plague: null,
     signs: {},
     rival: { open: true, day: 0, potion: null, sold: 0, streak: 0 },
+    seals: 0,
+    wagon: null,
+    marketPick: 'flour',
   };
   state.contract = contractFor(state, 1, 0);
   return state;

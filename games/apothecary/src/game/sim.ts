@@ -103,6 +103,17 @@ import {
   signOf,
   weatherFor,
   PLOTS_PER_GARDEN,
+  SEASON_GAP,
+  contractWants,
+  herbBuyPrice,
+  herbSellPrice,
+  isWagonDay,
+  marketOpen,
+  wagonFor,
+  wagonHere,
+  WAGON_ARRIVES,
+  HERBS,
+  type HerbId,
   type BeltId,
   type CraftingId,
   type BeltItem,
@@ -213,6 +224,15 @@ export function tick(
   if (state.rival.day !== day) rivalNewDay(state);
   // From the fifth day the plague spreads; each stage has so long before it comes back worse.
   if (!state.plague && day >= PLAGUE_DAY) state.plague = plagueAt(0);
+  // A season after the cure, a new, stronger outbreak comes.
+  if (state.plague?.cured) {
+    const plague = state.plague;
+    plague.curedDay ??= day;
+    if (day >= plague.curedDay + SEASON_GAP) state.plague = plagueAt(0, 0, 0, (plague.season ?? 0) + 1);
+  }
+  // On a wagon day, the merchant wagon pulls up at the street door mid-morning and waits a while.
+  if (isWagonDay(day) && state.wagon?.day !== day && state.contract.dayLeft <= DAY_MS * WAGON_ARRIVES) state.wagon = wagonFor(state, day);
+  if (state.wagon && state.wagon.left > 0) state.wagon.left -= dt;
   const stage = plagueStage(state);
   if (stage) {
     state.plague!.left -= dt;
@@ -250,7 +270,7 @@ function deliverForPlague(state: GameState, potion: PotionId) {
   if (!stage || !plague || (stage.potion && stage.potion !== potion)) return;
   plague.made++;
   if (plague.made < plague.need) return;
-  state.plague = plagueAt(plague.stage + 1, plague.relapses);
+  state.plague = plagueAt(plague.stage + 1, plague.relapses, 0, plague.season ?? 0);
 }
 
 /**
@@ -464,7 +484,12 @@ function brew(state: GameState, cauldron: Cauldron, brewing: Brew | null, ms: nu
   if (current.progress < current.ms) return current;
   // The Panacea goes straight to the town, which it cures; a potion goes out on its pallet.
   if (current.out === PANACEA) {
-    if (state.plague) state.plague.cured = true;
+    // Each season cured earns the town's seal, which raises every price.
+    if (state.plague && !state.plague.cured) {
+      state.plague.cured = true;
+      state.plague.curedDay = state.contract.day;
+      state.seals = (state.seals ?? 0) + 1;
+    }
   } else cauldron.output.push(current.out);
   // Work past the end of this brew goes on the next, if there is one.
   const next = startBrew(state, cauldron, first);
@@ -472,10 +497,13 @@ function brew(state: GameState, cauldron: Cauldron, brewing: Brew | null, ms: nu
   return next;
 }
 
+/** How far ahead of the shop's shortest potion another may get before its cauldron saves the ingredients. */
+const BREW_LEAD = 6;
+
 /**
- * Starts the recipe with the fewest potions on the cauldron's output pallets among those the
- * apothecary has learned and the cauldron has the ingredients and room for, so every potion keeps
- * coming. Ties go in recipe order. Takes the ingredients out of the cauldron and returns the brew
+ * Starts the recipe the shop is shortest of (the potions on the cauldron's output pallets and on
+ * the shop's shelf) among those the apothecary has learned and the cauldron has the ingredients and
+ * room for, so every potion keeps coming. Ties go in recipe order. Takes the ingredients out of the cauldron and returns the brew
  * started, if any, for a pipe to work.
  */
 function startBrew(state: GameState, cauldron: Cauldron, first: PotionId | null = null): Brew | null {
@@ -488,12 +516,18 @@ function startBrew(state: GameState, cauldron: Cauldron, first: PotionId | null 
       return { out: PANACEA, ms: PANACEA_RECIPE.ms, progress: 0 };
     }
   }
-  // A fine potion counts as the potion it is.
-  const have = new Map(RECIPES.map((r) => [r.out, onPallet(cauldron.output.map(plainOf), r.out)]));
-  // The priority potion goes first whenever its ingredients are in; the rest by fewest on the pallet.
+  // A fine potion counts as the potion it is. Counting the shelf too keeps one potion from piling up
+  // there while another runs out, now that pixies empty the pallets as fast as they fill.
+  const stock = [...cauldron.output, ...state.counter.shelf].map(plainOf);
+  const have = new Map(RECIPES.map((r) => [r.out, onPallet(stock, r.out)]));
+  // The priority potion goes first whenever its ingredients are in; the rest by fewest in stock.
   const byNeed = [...RECIPES].sort((a, b) => Number(b.out === first) - Number(a.out === first) || have.get(a.out)! - have.get(b.out)!);
+  // A potion already `BREW_LEAD` ahead of the one customers can ask for that the shop is shortest of
+  // waits, so its ingredients go to the short one when they come in rather than into the pile.
+  const shortest = Math.min(...orderable(state).map((p) => have.get(p) ?? 0));
   for (const recipe of byNeed) {
     if (!researched(state, recipe.out) || !palletHasRoom(state, cauldron.output, recipe.out)) continue;
+    if (recipe.out !== first && have.get(recipe.out)! >= shortest + BREW_LEAD) continue;
     const left = without(cauldron.contents, recipe.inputs);
     if (left) {
       cauldron.contents = left;
@@ -609,16 +643,17 @@ function serveFromShelf(state: GameState, atCounter: (order: Order) => boolean, 
       if (!fine) i = counter.shelf.indexOf(want);
       if (i < 0) return true;
       counter.shelf.splice(i, 1);
-      const others = counter.shelf.filter((p) => plainOf(p) === want).length;
+      // The stock cut counts the potions of the kind on the shelf, this one included.
+      const stocked = counter.shelf.filter((p) => plainOf(p) === want).length + 1;
       const sign = signOf(state, want);
       // A fine one pays more, the shelf's sign scales the price, and the rival's cut comes off a plain one.
       let pay = Math.round((order.pay[want] ?? 0) * SIGN_PAY[sign] * (fine ? FINE_BONUS : 1));
       if (!fine && rivalUndercuts(state, want)) pay = Math.round(pay * (1 - RIVAL_CUT));
-      counter.till += stockedPay(pay, others);
+      counter.till += stockedPay(pay, stocked, storage(state));
       state.sold++;
       nudgeReputation(state, SIGN_REPUTATION[sign]);
       if (rivalUndercuts(state, want)) state.rival.sold++;
-      if (want === state.contract.potion) deliverForContract(state);
+      if (contractWants(state.contract, want)) deliverForContract(state, want);
       deliverForPlague(state, want);
       limit--;
       return false;
@@ -662,10 +697,12 @@ function orderFilled(state: GameState, order: Order) {
  * Counts a potion of today's contract as delivered. Once enough are, the reward goes straight into
  * the purse and the next day's contract comes in at once.
  */
-function deliverForContract(state: GameState) {
+function deliverForContract(state: GameState, potion: PotionId) {
   const contract = state.contract;
-  contract.made++;
-  if (contract.made < contract.need) return;
+  const { bundle } = contract;
+  if (contract.potion === potion && contract.made < contract.need) contract.made++;
+  else if (bundle?.potion === potion) bundle.made++;
+  if (contract.made < contract.need || (bundle && bundle.made < bundle.need)) return;
   state.coins += contract.reward;
   state.rival.dayShare = 1 - contract.dayLeft / DAY_MS;
   state.contract = contractFor(state, contract.day + 1, contract.kept + 1);
@@ -933,4 +970,56 @@ export function collectTill(state: GameState): Feedback | null {
   const feedback = [`+${counter.till} coins`];
   counter.till = 0;
   return feedback;
+}
+
+/**
+ * Sells the merchant wagon a whole crate of its potion from the shelf, fine ones last, at the
+ * wagon's price each, straight into the purse. Only a full crate will do.
+ */
+export function sellToWagon(state: GameState): Feedback | null {
+  const wagon = state.wagon;
+  if (!wagon || !wagonHere(state)) return null;
+  const { shelf } = state.counter;
+  const have = shelf.filter((p) => plainOf(p) === wagon.potion).length;
+  if (have < wagon.crate) return [`The wagon wants ${wagon.crate} ${ITEMS[wagon.potion].name}s`];
+  for (let n = 0; n < wagon.crate; n++) {
+    const plain = shelf.indexOf(wagon.potion);
+    shelf.splice(plain >= 0 ? plain : shelf.indexOf(FINE[wagon.potion]), 1);
+  }
+  wagon.sold = true;
+  const coins = wagon.crate * wagon.pay;
+  state.coins += coins;
+  return [`Crate sold: +${coins} coins`];
+}
+
+/** Moves the herb market's buy marker on to the next good. */
+export function cycleMarketPick(state: GameState): Feedback {
+  const next = HERBS[(HERBS.indexOf(state.marketPick) + 1) % HERBS.length];
+  state.marketPick = next;
+  return [`Market: ${ITEMS[next].name}`];
+}
+
+/** Buys one of the herb market's chosen good into the doctor's hands, at today's price. */
+export function buyHerb(state: GameState): Feedback | null {
+  if (!marketOpen(state) || freeHands(state) === 0) return null;
+  const herb = state.marketPick;
+  const price = herbBuyPrice(state.contract.day, herb);
+  if (state.coins < price) return null;
+  state.coins -= price;
+  state.carrying.push(herb);
+  return [`+ ${ITEMS[herb].name} -${price}c`];
+}
+
+/** Sells the topmost plant or refined good the doctor carries to the herb market, at today's price. */
+export function sellHerb(state: GameState): Feedback | null {
+  if (!marketOpen(state)) return null;
+  for (let i = state.carrying.length - 1; i >= 0; i--) {
+    const id = state.carrying[i];
+    if (!(HERBS as readonly ItemId[]).includes(id)) continue;
+    const price = herbSellPrice(state.contract.day, id as HerbId);
+    state.carrying.splice(i, 1);
+    state.coins += price;
+    return [`- ${ITEMS[id].name} +${price}c`];
+  }
+  return null;
 }
