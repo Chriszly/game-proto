@@ -1,3 +1,5 @@
+import type { TextKey } from '../i18n';
+
 // The workbench: lasting upgrades bought with coins between orders. They are saved with the progress.
 
 export type UpgradeId = 'hands' | 'catalyst' | 'bloom';
@@ -5,18 +7,18 @@ export type UpgradeId = 'hands' | 'catalyst' | 'bloom';
 export type Upgrades = Record<UpgradeId, number>;
 
 export interface Upgrade {
-  name: string;
-  /** What one level does. */
-  what: string;
+  /** Its name and what one level does, as keys of `i18n/en.ts`. */
+  name: TextKey;
+  what: TextKey;
   /** The price of each level, so `costs.length` is the top level. */
   costs: number[];
 }
 
 /** A move more on every order per level; Catalysts that clear their column too; a Bloom on every new board. */
 export const UPGRADES: Record<UpgradeId, Upgrade> = {
-  hands: { name: 'Steady hands', what: '+1 move on every order', costs: [60, 100, 150] },
-  catalyst: { name: 'Potent Catalysts', what: 'a fired Catalyst clears its column too', costs: [120] },
-  bloom: { name: 'Bloom starter', what: 'every order starts with a Bloom on the board', costs: [90] },
+  hands: { name: 'handsName', what: 'handsWhat', costs: [60, 100, 150] },
+  catalyst: { name: 'catalystName', what: 'catalystWhat', costs: [120] },
+  bloom: { name: 'bloomName', what: 'bloomWhat', costs: [90] },
 };
 export const UPGRADE_ORDER: UpgradeId[] = ['hands', 'catalyst', 'bloom'];
 
