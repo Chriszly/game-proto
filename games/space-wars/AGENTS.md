@@ -43,6 +43,25 @@ Implemented today:
   the message line (`FALL_BACK_BUTTON` in `layout.ts`, kind `command`, also the B key, since F is the shared full screen key) sends the
   selected ships to a point 30 px short of their nearest repair spot. The AI pulls a warship below
   30% (`AI_FALL_BACK_HP`) home when it is not on a raid, and leaves repairing ships out of raids.
+- Attack alerts (`WorldEvent` kind `hit`, `World.alarm`, `GameScene.alerts`, `alarm`, `drawAlerts`,
+  `jumpToAlert`): every rival hit on a player unit or building (a shot, a splash, a mine; not on a
+  decoy, never in watch mode) pushes a `hit` event with the spot and what was hit (`Struck`:
+  `harvester`, `ship` or `building`). The scene refreshes the live alert within `ALERT_NEAR` (160 px)
+  or raises a new one, which says what is under attack on the message line (`alertHarvesters`,
+  `alertShips`, `alertBuilding`); an alert lasts `ALERT_MS` (8 s of scene time) after its last hit.
+  Each draws a pulsing `ALERT_COLOR` ring on the map (still with reduced motion), and one off screen
+  an arrow on the map's edge (`edgeMarks`, drawn on `uiGfx`); Space (`keydown-SPACE`) or a tap on an
+  arrow centres the map on the alert. The events change nothing in the battle, so the seeded
+  playthrough plays as before.
+- Rally point (`Side.rally`, `rallyNext`, `World.setRally`, `clearRally`, `toRally`, `RALLY_SPOTS`;
+  `RALLY_BUTTON` in `layout.ts`, kind `command`, key `rally`, also the R key; `GameScene.rallyMode`,
+  `drawRally`, `drawRallyButton`): the button arms rally mode, and the next tap on the map plants the
+  player's rally point there (a tap within `RALLY_GRAB` 22 px of the flag takes it down; right-click
+  or the button again cancels). Each new warship from a Barracks or a held derelict shipyard then
+  gets a move order to the next of `RALLY_SPOTS` round it (the point, 6 at 24 px, 12 at 46 px), and
+  takes up targets in sight once it arrives. Harvesters and ships already flying are left alone.
+  The flag is a mustard pennant with a dashed ring and a faint line from each finished Barracks. The
+  AI never sets one.
 - Derelict stations (`World.derelicts`, `Derelict`, `updateDerelict`, `DERELICT_DEFS`): three neutral
   wrecks per map, one of each `DerelictKind`: `sensors` (the owner sees 280 px round it,
   `SENSOR_RANGE`, stamped into the player's fog and spotting ships in nebulae), `shipyard` (it is a
@@ -215,7 +234,7 @@ Missing or rough:
 - No minimap and no edge scrolling: the map scrolls with the keys or a two-finger drag.
 - The rivals' Barracks and Turrets are placed at random within 60 to 150 px of their hub.
 - Ships of a type spawn on the same spot and stack (no collision), so a fresh wing looks like one
-  ship until it moves.
+  ship until it moves, unless a rally point fans it out. A wing moved to one point stacks there too.
 - The AI ignores contracts (beyond hunting a convoy and the survive raid) and sees through the fog
   (but not into nebulae). Rivals left alone wipe each other out fast: the centre faction usually
   falls first, until the last-stand pact turns the last two on the player.
@@ -271,7 +290,7 @@ File map (`src/`):
   the retries that keep nebulae and derelicts clear.
 - `game/describe.ts`: the text for tooltips and faction cards (`unitLines`, `buildingLines`,
   `factionLines`, `abilityText`, `expansionLines`, `researchLines`, `fallBackLines`,
-  `derelictLines`), built from the faction data in the hub's language. No Phaser.
+  `derelictLines`, `rallyLines`), built from the faction data in the hub's language. No Phaser.
 - `game/world.ts`: `World`, the whole battle. `new World(layout, pick, watch, sector, kept)` puts faction `pick` in the
   player's slot (`watch`: the AI plays it, see Watch AI above; `sector` and `kept`: the campaign). `PLAYER` (0), `unitStats` and `buildingStats`
   (faction numbers with the faction's multipliers, the side's perks and research applied),
@@ -282,12 +301,12 @@ File map (`src/`):
   `NEBULA_SLOW`, `VETERAN_RANKS`, `VETERAN_STEP`, `VETERAN_NAMES`, `REPAIR_RANGE`, `REPAIR_RATE`,
   `DERELICT_RADIUS`, `CLAIM_MS`, `SENSOR_RANGE`, `DERELICT_GUN`, `DERELICT_DEFS` (name and text
   keys; `derelictText` fills in the numbers), `TRUCE_MS`,
-  `TRUCE_TRIBUTE`, `OFFER_MS`, `BRIBE_COST`, `BRIBE_MS`), the flagship, convoy and pact constants
+  `TRUCE_TRIBUTE`, `OFFER_MS`, `BRIBE_COST`, `BRIBE_MS`), `RALLY_SPOTS`, the flagship, convoy and pact constants
   (`FLAGSHIP_COST`, `FLAGSHIP_MS`, `FLAGSHIP_HP`, `FLAGSHIP_DAMAGE`, `FLAGSHIP_SPEED`, `FLAGSHIP_RANGE`,
   `CONVOY_SIZE`, `PACT_MS`, `PACT_WAVE_MS`), `flagshipStats` and the types `Beacon`, `Shard`, `Mine`,
-  `Pop`, `Build`, `ContractState`, `Pact`, `WorldEvent`, `Derelict`. Fields `fog`, `known`, `mines`,
+  `Pop`, `Build`, `ContractState`, `Pact`, `WorldEvent`, `Struck`, `Derelict`. Fields `fog`, `known`, `mines`,
   `derelicts`, `contract`, `convoyTo`, `pact`, `sector`. Methods the scene and test use: `update(dt)`, `build`, `train`, `research`,
-  `command`, `fallBack`, `pickContract`, `currentContract`, `buildFlagship`, `abilityOf`, `acceptTruce`, `declineTruce`, `bribe`, `bribeTarget`, `selectableIn`,
+  `command`, `fallBack`, `setRally`, `clearRally`, `pickContract`, `currentContract`, `buildFlagship`, `abilityOf`, `acceptTruce`, `declineTruce`, `bribe`, `bribeTarget`, `selectableIn`,
   `selectable`, `entityAt`, `derelictAt`, `placementProblem`, `count`, `hubOf`, `hubsOf`,
   `seesUnit`, `knowsBuilding`, `seesMine`, `inNebula`, `atPeace`, `rankOf`, `veteranBonus`, `unit`,
   `building`. No Phaser import.
@@ -297,7 +316,7 @@ File map (`src/`):
   rivals panel and its buttons as last drawn), `boardCards` and `keepCards` (`GoalCard`s: the
   contract board's and the victory's perk cards as last drawn), `campaign`, `sector` and
   `sectorNodes`. The board, pact banner, convoy label, perk cards and sector strip texts, and the
-  Flagship button's caption, are made in `create` with `Math.random` swapped for a `localRandom`:
+  Flagship and Rally buttons' captions, are made in `create` with `Math.random` swapped for a `localRandom`:
   every Phaser text draws its texture key from `Math.random`, so new texts made the ordinary way
   would shift the seeded playthrough's map and AI. `update(time)` steps the world by the frame
   gap (clamped to 100 ms), reads `World.events`, pans the camera from the keys and draws everything.
@@ -322,7 +341,8 @@ File map (`src/`):
   (116 by 30), `BUTTONS` (each button's kind, `build`, `train` or `research`, key and top-left
   corner: four build buttons with Expansion last, four train buttons, and the research column),
   `RESEARCH_COLUMN`, `FALL_BACK_BUTTON` (kind `command`, key `fallback`, at the right of the message
-  line), `FLAGSHIP_BUTTON` (kind `command`, key `flagship`, last in `BUTTONS`, above the build row),
+  line), `FLAGSHIP_BUTTON` (kind `command`, key `flagship`, above the build row), `RALLY_BUTTON`
+  (kind `command`, key `rally`, last in `BUTTONS`, left of the Flagship button),
   `BOARD` (the contract board's header and cards), `SECTOR_STRIP` (the picker's campaign strip),
   `KEEP` (the victory's perk cards), `PANEL_X` (where the message line and contract panel start), `RIVALS_PANEL` and `RIVALS_TAB`
   (the rivals panel's box and the top bar area that opens it), `ROLE_LABEL` (the generic
@@ -404,6 +424,8 @@ Test hooks (read by `e2e/playthrough.spec.ts`):
   `state.pact`, `state.convoyTo`, `scene.rivalsOpen`, `keepCards`, `campaign`, `sector` and `sectorNodes`.
 - `scene.camera.scrollX` and `scrollY`: the map's scroll, which the test reads to see whether a pan
   moved. `scene.toScreen(x, y)` gives where a battlefield point is in view pixels.
+- Not read by the test either: `scene.rallyMode`, `scene.alerts` (`x`, `y`, `first`, `last`,
+  `struck`) and `state.sides[0].rally`.
 - `scene.state.placementProblem(role, x, y)` answers whether a building can go somewhere. The test
   calls it to pick a clear spot, then taps it.
 - The test pans with the real arrow keys (`page.keyboard.down`) until the target is on screen, then

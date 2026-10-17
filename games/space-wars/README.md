@@ -32,8 +32,10 @@ stripes and long exhaust flames, under a chocolate-and-mustard striped HUD with 
 | Train buttons | Queue a unit: harvesters at a hub, combat units at a Barracks |
 | Research buttons (Hull, Weapons, Engines) | Start the next level at your hub |
 | Fall back button, or B | Send the selected ships home to the nearest hub or Depot, where ships repair |
+| Rally point button, or R, then tap the map | Plant the rally point: new warships fly there and fan out round it. Tap the flag in rally mode to take it down |
+| Space, or tap an arrow on the map's edge | Jump to the latest attack on your ships or base |
 | The rivals on the top bar, or T | Open the rivals panel: accept or decline a truce, or pay tribute to turn a rival |
-| Right-click | Cancel a placement, clear the selection and close the rivals panel |
+| Right-click | Cancel a placement or the rally point, clear the selection and close the rivals panel |
 | Arrow keys or WASD, or drag with two fingers | Scroll the map |
 | H | Centre the map on your hub |
 | Hover over a unit or building | Its name, role, hit points and stats |
@@ -210,6 +212,22 @@ end of the message line (or B) sends the selected ships to a point just short of
 or Depot. Rivals pull their hurt ships home too.
 
 ![Three hurt Lancers selected and falling back toward the hub, where a Halo Cruiser and an Aegis already repair under green crosses](docs/screenshots/repair.webp)
+
+### Attack alerts and the rally point
+
+When a rival hits one of your harvesters, warships or buildings, an orange ring pulses round the
+spot and the message line says what is under attack. While the spot is off screen, an orange arrow
+on the map's edge points at it. **Space**, or a tap on the arrow, jumps the map there. An alert lasts
+8 seconds after the last hit, and hits close together share one alert.
+
+The **Rally point** button left of the Flagship button (or R) arms the rally point: tap the map and
+a mustard flag goes up there. Every new warship from your Barracks or a held derelict shipyard then
+flies to it, each to its own spot in two rings round the flag, so a fresh wing gathers in the open
+rather than stacking on the Barracks. Tap the flag in rally mode to take it down.
+
+![A fresh wing of Lancers gathered round the rally flag, its dashed ring and the line from the Orbital Dock, while an orange alert ring marks a rival scout firing on them](docs/screenshots/rally-alert.webp)
+
+![The map scrolled away from the base: two orange arrows on the map's bottom edge point at attacks off screen, and the message line says the base is under attack](docs/screenshots/alert-edge.webp)
 
 ### Derelict stations
 

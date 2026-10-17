@@ -6,10 +6,10 @@ import { CONTRACT_STEPS, FLAGSHIP_STEP, RANKS, contractOf, type Goal } from '../
 import { SECTORS, keptFor, loadCampaign, saveCampaign, sectorText, winSector, type Campaign } from '../game/campaign';
 import {
   BEACON_PAY, BEACON_RADIUS, BRIBE_COST, BRIBE_MS, DERELICT_DEFS, DERELICT_RADIUS, EXPANSION_GAP, FLAGSHIP_MS, PLAYER, POP_MS, SENSOR_RANGE, TRUCE_MS,
-  TRUCE_TRIBUTE, VETERAN_NAMES, World, buildInfo, flagshipStats, researchCost, unitStats, type Build, type Derelict,
+  TRUCE_TRIBUTE, VETERAN_NAMES, World, buildInfo, flagshipStats, researchCost, unitStats, type Build, type Derelict, type Struck,
 } from '../game/world';
 import {
-  buildingLines, derelictLines, expansionLines, factionLines, fallBackLines, flagshipLines, researchLines, unitLines,
+  buildingLines, derelictLines, expansionLines, factionLines, fallBackLines, flagshipLines, rallyLines, researchLines, unitLines,
 } from '../game/describe';
 import { FOG_CELL, FOG_COLS, FOG_ROWS } from '../game/fog';
 import { RESEARCH_LEVELS, RESEARCH_MS, TRACK_DEFS, type Track } from '../game/research';
@@ -83,7 +83,27 @@ const EXPANSION_SCALE = 0.8;
 const FLAGSHIP_SCALE = 1.45;
 const FLAGSHIP_GOLD = 0xffd36a;
 /** How many hack hits take a turret over, for the ring that fills on a hacked turret. */
+/**
+ * Attack alerts: a rival's hit on the player within ALERT_NEAR battlefield pixels of a live alert
+ * refreshes it, and an alert lasts ALERT_MS of game time after its last hit. ALERT_COLOR is a hot
+ * orange, apart from the HUD's tangerine.
+ */
+const ALERT_NEAR = 160;
+const ALERT_MS = 8000;
+const ALERT_COLOR = 0xff5a2c;
+/** How close to the rally flag a tap in rally mode takes it down, in battlefield pixels. */
+const RALLY_GRAB = 22;
 const TAKEOVER = FACTIONS.map((f) => f.units.gunship.ability).find((a) => a?.kind === 'hack')?.takeover ?? 1;
+
+/** A place where a rival is hitting the player: a ring on the map, and an arrow on the map's edge while it is off screen. */
+interface Alert {
+  x: number;
+  y: number;
+  /** Scene game time of its first and its last hit. */
+  first: number;
+  last: number;
+  struck: Struck;
+}
 
 interface Drag {
   x0: number;
@@ -131,6 +151,12 @@ export class GameScene extends Phaser.Scene {
   selected = new Set<number>();
   /** The building the player is about to place, once its button is pressed. */
   placing: Build | null = null;
+  /** Whether the next tap on the map plants the rally point (the Rally button or R). */
+  rallyMode = false;
+  /** Live attack alerts, oldest first; Space jumps to the last one. */
+  alerts: Alert[] = [];
+  /** The edge arrows of off-screen alerts as last drawn, in view pixels; tapping one jumps to its alert. */
+  private edgeMarks: { x: number; y: number; alert: Alert }[] = [];
   /** Whether the faction picker is up: nothing moves until the player picks a faction. */
   picking = true;
   /** Whether the rivals panel (truces and tribute) is open over the map. */
@@ -320,7 +346,7 @@ export class GameScene extends Phaser.Scene {
         cost: t(b.x + 33, b.y + 16, 10, INK_CSS.rust),
       };
     // The Flagship button, last in BUTTONS, gets its caption with the board's texts below.
-    this.captions = BUTTONS.filter((b) => b.key !== 'flagship').map(caption);
+    this.captions = BUTTONS.filter((b) => b.key !== 'flagship' && b.key !== 'rally').map(caption);
     this.drawChrome();
 
     this.input.mouse?.disableContextMenu();
@@ -331,13 +357,18 @@ export class GameScene extends Phaser.Scene {
     this.input.addPointer(1);
     // Arrow keys scroll the map; keep the browser from scrolling the page with them too.
     this.keys = this.input.keyboard!.addKeys('UP,DOWN,LEFT,RIGHT,W,A,S,D,H,B,T') as Record<string, Phaser.Input.Keyboard.Key>;
-    this.input.keyboard!.addCapture('UP,DOWN,LEFT,RIGHT');
+    this.input.keyboard!.addCapture('UP,DOWN,LEFT,RIGHT,SPACE');
+    // R arms the rally point; Space jumps to the latest attack. On the key's down event, so a quick tap always counts.
+    const playing = () => !this.picking && !watching && this.state.phase === 'playing';
+    this.input.keyboard!.on('keydown-R', () => playing() && this.press(BUTTONS.find((b) => b.key === 'rally')!));
+    this.input.keyboard!.on('keydown-SPACE', () => playing() && this.jumpToAlert());
     this.newGame();
     // Every Phaser text draws from Math.random for its texture's key, and the map and the AI draw from
     // it too: these are made on a generator of their own, so a seeded battle plays as it did before them.
     const random = Math.random;
     Math.random = localRandom(0.5);
     this.captions.push(caption(BUTTONS.find((b) => b.key === 'flagship')!));
+    this.captions.push(caption(BUTTONS.find((b) => b.key === 'rally')!));
     // The contract board: a header over two cards at the map's top while the next contract is picked.
     this.boardHead = t(VIEW.w / 2, BOARD.y, 11, INK_CSS.mustard, true, 22).setOrigin(0.5, 0).setStroke(INK_CSS.chocolate, 4);
     this.boardTexts = [0, 1].map(() => ({
@@ -417,6 +448,9 @@ export class GameScene extends Phaser.Scene {
     this.rivalsOpen = false;
     this.selected.clear();
     this.placing = null;
+    this.rallyMode = false;
+    this.alerts = [];
+    this.edgeMarks = [];
     this.drag = null;
     this.touchPan = null;
     this.message = '';
@@ -481,11 +515,32 @@ export class GameScene extends Phaser.Scene {
     }
     for (const e of this.state.events.splice(0)) {
       if (e.kind === 'notice') this.message = e.text;
+      else if (e.kind === 'hit') this.alarm(e.x, e.y, e.struck);
       else this.flash = { amount: (this.flash.ms > 0 ? this.flash.amount : 0) + e.amount, ms: FLASH_MS };
     }
     this.flash.ms = Math.max(0, this.flash.ms - dt);
     this.pan(dt);
     this.draw();
+  }
+
+  /**
+   * A rival's hit on the player: it refreshes the live alert near it, or raises a new one and says
+   * what is under attack on the message line.
+   */
+  private alarm(x: number, y: number, struck: Struck) {
+    const near = this.alerts.find((a) => Math.hypot(a.x - x, a.y - y) <= ALERT_NEAR);
+    if (near) {
+      near.last = this.clock;
+      return;
+    }
+    this.alerts.push({ x, y, first: this.clock, last: this.clock, struck });
+    const key = struck === 'harvester' ? 'alertHarvesters' : struck === 'ship' ? 'alertShips' : 'alertBuilding';
+    this.message = tr(key);
+  }
+
+  /** Centres the map on the latest attack alert (Space, or a tap on its edge arrow). */
+  private jumpToAlert(a = this.alerts[this.alerts.length - 1]) {
+    if (a) this.centreOn(a.x, a.y);
   }
 
   /** The battlefield point under a view pixel, from the map camera's scroll and viewport. */
@@ -592,6 +647,8 @@ export class GameScene extends Phaser.Scene {
     this.drawEffects();
     this.drawPops();
     this.drawSelection();
+    this.drawRally();
+    this.drawAlerts();
     this.drawPlacement();
     this.drawHover();
     this.drawBar();
@@ -603,6 +660,76 @@ export class GameScene extends Phaser.Scene {
     this.drawConvoy();
     this.drawKeep();
     this.drawPicker();
+  }
+
+  /**
+   * The rally point: a mustard pennant on a pole with a faint ring where the new warships gather,
+   * and a dashed line to it from each finished Barracks. In rally mode a pennant follows the pointer.
+   */
+  private drawRally() {
+    if (this.picking || this.state.watch) return;
+    const g = this.gfx;
+    const rally = this.state.sides[PLAYER].rally;
+    const flag = (x: number, y: number, alpha: number) => {
+      g.lineStyle(2, INK.chocolate, alpha);
+      g.lineBetween(x, y, x, y - 22);
+      g.fillStyle(INK.mustard, alpha);
+      g.fillTriangle(x, y - 22, x + 14, y - 17, x, y - 12);
+      g.lineStyle(1.5, INK.chocolate, alpha);
+      g.strokeTriangle(x, y - 22, x + 14, y - 17, x, y - 12);
+      g.fillStyle(INK.chocolate, alpha);
+      g.fillCircle(x, y, 2.5);
+    };
+    if (rally) {
+      for (const b of this.state.buildings) {
+        if (b.faction !== PLAYER || b.type !== 'barracks' || !b.done) continue;
+        g.lineStyle(1, INK.mustard, 0.35);
+        g.lineBetween(b.x, b.y, rally.x, rally.y);
+      }
+      dashedCircle(g, rally.x, rally.y, 46, 20, INK.mustard, 0.45, 1.5);
+      flag(rally.x, rally.y, 1);
+    }
+    if (this.rallyMode && this.inMap(this.pointer.x, this.pointer.y)) {
+      const at = this.toWorld(this.pointer.x, this.pointer.y);
+      flag(at.x, at.y, 0.6);
+    }
+  }
+
+  /**
+   * Attack alerts: a pulsing ring where a rival is hitting the player, and for one off screen an
+   * arrow on the map's edge pointing at it. Alerts end ALERT_MS after their last hit. With reduced
+   * motion the ring and arrow hold still.
+   */
+  private drawAlerts() {
+    this.alerts = this.alerts.filter((a) => this.clock - a.last < ALERT_MS);
+    this.edgeMarks = [];
+    if (this.picking || this.state.phase !== 'playing') return;
+    const still = settings.reduceMotion;
+    const pulse = still ? 0.5 : (Math.sin(this.clock / 160) + 1) / 2;
+    const cx = MAP_VIEW.x + MAP_VIEW.w / 2;
+    const cy = MAP_VIEW.y + MAP_VIEW.h / 2;
+    for (const a of this.alerts) {
+      const r = 26 + (still ? 0 : ((this.clock - a.first) / 25) % 14);
+      this.gfx.lineStyle(3, ALERT_COLOR, 0.55 + 0.4 * pulse);
+      this.gfx.strokeCircle(a.x, a.y, r);
+      const p = this.toScreen(a.x, a.y);
+      if (this.inMap(p.x, p.y)) continue;
+      // Where the line from the map's middle to the alert leaves the map, a little inside its edge.
+      const dx = p.x - cx;
+      const dy = p.y - cy;
+      const k = Math.min(Math.abs((MAP_VIEW.w / 2 - 18) / (dx || 1e-6)), Math.abs((MAP_VIEW.h / 2 - 18) / (dy || 1e-6)));
+      const mx = cx + dx * k;
+      const my = cy + dy * k;
+      const rot = Math.atan2(dy, dx);
+      const pt = (fx: number, fy: number) => ({ x: mx + fx * Math.cos(rot) - fy * Math.sin(rot), y: my + fx * Math.sin(rot) + fy * Math.cos(rot) });
+      const [p1, p2, p3] = [pt(12, 0), pt(-8, -10), pt(-8, 10)];
+      const g = this.uiGfx;
+      g.fillStyle(ALERT_COLOR, 0.7 + 0.3 * pulse);
+      g.fillTriangle(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y);
+      g.lineStyle(1.5, INK.chocolate, 1);
+      g.strokeTriangle(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y);
+      this.edgeMarks.push({ x: mx, y: my, alert: a });
+    }
   }
 
   /** The edge of each nebula, a faint dashed ring: ships inside are hidden from enemies and slowed. */
@@ -1161,6 +1288,10 @@ export class GameScene extends Phaser.Scene {
     const side = this.state.sides[PLAYER];
     const flag = side.flagship;
     const flagship = b.key === 'flagship';
+    if (b.key === 'rally') {
+      this.drawRallyButton(b, i);
+      return;
+    }
     const on = flagship ? flag.state === 'ready' && side.crystal >= flagshipStats(side).cost || flag.state === 'building' : this.selected.size > 0;
     const round = b.h / 2;
     g.fillStyle(0x000000, 0.35);
@@ -1192,6 +1323,25 @@ export class GameScene extends Phaser.Scene {
     caption.name.setColor(on ? INK_CSS.chocolate : INK_CSS.cocoa);
   }
 
+  /** The Rally pill: mustard while the next tap plants the rally point, cream once one is planted, dim before. */
+  private drawRallyButton(b: Button, i: number) {
+    const g = this.uiGfx;
+    const set = !!this.state.sides[PLAYER].rally;
+    const round = b.h / 2;
+    g.fillStyle(0x000000, 0.35);
+    g.fillRoundedRect(b.x + 2, b.y + 3, b.w, b.h, round);
+    g.fillStyle(this.rallyMode ? INK.mustard : set ? INK.cream : INK.creamDim, 1);
+    g.fillRoundedRect(b.x, b.y, b.w, b.h, round);
+    g.fillStyle(INK.tangerine, 1);
+    g.fillRect(b.x + 4, b.y + 5, 2, b.h - 10);
+    g.lineStyle(1.5, this.rallyMode ? INK.tangerine : INK.cocoa, 1);
+    g.strokeRoundedRect(b.x, b.y, b.w, b.h, round);
+    const caption = this.captions[i];
+    this.setText(caption.name, tr(this.rallyMode ? 'rallyTap' : set ? 'rallySetShort' : 'rallyShort'));
+    this.setText(caption.cost, '');
+    caption.name.setColor(this.rallyMode || set ? INK_CSS.chocolate : INK_CSS.cocoa);
+  }
+
   /** Describes the command button under the pointer: its name, role, cost and stats. */
   private drawTip() {
     const b = this.picking
@@ -1205,6 +1355,7 @@ export class GameScene extends Phaser.Scene {
     const { name } = this.buttonInfo(b);
     const lines = b.kind === 'research' ? researchLines(side, b.key as Track)
       : b.key === 'flagship' ? flagshipLines(side)
+      : b.key === 'rally' ? rallyLines()
       : b.kind === 'command' ? fallBackLines()
       : b.key === 'expansion' ? expansionLines(side)
       : b.kind === 'build' ? buildingLines(side, b.key as Role) : unitLines(side, b.key as UnitId);
@@ -1219,6 +1370,7 @@ export class GameScene extends Phaser.Scene {
     const side = this.state.sides[PLAYER];
     if (b.kind === 'research') return { name: tr(TRACK_DEFS[b.key as Track].name), cost: researchCost(side, b.key as Track) };
     if (b.key === 'flagship') return { name: flagshipStats(side).name, cost: flagshipStats(side).cost };
+    if (b.key === 'rally') return { name: tr('rallyName'), cost: 0 };
     if (b.kind === 'command') return { name: tr('fallBackName'), cost: 0 };
     if (b.kind === 'build') {
       const stats = buildInfo(side, b.key as Build);
@@ -1603,6 +1755,7 @@ export class GameScene extends Phaser.Scene {
     }
     if (pointer.rightButtonDown()) {
       this.placing = null;
+      this.rallyMode = false;
       this.selected.clear();
       this.rivalsOpen = false;
       return;
@@ -1631,6 +1784,25 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     if (!this.inMap(p.x, p.y)) return;
+    // An edge arrow jumps the map to its attack.
+    const mark = this.edgeMarks.find((m) => Math.hypot(m.x - p.x, m.y - p.y) <= 16);
+    if (mark) {
+      this.jumpToAlert(mark.alert);
+      return;
+    }
+    if (this.rallyMode) {
+      const at = this.toWorld(p.x, p.y);
+      const rally = this.state.sides[PLAYER].rally;
+      this.rallyMode = false;
+      if (rally && Math.hypot(rally.x - at.x, rally.y - at.y) <= RALLY_GRAB) {
+        this.state.clearRally();
+        this.message = tr('rallyCleared');
+      } else {
+        this.state.setRally(at.x, at.y);
+        this.message = tr('rallyPlanted');
+      }
+      return;
+    }
     if (this.placing) {
       const at = this.toWorld(p.x, p.y);
       const problem = this.state.build(this.placing, at.x, at.y);
@@ -1705,6 +1877,12 @@ export class GameScene extends Phaser.Scene {
   /** A press on a command bar button: arm a building, or queue a unit. */
   private press(b: Button) {
     const { name, cost } = this.buttonInfo(b);
+    if (b.key === 'rally') {
+      this.rallyMode = !this.rallyMode;
+      this.placing = null;
+      if (this.rallyMode) this.message = tr('rallyHow');
+      return;
+    }
     if (b.key === 'flagship') {
       this.message = this.state.buildFlagship() ?? tr('flagshipStarted', { name, s: FLAGSHIP_MS / 1000 });
       return;
@@ -1726,6 +1904,7 @@ export class GameScene extends Phaser.Scene {
         this.message = tr('notEnoughCrystal');
       } else {
         this.placing = b.key as Build;
+        this.rallyMode = false;
         this.message = '';
       }
       return;
