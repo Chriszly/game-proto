@@ -873,18 +873,26 @@ export function contactMod(s: GameState, e: Enemy) {
   return Math.hypot(e.x - s.player.x, e.y - s.player.y) < dreadRadius(s) ? 0.5 : 1;
 }
 
-/** Whether a deed this run unlocks a knight; `pop`s the news once. */
+/** The deeds that unlock heroes, done this run, into `state.deeds` (each once). */
 export function checkDeeds(s: GameState) {
+  // The game pauses on each new hero to show it (see GameScene).
   const done = (id: HeroId, ok: boolean) => {
     if (!ok || s.known.includes(id) || s.deeds.includes(id)) return;
     s.deeds.push(id);
-    pop(s, tr('unlockedPop', { name: tr(HEROES[id].name) }), '#ffe066');
   };
+  // The soldiers' chain: TR-9's Drop Squad unlocks Bram-17, Bram-17's Brothers in Arms unlocks Rook.
+  done('bram', s.hero === 'tr9' && rank(s, 'drop-doctrine') >= 5);
+  done('rook', s.hero === 'bram' && rank(s, 'brothers') >= 5);
   done('kael', s.planet >= 1);
-  done('oom', s.arenaWins > 0);
-  done('corvin', s.cleanSwamp);
+  done('oom', s.cleanSwamp);
+  done('corvin', s.arenaWins > 0);
   done('veyl', s.planet >= 2);
   done('kresh', s.elitesKilled >= 10);
   done('joren', s.planet >= 3);
   done('vharn', s.hero === 'kael' && rank(s, 'the-fall') >= 5);
+  done('elara', s.credits >= DEEDS.credits);
+  done('triad', s.kills >= DEEDS.kills);
 }
+
+/** Elara Voss's deed (credits held at once) and Triad-77's (foes defeated in one run). */
+export const DEEDS = { credits: 100, kills: 2500 };

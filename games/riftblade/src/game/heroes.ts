@@ -1,20 +1,24 @@
 /**
- * The heroes a run can start with: three blaster soldiers, open from the start, and seven blade
- * knights of the Current or the Hollow, each unlocked by a deed. Their weapons, signature moves,
+ * The heroes a run can start with: three blaster soldiers, seven blade knights of the Current or
+ * the Hollow and two more blaster heroes (Elara Voss and Triad-77). Only Legionary TR-9 is open
+ * from the start; every other hero is unlocked by a deed. Their weapons, signature moves,
  * pools and colours. Names and texts are keys of `i18n/en.ts`, shown with `t`.
  */
 import type { TextKey } from '../i18n';
 
-export type HeroId = 'rook' | 'tr9' | 'bram' | 'kael' | 'vharn' | 'oom' | 'corvin' | 'veyl' | 'kresh' | 'joren';
+export type HeroId = 'rook' | 'tr9' | 'bram' | 'kael' | 'vharn' | 'oom' | 'corvin' | 'veyl' | 'kresh' | 'joren' | 'elara' | 'triad';
 /** The order of the hero select screen. */
-export const HERO_IDS: readonly HeroId[] = ['rook', 'tr9', 'bram', 'kael', 'vharn', 'oom', 'corvin', 'veyl', 'kresh', 'joren'];
+export const HERO_IDS: readonly HeroId[] = [
+  'rook', 'tr9', 'bram', 'kael', 'vharn', 'oom', 'corvin', 'veyl', 'kresh', 'joren', 'elara', 'triad',
+];
 
 /**
  * How a hero's primary attack works: the soldiers' guns pick targets (`nearest-two`, `nearest`,
- * `facing`); each knight has an attack of their own (see `blades.ts`).
+ * `facing`), Elara's pistol the weakest foe (`weakest`) and Triad-77's droids each their own
+ * (`triad`, see `squad.ts`); each knight has an attack of their own (see `blades.ts`).
  */
 export type AimMode =
-  | 'nearest-two' | 'nearest' | 'facing'
+  | 'nearest-two' | 'nearest' | 'facing' | 'weakest' | 'triad'
   | 'slash' | 'throw' | 'ripple' | 'spin' | 'chain' | 'orbit' | 'flurry';
 
 /** A weapon class and a side, each with a pool of skills its heroes draw cards from. */
@@ -69,8 +73,8 @@ export interface HeroDef {
   blurb: TextKey;
   /** The kind line of a card of this hero's paths ("ROOK PATH"). */
   pathKind: TextKey;
-  /** The deed that unlocks the hero (none: open from the start); see `save.ts`. */
-  unlock?: TextKey;
+  /** Locked until a deed is done (see `checkDeeds` in blades.ts and `save.ts`); the deeds are never shown in the game. */
+  locked?: boolean;
 }
 
 export const HEROES: Record<HeroId, HeroDef> = {
@@ -95,6 +99,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     paths: ['gunslinger', 'commander', 'demolitions'],
     blurb: 'rookBlurb',
     pathKind: 'rookPathKind',
+    locked: true,
   },
   tr9: {
     id: 'tr9',
@@ -139,6 +144,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     paths: ['marksman', 'jump-trooper', 'brothers'],
     blurb: 'bramBlurb',
     pathKind: 'bramPathKind',
+    locked: true,
   },
   kael: {
     id: 'kael',
@@ -165,7 +171,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     paths: ['prodigy', 'ace-pilot', 'the-fall'],
     blurb: 'kaelBlurb',
     pathKind: 'kaelPathKind',
-    unlock: 'kaelUnlock',
+    locked: true,
   },
   vharn: {
     id: 'vharn',
@@ -190,7 +196,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     paths: ['dread', 'iron-grip', 'life-support'],
     blurb: 'vharnBlurb',
     pathKind: 'vharnPathKind',
-    unlock: 'vharnUnlock',
+    locked: true,
   },
   oom: {
     id: 'oom',
@@ -214,7 +220,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     paths: ['stillness', 'whirlwind', 'old-teacher'],
     blurb: 'oomBlurb',
     pathKind: 'oomPathKind',
-    unlock: 'oomUnlock',
+    locked: true,
   },
   corvin: {
     id: 'corvin',
@@ -237,7 +243,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     paths: ['bulwark', 'persuasion', 'vantage'],
     blurb: 'corvinBlurb',
     pathKind: 'corvinPathKind',
-    unlock: 'corvinUnlock',
+    locked: true,
   },
   veyl: {
     id: 'veyl',
@@ -260,7 +266,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     paths: ['storm', 'puppet-master', 'dark-bargain'],
     blurb: 'veylBlurb',
     pathKind: 'veylPathKind',
-    unlock: 'veylUnlock',
+    locked: true,
   },
   kresh: {
     id: 'kresh',
@@ -283,7 +289,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     paths: ['dervish', 'stalker', 'rebuilt'],
     blurb: 'kreshBlurb',
     pathKind: 'kreshPathKind',
-    unlock: 'kreshUnlock',
+    locked: true,
   },
   joren: {
     id: 'joren',
@@ -307,7 +313,56 @@ export const HEROES: Record<HeroId, HeroDef> = {
     paths: ['duelist', 'breaker', 'council-seat'],
     blurb: 'jorenBlurb',
     pathKind: 'jorenPathKind',
-    unlock: 'jorenUnlock',
+    locked: true,
+  },
+  elara: {
+    id: 'elara',
+    name: 'elaraName',
+    short: 'elaraShort',
+    weapon: 'elaraWeapon',
+    pools: ['blaster'],
+    schemes: [{ name: 'Rebel', body: '#5c4a3a', accent: '#ff3b3b', mark: '#e6dac2', bolt: '#ff5a4a' }],
+    maxHp: 100,
+    speed: 146,
+    aim: 'weakest',
+    fireMs: 400,
+    pellets: 1,
+    spread: 0,
+    jitter: 0,
+    damage: 10,
+    boltSpeed: 680,
+    range: 360,
+    signature: { name: 'elaraSignature', text: 'elaraSignatureText', cooldownMs: 16_000 },
+    paths: ['sharpshooter', 'rebel-network', 'diplomat'],
+    blurb: 'elaraBlurb',
+    pathKind: 'elaraPathKind',
+    locked: true,
+  },
+  triad: {
+    id: 'triad',
+    name: 'triadName',
+    short: 'triadShort',
+    weapon: 'triadWeapon',
+    pools: ['blaster'],
+    // The whole unit's body, so foes bump into the formation rather than its middle.
+    r: 22,
+    schemes: [{ name: 'Bone', body: '#e4e7ee', accent: '#f4f6fb', mark: '#8a93a6', bolt: '#eef2ff' }],
+    // Three droids of 40 health each.
+    maxHp: 120,
+    speed: 140,
+    aim: 'triad',
+    fireMs: 460,
+    pellets: 1,
+    spread: 0,
+    jitter: 0.05,
+    damage: 7,
+    boltSpeed: 560,
+    range: 330,
+    signature: { name: 'triadSignature', text: 'triadSignatureText', cooldownMs: 2_500 },
+    paths: ['firing-line', 'factory', 'uplink'],
+    blurb: 'triadBlurb',
+    pathKind: 'triadPathKind',
+    locked: true,
   },
 };
 

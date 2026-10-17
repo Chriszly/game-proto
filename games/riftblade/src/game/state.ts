@@ -115,7 +115,7 @@ export interface Enemy {
 }
 
 /**
- * A bolt's look: a hero's own bolt colour (from its scheme), a drone or turret bolt, a heavy round
+ * A bolt's look: a hero's own bolt colour (from its scheme), a drone or escort bolt, a heavy round
  * or a mini rocket; or a hostile one: a droid shell, a slowing glob, a trooper's volley bolt or a
  * walker's slug.
  */
@@ -146,7 +146,7 @@ export interface Bullet {
   spin: boolean;
   ret: number;
   back: boolean;
-  /** A spitter toad's glob (counted for Elder Corvin Hale's deed). */
+  /** A spitter toad's glob (counted for Master Oom's deed). */
   toad: boolean;
   /** Ms before a thrown blade can cut the boss it is passing through again. */
   bossMs: number;
@@ -211,8 +211,6 @@ export interface Bomb {
   cluster: number;
   /** Leaves a medkit healing this much (crates). */
   heal: number;
-  /** Drops a sentry turret where it lands (Orbital Drop). */
-  turret: boolean;
 }
 
 /** A burning patch left by a jet dash. */
@@ -228,16 +226,19 @@ export interface Fire {
 /**
  * Allies; the escort is the stranded droid of the event, for one planet. The knights': Kael's
  * strafing starfighter, his Squadron Run fighters and droid co-pilot, Oom's spirits and Veyl's
- * puppets.
+ * puppets. Elara Voss's rebel commandos, speeder bike and medic; Triad-77's rolling shield droids,
+ * command droid and spare battle droids (`spare`, for a while).
  */
-export type AllyKind = 'trooper' | 'brother' | 'sentry' | 'drone' | 'escort' | 'fighter' | 'squadron' | 'copilot' | 'spirit' | 'puppet';
+export type AllyKind =
+  | 'trooper' | 'legionary' | 'brother' | 'drone' | 'escort' | 'fighter' | 'squadron' | 'copilot' | 'spirit' | 'puppet'
+  | 'commando' | 'bike' | 'medic' | 'shieldbot' | 'command' | 'spare';
 
 export interface Ally {
   id: number;
   kind: AllyKind;
   x: number;
   y: number;
-  /** Ms until it fires again; a sentry's ms of life left; its place in formation. */
+  /** Ms until it fires again; the ms of life left of one that lasts a while; its place in formation. */
   cdMs: number;
   lifeMs: number;
   slot: number;
@@ -245,6 +246,26 @@ export interface Ally {
   aim: number;
   /** A puppet risen from an elite (Court of Puppets) hits harder. */
   elite?: boolean;
+  /** Foes a speeder bike's run already hit. */
+  hit?: number[];
+}
+
+/** One of Triad-77's battle droids: its health (0 while down) and most health, ms until it is rebuilt, where it stands and aims. */
+export interface Droid {
+  hp: number;
+  max: number;
+  rebuildMs: number;
+  x: number;
+  y: number;
+  aim: number;
+}
+
+/** Elara Voss's signal flag: where it stands and ms it has left. */
+export interface Flag {
+  x: number;
+  y: number;
+  ms: number;
+  maxMs: number;
 }
 
 export interface Pickup {
@@ -442,6 +463,13 @@ export interface GameState {
   /** Heroes unlocked before this run, and the ones whose deeds this run did. */
   known: HeroId[];
   deeds: HeroId[];
+  /** Elara Voss's signal flag, and the planet her last Uprising supply drop fell on (-1 none). */
+  flag: Flag | null;
+  supplyWorld: number;
+  /** Triad-77: its droids, their formation, and scrap gathered from kills (Factory). */
+  droids: Droid[];
+  formation: 'spread' | 'column';
+  scrap: number;
 }
 
 export function freshHero(): Hero {
@@ -515,6 +543,11 @@ export function freshState(): GameState {
     arenaWins: 0,
     known: [],
     deeds: [],
+    flag: null,
+    supplyWorld: -1,
+    droids: [],
+    formation: 'spread',
+    scrap: 0,
   };
 }
 
@@ -566,14 +599,17 @@ export function statsOf(s: GameState): Stats {
   if (cap('longshot')) pierce = 999;
   const bounces = at([1, 2, 2, 3, 4], r('ricochet'), 0) + (r('gunslinger') >= 2 ? 1 : 0) + (r('gunslinger') >= 5 ? 1 : 0);
   const k = s.hero ? knightMods(s) : NO_MODS;
+  const q = squadMods(s);
+  fireRate += q.fireRate;
+  if (pierce < 999) pierce += q.pierce;
   return {
     speed: hero.speed * (1 + 0.08 * r('boots')) * k.speed,
     pickup: PICKUP_R * (1 + 0.3 * r('magnet')),
     armour: 0.08 * r('armour') + k.armour,
-    maxHp: Math.round((hero.maxHp + 10 * r('armour') + k.hp) * s.maxHpMod),
+    maxHp: s.hero === 'triad' ? droidMax(s) * droidCount(s) : Math.round((hero.maxHp + 10 * r('armour') + k.hp) * s.maxHpMod),
     regen: 0.5 * r('medpack') + k.regen,
     cooldown: 1 - 0.07 * r('overclock'),
-    damage: (1 + 0.1 * r('cell')) * (1 + at([0, 0.1, 0.1, 0.2, 0.2], r('overcharge'), 0)) * (1 + at([0, 0.25, 0.25, 0.25, 0.75], r('marksman'), 0)) * k.damage,
+    damage: (1 + 0.1 * r('cell')) * (1 + at([0, 0.1, 0.1, 0.2, 0.2], r('overcharge'), 0)) * (1 + at([0, 0.25, 0.25, 0.25, 0.75], r('marksman'), 0)) * k.damage * q.damage,
     xp: 1 + 0.1 * r('lens'),
     crit: 0.06 * r('chip') + k.crit,
     fireRate,
@@ -584,8 +620,36 @@ export function statsOf(s: GameState): Stats {
     slowMs: r('stun') >= 3 ? 2000 : 1500,
     reach: k.reach,
     dodge: k.dodge,
-    sigCooldown: (1 - 0.07 * r('overclock')) * k.sig,
+    sigCooldown: (1 - 0.07 * r('overclock')) * k.sig * q.sig,
   };
+}
+
+/** How many battle droids Triad-77 fields: three, more on the Firing Line, eight with Endless Ranks. */
+export function droidCount(s: GameState) {
+  if (s.capstones.includes('endless-ranks')) return 8;
+  const fl = s.ranks['firing-line'] ?? 0;
+  return 3 + (fl >= 2 ? 1 : 0) + (fl >= 4 ? 1 : 0);
+}
+
+/** Each of Triad-77's droids' health: a third of the hero's, and a third of each armour tier's. */
+export function droidMax(s: GameState) {
+  return Math.round(((HEROES.triad.maxHp + 10 * (s.ranks.armour ?? 0)) / 3) * s.maxHpMod);
+}
+
+/** What Elara Voss's and Triad-77's paths add to the stats (all neutral for anyone else). */
+function squadMods(s: GameState) {
+  const r = (id: string) => s.ranks[id] ?? 0;
+  const mods = { fireRate: 0, pierce: 0, damage: 1, sig: 1 };
+  if (s.hero === 'elara') {
+    mods.pierce += (r('sharpshooter') >= 2 ? 1 : 0) + (r('sharpshooter') >= 5 ? 2 : 0);
+    mods.fireRate += r('sharpshooter') >= 5 ? 0.25 : 0;
+    mods.sig *= r('diplomat') >= 3 ? 0.8 : 1;
+  } else if (s.hero === 'triad') {
+    mods.fireRate += at([0.2, 0.2, 0.2, 0.2, 0.45], r('firing-line'), 0) + (r('uplink') >= 1 ? 0.15 : 0);
+    mods.pierce += r('firing-line') >= 3 ? 1 : 0;
+    mods.damage *= r('uplink') >= 4 ? 1.25 : 1;
+  }
+  return mods;
 }
 
 const NO_MODS = { speed: 1, armour: 0, hp: 0, regen: 0, damage: 1, crit: 0, reach: 1, dodge: 0, sig: 1 };

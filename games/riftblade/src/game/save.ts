@@ -10,7 +10,7 @@ export interface Progress {
   wins: Partial<Record<HeroId, number>>;
   /** The furthest planet reached (1 to 4), by hero. Saves from before the star map have none. */
   furthest: Partial<Record<HeroId, number>>;
-  /** Knights whose deed is done. Saves from before the knights have none. */
+  /** Heroes whose deed is done. Saves from before the knights have none. */
   unlocked: HeroId[];
 }
 
@@ -48,7 +48,7 @@ export function recordRun(hero: HeroId, ms: number, won: boolean, planet: number
   return progress;
 }
 
-/** Records knights unlocked by deeds done in a run and returns the updated progress. */
+/** Records heroes unlocked by deeds done in a run and returns the updated progress. */
 export function recordUnlocks(ids: readonly HeroId[]): Progress {
   const progress = loadProgress();
   for (const id of ids) if (!progress.unlocked.includes(id)) progress.unlocked.push(id);
@@ -57,11 +57,12 @@ export function recordUnlocks(ids: readonly HeroId[]): Progress {
 }
 
 /**
- * Whether a hero can be picked: the soldiers always, a knight once its deed is done. The deeds of
- * reaching a world also count from the furthest world saved before the knights came.
+ * Whether a hero can be picked: Legionary TR-9 always, every other hero once its deed is done. A
+ * hero an older save shows as played (a world reached) stays open, and so do the deeds of reaching
+ * a world, counted from the furthest world saved before the knights came.
  */
 export function isUnlocked(progress: Progress, id: HeroId) {
-  if (!HEROES[id].unlock || progress.unlocked.includes(id)) return true;
+  if (!HEROES[id].locked || progress.unlocked.includes(id) || (progress.furthest[id] ?? 0) > 0) return true;
   const furthest = Math.max(0, ...Object.values(progress.furthest).map((n) => n ?? 0));
   const reach: Partial<Record<HeroId, number>> = { kael: 2, veyl: 3, joren: 4 };
   return reach[id] !== undefined && furthest >= reach[id]!;
