@@ -1,6 +1,6 @@
 import { GRID, indexOf, type Feature, type Point, type Tile } from '../game/state';
 import type { Terrain } from '../game/terrain';
-import { BLUE, GREEN, INK, SHEET, TREE, VELLUM, circle, poly, rng, type Ctx } from './paint';
+import { BLUE, FOG_LETTER, FOG_LINE, GREEN, INK, LIMIT, SHEET, TREE, VELLUM, circle, poly, rng, theme, type Ctx } from './paint';
 
 // The island as a survey sheet. `paintTerrain` paints the whole island once (it is hidden under the
 // fog until surveyed): layered height tints, hillshade from the north-west, brown contours, the blue
@@ -28,38 +28,76 @@ const ELEV: Record<Terrain, number> = {
   road: 0.16,
 };
 
-/** Hypsometric tints: the colour from each height up. */
-const BANDS: [number, string][] = [
-  [-9, '#a9d3ec'],
-  [-0.16, '#bcdff1'],
-  [-0.06, '#d2eaf5'],
-  [-0.02, '#f2e6bf'],
-  [0.08, '#dcebc8'],
-  [0.2, '#cfe2b2'],
-  [0.32, '#e3e3b0'],
-  [0.46, '#ead39f'],
-  [0.62, '#e2bf8e'],
-  [0.8, '#d6ab86'],
-  [1.0, '#ece6e2'],
-  [1.15, '#ffffff'],
-];
-const FOREST_TINT = '#a7cf8a';
-const ROAD_FILL = '#f6ecd2';
+/** Hypsometric tints: the colour from each height up, by day and at night. */
+const BANDS: Record<'light' | 'dark', [number, string][]> = {
+  light: [
+    [-9, '#a9d3ec'],
+    [-0.16, '#bcdff1'],
+    [-0.06, '#d2eaf5'],
+    [-0.02, '#f2e6bf'],
+    [0.08, '#dcebc8'],
+    [0.2, '#cfe2b2'],
+    [0.32, '#e3e3b0'],
+    [0.46, '#ead39f'],
+    [0.62, '#e2bf8e'],
+    [0.8, '#d6ab86'],
+    [1.0, '#ece6e2'],
+    [1.15, '#ffffff'],
+  ],
+  dark: [
+    [-9, '#0f2233'],
+    [-0.16, '#13293d'],
+    [-0.06, '#183249'],
+    [-0.02, '#4a4431'],
+    [0.08, '#2f3f2a'],
+    [0.2, '#34482b'],
+    [0.32, '#47492d'],
+    [0.46, '#574a30'],
+    [0.62, '#5e4732'],
+    [0.8, '#654a3b'],
+    [1.0, '#6c6560'],
+    [1.15, '#857e79'],
+  ],
+};
+const FOREST_TINT = { light: '#a7cf8a', dark: '#26472a' };
+const ROAD_FILL = { light: '#f6ecd2', dark: '#6a5c44' };
+/** Brown contours (index and plain) and the hillshade's highlight strength. */
+const CONTOUR = { light: ['rgba(150,88,44,0.9)', 'rgba(168,105,58,0.55)'], dark: ['rgba(214,150,98,0.85)', 'rgba(196,136,88,0.45)'] };
+const SHINE = { light: 0.7, dark: 0.3 };
 
 /** One flat colour per terrain, for the panel's live chart and the chart rows. */
-export const TINT: Record<Terrain, string> = {
-  sea: '#bcdff1',
-  beach: '#f2e6bf',
-  port: INK,
-  grass: '#cfe2b2',
-  forest: FOREST_TINT,
-  village: INK,
-  ruins: '#5b6670',
-  hills: '#ead39f',
-  mountain: '#d6ab86',
-  river: BLUE,
-  road: '#8d7a5c',
+const TINTS: Record<'light' | 'dark', Record<Terrain, string>> = {
+  light: {
+    sea: '#bcdff1',
+    beach: '#f2e6bf',
+    port: '#1d2329',
+    grass: '#cfe2b2',
+    forest: FOREST_TINT.light,
+    village: '#1d2329',
+    ruins: '#5b6670',
+    hills: '#ead39f',
+    mountain: '#d6ab86',
+    river: '#2f7fb8',
+    road: '#8d7a5c',
+  },
+  dark: {
+    sea: '#1d3f5c',
+    beach: '#6b6142',
+    port: '#e4e8ec',
+    grass: '#4a6640',
+    forest: '#356b38',
+    village: '#e4e8ec',
+    ruins: '#9aa6b1',
+    hills: '#7d6a43',
+    mountain: '#8a6650',
+    river: '#5aa6dc',
+    road: '#a8946e',
+  },
 };
+/** Every terrain, for baking a swatch of each. */
+export const TERRAINS = Object.keys(TINTS.light) as Terrain[];
+/** A terrain's flat colour in the current theme. */
+export const tintOf = (t: Terrain) => TINTS[theme][t];
 
 const rgb = (c: string) => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)];
 
@@ -143,8 +181,10 @@ export function paintTerrain(ctx: Ctx, tiles: Tile[]) {
   const CW = ctx.canvas.width;
   const CH = ctx.canvas.height;
   const img = ctx.createImageData(CW, CH);
-  const bandCol = BANDS.map(([, c]) => rgb(c));
-  const forest = rgb(FOREST_TINT);
+  const bands = BANDS[theme];
+  const bandCol = bands.map(([, c]) => rgb(c));
+  const forest = rgb(FOREST_TINT[theme]);
+  const shine = SHINE[theme];
   const step = 1 / (R * k);
   for (let y = 0; y < CH; y++) {
     for (let x = 0; x < CW; x++) {
@@ -152,7 +192,7 @@ export function paintTerrain(ctx: Ctx, tiles: Tile[]) {
       const fj = y * step;
       const h = between(H, fi, fj);
       let b = 0;
-      while (b + 1 < BANDS.length && h >= BANDS[b + 1][0]) b++;
+      while (b + 1 < bands.length && h >= bands[b + 1][0]) b++;
       let [r, g, bl] = bandCol[b];
       if (T((x / (TS * k)) | 0, (y / (TS * k)) | 0) === 'forest' && h > -0.02) {
         r = r * 0.35 + forest[0] * 0.65;
@@ -166,9 +206,9 @@ export function paintTerrain(ctx: Ctx, tiles: Tile[]) {
           g *= 1 + s * 0.55;
           bl *= 1 + s * 0.45;
         } else {
-          r += (255 - r) * s * 0.7;
-          g += (255 - g) * s * 0.7;
-          bl += (255 - bl) * s * 0.7;
+          r += (255 - r) * s * shine;
+          g += (255 - g) * s * shine;
+          bl += (255 - bl) * s * shine;
         }
       }
       const o = (y * CW + x) * 4;
@@ -223,7 +263,7 @@ export function paintTerrain(ctx: Ctx, tiles: Tile[]) {
   };
   for (let k = 1; k < 16; k++) {
     const index = k % 5 === 0;
-    contour(k / 10, index ? 'rgba(150,88,44,0.9)' : 'rgba(168,105,58,0.55)', index ? 2.4 : 1.3);
+    contour(k / 10, CONTOUR[theme][index ? 0 : 1], index ? 2.4 : 1.3);
   }
   contour(-0.06, 'rgba(47,127,184,0.45)', 1.3);
   contour(-0.16, 'rgba(47,127,184,0.45)', 1.3);
@@ -256,15 +296,15 @@ export function paintTerrain(ctx: Ctx, tiles: Tile[]) {
     }
     ctx.stroke();
   };
-  links(['river', 'sea'], (segs) => stroke(segs, 'rgba(188,223,241,0.9)', 12), 'river');
+  links(['river', 'sea'], (segs) => stroke(segs, theme === 'dark' ? 'rgba(24,50,73,0.9)' : 'rgba(188,223,241,0.9)', 12), 'river');
   links(['river', 'sea'], (segs) => stroke(segs, BLUE, 5), 'river');
   // A cased road: an ink edge round a pale fill.
   links(['road', 'village', 'port'], (segs) => stroke(segs, INK, 8), 'road');
-  links(['road', 'village', 'port'], (segs) => stroke(segs, ROAD_FILL, 4), 'road');
+  links(['road', 'village', 'port'], (segs) => stroke(segs, ROAD_FILL[theme], 4), 'road');
 
   // Map symbols.
   const tree = (x: number, y: number) => {
-    circle(ctx, x, y, 5.5, 'rgba(255,255,255,0.35)', TREE, 1.6);
+    circle(ctx, x, y, 5.5, theme === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.35)', TREE, 1.6);
     circle(ctx, x, y, 1.4, TREE);
   };
   for (let y = 0; y < GRID.h; y++) {
@@ -335,7 +375,7 @@ export function paintFog(ctx: Ctx, tiles: Tile[]) {
   ctx.fill();
   ctx.clip();
   ctx.lineWidth = 1;
-  ctx.strokeStyle = 'rgba(120,130,140,0.16)';
+  ctx.strokeStyle = `rgba(${FOG_LINE},0.16)`;
   ctx.beginPath();
   for (let x = 0; x <= CANVAS.w; x += 20) {
     ctx.moveTo(x + 0.5, 0);
@@ -346,7 +386,7 @@ export function paintFog(ctx: Ctx, tiles: Tile[]) {
     ctx.lineTo(CANVAS.w, y + 0.5);
   }
   ctx.stroke();
-  ctx.strokeStyle = 'rgba(120,130,140,0.32)';
+  ctx.strokeStyle = `rgba(${FOG_LINE},0.32)`;
   ctx.beginPath();
   for (let y = 0; y <= GRID.h; y++) {
     ctx.moveTo(0, y * TS + 0.5);
@@ -360,7 +400,7 @@ export function paintFog(ctx: Ctx, tiles: Tile[]) {
   // UNSURVEYED, lettered across up to two wide stretches of blank paper.
   ctx.font = `700 26px Inter, system-ui, sans-serif`;
   (ctx as Ctx & { letterSpacing: string }).letterSpacing = '10px';
-  ctx.fillStyle = 'rgba(110,120,130,0.35)';
+  ctx.fillStyle = FOG_LETTER;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   let placed = -9;
@@ -385,7 +425,7 @@ export function paintFog(ctx: Ctx, tiles: Tile[]) {
   ctx.restore();
 
   // The survey limit: a dashed pencil line where charted ground meets blank paper.
-  ctx.strokeStyle = '#5b6670';
+  ctx.strokeStyle = LIMIT;
   ctx.lineWidth = 2;
   ctx.setLineDash([8, 5]);
   ctx.beginPath();
@@ -478,12 +518,7 @@ export function placeNames(tiles: Tile[], island: number, port: Point, features:
   return out;
 }
 
-export const NAME_COLOR: Record<PlaceName['kind'], string> = {
-  village: INK,
-  ruin: INK,
-  height: INK,
-  wood: GREEN,
-  river: BLUE,
-  water: BLUE,
-  port: INK,
-};
+/** A place name's colour in the current theme. */
+export function nameColor(kind: PlaceName['kind']) {
+  return kind === 'wood' ? GREEN : kind === 'river' || kind === 'water' ? BLUE : INK;
+}
