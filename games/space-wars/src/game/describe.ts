@@ -1,9 +1,10 @@
 import type { Ability, Faction, Role, UnitId } from './factions';
+import { FLAGSHIP_STEP } from './contracts';
 import { RESEARCH_LEVELS, RESEARCH_MS, RESEARCH_STEP, TRACK_DEFS, type Track } from './research';
 import type { DerelictKind } from './map';
 import {
-  CLAIM_MS, DERELICT_DEFS, EXPANSION_GAP, REPAIR_RANGE, REPAIR_RATE, VETERAN_NAMES, VETERAN_RANKS, VETERAN_STEP, buildingStats, expansionStats,
-  researchCost, unitStats, type Side,
+  CLAIM_MS, DERELICT_DEFS, EXPANSION_GAP, REPAIR_RANGE, REPAIR_RATE, VETERAN_NAMES, VETERAN_RANKS, VETERAN_STEP, buildingStats,
+  expansionStats, flagshipStats, researchCost, unitStats, type Side,
 } from './world';
 
 /** A sentence about what an ability does, with its numbers. */
@@ -33,7 +34,7 @@ export function unitLines(side: Side, type: UnitId): string[] {
   const s = unitStats(side, type);
   const def = side.def.units[type];
   const lines = [`${s.cost} crystal · hp ${s.hp} · speed ${Math.round(s.speed)}`];
-  if (type === 'harvester') lines.push(`Mines crystal and carries ${side.def.tune.carry} a trip.`);
+  if (type === 'harvester') lines.push(`Mines crystal and carries ${Math.round(side.def.tune.carry * side.perks.carry)} a trip.`);
   if (s.weapon) lines.push(`Damage ${s.weapon.damage} · range ${s.weapon.range} · reload ${s.weapon.cooldownMs / 1000} s`);
   if (def.ability) lines.push(abilityText(def.ability));
   return lines;
@@ -70,6 +71,16 @@ export function fallBackLines(): string[] {
     `Ships within ${REPAIR_RANGE} px of one repair ${Math.round(REPAIR_RATE * 100)}% of their hull a second. Also B.`,
     `Ranks: ${VETERAN_RANKS.map((k, i) => `${VETERAN_NAMES[i]} at ${k} kills`).join(', ')}, each +${Math.round(VETERAN_STEP * 100)}% damage and hull.`,
   ];
+}
+
+/** The lines the flagship's tooltip shows under its name: its numbers, its ability and its one-per-battle rule. */
+export function flagshipLines(side: Side): string[] {
+  const s = flagshipStats(side);
+  const lines = [`${s.cost} crystal · hp ${s.hp} · speed ${Math.round(s.speed)} · builds in ${s.trainMs / 1000} s at the hub`];
+  if (s.weapon) lines.push(`Damage ${s.weapon.damage} · range ${s.weapon.range} · reload ${s.weapon.cooldownMs / 1000} s`);
+  lines.push(abilityText(side.def.flagship.ability));
+  lines.push(`Unlocked by contract ${FLAGSHIP_STEP}. One per battle: once lost, it is gone.`);
+  return lines;
 }
 
 /** The lines a derelict station's label shows: what it gives and how to claim it. */

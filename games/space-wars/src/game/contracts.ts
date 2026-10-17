@@ -1,5 +1,7 @@
-// The contract chain: five contracts in a row give each battle its goals. Each one pays crystal
-// and a rank perk for the player's faction when it is done, then the next one starts. No Phaser.
+// The contract board: five contracts in a row give each battle its goals. The first (raise the
+// Barracks) is fixed; each later one is picked from two the board offers out of a larger pool. Each
+// pays crystal and a rank perk for the player's faction when it is done, then the board offers the
+// next two. No Phaser.
 
 import type { Faction } from './factions';
 
@@ -15,65 +17,148 @@ export interface Perks {
   hp: number;
   /** On ship damage. */
   damage: number;
+  /** On what a harvester carries a trip. */
+  carry: number;
+  /** On how fast ships repair beside a hub or Depot. */
+  repair: number;
+  /** On how far ships see. */
+  sight: number;
+  /** On turret damage. */
+  turretDamage: number;
+  /** On what ships cost. */
+  cost: number;
 }
 
-export const NO_PERKS: Perks = { train: 1, turretRange: 1, speed: 1, hp: 1, damage: 1 };
+export const NO_PERKS: Perks = { train: 1, turretRange: 1, speed: 1, hp: 1, damage: 1, carry: 1, repair: 1, sight: 1, turretDamage: 1, cost: 1 };
 
 /**
- * What a contract counts: `barracks` (a finished Barracks), `kills` (enemy ships the player
- * destroys), `hold` (seconds the player holds the relay beacon), `razes` (enemy buildings
- * destroyed), `hubs` (rival hubs destroyed).
+ * What a contract counts, and its id: `barracks` (a finished Barracks), `kills` (enemy ships the
+ * player destroys), `hold` (seconds the player holds the relay beacon), `razes` (enemy buildings
+ * destroyed), `hubs` (rival hubs destroyed), `convoy` (harvesters of a convoy that reach a far
+ * field), `derelicts` (derelict stations held at once), `nebula` (seconds a player warship holds a
+ * nebula no enemy warship is in), `lattice` (Mine Lattices destroyed), `survive` (seconds the hub
+ * stands through a raid by every rival).
  */
-export type Goal = 'barracks' | 'kills' | 'hold' | 'razes' | 'hubs';
+export type Goal = 'barracks' | 'kills' | 'hold' | 'razes' | 'hubs' | 'convoy' | 'derelicts' | 'nebula' | 'lattice' | 'survive';
 
 export interface Contract {
   goal: Goal;
   target: number;
   reward: number;
-  rank: string;
-  /** The short title, shown on the top bar and as the next contract. */
+  /** The lowest step of the chain (0 is the first contract) the board offers it at. */
+  from: number;
+  /** The short title, shown on the top bar and on the board's card. */
   title: (def: Faction) => string;
   /** The goal in a sentence, shown on the command bar. */
   brief: (def: Faction) => string;
-  /** The perk, as the bar shows it. */
+  /** The perk, as the bar shows it after the rank. */
   perk: (def: Faction) => string;
   apply: (p: Perks) => void;
 }
 
-export const CONTRACTS: readonly Contract[] = [
+/** The ranks the five contracts give, in order. */
+export const RANKS = ['I', 'II', 'III', 'IV', 'V'] as const;
+/** How many contracts a battle's chain has. */
+export const CONTRACT_STEPS = RANKS.length;
+/** How long the board waits for a pick before it takes the first card, in ms. */
+export const BOARD_MS = 15000;
+/** The contract whose completion unlocks the flagship: the third. */
+export const FLAGSHIP_STEP = 3;
+
+/** The first contract, the same every battle: it is part of the first round. */
+export const FIRST_CONTRACT: Contract = {
+  goal: 'barracks', target: 1, reward: 60, from: 0,
+  title: (d) => `Raise the ${d.buildings.barracks.name}`,
+  brief: (d) => `Raise the ${d.buildings.barracks.name}: finish your Barracks`,
+  perk: () => 'ships train 20% faster',
+  apply: (p) => { p.train *= 0.8; },
+};
+
+/** The board's pool: it offers two of these for each contract after the first. */
+export const CONTRACT_POOL: readonly Contract[] = [
   {
-    goal: 'barracks', target: 1, reward: 60, rank: 'I',
-    title: (d) => `Raise the ${d.buildings.barracks.name}`,
-    brief: (d) => `Raise the ${d.buildings.barracks.name}: finish your Barracks`,
-    perk: () => 'Rank I: ships train 20% faster',
-    apply: (p) => { p.train *= 0.8; },
-  },
-  {
-    goal: 'kills', target: 7, reward: 120, rank: 'II',
+    goal: 'kills', target: 7, reward: 120, from: 1,
     title: () => 'Break the raid',
     brief: () => 'Break the raid: destroy 7 enemy ships',
-    perk: (d) => `Rank II: ${d.buildings.turret.name} range +20%`,
+    perk: (d) => `${d.buildings.turret.name} range +20%`,
     apply: (p) => { p.turretRange *= 1.2; },
   },
   {
-    goal: 'hold', target: 60, reward: 150, rank: 'III',
+    goal: 'convoy', target: 2, reward: 150, from: 1,
+    title: () => 'Escort the convoy',
+    brief: () => 'Escort the convoy: get 2 of 3 harvesters there',
+    perk: () => 'harvesters carry 30% more',
+    apply: (p) => { p.carry *= 1.3; },
+  },
+  {
+    goal: 'derelicts', target: 2, reward: 160, from: 1,
+    title: () => 'Claim two derelicts',
+    brief: () => 'Claim two derelicts: hold two at once',
+    perk: () => 'ships repair twice as fast',
+    apply: (p) => { p.repair *= 2; },
+  },
+  {
+    goal: 'hold', target: 60, reward: 150, from: 1,
     title: () => 'Hold the Relay 60 s',
     brief: () => 'Hold the Relay: keep a ship on the relay beacon for 60 s',
-    perk: () => 'Rank III: ships 10% faster',
+    perk: () => 'ships 10% faster',
     apply: (p) => { p.speed *= 1.1; },
   },
   {
-    goal: 'razes', target: 3, reward: 200, rank: 'IV',
+    goal: 'nebula', target: 45, reward: 140, from: 1,
+    title: () => 'Hold a nebula 45 s',
+    brief: () => 'Hold a nebula: no enemy ship in it, 45 s',
+    perk: () => 'ships see 20% further',
+    apply: (p) => { p.sight *= 1.2; },
+  },
+  {
+    goal: 'lattice', target: 1, reward: 180, from: 2,
+    title: () => 'Break a Mine Lattice',
+    brief: () => 'Break a Mine Lattice: destroy one',
+    perk: (d) => `${d.buildings.turret.name} damage +25%`,
+    apply: (p) => { p.turretDamage *= 1.25; },
+  },
+  {
+    goal: 'razes', target: 3, reward: 200, from: 2,
     title: () => 'Raze an outpost',
     brief: () => 'Raze an outpost: destroy 3 enemy buildings',
-    perk: () => 'Rank IV: ship hulls +15%',
+    perk: () => 'ship hulls +15%',
     apply: (p) => { p.hp *= 1.15; },
   },
   {
-    goal: 'hubs', target: 1, reward: 300, rank: 'V',
+    goal: 'survive', target: 90, reward: 220, from: 2,
+    title: () => 'Survive the raid 90 s',
+    brief: () => 'Survive the raid: every rival comes, 90 s',
+    perk: () => 'ships cost 10% less',
+    apply: (p) => { p.cost *= 0.9; },
+  },
+  {
+    goal: 'hubs', target: 1, reward: 300, from: 3,
     title: () => 'Topple a hub',
     brief: () => 'Topple a hub: destroy a rival hub',
-    perk: () => 'Rank V: ship damage +10%',
+    perk: () => 'ship damage +10%',
     apply: (p) => { p.damage *= 1.1; },
   },
 ];
+
+/** Every contract by its goal, the first included. */
+export function contractOf(goal: Goal): Contract {
+  return goal === 'barracks' ? FIRST_CONTRACT : CONTRACT_POOL.find((c) => c.goal === goal)!;
+}
+
+/**
+ * The two contracts the board offers for `step` (1 to 4), drawn with `rand`: from the pool, those
+ * open at that step, not taken before and `open` in this battle. The second contract's board
+ * always offers Break the raid first, beside one other, since the first round's fight counts for it.
+ */
+export function boardOffer(step: number, taken: readonly Goal[], open: (g: Goal) => boolean, rand: () => number): Goal[] {
+  const pool = CONTRACT_POOL.filter((c) => c.from <= step && !taken.includes(c.goal) && open(c.goal)).map((c) => c.goal);
+  const offer: Goal[] = [];
+  if (step === 1 && pool.includes('kills')) offer.push('kills');
+  while (offer.length < 2) {
+    const left = pool.filter((g) => !offer.includes(g));
+    if (!left.length) break;
+    offer.push(left[Math.floor(rand() * left.length)]);
+  }
+  return offer;
+}

@@ -56,7 +56,7 @@ function randomIn(rand = Math.random): Point {
  * the map draws the same count from Math.random whatever the retries, and everything that follows
  * (the stars, then the battle's own randomness) is the same as before they existed.
  */
-function localRandom(seed: number) {
+export function localRandom(seed: number) {
   let s = Math.floor(seed * 2147483647) | 0;
   return () => {
     s = (s + 0x6d2b79f5) | 0;
@@ -99,8 +99,11 @@ function placeHomes(count: number): Point[] {
   }));
 }
 
-/** Makes a random map for `factionCount` hubs. Every call with the same Math.random gives the same map. */
-export function generateMap(factionCount: number): MapLayout {
+/**
+ * Makes a random map for `factionCount` hubs with `loose` crystal nodes across the field (fewer in
+ * a harder campaign sector). Every call with the same Math.random gives the same map.
+ */
+export function generateMap(factionCount: number, loose = 16): MapLayout {
   const homes = placeHomes(factionCount);
   const nodes: MapLayout['nodes'] = [];
 
@@ -112,7 +115,7 @@ export function generateMap(factionCount: number): MapLayout {
       nodes.push({ x: home.x + Math.cos(angle) * d, y: home.y + Math.sin(angle) * d, amount: NODE_AMOUNT });
     }
   }
-  for (let i = 0; i < 16; i++) {
+  for (let i = 0; i < loose; i++) {
     let p = randomIn();
     for (let tries = 0; tries < 20 && homes.some((h) => dist(h, p) < 130); tries++) p = randomIn();
     nodes.push({ ...p, amount: NODE_AMOUNT });
