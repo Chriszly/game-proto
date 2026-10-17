@@ -216,6 +216,15 @@ const CAPTION = {
   align: 'center',
   wordWrap: { width: 92 },
 };
+/**
+ * How wide a marker's caption may run where its neighbours stand close: in a station's row
+ * (`COINS_GAP` apart), at a belt's build marker in that row, and in the markets (the outfitter, the
+ * guild and the herb market, 90 apart). A longer caption there is set a size or two smaller
+ * (`fitCaption`) rather than run into the next.
+ */
+const ROW_CAPTION = 56;
+const BELT_CAPTION = 68;
+const MARKET_CAPTION = 84;
 /** Caption colours: ink for the doctor's markers, violet for the ones that take coins. */
 const CAPTION_INK = INK;
 const CAPTION_PAY = '#5a2c80';
@@ -767,7 +776,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** An upgrade marker, captioned with the next level and its price, after `name` if given. */
-  private addUpgradeMarker(at: Point, id: UpgradeId, name?: TextKey) {
+  private addUpgradeMarker(at: Point, id: UpgradeId, name?: TextKey, room?: number) {
     this.addLevelMarker(
       at,
       upgradeIcon(id),
@@ -777,13 +786,15 @@ export class GameScene extends Phaser.Scene {
       () => payUpgrade(this.state, id),
       (level, left) => (name ? t('levelCost', { name: t(name), level: level + 2, coins: left }) : t('stationLevelCost', { level: level + 2, coins: left })),
       () => unlocked(this.state, `level-${id}`),
+      room ?? (name ? undefined : ROW_CAPTION),
     );
   }
 
   /**
    * A purple marker for something bought a level at a time, like an upgrade or a craftsman: standing
    * still on it pays towards the next level, captioned by `caption` with the coins still to pay for
-   * it. It is shown while `shown` holds and goes away once the last level is bought.
+   * it. It is shown while `shown` holds and goes away once the last level is bought. With `room`,
+   * the caption is fitted to that width (`fitCaption`).
    */
   private addLevelMarker(
     at: Point,
@@ -794,6 +805,7 @@ export class GameScene extends Phaser.Scene {
     pay: () => Feedback | null,
     caption: (level: number, left: number) => string,
     shown: () => boolean = () => true,
+    room?: number,
   ) {
     this.addMarker(
       at,
@@ -818,7 +830,7 @@ export class GameScene extends Phaser.Scene {
     this.views.push(() => {
       const { level, paid } = get();
       text.setVisible(open());
-      if (level < max) text.setText(caption(level, cost(level) - paid));
+      if (level < max) this.fitCaption(text, caption(level, cost(level) - paid), room);
     });
   }
 
@@ -838,6 +850,7 @@ export class GameScene extends Phaser.Scene {
       () => payCraftsman(this.state, id),
       (_level, left) => t('hireCost', { coins: left }),
       () => unlocked(this.state, `hire-${id}`),
+      ROW_CAPTION,
     );
     stand.forEach((at, i) => {
       const craftsman = fit(this.add.image(at.x, at.y, craftsmanTexture(i)).setOrigin(0.5, 1).setDepth(at.y).setFlipX(i === 1));
@@ -868,9 +881,19 @@ export class GameScene extends Phaser.Scene {
 
   /**
    * A purple build marker captioned with the coins still to pay for the build, shown while `shown`
-   * holds; standing still on it pays towards the build.
+   * holds; standing still on it pays towards the build. With `room`, the caption is fitted to that
+   * width (`fitCaption`).
    */
-  private addBuildMarker(at: Point, icon: UpgradeIcon, caption: TextKey, cost: number, build: Build, shown: () => boolean, act: () => Feedback | null) {
+  private addBuildMarker(
+    at: Point,
+    icon: UpgradeIcon,
+    caption: TextKey,
+    cost: number,
+    build: Build,
+    shown: () => boolean,
+    act: () => Feedback | null,
+    room?: number,
+  ) {
     const pad = fit(this.add.image(at.x, at.y, upgradePad(icon)).setDepth(-400));
     const text = this.add
       .text(at.x, at.y + 26, '', { ...CAPTION, color: CAPTION_PAY })
@@ -880,8 +903,25 @@ export class GameScene extends Phaser.Scene {
     this.views.push(() => {
       const show = shown();
       pad.setVisible(show);
-      text.setVisible(show).setText(t('buildCost', { name: t(caption), coins: cost - build.paid }));
+      text.setVisible(show);
+      this.fitCaption(text, t('buildCost', { name: t(caption), coins: cost - build.paid }), room);
     });
+  }
+
+  /**
+   * Shows `caption` under a purple marker. Without `room` it wraps at the caption's width as usual;
+   * with it, a caption wider than `room` is set a size or two smaller, and wraps at `room` if that is
+   * still too wide, so it doesn't run into the markers beside it.
+   */
+  private fitCaption(text: Phaser.GameObjects.Text, caption: string, room?: number) {
+    if (text.text === caption) return;
+    if (room === undefined) {
+      text.setText(caption);
+      return;
+    }
+    text.setWordWrapWidth(null).setFontSize(CAPTION.fontSize).setText(caption);
+    for (let size = parseInt(CAPTION.fontSize) - 1; text.width > room && size >= 10; size--) text.setFontSize(size);
+    if (text.width > room) text.setFontSize(CAPTION.fontSize).setWordWrapWidth(room);
   }
 
   /**
@@ -946,6 +986,7 @@ export class GameScene extends Phaser.Scene {
       const belt = this.state.belts[id];
       this.addBuildMarker(BELT_BUILD[id], 'pixies', 'pixies', BELT_COST[id], belt, () => !belt.built && beltBuildable(this.state, id) && unlocked(this.state, `belt-${id}`), () =>
         payBelt(this.state, id),
+        BELT_CAPTION,
       );
       const riding: { pixie: Phaser.GameObjects.Image; icon: Phaser.GameObjects.Image }[] = [];
       const [main, ...feeders] = BELT_PATHS[id];
@@ -1028,7 +1069,7 @@ export class GameScene extends Phaser.Scene {
   /** The outfitter's stall right of the shop: upgrades for the doctor's pack, boots and sickle. */
   private createOutfitter() {
     this.label(OUTFITTER.sign.x, OUTFITTER.sign.y, t('outfitter'));
-    for (const id of DOCTOR_UPGRADES) this.addUpgradeMarker(OUTFITTER[id], id, UPGRADES[id].name);
+    for (const id of DOCTOR_UPGRADES) this.addUpgradeMarker(OUTFITTER[id], id, UPGRADES[id].name, MARKET_CAPTION);
   }
 
   /** The guild in the corner of the yard: upgrades for the gardens, the belts and the shop. */
@@ -1036,8 +1077,8 @@ export class GameScene extends Phaser.Scene {
     this.label(GUILD.sign.x, GUILD.sign.y, t('guild'));
     // Its upgrades go up for sale once the doctor has paid to join.
     const { guild } = this.state;
-    this.addBuildMarker(GUILD.join, 'guild', 'joinGuild', GUILD_COST, guild, () => !guild.built && unlocked(this.state, 'guild'), () => joinGuild(this.state));
-    for (const id of GUILD_UPGRADES) this.addUpgradeMarker(GUILD[id], id, UPGRADES[id].name);
+    this.addBuildMarker(GUILD.join, 'guild', 'joinGuild', GUILD_COST, guild, () => !guild.built && unlocked(this.state, 'guild'), () => joinGuild(this.state), MARKET_CAPTION);
+    for (const id of GUILD_UPGRADES) this.addUpgradeMarker(GUILD[id], id, UPGRADES[id].name, MARKET_CAPTION);
   }
 
   /**
@@ -1294,9 +1335,11 @@ export class GameScene extends Phaser.Scene {
       icon.setTexture(itemTexture(c.potion));
       const potions = potionCount(c.potion, c.need);
       title.setText(c.bundle ? t('contractBundle', { potions, more: potionCount(c.bundle.potion, c.bundle.need) }) : t('contract', { potions }));
-      // The title stops short of the dusk dial, in a smaller hand when a long one would run into it.
-      title.setFontSize(13);
+      // The title stops short of the dusk dial, in a smaller hand when a long one would run into it,
+      // and scaled down to fit when even the smallest hand is too wide.
+      title.setScale(1).setFontSize(13);
       for (let size = 12; title.width > w - 42 - 40 && size >= 10; size--) title.setFontSize(size);
+      title.setScale(Math.min(1, (w - 42 - 40) / title.width));
       const gap = need > 8 ? 11 : 15;
       const r = need > 8 ? 4.5 : 5.5;
       pips.clear();
@@ -1571,8 +1614,12 @@ export class GameScene extends Phaser.Scene {
       for (const part of [stall, name, board, sellText, buyText, pick, pickIcon]) part.setVisible(shown);
       if (!shown) return;
       pickIcon.setTexture(itemTexture(herb));
-      buyText.setText(t('buyHerb', { item: itemName(herb), coins: herbBuyPrice(day, herb) }));
-      sellText.setText(top && (isPlant(top) || isRefined(top)) ? t('sellHerb', { item: itemName(top), coins: herbSellPrice(day, top) }) : t('sellHerbs'));
+      this.fitCaption(buyText, t('buyHerb', { item: itemName(herb), coins: herbBuyPrice(day, herb) }), MARKET_CAPTION);
+      this.fitCaption(
+        sellText,
+        top && (isPlant(top) || isRefined(top)) ? t('sellHerb', { item: itemName(top), coins: herbSellPrice(day, top) }) : t('sellHerbs'),
+        MARKET_CAPTION,
+      );
     });
   }
 

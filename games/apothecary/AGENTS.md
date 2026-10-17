@@ -521,9 +521,10 @@ brew's `out` may be `PANACEA`.
 - Add or change a text: its key in `src/i18n/en.ts`, the German in `src/i18n/de.ts` (the build
   fails without it) and, when the US spelling differs, `src/i18n/en-US.ts`; run
   `node scripts/check-translations.mjs`. German runs longer than English: a station's row of
-  purple markers is the tightest spot (their German captions put the price on a second line), then
-  the top bar's buttons and hint and the contract card's title (which shrinks its font to fit), so
-  check a new text with `?lang=de`. Never compare a translated text in game logic; compare ids.
+  purple markers and the outfitter's are the tightest spots (their captions pass a `room` to
+  `fitCaption` in `GameScene.ts`, which sets one a size or two smaller rather than let it run into
+  its neighbour), then the top bar's coins, buttons and hint and the contract card's title (which
+  shrinks its font to fit), so keep German short and check a new text with `?lang=de`. Never compare a translated text in game logic; compare ids.
 
 - Tune a number: edit the table in `src/game/items.ts` or `src/game/state.ts`; if it is a grow
   time, price, tip, carry size or recipe, update the matching expectation in the playthrough.

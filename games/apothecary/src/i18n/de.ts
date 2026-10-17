@@ -2,8 +2,9 @@ import type { Translation } from '../../../../shared/i18n';
 import type en from './en';
 
 /**
- * Apothecary's texts in German. Coins are Münzen, shortened to M after a price; a station's
- * markers stand too close for a German caption on one line, so their prices go on a line of their own.
+ * Apothecary's texts in German. Coins are Münzen, shortened to M after a price. Captions under
+ * markers that stand close together (a station's row, the outfitter) are kept short, and
+ * `fitCaption` in `GameScene.ts` sets one a size smaller where it still runs long.
  */
 const de: Translation<typeof en> = {
   // Items, by id
@@ -90,18 +91,18 @@ const de: Translation<typeof en> = {
   rivalApothecary: 'Konkurrenz',
   pickUp: 'Aufheben',
   drop: 'Ablegen',
-  work: 'Arbeiten',
-  coins: 'Münzen',
+  work: 'Arbeit',
+  coins: 'Kasse',
   first: 'Zuerst:',
   any: 'egal',
   land: 'Land',
   table: 'Tisch',
   joinGuild: 'Gilde beitreten',
-  levelCost: '{name} {level}:\u00a0{coins}\u00a0M',
-  stationLevelCost: 'Stufe {level}:\n{coins}\u00a0M',
-  buildCost: '{name}:\n{coins}\u00a0M',
-  learnCost: '{potion}:\n{coins}\u00a0M',
-  hireCost: 'Anheuern:\n{coins}\u00a0M',
+  levelCost: '{name}\u00a0{level}: {coins}\u00a0M',
+  stationLevelCost: 'St. {level}: {coins}\u00a0M',
+  buildCost: '{name}: {coins}\u00a0M',
+  learnCost: '{potion}: {coins}\u00a0M',
+  hireCost: 'Helfer {coins}\u00a0M',
 
   // Feedback over the doctor
   gained: '+ {item}',
@@ -134,9 +135,9 @@ const de: Translation<typeof en> = {
   sold: '- {item} +{coins}\u00a0M',
 
   // Top bar and panels
-  coinsHud: 'Münzen: {n}',
+  coinsHud: 'Geld: {n}',
   hands: 'Hände',
-  hint: 'Gehen: WASD / tippen\nErnten: an reifen Pflanzen vorbei',
+  hint: 'Gehen: WASD / tippen\nErnten: an Reifem vorbei',
   settings: 'Einstellungen',
   dropAll: 'Ablegen',
   recipes: 'Rezepte',
@@ -154,7 +155,7 @@ const de: Translation<typeof en> = {
   noTip: 'kein Trinkgeld',
 
   // Contract card
-  contract: 'Auftrag: {potions} bis zur Dämmerung',
+  contract: 'Auftrag: {potions} bis abends',
   contractBundle: 'Auftrag: {potions} + {more}',
   reward: 'Lohn {n}',
   contractKept: 'Auftrag erfüllt!',
@@ -170,7 +171,7 @@ const de: Translation<typeof en> = {
   sicknessSpreads: 'Eine Krankheit breitet sich in der Stadt aus!',
   townCured: 'Die Stadt ist geheilt!',
   townCuredSeals: 'Die Stadt ist geheilt! Siegel: {seals}, Preise +{n}%',
-  nextSeason: 'Die Krankheit der nächsten Saison kommt an Tag {day}',
+  nextSeason: 'Nächste Seuche ab Tag {day}',
   brewTheCure: 'Allheilmittel frei: braue die Heilung',
   inACauldron: 'in einem Kessel',
   plagueStage: 'Seuche {stage}/{stages}: {need}',
@@ -190,8 +191,8 @@ const de: Translation<typeof en> = {
   wagonReady: 'Im Regal {have}/{crate}: zum Verkauf tippen, noch {s} s',
 
   // Herb market
-  buyHerb: 'Kaufen: {item} {coins}\u00a0M',
-  sellHerb: 'Verkaufen: {item} {coins}\u00a0M',
+  buyHerb: '{item}\nKauf: {coins}\u00a0M',
+  sellHerb: '{item}\nVerkauf: {coins}\u00a0M',
   sellHerbs: 'Kräuter verkaufen',
 
   // Town card
