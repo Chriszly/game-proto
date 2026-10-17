@@ -5,11 +5,11 @@ const en: HowToPlay = {
   goal: 'Your knight never stops running: jump and slide past traps and foes to get as far as you can. The run ends with the last heart.',
   controls: [
     {
-      input: 'Tap the top half, or Space / Up / W',
+      input: 'Tap the top half or the Jump button, or Space / Up / W',
       action: 'Jump (again in the air with Second Leap)',
     },
     {
-      input: 'Tap the bottom half, or Down / S',
+      input: 'Tap the bottom half or the Slide button, or Down / S',
       action: 'Slide; in the air, drop fast and slide on landing',
     },
     { input: 'Tap a boon card', action: 'Take that boon at a checkpoint' },
@@ -57,11 +57,11 @@ const de: HowToPlay = {
   goal: 'Dein Ritter hört nie auf zu laufen: Spring und rutsch an Fallen und Feinden vorbei, so weit du kannst. Der Lauf endet mit dem letzten Herz.',
   controls: [
     {
-      input: 'Obere Hälfte antippen, oder Leertaste / Hoch / W',
+      input: 'Obere Hälfte oder den Springen-Knopf antippen, oder Leertaste / Hoch / W',
       action: 'Springen (mit Zweiter Satz noch einmal in der Luft)',
     },
     {
-      input: 'Untere Hälfte antippen, oder Runter / S',
+      input: 'Untere Hälfte oder den Rutschen-Knopf antippen, oder Runter / S',
       action: 'Rutschen; in der Luft schnell fallen und bei der Landung rutschen',
     },
     { input: 'Eine Gabenkarte antippen', action: 'Diese Gabe an einem Rastplatz nehmen' },

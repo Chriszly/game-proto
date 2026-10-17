@@ -42,7 +42,7 @@ import {
 import { t, type TextKey } from '../i18n';
 import { BoonCards } from '../ui/BoonCards';
 import { makeButton } from '../ui/Button';
-import { ARMOURY_PANEL, DARE_TAG, FONT, FRAME, GROUND_Y, MARGIN, RUNNER_X, STAGE_TITLE, STREAK_CHIP, TAG, TAP_SPLIT_Y, TRACK, UI_DEPTH, VIEW } from './layout';
+import { ACTION_BUTTONS, ARMOURY_PANEL, DARE_TAG, FONT, FRAME, GROUND_Y, MARGIN, RUNNER_X, STAGE_TITLE, STREAK_CHIP, TAG, TAP_SPLIT_Y, TRACK, UI_DEPTH, VIEW } from './layout';
 
 /** Longest simulated step, so a backgrounded tab doesn't jump the run forward. */
 const MAX_STEP_MS = 100;
@@ -127,6 +127,9 @@ export class GameScene extends Phaser.Scene {
   private trackBest!: Phaser.GameObjects.Text;
   private caption!: Phaser.GameObjects.Text;
   private hint!: Phaser.GameObjects.Container;
+  /** The round Slide and Jump buttons, shown while running on a touch screen. */
+  private actionButtons!: Phaser.GameObjects.Container;
+  private touchScreen = false;
   private gameOver!: Phaser.GameObjects.Container;
   private gameOverText!: Phaser.GameObjects.Text;
   private shopText!: Phaser.GameObjects.Text;
@@ -185,6 +188,7 @@ export class GameScene extends Phaser.Scene {
       .setDepth(0);
     this.createHud();
     this.createHint();
+    this.createActionButtons();
     this.createTitle();
     this.createGameOver();
     this.createArmoury();
@@ -197,6 +201,7 @@ export class GameScene extends Phaser.Scene {
     // A tap in the top half of the screen jumps, in the bottom half slides. Taps on a card or a
     // button are theirs alone.
     this.input.on('pointerdown', (p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
+      if (p.wasTouch) this.touchScreen = true;
       if (over.length > 0) return;
       if (viewPoint(p).y < TAP_SPLIT_Y) jump(this.state);
       else slide(this.state);
@@ -781,6 +786,8 @@ export class GameScene extends Phaser.Scene {
     const hint = s.stage === 1 && s.phase === 'running' ? (HINT_UNTIL - s.distance) / 200 : 0;
     this.hint.setAlpha(Phaser.Math.Clamp(hint, 0, 1));
 
+    this.actionButtons.setVisible(this.touchScreen && s.phase === 'running');
+
     // Each stage after the first opens with its title: its name and its rule.
     const intoStage = s.distance - s.stageStart;
     const shown = s.stage > 1 && s.phase === 'running' ? (TITLE_UNTIL - intoStage) / 200 : 0;
@@ -884,6 +891,34 @@ export class GameScene extends Phaser.Scene {
     const up = this.add.text(VIEW.w / 2 + 100, TAP_SPLIT_Y - 70, t('hintJump'), textStyle(19, C.goldPale, 4)).setOrigin(0.5).setAlign('center');
     const down = this.add.text(VIEW.w / 2 + 100, TAP_SPLIT_Y + 70, t('hintSlide'), textStyle(19, C.goldPale, 4)).setOrigin(0.5).setAlign('center');
     this.hint = this.add.container(0, 0, [g, up, down]).setDepth(UI_DEPTH - 5);
+  }
+
+  /**
+   * The round Slide and Jump buttons in the margin's bottom right. They show on a touch screen (or
+   * once the screen has been touched), next to the tap halves and keys, which still work.
+   */
+  private createActionButtons() {
+    const { y, r, slideX, jumpX } = ACTION_BUTTONS;
+    this.touchScreen = this.sys.game.device.input.touch;
+    // Two thumbs at once: one on a button, one tapping the screen.
+    this.input.addPointer(1);
+    const button = (kind: 'jump' | 'slide', x: number, act: () => void) => {
+      const key = `action-${kind}`;
+      const disc = this.add.image(0, 0, key).setInteractive(new Phaser.Geom.Circle(r + 2, r + 2, r), Phaser.Geom.Circle.Contains);
+      const caption = this.add.text(0, 20, t(kind === 'jump' ? 'buttonJump' : 'buttonSlide'), textStyle(13, C.goldPale, 3)).setOrigin(0.5);
+      disc
+        .on('pointerdown', () => {
+          disc.setTexture(`${key}-down`);
+          act();
+        })
+        .on('pointerup', () => disc.setTexture(key))
+        .on('pointerout', () => disc.setTexture(key));
+      return this.add.container(x, y, [disc, caption]);
+    };
+    this.actionButtons = this.add
+      .container(0, 0, [button('slide', slideX, () => slide(this.state)), button('jump', jumpX, () => jump(this.state))])
+      .setDepth(UI_DEPTH - 4)
+      .setVisible(false);
   }
 
   private createGameOver() {

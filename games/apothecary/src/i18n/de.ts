@@ -2,9 +2,9 @@ import type { Translation } from '../../../../shared/i18n';
 import type en from './en';
 
 /**
- * Apothecary's texts in German. Coins are Münzen, shortened to M after a price. Captions under
- * markers that stand close together (a station's row, the outfitter) are kept short, and
- * `fitCaption` in `GameScene.ts` sets one a size smaller where it still runs long.
+ * Apothecary's texts in German. Amounts show as a number and the gold coin ({coin}), never a name.
+ * Captions under markers that stand close together (a station's row, the markets) are kept short,
+ * and `fitCaption` in `GameScene.ts` sets one a size smaller where it still runs long.
  */
 const de: Translation<typeof en> = {
   // Items, by id
@@ -91,18 +91,17 @@ const de: Translation<typeof en> = {
   rivalApothecary: 'Konkurrenz',
   pickUp: 'Aufheben',
   drop: 'Ablegen',
-  work: 'Arbeit',
-  coins: 'Kasse',
+  work: 'Arbeiten',
   first: 'Zuerst:',
   any: 'egal',
   land: 'Land',
   table: 'Tisch',
   joinGuild: 'Gilde beitreten',
-  levelCost: '{name}\u00a0{level}: {coins}\u00a0M',
-  stationLevelCost: 'St. {level}: {coins}\u00a0M',
-  buildCost: '{name}: {coins}\u00a0M',
-  learnCost: '{potion}: {coins}\u00a0M',
-  hireCost: 'Helfer {coins}\u00a0M',
+  levelCost: '{name}\u00a0{level}: {coins}{coin}',
+  stationLevelCost: 'St. {level}: {coins}{coin}',
+  buildCost: '{name}: {coins}{coin}',
+  learnCost: '{potion}: {coins}{coin}',
+  hireCost: 'Hilfe {coins}{coin}',
 
   // Feedback over the doctor
   gained: '+ {item}',
@@ -127,15 +126,14 @@ const de: Translation<typeof en> = {
   cauldronBuilt: 'Kessel gebaut!',
   fieldPlanted: 'Feld bepflanzt!',
   shadePlanted: 'Schattengarten bepflanzt!',
-  coinsGained: '+{n} Münzen',
+  coinsGained: '+{n}{coin}',
   wagonWants: 'Der Wagen will {crate}',
-  crateSold: 'Kiste verkauft: +{n} Münzen',
+  crateSold: 'Kiste verkauft: +{n}{coin}',
   marketPick: 'Markt: {item}',
-  bought: '+ {item} -{coins}\u00a0M',
-  sold: '- {item} +{coins}\u00a0M',
+  bought: '+ {item} -{coins}{coin}',
+  sold: '- {item} +{coins}{coin}',
 
   // Top bar and panels
-  coinsHud: 'Münzen: {n}',
   hands: 'Hände',
   hint: 'Gehen: WASD / tippen\nErnten: an Reifem vorbei',
   settings: 'Einstellungen',
@@ -148,10 +146,10 @@ const de: Translation<typeof en> = {
   tapToClose: 'Zum Schließen tippen',
   confirmNewGame: 'Ein neues Spiel beginnen? Dein gespeicherter Fortschritt geht verloren.',
   awayLead: 'Während du weg warst:',
-  awaySum: { one: '+{coins} Münzen, {n} Trank', other: '+{coins} Münzen, {n} Tränke' },
+  awaySum: { one: '+{coins}{coin}, {n} Trank', other: '+{coins}{coin}, {n} Tränke' },
 
   // Customers
-  tip: 'Trinkgeld +{n}',
+  tip: 'Trinkgeld +{n}{coin}',
   noTip: 'kein Trinkgeld',
 
   // Contract card
@@ -186,13 +184,13 @@ const de: Translation<typeof en> = {
   rivalStreak: '{streak}/{days} Tage übertroffen, heute {sold}/{sales}',
   rivalClosed: 'Für immer geschlossen',
   streetIsYours: 'Die Straße gehört dir',
-  wagonBuys: 'Wagen kauft {crate} zu je {pay}\u00a0M',
+  wagonBuys: 'Wagen kauft {crate} zu je {pay}{coin}',
   wagonWaiting: 'Im Regal {have}/{crate}, noch {s} s',
   wagonReady: 'Im Regal {have}/{crate}: zum Verkauf tippen, noch {s} s',
 
   // Herb market
-  buyHerb: '{item}\nKauf: {coins}\u00a0M',
-  sellHerb: '{item}\nVerkauf: {coins}\u00a0M',
+  buyHerb: '{item}\nKauf: {coins}{coin}',
+  sellHerb: '{item}\nVerkauf: {coins}{coin}',
   sellHerbs: 'Kräuter verkaufen',
 
   // Town card
@@ -205,18 +203,18 @@ const de: Translation<typeof en> = {
   dayWeather: 'Tag {day}, {weather}',
   marketDayWeather: 'Markttag, {weather}',
   blightIn: 'Fäule im {garden}! Beseitige sie mit der Sichel',
-  crowdBonus: 'Marktandrang bedient: +{n} Münzen!',
+  crowdBonus: 'Marktandrang bedient: +{n}{coin}!',
   crowdWalkedOff: 'Kundschaft ging: kein Marktbonus',
   crowdComes: 'Markttag: ein Andrang kommt!',
   crowdNoRoom: 'Markttag: kein Platz für den Andrang',
 
   // Shelves and the Recipes panel
   rivalCut: 'Konkurrenz {n}%',
-  coinPrice: '{n}\u00a0M',
+  coinPrice: '{n}{coin}',
   learnAtStudy: 'Studieren',
 };
 
 /** Texts that read the same in German. */
-export const keepEnglish: (keyof typeof en)[] = ['mild', 'land', 'fairSign', 'fairSet', 'gained', 'gainedFine', 'handedOver'];
+export const keepEnglish: (keyof typeof en)[] = ['mild', 'land', 'fairSign', 'fairSet', 'gained', 'gainedFine', 'handedOver', 'coinsGained', 'coinPrice', 'bought', 'sold', 'buildCost', 'learnCost'];
 
 export default de;

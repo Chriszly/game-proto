@@ -17,7 +17,7 @@ in.
   flying at the knight) that can be stomped from above, raised ledges and two-step stairs the knight
   climbs and drops off, hearts with a hurt blink, coins with lodestone pull, checkpoints with two
   boon cards, eight boons plus the Field Dressing filler, a game-over panel with a coin shop and
-  "Run again", a fading controls hint on stage 1, and progress saved between runs (best distance,
+  "Run again", a fading controls hint on stage 1, round Slide and Jump buttons on touch screens, and progress saved between runs (best distance,
   banked coins and a bought boon).
 - Languages: every text on screen and How to play follow the hub's Language setting: British
   English, US English and German (`src/i18n/`).
@@ -143,7 +143,7 @@ in.
   `FRAME` (the miniature's gold frame), `TRACK` (the run track), `TAG` (the stage's tag),
   `DARE_TAG` (the dare's strip under it), `STAGE_TITLE`, `ARMOURY_PANEL`, `STREAK_CHIP`, `MARGIN`
   (the scrollwork and caption), `CARDS` (card size and the centres for two or three cards),
-  `BUTTON`, `HUD_HEIGHT`, `UI_DEPTH`, `FONT` (a Georgia serif stack)).
+  `BUTTON`, `ACTION_BUTTONS` (the touch Slide and Jump buttons), `HUD_HEIGHT`, `UI_DEPTH`, `FONT` (a Georgia serif stack)).
 - `src/ui/BoonCards.ts`: the checkpoint overlay and its vellum cards: two or three boon cards (a
   cursed boon's card is edged in madder; a paired boon's card carries the pair's hint), then the
   two road cards; exposes `cards: CardSpot[]` (`id` is a `BoonId` or a `Road`).
@@ -172,7 +172,8 @@ in.
 - `src/art/hud.ts`: `bakeHud` (the `hud-band`, the illuminated `initial` (the first letter of
   "Stage", `stageInitial`: S, or E for German "Etappe"; the HUD writes the rest, `stageRest`), the `streak-chip` and its
   `medallion`, the `track-strip`, the `tag-strip` and `dare-strip`), `bakePanel` (vellum panels:
-  cards, the title strip, the game-over panel) and `bakeButton`.
+  cards, the title strip, the game-over panel), `bakeButton` and `bakeActionButtons` (the touch
+  Slide and Jump discs, called from `bakeHud`).
 - `shared/setupGame.ts` and `shared/settings.ts` (outside the game folder): the hub's settings.
   `main.ts` imports `setupGame`; `state.ts` imports `byDifficulty`. `shared/scaling.ts`:
   `main.ts` imports `setupScaling`, `ink.ts` imports `sharpRes`, `GameScene` imports `viewPoint`.
@@ -235,7 +236,12 @@ in.
 - Moving the knight forward before gravity is deliberate: a jump that is still above a ledge's top
   as it reaches the side lands on it, even if a long frame takes the feet below the top.
 - Input: a `pointerdown` on the scene with nothing interactive under it calls `jump` when
-  `viewPoint(pointer).y` is above `TAP_SPLIT_Y` and `slide` below it. Keys: Space, Up, W jump; Down, S slide. Card and button taps
+  `viewPoint(pointer).y` is above `TAP_SPLIT_Y` and `slide` below it. Keys: Space, Up, W jump; Down, S slide.
+  On a touch screen (`device.input.touch`, or once a pointer `wasTouch`) `createActionButtons`
+  shows two round buttons in the margin's bottom right (`ACTION_BUTTONS`: Slide at 780, Jump at
+  890, y 490, radius 40; textures `action-slide`/`action-jump` and their madder `-down` press,
+  baked by `bakeActionButtons` in `hud.ts`) while `phase === 'running'`; they call `slide` and
+  `jump` on `pointerdown`, and the scene has a second touch pointer so a thumb on each works. Card and button taps
   are ignored by that handler because they hit interactive objects; the full-screen dims behind the
   cards and the game-over panel are interactive too, so they swallow stray taps.
 - Rendering, back to front: the vellum `page` (depth -10, with the margin's scrollwork), the `sky`
@@ -428,7 +434,8 @@ key (see Hub settings).
 - It seeds `Math.random`, owns the clock with 64 ms frames, and blocks WebGL so Phaser uses canvas.
 - It drives only mouse clicks on the canvas: `JUMP_AT` (720,120) and `SLIDE_AT` (720,470), on
   either side of `TAP_SPLIT_Y`, and the centre of the first boon card. Nothing interactive may sit
-  under those two points (the run track and the margin caption are not interactive).
+  under those two points (the run track and the margin caption are not interactive). The touch
+  Slide and Jump buttons stay hidden in the test (no touch screen) and sit clear of `SLIDE_AT`.
 - Values the test copies and that must stay in sync: `VIEW` 960x540, `HALF_W` 14 (half of
   `RUNNER.w`), `STAGE_1` (3 hearts, speed 260, `checkpointX` 3200), and the reaction distances in
   `REACT`. Its `obstaclesOf` turns `traps` and the rising sides of `ledges` into one list; it
