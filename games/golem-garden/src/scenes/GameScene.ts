@@ -205,7 +205,8 @@ export class GameScene extends Phaser.Scene {
     this.lastFrame = time;
     const s = this.state;
     const { wave, heart, phase, bloom, harvest } = s;
-    tick(s, dt * (s.fast ? FAST : 1));
+    // The garden picker (and the harvest and game-over screens) holds the game still behind it.
+    tick(s, this.picker ? 0 : dt * (s.fast ? FAST : 1));
     if (s.heart < heart) this.heartHit();
     if (s.wave > wave) this.waveDone(wave, bloom, false);
     if (s.harvest && !harvest) this.showPicker('harvest');
@@ -605,7 +606,9 @@ export class GameScene extends Phaser.Scene {
         ? [`Start wave ${n}`, '']
         : early
           ? [`Call wave ${n} now`, `+${EARLY_BONUS} early`]
-          : s.phase === 'wave'
+          : s.phase === 'wave' && s.wave === HARVEST_WAVE && s.queue.length === 0
+            ? ['Harvest wave', 'squash every pest']
+            : s.phase === 'wave'
             ? [`Wave ${s.wave}...`, 'still coming in']
             : ['Garden lost', ''];
     this.waveLabel = line2 ? `${line1}, ${line2}` : line1;

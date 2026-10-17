@@ -24,7 +24,8 @@ Implemented today:
   a hint line and the wave button, a hover outline with a bead ring for reach and a ghost golem (or
   ghost hedge on the path), the golem menu, a banner for cleared or called waves, compost, the
   harvest, buds and the Queen Slug, and the garden picker overlay (also the game-over and the
-  harvest screen).
+  harvest screen). While the picker is open, `update` ticks the state by 0, so the game stands
+  still behind it.
 - Three golems, pebble, moss (slows) and thorn (pricks every pest in reach at once), each with
   three levels.
 - Golem menu (GG1): tapping a golem opens Raise (`upgrade`), Aim (`setTarget`, `nextTarget`),
@@ -36,7 +37,9 @@ Implemented today:
   Back (the scene's `formMenu`); `upgrade(s, g, form)` then sets `Golem.form` for good.
   `golemStats(kind, level, form)` (and `statsOf(g)`) folds the form in: a damage multiplier, added
   reach, a cooldown multiplier, its own `slow`, `area` (Spore), `splash` (Boulder: half damage on
-  every other pest within 44px of the target) and `pierce` (Barb ignores armour). A level-3 golem
+  every other pest within 44px of the target, in the golem's reach or not) and `pierce` (Barb
+  ignores armour). A slow lands only if it is at least as strong as the pest's current one
+  (`slowFactor`); an equal one tops up `slowMs`. A level-3 golem
   wears a bead in `FormInfo.colour` on its shoulder.
 - Targeting (GG7): `Golem.target` is one of `TARGETS` (`first`, the default, `strongest`,
   `weakest`, `flyers`); `pickTarget` picks among the pests in reach (flyers: `PestInfo.flies`,
@@ -75,7 +78,9 @@ Implemented today:
   is saved and kept between gardens, so once full the Thorn golem stays unlocked.
 - Calling early: once a wave's queue is empty, the wave button reads "Call wave N now, +15 early";
   `startWave` then finishes the current wave at once (bonus, bud, best) plus `EARLY_BONUS` and
-  starts the next. The preview above it counts the next wave's pests with `waveCounts`.
+  starts the next. Not on `HARVEST_WAVE`: `canCallEarly` is false there, so the harvest
+  counts the leaves left once wave 30 is cleared, and the button reads "Harvest wave".
+  The preview above it counts the next wave's pests with `waveCounts`.
 - Sap pops: each squashed pest pushes a `Pop` onto `state.pops`; the scene drains them into a
   splat, a "+N" label and three droplets that arc to the sap counter, whose glow pulses as they
   land.
@@ -83,7 +88,7 @@ Implemented today:
 
 Missing or rough:
 
-- No title screen, sound or pause.
+- No sound.
 - The preview fits six kinds; the Queen Slug is named in its title instead of an icon.
 - The golem menu can cover a neighbouring golem; it opens below golems in the top two rows.
 - On a touch screen the form chips have no hover, so the hint names the two forms but not what
@@ -99,7 +104,7 @@ Missing or rough:
 - Canvas `filter: blur` (the clay's soft shadows) is ignored by Safari, so shadows are hard there.
 - The cover and the loop screenshots (`heartwood-bloom`, `call-early`, `sap-pops`, `golem-menu`,
   `golem-move`, `new-pests`, `queen-slug`, `garden-picker`, `forked-brook`, `two-gates`,
-  `level-3-forms`, `targeting`, `hedge`, `compost`, `harvest`) were
+  `level-3-forms`, `targeting`, `hedge`, `compost`, `harvest`, `harvest-wave`) were
   staged through `window.game` with a scratch Playwright script against the dev server (set
   `state` fields and `localStorage` keys, push pests or pops, click cells and buttons, pause the
   scene); refresh them the same way.
@@ -300,7 +305,7 @@ Phaser passes to `update`; the pops' tweens run on Phaser's clock and are cosmet
   (Raise, Aim, Move, Uproot); `refreshMenu` and `menuTap` agree on that order.
 - A hedge's `stops` are fixed when it is planted, from the garden's routes; a pest exactly at a
   stop keeps chewing because the halt test is `dist <= stop <= next`.
-- `startWave` during a wave returns null until the queue is empty. The scene shows the "called
+- `startWave` during a wave returns null until the queue is empty, and always on wave 30. The scene shows the "called
   early" banner itself (from the click), while a natural clear is spotted in `update`.
 - A golem's damage lands when it throws; the shot image is cosmetic, so a pest can vanish before
   the rock arrives.
