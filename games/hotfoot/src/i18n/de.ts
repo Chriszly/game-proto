@@ -124,6 +124,9 @@ const de: Translation<typeof en> = {
   // The controls hint on stage 1
   hintJump: 'Oben tippen zum Springen\n(Leertaste / Hoch)',
   hintSlide: 'Unten tippen zum Rutschen\n(Runter / S)',
+  // The round buttons in the margin on a touch screen
+  buttonJump: 'Springen',
+  buttonSlide: 'Rutschen',
 
   // The wayside shrine's banderole
   shrineName: 'Wegschrein',

@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { DARE_TAG, HUD_HEIGHT, STREAK_CHIP, TAG, TRACK, VIEW } from '../scenes/layout';
+import { ACTION_BUTTONS, DARE_TAG, HUD_HEIGHT, STREAK_CHIP, TAG, TRACK, VIEW } from '../scenes/layout';
 import { t } from '../i18n';
 import { C, gold, paint, poly, SERIF } from './ink';
 
@@ -94,6 +94,7 @@ export function bakeHud(scene: Phaser.Scene) {
       ctx.strokeRect(3, 3, sw - 6, sh - 6);
     });
   }
+  bakeActionButtons(scene);
 }
 
 /**
@@ -154,5 +155,57 @@ export function bakeButton(scene: Phaser.Scene, key: string, w: number, h: numbe
       ctx.lineTo(w - 8, 8);
       ctx.stroke();
     });
+  }
+}
+
+/**
+ * The round Slide and Jump buttons: a lapis disc ringed in gold (madder while held) with a vellum
+ * arrow, up for the jump and down then forward for the slide. Their captions are texts on top.
+ */
+export function bakeActionButtons(scene: Phaser.Scene) {
+  const r = ACTION_BUTTONS.r;
+  const size = r * 2 + 4;
+  const c = size / 2;
+  for (const kind of ['jump', 'slide'] as const) {
+    for (const [suffix, fill] of [['', C.lapis], ['-down', C.madder]] as const) {
+      paint(scene, `action-${kind}${suffix}`, size, size, (ctx) => {
+        ctx.fillStyle = C.ink;
+        ctx.beginPath();
+        ctx.arc(c, c, r + 1, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = gold(ctx, c - r, c - r, c + r, c + r);
+        ctx.beginPath();
+        ctx.arc(c, c, r - 0.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = fill;
+        ctx.beginPath();
+        ctx.arc(c, c, r - 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = C.ink;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,250,235,0.45)';
+        ctx.beginPath();
+        ctx.arc(c, c, r - 8, Math.PI * 0.95, Math.PI * 1.55);
+        ctx.stroke();
+        // The arrow, in the disc's upper part; the caption sits under it.
+        ctx.strokeStyle = C.goldPale;
+        ctx.lineWidth = 5;
+        if (kind === 'jump') {
+          ctx.beginPath();
+          ctx.moveTo(c, c + 6);
+          ctx.lineTo(c, c - 16);
+          ctx.stroke();
+          poly(ctx, [[c - 12, c - 12], [c, c - 26], [c + 12, c - 12]], C.goldPale, 0);
+        } else {
+          ctx.beginPath();
+          ctx.moveTo(c - 14, c - 22);
+          ctx.lineTo(c - 14, c - 2);
+          ctx.lineTo(c + 6, c - 2);
+          ctx.stroke();
+          poly(ctx, [[c + 4, c - 12], [c + 18, c - 2], [c + 4, c + 8]], C.goldPale, 0);
+        }
+      });
+    }
   }
 }

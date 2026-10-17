@@ -1,4 +1,4 @@
-import { upgradePad, type UpgradeIcon } from '../art/markers';
+import { pickUpPad, upgradePad, type UpgradeIcon } from '../art/markers';
 import Phaser from 'phaser';
 import { settings as hubSettings } from '../../../../shared/settings';
 import { formatNumber } from '../../../../shared/i18n';
@@ -19,7 +19,7 @@ import {
   doneByHand,
   isBlighted,
   replantGarden,
-  dropAll,
+  dropItem,
   dropAtRefiner,
   dropInCauldron,
   harvest,
@@ -40,6 +40,7 @@ import {
   buyHerb,
   cycleMarketPick,
   sellHerb,
+  serveOrder,
   sellToWagon,
   type Feedback,
 } from '../game/sim';
@@ -122,7 +123,8 @@ import { Shelf } from '../ui/Shelf';
 import { RecipeBook } from '../ui/RecipeBook';
 import { Settings } from '../ui/Settings';
 import { ProgressBar } from '../ui/ProgressBar';
-import { itemName, potionCount, t, type TextKey } from '../i18n';
+import { COIN, itemName, potionCount, t, type TextKey } from '../i18n';
+import { coined } from '../ui/coins';
 import {
   BELT_BUILD,
   BELT_PATHS,
@@ -221,11 +223,26 @@ const CAPTION = {
   align: 'center',
   wordWrap: { width: 92 },
 };
+/**
+ * How wide a marker's caption may run where its neighbours stand close: in a station's row
+ * (`COINS_GAP` apart), at a belt's build marker in that row, and in the markets (the outfitter, the
+ * guild and the herb market, 90 apart). A longer caption there is set a size or two smaller
+ * (`fitCaption`) rather than run into the next.
+ */
+const ROW_CAPTION = 62;
+const BELT_CAPTION = 68;
+const MARKET_CAPTION = 84;
 /** Caption colours: ink for the doctor's markers, violet for the ones that take coins. */
 const CAPTION_INK = INK;
 const CAPTION_PAY = '#5a2c80';
 /** The top bar's text: ink on parchment. */
 const HUD_TEXT = { fontFamily: SERIF, fontSize: '17px', fontStyle: 'bold', color: INK };
+/** The top bar's day sky, from and to these offsets from the bar's middle. */
+const DAY_BAR = { left: -140, right: 90 };
+/** The square Settings button with its cogwheel. */
+const HUD_ICON_BUTTON = 36;
+/** The hands card at the bottom of the screen: its height and the slots' spacing. */
+const HANDS_BAR = { h: 40, gap: 40 };
 /** Where the contract card and the away chip sit on screen, below the top bar. */
 /** Pixies fly above everything standing in the world, under the order bubbles and bars. */
 const PIXIE_DEPTH = 5000;
@@ -244,6 +261,9 @@ const BELT_TARGET: Record<BeltId, StationId> = {
 const ORDER_STRIP = { x: 8, y: 50, w: 44, h: 34, gap: 4 };
 /** The weather is drawn over everything standing in the world and the pixies, under the bubbles and bars. */
 const WEATHER_DEPTH = 9990;
+/** The evening light: from this share of the day on, deepening to this alpha at dusk. */
+const DUSK_FROM = 0.6;
+const DUSK_ALPHA = 0.45;
 /** How many rain streaks and heat waves are in view at once. */
 const RAIN_STREAKS = 140;
 const HEAT_WAVES = 22;
@@ -666,7 +686,7 @@ export class GameScene extends Phaser.Scene {
     const progress = new ProgressBar(this, at.x, at.y + 30, 60, REFINING_BAR, WORLD_UI_DEPTH, REFINING_BAR_H);
     // A second craftsman's pipe shows its own bar just below.
     const progress2 = new ProgressBar(this, at.x, at.y + 41, 60, REFINING_BAR, WORLD_UI_DEPTH, REFINING_BAR_H);
-    this.addMarker(m.pickUp, 'pad-out', t('pickUp'), () => pickUpFromRefiner(this.state, id), () => this.state.belts[beltOut].built);
+    this.addMarker(m.pickUp, pickUpPad('sack'), t('pickUp'), () => pickUpFromRefiner(this.state, id), () => this.state.belts[beltOut].built);
     this.addMarker(m.drop, 'pad-in', t('drop'), () => dropAtRefiner(this.state, id), () => this.state.belts[beltIn].built && !this.carries(isPlant));
     this.addWorkSpot(m.work, id);
     this.addUpgradeMarker(m.upgrade, id);
@@ -690,7 +710,7 @@ export class GameScene extends Phaser.Scene {
     // The end of the bar is the fine window: picked up then, the potion comes out fine.
     const brewing = new ProgressBar(this, at.x, at.y + 34, 60, 0x58a35a, WORLD_UI_DEPTH).setZone(1 - FINE_SHARE, 0xe8b830);
     const brewing2 = new ProgressBar(this, at.x, at.y + 42, 60, 0x58a35a, WORLD_UI_DEPTH).setZone(1 - FINE_SHARE, 0xe8b830);
-    this.addMarker(m.pickUp, 'pad-out', t('pickUp'), () => pickUpFromCauldron(this.state, id), () => this.state.belts[beltOut].built);
+    this.addMarker(m.pickUp, pickUpPad('bottle'), t('pickUp'), () => pickUpFromCauldron(this.state, id), () => this.state.belts[beltOut].built);
     this.addMarker(m.drop, 'pad-in', t('drop'), () => dropInCauldron(this.state, id), () => this.state.belts[beltIn].built && !this.carries(isRefined));
     this.addWorkSpot(m.work, id);
     this.addUpgradeMarker(m.upgrade, id);
@@ -749,10 +769,12 @@ export class GameScene extends Phaser.Scene {
   /** Lays a floor marker with a caption. A marker a belt replaces goes away once `gone` holds. */
   private addMarker(at: Point, texture: string, caption: string, act: () => Feedback | null, gone?: () => boolean) {
     const pad = fit(this.add.image(at.x, at.y, texture).setDepth(-400));
-    const text = this.add
-      .text(at.x, at.y + 26, caption, { ...CAPTION, color: CAPTION_INK })
-      .setOrigin(0.5, 0)
-      .setDepth(-400);
+    const text = coined(
+      this.add
+        .text(at.x, at.y + 26, caption, { ...CAPTION, color: CAPTION_INK })
+        .setOrigin(0.5, 0)
+        .setDepth(-400),
+    );
     const shown = () => !gone?.();
     this.markers.push({ zone: new Phaser.Geom.Rectangle(at.x - 22, at.y - 22, 44, 44), act, shown });
     if (gone) {
@@ -761,6 +783,7 @@ export class GameScene extends Phaser.Scene {
         text.setVisible(shown());
       });
     }
+    return text;
   }
 
   /**
@@ -778,7 +801,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** An upgrade marker, captioned with the next level and its price, after `name` if given. */
-  private addUpgradeMarker(at: Point, id: UpgradeId, name?: TextKey) {
+  private addUpgradeMarker(at: Point, id: UpgradeId, name?: TextKey, room?: number) {
     this.addLevelMarker(
       at,
       upgradeIcon(id),
@@ -788,13 +811,15 @@ export class GameScene extends Phaser.Scene {
       () => payUpgrade(this.state, id),
       (level, left) => (name ? t('levelCost', { name: t(name), level: level + 2, coins: left }) : t('stationLevelCost', { level: level + 2, coins: left })),
       () => unlocked(this.state, `level-${id}`),
+      room ?? (name ? undefined : ROW_CAPTION),
     );
   }
 
   /**
    * A purple marker for something bought a level at a time, like an upgrade or a craftsman: standing
    * still on it pays towards the next level, captioned by `caption` with the coins still to pay for
-   * it. It is shown while `shown` holds and goes away once the last level is bought.
+   * it. It is shown while `shown` holds and goes away once the last level is bought. With `room`,
+   * the caption is fitted to that width (`fitCaption`).
    */
   private addLevelMarker(
     at: Point,
@@ -805,6 +830,7 @@ export class GameScene extends Phaser.Scene {
     pay: () => Feedback | null,
     caption: (level: number, left: number) => string,
     shown: () => boolean = () => true,
+    room?: number,
   ) {
     this.addMarker(
       at,
@@ -822,14 +848,16 @@ export class GameScene extends Phaser.Scene {
     const open = () => shown() && get().level < max;
     const marker = this.markers.length - 1;
     this.markers[marker].pays = true;
-    const text = this.add
-      .text(at.x, at.y + 26, '', { ...CAPTION, color: CAPTION_PAY })
-      .setOrigin(0.5, 0)
-      .setDepth(-400);
+    const text = coined(
+      this.add
+        .text(at.x, at.y + 26, '', { ...CAPTION, color: CAPTION_PAY })
+        .setOrigin(0.5, 0)
+        .setDepth(-400),
+    );
     this.views.push(() => {
       const { level, paid } = get();
       text.setVisible(open());
-      if (level < max) text.setText(caption(level, cost(level) - paid));
+      if (level < max) this.fitCaption(text, caption(level, cost(level) - paid), room);
     });
   }
 
@@ -849,6 +877,7 @@ export class GameScene extends Phaser.Scene {
       () => payCraftsman(this.state, id),
       (_level, left) => t('hireCost', { coins: left }),
       () => unlocked(this.state, `hire-${id}`),
+      ROW_CAPTION,
     );
     stand.forEach((at, i) => {
       const craftsman = fit(this.add.image(at.x, at.y, craftsmanTexture(i)).setOrigin(0.5, 1).setDepth(at.y).setFlipX(i === 1));
@@ -879,20 +908,49 @@ export class GameScene extends Phaser.Scene {
 
   /**
    * A purple build marker captioned with the coins still to pay for the build, shown while `shown`
-   * holds; standing still on it pays towards the build.
+   * holds; standing still on it pays towards the build. With `room`, the caption is fitted to that
+   * width (`fitCaption`).
    */
-  private addBuildMarker(at: Point, icon: UpgradeIcon, caption: TextKey, cost: number, build: Build, shown: () => boolean, act: () => Feedback | null) {
+  private addBuildMarker(
+    at: Point,
+    icon: UpgradeIcon,
+    caption: TextKey,
+    cost: number,
+    build: Build,
+    shown: () => boolean,
+    act: () => Feedback | null,
+    room?: number,
+  ) {
     const pad = fit(this.add.image(at.x, at.y, upgradePad(icon)).setDepth(-400));
-    const text = this.add
-      .text(at.x, at.y + 26, '', { ...CAPTION, color: CAPTION_PAY })
-      .setOrigin(0.5, 0)
-      .setDepth(-400);
+    const text = coined(
+      this.add
+        .text(at.x, at.y + 26, '', { ...CAPTION, color: CAPTION_PAY })
+        .setOrigin(0.5, 0)
+        .setDepth(-400),
+    );
     this.markers.push({ zone: new Phaser.Geom.Rectangle(at.x - 22, at.y - 22, 44, 44), act, shown, pays: true });
     this.views.push(() => {
       const show = shown();
       pad.setVisible(show);
-      text.setVisible(show).setText(t('buildCost', { name: t(caption), coins: cost - build.paid }));
+      text.setVisible(show);
+      this.fitCaption(text, t('buildCost', { name: t(caption), coins: cost - build.paid }), room);
     });
+  }
+
+  /**
+   * Shows `caption` under a purple marker. Without `room` it wraps at the caption's width as usual;
+   * with it, a caption wider than `room` is set a size or two smaller, and wraps at `room` if that is
+   * still too wide, so it doesn't run into the markers beside it.
+   */
+  private fitCaption(text: Phaser.GameObjects.Text, caption: string, room?: number) {
+    if (text.text === caption) return;
+    if (room === undefined) {
+      text.setText(caption);
+      return;
+    }
+    text.setWordWrapWidth(null).setFontSize(CAPTION.fontSize).setText(caption);
+    for (let size = parseInt(CAPTION.fontSize) - 1; text.width > room && size >= 10; size--) text.setFontSize(size);
+    if (text.width > room) text.setFontSize(CAPTION.fontSize).setWordWrapWidth(room);
   }
 
   /**
@@ -957,6 +1015,7 @@ export class GameScene extends Phaser.Scene {
       const belt = this.state.belts[id];
       this.addBuildMarker(BELT_BUILD[id], 'pixies', 'pixies', BELT_COST[id], belt, () => !belt.built && beltBuildable(this.state, id) && unlocked(this.state, `belt-${id}`), () =>
         payBelt(this.state, id),
+        BELT_CAPTION,
       );
       const riding: { pixie: Phaser.GameObjects.Image; icon: Phaser.GameObjects.Image }[] = [];
       const [main, ...feeders] = BELT_PATHS[id];
@@ -1039,7 +1098,7 @@ export class GameScene extends Phaser.Scene {
   /** The outfitter's stall right of the shop: upgrades for the doctor's pack, boots and sickle. */
   private createOutfitter() {
     this.label(OUTFITTER.sign.x, OUTFITTER.sign.y, t('outfitter'));
-    for (const id of DOCTOR_UPGRADES) this.addUpgradeMarker(OUTFITTER[id], id, UPGRADES[id].name);
+    for (const id of DOCTOR_UPGRADES) this.addUpgradeMarker(OUTFITTER[id], id, UPGRADES[id].name, MARKET_CAPTION);
   }
 
   /** The guild in the corner of the yard: upgrades for the gardens, the belts and the shop. */
@@ -1047,8 +1106,8 @@ export class GameScene extends Phaser.Scene {
     this.label(GUILD.sign.x, GUILD.sign.y, t('guild'));
     // Its upgrades go up for sale once the doctor has paid to join.
     const { guild } = this.state;
-    this.addBuildMarker(GUILD.join, 'guild', 'joinGuild', GUILD_COST, guild, () => !guild.built && unlocked(this.state, 'guild'), () => joinGuild(this.state));
-    for (const id of GUILD_UPGRADES) this.addUpgradeMarker(GUILD[id], id, UPGRADES[id].name);
+    this.addBuildMarker(GUILD.join, 'guild', 'joinGuild', GUILD_COST, guild, () => !guild.built && unlocked(this.state, 'guild'), () => joinGuild(this.state), MARKET_CAPTION);
+    for (const id of GUILD_UPGRADES) this.addUpgradeMarker(GUILD[id], id, UPGRADES[id].name, MARKET_CAPTION);
   }
 
   /**
@@ -1110,26 +1169,14 @@ export class GameScene extends Phaser.Scene {
     // whenever the doctor carries one.
     const allBelted = () => !doneByHand(this.state, 'cauldron') && !doneByHand(this.state, 'cauldron2');
     this.addMarker(COUNTER_MARKERS.drop, 'pad-in', t('drop'), () => stockShelf(this.state), () => allBelted() && !this.carries(isSellable));
-    this.addMarker(COUNTER_MARKERS.pickUp, 'pad-out', t('coins'), () => collectTill(this.state));
+    // The till: a coin beside the pick-up arrow, and what it holds as the caption.
+    const till = this.addMarker(COUNTER_MARKERS.pickUp, pickUpPad('coin'), '', () => collectTill(this.state));
     this.addWorkSpot(COUNTER_MARKERS.work, 'counter');
     this.addUpgradeMarker(COUNTER_MARKERS.upgrade, 'counter');
     this.addCraftsmen('counter');
-    const tillCoin = fit(this.add.image(COUNTER_MARKERS.pickUp.x - 8, COUNTER_MARKERS.pickUp.y, 'coin').setDepth(-300), 1.2);
-    const till = this.add
-      .text(COUNTER_MARKERS.pickUp.x - 1, COUNTER_MARKERS.pickUp.y, '', {
-        fontFamily: SERIF,
-        fontSize: '13px',
-        fontStyle: 'bold',
-        color: INK,
-        stroke: TEXT_HALO,
-        strokeThickness: 3,
-      })
-      .setOrigin(0, 0.5)
-      .setDepth(-300);
     this.views.push(() => {
       const { counter } = this.state;
-      tillCoin.setVisible(counter.till > 0);
-      till.setText(counter.till > 0 ? formatNumber(counter.till) : '');
+      till.setText(counter.till > 0 ? `${formatNumber(counter.till)}${COIN}` : '');
     });
 
     // How far the counter's craftsmen are with handing over the next potion.
@@ -1208,16 +1255,30 @@ export class GameScene extends Phaser.Scene {
     // Later customers' bubbles sit over earlier ones' where two wide ones meet.
     const depth = WORLD_UI_DEPTH - 1 + i * 0.1;
     const bubbles = [1, 2, 3].map((n) => this.card(x, cy, 'bubble', cardTexture(this, 'bubble', bubbleWidth(n), BUBBLE.h)).setDepth(depth).setVisible(false));
+    // Selling by hand: a tap on a waiting customer's bubble hands them what they want from the
+    // shelf, while the doctor is in the shop.
+    for (const bubble of bubbles) {
+      bubble.setInteractive({ useHandCursor: true }).on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
+        e.stopPropagation();
+        if (this.pinching()) return;
+        if (this.closePanels()) return;
+        const order = this.state.orders[i];
+        if (!order || !this.atCounter.has(order.id)) return;
+        this.showFeedback(this.inShop({ x: this.feetX(), y: this.feetY() }) ? (serveOrder(this.state, order.id) ?? []) : [t('serveInShop')]);
+      });
+    }
     const wants = new IconRow(this, x, cy - 4, depth + 0.02, BUBBLE.icon);
     const patience = new ProgressBar(this, x, cy + 5, 10, 0xd9a032, depth + 0.02);
     const ring = this.add.graphics().setDepth(depth + 0.03);
     const coin = fit(this.add.image(x, top + 1, 'coin'), 0.8).setDepth(depth + 0.04).setVisible(false);
     // A gold star on a regular's bubble, on its top left corner.
     const regular = fit(this.add.image(x, top + 1, 'regular')).setDepth(depth + 0.04).setVisible(false);
-    const tipText = this.add
-      .text(x, top - 7, '', { fontFamily: SERIF, fontSize: '11px', fontStyle: 'bold', color: '#7a4a00', stroke: TEXT_HALO, strokeThickness: 3 })
-      .setOrigin(0.5, 1)
-      .setDepth(depth + 0.04);
+    const tipText = coined(
+      this.add
+        .text(x, top - 7, '', { fontFamily: SERIF, fontSize: '11px', fontStyle: 'bold', color: '#7a4a00', stroke: TEXT_HALO, strokeThickness: 3 })
+        .setOrigin(0.5, 1)
+        .setDepth(depth + 0.04),
+    );
     let drawn = '';
     this.views.push(() => {
       const order = this.state.orders[i];
@@ -1305,9 +1366,11 @@ export class GameScene extends Phaser.Scene {
       icon.setTexture(itemTexture(c.potion));
       const potions = potionCount(c.potion, c.need);
       title.setText(c.bundle ? t('contractBundle', { potions, more: potionCount(c.bundle.potion, c.bundle.need) }) : t('contract', { potions }));
-      // The title stops short of the dusk dial, in a smaller hand when a long one would run into it.
-      title.setFontSize(13);
+      // The title stops short of the dusk dial, in a smaller hand when a long one would run into it,
+      // and scaled down to fit when even the smallest hand is too wide.
+      title.setScale(1).setFontSize(13);
       for (let size = 12; title.width > w - 42 - 40 && size >= 10; size--) title.setFontSize(size);
+      title.setScale(Math.min(1, (w - 42 - 40) / title.width));
       const gap = need > 8 ? 11 : 15;
       const r = need > 8 ? 4.5 : 5.5;
       pips.clear();
@@ -1516,7 +1579,7 @@ export class GameScene extends Phaser.Scene {
       if (feedback) this.showFeedback(feedback);
     });
     const style = { fontFamily: SERIF, fontSize: '12px', fontStyle: 'bold', color: INK, stroke: TEXT_HALO, strokeThickness: 3 };
-    const want = this.add.text(WAGON.want.x + 10, WAGON.want.y, '', style).setOrigin(0.5).setDepth(WAGON.y + 0.2).setVisible(false);
+    const want = coined(this.add.text(WAGON.want.x + 10, WAGON.want.y, '', style).setOrigin(0.5).setDepth(WAGON.y + 0.2).setVisible(false));
     const icon = fit(this.add.image(WAGON.want.x, WAGON.want.y, itemTexture('healingDraught'))).setDepth(WAGON.y + 0.2).setVisible(false);
     const left = this.add.text(WAGON.left.x, WAGON.left.y, '', style).setOrigin(0.5).setDepth(WAGON.y + 0.2).setVisible(false);
     let drawn = '';
@@ -1555,10 +1618,12 @@ export class GameScene extends Phaser.Scene {
     this.addMarker(HERB_MARKET.buy, 'pad-out', '', () => buyHerb(this.state), () => !open());
     this.markers[this.markers.length - 1].pays = true;
     const caption = (at: Point) =>
-      this.add
-        .text(at.x, at.y + 26, '', { ...CAPTION, color: CAPTION_INK })
-        .setOrigin(0.5, 0)
-        .setDepth(-400);
+      coined(
+        this.add
+          .text(at.x, at.y + 26, '', { ...CAPTION, color: CAPTION_INK })
+          .setOrigin(0.5, 0)
+          .setDepth(-400),
+      );
     const sellText = caption(HERB_MARKET.sell);
     const buyText = caption(HERB_MARKET.buy);
     const pick = this.card(HERB_MARKET.pick.x, HERB_MARKET.pick.y, 'small', signTexture(this, PRICE_SIGN_W, true)).setDepth(-910);
@@ -1582,8 +1647,12 @@ export class GameScene extends Phaser.Scene {
       for (const part of [stall, name, board, sellText, buyText, pick, pickIcon]) part.setVisible(shown);
       if (!shown) return;
       pickIcon.setTexture(itemTexture(herb));
-      buyText.setText(t('buyHerb', { item: itemName(herb), coins: herbBuyPrice(day, herb) }));
-      sellText.setText(top && (isPlant(top) || isRefined(top)) ? t('sellHerb', { item: itemName(top), coins: herbSellPrice(day, top) }) : t('sellHerbs'));
+      this.fitCaption(buyText, t('buyHerb', { item: itemName(herb), coins: herbBuyPrice(day, herb) }), MARKET_CAPTION);
+      this.fitCaption(
+        sellText,
+        top && (isPlant(top) || isRefined(top)) ? t('sellHerb', { item: itemName(top), coins: herbSellPrice(day, top) }) : t('sellHerbs'),
+        MARKET_CAPTION,
+      );
     });
   }
 
@@ -1665,6 +1734,8 @@ export class GameScene extends Phaser.Scene {
   private createWeather() {
     const tint = this.add.rectangle(0, 0, WORLD.w, WORLD.h, 0, 0).setOrigin(0).setDepth(WEATHER_DEPTH);
     const fx = this.add.graphics().setDepth(WEATHER_DEPTH + 0.1);
+    // Evening light over the last part of the day: warm at first, then deepening towards dusk.
+    const dusk = this.add.rectangle(0, 0, WORLD.w, WORLD.h, 0, 0).setOrigin(0).setDepth(WEATHER_DEPTH + 0.05);
     const TINTS: Record<Weather, [number, number]> = { mild: [0, 0], rain: [0x2a3a58, 0.22], fair: [0xffd870, 0.08], drought: [0xe0782a, 0.14] };
     // Where each streak or wave starts, spread evenly but not in rows: a fixed scatter, so the weather
     // never touches Math.random.
@@ -1673,6 +1744,9 @@ export class GameScene extends Phaser.Scene {
       const weather = weatherFor(this.state.contract.day);
       const [color, alpha] = TINTS[weather];
       tint.setFillStyle(color, alpha);
+      const evening = Phaser.Math.Clamp((1 - this.state.contract.dayLeft / DAY_MS - DUSK_FROM) / (1 - DUSK_FROM), 0, 1);
+      const light = Phaser.Display.Color.Interpolate.ColorWithColor(Phaser.Display.Color.ValueToColor(0xe8903a), Phaser.Display.Color.ValueToColor(0x1c2050), 1, evening);
+      dusk.setFillStyle(Phaser.Display.Color.GetColor(light.r, light.g, light.b), evening * DUSK_ALPHA);
       fx.clear();
       if (hubSettings.reduceMotion || (weather !== 'rain' && weather !== 'drought')) return;
       const view = this.cameras.main.worldView;
@@ -1745,7 +1819,7 @@ export class GameScene extends Phaser.Scene {
     const { y, h } = AWAY_CHIP;
     const d = UI_DEPTH;
         const lead = this.add.text(0, y + h / 2, t('awayLead'), { ...HUD_TEXT, fontSize: '13px', fontStyle: 'normal' }).setOrigin(0, 0.5).setDepth(d + 0.1);
-    const sum = this.add.text(0, y + h / 2, t('awaySum', { coins: away.coins, n: away.potions }), { ...HUD_TEXT, fontSize: '13px', color: '#6a2c90' }).setOrigin(0, 0.5).setDepth(d + 0.1);
+    const sum = coined(this.add.text(0, y + h / 2, t('awaySum', { coins: away.coins, n: away.potions }), { ...HUD_TEXT, fontSize: '13px', color: '#6a2c90' }).setOrigin(0, 0.5).setDepth(d + 0.1));
     const w = Math.max(AWAY_CHIP.w, Math.ceil(lead.width + sum.width + 46));
     const x = AWAY_CHIP.x + AWAY_CHIP.w - w;
     lead.setX(x + 28);
@@ -1763,67 +1837,143 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createHud() {
-    const { width } = viewSize(this);
+    const { width, height } = viewSize(this);
     const first = this.children.list.length;
     // Taps on the bar stop here rather than falling through to a priority sign in the world below.
+    const stopTaps = (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
+      e.stopPropagation();
+      this.pinching();
+    };
     fit(this.add.image(0, 0, cardTexture(this, 'bar', width, HUD_HEIGHT)))
       .setOrigin(0)
       .setDepth(UI_DEPTH)
       .setInteractive()
-      .on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
-        e.stopPropagation();
-        this.pinching();
-      });
+      .on('pointerdown', stopTaps);
     const style = HUD_TEXT;
     fit(this.add.image(26, HUD_HEIGHT / 2 - 1, 'coin'), 1.6).setDepth(UI_DEPTH);
     const coins = this.add.text(42, HUD_HEIGHT / 2 - 1, '', style).setOrigin(0, 0.5).setDepth(UI_DEPTH);
-    this.add.text(width / 2 - 92, HUD_HEIGHT / 2, t('hands'), style).setOrigin(1, 0.5).setDepth(UI_DEPTH);
     this.add
-      // Right of the last slot the biggest pack fills, so a full pack never runs into it.
-      .text(width / 2 - 60 + MAX_CARRY * 40 - 12, HUD_HEIGHT / 2, t('hint'), { ...style, fontSize: '12px', fontStyle: 'normal', color: '#4a3424' })
+      .text(width / 2 + DAY_BAR.right + 28, HUD_HEIGHT / 2, t('hint'), { ...style, fontSize: '12px', fontStyle: 'normal', color: '#4a3424' })
       .setOrigin(0, 0.5)
       .setDepth(UI_DEPTH);
-    this.hudButton(width - 16, t('settings'), () => {
-      const open = this.settings.visible;
-      this.closePanels();
-      this.settings.toggle(!open);
-    });
-    // Empties the doctor's hands, for goods that are no longer needed.
-    const drop = this.hudButton(width / 2 - 150, t('dropAll'), () => {
-      const feedback = dropAll(this.state);
-      if (feedback) this.showFeedback(feedback);
-    });
+    // Settings behind a cogwheel at the bar's right end.
+    const cog = this.card(width - 16 - HUD_ICON_BUTTON / 2, HUD_HEIGHT / 2, 'button', cardTexture(this, 'button', HUD_ICON_BUTTON, 28))
+      .setDepth(UI_DEPTH)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
+        e.stopPropagation();
+        if (this.pinching()) return;
+        const open = this.settings.visible;
+        this.closePanels();
+        this.settings.toggle(!open);
+      });
+    fit(this.add.image(cog.x, HUD_HEIGHT / 2, 'cog')).setDepth(UI_DEPTH + 0.5);
     // What each station makes from what, in a panel over the map.
     this.hudButton(width / 2 - 230, t('recipes'), () => {
       const open = this.recipes.visible;
       this.closePanels();
       this.recipes.toggle(!open);
     });
+    this.createDayBar(width);
 
-    // A slot for everything the biggest pack holds; those beyond the current pack stay hidden.
+    // The doctor's hands on a card at the bottom of the screen: a slot for everything the biggest
+    // pack holds (those beyond the current pack stay hidden), each with a bin on it once it holds
+    // something; tapping the slot throws that thing away.
+    const label = this.add.text(0, height - HANDS_BAR.h / 2 - 4, t('hands'), style).setOrigin(0, 0.5).setDepth(UI_DEPTH + 0.1);
+    const barW = label.width + 24 + MAX_CARRY * HANDS_BAR.gap;
+    const barX = width / 2 - barW / 2;
+    const barY = height - HANDS_BAR.h / 2 - 4;
+    this.card(width / 2, barY, 'contract', cardTexture(this, 'contract', barW, HANDS_BAR.h))
+      .setDepth(UI_DEPTH)
+      .setInteractive()
+      .on('pointerdown', stopTaps);
+    label.setX(barX + 12);
     const frames: Phaser.GameObjects.Image[] = [];
+    const bins: Phaser.GameObjects.Image[] = [];
     const slots = Array.from({ length: MAX_CARRY }, (_, i) => {
-      const x = width / 2 - 60 + i * 40;
-      frames.push(fit(this.add.image(x, HUD_HEIGHT / 2 - 1, 'slot').setDepth(UI_DEPTH)));
-      return fit(this.add.image(x, HUD_HEIGHT / 2 - 1, itemTexture('wheat')), 1.5).setDepth(UI_DEPTH);
+      const x = barX + label.width + 18 + HANDS_BAR.gap / 2 + i * HANDS_BAR.gap;
+      const frame = fit(this.add.image(x, barY, 'slot').setDepth(UI_DEPTH + 0.1))
+        .setInteractive({ useHandCursor: true })
+        .on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
+          e.stopPropagation();
+          if (this.pinching()) return;
+          const feedback = dropItem(this.state, i);
+          if (feedback) this.showFeedback(feedback);
+        });
+      frames.push(frame);
+      bins.push(fit(this.add.image(x + 12, barY - 11, 'bin')).setDepth(UI_DEPTH + 0.3));
+      return fit(this.add.image(x, barY, itemTexture('wheat')), 1.5).setDepth(UI_DEPTH + 0.2);
     });
-    // Everything in the top bar stays put while the camera follows the doctor.
+    // Everything in the top and bottom bars stays put while the camera follows the doctor.
     for (const obj of this.children.list.slice(first)) (obj as unknown as Phaser.GameObjects.Components.ScrollFactor).setScrollFactor(0);
     const pack = new BackStack(this);
     this.recipes = new RecipeBook(this, UI_DEPTH + 1);
     this.settings = new Settings(this, UI_DEPTH + 1, () => this.startOver());
 
     this.views.push(() => {
-      coins.setText(t('coinsHud', { n: this.state.coins }));
-      for (const part of drop) part.setAlpha(this.state.carrying.length > 0 ? 1 : 0.5);
+      coins.setText(formatNumber(this.state.coins));
       frames.forEach((frame, i) => frame.setVisible(i < carryCapacity(this.state)));
       slots.forEach((slot, i) => {
         const item = this.state.carrying[i];
         slot.setVisible(!!item);
+        bins[i].setVisible(!!item);
         if (item) slot.setTexture(itemTexture(item));
       });
       pack.update(this.player, this.state.carrying);
       this.recipes.update(this.state);
+    });
+  }
+
+  /**
+   * The day in the middle of the top bar: "Day 3" and a sky that runs from dawn to dusk, the sun
+   * crossing it as the day passes and the moon waiting at its end. In the last part of the day the
+   * world takes on the evening light, and a new day is named across the screen as it starts.
+   */
+  private createDayBar(width: number) {
+    const y = HUD_HEIGHT / 2;
+    const left = width / 2 + DAY_BAR.left, right = width / 2 + DAY_BAR.right;
+    const label = this.add.text(left - 8, y, '', HUD_TEXT).setOrigin(1, 0.5).setDepth(UI_DEPTH);
+    const sky = this.add.graphics().setDepth(UI_DEPTH);
+    // The sky: morning blue, a bright noon and an orange dusk, under an ink rule.
+    const steps = 24;
+    for (let i = 0; i < steps; i++) {
+      const color = Phaser.Display.Color.Interpolate.ColorWithColor(
+        Phaser.Display.Color.ValueToColor(i < steps / 2 ? 0x9cc4dc : 0xf2d27a),
+        Phaser.Display.Color.ValueToColor(i < steps / 2 ? 0xf2d27a : 0xd8743a),
+        steps / 2,
+        i % (steps / 2),
+      );
+      sky.fillStyle(Phaser.Display.Color.GetColor(color.r, color.g, color.b), 1).fillRect(left + ((right - left) * i) / steps, y - 5, (right - left) / steps + 0.5, 10);
+    }
+    sky.lineStyle(1.2, INK_NUM, 0.9).strokeRoundedRect(left, y - 5, right - left, 10, 3);
+    const passed = this.add.graphics().setDepth(UI_DEPTH + 0.1);
+    fit(this.add.image(right + 10, y, 'moon'), 1.1).setDepth(UI_DEPTH + 0.2);
+    const sun = fit(this.add.image(left, y, 'sun'), 1.2).setDepth(UI_DEPTH + 0.3);
+    const banner = this.add
+      .text(0, 0, '', { fontFamily: SERIF, fontSize: '40px', fontStyle: 'bold', color: INK, stroke: TEXT_HALO, strokeThickness: 6 })
+      .setOrigin(0.5)
+      .setDepth(UI_DEPTH + 0.5)
+      .setAlpha(0);
+    for (const obj of [label, sky, passed, sun, banner]) obj.setScrollFactor(0);
+    let day = this.state.contract.day;
+    let drawn = -1;
+    this.views.push(() => {
+      const c = this.state.contract;
+      label.setText(t('dayClock', { day: c.day }));
+      const share = Phaser.Math.Clamp(1 - c.dayLeft / DAY_MS, 0, 1);
+      const x = left + (right - left) * share;
+      sun.setX(x);
+      if (Math.round(x) !== drawn) {
+        drawn = Math.round(x);
+        // The part of the day gone by is shaded over.
+        passed.clear().fillStyle(INK_NUM, 0.28).fillRect(left, y - 5, x - left, 10);
+      }
+      if (c.day === day) return;
+      day = c.day;
+      const view = viewSize(this);
+      banner.setText(t('dayClock', { day })).setPosition(view.width / 2, view.height / 2 - 60).setAlpha(1);
+      this.tweens.killTweensOf(banner);
+      this.tweens.add({ targets: banner, alpha: 0, delay: 1_400, duration: 900 });
     });
   }
 
@@ -2000,17 +2150,19 @@ export class GameScene extends Phaser.Scene {
     const start = Math.max(this.time.now, this.nextFeedbackAt);
     lines.forEach((line, i) => {
       this.time.delayedCall(start - this.time.now + i * 180, () => {
-        const text = this.add
-          .text(this.player.x, this.player.y - 60, line, {
-            fontFamily: SERIF,
-            fontSize: '14px',
-            fontStyle: 'bold',
-            color: INK,
-            stroke: TEXT_HALO,
-            strokeThickness: 4,
-          })
-          .setOrigin(0.5)
-          .setDepth(WORLD_UI_DEPTH);
+        const text = coined(
+          this.add
+            .text(this.player.x, this.player.y - 60, line, {
+              fontFamily: SERIF,
+              fontSize: '14px',
+              fontStyle: 'bold',
+              color: INK,
+              stroke: TEXT_HALO,
+              strokeThickness: 4,
+            })
+            .setOrigin(0.5)
+            .setDepth(WORLD_UI_DEPTH),
+        );
         this.tweens.add({ targets: text, y: text.y - 36, alpha: 0, duration: 1100, onComplete: () => text.destroy() });
       });
     });

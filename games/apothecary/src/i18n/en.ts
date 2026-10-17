@@ -89,17 +89,16 @@ const en = {
   pickUp: 'Pick up',
   drop: 'Drop',
   work: 'Work',
-  coins: 'Coins',
   first: 'First:',
   any: 'any',
   land: 'Land',
   table: 'Table',
   joinGuild: 'Join guild',
-  levelCost: '{name} {level}: {coins}c',
-  stationLevelCost: 'Lv {level}: {coins}c',
-  buildCost: '{name}: {coins}c',
-  learnCost: '{potion}: {coins}c',
-  hireCost: 'Hire {coins}c',
+  levelCost: '{name} {level}: {coins}{coin}',
+  stationLevelCost: 'Lv {level}: {coins}{coin}',
+  buildCost: '{name}: {coins}{coin}',
+  learnCost: '{potion}: {coins}{coin}',
+  hireCost: 'Hire {coins}{coin}',
 
   // Feedback over the doctor
   gained: '+ {item}',
@@ -118,25 +117,26 @@ const en = {
   welcomeGuild: 'Welcome to the guild!',
   pixiesHired: '{pixies} hired!',
   toPixies: '{n} to the pixies',
-  dropped: 'Dropped {n}',
+  droppedItem: 'Threw away {item}',
+  notOnShelf: 'Not on the shelf yet',
+  serveInShop: 'Step into the shop to serve',
   landBought: 'New land bought!',
   tableBuilt: 'Refining table built!',
   cauldronBuilt: 'Cauldron built!',
   fieldPlanted: 'Field planted!',
   shadePlanted: 'Shade garden planted!',
-  coinsGained: '+{n} coins',
+  coinsGained: '+{n}{coin}',
   wagonWants: 'The wagon wants {crate}',
-  crateSold: 'Crate sold: +{n} coins',
+  crateSold: 'Crate sold: +{n}{coin}',
   marketPick: 'Market: {item}',
-  bought: '+ {item} -{coins}c',
-  sold: '- {item} +{coins}c',
+  bought: '+ {item} -{coins}{coin}',
+  sold: '- {item} +{coins}{coin}',
 
   // Top bar and panels
-  coinsHud: 'Coins: {n}',
   hands: 'Hands',
+  dayClock: 'Day {day}',
   hint: 'Walk: WASD / tap\nHarvest: walk past ripe plants',
   settings: 'Settings',
-  dropAll: 'Drop all',
   recipes: 'Recipes',
   settingsLine: 'Difficulty: {difficulty}   Frame rate: {fps} FPS',
   changeOnHub: 'Change these on the hub page',
@@ -145,10 +145,10 @@ const en = {
   tapToClose: 'Tap to close',
   confirmNewGame: 'Start a new game? Your saved progress will be lost.',
   awayLead: 'While you were away:',
-  awaySum: { one: '+{coins} coins, {n} potion', other: '+{coins} coins, {n} potions' },
+  awaySum: { one: '+{coins}{coin}, {n} potion', other: '+{coins}{coin}, {n} potions' },
 
   // Customers
-  tip: 'tip +{n}',
+  tip: 'tip +{n}{coin}',
   noTip: 'no tip',
 
   // Contract card
@@ -183,13 +183,13 @@ const en = {
   rivalStreak: 'Outsold {streak}/{days} days, {sold}/{sales} today',
   rivalClosed: 'Closed for good',
   streetIsYours: 'The street is yours',
-  wagonBuys: 'Wagon buys {crate} at {pay}c each',
+  wagonBuys: 'Wagon buys {crate} at {pay}{coin} each',
   wagonWaiting: 'On the shelf {have}/{crate}, leaves in {s}s',
   wagonReady: 'On the shelf {have}/{crate}: tap to sell, leaves in {s}s',
 
   // Herb market
-  buyHerb: 'Buy {item}: {coins}c',
-  sellHerb: 'Sell {item}: {coins}c',
+  buyHerb: 'Buy {item}: {coins}{coin}',
+  sellHerb: 'Sell {item}: {coins}{coin}',
   sellHerbs: 'Sell herbs',
 
   // Town card
@@ -202,14 +202,14 @@ const en = {
   dayWeather: 'Day {day}, {weather}',
   marketDayWeather: 'Market day, {weather}',
   blightIn: 'Blight in the {garden}! Clear it with the sickle',
-  crowdBonus: 'Market crowd served: +{n} coins!',
+  crowdBonus: 'Market crowd served: +{n}{coin}!',
   crowdWalkedOff: 'A customer walked off: no market bonus',
   crowdComes: 'Market day: a crowd comes in!',
   crowdNoRoom: 'Market day: no room for the crowd',
 
   // Shelves and the Recipes panel
   rivalCut: 'rival {n}%',
-  coinPrice: '{n}c',
+  coinPrice: '{n}{coin}',
   learnAtStudy: 'Study',
 };
 

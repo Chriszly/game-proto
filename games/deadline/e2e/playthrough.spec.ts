@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 // Plays the first wave with real inputs (a tap to move, as on a phone): the art style switch is
-// tapped to night vision and back, the horde comes in and is shot down while the progress strip
+// tapped to night vision and back, the horde comes down its lanes and the hero moves under it to shoot it down while the progress strip
 // fills, the hero moves under the wave's pickup and shoots it open for an upgrade, then under the
 // wave's fuel drum and blows it up among the horde, and the wave is cleared without the horde
 // reaching the hero. Kills in quick succession build the frenzy streak along the way, and every kill
@@ -213,7 +213,15 @@ test('plays the first wave', async ({ page }, testInfo) => {
   expect(await play(5_000, async () => (enemies = await game.enemies()).length >= 3), 'the horde came in').toBe(true);
   expect(enemies.every((e) => e.kind === 'grunt' && e.y < HERO_Y)).toBe(true);
   await snap('1-horde');
-  s = await until('the first kill', (s) => s.kills > 0);
+  // The zombies keep to the middle of their lanes and never come after the hero, so the hero moves
+  // below the one closest to their line, as a player would.
+  const aimAtFront = async () => {
+    const [hero, enemies] = [await game.hero(), await game.enemies()];
+    if (hero.moving || enemies.length === 0) return;
+    const front = enemies.reduce((a, b) => (b.y > a.y ? b : a));
+    if (Math.abs(front.x - hero.x) > 8) await tap({ x: Math.round(front.x), y: VIEW.h / 2 });
+  };
+  s = await until('the first kill', (s) => s.kills > 0, 30_000, aimAtFront);
   // The progress strip counts the wave's zombies down as they fall.
   expect(s.fallen).toBe(s.kills);
   expect(s.streak).toBeGreaterThan(0);
@@ -274,14 +282,8 @@ test('plays the first wave', async ({ page }, testInfo) => {
   expect((await game.pickups()).find((p) => p.id === pickup.id)).toBeUndefined();
   await snap('5-upgrade');
 
-  // Play the rest of the wave as a player would: whenever the hero is not below the enemy closest to
+  // Play the rest of the wave the same way: whenever the hero is not below the enemy closest to
   // their line, tap above it. Every enemy falls before any reaches the hero, and the wave is cleared.
-  const aimAtFront = async () => {
-    const [hero, enemies] = [await game.hero(), await game.enemies()];
-    if (hero.moving || enemies.length === 0) return;
-    const front = enemies.reduce((a, b) => (b.y > a.y ? b : a));
-    if (Math.abs(front.x - hero.x) > 8) await tap({ x: Math.round(front.x), y: VIEW.h / 2 });
-  };
   s = await until('wave 1 cleared', (s) => s.phase === 'break', 60_000, aimAtFront);
   expect(s).toMatchObject({ wave: 1, kills: WAVE_1_ENEMIES, fallen: WAVE_1_ENEMIES, waveTotal: WAVE_1_ENEMIES });
   expect(await game.enemies()).toEqual([]);

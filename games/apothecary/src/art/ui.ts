@@ -99,6 +99,45 @@ function drawHourglass(c: Ctx) {
   ink(c, [[1, 16.5], [13, 16.5]], { closed: false, w: 1.3 });
 }
 
+/** The Settings button's cogwheel: eight teeth round a hub, brass under ink. 22x22 as shown. */
+function drawCog(c: Ctx) {
+  const pts: Pt[] = [];
+  for (let i = 0; i < 32; i++) {
+    const a = (i / 32) * Math.PI * 2;
+    const r = i % 4 < 2 ? 10 : 7.4;
+    pts.push([11 + Math.cos(a + Math.PI / 32) * r, 11 + Math.sin(a + Math.PI / 32) * r]);
+  }
+  both(c, pts, '#b8923a', { layers: 2, edge: 0 }, { w: 1 });
+  both(c, ellPts(11, 11, 3.4, 3.4, 16), '#c8b48a', { layers: 1, edge: 0 }, { w: 0.9 });
+}
+
+/** A small rubbish bin, on each hand slot that holds something: tap the slot to throw it away. 12x14 as shown. */
+function drawBin(c: Ctx) {
+  both(c, [[2.5, 4], [9.5, 4], [8.6, 13], [3.4, 13]], '#8a8070', { layers: 1, edge: 0 }, { w: 0.9 });
+  for (const x of [4.8, 6, 7.2]) ink(c, [[x, 6], [x, 11.5]], { closed: false, w: 0.6, alpha: 0.7 });
+  both(c, rectPts(1, 2.4, 10, 1.8, 0.6), '#9a907e', { layers: 1, edge: 0 }, { w: 0.8 });
+  ink(c, [[4.6, 2.2], [5, 0.8], [7, 0.8], [7.4, 2.2]], { closed: false, w: 0.8 });
+}
+
+/** A pale crescent moon, where the day bar's dusk ends. 16x16 as shown. */
+function drawMoon(c: Ctx) {
+  both(c, crescent(), '#e8e2c8', { layers: 1, edge: 0 }, { w: 0.9 });
+}
+
+/** The crescent's outline: the outer arc one way, the inner one back. */
+function crescent(): Pt[] {
+  const pts: Pt[] = [];
+  for (let i = 0; i <= 16; i++) {
+    const a = Math.PI * 0.35 + (i / 16) * Math.PI * 1.3;
+    pts.push([8 + Math.cos(a) * 6.5, 8 + Math.sin(a) * 6.5]);
+  }
+  for (let i = 16; i >= 0; i--) {
+    const a = Math.PI * 0.45 + (i / 16) * Math.PI * 1.1;
+    pts.push([10.5 + Math.cos(a) * 5, 7 + Math.sin(a) * 5]);
+  }
+  return pts;
+}
+
 /** The plague card's bell: the town crier's handbell, rung for the sickness. 22x22 as shown. */
 function drawBell(c: Ctx) {
   ink(c, [[11, 1.5], [11, 5]], { closed: false, w: 2 });
@@ -248,6 +287,9 @@ export function bakeUi(scene: Phaser.Scene) {
   paint(scene, 'slot', 32, 32, drawSlot, 3);
   paint(scene, 'hourglass', 14, 18, drawHourglass, 3);
   paint(scene, 'sun', 16, 16, drawSun, 3);
+  paint(scene, 'moon', 16, 16, drawMoon, 3);
+  paint(scene, 'cog', 22, 22, drawCog, 3);
+  paint(scene, 'bin', 12, 14, drawBin, 3);
   paint(scene, 'bell', 22, 22, drawBell, 3);
   paint(scene, 'rival-stall', 72, 64, drawRivalStall, 3);
   paint(scene, 'wagon', 84, 60, drawWagon, 3);
