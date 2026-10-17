@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { ui } from '../../../../shared/audio';
 import { FIGURES, guardTexture } from '../art/characters';
 import { relicTexture } from '../art/icons';
 import { fit } from '../art/lowpoly';
@@ -98,7 +99,7 @@ export class LegacyPanel {
         .on('pointerover', () => draw(true))
         .on('pointerout', () => draw(false))
         .on('pointerdown', () => this.onPick(id));
-    }
+    } else hit.setInteractive().on('pointerdown', () => ui('refuse'));
     this.body.add(card);
     this.cards.push({ id, x, y, w, h });
   }
