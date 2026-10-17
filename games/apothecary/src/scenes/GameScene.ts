@@ -316,6 +316,8 @@ export class GameScene extends Phaser.Scene {
   away: AwaySummary | null = null;
   /** The panel shown once the town is cured, until tapped away. */
   private winPanel: Phaser.GameObjects.Container | null = null;
+  /** The plague as it was saved, before the time away was played, so the card can tell what changed while away. */
+  private plagueSaved: { stage: number; relapses: number; cured: boolean } | null = null;
 
   constructor() {
     super('Game');
@@ -323,6 +325,8 @@ export class GameScene extends Phaser.Scene {
 
   create() {
     this.state = loadState();
+    const saved = this.state.plague;
+    this.plagueSaved = saved ? { stage: saved.stage, relapses: saved.relapses, cured: saved.cured } : null;
     // Play through the time away, before anything is drawn from the state.
     this.away = catchUp(this.state, Date.now());
     this.startingOver = false;
@@ -1325,7 +1329,8 @@ export class GameScene extends Phaser.Scene {
       this.tweens.killTweensOf(note);
       this.tweens.add({ targets: note, alpha: 0, delay: 2_500, duration: 800 });
     };
-    let seen = this.state.plague ? { stage: this.state.plague.stage, relapses: this.state.plague.relapses, cured: this.state.plague.cured } : null;
+    // Starts from the plague as saved, so a stage, relapse or cure while away is told like one in play.
+    let seen = this.plagueSaved;
     let drawn = '';
     this.views.push(() => {
       const plague = this.state.plague;
@@ -1334,7 +1339,7 @@ export class GameScene extends Phaser.Scene {
         for (const part of parts) part.setVisible(false);
         return;
       }
-      if (seen && plague.cured && !seen.cured) {
+      if (plague.cured && !seen?.cured) {
         say('The Panacea is brewed: the town is cured!', true);
         this.showWin();
       } else if (seen && plague.stage > seen.stage) say(plague.stage < PLAGUE_STAGES.length ? 'Stage beaten, but the sickness moves on' : 'Every stage beaten: the Panacea is unlocked!', true);
