@@ -15,7 +15,7 @@ succession build a streak that gives more experience; every level-up pauses the 
 upgrades to pick from; after each boss the hero picks the next road; and beating the third boss on
 wave 30 lifts the siege, which wins the run and unlocks the next heat.
 
-![A wave coming on](docs/screenshots/playthrough-0-battle.png)
+![A wave coming on](docs/screenshots/playthrough-0-battle.webp)
 
 ## How to play
 
@@ -51,7 +51,7 @@ wave 30 lifts the siege, which wins the run and unlocks the next heat.
    the next run, which starts again at wave 1. They are saved in the browser. "New hero" starts
    from scratch.
 
-![Three upgrades to pick from](docs/screenshots/playthrough-1-level-up.png)
+![Three upgrades to pick from](docs/screenshots/playthrough-1-level-up.webp)
 
 ### Road to the Troll King
 
@@ -60,7 +60,7 @@ once cleared, the current wave lit with its number, the boss's mark on the tenth
 chest after it. Its title names the boss ("Road to the Troll King") and its note says what waits at
 the end ("Wave 10: boss, Relic chest").
 
-![The road on wave 9](docs/screenshots/upgrades.png)
+![The road on wave 9](docs/screenshots/upgrades.webp)
 
 The tenth wave closes with the boss, with stacked health bars at the top of the screen. Beating
 the boss opens the **relic chest**: the break after it shows the relic won, a lasting bonus kept
@@ -68,9 +68,9 @@ from run to run (a second copy of one stacks). Then the road starts again from w
 boss: the Troll King on wave 10, the Ogre Warlord on wave 20, the Frost Giant on wave 30, and round
 again, each with one more health bar than the last boss.
 
-![Shield bearers, a shaman healing and harpies on wave 8](docs/screenshots/new-foes.png)
-![The Troll King on wave 10](docs/screenshots/boss.png)
-![The relic chest after the boss](docs/screenshots/relic-chest.png)
+![Shield bearers, a shaman healing and harpies on wave 8](docs/screenshots/new-foes.webp)
+![The Troll King on wave 10](docs/screenshots/boss.webp)
+![The relic chest after the boss](docs/screenshots/relic-chest.webp)
 
 | Relic | Set | What it does |
 | --- | --- | --- |
@@ -91,7 +91,7 @@ skill book lists the relics of a full set in green with its bonus above them.
 | Warlord's set | Troll King's Crown, War Drum | 10% more chance of a double-damage hit |
 | Warden's set | Oakheart Charm, Streak Banner | The barricade mends 20% after each wave, not 10% |
 
-![A relic chest of two relics that completes the Hunter's set, and the road choice](docs/screenshots/road-choice.png)
+![A relic chest of two relics that completes the Hunter's set, and the road choice](docs/screenshots/road-choice.webp)
 
 ### Siege lifted and heats
 
@@ -108,9 +108,9 @@ shows the heat the run is on.
 | Heat 2 | Every boss has one more health bar |
 | Heat 3 | The barricade mends half as much after a wave and from Mend the Barricade |
 
-![The siege is lifted](docs/screenshots/siege-lifted.png)
-![A new run at Heat 1](docs/screenshots/heat-1.png)
-![The game-over panel with the heats](docs/screenshots/game-over-heats.png)
+![The siege is lifted](docs/screenshots/siege-lifted.webp)
+![A new run at Heat 1](docs/screenshots/heat-1.webp)
+![The game-over panel with the heats](docs/screenshots/game-over-heats.webp)
 
 ### Road choice
 
@@ -125,7 +125,7 @@ road has no twist, and a new run starts on it again.
 | Crowded Road | 40% more foes in every wave | Foes give 30% more experience |
 | Golden Road | Foes walk 15% faster | Foes drop twice the coins |
 
-![The wave track on a Golden Road](docs/screenshots/golden-road.png)
+![The wave track on a Golden Road](docs/screenshots/golden-road.webp)
 
 ### Arrow Rain
 
@@ -136,8 +136,8 @@ up over the field to a gold target ring on the road. Let go and a volley falls o
 later, hitting every foe in it for four times an arrow's damage (armour takes its share off). It
 then charges again from empty. A level-up or a fall drops it from the hand.
 
-![Dragging Arrow Rain onto the horde](docs/screenshots/arrow-rain-aim.png)
-![The volley landing](docs/screenshots/arrow-rain-volley.png)
+![Dragging Arrow Rain onto the horde](docs/screenshots/arrow-rain-aim.webp)
+![The volley landing](docs/screenshots/arrow-rain-volley.webp)
 
 ### Aim priority
 
@@ -148,7 +148,7 @@ The ranger always shot the foe nearest the barricade first. The toggle above the
 thickest crowd and the mage still throws at the nearest. The choice is remembered in the browser,
 apart from the hero.
 
-![Aiming at flyers first](docs/screenshots/aim-priority.png)
+![Aiming at flyers first](docs/screenshots/aim-priority.webp)
 
 ### Caltrops
 
@@ -159,8 +159,8 @@ in included) before they wear off, looking worn on their last wave: every foe wa
 armour. Up to three patches lie on the road at once; strewing a fourth lifts the oldest. Harpies
 fly over them.
 
-![Dragging the caltrops onto the road](docs/screenshots/caltrops-aim.png)
-![Foes walking over the caltrops](docs/screenshots/caltrops.png)
+![Dragging the caltrops onto the road](docs/screenshots/caltrops-aim.webp)
+![Foes walking over the caltrops](docs/screenshots/caltrops.webp)
 
 ### Hired guards
 
@@ -175,8 +175,8 @@ The battle waits while the panel is open; a tap beside it closes it.
 | Spearman | 20 coins | 30, then 40 | Stabs the foe at the barricade nearest his slot every 0.7s for 12, through shields (armour counts) |
 | Mage | 30 coins | 45, then 60 | Throws an arcane bolt every 1.8s at the foe nearest the barricade, bursting for 16 over a small area, through armour and shields |
 
-![A trained spearman and a mage on the barricade](docs/screenshots/guards.png)
-![The hire panel](docs/screenshots/hire-panel.png)
+![A trained spearman and a mage on the barricade](docs/screenshots/guards.webp)
+![The hire panel](docs/screenshots/hire-panel.webp)
 
 ### Fortifications
 
@@ -190,9 +190,9 @@ waits while the panel is open.
 | Oil pot | 15 coins | Armed on the barricade. The first foe to reach it next wave bursts the pot: every foe near it takes 15 and burns for 6s, Warded elites aside |
 | Lookout | 20 coins | A pennant on the barricade: Arrow Rain's ring is 40% wider for the next three waves (the one it was bought before included) |
 
-![The fortify panel](docs/screenshots/fortify-panel.png)
-![An oil pot and a lookout on the barricade](docs/screenshots/fortifications.png)
-![Foes hacking at the stake line after the barricade fell](docs/screenshots/stake-line.png)
+![The fortify panel](docs/screenshots/fortify-panel.webp)
+![An oil pot and a lookout on the barricade](docs/screenshots/fortifications.webp)
+![Foes hacking at the stake line after the barricade fell](docs/screenshots/stake-line.webp)
 
 ### Kill streak
 
@@ -202,7 +202,7 @@ to the next kill, and every kill in it gives 5% more experience per kill in the 
 at ten. The pop where the foe fell shows the streak too ("+5 XP x6"). The streak waits while a
 level-up is up, and ends when no kill comes in time.
 
-![A streak of seven](docs/screenshots/kill-streak.png)
+![A streak of seven](docs/screenshots/kill-streak.webp)
 
 ### Foes
 
@@ -218,10 +218,10 @@ level-up is up, and ends when no kill comes in time.
 | Ogre Warlord | wave 20 (50, 80...) | A boss with a horned helm and a great axe, harder hitting and better armoured. Once below half health it calls four goblins to its side |
 | Frost Giant | wave 30 (60, 90...) | The biggest boss, slow, with the most health. Every 9s it roars, and the ranger shoots at 60% of the pace for 4s ("Chilled bow") |
 
-![The Troll King's rock on its way to a guard](docs/screenshots/boss-troll-rock.png)
-![The spearman stunned by the rock](docs/screenshots/boss-guard-stunned.png)
-![The Ogre Warlord calling goblins](docs/screenshots/boss-ogre-call.png)
-![The Frost Giant's roar chills the bow](docs/screenshots/boss-giant-roar.png)
+![The Troll King's rock on its way to a guard](docs/screenshots/boss-troll-rock.webp)
+![The spearman stunned by the rock](docs/screenshots/boss-guard-stunned.webp)
+![The Ogre Warlord calling goblins](docs/screenshots/boss-ogre-call.webp)
+![The Frost Giant's roar chills the bow](docs/screenshots/boss-giant-roar.webp)
 
 #### Elite foes
 
@@ -235,7 +235,7 @@ and carries one of three traits, named over its health bar:
 | Enraged | Below half health it walks and hits 60% faster, and turns red |
 | Warded | Immune to burning and chill, with a violet rune ring on the road; Shatter's bonus never applies to it |
 
-![Elites on wave 14](docs/screenshots/elite-foes.png)
+![Elites on wave 14](docs/screenshots/elite-foes.webp)
 
 ### Upgrades
 
@@ -273,14 +273,14 @@ Rain and the caltrops at once). So every filler turns up on the way to the last 
 | Bounty Hunter | 3 | Every kill pays 1 more coin (2 on a Golden Road) |
 | Drill Sergeant | 3 | Hired guards attack 20% faster |
 
-![With one upgrade left, War Chest and Second Wind fill the other cards](docs/screenshots/fillers-one-left.png)
+![With one upgrade left, War Chest and Second Wind fill the other cards](docs/screenshots/fillers-one-left.webp)
 
 Once every skill is learned, each level-up offers the three base skills again: Swift Draw, Steel
 Tips and Stout Timber, with no cap on their ranks ("Rank 6, no cap"), so the hero keeps getting
 stronger for as long as the waves keep coming.
 
-![After every skill is learned: the base skills, with no cap](docs/screenshots/base-skills-no-cap.png)
-![Three of the newer skills on a level-up](docs/screenshots/new-skills-level-up.png)
+![After every skill is learned: the base skills, with no cap](docs/screenshots/base-skills-no-cap.webp)
+![Three of the newer skills on a level-up](docs/screenshots/new-skills-level-up.webp)
 
 The skill book (its button in the top bar shows how many skills are found, such as "Skill book
 8/28") has a page for every upgrade and filler, one theme a row: the bow, harder hits, fire, chill
@@ -291,19 +291,19 @@ bottom it lists the relics won, with the bonus of each full set; hovering over a
 it does and which set it belongs to. The book stays filled for a new hero. It opens during a
 level-up too, to check what the hero has before choosing.
 
-![The empty skill book of a new hero](docs/screenshots/skill-book-empty.png)
-![A skill book part filled in, sorted by theme, with a relic's tooltip](docs/screenshots/skill-book.png)
-![The barricade's tooltip in the top bar](docs/screenshots/barricade-tooltip.png)
-![The pop-up after the countdown took an upgrade](docs/screenshots/auto-pick-pop.png)
-![Auto-pick unticked: the level-up waits for a pick](docs/screenshots/auto-pick-off.png)
-![The skill book with all 28 skills](docs/screenshots/skill-book-new-skills.png)
+![The empty skill book of a new hero](docs/screenshots/skill-book-empty.webp)
+![A skill book part filled in, sorted by theme, with a relic's tooltip](docs/screenshots/skill-book.webp)
+![The barricade's tooltip in the top bar](docs/screenshots/barricade-tooltip.webp)
+![The pop-up after the countdown took an upgrade](docs/screenshots/auto-pick-pop.webp)
+![Auto-pick unticked: the level-up waits for a pick](docs/screenshots/auto-pick-off.webp)
+![The skill book with all 28 skills](docs/screenshots/skill-book-new-skills.webp)
 
 The switch at the right end of the experience bar plays the battle at double speed. It lights up
 gold at 2x and is remembered in the browser, separately from the hero.
 
-![The speed switch at 2x](docs/screenshots/speed-switch.png)
+![The speed switch at 2x](docs/screenshots/speed-switch.webp)
 
-![After a fall](docs/screenshots/game-over.png)
+![After a fall](docs/screenshots/game-over.webp)
 
 The difficulty, set on the hub page's Settings, changes one thing: foes have 25% less health on Easy and 30% more on Hard. The heats are separate from it.
 
@@ -330,8 +330,8 @@ on every PR that changes this folder or the workflow, and uploads the video and 
 npx playwright test --project palisade
 ```
 
-![Arrow Rain aimed in the playthrough](docs/screenshots/playthrough-2-arrow-rain-aim.png)
-![The volley clears the last foes of wave 1](docs/screenshots/playthrough-3-arrow-rain.png)
+![Arrow Rain aimed in the playthrough](docs/screenshots/playthrough-2-arrow-rain-aim.webp)
+![The volley clears the last foes of wave 1](docs/screenshots/playthrough-3-arrow-rain.webp)
 
 ## Code layout
 

@@ -103,49 +103,49 @@ under a new charter, keeping the guild stars that raise every price.
    sold, upgrades, the standing commission and its open offer, your guild stars and charter,
    reputation and whether you have won are saved in the browser.
 
-![While a Steel Sword is held, the knight who asked for one shows the tipped price and the ranger who asked for less shows Overkill](docs/screenshots/exact-fit-tip.png)
+![While a Steel Sword is held, the knight who asked for one shows the tipped price and the ranger who asked for less shows Overkill](docs/screenshots/exact-fit-tip.webp)
 
-![A third quick merge makes a Silver Saber: a hammer streak of three, with its burst, timer ring and bonus](docs/screenshots/hammer-streak.png)
+![A third quick merge makes a Silver Saber: a hammer streak of three, with its burst, timer ring and bonus](docs/screenshots/hammer-streak.webp)
 
-![A Golden Claymore dragged onto the glowing commission banner to deliver it](docs/screenshots/deliver-to-crown.png)
+![A Golden Claymore dragged onto the glowing commission banner to deliver it](docs/screenshots/deliver-to-crown.webp)
 
-![Delivered: the commission pays 500 coins and a guild star, and the Runeblade commission follows](docs/screenshots/delivered.png)
+![Delivered: the commission pays 500 coins and a guild star, and the Runeblade commission follows](docs/screenshots/delivered.webp)
 
-![A gem dragged onto a Steel Sword, with an adventurer at the counter who wants a gemmed one](docs/screenshots/gem-setting.png)
+![A gem dragged onto a Steel Sword, with an adventurer at the counter who wants a gemmed one](docs/screenshots/gem-setting.webp)
 
-![The gemmed Steel Sword held over that adventurer, who pays double plus the exact-fit tip](docs/screenshots/gem-order.png)
+![The gemmed Steel Sword held over that adventurer, who pays double plus the exact-fit tip](docs/screenshots/gem-order.webp)
 
-![The fifth row of anvils and the quench barrel, with a Silver Saber being dropped into it](docs/screenshots/bigger-smithy.png)
+![The fifth row of anvils and the quench barrel, with a Silver Saber being dropped into it](docs/screenshots/bigger-smithy.webp)
 
-![An adventurer walks off and the guild reputation falls to Shunned](docs/screenshots/reputation-walk-off.png)
+![An adventurer walks off and the guild reputation falls to Shunned](docs/screenshots/reputation-walk-off.webp)
 
-![Two Dragonslayers merging into the Anvilheart](docs/screenshots/anvilheart-merge.png)
+![Two Dragonslayers merging into the Anvilheart](docs/screenshots/anvilheart-merge.webp)
 
-![The Anvilheart, ready for the Crown Blade commission](docs/screenshots/anvilheart-made.png)
+![The Anvilheart, ready for the Crown Blade commission](docs/screenshots/anvilheart-made.webp)
 
-![The Crown Blade delivered: the smithy is won](docs/screenshots/crown-blade-won.png)
+![The Crown Blade delivered: the smithy is won](docs/screenshots/crown-blade-won.webp)
 
-![The row of discovered swords under the anvils](docs/screenshots/discovered-swords.png)
+![The row of discovered swords under the anvils](docs/screenshots/discovered-swords.webp)
 
-![The crown's two offers for the next commission: a Runeblade for 1200 coins, or a gemmed one for 3000](docs/screenshots/commission-offer.png)
+![The crown's two offers for the next commission: a Runeblade for 1200 coins, or a gemmed one for 3000](docs/screenshots/commission-offer.webp)
 
-![The grand commission chosen: a gemmed Runeblade held over the banner](docs/screenshots/grand-commission.png)
+![The grand commission chosen: a gemmed Runeblade held over the banner](docs/screenshots/grand-commission.webp)
 
-![Three dulled swords with their rust rings draining, next to a fresh one](docs/screenshots/rust.png)
+![Three dulled swords with their rust rings draining, next to a fresh one](docs/screenshots/rust.webp)
 
-![A Noble, a Haggler and a Veteran at the counter, each tag showing what they would pay for the held Knight's Blade](docs/screenshots/adventurer-traits.png)
+![A Noble, a Haggler and a Veteran at the counter, each tag showing what they would pay for the held Knight's Blade](docs/screenshots/adventurer-traits.webp)
 
-![A hero back from the quest with a battered Silver Saber and a trophy](docs/screenshots/returning-hero.png)
+![A hero back from the quest with a battered Silver Saber and a trophy](docs/screenshots/returning-hero.webp)
 
-![A Rusty Dagger dragged onto the battered Silver Saber to repair it](docs/screenshots/repair-battered.png)
+![A Rusty Dagger dragged onto the battered Silver Saber to repair it](docs/screenshots/repair-battered.webp)
 
-![The win window with "Found a new smithy"](docs/screenshots/found-new-smithy.png)
+![The win window with "Found a new smithy"](docs/screenshots/found-new-smithy.webp)
 
-![The new charter: an empty smithy, six stars, 30% on every price and a commission for two Golden Claymores](docs/screenshots/new-charter.png)
+![The new charter: an empty smithy, six stars, 30% on every price and a commission for two Golden Claymores](docs/screenshots/new-charter.webp)
 
-![In the new charter an Iron Shortsword asked for pays 13 coins instead of 10, and 19 as an exact fit](docs/screenshots/charter-prices.png)
+![In the new charter an Iron Shortsword asked for pays 13 coins instead of 10, and 19 as an exact fit](docs/screenshots/charter-prices.webp)
 
-![Dragging a dagger onto its twin](docs/screenshots/playthrough-1-dragging.png)
+![Dragging a dagger onto its twin](docs/screenshots/playthrough-1-dragging.webp)
 
 ### Swords
 
@@ -177,7 +177,7 @@ double its price, and every guild star adds 5%.
 | Fifth row | 1 (800 coins) | Four more anvils under the board; bought with the button over the covered row |
 | Quench barrel | 1 (300 coins) | A barrel beside the board that holds one sword or gem; bought by tapping it |
 
-![Auto Forge, unlocked once Bellows is maxed, forging on its own](docs/screenshots/auto-forge-on.png)
+![Auto Forge, unlocked once Bellows is maxed, forging on its own](docs/screenshots/auto-forge-on.webp)
 
 The difficulty, set on the hub page's Settings, changes one thing: adventurers wait 50% longer on Easy and 30% less on Hard.
 

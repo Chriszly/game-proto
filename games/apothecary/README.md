@@ -8,7 +8,7 @@ brew potions in the cauldron and sell them to customers at the storefront. It lo
 from a herbalist's almanac: watercolour washes on aged paper in deep, muted tones, wobbly ink outlines and hatched
 shadows, with the interface in dark ink on parchment cards and a serif type.
 
-![The whole map with both production lines built](docs/screenshots/rows-map.png)
+![The whole map with both production lines built](docs/screenshots/rows-map.webp)
 
 The apothecary is laid out in two rows either side of the shop. The first production line runs
 east along the left half: the wheat field, mandrake patch and shade garden stacked at the far
@@ -22,7 +22,7 @@ the right. The right half is grass until the expansion is bought, which opens it
 production line that mirrors the first. Pixies fly goods along each row into the shop. The map is
 bigger than the screen, so the camera follows the doctor.
 
-![A new game: one line and the shop](docs/screenshots/rows-new-game.png)
+![A new game: one line and the shop](docs/screenshots/rows-new-game.webp)
 
 ## How to play
 
@@ -66,11 +66,11 @@ bigger than the screen, so the camera follows the doctor.
    potion first. Each shelf has a price sign beside it, Cheap, Fair or Dear (see **Price signs**
    below).
 
-![The recipes](docs/screenshots/playthrough-0-recipes.png)
+![The recipes](docs/screenshots/playthrough-0-recipes.webp)
 
-![A Shadow Elixir in its fine window, with a Fine one already in hand](docs/screenshots/fine-window.png)
+![A Shadow Elixir in its fine window, with a Fine one already in hand](docs/screenshots/fine-window.webp)
 
-![The shop's shelves along its walls, with work and coins behind the counter](docs/screenshots/shop-shelves.png)
+![The shop's shelves along its walls, with work and coins behind the counter](docs/screenshots/shop-shelves.webp)
 
 **The study**, in the market beside the outfitter, teaches the recipes the apothecary doesn't know
 from the start, one at a time and always in this order: the Vigour Tonic (30 coins, sells for
@@ -80,7 +80,7 @@ and its caption names the next recipe. Customers only ask for potions the apothe
 and a cauldron only brews those. The Recipes panel lists every recipe, the ones still to learn
 faded with "Study" in place of their price.
 
-![The study, with the Vigour Tonic for sale](docs/screenshots/study.png)
+![The study, with the Vigour Tonic for sale](docs/screenshots/study.webp)
 
 **The shade garden** grows nightshade, for the Shadow Elixir, the Moonlight Salve and the Witch's
 Brew. It stands at the top of the market, on the left, and is planted on its
@@ -117,7 +117,7 @@ seed. The town card says which garden the blight struck. The guild's **Herbalist
 coins, after growth) makes every bed immune, so a garden left to the pixies is never quite
 hands-off until then.
 
-![Blight in the wheat field: the withered beds, and the town card's warning](docs/screenshots/blight.png)
+![Blight in the wheat field: the withered beds, and the town card's warning](docs/screenshots/blight.webp)
 
 **Replanting**: tap a garden's sign to switch all nine of its beds to the next plant its line
 grows: wheat, mandrake, and nightshade once the line's shade garden is planted (the shade garden
@@ -125,7 +125,7 @@ can be switched too). The sign shows the plant's name and icon. Every bed starts
 and the blight is cleared, so rebalancing the gardens for the day's contract costs a crop. The
 pixies pick from whatever each garden grows, flying it in from that garden.
 
-![The wheat field replanted with mandrakes, growing from seed](docs/screenshots/replant.png)
+![The wheat field replanted with mandrakes, growing from seed](docs/screenshots/replant.webp)
 
 **Price signs**: each shelf has a sign beside it, Fair at first. Tap it to go Dear, then Cheap,
 then Fair again. A Dear potion sells for 40% more, but a customer waiting for one loses patience
@@ -133,7 +133,7 @@ half again as fast (and so tips less). A Cheap one sells for 25% less, is asked 
 often and raises the reputation by 2 more for each one sold. The cut under each shelf counts the
 sign in: "+33%" or "-27%" against the price.
 
-![Price signs: Healing Draughts cheap, Sleeping Tonics dear](docs/screenshots/price-signs.png)
+![Price signs: Healing Draughts cheap, Sleeping Tonics dear](docs/screenshots/price-signs.webp)
 
 **The rival shop**: from the fourth day a rival apothecary opens a stall across the street, left
 of the street door, and undercuts one potion a day (the same one in every game, going round what
@@ -143,7 +143,7 @@ sell 5 or more and the day counts as outsold. The stall's lines say what is unde
 race stands ("Outsold 2/10 days, 3/5 today"). Outsell it for a month, ten days running, and it
 closes for good: the stall is boarded up and the street is yours.
 
-![The rival's stall across the street, undercutting Sleeping Tonics](docs/screenshots/rival-shop.png)
+![The rival's stall across the street, undercutting Sleeping Tonics](docs/screenshots/rival-shop.webp)
 
 **The plague**, the game's ending: from the fifth day a sickness spreads through the town in
 three stages, each on its own card under the town card. The first asks for 6 Healing Draughts,
@@ -155,16 +155,16 @@ in a cauldron brew the town's cure (9 seconds) before anything else, and it goes
 town the moment it is done, never out early and never for sale. That cures the town and wins the
 game: a panel says so, and "Keep trading" carries on with the shop as it is.
 
-![Plague, stage one: two of six Healing Draughts sold, three days left](docs/screenshots/plague-stage.png)
+![Plague, stage one: two of six Healing Draughts sold, three days left](docs/screenshots/plague-stage.webp)
 
-![The Panacea unlocked and brewing in the cauldron](docs/screenshots/panacea.png)
+![The Panacea unlocked and brewing in the cauldron](docs/screenshots/panacea.webp)
 
-![The town is cured](docs/screenshots/plague-cured.png)
+![The town is cured](docs/screenshots/plague-cured.webp)
 
-![Rain over the yard](docs/screenshots/weather-rain.png)
-![Heat waves on a drought day](docs/screenshots/weather-drought.png)
+![Rain over the yard](docs/screenshots/weather-rain.webp)
+![Heat waves on a drought day](docs/screenshots/weather-drought.webp)
 
-![Market day: a crowd at the counter, a regular with a gold star, and fine potions on the shelf](docs/screenshots/market-day.png)
+![Market day: a crowd at the counter, a regular with a gold star, and fine potions on the shelf](docs/screenshots/market-day.webp)
 
 **Tips**: on top of the price, a customer whose order is filled leaves a tip: a coin, plus two
 for each potion they asked for (3 for one potion, 5 for two). The tip shrinks while they wait at
@@ -178,7 +178,7 @@ bar on the left: one card per customer, in the order they came in, with the poti
 want and, once they wait at the counter, a bar of their patience. So the doctor can see what is
 needed while working out in the gardens.
 
-![Order bubbles: the coin rings show what is left of each tip](docs/screenshots/tip-rings.png)
+![Order bubbles: the coin rings show what is left of each tip](docs/screenshots/tip-rings.webp)
 
 **Daily contract**: the card at the top of the screen asks for a number of one potion by dusk,
 "Contract: 3 Sleeping Tonics by dusk" on the first day. Each potion of that kind sold at the
@@ -188,7 +188,7 @@ four minutes, and the little sun on the right of the card sinks towards the hori
 Days alternate Sleeping Tonics and Healing Draughts, each kept contract asks for one more potion
 than the last (up to 12), and the reward is a little under half of what the potions sell for.
 
-![The daily contract: four of six Sleeping Tonics sold, 40 coins when the last two go](docs/screenshots/contract.png)
+![The daily contract: four of six Sleeping Tonics sold, 40 coins when the last two go](docs/screenshots/contract.webp)
 
 **While you were away**: once anything runs without the doctor (a craftsman or pixies hired), the apothecary keeps going while the game is closed. On the next visit the time away, up
 to two hours, is played through the same rules with the doctor off his work spots, and a chip in
@@ -196,7 +196,7 @@ the top right says what it earned: "While you were away: +32 coins, 9 potions". 
 dismiss it. The coins land where they would have: in the till, or in the purse when a craftsman
 carries them or a contract pays.
 
-![The chip after time away, with pixies and craftsmen running](docs/screenshots/away-chip.png)
+![The chip after time away, with pixies and craftsmen running](docs/screenshots/away-chip.webp)
 
 **Pallets**: every station keeps each kind of goods coming in or going out on its own pallet. A
 pallet or shelf holds 10 of each kind at first; the guild's Storage upgrade raises that by 10 a
@@ -207,7 +207,7 @@ only once its goods can be had: nightshade's once a shade garden grows, a potion
 learned. The drop and pick-up markers stand above the pallets they fill and empty. A full pallet takes nothing more: the doctor keeps the item and the
 pixies wait until there is room.
 
-![Pallets at the refining tables and cauldrons](docs/screenshots/pallets-map.png)
+![Pallets at the refining tables and cauldrons](docs/screenshots/pallets-map.webp)
 
 **Craftsmen** work a station so the doctor doesn't have to stand on its work spot. Each station
 takes up to two, hired one at a time on the purple marker beside it (30, then 60 coins); they
@@ -219,9 +219,9 @@ pipe's brew can be taken out fine. At the counter
 the first craftsman serves customers, a potion every 1.5 seconds where the doctor hands them over
 at once, and the second makes that twice as fast and also brings the coins from the till.
 
-![Craftsmen at the stations](docs/screenshots/craftsmen-map.png)
+![Craftsmen at the stations](docs/screenshots/craftsmen-map.webp)
 
-![Two craftsmen at each station, each table and cauldron working two pipes](docs/screenshots/second-pipe.png)
+![Two craftsmen at each station, each table and cauldron working two pipes](docs/screenshots/second-pipe.webp)
 
 **Priority**: each refining table and cauldron has a small "First:" sign by its name. Tap it to
 choose what the station makes first whenever it can: wheat, mandrake or nightshade at a table, a
@@ -230,7 +230,7 @@ plants in the order they came, a table and a cauldron make what their out pallet
 sign doesn't walk the doctor. A station with nothing for its priority makes something else rather
 than wait.
 
-![Priority signs: wheat first at the table, Sleeping Tonic first at the cauldron](docs/screenshots/station-priority.png)
+![Priority signs: wheat first at the table, Sleeping Tonic first at the cauldron](docs/screenshots/station-priority.webp)
 
 **What's for sale** opens up as you buy things. At first only one purple marker shows, and each
 purchase puts the next one out, in this order: refining table level 2, pack 2, cauldron level 2, a
@@ -241,9 +241,9 @@ storage and prices upgrades up for sale. The cauldron's pixies follow the table'
 cauldron's pixies, customers follows prices and the extra slot follows customers. The second line's things are for sale once their
 station stands.
 
-![A new game: only the refining table's level 2 is for sale](docs/screenshots/unlock-start.png)
+![A new game: only the refining table's level 2 is for sale](docs/screenshots/unlock-start.webp)
 
-![After the garden's pixies, the shop branches out, with entry to the guild](docs/screenshots/unlock-branches.png)
+![After the garden's pixies, the shop branches out, with entry to the guild](docs/screenshots/unlock-branches.webp)
 
 Every station has an upgrade marker and goes up to level 5. Upgrades cost 20, 40, 80 and 160
 coins: the refining table and cauldron work faster, and customers at an upgraded counter pay
@@ -255,7 +255,7 @@ The **outfitter** in the market below the first line kits the doctor out, two le
 pack carries one more item per level (30, then 60 coins), boots walk a fifth faster per level and
 a longer sickle harvests from a quarter further away (25, then 50 coins each).
 
-![The outfitter](docs/screenshots/outfitter.png)
+![The outfitter](docs/screenshots/outfitter.webp)
 
 The **guild** in the market below the second line sells upgrades for the rest of the apothecary:
 growth makes every garden grow a quarter faster per level (20, then 40 coins), pixies fly half again
@@ -269,9 +269,9 @@ customers level, a fifth more customers want two potions (35% at first, then 55%
 wait a third less long, then half as long. One line with a craftsman per station can't serve
 everyone at the top level; it takes the second line, more craftsmen or station upgrades.
 
-![The guild, with the herbalist for sale](docs/screenshots/guild.png)
+![The guild, with the herbalist for sale](docs/screenshots/guild.webp)
 
-![Every purple marker's icon, one for each kind of thing it buys](docs/screenshots/upgrade-icons.png)
+![Every purple marker's icon, one for each kind of thing it buys](docs/screenshots/upgrade-icons.webp)
 
 **Pixies** take the walking out of the loop. Three teams can be hired on their own purple markers,
 a handful of coins at a time: gardens to refining table (60 coins), table to cauldron (100) and
@@ -285,7 +285,7 @@ unless the other line still moves those goods by hand. Each kind of goods keeps 
 the trail, so when one kind waits for room at the next station the others keep flying. With
 reduced motion the pixies glide without beating their wings.
 
-![Pixies flying crops from the gardens to the refining table](docs/screenshots/pixies.png)
+![Pixies flying crops from the gardens to the refining table](docs/screenshots/pixies.webp)
 
 **The expansion** opens the right half for a second production line. Its land is bought on a
 marker beside the shop's right wall (100 coins), which lays the yard and puts a build marker where each
@@ -295,7 +295,7 @@ pixies, for hire once the stations at both ends stand; its cauldron's pixies fly
 shop's right wall, as the first line's do through the left. The counter's drop marker stays
 until every cauldron has its pixies, and comes back whenever the doctor carries a potion.
 
-![Both lines with all their pixies](docs/screenshots/expansion-map.png)
+![Both lines with all their pixies](docs/screenshots/expansion-map.webp)
 
 You can carry four items at a time, more with a bigger pack; they stack up on the doctor's back. Progress is saved in the browser automatically.
 
@@ -303,7 +303,7 @@ You can carry four items at a time, more with a bigger pack; they stack up on th
 the hub page's Settings, and has "New game", which starts over. On Easy customers wait 50% longer
 before they leave, on Hard 30% less.
 
-![The settings panel](docs/screenshots/settings.png)
+![The settings panel](docs/screenshots/settings.webp)
 
 ## Running locally
 

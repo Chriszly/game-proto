@@ -165,7 +165,7 @@ Missing or rough:
 - The decree outline is drawn cell edge by cell edge (dashed, square corners), not as one rounded
   shape like the mockup.
 - `restart` does not clear running popups or the round banner tween.
-- The cover, `island-324.png`, `island-7409.png`, `windmill.png` and `game-over.png` are not
+- The cover, `island-324.webp`, `island-7409.webp`, `windmill.webp` and `game-over.webp` are not
   made by the test: they were taken with a scratch Playwright script against the dev server (the
   cover and game-over set `state` fields through `window.game` to the mockup's round-3 board, then
   placed a tile by tapping; the islands called `newGame(0, 0, island)` from
@@ -177,7 +177,7 @@ Missing or rough:
   scene.refresh()`), then real hovers, taps and keys. The cover, the island shots, `windmill`,
   `new-buildings`, the season, manor and islands-card shots predate the hand, the castle and the
   omen strip, so their panels look older.
-- `docs/screenshots/readable-panel*.png` and `favicon.png` are older shots no README links.
+- `docs/screenshots/readable-panel*.png` and `favicon.webp` are older shots no README links.
 
 ## Architecture
 
@@ -389,7 +389,7 @@ Data tables:
   re-derived: a scratch Playwright script that imports `state.ts` in the page and searches
   placements (beam search over the hand's kinds and every cell) finds one quickly.
 - It saves `0-start`, `1-preview`, `2-decree`, `3-links`, `4-gift` and `5-round-2` screenshots
-  (under `test-results/`); copy them into `docs/screenshots/` as `playthrough-*.png` when the look
+  (under `test-results/`); copy them into `docs/screenshots/` as `playthrough-*.webp` when the look
   changes.
 
 ## Making common changes

@@ -98,10 +98,10 @@ Missing or rough:
 - The endless sky has no blessings or shop past what tiers give; gusts are the only new pressure.
 - A tap is ignored while a stone falls; a tap during the blessing choice lands on the dim.
 - The clouds stop about 16000 pixels up (`createBackdrop`), roughly 190 tiers.
-- `docs/screenshots/game-over.png`, `gilded.png`, `crowned.png`, `wobbly-break.png`,
-  `shop-bought.png`, `curse-taken.png`, `stone-kinds.png`, `endless-gust.png`, `four-blessings.png`,
-  `material-pick.png`, `reserve.png`, `lean-meter.png`, `toppled.png`, `regrown.png`,
-  `storm-gust.png` and `cover.png` (a copy of `gilded.png`) are not produced by the test; refresh
+- `docs/screenshots/game-over.webp`, `gilded.webp`, `crowned.webp`, `wobbly-break.webp`,
+  `shop-bought.webp`, `curse-taken.webp`, `stone-kinds.webp`, `endless-gust.webp`, `four-blessings.webp`,
+  `material-pick.webp`, `reserve.webp`, `lean-meter.webp`, `toppled.webp`, `regrown.webp`,
+  `storm-gust.webp` and `cover.png` (a copy of `gilded.webp`) are not produced by the test; refresh
   them by hand (play several tiers in the dev build, or drive it with a Playwright script that taps
   like the test does) if the look changes.
 

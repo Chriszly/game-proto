@@ -85,9 +85,9 @@ sky.
 16. **The end** comes when a stone misses the temple. The most tiers built in one temple are saved
     in the browser.
 
-![Choosing a patron for the temple](docs/screenshots/playthrough-0-patrons.png)
+![Choosing a patron for the temple](docs/screenshots/playthrough-0-patrons.webp)
 
-![The first stone landed perfectly](docs/screenshots/playthrough-1-first-stone.png)
+![The first stone landed perfectly](docs/screenshots/playthrough-1-first-stone.webp)
 
 ### Patrons
 
@@ -98,7 +98,7 @@ sky.
 | The Patient Mason | Stones swing 10% slower. | Perfect drops earn no extra favor. |
 | The Storm Caller | Perfect drops get 3 more pixels of leeway. | Gusts blow from tier 6, not only past the crown. |
 
-![Four blessings on offer under the Many-Handed](docs/screenshots/four-blessings.png)
+![Four blessings on offer under the Many-Handed](docs/screenshots/four-blessings.webp)
 
 ### Materials
 
@@ -109,7 +109,7 @@ sky.
 | Sandstone | Double the perfect window; half the favor. |
 | Basalt | Heavy: swings 25% slower and cracks 6 more off each cut; the tier's trial pays double. |
 
-![Picking marble for tier 3](docs/screenshots/material-pick.png)
+![Picking marble for tier 3](docs/screenshots/material-pick.webp)
 
 ### Blessings
 
@@ -123,33 +123,33 @@ sky.
 
 Blessings can be taken more than once, and they add up.
 
-![Choosing a blessing after a balanced tier, with a curse and the favor shop](docs/screenshots/playthrough-2-blessing.png)
+![Choosing a blessing after a balanced tier, with a curse and the favor shop](docs/screenshots/playthrough-2-blessing.webp)
 
-![Taking a curse with the blessing](docs/screenshots/curse-taken.png)
+![Taking a curse with the blessing](docs/screenshots/curse-taken.webp)
 
-![The shop after a wobbly tier](docs/screenshots/wobbly-break.png)
+![The shop after a wobbly tier](docs/screenshots/wobbly-break.webp)
 
-![A slow drop bought](docs/screenshots/shop-bought.png)
+![A slow drop bought](docs/screenshots/shop-bought.webp)
 
-![A heavy stone held in reserve](docs/screenshots/reserve.png)
+![A heavy stone held in reserve](docs/screenshots/reserve.webp)
 
-![Heavy and light stones, and a tier trial](docs/screenshots/stone-kinds.png)
+![Heavy and light stones, and a tier trial](docs/screenshots/stone-kinds.webp)
 
-![The lean meter filling on a marble tier](docs/screenshots/lean-meter.png)
+![The lean meter filling on a marble tier](docs/screenshots/lean-meter.webp)
 
-![The tier topples](docs/screenshots/toppled.png)
+![The tier topples](docs/screenshots/toppled.webp)
 
-![A chain of perfect drops grows the stone back](docs/screenshots/regrown.png)
+![A chain of perfect drops grows the stone back](docs/screenshots/regrown.webp)
 
-![A gust on tier 6 under the Storm Caller](docs/screenshots/storm-gust.png)
+![A gust on tier 6 under the Storm Caller](docs/screenshots/storm-gust.webp)
 
-![A gust in the endless sky](docs/screenshots/endless-gust.png)
+![A gust in the endless sky](docs/screenshots/endless-gust.webp)
 
-![The gilded tenth tier going up](docs/screenshots/gilded.png)
+![The gilded tenth tier going up](docs/screenshots/gilded.webp)
 
-![The shrine crowned at tier 12](docs/screenshots/crowned.png)
+![The shrine crowned at tier 12](docs/screenshots/crowned.webp)
 
-![The temple has fallen](docs/screenshots/game-over.png)
+![The temple has fallen](docs/screenshots/game-over.webp)
 
 The difficulty, set on the hub page's Settings, changes one thing: stones swing 20% slower on Easy
 and 25% faster on Hard.

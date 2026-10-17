@@ -13,7 +13,7 @@ and every fifth wave ends with a boss that fights back and leaves a supply drop 
 reaches the sandbags in front of the soldier, it's game over. Your best wave is kept, so every run
 has a record to beat, and every kill banks scrap that buys a head start for the next run.
 
-![The comic style at wave 4, with its comic panels beside the road](docs/screenshots/style-comic.png)
+![The comic style at wave 4, with its comic panels beside the road](docs/screenshots/style-comic.webp)
 
 ## Two art styles
 
@@ -29,7 +29,7 @@ switch at the right of the top bar (or the **V** key). The game remembers your c
   colour of their chemlights. On a wide screen an overwatch console fills the sides: the feed's REC
   clock, a strip map with the horde on it, the squad roster, the supply drops and your stats.
 
-![The night-vision style at wave 4, with its overwatch console](docs/screenshots/style-night-vision.png)
+![The night-vision style at wave 4, with its overwatch console](docs/screenshots/style-night-vision.webp)
 
 With **Reduce motion** on in the hub's Settings, the feed's grain, scanlines and flicker hold still
 and the fuel drum's blast doesn't swell.
@@ -60,13 +60,13 @@ and the fuel drum's blast doesn't swell.
   | Crawler | 4 | Small and quick, in swarms of six that come in at once (one more swarm every third wave) |
   | Riot zombie | 6 | Holds a shield in front: bullets without pierce only chip it (a blue bar shows what is left). Pierce, a fuel drum or a flame goes past it, and enough chipping breaks it |
 
-  ![Spitters, a crawler swarm and riot zombies in both styles, the soldier standing in acid](docs/screenshots/new-zombies.png)
+  ![Spitters, a crawler swarm and riot zombies in both styles, the soldier standing in acid](docs/screenshots/new-zombies.webp)
 - **Wave progress**: the strip under the top bar fills as the wave's zombies fall (8/30 means 8 of
   its 30 are down). Its end says when the next boss comes, and warns "Boss next wave!" the wave
   before it. The chip in the top bar shows the best wave you have ever reached; beat it and it says
   "New best".
 
-  ![The progress strip in both styles, warning that the boss comes next wave](docs/screenshots/wave-progress.png)
+  ![The progress strip in both styles, warning that the boss comes next wave](docs/screenshots/wave-progress.webp)
 - **Crates** drift down slower than the horde and show how many hits they still take. Opening one
   gives its upgrade:
 
@@ -86,24 +86,24 @@ and the fuel drum's blast doesn't swell.
   becomes **ricochets** (a bullet that has spent its hits on a zombie jumps to the nearest other
   one for one more hit). Committing to one kind pays.
 
-  ![Fire rounds, headshots and ricochets in both styles](docs/screenshots/perks.png)
+  ![Fire rounds, headshots and ricochets in both styles](docs/screenshots/perks.webp)
 - **Survivors**: from wave 3, one walks down among the zombies each wave, waving at you. Your
   bullets hurt them like anything else in the way, so aiming becomes a choice. A survivor who
   reaches the sandbags joins the squad as a companion, or hands over 15 scrap once the squad is
   full.
 
-  ![A survivor among the horde in both styles](docs/screenshots/survivors.png)
+  ![A survivor among the horde in both styles](docs/screenshots/survivors.webp)
 - **Wave conditions**: from wave 6, each wave may come with a condition, named in the wave banner
   and on a chip under the progress strip. A **blackout** means zombies can only be seen when they
   are close to the soldier; a **blood moon** makes the runners half again as fast; an **ammo
   shortage** slows the squad's fire by 40% but rolls two more fuel drums down the road.
 
-  ![A blackout, a blood moon and an ammo shortage](docs/screenshots/conditions.png)
+  ![A blackout, a blood moon and an ammo shortage](docs/screenshots/conditions.webp)
 - **Sandbag walls**: tap the kit panel at the bottom left, then tap a lane on the road. A short wall
   goes up across that lane and holds its zombies back for 6 seconds (a boss smashes straight
   through). Tap the panel again, or anywhere off the road, to put the sandbags away.
 
-  ![Placing a sandbag wall: the lanes light up, then the wall holds the left lane](docs/screenshots/sandbags.png)
+  ![Placing a sandbag wall: the lanes light up, then the wall holds the left lane](docs/screenshots/sandbags.webp)
 - **Fuel drums** roll down the road in every wave (one more every fourth wave), slower than the
   horde, so the zombies behind them walk through them. A dashed ring round each drum shows its blast
   radius and how many zombies it would catch right now ("2 in the blast!"). A single hit blows it
@@ -111,14 +111,14 @@ and the fuel drum's blast doesn't swell.
   Wait for the crowd to bunch up round it, then step under it. A drum nobody shoots is lost behind
   the sandbags.
 
-  ![A fuel drum with two zombies in its blast ring](docs/screenshots/fuel-drum.png)
-  ![The same in night vision](docs/screenshots/fuel-drum-night-vision.png)
+  ![A fuel drum with two zombies in its blast ring](docs/screenshots/fuel-drum.webp)
+  ![The same in night vision](docs/screenshots/fuel-drum-night-vision.webp)
 - **Frenzy**: every kill that comes within 1.5 seconds of the last one adds to your streak (a burst
   pops up every third kill: x3, x6, x9...). The frenzy meter beside the squad fills with it. At a
   streak of 12 the frenzy starts: for 5 seconds the whole squad fires twice as fast. A pause in the
   killing breaks the streak.
 
-  ![A frenzy: the squad firing at double rate, a x12 streak burst over the horde](docs/screenshots/frenzy.png)
+  ![A frenzy: the squad firing at double rate, a x12 streak burst over the horde](docs/screenshots/frenzy.webp)
 - **Companions** line up beside and behind the soldier, up to three rows of three. Each row is
   shifted a little to the side, so every rifle has its own clear line of fire. Once the squad is
   full, companion crates give Damage +1 instead.
@@ -132,10 +132,10 @@ and the fuel drum's blast doesn't swell.
   (wave 15) spits a far bigger pool and leaves a huge acid pool on the squad's line when it falls.
   Then the Behemoth again at wave 20, and so on.
 
-  ![A boss winding up a charge, an acid spit and calling its pack](docs/screenshots/boss-moves.png)
-  ![The same moves on the night-vision feed](docs/screenshots/boss-moves-night-vision.png)
-  ![The Brood Mother with its brood, and the Bloater spitting and bursting](docs/screenshots/bosses.png)
-  ![The same two bosses on the night-vision feed](docs/screenshots/bosses-night-vision.png)
+  ![A boss winding up a charge, an acid spit and calling its pack](docs/screenshots/boss-moves.webp)
+  ![The same moves on the night-vision feed](docs/screenshots/boss-moves-night-vision.webp)
+  ![The Brood Mother with its brood, and the Bloater spitting and bursting](docs/screenshots/bosses.webp)
+  ![The same two bosses on the night-vision feed](docs/screenshots/bosses-night-vision.webp)
 - **Supply drop**: clearing a boss wave brings a supply drop. The game waits while you pick one of
   three: a **shotgun** (two more bullets fan out from the soldier's rifle every volley, up to three
   pairs), a **flamethrower** (two flame bursts that go off on their own when a zombie gets close to
@@ -143,22 +143,22 @@ and the fuel drum's blast doesn't swell.
   doesn't end the run: everything near the line is thrown back) or **two sandbag walls**. What you
   hold shows in the kit panel.
 
-  ![The supply drop in both styles](docs/screenshots/supply-drop.png)
-  ![The shotgun's spread, and a flame burst along the sandbags in both styles](docs/screenshots/shotgun-and-flamethrower.png)
+  ![The supply drop in both styles](docs/screenshots/supply-drop.webp)
+  ![The shotgun's spread, and a flame burst along the sandbags in both styles](docs/screenshots/shotgun-and-flamethrower.webp)
 - **Extraction**: from wave 20, every boss's supply drop also offers a wide fourth card: extract.
   Taking it ends the run as a win and banks this run's scrap twice over. Pass it up and the next
   boss's drop pays more (2.5x at wave 25, 3x at wave 30), if you live to see it.
 
-  ![The extraction card on wave 20's supply drop, and the run extracted](docs/screenshots/extraction.png)
+  ![The extraction card on wave 20's supply drop, and the run extracted](docs/screenshots/extraction.webp)
 - **Scrap**: every kill banks scrap (a grunt, runner or crawler 1, a spitter 2, a brute or riot
   zombie 3, a boss 25), saved when a wave is cleared and when the run ends. On the game over screen,
   spend it on starting crates for the next run: Fire rate (40), Damage +1 (60), Companion +1 (80)
   or Pierce +1 (100). Each can be bought once per run and is used up when the next run starts.
 
-  ![The game over screen with the scrap shop in both styles](docs/screenshots/scrap-shop.png)
+  ![The game over screen with the scrap shop in both styles](docs/screenshots/scrap-shop.webp)
 
-  ![A boss on wave 5 against a full squad of nine](docs/screenshots/boss.png)
-  ![The same boss through the night-vision feed](docs/screenshots/boss-night-vision.png)
+  ![A boss on wave 5 against a full squad of nine](docs/screenshots/boss.webp)
+  ![The same boss through the night-vision feed](docs/screenshots/boss-night-vision.webp)
 
 The difficulty, set on the hub page's Settings, changes one thing: zombies have 25% less health on Easy and 30% more on Hard.
 

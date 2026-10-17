@@ -13,7 +13,7 @@ the Academy and the Town Center, train villagers and armies, earn your way throu
 destroy the enemy Town Center to win, or raise a Monument in Age III and hold it for three minutes.
 Lose your own Town Center, or let the enemy's Monument stand, and the match is over.
 
-![A Tide Coven raid meets the Ember Legion east of its base: the horn toast, sparks and damage numbers, the deeds card at 2 of 3 and the minimap's pulsing rings](docs/screenshots/raid.png)
+![A Tide Coven raid meets the Ember Legion east of its base: the horn toast, sparks and damage numbers, the deeds card at 2 of 3 and the minimap's pulsing rings](docs/screenshots/raid.webp)
 
 ## Factions
 
@@ -26,13 +26,13 @@ Lose your own Town Center, or let the enemy's Monument stand, and the match is o
 Every faction has the same villagers and the same other buildings. The faction's own building is
 the last one on the first page of the build list.
 
-![The menu: each faction's card names its own building](docs/screenshots/menu-unique-buildings.png)
+![The menu: each faction's card names its own building](docs/screenshots/menu-unique-buildings.webp)
 
-![An Ember Legion Forge, with the Barracks selected: Militia cost 40 food and 24 wood instead of 50 and 30, and its new soldiers stand round the rally flag](docs/screenshots/forge-and-rally.png)
+![An Ember Legion Forge, with the Barracks selected: Militia cost 40 food and 24 wood instead of 50 and 30, and its new soldiers stand round the rally flag](docs/screenshots/forge-and-rally.webp)
 
-![A Tide Coven Dock on the shore landing a catch of 10 food](docs/screenshots/dock.png)
+![A Tide Coven Dock on the shore landing a catch of 10 food](docs/screenshots/dock.webp)
 
-![A Thorn Grove Grove with the trees it has planted round it](docs/screenshots/grove.png)
+![A Thorn Grove Grove with the trees it has planted round it](docs/screenshots/grove.webp)
 
 ## How to play
 
@@ -61,7 +61,7 @@ axe, reap with a sickle, mine with a pick, hammer at a building and carry their 
 walk (riders gallop), swing a sword or club, thrust a spear, draw and loose a bow, whirl a sling or
 charge with a lowered lance.
 
-![Villagers at work around the Town Center: chopping, reaping, mining, building and carrying their loads](docs/screenshots/villagers-at-work.png)
+![Villagers at work around the Town Center: chopping, reaping, mining, building and carrying their loads](docs/screenshots/villagers-at-work.webp)
 
 ## The three ages
 
@@ -78,7 +78,7 @@ charge with a lowered lance.
 
 The top bar's age track has a pip for each age; the next pip fills as its deeds are done.
 
-![Age II reached: the boon pick in the panel and the first deed ticked](docs/screenshots/playthrough-boon.png)
+![Age II reached: the boon pick in the panel and the first deed ticked](docs/screenshots/playthrough-boon.webp)
 
 ## Raids
 
@@ -96,7 +96,7 @@ of red running stitch where the raiders are until the last of them falls. The de
 how many have been routed. In a fight, every blow throws ochre sparks and a damage number, and
 arrows fly from the bows; every load a villager drops off pops a "+10" badge with its icon.
 
-![Watching the AI: a Tide Coven party of ten heads for the enemy's Lumber Camp at 10:00, as the log says](docs/screenshots/raid-goal.png)
+![Watching the AI: a Tide Coven party of ten heads for the enemy's Lumber Camp at 10:00, as the log says](docs/screenshots/raid-goal.webp)
 
 ## Rally flags and spacing
 
@@ -116,7 +116,7 @@ volleys, and a knot of ochre on its roof counts them. They gather nothing while 
 A shelter that falls spills its garrison out onto the ground. The AI rings its own bell when enemy
 soldiers come within 14 tiles of its Town Center, and releases it once they are gone.
 
-![The bell rung as Tide spearmen reach the base: four villagers inside the Town Center, the panel's Back to work button, and the tower shooting the raiders](docs/screenshots/town-bell.png)
+![The bell rung as Tide spearmen reach the base: four villagers inside the Town Center, the panel's Back to work button, and the tower shooting the raiders](docs/screenshots/town-bell.webp)
 
 ## Veteran ranks
 
@@ -125,7 +125,7 @@ Every soldier but the Ram earns ranks by its kills: **Seasoned** at 2, **Veteran
 over the unit's head; the panel shows the rank and the kill count. A veteran is worth pulling back
 from a losing fight. The enemy's soldiers rank up the same way.
 
-![A rank III Militia selected, with its three chevrons, beside a rank II Militia and a rank I Archer](docs/screenshots/veteran-ranks.png)
+![A rank III Militia selected, with its three chevrons, beside a rank II Militia and a rank I Archer](docs/screenshots/veteran-ranks.webp)
 
 ## The Market and trade carts
 
@@ -141,9 +141,9 @@ line the enemy can raid, and the AI's economy raids go for a Market too. The AI 
 its Watchtower and keeps three carts on the road, and sells a resource that piles up past 600 when
 its ore runs low or buys one that runs out when it has ore to spare.
 
-![The Market selected: buy and sell buttons with their current prices, and trade carts setting off](docs/screenshots/market.png)
+![The Market selected: buy and sell buttons with their current prices, and trade carts setting off](docs/screenshots/market.webp)
 
-![Three trade carts at a trading post in the middle of the map](docs/screenshots/trading-post.png)
+![Three trade carts at a trading post in the middle of the map](docs/screenshots/trading-post.webp)
 
 ## Siege rams
 
@@ -153,7 +153,7 @@ goes for on its own. It can't hurt a unit at all, and sent at one it only walks 
 need an escort and give attackers an answer to a walled base and to a standing Monument. The AI
 keeps two rams with its army from Age II.
 
-![Two rams and their militia escort breaking a Tide palisade, with the Ram's panel text](docs/screenshots/siege-rams.png)
+![Two rams and their militia escort breaking a Tide palisade, with the Ram's panel text](docs/screenshots/siege-rams.webp)
 
 ## Faction champions
 
@@ -169,9 +169,9 @@ In Age III the Town Center trains the faction's **champion** (200 food, 150 ore,
 A champion earns ranks like any soldier. The AI trains its own once it reaches Age III, so a late
 match has one to protect and one to hunt.
 
-![The Ember Warlord with its aura ring round the militia fighting beside it](docs/screenshots/champion-warlord.png)
+![The Ember Warlord with its aura ring round the militia fighting beside it](docs/screenshots/champion-warlord.webp)
 
-![The Thorn Druid, antlered, mending the brutes round it](docs/screenshots/champion-druid.png)
+![The Thorn Druid, antlered, mending the brutes round it](docs/screenshots/champion-druid.webp)
 
 ## Walls and gates
 
@@ -183,7 +183,7 @@ and towers never pick walls as targets on their own, but an army with no way rou
 nearest stake or gate. The AI lays a short palisade with a gate across the front of its base once it
 reaches Age II.
 
-![A palisade with a gate, a Watchtower behind it and a raid hacking at the gate, while a new line is dragged out](docs/screenshots/palisade-and-gate.png)
+![A palisade with a gate, a Watchtower behind it and a raid hacking at the gate, while a new line is dragged out](docs/screenshots/palisade-and-gate.webp)
 
 ## Neutral camps and relics
 
@@ -202,9 +202,9 @@ Right click a camp to send the selection to stand round it. The **relics card** 
 shows each relic with a green ring when you hold it and the enemy's colour when they do. The AI sends
 its army to take relics between raids.
 
-![Ember militia fight the Brigands and Poachers guarding the Relic of Valor](docs/screenshots/camp-fight.png)
+![Ember militia fight the Brigands and Poachers guarding the Relic of Valor](docs/screenshots/camp-fight.webp)
 
-![The Relic of Valor taken: the shrine flies the Ember banner and the relics card rings the sword in green](docs/screenshots/relic-held.png)
+![The Relic of Valor taken: the shrine flies the Ember banner and the relics card rings the sword in green](docs/screenshots/relic-held.webp)
 
 ## The Monument
 
@@ -214,9 +214,9 @@ still standing at the end, its owner wins. Everyone sees a Monument from the mom
 match says so when one is finished, and the AI throws everything it has at yours. The AI builds one
 too once it reaches Age III.
 
-![A finished Monument with 1:11 left on the card](docs/screenshots/monument.png)
+![A finished Monument with 1:11 left on the card](docs/screenshots/monument.webp)
 
-![Victory: the Monument stood for three minutes](docs/screenshots/monument-victory.png)
+![Victory: the Monument stood for three minutes](docs/screenshots/monument-victory.webp)
 
 ## Economy and population
 
@@ -246,7 +246,7 @@ arrow keys or the minimap and click a unit to see what it is doing. The panel in
 holds the match still, sets the speed from 1x to 8x (**[** and **]**) and opens a log of every build,
 unit, tech, attack and relic run (**L**). A click on the end screen starts another match.
 
-![Watching two AIs play, with the log open](docs/screenshots/watch-ai.png)
+![Watching two AIs play, with the log open](docs/screenshots/watch-ai.webp)
 
 ## Notes
 

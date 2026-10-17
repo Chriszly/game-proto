@@ -3,7 +3,7 @@
 A hub of small game prototypes built with [Phaser 4](https://phaser.io), TypeScript and Vite. The
 start page lists the games; each one lives in its own folder under `games/`.
 
-![The hub page](docs/screenshots/hub.png)
+![The hub page](docs/screenshots/hub.webp)
 
 | Game | What it is |
 | --- | --- |
@@ -31,7 +31,7 @@ start page lists the games; each one lives in its own folder under `games/`.
 The hub's **Settings** button opens the settings every game shares. They are saved in the browser
 (`shared/settings.ts`) and apply to a game the next time it opens.
 
-![The hub's settings](docs/screenshots/hub-settings.png)
+![The hub's settings](docs/screenshots/hub-settings.webp)
 
 - **Difficulty**: Easy, Normal or Hard. Normal is each game as designed; each game picks what it scales:
 

@@ -20,7 +20,7 @@ flagship, and sinking her wins the campaign. When your ship goes down, the Admir
 medals that buy a head start for the next run, which can sail a different ship.
 
 ![Holding the starboard guns: the arc is washed in ochre and the charge fills its rim and the ring
-round the held button, while a brig steers round the island on a dotted course](docs/screenshots/hold-to-aim.png)
+round the held button, while a brig steers round the island on a dotted course](docs/screenshots/hold-to-aim.webp)
 
 ## How to play
 
@@ -171,58 +171,58 @@ On a phone, one thumb can hold a wheel while the other holds a fire control.
    | Cutter | best wave 3 | 90 | 1 heavy gun (14 damage, 1.5 s reload, range 240) | 114, turns faster | 24 sailors |
    | Bomb Ketch | best wave 6 | 150 | 2 to port (10 damage, 2.2 s, range 250); a mortar to starboard | 70, turns slowly | 36 sailors; holding the starboard control aims a shell that lands where the arc reaches two seconds later, bursting for 26 (more when charged) |
 
-![The prize draft as the harbor opens: three perks, one to keep](docs/screenshots/prize-draft.png)
+![The prize draft as the harbor opens: three perks, one to keep](docs/screenshots/prize-draft.webp)
 
-![The Admiralty's bounty under the order card, and a crew short of hands](docs/screenshots/bounty.png)
+![The Admiralty's bounty under the order card, and a crew short of hands](docs/screenshots/bounty.webp)
 
-![A shore fort on Isla de las Palmas under fire](docs/screenshots/shore-fort.png)
+![A shore fort on Isla de las Palmas under fire](docs/screenshots/shore-fort.webp)
 
-![A brig alongside raking the deck with grapeshot: the crew drops from 40 to 34](docs/screenshots/crew-grape.png)
+![A brig alongside raking the deck with grapeshot: the crew drops from 40 to 34](docs/screenshots/crew-grape.webp)
 
-![The Bomb Ketch's mortar shell marked where it will land](docs/screenshots/bomb-ketch.png)
+![The Bomb Ketch's mortar shell marked where it will land](docs/screenshots/bomb-ketch.webp)
 
-![Choosing the ship for the next run on the "Sunk!" panel](docs/screenshots/choose-ship.png)
+![Choosing the ship for the next run on the "Sunk!" panel](docs/screenshots/choose-ship.webp)
 
-![Wave 20, the pirate haven](docs/screenshots/haven-banner.png)
+![Wave 20, the pirate haven](docs/screenshots/haven-banner.webp)
 
-![The admiral's flagship](docs/screenshots/haven.png)
+![The admiral's flagship](docs/screenshots/haven.webp)
 
-![The haven razed: the campaign won, with Sail on](docs/screenshots/haven-won.png)
+![The haven razed: the campaign won, with Sail on](docs/screenshots/haven-won.webp)
 
-![The harbor's ledger with the sailors to hire and a Bomb Ketch's mortar side](docs/screenshots/harbor-hire.png)
+![The harbor's ledger with the sailors to hire and a Bomb Ketch's mortar side](docs/screenshots/harbor-hire.webp)
 
-![The captain's order for the wave: grapeshot, fired in fans of small clusters](docs/screenshots/captains-order.png)
+![The captain's order for the wave: grapeshot, fired in fans of small clusters](docs/screenshots/captains-order.webp)
 
 ![Wind from the north-east on the wind rose, a fireship trailing smoke as it closes in, and a
-mortar ketch's shell about to land on the spot ringed in rust](docs/screenshots/fireship-and-mortar.png)
+mortar ketch's shell about to land on the spot ringed in rust](docs/screenshots/fireship-and-mortar.webp)
 
-![A fireship blowing up alongside](docs/screenshots/fireship-blast.png)
+![A fireship blowing up alongside](docs/screenshots/fireship-blast.webp)
 
-![Boarding a crippled brig: the dashed ochre ring fills while the ship stays alongside](docs/screenshots/boarding.png)
+![Boarding a crippled brig: the dashed ochre ring fills while the ship stays alongside](docs/screenshots/boarding.webp)
 
 ![The brig taken as a prize, sailing as an escort in a ring of green dots, with the button to
-scuttle her for double loot](docs/screenshots/prize-escort.png)
+scuttle her for double loot](docs/screenshots/prize-escort.webp)
 
-![A galleon hit by grapeshot, its reload slowed: the ring of dashes round it](docs/screenshots/grapeshot-jam.png)
+![A galleon hit by grapeshot, its reload slowed: the ring of dashes round it](docs/screenshots/grapeshot-jam.webp)
 
-![Wave 5: the enemy flagship](docs/screenshots/flagship.png)
+![Wave 5: the enemy flagship](docs/screenshots/flagship.webp)
 
-![The harbor with the port guns loaded with grapeshot and the starboard guns with chain shot](docs/screenshots/harbor-loadout.png)
+![The harbor with the port guns loaded with grapeshot and the starboard guns with chain shot](docs/screenshots/harbor-loadout.webp)
 
-![The Admiralty's medals at the end of a run, spent on a refitted hull for the next](docs/screenshots/admiralty.png)
+![The Admiralty's medals at the end of a run, spent on a refitted hull for the next](docs/screenshots/admiralty.webp)
 
-![A brig steering round Isla de las Palmas on its dotted course, instead of running aground](docs/screenshots/steer-round.png)
+![A brig steering round Isla de las Palmas on its dotted course, instead of running aground](docs/screenshots/steer-round.webp)
 
-![Charging the port broadside in the first wave](docs/screenshots/playthrough-0-aim.png)
+![Charging the port broadside in the first wave](docs/screenshots/playthrough-0-aim.webp)
 
-![Let go: chain shot flies at the sloop](docs/screenshots/playthrough-1-broadside.png)
+![Let go: chain shot flies at the sloop](docs/screenshots/playthrough-1-broadside.webp)
 
-![Hauling in the plunder](docs/screenshots/playthrough-2-loot.png)
+![Hauling in the plunder](docs/screenshots/playthrough-2-loot.webp)
 
 ![Just over the northern edge: Cay Morgan ahead lies at the far south of the sea, and the sloop
-astern came over the edge after the ship](docs/screenshots/wrap-around.png)
+astern came over the edge after the ship](docs/screenshots/wrap-around.webp)
 
-![Running aground on Gull Key: the hull flashes and the ship glances off](docs/screenshots/run-aground.png)
+![Running aground on Gull Key: the hull flashes and the ship glances off](docs/screenshots/run-aground.webp)
 
 ### Enemy ships
 
@@ -251,7 +251,7 @@ Every wave brings one more sloop than the last, and enemy hulls (and forts) get 
 Below them, "Patch the hull" repairs the ship for 10 gold and "Hire sailors" brings 8 aboard for
 12 gold, up to a full crew.
 
-![The harbor between waves](docs/screenshots/playthrough-4-harbor.png)
+![The harbor between waves](docs/screenshots/playthrough-4-harbor.webp)
 
 The difficulty, set on the hub page's Settings, changes one thing: enemy ships and forts have 25% less health on Easy and 30% more on Hard.
 

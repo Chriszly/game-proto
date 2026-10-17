@@ -11,7 +11,7 @@ winter the bees stay home and eat honey; casks age jars into mead, a farmer borr
 the orchard, a crowded hive swarms into a second one, and the county honey fair is the ending: gold
 there makes you the Beehive Baron.
 
-![A hive with every meadow open: clover, lavender and heather cells, two brood cells, the market board under the hive, a village order on the board and wax in the HUD](docs/screenshots/upgrades-overview.png)
+![A hive with every meadow open: clover, lavender and heather cells, two brood cells, the market board under the hive, a village order on the board and wax in the HUD](docs/screenshots/upgrades-overview.webp)
 
 ## How to play
 
@@ -30,7 +30,7 @@ there makes you the Beehive Baron.
    timer, village orders, contracts and a gathering swarm start afresh. **New hive**, in the bottom
    right corner, starts over.
 
-![Foragers flying to the flowers](docs/screenshots/playthrough-1-foraging.png)
+![Foragers flying to the flowers](docs/screenshots/playthrough-1-foraging.webp)
 
 ### Comb bonus: build cells touching
 
@@ -40,7 +40,7 @@ it. Building a cell next to others pops a green "+3 touching" tag over it, and t
 lights the edges it would share in green. A tight cluster pays far more than cells scattered over
 the comb: ten cells in a clump share 18 edges, which more than doubles a jar's price.
 
-![The comb bonus: a cell just built touching three others, and the preview on the next spot](docs/screenshots/comb-bonus.png)
+![The comb bonus: a cell just built touching three others, and the preview on the next spot](docs/screenshots/comb-bonus.webp)
 
 ### Goals unlock meadows
 
@@ -55,7 +55,7 @@ and every meadow's benefit lasts for good:
 | 30 jars sold | Sunflower Ridge | Every jar sells for 5 more coins |
 | 80 jars sold | Heather Moor | Full cells ripen twice as fast |
 
-![The tenth jar sold: the Lavender Field opens and the next goal is the Sunflower Ridge](docs/screenshots/goal-unlocked.png)
+![The tenth jar sold: the Lavender Field opens and the next goal is the Sunflower Ridge](docs/screenshots/goal-unlocked.webp)
 
 ### Honey kinds and the market
 
@@ -76,7 +76,7 @@ to the next open kind every minute, and the board counts down to it. Tap a kind 
 send the foragers there: the highlighted entry with the little bee is where they go, and the Send
 button says which nectar they fetch. Bees already out finish their trip.
 
-![Foragers sent to the Lavender Field, the market showing lavender picked](docs/screenshots/lavender-foraging.png)
+![Foragers sent to the Lavender Field, the market showing lavender picked](docs/screenshots/lavender-foraging.webp)
 
 ### Village orders
 
@@ -92,7 +92,7 @@ lands on a capped cell. An orange bar over the cell runs out in 5 seconds, and t
 gone. Tap the wasp to swat it away, or harvest the cell first. **Guard Bees** drive off every wasp
 as it lands.
 
-![A wasp on a capped heather cell, stealing its honey](docs/screenshots/wasp-raid.png)
+![A wasp on a capped heather cell, stealing its honey](docs/screenshots/wasp-raid.webp)
 
 ### Brood cells
 
@@ -102,7 +102,7 @@ hatches a new bee every 45 seconds while the hive has fewer than 12 bees (a gree
 next one growing). It counts for the comb bonus like any cell, so it competes with honey cells for
 the best spots.
 
-![Placing a brood cell: the preview says "Brood here" and the wax it uses](docs/screenshots/brood-preview.png)
+![Placing a brood cell: the preview says "Brood here" and the wax it uses](docs/screenshots/brood-preview.webp)
 
 ### Wax
 
@@ -118,7 +118,7 @@ comb gets nothing). When you come back a chip under the hive says how much they 
 bar against the cap: "While you were away: +12 nectar (cap 20)". It fades after a few seconds, or
 when tapped. Cells it fills start ripening as you return.
 
-![Back after twenty minutes: the bees filled the comb up to the 20-drop cap](docs/screenshots/away.png)
+![Back after twenty minutes: the bees filled the comb up to the 20-drop cap](docs/screenshots/away.webp)
 
 ### Seasons and winter
 
@@ -136,9 +136,9 @@ So selling everything before winter is a gamble: keep jars or capped cells back 
 or put honey in casks, which the bees never touch. Every spring the HUD counts another year
 survived.
 
-![Winter: the bees at home, the hills under snow, and the Send button shut](docs/screenshots/seasons-winter.png)
+![Winter: the bees at home, the hills under snow, and the Send button shut](docs/screenshots/seasons-winter.webp)
 
-![Autumn: the Lavender Field shut on the market](docs/screenshots/seasons-autumn.png)
+![Autumn: the Lavender Field shut on the market](docs/screenshots/seasons-autumn.webp)
 
 ### Mead casks
 
@@ -148,7 +148,7 @@ glows when it is ready). Mead sells with the jars on **Sell**, for a multiple of
 jars would have sold for the moment they went in: clover x1.5, lavender x1.6, heather x1.8. The
 cellar holds 3 casks. Cash now, or more later; and mead keeps through winter.
 
-![Three jars of heather aging into mead next to a cask that is ready](docs/screenshots/mead-casks.png)
+![Three jars of heather aging into mead next to a cask that is ready](docs/screenshots/mead-casks.webp)
 
 ### Orchard contracts
 
@@ -158,7 +158,7 @@ front at 25 coins a bee; they bring no nectar meanwhile and the HUD counts them 
 stands for 40 seconds, the farmer never asks for your last bee, and no contracts come in winter.
 Idle bees get a second job.
 
-![An orchard contract on the board](docs/screenshots/orchard-contract.png)
+![An orchard contract on the board](docs/screenshots/orchard-contract.webp)
 
 ### Swarming into a second hive
 
@@ -169,9 +169,9 @@ then the same rising prices), its own comb bonus (added to the plaque), and the 
 24 bees. Tabs on the roof switch between the two combs; nectar fills both, a wasp brings its comb
 to the front, and the brood and build previews work on the comb shown.
 
-![A swarm gathering under a full hive](docs/screenshots/swarm.png)
+![A swarm gathering under a full hive](docs/screenshots/swarm.webp)
 
-![The second hive's empty comb, with the roof tabs](docs/screenshots/second-hive.png)
+![The second hive's empty comb, with the roof tabs](docs/screenshots/second-hive.webp)
 
 ### The county honey fair
 
@@ -182,9 +182,9 @@ jar of each kind entered the honey is judged, and **14 points** in all win gold,
 the Beehive Baron, with an end card. Short of gold, enter better-joined honey. You can keep
 playing afterwards.
 
-![Entering honey: each capped cell shows the points it would score](docs/screenshots/fair-entering.png)
+![Entering honey: each capped cell shows the points it would score](docs/screenshots/fair-entering.webp)
 
-![Gold at the fair: the Beehive Baron end card](docs/screenshots/fair-baron.png)
+![Gold at the fair: the Beehive Baron end card](docs/screenshots/fair-baron.webp)
 
 ### What the coins buy
 

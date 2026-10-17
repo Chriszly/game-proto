@@ -131,39 +131,39 @@ and pressed lettering on clay tags. It is all painted in code at startup; there 
     droplets fly in an arc to the sap counter, which glows as they land. With reduced motion on (hub
     Settings) the splat and "+N" stay put and fade, without the flying droplets or the glow.
 
-![A seed just planted, growing](docs/screenshots/playthrough-1-sprout.png)
+![A seed just planted, growing](docs/screenshots/playthrough-1-sprout.webp)
 
-![Wave 1's beetles coming down the path](docs/screenshots/playthrough-2-wave.png)
+![Wave 1's beetles coming down the path](docs/screenshots/playthrough-2-wave.webp)
 
-![The Heartwood in full bloom, with Thorn golems planted and the Thorn golem's seed picked](docs/screenshots/heartwood-bloom.png)
+![The Heartwood in full bloom, with Thorn golems planted and the Thorn golem's seed picked](docs/screenshots/heartwood-bloom.webp)
 
-![Wave 2's last pests on the path, with the button offering to call wave 3 early and its preview](docs/screenshots/call-early.png)
+![Wave 2's last pests on the path, with the button offering to call wave 3 early and its preview](docs/screenshots/call-early.webp)
 
-![Squashed pests leave splats and "+5" pops while sap droplets fly to the counter](docs/screenshots/sap-pops.png)
+![Squashed pests leave splats and "+5" pops while sap droplets fly to the counter](docs/screenshots/sap-pops.webp)
 
-![A tapped pebble golem's menu, Raise, Move and Uproot, with combo vines to its moss neighbours](docs/screenshots/golem-menu.png)
+![A tapped pebble golem's menu, Raise, Move and Uproot, with combo vines to its moss neighbours](docs/screenshots/golem-menu.webp)
 
-![Moving a golem: the ghost and its reach on the soil it would move to](docs/screenshots/golem-move.png)
+![Moving a golem: the ghost and its reach on the soil it would move to](docs/screenshots/golem-move.webp)
 
-![A mole and its tunnel mound, armoured snails and an aphid swarm](docs/screenshots/new-pests.png)
+![A mole and its tunnel mound, armoured snails and an aphid swarm](docs/screenshots/new-pests.webp)
 
-![The Queen Slug on wave 10 and her slime trail](docs/screenshots/queen-slug.png)
+![The Queen Slug on wave 10 and her slime trail](docs/screenshots/queen-slug.webp)
 
-![Raising a pebble golem to level 3: Boulder or Sling](docs/screenshots/level-3-forms.png)
+![Raising a pebble golem to level 3: Boulder or Sling](docs/screenshots/level-3-forms.webp)
 
-![A Boulder golem's menu, aiming at the weakest pest](docs/screenshots/targeting.png)
+![A Boulder golem's menu, aiming at the weakest pest](docs/screenshots/targeting.webp)
 
-![Beetles chewing on a hedge planted on the path](docs/screenshots/hedge.png)
+![Beetles chewing on a hedge planted on the path](docs/screenshots/hedge.webp)
 
-![Wave 3 cleared with compost on the unspent sap](docs/screenshots/compost.png)
+![Wave 3 cleared with compost on the unspent sap](docs/screenshots/compost.webp)
 
-![The harvest at wave 30: two stars](docs/screenshots/harvest.png)
+![The harvest at wave 30: two stars](docs/screenshots/harvest.webp)
 
-![The garden picker, with each garden's stars](docs/screenshots/garden-picker.png)
+![The garden picker, with each garden's stars](docs/screenshots/garden-picker.webp)
 
-![Forked Brook at 2x speed](docs/screenshots/forked-brook.png)
+![Forked Brook at 2x speed](docs/screenshots/forked-brook.webp)
 
-![Two Gates](docs/screenshots/two-gates.png)
+![Two Gates](docs/screenshots/two-gates.webp)
 
 The difficulty, set on the hub page's Settings, changes one thing: pests have 25% less health on
 Easy and 30% more on Hard.

@@ -10,7 +10,7 @@ decide which way the wyrm goes. Keep it fed at the Roost, bring goods to the wor
 better ones, keep the villages in good cheer, wake a second wyrm late in the game, and after the
 eighth village finish with the festival. Every game is played in a new valley.
 
-![The valley at the start](docs/screenshots/playthrough-0-valley.png)
+![The valley at the start](docs/screenshots/playthrough-0-valley.webp)
 
 ## How to play
 
@@ -96,9 +96,9 @@ eighth village finish with the festival. Every game is played in a new valley.
 15. **The festival**: round 9 is the last. The festival is held at Kettlecross, under bunting, and
     every new order goes there. Ten deliveries win the game.
 
-![Laying track](docs/screenshots/playthrough-1-track.png)
+![Laying track](docs/screenshots/playthrough-1-track.webp)
 
-![The wyrm loading grain at Millbrook](docs/screenshots/playthrough-2-loading.png)
+![The wyrm loading grain at Millbrook](docs/screenshots/playthrough-2-loading.webp)
 
 ### Villages
 
@@ -125,31 +125,31 @@ An order pays 10 coins plus 3 per tile between the two villages (as the crow fli
 | Golden hoard | 3 | 40, 80, 140 | Every order pays 25% more |
 | Second wyrm | 1 | 150, from round 5 | A second, copper wyrm joins the line |
 
-![Round 4: the villages' moods, a sulking village's rush order and a forgotten one souring](docs/screenshots/moods.png)
+![Round 4: the villages' moods, a sulking village's rush order and a forgotten one souring](docs/screenshots/moods.webp)
 
-![A washout coming to the bridge, marked with an amber "!"](docs/screenshots/washout.png)
+![A washout coming to the bridge, marked with an amber "!"](docs/screenshots/washout.webp)
 
-![Plain track: a second line beside the first that joins it only at its end, and a crossing by Ashford](docs/screenshots/plain-track.png)
+![Plain track: a second line beside the first that joins it only at its end, and a crossing by Ashford](docs/screenshots/plain-track.webp)
 
-![Round 5 opens with two charters to choose from](docs/screenshots/charter.png)
+![Round 5 opens with two charters to choose from](docs/screenshots/charter.webp)
 
-![Passengers fill both wagons and pay triple](docs/screenshots/passengers.png)
+![Passengers fill both wagons and pay triple](docs/screenshots/passengers.webp)
 
-![Two valleys from two games](docs/screenshots/new-valley-1.png)
+![Two valleys from two games](docs/screenshots/new-valley-1.webp)
 
-![A switch sends the wyrm the long way round to Ashford](docs/screenshots/steering.png)
+![A switch sends the wyrm the long way round to Ashford](docs/screenshots/steering.webp)
 
-![Round 5: workshop signs, flour from the mill, and both wyrms on the line](docs/screenshots/workshops-two-wyrms.png)
+![Round 5: workshop signs, flour from the mill, and both wyrms on the line](docs/screenshots/workshops-two-wyrms.webp)
 
-![The festival at Kettlecross](docs/screenshots/festival.png)
+![The festival at Kettlecross](docs/screenshots/festival.webp)
 
-![The festival won](docs/screenshots/festival-won.png)
+![The festival won](docs/screenshots/festival-won.webp)
 
-![Round 2, with the line across the river to Fernhollow](docs/screenshots/round-2.png)
+![Round 2, with the line across the river to Fernhollow](docs/screenshots/round-2.webp)
 
-![Taking up track](docs/screenshots/remove-track.png)
+![Taking up track](docs/screenshots/remove-track.webp)
 
-![Game over](docs/screenshots/game-over.png)
+![Game over](docs/screenshots/game-over.webp)
 
 The difficulty, set on the hub page's Settings, changes one thing: orders allow 50% more time on
 Easy and 30% less on Hard.

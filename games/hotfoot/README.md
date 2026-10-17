@@ -26,7 +26,7 @@ keeps its own best distance.
 
 ![The knight leaping a flame on stage 3, a wayside shrine and a goblin ahead](cover.png)
 
-![The knight jumping on the first stage, with a hanging log ahead](docs/screenshots/playthrough-0-jump.png)
+![The knight jumping on the first stage, with a hanging log ahead](docs/screenshots/playthrough-0-jump.webp)
 
 ## How to play
 
@@ -42,7 +42,7 @@ keeps its own best distance.
 
 A hint on the first stretch of the run shows where to tap.
 
-![Where to tap](docs/screenshots/controls.png)
+![Where to tap](docs/screenshots/controls.webp)
 
 1. **Traps**: spikes and pits are jumped, blades are slid under. A fire vent only burns part of the
    time, flaring after a short sputter; jump it, or run over it while it is out.
@@ -142,57 +142,57 @@ A hint on the first stretch of the run shows where to tap.
    The best distance, the banked coins, any boon bought, the armoury, the day's best on the
    daily course and the crown are saved between runs.
 
-![A streak at x3: the chip, a "+3" pop and the trail of gold stars](docs/screenshots/streak.png)
+![A streak at x3: the chip, a "+3" pop and the trail of gold stars](docs/screenshots/streak.webp)
 
-![A wayside shrine ahead, under its scroll](docs/screenshots/shrine.png)
+![A wayside shrine ahead, under its scroll](docs/screenshots/shrine.webp)
 
-![Sliding into the shrine: 15 coins for a heart](docs/screenshots/shrine-heal.png)
+![Sliding into the shrine: 15 coins for a heart](docs/screenshots/shrine-heal.webp)
 
-![The run track at 392 m: the next banner 8 m on, the ghost flag of the best run at 412 m](docs/screenshots/track.png)
+![The run track at 392 m: the next banner 8 m on, the ghost flag of the best run at 412 m](docs/screenshots/track.webp)
 
-![Sliding under a blade, with a pit ahead](docs/screenshots/slide.png)
+![Sliding under a blade, with a pit ahead](docs/screenshots/slide.webp)
 
-![A goblin walking the road](docs/screenshots/goblin.png)
+![A goblin walking the road](docs/screenshots/goblin.webp)
 
-![Stomping a goblin](docs/screenshots/stomp.png)
+![Stomping a goblin](docs/screenshots/stomp.webp)
 
-![Jumping up onto a ledge](docs/screenshots/ledge.png)
+![Jumping up onto a ledge](docs/screenshots/ledge.webp)
 
-![A fire vent flaring](docs/screenshots/flames.png)
+![A fire vent flaring](docs/screenshots/flames.webp)
 
-![A bat flying in](docs/screenshots/bat.png)
+![A bat flying in](docs/screenshots/bat.webp)
 
-![Steps up to a tall ledge](docs/screenshots/steps.png)
+![Steps up to a tall ledge](docs/screenshots/steps.webp)
 
-![The checkpoint](docs/screenshots/checkpoint-flag.png)
+![The checkpoint](docs/screenshots/checkpoint-flag.webp)
 
-![Stage 2 opens on the Frozen Pass: snow, a pale icy road and its title](docs/screenshots/ice-stage.png)
+![Stage 2 opens on the Frozen Pass: snow, a pale icy road and its title](docs/screenshots/ice-stage.webp)
 
-![The Fen: reeds and puddles on a muddy road](docs/screenshots/fen-stage.png)
+![The Fen: reeds and puddles on a muddy road](docs/screenshots/fen-stage.webp)
 
-![The Windy Pass: gusts blowing in while the knight is in the air](docs/screenshots/wind-stage.png)
+![The Windy Pass: gusts blowing in while the knight is in the air](docs/screenshots/wind-stage.webp)
 
-![The Gatekeeper rolls a barrel at the knight](docs/screenshots/gatekeeper-throw.png)
+![The Gatekeeper rolls a barrel at the knight](docs/screenshots/gatekeeper-throw.webp)
 
-![The Gatekeeper tires, and the knight comes down on its helm](docs/screenshots/gatekeeper-stomp.png)
+![The Gatekeeper tires, and the knight comes down on its helm](docs/screenshots/gatekeeper-stomp.webp)
 
-![The Gatekeeper beaten](docs/screenshots/gatekeeper-beaten.png)
+![The Gatekeeper beaten](docs/screenshots/gatekeeper-beaten.webp)
 
-![A daily course under way](docs/screenshots/daily-course.png)
+![A daily course under way](docs/screenshots/daily-course.webp)
 
-![Choosing the road for stage 3](docs/screenshots/forked-roads.png)
+![Choosing the road for stage 3](docs/screenshots/forked-roads.webp)
 
-![Stage 3 on the High Road: its title names the road and the herald's dare, shown under the tag](docs/screenshots/high-road.png)
+![Stage 3 on the High Road: its title names the road and the herald's dare, shown under the tag](docs/screenshots/high-road.webp)
 
-![Stage 4 on the Low Road, with a pair just completed](docs/screenshots/low-road.png)
+![Stage 4 on the Low Road, with a pair just completed](docs/screenshots/low-road.webp)
 
-![The rockfall close behind on stage 7](docs/screenshots/rockfall.png)
+![The rockfall close behind on stage 7](docs/screenshots/rockfall.webp)
 
-![The dragon breathes fire along the road and lashes its tail](docs/screenshots/dragon-fire.png)
+![The dragon breathes fire along the road and lashes its tail](docs/screenshots/dragon-fire.webp)
 
-![The knight bounces off the dragon's head, and it flies ahead](docs/screenshots/dragon-stomp.png)
+![The knight bounces off the dragon's head, and it flies ahead](docs/screenshots/dragon-stomp.webp)
 
-![The dragon beaten: the crown on the knight's helm](docs/screenshots/crowned.png)
+![The dragon beaten: the crown on the knight's helm](docs/screenshots/crowned.webp)
 
 ### Boons and the coin shop
 
@@ -211,19 +211,19 @@ A hint on the first stretch of the run shows where to tap.
 | Glass Greaves (cursed) | 1 | Slides last 60% longer, but you stay unhurt half as long after a hit |
 | Iron Oath (cursed) | 1 | Shrug off two more hits after each checkpoint, but jump 15% lower |
 
-![Two boons at a checkpoint](docs/screenshots/playthrough-1-checkpoint.png)
+![Two boons at a checkpoint](docs/screenshots/playthrough-1-checkpoint.webp)
 
-![A cursed boon beside an ordinary one](docs/screenshots/cursed-boon.png)
+![A cursed boon beside an ordinary one](docs/screenshots/cursed-boon.webp)
 
-![Three cards after a met dare, with the pair hints](docs/screenshots/dare-met-three-cards.png)
+![Three cards after a met dare, with the pair hints](docs/screenshots/dare-met-three-cards.webp)
 
-![After a fall at the Dragon's Keep, crowned](docs/screenshots/game-over-crowned.png)
+![After a fall at the Dragon's Keep, crowned](docs/screenshots/game-over-crowned.webp)
 
-![A hit](docs/screenshots/hit.png)
+![A hit](docs/screenshots/hit.webp)
 
-![After a fall: the shop, the armoury and the daily course](docs/screenshots/game-over.png)
+![After a fall: the shop, the armoury and the daily course](docs/screenshots/game-over.webp)
 
-![The armoury](docs/screenshots/armoury.png)
+![The armoury](docs/screenshots/armoury.webp)
 
 **The coin shop.** Coins collected in a run are banked when the knight falls. On the game-over panel,
 the boon you missed at the last checkpoint (the card you did not tap) is for sale for 30 coins. Buy
