@@ -241,7 +241,8 @@ export interface Objective {
 /** Two upgrades on offer after the player's champion reached `level`. */
 export interface UpgradeOffer {
   level: number;
-  options: [string, string];
+  /** Two upgrade ids, or three where the class's mastery adds one. */
+  options: string[];
 }
 
 export interface GameState {
@@ -260,6 +261,8 @@ export interface GameState {
   player: number;
   /** Watch AI: the AI plays the player's champion as well, and no objectives run. */
   watch: boolean;
+  /** The player's mastery rank with its class: its first `mastery` upgrade offers get a third card. */
+  mastery: number;
   /** The objective in progress, or null between two. */
   objective: Objective | null;
   /** Index into `OBJECTIVES` of the next objective to start, and when it starts. */
@@ -448,6 +451,8 @@ export interface MatchOptions {
   rnd?: () => number;
   /** Watch AI (`?watch`): the AI plays the player's champion too, in the top lane like red's fifth. */
   watch?: boolean;
+  /** The player's mastery rank with the picked class (`masteryRank`), 0 when none. */
+  mastery?: number;
 }
 
 /**
@@ -468,6 +473,7 @@ export function createGame(pick: ChampionDef, enemyDamage: number, opts: MatchOp
     enemyDamage,
     player: 0,
     watch: !!opts.watch,
+    mastery: opts.watch ? 0 : (opts.mastery ?? 0),
     objective: null,
     objectiveIndex: 0,
     nextObjectiveAt: 0,

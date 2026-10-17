@@ -10,7 +10,7 @@ export const howToPlay: HowToPlay = {
     { input: 'D, H, V, or their buttons', action: 'Dash, drink the Healing Flask, or plant a Vision Ward' },
     { input: 'T, or Recall', action: 'Channel 4 seconds, then return to your Nexus' },
     { input: 'B, or Shop (Esc closes it)', action: 'Open the shop and buy items' },
-    { input: '1 or 2, or click a card', action: 'Keep one of the two upgrades a new level offers' },
+    { input: '1, 2 or 3, or click a card', action: 'Keep one of the upgrades a new level offers' },
   ],
   loop: [
     'Pick a champion card to start the match.',
@@ -25,6 +25,7 @@ export const howToPlay: HowToPlay = {
     'Towers shoot minions first, but hitting an enemy champion under a tower draws its fire.',
     'Jungle camps give gold and XP, and the brutes give a 60-second buff.',
     'Your R ability unlocks at level 3.',
+    'Wins with a champion raise its mastery, which adds a third upgrade card to its early levels.',
     'Tall grass hides you from enemies until you attack, and the fog hides what your team cannot see.',
     'Standing inside the ring round your own Nexus heals you quickly.',
   ],
