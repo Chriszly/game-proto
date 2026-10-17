@@ -69,7 +69,7 @@ import {
   WARD_SPOTS,
   bountyOf,
 } from './data';
-import { GameState, ObjectiveTitle, Unit, dist, getUnit, laneNear, levelFor, refreshStats, spawnWard, spawnWave } from './state';
+import { GameState, ObjectiveTitle, SoundId, Unit, dist, getUnit, laneNear, levelFor, refreshStats, spawnWard, spawnWave } from './state';
 import { shortName } from './names';
 import { aiLog } from '../../../../shared/watch';
 import { english, t as text, type TextKey } from '../i18n';
@@ -89,7 +89,10 @@ const MIN_CD = 0.55;
 export function tick(s: GameState, dt: number) {
   if (s.phase !== 'playing') return;
   s.time += dt;
-  if (s.time >= s.nextWave) spawnWave(s);
+  if (s.time >= s.nextWave) {
+    spawnWave(s);
+    sound(s, 'wave');
+  }
   updateVision(s);
   updateWatchstones(s, dt);
   updateContesters(s);
@@ -230,6 +233,7 @@ function updateObjective(s: GameState) {
       s.objectivesDone++;
       if (t) s.fx.push({ kind: 'ring', x: t.x, y: t.y, r: 80, color: '#f2c14e', ms: 700 });
     }
+    sound(s, done ? 'objective' : 'objectiveMissed');
     s.lastObjective = { title: o.title, done, gold: o.gold, at: s.time };
     s.objective = null;
     s.nextObjectiveAt = s.time + OBJECTIVE_GAP_MS;
@@ -371,6 +375,7 @@ export function useActive(s: GameState, u: Unit, id: ActiveId, aim: Vec): boolea
   if (id === 'dash') {
     const to = towards(u, aim, def.range ?? 0);
     s.fx.push({ kind: 'line', x: u.x, y: u.y, x2: to.x, y2: to.y, color: '#7fb6ff', ms: 250 });
+    sound(s, 'blink', u, u.player);
     if (dist(u, to) > 1) u.facing = Math.atan2(to.y - u.y, to.x - u.x);
     u.x = to.x;
     u.y = to.y;
@@ -378,6 +383,7 @@ export function useActive(s: GameState, u: Unit, id: ActiveId, aim: Vec): boolea
   } else {
     u.hp = Math.min(u.maxHp, u.hp + (def.heal ?? 0));
     s.fx.push({ kind: 'ring', x: u.x, y: u.y, r: 34, color: '#62d86f', ms: 500 });
+    sound(s, 'flask', u, u.player);
   }
   return true;
 }
@@ -392,6 +398,7 @@ export function plantWard(s: GameState, u: Unit, aim: Vec): boolean {
   if (dist(u, at) > 1) u.facing = Math.atan2(at.y - u.y, at.x - u.x);
   u.castMs = 300;
   s.fx.push({ kind: 'ring', x: at.x, y: at.y, r: 30, color: SIDE_COLOR[u.side], ms: 500 });
+  sound(s, 'ward', at, u.player);
   return true;
 }
 
@@ -416,6 +423,7 @@ function finishRecall(s: GameState, u: Unit) {
   u.moveTo = null;
   if (u.path) u.wp = 1;
   s.fx.push({ kind: 'ring', x: u.x, y: u.y, r: 40, color: '#9fd8ff', ms: 500 });
+  sound(s, 'recallHome', u, u.player);
   if (!u.player) aiLog(u.side, `${shortName(u.name)} recalls home`);
 }
 
@@ -433,7 +441,10 @@ export function buyBack(s: GameState, u: Unit): boolean {
   u.buybackReadyAt = s.time + BUYBACK.cd;
   revive(u);
   s.fx.push({ kind: 'ring', x: u.x, y: u.y, r: 50, color: '#f2c14e', ms: 600 });
-  if (u.player) notice(s, text('noticeBoughtBack', { gold: cost }), '#f2c14e');
+  if (u.player) {
+    notice(s, text('noticeBoughtBack', { gold: cost }), '#f2c14e');
+    sound(s, 'buyBack', undefined, true);
+  }
   else aiLog(u.side, `${shortName(u.name)} buys back for ${cost} gold`);
   return true;
 }
@@ -474,6 +485,8 @@ export function cast(s: GameState, caster: Unit, key: AbilityKey, aim: Vec): boo
   const dmg = abilityDamage(s, caster, ab.damage ?? 0);
   const look = lookOf(caster, key);
   const shot = (at: Vec, r: number) => s.fx.push({ kind: 'skill', look, x: at.x, y: at.y, x2: caster.x, y2: caster.y, r, a: caster.facing, color, ms: 600 });
+  // One sound per cast, by the ability's kind, however many bolts it throws.
+  sound(s, ab.kind, caster, caster.player);
 
   switch (ab.kind) {
     case 'burst': {
@@ -677,7 +690,11 @@ function updateUnit(s: GameState, u: Unit, dt: number) {
     if ((u.kind === 'champion' || u.kind === 'camp' || u.kind === 'beast') && s.time >= u.respawnAt) {
       if (u.kind === 'beast' && s.time >= ELDER.at && !s.beastElder) makeElder(s, u);
       revive(u);
-      if (u.kind === 'beast') notice(s, text(s.beastElder ? 'noticeElderAwake' : 'noticeBeastAwake'), '#f2c14e');
+      if (u.kind === 'beast') {
+        notice(s, text(s.beastElder ? 'noticeElderAwake' : 'noticeBeastAwake'), '#f2c14e');
+        sound(s, 'growl');
+      }
+      if (u.player) sound(s, 'respawn', undefined, true);
     } else if (u.kind === 'champion' && !u.player) {
       // A dead AI champion spends its wait at the shop, and buys back when its base is in danger.
       aiShop(u);
@@ -799,6 +816,7 @@ function kill(s: GameState, t: Unit, killerId: number) {
         const gold = Math.round(MINION.gold * (s.streak >= STREAK.at ? 1 + STREAK.bonus : 1));
         champKiller.gold += gold;
         s.fx.push({ kind: 'coin', x: t.x, y: t.y, gold, color: '#f2c14e', ms: 900 });
+        sound(s, 'lastHit', t, true);
       } else {
         if (champKiller) champKiller.gold += MINION.gold;
         // The minion the player could have finished fell to someone else: the streak breaks.
@@ -821,6 +839,7 @@ function kill(s: GameState, t: Unit, killerId: number) {
           const b = BUFFS[def.buff];
           addBuff(champKiller, def.buff, b.buff, b.ms, b.color);
           s.fx.push({ kind: 'ring', x: champKiller.x, y: champKiller.y, r: 60, color: b.color, ms: 700 });
+          sound(s, 'brute', champKiller, champKiller.player);
           if (champKiller.side === 'blue') notice(s, champKiller.player ? text('noticeYouTakeBuff', { buff: text(b.name) }) : text('noticeTakesBuff', { name: shortName(champKiller.name), buff: text(b.name) }), b.color);
         }
       }
@@ -847,6 +866,7 @@ function kill(s: GameState, t: Unit, killerId: number) {
         }
       }
       s.fx.push({ kind: 'ring', x: t.x, y: t.y, r: 90, color: '#c79bff', ms: 800 });
+      sound(s, 'beastSlain');
       break;
     case 'inhibitor': {
       if (champKiller) champKiller.gold += INHIBITOR.gold;
@@ -854,6 +874,7 @@ function kill(s: GameState, t: Unit, killerId: number) {
       aiLog(foe, `breaks the ${t.lane} inhibitor`);
       notice(s, text(t.side === 'red' ? 'noticeRedInhibitor' : 'noticeBlueInhibitor', { lane: t.lane ? text(LANE_NAME[t.lane]) : '' }), SIDE_COLOR[foe]);
       s.fx.push({ kind: 'ring', x: t.x, y: t.y, r: 70, color: SIDE_COLOR[t.side], ms: 700 });
+      sound(s, 'crash', t);
       break;
     }
     case 'ward': {
@@ -862,14 +883,17 @@ function kill(s: GameState, t: Unit, killerId: number) {
       aiLog(foe, 'destroys a ward');
       if (t.side === 'blue' && !s.watch) notice(s, text('noticeWardLost'), SIDE_COLOR.red);
       s.fx.push({ kind: 'ring', x: t.x, y: t.y, r: 24, color: SIDE_COLOR[t.side], ms: 400 });
+      sound(s, 'wardBreak', t);
       break;
     }
     case 'tower':
       if (champKiller) champKiller.gold += TOWER.gold;
       aiLog(t.side === 'blue' ? 'red' : 'blue', `takes a ${t.lane} tower`);
       s.fx.push({ kind: 'ring', x: t.x, y: t.y, r: 60, color: SIDE_COLOR[t.side], ms: 600 });
+      sound(s, 'crash', t);
       break;
     case 'nexus':
+      sound(s, 'nexus');
       s.phase = t.side === 'blue' ? 'lost' : 'won';
       s.winner = t.side === 'blue' ? 'red' : 'blue';
       break;
@@ -895,6 +919,7 @@ function kill(s: GameState, t: Unit, killerId: number) {
         notice(s, bounty ? text('noticeBountyClaimed', { line: slain, gold: bounty }) : slain, SIDE_COLOR[side]);
         // Three kills in a row put a price on the killer's head, and every kill after raises it.
         const price = bountyOf(champKiller.killStreak);
+        if (price || bounty) sound(s, 'streak', undefined, champKiller.player);
         if (price) {
           aiLog(side, `${shortName(champKiller.name)} is on a ${champKiller.killStreak} kill streak: a ${price} gold bounty`);
           notice(s, champKiller.player ? text('noticeYourStreak', { n: champKiller.killStreak, gold: price }) : text('noticeStreak', { name: shortName(champKiller.name), n: champKiller.killStreak, gold: price }), '#f2c14e');
@@ -902,6 +927,8 @@ function kill(s: GameState, t: Unit, killerId: number) {
       }
       t.respawnAt = s.time + RESPAWN_BASE_MS + t.level * RESPAWN_PER_LEVEL_MS;
       s.fx.push({ kind: 'ring', x: t.x, y: t.y, r: 50, color: SIDE_COLOR[t.side], ms: 500 });
+      if (t.player) sound(s, 'youDie', undefined, true);
+      else sound(s, 'slain', t, champKiller?.player);
       break;
     }
   }
@@ -935,12 +962,19 @@ function gainXp(s: GameState, c: Unit, amount: number) {
     c.level = level;
     refreshStats(c);
     s.fx.push({ kind: 'ring', x: c.x, y: c.y, r: 40, color: '#ffffff', ms: 500 });
+    if (c.player) sound(s, 'levelUp', undefined, true);
   }
 }
 
 /** How much an AI champion likes an upgrade: stuns and damage first, then the rest. */
 function aiRate(u: UpgradeDef): number {
   return (u.damage ?? 0) + (u.heal ?? 0) + (u.shield ?? 0) + (u.stun ? 45 : 0) + (u.slow ? 25 : 0) + (u.count ? 35 : 0) + (u.radius ?? 0) * 0.8 + (u.range ?? 0) * 0.5 + (u.ms ?? 0) * 0.6 - (u.cd ?? 0);
+}
+
+/** Raises a sound for the view. Capped, so a match run with no view to drain it never grows it. */
+function sound(s: GameState, id: SoundId, at?: Vec, mine = false) {
+  if (s.sounds.length >= 64) return;
+  s.sounds.push(at ? { id, x: at.x, y: at.y, mine } : { id, mine });
 }
 
 function notice(s: GameState, text: string, color: string) {
@@ -1269,6 +1303,7 @@ function updateWatchstones(s: GameState, dt: number) {
       w.capture = null;
       s.fx.push({ kind: 'ring', x: w.x, y: w.y, r: 90, color: SIDE_COLOR[team], ms: 700 });
       notice(s, text(team === 'blue' ? 'noticeWatchstoneBlue' : 'noticeWatchstoneRed'), SIDE_COLOR[team]);
+      sound(s, 'watchstone');
       aiLog(team, 'takes a watchstone');
     }
   }
@@ -1346,6 +1381,7 @@ function beastAct(s: GameState, u: Unit, dt: number) {
     makeElder(s, u);
     u.hp = u.maxHp;
     notice(s, text('noticeElderGrows'), '#f2c14e');
+    sound(s, 'growl');
   }
   const who = getUnit(s, u.lastHitBy);
   if (!who || who.dead || dist(who, u) > BEAST.leash) {
@@ -1451,16 +1487,19 @@ function attack(s: GameState, u: Unit, t: Unit) {
   u.swing = 180;
   u.facing = Math.atan2(t.y - u.y, t.x - u.x);
   let amount = u.dmg;
+  let crit = false;
   const p = u.champ?.passive;
   if (u.kind === 'champion' && p) {
     amount *= 1 + buffSum(u, 'dmg') / 100;
     u.attackCount++;
     if (p.critEvery && u.attackCount % p.critEvery === 0) {
       amount *= p.critMult ?? 1.5;
+      crit = true;
       s.fx.push({ kind: 'ring', x: t.x, y: t.y, r: 22, color: u.champ!.color, ms: 220 });
     }
     if (p.ambush && (u.lullMs >= LULL_MS || stealthed(u))) {
       amount *= p.ambush;
+      crit = true;
       s.fx.push({ kind: 'ring', x: t.x, y: t.y, r: 28, color: u.champ!.color, ms: 300 });
     }
     if (p.hasteMs) u.hasteMs = p.hasteMs;
@@ -1475,6 +1514,10 @@ function attack(s: GameState, u: Unit, t: Unit) {
     s.fx.push({ kind: 'arc', x: u.x, y: u.y, r: u.radius + 14, a: u.facing, color: '#ffffff', ms: 180 });
     s.fx.push({ kind: 'ring', x: t.x, y: t.y, r: 12, color: '#ffffff', ms: 120 });
   }
+  // Minions and camps fight too often to be heard; champions, towers and the beast are.
+  if (u.kind === 'champion') sound(s, crit ? 'crit' : u.range > 80 ? 'shot' : 'swing', u, u.player);
+  else if (u.kind === 'tower') sound(s, 'towerShot', u);
+  else if (u.kind === 'beast') sound(s, 'beastClaw', u);
   // Minions of the team that slew the beast hit harder while its buff lasts.
   const empowered = u.kind === 'minion' && u.side !== 'neutral' && s.beastBuff[u.side] > s.time;
   const hit = dealt(s, u, amount) * (empowered ? BEAST_BUFF.dmg : 1);
@@ -1551,7 +1594,10 @@ function updateProjectiles(s: GameState, dt: number) {
       if (Math.hypot(e.x - p.x, e.y - p.y) > p.width + e.radius) continue;
       p.hit.push(e.id);
       const owner = getUnit(s, p.owner);
-      if (p.look) s.fx.push({ kind: 'skill', look: `${p.look}>hit`, x: e.x, y: e.y, x2: p.x, y2: p.y, r: 0, a: Math.atan2(p.vy, p.vx), color: p.color, ms: 400 });
+      if (p.look) {
+        s.fx.push({ kind: 'skill', look: `${p.look}>hit`, x: e.x, y: e.y, x2: p.x, y2: p.y, r: 0, a: Math.atan2(p.vy, p.vx), color: p.color, ms: 400 });
+        sound(s, 'impact', e, owner?.player);
+      }
       if (owner && owner.kind === 'champion') abilityHit(s, owner, e, p.damage, p);
       else damage(s, e, p.damage, p.owner);
       // A harpoon drags what it caught to the thrower.

@@ -463,6 +463,10 @@ Notes:
 ### Lane Brawl
 Single-player five-against-five lane battler; bright and competitive.
 
+**Done:** built as planned (`src/audio.ts`; the list of sounds is in the game's `AGENTS.md`). The
+sim raises `SoundEvent`s in `s.sounds` for the scene to play, as fx already go; minion and camp
+attacks stay silent, and the pick theme also plays under the end panel.
+
 **Music:** Heroic march at about 128 BPM in D Dorian.
 - Champion pick: a calm theme.
 - Laning: the main loop.
