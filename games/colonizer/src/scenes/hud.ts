@@ -329,7 +329,7 @@ export class Minimap {
   /** Each side's colour, by its index. */
   private colours: [number, number, number][];
 
-  update(s: GameState, dt: number, view: Phaser.Geom.Rectangle) {
+  update(s: GameState, dt: number, view: Phaser.Geom.Rectangle, alerts: { x: number; y: number }[]) {
     this.clock += dt;
     if (this.clock >= 300) {
       this.clock = 0;
@@ -355,20 +355,25 @@ export class Minimap {
       stitchEllipse(g, hx, hy, 8, 8, 1, hexNum(T.indigo));
       this.hints[town.owner].setPosition(hx, hy + 0.5).setVisible(true);
     }
-    // A raid pulses rings of running stitch where it is.
+    // A raid pulses rings of running stitch where it is, and each attack alert smaller ones.
     const r = s.raid;
-    if (r && r.target === PLAYER) {
-      const px = MINI.x + r.x * k;
-      const py = MINI.y + r.y * k;
-      for (let i = 0; i < 3; i++) {
-        const rad = settings.reduceMotion ? 4 + i * 4 : 3 + ((s.time / 60 + i * 6) % 18);
-        const a = settings.reduceMotion ? 1 : 1 - (rad - 3) / 18;
-        g.lineStyle(1.3, hexNum(T.red), a);
-        const n = 14;
-        for (let j = 0; j < n; j += 2) g.lineBetween(px + Math.cos((j / n) * 6.283) * rad, py + Math.sin((j / n) * 6.283) * rad, px + Math.cos(((j + 1.3) / n) * 6.283) * rad, py + Math.sin(((j + 1.3) / n) * 6.283) * rad);
-      }
-      g.fillStyle(hexNum(T.red), 1).fillCircle(px, py, 1.6);
+    if (r && r.target === PLAYER) this.ping(g, s, r.x * k, r.y * k, 3, 18);
+    for (const a of alerts) this.ping(g, s, a.x * k, a.y * k, 2, 10);
+  }
+
+  /** Rings of red running stitch spreading from a point on the minimap. */
+  private ping(g: Phaser.GameObjects.Graphics, s: GameState, x: number, y: number, rings: number, spread: number) {
+    const px = MINI.x + x;
+    const py = MINI.y + y;
+    const step = spread / rings;
+    for (let i = 0; i < rings; i++) {
+      const rad = settings.reduceMotion ? 4 + i * 4 : 3 + ((s.time / 60 + i * step) % spread);
+      const a = settings.reduceMotion ? 1 : 1 - (rad - 3) / spread;
+      g.lineStyle(1.3, hexNum(T.red), a);
+      const n = 14;
+      for (let j = 0; j < n; j += 2) g.lineBetween(px + Math.cos((j / n) * 6.283) * rad, py + Math.sin((j / n) * 6.283) * rad, px + Math.cos(((j + 1.3) / n) * 6.283) * rad, py + Math.sin(((j + 1.3) / n) * 6.283) * rad);
     }
+    g.fillStyle(hexNum(T.red), 1).fillCircle(px, py, 1.6);
   }
 
   private paint(s: GameState) {

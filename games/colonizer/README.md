@@ -79,7 +79,9 @@ the last one on the first page of the build list.
 | --- | --- |
 | Left click | Select one unit or building; hold and drag to box-select units; Shift adds to the selection |
 | Right click | Attack an enemy, gather from a tree, bush or mine, finish a building, walk, or go to a camp |
-| Right click, with a production building selected | Plant its rally flag: new units walk there (on a tree, bush, mine or farm, new villagers gather it) |
+| Right click, with production buildings selected | Plant their rally flag: new units walk there (on a tree, bush, mine, farm or camp, new villagers gather there); right click one of them to take it down |
+| **Rally flag**, with a production building selected | Then click the map to plant the flag, the same as a right click (and on a touch screen) |
+| Space, or click a red marker at the edge | Look at where you are under attack (or at the raid) |
 | Tap, on a touch screen | With units selected, a tap gives the right click's order (tap another of your units or buildings to select it instead); with a production building selected, a tap on the ground plants its rally flag |
 | A, then left click | Attack-move: the army walks and fights whatever it meets on the way |
 | S | Stop the selected units |
@@ -87,7 +89,7 @@ the last one on the first page of the build list.
 | 1 to 9 | Select a control group; Ctrl with a number saves the selection to it |
 | Arrow keys, or the screen edge | Scroll the map |
 | Click the minimap | Look at that part of the map |
-| Click the horn toast | Look at the raid it names |
+| Click the horn toast | Look at the raid or the attack it names |
 | Click a camp | Say what it holds and who has it |
 | Right click a trading post, with trade carts selected | Send the carts trading |
 | **Ring the bell**, with the Town Center selected | Villagers near the Town Center or a Watchtower shelter inside; **Back to work** sends them out again |
@@ -144,14 +146,32 @@ of red running stitch where the raiders are until the last of them falls. The de
 how many have been routed. In a fight, every blow throws ochre sparks and a damage number, and
 arrows fly from the bows; every load a villager drops off pops a "+10" badge with its icon.
 
+## Attack alerts
+
+Any blow a rival lands on your villagers, soldiers or buildings raises an alert, raid or not. Red
+rings of running stitch spread on the ground where the fight is and on the minimap, and stay until
+eight seconds after its last blow; hits within twelve tiles of a fight belong to it, so one skirmish
+is one alert. When the fight is out of sight, the toast under the top bar says what is hit
+(*Villagers under attack*, *Lumber Camp under attack*) with an arrow towards it, and a red arrow at
+the edge of the view points the way. Click the toast or the arrow, or press Space, to look there.
+The camp guards fighting back raise none.
+
+![Villagers hit out of sight: the toast and the red arrow at the left edge of the view point the way](docs/screenshots/attack-alert.webp)
+
+![After Space: the camera on the fight, with red rings round it on the ground and on the minimap](docs/screenshots/attack-rings.webp)
+
 ![Watching the AI: a Tide Coven party of ten heads for the enemy's Lumber Camp at 10:00, as the log says](docs/screenshots/raid-goal.webp)
 
 ## Rally flags and spacing
 
-Select a Town Center, Barracks, Archery Range or Stable and right click the map to plant its rally
-flag: an ochre pennant with a running thread back to the building, shown while it is selected. New
-soldiers walk to the flag and stand round it; a villager whose flag is on a tree, bush, mine or farm
-goes straight to work there. Units no longer stack on one spot: they push gently apart until each
+Select a Town Center, Barracks, Archery Range or Stable and right click the map (or press **Rally
+flag** and click) to plant its rally flag: an ochre pennant with a running thread back to the
+building, shown while it is selected. Shift-click several buildings to give them all the same flag;
+right click one of them to take it down. New soldiers walk to the flag and stand round it; a
+villager whose flag is on a tree, bush, mine or farm goes straight to work there, and one whose flag
+is on a Lumber or Mining Camp (or a Grove) works the nearest wood or ore to it.
+
+![Two Barracks and a Stable given one rally flag with a single right click: a thread runs from each building to the pennant](docs/screenshots/rally-many.webp) Units no longer stack on one spot: they push gently apart until each
 has room, so a group spreads out where it stops (villagers at work hold their place).
 
 ## The town bell and the garrison

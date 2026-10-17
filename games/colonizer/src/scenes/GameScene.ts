@@ -24,6 +24,7 @@ import {
   UNIQUE,
   UNIQUE_EFFECT,
   UNITS,
+  isCivil,
   isSoldier,
   unitFor,
   type BoonId,
@@ -65,6 +66,7 @@ import {
   ringBell,
   say,
   setRally,
+  clearRally,
   tick,
   trade,
   train,
@@ -75,6 +77,7 @@ import {
   type Building,
   type Camp,
   type GameState,
+  type SimEvent,
   type Unit,
 } from '../game/sim';
 import { think } from '../game/planner';
@@ -92,7 +95,21 @@ import { BOON, BUTTONS, PANEL_Y, SEL, TOP_H } from './layout';
 const SCROLL_PX_PER_S = 520;
 /** How long a raid's horn toast stays up, in game time. */
 const RAID_TOAST_MS = 10_000;
+/** An attack alert stays on the map this long after its last hit, in game time. */
+const ALERT_MS = 8_000;
+/** Hits within this many tiles of a live alert belong to it, so one fight is one alert. */
+const ALERT_NEAR = 12;
+/** How long an attack alert's toast stays up, in game time. */
+const ALERT_TOAST_MS = 5_000;
 const FOG_RES = 256;
+
+/** A place where the player's units or buildings are being hit, for the toast, the markers and the minimap. */
+interface Alert {
+  x: number;
+  y: number;
+  /** Game time of its latest hit. */
+  last: number;
+}
 
 interface Hud {
   /** What the button does, in no language: a unit, building, tech, boon or edge id, or an action such as 'build'. */
@@ -137,6 +154,12 @@ export class GameScene extends Phaser.Scene {
   toastLog: string[] = [];
   /** The horn toast, whose `shown` is the line on screen. */
   toast!: Toast;
+  /** Attack alerts shown in the toast, newest last, translated. */
+  alertLog: string[] = [];
+  /** Where the player is under attack now, each kept while the hits go on. */
+  alerts: Alert[] = [];
+  /** The next click on the map plants the selected buildings' rally flags. */
+  rallyMode = false;
 
   private faction!: FactionId;
   private aiFaction!: FactionId;
@@ -150,7 +173,16 @@ export class GameScene extends Phaser.Scene {
   private nodeSprites = new Map<number, Phaser.GameObjects.Image>();
   private campSprites = new Map<number, Phaser.GameObjects.Image>();
   private postSprites: Phaser.GameObjects.Image[] = [];
-  private rallyFlag!: Phaser.GameObjects.Image;
+  private rallyFlags: Phaser.GameObjects.Image[] = [];
+  /** The latest alert that was announced, and until when its toast shows. */
+  private alertAt: Alert | null = null;
+  private alertText = '';
+  private alertToastUntil = 0;
+  /** Where the toast's arrow points, so a click on it jumps there. */
+  private toastAt: { x: number; y: number } | null = null;
+  /** Red markers at the edge of the view, pointing at alerts out of sight. */
+  private edgeG!: Phaser.GameObjects.Graphics;
+  private edgeMarks: { x: number; y: number; alert: Alert }[] = [];
   /** Where a palisade drag started, in tiles, while placing a wall. */
   private wallStart: { tx: number; ty: number } | null = null;
   private wallGhost!: Phaser.GameObjects.Graphics;
@@ -208,6 +240,7 @@ export class GameScene extends Phaser.Scene {
     this.groups = new Map();
     this.placing = null;
     this.attackMode = false;
+    this.rallyMode = false;
     this.buildMenu = false;
     this.buildPage = 0;
     this.panelSelection = '';
@@ -217,6 +250,14 @@ export class GameScene extends Phaser.Scene {
     this.hud = [];
     this.popLog = [];
     this.toastLog = [];
+    this.alertLog = [];
+    this.alerts = [];
+    this.alertAt = null;
+    this.alertText = '';
+    this.alertToastUntil = 0;
+    this.toastAt = null;
+    this.edgeMarks = [];
+    this.rallyFlags = [];
     this.unitSprites = new Map();
     this.buildingSprites = new Map();
     this.nodeSprites = new Map();
@@ -274,7 +315,6 @@ export class GameScene extends Phaser.Scene {
     this.dragBox = this.add.graphics().setDepth(4960);
     // Placement ghosts sit above the fog, so a site in explored land still shows clearly.
     this.wallGhost = this.add.graphics().setDepth(5002);
-    this.rallyFlag = this.add.image(0, 0, 'rally-flag').setOrigin(4 / 28, 38 / 40).setDepth(4955).setVisible(false);
     // The trading posts, where trade carts load ore; shown once their ground has been seen.
     for (const p of this.state.posts) this.postSprites.push(this.add.image(p.tx * TILE, p.ty * TILE - BUILDING_TOP, 'post').setOrigin(0, 0).setDepth((p.ty + 2) * TILE - 1).setVisible(false));
     this.fx = new Effects(this);
@@ -309,7 +349,8 @@ export class GameScene extends Phaser.Scene {
     this.top.update(this.state);
     this.deeds.update(this.state);
     this.status.update(this.state);
-    this.mini.update(this.state, dt, this.cameras.main.worldView);
+    this.mini.update(this.state, dt, this.cameras.main.worldView, this.alerts);
+    this.renderAlerts();
     this.renderToast();
     this.renderPanel();
     this.renderGhost();
@@ -462,6 +503,8 @@ export class GameScene extends Phaser.Scene {
   private drainEvents() {
     const s = this.state;
     for (const e of s.events) {
+      // A rival's blow on the player's side raises an alert, seen or not (the camp guards only fight back).
+      if (e.t === 'hit' && e.victim === PLAYER && e.owner !== PLAYER && e.owner !== NEUTRAL && !watching) this.alarm(e);
       if (!visible(s, Math.floor(e.x), Math.floor(e.y))) continue;
       if (e.t === 'hit') this.fx.hit(e.x, e.y, e.fromX, e.fromY, e.dmg, e.ranged);
       else if (e.t === 'grow') continue;
@@ -564,16 +607,27 @@ export class GameScene extends Phaser.Scene {
       const foe = u.owner === NEUTRAL ? WOOL.wild.cloth : WOOL[s.players[u.owner].faction].cloth;
       this.thread(g, u.x * TILE - 9, top, 18, u.hp / max, mine ? T.green : foe);
     }
-    // The selected building's rally flag, with a running thread out to it.
-    const rb = this.selectedBuilding();
-    if (rb?.rally) {
+    // Each selected building's rally flag, with a running thread out to it.
+    const flagged = this.rallyBuildings().filter((b) => b.rally);
+    while (this.rallyFlags.length < flagged.length) this.rallyFlags.push(this.add.image(0, 0, 'rally-flag').setOrigin(4 / 28, 38 / 40).setDepth(4955));
+    this.rallyFlags.forEach((f, i) => f.setVisible(i < flagged.length));
+    flagged.forEach((rb, i) => {
       const def = BUILDINGS[rb.type];
-      const fx = rb.rally.x * TILE;
-      const fy = rb.rally.y * TILE;
+      const fx = rb.rally!.x * TILE;
+      const fy = rb.rally!.y * TILE;
       stitchLine(g, (rb.tx + def.w / 2) * TILE, (rb.ty + def.h / 2) * TILE, fx, fy, 1.2, ochre, 0.85);
       stitchEllipse(g, fx, fy, 7, 3, 1.2, ochre);
-      this.rallyFlag.setPosition(fx, fy).setVisible(true);
-    } else this.rallyFlag.setVisible(false);
+      this.rallyFlags[i].setPosition(fx, fy);
+    });
+    // Where the player is under attack: rings of red running stitch on the ground.
+    const red = hexNum(T.red);
+    for (const a of this.alerts) {
+      for (let k = 0; k < 2; k++) {
+        const rad = settings.reduceMotion ? 20 + k * 14 : 14 + ((s.time / 25 + k * 20) % 40);
+        const alpha = settings.reduceMotion ? 0.8 : 1 - (rad - 14) / 40;
+        stitchEllipse(g, a.x * TILE, a.y * TILE, rad, rad * 0.6, 1.6, red, alpha);
+      }
+    }
     for (const b of s.buildings.values()) {
       const def = BUILDINGS[b.type];
       if (b.owner !== PLAYER && !visible(s, b.tx, b.ty)) continue;
@@ -642,6 +696,32 @@ export class GameScene extends Phaser.Scene {
     return null;
   }
 
+  /** The selected own buildings that train units, whose rally flags a right click plants. */
+  private rallyBuildings(): Building[] {
+    const out: Building[] = [];
+    for (const id of this.selected) {
+      const b = this.state.buildings.get(id);
+      if (b && b.owner === PLAYER && BUILDINGS[b.type].trains) out.push(b);
+    }
+    return out;
+  }
+
+  /** Plants the selected buildings' rally flags at a point, or takes them down on one of those buildings. */
+  private plantRally(tx: number, ty: number) {
+    const all = this.rallyBuildings();
+    const hit = entityAt(this.state, tx, ty);
+    if (hit && hit.kind === 'building' && all.some((b) => b.id === hit.id)) {
+      if (all.filter((b) => clearRally(this.state, PLAYER, b.id)).length > 0) say(this.state, t('rallyCleared'));
+      return;
+    }
+    if (all.filter((b) => setRally(this.state, PLAYER, b.id, tx, ty)).length > 0) say(this.state, t('rallySet'));
+  }
+
+  /** Centres the camera on a world tile, allowing for the panel and top bar. */
+  private jumpTo(x: number, y: number) {
+    this.cameras.main.centerOn(x * TILE, y * TILE + (540 - PANEL_Y - TOP_H) / 2);
+  }
+
   private onPointerDown(pointer: Phaser.Input.Pointer) {
     const p = Object.assign(viewPoint(pointer), { rightButtonDown: () => pointer.rightButtonDown(), event: pointer.event });
     if (this.endPanel) return void this.scene.start(watching ? 'Game' : 'Menu');
@@ -651,10 +731,12 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     if (this.toast.contains(p.x, p.y)) {
-      const r = this.state.raid;
-      if (r) this.cameras.main.centerOn(r.x * TILE, r.y * TILE + (540 - PANEL_Y - TOP_H) / 2);
+      if (this.toastAt) this.jumpTo(this.toastAt.x, this.toastAt.y);
       return;
     }
+    // A marker at the edge of the view jumps to the attack it points at.
+    const mark = this.edgeMarks.find((m) => Math.hypot(m.x - p.x, m.y - p.y) <= 14);
+    if (mark) return void this.jumpTo(mark.alert.x, mark.alert.y);
     if (p.y < TOP_H || p.y >= PANEL_Y || this.deeds.contains(p.x, p.y) || this.status.contains(p.x, p.y)) return;
     // Watching, a click only selects, to see what a unit is doing; the AI gives every order.
     if (watching && p.rightButtonDown()) return;
@@ -663,17 +745,17 @@ export class GameScene extends Phaser.Scene {
     const ty = w.y;
 
     if (p.rightButtonDown()) {
-      if (this.placing || this.attackMode) {
+      if (this.placing || this.attackMode || this.rallyMode) {
         this.placing = null;
         this.attackMode = false;
+        this.rallyMode = false;
         this.buildMenu = false;
         this.wallStart = null;
         return;
       }
-      // A production building on its own: a right click plants its rally flag.
-      const b = this.selectedBuilding();
-      if (b && this.selectedUnits().length === 0 && BUILDINGS[b.type].trains) {
-        if (setRally(this.state, PLAYER, b.id, tx, ty)) say(this.state, t('rallySet'));
+      // Production buildings and no units: a right click plants their rally flags (on one of them, takes them down).
+      if (this.selectedUnits().length === 0 && this.rallyBuildings().length > 0) {
+        this.plantRally(tx, ty);
         return;
       }
       this.commandAt(tx, ty);
@@ -687,6 +769,11 @@ export class GameScene extends Phaser.Scene {
     }
     if (this.placing) {
       this.tryPlace(this.placing, tx, ty, p.event.shiftKey);
+      return;
+    }
+    if (this.rallyMode) {
+      this.plantRally(tx, ty);
+      this.rallyMode = false;
       return;
     }
     if (this.attackMode) {
@@ -780,9 +867,8 @@ export class GameScene extends Phaser.Scene {
       this.commandAt(tx, ty);
       return true;
     }
-    const b = this.selectedBuilding();
-    if (!b || !BUILDINGS[b.type].trains || (own && !farm)) return false;
-    if (setRally(this.state, PLAYER, b.id, tx, ty)) say(this.state, t('rallySet'));
+    if (this.rallyBuildings().length === 0 || (own && !farm)) return false;
+    this.plantRally(tx, ty);
     return true;
   }
 
@@ -908,9 +994,18 @@ export class GameScene extends Phaser.Scene {
       case 'b':
         if (this.selectedUnits().some((u) => UNITS[u.type].role === 'villager')) this.buildMenu = !this.buildMenu;
         break;
+      case ' ': {
+        // Space jumps to the latest attack, or the raid under way.
+        const a = this.alerts[this.alerts.length - 1];
+        const r = this.state.raid;
+        if (a) this.jumpTo(a.x, a.y);
+        else if (r && r.target === PLAYER) this.jumpTo(r.x, r.y);
+        break;
+      }
       case 'escape':
         this.placing = null;
         this.attackMode = false;
+        this.rallyMode = false;
         this.buildMenu = false;
         this.wallStart = null;
         break;
@@ -925,6 +1020,7 @@ export class GameScene extends Phaser.Scene {
     this.deeds = new DeedCard(this);
     this.status = new StatusCard(this, this.state);
     this.toast = new Toast(this);
+    this.edgeG = this.add.graphics().setScrollFactor(0).setDepth(9980);
     this.mini = new Minimap(this, this.terrain, this.state);
     const fix = <O extends Phaser.GameObjects.Image | Phaser.GameObjects.Text | Phaser.GameObjects.Graphics>(o: O, d = 10000) => o.setScrollFactor(0).setDepth(d) as O;
     this.selTitle = fix(this.add.text(SEL.x + 2, SEL.y + 8, '', text(13, T.ink, true)).setOrigin(0, 0.5));
@@ -942,12 +1038,77 @@ export class GameScene extends Phaser.Scene {
       this.raidToastUntil = s.time + RAID_TOAST_MS;
       this.toastLog.push(t('raidToast', { faction: t(FACTIONS[s.players[r.by].faction].name), from: t(r.from) }).toUpperCase());
     }
+    const v = this.cameras.main.worldView;
+    const angle = (x: number, y: number) => Math.atan2(y * TILE - (v.y + v.height / 2), x * TILE - (v.x + v.width / 2));
+    const a = this.alertAt;
+    this.toastAt = null;
     if (r && r.target === PLAYER && s.time < this.raidToastUntil) {
-      const v = this.cameras.main.worldView;
-      const angle = Math.atan2(r.y * TILE - (v.y + v.height / 2), r.x * TILE - (v.x + v.width / 2));
-      this.toast.show(this.toastLog[this.toastLog.length - 1], angle);
+      this.toastAt = { x: r.x, y: r.y };
+      this.toast.show(this.toastLog[this.toastLog.length - 1], angle(r.x, r.y));
+    } else if (a && s.time < this.alertToastUntil) {
+      this.toastAt = { x: a.x, y: a.y };
+      this.toast.show(this.alertText, angle(a.x, a.y));
     } else if (s.noticeMs > 0) this.toast.show(s.notice.toUpperCase(), null);
     else this.toast.hide();
+  }
+
+  /** A hit on one of the player's units or buildings by a rival: a new alert, or more of a known one. */
+  private alarm(e: Extract<SimEvent, { t: 'hit' }>) {
+    const s = this.state;
+    const near = this.alerts.find((a) => Math.hypot(a.x - e.x, a.y - e.y) < ALERT_NEAR);
+    if (near) {
+      near.x = e.x;
+      near.y = e.y;
+      near.last = s.time;
+      return;
+    }
+    const alert = { x: e.x, y: e.y, last: s.time };
+    this.alerts.push(alert);
+    // A fight on screen speaks for itself; one out of sight gets the toast, saying what is hit.
+    const v = this.cameras.main.worldView;
+    if (e.x * TILE >= v.x && e.x * TILE <= v.right && e.y * TILE >= v.y && e.y * TILE <= v.bottom) return;
+    const u = s.units.get(e.target);
+    const b = s.buildings.get(e.target);
+    const text = u
+      ? t(isCivil(UNITS[u.type].role) ? 'alertVillagers' : 'alertSoldiers')
+      : b
+        ? t('alertBuilding', { building: t(BUILDINGS[b.type].name) })
+        : t('alertAny');
+    this.alertText = text.toUpperCase();
+    this.alertAt = alert;
+    this.alertToastUntil = s.time + ALERT_TOAST_MS;
+    this.alertLog.push(this.alertText);
+  }
+
+  /** Drops alerts whose fight is over, and marks the edge of the view towards the ones out of sight. */
+  private renderAlerts() {
+    const s = this.state;
+    this.alerts = this.alerts.filter((a) => s.time - a.last < ALERT_MS);
+    const g = this.edgeG.clear();
+    this.edgeMarks = [];
+    const v = this.cameras.main.worldView;
+    const cx = 480;
+    const cy = (TOP_H + PANEL_Y) / 2;
+    for (const a of this.alerts) {
+      const sx = a.x * TILE - v.x;
+      const sy = a.y * TILE - v.y;
+      if (sx >= 0 && sx <= 960 && sy >= TOP_H && sy <= PANEL_Y) continue;
+      // Where the line from the middle of the view to the alert leaves the play area, a little inside.
+      const dx = sx - cx;
+      const dy = sy - cy;
+      const k = Math.min(Math.abs((480 - 16) / (dx || 1e-6)), Math.abs(((PANEL_Y - TOP_H) / 2 - 16) / (dy || 1e-6)));
+      const mx = cx + dx * k;
+      const my = cy + dy * k;
+      const rot = Math.atan2(dy, dx);
+      const alpha = settings.reduceMotion ? 1 : 0.65 + 0.35 * Math.sin(s.time / 160);
+      const pt = (fx: number, fy: number) => ({ x: mx + fx * Math.cos(rot) - fy * Math.sin(rot), y: my + fx * Math.sin(rot) + fy * Math.cos(rot) });
+      const p1 = pt(10, 0);
+      const p2 = pt(-7, -8);
+      const p3 = pt(-7, 8);
+      g.fillStyle(hexNum(T.red), alpha).fillTriangle(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y);
+      g.lineStyle(1, hexNum(T.ink), alpha).strokeTriangle(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y);
+      this.edgeMarks.push({ x: mx, y: my, alert: a });
+    }
   }
 
   /** The left of the panel: what is selected, with its figures or its building. */
@@ -955,6 +1116,11 @@ export class GameScene extends Phaser.Scene {
     const g = this.selG.clear();
     for (const f of this.selFigs) f.setVisible(false);
     this.selBig.setVisible(false);
+    if (this.rallyMode) {
+      this.selTitle.setText(t('rallyTitle').toUpperCase());
+      this.info(2, 24, t('rallyHow'));
+      return;
+    }
     if (this.placing || this.attackMode) {
       this.selTitle.setText((this.placing ? t('placeTitle', { building: t(BUILDINGS[this.placing].name) }) : t('attackMoveTitle')).toUpperCase());
       const how =
@@ -1117,7 +1283,7 @@ export class GameScene extends Phaser.Scene {
     const own = [...this.state.buildings.values()].filter((x) => x.owner === PLAYER).length;
     const rates = `${p.rates.wood.toFixed(2)}/${p.rates.food.toFixed(2)}`;
     const champion = unitCount(this.state, PLAYER, unitFor(this.faction, 'champion').id);
-    return [...this.selected].join(',') + `|${this.buildMenu}|${this.buildPage}|${this.placing}|${this.attackMode}|${q}|${p.techs.join(',')}|${p.age}|${p.boonPending}|${p.edgePending}|${deedsDone(p)}|${this.resourceKey()}|${own}|${hasBuilt(this.state, PLAYER, 'forge')}|${p.bell}|${rates}|${champion}`;
+    return [...this.selected].join(',') + `|${this.buildMenu}|${this.buildPage}|${this.placing}|${this.attackMode}|${this.rallyMode}|${this.rallyBuildings().map((x) => (x.rally ? 1 : 0)).join('')}|${q}|${p.techs.join(',')}|${p.age}|${p.boonPending}|${p.edgePending}|${deedsDone(p)}|${this.resourceKey()}|${own}|${hasBuilt(this.state, PLAYER, 'forge')}|${p.bell}|${rates}|${champion}`;
   }
 
   private resourceKey() {
@@ -1132,6 +1298,7 @@ export class GameScene extends Phaser.Scene {
     const out: Action[] = [];
     const ageName = (age: 2 | 3) => t(age === 3 ? 'age3' : 'age2');
     if (this.placing) return [{ id: 'cancel', name: t('cancel'), sub: '', enabled: true, run: () => (this.placing = null) }];
+    if (this.rallyMode) return [{ id: 'cancel', name: t('cancel'), sub: '', enabled: true, run: () => (this.rallyMode = false) }];
     if (this.buildMenu) {
       // Page one: the usual buildings and the faction's own; page two: palisade, gate and Monument.
       const list = this.buildPage === 0 ? [...BUILD_ORDER, UNIQUE[this.faction]] : BUILD_MORE;
@@ -1213,6 +1380,10 @@ export class GameScene extends Phaser.Scene {
             },
           });
         }
+      }
+      if (def.trains) {
+        const flags = this.rallyBuildings();
+        out.push({ id: 'rally', name: t('rallyFlag'), sub: t(flags.some((x) => x.rally) ? 'rallyMoveSub' : 'rallySetSub'), enabled: true, run: () => (this.rallyMode = true) });
       }
       if (b.type === 'town' && p.age < 3) {
         const next = p.age === 1 ? TECHS.age2 : TECHS.age3;

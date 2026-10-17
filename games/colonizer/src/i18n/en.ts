@@ -186,6 +186,11 @@ const en = {
   relicHeld: 'You hold the {relic}: {effect}',
   relicTaken: 'The enemy took the {relic}',
   rallySet: 'Rally flag set',
+  rallyCleared: 'Rally flag taken down',
+  alertVillagers: 'Villagers under attack',
+  alertSoldiers: 'Soldiers under attack',
+  alertBuilding: '{building} under attack',
+  alertAny: 'Under attack',
   tradingPost: 'A trading post: trade carts from a Market load ore here',
   cacheGuarded: 'A cache of {n} {res}, guarded by brigands',
   cacheFree: 'A cache of {n} {res}: stand by it to take it',
@@ -233,8 +238,10 @@ const en = {
   },
   shelters: 'Shelters {n} villagers when the bell rings',
   marketInfo: 'Ore buys wood and food;\nevery trade moves the price',
-  rallyMove: 'Right click moves the rally flag',
+  rallyMove: 'Right click moves the rally flag;\non the building, takes it down',
   rallyHint: 'Right click sets a rally flag',
+  rallyTitle: 'Rally flag',
+  rallyHow: 'Click where new units should gather.\nOn a tree, bush, mine, farm or camp,\nnew villagers go to work there.\nRight click or Esc to cancel.',
   nothingSelected: 'Nothing selected',
   nothingHint: 'Drag or click your units,\nor click a building.',
 
@@ -253,6 +260,9 @@ const en = {
 
   // Panel buttons
   cancel: 'Cancel',
+  rallyFlag: 'Rally flag',
+  rallySetSub: 'set',
+  rallyMoveSub: 'move',
   wallsMore: 'Walls & More',
   back: 'Back',
   build: 'Build (B)',
