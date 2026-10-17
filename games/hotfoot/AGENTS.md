@@ -61,8 +61,9 @@ in.
   castle, lollipop trees, a turf road, ink outlines with white highlights, gold-leaf coins, a lapis
   HUD band with an illuminated initial on the stage's name, and a vellum margin of acanthus
   scrollwork under the road with a rubric caption that names what is ahead. No cast shadows.
-- One scene does everything: there is no title screen, pause, settings, audio or menu. The run
-  starts as soon as `GameScene` loads. The hub's shared settings (difficulty, frame cap, FPS readout, reduced motion and full screen) apply; see Hub settings below.
+- One scene does everything: there is no title screen, pause, settings or menu of its own (the
+  shared start and pause screens cover it). The run starts as soon as `GameScene` loads. Sound
+  effects and a galloping chiptune song play throughout (see Sound). The hub's shared settings (difficulty, frame cap, FPS readout, reduced motion and full screen) apply; see Hub settings below.
 - Coins are counted during a run and banked when the knight falls. On the game-over panel they buy
   the boon missed at the last checkpoint (the card not taken), for `BOON_PRICE` (30) coins. The next
   ordinary run starts with that boon at one rank, with full hearts (a daily run keeps it waiting).
@@ -89,6 +90,9 @@ in.
   `ARMOURY`, `BOSS`, `ROADS`, `TERRAIN`, `DARE_TEXT`) and the sim's word effects name their texts
   by key, never by English words. Numbers come out formatted for the language (2,000 m or
   2.000 m), and the daily course's date through `formatDate`.
+- `src/audio/sound.ts`: the sound table `sfx` (`sounds` from `shared/audio.ts`) and the `SONG`
+  with its parts (see Sound). `src/audio/cues.ts`: `SoundCues`, which plays them from what changed
+  in the run each frame.
 - `src/main.ts`: creates the `Phaser.Game` (960x540, `Scale.FIT`, `pixelArt: false`) with `BootScene`
   then `GameScene`, calls `setupGame(game)` and `setupScaling(game)` (see Screen scaling), and puts
   `game` on `window` in dev builds.
@@ -250,7 +254,9 @@ in.
   (depth 3), traps, foes and coins (depth 4), the shrine's banderole (4.2), the `frame` overlay
   (4.5: vellum side strips and the gold rule), the knight (5), effects (6) and words (6.5), the hint
   and the HUD (`UI_DEPTH`). The margin caption is a `Text` at depth 0, set by `drawCaption` from
-  the phase and the nearest thing ahead.
+  the phase and the nearest thing ahead. It is centred at `MARGIN.captionX` (458) and shrunk to at
+  most `MARGIN.captionW` (540) wide, so it stays clear of the shared corner buttons in the bottom
+  left (up to about 165 game px in on a small phone) and of the touch Slide and Jump buttons.
 - Terrain: `drawWorld` swaps the `ground` tile sprite's texture by `state.terrain`, `drawWeather`
   draws snow (ice) or gust streaks (wind) on a `Graphics` at depth 4.4, under the frame, and
   `drawHud` fills the stage's tag (ground, "Rockfall!" and road) and the dare's strip, and fades
@@ -404,6 +410,35 @@ key (see Hub settings).
   (canvas pixels). Texts are drawn at `renderScale` by the shared module.
 - `index.html` has the shared `100dvh` and `touch-action: none` styles. A phone held upright gets
   the shared hint to turn it. `e2e/screens.spec.ts` checks the game on five screens.
+
+### Sound
+
+All sound is made in code by `shared/audio.ts`; nothing plays under browser automation, so the
+playthrough is unchanged. The sim (`src/game/`) has no audio: `SoundCues.update(state)` runs in
+`GameScene.update` after `tick` and plays from what changed since the last frame (new effects by
+id, the runner's jumps and slide, the boss's hp, the rockfall's x, fire vents' burn, the phase and
+the stage), at most one sound of each kind a frame, so a row of coins or a volley stays one sound.
+`SoundCues.reset` is called when a run starts (`create`, `restart`). Button sounds play in
+`GameScene` itself.
+
+- **Song** (`SONG`): 150 BPM in D Mixolydian, a square lead, a pulse counter-melody, a triangle bass
+  galloping long-short-short and noise drums. Loops by `partOf(state)`: `road` (the old road, eight
+  bars), `ice` (high, sparkling staccato), `fen` (low and murky, half time), `wind` (long airy notes
+  over quick arpeggios), `boss` (the Gatekeeper and the dragon while they stand), `rockfall` (the
+  road's tune over a driving bass) and `camp` (calm, at a checkpoint and on the game-over panel).
+  Stings: `lose` (the knight falls) and `crown` (the dragon beaten).
+- **Effects** (`sfx`), and where they play: `jump` (a jump, at 1.35x pitch for an air jump, also the
+  skid's queued jump), `slide` (a slide starts), `drop` (an air drop), `land` (the `dust` effect),
+  `skid` (the `skid` effect on ice), `coin` (a `coin` effect, climbing the D major scale with the
+  streak's count towards the next multiplier), `streak` (the multiplier goes up), `stomp` (a `stomp`
+  effect: a foe stomped or knocked away by Bulwark), `hit` / `block` (the `hit` / `block` effect),
+  `crackle` / `flare` (a fire vent on screen turning `warn` / `lit`), `heal` (a shrine's heart),
+  `dare` (the `dareMetPop` pop), `pair` (a pair's pop), `throw` / `roll` (a new axe or tail lash /
+  barrel or fire), `bossHit` (the boss's hp drops), `bossDown` (the `gateBeaten` pop), `rock` (the
+  rockfall catches the knight and falls back), `checkpoint` (the phase turns `checkpoint`), `pick`
+  (a boon or road taken), `horn` (a new stage starts), `again` (Run again or Daily course). Shared
+  sounds: `ui('refuse')` for a shrine's refusal and a refused purchase, `ui('coin')` for a boon or
+  armoury level bought, `ui('click')` for Armoury and Back.
 
 ### Hub settings
 
