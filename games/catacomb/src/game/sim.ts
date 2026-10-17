@@ -1,5 +1,5 @@
 import { byDifficulty } from '../../../../shared/settings';
-import { COMMON, DOUBT_COST, POWER_BLOCK, POWER_STRENGTH, RARE, THORNS, WOUND_HURT, card, isCurse, isTempered, tempered, type BaseId, type CardId } from './cards';
+import { COMMON, DOUBT_COST, POWER_BLOCK, POWER_STRENGTH, RARE, THORNS, WOUND_HURT, canBeTempered, card, isCurse, tempered, type BaseId, type CardId } from './cards';
 import { DEPTH_CURSE, depthFoeHp, DEEP_REST_HEAL, loadBestDepth, saveBestDepth } from './depth';
 import { ENEMIES, type EnemyKind, type Intent, type StatusKind } from './enemies';
 import { ALTAR_COST, CHEST_CURSE, EVENTS, POOL_COST, POOL_HEAL, SHRINE_CURSE, SHRINE_GOLD } from './events';
@@ -400,9 +400,10 @@ function act(s: GameState, e: Enemy) {
   nextIntent(e);
   e.actMs = HIT_MS;
   if (intent.kind === 'attack') {
-    for (let hit = 0; hit < (intent.hits ?? 1); hit++) damageHero(s, foeHit(s, e, intent.damage), e);
-    if (intent.apply) applyStatus(s, f.status, 'hero', intent.apply.status, intent.apply.amount);
+    // Thorns can kill the foe mid-attack: then its remaining hits and its rider don't land.
+    for (let hit = 0; hit < (intent.hits ?? 1) && f.enemies.includes(e); hit++) damageHero(s, foeHit(s, e, intent.damage), e);
     if (!f.enemies.includes(e)) return false;
+    if (intent.apply) applyStatus(s, f.status, 'hero', intent.apply.status, intent.apply.amount);
   } else if (intent.kind === 'curse') {
     curse(s, intent.curse);
   } else if (intent.kind === 'block') {
@@ -582,24 +583,24 @@ export function removeCard(s: GameState, id: CardId) {
   return true;
 }
 
-/** Whether the campfire can temper a card: one in the deck isn't tempered yet. */
-export const canTemper = (s: GameState) => s.phase === 'rest' && s.deck.some((id) => !isTempered(id));
+/** Whether the campfire can temper a card: one in the deck isn't tempered yet and isn't a curse. */
+export const canTemper = (s: GameState) => s.phase === 'rest' && s.deck.some(canBeTempered);
 
 /** Tempers one copy of a card at the campfire, then goes back to the map. */
 export function temperCard(s: GameState, id: CardId) {
   const i = s.deck.indexOf(id);
-  if (!canTemper(s) || i < 0 || isTempered(id)) return false;
+  if (!canTemper(s) || i < 0 || !canBeTempered(id)) return false;
   s.deck[i] = tempered(id);
   s.notice = `Tempered ${card(id).name} into ${card(s.deck[i]).name}`;
   leaveRoom(s);
   return true;
 }
 
-/** Tempers up to n cards of the deck at random; returns their new names. */
+/** Tempers up to n cards of the deck at random, never a curse; returns their new names. */
 function temperRandom(s: GameState, n: number) {
   const names: string[] = [];
   for (let k = 0; k < n; k++) {
-    const plain = s.deck.map((id, i) => (isTempered(id) ? -1 : i)).filter((i) => i >= 0);
+    const plain = s.deck.map((id, i) => (canBeTempered(id) ? i : -1)).filter((i) => i >= 0);
     if (plain.length === 0) break;
     const i = plain[Math.floor(Math.random() * plain.length)];
     s.deck[i] = tempered(s.deck[i]);
@@ -694,7 +695,7 @@ export function canChoose(s: GameState, choice: number) {
   const ev = s.phase === 'event' ? s.rooms[s.at!].event : undefined;
   if (!ev || (choice !== 0 && choice !== 1)) return false;
   if (ev === 'altar' && choice === 0) return s.hp > ALTAR_COST;
-  if (ev === 'pool' && choice === 1) return s.hp > POOL_COST;
+  if (ev === 'pool' && choice === 1) return s.hp > POOL_COST && s.deck.some(canBeTempered);
   return true;
 }
 
