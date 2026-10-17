@@ -8,6 +8,7 @@ import type { EnemyKind } from './ships';
 import { SHOTS, type ShotKind } from './shot';
 import type { UpgradeId } from './upgrades';
 import { waveShips } from './waves';
+import type { TextKey } from '../i18n';
 
 /**
  * The sea the battle is fought on; the camera follows the player across it. It has no edges: like
@@ -16,16 +17,16 @@ import { waveShips } from './waves';
 export const WORLD = { w: 1920, h: 1200 };
 
 /**
- * The islands on the sea: their name on the chart, centre, and the half-widths of the sandy beach
+ * The islands on the sea: their name on the chart (a key of `i18n/en.ts`), centre, and the half-widths of the sandy beach
  * that ships run aground on (the shallows drawn round it are safe). `bakeSea` in
  * src/art/art.ts draws each coast from these numbers.
  */
-export const ISLANDS = [
-  { name: 'Isla de las Palmas', x: 330, y: 260, rx: 58, ry: 36 },
-  { name: 'Gull Key', x: 1540, y: 330, rx: 39, ry: 29 },
-  { name: 'Cay Morgan', x: 1180, y: 940, rx: 27, ry: 19 },
-  { name: 'Turtle Isle', x: 420, y: 960, rx: 39, ry: 29 },
-  { name: 'Bones Cay', x: 1700, y: 1020, rx: 27, ry: 19 },
+export const ISLANDS: { name: TextKey; x: number; y: number; rx: number; ry: number }[] = [
+  { name: 'palmasIsland', x: 330, y: 260, rx: 58, ry: 36 },
+  { name: 'gullIsland', x: 1540, y: 330, rx: 39, ry: 29 },
+  { name: 'morganIsland', x: 1180, y: 940, rx: 27, ry: 19 },
+  { name: 'turtleIsland', x: 420, y: 960, rx: 39, ry: 29 },
+  { name: 'bonesIsland', x: 1700, y: 1020, rx: 27, ry: 19 },
 ];
 /** Hull damage a ship takes each time it runs onto an island's beach. */
 export const AGROUND_DAMAGE = 8;
@@ -78,9 +79,9 @@ export const FIRST_WIND = 0;
 export const windSpeed = (wind: number, heading: number) => 1 + WIND_SPEED * Math.cos(heading - wind);
 /** How much further shot fired toward `dir` reaches: further downwind, never shorter. */
 export const windReach = (wind: number, dir: number) => 1 + WIND_REACH * Math.max(0, Math.cos(dir - wind));
-/** Where the wind blows from, as a compass point (wind blowing toward the east comes from the W). */
+/** Where the wind blows from, as a compass point's key (wind blowing toward the east comes from the W, `windW`). */
 export function windFrom(wind: number) {
-  const points = ['E', 'SE', 'S', 'SW', 'W', 'NW', 'N', 'NE'];
+  const points = ['windE', 'windSE', 'windS', 'windSW', 'windW', 'windNW', 'windN', 'windNE'] as const;
   const k = Math.round((wind + Math.PI) / (Math.PI / 4));
   return points[((k % 8) + 8) % 8];
 }

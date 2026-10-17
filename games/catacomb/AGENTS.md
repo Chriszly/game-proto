@@ -52,6 +52,8 @@ with one more rule. The art is painterly: shapes and pixel grids drawn in code, 
   - The card id `vampBite` is shown as "Leech".
   - A card face shows its own cost, not the one Doubt makes of it (`costOf` in `sim.ts`); the
     card simply dims when it can't be afforded.
+  - From depth 4 down, the hero panel's depth rules run up into the depth row's arrows (in every
+    language), since `panelText` is centred on `HERO_PANEL.rulesY` and grows both ways.
   - Flasks can only be drunk during a fight, on the hero's turn, so a Healing Flask can't be used
     on the map.
 
@@ -59,8 +61,18 @@ with one more rule. The art is painterly: shapes and pixel grids drawn in code, 
 
 File map (all under `src/` unless it starts with `shared/`):
 
-- `howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips), handed to
-  `setupGame(game, { howToPlay })` in `main.ts`; update it when the controls or the first round change.
+- `howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips) in British
+  English (also used for US English, which spells it the same) and German, picked with `byLanguage`
+  and handed to `setupGame(game, { howToPlay })` in `main.ts`; update both languages when the
+  controls or the first round change.
+- `i18n.ts` and `i18n/`: the game's texts (`shared/i18n.ts`). `i18n/en.ts` is the British English
+  source, `i18n/de.ts` the German (with `keepEnglish` for "Deck {n}") and `i18n/en-US.ts` the US
+  spellings, none yet. `t(key, vars)` shows a text in the hub's language; `TextKey` types the keys.
+  The data tables (`CARDS`, `ENEMIES`, `HEROES`, `FLASKS`, `RELICS`, `EVENTS`, `ACT_FOES`,
+  `DEPTH_RULES`) hold `TextKey`s, not texts; numbers go in through placeholders (`{n}`, `{hp}`).
+  The sim writes its pops and `notice` through `t` too, so they come in the language of the moment
+  they happen. Every text on screen goes through `t`, and a new one gets its German entry in the
+  same PR.
 - `main.ts`: creates the `Phaser.Game` (960x540 from `VIEW`, `Scale.FIT`, `pixelArt: false`, so
   the painted textures are smoothed) with
   `BootScene` then `GameScene`, calls `setupGame(game)` and `setupScaling(game)` from
@@ -68,13 +80,16 @@ File map (all under `src/` unless it starts with `shared/`):
 - `game/cards.ts`: the `Card` type (with `up`, what tempering changes, and the optional `power`
   and `curse` kinds), `PowerKind`, `CurseKind`, the `CARDS` table, `BaseId` (a key of `CARDS`) and
   `CardId` (a `BaseId`, or `BaseId+` once tempered), `card(id)` (the rules, with `up` applied to a
-  tempered id), `isTempered`, `baseOf`, `tempered`, `isCurse`, `canBeTempered` (not yet tempered and
+  tempered id; its `name` is a `TextKey`), `cardName(id)` (the shown name, with a '+' once tempered), `isTempered`, `baseOf`, `tempered`, `isCurse`, `canBeTempered` (not yet tempered and
   not a curse: the campfire picker, `temperRandom` and the pool's Bathe use it), `STARTER_DECK` (the Knight's) and
   `HUNTER_DECK`, the `COMMON` and `RARE` pools (derived from `rarity`; curses are in neither),
   the power and curse constants (`POWER_BLOCK`, `POWER_STRENGTH`, `THORNS`, `WOUND_HURT`,
-  `DOUBT_COST`), `describe` (card text) and `kindOf` (attack, skill, power or curse).
-- `game/heroes.ts`: `HeroId`, `HEROES` (name, health, deck, starting flask, caption) and `HERO_IDS`.
-- `game/flasks.ts`: `FlaskId`, `FLASKS` (name and text), `FLASK_IDS`, `FLASK_SLOTS` (3),
+  `DOUBT_COST`), `POWER_TEXT` and `CURSE_TEXT` (each a function giving the text after the lead-in),
+  `describe` (card text, built from the `deal`, `apply`, `gainBlock` and other parts in `i18n/`),
+  `describePower` (a power's text without "Power.", for its tip in play) and `kindOf` (attack, skill, power or curse).
+- `game/heroes.ts`: `HeroId`, `HEROES` (name, health, deck, starting flask, caption; the caption's
+  `{hp}` is the hero's health) and `HERO_IDS`.
+- `game/flasks.ts`: `FlaskId`, `FLASKS` (name, text and the number its `{n}` shows), `FLASK_IDS`, `FLASK_SLOTS` (3),
   `FLASK_PRICE` and each flask's number. Their effects live in `useFlask` in `sim.ts`.
 - `game/depth.ts`: the depth ladder: `DEPTH_RULES` and `depthText(depth)` for the panels,
   `depthFoeHp(depth)`, `DEEP_REST_HEAL`, `DEPTH_CURSE`, and the save (`loadBestDepth`,
@@ -84,7 +99,8 @@ File map (all under `src/` unless it starts with `shared/`):
   `ENEMIES` table of health, `gold`, `elite`/`boss` and `moves` (the first is the opening move).
 - `game/relics.ts`: `RelicId`, `RELICS` (name and text) and `RELIC_IDS`. Their effects live in
   `sim.ts` (search for `hasRelic`).
-- `game/events.ts`: `EventId`, `EVENTS` (title, text, two choice captions), their cost constants
+- `game/events.ts`: `EventId`, `EVENTS` (title, text, two choice captions and the number each
+  caption's `{n}` shows), their cost constants
   and the curses the shrine's loot and the chest add (`SHRINE_CURSE`, `CHEST_CURSE`). Their effects
   live in `chooseEvent` in `sim.ts`.
 - `game/map.ts`: `RoomKind`, `Room` (kind, column, screen x/y, `next` links, foes, event),
@@ -150,8 +166,9 @@ File map (all under `src/` unless it starts with `shared/`):
 - `art/scenery.ts`: the `room-bg` crypt (wall, arch, two torches, floor in perspective) and the
   `map-bg` flagstones, drawn at 1920x1080, shrunk to 960x540 (times their `res`) and painted, plus `room-bg-2` and
   `map-bg-2` for the second act (the same washed green); `backdrop(kind, act)` names the one to use.
-- `shared/settings.ts`, `shared/setupGame.ts` and `shared/scaling.ts` (repo root, shared by every
-  game): the hub's settings, `byDifficulty`, `setupGame`, and `setupScaling` with `renderScale`. `sim.ts` imports `byDifficulty`, `GameScene.ts`
+- `shared/settings.ts`, `shared/setupGame.ts`, `shared/scaling.ts` and `shared/i18n.ts` (repo root, shared by every
+  game): the hub's settings, `byDifficulty`, `setupGame`, `setupScaling` with `renderScale`, and
+  `translator`, `byLanguage` and `Translation`. `sim.ts` imports `byDifficulty`, `GameScene.ts`
   imports `settings`.
 
 How it runs:
@@ -287,7 +304,7 @@ Data tables (where to tune):
   `docs/screenshots/`; refresh them when the look of the first room changes. `map`, `boss`,
   `treasure`, `victory`, `campfire`, `campfire-temper`, `campfire-remove`, `shop`, `event`,
   `elite-fight`, `descend`, `act2-map`, `tombs-foes`, `hollow-queen`, `heroes`,
-  `flasks-and-powers` and `curses` there are taken by hand
+  `flasks-and-powers`, `curses` and `german-shop` (the merchant with `?lang=de`) there are taken by hand
   (not by the test); refresh them too when the look changes. `cover.png` is a copy of `playthrough-1-fight`.
 
 ## Making common changes
@@ -297,10 +314,15 @@ Data tables (where to tune):
   (it is painted on its own). A
   new kind of effect needs a field on `Card`, handling in `playCard` in `src/game/sim.ts` and a
   line in `describe`. Update the README's card table.
-- **Add a power:** add its `PowerKind` and text (`POWER_TEXT`) in `cards.ts` and a card with
+- **Add or change a text:** its key in `src/i18n/en.ts` and the German in `src/i18n/de.ts` (the
+  build fails without it), plus `src/i18n/en-US.ts` if US English spells it differently; run
+  `node scripts/check-translations.mjs`. German runs longer: a card face's rules (three lines of
+  13px in 104px), the hero panel's depth rules and the merchant's flask boxes are the tightest
+  spots, so check a new text with `?lang=de`.
+- **Add a power:** add its `PowerKind` and text (`POWER_TEXT`, with its key in `i18n/`) in `cards.ts` and a card with
   `power` set, then its effect in `sim.ts`: a per-turn one in `startTurn`'s power loop, one that
   reacts elsewhere behind `hasPower`.
-- **Add a curse:** add its `CurseKind` and text (`CURSE_TEXT`) in `cards.ts` and a card with
+- **Add a curse:** add its `CurseKind` and text (`CURSE_TEXT`, with its key in `i18n/`) in `cards.ts` and a card with
   `curse` set and `rarity: 'curse'`; what it does goes where it bites (`drawCards` for a draw
   effect, `costOf` for a cost one). Give it a source: an elite's `curse` move, an event or a depth.
 - **Add a flask:** add it to `FlaskId` and `FLASKS` in `src/game/flasks.ts`, its colours to
@@ -337,7 +359,7 @@ Data tables (where to tune):
   behind `hasRelic`. Update the README's relic table.
 - **Add an event:** add it to `EventId` and `EVENTS` in `src/game/events.ts` and its two choices
   to `chooseEvent` (and any health cost to `canChoose`) in `src/game/sim.ts`.
-- **Add a status:** extend `StatusKind`, `noStatus`, `STATUS_NAMES` in `sim.ts`, its effect in
+- **Add a status:** extend `StatusKind`, `noStatus`, its name in `i18n/` under the kind as key, its effect in
   `heroHit`/`foeHit`, `act` or `endRound`, its icon in `STATUSES` and its colour in
   `STATUS_COLORS` in `GameScene.ts`.
 - **Add an act:** add an entry to `ACT_FOES`, raise `ACTS`, add the backdrops in
