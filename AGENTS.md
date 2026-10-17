@@ -158,8 +158,8 @@ and tries to link it to the repo (the run summary says if the link has to be mad
   `scripts/check-translations.mjs`) fails a PR whose translation has other placeholders or plural
   forms than English, or is left the same as English (a text that really is the same goes in that
   file's `keepEnglish`), and warns where a text is much longer than English; run
-  `node scripts/check-translations.mjs` before pushing. Playthroughs and other tests run in the
-  browser's US English.
+  `node scripts/check-translations.mjs` before pushing. Playthroughs and other tests run in British
+  English, the default language (the browser's own language is not used).
 - **Play counts come for free.** `setupGame` also bumps the game's public play counter
   (`shared/playCount.ts`, keyed by the game's folder name) and the hub shows the count on its card,
   so a new game needs nothing for it. Tests never count: browser automation skips it.

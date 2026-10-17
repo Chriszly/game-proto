@@ -284,7 +284,7 @@ Phaser passes to `update`; the pops' tweens run on Phaser's clock and are cosmet
   and its `state` (copied through JSON), `seedButtons` (`{ kind, x, y, w, h }` per card),
   `waveButton` (`{ x, y, w, h }`), all in view pixels, and `waveLabel` (the wave button's text on
   one line, such as `Start wave 1` or `Call wave 2 now, +15 early`). `waveLabel` is in the
-  player's language; the playthrough runs in the browser's US English, so it reads the English
+  player's language; the playthrough runs in British English, the default language, so it reads the English
   `startWave`, `callWave` and `earlyBonus` texts.
 - Inputs: it clicks the seed cards, cell centres and the wave button, scaling view pixels by the
   canvas bounding box. It never plants a hedge, raises a golem or opens the menu: forms,

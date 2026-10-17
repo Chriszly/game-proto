@@ -36,7 +36,7 @@ The hub's **Settings** button opens the settings every game shares. They are sav
 
 ![The hub's settings](docs/screenshots/hub-settings.webp)
 
-- **Language**: English (UK), English (US) or Deutsch, picked from the browser's language at first.
+- **Language**: English (UK), English (US) or Deutsch, British English until another is picked.
   The hub switches at once; the start, pause and How to play screens of every game follow the next
   time it opens, and so does each game whose own text has been translated. Numbers and dates match
   the language: 1,234.5 and 17/10/2026 in British English, 1,234.5 and 10/17/2026 in US English,

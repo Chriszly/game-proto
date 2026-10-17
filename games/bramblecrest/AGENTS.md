@@ -132,7 +132,7 @@ hidden places. `load` fills in fields a save from an older version lacks (`items
   (`GATE`). Mirrored there, so change them together: the elder's, the chest's and the gate's
   places, `START_HP` (Normal's three hearts), the quest stage names, the `chest-blade` and
   `gate-cut` flags, the speaker name `Elder Wren`, the item text naming the Old Blade and the save
-  key. It runs in US English, so those are the `elderName` and `foundSword` texts of `i18n/en.ts`. It checks that the view point it taps is on screen and below the HUD's top 70 pixels.
+  key. It runs in British English, the default language, so those are the `elderName` and `foundSword` texts of `i18n/en.ts`. It checks that the view point it taps is on screen and below the HUD's top 70 pixels.
 - It saves `0-start`, `1-elder`, `2-blade` and `3-gate` screenshots.
 
 ## Making common changes
