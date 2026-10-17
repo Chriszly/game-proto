@@ -153,6 +153,16 @@ const PACT_FUNDS = 100;
 const PACT_HUB_SHARE = 1 / 3;
 const PACT_RIVALS = 2;
 
+/**
+ * The spots round a rally point that new ships fly to, in turn, so a wing fans out rather than
+ * stacking on one point: the point itself, a ring of 6 at 24 px and a ring of 12 at 46 px.
+ */
+export const RALLY_SPOTS: readonly Point[] = [
+  { x: 0, y: 0 },
+  ...Array.from({ length: 6 }, (_, k) => ({ x: Math.cos((k * Math.PI) / 3) * 24, y: Math.sin((k * Math.PI) / 3) * 24 })),
+  ...Array.from({ length: 12 }, (_, k) => ({ x: Math.cos(((k + 0.5) * Math.PI) / 6) * 46, y: Math.sin(((k + 0.5) * Math.PI) / 6) * 46 })),
+];
+
 /** Where a unit is going: a point to move to, or an entity to attack. */
 export type Order = { kind: 'move'; x: number; y: number } | { kind: 'attack'; id: number; auto: boolean };
 
@@ -319,6 +329,10 @@ export interface Side {
   claimer: number;
   /** The flagship (the player's only): locked until the third contract, then ready, building, out, or lost for good. */
   flagship: { state: 'locked' | 'ready' | 'building' | 'out' | 'lost'; left: number };
+  /** The rally point (the player's only): new warships from its Barracks and shipyard fly there, or null. */
+  rally: Point | null;
+  /** The next of RALLY_SPOTS a new warship takes round the rally point. */
+  rallyNext: number;
 }
 
 /**
@@ -375,8 +389,17 @@ export interface Pact {
   waves: number;
 }
 
-/** Things the scene shows once: a notice on the command bar, or crystal gained (flashed by the count). */
-export type WorldEvent = { kind: 'notice'; text: string } | { kind: 'gain'; amount: number };
+/** What a rival hit, for an attack alert: a harvester, a warship or a building. */
+export type Struck = 'harvester' | 'ship' | 'building';
+
+/**
+ * Things the scene shows once: a notice on the command bar, crystal gained (flashed by the count),
+ * or a rival's hit on one of the player's units or buildings (an attack alert, never in watch mode).
+ */
+export type WorldEvent =
+  | { kind: 'notice'; text: string }
+  | { kind: 'gain'; amount: number }
+  | { kind: 'hit'; x: number; y: number; struck: Struck };
 
 /** Anything that can fire a shot. */
 type Shooter = Unit | Building | Derelict;
@@ -529,7 +552,7 @@ export class World {
     this.sides = order.map((f, index) => ({
       index, def: FACTIONS[f], crystal: START_CRYSTAL, alive: true, thinkMs: 0, attackMs: 0, perks: { ...NO_PERKS }, picket: -1,
       research: noResearch(), grudge: -1, grudgeLockMs: 0, truceMs: 0, offerMs: 0, offerCooldownMs: 0, pressure: 0, claimer: -1,
-      flagship: { state: 'locked', left: 0 },
+      flagship: { state: 'locked', left: 0 }, rally: null, rallyNext: 0,
     }));
     for (const goal of kept) contractOf(goal).apply(this.sides[PLAYER].perks);
     this.rng = localRandom((layout.homes[0].x * 3.7 + layout.homes[0].y) % 1);
@@ -773,6 +796,37 @@ export class World {
     return units.length > 0;
   }
 
+  /**
+   * Plants the player's rally point at (x, y): from now on every new warship from a Barracks or a
+   * held shipyard flies there, each to the next spot round it. Ships already flying are not moved.
+   */
+  setRally(x: number, y: number) {
+    const side = this.sides[PLAYER];
+    side.rally = {
+      x: Math.min(ARENA.x + ARENA.w - 8, Math.max(ARENA.x + 8, x)),
+      y: Math.min(ARENA.y + ARENA.h - 8, Math.max(ARENA.y + 8, y)),
+    };
+    side.rallyNext = 0;
+  }
+
+  /** Takes the player's rally point down: new warships wait by the building again. */
+  clearRally() {
+    this.sides[PLAYER].rally = null;
+  }
+
+  /** A new warship of a faction with a rally point flies to the next free spot round it. */
+  private toRally(u: Unit) {
+    const side = this.sides[u.faction];
+    if (!side.rally || u.type === 'harvester') return;
+    const spot = RALLY_SPOTS[side.rallyNext % RALLY_SPOTS.length];
+    side.rallyNext += 1;
+    u.order = {
+      kind: 'move',
+      x: Math.min(ARENA.x + ARENA.w - 8, Math.max(ARENA.x + 8, side.rally.x + spot.x)),
+      y: Math.min(ARENA.y + ARENA.h - 8, Math.max(ARENA.y + 8, side.rally.y + spot.y)),
+    };
+  }
+
   /** The player's order to fall back: the selected ships fly home to the nearest hub or Depot, where ships repair. */
   fallBack(ids: number[]): boolean {
     if (this.phase !== 'playing') return false;
@@ -966,6 +1020,7 @@ export class World {
         b.trainLeft = 0;
         const unit = this.spawn(b.faction, type, b.x, b.y + buildingStats(side, b.type).radius + 14);
         if (type === 'harvester') unit.home = b.id;
+        else this.toRally(unit);
       }
     }
     if (b.disabledMs > 0) {
@@ -1143,7 +1198,7 @@ export class World {
       if (d.trainLeft <= 0) {
         const type = d.queue.shift()!;
         d.trainLeft = 0;
-        this.spawn(d.owner, type, d.x, d.y + DERELICT_RADIUS * 0.6);
+        this.toRally(this.spawn(d.owner, type, d.x, d.y + DERELICT_RADIUS * 0.6));
       }
     }
     if (d.perk === 'gun') {
@@ -1247,6 +1302,7 @@ export class World {
     target.hp -= dealt;
     target.lastHit = faction;
     if (target.kind === 'unit') target.lastHitBy = from.kind === 'unit' ? from.id : -1;
+    this.alarm(target, faction);
     this.beams.push({ x: from.x, y: from.y, x2: target.x, y2: target.y, color: this.sides[faction].def.color, life: BEAM_MS });
     if (from.kind === 'unit') {
       const ability = this.abilityOf(from);
@@ -1269,8 +1325,17 @@ export class World {
         e.hp -= Math.round(damage * ability.share);
         e.lastHit = faction;
         if (e.kind === 'unit') e.lastHitBy = from.kind === 'unit' ? from.id : -1;
+        this.alarm(e, faction);
       }
     }
+  }
+
+  /** A rival's hit on one of the player's units or buildings (not a decoy) raises an attack alert for the scene. */
+  private alarm(target: Unit | Building, faction: number) {
+    if (this.watch || target.faction !== PLAYER || faction === PLAYER) return;
+    if (target.kind === 'unit' && target.decoyMs !== null) return;
+    const struck: Struck = target.kind === 'building' ? 'building' : target.type === 'harvester' ? 'harvester' : 'ship';
+    this.events.push({ kind: 'hit', x: target.x, y: target.y, struck });
   }
 
   /** A hacked turret changes sides: it becomes the hacker's own turret, as damaged as it was. */
@@ -1314,6 +1379,7 @@ export class World {
         u.hp -= Math.round(def.damage * this.shieldShare(u));
         u.lastHit = m.faction;
         u.lastHitBy = -1;
+        this.alarm(u, m.faction);
       }
       this.booms.push({ x: m.x, y: m.y, color: this.sides[m.faction].def.color, life: BOOM_MS, r: def.radius });
       return false;

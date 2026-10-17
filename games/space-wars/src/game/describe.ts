@@ -84,6 +84,11 @@ export function fallBackLines(): string[] {
   ];
 }
 
+/** The lines the Rally button's tooltip shows under its name: what it does and how to take it down. */
+export function rallyLines(): string[] {
+  return [t('rallyWhat'), t('rallyClear')];
+}
+
 /** The lines the flagship's tooltip shows under its name: its numbers, its ability and its one-per-battle rule. */
 export function flagshipLines(side: Side): string[] {
   const s = flagshipStats(side);
