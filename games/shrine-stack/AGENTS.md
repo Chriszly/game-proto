@@ -113,8 +113,15 @@ Missing or rough:
 
 File map (`src/`):
 
-- `howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips), handed to
-  `setupGame(game, { howToPlay })` in `main.ts`; update it when the controls or the first round change.
+- `howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips) in British
+  English, US English (the same with US spelling, made by `us`) and German, picked with `byLanguage`
+  and handed to `setupGame(game, { howToPlay })` in `main.ts`; update every language when the
+  controls or the first round change.
+- `i18n.ts` and `i18n/`: the game's texts (`shared/i18n.ts`). `i18n/en.ts` is the British English
+  source (favour, centre), `i18n/de.ts` the German and `i18n/en-US.ts` only the texts with
+  "favour" in them, spelled "favor". `t(key, vars)` shows a text in the hub's language; `TextKey`
+  types the keys. Every text on screen goes through `t`, and a new one gets its German entry (and
+  a US one if its spelling differs) in the same PR.
 - `main.ts`: creates the `Phaser.Game` (960x540 from `VIEW`, `Phaser.Scale.FIT`,
   `pixelArt: true`) with `GameScene` only, calls `setupGame(game)` from `shared/setupGame.ts` and
   then `setupScaling(game)` from `shared/scaling.ts`, and in dev builds puts `game` on `window`.
@@ -137,12 +144,14 @@ File map (`src/`):
   `stoneFavor`, `gusty`; `pickPatrons`, `spawn`, `gustFor`, `kindFor`, `gust`, `land`, `topple`,
   `pickOffer`, `pickCurse`, `widenTop` and `endBreak` are private). No Phaser; `speedFor` reads
   `byDifficulty` from `shared/settings.ts`.
-- `game/blessings.ts`: `BLESSINGS`, `BlessingId` and `BLESSING_INFO` (name, card text, colour).
+- `game/blessings.ts`: `BLESSINGS`, `BlessingId` and `BLESSING_INFO` (name and card text as
+  `TextKey`s, colour).
 - `game/catalog.ts`: `SHOP`/`ShopId`/`SHOP_INFO` (name, cost, colour) and `CHEAPEST`,
-  `KINDS`/`StoneKind`/`KIND_INFO`, `TRIALS`/`TrialId`/`TRIAL_INFO`,
-  `CURSES`/`CurseId`/`CURSE_INFO`, `MATERIALS`/`MaterialId`/`MATERIAL_INFO` (name, text, short
-  button text, colour) with `MATERIAL_PICKS` (the three on buttons) and
-  `PATRONS`/`PatronId`/`PATRON_INFO` (name, boon, bane, colour).
+  `KINDS`/`StoneKind`/`KIND_INFO` (name, short name for the reserve, colour),
+  `TRIALS`/`TrialId`/`TRIAL_INFO` (short text), `CURSES`/`CurseId`/`CURSE_INFO`,
+  `MATERIALS`/`MaterialId`/`MATERIAL_INFO` (name, short button text, colour) with `MATERIAL_PICKS`
+  (the three on buttons) and `PATRONS`/`PatronId`/`PATRON_INFO` (name, boon, bane, colour). Every
+  name and text is a `TextKey` of `i18n/en.ts`, which the scene shows with `t`.
 - `game/save.ts`: `loadBest` and `saveBest`.
 - `scenes/GameScene.ts`: everything drawn, plus `drawStone`, `materialColor`, `tierColor`,
   `blend`, `shade`, `seeded`, `pin` and `place` helpers and the `UiPart` type.
@@ -153,7 +162,8 @@ File map (`src/`):
 - `ui/Button.ts`: `makeButton`, the captioned buttons on the end panel (returned as loose parts).
 
 Shared code it imports (outside the game folder): `shared/setupGame.ts` (`setupGame`),
-`shared/scaling.ts` (`setupScaling`) and `shared/settings.ts` (`byDifficulty`, `settings`).
+`shared/scaling.ts` (`setupScaling`), `shared/settings.ts` (`byDifficulty`, `settings`) and
+`shared/i18n.ts` (`translator`, `byLanguage`, `Translation`).
 
 How it runs:
 
@@ -274,7 +284,12 @@ from `tick`; tweens are cosmetic only.
 
 ## Making common changes
 
-- **Add a blessing**: add its id to `BLESSINGS` and its `BLESSING_INFO`, its effect in
+- **Add or change a text**: its key in `i18n/en.ts`, the German in `i18n/de.ts` (the build fails
+  without it) and, when it spells "favour", the US spelling in `i18n/en-US.ts`; run
+  `node scripts/check-translations.mjs`. German runs longer than English: the panel's "Next:" line
+  and the Reroll button are the tightest spots, so check a new text with `?lang=de`.
+- **Add a blessing**: add its id to `BLESSINGS` and its `BLESSING_INFO` (with its name and text in
+  the `i18n/` files), its effect in
   `chooseBlessing`, its emblem in `GameScene.drawBlessingIcon`, a README row, and a case in the
   test's `switch` (the seeded offer may change which card is first).
 - **Retune**: the constants at the top of `src/game/state.ts` (shop prices in
