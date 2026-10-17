@@ -293,8 +293,8 @@ const ICONS: Record<UpgradeIcon, (c: Ctx, x: number, y: number) => void> = {
 };
 
 /** The marker's symbol, faint, in its colour: a mortar and pestle to work, an arrow down to drop off, up to pick up or pay. */
-function symbol(c: Ctx, kind: Symbol, color: string) {
-  const x = 22, y = 22;
+function symbol(c: Ctx, kind: Symbol, color: string, x = 22) {
+  const y = 22;
   c.save();
   c.globalAlpha = 0.6;
   c.fillStyle = color;
@@ -337,7 +337,56 @@ function icon(c: Ctx, which: UpgradeIcon) {
   c.restore();
 }
 
-function drawPad(c: Ctx, color: string, kind: Symbol | UpgradeIcon) {
+/** What a pick-up marker gives, drawn small beside its arrow: a sack of goods, an empty bottle or a coin. */
+export type PickUpIcon = 'sack' | 'bottle' | 'coin';
+
+/** A pick-up marker with what it gives beside the arrow. */
+export const pickUpPad = (what: PickUpIcon) => `pad-out-${what}`;
+
+/** The small schematic of what a pick-up marker gives, faint like the arrow, centred on (x, y). */
+function pickUpIcon(c: Ctx, what: PickUpIcon, x: number, y: number) {
+  c.save();
+  c.globalAlpha = 0.75;
+  c.strokeStyle = MARKER.pickUp;
+  c.fillStyle = MARKER.pickUp;
+  c.lineWidth = 1.6;
+  c.lineJoin = 'round';
+  c.lineCap = 'round';
+  c.beginPath();
+  if (what === 'sack') {
+    // A sack tied at the neck.
+    c.moveTo(x - 2, y - 5);
+    c.lineTo(x + 2, y - 5);
+    c.quadraticCurveTo(x + 6, y + 1, x + 4.5, y + 6);
+    c.lineTo(x - 4.5, y + 6);
+    c.quadraticCurveTo(x - 6, y + 1, x - 2, y - 5);
+    c.stroke();
+    c.beginPath();
+    c.moveTo(x - 3, y - 3.2);
+    c.lineTo(x + 3, y - 3.2);
+    c.stroke();
+  } else if (what === 'bottle') {
+    // An empty round flask with a neck.
+    c.moveTo(x - 1.5, y - 6);
+    c.lineTo(x - 1.5, y - 2);
+    c.arc(x, y + 2.5, 4.8, -Math.PI / 2 - 0.32, Math.PI * 1.5 + 0.32, true);
+    c.lineTo(x + 1.5, y - 6);
+    c.stroke();
+    c.beginPath();
+    c.moveTo(x - 2.6, y - 6);
+    c.lineTo(x + 2.6, y - 6);
+    c.stroke();
+  } else {
+    c.arc(x, y, 5.5, 0, Math.PI * 2);
+    c.stroke();
+    c.beginPath();
+    c.arc(x, y, 2.6, 0, Math.PI * 2);
+    c.fill();
+  }
+  c.restore();
+}
+
+function drawPad(c: Ctx, color: string, kind: Symbol | UpgradeIcon, ringOnly = false) {
   c.save();
   // A dark rim under the ring, so it reads on light boards as on dark earth.
   c.setLineDash([5, 4]);
@@ -351,6 +400,7 @@ function drawPad(c: Ctx, color: string, kind: Symbol | UpgradeIcon) {
   c.lineWidth = 2.6;
   c.stroke();
   c.restore();
+  if (ringOnly) return;
   if (kind === 'drop' || kind === 'pickUp' || kind === 'work' || kind === 'upgrade') symbol(c, kind, color);
   else icon(c, kind);
 }
@@ -360,5 +410,13 @@ export function bakeMarkers(scene: Phaser.Scene) {
   paint(scene, 'pad-out', 44, 44, (c) => drawPad(c, MARKER.pickUp, 'pickUp'), 3);
   paint(scene, 'pad-work', 44, 44, (c) => drawPad(c, MARKER.work, 'work'), 3);
   paint(scene, 'pad-up', 44, 44, (c) => drawPad(c, MARKER.upgrade, 'upgrade'), 3);
+  // Pick-up markers that say what they give: the arrow moves left and the icon stands right of it.
+  for (const what of ['sack', 'bottle', 'coin'] as const) {
+    paint(scene, pickUpPad(what), 44, 44, (c) => {
+      drawPad(c, MARKER.pickUp, 'drop', true);
+      symbol(c, 'pickUp', MARKER.pickUp, 17);
+      pickUpIcon(c, what, 28, 22);
+    }, 3);
+  }
   for (const which of UPGRADE_ICONS) paint(scene, upgradePad(which), 44, 44, (c) => drawPad(c, MARKER.upgrade, which), 3);
 }
