@@ -54,6 +54,9 @@ import {
   type Order,
   type UpgradeId,
 } from '../game/state';
+import { ui } from '../../../../shared/audio';
+import { frameSounds, nightfallSounds, snapshot, updateMusic } from '../audio/cues';
+import { sfx, type SoundName } from '../audio/sound';
 import { t, type TextKey } from '../i18n';
 import { makeButton } from '../ui/Button';
 import {
@@ -226,6 +229,22 @@ export class GameScene extends Phaser.Scene {
     this.createPerilPanel();
     this.createGameOver();
     this.createFestival();
+    updateMusic(this.state, true);
+  }
+
+  /** A tap on lantern `i`: a moth flutters off, or the tap queues with a pip; a lost tap buzzes. */
+  private tapLantern(i: number) {
+    const s = this.state;
+    const queued = s.queue.length;
+    if (send(s, i)) sfx(s.queue.length > queued ? 'pip' : 'flutter');
+    else if (s.phase === 'dusk' && s.lanterns[i]) ui('refuse');
+  }
+
+  /** The sound of a tapped action: its own sound (or a click) when done, the refusal buzz when not. */
+  private answer(done: boolean, sound?: SoundName) {
+    if (!done) ui('refuse');
+    else if (sound) sfx(sound);
+    else ui('click');
   }
 
   /** A line of serif lettering: `glow` lights it from behind like light through cut card. */
@@ -275,7 +294,7 @@ export class GameScene extends Phaser.Scene {
       const hit = this.add
         .zone(x, y, LANTERN_HIT.w, LANTERN_HIT.h)
         .setInteractive({ useHandCursor: true })
-        .on('pointerdown', () => send(this.state, i));
+        .on('pointerdown', () => this.tapLantern(i));
       this.lamps.push({ glow, lamp, flame, tag, tagText, kindLabel, hit });
     });
     this.marks = this.add.graphics().setDepth(6);
@@ -369,12 +388,15 @@ export class GameScene extends Phaser.Scene {
       const hit = this.add
         .zone(bx, by, SHOP.w, SHOP.h)
         .setInteractive({ useHandCursor: true })
-        .on('pointerdown', () => (id === 'cask' ? topUp(this.state) : id === 'hearth' ? rekindle(this.state) : buy(this.state, id)));
+        .on('pointerdown', () => {
+          const done = id === 'cask' ? topUp(this.state) : id === 'hearth' ? rekindle(this.state) : buy(this.state, id);
+          this.answer(done, id === 'cask' ? 'glug' : id === 'hearth' ? 'swell' : 'kaching');
+        });
       this.shop.set(id, { bg, level, cost });
       this.shopButtons.push({ id, x: bx, y: by, w: SHOP.w, h: SHOP.h });
       parts.push(bg, name, level, blurb, cost, hit);
     });
-    parts.push(makeButton(this, NEXT_BUTTON.x, NEXT_BUTTON.y, t('nextDusk'), () => nextDusk(this.state)));
+    parts.push(makeButton(this, NEXT_BUTTON.x, NEXT_BUTTON.y, t('nextDusk'), () => this.answer(nextDusk(this.state), 'evening')));
     this.nightPanel = this.add.container(0, 0, parts).setDepth(UI_DEPTH + 10).setVisible(false);
   }
 
@@ -403,7 +425,7 @@ export class GameScene extends Phaser.Scene {
       const hit = this.add
         .zone(bx, by, MOVE_CARDS.w, MOVE_CARDS.h)
         .setInteractive({ useHandCursor: true })
-        .on('pointerdown', () => moveTo(this.state, id));
+        .on('pointerdown', () => this.answer(moveTo(this.state, id), 'rumble'));
       this.moveCards.set(id, { bg, note });
       this.moveButtons.push({ id, x: bx, y: by, w: MOVE_CARDS.w, h: MOVE_CARDS.h });
       parts.push(bg, name, note, blurb, hit);
@@ -440,13 +462,15 @@ export class GameScene extends Phaser.Scene {
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => {
           const id = this.perilCards[k].name.getData('curse') as CurseId | undefined;
-          if (id && takeCurse(this.state, id)) saveBestPeril(this.state.bestPeril);
+          const taken = !!id && takeCurse(this.state, id);
+          if (taken) saveBestPeril(this.state.bestPeril);
+          this.answer(taken, 'pluck');
         });
       this.perilCards.push({ bg, name, note, blurb });
       this.perilButtons.push({ x: bx, y: by, w: MOVE_CARDS.w, h: MOVE_CARDS.h });
       parts.push(bg, name, note, blurb, hit);
     }
-    parts.push(makeButton(this, this.goOnButton.x, this.goOnButton.y, t('goOn'), () => endPeril(this.state)));
+    parts.push(makeButton(this, this.goOnButton.x, this.goOnButton.y, t('goOn'), () => this.answer(endPeril(this.state))));
     this.perilPanel = this.add.container(0, 0, parts).setDepth(UI_DEPTH + 12).setVisible(false);
   }
 
@@ -475,7 +499,7 @@ export class GameScene extends Phaser.Scene {
     const text = this.label(cx, cy - 12, t('festivalText', { n: FESTIVAL_NIGHTS }), { size: 15 })
       .setOrigin(0.5)
       .setAlign('center');
-    const go = makeButton(this, this.carryOnButton.x, this.carryOnButton.y, t('keepGoing'), () => carryOn(this.state));
+    const go = makeButton(this, this.carryOnButton.x, this.carryOnButton.y, t('keepGoing'), () => this.answer(carryOn(this.state)));
     this.festival = this.add
       .container(0, 0, [dim, ...this.skyLanterns, panel, title, text, go])
       .setDepth(UI_DEPTH + 15)
@@ -490,13 +514,18 @@ export class GameScene extends Phaser.Scene {
     this.clock += dt;
     const s = this.state;
     const phase = s.phase;
+    const before = phase === 'dusk' ? snapshot(s) : null;
     tick(s, dt);
-    for (const e of s.events.splice(0)) this.showEvent(e);
+    const events = s.events.splice(0);
+    if (before) frameSounds(before, s, events);
+    for (const e of events) this.showEvent(e);
     if (s.phase !== phase) {
       saveBest(s.best);
       this.nightAt = this.clock;
       this.payout();
+      nightfallSounds(s, (ms, fn) => this.time.delayedCall(ms, fn));
     }
+    updateMusic(s);
     this.drawScreen();
     this.drawDistrict();
     this.drawKind();
@@ -797,7 +826,7 @@ export class GameScene extends Phaser.Scene {
         .zone(-200, -200, MOTH_HIT.w, MOTH_HIT.h)
         .setDepth(7.4)
         .setInteractive({ useHandCursor: true })
-        .on('pointerdown', () => swapJar(this.state, k));
+        .on('pointerdown', () => this.answer(swapJar(this.state, k), 'swap'));
       const nap = this.label(0, 0, '', { size: 9, bold: true, color: '#e4d8ff', stroke: true }).setOrigin(0.5).setDepth(7.3).setVisible(false);
       this.moths.push({ halo, body, hit, nap });
     }
@@ -854,7 +883,7 @@ export class GameScene extends Phaser.Scene {
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => {
           const bat = this.state.bats[k];
-          if (bat) chase(this.state, bat.id);
+          if (bat) this.answer(chase(this.state, bat.id), 'whoosh');
         });
       this.bats.push({ body, hit });
     }
@@ -1091,6 +1120,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private restart() {
+    ui('click');
     this.state = newGame(loadBest(), loadBestPeril());
+    updateMusic(this.state, true);
   }
 }

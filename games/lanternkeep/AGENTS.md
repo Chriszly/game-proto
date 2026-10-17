@@ -148,7 +148,8 @@ Implemented today:
 
 Missing or rough:
 
-- No title screen, sound or pause. The kinds, bats, chains, fireflies, the festival, the window
+- No title screen of its own (the shared start and pause screens cover it). No ambience (crickets,
+  rain): the storm's rain is only in its music. The kinds, bats, chains, fireflies, the festival, the window
   calls, the cask, the kinds of lantern, the owl, the districts, tired moths, the second jar,
   rekindling and the curses are not exercised by the
   playthrough (night 1 is clear with no bats, chains, calls, cask use or special lanterns), only
@@ -177,6 +178,10 @@ File map (`src/`):
   `Partial<Translation<typeof en>>`, and hand it to `translator` when one does). `t(key, vars)`
   shows a text in the hub's language; `TextKey` types the keys. Every text on screen goes through
   `t`, numbers through `formatNumber` (the scene's `mult2` for pay multipliers).
+- `audio/sound.ts`: `sfx`, the game's sound table (`sounds` from `shared/audio.ts`), and `SONG`,
+  its music. `audio/cues.ts`: when they play: `snapshot(s)` before `tick` and `frameSounds(before,
+  s, events)` after it, `nightfallSounds`, and `updateMusic` (the part for the state, from
+  `musicPart`). See Sound below.
 - `main.ts`: creates the `Phaser.Game` (960x540, `Phaser.Scale.FIT`, `pixelArt: false`) with
   `BootScene` and `GameScene`, calls `setupGame(game)` from `shared/setupGame.ts` and
   `setupScaling(game)` from `shared/scaling.ts`, and in dev builds puts `game` on `window`.
@@ -234,7 +239,7 @@ File map (`src/`):
 - `ui/Button.ts`: `makeButton`, the carved card button (texture swap on hover, a `Zone` for taps).
 
 Shared code it imports (outside the game folder): `shared/setupGame.ts` (`setupGame`),
-`shared/scaling.ts` (`setupScaling`, `sharpRes`), `shared/settings.ts` (`byDifficulty`,
+`shared/scaling.ts` (`setupScaling`, `sharpRes`), `shared/audio.ts` (`sounds`, `ui`, `playMusic`, `playSting`), `shared/settings.ts` (`byDifficulty`,
 `settings`) and `shared/i18n.ts` (`translator`, `byLanguage`, `formatNumber`, `language`,
 `Translation`).
 
@@ -330,6 +335,50 @@ seeded generator in `puppet.ts`. Popups, flares and sparks are cosmetic Phaser t
   shake or flash.
 - Keep the Lanternkeep row of the difficulty table in the root README and the line in this game's
   README in step with the `byDifficulty` values.
+
+### Sound
+
+All in code through `shared/audio.ts`; the rules (`game/state.ts`) stay free of sound. The scene
+takes a `snapshot` of the state before `tick`, then `frameSounds` plays the frame's events and
+what changed (only during dusk); the tap handlers play their action's sound when the rule
+function returns true and `ui('refuse')` when it returns false (`tapLantern`, `answer`).
+
+Music, `SONG`: music-box folk in A minor at 108 BPM in eighth notes (triangle lead, thin pulse
+pizzicato arpeggio, triangle bass, soft shaker). `updateMusic` (every frame, switching only when
+the part changes, at the next bar) picks:
+
+| Part | When |
+| --- | --- |
+| `dusk` | a clear dusk |
+| `fog`, `feast`, `storm` | a dusk of that kind (sparse and muted, a bouncy dance, driving with rain on the hats) |
+| `late` | the last 10 s of any dusk (`LATE_MS`): pulsing bass and a ticking clock |
+| `lullaby` | every phase but dusk: night panel, festival, district choice, curses, game over |
+| `festival` (sting) | the nightfall that reaches the Great Festival |
+| `over` (sting) | the nightfall that puts the last hearth out |
+
+`create` and `restart` call `updateMusic(state, true)`.
+
+Sound table, `sfx` (plus the shared `ui('coin')`, `ui('refuse')` and `ui('click')`):
+
+| Sound | Where |
+| --- | --- |
+| `flutter` / `pip` | `tapLantern`: a moth sent / the tap queued (lost or ignored taps buzz) |
+| `strike` + `fwoomp` | `frameSounds`: a moth finished lighting or refilling a lantern (one per frame) |
+| `sparkle` + coin | `closeCall` event |
+| `clunk` + buzz | `dry` event |
+| `fizzle` | any lanterns going dark in a frame: burnt out, blown out, snuffed by a bat or the owl (merged into one) |
+| `windSwell` / `gust` / `ting` | gust warned / `gust` event / a shielded gust or owl |
+| `squeak` / `bounce` / `whoosh` | a bat comes on screen / a bat driven off a guarded lantern / `chased` (and a tapped chase) |
+| `hoot` / `sweep` | the owl warned / the owl starts its sweep |
+| `chime` / `callKept` + coin / `callLost` | a window calls / `call` kept / `call` ran out |
+| `yawn` / `swap` | a moth goes to rest / `swapJar` |
+| `toll`, coins, `thud` + `minor` | `nightfallSounds`: the bell, a rising coin per lit lantern, a lost hearth |
+| `kaching` / `glug` / `swell` | the shop: `buy` / `topUp` / `rekindle` |
+| `evening` / `rumble` / `pluck` | `nextDusk` / `moveTo` / `takeCurse` |
+| click | "Go on", "Keep going", "New keep" |
+
+The nightfall coins and stings are timed with `this.time.delayedCall`, so they pause with the
+scene. Under browser automation nothing plays, so the playthrough is unchanged.
 
 ## Testing hooks
 
