@@ -7,12 +7,30 @@ const de: Translation<typeof en> = {
   hubTitle: 'Spielesammlung',
   hubLede: 'Kleine Spielprototypen. Such dir eins aus.',
   settings: 'Einstellungen',
-  settingsLede: 'Sie gelten für jedes Spiel, sobald es das nächste Mal startet.',
+  settingsLede: 'Änderungen werden sofort gespeichert. Die Sprache wechselt gleich, alles andere gilt ab dem nächsten Spielstart.',
   close: 'Schließen',
   restoreDefaults: 'Standard wiederherstellen',
+  done: 'Fertig',
+  savedProgress: 'Spielstände',
+  savedProgressHint: 'Löscht Spielstände, Bestwerte und Freischaltungen aller Spiele auf diesem Gerät. Für ein einzelnes Spiel nimm das ⚙ auf seiner Karte.',
   resetProgress: 'Allen Fortschritt löschen',
   resetProgressConfirm: 'Den gespeicherten Fortschritt aller Spiele löschen? Die Einstellungen bleiben erhalten.',
   plays: { one: '{n}-mal gespielt', other: '{n}-mal gespielt' },
+  continuePlaying: 'Weiterspielen',
+  feedback: 'Fehler melden oder Idee teilen',
+  gameSettings: 'Einstellungen für {game}',
+  gameProgressSaved: 'Für dieses Spiel ist auf diesem Gerät Fortschritt gespeichert: ein Spielstand, Bestwerte, Freischaltungen oder eigene Optionen.',
+  gameProgressNone: 'Für dieses Spiel ist noch nichts gespeichert.',
+  resetGame: 'Fortschritt dieses Spiels löschen',
+  resetGameConfirm: 'Den gespeicherten Fortschritt von {game} löschen? Das lässt sich nicht rückgängig machen.',
+  play: 'Spielen',
+  genres: 'Spielarten',
+  genreAll: 'Alle',
+  genreAction: 'Action',
+  genreStrategy: 'Strategie',
+  genreManagement: 'Aufbau',
+  genrePuzzle: 'Knobelei',
+  genreAdventure: 'Abenteuer',
 
   // Settings panel
   off: 'Aus',
@@ -28,6 +46,8 @@ const de: Translation<typeof en> = {
   settingFpsHint: 'Die meisten Bilder pro Sekunde, die ein Spiel zeichnet. Weniger schont den Akku.',
   settingShowFps: 'FPS anzeigen',
   settingShowFpsHint: 'Zeigt die Bildrate in der Ecke jedes Spiels.',
+  settingGenreFilter: 'Genrefilter',
+  settingGenreFilterHint: 'Zeigt über den Spielen eine Reihe Genres, um nur eine Art aufzulisten.',
   settingReduceMotion: 'Bewegung reduzieren',
   settingReduceMotionHint: 'Schaltet Bildschirmwackeln, Blitze und blinkende Treffereffekte ab.',
   settingMusic: 'Musik',
@@ -118,4 +138,4 @@ const de: Translation<typeof en> = {
 export default de;
 
 /** Texts that are the same in German, so the translation check doesn't flag them. */
-export const keepEnglish: (keyof typeof en)[] = ['start', 'normal', 'fpsReadout', 'pauseButton', 'pauseAction'];
+export const keepEnglish: (keyof typeof en)[] = ['start', 'normal', 'fpsReadout', 'pauseButton', 'pauseAction', 'genreAction'];

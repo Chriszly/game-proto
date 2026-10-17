@@ -3,7 +3,8 @@ import { settings } from './settings';
 import { language, setLanguage, t } from './i18n';
 import { addStartScreen } from './startScreen';
 import type { HowToPlay } from './howToPlay';
-import { countPlay } from './playCount';
+import { countPlay, gameOf } from './playCount';
+import { markPlayed } from './progress';
 import { addSoundButton, cornerBar } from './corner';
 
 /** Frames that come up to this early still run, so a display whose frames jitter keeps them all. */
@@ -16,7 +17,8 @@ const SLACK_MS = 1;
  * button beside it with the M key (`corner.ts`, which also lays out that row), and so are the
  * loading, start and pause screens (`startScreen.ts`), with the game's How to play behind a button on
  * the start and pause screens when it passes `howToPlay` (`howToPlay.ts`). It also counts the play
- * on the game's public play counter (`playCount.ts`). The browser's right-click menu is turned off
+ * on the game's public play counter (`playCount.ts`) and marks it played for the hub's Continue
+ * playing row (`progress.ts`). The browser's right-click menu is turned off
  * on the whole page, so a right click or a long press never pops it up over the game.
  */
 export function setupGame(game: Phaser.Game, options: { howToPlay?: HowToPlay } = {}) {
@@ -29,6 +31,8 @@ export function setupGame(game: Phaser.Game, options: { howToPlay?: HowToPlay } 
   addSoundButton();
   addStartScreen(game, options.howToPlay);
   countPlay();
+  const name = gameOf(location.pathname);
+  if (name) markPlayed(name);
 }
 
 /**

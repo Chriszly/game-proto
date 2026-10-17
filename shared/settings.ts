@@ -7,6 +7,7 @@ import type { SharedKey } from './i18n/en';
  *
  * To add a setting: add it to `Settings` and `DEFAULTS`, describe it in `SETTING_FIELDS` so the hub
  * panel shows it, and honour it in the games (in `setupGame` when it can be done for all of them).
+ * A setting marked "hub only" changes just the hub page, and no game reads it.
  */
 
 export const DIFFICULTIES = ['easy', 'normal', 'hard'] as const;
@@ -43,6 +44,8 @@ export interface Settings {
   effects: number;
   /** Silences every sound; the sound button in each game's corner and the M key switch it. */
   muted: boolean;
+  /** Hub only: shows a row of genres above the games to filter the cards by. */
+  genreFilter: boolean;
 }
 
 export const DEFAULTS: Settings = {
@@ -54,6 +57,7 @@ export const DEFAULTS: Settings = {
   music: 60,
   effects: 80,
   muted: false,
+  genreFilter: false,
 };
 
 /**
@@ -96,6 +100,7 @@ export const SETTING_FIELDS: readonly SettingField[] = [
   { key: 'music', label: 'settingMusic', hint: 'settingMusicHint', ...VOLUME },
   { key: 'effects', label: 'settingEffects', hint: 'settingEffectsHint', ...VOLUME },
   { key: 'muted', label: 'settingMuted', hint: 'settingMutedHint', kind: 'toggle' },
+  { key: 'genreFilter', label: 'settingGenreFilter', hint: 'settingGenreFilterHint', kind: 'toggle' },
 ];
 
 export const SETTINGS_KEY = 'hub-settings';
@@ -117,6 +122,7 @@ export function loadSettings(): Settings {
     music: volume(saved.music, DEFAULTS.music),
     effects: volume(saved.effects, DEFAULTS.effects),
     muted: typeof saved.muted === 'boolean' ? saved.muted : DEFAULTS.muted,
+    genreFilter: typeof saved.genreFilter === 'boolean' ? saved.genreFilter : DEFAULTS.genreFilter,
   };
 }
 

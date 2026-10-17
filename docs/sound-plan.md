@@ -320,6 +320,9 @@ are a square lead like a shawm, a triangle drone and noise drums.
 | Drop-off of wood, food or ore | knock / pluck / clink | `drop` event, `GameScene.ts:drainEvents` |
 | Melee / ranged hit / tower volley | clash / arrow thwip / several thwips | `sim.ts:strike`, `updateBuilding` |
 | Town bell rung / released | bell toll / lower toll | `sim.ts:ringBell`, `releaseBell` |
+| Attack alert (a new fight on the player's side) | short alarm horn, louder when out of sight | `GameScene.ts:alarm`, when it announces a new alert |
+| Jump to an alert (Space, toast or edge arrow) | quick whoosh | `GameScene.ts:jumpTo` |
+| Rally flag set / taken down | cloth flap / lower flap | `GameScene.ts:plantRally` (`rallySet`, `rallyCleared`) |
 | Raid incoming / repelled | war horn / triumphant horn | `sim.ts:startRaid`, `endRaid` |
 | Market trade / cache, relic held or lost | coins / chime, rising or falling arpeggio | `sim.ts:trade`, `updateCamps` |
 | Monument stands | solemn drone chord | `sim.ts:finish` |
@@ -329,6 +332,8 @@ Notes:
 - Big armies send dozens of hits per second, so rate-limit per type and play only what is
   visible.
 - Watch mode gets a neutral end sting (`showWatchEnd`).
+- The attack alarm plays once per alert, not per hit: a fight that keeps going inside an alert's
+  12 tiles stays silent until the alert ends.
 
 ### Deadline
 Upright zombie wave defence with auto-fire; tense pulp horror.

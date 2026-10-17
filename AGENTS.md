@@ -115,7 +115,7 @@ and tries to link it to the repo (the run summary says if the link has to be mad
   `favicon.svg` (same ears, head, dot eyes and muzzle, 32x32 viewBox) with one prop for the game,
   like Apothecary's plague doctor hat and beak. Then add a card for it in the hub's `index.html` (the hub sorts its cards by name; with its text and cover description in
   `shared/i18n/en.ts` and `de.ts` as `<game>Card` and `<game>Cover`, marked `data-i18n` and
-  `data-i18n-alt`) and in `e2e/hub.spec.ts`, a
+  `data-i18n-alt`, and its genres for the hub's genre filter in `data-genres`) and in `e2e/hub.spec.ts`, a
   Playwright project in `playwright.config.ts`, a row in the README's table of games and a row in
   the table of guides above. Add its Game label (its folder name, description `Game: <Name>`) to `.github/labels.json` (the Labels
   workflow creates it on main), its Project (title, short description and README) to `.github/projects.json`, its name to the
@@ -128,7 +128,8 @@ and tries to link it to the repo (the run summary says if the link has to be mad
   `is:issue,pr is:open label:<game>`, the "Item added to project" workflow set to Issue only with
   Status Todo, and the link to the repo if the run summary says it is missing. Vite picks
   up `games/*/index.html` on its own. Keep save keys and other browser storage prefixed with the
-  game's name, since every game shares the hub's origin.
+  game's folder name (`<name>-...`), since every game shares the hub's origin and the hub's ⚙ on a
+  card deletes a game's progress by that prefix (`shared/progress.ts`).
 - **Honour the hub's settings.** Every game calls `setupGame(game)` from `shared/setupGame.ts`
   right after creating its `Phaser.Game`, which applies the frame cap, the FPS readout, reduced motion, full screen and the sound button, turns off the browser's right-click menu, and covers
   the page with the shared loading, start and pause screens (`shared/startScreen.ts`): the game's
@@ -165,7 +166,7 @@ and tries to link it to the repo (the run summary says if the link has to be mad
   and dates with `formatNumber` and `formatDate` (or `toLocaleString(locale())`), never by hand. The
   shared texts (hub page, Settings panel, loading, start, pause and How to play screens) are in
   `shared/i18n/`; the hub page marks its text with `data-i18n="key"` (`data-i18n-alt` for an
-  image's alt text). A game moves its own text into `games/<name>/src/i18n/` one game per PR, like
+  image's alt text, `data-i18n-label` for an `aria-label`). A game moves its own text into `games/<name>/src/i18n/` one game per PR, like
   screen scaling, and from then on gives every new text its German (and, where the spelling
   differs, US English) entry in the same PR; game logic compares ids, never translated text. The
   **Translations** workflow (`.github/workflows/translations.yml`, running
