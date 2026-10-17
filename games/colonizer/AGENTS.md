@@ -173,7 +173,8 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   setting (`?lang=de` for a quick look): the menu, HUD, panel, notices, end screens, How to play and
   the watch log. Names that are the same in German (the game's title, the Palisade) are in
   `keepEnglish` in `src/i18n/de.ts`.
-- Not implemented yet: saves and sound.
+- Sound: effects and music made in code by `shared/audio.ts` (see Sound below).
+- Not implemented yet: saves.
 
 ## Architecture
 
@@ -189,6 +190,11 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   in the hub's language; `TextKey` types the keys. Every text on screen, the sim's notices and the
   planner's watch log go through `t`, and a new one gets its German entry (and a US one if its
   spelling differs) in the same PR.
+- `src/audio/sfx.ts`: the sound table (`sfx`), `src/audio/music.ts` the songs (`COLONY`, `RAID`). See
+  Sound below.
+- `src/scenes/sound.ts`: `SoundCues`, which compares the sim with the last frame and plays what
+  changed (new units, finished buildings, techs, ages, the bell, raids, camps, falls) and keeps
+  the music on the right part.
 - `src/main.ts`: creates the `Phaser.Game` (960x540, FIT scaling, `pixelArt: false`, linen
   background), registers the three scenes, calls `setupGame(game)` from `shared/setupGame.ts` and
   `setupScaling(game)` from `shared/scaling.ts`, and puts `game` on window in dev.
@@ -275,7 +281,8 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   `Player.rates` (the Market's wood and food rates).
 - `GameState.raid` (`Raid | null`), `raids` and `repelled` counters, `assault` (per AI side, by
   index: the ids of other sides' soldiers attacking its base, or null), `toLast`, and `events`: `hit`
-  (with the striker's `owner`, the struck side `victim` and its `target` id), `drop` and `grow` events the sim pushes and the scene drains each frame (capped at 400 when nobody drains them).
+  (with the striker's `owner`, the struck side `victim`, its `target` id and `tower` for a
+  building's volley), `drop` and `grow` events the sim pushes and the scene drains each frame (capped at 400 when nobody drains them).
 - `GameState.players` has a third entry, `NEUTRAL` (the camp guards); its `faction` is only a
   placeholder. Code that loops over players skips it where it matters (`updateDeeds`, `checkWinner`).
   A three-way match has a fourth, `AI2`; per-side arrays (`aiClock`, `aiRaid`, `assault`) have one
@@ -368,6 +375,50 @@ in code on 2D canvases (no image files), with `pixelArt` off.
 - A grown tree never goes next to a building, so it can't box one in; its id comes from `nextId`.
 - Camps are solid until a cache is taken; relics stay. The camp patches change no other tile of the
   map, so a seed gives the same map as before camps (apart from the cleared patches).
+
+## Sound
+
+Everything is synthesized by `shared/audio.ts`; nothing plays under browser automation, so the
+playthrough runs as before. The sim imports no audio: the scene plays the player's own actions
+where they happen, the visible fights in `drainEvents`, and everything else from `SoundCues`
+(`scenes/sound.ts`), which diffs the state each frame. No sound uses `Math.random` of its own
+(the playthrough seeds it); watching thins the battle by frame count instead.
+
+Songs (`src/audio/music.ts`):
+- `COLONY`, a medieval dance in D Dorian at 96 beats a minute, three steps a beat (12/8), square
+  lead, pulse second voice, triangle drone. Parts: `calm` (Age I, the lead alone), `calm2` (Age II,
+  a second voice and fuller drums), `calm3` (Age III, D Mixolydian, busier drums), `monument` (slow
+  and solemn, while any finished Monument stands), and the stings `age` (Age II or III reached),
+  `win`, `lose` and `end` (a watched match, open fifths). The menu and a new match start `calm`.
+- `RAID`, `battle` at 132 beats a minute: a horn call over driving octaves and war drums, while a
+  raid on the player is under way (any raid when watching).
+- `SoundCues.updateMusic` picks raid, then Monument, then the player's age; `showEnd` stops the
+  music and plays `win`, `lose` or `end`.
+
+Sound table (`src/audio/sfx.ts`), and where each plays (in `GameScene` unless noted):
+- `select`: a unit or building selected by click, box or control group.
+- `order`: `commandAt` (right click or tap), attack-move click, S, the Stop and Trade buttons.
+- `place`: `tryPlace` and `tryWall` lay out a site (a refusal plays `ui('refuse')`).
+- `queue`: a unit, tech or age queued from the panel (`train`/`research` refused: `ui('refuse')`).
+- `pick`: the Age II boon or Age III edge chosen (`renderPick`).
+- `trained`, `built`, `researched`: a new unit, a finished building, a finished tech of the
+  player's (`SoundCues`).
+- `bell`, `bellLow`: the player's town bell rung or released (`SoundCues`, from `Player.bell`).
+- `dropWood`, `dropFood`, `dropOre`: the player's drop-offs on screen (`drainEvents`).
+- `clash`, `thwip`, `volley`: one per frame for the fights on screen, melee, ranged or a building's
+  volley (`tower` on the event), full volume when the player's side is in it.
+- `alarm`: a new attack alert (`alarm`), once per alert, louder when out of sight.
+- `whoosh`: `jumpTo` (Space, the toast or an edge marker).
+- `flag`, `flagDown`: `plantRally` plants or takes down rally flags.
+- `raidHorn`, `repelled`: a raid on the player starts, or is repelled (`SoundCues`).
+- `cache`, `relicGain`, `relicLost`: the player takes a cache, holds a relic or loses one (`SoundCues`).
+- `monument`: anyone's Monument finished (`SoundCues`).
+- `crumble`: a building falls on screen, a Town Centre included (`SoundCues`).
+- Shared: `ui('click')` for the other panel buttons and the menu, `ui('coin')` for a Market trade,
+  `ui('refuse')` for every refused action and a disabled panel button.
+
+Watching: the music and stings play, the battle sounds play quieter on one frame in three, and
+only the raid horns, Monuments and falls of the rest.
 
 ## Save keys
 
