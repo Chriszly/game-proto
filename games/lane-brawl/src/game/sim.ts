@@ -31,8 +31,11 @@ import {
   SIEGE,
   STREAK,
   TOWERS,
-  UPGRADES,
   upgradeById,
+  upgradePairAt,
+  ultRank,
+  ULT_RANK,
+  ULT_RANK_LEVELS,
   ACTIVES,
   ActiveId,
   BEAST,
@@ -95,12 +98,20 @@ export function tick(s: GameState, dt: number) {
   updateLastHitMark(s);
 }
 
-/** An ability as the champion casts it now: its definition with the upgrades it chose applied. */
+/** An ability as the champion casts it now: its definition with the upgrades it chose and the R's ranks applied. */
 export function abilityFor(u: Unit, key: AbilityKey): AbilityDef | undefined {
   const base = u.champ?.abilities.find((a) => a.key === key);
-  if (!base || u.upgrades.length === 0) return base;
+  const ranks = key === 'R' ? ultRank(u.level) : 0;
+  if (!base || (u.upgrades.length === 0 && ranks === 0)) return base;
   const ab: AbilityDef = { ...base };
   const pct = (v: number | undefined, p: number | undefined) => (v === undefined || !p ? v : v * (1 + p / 100));
+  for (let r = 0; r < ranks; r++) {
+    ab.damage = pct(ab.damage, ULT_RANK.damage);
+    ab.dps = pct(ab.dps, ULT_RANK.damage);
+    ab.heal = pct(ab.heal, ULT_RANK.heal);
+    ab.shield = pct(ab.shield, ULT_RANK.shield);
+    ab.cd *= 1 + ULT_RANK.cd / 100;
+  }
   for (const id of u.upgrades) {
     const up = upgradeById(id);
     if (!up || up.key !== key) continue;
@@ -854,7 +865,13 @@ function gainXp(s: GameState, c: Unit, amount: number) {
   const level = Math.min(levelFor(c.xp), MAX_LEVEL);
   if (level > c.level) {
     for (let l = c.level + 1; l <= level && c.champ; l++) {
-      const pair = UPGRADES[c.champ.id]?.[l - 2];
+      if (ULT_RANK_LEVELS.includes(l)) {
+        const r = c.champ.abilities.find((a) => a.key === 'R')!;
+        if (c.player) notice(s, `Level ${l}: ${r.name} ranks up`, '#f2c14e');
+        aiLog(c.side, `${shortName(c.name)} ranks up ${r.name} at level ${l}`);
+        continue;
+      }
+      const pair = upgradePairAt(c.champ.id, l);
       if (!pair) continue;
       // The player chooses on the cards; an AI champion takes the one it rates higher.
       if (c.player) s.upgradeOffers.push({ level: l, options: [pair[0].id, pair[1].id] });

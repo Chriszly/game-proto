@@ -21,7 +21,6 @@ import {
   STREAK,
   Team,
   TOWERS,
-  UPGRADES,
   Vec,
   WORLD,
   XP_FOR_LEVEL,
@@ -31,6 +30,8 @@ import {
   WARD,
   bountyOf,
   upgradeById,
+  ultRank,
+  ULT_RANK_LEVELS,
   bushAt,
 } from '../game/data';
 import { Fx, GameState, Phase, Unit, createGame, dist, getUnit } from '../game/state';
@@ -1308,7 +1309,7 @@ export class GameScene extends Phaser.Scene {
       const label = locked ? `Lv${ab.level}` : cd > 0 ? `${Math.ceil(cd / 1000)}` : '';
       this.t(`abcd-${k}`, box.x + box.w / 2, box.y + 14, label, 18, UI.text, 'center', true);
       // Chosen upgrades as gold pips, and a gold diamond on an ability the offer would change.
-      const pips = me.upgrades.filter((id) => upgradeById(id)?.key === k).length;
+      const pips = me.upgrades.filter((id) => upgradeById(id)?.key === k).length + (k === 'R' ? ultRank(me.level) : 0);
       for (let p = 0; p < pips; p++) g.fillStyle(col(UI.gold), 1).fillRect(box.x + box.w - 9 - p * 6, box.y + box.h - 9, 4, 4);
       if (marked) {
         const dx = box.x + box.w - 6, dy = box.y - 2;
@@ -1372,11 +1373,12 @@ export class GameScene extends Phaser.Scene {
       });
     } else {
       this.panel(g, up.x, up.y, up.w, up.h, UI.slate);
-      const next = me.level < MAX_LEVEL ? UPGRADES[c.id]?.[me.level - 1] : undefined;
+      const nextLevel = me.level + 1;
       this.t('up-head', up.x + 10, up.y + 8, 'UPGRADES', 9, UI.goldDeep, 'left', true);
       const chosen = me.upgrades.map((id) => upgradeById(id)?.name ?? id);
       this.t('up-chosen', up.x + 10, up.y + 26, chosen.length ? chosen.join('\n') : 'None yet', 10, chosen.length ? UI.text : UI.muted, 'left', true);
-      this.t('up-next', up.x + 10, up.y + up.h - 18, next ? `Next at level ${me.level + 1}` : 'All levels reached', 9, UI.muted);
+      const nextText = me.level >= MAX_LEVEL ? 'All levels reached' : ULT_RANK_LEVELS.includes(nextLevel) ? `Level ${nextLevel} ranks up R` : `Next at level ${nextLevel}`;
+      this.t('up-next', up.x + 10, up.y + up.h - 18, nextText, 9, UI.muted);
     }
   }
 

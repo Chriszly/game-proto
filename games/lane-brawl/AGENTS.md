@@ -36,7 +36,7 @@ Implemented today:
   hit where it lands), `ally` (heal, shield and optional `buff` for allied champions), `buff` (a
   timed `BuffDef` on the caster: attack speed, damage, speed, lifesteal, armor, cooldowns, regen,
   slowing hits or stealth) and `zone` (a lingering circle that hurts enemies by `dps` and slows
-  them, in `s.zones`). R unlocks at level 3; levels run 1 to 5.
+  them, in `s.zones`). R unlocks at level 3; levels run 1 to 8 (`XP_FOR_LEVEL`).
 - Champions and lore: each `ChampionDef` carries `hero` (the full name, like Hald Oathstone, which
   `createGame` gives the unit as `name`), `short` (the first name for labels, the portrait and
   notices, through `shortName` in `names.ts`), `title` and `motive` (one line, at most 90
@@ -159,12 +159,17 @@ Implemented today:
   starts 4 s later. A card under the top bar shows it (title, time left, the target's damage as a
   bar, the reward), a gold pill and dashed ring mark the target in the world and a star marks it on
   the minimap.
-- Upgrade choice on level-up: each new level of the player's champion queues an offer of two
-  upgrades (`UPGRADES[champion][level - 2]`); two cards in the bottom bar (between the shop button
+- Upgrade choice on level-up: levels 2, 3, 4, 5 and 7 (`UPGRADE_LEVELS`) of the player's champion
+  each queue an offer of two upgrades (`upgradePairAt(champion, level)`, the matching pair in
+  `UPGRADES`); two cards in the bottom bar (between the shop button
   and the minimap) show the first offer, and the ability box an option changes gets a gold diamond.
   Clicking a card or pressing 1 or 2 keeps it. Upgrades scale an ability's radius, damage, range,
   heal, shield or cooldown by a percent, add a stun or a slow, or add bolts (`abilityFor` applies
-  them). Gold pips under an ability box count its upgrades. AI champions pick theirs on their own.
+  them). Levels 6 and 8 (`ULT_RANK_LEVELS`) offer nothing but rank up the R instead: each rank adds
+  `ULT_RANK` (+20% damage, heal and shield, -15% cooldown), applied in `abilityFor` through
+  `ultRank(level)`, with a notice for the player. Gold pips under an ability box count its upgrades
+  and, on R, its ranks; the upgrade panel names what the next level brings. AI champions pick theirs
+  on their own.
 - Last hits: after every tick the enemy minion within the player's reach plus 140 px that its next
   hit would kill is `lastHitMark` and gets a gold outline. A last hit by the player grows the streak
   (`streak`, shown in a chip by the gold counter) and pops a coin fx with the gold; from x4 on it
@@ -448,7 +453,7 @@ generator (`seeded` in `lowpoly.ts`); `performance.now` only times the bake for 
 - **Add a champion**: add a `ChampionDef` to `CHAMPIONS` with its `hero`, `short`, `title` and
   `motive` (90 characters at most), a blurb (32 characters at most, for the card), a `PassiveDef` (a
   short desc), optionally a `perk` that fits the story, and four `AbilityDef`s (keys Q, W, E, R; R at level 3) named to fit the story,
-  its four upgrade pairs to `UPGRADES`, four looks in `skillFx.ts`, a `Kit` in `KITS` and its pose in
+  its five upgrade pairs to `UPGRADES`, four looks in `skillFx.ts`, a `Kit` in `KITS` and its pose in
   `classPose` (`models.ts`) and its id to `ChampId`. `createGame` shuffles the classes other than the
   player's, gives blue the first four and red the next five, so any roster of ten or more works;
   the pick screen lays out `pickCard(i)` in three rows of five, so a sixteenth needs a new layout.
