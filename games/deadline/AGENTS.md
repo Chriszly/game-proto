@@ -24,7 +24,8 @@ upgrades. A run is the endless Open Road or a 10-wave operation, picked on the g
   placed in a lane, scrap banked from kills and spent on the game over screen on starting crates for
   the next run, four crate upgrades (fire rate, damage, companion, pierce) and the perks their third
   crate evolves into (fire rounds, headshots, ricochets), survivors walking among the zombies from
-  wave 3 (shots hurt them; one who reaches the sandbags joins the squad or gives scrap), wave
+  wave 3 (walking the seams between lanes; rifles hold fire on them, but pellets, marksman rounds and
+  ricochets hurt them; one who reaches the sandbags joins the squad or gives scrap), wave
   conditions from wave 6 (blackout, blood moon, ammo shortage), the horde adapting from wave 8
   (every fourth grunt becomes armoured brutes, riot zombies or flank spitters, answering the
   squad's strongest stat), squad roles (a joining survivor picks Gunner, Grenadier or Marksman),
@@ -58,8 +59,8 @@ upgrades. A run is the endless Open Road or a 10-wave operation, picked on the g
   - No audio, no camera shake.
   - Each boss's moves cycle in a fixed order (each boss wave starts one further along).
   - A spitter stands still at its range until shot, so a wave can't end while one stands; it is
-    an easy target once the soldier walks under it. Zombies steer to the hero's x plus their own
-    offset, clamped to `HERO.minX..HERO.maxX`, so none stops out of every rifle's reach.
+    an easy target once the soldier walks under it. Zombies steer to their lane's middle, inside
+    `HERO.minX..HERO.maxX`, so none stops out of every rifle's reach.
   - Supply drop picks, kit panel items, squad roles and the operation are not shown in the
     wide-screen backdrop.
   - Night-vision textures are baked the first time that style is shown, a hitch of about 0.4s
@@ -222,7 +223,8 @@ upgrades. A run is the endless Open Road or a 10-wave operation, picked on the g
   `addCompanions`) or `SURVIVOR.scrap` once the squad is full; `state.survivorsSaved` counts them.
   In `fire` a rifle's straight shot is held while `survivorAhead(x, y)` (a survivor up its column);
   shotgun pellets, a marksman's aimed round and ricochets are not held. `hitTargets` sweeps
-  survivors along with the enemies, so the nearest thing in a bullet's path is hit first; `hurtSurvivor` takes the damage and at 0 the survivor is lost (`state.survivorsLost`).
+  survivors along with the enemies, so the nearest thing in a bullet's path is hit first;
+  `hurtSurvivor` takes the damage and at 0 the survivor is lost (`state.survivorsLost`).
   They don't count towards `waveTotal` or block a wave clear, and keep walking in the break.
 - **Conditions:** `state.condition` is read where it applies: `fire` multiplies the interval by
   `CONDITION.shortageFire` in a shortage (and `planWave` got `CONDITION.shortageDrums` more drums

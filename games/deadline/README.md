@@ -99,7 +99,7 @@ and the fuel drum's blast doesn't swell.
   reaches the sandbags joins the squad as a companion, or hands over 15 scrap once the squad is
   full.
 
-  ![A survivor among the horde in both styles](docs/screenshots/survivors.webp)
+  ![Survivors walking the seam between two lanes while the horde keeps to its lanes, in both styles](docs/screenshots/survivors.webp)
 - **Squad roles**: a survivor who joins the squad stops the game to pick a role. A **Gunner**
   fires every volley like everyone else. A **Grenadier** throws a grenade every fourth volley,
   which bursts on the first zombie it hits and hurts everything round it, past riot shields. A
