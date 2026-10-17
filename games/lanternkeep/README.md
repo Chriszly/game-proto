@@ -105,7 +105,8 @@ stone joints, the lanterns have coloured-glass panes and the moths are lace-wing
     the Cask card puts a fill in for 3 coins.
 16. **Kinds of lantern**: from the fourth night some spots hold a special lantern, named under
     it: one on night 4, two on night 5, three from night 6, on spots that change with the night.
-    - **Beacon** (red-orange panes): burns its oil 40% faster, but pays triple at nightfall.
+    - **Beacon** (red-orange panes): holds 40% less oil, so it goes dark sooner, but pays triple
+      at nightfall.
     - **Candle** (a single pale pane): catches at once, but holds half the oil.
     - **Bell** (teal panes, a bell under it): while lit, every bat within 150 pixels is held still.
 17. **The Great Owl**: every fifth night, 26 seconds before nightfall, a dashed line marks a row
