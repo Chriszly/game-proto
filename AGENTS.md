@@ -130,7 +130,7 @@ and tries to link it to the repo (the run summary says if the link has to be mad
   up `games/*/index.html` on its own. Keep save keys and other browser storage prefixed with the
   game's name, since every game shares the hub's origin.
 - **Honour the hub's settings.** Every game calls `setupGame(game)` from `shared/setupGame.ts`
-  right after creating its `Phaser.Game`, which applies the frame cap, the FPS readout, reduced motion and full screen, and covers
+  right after creating its `Phaser.Game`, which applies the frame cap, the FPS readout, reduced motion and full screen, turns off the browser's right-click menu, and covers
   the page with the shared loading, start and pause screens (`shared/startScreen.ts`): the game's
   scenes stand paused until Start is pressed, and the pause button, P or leaving the tab pause them. A game
   hands its How to play (`games/<name>/src/howToPlay.ts`, typed by `shared/howToPlay.ts`) to
