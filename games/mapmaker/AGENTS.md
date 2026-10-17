@@ -54,33 +54,41 @@ voyages it took and a saved best, then Keep charting or New atlas.
 
 ### File map
 
-- `src/howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips), handed to
-  `setupGame(game, { howToPlay })` in `src/main.ts`; update it when the controls or the first round change.
+- `src/howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips) in British
+  English, US English (the same with US spelling, made by `us`) and German, picked with `byLanguage`
+  and handed to `setupGame(game, { howToPlay })` in `src/main.ts`; update every language when the
+  controls or the first round change.
+- `src/i18n.ts` and `src/i18n/`: the game's texts (`shared/i18n.ts`). `i18n/en.ts` is the British
+  English source (harbour, artefact), `i18n/de.ts` the German and `i18n/en-US.ts` only the texts
+  spelled differently in US English (harbor, artifact). `t(key, vars)` shows a text in the hub's
+  language, `coins(n)` prints a coin amount (12c, 12 M in German) and `TextKey` types the keys.
+  Every text on screen goes through `t`; the data tables name their texts by key.
 - `src/main.ts`: creates the `Phaser.Game` (960x540, `Scale.FIT`, smooth art) with `BootScene`
   then `GameScene`, calls `setupGame(game)` and `setupScaling(game)`, and puts `game` on `window`
   in dev builds.
-- `src/game/state.ts`: `GameState`, `Tile`, `Find`, `Riddle`, `Commission`, `Feature`, `Rival`,
+- `src/game/state.ts`: `GameState`, `Tile`, `Find`, `Riddle`, `Clue`, `Ground`, `Commission`, `Feature`, `Rival`,
   `Chart`, `Milestone`, `AtlasPage`, `Phase`, `Point`; `GRID`, `BASE_SUPPLIES`, `PROVISIONS_STEP`,
   `INK_STEP`, `SELL_BACK`, `WRECK_SUPPLIES`, `ARTIFACT_VALUE`, `CAMP_COST`, `CAMP_REACH`,
   `DIG_COST`, `TREASURE_VALUE`, `FEATURE_BONUS`, `WOOD_MIN`, `RIVAL_FROM`, `RIVAL_PACE`,
   `RIVAL_STEPS`, `ROYAL_KINDS`, `MILESTONES`; helpers `rankOf`, `maxSupplies`, `inkBonus`,
   `indexOf`, `inGrid`, `tileAt`, `neighbours`.
-- `src/game/hands.ts`: `Hand`, the `HANDS` table (name, card text), `HAND_IDS`, `HANDS_OFFERED`.
-- `src/game/terrain.ts`: `Terrain`, the `TERRAIN` table (name, plural, value, cost, sight, shape),
+- `src/game/hands.ts`: `Hand`, the `HANDS` table (name and card text as `TextKey`s), `HAND_IDS`, `HANDS_OFFERED`.
+- `src/game/terrain.ts`: `Terrain`, the `TERRAIN` table (name and tile count as `TextKey`s, value, cost, sight, shape),
   `CHART_ORDER`, `isLandmark`.
-- `src/game/kinds.ts`: `IsleKind`, the `KINDS` table (name, noise cell and roughness, shore,
+- `src/game/kinds.ts`: `IsleKind`, the `KINDS` table (name and Set sail caption as `TextKey`s, noise cell and roughness, shore,
   `minLand`, hills and peak thresholds, volcanic `lift`, woods, rivers, roads, atlas page colour)
   and `kindOf(island)` (green, archipelago, volcanic, jungle in turn).
-- `src/game/upgrades.ts`: `UpgradeId`, the `UPGRADES` table (name, text, costs), `UPGRADE_IDS`,
+- `src/game/upgrades.ts`: `UpgradeId`, the `UPGRADES` table (name and text as `TextKey`s, costs), `UPGRADE_IDS`,
   `nextCost`.
 - `src/game/island.ts`: `makeIsland(number)` rolls an island of `kindOf(number)` (value noise for
   height, relief and woods), joins an archipelago's islets with sandbars (`joinIslets`), keeps the
   biggest landmass (four-way connected), rings it with beach, places the port, runs rivers from the
   high ground to the sea (`addRivers`), places villages, lays a road from the port to the nearest
   village (`addRoad`), places ruins, hides the `FINDS`, builds the riddle (`makeRiddle`: a
-  tile and the fewest clues that pick it out among every tile you could dig) and finds the
-  features (`findFeatures`: each four-way stretch of river, road or forest, named from
-  `RIVER_NAMES`, `ROAD_NAMES` and `WOOD_NAMES` by the island number, in reading order).
+  tile and the fewest `Clue`s that pick it out among every tile you could dig, landmark clues tried
+  in `TILES_ORDER`, `DIR_ORDER` and `MARK_ORDER`) and finds the features (`findFeatures`: each
+  four-way stretch of river, road or forest, named from `RIVER_NAMES`, `ROAD_NAMES` and
+  `WOOD_NAMES`, keys of `i18n/en.ts`, by the island number, in reading order).
 - `src/game/sim.ts`: the rules. `newGame`, `canSurvey`, `frontier`, `costOf`, `canAfford`,
   `sightOf`, `survey`, `canAct`, `canCamp`, `pitchCamp`, `diggable`, `dig`, `claimed`,
   `valueOf`, `returnToPort`, `featuresDone`, `featureAt`, `artifactValue`, `chartOf`,
@@ -88,7 +96,8 @@ voyages it took and a saved best, then Keep charting or New atlas.
   `sellChart`, `closeAtlas`, `pickCommission`, `isPicked`, `hire`, `buy`, `islandCharted`,
   `setSail`, and the private `reveal` (turns up finds), `landRival` and `rivalTurn`, `fogged`,
   `rollCommission` and `rollBoard` with the `COMMISSIONS` table, and `rollHands`.
-- `src/game/save.ts`: `loadGame` (fills the new fields on older saves) and `saveGame`; `loadBest`
+- `src/game/save.ts`: `loadGame` (fills the new fields on older saves, and turns English feature
+  names and riddle clues from before the translations into keys and `Clue`s) and `saveGame`; `loadBest`
   and `saveBest` for the Royal Atlas's fewest voyages; `loadTheme` (the saved theme, else the
   device's `prefers-color-scheme`) and `saveTheme`.
 - `src/scenes/BootScene.ts`: sets the art's resolution (`sharpenArt`) and the theme
@@ -97,7 +106,8 @@ voyages it took and a saved best, then Keep charting or New atlas.
 - `src/scenes/GameScene.ts`: owns the `GameState`, takes taps, paints the island into two canvas
   textures, draws the sheet, survey stations with their costs, the map marks, surveyor and rival,
   value chips and notices, the viewshed, the side panel (with the riddle box and the Camp button)
-  and the chart, Royal Atlas and harbor overlays; exposes `spots`.
+  and the chart, Royal Atlas and harbor overlays; exposes `spots`. `commissionText`, `voyagesLeft`
+  and `clueText` put commissions and riddle clues into words.
 - `src/scenes/layout.ts`: screen constants (`VIEW`, `MAP`, `PANEL`, `CAMP_BUTTON`, `RETURN_BUTTON`, `OVERLAY`,
   `OVERLAY_BUTTON`, `SHOP`, `HANDS_COLUMN`, `BOARD`, `BUTTON`, `SMALL_BUTTON`, `UI_DEPTH`, `FONT`) and `tileCentre`.
 - `src/ui/Button.ts`: `makeButton`, a flat ink button with an optional size, disabled look and
@@ -111,10 +121,10 @@ voyages it took and a saved best, then Keep charting or New atlas.
   set by `sharpenArt`), `bake` (paint a canvas and add it as a texture),
   `rng`, `hex` and drawing helpers.
 - `src/art/map.ts`: `paintTerrain` (tints, hillshade, contours by marching squares, coastline,
-  rivers, roads and symbols for the whole island), `paintFog` (blank paper over uncharted tiles, UNSURVEYED lettering
+  rivers, roads and symbols for the whole island), `paintFog` (blank paper over uncharted tiles, translated UNSURVEYED lettering
   and the dashed survey limit), `placeNames` (village, ruin, bay and harbour names and peak
   heights, picked from the island number and tile spots, and every wood's and river's feature
-  name) and `nameColor`, `tintOf` (a flat colour per terrain for the live chart and swatches, per
+  name; villages keep their names in every language, the rest are translated) and `nameColor`, `tintOf` (a flat colour per terrain for the live chart and swatches, per
   theme) and `TERRAINS`, the per-theme `BANDS`, `FOREST_TINT`, `ROAD_FILL`, `CONTOUR` and `SHINE`,
   `CANVAS` and `TS` (80 units a tile; both painters draw in these units
   onto a canvas `HI / 2` times CANVAS, and paint the tints pixel by pixel at the canvas's own size).
@@ -124,9 +134,9 @@ voyages it took and a saved best, then Keep charting or New atlas.
   compass rose), `logo`, `atlas-<kind>` and `atlas-empty`, and the `MARKS`: `find-wreck`,
   `find-cave`, `artifact`, `storm`, `camp`, `dug`, `treasure`, `claim` (the rival's pennant) and
   `riddle`.
-- `shared/setupGame.ts` and `shared/settings.ts` (outside the game folder): the hub's settings.
-  `main.ts` imports `setupGame`; `state.ts` imports `byDifficulty`; `GameScene` reads
-  `settings.reduceMotion`.
+- `shared/setupGame.ts`, `shared/settings.ts` and `shared/i18n.ts` (outside the game folder): the
+  hub's settings. `main.ts` imports `setupGame`; `state.ts` imports `byDifficulty`; `GameScene`
+  reads `settings.reduceMotion`; `i18n.ts` and `howToPlay.ts` use `translator` and `byLanguage`.
 
 ### How it runs
 
@@ -192,7 +202,9 @@ voyages it took and a saved best, then Keep charting or New atlas.
   `returnToPort`). Charting a ruins tile sets `riddle.known`.
 - `camps` (the isle's base camps) are pitched on the surveyor's tile by `pitchCamp` for
   `CAMP_COST`; not on the port or sea, not twice. They reset on a new isle.
-- `riddle` (null when no tile could be told apart) holds the hidden tile `at`, its `clues`,
+- `riddle` (null when no tile could be told apart) holds the hidden tile `at`, its `clues` (each a
+  `Clue`: so many tiles one way from a landmark, the ground, by the water, out of sight of the sea
+  or beside a river, put into words by `clueText`),
   `known` and `found`. `diggable` is every charted non-sea, non-port tile not in `dug`, once the
   riddle is known and not found and a supply is left; `dig` costs `DIG_COST`, walks the surveyor
   there, and on `at` sets `found` and adds `TREASURE_VALUE` to `treasure`. `dug` resets on a new
@@ -212,7 +224,7 @@ voyages it took and a saved best, then Keep charting or New atlas.
   (`min(unused * SELL_BACK, base)`, so turning back at once earns nothing), `milestones` and
   `milestoneCoins` (the `MILESTONES` reached and not yet paid), `atlas` (100% reached), `total`.
   Supplies are left as they are until `setSail` refills them.
-- `features` (from `makeIsland`, or `findFeatures` on a load): each with `kind`, `name`, `tiles`
+- `features` (from `makeIsland`, or `findFeatures` on a load): each with `kind`, `name` (a `TextKey`), `tiles`
   and `bonus` (`FEATURE_BONUS` a tile). They never change on an isle.
 - `hand` is the hand aboard (`null` for none): `costOf` (Woodsman: forests 1, Climber: peaks 1,
   Boatman: sea 0), `sightOf` (Climber: +1), `canSurvey` and `survey` (Boatman: a charted sea tile
@@ -265,7 +277,8 @@ before isle kinds and finds get `kind: 'green'` (atlas pages too), no camps, sto
 riddle, and zero artifacts and treasure. Saves from before features, the board, hands, the rival
 and the Royal Atlas get their `features` from `findFeatures`, an empty board and hands, no hand,
 no rival, no `royal`, one-voyage commissions and zeroed new chart fields. Saves from before the
-next isle was rolled at the sale get `next: null`. `mapmaker-best` holds
+next isle was rolled at the sale get `next: null`. Saves from before the translations get their
+feature names turned into keys and their riddle clues into `Clue`s. `mapmaker-best` holds
 the fewest voyages a Royal Atlas took, kept across New atlas. `mapmaker-theme` holds `'light'` or
 `'dark'` once the theme button has been used; until then the device's preference decides. The hub's settings live under the
 shared `hub-settings` key.
@@ -284,14 +297,16 @@ shared `hub-settings` key.
 
 - `src/game/terrain.ts`: tile values, survey costs, lookout sight and shape.
 - `src/game/kinds.ts`: each isle kind's terrain mix and atlas colour.
-- `src/game/upgrades.ts`: upgrade costs and texts.
-- `src/game/hands.ts`: the hands' names and card texts.
+- `src/game/upgrades.ts`: upgrade costs and text keys.
+- `src/game/hands.ts`: the hands' names and card texts (as keys).
+- `src/i18n/`: every text on screen, in British English, German and US English.
 - `src/game/state.ts`: `GRID`, `BASE_SUPPLIES`, `PROVISIONS_STEP`, `INK_STEP`, `SELL_BACK`,
   `WRECK_SUPPLIES`, `ARTIFACT_VALUE`, `CAMP_COST`, `CAMP_REACH`, `DIG_COST`, `TREASURE_VALUE`,
   `FEATURE_BONUS`, `WOOD_MIN`, `RIVAL_FROM`, `RIVAL_PACE`, `RIVAL_STEPS`, `ROYAL_KINDS`,
   `MILESTONES`.
 - `src/game/island.ts`: `FINDS` (how many of each, on what, how far from the port), landmark
-  counts per island, the riddle's wording (`NUMBER`, `DIRS`, `MARKS`, `GROUND`), the feature names
+  counts per island, the riddle's clue tables and order (`DIRS`, `MARKS`, `GROUND`, `TILES_ORDER`, `DIR_ORDER`,
+  `MARK_ORDER`), the feature name keys
   (`RIVER_NAMES`, `ROAD_NAMES`, `WOOD_NAMES`).
 - `src/game/sim.ts`: `COMMISSIONS`, `BOARD_SIZE`, `LONG_PAY`.
 - `src/art/map.ts`: terrain heights (`ELEV`), tint bands (`BANDS`), name lists.
@@ -336,6 +351,11 @@ shared `hub-settings` key.
 
 ## Making common changes
 
+- Add or change a text: its key in `i18n/en.ts` (British spelling), the German in `i18n/de.ts`
+  (the build fails without it) and, when US spelling differs, the US text in `i18n/en-US.ts`; run
+  `node scripts/check-translations.mjs`. German runs longer than English: the hand cards, the
+  harbour's upgrade texts and the chart rows are the tightest spots, so check a new text with
+  `?lang=de`.
 - Add a terrain: add it to `Terrain` and `TERRAIN` in `terrain.ts` (and `CHART_ORDER`), give it a
   height in `ELEV` and a colour in `TINT` in `src/art/map.ts` (the `Record`s force this) and a
   symbol in `paintTerrain` and `swatch` (`icons.ts`), place it in `island.ts`, and add it to the
@@ -343,17 +363,18 @@ shared `hub-settings` key.
 - Add a find: add it to `Find` in `state.ts`, a row in `FINDS` in `island.ts`, its effect in
   `reveal` in `sim.ts`, a mark in `MARKS` (`icons.ts`) drawn by `syncMarks`, a notice in
   `announceFinds`, the test's per-survey check and the README's finds table.
-- Add an isle kind: add it to `IsleKind` and `KINDS` in `kinds.ts` and to `ORDER` there; the atlas
-  icon is baked from `KINDS` on its own.
+- Add an isle kind: add it to `IsleKind` and `KINDS` in `kinds.ts` (its name and Set sail caption in
+  the `i18n/` files) and to `ORDER` there; the atlas icon is baked from `KINDS` on its own.
 - Add an upgrade: add it to `UpgradeId` and `UPGRADES`, draw `icon-<id>` in `UPGRADE_ICONS` in
   `icons.ts`, apply it where it acts (`state.ts` helpers or `sim.ts`). Four rows fill the harbor's
   left column; a fifth needs `SHOP`, `BOARD` and `OVERLAY` in `layout.ts` adjusted.
-- Add a hand: add it to `Hand` and `HANDS` in `hands.ts` (card text of about 26 characters), draw
+- Add a hand: add it to `Hand` and `HANDS` in `hands.ts` (name and card text of about 26 characters
+  in the `i18n/` files), draw
   `hand-<id>` in `HAND_ICONS` in `icons.ts`, apply it in `sim.ts` (`costOf`, `sightOf`,
   `canSurvey`, `artifactValue`...) and add it to the README's table. `HANDS_OFFERED` cards fill the
   right column (`HANDS_COLUMN`).
 - Add a feature kind: add it to `Feature['kind']` and `findFeatures` in `island.ts` (with a name
-  list), label it in `placeNames` if it should print, and add it to the test's feature check and
+  list of keys, their names in the `i18n/` files), label it in `placeNames` if it should print, and add it to the test's feature check and
   the README's table.
 - Change the rival: `RIVAL_FROM`, `RIVAL_PACE` and `RIVAL_STEPS` in `state.ts`, the pulls in
   `rivalTurn`, the half in `chartOf`.

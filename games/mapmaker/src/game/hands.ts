@@ -1,19 +1,21 @@
 // The hands a voyage can take on at the harbor: one of three offered, free, for that voyage only.
-// Their effects are applied in src/game/sim.ts (`costOf`, `canSurvey`, `sightOf`, `chartOf`).
+// Their effects are applied in src/game/sim.ts (`costOf`, `canSurvey`, `sightOf`, `chartOf`). Names
+// and texts are keys of `i18n/en.ts`, shown with `t`.
+import type { TextKey } from '../i18n';
 
 export type Hand = 'woodsman' | 'climber' | 'naturalist' | 'boatman';
 
 export interface HandInfo {
-  name: string;
+  name: TextKey;
   /** What the hand does, as printed on their card (it has room for about 26 characters). */
-  text: string;
+  text: TextKey;
 }
 
 export const HANDS: Record<Hand, HandInfo> = {
-  woodsman: { name: 'Woodsman', text: 'Forests cost 1 supply' },
-  climber: { name: 'Climber', text: 'Peaks cost 1, sees further' },
-  naturalist: { name: 'Naturalist', text: 'Caves pay double' },
-  boatman: { name: 'Boatman', text: 'Sea is free and leads on' },
+  woodsman: { name: 'woodsmanName', text: 'woodsmanText' },
+  climber: { name: 'climberName', text: 'climberText' },
+  naturalist: { name: 'naturalistName', text: 'naturalistText' },
+  boatman: { name: 'boatmanName', text: 'boatmanText' },
 };
 
 export const HAND_IDS = Object.keys(HANDS) as Hand[];
