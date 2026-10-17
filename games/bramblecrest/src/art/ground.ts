@@ -1,13 +1,15 @@
-// Paints a map's ground in one texture: moss and grass, worn paths, still water, the shrine's
-// flagstones, walls and pits. Trees, bushes and everything that stands up are sprites on top.
+// Paints a map's ground in one texture: moss and grass, worn paths, still water, the shrine's and
+// the belfry's flagstones, walls, cracked walls and pits. Trees, bushes and everything that stands up are sprites on top.
 
 import Phaser from 'phaser';
 import { sharpRes } from '../../../../shared/scaling';
-import { TILE, tileAt, type MapDef, type Tile } from '../game/maps';
+import { DUNGEONS, TILE, tileAt, underBoulder, type MapDef, type Tile } from '../game/maps';
 import { paint, shade } from './paint';
 
-const GRASS: Record<string, string> = { village: '#4f7a46', woods: '#3f6a40', fen: '#3d6a5a', shrine: '#4a4a56' };
-const PATH: Record<string, string> = { village: '#b49a72', woods: '#8f7c5c', fen: '#8a7a5a', shrine: '#6a6a74' };
+const GRASS: Record<string, string> = { village: '#4f7a46', woods: '#3f6a40', fen: '#3d6a5a', shrine: '#4a4a56', belfry: '#44505a' };
+const PATH: Record<string, string> = { village: '#b49a72', woods: '#8f7c5c', fen: '#8a7a5a', shrine: '#6a6a74', belfry: '#62707a' };
+/** Flagstones: the shrine's grey, the belfry's drowned blue. */
+const FLOOR: Record<string, string> = { shrine: '#55535e', belfry: '#4a5868' };
 
 function rng(seed: number) {
   return () => {
@@ -33,11 +35,13 @@ export function paintGround(scene: Phaser.Scene, map: MapDef) {
     W,
     H,
     (c) => {
-      c.fillStyle = map.theme === 'shrine' ? '#15141c' : grass;
+      c.fillStyle = DUNGEONS.has(map.id) ? '#15141c' : grass;
       c.fillRect(0, 0, W, H);
       for (let y = 0; y < map.h; y++)
         for (let x = 0; x < map.w; x++) {
-          const t = tileAt(map, x, y);
+          let t = tileAt(map, x, y);
+          // A boulder stands on the path or grass it blocks; its sprite goes on top.
+          if (t === 'boulder') t = underBoulder(map, x, y);
           const px = x * TILE;
           const py = y * TILE;
           switch (t) {
@@ -108,7 +112,7 @@ export function paintGround(scene: Phaser.Scene, map: MapDef) {
               break;
             }
             case 'floor': {
-              c.fillStyle = shade('#55535e', (r() - 0.5) * 0.12);
+              c.fillStyle = shade(FLOOR[map.theme] ?? FLOOR.shrine, (r() - 0.5) * 0.12);
               c.fillRect(px, py, TILE, TILE);
               c.strokeStyle = 'rgba(15,14,20,0.55)';
               c.lineWidth = 1.5;
@@ -137,10 +141,12 @@ export function paintGround(scene: Phaser.Scene, map: MapDef) {
               }
               break;
             }
-            case 'wall': {
+            case 'wall':
+            case 'crack': {
               // A wall over open floor shows its lit face; deeper wall is the dark top of the masonry.
+              // A cracked wall always shows its face, split by dark cracks.
               const below = tileAt(map, x, y + 1);
-              const open = below !== 'wall';
+              const open = t === 'crack' || (below !== 'wall' && below !== 'crack');
               c.fillStyle = shade('#2c2a36', (r() - 0.5) * 0.15);
               c.fillRect(px, py, TILE, TILE);
               if (open) {
@@ -156,6 +162,20 @@ export function paintGround(scene: Phaser.Scene, map: MapDef) {
                 c.lineTo(px + TILE, py + 20);
                 c.moveTo(px + (x % 2 ? 10 : 22), py + 8);
                 c.lineTo(px + (x % 2 ? 10 : 22), py + 20);
+                c.stroke();
+              }
+              if (t === 'crack') {
+                c.strokeStyle = '#0a0a10';
+                c.lineWidth = 2;
+                c.beginPath();
+                c.moveTo(px + 8, py + 9);
+                c.lineTo(px + 14, py + 17);
+                c.lineTo(px + 11, py + 24);
+                c.lineTo(px + 18, py + 31);
+                c.moveTo(px + 14, py + 17);
+                c.lineTo(px + 24, py + 14);
+                c.moveTo(px + 11, py + 24);
+                c.lineTo(px + 4, py + 28);
                 c.stroke();
               }
               break;

@@ -4,20 +4,21 @@
 import Phaser from 'phaser';
 import { paintAll, texScale } from '../art/paint';
 import { paintGround, groundKey } from '../art/ground';
-import { buildMap, centre, CUTTABLE, LOW, setTile, SOLID, TILE, tileAt, type Door, type Facing, type ItemId, type MapDef, type MapId, type NpcId, type Prop, type PropKind } from '../game/maps';
+import { BREAKABLE, buildMap, centre, CUTTABLE, DUNGEONS, LOW, setTile, SOLID, TILE, tileAt, underBoulder, type Door, type Facing, type ItemId, type MapDef, type MapId, type NpcId, type Prop, type PropKind } from '../game/maps';
 import { findPath, type Step } from '../game/path';
-import { advance, clearSave, give, hasFlag, load, MOONSTONES, newState, save, setFlag, type GameState } from '../game/state';
+import { advance, CHAPTER_ONE_STONES, clearSave, give, hasFlag, load, MAX_SEEDS, MOONSTONES, newState, save, setFlag, stonesToFind, type GameState } from '../game/state';
 import { talk, type TalkEffect } from '../game/talk';
 import { settings } from '../../../../shared/settings';
 import { scrollingCamera, splitHudCamera, viewPoint } from '../../../../shared/scaling';
 import { Hud } from './hud';
 import { NightLight, type Light } from './light';
 import {
-  BULB_DOWN_MS, BULB_EVERY_MS, BULB_HP, BULB_UP_MS, FOES, foeFree, makeFoe, SEED_SPEED, SUMMON_MS, THORNLING_SHOT_MS, VOLLEY_MS,
-  type Boss, type Foe, type Seed,
+  BELL_DOWN_MS, BULB_DOWN_MS, BULB_EVERY_MS, BULB_HP, BULB_UP_MS, BURST_PX, DROP_MS, EXPOSED_MS, FOES, foeFree, FROG_LEAP_MS, FROG_WAIT_MS, FUSE_MS, HOVER_MS, HOVER_SPEED,
+  makeFoe, SEED_SPEED, SLAM_PX, SUMMON_MS, THORNLING_SHOT_MS, VOLLEY_MS, WRAITH_HP,
+  type Bomb, type Boss, type Foe, type Seed, type Wraith,
 } from './foes';
 import {
-  HURT_MS, LANTERN, LANTERN_OIL, PICKUP_PX, PULL_SPEED, ROLL_COOLDOWN_MS, ROLL_MS, ROLL_SPEED, SWING_COOLDOWN_MS, SWING_MS, SWING_RADIUS, SWING_REACH, VINE_RANGE, VINE_SPEED, WALK_SPEED,
+  HURT_MS, LANTERN, LANTERN_OIL, PICKUP_PX, PLANT_REACH, PULL_SPEED, ROLL_COOLDOWN_MS, ROLL_MS, ROLL_SPEED, SWING_COOLDOWN_MS, SWING_MS, SWING_RADIUS, SWING_REACH, VINE_RANGE, VINE_SPEED, WALK_SPEED,
 } from './layout';
 
 /** Where each prop's art touches the ground, as a share of its texture's height, and whether it blocks. */
@@ -33,7 +34,18 @@ const PROP_ART: Record<PropKind, { key: string; foot: number; solid: boolean }> 
   rock: { key: 'rock', foot: 23 / 28, solid: true },
   arch: { key: 'arch', foot: 96 / 104, solid: true },
   statue: { key: 'statue-right', foot: 58 / 64, solid: true },
+  tower: { key: 'tower', foot: 148 / 152, solid: true },
+  bell: { key: 'bell-1', foot: 44 / 48, solid: true },
+  candle: { key: 'candle', foot: 26 / 28, solid: false },
 };
+
+/** Moonstones that only show once a boss is beaten, and the flag that beats it. */
+const AFTER_BOSS: Record<string, string> = { 's-boss': 'boss', 'b-bell': 'wraith' };
+/** The order the belfry's bells must ring in, by voice (0 is the deepest). */
+const BELL_ORDER = [0, 2, 1];
+const BELL_SOUND = ['BONG', 'DONG', 'ting'];
+/** How high the Bellwraith's bell hangs while it hunts. */
+const BELL_LIFT = 72;
 
 const DIRS: Record<Facing, { x: number; y: number }> = { up: { x: 0, y: -1 }, down: { x: 0, y: 1 }, left: { x: -1, y: 0 }, right: { x: 1, y: 0 } };
 const WARM: [number, number, number] = [255, 190, 110];
@@ -43,14 +55,14 @@ type Target =
   | { kind: 'npc'; id: NpcId }
   | { kind: 'chest'; id: string }
   | { kind: 'sign'; i: number }
-  | { kind: 'cut' | 'dig' | 'block' | 'door'; tx: number; ty: number }
+  | { kind: 'cut' | 'dig' | 'block' | 'door' | 'ring' | 'plant'; tx: number; ty: number }
   | { kind: 'foe'; foe: Foe };
 
 interface Dialog {
   speaker: string;
   lines: string[];
   i: number;
-  then?: TalkEffect | 'chapter-end';
+  then?: TalkEffect;
 }
 
 export class GameScene extends Phaser.Scene {
@@ -63,6 +75,9 @@ export class GameScene extends Phaser.Scene {
   target: Target | null = null;
   foes: Foe[] = [];
   boss: Boss | null = null;
+  wraith: Wraith | null = null;
+  /** Bellseeds planted and swelling. */
+  bombs: Bomb[] = [];
 
   private hud!: Hud;
   private night!: NightLight;
@@ -77,6 +92,12 @@ export class GameScene extends Phaser.Scene {
   private blocks: { x: number; y: number; sprite: Phaser.GameObjects.Image }[] = [];
   private seeds: Seed[] = [];
   private hearts: { x: number; y: number; sprite: Phaser.GameObjects.Image }[] = [];
+  private pods: { x: number; y: number; sprite: Phaser.GameObjects.Image }[] = [];
+  private bells: { note: number; x: number; y: number; sprite: Phaser.GameObjects.Image }[] = [];
+  /** The bells rung so far, in order, toward the belfry's tune. */
+  private bellSeq: number[] = [];
+  /** Short bursts of light: a bellseed going off, a bell ringing. */
+  private flashes: (Light & { t: number })[] = [];
   private glows: Light[] = [];
   private wisp: { i: number; sprite: Phaser.GameObjects.Image; hop: number } | null = null;
   private dug = new Set<string>();
@@ -127,10 +148,18 @@ export class GameScene extends Phaser.Scene {
     this.world = [];
     for (const s of this.seeds) s.sprite.destroy();
     for (const h of this.hearts) h.sprite.destroy();
+    for (const p of this.pods) p.sprite.destroy();
+    for (const b of this.bombs) b.sprite.destroy();
     this.seeds = [];
     this.hearts = [];
+    this.pods = [];
+    this.bombs = [];
+    this.bells = [];
+    this.bellSeq = [];
+    this.flashes = [];
     this.foes = [];
     this.boss = null;
+    this.wraith = null;
     this.wisp = null;
     this.blocks = [];
     this.blockers.clear();
@@ -153,13 +182,19 @@ export class GameScene extends Phaser.Scene {
     if (id === 'village' && hasFlag(s, 'gate-cut')) for (const i of [19, 20]) setTile(map, i, 3, 'path');
     if (id === 'woods' && hasFlag(s, 'woods-thorns')) for (const i of [42, 43]) setTile(map, i, 10, 'path');
     if (id === 'shrine' && hasFlag(s, 'boss')) map.tiles = map.tiles.map((t) => (t === 'ring' ? 'floor' : t));
+    const broke = `broke-${id}-`;
+    for (const f of s.flags)
+      if (f.startsWith(broke)) {
+        const [tx, ty] = f.slice(broke.length).split('-').map(Number);
+        this.clearRock(map, tx, ty);
+      }
 
     paintGround(this, map);
     this.ground = this.add.image(0, 0, groundKey(map)).setOrigin(0).setScale(texScale(groundKey(map))).setDepth(-10000);
     this.world.push(this.ground);
     const cam = this.cameras.main;
     cam.setBounds(0, 0, map.w * TILE, map.h * TILE);
-    cam.setBackgroundColor(map.theme === 'shrine' ? '#05050a' : '#0b1020');
+    cam.setBackgroundColor(DUNGEONS.has(id) ? '#05050a' : '#0b1020');
     this.glows = [];
 
     for (let ty = 0; ty < map.h; ty++)
@@ -171,6 +206,10 @@ export class GameScene extends Phaser.Scene {
           this.addWorld(this.add.image(tx * TILE + 16, ty * TILE + 30, key).setOrigin(0.5, 64 / 72), (ty + 1) * TILE - 2);
         } else if (t === 'bush' || t === 'thorns') {
           const img = this.add.image(tx * TILE + 16, ty * TILE + 28, t).setOrigin(0.5, t === 'bush' ? 25 / 30 : 29 / 34);
+          this.addWorld(img, (ty + 1) * TILE - 4);
+          this.bushSprites.set(ty * map.w + tx, img);
+        } else if (t === 'boulder') {
+          const img = this.add.image(tx * TILE + 16, ty * TILE + 28, 'boulder').setOrigin(0.5, 27 / 32);
           this.addWorld(img, (ty + 1) * TILE - 4);
           this.bushSprites.set(ty * map.w + tx, img);
         }
@@ -233,11 +272,12 @@ export class GameScene extends Phaser.Scene {
       this.stoneSprites.set(st.id, img);
     }
     map.enemies.forEach((e, i) => {
-      if (id === 'shrine' && hasFlag(s, `foe-${i}`)) return;
+      if (DUNGEONS.has(id) && hasFlag(s, this.foeFlag(i))) return;
       const c = centre(e);
       this.spawnFoe(e.kind, c.x, c.y, i, e.room);
     });
     if (id === 'shrine' && map.boss && !hasFlag(s, 'boss')) this.makeBoss(map.boss);
+    if (id === 'belfry' && map.boss && !hasFlag(s, 'wraith')) this.makeWraith(map.boss);
     if (map.wisp && !s.moonstones.includes('f-wisp')) {
       const c = centre(map.wisp[0]);
       const img = this.add.image(c.x, c.y, 'wisp');
@@ -267,10 +307,11 @@ export class GameScene extends Phaser.Scene {
 
   private addProp(p: Prop) {
     const art = PROP_ART[p.kind];
-    const key = p.kind === 'statue' ? `statue-${p.facing ?? 'down'}` : art.key;
+    const key = p.kind === 'statue' ? `statue-${p.facing ?? 'down'}` : p.kind === 'bell' ? `bell-${p.note ?? 1}` : art.key;
     const x = (p.x + p.w / 2) * TILE;
     const bottom = (p.y + p.h) * TILE;
-    this.addWorld(this.add.image(x, bottom, key).setOrigin(0.5, art.foot), bottom - 1);
+    const img = this.addWorld(this.add.image(x, bottom, key).setOrigin(0.5, art.foot), bottom - 1);
+    if (p.kind === 'bell') this.bells.push({ note: p.note ?? 1, x: p.x, y: p.y, sprite: img });
     if (art.solid) for (let j = 0; j < p.h; j++) for (let i = 0; i < p.w; i++) this.block(p.x + i, p.y + j);
     const top = bottom - this.textures.get(key).getSourceImage().height * texScale(key) * art.foot;
     switch (p.kind) {
@@ -282,6 +323,12 @@ export class GameScene extends Phaser.Scene {
         break;
       case 'shroom':
         this.glows.push({ x, y: bottom - 8, r: 70, col: [120, 230, 255], power: 0.7 });
+        break;
+      case 'candle':
+        this.glows.push({ x, y: bottom - 20, r: 90, col: WARM, power: 0.8 });
+        break;
+      case 'tower':
+        this.glows.push({ x, y: top + 60, r: 60, col: [150, 200, 255], power: 0.5 });
         break;
       case 'house':
         for (const dx of [-45, 45]) this.glows.push({ x: x + dx, y: bottom - 45, r: 80, col: WARM, power: 0.75 });
@@ -311,7 +358,7 @@ export class GameScene extends Phaser.Scene {
     const ty = Math.floor(s.y / TILE);
     const inside = tx >= room.x && tx < room.x + room.w && ty >= room.y && ty < room.y + room.h;
     if (!inside) return false;
-    if (d.room === 'boss') return !!this.boss;
+    if (d.room === 'boss') return !!this.boss || !!this.wraith;
     return this.foes.some((f) => f.alive && f.room === d.room);
   }
 
@@ -357,6 +404,7 @@ export class GameScene extends Phaser.Scene {
     if (code === 'Space' || code === 'Enter' || code === 'KeyJ') this.act();
     else if (code === 'ShiftLeft' || code === 'ShiftRight' || code === 'KeyK') this.startRoll();
     else if (code === 'KeyQ' || code === 'KeyE' || code === 'KeyL') this.fireVine();
+    else if (code === 'KeyB' || code === 'KeyX') this.plantSeed();
   }
 
   private onPointer(pointer: Phaser.Input.Pointer) {
@@ -369,6 +417,7 @@ export class GameScene extends Phaser.Scene {
     if (btn === 'sword') return this.act();
     if (btn === 'roll') return this.startRoll();
     if (btn === 'vine') return this.fireVine();
+    if (btn === 'seed') return this.plantSeed();
     const w = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
     this.tapWorld(w.x, w.y);
   }
@@ -390,6 +439,8 @@ export class GameScene extends Phaser.Scene {
     if (sign >= 0) return this.goTo({ kind: 'sign', i: sign }, tx, ty);
     if (this.blocks.some((b) => b.x === tx && b.y === ty)) return this.goTo({ kind: 'block', tx, ty }, tx, ty);
     if (this.closedDoors.has(ty * this.map.w + tx)) return this.goTo({ kind: 'door', tx, ty }, tx, ty);
+    if (s.items.sword && this.bells.some((b) => b.x === tx && b.y === ty)) return this.goTo({ kind: 'ring', tx, ty }, tx, ty);
+    if (s.items.seeds && BREAKABLE.has(tileAt(this.map, tx, ty))) return this.goTo({ kind: 'plant', tx, ty }, tx, ty);
     if (s.items.sword && CUTTABLE.has(tileAt(this.map, tx, ty))) return this.goTo({ kind: 'cut', tx, ty }, tx, ty);
     const buried = this.map.stones.find((st) => st.hidden === 'buried' && st.x === tx && st.y === ty && !this.dug.has(st.id));
     if (buried && s.items.sword) return this.goTo({ kind: 'dig', tx, ty }, tx, ty, true);
@@ -447,7 +498,8 @@ export class GameScene extends Phaser.Scene {
     const dy = at.y + 0.5 - s.y / TILE;
     if (t.kind !== 'dig') s.facing = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : dy > 0 ? 'down' : 'up';
     this.applyFacing();
-    if (t.kind === 'cut' || t.kind === 'dig') this.startSwing();
+    if (t.kind === 'cut' || t.kind === 'dig' || t.kind === 'ring') this.startSwing();
+    else if (t.kind === 'plant') this.plantSeed();
     else this.interactAt(at.x, at.y);
   }
 
@@ -509,9 +561,10 @@ export class GameScene extends Phaser.Scene {
     const text: Record<ItemId, string> = {
       sword: 'You found the Old Blade! Space, J or the sword button swings it. It cuts bushes and thorns too.',
       hookvine: 'You found the Hookvine! Q, L or the vine button throws it. It pulls you to golden posts, over water and pits.',
-      key: 'You found a small key. It opens one locked door in the shrine.',
+      key: 'You found a small key. It opens one locked door in this place.',
       heart: 'You found a Heart Vessel! One more heart.',
       oil: 'You found lantern oil. Your lantern burns brighter now.',
+      seeds: `You got ${MAX_SEEDS} bellseeds! B, X or the seed button plants one. Step back: it bursts and breaks cracked stone.`,
     };
     this.openDialog('', [text[item]]);
     save(s);
@@ -532,7 +585,7 @@ export class GameScene extends Phaser.Scene {
     if (d.then) this.effect(d.then);
   }
 
-  private effect(e: TalkEffect | 'chapter-end') {
+  private effect(e: TalkEffect) {
     const s = this.state;
     switch (e) {
       case 'quest-blade':
@@ -552,27 +605,48 @@ export class GameScene extends Phaser.Scene {
         break;
       case 'finish':
         advance(s, 'done');
-        this.chapterEnd();
+        this.chapterEnd(1);
         break;
-      case 'chapter-end':
-        this.chapterEnd();
+      case 'quest-bell':
+        advance(s, 'bell');
+        this.hud.toast('New quest: The Drowned Bell');
+        break;
+      case 'seeds':
+        advance(s, 'belfry');
+        give(s, 'seeds');
+        this.openDialog('', [`You got ${MAX_SEEDS} bellseeds! B, X or the seed button plants one in front of you. Step back: it bursts, breaks cracked stone and boulders, and hurts anything close.`]);
+        break;
+      case 'refill':
+        s.seeds = MAX_SEEDS;
+        this.hud.toast(`Bellseeds ${MAX_SEEDS}`);
+        break;
+      case 'finish-two':
+        advance(s, 'end');
+        this.chapterEnd(2);
         break;
     }
     save(s);
   }
 
-  private chapterEnd() {
+  private chapterEnd(chapter: 1 | 2) {
     const s = this.state;
     const n = s.moonstones.length;
+    const total = chapter === 1 ? CHAPTER_ONE_STONES : MOONSTONES;
     const ending =
-      n >= MOONSTONES
-        ? 'Every moonstone hums at once. Far off in Glimmer Fen, something vast opens one eye, and smiles.'
-        : n >= 4
-          ? 'A cold light flickers over Glimmer Fen. Some of the moon is still missing.'
-          : 'The lamps burn on in Mossford. The woods are quiet, for now.';
+      chapter === 1
+        ? n >= total
+          ? 'Every moonstone hums at once. Far off in Glimmer Fen, something vast opens one eye, and smiles.'
+          : n >= 4
+            ? 'A cold light flickers over Glimmer Fen. Some of the moon is still missing.'
+            : 'The lamps burn on in Mossford. The woods are quiet, for now.'
+        : n >= total
+          ? 'The moonstones ring like little bells, all together. High above the fen, the moon rings back.'
+          : n >= 10
+            ? 'The fen is still at last. Somewhere under the water, a last few stones keep humming.'
+            : 'The frogs sing over the drowned belfry. The night is quiet, for now.';
     this.hud.showEnd(
-      'Chapter One: The Thornmother',
-      [`Moonstones ${n} of ${MOONSTONES}   ·   Foes beaten ${s.beaten}   ·   Falls ${s.falls}`, ending],
+      chapter === 1 ? 'Chapter One: The Thornmother' : 'Chapter Two: The Drowned Bell',
+      [`Moonstones ${n} of ${total}   ·   Foes beaten ${s.beaten}   ·   Falls ${s.falls}`, ending],
       () => undefined,
       () => {
         clearSave();
@@ -588,7 +662,7 @@ export class GameScene extends Phaser.Scene {
     s.moonstones.push(id);
     this.stoneSprites.get(id)?.destroy();
     this.stoneSprites.delete(id);
-    this.hud.toast(`Moonstone! ${s.moonstones.length} of ${MOONSTONES}`);
+    this.hud.toast(`Moonstone! ${s.moonstones.length} of ${stonesToFind(s)}`);
     save(s);
   }
 
@@ -605,6 +679,11 @@ export class GameScene extends Phaser.Scene {
     // Foes and the Thornmother's bulbs in reach.
     for (const f of this.foes) if (f.alive && Math.hypot(f.x - hx, f.y - 8 - hy) < SWING_RADIUS + 12) this.hitFoe(f, d);
     if (this.boss) for (const b of this.boss.bulbs) if (b.state === 'down' && Math.hypot(b.x - hx, b.y - 10 - hy) < SWING_RADIUS + 14) this.hitBulb(b);
+    const w = this.wraith;
+    if (w && (w.state === 'tipped' || w.state === 'down') && Math.hypot(w.x - hx, w.y - 12 - hy) < SWING_RADIUS + 26) this.hitWraith();
+    // The belfry's bells, one at a time.
+    const bell = this.bells.find((b) => Math.hypot((b.x + 0.5) * TILE - hx, (b.y + 0.5) * TILE - hy) < SWING_RADIUS + 14);
+    if (bell) this.ringBell(bell);
     // Bushes and thorns: the tile in front, and the one the blade's tip reaches.
     const tiles = new Set<string>();
     for (const r of [16, SWING_REACH + 8]) tiles.add(`${Math.floor((s.x + d.x * r) / TILE)},${Math.floor((s.y - 4 + d.y * r) / TILE)}`);
@@ -646,6 +725,138 @@ export class GameScene extends Phaser.Scene {
       if (this.map.id === 'woods') setFlag(s, 'woods-thorns');
       save(s);
     } else if (Math.random() < 0.2) this.dropHeart((tx + 0.5) * TILE, (ty + 0.5) * TILE);
+    else if (s.items.seeds && Math.random() < 0.3) this.dropPod((tx + 0.5) * TILE, (ty + 0.5) * TILE);
+  }
+
+  private ringBell(bell: GameScene['bells'][number]) {
+    const s = this.state;
+    const c = centre(bell);
+    this.hud.toast(`${BELL_SOUND[bell.note]}...`);
+    if (!settings.reduceMotion) {
+      this.tweens.add({ targets: bell.sprite, angle: { from: -14, to: 14 }, duration: 160, yoyo: true, repeat: 1, onComplete: () => bell.sprite.setAngle(0) });
+      this.flashes.push({ x: c.x, y: c.y - 14, r: 90, col: [255, 210, 130], power: 0.8, t: 500 });
+    }
+    if (hasFlag(s, 'bells')) return;
+    this.bellSeq.push(bell.note);
+    const i = this.bellSeq.length - 1;
+    if (this.bellSeq[i] !== BELL_ORDER[i]) {
+      this.bellSeq = [];
+      this.time.delayedCall(500, () => this.hud.toast('The bells clash, and fall silent.'));
+      return;
+    }
+    if (this.bellSeq.length < BELL_ORDER.length) return;
+    setFlag(s, 'bells');
+    this.time.delayedCall(500, () => this.hud.toast('The bells ring true. Somewhere, iron bars grind open.'));
+    save(s);
+  }
+
+  // ---------------------------------------------------------------- bellseeds
+
+  /** Plants a bellseed in front of the knight; it bursts after FUSE_MS. */
+  private plantSeed() {
+    const s = this.state;
+    if (!s.items.seeds || this.roll || this.hook || this.bombs.length >= 2) return;
+    if (s.seeds <= 0) {
+      this.hud.toast('No bellseeds left. Cut bushes, or ask Old Sedge.');
+      return;
+    }
+    const d = DIRS[s.facing];
+    let x = s.x + d.x * PLANT_REACH;
+    let y = s.y + d.y * PLANT_REACH;
+    const tx = Math.floor(x / TILE);
+    const ty = Math.floor(y / TILE);
+    // Against a plain wall the seed drops at the knight's feet; against cracked stone it sits right on it.
+    if (this.solidTile(tx, ty) && !BREAKABLE.has(tileAt(this.map, tx, ty))) {
+      x = s.x;
+      y = s.y + 2;
+    }
+    s.seeds--;
+    const sprite = this.add.image(x, y, 'bellseed').setOrigin(0.5, 19 / 22).setScale(texScale('bellseed')).setDepth(y);
+    this.world.push(sprite);
+    this.bombs.push({ x, y, t: FUSE_MS, sprite });
+    this.route = null;
+    this.target = null;
+  }
+
+  private updateBombs(dt: number) {
+    for (const b of this.bombs) {
+      b.t -= dt;
+      const grow = 1 + (1 - b.t / FUSE_MS) * 0.45;
+      b.sprite.setScale(texScale('bellseed') * grow);
+      // It flickers just before it bursts; held steady with reduce motion on.
+      const flick = b.t < 450 && !settings.reduceMotion && Math.floor(b.t / 70) % 2 === 0;
+      if (flick) b.sprite.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
+      else b.sprite.clearTint().setTintMode(Phaser.TintModes.MULTIPLY);
+    }
+    const done = this.bombs.filter((b) => b.t <= 0);
+    if (!done.length) return;
+    this.bombs = this.bombs.filter((b) => b.t > 0);
+    for (const b of done) {
+      b.sprite.destroy();
+      this.burst(b.x, b.y);
+    }
+  }
+
+  /** A bellseed goes off: it breaks rock, cuts bushes, hurts foes (and the knight) and tips the Bellwraith's bell. */
+  private burst(x: number, y: number) {
+    const s = this.state;
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2;
+      const dot = this.add.circle(x, y - 6, 4, i % 2 ? 0xd8f08a : 0xf0d070).setDepth(y + 2);
+      this.tweens.add({ targets: dot, x: x + Math.cos(a) * BURST_PX, y: y - 6 + Math.sin(a) * BURST_PX * 0.7, alpha: 0, duration: 380, onComplete: () => dot.destroy() });
+    }
+    if (!settings.reduceMotion) {
+      this.cameras.main.shake(160, 0.006);
+      this.flashes.push({ x, y: y - 8, r: 140, col: [230, 255, 160], power: 1, t: 350 });
+    }
+    const tx0 = Math.floor(x / TILE);
+    const ty0 = Math.floor(y / TILE);
+    for (let ty = ty0 - 2; ty <= ty0 + 2; ty++)
+      for (let tx = tx0 - 2; tx <= tx0 + 2; tx++) {
+        const t = tileAt(this.map, tx, ty);
+        if (Math.hypot((tx + 0.5) * TILE - x, (ty + 0.5) * TILE - y) > BURST_PX + 8) continue;
+        if (BREAKABLE.has(t)) this.breakRock(tx, ty);
+        else if (t === 'bush') this.cut(tx, ty);
+      }
+    for (const f of this.foes)
+      if (f.alive && Math.hypot(f.x - x, f.y - y) < BURST_PX + 8) {
+        const d = { x: Math.sign(f.x - x), y: Math.sign(f.y - y) };
+        this.hitFoe(f, d);
+        f.hurt = 0;
+        if (f.alive) this.hitFoe(f, d);
+      }
+    if (Math.hypot(s.x - x, s.y - y) < BURST_PX * 0.8) this.hurt(1, { x, y });
+    const w = this.wraith;
+    if (w && w.state === 'down' && Math.hypot(w.x - x, w.y - y) < BURST_PX + 30) this.tipBell();
+  }
+
+  /** Clears a boulder or cracked wall from a map's tiles. */
+  private clearRock(map: MapDef, tx: number, ty: number) {
+    const t = tileAt(map, tx, ty);
+    if (t === 'crack') setTile(map, tx, ty, 'floor');
+    else if (t === 'boulder') setTile(map, tx, ty, underBoulder(map, tx, ty));
+  }
+
+  private breakRock(tx: number, ty: number) {
+    const s = this.state;
+    const crack = tileAt(this.map, tx, ty) === 'crack';
+    this.clearRock(this.map, tx, ty);
+    setFlag(s, `broke-${this.map.id}-${tx}-${ty}`);
+    const k = ty * this.map.w + tx;
+    this.bushSprites.get(k)?.destroy();
+    this.bushSprites.delete(k);
+    this.puff((tx + 0.5) * TILE, (ty + 0.5) * TILE, 0x8a8c94);
+    // A cracked wall is part of the ground's picture, so the ground is painted again.
+    if (crack) {
+      paintGround(this, this.map);
+      this.ground.setTexture(groundKey(this.map));
+    }
+    save(s);
+  }
+
+  private dropPod(x: number, y: number) {
+    const sprite = this.add.image(x, y, 'pickup-seed').setScale(texScale('pickup-seed')).setDepth(y);
+    this.pods.push({ x, y, sprite });
   }
 
   private startRoll() {
@@ -725,15 +936,18 @@ export class GameScene extends Phaser.Scene {
       this.updateHook(dt);
       this.updateFoes(dt);
       this.updateSeeds(dt);
+      this.updateBombs(dt);
       this.updateBoss(dt);
+      this.updateWraith(dt);
       this.updateWisp(dt);
       this.pickups();
       this.updateDoors();
       this.checkExits();
     }
+    this.flashes = this.flashes.filter((f) => (f.t -= dt) > 0);
     this.drawPlayer(dt);
     this.drawWorld();
-    this.hud.update(dt, s, this.dialog ? { speaker: this.dialog.speaker, text: this.dialog.lines[this.dialog.i] } : null, this.map.id === 'shrine');
+    this.hud.update(dt, s, this.dialog ? { speaker: this.dialog.speaker, text: this.dialog.lines[this.dialog.i] } : null, DUNGEONS.has(this.map.id));
   }
 
   private movePlayer(dt: number) {
@@ -987,10 +1201,16 @@ export class GameScene extends Phaser.Scene {
       h.sprite.destroy();
       return false;
     });
+    this.pods = this.pods.filter((p) => {
+      if (Math.hypot(p.x - s.x, p.y - s.y) > PICKUP_PX + 4) return true;
+      s.seeds = Math.min(MAX_SEEDS, s.seeds + 1);
+      p.sprite.destroy();
+      return false;
+    });
     for (const st of this.map.stones) {
       if (st.x < 0 || s.moonstones.includes(st.id)) continue;
       if (st.hidden === 'buried' && !this.dug.has(st.id)) continue;
-      if (st.id === 's-boss' && !hasFlag(s, 'boss')) continue;
+      if (AFTER_BOSS[st.id] && !hasFlag(s, AFTER_BOSS[st.id])) continue;
       const c = centre(st);
       if (Math.hypot(c.x - s.x, c.y - s.y) < PICKUP_PX) this.gainStone(st.id);
     }
@@ -1018,8 +1238,14 @@ export class GameScene extends Phaser.Scene {
     this.state.beaten++;
     this.puff(f.x, f.y - 10, f.kind === 'moth' ? 0xc8bce0 : 0x6a8a4a);
     f.sprite.destroy();
-    if (this.map.id === 'shrine' && f.index >= 0) setFlag(this.state, `foe-${f.index}`);
+    if (DUNGEONS.has(this.map.id) && f.index >= 0) setFlag(this.state, this.foeFlag(f.index));
     if (Math.random() < 0.3) this.dropHeart(f.x, f.y);
+    else if (this.state.items.seeds && Math.random() < 0.35) this.dropPod(f.x, f.y);
+  }
+
+  /** The flag that remembers a beaten dungeon foe (the shrine's kept their first name). */
+  private foeFlag(i: number) {
+    return this.map.id === 'shrine' ? `foe-${i}` : `${this.map.id}-foe-${i}`;
   }
 
   private updateFoes(dt: number) {
@@ -1064,15 +1290,30 @@ export class GameScene extends Phaser.Scene {
           vx = hx;
           vy = hy;
         }
+      } else if (f.kind === 'frog') {
+        // A frog sits, then leaps: at the knight when it sees them, a short hop anywhere when not.
+        if (f.leap > 0) {
+          f.leap -= dt;
+          vx = f.dir.x * info.speed;
+          vy = f.dir.y * info.speed;
+        } else if (f.t <= 0) {
+          f.t = FROG_WAIT_MS + Math.random() * 400;
+          const a = Math.random() * Math.PI * 2;
+          f.dir = sees ? { x: dx / dist, y: dy / dist } : { x: Math.cos(a) * 0.5, y: Math.sin(a) * 0.5 };
+          f.leap = FROG_LEAP_MS;
+        }
       } else if (f.kind === 'thornling' && sees && f.t <= 0) {
         f.t = THORNLING_SHOT_MS;
         this.shoot(f.x, f.y - 16, dx / dist, dy / dist);
       }
       const nx = f.x + vx * sec;
       const ny = f.y + vy * sec;
+      // A foe that bumps into something turns at once; a frog just ends its leap.
       if (foeFree(this.map, this.standing, nx, f.y, info.flies)) f.x = nx;
+      else if (f.kind === 'frog') f.leap = 0;
       else f.t = 0;
       if (foeFree(this.map, this.standing, f.x, ny, info.flies)) f.y = ny;
+      else if (f.kind === 'frog') f.leap = 0;
       else f.t = 0;
       if (Math.hypot(s.x - f.x, s.y - f.y) < 18) this.hurt(info.damage, f);
     }
@@ -1238,6 +1479,151 @@ export class GameScene extends Phaser.Scene {
     if (!settings.reduceMotion) boss.sprite.setScale(texScale('boss') * (1 + Math.sin(this.now / 400) * 0.02));
   }
 
+  // ---------------------------------------------------------------- the Bellwraith
+
+  private makeWraith(at: { x: number; y: number }) {
+    const x = at.x * TILE;
+    const y = at.y * TILE;
+    const shadow = this.add.image(x, y, 'bell-shadow').setScale(texScale('bell-shadow')).setDepth(-4000);
+    const ghost = this.add.image(x, y, 'wraith').setOrigin(0.5, 0.9).setScale(texScale('wraith')).setVisible(false);
+    const bell = this.add.image(x, y, 'bigbell').setOrigin(0.5, 78 / 88).setScale(texScale('bigbell'));
+    this.world.push(shadow, ghost, bell);
+    this.wraith = { x, y, lift: BELL_LIFT, state: 'hover', t: HOVER_MS, hp: WRAITH_HP, bell, ghost, shadow, summonT: SUMMON_MS, podT: 3000, awake: false };
+  }
+
+  private tipBell() {
+    const w = this.wraith!;
+    w.state = 'tipped';
+    w.t = EXPOSED_MS;
+    this.hud.toast('The bell tips over. Strike what hides inside!');
+  }
+
+  private hitWraith() {
+    const w = this.wraith!;
+    if (w.state !== 'tipped') {
+      this.hud.toast('Clang! The bronze is too thick.');
+      return;
+    }
+    w.hp--;
+    this.puff(w.x, w.y - 24, 0xc8e8ff);
+    if (!settings.reduceMotion) this.flashes.push({ x: w.x, y: w.y - 30, r: 160, col: [190, 230, 255], power: 1, t: 400 });
+    if (w.hp <= 0) return this.wraithDown();
+    this.hud.toast('The Bellwraith shrieks and flees into its bell!');
+    w.state = 'rise';
+    w.t = 600;
+  }
+
+  private wraithDown() {
+    const s = this.state;
+    const w = this.wraith!;
+    this.puff(w.x, w.y - 20, 0xc8e8ff);
+    this.tweens.add({ targets: [w.ghost, w.bell, w.shadow], alpha: 0, duration: 900 });
+    this.wraith = null;
+    for (const f of this.foes)
+      if (f.room === 'boss') {
+        f.alive = false;
+        f.sprite.destroy();
+      }
+    setFlag(s, 'wraith');
+    advance(s, 'home');
+    give(s, 'heart');
+    this.stoneSprites.get('b-bell')?.setVisible(true);
+    this.openDialog('', [
+      'The Bellwraith frays into mist, and the great bell cracks in two.',
+      'You found a Heart Vessel! One more heart.',
+      'The fen falls quiet. Elder Wren will want to hear it from you.',
+    ]);
+    save(s);
+  }
+
+  private updateWraith(dt: number) {
+    const w = this.wraith;
+    if (!w) return;
+    const s = this.state;
+    if (!w.awake) {
+      if (!this.inRoom('boss')) return;
+      w.awake = true;
+      this.hud.showPlace('The Bellwraith');
+    }
+    const room = this.map.rooms.find((r) => r.id === 'boss')!;
+    w.t -= dt;
+    if (w.state === 'hover') {
+      // The bell drifts after the knight, high up, its shadow on the floor below.
+      const dx = s.x - w.x;
+      const dy = s.y - w.y;
+      const dist = Math.hypot(dx, dy);
+      const step = Math.min(dist, (HOVER_SPEED * dt) / 1000);
+      if (dist > 1) {
+        w.x = Phaser.Math.Clamp(w.x + (dx / dist) * step, (room.x + 1.5) * TILE, (room.x + room.w - 1.5) * TILE);
+        w.y = Phaser.Math.Clamp(w.y + (dy / dist) * step, (room.y + 1.5) * TILE, (room.y + room.h - 0.5) * TILE);
+      }
+      w.lift = BELL_LIFT;
+      if (w.t <= 0) {
+        w.state = 'drop';
+        w.t = DROP_MS;
+      }
+    } else if (w.state === 'drop') {
+      // It shudders, then falls.
+      w.lift = BELL_LIFT + 10 * (1 - w.t / DROP_MS);
+      if (w.t <= 0) {
+        w.state = 'down';
+        w.t = BELL_DOWN_MS;
+        w.lift = 0;
+        this.puff(w.x, w.y - 4, 0x8a8c94);
+        if (!settings.reduceMotion) this.cameras.main.shake(200, 0.008);
+        if (Math.hypot(s.x - w.x, s.y - w.y) < SLAM_PX) this.hurt(Math.hypot(s.x - w.x, s.y - w.y) < 26 ? 2 : 1, w);
+      }
+    } else if (w.state === 'down' || w.state === 'tipped') {
+      if (w.t <= 0) {
+        w.state = 'rise';
+        w.t = 600;
+      }
+    } else if (w.state === 'rise') {
+      w.lift = BELL_LIFT * (1 - Math.max(0, w.t) / 600);
+      if (w.t <= 0) {
+        w.state = 'hover';
+        w.t = HOVER_MS;
+      }
+    }
+    // The bell on the floor is in the way: the knight can't stand inside it.
+    if (w.lift < 20) {
+      const dx = s.x - w.x;
+      const dy = s.y - w.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist < 30) {
+        const len = dist || 1;
+        this.tryMove(((dx || 1) / len) * (30 - dist), (dy / len) * (30 - dist));
+      }
+    }
+    // Moths when the knight is alone with it, and seed pods when they run short.
+    w.summonT -= dt;
+    if (w.summonT <= 0) {
+      w.summonT = SUMMON_MS;
+      if (this.foes.filter((f) => f.alive && f.room === 'boss').length < 2) {
+        const c = centre({ x: Math.random() < 0.5 ? room.x + 2 : room.x + room.w - 3, y: room.y + 2 });
+        this.spawnFoe('moth', c.x, c.y, -1, 'boss');
+      }
+    }
+    w.podT -= dt;
+    if (w.podT <= 0) {
+      w.podT = 4000;
+      if (s.seeds < 2 && this.pods.length < 2) {
+        const c = centre({ x: room.x + 2 + Math.floor(Math.random() * (room.w - 4)), y: room.y + room.h - 2 });
+        this.dropPod(c.x, c.y);
+      }
+    }
+    // Drawing: the bell at its height, tipped on its side when the wraith is out.
+    const tipped = w.state === 'tipped';
+    const shake = w.state === 'drop' && !settings.reduceMotion ? Math.sin(this.now / 25) * 2 : 0;
+    w.bell
+      .setPosition(w.x + shake + (tipped ? 40 : 0), w.y - w.lift + (tipped ? 6 : 0))
+      .setAngle(tipped ? 80 : 0)
+      .setDepth(w.lift > 20 ? w.y + 200 : w.y);
+    w.ghost.setVisible(tipped).setPosition(w.x, w.y - 6 - (settings.reduceMotion ? 0 : Math.sin(this.now / 200) * 3)).setDepth(w.y + 1);
+    const near = 1 - w.lift / (BELL_LIFT + 10);
+    w.shadow.setPosition(w.x, w.y).setScale(texScale('bell-shadow') * (0.6 + near * 0.5)).setAlpha(w.state === 'drop' ? 1 : 0.6 + near * 0.4);
+  }
+
   private updateWisp(dt: number) {
     const w = this.wisp;
     const path = this.map.wisp;
@@ -1314,16 +1700,17 @@ export class GameScene extends Phaser.Scene {
     for (const f of this.foes) {
       if (!f.alive) continue;
       const key = f.kind === 'moth' ? (Math.floor(this.now / 120 + f.index) % 2 ? 'moth-a' : 'moth-b') : f.kind;
-      f.sprite.setTexture(key).setScale(texScale(key)).setPosition(f.x, f.y - (f.kind === 'moth' ? 12 : 0)).setDepth(f.y);
+      const lift = f.kind === 'moth' ? 12 : f.kind === 'frog' && f.leap > 0 ? Math.sin((1 - f.leap / FROG_LEAP_MS) * Math.PI) * 10 : 0;
+      f.sprite.setTexture(key).setScale(texScale(key)).setPosition(f.x, f.y - lift).setDepth(f.y);
       f.sprite.setAlpha(f.stun > 0 ? 0.6 : 1);
       if (f.hurt > 0 && !settings.reduceMotion) f.sprite.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
       else f.sprite.clearTint().setTintMode(Phaser.TintModes.MULTIPLY);
-      if (f.kind === 'slug' && f.dir.x) f.sprite.setFlipX(s.x < f.x);
+      if ((f.kind === 'slug' || f.kind === 'frog') && f.dir.x) f.sprite.setFlipX(f.kind === 'slug' ? s.x < f.x : f.dir.x < 0);
     }
     for (const [id, img] of this.stoneSprites) {
       const st = this.map.stones.find((x) => x.id === id);
       if (!st) continue;
-      if (id === 's-boss') img.setVisible(hasFlag(s, 'boss'));
+      if (AFTER_BOSS[id]) img.setVisible(hasFlag(s, AFTER_BOSS[id]));
       const c = centre(st);
       img.setY(c.y - 4 + (settings.reduceMotion ? 0 : Math.sin(this.now / 350 + c.x) * 2));
     }
@@ -1337,6 +1724,14 @@ export class GameScene extends Phaser.Scene {
       for (const b of this.boss.bulbs) if (b.state === 'raised' || b.state === 'down') lights.push({ x: b.x, y: b.y - 14, r: 80, col: [220, 255, 140], power: 0.8 });
     }
     for (const sd of this.seeds) lights.push({ x: sd.x, y: sd.y, r: 24, col: [230, 120, 200], power: 0.5 });
+    for (const b of this.bombs) lights.push({ x: b.x, y: b.y - 10, r: 46, col: [210, 255, 150], power: 0.7 });
+    for (const p of this.pods) lights.push({ x: p.x, y: p.y, r: 30, col: [210, 255, 150], power: 0.5 });
+    const w = this.wraith;
+    if (w) {
+      lights.push({ x: w.x, y: w.y - w.lift - 30, r: 110, col: [150, 210, 255], power: 0.55 });
+      if (w.state === 'tipped') lights.push({ x: w.x, y: w.y - 30, r: 120, col: [170, 230, 255], power: 0.9 });
+    }
+    for (const f of this.flashes) lights.push({ ...f, power: f.power * Math.min(1, f.t / 200) });
     this.night.draw(this.cameras.main.worldView, lights, this.map.dark);
   }
 

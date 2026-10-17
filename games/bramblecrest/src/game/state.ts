@@ -9,11 +9,14 @@ export const SAVE_KEY = 'bramblecrest-save';
 
 /** Health is counted in half hearts. */
 export const START_HEARTS = byDifficulty(5, 3, 2);
-/** Moonstones hidden in the first chapter. */
-export const MOONSTONES = 8;
+/** Moonstones hidden in the first chapter, and in the first two together. */
+export const CHAPTER_ONE_STONES = 8;
+export const MOONSTONES = 13;
+/** The most bellseeds the knight can carry. */
+export const MAX_SEEDS = 10;
 
-/** The quest line of the first chapter, in order. */
-export const QUESTS = ['start', 'blade', 'thorns', 'shrine', 'return', 'done'] as const;
+/** The quest line of the first two chapters, in order. */
+export const QUESTS = ['start', 'blade', 'thorns', 'shrine', 'return', 'done', 'bell', 'belfry', 'home', 'end'] as const;
 export type Quest = (typeof QUESTS)[number];
 
 /** What the journal line says for each step of the quest. */
@@ -23,8 +26,22 @@ export const OBJECTIVES: Record<Quest, string> = {
   thorns: 'Cut the thorns at the north gate',
   shrine: 'Find the Sunken Shrine in Bramble Woods',
   return: 'Bring the news back to Elder Wren',
-  done: 'Chapter one is done. Keep exploring by lamplight',
+  done: 'A bell tolls in the night. Ask Elder Wren about it',
+  bell: 'Ask Old Sedge in Glimmer Fen about the bell',
+  belfry: 'Find the Drowned Belfry in Glimmer Fen',
+  home: 'Tell Elder Wren the bell is quiet',
+  end: 'Chapter two is done. Keep exploring by lamplight',
 };
+
+/** Whether the quest has reached `q`. */
+export function reached(s: GameState, q: Quest) {
+  return QUESTS.indexOf(s.quest) >= QUESTS.indexOf(q);
+}
+
+/** How many moonstones there are to find so far: the second chapter's show up once it starts. */
+export function stonesToFind(s: GameState) {
+  return reached(s, 'bell') ? MOONSTONES : CHAPTER_ONE_STONES;
+}
 
 export interface GameState {
   map: MapId;
@@ -36,8 +53,10 @@ export interface GameState {
   spawn: { map: MapId; x: number; y: number; facing: Facing };
   hp: number;
   maxHp: number;
-  items: { sword: boolean; hookvine: boolean; oil: boolean };
+  items: { sword: boolean; hookvine: boolean; oil: boolean; seeds: boolean };
   keys: number;
+  /** Bellseeds carried. */
+  seeds: number;
   moonstones: string[];
   flags: string[];
   quest: Quest;
@@ -57,8 +76,9 @@ export function newState(): GameState {
     spawn,
     hp: START_HEARTS * 2,
     maxHp: START_HEARTS * 2,
-    items: { sword: false, hookvine: false, oil: false },
+    items: { sword: false, hookvine: false, oil: false, seeds: false },
     keys: 0,
+    seeds: 0,
     moonstones: [],
     flags: [],
     quest: 'start',
@@ -86,6 +106,10 @@ export function give(s: GameState, item: ItemId) {
   else if (item === 'hookvine') s.items.hookvine = true;
   else if (item === 'oil') s.items.oil = true;
   else if (item === 'key') s.keys++;
+  else if (item === 'seeds') {
+    s.items.seeds = true;
+    s.seeds = MAX_SEEDS;
+  }
   else if (item === 'heart') {
     s.maxHp += 2;
     s.hp = s.maxHp;

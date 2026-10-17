@@ -1,10 +1,10 @@
-// What sits on the screen over the world: hearts, moonstones and keys, the journal line, the
+// What sits on the screen over the world: hearts, moonstones, keys and bellseeds, the journal line, the
 // name of the place, the touch buttons, the talk box, short toasts and the chapter's end card.
 // Everything here has a scroll factor of 0, so `splitHudCamera` draws it with the fixed camera.
 
 import Phaser from 'phaser';
 import { texScale } from '../art/paint';
-import { MOONSTONES, OBJECTIVES, type GameState } from '../game/state';
+import { OBJECTIVES, stonesToFind, type GameState } from '../game/state';
 import { BUTTONS, VIEW } from './layout';
 
 const FONT = 'Georgia, "Times New Roman", serif';
@@ -20,6 +20,7 @@ export class Hud {
   private stones: Phaser.GameObjects.Text;
   private stoneIcon: Phaser.GameObjects.Image;
   private keys: Phaser.GameObjects.Text;
+  private seeds: Phaser.GameObjects.Text;
   private objective: Phaser.GameObjects.Text;
   private place: Phaser.GameObjects.Text;
   private toastText: Phaser.GameObjects.Text;
@@ -36,10 +37,11 @@ export class Hud {
     const add = scene.add;
     const fixed = <T extends Phaser.GameObjects.Components.ScrollFactor & Phaser.GameObjects.Components.Depth>(o: T) => o.setScrollFactor(0).setDepth(DEPTH);
     const plate = fixed(add.graphics());
-    plate.fillStyle(0x0a0e24, 0.55).fillRoundedRect(8, 8, 230, 52, 10);
+    plate.fillStyle(0x0a0e24, 0.55).fillRoundedRect(8, 8, 262, 52, 10);
     this.stoneIcon = fixed(add.image(24, 46, 'moonstone').setScale(texScale('moonstone')));
     this.stones = fixed(add.text(36, 37, '', { fontFamily: FONT, fontSize: '16px', color: '#dff2ff' }));
-    this.keys = fixed(add.text(120, 37, '', { fontFamily: FONT, fontSize: '16px', color: '#f0d890' }));
+    this.keys = fixed(add.text(108, 37, '', { fontFamily: FONT, fontSize: '16px', color: '#f0d890' }));
+    this.seeds = fixed(add.text(178, 37, '', { fontFamily: FONT, fontSize: '16px', color: '#c8f0a0' }));
     this.objective = fixed(
       add.text(VIEW.w - 12, 12, '', { fontFamily: FONT, fontSize: '15px', color: '#f3ead2', align: 'right', backgroundColor: 'rgba(10,14,36,0.55)', padding: { x: 10, y: 6 } }).setOrigin(1, 0),
     );
@@ -49,6 +51,7 @@ export class Hud {
       sword: fixed(add.image(BUTTONS.sword.x, BUTTONS.sword.y, 'btn-sword').setScale(texScale('btn-sword') * (BUTTONS.sword.r / 30))),
       roll: fixed(add.image(BUTTONS.roll.x, BUTTONS.roll.y, 'btn-roll').setScale(texScale('btn-roll') * (BUTTONS.roll.r / 30))),
       vine: fixed(add.image(BUTTONS.vine.x, BUTTONS.vine.y, 'btn-vine').setScale(texScale('btn-vine') * (BUTTONS.vine.r / 30))),
+      seed: fixed(add.image(BUTTONS.seed.x, BUTTONS.seed.y, 'btn-seed').setScale(texScale('btn-seed') * (BUTTONS.seed.r / 30))),
     };
     this.box = fixed(add.graphics()).setDepth(DEPTH + 1);
     this.speaker = fixed(add.text(150, 398, '', { fontFamily: FONT, fontSize: '17px', color: '#f0d890', fontStyle: 'bold' })).setDepth(DEPTH + 2);
@@ -61,6 +64,7 @@ export class Hud {
     for (const [id, b] of Object.entries(BUTTONS) as [keyof typeof BUTTONS, (typeof BUTTONS)['sword']][]) {
       if (!this.buttons[id].visible) continue;
       if (id === 'vine' && !s.items.hookvine) continue;
+      if (id === 'seed' && !s.items.seeds) continue;
       if (Math.hypot(p.x - b.x, p.y - b.y) <= b.r) return id;
     }
     return null;
@@ -76,7 +80,7 @@ export class Hud {
     this.toastMs = 1800;
   }
 
-  update(dt: number, s: GameState, dialog: DialogView | null, inShrine: boolean) {
+  update(dt: number, s: GameState, dialog: DialogView | null, inDungeon: boolean) {
     // Hearts: one image per two half hearts of the most the knight can have.
     const want = Math.ceil(s.maxHp / 2);
     while (this.hearts.length < want) this.hearts.push(this.scene.add.image(24 + this.hearts.length * 22, 22, 'ui-heart').setScrollFactor(0).setDepth(DEPTH));
@@ -85,12 +89,14 @@ export class Hud {
       const key = left >= 2 ? 'ui-heart' : left === 1 ? 'ui-heart-half' : 'ui-heart-empty';
       h.setTexture(key).setScale(texScale(key)).setVisible(i < want);
     });
-    this.stones.setText(`${s.moonstones.length} / ${MOONSTONES}`);
-    this.keys.setText(inShrine || s.keys > 0 ? `Keys ${s.keys}` : '');
+    this.stones.setText(`${s.moonstones.length} / ${stonesToFind(s)}`);
+    this.keys.setText(inDungeon || s.keys > 0 ? `Keys ${s.keys}` : '');
+    this.seeds.setText(s.items.seeds ? `Seeds ${s.seeds}` : '');
     this.objective.setText(OBJECTIVES[s.quest]);
     this.buttons.sword.setVisible(s.items.sword && !dialog);
     this.buttons.vine.setVisible(s.items.hookvine && !dialog);
     this.buttons.roll.setVisible(!dialog);
+    this.buttons.seed.setVisible(s.items.seeds && !dialog).setAlpha(s.seeds > 0 ? 1 : 0.4);
     this.stoneIcon.setVisible(true);
     if (this.placeMs > 0) {
       this.placeMs -= dt;

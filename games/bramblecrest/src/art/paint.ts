@@ -650,6 +650,196 @@ export function paintAll(scene: Phaser.Scene) {
   bulb('bulb', false);
   bulb('bulb-lit', true);
 
+  // The second chapter: boulders, bellseeds, the belfry's bells, candles, frogs and the Bellwraith.
+  paint(scene, 'boulder', 34, 32, (c) => {
+    shadow(c, 17, 27, 16, 5, 0.5);
+    ball(c, 17, 17, 15, '#7c7a84', 12);
+    ball(c, 11, 13, 6, '#8e8c96', 5);
+    c.strokeStyle = 'rgba(30,28,40,0.55)';
+    c.lineWidth = 1.5;
+    c.beginPath();
+    c.moveTo(20, 8);
+    c.lineTo(17, 15);
+    c.lineTo(22, 20);
+    c.stroke();
+    c.fillStyle = 'rgba(90,140,80,0.6)';
+    c.beginPath();
+    c.ellipse(24, 9, 5, 2.5, 0.3, 0, Math.PI * 2);
+    c.fill();
+  });
+  const seedPod = (c: Ctx, x: number, y: number, r: number) => {
+    glowDot(c, x, y, r * 2, 'rgba(200,255,140,0.45)');
+    ball(c, x, y, r, '#7aa84a', r * 1.15);
+    c.strokeStyle = '#e8d070';
+    c.lineWidth = 1.2;
+    c.beginPath();
+    c.moveTo(x - r * 0.7, y);
+    c.lineTo(x + r * 0.7, y);
+    c.stroke();
+    c.strokeStyle = '#4a6a3a';
+    c.lineWidth = 2;
+    c.beginPath();
+    c.moveTo(x, y - r);
+    c.quadraticCurveTo(x + 2, y - r - 4, x + 4, y - r - 3);
+    c.stroke();
+  };
+  paint(scene, 'bellseed', 20, 22, (c) => {
+    shadow(c, 10, 19, 7, 2.5);
+    seedPod(c, 10, 12, 6);
+  });
+  paint(scene, 'pickup-seed', 18, 18, (c) => seedPod(c, 9, 10, 4.5));
+  const bell = (key: string, r: number) =>
+    paint(scene, key, 40, 48, (c) => {
+      shadow(c, 20, 44, r + 4, 4, 0.45);
+      c.fillStyle = '#3a2c22';
+      c.fillRect(19, 2, 2, 44 - r * 2.2);
+      const top = 44 - r * 2;
+      const g = c.createLinearGradient(20 - r, 0, 20 + r, 0);
+      g.addColorStop(0, '#e0b060');
+      g.addColorStop(0.45, '#b07a34');
+      g.addColorStop(1, '#5a3a1a');
+      c.fillStyle = g;
+      c.beginPath();
+      c.moveTo(20 - r * 0.55, top);
+      c.quadraticCurveTo(20 - r * 0.6, top + r * 1.2, 20 - r, 44 - r * 0.3);
+      c.lineTo(20 + r, 44 - r * 0.3);
+      c.quadraticCurveTo(20 + r * 0.6, top + r * 1.2, 20 + r * 0.55, top);
+      c.quadraticCurveTo(20, top - r * 0.4, 20 - r * 0.55, top);
+      c.fill();
+      c.fillStyle = '#2a1a10';
+      c.beginPath();
+      c.ellipse(20, 44 - r * 0.3, r, r * 0.25, 0, 0, Math.PI * 2);
+      c.fill();
+      ball(c, 20, 44 - r * 0.15, r * 0.18, '#8a6a3a');
+    });
+  bell('bell-0', 15);
+  bell('bell-1', 12);
+  bell('bell-2', 9);
+  paint(scene, 'candle', 14, 28, (c) => {
+    shadow(c, 7, 26, 6, 2);
+    body(c, 7, 12, 7, 14, '#e8dcc0', 0.2);
+    glowDot(c, 7, 8, 7, 'rgba(255,200,110,0.9)');
+    c.fillStyle = '#ffe2a0';
+    c.beginPath();
+    c.moveTo(5, 11);
+    c.quadraticCurveTo(7, 2, 9, 11);
+    c.fill();
+  });
+  paint(scene, 'tower', 128, 152, (c) => {
+    shadow(c, 64, 146, 62, 8, 0.5);
+    // Two leaning pillars and a broken arch over a dark door, with a small bell still hanging.
+    box(c, 8, 30, 26, 6, 112, '#6a7080');
+    box(c, 94, 22, 26, 6, 120, '#646a7a');
+    c.fillStyle = '#585e6e';
+    c.beginPath();
+    c.moveTo(8, 34);
+    c.quadraticCurveTo(64, -14, 120, 26);
+    c.lineTo(120, 42);
+    c.quadraticCurveTo(64, 4, 8, 48);
+    c.fill();
+    c.fillStyle = '#0a0c14';
+    c.beginPath();
+    c.moveTo(32, 148);
+    c.lineTo(32, 104);
+    c.quadraticCurveTo(64, 78, 96, 104);
+    c.lineTo(96, 148);
+    c.fill();
+    c.fillStyle = '#3a2c22';
+    c.fillRect(63, 22, 2, 18);
+    c.fillStyle = '#b07a34';
+    c.beginPath();
+    c.moveTo(56, 52);
+    c.quadraticCurveTo(58, 38, 64, 38);
+    c.quadraticCurveTo(70, 38, 72, 52);
+    c.fill();
+    glowDot(c, 64, 60, 14, 'rgba(150,200,255,0.5)');
+    c.fillStyle = 'rgba(70,120,70,0.7)';
+    for (const [x, y] of [[14, 60], [20, 100], [100, 44], [108, 120], [40, 30]]) {
+      c.beginPath();
+      c.ellipse(x, y, 7, 3.5, 0.4, 0, Math.PI * 2);
+      c.fill();
+    }
+  });
+  paint(scene, 'frog', 32, 26, (c) => {
+    shadow(c, 16, 23, 13, 4);
+    ball(c, 8, 18, 6, '#3f7a4a', 4);
+    ball(c, 24, 18, 6, '#3f7a4a', 4);
+    ball(c, 16, 15, 11, '#4f9a5a', 8);
+    ball(c, 10, 8, 4.5, '#5fae68');
+    ball(c, 22, 8, 4.5, '#5fae68');
+    c.fillStyle = '#e8d070';
+    c.beginPath();
+    c.arc(10, 7.5, 2.2, 0, Math.PI * 2);
+    c.arc(22, 7.5, 2.2, 0, Math.PI * 2);
+    c.fill();
+    c.fillStyle = '#1a1420';
+    c.fillRect(9.5, 6.5, 1.2, 2.2);
+    c.fillRect(21.5, 6.5, 1.2, 2.2);
+    c.strokeStyle = '#2a4a30';
+    c.lineWidth = 1.2;
+    c.beginPath();
+    c.moveTo(10, 16);
+    c.quadraticCurveTo(16, 19, 22, 16);
+    c.stroke();
+  });
+  paint(scene, 'bigbell', 84, 88, (c) => {
+    const g = c.createLinearGradient(6, 0, 78, 0);
+    g.addColorStop(0, '#d8a858');
+    g.addColorStop(0.4, '#9a6a2e');
+    g.addColorStop(1, '#3e2812');
+    c.fillStyle = g;
+    c.beginPath();
+    c.moveTo(24, 12);
+    c.quadraticCurveTo(20, 50, 4, 78);
+    c.lineTo(80, 78);
+    c.quadraticCurveTo(64, 50, 60, 12);
+    c.quadraticCurveTo(42, 2, 24, 12);
+    c.fill();
+    c.fillStyle = '#2a1a0e';
+    c.beginPath();
+    c.ellipse(42, 78, 38, 8, 0, 0, Math.PI * 2);
+    c.fill();
+    c.strokeStyle = '#e8c070';
+    c.lineWidth = 2;
+    c.beginPath();
+    c.moveTo(12, 66);
+    c.quadraticCurveTo(42, 72, 72, 66);
+    c.stroke();
+    // Pale light leaks through cracks in the bronze.
+    c.strokeStyle = 'rgba(170,230,255,0.9)';
+    c.lineWidth = 1.5;
+    c.beginPath();
+    c.moveTo(34, 20);
+    c.lineTo(38, 34);
+    c.lineTo(33, 44);
+    c.moveTo(54, 28);
+    c.lineTo(50, 42);
+    c.stroke();
+    c.fillStyle = '#5a3e1e';
+    c.beginPath();
+    c.roundRect(36, 2, 12, 8, 3);
+    c.fill();
+  });
+  paint(scene, 'wraith', 56, 64, (c) => {
+    glowDot(c, 28, 26, 28, 'rgba(150,210,255,0.55)');
+    c.fillStyle = 'rgba(210,235,255,0.92)';
+    c.beginPath();
+    c.moveTo(10, 30);
+    c.quadraticCurveTo(10, 6, 28, 6);
+    c.quadraticCurveTo(46, 6, 46, 30);
+    c.lineTo(46, 54);
+    for (let i = 0; i < 4; i++) c.quadraticCurveTo(46 - i * 9 - 4.5, 62, 46 - (i + 1) * 9, 54);
+    c.closePath();
+    c.fill();
+    c.fillStyle = '#10163a';
+    c.beginPath();
+    c.ellipse(21, 26, 4, 6, 0, 0, Math.PI * 2);
+    c.ellipse(35, 26, 4, 6, 0, 0, Math.PI * 2);
+    c.ellipse(28, 40, 5, 4, 0, 0, Math.PI * 2);
+    c.fill();
+  });
+  paint(scene, 'bell-shadow', 80, 28, (c) => shadow(c, 40, 14, 38, 12, 0.7));
+
   // The HUD's icons and the touch buttons.
   const icon = (key: string, draw: (c: Ctx) => void) => paint(scene, key, 22, 20, draw);
   icon('ui-heart', (c) => heart(c, 11, 10, 8, '#e8506a'));
@@ -698,6 +888,7 @@ export function paintAll(scene: Phaser.Scene) {
     c.lineTo(36, 30);
     c.fill();
   });
+  button('btn-seed', (c) => seedPod(c, 32, 34, 11));
   button('btn-vine', (c) => {
     c.strokeStyle = '#9ad86a';
     c.lineWidth = 4;
