@@ -63,6 +63,8 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
 
 ### File map
 
+- `src/howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips), handed to
+  `setupGame(game, { howToPlay })` in `src/main.ts`; update it when the controls or the first round change.
 - `src/main.ts`: creates the `Phaser.Game` (size from `VIEW`, `Scale.FIT`, `pixelArt: false`) with
   `BootScene` and `GameScene`, calls `setupGame(game)`, and exposes `game` on `window` in the dev
   build.

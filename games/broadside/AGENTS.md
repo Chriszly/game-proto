@@ -100,6 +100,8 @@ and the player chooses a ship.
 
 File map (all under `src/`, plus the shared files it imports):
 
+- `howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips), handed to
+  `setupGame(game, { howToPlay })` in `main.ts`; update it when the controls or the first round change.
 - `main.ts`: creates the `Phaser.Game` (960x540, `Scale.FIT`, `pixelArt: false`, three active
   pointers for two-thumb play) with `BootScene` and `GameScene`, calls `setupGame(game)` and
   `setupScaling(game)` (`shared/scaling.ts`) and exposes `window.game` in dev builds.

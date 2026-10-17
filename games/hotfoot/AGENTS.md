@@ -74,6 +74,8 @@ in.
 
 ### File map
 
+- `src/howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips), handed to
+  `setupGame(game, { howToPlay })` in `src/main.ts`; update it when the controls or the first round change.
 - `src/main.ts`: creates the `Phaser.Game` (960x540, `Scale.FIT`, `pixelArt: false`) with `BootScene`
   then `GameScene`, calls `setupGame(game)` and `setupScaling(game)` (see Screen scaling), and puts
   `game` on `window` in dev builds.

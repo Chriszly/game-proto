@@ -59,6 +59,8 @@ with one more rule. The art is painterly: shapes and pixel grids drawn in code, 
 
 File map (all under `src/` unless it starts with `shared/`):
 
+- `howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips), handed to
+  `setupGame(game, { howToPlay })` in `main.ts`; update it when the controls or the first round change.
 - `main.ts`: creates the `Phaser.Game` (960x540 from `VIEW`, `Scale.FIT`, `pixelArt: false`, so
   the painted textures are smoothed) with
   `BootScene` then `GameScene`, calls `setupGame(game)` and `setupScaling(game)` from
