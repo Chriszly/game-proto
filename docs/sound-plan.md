@@ -254,6 +254,14 @@ Notes:
 ### Broadside
 Real-time naval battle on an engraved sea chart; swashbuckling and tense.
 
+**Done.** Built as planned, with these differences: the calm and the battle music are two songs
+(`HARBOR_SONG` at 66 and `BATTLE_SONG` at 112 dotted quarters, since a song has one tempo), the
+heavy `boss` part starts once a flagship or the admiral is on the sea, the wave start and harbor
+are stings, and the sounds are played by `scenes/soundCues.ts` from what each tick changed, so
+`sim.ts` has no audio. Hits near the player, a sail on the horizon (`pipe`), a full charge and a
+helm creak are added; there is no ambient wash. The helm wheels and fire controls moved up 36 and
+28 px to clear the corner buttons. Its table is in `games/broadside/AGENTS.md`.
+
 **Music:** Sea-shanty jig in 6/8, in D minor (Dorian). Voices are a square lead, a pulse
 "accordion", triangle bass and noise drums.
 - Harbor and the break before each wave: calm, at about 100 BPM.

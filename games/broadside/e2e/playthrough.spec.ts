@@ -49,8 +49,8 @@ const VIEW = { w: 960, h: 540 };
 /** The size of the sea, from src/game/state.ts; it wraps around at its edges. */
 const WORLD = { w: 1920, h: 1200 };
 /** The helm buttons' and fire controls' centres, from src/scenes/layout.ts. */
-const HELM = { port: { x: 86, y: 456 }, starboard: { x: 874, y: 456 } };
-const FIRE = { port: { x: 86, y: 314 }, starboard: { x: 874, y: 314 } };
+const HELM = { port: { x: 86, y: 420 }, starboard: { x: 874, y: 420 } };
+const FIRE = { port: { x: 86, y: 286 }, starboard: { x: 874, y: 286 } };
 /** Wave 1 is two sloops, from src/game/waves.ts; each leaves 10 gold, from src/game/ships.ts. */
 const WAVE_1 = ['sloop', 'sloop'];
 const SLOOP_LOOT = 10;

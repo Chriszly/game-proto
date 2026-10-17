@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { settings } from '../../../../shared/settings';
+import { ui } from '../../../../shared/audio';
 import { HI, lookOf, SEA_RES, SHEET_RES } from '../art/art';
 import { renderScale } from '../../../../shared/scaling';
 import { BOON_IDS, BOONS, costOfBoons, type BoonId } from '../game/admiralty';
@@ -36,6 +37,7 @@ import { makeButton } from '../ui/Button';
 import { HAVEN_WAVE } from '../game/waves';
 import { Harbor, type HarborAction } from '../ui/Harbor';
 import { fitWidth, pinToScreen } from '../ui/screen';
+import { SoundCues } from './soundCues';
 import { BOUNTY, CONVOY, FIRE, FONT, HELM, HUD_HEIGHT, ORDER_CARD, OVER, SCUTTLE, UI_DEPTH, VIEW, WIND } from './layout';
 
 /** Longest simulated step, so a backgrounded tab doesn't jump the battle forward. */
@@ -146,6 +148,8 @@ export class GameScene extends Phaser.Scene {
   private clock = 0;
   private lastWake = 0;
   private lastFrame: number | null = null;
+  /** Plays the sound and music for what each tick changed. */
+  private cues!: SoundCues;
 
   constructor() {
     super('Game');
@@ -169,6 +173,7 @@ export class GameScene extends Phaser.Scene {
     this.state = newRun(best, data?.boons ?? [], hull);
     this.view = { x: this.state.player.x, y: this.state.player.y };
     this.lastPlayer = { ...this.view };
+    this.cues = new SoundCues(this.state);
 
     // The chart is the whole sea; it fills the screen and scrolls with the camera, repeating where
     // the sea wraps.
@@ -211,8 +216,10 @@ export class GameScene extends Phaser.Scene {
     this.lastFrame = time;
     const s = this.state;
     const phase = s.phase;
+    this.cues.before(s);
     this.readInput();
     tick(s, dt);
+    this.cues.after(s, dt);
     if (s.phase !== phase && (s.phase === 'harbor' || s.phase === 'over' || s.phase === 'won')) saveBestWave(s.bestWave);
     if (s.phase !== phase && (s.phase === 'over' || s.phase === 'won')) {
       this.medalBank = loadMedals() + s.medals;
@@ -281,15 +288,23 @@ export class GameScene extends Phaser.Scene {
     return { x: this.view.x + dx, y: this.view.y + dy };
   }
 
+  /** A harbor row, card or sail button: a coin for gold spent, a click for a choice, the buzz when refused. */
   private harborAction(id: HarborAction) {
-    if (id === 'sail') setSail(this.state);
-    else if (id.startsWith('sail-')) setSail(this.state, id.slice('sail-'.length) as CourseId);
-    else if (id === 'keep') keep(this.state);
-    else if (id === 'repair') repair(this.state);
-    else if (id === 'hire') hire(this.state);
-    else if (id === 'load-port' || id === 'load-starboard') loadShot(this.state, id === 'load-port' ? 'port' : 'starboard');
-    else if (id.startsWith('draft-')) pickPerk(this.state, id.slice('draft-'.length) as PerkId);
-    else buy(this.state, id as UpgradeId);
+    const s = this.state;
+    let done: boolean;
+    let spent = false;
+    if (id === 'sail') done = setSail(s);
+    else if (id.startsWith('sail-')) done = setSail(s, id.slice('sail-'.length) as CourseId);
+    else if (id === 'load-port' || id === 'load-starboard') done = loadShot(s, id === 'load-port' ? 'port' : 'starboard');
+    else if (id.startsWith('draft-')) done = pickPerk(s, id.slice('draft-'.length) as PerkId);
+    else {
+      spent = true;
+      if (id === 'keep') done = keep(s);
+      else if (id === 'repair') done = repair(s);
+      else if (id === 'hire') done = hire(s);
+      else done = buy(s, id as UpgradeId);
+    }
+    ui(!done ? 'refuse' : spent ? 'coin' : 'click');
   }
 
   private drawShips() {
@@ -1074,7 +1089,8 @@ export class GameScene extends Phaser.Scene {
   private createScuttle() {
     const b = makeButton(this, SCUTTLE.x, SCUTTLE.y, '', () => {
       const prize = this.scuttlePrize();
-      if (prize) scuttle(this.state, prize.id);
+      // The prize going down and the gold coming in sound through the effects they leave.
+      if (!prize || !scuttle(this.state, prize.id)) ui('refuse');
     }, SCUTTLE.w, SCUTTLE.h);
     this.scuttleText = b.text.setFontSize(15);
     this.scuttleButton = pinToScreen(b.button).setDepth(UI_DEPTH - 5).setVisible(false);
@@ -1117,7 +1133,9 @@ export class GameScene extends Phaser.Scene {
       const y = OVER.shipY;
       const bg = this.add.rectangle(x, y, OVER.shipW, 36, CREAM, 0.9).setStrokeStyle(1.5, INK);
       bg.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
-        if (unlocked(id, this.state.bestWave)) this.nextHull = id;
+        const open = unlocked(id, this.state.bestWave);
+        if (open) this.nextHull = id;
+        ui(open ? 'click' : 'refuse');
       });
       const name = this.add.text(x, y - 8, t(HULLS[id].name), textStyle(14, '#2b2118', 'bold')).setOrigin(0.5);
       const desc = this.add.text(x, y + 9, '', textStyle(10, '#5a4a38', 'italic')).setOrigin(0.5);
@@ -1137,13 +1155,17 @@ export class GameScene extends Phaser.Scene {
       parts.push(bg, name, desc, cost);
     });
     const again = makeButton(this, OVER.x, top + OVER.h - 32, t('sailAgain'), () => {
+      ui('click');
       saveMedals(this.medalBank - costOfBoons(this.commission));
       saveHull(this.nextHull);
       this.scene.restart({ boons: this.commission, hull: this.nextHull });
     });
     this.againButton = again.button;
     // After razing the haven, the run can go on through the waves beyond instead.
-    const on = makeButton(this, OVER.x - 110, top + OVER.h - 32, t('sailOn'), () => sailOn(this.state));
+    const on = makeButton(this, OVER.x - 110, top + OVER.h - 32, t('sailOn'), () => {
+      ui('click');
+      sailOn(this.state);
+    });
     this.sailOnButton = on.button;
     parts.push(again.button, on.button);
     this.gameOver = pinToScreen(this.add.container(0, 0, parts))
@@ -1155,6 +1177,8 @@ export class GameScene extends Phaser.Scene {
   private toggleBoon(id: BoonId) {
     if (this.commission.includes(id)) this.commission = this.commission.filter((b) => b !== id);
     else if (costOfBoons(this.commission) + BOONS[id].cost <= this.medalBank) this.commission = [...this.commission, id];
+    else return ui('refuse');
+    ui('click');
   }
 
   private drawGameOver() {
