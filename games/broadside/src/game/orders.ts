@@ -1,12 +1,14 @@
 // The captain's orders: one bonus for a whole wave, named on a card under the top bar.
 
+import type { TextKey } from '../i18n';
 import type { ShotKind } from './shot';
 
 export type OrderId = 'chain' | 'grape' | 'powder' | 'wind' | 'crew';
 
 export interface Order {
-  title: string;
-  desc: string;
+  /** Keys of `i18n/en.ts`. */
+  title: TextKey;
+  desc: TextKey;
   /** Multipliers on the player's stats while the order stands. */
   damage?: number;
   range?: number;
@@ -19,11 +21,11 @@ export interface Order {
 }
 
 export const ORDERS: Record<OrderId, Order> = {
-  chain: { title: 'Chain shot this wave', desc: 'Both sides fire chain: hits slow ships by 40%', load: 'chain' },
-  grape: { title: 'Grapeshot this wave', desc: 'Both sides fire grape: hits slow reloads', load: 'grape' },
-  powder: { title: 'Double powder this wave', desc: 'Shot flies 30% farther and hits 30% harder', range: 1.3, damage: 1.3, powder: true },
-  wind: { title: 'Fair wind this wave', desc: 'Sail and turn 25% faster', sails: 1.25 },
-  crew: { title: 'Rum for the gun crews', desc: 'Reload 30% faster', reload: 0.7 },
+  chain: { title: 'chainOrder', desc: 'chainOrderDesc', load: 'chain' },
+  grape: { title: 'grapeOrder', desc: 'grapeOrderDesc', load: 'grape' },
+  powder: { title: 'powderOrder', desc: 'powderOrderDesc', range: 1.3, damage: 1.3, powder: true },
+  wind: { title: 'windOrder', desc: 'windOrderDesc', sails: 1.25 },
+  crew: { title: 'crewOrder', desc: 'crewOrderDesc', reload: 0.7 },
 };
 
 export const ORDER_IDS = Object.keys(ORDERS) as OrderId[];

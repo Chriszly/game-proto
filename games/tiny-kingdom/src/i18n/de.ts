@@ -1,0 +1,197 @@
+import type { Translation } from '../../../../shared/i18n';
+import type en from './en';
+
+/** Tiny Kingdom's texts in German. */
+const de: Translation<typeof en> = {
+  title: 'Tiny Kingdom',
+
+  // Buildings: name, rule on the tile button, and a count of them ("3 farms")
+  farmName: 'Acker',
+  farmRule: '1 Punkt, +1 je See daneben',
+  farmCount: { one: '{n} Acker', other: '{n} Äcker' },
+  houseName: 'Haus',
+  houseRule: 'Daneben: +2 je Acker, +1 je Haus, Herrenhaus, Wald, Lager',
+  houseCount: { one: '{n} Haus', other: '{n} Häuser' },
+  towerName: 'Turm',
+  towerRule: '+2 je Haus oder Herrenhaus ringsum, 0 neben einem Turm',
+  towerCount: { one: '{n} Turm', other: '{n} Türme' },
+  windmillName: 'Windmühle',
+  windmillRule: '+1 je Acker ringsum und +1 für jeden Acker daneben',
+  windmillCount: { one: '{n} Mühle', other: '{n} Mühlen' },
+  marketName: 'Markt',
+  marketRule: '+1 für jede andere Gebäudeart ringsum',
+  marketCount: { one: '{n} Markt', other: '{n} Märkte' },
+  harborName: 'Hafen',
+  harborRule: 'Nur am Seeufer: +2 je See, +1 je Haus daneben',
+  harborCount: { one: '{n} Hafen', other: '{n} Häfen' },
+  lumberName: 'Holzfällerlager',
+  lumberRule: 'Nur am Wald: +2 je Wald, +1 für Häuser daneben. Oder rodet einen Wald am Lager',
+  lumberCount: { one: '{n} Lager', other: '{n} Lager' },
+  roadName: 'Weg',
+  roadRule: 'Zählt nichts, verbindet aber die Gebäude daran mit der Burg',
+  roadCount: { one: '{n} Weg', other: '{n} Wege' },
+  manorName: 'Herrenhaus',
+  manorRule: 'Zwei Häuser vereint: 4 Punkte, +3 je Acker, +1 je Haus, Herrenhaus oder Wald daneben',
+  manorCount: { one: '{n} Herrenhaus', other: '{n} Herrenhäuser' },
+
+  // Gifts: label on the chip and the card, and the line under it
+  towersGift: '+2 Türme',
+  towersDesc: '2 Türme mehr',
+  housesGift: '+3 Häuser',
+  housesDesc: '3 Häuser mehr',
+  farmsGift: '+3 Äcker',
+  farmsDesc: '3 Äcker mehr',
+  windmillGift: 'Windmühle',
+  windmillDesc: 'Neu: 2 Windmühlen',
+  windmillsGift: '+2 Mühlen',
+  windmillsDesc: '2 Windmühlen mehr',
+  marketGift: 'Markt',
+  marketDesc: 'Neu: 2 Märkte',
+  marketsGift: '+2 Märkte',
+  marketsDesc: '2 Märkte mehr',
+  harborGift: 'Hafen',
+  harborDesc: 'Neu: 2 Häfen',
+  harborsGift: '+2 Häfen',
+  harborsDesc: '2 Häfen mehr',
+  lumberGift: 'Holzfäller',
+  lumberDesc: 'Neu: 2 Holzfällerlager',
+  lumbersGift: '+2 Lager',
+  lumbersDesc: '2 Holzfällerlager mehr',
+
+  // Seasons: name, rule for the round banner, and the short rule for the panel's strip
+  springName: 'Frühlingsmarkt',
+  springRule: 'Märkte und Häfen zählen doppelt',
+  springShort: 'Märkte, Häfen x2',
+  summerName: 'Erntefest',
+  summerRule: 'Äcker zählen doppelt',
+  summerShort: 'Äcker x2',
+  autumnName: 'Holzernte',
+  autumnRule: 'Häuser und Holzfällerlager zählen doppelt',
+  autumnShort: 'Häuser, Lager x2',
+  winterName: 'Winterwacht',
+  winterRule: 'Türme und Windmühlen zählen doppelt',
+  winterShort: 'Türme, Mühlen x2',
+
+  // Lakes and woods are named by where they lie and an ending: Eastmere, Northwood, Midgrove
+  dirNorth: 'Nord',
+  dirSouth: 'Süd',
+  dirEast: 'Ost',
+  dirWest: 'West',
+  dirMid: 'Mittel',
+  endMere: 'weiher',
+  endPool: 'teich',
+  endTarn: 'see',
+  endWater: 'wasser',
+  endWood: 'wald',
+  endGrove: 'hain',
+  endHolt: 'forst',
+  endShaw: 'gehölz',
+
+  // Royal decree
+  decreeHeading: 'KÖNIGLICHER ERLASS',
+  rewardHeading: 'LOHN',
+  reward: '+{n} und eine Krone',
+  rewardPaid: 'Erhalten: +{n} und Krone',
+  noDecree: 'Kein Erlass in dieser Runde',
+  decreeDone: 'Erfüllt!',
+  decreeShore: { one: '{n} Acker am {place}', other: '{n} Äcker am {place}' },
+  decreeWood: { one: '{n} Haus am {place}', other: '{n} Häuser am {place}' },
+  decreeWatch: 'Ein Turm, der {n} Häuser bewacht',
+
+  // Omens
+  floodText: 'Flut: {place} tritt über das markierte Feld',
+  floodShort: 'Omen: {place} flutet das Feld',
+  stormText: 'Sturm: Der markierte Turm fällt, wenn kein Haus bei ihm steht',
+  stormShort: 'Omen: Der Turm fällt, wenn er allein steht',
+  floodMark: 'Flut',
+  stormMark: 'Sturm',
+  flooded: 'Überflutet',
+  toppled: 'Umgestürzt',
+  omensFrom: 'Omen ab Runde {n}',
+  noOmen: 'Kein Omen für die nächste Runde',
+
+  // Panel
+  round: 'Runde {n}',
+  islandButton: 'Insel {n}',
+  levelButton: 'Level {n}',
+  dailyButton: 'Täglich {n}',
+  score: 'Punkte {n}',
+  goal: '{score} / {goal} für Runde {next}',
+  castleJoins: 'Burg verbindet {n}\n(+{n} am Ende)',
+  castlePaid: 'Burg brachte +{n}',
+  giftAt: 'Geschenk bei {n}:',
+  giftAtShort: 'Bei {n}:',
+  pickOne: 'Wähle eins:',
+  pickShort: 'Wähle:',
+  or: 'oder',
+  pouch: 'Beutel: {list}',
+  pouchEmpty: 'Der Beutel ist leer',
+  pouchTrade: '{pouch}. Tippe auf einen Markt zum Tauschen.',
+  undo: 'Letztes Plättchen zurück',
+  undoUsed: 'Rückgängig schon genutzt',
+  noRoom: 'Kein Platz: Häuser vereinen oder beenden',
+  starsAt: 'Sterne bei {one}, {two} und {three}',
+  todaysBest: 'Heutiger Rekord {n}',
+  bestScore: 'Rekord {n}',
+
+  // Board hints
+  castlePlus: 'Burg +{n}',
+  tapToCancel: 'Tippen: abbrechen',
+  pickThisHouse: 'Dieses Haus wählen',
+  tapToMerge: 'Tippen: vereinen',
+  clearWood: 'Wald roden',
+  tapToTrade: 'Tippen: tauschen',
+  tradedThisRound: 'Schon getauscht',
+  noTrade: 'Kein Tausch',
+
+  // Round banner
+  bannerRound: 'Runde {n}: {season}',
+  bannerRule: '{rule}.  {tiles}',
+  bannerGift: 'Königliches Geschenk: {gift}',
+  bannerOmen: 'Omen für Runde {n}. {omen}',
+
+  // Gift card
+  goalReached: 'Ziel von Runde {n} erreicht!',
+  chooseGift: 'Wähle ein königliches Geschenk für Runde {n}',
+
+  // Trade card
+  tradeTitle: 'Markttausch',
+  tradeSub: 'Einmal pro Runde tauscht der Markt {n} Plättchen einer Art gegen ein Geschenkgebäude',
+  give: 'GIB {n}',
+  take: 'NIMM {n}',
+  trade: 'Tauschen',
+  tradeFor: '{give} gegen {take} tauschen',
+  close: 'Schließen',
+
+  // Islands card
+  chooseIsland: 'Wähle eine Insel',
+  campaign: 'KAMPAGNE',
+  campaignSub: 'Bis zu drei Sterne pro Insel. Ein Stern öffnet die nächste.',
+  levelInfo: 'Level {level}, Insel {island}:   1 Stern {one}   2 Sterne {two}   3 Sterne {three}',
+  levelLocked: '   (erst ein Stern im Level davor)',
+  islandOfTheDay: 'INSEL DES TAGES',
+  notPlayedToday: 'Heute noch nicht gespielt',
+  randomIsland: 'Zufällige Insel',
+  islandNumber: 'INSELNUMMER',
+  islandRange: '1 bis {n}',
+  keyDel: 'Entf',
+  keyPlay: 'Los',
+
+  // Game over
+  gameOver: 'Das Königreich steht',
+  islands: 'Inseln',
+  newKingdom: 'Neues Königreich',
+  overBest: 'Rekord {best}.  Kronen {crowns}.',
+  overLevel: { one: 'Level {level}: {n} Stern{next}.  Kronen {crowns}.', other: 'Level {level}: {n} Sterne{next}.  Kronen {crowns}.' },
+  nextStarAt: ' (nächster bei {n})',
+  overDaily: 'Insel des Tages: heutiger Rekord {best}.  Kronen {crowns}.',
+  overText: {
+    one: 'Endstand {score} auf Insel {island}, bis Runde {round}.\n{n} Gebäude gebaut, {castle} mit der Burg verbunden (+{castle}).\n\n{won}',
+    other: 'Endstand {score} auf Insel {island}, bis Runde {round}.\n{n} Gebäude gebaut, {castle} mit der Burg verbunden (+{castle}).\n\n{won}',
+  },
+};
+
+export default de;
+
+/** Texts that are the same in German, so the translation check doesn't flag them. */
+export const keepEnglish: (keyof typeof en)[] = ['title', 'dirWest', 'levelButton', 'bannerRule'];

@@ -1,3 +1,4 @@
+import type { TextKey } from '../i18n';
 import type { PotionId } from './orders';
 
 // Stars and the tinker's rank. Every sold order earns one to three stars by the moves left, and the
@@ -10,7 +11,8 @@ export const STARS_2 = 4;
 export const starsFor = (movesLeft: number) => (movesLeft >= STARS_3 ? 3 : movesLeft >= STARS_2 ? 2 : 1);
 
 export interface Rank {
-  title: string;
+  /** Its key in `i18n/en.ts`. */
+  title: TextKey;
   /** Total stars needed. */
   stars: number;
   /** The recipe it unlocks. */
@@ -18,10 +20,10 @@ export interface Rank {
 }
 
 export const RANKS: Rank[] = [
-  { title: 'Apprentice Tinker', stars: 0 },
-  { title: 'Journeyman Tinker', stars: 5, recipe: 'amberCordial' },
-  { title: 'Master Tinker', stars: 12, recipe: 'starlightElixir' },
-  { title: 'Grand Master Tinker', stars: 24, recipe: 'philosophersDraught' },
+  { title: 'apprentice', stars: 0 },
+  { title: 'journeyman', stars: 5, recipe: 'amberCordial' },
+  { title: 'master', stars: 12, recipe: 'starlightElixir' },
+  { title: 'grandMaster', stars: 24, recipe: 'philosophersDraught' },
 ];
 
 /** The index in `RANKS` of the rank `stars` earns. */

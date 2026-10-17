@@ -10,6 +10,7 @@ import { UPGRADES, MAX_TIER } from '../game/upgrades';
 import { loadProgress, recordRun, type Progress } from '../game/save';
 import { C, hex } from '../art/glow';
 import { heroKey } from '../art/sprites';
+import { t } from '../i18n';
 import { Panel, endScreen, eventPanel, heroSelect, levelUp, starMap, trader } from '../ui/panels';
 import {
   BOSS_BAR, CENTER, CREDITS_TAG, DEPTH, FONT, HP_BAR, KIT, LEVEL, PLANET_TAG, SIG_BUTTON, STICK, TIMER, VIEW, XP_BAR, inside,
@@ -662,11 +663,11 @@ export class GameScene extends Phaser.Scene {
     g.fillStyle(0x0d1426, 0.85).fillRoundedRect(HP_BAR.x - 2, HP_BAR.y - 2, HP_BAR.w + 4, HP_BAR.h + 4, 4);
     g.fillStyle(hpK > 0.35 ? hex(C.hp) : hex(C.danger), 1).fillRoundedRect(HP_BAR.x, HP_BAR.y, Math.max(2, HP_BAR.w * hpK), HP_BAR.h, 3);
     g.lineStyle(1, hex(C.hp), 0.5).strokeRoundedRect(HP_BAR.x - 2, HP_BAR.y - 2, HP_BAR.w + 4, HP_BAR.h + 4, 4);
-    this.texts.hp.setText(`${Math.ceil(p.hp)} / ${p.maxHp}   ·   ${s.kills} ${s.planet === 0 ? 'droids' : 'foes'}`);
+    this.texts.hp.setText(`${Math.ceil(p.hp)} / ${p.maxHp}   ·   ${t(PLANETS[s.planet].foes, { n: s.kills })}`);
     // The kit held.
     const lines = Object.entries(s.ranks).map(([id, rank]) => {
       const pips = '●'.repeat(rank) + '○'.repeat(MAX_TIER - rank);
-      return `${pips}  ${UPGRADES[id].name}`;
+      return `${pips}  ${t(UPGRADES[id].name)}`;
     });
     this.texts.kit.setText(lines.join('\n'));
     if (lines.length) {
@@ -676,13 +677,13 @@ export class GameScene extends Phaser.Scene {
     // Clock and level.
     const boss = s.enemies.find((e) => e.kind === 'boss');
     if (s.arena) this.texts.timer.setText(clock(ARENA_MS - s.time)).setColor(C.elite);
-    else this.texts.timer.setText(s.bossSpawned ? 'BOSS' : clock(Math.min(s.time, RUN_MS))).setColor(s.bossSpawned ? C.boss : C.text);
-    this.texts.level.setText(`LV ${s.level}`);
-    this.texts.planet.setText(s.arena ? 'Elite arena' : planetLabel(s.planet)).setColor(s.arena ? C.elite : PLANETS[s.planet].ground.deco);
-    this.texts.credits.setText(`${s.credits} credits`);
+    else this.texts.timer.setText(s.bossSpawned ? t('bossTimer') : clock(Math.min(s.time, RUN_MS))).setColor(s.bossSpawned ? C.boss : C.text);
+    this.texts.level.setText(t('levelTag', { n: s.level }));
+    this.texts.planet.setText(s.arena ? t('eliteArena') : planetLabel(s.planet)).setColor(s.arena ? C.elite : PLANETS[s.planet].ground.deco);
+    this.texts.credits.setText(t('credits', { n: s.credits }));
     this.texts.boss.setVisible(!!boss);
     if (boss) {
-      this.texts.boss.setText(BOSSES[PLANETS[s.planet].boss].name.replace('The ', '').toUpperCase());
+      this.texts.boss.setText(t(BOSSES[PLANETS[s.planet].boss].bar));
       g.fillStyle(0x0d1426, 0.9).fillRect(BOSS_BAR.x, BOSS_BAR.y, BOSS_BAR.w, BOSS_BAR.h);
       g.fillStyle(hex(C.boss), 1).fillRect(BOSS_BAR.x, BOSS_BAR.y, BOSS_BAR.w * Math.max(0, boss.hp / boss.maxHp), BOSS_BAR.h);
       g.lineStyle(1, hex(C.boss), 0.6).strokeRect(BOSS_BAR.x, BOSS_BAR.y, BOSS_BAR.w, BOSS_BAR.h);
@@ -698,8 +699,10 @@ export class GameScene extends Phaser.Scene {
     g.lineStyle(4, 0x2a3550, 1).strokeCircle(x, y, r - 4);
     g.lineStyle(4, accent, ready ? 1 : 0.7).beginPath().arc(x, y, r - 4, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * charge).strokePath();
     if (ready) g.lineStyle(10, accent, 0.18).strokeCircle(x, y, r - 2);
-    this.texts.sig.setText(hero.signature.name).setColor(ready ? C.text : C.muted);
-    this.texts.sigKey.setText(ready ? 'SPACE' : `${Math.ceil(p.sigMs / 1000)} s`);
+    this.texts.sig.setText(t(hero.signature.name)).setColor(ready ? C.text : C.muted);
+    // Longer names (German) shrink to stay inside the ring.
+    this.texts.sig.setScale(Math.min(1, (2 * r - 18) / this.texts.sig.width));
+    this.texts.sigKey.setText(ready ? t('spaceKey') : t('seconds', { n: Math.ceil(p.sigMs / 1000) }));
     // The floating stick under a steering finger: a faint ring and a knob in the hero's accent.
     const st = this.stick;
     if (st) {

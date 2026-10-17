@@ -2,6 +2,8 @@
 // the villages that join the line round by round. Every game makes a new valley with
 // `generateValley`. Screen positions are in src/scenes/layout.ts.
 
+import type { TextKey } from '../i18n';
+
 export const COLS = 12;
 export const ROWS = 7;
 
@@ -59,16 +61,17 @@ export const WORKSHOPS: Record<string, { kind: string; takes: Cargo; makes: Carg
   Stonereach: { kind: 'sawmill', takes: 'timber', makes: 'planks' },
 };
 
-export const CARGO_NAMES: Record<Cargo, string> = {
-  grain: 'Grain',
-  tools: 'Tools',
-  timber: 'Timber',
-  ore: 'Ore',
-  fish: 'Fish',
-  flour: 'Flour',
-  planks: 'Planks',
-  iron: 'Iron',
-  passengers: 'Passengers',
+/** Each cargo's name (on an order card) and the same word inside a sentence, as keys of `i18n/en.ts`. */
+export const CARGO_NAMES: Record<Cargo, { name: TextKey; lower: TextKey }> = {
+  grain: { name: 'grain', lower: 'grainLower' },
+  tools: { name: 'tools', lower: 'toolsLower' },
+  timber: { name: 'timber', lower: 'timberLower' },
+  ore: { name: 'ore', lower: 'oreLower' },
+  fish: { name: 'fish', lower: 'fishLower' },
+  flour: { name: 'flour', lower: 'flourLower' },
+  planks: { name: 'planks', lower: 'planksLower' },
+  iron: { name: 'iron', lower: 'ironLower' },
+  passengers: { name: 'passengers', lower: 'passengersLower' },
 };
 
 export const key = (t: Tile) => `${t.c},${t.r}`;

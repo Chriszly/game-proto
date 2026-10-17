@@ -1,4 +1,5 @@
 import { byDifficulty } from '../../../../shared/settings';
+import type { TextKey } from '../i18n';
 import { KINDS, type Kind } from './kinds';
 
 // The potion orders, one after another. Each asks for so many of a few ingredients within a number
@@ -14,15 +15,16 @@ export type PotionId =
   | 'starlightElixir'
   | 'philosophersDraught';
 
-export const POTION_NAMES: Record<PotionId, string> = {
-  healingDraught: 'Healing Draught',
-  sleepingTonic: 'Sleeping Tonic',
-  mandrakeTincture: 'Mandrake Tincture',
-  goldenElixir: 'Golden Elixir',
-  moonlitPhilter: 'Moonlit Philter',
-  amberCordial: 'Amber Cordial',
-  starlightElixir: 'Starlight Elixir',
-  philosophersDraught: "Philosopher's Draught",
+/** Each potion's name: its key in `i18n/en.ts` is its id. */
+export const POTION_NAMES: Record<PotionId, TextKey> = {
+  healingDraught: 'healingDraught',
+  sleepingTonic: 'sleepingTonic',
+  mandrakeTincture: 'mandrakeTincture',
+  goldenElixir: 'goldenElixir',
+  moonlitPhilter: 'moonlitPhilter',
+  amberCordial: 'amberCordial',
+  starlightElixir: 'starlightElixir',
+  philosophersDraught: 'philosophersDraught',
 };
 
 export type Needs = Partial<Record<Kind, number>>;

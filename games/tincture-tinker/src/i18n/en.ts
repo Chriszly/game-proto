@@ -1,0 +1,151 @@
+/**
+ * TinctureTinker's texts in British English, the source `de.ts` and `en-US.ts` translate (see
+ * `shared/i18n.ts`). The tables in `game/` name their texts by these keys.
+ */
+const en = {
+  // Ingredients: name, and a count of them in a sentence ("3 wheat kept in the pantry")
+  wheatName: 'Wheat',
+  wheatCount: { one: '{n} wheat', other: '{n} wheat' },
+  mandrakeName: 'Mandrake',
+  mandrakeCount: { one: '{n} mandrake', other: '{n} mandrake' },
+  sageName: 'Sage',
+  sageCount: { one: '{n} sage', other: '{n} sage' },
+  emberName: 'Ember Salt',
+  emberCount: { one: '{n} ember salt', other: '{n} ember salt' },
+  moonpetalName: 'Moonpetal',
+  moonpetalCount: { one: '{n} moonpetal', other: '{n} moonpetal' },
+
+  // Potions
+  healingDraught: 'Healing Draught',
+  sleepingTonic: 'Sleeping Tonic',
+  mandrakeTincture: 'Mandrake Tincture',
+  goldenElixir: 'Golden Elixir',
+  moonlitPhilter: 'Moonlit Philter',
+  amberCordial: 'Amber Cordial',
+  starlightElixir: 'Starlight Elixir',
+  philosophersDraught: "Philosopher's Draught",
+
+  // Ranks
+  apprentice: 'Apprentice Tinker',
+  journeyman: 'Journeyman Tinker',
+  master: 'Master Tinker',
+  grandMaster: 'Grand Master Tinker',
+  royalTitle: 'Royal Apothecary',
+
+  // Workbench upgrades: name and what one level does
+  handsName: 'Steady hands',
+  handsWhat: '+1 move on every order',
+  catalystName: 'Potent Catalysts',
+  catalystWhat: 'a fired Catalyst clears its column too',
+  bloomName: 'Bloom starter',
+  bloomWhat: 'every order starts with a Bloom on the board',
+
+  // Bench tools: name on the button and tip in the caption
+  benchTools: 'Bench tools',
+  stirName: 'Stir',
+  stirTip: 'Stir: 3 more moves for this order',
+  siftName: 'Sift',
+  siftTip: 'Sift: reroll one row of the board',
+  pestleName: 'Pestle',
+  pestleTip: 'Pestle: smash one tile, a jar or a special, without a move',
+  funnelName: 'Funnel',
+  funnelTip: 'Funnel: swap any two tiles on the board, without a move',
+  toolTip: '{tip} ({cost} coins)',
+
+  // Captions
+  captionTip: 'A match of four brews a Catalyst (clears its row); an L or T brews a Bloom (clears a 3x3)',
+  captionBlockers: 'A match next to a corked jar opens it; resin holds a tile in place for one match',
+  captionMould: 'Mould creeps to a neighbour after every move unless a match touches it, which scrubs it off',
+  captionRoyal: 'A royal commission: three potions in turn on one board, the moves carried over',
+  captionTwin: 'Two customers share the board and the moves; the one served first pays {coins} coins more',
+  captionSift: 'Sift: tap a row to reroll it for {cost} coins, or tap Sift again to put it away',
+  captionPestle: 'Pestle: tap a tile to smash it for {cost} coins, or tap Pestle again to put it away',
+  captionFunnel: 'Funnel: tap a tile, then any other, to swap them for {cost} coins',
+  captionFunnelTo: 'Funnel: now tap the tile to swap it with (tap it again to let it go)',
+  captionHerbs: 'The herbalist: {cost} coins an ingredient, up to {max} of a kind in the pantry',
+  captionPantry: 'The pantry put in {list} to start',
+  captionExam: 'A guild examination: the same board every try; sell it with {stars} stars for a seal',
+  captionRichMoves: 'A rich order: {share}% more coins for {moves} fewer moves',
+  captionRichBlockers: 'A rich order: {share}% more coins for {blockers} more jars and resin',
+  captionForbid: 'No {kind} in this order: a swap that matches it costs a move',
+  captionRush: 'Rush order: {moves} fewer moves than usual, and {coins} more coins',
+  captionPickRichMoves: 'A rich order pays {share}% more, for {moves} fewer moves',
+  captionPickRichBlockers: 'A rich order pays {share}% more, for {blockers} more jars and resin',
+  captionExamRetry: 'The examination starts on the same board every time',
+  and: '{a} and {b}',
+
+  // Notes over the board
+  served: '{potion} served!',
+  servedFast: '{potion} served! +{coins} coins for speed with the sale',
+  nextStage: 'Stage {stage}: now the {potion}',
+
+  // The order label
+  examTitle: 'Guild examination {n}',
+  crownsLast: "The crown's last order",
+  royalCommission: 'Royal commission',
+  twinTitle: 'Order {n}: two customers',
+  orderTitle: 'Order {n}',
+  potionNumber: 'No. {n}',
+  paysPass: 'Pays {price} coins on a pass',
+  paysRich: 'Pays {price} coins: rich order',
+  pays: 'Pays {price} coins',
+  perMove: '+{n} per move left',
+  examLine: 'Sell it with {stars} stars: {moves}+ moves left',
+  stageLine: 'Stage {stage} of {stages}: the moves carry over',
+  twinLine: 'and a {potion} for a second customer',
+  rushLine: 'Rush order: {moves} fewer moves, +{coins} coins',
+  forbidLine: 'No {kind}: matching it costs a move',
+  needFor: '{kind} ({potion})',
+  moves: 'Moves {n}',
+  stars3: '3 stars at {n}+ moves left',
+  stars2: '2 stars at {n}+ moves left',
+  stars1: '1 star for any sale',
+  pantry: 'Pantry',
+
+  // The rank ribbon
+  nextRank: 'Next: {rank}: a new recipe',
+  guildSeals: 'Guild seals',
+  allRecipes: "Every recipe unlocked: the crown's last order is next",
+
+  // The result card
+  outOfMoves: 'Out of moves',
+  potionUnfinished: "The {potion} wasn't finished.",
+  royalUnfinished: "The royal commission wasn't finished.",
+  twinUnfinished: "The two orders weren't finished.",
+  noSeal: 'No seal this time.',
+  noStars: 'No stars this time.',
+  tryAgain: 'Try again',
+  backToOrders: 'Back to orders',
+  modestOrder: 'Modest order',
+  richOrder: 'Rich order',
+  workbench: 'Workbench',
+  herbalist: 'Herbalist',
+  examFailed: 'Examination failed',
+  examFailedText: 'Sold with {moves} moves left: the guild wanted {stars} stars ({need}+ moves left).',
+  examPassed: 'Examination passed!',
+  allSeals: 'Every guild seal earned: {seals} of {exams}',
+  seal: 'Guild seal {seals} of {exams}',
+  earned: '+{price} coins, +{bonus} for {moves} moves left',
+  speedBonus: '+{n} for serving the {potion} first',
+  keptInPantry: '{list} kept in the pantry',
+  crownedRank: '{title}! {n} stars in all',
+  newRank: 'Now a {rank}! New recipe: {potion}',
+  moreToRank: { one: '{n} star: {more} more to {rank}', other: '{n} stars: {more} more to {rank}' },
+  royalStars: '{n} stars in all as {title}',
+  everyRecipe: '{n} stars, and every recipe unlocked',
+  crownFilled: "The crown's last order filled!",
+  royalFilled: 'Royal commission filled!',
+  twinFilled: 'Both customers served!',
+  sold: '{potion} sold!',
+
+  // The herbalist and the workbench
+  coinsToSpend: '{n} coins to spend',
+  buyFor: 'Buy for {cost}',
+  buyHerb: 'Buy for {cost}',
+  full: 'Full',
+  nextOrder: 'next order',
+  bought: 'Bought',
+  back: 'Back',
+};
+
+export default en;
