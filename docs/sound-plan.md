@@ -303,6 +303,10 @@ Notes:
 ### Colonizer
 Base-building strategy drawn as a medieval tapestry; stately and slow-building.
 
+Done: see `games/colonizer/AGENTS.md` (Sound). The raid music is its own song at 132 BPM, the
+5-note age fanfare is a sting, and a selected unit, every trade and a building falling on screen
+have sounds too.
+
 **Music:** Medieval dance at about 96 BPM in D Dorian, turning Mixolydian in later ages. Voices
 are a square lead like a shawm, a triangle drone and noise drums.
 - Each age gets a fuller arrangement.
