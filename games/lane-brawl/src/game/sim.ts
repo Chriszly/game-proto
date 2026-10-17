@@ -11,6 +11,9 @@ import {
   CAMP_KINDS,
   CHAMP_AGGRO,
   ITEMS,
+  ELIXIR,
+  ELIXIR_COLOR,
+  AI_ELIXIR,
   KILL,
   MINION,
   RESPAWN_BASE_MS,
@@ -313,6 +316,14 @@ export function buy(u: Unit, id: string): boolean {
   if (!item || u.side === 'neutral' || (!item.ward && u.items.includes(id))) return false;
   // A champion shops at its Nexus, or anywhere while it waits to respawn.
   if (!u.dead && !atShop(u)) return false;
+  if (item.elixir) {
+    if (u.gold < item.cost) return false;
+    u.gold -= item.cost;
+    u.buffs = u.buffs.filter((b) => !b.elixir);
+    u.buffs.push({ id: item.name, ms: ELIXIR.ms, def: item.elixir, color: ELIXIR_COLOR[item.id] ?? '#c49bff', elixir: true });
+    refreshStats(u);
+    return true;
+  }
   if (item.ward) {
     if (u.wards >= WARD.carry || u.gold < item.cost) return false;
     u.gold -= item.cost;
@@ -739,7 +750,7 @@ function revive(u: Unit) {
   u.slowMs = 0;
   u.stunMs = 0;
   u.shield = 0;
-  u.buffs = [];
+  u.buffs = u.buffs.filter((b) => b.elixir);
   u.lastHitBy = null;
   u.hasteMs = 0;
   u.recallMs = 0;
@@ -751,7 +762,7 @@ function kill(s: GameState, t: Unit, killerId: number) {
   t.dead = true;
   t.target = null;
   t.moveTo = null;
-  t.buffs = [];
+  t.buffs = t.buffs.filter((b) => b.elixir);
   const killer = getUnit(s, killerId);
   const champKiller = killer && killer.kind === 'champion' ? killer : null;
   switch (t.kind) {
@@ -1084,6 +1095,12 @@ function aiShop(u: Unit) {
   const next = nextBuy(u);
   if (next && u.gold >= priceFor(u, next) && buy(u, next.id)) {
     aiLog(u.side, `${shortName(u.name)} buys the ${next.name}`);
+    return;
+  }
+  // With the build done, spare gold goes on an elixir for the next push.
+  const elixir = ITEMS.find((it) => it.id === AI_ELIXIR[AI_BUILD_FOR[u.champ?.role ?? ''] ?? 'fighter']);
+  if (!next && elixir && !u.buffs.some((b) => b.elixir) && u.gold >= elixir.cost + ELIXIR.aiSpare && buy(u, elixir.id)) {
+    aiLog(u.side, `${shortName(u.name)} drinks a ${elixir.name}`);
     return;
   }
   if (u.wards === 0 && buy(u, 'ward')) aiLog(u.side, `${shortName(u.name)} buys a ward`);

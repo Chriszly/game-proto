@@ -164,6 +164,8 @@ export interface Buff {
   color: string;
   /** The look of the ability that gave it (`${championId}.${key}`), for its aura; none for a jungle buff. */
   look?: string;
+  /** An elixir: kept through death, and replaced by the next one bought. */
+  elixir?: boolean;
 }
 
 /** A patch on the ground from a zone ability: it hurts and slows the other team's units inside. */

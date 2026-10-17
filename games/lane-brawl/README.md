@@ -113,7 +113,7 @@ left, under bevelled slate panels.
    you (2:00, 150 gold), slay the guardian beast (2:00, 250 gold; only when your team slays it).
    A goal counts however its target falls; a late one is missed, and one with nothing to aim at
    (the beast asleep) is skipped. The next goal comes 4 seconds after one ends.
-12. **Items**: twelve of them plus the Vision Ward, bought within reach of your Nexus or anywhere
+12. **Items**: twelve of them plus the Vision Ward and three elixirs, bought within reach of your Nexus or anywhere
     while you wait to respawn, at most six in your bag (the slots
     under your health bar). Cheap parts build into bigger items: buying a big item uses up the parts
     you own and takes their cost off its price (the shop shows the saving).
@@ -133,6 +133,14 @@ left, under bevelled slate panels.
    | Sage's Cloak | 900 | -20% ability cooldowns, +120 health | Sapphire + Ruby Crystal |
    | Giant's Belt | 700 | +320 health | Ruby Crystal |
    | Vision Ward | 75 | Consumable: carry up to two, plant with V | |
+   | Wrath Elixir | 400 | Elixir: +20% damage for 3 minutes | |
+   | Iron Elixir | 400 | Elixir: +15 armor and 4 health a second for 3 minutes | |
+   | Swift Elixir | 400 | Elixir: +15% speed and +20% attack speed for 3 minutes | |
+
+   Elixirs take no bag slot and last through death; you drink one at a time, and a new one replaces
+   the one you have. Once the bag is full they are where late gold goes before a push.
+
+   ![The shop's last row: the Vision Ward and the three elixirs, the Wrath Elixir active with 2:59 left and a Wrath chip by the portrait](docs/screenshots/elixir-shop.webp)
 
 13. **Vision wards**: a planted ward is a stake with a gem eye that gives your team sight 420 px
     around it for 90 seconds, tall grass included, so a champion hiding in a bush near it is seen.
@@ -178,7 +186,8 @@ They shop whenever they are home or dead, following a build for their class's ro
 brawlers and catchers go Cloth Armor, Ruby Crystal, Thornmail, Swift Boots, Giant's Belt and on;
 casters and supports go Sapphire, Sage's Cloak and on; everyone else goes Long Sword, Dagger,
 Brutal Edge, Phase Boots and on), each starting with a Healing Flask they drink under 40% health,
-and buy a Vision Ward whenever they have none. They recall home when hurt with no enemy near, or
+and buy a Vision Ward whenever they have none. With the build done and gold to spare they drink an
+elixir before heading out (tanks the Iron Elixir, casters the Swift Elixir, the rest Wrath). They recall home when hurt with no enemy near, or
 with 900 gold and something to buy, and buy back when an enemy champion is at their Nexus.
 Every 70 seconds from 1:40, each team sends one healthy champion from another lane to gang up on
 the weakest enemy champion it can see. A champion that is low on health with an enemy champion
