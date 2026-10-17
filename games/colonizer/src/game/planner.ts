@@ -245,8 +245,14 @@ function plan(s: GameState) {
   if (monument && monumentLeft(s, FOE) !== null && army.length > 0) {
     if (idleArmy.length > 0 && act(() => true)) {
       const half = BUILDINGS.monument.w / 2;
-      issue(s, ME, army.map((u) => u.id), { t: 'attackMove', x: monument.tx + half, y: monument.ty + half });
-      startRaid(s, ME, FOE, army.map((u) => u.id));
+      const ids = army.map((u) => u.id);
+      issue(s, ME, ids, { t: 'attackMove', x: monument.tx + half, y: monument.ty + half });
+      // The rush is a raid on the Monument, so `pressRaid` ends it (and the raid it records) once
+      // the Monument falls, instead of leaving the record open and every later raid unrecorded.
+      if (raid.goal?.b !== monument.id) {
+        Object.assign(raid, { goal: { kind: 'town', x: monument.tx + half, y: monument.ty + half, b: monument.id, camp: null }, party: ids, started: s.time, count: raid.count + 1 });
+      }
+      startRaid(s, ME, FOE, ids);
       log(`sends all ${army.length} soldiers at the enemy Monument`);
     }
   } else if (raid.goal) {

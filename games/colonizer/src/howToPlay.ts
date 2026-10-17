@@ -5,6 +5,7 @@ export const howToPlay: HowToPlay = {
   controls: [
     { input: 'Left click, or drag a box', action: 'Select units or a building; Shift adds to the selection' },
     { input: 'Right click', action: 'Gather, build, attack or walk; with a building selected, set its rally flag' },
+    { input: 'Tap, on a touch screen', action: 'With units selected, give the right click order; tap your own unit or building to select it' },
     { input: 'A, then left click', action: 'Attack-move: walk there and fight on the way' },
     { input: 'S', action: 'Stop the selected units' },
     { input: 'B, or the bottom panel', action: 'Open the build list with villagers selected, then click a spot' },

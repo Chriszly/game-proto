@@ -41,6 +41,7 @@ the last one on the first page of the build list.
 | Left click | Select one unit or building; hold and drag to box-select units; Shift adds to the selection |
 | Right click | Attack an enemy, gather from a tree, bush or mine, finish a building, walk, or go to a camp |
 | Right click, with a production building selected | Plant its rally flag: new units walk there (on a tree, bush, mine or farm, new villagers gather it) |
+| Tap, on a touch screen | With units selected, a tap gives the right click's order (tap another of your units or buildings to select it instead); with a production building selected, a tap on the ground plants its rally flag |
 | A, then left click | Attack-move: the army walks and fights whatever it meets on the way |
 | S | Stop the selected units |
 | B | Open the build list for the selected villagers, then click a spot to place it (drag a line for a palisade) |
@@ -253,6 +254,8 @@ unit, tech, attack and relic run (**L**). A click on the end screen starts anoth
 - There is no save yet: each match starts fresh.
 - The map is the same for a given seed, and the seed is fixed in the playthrough test.
 - The AI picks Shieldwall when it reaches Age II, and researches Age III once it has the three deeds.
+  Its raid deed is yours to give: it repels a raid when three or more of your soldiers come at its
+  Town Center and at least half of them fall before the rest leave.
 - The AI builds its faction's own building early, sets a rally flag in front of its base for each
   production building, and walls off the front of its base in Age II.
 - The AI plays at a human pace: about 30 commands a minute, so it can leave villagers idle too.
