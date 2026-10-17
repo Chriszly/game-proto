@@ -52,7 +52,7 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   of its Town Center and releases when none is.
 - Veteran ranks (`Unit.kills`, `Unit.rank`): a kill of a unit in `strike` counts; `RANK_KILLS`
   gives rank 1 to 3, each worth `RANK_HP` (added to `maxHp(u)` and healed at once) and `RANK_DMG` in
-  `ownBonus`. The scene draws chevrons over the head and names the rank (`RANK_NAMES`).
+  `ownBonus`. The scene draws chevrons over the head and names the rank (`RANK_NAMES[rank - 1]`).
 - The Market and trade carts: `trade(s, owner, res, dir)` swaps `MARKET_LOT` wood or food for ore
   at `marketPrice` (`MARKET_BASE` times `Player.rates[res]`, sales pay `MARKET_SELL` of it); each
   trade moves the rate by `MARKET_STEP` within `MARKET_RATE_MIN..MAX`, and `updateMarkets` drifts
@@ -158,26 +158,38 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   `watchSteps()` times a frame, the panel shows no buttons, right clicks and hotkeys do nothing, and
   the end screen names the winning faction and starts another match on a click. The planner reports
   what it builds, trains and researches, its attacks, relic runs and boon to `aiLog`.
+- Languages: British English (the source), US English and German, following the hub's Language
+  setting (`?lang=de` for a quick look): the menu, HUD, panel, notices, end screens, How to play and
+  the watch log. Names that are the same in German (the game's title, the Palisade) are in
+  `keepEnglish` in `src/i18n/de.ts`.
 - Not implemented yet: saves and sound.
 
 ## Architecture
 
 ### File map
 
-- `src/howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips), handed to
-  `setupGame(game, { howToPlay })` in `src/main.ts`; update it when the controls or the first round change.
+- `src/howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips) in British
+  English, US English (the same with "Town Center", made by `us`) and German, picked with
+  `byLanguage` and handed to `setupGame(game, { howToPlay })` in `src/main.ts`; update every language
+  when the controls or the first round change.
+- `src/i18n.ts` and `src/i18n/`: the game's texts (`shared/i18n.ts`). `i18n/en.ts` is the British
+  English source (Town Centre, Relic of Valour), `i18n/de.ts` the German and `i18n/en-US.ts` only the
+  texts spelled differently in US English (Town Center, Relic of Valor). `t(key, vars)` shows a text
+  in the hub's language; `TextKey` types the keys. Every text on screen, the sim's notices and the
+  planner's watch log go through `t`, and a new one gets its German entry (and a US one if its
+  spelling differs) in the same PR.
 - `src/main.ts`: creates the `Phaser.Game` (960x540, FIT scaling, `pixelArt: false`, linen
   background), registers the three scenes, calls `setupGame(game)` from `shared/setupGame.ts` and
   `setupScaling(game)` from `shared/scaling.ts`, and puts `game` on window in dev.
-- `src/game/data.ts`: every balance number and roster: `FACTIONS`, `UNITS` (cost, time, stats,
+- `src/game/data.ts`: every balance number and roster (names and texts are `TextKey`s, shown with `t`): `FACTIONS`, `UNITS` (cost, time, stats,
   trainer, `age`, `limit`, `gift`), `unitFor(faction, role)`, `isCivil`/`isSoldier`/`earnsRanks`,
   `BUILDINGS`, `BUILD_ORDER`, `TECHS` (with `advance: 2 | 3` on
   the age techs), `GATHER_MS`, `CARRY`, `START`, `START_VILLAGERS`, `DEEDS`, `ARMY_DEED`,
   `AGE3_DAMAGE`, `BOONS`, `SHIELDWALL_TAKEN`, `HARVEST_RITES`, `EDGES`, `MASONRY_HP`, `MUSTER_SPEED`,
   `MAP_KINDS`, `TEMPERAMENTS`, `BUILD_MORE`, `UNIQUE`,
-  `UNIQUE_TEXT`, the Forge, Dock and Grove numbers, `UNIT_GAP`, `RELICS` and their bonuses,
+  `UNIQUE_EFFECT` (what each faction's building does), the Forge, Dock and Grove numbers, `UNIT_GAP`, `RELICS` and their bonuses,
   `CLAIM_RANGE`, `LEASH`, the bell (`BELL_RANGE`, `GARRISON_ARROW`), the ranks (`RANK_KILLS`,
-  `RANK_HP`, `RANK_DMG`, `RANK_NAMES`), the Market (`MARKET_*`, `TRADE_ORE`), the champions
+  `RANK_HP`, `RANK_DMG`, `RANK_NAMES`, rank r's at `r - 1`), the Market (`MARKET_*`, `TRADE_ORE`), the champions
   (`AURA_*`, `HEAL_*`), `MONUMENT_MS`, the raid pacing (`RAID_TOWN_FROM`, `RAID_MAX_MS`,
   `ASSAULT_MIN`, `ASSAULT_CLEAR`; the rest is per temperament), `TILE` (32) and `MAP_SIZE` (128).
 - `src/game/map.ts`: `generateMap(kind, sides)` draws lakes, rock ridges (and Highlands' long
@@ -188,8 +200,8 @@ in code on 2D canvases (no image files), with `pixelArt` off.
 - `src/game/sim.ts`: the rules, free of Phaser. `createGame` builds the state, `tick` advances it,
   `issue` gives unit orders, `placeBuilding`, `canPlace`, `train` and `research` queue things,
   `chooseBoon` takes the Age II boon, `chooseEdge` the Age III edge, `buildingHp` reads a building's
-  full health, `startRaid` records a raid, `notAllowed` says why a building
-  can't be placed at all, `unitCost` applies the Forge, `placeWall`/`wallLine` lay a palisade,
+  full health, `startRaid` records a raid (its `from` is a compass `TextKey`), `notAllowed` says why a
+  building can't be placed at all (a translated text, or null), `unitCost` applies the Forge, `placeWall`/`wallLine` lay a palisade,
   `ringBell`/`releaseBell` run the garrison, `trade`/`marketPrice` the Market, `maxHp`, `unitCount`,
   `garrisoned`, `shelters`, `inAura` and `postAt` read things,
   `setRally` plants a rally flag, `endRaid` ends a raid whose raiders turn back, `campAt`/`campSpots` find a camp and the tiles round it,
@@ -293,14 +305,19 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   button. A building the player may not place (`notAllowed`) shows disabled. `renderPanel` closes
   the build list (`buildMenu`, `buildPage`) whenever the selection changes (`panelSelection`) or no
   villager is left in it, so clicking another unit or building shows its own buttons.
+- Panel buttons are `Action`s: an `id` in no language (a unit, building or tech id, `build`,
+  `more`, `back`, `bell`, `release`, `buy-wood` and so on), the `name` and the `sub` line under it (a
+  cost from `costText`, the age it waits for, or "one only"). `fitWidth` squeezes a name or line
+  that would run past the button, for long German words. `info(dx, dy, lines)` wraps the selection's
+  lines before the buttons.
 - The panel is rebuilt when `panelSignature` changes (it also watches the bell, the Market rates
   and the champion count). While `boonPending` (or `edgePending`), `renderPick` puts the two boon
-  (or edge) cards in the buttons' place, with `hud` labels `Shieldwall` and `Harvest Rites` (or
-  `Masonry` and `Muster`). The Town Center's buttons
+  (or edge) cards in the buttons' place, with `hud` ids `shieldwall` and `harvest` (or
+  `masonry` and `muster`). The Town Center's buttons
   are the Villager, the champion, `Ring the bell` or `Back to work`, and the age; a Market's are the
-  Trade Cart and `Buy 100 wood 70o`-style buy and sell buttons with the live price; selected carts
-  get `Trade`. A unit whose age is too low shows as `Ram (Age II)`, a champion at its limit as
-  `Warlord (one only)`.
+  Trade Cart and `Buy 100 wood` / `70 ore` buy and sell buttons with the live price; selected carts
+  get `Trade`. A unit whose age is too low shows the age under its name (`Ram`, `Age II`), a
+  champion at its limit `one only`.
 - Right click on a trading post sends selected carts trading (`postAt`) and everyone else there;
   carts otherwise take move orders with the soldiers. A left click on a post says what it is.
 
@@ -348,13 +365,17 @@ None: there is no save. Settings come from the hub (`shared/settings.ts`).
 - The dev build sets `window.game`. The playthrough reads `scene.getScene('Game')`: `state` (the
   whole sim, with `units`, `buildings`, `nodes`, `players` (with `age`, `deeds`, `boon`,
   `boonPending`), `winner`, `time`, `raid`), `selected` (a Set of ids), `hud` (the panel's buttons
-  or boon cards, in game-space screen coordinates with `label`, `x`, `y`, `w`, `h`), `popLog` (the
-  player's drop-off badges, such as `+10 wood`), `toastLog` (raid toasts shown), `toast.shown`,
+  or boon cards, in game-space screen coordinates with `id`, `label`, `x`, `y`, `w`, `h`; the test
+  finds a button by its `id`, so it plays in any language, and `label` is the translated text),
+  `popLog` (the player's drop-off badges by resource id, such as `+10 wood`, in no language),
+  `toastLog` (raid toasts shown, translated), `toast.shown`,
   `placing`, `attackMode`, `buildMenu`, `buildPage`, `status.shown` (the Monument line),
-  `status.temperaments` (each rival's temperament as the card shows it, `?` until scouted),
+  `status.temperaments` (each rival's temperament as the card shows it, translated, `?` until scouted),
   `cameras.main.worldView.x/y` (not `scrollX/Y`, which differ once `renderScale` zooms the
   camera), and `toScreen(tx, ty)`. `e2e/screens.spec.ts` at the root opens the game on five screens. `state.camps` lists the camps with `holder`, `state.posts` the trading posts,
   and each building's `garrison` the villagers inside it.
+- The playthrough runs in the browser's US English, and plays the same in German (Playwright's
+  `locale: 'de-DE'`), since it finds buttons by `id`.
 - Inputs are canvas clicks (left and right), so the test drives the real controls. It never writes
   to game state.
 - It seeds `Math.random`, owns `page.clock`, makes `requestAnimationFrame` a 64 ms timer and forces
@@ -366,9 +387,14 @@ None: there is no save. Settings come from the hub (`shared/settings.ts`).
 
 ## Making common changes
 
+- Add or change a text: its key in `src/i18n/en.ts`, the German in `src/i18n/de.ts` (the build
+  fails without it) and, when it spells "Centre" or "Valour", the US spelling in `src/i18n/en-US.ts`;
+  run `node scripts/check-translations.mjs`. German runs longer: the panel's buttons (squeezed by
+  `fitWidth`), the deeds card's rows and the top bar's labels are the tightest spots, so check a new
+  text with `?lang=de`. Never compare a translated text in code; compare ids.
 - Tune a number: `src/game/data.ts`. If it changes the first round (the harvest, the villager, the
   house, the Academy, Axes or Age II), update the playthrough's expectations too.
-- Add a unit: add an entry to `UNITS` with its faction and role, and add it to the faction's trainer
+- Add a unit: add an entry to `UNITS` with its faction, role and name key (in the `i18n/` files), and add it to the faction's trainer
   building. Give it a figure: map its name to a `Kind` in `kindOf` (`src/art/figures.ts`) and, for a
   new kind, its hands and weapon in `footman` or `rider`. `BootScene` bakes a strip for every unit.
   A new role needs a line in `isCivil`/`isSoldier`, a branch in `updateUnit` and `frameOf`, and its
@@ -378,7 +404,7 @@ None: there is no save. Settings come from the hub (`shared/settings.ts`).
   the range ring in `renderRings` read `gift` too.
 - Add a pose: add it to `VILLAGER_POSES` or `SOLDIER_POSES` with its frame count, draw it in
   `villager`, `footman` or `rider`, and pick it in `GameScene.frameOf`.
-- Add a building: add it to `BUILDINGS` and `BUILD_ORDER` (or `BUILD_MORE`; page one holds 10 plus
+- Add a building: add it to `BUILDINGS` (its name key in the `i18n/` files) and `BUILD_ORDER` (or `BUILD_MORE`; page one holds 10 plus
   two buttons, so it is full), give it a painter in `PAINT`
   (`src/art/scenery.ts`), and if it trains or researches, make `trains` or `research` say so. The
   panel and the planner pick it up from the data; add it to `BUILD_PLAN` in the planner if the AI
@@ -397,7 +423,7 @@ None: there is no save. Settings come from the hub (`shared/settings.ts`).
   they are, so the playthrough's seeded map stays the same.
 - Add a faction: add it to `FACTIONS` and `FACTION_IDS`, its colours to `WOOL`, its three units to
   `UNITS` (one each for melee, ranged and cavalry), its own building to `BUILDINGS` (with `faction`),
-  `UNIQUE` and `UNIQUE_TEXT`, and the menu shows a card for it (re-space the cards for four).
+  `UNIQUE` and `UNIQUE_EFFECT` (with its texts in the `i18n/` files), and the menu shows a card for it (re-space the cards for four).
 - Add a relic: add it to `RELICS`, apply it in the sim behind `holds`, give it a sign in `bakeRelic`
   and an icon in `RELIC_ICON` (hud.ts), and put a camp for it in `CAMP_PLAN` (mirrored pairs keep
   the map fair).

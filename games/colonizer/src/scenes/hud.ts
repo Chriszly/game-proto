@@ -2,12 +2,13 @@
 // the deeds card, the horn toast and the minimap. Each is a small class the GameScene updates every
 // frame; all of them are fixed to the screen (scroll factor 0).
 import Phaser from 'phaser';
-import { ARMY_DEED, BUILDINGS, DEEDS, EDGES, FACTIONS, MAP_SIZE, RELICS, RESOURCES, TEMPERAMENTS, TILE, type FactionId, type RelicId } from '../game/data';
+import { AGE3_DAMAGE, ARMY_DEED, BUILDINGS, DEEDS, EDGES, FACTIONS, MAP_SIZE, RELICS, RESOURCES, TEMPERAMENTS, TILE, type FactionId, type RelicId } from '../game/data';
 import { DIRT, ROCK, WATER } from '../game/map';
 import { deedCount, monumentLeft, NEUTRAL, PLAYER, popCap, popUsed, type GameState, type Player } from '../game/sim';
 import { WOOL } from '../art/figures';
 import { hexNum, mix, SERIF, T } from '../art/stitch';
 import { settings } from '../../../../shared/settings';
+import { t } from '../i18n';
 import { AGE_PIPS, DEED_CARD, MINI, STATUS_CARD, TOAST, TOP_SLOTS } from './layout';
 
 const HUD_DEPTH = 9990;
@@ -55,19 +56,19 @@ export class TopBar {
 
   constructor(scene: Phaser.Scene, faction: FactionId) {
     fixed(scene.add.image(0, 0, 'topbar').setOrigin(0, 0), 0);
-    const slots: [string, number, string][] = [['wood', TOP_SLOTS.wood, 'WOOD'], ['food', TOP_SLOTS.food, 'FOOD'], ['ore', TOP_SLOTS.ore, 'ORE'], ['pop', TOP_SLOTS.pop, 'POP']];
+    const slots: [string, number, string][] = [['wood', TOP_SLOTS.wood, t('woodLabel')], ['food', TOP_SLOTS.food, t('foodLabel')], ['ore', TOP_SLOTS.ore, t('oreLabel')], ['pop', TOP_SLOTS.pop, t('popLabel')]];
     for (const [key, x, label] of slots) {
       fixed(scene.add.image(x + 8, 15, `icon-${key}`), 2);
       this.values[key] = fixed(scene.add.text(x + 19, 15, '', ink(14)).setOrigin(0, 0.5), 2);
-      this.labels[key] = fixed(scene.add.text(x + 60, 16, label, ink(8.5, T.faded)).setOrigin(0, 0.5), 2);
+      this.labels[key] = fixed(scene.add.text(x + 60, 16, label.toUpperCase(), ink(8.5, T.faded)).setOrigin(0, 0.5), 2);
     }
-    fixed(scene.add.text(TOP_SLOTS.age, 15, 'AGE', ink(10)).setOrigin(0, 0.5), 2);
+    fixed(scene.add.text(TOP_SLOTS.age, 15, t('ageLabel').toUpperCase(), ink(10)).setOrigin(0, 0.5), 2);
     this.pips = fixed(scene.add.graphics(), 2);
     ['I', 'II', 'III'].forEach((p, k) => this.pipText.push(fixed(scene.add.text(AGE_PIPS.x + k * AGE_PIPS.gap, AGE_PIPS.y, p, ink(7, T.ink)).setOrigin(0.5, 0.5), 3)));
     fixed(scene.add.image(TOP_SLOTS.clock + 8, 15, 'icon-clock'), 2);
     this.values.clock = fixed(scene.add.text(TOP_SLOTS.clock + 19, 15, '', ink(14)).setOrigin(0, 0.5), 2);
     fixed(scene.add.image(TOP_SLOTS.faction + 8, 15, `icon-banner-${faction}`), 2);
-    fixed(scene.add.text(TOP_SLOTS.faction + 20, 15, FACTIONS[faction].name.toUpperCase(), ink(12.5, WOOL[faction].cloth)).setOrigin(0, 0.5), 2);
+    fixed(scene.add.text(TOP_SLOTS.faction + 20, 15, t(FACTIONS[faction].name).toUpperCase(), ink(12.5, WOOL[faction].cloth)).setOrigin(0, 0.5), 2);
     this.boonIcon = fixed(scene.add.image(722, 15, 'icon-shield').setVisible(false), 2);
     this.edgeIcon = fixed(scene.add.image(752, 15, 'icon-stone').setVisible(false), 2);
   }
@@ -117,12 +118,12 @@ export class DeedCard {
     const { x, y, w } = DEED_CARD;
     fixed(scene.add.image(x - 2, y - 2, 'card-deeds').setOrigin(0, 0), 0);
     this.g = fixed(scene.add.graphics(), 1);
-    this.title = fixed(scene.add.text(x + 9, y + 12, 'DEEDS FOR AGE III', ink(11.5, T.red)).setOrigin(0, 0.5), 2);
+    this.title = fixed(scene.add.text(x + 9, y + 12, t('deedsTitle').toUpperCase(), ink(11.5, T.red)).setOrigin(0, 0.5), 2);
     this.count = fixed(scene.add.text(x + w - 9, y + 12, '', ink(12)).setOrigin(1, 0.5), 2);
     DEEDS.forEach((d, i) => {
       const ry = y + 32 + i * 16;
       this.rows.push({
-        name: fixed(scene.add.text(x + 26, ry, d.name, ink(11)).setOrigin(0, 0.5), 2),
+        name: fixed(scene.add.text(x + 26, ry, t(d.name, { n: ARMY_DEED }), ink(11)).setOrigin(0, 0.5), 2),
         sub: fixed(scene.add.text(x + w - 9, ry + 0.5, '', ink(9, T.faded, false)).setOrigin(1, 0.5), 2),
       });
     });
@@ -137,8 +138,8 @@ export class DeedCard {
     const raid = s.raid && s.raid.target === PLAYER ? s.raid : null;
     const rows: { done: boolean; frac: number; sub: string }[] = [
       { done: p.deeds.age2, frac: p.age >= 2 ? 1 : 0, sub: '' },
-      { done: p.deeds.army >= ARMY_DEED, frac: Math.min(1, p.deeds.army / ARMY_DEED), sub: `${Math.min(p.deeds.army, ARMY_DEED)} of ${ARMY_DEED}` },
-      { done: p.deeds.raid, frac: raid ? raid.routed / raid.size : 0, sub: raid ? `${raid.routed} of ${raid.size} routed` : 'none yet' },
+      { done: p.deeds.army >= ARMY_DEED, frac: Math.min(1, p.deeds.army / ARMY_DEED), sub: t('deedProgress', { n: Math.min(p.deeds.army, ARMY_DEED), total: ARMY_DEED }) },
+      { done: p.deeds.raid, frac: raid ? raid.routed / raid.size : 0, sub: raid ? t('deedRouted', { n: raid.routed, total: raid.size }) : t('noneYet') },
     ];
     rows.forEach((r, i) => {
       const ry = y + 32 + i * 16;
@@ -162,10 +163,11 @@ export class DeedCard {
     const n = deedCount(p);
     this.count.setText(`${n} / 3`);
     if (p.age >= 3) {
-      this.title.setText('AGE III REACHED');
-      this.foot.setText(`Every soldier deals +2 damage${p.edge ? ` · ${EDGES[p.edge].name}` : p.edgePending ? ' · pick an edge' : ''}`);
-    } else if (n === 3) this.foot.setText('Research Age III at the Town Center');
-    else this.foot.setText('Then Age III: soldiers deal +2 damage');
+      this.title.setText(t('age3Reached').toUpperCase());
+      const dmg = { n: AGE3_DAMAGE };
+      this.foot.setText(p.edge ? t('age3FootEdge', { ...dmg, edge: t(EDGES[p.edge].name) }) : p.edgePending ? t('age3FootPick', dmg) : t('age3Foot', dmg));
+    } else if (n === 3) this.foot.setText(t('researchAge3'));
+    else this.foot.setText(t('thenAge3', { n: AGE3_DAMAGE }));
   }
 
   contains(px: number, py: number) {
@@ -196,10 +198,10 @@ export class StatusCard {
     const { x, y } = STATUS_CARD;
     this.bg = fixed(scene.add.image(x - 2, y - 2, 'card-status').setOrigin(0, 0), 0);
     this.g = fixed(scene.add.graphics(), 1);
-    fixed(scene.add.text(x + 9, y + 15, 'RELICS', ink(11.5, T.red)).setOrigin(0, 0.5), 2);
+    fixed(scene.add.text(x + 9, y + 15, t('relicsLabel').toUpperCase(), ink(11.5, T.red)).setOrigin(0, 0.5), 2);
     this.relics.forEach((r, i) => this.icons.push(fixed(scene.add.image(x + 84 + i * 26, y + 15, RELIC_ICON[r]), 2)));
     this.held = fixed(scene.add.text(x + STATUS_CARD.w - 9, y + 15.5, '', ink(9, T.faded, false)).setOrigin(1, 0.5), 2);
-    fixed(scene.add.text(x + 9, y + 37, 'RIVALS', ink(11.5, T.red)).setOrigin(0, 0.5), 2);
+    fixed(scene.add.text(x + 9, y + 37, t('rivalsLabel').toUpperCase(), ink(11.5, T.red)).setOrigin(0, 0.5), 2);
     s.players
       .filter((p) => p.id !== PLAYER && p.id !== NEUTRAL)
       .forEach((p, k) => {
@@ -220,12 +222,12 @@ export class StatusCard {
       const col = holder === PLAYER ? T.green : holder === null ? '#c8b890' : WOOL[s.players[holder].faction].cloth;
       stitchEllipse(g, x + 84 + i * 26, y + 15, 10, 10, holder === null ? 0.9 : 1.8, hexNum(col));
     });
-    this.held.setText(`${mine} held`);
+    this.held.setText(t('relicsHeld', { n: mine }));
     stitchLine(g, x + 4, y + 26, x + STATUS_CARD.w - 4, y + 26, 0.8, hexNum(T.ochre));
     // A rival's temperament shows once its Town Center has been seen; one that has fallen says so.
     this.temperaments = this.rivals.map(({ id, name }) => {
       const p = s.players[id];
-      const word = p.out ? 'fallen' : p.scouted && p.temperament ? TEMPERAMENTS[p.temperament].name : '?';
+      const word = p.out ? t('rivalFallen') : p.scouted && p.temperament ? t(TEMPERAMENTS[p.temperament].name) : '?';
       name.setText(word.toUpperCase()).setColor(p.scouted && !p.out ? WOOL[p.faction].cloth : T.faded);
       return word;
     });
@@ -233,9 +235,10 @@ export class StatusCard {
     const left = this.rivals.map((r) => monumentLeft(s, r.id)).filter((ms): ms is number => ms !== null);
     const foe = left.length > 0 ? Math.min(...left) : null;
     const clock = (ms: number) => `${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, '0')}`;
-    const line = own !== null && (foe === null || own <= foe) ? `YOUR MONUMENT · ${clock(own)} TO VICTORY` : foe !== null ? `ENEMY MONUMENT · ${clock(foe)} TO DESTROY IT` : '';
+    const ours = own !== null && (foe === null || own <= foe);
+    const line = (ours ? t('monumentOwn', { time: clock(own) }) : foe !== null ? t('monumentFoe', { time: clock(foe) }) : '').toUpperCase();
     this.shown = line;
-    this.monument.setText(line).setColor(own !== null && line.startsWith('YOUR') ? T.green : T.red);
+    this.monument.setText(line).setColor(ours ? T.green : T.red);
     this.bg.setTexture(line ? 'card-status-tall' : 'card-status');
     if (line) stitchLine(g, x + 4, y + 48, x + STATUS_CARD.w - 4, y + 48, 0.8, hexNum(T.ochre));
   }

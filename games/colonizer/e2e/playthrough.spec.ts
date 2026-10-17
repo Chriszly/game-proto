@@ -18,6 +18,7 @@ interface GameState {
   players: { res: Record<string, number>; techs: string[]; age: number; deeds: Deeds; boon: string | null; boonPending: boolean }[];
 }
 interface Hud {
+  id: string;
   label: string;
   x: number;
   y: number;
@@ -114,10 +115,11 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
       x: box.x + (tx * 32 - cam.x) * scale,
       y: box.y + (ty * 32 - cam.y) * scale,
     }));
-  const hudButton = (label: string) =>
+  /** A panel button by its id (a unit, building or tech id, or an action such as 'build'), so the test plays in any language. */
+  const hudButton = (id: string) =>
     read<{ hud: Hud[]; sel: string[] }>((g) => ({ hud: g.hud, sel: [...g.selected].map((id: number) => `${id}:${g.state.buildings.get(id)?.type ?? 'unit'}`) })).then(({ hud, sel }) => {
-      const h = hud.find((b) => b.label.startsWith(label));
-      expect(h, `button ${label}; selected ${sel.join(',')}; buttons ${hud.map((b) => b.label).join(' | ')}`).toBeTruthy();
+      const h = hud.find((b) => b.id === id);
+      expect(h, `button ${id}; selected ${sel.join(',')}; buttons ${hud.map((b) => `${b.id} (${b.label})`).join(' | ')}`).toBeTruthy();
       return { x: box.x + (h!.x + h!.w / 2) * scale, y: box.y + (h!.y + h!.h / 2) * scale };
     });
 
@@ -193,7 +195,7 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
 
   // 2. Economy: the Town Center trains a villager.
   await click(await pageXY(town.tx + 2, town.ty + 2));
-  await click(await hudButton('Villager'));
+  await click(await hudButton('villager'));
   await until('a new villager', (s) => me(s).filter((u) => u.type === 'villager').length > startVillagers);
 
   // 3. Build: a villager puts up a house by the Town Center.
@@ -210,8 +212,8 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
   });
   const worker = me(await state()).find((u) => u.type === 'villager')!;
   await click(await pageXY(worker.x, worker.y));
-  await click(await hudButton('Build'));
-  await click(await hudButton('House'));
+  await click(await hudButton('build'));
+  await click(await hudButton('house'));
   // A building is placed centred on the tile under the cursor, so aim at the middle of the spot.
   await clickTile(houseSpot.tx + 1, houseSpot.ty + 1);
   await until('the house is built', (s) => myBuildings(s, 'house').some((b) => b.built));
@@ -233,37 +235,37 @@ test('plays a round of the game loop', async ({ page }, testInfo) => {
   });
   const builder = me(await state()).find((u) => u.type === 'villager')!;
   await click(await pageXY(builder.x, builder.y));
-  await click(await hudButton('Build'));
-  await click(await hudButton('Academy'));
+  await click(await hudButton('build'));
+  await click(await hudButton('academy'));
   await clickTile(academySpot.tx + 1, academySpot.ty + 1);
   await until('the Academy is built', (s) => myBuildings(s, 'academy').some((b) => b.built));
   await until('wood for Axes', (s) => s.players[0].res.wood >= 100);
   await click(await pageXY(academySpot.tx + 1, academySpot.ty + 1));
-  await click(await hudButton('Axes'));
+  await click(await hudButton('axes'));
   await until('Axes researched', (s) => s.players[0].techs.includes('axes'), 60_000);
   await snap('research');
 
   // 5. Training again: the Town Center makes another villager once the Axes are done.
   const before = me(await state()).filter((u) => u.type === 'villager').length;
   await click(await pageXY(town.tx + 2, town.ty + 2));
-  await click(await hudButton('Villager'));
+  await click(await hudButton('villager'));
   await until('the villager is trained', (s) => me(s).filter((u) => u.type === 'villager').length > before);
 
   // 6. Age II at the Town Center: the first deed for Age III is done and the boon pick opens.
   await until('food and wood for Age II', (s) => s.players[0].res.food >= 400 && s.players[0].res.wood >= 200);
   await click(await pageXY(town.tx + 2, town.ty + 2));
-  await click(await hudButton('Age II'));
+  await click(await hudButton('age2'));
   const aged = await until('Age II reached', (s) => s.players[0].age === 2, 90_000);
   expect(aged.players[0].deeds.age2, 'the Age II deed is done').toBe(true);
   expect(aged.players[0].boonPending, 'the boon pick is open').toBe(true);
-  const cards = await read<string[]>((g) => g.hud.map((h: Hud) => h.label));
-  expect(cards, 'the two boon cards replace the buttons').toEqual(['Shieldwall', 'Harvest Rites']);
+  const cards = await read<string[]>((g) => g.hud.map((h: Hud) => h.id));
+  expect(cards, 'the two boon cards replace the buttons').toEqual(['shieldwall', 'harvest']);
   await snap('boon');
-  await click(await hudButton('Harvest Rites'));
+  await click(await hudButton('harvest'));
   const picked = await until('Harvest Rites picked', (s) => s.players[0].boon === 'harvest' && !s.players[0].boonPending, 5_000);
   expect(picked.players[0].age, 'still Age II: Age III needs all three deeds').toBe(2);
   // The Town Center now offers Age III, which waits on the other two deeds.
-  await click(await hudButton('Age III'));
+  await click(await hudButton('age3'));
   expect((await state()).buildings.find((b) => b.id === town.id)!.queue.map((q) => q.key), 'Age III is not queued yet').not.toContain('age3');
 
   expect(errors, 'page errors').toEqual([]);

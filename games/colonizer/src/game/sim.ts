@@ -66,6 +66,7 @@ import {
   type UnitDef,
 } from './data';
 import { AMOUNT, WATER, ROCK, idx, inMap, type MapData, type Node, type PostSpot } from './map';
+import { t, type TextKey } from '../i18n';
 
 export type Order =
   | { t: 'idle' }
@@ -134,8 +135,8 @@ export interface Raid {
   /** Where the raiders are now: the middle of the living ones. */
   x: number;
   y: number;
-  /** Compass point it comes from, seen from the target's Town Center, such as 'south-east'. */
-  from: string;
+  /** Compass point it comes from, seen from the target's Town Center, as a text key such as 'southEast'. */
+  from: TextKey;
   started: number;
 }
 
@@ -433,12 +434,12 @@ export function holds(s: GameState, owner: number, relic: RelicId) {
 export function notAllowed(s: GameState, owner: number, type: BuildingId): string | null {
   const def = BUILDINGS[type];
   const p = s.players[owner];
-  if (def.faction && def.faction !== p.faction) return 'Not your faction';
-  if (def.age && p.age < def.age) return `Needs Age ${def.age === 3 ? 'III' : 'II'}`;
+  if (def.faction && def.faction !== p.faction) return t('notYourFaction');
+  if (def.age && p.age < def.age) return t('needsAge', { age: t(def.age === 3 ? 'age3' : 'age2') });
   if (def.limit !== undefined) {
     let n = 0;
     for (const b of s.buildings.values()) if (b.owner === owner && b.type === type) n++;
-    if (n >= def.limit) return def.limit === 1 ? 'You have one already' : `At most ${def.limit}`;
+    if (n >= def.limit) return def.limit === 1 ? t('haveOne') : t('atMost', { n: def.limit });
   }
   return null;
 }
@@ -1001,7 +1002,7 @@ export function ringBell(s: GameState, owner: number): number {
   }
   // The bell only counts as rung once someone is on their way in.
   if (sent > 0) p.bell = true;
-  if (owner === PLAYER) say(s, sent > 0 ? `The bell rings: ${sent} villager${sent === 1 ? '' : 's'} run for shelter` : 'The bell rings, but no villager is near a shelter');
+  if (owner === PLAYER) say(s, sent > 0 ? t('bellRings', { n: sent }) : t('bellNobody'));
   return sent;
 }
 
@@ -1012,7 +1013,7 @@ export function releaseBell(s: GameState, owner: number): number {
   let out = 0;
   for (const b of s.buildings.values()) if (b.owner === owner) out += ungarrison(s, b);
   for (const u of s.units.values()) if (u.owner === owner && u.order.t === 'garrison') backToWork(s, u);
-  if (owner === PLAYER) say(s, out > 0 ? 'The villagers go back to work' : 'Nobody was sheltering');
+  if (owner === PLAYER) say(s, out > 0 ? t('backToWorkNotice') : t('nobodySheltering'));
   return out;
 }
 
@@ -1085,7 +1086,7 @@ function updateMarkets(s: GameState, dt: number) {
   }
 }
 
-const COMPASS = ['east', 'south-east', 'south', 'south-west', 'west', 'north-west', 'north', 'north-east'];
+const COMPASS: TextKey[] = ['east', 'southEast', 'south', 'southWest', 'west', 'northWest', 'north', 'northEast'];
 
 /** Records a raid: `ids` sent by `by` at `target`. One raid is tracked at a time. */
 export function startRaid(s: GameState, by: number, target: number, ids: number[]) {
@@ -1117,7 +1118,7 @@ export function endRaid(s: GameState, by: number, repelled: boolean) {
     s.players[r.target].deeds.raid = true;
     s.repelled++;
   }
-  if (r.target === PLAYER) say(s, repelled ? 'The raid is repelled' : 'The raiders withdraw');
+  if (r.target === PLAYER) say(s, repelled ? t('raidRepelled') : t('raidersWithdraw'));
 }
 
 /** Keeps the raid's count and position, and marks the deed when every raider has fallen. */
@@ -1143,7 +1144,7 @@ function updateRaid(s: GameState) {
   s.players[r.target].deeds.raid = true;
   s.repelled++;
   s.raid = null;
-  if (r.target === PLAYER) say(s, 'The raid is repelled');
+  if (r.target === PLAYER) say(s, t('raidRepelled'));
 }
 
 /**
@@ -1668,7 +1669,7 @@ function finish(s: GameState, b: Building) {
   b.hp = buildingHp(s, b);
   b.doneAt = s.time;
   if (b.type === 'gate') rebuildSolid(s);
-  if (b.type === 'monument') say(s, b.owner === PLAYER ? 'Your Monument stands: hold it for 3 minutes to win' : 'The enemy Monument stands: destroy it within 3 minutes');
+  if (b.type === 'monument') say(s, b.owner === PLAYER ? t('monumentStandsOwn') : t('monumentStandsFoe'));
 }
 
 function nearestUnbuilt(s: GameState, owner: number, x: number, y: number, range: number): Building | null {
@@ -1854,7 +1855,7 @@ function checkWinner(s: GameState) {
     for (const u of s.units.values()) if (u.owner === p.id) u.hp = 0;
     for (const b of s.buildings.values()) if (b.owner === p.id) b.hp = 0;
     for (const c of s.camps) if (c.relic && c.holder === p.id) c.holder = null;
-    say(s, p.id === PLAYER ? 'Your Town Center has fallen' : `The ${FACTIONS[p.faction].name} have fallen`);
+    say(s, p.id === PLAYER ? t('townFallen') : t('sideFallen', { faction: t(FACTIONS[p.faction].name) }));
   }
   if (fallen.length > 0) reap(s);
   // A Monument that has stood MONUMENT_MS since it was finished wins the match for its owner.
@@ -1939,15 +1940,15 @@ function updateCamps(s: GameState) {
       c.claimed = true;
       rebuildSolid(s);
       emit(s, { t: 'drop', x: cx, y: cy - 0.5, res: c.res, n: c.amount, owner: who });
-      if (who === PLAYER) say(s, `The cache gives ${c.amount} ${c.res}`);
+      if (who === PLAYER) say(s, t('cacheGives', { n: c.amount, res: t(c.res) }));
       continue;
     }
     if (c.holder === who || !c.relic) continue;
     const had = c.holder;
     c.holder = who;
-    const name = RELICS[c.relic].name;
-    if (who === PLAYER) say(s, `You hold the ${name}: ${RELICS[c.relic].text.toLowerCase()}`);
-    else if (had === PLAYER) say(s, `The enemy took the ${name}`);
+    const relic = t(RELICS[c.relic].name);
+    if (who === PLAYER) say(s, t('relicHeld', { relic, effect: t(RELICS[c.relic].text) }));
+    else if (had === PLAYER) say(s, t('relicTaken', { relic }));
   }
 }
 

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { FACTION_IDS, FACTIONS, MAP_KIND_IDS, MAP_KINDS, UNIQUE_TEXT, unitFor, type FactionId, type MapKind } from '../game/data';
+import { BUILDINGS, FACTION_IDS, FACTIONS, MAP_KIND_IDS, MAP_KINDS, UNIQUE, UNIQUE_EFFECT, unitFor, type FactionId, type MapKind } from '../game/data';
+import { t } from '../i18n';
 import { FEET, FRAME, WOOL } from '../art/figures';
 import { hexNum, SERIF, T } from '../art/stitch';
 import { figKey } from './BootScene';
@@ -23,9 +24,9 @@ export class MenuScene extends Phaser.Scene {
 
   create() {
     this.add.image(0, 0, 'backdrop').setOrigin(0, 0);
-    this.add.text(480, 78, 'COLONIZER', { fontFamily: SERIF, fontSize: '46px', fontStyle: 'bold', color: T.red, stroke: T.linen, strokeThickness: 2 }).setOrigin(0.5);
+    this.add.text(480, 78, t('title').toUpperCase(), { fontFamily: SERIF, fontSize: '46px', fontStyle: 'bold', color: T.red, stroke: T.linen, strokeThickness: 2 }).setOrigin(0.5);
     this.add
-      .text(480, 120, 'Pick your faction. Gather, build, earn the ages and destroy the enemy Town Center.', { fontFamily: SERIF, fontSize: '15px', color: T.ink })
+      .text(480, 120, t('menuIntro'), { fontFamily: SERIF, fontSize: '15px', color: T.ink })
       .setOrigin(0.5);
 
     this.against = [];
@@ -34,15 +35,15 @@ export class MenuScene extends Phaser.Scene {
 
     // The map kind and the number of rivals, as two rows of toggles under the cards.
     const label = (x: number, words: string) => this.add.text(x - 10, MENU_OPTS.y, words, { fontFamily: SERIF, fontSize: '12px', fontStyle: 'bold', color: T.red }).setOrigin(1, 0.5);
-    label(MENU_OPTS.kindX, 'MAP');
-    MAP_KIND_IDS.forEach((kind, i) => this.option(MENU_OPTS.kindX + i * (MENU_OPTS.w + MENU_OPTS.gap), MAP_KINDS[kind].name, () => options.kind === kind, () => (options.kind = kind)));
-    label(MENU_OPTS.rivalsX, 'RIVALS');
-    ([1, 2] as const).forEach((n, i) => this.option(MENU_OPTS.rivalsX + i * (MENU_OPTS.w + MENU_OPTS.gap), n === 1 ? 'One AI' : 'Two AIs', () => options.rivals === n, () => (options.rivals = n)));
+    label(MENU_OPTS.kindX, t('mapLabel').toUpperCase());
+    MAP_KIND_IDS.forEach((kind, i) => this.option(MENU_OPTS.kindX + i * (MENU_OPTS.w + MENU_OPTS.gap), t(MAP_KINDS[kind].name), () => options.kind === kind, () => (options.kind = kind)));
+    label(MENU_OPTS.rivalsX, t('rivalsLabel').toUpperCase());
+    ([1, 2] as const).forEach((n, i) => this.option(MENU_OPTS.rivalsX + i * (MENU_OPTS.w + MENU_OPTS.gap), t(n === 1 ? 'oneAi' : 'twoAis'), () => options.rivals === n, () => (options.rivals = n)));
     this.optText = this.add.text(480, 464, '', { fontFamily: SERIF, fontSize: '12.5px', fontStyle: 'italic', color: T.ink }).setOrigin(0.5);
     this.refresh();
 
     this.add
-      .text(480, 488, 'Left click selects, right click commands, drag to box select, 1-9 recall groups (Ctrl+1-9 sets them), A attack-move, S stop, B build.', {
+      .text(480, 488, t('menuControls'), {
         fontFamily: SERIF,
         fontSize: '13px',
         color: T.faded,
@@ -68,11 +69,11 @@ export class MenuScene extends Phaser.Scene {
   /** Shows the chosen options, what the map kind is like, and whom each faction would play against. */
   private refresh() {
     for (const o of this.opts) o.img.setTexture(o.on() ? 'opt-on' : 'opt-off');
-    const rivals = options.rivals === 2 ? 'Two AIs: everyone raids everyone, the last Town Center standing wins' : 'One AI, one Town Center to bring down';
-    this.optText.setText(`${MAP_KINDS[options.kind].name}: ${MAP_KINDS[options.kind].text.toLowerCase()}. ${rivals}.`);
+    const kind = MAP_KINDS[options.kind];
+    this.optText.setText(t('menuOptions', { kind: t(kind.name), text: t(kind.text), rivals: t(options.rivals === 2 ? 'rivalsTwo' : 'rivalsOne') }));
     for (const { text, id } of this.against) {
       const [ai, ai2] = rivalsFor(id);
-      text.setText(options.rivals === 2 ? `Plays against ${FACTIONS[ai].name} and ${FACTIONS[ai2].name}` : `Plays against ${FACTIONS[ai].name}`);
+      text.setText(options.rivals === 2 ? t('playsAgainstTwo', { a: t(FACTIONS[ai].name), b: t(FACTIONS[ai2].name) }) : t('playsAgainst', { a: t(FACTIONS[ai].name) }));
     }
   }
 
@@ -89,11 +90,11 @@ export class MenuScene extends Phaser.Scene {
         .setOrigin(FEET.x / FRAME, FEET.y / FRAME)
         .setScale(1.35);
     });
-    this.add.text(x, top + 122, f.name.toUpperCase(), { fontFamily: SERIF, fontSize: '21px', fontStyle: 'bold', color: WOOL[id].cloth }).setOrigin(0.5);
+    this.add.text(x, top + 122, t(f.name).toUpperCase(), { fontFamily: SERIF, fontSize: '21px', fontStyle: 'bold', color: WOOL[id].cloth }).setOrigin(0.5);
     this.add
-      .text(x, top + 156, f.blurb, { fontFamily: SERIF, fontSize: '14px', color: T.ink, wordWrap: { width: 240 }, align: 'center' })
+      .text(x, top + 156, t(f.blurb), { fontFamily: SERIF, fontSize: '14px', color: T.ink, wordWrap: { width: 240 }, align: 'center' })
       .setOrigin(0.5, 0.5);
-    this.add.text(x, top + 186, UNIQUE_TEXT[id], { fontFamily: SERIF, fontSize: '12.5px', fontStyle: 'bold', color: WOOL[id].cloth }).setOrigin(0.5);
+    this.add.text(x, top + 186, t('uniqueLine', { building: t(BUILDINGS[UNIQUE[id]].name), effect: t(UNIQUE_EFFECT[id]) }), { fontFamily: SERIF, fontSize: '12.5px', fontStyle: 'bold', color: WOOL[id].cloth }).setOrigin(0.5);
     this.against.push({ id, text: this.add.text(x, top + 208, '', { fontFamily: SERIF, fontSize: '12px', fontStyle: 'italic', color: T.faded }).setOrigin(0.5) });
     box.on('pointerover', () => box.setTexture('card-faction-hot'));
     box.on('pointerout', () => box.setTexture('card-faction'));
