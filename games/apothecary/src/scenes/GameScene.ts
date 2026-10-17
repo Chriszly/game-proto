@@ -2,12 +2,12 @@ import { upgradePad, type UpgradeIcon } from '../art/markers';
 import Phaser from 'phaser';
 import { settings as hubSettings } from '../../../../shared/settings';
 import { formatNumber } from '../../../../shared/i18n';
-import { renderScale, scrollingCamera, viewSize } from '../../../../shared/scaling';
+import { renderScale, scrollingCamera, viewPoint, viewSize } from '../../../../shared/scaling';
 import { PIXIE_FRAMES, drawFairyPaths, laneOffset, pointAlong } from '../art/pixies';
 import { plantTexture } from '../art/garden';
 import { EXPANSION_IMAGE, WALLS_IMAGE, GARDEN_MARGIN, gardenTexture, sceneryLayout } from '../art/ground';
 import { itemTexture } from '../art/items';
-import { INK, SERIF, TEXT_HALO, fit, resOf } from '../art/paint';
+import { INK, INK_NUM, SERIF, TEXT_HALO, fit, resOf } from '../art/paint';
 import { craftsmanTexture, customerTexture } from '../art/townsfolk';
 import { BUBBLE_TAIL, cardInset, cardTexture, signTexture, type CardKind } from '../art/ui';
 import { catchUp, type AwaySummary } from '../game/away';
@@ -178,6 +178,11 @@ const MAX_WALK_STEP_PX = 20;
 /** Longest simulated step, so a backgrounded tab doesn't jump the world forward. */
 const MAX_STEP_MS = 250;
 const UI_DEPTH = 10_000;
+/**
+ * The floating touch stick, in screen pixels: rim and knob radius, the dead zone, and how far a
+ * finger drags before a touch steers instead of walking to where it landed.
+ */
+const STICK = { r: 60, knob: 24, dead: 8, drag: 14 };
 /** Bars, icons and feedback over the world, kept under the top bar and panels when the camera scrolls them up there. */
 const WORLD_UI_DEPTH = UI_DEPTH - 1;
 const AUTOSAVE_MS = 3_000;
@@ -294,6 +299,12 @@ export class GameScene extends Phaser.Scene {
   private waypoint: Phaser.Math.Vector2 | null = null;
   /** Which way the doctor set off towards the tapped spot (or corner) last frame. */
   private heading: Phaser.Math.Vector2 | null = null;
+  /**
+   * A finger on the map, in screen pixels: where it went down and where it is now. Dragged past
+   * `STICK.drag` it goes `live` and steers like a joystick; until then it is an ordinary tap.
+   */
+  private stick: { id: number; ox: number; oy: number; x: number; y: number; live: boolean } | null = null;
+  private stickGfx!: Phaser.GameObjects.Graphics;
   /** Station footprints grown by the doctor's feet, used to walk around stations after a tap. */
   private blockedAreas: Phaser.Geom.Rectangle[] = [];
   /** The shop as measured for the doctor's feet, and the feet's half size it was measured for. */
@@ -1855,6 +1866,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.input.pointer1.isDown || !this.input.pointer2.isDown) return false;
     this.pointerTarget = null;
     this.waypoint = null;
+    this.stick = null;
     return true;
   }
 
@@ -1901,7 +1913,54 @@ export class GameScene extends Phaser.Scene {
       this.pointerTarget = this.reachable(new Phaser.Math.Vector2(at.x, at.y));
       this.heading = null;
       this.waypoint = this.routeAround(this.pointerTarget);
+      // A touch may also turn into the floating stick, if the finger drags on from here.
+      if (p.wasTouch) {
+        const v = viewPoint(p);
+        this.stick = { id: p.id, ox: v.x, oy: v.y, x: v.x, y: v.y, live: false };
+      }
     });
+    this.stick = null;
+    this.stickGfx = this.add.graphics().setDepth(UI_DEPTH);
+    this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
+      const st = this.stick;
+      if (!st || st.id !== p.id || !p.isDown) return;
+      const v = viewPoint(p);
+      st.x = v.x;
+      st.y = v.y;
+      const d = Math.hypot(st.x - st.ox, st.y - st.oy);
+      if (!st.live && d > STICK.drag) {
+        // Steering now, so drop the walk to where the finger landed.
+        st.live = true;
+        this.pointerTarget = null;
+        this.waypoint = null;
+        this.heading = null;
+      }
+      // Past the rim the base is dragged along behind the finger.
+      if (d > STICK.r) {
+        const k = (d - STICK.r) / d;
+        st.ox += (st.x - st.ox) * k;
+        st.oy += (st.y - st.oy) * k;
+      }
+    });
+    this.input.on('pointerup', (p: Phaser.Input.Pointer) => {
+      if (this.stick?.id === p.id) this.stick = null;
+    });
+  }
+
+  /** The stick under a steering finger: a faint ring and a knob, drawn by the fixed UI camera. */
+  private drawStick() {
+    const g = this.stickGfx;
+    g.clear();
+    const st = this.stick;
+    if (!st?.live) return;
+    const d = Math.hypot(st.x - st.ox, st.y - st.oy);
+    const k = d > STICK.r ? STICK.r / d : 1;
+    const kx = st.ox + (st.x - st.ox) * k;
+    const ky = st.oy + (st.y - st.oy) * k;
+    g.fillStyle(INK_NUM, 0.18).fillCircle(st.ox, st.oy, STICK.r);
+    g.lineStyle(3, INK_NUM, 0.5).strokeCircle(st.ox, st.oy, STICK.r);
+    g.fillStyle(0xe8dcb8, 0.85).fillCircle(kx, ky, STICK.knob);
+    g.lineStyle(2, INK_NUM, 0.7).strokeCircle(kx, ky, STICK.knob);
   }
 
   /**
@@ -1985,6 +2044,7 @@ export class GameScene extends Phaser.Scene {
     this.state.player.x = this.player.x;
     this.state.player.y = this.player.y;
     for (const view of this.views) view();
+    this.drawStick();
     this.splitCameras();
   }
 
@@ -2008,6 +2068,9 @@ export class GameScene extends Phaser.Scene {
     if (this.cursors.right.isDown || this.wasd.right.isDown) dir.x += 1;
     if (this.cursors.up.isDown || this.wasd.up.isDown) dir.y -= 1;
     if (this.cursors.down.isDown || this.wasd.down.isDown) dir.y += 1;
+
+    const st = this.stick;
+    if (dir.lengthSq() === 0 && st?.live && Math.hypot(st.x - st.ox, st.y - st.oy) > STICK.dead) dir.set(st.x - st.ox, st.y - st.oy);
 
     if (dir.lengthSq() > 0) {
       this.pointerTarget = null;

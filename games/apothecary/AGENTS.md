@@ -184,6 +184,11 @@ study, shade gardens and a mirrored second production line.
   a tap on the Recipes panel closes it. A priority sign tapped while a panel is open only closes
   the panel. The tapped spot comes from
   `cameras.main.getWorldPoint`, since the pointer's own `worldX/Y` may be the UI camera's.
+- Touch stick: a touch on the map (`pointer.wasTouch`, never the mouse) walks to where it landed
+  like a tap and also starts `stick` (screen pixels, from `viewPoint`). Dragged past `STICK.drag`
+  it goes `live`, drops the tap's target and steers: `movePlayer` takes knob minus base after the
+  keys, nothing inside `STICK.dead`; the base is dragged along past `STICK.r`. Lifting the finger
+  or a second finger (`pinching`) ends it. `drawStick` draws it at `UI_DEPTH` on the UI camera.
 - Zoom: two cameras. The main camera follows the doctor and zooms (`MIN_ZOOM` 0.62 to `MAX_ZOOM`
   2, by the mouse wheel, + and - keys, or a two-finger pinch on `pointer1`/`pointer2`, which also
   cancels the walk when the second finger lands on the map, the top bar, a top-bar button or a

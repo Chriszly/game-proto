@@ -6,6 +6,7 @@ const en: HowToPlay = {
   goal: 'Grow herbs, brew potions and sell them to grow your apothecary. You win by brewing the Panacea that cures the town of the plague.',
   controls: [
     { input: 'Tap or click the ground, or WASD / arrow keys', action: 'Walk the plague doctor there' },
+    { input: 'Touch: put a finger down and drag', action: 'A steering stick appears under it; walk the way you drag' },
     { input: 'Walk past ripe plants', action: 'Harvest every ripe bed within reach of the sickle' },
     {
       input: 'Stand on a floor marker',
@@ -46,6 +47,7 @@ const de: HowToPlay = {
   goal: 'Baue Kräuter an, braue Tränke und verkaufe sie, um deine Apotheke wachsen zu lassen. Du gewinnst, wenn du das Allheilmittel braust, das die Stadt von der Seuche heilt.',
   controls: [
     { input: 'Boden antippen oder anklicken, oder WASD / Pfeiltasten', action: 'Den Pestdoktor dorthin gehen lassen' },
+    { input: 'Touch: Finger aufsetzen und ziehen', action: 'Darunter erscheint ein Steuerknüppel; der Doktor geht in Zugrichtung' },
     { input: 'An reifen Pflanzen vorbeigehen', action: 'Jedes reife Beet in Reichweite der Sichel ernten' },
     {
       input: 'Auf einer Bodenmarke stehen',
