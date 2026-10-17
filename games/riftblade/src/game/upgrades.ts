@@ -68,6 +68,32 @@ const defs: UpgradeDef[] = [
     id: 'brothers', kind: 'path', hero: 'bram', name: 'brothersName', blurb: 'brothersBlurb',
     tiers: ['brothers1', 'brothers2', 'brothers3', 'brothers4', 'brothers5'],
   },
+  // Commander Elara Voss
+  {
+    id: 'sharpshooter', kind: 'path', hero: 'elara', name: 'sharpshooterName', blurb: 'sharpshooterBlurb',
+    tiers: ['sharpshooter1', 'sharpshooter2', 'sharpshooter3', 'sharpshooter4', 'sharpshooter5'],
+  },
+  {
+    id: 'rebel-network', kind: 'path', hero: 'elara', name: 'rebelNetworkName', blurb: 'rebelNetworkBlurb',
+    tiers: ['rebelNetwork1', 'rebelNetwork2', 'rebelNetwork3', 'rebelNetwork4', 'rebelNetwork5'],
+  },
+  {
+    id: 'diplomat', kind: 'path', hero: 'elara', name: 'diplomatName', blurb: 'diplomatBlurb',
+    tiers: ['diplomat1', 'diplomat2', 'diplomat3', 'diplomat4', 'diplomat5'],
+  },
+  // Triad-77
+  {
+    id: 'firing-line', kind: 'path', hero: 'triad', name: 'firingLineName', blurb: 'firingLineBlurb',
+    tiers: ['firingLine1', 'firingLine2', 'firingLine3', 'firingLine4', 'firingLine5'],
+  },
+  {
+    id: 'factory', kind: 'path', hero: 'triad', name: 'factoryName', blurb: 'factoryBlurb',
+    tiers: ['factory1', 'factory2', 'factory3', 'factory4', 'factory5'],
+  },
+  {
+    id: 'uplink', kind: 'path', hero: 'triad', name: 'uplinkName', blurb: 'uplinkBlurb',
+    tiers: ['uplink1', 'uplink2', 'uplink3', 'uplink4', 'uplink5'],
+  },
   // The Blaster pool
   {
     id: 'ricochet', kind: 'pool', pool: 'blaster', name: 'ricochetName', blurb: 'ricochetBlurb',
@@ -310,6 +336,12 @@ export const CAPSTONES: readonly CapstoneDef[] = [
   { id: 'royal-fury', name: 'royalFuryName', hero: 'joren', path: 'duelist', gear: 'overclock', text: 'royalFuryText' },
   { id: 'shattering-blow', name: 'shatteringBlowName', hero: 'joren', path: 'breaker', gear: 'magnet', text: 'shatteringBlowText' },
   { id: 'master-of-the-order', name: 'masterOfTheOrderName', hero: 'joren', path: 'council-seat', gear: 'armour', text: 'masterOfTheOrderText' },
+  { id: 'never-miss', name: 'neverMissName', hero: 'elara', path: 'sharpshooter', gear: 'overclock', text: 'neverMissText' },
+  { id: 'the-uprising', name: 'theUprisingName', hero: 'elara', path: 'rebel-network', gear: 'medpack', text: 'theUprisingText' },
+  { id: 'rallying-cry', name: 'rallyingCryName', hero: 'elara', path: 'diplomat', gear: 'armour', text: 'rallyingCryText' },
+  { id: 'endless-ranks', name: 'endlessRanksName', hero: 'triad', path: 'firing-line', gear: 'overclock', text: 'endlessRanksText' },
+  { id: 'assembly-line', name: 'assemblyLineName', hero: 'triad', path: 'factory', gear: 'magnet', text: 'assemblyLineText' },
+  { id: 'hive-signal', name: 'hiveSignalName', hero: 'triad', path: 'uplink', gear: 'boots', text: 'hiveSignalText' },
 ];
 
 export interface CrossoverDef {
@@ -333,6 +365,8 @@ export const CROSSOVERS: readonly CrossoverDef[] = [
   { id: 'loyal-dead', name: 'loyalDeadName', path: 'puppet-master', pool: 'drain', text: 'loyalDeadText' },
   { id: 'double-ring', name: 'doubleRingName', path: 'dervish', pool: 'spinning-guard', text: 'doubleRingText' },
   { id: 'royal-lightning', name: 'royalLightningName', path: 'council-seat', pool: 'lightning-arc', text: 'royalLightningText' },
+  { id: 'eyes-in-the-sky', name: 'eyesInTheSkyName', path: 'rebel-network', pool: 'drone', text: 'eyesInTheSkyText' },
+  { id: 'crossfire', name: 'crossfireName', path: 'firing-line', pool: 'scatter', text: 'crossfireText' },
 ];
 
 /** The capstones a run's tiers and gear unlock. */
@@ -397,8 +431,8 @@ export function canOffer(id: string, hero: HeroId, ranks: Record<string, number>
 }
 
 /**
- * Three different cards for a level-up, at least one from the hero's own paths while any can be
- * offered; the Field Ration fills in when fewer than three upgrades are left.
+ * Different cards for a level-up (three, or four for Elara Voss), at least one from the hero's own
+ * paths while any can be offered; the Field Ration fills in when fewer upgrades are left.
  */
 export function rollChoices(hero: HeroId, ranks: Record<string, number>, count = 3): string[] {
   const open = UPGRADE_IDS.filter((id) => canOffer(id, hero, ranks));
@@ -423,6 +457,9 @@ export function rollChoices(hero: HeroId, ranks: Record<string, number>, count =
   if (picks.length < count) picks.push(FILLER.id);
   return picks;
 }
+
+/** How many cards a level-up offers: Elara Voss's Hope makes it four. */
+export const cardCount = (hero: HeroId) => (hero === 'elara' ? 4 : 3);
 
 /**
  * A free pick (the arena's reward): up to three upgrades already held that can still go up, filled

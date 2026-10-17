@@ -3,10 +3,10 @@
 A survivor-style auto-attack roguelike built with [Phaser 4](https://phaser.io), TypeScript and
 Vite, part of the [game hub](../../README.md).
 
-Pick one of ten heroes, three soldiers and seven blade knights, and fight the Rift Crusade across four worlds: the Dune, Swamp, Ice and
+Pick a hero (blaster soldiers, blade knights, a rebel commander or a trio of battle droids) and fight the Rift Crusade across four worlds: the Dune, Swamp, Ice and
 Lava worlds. On each you hold out for five minutes while its faction pours in from every side, then
 beat its boss. You only steer: your weapon fires (or your blade strikes) on its own. Shot-down foes drop lumen shards, and
-every level-up pauses the run on three upgrade cards. Your hero, level and kit carry over from
+every level-up pauses the run on three upgrade cards (four for Elara Voss). Your hero, level and kit carry over from
 world to world, and between worlds a star map offers a trader, an elite fight, a rest or an event.
 Beat the Hollow Champion on the Lava world to win the run. Everything is drawn in code in a "Glow
 Vector" style: dark fields with a faint grid and each world's own scenery, and neon-rimmed heroes,
@@ -22,8 +22,9 @@ foes and bolts.
 | Hold the mouse anywhere on the field | Walk toward that point; the hero keeps walking while you hold |
 | Touch: put a finger down anywhere and drag | A steering stick appears where the finger went down; walk the way you drag, faster the further out (the stick follows a finger that goes past its rim) |
 | Space, or the round button bottom right | Signature move, once charged |
-| Tap a hero card, or 1-9 and 0; then Fight, or Enter | Choose a hero and start the run |
-| Tap a card, or 1 / 2 / 3 | Choose an upgrade at a level-up, a node on the star map, an offer at the trader or an answer to an event |
+| Tap a hero card, or 1-9, 0, - and =; then Fight, or Enter | Choose a hero and start the run |
+| Tap a card, or 1 / 2 / 3 (and 4 on Elara's level-ups) | Choose an upgrade at a level-up, a node on the star map, an offer at the trader or an answer to an event |
+| Continue, Enter or Space | Close the panel of a hero just unlocked; the run waits behind it |
 | Reroll, or 4 | At the trader: new offers for a few credits |
 | Leave, or Enter | At the trader: on to the next world |
 | Run again, or Enter | After a run, back to the hero select screen |
@@ -37,7 +38,7 @@ foes and bolts.
 | Hero | Weapon | Signature | Paths |
 | --- | --- | --- | --- |
 | Captain Rook (slate armour, bronze markings) | Twin pistols: alternating shots at the two nearest droids | **Rally Order**: 5 s of +50% fire rate (12 s) | Gunslinger, Commander, Demolitions |
-| Legionary TR-9 (charcoal armour, orange lenses) | Spread rifle: three wide, inaccurate bolts at the nearest droid. 150 health, slow | **Brace**: 3 s without damage, knocks droids back (13 s) | Suppressor, Riot Shield, Drop Doctrine |
+| Legionary TR-9 (charcoal armour, orange lenses) | Spread rifle: three wide, inaccurate bolts at the nearest droid. 150 health, slow | **Brace**: 3 s without damage, knocks droids back (13 s) | Suppressor, Riot Shield, Drop Squad |
 | Corporal Bram-17 (sand armour, pink markings) | Carbine: fires the way he walks (a little aim assist); standing still, at the nearest droid | **Frag Out**: a grenade that clears a circle (9 s) | Marksman, Jump Trooper, Brothers in Arms |
 | Kael Varro (magenta blade) | Slashes in front. Fast and fragile; Temper fills as he kills and drains as he heals | **Leap Strike**: leaps onto the strongest foe and slashes all round (10 s) | Prodigy, Ace Pilot, The Fall (turns him crimson and to the Hollow) |
 | Lord Vharn (turquoise blade) | Throws his blade, which flies out and back. 210 health, armoured, slow | **Grip**: lifts the 5 nearest foes and crushes them (12 s) | Dread, Iron Grip, Life Support |
@@ -46,19 +47,32 @@ foes and bolts.
 | Regent Veyl (lime lightning) | Forked lightning chains from foe to foe. Little health and slow, huge damage | **Overload**: 3 s of lightning in every direction (12 s) | Storm, Puppet Master, Dark Bargain |
 | Kresh the Twinblade (violet staff blade) | His double-ended staff orbits him. Fast, medium health | **Hunt**: marks the strongest foe and dashes in for triple damage (9 s) | Dervish, Stalker, Rebuilt |
 | Master Joren Vask (royal blue blade) | A fast flurry strikes in four directions around him. **Edge**: every 10th hit is a critical hit | **Breaking Point**: one huge strike that stuns the strongest foe (12 s) | Duelist Form, Breaker, Council Seat |
+| Commander Elara Voss (red) | Precise pistol: always aims at the weakest foe near. 100 health, medium speed. **Hope**: her level-ups offer 4 cards instead of 3 | **Call for Aid**: plants a signal flag, and rebel fighters bombard the area round it (16 s) | Sharpshooter, Rebel Network, Diplomat |
+| Triad-77 (white) | Three skinny battle droids moving as one unit, each shooting the nearest foe its own way (three sides). 40 health per droid; a fallen droid is rebuilt after 10 s, and the run ends only when all are down | **Formation Shift**: toggles Spread (a wide triangle) and Column (stacked, all firing at one foe ahead, triple damage) (2.5 s) | Firing Line, Factory, Uplink |
 
-The soldiers are open from the start. Each knight unlocks through a deed, shown on his locked card;
-the deed can be done with any hero, and the knight is free from the next run on:
+Only Legionary TR-9 is open from the start. Every other hero unlocks through a deed, which the game
+never shows: a locked card is a dark placeholder with no art or name. When a deed is done, the run
+pauses on a panel with the new hero (Continue, Enter or Space goes on), and the hero is free from
+the next run on. The deeds:
 
-| Knight | Deed |
+| Hero | Deed |
 | --- | --- |
+| Corporal Bram-17 | Take Legionary TR-9's Drop Squad path to tier 5 |
+| Captain Rook | Take Corporal Bram-17's Brothers in Arms path to tier 5 |
 | Kael Varro | Reach the Swamp world |
 | Regent Veyl | Reach the Ice world |
 | Master Joren Vask | Reach the Lava world |
-| Master Oom | Win an elite arena on the star map |
-| Elder Corvin Hale | Clear the Swamp world taking at most 5 toad globs |
+| Master Oom | Clear the Swamp world taking at most 5 toad globs |
+| Elder Corvin Hale | Win an elite arena on the star map |
 | Kresh the Twinblade | Defeat 10 elites in one run |
 | Lord Vharn | Take Kael Varro's The Fall path to tier 5 |
+| Commander Elara Voss | Hold 100 credits at once |
+| Triad-77 | Defeat 2500 foes in one run |
+
+All but the two path deeds can be done with any hero. A save from before this chain keeps every
+hero it shows as played (a world reached) or unlocked.
+
+![A new hero unlocked mid-run](docs/screenshots/hero-unlocked.webp)
 
 ### The run: the Rift Crusade
 
@@ -109,16 +123,22 @@ cleared (12).
 
 ![A level-up](docs/screenshots/level-up.webp)
 
-Each level-up offers three different cards, at least one from your hero's own paths while any are
+Each level-up offers three different cards (four for Elara Voss), at least one from your hero's own paths while any are
 left. Every upgrade has five tiers. A run holds at most **5 abilities** (your paths and pool
 skills) and **4 pieces of gear**; when both are full, only what you hold can come up, and when
 nothing is left a Field Ration heals you.
 
 - **Hero paths** (three per hero), soldiers: Gunslinger (fire rate, ricochets, quick-draw bursts), Commander
   (1-3 squad troopers), Demolitions (timed charges, bigger blasts, bomblets); Suppressor (a slowing,
-  burning cone), Riot Shield (blocks the front, bashes, reflects), Drop Doctrine (sentry turrets,
-  supply crates); Marksman (piercing, heavy rounds), Jump Trooper (jet dashes that leave fire,
-  homing mini rockets), Brothers in Arms (1-3 brothers who copy every shot).
+  burning cone), Riot Shield (blocks the front, bashes, reflects), Drop Squad (1-3 squad
+  troopers land in drop pods and follow him, supply crates); Marksman (piercing, heavy rounds), Jump Trooper (jet dashes that leave fire,
+  homing mini rockets), Brothers in Arms (1-3 brothers who copy every shot); Sharpshooter (critical
+  hits on worn foes, piercing shots, a second pistol on the next weakest foe), Rebel Network (1-3
+  commandos, a speeder bike that runs foes down, a medic who heals her), Diplomat (the flag raises
+  a shield bubble that cuts damage and later heals; foes near the flag are confused and fight each
+  other); Firing Line (faster fire, a 4th and a 5th droid), Factory (faster rebuilding; scrap from
+  kills builds rolling shield droids that catch bolts), Uplink (a command droid links the unit:
+  spinning heads that fire any way, then shared health).
 - **Knight paths**: Prodigy (wider slashes, combos, a thrown blade), Ace Pilot (a starfighter
   strafes, a droid co-pilot repairs), The Fall (full Temper doubles damage, halves healing);
   Dread (a slowing aura, weak foes flee), Iron Grip (Grip takes more foes and throws them), Life
@@ -131,7 +151,7 @@ nothing is left a Field Ration heals you.
   chain, kills speed him up), Rebuilt (rises once on mechanical legs); Duelist Form (more strikes,
   a lunge, a counter), Breaker (hits strip armour from elites and bosses), Council Seat (turns foe
   bolts back, a ward).
-- **Blaster pool** (soldiers): Ricochet Rounds, Overcharge (pierce), Thermal Grenade, Stun Rounds
+- **Blaster pool** (soldiers, Elara and Triad-77): Ricochet Rounds, Overcharge (pierce), Thermal Grenade, Stun Rounds
   (slow), Quick Reload, Covering Drone, Scatter Shot, Call-In (a supply crate that crashes on the
   swarm and leaves a medkit).
 - **Blade pool** (knights): Blade Throw, Wide Arc (reach), Riposte (a counter after a hit),
@@ -151,7 +171,7 @@ nothing is left a Field Ration heals you.
   | Rook | Carpet Strike | Demolitions + Magnet Coil | A line of 6 blasts sweeps the thickest swarm every 6 s |
   | TR-9 | Hailstorm | Suppressor + Overclock | A ring of 12 bolts every 1.5 s, +2 rifle bolts |
   | TR-9 | Phalanx | Riot Shield + Plate Armour | Three shields orbit you, blocking and bashing |
-  | TR-9 | Orbital Drop | Drop Doctrine + Servo Boots | Every 8 s a turret slams down on the swarm |
+  | TR-9 | Orbital Drop | Drop Squad + Servo Boots | A full squad of 6 troopers lands, and every 8 s a drop pod slams into the swarm |
   | Bram | Longshot | Marksman + Magnet Coil | Bolts pierce everything, every 2nd is heavy |
   | Bram | Skyfall | Jump Trooper + Servo Boots | Dashes land with a blast, twice the rockets |
   | Bram | The Batch | Brothers in Arms + Medpack | 5 brothers who also throw frags |
@@ -176,6 +196,12 @@ nothing is left a Field Ration heals you.
   | Joren | Royal Fury | Duelist Form + Overclock | Edge every 5th hit, and its crits chain to 2 foes near |
   | Joren | Shattering Blow | Breaker + Magnet Coil | Breaking Point hits every elite near at once |
   | Joren | Master of the Order | Council Seat + Plate Armour | Every 8 s, takes every foe bolt near and fires it back as one blast |
+  | Elara | Never Miss | Sharpshooter + Overclock | Every hit is critical (bosses aside), and each kill fires a free shot at the next weakest foe |
+  | Elara | The Uprising | Rebel Network + Medpack | 8 commandos fight with her, and each world starts with a supply drop (a crate of health and a chest) |
+  | Elara | Rallying Cry | Diplomat + Plate Armour | The bubble goes with her always; Call for Aid confuses every foe around her |
+  | Triad-77 | Endless Ranks | Firing Line + Overclock | 8 droids, and every 15th kill adds a spare droid for 12 s |
+  | Triad-77 | Assembly Line | Factory + Magnet Coil | Scrap from 20 kills: up to 3 shield droids that send bolts back, then spare droids |
+  | Triad-77 | Hive Signal | Uplink + Servo Boots | Every droid fires a 360° burst on each Formation Shift |
 
 - **Crossovers**: a pool skill held with a fitting path gives a bonus: Gunslinger + Ricochet
   Rounds (ricochets seek new targets), Riot Shield + Stun Rounds (shield bashes stun), Brothers in
@@ -184,8 +210,9 @@ nothing is left a Field Ration heals you.
   Throw (the thrown blade hits every gripped foe), Stillness + Push Wave (waves lift foes and throw
   them twice as far), Bulwark + Blade Throw (deflected bolts ride a thrown blade back), Puppet
   Master + Drain (puppets heal him when they hit), Dervish + Spinning Guard (a double ring), Council
-  Seat + Lightning Arc (turned-back bolts chain lightning in royal blue). A card that completes one
-  shows a link icon.
+  Seat + Lightning Arc (turned-back bolts chain lightning in royal blue); Rebel Network + Covering
+  Drone (each commando gets a drone of its own), Firing Line + Scatter Shot (every droid fires its
+  own cone; otherwise only the first does). A card that completes one shows a link icon.
 
 ![A crossover on offer: Rage completes Kael's The Fall](docs/screenshots/knights-crossover.webp)
 
@@ -197,7 +224,11 @@ nothing is left a Field Ration heals you.
 
 ![The Hollow Champion's rings of fire on the Lava world](docs/screenshots/lava-boss.webp)
 
-The longest run, the wins and the furthest world reached per hero, and the knights unlocked, are
+![Elara Voss's flag and bubble under Call for Aid, with her commandos, medic and drones](docs/screenshots/elara-call-for-aid.webp)
+
+![Triad-77 in Spread, linked by its command droid](docs/screenshots/triad.webp)
+
+The longest run, the wins and the furthest world reached per hero, and the heroes unlocked, are
 saved in the browser.
 
 ## Running locally
@@ -209,10 +240,10 @@ npm run dev   # then open http://localhost:5173/games/riftblade/
 ## Playthrough test
 
 `e2e/playthrough.spec.ts` plays the first minute in headless Chromium with real inputs: on the
-hero select screen it checks the ten cards (the knights locked on a fresh save), taps Captain Rook
-and then Fight, walks him in a wide circle by holding the mouse down at a
-point that turns around him, takes the first card at the first level-up and checks the upgrade was
-taken, fires Rally Order from its button and plays on to the one-minute mark.
+hero select screen it checks the twelve cards (all but Legionary TR-9 locked on a fresh save),
+taps a locked card (no Fight button), then TR-9 and Fight, walks him in a wide circle by holding
+the mouse down at a point that turns around him, takes the first card at the first level-up and
+checks the upgrade was taken, fires Brace from its button and plays on to the one-minute mark.
 
 ```sh
 npx playwright test --project riftblade
@@ -223,13 +254,15 @@ npx playwright test --project riftblade
 - `src/main.ts`: creates the game, the hub's settings and scaling.
 - `src/howToPlay.ts`: the How to play screen.
 - `src/game/`: the rules, without drawing: `heroes.ts` (the heroes, their pools, colour schemes
-  and unlock deeds), `blades.ts` (the knights' attacks, signatures and skills),
+  and which are locked), `blades.ts` (the knights' attacks, signatures and skills, and the unlock
+  deeds), `squad.ts` (Elara Voss and Triad-77: weapons, signatures, paths and allies),
   `upgrades.ts` (paths, pool, gear, capstones, crossovers and the card roll), `planets.ts` (the
   four worlds, their bosses and the star map's numbers), `state.ts` (the state and the numbers),
   `sim.ts` (everything that happens in a fight), `voyage.ts` (between fights: the star map, trader,
   arena, events and the next world) and `save.ts`.
 - `src/art/`: `glow.ts` (painting helpers), `sprites.ts` (the heroes, Scrap droids and pickups),
-  `knights.ts` (the knights, their blades and allies) and
+  `knights.ts` (the knights, their blades and allies), `squad.ts` (Elara, Triad-77, their allies,
+  the drop pod and the locked placeholder) and
   `factions.ts` (the later factions and their bosses), all painted at boot.
 - `src/scenes/`: `BootScene.ts`, `GameScene.ts` (input, camera and drawing) and `layout.ts`.
-- `src/ui/panels.ts`: the hero select, level-up, star map, trader, event and end screens.
+- `src/ui/panels.ts`: the hero select, level-up, new hero, star map, trader, event and end screens.

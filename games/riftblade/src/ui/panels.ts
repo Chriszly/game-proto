@@ -15,7 +15,7 @@ import { t } from '../i18n';
 import { C, hex } from '../art/glow';
 import { portraitKey } from '../art/sprites';
 import {
-  AGAIN, DEPTH, FIGHT, FONT, HERO_DETAIL, LEAVE, MAP, REROLL, VIEW, eventOptionRect, heroCardRect, levelCardRect, mapNodeRect,
+  AGAIN, CONTINUE, DEPTH, FIGHT, FONT, HERO_DETAIL, LEAVE, MAP, REROLL, UNLOCK, VIEW, eventOptionRect, heroCardRect, levelCardRect, mapNodeRect,
   mapNodeSpot, tradeCardRect, type Rect,
 } from '../scenes/layout';
 
@@ -104,8 +104,8 @@ function sideOf(hero: HeroDef) {
 }
 
 /**
- * The hero select screen: ten small cards (three soldiers, seven knights, each knight locked until
- * its deed is done) and the chosen hero's details with the Fight button.
+ * The hero select screen: twelve small cards (a hero still locked shows only a dark placeholder:
+ * no art, name or colour, and never its deed) and the chosen hero's details with the Fight button.
  */
 export function heroSelect(scene: Phaser.Scene, progress: Progress, chosen: HeroId) {
   const p = new Panel(scene);
@@ -119,47 +119,56 @@ export function heroSelect(scene: Phaser.Scene, progress: Progress, chosen: Hero
   return p;
 }
 
+/** The key that picks the hero card at `i`: 1-9 and 0, then - and =. */
+export const heroKeyLabel = (i: number) => (i < 10 ? String((i + 1) % 10) : i === 10 ? '-' : '=');
+
+/** The colours of a locked hero's placeholder. */
+const LOCKED = { frame: '#2a3550', fill: '#0b1222' };
+
 function heroCard(p: Panel, scene: Phaser.Scene, id: HeroId, i: number, progress: Progress, chosen: boolean) {
   const hero = HEROES[id];
   const sch = schemeOf(id);
   const open = isUnlocked(progress, id);
   const r = heroCardRect(i);
-  p.frame(r, open ? sch.accent : C.muted, chosen ? '#1a2a4a' : C.panel);
+  const color = open ? sch.accent : LOCKED.frame;
+  p.frame(r, color, chosen ? '#1a2a4a' : open ? C.panel : LOCKED.fill);
   p.spots.push({ id, ...r, locked: !open });
   const cx = r.x + r.w / 2;
   if (chosen) {
     const g = p.add(scene.add.graphics(), 2);
     g.lineStyle(3, hex(open ? sch.accent : C.muted), 1).strokeRoundedRect(r.x, r.y, r.w, r.h, 14);
   }
-  const portrait = scene.add.image(cx, r.y + 62, portraitKey(id)).setScale(0.52);
-  if (!open) portrait.setAlpha(0.22);
-  p.add(portrait, 2);
-  const name = p.text(cx, r.y + 104, t(hero.name), 13, open ? C.text : C.muted, { bold: true, origin: [0.5, 0], align: 'center', wrap: r.w - 12 });
-  // A locked knight shows the deed that unlocks it.
-  if (open) p.text(cx, r.y + 150, sideOf(hero), 11, sch.accent, { origin: [0.5, 0], align: 'center', wrap: r.w - 8 });
-  else p.text(cx, name.y + name.height + 4, hero.unlock ? t(hero.unlock) : '', 10.5, C.elite, { origin: [0.5, 0], align: 'center', wrap: r.w - 12 });
+  p.text(r.x + 8, r.y + 7, heroKeyLabel(i), 12, C.muted);
+  if (!open) {
+    p.add(scene.add.image(cx, r.y + r.h / 2 - 4, 'rb-locked'), 2);
+    return;
+  }
+  p.add(scene.add.image(cx, r.y + 62, portraitKey(id)).setScale(0.44), 2);
+  p.text(cx, r.y + 104, t(hero.name), 12.5, C.text, { bold: true, origin: [0.5, 0], align: 'center', wrap: r.w - 10 });
+  p.text(cx, r.y + 142, sideOf(hero), 11, sch.accent, { origin: [0.5, 0], align: 'center', wrap: r.w - 8 });
   const wins = progress.wins[id] ?? 0;
   const furthest = progress.furthest[id] ?? 0;
   const status = wins > 0 ? t('wins', { n: wins }) : furthest > 0 ? t('reached', { n: furthest, of: PLANETS.length }) : '';
-  if (!open) p.text(r.x + r.w - 9, r.y + 7, t('locked'), 10.5, C.muted, { bold: true, origin: [1, 0] });
-  else if (status) p.text(cx, r.y + r.h - 12, status, 11, wins > 0 ? C.elite : C.muted, { origin: [0.5, 1] });
-  p.text(r.x + 9, r.y + 7, String((i + 1) % 10), 12, C.muted);
+  if (status) p.text(cx, r.y + r.h - 6, status, 10.5, wins > 0 ? C.elite : C.muted, { origin: [0.5, 1] });
 }
 
-/** The chosen hero in full: weapon, numbers, signature, paths, and the deed if still locked. */
+/** The chosen hero in full: weapon, numbers, signature and paths; a locked one shows only its placeholder. */
 function heroDetail(p: Panel, scene: Phaser.Scene, id: HeroId, progress: Progress) {
   const hero = HEROES[id];
   const sch = schemeOf(id);
-  const open = isUnlocked(progress, id);
   const r = HERO_DETAIL;
-  p.frame(r, open ? sch.accent : C.muted);
   const cx = r.x + r.w / 2;
+  if (!isUnlocked(progress, id)) {
+    p.frame(r, LOCKED.frame, LOCKED.fill);
+    p.add(scene.add.image(cx, r.y + 150, 'rb-locked').setScale(1.8), 2);
+    p.text(cx, r.y + 270, t('locked'), 22, C.muted, { bold: true, origin: [0.5, 0] });
+    return;
+  }
+  p.frame(r, sch.accent);
   const left = r.x + 18;
   const wrap = r.w - 36;
-  const portrait = scene.add.image(cx, r.y + 58, portraitKey(id)).setScale(0.8);
-  if (!open) portrait.setAlpha(0.3);
-  p.add(portrait, 2);
-  p.text(cx, r.y + 112, t(hero.name), 21, C.text, { bold: true, origin: [0.5, 0] });
+  p.add(scene.add.image(cx, r.y + 58, portraitKey(id)).setScale(0.8), 2);
+  fit(p.text(cx, r.y + 112, t(hero.name), 21, C.text, { bold: true, origin: [0.5, 0] }), r.w - 20);
   p.text(cx, r.y + 140, `${t(hero.weapon)}  ·  ${sideOf(hero)}`, 13, sch.accent, { origin: [0.5, 0] });
   p.text(cx, r.y + 160, t('heroStats', { hp: hero.maxHp, speed: hero.speed }), 12.5, C.muted, { origin: [0.5, 0] });
   // The lines flow down, since German runs longer.
@@ -169,15 +178,38 @@ function heroDetail(p: Panel, scene: Phaser.Scene, id: HeroId, progress: Progres
     [t('signatureFull', { name: t(hero.signature.name), text: t(hero.signature.text) }), sch.accent],
     [t('pathsLine', { paths: hero.paths.map((pid) => t(UPGRADES[pid].name)).join(', ') }), C.text],
   ]) y += p.text(left, y, text, 12.5, color, { wrap }).height + 6;
-  if (open) {
-    p.frame(FIGHT, sch.accent, '#14244a');
-    p.spots.push({ id: 'fight', ...FIGHT });
-    p.text(FIGHT.x + FIGHT.w / 2, FIGHT.y + FIGHT.h / 2, t('fightAs', { name: t(hero.short) }), 18, C.text, { bold: true, origin: [0.5, 0.5] });
-  } else {
-    p.frame(FIGHT, C.muted, '#0b1222');
-    p.text(FIGHT.x + FIGHT.w / 2, FIGHT.y - 6, t('toUnlock'), 12, C.muted, { origin: [0.5, 1] });
-    p.text(FIGHT.x + FIGHT.w / 2, FIGHT.y + FIGHT.h / 2, hero.unlock ? t(hero.unlock) : '', 13, C.elite, { bold: true, origin: [0.5, 0.5], align: 'center', wrap: FIGHT.w - 20 });
-  }
+  p.frame(FIGHT, sch.accent, '#14244a');
+  p.spots.push({ id: 'fight', ...FIGHT });
+  p.text(FIGHT.x + FIGHT.w / 2, FIGHT.y + FIGHT.h / 2, t('fightAs', { name: t(hero.short) }), 18, C.text, { bold: true, origin: [0.5, 0.5] });
+}
+
+/** Shrinks a one-line text to fit a width. */
+function fit(text: Phaser.GameObjects.Text, width: number) {
+  if (text.width > width) text.setScale(width / text.width);
+  return text;
+}
+
+/**
+ * A hero unlocked mid-run: the game stands still behind this panel, with the hero's art and name,
+ * until Continue (a tap, Enter or Space).
+ */
+export function unlockPanel(scene: Phaser.Scene, id: HeroId) {
+  const p = new Panel(scene);
+  p.dim(0.75);
+  const hero = HEROES[id];
+  const sch = schemeOf(id);
+  const r = UNLOCK;
+  p.frame(r, sch.accent);
+  const cx = r.x + r.w / 2;
+  p.text(cx, r.y + 22, t('newHero'), 24, C.elite, { bold: true, origin: [0.5, 0], glow: true });
+  p.add(scene.add.image(cx, r.y + 130, portraitKey(id)), 2);
+  fit(p.text(cx, r.y + 204, t(hero.name), 22, C.text, { bold: true, origin: [0.5, 0] }), r.w - 30);
+  p.text(cx, r.y + 236, `${t(hero.weapon)}  ·  ${sideOf(hero)}`, 13, sch.accent, { origin: [0.5, 0] });
+  p.frame(CONTINUE, sch.accent, '#14244a');
+  p.spots.push({ id: 'continue', ...CONTINUE });
+  p.text(CONTINUE.x + CONTINUE.w / 2, CONTINUE.y + CONTINUE.h / 2, t('continueButton'), 18, C.text, { bold: true, origin: [0.5, 0.5] });
+  p.text(cx, CONTINUE.y + CONTINUE.h + 10, t('continueHelp'), 12, C.muted, { origin: [0.5, 0] });
+  return p;
 }
 
 /** Colour of a card by kind. */
@@ -198,14 +230,14 @@ function linkIcon(p: Panel, scene: Phaser.Scene, x: number, y: number, color: st
   g.strokeRoundedRect(x + 7, y + 6, 11, 7, 3.5);
 }
 
-/** The level-up: three cards over the paused run. */
+/** The level-up: three cards (four for Elara Voss) over the paused run. */
 export function levelUp(scene: Phaser.Scene, s: GameState) {
   const p = new Panel(scene);
   p.dim(0.6);
   const reward = s.rewardPicks > 0;
   p.text(VIEW.w / 2, 70, reward ? t('arenaReward') : t('levelTitle', { n: s.level }), 30, reward ? C.elite : C.shard, { bold: true, origin: [0.5, 0], glow: true });
-  p.text(VIEW.w / 2, 108, `${reward ? t('freeTier') : t('chooseUpgrade')}  ·  ${t('tapCard')}`, 14, C.muted, { origin: [0.5, 0] });
   const choices = s.choices ?? [];
+  p.text(VIEW.w / 2, 108, `${reward ? t('freeTier') : t('chooseUpgrade')}  ·  ${t(choices.length > 3 ? 'tapCard4' : 'tapCard')}`, 14, C.muted, { origin: [0.5, 0] });
   choices.forEach((id, i) => {
     const r = levelCardRect(i, choices.length);
     const color = kindColor(s, id);
@@ -224,7 +256,7 @@ export function levelUp(scene: Phaser.Scene, s: GameState) {
     const rank = s.ranks[id] ?? 0;
     const kind = t(def.kind === 'path' ? HEROES[s.hero!].pathKind : def.kind === 'pool' ? POOL_NAMES[def.pool!] : 'gearKind');
     p.text(cx, r.y + 18, kind, 11, color, { bold: true, origin: [0.5, 0] });
-    p.text(cx, r.y + 40, t(def.name), 21, C.text, { bold: true, origin: [0.5, 0] });
+    fit(p.text(cx, r.y + 40, t(def.name), 21, C.text, { bold: true, origin: [0.5, 0] }), r.w - 20);
     // Tier pips: held tiers filled, the one this card gives ringed.
     const pips = scene.add.graphics();
     for (let t = 0; t < MAX_TIER; t++) {
@@ -236,11 +268,13 @@ export function levelUp(scene: Phaser.Scene, s: GameState) {
     }
     p.add(pips, 2);
     p.text(cx, r.y + 94, rank === 0 ? t('newUpgrade') : t('tier', { n: rank + 1 }), 12, rank === 0 ? C.elite : C.muted, { bold: true, origin: [0.5, 0] });
-    p.text(left, r.y + 118, t(def.tiers[rank]), 15, C.text, { bold: true, wrap });
-    p.text(left, r.y + 160, t(def.blurb), 12.5, C.muted, { wrap });
+    // The lines flow down, so a long tier line (German, or a narrow card of four) never runs into the next.
+    const four = choices.length > 3;
+    const tier = p.text(left, r.y + 118, t(def.tiers[rank]), four ? 14 : 15, C.text, { bold: true, wrap });
+    const blurb = p.text(left, Math.max(r.y + 160, tier.y + tier.height + 8), t(def.blurb), four ? 12 : 12.5, C.muted, { wrap });
     const cross = crossoverFor(id, s.hero!);
     const partner = cross ? (cross.path === id ? cross.pool : cross.path) : null;
-    let y = r.y + 206;
+    let y = Math.max(r.y + 206, blurb.y + blurb.height + 8);
     if (cross && partner) {
       // A crossover: a link icon and what the pair does.
       const done = s.crossovers.includes(cross.id);

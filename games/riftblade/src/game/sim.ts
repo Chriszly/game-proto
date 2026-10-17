@@ -13,7 +13,11 @@ import {
   contactMod, crush, dashEnd, dashSweep, foeMod, healFactor, knightAbilities, knightAllies, knightAttack, knightGuard,
   knightSignature, moveKnightAlly, onHealed, onHurt, onKill, rescue,
 } from './blades';
-import { CAPSTONES, CROSSOVERS, FILLER, MAX_TIER, UPGRADES, at, rewardChoices, rollChoices } from './upgrades';
+import {
+  droneSpot, hurtFactor, moveSquadAlly, squadAbilities, squadAllies, squadAttack, squadBlock, squadCrit, squadHeal, squadHurt,
+  squadKill, squadSignature, squadStart, syncSquad, turnedBonus,
+} from './squad';
+import { CAPSTONES, CROSSOVERS, FILLER, MAX_TIER, UPGRADES, at, cardCount, rewardChoices, rollChoices } from './upgrades';
 import { ARENA_MS, BOG, BOSSES, CHAMPION, CREDITS, PLANETS, SIEGE, VENT, type FoeKind } from './planets';
 // `t` is a common local name here (targets, time), so the translator goes by `tr`.
 import { t as tr } from '../i18n';
@@ -34,9 +38,11 @@ export const HURT_GRACE_MS = 450;
 /** Colours of the blast rings. */
 const BLAST = { wreck: '#ffd23f', hero: '#ffb347', droid: '#ff6a4d', frag: '#ffd36b', shield: '#ff9a5a', vent: '#ff6a3c', shell: '#9fd4ff', stomp: '#d6efff' };
 
-/** The stats for this frame, computed once per tick, and whether the hero is a knight. */
+/** The stats for this frame, computed once per tick, and whether the hero is a knight (or Elara Voss or Triad-77). */
 let st: Stats = statsOf(freshState());
 let knight = false;
+let squad = false;
+const isSquad = (id: HeroId) => id === 'elara' || id === 'triad';
 
 /** The stats for this frame (for `blades.ts`). */
 export const stats = () => st;
@@ -57,6 +63,8 @@ export function startRun(s: GameState, id: HeroId, known: HeroId[] = []) {
   s.player.fireMs = 300;
   st = statsOf(s);
   knight = isKnight(id);
+  squad = isSquad(id);
+  if (squad) squadStart(s);
 }
 
 /** Takes the card at `index` during a level-up (or a free pick won in the arena). */
@@ -78,7 +86,7 @@ export function nextPick(s: GameState) {
     s.choices = rewardChoices(s.hero!, s.ranks);
   } else if (s.pendingLevels > 0) {
     s.phase = 'levelup';
-    s.choices = rollChoices(s.hero!, s.ranks);
+    s.choices = rollChoices(s.hero!, s.ranks, cardCount(s.hero!));
   } else {
     s.choices = null;
     s.phase = s.after;
@@ -126,6 +134,7 @@ export function tick(s: GameState, dtMs: number, input: Input) {
   if (s.phase !== 'run') return;
   st = statsOf(s);
   knight = isKnight(s.hero!);
+  squad = isSquad(s.hero!);
   const dt = Math.min(dtMs, MAX_FRAME_MS);
   if (input.signature) signature(s);
   const steps = Math.max(1, Math.ceil(dt / STEP_MS));
@@ -143,7 +152,7 @@ export function tick(s: GameState, dtMs: number, input: Input) {
   }
   if (s.phase === 'run' && s.pendingLevels > 0) {
     s.phase = 'levelup';
-    s.choices = rollChoices(s.hero!, s.ranks);
+    s.choices = rollChoices(s.hero!, s.ranks, cardCount(s.hero!));
   }
 }
 
@@ -157,6 +166,7 @@ function step(s: GameState, ms: number, input: Input) {
   primary(s, ms);
   abilities(s, ms);
   if (knight) knightAbilities(s, ms);
+  if (squad) squadAbilities(s, ms);
   moveAllies(s, ms);
   moveEnemies(s, ms);
   moveBullets(s, ms);
@@ -318,6 +328,7 @@ export function heal(s: GameState, amount: number) {
     onHealed(s, p.hp - before);
     return;
   }
+  if (squad && squadHeal(s, amount)) return;
   p.hp = Math.min(p.maxHp, p.hp + amount);
 }
 
@@ -326,7 +337,8 @@ function untouchable(s: GameState) {
   return (s.hero === 'tr9' && s.player.sigActiveMs > 0) || s.player.dashMs > 0 || s.player.hurtMs > 0;
 }
 
-function hurtHero(s: GameState, dmg: number) {
+/** A hit on the hero; `x`, `y` say where it came from (Triad-77's nearest droid takes it). */
+function hurtHero(s: GameState, dmg: number, x?: number, y?: number) {
   if (untouchable(s) || s.phase !== 'run') return;
   const p = s.player;
   if (knight) {
@@ -350,7 +362,11 @@ function hurtHero(s: GameState, dmg: number) {
     }
     return;
   }
-  const taken = dmg * (1 - st.armour);
+  let taken = dmg * (1 - st.armour);
+  if (squad) {
+    taken *= hurtFactor(s);
+    if (squadHurt(s, taken, x, y)) return;
+  }
   p.hp -= taken;
   s.damageTaken += taken;
   // A moment of grace after each hit, so a crowd can't take it all at once.
@@ -375,7 +391,8 @@ function signature(s: GameState) {
   }
   p.sigMs = hero.signature.cooldownMs * st.sigCooldown;
   s.signatures += 1;
-  if (s.hero === 'rook') p.sigActiveMs = 5000;
+  if (squad) squadSignature(s);
+  else if (s.hero === 'rook') p.sigActiveMs = 5000;
   else if (s.hero === 'tr9') {
     p.sigActiveMs = 3000;
     // The bracing pulse throws every droid near back.
@@ -420,7 +437,7 @@ export function bolt(s: GameState, x: number, y: number, angle: number, dmg: num
 }
 
 /** One trigger pull: the hero's pellets, plus Scatter Shot's side bolts. */
-function volley(s: GameState, x: number, y: number, angle: number, dmg: number, o: BoltOpts = {}, extraPellets = 0) {
+export function volley(s: GameState, x: number, y: number, angle: number, dmg: number, o: BoltOpts = {}, extraPellets = 0) {
   const hero = HEROES[s.hero ?? 'rook'];
   const pellets = hero.pellets + extraPellets;
   const spread = pellets > 1 ? hero.spread * (1 + 0.15 * extraPellets) : 0;
@@ -447,6 +464,10 @@ function fireRate(s: GameState) {
 function primary(s: GameState, ms: number) {
   if (knight) {
     knightAttack(s, ms);
+    return;
+  }
+  if (squad) {
+    squadAttack(s, ms, fireRate(s));
     return;
   }
   const p = s.player;
@@ -599,21 +620,15 @@ function abilities(s: GameState, ms: number) {
       });
     }
   }
+  // Drop Squad: its troopers come in `syncAllies`.
   const drop = r('drop-doctrine');
-  if (drop > 0 && ready(s, 'sentry', at([12000, 12000, 10000, 10000, 8000], drop, 12000), ms)) {
-    const max = at([1, 1, 2, 2, 3], drop, 1);
-    const sentries = s.allies.filter((a) => a.kind === 'sentry');
-    if (sentries.length >= max) s.allies = s.allies.filter((a) => a !== sentries[0]);
-    const a = Math.random() * Math.PI * 2;
-    s.allies.push({ id: s.nextId++, kind: 'sentry', x: p.x + Math.cos(a) * 30, y: p.y + Math.sin(a) * 30, cdMs: 300, lifeMs: drop >= 3 ? 15000 : 10000, slot: 0, aim: 0 });
-  }
   if (drop >= 2 && ready(s, 'supply', 20000, ms)) {
     const spot = swarmSpot(s, 250);
     addBomb(s, 'crate', spot.x, spot.y, 1000, 80, 50, { heal: 15 });
   }
   if (cap('orbital-drop') && ready(s, 'orbital', 8000, ms)) {
     const spot = swarmSpot(s, 380);
-    addBomb(s, 'orbital', spot.x, spot.y, 900, 120, 80, { turret: true });
+    addBomb(s, 'orbital', spot.x, spot.y, 900, 120, 80);
   }
   // Corporal Bram-17
   const jump = r('jump-trooper');
@@ -688,20 +703,29 @@ export function angleDiff(a: number, b: number) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Allies: troopers, brothers, sentry turrets and drones
+// Allies: troopers, squad troopers, brothers and drones
 
 /** Adds troopers, brothers and drones to match the upgrades held. */
 export function syncAllies(s: GameState) {
   const r = (id: string) => s.ranks[id] ?? 0;
-  const want: Record<'trooper' | 'brother' | 'drone' | 'spirit' | 'copilot' | 'squadron', number> = {
+  const squadWant = squadAllies(s);
+  const want: Record<(typeof LASTING)[number], number> = {
     trooper: s.capstones.includes('last-company') ? 5 : at([1, 1, 2, 2, 3], r('commander'), 0),
+    legionary: s.capstones.includes('orbital-drop') ? 6 : at([1, 1, 2, 2, 3], r('drop-doctrine'), 0),
     brother: s.capstones.includes('the-batch') ? 5 : at([1, 1, 2, 2, 3], r('brothers'), 0),
-    drone: at([1, 1, 2, 2, 3], r('drone'), 0),
     ...knightAllies(s),
+    ...squadWant,
+    drone: at([1, 1, 2, 2, 3], r('drone'), 0) + squadWant.drone,
   };
-  for (const kind of ['trooper', 'brother', 'drone', 'spirit', 'copilot', 'squadron'] as const) {
+  syncSquad(s);
+  for (const kind of LASTING) {
     const have = s.allies.filter((a) => a.kind === kind);
     for (let i = have.length; i < want[kind]; i++) {
+      // TR-9's squad troopers land in a drop pod beside him.
+      if (kind === 'legionary') {
+        const a = s.player.facing + Math.PI + (i - 1) * 0.8;
+        addBomb(s, 'orbital', s.player.x + Math.cos(a) * 44, s.player.y + Math.sin(a) * 44, 700, 60, 25);
+      }
       s.allies.push({ id: s.nextId++, kind, x: s.player.x, y: s.player.y, cdMs: 400 + i * 150, lifeMs: 0, slot: i, aim: 0 });
     }
     // A tier given up at the shrine can take an ally with it.
@@ -709,34 +733,44 @@ export function syncAllies(s: GameState) {
   }
 }
 
+/** The allies that stay as long as the upgrades that bring them. */
+const LASTING = ['trooper', 'legionary', 'brother', 'drone', 'spirit', 'copilot', 'squadron', 'commando', 'medic', 'command'] as const;
+
 function moveAllies(s: GameState, ms: number) {
   const p = s.player;
   const dt = ms / 1000;
   const rally = s.hero === 'rook' && p.sigActiveMs > 0 ? 1.5 : 1;
-  const counts: Record<AllyKind, number> = { trooper: 0, brother: 0, drone: 0, sentry: 0, escort: 0, fighter: 0, squadron: 0, copilot: 0, spirit: 0, puppet: 0 };
+  const counts: Record<AllyKind, number> = {
+    trooper: 0, legionary: 0, brother: 0, drone: 0, escort: 0, fighter: 0, squadron: 0, copilot: 0, spirit: 0, puppet: 0,
+    commando: 0, bike: 0, medic: 0, shieldbot: 0, command: 0, spare: 0,
+  };
   for (const a of s.allies) counts[a.kind] += 1;
   for (const a of s.allies) {
     if (KNIGHT_ALLIES.includes(a.kind)) {
       moveKnightAlly(s, a, ms, counts[a.kind]);
       continue;
     }
-    if (a.kind === 'sentry') {
-      a.lifeMs -= ms;
-    } else {
+    if (SQUAD_ALLIES.includes(a.kind)) {
+      moveSquadAlly(s, a, ms, counts[a.kind]);
+      continue;
+    }
+    {
       // Troopers and brothers keep formation behind the hero; drones circle.
       const n = counts[a.kind];
+      // Eyes in the Sky: the extra drones fly over Elara's commandos.
+      const over = squad && a.kind === 'drone' ? droneSpot(s, a, at([1, 1, 2, 2, 3], s.ranks.drone ?? 0, 0)) : null;
       const ang = a.kind === 'escort' ? -s.time / 900 : a.kind === 'drone' ? s.time / 550 + (a.slot * Math.PI * 2) / n : p.facing + Math.PI + (a.slot - (n - 1) / 2) * 0.8;
       const dist = a.kind === 'escort' ? 74 : a.kind === 'drone' ? 52 : a.kind === 'brother' ? 50 : 44;
       const tx = p.x + Math.cos(ang) * dist;
       const ty = p.y + Math.sin(ang) * dist;
       const k = a.kind === 'drone' || a.kind === 'escort' ? 1 : Math.min(1, 8 * dt);
-      a.x += (tx - a.x) * k;
-      a.y += (ty - a.y) * k;
+      a.x += ((over?.x ?? tx) - a.x) * k;
+      a.y += ((over?.y ?? ty) - a.y) * k;
     }
     if (a.kind === 'brother') continue;
     a.cdMs -= ms * (a.kind === 'trooper' ? rally : 1);
     if (a.cdMs > 0) continue;
-    const range = a.kind === 'trooper' || a.kind === 'escort' ? 340 : 300;
+    const range = a.kind === 'trooper' || a.kind === 'legionary' || a.kind === 'escort' ? 340 : 300;
     const t = nearest(s, a.x, a.y, 1, range)[0];
     if (!t) {
       a.cdMs = 0;
@@ -751,9 +785,9 @@ function moveAllies(s: GameState, ms: number) {
       bolt(s, a.x, a.y, ang, dmg, { ...plain, color: 'rook' });
       if (cm >= 4) bolt(s, a.x, a.y, ang + 0.05, dmg, { ...plain, color: 'rook' });
       a.cdMs = 900 * (cm >= 2 ? 0.75 : 1);
-    } else if (a.kind === 'sentry') {
-      bolt(s, a.x, a.y, ang, 8 * ((s.ranks['drop-doctrine'] ?? 0) >= 4 ? 1.6 : 1), { ...plain, color: 'drone' });
-      a.cdMs = 500;
+    } else if (a.kind === 'legionary') {
+      bolt(s, a.x, a.y, ang, 7 * ((s.ranks['drop-doctrine'] ?? 0) >= 4 ? 1.6 : 1), { ...plain, color: 'tr9' });
+      a.cdMs = 900;
     } else if (a.kind === 'escort') {
       // The stranded droid: a little turret that keeps up with the planet's toughness.
       bolt(s, a.x, a.y, ang, 10 + 6 * s.planet, { ...plain, color: 'drone', speed: 620 });
@@ -763,10 +797,13 @@ function moveAllies(s: GameState, ms: number) {
       a.cdMs = at([1100, 850, 850, 700, 600], s.ranks.drone ?? 0, 1100);
     }
   }
-  s.allies = s.allies.filter((a) => (a.kind !== 'sentry' && a.kind !== 'fighter' && a.kind !== 'puppet') || a.lifeMs > 0);
+  s.allies = s.allies.filter((a) => !SHORT_LIVED.includes(a.kind) || a.lifeMs > 0);
 }
 
 const KNIGHT_ALLIES: readonly AllyKind[] = ['fighter', 'squadron', 'copilot', 'spirit', 'puppet'];
+const SQUAD_ALLIES: readonly AllyKind[] = ['commando', 'bike', 'medic', 'shieldbot', 'command', 'spare'];
+/** Allies that last a while and are gone at the end of a fight. */
+export const SHORT_LIVED: readonly AllyKind[] = ['fighter', 'puppet', 'bike', 'spare'];
 
 // ---------------------------------------------------------------------------------------------
 // The droids
@@ -966,10 +1003,11 @@ function moveEnemies(s: GameState, ms: number) {
         if (e.gripMs <= 0) crush(s, e);
         continue;
       }
-      if (e.charmMs > 0) {
-        turned(s, e, ms);
-        continue;
-      }
+    }
+    // Turned to the hero's side (Persuasion) or confused (the Diplomat).
+    if (e.charmMs > 0) {
+      turned(s, e, ms);
+      continue;
     }
     const dx = p.x - e.x;
     const dy = p.y - e.y;
@@ -1146,13 +1184,15 @@ function moveEnemies(s: GameState, ms: number) {
       detonate(s, e, true);
       continue;
     }
-    hurtHero(s, knight ? e.dmg * contactMod(s, e) : e.dmg);
+    hurtHero(s, knight ? e.dmg * contactMod(s, e) : e.dmg, e.x, e.y);
   }
 }
 
-/** A foe turned to the hero's side (Persuasion): it goes for the nearest other foe and hits it. */
+/** A foe turned to the hero's side (Persuasion) or confused (Diplomat): it goes for the nearest other foe and hits it. */
 function turned(s: GameState, e: Enemy, ms: number) {
   e.charmMs -= ms;
+  // (A knight's step already counts this down.)
+  if (squad) e.orbitMs -= ms;
   const t = nearest(s, e.x, e.y, 1, 320, [e.id])[0];
   if (!t) return;
   const d = Math.hypot(t.x - e.x, t.y - e.y) || 1;
@@ -1162,7 +1202,7 @@ function turned(s: GameState, e: Enemy, ms: number) {
     e.y += ((t.y - e.y) / d) * step;
   } else if (e.orbitMs <= 0) {
     e.orbitMs = 700;
-    damage(s, t, e.dmg * 2 * ((s.ranks.persuasion ?? 0) >= 4 ? 1.5 : 1), { noCrit: true });
+    damage(s, t, e.dmg * 2 * ((s.ranks.persuasion ?? 0) >= 4 ? 1.5 : 1) * (squad ? turnedBonus(s) : 1), { noCrit: true });
   }
 }
 
@@ -1293,7 +1333,7 @@ export function inRingGap(h: Hazard, angle: number) {
 function detonate(s: GameState, e: Enemy, onHero: boolean) {
   e.hp = 0;
   const p = s.player;
-  if (onHero || Math.hypot(p.x - e.x, p.y - e.y) < ROLLER.blastR + p.r) hurtHero(s, e.dmg);
+  if (onHero || Math.hypot(p.x - e.x, p.y - e.y) < ROLLER.blastR + p.r) hurtHero(s, e.dmg, e.x, e.y);
   explodeDroids(s, e.x, e.y, ROLLER.blastR, ROLLER.hurtOthers, e);
   s.blasts.push({ id: s.nextId++, x: e.x, y: e.y, r: ROLLER.blastR, ms: 380, maxMs: 380, color: BLAST.droid });
 }
@@ -1310,7 +1350,10 @@ export function damage(s: GameState, e: Enemy, base: number, o: HitOpts = {}) {
   if (e.hp <= 0 || e.charmMs > 0) return 0;
   let dmg = base * st.damage;
   if (knight) dmg *= foeMod(s, e);
-  if (o.crit || (!o.noCrit && st.crit > 0 && Math.random() < st.crit)) dmg *= 2;
+  // Elara's Sharpshooter makes its own critical hits.
+  const sure = squad ? squadCrit(s, e) : 1;
+  if (sure > 1) dmg *= sure;
+  else if (o.crit || (!o.noCrit && st.crit > 0 && Math.random() < st.crit)) dmg *= 2;
   e.hp -= dmg;
   e.flashMs = 90;
   if (o.slow && st.slowPct > 0) {
@@ -1325,6 +1368,7 @@ function kill(s: GameState, e: Enemy) {
   e.hp = 0;
   s.kills += 1;
   if (knight) onKill(s, e);
+  if (squad) squadKill(s, e);
   if (e.kind === 'boss') {
     // The planet is cleared; the star map (or victory) comes next frame.
     s.phase = 'cleared';
@@ -1486,6 +1530,9 @@ function hostileBolt(s: GameState, b: Bullet, shield: number) {
   }
   // Corvin's Deflect and Joren's Council Seat send bolts back.
   if (knight && knightGuard(s, d, (dmg, color) => reflect(b, dmg, color), () => Math.atan2(b.vy, b.vx))) return true;
+  // Triad-77's rolling shield droids catch bolts.
+  const caught = squad ? squadBlock(s, b, () => reflect(b, 20, 'triad')) : null;
+  if (caught !== null) return caught;
   if (d < p.r + b.r) {
     // A glob slows as well as hurts.
     if (b.color === 'glob' && !untouchable(s)) {
@@ -1493,7 +1540,7 @@ function hostileBolt(s: GameState, b: Bullet, shield: number) {
       p.slowPct = Math.max(p.slowPct, TOAD.slow);
       if (b.toad) s.globHits += 1;
     }
-    hurtHero(s, b.dmg);
+    hurtHero(s, b.dmg, b.x - b.vx * 0.05, b.y - b.vy * 0.05);
     return false;
   }
   return true;
@@ -1510,7 +1557,7 @@ function reflect(b: Bullet, dmg = 30, color: BoltColor = 'tr9') {
 }
 
 export function addBomb(s: GameState, kind: Bomb['kind'], x: number, y: number, ms: number, r: number, dmg: number, o: Partial<Bomb> = {}) {
-  s.bombs.push({ id: s.nextId++, kind, x, y, fromX: o.fromX ?? x, fromY: o.fromY ?? y, ms, maxMs: ms, r, dmg, cluster: o.cluster ?? 0, heal: o.heal ?? 0, turret: o.turret ?? false });
+  s.bombs.push({ id: s.nextId++, kind, x, y, fromX: o.fromX ?? x, fromY: o.fromY ?? y, ms, maxMs: ms, r, dmg, cluster: o.cluster ?? 0, heal: o.heal ?? 0 });
 }
 
 function bombs(s: GameState, ms: number) {
@@ -1528,7 +1575,6 @@ function bombs(s: GameState, ms: number) {
       addBomb(s, 'bomblet', b.x + Math.cos(a) * 48, b.y + Math.sin(a) * 48, 260 + i * 60, 45, b.dmg * 0.5);
     }
     if (b.heal > 0) s.pickups.push({ id: s.nextId++, kind: 'medkit', x: b.x, y: b.y, heal: b.heal, value: 0 });
-    if (b.turret) s.allies.push({ id: s.nextId++, kind: 'sentry', x: b.x, y: b.y, cdMs: 200, lifeMs: 8000, slot: 0, aim: 0 });
   }
 }
 
@@ -1550,7 +1596,7 @@ function hazards(s: GameState, ms: number) {
       h.warnMs -= ms;
       if (h.warnMs > 0) continue;
       // The warning is over: it goes off.
-      if (d < h.r + p.r) hurtHero(s, h.dmg);
+      if (d < h.r + p.r) hurtHero(s, h.dmg, h.x, h.y);
       if (h.kind === 'vent') explodeDroids(s, h.x, h.y, h.r, VENT.foeDmg * PLANETS[s.planet].hp, null);
       const color = h.kind === 'vent' ? BLAST.vent : h.kind === 'shell' ? BLAST.shell : BLAST.stomp;
       s.blasts.push({ id: s.nextId++, x: h.x, y: h.y, r: h.r, ms: 420, maxMs: 420, color });
@@ -1564,12 +1610,12 @@ function hazards(s: GameState, ms: number) {
         p.slowPct = Math.max(p.slowPct, BOG.slow);
       }
     } else if (h.kind === 'ember') {
-      if (d < h.r + p.r * 0.5) hurtHero(s, h.dmg);
+      if (d < h.r + p.r * 0.5) hurtHero(s, h.dmg, h.x, h.y);
     } else if (h.kind === 'ring') {
       h.r += CHAMPION.ringSpeed * dt;
       if (!h.hit && Math.abs(d - h.r) < 9 + p.r * 0.6 && !inRingGap(h, Math.atan2(p.y - h.y, p.x - h.x))) {
         h.hit = true;
-        hurtHero(s, h.dmg);
+        hurtHero(s, h.dmg, h.x, h.y);
       }
     }
   }
