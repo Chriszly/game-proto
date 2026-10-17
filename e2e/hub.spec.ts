@@ -94,6 +94,7 @@ test('hub settings reach the games', async ({ page }, testInfo) => {
   await choice('Difficulty', 'Hard').click();
   await choice('Frame rate (FPS)', '30').click();
   await choice('Show FPS', 'On').click();
+  await dialog.getByRole('slider', { name: 'Music' }).fill('35');
   await expect(choice('Difficulty', 'Hard')).toHaveAttribute('aria-pressed', 'true');
   testInfo.attach('settings', { body: await page.screenshot({ path: testInfo.outputPath('settings.png') }), contentType: 'image/png' });
   await dialog.getByRole('button', { name: 'Close' }).click();
@@ -111,7 +112,11 @@ test('hub settings reach the games', async ({ page }, testInfo) => {
     reduceMotion: false,
     // British English is the default, whatever language the browser speaks.
     language: 'en',
+    music: 35,
+    effects: 80,
+    muted: false,
   });
+  await expect(dialog.getByRole('slider', { name: 'Music' })).toHaveValue('35');
 
   // A game opened now shows the FPS readout.
   await page.goto('/games/apothecary/');
@@ -140,6 +145,49 @@ test('hub settings reach the games', async ({ page }, testInfo) => {
   await dialog.getByRole('button', { name: 'Restore defaults' }).click();
   await expect(choice('Difficulty', 'Normal')).toHaveAttribute('aria-pressed', 'true');
   await expect(choice('Show FPS', 'Off')).toHaveAttribute('aria-pressed', 'true');
+});
+
+// Every game has a sound button beside full screen and pause, and the M key: both switch the shared
+// mute setting, which the next game keeps. The pause screen sets the music and effects volumes. The
+// corner buttons keep clear of the screen's edges, for phones with rounded corners.
+test('games have a sound button and volumes', async ({ page }) => {
+  await page.addInitScript(() => Object.assign(window, { showStartScreen: true }));
+  await page.goto('/games/apothecary/');
+  const saved = () => page.evaluate(() => JSON.parse(localStorage.getItem('hub-settings') ?? '{}'));
+  const sound = page.locator('.sound-button');
+  await expect(sound).toHaveAttribute('aria-label', 'Mute (M)');
+  // Full screen, sound and pause sit in one row, in that order, 12px from the edges.
+  const corner = await page.locator('.game-corner').boundingBox();
+  const view = page.viewportSize()!;
+  expect(corner!.x).toBe(12);
+  expect(view.height - corner!.y - corner!.height).toBe(12);
+  await page.locator('.game-start-button').click();
+  const order = await page.locator('.game-corner > button').evaluateAll((buttons) => buttons.map((b) => b.className.split(' ')[0]));
+  expect(order).toEqual(['fullscreen-button', 'sound-button', 'pause-button']);
+
+  await sound.click();
+  await expect(sound).toHaveAttribute('aria-pressed', 'true');
+  await expect(sound).toHaveAttribute('aria-label', 'Sound on (M)');
+  expect((await saved()).muted).toBe(true);
+  await page.keyboard.press('m');
+  await expect(sound).toHaveAttribute('aria-pressed', 'false');
+  expect((await saved()).muted).toBe(false);
+  await page.keyboard.press('m');
+
+  // The pause screen shows the volumes; moving one saves it and turns the sound back on.
+  await page.locator('.pause-button').click();
+  const effects = page.getByRole('slider', { name: 'Effects' });
+  await expect(effects).toBeVisible();
+  await effects.fill('40');
+  await effects.dispatchEvent('change');
+  expect(await saved()).toMatchObject({ effects: 40, muted: false });
+  await expect(sound).toHaveAttribute('aria-pressed', 'false');
+
+  // Another game opens with the same settings.
+  await page.keyboard.press('m');
+  await page.goto('/games/hotfoot/');
+  await expect(page.locator('.sound-button')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('slider', { name: 'Effects', includeHidden: true })).toHaveValue('40');
 });
 
 // The game grid fills the width: wide screens get more than three columns, a phone gets one and nothing scrolls sideways.

@@ -4,6 +4,7 @@ import { language, setLanguage, t } from './i18n';
 import { addStartScreen } from './startScreen';
 import type { HowToPlay } from './howToPlay';
 import { countPlay } from './playCount';
+import { addSoundButton, cornerBar } from './corner';
 
 /** Frames that come up to this early still run, so a display whose frames jitter keeps them all. */
 const SLACK_MS = 1;
@@ -11,7 +12,8 @@ const SLACK_MS = 1;
 /**
  * Applies the hub's settings that work the same in every game: the frame cap, the FPS readout and
  * reduced motion. Every game calls this right after creating its `Phaser.Game`. Full screen is
- * here too, as a button in the bottom left corner and the F key, in every game, and so are the
+ * here too, as a button in the bottom left corner and the F key, in every game, and so is the sound
+ * button beside it with the M key (`corner.ts`, which also lays out that row), and so are the
  * loading, start and pause screens (`startScreen.ts`), with the game's How to play behind a button on
  * the start and pause screens when it passes `howToPlay` (`howToPlay.ts`). It also counts the play
  * on the game's public play counter (`playCount.ts`). The browser's right-click menu is turned off
@@ -24,6 +26,7 @@ export function setupGame(game: Phaser.Game, options: { howToPlay?: HowToPlay } 
   if (settings.showFps) showFps(game);
   if (settings.reduceMotion) reduceMotion();
   addFullscreen();
+  addSoundButton();
   addStartScreen(game, options.howToPlay);
   countPlay();
 }
@@ -36,10 +39,7 @@ function addFullscreen() {
   if (!document.fullscreenEnabled) return;
   const button = document.createElement('button');
   button.type = 'button';
-  button.className = 'fullscreen-button';
-  button.style.cssText =
-    'position:fixed;bottom:4px;left:4px;z-index:10;width:30px;height:30px;padding:5px;cursor:pointer;' +
-    'color:#f3e9d2;background:rgba(0,0,0,0.55);border:1px solid rgba(243,233,210,0.35);border-radius:3px';
+  button.className = 'fullscreen-button corner-button';
   button.innerHTML =
     '<svg viewBox="0 0 16 16" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">' +
     '<path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg>';
@@ -67,7 +67,7 @@ function addFullscreen() {
     toggle();
   });
   document.addEventListener('fullscreenchange', () => label(document.fullscreenElement !== null));
-  document.body.append(button);
+  cornerBar().append(button);
 }
 
 /**

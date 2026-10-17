@@ -37,9 +37,24 @@ export interface Settings {
   reduceMotion: boolean;
   /** The language of the hub, the shared screens and every game that has been translated. */
   language: Language;
+  /** How loud the music plays, 0 to 100. */
+  music: number;
+  /** How loud the sound effects play, 0 to 100. */
+  effects: number;
+  /** Silences every sound; the sound button in each game's corner and the M key switch it. */
+  muted: boolean;
 }
 
-export const DEFAULTS: Settings = { difficulty: 'normal', fps: 60, showFps: false, reduceMotion: false, language: 'en' };
+export const DEFAULTS: Settings = {
+  difficulty: 'normal',
+  fps: 60,
+  showFps: false,
+  reduceMotion: false,
+  language: 'en',
+  music: 60,
+  effects: 80,
+  muted: false,
+};
 
 /**
  * One row of the hub's Settings panel. Labels and hints are keys of the shared texts
@@ -48,7 +63,11 @@ export const DEFAULTS: Settings = { difficulty: 'normal', fps: 60, showFps: fals
 export type SettingOption = { value: string | number } & ({ label: SharedKey } | { text: string });
 export type SettingField =
   | { key: keyof Settings; label: SharedKey; hint: SharedKey; kind: 'choice'; options: readonly SettingOption[] }
-  | { key: keyof Settings; label: SharedKey; hint: SharedKey; kind: 'toggle' };
+  | { key: keyof Settings; label: SharedKey; hint: SharedKey; kind: 'toggle' }
+  | { key: keyof Settings; label: SharedKey; hint: SharedKey; kind: 'range'; min: number; max: number; step: number };
+
+/** The volumes go from silent to full in steps of 5. */
+const VOLUME = { kind: 'range', min: 0, max: 100, step: 5 } as const;
 
 export const SETTING_FIELDS: readonly SettingField[] = [
   {
@@ -74,6 +93,9 @@ export const SETTING_FIELDS: readonly SettingField[] = [
   },
   { key: 'showFps', label: 'settingShowFps', hint: 'settingShowFpsHint', kind: 'toggle' },
   { key: 'reduceMotion', label: 'settingReduceMotion', hint: 'settingReduceMotionHint', kind: 'toggle' },
+  { key: 'music', label: 'settingMusic', hint: 'settingMusicHint', ...VOLUME },
+  { key: 'effects', label: 'settingEffects', hint: 'settingEffectsHint', ...VOLUME },
+  { key: 'muted', label: 'settingMuted', hint: 'settingMutedHint', kind: 'toggle' },
 ];
 
 export const SETTINGS_KEY = 'hub-settings';
@@ -92,7 +114,19 @@ export function loadSettings(): Settings {
     showFps: typeof saved.showFps === 'boolean' ? saved.showFps : DEFAULTS.showFps,
     reduceMotion: typeof saved.reduceMotion === 'boolean' ? saved.reduceMotion : DEFAULTS.reduceMotion,
     language: LANGUAGES.find((l) => l === saved.language) ?? DEFAULTS.language,
+    music: volume(saved.music, DEFAULTS.music),
+    effects: volume(saved.effects, DEFAULTS.effects),
+    muted: typeof saved.muted === 'boolean' ? saved.muted : DEFAULTS.muted,
   };
+}
+
+function volume(value: unknown, fallback: number) {
+  return typeof value === 'number' && value >= 0 && value <= 100 ? Math.round(value) : fallback;
+}
+
+/** Saves a change made inside a game (the sound button, the pause screen's volumes) on top of what is stored. */
+export function updateSettings(patch: Partial<Settings>) {
+  saveSettings({ ...loadSettings(), ...patch });
 }
 
 export function saveSettings(settings: Settings) {
