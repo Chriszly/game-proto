@@ -24,9 +24,10 @@ export const OBJECTIVE_CARD = { x: 10, y: 42, w: 236, h: 62 };
 /** The last-hit streak chip, right of the gold counter. */
 export const STREAK_CHIP = { x: 96, y: 6, w: 118, h: 22 };
 
-/** The upgrade choice in the bottom bar, between the shop button and the minimap: two cards. */
+/** The upgrade choice in the bottom bar, between the shop button and the minimap: two cards, or three slimmer ones. */
 export const UPGRADE_PANEL = { x: 614, y: 420, w: 168, h: 112 };
-export function upgradeCard(i: number) {
+export function upgradeCard(i: number, n = 2) {
+  if (n === 3) return { x: UPGRADE_PANEL.x + 6, y: UPGRADE_PANEL.y + 19 + i * 31, w: UPGRADE_PANEL.w - 12, h: 29 };
   return { x: UPGRADE_PANEL.x + 6, y: UPGRADE_PANEL.y + 20 + i * 46, w: UPGRADE_PANEL.w - 12, h: 42 };
 }
 

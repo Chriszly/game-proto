@@ -38,7 +38,7 @@ left, under bevelled slate panels.
 | V, or click its button | Plant a Vision Ward at the cursor (within 600 px), if you carry one |
 | T, or Recall home in the top bar | Channel 4 seconds standing still, then appear at your Nexus; damage, moving, attacking or casting cancels it |
 | X, or Buy back in the top bar | While dead: pay to respawn at once (100 gold + 50 per level), once every 2:30 |
-| 1 or 2, or click an upgrade card | Keep one of the two upgrades a new level offers |
+| 1, 2 or 3, or click an upgrade card | Keep one of the upgrades a new level offers |
 | B, or Shop | Open or close the shop; buy an item by clicking it |
 | Esc | Close the shop |
 | Play again | After a match: pick a champion again |
@@ -114,6 +114,13 @@ left, under bevelled slate panels.
 10. **Upgrades**: levels 2, 3, 4, 5 and 7 each put two upgrade cards in the bottom bar and marks the ability box
    they change with a gold diamond. Keep one; it changes that ability for the rest of the match (gold
    pips under a box count the upgrades it has). The choices per champion are in the table below.
+   **Class mastery**: each win with a champion counts toward its mastery, saved in your browser.
+   At 1, 2, 4, 6 and 9 wins it reaches ranks 1 to 5, shown as gold diamonds on its pick card, and
+   each rank puts a third card in one more of its offers (rank 1 at level 2, rank 2 at levels 2
+   and 3, and so on). The third card is an upgrade from the champion's other levels that you don't
+   have yet, and the end panel says how far the next rank is.
+
+   ![The upgrade panel with three slim cards at level 3 for Hald, the third from his mastery](docs/screenshots/mastery-offer.webp)
 11. **Objectives**: a card under the top bar names one goal at a time with a timer and a reward, a
    gold marker floats over its target and a star marks it on the minimap. They come in turn: topple
    the nearest red tower (2:30, 200 gold and the siege banner, +25% damage to towers and the Nexus
@@ -361,7 +368,7 @@ it.
   where everything sits on screen.
 - `src/game/`: the rules, free of Phaser: `data.ts` (map, river, camps, watchstones, sight,
   champions and their passives, items, objectives, upgrades, buffs, the beast, inhibitors, bushes
-  and AI plans), `names.ts` (the champions' short names), `state.ts` (types and a new match) and
+  and AI plans), `names.ts` (the champions' short names), `mastery.ts` (saved wins per class), `state.ts` (types and a new match) and
   `sim.ts` (the rules, vision and the AI).
 - `src/art/`: `lowpoly.ts` (the software renderer), `models.ts` (every low-poly model), `bake.ts`
   (renders the models into sprite sheets at start-up) and `map.ts` (paints the map).

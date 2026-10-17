@@ -36,6 +36,8 @@ import {
   TOWERS,
   upgradeById,
   upgradePairAt,
+  offerFor,
+  UPGRADE_LEVELS,
   ultRank,
   ULT_RANK,
   ULT_RANK_LEVELS,
@@ -134,12 +136,13 @@ export function abilityFor(u: Unit, key: AbilityKey): AbilityDef | undefined {
   return ab;
 }
 
-/** The player keeps one of the two upgrades on offer (0 or 1). Returns false if none is on offer. */
+/** The player keeps one of the upgrades on offer (0, 1, or 2 on a third card). Returns false if there is no such option. */
 export function chooseUpgrade(s: GameState, choice: number): boolean {
   const p = getUnit(s, s.player);
   const offer = s.upgradeOffers[0];
-  if (!p || !offer || (choice !== 0 && choice !== 1)) return false;
-  p.upgrades.push(offer.options[choice]);
+  if (!p || !offer || !(choice >= 0 && choice < offer.options.length)) return false;
+  // Offers queued together can share a borrowed card; one already kept is not kept twice.
+  if (!p.upgrades.includes(offer.options[choice])) p.upgrades.push(offer.options[choice]);
   s.upgradeOffers.shift();
   return true;
 }
@@ -907,9 +910,13 @@ function gainXp(s: GameState, c: Unit, amount: number) {
       }
       const pair = upgradePairAt(c.champ.id, l);
       if (!pair) continue;
-      // The player chooses on the cards; an AI champion takes the one it rates higher.
-      if (c.player) s.upgradeOffers.push({ level: l, options: [pair[0].id, pair[1].id] });
-      else {
+      // The player chooses on the cards (a third one where its class's mastery reaches this
+      // level); an AI champion takes the one it rates higher.
+      if (c.player) {
+        const third = UPGRADE_LEVELS.indexOf(l) < s.mastery;
+        const options = offerFor(c.champ.id, l, c.upgrades, third ? 3 : 2);
+        if (options.length) s.upgradeOffers.push({ level: l, options });
+      } else {
         const up = aiRate(pair[1]) > aiRate(pair[0]) ? pair[1] : pair[0];
         c.upgrades.push(up.id);
         aiLog(c.side, `${shortName(c.name)} takes ${up.name} at level ${l}`);

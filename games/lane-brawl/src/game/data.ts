@@ -1000,6 +1000,28 @@ export const UPGRADES: Record<string, [UpgradeDef, UpgradeDef][]> = {
   ],
 };
 
+/**
+ * Class mastery: the player's wins with a class (saved in `mastery.ts`) that reach each rank. At
+ * rank r the offers at the first r of `UPGRADE_LEVELS` get a third card.
+ */
+export const MASTERY_WINS = [1, 2, 4, 6, 9];
+
+/**
+ * The upgrades a level offers a champion: its pair less any it owns, topped up to `count` from its
+ * other pairs (the later ones first) with upgrades it doesn't own yet. Empty on a level with none.
+ */
+export function offerFor(champId: string, level: number, owned: string[], count: number): string[] {
+  const i = UPGRADE_LEVELS.indexOf(level);
+  const pairs = UPGRADES[champId] ?? [];
+  if (i < 0 || !pairs[i]) return [];
+  const opts = pairs[i].map((u) => u.id).filter((id) => !owned.includes(id));
+  for (const u of [...pairs.slice(i + 1), ...pairs.slice(0, i)].flat()) {
+    if (opts.length >= count) break;
+    if (!owned.includes(u.id) && !opts.includes(u.id)) opts.push(u.id);
+  }
+  return opts;
+}
+
 /** The upgrade pair a level offers a champion, or undefined (a rank-up level, or none left). */
 export function upgradePairAt(champId: string, level: number): [UpgradeDef, UpgradeDef] | undefined {
   const i = UPGRADE_LEVELS.indexOf(level);

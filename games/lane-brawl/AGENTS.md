@@ -177,13 +177,23 @@ Implemented today:
   each queue an offer of two upgrades (`upgradePairAt(champion, level)`, the matching pair in
   `UPGRADES`); two cards in the bottom bar (between the shop button
   and the minimap) show the first offer, and the ability box an option changes gets a gold diamond.
-  Clicking a card or pressing 1 or 2 keeps it. Upgrades scale an ability's radius, damage, range,
+  Clicking a card or pressing 1, 2 or 3 keeps it. Upgrades scale an ability's radius, damage, range,
   heal, shield or cooldown by a percent, add a stun or a slow, or add bolts (`abilityFor` applies
   them). Levels 6 and 8 (`ULT_RANK_LEVELS`) offer nothing but rank up the R instead: each rank adds
   `ULT_RANK` (+20% damage, heal and shield, -15% cooldown), applied in `abilityFor` through
   `ultRank(level)`, with a notice for the player. Gold pips under an ability box count its upgrades
   and, on R, its ranks; the upgrade panel names what the next level brings. AI champions pick theirs
   on their own.
+- Class mastery (#292): `mastery.ts` keeps the player's wins per class under the save key
+  `lane-brawl-mastery` (`loadMastery`, `recordWin`; JSON `{ classId: wins }`, every read and write
+  in try/catch). `masteryRank` turns wins into a rank by `MASTERY_WINS` (1, 2, 4, 6, 9 wins for
+  ranks 1 to 5). `startMatch` passes the picked class's rank to `createGame` (`MatchOptions.mastery`,
+  `s.mastery`; always 0 when watching), and `gainXp` offers the player `offerFor(class, level,
+  owned, 3)` at the first `s.mastery` of `UPGRADE_LEVELS`, else 2: the level's pair less what it
+  owns, topped up from its other pairs, later ones first. `UpgradeOffer.options` is two or three
+  ids; three show as slimmer cards (`upgradeCard(i, 3)`), the third with a gold edge, kept with 3.
+  The end panel counts a win once (`winCounted`) and shows the rank and the wins to the next; pick
+  cards show one gold diamond per rank. The playthrough starts with no save, so it sees pairs.
 - Last hits: after every tick the enemy minion within the player's reach plus 140 px that its next
   hit would kill is `lastHitMark` and gets a gold outline. A last hit by the player grows the streak
   (`streak`, shown in a chip by the gold counter) and pops a coin fx with the gold; from x4 on it
@@ -221,7 +231,7 @@ Implemented today:
 Missing or rough:
 
 - No pathing or collisions: units overlap and walk straight lines.
-- No sound, pause, title or save. Nothing is persisted, so there are no save keys.
+- No sound or title. The only save is class mastery (below).
 - Bushes hide champions only, not minions. The camera follows the player's champion.
 - AI champions don't use bushes on purpose, and their wards go only to the fixed `WARD_SPOTS`.
 - Balance is tuned with AI-only matches (every class within roughly 35% to 65% wins over 80
@@ -303,6 +313,8 @@ File map (`src/`):
   brutes, bones for the wolves), watchstone islands, ruins, flowers and mushrooms and up to 620
   pines and rocks, from a fixed seed; then the beast's pit and the bushes (tall faceted grass).
 - `game/names.ts`: `shortName`, a champion's first name from its full name.
+- `game/mastery.ts`: class mastery, the save key `lane-brawl-mastery` (`loadMastery`, `recordWin`,
+  `masteryRank`).
 - `game/data.ts`: plain data. `WORLD`, `LANES`, `BASE`, `TOWERS`, `RIVER`, `CAMPS`, `CAMP_KINDS`,
   `PUPS`, `SIGHT`, `WATCHSTONES`, `WATCH`, `BUFFS`, `JUNGLE`, `KITE`, the balance constants (`TOWER`,
   `CAMP`, `MINION`, `KILL`, `XP_FOR_LEVEL`, respawn times), `CHAMPIONS` with their `AbilityDef`s,
