@@ -108,6 +108,21 @@
     "previous": "game: colonizer"
   },
   {
+    "name": "riftblade",
+    "color": "5b7a99",
+    "description": "Game: Riftblade"
+  },
+  {
+    "name": "scrapyard-titans",
+    "color": "5b7a99",
+    "description": "Game: Scrapyard Titans"
+  },
+  {
+    "name": "bramblecrest",
+    "color": "5b7a99",
+    "description": "Game: Bramblecrest"
+  },
+  {
     "name": "hub",
     "color": "5b7a99",
     "description": "Game: The hub page and its settings",

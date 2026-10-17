@@ -41,6 +41,9 @@ export default defineConfig({
     { name: 'space-wars', testDir: 'games/space-wars/e2e' },
     { name: 'lane-brawl', testDir: 'games/lane-brawl/e2e' },
     { name: 'colonizer', testDir: 'games/colonizer/e2e' },
+    { name: 'riftblade', testDir: 'games/riftblade/e2e' },
+    { name: 'scrapyard-titans', testDir: 'games/scrapyard-titans/e2e' },
+    { name: 'bramblecrest', testDir: 'games/bramblecrest/e2e' },
   ],
   webServer: {
     command: 'npm run dev -- --port 5173 --strictPort',
