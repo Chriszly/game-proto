@@ -135,7 +135,7 @@ const de: Translation<typeof en> = {
   sold: '- {item} +{coins}\u00a0M',
 
   // Top bar and panels
-  coinsHud: 'Geld: {n}',
+  coinsHud: 'Münzen: {n}',
   hands: 'Hände',
   hint: 'Gehen: WASD / tippen\nErnten: an Reifem vorbei',
   settings: 'Einstellungen',
