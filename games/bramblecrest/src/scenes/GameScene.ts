@@ -17,7 +17,7 @@ import {
   type Boss, type Foe, type Seed,
 } from './foes';
 import {
-  HURT_MS, LANTERN, LANTERN_OIL, PICKUP_PX, PULL_SPEED, ROLL_COOLDOWN_MS, ROLL_MS, ROLL_SPEED, SWING_COOLDOWN_MS, SWING_MS, SWING_RADIUS, SWING_REACH, VINE_RANGE, VINE_SPEED, WALK_SPEED,
+  HURT_MS, LANTERN, LANTERN_OIL, PICKUP_PX, PULL_SPEED, ROLL_COOLDOWN_MS, ROLL_MS, ROLL_SPEED, STICK, SWING_COOLDOWN_MS, SWING_MS, SWING_RADIUS, SWING_REACH, VINE_RANGE, VINE_SPEED, WALK_SPEED,
 } from './layout';
 
 /** Where each prop's art touches the ground, as a share of its texture's height, and whether it blocks. */
@@ -84,6 +84,12 @@ export class GameScene extends Phaser.Scene {
   private vine!: Phaser.GameObjects.Graphics;
   private hookTip!: Phaser.GameObjects.Image;
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
+  /**
+   * A finger on the world: where it went down and where it is now, in view pixels, and the world
+   * point it went down on. It steers as a floating stick once dragged past `STICK.drag`; lifted
+   * before that, it was a tap.
+   */
+  stick: { id: number; ox: number; oy: number; x: number; y: number; wx: number; wy: number; live: boolean } | null = null;
   private swing: { t: number; dir: Facing } | null = null;
   private swingCd = 0;
   private roll: { t: number; dx: number; dy: number } | null = null;
@@ -116,6 +122,10 @@ export class GameScene extends Phaser.Scene {
     this.keys = kb.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE,ENTER,J,SHIFT,K,Q,E,L', false) as Record<string, Phaser.Input.Keyboard.Key>;
     kb.on('keydown', this.onKey, this);
     this.input.on('pointerdown', this.onPointer, this);
+    this.input.on('pointermove', this.onPointerMove, this);
+    this.input.on('pointerup', this.onPointerUp, this);
+    // A second touch pointer, so one thumb can swing or roll while the other steers.
+    this.input.addPointer(1);
     this.enterMap(this.state.map, this.state.x, this.state.y, this.state.facing, false);
   }
 
@@ -370,7 +380,38 @@ export class GameScene extends Phaser.Scene {
     if (btn === 'roll') return this.startRoll();
     if (btn === 'vine') return this.fireVine();
     const w = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
-    this.tapWorld(w.x, w.y);
+    if (!pointer.wasTouch) return this.tapWorld(w.x, w.y);
+    // A touch waits to see whether it is a tap or the start of a steering drag.
+    if (this.stick) return;
+    const v = viewPoint(pointer);
+    this.stick = { id: pointer.id, ox: v.x, oy: v.y, x: v.x, y: v.y, wx: w.x, wy: w.y, live: false };
+  }
+
+  /** Moves the stick's knob to the finger; past the rim the base is dragged along behind it. */
+  private onPointerMove(pointer: Phaser.Input.Pointer) {
+    const st = this.stick;
+    if (!st || st.id !== pointer.id) return;
+    const v = viewPoint(pointer);
+    st.x = v.x;
+    st.y = v.y;
+    const d = Math.hypot(st.x - st.ox, st.y - st.oy);
+    if (!st.live && d > STICK.drag) {
+      st.live = true;
+      this.route = null;
+      this.target = null;
+    }
+    if (d > STICK.r) {
+      const k = (d - STICK.r) / d;
+      st.ox += (st.x - st.ox) * k;
+      st.oy += (st.y - st.oy) * k;
+    }
+  }
+
+  private onPointerUp(pointer: Phaser.Input.Pointer) {
+    const st = this.stick;
+    if (!st || st.id !== pointer.id) return;
+    this.stick = null;
+    if (!st.live && !this.dialog && !this.hud.ended && !this.fading) this.tapWorld(st.wx, st.wy);
   }
 
   /** Where a tap in the world sends the knight, and what they do there. */
@@ -710,7 +751,17 @@ export class GameScene extends Phaser.Scene {
     const k = this.keys;
     const x = (k.D.isDown || k.RIGHT.isDown ? 1 : 0) - (k.A.isDown || k.LEFT.isDown ? 1 : 0);
     const y = (k.S.isDown || k.DOWN.isDown ? 1 : 0) - (k.W.isDown || k.UP.isDown ? 1 : 0);
-    return { x, y };
+    const st = this.stick;
+    if (x || y || !st?.live) return { x, y };
+    // The stick walks at full speed past its dead zone; close to an axis it snaps to it, so the
+    // knight can lean straight into a block to push it.
+    const dx = st.x - st.ox;
+    const dy = st.y - st.oy;
+    const d = Math.hypot(dx, dy);
+    if (d <= STICK.dead) return { x: 0, y: 0 };
+    if (Math.abs(dy) < Math.abs(dx) * STICK.snap) return { x: Math.sign(dx), y: 0 };
+    if (Math.abs(dx) < Math.abs(dy) * STICK.snap) return { x: 0, y: Math.sign(dy) };
+    return { x: dx / d, y: dy / d };
   }
 
   update(_time: number, delta: number) {
@@ -734,6 +785,7 @@ export class GameScene extends Phaser.Scene {
     this.drawPlayer(dt);
     this.drawWorld();
     this.hud.update(dt, s, this.dialog ? { speaker: this.dialog.speaker, text: this.dialog.lines[this.dialog.i] } : null, this.map.id === 'shrine');
+    this.hud.drawStick(this.stick?.live ? this.stick : null);
   }
 
   private movePlayer(dt: number) {
