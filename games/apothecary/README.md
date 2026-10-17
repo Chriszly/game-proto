@@ -210,7 +210,7 @@ fifths for the nightshade potions.
 
 **While you were away**: once anything runs without the doctor (a craftsman or pixies hired), the apothecary keeps going while the game is closed. On the next visit the time away, up
 to two hours, is played through the same rules with the doctor off his work spots, and a chip in
-the top right says what it earned: "While you were away: +32 coins, 9 potions". Tap the chip to
+the top right says what it earned: "While you were away: +32, 9 potions", with a gold coin after the 32 (every amount on screen is a number and a gold coin, with no currency name). Tap the chip to
 dismiss it. The coins land where they would have: in the till, or in the purse when a craftsman
 carries them or a contract pays.
 

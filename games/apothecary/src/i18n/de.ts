@@ -2,7 +2,7 @@ import type { Translation } from '../../../../shared/i18n';
 import type en from './en';
 
 /**
- * Apothecary's texts in German. Coins are Münzen, shortened to M after a price; a station's
+ * Apothecary's texts in German. Amounts show as a number and the gold coin ({coin}), never a name; a station's
  * markers stand too close for a German caption on one line, so their prices go on a line of their own.
  */
 const de: Translation<typeof en> = {
@@ -91,17 +91,16 @@ const de: Translation<typeof en> = {
   pickUp: 'Aufheben',
   drop: 'Ablegen',
   work: 'Arbeiten',
-  coins: 'Münzen',
   first: 'Zuerst:',
   any: 'egal',
   land: 'Land',
   table: 'Tisch',
   joinGuild: 'Gilde beitreten',
-  levelCost: '{name} {level}:\u00a0{coins}\u00a0M',
-  stationLevelCost: 'Stufe {level}:\n{coins}\u00a0M',
-  buildCost: '{name}:\n{coins}\u00a0M',
-  learnCost: '{potion}:\n{coins}\u00a0M',
-  hireCost: 'Anheuern:\n{coins}\u00a0M',
+  levelCost: '{name} {level}:\u00a0{coins}{coin}',
+  stationLevelCost: 'Stufe {level}:\n{coins}{coin}',
+  buildCost: '{name}:\n{coins}{coin}',
+  learnCost: '{potion}:\n{coins}{coin}',
+  hireCost: 'Anheuern:\n{coins}{coin}',
 
   // Feedback over the doctor
   gained: '+ {item}',
@@ -126,15 +125,14 @@ const de: Translation<typeof en> = {
   cauldronBuilt: 'Kessel gebaut!',
   fieldPlanted: 'Feld bepflanzt!',
   shadePlanted: 'Schattengarten bepflanzt!',
-  coinsGained: '+{n} Münzen',
+  coinsGained: '+{n}{coin}',
   wagonWants: 'Der Wagen will {crate}',
-  crateSold: 'Kiste verkauft: +{n} Münzen',
+  crateSold: 'Kiste verkauft: +{n}{coin}',
   marketPick: 'Markt: {item}',
-  bought: '+ {item} -{coins}\u00a0M',
-  sold: '- {item} +{coins}\u00a0M',
+  bought: '+ {item} -{coins}{coin}',
+  sold: '- {item} +{coins}{coin}',
 
   // Top bar and panels
-  coinsHud: 'Münzen: {n}',
   hands: 'Hände',
   hint: 'Gehen: WASD / tippen\nErnten: an reifen Pflanzen vorbei',
   settings: 'Einstellungen',
@@ -147,10 +145,10 @@ const de: Translation<typeof en> = {
   tapToClose: 'Zum Schließen tippen',
   confirmNewGame: 'Ein neues Spiel beginnen? Dein gespeicherter Fortschritt geht verloren.',
   awayLead: 'Während du weg warst:',
-  awaySum: { one: '+{coins} Münzen, {n} Trank', other: '+{coins} Münzen, {n} Tränke' },
+  awaySum: { one: '+{coins}{coin}, {n} Trank', other: '+{coins}{coin}, {n} Tränke' },
 
   // Customers
-  tip: 'Trinkgeld +{n}',
+  tip: 'Trinkgeld +{n}{coin}',
   noTip: 'kein Trinkgeld',
 
   // Contract card
@@ -185,13 +183,13 @@ const de: Translation<typeof en> = {
   rivalStreak: '{streak}/{days} Tage übertroffen, heute {sold}/{sales}',
   rivalClosed: 'Für immer geschlossen',
   streetIsYours: 'Die Straße gehört dir',
-  wagonBuys: 'Wagen kauft {crate} zu je {pay}\u00a0M',
+  wagonBuys: 'Wagen kauft {crate} zu je {pay}{coin}',
   wagonWaiting: 'Im Regal {have}/{crate}, noch {s} s',
   wagonReady: 'Im Regal {have}/{crate}: zum Verkauf tippen, noch {s} s',
 
   // Herb market
-  buyHerb: 'Kaufen: {item} {coins}\u00a0M',
-  sellHerb: 'Verkaufen: {item} {coins}\u00a0M',
+  buyHerb: 'Kaufen: {item} {coins}{coin}',
+  sellHerb: 'Verkaufen: {item} {coins}{coin}',
   sellHerbs: 'Kräuter verkaufen',
 
   // Town card
@@ -204,18 +202,18 @@ const de: Translation<typeof en> = {
   dayWeather: 'Tag {day}, {weather}',
   marketDayWeather: 'Markttag, {weather}',
   blightIn: 'Fäule im {garden}! Beseitige sie mit der Sichel',
-  crowdBonus: 'Marktandrang bedient: +{n} Münzen!',
+  crowdBonus: 'Marktandrang bedient: +{n}{coin}!',
   crowdWalkedOff: 'Kundschaft ging: kein Marktbonus',
   crowdComes: 'Markttag: ein Andrang kommt!',
   crowdNoRoom: 'Markttag: kein Platz für den Andrang',
 
   // Shelves and the Recipes panel
   rivalCut: 'Konkurrenz {n}%',
-  coinPrice: '{n}\u00a0M',
+  coinPrice: '{n}{coin}',
   learnAtStudy: 'Studieren',
 };
 
 /** Texts that read the same in German. */
-export const keepEnglish: (keyof typeof en)[] = ['mild', 'land', 'fairSign', 'fairSet', 'gained', 'gainedFine', 'handedOver'];
+export const keepEnglish: (keyof typeof en)[] = ['mild', 'land', 'fairSign', 'fairSet', 'gained', 'gainedFine', 'handedOver', 'coinsGained', 'coinPrice', 'bought', 'sold'];
 
 export default de;
