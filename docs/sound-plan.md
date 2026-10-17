@@ -661,6 +661,11 @@ with echo. The tempo creeps up each tier.
 Notes:
 - Ambience: wind in the endless sky that follows the gust strength.
 
+**Done** (see `games/shrine-stack/AGENTS.md`, Sound). Parts: `calm`, `gilded`, `sky`, `break`
+(patron pick and breaks), stings `crown` and `fall`. Differs from the plan: the tempo stays at 80
+(the engine plays a song at one tempo), and the wind is a one-shot `gust` whenever a new stone gets
+a gust rather than a steady ambience.
+
 ### Space Wars
 Five-faction real-time strategy on a star map; pulpy 1970s sci-fi.
 
