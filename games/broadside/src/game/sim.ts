@@ -182,8 +182,10 @@ export function tick(s: GameState, dt: number) {
     if (s.wave === HAVEN_WAVE && !s.won) {
       s.won = true;
       s.phase = 'won';
-      s.medals = medalsFor(s.wave, s.bestBefore) + WIN_MEDALS;
-      s.medalsBanked = s.medals;
+      // Bank only the waves' medals: `playerSunk` subtracts this from its own wave count, which
+      // never includes `WIN_MEDALS`.
+      s.medalsBanked = medalsFor(s.wave, s.bestBefore);
+      s.medals = s.medalsBanked + WIN_MEDALS;
     }
   }
 }
@@ -897,6 +899,8 @@ function board(s: GameState, dt: number) {
     s.escorts.push(e);
     s.taken++;
     s.wavePrizes++;
+    // A prize is out of the fight as surely as a wreck, so the `ketch` bounty counts her too.
+    s.waveSunk.push(e.kind as EnemyKind);
     effect(s, 'prize', e.x, e.y, 1400);
   }
 }

@@ -142,7 +142,7 @@ On a phone, one thumb can hold a wheel while the other holds a fire control.
    | Never run aground | Your ship touches no beach this wave |
    | Beat the wave within N seconds | The last ship sinks within 30 seconds plus 8 a ship |
    | Board a ship and take her as a prize | A prize is taken this wave |
-   | Sink the mortar ketch before any brig | Only on waves with both; a ketch goes down before the first brig does |
+   | Sink the mortar ketch before any brig | Only on waves with both; a ketch goes down or is taken as a prize before the first brig is |
 
 15. **Crew.** Your ship carries sailors (40 on the Frigate), shown at the top; with fewer than a
    full crew every reload is slower in the same share, down to a third of the pace. Grapeshot

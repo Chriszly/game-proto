@@ -31,17 +31,17 @@ and the player chooses a ship.
   the player in range, the player's and prizes' balls and any blast batter them in `moveBalls`
   and `blast`, and `raze` pays `fortBounty(wave)`; the wave is beaten without them, and `setSail`
   clears them. The haven: when wave `HAVEN_WAVE` is beaten and `won` is false, `tick` sets `won`,
-  phase `won` and `medals` (`medalsFor` plus `WIN_MEDALS`, remembered in `medalsBanked` so
-  `playerSunk` awards only the rest), and the end card's "Sail on" (`sailOn`) goes to the harbor.
+  phase `won` and `medals` (`medalsFor` plus `WIN_MEDALS`; `medalsBanked` remembers only the
+  `medalsFor` part, so `playerSunk` awards only the waves beaten since), and the end card's "Sail on" (`sailOn`) goes to the harbor.
   Ships (`src/game/hulls.ts`): `GameState.hull` picks the `HULLS` row `stats()` starts from (the
   frigate is the old `PLAYER`), `unlocked` by best wave, chosen on the end card and passed to
   `newRun`; a `mortarSide` (the Bomb Ketch's starboard) makes `firePlayer` `lob` a shell to where
   the arc reaches instead, `loadShot` refuses that side and the harbor shows it as a mortar.
   Bounties (`src/game/bounties.ts`): `setSail` draws `GameState.bounty` from wave
   `FIRST_BOUNTY_WAVE` (2), the wave's trackers (`waveLoot`, `waveDamage`, `waveAground`,
-  `wavePrizes`, `waveMs`, `waveSunk`) feed `BOUNTIES[id].met`, and `reachHarbor` pays
-  `bountyPay` (half `waveLoot`) into `bountyPaid`. Crew (`Ship.crew`/`maxCrew`): `crewPace`
-  scales every reload step (`reloadStep`, `aimBroadsides`), grapeshot pellets `kill`
+  `wavePrizes`, `waveMs`, `waveSunk`, which `sink` and `board` both add to) feed
+  `BOUNTIES[id].met`, and `reachHarbor` pays `bountyPay` (half `waveLoot`) into `bountyPaid`.
+  Crew (`Ship.crew`/`maxCrew`): `crewPace` scales every reload step (`reloadStep`, `aimBroadsides`), grapeshot pellets `kill`
   `GRAPE_KILLS` and blasts `BLAST_KILLS`, ships with `grape` in `ENEMIES` fire grapeshot within
   `GRAPE_RANGE`, `board` needs `canBoard` and moves `prizeCrew` sailors across (`crewBack` on
   scuttling or selling), and `hire` at the harbor buys `HIRE.crew` for `HIRE.cost`. Fireships (`role: 'fireship'`) sail straight at the player and blow up on

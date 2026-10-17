@@ -260,10 +260,11 @@ export interface GameState {
   waveAground: number;
   wavePrizes: number;
   waveMs: number;
+  /** The kinds sunk or taken as prizes this wave, in order. */
   waveSunk: EnemyKind[];
   /** Whether the pirate haven has been razed this run; the waves go on after. */
   won: boolean;
-  /** Medals already banked this run (at the haven), so sinking later awards only the rest. */
+  /** The waves' medals already banked this run at the haven (without `WIN_MEDALS`), so sinking later awards only the rest. */
   medalsBanked: number;
   bestWave: number;
   /** The best wave before this run, which a run must beat for the Admiralty's bonus medals. */
