@@ -5,13 +5,14 @@ import { cardIcon, flaskIcon, relicIcon } from '../art/icons';
 import { BLUE, GOLD, INK, PURPLE, RED, STONE } from '../art/palette';
 import { artImage } from '../art/paint';
 import { backdrop } from '../art/scenery';
-import { canBeTempered, card, describe, tempered, type CardId } from '../game/cards';
+import { canBeTempered, card, cardName, describePower, tempered, type CardId } from '../game/cards';
 import { depthText } from '../game/depth';
 import { ENEMIES, type StatusKind } from '../game/enemies';
 import { FLASKS, FLASK_SLOTS } from '../game/flasks';
 import { HEROES } from '../game/heroes';
 import { COLUMNS, ENTRANCE, reachable } from '../game/map';
 import { RELICS, type RelicId } from '../game/relics';
+import { t, type TextKey } from '../i18n';
 import {
   actName,
   buyCard,
@@ -151,16 +152,12 @@ interface Foe {
 /** What the card picker is for: burning or tempering at a campfire, or the merchant's removal. */
 type PickMode = 'burn' | 'temper' | 'sell';
 
-const PICK_TITLES: Record<PickMode, string> = {
-  burn: 'Burn a card: it leaves your deck for good',
-  temper: 'Temper a card: it gets better for good',
-  sell: 'The merchant takes one card off your hands',
-};
+const PICK_TITLES: Record<PickMode, TextKey> = { burn: 'burnPick', temper: 'temperPick', sell: 'sellPick' };
+
+/** A flask's name and rules in the hub's language. */
+const flaskTip = (id: keyof typeof FLASKS) => ({ name: t(FLASKS[id].name), text: t(FLASKS[id].text, { n: FLASKS[id].n }) });
 
 const POP_COLORS = { damage: '#f4a08a', block: '#8ab8e8', heal: '#8cd060', status: '#c49ae8' };
-
-/** A power's rules, without the "Power." lead-in its card face carries. */
-const describePower = (id: CardId) => describe(id).replace(/^Power\. /, '');
 
 export class GameScene extends Phaser.Scene {
   /** The run being played; read by the playthrough test. */
@@ -364,7 +361,7 @@ export class GameScene extends Phaser.Scene {
       pos = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t - Math.abs(Math.sin(t * Math.PI * 4)) * 4 };
     }
     this.token.setTexture(heroTexture(s.hero, true)).setPosition(pos.x, pos.y - (s.walk ? 0 : ROOM_RADIUS - 6));
-    const hint = s.at === null ? 'Tap a room to enter the dungeon' : 'Tap a lit room to go on';
+    const hint = t(s.at === null ? 'enterHint' : 'goOnHint');
     this.mapHint.setText(s.phase === 'map' ? s.notice || hint : '');
   }
 
@@ -384,7 +381,7 @@ export class GameScene extends Phaser.Scene {
     this.energyText = this.add.text(ENERGY_ORB.x, ENERGY_ORB.y, '', textStyle(24)).setOrigin(0.5);
     this.drawText = this.add.text(ENERGY_ORB.x, PILES_Y, '', textStyle(14, '#d8c7a6')).setOrigin(0.5);
     this.discardText = this.add.text(END_TURN.x, PILES_Y, '', textStyle(14, '#d8c7a6')).setOrigin(0.5);
-    this.endTurnButton = makeButton(this, END_TURN.x, END_TURN.y, 'End turn', () => endTurn(this.state), END_TURN.w);
+    this.endTurnButton = makeButton(this, END_TURN.x, END_TURN.y, t('endTurn'), () => endTurn(this.state), END_TURN.w);
     this.turnBanner = this.add.text(VIEW.w / 2, 150, '', textStyle(30, '#e6c766')).setOrigin(0.5);
     this.flaskLayer = this.add.container(0, 0);
     this.powerLayer = this.add.container(0, 0);
@@ -453,11 +450,11 @@ export class GameScene extends Phaser.Scene {
     this.drawFlasks();
     this.drawPowers();
     this.energyText.setText(f ? `${f.energy}/${ENERGY}` : '');
-    this.drawText.setText(f ? `Draw pile ${f.draw.length}` : '');
-    this.discardText.setText(f ? `Discard pile ${f.discard.length}` : '');
+    this.drawText.setText(f ? t('drawPile', { n: f.draw.length }) : '');
+    this.discardText.setText(f ? t('discardPile', { n: f.discard.length }) : '');
     this.endTurnButton.setVisible(s.phase === 'player').setAlpha(s.phase === 'player' ? 1 : 0.4);
     const opening = f && f.turn === 1 && s.phase === 'player' && f.discard.length === 0 && f.hand.length === HAND_SIZE;
-    const banner = s.phase === 'enemy' ? 'Foes’ turn' : s.phase === 'cleared' ? 'Victory!' : opening ? 'Your turn' : '';
+    const banner = s.phase === 'enemy' ? t('foesTurn') : s.phase === 'cleared' ? t('victory') : opening ? t('yourTurn') : '';
     this.turnBanner.setText(banner);
   }
 
@@ -484,7 +481,7 @@ export class GameScene extends Phaser.Scene {
           : intent.kind === 'buff'
             ? `+${intent.strength}`
             : intent.kind === 'curse'
-              ? card(intent.curse).name
+              ? cardName(intent.curse)
               : `${intent.amount}`;
     const color = { attack: '#f4a08a', block: '#8ab8e8', buff: '#e6c766', debuff: '#c49ae8', curse: '#9a6ac0' }[intent.kind];
     foe.intentText.setText(text).setPosition(x + 2, y).setColor(color);
@@ -539,9 +536,9 @@ export class GameScene extends Phaser.Scene {
       this.flaskLayer.add(pic);
       ring
         .setInteractive({ useHandCursor: usable })
-        .on('pointerover', () => this.showTip(`${FLASKS[id].name}: ${FLASKS[id].text}${usable ? ' Tap to drink it, for no energy.' : ''}`))
+        .on('pointerover', () => this.showTip(usable ? t('drinkTip', flaskTip(id)) : `${flaskTip(id).name}: ${flaskTip(id).text}`))
         .on('pointerdown', () => {
-          this.showTip(`${FLASKS[id].name}: ${FLASKS[id].text}`);
+          this.showTip(`${flaskTip(id).name}: ${flaskTip(id).text}`);
           if (canUseFlask(this.state, i)) useFlask(this.state, i);
         });
     }
@@ -559,7 +556,7 @@ export class GameScene extends Phaser.Scene {
       const x = POWERS.x + i * POWERS.gap;
       const ring = this.add.circle(x, POWERS.y, POWERS.r, PURPLE.mid).setStrokeStyle(2, PURPLE.light);
       const pic = artImage(this, x, POWERS.y, cardIcon(card(id).icon), 0.5);
-      const tip = () => this.showTip(`${card(id).name} (in play): ${describePower(id)}`);
+      const tip = () => this.showTip(t('powerTip', { name: cardName(id), text: describePower(id) }));
       ring.setInteractive({ useHandCursor: true }).on('pointerover', tip).on('pointerdown', tip);
       this.powerLayer.add([ring, pic]);
     });
@@ -570,7 +567,7 @@ export class GameScene extends Phaser.Scene {
   private createReward() {
     const dim = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x0e0a08, 0.7).setInteractive();
     this.rewardTitle = this.add.text(VIEW.w / 2, 100, '', textStyle(28, '#e6c766')).setOrigin(0.5);
-    const skip = makeButton(this, SKIP.x, SKIP.y, 'Skip', () => takeReward(this.state, null));
+    const skip = makeButton(this, SKIP.x, SKIP.y, t('skip'), () => takeReward(this.state, null));
     this.rewardLayer = this.add.container(0, 0, [dim, this.rewardTitle, skip]).setDepth(UI_DEPTH + 10).setVisible(false);
   }
 
@@ -587,15 +584,9 @@ export class GameScene extends Phaser.Scene {
     this.rewards = [];
     if (!choices) return;
     const kind = s.rooms[s.at!]?.kind;
-    const gold = s.goldWon ? `+${s.goldWon} gold${s.flaskWon ? ` and a ${FLASKS[s.flaskWon].name}` : ''}. ` : '';
+    const gold = !s.goldWon ? '' : s.flaskWon ? t('goldAndFlask', { n: s.goldWon, flask: t(FLASKS[s.flaskWon].name) }) : t('goldWon', { n: s.goldWon });
     this.rewardTitle.setText(
-      kind === 'treasure'
-        ? 'Treasure! Take a rare card'
-        : kind === 'event'
-          ? 'The altar drinks. Take a rare card'
-          : s.rewardRare
-            ? `Elite felled! ${gold}Take a rare card`
-            : `${gold}Choose a card for your deck`,
+      kind === 'treasure' ? t('treasureReward') : kind === 'event' ? t('altarReward') : t(s.rewardRare ? 'eliteReward' : 'cardReward', { gold }),
     );
     choices.forEach((id, i) => {
       const x = REWARD.xs[i];
@@ -612,8 +603,8 @@ export class GameScene extends Phaser.Scene {
 
   private createShop() {
     const dim = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x0e0a08, 0.78).setInteractive();
-    const title = this.add.text(VIEW.w / 2, 72, 'The Merchant', textStyle(28, '#e6c766')).setOrigin(0.5);
-    const leave = makeButton(this, SHOP.leave.x, SHOP.leave.y, 'Leave', () => leaveShop(this.state));
+    const title = this.add.text(VIEW.w / 2, 72, t('merchant'), textStyle(28, '#e6c766')).setOrigin(0.5);
+    const leave = makeButton(this, SHOP.leave.x, SHOP.leave.y, t('leave'), () => leaveShop(this.state));
     this.shopLayer = this.add.container(0, 0, [dim, title, leave]).setDepth(UI_DEPTH + 10).setVisible(false);
   }
 
@@ -636,7 +627,7 @@ export class GameScene extends Phaser.Scene {
     const price = (x: number, y: number, amount: number, sold: boolean) => {
       const coin = artImage(this, x - 22, y, 'coin');
       const text = this.add
-        .text(x - 6, y, sold ? 'Sold' : String(amount), textStyle(17, sold ? '#8a8070' : s.gold >= amount ? '#e6c766' : '#e0584f'))
+        .text(x - 6, y, sold ? t('sold') : String(amount), textStyle(17, sold ? '#8a8070' : s.gold >= amount ? '#e6c766' : '#e0584f'))
         .setOrigin(0, 0.5);
       coin.setVisible(!sold);
       if (sold) text.setX(x).setOrigin(0.5);
@@ -669,9 +660,9 @@ export class GameScene extends Phaser.Scene {
     };
     shop.relics.forEach((w, i) => {
       const r = RELICS[w.id];
-      box(SHOP.box.ys[i], relicIcon(w.id, true), r.name, r.text, w.price, w.sold, !w.sold && s.gold >= w.price, () => buyRelic(this.state, i));
+      box(SHOP.box.ys[i], relicIcon(w.id, true), t(r.name), t(r.text), w.price, w.sold, !w.sold && s.gold >= w.price, () => buyRelic(this.state, i));
     });
-    box(SHOP.box.ys[2], 'room-rest', 'Remove a card', 'Take one card out of your deck for good.', shop.removePrice, shop.removed, canBuyRemoval(s), () => {
+    box(SHOP.box.ys[2], 'room-rest', t('removeTitle'), t('removeText'), shop.removePrice, shop.removed, canBuyRemoval(s), () => {
       if (canBuyRemoval(this.state)) this.picking = 'sell';
     });
     // Flasks under the cards, with how many slots are free.
@@ -682,13 +673,13 @@ export class GameScene extends Phaser.Scene {
       const fl = FLASKS[w.id];
       const bg = this.add.rectangle(x, y, bw, h, 0x2a2632, w.sold ? 0.5 : 1).setStrokeStyle(3, can ? GOLD.mid : 0x5a5366);
       const pic = artImage(this, x - bw / 2 + 24, y, flaskIcon(w.id)).setAlpha(w.sold ? 0.3 : 1);
-      const title = this.add.text(x - bw / 2 + 46, y - 24, fl.name, textStyle(13, '#f3e9d2'));
-      const rules = this.add.text(x - bw / 2 + 46, y - 4, fl.text, { fontFamily: FONT, fontSize: '12px', color: '#d8c7a6', wordWrap: { width: bw - 56 } }).setAlpha(w.sold ? 0.5 : 1);
+      const title = this.add.text(x - bw / 2 + 46, y - 24, t(fl.name), textStyle(13, '#f3e9d2'));
+      const rules = this.add.text(x - bw / 2 + 46, y - 4, t(fl.text, { n: fl.n }), { fontFamily: FONT, fontSize: '12px', color: '#d8c7a6', wordWrap: { width: bw - 56 } }).setAlpha(w.sold ? 0.5 : 1);
       ware(bg, pic, title, rules);
       price(x + bw / 2 - 20, y - 14, w.price, w.sold);
       if (can) bg.setInteractive({ useHandCursor: true }).on('pointerdown', () => buyFlask(this.state, i));
     });
-    const slots = this.add.text(SHOP.flasks.xs[0] - SHOP.flasks.w / 2, SHOP.flasks.y - SHOP.flasks.h / 2 - 18, `Flasks: ${s.flasks.length} of ${FLASK_SLOTS} slots held`, textStyle(14, '#d8c7a6'));
+    const slots = this.add.text(SHOP.flasks.xs[0] - SHOP.flasks.w / 2, SHOP.flasks.y - SHOP.flasks.h / 2 - 18, t('flaskSlots', { n: s.flasks.length, slots: FLASK_SLOTS }), textStyle(14, '#d8c7a6'));
     ware(slots);
   }
 
@@ -699,9 +690,9 @@ export class GameScene extends Phaser.Scene {
     this.panelText = this.add
       .text(VIEW.w / 2, VIEW.h / 2 - 26, '', { fontFamily: FONT, fontSize: '16px', color: '#f1e3c6', align: 'center', wordWrap: { width: 520 } })
       .setOrigin(0.5);
-    this.panelButton = makeButton(this, PANEL_BUTTON.x, PANEL_BUTTON.y, 'Continue', () => this.panelAction());
-    this.temperButton = makeButton(this, PANEL_BUTTON.x, PANEL_BUTTON.y, 'Temper a card', () => canTemper(this.state) && (this.picking = 'temper'), REST_BUTTONS.w);
-    this.removeButton = makeButton(this, PANEL_BUTTON.x + REST_BUTTONS.dx, PANEL_BUTTON.y, 'Remove a card', () => canRemove(this.state) && (this.picking = 'burn'), REST_BUTTONS.w);
+    this.panelButton = makeButton(this, PANEL_BUTTON.x, PANEL_BUTTON.y, t('continue'), () => this.panelAction());
+    this.temperButton = makeButton(this, PANEL_BUTTON.x, PANEL_BUTTON.y, t('temperButton'), () => canTemper(this.state) && (this.picking = 'temper'), REST_BUTTONS.w);
+    this.removeButton = makeButton(this, PANEL_BUTTON.x + REST_BUTTONS.dx, PANEL_BUTTON.y, t('removeButton'), () => canRemove(this.state) && (this.picking = 'burn'), REST_BUTTONS.w);
     // The two choices of a mystery room double as the hero choice before the first room.
     this.choiceButtons = [0, 1].map((i) =>
       makeButton(this, VIEW.w / 2, EVENT_BUTTONS.y + i * EVENT_BUTTONS.gap, '', () => (this.state.phase === 'hero' ? chooseHero(this.state, i === 0 ? 'knight' : 'hunter') : chooseEvent(this.state, i)), EVENT_BUTTONS.w),
@@ -734,16 +725,16 @@ export class GameScene extends Phaser.Scene {
     this.removeButton.setVisible(camp).setAlpha(canRemove(s) ? 1 : 0.45);
     for (const pic of this.heroPics) pic.setVisible(heroes);
     const ladder = heroes && s.bestDepth > 0;
-    this.depthText.setVisible(ladder).setText(`Depth ${s.depth}`);
+    this.depthText.setVisible(ladder).setText(t('depth', { n: s.depth }));
     this.depthButtons.forEach((b, i) => b.setVisible(ladder).setAlpha((i === 0 ? s.depth > 0 : s.depth < s.bestDepth) ? 1 : 0.4));
     this.panelText.setWordWrapWidth(heroes ? 300 : 520).setY(heroes ? HERO_PANEL.rulesY : VIEW.h / 2 - 26);
     if (heroes) {
-      this.panelTitle.setText('Choose your hero').setColor('#e6c766');
-      this.panelText.setText(ladder ? depthText(s.depth) : s.bestDepth > 0 ? '' : 'Beat the Hollow Queen to open the depths below.');
+      this.panelTitle.setText(t('chooseHero')).setColor('#e6c766');
+      this.panelText.setText(ladder ? depthText(s.depth) : s.bestDepth > 0 ? '' : t('openDepths'));
       this.choiceButtons.forEach((b, i) => {
         const h = HEROES[i === 0 ? 'knight' : 'hunter'];
         b.setVisible(true).setAlpha(1);
-        (b.list[1] as Phaser.GameObjects.Text).setText(`${h.name}: ${h.text}`);
+        (b.list[1] as Phaser.GameObjects.Text).setText(`${t(h.name)}: ${t(h.text, { hp: h.hp })}`);
       });
       return;
     }
@@ -752,35 +743,33 @@ export class GameScene extends Phaser.Scene {
     this.choiceButtons.forEach((b, i) => {
       b.setVisible(!!ev);
       if (!ev) return;
-      (b.list[1] as Phaser.GameObjects.Text).setText(ev.choices[i]);
+      (b.list[1] as Phaser.GameObjects.Text).setText(t(ev.choices[i], { n: ev.amounts[i] }));
       b.setAlpha(canChoose(s, i) ? 1 : 0.45);
     });
     if (ev) {
-      this.panelTitle.setText(ev.title).setColor('#c49ae8');
-      this.panelText.setText(ev.text);
+      this.panelTitle.setText(t(ev.title)).setColor('#c49ae8');
+      this.panelText.setText(t(ev.text));
     } else if (camp) {
-      this.panelTitle.setText('A quiet campfire').setColor('#f09a3a');
-      this.panelText.setText(
-        `Rest by the fire to heal ${restHeal(s)}, temper a card to make it better, or burn one you no longer want.\nHealth ${s.hp} of ${s.maxHp}, deck of ${s.deck.length} cards.`,
-      );
-      caption.setText(`Rest (+${restHeal(s)})`);
+      this.panelTitle.setText(t('campfire')).setColor('#f09a3a');
+      this.panelText.setText(t('campfireText', { heal: restHeal(s), hp: s.hp, max: s.maxHp, deck: s.deck.length }));
+      caption.setText(t('restButton', { n: restHeal(s) }));
       this.panelAction = () => rest(this.state);
     } else if (s.phase === 'descend') {
-      this.panelTitle.setText('The Bone King falls!').setColor('#e6c766');
-      this.panelText.setText(`${s.notice}\nA stair winds down into the dark.`);
-      caption.setText('Descend');
+      this.panelTitle.setText(t('boneKingFalls')).setColor('#e6c766');
+      this.panelText.setText(t('stairDown', { notice: s.notice }));
+      caption.setText(t('descend'));
       this.panelAction = () => descend(this.state);
     } else {
       const won = s.phase === 'won';
       const where = s.at === null ? 1 : s.rooms[s.at].col + 1;
-      this.panelTitle.setText(won ? 'The Hollow Queen falls!' : 'You have fallen').setColor(won ? '#e6c766' : '#e0584f');
-      const deep = s.depth > 0 ? ` at depth ${s.depth}` : '';
+      this.panelTitle.setText(t(won ? 'hollowQueenFalls' : 'fallen')).setColor(won ? '#e6c766' : '#e0584f');
+      const deep = s.depth > 0 ? t('atDepth', { n: s.depth }) : '';
       this.panelText.setText(
         won
-          ? `You cleared the dungeon${deep} with ${s.hp} health left, ${s.gold} gold and a deck of ${s.deck.length} cards.\nDepth ${s.depth + 1} is open: ${depthText(s.depth + 1)}`
-          : `You fell in ${actName(s)}${deep}, room ${where} of ${COLUMNS}, with a deck of ${s.deck.length} cards.`,
+          ? t('wonText', { deep, hp: s.hp, gold: s.gold, deck: s.deck.length, next: s.depth + 1, rules: depthText(s.depth + 1) })
+          : t('fellText', { act: actName(s), deep, room: where, rooms: COLUMNS, deck: s.deck.length }),
       );
-      caption.setText('Delve again');
+      caption.setText(t('delveAgain'));
       this.panelAction = () => this.scene.restart();
     }
   }
@@ -788,7 +777,7 @@ export class GameScene extends Phaser.Scene {
   private createPicker() {
     const dim = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x0e0a08, 0.85).setInteractive();
     this.pickTitle = this.add.text(VIEW.w / 2, 80, '', textStyle(24, '#f09a3a')).setOrigin(0.5);
-    const back = makeButton(this, PICKER.back.x, PICKER.back.y, 'Back', () => (this.picking = null));
+    const back = makeButton(this, PICKER.back.x, PICKER.back.y, t('back'), () => (this.picking = null));
     this.pickLayer = this.add.container(0, 0, [dim, this.pickTitle, back]).setDepth(UI_DEPTH + 21).setVisible(false);
   }
 
@@ -808,7 +797,7 @@ export class GameScene extends Phaser.Scene {
       if (child.getData('card')) child.destroy();
     });
     if (!mode) return;
-    this.pickTitle.setText(PICK_TITLES[mode]).setColor(mode === 'temper' ? '#a8e070' : '#f09a3a');
+    this.pickTitle.setText(t(PICK_TITLES[mode])).setColor(mode === 'temper' ? '#a8e070' : '#f09a3a');
     const L = ids.length > PICKER.tight.perRow * 3 ? PICKER.packed : ids.length > PICKER.roomy.perRow * 2 ? PICKER.tight : PICKER.roomy;
     const perRow = Math.min(ids.length, L.perRow);
     ids.forEach((id, i) => {
@@ -880,7 +869,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private relicTip(id: RelicId) {
-    this.showTip(`${RELICS[id].name}: ${RELICS[id].text}`);
+    this.showTip(`${t(RELICS[id].name)}: ${t(RELICS[id].text)}`);
   }
 
   private drawHud() {
@@ -889,7 +878,7 @@ export class GameScene extends Phaser.Scene {
     g.fillStyle(0x1e1a24, 0.92).fillRect(0, 0, VIEW.w, HUD_HEIGHT);
     g.fillStyle(0x5a5366).fillRect(0, HUD_HEIGHT - 3, VIEW.w, 3);
     this.hpText.setText(`${s.hp}/${s.maxHp}`);
-    this.deckText.setText(`Deck ${s.deck.length}`);
+    this.deckText.setText(t('deck', { n: s.deck.length }));
     this.goldText.setText(String(s.gold));
     const relicKey = s.relics.join();
     if (relicKey !== this.relicKey) {
@@ -904,10 +893,10 @@ export class GameScene extends Phaser.Scene {
     this.tip.setVisible(this.tipMs > 0);
     const room = s.at === null ? null : s.rooms[s.at];
     const depth = room ? room.col + 1 : 0;
-    const names: Record<string, string> = { rest: 'Campfire', treasure: 'Treasure', shop: 'Merchant', event: 'Mystery' };
-    const name = room?.foes ? room.foes.map((k) => ENEMIES[k].name).join(' and ') : room ? names[room.kind] : 'Entrance';
+    const names: Record<string, TextKey> = { rest: 'campfireRoom', treasure: 'treasureRoom', shop: 'merchantRoom', event: 'mysteryRoom' };
+    const name = room?.foes ? room.foes.map((k) => t(ENEMIES[k].name)).reduce((a, b) => t('and', { a, b })) : t(room ? names[room.kind] : 'entrance');
     const where = s.phase === 'map' || s.phase === 'walk' || s.phase === 'hero' ? '' : name;
-    const deep = s.depth > 0 ? `Depth ${s.depth}   ` : '';
-    this.roomText.setText(`${deep}${actName(s)}   Room ${depth} of ${COLUMNS}   ${where}`.trimEnd());
+    const deep = s.depth > 0 ? `${t('depth', { n: s.depth })}   ` : '';
+    this.roomText.setText(`${deep}${actName(s)}   ${t('roomOf', { n: depth, rooms: COLUMNS })}   ${where}`.trimEnd());
   }
 }
