@@ -105,7 +105,7 @@ export const GOLD_PER_SEC = 1.5;
 /** Champion kills pay gold and XP to the killer. */
 export const KILL = { gold: 300, xp: 200 };
 /** XP needed to reach each level: index 0 is level 1. */
-export const XP_FOR_LEVEL = [0, 280, 660, 1140, 1720];
+export const XP_FOR_LEVEL = [0, 280, 660, 1140, 1720, 2600, 3700, 5000];
 export const MAX_LEVEL = XP_FOR_LEVEL.length;
 /** Minion and camp XP reaches champions within this distance. */
 export const XP_RANGE = 900;
@@ -866,100 +866,131 @@ export interface UpgradeDef {
   count?: number;
 }
 
+/** The levels that offer an upgrade pair; the others past 1 rank up the R (`ULT_RANK_LEVELS`). */
+export const UPGRADE_LEVELS = [2, 3, 4, 5, 7];
+/** Levels 6 and 8 rank up the R: each rank adds `ULT_RANK`'s percents to its numbers. */
+export const ULT_RANK_LEVELS = [6, 8];
+export const ULT_RANK = { damage: 20, heal: 20, shield: 20, cd: -15 };
+
+/** How many ranks the R has at a level (0 to 2). */
+export const ultRank = (level: number) => ULT_RANK_LEVELS.filter((l) => level >= l).length;
+
 const up = (id: string, key: AbilityKey, name: string, desc: string, fx: Partial<UpgradeDef>): UpgradeDef => ({ ...fx, id, key, name, desc });
 
-/** Per champion, the two upgrades offered at levels 2, 3, 4 and 5 (index 0 is level 2). */
+/** Per champion, the two upgrades offered at each of `UPGRADE_LEVELS`, in order. */
 export const UPGRADES: Record<string, [UpgradeDef, UpgradeDef][]> = {
   warden: [
     [up('wide-slam', 'Q', 'Wide Gatefall', 'Gatefall radius +30%', { radius: 30 }), up('stun-slam', 'Q', 'Stun Gatefall', 'Gatefall stuns for 0.6s', { stun: 600 })],
     [up('iron-bulwark', 'W', 'Iron Oath', 'Oathguard shield +40%', { shield: 40 }), up('long-charge', 'E', 'Long Rush', 'Gate Rush range +30%', { range: 30 })],
     [up('titan-stand', 'R', 'Iron Gate', 'Last Gate damage +25%', { damage: 25 }), up('quick-slam', 'Q', 'Quick Gatefall', 'Gatefall cooldown -25%', { cd: -25 })],
     [up('crushing-charge', 'E', 'Crushing Rush', 'Gate Rush damage +40%', { damage: 40 }), up('wide-bulwark', 'W', 'Wide Oath', 'Oathguard radius +40%', { radius: 40 })],
+    [up('quick-oath', 'W', 'Unbroken Oath', 'Oathguard cooldown -30%', { cd: -30 }), up('gatebreaker', 'E', 'Gatebreaker', 'Gate Rush stuns 0.4s longer', { stun: 400 })],
   ],
   blade: [
     [up('deep-strike', 'Q', 'Deep Cut', 'Quick Cut range +30%', { range: 30 }), up('keen-strike', 'Q', 'Keen Cut', 'Quick Cut damage +30%', { damage: 30 })],
     [up('wide-whirl', 'W', 'Wide Wind', 'Cutwind radius +30%', { radius: 30 }), up('quick-step', 'E', 'Quick Step', 'Shadow Step cooldown -30%', { cd: -30 })],
     [up('brutal-execute', 'R', 'Final Word', 'Last Word damage +25%', { damage: 25 }), up('crippling-whirl', 'W', 'Crippling Wind', 'Cutwind slows for 1.2s', { slow: 1200 })],
     [up('swift-strike', 'Q', 'Swift Cut', 'Quick Cut cooldown -25%', { cd: -25 }), up('long-step', 'E', 'Long Step', 'Shadow Step range +30%', { range: 30 })],
+    [up('debt-collected', 'R', 'Debt Collected', 'Last Word cooldown -30%', { cd: -30 }), up('twin-wind', 'W', 'Twin Wind', 'Cutwind damage +40%', { damage: 40 })],
   ],
   archer: [
     [up('heavy-arrow', 'Q', 'Heavy Seeker', 'Heartseeker damage +30%', { damage: 30 }), up('wide-volley', 'W', 'Wide Feathers', 'Featherfall fires 2 more arrows', { count: 2 })],
     [up('long-roll', 'E', 'Long Tumble', 'Tumble range +40%', { range: 40 }), up('quick-arrow', 'Q', 'Quick Seeker', 'Heartseeker cooldown -25%', { cd: -25 })],
     [up('wide-rain', 'R', 'Wide Hail', 'Hailstorm radius +30%', { radius: 30 }), up('hard-volley', 'W', 'Hard Feathers', 'Featherfall damage +30%', { damage: 30 })],
     [up('pinning-arrow', 'Q', 'Pinning Seeker', 'Heartseeker stuns for 0.5s', { stun: 500 }), up('heavy-rain', 'R', 'Heavy Hail', 'Hailstorm damage +25%', { damage: 25 })],
+    [up('long-hail', 'R', 'Long Hail', 'Hailstorm lasts 40% longer', { ms: 40 }), up('quick-tumble', 'E', 'Quick Tumble', 'Tumble cooldown -30%', { cd: -30 })],
   ],
   mage: [
     [up('big-fireball', 'Q', 'Big Riftflame', 'Riftflame damage +30%', { damage: 30 }), up('swift-fireball', 'Q', 'Swift Riftflame', 'Riftflame cooldown -25%', { cd: -25 })],
     [up('deep-freeze', 'W', 'Deep Rime', 'Rime Ring stuns for 0.6s', { stun: 600 }), up('far-blink', 'E', 'Far Fold', 'Fold Step range +30%', { range: 30 })],
     [up('huge-meteor', 'R', 'Huge Starfall', 'Starfall radius +30%', { radius: 30 }), up('wide-nova', 'W', 'Wide Ring', 'Rime Ring radius +30%', { radius: 30 })],
     [up('long-fireball', 'Q', 'Long Riftflame', 'Riftflame range +30%', { range: 30 }), up('heavy-meteor', 'R', 'Heavy Starfall', 'Starfall damage +25%', { damage: 25 })],
+    [up('quick-fold', 'E', 'Quick Fold', 'Fold Step cooldown -30%', { cd: -30 }), up('hard-rime', 'W', 'Hard Rime', 'Rime Ring damage +40%', { damage: 40 })],
   ],
   priest: [
     [up('deep-mend', 'W', 'Deep Mend', 'Mend heals +30%', { heal: 30 }), up('wide-mend', 'W', 'Wide Mend', 'Mend radius +30%', { radius: 30 })],
     [up('holy-smite', 'Q', 'Bright Lance', 'Sunlance damage +30%', { damage: 30 }), up('strong-ward', 'E', 'Strong Veil', 'Dawn Veil shield +40%', { shield: 40 })],
     [up('wide-sanctuary', 'R', 'Loud Bell', 'Noon Bell radius +25%', { radius: 25 }), up('quick-ward', 'E', 'Quick Veil', 'Dawn Veil cooldown -25%', { cd: -25 })],
     [up('binding-smite', 'Q', 'Binding Lance', 'Sunlance stuns for 0.5s', { stun: 500 }), up('quick-mend', 'W', 'Quick Mend', 'Mend cooldown -25%', { cd: -25 })],
+    [up('bright-bell', 'R', 'Bright Bell', 'Noon Bell heals +40%', { heal: 40 }), up('long-lance', 'Q', 'Long Lance', 'Sunlance range +30%', { range: 30 })],
   ],
   berserker: [
     [up('wide-cleave', 'Q', 'Wide Cleave', 'Cleave radius +30%', { radius: 30 }), up('savage-cleave', 'Q', 'Savage Cleave', 'Cleave damage +30%', { damage: 30 })],
     [up('long-frenzy', 'W', 'Long Blood', 'Blood Up lasts 50% longer', { ms: 50 }), up('far-leap', 'E', 'Far Skyfall', 'Skyfall range +30%', { range: 30 })],
     [up('endless-rampage', 'R', 'Endless Chains', 'Unchained lasts 40% longer', { ms: 40 }), up('crushing-leap', 'E', 'Crushing Skyfall', 'Skyfall stuns for 0.5s', { stun: 500 })],
     [up('quick-cleave', 'Q', 'Quick Cleave', 'Cleave cooldown -25%', { cd: -25 }), up('quick-frenzy', 'W', 'Quick Blood', 'Blood Up cooldown -30%', { cd: -30 })],
+    [up('quick-skyfall', 'E', 'Quick Skyfall', 'Skyfall cooldown -30%', { cd: -30 }), up('quick-chains', 'R', 'Quick Chains', 'Unchained cooldown -30%', { cd: -30 })],
   ],
   harpooner: [
     [up('long-harpoon', 'Q', 'Long Harpoon', 'Harpoon range +25%', { range: 25 }), up('barbed-harpoon', 'Q', 'Barbed Harpoon', 'Harpoon damage +40%', { damage: 40 })],
     [up('deep-undertow', 'W', 'Deep Riptide', 'Riptide radius +30%', { radius: 30 }), up('iron-brace', 'E', 'Iron Grip', 'Hold Fast shield +50%', { shield: 50 })],
     [up('wide-maelstrom', 'R', 'Wide Maelstrom', 'Maelstrom radius +25%', { radius: 25 }), up('quick-harpoon', 'Q', 'Quick Harpoon', 'Harpoon cooldown -25%', { cd: -25 })],
     [up('stunning-undertow', 'W', 'Stunning Riptide', 'Riptide stuns for 0.5s', { stun: 500 }), up('raging-maelstrom', 'R', 'Raging Maelstrom', 'Maelstrom damage +30%', { damage: 30 })],
+    [up('long-maelstrom', 'R', 'Long Maelstrom', 'Maelstrom lasts 40% longer', { ms: 40 }), up('quick-hold', 'E', 'Quick Hold', 'Hold Fast cooldown -30%', { cd: -30 })],
   ],
   witch: [
     [up('cruel-hex', 'Q', 'Cruel Hex', 'Hex Bolt damage +30%', { damage: 30 }), up('lasting-blight', 'W', 'Lasting Rot', 'Mire Rot lasts 40% longer', { ms: 40 })],
     [up('wide-snare', 'E', 'Wide Snare', 'Bramble Snare radius +40%', { radius: 40 }), up('quick-hex', 'Q', 'Quick Hex', 'Hex Bolt cooldown -25%', { cd: -25 })],
     [up('wide-plague', 'R', 'Wide Bloom', 'Mire Bloom radius +25%', { radius: 25 }), up('foul-blight', 'W', 'Foul Rot', 'Mire Rot damage +35%', { damage: 35 })],
     [up('deep-roots', 'E', 'Deep Roots', 'Bramble Snare holds 0.5s longer', { stun: 500 }), up('long-plague', 'R', 'Long Bloom', 'Mire Bloom lasts 30% longer', { ms: 30 })],
+    [up('wide-rot', 'W', 'Wide Rot', 'Mire Rot radius +30%', { radius: 30 }), up('quick-snare', 'E', 'Quick Snare', 'Bramble Snare cooldown -30%', { cd: -30 })],
   ],
   stalker: [
     [up('sharp-shuriken', 'Q', 'Sharp Stars', 'Mist Stars damage +30%', { damage: 30 }), up('wide-fan', 'Q', 'Wide Stars', 'Mist Stars throws 2 more', { count: 2 })],
     [up('long-vanish', 'W', 'Long Vanish', 'Vanish lasts 50% longer', { ms: 50 }), up('far-pounce', 'E', 'Far Pounce', 'Pounce range +30%', { range: 30 })],
     [up('deadly-mark', 'R', 'Deadly Mark', 'Final Mark damage +25%', { damage: 25 }), up('quick-vanish', 'W', 'Quick Vanish', 'Vanish cooldown -30%', { cd: -30 })],
     [up('stunning-pounce', 'E', 'Stunning Pounce', 'Pounce stuns 0.4s longer', { stun: 400 }), up('quick-shuriken', 'Q', 'Quick Stars', 'Mist Stars cooldown -25%', { cd: -25 })],
+    [up('quick-pounce', 'E', 'Quick Pounce', 'Pounce cooldown -30%', { cd: -30 }), up('long-stars', 'Q', 'Long Stars', 'Mist Stars range +30%', { range: 30 })],
   ],
   lancer: [
     [up('long-thrust', 'Q', 'Long Thrust', 'Thrust range +30%', { range: 30 }), up('hard-thrust', 'Q', 'Hard Thrust', 'Thrust damage +30%', { damage: 30 })],
     [up('wide-sweep', 'W', 'Wide Sweep', 'Sweep radius +25%', { radius: 25 }), up('high-vault', 'E', 'High Vault', 'Vault range +30%', { range: 30 })],
     [up('iron-phalanx', 'R', 'Iron Rally', 'Rally shield +40%', { shield: 40 }), up('crippling-sweep', 'W', 'Crippling Sweep', 'Sweep slows for 1.2s', { slow: 1200 })],
     [up('stunning-vault', 'E', 'Stunning Vault', 'Vault stuns 0.4s longer', { stun: 400 }), up('quick-thrust', 'Q', 'Quick Thrust', 'Thrust cooldown -25%', { cd: -25 })],
-  ],  gunslinger: [
+    [up('quick-rally', 'R', 'Quick Rally', 'Rally cooldown -30%', { cd: -30 }), up('hard-sweep', 'W', 'Hard Sweep', 'Sweep damage +40%', { damage: 40 })],
+  ],
+  gunslinger: [
     [up('more-hammer', 'Q', 'Six Shooter', 'Fan the Hammer fires 2 more', { count: 2 }), up('hot-lead', 'Q', 'Hot Lead', 'Fan the Hammer damage +30%', { damage: 30 })],
     [up('thick-smoke', 'W', 'Thick Smoke', 'Smoke Bomb radius +30%', { radius: 30 }), up('quick-roll', 'E', 'Quick Roll', 'Dodge Roll cooldown -30%', { cd: -30 })],
     [up('steady-aim', 'R', 'Steady Aim', 'Last Round damage +25%', { damage: 25 }), up('long-smoke', 'W', 'Long Smoke', 'Smoke Bomb lasts 40% longer', { ms: 40 })],
     [up('stunning-shot', 'Q', 'Stunning Shot', 'Fan the Hammer stuns 0.3s', { stun: 300 }), up('quick-hammer', 'Q', 'Quick Hammer', 'Fan the Hammer cooldown -25%', { cd: -25 })],
+    [up('quick-draw', 'R', 'Quick Draw', 'Last Round cooldown -30%', { cd: -30 }), up('far-roll', 'E', 'Far Roll', 'Dodge Roll range +30%', { range: 30 })],
   ],
   automaton: [
     [up('wide-vent', 'Q', 'Wide Vent', 'Steam Vent radius +30%', { radius: 30 }), up('scalding-vent', 'Q', 'Scalding Vent', 'Steam Vent damage +30%', { damage: 30 })],
     [up('long-overclock', 'W', 'Long Overclock', 'Overclock lasts 50% longer', { ms: 50 }), up('long-fist', 'E', 'Long Fist', 'Rocket Fist range +25%', { range: 25 })],
     [up('big-overload', 'R', 'Big Heartburst', 'Heartburst radius +25%', { radius: 25 }), up('quick-vent', 'Q', 'Quick Vent', 'Steam Vent cooldown -25%', { cd: -25 })],
     [up('heavy-fist', 'E', 'Heavy Fist', 'Rocket Fist damage +40%', { damage: 40 }), up('quick-overclock', 'W', 'Quick Overclock', 'Overclock cooldown -30%', { cd: -30 })],
+    [up('quick-fist', 'E', 'Quick Fist', 'Rocket Fist cooldown -30%', { cd: -30 }), up('hot-heart', 'R', 'Hot Heart', 'Heartburst damage +30%', { damage: 30 })],
   ],
   tinker: [
     [up('hot-spark', 'Q', 'Hot Spark', 'Spark Bolt damage +30%', { damage: 30 }), up('quick-spark', 'Q', 'Quick Spark', 'Spark Bolt cooldown -25%', { cd: -25 })],
     [up('wide-field', 'W', 'Wide Coil', 'Coil Field radius +30%', { radius: 30 }), up('long-jet', 'E', 'Long Jet', 'Jetpack range +30%', { range: 30 })],
     [up('wide-storm', 'R', 'Wide Storm', 'Storm Engine radius +25%', { radius: 25 }), up('strong-field', 'W', 'Strong Coil', 'Coil Field damage +35%', { damage: 35 })],
     [up('stunning-spark', 'Q', 'Stunning Spark', 'Spark Bolt stuns 0.4s longer', { stun: 400 }), up('long-storm', 'R', 'Long Storm', 'Storm Engine lasts 30% longer', { ms: 30 })],
+    [up('quick-coil', 'W', 'Quick Coil', 'Coil Field cooldown -30%', { cd: -30 }), up('long-spark', 'Q', 'Long Spark', 'Spark Bolt range +30%', { range: 30 })],
   ],
   wolfkin: [
     [up('far-lunge', 'Q', 'Far Lunge', 'Lunge range +30%', { range: 30 }), up('savage-lunge', 'Q', 'Savage Lunge', 'Lunge damage +30%', { damage: 30 })],
     [up('long-howl', 'W', 'Long Howl', 'Pack Howl lasts 50% longer', { ms: 50 }), up('wide-rend', 'E', 'Wide Rend', 'Rend radius +30%', { radius: 30 })],
     [up('long-moon', 'R', 'Long Moon', 'Blood Moon lasts 40% longer', { ms: 40 }), up('quick-lunge', 'Q', 'Quick Lunge', 'Lunge cooldown -25%', { cd: -25 })],
     [up('deep-rend', 'E', 'Deep Rend', 'Rend damage +40%', { damage: 40 }), up('quick-howl', 'W', 'Quick Howl', 'Pack Howl cooldown -30%', { cd: -30 })],
+    [up('quick-rend', 'E', 'Quick Rend', 'Rend cooldown -30%', { cd: -30 }), up('red-moon', 'R', 'Red Moon', 'Blood Moon cooldown -30%', { cd: -30 })],
   ],
   bruin: [
     [up('wide-maul', 'Q', 'Wide Maul', 'Maul radius +30%', { radius: 30 }), up('heavy-maul', 'Q', 'Heavy Maul', 'Maul damage +30%', { damage: 30 })],
     [up('loud-roar', 'W', 'Loud Roar', 'Roar radius +25%', { radius: 25 }), up('long-rush', 'E', 'Long Charge', 'Oak Charge range +30%', { range: 30 })],
     [up('long-wrath', 'R', 'Long Wrath', 'Grovewrath lasts 40% longer', { ms: 40 }), up('quick-maul', 'Q', 'Quick Maul', 'Maul cooldown -25%', { cd: -25 })],
     [up('stunning-roar', 'W', 'Stunning Roar', 'Roar stuns for 0.5s', { stun: 500 }), up('crushing-rush', 'E', 'Crushing Charge', 'Oak Charge damage +40%', { damage: 40 })],
+    [up('quick-roar', 'W', 'Quick Roar', 'Roar cooldown -30%', { cd: -30 }), up('quick-wrath', 'R', 'Quick Wrath', 'Grovewrath cooldown -30%', { cd: -30 })],
   ],
 };
+
+/** The upgrade pair a level offers a champion, or undefined (a rank-up level, or none left). */
+export function upgradePairAt(champId: string, level: number): [UpgradeDef, UpgradeDef] | undefined {
+  const i = UPGRADE_LEVELS.indexOf(level);
+  return i < 0 ? undefined : UPGRADES[champId]?.[i];
+}
 
 export function upgradeById(id: string): UpgradeDef | undefined {
   for (const pairs of Object.values(UPGRADES)) for (const pair of pairs) for (const u of pair) if (u.id === id) return u;

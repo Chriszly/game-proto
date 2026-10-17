@@ -96,13 +96,14 @@ left, under bevelled slate panels.
    enemies unless one of them stands in the same bush or right next to it; your own champion shows
    through the grass. Attacking or casting shows the champion for 1.5 seconds. A target that slips
    into a bush is lost.
-9. **Champions** level from 1 to 5 on XP. R unlocks at level 3. Each level adds health and damage.
+9. **Champions** level from 1 to 8 on XP. R unlocks at level 3, and levels 6 and 8 rank it up (+20%
+   damage, heal and shield, -15% cooldown each, shown as gold pips on the R box). Each level adds health and damage.
    Each class has a passive (in the table below) and its own mix of abilities: bursts, bolts,
    dashes, heals and shields, plus self buffs (Blood Up, Vanish), lingering zones that hurt and slow
    (Mire Rot, Hailstorm), a harpoon that pulls its target in, knock-backs, and finishers that hit
    twice as hard on a champion under 40% health (Last Word, Final Mark). The Stalker's Vanish hides
    it from enemies and their towers and camps until it attacks.
-10. **Upgrades**: each new level puts two upgrade cards in the bottom bar and marks the ability box
+10. **Upgrades**: levels 2, 3, 4, 5 and 7 each put two upgrade cards in the bottom bar and marks the ability box
    they change with a gold diamond. Keep one; it changes that ability for the rest of the match (gold
    pips under a box count the upgrades it has). The choices per champion are in the table below.
 11. **Objectives**: a card under the top bar names one goal at a time with a timer and a reward, a
@@ -172,7 +173,7 @@ camp, watchstone, bush, ward, the beast and the champions you can see, under the
 
 ### The AI
 
-The AI champions take an upgrade at each level (the one they rate higher: stuns and damage first).
+The AI champions take an upgrade at each level that offers one (the one they rate higher: stuns and damage first).
 They shop whenever they are home or dead, following a build for their class's role (tanks, bruisers,
 brawlers and catchers go Cloth Armor, Ruby Crystal, Thornmail, Swift Boots, Giant's Belt and on;
 casters and supports go Sapphire, Sage's Cloak and on; everyone else goes Long Sword, Dagger,
@@ -290,23 +291,23 @@ claims 50% more gold from a bounty.
 
 ### Upgrades
 
-| Champion | Level 2 | Level 3 | Level 4 | Level 5 |
-| --- | --- | --- | --- | --- |
-| Hald (Warden) | Wide Gatefall (Q radius +30%) or Stun Gatefall (Q stuns 0.6s) | Iron Oath (W shield +40%) or Long Rush (E range +30%) | Iron Gate (R damage +25%) or Quick Gatefall (Q cooldown -25%) | Crushing Rush (E damage +40%) or Wide Oath (W radius +40%) |
-| Vesna (Blade) | Deep Cut (Q range +30%) or Keen Cut (Q damage +30%) | Wide Wind (W radius +30%) or Quick Step (E cooldown -30%) | Final Word (R damage +25%) or Crippling Wind (W slows 1.2s) | Swift Cut (Q cooldown -25%) or Long Step (E range +30%) |
-| Tamsin (Archer) | Heavy Seeker (Q damage +30%) or Wide Feathers (W two more arrows) | Long Tumble (E range +40%) or Quick Seeker (Q cooldown -25%) | Wide Hail (R radius +30%) or Hard Feathers (W damage +30%) | Pinning Seeker (Q stuns 0.5s) or Heavy Hail (R damage +25%) |
-| Elowen (Mage) | Big Riftflame (Q damage +30%) or Swift Riftflame (Q cooldown -25%) | Deep Rime (W stuns 0.6s) or Far Fold (E range +30%) | Huge Starfall (R radius +30%) or Wide Ring (W radius +30%) | Long Riftflame (Q range +30%) or Heavy Starfall (R damage +25%) |
-| Maren (Priest) | Deep Mend (W heals +30%) or Wide Mend (W radius +30%) | Bright Lance (Q damage +30%) or Strong Veil (E shield +40%) | Loud Bell (R radius +25%) or Quick Veil (E cooldown -25%) | Binding Lance (Q stuns 0.5s) or Quick Mend (W cooldown -25%) |
-| Torvik (Berserker) | Wide Cleave (Q radius +30%) or Savage Cleave (Q damage +30%) | Long Blood (W lasts 50% longer) or Far Skyfall (E range +30%) | Endless Chains (R lasts 40% longer) or Crushing Skyfall (E stuns 0.5s) | Quick Cleave (Q cooldown -25%) or Quick Blood (W cooldown -30%) |
-| Morrow (Harpooner) | Long Harpoon (Q range +25%) or Barbed Harpoon (Q damage +40%) | Deep Riptide (W radius +30%) or Iron Grip (E shield +50%) | Wide Maelstrom (R radius +25%) or Quick Harpoon (Q cooldown -25%) | Stunning Riptide (W stuns 0.5s) or Raging Maelstrom (R damage +30%) |
-| Gwyth (Witch) | Cruel Hex (Q damage +30%) or Lasting Rot (W lasts 40% longer) | Wide Snare (E radius +40%) or Quick Hex (Q cooldown -25%) | Wide Bloom (R radius +25%) or Foul Rot (W damage +35%) | Deep Roots (E holds 0.5s longer) or Long Bloom (R lasts 30% longer) |
-| Kaida (Stalker) | Sharp Stars (Q damage +30%) or Wide Stars (Q two more stars) | Long Vanish (W lasts 50% longer) or Far Pounce (E range +30%) | Deadly Mark (R damage +25%) or Quick Vanish (W cooldown -30%) | Stunning Pounce (E stuns 0.4s longer) or Quick Stars (Q cooldown -25%) |
-| Rook (Gunslinger) | Six Shooter (Q two more shots) or Hot Lead (Q damage +30%) | Thick Smoke (W radius +30%) or Quick Roll (E cooldown -30%) | Steady Aim (R damage +25%) or Long Smoke (W lasts 40% longer) | Stunning Shot (Q stuns 0.3s) or Quick Hammer (Q cooldown -25%) |
-| AX-9 (Automaton) | Wide Vent (Q radius +30%) or Scalding Vent (Q damage +30%) | Long Overclock (W lasts 50% longer) or Long Fist (E range +25%) | Big Heartburst (R radius +25%) or Quick Vent (Q cooldown -25%) | Heavy Fist (E damage +40%) or Quick Overclock (W cooldown -30%) |
-| Winnie (Tinker) | Hot Spark (Q damage +30%) or Quick Spark (Q cooldown -25%) | Wide Coil (W radius +30%) or Long Jet (E range +30%) | Wide Storm (R radius +25%) or Strong Coil (W damage +35%) | Stunning Spark (Q stuns 0.4s longer) or Long Storm (R lasts 30% longer) |
-| Fenra (Wolfkin) | Far Lunge (Q range +30%) or Savage Lunge (Q damage +30%) | Long Howl (W lasts 50% longer) or Wide Rend (E radius +30%) | Long Moon (R lasts 40% longer) or Quick Lunge (Q cooldown -25%) | Deep Rend (E damage +40%) or Quick Howl (W cooldown -30%) |
-| Grumm (Bruin) | Wide Maul (Q radius +30%) or Heavy Maul (Q damage +30%) | Loud Roar (W radius +25%) or Long Charge (E range +30%) | Long Wrath (R lasts 40% longer) or Quick Maul (Q cooldown -25%) | Stunning Roar (W stuns 0.5s) or Crushing Charge (E damage +40%) |
-| Liora (Lancer) | Long Thrust (Q range +30%) or Hard Thrust (Q damage +30%) | Wide Sweep (W radius +25%) or High Vault (E range +30%) | Iron Rally (R shield +40%) or Crippling Sweep (W slows 1.2s) | Stunning Vault (E stuns 0.4s longer) or Quick Thrust (Q cooldown -25%) |
+| Champion | Level 2 | Level 3 | Level 4 | Level 5 | Level 7 |
+| --- | --- | --- | --- | --- | --- |
+| Hald (Warden) | Wide Gatefall (Q radius +30%) or Stun Gatefall (Q stuns 0.6s) | Iron Oath (W shield +40%) or Long Rush (E range +30%) | Iron Gate (R damage +25%) or Quick Gatefall (Q cooldown -25%) | Crushing Rush (E damage +40%) or Wide Oath (W radius +40%) | Unbroken Oath (W cooldown -30%) or Gatebreaker (E stuns 0.4s longer) |
+| Vesna (Blade) | Deep Cut (Q range +30%) or Keen Cut (Q damage +30%) | Wide Wind (W radius +30%) or Quick Step (E cooldown -30%) | Final Word (R damage +25%) or Crippling Wind (W slows 1.2s) | Swift Cut (Q cooldown -25%) or Long Step (E range +30%) | Debt Collected (R cooldown -30%) or Twin Wind (W damage +40%) |
+| Tamsin (Archer) | Heavy Seeker (Q damage +30%) or Wide Feathers (W two more arrows) | Long Tumble (E range +40%) or Quick Seeker (Q cooldown -25%) | Wide Hail (R radius +30%) or Hard Feathers (W damage +30%) | Pinning Seeker (Q stuns 0.5s) or Heavy Hail (R damage +25%) | Long Hail (R lasts 40% longer) or Quick Tumble (E cooldown -30%) |
+| Elowen (Mage) | Big Riftflame (Q damage +30%) or Swift Riftflame (Q cooldown -25%) | Deep Rime (W stuns 0.6s) or Far Fold (E range +30%) | Huge Starfall (R radius +30%) or Wide Ring (W radius +30%) | Long Riftflame (Q range +30%) or Heavy Starfall (R damage +25%) | Quick Fold (E cooldown -30%) or Hard Rime (W damage +40%) |
+| Maren (Priest) | Deep Mend (W heals +30%) or Wide Mend (W radius +30%) | Bright Lance (Q damage +30%) or Strong Veil (E shield +40%) | Loud Bell (R radius +25%) or Quick Veil (E cooldown -25%) | Binding Lance (Q stuns 0.5s) or Quick Mend (W cooldown -25%) | Bright Bell (R heals +40%) or Long Lance (Q range +30%) |
+| Torvik (Berserker) | Wide Cleave (Q radius +30%) or Savage Cleave (Q damage +30%) | Long Blood (W lasts 50% longer) or Far Skyfall (E range +30%) | Endless Chains (R lasts 40% longer) or Crushing Skyfall (E stuns 0.5s) | Quick Cleave (Q cooldown -25%) or Quick Blood (W cooldown -30%) | Quick Skyfall (E cooldown -30%) or Quick Chains (R cooldown -30%) |
+| Morrow (Harpooner) | Long Harpoon (Q range +25%) or Barbed Harpoon (Q damage +40%) | Deep Riptide (W radius +30%) or Iron Grip (E shield +50%) | Wide Maelstrom (R radius +25%) or Quick Harpoon (Q cooldown -25%) | Stunning Riptide (W stuns 0.5s) or Raging Maelstrom (R damage +30%) | Long Maelstrom (R lasts 40% longer) or Quick Hold (E cooldown -30%) |
+| Gwyth (Witch) | Cruel Hex (Q damage +30%) or Lasting Rot (W lasts 40% longer) | Wide Snare (E radius +40%) or Quick Hex (Q cooldown -25%) | Wide Bloom (R radius +25%) or Foul Rot (W damage +35%) | Deep Roots (E holds 0.5s longer) or Long Bloom (R lasts 30% longer) | Wide Rot (W radius +30%) or Quick Snare (E cooldown -30%) |
+| Kaida (Stalker) | Sharp Stars (Q damage +30%) or Wide Stars (Q two more stars) | Long Vanish (W lasts 50% longer) or Far Pounce (E range +30%) | Deadly Mark (R damage +25%) or Quick Vanish (W cooldown -30%) | Stunning Pounce (E stuns 0.4s longer) or Quick Stars (Q cooldown -25%) | Quick Pounce (E cooldown -30%) or Long Stars (Q range +30%) |
+| Rook (Gunslinger) | Six Shooter (Q two more shots) or Hot Lead (Q damage +30%) | Thick Smoke (W radius +30%) or Quick Roll (E cooldown -30%) | Steady Aim (R damage +25%) or Long Smoke (W lasts 40% longer) | Stunning Shot (Q stuns 0.3s) or Quick Hammer (Q cooldown -25%) | Quick Draw (R cooldown -30%) or Far Roll (E range +30%) |
+| AX-9 (Automaton) | Wide Vent (Q radius +30%) or Scalding Vent (Q damage +30%) | Long Overclock (W lasts 50% longer) or Long Fist (E range +25%) | Big Heartburst (R radius +25%) or Quick Vent (Q cooldown -25%) | Heavy Fist (E damage +40%) or Quick Overclock (W cooldown -30%) | Quick Fist (E cooldown -30%) or Hot Heart (R damage +30%) |
+| Winnie (Tinker) | Hot Spark (Q damage +30%) or Quick Spark (Q cooldown -25%) | Wide Coil (W radius +30%) or Long Jet (E range +30%) | Wide Storm (R radius +25%) or Strong Coil (W damage +35%) | Stunning Spark (Q stuns 0.4s longer) or Long Storm (R lasts 30% longer) | Quick Coil (W cooldown -30%) or Long Spark (Q range +30%) |
+| Fenra (Wolfkin) | Far Lunge (Q range +30%) or Savage Lunge (Q damage +30%) | Long Howl (W lasts 50% longer) or Wide Rend (E radius +30%) | Long Moon (R lasts 40% longer) or Quick Lunge (Q cooldown -25%) | Deep Rend (E damage +40%) or Quick Howl (W cooldown -30%) | Quick Rend (E cooldown -30%) or Red Moon (R cooldown -30%) |
+| Grumm (Bruin) | Wide Maul (Q radius +30%) or Heavy Maul (Q damage +30%) | Loud Roar (W radius +25%) or Long Charge (E range +30%) | Long Wrath (R lasts 40% longer) or Quick Maul (Q cooldown -25%) | Stunning Roar (W stuns 0.5s) or Crushing Charge (E damage +40%) | Quick Roar (W cooldown -30%) or Quick Wrath (R cooldown -30%) |
+| Liora (Lancer) | Long Thrust (Q range +30%) or Hard Thrust (Q damage +30%) | Wide Sweep (W radius +25%) or High Vault (E range +30%) | Iron Rally (R shield +40%) or Crippling Sweep (W slows 1.2s) | Stunning Vault (E stuns 0.4s longer) or Quick Thrust (Q cooldown -25%) | Quick Rally (R cooldown -30%) or Hard Sweep (W damage +40%) |
 
 A stunned champion or minion neither moves nor attacks. AI champions take upgrades too (see The AI).
 
