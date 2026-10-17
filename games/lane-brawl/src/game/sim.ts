@@ -184,10 +184,20 @@ function breakStealth(u: Unit) {
 function updateObjective(s: GameState) {
   const o = s.objective;
   if (o) {
-    const t = getUnit(s, o.target);
+    let t = getUnit(s, o.target);
+    // A wolf pack is cleared only when its pups are down too: the goal moves on to one still up.
+    if (o.kind === 'camp' && t?.dead) {
+      const left = s.units.find((m) => m.kind === 'camp' && !m.dead && m.group === t!.group);
+      if (left) {
+        o.target = left.id;
+        t = left;
+      }
+    }
+    const gone = !t || t.dead;
     // The beast only counts when blue slew it: its kill sets blue's buff (it outlasts no respawn).
-    const done = (!t || t.dead) && (o.kind !== 'beast' || s.beastBuff.blue > s.time);
-    if (!done && s.time < o.endsAt) return;
+    // Slain by red, it is missed at once rather than standing until its time runs out.
+    const done = gone && (o.kind !== 'beast' || s.beastBuff.blue > s.time);
+    if (!gone && s.time < o.endsAt) return;
     const p = getUnit(s, s.player);
     if (done && p) {
       p.gold += o.gold;
@@ -346,6 +356,7 @@ export function plantWard(s: GameState, u: Unit, aim: Vec): boolean {
   const at = towards(u, aim, WARD.range);
   spawnWard(s, u.side, at.x, at.y);
   u.wards--;
+  u.recallMs = 0;
   if (dist(u, at) > 1) u.facing = Math.atan2(at.y - u.y, at.x - u.x);
   u.castMs = 300;
   s.fx.push({ kind: 'ring', x: at.x, y: at.y, r: 30, color: SIDE_COLOR[u.side], ms: 500 });

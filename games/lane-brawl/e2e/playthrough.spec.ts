@@ -11,6 +11,7 @@ interface Unit {
   id: number;
   kind: 'champion' | 'minion' | 'tower' | 'nexus' | 'camp' | 'inhibitor' | 'beast' | 'watchstone';
   campKind?: 'boar' | 'wolf' | 'pup' | 'ember' | 'moss';
+  group: number;
   side: 'blue' | 'red' | 'neutral';
   x: number;
   y: number;
@@ -298,16 +299,17 @@ test('plays the first round', async ({ page }, testInfo) => {
   await snap('2-tower-down');
 
   // The next objective comes a few seconds later: clear the boar or wolf pack nearest the Warden
-  // on blue's half of the jungle.
+  // on blue's half of the jungle. A wolf pack's goal moves from the alpha to each pup still up, so
+  // the Warden fights whatever the objective marks until the whole pack is down.
   expect(await play(10_000, async () => (await state()).objective !== null), 'second objective').toBe(true);
   s = await state();
   expect(s.objective?.kind, 'second objective is a camp').toBe('camp');
   const campId = s.objective!.target;
   const campGold = CAMP_GOLD[s.units.find((u) => u.id === campId)!.campKind!];
-  const camp = () => s.units.find((u) => u.id === campId)!;
+  const pack = () => s.units.filter((u) => u.kind === 'camp' && (u.id === campId || u.group === campId));
+  const camp = () => s.units.find((u) => u.id === (s.objective?.kind === 'camp' ? s.objective.target : campId))!;
   const goldBeforeCamp = me().gold;
-  while ((await state()).time < ROUND_LIMIT_MS && !camp().dead) {
-    s = await state();
+  while ((s = await state()).time < ROUND_LIMIT_MS && s.objectivesDone < 2) {
     const p = me();
     const c = camp();
     if (p.dead) {
@@ -326,7 +328,7 @@ test('plays the first round', async ({ page }, testInfo) => {
   }
   await tick(STEP_MS);
   s = await state();
-  expect(camp().dead, `camp cleared; state: ${JSON.stringify(me())}`).toBe(true);
+  expect(pack().every((u) => u.dead), `camp cleared; state: ${JSON.stringify(me())}`).toBe(true);
   expect(s.objectivesDone, 'camp objective done').toBe(2);
   expect(me().gold - goldBeforeCamp, 'camp and objective gold').toBeGreaterThanOrEqual(campGold + 120);
 
