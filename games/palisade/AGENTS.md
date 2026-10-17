@@ -167,8 +167,9 @@ seconds without a tap.
     `nextAim`, `sortTargets`.
   - `enemies.ts`: the `ENEMIES` table of wave 1 stats per `EnemyKind` (with `coins` and the
     `flying`, `shield` and `healer` flags), the three bosses included.
-  - `upgrades.ts`: the `UPGRADES` table, `UpgradeId`, `Icon`, `UPGRADE_IDS`, `FILLERS` and
-    `PURSE_COINS`.
+  - `upgrades.ts`: the `UPGRADES` table, `UpgradeId`, `Icon`, `UPGRADE_IDS`, `BOOK_ORDER` (the
+    skill book's order only; the level-up's random picks follow `UPGRADE_IDS`), `FILLERS`,
+    `BASE_SKILLS` and `PURSE_COINS`.
   - `relics.ts`: the `RELICS` table, `RelicId`, `RELIC_IDS`, `SETS`, `SetId`, `SET_IDS`,
     `setRelics` and `setComplete`.
   - `guards.ts`: the `GUARDS` table, `GuardKind`, `GUARD_KINDS`, `MAX_GUARD_LEVEL`, `trainCost`,
@@ -191,7 +192,7 @@ seconds without a tap.
 - `src/scenes/layout.ts`: screen positions (`HERO_FEET`, `BARRICADE`, `XP_BAR`, `BOSS_BAR`,
   `TRACK`, `RAIN`, `CALTROPS`, `AIM`, `FORTIFY` (with its panel's size), `HEAT`, `ROAR_CHIP`,
   `GUARD_HIT`, `HIRE`, `ROAD_CARDS`, `RAIN_HINT`, `STREAK`, `CARDS`,
-  `COUNTDOWN`, `SKILL_BOOK`, `SPEED`, `BUTTON`),
+  `COUNTDOWN`, `SKILL_BOOK`, `SPEED`, `BUTTON`, `BARRICADE_BAR`, `BARRICADE_TIP_W`),
   `HUD_HEIGHT`, `UI_DEPTH`, `FONT` (a system font stack).
 - `src/ui/LevelUp.ts`: the level-up overlay, its cards and the auto-pick countdown (seconds left
   over an emptying bar, at `COUNTDOWN`). It records each card's spot in `cards`.
@@ -206,8 +207,11 @@ seconds without a tap.
   cost, greyed out when the coins are short or this break's one is bought) and a dim backdrop that
   closes it. `open` tells the scene to hold everything still.
 - `src/ui/SkillBook.ts`: the "Skill book found/total" button in the top bar and the book it opens,
-  a 4x7 grid with a slot for every id in `UPGRADE_IDS` order (the three fillers last), and the
-  relics won along the bottom (a full set's relics in green, its bonus above them).
+  a 4x7 grid with a slot for every id in `BOOK_ORDER` (`upgrades.ts`: one theme a row, the bow,
+  harder hits, fire, chill and slow, powder and lightning, the barricade and guards, then Battle
+  Lore and the three fillers), and the relics won along the bottom (a full set's relics in green,
+  its bonus above them). Hovering over a relic (a zone over its icon and name) shows `relicTip`:
+  its name and count, its text and its set with the other relic and the set's bonus.
   A slot not yet in `found` is an empty placeholder (a "?" frame and blank lines); a found one
   shows icon, name, rank of max (`Nx` for a filler, how many times it was picked) and
   `text`, dimmed at rank 0. Its `open` flag tells the scene to hold everything still.
@@ -277,6 +281,9 @@ seconds without a tap.
   auto-pick countdown all wait. The button sits above the level-up overlay (depth `UI_DEPTH + 15`)
   so it works while choosing, and hides after a fall. Shooting is automatic. A dimming rectangle
   under each overlay is interactive, so taps on the battle are swallowed.
+  A zone over the barricade's health bar in the top bar shows `barricadeTip` on `pointerover`
+  (health of max, Stout Timber's rank and bonus, and `stats().repair` after each wave, refreshed by
+  `drawBarricadeTip` each frame) and hides it on `pointerout`; on a phone a tap shows it.
 - **Skill book:** after each `tick`, `GameScene.discover` adds every id in `choices` and `ranks`
   to `found` (so an old save's upgrades count as found), and the three `FILLERS` once `mastered`
   (an older save that learned everything before Second Wind could be offered), and saves it when
@@ -527,7 +534,7 @@ fortifications' in `forts.ts` and the heats' in `heat.ts`. Arrow Rain's damage (
 ## Gotchas
 
 - Positions live in two places. The rule geometry is in `state.ts`, and the draw positions are in
-  `layout.ts` and partly hard-coded in `GameScene` (the barricade bar at x 232, the banner and
+  `layout.ts` and partly hard-coded in `GameScene` (the banner and
   relic panel at y 170, the game-over panel, the top bar's texts) and in `scenery.ts` (the log at
   double-unit x 365, `BARRICADE_TEX`). Moving the barricade art means moving `BARRICADE` and
   `BARRICADE_FRONT` too.

@@ -10,6 +10,10 @@ export const BARRICADE = { x: 112, y: 250 };
 export const XP_BAR = { x: 112, y: 514, w: 752, h: 16 };
 /** The 1x/2x speed switch, right of the experience bar, by its centre. */
 export const SPEED = { x: 908, y: 522, w: 60, h: 22 };
+/** The barricade's health bar in the top bar (its fill, inside a 3px frame, 14px tall at y 13). */
+export const BARRICADE_BAR = { x: 232, w: 198 };
+/** Width of the tooltip shown under the barricade's bar while it is hovered. */
+export const BARRICADE_TIP_W = 250;
 /** The boss's stacked health bars, by their top centre, right of the wave track. */
 export const BOSS_BAR = { x: 640, y: 66, w: 400, h: 14 };
 /** The wave track under the top bar: its panel, and the first of its ten marks and their spacing. */
