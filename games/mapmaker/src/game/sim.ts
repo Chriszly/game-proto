@@ -27,6 +27,7 @@ import {
   type GameState,
   type Point,
   type Rival,
+  type Tile,
 } from './state';
 import { CHART_ORDER, TERRAIN, type Terrain } from './terrain';
 import { nextCost, type UpgradeId } from './upgrades';
@@ -77,9 +78,10 @@ export function newGame(): GameState {
     features,
     rival: null,
     royal: null,
+    next: null,
   };
   s.supplies = maxSupplies(s);
-  s.commission = rollCommission(s);
+  s.commission = rollCommission(fogged(s.tiles));
   return s;
 }
 
@@ -474,9 +476,15 @@ export function sellChart(s: GameState) {
   s.treasure = 0;
   s.hand = null;
   s.hands = rollHands();
+  // Once this isle is charted in full, the next one is rolled now, so the board is laid out for it.
+  if (islandCharted(s)) s.next = makeIsland(s.island + 1);
+  const fog = fogged(s.next?.tiles ?? s.tiles);
+  // A long commission carries over to a new isle only with a voyage left and the fog to fill it.
+  const run = s.commission;
+  if (run && s.next && (run.left <= 1 || (fog[run.terrain] ?? 0) < run.need - run.done)) s.commission = null;
   if (s.commission) s.board = [];
   else {
-    s.board = rollBoard(s);
+    s.board = rollBoard(fog);
     s.commission = s.board.length ? { ...s.board[0] } : null;
   }
   const royal = !s.royal && royalComplete(s);
@@ -526,14 +534,15 @@ export function buy(s: GameState, id: UpgradeId) {
 export const islandCharted = (s: GameState) => frontier(s).length === 0;
 
 /**
- * Sets out on the next voyage with full supplies, to a new island once this one is charted, where
- * the rival lands too from `RIVAL_FROM`.
+ * Sets out on the next voyage with full supplies, to a new island once this one is charted (the
+ * one `sellChart` rolled), where the rival lands too from `RIVAL_FROM`.
  */
 export function setSail(s: GameState) {
   if (s.phase !== 'harbor') return false;
   if (islandCharted(s)) {
     s.island += 1;
-    const { kind, tiles, port, riddle, features } = makeIsland(s.island);
+    const { kind, tiles, port, riddle, features } = s.next ?? makeIsland(s.island);
+    s.next = null;
     s.kind = kind;
     s.tiles = tiles;
     s.port = port;
@@ -544,29 +553,25 @@ export function setSail(s: GameState) {
     s.milestones = 0;
     s.isleStart = s.voyage + 1;
     s.rival = landRival(s);
-    // A long commission carries over if the new isle can fill it; otherwise the board is laid out again.
-    const c = s.commission;
-    if (!c || c.left <= 1 || (fogged(s)[c.terrain] ?? 0) < c.need - c.done) {
-      s.board = rollBoard(s);
-      s.commission = s.board.length ? { ...s.board[0] } : null;
-    }
   }
   s.voyage += 1;
   s.surveyor = { ...s.port };
   s.supplies = maxSupplies(s);
-  if (!s.commission) s.commission = rollCommission(s);
+  // Only a save from before the next isle was rolled at the sale can sail with no commission the
+  // fog could fill; it gets a one-voyage one, as the first voyage does.
+  if (!s.commission) s.commission = rollCommission(fogged(s.tiles));
   s.phase = 'survey';
   return true;
 }
 
 /** How many tiles of each terrain the fog still hides; for sea, only sea beside land, since open sea can't be surveyed. */
-function fogged(s: GameState) {
+function fogged(tiles: Tile[]) {
   const out: Partial<Record<Terrain, number>> = {};
   for (let y = 0; y < GRID.h; y++) {
     for (let x = 0; x < GRID.w; x++) {
-      const t = tileAt(s, x, y)!;
+      const t = tiles[indexOf(x, y)];
       if (t.revealed) continue;
-      if (t.terrain === 'sea' && !neighbours(x, y).some((n) => tileAt(s, n.x, n.y)!.terrain !== 'sea')) continue;
+      if (t.terrain === 'sea' && !neighbours(x, y).some((n) => tiles[indexOf(n.x, n.y)].terrain !== 'sea')) continue;
       out[t.terrain] = (out[t.terrain] ?? 0) + 1;
     }
   }
@@ -574,8 +579,7 @@ function fogged(s: GameState) {
 }
 
 /** Picks one commission the fogged part of the island can still fill, for one voyage. */
-function rollCommission(s: GameState): Commission | null {
-  const fog = fogged(s);
+function rollCommission(fog: Partial<Record<Terrain, number>>): Commission | null {
   const open = COMMISSIONS.filter((c) => (fog[c.terrain] ?? 0) >= c.need);
   if (open.length === 0) return null;
   return { ...open[Math.floor(Math.random() * open.length)], voyages: 1, done: 0, left: 1 };
@@ -586,8 +590,7 @@ function rollCommission(s: GameState): Commission | null {
  * one over two or three voyages, asking for that many times the tiles for `LONG_PAY` times the pay a
  * voyage, when the fog holds enough.
  */
-function rollBoard(s: GameState): Commission[] {
-  const fog = fogged(s);
+function rollBoard(fog: Partial<Record<Terrain, number>>): Commission[] {
   const open = COMMISSIONS.filter((c) => (fog[c.terrain] ?? 0) >= c.need);
   for (let i = open.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
