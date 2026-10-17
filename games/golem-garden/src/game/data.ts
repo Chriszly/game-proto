@@ -1,5 +1,7 @@
 // The golems you can grow, the pests that come for the Heartwood, and the waves they come in.
+// Names and texts are keys of `i18n/en.ts`, shown with `t`.
 import { byDifficulty } from '../../../../shared/settings';
+import type { TextKey } from '../i18n';
 
 export const GOLEMS = ['pebble', 'moss', 'thorn'] as const;
 export type GolemKind = (typeof GOLEMS)[number];
@@ -8,7 +10,11 @@ export const SEEDS = [...GOLEMS, 'hedge'] as const;
 export type SeedKind = (typeof SEEDS)[number];
 
 export interface GolemInfo {
-  name: string;
+  name: TextKey;
+  /** Its name inside a sentence. */
+  lower: TextKey;
+  /** Its name on two lines, for a tall seed card. */
+  card: TextKey;
   /** Sap to plant its seed. */
   cost: number;
   /** How long the seed takes to grow into a golem that fights, in ms. */
@@ -25,23 +31,37 @@ export interface GolemInfo {
   area?: boolean;
   /** Can only be planted once the Heartwood is in full bloom (`BLOOM_GOAL` buds open). */
   locked?: boolean;
-  blurb: string;
+  blurb: TextKey;
 }
 
 export const GOLEM_INFO: Record<GolemKind, GolemInfo> = {
-  pebble: { name: 'Pebble golem', cost: 30, growMs: 3000, damage: 7, range: 110, cooldownMs: 700, blurb: 'Throws rocks' },
+  pebble: {
+    name: 'pebbleName',
+    lower: 'pebbleLower',
+    card: 'pebbleCard',
+    cost: 30,
+    growMs: 3000,
+    damage: 7,
+    range: 110,
+    cooldownMs: 700,
+    blurb: 'pebbleBlurb',
+  },
   moss: {
-    name: 'Moss golem',
+    name: 'mossName',
+    lower: 'mossLower',
+    card: 'mossCard',
     cost: 50,
     growMs: 4000,
     damage: 3,
     range: 140,
     cooldownMs: 800,
     slow: { factor: 0.5, ms: 1500 },
-    blurb: 'Slows pests',
+    blurb: 'mossBlurb',
   },
   thorn: {
-    name: 'Thorn golem',
+    name: 'thornName',
+    lower: 'thornLower',
+    card: 'thornCard',
     cost: 60,
     growMs: 4000,
     damage: 5,
@@ -49,7 +69,7 @@ export const GOLEM_INFO: Record<GolemKind, GolemInfo> = {
     cooldownMs: 600,
     area: true,
     locked: true,
-    blurb: 'Pricks all near',
+    blurb: 'thornBlurb',
   },
 };
 
@@ -84,8 +104,8 @@ export type FormKind = (typeof FORMS)[number];
 export interface FormInfo {
   /** The golem kind it is a form of. */
   of: GolemKind;
-  name: string;
-  blurb: string;
+  name: TextKey;
+  blurb: TextKey;
   /** Multiplies the level-3 damage. */
   damage?: number;
   /** Added to the level-3 reach, in pixels. */
@@ -105,12 +125,12 @@ export interface FormInfo {
 }
 
 export const FORM_INFO: Record<FormKind, FormInfo> = {
-  boulder: { of: 'pebble', name: 'Boulder', blurb: 'double damage, splashes, slower throws', damage: 2, cooldown: 1.6, splash: 44, colour: 0x8a8680 },
-  sling: { of: 'pebble', name: 'Sling', blurb: 'quick throws, far reach', damage: 0.8, cooldown: 0.55, range: 50, colour: 0xf2c44a },
-  bog: { of: 'moss', name: 'Bog', blurb: 'slows to a crawl for 3s', slow: { factor: 0.25, ms: 3000 }, colour: 0x3a6a8a },
-  spore: { of: 'moss', name: 'Spore', blurb: 'slows every pest in reach', area: true, damage: 0.7, colour: 0xb0d860 },
-  bramble: { of: 'thorn', name: 'Bramble', blurb: 'reaches 60px further', range: 60, colour: 0x6fae4a },
-  barb: { of: 'thorn', name: 'Barb', blurb: 'deeper pricks, pierce armour', damage: 1.5, pierce: true, colour: 0xf2a6c8 },
+  boulder: { of: 'pebble', name: 'boulderName', blurb: 'boulderBlurb', damage: 2, cooldown: 1.6, splash: 44, colour: 0x8a8680 },
+  sling: { of: 'pebble', name: 'slingName', blurb: 'slingBlurb', damage: 0.8, cooldown: 0.55, range: 50, colour: 0xf2c44a },
+  bog: { of: 'moss', name: 'bogName', blurb: 'bogBlurb', slow: { factor: 0.25, ms: 3000 }, colour: 0x3a6a8a },
+  spore: { of: 'moss', name: 'sporeName', blurb: 'sporeBlurb', area: true, damage: 0.7, colour: 0xb0d860 },
+  bramble: { of: 'thorn', name: 'brambleName', blurb: 'brambleBlurb', range: 60, colour: 0x6fae4a },
+  barb: { of: 'thorn', name: 'barbName', blurb: 'barbBlurb', damage: 1.5, pierce: true, colour: 0xf2a6c8 },
 };
 
 /** The two forms a golem of `kind` can take at level 3. */
@@ -119,11 +139,11 @@ export const formsOf = (kind: GolemKind) => FORMS.filter((form) => FORM_INFO[for
 /** How a golem picks its target, among the pests within reach. */
 export const TARGETS = ['first', 'strongest', 'weakest', 'flyers'] as const;
 export type Target = (typeof TARGETS)[number];
-export const TARGET_INFO: Record<Target, { name: string; blurb: string }> = {
-  first: { name: 'First', blurb: 'the pest furthest along the path' },
-  strongest: { name: 'Strongest', blurb: 'the pest with the most health left' },
-  weakest: { name: 'Weakest', blurb: 'the pest with the least health left' },
-  flyers: { name: 'Flyers', blurb: 'crows before anything else' },
+export const TARGET_INFO: Record<Target, { name: TextKey; blurb: TextKey }> = {
+  first: { name: 'firstName', blurb: 'firstBlurb' },
+  strongest: { name: 'strongestName', blurb: 'strongestBlurb' },
+  weakest: { name: 'weakestName', blurb: 'weakestBlurb' },
+  flyers: { name: 'flyersName', blurb: 'flyersBlurb' },
 };
 
 /** What a golem throws with at its level and form. */
@@ -156,7 +176,7 @@ export function golemStats(kind: GolemKind, level: number, form: FormKind | null
 }
 
 /** A hedge: a cheap seed for a path cell that pests must chew through before they walk on. */
-export const HEDGE = { name: 'Hedge', cost: 15, hp: 60, blurb: 'Blocks the path until chewed through' };
+export const HEDGE = { name: 'hedgeName' as TextKey, cost: 15, hp: 60 };
 /** Health a chewing pest takes off a hedge every second, per leaf it bites. */
 export const CHEW_PER_BITE = 6;
 
@@ -270,13 +290,13 @@ export const regrowCost = (regrown: number) => REGROW.base + REGROW.step * regro
 /** Garden boons (GG11), one picked from three after each Queen Slug wave. They last the garden. */
 export const BOONS = ['moss', 'sun', 'leaf', 'hedge', 'pebble', 'compost'] as const;
 export type Boon = (typeof BOONS)[number];
-export const BOON_INFO: Record<Boon, { name: string; blurb: string }> = {
-  moss: { name: 'Long moss', blurb: 'Every slow lasts half again as long' },
-  sun: { name: 'Sunny row', blurb: 'Golems on one row reach 20px further' },
-  leaf: { name: 'New growth', blurb: 'Two Heartwood leaves grow back' },
-  hedge: { name: 'Thick hedges', blurb: 'Hedges planted from now have half again the health' },
-  pebble: { name: 'Sharp rocks', blurb: 'Pebble golems do 20% more damage' },
-  compost: { name: 'Rich compost', blurb: 'Compost pays up to 15 sap more' },
+export const BOON_INFO: Record<Boon, { name: TextKey; blurb: TextKey }> = {
+  moss: { name: 'longMossName', blurb: 'longMossBlurb' },
+  sun: { name: 'sunnyRowName', blurb: 'sunnyRowBlurb' },
+  leaf: { name: 'newGrowthName', blurb: 'newGrowthBlurb' },
+  hedge: { name: 'thickHedgesName', blurb: 'thickHedgesBlurb' },
+  pebble: { name: 'sharpRocksName', blurb: 'sharpRocksBlurb' },
+  compost: { name: 'richCompostName', blurb: 'richCompostBlurb' },
 };
 /** What each boon does, in numbers: each pick of it adds this much again. */
 export const BOON = { mossSlow: 0.5, sunReach: 20, leaves: 2, hedgeHp: 0.5, pebbleDamage: 0.2, compostCap: 15 };
@@ -289,10 +309,10 @@ export const boonOffer = (nth: number): Boon[] => BOONS.slice(((nth - 1) % 2) * 
  */
 export const TWISTS = ['hedges', 'crows', 'sap'] as const;
 export type Twist = (typeof TWISTS)[number];
-export const TWIST_INFO: Record<Twist, { name: string; blurb: string }> = {
-  hedges: { name: 'No hedges', blurb: 'the hedge seed is gone' },
-  crows: { name: 'Double crows', blurb: 'every crow comes with a twin' },
-  sap: { name: 'Lean start', blurb: 'start with 30 sap' },
+export const TWIST_INFO: Record<Twist, { name: TextKey }> = {
+  hedges: { name: 'noHedgesName' },
+  crows: { name: 'doubleCrowsName' },
+  sap: { name: 'leanStartName' },
 };
 export const GARDEN_TWISTS: Twist[] = ['hedges', 'crows', 'sap'];
 /** Stars on a garden that unlock its thorny variant. */
