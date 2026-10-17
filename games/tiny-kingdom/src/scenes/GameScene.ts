@@ -1,8 +1,10 @@
 import Phaser from 'phaser';
+import { playMusic, playSting, ui } from '../../../../shared/audio';
 import { settings } from '../../../../shared/settings';
 import { viewPoint } from '../../../../shared/scaling';
 import { propKey, PROP_ORIGIN, tileKey } from '../art/textures';
 import { addArt, RES } from '../art/wood';
+import { PLACE_PITCH, sfx, SONG } from '../audio';
 import { joinedCells, joinedCount } from '../game/castle';
 import { DECREE_BONUS, decreeMarks, type At, type Decree } from '../game/decree';
 import { GIFT_INFO, type Gift } from '../game/gifts';
@@ -211,6 +213,8 @@ export class GameScene extends Phaser.Scene {
   private code = '';
   /** The campaign's best stars per level, loaded when the card opens. */
   private stars: number[] = [];
+  /** The best score when this kingdom began, to tell a new best at its end. */
+  private bestAtStart = 0;
 
   constructor() {
     super('Game');
@@ -233,6 +237,9 @@ export class GameScene extends Phaser.Scene {
       .setDepth(UI_DEPTH + 5)
       .setAlpha(0);
     this.refresh();
+    this.bestAtStart = this.state.best;
+    // Each season has its own part of the song; it starts on the first tap if sound is still locked.
+    playMusic(SONG, season(this.state));
   }
 
   private createBoard() {
@@ -293,7 +300,10 @@ export class GameScene extends Phaser.Scene {
     const islandBg = addArt(this, ib.x, ib.y, `plaque-${ib.w}x${ib.h}`).setInteractive({ useHandCursor: true });
     islandBg.on('pointerover', () => islandBg.setTexture(`plaque-${ib.w}x${ib.h}-sel`));
     islandBg.on('pointerout', () => islandBg.setTexture(`plaque-${ib.w}x${ib.h}`));
-    islandBg.on('pointerdown', () => this.openIslands());
+    islandBg.on('pointerdown', () => {
+      ui('click');
+      this.openIslands();
+    });
     this.islandText = this.add.text(ib.x, ib.y - 1, '', style(12, INK, '900')).setOrigin(0.5);
     this.scoreText = this.add.text(PANEL.x + 16, 104, '', style(20, CREAM, '900', { shadow: { offsetX: 1, offsetY: 1.5, color: 'rgba(0,0,0,0.45)', fill: true } })).setOrigin(0, 0.5);
     // How many buildings the castle's chain reaches: the bonus the end of the kingdom pays.
@@ -339,7 +349,11 @@ export class GameScene extends Phaser.Scene {
         this.refresh();
         return;
       }
-      if (!undo(this.state)) return;
+      if (!undo(this.state)) {
+        ui('refuse');
+        return;
+      }
+      sfx('undo');
       this.mergeFrom = null;
       this.redrawCells();
       this.refresh();
@@ -398,7 +412,11 @@ export class GameScene extends Phaser.Scene {
     const pill = addArt(this, countX, countY, 'count');
     const count = this.add.text(pill.x, pill.y, '', style(12, CREAM, '900')).setOrigin(0.5);
     plaque.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
-      if (!select(this.state, kind)) return;
+      if (!select(this.state, kind)) {
+        ui('refuse');
+        return;
+      }
+      sfx('select');
       this.mergeFrom = null;
       this.refresh();
       // The hover follows the new pick right away, without waiting for the pointer to move.
@@ -423,7 +441,10 @@ export class GameScene extends Phaser.Scene {
     const heading = (y: number, text: string) => this.add.text(C.x, y, text, style(10, '#f2c33a', '900', { letterSpacing: 1 } as never)).setOrigin(0.5);
     this.tradeGo = this.plaque(C.x - 110, top + C.buttonY, BUTTON.w, BUTTON.h, () => this.makeTrade());
     this.tradeGoText = this.add.text(C.x - 110, top + C.buttonY - 1, t('trade'), style(16, INK, '900')).setOrigin(0.5);
-    const close = this.plaque(C.x + 110, top + C.buttonY, BUTTON.w, BUTTON.h, () => this.closeTrade());
+    const close = this.plaque(C.x + 110, top + C.buttonY, BUTTON.w, BUTTON.h, () => {
+      ui('click');
+      this.closeTrade();
+    });
     const closeText = this.add.text(C.x + 110, top + C.buttonY - 1, t('close'), style(16, INK, '900')).setOrigin(0.5);
     this.tradeCard = this.add
       .container(0, 0, [dim, card, title, sub, heading(top + C.giveY - 40, t('give', { n: TRADE_GIVE })), heading(top + C.takeY - 40, t('take', { n: 1 })), this.tradeGo, this.tradeGoText, close, closeText])
@@ -440,7 +461,10 @@ export class GameScene extends Phaser.Scene {
       const key = `plaque-${w}x${h}`;
       const glow = addArt(this, x, y + 1, `glow-${w}x${h}`).setVisible(kind === picked);
       const plaque = addArt(this, x, y, kind === picked ? `${key}-sel` : key).setInteractive({ useHandCursor: true });
-      plaque.on('pointerdown', () => onPick(kind));
+      plaque.on('pointerdown', () => {
+        ui('click');
+        onPick(kind);
+      });
       const icon = this.tileIcon(kind, x, y - 9, 0.4);
       const text = fit(this.add.text(x, y + h / 2 - 11, label(kind), style(10, kind === picked ? '#b0401f' : INK, '900')).setOrigin(0.5), w - 6);
       this.tradeObjects.push(glow, plaque, icon, text);
@@ -487,7 +511,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   private makeTrade() {
-    if (!this.tradeGive || !this.tradeTake || !trade(this.state, this.tradeGive, this.tradeTake)) return;
+    if (!this.tradeGive || !this.tradeTake || !trade(this.state, this.tradeGive, this.tradeTake)) {
+      ui('refuse');
+      return;
+    }
+    sfx('jingle');
     this.closeTrade();
     this.refresh();
     this.hoverPointer();
@@ -525,7 +553,10 @@ export class GameScene extends Phaser.Scene {
       .text(VIEW.w / 2, VIEW.h / 2 - 90, t('gameOver'), style(28, CREAM, '900', { shadow: { offsetX: 1, offsetY: 2, color: 'rgba(0,0,0,0.45)', fill: true } }))
       .setOrigin(0.5);
     this.gameOverText = this.add.text(VIEW.w / 2, VIEW.h / 2 - 8, '', style(15, LABEL, '700', { align: 'center', lineSpacing: 4 })).setOrigin(0.5);
-    const islands = makeButton(this, VIEW.w / 2 - 110, VIEW.h / 2 + 88, t('islands'), () => this.openIslands());
+    const islands = makeButton(this, VIEW.w / 2 - 110, VIEW.h / 2 + 88, t('islands'), () => {
+      ui('click');
+      this.openIslands();
+    });
     const again = makeButton(this, VIEW.w / 2 + 110, VIEW.h / 2 + 88, t('newKingdom'), () => this.start(randomIsland()));
     this.gameOver = this.add.container(0, 0, [dim, panel, title, this.gameOverText, islands, again]).setDepth(UI_DEPTH + 20).setVisible(false);
   }
@@ -553,7 +584,10 @@ export class GameScene extends Phaser.Scene {
     const heading = (x: number, y: number, text: string) => objects.push(this.add.text(x, y, text, style(10, '#f2c33a', '900', { letterSpacing: 1 } as never)).setOrigin(0, 0.5));
     objects.push(
       this.add.text(left + 30, C.close.y, t('chooseIsland'), style(22, CREAM, '900', { shadow: { offsetX: 1, offsetY: 1.5, color: 'rgba(0,0,0,0.45)', fill: true } })).setOrigin(0, 0.5),
-      this.plaque(C.close.x, C.close.y, C.close.w, C.close.h, () => this.closeIslands()),
+      this.plaque(C.close.x, C.close.y, C.close.w, C.close.h, () => {
+        ui('click');
+        this.closeIslands();
+      }),
       fit(this.add.text(C.close.x, C.close.y - 1, t('close'), style(13, INK, '900')).setOrigin(0.5), C.close.w - 8),
     );
 
@@ -610,18 +644,24 @@ export class GameScene extends Phaser.Scene {
       if (/^\d$/.test(e.key)) this.keyIn(e.key);
       else if (e.key === 'Backspace') this.keyIn('Del');
       else if (e.key === 'Enter') this.keyIn('Play');
-      else if (e.key === 'Escape') this.closeIslands();
+      else if (e.key === 'Escape') {
+        ui('click');
+        this.closeIslands();
+      }
     });
   }
 
   /** A key on the islands card's keypad: a digit, Del or Play. */
   private keyIn(key: string) {
-    if (key === 'Del') this.code = this.code.slice(0, -1);
-    else if (key === 'Play') {
+    if (key === 'Play') {
       const island = parseIsland(this.code);
       if (island) this.start(island, { mode: 'code' });
+      else ui('refuse');
       return;
-    } else if (this.code.length < 4) this.code = (this.code + key).replace(/^0+/, '');
+    }
+    ui('click');
+    if (key === 'Del') this.code = this.code.slice(0, -1);
+    else if (this.code.length < 4) this.code = (this.code + key).replace(/^0+/, '');
     this.refreshCode();
   }
 
@@ -706,13 +746,27 @@ export class GameScene extends Phaser.Scene {
     const from = this.mergeFrom;
     this.mergeFrom = null;
     let placed: Placed | null = null;
-    if (from && canMerge(this.state, from, at)) placed = merge(this.state, from, at);
-    else if ((!from || from.col !== at.col || from.row !== at.row) && mergeable(this.state, at.col, at.row)) this.mergeFrom = at;
-    else if (!from && canClear(this.state, at.col, at.row)) placed = clear(this.state, at.col, at.row);
-    else if (!from && this.state.grid[at.row][at.col] === 'market' && canTrade(this.state)) {
+    if (from && canMerge(this.state, from, at)) {
+      placed = merge(this.state, from, at);
+      sfx('thunk');
+      this.later(110, () => sfx('ding'));
+    } else if ((!from || from.col !== at.col || from.row !== at.row) && mergeable(this.state, at.col, at.row)) {
+      this.mergeFrom = at;
+      sfx('select');
+    } else if (!from && canClear(this.state, at.col, at.row)) {
+      placed = clear(this.state, at.col, at.row);
+      if (placed) sfx('chop');
+    } else if (!from && this.state.grid[at.row][at.col] === 'market' && canTrade(this.state)) {
+      ui('click');
       this.openTrade();
       return;
-    } else if (!from) placed = place(this.state, at.col, at.row);
+    } else if (!from) {
+      const kind = this.state.selected;
+      placed = place(this.state, at.col, at.row);
+      if (placed && kind) sfx('place', { pitch: PLACE_PITCH[kind] });
+      else if (!placed) ui('refuse');
+    } else sfx('select', { pitch: 0.8 }); // a second tap that cancels the merge
+    if (placed) this.placedSounds(placed, !!from);
     if (placed) {
       if (placed.decree) saveCrowns(this.state.crowns);
       if (this.state.phase === 'over') this.gameEnded();
@@ -726,7 +780,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   private takeGift(gift: Gift) {
-    if (!chooseGift(this.state, gift)) return;
+    if (!chooseGift(this.state, gift)) {
+      ui('refuse');
+      return;
+    }
+    sfx('gift');
     if (this.state.phase === 'over') this.gameEnded();
     if (this.state.phase === 'playing') this.announceRound(gift);
     this.refresh();
@@ -743,6 +801,51 @@ export class GameScene extends Phaser.Scene {
       stars[s.level - 1] = Math.max(stars[s.level - 1] ?? 0, starsFor(s.level, s.score));
       saveStars(stars);
     }
+    this.endSounds();
+  }
+
+  /** Plays `play` after `ms` of game time; `start` cancels the ones still waiting. */
+  private later(ms: number, play: () => void) {
+    this.time.delayedCall(ms, play);
+  }
+
+  /**
+   * What a placement, clearing or merge sounds like after its own "tok": a rising blip per building
+   * whose worth went up (staggered with the popups, at most six), one low note if any went down,
+   * then the decree's fanfare, the omen striking and the goal's arpeggio, in that order. `merged`
+   * is true for a merge.
+   */
+  private placedSounds(placed: Placed, merged: boolean) {
+    const gains = placed.changes.filter((c) => c.gained > 0).slice(0, 6);
+    gains.forEach((_, i) => this.later(70 + i * 70, () => sfx('gain', { pitch: 2 ** ((i * 2) / 12) })));
+    // A merge always loses the house it takes away, so only other losses sound.
+    if (!merged && placed.changes.some((c) => c.gained < 0)) this.later(80, () => sfx('loss'));
+    let at = 120 + gains.length * 70;
+    if (placed.decree) {
+      this.later(at, () => sfx('decree'));
+      at += 450;
+    }
+    if (placed.struck) {
+      const kind = placed.struck.kind;
+      this.later(at, () => sfx(kind));
+      at += 500;
+    }
+    if (placed.newRound) this.later(at, () => sfx('goal'));
+  }
+
+  /** The end of a kingdom: a tick per building the castle joined (up to ten), a chime per campaign star, then a sting. */
+  private endSounds() {
+    const s = this.state;
+    const ticks = Math.min(10, s.castle);
+    for (let i = 0; i < ticks; i++) this.later(500 + i * 60, () => sfx('tick', { pitch: 1 + i * 0.03 }));
+    let at = 600 + ticks * 60;
+    if (s.mode === 'campaign') {
+      const stars = starsFor(s.level, s.score);
+      for (let i = 0; i < stars; i++) this.later(at + i * 260, () => sfx('star', { pitch: 2 ** ((i * 4) / 12) }));
+      at += stars * 260;
+    }
+    const best = s.score > this.bestAtStart;
+    this.later(at, () => playSting(SONG, best ? 'best' : 'finished'));
   }
 
   /** A "+N" (or a word, such as an omen's "Flooded") that floats up from a cell and fades; it only fades with reduced motion. */
@@ -781,6 +884,9 @@ export class GameScene extends Phaser.Scene {
       t('bannerGift', { gift: t(GIFT_INFO[gift].label) }),
     ];
     if (s.omen) lines.push(t('bannerOmen', { n: s.round + 1, omen: this.omenLine(s.omen, 'text') }));
+    // The new season's part takes over at the next bar; an omen for the next round adds its motif.
+    playMusic(SONG, season(s));
+    if (s.omen) this.later(500, () => playSting(SONG, 'omen'));
     fit(this.bannerText.setText(lines), 430);
     this.banner.setAlpha(1);
     this.tweens.killTweensOf(this.banner);
@@ -1194,6 +1300,10 @@ export class GameScene extends Phaser.Scene {
     this.state = newGame(Math.max(loadBest(), this.state.best), Math.max(loadCrowns(), this.state.crowns), island, kingdom);
     this.closeIslands();
     this.closeTrade();
+    ui('click');
+    this.time.removeAllEvents();
+    this.bestAtStart = this.state.best;
+    playMusic(SONG, season(this.state));
     this.tweens.killTweensOf(this.banner);
     this.banner.setAlpha(0);
     this.redrawCells();

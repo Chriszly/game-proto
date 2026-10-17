@@ -802,6 +802,9 @@ triangle bass.
 
 Notes:
 - Nothing here is high-frequency. Play hover ticks only when the cell changes, or not at all.
+- Done: `src/audio.ts`, with the song's parts named after the seasons (`spring`, `summer`,
+  `autumn`, `winter`) and stings `omen`, `finished` and `best`; no hover ticks. The game's
+  `AGENTS.md` lists where each sound plays.
 
 ### TinctureTinker
 Match-3 potion brewing in Art Nouveau style; cosy and whimsical.

@@ -163,7 +163,7 @@ Implemented today:
 
 Missing or rough:
 
-- No title screen, menu or sound.
+- No title screen or menu. The sound has not had a listen on real speakers yet; retune `src/audio.ts` by ear.
 - The campaign's star scores come from a greedy bot (`previewScore` for every kind in the hand and
   every cell, merging when it gains, taking the second gift, the castle bonus included), not from
   human play; retune `LEVELS` if they feel off. The bot never trades or clears woods.
@@ -204,6 +204,8 @@ File map (`src/`):
   `TextKey` types the keys; `placeName(id)` turns a lake's or wood's id into its name. Every text
   on screen goes through `t`, and a new one gets its German entry (and a US one if its spelling
   differs) in the same PR. In German a farm is an Acker, since Feld means a board cell.
+- `audio.ts`: the song (`SONG`) and the effects (`sfx`, `PLACE_PITCH`), played by `GameScene`; see
+  Sound below.
 - `main.ts`: creates the `Phaser.Game` (960x540, `Phaser.Scale.FIT`, `pixelArt: false`) with
   `BootScene` and `GameScene`, calls `setupGame(game)` from `shared/setupGame.ts` and
   `setupScaling(game)` from `shared/scaling.ts`, and in dev builds puts `game` on `window`.
@@ -262,7 +264,8 @@ File map (`src/`):
   `bg` texture.
 - `ui/Button.ts`: `makeButton`, the beech plaque button used by the game-over overlay.
 
-Shared code it imports (outside the game folder): `shared/setupGame.ts` (`setupGame`),
+Shared code it imports (outside the game folder): `shared/audio.ts` (`sounds`, `ui`, `playMusic`,
+`playSting`), `shared/setupGame.ts` (`setupGame`),
 `shared/scaling.ts` (`setupScaling`, `sharpRes`, `viewPoint`), `shared/settings.ts`
 (`byDifficulty`, `settings`) and `shared/i18n.ts` (`translator`, `byLanguage`, `Translation`).
 
@@ -332,7 +335,8 @@ kingdom; the island, its hands, its decrees, its omens and its gifts all follow 
 (`seeded`). The only
 date read is `today()` (`new Date()`) when the islands card opens or the daily island starts. The
 game calls no `Date.now` or `performance.now`. The art uses its own seeded `rnd`, so textures are
-identical every load. Only Phaser tweens use time.
+identical every load. Only Phaser tweens use time, and the scene's `later` (a `this.time.delayedCall`)
+that staggers sounds; `start` cancels the waiting ones with `this.time.removeAllEvents()`.
 
 Data tables:
 
@@ -370,6 +374,50 @@ Data tables:
 - Keep the Tiny Kingdom row of the difficulty table in the root README (and the line under the
   screenshots in this game's README) in sync with the `byDifficulty` values in `goalFor` and
   `starScores`.
+
+## Sound
+
+All of it is in `src/audio.ts` and made by `shared/audio.ts` (nothing plays under browser
+automation, so the playthrough is unchanged). `GameScene` plays it; `src/game/` has no audio.
+
+Song (`SONG`): a bouncy pastoral in G major at 100 BPM, with a music-box lead (`pulse12`), a quiet
+square harmony, a triangle bass and light drums. Its looping parts are the seasons, so the part is
+always `season(state)`:
+
+- `spring` (eight bars, G C D G Em C Am-D G): the main tune; plays from `create` and `start`, since
+  round 1 is spring.
+- `summer` (four bars, brighter and busier), `autumn` (four bars, slower, Em C G D) and `winter`
+  (four bars, a sparse music box up high): `announceRound` switches to the new round's season,
+  which takes over at the next bar.
+- Stings: `omen` (a falling E minor phrase, half a second after the round banner when the round
+  brings an omen), `finished` (a cadence home, at the end of a kingdom) and `best` (a fanfare,
+  instead of `finished` when the final score beats the best the kingdom started with,
+  `bestAtStart`).
+
+Effects (`sfx`), and where they play:
+
+| Sound | Plays |
+| --- | --- |
+| `select` | a tile button picked, or a house picked to merge in `tapAt` (pitched down when a second tap cancels the merge) |
+| `place` | a building placed in `tapAt`, pitched by kind with `PLACE_PITCH` |
+| `gain` | after a placement, clearing or merge: one rising blip per building whose worth went up (at most six, 70ms apart, with the popups; `placedSounds`) |
+| `loss` | once after a placement or clearing that lowered a building's worth (not for a merge's lost house) |
+| `thunk`, `ding` | a merge into a manor, the ding 110ms after the thunk |
+| `chop` | a wood cleared by a lumber camp |
+| `jingle` | a market trade made (`makeTrade`) |
+| `undo` | the undo button took a placement back |
+| `decree` | the placement fulfilled the round's decree |
+| `flood`, `storm` | the omen struck as the round began (`placed.struck`) |
+| `goal` | the placement reached the goal (`placed.newRound`) |
+| `gift` | a gift taken (`takeGift`) |
+| `tick` | at the end of a kingdom (`endSounds`, from `gameEnded`), one per building the castle joined, at most ten |
+| `star` | at the end of a campaign kingdom, one rising chime per star won |
+
+Shared sounds: `ui('click')` for the island button, the trade card's chips and Close, a market
+tapped to trade, the islands card's Close (and Escape), keypad digits and Del, and every new
+kingdom (`start`); `ui('refuse')` for a tap where nothing can be placed, a tile button or gift
+that can't be taken, undo when it isn't allowed, Trade before both picks are made and Play with no
+valid island number. Hovering makes no sound. The game has no `?watch` mode.
 
 ## Testing hooks
 
