@@ -31,9 +31,12 @@ export const LANTERN_OIL = 175;
  */
 export const STICK = { r: 60, knob: 24, dead: 8, drag: 14, snap: 0.4 };
 
-/** Touch buttons, bottom right: sword, roll and hookvine. */
+/** Touch buttons, bottom right: sword, roll, hookvine and bellseeds. */
 export const BUTTONS = {
   sword: { x: 880, y: 456, r: 34 },
   roll: { x: 800, y: 490, r: 28 },
   vine: { x: 812, y: 410, r: 28 },
+  seed: { x: 728, y: 468, r: 26 },
 };
+/** Where a bellseed is planted: this far in front of the knight's feet. */
+export const PLANT_REACH = 22;
