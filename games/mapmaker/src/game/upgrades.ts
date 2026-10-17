@@ -1,20 +1,22 @@
 // What the coins from charts buy at the harbor, between voyages. Their effects are applied in
-// src/game/state.ts (`maxSupplies`, `inkBonus`) and src/game/sim.ts (`sightOf`, compass).
+// src/game/state.ts (`maxSupplies`, `inkBonus`) and src/game/sim.ts (`sightOf`, compass). Names
+// and texts are keys of `i18n/en.ts`, shown with `t`.
+import type { TextKey } from '../i18n';
 
 export type UpgradeId = 'provisions' | 'spyglass' | 'ink' | 'compass';
 
 export interface Upgrade {
-  name: string;
-  text: string;
+  name: TextKey;
+  text: TextKey;
   /** The price of each rank, in order; its length is the most ranks. */
   costs: number[];
 }
 
 export const UPGRADES: Record<UpgradeId, Upgrade> = {
-  provisions: { name: 'Provisions', text: '+3 supplies every voyage', costs: [40, 80, 140] },
-  spyglass: { name: 'Spyglass', text: 'Hills and peaks see one tile further', costs: [60, 120] },
-  ink: { name: 'Fine Ink', text: 'Charts sell for 25% more', costs: [50, 100, 180] },
-  compass: { name: 'Lodestone Compass', text: 'Shows villages and ruins through the fog', costs: [90] },
+  provisions: { name: 'provisionsName', text: 'provisionsText', costs: [40, 80, 140] },
+  spyglass: { name: 'spyglassName', text: 'spyglassText', costs: [60, 120] },
+  ink: { name: 'inkName', text: 'inkText', costs: [50, 100, 180] },
+  compass: { name: 'compassName', text: 'compassText', costs: [90] },
 };
 
 export const UPGRADE_IDS = Object.keys(UPGRADES) as UpgradeId[];

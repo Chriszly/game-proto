@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { CRATES, CRATE_KINDS, DRUM, HUD_HEIGHT, REACH_Y, SUPPLY_KINDS, VIEW, type CrateKind, type SupplyKind } from '../game/rules';
+import { t } from '../i18n';
 import { GEOM, TAU, bake, circle, lit, path, rng, tex, type Ctx, type Pt } from './paint';
 import { ACID_COLOR, COMIC, CRATE_COLORS } from './theme';
 
@@ -331,7 +332,7 @@ function crate(ctx: Ctx, kind: CrateKind) {
 }
 
 function crateLabel(ctx: Ctx, kind: CrateKind) {
-  const label = CRATES[kind].label.toUpperCase();
+  const label = t(CRATES[kind].label).toUpperCase();
   ctx.font = `italic 900 10px ${FONT}`;
   const w = ctx.measureText(label).width + 22;
   ctx.save();
@@ -747,10 +748,10 @@ export function bakeComic(scene: Phaser.Scene) {
     c.strokeStyle = '#ffb02a';
     c.stroke();
   });
-  bake(scene, key('sfx-blam'), GEOM.sfx, (c) => letter(c, 'BLAM!', 0, 0, 26, '#ffe24a', { sw: 5 }));
-  bake(scene, key('sfx-splut'), GEOM.sfx, (c) => letter(c, 'SPLUT!', 0, 0, 16, '#8cc04e', { sw: 4 }));
+  bake(scene, key('sfx-blam'), GEOM.sfx, (c) => letter(c, t('sfxBlam'), 0, 0, 26, '#ffe24a', { sw: 5 }));
+  bake(scene, key('sfx-splut'), GEOM.sfx, (c) => letter(c, t('sfxSplut'), 0, 0, 16, '#8cc04e', { sw: 4 }));
   bake(scene, key('sfx-boom'), GEOM.sfx, (c) => {
     burst(c, 0, 0, 24, 40, 10, '#fff3a0', { lw: 2.5, sx: 1.7, seed: 12 });
-    letter(c, 'KA-BOOM!', 0, 0, 22, '#e8402a', { sw: 5 });
+    letter(c, t('sfxBoom'), 0, 0, 22, '#e8402a', { sw: 5 });
   });
 }

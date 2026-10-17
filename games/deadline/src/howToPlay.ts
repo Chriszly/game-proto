@@ -1,6 +1,7 @@
 import type { HowToPlay } from '../../../shared/howToPlay';
+import { byLanguage } from '../../../shared/i18n';
 
-export const howToPlay: HowToPlay = {
+const en: HowToPlay = {
   goal: 'Hold the road against the zombie horde for as many waves as you can, or win a 10-wave operation. The run ends when a zombie reaches your sandbags.',
   controls: [
     {
@@ -40,3 +41,55 @@ export const howToPlay: HowToPlay = {
     'Every kill banks scrap, which buys starting crates for your next run and lasting outpost upgrades.',
   ],
 };
+
+/** US English only changes the spelling. */
+const us = (text: string) => text.replace(/armoured/g, 'armored');
+const enUS: HowToPlay = {
+  goal: en.goal,
+  controls: en.controls,
+  loop: en.loop,
+  tips: en.tips.map(us),
+};
+
+const de: HowToPlay = {
+  goal: 'Halte die Straße so viele Wellen wie möglich gegen die Zombiehorde, oder gewinne eine Operation über 10 Wellen. Der Lauf endet, wenn ein Zombie deine Sandsäcke erreicht.',
+  controls: [
+    {
+      input: 'Irgendwo tippen oder ziehen, oder A / D / Pfeiltasten',
+      action: 'Den Soldaten nach links oder rechts bewegen; geschossen wird von selbst',
+    },
+    {
+      input: 'Die Ausrüstung antippen, dann eine Spur, oder S',
+      action: 'Einen Sandsackwall bauen, der eine Spur 6 Sekunden lang aufhält',
+    },
+    { input: 'Eine Karte antippen, oder 1 / 2 / 3', action: 'Nach einem Boss Nachschub wählen, oder die Rolle eines Überlebenden, der dazukommt' },
+    { input: 'Die breite Karte antippen, oder 4', action: 'Ab Welle 20 abziehen und den Lauf als Sieg beenden' },
+    { input: 'Schalter COMIC / NACHT, oder V', action: 'Zwischen Comic- und Nachtsicht-Grafik wechseln' },
+    {
+      input: 'Nach dem Spielende eine Startkiste antippen',
+      action: 'Sie mit Schrott für den nächsten Lauf kaufen; nochmal tippen erstattet sie',
+    },
+    { input: 'Nach dem Spielende einen Außenposten-Ausbau antippen', action: 'Seine nächste Stufe mit Schrott kaufen, für alle kommenden Läufe' },
+    { input: 'Nach dem Spielende eine Operation antippen', action: 'Den nächsten Lauf wählen: die Offene Straße oder eine Operation über 10 Wellen' },
+    { input: 'Nach dem Spielende woanders tippen', action: 'Neu ab Welle 1 beginnen' },
+  ],
+  loop: [
+    'Zombies laufen die Straße hinunter auf dich zu, während dein Trupp gerade nach oben feuert.',
+    'Stell dich unter eine Kiste und schieß sie auf, um ihr Upgrade zu bekommen.',
+    'Erledige jeden Zombie der Welle, und nach einer kurzen Pause kommt die nächste, größere Welle.',
+    'Jede fünfte Welle endet mit einem Boss; besiege ihn und wähle einen von drei Nachschüben.',
+  ],
+  tips: [
+    'Schieß ein Treibstofffass, wenn sich Zombies darum drängen, und sprenge sie alle.',
+    'Töte schnell: eine Serie von 12 startet einen Rausch, der deine Feuerrate 5 Sekunden lang verdoppelt.',
+    'Die dritte Kiste einer Sorte wird zum Vorteil: Brandmunition, Kopfschüsse oder Querschläger.',
+    'Spucker werfen Säure; geh aus dem Ring, denn in der Säure halbiert sich deine Feuerrate.',
+    'Deine Kugeln treffen auch Überlebende; lass einen die Sandsäcke erreichen, dann verstärkt er deinen Trupp.',
+    'Krawallzombies nehmen von normalen Kugeln kaum Schaden; nimm Durchschlag, ein Treibstofffass oder Feuer.',
+    'Ein neuer Überlebender wählt eine Rolle: Schütze, Grenadier (jede vierte Salve eine Granate) oder Scharfschütze (ein schwerer Schuss auf den zähesten Zombie).',
+    'Ab Welle 8 antwortet die Horde auf deinen stärksten Wert: gepanzerte Brecher stoppen Durchschlag, Krawallschilde bremsen die Feuerrate, Flankenspucker prüfen einen breiten Trupp.',
+    'Jeder Kill bringt Schrott, der Startkisten für den nächsten Lauf und dauerhafte Außenposten-Ausbauten kauft.',
+  ],
+};
+
+export const howToPlay: HowToPlay = byLanguage({ en, 'en-US': enUS, de });
