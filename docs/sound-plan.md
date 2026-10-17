@@ -751,6 +751,11 @@ Notes:
 - Fire sounds in the animation queue's `start` callbacks so they stay in sync.
 
 ### Wyrmrail
+**Done.** See the Sound section of `games/wyrmrail/AGENTS.md`. Differences from the plan below: the
+sim stays free of audio, so the scene plays the player's taps and `GameSounds` compares the state
+each frame for the rest; the busy part is sixteenths at 100 BPM (one tempo per song); there is no
+tunnel muffling (no wyrm sound plays inside a tunnel).
+
 Isometric railway builder with a dragon train; pastoral, mild time pressure.
 
 **Music:** Fiddle-like folk at about 100 BPM in G major pentatonic, with a pulse lead, triangle

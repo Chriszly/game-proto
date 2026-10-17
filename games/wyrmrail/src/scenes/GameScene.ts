@@ -51,6 +51,7 @@ import {
   roundGoal,
   type GameState,
   type Order,
+  type Upgrade,
   type Wyrm,
 } from '../game/state';
 import { RAIL, WOOD } from '../art/palette';
@@ -58,6 +59,9 @@ import { fit } from '../art/canvas';
 import { LOAD_LIFT, PART_ORIGIN } from '../art/sprites';
 import { PROP, bakeValley } from '../art/valley';
 import { makeButton } from '../ui/Button';
+import { ui } from '../../../../shared/audio';
+import { GameSounds } from '../audio/events';
+import { sfx } from '../audio/sounds';
 import {
   BOARD,
   BUTTONS,
@@ -82,6 +86,9 @@ import {
 const HINT_PX = 13;
 const MIN_HINT_PX = 10;
 const HINT_MARGIN = 72;
+
+/** The tok of new track by terrain: a bridge sounds hollow, a tunnel deep. */
+const TOK_PITCH: Record<ReturnType<typeof terrainAt>, number> = { grass: 1, forest: 0.88, river: 0.72, mountain: 0.6 };
 
 /** Longest simulated step, so a backgrounded tab doesn't jump the game forward. */
 const MAX_STEP_MS = 250;
@@ -153,6 +160,10 @@ export class GameScene extends Phaser.Scene {
   private pressedVillage: number | null = null;
   /** Whether this game's festival medal has been saved. */
   private medalSaved = false;
+  /** Plays what the sim did each frame, and the music. */
+  private sounds!: GameSounds;
+  /** Tiles of track laid in this drag, which raise the tok's pitch. */
+  private dragLaid = 0;
 
   private hints!: Phaser.GameObjects.Graphics;
   private rails!: Phaser.GameObjects.Graphics;
@@ -231,6 +242,7 @@ export class GameScene extends Phaser.Scene {
     this.cards = [];
     this.hearts = [];
     this.pops.clear();
+    this.sounds = new GameSounds(this.state);
 
     // Every game has a new valley, baked here over the last one.
     bakeValley(this, this.state.valley);
@@ -252,7 +264,10 @@ export class GameScene extends Phaser.Scene {
     this.input.on('pointerup', () => {
       this.dragTile = null;
       // A tap on a village that didn't drag off it sends a wyrm with gifts.
-      if (this.pressedVillage !== null) sendCourier(this.state, this.pressedVillage);
+      if (this.pressedVillage !== null) {
+        if (sendCourier(this.state, this.pressedVillage)) sfx('courier');
+        else if (this.state.round >= MOOD_ROUND && this.state.phase === 'play') ui('refuse');
+      }
       this.pressedVillage = null;
     });
     this.draw();
@@ -262,6 +277,7 @@ export class GameScene extends Phaser.Scene {
     const dt = this.lastFrame ? Math.min(time - this.lastFrame, MAX_STEP_MS) : 0;
     this.lastFrame = time;
     tick(this.state, dt);
+    this.sounds.update(this.state);
     this.draw();
   }
 
@@ -276,16 +292,32 @@ export class GameScene extends Phaser.Scene {
     if (!inGrid(t)) return;
     if (!down && (this.dragTile === null || this.dragTile === key(t))) return;
     this.dragTile = key(t);
-    const village = villageAt(this.state, t);
+    if (down) this.dragLaid = 0;
+    const s = this.state;
+    const village = villageAt(s, t);
     this.pressedVillage = down && this.mode !== 'remove' && this.mode !== 'depot' ? village : null;
     if (this.mode === 'depot') {
-      if (down && village !== null && buyDepot(this.state, village)) this.mode = 'auto';
+      if (!down) return;
+      if (village !== null && buyDepot(s, village)) {
+        this.mode = 'auto';
+        sfx('buy');
+      } else ui('refuse');
       return;
     }
-    if (this.mode === 'remove') return void removeTrack(this.state, t);
-    if (down && throwSwitch(this.state, t)) return;
+    if (this.mode === 'remove') {
+      if (removeTrack(s, t)) {
+        sfx('untok');
+        ui('coin');
+      } else if (down) ui('refuse');
+      return;
+    }
+    if (down && throwSwitch(s, t)) return void sfx('switch');
     // Plain track continues from the line tile touched just before it (laid or already there), when that is next to it.
-    if (buildTrack(this.state, t, this.mode === 'plain', this.lastLaid) || onLine(this.state, t)) this.lastLaid = t;
+    if (buildTrack(s, t, this.mode === 'plain', this.lastLaid)) {
+      this.lastLaid = t;
+      sfx('tok', { pitch: TOK_PITCH[terrainAt(s.valley, t)] * Math.min(1.5, 1 + 0.05 * this.dragLaid++) });
+    } else if (onLine(s, t)) this.lastLaid = t;
+    else if (s.phase === 'play') ui('refuse');
   }
 
   /** A prop standing on a tile, sorted with the wyrm by where it touches the ground. */
@@ -381,10 +413,18 @@ export class GameScene extends Phaser.Scene {
       b.container.setDepth(UI_DEPTH + 1);
       return b;
     };
-    this.wingsButton = button(BUTTONS.wings, () => buyUpgrade(this.state, 'wings'));
-    this.hoardButton = button(BUTTONS.hoard, () => buyUpgrade(this.state, 'hoard'));
-    this.secondButton = button(BUTTONS.second, () => buyUpgrade(this.state, 'second'));
-    const toggle = (mode: Mode) => () => (this.mode = this.mode === mode ? 'auto' : mode);
+    const buy = (u: Upgrade) => () => {
+      if (!buyUpgrade(this.state, u)) return ui('refuse');
+      sfx('buy');
+      if (u === 'second') sfx('roar');
+    };
+    this.wingsButton = button(BUTTONS.wings, buy('wings'));
+    this.hoardButton = button(BUTTONS.hoard, buy('hoard'));
+    this.secondButton = button(BUTTONS.second, buy('second'));
+    const toggle = (mode: Mode) => () => {
+      ui('click');
+      this.mode = this.mode === mode ? 'auto' : mode;
+    };
     this.depotButton = button(BUTTONS.depot, toggle('depot'));
     const dx = (PANEL.w - BUTTONS.half) / 2;
     this.removeButton = makeButton(this, PANEL.x - dx, BUTTONS.remove, BUTTONS.half, BUTTONS.h, t('remove'), toggle('remove'));
@@ -402,7 +442,10 @@ export class GameScene extends Phaser.Scene {
 
     const shade = this.add.rectangle(0, 0, BOARD.w, BOARD.h, 0x0e0a08, 0.7).setOrigin(0);
     this.overText = this.add.text(BOARD.w / 2, 220 - BOARD.y, '', { ...textStyle(20), align: 'center' }).setOrigin(0.5);
-    const restart = makeButton(this, PANEL_BUTTON.x, PANEL_BUTTON.y - BOARD.y, 160, 44, t('playAgain'), () => this.scene.restart());
+    const restart = makeButton(this, PANEL_BUTTON.x, PANEL_BUTTON.y - BOARD.y, 160, 44, t('playAgain'), () => {
+      ui('click');
+      this.scene.restart();
+    });
     this.overLayer = this.add.container(BOARD.x, BOARD.y, [shade, this.overText, restart.container]).setDepth(UI_DEPTH + 4).setVisible(false);
 
     // The round's charter: two cards over the board, the game waiting until one is tapped.
@@ -415,7 +458,7 @@ export class GameScene extends Phaser.Scene {
       bg.setInteractive({ useHandCursor: true })
         .on('pointerover', () => bg.setFillStyle(0x5c3a21))
         .on('pointerout', () => bg.setFillStyle(0x3d2b1f))
-        .on('pointerdown', () => pickCharter(this.state, i));
+        .on('pointerdown', () => pickCharter(this.state, i) && sfx('stamp'));
       const name = this.add.text(x, CHARTER_CARD.y - 34, '', textStyle(17, '#f3c64e')).setOrigin(0.5);
       const text = this.add.text(x, CHARTER_CARD.y + 10, '', { ...textStyle(13, '#f3e9d2'), align: 'center', wordWrap: { width: CHARTER_CARD.w - 30 } }).setOrigin(0.5);
       this.charterCards.push({ name, text });
@@ -879,7 +922,7 @@ export class GameScene extends Phaser.Scene {
       .text(PANEL.w / 2 - 8, 5, mood < 0 ? t('rushOrder') : mood > 0 ? t('morePay', { n: Math.round((MOOD_PAY[mood] - 1) * 100) }) : '', textStyle(11, mood < 0 ? '#e8b040' : '#9be883'))
       .setOrigin(1, 0);
     const card = this.add.container(PANEL.x, y, [bg, icon, title, pay, route, status, tag]).setDepth(UI_DEPTH + 1);
-    bg.setInteractive({ useHandCursor: true }).on('pointerdown', () => dispatch(this.state, o.id));
+    bg.setInteractive({ useHandCursor: true }).on('pointerdown', () => (dispatch(this.state, o.id) ? sfx('send') : ui('refuse')));
     return card;
   }
 }
