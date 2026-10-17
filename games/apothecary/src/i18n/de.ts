@@ -2,8 +2,9 @@ import type { Translation } from '../../../../shared/i18n';
 import type en from './en';
 
 /**
- * Apothecary's texts in German. Amounts show as a number and the gold coin ({coin}), never a name; a station's
- * markers stand too close for a German caption on one line, so their prices go on a line of their own.
+ * Apothecary's texts in German. Amounts show as a number and the gold coin ({coin}), never a name.
+ * Captions under markers that stand close together (a station's row, the markets) are kept short,
+ * and `fitCaption` in `GameScene.ts` sets one a size smaller where it still runs long.
  */
 const de: Translation<typeof en> = {
   // Items, by id
@@ -90,17 +91,17 @@ const de: Translation<typeof en> = {
   rivalApothecary: 'Konkurrenz',
   pickUp: 'Aufheben',
   drop: 'Ablegen',
-  work: 'Arbeiten',
+  work: 'Arbeit',
   first: 'Zuerst:',
   any: 'egal',
   land: 'Land',
   table: 'Tisch',
   joinGuild: 'Gilde beitreten',
-  levelCost: '{name} {level}:\u00a0{coins}{coin}',
-  stationLevelCost: 'Stufe {level}:\n{coins}{coin}',
-  buildCost: '{name}:\n{coins}{coin}',
-  learnCost: '{potion}:\n{coins}{coin}',
-  hireCost: 'Anheuern:\n{coins}{coin}',
+  levelCost: '{name}\u00a0{level}: {coins}{coin}',
+  stationLevelCost: 'St. {level}: {coins}{coin}',
+  buildCost: '{name}: {coins}{coin}',
+  learnCost: '{potion}: {coins}{coin}',
+  hireCost: 'Hilfe {coins}{coin}',
 
   // Feedback over the doctor
   gained: '+ {item}',
@@ -154,7 +155,7 @@ const de: Translation<typeof en> = {
   noTip: 'kein Trinkgeld',
 
   // Contract card
-  contract: 'Auftrag: {potions} bis zur Dämmerung',
+  contract: 'Auftrag: {potions} bis abends',
   contractBundle: 'Auftrag: {potions} + {more}',
   reward: 'Lohn {n}',
   contractKept: 'Auftrag erfüllt!',
@@ -170,7 +171,7 @@ const de: Translation<typeof en> = {
   sicknessSpreads: 'Eine Krankheit breitet sich in der Stadt aus!',
   townCured: 'Die Stadt ist geheilt!',
   townCuredSeals: 'Die Stadt ist geheilt! Siegel: {seals}, Preise +{n}%',
-  nextSeason: 'Die Krankheit der nächsten Saison kommt an Tag {day}',
+  nextSeason: 'Nächste Seuche ab Tag {day}',
   brewTheCure: 'Allheilmittel frei: braue die Heilung',
   inACauldron: 'in einem Kessel',
   plagueStage: 'Seuche {stage}/{stages}: {need}',
@@ -190,8 +191,8 @@ const de: Translation<typeof en> = {
   wagonReady: 'Im Regal {have}/{crate}: zum Verkauf tippen, noch {s} s',
 
   // Herb market
-  buyHerb: 'Kaufen: {item} {coins}{coin}',
-  sellHerb: 'Verkaufen: {item} {coins}{coin}',
+  buyHerb: '{item}\nKauf: {coins}{coin}',
+  sellHerb: '{item}\nVerkauf: {coins}{coin}',
   sellHerbs: 'Kräuter verkaufen',
 
   // Town card
@@ -216,6 +217,6 @@ const de: Translation<typeof en> = {
 };
 
 /** Texts that read the same in German. */
-export const keepEnglish: (keyof typeof en)[] = ['mild', 'land', 'fairSign', 'fairSet', 'gained', 'gainedFine', 'handedOver', 'coinsGained', 'coinPrice', 'bought', 'sold'];
+export const keepEnglish: (keyof typeof en)[] = ['mild', 'land', 'fairSign', 'fairSet', 'gained', 'gainedFine', 'handedOver', 'coinsGained', 'coinPrice', 'bought', 'sold', 'buildCost', 'learnCost'];
 
 export default de;

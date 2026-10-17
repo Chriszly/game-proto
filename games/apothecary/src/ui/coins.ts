@@ -9,7 +9,7 @@ const COIN_SIZE = 0.85;
  * Lays the painted gold coin over each coin slot in `text` (`{coin}` in a translated text, which
  * leaves an em space), so amounts read as a number and a coin, never a currency's name. The coins
  * follow the text's place, visibility, alpha, depth and container after every update, and only
- * measure again when the text changes.
+ * measure again when the text or its font size changes.
  */
 export function coined<T extends Phaser.GameObjects.Text>(text: T): T {
   const { scene } = text;
@@ -17,15 +17,16 @@ export function coined<T extends Phaser.GameObjects.Text>(text: T): T {
   let laid: string | null = null;
   let spots: Phaser.Types.Math.Vector2Like[] = [];
   const sync = () => {
-    if (text.text !== laid) {
-      laid = text.text;
+    const layout = `${fontSize(text)}:${text.text}`;
+    if (layout !== laid) {
+      laid = layout;
       spots = coinSpots(text);
-      const scale = (COIN_SIZE * fontSize(text)) / 12;
       while (coins.length < spots.length) {
-        const coin = fit(scene.add.image(0, 0, 'coin'), scale);
+        const coin = scene.add.image(0, 0, 'coin');
         text.parentContainer?.add(coin);
         coins.push(coin);
       }
+      for (const coin of coins) fit(coin, (COIN_SIZE * fontSize(text)) / 12);
     }
     coins.forEach((coin, i) => {
       const spot = spots[i];
