@@ -2,19 +2,21 @@
 // hero starts from scratch at level 1 but keeps one legacy perk, picked from three, on top of the
 // ones earlier heroes left. A first relic can be kept again and again; the others once each.
 
+import type { TextKey } from '../i18n';
 import type { RelicId } from './relics';
 
 export type LegacyId = 'relic' | 'slot' | 'rain';
 
 export interface LegacyType {
-  name: string;
-  text: string;
+  /** Name and text, keys of `i18n/en.ts`. */
+  name: TextKey;
+  text: TextKey;
 }
 
 export const LEGACIES: Record<LegacyId, LegacyType> = {
-  relic: { name: 'A first relic', text: 'Every new hero starts with this relic' },
-  slot: { name: 'Third guard slot', text: 'A third slot on the barricade to hire a guard on' },
-  rain: { name: 'Quick Arrow Rain', text: 'Arrow Rain charges with 25% fewer kills' },
+  relic: { name: 'legacyRelicName', text: 'legacyRelicText' },
+  slot: { name: 'legacySlotName', text: 'legacySlotText' },
+  rain: { name: 'legacyRainName', text: 'legacyRainText' },
 };
 
 export const LEGACY_IDS = Object.keys(LEGACIES) as LegacyId[];

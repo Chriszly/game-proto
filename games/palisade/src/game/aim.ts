@@ -1,5 +1,6 @@
 import { ENEMIES } from './enemies';
 import type { Enemy } from './state';
+import type { TextKey } from '../i18n';
 
 // Aim priority: who the ranger's arrows (and lightning) go at first. Nearest is how the game
 // always shot; the toggle beside the caltrops button cycles through the rest.
@@ -8,11 +9,11 @@ export type AimMode = 'nearest' | 'strongest' | 'flyers' | 'healers';
 
 export const AIM_MODES: AimMode[] = ['nearest', 'strongest', 'flyers', 'healers'];
 
-export const AIMS: Record<AimMode, { name: string; text: string }> = {
-  nearest: { name: 'Nearest', text: 'The foe nearest the barricade first' },
-  strongest: { name: 'Strongest', text: 'The foe with the most health first' },
-  flyers: { name: 'Flyers', text: 'Harpies first, then the nearest' },
-  healers: { name: 'Healers', text: 'Shamans first, then the nearest' },
+export const AIMS: Record<AimMode, { name: TextKey; text: TextKey }> = {
+  nearest: { name: 'nearestName', text: 'nearestText' },
+  strongest: { name: 'strongestName', text: 'strongestText' },
+  flyers: { name: 'flyersName', text: 'flyersText' },
+  healers: { name: 'healersName', text: 'healersText' },
 };
 
 /** The foe after `mode` in the cycle. */
