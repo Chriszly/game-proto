@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
+import { formatNumber, t as sharedText } from '../../../../shared/i18n';
 import { settings } from '../../../../shared/settings';
+import { t, type TextKey } from '../i18n';
 import { CARGO_NAMES, COLS, ROOST, ROWS, inGrid, key, terrainAt, type Tile } from '../game/map';
 import {
   arms,
@@ -76,6 +78,11 @@ import {
   tileCenter,
 } from './layout';
 
+/** The hint line's font size, the smallest it shrinks to, and the room it keeps clear on each side. */
+const HINT_PX = 13;
+const MIN_HINT_PX = 10;
+const HINT_MARGIN = 72;
+
 /** Longest simulated step, so a backgrounded tab doesn't jump the game forward. */
 const MAX_STEP_MS = 250;
 
@@ -94,11 +101,11 @@ const textStyle = (size: number, color = '#f3e9d2') => ({
   strokeThickness: 4,
 });
 
-const STATUS_TEXT: Record<Order['status'], string> = {
-  waiting: 'Tap to send',
-  queued: 'Queued',
-  loading: 'Loading...',
-  carrying: 'On the way',
+const STATUS_TEXT: Record<Order['status'], TextKey> = {
+  waiting: 'tapToSend',
+  queued: 'queued',
+  loading: 'loading',
+  carrying: 'onTheWay',
 };
 
 type Button = ReturnType<typeof makeButton>;
@@ -127,8 +134,6 @@ const MOOD_LOOKS: { color: number; mouth: number }[] = [
 
 /** How taps on the valley act: laying track that joins its neighbours, plain track, taking track up, or building a depot at a village. */
 type Mode = 'auto' | 'plain' | 'remove' | 'depot';
-
-const MEDAL_NAMES = { bronze: 'Bronze', silver: 'Silver', gold: 'Gold' } as const;
 
 /** Minutes and seconds of game time, like 2:05. */
 const clock = (ms: number) => `${Math.floor(ms / 60_000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}`;
@@ -311,7 +316,7 @@ export class GameScene extends Phaser.Scene {
         this.depotIcons.push(fit(this.add.image(x - label.width / 2 - 10, y + 15, 'depot')).setDepth(UI_DEPTH - 2).setVisible(false));
       }
     };
-    add(ROOST, 'roost', 'Roost', 1);
+    add(ROOST, 'roost', t('roost'), 1);
     for (const v of villages(this.state)) {
       const shop = workshopOf(v);
       add(v, `village-${v.name}`, v.name, v.round);
@@ -358,18 +363,18 @@ export class GameScene extends Phaser.Scene {
     for (let i = 0; i < 3; i++) this.hearts.push(fit(this.add.image(140 + i * 26, 22, 'heart')).setDepth(UI_DEPTH));
     fit(this.add.image(230, 22, 'food')).setDepth(UI_DEPTH);
     this.bellies = this.add.graphics().setDepth(UI_DEPTH);
-    this.roundText = this.add.text(440, 22, '', textStyle(16)).setOrigin(0.5).setDepth(UI_DEPTH);
+    this.roundText = this.add.text(440, 22, '', { ...textStyle(16), align: 'center' }).setOrigin(0.5).setDepth(UI_DEPTH);
     this.wyrmText = this.add.text(950, 22, '', { ...textStyle(14, '#c9e8c0'), align: 'right' }).setOrigin(1, 0.5).setDepth(UI_DEPTH);
     this.add.rectangle(0, BOARD.y + BOARD.h, BOARD.w, VIEW.h, 0x2c2018).setOrigin(0).setDepth(UI_DEPTH);
-    this.hint = this.add.text(384, HINT_Y, '', textStyle(13, '#d8c7a6')).setOrigin(0.5).setDepth(UI_DEPTH);
+    this.hint = this.add.text(384, HINT_Y, '', textStyle(HINT_PX, '#d8c7a6')).setOrigin(0.5).setDepth(UI_DEPTH);
   }
 
   private createPanel() {
     const left = PANEL.x - PANEL.w / 2 - 8;
     this.add.rectangle(left, PANEL.top, VIEW.w - left, VIEW.h - PANEL.top, 0x2c2018).setOrigin(0).setDepth(UI_DEPTH);
     this.add.rectangle(left, PANEL.top, 4, VIEW.h - PANEL.top, 0x5a3f2a).setOrigin(0).setDepth(UI_DEPTH);
-    this.add.text(PANEL.x, 62, 'Orders', textStyle(16, '#f3c64e')).setOrigin(0.5).setDepth(UI_DEPTH);
-    this.add.text(PANEL.x, UPGRADES_Y, 'Upgrades', textStyle(14, '#f3c64e')).setOrigin(0.5).setDepth(UI_DEPTH);
+    this.add.text(PANEL.x, 62, t('orders'), textStyle(16, '#f3c64e')).setOrigin(0.5).setDepth(UI_DEPTH);
+    this.add.text(PANEL.x, UPGRADES_Y, t('upgrades'), textStyle(14, '#f3c64e')).setOrigin(0.5).setDepth(UI_DEPTH);
     this.timers = this.add.graphics().setDepth(UI_DEPTH + 2);
     const button = (y: number, onClick: () => void) => {
       const b = makeButton(this, PANEL.x, y, PANEL.w, BUTTONS.h, '', onClick);
@@ -382,8 +387,8 @@ export class GameScene extends Phaser.Scene {
     const toggle = (mode: Mode) => () => (this.mode = this.mode === mode ? 'auto' : mode);
     this.depotButton = button(BUTTONS.depot, toggle('depot'));
     const dx = (PANEL.w - BUTTONS.half) / 2;
-    this.removeButton = makeButton(this, PANEL.x - dx, BUTTONS.remove, BUTTONS.half, BUTTONS.h, 'Remove', toggle('remove'));
-    this.plainButton = makeButton(this, PANEL.x + dx, BUTTONS.remove, BUTTONS.half, BUTTONS.h, 'Plain', toggle('plain'));
+    this.removeButton = makeButton(this, PANEL.x - dx, BUTTONS.remove, BUTTONS.half, BUTTONS.h, t('remove'), toggle('remove'));
+    this.plainButton = makeButton(this, PANEL.x + dx, BUTTONS.remove, BUTTONS.half, BUTTONS.h, t('plain'), toggle('plain'));
     this.removeButton.container.setDepth(UI_DEPTH + 1);
     this.plainButton.container.setDepth(UI_DEPTH + 1);
   }
@@ -397,7 +402,7 @@ export class GameScene extends Phaser.Scene {
 
     const shade = this.add.rectangle(0, 0, BOARD.w, BOARD.h, 0x0e0a08, 0.7).setOrigin(0);
     this.overText = this.add.text(BOARD.w / 2, 220 - BOARD.y, '', { ...textStyle(20), align: 'center' }).setOrigin(0.5);
-    const restart = makeButton(this, PANEL_BUTTON.x, PANEL_BUTTON.y - BOARD.y, 160, 44, 'Play again', () => this.scene.restart());
+    const restart = makeButton(this, PANEL_BUTTON.x, PANEL_BUTTON.y - BOARD.y, 160, 44, t('playAgain'), () => this.scene.restart());
     this.overLayer = this.add.container(BOARD.x, BOARD.y, [shade, this.overText, restart.container]).setDepth(UI_DEPTH + 4).setVisible(false);
 
     // The round's charter: two cards over the board, the game waiting until one is tapped.
@@ -445,7 +450,7 @@ export class GameScene extends Phaser.Scene {
     }
     this.banner.setVisible(!!s.banner);
     if (s.phase === 'over' && !this.overLayer.visible) {
-      this.overText.setText(`The line's last heart is gone.\nThe villages lost faith in the wyrm.\n\nReached round ${s.round}, ${s.totalDelivered} delivered`);
+      this.overText.setText(t('gameOver', { round: s.round, n: s.totalDelivered }));
     }
     if (s.phase === 'won' && !this.overLayer.visible) {
       const host = villages(s)[festivalHost(s)].name;
@@ -453,11 +458,14 @@ export class GameScene extends Phaser.Scene {
       // The best medal on this difficulty is kept, and its boons start the next game.
       const best = this.medalSaved ? medal : saveMedal(settings.difficulty, medal);
       this.medalSaved = true;
-      const level = settings.difficulty[0].toUpperCase() + settings.difficulty.slice(1);
       this.overText.setText(
-        `The festival at ${host} is a triumph!\n${s.totalDelivered} delivered, ${s.hearts} of 3 hearts left\n\n` +
-          `${MEDAL_NAMES[medal]} medal: festival in ${clock(s.festivalMs)}\nBest on ${level}: ${MEDAL_NAMES[best]}\n` +
-          `Next game: ${boonNames(best).join(', ')}`,
+        [
+          t('festivalWon', { village: host, n: s.totalDelivered, hearts: s.hearts }),
+          '',
+          t('medalLine', { medal: t(medal), time: clock(s.festivalMs) }),
+          t('bestLine', { level: sharedText(settings.difficulty), best: t(best) }),
+          t('nextGame', { boons: boonNames(best).join(', ') }),
+        ].join('\n'),
       );
     }
     this.overLayer.setVisible(s.phase !== 'play');
@@ -470,13 +478,13 @@ export class GameScene extends Phaser.Scene {
     const offer = s.charterOffer;
     this.charterLayer.setVisible(!!offer && s.phase === 'play');
     if (!offer) return;
-    const k = `${s.round}|${offer.map((c) => c.id + c.text).join(';')}`;
+    const k = `${s.round}|${offer.map((c) => c.id + (c.cargo ?? '')).join(';')}`;
     if (k === this.charterKey) return;
     this.charterKey = k;
-    this.charterTitle.setText(`Round ${s.round}: pick the round's charter`);
+    this.charterTitle.setText(t('pickCharter', { round: s.round }));
     offer.forEach((c, i) => {
-      this.charterCards[i].name.setText(c.name);
-      this.charterCards[i].text.setText(c.text);
+      this.charterCards[i].name.setText(t(c.name));
+      this.charterCards[i].text.setText(t(c.text, { cargo: c.cargo ? t(CARGO_NAMES[c.cargo].name) : '' }));
     });
   }
 
@@ -750,30 +758,32 @@ export class GameScene extends Phaser.Scene {
     const s = this.state;
     const vs = villages(s);
     const job = s.orders.find((o) => o.id === jobOrder(w.job));
-    const cargo = job ? CARGO_NAMES[job.cargo].toLowerCase() : '';
-    if (w.switchMs > 0) return 'throwing a switch';
-    if (w.waitMs > 0) return 'waiting at a junction';
-    if (w.eatMs > 0) return 'eating at the Roost';
-    if (w.job?.leg === 'feed') return 'hungry, off to the Roost';
-    if (w.job?.leg === 'visit') return `bringing gifts to ${vs[w.job.village].name}`;
-    if (!job) return s.queue.length ? 'setting off' : 'resting';
-    if (job.status === 'carrying') return `hauling ${cargo} to ${vs[job.to].name}`;
-    if (job.status === 'loading') return `loading ${cargo}`;
-    return `off to ${vs[job.from].name}`;
+    const cargo = job ? t(CARGO_NAMES[job.cargo].lower) : '';
+    if (w.switchMs > 0) return t('throwingSwitch');
+    if (w.waitMs > 0) return t('waitingJunction');
+    if (w.eatMs > 0) return t('eating');
+    if (w.job?.leg === 'feed') return t('hungry');
+    if (w.job?.leg === 'visit') return t('bringingGifts', { village: vs[w.job.village].name });
+    if (!job) return t(s.queue.length ? 'settingOff' : 'resting');
+    if (job.status === 'carrying') return t('hauling', { cargo, village: vs[job.to].name });
+    if (job.status === 'loading') return t('loadingCargo', { cargo });
+    return t('offTo', { village: vs[job.from].name });
   }
 
   private drawHud() {
     const s = this.state;
-    this.coinsText.setText(String(s.coins));
+    this.coinsText.setText(formatNumber(s.coins));
     this.hearts.forEach((h, i) => h.setTexture(i < s.hearts ? 'heart' : 'heart-empty'));
-    this.roundText.setText(
+    const progress =
       s.round === FESTIVAL_ROUND
-        ? `Festival: ${s.delivered}/${FESTIVAL_GOAL} delivered`
-        : `Round ${s.round}: ${s.delivered}/${roundGoal(s.round)} delivered${s.charter ? ` · ${s.charter.name}` : ''}`,
-    );
+        ? t('festivalProgress', { n: s.delivered, goal: FESTIVAL_GOAL })
+        : t('roundProgress', { round: s.round, n: s.delivered, goal: roundGoal(s.round) });
+    // The round's charter goes on a second line, so the HUD stays clear of the bellies and the wyrms' status.
+    const charter = s.charter && s.round !== FESTIVAL_ROUND;
+    this.roundText.setText(charter ? t('roundCharter', { progress, charter: t(s.charter!.name) }) : progress).setFontSize(charter ? 14 : 16);
     const two = s.wyrms.length > 1;
     this.wyrmText
-      .setText(s.wyrms.map((w, i) => `${two ? `Wyrm ${i + 1}` : 'Wyrm'}: ${this.wyrmStatus(w)}`).join('\n'))
+      .setText(s.wyrms.map((w, i) => (two ? t('wyrmN', { n: i + 1, status: this.wyrmStatus(w) }) : t('wyrm', { status: this.wyrmStatus(w) }))).join('\n'))
       .setFontSize(two ? 12 : 14);
     // Each wyrm's belly: green while fed, amber when hungry, empty when it is starving.
     const g = this.bellies.clear();
@@ -786,21 +796,24 @@ export class GameScene extends Phaser.Scene {
 
   private drawHintLine() {
     const s = this.state;
-    this.hint.setText(
+    const text =
       this.mode === 'remove'
-        ? 'Tap track to take it up for half its cost. Tap Remove again to lay track.'
+        ? t('hintRemove')
         : this.mode === 'plain'
-          ? 'Plain track joins only the piece it continues. Track on all four sides makes a crossing.'
+          ? t('hintPlain')
           : this.mode === 'depot'
-            ? `Tap a village for a depot (${depotCost(s)}c): its goods wait at half speed and load at once.`
+            ? t('hintDepot', { cost: depotCost(s) })
             : s.hazard
-              ? `A ${s.hazard.kind} is coming: lay a way round it, or rebuild the track after.`
+              ? t(s.hazard.kind === 'washout' ? 'hintWashout' : 'hintRockfall')
               : s.round >= MOOD_ROUND && openVillages(s).some((v) => moodOf(s, villages(s).indexOf(v)) < 0 && canSendCourier(s, villages(s).indexOf(v)))
-                ? `A village is sulking: tap it to send a free wyrm with gifts (${COURIER_COST}c).`
+                ? t('hintCourier', { cost: COURIER_COST })
                 : Object.keys(s.switches).length
-                  ? 'Tap a junction to set its switch: the wyrm goes the way the switches send it.'
-                  : 'Tap or drag to lay track: grass 2, forest 4, bridge 6, tunnel 20. Then tap an order.',
-    );
+                  ? t('hintSwitch')
+                  : t('hintBuild');
+    if (text === this.hint.text) return;
+    // A long hint (German runs long) shrinks to stay clear of the full screen and pause buttons in the corner.
+    this.hint.setText(text).setFontSize(HINT_PX);
+    for (let px = HINT_PX - 1; px >= MIN_HINT_PX && this.hint.width > BOARD.w - 2 * HINT_MARGIN; px--) this.hint.setFontSize(px);
   }
 
   private drawPanel() {
@@ -826,23 +839,23 @@ export class GameScene extends Phaser.Scene {
     const wings = upgradeCost(s, 'wings');
     const hoard = upgradeCost(s, 'hoard');
     const second = upgradeCost(s, 'second');
-    this.wingsButton.setCaption(wings === null ? 'Swift wings: max' : `Swift wings ${s.upgrades.wings + 1}: ${wings}c`);
+    this.wingsButton.setCaption(wings === null ? t('wingsMax') : t('wingsCost', { level: s.upgrades.wings + 1, cost: wings }));
     this.wingsButton.setEnabled(wings !== null && wings <= s.coins);
-    this.hoardButton.setCaption(hoard === null ? 'Golden hoard: max' : `Golden hoard ${s.upgrades.hoard + 1}: ${hoard}c`);
+    this.hoardButton.setCaption(hoard === null ? t('hoardMax') : t('hoardCost', { level: s.upgrades.hoard + 1, cost: hoard }));
     this.hoardButton.setEnabled(hoard !== null && hoard <= s.coins);
     this.secondButton.setCaption(
-      second === null ? 'Second wyrm: awake' : upgradeLocked(s, 'second') ? `Second wyrm: round ${secondWyrmRound(s)}` : `Second wyrm: ${second}c`,
+      second === null ? t('secondAwake') : upgradeLocked(s, 'second') ? t('secondRound', { round: secondWyrmRound(s) }) : t('secondCost', { cost: second }),
     );
     this.secondButton.setEnabled(second !== null && second <= s.coins && !upgradeLocked(s, 'second'));
     const depot = depotCost(s);
     this.depotButton.setCaption(
-      this.mode === 'depot' ? 'Tap a village' : depotLocked(s) ? `Depot: round ${DEPOT_ROUND}` : `Depot ${s.depots.length + 1}: ${depot}c`,
+      this.mode === 'depot' ? t('tapVillage') : depotLocked(s) ? t('depotRound', { round: DEPOT_ROUND }) : t('depotCost', { n: s.depots.length + 1, cost: depot }),
     );
     this.depotButton.setLit(this.mode === 'depot');
     this.depotButton.setEnabled(this.mode === 'depot' || (!depotLocked(s) && depot <= s.coins));
-    this.removeButton.setCaption(this.mode === 'remove' ? 'Removing' : 'Remove');
+    this.removeButton.setCaption(t(this.mode === 'remove' ? 'removing' : 'remove'));
     this.removeButton.setLit(this.mode === 'remove');
-    this.plainButton.setCaption(this.mode === 'plain' ? 'Plain on' : 'Plain');
+    this.plainButton.setCaption(t(this.mode === 'plain' ? 'plainOn' : 'plain'));
     this.plainButton.setLit(this.mode === 'plain');
   }
 
@@ -856,14 +869,14 @@ export class GameScene extends Phaser.Scene {
     const vs = villages(s);
     const icon = fit(this.add.image(left + 12, -18, `cargo-${o.cargo}`));
     // Goods a workshop made have their name in gold.
-    const title = this.add.text(left + 28, -26, CARGO_NAMES[o.cargo], textStyle(14, o.made ? '#f3c64e' : isPassengers(o) ? '#9bd8f0' : '#f3e9d2'));
-    const pay = this.add.text(PANEL.w / 2 - 8, -26, `${orderPay(s, o)}c`, textStyle(14, '#f3c64e')).setOrigin(1, 0);
-    const route = this.add.text(left, -8, `${vs[o.from].name} > ${vs[o.to].name}`, textStyle(11, '#d8c7a6'));
-    const status = this.add.text(left, 5, ok ? STATUS_TEXT[o.status] : 'No track yet', textStyle(11, ok ? '#c9e8c0' : '#a8957a'));
+    const title = this.add.text(left + 28, -26, t(CARGO_NAMES[o.cargo].name), textStyle(14, o.made ? '#f3c64e' : isPassengers(o) ? '#9bd8f0' : '#f3e9d2'));
+    const pay = this.add.text(PANEL.w / 2 - 8, -26, t('coins', { n: orderPay(s, o) }), textStyle(14, '#f3c64e')).setOrigin(1, 0);
+    const route = this.add.text(left, -8, t('route', { from: vs[o.from].name, to: vs[o.to].name }), textStyle(11, '#d8c7a6'));
+    const status = this.add.text(left, 5, t(ok ? STATUS_TEXT[o.status] : 'noTrack'), textStyle(11, ok ? '#c9e8c0' : '#a8957a'));
     // What the sending village's mood did to the order: a sulking village wants it fast, a happy one pays more.
     const mood = moodOf(s, o.from);
     const tag = this.add
-      .text(PANEL.w / 2 - 8, 5, mood < 0 ? 'rush order' : mood > 0 ? `+${(MOOD_PAY[mood] - 1) * 100}% pay` : '', textStyle(11, mood < 0 ? '#e8b040' : '#9be883'))
+      .text(PANEL.w / 2 - 8, 5, mood < 0 ? t('rushOrder') : mood > 0 ? t('morePay', { n: Math.round((MOOD_PAY[mood] - 1) * 100) }) : '', textStyle(11, mood < 0 ? '#e8b040' : '#9be883'))
       .setOrigin(1, 0);
     const card = this.add.container(PANEL.x, y, [bg, icon, title, pay, route, status, tag]).setDepth(UI_DEPTH + 1);
     bg.setInteractive({ useHandCursor: true }).on('pointerdown', () => dispatch(this.state, o.id));

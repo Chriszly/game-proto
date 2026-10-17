@@ -1,6 +1,7 @@
 import type { HowToPlay } from '../../../shared/howToPlay';
+import { byLanguage } from '../../../shared/i18n';
 
-export const howToPlay: HowToPlay = {
+const en: HowToPlay = {
   goal: 'Fill each potion order by matching its ingredients before the moves run out. A filled order sells for coins and stars.',
   controls: [
     { input: 'Tap a tile, then a neighbour, or drag a tile onto it', action: 'Swap the two tiles' },
@@ -37,3 +38,52 @@ export const howToPlay: HowToPlay = {
     'Once Royal Apothecary, pass guild examinations on fixed boards to fill the ribbon with seals.',
   ],
 };
+
+/** US English only changes the spelling. */
+const us = (text: string) => text.replace(/neighbour/g, 'neighbor').replace(/mould/g, 'mold');
+const enUS: HowToPlay = {
+  goal: us(en.goal),
+  controls: en.controls.map((c) => ({ input: us(c.input), action: us(c.action) })),
+  loop: en.loop.map(us),
+  tips: en.tips.map(us),
+};
+
+const de: HowToPlay = {
+  goal: 'Erfülle jeden Trankauftrag, indem du seine Zutaten kombinierst, bevor die Züge ausgehen. Ein erfüllter Auftrag bringt Münzen und Sterne.',
+  controls: [
+    { input: 'Ein Feld antippen, dann ein Nachbarfeld, oder ein Feld darauf ziehen', action: 'Die beiden Felder tauschen' },
+    { input: 'Das gewählte Feld noch einmal antippen', action: 'Es loslassen' },
+    { input: 'Rühren antippen', action: '40 Münzen für 3 Züge mehr in diesem Auftrag ausgeben' },
+    { input: 'Sieben antippen, dann ein Feld', action: '25 Münzen ausgeben, um die Reihe des Felds neu zu würfeln' },
+    { input: 'Stößel antippen, dann ein Feld', action: '30 Münzen ausgeben, um das Feld ohne Zug zu zerstoßen' },
+    { input: 'Trichter antippen, dann zwei Felder', action: '35 Münzen ausgeben, um zwei beliebige Felder ohne Zug zu tauschen' },
+    {
+      input: 'Schlichter Auftrag oder Reicher Auftrag antippen',
+      action: 'Nach einem Verkauf: der nächste Auftrag wie gewohnt, oder für mehr Münzen und mehr Risiko',
+    },
+    {
+      input: 'Noch einmal, Werkbank oder Kräuterladen antippen',
+      action: 'Nach einem Auftrag: ihn wiederholen, dauerhafte Verbesserungen kaufen oder den Vorrat auffüllen',
+    },
+  ],
+  loop: [
+    'Lies das Auftragsetikett: welche Zutaten der Trank braucht, wie viele Züge du hast und was er bringt.',
+    'Tausche zwei benachbarte Felder, um drei oder mehr Gleiche in eine Reihe zu bringen.',
+    'Kombinierte Zutaten, die der Auftrag braucht, fliegen zum Etikett, und die Felder darüber fallen in die Lücken.',
+    'Sammle alles auf dem Etikett, bevor die Züge ausgehen, dann wird der Trank verkauft.',
+    'Gib deine Münzen in der Werkbank oder im Kräuterladen aus und wähle den nächsten Auftrag, schlicht oder reich.',
+  ],
+  tips: [
+    'Ein Tausch ohne Treffer gleitet zurück und kostet keinen Zug, und Kettenreaktionen nach einem Tausch sind gratis.',
+    'Vier in einer Reihe hinterlassen einen Katalysator, der beim Kombinieren seine ganze Reihe räumt.',
+    'Eine L- oder T-Form hinterlässt eine Blüte, die beim Kombinieren die 3x3 Felder um sich räumt.',
+    'Tausche zwei Spezialfelder miteinander: ein Katalysator und eine Blüte räumen drei Reihen, zwei Blüten ein 5x5.',
+    'Jeder übrige Zug bringt 5 Münzen mehr, und ab 8 übrigen Zügen gibt es drei Sterne.',
+    'Sterne heben deinen Tüftlerrang, und jeder Rang schaltet ein neues Rezept frei.',
+    'Verkorkte Gläser, Harz und wuchernder Schimmel blockieren das Brett; kombiniere direkt daneben, um die Felder zu befreien.',
+    'Jeder fünfte Auftrag ist ein königlicher Auftrag: drei Tränke nacheinander auf einem Brett.',
+    'Als Hofapotheker bestehst du Gildenprüfungen auf festen Brettern und füllst das Band mit Siegeln.',
+  ],
+};
+
+export const howToPlay: HowToPlay = byLanguage({ en, 'en-US': enUS, de });

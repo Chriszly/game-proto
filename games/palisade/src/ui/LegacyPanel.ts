@@ -7,6 +7,7 @@ import { LEGACY, UI_DEPTH, VIEW } from '../scenes/layout';
 import { LEGACIES, LEGACY_IDS, canKeep, type Legacy, type LegacyId } from '../game/legacy';
 import { RELICS, type RelicId } from '../game/relics';
 import { drawPanel, makeButton, textStyle } from './panel';
+import { t } from '../i18n';
 
 /** Where a legacy card is on screen and which perk it keeps. */
 export interface LegacySpot {
@@ -34,12 +35,12 @@ export class LegacyPanel {
     const dim = scene.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x0e1218, 0.75).setInteractive();
     const g = scene.add.graphics();
     drawPanel(g, VIEW.w / 2 - 440, 90, 880, 380, { c: 18, fill: SLATE.mid, alpha: 1, lw: 3 });
-    const title = scene.add.text(VIEW.w / 2, 124, 'Retire this hero', textStyle(26, '#ffcf4a', 5)).setOrigin(0.5);
+    const title = scene.add.text(VIEW.w / 2, 124, t('retireTitle'), textStyle(26, '#ffcf4a', 5)).setOrigin(0.5);
     const sub = scene.add
-      .text(VIEW.w / 2, 158, 'The next hero starts from scratch at level 1, and keeps one legacy of your choice.', { ...textStyle(13, '#e9e4d8'), fontStyle: 'normal' })
+      .text(VIEW.w / 2, 158, t('retireSub'), { ...textStyle(13, '#e9e4d8'), fontStyle: 'normal' })
       .setOrigin(0.5);
     this.keptText = scene.add.text(VIEW.w / 2, 384, '', { ...textStyle(12, '#c9c3b6'), fontStyle: 'normal' }).setOrigin(0.5);
-    const cancel = makeButton(scene, VIEW.w / 2, 430, 160, 34, 'Cancel', () => this.close());
+    const cancel = makeButton(scene, VIEW.w / 2, 430, 160, 34, t('cancel'), () => this.close());
     this.body = scene.add.container(0, 0);
     this.root = scene.add.container(0, 0, [dim, g, title, sub, this.keptText, cancel, this.body]).setDepth(UI_DEPTH + 30).setVisible(false);
   }
@@ -59,11 +60,11 @@ export class LegacyPanel {
     this.cards = [];
     LEGACY_IDS.forEach((id, i) => this.addCard(id, LEGACY.xs[i], canKeep(legacy, id), relic));
     const kept = [
-      ...legacy.relics.map((r) => RELICS[r].name),
-      ...(legacy.slot ? [LEGACIES.slot.name] : []),
-      ...(legacy.rain ? [LEGACIES.rain.name] : []),
+      ...legacy.relics.map((r) => t(RELICS[r].name)),
+      ...(legacy.slot ? [t(LEGACIES.slot.name)] : []),
+      ...(legacy.rain ? [t(LEGACIES.rain.name)] : []),
     ];
-    this.keptText.setText(kept.length > 0 ? `Kept from earlier heroes: ${kept.join(', ')}` : 'Earlier heroes left no legacy yet.');
+    this.keptText.setText(kept.length > 0 ? t('keptFrom', { list: kept.join(', ') }) : t('keptNone'));
   }
 
   private addCard(id: LegacyId, x: number, open: boolean, relic: RelicId) {
@@ -83,10 +84,10 @@ export class LegacyPanel {
         : id === 'slot'
           ? this.guardIcon(-h / 2 + 46)
           : fit(scene.add.image(0, -h / 2 + 46, 'rain-ready'), 0.9);
-    const name = scene.add.text(0, -h / 2 + 94, LEGACIES[id].name, textStyle(16, open ? '#ffcf4a' : '#9aa0ac')).setOrigin(0.5);
-    const text = id === 'relic' ? `${RELICS[relic].name}: ${RELICS[relic].text}` : LEGACIES[id].text;
+    const name = scene.add.text(0, -h / 2 + 94, t(LEGACIES[id].name), textStyle(16, open ? '#ffcf4a' : '#9aa0ac')).setOrigin(0.5);
+    const text = id === 'relic' ? t('relicCard', { name: t(RELICS[relic].name), text: t(RELICS[relic].text) }) : t(LEGACIES[id].text);
     const body = scene.add
-      .text(0, -h / 2 + 124, open ? text : 'Kept already', { ...textStyle(12, open ? '#e9e4d8' : '#9aa0ac'), fontStyle: 'normal', align: 'center', wordWrap: { width: w - 28 } })
+      .text(0, -h / 2 + 124, open ? text : t('keptAlready'), { ...textStyle(12, open ? '#e9e4d8' : '#9aa0ac'), fontStyle: 'normal', align: 'center', wordWrap: { width: w - 28 } })
       .setOrigin(0.5, 0);
     if (!open) icon.setAlpha(0.4);
     const hit = scene.add.zone(0, 0, w, h);

@@ -1,3 +1,4 @@
+import type { TextKey } from '../i18n';
 import type { Boss, BossKind, GameState, TrapKind } from './state';
 
 // The bosses: the Gatekeeper, on every fifth stage, and the dragon of the Dragon's Keep, on the
@@ -20,7 +21,8 @@ export interface Missile {
 }
 
 export interface BossNumbers {
-  name: string;
+  /** Its name, a key of `i18n/en.ts`. */
+  name: TextKey;
   /** Its box: width, and height up from the road (its head, where a stomp lands). */
   w: number;
   h: number;
@@ -46,7 +48,7 @@ export interface BossNumbers {
 
 export const BOSS: Record<BossKind, BossNumbers> = {
   gate: {
-    name: 'The Gatekeeper',
+    name: 'gateName',
     w: 60,
     h: 86,
     hp: 3,
@@ -65,7 +67,7 @@ export const BOSS: Record<BossKind, BossNumbers> = {
     holdBack: 2000,
   },
   dragon: {
-    name: 'The Dragon',
+    name: 'dragonName',
     w: 80,
     h: 96,
     hp: 3,

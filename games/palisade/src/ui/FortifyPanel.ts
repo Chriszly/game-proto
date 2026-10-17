@@ -5,6 +5,7 @@ import { FORTIFY, UI_DEPTH, VIEW } from '../scenes/layout';
 import { FORT_IDS, FORTS, type FortId } from '../game/forts';
 import type { Forts } from '../game/state';
 import { drawPanel, textStyle } from './panel';
+import { t } from '../i18n';
 
 /**
  * The panel the "Fortify" button opens: three fortifications, one of which can be bought per break
@@ -49,12 +50,19 @@ export class FortifyPanel {
     drawPanel(g, left, top, w, h, { c: 14, fill: SLATE.mid, alpha: 0.98, lw: 2.5 });
     const coinIcon = fit(scene.add.image(left + w - 70, top + 24, 'hud-coin'));
     const coinText = scene.add.text(left + w - 58, top + 24, String(coins), textStyle(14, '#ffe07a')).setOrigin(0, 0.5);
-    const title = scene.add.text(left + 18, top + 24, 'Fortify', textStyle(17, '#ffcf4a', 3)).setOrigin(0, 0.5);
+    const title = scene.add.text(left + 18, top + 24, t('fortify'), textStyle(17, '#ffcf4a', 3)).setOrigin(0, 0.5);
     const sub = scene.add
       .text(left + 18, top + 46, note, { ...textStyle(12, '#c9c3b6'), fontStyle: 'normal' })
       .setOrigin(0, 0.5);
     this.body.add([g, coinIcon, coinText, title, sub]);
-    const held = (id: FortId) => (forts.queued === id ? 'Queued for the next break' : id === 'stakes' ? (forts.stakeHp > 0 ? `Standing, ${Math.ceil(forts.stakeHp)} left` : '') : id === 'oil' ? (forts.oil ? 'Armed' : '') : forts.lookout > 0 ? `${forts.lookout} wave${forts.lookout > 1 ? 's' : ''} left` : '');
+    const held = (id: FortId) =>
+      forts.queued === id
+        ? t('queuedNext')
+        : id === 'stakes'
+          ? forts.stakeHp > 0 ? t('stakesStanding', { n: Math.ceil(forts.stakeHp) }) : ''
+          : id === 'oil'
+            ? forts.oil ? t('oilArmed') : ''
+            : forts.lookout > 0 ? t('wavesLeft', { n: forts.lookout }) : '';
     FORT_IDS.forEach((id, i) => this.addRow(id, left, top + 62 + i * 66, w, held(id), buyable(id) && coins >= FORTS[id].cost));
   }
 
@@ -66,9 +74,9 @@ export class FortifyPanel {
     drawPanel(back, left + 10, y, w - 20, 60, { c: 6, fill: SLATE.light, alpha: 1, edge: GOLD.dark, lw: 1 });
     const mark = scene.add.graphics();
     this.drawMark(mark, id, left + 38, y + 30);
-    const name = scene.add.text(left + 66, y + 13, fort.name, textStyle(14, '#ffe7a0')).setOrigin(0, 0.5);
+    const name = scene.add.text(left + 66, y + 13, t(fort.name), textStyle(14, '#ffe7a0')).setOrigin(0, 0.5);
     const state = scene.add.text(left + 66 + name.width + 10, y + 13, held, textStyle(11, '#8fdc6a')).setOrigin(0, 0.5);
-    const desc = scene.add.text(left + 66, y + 24, fort.text, { ...textStyle(11, '#e9e4d8'), fontStyle: 'normal', wordWrap: { width: w - 180 } });
+    const desc = scene.add.text(left + 66, y + 24, t(fort.text), { ...textStyle(11, '#e9e4d8'), fontStyle: 'normal', wordWrap: { width: w - 180 } });
     this.body.add([back, mark, name, state, desc]);
     const bx = left + w - 56;
     const by = y + 30;
@@ -85,7 +93,7 @@ export class FortifyPanel {
     };
     draw(false);
     const color = afford ? '#ffe7a0' : '#7a8294';
-    const caption = scene.add.text(bx, by - 8, 'Buy', textStyle(13, color)).setOrigin(0.5);
+    const caption = scene.add.text(bx, by - 8, t('buy'), textStyle(13, color)).setOrigin(0.5);
     const coinIcon = fit(scene.add.image(bx - 12, by + 9, 'hud-coin'), 0.75).setAlpha(afford ? 1 : 0.5);
     const cost = scene.add.text(bx - 3, by + 9, String(fort.cost), textStyle(12, color)).setOrigin(0, 0.5);
     const hit = scene.add.zone(bx, by, 80, 40);

@@ -1,4 +1,8 @@
-/** The three soldiers a run can start with, their weapons and signature moves. */
+/**
+ * The three soldiers a run can start with, their weapons and signature moves. Names and texts are
+ * keys of `i18n/en.ts`, shown with `t`.
+ */
+import type { TextKey } from '../i18n';
 
 export type HeroId = 'rook' | 'tr9' | 'bram';
 export const HERO_IDS: readonly HeroId[] = ['rook', 'tr9', 'bram'];
@@ -21,8 +25,8 @@ export interface HeroScheme {
 
 export interface HeroDef {
   id: HeroId;
-  name: string;
-  weapon: string;
+  name: TextKey;
+  weapon: TextKey;
   /** The hero's colour schemes; the first is the one in use (see `schemeOf`). */
   schemes: readonly HeroScheme[];
   maxHp: number;
@@ -39,18 +43,20 @@ export interface HeroDef {
   /** Bolt speed (px/s) and how far it flies (px). */
   boltSpeed: number;
   range: number;
-  signature: { name: string; text: string; cooldownMs: number };
+  signature: { name: TextKey; text: TextKey; cooldownMs: number };
   /** The three upgrade paths only this hero can take (ids in `UPGRADES`). */
   paths: readonly string[];
   /** One line for the hero select card. */
-  blurb: string;
+  blurb: TextKey;
+  /** The kind line of a card of this hero's paths ("ROOK PATH"). */
+  pathKind: TextKey;
 }
 
 export const HEROES: Record<HeroId, HeroDef> = {
   rook: {
     id: 'rook',
-    name: 'Captain Rook',
-    weapon: 'Twin pistols',
+    name: 'rookName',
+    weapon: 'rookWeapon',
     schemes: [{ name: 'Slate', body: '#6b7686', accent: '#c08a4a', mark: '#8f5f2c', bolt: '#c08a4a' }],
     maxHp: 100,
     speed: 150,
@@ -62,14 +68,15 @@ export const HEROES: Record<HeroId, HeroDef> = {
     damage: 9,
     boltSpeed: 560,
     range: 380,
-    signature: { name: 'Rally Order', text: '5 s of +50% fire rate', cooldownMs: 12_000 },
+    signature: { name: 'rookSignature', text: 'rookSignatureText', cooldownMs: 12_000 },
     paths: ['gunslinger', 'commander', 'demolitions'],
-    blurb: 'Alternating pistol shots at the two nearest droids.',
+    blurb: 'rookBlurb',
+    pathKind: 'rookPathKind',
   },
   tr9: {
     id: 'tr9',
-    name: 'Legionary TR-9',
-    weapon: 'Spread rifle',
+    name: 'tr9Name',
+    weapon: 'tr9Weapon',
     schemes: [{ name: 'Charcoal', body: '#3a3f48', accent: '#ff7a2e', bolt: '#ff7a2e' }],
     maxHp: 150,
     speed: 128,
@@ -81,14 +88,15 @@ export const HEROES: Record<HeroId, HeroDef> = {
     damage: 8,
     boltSpeed: 520,
     range: 300,
-    signature: { name: 'Brace', text: '3 s without damage, knocks droids back', cooldownMs: 13_000 },
+    signature: { name: 'tr9Signature', text: 'tr9SignatureText', cooldownMs: 13_000 },
     paths: ['suppressor', 'riot-shield', 'drop-doctrine'],
-    blurb: 'A fast, wide and not very accurate rifle. Tough but slow.',
+    blurb: 'tr9Blurb',
+    pathKind: 'tr9PathKind',
   },
   bram: {
     id: 'bram',
-    name: 'Corporal Bram-17',
-    weapon: 'Carbine and frag',
+    name: 'bramName',
+    weapon: 'bramWeapon',
     schemes: [{ name: 'Sand', body: '#a8946a', accent: '#ff9ad5', bolt: '#ff9ad5' }],
     maxHp: 115,
     speed: 145,
@@ -100,9 +108,10 @@ export const HEROES: Record<HeroId, HeroDef> = {
     damage: 11,
     boltSpeed: 640,
     range: 420,
-    signature: { name: 'Frag Out', text: 'A grenade that clears a circle', cooldownMs: 9_000 },
+    signature: { name: 'bramSignature', text: 'bramSignatureText', cooldownMs: 9_000 },
     paths: ['marksman', 'jump-trooper', 'brothers'],
-    blurb: 'Fires the way he walks; standing still, at the nearest droid.',
+    blurb: 'bramBlurb',
+    pathKind: 'bramPathKind',
   },
 };
 

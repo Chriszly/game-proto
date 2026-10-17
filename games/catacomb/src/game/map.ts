@@ -1,3 +1,4 @@
+import type { TextKey } from '../i18n';
 import type { EnemyKind } from './enemies';
 import { EVENT_IDS, type EventId } from './events';
 
@@ -31,7 +32,8 @@ const MID = 290;
 const ROWS: Record<number, number[]> = { 1: [MID], 2: [200, 380], 3: [170, 290, 410] };
 
 interface ActFoes {
-  name: string;
+  /** The act's name, a key of `i18n/en.ts`. */
+  name: TextKey;
   first: EnemyKind[];
   early: EnemyKind[][];
   late: EnemyKind[][];
@@ -42,7 +44,7 @@ interface ActFoes {
 /** The foes each act's rooms can hold. Act one always opens on a lone slime. */
 export const ACT_FOES: ActFoes[] = [
   {
-    name: 'The Crypt',
+    name: 'cryptAct',
     first: ['slime'],
     early: [['rat', 'rat'], ['skeleton'], ['slime', 'rat'], ['cultist']],
     late: [['cultist', 'rat'], ['skeleton', 'cultist'], ['rat', 'rat', 'slime'], ['skeleton', 'rat'], ['slime', 'slime']],
@@ -50,7 +52,7 @@ export const ACT_FOES: ActFoes[] = [
     boss: 'boneKing',
   },
   {
-    name: 'The Sunken Tombs',
+    name: 'tombsAct',
     first: ['ghoul'],
     early: [['spider', 'spider'], ['wraith'], ['ghoul'], ['spider', 'wraith']],
     late: [['mummy'], ['ghoul', 'spider'], ['wraith', 'wraith'], ['mummy', 'spider'], ['ghoul', 'wraith']],

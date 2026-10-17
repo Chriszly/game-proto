@@ -1,5 +1,6 @@
 import { byDifficulty } from '../../../../shared/settings';
-import { COMMON, DOUBT_COST, POWER_BLOCK, POWER_STRENGTH, RARE, THORNS, WOUND_HURT, canBeTempered, card, isCurse, tempered, type BaseId, type CardId } from './cards';
+import { t } from '../i18n';
+import { COMMON, DOUBT_COST, POWER_BLOCK, POWER_STRENGTH, RARE, THORNS, WOUND_HURT, canBeTempered, card, cardName, isCurse, tempered, type BaseId, type CardId } from './cards';
 import { DEPTH_CURSE, depthFoeHp, DEEP_REST_HEAL, loadBestDepth, saveBestDepth } from './depth';
 import { ENEMIES, type EnemyKind, type Intent, type StatusKind } from './enemies';
 import { ALTAR_COST, CHEST_CURSE, EVENTS, POOL_COST, POOL_HEAL, SHRINE_CURSE, SHRINE_GOLD } from './events';
@@ -141,7 +142,7 @@ function grantFlask(s: GameState) {
 }
 
 /** The name of the act the hero is in. */
-export const actName = (s: GameState) => ACT_FOES[s.act - 1].name;
+export const actName = (s: GameState) => t(ACT_FOES[s.act - 1].name);
 
 /** Sets off towards a room next to the hero's; false if it isn't one. */
 export function walkTo(s: GameState, room: number) {
@@ -209,7 +210,7 @@ function startTurn(s: GameState) {
     if (power === 'bulwark') gainBlock(s, POWER_BLOCK);
     else if (power === 'rage') {
       f.strength += POWER_STRENGTH;
-      pop(s, 'hero', `+${POWER_STRENGTH} str`, 'heal');
+      pop(s, 'hero', t('strengthPop', { n: POWER_STRENGTH }), 'heal');
     }
   }
   drawCards(s, HAND_SIZE);
@@ -278,7 +279,7 @@ export function playCard(s: GameState, index: number) {
   f.played++;
   if (c.power) {
     f.powers.push(id);
-    pop(s, 'hero', c.name, 'status');
+    pop(s, 'hero', cardName(id), 'status');
     return true;
   }
   const targets = c.all ? [...f.enemies] : f.enemies.slice(0, 1);
@@ -308,8 +309,6 @@ function clearFight(s: GameState) {
   s.timerMs = CLEARED_MS;
 }
 
-const STATUS_NAMES: Record<StatusKind, string> = { weak: 'Weak', vulnerable: 'Vulnerable', poison: 'Poison' };
-
 function gainBlock(s: GameState, amount: number) {
   s.fight!.block += amount;
   pop(s, 'hero', `+${amount}`, 'block');
@@ -327,7 +326,7 @@ function applyPoison(s: GameState, e: Enemy, amount: number, splash = false) {
 
 function applyStatus(s: GameState, status: Status, on: Pop['on'], kind: StatusKind, amount: number) {
   status[kind] += amount;
-  pop(s, on, `${STATUS_NAMES[kind]} ${amount}`, 'status');
+  pop(s, on, `${t(kind)} ${amount}`, 'status');
 }
 
 function heal(s: GameState, amount: number) {
@@ -344,7 +343,7 @@ function damageEnemy(s: GameState, e: Enemy, amount: number) {
   e.block -= blocked;
   e.hp -= amount - blocked;
   e.hitMs = HIT_MS;
-  pop(s, e.id, blocked === amount ? 'Blocked' : `-${amount - blocked}`, 'damage');
+  pop(s, e.id, blocked === amount ? t('blocked') : `-${amount - blocked}`, 'damage');
   if (e.hp <= 0) f.enemies.splice(f.enemies.indexOf(e), 1);
 }
 
@@ -355,7 +354,7 @@ function damageHero(s: GameState, amount: number, from?: Enemy) {
   f.block -= blocked;
   s.hp = Math.max(0, s.hp - (amount - blocked));
   s.heroHitMs = HIT_MS;
-  pop(s, 'hero', blocked === amount ? 'Blocked' : `-${amount - blocked}`, 'damage');
+  pop(s, 'hero', blocked === amount ? t('blocked') : `-${amount - blocked}`, 'damage');
   if (from && hasPower(s, 'thorns')) damageEnemy(s, from, THORNS);
 }
 
@@ -411,7 +410,7 @@ function act(s: GameState, e: Enemy) {
     pop(s, e.id, `+${intent.block}`, 'block');
   } else if (intent.kind === 'buff') {
     e.strength += intent.strength;
-    pop(s, e.id, `+${intent.strength} str`, 'heal');
+    pop(s, e.id, t('strengthPop', { n: intent.strength }), 'heal');
   } else {
     applyStatus(s, f.status, 'hero', intent.status, intent.amount);
   }
@@ -423,7 +422,7 @@ function act(s: GameState, e: Enemy) {
 function curse(s: GameState, id: CardId) {
   s.deck.push(id);
   s.fight?.discard.push(id);
-  pop(s, 'hero', `Cursed: ${card(id).name}`, 'status');
+  pop(s, 'hero', t('cursedPop', { name: cardName(id) }), 'status');
 }
 
 /** After the foes' turn: Vulnerable wears off a turn on everyone, the hero's poison bites, and the hero's turn starts. */
@@ -500,8 +499,8 @@ function winFight(s: GameState) {
     return;
   }
   const relic = grantRelic(s);
-  s.notice = relic ? `Among the bones lies the ${RELICS[relic].name}: ${RELICS[relic].text}` : `Among the bones lie ${RELIC_GOLD} more gold.`;
-  if (flask) s.notice += ` A ${FLASKS[flask].name} too.`;
+  s.notice = relic ? t('boneRelic', { name: t(RELICS[relic].name), text: t(RELICS[relic].text) }) : t('boneGold', { n: RELIC_GOLD });
+  if (flask) s.notice = t('boneFlask', { notice: s.notice, name: t(FLASKS[flask].name) });
   s.phase = 'descend';
 }
 
@@ -548,7 +547,7 @@ export function descend(s: GameState) {
   s.at = null;
   s.cleared = [];
   const healed = heal(s, restHeal(s));
-  s.notice = `${actName(s)}${healed ? `: you catch your breath (+${healed} health)` : ''}`;
+  s.notice = healed ? t('catchBreath', { act: actName(s), n: healed }) : actName(s);
   s.phase = 'map';
   return true;
 }
@@ -591,7 +590,7 @@ export function temperCard(s: GameState, id: CardId) {
   const i = s.deck.indexOf(id);
   if (!canTemper(s) || i < 0 || !canBeTempered(id)) return false;
   s.deck[i] = tempered(id);
-  s.notice = `Tempered ${card(id).name} into ${card(s.deck[i]).name}`;
+  s.notice = t('temperedInto', { from: cardName(id), to: cardName(s.deck[i]) });
   leaveRoom(s);
   return true;
 }
@@ -604,7 +603,7 @@ function temperRandom(s: GameState, n: number) {
     if (plain.length === 0) break;
     const i = plain[Math.floor(Math.random() * plain.length)];
     s.deck[i] = tempered(s.deck[i]);
-    names.push(card(s.deck[i]).name);
+    names.push(cardName(s.deck[i]));
   }
   return names;
 }
@@ -717,25 +716,26 @@ export function chooseEvent(s: GameState, choice: number) {
   } else if (ev === 'shrine') {
     if (choice === 0) {
       const names = temperRandom(s, 2);
-      s.notice = names.length ? `The idol tempers ${names.join(' and ')}` : 'The idol is silent';
+      s.notice = names.length ? t('idolTempers', { names: names.reduce((a, b) => t('and', { a, b })) }) : t('idolSilent');
     } else {
       s.gold += SHRINE_GOLD;
       curse(s, SHRINE_CURSE);
-      s.notice = `+${SHRINE_GOLD} gold, and the idol's ${card(SHRINE_CURSE).name} joins your deck`;
+      s.notice = t('idolLoot', { n: SHRINE_GOLD, curse: cardName(SHRINE_CURSE) });
     }
   } else if (ev === 'chest') {
     if (choice === 0) {
       const relic = grantRelic(s);
       curse(s, CHEST_CURSE);
-      s.notice = `${relic ? `Found the ${RELICS[relic].name}: ${RELICS[relic].text}` : `Found ${RELIC_GOLD} gold`} A ${card(CHEST_CURSE).name} curse joins your deck.`;
+      const found = relic ? t('foundRelic', { name: t(RELICS[relic].name), text: t(RELICS[relic].text) }) : t('foundGold', { n: RELIC_GOLD });
+      s.notice = t('chestCurse', { found, curse: cardName(CHEST_CURSE) });
     }
   } else if (choice === 0) {
     const healed = heal(s, POOL_HEAL);
-    s.notice = `Healed ${healed}`;
+    s.notice = t('healed', { n: healed });
   } else {
     hurt(POOL_COST);
     const names = temperRandom(s, 1);
-    s.notice = names.length ? `The water tempers ${names[0]}` : 'Nothing happens';
+    s.notice = names.length ? t('waterTempers', { name: names[0] }) : t('nothingHappens');
   }
   leaveRoom(s);
   return true;

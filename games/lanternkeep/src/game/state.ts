@@ -1,4 +1,5 @@
 import { byDifficulty } from '../../../../shared/settings';
+import type { TextKey } from '../i18n';
 import { DISTRICTS, type DistrictId, JARS, LANTERN_SPOTS, mothRest } from './places';
 
 // The rules in plain TypeScript, with no Phaser. Each night begins with a dusk: tap a lantern and
@@ -20,21 +21,21 @@ export const UPGRADE_IDS = ['wick', 'oil', 'moths', 'wings', 'firefly', 'nectar'
 export type UpgradeId = (typeof UPGRADE_IDS)[number];
 
 export interface Upgrade {
-  name: string;
+  name: TextKey;
   /** What one level does, shown on its button. */
-  blurb: string;
+  blurb: TextKey;
   /** The cost of each level; its length is the most levels there are. */
   costs: readonly number[];
 }
 
 export const UPGRADES: Record<UpgradeId, Upgrade> = {
-  wick: { name: 'Wicks', blurb: 'Lanterns catch 25% faster', costs: [10, 20, 35] },
-  oil: { name: 'Oil', blurb: 'Lanterns burn 6s longer', costs: [10, 20, 35] },
-  moths: { name: 'Moths', blurb: 'One more moth in the jar', costs: [15, 30, 50] },
-  wings: { name: 'Wings', blurb: 'Moths fly 20% faster', costs: [10, 20, 35] },
-  firefly: { name: 'Firefly', blurb: 'Lights two lanterns a flight', costs: [25, 45] },
-  nectar: { name: 'Nectar', blurb: 'Tired moths rest 1.5s less', costs: [15, 30, 50] },
-  jar: { name: 'Jar', blurb: 'A second jar by the east wall', costs: [120] },
+  wick: { name: 'wickName', blurb: 'wickBlurb', costs: [10, 20, 35] },
+  oil: { name: 'oilName', blurb: 'oilBlurb', costs: [10, 20, 35] },
+  moths: { name: 'mothsName', blurb: 'mothsBlurb', costs: [15, 30, 50] },
+  wings: { name: 'wingsName', blurb: 'wingsBlurb', costs: [10, 20, 35] },
+  firefly: { name: 'fireflyName', blurb: 'fireflyBlurb', costs: [25, 45] },
+  nectar: { name: 'nectarName', blurb: 'nectarBlurb', costs: [15, 30, 50] },
+  jar: { name: 'jarName', blurb: 'jarBlurb', costs: [120] },
 };
 
 /**
@@ -61,11 +62,11 @@ export const hearthCost = (s: GameState) => (s.lives < LIVES ? (HEARTH_COSTS[s.r
 export const PERIL_NIGHT = 11;
 export const PERIL_STEP = 0.25;
 export const CURSES = {
-  wet: { name: 'Wet wicks', blurb: 'Lighting a lantern takes 50% longer' },
-  bats: { name: 'Restless bats', blurb: 'One more bat comes every night' },
-  thin: { name: 'Thin oil', blurb: 'Oil burns 25% faster' },
-  watch: { name: 'Watchful lord', blurb: 'One more lantern must burn at nightfall' },
-} as const;
+  wet: { name: 'wetName', blurb: 'wetBlurb' },
+  bats: { name: 'batsName', blurb: 'batsBlurb' },
+  thin: { name: 'thinName', blurb: 'thinBlurb' },
+  watch: { name: 'watchName', blurb: 'watchBlurb' },
+} as const satisfies Record<string, { name: TextKey; blurb: TextKey }>;
 export type CurseId = keyof typeof CURSES;
 export const CURSE_IDS = Object.keys(CURSES) as CurseId[];
 /** What each Wet wicks multiplies the wick time by, and each Thin oil the burn. */
@@ -123,11 +124,11 @@ export const QUEUE_MAX = 2;
  * the wick time and the pay a lantern.
  */
 export const LANTERN_KINDS = {
-  plain: { name: 'Lantern', blurb: '', oil: 1, wick: 1, pay: 1 },
-  beacon: { name: 'Beacon', blurb: 'Less oil, pays triple', oil: 0.6, wick: 1, pay: 3 },
-  candle: { name: 'Candle', blurb: 'Lights at once, half the oil', oil: 0.5, wick: 0, pay: 1 },
-  bell: { name: 'Bell', blurb: 'Stuns bats near it while lit', oil: 1, wick: 1, pay: 1 },
-} as const;
+  plain: { name: 'plainName', oil: 1, wick: 1, pay: 1 },
+  beacon: { name: 'beaconName', oil: 0.6, wick: 1, pay: 3 },
+  candle: { name: 'candleName', oil: 0.5, wick: 0, pay: 1 },
+  bell: { name: 'bellName', oil: 1, wick: 1, pay: 1 },
+} as const satisfies Record<string, { name: TextKey; oil: number; wick: number; pay: number }>;
 export type LanternKind = keyof typeof LANTERN_KINDS;
 /** The kinds of lantern that spots hold, in the order nights deal them. */
 export const SPECIAL_KINDS: readonly LanternKind[] = ['beacon', 'candle', 'bell'];
@@ -210,11 +211,11 @@ export const chainsOf = (s: GameState) => districtOf(s).chains;
  * nightfall before it, so the night panel can show what is coming.
  */
 export const NIGHT_KINDS = {
-  clear: { name: 'Clear night', blurb: 'Nothing stirs but the moths' },
-  fog: { name: 'Foggy night', blurb: 'Oil burns 40% faster' },
-  feast: { name: 'Feast night', blurb: 'Lanterns and chains pay double' },
-  storm: { name: 'Stormy night', blurb: 'Two more gusts' },
-} as const;
+  clear: { name: 'clearName', blurb: 'clearBlurb' },
+  fog: { name: 'fogName', blurb: 'fogBlurb' },
+  feast: { name: 'feastName', blurb: 'feastBlurb' },
+  storm: { name: 'stormName', blurb: 'stormBlurb' },
+} as const satisfies Record<string, { name: TextKey; blurb: TextKey }>;
 export type NightKind = keyof typeof NIGHT_KINDS;
 export const NIGHT_KIND_IDS = Object.keys(NIGHT_KINDS) as NightKind[];
 /** How much faster oil burns on a foggy night. */
@@ -268,27 +269,23 @@ export const callPay = (s: GameState) => CALL_PAY * (districtOf(s).rule === 'tra
  */
 export type OrderGoal = { kind: 'lit'; lanterns: readonly number[] } | { kind: 'closeCalls' | 'shields'; count: number };
 export interface Order {
-  text: string;
+  /** What the herald asks for, as named in the keep; `orderText` in the scene names another district's lanterns. */
+  text: TextKey;
   goal: OrderGoal;
   reward: number;
 }
 /**
  * The orders, one a night in this order, then round again. Each only names lanterns its night has.
- * The texts name the keep's lanterns; in another district `orderFor` names that district's.
+ * The texts name the keep's lanterns; in another district the scene names that district's.
  */
 export const ORDERS: readonly Order[] = [
-  { text: 'Both towers + keep lit at nightfall', goal: { kind: 'lit', lanterns: [0, 1, 2] }, reward: 15 },
-  { text: 'The west wall lit at nightfall', goal: { kind: 'lit', lanterns: [0, 3, 5] }, reward: 15 },
-  { text: 'Save two lanterns in a close call', goal: { kind: 'closeCalls', count: 2 }, reward: 15 },
-  { text: 'The east wall lit at nightfall', goal: { kind: 'lit', lanterns: [1, 4, 6] }, reward: 15 },
-  { text: 'Shield a lantern from a gust', goal: { kind: 'shields', count: 1 }, reward: 15 },
+  { text: 'orderTowers', goal: { kind: 'lit', lanterns: [0, 1, 2] }, reward: 15 },
+  { text: 'orderWest', goal: { kind: 'lit', lanterns: [0, 3, 5] }, reward: 15 },
+  { text: 'orderCloseCalls', goal: { kind: 'closeCalls', count: 2 }, reward: 15 },
+  { text: 'orderEast', goal: { kind: 'lit', lanterns: [1, 4, 6] }, reward: 15 },
+  { text: 'orderShield', goal: { kind: 'shields', count: 1 }, reward: 15 },
 ];
-export function orderFor(night: number, district: DistrictId = 'keep'): Order {
-  const order = ORDERS[(night - 1) % ORDERS.length];
-  if (district === 'keep' || order.goal.kind !== 'lit') return order;
-  const names = order.goal.lanterns.map((i) => DISTRICTS[district].spots[i].name);
-  return { ...order, text: `Lit at nightfall: ${names.join(', ')}` };
-}
+export const orderFor = (night: number): Order => ORDERS[(night - 1) % ORDERS.length];
 
 /** How far the night's order has come: `done` of `of`. */
 export function orderProgress(s: GameState) {
@@ -1084,7 +1081,7 @@ export function nextDusk(s: GameState) {
   makeMoths(s);
   s.queue = [];
   s.report = null;
-  s.order = orderFor(s.night, s.district);
+  s.order = orderFor(s.night);
   s.kind = s.nextKind;
   s.gusts = gustsFor(s.night, s.kind);
   s.batTimes = batsFor(s.night, s.curses.bats);

@@ -6,6 +6,7 @@
 import { ELITE, WAVES, statsOf, type EventState, type GameState } from './state';
 import { collectAll, heal, lower, nextPick, pop, raise, refreshHealth, spawnElite, tick, type Input } from './sim';
 import { FILLER, MAX_TIER, UPGRADES, UPGRADE_IDS, canOffer, rollChoices } from './upgrades';
+import { t } from '../i18n';
 import { CREDITS, LAST_PLANET, NODE_INFO, PLANETS, REST_HEAL, TRADE, arenaElites, type EventId, type NodeKind } from './planets';
 
 /** One frame of the game: the sim while a fight is on, then whatever follows a cleared fight. */
@@ -40,8 +41,8 @@ export function afterClear(s: GameState) {
     if (s.arenaWon) {
       s.credits += CREDITS.arena;
       s.rewardPicks += 1;
-      pop(s, `Arena won: +${CREDITS.arena} credits and a free pick`, '#ffe066');
-    } else pop(s, 'The elites withdraw', '#8ea0c4');
+      pop(s, t('arenaWon', { n: CREDITS.arena }), '#ffe066');
+    } else pop(s, t('elitesWithdraw'), '#8ea0c4');
     s.after = 'travel';
   } else {
     s.credits += CREDITS.clear;
@@ -76,7 +77,7 @@ export function chooseNode(s: GameState, index: number) {
   else if (kind === 'rest') {
     const before = s.player.hp;
     heal(s, REST_HEAL * s.player.maxHp);
-    pop(s, `Rested: +${Math.round(s.player.hp - before)} health`, '#7dffa0');
+    pop(s, t('rested', { n: Math.round(s.player.hp - before) }), '#7dffa0');
     s.phase = 'travel';
   } else {
     s.event = rollEvent(s);
@@ -136,7 +137,7 @@ function startArena(s: GameState) {
   const n = arenaElites(s.planet);
   const a0 = Math.random() * Math.PI * 2;
   for (let i = 0; i < n; i++) spawnElite(s, a0 + (i / n) * Math.PI * 2);
-  pop(s, `Elite arena: beat ${n} elites in 60 s`, '#ffe066');
+  pop(s, t('arenaStart', { n }), '#ffe066');
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -165,37 +166,37 @@ export function rollEvent(s: GameState): EventState {
   const id = ids[Math.floor(Math.random() * ids.length)];
   if (id === 'droid') {
     return {
-      id, title: 'A stranded droid', text: 'A small turret drone sits in the wreck of a lander, still humming. It turns its lens toward you.',
+      id, title: 'droidTitle', text: 'droidText',
       options: [
-        { label: 'Take it along', text: 'It flies with you and shoots for the whole next planet' },
-        { label: 'Strip it for parts', text: '+20 credits' },
+        { label: 'droidTake', text: 'droidTakeText' },
+        { label: 'droidStrip', text: 'droidStripText' },
       ],
     };
   }
   if (id === 'cache') {
     return {
-      id, title: 'A derelict cache', text: 'A sealed supply cache, half buried. The lock is rigged: forcing the inner case will cost you.',
+      id, title: 'cacheTitle', text: 'cacheText',
       options: [
-        { label: 'Take the credits', text: '+40 credits' },
-        { label: 'Force the inner case', text: 'A random gear piece, but lose 15% of your max health' },
+        { label: 'cacheTake', text: 'cacheTakeText' },
+        { label: 'cacheForce', text: 'cacheForceText' },
       ],
     };
   }
   if (id === 'well') {
     return {
-      id, title: 'A lumen well', text: 'Raw lumen wells up from a crack in the ground, bright enough to read by.',
+      id, title: 'wellTitle', text: 'wellText',
       options: [
-        { label: 'Drink', text: 'A free level-up' },
-        { label: 'Bottle it', text: '+25 credits' },
+        { label: 'wellDrink', text: 'wellDrinkText' },
+        { label: 'wellBottle', text: 'wellBottleText' },
       ],
     };
   }
   const { lose, gain } = pair!;
   return {
-    id, title: 'A shrine of the Current', text: 'An old shrine hums with the Current. It will take what you know and give it back changed.',
+    id, title: 'shrineTitle', text: 'shrineText',
     options: [
-      { label: 'Make the trade', text: `Lose a tier of ${UPGRADES[lose].name}, gain two tiers of ${UPGRADES[gain].name}` },
-      { label: 'Walk on', text: 'Nothing changes' },
+      { label: 'shrineTrade', text: 'shrineTradeText' },
+      { label: 'shrineWalk', text: 'shrineWalkText' },
     ],
     lose, gain,
   };
@@ -209,7 +210,7 @@ export function chooseEvent(s: GameState, index: number) {
   if (ev.id === 'droid') {
     if (first) {
       s.escort = true;
-      pop(s, 'The droid follows you', '#7df9ff');
+      pop(s, t('droidFollows'), '#7df9ff');
     } else s.credits += 20;
   } else if (ev.id === 'cache') {
     if (first) s.credits += 40;
@@ -217,7 +218,7 @@ export function chooseEvent(s: GameState, index: number) {
       const gear = cacheGear(s);
       if (gear) {
         raise(s, gear);
-        pop(s, `${UPGRADES[gear].name} tier ${s.ranks[gear]}`, '#b48cff');
+        pop(s, t('upgradeTier', { name: t(UPGRADES[gear].name), n: s.ranks[gear] }), '#b48cff');
       } else s.credits += 40;
       s.maxHpMod *= 0.85;
       refreshHealth(s);
@@ -229,7 +230,7 @@ export function chooseEvent(s: GameState, index: number) {
     lower(s, ev.lose);
     raise(s, ev.gain);
     raise(s, ev.gain);
-    pop(s, `${UPGRADES[ev.gain].name} tier ${s.ranks[ev.gain]}`, '#b48cff');
+    pop(s, t('upgradeTier', { name: t(UPGRADES[ev.gain].name), n: s.ranks[ev.gain] }), '#b48cff');
   }
   s.event = null;
   s.after = 'travel';
@@ -256,5 +257,5 @@ export function nextPlanet(s: GameState) {
   s.player.maxHp = statsOf(s).maxHp;
   s.phase = 'run';
   s.after = 'run';
-  pop(s, PLANETS[s.planet].name, '#9fd8ff');
+  pop(s, t(PLANETS[s.planet].name), '#9fd8ff');
 }

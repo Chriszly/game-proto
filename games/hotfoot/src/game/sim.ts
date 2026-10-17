@@ -1,3 +1,4 @@
+import type { TextKey } from '../i18n';
 import { ARMOURY_EACH, nextPrice, noArmoury, type Armoury, type ArmouryId } from './armoury';
 import { BOONS, BOON_IDS, CURSE, forSale, type BoonId } from './boons';
 import { MISSILES, bossOf, bossStands, moveBoss } from './boss';
@@ -185,8 +186,8 @@ function stomp(s: GameState, prevH: number) {
   r.slideQueued = false;
 }
 
-function effect(s: GameState, kind: GameState['effects'][number]['kind'], x: number, h: number, total: number, text?: string) {
-  s.effects.push({ id: s.nextId++, kind, x, h, ms: total, total, ...(text ? { text } : {}) });
+function effect(s: GameState, kind: GameState['effects'][number]['kind'], x: number, h: number, total: number, text?: TextKey, n?: number) {
+  s.effects.push({ id: s.nextId++, kind, x, h, ms: total, total, ...(text ? { text } : {}), ...(n !== undefined ? { n } : {}) });
 }
 
 /**
@@ -197,7 +198,7 @@ function gainCoin(s: GameState, x: number, h: number) {
   const value = stats(s).coinValue * streakMult(s.streak, streakMax(s.road));
   s.streak += 1;
   s.coins += value;
-  if (value > 1) effect(s, 'pop', x, h + 40, 700, `+${value}`);
+  if (value > 1) effect(s, 'pop', x, h + 40, 700, 'coinPop', value);
   dared(s, 'coins', 1);
   dared(s, 'streak', streakMult(s.streak, streakMax(s.road)));
 }
@@ -218,7 +219,7 @@ function meetDare(s: GameState) {
   if (!d || d.done) return;
   d.done = true;
   s.coins += DARE.reward;
-  effect(s, 'pop', s.distance + 420, RUNNER.h + 100, 1600, `Dare met! +${DARE.reward}`);
+  effect(s, 'pop', s.distance + 420, RUNNER.h + 100, 1600, 'dareMetPop', DARE.reward);
 }
 
 /**
@@ -239,7 +240,8 @@ function visitShrines(s: GameState) {
       effect(s, 'heal', sh.x + sh.w / 2, 60, 900);
     } else {
       sh.tried = true;
-      effect(s, 'refuse', sh.x + sh.w / 2, 90, 1100, s.hearts >= max ? 'Hearts full' : `Needs ${SHRINE.price} coins`);
+      if (s.hearts >= max) effect(s, 'refuse', sh.x + sh.w / 2, 90, 1100, 'heartsFull');
+      else effect(s, 'refuse', sh.x + sh.w / 2, 90, 1100, 'needsCoins', SHRINE.price);
     }
   }
 }
@@ -437,7 +439,7 @@ export function pick(s: GameState, id: BoonId) {
   s.choices = null;
   s.shields = st.shields;
   for (const pid of pairsOf(s.ranks)) {
-    if (!before.includes(pid)) effect(s, 'pop', s.distance + 480, RUNNER.h + 120, 2400, `${PAIRS.find((p) => p.id === pid)!.name}!`);
+    if (!before.includes(pid)) effect(s, 'pop', s.distance + 480, RUNNER.h + 120, 2400, PAIRS.find((p) => p.id === pid)!.pop);
   }
   if (roadChoiceDue(s)) {
     s.roads = ['high', 'low'];
@@ -490,10 +492,10 @@ function bossContact(s: GameState, prevH: number) {
       s.dragonBeaten = true;
       s.crown = true;
       s.speed = speedOf(s.stage, true);
-      effect(s, 'pop', s.distance + 300, n.h + 150, 2600, `The dragon is beaten! The crown is yours. +${n.reward}`);
+      effect(s, 'pop', s.distance + 300, n.h + 150, 2600, 'dragonBeaten', n.reward);
     } else {
       s.bosses += 1;
-      effect(s, 'pop', s.distance + 300, n.h + 150, 1400, `Gatekeeper beaten! +${n.reward}`);
+      effect(s, 'pop', s.distance + 300, n.h + 150, 1400, 'gateBeaten', n.reward);
     }
     s.checkpointX = Math.round(s.distance + n.after);
     for (let i = 0; i < 6; i++) s.course.push({ id: s.nextId++, x: s.distance + 500 + i * 40, h: 12, pulled: false });

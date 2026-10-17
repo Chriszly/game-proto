@@ -4,7 +4,7 @@ import { viewPoint } from '../../../../shared/scaling';
 import { aiLog, mountWatch, watching, watchSteps } from '../../../../shared/watch';
 import {
   AUGMENT_BY_ID, CLASS_STATS, COST_COLOR, DRAFT_PICK_S, ITEMS, MONSTERS, ORIGIN_COLOR, PLAN_S, PLAYER_COMMANDERS, RIVALS, SETS,
-  PARTS, SKILLS, TERRAIN, TRAITS, UNIT_BY_ID, comboOf, isPart,
+  PARTS, SCRAP_TOKENS_PER_PART, SKILLS, TERRAIN, TRAITS, UNIT_BY_ID, comboOf, isPart,
   type PartId, type SetId, type TraitId,
 } from '../game/data';
 import { STEP_S, traitValue, type BEvent, type BUnit } from '../game/battle';
@@ -16,6 +16,7 @@ import {
   type Match, type MeterRow, type Owned, type Player, type Spot,
 } from '../game/match';
 import { aiDraft, aiPickAugment, aiPlan } from '../game/ai';
+import { ordinal, t } from '../i18n';
 import { CMD_TEX, INK, UNIT_TEX, bakeAll, cmdKey, itemKey, monsterKey, textureRes, unitKey } from '../art/paint';
 import {
   BENCH, BOARD_VIEW, BUTTONS, COMMANDER_HOME, DRAFT_RING, INFO_PANEL, ITEMS_PANEL, PLAYERS_PANEL, RIVAL_HOME, SELL_ZONE, SHOP,
@@ -219,7 +220,7 @@ export class GameScene extends Phaser.Scene {
     if (watching) {
       mountWatch({
         title: 'Watching AI: Scrapyard Titans',
-        sides: Object.fromEntries(this.state.players.map((p) => [`p${p.seat}`, { name: p.seat === 0 ? `Seat 1 (${p.commander.name})` : p.name, color: `#${p.commander.color.toString(16).padStart(6, '0')}` }])),
+        sides: Object.fromEntries(this.state.players.map((p) => [`p${p.seat}`, { name: p.seat === 0 ? `Seat 1 (${t(p.commander.name)})` : t(p.name), color: `#${p.commander.color.toString(16).padStart(6, '0')}` }])),
         time: () => (this.state?.time ?? 0) * 1000,
       });
     }
@@ -256,7 +257,7 @@ export class GameScene extends Phaser.Scene {
     const rival = m.opponent >= 0 ? m.players[m.opponent] : null;
     this.rivalImg.setVisible(!!rival);
     if (rival) this.rivalImg.setTexture(cmdKey(rival.commander.name));
-    aiLog('p0', `fights ${rival ? rival.name : 'the monsters'}`);
+    aiLog('p0', `fights ${rival ? t(rival.name) : 'the monsters'}`);
     this.dirty = true;
     this.boardDirty = true;
   }
@@ -267,8 +268,8 @@ export class GameScene extends Phaser.Scene {
     for (const o of this.orbs) o.at = Math.min(o.at, this.t);
     const r = m.result;
     if (r) {
-      const text = r.outcome === 'win' ? 'Victory!' : r.outcome === 'draw' ? 'Draw' : 'Defeat';
-      const extra = r.damage ? `  -${r.damage} HP` : r.gold ? `  +${r.gold} gold` : '';
+      const text = t(r.outcome === 'win' ? 'victory' : r.outcome === 'draw' ? 'draw' : 'defeat');
+      const extra = r.damage ? t('lostHp', { n: r.damage }) : r.gold ? t('wonGold', { n: r.gold }) : '';
       this.banner.setText(text + extra).setColor(r.outcome === 'win' ? '#7cf3ff' : r.outcome === 'draw' ? '#ffd166' : '#ff8a7a');
     }
     this.resultUntil = m.time + 2;
@@ -465,7 +466,7 @@ export class GameScene extends Phaser.Scene {
         }
         case 'dodge': {
           const v = this.views.get(`b${e.id}`);
-          if (v) this.number(v, 'miss', '#8f8cc0', 11);
+          if (v) this.number(v, t('miss'), '#8f8cc0', 11);
           break;
         }
         case 'revive': {
@@ -476,7 +477,7 @@ export class GameScene extends Phaser.Scene {
         case 'gold': {
           const v = this.views.get(`b${e.id}`);
           if (v && e.team === 0) {
-            this.number(v, `+${e.amount}g`, C.gold, 13);
+            this.number(v, t('plusG', { n: e.amount }), C.gold, 13);
             this.fx.push({ kind: 'puff', at, dur: 0.3, x: v.x, y: v.y - 20, color: 0xffd166 });
           }
           break;
@@ -487,8 +488,8 @@ export class GameScene extends Phaser.Scene {
           if (e.skill === 'bulwark') for (const a of allies) this.fx.push({ kind: 'bubble', at, dur: 0.8, from: a.id });
           if (e.skill === 'zap' && e.target) this.fx.push({ kind: 'zap', at, dur: 0.4, to: e.target, x: e.team === 0 ? 0 : 1 });
           if (e.team === 0) this.avatarHop = at;
-          const name = SKILLS[e.skill].name;
-          const label = e.team === 0 ? `${player(m).commander.name}: ${name}!` : `${m.opponent >= 0 ? m.players[m.opponent].name : 'Rival'}: ${name}!`;
+          const skill = t(SKILLS[e.skill].name);
+          const label = t('skillCall', { name: e.team === 0 ? t(player(m).commander.name) : m.opponent >= 0 ? t(m.players[m.opponent].name) : t('rival'), skill });
           this.number({ x: e.team === 0 ? COMMANDER_HOME.x + 60 : RIVAL_HOME.x - 60, y: e.team === 0 ? COMMANDER_HOME.y - 20 : RIVAL_HOME.y + 40, s: 1 } as View, label, e.team === 0 ? '#7cf3ff' : '#ff8a7a', 13, 1.4);
           this.dirty = true;
           break;
@@ -497,7 +498,7 @@ export class GameScene extends Phaser.Scene {
           const v = this.views.get(`b${e.id}`);
           if (v) {
             v.diedAt = at;
-            this.number(v, 'escaped!', '#ffd166', 14, 1.2);
+            this.number(v, t('escaped'), '#ffd166', 14, 1.2);
             this.fx.push({ kind: 'puff', at, dur: 0.5, x: v.x, y: v.y - 10, color: 0xd0b060 });
           }
           break;
@@ -931,7 +932,7 @@ export class GameScene extends Phaser.Scene {
     } else if (orb) {
       this.orbs.shift();
       this.fx.push({ kind: 'sparks', at: this.t, dur: 0.6, x: orb.x, y: orb.y - 8, seed: 3, color: orb.item ? 0xc78bff : 0xffd166 });
-      this.number({ x: orb.x, y: orb.y + 30, s: 1 }, orb.item ? ITEMS[orb.item].name : `+${orb.gold} gold`, orb.item ? '#c78bff' : C.gold, 12, 1.2);
+      this.number({ x: orb.x, y: orb.y + 30, s: 1 }, orb.item ? t(ITEMS[orb.item].name) : t('plusGold', { n: orb.gold ?? 0 }), orb.item ? '#c78bff' : C.gold, 12, 1.2);
     }
     const hopK = (this.t - this.avatarHop) / 0.5;
     const hop = walking ? Math.abs(Math.sin(this.t * 10)) * 4 : hopK >= 0 && hopK < 1 ? Math.sin(Math.PI * hopK) * 12 : 0;
@@ -942,7 +943,7 @@ export class GameScene extends Phaser.Scene {
     if (taunt) {
       const row = PLAYERS_PANEL.y + taunt.seat * PLAYERS_PANEL.rowH;
       const onBoard = this.rivalImg.visible && m.opponent === taunt.seat;
-      this.bubble.setText(`${m.players[taunt.seat].name}: “${taunt.text}”`);
+      this.bubble.setText(t('taunt', { name: t(m.players[taunt.seat].name), text: t(taunt.text) }));
       if (onBoard) this.bubble.setOrigin(1, 1).setPosition(RIVAL_HOME.x - 14, RIVAL_HOME.y - 36);
       else this.bubble.setOrigin(1, 0.5).setPosition(PLAYERS_PANEL.x - 6, row + 14);
     }
@@ -994,16 +995,16 @@ export class GameScene extends Phaser.Scene {
       const tb = traitValue(traits, b[0]) ? 1 : 0;
       return tb - ta || b[1] - a[1];
     }).slice(0, TRAITS_PANEL.maxRows);
-    this.txt(TRAITS_PANEL.x + 4, TRAITS_PANEL.y - 2, 'TRAITS', 10, C.dim, { fontStyle: 'bold' });
+    this.txt(TRAITS_PANEL.x + 4, TRAITS_PANEL.y - 2, t('traits'), 10, C.dim, { fontStyle: 'bold' });
     shownTraits.forEach(([id, n], i) => {
       const def = TRAITS[id];
       const y = TRAITS_PANEL.y + 12 + i * TRAITS_PANEL.rowH;
       const active = traitValue(traits, id) > 0;
-      const next = def.tiers.find((t) => t > n) ?? def.tiers[def.tiers.length - 1];
+      const next = def.tiers.find((tier) => tier > n) ?? def.tiers[def.tiers.length - 1];
       g.fillStyle(active ? 0x2a2360 : C.panel, 0.92).fillRoundedRect(TRAITS_PANEL.x, y, 150, TRAITS_PANEL.rowH - 3, 5);
       if (active) g.lineStyle(1.5, def.kind === 'origin' ? ORIGIN_COLOR[id as keyof typeof ORIGIN_COLOR] : C.cyan, 0.9).strokeRoundedRect(TRAITS_PANEL.x, y, 150, TRAITS_PANEL.rowH - 3, 5);
       g.fillStyle(def.kind === 'origin' ? ORIGIN_COLOR[id as keyof typeof ORIGIN_COLOR] : 0xd0d8e8).fillCircle(TRAITS_PANEL.x + 10, y + 9, 4.5);
-      this.txt(TRAITS_PANEL.x + 20, y + 2, `${def.name}`, 11, active ? '#ffffff' : C.dim, { fontStyle: active ? 'bold' : 'normal' });
+      this.txt(TRAITS_PANEL.x + 20, y + 2, t(def.name), 11, active ? '#ffffff' : C.dim, { fontStyle: active ? 'bold' : 'normal' });
       this.txt(TRAITS_PANEL.x + 112, y + 2, `${n}/${next}`, 11, active ? C.gold : C.dim);
       this.buttons.push({ x: TRAITS_PANEL.x, y, w: 150, h: TRAITS_PANEL.rowH - 3, run: () => {
         this.infoTrait = this.infoTrait === id ? null : id;
@@ -1012,7 +1013,7 @@ export class GameScene extends Phaser.Scene {
       } });
     });
     // Left: parts and items.
-    this.txt(ITEMS_PANEL.x, ITEMS_PANEL.y - 16, me.items.length ? 'PARTS (tap, then a robot)' : 'PARTS', 10, C.dim, { fontStyle: 'bold' });
+    this.txt(ITEMS_PANEL.x, ITEMS_PANEL.y - 16, t(me.items.length ? 'partsHint' : 'parts'), 10, C.dim, { fontStyle: 'bold' });
     for (let i = 0; i < 10; i++) {
       const x = ITEMS_PANEL.x + (i % ITEMS_PANEL.cols) * (ITEMS_PANEL.size + 3);
       const y = ITEMS_PANEL.y + Math.floor(i / ITEMS_PANEL.cols) * (ITEMS_PANEL.size + 3);
@@ -1025,18 +1026,18 @@ export class GameScene extends Phaser.Scene {
     // Left bottom: gold, level and buttons.
     g.fillStyle(C.panel, 0.92).fillRoundedRect(8, 426, 152, 108, 8);
     this.txt(16, 430, `${me.gold}`, 20, C.gold, { fontStyle: 'bold' });
-    this.txt(16 + 12 * String(me.gold).length + 4, 436, 'gold', 11, C.dim);
-    this.txt(92, 428, `Lv ${me.level}`, 13, '#ffffff', { fontStyle: 'bold' });
+    this.txt(16 + 12 * String(me.gold).length + 4, 436, t('gold'), 11, C.dim);
+    this.txt(92, 428, t('level', { n: me.level }), 13, '#ffffff', { fontStyle: 'bold' });
     const need = xpToNext(me);
     g.fillStyle(0x000000, 0.6).fillRect(92, 446, 60, 5);
     g.fillStyle(C.mana).fillRect(92, 446, need ? (60 * me.xp) / need : 60, 5);
-    this.txt(92, 451, need ? `${me.xp}/${need} xp` : 'max', 9, C.dim);
+    this.txt(92, 451, need ? t('xp', { xp: me.xp, need }) : t('maxLevel'), 9, C.dim);
     const planning = m.phase === 'plan';
-    this.button(g, BUTTONS.reroll, `Reroll ${rerollCost(me)}`, () => this.doReroll(), { on: planning && me.gold >= rerollCost(me), size: 11 });
-    this.button(g, BUTTONS.xp, 'Buy XP 4', () => this.doXp(), { on: planning && me.gold >= 4 && me.level < 9, size: 11 });
+    this.button(g, BUTTONS.reroll, t('reroll', { n: rerollCost(me) }), () => this.doReroll(), { on: planning && me.gold >= rerollCost(me), size: 11 });
+    this.button(g, BUTTONS.xp, t('buyXp', { n: 4 }), () => this.doXp(), { on: planning && me.gold >= 4 && me.level < 9, size: 11 });
     const selUnit = this.selected?.kind === 'unit' ? unitAt(me, this.selected.spot) : null;
-    if (selUnit && planning) this.button(g, BUTTONS.sell, `Sell for ${sellValue(selUnit)} (E)`, () => this.doSell(), { color: 0xffb703, size: 11 });
-    else this.txt(80, 508, `Board ${boardCount(me)}/${me.level}`, 11, boardCount(me) > me.level ? '#ff8a7a' : C.dim);
+    if (selUnit && planning) this.button(g, BUTTONS.sell, t('sellFor', { n: sellValue(selUnit) }), () => this.doSell(), { color: 0xffb703, size: 11 });
+    else this.txt(80, 508, t('boardCount', { n: boardCount(me), max: me.level }), 11, boardCount(me) > me.level ? '#ff8a7a' : C.dim);
     // The shop.
     me.shop.forEach((s, i) => {
       const x = shopCardX(i);
@@ -1055,10 +1056,10 @@ export class GameScene extends Phaser.Scene {
       if (s.gilded) img.setTint(0xffe08a);
       this.hud.add(img);
       this.txt(x + 58, y + 6, `${cost}`, 14, `#${COST_COLOR[def.cost].toString(16)}`, { fontStyle: 'bold' });
-      this.txt(x + 72, y + 9, 'gold', 9, C.dim);
-      this.txt(x + 58, y + 26, TRAITS[def.origin].name + (s.gilded ? `\n+${TRAITS[s.gilded].name}` : ''), 9, s.gilded ? C.gold : `#${ORIGIN_COLOR[def.origin].toString(16)}`);
-      this.txt(x + 58, y + (s.gilded ? 50 : 40), TRAITS[def.cls].name, 9, '#d0d8e8');
-      this.txt(x + 6, y + 66, (s.gilded ? 'Gilded ' : '') + def.name, 11, '#ffffff', { fontStyle: 'bold', wordWrap: { width: SHOP.cardW - 10 } });
+      this.txt(x + 72, y + 9, t('gold'), 9, C.dim);
+      this.txt(x + 58, y + 26, t(TRAITS[def.origin].name) + (s.gilded ? `\n+${t(TRAITS[s.gilded].name)}` : ''), 9, s.gilded ? C.gold : `#${ORIGIN_COLOR[def.origin].toString(16)}`);
+      this.txt(x + 58, y + (s.gilded ? 50 : 40), t(TRAITS[def.cls].name), 9, '#d0d8e8');
+      this.txt(x + 6, y + 66, s.gilded ? t('gilded', { name: t(def.name) }) : t(def.name), 11, '#ffffff', { fontStyle: 'bold', wordWrap: { width: SHOP.cardW - 10 } });
       if (can) this.buttons.push({ x, y, w: SHOP.cardW, h: SHOP.h, run: () => this.doBuy(i) });
     });
     // Right: the players.
@@ -1068,7 +1069,7 @@ export class GameScene extends Phaser.Scene {
       g.fillStyle(p.seat === 0 ? 0x1d2a5a : C.panel, p.alive ? 0.92 : 0.4).fillRoundedRect(PLAYERS_PANEL.x, y, PLAYERS_PANEL.w, PLAYERS_PANEL.rowH - 3, 6);
       if (opp) g.lineStyle(2, 0xff6b8a, 1).strokeRoundedRect(PLAYERS_PANEL.x, y, PLAYERS_PANEL.w, PLAYERS_PANEL.rowH - 3, 6);
       this.hud.add(this.add.image(PLAYERS_PANEL.x + 13, y + 26, cmdKey(p.commander.name)).setOrigin(0.5, 1).setScale(0.5 / (textureRes.get(cmdKey(p.commander.name)) ?? 2)).setAlpha(p.alive ? 1 : 0.4));
-      this.txt(PLAYERS_PANEL.x + 26, y + 2, p.name, 10, p.alive ? '#ffffff' : C.dim, { fontStyle: p.seat === 0 ? 'bold' : 'normal' });
+      this.txt(PLAYERS_PANEL.x + 26, y + 2, t(p.name), 10, p.alive ? '#ffffff' : C.dim, { fontStyle: p.seat === 0 ? 'bold' : 'normal' });
       const hpW = 80;
       g.fillStyle(0x000000, 0.6).fillRect(PLAYERS_PANEL.x + 26, y + 17, hpW, 5);
       g.fillStyle(p.seat === 0 ? C.cyan : C.good).fillRect(PLAYERS_PANEL.x + 26, y + 17, (hpW * Math.max(0, p.hp)) / 100 > hpW ? hpW : (hpW * Math.max(0, p.hp)) / 100, 5);
@@ -1085,17 +1086,17 @@ export class GameScene extends Phaser.Scene {
     });
     this.buildInfo(g);
     // Right bottom: fight, skill and speed.
-    if (m.phase === 'plan') this.button(g, BUTTONS.fight, 'FIGHT! (Space)', () => this.goFight(), { size: 15, color: 0xffb703, on: me.human });
+    if (m.phase === 'plan') this.button(g, BUTTONS.fight, t('fight'), () => this.goFight(), { size: 15, color: 0xffb703, on: me.human });
     else if (m.phase === 'fight' && m.battle) {
       const skill = SKILLS[me.commander.skill];
       const used = m.battle.skillUsed[0] || m.battle.done;
-      this.button(g, BUTTONS.skill, used ? `${skill.name} used` : `${skill.name} (Space)`, () => this.doSkill(), { on: !used && me.human, size: 13, color: 0xff5cf0 });
+      this.button(g, BUTTONS.skill, t(used ? 'skillUsed' : 'skillKey', { skill: t(skill.name) }), () => this.doSkill(), { on: !used && me.human, size: 13, color: 0xff5cf0 });
     }
-    if (m.phase === 'fight' || m.phase === 'result' || m.phase === 'plan') this.button(g, BUTTONS.speed, `Speed ${this.speed}x`, () => this.toggleSpeed(), { size: 11 });
-    if (m.opts.terrain) this.txt(170, 412, 'Terrain: dark oil slows, green pad charges, grey plate armours, orange grate burns', 9, C.dim);
+    if (m.phase === 'fight' || m.phase === 'result' || m.phase === 'plan') this.button(g, BUTTONS.speed, t('speed', { n: this.speed }), () => this.toggleSpeed(), { size: 11 });
+    if (m.opts.terrain) this.txt(170, 412, t('terrainLegend'), 9, C.dim);
     if (planning) {
       const locked = me.shopLocked;
-      this.button(g, BUTTONS.lock, locked ? 'Locked (L)' : 'Lock (L)', () => this.toggleLock(), { on: me.human, size: 10, color: locked ? 0xffd166 : C.panelLine });
+      this.button(g, BUTTONS.lock, t(locked ? 'locked' : 'lock'), () => this.toggleLock(), { on: me.human, size: 10, color: locked ? 0xffd166 : C.panelLine });
     }
     this.buildPreview(me);
   }
@@ -1108,9 +1109,9 @@ export class GameScene extends Phaser.Scene {
     if (!id) return;
     const tag = (o: Owned, x: number, y: number) => {
       const out = equipPreview(id, o);
-      const label = out === null ? 'full' : out === id ? `+ ${ITEMS[id].name}` : ITEMS[out].name;
-      const t = this.txt(x, y, label, 9, out === null ? C.dim : out === id ? '#d0d8e8' : '#c78bff', { fontStyle: 'bold', backgroundColor: '#0a0818cc', padding: { x: 3, y: 1 } });
-      t.setOrigin(0.5, 1);
+      const label = out === null ? t('previewFull') : out === id ? `+ ${t(ITEMS[id].name)}` : t(ITEMS[out].name);
+      const tag = this.txt(x, y, label, 9, out === null ? C.dim : out === id ? '#d0d8e8' : '#c78bff', { fontStyle: 'bold', backgroundColor: '#0a0818cc', padding: { x: 3, y: 1 } });
+      tag.setOrigin(0.5, 1);
     };
     for (const [k, o] of Object.entries(me.board)) {
       const [col, row] = k.split(',').map(Number);
@@ -1134,37 +1135,41 @@ export class GameScene extends Phaser.Scene {
     if (unit) {
       const def = UNIT_BY_ID[unit.defId];
       const cs = CLASS_STATS[def.cls];
-      title = `${unit.gilded ? 'Gilded ' : ''}${def.name} ${'★'.repeat(unit.star)}`;
-      body = `${TRAITS[def.origin].name}${unit.gilded ? ` + ${TRAITS[unit.gilded].name}` : ''} ${TRAITS[def.cls].name}\n${cs.abilityName}\nRange ${cs.range}  Cost ${unitCost(unit)}`;
-      if (unit.items.length) body += `\n${unit.items.map((i) => ITEMS[i].name).join(', ')}`;
+      title = `${unit.gilded ? t('gilded', { name: t(def.name) }) : t(def.name)} ${'★'.repeat(unit.star)}`;
+      const traitNames = `${t(TRAITS[def.origin].name)}${unit.gilded ? ` + ${t(TRAITS[unit.gilded].name)}` : ''}`;
+      body = t('unitInfo', { traits: traitNames, cls: t(TRAITS[def.cls].name), ability: t(cs.abilityName), range: cs.range, cost: unitCost(unit) });
+      if (unit.items.length) body += `\n${unit.items.map((i) => t(ITEMS[i].name)).join(', ')}`;
     } else if (item) {
       const def = ITEMS[item];
-      title = def.name;
-      body = def.from.length
-        ? `${def.text}\n${def.from.map((p) => ITEMS[p].text).join(', ')}`
-        : `${def.text}\nWith ${PARTS.filter((p) => p !== item).map((p) => `${ITEMS[p].name}: ${comboOf(item as PartId, p).name}`).concat(`another ${def.name}: ${comboOf(item as PartId, item as PartId).name}`).join('; ')}`;
+      title = t(def.name);
+      if (def.from.length) body = `${t(def.text)}\n${def.from.map((p) => t(ITEMS[p].text)).join(', ')}`;
+      else {
+        const recipes = PARTS.filter((p) => p !== item).map((p) => `${t(ITEMS[p].name)}: ${t(comboOf(item as PartId, p).name)}`);
+        recipes.push(`${t('anotherPart', { name: t(def.name) })}: ${t(comboOf(item as PartId, item as PartId).name)}`);
+        body = `${t(def.text)}\n${t('recipes', { list: recipes.join('; ') })}`;
+      }
     } else if (this.infoTrait) {
       const def = TRAITS[this.infoTrait];
-      title = `${def.name} (${def.tiers.join(' / ')})`;
-      body = def.text.replace('{v}', def.values.join('/'));
+      title = `${t(def.name)} (${def.tiers.join(' / ')})`;
+      body = t(def.text, { v: def.values.join('/') });
     } else if (rival) {
       const traits = countTraits(boardUnits(rival));
-      const active = (Object.keys(traits) as TraitId[]).filter((t) => traitValue(traits, t) > 0).map((t) => `${TRAITS[t].name} ${traits[t]}`);
-      title = `${rival.name}'s board`;
-      body = `Lv ${rival.level} · ${rival.gold} gold · ${boardCount(rival)} robots\n${active.length ? active.join(', ') : 'No traits active'}${rival.augments.length ? `\n${rival.augments.map((a) => AUGMENT_BY_ID[a].name).join(', ')}` : ''}`;
+      const active = (Object.keys(traits) as TraitId[]).filter((id) => traitValue(traits, id) > 0).map((id) => `${t(TRAITS[id].name)} ${traits[id]}`);
+      title = t('rivalBoard', { name: t(rival.name) });
+      body = `${t('rivalInfo', { level: rival.level, gold: rival.gold, n: boardCount(rival) })}\n${active.length ? active.join(', ') : t('noTraits')}${rival.augments.length ? `\n${rival.augments.map((a) => t(AUGMENT_BY_ID[a].name)).join(', ')}` : ''}`;
     } else if (meter && this.infoPage === 'meter') {
       return this.buildMeter(g, meter, m.phase === 'plan');
     } else if (m.phase === 'plan') {
       const set = SETS.find((s) => s.id === m.opts.set)!;
-      title = me.augments.length ? 'Power cards' : set.name;
-      body = me.augments.length ? me.augments.map((a) => AUGMENT_BY_ID[a].name).join('\n') : `${set.blurb}${m.opts.set === 'scrap' ? `\nTokens: ${me.scrapTokens}/3` : ''}`;
+      title = t(me.augments.length ? 'powerCards' : set.name);
+      body = me.augments.length ? me.augments.map((a) => t(AUGMENT_BY_ID[a].name)).join('\n') : `${t(set.blurb)}${m.opts.set === 'scrap' ? `\n${t('tokens', { n: me.scrapTokens, max: SCRAP_TOKENS_PER_PART })}` : ''}`;
       if (meter) this.infoRect = r;
     } else return;
     g.fillStyle(C.panel, 0.95).fillRoundedRect(r.x, r.y, r.w, r.h, 8);
     g.lineStyle(1, C.panelLine, 1).strokeRoundedRect(r.x, r.y, r.w, r.h, 8);
     this.txt(r.x + 8, r.y + 6, title, 11, C.gold, { fontStyle: 'bold', wordWrap: { width: r.w - 14 } });
     this.txt(r.x + 8, r.y + 24, body, item && !ITEMS[item].from.length ? 9 : 10, C.text, { wordWrap: { width: r.w - 14 }, lineSpacing: 2 });
-    if (this.infoRect) this.txt(r.x + r.w - 8, r.y + r.h - 16, 'tap: damage', 9, C.dim).setOrigin(1, 0);
+    if (this.infoRect) this.txt(r.x + r.w - 8, r.y + r.h - 16, t('tapDamage'), 9, C.dim).setOrigin(1, 0);
   }
 
   /** The damage meter: the player's robots in the last fight, by damage dealt (bar) and taken (number). */
@@ -1172,19 +1177,19 @@ export class GameScene extends Phaser.Scene {
     const r = INFO_PANEL;
     g.fillStyle(C.panel, 0.95).fillRoundedRect(r.x, r.y, r.w, r.h, 8);
     g.lineStyle(1, C.panelLine, 1).strokeRoundedRect(r.x, r.y, r.w, r.h, 8);
-    this.txt(r.x + 8, r.y + 6, 'Last fight: damage', 11, C.gold, { fontStyle: 'bold' });
+    this.txt(r.x + 8, r.y + 6, t('lastFight'), 11, C.gold, { fontStyle: 'bold' });
     const max = Math.max(1, ...rows.map((x) => x.dealt));
     const n = Math.min(rows.length, Math.floor((r.h - 40) / 19));
     rows.slice(0, n).forEach((row, i) => {
       const y = r.y + 24 + i * 19;
-      const name = UNIT_BY_ID[row.defId].name;
+      const name = t(UNIT_BY_ID[row.defId].name);
       this.txt(r.x + 8, y, `${name.length > 12 ? `${name.slice(0, 11)}.` : name}${'★'.repeat(row.star - 1)}`, 9, row.alive ? '#ffffff' : C.dim);
       this.txt(r.x + r.w - 8, y, `${row.dealt}`, 9, C.gold, { fontStyle: 'bold' }).setOrigin(1, 0);
       g.fillStyle(0x000000, 0.5).fillRect(r.x + 8, y + 12, r.w - 16, 3);
       g.fillStyle(ORIGIN_COLOR[UNIT_BY_ID[row.defId].origin]).fillRect(r.x + 8, y + 12, ((r.w - 16) * row.dealt) / max, 3);
     });
     const tanked = [...rows].sort((a, b) => b.taken - a.taken)[0];
-    if (tanked) this.txt(r.x + 8, r.y + r.h - 16, `Took most: ${UNIT_BY_ID[tanked.defId].name} ${tanked.taken}`, 9, C.dim);
+    if (tanked) this.txt(r.x + 8, r.y + r.h - 16, t('tookMost', { name: t(UNIT_BY_ID[tanked.defId].name), n: tanked.taken }), 9, C.dim);
     if (toggles) this.infoRect = r;
   }
 
@@ -1197,19 +1202,20 @@ export class GameScene extends Phaser.Scene {
     }
     const me = player(m);
     const label = roundLabel(m);
-    const kind = m.round.kind === 'pvp' ? 'vs rival' : m.round.kind === 'draft' ? 'draft' : m.round.kind === 'rat' ? 'Scrap Rat chase!' : 'vs monsters';
+    const kind = t(m.round.kind === 'pvp' ? 'vsRival' : m.round.kind === 'draft' ? 'draft' : m.round.kind === 'rat' ? 'ratChase' : 'vsMonsters');
     let phase = '';
-    if (m.phase === 'plan') phase = `Plan  ${Math.max(0, Math.ceil(m.phaseEnds - m.time))}s`;
+    if (m.phase === 'plan') phase = t('planPhase', { n: Math.max(0, Math.ceil(m.phaseEnds - m.time)) });
     else if (m.phase === 'fight') {
-      const opp = m.opponent >= 0 ? `${m.players[m.opponent].name}${m.ghost ? ' (ghost)' : ''}` : m.round.kind === 'rat' ? 'tap the rat to zap it' : 'monsters';
-      phase = `Fight vs ${opp}  ${m.battle ? Math.floor(m.battle.time) : 0}s`;
-    } else if (m.phase === 'result') phase = 'Result';
+      const rival = m.opponent >= 0 ? t(m.players[m.opponent].name) : '';
+      const opp = rival ? (m.ghost ? t('ghost', { name: rival }) : rival) : t(m.round.kind === 'rat' ? 'tapRat' : 'monsters');
+      phase = t('fightPhase', { opp, n: m.battle ? Math.floor(m.battle.time) : 0 });
+    } else if (m.phase === 'result') phase = t('resultPhase');
     else if (m.phase === 'draft') {
       const d = m.draft;
       const turn = d && d.turn < d.order.length ? m.players[d.order[d.turn]] : null;
-      phase = turn ? (turn.seat === 0 && turn.human ? 'Draft: your pick! Tap a robot on the ring' : `Draft: ${turn.seat === 0 ? 'your seat' : turn.name} picks`) : 'Draft';
+      phase = turn ? (turn.seat === 0 && turn.human ? t('yourPick') : t('draftPicks', { name: t(turn.seat === 0 ? 'yourSeat' : turn.name) })) : t('draft');
     }
-    this.topText.setText(`Round ${label} · ${kind}   ${phase}`);
+    this.topText.setText(t('round', { round: label, kind, phase }));
     if (m.phase === 'plan' && me.human && Math.floor(m.time * 2) !== Math.floor((m.time - 1 / 60) * 2)) void 0;
   }
 
@@ -1221,17 +1227,17 @@ export class GameScene extends Phaser.Scene {
     const m = this.state;
     const g = this.add.graphics();
     this.overlay.add(g);
-    const t = (x: number, y: number, s: string, size: number, color = C.text, opts: Partial<Phaser.Types.GameObjects.Text.TextStyle> = {}) => {
+    const say = (x: number, y: number, s: string, size: number, color = C.text, opts: Partial<Phaser.Types.GameObjects.Text.TextStyle> = {}) => {
       const o = this.add.text(x, y, s, { fontFamily: FONT, fontSize: `${size}px`, color, ...opts });
       this.overlay.add(o);
       return o;
     };
-    if (!m) return this.buildMenu(g, t);
+    if (!m) return this.buildMenu(g, say);
     const me = player(m);
     if (m.phase === 'plan' && me.human && me.augmentOffer) {
       g.fillStyle(0x05040f, 0.72).fillRect(0, 0, VIEW.w, VIEW.h);
-      t(VIEW.w / 2, 70, 'Pick a power card', 24, '#ffffff', { fontStyle: 'bold' }).setOrigin(0.5);
-      t(VIEW.w / 2, 100, 'It stays with you for the rest of the match. (1, 2 or 3)', 12, C.dim).setOrigin(0.5);
+      say(VIEW.w / 2, 70, t('pickCard'), 24, '#ffffff', { fontStyle: 'bold' }).setOrigin(0.5);
+      say(VIEW.w / 2, 100, t('pickCardHint'), 12, C.dim).setOrigin(0.5);
       me.augmentOffer.forEach((id, i) => {
         const a = AUGMENT_BY_ID[id];
         const r = { x: VIEW.w / 2 - 330 + i * 230, y: 130, w: 200, h: 250 };
@@ -1239,18 +1245,18 @@ export class GameScene extends Phaser.Scene {
         g.lineStyle(3, 0xff5cf0, 1).strokeRoundedRect(r.x, r.y, r.w, r.h, 14);
         g.lineStyle(1.5, C.cyan, 0.6).strokeRoundedRect(r.x + 8, r.y + 8, r.w - 16, r.h - 16, 10);
         g.fillStyle(0xff5cf0, 0.18).fillCircle(r.x + r.w / 2, r.y + 80, 44);
-        t(r.x + r.w / 2, r.y + 80, `${i + 1}`, 40, '#ff5cf0', { fontStyle: 'bold' }).setOrigin(0.5);
-        t(r.x + r.w / 2, r.y + 150, a.name, 17, '#ffffff', { fontStyle: 'bold' }).setOrigin(0.5);
-        t(r.x + r.w / 2, r.y + 180, a.text, 12, C.text, { align: 'center', wordWrap: { width: r.w - 30 } }).setOrigin(0.5, 0);
+        say(r.x + r.w / 2, r.y + 80, `${i + 1}`, 40, '#ff5cf0', { fontStyle: 'bold' }).setOrigin(0.5);
+        say(r.x + r.w / 2, r.y + 150, t(a.name), 17, '#ffffff', { fontStyle: 'bold' }).setOrigin(0.5);
+        say(r.x + r.w / 2, r.y + 180, t(a.text), 12, C.text, { align: 'center', wordWrap: { width: r.w - 30 } }).setOrigin(0.5, 0);
         this.overlayButtons.push({ ...r, run: () => this.doAugment(i) });
       });
     } else if (m.phase === 'won' || m.phase === 'lost') {
       g.fillStyle(0x05040f, 0.8).fillRect(0, 0, VIEW.w, VIEW.h);
       const place = m.phase === 'won' ? 1 : me.place;
-      t(VIEW.w / 2, 150, m.phase === 'won' ? 'Last titan standing!' : 'Knocked out', 34, m.phase === 'won' ? '#7cf3ff' : '#ff8a7a', { fontStyle: 'bold', stroke: INK, strokeThickness: 6 }).setOrigin(0.5);
-      t(VIEW.w / 2, 200, `${watching ? 'Seat 1' : 'You'} finished ${ordinal(place)} of 8 after round ${roundLabel(m)}.`, 16, '#ffffff').setOrigin(0.5);
-      t(VIEW.w / 2, 228, `Matches ${this.stats.played} · wins ${this.stats.wins} · best ${this.stats.best ? ordinal(this.stats.best) : '-'}`, 12, C.dim).setOrigin(0.5);
-      this.button(g, { x: VIEW.w / 2 - 90, y: 270, w: 180, h: 44 }, watching ? 'Watch another' : 'Play again', () => {
+      say(VIEW.w / 2, 150, t(m.phase === 'won' ? 'won' : 'lost'), 34, m.phase === 'won' ? '#7cf3ff' : '#ff8a7a', { fontStyle: 'bold', stroke: INK, strokeThickness: 6 }).setOrigin(0.5);
+      say(VIEW.w / 2, 200, t(watching ? 'seatFinished' : 'youFinished', { place: ordinal(place), round: roundLabel(m) }), 16, '#ffffff').setOrigin(0.5);
+      say(VIEW.w / 2, 228, t('endStats', { played: this.stats.played, wins: this.stats.wins, best: this.stats.best ? ordinal(this.stats.best) : '-' }), 12, C.dim).setOrigin(0.5);
+      this.button(g, { x: VIEW.w / 2 - 90, y: 270, w: 180, h: 44 }, t(watching ? 'watchAnother' : 'playAgain'), () => {
         this.state = null;
         this.clearViews();
         this.orbs = [];
@@ -1262,34 +1268,34 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private buildMenu(g: Phaser.GameObjects.Graphics, t: (x: number, y: number, s: string, size: number, color?: string, opts?: Partial<Phaser.Types.GameObjects.Text.TextStyle>) => Phaser.GameObjects.Text) {
+  private buildMenu(g: Phaser.GameObjects.Graphics, say: (x: number, y: number, s: string, size: number, color?: string, opts?: Partial<Phaser.Types.GameObjects.Text.TextStyle>) => Phaser.GameObjects.Text) {
     g.fillStyle(0x05040f, 0.55).fillRect(0, 0, VIEW.w, VIEW.h);
-    t(VIEW.w / 2, 46, 'SCRAPYARD TITANS', 38, '#7cf3ff', { fontStyle: 'bold', stroke: INK, strokeThickness: 7 }).setOrigin(0.5);
-    t(VIEW.w / 2, 82, 'Build a squad of junk robots, bolt on parts, and be the last commander standing.', 13, C.text).setOrigin(0.5);
-    t(VIEW.w / 2, 112, 'Pick your commander', 14, C.gold, { fontStyle: 'bold' }).setOrigin(0.5);
+    say(VIEW.w / 2, 46, t('title'), 38, '#7cf3ff', { fontStyle: 'bold', stroke: INK, strokeThickness: 7 }).setOrigin(0.5);
+    say(VIEW.w / 2, 82, t('tagline'), 13, C.text).setOrigin(0.5);
+    say(VIEW.w / 2, 112, t('pickCommander'), 14, C.gold, { fontStyle: 'bold' }).setOrigin(0.5);
     PLAYER_COMMANDERS.forEach((c, i) => {
       const r = { x: VIEW.w / 2 - 345 + i * 235, y: 128, w: 220, h: 150 };
       const on = this.menu.commander === i;
       g.fillStyle(on ? 0x2a2360 : C.panel, 0.95).fillRoundedRect(r.x, r.y, r.w, r.h, 12);
       g.lineStyle(on ? 3 : 1.5, on ? 0xffb703 : C.panelLine, 1).strokeRoundedRect(r.x, r.y, r.w, r.h, 12);
       this.overlay.add(this.add.image(r.x + 40, r.y + 100, cmdKey(c.name)).setOrigin(0.5, 1).setScale(1.6 / (textureRes.get(cmdKey(c.name)) ?? 2)));
-      t(r.x + 80, r.y + 14, c.name, 15, '#ffffff', { fontStyle: 'bold' });
-      t(r.x + 80, r.y + 38, SKILLS[c.skill].name, 13, '#ff5cf0', { fontStyle: 'bold' });
-      t(r.x + 80, r.y + 58, SKILLS[c.skill].text, 11, C.text, { wordWrap: { width: r.w - 90 } });
-      t(r.x + 14, r.y + 118, 'Once per fight: tap its button or press Space.', 9, C.dim, { wordWrap: { width: r.w - 20 } });
+      say(r.x + 80, r.y + 14, t(c.name), 15, '#ffffff', { fontStyle: 'bold' });
+      say(r.x + 80, r.y + 38, t(SKILLS[c.skill].name), 13, '#ff5cf0', { fontStyle: 'bold' });
+      say(r.x + 80, r.y + 58, t(SKILLS[c.skill].text), 11, C.text, { wordWrap: { width: r.w - 90 } });
+      say(r.x + 14, r.y + 118, t('skillHint'), 9, C.dim, { wordWrap: { width: r.w - 20 } });
       this.overlayButtons.push({ ...r, run: () => {
         this.menu.commander = i;
         this.dirty = true;
       } });
     });
-    t(VIEW.w / 2, 296, 'Season', 13, C.gold, { fontStyle: 'bold' }).setOrigin(0.5);
+    say(VIEW.w / 2, 296, t('season'), 13, C.gold, { fontStyle: 'bold' }).setOrigin(0.5);
     SETS.forEach((s, i) => {
       const r = { x: VIEW.w / 2 - 300 + i * 310, y: 312, w: 290, h: 58 };
       const on = this.menu.set === s.id;
       g.fillStyle(on ? 0x2a2360 : C.panel, 0.95).fillRoundedRect(r.x, r.y, r.w, r.h, 10);
       g.lineStyle(on ? 2.5 : 1.2, on ? C.cyan : C.panelLine, 1).strokeRoundedRect(r.x, r.y, r.w, r.h, 10);
-      t(r.x + 12, r.y + 8, s.name, 13, '#ffffff', { fontStyle: 'bold' });
-      t(r.x + 12, r.y + 28, s.blurb, 10, C.text, { wordWrap: { width: r.w - 24 } });
+      say(r.x + 12, r.y + 8, t(s.name), 13, '#ffffff', { fontStyle: 'bold' });
+      say(r.x + 12, r.y + 28, t(s.blurb), 10, C.text, { wordWrap: { width: r.w - 24 } });
       this.overlayButtons.push({ ...r, run: () => {
         this.menu.set = s.id;
         this.dirty = true;
@@ -1298,14 +1304,14 @@ export class GameScene extends Phaser.Scene {
     const tr = { x: VIEW.w / 2 - 300, y: 384, w: 290, h: 40 };
     g.fillStyle(this.menu.terrain ? 0x2a2360 : C.panel, 0.95).fillRoundedRect(tr.x, tr.y, tr.w, tr.h, 10);
     g.lineStyle(this.menu.terrain ? 2.5 : 1.2, this.menu.terrain ? 0x39e58c : C.panelLine, 1).strokeRoundedRect(tr.x, tr.y, tr.w, tr.h, 10);
-    t(tr.x + 12, tr.y + 6, `Terrain tiles: ${this.menu.terrain ? 'On' : 'Off'}`, 13, '#ffffff', { fontStyle: 'bold' });
-    t(tr.x + 12, tr.y + 24, 'Oil, charge pads, steel plates and furnace grates', 9, C.dim);
+    say(tr.x + 12, tr.y + 6, t(this.menu.terrain ? 'terrainOn' : 'terrainOff'), 13, '#ffffff', { fontStyle: 'bold' });
+    say(tr.x + 12, tr.y + 24, t('terrainKinds'), 9, C.dim);
     this.overlayButtons.push({ ...tr, run: () => {
       this.menu.terrain = !this.menu.terrain;
       this.dirty = true;
     } });
-    this.button(g, { x: VIEW.w / 2 + 10, y: 384, w: 290, h: 40 }, 'START MATCH', () => this.startMatch(), { list: this.overlayButtons, container: this.overlay, size: 16, color: 0xffb703 });
-    if (this.stats.played) t(VIEW.w / 2, 446, `Matches ${this.stats.played} · wins ${this.stats.wins} · best place ${ordinal(this.stats.best)}`, 11, C.dim).setOrigin(0.5);
+    this.button(g, { x: VIEW.w / 2 + 10, y: 384, w: 290, h: 40 }, t('startMatch'), () => this.startMatch(), { list: this.overlayButtons, container: this.overlay, size: 16, color: 0xffb703 });
+    if (this.stats.played) say(VIEW.w / 2, 446, t('menuStats', { played: this.stats.played, wins: this.stats.wins, best: ordinal(this.stats.best) }), 11, C.dim).setOrigin(0.5);
   }
 
   // ------------------------------------------------------------------ actions
@@ -1548,7 +1554,6 @@ export class GameScene extends Phaser.Scene {
 const INK_NUM = 0x0a0818;
 const sameSpot = (a: Spot, b: Spot) => (a.where === 'bench' && b.where === 'bench' && a.i === b.i) || (a.where === 'board' && b.where === 'board' && a.col === b.col && a.row === b.row);
 const sameHeld = (a: Held, b: Held) => (a.kind === 'item' && b.kind === 'item' && a.index === b.index) || (a.kind === 'unit' && b.kind === 'unit' && sameSpot(a.spot, b.spot));
-const ordinal = (n: number) => `${n}${n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th'}`;
 
 // Kept for the record of which helpers the scene leans on; unused imports would fail the build.
 void comboOf;

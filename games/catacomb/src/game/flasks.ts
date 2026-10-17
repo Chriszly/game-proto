@@ -3,9 +3,13 @@
 
 export type FlaskId = 'heal' | 'energy' | 'poison' | 'block' | 'draw';
 
+import type { TextKey } from '../i18n';
+
 export interface Flask {
-  name: string;
-  text: string;
+  /** Its name and rules, keys of `i18n/en.ts`; the rules take the flask's number as `{n}`. */
+  name: TextKey;
+  text: TextKey;
+  n: number;
 }
 
 export const FLASK_SLOTS = 3;
@@ -17,11 +21,11 @@ export const FLASK_BLOCK = 10;
 export const FLASK_DRAW = 3;
 
 export const FLASKS: Record<FlaskId, Flask> = {
-  heal: { name: 'Healing Flask', text: `Heal ${FLASK_HEAL}.` },
-  energy: { name: 'Quicksilver Flask', text: `Gain ${FLASK_ENERGY} energy.` },
-  poison: { name: 'Venom Flask', text: `Apply ${FLASK_POISON} Poison to every foe.` },
-  block: { name: 'Stoneskin Flask', text: `Gain ${FLASK_BLOCK} block.` },
-  draw: { name: 'Foresight Flask', text: `Draw ${FLASK_DRAW} cards.` },
+  heal: { name: 'healFlask', text: 'healFlaskText', n: FLASK_HEAL },
+  energy: { name: 'energyFlask', text: 'energyFlaskText', n: FLASK_ENERGY },
+  poison: { name: 'poisonFlask', text: 'poisonFlaskText', n: FLASK_POISON },
+  block: { name: 'blockFlask', text: 'blockFlaskText', n: FLASK_BLOCK },
+  draw: { name: 'drawFlask', text: 'drawFlaskText', n: FLASK_DRAW },
 };
 
 export const FLASK_IDS = Object.keys(FLASKS) as FlaskId[];

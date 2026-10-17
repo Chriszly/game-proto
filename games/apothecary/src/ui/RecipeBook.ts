@@ -2,9 +2,10 @@ import Phaser from 'phaser';
 import { itemTexture } from '../art/items';
 import { INK, SERIF, fit } from '../art/paint';
 import { cardTexture } from '../art/ui';
-import { ITEMS, PLANTS, RECIPES, REFINE, type ItemId } from '../game/items';
+import { PLANTS, RECIPES, REFINE, type ItemId } from '../game/items';
 import { potionPrice, researched, type GameState } from '../game/state';
 import { viewSize } from '../../../../shared/scaling';
+import { itemName, t } from '../i18n';
 
 const ROW = 30;
 const WIDTH = 360;
@@ -46,16 +47,16 @@ export class RecipeBook {
       });
       parts.push(scene.add.text(x, cy, '=', TEXT).setOrigin(0.5));
       parts.push(fit(scene.add.image(x + 22, cy, itemTexture(out)), 1.5));
-      parts.push(scene.add.text(x + 40, cy, ITEMS[out].name, TEXT).setOrigin(0, 0.5));
-      this.lines.push(`${inputs.map((i) => ITEMS[i].name).join(' + ')} = ${ITEMS[out].name}`);
+      parts.push(scene.add.text(x + 40, cy, itemName(out), TEXT).setOrigin(0, 0.5));
+      this.lines.push(`${inputs.map(itemName).join(' + ')} = ${itemName(out)}`);
       y += ROW;
       return { cy, row: parts.slice(from) };
     };
 
-    heading('Refining table');
+    heading(t('refiningTable'));
     for (const plant of PLANTS) row([plant], REFINE[plant].out);
     y += 8;
-    heading('Cauldron');
+    heading(t('cauldron'));
     for (const recipe of RECIPES) {
       const { cy, row: shown } = row(recipe.inputs, recipe.out);
       const text = scene.add.text(WIDTH / 2 - 20, cy, '', { ...TEXT, fontStyle: 'bold', color: '#7a4a10' }).setOrigin(1, 0.5);
@@ -63,7 +64,7 @@ export class RecipeBook {
       this.prices.push({ text, potion: recipe.out, row: shown });
     }
     y += 6;
-    parts.push(scene.add.text(0, y, 'Tap to close', { ...TEXT, fontSize: '12px', fontStyle: 'italic', color: '#6a5440' }).setOrigin(0.5, 0));
+    parts.push(scene.add.text(0, y, t('tapToClose'), { ...TEXT, fontSize: '12px', fontStyle: 'italic', color: '#6a5440' }).setOrigin(0.5, 0));
     y += 18;
 
     const h = y + 28;
@@ -94,7 +95,7 @@ export class RecipeBook {
     // A recipe still to learn is faded, with the study in place of its price.
     for (const { text, potion, row } of this.prices) {
       const known = researched(state, potion);
-      text.setText(known ? `${potionPrice(state, potion)}c` : 'Study').setAlpha(known ? 1 : 0.6);
+      text.setText(known ? t('coinPrice', { n: potionPrice(state, potion) }) : t('learnAtStudy')).setAlpha(known ? 1 : 0.6);
       for (const part of row) (part as Phaser.GameObjects.Image).setAlpha(known ? 1 : 0.4);
     }
   }

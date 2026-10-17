@@ -186,8 +186,19 @@ seconds without a tap.
 
 ### File map
 
-- `src/howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips), handed to
-  `setupGame(game, { howToPlay })` in `src/main.ts`; update it when the controls or the first round change.
+- `src/howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips) in British
+  English (which US English shares, as nothing in it is spelled differently) and German, picked with
+  `byLanguage` and handed to `setupGame(game, { howToPlay })` in `src/main.ts`; update every
+  language when the controls or the first round change.
+- `src/i18n.ts` and `src/i18n/`: the game's texts (`shared/i18n.ts`). `i18n/en.ts` is the British
+  English source, `i18n/de.ts` the German and `i18n/en-US.ts` the texts spelled differently in US
+  English (none so far, so it is empty). `t(key, vars)` shows a text in the hub's language;
+  `TextKey` types the keys. Every text on screen goes through `t`: the tables in `src/game/`
+  (`UPGRADES`, `RELICS`, `SETS`, `ENEMIES`, `TRAITS`, `AIMS`, `GUARDS`, `ROADS`, `OMENS`, `FORTS`,
+  `LEGACIES`, `HEAT_RULES` and `HEAT_UNLOCKED`) hold `TextKey`s for their names and texts, never
+  the text itself, and the scene and `src/ui/` look them up with `t`. Game logic compares ids only.
+  German joins a number and its unit (`25 %`, `3 s`) with a no-break space so wrapping never
+  splits them.
 - `src/main.ts`: creates the `Phaser.Game` (960x540 from `VIEW`, `pixelArt: false`, FIT scaling)
   with `BootScene` and `GameScene`, calls `setupGame(game)` and `setupScaling(game)`, and puts
   `game` on `window` in the dev build.
@@ -212,7 +223,8 @@ seconds without a tap.
     `NIGHT_X`, `OMEN_XP`, `omenWave`, `omenEffects`. `march.ts`: `MARCH_STARTS`, `canMarch`,
     `marchCoins`. `legacy.ts`: `LegacyId`, `LEGACIES`, `LEGACY_IDS`, `Legacy`, `freshLegacy`,
     `QUICK_RAIN`, `canKeep`. `heat.ts`: `WIN_WAVE`,
-    `MAX_HEAT`, `HEAT_RULES` (texts) and `heatRules`. `aim.ts`: `AimMode`, `AIM_MODES`, `AIMS`,
+    `MAX_HEAT`, `HEAT_RULES` and `HEAT_UNLOCKED` (text keys: each heat's rule, and the victory
+    panel's line when it unlocks) and `heatRules`. `aim.ts`: `AimMode`, `AIM_MODES`, `AIMS`,
     `nextAim`, `sortTargets`.
   - `enemies.ts`: the `ENEMIES` table of wave 1 stats per `EnemyKind` (with `coins` and the
     `flying`, `shield` and `healer` flags), the three bosses included.
@@ -293,8 +305,8 @@ seconds without a tap.
   (`hud-coin` among them). `palette.ts` holds the runtime colours, including `BAR` and
   `BOSS_BARS`.
 - `shared/` (repo root, shared by every game): `shared/setupGame.ts` (`setupGame`),
-  `shared/scaling.ts` (`setupScaling`, `sharpRes`) and `shared/settings.ts` (`settings`,
-  `byDifficulty`). `waves.ts` and `GameScene` import
+  `shared/scaling.ts` (`setupScaling`, `sharpRes`), `shared/settings.ts` (`settings`,
+  `byDifficulty`) and `shared/i18n.ts` (`translator`, `byLanguage`, `Translation`). `waves.ts` and `GameScene` import
   `shared/settings.ts`, and neither file imports Phaser, so `src/game/` stays Phaser-free.
 
 ### How it runs
@@ -564,13 +576,21 @@ fortifications' in `forts.ts` and the heats' in `heat.ts`. Arrow Rain's damage (
 
 ## Making common changes
 
+- **Add or change a text**: its key in `src/i18n/en.ts`, the German in `src/i18n/de.ts` (the build
+  fails without it) and, when its US spelling differs (colour, armour, centre), the US one in
+  `src/i18n/en-US.ts`; a table entry names the key, and the scene shows it with `t`. Run
+  `node scripts/check-translations.mjs`. German runs longer than English: the Repair button, the
+  skill book's slots (two lines of text each), the road cards' Catch and Reward lines and the omen
+  card's text line are the tightest spots, so check a new text with `?lang=de`.
 - **Add an upgrade:**
-  1. Add its id to `UpgradeId` and an entry to `UPGRADES` (with `requires` for a follow-up).
+  1. Add its id to `UpgradeId` and an entry to `UPGRADES` (with `requires` for a follow-up), with
+     its name and text as `<id>Name` and `<id>Text` in the `src/i18n/` files.
   2. Put its effect in `stats`, and read the new stat in `sim.ts`.
   3. Draw an icon in `ICONS` in `src/art/icons.ts`, adding to `Icon` if it is new.
   4. Add a row to the README table.
 - **Add a relic:**
-  1. Add its id to `RelicId` and an entry to `RELICS` in `src/game/relics.ts`, with its `set`.
+  1. Add its id to `RelicId` and an entry to `RELICS` in `src/game/relics.ts`, with its `set`, and
+     its name and text in the `src/i18n/` files.
   2. Put its effect in `stats` (read it with `relic('<id>')`). A set bonus goes in `stats` behind
      `setComplete(relics, '<set>')`, with its text in `SETS`.
   3. Draw its icon in `RELIC_ICONS` in `src/art/icons.ts`, and add a row to the README's relic
@@ -599,7 +619,8 @@ fortifications' in `forts.ts` and the heats' in `heat.ts`. Arrow Rain's damage (
 - **Add a legacy:** add its id to `LegacyId` and `LEGACIES` in `src/game/legacy.ts` (and a field to
   `Legacy`, `freshLegacy`, `canKeep` and `loadProgress`), set it in `retire`, read it where it acts,
   give its card an icon in `LegacyPanel.addCard` and `LEGACY.xs` a spot, and add a README row.
-- **Add a heat rule:** add a line to `HEAT_RULES` and a field to `heatRules` in `src/game/heat.ts`,
+- **Add a heat rule:** add its text keys to `HEAT_RULES` and `HEAT_UNLOCKED` (with the texts in
+  `src/i18n/`) and a field to `heatRules` in `src/game/heat.ts`,
   raise `MAX_HEAT`, read the field where it acts, and add a row to the README's heat table.
 - **Add a foe:**
   1. Extend `EnemyKind` and `ENEMIES` (with its `coins`), and `SCALE` in `src/art/characters.ts`.

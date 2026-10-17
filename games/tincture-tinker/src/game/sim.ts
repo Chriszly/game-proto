@@ -1,3 +1,4 @@
+import type { TextKey } from '../i18n';
 import {
   adjacent,
   collapse,
@@ -310,12 +311,12 @@ function gather(s: GameState, board: Board, prefer: Cell[], extra?: Extra): Step
 // ---- Bench tools: coins spent during an order ----
 
 export type Tool = 'stir' | 'sift' | 'pestle' | 'funnel';
-/** Stir buys moves, Sift rerolls one row, Pestle smashes one tile and Funnel swaps any two. */
-export const TOOLS: Record<Tool, { cost: number; name: string; what: string; tip: string }> = {
-  stir: { cost: 40, name: 'Stir', what: '+3 moves', tip: 'Stir: 3 more moves for this order' },
-  sift: { cost: 25, name: 'Sift', what: 'reroll a row', tip: 'Sift: reroll one row of the board' },
-  pestle: { cost: 30, name: 'Pestle', what: 'smash a tile', tip: 'Pestle: smash one tile, a jar or a special, without a move' },
-  funnel: { cost: 35, name: 'Funnel', what: 'swap any two', tip: 'Funnel: swap any two tiles on the board, without a move' },
+/** Stir buys moves, Sift rerolls one row, Pestle smashes one tile and Funnel swaps any two. Name and tip are keys of `i18n/en.ts`. */
+export const TOOLS: Record<Tool, { cost: number; name: TextKey; tip: TextKey }> = {
+  stir: { cost: 40, name: 'stirName', tip: 'stirTip' },
+  sift: { cost: 25, name: 'siftName', tip: 'siftTip' },
+  pestle: { cost: 30, name: 'pestleName', tip: 'pestleTip' },
+  funnel: { cost: 35, name: 'funnelName', tip: 'funnelTip' },
 };
 export const TOOL_ORDER: Tool[] = ['stir', 'sift', 'pestle', 'funnel'];
 export const STIR_MOVES = 3;

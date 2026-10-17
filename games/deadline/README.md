@@ -203,12 +203,18 @@ and the fuel drum's blast doesn't swell.
 
 The difficulty, set on the hub page's Settings, changes one thing: zombies have 25% less health on Easy and 30% more on Hard.
 
+Deadline follows the hub's Language setting: every text in the game, How to play and the wide-screen side panels come in British English, US English and German.
+
+![The supply drop in German](docs/screenshots/german-supply-drop.webp)
+
 ## Code layout
 
 - `src/game/rules.ts`: the numbers and rules: enemy stats, upgrades and their perks, fuel drums,
   the frenzy, wave plans and conditions, the horde adapting, the bosses and their moves, survivors
   and squad roles, sandbag walls, the supply drop, extraction, scrap, the outpost and operations.
-  No drawing.
+  No drawing; its names and texts are keys of `src/i18n/en.ts`.
+- `src/i18n.ts` and `src/i18n/`: the game's texts in British English (`en.ts`), German (`de.ts`)
+  and US spelling (`en-US.ts`, only what differs). `src/howToPlay.ts` has How to play in all three.
 - `src/game/save.ts`: the saved best wave, art style, banked scrap, starting crates, outpost
   upgrades, the next operation and each operation's best.
 - `src/game/pool.ts`: reuses sprites for enemies, bullets, crates, drums and effects, so a big horde

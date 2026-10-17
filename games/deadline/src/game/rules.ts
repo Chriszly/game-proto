@@ -1,5 +1,7 @@
 import { byDifficulty } from '../../../../shared/settings';
-// The rules and numbers of the game, kept apart from drawing so they are easy to tune.
+import type { TextKey } from '../i18n';
+// The rules and numbers of the game, kept apart from drawing so they are easy to tune. Names and
+// texts are keys of `i18n/en.ts`, shown with `t`.
 
 /** The battlefield, in game pixels: a portrait screen with the hero at the bottom. */
 export const VIEW = { w: 540, h: 960 };
@@ -93,10 +95,10 @@ export const BOSS = { firstMs: 7000, everyMs: 5500, warnMs: 1300, chargeMs: 550,
  */
 export type BossKind = 'boss' | 'brood' | 'bloater';
 export const BOSS_KINDS: BossKind[] = ['boss', 'brood', 'bloater'];
-export const BOSSES: Record<BossKind, { name: string; moves: BossMove[] }> = {
-  boss: { name: 'Behemoth', moves: BOSS_MOVES },
-  brood: { name: 'Brood Mother', moves: ['charge', 'call', 'call'] },
-  bloater: { name: 'Bloater', moves: ['spit', 'charge', 'spit'] },
+export const BOSSES: Record<BossKind, { name: TextKey; moves: BossMove[] }> = {
+  boss: { name: 'bossBehemoth', moves: BOSS_MOVES },
+  brood: { name: 'bossBrood', moves: ['charge', 'call', 'call'] },
+  bloater: { name: 'bossBloater', moves: ['spit', 'charge', 'spit'] },
 };
 export const isBoss = (kind: EnemyKind): kind is BossKind => kind in BOSSES;
 /** Which boss ends a boss wave: wave 5's is the Behemoth, and they take turns from there. */
@@ -112,11 +114,11 @@ export const bossMove = (wave: number, n: number) => {
 export type UpgradeKind = 'rate' | 'damage' | 'companion' | 'pierce';
 
 /** What each pickup does, with the name shown on its crate. */
-export const UPGRADES: Record<UpgradeKind, { label: string }> = {
-  rate: { label: 'Fire rate' },
-  damage: { label: 'Damage +1' },
-  companion: { label: 'Companion +1' },
-  pierce: { label: 'Pierce +1' },
+export const UPGRADES: Record<UpgradeKind, { label: TextKey }> = {
+  rate: { label: 'upgradeRate' },
+  damage: { label: 'upgradeDamage' },
+  companion: { label: 'upgradeCompanion' },
+  pierce: { label: 'upgradePierce' },
 };
 export const UPGRADE_KINDS = Object.keys(UPGRADES) as UpgradeKind[];
 
@@ -132,10 +134,10 @@ export const UPGRADE_KINDS = Object.keys(UPGRADES) as UpgradeKind[];
  * The companion crate has no perk: once the squad is full, it already brings damage instead.
  */
 export type Perk = 'fire' | 'headshot' | 'ricochet';
-export const PERKS: Record<Perk, { upgrade: UpgradeKind; label: string; detail: string }> = {
-  fire: { upgrade: 'rate', label: 'Fire rounds', detail: 'Bullets set zombies burning' },
-  headshot: { upgrade: 'damage', label: 'Headshots', detail: 'Every fourth hit lands triple damage' },
-  ricochet: { upgrade: 'pierce', label: 'Ricochets', detail: 'Spent bullets jump to the nearest zombie' },
+export const PERKS: Record<Perk, { upgrade: UpgradeKind; label: TextKey; detail: TextKey }> = {
+  fire: { upgrade: 'rate', label: 'perkFire', detail: 'perkFireDetail' },
+  headshot: { upgrade: 'damage', label: 'perkHeadshot', detail: 'perkHeadshotDetail' },
+  ricochet: { upgrade: 'pierce', label: 'perkRicochet', detail: 'perkRicochetDetail' },
 };
 export const PERK_KINDS = Object.keys(PERKS) as Perk[];
 export const PERK_AT = 3;
@@ -160,11 +162,11 @@ export const SURVIVOR = { fromWave: 3, speed: 44, steer: 30, radius: 12, hp: (wa
  * - shortage: the squad fires `shortageFire` times slower, and `shortageDrums` more fuel drums roll down.
  */
 export type Condition = 'clear' | 'blackout' | 'bloodmoon' | 'shortage';
-export const CONDITIONS: Record<Condition, { label: string; detail: string }> = {
-  clear: { label: 'Clear', detail: '' },
-  blackout: { label: 'Blackout', detail: 'Zombies only seen up close' },
-  bloodmoon: { label: 'Blood Moon', detail: 'Runners are faster' },
-  shortage: { label: 'Ammo Shortage', detail: 'Slower fire, more drums' },
+/** The name and effect of each condition but the clear one, which has nothing to show. */
+export const CONDITIONS: Record<Exclude<Condition, 'clear'>, { label: TextKey; detail: TextKey }> = {
+  blackout: { label: 'conditionBlackout', detail: 'conditionBlackoutDetail' },
+  bloodmoon: { label: 'conditionBloodmoon', detail: 'conditionBloodmoonDetail' },
+  shortage: { label: 'conditionShortage', detail: 'conditionShortageDetail' },
 };
 export const CONDITION = { fromWave: 6, blackoutRadius: 250, bloodMoonRunner: 1.5, shortageFire: 1.4, shortageDrums: 2 };
 const CONDITION_DRAWS: Condition[] = ['clear', 'blackout', 'bloodmoon', 'shortage'];
@@ -183,7 +185,7 @@ export const canExtract = (wave: number) => isBossWave(wave) && wave >= EXTRACT.
 
 /** What a crate can hold: an upgrade, or (from wave 2, now and then) a sandbag wall to place. */
 export type CrateKind = UpgradeKind | 'sandbag';
-export const CRATES: Record<CrateKind, { label: string }> = { ...UPGRADES, sandbag: { label: 'Sandbag wall' } };
+export const CRATES: Record<CrateKind, { label: TextKey }> = { ...UPGRADES, sandbag: { label: 'crateSandbag' } };
 export const CRATE_KINDS = Object.keys(CRATES) as CrateKind[];
 /** The chance a wave from wave 2 on also drops a sandbag crate. */
 export const SANDBAG_CRATE_ODDS = 0.5;
@@ -216,11 +218,11 @@ export function seamAt(x: number) {
  * - sandbags: two sandbag walls.
  */
 export type SupplyKind = 'shotgun' | 'flamer' | 'medkit' | 'sandbags';
-export const SUPPLIES: Record<SupplyKind, { label: string; detail: string }> = {
-  shotgun: { label: 'Shotgun', detail: 'Two more bullets\nfan out from the\nsoldier every volley' },
-  flamer: { label: 'Flamethrower', detail: 'Two flame bursts:\nthey go off when\nzombies get close' },
-  medkit: { label: 'Medkit', detail: 'The squad survives\none breach of\nthe sandbags' },
-  sandbags: { label: 'Sandbags', detail: 'Two sandbag walls\nto hold a lane\nfor a few seconds' },
+export const SUPPLIES: Record<SupplyKind, { label: TextKey; detail: TextKey }> = {
+  shotgun: { label: 'supplyShotgun', detail: 'supplyShotgunDetail' },
+  flamer: { label: 'supplyFlamer', detail: 'supplyFlamerDetail' },
+  medkit: { label: 'supplyMedkit', detail: 'supplyMedkitDetail' },
+  sandbags: { label: 'supplySandbags', detail: 'supplySandbagsDetail' },
 };
 export const SUPPLY_KINDS = Object.keys(SUPPLIES) as SupplyKind[];
 export const SHOTGUN = { angle: 0.2, maxPairs: 3 };
@@ -246,11 +248,11 @@ export const KIT_COSTS: Record<UpgradeKind, number> = { rate: 40, damage: 60, co
  * - veteran: start each run with a companion (a Gunner) per level.
  */
 export type OutpostKind = 'barricade' | 'medic' | 'depot' | 'veteran';
-export const OUTPOST: Record<OutpostKind, { label: string; detail: string; costs: number[] }> = {
-  barricade: { label: 'Barricade', detail: 'Start with a sandbag wall', costs: [60, 120, 200] },
-  medic: { label: 'Field Medic', detail: 'Start with a medkit', costs: [100, 180, 280] },
-  depot: { label: 'Fuel Depot', detail: 'One more drum a wave', costs: [80, 150, 240] },
-  veteran: { label: 'Veteran', detail: 'Start with a companion', costs: [120, 220, 340] },
+export const OUTPOST: Record<OutpostKind, { label: TextKey; detail: TextKey; costs: number[] }> = {
+  barricade: { label: 'outpostBarricade', detail: 'outpostBarricadeDetail', costs: [60, 120, 200] },
+  medic: { label: 'outpostMedic', detail: 'outpostMedicDetail', costs: [100, 180, 280] },
+  depot: { label: 'outpostDepot', detail: 'outpostDepotDetail', costs: [80, 150, 240] },
+  veteran: { label: 'outpostVeteran', detail: 'outpostVeteranDetail', costs: [120, 220, 340] },
 };
 export const OUTPOST_KINDS = Object.keys(OUTPOST) as OutpostKind[];
 export const OUTPOST_MAX = 3;
@@ -270,10 +272,10 @@ export const outpostCost = (kind: OutpostKind, level: number) => (level < OUTPOS
  *   any shield).
  */
 export type Role = 'gunner' | 'grenadier' | 'marksman';
-export const ROLES: Record<Role, { label: string; detail: string }> = {
-  gunner: { label: 'Gunner', detail: 'Fires every volley,\nlike the rest of\nthe squad' },
-  grenadier: { label: 'Grenadier', detail: 'Every fourth volley\na grenade: a small\nblast past shields' },
-  marksman: { label: 'Marksman', detail: 'A slow piercing\nshot at the\ntoughest zombie' },
+export const ROLES: Record<Role, { label: TextKey; detail: TextKey }> = {
+  gunner: { label: 'roleGunner', detail: 'roleGunnerDetail' },
+  grenadier: { label: 'roleGrenadier', detail: 'roleGrenadierDetail' },
+  marksman: { label: 'roleMarksman', detail: 'roleMarksmanDetail' },
 };
 export const ROLE_KINDS = Object.keys(ROLES) as Role[];
 export const GRENADE = { every: 4, radius: 46, damage: (wave: number) => Math.round(2 + 1.5 * wave) };
@@ -290,8 +292,8 @@ export const MARKSMAN = { every: 3, mult: 3, pierce: 2 };
  */
 export type OperationKind = 'road' | 'hospital' | 'lightsout';
 export interface Operation {
-  label: string;
-  detail: string;
+  label: TextKey;
+  detail: TextKey;
   waves: number | null;
   survivors: number;
   survivorsFrom: number;
@@ -299,17 +301,17 @@ export interface Operation {
   condition: Condition | null;
 }
 export const OPERATIONS: Record<OperationKind, Operation> = {
-  road: { label: 'Open Road', detail: 'Endless, extract\nfrom wave 20', waves: null, survivors: 1, survivorsFrom: SURVIVOR.fromWave, drums: true, condition: null },
-  hospital: { label: 'Hospital', detail: '10 waves, 2 survivors\na wave, no drums', waves: 10, survivors: 2, survivorsFrom: 1, drums: false, condition: null },
-  lightsout: { label: 'Lights Out', detail: '10 waves, every\nwave a blackout', waves: 10, survivors: 1, survivorsFrom: SURVIVOR.fromWave, drums: true, condition: 'blackout' },
+  road: { label: 'opRoad', detail: 'opRoadDetail', waves: null, survivors: 1, survivorsFrom: SURVIVOR.fromWave, drums: true, condition: null },
+  hospital: { label: 'opHospital', detail: 'opHospitalDetail', waves: 10, survivors: 2, survivorsFrom: 1, drums: false, condition: null },
+  lightsout: { label: 'opLightsout', detail: 'opLightsoutDetail', waves: 10, survivors: 1, survivorsFrom: SURVIVOR.fromWave, drums: true, condition: 'blackout' },
 };
 export const OPERATION_KINDS = Object.keys(OPERATIONS) as OperationKind[];
 export const OPERATION_BONUS = 2;
 /** The medals an operation's best earns: waves cleared out of its 10. */
-export const MEDALS = [
-  { label: 'Gold', cleared: 10 },
-  { label: 'Silver', cleared: 8 },
-  { label: 'Bronze', cleared: 5 },
+export const MEDALS: { label: TextKey; cleared: number }[] = [
+  { label: 'medalGold', cleared: 10 },
+  { label: 'medalSilver', cleared: 8 },
+  { label: 'medalBronze', cleared: 5 },
 ];
 export const medalOf = (cleared: number) => MEDALS.find((m) => cleared >= m.cleared)?.label ?? null;
 
@@ -323,10 +325,10 @@ export const medalOf = (cleared: number) => MEDALS.find((m) => cleared >= m.clea
  * upgrades in it, the squad by every two companions. The first of the highest wins a tie.
  */
 export type Adapt = 'armour' | 'shields' | 'flanks';
-export const ADAPTS: Record<Adapt, { label: string }> = {
-  armour: { label: 'Armoured brutes' },
-  shields: { label: 'Riot shields' },
-  flanks: { label: 'Flank spitters' },
+export const ADAPTS: Record<Adapt, { label: TextKey }> = {
+  armour: { label: 'adaptArmour' },
+  shields: { label: 'adaptShields' },
+  flanks: { label: 'adaptFlanks' },
 };
 export const ADAPT = { fromWave: 8, minScore: 2, every: 4 };
 export function adaptTo(stats: Stats): Adapt | null {

@@ -1,6 +1,8 @@
 // Where the lanterns hang and where the moths live, in view pixels, for each district the keep can
 // stand in. The scenery in src/art/puppet.ts is drawn around these spots.
 
+import type { TextKey } from '../i18n';
+
 /** The moth jar in front of the gate, where idle moths wait and return to. */
 export const JAR = { x: 480, y: 500 };
 /** The jars moths can rest at: the one at the gate, and the second jar by the east wall, once bought (LK14). */
@@ -10,7 +12,7 @@ export const JARS = [JAR, { x: 800, y: 500 }] as const;
 export interface Spot {
   x: number;
   y: number;
-  name: string;
+  name: TextKey;
 }
 
 /**
@@ -19,6 +21,7 @@ export interface Spot {
  * the first night (lanterns 0 to 4) has none. Listed in the order the cord runs.
  */
 export interface Chain {
+  /** A label for code readers; it is never shown, so it is not translated. */
   name: string;
   lanterns: readonly number[];
 }
@@ -31,9 +34,9 @@ export interface Chain {
  * and window calls but burns oil faster, and `none` changes nothing.
  */
 export interface District {
-  name: string;
+  name: TextKey;
   /** The rule, in a line for the panel. */
-  blurb: string;
+  blurb: TextKey;
   rule: 'none' | 'seawind' | 'vespers' | 'trade';
   spots: readonly Spot[];
   chains: readonly Chain[];
@@ -41,20 +44,20 @@ export interface District {
 
 export const DISTRICTS = {
   keep: {
-    name: 'The Keep',
-    blurb: 'The old walls: no rule but the dark',
+    name: 'keepName',
+    blurb: 'keepBlurb',
     rule: 'none',
     spots: [
-      { x: 170, y: 184, name: 'left tower' },
-      { x: 790, y: 184, name: 'right tower' },
-      { x: 480, y: 112, name: 'the keep' },
-      { x: 330, y: 304, name: 'left wall' },
-      { x: 630, y: 304, name: 'right wall' },
-      { x: 64, y: 304, name: 'far left' },
-      { x: 896, y: 304, name: 'far right' },
-      { x: 424, y: 230, name: 'left sconce' },
-      { x: 536, y: 230, name: 'right sconce' },
-      { x: 480, y: 392, name: 'the gate' },
+      { x: 170, y: 184, name: 'spotLeftTower' },
+      { x: 790, y: 184, name: 'spotRightTower' },
+      { x: 480, y: 112, name: 'spotKeep' },
+      { x: 330, y: 304, name: 'spotLeftWall' },
+      { x: 630, y: 304, name: 'spotRightWall' },
+      { x: 64, y: 304, name: 'spotFarLeft' },
+      { x: 896, y: 304, name: 'spotFarRight' },
+      { x: 424, y: 230, name: 'spotLeftSconce' },
+      { x: 536, y: 230, name: 'spotRightSconce' },
+      { x: 480, y: 392, name: 'spotGate' },
     ],
     chains: [
       { name: 'West wall', lanterns: [5, 0, 3] },
@@ -64,20 +67,20 @@ export const DISTRICTS = {
     ],
   },
   docks: {
-    name: 'The Docks',
-    blurb: 'Sea wind: each gust blows out two lanterns',
+    name: 'docksName',
+    blurb: 'docksBlurb',
     rule: 'seawind',
     spots: [
-      { x: 150, y: 184, name: 'the crane' },
-      { x: 810, y: 150, name: 'the lighthouse' },
-      { x: 480, y: 112, name: 'the mast' },
-      { x: 300, y: 304, name: 'the warehouse' },
-      { x: 660, y: 304, name: 'the fish hall' },
-      { x: 60, y: 304, name: 'west mooring' },
-      { x: 900, y: 304, name: 'east mooring' },
-      { x: 400, y: 392, name: 'left quay post' },
-      { x: 560, y: 392, name: 'right quay post' },
-      { x: 480, y: 230, name: 'customs house' },
+      { x: 150, y: 184, name: 'spotCrane' },
+      { x: 810, y: 150, name: 'spotLighthouse' },
+      { x: 480, y: 112, name: 'spotMast' },
+      { x: 300, y: 304, name: 'spotWarehouse' },
+      { x: 660, y: 304, name: 'spotFishHall' },
+      { x: 60, y: 304, name: 'spotWestMooring' },
+      { x: 900, y: 304, name: 'spotEastMooring' },
+      { x: 400, y: 392, name: 'spotLeftQuay' },
+      { x: 560, y: 392, name: 'spotRightQuay' },
+      { x: 480, y: 230, name: 'spotCustoms' },
     ],
     chains: [
       { name: 'Warehouse', lanterns: [5, 3, 7] },
@@ -87,20 +90,20 @@ export const DISTRICTS = {
     ],
   },
   chapel: {
-    name: 'Chapel Hill',
-    blurb: 'Vespers: +2 a lantern, but three in four must burn',
+    name: 'chapelName',
+    blurb: 'chapelBlurb',
     rule: 'vespers',
     spots: [
-      { x: 120, y: 184, name: 'bell tower' },
-      { x: 840, y: 184, name: 'the yew' },
-      { x: 480, y: 112, name: 'the steeple' },
-      { x: 280, y: 304, name: 'left wall' },
-      { x: 680, y: 304, name: 'right wall' },
-      { x: 60, y: 304, name: 'far left' },
-      { x: 900, y: 304, name: 'far right' },
-      { x: 410, y: 230, name: 'left window' },
-      { x: 550, y: 230, name: 'right window' },
-      { x: 480, y: 392, name: 'the porch' },
+      { x: 120, y: 184, name: 'spotBellTower' },
+      { x: 840, y: 184, name: 'spotYew' },
+      { x: 480, y: 112, name: 'spotSteeple' },
+      { x: 280, y: 304, name: 'spotLeftWall' },
+      { x: 680, y: 304, name: 'spotRightWall' },
+      { x: 60, y: 304, name: 'spotFarLeft' },
+      { x: 900, y: 304, name: 'spotFarRight' },
+      { x: 410, y: 230, name: 'spotLeftWindow' },
+      { x: 550, y: 230, name: 'spotRightWindow' },
+      { x: 480, y: 392, name: 'spotPorch' },
     ],
     chains: [
       { name: 'Lychgate', lanterns: [5, 3, 7] },
@@ -110,20 +113,20 @@ export const DISTRICTS = {
     ],
   },
   market: {
-    name: 'The Market',
-    blurb: 'Market day: close calls and window calls pay double, oil burns 15% faster',
+    name: 'marketName',
+    blurb: 'marketBlurb',
     rule: 'trade',
     spots: [
-      { x: 200, y: 184, name: 'left gable' },
-      { x: 760, y: 184, name: 'right gable' },
-      { x: 480, y: 112, name: 'clock tower' },
-      { x: 320, y: 304, name: 'bread stall' },
-      { x: 640, y: 304, name: 'cloth stall' },
-      { x: 100, y: 304, name: 'far left stall' },
-      { x: 860, y: 304, name: 'far right stall' },
-      { x: 430, y: 230, name: 'left sconce' },
-      { x: 530, y: 230, name: 'right sconce' },
-      { x: 480, y: 392, name: 'hall arch' },
+      { x: 200, y: 184, name: 'spotLeftGable' },
+      { x: 760, y: 184, name: 'spotRightGable' },
+      { x: 480, y: 112, name: 'spotClockTower' },
+      { x: 320, y: 304, name: 'spotBreadStall' },
+      { x: 640, y: 304, name: 'spotClothStall' },
+      { x: 100, y: 304, name: 'spotFarLeftStall' },
+      { x: 860, y: 304, name: 'spotFarRightStall' },
+      { x: 430, y: 230, name: 'spotLeftSconce' },
+      { x: 530, y: 230, name: 'spotRightSconce' },
+      { x: 480, y: 392, name: 'spotHallArch' },
     ],
     chains: [
       { name: 'West stalls', lanterns: [5, 0, 3] },

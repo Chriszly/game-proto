@@ -1,11 +1,14 @@
 // The kinds of shot the guns can be loaded with. Each side is loaded at the harbor; a captain's
 // order for chain shot or grapeshot loads both sides with it for the wave.
 
+import type { TextKey } from '../i18n';
+
 export type ShotKind = 'round' | 'chain' | 'grape';
 
 export interface Shot {
-  name: string;
-  desc: string;
+  /** Keys of `i18n/en.ts`. */
+  name: TextKey;
+  desc: TextKey;
   /** Chain shot: a hit slows the ship struck to this share of its speed for `SLOW_MS`. */
   slow?: number;
   /** Grapeshot: each gun fires this many smaller shots in a fan, each hitting for `pellet` of a ball. */
@@ -18,9 +21,9 @@ export interface Shot {
 }
 
 export const SHOTS: Record<ShotKind, Shot> = {
-  round: { name: 'Round shot', desc: 'Full range and weight' },
-  chain: { name: 'Chain shot', desc: 'Hits slow ships by 40%', slow: 0.6 },
-  grape: { name: 'Grapeshot', desc: 'Short-range fan; hits slow their reload', pellets: 3, pellet: 0.5, range: 0.7, jam: 0.5 },
+  round: { name: 'roundName', desc: 'roundDesc' },
+  chain: { name: 'chainName', desc: 'chainDesc', slow: 0.6 },
+  grape: { name: 'grapeName', desc: 'grapeDesc', pellets: 3, pellet: 0.5, range: 0.7, jam: 0.5 },
 };
 
 export const SHOT_IDS = Object.keys(SHOTS) as ShotKind[];

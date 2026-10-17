@@ -6,9 +6,10 @@ import { AUTO_TOGGLE, CARDS, COUNTDOWN, UI_DEPTH, VIEW } from '../scenes/layout'
 import { UPGRADES, type UpgradeId } from '../game/upgrades';
 import { AUTO_PICK_MS } from '../game/sim';
 import { drawPanel, textStyle } from './panel';
+import { t, type TextKey } from '../i18n';
 
 /** What a filler card says under its name instead of a rank. */
-const FILLER_NOTE: Partial<Record<UpgradeId, string>> = { mend: 'Repair', purse: 'Coins', wind: 'Recharge' };
+const FILLER_NOTE: Partial<Record<UpgradeId, TextKey>> = { mend: 'noteMend', purse: 'notePurse', wind: 'noteWind' };
 
 /** Where a card is on screen and which upgrade it offers; read by the playthrough test. */
 export interface CardSpot {
@@ -48,7 +49,7 @@ export class LevelUp {
     this.timer = scene.add.graphics();
     const { x, y, size } = AUTO_TOGGLE;
     this.toggleBox = scene.add.graphics();
-    const label = scene.add.text(x + size / 2 + 6, y, 'Auto-pick', textStyle(14, '#c9c3b6', 3)).setOrigin(0, 0.5);
+    const label = scene.add.text(x + size / 2 + 6, y, t('autoPick'), textStyle(14, '#c9c3b6', 3)).setOrigin(0, 0.5);
     const toggle = scene.add
       .zone(x - size / 2 - 4, y - size / 2 - 4, size + 14 + label.width, size + 8)
       .setOrigin(0)
@@ -78,7 +79,7 @@ export class LevelUp {
     this.cards = [];
     this.root.setVisible(!!choices);
     if (!choices) return;
-    this.title.setText(more > 1 ? `Level ${level}! Choose an upgrade (${more} to pick)` : `Level ${level}! Choose an upgrade`);
+    this.title.setText(more > 1 ? t('levelUpMore', { level, more }) : t('levelUp', { level }));
     choices.forEach((id, i) => this.addCard(id, CARDS.xs[i], ranks[id] ?? 0));
   }
 
@@ -95,7 +96,7 @@ export class LevelUp {
       this.toggleBox.lineStyle(3, GOLD.light).beginPath();
       this.toggleBox.moveTo(bx - 5, by).lineTo(bx - 1, by + 4).lineTo(bx + 6, by - 5).strokePath();
     }
-    this.countdown.setText(this.autoPick ? `Auto-pick in ${Math.ceil(pickMs / 1000)}s` : 'Waiting for your pick');
+    this.countdown.setText(this.autoPick ? t('autoPickIn', { n: Math.ceil(pickMs / 1000) }) : t('waitingPick'));
     const { x, y, w, h } = COUNTDOWN;
     const left = Phaser.Math.Clamp(pickMs / AUTO_PICK_MS, 0, 1);
     this.timer.clear();
@@ -121,11 +122,15 @@ export class LevelUp {
     };
     draw(false);
     const icon = fit(scene.add.image(0, -h / 2 + 62, iconTexture(u.icon)), 1.1);
-    const name = scene.add.text(0, -h / 2 + 122, u.name, { ...textStyle(19, '#ffcf4a'), align: 'center' }).setOrigin(0.5);
-    const rankText = u.filler ? FILLER_NOTE[id] ?? 'Filler' : rank === 0 ? (u.maxRank === 1 ? 'New' : `New, ${u.maxRank} ranks`) : rank >= u.maxRank ? `Rank ${rank + 1}, no cap` : `Rank ${rank + 1} of ${u.maxRank}`;
+    const name = scene.add.text(0, -h / 2 + 122, t(u.name), { ...textStyle(19, '#ffcf4a'), align: 'center' }).setOrigin(0.5);
+    const rankText = u.filler
+      ? t(FILLER_NOTE[id] ?? 'noteMend')
+      : rank === 0
+        ? u.maxRank === 1 ? t('rankNew') : t('rankNewRanks', { n: u.maxRank })
+        : rank >= u.maxRank ? t('rankNoCap', { n: rank + 1 }) : t('rankOf', { n: rank + 1, max: u.maxRank });
     const ranked = scene.add.text(0, -h / 2 + 146, rankText, textStyle(13, rank === 0 ? '#8fdc6a' : '#c9c3b6')).setOrigin(0.5);
     const text = scene.add
-      .text(0, -h / 2 + 170, u.text, { ...textStyle(15, '#e9e4d8'), fontStyle: 'normal', align: 'center', wordWrap: { width: w - 36 } })
+      .text(0, -h / 2 + 170, t(u.text), { ...textStyle(15, '#e9e4d8'), fontStyle: 'normal', align: 'center', wordWrap: { width: w - 36 } })
       .setOrigin(0.5, 0);
     const hit = scene.add.zone(0, 0, w, h);
     const card = scene.add.container(x, y, [bg, icon, name, ranked, text, hit]).setData('card', true);

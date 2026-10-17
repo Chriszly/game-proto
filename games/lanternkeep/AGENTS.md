@@ -44,6 +44,9 @@ Implemented today:
   "Chased off!" and "+8 chain".
 - Shadow-puppet art, painted on 2D canvases at startup (`art/puppet.ts`, `pixelArt: false`),
   ported from the approved mockup's drawing script. Lettering is a system serif stack.
+- Every text on screen follows the hub's Language setting: British English (the source), German,
+  and US English, which spells every text the British way and so falls back to the source
+  (`src/i18n/`, `docs/screenshots/german-dusk.webp`).
 - Three moth kinds: `fast`, `slow` and `heavy`, cycling in jar order, so the first night's three
   moths are one of each. Each kind scales its speed, wick time and (heavy only) oil.
 - Two-tap queue: a tap on an unclaimed lantern while every moth is busy waits (at most `QUEUE_MAX`
@@ -116,8 +119,8 @@ Implemented today:
   `nextDistrict` the next; `nightfall` on a night divisible by `MOVE_EVERY` (5) sets `moveDue` and
   phase `'move'` (after `'festival'` if both; `carryOn` goes to `'move'` then), `moveTo(s, id)`
   picks and goes to `'night'`, and `nextDusk` moves in and builds the lanterns from the district's
-  spots. `orderFor(night, district)` keeps the keep's order texts and names another district's
-  spots. `districtOf(s)`, `chainsOf(s)` and `chainsFor` read the current district.
+  spots. `orderFor(night)` gives the night's order; the scene's `describeOrder` shows its text in
+  the keep and names the district's spots for a `lit` order elsewhere (`orderLit`). `districtOf(s)`, `chainsOf(s)` and `chainsFor` read the current district.
 - Pick your peril (LK11): `nightfall` on a night with `night + 1 >= PERIL_NIGHT` (11) sets
   `state.offer` to two different `CURSES` (`wet`, `bats`, `thin`, `watch`, drawn by `drawOffer`
   with `Math.random`) and, after `'festival'` and `'move'` (`afterPanels`), phase `'peril'`.
@@ -164,8 +167,16 @@ Missing or rough:
 
 File map (`src/`):
 
-- `howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips), handed to
-  `setupGame(game, { howToPlay })` in `main.ts`; update it when the controls or the first round change.
+- `howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips) in British
+  English and German, picked with `byLanguage` (US English uses the British text) and handed to
+  `setupGame(game, { howToPlay })` in `main.ts`; update both languages when the controls or the
+  first round change.
+- `i18n.ts` and `i18n/`: the game's texts (`shared/i18n.ts`). `i18n/en.ts` is the British English
+  source and `i18n/de.ts` the German (with `keepEnglish` for a text that is the same); there is no
+  `en-US.ts`, since no text spells differently in US English (add one, typed
+  `Partial<Translation<typeof en>>`, and hand it to `translator` when one does). `t(key, vars)`
+  shows a text in the hub's language; `TextKey` types the keys. Every text on screen goes through
+  `t`, numbers through `formatNumber` (the scene's `mult2` for pay multipliers).
 - `main.ts`: creates the `Phaser.Game` (960x540, `Phaser.Scale.FIT`, `pixelArt: false`) with
   `BootScene` and `GameScene`, calls `setupGame(game)` from `shared/setupGame.ts` and
   `setupScaling(game)` from `shared/scaling.ts`, and in dev builds puts `game` on `window`.
@@ -183,7 +194,8 @@ File map (`src/`):
   window plaque), `CASK_HUD`, `LANTERN_HIT`, `BAT_HIT`, `MOTH_HIT`, `UI_DEPTH` and `FONT` (Georgia / DejaVu
   Serif / serif).
 - `game/places.ts`: `JAR`, `JARS` (the gate's jar and the second one), `DISTRICTS` (each district's `spots` in view pixels, in the order
-  nights add them, with names, its `chains` and `rule`), `DISTRICT_IDS`, `LANTERN_SPOTS` and
+  nights add them, with names, its `chains` and `rule`; the district's and spots' names and the
+  rule's blurb are `TextKey`s, while a chain's `name` is a label for code readers, never shown), `DISTRICT_IDS`, `LANTERN_SPOTS` and
   `CHAINS` (the keep's) and `mothRest` (30 px apart on a jar's rim).
 - `game/state.ts`: `GameState`, `Lantern`, `Moth`, `Bat`, `Gust`, `GameEvent`, `Order`,
   `OrderGoal`, `NightReport`, `NightKind`, the balance constants, `MOTH_KINDS`, `KIND_ORDER`,
@@ -198,7 +210,9 @@ File map (`src/`):
   `THIN_BURN`, `RESTLESS_BATS`, `perilMult`, `required`, `restOf`, `newGame`, `send`, `chase`,
   `swapJar`, `tick`, `nextCost`, `buy`, `rekindle`, `topUp`, `carryOn`, `moveTo`, `takeCurse`,
   `endPeril` and `nextDusk`. No Phaser;
-  `baseBurnMs` reads `byDifficulty` from `shared/settings.ts`.
+  `baseBurnMs` reads `byDifficulty` from `shared/settings.ts`. The catalogues name their texts by
+  `TextKey` (`UPGRADES`, `CURSES` and `NIGHT_KINDS` names and blurbs, `LANTERN_KINDS` names, and each
+  `Order`'s `text`), which the scene shows with `t`; the rules never read a text.
 - `game/save.ts`: `loadBest`, `saveBest`, `loadBestPeril` and `saveBestPeril`.
 - `art/puppet.ts`: `bakeTextures`, `bakeScenery(scene, district)` and the painters. Full-screen
   layers are painted at `BACK_RES` (1 on a screen that needs no scaling, up to 4 on a 4K screen)
@@ -220,8 +234,9 @@ File map (`src/`):
 - `ui/Button.ts`: `makeButton`, the carved card button (texture swap on hover, a `Zone` for taps).
 
 Shared code it imports (outside the game folder): `shared/setupGame.ts` (`setupGame`),
-`shared/scaling.ts` (`setupScaling`, `sharpRes`) and `shared/settings.ts` (`byDifficulty`,
-`settings`).
+`shared/scaling.ts` (`setupScaling`, `sharpRes`), `shared/settings.ts` (`byDifficulty`,
+`settings`) and `shared/i18n.ts` (`translator`, `byLanguage`, `formatNumber`, `language`,
+`Translation`).
 
 Screens: `setupScaling` gives the canvas `renderScale` canvas pixels per game pixel (up to 4 on a
 4K screen) and zooms the one camera to match from its top-left, so the game keeps its 960x540
@@ -366,21 +381,27 @@ seeded generator in `puppet.ts`. Popups, flares and sparks are cosmetic Phaser t
 
 ## Making common changes
 
+- **Add or change a text**: its key in `i18n/en.ts` and the German in `i18n/de.ts` (the build
+  fails without it), shown with `t`; a catalogue row names its key, not the English. Run
+  `node scripts/check-translations.mjs`. German runs longer than English, so check it fits: the
+  shop cards (name, level and cost share one line, the blurb about 28 characters), the order card,
+  the plaques' notes and the "Next dusk" button. Run the playthrough with a `de-DE` locale too
+  (or open the game with `?lang=de`).
 - **Retune a night**: the constants at the top of `src/game/state.ts`, `lanternsFor` and
   `requiredFor`; update the README and the test's constants.
-- **Add or change an order**: a row in `ORDERS` (its `lit` lanterns must exist on every night it
+- **Add or change an order**: a row in `ORDERS` with its text's key (its `lit` lanterns must exist on every night it
   comes round on: night n has `lanternsFor(n)` lanterns). `GameScene.drawOrder` shows up to three
   pips; a goal with more needs more `orderPips`. Night 1's order is mirrored in the test.
 - **Retune gusts**: `gustsFor` and `GUST_WARN_MS` in `state.ts`; night 1's gust is in the test.
 - **Add an upgrade**: add its id to `UPGRADE_IDS`, its row to `UPGRADES` and `levels`, apply it in
   `stats` (or where it acts), and give `SHOP` a fourth row (the three rows of three are full).
-- **Add a curse**: a row in `CURSES`, its count in `newGame`'s `curses`, and its effect where the
+- **Add a curse**: a row in `CURSES` (its name and blurb keys in both `i18n` files), its count in `newGame`'s `curses`, and its effect where the
   rule lives (`mothLightMs`, `batsFor`, `tick`, `required`); the panel shows it on its own.
 - **Add a kind of lantern**: a row in `LANTERN_KINDS` (its `oil`, `wick` and `pay`), its id in
   `SPECIAL_KINDS`, its gels in `LANTERN_GELS` and any emblem in `paintLantern`, and its textures in
   the `bakeTextures` loop; a rule beyond those multipliers goes in `tick` or `raiders` like the
   bell's.
-- **Add a district**: an entry in `DISTRICTS` (ten spots with names, four chains, a rule) and its
+- **Add a district**: an entry in `DISTRICTS` (ten spots with name keys, four chains, a rule) and its
   scenery in `SCENERY` in `puppet.ts` (a card path around the spots, with `merlonXs` to skip them,
   and the trim); a new rule gets a branch where the others are applied (`wind`, `lanternPay`,
   `requiredFor`, `closeCallPay`, `callPay`, `tick`). `MOVE_CARDS` has room for four cards.

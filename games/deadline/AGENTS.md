@@ -66,6 +66,8 @@ upgrades. A run is the endless Open Road or a 10-wave operation, picked on the g
     (measured in headless Chromium) on that first switch; later switches take a frame or so. On a
     big screen the textures are painted finer, and the first switch takes about twice as long.
   - Drums are not blocked by anything and can overlap crates; their labels then overlap too.
+  - The kit panel's last line runs past the panel when the perks and several supplies are all held
+    (in English too, longer in German).
   - Zombies ignore survivors: nothing but the squad's fire can kill one, and a survivor walks
     through sandbag walls.
   - A boss wave can draw a condition too; a blackout hides the boss until it is close (its bar at
@@ -75,8 +77,18 @@ upgrades. A run is the endless Open Road or a 10-wave operation, picked on the g
 
 ### File map
 
-- `src/howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips), handed to
-  `setupGame(game, { howToPlay })` in `src/main.ts`; update it when the controls or the first round change.
+- `src/howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips) in British
+  English, US English (the same with "armored", made by `us`) and German, picked with `byLanguage`
+  and handed to `setupGame(game, { howToPlay })` in `src/main.ts`; update every language when the
+  controls or the first round change.
+- `src/i18n.ts` and `src/i18n/`: the game's texts (`shared/i18n.ts`). `i18n/en.ts` is the British
+  English source, `i18n/de.ts` the German (with `keepEnglish` for the few that are the same) and
+  `i18n/en-US.ts` only the texts spelled "armour", spelled "armor". `t(key, vars)` shows a text in
+  the hub's language; `TextKey` types the keys. `GameScene.ts` and `Hud.ts` import it as `tr`, as
+  `t` names Text objects there. Every text on screen goes through it, the backdrop's and the
+  crate captions and comic sound words baked into textures included; a new one gets its German
+  entry (and a US one if its spelling differs) in the same PR. Texts a style shows differently come
+  in pairs: `key` for the comic and `nvKey` for night vision.
 - `src/main.ts`: creates the `Phaser.Game` (size from `VIEW`, `Scale.FIT`, `pixelArt: false`) with
   `BootScene` and `GameScene`, calls `setupGame(game)`, and exposes `game` on `window` in the dev
   build.
@@ -95,7 +107,7 @@ upgrades. A run is the endless Open Road or a 10-wave operation, picked on the g
 - `src/game/rules.ts`: pure numbers and rules (also `OUTPOST`, `OUTPOST_KINDS`, `OUTPOST_MAX`,
   `NO_OUTPOST`, `outpostCost`, `ROLES`, `ROLE_KINDS`, `GRENADE`, `MARKSMAN`, `OPERATIONS`,
   `OPERATION_KINDS`, `OPERATION_BONUS`, `MEDALS`, `medalOf`, `ADAPTS`, `ADAPT`, `adaptTo`,
-  `WaveRules`): `VIEW`, `HERO`, `REACH_Y`, `SQUAD_SLOTS`,
+  `WaveRules`; every `label`, `detail` and `name` in them is a `TextKey`): `VIEW`, `HERO`, `REACH_Y`, `SQUAD_SLOTS`,
   `MAX_COMPANIONS`, `ENEMIES`, `SCRAP`, `SPITTER`, `ACID_SLOW`, `riotShield`, `SWARM`,
   `swarmCount`, `BOSS`, `BOSS_MOVES`, `BOSSES`, `BOSS_KINDS`, `isBoss`, `bossKind`, `bossMove`,
   `BROOD`, `BLOATER`, `UPGRADES`, `PERKS`, `PERK_AT`, `perksOf`, `FIRE_ROUNDS`, `HEADSHOT`,
@@ -104,7 +116,8 @@ upgrades. A run is the endless Open Road or a 10-wave operation, picked on the g
   `SANDBAG_CRATE_ODDS`, `LANES`, `laneAt`, `laneMid`, `seamAt`, `WALL`, `SUPPLIES`, `supplyPick`, `SHOTGUN`, `FLAMER`,
   `MEDKIT`, `KIT_COSTS`, `PICKUP`, `DRUM`, `blastDamage`, `FRENZY`, `Stats`, `BASE_STATS`,
   `applyUpgrade`, `planWave`, `isBossWave`, `waveSize`, `waveTotal`, `waveToughness`, `toughness`, `drumCount`. No
-  Phaser import; its only import is `byDifficulty` from `shared/settings.ts`.
+  Phaser import; it imports only `byDifficulty` from `shared/settings.ts` and the `TextKey` type.
+  `CONDITIONS` has no entry for `'clear'`, which shows nothing.
 - `src/game/save.ts`: `loadBest`/`saveBest`, `loadStyle`/`saveStyle`, `loadScrap`/`saveScrap`,
   `loadKit`/`saveKit`, `loadOutpost`/`saveOutpost`, `loadOperation`/`saveOperation`,
   `loadOperationBests`/`saveOperationBests`, the `ArtStyle` type (`'comic' | 'nv'`) and the key
@@ -127,7 +140,9 @@ upgrades. A run is the endless Open Road or a 10-wave operation, picked on the g
   `aria-hidden`), which the hub test uses to tell it from the game's canvas.
 - `shared/setupGame.ts` and `shared/settings.ts` (outside the game folder, shared by every game):
   the hub's settings, applied in `src/main.ts`, read for difficulty in `src/game/rules.ts` and for
-  reduced motion in `src/scenes/GameScene.ts`.
+  reduced motion in `src/scenes/GameScene.ts`. `shared/i18n.ts` (`translator`, `byLanguage`,
+  `formatNumber`, `Translation`) for the language; the fire rate is shown with `fireRate` in `Hud.ts`
+  (2.9 or 2,9).
 
 ### How it runs
 
@@ -417,6 +432,8 @@ upgrades. A run is the endless Open Road or a 10-wave operation, picked on the g
   behind it), converted from game pixels with its bounding box. The Playwright project `deadline`
   uses a 540x960 viewport.
 - The test seeds `Math.random`, owns the clock (64ms frames), and forces the canvas renderer.
+- The test reads no text, so it plays the same in any language; it runs in the browser's US
+  English in CI, and passes with a German locale (`locale: 'de-DE'` in the Playwright config) too.
 - Flow: wave 1 starts with `BASE_STATS`, best 1 (saved), no scrap, starting kit or sandbags, the
   hero at `VIEW.w / 2` and the comic style; it taps the switch's NV half (style `nv`, saved, hero not moving, screenshot
   `0-night-vision`) and its COMIC half (back to `comic`); at least 3 grunts come in; it taps above the lowest
@@ -443,6 +460,13 @@ upgrades. A run is the endless Open Road or a 10-wave operation, picked on the g
   firing, tougher wave 1 grunts or a later drum can turn it red.
 
 ## Making common changes
+
+- **Add or change a text:** its key in `src/i18n/en.ts`, the German in `src/i18n/de.ts` (the build
+  fails without it) and, when it spells "armour", the US spelling in `src/i18n/en-US.ts`; run
+  `node scripts/check-translations.mjs`. German runs longer than English: the HUD's stats row, the
+  progress strip's boss note, the frenzy meter, the game over buttons and the operation cards are
+  the tightest spots, so check a new text with `?lang=de`. The wave banner wraps and supply and
+  role card names shrink to fit (`fit`), but nothing else does.
 
 - **Tune a number:** edit `src/game/rules.ts`. If it touches wave 1, `BASE_STATS`, an upgrade's
   effect, drums or the frenzy gap, update the mirrored constants in the test.
@@ -487,6 +511,9 @@ upgrades. A run is the endless Open Road or a 10-wave operation, picked on the g
 
 ## Gotchas
 
+- The crate captions (`label-<kind>`) and the comic's sound words (`sfx-*`) are baked into
+  textures in the language the page opened with; the language only changes on the hub, so a game
+  page never needs to re-bake them.
 - The hero's x is the rifle, not the sprite centre: `GEOM.hero.ox` is the rifle's column, and both
   styles paint the rifle at x 0.
 - `HERO` and `DRUM` are tuning in `rules.ts`; `GEOM` in `paint.ts` is only the drawing box.

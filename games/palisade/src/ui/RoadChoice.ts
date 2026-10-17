@@ -5,6 +5,7 @@ import { GOLD, SLATE } from '../art/palette';
 import { ROAD_CARDS, UI_DEPTH, VIEW } from '../scenes/layout';
 import { ROADS, type RoadId } from '../game/roads';
 import { drawPanel, textStyle } from './panel';
+import { t } from '../i18n';
 
 /** Where a road card is on screen and which road it offers. */
 export interface RoadSpot {
@@ -30,7 +31,7 @@ export class RoadChoice {
     private onPick: (id: RoadId) => void,
   ) {
     const title = scene.add
-      .text(VIEW.w / 2, ROAD_CARDS.y - ROAD_CARDS.h / 2 - 18, 'Choose the next road', textStyle(20, '#ffcf4a', 5))
+      .text(VIEW.w / 2, ROAD_CARDS.y - ROAD_CARDS.h / 2 - 18, t('chooseRoad'), textStyle(20, '#ffcf4a', 5))
       .setOrigin(0.5);
     this.countdown = scene.add.text(VIEW.w / 2, ROAD_CARDS.y + ROAD_CARDS.h / 2 + 16, '', textStyle(13, '#c9c3b6', 4)).setOrigin(0.5);
     this.root = scene.add.container(0, 0, [title, this.countdown]).setDepth(UI_DEPTH + 5).setVisible(false);
@@ -38,7 +39,7 @@ export class RoadChoice {
 
   /** Shows these roads with `ms` left to pick, or hides the cards for null. */
   show(choices: RoadId[] | null, ms: number) {
-    if (choices) this.countdown.setText(`Taken at random in ${Math.ceil(ms / 1000)}s`);
+    if (choices) this.countdown.setText(t('roadRandom', { n: Math.ceil(ms / 1000) }));
     const key = choices ? choices.join() : null;
     if (key === this.shown) return;
     this.shown = key;
@@ -63,11 +64,11 @@ export class RoadChoice {
     };
     draw(false);
     const icon = fit(scene.add.image(-w / 2 + 46, -h / 2 + 48, roadTexture(id)), 0.9);
-    const name = scene.add.text(-w / 2 + 90, -h / 2 + 34, road.name, textStyle(18, '#ffcf4a')).setOrigin(0, 0.5);
-    const sub = scene.add.text(-w / 2 + 90, -h / 2 + 58, '10 waves to the next boss', { ...textStyle(11, '#c9c3b6'), fontStyle: 'normal' }).setOrigin(0, 0.5);
+    const name = scene.add.text(-w / 2 + 90, -h / 2 + 34, t(road.name), textStyle(18, '#ffcf4a')).setOrigin(0, 0.5);
+    const sub = scene.add.text(-w / 2 + 90, -h / 2 + 58, t('roadSub'), { ...textStyle(11, '#c9c3b6'), fontStyle: 'normal' }).setOrigin(0, 0.5);
     const style = (color: string) => ({ ...textStyle(13, color), fontStyle: 'normal', wordWrap: { width: w - 40 } });
-    const harder = scene.add.text(-w / 2 + 20, -h / 2 + 90, `Catch: ${road.harder}`, style('#ffb08a'));
-    const better = scene.add.text(-w / 2 + 20, -h / 2 + 114, `Reward: ${road.better}`, style('#8fdc6a'));
+    const harder = scene.add.text(-w / 2 + 20, -h / 2 + 90, t('roadCatch', { text: t(road.harder) }), style('#ffb08a'));
+    const better = scene.add.text(-w / 2 + 20, -h / 2 + 114, t('roadReward', { text: t(road.better) }), style('#8fdc6a'));
     const hit = scene.add.zone(0, 0, w, h);
     const card = scene.add.container(x, y, [bg, icon, name, sub, harder, better, hit]).setData('card', true);
     hit

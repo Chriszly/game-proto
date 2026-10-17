@@ -83,8 +83,8 @@ Implemented today:
   the beacon, shards, beams and fireballs show only where explored or in sight; the player can only
   build on explored ground. `entityAt` skips what the player can't see. The AI is not fogged.
 - Expansions (`Build` = a building role or `'expansion'`, `expansionStats`): an outpost is a
-  `Building` of type `hub` with `expansion: true`, drawn at 0.8 of the hub's size and named after
-  the hub (`Sun Outpost`). 250 crystal, 18 s, 60% of the hub's hp; it goes within 120 px of a
+  `Building` of type `hub` with `expansion: true`, drawn at 0.8 of the hub's size and named by its
+  faction's `outpost` (`Sun Outpost`). 250 crystal, 18 s, 60% of the hub's hp; it goes within 120 px of a
   crystal node and 400 px or more from the faction's hubs. It trains harvesters and takes crystal,
   and buildings can go within 240 px of any finished hub (`hubsOf`). `hubOf` is the main hub
   only; only the main hub's fall ends a faction or counts for the `hubs` contract.
@@ -230,25 +230,37 @@ Missing or rough:
 
 File map (`src/`):
 
-- `howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips), handed to
-  `setupGame(game, { howToPlay })` in `main.ts`; update it when the controls or the first round change.
+- `howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips) in British
+  English, US English (the same with "Center") and German, picked with `byLanguage` and handed to
+  `setupGame(game, { howToPlay })` in `main.ts`; update every language when the controls or the
+  first round change.
+- `i18n.ts` and `i18n/`: the game's texts (`shared/i18n.ts`). `i18n/en.ts` is the British English
+  source, `i18n/de.ts` the German (faction, ship and building names are compound nouns used without
+  an article, so they fit any sentence) and `i18n/en-US.ts` the texts spelled differently in US
+  English (none yet). `t(key, vars)` shows a text in the hub's language; `TextKey` types the keys.
+  Every text on screen, the notices and problems `World` returns and the Watch AI log go through
+  `t` (`tr` in `GameScene`, where `t` names the text helper in `create`); game logic compares ids
+  and keys, never shown text.
 - `main.ts`: creates the `Phaser.Game` (960x540, `Phaser.Scale.FIT`, `pixelArt: false`) with
   `GameScene`, calls `setupGame(game)` from `shared/setupGame.ts` and `setupScaling(game)` from
   `shared/scaling.ts`, and in dev builds puts `game` on `window`. The canvas has `renderScale`
   canvas pixels per view pixel (see "Screen scaling" below).
-- `game/factions.ts`: the `FACTIONS` list (name, colours, `tune` multipliers, and the `units` and
-  `buildings` definitions with their outlines and optional `ability`), `COMBAT_UNITS`, and the types
+- `game/factions.ts`: the `FACTIONS` list (name, outpost name, colours, `tune` multipliers, the
+  `units` and `buildings` definitions with their outlines and optional `ability`, and the
+  flagship). Every name is a `TextKey`; a faction's name key (`solarConcord`) is also its id, which
+  `FACTION_ART` and the Solar Concord's floating pylons go by. Also `COMBAT_UNITS` and the types
   `UnitId`, `Role`, `Poly`, `Weapon`, `Ability`, `UnitDef`, `BuildingDef`. The outlines (`shape`) are
   no longer drawn; the art comes from `art/models.ts`.
 - `game/fog.ts`: `Fog` (`explored` and `visible` cells, `stamp`, `sees`, `knows`; `toJSON` gives
   only the explored share, so the test's state reads stay small), `FOG_CELL` (10), `FOG_COLS`,
   `FOG_ROWS`. No Phaser.
-- `game/research.ts`: `TRACKS`, `TRACK_DEFS`, `RESEARCH_LEVELS`, `RESEARCH_STEP`, `RESEARCH_COSTS`,
+- `game/research.ts`: `TRACKS`, `TRACK_DEFS` (name and effect as `TextKey`s), `RESEARCH_LEVELS`, `RESEARCH_STEP`, `RESEARCH_COSTS`,
   `RESEARCH_MS`, `Research`, `noResearch`, `researchBonus`. No Phaser.
 - `game/contracts.ts`: `FIRST_CONTRACT` and `CONTRACT_POOL` (goal, target, reward, `from` step,
-  title, brief and perk text from the faction, and `apply` for the perk), `contractOf`, `boardOffer`,
+  title, brief, task and perk text through `t`, filled with the faction's Barracks or Turret name,
+  and `apply` for the perk), `contractOf`, `boardOffer`,
   `RANKS`, `CONTRACT_STEPS`, `BOARD_MS`, `FLAGSHIP_STEP`, `Perks`, `NO_PERKS`, `Goal`. No Phaser.
-- `game/campaign.ts`: `SECTORS` (name, rival outposts, loose nodes, rival crystal and research),
+- `game/campaign.ts`: `SECTORS` (name as a `TextKey`, rival outposts, loose nodes, rival crystal and research),
   `Campaign`, `CAMPAIGN_KEY`, `loadCampaign`, `saveCampaign`, `newCampaign`, `keptFor`, `winSector`,
   `sectorText`. No Phaser.
 - `game/arena.ts`: `ARENA` (the 1600 by 1000 battlefield in world pixels), `START_POINTS` (the five
@@ -259,7 +271,7 @@ File map (`src/`):
   the retries that keep nebulae and derelicts clear.
 - `game/describe.ts`: the text for tooltips and faction cards (`unitLines`, `buildingLines`,
   `factionLines`, `abilityText`, `expansionLines`, `researchLines`, `fallBackLines`,
-  `derelictLines`), built from the faction data. No Phaser.
+  `derelictLines`), built from the faction data in the hub's language. No Phaser.
 - `game/world.ts`: `World`, the whole battle. `new World(layout, pick, watch, sector, kept)` puts faction `pick` in the
   player's slot (`watch`: the AI plays it, see Watch AI above; `sector` and `kept`: the campaign). `PLAYER` (0), `unitStats` and `buildingStats`
   (faction numbers with the faction's multipliers, the side's perks and research applied),
@@ -268,7 +280,8 @@ File map (`src/`):
   salvage constants (`BEACON_RADIUS`, `CAPTURE_MS`, `BEACON_PAY`, `SHARD_VALUE`, `SHARD_MAGNET`,
   `POP_MS`), the nebula, veteran, repair, derelict and truce constants (`NEBULA_SPOT`,
   `NEBULA_SLOW`, `VETERAN_RANKS`, `VETERAN_STEP`, `VETERAN_NAMES`, `REPAIR_RANGE`, `REPAIR_RATE`,
-  `DERELICT_RADIUS`, `CLAIM_MS`, `SENSOR_RANGE`, `DERELICT_GUN`, `DERELICT_DEFS`, `TRUCE_MS`,
+  `DERELICT_RADIUS`, `CLAIM_MS`, `SENSOR_RANGE`, `DERELICT_GUN`, `DERELICT_DEFS` (name and text
+  keys; `derelictText` fills in the numbers), `TRUCE_MS`,
   `TRUCE_TRIBUTE`, `OFFER_MS`, `BRIBE_COST`, `BRIBE_MS`), the flagship, convoy and pact constants
   (`FLAGSHIP_COST`, `FLAGSHIP_MS`, `FLAGSHIP_HP`, `FLAGSHIP_DAMAGE`, `FLAGSHIP_SPEED`, `FLAGSHIP_RANGE`,
   `CONVOY_SIZE`, `PACT_MS`, `PACT_WAVE_MS`), `flagshipStats` and the types `Beacon`, `Shard`, `Mine`,
@@ -313,7 +326,7 @@ File map (`src/`):
   `BOARD` (the contract board's header and cards), `SECTOR_STRIP` (the picker's campaign strip),
   `KEEP` (the victory's perk cards), `PANEL_X` (where the message line and contract panel start), `RIVALS_PANEL` and `RIVALS_TAB`
   (the rivals panel's box and the top bar area that opens it), `ROLE_LABEL` (the generic
-  name of each building and unit type, shown under the faction's own name), `FONT` (a system sans
+  name of each building and unit type as a `TextKey`, shown under the faction's own name), `FONT` (a system sans
   stack, bold italic for headings).
 - `art/mesh.ts`: the modelling kit. `Mesh` (vertex and face lists, each face with a material key),
   primitives `box`, `tube` (and cones), `ellipsoid` (and domes), `slab` (an extruded outline),
@@ -325,7 +338,7 @@ File map (`src/`):
   bottom-right gradient. Materials are `paint` (Lambert plus a highlight), `chrome` (reflects a
   painted sky, horizon and desert), `glass` and `glow` (unlit, blooms with a canvas shadow).
   Also `sparkle` (the four-pointed glint) and `reach`.
-- `art/models.ts`: `FACTION_ART` (by faction name: materials, the four ship and four building
+- `art/models.ts`: `FACTION_ART` (by faction name key: materials, the four ship and four building
   meshes, and the flame colours) and the props (`crystalCluster`, `beaconModel`, `shardModel`,
   `rockModel`, `PROP_MATS`).
 - `art/textures.ts`: `bakeAll` (once per page) bakes each faction's ships as sheets of `FACINGS`
@@ -367,7 +380,7 @@ follows or uses bounds (`scrollTo` clamps it), so it keeps the top-left origin r
 
 Save keys: `space-wars-campaign` (`CAMPAIGN_KEY` in `game/campaign.ts`): the sector campaign, as
 `{ unlocked, kept }`. Nothing else is kept between visits; the game reads the hub's settings
-(`byDifficulty`, `settings.reduceMotion`) through `shared/`. The playthrough starts with empty
+(`byDifficulty`, `settings.reduceMotion`, the language through `shared/i18n.ts`) through `shared/`. The playthrough starts with empty
 storage, so it plays sector 1 with no kept perks.
 
 Test hooks (read by `e2e/playthrough.spec.ts`):
@@ -375,7 +388,8 @@ Test hooks (read by `e2e/playthrough.spec.ts`):
 - `window.game.scene.getScene('Game')` (dev builds only). `scene.state` is the `World`: `phase`,
   `elapsedMs`, `units`, `buildings`, `nodes`, `sides` (crystal, alive), `layout`.
 - `scene.buttons`: the command bar's buttons with their positions, read to click them.
-- `scene.pickCards`: the picker's cards. The test taps the first one to play the Solar Concord.
+- `scene.pickCards`: the picker's cards. The test taps the first one to play the Solar Concord
+  and checks its name key, `solarConcord`.
 - `scene.state.fog`: its JSON is `{ explored }` (the explored share); `state.fog.knows({ x, y })`
   answers whether the player has seen a point. The test checks the beacon starts hidden and is
   found, and that flying out explores more.
@@ -407,7 +421,14 @@ Test hooks (read by `e2e/playthrough.spec.ts`):
 - **A new building or unit type**: add it to the `Role` or `UnitId` types and to each faction's
   definitions, then the command bar's `BUTTON`s in `scenes/layout.ts` (and its `ROLE_LABEL`) and
   any `World` rules that name it (`train`, `updateBuilding`, `harvest` for drop-offs).
-- **A tooltip or card text**: add the line in `game/describe.ts`; the scene shows whatever it returns.
+- **Add or change a text**: its key in `i18n/en.ts`, the German in `i18n/de.ts` (the build fails
+  without it) and, where US spelling differs, `i18n/en-US.ts`; then run
+  `node scripts/check-translations.mjs`. German runs longer than English: the message line (two
+  lines of 240 px), the Fall back pill, the role line under each build and train button and the
+  end overlay are the tightest spots, so check a new text with `?lang=de`. A new faction, unit or
+  building needs its name in all three files too.
+- **A tooltip or card text**: add the line in `game/describe.ts` through `t`; the scene shows
+  whatever it returns.
 - **A map-clicked command**: convert the view pixel with `toWorld` first; the bars take view pixels.
 - **Shooting and approach** share a half-pixel slack (`approach` and `updateUnit`), so a unit that
   stops at its range can always fire.

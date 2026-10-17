@@ -75,18 +75,28 @@ File map (`src/`):
 
 - `main.ts`: creates the `Phaser.Game` (960x540) with `GameScene`, calls `setupGame(game,
   { howToPlay })` and `setupScaling(game)`, and in dev builds puts `game` on `window`.
-- `howToPlay.ts`: the How to play text; update it when controls or the loop change.
-- `game/data.ts`: every rule and number (see above). No Phaser.
+- `howToPlay.ts`: the How to play text in British English (US English spells it the same and falls
+  back to it) and German, picked with `byLanguage`; update both when controls or the loop change.
+- `i18n.ts` and `i18n/`: the game's texts (`shared/i18n.ts`). `i18n/en.ts` is the British English
+  source (armour, honour), `i18n/de.ts` the German (with `keepEnglish` for names that stay as they
+  are) and `i18n/en-US.ts` only the texts spelled differently in US English. `t(key, vars)` shows a
+  text in the hub's language, `TextKey` types the keys and `ordinal(n)` writes a place (3rd, or
+  just 3 in German, where the text says "Platz"). Every text on screen goes through `t`, and a new
+  one gets its German entry (and a US one if its spelling differs) in the same PR. The watch
+  panel's title and `aiLog` lines stay English, with the names inside them translated.
+- `game/data.ts`: every rule and number (see above). Every name and text in its tables (robots,
+  seasons, abilities, traits, parts and items, power cards, skills, commanders and taunts,
+  monsters, terrain) is a `TextKey` of `i18n/en.ts`, which the scene shows with `t`. No Phaser.
 - `game/battle.ts`: `Battle(a, b, terrain)` with `step()` (fixed `STEP_S` 0.05 s), `useSkill`,
   `zapRat`, `runToEnd`, and `events` (`BEvent`) the scene drains for animation. No Phaser.
-- `game/match.ts`: the `Match` and `Player` types and every action: `newMatch`, `rollShop`,
-  `reroll`, `buyXp`, `buy`, `sell`, `moveUnit`, `equip`, `giveItem`, `pickAugment`, `startPlan`,
+- `game/match.ts`: the `Match` and `Player` types (`Player.name` and `Match.taunt.text` are
+  `TextKey`s too) and every action: `newMatch`, `rollShop`, `reroll`, `buyXp`, `buy`, `sell`, `moveUnit`, `equip`, `giveItem`, `pickAugment`, `startPlan`,
   `startFight`, `endFight`, `advance`, `startDraft`, `draftPick`, `newDrops`, plus helpers. No
   Phaser. A board is a record keyed `"col,row"` (rows 4-7).
 - `game/ai.ts`: `aiPlan` (level, buy, sell, `arrange`, equip), `aiPickAugment`, `aiDraft`;
   reports to `aiLog` with side `p<seat>`.
 - `art/paint.ts`: canvas painters for robots (a class body plus an origin head), monsters,
-  commanders and part icons; `bakeAll` makes textures `unit:<id>`, `mon:<id>`, `cmd:<name>` and
+  commanders and part icons; `bakeAll` makes textures `unit:<id>`, `mon:<id>`, `cmd:<name key>` and
   `item:<id>` at `sharpRes` resolution.
 - `scenes/layout.ts`: positions of every HUD block and button, and the board projection
   (`project`, `boardPoint`, `tileAt`).
@@ -100,7 +110,8 @@ The phase flow: `plan` (timed by `PLAN_S`) → `fight` → `result` → next rou
 in `STEP_S` steps times the playback speed.
 
 Shared code it imports: `shared/setupGame.ts`, `shared/scaling.ts` (`setupScaling`, `sharpRes`,
-`viewPoint`), `shared/settings.ts` (`byDifficulty`, `settings`) and `shared/watch.ts`.
+`viewPoint`), `shared/settings.ts` (`byDifficulty`, `settings`), `shared/i18n.ts` (`translator`,
+`byLanguage`, `Translation`) and `shared/watch.ts`.
 
 ### Hub settings
 
@@ -127,12 +138,18 @@ Shared code it imports: `shared/setupGame.ts`, `shared/scaling.ts` (`setupScalin
 - Screenshots: `docs/screenshots/menu.webp` is the test's `0-menu`; `fight.webp` (also
   `cover.png`), `draft.webp` and `scrap-rat.webp` are from a scratch `?watch` run with the watch
   panel hidden; `scout.webp`, `part-preview.webp` and `damage-meter.webp` from a scratch run that
-  plays round 1-1 with real clicks.
+  plays round 1-1 with real clicks; `german-result.webp` is the test's `3-result` run with a
+  `de-DE` browser locale.
 
 ## Making common changes
 
-- **Add a robot**: add it to `UNITS` with an origin of its season and a class; give its origin a
-  head in `paint.ts` if the origin is new. Keep six per origin, one per class.
+- **Add or change a text**: its key in `i18n/en.ts`, the German in `i18n/de.ts` (the build fails
+  without it) and, when it spells armour, honour or grey, the US spelling in `i18n/en-US.ts`; run
+  `node scripts/check-translations.mjs`. German runs longer: the Reroll, Buy XP, Sell and Lock
+  buttons, the shop cards' trait lines and the players list are the tightest spots, so check a new
+  text with `?lang=de`.
+- **Add a robot**: add it to `UNITS` with an origin of its season, a class and its name's key (in
+  the `i18n/` files); give its origin a head in `paint.ts` if the origin is new. Keep six per origin, one per class.
 - **Add an origin or class**: add it to the ids, `TRAITS`, `ORIGIN_COLOR` (origins), a season's
   `origins` and, for a class, `CLASS_STATS` with an ability the sim handles in `battle.ts`.
 - **Add an item**: add a part to `PARTS`/`PART_DEFS` (every pair then needs a combo) or change a

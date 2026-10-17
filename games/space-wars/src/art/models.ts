@@ -680,13 +680,13 @@ function ferrox(): FactionArt {
   return { mats, units: { harvester, scout, gunship, heavy }, buildings: { hub, depot, barracks, turret }, flame: [0x2fe0a0, 0xdcffe8] };
 }
 
-/** Every faction's art, by the faction's name. */
+/** Every faction's art, by the faction's name key (its id). */
 export const FACTION_ART: Record<string, () => FactionArt> = {
-  'Solar Concord': solar,
-  'Ferrox Hive': ferrox,
-  'Iron Dominion': iron,
-  'Veil Syndicate': veil,
-  'Nomad Freight': nomad,
+  solarConcord: solar,
+  ferroxHive: ferrox,
+  ironDominion: iron,
+  veilSyndicate: veil,
+  nomadFreight: nomad,
 };
 
 // ---------------------------------------------------------------- Props

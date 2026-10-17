@@ -2,7 +2,6 @@ import { byDifficulty } from '../../../../shared/settings';
 import {
   FINE,
   GROW_MS,
-  ITEMS,
   PANACEA,
   PANACEA_RECIPE,
   POTIONS,
@@ -76,7 +75,7 @@ import {
   BLIGHT_EVERY_MS,
   BLIGHT_SPREAD_MS,
   GARDEN_RUN,
-  GARDEN_NAMES,
+  GARDEN_NAMES_IN,
   MAX_PLAGUE_NEED,
   PLAGUE_DAY,
   PLAGUE_RELAPSE_EXTRA,
@@ -87,7 +86,7 @@ import {
   RIVAL_CUT,
   RIVAL_SALES,
   SIGN_DEMAND,
-  SIGN_NAMES,
+  SIGN_SET,
   SIGN_PAY,
   SIGN_REPUTATION,
   blightImmune,
@@ -131,6 +130,7 @@ import {
 } from './state';
 // Where goods get on the belts comes from their paths; the layout is plain data, free of Phaser too.
 import { beltSpan } from '../scenes/layout';
+import { itemName, potionCount, t, type TextKey } from '../i18n';
 
 // Pure game rules, kept free of Phaser so later automation can drive the same functions.
 
@@ -315,7 +315,7 @@ export function clearBlight(state: GameState, plotIndex: number): Feedback | nul
   plot.blighted = false;
   plot.blightMs = 0;
   plot.grown = 0;
-  return ['Blight cleared'];
+  return [t('blightCleared')];
 }
 
 /**
@@ -598,11 +598,11 @@ const freeHands = (state: GameState) => carryCapacity(state) - state.carrying.le
 
 export function harvest(state: GameState, plotIndex: number): Feedback {
   const plot = state.plots[plotIndex];
-  if (!isRipe(state, plotIndex)) return ['Not ripe yet'];
-  if (freeHands(state) === 0) return ['Hands full'];
+  if (!isRipe(state, plotIndex)) return [t('notRipe')];
+  if (freeHands(state) === 0) return [t('handsFull')];
   plot.grown = 0;
   state.carrying.push(plot.plant);
-  return [`+ ${ITEMS[plot.plant].name}`];
+  return [t('gained', { item: itemName(plot.plant) })];
 }
 
 /**
@@ -753,14 +753,14 @@ function pickUpOne(state: GameState, from: ItemId[]): Feedback | null {
   });
   const id = from.splice(best, 1)[0];
   state.carrying.push(id);
-  return [`+ ${ITEMS[id].name}`];
+  return [t('gained', { item: itemName(id) })];
 }
 
 export function dropAtRefiner(state: GameState, id: RefinerId = 'refiner'): Feedback | null {
   const plant = takeTopFromBack(state, isPlant, state[id].queue);
   if (!plant) return null;
   state[id].queue.push(plant);
-  return [`- ${ITEMS[plant].name}`];
+  return [t('handedOver', { item: itemName(plant) })];
 }
 
 export const pickUpFromRefiner = (state: GameState, id: RefinerId = 'refiner') => pickUpOne(state, state[id].output);
@@ -769,7 +769,7 @@ export function dropInCauldron(state: GameState, id: CauldronId = 'cauldron'): F
   const good = takeTopFromBack(state, isRefined, state[id].contents);
   if (!good) return null;
   state[id].contents.push(good);
-  return [`- ${ITEMS[good].name}`];
+  return [t('handedOver', { item: itemName(good) })];
 }
 
 /**
@@ -786,7 +786,7 @@ export function pickUpFromCauldron(state: GameState, id: CauldronId = 'cauldron'
     const fine = FINE[cauldron[pipe]!.out as PotionId];
     cauldron[pipe] = null;
     state.carrying.push(fine);
-    return [`+ ${ITEMS[fine].name}!`];
+    return [t('gainedFine', { item: itemName(fine) })];
   }
   return pickUpOne(state, cauldron.output);
 }
@@ -816,7 +816,9 @@ export function payUpgrade(state: GameState, id: UpgradeId): Feedback | null {
   const upgrade = state.upgrades[id];
   // A study level teaches a recipe; levels count from 0, so the one just learned is at level - 1.
   const done = () =>
-    id === 'research' ? `Learned ${ITEMS[RESEARCH_ORDER[upgrade.level - 1]].name}!` : `${UPGRADES[id].name} level ${upgrade.level + 1}!`;
+    id === 'research'
+      ? t('learned', { potion: itemName(RESEARCH_ORDER[upgrade.level - 1]) })
+      : t('levelUp', { name: t(UPGRADES[id].name), level: upgrade.level + 1 });
   return payLevel(state, upgrade, UPGRADES[id].max, upgradeCost(id, upgrade.level), done);
 }
 
@@ -830,14 +832,14 @@ export function cyclePriority(state: GameState, id: CraftingId): Feedback {
   const choices: (PlantId | PotionId | null)[] = [null, ...(id === 'refiner' || id === 'refiner2' ? PLANTS : potions)];
   const next = choices[(choices.indexOf(state.priority[id]) + 1) % choices.length];
   (state.priority as Record<CraftingId, PlantId | PotionId | null>)[id] = next;
-  return [next ? `${ITEMS[next].name} first` : 'Any order'];
+  return [next ? t('firstChoice', { item: itemName(next) }) : t('anyOrder')];
 }
 
 /** Moves a shelf's price sign on: Fair to Dear, Dear to Cheap, Cheap to Fair. */
 export function cycleSign(state: GameState, potion: PotionId): Feedback {
   const next = PRICE_SIGNS[(PRICE_SIGNS.indexOf(signOf(state, potion)) + 1) % PRICE_SIGNS.length];
   state.signs[potion] = next;
-  return [`${ITEMS[potion].name}: ${SIGN_NAMES[next].toLowerCase()}`];
+  return [t(SIGN_SET[next], { potion: itemName(potion) })];
 }
 
 /**
@@ -848,25 +850,25 @@ export function replantGarden(state: GameState, garden: number): Feedback | null
   const choices = plantChoices(state, garden);
   const now = gardenPlant(state, garden);
   const next = choices[(choices.indexOf(now) + 1) % choices.length];
-  if (!next || next === now) return ['Nothing else to plant'];
+  if (!next || next === now) return [t('nothingToPlant')];
   // Changed in place: the scene keeps each bed's plot object.
   for (let i = garden * PLOTS_PER_GARDEN; i < (garden + 1) * PLOTS_PER_GARDEN; i++) {
     Object.assign(state.plots[i], { plant: next, grown: 0, blighted: false, blightMs: 0 });
   }
-  return [`Replanted: ${GARDEN_NAMES[next].toLowerCase()}`];
+  return [t('replanted', { garden: t(GARDEN_NAMES_IN[next]) })];
 }
 
 /** Pays a handful of coins towards hiring a station's next craftsman, who starts work once fully paid. */
 export function payCraftsman(state: GameState, id: StationId): Feedback | null {
   if (!unlocked(state, `hire-${id}`)) return null;
   const hired = state.craftsmen[id];
-  return payLevel(state, hired, MAX_CRAFTSMEN, craftsmanCost(hired.level), () => 'Craftsman hired!');
+  return payLevel(state, hired, MAX_CRAFTSMEN, craftsmanCost(hired.level), () => t('craftsmanHired'));
 }
 
 /** Pays towards entry to the guild, which puts its upgrades up for sale. */
 export function joinGuild(state: GameState): Feedback | null {
   if (!unlocked(state, 'guild')) return null;
-  return payToward(state, state.guild, GUILD_COST, 'Welcome to the guild!');
+  return payToward(state, state.guild, GUILD_COST, t('welcomeGuild'));
 }
 
 /** Pays towards a build, which is done once fully paid. */
@@ -878,13 +880,13 @@ function payToward(state: GameState, build: Build, cost: number, done: string): 
   });
 }
 
-const BELT_NAMES: Record<BeltId, string> = {
-  garden: 'Garden pixies',
-  refiner: 'Table pixies',
-  cauldron: 'Cauldron pixies',
-  garden2: 'Garden pixies',
-  refiner2: 'Table pixies',
-  cauldron2: 'Cauldron pixies',
+const BELT_NAMES: Record<BeltId, TextKey> = {
+  garden: 'gardenPixies',
+  refiner: 'tablePixies',
+  cauldron: 'cauldronPixies',
+  garden2: 'gardenPixies',
+  refiner2: 'tablePixies',
+  cauldron2: 'cauldronPixies',
 };
 
 /** Each belt's twin on the other line, which takes the same kind of goods by hand until it is built. */
@@ -915,7 +917,7 @@ export const doneByHand = (state: GameState, id: BeltId) =>
 export function payBelt(state: GameState, id: BeltId): Feedback | null {
   if (!beltBuildable(state, id) || !unlocked(state, `belt-${id}`)) return null;
   const belt = state.belts[id];
-  const feedback = payToward(state, belt, BELT_COST[id], `${BELT_NAMES[id]} hired!`);
+  const feedback = payToward(state, belt, BELT_COST[id], t('pixiesHired', { pixies: t(BELT_NAMES[id]) }));
   if (!feedback || !belt.built) return feedback;
   if (doneByHand(state, OTHER_LINE[id])) return feedback;
   const carried = (item: ItemId) => BELT_LANES[id].includes(item);
@@ -925,7 +927,7 @@ export function payBelt(state: GameState, id: BeltId): Feedback | null {
     const ahead = loaded.slice(0, i).filter((other) => other === item).length;
     belt.items.push({ id: item, at: beltStart(id, item) - ahead * BELT_GAP_MS });
   });
-  return loaded.length > 0 ? [...feedback, `${loaded.length} to the pixies`] : feedback;
+  return loaded.length > 0 ? [...feedback, t('toPixies', { n: loaded.length })] : feedback;
 }
 
 /** Drops everything the doctor carries; the goods are gone. */
@@ -933,7 +935,7 @@ export function dropAll(state: GameState): Feedback | null {
   if (state.carrying.length === 0) return null;
   const dropped = state.carrying.length;
   state.carrying = [];
-  return [`Dropped ${dropped}`];
+  return [t('dropped', { n: dropped })];
 }
 
 /** What can be built on the expansion: its land first, then a field, the table or the cauldron. */
@@ -942,32 +944,32 @@ export type ExpansionPart = 'land' | 'field1' | 'field2' | 'refiner' | 'cauldron
 /** Pays a handful of coins towards part of the expansion; everything but the land needs the land first. */
 export function payExpansion(state: GameState, part: ExpansionPart): Feedback | null {
   const { expansion } = state;
-  if (part === 'land') return unlocked(state, 'land') ? payToward(state, expansion.land, EXPANSION_COST.land, 'New land bought!') : null;
+  if (part === 'land') return unlocked(state, 'land') ? payToward(state, expansion.land, EXPANSION_COST.land, t('landBought')) : null;
   if (!expansion.land.built) return null;
-  if (part === 'refiner') return payToward(state, expansion.refiner, EXPANSION_COST.refiner, 'Refining table built!');
-  if (part === 'cauldron') return payToward(state, expansion.cauldron, EXPANSION_COST.cauldron, 'Cauldron built!');
+  if (part === 'refiner') return payToward(state, expansion.refiner, EXPANSION_COST.refiner, t('tableBuilt'));
+  if (part === 'cauldron') return payToward(state, expansion.cauldron, EXPANSION_COST.cauldron, t('cauldronBuilt'));
   const field = expansion.fields[part === 'field1' ? 0 : 1];
-  return payToward(state, field, EXPANSION_COST.field, 'Field planted!');
+  return payToward(state, field, EXPANSION_COST.field, t('fieldPlanted'));
 }
 
 /** Pays a handful of coins towards planting a shade garden: the first line's (`line` 0), or the second's once its land is bought. */
 export function payShade(state: GameState, line: 0 | 1): Feedback | null {
   if (line === 0 ? !unlocked(state, 'shade') : !state.expansion.land.built) return null;
-  return payToward(state, state.shade[line], SHADE_COST[line], 'Shade garden planted!');
+  return payToward(state, state.shade[line], SHADE_COST[line], t('shadePlanted'));
 }
 
 export function stockShelf(state: GameState): Feedback | null {
   const potion = takeTopFromBack(state, isSellable, state.counter.shelf);
   if (!potion) return null;
   state.counter.shelf.push(potion);
-  return [`- ${ITEMS[potion].name}`];
+  return [t('handedOver', { item: itemName(potion) })];
 }
 
 export function collectTill(state: GameState): Feedback | null {
   const { counter } = state;
   if (counter.till === 0) return null;
   state.coins += counter.till;
-  const feedback = [`+${counter.till} coins`];
+  const feedback = [t('coinsGained', { n: counter.till })];
   counter.till = 0;
   return feedback;
 }
@@ -981,7 +983,7 @@ export function sellToWagon(state: GameState): Feedback | null {
   if (!wagon || !wagonHere(state)) return null;
   const { shelf } = state.counter;
   const have = shelf.filter((p) => plainOf(p) === wagon.potion).length;
-  if (have < wagon.crate) return [`The wagon wants ${wagon.crate} ${ITEMS[wagon.potion].name}s`];
+  if (have < wagon.crate) return [t('wagonWants', { crate: potionCount(wagon.potion, wagon.crate) })];
   for (let n = 0; n < wagon.crate; n++) {
     const plain = shelf.indexOf(wagon.potion);
     shelf.splice(plain >= 0 ? plain : shelf.indexOf(FINE[wagon.potion]), 1);
@@ -989,14 +991,14 @@ export function sellToWagon(state: GameState): Feedback | null {
   wagon.sold = true;
   const coins = wagon.crate * wagon.pay;
   state.coins += coins;
-  return [`Crate sold: +${coins} coins`];
+  return [t('crateSold', { n: coins })];
 }
 
 /** Moves the herb market's buy marker on to the next good. */
 export function cycleMarketPick(state: GameState): Feedback {
   const next = HERBS[(HERBS.indexOf(state.marketPick) + 1) % HERBS.length];
   state.marketPick = next;
-  return [`Market: ${ITEMS[next].name}`];
+  return [t('marketPick', { item: itemName(next) })];
 }
 
 /** Buys one of the herb market's chosen good into the doctor's hands, at today's price. */
@@ -1007,7 +1009,7 @@ export function buyHerb(state: GameState): Feedback | null {
   if (state.coins < price) return null;
   state.coins -= price;
   state.carrying.push(herb);
-  return [`+ ${ITEMS[herb].name} -${price}c`];
+  return [t('bought', { item: itemName(herb), coins: price })];
 }
 
 /** Sells the topmost plant or refined good the doctor carries to the herb market, at today's price. */
@@ -1019,7 +1021,7 @@ export function sellHerb(state: GameState): Feedback | null {
     const price = herbSellPrice(state.contract.day, id as HerbId);
     state.carrying.splice(i, 1);
     state.coins += price;
-    return [`- ${ITEMS[id].name} +${price}c`];
+    return [t('sold', { item: itemName(id), coins: price })];
   }
   return null;
 }

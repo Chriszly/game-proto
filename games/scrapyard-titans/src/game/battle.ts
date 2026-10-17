@@ -8,11 +8,12 @@
  * Side 0 holds rows 4 to 7 (the bottom half on screen), side 1 rows 0 to 3.
  */
 import {
-  AUGMENT_BY_ID, BIG_ABILITY_COST, BOARD, CLASS_STATS, COST_SCALE, FIGHT_LIMIT_S, ITEMS, MONSTERS, OVERCHARGE_MANA,
-  RAT, SKILLS, STAR_POWER, STAR_STAT, TRAITS, UNIT_BY_ID,
+  BIG_ABILITY_COST, BOARD, CLASS_STATS, COST_SCALE, FIGHT_LIMIT_S, ITEMS, MONSTERS, OVERCHARGE_MANA,
+  RAT, STAR_POWER, STAR_STAT, TRAITS, UNIT_BY_ID,
   type AbilityKind, type AugmentId, type ClassId, type MonsterId, type OriginId, type SetId, type SkillId, type Special,
   type TerrainId, type TraitId,
 } from './data';
+import type { TextKey } from '../i18n';
 
 export const STEP_S = 0.05;
 /** Seconds a robot takes to step to the next tile. */
@@ -67,7 +68,7 @@ export interface BUnit {
   team: 0 | 1;
   defId?: string;
   monster?: MonsterId;
-  name: string;
+  name: TextKey;
   star: number;
   cls: ClassId | null;
   origins: OriginId[];
@@ -622,7 +623,3 @@ export class Battle {
     }
   }
 }
-
-/** The skill name of a commander's skill, for buttons. */
-export const skillName = (s: SkillId) => SKILLS[s].name;
-export const augmentName = (a: AugmentId) => AUGMENT_BY_ID[a].name;

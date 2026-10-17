@@ -3,6 +3,8 @@ import { INK, SERIF, fit } from '../art/paint';
 import { cardTexture } from '../art/ui';
 import { settings } from '../../../../shared/settings';
 import { viewSize } from '../../../../shared/scaling';
+import { t as sharedT } from '../../../../shared/i18n';
+import { t } from '../i18n';
 
 const WIDTH = 360;
 const TEXT = { fontFamily: SERIF, fontSize: '13px', color: INK };
@@ -40,12 +42,12 @@ export class Settings {
       return text;
     };
 
-    parts.push(scene.add.text(cx, top + 14, 'Settings', { ...TEXT, fontSize: '15px', fontStyle: 'bold', color: '#7a4a10' }).setOrigin(0.5, 0));
-    const difficulty = settings.difficulty[0].toUpperCase() + settings.difficulty.slice(1);
-    parts.push(scene.add.text(cx, top + 44, `Difficulty: ${difficulty}   Frame rate: ${settings.fps} FPS`, TEXT).setOrigin(0.5, 0));
-    parts.push(scene.add.text(cx, top + 64, 'Change these on the hub page', { ...TEXT, fontSize: '12px', fontStyle: 'italic', color: '#6a5440' }).setOrigin(0.5, 0));
-    button(0, 108, 'New game', onNewGame);
-    parts.push(scene.add.text(cx, top + 146, 'Tap outside to close', { ...TEXT, fontSize: '12px', fontStyle: 'italic', color: '#6a5440' }).setOrigin(0.5, 0));
+    parts.push(scene.add.text(cx, top + 14, t('settings'), { ...TEXT, fontSize: '15px', fontStyle: 'bold', color: '#7a4a10' }).setOrigin(0.5, 0));
+    // The difficulty's name comes from the hub's own texts.
+    parts.push(scene.add.text(cx, top + 44, t('settingsLine', { difficulty: sharedT(settings.difficulty), fps: settings.fps }), TEXT).setOrigin(0.5, 0));
+    parts.push(scene.add.text(cx, top + 64, t('changeOnHub'), { ...TEXT, fontSize: '12px', fontStyle: 'italic', color: '#6a5440' }).setOrigin(0.5, 0));
+    button(0, 108, t('newGame'), onNewGame);
+    parts.push(scene.add.text(cx, top + 146, t('tapOutside'), { ...TEXT, fontSize: '12px', fontStyle: 'italic', color: '#6a5440' }).setOrigin(0.5, 0));
 
     for (const part of parts) (part as unknown as Phaser.GameObjects.Image).setScrollFactor(0).setDepth(depth).setVisible(false);
     this.parts = parts;

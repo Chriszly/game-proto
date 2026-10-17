@@ -1,20 +1,23 @@
 // Elite foes: from wave 4 some foes come on with a trait, more health and better rewards, so a
 // build around one effect has to adapt. Bosses never carry one.
 
+import type { TextKey } from '../i18n';
+
 export type Trait = 'splitting' | 'enraged' | 'warded';
 
 export interface TraitType {
-  name: string;
-  text: string;
+  /** Name and text, keys of `i18n/en.ts`. */
+  name: TextKey;
+  text: TextKey;
   /** The colour of its badge over the foe, and for the text. */
   color: number;
   css: string;
 }
 
 export const TRAITS: Record<Trait, TraitType> = {
-  splitting: { name: 'Splitting', text: 'Splits into two goblins when it falls', color: 0x7ccf5a, css: '#8fdc6a' },
-  enraged: { name: 'Enraged', text: 'Walks and hits 60% faster below half health', color: 0xf06a3a, css: '#ff9b6a' },
-  warded: { name: 'Warded', text: 'Immune to burning and chill', color: 0xb08af0, css: '#d0b8ff' },
+  splitting: { name: 'splittingName', text: 'splittingText', color: 0x7ccf5a, css: '#8fdc6a' },
+  enraged: { name: 'enragedName', text: 'enragedText', color: 0xf06a3a, css: '#ff9b6a' },
+  warded: { name: 'wardedName', text: 'wardedText', color: 0xb08af0, css: '#d0b8ff' },
 };
 
 export const TRAIT_IDS = Object.keys(TRAITS) as Trait[];

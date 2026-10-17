@@ -1,3 +1,4 @@
+import type { TextKey } from '../i18n';
 import { SPECIALS, seeded, type Building, type Special } from './tiles';
 
 // Royal gifts: reaching a round's goal offers a choice of two, shown in the panel all round long.
@@ -7,28 +8,28 @@ export const GIFTS = ['towers', 'houses', 'farms', 'windmill', 'windmills', 'mar
 export type Gift = (typeof GIFTS)[number];
 
 export interface GiftInfo {
-  /** The short label on the panel's chip and the choice button. */
-  label: string;
+  /** The short label on the panel's chip and the choice button, a key of `i18n/en.ts`. */
+  label: TextKey;
   /** The building drawn on its chip. */
   icon: Building;
-  /** One line on the choice button. */
-  desc: string;
+  /** One line on the choice button, a key of `i18n/en.ts`. */
+  desc: TextKey;
   /** Tiles it adds to the pouch. */
   tiles: Partial<Record<Building, number>>;
 }
 
 export const GIFT_INFO: Record<Gift, GiftInfo> = {
-  towers: { label: '+2 Towers', icon: 'tower', desc: '2 more towers', tiles: { tower: 2 } },
-  houses: { label: '+3 Houses', icon: 'house', desc: '3 more houses', tiles: { house: 3 } },
-  farms: { label: '+3 Farms', icon: 'farm', desc: '3 more farms', tiles: { farm: 3 } },
-  windmill: { label: 'Windmill', icon: 'windmill', desc: 'A new tile: 2 windmills', tiles: { windmill: 2 } },
-  windmills: { label: '+2 Windmills', icon: 'windmill', desc: '2 more windmills', tiles: { windmill: 2 } },
-  market: { label: 'Market', icon: 'market', desc: 'A new tile: 2 markets', tiles: { market: 2 } },
-  markets: { label: '+2 Markets', icon: 'market', desc: '2 more markets', tiles: { market: 2 } },
-  harbor: { label: 'Harbor', icon: 'harbor', desc: 'A new tile: 2 harbors', tiles: { harbor: 2 } },
-  harbors: { label: '+2 Harbors', icon: 'harbor', desc: '2 more harbors', tiles: { harbor: 2 } },
-  lumber: { label: 'Lumber camp', icon: 'lumber', desc: 'A new tile: 2 lumber camps', tiles: { lumber: 2 } },
-  lumbers: { label: '+2 Camps', icon: 'lumber', desc: '2 more lumber camps', tiles: { lumber: 2 } },
+  towers: { label: 'towersGift', icon: 'tower', desc: 'towersDesc', tiles: { tower: 2 } },
+  houses: { label: 'housesGift', icon: 'house', desc: 'housesDesc', tiles: { house: 3 } },
+  farms: { label: 'farmsGift', icon: 'farm', desc: 'farmsDesc', tiles: { farm: 3 } },
+  windmill: { label: 'windmillGift', icon: 'windmill', desc: 'windmillDesc', tiles: { windmill: 2 } },
+  windmills: { label: 'windmillsGift', icon: 'windmill', desc: 'windmillsDesc', tiles: { windmill: 2 } },
+  market: { label: 'marketGift', icon: 'market', desc: 'marketDesc', tiles: { market: 2 } },
+  markets: { label: 'marketsGift', icon: 'market', desc: 'marketsDesc', tiles: { market: 2 } },
+  harbor: { label: 'harborGift', icon: 'harbor', desc: 'harborDesc', tiles: { harbor: 2 } },
+  harbors: { label: 'harborsGift', icon: 'harbor', desc: 'harborsDesc', tiles: { harbor: 2 } },
+  lumber: { label: 'lumberGift', icon: 'lumber', desc: 'lumberDesc', tiles: { lumber: 2 } },
+  lumbers: { label: 'lumbersGift', icon: 'lumber', desc: 'lumbersDesc', tiles: { lumber: 2 } },
 };
 
 /** The gift that first brings each special building, and the one that brings more of it. */

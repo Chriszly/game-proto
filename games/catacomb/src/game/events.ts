@@ -2,11 +2,15 @@
 
 export type EventId = 'altar' | 'shrine' | 'chest' | 'pool';
 
+import type { TextKey } from '../i18n';
+
 export interface GameEvent {
-  title: string;
-  text: string;
-  /** The two choices' captions, in order. */
-  choices: [string, string];
+  /** Its title, text and choices are keys of `i18n/en.ts`. */
+  title: TextKey;
+  text: TextKey;
+  /** The two choices' captions, in order, with the number each one's `{n}` shows. */
+  choices: [TextKey, TextKey];
+  amounts: [number, number];
 }
 
 /** What blood the altar asks for a rare card. */
@@ -22,24 +26,28 @@ export const POOL_COST = 4;
 
 export const EVENTS: Record<EventId, GameEvent> = {
   altar: {
-    title: 'A bloodstained altar',
-    text: 'Old runes promise a gift to whoever feeds the stone.',
-    choices: [`Bleed (-${ALTAR_COST} health, a rare card)`, 'Walk on'],
+    title: 'altarTitle',
+    text: 'altarText',
+    choices: ['altarBleed', 'altarWalk'],
+    amounts: [ALTAR_COST, 0],
   },
   shrine: {
-    title: 'A forgotten shrine',
-    text: 'A cracked idol watches over a bowl of coins.',
-    choices: ['Pray (temper 2 random cards)', `Loot (+${SHRINE_GOLD} gold, a Doubt curse)`],
+    title: 'shrineTitle',
+    text: 'shrineText',
+    choices: ['shrinePray', 'shrineLoot'],
+    amounts: [0, SHRINE_GOLD],
   },
   chest: {
-    title: 'A chained chest',
-    text: 'Cold seeps from the lock. Something valuable rattles inside.',
-    choices: ['Open (a relic, a Rust curse)', 'Leave it'],
+    title: 'chestTitle',
+    text: 'chestText',
+    choices: ['chestOpen', 'chestLeave'],
+    amounts: [0, 0],
   },
   pool: {
-    title: 'A still black pool',
-    text: 'The water is cold and strangely clear.',
-    choices: [`Drink (heal ${POOL_HEAL})`, `Bathe (-${POOL_COST} health, temper a random card)`],
+    title: 'poolTitle',
+    text: 'poolText',
+    choices: ['poolDrink', 'poolBathe'],
+    amounts: [POOL_HEAL, POOL_COST],
   },
 };
 

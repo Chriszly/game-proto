@@ -1,6 +1,7 @@
 import type { HowToPlay } from '../../../shared/howToPlay';
+import { byLanguage } from '../../../shared/i18n';
 
-export const howToPlay: HowToPlay = {
+const en: HowToPlay = {
   goal: 'Light enough lanterns by nightfall to keep the hearths burning. Keep ten nights for the Great Festival; lose all three hearths and the keep falls.',
   controls: [
     {
@@ -53,3 +54,60 @@ export const howToPlay: HowToPlay = {
     'After the Festival each curse you take makes the nights harder and every nightfall pay 25% more.',
   ],
 };
+
+const de: HowToPlay = {
+  goal: 'Zünde bis zum Einbruch der Nacht genug Laternen an, damit die Herdfeuer weiterbrennen. Halte zehn Nächte für das Große Fest; erlöschen alle drei Herdfeuer, fällt die Burg.',
+  controls: [
+    {
+      input: 'Eine Laterne anklicken oder antippen',
+      action: 'Eine freie Motte schicken, um sie anzuzünden oder das Öl einer brennenden nachzufüllen',
+    },
+    {
+      input: 'Eine Fledermaus anklicken oder antippen',
+      action: 'Eine freie Motte schicken, um sie zu verjagen',
+    },
+    {
+      input: 'Eine Verbesserung anklicken oder antippen',
+      action: 'Zwischen den Nächten: die nächste Stufe kaufen, das Fass füllen oder ein Herdfeuer entfachen',
+    },
+    {
+      input: 'Eine ruhende Motte anklicken oder antippen',
+      action: 'Mit dem zweiten Glas: sie zum Ruhen ans andere Glas schicken',
+    },
+    {
+      input: 'Ein Viertel anklicken oder antippen',
+      action: 'In jeder fünften Nacht: die Burg dorthin bringen oder bleiben',
+    },
+    {
+      input: 'Einen Fluch anklicken oder antippen / Weiter',
+      action: 'Nach dem Großen Fest: einen Fluch für mehr Lohn nehmen oder keinen',
+    },
+    { input: 'Nächste Nacht', action: 'Die Dämmerung der nächsten Nacht beginnen' },
+    {
+      input: 'Weiterspielen / Neue Burg',
+      action: 'Nach dem Großen Fest weiterspielen oder nach einer Niederlage neu beginnen',
+    },
+  ],
+  loop: [
+    'Tippe auf eine Laterne, und eine Motte fliegt aus dem Glas, zündet sie an und fliegt heim.',
+    'Brennende Laternen verbrauchen Öl und gehen aus, wenn es leer ist, also tippe sie zum Nachfüllen erneut an.',
+    'Achte auf die Böenwarnung und lass eine Motte auf der Laterne sitzen, die sie nennt.',
+    'Bei Einbruch der Nacht bringt jede brennende Laterne 5 Münzen, und brennen alle, gibt es 10 mehr.',
+    'Gib deine Münzen für Verbesserungen aus und beginne die nächste Dämmerung mit einer Laterne mehr.',
+  ],
+  tips: [
+    'Die Dämmerung dauert 45 Sekunden, und eine volle Laterne brennt 20, also zünde nicht alle zu früh an.',
+    'Brennen bei Einbruch der Nacht weniger als drei von fünf Laternen, erlischt eines deiner drei Herdfeuer.',
+    'Eine Laterne mit weniger als 15 % Öl zu retten, ist knapp und bringt sofort 2 Münzen.',
+    'Erfülle den Auftrag des Herolds auf der Karte unter der Leiste für 15 Münzen mehr bei Einbruch der Nacht.',
+    'Ein Tippen, während alle Motten unterwegs sind, wartet in der Reihe, bis zu zwei Mal.',
+    'Ab Nacht 3 kommen Fledermäuse, um Laternen zu löschen, und Nachfüllen zehrt vom Ölfass.',
+    'Laternen nebeneinander bilden Ketten, die 8 Münzen bringen, wenn alle bei Einbruch der Nacht brennen.',
+    'Ab Nacht 6 ruht eine Motte nach ihrem vierten Flug einer Dämmerung 6 Sekunden; Nektar verkürzt das.',
+    'Ein Herdfeuer verloren? Die Herd-Karte entfacht es zwischen den Nächten für 40, dann 80, dann 120 Münzen.',
+    'Nach dem Fest macht jeder genommene Fluch die Nächte schwerer, und jede Nacht zahlt 25 % mehr.',
+  ],
+};
+
+/** US English spells every text the British way. */
+export const howToPlay: HowToPlay = byLanguage({ en, de });

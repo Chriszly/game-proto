@@ -5,13 +5,15 @@ import { BROWN, GOLD, MOSS, num, OCHRE, RES, RUST, SEPIA, shown } from '../art/n
 import { needTexture, POTION_ORIGIN, potionTexture, tileTexture, TOOL_PAD, toolTexture } from '../art/textures';
 import { adjacent, COLS, inBoard, ROWS, special, stuck, validMoves, type Board, type Cell, type Tile } from '../game/board';
 import { EXAMS } from '../game/exams';
-import { KIND_NAMES, KINDS, type Kind } from '../game/kinds';
+import { formatNumber } from '../../../../shared/i18n';
+import { KIND_COUNTS, KIND_NAMES, KINDS, type Kind } from '../game/kinds';
 import { MOVE_BONUS, orderFor, POTION_NAMES, RICH_BLOCKERS, RICH_MOVES, RICH_SHARE, riskFor, RUSH_COINS, RUSH_MOVES, TWIN_BONUS } from '../game/orders';
 import { RANKS, rankOf, starsFor, STARS_2, STARS_3 } from '../game/ranks';
 import { loadProgress, saveProgress } from '../game/save';
 import { canUse, funnel, nextExam, nextOrder, pestle, sift, stir, TOOL_ORDER, TOOLS, trySwap, type Step, type Tool } from '../game/sim';
 import { buyHerb, examOpen, heldPantry, HERB_COST, PANTRY_MAX, progressOf, standingOf, startOrder, type GameState } from '../game/state';
 import { buyUpgrade, UPGRADE_ORDER, upgradeCost, UPGRADES, type UpgradeId } from '../game/upgrades';
+import { t } from '../i18n';
 import { makeButton } from '../ui/Button';
 import { BOARD, CAPTION, cellX, cellY, NEEDS, PANEL, PANTRY, RIBBON, SERIF, TOOL, UI_DEPTH } from './layout';
 
@@ -28,25 +30,12 @@ const HINT_MS = 6000;
 /** How long mould takes to creep onto a tile, and a served customer's or a new stage's note to show. */
 const MOULD_MS = 260;
 const NOTE_MS = 700;
-/** The title the crown's last order earns. */
-const ROYAL_TITLE = 'Royal Apothecary';
 
 /**
  * Draw order: the table, catalyst row bands, the cursor, specials (whose rays and petals sit under
  * their neighbours), tiles, the panel, and gathered tiles flying to the label.
  */
 const DEPTH = { band: 1.5, cursor: 1.8, catalyst: 1.9, tile: 2, resin: 2.1, panel: 3, flying: 4 };
-
-const CAPTION_TIP = 'A match of four brews a Catalyst (clears its row); an L or T brews a Bloom (clears a 3x3)';
-const CAPTION_BLOCKERS = 'A match next to a corked jar opens it; resin holds a tile in place for one match';
-const CAPTION_MOULD = 'Mould creeps to a neighbour after every move unless a match touches it, which scrubs it off';
-const CAPTION_ROYAL = 'A royal commission: three potions in turn on one board, the moves carried over';
-const CAPTION_TWIN = `Two customers share the board and the moves; the one served first pays ${TWIN_BONUS} coins more`;
-const CAPTION_SIFT = `Sift: tap a row to reroll it for ${TOOLS.sift.cost} coins, or tap Sift again to put it away`;
-const CAPTION_PESTLE = `Pestle: tap a tile to smash it for ${TOOLS.pestle.cost} coins, or tap Pestle again to put it away`;
-const CAPTION_FUNNEL = `Funnel: tap a tile, then any other, to swap them for ${TOOLS.funnel.cost} coins`;
-const CAPTION_FUNNEL_TO = 'Funnel: now tap the tile to swap it with (tap it again to let it go)';
-const CAPTION_HERBS = `The herbalist: ${HERB_COST} coins an ingredient, up to ${PANTRY_MAX} of a kind in the pantry`;
 
 /** A result card button: its caption and what a tap does. */
 interface Choice {
@@ -391,14 +380,14 @@ export class GameScene extends Phaser.Scene {
       // A customer is served: a note over the board, and their rows finish.
       const potion = step.served;
       const bonus = this.state.served[0] === potion && this.state.speedBonus > 0;
-      this.queue.push(this.showNote(`${POTION_NAMES[potion]} served!${bonus ? ` +${TWIN_BONUS} coins for speed with the sale` : ''}`));
+      this.queue.push(this.showNote(t(bonus ? 'servedFast' : 'served', { potion: t(POTION_NAMES[potion]), coins: TWIN_BONUS })));
       return;
     }
     if (step.stage) {
       // A royal commission moves on: the label is rebuilt for the next potion and the moves stay.
       const stage = step.stage;
       this.queue.push({ ms: 0, end: () => ((this.shown = { ...this.state.got }), this.buildPanel(), this.refreshNeeds()) });
-      this.queue.push(this.showNote(`Stage ${stage + 1}: now the ${POTION_NAMES[this.state.current.stages![stage].potion]}`));
+      this.queue.push(this.showNote(t('nextStage', { stage: stage + 1, potion: t(POTION_NAMES[this.state.current.stages![stage].potion]) })));
       return;
     }
     this.queue.push(this.moveTo(step.board, step.shuffled ? SHUFFLE_MS : FALL_MS));
@@ -463,10 +452,10 @@ export class GameScene extends Phaser.Scene {
       saveProgress(progressOf(s));
       this.showSold();
     } else if (s.current.exam && s.phase === 'failed') {
-      this.showResult('Out of moves', `The ${POTION_NAMES[s.current.potion]} wasn't finished.`, 'No seal this time.', this.examRetry(), 0);
+      this.showResult(t('outOfMoves'), t('potionUnfinished', { potion: t(POTION_NAMES[s.current.potion]) }), t('noSeal'), this.examRetry(), 0);
     } else if (s.phase === 'failed') {
-      const what = s.current.stages ? 'royal commission' : s.current.second ? 'two orders' : POTION_NAMES[s.current.potion];
-      this.showResult('Out of moves', `The ${what} ${s.current.second ? "weren't" : "wasn't"} finished.`, 'No stars this time.', [{ label: 'Try again', act: () => this.begin(nextOrder(this.state)) }], 0);
+      const what = s.current.stages ? t('royalUnfinished') : s.current.second ? t('twinUnfinished') : t('potionUnfinished', { potion: t(POTION_NAMES[s.current.potion]) });
+      this.showResult(t('outOfMoves'), what, t('noStars'), [{ label: t('tryAgain'), act: () => this.begin(nextOrder(this.state)) }], 0);
     }
   }
 
@@ -633,33 +622,33 @@ export class GameScene extends Phaser.Scene {
     const o = s.current;
     const mid = PANEL.x + PANEL.w / 2;
     const title = o.exam
-      ? `Guild examination ${o.exam.index + 1}`
+      ? t('examTitle', { n: o.exam.index + 1 })
       : o.stages
         ? o.last
-          ? "The crown's last order"
-          : 'Royal commission'
+          ? t('crownsLast')
+          : t('royalCommission')
         : o.second
-          ? `Order ${o.number}: two customers`
-          : `Order ${o.number}`;
+          ? t('twinTitle', { n: o.number })
+          : t('orderTitle', { n: o.number });
     const items: Phaser.GameObjects.GameObject[] = [
       this.add.text(mid, 62, title, ink(o.stages || o.second || o.exam ? 24 : 28, SEPIA, 'bold')).setOrigin(0.5),
       shown(this.add.image(606, 145, potionTexture(o.potion))).setOrigin(POTION_ORIGIN.x, POTION_ORIGIN.y),
-      this.add.text(606, 164.5, `No. ${o.number}`, ink(9, RUST, 'italic bold')).setOrigin(0.5),
-      this.add.text(666, 124, POTION_NAMES[o.potion], ink(22, SEPIA, 'italic bold')).setOrigin(0, 0.5),
-      this.add.text(666, 152, o.exam ? `Pays ${o.price} coins on a pass` : o.rich ? `Pays ${o.price} coins: rich order` : `Pays ${o.price} coins`, ink(15, BROWN)).setOrigin(0, 0.5),
-      this.add.text(666, 174, `+${MOVE_BONUS} per move left`, ink(15, BROWN)).setOrigin(0, 0.5),
+      this.add.text(606, 164.5, t('potionNumber', { n: o.number }), ink(9, RUST, 'italic bold')).setOrigin(0.5),
+      this.add.text(666, 124, t(POTION_NAMES[o.potion]), ink(22, SEPIA, 'italic bold')).setOrigin(0, 0.5),
+      this.add.text(666, 152, t(o.exam ? 'paysPass' : o.rich ? 'paysRich' : 'pays', { price: o.price }), ink(15, BROWN)).setOrigin(0, 0.5),
+      this.add.text(666, 174, t('perMove', { n: MOVE_BONUS }), ink(15, BROWN)).setOrigin(0, 0.5),
     ];
     // The order's twist, stage or second customer, under the price.
     const line = o.exam
-      ? `Sell it with ${o.exam.stars} stars: ${o.exam.stars === 3 ? STARS_3 : STARS_2}+ moves left`
+      ? t('examLine', { stars: o.exam.stars, moves: o.exam.stars === 3 ? STARS_3 : STARS_2 })
       : o.stages
-      ? `Stage ${s.stage + 1} of ${o.stages.length}: the moves carry over`
+      ? t('stageLine', { stage: s.stage + 1, stages: o.stages.length })
       : o.second
-        ? `and a ${POTION_NAMES[o.second.potion]} for a second customer`
+        ? t('twinLine', { potion: t(POTION_NAMES[o.second.potion]) })
         : o.rush
-          ? `Rush order: ${RUSH_MOVES} fewer moves, +${RUSH_COINS} coins`
+          ? t('rushLine', { moves: RUSH_MOVES, coins: RUSH_COINS })
           : o.forbid
-            ? `No ${KIND_NAMES[o.forbid]}: matching it costs a move`
+            ? t('forbidLine', { kind: t(KIND_NAMES[o.forbid]) })
             : '';
     if (line) items.push(this.add.text(666, 196, line, ink(13, RUST, 'italic bold')).setOrigin(0, 0.5));
     this.rows = Object.keys(o.needs) as Kind[];
@@ -667,8 +656,9 @@ export class GameScene extends Phaser.Scene {
     this.rows.forEach((kind, i) => {
       const y = this.rowY(i);
       items.push(shown(this.add.image(NEEDS.x, y, needTexture(kind))));
-      const who = second.includes(kind) ? ` (${POTION_NAMES[o.second!.potion]})` : o.second ? ` (${POTION_NAMES[o.potion]})` : '';
-      items.push(this.add.text(NEEDS.barX, y - 17, `${KIND_NAMES[kind]}${who}`, ink(o.second ? 11 : 13, BROWN, 'italic bold')).setOrigin(0, 0.5));
+      const name = t(KIND_NAMES[kind]);
+      const label = o.second ? t('needFor', { kind: name, potion: t(POTION_NAMES[second.includes(kind) ? o.second.potion : o.potion]) }) : name;
+      items.push(this.add.text(NEEDS.barX, y - 17, label, ink(o.second ? 11 : 13, BROWN, 'italic bold')).setOrigin(0, 0.5));
       const text = this.add.text(906, y + 2, '', ink(18, SEPIA, 'bold')).setOrigin(1, 0.5);
       this.needTexts.set(kind, text);
       items.push(text);
@@ -686,7 +676,7 @@ export class GameScene extends Phaser.Scene {
     this.refreshMoves();
     this.refreshRank();
     this.refreshTools();
-    this.coinsText.setText(`${this.state.coins}`);
+    this.coinsText.setText(formatNumber(this.state.coins));
     this.coinIcon.setX(this.coinsText.x - this.coinsText.width - 18);
     this.refreshPantry();
     this.refreshCaption();
@@ -697,11 +687,11 @@ export class GameScene extends Phaser.Scene {
   /** The moves left, lit with the stars a sale would earn now, and what keeps the next star. */
   private refreshMoves() {
     const s = this.state;
-    this.movesText.setText(`Moves ${s.moves}`).setColor(s.moves <= 3 && s.phase === 'play' ? '#a8352a' : SEPIA);
+    this.movesText.setText(t('moves', { n: s.moves })).setColor(s.moves <= 3 && s.phase === 'play' ? '#a8352a' : SEPIA);
     const lit = s.phase === 'sold' ? s.orderStars : s.phase === 'failed' ? 0 : starsFor(s.moves);
     this.starIcons.forEach((icon, k) => icon.setTexture(k < lit ? 'star-on' : 'star-off'));
     this.ruleText.setText(
-      lit === 3 ? `3 stars at ${STARS_3}+ moves left` : lit === 2 ? `2 stars at ${STARS_2}+ moves left` : '1 star for any sale',
+      lit === 3 ? t('stars3', { n: STARS_3 }) : lit === 2 ? t('stars2', { n: STARS_2 }) : t('stars1'),
     );
   }
 
@@ -735,7 +725,7 @@ export class GameScene extends Phaser.Scene {
       items.push(shown(this.add.image(x - 9, 0, needTexture(kind)), 0.45));
       x -= 24;
     }
-    items.push(this.add.text(x - 2, 0, 'Pantry', ink(11, BROWN, 'italic')).setOrigin(1, 0.5));
+    items.push(this.add.text(x - 2, 0, t('pantry'), ink(11, BROWN, 'italic')).setOrigin(1, 0.5));
     this.pantry = this.add.container(PANTRY.x, PANTRY.y, items).setDepth(DEPTH.panel);
   }
 
@@ -753,13 +743,13 @@ export class GameScene extends Phaser.Scene {
     const stars = this.state.stars;
     const at = rankOf(stars);
     const next = RANKS[at + 1];
-    this.rankTitle.setText(this.state.royal ? ROYAL_TITLE : RANKS[at].title);
+    this.rankTitle.setText(t(this.state.royal ? 'royalTitle' : RANKS[at].title));
     const barX = Math.max(RIBBON.barX, this.rankTitle.x + this.rankTitle.width + 10);
     this.rankBar.clear();
     this.bar(barX, RIBBON.y + 7.5, RIBBON.barW, 8, next ? stars / next.stars : 1, OCHRE, this.rankBar);
     this.rankCount.setText(next ? `${stars}/${next.stars}` : `${stars}`).setX(barX + RIBBON.barW + 7);
     this.rankNext
-      .setText(next ? `Next: ${next.title}: a new recipe` : this.state.royal ? 'Guild seals' : "Every recipe unlocked: the crown's last order is next")
+      .setText(next ? t('nextRank', { rank: t(next.title) }) : t(this.state.royal ? 'guildSeals' : 'allRecipes'))
       .setX(this.rankCount.x + this.rankCount.width + 9);
     // Once Royal Apothecary, a wax seal per guild examination, filled in as each is passed.
     if (!this.state.royal) return;
@@ -785,23 +775,26 @@ export class GameScene extends Phaser.Scene {
     const mould = s.board.some((row) => row.some((t) => t.mould));
     const forbid = s.current.forbid;
     const given = Object.entries(s.fromPantry);
-    let text = CAPTION_TIP;
-    if (this.herbs?.visible) text = CAPTION_HERBS;
+    let text = t('captionTip');
+    if (this.herbs?.visible) text = t('captionHerbs', { cost: HERB_COST, max: PANTRY_MAX });
     else if (this.resultCaption && s.phase !== 'play') text = this.resultCaption;
-    else if (this.armed === 'sift') text = CAPTION_SIFT;
-    else if (this.armed === 'pestle') text = CAPTION_PESTLE;
-    else if (this.armed === 'funnel') text = this.funnelFrom ? CAPTION_FUNNEL_TO : CAPTION_FUNNEL;
-    else if (this.hoverTool) text = `${TOOLS[this.hoverTool].tip} (${TOOLS[this.hoverTool].cost} coins)`;
+    else if (this.armed === 'sift') text = t('captionSift', { cost: TOOLS.sift.cost });
+    else if (this.armed === 'pestle') text = t('captionPestle', { cost: TOOLS.pestle.cost });
+    else if (this.armed === 'funnel') text = this.funnelFrom ? t('captionFunnelTo') : t('captionFunnel', { cost: TOOLS.funnel.cost });
+    else if (this.hoverTool) text = t('toolTip', { tip: t(TOOLS[this.hoverTool].tip), cost: TOOLS[this.hoverTool].cost });
     else if (given.length > 0 && Object.values(s.got).every((n, i) => n === (s.fromPantry[Object.keys(s.got)[i] as Kind] ?? 0)))
-      text = `The pantry put in ${given.map(([k, n]) => `${n} ${KIND_NAMES[k as Kind].toLowerCase()}`).join(' and ')} to start`;
-    else if (s.current.exam) text = `A guild examination: the same board every try; sell it with ${s.current.exam.stars} stars for a seal`;
-    else if (s.current.rich) text = `A rich order: ${RICH_SHARE * 100}% more coins for ${s.current.rich === 'moves' ? `${RICH_MOVES} fewer moves` : `${RICH_BLOCKERS} more jars and resin`}`;
-    else if (s.current.stages) text = CAPTION_ROYAL;
-    else if (s.current.second) text = CAPTION_TWIN;
-    else if (forbid) text = `No ${KIND_NAMES[forbid]} in this order: a swap that matches it costs a move`;
-    else if (mould) text = CAPTION_MOULD;
-    else if (blockers) text = CAPTION_BLOCKERS;
-    else if (s.current.rush) text = `Rush order: ${RUSH_MOVES} fewer moves than usual, and ${RUSH_COINS} more coins`;
+      text = t('captionPantry', { list: given.map(([k, n]) => t(KIND_COUNTS[k as Kind], { n })).reduce((a, b) => t('and', { a, b })) });
+    else if (s.current.exam) text = t('captionExam', { stars: s.current.exam.stars });
+    else if (s.current.rich)
+      text = s.current.rich === 'moves'
+        ? t('captionRichMoves', { share: RICH_SHARE * 100, moves: RICH_MOVES })
+        : t('captionRichBlockers', { share: RICH_SHARE * 100, blockers: RICH_BLOCKERS });
+    else if (s.current.stages) text = t('captionRoyal');
+    else if (s.current.second) text = t('captionTwin', { coins: TWIN_BONUS });
+    else if (forbid) text = t('captionForbid', { kind: t(KIND_NAMES[forbid]) });
+    else if (mould) text = t('captionMould');
+    else if (blockers) text = t('captionBlockers');
+    else if (s.current.rush) text = t('captionRush', { moves: RUSH_MOVES, coins: RUSH_COINS });
     this.setCaption(text);
   }
 
@@ -864,11 +857,11 @@ export class GameScene extends Phaser.Scene {
    * once Royal Apothecary, the next guild examination. They sit in a row, centred.
    */
   private refreshLinks() {
-    this.resultBench ??= this.link('Workbench', () => this.openBench());
-    this.resultHerbs ??= this.link('Herbalist', () => this.openHerbs());
+    this.resultBench ??= this.link(t('workbench'), () => this.openBench());
+    this.resultHerbs ??= this.link(t('herbalist'), () => this.openHerbs());
     const exam = examOpen(progressOf(this.state));
     if (exam) this.resultExam ??= this.link('', () => this.begin(nextExam(this.state)));
-    this.resultExam?.setText(`Guild examination ${this.state.seals + 1}`).setVisible(exam);
+    this.resultExam?.setText(t('examTitle', { n: this.state.seals + 1 })).setVisible(exam);
     const links = [this.resultBench, this.resultHerbs, ...(exam && this.resultExam ? [this.resultExam] : [])];
     const gap = 26;
     let x = -(links.reduce((w, l) => w + l.width, 0) + gap * (links.length - 1)) / 2;
@@ -894,19 +887,21 @@ export class GameScene extends Phaser.Scene {
   /** The result card's choice of the next order, and the caption that says what a rich one risks. */
   private orderChoice(): Choice[] {
     const risk = riskFor(this.state.order);
-    this.resultCaption = `A rich order pays ${RICH_SHARE * 100}% more, for ${risk === 'moves' ? `${RICH_MOVES} fewer moves` : `${RICH_BLOCKERS} more jars and resin`}`;
+    this.resultCaption = risk === 'moves'
+      ? t('captionPickRichMoves', { share: RICH_SHARE * 100, moves: RICH_MOVES })
+      : t('captionPickRichBlockers', { share: RICH_SHARE * 100, blockers: RICH_BLOCKERS });
     return [
-      { label: 'Modest order', act: () => this.pick(false) },
-      { label: 'Rich order', act: () => this.pick(true) },
+      { label: t('modestOrder'), act: () => this.pick(false) },
+      { label: t('richOrder'), act: () => this.pick(true) },
     ];
   }
 
   /** After a failed examination: try it again on the same board, or go back to the orders. */
   private examRetry(): Choice[] {
-    this.resultCaption = 'The examination starts on the same board every time';
+    this.resultCaption = t('captionExamRetry');
     return [
-      { label: 'Try again', act: () => this.begin(nextExam(this.state)) },
-      { label: 'Back to orders', act: () => this.begin(nextOrder(this.state)) },
+      { label: t('tryAgain'), act: () => this.begin(nextExam(this.state)) },
+      { label: t('backToOrders'), act: () => this.begin(nextOrder(this.state)) },
     ];
   }
 
@@ -916,10 +911,10 @@ export class GameScene extends Phaser.Scene {
   private createHerbs() {
     const size = BOARD.cell * COLS;
     const card = shown(this.add.image(0, 0, 'result-card'));
-    const title = this.add.text(0, -92, 'Herbalist', ink(24, SEPIA, 'italic bold')).setOrigin(0.5);
+    const title = this.add.text(0, -92, t('herbalist'), ink(24, SEPIA, 'italic bold')).setOrigin(0.5);
     this.herbCoins = this.add.text(0, -68, '', ink(13, BROWN, 'italic')).setOrigin(0.5);
     this.herbRows = this.add.container(0, 0);
-    const back = makeButton(this, 0, 86, 'Back', () => this.closeHerbs());
+    const back = makeButton(this, 0, 86, t('back'), () => this.closeHerbs());
     this.herbs = this.add.container(BOARD.x + size / 2, BOARD.y + size / 2, [card, title, this.herbCoins, this.herbRows, back]).setDepth(UI_DEPTH);
   }
 
@@ -948,7 +943,7 @@ export class GameScene extends Phaser.Scene {
   private refreshHerbs() {
     if (!this.herbRows || !this.herbCoins) return;
     this.herbRows.removeAll(true);
-    this.herbCoins.setText(`${this.state.coins} coins to spend`);
+    this.herbCoins.setText(t('coinsToSpend', { n: this.state.coins }));
     const pantry = heldPantry(this.state);
     const next = orderFor(this.state.order, standingOf(progressOf(this.state)));
     const wanted = Object.keys(next.stages ? Object.assign({}, ...next.stages.map((st) => st.needs)) : next.needs);
@@ -956,14 +951,14 @@ export class GameScene extends Phaser.Scene {
       const x = (i - 2) * 76;
       const have = pantry[kind] ?? 0;
       this.herbRows!.add(shown(this.add.image(x, -34, needTexture(kind)), 0.8));
-      this.herbRows!.add(this.add.text(x, -8, KIND_NAMES[kind], ink(11, BROWN, 'italic bold')).setOrigin(0.5));
+      this.herbRows!.add(this.add.text(x, -8, t(KIND_NAMES[kind]), ink(11, BROWN, 'italic bold')).setOrigin(0.5));
       this.herbRows!.add(this.add.text(x, 10, `${have}/${PANTRY_MAX}`, ink(15, SEPIA, 'bold')).setOrigin(0.5));
       const can = have < PANTRY_MAX && this.state.coins >= HERB_COST;
-      const buy = this.add.text(x, 32, have < PANTRY_MAX ? `Buy for ${HERB_COST}` : 'Full', ink(12, RUST, 'italic bold')).setOrigin(0.5);
+      const buy = this.add.text(x, 32, have < PANTRY_MAX ? t('buyHerb', { cost: HERB_COST }) : t('full'), ink(12, RUST, 'italic bold')).setOrigin(0.5);
       if (can) buy.setInteractive({ useHandCursor: true }).on('pointerdown', () => this.buyHerb(kind));
       else buy.setAlpha(0.45);
       this.herbRows!.add(buy);
-      if (wanted.includes(kind)) this.herbRows!.add(this.add.text(x, 50, 'next order', ink(10, MOSS, 'italic bold')).setOrigin(0.5));
+      if (wanted.includes(kind)) this.herbRows!.add(this.add.text(x, 50, t('nextOrder'), ink(10, MOSS, 'italic bold')).setOrigin(0.5));
     });
   }
 
@@ -971,10 +966,10 @@ export class GameScene extends Phaser.Scene {
   private createBench() {
     const size = BOARD.cell * COLS;
     const card = shown(this.add.image(0, 0, 'result-card'));
-    const title = this.add.text(0, -92, 'Workbench', ink(24, SEPIA, 'italic bold')).setOrigin(0.5);
+    const title = this.add.text(0, -92, t('workbench'), ink(24, SEPIA, 'italic bold')).setOrigin(0.5);
     this.benchCoins = this.add.text(0, -68, '', ink(13, BROWN, 'italic')).setOrigin(0.5);
     this.benchRows = this.add.container(0, 0);
-    const back = makeButton(this, 0, 86, 'Back', () => this.closeBench());
+    const back = makeButton(this, 0, 86, t('back'), () => this.closeBench());
     this.bench = this.add.container(BOARD.x + size / 2, BOARD.y + size / 2, [card, title, this.benchCoins, this.benchRows, back]).setDepth(UI_DEPTH);
   }
 
@@ -1002,16 +997,16 @@ export class GameScene extends Phaser.Scene {
     if (!this.benchRows || !this.benchCoins) return;
     this.benchRows.removeAll(true);
     const u = this.state.upgrades;
-    this.benchCoins.setText(`${this.state.coins} coins to spend`);
+    this.benchCoins.setText(t('coinsToSpend', { n: this.state.coins }));
     UPGRADE_ORDER.forEach((id, i) => {
       const y = -42 + i * 36;
       const level = u[id];
       const top = UPGRADES[id].costs.length;
       const cost = upgradeCost(u, id);
       const pips = Array.from({ length: top }, (_, k) => (k < level ? '●' : '○')).join('');
-      this.benchRows!.add(this.add.text(-172, y - 9, `${UPGRADES[id].name}  ${pips}`, ink(14, SEPIA, 'italic bold')).setOrigin(0, 0.5));
-      this.benchRows!.add(this.add.text(-172, y + 8, UPGRADES[id].what, ink(11, BROWN)).setOrigin(0, 0.5));
-      const button = makeButton(this, 118, y, cost === null ? 'Bought' : `Buy for ${cost}`, () => this.buy(id)).setScale(0.6);
+      this.benchRows!.add(this.add.text(-172, y - 9, `${t(UPGRADES[id].name)}  ${pips}`, ink(14, SEPIA, 'italic bold')).setOrigin(0, 0.5));
+      this.benchRows!.add(this.add.text(-172, y + 8, t(UPGRADES[id].what), ink(11, BROWN)).setOrigin(0, 0.5));
+      const button = makeButton(this, 118, y, cost === null ? t('bought') : t('buyFor', { cost }), () => this.buy(id)).setScale(0.6);
       if (cost === null || this.state.coins < cost) button.setAlpha(0.45);
       this.benchRows!.add(button);
     });
@@ -1023,30 +1018,31 @@ export class GameScene extends Phaser.Scene {
     if (o.exam) {
       const need = o.exam.stars === 3 ? STARS_3 : STARS_2;
       if (!s.passed) {
-        this.showResult('Examination failed', `Sold with ${s.moves} moves left: the guild wanted ${o.exam.stars} stars (${need}+ moves left).`, 'No seal this time.', this.examRetry(), s.orderStars);
+        this.showResult(t('examFailed'), t('examFailedText', { moves: s.moves, stars: o.exam.stars, need }), t('noSeal'), this.examRetry(), s.orderStars);
         return;
       }
-      const rank = s.seals === EXAMS.length ? `Every guild seal earned: ${s.seals} of ${EXAMS.length}` : `Guild seal ${s.seals} of ${EXAMS.length}`;
-      this.showResult('Examination passed!', `+${o.price} coins, +${s.earned - o.price} for ${s.moves} moves left`, rank, this.orderChoice(), s.orderStars);
+      const rank = t(s.seals === EXAMS.length ? 'allSeals' : 'seal', { seals: s.seals, exams: EXAMS.length });
+      this.showResult(t('examPassed'), t('earned', { price: o.price, bonus: s.earned - o.price, moves: s.moves }), rank, this.orderChoice(), s.orderStars);
       return;
     }
     const before = rankOf(s.stars - s.orderStars);
     const at = rankOf(s.stars);
     const next = RANKS[at + 1];
+    const royalTitle = t('royalTitle');
     const rank = o.last
-      ? `${ROYAL_TITLE}! ${s.stars} stars in all`
+      ? t('crownedRank', { title: royalTitle, n: s.stars })
       : at > before
-        ? `Now a ${RANKS[at].title}! New recipe: ${POTION_NAMES[RANKS[at].recipe!]}`
+        ? t('newRank', { rank: t(RANKS[at].title), potion: t(POTION_NAMES[RANKS[at].recipe!]) })
         : next
-          ? `${s.stars} stars: ${next.stars - s.stars} more to ${next.title}`
+          ? t('moreToRank', { n: s.stars, more: next.stars - s.stars, rank: t(next.title) })
           : s.royal
-            ? `${s.stars} stars in all as ${ROYAL_TITLE}`
-            : `${s.stars} stars, and every recipe unlocked`;
-    const kept = Object.entries(s.toPantry).map(([k, n]) => `${n} ${KIND_NAMES[k as Kind].toLowerCase()}`);
-    const lines = [`+${o.price} coins, +${s.earned - o.price} for ${s.moves} moves left`];
-    if (s.speedBonus > 0) lines.push(`+${s.speedBonus} for serving the ${POTION_NAMES[s.served[0]]} first`);
-    if (kept.length > 0) lines.push(`${kept.join(', ')} kept in the pantry`);
-    const title = o.last ? "The crown's last order filled!" : o.stages ? 'Royal commission filled!' : o.second ? 'Both customers served!' : `${POTION_NAMES[o.potion]} sold!`;
+            ? t('royalStars', { n: s.stars, title: royalTitle })
+            : t('everyRecipe', { n: s.stars });
+    const kept = Object.entries(s.toPantry).map(([k, n]) => t(KIND_COUNTS[k as Kind], { n }));
+    const lines = [t('earned', { price: o.price, bonus: s.earned - o.price, moves: s.moves })];
+    if (s.speedBonus > 0) lines.push(t('speedBonus', { n: s.speedBonus, potion: t(POTION_NAMES[s.served[0]]) }));
+    if (kept.length > 0) lines.push(t('keptInPantry', { list: kept.join(', ') }));
+    const title = o.last ? t('crownFilled') : o.stages ? t('royalFilled') : o.second ? t('twinFilled') : t('sold', { potion: t(POTION_NAMES[o.potion]) });
     this.showResult(title, lines.join('\n'), rank, this.orderChoice(), s.orderStars);
   }
 

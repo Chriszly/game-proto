@@ -38,17 +38,26 @@ between them.
 - `src/main.ts`: creates the `Phaser.Game` (960x540, `Scale.FIT`) with `BootScene` then
   `GameScene`, calls `setupGame(game, { howToPlay })` and `setupScaling(game)`, and puts `game` on
   `window` in dev builds.
-- `src/howToPlay.ts`: the How to play text; update it when controls or the first round change.
-- `src/game/heroes.ts`: `HeroId`, `HEROES` (weapon numbers, aim mode, signature, paths, blurb) and
+- `src/howToPlay.ts`: the How to play text in British English (which US English shares) and
+  German, picked with `byLanguage`; update both when controls or the first round change.
+- `src/i18n.ts` and `src/i18n/`: the game's texts (`shared/i18n.ts`). `i18n/en.ts` is the British
+  English source, `i18n/de.ts` the German (with `keepEnglish` for the few texts that are the same)
+  and `i18n/en-US.ts` only "Plate Armor". `t(key, vars)` shows a text in the hub's language;
+  `TextKey` types the keys. Every name and text in `heroes.ts`, `upgrades.ts`, `planets.ts` and the
+  events is a `TextKey`, and every text on screen goes through `t` (in `sim.ts` it is imported as
+  `tr`, since `t` is a common local name there). Floating texts are translated when they pop.
+- `src/game/heroes.ts`: `HeroId`, `HEROES` (weapon numbers, aim mode, signature, paths, blurb, the
+  `pathKind` line of their path cards) and
   each hero's `schemes` (`HeroScheme`: `name`, `body`, `accent`, optional `mark`, `bolt`);
   `schemeOf` returns the scheme in use (the first). All hero colours come from here.
 - `src/game/upgrades.ts`: `UPGRADES` (every path, pool skill and gear piece, with five tier lines),
   `MAX_TIER`, `MAX_ABILITIES`, `MAX_GEAR`, `FILLER`, `CAPSTONES`, `CROSSOVERS`, `capstonesOf`,
   `crossoversOf`, `crossoverFor` and `capstoneFor` (card hints), `at` (per-tier tables),
   `canOffer` and `rollChoices`.
-- `src/game/planets.ts`: `PLANETS` (per planet: name, faction, `hp` / `spawn` / `dmg`
-  multipliers, ring-wave kind, elite kinds, boss, ground colours), `BOSSES` (name, size, health,
-  credits), the bosses' attack numbers (`BOG`, `SIEGE`, `CHAMPION`), `VENT`, `CREDITS`, `ARENA_MS`,
+- `src/game/planets.ts`: `PLANETS` (per planet: name, faction, `foes` (the HUD's kill count, with
+  plural forms), `elite` (its pop), `hp` / `spawn` / `dmg`
+  multipliers, ring-wave kind, elite kinds, boss, ground colours), `BOSSES` (name, boss bar label,
+  `beaten` line for the end screen, size, health, credits), the bosses' attack numbers (`BOG`, `SIEGE`, `CHAMPION`), `VENT`, `CREDITS`, `ARENA_MS`,
   `arenaElites`, `TRADE` (prices), `NODE_INFO` (star map nodes), `REST_HEAL`, `planetLabel`.
 - `src/game/state.ts`: `GameState` and its parts (`Hero`, `Enemy`, `Bullet`, `Shard`, `Blast`,
   `Bomb`, `Fire`, `Ally`, `Pickup`, `Hazard`, `Pop`, `EventState`), the balance numbers (`RUN_MS`,
@@ -146,6 +155,13 @@ shake or flash.
 
 ## Making common changes
 
+- **Add or change a text**: its key in `i18n/en.ts`, the German in `i18n/de.ts` (the build fails
+  without it) and, when the US spelling differs (armour, colour), the US one in `i18n/en-US.ts`;
+  run `node scripts/check-translations.mjs`. German runs longer: the star map's node texts (two
+  lines), the card tier lines (two lines) and the signature button (its label shrinks to fit) are
+  the tightest spots, so check a new text with `?lang=de`.
+- **A new hero, planet or boss**: give its names and texts keys in the `i18n/` files too (a hero's
+  `pathKind`, a planet's `foes` and `elite`, a boss's `bar` and `beaten`).
 - **A new hero colour scheme**: add it to the hero's `schemes` in `heroes.ts`; the art reads
   `schemeOf`. To use another scheme, change `schemeOf` (and bake per scheme if both are needed).
 - **A new upgrade**: add it to `UPGRADES` (five tier lines), implement it in `statsOf` (a passive
@@ -160,8 +176,8 @@ shake or flash.
 - **A new foe**: add a `FoeKind` (planets.ts) and `ENEMY` entry, its spawning in `spawnGroup`, its
   behaviour in `moveEnemies`, its texture in `factions.ts` (key `rb-<kind>` and `-elite`, picked up
   by `GameScene.drawRun` on its own).
-- **A new event**: add its id to `EventId`, its text and options in `rollEvent` and its effect in
-  `chooseEvent` (voyage.ts).
+- **A new event**: add its id to `EventId`, its title, text and options (as `TextKey`s, with the
+  texts in `i18n/`) in `rollEvent` and its effect in `chooseEvent` (voyage.ts).
 - **A new planet or boss**: add a `PLANETS` row (and a `BossId` in `BOSSES` with its attacks in
   `bossAttacks` and texture `rb-boss-<id>`), its ground cell in `GameScene.drawGround`.
 

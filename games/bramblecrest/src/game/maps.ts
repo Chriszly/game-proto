@@ -4,6 +4,8 @@
 // Everything that is not ground (houses, lamps, people, foes, chests, posts) is listed beside the
 // tiles. Tile coordinates count from the map's top-left corner.
 
+import { t } from '../i18n';
+
 export const TILE = 32;
 
 export type Tile =
@@ -187,7 +189,7 @@ class Builder {
 }
 
 function village(): MapDef {
-  const b = new Builder('village', 'Mossford', 'village', 40, 26, 0.74, 'grass');
+  const b = new Builder('village', t('village'), 'village', 40, 26, 0.74, 'grass');
   const d = b.def;
   b.border('tree', 2);
   // The main street runs north to the gate, the cross street east to west.
@@ -199,13 +201,13 @@ function village(): MapDef {
   b.prop('lamp', 18, 7).prop('lamp', 21, 13).prop('lamp', 17, 19).prop('lamp', 28, 10).prop('lamp', 11, 13);
   b.prop('bench', 33, 19, 2, 1).prop('rock', 36, 10);
   d.npcs.push(
-    { id: 'elder', name: 'Elder Wren', x: 17, y: 13 },
-    { id: 'pip', name: 'Pip', x: 13, y: 16 },
-    { id: 'baker', name: 'Marla', x: 29, y: 13 },
-    { id: 'cat', name: 'Biscuit', x: 34, y: 20 },
+    { id: 'elder', name: t('elderName'), x: 17, y: 13 },
+    { id: 'pip', name: t('pipName'), x: 13, y: 16 },
+    { id: 'baker', name: t('bakerName'), x: 29, y: 13 },
+    { id: 'cat', name: t('catName'), x: 34, y: 20 },
   );
   d.chests.push({ id: 'blade', x: 31, y: 10, item: 'sword' });
-  d.signs.push({ x: 21, y: 5, text: 'North: Bramble Woods. The thorns came back again this spring.' });
+  d.signs.push({ x: 21, y: 5, text: t('signGate') });
   d.exits.push({ x: 19, y: 0, w: 2, h: 1, to: 'woods', tx: 24, ty: 28, facing: 'up' });
   // A ring of bushes by the pond hides a moonstone.
   b.rect(12, 20, 3, 3, 'bush').set(13, 21, 'grass');
@@ -220,7 +222,7 @@ function village(): MapDef {
 }
 
 function woods(): MapDef {
-  const b = new Builder('woods', 'Bramble Woods', 'woods', 50, 32, 0.8, 'grass');
+  const b = new Builder('woods', t('woods'), 'woods', 50, 32, 0.8, 'grass');
   const d = b.def;
   b.border('tree', 2);
   // The path from the village gate up to the shrine, with a branch west to the river.
@@ -235,7 +237,7 @@ function woods(): MapDef {
     { x: 42, y: 4, w: 2, h: 1, to: 'shrine', tx: 21, ty: 48, facing: 'up' },
     { x: 0, y: 15, w: 1, h: 2, to: 'fen', tx: 33, ty: 12, facing: 'left' },
   );
-  d.signs.push({ x: 26, y: 27, text: 'The Sunken Shrine lies northeast. Mind the slugs after dark.' });
+  d.signs.push({ x: 26, y: 27, text: t('signWoods') });
   // A hidden grove: a ring of trees, entered through two that are not really there.
   b.rect(30, 21, 9, 7, 'tree').rect(32, 23, 5, 3, 'grass').set(30, 24, 'faketree').set(31, 24, 'faketree');
   d.stones.push({ id: 'w-grove', x: 35, y: 24 });
@@ -256,7 +258,7 @@ function woods(): MapDef {
 }
 
 function fen(): MapDef {
-  const b = new Builder('fen', 'Glimmer Fen', 'fen', 36, 24, 0.82, 'grass');
+  const b = new Builder('fen', t('fen'), 'fen', 36, 24, 0.82, 'grass');
   const d = b.def;
   b.border('tree', 2);
   b.rect(34, 12, 2, 2, 'path').rect(20, 12, 14, 2, 'path').rect(10, 8, 2, 6, 'path').rect(10, 12, 10, 2, 'path');
@@ -270,7 +272,7 @@ function fen(): MapDef {
   // Three statues point at one spot; a swing there digs up what they guard.
   b.prop('statue', 4, 12, 1, 1, 'right').prop('statue', 17, 3, 1, 1, 'down').prop('statue', 17, 20, 1, 1, 'up');
   d.stones.push({ id: 'f-statues', x: 17, y: 12, hidden: 'buried' }, { id: 'f-wisp', x: -1, y: -1 });
-  d.npcs.push({ id: 'hermit', name: 'Old Sedge', x: 11, y: 7 });
+  d.npcs.push({ id: 'hermit', name: t('hermitName'), x: 11, y: 7 });
   d.exits.push({ x: 35, y: 12, w: 1, h: 2, to: 'woods', tx: 1, ty: 15, facing: 'right' });
   d.wisp = [{ x: 28, y: 9 }, { x: 31, y: 17 }, { x: 22, y: 16 }, { x: 13, y: 16 }];
   d.enemies.push({ kind: 'moth', x: 22, y: 9 }, { kind: 'moth', x: 8, y: 15 }, { kind: 'slug', x: 28, y: 15 });
@@ -281,7 +283,7 @@ function fen(): MapDef {
 }
 
 function shrine(): MapDef {
-  const b = new Builder('shrine', 'Sunken Shrine', 'shrine', 44, 52, 0.92, 'wall');
+  const b = new Builder('shrine', t('shrine'), 'shrine', 44, 52, 0.92, 'wall');
   const d = b.def;
   const room = (id: string, x: number, y: number, w: number, h: number) => b.room(id, x, y, w, h);
   room('boss', 8, 2, 28, 11);
@@ -311,7 +313,7 @@ function shrine(): MapDef {
   // Behind the entry hall's east wall, a niche the builders walled up.
   b.rect(28, 43, 2, 3, 'floor').set(27, 44, 'crack');
   d.stones.push({ id: 's-niche', x: 29, y: 44 });
-  d.signs.push({ x: 24, y: 46, text: 'Carved into the stone: "What the bramble takes, the vine gives back."' });
+  d.signs.push({ x: 24, y: 46, text: t('signShrine') });
   d.enemies.push(
     { kind: 'thornling', x: 5, y: 47, room: 'key' }, { kind: 'slug', x: 9, y: 45, room: 'key' }, { kind: 'slug', x: 6, y: 44, room: 'key' },
     { kind: 'thornling', x: 26, y: 31, room: 'hall' }, { kind: 'moth', x: 18, y: 35, room: 'hall' },
@@ -334,7 +336,7 @@ function shrine(): MapDef {
 }
 
 function belfry(): MapDef {
-  const b = new Builder('belfry', 'Drowned Belfry', 'belfry', 38, 40, 0.9, 'wall');
+  const b = new Builder('belfry', t('belfry'), 'belfry', 38, 40, 0.9, 'wall');
   const d = b.def;
   b.room('entry', 13, 30, 10, 8).room('hub', 13, 18, 10, 9).room('bells', 2, 18, 9, 9).room('flood', 25, 18, 9, 9).room('boss', 6, 3, 24, 11);
   // Corridors: down to the fen, entry to hub, hub west to the bells, east to the flood and north to the tower.
@@ -357,8 +359,8 @@ function belfry(): MapDef {
   );
   d.chests.push({ id: 'belfry-key', x: 32, y: 22, item: 'key' }, { id: 'belfry-heart', x: 3, y: 25, item: 'heart' });
   d.signs.push(
-    { x: 21, y: 32, text: 'Scratched by the door: "First the deepest voice, then the smallest. Last, the one between."' },
-    { x: 14, y: 19, text: 'A ringer\'s note: "We kept our wages behind the wet stones, where the river cannot reach."' },
+    { x: 21, y: 32, text: t('signBells') },
+    { x: 14, y: 19, text: t('signWages') },
   );
   d.enemies.push(
     { kind: 'frog', x: 15, y: 33, room: 'entry' }, { kind: 'frog', x: 20, y: 35, room: 'entry' },

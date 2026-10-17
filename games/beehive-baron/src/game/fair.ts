@@ -9,7 +9,6 @@ import { KINDS, type Kind } from './honey';
 /** What can be entered: a jar of each kind, then a cask of mead, then a jar from a cell filled this season. */
 export type FairClass = Kind | 'mead' | 'fresh';
 export const FAIR_CLASSES: FairClass[] = [...KINDS, 'mead', 'fresh'];
-export const CLASS_NAME: Record<FairClass, string> = { clover: 'Clover', lavender: 'Lavender', heather: 'Heather', mead: 'Mead', fresh: 'Fresh' };
 
 /** The classes a fair judges, by how many fairs were held before it: mead joins at the second, fresh honey at the third. */
 export const classesFor = (fairs: number): FairClass[] => FAIR_CLASSES.slice(0, Math.min(FAIR_CLASSES.length, KINDS.length + fairs));

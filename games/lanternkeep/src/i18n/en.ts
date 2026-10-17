@@ -1,0 +1,208 @@
+/**
+ * Lanternkeep's texts in British English, the source `de.ts` and `en-US.ts` translate (see
+ * `shared/i18n.ts`). The catalogues in `game/` name their texts by these keys.
+ */
+const en = {
+  // Upgrades: name and card text
+  wickName: 'Wicks',
+  wickBlurb: 'Lanterns catch 25% faster',
+  oilName: 'Oil',
+  oilBlurb: 'Lanterns burn 6s longer',
+  mothsName: 'Moths',
+  mothsBlurb: 'One more moth in the jar',
+  wingsName: 'Wings',
+  wingsBlurb: 'Moths fly 20% faster',
+  fireflyName: 'Firefly',
+  fireflyBlurb: 'Lights two lanterns a flight',
+  nectarName: 'Nectar',
+  nectarBlurb: 'Tired moths rest 1.5s less',
+  jarName: 'Jar',
+  jarBlurb: 'A second jar by the east wall',
+  caskName: 'Cask',
+  caskBlurb: 'One more refill (night {n} on)',
+  hearthName: 'Hearth',
+  hearthBlurb: 'Rekindle a hearth gone out',
+
+  // The shop cards' levels and prices
+  level: 'Lv {n}/{max}',
+  caskLevel: '{n}/{max}',
+  hearthLevel: '{n}/{max} lit',
+  cost: '{n}c',
+  full: 'Full',
+  spent: 'Spent',
+  allLit: 'All lit',
+  built: 'Built',
+  maxed: 'Maxed',
+
+  // Curses: name and card text
+  wetName: 'Wet wicks',
+  wetBlurb: 'Lighting a lantern takes 50% longer',
+  batsName: 'Restless bats',
+  batsBlurb: 'One more bat comes every night',
+  thinName: 'Thin oil',
+  thinBlurb: 'Oil burns 25% faster',
+  watchName: 'Watchful lord',
+  watchBlurb: 'One more lantern must burn at nightfall',
+
+  // Kinds of lantern, lettered under a special one
+  plainName: 'Lantern',
+  beaconName: 'Beacon',
+  candleName: 'Candle',
+  bellName: 'Bell',
+
+  // Kinds of night: name and plaque text
+  clearName: 'Clear night',
+  clearBlurb: 'Nothing stirs but the moths',
+  fogName: 'Foggy night',
+  fogBlurb: 'Oil burns 40% faster',
+  feastName: 'Feast night',
+  feastBlurb: 'Lanterns and chains pay double',
+  stormName: 'Stormy night',
+  stormBlurb: 'Two more gusts',
+
+  // Districts: name and rule
+  keepName: 'The Keep',
+  keepBlurb: 'The old walls: no rule but the dark',
+  docksName: 'The Docks',
+  docksBlurb: 'Sea wind: each gust blows out two lanterns',
+  chapelName: 'Chapel Hill',
+  chapelBlurb: 'Vespers: +2 a lantern, but three in four must burn',
+  marketName: 'The Market',
+  marketBlurb: 'Market day: close calls and window calls pay double, oil burns 15% faster',
+
+  // Lantern spots, named in the herald's orders outside the keep
+  spotLeftTower: 'left tower',
+  spotRightTower: 'right tower',
+  spotKeep: 'the keep',
+  spotLeftWall: 'left wall',
+  spotRightWall: 'right wall',
+  spotFarLeft: 'far left',
+  spotFarRight: 'far right',
+  spotLeftSconce: 'left sconce',
+  spotRightSconce: 'right sconce',
+  spotGate: 'the gate',
+  spotCrane: 'the crane',
+  spotLighthouse: 'the lighthouse',
+  spotMast: 'the mast',
+  spotWarehouse: 'the warehouse',
+  spotFishHall: 'the fish hall',
+  spotWestMooring: 'west mooring',
+  spotEastMooring: 'east mooring',
+  spotLeftQuay: 'left quay post',
+  spotRightQuay: 'right quay post',
+  spotCustoms: 'customs house',
+  spotBellTower: 'bell tower',
+  spotYew: 'the yew',
+  spotSteeple: 'the steeple',
+  spotLeftWindow: 'left window',
+  spotRightWindow: 'right window',
+  spotPorch: 'the porch',
+  spotLeftGable: 'left gable',
+  spotRightGable: 'right gable',
+  spotClockTower: 'clock tower',
+  spotBreadStall: 'bread stall',
+  spotClothStall: 'cloth stall',
+  spotFarLeftStall: 'far left stall',
+  spotFarRightStall: 'far right stall',
+  spotHallArch: 'hall arch',
+
+  // The herald's orders and the order card
+  orderTowers: 'Both towers + keep lit at nightfall',
+  orderWest: 'The west wall lit at nightfall',
+  orderCloseCalls: 'Save two lanterns in a close call',
+  orderEast: 'The east wall lit at nightfall',
+  orderShield: 'Shield a lantern from a gust',
+  orderLit: 'Lit at nightfall: {names}',
+  heraldsOrder: "HERALD'S ORDER",
+  reward: '+{n}c',
+  progressLit: '{done}/{of} burning',
+  progressLitMet: '{done}/{of} burning · hold till dark',
+  progressSaved: '{done}/{of} saved in time',
+  progressShielded: '{done}/{of} shielded',
+  orderKept: 'Order kept!',
+  orderMissed: 'Order missed',
+
+  // HUD
+  night: 'Night {n}',
+  lit: 'Lit {lit}/{count}',
+  need: 'need {n}',
+  nightfallIn: 'Nightfall in {s}s',
+  nightfallQueued: 'Nightfall in {s}s · {n} queued',
+  nightHasFallen: 'Night',
+
+  // Plaques and tags over the lanterns
+  saveIt: 'Save it +{n}c',
+  gustIn: 'Gust in {n}s',
+  gustShielding: 'a moth is shielding it',
+  gustShield: 'a moth on it shields it',
+  owlIn: 'Owl in {n}s',
+  owlNote: 'a moth on a lantern of this row keeps it',
+  windowCalls: 'A window calls: {n}s',
+  windowNote: 'light this lantern in time: +{n}c',
+  nap: 'zz {n}s',
+
+  // Popups
+  chasedOff: 'Chased off!',
+  snuffed: 'Snuffed!',
+  drivenOff: 'Driven off!',
+  keptPopup: 'Kept!',
+  windowLit: '+{n}c window lit!',
+  windowDarkens: 'The window darkens',
+  caskDry: 'Cask dry!',
+  closeCall: '+{n}c close call!',
+  shielded: 'Shielded!',
+  blownOut: 'Blown out!',
+  chainPay: '+{n} chain',
+  orderPay: '+{n} order kept',
+
+  // Buttons
+  nextDusk: 'Next dusk',
+  goOn: 'Go on',
+  newKeep: 'New keep',
+  keepGoing: 'Keep going',
+
+  // The night panel
+  nightFalls: 'Night {n} falls',
+  litLine: '{lit} of {count} lanterns lit ({need} needed){feast}',
+  feastDouble: '  ·  the feast pays double',
+  orderKeptLine: "Herald's order kept: +{n}",
+  orderMissedLine: "Herald's order missed",
+  chainsLit: { one: '  ·  {n} chain lit: +{coins}', other: '  ·  {n} chains lit: +{coins}' },
+  coinsLine: '+{n} coins{during}{peril}',
+  closeCallsEarned: '+{n} in close calls',
+  windowsEarned: '+{n} from windows',
+  cursesPaid: '  ·  curses paid x{mult}',
+  verdictLost: 'Too dark: one of the hearths went out.',
+  verdictAll: 'Every lantern lit: the keep blazes!',
+  verdictHeld: 'The keep holds the dark at bay.',
+  festivalHeldGoal: 'The Great Festival was held: the nights go on.',
+  festivalGoal: 'Great Festival: {kept} of {of} nights kept',
+  nextNight: 'Next: {kind}{where} ({blurb})',
+  nextWhere: ' at {district}',
+
+  // The choice of district
+  moveTitle: 'Night {n} falls: where next?',
+  moveSub: 'The keep can stand in another district from the next dusk, with its own lanterns, chains and rule.',
+  moveHint: 'Tap a district to move the keep there, or stay where it is.',
+  stayHere: 'stay here',
+
+  // Pick your peril
+  perilTitle: 'Night {n} falls: pick your peril',
+  perilSub: 'Each curse taken lasts the rest of the game,\nand every nightfall pays 25% more for it. Take one, both or neither.',
+  taken: 'taken',
+  takenTimes: 'taken {n}x',
+  perilMult: 'Pay now x{mult}  ·  best x{best}',
+
+  // Game over and the Great Festival
+  keepDark: 'The keep went dark',
+  gameOver: {
+    one: 'The last hearth went out on night {night}.\nNights kept: {kept}.{festival}\n\nBest: {n} night{peril}.',
+    other: 'The last hearth went out on night {night}.\nNights kept: {kept}.{festival}\n\nBest: {n} nights{peril}.',
+  },
+  festivalWasHeld: '\nThe Great Festival was held.',
+  bestPeril: '  ·  best peril x{mult}',
+  festivalTitle: 'The Great Festival!',
+  festivalText: "{n} nights kept: the whole valley comes\nto see the keep's lanterns.\n\nThe nights go on. How long can it hold?",
+};
+
+export default en;

@@ -4,6 +4,7 @@
 
 import { byDifficulty } from '../../../../shared/settings';
 import type { Facing, ItemId, MapId } from './maps';
+import type { TextKey } from '../i18n';
 
 export const SAVE_KEY = 'bramblecrest-save';
 
@@ -19,18 +20,18 @@ export const MAX_SEEDS = 10;
 export const QUESTS = ['start', 'blade', 'thorns', 'shrine', 'return', 'done', 'bell', 'belfry', 'home', 'end'] as const;
 export type Quest = (typeof QUESTS)[number];
 
-/** What the journal line says for each step of the quest. */
-export const OBJECTIVES: Record<Quest, string> = {
-  start: 'Talk to Elder Wren in the square',
-  blade: 'Fetch the old blade from the shed',
-  thorns: 'Cut the thorns at the north gate',
-  shrine: 'Find the Sunken Shrine in Bramble Woods',
-  return: 'Bring the news back to Elder Wren',
-  done: 'A bell tolls in the night. Ask Elder Wren about it',
-  bell: 'Ask Old Sedge in Glimmer Fen about the bell',
-  belfry: 'Find the Drowned Belfry in Glimmer Fen',
-  home: 'Tell Elder Wren the bell is quiet',
-  end: 'Chapter two is done. Keep exploring by lamplight',
+/** The text the journal line shows for each step of the quest. */
+export const OBJECTIVES: Record<Quest, TextKey> = {
+  start: 'objStart',
+  blade: 'objBlade',
+  thorns: 'objThorns',
+  shrine: 'objShrine',
+  return: 'objReturn',
+  done: 'objDone',
+  bell: 'objBell',
+  belfry: 'objBelfry',
+  home: 'objHome',
+  end: 'objEnd',
 };
 
 /** Whether the quest has reached `q`. */

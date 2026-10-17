@@ -1,22 +1,24 @@
 /**
  * Every upgrade a level-up card can offer: the heroes' own paths, the shared Blaster pool and the
  * Gear deck, each with five tiers, plus the capstones (a path at tier 5 and its gear piece) and the
- * crossovers (a pool skill held with a fitting path).
+ * crossovers (a pool skill held with a fitting path). Names and texts are keys of `i18n/en.ts`, shown
+ * with `t`.
  */
 import type { HeroId } from './heroes';
+import type { TextKey } from '../i18n';
 
 export type UpgradeKind = 'path' | 'pool' | 'gear';
 
 export interface UpgradeDef {
   id: string;
   kind: UpgradeKind;
-  name: string;
+  name: TextKey;
   /** The hero whose path this is (paths only). */
   hero?: HeroId;
   /** What the upgrade does, one short line. */
-  blurb: string;
+  blurb: TextKey;
   /** What each of the five tiers adds, in order. */
-  tiers: readonly [string, string, string, string, string];
+  tiers: readonly [TextKey, TextKey, TextKey, TextKey, TextKey];
 }
 
 export const MAX_TIER = 5;
@@ -27,129 +29,129 @@ export const MAX_GEAR = 4;
 const defs: UpgradeDef[] = [
   // Captain Rook
   {
-    id: 'gunslinger', kind: 'path', hero: 'rook', name: 'Gunslinger', blurb: 'Faster pistols, ricochets and a quick-draw burst.',
-    tiers: ['+15% fire rate', 'Shots ricochet once', 'Quick-draw: 6 shots every 3 s', 'Each pistol fires two bolts', 'Quick-draw: 10 shots every 2 s, +1 ricochet'],
+    id: 'gunslinger', kind: 'path', hero: 'rook', name: 'gunslingerName', blurb: 'gunslingerBlurb',
+    tiers: ['gunslinger1', 'gunslinger2', 'gunslinger3', 'gunslinger4', 'gunslinger5'],
   },
   {
-    id: 'commander', kind: 'path', hero: 'rook', name: 'Commander', blurb: 'Squad troopers follow you and shoot.',
-    tiers: ['1 trooper joins', 'Troopers hit 30% harder and faster', '2 troopers', 'Troopers fire 2-shot bursts', '3 troopers'],
+    id: 'commander', kind: 'path', hero: 'rook', name: 'commanderName', blurb: 'commanderBlurb',
+    tiers: ['commander1', 'commander2', 'commander3', 'commander4', 'commander5'],
   },
   {
-    id: 'demolitions', kind: 'path', hero: 'rook', name: 'Demolitions', blurb: 'Drop timed charges behind you.',
-    tiers: ['A charge every 5 s', 'Charges hit 50% harder', 'Bigger blasts', 'Cluster: each blast throws 3 bomblets', 'A charge every 3 s, double damage'],
+    id: 'demolitions', kind: 'path', hero: 'rook', name: 'demolitionsName', blurb: 'demolitionsBlurb',
+    tiers: ['demolitions1', 'demolitions2', 'demolitions3', 'demolitions4', 'demolitions5'],
   },
   // Legionary TR-9
   {
-    id: 'suppressor', kind: 'path', hero: 'tr9', name: 'Suppressor', blurb: 'A cone of fire ahead that slows droids.',
-    tiers: ['Cone slows 30%', 'Cone slows 40%', 'Longer cone that burns', '+1 rifle bolt', 'Long cone, slows 55%, burns hot'],
+    id: 'suppressor', kind: 'path', hero: 'tr9', name: 'suppressorName', blurb: 'suppressorBlurb',
+    tiers: ['suppressor1', 'suppressor2', 'suppressor3', 'suppressor4', 'suppressor5'],
   },
   {
-    id: 'riot-shield', kind: 'path', hero: 'tr9', name: 'Riot Shield', blurb: 'A front shield that blocks, bashes and reflects.',
-    tiers: ['Blocks hits from the front', 'Shield bash every 2.5 s', 'Reflect: blocked droids and shells hurt', 'Wider shield, bash hits twice as hard', 'Bash every 1.2 s'],
+    id: 'riot-shield', kind: 'path', hero: 'tr9', name: 'riotShieldName', blurb: 'riotShieldBlurb',
+    tiers: ['riotShield1', 'riotShield2', 'riotShield3', 'riotShield4', 'riotShield5'],
   },
   {
-    id: 'drop-doctrine', kind: 'path', hero: 'tr9', name: 'Drop Doctrine', blurb: 'Sentry turrets and supply crates from orbit.',
-    tiers: ['A sentry turret every 12 s', 'A supply crate every 20 s', 'Turrets last 15 s, 2 at once', 'Turrets hit 60% harder', '3 turrets, one every 8 s'],
+    id: 'drop-doctrine', kind: 'path', hero: 'tr9', name: 'dropDoctrineName', blurb: 'dropDoctrineBlurb',
+    tiers: ['dropDoctrine1', 'dropDoctrine2', 'dropDoctrine3', 'dropDoctrine4', 'dropDoctrine5'],
   },
   // Corporal Bram-17
   {
-    id: 'marksman', kind: 'path', hero: 'bram', name: 'Marksman', blurb: 'Bolts pierce through the line.',
-    tiers: ['Bolts pierce 1 droid', '+25% damage', 'Pierce 3, 30% more range', 'Every 4th bolt is a heavy round', 'Pierce 5, +50% damage'],
+    id: 'marksman', kind: 'path', hero: 'bram', name: 'marksmanName', blurb: 'marksmanBlurb',
+    tiers: ['marksman1', 'marksman2', 'marksman3', 'marksman4', 'marksman5'],
   },
   {
-    id: 'jump-trooper', kind: 'path', hero: 'bram', name: 'Jump Trooper', blurb: 'Jetpack dashes that leave fire, and mini rockets.',
-    tiers: ['A jet dash every 5 s leaves fire', '2 mini rockets every 2 s', 'Dash every 3.5 s, hotter fire', '4 mini rockets', '6 mini rockets, dash every 2.5 s'],
+    id: 'jump-trooper', kind: 'path', hero: 'bram', name: 'jumpTrooperName', blurb: 'jumpTrooperBlurb',
+    tiers: ['jumpTrooper1', 'jumpTrooper2', 'jumpTrooper3', 'jumpTrooper4', 'jumpTrooper5'],
   },
   {
-    id: 'brothers', kind: 'path', hero: 'bram', name: 'Brothers in Arms', blurb: 'Identical brothers copy every shot.',
-    tiers: ['1 brother at 60% damage', 'Brothers at 80% damage', '2 brothers', 'Brothers at full damage', '3 brothers'],
+    id: 'brothers', kind: 'path', hero: 'bram', name: 'brothersName', blurb: 'brothersBlurb',
+    tiers: ['brothers1', 'brothers2', 'brothers3', 'brothers4', 'brothers5'],
   },
   // The Blaster pool
   {
-    id: 'ricochet', kind: 'pool', name: 'Ricochet Rounds', blurb: 'Bolts bounce on after a hit.',
-    tiers: ['1 bounce', '2 bounces', 'Bounced bolts +25% damage', '3 bounces', '4 bounces'],
+    id: 'ricochet', kind: 'pool', name: 'ricochetName', blurb: 'ricochetBlurb',
+    tiers: ['ricochet1', 'ricochet2', 'ricochet3', 'ricochet4', 'ricochet5'],
   },
   {
-    id: 'overcharge', kind: 'pool', name: 'Overcharge', blurb: 'Bolts pierce droids.',
-    tiers: ['Pierce 1', '+10% damage', 'Pierce 2', '+20% damage', 'Pierce 3'],
+    id: 'overcharge', kind: 'pool', name: 'overchargeName', blurb: 'overchargeBlurb',
+    tiers: ['overcharge1', 'overcharge2', 'overcharge3', 'overcharge4', 'overcharge5'],
   },
   {
-    id: 'thermal', kind: 'pool', name: 'Thermal Grenade', blurb: 'Lob grenades at nearby droids.',
-    tiers: ['A grenade every 4 s', 'Every 3.6 s, harder', 'Every 3.2 s, wider', 'Every 2.8 s, harder', 'Every 2.4 s, big blasts'],
+    id: 'thermal', kind: 'pool', name: 'thermalName', blurb: 'thermalBlurb',
+    tiers: ['thermal1', 'thermal2', 'thermal3', 'thermal4', 'thermal5'],
   },
   {
-    id: 'stun', kind: 'pool', name: 'Stun Rounds', blurb: 'Hits slow droids down.',
-    tiers: ['Slow 25%', 'Slow 30%', 'Slow 35% for longer', 'Slow 40%', 'Slow 50%'],
+    id: 'stun', kind: 'pool', name: 'stunName', blurb: 'stunBlurb',
+    tiers: ['stun1', 'stun2', 'stun3', 'stun4', 'stun5'],
   },
   {
-    id: 'reload', kind: 'pool', name: 'Quick Reload', blurb: 'Faster fire rate.',
-    tiers: ['+10% fire rate', '+20% fire rate', '+30% fire rate', '+40% fire rate', '+55% fire rate'],
+    id: 'reload', kind: 'pool', name: 'reloadName', blurb: 'reloadBlurb',
+    tiers: ['reload1', 'reload2', 'reload3', 'reload4', 'reload5'],
   },
   {
-    id: 'drone', kind: 'pool', name: 'Covering Drone', blurb: 'A drone circles you and shoots.',
-    tiers: ['1 drone', 'Fires faster', '2 drones', 'Fires faster again', '3 drones'],
+    id: 'drone', kind: 'pool', name: 'droneName', blurb: 'droneBlurb',
+    tiers: ['drone1', 'drone2', 'drone3', 'drone4', 'drone5'],
   },
   {
-    id: 'scatter', kind: 'pool', name: 'Scatter Shot', blurb: 'Extra bolts fan out from each shot.',
-    tiers: ['2 side bolts at 50% damage', 'Side bolts at 70%', 'Side bolts at 85%', '4 side bolts', 'Side bolts at full damage'],
+    id: 'scatter', kind: 'pool', name: 'scatterName', blurb: 'scatterBlurb',
+    tiers: ['scatter1', 'scatter2', 'scatter3', 'scatter4', 'scatter5'],
   },
   {
-    id: 'callin', kind: 'pool', name: 'Call-In', blurb: 'A supply crate crashes down on droids.',
-    tiers: ['A crate every 30 s', 'Every 27 s, harder', 'Every 24 s, harder', 'Every 21 s, harder', 'Every 18 s, harder'],
+    id: 'callin', kind: 'pool', name: 'callinName', blurb: 'callinBlurb',
+    tiers: ['callin1', 'callin2', 'callin3', 'callin4', 'callin5'],
   },
   // The Gear deck
-  { id: 'boots', kind: 'gear', name: 'Servo Boots', blurb: 'Walk faster.', tiers: ['+8% speed', '+16% speed', '+24% speed', '+32% speed', '+40% speed'] },
-  { id: 'magnet', kind: 'gear', name: 'Magnet Coil', blurb: 'Pull lumen shards from further away.', tiers: ['+30% pickup range', '+60%', '+90%', '+120%', '+150%'] },
-  { id: 'armour', kind: 'gear', name: 'Plate Armour', blurb: 'Take less damage, more health.', tiers: ['-8% damage, +10 health', '-16%, +20', '-24%, +30', '-32%, +40', '-40%, +50'] },
-  { id: 'overclock', kind: 'gear', name: 'Overclock', blurb: 'Shorter cooldowns.', tiers: ['-7% cooldowns', '-14%', '-21%', '-28%', '-35%'] },
-  { id: 'medpack', kind: 'gear', name: 'Medpack', blurb: 'Heal over time.', tiers: ['+0.5 health/s', '+1/s', '+1.5/s', '+2/s', '+2.5/s'] },
-  { id: 'cell', kind: 'gear', name: 'Power Cell', blurb: 'More damage.', tiers: ['+10% damage', '+20%', '+30%', '+40%', '+50%'] },
-  { id: 'lens', kind: 'gear', name: 'Lumen Lens', blurb: 'More from each lumen shard.', tiers: ['+10% XP', '+20%', '+30%', '+40%', '+50%'] },
-  { id: 'chip', kind: 'gear', name: 'Targeting Chip', blurb: 'Critical hits do double damage.', tiers: ['6% crit chance', '12%', '18%', '24%', '30%'] },
+  { id: 'boots', kind: 'gear', name: 'bootsName', blurb: 'bootsBlurb', tiers: ['boots1', 'boots2', 'boots3', 'boots4', 'boots5'] },
+  { id: 'magnet', kind: 'gear', name: 'magnetName', blurb: 'magnetBlurb', tiers: ['magnet1', 'magnet2', 'magnet3', 'magnet4', 'magnet5'] },
+  { id: 'armour', kind: 'gear', name: 'armourName', blurb: 'armourBlurb', tiers: ['armour1', 'armour2', 'armour3', 'armour4', 'armour5'] },
+  { id: 'overclock', kind: 'gear', name: 'overclockName', blurb: 'overclockBlurb', tiers: ['overclock1', 'overclock2', 'overclock3', 'overclock4', 'overclock5'] },
+  { id: 'medpack', kind: 'gear', name: 'medpackName', blurb: 'medpackBlurb', tiers: ['medpack1', 'medpack2', 'medpack3', 'medpack4', 'medpack5'] },
+  { id: 'cell', kind: 'gear', name: 'cellName', blurb: 'cellBlurb', tiers: ['cell1', 'cell2', 'cell3', 'cell4', 'cell5'] },
+  { id: 'lens', kind: 'gear', name: 'lensName', blurb: 'lensBlurb', tiers: ['lens1', 'lens2', 'lens3', 'lens4', 'lens5'] },
+  { id: 'chip', kind: 'gear', name: 'chipName', blurb: 'chipBlurb', tiers: ['chip1', 'chip2', 'chip3', 'chip4', 'chip5'] },
 ];
 
 export const UPGRADES: Record<string, UpgradeDef> = Object.fromEntries(defs.map((d) => [d.id, d]));
 export const UPGRADE_IDS = defs.map((d) => d.id);
 
 /** The card taken when nothing else is left to offer. */
-export const FILLER = { id: 'ration', name: 'Field Ration', text: 'Heal 30% of your health' } as const;
+export const FILLER: { id: 'ration'; name: TextKey; text: TextKey } = { id: 'ration', name: 'rationName', text: 'rationText' };
 
 export interface CapstoneDef {
   id: string;
-  name: string;
+  name: TextKey;
   hero: HeroId;
   path: string;
   gear: string;
-  text: string;
+  text: TextKey;
 }
 
 /** A path at tier 5 together with its gear piece (any tier) unlocks the path's capstone at once. */
 export const CAPSTONES: readonly CapstoneDef[] = [
-  { id: 'twin-storm', name: 'Twin Storm', hero: 'rook', path: 'gunslinger', gear: 'overclock', text: 'Both pistols fire every shot, +30% fire rate' },
-  { id: 'last-company', name: 'Last Company', hero: 'rook', path: 'commander', gear: 'armour', text: '5 troopers that hit 50% harder' },
-  { id: 'carpet-strike', name: 'Carpet Strike', hero: 'rook', path: 'demolitions', gear: 'magnet', text: 'A line of 6 blasts sweeps the thickest swarm every 6 s' },
-  { id: 'hailstorm', name: 'Hailstorm', hero: 'tr9', path: 'suppressor', gear: 'overclock', text: 'A ring of 12 bolts every 1.5 s, +2 rifle bolts' },
-  { id: 'phalanx', name: 'Phalanx', hero: 'tr9', path: 'riot-shield', gear: 'armour', text: 'Three shields orbit you, blocking and bashing' },
-  { id: 'orbital-drop', name: 'Orbital Drop', hero: 'tr9', path: 'drop-doctrine', gear: 'boots', text: 'Every 8 s a turret slams down on the swarm' },
-  { id: 'longshot', name: 'Longshot', hero: 'bram', path: 'marksman', gear: 'magnet', text: 'Bolts pierce everything, every 2nd is heavy' },
-  { id: 'skyfall', name: 'Skyfall', hero: 'bram', path: 'jump-trooper', gear: 'boots', text: 'Dashes land with a blast, twice the rockets' },
-  { id: 'the-batch', name: 'The Batch', hero: 'bram', path: 'brothers', gear: 'medpack', text: '5 brothers who also throw frags' },
+  { id: 'twin-storm', name: 'twinStormName', hero: 'rook', path: 'gunslinger', gear: 'overclock', text: 'twinStormText' },
+  { id: 'last-company', name: 'lastCompanyName', hero: 'rook', path: 'commander', gear: 'armour', text: 'lastCompanyText' },
+  { id: 'carpet-strike', name: 'carpetStrikeName', hero: 'rook', path: 'demolitions', gear: 'magnet', text: 'carpetStrikeText' },
+  { id: 'hailstorm', name: 'hailstormName', hero: 'tr9', path: 'suppressor', gear: 'overclock', text: 'hailstormText' },
+  { id: 'phalanx', name: 'phalanxName', hero: 'tr9', path: 'riot-shield', gear: 'armour', text: 'phalanxText' },
+  { id: 'orbital-drop', name: 'orbitalDropName', hero: 'tr9', path: 'drop-doctrine', gear: 'boots', text: 'orbitalDropText' },
+  { id: 'longshot', name: 'longshotName', hero: 'bram', path: 'marksman', gear: 'magnet', text: 'longshotText' },
+  { id: 'skyfall', name: 'skyfallName', hero: 'bram', path: 'jump-trooper', gear: 'boots', text: 'skyfallText' },
+  { id: 'the-batch', name: 'theBatchName', hero: 'bram', path: 'brothers', gear: 'medpack', text: 'theBatchText' },
 ];
 
 export interface CrossoverDef {
   id: string;
-  name: string;
+  name: TextKey;
   path: string;
   pool: string;
-  text: string;
+  text: TextKey;
 }
 
 /** A pool skill held with a fitting path (any tiers) gives a bonus. */
 export const CROSSOVERS: readonly CrossoverDef[] = [
-  { id: 'seeking-ricochets', name: 'Seeking Ricochets', path: 'gunslinger', pool: 'ricochet', text: 'Ricochets seek new targets' },
-  { id: 'stunning-bash', name: 'Stunning Bash', path: 'riot-shield', pool: 'stun', text: 'Shield bashes stun droids' },
-  { id: 'shoulder-to-shoulder', name: 'Shoulder to Shoulder', path: 'brothers', pool: 'scatter', text: 'Brothers fire cones' },
-  { id: 'cluster-grenades', name: 'Cluster Grenades', path: 'demolitions', pool: 'thermal', text: 'Grenades split into bomblets' },
+  { id: 'seeking-ricochets', name: 'seekingRicochetsName', path: 'gunslinger', pool: 'ricochet', text: 'seekingRicochetsText' },
+  { id: 'stunning-bash', name: 'stunningBashName', path: 'riot-shield', pool: 'stun', text: 'stunningBashText' },
+  { id: 'shoulder-to-shoulder', name: 'shoulderToShoulderName', path: 'brothers', pool: 'scatter', text: 'shoulderToShoulderText' },
+  { id: 'cluster-grenades', name: 'clusterGrenadesName', path: 'demolitions', pool: 'thermal', text: 'clusterGrenadesText' },
 ];
 
 /** The capstones a run's tiers and gear unlock. */

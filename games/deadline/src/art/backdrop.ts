@@ -1,4 +1,5 @@
-import type { UpgradeKind } from '../game/rules';
+import { UPGRADES, type UpgradeKind } from '../game/rules';
+import { t } from '../i18n';
 import type { ArtStyle } from '../game/save';
 import { burst, ink } from './comic';
 import { TAU, canvas, circle, mix, path, rgba, rng, type Ctx, type Pt } from './paint';
@@ -32,7 +33,6 @@ export interface BackdropInfo {
 }
 
 const SIDE = { w: 656, h: 1080 };
-const LABELS: Record<UpgradeKind, string> = { companion: 'COMPANION +1', damage: 'DAMAGE +1', rate: 'FIRE RATE', pierce: 'PIERCE +1' };
 const ROSTER = ['RAINES', 'OKAFOR', 'VOSS', 'IBARRA', 'KOWALSKI', 'NAKAMURA', 'DIALLO', 'REYES', 'LINDQVIST'];
 
 export class Backdrop {
@@ -294,9 +294,9 @@ function comicLeft(ctx: Ctx) {
   ctx.lineJoin = 'round';
   ctx.lineWidth = 8;
   ctx.strokeStyle = CINK;
-  ctx.strokeText('BLAM!', 440, 822);
+  ctx.strokeText(t('sfxBlam'), 440, 822);
   ctx.fillStyle = '#e8402a';
-  ctx.fillText('BLAM!', 440, 822);
+  ctx.fillText(t('sfxBlam'), 440, 822);
   ctx.restore();
 }
 
@@ -409,17 +409,17 @@ function captionBox(ctx: Ctx, x: number, y: number, rot: number, fill: string, l
 
 function comicLive(ctx: Ctx, d: BackdropInfo, left: boolean) {
   if (left) {
-    const head = d.over ? `NIGHT ${d.wave}. THE LINE FELL.` : `NIGHT ${d.wave}. THE OLD HIGHWAY.`;
-    const sub = d.over ? [`${d.kills} of them went down first.`, `Best night so far: ${d.best}.`] : ['Hold the sandbags. Nothing', 'gets past the line.'];
+    const head = t(d.over ? 'nightFell' : 'nightHighway', { wave: d.wave });
+    const sub = d.over ? [t('wentDownFirst', { kills: d.kills }), t('bestNight', { best: d.best })] : [t('holdSandbags'), t('getsPast')];
     captionBox(ctx, 70, 600, -0.02, '#ffe04a', [
       { s: head, size: 26, weight: 900 },
       { s: sub[0], size: 22, weight: 700 },
       { s: sub[1], size: 22, weight: 700 },
     ]);
   } else {
-    const boss = d.bossWave ? "IT'S HERE. SHOOT IT DOWN!" : d.bossNext ? 'NEXT WAVE: SOMETHING BIG...' : `SOMETHING BIG COMES AT WAVE ${d.nextBoss}...`;
+    const boss = d.bossWave ? t('bossHere') : d.bossNext ? t('bigNext') : t('bigAt', { wave: d.nextBoss });
     captionBox(ctx, 76, 440, 0.02, '#fff8e8', [{ s: boss, size: 22, weight: 900 }]);
-    const drop = d.inbound.length ? 'Supplies! Shoot it open!' : `Squad: ${d.squad} of ${d.maxSquad}. Hold on.`;
+    const drop = d.inbound.length ? t('suppliesInbound') : t('squadHoldOn', { squad: d.squad, max: d.maxSquad });
     captionBox(ctx, 66, 960, -0.03, '#ffe04a', [{ s: drop, size: 22, weight: 900 }]);
   }
 }
@@ -464,16 +464,16 @@ function nvStill(ctx: Ctx, L: Layout) {
   sides(ctx, L, (left) => {
     plate(ctx, 40, 40, 576, 1000);
     if (left) {
-      txt(ctx, 'OVERWATCH  CAM-2', 80, 96, { font: mono(24), color: PH, ls: 2, glow: '#7dff8a' });
-      txt(ctx, 'IR ILLUM  ON', 80, 182, { font: mono(18), color: DIM });
-      txt(ctx, 'GAIN  +18dB', 330, 182, { font: mono(18), color: DIM });
+      txt(ctx, t('consoleCam'), 80, 96, { font: mono(24), color: PH, ls: 2, glow: '#7dff8a' });
+      txt(ctx, t('consoleIr'), 80, 182, { font: mono(18), color: DIM });
+      txt(ctx, t('consoleGain'), 330, 182, { font: mono(18), color: DIM });
       ctx.fillStyle = '#1e2421';
       ctx.fillRect(80, 210, 496, 2);
       for (let i = 0; i < 5; i++) {
         ctx.fillStyle = i < 4 ? '#6adf78' : '#2a332d';
         ctx.fillRect(80 + i * 16, 262 - i * 8, 10, 12 + i * 8);
       }
-      txt(ctx, 'LINK 92%', 180, 262, { font: mono(18), color: DIM });
+      txt(ctx, t('consoleLink'), 180, 262, { font: mono(18), color: DIM });
       ctx.beginPath();
       ctx.roundRect(380, 246, 120, 30, 4);
       ctx.strokeStyle = '#6adf78';
@@ -520,15 +520,15 @@ function nvStill(ctx: Ctx, L: Layout) {
       ctx.stroke();
       ctx.setLineDash([]);
       circle(ctx, 205, 830, 7, '#6adf78');
-      txt(ctx, 'SQUAD', 222, 830, { font: mono(16), color: '#6adf78' });
-      txt(ctx, 'SECTOR 7 · HWY 41', 100, 352, { font: mono(16), color: '#5a7a62' });
+      txt(ctx, t('consoleSquad'), 222, 830, { font: mono(16), color: '#6adf78' });
+      txt(ctx, t('consoleSector'), 100, 352, { font: mono(16), color: '#5a7a62' });
       ctx.restore();
-      txt(ctx, 'KEEP THE ROAD CLEAR', 80, 990, { font: mono(16), color: '#4a6a52', ls: 3 });
+      txt(ctx, t('consoleKeepClear'), 80, 990, { font: mono(16), color: '#4a6a52', ls: 3 });
     } else {
-      txt(ctx, 'SUPPLY DROPS', 80, 560, { font: mono(20), color: PH, ls: 2 });
+      txt(ctx, t('consoleSupplies'), 80, 560, { font: mono(20), color: PH, ls: 2 });
       ctx.fillStyle = '#1e2421';
       ctx.fillRect(80, 848, 496, 2);
-      txt(ctx, 'NV-7 OVERWATCH SYSTEM', 80, 990, { font: mono(16), color: '#4a6a52', ls: 3 });
+      txt(ctx, t('consoleSystem'), 80, 990, { font: mono(16), color: '#4a6a52', ls: 3 });
     }
   });
   // The feed's bezel.
@@ -541,7 +541,7 @@ function nvLive(ctx: Ctx, d: BackdropInfo, left: boolean) {
   if (left) {
     const s = d.seconds, clock = [Math.floor(s / 3600), Math.floor(s / 60) % 60, s % 60].map((n) => String(n).padStart(2, '0')).join(':');
     circle(ctx, 86, 140, 7, d.over ? '#5a2a20' : '#ff4a2a');
-    txt(ctx, `${d.over ? 'FEED LOST' : 'REC'}  ${clock}`, 104, 141, { font: mono(20), color: '#ff9a7a' });
+    txt(ctx, `${t(d.over ? 'consoleFeedLost' : 'consoleRec')}  ${clock}`, 104, 141, { font: mono(20), color: '#ff9a7a' });
     // The horde on the strip map: one dot for every zombie on the road, along the highway.
     const rnd = rng(41);
     ctx.save();
@@ -549,23 +549,23 @@ function nvLive(ctx: Ctx, d: BackdropInfo, left: boolean) {
     ctx.rect(80, 320, 496, 560);
     ctx.clip();
     for (let i = 0; i < Math.min(d.horde, 60); i++) {
-      const t = 0.35 + rnd() * 0.55;
-      const x = 140 + 280 * t + (rnd() - 0.5) * 30 + 40, y = 900 - 470 * t + (rnd() - 0.5) * 20;
+      const along = 0.35 + rnd() * 0.55;
+      const x = 140 + 280 * along + (rnd() - 0.5) * 30 + 40, y = 900 - 470 * along + (rnd() - 0.5) * 20;
       circle(ctx, x, y, 3, '#ff8a5a');
     }
     ctx.restore();
-    txt(ctx, `HORDE ${d.horde}`, 420, 560, { font: mono(16), color: '#ff8a5a' });
+    txt(ctx, t('consoleHorde', { n: d.horde }), 420, 560, { font: mono(16), color: '#ff8a5a' });
     // Threat: how far into the night the squad is.
-    txt(ctx, 'THREAT', 80, 924, { font: mono(18), color: DIM });
+    txt(ctx, t('consoleThreat'), 80, 924, { font: mono(18), color: DIM });
     const lit = Math.min(12, 2 + d.wave + (d.bossWave ? 3 : 0));
     for (let i = 0; i < 12; i++) {
       ctx.fillStyle = i < lit ? mix('#6adf78', '#ff6a3a', i / 11) : '#26302b';
       ctx.fillRect(170 + i * 32, 912, 26, 22);
     }
-    txt(ctx, lit > 8 ? 'HIGH' : lit > 4 ? 'MED' : 'LOW', 576, 924, { font: mono(18), color: lit > 8 ? '#ff8a5a' : DIM, align: 'right' });
+    txt(ctx, t(lit > 8 ? 'consoleHigh' : lit > 4 ? 'consoleMed' : 'consoleLow'), 576, 924, { font: mono(18), color: lit > 8 ? '#ff8a5a' : DIM, align: 'right' });
     return;
   }
-  txt(ctx, `SQUAD  ${d.squad}/${d.maxSquad}`, 80, 96, { font: mono(24), color: PH, ls: 2, glow: '#7dff8a' });
+  txt(ctx, t('consoleSquadCount', { squad: d.squad, max: d.maxSquad }), 80, 96, { font: mono(24), color: PH, ls: 2, glow: '#7dff8a' });
   // The roster: the six slots that fit, the rest summed up on the last row.
   for (let i = 0; i < 6; i++) {
     const y = 150 + i * 62, on = i < d.squad;
@@ -578,8 +578,8 @@ function nvLive(ctx: Ctx, d: BackdropInfo, left: boolean) {
     ctx.stroke();
     circle(ctx, 106, y + 25, 7, on ? '#6adf78' : '#2f3a33');
     const more = i === 5 && d.squad > 6;
-    txt(ctx, more ? `+${d.squad - 5} MORE` : on ? ROSTER[i] : '—', 128, y + 25, { font: mono(19), color: on ? PH : '#3f4d44' });
-    txt(ctx, i === 0 ? 'LEAD' : on ? 'RIFLE' : 'OPEN SLOT', 556, y + 25, { font: mono(16), color: on ? DIM : '#3f4d44', align: 'right' });
+    txt(ctx, more ? t('consoleMore', { n: d.squad - 5 }) : on ? ROSTER[i] : '—', 128, y + 25, { font: mono(19), color: on ? PH : '#3f4d44' });
+    txt(ctx, t(i === 0 ? 'consoleLead' : on ? 'consoleRifle' : 'consoleOpenSlot'), 556, y + 25, { font: mono(16), color: on ? DIM : '#3f4d44', align: 'right' });
   }
   (['companion', 'damage', 'rate', 'pierce'] as UpgradeKind[]).forEach((k, i) => {
     const y = 600 + i * 56, col = UPGRADE_COLORS[k];
@@ -591,14 +591,14 @@ function nvLive(ctx: Ctx, d: BackdropInfo, left: boolean) {
     ctx.fillStyle = col;
     ctx.fill();
     ctx.restore();
-    txt(ctx, LABELS[k], 106, y + 24, { font: mono(19), color: PH });
-    const status = d.inbound.includes(k) ? 'INBOUND' : d.collected[k] ? `TAKEN x${d.collected[k]}` : '—';
+    txt(ctx, t(UPGRADES[k].label).toUpperCase(), 106, y + 24, { font: mono(19), color: PH });
+    const status = d.inbound.includes(k) ? t('consoleInbound') : d.collected[k] ? t('consoleTaken', { n: d.collected[k] }) : '—';
     txt(ctx, status, 556, y + 24, { font: mono(16), color: d.inbound.includes(k) ? AMB : DIM, align: 'right' });
   });
-  txt(ctx, `VOLLEY ${d.rate}`, 80, 890, { font: mono(20), color: DIM });
-  txt(ctx, `PIERCE ${d.pierce}`, 556, 890, { font: mono(20), color: DIM, align: 'right' });
-  txt(ctx, `DMG ${d.damage}`, 80, 930, { font: mono(20), color: DIM });
-  txt(ctx, `BEST WAVE ${d.best}`, 556, 930, { font: mono(20), color: AMB, align: 'right' });
+  txt(ctx, t('consoleVolley', { rate: d.rate }), 80, 890, { font: mono(20), color: DIM });
+  txt(ctx, t('consolePierce', { n: d.pierce }), 556, 890, { font: mono(20), color: DIM, align: 'right' });
+  txt(ctx, t('consoleDamage', { n: d.damage }), 80, 930, { font: mono(20), color: DIM });
+  txt(ctx, t('bestWaveCaps', { wave: d.best }), 556, 930, { font: mono(20), color: AMB, align: 'right' });
 }
 
 

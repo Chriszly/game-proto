@@ -2,18 +2,21 @@
 // guards. A stake line stands behind the barricade as a fallback, an oil pot burns the next group
 // of foes to reach the barricade, and a lookout widens Arrow Rain for a few waves.
 
+import type { TextKey } from '../i18n';
+
 export type FortId = 'stakes' | 'oil' | 'lookout';
 
 export interface FortType {
-  name: string;
-  text: string;
+  /** Name and text, keys of `i18n/en.ts`. */
+  name: TextKey;
+  text: TextKey;
   cost: number;
 }
 
 export const FORTS: Record<FortId, FortType> = {
-  stakes: { name: 'Stake line', text: 'A fallback line behind the barricade: once it falls, foes have to hack through 80 of stakes too', cost: 25 },
-  oil: { name: 'Oil pot', text: 'Bursts on the first foe to reach the barricade next wave: every foe near it burns', cost: 15 },
-  lookout: { name: 'Lookout', text: "Arrow Rain's ring is 40% wider for the next 3 waves", cost: 20 },
+  stakes: { name: 'fortStakesName', text: 'fortStakesText', cost: 25 },
+  oil: { name: 'fortOilName', text: 'fortOilText', cost: 15 },
+  lookout: { name: 'fortLookoutName', text: 'fortLookoutText', cost: 20 },
 };
 
 export const FORT_IDS = Object.keys(FORTS) as FortId[];

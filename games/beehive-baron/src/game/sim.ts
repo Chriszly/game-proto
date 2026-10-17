@@ -1,6 +1,6 @@
 import { byDifficulty } from '../../../../shared/settings';
 import { CONTRACTS_FROM, CONTRACT_BEES, CONTRACT_COINS_PER_BEE, CONTRACT_GAP_MS, CONTRACT_MS, OFFER_MS } from './contracts';
-import { CLASS_NAME, MEAD_POINTS, classesFor, fairGold, noEntries, type FairClass } from './fair';
+import { MEAD_POINTS, classesFor, fairGold, noEntries, type FairClass } from './fair';
 import { KINDS, type Kind } from './honey';
 import { REST_RATE, TIRE_MS, rested, unwilted } from './tired';
 import { CASK_JARS, CASK_MS, MAX_CASKS, MEAD_MULT } from './mead';
@@ -513,7 +513,7 @@ export function enterMead(s: GameState, i: number) {
 /** Keeps an entry's points for its classes, then judges: with every class in, gold's points win gold (and the first gold makes the Baron). */
 function enter(s: GameState, classes: FairClass[], score: number) {
   for (const k of classes) s.fair[k] = Math.max(s.fair[k] ?? -1, score);
-  s.events.push({ kind: 'entered', what: classes.map((k) => CLASS_NAME[k]).join(' and '), score });
+  s.events.push({ kind: 'entered', classes, score });
   const total = fairTotal(s);
   if (total === null) return;
   const gold = fairGold(s.fairs);

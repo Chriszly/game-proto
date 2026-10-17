@@ -21,6 +21,8 @@ import {
 import { settings } from '../../../../shared/settings';
 import { mountWatch, watching, watchSteps } from '../../../../shared/watch';
 import { renderScale, viewPoint } from '../../../../shared/scaling';
+// `tr` is the game's translator (`t` in the other files): `t` names the scene's text helpers here.
+import { t as tr } from '../i18n';
 import { BAR, BOARD, BUTTONS, FONT, KEEP, MAP_VIEW, PANEL_X, RIVALS_PANEL, RIVALS_TAB, ROLE_LABEL, SECTOR_STRIP, TOP, VIEW, type Button } from './layout';
 
 // Game time for one step at most, so a hidden tab doesn't jump the battle ahead.
@@ -37,6 +39,8 @@ const CARD_GAP = 8;
 const PAN_SPEED = 360;
 /** How far above an entity the hover label sits. */
 const LABEL_LIFT = 26;
+/** How wide the faction's name on the top bar may be before it shrinks, in view pixels. */
+const FACTION_W = 128;
 /** How long the gain flash by the crystal count stays up, in ms. */
 const FLASH_MS = 1600;
 /** Where each ship's engines sit behind its centre, and how long its exhaust flame is, in pixels. */
@@ -253,7 +257,7 @@ export class GameScene extends Phaser.Scene {
       tag: t(490, 10, 10, INK_CSS.cream, true),
       title: t(578, 9, 11, INK_CSS.chocolate, true),
       count: t(782, 9, 11, INK_CSS.chocolate, true).setOrigin(1, 0),
-      rivals: t(806, 10, 10, INK_CSS.mustard, true).setText('RIVALS'),
+      rivals: t(806, 10, 10, INK_CSS.mustard, true).setText(tr('rivalsTab')),
       rivalCount: t(950, 5, 17, INK_CSS.cream, true).setOrigin(1, 0),
     };
     const px = PANEL_X;
@@ -265,18 +269,18 @@ export class GameScene extends Phaser.Scene {
       count: t(px + 170, 506, 11, INK_CSS.green, true),
       reward: t(px + 222, 506, 11, INK_CSS.rust, true),
       perk: t(px + 8, 521, 10, INK_CSS.cocoa),
-      build: t(14, 448, 10, INK_CSS.mustard, true).setText('BUILD'),
+      build: t(14, 448, 10, INK_CSS.mustard, true).setText(tr('build')),
     };
     this.overlay = t(MAP_VIEW.x + MAP_VIEW.w / 2, MAP_VIEW.y + MAP_VIEW.h / 2, 44, INK_CSS.mustard, true, 30)
       .setOrigin(0.5).setAlign('center').setStroke(INK_CSS.chocolate, 8);
     // Tooltips: the hover label names a unit or building on the map; the tip describes a command button.
     this.tip = t(0, 0, 11, INK_CSS.chocolate, false, 25).setOrigin(0, 1).setPadding(7, 5, 7, 5).setBackgroundColor(INK_CSS.cream)
       .setWordWrapWidth(300).setVisible(false);
-    this.pickTitle = t(VIEW.w / 2, MAP_VIEW.y + 18, 22, INK_CSS.mustard, true, 21).setOrigin(0.5, 0).setText('CHOOSE YOUR FACTION')
+    this.pickTitle = t(VIEW.w / 2, MAP_VIEW.y + 18, 22, INK_CSS.mustard, true, 21).setOrigin(0.5, 0).setText(tr('chooseFaction'))
       .setStroke(INK_CSS.chocolate, 5);
     // The rivals panel: a header, a row per rival with its stance and up to two buttons, and a hint while an offer is open.
     const rp = RIVALS_PANEL;
-    this.rivalsHead = t(rp.x + 10, rp.y + 5, 11, INK_CSS.cream, true, 22).setText('RIVALS · truces and tribute · T closes');
+    this.rivalsHead = t(rp.x + 10, rp.y + 5, 11, INK_CSS.cream, true, 22).setText(tr('rivalsHead'));
     this.rivalTexts = FACTIONS.slice(1).map((_, k) => {
       const y = rp.y + rp.head + k * rp.row;
       return {
@@ -290,7 +294,7 @@ export class GameScene extends Phaser.Scene {
       .setBackgroundColor(INK_CSS.mustard).setVisible(false);
     this.pickTexts = this.pickCards.map((c) => {
       const def = FACTIONS[c.faction];
-      const name = t(c.x + 12, c.y + 8, 13, INK_CSS.cream, true, 21).setText(def.name.toUpperCase());
+      const name = t(c.x + 12, c.y + 8, 13, INK_CSS.cream, true, 21).setText(tr(def.name).toUpperCase());
       const body = t(c.x + 12, c.y + 150, 10, INK_CSS.chocolate, false, 21).setWordWrapWidth(c.w - 22)
         .setText(factionLines(def).join('\n')).setLineSpacing(1);
       return { name, body };
@@ -347,7 +351,7 @@ export class GameScene extends Phaser.Scene {
     }));
     this.pactBanner = t(8, TOP.h + 8, 11, INK_CSS.cream, true, 22).setPadding(8, 4, 8, 4).setBackgroundColor(INK_CSS.rust).setVisible(false);
     this.convoyLabel = this.onMap(this.text(0, 0, 10, INK_CSS.chocolate, true).setBackgroundColor(INK_CSS.mustard).setPadding(6, 3, 6, 3)
-      .setDepth(DEPTH.label).setVisible(false).setText('CONVOY FIELD'));
+      .setDepth(DEPTH.label).setVisible(false).setText(tr('convoyField')));
     const st = SECTOR_STRIP;
     this.sectorTexts = {
       title: t(st.x + 14, st.y + 8, 13, INK_CSS.mustard, true, 21),
@@ -402,7 +406,7 @@ export class GameScene extends Phaser.Scene {
       : new World(this.layout, faction, false, this.sector, keptFor(this.campaign, this.sector));
     this.picking = false;
     if (watching) {
-      const sides = Object.fromEntries(this.state.sides.map((s) => [String(s.index), { name: s.def.name, color: `#${s.def.color.toString(16).padStart(6, '0')}` }]));
+      const sides = Object.fromEntries(this.state.sides.map((s) => [String(s.index), { name: tr(s.def.name), color: `#${s.def.color.toString(16).padStart(6, '0')}` }]));
       mountWatch({ sides, time: () => this.state.elapsedMs });
     }
     this.reset();
@@ -649,8 +653,8 @@ export class GameScene extends Phaser.Scene {
       g.fillCircle(d.x, d.y, 4);
       const def = DERELICT_DEFS[d.perk];
       const pct = Math.round(d.claim * 100);
-      const who = d.owner === PLAYER ? 'Yours' : d.owner >= 0 ? `Held by ${s.sides[d.owner].def.name}` : `Hold ${pct}% · claim it`;
-      const text = `DERELICT · ${def.name.toUpperCase()}\n${who}`;
+      const who = d.owner === PLAYER ? tr('yours') : d.owner >= 0 ? tr('heldBy', { faction: tr(s.sides[d.owner].def.name) }) : tr('holdClaim', { pct });
+      const text = `${tr('derelictLabel', { name: tr(def.name).toUpperCase() })}\n${who}`;
       if (label.text !== text) label.setText(text);
       label.setVisible(!this.picking);
     });
@@ -666,7 +670,7 @@ export class GameScene extends Phaser.Scene {
     const rivals = s.sides.filter((r) => r.index !== PLAYER);
     const offer = rivals.find((r) => r.offerMs > 0);
     this.rivalsHint.setVisible(!this.rivalsOpen && !this.picking && !!offer);
-    if (offer) this.setText(this.rivalsHint, `${offer.def.name} offers a truce · ${Math.ceil(offer.offerMs / 1000)} s · press T`);
+    if (offer) this.setText(this.rivalsHint, tr('rivalOffers', { faction: tr(offer.def.name), s: Math.ceil(offer.offerMs / 1000) }));
     const show = this.rivalsOpen && !this.picking && !watching;
     this.rivalsHead.setVisible(show);
     this.rivalTexts.forEach((t) => [t.name, t.status, t.b1, t.b2].forEach((x) => x.setVisible(show)));
@@ -698,33 +702,33 @@ export class GameScene extends Phaser.Scene {
       g.fillCircle(rp.x + 13, y + 14, 5.5);
       g.lineStyle(1, INK.cocoa, 1);
       g.lineBetween(rp.x + 8, y + rp.row, rp.x + rp.w - 8, y + rp.row);
-      this.setText(t.name, r.def.name);
+      this.setText(t.name, tr(r.def.name));
       t.b1.setVisible(false);
       t.b2.setVisible(false);
       if (!r.alive) {
-        this.setText(t.status, 'Fallen');
+        this.setText(t.status, tr('fallen'));
         return;
       }
-      const grudge = r.grudge === PLAYER ? 'Grudge: you' : r.grudge >= 0 ? `Grudge: the ${s.sides[r.grudge].def.name}` : 'No grudge yet';
-      const lock = r.grudgeLockMs > 0 ? ` · held by tribute ${Math.ceil(r.grudgeLockMs / 1000)} s` : '';
+      const grudge = r.grudge === PLAYER ? tr('grudgeYou') : r.grudge >= 0 ? tr('grudgeAt', { faction: tr(s.sides[r.grudge].def.name) }) : tr('noGrudge');
+      const lock = r.grudgeLockMs > 0 ? tr('heldByTribute', { s: Math.ceil(r.grudgeLockMs / 1000) }) : '';
       t.status.setWordWrapWidth(r.offerMs > 0 ? rp.w - 196 : rp.w - 140);
       if (r.offerMs > 0) {
-        this.setText(t.status, `Offers a truce: ${TRUCE_MS / 1000} s of peace, +${TRUCE_TRIBUTE} crystal · ${Math.ceil(r.offerMs / 1000)} s`);
-        pill(rp.x + rp.w - 160, y + 12, 72, t.b1, 'ACCEPT', true, 'accept', r.index);
-        pill(rp.x + rp.w - 82, y + 12, 74, t.b2, 'DECLINE', true, 'decline', r.index);
+        this.setText(t.status, tr('offersTruce', { s: TRUCE_MS / 1000, n: TRUCE_TRIBUTE, left: Math.ceil(r.offerMs / 1000) }));
+        pill(rp.x + rp.w - 160, y + 12, 72, t.b1, tr('accept'), true, 'accept', r.index);
+        pill(rp.x + rp.w - 82, y + 12, 74, t.b2, tr('decline'), true, 'decline', r.index);
         return;
       }
       if (r.truceMs > 0) {
-        this.setText(t.status, `Truce: ${Math.ceil(r.truceMs / 1000)} s left. Attacking it breaks the truce.`);
+        this.setText(t.status, tr('truceLeft', { s: Math.ceil(r.truceMs / 1000) }));
         return;
       }
       if (s.pact) {
-        this.setText(t.status, 'In the last-stand pact: raids you with the other rivals');
+        this.setText(t.status, tr('inThePact'));
         return;
       }
       const target = s.bribeTarget(r.index);
-      this.setText(t.status, lock ? `${grudge}${lock}` : `${grudge}${target ? ` · tribute turns it on the ${target.def.name} for ${BRIBE_MS / 1000} s` : ''}`);
-      if (target) pill(rp.x + rp.w - 104, y + 12, 96, t.b1, `TRIBUTE ◆${BRIBE_COST}`, s.sides[PLAYER].crystal >= BRIBE_COST, 'bribe', r.index);
+      this.setText(t.status, lock ? `${grudge}${lock}` : `${grudge}${target ? tr('tributeTurns', { faction: tr(target.def.name), s: BRIBE_MS / 1000 }) : ''}`);
+      if (target) pill(rp.x + rp.w - 104, y + 12, 96, t.b1, tr('tribute', { n: BRIBE_COST }), s.sides[PLAYER].crystal >= BRIBE_COST, 'bribe', r.index);
     });
   }
 
@@ -794,9 +798,9 @@ export class GameScene extends Phaser.Scene {
     this.beaconGlow.setScale((bc.held ? 1.4 : 0.9) * pulse).setAlpha(bc.held ? 0.7 : 0.4);
     const pct = Math.round(bc.capture * 100);
     const status = bc.owner === PLAYER
-      ? bc.held ? `Yours: +${BEACON_PAY} crystal/s` : 'Yours: keep a ship here to earn'
-      : bc.owner >= 0 ? `Held by ${this.state.sides[bc.owner].def.name}` : `Hold it: +${BEACON_PAY} crystal/s`;
-    const label = `RELAY BEACON  ${pct}%\n${status}`;
+      ? bc.held ? tr('beaconYoursPaying', { n: BEACON_PAY }) : tr('beaconYours')
+      : bc.owner >= 0 ? tr('heldBy', { faction: tr(this.state.sides[bc.owner].def.name) }) : tr('beaconHold', { n: BEACON_PAY });
+    const label = `${tr('beaconLabel', { pct })}\n${status}`;
     if (this.beaconLabel.text !== label) this.beaconLabel.setText(label);
     this.beaconLabel.setPosition(bc.x + BEACON_RADIUS * 0.72, bc.y + BEACON_RADIUS * 0.55).setVisible(!this.picking);
   }
@@ -819,7 +823,7 @@ export class GameScene extends Phaser.Scene {
         img.setTexture(key);
       }
       const inSight = b.faction === PLAYER || this.state.fog.sees(b);
-      const floats = side.def.name === 'Solar Concord' && b.type === 'turret' && !settings.reduceMotion;
+      const floats = side.def.name === 'solarConcord' && b.type === 'turret' && !settings.reduceMotion;
       img.setPosition(b.x, b.y + (floats ? Math.sin(this.clock / 500 + b.id) * 1.6 : 0));
       img.setAlpha(!b.done ? 0.5 : b.disabledMs > 0 ? 0.45 : 1);
       const r = def.radius;
@@ -1036,7 +1040,7 @@ export class GameScene extends Phaser.Scene {
     const target = hit ? this.state.entityAt(hit.x, hit.y) : null;
     const derelict = hit && !target ? this.state.derelictAt(hit.x, hit.y) : null;
     if (derelict) {
-      const text = [`Derelict ${DERELICT_DEFS[derelict.perk].name} · Station`, ...derelictLines(derelict.perk)].join('\n');
+      const text = [tr('derelictHover', { name: tr(DERELICT_DEFS[derelict.perk].name) }), ...derelictLines(derelict.perk)].join('\n');
       if (label.text !== text) label.setText(text);
       label.setPosition(derelict.x, derelict.y - LABEL_LIFT).setVisible(true);
       return;
@@ -1051,14 +1055,15 @@ export class GameScene extends Phaser.Scene {
     if (target.kind === 'unit') {
       const u = this.state.unit(target.id)!;
       const rank = this.state.rankOf(u);
-      const name = u.flagship ? side.def.flagship.name : side.def.units[u.type].name;
-      const head = `${name} · ${rank ? `${VETERAN_NAMES[rank - 1]} ${'★'.repeat(rank)} · ` : ''}${ROLE_LABEL[u.flagship ? 'flagship' : u.type]} · ${Math.ceil(u.hp)}/${u.maxHp} hp`;
+      const name = tr(u.flagship ? side.def.flagship.name : side.def.units[u.type].name);
+      const hp = tr('hp', { hp: Math.ceil(u.hp), max: u.maxHp });
+      const head = `${name} · ${rank ? `${tr(VETERAN_NAMES[rank - 1])} ${'★'.repeat(rank)} · ` : ''}${tr(ROLE_LABEL[u.flagship ? 'flagship' : u.type])} · ${hp}`;
       text = [head, ...(u.flagship ? flagshipLines(side) : unitLines(side, u.type))].join('\n');
       at = u;
     } else {
       const b = this.state.building(target.id)!;
-      const name = b.expansion ? buildInfo(side, 'expansion').name : side.def.buildings[b.type].name;
-      const head = `${name} · ${ROLE_LABEL[b.expansion ? 'expansion' : b.type]} · ${Math.ceil(b.hp)}/${b.maxHp} hp`;
+      const name = b.expansion ? buildInfo(side, 'expansion').name : tr(side.def.buildings[b.type].name);
+      const head = `${name} · ${tr(ROLE_LABEL[b.expansion ? 'expansion' : b.type])} · ${tr('hp', { hp: Math.ceil(b.hp), max: b.maxHp })}`;
       text = [head, ...(b.expansion ? expansionLines(side) : buildingLines(side, b.type))].join('\n');
       at = b;
     }
@@ -1098,7 +1103,7 @@ export class GameScene extends Phaser.Scene {
         caption.name.setText(name).setFontSize(12);
         for (let size = 11; caption.name.width > b.w - 36 && size >= 9; size--) caption.name.setFontSize(size);
       }
-      const roleLine = `${ROLE_LABEL[b.key]} · ◆${cost}`;
+      const roleLine = tr('roleCost', { role: tr(ROLE_LABEL[b.key]), cost });
       if (caption.cost.text !== roleLine) caption.cost.setText(roleLine);
       caption.name.setColor(affordable ? INK_CSS.chocolate : INK_CSS.creamDim);
     });
@@ -1140,9 +1145,9 @@ export class GameScene extends Phaser.Scene {
     g.lineStyle(1.5, busy ? INK.tangerine : INK.cocoa, 1);
     g.strokeRoundedRect(b.x, b.y, b.w, b.h, round);
     const caption = this.captions[i];
-    this.setText(caption.name, TRACK_DEFS[track].name);
-    const sub = busy ? `Researching · ${Math.ceil(r.current!.left / 1000)} s`
-      : level >= RESEARCH_LEVELS ? 'Fully researched' : `Level ${level + 1} · ◆${cost}`;
+    this.setText(caption.name, tr(TRACK_DEFS[track].name));
+    const sub = busy ? tr('researching', { s: Math.ceil(r.current!.left / 1000) })
+      : level >= RESEARCH_LEVELS ? tr('fullyResearchedShort') : tr('levelCost', { level: level + 1, cost });
     this.setText(caption.cost, sub);
     caption.name.setColor(open || busy ? INK_CSS.chocolate : INK_CSS.cocoa);
   }
@@ -1173,17 +1178,17 @@ export class GameScene extends Phaser.Scene {
     const caption = this.captions[i];
     if (flagship) {
       const cost = flagshipStats(side).cost;
-      const text = flag.state === 'locked' ? `FLAGSHIP · contract ${FLAGSHIP_STEP} unlocks`
-        : flag.state === 'ready' ? `BUILD FLAGSHIP · ◆${cost}`
-        : flag.state === 'building' ? `FLAGSHIP · ${Math.ceil(flag.left / 1000)} s`
-        : flag.state === 'out' ? 'FLAGSHIP FLYING' : 'FLAGSHIP LOST';
+      const text = flag.state === 'locked' ? tr('flagshipUnlocks', { n: FLAGSHIP_STEP })
+        : flag.state === 'ready' ? tr('buildFlagship', { cost })
+        : flag.state === 'building' ? tr('flagshipBuildingShort', { s: Math.ceil(flag.left / 1000) })
+        : flag.state === 'out' ? tr('flagshipFlying') : tr('flagshipLostShort');
       this.setText(caption.name, text);
       this.setText(caption.cost, '');
       caption.name.setColor(on || flag.state === 'out' ? INK_CSS.chocolate : INK_CSS.cocoa);
       return;
     }
-    this.setText(caption.name, 'FALL BACK');
-    this.setText(caption.cost, on ? `${this.selected.size} selected · B` : 'Select ships · B');
+    this.setText(caption.name, tr('fallBack'));
+    this.setText(caption.cost, on ? tr('selectedB', { n: this.selected.size }) : tr('selectShipsB'));
     caption.name.setColor(on ? INK_CSS.chocolate : INK_CSS.cocoa);
   }
 
@@ -1203,7 +1208,7 @@ export class GameScene extends Phaser.Scene {
       : b.kind === 'command' ? fallBackLines()
       : b.key === 'expansion' ? expansionLines(side)
       : b.kind === 'build' ? buildingLines(side, b.key as Role) : unitLines(side, b.key as UnitId);
-    const text = [`${name} · ${ROLE_LABEL[b.key]}`, ...lines].join('\n');
+    const text = [`${name} · ${tr(ROLE_LABEL[b.key])}`, ...lines].join('\n');
     if (this.tip.text !== text) this.tip.setText(text);
     // Above the command bar, so the tip never covers the buttons it describes.
     this.tip.setPosition(Phaser.Math.Clamp(b.x, 4, VIEW.w - this.tip.width - 4), BAR.y - 6).setVisible(true);
@@ -1212,9 +1217,9 @@ export class GameScene extends Phaser.Scene {
   /** The caption and crystal cost a button shows for the player's faction. */
   buttonInfo(b: Button): { name: string; cost: number } {
     const side = this.state.sides[PLAYER];
-    if (b.kind === 'research') return { name: TRACK_DEFS[b.key as Track].name, cost: researchCost(side, b.key as Track) };
-    if (b.key === 'flagship') return { name: side.def.flagship.name, cost: flagshipStats(side).cost };
-    if (b.kind === 'command') return { name: 'Fall back', cost: 0 };
+    if (b.kind === 'research') return { name: tr(TRACK_DEFS[b.key as Track].name), cost: researchCost(side, b.key as Track) };
+    if (b.key === 'flagship') return { name: flagshipStats(side).name, cost: flagshipStats(side).cost };
+    if (b.kind === 'command') return { name: tr('fallBackName'), cost: 0 };
     if (b.kind === 'build') {
       const stats = buildInfo(side, b.key as Build);
       return { name: stats.name, cost: stats.cost };
@@ -1234,12 +1239,17 @@ export class GameScene extends Phaser.Scene {
     const h = this.hud;
     const g = this.uiGfx;
     const sec = Math.floor(s.elapsedMs / 1000);
-    this.setText(h.faction, this.picking ? 'SPACE WARS' : side.def.name.toUpperCase());
+    const faction = this.picking ? tr('gameTitle') : tr(side.def.name).toUpperCase();
+    if (h.faction.text !== faction) {
+      // A long name shrinks to stay clear of the crystal count.
+      h.faction.setText(faction).setFontSize(14);
+      for (let size = 13; h.faction.width > FACTION_W && size >= 10; size--) h.faction.setFontSize(size);
+    }
     this.setText(h.crystal, String(side.crystal));
     this.setText(h.gain, `+${this.flash.amount}`);
     h.gain.setVisible(this.flash.ms > 0).setX(h.crystal.x + h.crystal.width + 6);
-    this.setText(h.harvesters, `${s.count(PLAYER, 'harvester')} harvesters`);
-    this.setText(h.army, `${s.units.filter((u) => u.faction === PLAYER && u.type !== 'harvester').length} army`);
+    this.setText(h.harvesters, tr('harvesters', { n: s.count(PLAYER, 'harvester') }));
+    this.setText(h.army, tr('army', { n: s.units.filter((u) => u.faction === PLAYER && u.type !== 'harvester').length }));
     this.setText(h.clock, `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`);
 
     // The contract pill: a tangerine tag, then the contract's title, progress and reward on cream.
@@ -1252,16 +1262,16 @@ export class GameScene extends Phaser.Scene {
     g.lineStyle(1.5, INK.mustard, 1);
     g.strokeRoundedRect(482, 4, 308, 21, 10.5);
     if (c) {
-      this.setText(h.tag, `CONTRACT ${step + 1}/${CONTRACT_STEPS}`);
+      this.setText(h.tag, tr('contractTag', { step: step + 1, steps: CONTRACT_STEPS }));
       this.setText(h.title, c.title(side.def));
       this.setText(h.count, `${Math.floor(s.contract.progress)}/${c.target}  ◆+${c.reward}`);
     } else if (s.contract.offer.length) {
-      this.setText(h.tag, `CONTRACT ${step + 1}/${CONTRACT_STEPS}`);
-      this.setText(h.title, 'Pick one on the board');
-      this.setText(h.count, `${Math.ceil(s.contract.boardMs / 1000)} s`);
+      this.setText(h.tag, tr('contractTag', { step: step + 1, steps: CONTRACT_STEPS }));
+      this.setText(h.title, tr('pickOnBoard'));
+      this.setText(h.count, tr('seconds', { n: Math.ceil(s.contract.boardMs / 1000) }));
     } else {
-      this.setText(h.tag, 'CONTRACTS ✓');
-      this.setText(h.title, 'Every contract done: Rank V');
+      this.setText(h.tag, tr('contractsDoneTag'));
+      this.setText(h.title, tr('everyContractDone'));
       this.setText(h.count, '');
     }
     h.title.setFontSize(11);
@@ -1289,19 +1299,27 @@ export class GameScene extends Phaser.Scene {
     const side = s.sides[PLAYER];
     let line = this.message;
     if (this.picking) {
-      line = 'Tap a faction to command it. Tap an open sector below to fight there.';
+      line = tr('hintPick');
     } else if (this.placing === 'expansion') {
-      line = `Tap beside a far crystal field you have scouted to place the ${buildInfo(side, 'expansion').name}. Right-click to cancel.`;
+      line = tr('hintPlaceOutpost', { name: buildInfo(side, 'expansion').name });
     } else if (this.placing) {
-      line = `Tap the map to place the ${side.def.buildings[this.placing].name}. Right-click to cancel.`;
+      line = tr('hintPlace', { name: tr(side.def.buildings[this.placing].name) });
     } else if (!line) {
-      line = 'Tap or drag to select ships. Tap the ground to move, an enemy to attack. Harvesters work on their own.';
+      line = tr('hintPlay');
     }
     if (this.selected.size === 1) {
       const u = s.unit([...this.selected][0]);
-      if (u) line = `Selected: ${u.flagship ? side.def.flagship.name : side.def.units[u.type].name} (${ROLE_LABEL[u.flagship ? 'flagship' : u.type]}), hp ${Math.ceil(u.hp)}/${u.maxHp} · ${line}`;
+      if (u) {
+        line = tr('selectedOne', {
+          name: tr(u.flagship ? side.def.flagship.name : side.def.units[u.type].name),
+          role: tr(ROLE_LABEL[u.flagship ? 'flagship' : u.type]),
+          hp: Math.ceil(u.hp),
+          max: u.maxHp,
+          line,
+        });
+      }
     } else if (this.selected.size) {
-      line = `Selected: ${this.selected.size} ships · ${line}`;
+      line = tr('selectedMany', { n: this.selected.size, line });
     }
     this.setText(this.panel.line, line);
 
@@ -1319,36 +1337,36 @@ export class GameScene extends Phaser.Scene {
     const step = s.contract.index;
     const p = this.panel;
     if (c) {
-      this.setText(p.head, `CONTRACT ${step + 1} OF ${CONTRACT_STEPS}`);
-      this.setText(p.next, step + 1 < CONTRACT_STEPS ? 'Next: from the board' : 'Last contract');
+      this.setText(p.head, tr('contractHead', { step: step + 1, steps: CONTRACT_STEPS }));
+      this.setText(p.next, step + 1 < CONTRACT_STEPS ? tr('nextFromBoard') : tr('lastContract'));
       this.setText(p.brief, c.brief(side.def));
       const ratio = Math.min(1, s.contract.progress / c.target);
       g.fillStyle(INK.creamDim, 1);
       g.fillRoundedRect(x + 8, 509, 156, 8, 4);
       g.fillStyle(INK.green, 1);
       g.fillRoundedRect(x + 8, 509, Math.max(8, 156 * ratio), 8, 4);
-      this.setText(p.count, `${Math.floor(s.contract.progress)} / ${c.target}`);
-      this.setText(p.reward, `Reward ◆ +${c.reward}`);
-      this.setText(p.perk, `+ Rank ${RANKS[step]}: ${c.perk(side.def)}`);
+      this.setText(p.count, tr('progress', { n: Math.floor(s.contract.progress), target: c.target }));
+      this.setText(p.reward, tr('reward', { n: c.reward }));
+      this.setText(p.perk, tr('rankPerk', { rank: RANKS[step], perk: c.perk(side.def) }));
     } else if (s.contract.offer.length) {
-      this.setText(p.head, `CONTRACT ${step + 1} OF ${CONTRACT_STEPS} · THE BOARD`);
-      this.setText(p.next, `${Math.ceil(s.contract.boardMs / 1000)} s`);
-      this.setText(p.brief, 'Pick one of the two contracts on the map');
+      this.setText(p.head, tr('boardHead', { step: step + 1, steps: CONTRACT_STEPS }));
+      this.setText(p.next, tr('seconds', { n: Math.ceil(s.contract.boardMs / 1000) }));
+      this.setText(p.brief, tr('pickOfTwo'));
       this.setText(p.count, '');
       this.setText(p.reward, '');
-      this.setText(p.perk, `The first card is taken when the time runs out`);
+      this.setText(p.perk, tr('firstTaken'));
     } else {
-      this.setText(p.head, 'CONTRACTS COMPLETE');
+      this.setText(p.head, tr('contractsComplete'));
       this.setText(p.next, '');
-      this.setText(p.brief, 'All five contracts done. Finish the rival hubs.');
+      this.setText(p.brief, tr('allDone'));
       this.setText(p.count, '');
       this.setText(p.reward, '');
-      this.setText(p.perk, 'Rank V');
+      this.setText(p.perk, tr('rankFive'));
     }
 
     const end = s.watch && s.phase === 'won'
-      ? `${s.sides[s.winner]?.def.name.toUpperCase() ?? 'NOBODY'} WINS\nTap to watch another`
-      : s.phase === 'won' ? this.victoryText() : s.phase === 'lost' ? `DEFEAT\nTap to try sector ${s.sector + 1} again` : '';
+      ? tr('watchWins', { faction: s.sides[s.winner] ? tr(s.sides[s.winner].def.name).toUpperCase() : tr('nobody') })
+      : s.phase === 'won' ? this.victoryText() : s.phase === 'lost' ? tr('defeat', { n: s.sector + 1 }) : '';
     this.setText(this.overlay, end);
     this.overlay.setVisible(end !== '').setFontSize(this.keepCards.length ? 34 : 44)
       .setY(this.keepCards.length ? KEEP.y - 70 : MAP_VIEW.y + MAP_VIEW.h / 2);
@@ -1358,9 +1376,9 @@ export class GameScene extends Phaser.Scene {
   private victoryText() {
     const s = this.state;
     const last = s.sector >= SECTORS.length - 1;
-    const head = last ? 'CAMPAIGN WON' : `VICTORY · SECTOR ${s.sector + 1} WON`;
-    const next = last ? 'Every sector is yours' : `Sector ${s.sector + 2} is open`;
-    return this.keepCards.length ? `${head}\n${next} · keep one perk` : `${head}\n${next} · tap to go on`;
+    const head = last ? tr('campaignWon') : tr('victory', { n: s.sector + 1 });
+    const next = last ? tr('everySector') : tr('sectorOpen', { n: s.sector + 2 });
+    return tr(this.keepCards.length ? 'keepOne' : 'tapOn', { head, next });
   }
 
   /** The perks the player can keep after a campaign victory: one per contract done this battle. */
@@ -1390,7 +1408,7 @@ export class GameScene extends Phaser.Scene {
       g.lineStyle(2, INK.cocoa, 1);
       g.strokeRoundedRect(card.x, card.y, card.w, card.h, 10);
       const rank = RANKS[this.state.contract.done.indexOf(card.goal)];
-      this.setText(t.title, `KEEP RANK ${rank}`);
+      this.setText(t.title, tr('keepRank', { rank }));
       this.setText(t.sub, contractOf(card.goal).perk(side.def));
       t.title.setPosition(card.x + 16, card.y + 8);
       t.sub.setPosition(card.x + 16, card.y + 26);
@@ -1425,12 +1443,12 @@ export class GameScene extends Phaser.Scene {
       g.fillRect(card.x + 6, card.y + 8, 3, card.h - 16);
       g.lineStyle(2, k === 0 ? INK.tangerine : INK.cocoa, 1);
       g.strokeRoundedRect(card.x, card.y, card.w, card.h, 10);
-      this.setText(t.title, `${contract.title(def)}  ◆+${contract.reward}`);
-      this.setText(t.sub, `Rank ${RANKS[c.index]}: ${contract.perk(def)}\n${contract.brief(def).split(': ').slice(1).join(': ')}`);
+      this.setText(t.title, tr('boardTitle', { title: contract.title(def), n: contract.reward }));
+      this.setText(t.sub, tr('boardSub', { rank: RANKS[c.index], perk: contract.perk(def), task: contract.task() }));
       t.title.setPosition(card.x + 16, card.y + 7);
       t.sub.setPosition(card.x + 16, card.y + 25);
     });
-    if (show) this.setText(this.boardHead, `CONTRACT BOARD · RANK ${RANKS[c.index]} · tap one · the first in ${Math.ceil(c.boardMs / 1000)} s`);
+    if (show) this.setText(this.boardHead, tr('boardHeader', { rank: RANKS[c.index], s: Math.ceil(c.boardMs / 1000) }));
   }
 
   /** The last-stand pact's banner on the map's top left: the countdown to the rivals' next raid. */
@@ -1440,7 +1458,7 @@ export class GameScene extends Phaser.Scene {
     this.pactBanner.setVisible(show);
     if (!show) return;
     const sec = Math.ceil(pact.ms / 1000);
-    this.setText(this.pactBanner, `LAST-STAND PACT · ${pact.waves ? 'next raid' : 'raid'} in ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`);
+    this.setText(this.pactBanner, tr(pact.waves ? 'pactBannerNext' : 'pactBanner', { time: `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}` }));
   }
 
   /** The convoy contract: a mustard ring on the convoy's field and a dashed trail from each convoy harvester to it. */
@@ -1508,12 +1526,12 @@ export class GameScene extends Phaser.Scene {
     g.lineStyle(1.5, INK.mustard, 0.8);
     g.strokeRoundedRect(st.x, st.y, st.w, st.h, 10);
     const sector = SECTORS[this.sector];
-    this.setText(t.title, `SECTOR ${this.sector + 1} · ${sector.name.toUpperCase()}`);
+    this.setText(t.title, tr('sectorTitle', { n: this.sector + 1, name: tr(sector.name).toUpperCase() }));
     this.setText(t.body, sectorText(sector));
     // Before a faction is picked, a turret perk names the generic Turret.
-    const turret = FACTIONS[0].buildings.turret.name;
-    const kept = keptFor(c, this.sector).map((goal) => contractOf(goal).perk(FACTIONS[0]).replace(turret, 'Turret'));
-    this.setText(t.kept, kept.length ? `Kept perks: ${kept.join(' · ')}` : 'Win a sector to keep one of its contract perks for the sectors after it');
+    const turret = tr(FACTIONS[0].buildings.turret.name);
+    const kept = keptFor(c, this.sector).map((goal) => contractOf(goal).perk(FACTIONS[0]).replace(turret, tr('roleTurret')));
+    this.setText(t.kept, kept.length ? tr('keptPerks', { perks: kept.join(' · ') }) : tr('winToKeep'));
     const first = this.sectorNodes[0];
     const last = this.sectorNodes[this.sectorNodes.length - 1];
     g.lineStyle(3, INK.cocoa, 1);
@@ -1529,7 +1547,7 @@ export class GameScene extends Phaser.Scene {
       g.fillCircle(n.x, n.y, n.r);
       g.lineStyle(k === this.sector ? 3 : 1.5, k === this.sector ? INK.tangerine : INK.chocolate, 1);
       g.strokeCircle(n.x, n.y, k === this.sector ? n.r + 3 : n.r);
-      this.setText(t.names[k], `${k + 1} · ${SECTORS[k].name}`);
+      this.setText(t.names[k], tr('sectorNode', { n: k + 1, name: tr(SECTORS[k].name) }));
       t.names[k].setColor(open ? INK_CSS.cream : INK_CSS.creamDim);
     });
   }
@@ -1600,7 +1618,7 @@ export class GameScene extends Phaser.Scene {
         const reason = rb.action === 'accept' ? this.state.acceptTruce(rb.faction)
           : rb.action === 'decline' ? this.state.declineTruce(rb.faction) : this.state.bribe(rb.faction);
         if (reason) this.message = reason;
-        else if (rb.action === 'decline') this.message = `Truce declined`;
+        else if (rb.action === 'decline') this.message = tr('truceDeclined');
         return;
       }
       const rp = RIVALS_PANEL;
@@ -1619,7 +1637,7 @@ export class GameScene extends Phaser.Scene {
       if (problem) {
         this.message = problem;
       } else {
-        this.message = `${buildInfo(this.state.sides[PLAYER], this.placing).name} started`;
+        this.message = tr('started', { name: buildInfo(this.state.sides[PLAYER], this.placing).name });
         this.placing = null;
       }
       return;
@@ -1675,37 +1693,37 @@ export class GameScene extends Phaser.Scene {
     }
     if (!this.selected.size) return;
     if (!this.state.command([...this.selected], at.x, at.y)) {
-      this.message = 'Harvesters work on their own';
+      this.message = tr('harvestersOwn');
       return;
     }
     const bc = this.state.beacon;
     this.message = hit && hit.faction !== PLAYER
-      ? 'Attacking'
-      : Math.hypot(at.x - bc.x, at.y - bc.y) <= BEACON_RADIUS ? 'Moving to the relay beacon' : 'Moving';
+      ? tr('attacking')
+      : Math.hypot(at.x - bc.x, at.y - bc.y) <= BEACON_RADIUS ? tr('movingBeacon') : tr('moving');
   }
 
   /** A press on a command bar button: arm a building, or queue a unit. */
   private press(b: Button) {
     const { name, cost } = this.buttonInfo(b);
     if (b.key === 'flagship') {
-      this.message = this.state.buildFlagship() ?? `The ${name} is being built at your hub: ${FLAGSHIP_MS / 1000} s`;
+      this.message = this.state.buildFlagship() ?? tr('flagshipStarted', { name, s: FLAGSHIP_MS / 1000 });
       return;
     }
     if (b.kind === 'command') {
-      this.message = this.selected.size === 0 ? 'Select ships first, then Fall back'
-        : this.state.fallBack([...this.selected]) ? 'Falling back to repair' : 'Nowhere to fall back to';
+      this.message = this.selected.size === 0 ? tr('selectFirst')
+        : this.state.fallBack([...this.selected]) ? tr('fallingBack') : tr('nowhere');
       return;
     }
     if (b.kind === 'research') {
       const reason = this.state.research(b.key as Track);
-      this.message = reason ?? `${name} research started at the hub`;
+      this.message = reason ?? tr('researchStarted', { name });
       return;
     }
     if (b.kind === 'build') {
       if (this.placing === b.key) {
         this.placing = null;
       } else if (this.state.sides[PLAYER].crystal < cost) {
-        this.message = 'Not enough crystal';
+        this.message = tr('notEnoughCrystal');
       } else {
         this.placing = b.key as Build;
         this.message = '';
@@ -1713,6 +1731,6 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     const reason = this.state.train(b.key as UnitId);
-    this.message = reason ?? `${name} queued`;
+    this.message = reason ?? tr('queued', { name });
   }
 }

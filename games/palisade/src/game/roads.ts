@@ -1,20 +1,23 @@
 // The road choice: after each boss the hero picks the next road of ten waves from two, each with a
 // twist that makes it harder in one way and pays better in another. The first road has none.
 
+import type { TextKey } from '../i18n';
+
 export type RoadId = 'hardened' | 'crowded' | 'golden';
 
 export interface Road {
-  name: string;
+  /** Name, catch and reward, keys of `i18n/en.ts`. */
+  name: TextKey;
   /** The catch. */
-  harder: string;
+  harder: TextKey;
   /** The reward. */
-  better: string;
+  better: TextKey;
 }
 
 export const ROADS: Record<RoadId, Road> = {
-  hardened: { name: 'Hardened Road', harder: 'Foes have 30% more health', better: 'Its relic chest holds two relics' },
-  crowded: { name: 'Crowded Road', harder: '40% more foes in every wave', better: 'Foes give 30% more experience' },
-  golden: { name: 'Golden Road', harder: 'Foes walk 15% faster', better: 'Foes drop twice the coins' },
+  hardened: { name: 'hardenedName', harder: 'hardenedHarder', better: 'hardenedBetter' },
+  crowded: { name: 'crowdedName', harder: 'crowdedHarder', better: 'crowdedBetter' },
+  golden: { name: 'goldenName', harder: 'goldenHarder', better: 'goldenBetter' },
 };
 
 export const ROAD_IDS = Object.keys(ROADS) as RoadId[];
