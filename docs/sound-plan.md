@@ -566,6 +566,13 @@ Notes:
 - Ambience: wind in the pines.
 
 ### Riftblade (planned against PR #378)
+**Done.** Built on main after the heroes PR merged, as planned with these differences: the sim
+gets no `s.sfx` queue; `games/riftblade/src/audio/cues.ts` plays everything by comparing the state
+frame to frame (new entities by id, counts, phase). Each planet's song has its own calm part and
+shares tense, boss and pad parts moved into its key; the hero select, star map and trader share one
+90 BPM song. Elara and Triad-77 have their own shot and signature sounds. See
+`games/riftblade/AGENTS.md`, Sound.
+
 Survivor-style auto-attack roguelike in neon vector art; sci-fi and frantic.
 
 **Music:** Space-opera chiptune at 150-160 BPM, one key per world: Dune in D minor, Swamp in E
