@@ -224,8 +224,8 @@ Implemented today:
   faction within 260 px pulls it in at 220 px/s and banks it on contact (`salvaged` counts the
   player's). Shards fade after 45 s, and go with a fallen faction.
 - Floating numbers and one-off notices: `World.pops` (+8 and +3 over the map, aged in `update`) and
-  `World.events` (`notice` for the command bar, `gain` for the flash by the crystal count), which
-  the scene empties each frame.
+  `World.events` (`notice` for the command bar, `gain` for the flash by the crystal count, `hit` for
+  attack alerts and `cue` for a sound, see "Sound"), which the scene empties each frame.
 - Win: every rival hub gone. Lose: the player's hub gone. A fallen hub takes its faction's
   remaining units and buildings with it. A battle ends with a Victory or Defeat overlay; a tap starts
   a new map.
@@ -241,7 +241,7 @@ Implemented today:
 Missing or rough:
 
 - No pathfinding (units move in straight lines and pass over rocks), no unit
-  collision, no sound and no save.
+  collision and no save. No ambient hum under the music, and no per-faction music motif.
 - No edge scrolling: the map scrolls with the keys, a two-finger drag or the minimap.
 - The rivals' Barracks and Turrets are placed at random within 60 to 150 px of their hub.
 - Ships of a type spawn on the same spot and stack (no collision), so a fresh wing looks like one
@@ -271,6 +271,8 @@ File map (`src/`):
   Every text on screen, the notices and problems `World` returns and the Watch AI log go through
   `t` (`tr` in `GameScene`, where `t` names the text helper in `create`); game logic compares ids
   and keys, never shown text.
+- `audio.ts`: the game's sound (see "Sound" below): `SONG`, the `sfx` table, its `Sfx` names and
+  `LASER_PITCH`. Only `GameScene` imports it.
 - `main.ts`: creates the `Phaser.Game` (960x540, `Phaser.Scale.FIT`, `pixelArt: false`) with
   `GameScene`, calls `setupGame(game)` from `shared/setupGame.ts` and `setupScaling(game)` from
   `shared/scaling.ts`, and in dev builds puts `game` on `window`. The canvas has `renderScale`
@@ -315,7 +317,7 @@ File map (`src/`):
   `TRUCE_TRIBUTE`, `OFFER_MS`, `BRIBE_COST`, `BRIBE_MS`), `RALLY_SPOTS`, the flagship, convoy and pact constants
   (`FLAGSHIP_COST`, `FLAGSHIP_MS`, `FLAGSHIP_HP`, `FLAGSHIP_DAMAGE`, `FLAGSHIP_SPEED`, `FLAGSHIP_RANGE`,
   `CONVOY_SIZE`, `PACT_MS`, `PACT_WAVE_MS`), `flagshipStats` and the types `Beacon`, `Shard`, `Mine`,
-  `Pop`, `Build`, `ContractState`, `Pact`, `WorldEvent`, `Struck`, `Derelict`. Fields `fog`, `known`, `mines`,
+  `Pop`, `Build`, `ContractState`, `Pact`, `WorldEvent`, `Struck`, `Cue`, `Derelict`. Fields `fog`, `known`, `mines`,
   `derelicts`, `contract`, `convoyTo`, `pact`, `sector`. Methods the scene and test use: `update(dt)`, `build`, `train`, `research`,
   `command`, `fallBack`, `setRally`, `clearRally`, `fleet`, `pickContract`, `currentContract`, `buildFlagship`, `abilityOf`, `acceptTruce`, `declineTruce`, `bribe`, `bribeTarget`, `selectableIn`,
   `selectable`, `entityAt`, `derelictAt`, `placementProblem`, `count`, `hubOf`, `hubsOf`,
@@ -349,7 +351,8 @@ File map (`src/`):
   `tapMap`, `press` (buttons). Bars and drag boxes use view pixels; placement and commands use
   battlefield pixels, converted with `toWorld`.
 - `scenes/layout.ts`: `VIEW`, `TOP`, `BAR`, `MAP_VIEW` (the map's window on screen), `BUTTON`
-  (116 by 30), `BUTTONS` (each button's kind, `build`, `train` or `research`, key and top-left
+  (112 by 30), `GRID_X` (64: where the build and train rows start, leaving the bar's bottom-left
+  corner to the shared corner buttons), `BUTTONS` (each button's kind, `build`, `train` or `research`, key and top-left
   corner: four build buttons with Expansion last, four train buttons, and the research column),
   `RESEARCH_COLUMN`, `FALL_BACK_BUTTON` (kind `command`, key `fallback`, at the right of the message
   line), `FLAGSHIP_BUTTON` (kind `command`, key `flagship`, above the build row), `RALLY_BUTTON`
@@ -401,6 +404,60 @@ How it runs:
   backdrop.
 - Time is simulated, not read from the clock: `elapsedMs` is game time, used for the AI grace and
   the HUD clock.
+
+## Sound
+
+All sound is made in code by `shared/audio.ts`; the game's song and effects are in `src/audio.ts`,
+and only `GameScene` plays them. `World` has no audio: it pushes `WorldEvent`s of kind `cue` (a
+`Cue` name, and for `hubFalls` the hub's spot), which the scene drains with the notices and maps
+through `CUE_SOUND`. Every cue but `hubFalls` is the player's own, so the AI's builds, training and
+research make no sound.
+
+Music, `SONG`: a synth space opera in E minor at 120 BPM (pulse lead, thin pulse harmony arpeggios,
+sawtooth bass, drums). `GameScene.music` picks the part each frame and switches on a change:
+
+| Part | When |
+| --- | --- |
+| `menu` | the faction picker |
+| `calm` | the battle (half-time loop for the economy) |
+| `battle` | while an attack alert is live, and `BATTLE_TAIL_MS` (4 s) after; watching, once two factions are left |
+| `boss` | once the rivals have signed the last-stand pact |
+| `win`, `lose` | stings on Victory and Defeat (the music stops first) |
+| `end` | the neutral sting when a watched battle ends |
+
+Effects, `sfx` (the shared `ui('click')` for plain buttons and choices, `ui('refuse')` for every
+refused action: a build, train, research, flagship or contract the world turns down, a placement
+problem, a command or fall back with nothing to send, Space with no alert, Q with no fleet). Panning
+with the keys, two fingers or the minimap makes no sound:
+
+| Sound | Where it plays |
+| --- | --- |
+| `laser` | `GameScene.listen`: one per frame at most, from the new beams on screen and in sight, pitched by faction (`LASER_PITCH`) |
+| `boom`, `boomBig` | `listen`: the biggest new wreck, splash or mine ring in sight each frame (`BIG_BOOM` radius 22 and up is big); a rank-up's gold ring is skipped |
+| `hubFalls` | cue `hubFalls` (`removeDead`), only when the hub is in sight |
+| `select` | a tap or box that selects ships (`tapMap`, `onUp`), and the army tab or Q selecting the fleet (`selectFleet`; `ui('refuse')` with no warships) |
+| `move`, `attack` | a move or attack order (`tapMap`) |
+| `fallBack` | the Fall back button or B with ships sent (`press`) |
+| `place` | a building placed (`onDown`) |
+| `built` | cue `built` (`updateBuilding`, a player building finished) |
+| `queue` | a unit, research or the flagship queued (`press`) |
+| `warpIn` | cue `warpIn` (a player ship out of a Barracks, hub or held shipyard) |
+| `upgrade` | cues `researchDone` (`updateResearch`) and `rankUp` (`credit`) |
+| `crystal` | each `gain` event (salvage, tribute, a contract's reward) |
+| `stamp` | cue `contractStarted` (`startContract`: a card tapped or the board's timer) |
+| `contractDone`, `contractFailed` | cues from `updateContract` and `failContract` |
+| `won`, `lost` | cues for the beacon (`updateBeacon`), a derelict (`updateDerelict`, `loseDerelict`), a hacked turret (`takeOver`), and `lost` when a truce runs out |
+| `truceOffered`, `truceMade`, `truceBroken`, `tribute` | cues from `considerTruce`, `acceptTruce`, `command` (an attack on a rival under truce) and `bribe` |
+| `klaxon` | cue `klaxon`: the pact signed and each pact raid (`signPact`, `updatePact`), the convoy hunted (`launchConvoy`), the survive contract's raid |
+| `alert` | a new attack alert (`alarm`), once per alert, not on a refresh |
+| `whoosh` | the map jumps to an alert (`jumpToAlert`: Space or an edge arrow) |
+| `rally`, `rallyClear` | the rally point planted or taken down (`onDown` in rally mode) |
+| `flagshipReady`, `flagshipLaunch`, `flagshipLost` | cues from `updateContract` (third contract), `updateFlagship` and `removeDead` |
+
+Watching (`?watch`), the music plays, the lasers and wrecks play quieter, a hub falling in sight
+plays, and no cue of the player's side or `gain` plays. Under browser automation the engine makes
+no sound at all, and the cues change nothing in the battle, so the seeded playthrough plays as
+before.
 
 Screen scaling (`shared/scaling.ts`): lay out in view pixels from `layout.ts` (never
 `this.scale`, which is canvas pixels), read pointers through `viewPoint`, give a new camera its

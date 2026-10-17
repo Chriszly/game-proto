@@ -6,7 +6,7 @@ import { CONTRACT_STEPS, FLAGSHIP_STEP, RANKS, contractOf, type Goal } from '../
 import { SECTORS, keptFor, loadCampaign, saveCampaign, sectorText, winSector, type Campaign } from '../game/campaign';
 import {
   BEACON_PAY, BEACON_RADIUS, BRIBE_COST, BRIBE_MS, DERELICT_DEFS, DERELICT_RADIUS, EXPANSION_GAP, FLAGSHIP_MS, PLAYER, POP_MS, SENSOR_RANGE, TRUCE_MS,
-  TRUCE_TRIBUTE, VETERAN_NAMES, World, buildInfo, flagshipStats, researchCost, unitStats, type Build, type Derelict, type Struck,
+  TRUCE_TRIBUTE, VETERAN_NAMES, World, buildInfo, flagshipStats, researchCost, unitStats, type Build, type Cue, type Derelict, type Effect, type Struck,
 } from '../game/world';
 import {
   buildingLines, derelictLines, expansionLines, factionLines, fallBackLines, flagshipLines, rallyLines, researchLines, unitLines,
@@ -19,11 +19,13 @@ import {
   BACKDROP_KEY, BEACON_KEY, CRYSTAL_KEYS, GLOW_BLUE_KEY, GLOW_KEY, RES, SHARD_KEY, SHIP_ZOOM, bakeAll, bakeBackdrop, buildingKey, facing, flameKey, shipKey,
 } from '../art/textures';
 import { settings } from '../../../../shared/settings';
+import { playMusic, playSting, stopMusic, ui } from '../../../../shared/audio';
+import { LASER_PITCH, SONG, sfx, type Sfx } from '../audio';
 import { mountWatch, watching, watchSteps } from '../../../../shared/watch';
 import { renderScale, viewPoint } from '../../../../shared/scaling';
 // `tr` is the game's translator (`t` in the other files): `t` names the scene's text helpers here.
 import { t as tr } from '../i18n';
-import { ARMY_TAB, BAR, BOARD, BUTTONS, FONT, KEEP, MAP_VIEW, MINIMAP, PANEL_X, RIVALS_PANEL, RIVALS_TAB, ROLE_LABEL, SECTOR_STRIP, TOP, VIEW, type Button } from './layout';
+import { ARMY_TAB, BAR, BOARD, BUTTONS, FONT, GRID_X, KEEP, MAP_VIEW, MINIMAP, PANEL_X, RIVALS_PANEL, RIVALS_TAB, ROLE_LABEL, SECTOR_STRIP, TOP, VIEW, type Button } from './layout';
 
 // Game time for one step at most, so a hidden tab doesn't jump the battle ahead.
 const MAX_STEP_MS = 100;
@@ -90,6 +92,18 @@ const FLAGSHIP_GOLD = 0xffd36a;
  */
 const ALERT_NEAR = 160;
 const ALERT_MS = 8000;
+/** How long the battle music plays on after the last attack alert has ended, in ms of scene time. */
+const BATTLE_TAIL_MS = 4000;
+/** A wreck at least this big (its radius) makes the big explosion. */
+const BIG_BOOM = 22;
+
+/** The sound each of the world's cues plays (`hubFalls` is played apart, only when it is in sight). */
+const CUE_SOUND: Record<Exclude<Cue, 'hubFalls'>, Sfx> = {
+  built: 'built', warpIn: 'warpIn', researchDone: 'upgrade', rankUp: 'upgrade', contractStarted: 'stamp',
+  contractDone: 'contractDone', contractFailed: 'contractFailed', won: 'won', lost: 'lost', truceOffered: 'truceOffered',
+  truceMade: 'truceMade', truceBroken: 'truceBroken', tribute: 'tribute', klaxon: 'klaxon', flagshipReady: 'flagshipReady',
+  flagshipLaunched: 'flagshipLaunch', flagshipLost: 'flagshipLost',
+};
 const ALERT_COLOR = 0xff5a2c;
 /** How close to the rally flag a tap in rally mode takes it down, in battlefield pixels. */
 const RALLY_GRAB = 22;
@@ -199,6 +213,12 @@ export class GameScene extends Phaser.Scene {
   private lastFrame: number | null = null;
   /** Game time the scene has drawn, for the flicker of flames and the bob of floating pylons. */
   private clock = 0;
+  /** Beams and booms already heard, so each plays at most once. */
+  private heard = new WeakSet<Effect>();
+  /** The song's part playing now ('' when none), the scene time the battle music lasts to, and the phase last heard. */
+  private musicPart = '';
+  private battleUntil = 0;
+  private endPhase: World['phase'] = 'playing';
   private flash = { amount: 0, ms: 0 };
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
   private fixed!: Phaser.Cameras.Scene2D.Camera;
@@ -304,7 +324,7 @@ export class GameScene extends Phaser.Scene {
       count: t(px + 170, 506, 11, INK_CSS.green, true),
       reward: t(px + 222, 506, 11, INK_CSS.rust, true),
       perk: t(px + 8, 521, 10, INK_CSS.cocoa),
-      build: t(14, 448, 10, INK_CSS.mustard, true).setText(tr('build')),
+      build: t(GRID_X + 4, 448, 10, INK_CSS.mustard, true).setText(tr('build')),
     };
     this.overlay = t(MAP_VIEW.x + MAP_VIEW.w / 2, MAP_VIEW.y + MAP_VIEW.h / 2, 44, INK_CSS.mustard, true, 30)
       .setOrigin(0.5).setAlign('center').setStroke(INK_CSS.chocolate, 8);
@@ -350,9 +370,9 @@ export class GameScene extends Phaser.Scene {
         cost: t(b.x + 10, b.y + 14, 9, INK_CSS.rust),
       }
       : {
-        icon: this.onUi(this.add.image(b.x + 14, b.y + b.h / 2, '__WHITE').setDepth(12)),
-        name: t(b.x + 33, b.y + 3, 12, INK_CSS.chocolate, true),
-        cost: t(b.x + 33, b.y + 16, 10, INK_CSS.rust),
+        icon: this.onUi(this.add.image(b.x + 12, b.y + b.h / 2, '__WHITE').setDepth(12)),
+        name: t(b.x + 31, b.y + 3, 12, INK_CSS.chocolate, true),
+        cost: t(b.x + 31, b.y + 16, 10, INK_CSS.rust),
       };
     // The Flagship button, last in BUTTONS, gets its caption with the board's texts below.
     this.captions = BUTTONS.filter((b) => b.key !== 'flagship' && b.key !== 'rally').map(caption);
@@ -469,6 +489,8 @@ export class GameScene extends Phaser.Scene {
     this.rallyMode = false;
     this.alerts = [];
     this.edgeMarks = [];
+    this.endPhase = 'playing';
+    this.battleUntil = 0;
     this.miniDrag = false;
     this.drag = null;
     this.touchPan = null;
@@ -535,8 +557,14 @@ export class GameScene extends Phaser.Scene {
     for (const e of this.state.events.splice(0)) {
       if (e.kind === 'notice') this.message = e.text;
       else if (e.kind === 'hit') this.alarm(e.x, e.y, e.struck);
-      else this.flash = { amount: (this.flash.ms > 0 ? this.flash.amount : 0) + e.amount, ms: FLASH_MS };
+      else if (e.kind === 'cue') this.cue(e.cue, e.x, e.y);
+      else {
+        this.flash = { amount: (this.flash.ms > 0 ? this.flash.amount : 0) + e.amount, ms: FLASH_MS };
+        if (!watching) sfx('crystal');
+      }
     }
+    this.listen();
+    this.music();
     this.flash.ms = Math.max(0, this.flash.ms - dt);
     this.pan(dt);
     this.draw();
@@ -556,6 +584,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     this.alerts.push({ x, y, first: this.clock, last: this.clock, struck });
+    sfx('alert');
     const key = struck === 'harvester' ? 'alertHarvesters' : struck === 'ship' ? 'alertShips' : 'alertBuilding';
     this.message = tr(key);
   }
@@ -564,11 +593,85 @@ export class GameScene extends Phaser.Scene {
   private selectFleet() {
     this.selected = new Set(this.state.fleet());
     this.message = this.selected.size ? tr('fleetSelected', { n: this.selected.size }) : tr('noFleet');
+    if (this.selected.size) sfx('select');
+    else ui('refuse');
   }
 
   /** Centres the map on the latest attack alert (Space, or a tap on its edge arrow). */
   private jumpToAlert(a = this.alerts[this.alerts.length - 1]) {
-    if (a) this.centreOn(a.x, a.y);
+    if (!a) return ui('refuse');
+    this.centreOn(a.x, a.y);
+    sfx('whoosh');
+  }
+
+  /** Whether a battlefield point is on screen (with a margin) and in the player's sight. */
+  private inSight(x: number, y: number, margin = 24) {
+    const c = this.camera;
+    const on = x >= c.scrollX - margin && x <= c.scrollX + MAP_VIEW.w + margin && y >= c.scrollY - margin && y <= c.scrollY + MAP_VIEW.h + margin;
+    return on && (this.state.watch || this.state.fog.sees({ x, y }));
+  }
+
+  /** A sound for one of the world's cues: the player's own, or a hub falling in sight. A watched battle plays only the hubs. */
+  private cue(cue: Cue, x = 0, y = 0) {
+    if (cue === 'hubFalls') {
+      if (this.inSight(x, y, 60)) sfx('hubFalls', { volume: watching ? 0.6 : 1 });
+    } else if (!watching) sfx(CUE_SOUND[cue]);
+  }
+
+  /**
+   * One laser and one explosion a frame at most, from the shots and wrecks new since the last frame
+   * that are in sight: a volley sounds once, and fights off screen or in the fog stay quiet.
+   */
+  private listen() {
+    const s = this.state;
+    let shot: Effect | null = null;
+    for (const b of s.beams) {
+      if (this.heard.has(b)) continue;
+      this.heard.add(b);
+      if (!shot && (this.inSight(b.x, b.y) || this.inSight(b.x2 ?? b.x, b.y2 ?? b.y))) shot = b;
+    }
+    let boom: Effect | null = null;
+    for (const b of s.booms) {
+      if (this.heard.has(b)) continue;
+      this.heard.add(b);
+      // A rank-up's gold ring is no explosion: it has its own sound.
+      if (b.color === 0xffd36a && b.r === 14) continue;
+      if (this.inSight(b.x, b.y) && (!boom || (b.r ?? 0) > (boom.r ?? 0))) boom = b;
+    }
+    const quiet = watching ? 0.45 : 1;
+    if (shot) {
+      const f = FACTIONS.findIndex((d) => d.color === shot.color);
+      sfx('laser', { pitch: LASER_PITCH[f] ?? 1, volume: quiet });
+    }
+    if (boom) sfx((boom.r ?? 0) >= BIG_BOOM ? 'boomBig' : 'boom', { volume: quiet });
+    if (!this.picking && s.phase !== this.endPhase) {
+      this.endPhase = s.phase;
+      if (s.phase !== 'playing') {
+        stopMusic();
+        this.musicPart = '';
+        playSting(SONG, s.watch ? 'end' : s.phase === 'won' ? 'win' : 'lose');
+      }
+    }
+  }
+
+  /**
+   * The music for what is on: the picker's theme, the calm loop, the battle while an attack alert is
+   * live (and a little after), and the last stand once the pact is signed. Watching, the battle
+   * part comes in once two factions are left.
+   */
+  private music() {
+    const s = this.state;
+    let part = '';
+    if (this.picking) part = 'menu';
+    else if (s.phase === 'playing') {
+      if (this.alerts.length) this.battleUntil = this.clock + BATTLE_TAIL_MS;
+      if (s.watch) part = s.sides.filter((side) => side.alive).length <= 2 ? 'battle' : 'calm';
+      else part = s.pact ? 'boss' : this.clock < this.battleUntil ? 'battle' : 'calm';
+    }
+    if (part && part !== this.musicPart) {
+      this.musicPart = part;
+      playMusic(SONG, part);
+    }
   }
 
   /** The battlefield point under a view pixel, from the map camera's scroll and viewport. */
@@ -618,7 +721,10 @@ export class GameScene extends Phaser.Scene {
     if (!this.picking && !watching) {
       // B falls the selection back (F is the shared full screen key); T opens and closes the rivals panel.
       if (Phaser.Input.Keyboard.JustDown(k.B)) this.press(BUTTONS.find((b) => b.key === 'fallback')!);
-      if (Phaser.Input.Keyboard.JustDown(k.T)) this.rivalsOpen = !this.rivalsOpen;
+      if (Phaser.Input.Keyboard.JustDown(k.T)) {
+        this.rivalsOpen = !this.rivalsOpen;
+        ui('click');
+      }
     }
   }
 
@@ -1319,19 +1425,23 @@ export class GameScene extends Phaser.Scene {
       g.fillStyle(active ? INK.mustard : affordable ? INK.cream : INK.creamDim, 1);
       g.fillRoundedRect(b.x, b.y, b.w, b.h, round);
       g.fillStyle(INK.tangerine, 1);
-      g.fillRect(b.x + 26, b.y, 3, b.h);
+      g.fillRect(b.x + 24, b.y, 3, b.h);
       g.fillStyle(INK.mustard, 1);
-      g.fillRect(b.x + 29, b.y, 2, b.h);
+      g.fillRect(b.x + 27, b.y, 2, b.h);
       g.lineStyle(1.5, active ? INK.tangerine : INK.cocoa, 1);
       g.strokeRoundedRect(b.x, b.y, b.w, b.h, round);
       const caption = this.captions[i];
       caption.icon.setAlpha(affordable ? 1 : 0.55);
       if (caption.name.text !== name) {
         caption.name.setText(name).setFontSize(12);
-        for (let size = 11; caption.name.width > b.w - 36 && size >= 9; size--) caption.name.setFontSize(size);
+        for (let size = 11; caption.name.width > b.w - 35 && size >= 9; size--) caption.name.setFontSize(size);
       }
       const roleLine = tr('roleCost', { role: tr(ROLE_LABEL[b.key]), cost });
-      if (caption.cost.text !== roleLine) caption.cost.setText(roleLine);
+      if (caption.cost.text !== roleLine) {
+        // A long role line (a big cost, or German) shrinks to stay inside the pill.
+        caption.cost.setText(roleLine).setFontSize(10);
+        if (caption.cost.width > b.w - 35) caption.cost.setFontSize(9);
+      }
       caption.name.setColor(affordable ? INK_CSS.chocolate : INK_CSS.creamDim);
     });
     this.drawTip();
@@ -1830,6 +1940,7 @@ export class GameScene extends Phaser.Scene {
         this.campaign = winSector(this.campaign, this.state.sector, keep?.goal ?? null);
         saveCampaign(this.campaign);
       }
+      ui('click');
       this.newGame();
       return;
     }
@@ -1844,10 +1955,14 @@ export class GameScene extends Phaser.Scene {
     if (watching) return;
     if (this.picking) {
       const card = this.pickCards.find(inside);
-      if (card) this.startBattle(card.faction);
+      if (card) {
+        ui('click');
+        this.startBattle(card.faction);
+      }
       // An open sector's node picks where the next battle is fought, on a map of its own.
       const node = this.sectorNodes.find((n) => Math.hypot(p.x - n.x, p.y - n.y) <= n.r + 6);
       if (node && node.sector < this.campaign.unlocked && node.sector !== this.sector) {
+        ui('click');
         this.sector = node.sector;
         this.makeMap();
       }
@@ -1857,7 +1972,10 @@ export class GameScene extends Phaser.Scene {
     const contract = this.boardCards.find(inside);
     if (contract) {
       const reason = this.state.pickContract(contract.goal);
-      if (reason) this.message = reason;
+      if (reason) {
+        this.message = reason;
+        ui('refuse');
+      }
       return;
     }
     if (pointer.rightButtonDown()) {
@@ -1875,6 +1993,7 @@ export class GameScene extends Phaser.Scene {
     // The rivals area of the top bar opens the panel; its buttons answer offers and pay tribute.
     if (p.y < TOP.h && p.x >= RIVALS_TAB.x) {
       this.rivalsOpen = !this.rivalsOpen;
+      ui('click');
       return;
     }
     if (this.rivalsOpen) {
@@ -1882,8 +2001,13 @@ export class GameScene extends Phaser.Scene {
       if (rb) {
         const reason = rb.action === 'accept' ? this.state.acceptTruce(rb.faction)
           : rb.action === 'decline' ? this.state.declineTruce(rb.faction) : this.state.bribe(rb.faction);
-        if (reason) this.message = reason;
-        else if (rb.action === 'decline') this.message = tr('truceDeclined');
+        if (reason) {
+          this.message = reason;
+          ui('refuse');
+        } else if (rb.action === 'decline') {
+          this.message = tr('truceDeclined');
+          ui('click');
+        }
         return;
       }
       const rp = RIVALS_PANEL;
@@ -1909,9 +2033,11 @@ export class GameScene extends Phaser.Scene {
       if (rally && Math.hypot(rally.x - at.x, rally.y - at.y) <= RALLY_GRAB) {
         this.state.clearRally();
         this.message = tr('rallyCleared');
+        sfx('rallyClear');
       } else {
         this.state.setRally(at.x, at.y);
         this.message = tr('rallyPlanted');
+        sfx('rally');
       }
       return;
     }
@@ -1920,9 +2046,11 @@ export class GameScene extends Phaser.Scene {
       const problem = this.state.build(this.placing, at.x, at.y);
       if (problem) {
         this.message = problem;
+        ui('refuse');
       } else {
         this.message = tr('started', { name: buildInfo(this.state.sides[PLAYER], this.placing).name });
         this.placing = null;
+        sfx('place');
       }
       return;
     }
@@ -1970,6 +2098,7 @@ export class GameScene extends Phaser.Scene {
       const b = this.toWorld(p.x, p.y);
       this.selected = new Set(this.state.selectableIn(a.x, a.y, b.x, b.y));
       this.message = '';
+      if (this.selected.size) sfx('select');
       return;
     }
     if (this.inMap(p.x, p.y)) this.tapMap(p.x, p.y);
@@ -1982,15 +2111,19 @@ export class GameScene extends Phaser.Scene {
     if (hit?.kind === 'unit' && hit.faction === PLAYER && this.state.selectable(hit.id)) {
       this.selected = new Set([hit.id]);
       this.message = '';
+      sfx('select');
       return;
     }
     if (!this.selected.size) return;
     if (!this.state.command([...this.selected], at.x, at.y)) {
       this.message = tr('harvestersOwn');
+      ui('refuse');
       return;
     }
     const bc = this.state.beacon;
-    this.message = hit && hit.faction !== PLAYER
+    const attack = !!hit && hit.faction !== PLAYER;
+    sfx(attack ? 'attack' : 'move');
+    this.message = attack
       ? tr('attacking')
       : Math.hypot(at.x - bc.x, at.y - bc.y) <= BEACON_RADIUS ? tr('movingBeacon') : tr('moving');
   }
@@ -2002,35 +2135,48 @@ export class GameScene extends Phaser.Scene {
       this.rallyMode = !this.rallyMode;
       this.placing = null;
       if (this.rallyMode) this.message = tr('rallyHow');
+      ui('click');
       return;
     }
     if (b.key === 'flagship') {
-      this.message = this.state.buildFlagship() ?? tr('flagshipStarted', { name, s: FLAGSHIP_MS / 1000 });
+      const reason = this.state.buildFlagship();
+      this.message = reason ?? tr('flagshipStarted', { name, s: FLAGSHIP_MS / 1000 });
+      if (reason) ui('refuse');
+      else sfx('queue');
       return;
     }
     if (b.kind === 'command') {
-      this.message = this.selected.size === 0 ? tr('selectFirst')
-        : this.state.fallBack([...this.selected]) ? tr('fallingBack') : tr('nowhere');
+      const sent = this.selected.size > 0 && this.state.fallBack([...this.selected]);
+      this.message = this.selected.size === 0 ? tr('selectFirst') : sent ? tr('fallingBack') : tr('nowhere');
+      if (sent) sfx('fallBack');
+      else ui('refuse');
       return;
     }
     if (b.kind === 'research') {
       const reason = this.state.research(b.key as Track);
       this.message = reason ?? tr('researchStarted', { name });
+      if (reason) ui('refuse');
+      else sfx('queue');
       return;
     }
     if (b.kind === 'build') {
       if (this.placing === b.key) {
         this.placing = null;
+        ui('click');
       } else if (this.state.sides[PLAYER].crystal < cost) {
         this.message = tr('notEnoughCrystal');
+        ui('refuse');
       } else {
         this.placing = b.key as Build;
         this.rallyMode = false;
         this.message = '';
+        ui('click');
       }
       return;
     }
     const reason = this.state.train(b.key as UnitId);
     this.message = reason ?? tr('queued', { name });
+    if (reason) ui('refuse');
+    else sfx('queue');
   }
 }

@@ -750,6 +750,14 @@ a gust rather than a steady ambience.
 ### Space Wars
 Five-faction real-time strategy on a star map; pulpy 1970s sci-fi.
 
+**Done** (see `games/space-wars/AGENTS.md`, "Sound"). As built: one song at 120 BPM with the parts
+`menu` (picker), `calm` (a half-time loop rather than 104 BPM), `battle` (while an attack alert is
+live), `boss` (the last-stand pact) and the stings `win`, `lose` and `end` (watch mode). The world
+reports `cue` events and the scene plays them. Added since this plan: an alarm per new attack
+alert, a whoosh on jumping to one, and a flag sound for the rally point. Left out: the board's
+own "static and beep" (the contract jingle or error tone plays as it opens), the faction motifs
+and the ambient hum. The build and train rows start at x 64, clear of the corner buttons.
+
 **Music:** Synth space opera at about 120 BPM in E minor, with a pulse lead with vibrato, a
 buzzy bass and toms.
 - Opening economy: a slower loop at about 104 BPM.

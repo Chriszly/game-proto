@@ -399,7 +399,17 @@ export type Struck = 'harvester' | 'ship' | 'building';
 export type WorldEvent =
   | { kind: 'notice'; text: string }
   | { kind: 'gain'; amount: number }
-  | { kind: 'hit'; x: number; y: number; struck: Struck };
+  | { kind: 'hit'; x: number; y: number; struck: Struck }
+  | { kind: 'cue'; cue: Cue; x?: number; y?: number };
+
+/**
+ * Something the scene plays a sound for (the world has no audio of its own). All are the player's,
+ * except `hubFalls`, which comes with the hub's spot for any faction.
+ */
+export type Cue =
+  | 'built' | 'warpIn' | 'researchDone' | 'rankUp' | 'contractStarted' | 'contractDone' | 'contractFailed'
+  | 'won' | 'lost' | 'truceOffered' | 'truceMade' | 'truceBroken' | 'tribute' | 'klaxon'
+  | 'flagshipReady' | 'flagshipLaunched' | 'flagshipLost' | 'hubFalls';
 
 /** Anything that can fire a shot. */
 type Shooter = Unit | Building | Derelict;
@@ -786,6 +796,7 @@ export class World {
       const side = this.sides[target.faction];
       side.truceMs = 0;
       side.grudge = PLAYER;
+      this.cue('truceBroken');
       this.events.push({ kind: 'notice', text: t('truceBroken', { faction: t(side.def.name) }) });
     }
     // A wing sent to one point fans out round it (RALLY_SPOTS) rather than stacking on it.
@@ -862,6 +873,7 @@ export class World {
       if (target && this.atPeace(u.faction, target.faction)) u.order = null;
     }
     this.events.push({ kind: 'gain', amount: tribute });
+    this.cue('truceMade');
     this.events.push({ kind: 'notice', text: t('truceMade', { faction: t(side.def.name), s: TRUCE_MS / 1000, n: tribute }) });
     return null;
   }
@@ -906,6 +918,7 @@ export class World {
       const t = this.unit(u.order.id) ?? this.building(u.order.id);
       if (t?.faction === PLAYER && hub) u.order = { kind: 'attack', id: hub.id, auto: false };
     }
+    this.cue('tribute');
     this.events.push({ kind: 'notice', text: t('tributePaid', { faction: t(side.def.name), target: t(target.def.name), s: BRIBE_MS / 1000 }) });
     return null;
   }
@@ -1019,7 +1032,10 @@ export class World {
   private updateBuilding(b: Building, dt: number) {
     if (!b.done) {
       b.buildLeft -= dt;
-      if (b.buildLeft <= 0) b.done = true;
+      if (b.buildLeft <= 0) {
+        b.done = true;
+        if (b.faction === PLAYER) this.cue('built');
+      }
       return;
     }
     const side = this.sides[b.faction];
@@ -1032,6 +1048,7 @@ export class World {
         const unit = this.spawn(b.faction, type, b.x, b.y + buildingStats(side, b.type).radius + 14);
         if (type === 'harvester') unit.home = b.id;
         else this.toRally(unit);
+        if (b.faction === PLAYER) this.cue('warpIn');
       }
     }
     if (b.disabledMs > 0) {
@@ -1187,9 +1204,11 @@ export class World {
         d.capturer = f;
         d.claim = Math.min(1, d.claim + step);
         if (d.claim >= 1 && d.owner !== f) {
+          if (d.owner === PLAYER) this.cue('lost');
           if (d.owner === PLAYER) this.events.push({ kind: 'notice', text: t('derelictTaken', { derelict: derelictName(d.perk), faction: t(this.sides[f].def.name) }) });
           this.refundQueue(d);
           d.owner = f;
+          if (f === PLAYER) this.cue('won');
           if (f === PLAYER) this.events.push({ kind: 'notice', text: t('derelictClaimed', { derelict: derelictName(d.perk), text: derelictText(d.perk) }) });
           else aiLog(String(f), t('aiClaims', { derelict: derelictName(d.perk) }));
         }
@@ -1210,6 +1229,7 @@ export class World {
         const type = d.queue.shift()!;
         d.trainLeft = 0;
         this.toRally(this.spawn(d.owner, type, d.x, d.y + DERELICT_RADIUS * 0.6));
+        if (d.owner === PLAYER) this.cue('warpIn');
       }
     }
     if (d.perk === 'gun') {
@@ -1225,6 +1245,7 @@ export class World {
 
   /** A derelict goes back to nobody: its owner fell or was drained out. */
   private loseDerelict(d: Derelict) {
+    if (d.owner === PLAYER) this.cue('lost');
     if (d.owner === PLAYER) this.events.push({ kind: 'notice', text: t('derelictLost', { derelict: derelictName(d.perk) }) });
     this.refundQueue(d);
     d.owner = -1;
@@ -1248,6 +1269,7 @@ export class World {
   private updateTruce(side: Side, dt: number) {
     if (side.truceMs > 0) {
       side.truceMs = Math.max(0, side.truceMs - dt);
+      if (side.truceMs <= 0) this.cue('lost');
       if (side.truceMs <= 0) this.events.push({ kind: 'notice', text: t('truceEnded', { faction: t(side.def.name) }) });
     }
     if (side.offerMs > 0) side.offerMs = Math.max(0, side.offerMs - dt);
@@ -1264,6 +1286,7 @@ export class World {
     const pressed = (hub && hub.hp < hub.maxHp * PRESSURE_HUB) || side.pressure >= PRESSURE_LOSSES;
     if (!pressed) return;
     side.offerMs = OFFER_MS;
+    this.cue('truceOffered');
     this.events.push({
       kind: 'notice',
       text: t('truceOffered', { faction: t(side.def.name), s: TRUCE_MS / 1000, n: TRUCE_TRIBUTE }),
@@ -1349,6 +1372,11 @@ export class World {
     this.events.push({ kind: 'hit', x: target.x, y: target.y, struck });
   }
 
+  /** A sound cue for the scene. */
+  private cue(cue: Cue, at?: Point) {
+    this.events.push({ kind: 'cue', cue, x: at?.x, y: at?.y });
+  }
+
   /** A hacked turret changes sides: it becomes the hacker's own turret, as damaged as it was. */
   private takeOver(b: Building, faction: number) {
     const from = b.faction;
@@ -1365,6 +1393,7 @@ export class World {
     this.booms.push({ x: b.x, y: b.y, color: this.sides[faction].def.color, life: BOOM_MS, r: stats.radius + 10 });
     if (faction === PLAYER) this.events.push({ kind: 'notice', text: t('hackedYours', { building: was }) });
     else if (from === PLAYER) this.events.push({ kind: 'notice', text: t('hackedLost', { building: was }) });
+    if (faction === PLAYER || from === PLAYER) this.cue(faction === PLAYER ? 'won' : 'lost');
   }
 
   /** A Mine Lattice lays a mine at a random spot in its reach, while it has fewer than `cap` out. */
@@ -1417,6 +1446,7 @@ export class World {
         }
       }
       if (side.index === PLAYER) {
+        this.cue('researchDone');
         this.events.push({
           kind: 'notice',
           text: t('researchDone', {
@@ -1752,7 +1782,10 @@ export class World {
       if (b.hp > 0) continue;
       this.wreck(b);
       const main = b.type === 'hub' && !b.expansion;
-      if (main) fallen.add(b.faction);
+      if (main) {
+        fallen.add(b.faction);
+        this.cue('hubFalls', b);
+      }
       if (b.faction !== PLAYER && b.lastHit === PLAYER) {
         this.score('razes');
         if (main) this.score('hubs');
@@ -1766,6 +1799,7 @@ export class World {
       // A lost flagship is gone for the rest of the battle.
       if (u.flagship && u.faction === PLAYER) {
         this.sides[PLAYER].flagship.state = 'lost';
+        this.cue('flagshipLost');
         this.events.push({ kind: 'notice', text: t('flagshipLost', { name: t(this.sides[PLAYER].def.flagship.name) }) });
       }
       // A destroyed ship leaves a salvage shard for whoever destroyed it; the player's count as kills.
@@ -1805,6 +1839,7 @@ export class World {
     this.booms.push({ x: u.x, y: u.y, color: 0xffd36a, life: BOOM_MS, r: 14 });
     if (u.faction === PLAYER) {
       this.pops.push({ x: u.x, y: u.y - 20, text: name.toUpperCase(), color: 0xffd36a, life: POP_MS });
+      this.cue('rankUp');
       this.events.push({ kind: 'notice', text: t(rank === 'rankAce' ? 'rankUpAce' : 'rankUp', { unit: t(this.sides[PLAYER].def.units[u.type].name), rank: name, pct: Math.round(VETERAN_STEP * 100) }),
       });
     }
@@ -1849,11 +1884,13 @@ export class World {
         bc.capture = Math.min(1, bc.capture + step);
         if (bc.capture >= 1 && bc.owner !== f) {
           bc.owner = f;
+          if (f === PLAYER) this.cue('won');
           if (f === PLAYER) this.events.push({ kind: 'notice', text: t('beaconCaptured', { n: BEACON_PAY }) });
         }
       } else {
         bc.capture = Math.max(0, bc.capture - step);
         if (bc.capture <= 0) {
+          if (bc.owner === PLAYER) this.cue('lost');
           if (bc.owner === PLAYER) this.events.push({ kind: 'notice', text: t('beaconLost') });
           bc.owner = -1;
           bc.capturer = f;
@@ -1943,8 +1980,10 @@ export class World {
     let text = t('contractDone', { n: c.reward, rank, perk: c.perk(side.def) });
     if (state.index === FLAGSHIP_STEP && side.flagship.state === 'locked') {
       side.flagship.state = 'ready';
+      this.cue('flagshipReady');
       text += t('flagshipUnlocked', { name: t(side.def.flagship.name) });
     }
+    this.cue('contractDone');
     this.events.push({ kind: 'notice', text });
     this.openBoard();
   }
@@ -1969,12 +2008,14 @@ export class World {
     state.taken.push(goal);
     if (goal === 'convoy') this.launchConvoy();
     if (goal === 'survive') this.raidPlayer();
+    this.cue(goal === 'survive' ? 'klaxon' : 'contractStarted');
     this.events.push({ kind: 'notice', text: t('contractStarted', { rank: RANKS[state.index], brief: contractOf(goal).brief(this.sides[PLAYER].def) }) });
   }
 
   /** A contract that can no longer be met: the board offers the next two in its place. */
   private failContract(why: string) {
     this.endConvoy();
+    this.cue('contractFailed');
     this.events.push({ kind: 'notice', text: t('contractFailed', { why }) });
     this.openBoard();
   }
@@ -2037,6 +2078,7 @@ export class World {
       .sort((a, b) => dist(a, field) - dist(b, field))
       .slice(0, CONVOY_RAIDERS);
     raiders.forEach((u, k) => { u.order = { kind: 'attack', id: convoy[k % convoy.length].id, auto: false }; });
+    if (raiders.length) this.cue('klaxon');
     if (raiders.length) this.events.push({ kind: 'notice', text: t('convoyHunted', { faction: t(hunter.def.name), n: raiders.length }) });
   }
 
@@ -2090,6 +2132,7 @@ export class World {
     this.pact.waves += 1;
     this.pact.ms = PACT_WAVE_MS;
     this.raidPlayer();
+    this.cue('klaxon');
     this.events.push({ kind: 'notice', text: t('pactRaids', { s: PACT_WAVE_MS / 1000 }) });
   }
 
@@ -2110,6 +2153,7 @@ export class World {
       if (target && this.atPeace(u.faction, target.faction)) u.order = null;
     }
     const who = new Intl.ListFormat(locale(), { type: 'conjunction' }).format(rivals.map((s) => t('theFaction', { faction: t(s.def.name) })));
+    this.cue('klaxon');
     this.events.push({ kind: 'notice', text: t('pactSigned', { who, s: PACT_MS / 1000 }) });
   }
 
@@ -2123,6 +2167,7 @@ export class World {
     if (f.left > 0 || !hub) return;
     this.spawn(PLAYER, 'heavy', hub.x, hub.y + buildingStats(side, 'hub').radius + 24, null, true);
     f.state = 'out';
+    this.cue('flagshipLaunched');
     this.events.push({ kind: 'notice', text: t('flagshipLaunched', { name: t(side.def.flagship.name) }) });
   }
 

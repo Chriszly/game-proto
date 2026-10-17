@@ -13,7 +13,7 @@ export const MAP_VIEW = { x: 0, y: TOP.h, w: VIEW.w, h: BAR.y - TOP.h };
 /** The cover's lettering: a geometric sans, bold italic for headings. System fonts only. */
 export const FONT = '"Avenir Next", Futura, "Century Gothic", "Trebuchet MS", "Segoe UI", Inter, system-ui, sans-serif';
 
-export const BUTTON = { w: 116, h: 30 };
+export const BUTTON = { w: 112, h: 30 };
 
 export type ButtonKey = Role | UnitId | 'expansion' | Track | 'fallback' | 'flagship' | 'rally';
 
@@ -45,24 +45,30 @@ export interface Button {
   h: number;
 }
 
-const COLUMN = 120;
+const COLUMN = 115;
+/**
+ * Where the build and train rows start: the bar's bottom-left corner is left clear for the shared
+ * corner buttons (full screen, sound, pause), which sit over the canvas there on a phone held
+ * sideways and on a 16:9 screen.
+ */
+export const GRID_X = 64;
 const BUILD_ROW = 468;
 const TRAIN_ROW = 504;
 const BUILD_KEYS: Build[] = ['depot', 'barracks', 'turret', 'expansion'];
 const TRAIN_KEYS: UnitId[] = ['harvester', 'scout', 'gunship', 'heavy'];
 /** The research column: three slim buttons stacked right of the build and train rows. */
-export const RESEARCH_COLUMN = { x: 494, y: 446, w: 112, h: 26, gap: 3 };
+export const RESEARCH_COLUMN = { x: 525, y: 446, w: 106, h: 26, gap: 3 };
 /** The Fall back button, at the right end of the message line: sends the selected ships home to repair. */
 export const FALL_BACK_BUTTON: Button = { kind: 'command', key: 'fallback', x: 868, y: 445, w: 84, h: 24 };
 /** The Flagship button, a slim pill above the build row: locked until the third contract, then builds the one flagship at the hub. */
-export const FLAGSHIP_BUTTON: Button = { kind: 'command', key: 'flagship', x: 300, y: 444, w: 186, h: 21 };
+export const FLAGSHIP_BUTTON: Button = { kind: 'command', key: 'flagship', x: 330, y: 444, w: 191, h: 21 };
 /** The Rally button, a slim pill left of the Flagship button (also the R key): plants or moves the rally point for new warships. */
-export const RALLY_BUTTON: Button = { kind: 'command', key: 'rally', x: 150, y: 444, w: 144, h: 21 };
+export const RALLY_BUTTON: Button = { kind: 'command', key: 'rally', x: 180, y: 444, w: 144, h: 21 };
 
 /** The buttons of the command bar, in the top-left corner of each one. */
 export const BUTTONS: Button[] = [
-  ...BUILD_KEYS.map((key, i): Button => ({ kind: 'build', key, x: 10 + i * COLUMN, y: BUILD_ROW, ...BUTTON })),
-  ...TRAIN_KEYS.map((key, i): Button => ({ kind: 'train', key, x: 10 + i * COLUMN, y: TRAIN_ROW, ...BUTTON })),
+  ...BUILD_KEYS.map((key, i): Button => ({ kind: 'build', key, x: GRID_X + i * COLUMN, y: BUILD_ROW, ...BUTTON })),
+  ...TRAIN_KEYS.map((key, i): Button => ({ kind: 'train', key, x: GRID_X + i * COLUMN, y: TRAIN_ROW, ...BUTTON })),
   ...TRACKS.map((key, i): Button => {
     const c = RESEARCH_COLUMN;
     return { kind: 'research', key, x: c.x, y: c.y + i * (c.h + c.gap), w: c.w, h: c.h };
