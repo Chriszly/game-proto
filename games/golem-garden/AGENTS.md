@@ -81,10 +81,32 @@ Implemented today:
   starts the next. Not on `HARVEST_WAVE`: `canCallEarly` is false there, so the harvest
   counts the leaves left once wave 30 is cleared, and the button reads "Harvest wave".
   The preview above it counts the next wave's pests with `waveCounts`.
+- Boons (GG11): `finishWave` after a Queen Slug wave (`wave % BOSS_EVERY === 0`) sets
+  `state.offer` to `boonOffer(wave / BOSS_EVERY)`, three of `BOONS` (the first three, then the
+  last three, in turn). The scene holds the game still (ticks by 0) while `offer` is set and shows
+  `showBoons` (after the harvest picker closes, when both come at wave 30); a card calls
+  `takeBoon`, which pushes it onto `state.boons` (a boon taken twice counts twice, `boonCount`).
+  Long moss, Sharp rocks and Sunny row fold into `boonedStats`/`statsOf(s, g)`; Sunny row records
+  `sunRow(s)` (the row with most grown golems) in `state.sunRows`, drawn as a warm stripe
+  (`drawSun`); New growth adds `BOON.leaves`; Thick hedges raises the hp of hedges planted later;
+  Rich compost raises the compost cap. Numbers in `BOON`, names and blurbs in `BOON_INFO`.
+- Regrow a leaf (GG12): between waves (`canRegrow`: build phase, no boon pending, a leaf lost, the
+  sap), a tap on the Heartwood's cell or on the HUD leaf tag calls `regrow`, which costs
+  `regrowPrice(s)` (`regrowCost(regrown)`, `REGROW.base` 25 plus `REGROW.step` 25 per leaf already
+  regrown in this garden). The leaf tag shows a green plus when it can, and the hint names the
+  price during build with a leaf lost.
+- Thorny variants (GG13): a garden with `THORNY_STARS` (3) stars (`thornyOpen`) gets a Thorny tag
+  under its picker card that plants it with `state.thorny` set (`saveThorny`). `twistOf(s)` is then
+  `GARDEN_TWISTS[garden]` (`TWIST_INFO`): Meadow 'hedges' (`unlocked(s, 'hedge')` is false; the
+  hedge strip shows faded), Forked Brook 'crows' (`waveFor(n, twist)` adds a twin for every crow,
+  700ms behind) and Two Gates 'sap' (`newGame` starts with `LEAN_SAP` = 30). Its harvest sets
+  `state.laurels[garden]`, saved and shown on the tag ("laurel won"); the HUD garden tag reads
+  "<name> · thorny" and the wave tag "laurel at 30".
 - Sap pops: each squashed pest pushes a `Pop` onto `state.pops`; the scene drains them into a
   splat, a "+N" label and three droplets that arc to the sap counter, whose glow pulses as they
   land.
-- The most waves ever cleared, the bloom, each garden's stars and the garden last picked persist.
+- The most waves ever cleared, the bloom, each garden's stars and laurels, and the garden last
+  picked (and whether thorny) persist. Boons and regrown leaves last one garden.
 
 Missing or rough:
 
@@ -104,7 +126,8 @@ Missing or rough:
 - Canvas `filter: blur` (the clay's soft shadows) is ignored by Safari, so shadows are hard there.
 - The cover and the loop screenshots (`heartwood-bloom`, `call-early`, `sap-pops`, `golem-menu`,
   `golem-move`, `new-pests`, `queen-slug`, `garden-picker`, `forked-brook`, `two-gates`,
-  `level-3-forms`, `targeting`, `hedge`, `compost`, `harvest`, `harvest-wave`) were
+  `level-3-forms`, `targeting`, `hedge`, `compost`, `harvest`, `harvest-wave`, `boons`,
+  `regrow-leaf`, `thorny-picker`, `thorny-meadow`) were
   staged through `window.game` with a scratch Playwright script against the dev server (set
   `state` fields and `localStorage` keys, push pests or pops, click cells and buttons, pause the
   scene); refresh them the same way.
@@ -120,8 +143,8 @@ File map (`src/`):
   `setupScaling(game)` from `shared/scaling.ts`, and in dev builds puts `game` on `window`.
 - `scenes/BootScene.ts`: calls `bakeTextures`, then starts `Game`.
 - `scenes/GameScene.ts`: builds the garden, HUD, panel, golem menu and banner, and the garden
-  picker each time it opens (`createPicker(mode)`, `showPicker`, `closePicker`); turns taps into
-  `select`, `plant`, `upgrade` (with a form, through `menuTap` and `formMenu`), `setTarget`,
+  picker each time it opens (`createPicker(mode)`, `showPicker`, `closePicker`) and the boon pick (`showBoons`); turns taps into
+  `select`, `plant`, `regrow`, `takeBoon`, `upgrade` (with a form, through `menuTap` and `formMenu`), `setTarget`,
   `move`, `uproot`, `startWave` and the speed toggle; calls `tick` in `update` and draws slime,
   hedges, golems (and combo vines, form beads), pests (and mole mounds), shots, bars, level beads
   and the hover from the state; turns `state.pops` into splats, "+N" labels and flying droplets
@@ -140,17 +163,19 @@ File map (`src/`):
   `MAX_LEVEL`, `UPGRADE_COST`, `FORMS`, `FORM_INFO`, `formsOf`, `TARGETS`, `TARGET_INFO`,
   `golemStats(kind, level, form)` (a `GolemStats`), `HEDGE`, `CHEW_PER_BITE`, `COMPOST`,
   `HARVEST_WAVE`, `STAR_LEAVES`, `harvestStars`, `PESTS`, `PEST_INFO` (with `armour`, `tunnel`,
-  `slime`, `boss`, `flies`), `BOSS_EVERY`, `SLIME`, `PEST_HP_SCALE` (difficulty), `waveFor`,
-  `waveCounts`, `waveBonus` and `START`.
+  `slime`, `boss`, `flies`), `BOSS_EVERY`, `SLIME`, `PEST_HP_SCALE` (difficulty), `waveFor(n, twist)`,
+  `waveCounts(n, twist)`, `waveBonus`, `START`, `REGROW`/`regrowCost`, `BOONS`/`Boon`,
+  `BOON_INFO`, `BOON`, `boonOffer`, `TWISTS`/`Twist`, `TWIST_INFO`, `GARDEN_TWISTS`,
+  `THORNY_STARS` and `LEAN_SAP`.
 - `game/state.ts`: `GameState`, `Golem` (with `form` and `target`), `Hedge`, `Pest` (with
-  `chewing`), `Shot`, `Pop`, `Slime`, `SHOT_MS`, `newGame(best, bloom, garden, stars)`,
-  `gardenOf`, `totalStars`, `gardenOpen`, `unlocked`, `seedCost`, `select`, `golemAt`, `hedgeAt`,
+  `chewing`), `Shot`, `Pop`, `Slime`, `SHOT_MS`, `newGame(best, bloom, garden, stars, thorny, laurels)`,
+  `gardenOf`, `totalStars`, `gardenOpen`, `thornyOpen`, `twistOf`, `boonCount`, `unlocked`, `seedCost`, `select`, `golemAt`, `hedgeAt`,
   `freeSoil`, `freePath`, `canPlant`, `plant`, `upgradeCost`, `picksForm`, `upgrade(s, g, form)`,
-  `statsOf`, `setTarget`, `nextTarget`, `uprootValue`, `uproot`, `canMove`, `move`, `neighbours`,
-  `comboAt`, `slimed`, `canCallEarly`, `nextWave`, `startWave` (returns `'start'`, `'early'` or
-  null) and `tick`. No Phaser.
+  `boonedStats`, `statsOf(s, g)`, `setTarget`, `nextTarget`, `uprootValue`, `uproot`, `canMove`, `move`, `neighbours`,
+  `comboAt`, `slimed`, `canCallEarly`, `nextWave`, `regrowPrice`, `canRegrow`, `regrow`, `sunRow`,
+  `takeBoon`, `startWave` (returns `'start'`, `'early'` or null) and `tick`. No Phaser.
 - `game/save.ts`: `loadBest`/`saveBest`, `loadBloom`/`saveBloom`, `loadGarden`/`saveGarden`,
-  `loadStars`/`saveStars`.
+  `loadThorny`/`saveThorny`, `loadStars`/`saveStars`, `loadLaurels`/`saveLaurels`.
 - `art/clay.ts`: the claymation toolkit. `bake` paints a texture in art units (2 per view pixel)
   around an anchor, on a canvas `sharpRes` times the view size (at most `MAX_RES` = 2), and adds it
   with `addSharp`, which marks the texture's resolution so images show it at its view size; `clay` shades any path as
@@ -215,16 +240,18 @@ fought, or next while building), `phase` (`'build'`, `'wave'` or `'over'`), `hea
 `hp` and `stops`), `pests` (each with `route`, `under` and `chewing`), `queue`, `spawned`,
 `slime`, `fast`, `waveMs`, `waveHpScale`, `shots`, `kills`, `bloom` (0 to 5), `pops` (squashed
 pests not yet shown; the scene empties it every frame), `best`, `compost` (paid at the last wave's
-end), `stars` (per garden), `harvest` (this garden's, 0 before wave 30) and `nextId`. Golem
+end), `stars` (per garden), `harvest` (this garden's, 0 before wave 30), `thorny`, `laurels` (per
+garden), `boons`, `sunRows`, `offer` (the boons to pick from, or empty), `regrown` and `nextId`. Golem
 positions are cells; pest positions are `dist` pixels along their route. The open menu, its form
 mode and the golem being moved (`picked`, `formMenu`, `moving`) are the scene's, not the state's.
 
-Persistence: four `localStorage` keys, written by the scene: `golem-garden-best` (the most waves
+Persistence: six `localStorage` keys, written by the scene: `golem-garden-best` (the most waves
 ever cleared, when `state.best` rises), `golem-garden-bloom` (the Heartwood's bloom, when it rises;
 kept between gardens, so the Thorn golem stays unlocked once it blooms), `golem-garden-stars`
 (each garden's harvest stars, comma-separated in `GARDENS` order, when they change) and
-`golem-garden-garden` (the garden last picked, which a reload plants). The garden's golems, hedges
-and pests are never saved.
+`golem-garden-garden` (the garden last picked, which a reload plants), `golem-garden-thorny` (1
+when that pick was its thorny variant) and `golem-garden-laurels` (each garden's laurel, 0 or 1,
+comma-separated, when one is won). The garden's golems, hedges, pests and boons are never saved.
 The hub's settings are read from the shared `hub-settings` key.
 
 Randomness and timing: no `Math.random`, `Date.now` or `performance.now`. Waves are fixed by
@@ -282,6 +309,10 @@ Phaser passes to `update`; the pops' tweens run on Phaser's clock and are cosmet
   background, picker card and mini map follow; `GARDEN_CARD` fits three cards side by side.
 - **Retune combos, the boss or the menu's prices**: `COMBO`, `BOSS_EVERY`, `SLIME`, the queen's
   `PEST_INFO` row, `UPROOT_REFUND` and `MOVE_FEE` in `data.ts`, and the README.
+- **Retune boons, regrowing or thorny variants**: `BOON` (numbers), `BOON_INFO` and the order of
+  `BOONS` (`boonOffer` takes them three at a time), `REGROW`, `TWIST_INFO`, `GARDEN_TWISTS`,
+  `THORNY_STARS` and `LEAN_SAP` in `data.ts`; the boon cards' detail line is `boonDetail` in
+  `GameScene`; and the README's tables.
 - **Change the bloom goal or early bonus**: `BLOOM_GOAL` and `EARLY_BONUS` in `data.ts`. The HUD
   draws `BLOOM_GOAL` flowers but the tree has five spots (`TREE_FLOWERS`), and the test's
   `EARLY_BONUS` mirrors the bonus.
@@ -318,3 +349,7 @@ Phaser passes to `update`; the pops' tweens run on Phaser's clock and are cosmet
 - `saveStars` writes the whole list, so a garden's stars never go down (`finishWave` takes the
   max); the picker is rebuilt on each open, so new stars show at once.
 - A pest's texture origin is `PEST_ORIGIN`, except the bigger queen's (`QUEEN_ORIGIN`).
+- Read a golem's stats with `statsOf(s, g)` (or `boonedStats` for a ghost), never `golemStats`
+  alone, so boons count; Sunny row depends on the row, so moving a golem changes its reach.
+- `newGame` ignores `thorny` for a garden without `THORNY_STARS` stars, so a stale thorny key
+  plants the plain garden.

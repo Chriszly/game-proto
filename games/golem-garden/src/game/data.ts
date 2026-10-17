@@ -225,14 +225,16 @@ export interface Spawn {
  * second, two crows more each wave from the third, a mole more each wave from the fourth, an
  * armoured snail more every other wave from the fifth, and from the sixth a swarm of aphids that
  * grows each wave (two swarms from the twelfth). Every tenth wave the Queen Slug leads. Later
- * waves also get tougher, 12% more health per wave.
+ * waves also get tougher, 12% more health per wave. A thorny garden with the 'crows' twist doubles the crows.
  */
-export function waveFor(n: number): { spawns: Spawn[]; hpScale: number } {
+export function waveFor(n: number, twist: Twist | null = null): { spawns: Spawn[]; hpScale: number } {
   const spawns: Spawn[] = [];
   const beetles = 6 + 2 * n;
   for (let i = 0; i < beetles; i++) spawns.push({ kind: 'beetle', atMs: i * 1100 });
   for (let i = 0; i < n - 1; i++) spawns.push({ kind: 'slug', atMs: 2000 + i * 2600 });
   for (let i = 0; i < 2 * (n - 2); i++) spawns.push({ kind: 'crow', atMs: 4000 + i * 1500 });
+  // A thorny garden's crows come in pairs.
+  if (twist === 'crows') for (let i = 0; i < 2 * (n - 2); i++) spawns.push({ kind: 'crow', atMs: 4700 + i * 1500 });
   for (let i = 0; i < n - 3; i++) spawns.push({ kind: 'mole', atMs: 3000 + i * 2900 });
   for (let i = 0; i < Math.floor((n - 3) / 2); i++) spawns.push({ kind: 'snail', atMs: 5000 + i * 3400 });
   const swarms = n >= 12 ? 2 : n >= 6 ? 1 : 0;
@@ -245,9 +247,9 @@ export function waveFor(n: number): { spawns: Spawn[]; hpScale: number } {
 }
 
 /** How many of each pest wave `n` brings, counted from `waveFor`; shown in the wave preview. */
-export function waveCounts(n: number): Record<PestKind, number> {
+export function waveCounts(n: number, twist: Twist | null = null): Record<PestKind, number> {
   const counts = Object.fromEntries(PESTS.map((kind) => [kind, 0])) as Record<PestKind, number>;
-  for (const spawn of waveFor(n).spawns) counts[spawn.kind]++;
+  for (const spawn of waveFor(n, twist).spawns) counts[spawn.kind]++;
   return counts;
 }
 
@@ -256,3 +258,44 @@ export const waveBonus = (n: number) => 10 + 5 * n;
 
 /** What a new garden starts with. */
 export const START = { sap: 60, heart: 10 };
+
+/**
+ * Regrowing a leaf (GG12): between waves, a tap on the Heartwood buys back one lost leaf for
+ * `base` sap, `step` more for each leaf already regrown in this garden.
+ */
+export const REGROW = { base: 25, step: 25 };
+/** What regrowing the next leaf costs, after `regrown` leaves this garden. */
+export const regrowCost = (regrown: number) => REGROW.base + REGROW.step * regrown;
+
+/** Garden boons (GG11), one picked from three after each Queen Slug wave. They last the garden. */
+export const BOONS = ['moss', 'sun', 'leaf', 'hedge', 'pebble', 'compost'] as const;
+export type Boon = (typeof BOONS)[number];
+export const BOON_INFO: Record<Boon, { name: string; blurb: string }> = {
+  moss: { name: 'Long moss', blurb: 'Every slow lasts half again as long' },
+  sun: { name: 'Sunny row', blurb: 'Golems on one row reach 20px further' },
+  leaf: { name: 'New growth', blurb: 'Two Heartwood leaves grow back' },
+  hedge: { name: 'Thick hedges', blurb: 'Hedges planted from now have half again the health' },
+  pebble: { name: 'Sharp rocks', blurb: 'Pebble golems do 20% more damage' },
+  compost: { name: 'Rich compost', blurb: 'Compost pays up to 15 sap more' },
+};
+/** What each boon does, in numbers: each pick of it adds this much again. */
+export const BOON = { mossSlow: 0.5, sunReach: 20, leaves: 2, hedgeHp: 0.5, pebbleDamage: 0.2, compostCap: 15 };
+/** The three boons offered after the `nth` Queen Slug (1 for wave 10): two sets of three, in turn. */
+export const boonOffer = (nth: number): Boon[] => BOONS.slice(((nth - 1) % 2) * 3, ((nth - 1) % 2) * 3 + 3);
+
+/**
+ * Thorny variants (GG13): three stars on a garden unlock its thorny variant, played with one twist
+ * (`GARDEN_TWISTS`, in GARDENS order). Its harvest at wave HARVEST_WAVE wins the garden's laurel.
+ */
+export const TWISTS = ['hedges', 'crows', 'sap'] as const;
+export type Twist = (typeof TWISTS)[number];
+export const TWIST_INFO: Record<Twist, { name: string; blurb: string }> = {
+  hedges: { name: 'No hedges', blurb: 'the hedge seed is gone' },
+  crows: { name: 'Double crows', blurb: 'every crow comes with a twin' },
+  sap: { name: 'Lean start', blurb: 'start with 30 sap' },
+};
+export const GARDEN_TWISTS: Twist[] = ['hedges', 'crows', 'sap'];
+/** Stars on a garden that unlock its thorny variant. */
+export const THORNY_STARS = 3;
+/** Sap a garden with the 'sap' twist starts with. */
+export const LEAN_SAP = 30;
