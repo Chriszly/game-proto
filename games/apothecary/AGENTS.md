@@ -495,7 +495,7 @@ brew's `out` may be `PANACEA`.
 - Move a station, marker or wall: edit `src/scenes/layout.ts` (a station's pallets and the belt
   ends at them move with it, and `BELT_MS` stays about 100 pixels a second), bump `LAYOUT` in
   `src/game/state.ts`, update the test's coordinates, and refresh
-  `docs/screenshots/playthrough-*.png`. If belt paths change where goods ride, add a migration in
+  `docs/screenshots/playthrough-*.webp`. If belt paths change where goods ride, add a migration in
   `loadState` keyed on the saved `layout`, like `ontoOwnRuns`.
 - Change the save shape incompatibly: bump `version` in `GameState` and `createInitialState`;
   otherwise make `loadState` fill the new field from `fresh`.

@@ -373,7 +373,7 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
   `STYLE_SWITCH`), `STREAK_GAP_MS` (`FRENZY.gapMs`) and `FRONT_SAFE_Y`. Changing those, the
   `GameState` shape, the scene key `'Game'`, the public fields above, `planWave`'s random draws
   for wave 1, the drum's timing, speed, radius or one-hit hp, or the wave-1 blast damage means
-  updating the test in the same PR, and refreshing `docs/screenshots/playthrough-*.png`.
+  updating the test in the same PR, and refreshing `docs/screenshots/playthrough-*.webp`.
 - The test runs on Normal difficulty (no `hub-settings` saved), so enemy hp is unscaled.
 - Balance matters: the test needs wave 1 to be winnable by its simple strategy within the game time
   it allows, and the wave-1 drum to catch a zombie while the front is far enough away; slower

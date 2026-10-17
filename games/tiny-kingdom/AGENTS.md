@@ -177,7 +177,7 @@ Missing or rough:
   scene.refresh()`), then real hovers, taps and keys. The cover, the island shots, `windmill`,
   `new-buildings`, the season, manor and islands-card shots predate the hand, the castle and the
   omen strip, so their panels look older.
-- `docs/screenshots/readable-panel*.png` and `favicon.webp` are older shots no README links.
+- `docs/screenshots/favicon.webp` is an older shot no README links.
 
 ## Architecture
 
