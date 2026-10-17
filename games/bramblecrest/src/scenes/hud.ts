@@ -5,6 +5,7 @@
 import Phaser from 'phaser';
 import { texScale } from '../art/paint';
 import { OBJECTIVES, stonesToFind, type GameState } from '../game/state';
+import { t } from '../i18n';
 import { BUTTONS, STICK, VIEW } from './layout';
 
 const FONT = 'Georgia, "Times New Roman", serif';
@@ -17,6 +18,8 @@ export interface DialogView {
 
 export class Hud {
   private hearts: Phaser.GameObjects.Image[] = [];
+  private plate: Phaser.GameObjects.Graphics;
+  private plateW = 0;
   private stones: Phaser.GameObjects.Text;
   private stoneIcon: Phaser.GameObjects.Image;
   private keys: Phaser.GameObjects.Text;
@@ -37,8 +40,7 @@ export class Hud {
   constructor(private scene: Phaser.Scene) {
     const add = scene.add;
     const fixed = <T extends Phaser.GameObjects.Components.ScrollFactor & Phaser.GameObjects.Components.Depth>(o: T) => o.setScrollFactor(0).setDepth(DEPTH);
-    const plate = fixed(add.graphics());
-    plate.fillStyle(0x0a0e24, 0.55).fillRoundedRect(8, 8, 262, 52, 10);
+    this.plate = fixed(add.graphics());
     this.stoneIcon = fixed(add.image(24, 46, 'moonstone').setScale(texScale('moonstone')));
     this.stones = fixed(add.text(36, 37, '', { fontFamily: FONT, fontSize: '16px', color: '#dff2ff' }));
     this.keys = fixed(add.text(108, 37, '', { fontFamily: FONT, fontSize: '16px', color: '#f0d890' }));
@@ -107,9 +109,17 @@ export class Hud {
       h.setTexture(key).setScale(texScale(key)).setVisible(i < want);
     });
     this.stones.setText(`${s.moonstones.length} / ${stonesToFind(s)}`);
-    this.keys.setText(inDungeon || s.keys > 0 ? `Keys ${s.keys}` : '');
-    this.seeds.setText(s.items.seeds ? `Seeds ${s.seeds}` : '');
-    this.objective.setText(OBJECTIVES[s.quest]);
+    this.keys.setText(inDungeon || s.keys > 0 ? t('keys', { n: s.keys }) : '');
+    this.seeds.setText(s.items.seeds ? t('seeds', { n: s.seeds }) : '');
+    // The counters sit side by side, so a longer word (German Schlüssel) pushes the next one along.
+    this.keys.x = Math.max(108, this.stones.x + this.stones.width + 16);
+    this.seeds.x = this.keys.text ? Math.max(178, this.keys.x + this.keys.width + 16) : 178;
+    const plateW = Math.max(262, (this.seeds.text ? this.seeds.x + this.seeds.width : this.keys.x + this.keys.width) + 4);
+    if (plateW !== this.plateW) {
+      this.plateW = plateW;
+      this.plate.clear().fillStyle(0x0a0e24, 0.55).fillRoundedRect(8, 8, plateW, 52, 10);
+    }
+    this.objective.setText(t(OBJECTIVES[s.quest]));
     this.buttons.sword.setVisible(s.items.sword && !dialog);
     this.buttons.vine.setVisible(s.items.hookvine && !dialog);
     this.buttons.roll.setVisible(!dialog);
@@ -126,7 +136,7 @@ export class Hud {
     this.box.clear();
     this.speaker.setText(dialog?.speaker ?? '');
     this.line.setText(dialog?.text ?? '');
-    this.hint.setText(dialog ? 'Tap or Space' : '');
+    this.hint.setText(dialog ? t('readOn') : '');
     if (dialog) {
       this.box.fillStyle(0x0a0e24, 0.86).fillRoundedRect(130, 388, 700, 132, 14);
       this.box.lineStyle(2, 0xc8b070, 0.8).strokeRoundedRect(130, 388, 700, 132, 14);
@@ -158,8 +168,8 @@ export class Hud {
       });
       c.add(b);
     };
-    button(370, 'Keep exploring', onKeep);
-    button(590, 'New game', onNew);
+    button(370, t('keepExploring'), onKeep);
+    button(590, t('newGame'), onNew);
     this.endCard = c;
   }
 }
