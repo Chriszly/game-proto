@@ -28,6 +28,7 @@ alongside you, and binding one isle of every kind completes the Royal Atlas.
 | Tap charted ground | Once the riddle chart is found, dig there for the treasure, for 1 supply |
 | Return to port | End the voyage (early, if you like: unused supplies sell back) and draw the chart |
 | Sell chart | Sell the voyage's chart at the port |
+| Moon or sun beside the logo | Switch between the white survey sheet and the dark night sheet |
 | Tap a commission | Pick it off the harbor's board for the next voyage |
 | Tap a hand | Take them aboard for the next voyage (tap again to leave them ashore) |
 | Buy | Buy an upgrade at the harbor |
@@ -184,6 +185,16 @@ new isle; one page of every kind completes the Royal Atlas.
 
 ![An archipelago, a volcanic isle and a jungle isle, charted in full](docs/screenshots/isle-kinds.webp)
 
+## Dark theme
+
+The sheet comes in two looks: the white survey sheet and a night sheet with light ink on dark paper
+and deeper height colours. The game starts in the look the device prefers (its dark mode setting),
+and the moon or sun button beside the panel's logo switches it, which the game remembers.
+
+![The night sheet](docs/screenshots/dark-theme.webp)
+
+![The harbor on the night sheet](docs/screenshots/dark-theme-harbor.webp)
+
 ## Difficulty
 
 The hub's Difficulty setting changes the supplies of a voyage: 16 on Easy, 12 on Normal, 9 on Hard.
@@ -195,13 +206,13 @@ The hub's Difficulty setting changes the supplies of a voyage: 16 on Easy, 12 on
   riddle and the features included), `sim.ts` surveys, camps, digs, moves the rival, charts, sells,
   lays out the board and the hands, buys and tracks the isle goal and the Royal Atlas, `state.ts`
   holds the state and numbers, `terrain.ts`, `kinds.ts`, `upgrades.ts` and `hands.ts` the tables,
-  `save.ts` the save and the best.
+  `save.ts` the save, the best and the theme.
 - `src/scenes/`: `BootScene` bakes the art, `GameScene` paints the island and draws the sheet,
   panel and overlays and takes the taps, `layout.ts` says where everything goes.
 - `src/art/`: the survey-sheet art, painted on canvases in code: `map.ts` (terrain, contours,
   symbols, rivers, roads, blank paper, place names), `surveyor.ts` (the surveyor and the rival),
   `icons.ts` (also the hands' icons and the finds, camp, claim, riddle and treasure marks),
-  `paint.ts` (colours and helpers).
+  `paint.ts` (the light and dark palettes and helpers).
 - `src/ui/Button.ts`: the flat ink button.
 - `e2e/playthrough.spec.ts`: plays the first voyage.
 

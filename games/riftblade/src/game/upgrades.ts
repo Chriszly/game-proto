@@ -226,3 +226,18 @@ export function rollChoices(hero: HeroId, ranks: Record<string, number>, count =
   if (picks.length < count) picks.push(FILLER.id);
   return picks;
 }
+
+/**
+ * A free pick (the arena's reward): up to three upgrades already held that can still go up, filled
+ * with a level-up's cards when fewer are held.
+ */
+export function rewardChoices(hero: HeroId, ranks: Record<string, number>): string[] {
+  const held = Object.keys(ranks).filter((id) => ranks[id] < MAX_TIER);
+  const picks: string[] = [];
+  while (picks.length < 3 && held.length) picks.push(held.splice(Math.floor(Math.random() * held.length), 1)[0]);
+  for (const id of rollChoices(hero, ranks)) {
+    if (picks.length >= 3) break;
+    if (!picks.includes(id) && (id !== FILLER.id || !picks.length)) picks.push(id);
+  }
+  return picks;
+}

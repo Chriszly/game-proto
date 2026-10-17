@@ -1,10 +1,36 @@
 import Phaser from 'phaser';
 import { settings } from '../../../../shared/settings';
 import { renderScale } from '../../../../shared/scaling';
-import { CANVAS, NAME_COLOR, TINT, TS, paintFog, paintTerrain, placeNames } from '../art/map';
-import { BLUE, GOLD_DARK, GREEN, GREY, HI, INK, MAGENTA, RULE, SHEET, SLATE, TRACK, VELLUM, hex } from '../art/paint';
+import { CANVAS, TS, nameColor, paintFog, paintTerrain, placeNames, tintOf } from '../art/map';
+import {
+  BLUE,
+  CARD,
+  DIM,
+  DIM_ALPHA,
+  FOG_LINE,
+  GOLD_DARK,
+  GREEN,
+  GREY,
+  HI,
+  INK,
+  MAGENTA,
+  ON_INK,
+  ON_INK_ACCENT,
+  ON_INK_SOFT,
+  ON_MAGENTA,
+  ON_MAGENTA_SOFT,
+  RULE,
+  SHEET,
+  SLATE,
+  TABLE,
+  TABLE_LINE,
+  TRACK,
+  VELLUM,
+  hex,
+  theme,
+} from '../art/paint';
 import { SURVEYOR_ORIGIN } from '../art/surveyor';
-import { loadBest, loadGame, saveBest, saveGame } from '../game/save';
+import { loadBest, loadGame, saveBest, saveGame, saveTheme } from '../game/save';
 import {
   artifactValue,
   atlasKinds,
@@ -99,6 +125,10 @@ const MAP_H = GRID.h * MAP.tile;
 /** The panel's left and right text edges. */
 const PL = PANEL.x + 18;
 const PR = PANEL.x + PANEL.w - 18;
+/** The theme switch beside the panel's logo. */
+const THEME_BUTTON = { x: PR - 36, y: 50, size: 20 };
+/** Type on an atlas page's cover, light on every kind's colour in both themes. */
+const PAGE_TYPE = '#fbfaf6';
 
 interface TextOpts {
   size: number;
@@ -318,7 +348,7 @@ export class GameScene extends Phaser.Scene {
   private pill(x: number, y: number, caption: string, w: number, h: number, size: number) {
     const g = this.add.graphics();
     g.fillStyle(hex(MAGENTA)).fillRoundedRect(-w / 2, -h / 2, w, h, h / 2);
-    const t = this.text(0, 0, caption, { size, weight: 800, color: '#ffffff' }).setOrigin(0.5);
+    const t = this.text(0, 0, caption, { size, weight: 800, color: ON_MAGENTA }).setOrigin(0.5);
     return this.add.container(x, y, [g, t]);
   }
 
@@ -338,7 +368,8 @@ export class GameScene extends Phaser.Scene {
 
   /** One tile of blank drafting paper, laid over a tile as it is charted and faded out. */
   private bakeVellum() {
-    if (this.textures.exists('vellum')) return;
+    // Baked again in each theme's paper.
+    if (this.textures.exists('vellum')) this.textures.remove('vellum');
     const c = document.createElement('canvas');
     c.width = c.height = MAP.tile * HI;
     const ctx = c.getContext('2d')!;
@@ -346,7 +377,7 @@ export class GameScene extends Phaser.Scene {
     ctx.scale(HI / 2, HI / 2);
     ctx.fillStyle = VELLUM;
     ctx.fillRect(0, 0, TS, TS);
-    ctx.strokeStyle = 'rgba(120,130,140,0.16)';
+    ctx.strokeStyle = `rgba(${FOG_LINE},0.16)`;
     ctx.beginPath();
     for (let k = 0; k <= TS; k += 20) {
       ctx.moveTo(k + 0.5, 0);
@@ -369,19 +400,19 @@ export class GameScene extends Phaser.Scene {
   /** The drafting table, the survey sheet with its header, scale bar, north arrow and grid labels, and the panel card. */
   private drawSheet() {
     const g = this.add.graphics();
-    g.fillStyle(0xdfe3e0).fillRect(0, 0, VIEW.w, VIEW.h);
-    g.lineStyle(1, 0x506e78, 0.1);
+    g.fillStyle(hex(TABLE)).fillRect(0, 0, VIEW.w, VIEW.h);
+    g.lineStyle(1, hex(TABLE_LINE), 0.1);
     for (let x = 0; x < VIEW.w; x += 12) g.lineBetween(x + 0.5, 0, x + 0.5, VIEW.h);
     for (let y = 0; y < VIEW.h; y += 12) g.lineBetween(0, y + 0.5, VIEW.w, y + 0.5);
     for (const r of [SHEET_RECT, PANEL]) {
       for (let k = 1; k <= 4; k++) g.fillStyle(0x000000, 0.035).fillRect(r.x - k + 1, r.y - k + 3 + k, r.w + 2 * k - 2, r.h + 2 * k - 2);
     }
     g.fillStyle(hex(SHEET)).fillRect(SHEET_RECT.x, SHEET_RECT.y, SHEET_RECT.w, SHEET_RECT.h);
-    g.fillStyle(0xffffff).fillRect(PANEL.x, PANEL.y, PANEL.w, PANEL.h);
+    g.fillStyle(hex(CARD)).fillRect(PANEL.x, PANEL.y, PANEL.w, PANEL.h);
     g.fillStyle(hex(INK)).fillRect(PANEL.x, PANEL.y, PANEL.w, 4);
 
     const isle = this.text(24, 31, '', { size: 15, weight: 800, ls: 2 }).setOrigin(0, 0.5);
-    const sheet = this.text(86, 32, '', { size: 9, weight: 600, color: '#5b6670', ls: 1 }).setOrigin(0, 0.5);
+    const sheet = this.text(86, 32, '', { size: 9, weight: 600, color: SLATE, ls: 1 }).setOrigin(0, 0.5);
     this.header = { isle, sheet };
     // Scale bar: two tiles in half-tile steps.
     const sx = 500;
@@ -397,10 +428,10 @@ export class GameScene extends Phaser.Scene {
     this.text(nx, ny + 13, 'N', { size: 7, weight: 800 }).setOrigin(0.5);
     // Grid letters along the top and numbers down the side.
     for (let x = 0; x < GRID.w; x++) {
-      this.text(MAP.x + (x + 0.5) * MAP.tile, MAP.y - 8, String.fromCharCode(65 + x), { size: 7, color: '#7a858e' }).setOrigin(0.5);
+      this.text(MAP.x + (x + 0.5) * MAP.tile, MAP.y - 8, String.fromCharCode(65 + x), { size: 7, color: GREY }).setOrigin(0.5);
     }
     for (let y = 0; y < GRID.h; y++) {
-      this.text(MAP.x - 9, MAP.y + (y + 0.5) * MAP.tile, String(y + 1), { size: 7, color: '#7a858e' }).setOrigin(0.5);
+      this.text(MAP.x - 9, MAP.y + (y + 0.5) * MAP.tile, String(y + 1), { size: 7, color: GREY }).setOrigin(0.5);
     }
   }
 
@@ -434,7 +465,7 @@ export class GameScene extends Phaser.Scene {
                 : n.kind === 'river'
                   ? { size: 7.5, weight: 600, italic: true, ls: 1 }
                   : { size: n.kind === 'wood' ? 9 : 9.5, weight: 600, italic: true };
-        const text = this.text(c.x + n.dx, c.y + n.dy, n.text, { ...style, color: NAME_COLOR[n.kind], stroke: true })
+        const text = this.text(c.x + n.dx, c.y + n.dy, n.text, { ...style, color: nameColor(n.kind), stroke: true })
           .setOrigin(0.5)
           .setDepth(3);
         return { text, tile: n.tile };
@@ -554,7 +585,7 @@ export class GameScene extends Phaser.Scene {
 
   /** A notice on the map: a magenta pill (or a white one with magenta type) that floats up and fades. */
   private notice(x: number, y: number, caption: string, strong = false) {
-    const t = this.text(0, 0, caption, { size: 8.5, weight: 800, color: strong ? '#ffffff' : MAGENTA }).setOrigin(0.5);
+    const t = this.text(0, 0, caption, { size: 8.5, weight: 800, color: strong ? ON_MAGENTA : MAGENTA }).setOrigin(0.5);
     const w = t.width + 14;
     const g = this.add.graphics();
     g.fillStyle(strong ? hex(MAGENTA) : hex(SHEET)).fillRoundedRect(-w / 2, -8, w, 16, 8);
@@ -593,9 +624,9 @@ export class GameScene extends Phaser.Scene {
     const tx = Phaser.Math.Clamp(centre.x + 5, MAP.x + 82, MAP.x + MAP_W - 82);
     const g = this.add.graphics();
     g.fillStyle(hex(MAGENTA)).fillRoundedRect(-80, -13.5, 160, 27, 4);
-    const label = this.text(-71, 0, 'VIEWSHED', { size: 8, weight: 800, color: '#ffd9ec', ls: 1.5 }).setOrigin(0, 0.5);
-    const count = this.text(-11, 0, `${fresh.length} tiles`, { size: 10, weight: 600, color: '#ffffff' }).setOrigin(0, 0.5);
-    const sum = this.text(71, 0, '+0', { size: 15, weight: 900, color: '#ffffff' }).setOrigin(1, 0.5);
+    const label = this.text(-71, 0, 'VIEWSHED', { size: 8, weight: 800, color: ON_MAGENTA_SOFT, ls: 1.5 }).setOrigin(0, 0.5);
+    const count = this.text(-11, 0, `${fresh.length} tiles`, { size: 10, weight: 600, color: ON_MAGENTA }).setOrigin(0, 0.5);
+    const sum = this.text(71, 0, '+0', { size: 15, weight: 900, color: ON_MAGENTA }).setOrigin(1, 0.5);
     const tally = this.add.container(tx, ty, [g, label, count, sum]).setDepth(7).setAlpha(0);
     this.sweep = { age: 0, centre, radius, tiles, total, tally, tallyCount: sum, tallyAt: { x: tx, y: ty }, below };
   }
@@ -739,7 +770,7 @@ export class GameScene extends Phaser.Scene {
         const cy = c.y - 3;
         g.fillStyle(lit ? m : hex(SHEET)).fillTriangle(c.x, cy - 5, c.x + 5, cy + 3.5, c.x - 5, cy + 3.5);
         g.lineStyle(1, m).strokeTriangle(c.x, cy - 5, c.x + 5, cy + 3.5, c.x - 5, cy + 3.5);
-        g.fillStyle(lit ? 0xffffff : m).fillCircle(c.x, cy + 0.75, 1);
+        g.fillStyle(lit ? hex(ON_MAGENTA) : m).fillCircle(c.x, cy + 0.75, 1);
         const cost = costOf(s, p.x, p.y);
         if (!lit && cost !== 1) {
           const label = this.costLabel(used++);
@@ -821,6 +852,7 @@ export class GameScene extends Phaser.Scene {
     const rule = (y: number) => g.fillStyle(hex(RULE)).fillRect(PL, y, PR - PL, 1);
     this.text(PL, 50, 'MAPMAKER', { size: 24, weight: 900, ls: 1 }).setOrigin(0, 0.5);
     this.add.image(PR - 9, 50, 'logo').setScale(1 / HI);
+    this.makeThemeButton();
     const isle = this.text(PL, 72, '', { size: 9, weight: 700, color: GREY, ls: 1.5 }).setOrigin(0, 0.5);
     const atlas = this.text(PR, 72, '', { size: 8.5, weight: 700, color: GREY, ls: 1 }).setOrigin(1, 0.5);
     const atlasIcon = this.add.image(PR - 60, 72, 'atlas-empty').setScale(1 / HI);
@@ -840,8 +872,8 @@ export class GameScene extends Phaser.Scene {
     const bw = PR - PL;
     g.lineStyle(1, hex(INK)).strokeRect(PL, 220, bw, 72);
     g.fillStyle(hex(INK)).fillRect(PL, 220, bw, 18);
-    this.text(PL + 9, 229, 'COMMISSION', { size: 8.5, weight: 800, color: '#ffffff', ls: 2 }).setOrigin(0, 0.5);
-    const order = this.text(PR - 9, 229, '', { size: 7.5, weight: 600, color: '#aab3ba', ls: 1 }).setOrigin(1, 0.5);
+    this.text(PL + 9, 229, 'COMMISSION', { size: 8.5, weight: 800, color: ON_INK, ls: 2 }).setOrigin(0, 0.5);
+    const order = this.text(PR - 9, 229, '', { size: 7.5, weight: 600, color: ON_INK_SOFT, ls: 1 }).setOrigin(1, 0.5);
     const commission = this.text(PL + 9, 251, '', { size: 11.5, weight: 600 }).setOrigin(0, 0.5);
     const swatches = [0, 1, 2, 3].map((k) => this.add.image(PL + 16.5 + k * 19, 274, 'swatch-forest').setScale(0.94 / HI));
     const soFar = this.text(PL + 70, 274, '', { size: 12, weight: 700 }).setOrigin(0, 0.5);
@@ -850,8 +882,8 @@ export class GameScene extends Phaser.Scene {
     g.lineStyle(1, hex(INK)).strokeRect(PL, 300, bw, 62);
     g.fillStyle(hex(MAGENTA)).fillRect(PL, 300, bw, 18);
     this.add.image(PL + 10, 309, 'riddle').setScale(0.62 / HI);
-    this.text(PL + 21, 309, 'RIDDLE CHART', { size: 8.5, weight: 800, color: '#ffffff', ls: 2 }).setOrigin(0, 0.5);
-    const riddleTag = this.text(PR - 9, 309, '', { size: 7.5, weight: 700, color: '#ffd9ec', ls: 1 }).setOrigin(1, 0.5);
+    this.text(PL + 21, 309, 'RIDDLE CHART', { size: 8.5, weight: 800, color: ON_MAGENTA, ls: 2 }).setOrigin(0, 0.5);
+    const riddleTag = this.text(PR - 9, 309, '', { size: 7.5, weight: 700, color: ON_MAGENTA_SOFT, ls: 1 }).setOrigin(1, 0.5);
     const riddle = this.text(PL + 9, 323, '', { size: 10.5, weight: 600, wrap: bw - 18 });
     // The isle goal.
     const isleLabel = label(PL, 377, '');
@@ -905,6 +937,44 @@ export class GameScene extends Phaser.Scene {
       tagText,
       live,
     };
+  }
+
+  /**
+   * The theme switch: a moon on the white sheet, a sun on the night sheet. A tap saves the other
+   * theme and goes back to the boot scene, which bakes the art in its colours and redraws the game.
+   * It sits above the overlays' dim, so it works at the port and the harbor too.
+   */
+  private makeThemeButton() {
+    const { x, y, size } = THEME_BUTTON;
+    const g = this.add.graphics();
+    const draw = (lit: boolean) => {
+      g.clear();
+      g.fillStyle(hex(lit ? TRACK : CARD)).fillRoundedRect(-size / 2, -size / 2, size, size, 4);
+      g.lineStyle(1, hex(RULE)).strokeRoundedRect(-size / 2, -size / 2, size, size, 4);
+      g.fillStyle(hex(INK));
+      if (theme === 'dark') {
+        g.fillCircle(0, 0, 3.6);
+        g.lineStyle(1.4, hex(INK));
+        for (let k = 0; k < 8; k++) {
+          const a = (k * Math.PI) / 4;
+          g.lineBetween(Math.cos(a) * 5.6, Math.sin(a) * 5.6, Math.cos(a) * 7.4, Math.sin(a) * 7.4);
+        }
+      } else {
+        g.fillCircle(0, 0, 6);
+        g.fillStyle(hex(lit ? TRACK : CARD)).fillCircle(3.2, -2.6, 5.2);
+      }
+    };
+    draw(false);
+    const hit = this.add.rectangle(0, 0, size, size).setInteractive({ useHandCursor: true });
+    hit
+      .on('pointerover', () => draw(true))
+      .on('pointerout', () => draw(false))
+      .on('pointerdown', () => {
+        saveTheme(theme === 'dark' ? 'light' : 'dark');
+        this.scene.start('Boot');
+      });
+    this.add.container(x, y, [g, hit]).setDepth(UI_DEPTH + 1);
+    this.spots.theme = { x, y };
   }
 
   /** The Camp button, rebuilt when it turns on or off. */
@@ -978,7 +1048,7 @@ export class GameScene extends Phaser.Scene {
       const born = this.freshAt.get(i);
       const fresh = born !== undefined && this.clock - born < FRESH_MS;
       if (born !== undefined && !fresh) this.freshAt.delete(i);
-      g.fillStyle(hex(fresh ? MAGENTA : TINT[t.terrain])).fillRect(ox + (i % GRID.w) * cs, oy + Math.floor(i / GRID.w) * cs, cs, cs);
+      g.fillStyle(hex(fresh ? MAGENTA : tintOf(t.terrain))).fillRect(ox + (i % GRID.w) * cs, oy + Math.floor(i / GRID.w) * cs, cs, cs);
     });
     g.lineStyle(0.75, hex(INK)).strokeRect(ox - 2, oy - 2, GRID.w * cs + 4, GRID.h * cs + 4);
 
@@ -1088,7 +1158,7 @@ export class GameScene extends Phaser.Scene {
     this.overlayKey = key;
     this.overlay?.destroy();
     this.overlay = null;
-    for (const name of Object.keys(this.spots)) if (name !== 'return' && name !== 'camp') delete this.spots[name];
+    for (const name of Object.keys(this.spots)) if (!['return', 'camp', 'theme'].includes(name)) delete this.spots[name];
     if (s.phase === 'chart') this.showChart();
     if (s.phase === 'atlas') this.showAtlas();
     if (s.phase === 'harbor') this.showHarbor();
@@ -1097,12 +1167,12 @@ export class GameScene extends Phaser.Scene {
   private overlayBase(title: string) {
     const c = this.add.container(0, 0).setDepth(UI_DEPTH);
     // The dim covers the whole screen and swallows taps, so the map can't be surveyed behind it.
-    const dim = this.add.rectangle(0, 0, VIEW.w, VIEW.h, hex(INK), 0.38).setOrigin(0).setInteractive();
+    const dim = this.add.rectangle(0, 0, VIEW.w, VIEW.h, hex(DIM), DIM_ALPHA).setOrigin(0).setInteractive();
     const left = OVERLAY.x - OVERLAY.w / 2;
     const top = OVERLAY.y - OVERLAY.h / 2;
     const g = this.add.graphics();
     for (let k = 1; k <= 4; k++) g.fillStyle(0x000000, 0.05).fillRect(left - k, top + 2, OVERLAY.w + 2 * k, OVERLAY.h + 2 * k);
-    g.fillStyle(0xffffff).fillRect(left, top, OVERLAY.w, OVERLAY.h);
+    g.fillStyle(hex(CARD)).fillRect(left, top, OVERLAY.w, OVERLAY.h);
     g.fillStyle(hex(INK)).fillRect(left, top, OVERLAY.w, 4);
     g.fillStyle(hex(RULE)).fillRect(left + 24, top + 44, OVERLAY.w - 48, 1);
     const heading = this.text(left + 24, top + 26, title.toUpperCase(), { size: 14, weight: 800, ls: 2 }).setOrigin(0, 0.5);
@@ -1210,9 +1280,9 @@ export class GameScene extends Phaser.Scene {
       const g = this.add.graphics();
       g.fillStyle(hex(KINDS[kind].page)).fillRoundedRect(x - 36, y - 48, 72, 96, 3);
       g.fillStyle(hex(MAGENTA)).fillRect(x - 36, y - 48, 7, 96);
-      g.lineStyle(1, hex(SHEET), 0.7).strokeTriangle(x + 3, y - 14, x + 20, y + 14, x - 14, y + 14);
+      g.lineStyle(1, hex(PAGE_TYPE), 0.7).strokeTriangle(x + 3, y - 14, x + 20, y + 14, x - 14, y + 14);
       c.add(g);
-      c.add(this.text(x + 3, y + 30, KINDS[kind].name.toUpperCase(), { size: 7, weight: 800, color: SHEET, ls: 1 }).setOrigin(0.5));
+      c.add(this.text(x + 3, y + 30, KINDS[kind].name.toUpperCase(), { size: 7, weight: 800, color: PAGE_TYPE, ls: 1 }).setOrigin(0.5));
       if (page) {
         c.add(this.text(x, y + 66, `Isle ${page.island}`, { size: 10.5, weight: 700 }).setOrigin(0.5));
         c.add(this.text(x, y + 80, `${page.voyages} voyage${page.voyages === 1 ? '' : 's'}`, { size: 9, weight: 600, color: GREY }).setOrigin(0.5));
@@ -1296,8 +1366,8 @@ export class GameScene extends Phaser.Scene {
       const on = s.hand === id;
       c.add(this.card(hx, y, HANDS_COLUMN.w, HANDS_COLUMN.h, on, () => hire(this.state, on ? null : id)));
       c.add(this.add.image(hx + 16, y, `hand-${id}`).setScale(0.9 / HI));
-      c.add(this.text(hx + 32, y - 8, HANDS[id].name, { size: 11, weight: 800, color: on ? '#ffffff' : INK }).setOrigin(0, 0.5));
-      c.add(this.text(hx + 32, y + 7, HANDS[id].text, { size: 8, weight: 500, color: on ? '#ffd9ec' : SLATE }).setOrigin(0, 0.5));
+      c.add(this.text(hx + 32, y - 8, HANDS[id].name, { size: 11, weight: 800, color: on ? ON_INK : INK }).setOrigin(0, 0.5));
+      c.add(this.text(hx + 32, y + 7, HANDS[id].text, { size: 8, weight: 500, color: on ? ON_INK_ACCENT : SLATE }).setOrigin(0, 0.5));
       this.spots[`hire-${id}`] = { x: hx + HANDS_COLUMN.w / 2, y };
     });
     if (s.hands.length === 0) c.add(this.text(hx, HANDS_COLUMN.y, 'No hands at the harbor', { size: 9.5, weight: 500, color: SLATE }).setOrigin(0, 0.5));
@@ -1312,8 +1382,8 @@ export class GameScene extends Phaser.Scene {
         const on = isPicked(s, n);
         c.add(this.card(left, y, right - left, BOARD.h, on, () => pickCommission(this.state, n)));
         c.add(this.add.image(left + 14, y, `swatch-${b.terrain}`).setScale(0.8 / HI));
-        c.add(this.text(left + 28, y, commissionText(b), { size: 10.5, weight: on ? 800 : 600, color: on ? '#ffffff' : INK }).setOrigin(0, 0.5));
-        if (b.voyages > 1) c.add(this.text(right - 10, y, 'LONG', { size: 7.5, weight: 800, color: on ? '#ffd9ec' : MAGENTA, ls: 1.5 }).setOrigin(1, 0.5));
+        c.add(this.text(left + 28, y, commissionText(b), { size: 10.5, weight: on ? 800 : 600, color: on ? ON_INK : INK }).setOrigin(0, 0.5));
+        if (b.voyages > 1) c.add(this.text(right - 10, y, 'LONG', { size: 7.5, weight: 800, color: on ? ON_INK_ACCENT : MAGENTA, ls: 1.5 }).setOrigin(1, 0.5));
         this.spots[`pick-${n}`] = { x: OVERLAY.x, y };
       });
     } else if (com) {
@@ -1360,9 +1430,9 @@ export class GameScene extends Phaser.Scene {
     this.spots.sail = { ...OVERLAY_BUTTON };
   }
 
-  /** A pick card: a white box with an ink rule, inked when picked; a tap calls `onPick` and saves. */
+  /** A pick card: a card-coloured box with a rule, inked when picked; a tap calls `onPick` and saves. */
   private card(x: number, y: number, w: number, h: number, on: boolean, onPick: () => boolean) {
-    const box = this.add.rectangle(x, y, w, h, on ? hex(INK) : 0xffffff).setOrigin(0, 0.5).setStrokeStyle(1, hex(on ? INK : RULE));
+    const box = this.add.rectangle(x, y, w, h, on ? hex(INK) : hex(CARD)).setOrigin(0, 0.5).setStrokeStyle(1, hex(on ? INK : RULE));
     box.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
       if (onPick()) saveGame(this.state);
     });

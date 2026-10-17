@@ -1,5 +1,6 @@
 // The gardens: a grid of soil cells with dirt paths the pests walk along to the Heartwood.
 // Plain TypeScript with no Phaser, so the rules can use the same geometry the scene draws.
+import type { TextKey } from '../i18n';
 
 /** The board: its top left corner in view pixels, its size in cells, and each cell's size. */
 export const GRID = { x: 16, y: 64, cols: 12, rows: 7, cell: 64 };
@@ -19,9 +20,10 @@ export interface Route {
 }
 
 export interface Garden {
-  name: string;
-  /** What sets it apart, shown on its card. */
-  blurb: string;
+  /** Its name, a key of `i18n/en.ts`. */
+  name: TextKey;
+  /** What sets it apart, shown on its card (a key of `i18n/en.ts`). */
+  blurb: TextKey;
   /** How many harvest stars, over every garden, unlock it. */
   unlockStars: number;
   /** The ways through it; a forked garden has more than one, and pests take them in turn. */
@@ -52,7 +54,7 @@ function route(corners: readonly [number, number][]): Route {
   return { corners, points, segments, length: segments.reduce((a, b) => a + b, 0) };
 }
 
-function garden(name: string, blurb: string, unlockStars: number, routes: (readonly [number, number][])[]): Garden {
+function garden(name: TextKey, blurb: TextKey, unlockStars: number, routes: (readonly [number, number][])[]): Garden {
   const map: Cell[][] = Array.from({ length: GRID.rows }, () => Array<Cell>(GRID.cols).fill('soil'));
   for (const corners of routes) {
     for (let i = 1; i < corners.length; i++) {
@@ -76,14 +78,14 @@ function garden(name: string, blurb: string, unlockStars: number, routes: (reado
  * (and the playthrough) starts in.
  */
 export const GARDENS: Garden[] = [
-  garden('Meadow', 'One winding path', 0, [
+  garden('meadowName', 'meadowBlurb', 0, [
     [[-1, 1], [3, 1], [3, 5], [7, 5], [7, 2], [11, 2]],
   ]),
-  garden('Forked Brook', 'The path splits round a bed and meets again', 1, [
+  garden('forkedBrookName', 'forkedBrookBlurb', 1, [
     [[-1, 3], [2, 3], [2, 1], [8, 1], [8, 3], [11, 3]],
     [[-1, 3], [2, 3], [2, 5], [8, 5], [8, 3], [11, 3]],
   ]),
-  garden('Two Gates', 'Pests come in by two gates', 3, [
+  garden('twoGatesName', 'twoGatesBlurb', 3, [
     [[-1, 1], [5, 1], [5, 3], [9, 3], [9, 1], [11, 1]],
     [[-1, 5], [5, 5], [5, 3], [9, 3], [9, 1], [11, 1]],
   ]),

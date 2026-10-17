@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { INK, MUZZLE, SKIN, bake, circle, rrect } from './paint';
+import { MUZZLE, OUTLINE, SKIN, bake, circle, rrect } from './paint';
 
 /** The texture's size in game pixels, and the point it stands on (a little left of its feet, under the bear and tripod together). */
 const SIZE = { w: 36, h: 47 };
@@ -42,11 +42,11 @@ function bakeLook(scene: Phaser.Scene, look: Look, step: boolean) {
       ctx.globalAlpha = 0.25;
       ctx.beginPath();
       ctx.ellipse(x + 8, y + 2, 26, 6, 0, 0, Math.PI * 2);
-      ctx.fillStyle = INK;
+      ctx.fillStyle = OUTLINE;
       ctx.fill();
       ctx.restore();
       // The tripod and the theodolite on it.
-      ctx.strokeStyle = INK;
+      ctx.strokeStyle = OUTLINE;
       ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.moveTo(x + 26, y - 30);
@@ -61,7 +61,7 @@ function bakeLook(scene: Phaser.Scene, look: Look, step: boolean) {
       ctx.fill();
       ctx.lineWidth = 2;
       ctx.stroke();
-      ctx.fillStyle = INK;
+      ctx.fillStyle = OUTLINE;
       ctx.fillRect(x + 10, y - 41, 10, 6);
       ctx.translate(0, bob);
       // Feet, then the body in a pale survey coat.
@@ -71,13 +71,13 @@ function bakeLook(scene: Phaser.Scene, look: Look, step: boolean) {
       rrect(ctx, x - 16, y - 34, 26, 30, 10);
       ctx.fillStyle = look.coat;
       ctx.fill();
-      ctx.strokeStyle = INK;
+      ctx.strokeStyle = OUTLINE;
       ctx.lineWidth = 2.5;
       ctx.stroke();
       // Head, ears and face.
-      circle(ctx, x - 16, y - 66, 7, look.fur, INK, 2.5);
-      circle(ctx, x + 6, y - 66, 7, look.fur, INK, 2.5);
-      circle(ctx, x - 5, y - 52, 17, look.fur, INK, 2.5);
+      circle(ctx, x - 16, y - 66, 7, look.fur, OUTLINE, 2.5);
+      circle(ctx, x + 6, y - 66, 7, look.fur, OUTLINE, 2.5);
+      circle(ctx, x - 5, y - 52, 17, look.fur, OUTLINE, 2.5);
       ctx.beginPath();
       ctx.ellipse(x - 5, y - 46, 8, 6, 0, 0, Math.PI * 2);
       ctx.fillStyle = MUZZLE;
@@ -90,7 +90,7 @@ function bakeLook(scene: Phaser.Scene, look: Look, step: boolean) {
       ctx.ellipse(x - 5, y - 66, 24, 5, 0, 0, Math.PI * 2);
       ctx.fillStyle = look.helmet;
       ctx.fill();
-      ctx.strokeStyle = INK;
+      ctx.strokeStyle = OUTLINE;
       ctx.lineWidth = 2.5;
       ctx.stroke();
       ctx.beginPath();
