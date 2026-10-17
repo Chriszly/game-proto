@@ -1,12 +1,13 @@
 import { expect, test, type Page } from '@playwright/test';
 
-// Plays the first minute of a run with real inputs: on the hero select screen, where the three
-// soldiers are open and the seven knights still locked, waits for the game to settle, taps Captain
-// Rook's card and then Fight. Then walks him in a wide circle by holding the mouse down at a point
-// that turns around him, as a thumb on a phone would, while his pistols fire on their own. Droids die and drop lumen shards he
-// picks up, the first level-up pauses the run on three cards, and the test taps the first one and
-// checks the upgrade was taken. It fires the signature move from its round button, then plays on
-// to the one-minute mark, taking the first card at each later level-up.
+// Plays the first minute of a run with real inputs: on the hero select screen, where only
+// Legionary TR-9 is open and the eleven other heroes still locked, waits for the game to settle,
+// taps a locked card (no Fight button), then TR-9's card and Fight. Then walks him in a wide circle
+// by holding the mouse down at a point that turns around him, as a thumb on a phone would, while
+// his spread rifle fires on its own. Droids die and drop lumen shards he picks up, the first
+// level-up pauses the run on three cards, and the test taps the first one and checks the upgrade
+// was taken. It fires the signature move (Brace) from its round button, then plays on to the
+// one-minute mark, taking the first card at each later level-up.
 // Game state is only read, through the `game` object the dev build puts on window.
 
 interface GameState {
@@ -33,11 +34,10 @@ const VIEW = { w: 960, h: 540 };
 const CENTER = { x: 480, y: 270 };
 /** The round signature button, bottom right (layout.ts SIG_BUTTON). */
 const SIG_BUTTON = { x: 890, y: 470 };
-/** The heroes on the select screen, in order: the soldiers open, the knights unlocked by deeds. */
-const SOLDIERS = ['rook', 'tr9', 'bram'];
-const KNIGHTS = ['kael', 'vharn', 'oom', 'corvin', 'veyl', 'kresh', 'joren'];
-/** Captain Rook's health (heroes.ts) and how long his Rally Order lasts (sim.ts). */
-const ROOK = { hp: 100, rallyMs: 5000 };
+/** The heroes on the select screen, in order; on a fresh save only TR-9 is open. */
+const HEROES = ['rook', 'tr9', 'bram', 'kael', 'vharn', 'oom', 'corvin', 'veyl', 'kresh', 'joren', 'elara', 'triad'];
+/** Legionary TR-9's health and paths (heroes.ts) and how long his Brace lasts (sim.ts). */
+const TR9 = { hp: 150, braceMs: 3000, paths: ['suppressor', 'riot-shield', 'drop-doctrine'] };
 /** Where the test holds the mouse: this far from the hero, turning once every `turnMs` of game time. */
 const WALK = { reach: 150, turnMs: 25_000 };
 /** How long the test plays in all, ms of game time. */
@@ -163,34 +163,39 @@ test('plays the first minute', async ({ page }, testInfo) => {
   }
   const middle = (r: Spot) => ({ x: r.x + r.w / 2, y: r.y + r.h / 2 });
 
-  // The hero select screen: ten heroes and the Fight button, and no run yet. On a fresh save the
-  // three soldiers are open and the seven knights locked behind their deeds. The test waits here
+  // The hero select screen: twelve heroes and the Fight button, and no run yet. On a fresh save
+  // only TR-9 is open; the others are locked behind their deeds. The test waits here
   // until Phaser's start-up easing is over (its first STARTUP_FRAMES steps are cut short), so the
   // run always starts at full step length, however long the page took to load.
   await play(STARTUP_FRAMES * FRAME_MS, async () => false);
   let s = await game.state();
   expect(s).toMatchObject({ phase: 'select', hero: null, level: 1, kills: 0 });
   let spots = await game.spots();
-  expect(spots.map((c) => c.id)).toEqual([...SOLDIERS, ...KNIGHTS, 'fight']);
-  expect(spots.filter((c) => c.locked).map((c) => c.id), 'the knights start locked').toEqual(KNIGHTS);
+  expect(spots.map((c) => c.id)).toEqual([...HEROES, 'fight']);
+  expect(spots.filter((c) => c.locked).map((c) => c.id), 'all but TR-9 start locked').toEqual(HEROES.filter((id) => id !== 'tr9'));
   await snap('0-select');
 
-  // Tapping Captain Rook's card chooses him; it does not start the run yet.
+  // A locked card (Captain Rook's) shows only its placeholder: no Fight button.
   await tap(middle(spots[0]));
+  await play(FRAME_MS, async () => false);
+  expect((await game.spots()).some((c) => c.id === 'fight'), 'no Fight for a locked hero').toBe(false);
+
+  // Tapping TR-9's card chooses him; it does not start the run yet.
+  await tap(middle(spots[1]));
   await play(FRAME_MS, async () => false);
   s = await game.state();
   expect(s.phase, 'still choosing').toBe('select');
-  expect(await page.evaluate(() => (window as any).game.scene.getScene('Game').chosen)).toBe('rook');
+  expect(await page.evaluate(() => (window as any).game.scene.getScene('Game').chosen)).toBe('tr9');
 
-  // Tapping Fight starts the run as Rook.
+  // Tapping Fight starts the run as TR-9.
   spots = await game.spots();
   const fight = spots.find((c) => c.id === 'fight')!;
   expect(fight, 'a Fight button').toBeTruthy();
   await tap(middle(fight));
   await play(FRAME_MS, async () => false);
   s = await game.state();
-  expect(s).toMatchObject({ phase: 'run', hero: 'rook', level: 1, ranks: {}, choices: null });
-  expect(s.player.hp).toBe(ROOK.hp);
+  expect(s).toMatchObject({ phase: 'run', hero: 'tr9', level: 1, ranks: {}, choices: null });
+  expect(s.player.hp).toBe(TR9.hp);
 
   /** Holds the mouse down at the point of the walking circle for the current game time. */
   let held = false;
@@ -212,7 +217,7 @@ test('plays the first minute', async ({ page }, testInfo) => {
     held = false;
   }
 
-  // Walk the circle until the first level-up. Droids come; Rook's pistols shoot them down on their
+  // Walk the circle until the first level-up. Droids come; TR-9's rifle shoots them down on its
   // own, and the shards they drop are picked up on the way.
   let walked = 0;
   const ok = await play(PLAY_MS, async () => {
@@ -225,15 +230,15 @@ test('plays the first minute', async ({ page }, testInfo) => {
   await letGo();
   expect(ok, `reached a level-up; state ${JSON.stringify(s)}`).toBe(true);
   expect(s.phase).toBe('levelup');
-  expect(walked, 'Rook walked away from where he started').toBeGreaterThan(100);
+  expect(walked, 'TR-9 walked away from where he started').toBeGreaterThan(100);
   expect(s.kills, 'droids shot down').toBeGreaterThan(0);
   expect(s.level).toBe(2);
   expect(s.player.hp).toBeGreaterThan(0);
 
-  // The level-up waits on three different cards, at least one from Rook's own paths.
+  // The level-up waits on three different cards, at least one from TR-9's own paths.
   expect(s.choices).toHaveLength(3);
   expect(new Set(s.choices).size).toBe(3);
-  expect(s.choices!.some((id) => ['gunslinger', 'commander', 'demolitions'].includes(id)), 'a path of his own on offer').toBe(true);
+  expect(s.choices!.some((id) => TR9.paths.includes(id)), 'a path of his own on offer').toBe(true);
   spots = await game.spots();
   expect(spots.map((c) => c.id)).toEqual(s.choices);
   const paused = s.time;
@@ -250,12 +255,12 @@ test('plays the first minute', async ({ page }, testInfo) => {
   expect(s.phase).toBe('run');
   expect(s.time, 'running again').toBeGreaterThan(paused);
 
-  // The signature button fires Rally Order.
+  // The signature button fires Brace.
   await tap(SIG_BUTTON);
   await play(FRAME_MS * 2, async () => false);
   s = await game.state();
   expect(s.signatures).toBe(1);
-  expect(s.player.sigActiveMs, 'Rally Order is on').toBeGreaterThan(ROOK.rallyMs - 500);
+  expect(s.player.sigActiveMs, 'Brace is on').toBeGreaterThan(TR9.braceMs - 500);
   expect(s.player.sigMs, 'and recharging').toBeGreaterThan(0);
 
   // Play on to the minute mark, taking the first card at any later level-up.

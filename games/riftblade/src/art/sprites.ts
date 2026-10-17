@@ -1,6 +1,7 @@
 /**
  * Every texture of the game, painted once at boot: the heroes (a game-sized sprite per colour
- * scheme and a big portrait each; the knights are drawn in `knights.ts`), the soldiers' allies, the
+ * scheme and a big portrait each; the knights are drawn in `knights.ts`, Elara Voss and Triad-77 in
+ * `squad.ts`), the soldiers' allies, the
  * Scrap droids and the Grinder Crawler, bolts, shards and pickups. Heroes take their colours from
  * their scheme (`schemeOf`), so a new scheme needs no art.
  */
@@ -8,6 +9,7 @@ import Phaser from 'phaser';
 import { HEROES, HERO_IDS, isKnight, schemeOf, type HeroId, type HeroScheme } from '../game/heroes';
 import { C, beam, glow, outline, paint, shade, shape, type Ctx } from './glow';
 import { drawKnight } from './knights';
+import { drawSquadHero, rebel } from './squad';
 
 /** How big a hero is drawn in play (their art is laid out at 1 for the portraits). */
 export const HERO_SCALE = 0.46;
@@ -47,6 +49,10 @@ function torso(ctx: Ctx, x: number, y: number, sch: HeroScheme, z: number) {
 export function drawHero(ctx: Ctx, id: HeroId, x: number, y: number, z: number, bolts: boolean, sch = schemeOf(id)) {
   if (isKnight(id)) {
     drawKnight(ctx, id, x, y, z, bolts, sch);
+    return;
+  }
+  if (id === 'elara' || id === 'triad') {
+    drawSquadHero(ctx, id, x, y, z, bolts, sch);
     return;
   }
   const mark = sch.mark ?? shade(sch.accent, -0.15);
@@ -244,6 +250,14 @@ export function bakeSprites(scene: Phaser.Scene) {
   // Allies: Rook's troopers are smaller copies of him; Bram's brothers are identical to him.
   bakeHero(scene, 'rb-trooper', 'rook', 0.34, HERO_BOX, false);
   bakeHero(scene, 'rb-brother', 'bram', 0.42, HERO_BOX, false);
+  // TR-9's Drop Squad troopers are smaller copies of him; Elara's commandos and medic are rebels.
+  bakeHero(scene, 'rb-legionary', 'tr9', 0.32, HERO_BOX, false);
+  for (const [key, medic] of [['rb-commando', false], ['rb-medic', true]] as const) {
+    paint(scene, key, HERO_BOX.w * 0.34, HERO_BOX.h * 0.34, (ctx) => {
+      ctx.scale(0.34, 0.34);
+      rebel(ctx, -HERO_BOX.x, -HERO_BOX.y, 0.34, medic);
+    });
+  }
 
   paint(scene, 'rb-clanker', 36, 36, (ctx) => clanker(ctx, 18, 17, 11, C.clanker, false));
   paint(scene, 'rb-clanker-elite', 56, 56, (ctx) => clanker(ctx, 28, 27, 17.6, C.clanker, true));
@@ -296,19 +310,6 @@ export function bakeSprites(scene: Phaser.Scene) {
     ctx.fillStyle = C.elite;
     ctx.fillRect(16, 13, 4, 6);
     ctx.restore();
-  });
-  paint(scene, 'rb-sentry', 34, 34, (ctx) => {
-    outline(ctx, () => {
-      ctx.moveTo(17, 18);
-      ctx.lineTo(7, 30);
-      ctx.moveTo(17, 18);
-      ctx.lineTo(27, 30);
-      ctx.moveTo(17, 18);
-      ctx.lineTo(17, 31);
-    }, BOLT_COLOR.drone, 2, 6);
-    shape(ctx, () => ctx.arc(17, 15, 8, 0, Math.PI * 2), '#132a33', BOLT_COLOR.drone, 10);
-    ctx.fillStyle = BOLT_COLOR.drone;
-    ctx.fillRect(17, 13, 12, 4);
   });
   paint(scene, 'rb-drone', 26, 26, (ctx) => {
     shape(ctx, () => ctx.arc(13, 13, 6, 0, Math.PI * 2), '#132a33', BOLT_COLOR.drone, 10);
