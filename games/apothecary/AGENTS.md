@@ -47,8 +47,8 @@ study, shade gardens and a mirrored second production line.
   The palette is kept dark and muted (deep greens, dark earth and floor boards, aged-paper cards
   under dark ink): keep new ground, card and surface colours in that range, and only items, markers
   and the brew bright.
-- There is one scene with no title or lose screen, and no audio; the only win screen is the cure's
-  panel (`showWin`). A customer who runs out of patience leaves and lowers the reputation.
+- There is one scene with no title or lose screen; the only win screen is the cure's panel
+  (`showWin`). Sound effects and chiptune music are made in code (see Sound). A customer who runs out of patience leaves and lowers the reputation.
 - Leftovers: `GAME_WIDTH`/`GAME_HEIGHT` in `src/main.ts` are only used there. `DOCTOR_W`/`DOCTOR_H`
   in `src/art/doctor.ts` are exported but unused.
 
@@ -76,6 +76,8 @@ study, shade gardens and a mirrored second production line.
 - `src/main.ts`: creates the `Phaser.Game` (960x540, FIT scaling, arcade physics with
   `fixedStep: false`, `pixelArt: false`, aged-paper background `PAPER`), registers `BootScene` and `GameScene`, calls `setupGame(game)`
   from `shared/setupGame.ts` and `setupScaling(game)` from `shared/scaling.ts`, and puts `game` on window in dev.
+- `src/audio.ts`: the game's sound (`shared/audio.ts`): `SONG`, `RUSH_SONG` and the `sfx` table
+  (see Sound).
 - `src/game/items.ts`: item ids and defs (`ITEMS`: kind and colour; names are in `i18n/`), `GROW_MS`, `REFINE`, `RECIPES`,
   `POTION_PRICE`, the `isPlant`/`isRefined`/`isPotion`/`isFine`/`isSellable` guards, the ordered
   lists `PLANTS`, `REFINED`, `POTIONS`, and the fine potions (`FineId`, `FINE`, `plainOf`; a
@@ -501,6 +503,51 @@ brew's `out` may be `PANACEA`.
   root README.md and the Settings paragraph in this game's README.md.
 - Shared settings live under the `hub-settings` key, not in `apothecary-save`; "New game" keeps
   them.
+
+## Sound
+
+Everything plays from `GameScene`, never from `src/game/`, so the sim stays free of audio and
+`catchUp` (the time away) is silent: `createSound` starts comparing from the state as loaded, after
+`catchUp`, and the plague card's first frame (which tells what changed while away) plays nothing.
+Under browser automation the engine is a no-op, so the playthrough is unchanged.
+
+- Music, `SONG` in `src/audio.ts`: modal folk in D Dorian at 84 BPM (recorder-like pulse lead,
+  plucked square arpeggio, triangle bass, light shakers). Parts: `calm` (eight bars, a normal day)
+  and `plague` (D minor with Bb and A major over a heartbeat, while `state.plague` spreads and isn't
+  cured). `RUSH_SONG` (96 BPM, a jig over a driving bass, part `rush`) plays while any order of a
+  market day's crowd (`rush`) is waiting. `createSound` picks the part each frame (rush, then plague,
+  then calm) and calls `playMusic` only when it changes; a New game's `create` starts over from calm.
+- Stings (parts of `SONG`, played with `playSting`): `day` (a soft bell) when the day rolls over
+  without a kept contract, after the `missed` effect; `kept` (a fanfare) when a contract is kept
+  (both in `createContract`'s day change); `relapse` (a low toll) when the plague starts, a new
+  season starts or a stage relapses, and `win` (D major) when the town is cured (`createPlague`).
+- Effects, `sfx` (each with its own `gap`; soft volumes):
+
+| Sound | Where it plays |
+| --- | --- |
+| `swish` + `pluck` | `autoHarvest`, a ripe bed cut |
+| `rasp` | `autoHarvest`, a blighted bed cleared |
+| `drop` | drop markers at a table, a cauldron and the counter (`sounded`) |
+| `pickUp` | pick-up markers at a table, or a cauldron's pallet (`pickUpPotion`) |
+| `fine` | `pickUpPotion`, a brew taken out in its fine window |
+| `bubble` | `createSound`, a station on screen puts out a good or potion (one per frame) |
+| `pay` | purple markers (`addLevelMarker`, `addBuildMarker`) and the herb market's buy marker, pitched up as the price fills |
+| `upgrade` | a level, craftsman, recipe, pixie route or build fully paid |
+| `toss` | a hands slot tapped (`dropItem`) |
+| `sell` / `served` | `createSound`: `state.sold` went up / an order left with nothing more to want |
+| `cascade` | the till collected, the herb market's sell marker, a crate sold to the wagon |
+| `hmph` | `createSound`, an order gone with wants left and no patience |
+| `missed` | `createContract`, a day ended with its contract missed |
+| `rush` | `createSound`, a market day's crowd arrives |
+| `blight` | `createSound`, more beds blighted than last frame |
+| `plagueUp` | `createPlague`, a stage beaten or the Panacea unlocked |
+
+- Shared sounds: `ui('click')` for the Recipes and Settings buttons, price signs, priority signs,
+  the herb market's sign and a garden sign that replants; `ui('refuse')` for a garden sign with nothing else to plant, a tap on an order bubble
+  that hands nothing over (out of the shop or not on the shelf), a wagon tap without a full crate,
+  and a purple or herb market marker that takes nothing (no coins, nothing to trade), once a visit
+  (`refusedMarker`, reset on stepping off).
+- Not done: no ambience (cauldron bubble loop, rain) and no sound per pixie, as the plan says.
 
 ## Testing hooks
 

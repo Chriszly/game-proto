@@ -135,6 +135,14 @@ Notes:
 ### Apothecary
 Cosy crafting and shop automation; a calm herbalist's almanac.
 
+**Done** (see `games/apothecary/AGENTS.md`, Sound). Differences from the plan below: the market
+rush is its own song (`RUSH_SONG`, 96 BPM) since a song has one tempo; every sound plays from
+`GameScene` (marker callbacks, and `createSound` comparing the state each frame for the sim's own
+events) rather than from `sim.ts`; a kept contract plays the `kept` fanfare sting in place of the
+new day's bell, a missed one two low notes and then the bell; the plague starting, a new season and
+a relapse share the tolling `relapse` sting; a sale plays a soft coin and a filled order the
+ka-ching; purple markers buzz once a visit when there are no coins. No ambience yet.
+
 **Music:** Modal folk at about 84 BPM in D Dorian. Voices are a soft pulse lead like a recorder,
 triangle bass, a plucked square arpeggio and light shakers.
 - Market-day rush: brighter, at about 96 BPM.

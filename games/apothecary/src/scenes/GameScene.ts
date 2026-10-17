@@ -2,6 +2,8 @@ import { pickUpPad, upgradePad, type UpgradeIcon } from '../art/markers';
 import Phaser from 'phaser';
 import { settings as hubSettings } from '../../../../shared/settings';
 import { formatNumber } from '../../../../shared/i18n';
+import { playMusic, playSting, ui } from '../../../../shared/audio';
+import { RUSH_SONG, SONG, sfx, type SfxName } from '../audio';
 import { renderScale, scrollingCamera, viewPoint, viewSize } from '../../../../shared/scaling';
 import { PIXIE_FRAMES, drawFairyPaths, laneOffset, pointAlong } from '../art/pixies';
 import { plantTexture } from '../art/garden';
@@ -11,7 +13,7 @@ import { INK, INK_NUM, SERIF, TEXT_HALO, fit, resOf } from '../art/paint';
 import { craftsmanTexture, customerTexture } from '../art/townsfolk';
 import { BUBBLE_TAIL, cardInset, cardTexture, signTexture, type CardKind } from '../art/ui';
 import { catchUp, type AwaySummary } from '../game/away';
-import { GROW_MS, ITEMS, PANACEA_RECIPE, PLANTS, POTIONS, REFINE, REFINED, isPlant, isPotion, isRefined, isSellable, plainOf, type ItemId, type SellableId } from '../game/items';
+import { GROW_MS, ITEMS, PANACEA_RECIPE, PLANTS, POTIONS, REFINE, REFINED, isFine, isPlant, isPotion, isRefined, isSellable, plainOf, type ItemId, type SellableId } from '../game/items';
 import {
   clearBlight,
   collectTill,
@@ -335,6 +337,8 @@ export class GameScene extends Phaser.Scene {
   private nextMarkerAt = 0;
   /** Since when the doctor has stood still, by `this.time.now`, or null while walking. */
   private stillSince: number | null = null;
+  /** The purple marker that last refused to take coins, so its buzz plays once until the doctor steps off. */
+  private refusedMarker: Marker | null = null;
   /** Plot centres, in plot order, for finding ripe plants within the doctor's reach. */
   private plotCentres: Phaser.Math.Vector2[] = [];
   private nextHarvestAt = 0;
@@ -392,6 +396,7 @@ export class GameScene extends Phaser.Scene {
     this.atCounter = new Set();
     this.shopMeasured = null;
     this.winPanel = null;
+    this.refusedMarker = null;
     this.physics.world.setBounds(0, HUD_HEIGHT, WORLD.w, WORLD.h - HUD_HEIGHT);
     // Restarting the scene for a new game keeps its event listeners, so this one is added once.
     this.events.off(Phaser.Scenes.Events.PRE_UPDATE, this.limitWalkStep, this);
@@ -419,6 +424,7 @@ export class GameScene extends Phaser.Scene {
     this.createOrderStrip();
     this.createWeather();
     this.createAwayChip();
+    this.createSound();
     this.createUiCamera();
     this.createControls();
     this.createZoom();
@@ -534,7 +540,10 @@ export class GameScene extends Phaser.Scene {
       e.stopPropagation();
       if (this.pinching()) return;
       if (this.closePanels()) return;
+      const before = gardenPlant(this.state, garden);
       const feedback = replantGarden(this.state, garden);
+      if (gardenPlant(this.state, garden) === before) ui('refuse');
+      else ui('click');
       if (feedback) this.showFeedback(feedback);
     });
     let shown = '';
@@ -593,6 +602,7 @@ export class GameScene extends Phaser.Scene {
       if (this.pinching()) return;
       // With a panel open, a tap anywhere closes it, a sign's included, without changing the sign.
       if (this.closePanels()) return;
+      ui('click');
       cyclePriority(this.state, id);
     });
     this.views.push(() => {
@@ -686,8 +696,8 @@ export class GameScene extends Phaser.Scene {
     const progress = new ProgressBar(this, at.x, at.y + 30, 60, REFINING_BAR, WORLD_UI_DEPTH, REFINING_BAR_H);
     // A second craftsman's pipe shows its own bar just below.
     const progress2 = new ProgressBar(this, at.x, at.y + 41, 60, REFINING_BAR, WORLD_UI_DEPTH, REFINING_BAR_H);
-    this.addMarker(m.pickUp, pickUpPad('sack'), t('pickUp'), () => pickUpFromRefiner(this.state, id), () => this.state.belts[beltOut].built);
-    this.addMarker(m.drop, 'pad-in', t('drop'), () => dropAtRefiner(this.state, id), () => this.state.belts[beltIn].built && !this.carries(isPlant));
+    this.addMarker(m.pickUp, pickUpPad('sack'), t('pickUp'), () => this.sounded(pickUpFromRefiner(this.state, id), 'pickUp'), () => this.state.belts[beltOut].built);
+    this.addMarker(m.drop, 'pad-in', t('drop'), () => this.sounded(dropAtRefiner(this.state, id), 'drop'), () => this.state.belts[beltIn].built && !this.carries(isPlant));
     this.addWorkSpot(m.work, id);
     this.addUpgradeMarker(m.upgrade, id);
     this.addCraftsmen(id);
@@ -710,8 +720,8 @@ export class GameScene extends Phaser.Scene {
     // The end of the bar is the fine window: picked up then, the potion comes out fine.
     const brewing = new ProgressBar(this, at.x, at.y + 34, 60, 0x58a35a, WORLD_UI_DEPTH).setZone(1 - FINE_SHARE, 0xe8b830);
     const brewing2 = new ProgressBar(this, at.x, at.y + 42, 60, 0x58a35a, WORLD_UI_DEPTH).setZone(1 - FINE_SHARE, 0xe8b830);
-    this.addMarker(m.pickUp, pickUpPad('bottle'), t('pickUp'), () => pickUpFromCauldron(this.state, id), () => this.state.belts[beltOut].built);
-    this.addMarker(m.drop, 'pad-in', t('drop'), () => dropInCauldron(this.state, id), () => this.state.belts[beltIn].built && !this.carries(isRefined));
+    this.addMarker(m.pickUp, pickUpPad('bottle'), t('pickUp'), () => this.pickUpPotion(id), () => this.state.belts[beltOut].built);
+    this.addMarker(m.drop, 'pad-in', t('drop'), () => this.sounded(dropInCauldron(this.state, id), 'drop'), () => this.state.belts[beltIn].built && !this.carries(isRefined));
     this.addWorkSpot(m.work, id);
     this.addUpgradeMarker(m.upgrade, id);
     this.addCraftsmen(id);
@@ -841,6 +851,8 @@ export class GameScene extends Phaser.Scene {
         const feedback = pay();
         // A finished level doesn't roll straight into paying for the next.
         if (get().level > level) this.markers[marker].paused = true;
+        if (get().level > level) sfx('upgrade');
+        else if (feedback) sfx('pay', { pitch: 1 + (0.6 * get().paid) / cost(level) });
         return feedback;
       },
       () => !open(),
@@ -928,7 +940,13 @@ export class GameScene extends Phaser.Scene {
         .setOrigin(0.5, 0)
         .setDepth(-400),
     );
-    this.markers.push({ zone: new Phaser.Geom.Rectangle(at.x - 22, at.y - 22, 44, 44), act, shown, pays: true });
+    const payAndSound = () => {
+      const feedback = act();
+      if (build.built && feedback) sfx('upgrade');
+      else if (feedback) sfx('pay', { pitch: 1 + (0.6 * build.paid) / cost });
+      return feedback;
+    };
+    this.markers.push({ zone: new Phaser.Geom.Rectangle(at.x - 22, at.y - 22, 44, 44), act: payAndSound, shown, pays: true });
     this.views.push(() => {
       const show = shown();
       pad.setVisible(show);
@@ -1168,9 +1186,9 @@ export class GameScene extends Phaser.Scene {
     // Potions are stocked by hand until every cauldron standing has its belt to the counter, and
     // whenever the doctor carries one.
     const allBelted = () => !doneByHand(this.state, 'cauldron') && !doneByHand(this.state, 'cauldron2');
-    this.addMarker(COUNTER_MARKERS.drop, 'pad-in', t('drop'), () => stockShelf(this.state), () => allBelted() && !this.carries(isSellable));
+    this.addMarker(COUNTER_MARKERS.drop, 'pad-in', t('drop'), () => this.sounded(stockShelf(this.state), 'drop'), () => allBelted() && !this.carries(isSellable));
     // The till: a coin beside the pick-up arrow, and what it holds as the caption.
-    const till = this.addMarker(COUNTER_MARKERS.pickUp, pickUpPad('coin'), '', () => collectTill(this.state));
+    const till = this.addMarker(COUNTER_MARKERS.pickUp, pickUpPad('coin'), '', () => this.sounded(collectTill(this.state), 'cascade'));
     this.addWorkSpot(COUNTER_MARKERS.work, 'counter');
     this.addUpgradeMarker(COUNTER_MARKERS.upgrade, 'counter');
     this.addCraftsmen('counter');
@@ -1230,6 +1248,7 @@ export class GameScene extends Phaser.Scene {
       e.stopPropagation();
       if (this.pinching()) return;
       if (this.closePanels()) return;
+      ui('click');
       this.showFeedback(cycleSign(this.state, potion));
     });
     const COLOURS = { cheap: '#2f6a1a', fair: INK, dear: '#8a3a10' };
@@ -1264,7 +1283,10 @@ export class GameScene extends Phaser.Scene {
         if (this.closePanels()) return;
         const order = this.state.orders[i];
         if (!order || !this.atCounter.has(order.id)) return;
+        const sold = this.state.sold;
         this.showFeedback(this.inShop({ x: this.feetX(), y: this.feetY() }) ? (serveOrder(this.state, order.id) ?? []) : [t('serveInShop')]);
+        // Nothing handed over (not in the shop, or nothing on the shelf they want) is refused; a sale sounds from `createSound`.
+        if (this.state.sold === sold) ui('refuse');
       });
     }
     const wants = new IconRow(this, x, cy - 4, depth + 0.02, BUBBLE.icon);
@@ -1350,6 +1372,12 @@ export class GameScene extends Phaser.Scene {
       if (c.day !== day) {
         // A new day's contract: say how the last one went.
         const paid = c.kept > kept;
+        // A kept contract gets a fanfare in place of the new day's bell; a missed one two low notes, then the bell.
+        if (paid) playSting(SONG, 'kept');
+        else {
+          sfx('missed');
+          this.time.delayedCall(450, () => playSting(SONG, 'day'));
+        }
         note.setText(paid ? t('contractKept') : t('contractMissed')).setColor(paid ? '#2f6a1a' : '#8a3a10').setAlpha(1);
         this.tweens.killTweensOf(note);
         this.tweens.add({ targets: note, alpha: 0, delay: 2_500, duration: 800 });
@@ -1437,7 +1465,11 @@ export class GameScene extends Phaser.Scene {
     // Starts from the plague as saved, so a stage, relapse or cure while away is told like one in play.
     let seen = this.plagueSaved;
     let drawn = '';
+    // The first frame tells what changed while away, which stays silent like the catch-up itself.
+    let live = false;
     this.views.push(() => {
+      const loud = live;
+      live = true;
       const plague = this.state.plague;
       card.setVisible(!!plague);
       if (!plague) {
@@ -1452,10 +1484,20 @@ export class GameScene extends Phaser.Scene {
           say(t('panaceaBrewed'), true);
           this.showWin();
         } else say(t('seasonCured', { n: Math.round(SEAL_PRICE * 100) }), true);
-      } else if (seen && season > seen.season) say(t('newSeason'), false);
-      else if (seen && plague.stage > seen.stage) say(plague.stage < stages ? t('stageBeaten') : t('panaceaUnlocked'), true);
-      else if (seen && plague.relapses > seen.relapses) say(t('relapse'), false);
-      else if (!seen) say(t('sicknessSpreads'), false);
+        if (loud) playSting(SONG, 'win');
+      } else if (seen && season > seen.season) {
+        say(t('newSeason'), false);
+        if (loud) playSting(SONG, 'relapse');
+      } else if (seen && plague.stage > seen.stage) {
+        say(plague.stage < stages ? t('stageBeaten') : t('panaceaUnlocked'), true);
+        if (loud) sfx('plagueUp');
+      } else if (seen && plague.relapses > seen.relapses) {
+        say(t('relapse'), false);
+        if (loud) playSting(SONG, 'relapse');
+      } else if (!seen) {
+        say(t('sicknessSpreads'), false);
+        if (loud) playSting(SONG, 'relapse');
+      }
       seen = { stage: plague.stage, relapses: plague.relapses, cured: plague.cured, season };
       const stage = plagueStage(this.state);
       const key = `${season}:${plague.stage}:${plague.need}:${plague.made}:${plague.cured}:${this.state.seals}:${Math.ceil(plague.left / (DAY / 4))}`;
@@ -1576,6 +1618,8 @@ export class GameScene extends Phaser.Scene {
       if (this.pinching()) return;
       if (this.closePanels()) return;
       const feedback = sellToWagon(this.state);
+      if (this.state.wagon?.sold) sfx('cascade');
+      else ui('refuse');
       if (feedback) this.showFeedback(feedback);
     });
     const style = { fontFamily: SERIF, fontSize: '12px', fontStyle: 'bold', color: INK, stroke: TEXT_HALO, strokeThickness: 3 };
@@ -1613,9 +1657,9 @@ export class GameScene extends Phaser.Scene {
       .setDepth(-900);
     const board = this.card(HERB_MARKET.label.x, HERB_MARKET.label.y, 'sign', signTexture(this, name.width + 16)).setDepth(-910);
     // Walking over either marker trades nothing: like a purple marker, the doctor has to stand still on it.
-    this.addMarker(HERB_MARKET.sell, 'pad-in', '', () => sellHerb(this.state), () => !open());
+    this.addMarker(HERB_MARKET.sell, 'pad-in', '', () => this.sounded(sellHerb(this.state), 'cascade'), () => !open());
     this.markers[this.markers.length - 1].pays = true;
-    this.addMarker(HERB_MARKET.buy, 'pad-out', '', () => buyHerb(this.state), () => !open());
+    this.addMarker(HERB_MARKET.buy, 'pad-out', '', () => this.sounded(buyHerb(this.state), 'pay'), () => !open());
     this.markers[this.markers.length - 1].pays = true;
     const caption = (at: Point) =>
       coined(
@@ -1632,6 +1676,7 @@ export class GameScene extends Phaser.Scene {
       e.stopPropagation();
       if (this.pinching()) return;
       if (this.closePanels()) return;
+      ui('click');
       this.showFeedback(cycleMarketPick(this.state));
     });
     let drawn = '';
@@ -1863,6 +1908,7 @@ export class GameScene extends Phaser.Scene {
       .on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
         e.stopPropagation();
         if (this.pinching()) return;
+        ui('click');
         const open = this.settings.visible;
         this.closePanels();
         this.settings.toggle(!open);
@@ -1898,6 +1944,7 @@ export class GameScene extends Phaser.Scene {
           e.stopPropagation();
           if (this.pinching()) return;
           const feedback = dropItem(this.state, i);
+          if (feedback) sfx('toss');
           if (feedback) this.showFeedback(feedback);
         });
       frames.push(frame);
@@ -1995,6 +2042,7 @@ export class GameScene extends Phaser.Scene {
         e.stopPropagation();
         // A second finger landing on a button starts a pinch, not a tap.
         if (this.pinching()) return;
+        ui('click');
         onTap();
       });
     return [button, text] as const;
@@ -2122,6 +2170,11 @@ export class GameScene extends Phaser.Scene {
     if (this.time.now >= this.nextHarvestAt) {
       this.nextHarvestAt = this.time.now + HARVEST_INTERVAL_MS;
       const feedback = blighted.length > 0 ? clearBlight(this.state, blighted[0].i) : full ? null : harvest(this.state, inReach[0].i);
+      if (feedback && blighted.length > 0) sfx('rasp');
+      else if (feedback) {
+        sfx('swish');
+        sfx('pluck');
+      }
       if (feedback) this.showFeedback(feedback);
     }
     return true;
@@ -2143,6 +2196,70 @@ export class GameScene extends Phaser.Scene {
       .setRotation(this.sickleAngle + Math.PI / 2);
     // Sorted by its own position like the plants it passes, in front of what stands above it.
     this.sickle.setDepth(this.sickle.y + this.sickle.displayHeight / 2);
+  }
+
+  /** Plays `name` when a marker's action did something (returned feedback), and passes the feedback on. */
+  private sounded(feedback: Feedback | null, name: SfxName) {
+    if (feedback) sfx(name);
+    return feedback;
+  }
+
+  /** The cauldron's pick-up marker: a chime for a potion taken out fine, a blip for one off the pallet. */
+  private pickUpPotion(id: CauldronId) {
+    const feedback = pickUpFromCauldron(this.state, id);
+    if (feedback) sfx(isFine(this.state.carrying[this.state.carrying.length - 1]) ? 'fine' : 'pickUp');
+    return feedback;
+  }
+
+  /**
+   * Music, and the sounds of what the sim does on its own each frame, found by comparing the state
+   * with the last frame's: a station in view finishing a good, a sale, an order filled or walked
+   * off, a market day's crowd and the blight. It starts from the state as loaded, after `catchUp`,
+   * so the time away stays silent. The music follows the day: the plague's part while it spreads,
+   * the market rush while its crowd waits, and the calm part otherwise.
+   */
+  private createSound() {
+    const stations = [
+      { id: 'refiner', at: REFINER },
+      { id: 'refiner2', at: REFINER2 },
+      { id: 'cauldron', at: CAULDRON },
+      { id: 'cauldron2', at: CAULDRON2 },
+    ] as const;
+    const made = () => stations.map(({ id }) => this.state[id].output.length);
+    let output = made();
+    let orders = [...this.state.orders];
+    let sold = this.state.sold;
+    let rushDay = this.state.rush?.day ?? 0;
+    let blighted = this.state.plots.filter((p) => p.blighted).length;
+    let music = '';
+    this.views.push(() => {
+      const state = this.state;
+      const view = this.cameras.main.worldView;
+      const now = made();
+      // One pop a frame at most, and only for a station on screen.
+      if (stations.some(({ at }, i) => now[i] > output[i] && view.contains(at.x, at.y))) sfx('bubble');
+      output = now;
+      // Orders gone since the last frame: filled (nothing left to want) or walked off (out of patience).
+      const gone = orders.filter((o) => !state.orders.includes(o));
+      if (gone.some((o) => o.wants.length === 0)) sfx('served');
+      else if (state.sold > sold) sfx('sell');
+      if (gone.some((o) => o.wants.length > 0 && o.patience <= 0)) sfx('hmph');
+      orders = [...state.orders];
+      sold = state.sold;
+      if (state.rush && state.rush.day !== rushDay) sfx('rush');
+      rushDay = state.rush?.day ?? 0;
+      const blightedNow = state.plots.filter((p) => p.blighted).length;
+      if (blightedNow > blighted) sfx('blight');
+      blighted = blightedNow;
+      const plague = state.plague && !state.plague.cured;
+      const rush = state.orders.some((o) => o.rush);
+      const part = rush ? 'rush' : plague ? 'plague' : 'calm';
+      if (part !== music) {
+        music = part;
+        if (part === 'rush') playMusic(RUSH_SONG, 'rush');
+        else playMusic(SONG, part);
+      }
+    });
   }
 
   private showFeedback(lines: Feedback) {
@@ -2194,11 +2311,17 @@ export class GameScene extends Phaser.Scene {
     const moving = this.player.body!.velocity.lengthSq() > 0;
     if (moving) this.stillSince = null;
     else this.stillSince ??= this.time.now;
+    if (marker !== this.refusedMarker) this.refusedMarker = null;
     if (!marker || marker.paused || this.time.now < this.nextMarkerAt) return;
     if (marker.pays && (this.stillSince === null || this.time.now - this.stillSince < STILL_MS)) return;
     this.nextMarkerAt = this.time.now + MARKER_INTERVAL_MS;
     const feedback = marker.act();
     if (feedback) this.showFeedback(feedback);
+    // A purple marker that takes nothing (no coins, or the herb market with nothing to trade) buzzes once a visit.
+    else if (marker.pays && !this.refusedMarker) {
+      this.refusedMarker = marker;
+      ui('refuse');
+    }
   }
 
   private movePlayer() {
