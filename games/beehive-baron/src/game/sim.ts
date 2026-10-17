@@ -1,7 +1,8 @@
 import { byDifficulty } from '../../../../shared/settings';
 import { CONTRACTS_FROM, CONTRACT_BEES, CONTRACT_COINS_PER_BEE, CONTRACT_GAP_MS, CONTRACT_MS, OFFER_MS } from './contracts';
-import { FAIR_GOLD } from './fair';
+import { CLASS_NAME, MEAD_POINTS, classesFor, fairGold, noEntries, type FairClass } from './fair';
 import { KINDS, type Kind } from './honey';
+import { REST_RATE, TIRE_MS, rested, unwilted } from './tired';
 import { CASK_JARS, CASK_MS, MAX_CASKS, MEAD_MULT } from './mead';
 import { MEADOWS } from './meadows';
 import { ORDERS_FROM, ORDER_COINS_PER_JAR, ORDER_GAP_MS, ORDER_MIN_MS, ORDER_MS } from './orders';
@@ -15,14 +16,15 @@ import {
   SLOTS,
   TRIP_MS,
   atHome,
+  beeCarry,
   broodPrice,
-  carry,
   cellPrice,
   crowded,
   demand,
   emptyCell,
-  fairOpen,
+  fairOn,
   fairTotal,
+  fairWon,
   hiveOf,
   isBrood,
   isHoney,
@@ -39,12 +41,13 @@ import {
   ripenTime,
   room,
   season,
+  seasonNo,
   touching,
   withWax,
   type Cell,
   type GameState,
 } from './state';
-import { CATCH_PRICE, MAX_HIVES, SWARM_MS } from './swarm';
+import { CATCH_PRICE, MAX_HIVES, SWARM_MS, type Queen } from './swarm';
 import { nextPrice, type UpgradeId } from './upgrades';
 import { WASPS_FROM, WASP_GAP, WASP_GAP_SPREAD, WASP_IN_MS, WASP_OUT_MS, WASP_STEAL_MS, type Wasp } from './wasps';
 
@@ -54,15 +57,16 @@ export const tripMs = (s: GameState) => Math.round(TRIP_MS * Math.pow(0.8, s.ran
 /**
  * Moves the hive on by `dt` milliseconds: the year turns, foragers fly and bring nectar home, full
  * cells ripen, brood cells hatch bees, casks age, the market moves, wasps raid, village orders and
- * orchard contracts come and go, a crowded hive swarms, in winter the bees eat, and with the
- * Waggle Dance bees set off by themselves.
+ * orchard contracts come and go, a crowded hive swarms, in winter the bees eat, meadows tire and
+ * rest, and with the Waggle Dance bees set off by themselves.
  */
 export function tick(s: GameState, dt: number) {
   turn(s, dt);
+  tire(s, dt);
   for (const b of s.bees) {
     if (b.tripMs <= 0) continue;
     b.tripMs = Math.max(0, b.tripMs - dt);
-    if (b.tripMs === 0) deliver(s, carry(s), b.kind);
+    if (b.tripMs === 0) deliver(s, beeCarry(s, b), b.kind);
   }
   s.cells.forEach((c, slot) => {
     if (isBrood(c)) return hatch(s, c, slot, dt);
@@ -88,9 +92,14 @@ export function tick(s: GameState, dt: number) {
   if (s.ranks.dance > 0) send(s);
 }
 
-/** The year turns: a new season every `SEASON_MS`, and in winter the bees eat. The foragers leave a meadow that shuts. */
+/**
+ * The year turns: a new season every `SEASON_MS` (which rests every meadow), the fair opens at the
+ * end of summer and is judged as autumn comes, and in winter the bees eat. The foragers leave a
+ * meadow that shuts.
+ */
 function turn(s: GameState, dt: number) {
   const before = season(s);
+  const fair = fairOn(s);
   s.seasonMs += dt;
   if (s.seasonMs >= YEAR_MS) {
     s.seasonMs -= YEAR_MS;
@@ -101,14 +110,38 @@ function turn(s: GameState, dt: number) {
   if (now !== before) {
     s.events.push({ kind: 'season', season: now });
     s.eatIn = WINTER_EAT_MS;
+    s.tired = rested();
+    s.wilted = unwilted();
   }
+  if (!fair && fairOn(s)) s.events.push({ kind: 'fair-open' });
+  if (fair && !fairOn(s)) closeFair(s);
   if (!isOpen(s, s.forage)) s.forage = 'clover';
   if (now !== 'winter') return;
   s.eatIn -= dt;
   if (s.eatIn > 0) return;
   s.eatIn = WINTER_EAT_MS;
-  // One meal for every `BEES_PER_MEAL` bees (at least one), so a big hive needs a big larder.
-  for (let meals = Math.ceil(s.bees.length / BEES_PER_MEAL); meals > 0; meals--) eat(s);
+  // One meal for every `BEES_PER_MEAL` bees (at least one), so a big hive needs a big larder; a Hardy queen's bees eat half.
+  const hardy = s.queen === 'hardy' ? s.bees.filter((b) => b.hive === 1).length : 0;
+  const meals = Math.ceil((s.bees.length - hardy) / BEES_PER_MEAL) + Math.ceil(hardy / (BEES_PER_MEAL * 2));
+  for (let n = Math.max(1, meals); n > 0; n--) eat(s);
+}
+
+/**
+ * Meadows tire while the bees have another kind to go for: each kind's strain grows while a bee is
+ * out on it and falls `REST_RATE` times as fast while none is, and at `TIRE_MS` the meadow wilts
+ * until the season turns.
+ */
+function tire(s: GameState, dt: number) {
+  const rotate = openKinds(s).length > 1;
+  for (const k of KINDS) {
+    if (s.wilted[k]) continue;
+    const busy = rotate && s.bees.some((b) => b.tripMs > 0 && b.kind === k);
+    s.tired[k] = busy ? s.tired[k] + dt : Math.max(0, s.tired[k] - dt * REST_RATE);
+    if (s.tired[k] < TIRE_MS) continue;
+    s.tired[k] = 0;
+    s.wilted[k] = true;
+    s.events.push({ kind: 'wilted', honey: k });
+  }
 }
 
 /** The bees eat: a jar of the cheapest kind on the shelf, else the honey of a capped cell, else a bee starves (the last one never). */
@@ -136,7 +169,7 @@ function hatch(s: GameState, c: Extract<Cell, { type: 'brood' }>, slot: number, 
   if (c.hatchMs > 0) return;
   c.hatchMs = BROOD_MS;
   const id = s.nextId++;
-  s.bees.push({ id, tripMs: 0, trip: 0, flower: 0, kind: s.forage, lent: false });
+  s.bees.push({ id, tripMs: 0, trip: 0, flower: 0, kind: s.forage, lent: false, hive: hiveOf(slot) });
   s.events.push({ kind: 'hatched', slot, id });
 }
 
@@ -146,6 +179,7 @@ function deliver(s: GameState, drops: number, kind: Kind) {
     const c = s.cells[slot];
     if (!isHoney(c) || c.phase !== 'filling' || (c.kind !== null && c.kind !== kind)) continue;
     const take = Math.min(drops, CELL_CAP - c.nectar);
+    if (c.nectar === 0) c.since = seasonNo(s);
     c.nectar += take;
     c.kind = kind;
     drops -= take;
@@ -302,7 +336,8 @@ function raid(s: GameState, dt: number) {
   s.wasps = s.wasps.filter((w) => w.phase !== 'out' || w.ms < WASP_OUT_MS);
 
   if (s.sold < WASPS_FROM) return;
-  const targets = capped(s);
+  // A Gentle queen's comb is left alone.
+  const targets = capped(s).filter((slot) => !(s.queen === 'gentle' && hiveOf(slot) === 1));
   if (targets.length === 0 || s.wasps.some((w) => w.phase !== 'out')) return;
   s.waspIn -= dt;
   if (s.waspIn > 0) return;
@@ -391,11 +426,17 @@ function swarm(s: GameState, dt: number) {
   s.events.push({ kind: 'swarmed', lost });
 }
 
-/** Pays `CATCH_PRICE` to catch the swarm into a second hive with its own, empty comb. */
-export function catchSwarm(s: GameState) {
+/**
+ * Pays `CATCH_PRICE` to catch the swarm into a second hive with its own, empty comb and the queen
+ * picked: the half of the bees that would have left (those at home first) move in with her.
+ */
+export function catchSwarm(s: GameState, queen: Queen) {
   if (!crowded(s) || s.hives >= MAX_HIVES || s.coins < CATCH_PRICE) return false;
   s.coins -= CATCH_PRICE;
   s.hives++;
+  s.queen = queen;
+  const swarm = [...s.bees].sort((a, b) => Number(atHome(b)) - Number(atHome(a))).slice(0, Math.floor(s.bees.length / 2));
+  for (const b of swarm) b.hive = 1;
   s.cells.push(...new Array<null>(SLOTS).fill(null));
   s.swarmIn = SWARM_MS;
   s.events.push({ kind: 'caught' });
@@ -443,25 +484,50 @@ export function acceptContract(s: GameState) {
 }
 
 /**
- * Enters a capped cell's honey in the county fair (open once every meadow is): it scores its
- * neighbours capped with honey of its kind (`fairScore`) and replaces a lower entry of its kind; the cell gives its wax
- * and starts over. With every kind entered the jars are judged, and `FAIR_GOLD` points make the
- * player the Baron.
+ * Enters a capped cell's honey in this year's fair (on at the end of every summer once every
+ * meadow is open): it scores its neighbours capped with honey of its kind (`fairScore`) and counts
+ * for its kind's class, and for the fresh class too if its first drop came home this season, each
+ * replacing a lower entry. The cell gives its wax and starts over.
  */
 export function enterFair(s: GameState, slot: number) {
   const c = s.cells[slot];
-  if (!fairOpen(s) || !isHoney(c) || c.phase !== 'capped') return false;
+  if (!fairOn(s) || fairWon(s) || !isHoney(c) || c.phase !== 'capped') return false;
   const honey = c.kind ?? 'clover';
+  const fresh = classesFor(s.fairs).includes('fresh') && c.since === seasonNo(s);
   const score = fairScore(s, slot);
   s.wax++;
   s.cells[slot] = emptyCell();
-  s.fair[honey] = Math.max(s.fair[honey] ?? -1, score);
-  s.events.push({ kind: 'entered', honey, score });
-  const total = fairTotal(s);
-  if (total === null) return true;
-  if (total >= FAIR_GOLD && !s.baron) {
-    s.baron = true;
-    s.events.push({ kind: 'baron' });
-  } else s.events.push({ kind: 'judged', total });
+  enter(s, fresh ? [honey, 'fresh'] : [honey], score);
   return true;
+}
+
+/** Enters a cask of ready mead in the fair (from the second fair on): it scores `MEAD_POINTS` for its honey. */
+export function enterMead(s: GameState, i: number) {
+  const c = s.casks[i];
+  if (!fairOn(s) || fairWon(s) || !classesFor(s.fairs).includes('mead') || !c || c.agingMs > 0) return false;
+  s.casks.splice(i, 1);
+  enter(s, ['mead'], MEAD_POINTS[c.kind]);
+  return true;
+}
+
+/** Keeps an entry's points for its classes, then judges: with every class in, gold's points win gold (and the first gold makes the Baron). */
+function enter(s: GameState, classes: FairClass[], score: number) {
+  for (const k of classes) s.fair[k] = Math.max(s.fair[k] ?? -1, score);
+  s.events.push({ kind: 'entered', what: classes.map((k) => CLASS_NAME[k]).join(' and '), score });
+  const total = fairTotal(s);
+  if (total === null) return;
+  const gold = fairGold(s.fairs);
+  if (total < gold) return s.events.push({ kind: 'judged', total, gold });
+  s.golds++;
+  s.events.push({ kind: 'gold', total, golds: s.golds });
+  if (s.baron) return;
+  s.baron = true;
+  s.events.push({ kind: 'baron' });
+}
+
+/** Autumn closes the fair: its result is told, the next fair asks for more, and the entries are cleared. */
+function closeFair(s: GameState) {
+  s.events.push({ kind: 'fair-closed', total: fairTotal(s), gold: fairGold(s.fairs), won: fairWon(s) });
+  s.fairs++;
+  s.fair = noEntries();
 }

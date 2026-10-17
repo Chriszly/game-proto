@@ -98,5 +98,7 @@ export const LIVE = {
   swarmBar: 0xffd25a,
   swarmTrack: 0x5a3416,
   fairPick: 0x9cf060,
+  tired: 0xc0602a,
+  tiredTrack: 0xead9ad,
   snow: 0xffffff,
 };
