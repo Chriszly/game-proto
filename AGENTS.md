@@ -63,7 +63,10 @@ number to file an older issue again. The **Project status** workflow (`.github/w
 Projects with the status In Progress. Both use the `PROJECTS_TOKEN` secret (a classic token with only
 the `project` scope). To see what is on the boards, start the **Project report** workflow
 (`.github/workflows/project-report.yml`) by hand; it prints each Project's items and their Status
-to its log and run summary.
+to its log and run summary. To create a new game's Project, start the **Project setup** workflow
+(`.github/workflows/project-setup.yml`) by hand once its entry is on main: it creates every Project in
+`.github/projects.json` that doesn't exist yet, with its short description and README, makes it public
+and tries to link it to the repo (the run summary says if the link has to be made by hand).
 
 - **Every PR needs labels.** It carries at least one Type label for what it changes (`bug` for a
   fix, `feature`, `gameplay`, `refactor`, `assets`, `docs`, `ci`) and at least one Game label for
@@ -117,11 +120,11 @@ to its log and run summary.
   Game dropdown of the three issue forms in
   `.github/ISSUE_TEMPLATE/` (before `Hub page` and `Shared / all games`, then raise each form's
   `default` by one so it still preselects Shared), and its name and label to the map in
-  `.github/workflows/issue-labels.yml`. Then remind **Chriszly** to create the game's GitHub
-  Project by hand, in the PR's "Notes for reviewers" and in your reply when the PR is up: its title,
-  short description and README from `.github/projects.json`, public visibility, the Auto-add
-  workflow with the filter `is:issue,pr is:open label:<game>`, the "Item added to project"
-  workflow set to Issue only with Status Todo, and a link to the repo. Vite picks
+  `.github/workflows/issue-labels.yml`. Once that is merged, start the **Project setup** workflow to create
+  the game's GitHub Project, then remind **Chriszly**, in the PR's "Notes for reviewers" and in your
+  reply, to finish it by hand: the Auto-add workflow with the filter
+  `is:issue,pr is:open label:<game>`, the "Item added to project" workflow set to Issue only with
+  Status Todo, and the link to the repo if the run summary says it is missing. Vite picks
   up `games/*/index.html` on its own. Keep save keys and other browser storage prefixed with the
   game's name, since every game shares the hub's origin.
 - **Honour the hub's settings.** Every game calls `setupGame(game)` from `shared/setupGame.ts`
