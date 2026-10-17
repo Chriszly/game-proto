@@ -9,6 +9,9 @@ export default defineConfig({
   use: {
     ...devices['Desktop Chrome'],
     viewport: { width: 960, height: 540 },
+    // The screen matches the window, so games render at 1x like on a 960x540 display; Desktop
+    // Chrome's own 1920x1080 screen would make every game paint at 2x and start slower.
+    screen: { width: 960, height: 540 },
     video: { mode: 'on', size: { width: 960, height: 540 } },
     baseURL: 'http://localhost:5173',
     trace: 'retain-on-failure',
@@ -20,7 +23,7 @@ export default defineConfig({
     {
       name: 'deadline',
       testDir: 'games/deadline/e2e',
-      use: { viewport: { width: 540, height: 960 }, video: { mode: 'on', size: { width: 540, height: 960 } } },
+      use: { viewport: { width: 540, height: 960 }, screen: { width: 540, height: 960 }, video: { mode: 'on', size: { width: 540, height: 960 } } },
     },
     { name: 'palisade', testDir: 'games/palisade/e2e' },
     { name: 'tiny-kingdom', testDir: 'games/tiny-kingdom/e2e' },
