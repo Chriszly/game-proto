@@ -4,24 +4,25 @@
  * reports where its tappable rectangles are so the scene (and the playthrough test) can use them.
  */
 import Phaser from 'phaser';
-import { HEROES, HERO_IDS, schemeOf, type HeroId } from '../game/heroes';
+import { HEROES, HERO_IDS, schemeOf, type HeroDef, type HeroId } from '../game/heroes';
 import { clock, type GameState } from '../game/state';
-import { CAPSTONES, FILLER, MAX_TIER, UPGRADES, capstoneFor, crossoverFor } from '../game/upgrades';
+import { CAPSTONES, FILLER, MAX_TIER, POOL_NAMES, UPGRADES, capstoneFor, crossoverFor } from '../game/upgrades';
 import { BOSSES, NODE_INFO, PLANETS, TRADE, planetLabel, type NodeKind } from '../game/planets';
 import { priceOf } from '../game/voyage';
-import type { Progress } from '../game/save';
+import { isUnlocked, type Progress } from '../game/save';
 import type { Vars } from '../../../../shared/i18n';
 import { t } from '../i18n';
 import { C, hex } from '../art/glow';
 import { portraitKey } from '../art/sprites';
 import {
-  AGAIN, DEPTH, FONT, LEAVE, MAP, REROLL, VIEW, eventOptionRect, heroCardRect, levelCardRect, mapNodeRect, mapNodeSpot,
-  tradeCardRect, type Rect,
+  AGAIN, DEPTH, FIGHT, FONT, HERO_DETAIL, LEAVE, MAP, REROLL, VIEW, eventOptionRect, heroCardRect, levelCardRect, mapNodeRect,
+  mapNodeSpot, tradeCardRect, type Rect,
 } from '../scenes/layout';
 
-/** A tappable rectangle and what it stands for. */
+/** A tappable rectangle and what it stands for; a hero card whose deed is not done yet is `locked`. */
 export interface Spot extends Rect {
   id: string;
+  locked?: boolean;
 }
 
 type Obj = Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.ScrollFactor & Phaser.GameObjects.Components.Depth;
@@ -96,41 +97,87 @@ export class Panel {
   }
 }
 
-/** The hero select screen: three soldier cards, all open. */
-export function heroSelect(scene: Phaser.Scene, progress: Progress) {
+/** "Blaster", or a knight's "Blade · the Current". */
+function sideOf(hero: HeroDef) {
+  const side = hero.pools.find((p) => p === 'current' || p === 'hollow');
+  return t(side === 'current' ? 'sideCurrent' : side === 'hollow' ? 'sideHollow' : 'sideBlaster');
+}
+
+/**
+ * The hero select screen: ten small cards (three soldiers, seven knights, each knight locked until
+ * its deed is done) and the chosen hero's details with the Fight button.
+ */
+export function heroSelect(scene: Phaser.Scene, progress: Progress, chosen: HeroId) {
   const p = new Panel(scene);
   p.dim(0.55);
-  p.text(VIEW.w / 2, 30, 'RIFTBLADE', 40, '#9fd8ff', { bold: true, origin: [0.5, 0], glow: true });
-  p.text(VIEW.w / 2, 80, t('selectSubtitle'), 15, C.muted, { origin: [0.5, 0] });
-  HERO_IDS.forEach((id, i) => heroCard(p, scene, id, i, progress));
-  const best = progress.bestMs > 0 ? t('longestRun', { time: clock(progress.bestMs) }) : t('chooseSoldier');
-  p.text(VIEW.w / 2, VIEW.h - 22, `${best}  ·  ${t('tapCard')}`, 13, C.muted, { origin: [0.5, 0.5] });
+  p.text(VIEW.w / 2, 12, 'RIFTBLADE', 32, '#9fd8ff', { bold: true, origin: [0.5, 0], glow: true });
+  p.text(VIEW.w / 2, 54, t('selectSubtitle'), 14, C.muted, { origin: [0.5, 0] });
+  HERO_IDS.forEach((id, i) => heroCard(p, scene, id, i, progress, id === chosen));
+  heroDetail(p, scene, chosen, progress);
+  const best = progress.bestMs > 0 ? `${t('longestRun', { time: clock(progress.bestMs) })}  ·  ` : '';
+  p.text(VIEW.w / 2, VIEW.h - 22, `${best}${t('selectHelp')}`, 13, C.muted, { origin: [0.5, 0.5] });
   return p;
 }
 
-function heroCard(p: Panel, scene: Phaser.Scene, id: HeroId, i: number, progress: Progress) {
+function heroCard(p: Panel, scene: Phaser.Scene, id: HeroId, i: number, progress: Progress, chosen: boolean) {
   const hero = HEROES[id];
   const sch = schemeOf(id);
+  const open = isUnlocked(progress, id);
   const r = heroCardRect(i);
-  p.frame(r, sch.accent);
-  p.spots.push({ id, ...r });
+  p.frame(r, open ? sch.accent : C.muted, chosen ? '#1a2a4a' : C.panel);
+  p.spots.push({ id, ...r, locked: !open });
   const cx = r.x + r.w / 2;
-  const portrait = scene.add.image(cx, r.y + 82, portraitKey(id)).setScale(0.92);
+  if (chosen) {
+    const g = p.add(scene.add.graphics(), 2);
+    g.lineStyle(3, hex(open ? sch.accent : C.muted), 1).strokeRoundedRect(r.x, r.y, r.w, r.h, 14);
+  }
+  const portrait = scene.add.image(cx, r.y + 62, portraitKey(id)).setScale(0.52);
+  if (!open) portrait.setAlpha(0.22);
   p.add(portrait, 2);
-  p.text(cx, r.y + 160, t(hero.name), 21, C.text, { bold: true, origin: [0.5, 0] });
-  p.text(cx, r.y + 188, t(hero.weapon), 14, sch.accent, { origin: [0.5, 0] });
-  p.text(cx, r.y + 212, t('heroStats', { hp: hero.maxHp, speed: hero.speed }), 12, C.muted, { origin: [0.5, 0] });
-  const left = r.x + 18;
-  const wrap = r.w - 36;
-  p.text(left, r.y + 236, t(hero.blurb), 12.5, C.text, { wrap });
-  p.text(left, r.y + 276, t('signatureLine', { name: t(hero.signature.name) }), 13, sch.accent, { bold: true });
-  p.text(left, r.y + 294, t(hero.signature.text), 12, C.muted, { wrap });
-  p.text(left, r.y + 318, t('pathsLine', { paths: hero.paths.map((pid) => t(UPGRADES[pid].name)).join(', ') }), 12, C.text, { wrap });
+  const name = p.text(cx, r.y + 104, t(hero.name), 13, open ? C.text : C.muted, { bold: true, origin: [0.5, 0], align: 'center', wrap: r.w - 12 });
+  // A locked knight shows the deed that unlocks it.
+  if (open) p.text(cx, r.y + 150, sideOf(hero), 11, sch.accent, { origin: [0.5, 0], align: 'center', wrap: r.w - 8 });
+  else p.text(cx, name.y + name.height + 4, hero.unlock ? t(hero.unlock) : '', 10.5, C.elite, { origin: [0.5, 0], align: 'center', wrap: r.w - 12 });
   const wins = progress.wins[id] ?? 0;
   const furthest = progress.furthest[id] ?? 0;
-  if (wins > 0) p.text(r.x + r.w - 14, r.y + 12, t('wins', { n: wins }), 12, C.elite, { origin: [1, 0] });
-  else if (furthest > 0) p.text(r.x + r.w - 14, r.y + 12, t('reached', { n: furthest, of: PLANETS.length }), 12, C.muted, { origin: [1, 0] });
-  p.text(r.x + 14, r.y + 12, String(i + 1), 13, C.muted);
+  const status = wins > 0 ? t('wins', { n: wins }) : furthest > 0 ? t('reached', { n: furthest, of: PLANETS.length }) : '';
+  if (!open) p.text(r.x + r.w - 9, r.y + 7, t('locked'), 10.5, C.muted, { bold: true, origin: [1, 0] });
+  else if (status) p.text(cx, r.y + r.h - 12, status, 11, wins > 0 ? C.elite : C.muted, { origin: [0.5, 1] });
+  p.text(r.x + 9, r.y + 7, String((i + 1) % 10), 12, C.muted);
+}
+
+/** The chosen hero in full: weapon, numbers, signature, paths, and the deed if still locked. */
+function heroDetail(p: Panel, scene: Phaser.Scene, id: HeroId, progress: Progress) {
+  const hero = HEROES[id];
+  const sch = schemeOf(id);
+  const open = isUnlocked(progress, id);
+  const r = HERO_DETAIL;
+  p.frame(r, open ? sch.accent : C.muted);
+  const cx = r.x + r.w / 2;
+  const left = r.x + 18;
+  const wrap = r.w - 36;
+  const portrait = scene.add.image(cx, r.y + 58, portraitKey(id)).setScale(0.8);
+  if (!open) portrait.setAlpha(0.3);
+  p.add(portrait, 2);
+  p.text(cx, r.y + 112, t(hero.name), 21, C.text, { bold: true, origin: [0.5, 0] });
+  p.text(cx, r.y + 140, `${t(hero.weapon)}  ·  ${sideOf(hero)}`, 13, sch.accent, { origin: [0.5, 0] });
+  p.text(cx, r.y + 160, t('heroStats', { hp: hero.maxHp, speed: hero.speed }), 12.5, C.muted, { origin: [0.5, 0] });
+  // The lines flow down, since German runs longer.
+  let y = r.y + 182;
+  for (const [text, color] of [
+    [t(hero.blurb), C.text],
+    [t('signatureFull', { name: t(hero.signature.name), text: t(hero.signature.text) }), sch.accent],
+    [t('pathsLine', { paths: hero.paths.map((pid) => t(UPGRADES[pid].name)).join(', ') }), C.text],
+  ]) y += p.text(left, y, text, 12.5, color, { wrap }).height + 6;
+  if (open) {
+    p.frame(FIGHT, sch.accent, '#14244a');
+    p.spots.push({ id: 'fight', ...FIGHT });
+    p.text(FIGHT.x + FIGHT.w / 2, FIGHT.y + FIGHT.h / 2, t('fightAs', { name: t(hero.short) }), 18, C.text, { bold: true, origin: [0.5, 0.5] });
+  } else {
+    p.frame(FIGHT, C.muted, '#0b1222');
+    p.text(FIGHT.x + FIGHT.w / 2, FIGHT.y - 6, t('toUnlock'), 12, C.muted, { origin: [0.5, 1] });
+    p.text(FIGHT.x + FIGHT.w / 2, FIGHT.y + FIGHT.h / 2, hero.unlock ? t(hero.unlock) : '', 13, C.elite, { bold: true, origin: [0.5, 0.5], align: 'center', wrap: FIGHT.w - 20 });
+  }
 }
 
 /** Colour of a card by kind. */
@@ -138,7 +185,17 @@ function kindColor(s: GameState, id: string) {
   if (id === FILLER.id) return C.heal;
   const def = UPGRADES[id];
   if (def.kind === 'path') return schemeOf(s.hero!).accent;
-  return def.kind === 'pool' ? '#7df9ff' : '#b48cff';
+  return def.kind === 'pool' ? POOL_COLORS[def.pool!] : '#b48cff';
+}
+
+const POOL_COLORS = { blaster: '#7df9ff', blade: '#e6ecff', current: '#8fd0ff', hollow: '#c08aff' } as const;
+
+/** The small chain-link icon of a crossover hint. */
+function linkIcon(p: Panel, scene: Phaser.Scene, x: number, y: number, color: string) {
+  const g = p.add(scene.add.graphics(), 2);
+  g.lineStyle(2, hex(color), 1);
+  g.strokeRoundedRect(x, y + 2, 11, 7, 3.5);
+  g.strokeRoundedRect(x + 7, y + 6, 11, 7, 3.5);
 }
 
 /** The level-up: three cards over the paused run. */
@@ -165,7 +222,7 @@ export function levelUp(scene: Phaser.Scene, s: GameState) {
     }
     const def = UPGRADES[id];
     const rank = s.ranks[id] ?? 0;
-    const kind = t(def.kind === 'path' ? HEROES[s.hero!].pathKind : def.kind === 'pool' ? 'poolKind' : 'gearKind');
+    const kind = t(def.kind === 'path' ? HEROES[s.hero!].pathKind : def.kind === 'pool' ? POOL_NAMES[def.pool!] : 'gearKind');
     p.text(cx, r.y + 18, kind, 11, color, { bold: true, origin: [0.5, 0] });
     p.text(cx, r.y + 40, t(def.name), 21, C.text, { bold: true, origin: [0.5, 0] });
     // Tier pips: held tiers filled, the one this card gives ringed.
@@ -181,16 +238,21 @@ export function levelUp(scene: Phaser.Scene, s: GameState) {
     p.text(cx, r.y + 94, rank === 0 ? t('newUpgrade') : t('tier', { n: rank + 1 }), 12, rank === 0 ? C.elite : C.muted, { bold: true, origin: [0.5, 0] });
     p.text(left, r.y + 118, t(def.tiers[rank]), 15, C.text, { bold: true, wrap });
     p.text(left, r.y + 160, t(def.blurb), 12.5, C.muted, { wrap });
-    const cross = crossoverFor(id);
+    const cross = crossoverFor(id, s.hero!);
     const partner = cross ? (cross.path === id ? cross.pool : cross.path) : null;
-    const hints: string[] = [];
-    if (cross && partner && (UPGRADES[partner].kind !== 'path' || UPGRADES[partner].hero === s.hero)) {
+    let y = r.y + 206;
+    if (cross && partner) {
+      // A crossover: a link icon and what the pair does.
       const done = s.crossovers.includes(cross.id);
-      hints.push(t(done ? 'crossoverDone' : 'crossoverWith', { partner: t(UPGRADES[partner].name), text: t(cross.text) }));
+      const held = (s.ranks[partner] ?? 0) > 0;
+      const color = held || done ? '#e7d8ff' : '#c9b2ff';
+      linkIcon(p, scene, left, y, color);
+      const key = done ? 'crossoverDone' : held ? 'crossoverCompletes' : 'crossoverWith';
+      const line = p.text(left + 24, y, t(key, { partner: t(UPGRADES[partner].name), text: t(cross.text) }), 11.5, color, { wrap: wrap - 24, bold: held && !done });
+      y += line.height + 4;
     }
     const cap = capstoneFor(id, s.hero!);
-    if (cap && !s.capstones.includes(cap.id)) hints.push(t('capstoneHint', { name: t(cap.name), path: t(UPGRADES[cap.path].name), n: MAX_TIER, gear: t(UPGRADES[cap.gear].name) }));
-    p.text(left, r.y + 206, hints.join('\n'), 11.5, '#c9b2ff', { wrap });
+    if (cap && !s.capstones.includes(cap.id)) p.text(left, y, t('capstoneHint', { name: t(cap.name), path: t(UPGRADES[cap.path].name), n: MAX_TIER, gear: t(UPGRADES[cap.gear].name) }), 11.5, '#c9b2ff', { wrap });
     p.text(r.x + 12, r.y + 10, String(i + 1), 12, C.muted);
   });
   return p;
@@ -337,7 +399,7 @@ export function trader(scene: Phaser.Scene, s: GameState) {
     const color = kindColor(s, id);
     p.frame(r, can ? color : C.muted);
     p.spots.push({ id, ...r });
-    const kind = t(def.kind === 'path' ? 'pathKind' : def.kind === 'pool' ? 'poolKind' : 'gearKind');
+    const kind = t(def.kind === 'path' ? 'pathKind' : def.kind === 'pool' ? POOL_NAMES[def.pool!] : 'gearKind');
     p.text(cx, r.y + 16, kind, 11, color, { bold: true, origin: [0.5, 0] });
     p.text(cx, r.y + 36, t(def.name), 19, C.text, { bold: true, origin: [0.5, 0] });
     p.text(cx, r.y + 64, rank === 0 ? t('newUpgrade') : t('tier', { n: rank + 1 }), 12, rank === 0 ? C.elite : C.muted, { bold: true, origin: [0.5, 0] });

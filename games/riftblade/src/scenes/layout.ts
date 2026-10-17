@@ -23,12 +23,18 @@ export const SIG_BUTTON = { x: VIEW.w - 70, y: VIEW.h - 70, r: 42 };
 /** The floating touch stick: rim radius (full speed there), knob radius and dead zone. */
 export const STICK = { r: 60, knob: 24, dead: 6 };
 
-/** The three hero cards of the select screen (centres). */
-export const HERO_CARD = { w: 284, h: 372, y: 300, gap: 302 };
+/**
+ * The hero select screen: two rows of five small cards on the left (the soldiers first, then the
+ * knights), and the chosen hero's details on the right with the Fight button.
+ */
+export const HERO_CARD = { w: 112, h: 196, top: 84, gap: 8, cols: 5, left: 16 };
 export function heroCardRect(i: number) {
-  const cx = VIEW.w / 2 + (i - 1) * HERO_CARD.gap;
-  return { x: cx - HERO_CARD.w / 2, y: HERO_CARD.y - HERO_CARD.h / 2, w: HERO_CARD.w, h: HERO_CARD.h };
+  const col = i % HERO_CARD.cols;
+  const row = Math.floor(i / HERO_CARD.cols);
+  return { x: HERO_CARD.left + col * (HERO_CARD.w + HERO_CARD.gap), y: HERO_CARD.top + row * (HERO_CARD.h + HERO_CARD.gap), w: HERO_CARD.w, h: HERO_CARD.h };
 }
+export const HERO_DETAIL = { x: 624, y: 84, w: 320, h: 400 };
+export const FIGHT = { x: 648, y: 416, w: 272, h: 50 };
 
 /** The three level-up cards. */
 export const LEVEL_CARD = { w: 254, h: 290, y: 296, gap: 276 };

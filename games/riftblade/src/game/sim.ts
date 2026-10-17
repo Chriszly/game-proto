@@ -3,12 +3,16 @@
  * droids, pickups and level-ups. Pure state changes, no drawing; randomness comes from Math.random
  * and time from the `dt` the scene hands over, so a run replays exactly from the same inputs.
  */
-import { HEROES, type HeroId } from './heroes';
+import { HEROES, isKnight, type HeroId } from './heroes';
 import {
   BOSS, DIFF, ELITE, EMBER, ENEMY, HERO_R, KNIGHT, LEASH, LINE, MAX_ENEMIES, MAX_SHARDS, RATS, ROLLER, RUN_MS,
   SPAWN_RING, TOAD, WALKER, freshHero, freshState, refreshUnlocks, statsOf, xpFor,
-  type BoltColor, type Bomb, type Bullet, type Enemy, type EnemyKind, type GameState, type Hazard, type Pickup, type Stats,
+  type AllyKind, type BoltColor, type Bomb, type Bullet, type Enemy, type EnemyKind, type GameState, type Hazard, type Pickup, type Stats,
 } from './state';
+import {
+  contactMod, crush, dashEnd, dashSweep, foeMod, healFactor, knightAbilities, knightAllies, knightAttack, knightGuard,
+  knightSignature, moveKnightAlly, onHealed, onHurt, onKill, rescue,
+} from './blades';
 import { CAPSTONES, CROSSOVERS, FILLER, MAX_TIER, UPGRADES, at, rewardChoices, rollChoices } from './upgrades';
 import { ARENA_MS, BOG, BOSSES, CHAMPION, CREDITS, PLANETS, SIEGE, VENT, type FoeKind } from './planets';
 // `t` is a common local name here (targets, time), so the translator goes by `tr`.
@@ -28,24 +32,31 @@ const MAX_FRAME_MS = 100;
 /** After a hit the hero takes no damage for this long, ms. */
 export const HURT_GRACE_MS = 450;
 /** Colours of the blast rings. */
-const BLAST = { hero: '#ffb347', droid: '#ff6a4d', frag: '#ffd36b', shield: '#ff9a5a', vent: '#ff6a3c', shell: '#9fd4ff', stomp: '#d6efff' };
+const BLAST = { wreck: '#ffd23f', hero: '#ffb347', droid: '#ff6a4d', frag: '#ffd36b', shield: '#ff9a5a', vent: '#ff6a3c', shell: '#9fd4ff', stomp: '#d6efff' };
 
-/** The stats for this frame, computed once per tick. */
+/** The stats for this frame, computed once per tick, and whether the hero is a knight. */
 let st: Stats = statsOf(freshState());
+let knight = false;
+
+/** The stats for this frame (for `blades.ts`). */
+export const stats = () => st;
 
 // ---------------------------------------------------------------------------------------------
 // Starting and choosing
 
-/** Starts a run with the chosen hero, from a fresh state. */
-export function startRun(s: GameState, id: HeroId) {
+/** Starts a run with the chosen hero, from a fresh state; `known` are the heroes unlocked before. */
+export function startRun(s: GameState, id: HeroId, known: HeroId[] = []) {
   Object.assign(s, freshState());
   const hero = HEROES[id];
   s.hero = id;
+  s.known = [...known];
   s.phase = 'run';
   s.player = freshHero();
   s.player.hp = s.player.maxHp = hero.maxHp;
+  s.player.r = hero.r ?? HERO_R;
   s.player.fireMs = 300;
   st = statsOf(s);
+  knight = isKnight(id);
 }
 
 /** Takes the card at `index` during a level-up (or a free pick won in the arena). */
@@ -114,6 +125,7 @@ export function raise(s: GameState, id: string) {
 export function tick(s: GameState, dtMs: number, input: Input) {
   if (s.phase !== 'run') return;
   st = statsOf(s);
+  knight = isKnight(s.hero!);
   const dt = Math.min(dtMs, MAX_FRAME_MS);
   if (input.signature) signature(s);
   const steps = Math.max(1, Math.ceil(dt / STEP_MS));
@@ -123,6 +135,12 @@ export function tick(s: GameState, dtMs: number, input: Input) {
   s.blasts = s.blasts.filter((b) => b.ms > 0);
   for (const p of s.pops) p.ms -= dt;
   s.pops = s.pops.filter((p) => p.ms > 0);
+  if (s.slashes.length || s.zaps.length) {
+    for (const f of s.slashes) f.ms -= dt;
+    s.slashes = s.slashes.filter((f) => f.ms > 0);
+    for (const f of s.zaps) f.ms -= dt;
+    s.zaps = s.zaps.filter((f) => f.ms > 0);
+  }
   if (s.phase === 'run' && s.pendingLevels > 0) {
     s.phase = 'levelup';
     s.choices = rollChoices(s.hero!, s.ranks);
@@ -138,6 +156,7 @@ function step(s: GameState, ms: number, input: Input) {
   director(s, ms);
   primary(s, ms);
   abilities(s, ms);
+  if (knight) knightAbilities(s, ms);
   moveAllies(s, ms);
   moveEnemies(s, ms);
   moveBullets(s, ms);
@@ -175,7 +194,7 @@ function buildGrid(s: GameState) {
 }
 
 /** Calls `fn` for each living droid whose body reaches within `r` of a point, the boss included. */
-function near(s: GameState, x: number, y: number, r: number, fn: (e: Enemy, d: number) => void) {
+export function near(s: GameState, x: number, y: number, r: number, fn: (e: Enemy, d: number) => void) {
   const reach = r + 20;
   const x0 = Math.floor((x - reach) / CELL);
   const x1 = Math.floor((x + reach) / CELL);
@@ -199,11 +218,11 @@ function near(s: GameState, x: number, y: number, r: number, fn: (e: Enemy, d: n
   }
 }
 
-/** The `n` living droids nearest a point within `range`, nearest first. */
-function nearest(s: GameState, x: number, y: number, n: number, range: number, skip: number[] = []): Enemy[] {
+/** The `n` living droids nearest a point within `range`, nearest first (foes turned to the hero's side left out). */
+export function nearest(s: GameState, x: number, y: number, n: number, range: number, skip: number[] = []): Enemy[] {
   const found: { e: Enemy; d: number }[] = [];
   for (const e of s.enemies) {
-    if (e.hp <= 0 || skip.includes(e.id)) continue;
+    if (e.hp <= 0 || e.charmMs > 0 || skip.includes(e.id)) continue;
     const d = Math.hypot(e.x - x, e.y - y) - e.r;
     if (d > range) continue;
     if (found.length < n) {
@@ -218,7 +237,7 @@ function nearest(s: GameState, x: number, y: number, n: number, range: number, s
 }
 
 /** A spot in the thickest swarm near the hero: the droid with the most others around it. */
-function swarmSpot(s: GameState, range: number) {
+export function swarmSpot(s: GameState, range: number) {
   const p = s.player;
   const pool = nearest(s, p.x, p.y, 16, range);
   if (!pool.length) {
@@ -246,17 +265,36 @@ function moveHero(s: GameState, ms: number, input: Input) {
   const len = Math.hypot(input.mx, input.my);
   p.moving = len > 0.05;
   if (p.moving) p.facing = Math.atan2(input.my, input.mx);
-  if (p.dashMs > 0) {
+  if (p.dashMs > 0 && p.dashKind === 'jet') {
     p.dashMs -= ms;
     p.x += Math.cos(p.dashAngle) * 750 * dt;
     p.y += Math.sin(p.dashAngle) * 750 * dt;
     s.fires.push({ id: s.nextId++, x: p.x, y: p.y, r: 22, ms: 2000, dps: at([12, 12, 20, 20, 26], s.ranks['jump-trooper'] ?? 0, 12) });
     if (p.dashMs <= 0 && s.capstones.includes('skyfall')) explode(s, p.x, p.y, 110, 60, BLAST.frag);
+  } else if (p.dashMs > 0) {
+    // A knight's dash: a blade dash cuts through, a leap or a hunt homes in on its target.
+    p.dashMs -= ms;
+    const step = p.dashSpeed * dt;
+    const t = p.dashTarget ? s.enemies.find((e) => e.id === p.dashTarget && e.hp > 0) : undefined;
+    if (t) {
+      const d = Math.hypot(t.x - p.x, t.y - p.y);
+      p.dashAngle = Math.atan2(t.y - p.y, t.x - p.x);
+      if (d - t.r - p.r <= step) p.dashMs = 0;
+    }
+    p.x += Math.cos(p.dashAngle) * step;
+    p.y += Math.sin(p.dashAngle) * step;
+    p.facing = p.dashAngle;
+    dashSweep(s);
+    if (p.dashMs <= 0) {
+      p.dashMs = 0;
+      dashEnd(s);
+    }
   } else if (p.moving) {
     const k = Math.min(1, len) * st.speed * (p.slowMs > 0 ? 1 - p.slowPct : 1) * dt;
     p.x += (input.mx / len) * k;
     p.y += (input.my / len) * k;
   }
+  p.stillMs = p.moving ? 0 : p.stillMs + ms;
   p.sigMs = Math.max(0, p.sigMs - ms);
   p.sigActiveMs = Math.max(0, p.sigActiveMs - ms);
   p.hurtMs = Math.max(0, p.hurtMs - ms);
@@ -267,13 +305,20 @@ function moveHero(s: GameState, ms: number, input: Input) {
     if (p.regen >= 1) {
       const whole = Math.floor(p.regen);
       p.regen -= whole;
-      p.hp = Math.min(p.maxHp, p.hp + whole);
+      heal(s, whole);
     }
   }
 }
 
 export function heal(s: GameState, amount: number) {
-  s.player.hp = Math.min(s.player.maxHp, s.player.hp + amount);
+  const p = s.player;
+  if (knight) {
+    const before = p.hp;
+    p.hp = Math.min(p.maxHp, p.hp + amount * healFactor(s));
+    onHealed(s, p.hp - before);
+    return;
+  }
+  p.hp = Math.min(p.maxHp, p.hp + amount);
 }
 
 /** Whether the hero takes no damage right now (Brace, mid-dash, or just hit). */
@@ -283,13 +328,35 @@ function untouchable(s: GameState) {
 
 function hurtHero(s: GameState, dmg: number) {
   if (untouchable(s) || s.phase !== 'run') return;
+  const p = s.player;
+  if (knight) {
+    // Foresight: a chance to dodge; a barrier takes what it can first.
+    if (st.dodge > 0 && Math.random() < st.dodge) {
+      p.hurtMs = HURT_GRACE_MS / 2;
+      return;
+    }
+    let taken = dmg * (1 - st.armour);
+    const soak = Math.min(p.barrier, taken);
+    p.barrier -= soak;
+    taken -= soak;
+    p.barrierMs = 0;
+    p.hp -= taken;
+    s.damageTaken += taken;
+    p.hurtMs = HURT_GRACE_MS;
+    onHurt(s);
+    if (p.hp <= 0 && !rescue(s)) {
+      p.hp = 0;
+      s.phase = 'lost';
+    }
+    return;
+  }
   const taken = dmg * (1 - st.armour);
-  s.player.hp -= taken;
+  p.hp -= taken;
   s.damageTaken += taken;
   // A moment of grace after each hit, so a crowd can't take it all at once.
-  s.player.hurtMs = HURT_GRACE_MS;
-  if (s.player.hp <= 0) {
-    s.player.hp = 0;
+  p.hurtMs = HURT_GRACE_MS;
+  if (p.hp <= 0) {
+    p.hp = 0;
     s.phase = 'lost';
   }
 }
@@ -299,7 +366,14 @@ function signature(s: GameState) {
   const p = s.player;
   if (p.sigMs > 0 || !s.hero) return;
   const hero = HEROES[s.hero];
-  p.sigMs = hero.signature.cooldownMs * st.cooldown;
+  if (knight) {
+    // A knight's move needs something to act on; without it, nothing is spent.
+    if (!knightSignature(s)) return;
+    p.sigMs = hero.signature.cooldownMs * st.sigCooldown;
+    s.signatures += 1;
+    return;
+  }
+  p.sigMs = hero.signature.cooldownMs * st.sigCooldown;
   s.signatures += 1;
   if (s.hero === 'rook') p.sigActiveMs = 5000;
   else if (s.hero === 'tr9') {
@@ -328,9 +402,12 @@ interface BoltOpts {
   color?: BoltColor;
   homing?: number;
   r?: number;
+  /** A thrown blade: spins, and comes back after `ret` ms. */
+  spin?: boolean;
+  ret?: number;
 }
 
-function bolt(s: GameState, x: number, y: number, angle: number, dmg: number, o: BoltOpts = {}) {
+export function bolt(s: GameState, x: number, y: number, angle: number, dmg: number, o: BoltOpts = {}) {
   const hero = HEROES[s.hero ?? 'rook'];
   const speed = o.speed ?? hero.boltSpeed;
   const range = hero.range * ((s.ranks.marksman ?? 0) >= 3 ? 1.3 : 1);
@@ -338,7 +415,7 @@ function bolt(s: GameState, x: number, y: number, angle: number, dmg: number, o:
     id: s.nextId++, x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, dmg,
     pierce: o.pierce ?? st.pierce, bounces: o.bounces ?? st.bounces,
     lifeMs: o.life ?? (range / speed) * 1000, hostile: false, color: o.color ?? s.hero ?? 'rook',
-    hit: [], homing: o.homing ?? 0, bounced: false, r: o.r ?? 4,
+    hit: [], homing: o.homing ?? 0, bounced: false, r: o.r ?? 4, spin: o.spin ?? false, ret: o.ret ?? 0, back: false, toad: false, bossMs: 0,
   });
 }
 
@@ -368,6 +445,10 @@ function fireRate(s: GameState) {
 }
 
 function primary(s: GameState, ms: number) {
+  if (knight) {
+    knightAttack(s, ms);
+    return;
+  }
   const p = s.player;
   const hero = HEROES[s.hero!];
   p.fireMs -= ms * fireRate(s);
@@ -448,7 +529,7 @@ function primary(s: GameState, ms: number) {
 }
 
 /** Counts down an ability's cooldown; true when it goes off (and the next one is set). */
-function ready(s: GameState, name: string, periodMs: number, ms: number) {
+export function ready(s: GameState, name: string, periodMs: number, ms: number) {
   if (s.cd[name] === undefined) s.cd[name] = periodMs * 0.4;
   s.cd[name] -= ms;
   if (s.cd[name] > 0) return false;
@@ -612,12 +693,13 @@ export function angleDiff(a: number, b: number) {
 /** Adds troopers, brothers and drones to match the upgrades held. */
 export function syncAllies(s: GameState) {
   const r = (id: string) => s.ranks[id] ?? 0;
-  const want: Record<'trooper' | 'brother' | 'drone', number> = {
+  const want: Record<'trooper' | 'brother' | 'drone' | 'spirit' | 'copilot' | 'squadron', number> = {
     trooper: s.capstones.includes('last-company') ? 5 : at([1, 1, 2, 2, 3], r('commander'), 0),
     brother: s.capstones.includes('the-batch') ? 5 : at([1, 1, 2, 2, 3], r('brothers'), 0),
     drone: at([1, 1, 2, 2, 3], r('drone'), 0),
+    ...knightAllies(s),
   };
-  for (const kind of ['trooper', 'brother', 'drone'] as const) {
+  for (const kind of ['trooper', 'brother', 'drone', 'spirit', 'copilot', 'squadron'] as const) {
     const have = s.allies.filter((a) => a.kind === kind);
     for (let i = have.length; i < want[kind]; i++) {
       s.allies.push({ id: s.nextId++, kind, x: s.player.x, y: s.player.y, cdMs: 400 + i * 150, lifeMs: 0, slot: i, aim: 0 });
@@ -631,9 +713,13 @@ function moveAllies(s: GameState, ms: number) {
   const p = s.player;
   const dt = ms / 1000;
   const rally = s.hero === 'rook' && p.sigActiveMs > 0 ? 1.5 : 1;
-  const counts = { trooper: 0, brother: 0, drone: 0, sentry: 0, escort: 0 };
+  const counts: Record<AllyKind, number> = { trooper: 0, brother: 0, drone: 0, sentry: 0, escort: 0, fighter: 0, squadron: 0, copilot: 0, spirit: 0, puppet: 0 };
   for (const a of s.allies) counts[a.kind] += 1;
   for (const a of s.allies) {
+    if (KNIGHT_ALLIES.includes(a.kind)) {
+      moveKnightAlly(s, a, ms, counts[a.kind]);
+      continue;
+    }
     if (a.kind === 'sentry') {
       a.lifeMs -= ms;
     } else {
@@ -677,8 +763,10 @@ function moveAllies(s: GameState, ms: number) {
       a.cdMs = at([1100, 850, 850, 700, 600], s.ranks.drone ?? 0, 1100);
     }
   }
-  s.allies = s.allies.filter((a) => a.kind !== 'sentry' || a.lifeMs > 0);
+  s.allies = s.allies.filter((a) => (a.kind !== 'sentry' && a.kind !== 'fighter' && a.kind !== 'puppet') || a.lifeMs > 0);
 }
+
+const KNIGHT_ALLIES: readonly AllyKind[] = ['fighter', 'squadron', 'copilot', 'spirit', 'puppet'];
 
 // ---------------------------------------------------------------------------------------------
 // The droids
@@ -695,7 +783,7 @@ export function spawnAt(s: GameState, kind: EnemyKind, x: number, y: number, eli
     id: s.nextId++, kind, elite, x, y, r: spec.r * (elite ? ELITE.size : 1), hp, maxHp: hp, speed,
     dmg: spec.dmg * (boss ? 1 : planet.dmg) * (elite ? 1.5 : 1), hitMs: 0, slowMs: 0, slowPct: 0, stunMs: 0, flashMs: 0, kx: 0, ky: 0,
     mode: 'walk', modeMs: 0, vx: 0, vy: 0, shellMs: BOSS.shellMs, spawnMs: BOSS.spawnMs, bashMs: 0,
-    slot: 0, facing: 0, guardMs: 0, aimX: 0, aimY: 0, phase2: false,
+    slot: 0, facing: 0, guardMs: 0, aimX: 0, aimY: 0, phase2: false, gripMs: 0, gripDmg: 0, fleeMs: 0, charmMs: 0, orbitMs: 0,
   };
   if (kind === 'toad') e.shellMs = TOAD.spitMs * 0.5;
   else if (kind === 'walker') e.shellMs = WALKER.burstMs * 0.5;
@@ -830,7 +918,7 @@ function director(s: GameState, ms: number) {
   }
 }
 
-function knock(e: Enemy, fromX: number, fromY: number, power: number) {
+export function knock(e: Enemy, fromX: number, fromY: number, power: number) {
   if (e.kind === 'boss') return;
   const a = Math.atan2(e.y - fromY, e.x - fromX);
   e.kx = Math.cos(a) * power;
@@ -840,10 +928,13 @@ function knock(e: Enemy, fromX: number, fromY: number, power: number) {
 
 /** A hostile bolt from a droid, beast, trooper or boss. */
 function shoot(s: GameState, x: number, y: number, angle: number, speed: number, dmg: number, color: BoltColor, r: number, life = 3800) {
-  s.bullets.push({
+  const b: Bullet = {
     id: s.nextId++, x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
     dmg, pierce: 0, bounces: 0, lifeMs: life, hostile: true, color, hit: [], homing: 0, bounced: false, r,
-  });
+    spin: false, ret: 0, back: false, toad: false, bossMs: 0,
+  };
+  s.bullets.push(b);
+  return b;
 }
 
 /** Something on the ground: a warning (`warnMs`) then a blast, or a lasting pool or ring. */
@@ -867,6 +958,19 @@ function moveEnemies(s: GameState, ms: number) {
     e.guardMs = Math.max(0, e.guardMs - ms);
     if (e.slowMs > 0) e.slowMs -= ms;
     else e.slowPct = 0;
+    if (knight) {
+      e.orbitMs -= ms;
+      // Held in a Grip: lifted off the ground until it is crushed.
+      if (e.gripMs > 0) {
+        e.gripMs -= ms;
+        if (e.gripMs <= 0) crush(s, e);
+        continue;
+      }
+      if (e.charmMs > 0) {
+        turned(s, e, ms);
+        continue;
+      }
+    }
     const dx = p.x - e.x;
     const dy = p.y - e.y;
     const dist = Math.hypot(dx, dy) || 1;
@@ -920,7 +1024,7 @@ function moveEnemies(s: GameState, ms: number) {
         vx = vy = 0;
         if (e.shellMs <= 0 && !still) {
           e.shellMs = TOAD.spitMs;
-          shoot(s, e.x, e.y, toHero, TOAD.globSpeed, TOAD.globDmg * harm, 'glob', 8);
+          shoot(s, e.x, e.y, toHero, TOAD.globSpeed, TOAD.globDmg * harm, 'glob', 8).toad = true;
         }
       }
     } else if (e.kind === 'linetrooper') {
@@ -982,6 +1086,12 @@ function moveEnemies(s: GameState, ms: number) {
         vy = v.vy;
       }
     }
+    // Dread: wounded foes run from the hero.
+    if (e.fleeMs > 0) {
+      e.fleeMs -= ms;
+      vx = -vx;
+      vy = -vy;
+    }
     e.x += (vx + e.kx) * dt;
     e.y += (vy + e.ky) * dt;
     const fade = Math.exp(-7 * dt);
@@ -1019,13 +1129,13 @@ function moveEnemies(s: GameState, ms: number) {
       });
     }
     // Touching the hero.
-    const reach = e.r + HERO_R;
+    const reach = e.r + p.r;
     const ex = p.x - e.x;
     const ey = p.y - e.y;
     if (ex * ex + ey * ey > reach * reach || e.hitMs > 0) continue;
     e.hitMs = 700;
     const from = Math.atan2(e.y - p.y, e.x - p.x);
-    const braced = s.hero === 'tr9' && p.sigActiveMs > 0;
+    const braced = (s.hero === 'tr9' || s.hero === 'corvin') && p.sigActiveMs > 0;
     const blocked = shield > 0 && e.kind !== 'boss' && Math.abs(angleDiff(from, p.facing)) <= blockHalf;
     if (braced || blocked) {
       knock(e, p.x, p.y, braced ? 320 : 220);
@@ -1036,7 +1146,23 @@ function moveEnemies(s: GameState, ms: number) {
       detonate(s, e, true);
       continue;
     }
-    hurtHero(s, e.dmg);
+    hurtHero(s, knight ? e.dmg * contactMod(s, e) : e.dmg);
+  }
+}
+
+/** A foe turned to the hero's side (Persuasion): it goes for the nearest other foe and hits it. */
+function turned(s: GameState, e: Enemy, ms: number) {
+  e.charmMs -= ms;
+  const t = nearest(s, e.x, e.y, 1, 320, [e.id])[0];
+  if (!t) return;
+  const d = Math.hypot(t.x - e.x, t.y - e.y) || 1;
+  if (d > e.r + t.r + 2) {
+    const step = Math.min(d, e.speed * 1.2 * (ms / 1000));
+    e.x += ((t.x - e.x) / d) * step;
+    e.y += ((t.y - e.y) / d) * step;
+  } else if (e.orbitMs <= 0) {
+    e.orbitMs = 700;
+    damage(s, t, e.dmg * 2 * ((s.ranks.persuasion ?? 0) >= 4 ? 1.5 : 1), { noCrit: true });
   }
 }
 
@@ -1167,7 +1293,7 @@ export function inRingGap(h: Hazard, angle: number) {
 function detonate(s: GameState, e: Enemy, onHero: boolean) {
   e.hp = 0;
   const p = s.player;
-  if (onHero || Math.hypot(p.x - e.x, p.y - e.y) < ROLLER.blastR + HERO_R) hurtHero(s, e.dmg);
+  if (onHero || Math.hypot(p.x - e.x, p.y - e.y) < ROLLER.blastR + p.r) hurtHero(s, e.dmg);
   explodeDroids(s, e.x, e.y, ROLLER.blastR, ROLLER.hurtOthers, e);
   s.blasts.push({ id: s.nextId++, x: e.x, y: e.y, r: ROLLER.blastR, ms: 380, maxMs: 380, color: BLAST.droid });
 }
@@ -1175,13 +1301,16 @@ function detonate(s: GameState, e: Enemy, onHero: boolean) {
 interface HitOpts {
   noCrit?: boolean;
   slow?: boolean;
+  /** A sure critical hit (Joren's Edge). */
+  crit?: boolean;
 }
 
 /** Hero-side damage to a droid: the Power Cell, crits and Stun Rounds apply. Returns the damage. */
-function damage(s: GameState, e: Enemy, base: number, o: HitOpts = {}) {
-  if (e.hp <= 0) return 0;
+export function damage(s: GameState, e: Enemy, base: number, o: HitOpts = {}) {
+  if (e.hp <= 0 || e.charmMs > 0) return 0;
   let dmg = base * st.damage;
-  if (!o.noCrit && st.crit > 0 && Math.random() < st.crit) dmg *= 2;
+  if (knight) dmg *= foeMod(s, e);
+  if (o.crit || (!o.noCrit && st.crit > 0 && Math.random() < st.crit)) dmg *= 2;
   e.hp -= dmg;
   e.flashMs = 90;
   if (o.slow && st.slowPct > 0) {
@@ -1195,6 +1324,7 @@ function damage(s: GameState, e: Enemy, base: number, o: HitOpts = {}) {
 function kill(s: GameState, e: Enemy) {
   e.hp = 0;
   s.kills += 1;
+  if (knight) onKill(s, e);
   if (e.kind === 'boss') {
     // The planet is cleared; the star map (or victory) comes next frame.
     s.phase = 'cleared';
@@ -1244,7 +1374,7 @@ function explodeDroids(s: GameState, x: number, y: number, r: number, dmg: numbe
 }
 
 /** A hero-side blast: damages and pushes every droid within `r`. */
-function explode(s: GameState, x: number, y: number, r: number, dmg: number, color: string) {
+export function explode(s: GameState, x: number, y: number, r: number, dmg: number, color: string) {
   near(s, x, y, r, (e) => {
     damage(s, e, dmg);
     knock(e, x, y, 160);
@@ -1262,6 +1392,22 @@ function moveBullets(s: GameState, ms: number) {
   for (const b of s.bullets) {
     b.lifeMs -= ms;
     if (b.lifeMs <= 0) continue;
+    if (b.spin && b.ret > 0) {
+      // A thrown blade turns at the end of its reach and comes back, cutting again on the way.
+      b.ret -= ms;
+      if (b.ret <= 0) {
+        b.back = true;
+        b.hit = [];
+      }
+    }
+    if (b.back) {
+      const p = s.player;
+      const d = Math.hypot(p.x - b.x, p.y - b.y);
+      if (d < 22) continue;
+      const speed = Math.hypot(b.vx, b.vy);
+      b.vx = ((p.x - b.x) / d) * speed;
+      b.vy = ((p.y - b.y) / d) * speed;
+    }
     if (b.homing > 0) {
       const t = nearest(s, b.x, b.y, 1, 320)[0];
       if (t) {
@@ -1280,8 +1426,17 @@ function moveBullets(s: GameState, ms: number) {
       continue;
     }
     let alive = true;
+    b.bossMs -= ms;
     near(s, b.x, b.y, b.r, (e) => {
-      if (!alive || e.hp <= 0 || b.hit.includes(e.id)) return;
+      if (!alive || e.hp <= 0 || e.charmMs > 0) return;
+      if (b.spin && e.kind === 'boss') {
+        // A thrown blade keeps cutting a boss as it passes through.
+        if (b.bossMs > 0) return;
+        b.bossMs = 130;
+        damage(s, e, b.dmg);
+        return;
+      }
+      if (b.hit.includes(e.id)) return;
       b.hit.push(e.id);
       if (guarded(e, b.vx, b.vy)) {
         // A knight's shield takes most of a bolt from the front, and stops it.
@@ -1329,11 +1484,14 @@ function hostileBolt(s: GameState, b: Bullet, shield: number) {
   if (shield > 0 && d < HERO_R + 18 && Math.abs(angleDiff(Math.atan2(dy, dx), p.facing)) <= shieldHalf(s)) {
     return shield >= 3 ? reflect(b) : false;
   }
-  if (d < HERO_R + b.r) {
+  // Corvin's Deflect and Joren's Council Seat send bolts back.
+  if (knight && knightGuard(s, d, (dmg, color) => reflect(b, dmg, color), () => Math.atan2(b.vy, b.vx))) return true;
+  if (d < p.r + b.r) {
     // A glob slows as well as hurts.
     if (b.color === 'glob' && !untouchable(s)) {
       p.slowMs = TOAD.slowMs;
       p.slowPct = Math.max(p.slowPct, TOAD.slow);
+      if (b.toad) s.globHits += 1;
     }
     hurtHero(s, b.dmg);
     return false;
@@ -1341,17 +1499,17 @@ function hostileBolt(s: GameState, b: Bullet, shield: number) {
   return true;
 }
 
-function reflect(b: Bullet) {
+function reflect(b: Bullet, dmg = 30, color: BoltColor = 'tr9') {
   b.hostile = false;
   b.vx = -b.vx * 1.5;
   b.vy = -b.vy * 1.5;
-  b.dmg = 30;
-  b.color = 'tr9';
+  b.dmg = dmg;
+  b.color = color;
   b.lifeMs = 1500;
   return true;
 }
 
-function addBomb(s: GameState, kind: Bomb['kind'], x: number, y: number, ms: number, r: number, dmg: number, o: Partial<Bomb> = {}) {
+export function addBomb(s: GameState, kind: Bomb['kind'], x: number, y: number, ms: number, r: number, dmg: number, o: Partial<Bomb> = {}) {
   s.bombs.push({ id: s.nextId++, kind, x, y, fromX: o.fromX ?? x, fromY: o.fromY ?? y, ms, maxMs: ms, r, dmg, cluster: o.cluster ?? 0, heal: o.heal ?? 0, turret: o.turret ?? false });
 }
 
@@ -1364,7 +1522,7 @@ function bombs(s: GameState, ms: number) {
   if (!due.length) return;
   s.bombs = s.bombs.filter((b) => b.ms > 0);
   for (const b of due) {
-    explode(s, b.x, b.y, b.r, b.dmg, b.kind === 'frag' || b.kind === 'grenade' ? BLAST.frag : BLAST.hero);
+    explode(s, b.x, b.y, b.r, b.dmg, b.kind === 'frag' || b.kind === 'grenade' ? BLAST.frag : b.kind === 'wreck' || b.kind === 'ship' ? BLAST.wreck : BLAST.hero);
     for (let i = 0; i < b.cluster; i++) {
       const a = (i / b.cluster) * Math.PI * 2 + Math.random();
       addBomb(s, 'bomblet', b.x + Math.cos(a) * 48, b.y + Math.sin(a) * 48, 260 + i * 60, 45, b.dmg * 0.5);
@@ -1392,7 +1550,7 @@ function hazards(s: GameState, ms: number) {
       h.warnMs -= ms;
       if (h.warnMs > 0) continue;
       // The warning is over: it goes off.
-      if (d < h.r + HERO_R) hurtHero(s, h.dmg);
+      if (d < h.r + p.r) hurtHero(s, h.dmg);
       if (h.kind === 'vent') explodeDroids(s, h.x, h.y, h.r, VENT.foeDmg * PLANETS[s.planet].hp, null);
       const color = h.kind === 'vent' ? BLAST.vent : h.kind === 'shell' ? BLAST.shell : BLAST.stomp;
       s.blasts.push({ id: s.nextId++, x: h.x, y: h.y, r: h.r, ms: 420, maxMs: 420, color });
@@ -1406,10 +1564,10 @@ function hazards(s: GameState, ms: number) {
         p.slowPct = Math.max(p.slowPct, BOG.slow);
       }
     } else if (h.kind === 'ember') {
-      if (d < h.r + HERO_R * 0.5) hurtHero(s, h.dmg);
+      if (d < h.r + p.r * 0.5) hurtHero(s, h.dmg);
     } else if (h.kind === 'ring') {
       h.r += CHAMPION.ringSpeed * dt;
-      if (!h.hit && Math.abs(d - h.r) < 9 + HERO_R * 0.6 && !inRingGap(h, Math.atan2(p.y - h.y, p.x - h.x))) {
+      if (!h.hit && Math.abs(d - h.r) < 9 + p.r * 0.6 && !inRingGap(h, Math.atan2(p.y - h.y, p.x - h.x))) {
         h.hit = true;
         hurtHero(s, h.dmg);
       }
