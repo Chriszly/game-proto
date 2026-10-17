@@ -1,10 +1,11 @@
 import { AIM_MODES, type AimMode } from './aim';
+import { freshLegacy, type Legacy } from './legacy';
 import { freshProgress, type Progress } from './state';
 import { RELICS } from './relics';
 import { UPGRADES, type UpgradeId } from './upgrades';
 
-// Only the hero's progress is saved: level, experience, upgrades and relics. A run always starts at
-// wave 1.
+// Only the hero's progress is saved: level, experience, upgrades, relics and what retired heroes
+// left. A reload always starts a run at wave 1.
 const KEY = 'palisade-progress';
 
 export function loadProgress(): Progress {
@@ -24,7 +25,16 @@ export function loadProgress(): Progress {
     // The cards a level-up had up: kept only if they are still three known upgrades and a level-up
     // is pending, otherwise new ones are rolled.
     const choices = Array.isArray(saved.choices) && saved.choices.length === 3 && saved.choices.every((id) => id in UPGRADES) && (saved.levelUps ?? 0) > 0 ? saved.choices : null;
-    return { ...fresh, ...saved, ranks, relics, choices };
+    // What retired heroes left came later too: an older save has none, and unknown relics are dropped.
+    const kept: Partial<Legacy> = saved.legacy ?? {};
+    const legacy: Legacy = {
+      ...freshLegacy(),
+      relics: Array.isArray(kept.relics) ? kept.relics.filter((id) => id in RELICS) : [],
+      slot: kept.slot === true,
+      rain: kept.rain === true,
+      retired: typeof kept.retired === 'number' ? kept.retired : 0,
+    };
+    return { ...fresh, ...saved, ranks, relics, legacy, choices };
   } catch {
     return fresh;
   }

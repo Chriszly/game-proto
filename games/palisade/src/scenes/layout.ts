@@ -26,6 +26,16 @@ export const CALTROPS = { x: 66, y: 196, r: 22 };
 export const AIM = { x: 66, y: 134, w: 110, h: 22 };
 /** The "Fortify" button under the wave track, by its centre, and the panel it opens. */
 export const FORTIFY = { x: 66, y: 108, w: 110, h: 22, panel: { w: 460, h: 270 } };
+/** The "Repair" button right of the Fortify button, by its centre. */
+export const REPAIR = { x: 190, y: 108, w: 124, h: 22 };
+/** The omen card during a break from wave 4, by its centre. */
+export const OMEN = { x: 480, y: 330, w: 440, h: 130 };
+/** The chip naming an accepted omen during its wave, over the ranger, by its centre. */
+export const OMEN_CHIP = { x: 300, y: 210, w: 150, h: 20 };
+/** The three legacy cards when the hero retires, by their centres. */
+export const LEGACY = { xs: [230, 480, 730], y: 268, w: 230, h: 190 };
+/** The forced march row ("Start at") on the game-over panel: its buttons' size and spacing. */
+export const MARCH = { w: 150, h: 26, step: 160 };
 /** The heat chip right of the wave track, by its centre. */
 export const HEAT = { x: 398, y: 58, w: 68, h: 20 };
 /** The "Chilled bow" chip over the hero while the Frost Giant's roar slows the shots, by its centre. */

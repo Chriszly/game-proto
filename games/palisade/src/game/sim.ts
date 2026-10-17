@@ -2,8 +2,11 @@ import { type AimMode, sortTargets } from './aim';
 import { CALL_GOBLINS, FIRST_ROAR_MS, FIRST_ROCK_MS, ROAR_MS, ROAR_SLOW, ROAR_SLOW_MS, ROCK_DAMAGE, ROCK_MS, ROCK_SPEED, STUN_MS } from './bosses';
 import { ELITE_COINS, ELITE_HP, ELITE_XP, ENRAGE_PACE, SPLIT_HP, SPLIT_INTO, TRAIT_IDS, eliteChance } from './elites';
 import { ENEMIES } from './enemies';
-import { FORTS, LOOKOUT_RING, LOOKOUT_WAVES, OIL_DPS, OIL_HIT, OIL_MS, OIL_RADIUS, STAKE_FRONT, STAKE_HP, type FortId } from './forts';
+import { FORTS, LOOKOUT_RING, LOOKOUT_WAVES, OIL_DPS, OIL_HIT, OIL_MS, OIL_RADIUS, REPAIR_SHARE, STAKE_FRONT, STAKE_HP, repairCost, type FortId } from './forts';
 import { MAX_HEAT, WIN_WAVE } from './heat';
+import { canKeep, type LegacyId } from './legacy';
+import { canMarch } from './march';
+import { OMEN_BREAK_MS, OMEN_IDS, omenEffects, omenWave } from './omens';
 import {
   BOW,
   FIELD,
@@ -11,6 +14,7 @@ import {
   HERO_FRONT,
   BARRICADE_FRONT,
   GUARD_SLOTS,
+  freshProgress,
   offerable,
   progressOf,
   newRun,
@@ -26,7 +30,7 @@ import {
 import type { Trait } from './elites';
 import type { EnemyKind } from './enemies';
 import { ARCANE_RADIUS, GUARDS, MAX_GUARD_LEVEL, SPEAR_REACH, guardDamage, trainCost, type GuardKind } from './guards';
-import { RELIC_IDS } from './relics';
+import { RELIC_IDS, type RelicId } from './relics';
 import { ROAD_IDS, roadEffects, type RoadId } from './roads';
 import { BASE_SKILLS, FILLERS, PURSE_COINS, type UpgradeId } from './upgrades';
 import { BREAK_MS, bossBars, foeHp, isBossWave, spawnInterval, waveFoes } from './waves';
@@ -130,6 +134,8 @@ function step(state: GameState, dt: number) {
     if (state.breakMs <= 0) {
       state.phase = 'fighting';
       state.relicFound = null;
+      // An omen left alone until the break ends is refused.
+      if (state.omen && !state.omen.accepted) state.omen = null;
       state.toSpawn = waveFoes(state.wave, state.road);
       state.spawnMs = 0;
     }
@@ -158,7 +164,8 @@ function spawn(state: GameState, dt: number) {
       : FIELD.top + margin + Math.random() * (FIELD.bottom - FIELD.top - 2 * margin);
   // From wave 4 some foes come on as elites with a trait (never a boss); the rolls only start then,
   // so the first waves' random sequence stays as it was.
-  const chance = eliteChance(state.wave);
+  // A Blood Moon doubles the chance.
+  const chance = Math.min(1, eliteChance(state.wave) * omenEffects(state.omen).elites);
   const elite = !type.boss && chance > 0 && Math.random() < chance;
   const trait = elite ? TRAIT_IDS[Math.floor(Math.random() * TRAIT_IDS.length)] : null;
   addFoe(state, kind, SPAWN_X + type.radius, y, Math.round(foeHp(kind, state.wave, state.road, state.heat) * (trait ? ELITE_HP : 1)), trait);
@@ -189,9 +196,13 @@ function addFoe(state: GameState, kind: EnemyKind, x: number, y: number, hp: num
   });
 }
 
-/** Foes that have come into view, in the order the aim priority shoots them (nearest first by default). */
+/**
+ * Foes that have come into view, in the order the aim priority shoots them (nearest first by
+ * default). On a Night wave only those past mid-field are seen.
+ */
 function targets(state: GameState, mode: AimMode = state.aimMode) {
-  return sortTargets(state.enemies.filter((e) => e.x < VIEW_RIGHT), mode);
+  const sight = Math.min(VIEW_RIGHT, omenEffects(state.omen).sight);
+  return sortTargets(state.enemies.filter((e) => e.x < sight), mode);
 }
 
 function shoot(state: GameState, s: Stats, dt: number) {
@@ -375,7 +386,8 @@ function moveEnemies(state: GameState, s: Stats, dt: number) {
   const barricadeUp = state.barricade.hp > 0;
   // Once the barricade is down, a bought stake line behind it is the next thing foes hack at.
   const stakesUp = !barricadeUp && state.forts.stakeHp > 0;
-  const roadSpeed = roadEffects(state.road).speed;
+  // A Golden Road and Rich Plunder both hurry the foes.
+  const roadSpeed = roadEffects(state.road).speed * omenEffects(state.omen).speed;
   for (const e of state.enemies) {
     const type = ENEMIES[e.kind];
     e.hitMs = Math.max(0, e.hitMs - dt);
@@ -597,6 +609,28 @@ export const canFortify = (state: GameState) =>
 /** Whether this fortification can be bought now: an oil pot only when none is armed. */
 export const canBuyFort = (state: GameState, id: FortId) => canFortify(state) && !(id === 'oil' && state.forts.oil);
 
+/** Whether a paid repair can be bought now: during a break, with the barricade hurt and the coins there. */
+export const canRepair = (state: GameState) =>
+  state.phase === 'break' && !state.choices && state.barricade.hp < state.barricade.max && state.coins >= repairCost(state.repairs);
+
+/** Paid repairs: mends REPAIR_SHARE of the barricade for coins, each repair of the run costing more. Returns whether it did. */
+export function repair(state: GameState) {
+  if (!canRepair(state)) return false;
+  state.coins -= repairCost(state.repairs);
+  state.repairs++;
+  state.barricade.hp = Math.min(state.barricade.max, state.barricade.hp + state.barricade.max * REPAIR_SHARE);
+  return true;
+}
+
+/** Accepts (or refuses) the omen named for the coming wave; either way the break is cut short. Returns whether it did. */
+export function decideOmen(state: GameState, accept: boolean) {
+  if (state.phase !== 'break' || state.choices || !state.omen || state.omen.accepted) return false;
+  if (accept) state.omen.accepted = true;
+  else state.omen = null;
+  state.breakMs = Math.min(state.breakMs, BREAK_MS);
+  return true;
+}
+
 /** Sets who the ranger shoots first. */
 export function setAim(state: GameState, mode: AimMode) {
   state.aimMode = mode;
@@ -621,8 +655,9 @@ function removeDead(state: GameState) {
     const s = stats(state);
     state.kills++;
     const road = roadEffects(state.road);
+    const omen = omenEffects(state.omen);
     const elite = e.trait ? ELITE_COINS : 1;
-    state.coins += (ENEMIES[e.kind].coins * elite + s.bounty) * road.coins;
+    state.coins += Math.round((ENEMIES[e.kind].coins * elite + s.bounty) * road.coins * omen.coins);
     // Each kill charges Arrow Rain and the caltrops and carries the streak on (or starts a new one).
     state.rain.charge = Math.min(state.rain.need, state.rain.charge + 1);
     state.caltrops.charge = Math.min(state.caltrops.need, state.caltrops.charge + 1);
@@ -630,7 +665,7 @@ function removeDead(state: GameState) {
     streak.count = streak.ms > 0 ? streak.count + 1 : 1;
     streak.ms = s.streakMs;
     streak.best = Math.max(streak.best, streak.count);
-    const base = ENEMIES[e.kind].xp * s.xpGain * road.xp * (e.trait ? ELITE_XP : 1);
+    const base = ENEMIES[e.kind].xp * s.xpGain * road.xp * omen.xp * (e.trait ? ELITE_XP : 1);
     const bonus = base * streakBonus(streak.count);
     streak.bonusXp += bonus;
     const radius = ENEMIES[e.kind].radius;
@@ -819,7 +854,9 @@ function clearWave(state: GameState) {
   const won = state.wave === WIN_WAVE;
   state.wave++;
   state.phase = 'break';
-  state.breakMs = BREAK_MS;
+  // From wave 4 the break names the next wave's omen (not after a boss), and lasts long enough to read it.
+  state.omen = omenWave(state.wave) ? { id: OMEN_IDS[Math.floor(Math.random() * OMEN_IDS.length)], accepted: false } : null;
+  state.breakMs = state.omen ? OMEN_BREAK_MS : BREAK_MS;
   state.missiles = [];
   // An Oakheart Charm from the chest makes the barricade bigger at once.
   const s = stats(state);
@@ -841,13 +878,13 @@ export function keepFighting(state: GameState) {
   return true;
 }
 
-/** A new run at this heat (one that is unlocked), from wave 1 with the hero kept. */
-export function startHeat(state: GameState, heat: number): GameState {
+/** A new run at this heat (one that is unlocked), from wave 1 (or a forced march's start) with the hero kept. */
+export function startHeat(state: GameState, heat: number, start = 1): GameState {
   const progress = progressOf(state);
   progress.heat = Math.max(0, Math.min(progress.heatUnlocked, heat));
   // Leaving a won run for a new heat ends it, so it counts like a fall does (which counted already).
   if (state.phase !== 'over') progress.runs++;
-  const next = newRun(progress, state.aimMode);
+  const next = newRun(progress, state.aimMode, canMarch(progress.bestWave, start) ? start : 1);
   reoffer(next, state.choices);
   return next;
 }
@@ -867,11 +904,33 @@ function gameOver(state: GameState) {
   state.missiles = [];
 }
 
-/** After a fall, a new run from wave 1 with the hero's level and upgrades kept. */
-export function fightAgain(state: GameState): GameState {
-  const next = newRun(progressOf(state), state.aimMode);
+/**
+ * After a fall, a new run with the hero's level and upgrades kept: from wave 1, or on a forced
+ * march from the first wave of a road whose boss the hero has beaten (wave 11 or 21).
+ */
+export function fightAgain(state: GameState, start = 1): GameState {
+  const next = newRun(progressOf(state), state.aimMode, canMarch(state.bestWave, start) ? start : 1);
   reoffer(next, state.choices);
   return next;
+}
+
+/** Whether the hero may retire for a legacy: every skill learned, or the siege lifted (a heat unlocked). */
+export const canRetire = (state: GameState) => offerable(state).length === 0 || state.heatUnlocked > 0;
+
+/** The relic the "A first relic" legacy would keep, rolled when the retire panel opens. */
+export const rollLegacyRelic = (): RelicId => RELIC_IDS[Math.floor(Math.random() * RELIC_IDS.length)];
+
+/**
+ * Retires the hero (after a fall or from the victory panel) for this legacy perk, with `relic` the
+ * first relic when that is the one kept. The next hero starts from scratch on wave 1, with every
+ * legacy the retired heroes left. Returns null when the hero cannot retire or the perk is kept already.
+ */
+export function retire(state: GameState, id: LegacyId, relic: RelicId): GameState | null {
+  if ((state.phase !== 'over' && state.phase !== 'won') || !canRetire(state) || !canKeep(state.legacy, id)) return null;
+  const legacy = { ...state.legacy, relics: [...state.legacy.relics], retired: state.legacy.retired + 1 };
+  if (id === 'relic') legacy.relics.push(relic);
+  else legacy[id] = true;
+  return newRun(freshProgress(legacy), state.aimMode);
 }
 
 function nearest(foes: Enemy[], x: number, y: number) {

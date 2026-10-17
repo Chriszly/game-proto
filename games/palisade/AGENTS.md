@@ -68,6 +68,41 @@ seconds without a tap.
   `clearWave`, and `rainRingOf(state)` (used by `crowdSpot`, `landVolleys` and the scene's `ring()`)
   multiplies `stats().rainRing` by `LOOKOUT_RING` while it lasts. The scene draws them in
   `drawForts`. A new run starts with none (`freshForts`).
+- **Paid repairs** (`REPAIR_SHARE`, `repairCost` in `forts.ts`): the "Repair" button at `REPAIR`
+  (always shown, lit while `canRepair`) calls `repair(state)`, which during a break (no level-up)
+  with the barricade hurt spends `repairCost(state.repairs)` coins (15, then 10 more each time),
+  counts `repairs` up and mends `REPAIR_SHARE` (15%) of `barricade.max`. Heat 3 does not halve it.
+  A new run starts at 0 repairs.
+- **Omens** (`omens.ts`, `state.omen`): `clearWave` rolls one of `OMEN_IDS` for the next wave when
+  `omenWave(wave)` holds (from `OMEN_FROM_WAVE`, 4, but not on a road's first wave, whose break has
+  the relic chest and road choice), sets `omen` to `{ id, accepted: false }` and the break to
+  `OMEN_BREAK_MS` (6 s). `OmenCard` shows it with Accept and Refuse, which call `decideOmen`: accept
+  sets `accepted`, refuse clears `omen`, and either cuts the break to at most `BREAK_MS`. When the
+  break ends an undecided omen is cleared (refused). `omenEffects(omen)` gives what an accepted one
+  changes: `sight` (Night: `targets` only takes foes left of `NIGHT_X`, so the arrows, lightning,
+  fireballs, the mage and `crowdSpot` too; the scene hides foes right of it and darkens the field
+  with `nightG`), `elites` (Blood Moon doubles `eliteChance` in `spawn`), `coins` and `speed` (Rich
+  Plunder, in `removeDead` and `moveEnemies` with the road's), and `xp` (`OMEN_XP`, 1.3, on every
+  kill's base experience). The chip at `OMEN_CHIP` names an accepted omen until the wave is cleared,
+  when `clearWave` replaces it.
+- **Forced march** (`march.ts`): `newRun(progress, aim, start)` starts a run on `start` with
+  `marchCoins(start)` coins and the rain need for that wave. `MARCH_STARTS` are waves 1, 11 (120
+  coins) and 21 (300 coins); `canMarch(bestWave, wave)` needs `bestWave >= wave - 1`.
+  `fightAgain(state, start)` and `startHeat(state, heat, start)` fall back to wave 1 when the march
+  is not earned. The game-over panel's "Start at" row (`drawMarchPicks`) sets `GameScene.startWave`,
+  which "Fight again" and the heat buttons use; it goes back to 1 after every restart. "New hero",
+  a retirement and the victory panel's "Heat N" always start on wave 1. The skipped chests give
+  nothing, and the run starts on a road with no twist (`road` null).
+- **Retire for a legacy** (`legacy.ts`, `state.legacy`): `canRetire` holds once `offerable` is
+  empty or `heatUnlocked > 0`. "Retire" on the game-over and victory panels (dim until then, with
+  `retireNote` under it after a fall) opens `LegacyPanel` with a relic from `rollLegacyRelic`;
+  tapping a card calls `retire(state, id, relic)`, which returns `newRun(freshProgress(legacy))`:
+  a hero from scratch (level 1, no ranks, best wave, heats or runs) with `legacy.retired` counted
+  up and the perk added: `relics` gets the relic (stacks), `slot` or `rain` set (once each; `canKeep`
+  greys a held one out). `freshProgress(legacy)` puts the legacy's relics into `relics`; `newRun`
+  gives `guards` a third entry with `slot` (`GUARD_SLOTS[2]`, between the others, shown and tappable
+  only then), and `stats().rainCharge` is multiplied by `QUICK_RAIN` (0.75) with `rain`. "New hero"
+  keeps the legacy too (`freshProgress(state.legacy)`).
 - **Road to the boss:** waves come in roads of ten (`waveTrack` in `waves.ts`), shown as a track
   under the top bar. The tenth wave of each road ends with its boss (`bossOf`: the Troll King, the
   Ogre Warlord, the Frost Giant, then round again) with stacked health bars. Clearing a boss wave
@@ -125,14 +160,15 @@ seconds without a tap.
   empty sets `mastered` (saved with the progress), which only fills the skill book's filler pages.
   A skill added later puts the usual cards back, since `offerable` is no longer empty.
 - **Progression:** level, experience, upgrade ranks, relics, pending level-ups (with the cards up for them), best wave, run
-  count and `mastered` carry over between runs. Every run restarts at wave 1 on the first road, with no coins,
-  guards or caltrops.
+  count, `mastered` and the legacy carry over between runs. Every run restarts at wave 1 (or a forced march's start) on a road with no twist, with no coins
+  (or the march's stake), guards or caltrops.
 - **Screens:** there is one scene with the battle and HUD, plus overlays drawn over it: the
   level-up cards (`LevelUp`), the skill book (`SkillBook`, opened by the "Skill book" button in the
   top bar, with the relics and full sets along its bottom), the relic chest panel and the road
-  cards (`RoadChoice`, both during the break after a boss), the hire panel (`HirePanel`) and the
-  game-over panel with "Fight again" and "New hero". There is no title or menu
-  screen.
+  cards (`RoadChoice`, both during the break after a boss), the omen card (`OmenCard`, in the
+  breaks from wave 4), the hire panel (`HirePanel`), the game-over panel with "Fight again", "New
+  hero" and "Retire", the heat row and the "Start at" row, and the legacy cards (`LegacyPanel`).
+  There is no title or menu screen.
 - **Rough edges seen in the code:**
   - `GameState.version` (`VERSION`) is never read, and the save holds no version, so there is no
     migration path (relics are merged over `freshProgress`, so older saves load with none).
@@ -158,19 +194,24 @@ seconds without a tap.
 - `src/game/`: the rules in plain TypeScript, with no Phaser imports.
   - `state.ts`: `GameState` and its parts (`Enemy`, `Missile`, `Effect`, `Volley`, `Patch`,
     `Guard`, `Forts`), field geometry (`FIELD`, `SPAWN_X`, `BOW`, `HERO_FRONT`, `BARRICADE_FRONT`,
-    `GUARD_SLOTS`), `xpToNext`, `stats` (all upgrade, relic, set and heat effects), `streakBonus`,
+    `GUARD_SLOTS`, `BASE_GUARD_SLOTS`), `xpToNext`, `stats` (all upgrade, relic, set and heat effects), `streakBonus`,
     `STREAK_MS`, `RAIN_KILLS`, `CALTROP_KILLS`, `rainNeed`, `newRun`, `Progress`, `progressOf`,
     `freshForts`, `offerable`.
   - `sim.ts`: `tick` (the battle and the auto-pick countdown), `held`, `pick`, `offer`, `rollChoices`,
     `reoffer`, `pickRoad`, `fightAgain`, `startHeat`, `keepFighting`, `loose` (Arrow Rain), `strew`
-    (caltrops), `hire`, `train`, `fortify`, `canFortify`, `canBuyFort`, `setAim`,
+    (caltrops), `hire`, `train`, `fortify`, `canFortify`, `canBuyFort`, `repair`, `canRepair`,
+    `decideOmen`, `canRetire`, `retire`, `rollLegacyRelic`, `setAim`,
     `crowdSpot`, `inRing`, `rainRingOf`, `AUTO_PICK_MS`, `RAIN_FALL_MS`, `RAIN_RING`, `CALTROP_PATCH`,
     `CALTROP_WAVES`, `MAX_PATCHES`, `SHIELD_BLOCK`, and the private steps: spawning (elites), shooting, guards (stuns), missiles
     (rocks), boss moves, volleys, damage, foe movement (caltrops, healing, the stake line, the oil pot), kills (coins, streak, charges, experience, splitting),
     wave clear with the relic chest, road choice and the win, game over.
   - `elites.ts`: `Trait`, `TRAITS`, `TRAIT_IDS`, `ELITE_FROM_WAVE`, `eliteChance` and the elite and
     trait numbers. `bosses.ts`: the bosses' move numbers. `forts.ts`: `FortId`, `FORTS`,
-    `FORT_IDS`, `STAKE_FRONT`, `STAKE_HP`, the oil and lookout numbers. `heat.ts`: `WIN_WAVE`,
+    `FORT_IDS`, `STAKE_FRONT`, `STAKE_HP`, the oil and lookout numbers, `REPAIR_SHARE` and
+    `repairCost`. `omens.ts`: `OmenId`, `OMENS`, `OMEN_IDS`, `OMEN_FROM_WAVE`, `OMEN_BREAK_MS`,
+    `NIGHT_X`, `OMEN_XP`, `omenWave`, `omenEffects`. `march.ts`: `MARCH_STARTS`, `canMarch`,
+    `marchCoins`. `legacy.ts`: `LegacyId`, `LEGACIES`, `LEGACY_IDS`, `Legacy`, `freshLegacy`,
+    `QUICK_RAIN`, `canKeep`. `heat.ts`: `WIN_WAVE`,
     `MAX_HEAT`, `HEAT_RULES` (texts) and `heatRules`. `aim.ts`: `AimMode`, `AIM_MODES`, `AIMS`,
     `nextAim`, `sortTargets`.
   - `enemies.ts`: the `ENEMIES` table of wave 1 stats per `EnemyKind` (with `coins` and the
@@ -198,7 +239,8 @@ seconds without a tap.
   (`restart`, `restartAt`) and the 1x/2x speed switch
   (`speed`, at `SPEED` in the bottom bar).
 - `src/scenes/layout.ts`: screen positions (`HERO_FEET`, `BARRICADE`, `XP_BAR`, `BOSS_BAR`,
-  `TRACK`, `RAIN`, `CALTROPS`, `AIM`, `FORTIFY` (with its panel's size), `HEAT`, `ROAR_CHIP`,
+  `TRACK`, `RAIN`, `CALTROPS`, `AIM`, `FORTIFY` (with its panel's size), `REPAIR`, `OMEN`,
+  `OMEN_CHIP`, `LEGACY`, `MARCH`, `HEAT`, `ROAR_CHIP`,
   `GUARD_HIT`, `HIRE`, `ROAD_CARDS`, `RAIN_HINT`, `STREAK`, `CARDS`,
   `COUNTDOWN`, `AUTO_TOGGLE`, `SKILL_BOOK`, `SPEED`, `BUTTON`, `BARRICADE_BAR`, `BARRICADE_TIP_W`),
   `HUD_HEIGHT`, `UI_DEPTH`, `FONT` (a system font stack).
@@ -218,6 +260,13 @@ seconds without a tap.
   fortification in `FORT_IDS` (a little picture, its text, what is held and a Buy button with its
   cost, greyed out when the coins are short or this break's one is bought) and a dim backdrop that
   closes it. `open` tells the scene to hold everything still.
+- `src/ui/OmenCard.ts`: the omen card at `OMEN` during a break: "Omen for wave N: name", its text,
+  the experience it pays and Accept and Refuse (`buttons` holds their spots), calling back with
+  the choice.
+- `src/ui/LegacyPanel.ts`: the retire panel over the game-over or victory panel: three cards at
+  `LEGACY` (an icon, the perk's name and text; the relic card names its relic; a kept perk reads
+  "Kept already" and is not tappable), what earlier heroes left, and Cancel. `cards` records each
+  card's spot and `open` whether it is up.
 - `src/ui/SkillBook.ts`: the "Skill book found/total" button in the top bar and the book it opens,
   a 4x7 grid with a slot for every id in `BOOK_ORDER` (`upgrades.ts`: one theme a row, the bow,
   harder hits, fire, chill and slow, powder and lightning, the barricade and guards, then Battle
@@ -272,7 +321,8 @@ seconds without a tap.
   after a fall.
 - **Order inside `step`:** age effects, count the streak down (ending it at 0), update
   `rain.need`, count the roar down, bring volleys down (`landVolleys`), count up how long each caltrop patch has lain, then the break countdown
-  (or the road choice's countdown while `roadChoices` is set) or spawning, then `shoot`,
+  (or the road choice's countdown while `roadChoices` is set; when it runs out an undecided omen is
+  cleared) or spawning, then `shoot`,
   `guardsAct`, `moveMissiles`, `bossMoves`, `moveEnemies` (caltrops, shaman healing, the oil pot,
   the stake line), and finally the
   wave-clear check. Arrows home, turning
@@ -290,9 +340,11 @@ seconds without a tap.
   `HirePanel`, which calls `GameScene.hire`/`train`; the scene holds the battle while it is open and
   closes it on a level-up or a fall. A tap on the Fortify button (always shown; not after a fall or during a level-up) opens
   `FortifyPanel`, which calls `GameScene.fortify`; the scene holds the battle while it is open and
-  closes it on a level-up or a fall. A tap on the aim toggle (or T) calls `cycleAim`. A tap on a road card calls `pickRoad`. "Fight again" and "New hero" call
+  closes it on a level-up or a fall. A tap on the Repair button calls `repair`, and Accept or Refuse
+  on the omen card `decideOmen`. A tap on the aim toggle (or T) calls `cycleAim`. A tap on a road card calls `pickRoad`. "Fight again" and "New hero" call
   `restart`, the heat buttons on the game-over panel and "Heat N" on the victory panel call
-  `restartAt`, and "Keep fighting" calls `keepFighting`. The "Skill book" button opens `SkillBook`; Back or a tap beside the book closes it.
+  `restartAt`, a "Start at" button sets `startWave`, "Retire" calls `openRetire` and a legacy card
+  `GameScene.retire`, and "Keep fighting" calls `keepFighting`. The "Skill book" button opens `SkillBook`; Back or a tap beside the book closes it.
   While it is open `GameScene.update` skips `tick` and its `clock`, so the battle, effects and the
   auto-pick countdown all wait. The button sits above the level-up overlay (depth `UI_DEPTH + 15`)
   so it works while choosing, and hides after a fall. Shooting is automatic. A dimming rectangle
@@ -317,14 +369,14 @@ seconds without a tap.
 ### State model
 
 - `GameState` (`src/game/state.ts`) has two halves. The progress fields (`level`, `xp`, `ranks`,
-  `levelUps`, `bestWave`, `runs`, `relics`, `mastered`, `heat`, `heatUnlocked`, and `choices`, the
-  cards up for a pending level-up) form `Progress`. The run fields are `wave`, `phase`
+  `levelUps`, `bestWave`, `runs`, `relics`, `mastered`, `heat`, `heatUnlocked`, `legacy` (`relics`,
+  `slot`, `rain`, `retired`), and `choices`, the cards up for a pending level-up) form `Progress`. The run fields are `wave`, `phase`
   (`'break' | 'fighting' | 'over' | 'won'`), `breakMs`, `toSpawn`, `spawnMs`, `barricade`, `enemies`,
   `missiles`, `effects`, `cooldown`, `pickMs` (time left to pick before the auto-pick),
   `kills`, `rain` (`charge`, `need`, `volleys`), `caltrops` (`charge`, `need`, `patches`), `coins`,
   `guards`, `road`, `roadChoices`, `roadMs`, `streak` (`count`, `ms` left, `best`, `bonusXp`),
   `relicFound` (a list, or null), `aimMode`, `roarMs`, `forts` (`stakeHp`, `oil`, `lookout`,
-  `boughtWave`, `queued`), `won` and `nextId`.
+  `boughtWave`, `queued`), `won`, `repairs`, `omen` (`id`, `accepted`, or null) and `nextId`.
 - `Enemy` holds its position, `hp`/`maxHp`, boss `bars`, slow and burn timers, `attacking`,
   `hitMs`, `castMs` (a shaman's healing timer, a boss's move timer), `trait` (an elite's, or null)
   and `moved` (the Ogre Warlord's call). `Missile` is an arrow, a fireball, a mage's
@@ -333,7 +385,8 @@ seconds without a tap.
   `Volley` is an Arrow Rain volley in the air (`x`, `y`, `ms` until it lands). `Effect` is a
   short-lived visual with `ms`/`total`; `xp` and `orb` carry `amount` (the kill's experience) and
   `xp` its `streak`; `autoPick` carries the `upgrade` the countdown took.
-- Hero stats are never stored. `stats(state)` derives them from `ranks`, `relics` and `heat` each time.
+- Hero stats are never stored. `stats(state)` derives them from `ranks`, `relics`, `heat` and
+  `legacy` (only Quick Arrow Rain, read when present) each time.
   `pick` counts the fillers (`mend`, `purse`, `wind`) in `ranks` too (for the skill book); `stats`
   ignores them and `offerable` never offers one, so their ranks change nothing else.
   `rollChoices` fills the cards no upgrade is left for with `FILLERS`: `mend` with two upgrades
@@ -341,8 +394,8 @@ seconds without a tap.
   filler is offered (and found) before the last skill; with none left it offers the base skills
   (see Every skill learned).
 - Only `sim.ts` mutates state during play. The scene only replaces it wholesale (`newRun`,
-  `fightAgain`, `startHeat`), calls `reoffer` on load when level-ups are pending, and calls `loose`, `strew`,
-  `hire`, `train`, `fortify`, `setAim`, `keepFighting`, `pick` and `pickRoad`.
+  `fightAgain`, `startHeat`, `retire`), calls `reoffer` on load when level-ups are pending, and calls `loose`, `strew`,
+  `hire`, `train`, `fortify`, `repair`, `decideOmen`, `setAim`, `keepFighting`, `pick` and `pickRoad`.
 - **Invariants:** `choices` is set while `levelUps > 0`, and the battle (streak timer and volleys
   included) is frozen then. Every place that sets `choices` (`offer`, `fightAgain`) also resets
   `pickMs` to `AUTO_PICK_MS`, so each level-up gets the full 10 seconds. The countdown also stops
@@ -356,7 +409,11 @@ seconds without a tap.
   below 0. `fortify` refuses after a fall or the win, during a level-up, twice in one break, with one
   already queued during a wave, or without the
   coins. `phase` is `'won'` only between clearing `WIN_WAVE` and "Keep fighting" (or a new run);
-  `won` stays set for the rest of the run, so wave 60 never wins again. `heat` never exceeds
+  `won` stays set for the rest of the run, so wave 60 never wins again. `omen` is never set on waves
+  1 to 3 or a road's first wave, and an unaccepted one never outlasts its break. `repair` refuses
+  outside a break, during a level-up, with the barricade full or without the coins. `guards` has
+  `BASE_GUARD_SLOTS` entries, one more with `legacy.slot`. `retire` refuses unless the run is over or
+  won and `canRetire`, or for a perk `canKeep` refuses. `heat` never exceeds
   `heatUnlocked`. In
   `moveEnemies` a foe hacks at the standing barricade only when it is at the face (at most one
   substep's walk past it); a foe that got behind it while it was down keeps walking after a repair
@@ -373,22 +430,25 @@ Five `localStorage` keys. `palisade-skill-book` holds a JSON array of the upgrad
 battle speed (`'1'` or `'2'`, through `loadSpeed`/`saveSpeed`) and `palisade-aim` the aim priority
 (an `AimMode`, through `loadAim`/`saveAim`), and `palisade-auto-pick` the level-up's checkbox
 (`'0'` when unticked; anything else, or nothing, means on), all kept apart so "New hero" leaves
-them alone. `palisade-progress` holds JSON of `Progress`, relics, `heat`, `heatUnlocked` and the level-up's
+them alone. `palisade-progress` holds JSON of `Progress`, relics, `heat`, `heatUnlocked`, `legacy` and the level-up's
 `choices` included. `loadProgress` merges it over
 `freshProgress()` (dropping unknown upgrade and relic ids, and `choices` unless they are three known
-upgrades with a level-up pending; an older save gets heat 0) and falls back to fresh on any error.
-"New hero" calls `clearProgress`, which also drops the relics and the heats. The run itself (wave, foes,
-barricade, Arrow Rain and caltrops charge, streak, coins, guards, road, fortifications) is never saved, so a reload
+upgrades with a level-up pending; an older save gets heat 0 and no legacy, and the legacy's fields are
+checked one by one) and falls back to fresh on any error.
+"New hero" calls `clearProgress`, which also drops the relics and the heats, then saves a fresh hero
+with the legacy kept. The run itself (wave, foes,
+barricade, Arrow Rain and caltrops charge, streak, coins, guards, road, fortifications, repairs, omen) is never saved, so a reload
 starts at wave 1.
 
 ### Randomness and timing
 
-- `Math.random` is used in exactly ten places, all in `src/game/`. In `sim.ts`: `spawn` (a foe's
+- `Math.random` is used in exactly twelve places, all in `src/game/`. In `sim.ts`: `spawn` (a foe's
   y, one call for every kind, then from wave 4 the elite roll and, for an elite, its trait), `arrowHit` (crit roll, called on every arrow hit even at 0% crit
   and on a shield), `rollChoices`, the auto-pick in `tick` (only when the countdown runs out), the
   relic chest and the two roads offered in `clearWave` (only on boss waves), the road auto-pick
-  in `step` (only when its countdown runs out) and the Troll King's choice of guard in `bossMoves`
-  (only on its waves, with a guard hired). In `waves.ts`: `waveFoes` (shuffle). Arrow Rain,
+  in `step` (only when its countdown runs out), the Troll King's choice of guard in `bossMoves`
+  (only on its waves, with a guard hired), the omen in `clearWave` (only when the next wave is 4 or
+  more) and `rollLegacyRelic` (only when the retire panel opens). In `waves.ts`: `waveFoes` (shuffle). Arrow Rain,
   the caltrops, guards, shamans, the other boss moves, splitting, the fortifications and the streak use none. Art uses
   its own `seeded` generator, and the scene scatters a volley's shafts with a hash of its id, so
   neither touches the sequence.
@@ -451,7 +511,8 @@ fortifications' in `forts.ts` and the heats' in `heat.ts`. Arrow Rain's damage (
   `.state` (JSON-cloned), `.levelUp.cards` (`CardSpot` id, x, y, w, h), `.track` (`waveTrack` of
   the current wave: `first`, `last`, `boss`, `step`), `.rainSpot` (the Arrow Rain button's centre)
   and `.aim` (where Arrow Rain is being dragged, or null). It never writes to the game. Also there
-  to read: `.aimKind`, `.caltropsSpot`, `.roadChoice.cards` and `.hirePanel.slot`.
+  to read: `.aimKind`, `.caltropsSpot`, `.roadChoice.cards`, `.hirePanel.slot`,
+  `.omenCard.buttons`, `.legacyPanel.cards` and `.startWave`.
 - **Inputs:** the test advances the clock, clicks the centre of a card, and drags Arrow Rain with
   `page.mouse` (down on `rainSpot`, three moves towards a foe with a step of game time after each,
   up), all scaled from the 960-wide view to the canvas box. It never opens the skill book (not part
@@ -465,8 +526,10 @@ fortifications' in `forts.ts` and the heats' in `heat.ts`. Arrow Rain's damage (
     Rain at 0 of 4, caltrops at 0 of 6, no coins, guards or road, no streak, and the track on step
     1 of the road to the Troll King (1 to 10). It never touches the aim toggle, the Fortify button
     or the heats: with no `palisade-aim` saved the ranger shoots the nearest foe, as always, and a
-    fresh hero is on Heat 0. Elites only come from wave 4 and boss moves from wave 10, so wave 1
-    plays as before; keep `ELITE_FROM_WAVE` above 1, since the elite roll adds random calls.
+    fresh hero is on Heat 0 with no legacy (two guard slots, Arrow Rain at 4). Elites and omens only
+    come from wave 4 and boss moves from wave 10, so wave 1 plays as before; keep `ELITE_FROM_WAVE`
+    above 1 and `OMEN_FROM_WAVE` above 2, since the elite roll and the omen roll (made when the wave
+    before is cleared) add random calls. The Repair button is never tapped (the barricade stays full).
   - Wave 1 is exactly 3 goblins and 3 orcs, with an orc first.
   - An arrow is fired and hits.
   - The first kill: earned experience equals that foe's `xp` (a streak of 1 has no bonus), the
@@ -531,6 +594,11 @@ fortifications' in `forts.ts` and the heats' in `heat.ts`. Arrow Rain's damage (
 - **Add a boss move:** give the boss a branch in `bossMoves` in `sim.ts` (its numbers in
   `bosses.ts`), an effect kind if it needs one (in `Effect`, `EFFECT_MS` and `drawEffects`), and
   describe it in the README's foe table.
+- **Add an omen:** add its id to `OmenId` and `OMENS` in `src/game/omens.ts`, a field to
+  `omenEffects`, read it where it acts in `sim.ts`, and add a row to the README's omen table.
+- **Add a legacy:** add its id to `LegacyId` and `LEGACIES` in `src/game/legacy.ts` (and a field to
+  `Legacy`, `freshLegacy`, `canKeep` and `loadProgress`), set it in `retire`, read it where it acts,
+  give its card an icon in `LegacyPanel.addCard` and `LEGACY.xs` a spot, and add a README row.
 - **Add a heat rule:** add a line to `HEAT_RULES` and a field to `heatRules` in `src/game/heat.ts`,
   raise `MAX_HEAT`, read the field where it acts, and add a row to the README's heat table.
 - **Add a foe:**
