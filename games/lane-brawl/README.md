@@ -284,6 +284,10 @@ beastfolk of the Greywood, whose forest is dying from the overflow.
 | Fenra Moonfang, Packleader of the Greywood | Leader of the wolfkin, whose kin are the feral wolf packs in the camps | Drawing the Rift out of her pack |
 | Old Grumm Oakback, Keeper of the Hives | The eldest bear of the Greywood, whose grove Cogsport's loggers are cutting | A voice for the forest in the Concord |
 
+Three stories give their champion a small edge on top of the class, shown on the pick screen:
+Morrow deals 25% more damage to the Rift Guardian, Kaida takes watchstones twice as fast, and Rook
+claims 50% more gold from a bounty.
+
 ### Upgrades
 
 | Champion | Level 2 | Level 3 | Level 4 | Level 5 |

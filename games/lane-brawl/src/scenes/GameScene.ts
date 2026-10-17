@@ -1113,7 +1113,7 @@ export class GameScene extends Phaser.Scene {
     });
     // The champion under the pointer: who they are and what they play like, then why they fight.
     const h = CHAMPIONS[this.hoverPick];
-    this.t('pick-blurb', VIEW.w / 2, 444, h ? `${h.hero}, ${h.title}. ${h.name}: ${h.blurb.toLowerCase()}.` : 'Point at a card to meet its champion.', 12, h ? h.color : UI.muted, 'center', true);
+    this.t('pick-blurb', VIEW.w / 2, 444, h ? `${h.hero}, ${h.title}. ${h.name}: ${h.blurb.toLowerCase()}.${h.perk ? ` ${h.perk.desc}.` : ''}` : 'Point at a card to meet its champion.', 12, h ? h.color : UI.muted, 'center', true);
     this.t('pick-motive', VIEW.w / 2, 464, h ? h.motive : 'Two banners, Dawn and Dusk, fight the Contest of Lanes for the Riftwell of Kessmoor.', 12, h ? UI.text : UI.dim, 'center', true);
     this.t('hint', VIEW.w / 2, 491, 'Click a champion to start. Click the ground to walk, an enemy to attack. Q W E R cast at the cursor, D and H use item actives.', 11, UI.dim, 'center');
     this.t('hint2', VIEW.w / 2, 506, 'B opens the shop at your Nexus, 1 or 2 picks an upgrade, V plants a vision ward, T recalls home, X buys back while dead.', 11, UI.dim, 'center');
