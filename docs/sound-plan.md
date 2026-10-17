@@ -350,6 +350,11 @@ Notes:
 ### Deadline
 Upright zombie wave defence with auto-fire; tense pulp horror.
 
+**Done** (`games/deadline/src/audio.ts`, listed in the game's `AGENTS.md`). The boss song is a
+second `Song` at 150 BPM; blackout and blood moon share one `dark` part (low half steps, as the
+engine has no detune); the boss warning is the `warn` sting; survivor hits, rescues, ricochets
+and shield breaks have their own sounds.
+
 **Music:** Driving chiptune at about 140 BPM in E minor (Phrygian), with a square lead, a thin
 pulse arpeggio, a triangle bass ostinato and drums.
 - Breaks: the drums drop to a pad.

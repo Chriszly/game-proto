@@ -56,7 +56,7 @@ upgrades. A run is the endless Open Road or a 10-wave operation, picked on the g
   Save keys). It also reads the hub's
   shared settings (the `hub-settings` key, see Hub settings below).
 - **Rough edges seen in the code:**
-  - No audio, no camera shake.
+  - No camera shake.
   - Each boss's moves cycle in a fixed order (each boss wave starts one further along).
   - A spitter stands still at its range until shot, so a wave can't end while one stands; it is
     an easy target once the soldier walks under it. Zombies steer to their lane's middle, inside
@@ -90,6 +90,8 @@ upgrades. A run is the endless Open Road or a 10-wave operation, picked on the g
   crate captions and comic sound words baked into textures included; a new one gets its German
   entry (and a US one if its spelling differs) in the same PR. Texts a style shows differently come
   in pairs: `key` for the comic and `nvKey` for night vision.
+- `src/audio.ts`: the sound (`shared/audio.ts`): `SOUNDS` (the sound table), `sfx` (its `play`),
+  `SoundName`, and the songs `SONG` and `BOSS_SONG`. See Sound below.
 - `src/main.ts`: creates the `Phaser.Game` (size from `VIEW`, `Scale.FIT`, `pixelArt: false`) with
   `BootScene` and `GameScene`, calls `setupGame(game)`, and exposes `game` on `window` in the dev
   build.
@@ -319,6 +321,37 @@ upgrades. A run is the endless Open Road or a 10-wave operation, picked on the g
   scaled to fit, caches the still parts per style and size, and repaints its live parts (captions,
   REC clock, horde count, roster, supply drops, stats) on `refresh`. Sides narrower than 140px
   are left plain, so at the test's 540x960 nothing shows.
+
+### Sound
+
+All sound is made in code by `shared/audio.ts`; `GameScene` plays it, and nothing in `src/game/`
+imports it. Under browser automation it all does nothing, so the playthrough is unchanged.
+
+- **Music:** `SONG` (E Phrygian, 140 BPM, square lead, thin pulse arpeggio, triangle bass, drums)
+  has the parts `calm` (a pad, no beat: breaks, supply drop, game over), `battle` (a wave),
+  `frenzy` (the battle with double hats and a 16th arpeggio, while `frenzyMs` runs) and `dark`
+  (low half steps and a sparse beat, a wave under a blackout or blood moon), and the stings `warn`
+  (a low horn as a boss wave starts), `lose` (game over) and `win` (extraction or a won
+  operation). `BOSS_SONG` (150 BPM, heavier, with the diminished fifth) plays its `boss` part
+  through every boss wave. `GameScene.music()` picks the part from the phase and is called from
+  `startWave`, `checkWave`, `pickSupply`, the frenzy's start (`kill`) and end (`tickFrenzy`); the
+  role pick leaves the music as it is. `gameOver` and `endAsWin` switch to `calm` under their sting,
+  and a restart's `startWave(1)` goes back to `battle`.
+- **Effects** (`SOUNDS`, played with `sfx(name)`): `shot` once per volley (`fire`), `hit` on a
+  hurt zombie that lives (`hurt`, 50ms apart as it runs per pellet), `block` and `shieldDown`
+  (`chipShield`), `ricochet` (`hitTargets`), `kill` pitched by kind with `KILL_PITCH` and
+  `bossKill` (`kill`), `frenzy` (`kill`), `boom` (`explode`), `grenade` (`grenade`), `flame`
+  (`tickFlamer`), `crate` and `perk` (`collect`), `wall` (`placeWall`) and `wallSmash`
+  (`smashWall`), `spit` (`lobAcid`, only when the thrower can be seen in a blackout) and `sizzle`
+  (the glob lands, `moveAcid`), `siren` (a boss winds up, `tickBoss`), `yelp` and `survivorLost`
+  (`hurtSurvivor`), `rescue` (`rescue`), `medkit` (`useMedkit`), `waveStart` (`startWave`, from
+  wave 2, not on boss waves), `cleared` and `supply` (`checkWave`), `confirm` (`pickSupply`,
+  `pickRole`).
+- **Shared sounds:** `ui('click')` for the style switch, the kit panel toggle, putting the
+  sandbags away, refunding a starting crate, picking an operation and the restart tap;
+  `ui('coin')` for buying a starting crate or an outpost level; `ui('refuse')` for one that can't
+  be afforded and for S with no sandbags in a wave (`placeWall` returns whether it placed).
+- There is no `?watch` mode, so nothing for it.
 
 ### Save keys
 
