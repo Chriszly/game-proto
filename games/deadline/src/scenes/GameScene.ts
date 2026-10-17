@@ -108,7 +108,9 @@ import {
   saveStyle,
   type ArtStyle,
 } from '../game/save';
-import { HUD_DEPTH, Hud } from './Hud';
+import { HUD_DEPTH, Hud, fireRate } from './Hud';
+// Text objects go by `t` in this scene, so the translator goes by `tr`.
+import { t as tr, type TextKey } from '../i18n';
 
 const DEPTH = {
   ground: 0, sandbags: 5, splats: 8, acid: 8.5, ringUnder: 9, drums: 10, pickups: 11, dark: 19, enemies: 20, hero: 40,
@@ -546,7 +548,8 @@ export class GameScene extends Phaser.Scene {
     this.addCompanions();
 
     this.hud = new Hud(this);
-    this.banner = this.add.text(VIEW.w / 2, VIEW.h * 0.38, '', { align: 'center' }).setOrigin(0.5).setDepth(DEPTH.hud).setAlpha(0);
+    // Wrapped, as a perk's line or a German one can run wider than the road.
+    this.banner = this.add.text(VIEW.w / 2, VIEW.h * 0.38, '', { align: 'center', wordWrap: { width: VIEW.w - 40, useAdvancedWrap: true } }).setOrigin(0.5).setDepth(DEPTH.hud).setAlpha(0);
     this.bossCall = this.add.text(0, 0, '').setOrigin(0.5).setDepth(DEPTH.pops).setVisible(false);
     this.placeHint = this.add.text(VIEW.w / 2, WALL.y - 70, '', { align: 'center' }).setOrigin(0.5).setDepth(DEPTH.pops).setVisible(false);
     this.createInput();
@@ -667,6 +670,11 @@ export class GameScene extends Phaser.Scene {
     else this.font(t, 13, '#ffffff', { glow: '#ffffff' });
   }
 
+  /** Shrinks a card's name to `width` when it runs wider, as a long word (German, say) can. */
+  private fit(t: Phaser.GameObjects.Text, width: number) {
+    t.setScale(Math.min(1, width / t.width));
+  }
+
   private styleDrumLabel(t: Phaser.GameObjects.Text) {
     if (this.style === 'comic') this.font(t, 10, '#c03a1a');
     else this.font(t, 10, THEMES.nv.accent, { glow: THEMES.nv.accent });
@@ -675,7 +683,7 @@ export class GameScene extends Phaser.Scene {
   private styleSurvivorLabel(t: Phaser.GameObjects.Text) {
     if (this.style === 'comic') this.font(t, 11, '#fff8e8', { stroke: THEMES.comic.ink, sw: 3 });
     else this.font(t, 9, SURVIVOR_COLOR, { glow: SURVIVOR_COLOR });
-    t.setText(this.style === 'comic' ? "HELP! DON'T SHOOT!" : 'FRIENDLY · HOLD FIRE');
+    t.setText(tr(this.style === 'comic' ? 'survivorLabel' : 'nvSurvivorLabel'));
   }
 
   // ---------- Input and waves ----------
@@ -764,11 +772,11 @@ export class GameScene extends Phaser.Scene {
       this.state.best = wave;
       saveBest(wave);
     }
-    const bossName = this.state.bossKind ? BOSSES[this.state.bossKind].name.toUpperCase() : '';
-    const of = op.waves ? ` OF ${op.waves}` : '';
-    const lines = [`WAVE ${wave}${of}`, isBossWave(wave) ? `${bossName} INCOMING!` : isBossWave(wave + 1) ? 'BOSS NEXT WAVE' : ''];
-    if (this.state.condition !== 'clear') lines.push(`${CONDITIONS[this.state.condition].label.toUpperCase()}!`);
-    if (this.state.adapt) lines.push(`THE HORDE ADAPTS:\n${ADAPTS[this.state.adapt].label.toUpperCase()}`);
+    const bossName = this.state.bossKind ? tr(BOSSES[this.state.bossKind].name).toUpperCase() : '';
+    const title = op.waves ? tr('waveOf', { wave, waves: op.waves }) : tr('wave', { wave });
+    const lines = [title, isBossWave(wave) ? tr('bossIncoming', { boss: bossName }) : isBossWave(wave + 1) ? tr('bannerBossNext') : ''];
+    if (this.state.condition !== 'clear') lines.push(`${tr(CONDITIONS[this.state.condition].label).toUpperCase()}!`);
+    if (this.state.adapt) lines.push(tr('hordeAdapts', { adapt: tr(ADAPTS[this.state.adapt].label).toUpperCase() }));
     this.showBanner(lines.filter(Boolean).join('\n'));
     this.applyCondition();
     this.refreshBackdrop();
@@ -1070,7 +1078,7 @@ export class GameScene extends Phaser.Scene {
       this.showRoles();
     } else {
       this.state.scrap += SURVIVOR.scrap;
-      this.pop(this.style === 'comic' ? `SURVIVOR SAVED! +${SURVIVOR.scrap} SCRAP` : `SURVIVOR SAVED · +${SURVIVOR.scrap} SCRAP`, SURVIVOR_COLOR);
+      this.pop(tr(this.style === 'comic' ? 'survivorSaved' : 'nvSurvivorSaved', { n: SURVIVOR.scrap }), SURVIVOR_COLOR);
     }
     this.refreshBackdrop();
   }
@@ -1085,7 +1093,7 @@ export class GameScene extends Phaser.Scene {
     const s = this.splats.take();
     s.age = 0;
     s.sprite.setPosition(v.x, v.y).setScale(GEOM.splat.w / s.sprite.frame.width).setAlpha(1).setVisible(true);
-    this.effect('', v.x, v.y - 20, { life: 900, rise: 24, text: this.style === 'comic' ? 'SURVIVOR LOST!' : 'FRIENDLY DOWN' });
+    this.effect('', v.x, v.y - 20, { life: 900, rise: 24, text: tr(this.style === 'comic' ? 'fxSurvivorLost' : 'nvFxSurvivorLost') });
   }
 
   /** The squad patches up and throws back every zombie near the line. */
@@ -1097,7 +1105,7 @@ export class GameScene extends Phaser.Scene {
       e.sprite.setY(e.y);
     }
     if (this.bossAct?.acting) this.endBossMove();
-    this.showBanner(this.style === 'comic' ? 'MEDKIT!\nTHE LINE HOLDS!' : 'MEDKIT USED\nLINE HOLDS');
+    this.showBanner(tr(this.style === 'comic' ? 'medkitUsed' : 'nvMedkitUsed'));
   }
 
   /** Every so often a boss winds up a move (shown for `BOSS.warnMs`), then makes it. */
@@ -1116,8 +1124,9 @@ export class GameScene extends Phaser.Scene {
       const tx = Phaser.Math.Clamp(this.player.x, LANES[0].x0 + 40, LANES[2].x1 - 40);
       this.bossAct = { move, ms: 0, acting: false, tx, fromX: boss.x, fromY: boss.y };
       this.state.bossMove = move;
-      const call = { charge: ['CHARGE!', 'CHARGE INBOUND'], spit: ['ACID SPIT!', 'ACID INBOUND'], call: boss.kind === 'brood' ? ['SKREEEE!', 'BROOD CALLED'] : ['ROAAAR!', 'PACK CALLED'] }[move];
-      this.bossCall.setText(call[this.style === 'comic' ? 0 : 1]).setVisible(true);
+      const calls: Record<BossMove, [TextKey, TextKey]> = { charge: ['callCharge', 'nvCallCharge'], spit: ['callSpit', 'nvCallSpit'], call: boss.kind === 'brood' ? ['callBrood', 'nvCallBrood'] : ['callPack', 'nvCallPack'] };
+      const call = calls[move];
+      this.bossCall.setText(tr(call[this.style === 'comic' ? 0 : 1])).setVisible(true);
       return;
     }
     a.ms += dt;
@@ -1235,7 +1244,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private smashWall(w: Wall) {
-    this.effect('', w.sprite.x, WALL.y - 20, { life: 600, rise: 30, text: this.style === 'comic' ? 'CRUNCH!' : 'WALL DOWN' });
+    this.effect('', w.sprite.x, WALL.y - 20, { life: 600, rise: 30, text: tr(this.style === 'comic' ? 'fxWallDown' : 'nvFxWallDown') });
     this.walls.release(w);
   }
 
@@ -1287,7 +1296,7 @@ export class GameScene extends Phaser.Scene {
       d.caught = caught.length;
       d.sprite.setPosition(d.x, d.y);
       d.ring.setPosition(d.x, d.y);
-      const text = this.style === 'comic' ? `${d.caught} IN THE BLAST!` : `FUEL · ${d.caught} IN BLAST`;
+      const text = tr(this.style === 'comic' ? 'drumLabel' : 'nvDrumLabel', { n: d.caught });
       if (d.label.text !== text) d.label.setText(text);
       if (this.style === 'comic') d.label.setPosition(d.x, d.y - 33);
       else d.label.setPosition(d.x + 38, d.y + 30);
@@ -1334,7 +1343,7 @@ export class GameScene extends Phaser.Scene {
           const head = headshots && ++this.bulletHits % HEADSHOT.every === 0;
           if (head) {
             this.state.headshots++;
-            this.effect('', e.x, e.y - ENEMIES[e.kind].radius - 12, { life: 600, rise: 30, text: this.style === 'comic' ? 'HEADSHOT!' : 'HEADSHOT' });
+            this.effect('', e.x, e.y - ENEMIES[e.kind].radius - 12, { life: 600, rise: 30, text: tr(this.style === 'comic' ? 'fxHeadshot' : 'nvFxHeadshot') });
           }
           if (fire) e.burn = FIRE_ROUNDS.ms;
           this.hurt(e, head ? damage * HEADSHOT.mult : damage);
@@ -1342,7 +1351,7 @@ export class GameScene extends Phaser.Scene {
           if (e.armoured) {
             b.hitsLeft = 0;
             b.ricochets = 0;
-            if (this.volleys % 3 === 0) this.effect('', e.x, e.y + ENEMIES[e.kind].radius, { life: 360, rise: 20, text: this.style === 'comic' ? 'TONK' : 'ARMOUR' });
+            if (this.volleys % 3 === 0) this.effect('', e.x, e.y + ENEMIES[e.kind].radius, { life: 360, rise: 20, text: tr(this.style === 'comic' ? 'fxArmour' : 'nvFxArmour') });
             break;
           }
         }
@@ -1361,7 +1370,7 @@ export class GameScene extends Phaser.Scene {
           b.vx = Math.sin(ang) * BULLET.speed;
           b.vy = Math.cos(ang) * BULLET.speed;
           b.sprite.setPosition(b.x, b.y).setRotation(ang);
-          this.effect('', from.x, from.y - 16, { life: 400, rise: 20, text: this.style === 'comic' ? 'PING!' : 'RICOCHET' });
+          this.effect('', from.x, from.y - 16, { life: 400, rise: 20, text: tr(this.style === 'comic' ? 'fxRicochet' : 'nvFxRicochet') });
           continue;
         }
       }
@@ -1415,11 +1424,11 @@ export class GameScene extends Phaser.Scene {
     e.shield = Math.max(0, e.shield - damage);
     const r = ENEMIES[e.kind].radius;
     if (e.shield > 0) {
-      if (this.volleys % 3 === 0) this.effect('', e.x, e.y + r, { life: 360, rise: 20, text: this.style === 'comic' ? 'CLANG' : 'BLOCK' });
+      if (this.volleys % 3 === 0) this.effect('', e.x, e.y + r, { life: 360, rise: 20, text: tr(this.style === 'comic' ? 'fxBlock' : 'nvFxBlock') });
       return;
     }
     this.skin(e.sprite, 'riot-bare');
-    this.effect('', e.x, e.y - r - 10, { life: 700, rise: 30, text: this.style === 'comic' ? 'SHIELD BUSTED!' : 'SHIELD DOWN' });
+    this.effect('', e.x, e.y - r - 10, { life: 700, rise: 30, text: tr(this.style === 'comic' ? 'fxShieldDown' : 'nvFxShieldDown') });
   }
 
   /** Takes hit points off an enemy, with a little damage number, and kills it at 0. */
@@ -1440,7 +1449,7 @@ export class GameScene extends Phaser.Scene {
     if (this.state.streak >= FRENZY.kills && this.state.frenzyMs === 0) {
       this.state.frenzyMs = FRENZY.ms;
       this.state.frenzies++;
-      this.showBanner(this.style === 'comic' ? 'FRENZY!\nDOUBLE FIRE!' : 'FRENZY\n2X FIRE');
+      this.showBanner(tr(this.style === 'comic' ? 'frenzyBanner' : 'nvFrenzyBanner'));
     }
     const n = this.state.streak;
     if (n >= 3 && n % 3 === 0) this.effect('streak', e.x + 12, e.y + 2, { life: 700, text: `x${n}`, grow: 0.1 });
@@ -1452,10 +1461,10 @@ export class GameScene extends Phaser.Scene {
     // The Brood Mother bursts into crawlers; the Bloater leaves a huge acid pool on the squad's line.
     if (e.kind === 'brood') {
       this.spawnPack(e, 'crawler', BROOD.burst, 24);
-      this.effect('', e.x, e.y - 50, { life: 900, rise: 30, text: this.style === 'comic' ? 'THE BROOD BURSTS OUT!' : 'BROOD RELEASED' });
+      this.effect('', e.x, e.y - 50, { life: 900, rise: 30, text: tr(this.style === 'comic' ? 'fxBroodBursts' : 'nvFxBroodBursts') });
     } else if (e.kind === 'bloater') {
       this.lobAcid(e.x, e.y, BLOATER.poolRadius, 600, BLOATER.poolMs);
-      this.effect('', e.x, e.y - 50, { life: 900, rise: 30, text: this.style === 'comic' ? 'IT BURSTS! ACID EVERYWHERE!' : 'ACID RELEASED' });
+      this.effect('', e.x, e.y - 50, { life: 900, rise: 30, text: tr(this.style === 'comic' ? 'fxAcidBursts' : 'nvFxAcidBursts') });
     }
   }
 
@@ -1480,7 +1489,7 @@ export class GameScene extends Phaser.Scene {
     // A sandbag crate goes into the kit, to be placed in a lane.
     if (p.upgrade === 'sandbag') {
       this.state.sandbags++;
-      this.pop(this.style === 'comic' ? 'SANDBAGS! TAP TO PLACE' : 'SANDBAGS +1', CRATE_COLORS.sandbag);
+      this.pop(tr(this.style === 'comic' ? 'sandbagsPop' : 'nvSandbagsPop'), CRATE_COLORS.sandbag);
       return;
     }
     // A companion crate that was already falling when the squad filled up brings damage instead.
@@ -1488,11 +1497,11 @@ export class GameScene extends Phaser.Scene {
     this.state.stats = applyUpgrade(this.state.stats, upgrade);
     this.state.collected[upgrade]++;
     if (upgrade === 'companion') this.addCompanions();
-    this.pop(UPGRADES[upgrade].label.toUpperCase(), UPGRADE_COLORS[upgrade]);
+    this.pop(tr(UPGRADES[upgrade].label).toUpperCase(), UPGRADE_COLORS[upgrade]);
     // The third crate of a kind evolves its stat into a perk.
     const perks = perksOf(this.state.collected), gained = perks.find((p) => !this.state.perks.includes(p));
     this.state.perks = perks;
-    if (gained) this.showBanner(`${PERKS[gained].label.toUpperCase()}!\n${PERKS[gained].detail.toUpperCase()}`);
+    if (gained) this.showBanner(`${tr(PERKS[gained].label).toUpperCase()}!\n${tr(PERKS[gained].detail).toUpperCase()}`);
     this.refreshBackdrop();
   }
 
@@ -1573,7 +1582,7 @@ export class GameScene extends Phaser.Scene {
         this.state.placing = false;
         // The wave's scrap is banked.
         saveScrap(this.state.bank + this.state.scrap);
-        this.showBanner(`WAVE ${this.state.wave} CLEARED!`);
+        this.showBanner(tr('waveCleared', { wave: this.state.wave }));
         this.recordOperation(this.state.wave);
         // An operation's last wave cleared wins it.
         const op = OPERATIONS[this.state.operation];
@@ -1725,7 +1734,7 @@ export class GameScene extends Phaser.Scene {
         g.lineStyle(2, col, 0.8).strokeRect(l.x0 + 3, WALL.y - 14, l.x1 - l.x0 - 6, 28);
       }
     }
-    this.placeHint.setText(this.style === 'comic' ? 'TAP A LANE FOR\nTHE SANDBAG WALL!' : 'SELECT LANE\nFOR SANDBAG WALL').setVisible(this.state.placing);
+    this.placeHint.setText(tr(this.style === 'comic' ? 'placeHint' : 'nvPlaceHint')).setVisible(this.state.placing);
     // A boss also gets a big bar along the top of the screen, under the progress strip.
     if (boss) {
       const y = HUD_HEIGHT + 32;
@@ -1787,7 +1796,7 @@ export class GameScene extends Phaser.Scene {
       squad: s.stats.companions + 1,
       maxSquad: MAX_COMPANIONS + 1,
       damage: s.stats.damage,
-      rate: `${(1000 / s.stats.fireInterval).toFixed(1)}/s`,
+      rate: `${fireRate(s.stats)}/s`,
       pierce: s.stats.pierce,
       collected: s.collected,
       inbound: this.pickups ? this.pickups.live().flatMap((p) => (p.upgrade === 'sandbag' ? [] : [p.upgrade])) : [],
@@ -1834,18 +1843,19 @@ export class GameScene extends Phaser.Scene {
     const op = OPERATIONS[s.operation], onOp = s.operation !== 'road';
     const shade = this.add.rectangle(0, 0, VIEW.w, VIEW.h, comic ? 0x15121a : 0x000000, comic ? 0.6 : 0.65).setOrigin(0).setDepth(DEPTH.hud + 1);
     const won = s.extracted;
-    const winTitle = onOp ? (comic ? 'OPERATION WON!' : 'OPERATION COMPLETE') : comic ? 'EXTRACTED!' : 'EXTRACTION COMPLETE';
-    const title = this.add.text(VIEW.w / 2, 120, won ? winTitle : comic ? 'OVERRUN!' : 'FEED LOST: OVERRUN').setOrigin(0.5).setDepth(DEPTH.hud + 2);
+    const winTitle = onOp ? tr(comic ? 'operationWon' : 'nvOperationWon') : tr(comic ? 'extracted' : 'nvExtracted');
+    const title = this.add.text(VIEW.w / 2, 120, won ? winTitle : tr(comic ? 'overrun' : 'nvOverrun')).setOrigin(0.5).setDepth(DEPTH.hud + 2);
     if (comic) this.font(title, won ? 46 : 52, won ? '#8cd05a' : '#e8402a', { stroke: th.ink, sw: 9 });
     else this.font(title, 30, won ? '#6ae06a' : th.warn, { glow: won ? '#6ae06a' : th.warn });
-    const medal = medalOf(s.best);
+    const medal = medalOf(s.best), opBest = { op: tr(op.label), best: s.best, waves: op.waves ?? 0 };
     const best = onOp
-      ? `${op.label}: best ${s.best} of ${op.waves} cleared${medal ? `, ${medal} medal` : ''}`
-      : s.wave >= s.best && this.bestAtStart < s.wave ? 'A new best!' : `Best: wave ${s.best}`;
+      ? medal ? tr('opBestMedal', { ...opBest, medal: tr(medal) }) : tr('opBest', opBest)
+      : s.wave >= s.best && this.bestAtStart < s.wave ? tr('aNewBest') : tr('bestWave', { wave: s.best });
     const bonus = onOp ? OPERATION_BONUS : EXTRACT.bonus(s.wave);
-    const scrap = won ? `Scrap ${s.scrap} paid ${bonus}x: +${s.payout}  ·  banked ${s.bank}` : `Scrap +${s.scrap}  ·  banked ${s.bank}`;
+    const scrap = won ? tr('scrapPaid', { scrap: s.scrap, bonus, payout: s.payout, bank: s.bank }) : tr('scrapBanked', { scrap: s.scrap, bank: s.bank });
+    const reached = tr(won ? (onOp ? 'heldTo' : 'gotOut') : 'reached', { wave: s.wave, n: s.kills });
     const info = this.add
-      .text(VIEW.w / 2, 158, `${won ? (onOp ? 'Held to' : 'Got out at') : 'Reached'} wave ${s.wave} with ${s.kills} kills\n${best}\n${scrap}`, { align: 'center' })
+      .text(VIEW.w / 2, 158, `${reached}\n${best}\n${scrap}`, { align: 'center' })
       .setOrigin(0.5, 0)
       .setDepth(DEPTH.hud + 2);
     const body = (t: Phaser.GameObjects.Text, size: number, color = comic ? '#fff8e8' : th.text) =>
@@ -1882,27 +1892,29 @@ export class GameScene extends Phaser.Scene {
     };
     const grid = (i: number, top: number, step: number) => ({ x: i % 2 ? VIEW.w / 2 + 8 : VIEW.w / 2 - 8 - 220, y: top + Math.floor(i / 2) * step });
     // The scrap shop: starting crates for the next run, each bought once, tapped again to refund.
-    heading(262, 'SPEND SCRAP: START THE NEXT RUN WITH...', 'NEXT RUN LOADOUT (SCRAP)');
+    heading(262, tr('shopHeading'), tr('nvShopHeading'));
     UPGRADE_KINDS.forEach((kind, i) => {
       const { x, y } = grid(i, 280, 58), bought = s.nextKit.includes(kind), afford = bought || s.bank >= KIT_COSTS[kind];
-      const note = bought ? (comic ? 'BOUGHT! TAP TO REFUND' : 'LOADED · TAP TO REFUND') : `${KIT_COSTS[kind]} SCRAP`;
-      button(x, y, 220, 48, UPGRADE_COLORS[kind], bought, afford, UPGRADES[kind].label.toUpperCase(), note, () => this.buyKit(kind));
+      const note = bought ? tr(comic ? 'kitBought' : 'nvKitBought') : tr('scrapCost', { n: KIT_COSTS[kind] });
+      button(x, y, 220, 48, UPGRADE_COLORS[kind], bought, afford, tr(UPGRADES[kind].label).toUpperCase(), note, () => this.buyKit(kind));
     });
     // The outpost: lasting upgrades, three levels each, bought for good.
-    heading(410, 'BUILD THE OUTPOST: FOR EVERY RUN TO COME', 'OUTPOST UPGRADES (PERMANENT)');
+    heading(410, tr('outpostHeading'), tr('nvOutpostHeading'));
     OUTPOST_KINDS.forEach((kind, i) => {
       const { x, y } = grid(i, 428, 62), lv = s.outpost[kind], cost = outpostCost(kind, lv), afford = cost !== null && s.bank >= cost;
-      const note = `${OUTPOST[kind].detail.toUpperCase()}\nLV ${lv}/${OUTPOST_MAX}${cost === null ? ' · MAXED' : ` · NEXT ${cost} SCRAP`}`;
-      button(x, y, 220, 54, OUTPOST_COLORS[kind], lv > 0, afford, OUTPOST[kind].label.toUpperCase(), note, () => this.buyOutpost(kind));
+      const level = cost === null ? tr('outpostMaxed', { level: lv, max: OUTPOST_MAX }) : tr('outpostNext', { level: lv, max: OUTPOST_MAX, cost });
+      const note = `${tr(OUTPOST[kind].detail).toUpperCase()}\n${level}`;
+      button(x, y, 220, 54, OUTPOST_COLORS[kind], lv > 0, afford, tr(OUTPOST[kind].label).toUpperCase(), note, () => this.buyOutpost(kind));
     });
     // The operation the next run plays: the Open Road, or a 10-wave operation with its own rules.
-    heading(568, 'NEXT RUN: PICK THE OPERATION', 'NEXT OPERATION');
+    heading(568, tr('operationHeading'), tr('nvOperationHeading'));
     OPERATION_KINDS.forEach((kind, i) => {
       const w = 160, x = 18 + i * (w + 11), y = 586, rec = s.operationBests[kind], m = medalOf(rec);
-      const record = kind === 'road' ? `BEST WAVE ${kind === s.operation ? s.best : this.roadBest()}` : `BEST ${rec}/${OPERATIONS[kind].waves}${m ? ` · ${m.toUpperCase()}` : ''}`;
-      button(x, y, w, 76, OPERATION_COLORS[kind], s.nextOperation === kind, true, OPERATIONS[kind].label.toUpperCase(), `${OPERATIONS[kind].detail}\n${record}`, () => this.pickOperation(kind));
+      const waves = OPERATIONS[kind].waves ?? 0;
+      const record = kind === 'road' ? tr('bestWaveCaps', { wave: kind === s.operation ? s.best : this.roadBest() }) : m ? tr('opRecordMedal', { best: rec, waves, medal: tr(m).toUpperCase() }) : tr('opRecord', { best: rec, waves });
+      button(x, y, w, 76, OPERATION_COLORS[kind], s.nextOperation === kind, true, tr(OPERATIONS[kind].label).toUpperCase(), `${tr(OPERATIONS[kind].detail)}\n${record}`, () => this.pickOperation(kind));
     });
-    const again = this.add.text(VIEW.w / 2, 702, `Tap anywhere else to start ${OPERATIONS[s.nextOperation].label}`).setOrigin(0.5).setDepth(DEPTH.hud + 2);
+    const again = this.add.text(VIEW.w / 2, 702, tr('tapToStart', { op: tr(OPERATIONS[s.nextOperation].label) })).setOrigin(0.5).setDepth(DEPTH.hud + 2);
     body(again, 18);
     objs.push(again);
     this.overText = objs;
@@ -1959,7 +1971,7 @@ export class GameScene extends Phaser.Scene {
     this.banner.setAlpha(0);
     const th = this.theme(), comic = this.style === 'comic';
     const shade = this.add.rectangle(0, 0, VIEW.w, VIEW.h, comic ? 0x15121a : 0x000000, comic ? 0.5 : 0.55).setOrigin(0).setDepth(DEPTH.hud + 1);
-    const title = this.add.text(VIEW.w / 2, 300, comic ? 'SUPPLY DROP!\nPICK ONE' : 'SUPPLY DROP\nSELECT ONE', { align: 'center' }).setOrigin(0.5).setDepth(DEPTH.hud + 2);
+    const title = this.add.text(VIEW.w / 2, 300, tr(comic ? 'supplyTitle' : 'nvSupplyTitle'), { align: 'center' }).setOrigin(0.5).setDepth(DEPTH.hud + 2);
     if (comic) this.font(title, 34, '#ffe04a', { stroke: th.ink, sw: 8 });
     else this.font(title, 26, th.accent, { glow: th.accent });
     const g = this.add.graphics().setDepth(DEPTH.hud + 2);
@@ -1981,9 +1993,9 @@ export class GameScene extends Phaser.Scene {
       this.font(key, 14, comic ? th.ink : th.accent, comic ? {} : { glow: th.accent });
       const icon = this.add.image(x + w / 2, y + 82, tex(this.style, `supply-${kind}`)).setDepth(DEPTH.hud + 3);
       icon.setScale((GEOM.supply.w / icon.frame.width) * 1.1);
-      const name = this.add.text(x + w / 2, y + 136, SUPPLIES[kind].label.toUpperCase()).setOrigin(0.5).setDepth(DEPTH.hud + 3);
-      this.font(name, comic ? 17 : 15, comic ? th.ink : th.text, comic ? {} : { glow: th.text });
-      const detail = this.add.text(x + w / 2, y + 156, SUPPLIES[kind].detail, { align: 'center' }).setOrigin(0.5, 0).setDepth(DEPTH.hud + 3);
+      const name = this.add.text(x + w / 2, y + 136, tr(SUPPLIES[kind].label).toUpperCase()).setOrigin(0.5).setDepth(DEPTH.hud + 3);
+      this.fit(this.font(name, comic ? 17 : 15, comic ? th.ink : th.text, comic ? {} : { glow: th.text }), w - 14);
+      const detail = this.add.text(x + w / 2, y + 156, tr(SUPPLIES[kind].detail), { align: 'center' }).setOrigin(0.5, 0).setDepth(DEPTH.hud + 3);
       this.font(detail, 11, comic ? th.ink : th.muted);
       this.supplyUi.push(key, icon, name, detail);
       this.cards.push({ kind, x, y, w, h });
@@ -2003,10 +2015,10 @@ export class GameScene extends Phaser.Scene {
     this.font(key, 14, comic ? th.ink : '#6ae06a', comic ? {} : { glow: '#6ae06a' });
     const icon = this.add.image(x + 56, y + h / 2, tex(this.style, 'supply-extract')).setDepth(DEPTH.hud + 3);
     icon.setScale((GEOM.supply.w / icon.frame.width) * 0.8);
-    const name = this.add.text(x + 98, y + 22, comic ? 'EXTRACT: END THE RUN AS A WIN' : 'EXTRACT · END RUN (WIN)').setOrigin(0, 0.5).setDepth(DEPTH.hud + 3);
+    const name = this.add.text(x + 98, y + 22, tr(comic ? 'extract' : 'nvExtract')).setOrigin(0, 0.5).setDepth(DEPTH.hud + 3);
     this.font(name, comic ? 15 : 13, comic ? th.ink : th.text, comic ? {} : { glow: th.text });
     const pay = Math.round(this.state.scrap * bonus);
-    const detail = this.add.text(x + 98, y + 48, `Scrap paid ${bonus}x: +${pay}. Fight on for more, at your peril.`).setOrigin(0, 0.5).setDepth(DEPTH.hud + 3);
+    const detail = this.add.text(x + 98, y + 48, tr('extractDetail', { bonus, pay })).setOrigin(0, 0.5).setDepth(DEPTH.hud + 3);
     this.font(detail, 11, comic ? th.ink : th.muted);
     this.supplyUi.push(key, icon, name, detail);
     this.cards.push({ kind: 'extract', x, y, w, h });
@@ -2057,7 +2069,7 @@ export class GameScene extends Phaser.Scene {
     this.cards = [];
     s.phase = 'break';
     this.breakClock = 0;
-    this.pop(SUPPLIES[kind].label.toUpperCase(), this.style === 'comic' ? '#ffe04a' : this.theme().accent);
+    this.pop(tr(SUPPLIES[kind].label).toUpperCase(), this.style === 'comic' ? '#ffe04a' : this.theme().accent);
   }
 
   /** A survivor reached the sandbags: three cards for the role they take in the squad. */
@@ -2067,7 +2079,7 @@ export class GameScene extends Phaser.Scene {
     this.banner.setAlpha(0);
     const th = this.theme(), comic = this.style === 'comic';
     const shade = this.add.rectangle(0, 0, VIEW.w, VIEW.h, comic ? 0x15121a : 0x000000, comic ? 0.5 : 0.55).setOrigin(0).setDepth(DEPTH.hud + 1);
-    const title = this.add.text(VIEW.w / 2, 300, comic ? 'A SURVIVOR JOINS!\nPICK THEIR ROLE' : 'SURVIVOR RECRUITED\nASSIGN ROLE', { align: 'center' }).setOrigin(0.5).setDepth(DEPTH.hud + 2);
+    const title = this.add.text(VIEW.w / 2, 300, tr(comic ? 'roleTitle' : 'nvRoleTitle'), { align: 'center' }).setOrigin(0.5).setDepth(DEPTH.hud + 2);
     if (comic) this.font(title, 32, '#ffe04a', { stroke: th.ink, sw: 8 });
     else this.font(title, 24, th.accent, { glow: th.accent });
     const g = this.add.graphics().setDepth(DEPTH.hud + 2);
@@ -2108,9 +2120,9 @@ export class GameScene extends Phaser.Scene {
       }
       const key = this.add.text(cx, y + 15, `${i + 1}`).setOrigin(0.5).setDepth(DEPTH.hud + 3);
       this.font(key, 14, comic ? th.ink : th.accent, comic ? {} : { glow: th.accent });
-      const name = this.add.text(cx, y + 126, ROLES[role].label.toUpperCase()).setOrigin(0.5).setDepth(DEPTH.hud + 3);
-      this.font(name, comic ? 17 : 15, comic ? th.ink : th.text, comic ? {} : { glow: th.text });
-      const detail = this.add.text(cx, y + 146, ROLES[role].detail, { align: 'center' }).setOrigin(0.5, 0).setDepth(DEPTH.hud + 3);
+      const name = this.add.text(cx, y + 126, tr(ROLES[role].label).toUpperCase()).setOrigin(0.5).setDepth(DEPTH.hud + 3);
+      this.fit(this.font(name, comic ? 17 : 15, comic ? th.ink : th.text, comic ? {} : { glow: th.text }), w - 14);
+      const detail = this.add.text(cx, y + 146, tr(ROLES[role].detail), { align: 'center' }).setOrigin(0.5, 0).setDepth(DEPTH.hud + 3);
       this.font(detail, 11, comic ? th.ink : th.muted);
       this.supplyUi.push(key, name, detail);
       this.roleCards.push({ role, x, y, w, h });
@@ -2128,8 +2140,7 @@ export class GameScene extends Phaser.Scene {
     this.supplyUi = [];
     this.roleCards = [];
     s.phase = this.rolePrev;
-    const label = ROLES[role].label.toUpperCase();
-    this.pop(this.style === 'comic' ? `${label} JOINS THE SQUAD!` : `${label} JOINED SQUAD`, SURVIVOR_COLOR);
+    this.pop(tr(this.style === 'comic' ? 'roleJoins' : 'nvRoleJoins', { role: tr(ROLES[role].label).toUpperCase() }), SURVIVOR_COLOR);
     this.refreshBackdrop();
   }
 }

@@ -1,6 +1,8 @@
 import type { HowToPlay } from '../../../shared/howToPlay';
+import { byLanguage } from '../../../shared/i18n';
 
-export const howToPlay: HowToPlay = {
+/** British English, which US English shares: nothing in it is spelled differently. */
+const en: HowToPlay = {
   goal: 'Lead your team of five down the lanes and destroy the red Nexus. If your own Nexus falls first, you lose.',
   controls: [
     { input: 'Click or tap the ground', action: 'Walk there' },
@@ -30,3 +32,36 @@ export const howToPlay: HowToPlay = {
     'Standing inside the ring round your own Nexus heals you quickly.',
   ],
 };
+
+const de: HowToPlay = {
+  goal: 'Führe dein Team aus fünf die Lanes hinunter und zerstöre den roten Nexus. Fällt dein eigener Nexus zuerst, verlierst du.',
+  controls: [
+    { input: 'Den Boden anklicken oder antippen', action: 'Dorthin laufen' },
+    { input: 'Einen Feind anklicken oder antippen', action: 'Hinlaufen und angreifen' },
+    { input: 'Q, W, E oder R halten, dann loslassen', action: 'Beim Halten eine Fähigkeit zielen und am Zeiger wirken' },
+    { input: 'Ein Fähigkeitsfeld anklicken', action: 'Diese Fähigkeit am Zeiger wirken' },
+    { input: 'D, H, V oder ihre Tasten', action: 'Sprinten, den Heiltrank trinken oder einen Sichtwächter setzen' },
+    { input: 'T oder Heimkehren', action: '4 Sekunden kanalisieren, dann zum Nexus zurückkehren' },
+    { input: 'B oder Laden (Esc schließt ihn)', action: 'Den Laden öffnen und Gegenstände kaufen' },
+    { input: '1, 2 oder 3, oder eine Karte anklicken', action: 'Eines der Upgrades einer neuen Stufe behalten' },
+  ],
+  loop: [
+    'Wähle eine Championkarte, um das Match zu beginnen.',
+    'Lauf eine Lane hinunter und lande letzte Treffer an roten Vasallen für Gold.',
+    'Kämpfe gegen rote Champions und erfülle das Ziel auf der Karte unter der oberen Leiste.',
+    'Steige auf, wähle ein Upgrade und kehre heim, um Gegenstände zu kaufen.',
+    'Stürze die Türme und einen Inhibitor, dann zerstöre den roten Nexus.',
+  ],
+  tips: [
+    'Steht dein Champion still, greift er jeden Feind in Reichweite an.',
+    'Der Vasall, den dein nächster Treffer erledigen würde, bekommt einen goldenen Umriss, und eine Serie letzter Treffer zahlt mehr.',
+    'Türme schießen zuerst auf Vasallen, aber wer unter einem Turm einen feindlichen Champion trifft, zieht sein Feuer auf sich.',
+    'Dschungellager geben Gold und Erfahrung, und die Brocken geben 60 Sekunden lang einen Buff.',
+    'Deine R-Fähigkeit wird auf Stufe 3 frei.',
+    'Siege mit einem Champion steigern seine Meisterschaft, die seinen frühen Stufen eine dritte Upgradekarte gibt.',
+    'Hohes Gras verbirgt dich vor Feinden, bis du angreifst, und der Nebel verbirgt, was dein Team nicht sieht.',
+    'Im Ring um deinen eigenen Nexus heilst du schnell.',
+  ],
+};
+
+export const howToPlay: HowToPlay = byLanguage({ en, de });

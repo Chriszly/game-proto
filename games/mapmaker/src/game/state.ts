@@ -1,4 +1,5 @@
 import { byDifficulty } from '../../../../shared/settings';
+import type { TextKey } from '../i18n';
 import type { Hand } from './hands';
 import type { Island } from './island';
 import type { IsleKind } from './kinds';
@@ -81,12 +82,25 @@ export interface Tile {
  */
 export interface Riddle {
   at: Point;
-  clues: string[];
+  clues: Clue[];
   known: boolean;
   found: boolean;
   /** True when the rival surveyor dug the treasure up first. */
   rival?: boolean;
 }
+
+/**
+ * One clue of the riddle, in words by `GameScene`: so many tiles one way from a landmark ("Two tiles
+ * west of a peak"), the ground the tile is ("on a meadow"), or what lies beside it ("by the water",
+ * "out of sight of the sea", "beside a river").
+ */
+/** The ground a riddle's tile can be. */
+export type Ground = 'grass' | 'forest' | 'beach' | 'hills';
+
+export type Clue =
+  | { kind: 'from'; tiles: number; dir: 'north' | 'east' | 'south' | 'west'; mark: 'mountain' | 'village' | 'ruins' | 'port' }
+  | { kind: 'ground'; ground: Ground }
+  | { kind: 'water' | 'inland' | 'river' };
 
 /**
  * A buyer at the port pays a bonus for charts that show enough of one terrain: on one voyage, or
@@ -105,7 +119,8 @@ export interface Commission {
 /** A river, a road or a wood: charting every tile of it pays a named bonus with that chart. */
 export interface Feature {
   kind: 'river' | 'road' | 'wood';
-  name: string;
+  /** Its name, a key of `i18n/en.ts` (so a save shows in any language). */
+  name: TextKey;
   tiles: Point[];
   bonus: number;
 }
@@ -137,7 +152,7 @@ export interface Chart {
   artifactCoins: number;
   treasure: number;
   /** Features charted whole on this voyage, and what they pay together. */
-  features: { name: string; bonus: number }[];
+  features: { name: TextKey; bonus: number }[];
   featureCoins: number;
   /** Tiles the rival charted first, and the coins they cost (half of those tiles' value). */
   rivalTiles: number;

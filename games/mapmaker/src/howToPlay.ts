@@ -1,6 +1,7 @@
 import type { HowToPlay } from '../../../shared/howToPlay';
+import { byLanguage } from '../../../shared/i18n';
 
-export const howToPlay: HowToPlay = {
+const en: HowToPlay = {
   goal: 'Survey uncharted islands with a sack of supplies, sell your charts at the port, and bind every isle into your atlas.',
   controls: [
     {
@@ -25,7 +26,7 @@ export const howToPlay: HowToPlay = {
     },
     {
       input: 'Commission, hand or Buy',
-      action: 'At the harbor: pick a commission, take a hand aboard or buy an upgrade',
+      action: 'At the harbour: pick a commission, take a hand aboard or buy an upgrade',
     },
     { input: 'Set sail', action: 'Start the next voyage with full supplies' },
     { input: 'Moon or sun beside the logo', action: 'Switch between the white sheet and the dark night sheet' },
@@ -35,7 +36,7 @@ export const howToPlay: HowToPlay = {
     'Climb hills and peaks to see the tiles around them for free.',
     'When the supplies run out, or you turn back, the surveyor draws a chart.',
     'Sell the chart at the port for the value of every tile on it.',
-    'Spend the coins at the harbor, then set sail to chart more of the isle.',
+    'Spend the coins at the harbour, then set sail to chart more of the isle.',
   ],
   tips: [
     'Most tiles cost 1 supply, forests and peaks cost 2, and rivers and roads are free to follow.',
@@ -47,3 +48,62 @@ export const howToPlay: HowToPlay = {
     'From the third isle a rival surveyor charts too, and tiles they reach first sell for half.',
   ],
 };
+
+/** US English only changes the spelling. */
+const us = (text: string) => text.replace(/harbour/g, 'harbor');
+const enUS: HowToPlay = {
+  goal: us(en.goal),
+  controls: en.controls.map((c) => ({ input: us(c.input), action: us(c.action) })),
+  loop: en.loop.map(us),
+  tips: en.tips.map(us),
+};
+
+const de: HowToPlay = {
+  goal: 'Vermiss unbekannte Inseln mit einem Sack voller Vorräte, verkaufe deine Karten im Hafen und binde jede Insel in deinen Atlas.',
+  controls: [
+    {
+      input: 'Eine magentafarbene Messstation anklicken oder antippen',
+      action: 'Dieses Feld für seine Kosten vermessen; der Vermesser läuft hin',
+    },
+    {
+      input: 'Lager',
+      action: 'Für 3 Vorräte ein Basislager aufschlagen, wo der Vermesser steht',
+    },
+    {
+      input: 'Kartiertes Gelände anklicken oder antippen',
+      action: 'Sobald du die Rätselkarte hast, dort für 1 Vorrat graben',
+    },
+    {
+      input: 'Zurück zum Hafen',
+      action: 'Die Reise früh beenden und die Karte zeichnen',
+    },
+    {
+      input: 'Karte verkaufen',
+      action: 'Die Karte der Reise im Hafen für Münzen verkaufen',
+    },
+    {
+      input: 'Auftrag, Helfer oder Kaufen',
+      action: 'Im Hafen: einen Auftrag wählen, einen Helfer an Bord nehmen oder eine Verbesserung kaufen',
+    },
+    { input: 'In See stechen', action: 'Die nächste Reise mit vollen Vorräten beginnen' },
+    { input: 'Mond oder Sonne neben dem Logo', action: 'Zwischen dem weißen Blatt und dem dunklen Nachtblatt wechseln' },
+  ],
+  loop: [
+    'Tippe Messstationen neben kartiertem Land an, um vom Hafen ins Inland vorzudringen.',
+    'Besteige Hügel und Gipfel, um die Felder um sie herum kostenlos zu sehen.',
+    'Wenn die Vorräte ausgehen oder du umkehrst, zeichnet der Vermesser eine Karte.',
+    'Verkaufe die Karte im Hafen für den Wert jedes Feldes darauf.',
+    'Gib die Münzen im Hafen aus und stich dann in See, um mehr von der Insel zu kartieren.',
+  ],
+  tips: [
+    'Die meisten Felder kosten 1 Vorrat, Wälder und Gipfel kosten 2, und Flüssen und Straßen folgst du kostenlos.',
+    'Meerfelder lassen sich kartieren, aber von dort aus kannst du nicht weitervermessen.',
+    'Dörfer und Ruinen sind am meisten wert, und die Ruinen bergen ein Schatzrätsel, das 60 Münzen wert ist.',
+    'Jeder Vorrat, der bei der Rückkehr zum Hafen übrig ist, bringt 3 Münzen.',
+    'Einen ganzen Fluss, eine Straße oder einen Wald zu kartieren bringt 2 Münzen extra für jedes seiner Felder.',
+    'Eine ganz kartierte Insel wird in deinen Atlas gebunden, und die nächste Reise geht zu einer neuen Insel.',
+    'Ab der dritten Insel kartiert auch ein rivalisierender Vermesser, und Felder, die er zuerst erreicht, bringen nur die Hälfte.',
+  ],
+};
+
+export const howToPlay: HowToPlay = byLanguage({ en, 'en-US': enUS, de });

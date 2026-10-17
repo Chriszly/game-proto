@@ -36,12 +36,16 @@ import {
   ultRank,
   ULT_RANK_LEVELS,
   bushAt,
+  UpgradeDef,
+  SIEGE,
 } from '../game/data';
-import { Fx, GameState, Phase, Unit, createGame, dist, getUnit } from '../game/state';
+import { Fx, GameState, ObjectiveTitle, Phase, Unit, createGame, dist, getUnit } from '../game/state';
 import { loadMastery, masteryRank, recordWin } from '../game/mastery';
 import { abilityFor, atFountain, atShop, buy, buyBack, buybackCost, cast, chooseUpgrade, commandAttack, commandMove, hiddenFrom, invulnerable, priceFor, startRecall, stealthed, tick, useActive, viewers } from '../game/sim';
 import { FxLayers, drawAura, drawProjectile, drawSkill, drawZone, skillMs } from './skillFx';
 import { shortName } from '../game/names';
+import { t, type TextKey } from '../i18n';
+import { formatNumber } from '../../../../shared/i18n';
 import {
   BEAST_CELL,
   BEAST_KEY,
@@ -181,21 +185,42 @@ function col(hex: string): number {
 function describe(item: ItemDef): string {
   const parts: string[] = [];
   const active = ACTIVES.find((a) => a.id === item.active);
-  if (item.dmg) parts.push(`+${item.dmg} damage`);
-  if (item.armor) parts.push(`+${item.armor} armor`);
-  if (item.hp) parts.push(`+${item.hp} health`);
-  if (item.speed) parts.push(`+${item.speed} speed`);
-  if (item.atk) parts.push(`+${item.atk}% attack speed`);
-  if (item.cdr) parts.push(`-${item.cdr}% cooldowns`);
-  if (item.ward) parts.push(`[V] plant: sees ${SIGHT.ward}px for ${WARD.ms / 1000}s, ${WARD.hits} hits`);
+  if (item.dmg) parts.push(t('statDamage', { n: item.dmg }));
+  if (item.armor) parts.push(t('statArmour', { n: item.armor }));
+  if (item.hp) parts.push(t('statHealth', { n: item.hp }));
+  if (item.speed) parts.push(t('statSpeed', { n: item.speed }));
+  if (item.atk) parts.push(t('statAttackSpeed', { n: item.atk }));
+  if (item.cdr) parts.push(t('statCooldowns', { n: item.cdr }));
+  if (item.ward) parts.push(t('statWard', { range: SIGHT.ward, s: WARD.ms / 1000, hits: WARD.hits }));
   const e = item.elixir;
-  if (e?.dmg) parts.push(`+${e.dmg}% damage`);
-  if (e?.armor) parts.push(`+${e.armor} armor`);
-  if (e?.regen) parts.push(`+${e.regen} health a second`);
-  if (e?.speed) parts.push(`+${e.speed}% speed`);
-  if (e?.atk) parts.push(`+${e.atk}% attack speed`);
-  if (active) parts.push(active.id === 'dash' ? `[${active.key}] dash ${active.range}px` : `[${active.key}] heal ${active.heal}`);
+  if (e?.dmg) parts.push(t('statDamagePct', { n: e.dmg }));
+  if (e?.armor) parts.push(t('statArmour', { n: e.armor }));
+  if (e?.regen) parts.push(t('statRegen', { n: e.regen }));
+  if (e?.speed) parts.push(t('statSpeedPct', { n: e.speed }));
+  if (e?.atk) parts.push(t('statAttackSpeed', { n: e.atk }));
+  if (active) parts.push(active.id === 'dash' ? t('statDash', { key: active.key, range: active.range ?? 0 }) : t('statHeal', { key: active.key, n: active.heal ?? 0 }));
   return parts.join(', ');
+}
+
+/** What an upgrade does, worded from its one effect and the name of the ability it changes. */
+function upgradeText(u: UpgradeDef, champ: ChampionDef): string {
+  const ab = champ.abilities.find((a) => a.key === u.key)!;
+  const ability = t(ab.name);
+  if (u.stun) return t(ab.stun ? 'upStunLonger' : 'upStun', { ability, s: u.stun / 1000 });
+  if (u.slow) return t('upSlow', { ability, s: u.slow / 1000 });
+  if (u.count) return t('upCount', { ability, n: u.count });
+  if (u.ms) return t('upLasts', { ability, n: u.ms });
+  if (u.cd) return t('upCooldown', { ability, n: -u.cd });
+  if (u.heal) return t('upHeal', { ability, n: u.heal });
+  if (u.shield) return t('upShield', { ability, n: u.shield });
+  if (u.range) return t('upRange', { ability, n: u.range });
+  if (u.radius) return t('upRadius', { ability, n: u.radius });
+  return t('upDamage', { ability, n: u.damage ?? 0 });
+}
+
+/** An objective's title in the player's language. */
+function objectiveTitle(o: { title: ObjectiveTitle }): string {
+  return t(o.title.key, { name: o.title.name ? t(o.title.name) : '' });
 }
 
 /** The gem colour of an item, by what it gives. */
@@ -992,47 +1017,47 @@ export class GameScene extends Phaser.Scene {
       g.fillStyle(col(UI.slateDark), 1).fillRect(x - 13, y - 3, 12, 12);
       this.t(`lvl-${u.id}`, x - 7, y - 3, String(u.level), 9, UI.text, 'center', true, true);
       // The champion's own name over its bar.
-      this.t(`cname-${u.id}`, u.x, y - 15, u.player ? shortName(u.name) : shortName(u.name), 10, u.side === 'red' ? '#ffb4a8' : '#cfe1ff', 'center', true, true);
+      this.t(`cname-${u.id}`, u.x, y - 15, shortName(u.name), 10, u.side === 'red' ? '#ffb4a8' : '#cfe1ff', 'center', true, true);
       // A price on its head, from a kill streak.
       const bounty = bountyOf(u.killStreak);
       if (bounty) {
         g.fillStyle(col(UI.edge), 0.9).fillRect(u.x - 36, y - 30, 72, 13);
         g.fillStyle(col('#6b4f17'), 1).fillRect(u.x - 35, y - 29, 70, 11);
-        this.t(`bounty-${u.id}`, u.x, y - 30, `BOUNTY ${bounty}g`, 9, UI.gold, 'center', true, true);
+        this.t(`bounty-${u.id}`, u.x, y - 30, t('bountyLabel', { gold: bounty }), 9, UI.gold, 'center', true, true);
       }
       // The recall channel, filling under the bar.
       if (u.recallMs > 0) {
         g.fillStyle(col(UI.edge), 0.9).fillRect(x - 1, y + h + 2, w + 2, 5);
         g.fillStyle(col('#9fd8ff'), 1).fillRect(x, y + h + 3, w * (1 - u.recallMs / RECALL.ms), 3);
-        this.t(`recall-${u.id}`, u.x, y + h + 7, 'Recalling', 9, '#9fd8ff', 'center', true, true);
+        this.t(`recall-${u.id}`, u.x, y + h + 7, t('recallingLabel'), 9, '#9fd8ff', 'center', true, true);
       }
     }
-    if (u.stunMs > 0) this.t(`stun-${u.id}`, u.x, y - (u.kind === 'champion' ? 28 : 16), 'STUN', 9, UI.gold, 'center', true, true);
+    if (u.stunMs > 0) this.t(`stun-${u.id}`, u.x, y - (u.kind === 'champion' ? 28 : 16), t('stunLabel'), 9, UI.gold, 'center', true, true);
   }
 
   /** A gold marker over the objective's target, with the reward, and a dashed ring round it. */
   private drawObjectiveMarker(g: Phaser.GameObjects.Graphics, s: GameState) {
     const o = s.objective;
-    const t = o && getUnit(s, o.target);
-    if (!o || !t || t.dead || this.hidden(s, t)) return;
-    const fy = t.y + FOOT[t.kind];
+    const tgt = o && getUnit(s, o.target);
+    if (!o || !tgt || tgt.dead || this.hidden(s, tgt)) return;
+    const fy = tgt.y + FOOT[tgt.kind];
     const bob = settings.reduceMotion ? 0 : Math.sin(s.time / 220) * 3;
-    const y = fy - headOf(t) - (t.kind === 'champion' ? 30 : 18) + bob;
-    const label = `OBJECTIVE · +${o.gold}g`;
+    const y = fy - headOf(tgt) - (tgt.kind === 'champion' ? 30 : 18) + bob;
+    const label = t('objectiveMarker', { gold: o.gold });
     const w = 128;
-    g.fillStyle(col(UI.slateDark), 0.92).fillRect(t.x - w / 2, y - 22, w, 18);
-    g.lineStyle(1.5, col(UI.gold), 1).strokeRect(t.x - w / 2, y - 22, w, 18);
-    g.fillStyle(col(UI.gold), 1).fillTriangle(t.x - 6, y - 4, t.x + 6, y - 4, t.x, y + 4);
-    this.t('obj-marker', t.x, y - 20, label, 11, UI.gold, 'center', true, true);
-    const r = t.kind === 'tower' ? 44 : t.kind === 'nexus' ? 70 : t.kind === 'beast' ? 62 : t.radius + 14;
+    g.fillStyle(col(UI.slateDark), 0.92).fillRect(tgt.x - w / 2, y - 22, w, 18);
+    g.lineStyle(1.5, col(UI.gold), 1).strokeRect(tgt.x - w / 2, y - 22, w, 18);
+    g.fillStyle(col(UI.gold), 1).fillTriangle(tgt.x - 6, y - 4, tgt.x + 6, y - 4, tgt.x, y + 4);
+    this.t('obj-marker', tgt.x, y - 20, label, 11, UI.gold, 'center', true, true);
+    const r = tgt.kind === 'tower' ? 44 : tgt.kind === 'nexus' ? 70 : tgt.kind === 'beast' ? 62 : tgt.radius + 14;
     const n = 16;
     g.lineStyle(2, col(UI.gold), 0.9);
     for (let i = 0; i < n; i += 1) {
       const a0 = (i / n) * Math.PI * 2 + s.time / (settings.reduceMotion ? Infinity : 1500);
       const a1 = a0 + Math.PI / n;
       g.beginPath();
-      g.moveTo(t.x + Math.cos(a0) * r, fy + Math.sin(a0) * r * 0.58);
-      g.lineTo(t.x + Math.cos(a1) * r, fy + Math.sin(a1) * r * 0.58);
+      g.moveTo(tgt.x + Math.cos(a0) * r, fy + Math.sin(a0) * r * 0.58);
+      g.lineTo(tgt.x + Math.cos(a1) * r, fy + Math.sin(a1) * r * 0.58);
       g.strokePath();
     }
   }
@@ -1058,7 +1083,7 @@ export class GameScene extends Phaser.Scene {
         const x = f.x;
         const y = f.y - rise - 18;
         this.coin(g, x - 16, y + 7, 7, Math.min(1, alpha * 2));
-        this.t(`coin-${coins++}`, x - 6, y - 2, `+${f.gold}g`, 15, UI.gold, 'left', true, true, Math.min(1, alpha * 2));
+        this.t(`coin-${coins++}`, x - 6, y - 2, t('coinGold', { gold: f.gold }), 15, UI.gold, 'left', true, true, Math.min(1, alpha * 2));
       }
     }
   }
@@ -1121,8 +1146,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private drawPick(g: Phaser.GameObjects.Graphics) {
-    this.t('title', VIEW.w / 2, 12, 'LANE BRAWL', 32, UI.gold, 'center', true);
-    this.t('sub', VIEW.w / 2, 52, 'Pick your champion, from knights and witches to gunslingers, automatons and beasts. Four join you; five fight you.', 12, UI.dim, 'center');
+    this.t('title', VIEW.w / 2, 12, t('gameTitle'), 32, UI.gold, 'center', true);
+    this.t('sub', VIEW.w / 2, 52, t('pickSub'), 12, UI.dim, 'center');
     CHAMPIONS.forEach((c, i) => {
       const r = pickCard(i);
       const hover = this.hoverPick === i;
@@ -1130,10 +1155,10 @@ export class GameScene extends Phaser.Scene {
       g.fillStyle(col(c.color), 1).fillRect(r.x + 2, r.y + 2, r.w - 4, 4);
       g.fillStyle(col('#3b7be8'), 0.25).fillEllipse(r.x + r.w / 2, r.y + 56, 50, 14);
       g.lineStyle(2, col('#3b7be8'), 0.9).strokeEllipse(r.x + r.w / 2, r.y + 56, 50, 14);
-      this.t(`pick-name-${i}`, r.x + r.w / 2, r.y + 60, c.hero, c.hero.length > 18 ? 11 : 12, UI.text, 'center', true);
-      this.t(`pick-role-${i}`, r.x + r.w / 2, r.y + 75, `${c.name} · ${c.role}`.toUpperCase(), 9, c.color, 'center', true);
-      this.t(`pick-pas-${i}`, r.x + r.w / 2, r.y + 87, c.passive.name, 10, UI.gold, 'center', true);
-      this.t(`pick-desc-${i}`, r.x + r.w / 2, r.y + 100, c.passive.desc, 9, UI.dim, 'center');
+      this.t(`pick-name-${i}`, r.x + r.w / 2, r.y + 60, t(c.hero), t(c.hero).length > 18 ? 11 : 12, UI.text, 'center', true);
+      this.t(`pick-role-${i}`, r.x + r.w / 2, r.y + 75, `${t(c.name)} · ${t(c.role)}`.toUpperCase(), 9, c.color, 'center', true);
+      this.t(`pick-pas-${i}`, r.x + r.w / 2, r.y + 87, t(c.passive.name), 10, UI.gold, 'center', true);
+      this.t(`pick-desc-${i}`, r.x + r.w / 2, r.y + 100, t(c.passive.desc), 9, UI.dim, 'center');
       // Mastery: one gold diamond per rank in the card's top right corner.
       const rank = masteryRank(this.mastery[c.id] ?? 0);
       for (let k = 0; k < rank; k++) {
@@ -1144,11 +1169,12 @@ export class GameScene extends Phaser.Scene {
     });
     // The champion under the pointer: who they are and what they play like, then why they fight.
     const h = CHAMPIONS[this.hoverPick];
-    this.t('pick-blurb', VIEW.w / 2, 444, h ? `${h.hero}, ${h.title}. ${h.name}: ${h.blurb.toLowerCase()}.${h.perk ? ` ${h.perk.desc}.` : ''}` : 'Point at a card to meet its champion.', 12, h ? h.color : UI.muted, 'center', true);
-    this.t('pick-motive', VIEW.w / 2, 464, h ? h.motive : 'Two banners, Dawn and Dusk, fight the Contest of Lanes for the Riftwell of Kessmoor.', 12, h ? UI.text : UI.dim, 'center', true);
-    this.t('hint', VIEW.w / 2, 491, 'Click a champion to start. Click the ground to walk, an enemy to attack. Q W E R cast at the cursor, D and H use item actives.', 11, UI.dim, 'center');
-    this.t('hint2', VIEW.w / 2, 506, 'B opens the shop at your Nexus, 1, 2 or 3 picks an upgrade, V plants a vision ward, T recalls home, X buys back while dead.', 11, UI.dim, 'center');
-    this.t('hint3', VIEW.w / 2, 521, 'You only see what your team sees. Slay the brutes for buffs, take the watchstones for sight, and the beast for stronger minions.', 11, UI.dim, 'center');
+    const line = h && t('pickBlurb', { hero: t(h.hero), title: t(h.title), class: t(h.name), blurb: t(h.blurb) });
+    this.t('pick-blurb', VIEW.w / 2, 444, h ? (h.perk ? t('pickPerk', { line, perk: t(h.perk.desc) }) : line) : t('pickPoint'), 12, h ? h.color : UI.muted, 'center', true);
+    this.t('pick-motive', VIEW.w / 2, 464, h ? t(h.motive) : t('pickSetting'), 12, h ? UI.text : UI.dim, 'center', true);
+    this.t('hint', VIEW.w / 2, 491, t('pickHint1'), 11, UI.dim, 'center');
+    this.t('hint2', VIEW.w / 2, 506, t('pickHint2'), 11, UI.dim, 'center');
+    this.t('hint3', VIEW.w / 2, 521, t('pickHint3'), 11, UI.dim, 'center');
   }
 
   private drawPlaying(g: Phaser.GameObjects.Graphics, s: GameState) {
@@ -1170,7 +1196,7 @@ export class GameScene extends Phaser.Scene {
   private drawTopBar(g: Phaser.GameObjects.Graphics, s: GameState, me: Unit) {
     this.panel(g, TOP_BAR.x, TOP_BAR.y, TOP_BAR.w, TOP_BAR.h);
     this.coin(g, 20, 17, 8);
-    this.t('gold', 34, 8, `${Math.floor(me.gold)}`, 16, UI.gold, 'left', true);
+    this.t('gold', 34, 8, formatNumber(Math.floor(me.gold)), 16, UI.gold, 'left', true);
     // The last-hit streak chip.
     if (s.streak > 0) {
       const c = STREAK_CHIP;
@@ -1182,13 +1208,13 @@ export class GameScene extends Phaser.Scene {
         [[6, 0], [1, 9], [5, 9], [3, 16], [10, 6], [6, 6], [8, 0]].map(([x, y]) => new Phaser.Math.Vector2(c.x + 6 + x, c.y + 3 + y)),
         true,
       );
-      this.t('streak', c.x + 22, c.y + 4, hot ? `x${s.streak} streak +${Math.round(STREAK.bonus * 100)}%` : `x${s.streak} streak`, 11, hot ? UI.gold : UI.text, 'left', true);
+      this.t('streak', c.x + 22, c.y + 4, hot ? t('streakHot', { n: s.streak, pct: Math.round(STREAK.bonus * 100) }) : t('streak', { n: s.streak }), 11, hot ? UI.gold : UI.text, 'left', true);
     }
     if (!watching) this.drawRecallButton(g, s, me);
     const nexus = (team: Team) => s.units.find((u) => u.kind === 'nexus' && u.side === team)!;
-    const pct = (u: Unit) => `${Math.max(0, Math.ceil((u.hp / u.maxHp) * 100))}%`;
-    this.t('nexus-blue', 232, 9, `Blue Nexus ${pct(nexus('blue'))}`, 14, UI.blue, 'left', true);
-    this.t('nexus-red', VIEW.w - 12, 9, `Red Nexus ${pct(nexus('red'))}`, 14, UI.red, 'right', true);
+    const pct = (u: Unit) => Math.max(0, Math.ceil((u.hp / u.maxHp) * 100));
+    this.t('nexus-blue', 232, 9, t('blueNexus', { pct: pct(nexus('blue')) }), 14, UI.blue, 'left', true);
+    this.t('nexus-red', VIEW.w - 12, 9, t('redNexus', { pct: pct(nexus('red')) }), 14, UI.red, 'right', true);
     // The clock in its own sunken box.
     g.fillStyle(col(UI.edge), 1).fillRect(VIEW.w / 2 - 38, 3, 76, 28);
     g.fillStyle(col('#1b212d'), 1).fillRect(VIEW.w / 2 - 37, 4, 74, 26);
@@ -1206,13 +1232,13 @@ export class GameScene extends Phaser.Scene {
       const can = ready && me.gold >= cost;
       this.panel(g, b.x, b.y, b.w, b.h, can ? '#6b4f17' : '#3a4256');
       if (can) this.coin(g, b.x + 12, b.y + b.h / 2, 6);
-      this.t('recall', b.x + b.w / 2 + (can ? 6 : 0), b.y + 6, ready ? `Buy back ${cost}g [X]` : `Buy back in ${clock(me.buybackReadyAt - s.time)}`, 11, can ? UI.gold : UI.muted, 'center', true);
+      this.t('recall', b.x + b.w / 2 + (can ? 6 : 0), b.y + 6, ready ? t('buyBack', { gold: cost }) : t('buyBackIn', { time: clock(me.buybackReadyAt - s.time) }), 11, can ? UI.gold : UI.muted, 'center', true);
       return;
     }
     const on = me.recallMs > 0;
     this.panel(g, b.x, b.y, b.w, b.h, on ? '#2f4f6b' : '#33405a');
     if (on) g.fillStyle(col('#9fd8ff'), 0.45).fillRect(b.x + 2, b.y + 2, (b.w - 4) * (1 - me.recallMs / RECALL.ms), b.h - 4);
-    this.t('recall', b.x + b.w / 2, b.y + 6, on ? `Recalling ${(me.recallMs / 1000).toFixed(1)}s` : 'Recall home [T]', 11, on ? UI.text : UI.dim, 'center', true);
+    this.t('recall', b.x + b.w / 2, b.y + 6, on ? t('recallingFor', { s: formatNumber(me.recallMs / 1000, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) }) : t('recallHome'), 11, on ? UI.text : UI.dim, 'center', true);
   }
 
   private drawObjectiveCard(g: Phaser.GameObjects.Graphics, s: GameState) {
@@ -1221,19 +1247,19 @@ export class GameScene extends Phaser.Scene {
     g.fillStyle(col(UI.gold), 1).fillRect(c.x + 3, c.y + 4, 3, c.h - 8);
     const o = s.objective;
     if (o) {
-      const t = getUnit(s, o.target);
-      const progress = t ? 1 - Math.max(0, t.hp) / t.maxHp : 1;
-      this.t('obj-head', c.x + 14, c.y + 6, 'OBJECTIVE', 10, UI.gold, 'left', true);
-      this.t('obj-time', c.x + c.w - 10, c.y + 6, `${clock(o.endsAt - s.time)} left`, 10, UI.dim, 'right', true);
-      this.t('obj-title', c.x + 14, c.y + 20, o.title, 14, UI.text, 'left', true);
+      const target = getUnit(s, o.target);
+      const progress = target ? 1 - Math.max(0, target.hp) / target.maxHp : 1;
+      this.t('obj-head', c.x + 14, c.y + 6, t('objectiveHead'), 10, UI.gold, 'left', true);
+      this.t('obj-time', c.x + c.w - 10, c.y + 6, t('objectiveLeft', { time: clock(o.endsAt - s.time) }), 10, UI.dim, 'right', true);
+      this.t('obj-title', c.x + 14, c.y + 20, objectiveTitle(o), 14, UI.text, 'left', true);
       g.fillStyle(0x151a24, 1).fillRect(c.x + 14, c.y + 46, 92, 6);
       g.fillStyle(col(UI.gold), 1).fillRect(c.x + 14, c.y + 46, 92 * progress, 6);
-      this.t('obj-reward', c.x + c.w - 10, c.y + 42, o.banner ? `+${o.gold}g + Siege banner` : `+${o.gold}g`, 11, UI.gold, 'right', true);
+      this.t('obj-reward', c.x + c.w - 10, c.y + 42, t(o.banner ? 'objectiveRewardBanner' : 'objectiveReward', { gold: o.gold }), 11, UI.gold, 'right', true);
     } else {
       const last = s.lastObjective;
-      this.t('obj-head', c.x + 14, c.y + 6, last ? (last.done ? 'OBJECTIVE DONE' : 'OBJECTIVE MISSED') : 'OBJECTIVE', 10, last && !last.done ? UI.muted : UI.green, 'left', true);
-      this.t('obj-title', c.x + 14, c.y + 20, last ? last.title : '', 14, UI.dim, 'left', true);
-      this.t('obj-reward', c.x + 14, c.y + 42, `Next goal in ${clock(s.nextObjectiveAt - s.time)}${last?.done ? `   +${last.gold}g paid` : ''}`, 11, UI.dim, 'left');
+      this.t('obj-head', c.x + 14, c.y + 6, t(last ? (last.done ? 'objectiveDone' : 'objectiveMissed') : 'objectiveHead'), 10, last && !last.done ? UI.muted : UI.green, 'left', true);
+      this.t('obj-title', c.x + 14, c.y + 20, last ? objectiveTitle(last) : '', 14, UI.dim, 'left', true);
+      this.t('obj-reward', c.x + 14, c.y + 42, last?.done ? t('nextGoalPaid', { time: clock(s.nextObjectiveAt - s.time), gold: last.gold }) : t('nextGoal', { time: clock(s.nextObjectiveAt - s.time) }), 11, UI.dim, 'left');
     }
     if (s.time < s.siegeUntil) {
       const y = c.y + c.h + 6;
@@ -1241,7 +1267,7 @@ export class GameScene extends Phaser.Scene {
       g.fillStyle(col('#6b4f17'), 1).fillRect(c.x, y, 180, 18);
       g.fillStyle(col(UI.gold), 1).fillTriangle(c.x + 8, y + 3, c.x + 18, y + 3, c.x + 8, y + 10);
       g.fillStyle(col(UI.goldDeep), 1).fillRect(c.x + 7, y + 3, 1.5, 13);
-      this.t('siege', c.x + 24, y + 3, `Siege banner +25% vs towers ${clock(s.siegeUntil - s.time)}`, 10, UI.gold, 'left', true);
+      this.t('siege', c.x + 24, y + 3, t('siegeBanner', { pct: Math.round((SIEGE.mult - 1) * 100), time: clock(s.siegeUntil - s.time) }), 10, UI.gold, 'left', true);
     }
   }
 
@@ -1259,7 +1285,7 @@ export class GameScene extends Phaser.Scene {
       const cx = c.x + 12, cy = c.y + c.h / 2;
       g.fillStyle(0xb98cff, 1).fillPoints([new Phaser.Math.Vector2(cx, cy - 7), new Phaser.Math.Vector2(cx + 5, cy), new Phaser.Math.Vector2(cx, cy + 7), new Phaser.Math.Vector2(cx - 5, cy)], true);
       g.fillStyle(0xffffff, 0.45).fillTriangle(cx, cy - 7, cx - 5, cy, cx, cy);
-      this.t(`buff-${team}`, c.x + 24, c.y + 4, `${team === 'blue' ? 'Your' : 'Red'} minions empowered ${clock(left)}`, 10, team === 'blue' ? UI.blue : UI.red, 'left', true);
+      this.t(`buff-${team}`, c.x + 24, c.y + 4, t(team === 'blue' ? 'minionsEmpoweredBlue' : 'minionsEmpoweredRed', { time: clock(left) }), 10, team === 'blue' ? UI.blue : UI.red, 'left', true);
     }
     // The elder's blessing, in gold.
     for (const team of ['blue', 'red'] as Team[]) {
@@ -1272,7 +1298,7 @@ export class GameScene extends Phaser.Scene {
       const cx = c.x + 12, cy = c.y + c.h / 2;
       g.fillStyle(0xffc93d, 1).fillPoints([new Phaser.Math.Vector2(cx, cy - 7), new Phaser.Math.Vector2(cx + 5, cy), new Phaser.Math.Vector2(cx, cy + 7), new Phaser.Math.Vector2(cx - 5, cy)], true);
       g.fillStyle(0xffffff, 0.45).fillTriangle(cx, cy - 7, cx - 5, cy, cx, cy);
-      this.t(`elder-${team}`, c.x + 24, c.y + 4, `${team === 'blue' ? 'Your' : 'Red'} elder blessing ${clock(left)}`, 10, UI.gold, 'left', true);
+      this.t(`elder-${team}`, c.x + 24, c.y + 4, t(team === 'blue' ? 'elderBlessingBlue' : 'elderBlessingRed', { time: clock(left) }), 10, UI.gold, 'left', true);
     }
   }
 
@@ -1308,7 +1334,7 @@ export class GameScene extends Phaser.Scene {
     const bx = P.x + 82;
     const bw = P.w - 92;
     this.t('name', bx, P.y + 6, shortName(me.name), 15, UI.text, 'left', true);
-    this.t('lv', P.x + P.w - 10, P.y + 8, `Lv ${me.level}`, 12, UI.gold, 'right', true);
+    this.t('lv', P.x + P.w - 10, P.y + 8, t('level', { n: me.level }), 12, UI.gold, 'right', true);
     g.fillStyle(0x151a24, 1).fillRect(bx, P.y + 28, bw, 11);
     g.fillStyle(col('#62d86f'), 1).fillRect(bx, P.y + 28, bw * Math.max(0, me.hp / me.maxHp), 11);
     g.fillStyle(0xffffff, 0.25).fillRect(bx, P.y + 28, bw * Math.max(0, me.hp / me.maxHp), 2);
@@ -1330,8 +1356,8 @@ export class GameScene extends Phaser.Scene {
       g.fillStyle(0xffffff, 0.4).fillTriangle(cx, cy - 6, cx - 6, cy, cx, cy);
       if (item.from) g.lineStyle(1, col(UI.gold), 1).strokeRect(x + 1, y + 1, 15, 15);
     }
-    this.t('dead', bx, P.y + 72, me.dead ? `Respawn in ${Math.ceil((me.respawnAt - s.time) / 1000)}s` : `${c.name} · ${c.passive.name}`, 11, me.dead ? UI.red : UI.dim, 'left', true);
-    this.t('lasthits', bx, P.y + 89, `K ${me.kills}  D ${me.deaths}  Last hits ${s.lastHits}`, 10, UI.muted);
+    this.t('dead', bx, P.y + 72, me.dead ? t('respawnIn', { n: Math.ceil((me.respawnAt - s.time) / 1000) }) : t('classPassive', { class: t(c.name), passive: t(c.passive.name) }), 11, me.dead ? UI.red : UI.dim, 'left', true);
+    this.t('lasthits', bx, P.y + 89, t('scoreLine', { kills: me.kills, deaths: me.deaths, lastHits: s.lastHits }), 10, UI.muted);
     this.drawBuffStrip(g, me);
 
     // Q, W, E, R.
@@ -1348,8 +1374,9 @@ export class GameScene extends Phaser.Scene {
       const cd = me.cds[k];
       if (cd > 0) g.fillStyle(0x000000, 0.6).fillRect(box.x + 3, box.y + 3, box.w - 6, (box.h - 6) * (cd / ab.cd));
       this.t(`ab-${k}`, box.x + 6, box.y + 4, k, 12, locked ? UI.muted : UI.text, 'left', true);
-      this.t(`abn-${k}`, box.x + box.w / 2, box.y + box.h - 15, ab.name.length > 10 ? ab.name.split(' ')[0] : ab.name, 9, UI.dim, 'center', true);
-      const label = locked ? `Lv${ab.level}` : cd > 0 ? `${Math.ceil(cd / 1000)}` : '';
+      const name = t(ab.name);
+      this.t(`abn-${k}`, box.x + box.w / 2, box.y + box.h - 15, name.length > 10 ? name.split(' ')[0] : name, 9, UI.dim, 'center', true);
+      const label = locked ? t('abilityLocked', { n: ab.level }) : cd > 0 ? `${Math.ceil(cd / 1000)}` : '';
       this.t(`abcd-${k}`, box.x + box.w / 2, box.y + 14, label, 18, UI.text, 'center', true);
       // Chosen upgrades as gold pips, and a gold diamond on an ability the offer would change.
       const pips = me.upgrades.filter((id) => upgradeById(id)?.key === k).length + (k === 'R' ? ultRank(me.level) : 0);
@@ -1366,7 +1393,7 @@ export class GameScene extends Phaser.Scene {
     const sb = SHOP_BUTTON;
     this.panel(g, sb.x, sb.y, sb.w, sb.h, this.shopOpen ? '#4a5876' : '#33405a');
     this.coin(g, sb.x + 20, sb.y + 23, 10);
-    this.t('shop-label', sb.x + 36, sb.y + 10, 'Shop', 16, UI.text, 'left', true);
+    this.t('shop-label', sb.x + 36, sb.y + 10, t('shop'), 16, UI.text, 'left', true);
     this.t('shop-key', sb.x + 36, sb.y + 31, '[B]', 11, UI.dim, 'left', true);
 
     // The item actives: Dash (Phase Boots) on D, Flask on H (F is the hub's full screen key), the ward on V.
@@ -1402,7 +1429,7 @@ export class GameScene extends Phaser.Scene {
     const up = UPGRADE_PANEL;
     if (offer) {
       this.goldFrame(g, up.x, up.y, up.w, up.h, true);
-      this.t('up-head', up.x + 8, up.y + 6, `LEVEL ${offer.level} · CHOOSE AN UPGRADE`, 9, UI.gold, 'left', true);
+      this.t('up-head', up.x + 8, up.y + 6, t('chooseUpgrade', { level: offer.level }), 9, UI.gold, 'left', true);
       const n = offer.options.length;
       offer.options.forEach((id, i) => {
         const u = upgradeById(id)!;
@@ -1414,24 +1441,24 @@ export class GameScene extends Phaser.Scene {
           g.fillStyle(col(UI.goldDeep), 1).fillRect(r.x + 4, r.y + 5, 19, 19);
           g.fillStyle(col(UI.gold), 1).fillRect(r.x + 5, r.y + 6, 17, 17);
           this.t(`up-key-${i}`, r.x + 13.5, r.y + 7, u.key, 11, '#3a2a08', 'center', true);
-          this.t(`up-name-${i}`, r.x + 28, r.y + 2, u.name, 11, UI.text, 'left', true);
-          this.t(`up-desc-${i}`, r.x + 28, r.y + 16, u.desc, 9, UI.dim);
+          this.t(`up-name-${i}`, r.x + 28, r.y + 2, t(u.name), 11, UI.text, 'left', true);
+          this.t(`up-desc-${i}`, r.x + 28, r.y + 16, upgradeText(u, c), 9, UI.dim);
         } else {
           g.fillStyle(col(UI.goldDeep), 1).fillRect(r.x + 5, r.y + 8, 24, 26);
           g.fillStyle(col(UI.gold), 1).fillRect(r.x + 6, r.y + 9, 22, 24);
           this.t(`up-key-${i}`, r.x + 17, r.y + 13, u.key, 14, '#3a2a08', 'center', true);
-          this.t(`up-name-${i}`, r.x + 36, r.y + 6, u.name, 12, UI.text, 'left', true);
-          this.t(`up-desc-${i}`, r.x + 36, r.y + 23, u.desc, 9, UI.dim);
+          this.t(`up-name-${i}`, r.x + 36, r.y + 6, t(u.name), 12, UI.text, 'left', true);
+          this.t(`up-desc-${i}`, r.x + 36, r.y + 23, upgradeText(u, c), 9, UI.dim);
         }
         this.t(`up-num-${i}`, r.x + r.w - 6, r.y + (n === 3 ? 3 : 6), String(i + 1), 9, i === 2 ? UI.gold : UI.muted, 'right', true);
       });
     } else {
       this.panel(g, up.x, up.y, up.w, up.h, UI.slate);
       const nextLevel = me.level + 1;
-      this.t('up-head', up.x + 10, up.y + 8, 'UPGRADES', 9, UI.goldDeep, 'left', true);
-      const chosen = me.upgrades.map((id) => upgradeById(id)?.name ?? id);
-      this.t('up-chosen', up.x + 10, up.y + 26, chosen.length ? chosen.join('\n') : 'None yet', 10, chosen.length ? UI.text : UI.muted, 'left', true);
-      const nextText = me.level >= MAX_LEVEL ? 'All levels reached' : ULT_RANK_LEVELS.includes(nextLevel) ? `Level ${nextLevel} ranks up R` : `Next at level ${nextLevel}`;
+      this.t('up-head', up.x + 10, up.y + 8, t('upgradesHead'), 9, UI.goldDeep, 'left', true);
+      const chosen = me.upgrades.map((id) => { const u = upgradeById(id); return u ? t(u.name) : id; });
+      this.t('up-chosen', up.x + 10, up.y + 26, chosen.length ? chosen.join('\n') : t('noneYet'), 10, chosen.length ? UI.text : UI.muted, 'left', true);
+      const nextText = me.level >= MAX_LEVEL ? t('allLevels') : t(ULT_RANK_LEVELS.includes(nextLevel) ? 'nextRanksR' : 'nextAt', { level: nextLevel });
       this.t('up-next', up.x + 10, up.y + up.h - 18, nextText, 9, UI.muted);
     }
   }
@@ -1443,8 +1470,8 @@ export class GameScene extends Phaser.Scene {
       g.fillStyle(col(UI.edge), 0.9).fillRect(r.x - 1, r.y - 1, r.w + 2, r.h + 2);
       g.fillStyle(col(UI.slateDark), 0.92).fillRect(r.x, r.y, r.w, r.h);
       g.fillStyle(col(b.color), 1).fillRect(r.x, r.y, 4, r.h);
-      const label = b.id === 'ember' || b.id === 'moss' ? BUFFS[b.id].name : b.id;
-      this.t(`bstrip-${i}`, r.x + 8, r.y + 3, `${label.length > 9 ? label.split(' ')[0] : label} ${Math.ceil(b.ms / 1000)}s`, 10, UI.text, 'left', true);
+      const label = t(b.id === 'ember' || b.id === 'moss' ? BUFFS[b.id].name : (b.id as TextKey));
+      this.t(`bstrip-${i}`, r.x + 8, r.y + 3, t('buffTime', { buff: label.length > 9 ? label.split(' ')[0] : label, s: Math.ceil(b.ms / 1000) }), 10, UI.text, 'left', true);
     });
   }
 
@@ -1573,11 +1600,11 @@ export class GameScene extends Phaser.Scene {
     const p = SHOP_PANEL;
     this.panel(g, p.x, p.y, p.w, p.h, UI.slate);
     g.fillStyle(col(UI.gold), 1).fillRect(p.x + 2, p.y + 2, p.w - 4, 3);
-    this.t('shop-title', p.x + 16, p.y + 8, 'Shop', 18, UI.gold, 'left', true);
+    this.t('shop-title', p.x + 16, p.y + 8, t('shop'), 18, UI.gold, 'left', true);
     const open = me.dead || atShop(me);
     const note = !open
-      ? 'Return to your Nexus (or recall with T) to buy items, or shop while you wait to respawn.'
-      : `Gold ${Math.floor(me.gold)}. Bag ${me.items.length}/${MAX_ITEMS}. Wards ${me.wards}/${WARD.carry}. ${me.dead ? 'You can shop while you wait to respawn.' : 'Parts you own build into bigger items and come off their price.'}`;
+      ? t('shopClosed')
+      : t(me.dead ? 'shopDead' : 'shopOpen', { gold: Math.floor(me.gold), items: me.items.length, maxItems: MAX_ITEMS, wards: me.wards, maxWards: WARD.carry });
     this.t('shop-note', p.x + 90, p.y + 14, note, 11, open ? UI.dim : UI.red);
     ITEMS.forEach((item, i) => {
       const r = shopRow(i);
@@ -1594,25 +1621,25 @@ export class GameScene extends Phaser.Scene {
       g.fillStyle(col(UI.edge), 1).fillPoints([new Phaser.Math.Vector2(cx, cy - 12), new Phaser.Math.Vector2(cx + 11, cy), new Phaser.Math.Vector2(cx, cy + 12), new Phaser.Math.Vector2(cx - 11, cy)], true);
       g.fillStyle(col(itemTint(item)), has ? 0.4 : 1).fillPoints([new Phaser.Math.Vector2(cx, cy - 10), new Phaser.Math.Vector2(cx + 9, cy), new Phaser.Math.Vector2(cx, cy + 10), new Phaser.Math.Vector2(cx - 9, cy)], true);
       g.fillStyle(0xffffff, has ? 0.15 : 0.4).fillTriangle(cx, cy - 10, cx - 9, cy, cx, cy);
-      this.t(`shop-name-${i}`, r.x + 34, r.y + 5, item.name, 12, has ? UI.muted : UI.text, 'left', true);
-      const label = has ? 'Owned' : !fits ? (item.ward ? 'Carrying 2' : 'Bag full') : `${price}g`;
+      this.t(`shop-name-${i}`, r.x + 34, r.y + 5, t(item.name), 12, has ? UI.muted : UI.text, 'left', true);
+      const label = has ? t('owned') : !fits ? (item.ward ? t('carrying', { n: WARD.carry }) : t('bagFull')) : t('price', { gold: price });
       this.t(`shop-price-${i}`, r.x + 34, r.y + 20, label, 11, has || !fits ? UI.muted : afford ? UI.gold : UI.red, 'left', true);
-      if (!has && parts.length) this.t(`shop-save-${i}`, r.x + r.w - 8, r.y + 20, `-${item.cost - price}g parts`, 9, UI.green, 'right', true);
+      if (!has && parts.length) this.t(`shop-save-${i}`, r.x + r.w - 8, r.y + 20, t('partsOff', { gold: item.cost - price }), 9, UI.green, 'right', true);
       this.t(`shop-desc-${i}`, r.x + 10, r.y + 37, describe(item), 10, UI.dim);
       const into = ITEMS.filter((it) => it.from?.includes(item.id));
       const recipe = drinking
-        ? `Active: ${clock(drinking.ms)} left`
+        ? t('elixirActive', { time: clock(drinking.ms) })
         : item.elixir
-          ? `Elixir: ${ELIXIR.ms / 60_000} minutes, one at a time`
+          ? t('elixirNote', { n: ELIXIR.ms / 60_000 })
           : item.ward
-            ? `Consumable: carrying ${me.wards} of ${WARD.carry}`
+            ? t('wardNote', { n: me.wards, max: WARD.carry })
             : item.from
-              ? `From ${item.from.map((id) => ITEMS.find((it) => it.id === id)?.name ?? id).join(' + ')}`
+              ? t('buildsFrom', { parts: item.from.map((id) => { const part = ITEMS.find((it) => it.id === id); return part ? t(part.name) : id; }).join(' + ') })
               : into.length === 1
-                ? `Builds into ${into[0].name}`
+                ? t('buildsInto', { item: t(into[0].name) })
                 : into.length
-                  ? `Builds into ${into.length} items`
-                  : 'Active item';
+                  ? t('buildsIntoMany', { n: into.length })
+                  : t('activeItem');
       this.t(`shop-recipe-${i}`, r.x + 10, r.y + 54, recipe, 9, item.from ? UI.gold : UI.muted, 'left', !!item.from);
     });
   }
@@ -1624,13 +1651,13 @@ export class GameScene extends Phaser.Scene {
     g.fillStyle(col(UI.gold), 1).fillRect(p.x + 2, p.y + 2, p.w - 4, 3);
     const won = s.winner === 'blue';
     if (watching) {
-      this.t('end-title', VIEW.w / 2, p.y + 22, won ? 'Blue wins' : 'Red wins', 34, won ? SIDE_COLOR.blue : SIDE_COLOR.red, 'center', true);
-      this.t('end-sub', VIEW.w / 2, p.y + 72, won ? 'The red Nexus has fallen.' : 'The blue Nexus has fallen.', 13, UI.dim, 'center');
+      this.t('end-title', VIEW.w / 2, p.y + 22, t(won ? 'blueWins' : 'redWins'), 34, won ? SIDE_COLOR.blue : SIDE_COLOR.red, 'center', true);
+      this.t('end-sub', VIEW.w / 2, p.y + 72, t(won ? 'redNexusFell' : 'blueNexusFell'), 13, UI.dim, 'center');
     } else {
-      this.t('end-title', VIEW.w / 2, p.y + 22, won ? 'Victory' : 'Defeat', 34, won ? UI.green : UI.red, 'center', true);
-      this.t('end-sub', VIEW.w / 2, p.y + 72, won ? 'The red Nexus has fallen.' : 'Your Nexus has fallen.', 13, UI.dim, 'center');
+      this.t('end-title', VIEW.w / 2, p.y + 22, t(won ? 'victory' : 'defeat'), 34, won ? UI.green : UI.red, 'center', true);
+      this.t('end-sub', VIEW.w / 2, p.y + 72, t(won ? 'redNexusFell' : 'yourNexusFell'), 13, UI.dim, 'center');
     }
-    this.t('end-stats', VIEW.w / 2, p.y + 94, `${this.player()?.kills ?? 0} kills, ${this.player()?.deaths ?? 0} deaths   Objectives ${s.objectivesDone}   Last hits ${s.lastHits}   Best streak x${s.bestStreak}   Beasts ${s.beastKills.blue}`, 11, UI.muted, 'center');
+    this.t('end-stats', VIEW.w / 2, p.y + 94, t('endStats', { kills: t('kills', { n: this.player()?.kills ?? 0 }), deaths: t('deaths', { n: this.player()?.deaths ?? 0 }), objectives: s.objectivesDone, lastHits: s.lastHits, streak: s.bestStreak, beasts: s.beastKills.blue }), 11, UI.muted, 'center');
     // A win counts toward the class's mastery, once per match.
     const me = this.player();
     if (!watching && won && me?.champ) {
@@ -1641,10 +1668,11 @@ export class GameScene extends Phaser.Scene {
       const wins = this.winCounted;
       const rank = masteryRank(wins);
       const next = MASTERY_WINS[rank];
-      const line = `${me.champ.short} mastery rank ${rank}: ${wins} ${wins === 1 ? 'win' : 'wins'}${next ? `, rank ${rank + 1} at ${next}` : ', fully mastered'}`;
+      const winsLine = t('mastery', { name: me.champ.short, rank, n: wins });
+      const line = next ? t('masteryNext', { line: winsLine, rank: rank + 1, n: next }) : t('masteryFull', { line: winsLine });
       this.t('end-mastery', VIEW.w / 2, p.y + 112, line, 11, UI.gold, 'center', true);
     }
     this.panel(g, PLAY_AGAIN.x, PLAY_AGAIN.y, PLAY_AGAIN.w, PLAY_AGAIN.h, '#4a5876');
-    this.t('again-label', PLAY_AGAIN.x + PLAY_AGAIN.w / 2, PLAY_AGAIN.y + 12, watching ? 'Watch another' : 'Play again', 16, UI.text, 'center', true);
+    this.t('again-label', PLAY_AGAIN.x + PLAY_AGAIN.w / 2, PLAY_AGAIN.y + 12, t(watching ? 'watchAnother' : 'playAgain'), 16, UI.text, 'center', true);
   }
 }

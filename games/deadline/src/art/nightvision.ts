@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { CRATES, CRATE_KINDS, DRUM, HUD_HEIGHT, REACH_Y, SUPPLY_KINDS, VIEW, type CrateKind, type SupplyKind } from '../game/rules';
+import { t } from '../i18n';
 import { GEOM, GRAIN_TILE, TAU, bake, canvas, rgba, rng, tex, type Ctx } from './paint';
 import { CRATE_COLORS, NV } from './theme';
 
@@ -288,7 +289,7 @@ function brackets(ctx: Ctx, x: number, y: number, w: number, h: number, color: s
 }
 
 function crateLabel(ctx: Ctx, kind: CrateKind) {
-  const label = CRATES[kind].label.toUpperCase();
+  const label = t(CRATES[kind].label).toUpperCase();
   ctx.font = `800 10px ${NV.canvasFont}`;
   const w = ctx.measureText(label).width + 18;
   ctx.beginPath();

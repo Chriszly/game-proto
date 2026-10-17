@@ -1,5 +1,6 @@
 import { KINDS, kindOf, type IsleKind, type KindInfo } from './kinds';
-import { FEATURE_BONUS, GRID, WOOD_MIN, inGrid, indexOf, neighbours, type Feature, type Find, type Point, type Riddle, type Tile } from './state';
+import type { TextKey } from '../i18n';
+import { FEATURE_BONUS, GRID, WOOD_MIN, inGrid, indexOf, neighbours, type Clue, type Feature, type Find, type Ground, type Point, type Riddle, type Tile } from './state';
 import type { Terrain } from './terrain';
 
 /** How many of each find an isle hides, and the tiles each can hide under. */
@@ -114,9 +115,10 @@ function tryIsland(number: number, kind: IsleKind, k: KindInfo): Island | null {
 
 // ---- Features: the rivers, roads and woods that pay a bonus once charted whole.
 
-const RIVER_NAMES = ['Otter Brook', 'Heron Water', 'Mill Stream', 'Alder Burn', 'Kestrel Run', 'Fox Beck'];
-const ROAD_NAMES = ['Port Road', 'Old Road', "Drovers' Way", 'Salt Road'];
-export const WOOD_NAMES = ['Thornwood', 'Ashgrove', 'Elder Wood', 'Blackthorn', 'Hazel Holt', 'Rook Wood'];
+// Keys of `i18n/en.ts`: the state keeps the key, and the scene shows it with `t`.
+const RIVER_NAMES: TextKey[] = ['otterBrook', 'heronWater', 'millStream', 'alderBurn', 'kestrelRun', 'foxBeck'];
+const ROAD_NAMES: TextKey[] = ['portRoad', 'oldRoad', 'droversWay', 'saltRoad'];
+export const WOOD_NAMES: TextKey[] = ['thornwood', 'ashgrove', 'elderWood', 'blackthorn', 'hazelHolt', 'rookWood'];
 
 /**
  * Finds the island's features in its terrain: each stretch of river, road or forest joined side to
@@ -261,30 +263,28 @@ function addRoad(terrain: Terrain[], port: Point) {
 
 // ---- The treasure riddle.
 
-interface Clue {
-  text: string;
+/** A clue, and whether a tile at (x, y) fits it. */
+interface Candidate {
+  clue: Clue;
   holds: (x: number, y: number) => boolean;
 }
 
-const NUMBER = ['', 'One tile', 'Two tiles', 'Three tiles'];
-const DIRS: { name: string; dx: number; dy: number }[] = [
-  { name: 'north', dx: 0, dy: -1 },
-  { name: 'east', dx: 1, dy: 0 },
-  { name: 'south', dx: 0, dy: 1 },
-  { name: 'west', dx: -1, dy: 0 },
+const DIRS: { dir: 'north' | 'east' | 'south' | 'west'; dx: number; dy: number }[] = [
+  { dir: 'north', dx: 0, dy: -1 },
+  { dir: 'east', dx: 1, dy: 0 },
+  { dir: 'south', dx: 0, dy: 1 },
+  { dir: 'west', dx: -1, dy: 0 },
 ];
-const MARKS: { terrain: Terrain; name: string }[] = [
-  { terrain: 'mountain', name: 'a peak' },
-  { terrain: 'village', name: 'a village' },
-  { terrain: 'ruins', name: 'the ruins' },
-  { terrain: 'port', name: 'the port' },
-];
-const GROUND: Partial<Record<Terrain, string>> = {
-  grass: 'on a meadow',
-  forest: 'in a forest',
-  beach: 'on the sand',
-  hills: 'on the hills',
-};
+const MARKS: ('mountain' | 'village' | 'ruins' | 'port')[] = ['mountain', 'village', 'ruins', 'port'];
+const GROUND: Ground[] = ['grass', 'forest', 'beach', 'hills'];
+/**
+ * The order the landmark clues are tried in, each list best first: two tiles off reads better than
+ * three, and three better than one. (It is the order of their English wording, from Z to A, which
+ * picked the clues before they were translated, so every island keeps its riddle.)
+ */
+const TILES_ORDER = [2, 3, 1];
+const DIR_ORDER = ['west', 'south', 'north', 'east'];
+const MARK_ORDER = ['ruins', 'port', 'village', 'mountain'];
 
 /**
  * Picks a hidden tile and two or three clues that point at it and at no other tile you could dig
@@ -295,34 +295,36 @@ function makeRiddle(tiles: Tile[], port: Point): Riddle | null {
   const diggable: Point[] = [];
   for (let y = 0; y < GRID.h; y++) for (let x = 0; x < GRID.w; x++) if (T(x, y) !== 'sea' && T(x, y) !== 'port') diggable.push({ x, y });
   const spots = diggable.filter(
-    (p) => GROUND[T(p.x, p.y)] && !tiles[indexOf(p.x, p.y)].find && Math.abs(p.x - port.x) + Math.abs(p.y - port.y) >= 4,
+    (p) => GROUND.includes(T(p.x, p.y) as Ground) && !tiles[indexOf(p.x, p.y)].find && Math.abs(p.x - port.x) + Math.abs(p.y - port.y) >= 4,
   );
   const by = (x: number, y: number, t: Terrain) => neighbours(x, y).some((n) => T(n.x, n.y) === t);
   const start = spots.length ? Math.floor(Math.random() * spots.length) : 0;
   for (let k = 0; k < spots.length; k++) {
     const at = spots[(start + k) % spots.length];
-    const ground = T(at.x, at.y);
-    const placed: Clue[] = [];
-    for (const m of MARKS) {
+    const ground = T(at.x, at.y) as Ground;
+    const placed: Candidate[] = [];
+    for (const mark of MARKS) {
       for (const d of DIRS) {
         for (let n = 1; n <= 3; n++) {
-          const holds = (x: number, y: number) => T(x - n * d.dx, y - n * d.dy) === m.terrain;
-          if (holds(at.x, at.y)) placed.push({ text: `${NUMBER[n]} ${d.name} of ${m.name}`, holds });
+          const holds = (x: number, y: number) => T(x - n * d.dx, y - n * d.dy) === mark;
+          if (holds(at.x, at.y)) placed.push({ clue: { kind: 'from', tiles: n, dir: d.dir, mark }, holds });
         }
       }
     }
-    const traits: Clue[] = [{ text: GROUND[ground]!, holds: (x, y) => T(x, y) === ground }];
-    if (by(at.x, at.y, 'sea')) traits.push({ text: 'by the water', holds: (x, y) => by(x, y, 'sea') });
-    else traits.push({ text: 'out of sight of the sea', holds: (x, y) => !by(x, y, 'sea') });
-    if (by(at.x, at.y, 'river')) traits.push({ text: 'beside a river', holds: (x, y) => by(x, y, 'river') });
-    // Two tiles further off reads better than one; the fewest clues that leave one tile win.
-    placed.sort((a, b) => b.text.localeCompare(a.text));
-    const unique = (cs: Clue[]) => diggable.filter((p) => cs.every((c) => c.holds(p.x, p.y))).length === 1;
-    const sets: Clue[][] = [];
+    const traits: Candidate[] = [{ clue: { kind: 'ground', ground }, holds: (x, y) => T(x, y) === ground }];
+    if (by(at.x, at.y, 'sea')) traits.push({ clue: { kind: 'water' }, holds: (x, y) => by(x, y, 'sea') });
+    else traits.push({ clue: { kind: 'inland' }, holds: (x, y) => !by(x, y, 'sea') });
+    if (by(at.x, at.y, 'river')) traits.push({ clue: { kind: 'river' }, holds: (x, y) => by(x, y, 'river') });
+    // Landmark clues are tried in the order above; the fewest clues that leave one tile win.
+    const rank = (c: Clue) =>
+      c.kind === 'from' ? TILES_ORDER.indexOf(c.tiles) * 100 + DIR_ORDER.indexOf(c.dir) * 10 + MARK_ORDER.indexOf(c.mark) : 0;
+    placed.sort((a, b) => rank(a.clue) - rank(b.clue));
+    const unique = (cs: Candidate[]) => diggable.filter((p) => cs.every((c) => c.holds(p.x, p.y))).length === 1;
+    const sets: Candidate[][] = [];
     for (const p of placed) for (const t of traits) sets.push([p, t]);
     for (const p of placed) for (let i = 0; i < traits.length; i++) for (let j = i + 1; j < traits.length; j++) sets.push([p, traits[i], traits[j]]);
     const set = sets.find(unique);
-    if (set) return { at, clues: set.map((c) => c.text), known: false, found: false };
+    if (set) return { at, clues: set.map((c) => c.clue), known: false, found: false };
   }
   return null;
 }

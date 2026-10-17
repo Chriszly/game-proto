@@ -61,7 +61,7 @@ interface GameState {
   storms: Point[];
   artifacts: number;
   treasure: number;
-  riddle: { at: Point; clues: string[]; known: boolean; found: boolean } | null;
+  riddle: { at: Point; clues: unknown[]; known: boolean; found: boolean } | null;
   dug: Point[];
   features: { kind: 'river' | 'road' | 'wood'; name: string; tiles: Point[]; bonus: number }[];
   rival: unknown | null;
