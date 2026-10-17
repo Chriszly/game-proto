@@ -1,6 +1,6 @@
 /** The run's state and the numbers that shape it. The rules that change it are in `sim.ts`. */
 import { byDifficulty } from '../../../../shared/settings';
-import { HEROES, type HeroId } from './heroes';
+import { HEROES, isKnight, type HeroId } from './heroes';
 import { at, capstonesOf, crossoversOf } from './upgrades';
 import type { EventId, FoeKind, NodeKind } from './planets';
 import type { TextKey } from '../i18n';
@@ -104,6 +104,14 @@ export interface Enemy {
   aimX: number;
   aimY: number;
   phase2: boolean;
+  /** Held in a knight's Grip: ms until it is crushed, and for how much. */
+  gripMs: number;
+  gripDmg: number;
+  /** Ms it runs from the hero (Dread), or fights on the hero's side (Persuasion). */
+  fleeMs: number;
+  charmMs: number;
+  /** Ms before an orbiting blade or a turned foe can hit it again. */
+  orbitMs: number;
 }
 
 /**
@@ -111,7 +119,7 @@ export interface Enemy {
  * or a mini rocket; or a hostile one: a droid shell, a slowing glob, a trooper's volley bolt or a
  * walker's slug.
  */
-export type BoltColor = HeroId | 'drone' | 'shell' | 'heavy' | 'rocket' | 'glob' | 'volley' | 'slug';
+export type BoltColor = HeroId | 'drone' | 'shell' | 'heavy' | 'rocket' | 'glob' | 'volley' | 'slug' | 'fallen';
 
 export interface Bullet {
   id: number;
@@ -134,6 +142,36 @@ export interface Bullet {
   /** A bolt that has bounced: Ricochet's tier 3 makes it hit harder. */
   bounced: boolean;
   r: number;
+  /** A thrown blade: drawn spinning, flies out for `ret` ms, then comes `back` to the hero. */
+  spin: boolean;
+  ret: number;
+  back: boolean;
+  /** A spitter toad's glob (counted for Elder Corvin Hale's deed). */
+  toad: boolean;
+  /** Ms before a thrown blade can cut the boss it is passing through again. */
+  bossMs: number;
+}
+
+/** A blade's swing on screen: an arc (a full ring when `half` is pi) that fades. */
+export interface Slash {
+  id: number;
+  x: number;
+  y: number;
+  r: number;
+  a: number;
+  half: number;
+  color: string;
+  ms: number;
+  maxMs: number;
+}
+
+/** A bolt of lightning on screen, through these points (x, y pairs). */
+export interface Zap {
+  id: number;
+  pts: number[];
+  color: string;
+  ms: number;
+  maxMs: number;
 }
 
 export interface Shard {
@@ -159,7 +197,7 @@ export interface Blast {
 /** Something that goes off later: a timed charge, a thrown grenade, a falling crate. */
 export interface Bomb {
   id: number;
-  kind: 'charge' | 'grenade' | 'frag' | 'crate' | 'orbital' | 'bomblet' | 'carpet';
+  kind: 'charge' | 'grenade' | 'frag' | 'crate' | 'orbital' | 'bomblet' | 'carpet' | 'wreck' | 'ship';
   x: number;
   y: number;
   /** Where a thrown bomb flies from (for drawing its arc). */
@@ -187,8 +225,12 @@ export interface Fire {
   dps: number;
 }
 
-/** Allies; the escort is the stranded droid of the event, for one planet. */
-export type AllyKind = 'trooper' | 'brother' | 'sentry' | 'drone' | 'escort';
+/**
+ * Allies; the escort is the stranded droid of the event, for one planet. The knights': Kael's
+ * strafing starfighter, his Squadron Run fighters and droid co-pilot, Oom's spirits and Veyl's
+ * puppets.
+ */
+export type AllyKind = 'trooper' | 'brother' | 'sentry' | 'drone' | 'escort' | 'fighter' | 'squadron' | 'copilot' | 'spirit' | 'puppet';
 
 export interface Ally {
   id: number;
@@ -199,8 +241,10 @@ export interface Ally {
   cdMs: number;
   lifeMs: number;
   slot: number;
-  /** Aim angle, for drawing. */
+  /** Aim angle, for drawing (a strafing fighter's heading). */
   aim: number;
+  /** A puppet risen from an elite (Court of Puppets) hits harder. */
+  elite?: boolean;
 }
 
 export interface Pickup {
@@ -288,6 +332,34 @@ export interface Hero {
   /** Slowed (by a glob or a bog pool): ms left and how much. */
   slowMs: number;
   slowPct: number;
+  /** Body radius, px. */
+  r: number;
+  /** A dash: 'jet' (Bram), 'blade' (cuts through foes), 'leap' and 'hunt' (onto `dashTarget`). */
+  dashKind: 'jet' | 'blade' | 'leap' | 'hunt';
+  dashSpeed: number;
+  dashDmg: number;
+  dashTarget: number;
+  /** Foes this dash (and its chained hops) already cut, and hops left. */
+  dashHit: number[];
+  chain: number;
+  /** Kael's Temper, 0 to 100. */
+  temper: number;
+  /** A barrier that takes hits first (Life Support, the Council ward); ms since the last hit. */
+  barrier: number;
+  barrierMs: number;
+  /** Hits landed (Joren's Edge), ms standing still (Stillness, Vantage) and ms of Oom's push charged. */
+  hits: number;
+  stillMs: number;
+  charge: number;
+  /** Kael's kill streak (Perfect Form): kills, ms since the last, and ms of form left. */
+  streak: number;
+  streakMs: number;
+  formMs: number;
+  /** Kresh: times risen (Rebuilt) and ms of his kill speed boost. */
+  rises: number;
+  hasteMs: number;
+  /** Unbreakable used on this planet. */
+  saved: boolean;
 }
 
 export interface GameState {
@@ -355,13 +427,30 @@ export interface GameState {
   /** Signature uses this run. */
   signatures: number;
   nextId: number;
+  /** The knights' swings and lightning on screen. */
+  slashes: Slash[];
+  zaps: Zap[];
+  /** The foe Kresh hunts (its id, 0 for none). */
+  mark: number;
+  /** Corvin's raised platform (Vantage). */
+  platform: { x: number; y: number; r: number } | null;
+  /** Hits taken from spitter toad globs on this planet, and whether the Swamp was cleared with few. */
+  globHits: number;
+  cleanSwamp: boolean;
+  /** Elite arenas won this run. */
+  arenaWins: number;
+  /** Heroes unlocked before this run, and the ones whose deeds this run did. */
+  known: HeroId[];
+  deeds: HeroId[];
 }
 
 export function freshHero(): Hero {
   return {
     x: 0, y: 0, hp: 100, maxHp: 100, facing: 0, aim: 0, moving: false,
     sigMs: 0, sigActiveMs: 0, fireMs: 400, side: 0, shots: 0, dashMs: 0, dashAngle: 0, hurtMs: 0, regen: 0,
-    slowMs: 0, slowPct: 0,
+    slowMs: 0, slowPct: 0, r: HERO_R, dashKind: 'jet', dashSpeed: 750, dashDmg: 0, dashTarget: 0, dashHit: [], chain: 0,
+    temper: 0, barrier: 0, barrierMs: 0, hits: 0, stillMs: 0, charge: 0, streak: 0, streakMs: 0, formMs: 0, rises: 0, hasteMs: 0,
+    saved: false,
   };
 }
 
@@ -417,6 +506,15 @@ export function freshState(): GameState {
     damageTaken: 0,
     signatures: 0,
     nextId: 1,
+    slashes: [],
+    zaps: [],
+    mark: 0,
+    platform: null,
+    globHits: 0,
+    cleanSwamp: false,
+    arenaWins: 0,
+    known: [],
+    deeds: [],
   };
 }
 
@@ -442,7 +540,20 @@ export interface Stats {
   seek: boolean;
   slowPct: number;
   slowMs: number;
+  /** How far the knights' attacks reach (1 = as drawn), dodge chance and the signature's cooldown factor. */
+  reach: number;
+  dodge: number;
+  sigCooldown: number;
 }
+
+/** Whether the hero stands on Corvin's raised platform. */
+export function onPlatform(s: GameState) {
+  const pl = s.platform;
+  return !!pl && Math.hypot(s.player.x - pl.x, s.player.y - pl.y) <= pl.r;
+}
+
+/** Kael's Temper is full. */
+export const fullTemper = (s: GameState) => s.hero === 'kael' && s.player.temper >= 100;
 
 export function statsOf(s: GameState): Stats {
   const hero = HEROES[s.hero ?? 'rook'];
@@ -454,22 +565,83 @@ export function statsOf(s: GameState): Stats {
   let pierce = at([1, 1, 2, 2, 3], r('overcharge'), 0) + at([1, 1, 3, 3, 5], r('marksman'), 0);
   if (cap('longshot')) pierce = 999;
   const bounces = at([1, 2, 2, 3, 4], r('ricochet'), 0) + (r('gunslinger') >= 2 ? 1 : 0) + (r('gunslinger') >= 5 ? 1 : 0);
+  const k = s.hero ? knightMods(s) : NO_MODS;
   return {
-    speed: hero.speed * (1 + 0.08 * r('boots')),
+    speed: hero.speed * (1 + 0.08 * r('boots')) * k.speed,
     pickup: PICKUP_R * (1 + 0.3 * r('magnet')),
-    armour: 0.08 * r('armour'),
-    maxHp: Math.round((hero.maxHp + 10 * r('armour')) * s.maxHpMod),
-    regen: 0.5 * r('medpack'),
+    armour: 0.08 * r('armour') + k.armour,
+    maxHp: Math.round((hero.maxHp + 10 * r('armour') + k.hp) * s.maxHpMod),
+    regen: 0.5 * r('medpack') + k.regen,
     cooldown: 1 - 0.07 * r('overclock'),
-    damage: (1 + 0.1 * r('cell')) * (1 + at([0, 0.1, 0.1, 0.2, 0.2], r('overcharge'), 0)) * (1 + at([0, 0.25, 0.25, 0.25, 0.75], r('marksman'), 0)),
+    damage: (1 + 0.1 * r('cell')) * (1 + at([0, 0.1, 0.1, 0.2, 0.2], r('overcharge'), 0)) * (1 + at([0, 0.25, 0.25, 0.25, 0.75], r('marksman'), 0)) * k.damage,
     xp: 1 + 0.1 * r('lens'),
-    crit: 0.06 * r('chip'),
+    crit: 0.06 * r('chip') + k.crit,
     fireRate,
     pierce,
     bounces,
     seek: cross('seeking-ricochets'),
     slowPct: at([0.25, 0.3, 0.35, 0.4, 0.5], r('stun'), 0),
     slowMs: r('stun') >= 3 ? 2000 : 1500,
+    reach: k.reach,
+    dodge: k.dodge,
+    sigCooldown: (1 - 0.07 * r('overclock')) * k.sig,
+  };
+}
+
+const NO_MODS = { speed: 1, armour: 0, hp: 0, regen: 0, damage: 1, crit: 0, reach: 1, dodge: 0, sig: 1 };
+
+/** What the knights' pools and paths add to the stats (all neutral for a soldier). */
+function knightMods(s: GameState) {
+  if (!isKnight(s.hero!)) return NO_MODS;
+  const hero = HEROES[s.hero!];
+  const p = s.player;
+  const r = (id: string) => s.ranks[id] ?? 0;
+  const cap = (id: string) => s.capstones.includes(id);
+  const low = p.maxHp > 0 && p.hp < p.maxHp * 0.3;
+  let speed = 1;
+  let damage = 1 + (r('wide-arc') >= 5 ? 0.2 : 0);
+  let reach = 1 + at([0.15, 0.3, 0.45, 0.6, 0.8], r('wide-arc'), 0);
+  let sig = 1 - 0.1 * r('calm-mind');
+  // Rage: up to its bonus as health runs out (all of it at full Temper with Fury Unbound).
+  const missing = p.maxHp > 0 ? Math.max(0, 1 - p.hp / p.maxHp) : 0;
+  const rage = s.crossovers.includes('fury-unbound') && fullTemper(s) ? 1 : missing;
+  damage *= 1 + at([0.15, 0.3, 0.45, 0.6, 0.75], r('rage'), 0) * rage;
+  if (s.hero === 'kael') {
+    reach += r('prodigy') >= 1 ? 0.25 : 0;
+    if (r('the-fall') >= 4) speed *= 1.15;
+    if (cap('hollow-rebirth')) speed *= 0.85;
+    // Temper: up to +25% damage, or double at full Temper on The Fall.
+    damage *= fullTemper(s) && r('the-fall') >= 2 ? 2 : 1 + 0.25 * (p.temper / 100);
+  } else if (s.hero === 'vharn') {
+    if (low) damage *= 1 + at([0, 0, 0.4, 0.4, 0.8], r('life-support'), 0);
+  } else if (s.hero === 'oom') {
+    if (r('whirlwind') >= 4) sig *= 0.7;
+  } else if (s.hero === 'corvin') {
+    if (onPlatform(s)) {
+      damage *= 1 + at([0.2, 0.2, 0.4, 0.4, 0.6], r('vantage'), 0);
+      reach += at([0, 0.2, 0.2, 0.2, 0.4], r('vantage'), 0);
+    }
+  } else if (s.hero === 'veyl') {
+    damage *= 1 + at([0.3, 0.3, 0.5, 0.5, 0.8], r('dark-bargain'), 0);
+    if (r('storm') >= 4) damage *= 1.3;
+  } else if (s.hero === 'kresh') {
+    if (p.rises > 0) speed *= r('rebuilt') >= 5 ? 1.25 : 1.2;
+    if (p.hasteMs > 0) speed *= 1.15;
+    if (r('stalker') >= 4) sig *= 0.7;
+    if (cap('steel-strider')) damage *= 1 + 0.25 * p.rises;
+  } else if (s.hero === 'joren') {
+    if (r('breaker') >= 5) sig *= 0.6;
+  }
+  return {
+    speed,
+    armour: (hero.armour ?? 0) + (cap('hollow-rebirth') ? 0.3 : 0),
+    hp: (r('rebuilt') >= 2 ? 20 : 0) + (cap('hollow-rebirth') ? 60 : 0),
+    regen: at([0.6, 1.2, 1.8, 2.4, 3], r('mending'), 0) + (s.hero === 'vharn' && low && r('life-support') >= 5 ? 2 : 0),
+    damage,
+    crit: 0.05 * r('focus'),
+    reach,
+    dodge: 0.06 * r('foresight'),
+    sig,
   };
 }
 

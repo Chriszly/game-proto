@@ -7,13 +7,14 @@ const en: HowToPlay = {
   controls: [
     { input: 'WASD / arrow keys, or hold the mouse on the field', action: 'Walk (toward where you hold)' },
     { input: 'Touch: put a finger down anywhere and drag', action: 'A steering stick appears under it; walk the way you drag' },
-    { input: 'Nothing', action: 'Your weapon fires on its own' },
+    { input: 'Nothing', action: 'Your weapon fires, or your blade strikes, on its own' },
     { input: 'Space, or the round button bottom right', action: 'Signature move, when charged' },
-    { input: 'Tap a card, or 1 / 2 / 3', action: 'Choose a hero, an upgrade, a star map node, an offer or an answer' },
+    { input: 'Tap a hero, or 1-9 and 0; then Fight, or Enter', action: 'Choose a hero and start' },
+    { input: 'Tap a card, or 1 / 2 / 3', action: 'Choose an upgrade, a star map node, an offer or an answer' },
     { input: '4 / Enter at the trader', action: 'Reroll the offers / leave' },
   ],
   loop: [
-    'Pick one of three soldiers: Captain Rook, Legionary TR-9 or Corporal Bram-17.',
+    'Pick a hero: one of three soldiers with blasters, or one of seven blade knights once you have unlocked him.',
     'Keep moving: foes come at you from every side, and your weapon shoots them down.',
     'Walk over the green lumen shards they drop to fill the XP bar. Each level-up pauses the run on three cards.',
     'At 5:00 the planet\'s boss comes. Beat it, and your hero, level and kit carry on to the next world.',
@@ -25,6 +26,8 @@ const en: HowToPlay = {
     'Swamp toads spit slowing globs, Ice troopers fire in volleys, fallen knights block shots from the front: hit them while they dash.',
     'Glowing rings on the ground are warnings: step out before they blow. Lava vents erupt on the Lava world.',
     'You hold at most 5 abilities and 4 pieces of gear. A path at tier 5 plus its matching gear unlocks a capstone.',
+    'A locked knight\'s card names the deed that frees him, like reaching the Swamp world or winning an elite arena.',
+    'A card with a link icon completes a crossover: a pool skill and a path that work together.',
   ],
 };
 
@@ -33,13 +36,14 @@ const de: HowToPlay = {
   controls: [
     { input: 'WASD / Pfeiltasten, oder die Maus auf dem Feld halten', action: 'Laufen (dorthin, wo du hältst)' },
     { input: 'Touch: einen Finger irgendwo aufsetzen und ziehen', action: 'Darunter erscheint ein Steuerknüppel; lauf in die Richtung, in die du ziehst' },
-    { input: 'Nichts', action: 'Deine Waffe feuert von selbst' },
+    { input: 'Nichts', action: 'Deine Waffe feuert, oder deine Klinge schlägt zu, von selbst' },
     { input: 'Leertaste, oder der runde Knopf unten rechts', action: 'Spezialangriff, wenn aufgeladen' },
-    { input: 'Karte antippen, oder 1 / 2 / 3', action: 'Einen Helden, ein Upgrade, einen Knoten der Sternenkarte, ein Angebot oder eine Antwort wählen' },
+    { input: 'Einen Helden antippen, oder 1-9 und 0; dann Kämpfen, oder Enter', action: 'Einen Helden wählen und loslegen' },
+    { input: 'Karte antippen, oder 1 / 2 / 3', action: 'Ein Upgrade, einen Knoten der Sternenkarte, ein Angebot oder eine Antwort wählen' },
     { input: '4 / Enter beim Händler', action: 'Angebote neu würfeln / gehen' },
   ],
   loop: [
-    'Wähle einen von drei Soldaten: Hauptmann Rook, Legionär TR-9 oder Korporal Bram-17.',
+    'Wähle einen Helden: einen der drei Soldaten mit Blastern, oder einen der sieben Klingenritter, sobald du ihn freigeschaltet hast.',
     'Bleib in Bewegung: Gegner kommen von allen Seiten, und deine Waffe schießt sie ab.',
     'Lauf über die grünen Lumensplitter, die sie fallen lassen, um die EP-Leiste zu füllen. Jeder Stufenaufstieg hält den Lauf auf drei Karten an.',
     'Bei 5:00 kommt der Boss des Planeten. Besiege ihn, und dein Held, seine Stufe und Ausrüstung ziehen mit zur nächsten Welt.',
@@ -51,6 +55,8 @@ const de: HowToPlay = {
     'Sumpfkröten spucken bremsende Klumpen, Eissoldaten feuern Salven, gefallene Ritter blocken Schüsse von vorn: triff sie, während sie vorstürmen.',
     'Leuchtende Ringe am Boden sind Warnungen: tritt hinaus, bevor sie explodieren. Auf der Lavawelt brechen Lavaschlote aus.',
     'Du hältst höchstens 5 Fähigkeiten und 4 Ausrüstungsteile. Ein Pfad auf Stufe 5 mit der passenden Ausrüstung schaltet eine Krönung frei.',
+    'Die Karte eines gesperrten Ritters nennt die Tat, die ihn freischaltet, etwa die Sumpfwelt zu erreichen oder eine Elite-Arena zu gewinnen.',
+    'Eine Karte mit Kettensymbol vervollständigt eine Kombination: eine Vorratsfähigkeit und ein Pfad, die zusammenwirken.',
   ],
 };
 

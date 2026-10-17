@@ -1,16 +1,18 @@
 import Phaser from 'phaser';
 import { settings } from '../../../../shared/settings';
 import { splitHudCamera, viewPoint } from '../../../../shared/scaling';
-import { HEROES, schemeOf, type HeroId } from '../game/heroes';
+import { HEROES, HERO_IDS, isKnight, schemeOf, type HeroId } from '../game/heroes';
 import { HERO_R, RUN_MS, clock, freshState, statsOf, type GameState } from '../game/state';
 import { choose, inRingGap, phalanxSpots, shieldHalf, startRun, suppressorHalf, suppressorLength } from '../game/sim';
+import { bladeColor, dreadRadius, heroVariant, orbitBlades } from '../game/blades';
 import { buy, chooseEvent, chooseNode, frame, leave, reroll } from '../game/voyage';
 import { ARENA_MS, BOSSES, CHAMPION, PLANETS, SIEGE, VENT, planetLabel } from '../game/planets';
 import { UPGRADES, MAX_TIER } from '../game/upgrades';
-import { loadProgress, recordRun, type Progress } from '../game/save';
+import { isUnlocked, loadProgress, recordRun, recordUnlocks, unlockedHeroes, type Progress } from '../game/save';
 import { C, hex } from '../art/glow';
 import { heroKey } from '../art/sprites';
 import { t } from '../i18n';
+import { bladeKey } from '../art/knights';
 import { Panel, endScreen, eventPanel, heroSelect, levelUp, starMap, trader } from '../ui/panels';
 import {
   BOSS_BAR, CENTER, CREDITS_TAG, DEPTH, FONT, HP_BAR, KIT, LEVEL, PLANET_TAG, SIG_BUTTON, STICK, TIMER, VIEW, XP_BAR, inside,
@@ -46,6 +48,12 @@ class Pool {
   }
 }
 
+/** The texture of each kind of ally. */
+const ALLY_KEYS: Record<GameState['allies'][number]['kind'], string> = {
+  trooper: 'rb-trooper', brother: 'rb-brother', sentry: 'rb-sentry', escort: 'rb-escort', drone: 'rb-drone',
+  fighter: 'rb-fighter', squadron: 'rb-fighter', copilot: 'rb-copilot', spirit: 'rb-spirit', puppet: 'rb-puppet',
+};
+
 /** The hero art's centre within its texture (see HERO_BOX in sprites.ts). */
 const HERO_ORIGIN = { x: 0.5, y: 52 / 120 };
 
@@ -63,6 +71,9 @@ export class GameScene extends Phaser.Scene {
   /** What the panel showing was built from, so it is rebuilt when any of it changes. */
   private shown = '';
   private progress: Progress = loadProgress();
+  /** The hero chosen on the select screen (kept between runs), and deeds already saved this run. */
+  chosen: HeroId = 'rook';
+  private savedDeeds = 0;
 
   private ground!: Phaser.GameObjects.Graphics;
   private under!: Phaser.GameObjects.Graphics;
@@ -122,14 +133,18 @@ export class GameScene extends Phaser.Scene {
     this.texts.timer.setShadow(0, 0, '#5fa8ff', 8, false, true);
 
     const kb = this.input.keyboard!;
-    this.keys = kb.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE,ONE,TWO,THREE,FOUR,ENTER') as Record<string, Phaser.Input.Keyboard.Key>;
+    this.keys = kb.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE,ONE,TWO,THREE,FOUR,FIVE,SIX,SEVEN,EIGHT,NINE,ZERO,ENTER') as Record<string, Phaser.Input.Keyboard.Key>;
     this.keys.SPACE.on('down', () => (this.sigQueued = true));
-    this.keys.ONE.on('down', () => this.pickIndex(0));
-    this.keys.TWO.on('down', () => this.pickIndex(1));
-    this.keys.THREE.on('down', () => this.pickIndex(2));
-    this.keys.FOUR.on('down', () => reroll(this.state));
+    ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT', 'NINE', 'ZERO'].forEach((key, i) => {
+      this.keys[key].on('down', () => {
+        if (this.state.phase === 'select') this.choose(HERO_IDS[i]);
+        else if (i === 3) reroll(this.state);
+        else if (i < 3) this.pickIndex(i);
+      });
+    });
     this.keys.ENTER.on('down', () => {
       if (this.state.phase === 'won' || this.state.phase === 'lost') this.backToSelect();
+      else if (this.state.phase === 'select') this.begin(this.chosen);
       else leave(this.state);
     });
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => this.pointerDown(p));
@@ -163,7 +178,10 @@ export class GameScene extends Phaser.Scene {
     }
     const spot = this.panel?.spots.find((r) => inside(v, r));
     if (!spot) return;
-    if (s.phase === 'select') this.begin(spot.id as HeroId);
+    if (s.phase === 'select') {
+      if (spot.id === 'fight') this.begin(this.chosen);
+      else this.choose(spot.id as HeroId);
+    }
     else if (s.phase === 'won' || s.phase === 'lost') this.backToSelect();
     else if (spot.id === 'reroll') reroll(s);
     else if (spot.id === 'leave') leave(s);
@@ -183,20 +201,24 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** Shows a hero's details on the select screen (locked ones too, with their deed). */
+  private choose(id: HeroId) {
+    this.chosen = id;
+  }
+
   /** The card, node, offer or answer at `i` (a tap or the 1/2/3 keys). */
   private pickIndex(i: number) {
     const s = this.state;
-    if (s.phase === 'select') {
-      const id = this.panel?.spots[i]?.id;
-      if (id) this.begin(id as HeroId);
-    } else if (s.phase === 'levelup') choose(s, i);
+    if (s.phase === 'levelup') choose(s, i);
     else if (s.phase === 'map') chooseNode(s, i);
     else if (s.phase === 'trader') buy(s, i);
     else if (s.phase === 'event') chooseEvent(s, i);
   }
 
   private begin(id: HeroId) {
-    startRun(this.state, id);
+    if (!isUnlocked(this.progress, id)) return;
+    startRun(this.state, id, unlockedHeroes(this.progress));
+    this.savedDeeds = 0;
     this.hero.setTexture(heroKey(id)).setVisible(true);
     this.walking = false;
     this.stick = null;
@@ -251,6 +273,11 @@ export class GameScene extends Phaser.Scene {
     const move = s.phase === 'run' ? this.moveInput() : { mx: 0, my: 0 };
     frame(s, delta, { ...move, signature: s.phase === 'run' && this.sigQueued });
     if (s.phase === 'run') this.sigQueued = false;
+    // A deed done this run unlocks a knight at once, even if the run is lost later.
+    if (s.deeds.length > this.savedDeeds) {
+      this.savedDeeds = s.deeds.length;
+      this.progress = recordUnlocks(s.deeds);
+    }
     if (this.panelKey() !== this.shown) this.syncPanel();
     this.draw();
   }
@@ -259,7 +286,7 @@ export class GameScene extends Phaser.Scene {
   private panelKey() {
     const s = this.state;
     if (s.phase === 'run') return 'run';
-    return [s.phase, s.choices?.join(), s.offers.join(), s.credits, s.event?.id, s.nodes.join(), s.rewardPicks].join('|');
+    return [s.phase, this.chosen, s.choices?.join(), s.offers.join(), s.credits, s.event?.id, s.nodes.join(), s.rewardPicks].join('|');
   }
 
   /** Shows the panel for the phase the run is in. */
@@ -271,7 +298,7 @@ export class GameScene extends Phaser.Scene {
     if ((s.phase === 'won' || s.phase === 'lost') && was !== s.phase) {
       this.progress = recordRun(s.hero!, s.runMs, s.phase === 'won', s.planet + 1);
     }
-    if (s.phase === 'select') this.panel = heroSelect(this, this.progress);
+    if (s.phase === 'select') this.panel = heroSelect(this, this.progress, this.chosen);
     else if (s.phase === 'levelup') this.panel = levelUp(this, s);
     else if (s.phase === 'map') this.panel = starMap(this, s);
     else if (s.phase === 'trader') this.panel = trader(this, s);
@@ -503,6 +530,19 @@ export class GameScene extends Phaser.Scene {
         u.fillStyle(color, 0.08 + 0.16 * prog).fillCircle(h.x, h.y, h.r * prog);
       }
     }
+    // The knights: Vharn's Dread aura, Corvin's platform, foes turned to the hero's side.
+    const dread = dreadRadius(s);
+    if (dread > 0) {
+      u.fillStyle(accent, 0.05).fillCircle(p.x, p.y, dread);
+      u.lineStyle(1.5, accent, 0.3).strokeCircle(p.x, p.y, dread);
+    }
+    if (s.platform) {
+      const pl = s.platform;
+      u.fillStyle(0x1c2740, 0.85).fillCircle(pl.x, pl.y, pl.r);
+      u.lineStyle(3, accent, 0.55).strokeCircle(pl.x, pl.y, pl.r);
+      u.lineStyle(1, accent, 0.3).strokeCircle(pl.x, pl.y, pl.r - 8);
+    }
+    for (const e of s.enemies) if (e.charmMs > 0) u.lineStyle(2, accent, 0.75).strokeCircle(e.x, e.y, e.r + 5);
     const coneLen = suppressorLength(s);
     if (coneLen > 0) {
       const half = suppressorHalf(s);
@@ -513,7 +553,7 @@ export class GameScene extends Phaser.Scene {
     }
     for (const b of s.bombs) {
       const prog = 1 - b.ms / b.maxMs;
-      const color = b.kind === 'crate' || b.kind === 'orbital' ? hex(C.heal) : 0xffb347;
+      const color = b.kind === 'crate' || b.kind === 'orbital' ? hex(C.heal) : b.kind === 'wreck' || b.kind === 'ship' ? accent : 0xffb347;
       u.lineStyle(1.5, color, 0.25 + 0.4 * prog).strokeCircle(b.x, b.y, b.r);
       u.fillStyle(color, 0.06 + 0.1 * prog).fillCircle(b.x, b.y, b.r * prog);
     }
@@ -529,9 +569,13 @@ export class GameScene extends Phaser.Scene {
         const arc = Math.sin(Math.min(1, t * 1.4) * Math.PI) * 40;
         const k = Math.min(1, t * 1.4);
         pk.next('rb-grenade', b.fromX + (b.x - b.fromX) * k, b.fromY + (b.y - b.fromY) * k - arc).setScale(b.kind === 'frag' ? 1.4 : 1);
-      } else if (b.kind === 'crate' || b.kind === 'orbital') {
+      } else if (b.kind === 'crate' || b.kind === 'orbital' || b.kind === 'ship') {
         const t = b.ms / b.maxMs;
-        pk.next(b.turret ? 'rb-sentry' : 'rb-crate', b.x, b.y - t * 260).setAlpha(1 - t * 0.5);
+        pk.next(b.kind === 'ship' ? 'rb-ship' : b.turret ? 'rb-sentry' : 'rb-crate', b.x, b.y - t * 260).setAlpha(1 - t * 0.5);
+      } else if (b.kind === 'wreck') {
+        // Wreckage Oom lifts and throws: up off the ground, then down on the swarm.
+        const t = 1 - b.ms / b.maxMs;
+        pk.next('rb-wreck', b.fromX + (b.x - b.fromX) * t, b.fromY + (b.y - b.fromY) * t - Math.sin(t * Math.PI) * 70).setRotation(still ? 0 : t * 4);
       }
     }
 
@@ -549,13 +593,21 @@ export class GameScene extends Phaser.Scene {
       else if (e.kind !== 'clanker' && e.kind !== 'rollerbomb') im.setFlipX(Math.cos(e.kind === 'knight' ? e.facing : toHero) < 0);
       if (e.flashMs > 0 && !still) im.setScale(1.15);
       if (e.stunMs > 0) im.setAlpha(0.6);
+      // Held in a Grip: lifted off the ground.
+      if (e.gripMs > 0) im.setY(e.y - 12).setAlpha(0.9);
     }
 
     // Allies.
     const al = this.pools.allies;
     for (const a of s.allies) {
-      const key = a.kind === 'trooper' ? 'rb-trooper' : a.kind === 'brother' ? 'rb-brother' : a.kind === 'sentry' ? 'rb-sentry' : a.kind === 'escort' ? 'rb-escort' : 'rb-drone';
+      const key = ALLY_KEYS[a.kind];
       const im = al.next(key, a.x, a.y);
+      if (a.kind === 'fighter' || a.kind === 'squadron') im.setRotation(a.aim);
+      else if (a.kind === 'spirit') im.setAlpha(0.8).setFlipX(Math.cos(a.aim) < 0);
+      else if (a.kind === 'puppet') {
+        im.setFlipX(Math.cos(a.aim) < 0).setScale(a.elite ? 1.5 : 1);
+        if (a.lifeMs < 1500) im.setAlpha(0.4 + 0.6 * (a.lifeMs / 1500));
+      }
       if (a.kind === 'trooper' || a.kind === 'brother') im.setOrigin(HERO_ORIGIN.x, HERO_ORIGIN.y).setFlipX(Math.cos(a.aim) < 0);
       else if (a.kind === 'escort') im.setFlipX(Math.cos(a.aim) < 0);
       else if (a.kind === 'sentry') {
@@ -568,11 +620,18 @@ export class GameScene extends Phaser.Scene {
     this.pools.pickups.next('rb-shadow', p.x, p.y + 27);
     const bob = p.moving && !still ? Math.sin(s.time / 90) * 1.5 : 0;
     const face = s.hero === 'bram' ? p.aim : p.moving ? p.facing : p.aim;
+    const look = heroKey(s.hero!, heroVariant(s));
+    if (this.hero.texture.key !== look) this.hero.setTexture(look);
     this.hero.setPosition(p.x, p.y + bob).setFlipX(Math.cos(face) < 0).setAlpha(p.dashMs > 0 ? 0.6 : 1);
 
     // Bolts.
     const bo = this.pools.bolts;
     for (const b of s.bullets) {
+      if (b.spin) {
+        // A thrown blade spins as it flies.
+        bo.next(bladeKey(b.color as HeroId), b.x, b.y).setRotation(s.time / 45);
+        continue;
+      }
       const im = bo.next(`rb-bolt-${b.color}`, b.x, b.y);
       im.setRotation(Math.atan2(b.vy, b.vx));
     }
@@ -593,7 +652,8 @@ export class GameScene extends Phaser.Scene {
       o.lineStyle(6, color, 0.15).strokeCircle(p.x, p.y, 30);
       o.lineStyle(2, color, 0.8).strokeCircle(p.x, p.y, 30);
     }
-    if (p.hurtMs > 0) o.lineStyle(2, hex(C.danger), (p.hurtMs / 450) * 0.8).strokeCircle(p.x, p.y, 24);
+    if (p.hurtMs > 0) o.lineStyle(2, hex(C.danger), Math.min(1, p.hurtMs / 450) * 0.8).strokeCircle(p.x, p.y, 24);
+    if (isKnight(s.hero!)) this.drawKnight(s);
     // Slowed: a lime ring at the feet.
     if (p.slowMs > 0) o.lineStyle(2, hex(C.beast), 0.6).strokeCircle(p.x, p.y + 20, 15);
     // Knights' shields, and the dash lines of knights and the Champion about to strike.
@@ -647,6 +707,78 @@ export class GameScene extends Phaser.Scene {
     for (let i = pops.length; i < this.popTexts.length; i++) this.popTexts[i].setVisible(false);
   }
 
+  /** The knights' blades in the air: orbits, swings, lightning, grips, marks, the barrier and Kresh's legs. */
+  private drawKnight(s: GameState) {
+    const o = this.over;
+    const p = s.player;
+    const blade = hex(bladeColor(s));
+    for (const b of orbitBlades(s)) {
+      o.lineStyle(8, blade, 0.22).lineBetween(b.x1, b.y1, b.x2, b.y2);
+      o.lineStyle(3.5, blade, 0.95).lineBetween(b.x1, b.y1, b.x2, b.y2);
+      o.lineStyle(1.2, 0xffffff, 0.9).lineBetween(b.x1, b.y1, b.x2, b.y2);
+    }
+    for (const f of s.slashes) {
+      const k = f.ms / f.maxMs;
+      const c = hex(f.color);
+      const r = f.r * (1.08 - 0.08 * k);
+      if (f.half >= Math.PI) {
+        o.lineStyle(10, c, 0.14 * k).strokeCircle(f.x, f.y, r);
+        o.lineStyle(2.5, c, 0.85 * k).strokeCircle(f.x, f.y, r);
+      } else {
+        o.lineStyle(12, c, 0.16 * k).beginPath().arc(f.x, f.y, r * 0.85, f.a - f.half, f.a + f.half).strokePath();
+        o.lineStyle(3, c, 0.9 * k).beginPath().arc(f.x, f.y, r, f.a - f.half, f.a + f.half).strokePath();
+        o.lineStyle(1.2, 0xffffff, 0.8 * k).beginPath().arc(f.x, f.y, r, f.a - f.half * 0.7, f.a + f.half * 0.7).strokePath();
+      }
+    }
+    for (const z of s.zaps) {
+      // A jagged bolt between the points, its kinks from a hash so drawing never touches Math.random.
+      const k = z.ms / z.maxMs;
+      const pts: Phaser.Math.Vector2[] = [];
+      for (let i = 0; i + 3 < z.pts.length; i += 2) {
+        const [x1, y1, x2, y2] = [z.pts[i], z.pts[i + 1], z.pts[i + 2], z.pts[i + 3]];
+        const len = Math.hypot(x2 - x1, y2 - y1) || 1;
+        const nx = -(y2 - y1) / len;
+        const ny = (x2 - x1) / len;
+        const n = Math.max(2, Math.round(len / 22));
+        for (let j = 0; j < n; j++) {
+          const t = j / n;
+          const off = j === 0 ? 0 : (hash(z.id, i * 10 + j) - 0.5) * 18;
+          pts.push(new Phaser.Math.Vector2(x1 + (x2 - x1) * t + nx * off, y1 + (y2 - y1) * t + ny * off));
+        }
+        if (i + 4 >= z.pts.length) pts.push(new Phaser.Math.Vector2(x2, y2));
+      }
+      const c = hex(z.color);
+      o.lineStyle(7, c, 0.2 * k).strokePoints(pts);
+      o.lineStyle(2.5, c, 0.95 * k).strokePoints(pts);
+      o.lineStyle(1, 0xffffff, 0.9 * k).strokePoints(pts);
+    }
+    const apex = s.capstones.includes('apex-predator');
+    for (const e of s.enemies) {
+      if (e.gripMs > 0) o.lineStyle(2, blade, 0.8).strokeCircle(e.x, e.y - 12, e.r + 6);
+      if (e.id === s.mark || (apex && (e.elite || e.kind === 'boss'))) {
+        // The Hunt's mark: a ring with four ticks, in Kresh's violet.
+        const r = e.r + 10;
+        o.lineStyle(2, blade, 0.9).strokeCircle(e.x, e.y, r);
+        for (let i = 0; i < 4; i++) {
+          const a = (i * Math.PI) / 2 + Math.PI / 4;
+          o.lineBetween(e.x + Math.cos(a) * (r + 3), e.y + Math.sin(a) * (r + 3), e.x + Math.cos(a) * (r + 9), e.y + Math.sin(a) * (r + 9));
+        }
+      }
+    }
+    if (p.barrier > 0) {
+      o.lineStyle(6, blade, 0.12).strokeCircle(p.x, p.y, 27);
+      o.lineStyle(1.5, blade, 0.6).strokeCircle(p.x, p.y, 27);
+    }
+    if (s.hero === 'kresh' && p.rises > 0) {
+      // Rebuilt: mechanical legs.
+      o.lineStyle(2.5, 0xc9ccd6, 0.95);
+      for (const side of [-1, 1]) {
+        o.lineBetween(p.x + side * 5, p.y + 18, p.x + side * 14, p.y + 24);
+        o.lineBetween(p.x + side * 14, p.y + 24, p.x + side * 10, p.y + 32);
+      }
+    }
+  }
+
   private drawHud(s: GameState) {
     const g = this.hud;
     g.clear();
@@ -663,7 +795,20 @@ export class GameScene extends Phaser.Scene {
     g.fillStyle(0x0d1426, 0.85).fillRoundedRect(HP_BAR.x - 2, HP_BAR.y - 2, HP_BAR.w + 4, HP_BAR.h + 4, 4);
     g.fillStyle(hpK > 0.35 ? hex(C.hp) : hex(C.danger), 1).fillRoundedRect(HP_BAR.x, HP_BAR.y, Math.max(2, HP_BAR.w * hpK), HP_BAR.h, 3);
     g.lineStyle(1, hex(C.hp), 0.5).strokeRoundedRect(HP_BAR.x - 2, HP_BAR.y - 2, HP_BAR.w + 4, HP_BAR.h + 4, 4);
-    this.texts.hp.setText(`${Math.ceil(p.hp)} / ${p.maxHp}   ·   ${t(PLANETS[s.planet].foes, { n: s.kills })}`);
+    // The knights' meters: Kael's Temper under the bar, a barrier over it, Joren's Edge count.
+    let extra = '';
+    if (s.hero === 'kael') {
+      g.fillStyle(hex(bladeColor(s)), 1).fillRect(HP_BAR.x, HP_BAR.y + HP_BAR.h + 1, HP_BAR.w * (p.temper / 100), 3);
+      extra = `   ·   ${t('hudTemper', { n: Math.round(p.temper) })}`;
+    } else if (s.hero === 'joren') {
+      const every = s.capstones.includes('royal-fury') ? 5 : 10;
+      extra = `   ·   ${t('hudEdge', { n: p.hits % every, of: every })}`;
+    }
+    if (p.barrier > 0) {
+      g.fillStyle(hex(sch.accent), 0.9).fillRect(HP_BAR.x, HP_BAR.y, HP_BAR.w * Math.min(1, p.barrier / p.maxHp), 4);
+      extra += `   ·   ${t('hudBarrier', { n: Math.ceil(p.barrier) })}`;
+    }
+    this.texts.hp.setText(`${Math.ceil(p.hp)} / ${p.maxHp}   ·   ${t(PLANETS[s.planet].foes, { n: s.kills })}${extra}`);
     // The kit held.
     const lines = Object.entries(s.ranks).map(([id, rank]) => {
       const pips = '●'.repeat(rank) + '○'.repeat(MAX_TIER - rank);
@@ -691,7 +836,7 @@ export class GameScene extends Phaser.Scene {
     // The signature button: a ring that fills as it charges.
     const hero = HEROES[s.hero!];
     const accent = hex(sch.accent);
-    const total = hero.signature.cooldownMs * statsOf(s).cooldown;
+    const total = hero.signature.cooldownMs * statsOf(s).sigCooldown;
     const charge = 1 - Math.min(1, p.sigMs / total);
     const ready = p.sigMs <= 0;
     const { x, y, r } = SIG_BUTTON;

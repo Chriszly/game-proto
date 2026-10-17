@@ -10,12 +10,17 @@ A survivor-style auto-attack roguelike, landscape 960x540. A run is the Rift Cru
 (Dune, Swamp, Ice, Lava) of five minutes each, every one ending in its boss, with a star map
 between them.
 
-- Implemented: a hero select screen with three soldiers (Captain Rook, Legionary TR-9, Corporal
-  Bram-17), each with an auto-firing weapon, a signature move (Space or the round button) and three
-  five-tier paths; the shared Blaster pool (8 skills) and Gear deck (8 pieces), the 5-ability and
-  4-gear limits, level-ups with three cards (at least one of the hero's own paths while any are
-  left, the Field Ration as filler), all nine capstones and four crossovers; gold-ringed elites
-  with chests and credits, ring waves at 1:30, 3:00 and 4:15 on every planet.
+- Implemented: a hero select screen with ten heroes in a 5x2 grid and a detail panel with a Fight
+  button: three soldiers open from the start (Captain Rook, Legionary TR-9, Corporal Bram-17) and
+  seven blade knights unlocked by deeds (Kael Varro, Lord Vharn, Master Oom, Elder Corvin Hale,
+  Regent Veyl, Kresh the Twinblade, Master Joren Vask). Each has an auto-attacking weapon, a
+  signature move (Space or the round button) and three five-tier paths. Pools by weapon class
+  and side: Blaster (8 skills, soldiers), Blade (6, knights), Current (4: Kael, Oom, Corvin,
+  Joren) and Hollow (4: Vharn, Veyl, Kresh, and Kael once he takes The Fall); Joren may also draw
+  Lightning Arc. The shared Gear deck (8 pieces), the 5-ability and 4-gear limits, level-ups with
+  three cards (at least one of the hero's own paths while any are left, the Field Ration as
+  filler), 30 capstones and 11 crossovers (the cards show a link icon); gold-ringed elites with
+  chests and credits, ring waves at 1:30, 3:00 and 4:15 on every planet.
 - Four factions: Scrap droids (Clankers, Rollerbombs; the Grinder Crawler), wild beasts (mire rat
   packs, spitter toads with slowing globs; the Bog Mother with globs, young and bog pools), the
   Iron Dominion (line trooper squads firing volleys, walker gunners; the Siege Walker with volleys,
@@ -25,10 +30,11 @@ between them.
 - Between planets: collecting what is left, credits, the star map with 2-3 nodes (trader, elite
   arena, rest, event; four events), free arena picks, the escort droid. The hero, level, kit and
   allies carry over; the clock resets per planet. Victory after the Lava boss; the end screen
-  names the planet reached. Saved longest run, wins and furthest planet per hero.
+  names the planet reached. Saved longest run, wins and furthest planet per hero, and the knights
+  unlocked.
 - The field is endless: the camera follows the hero, foes spawn on a ring just off screen and
   ones left far behind are brought round ahead again.
-- Not built yet: the other heroes of the concept, audio, Watch AI.
+- Not built yet: audio, Watch AI.
 - No TODOs or FIXMEs in the code.
 
 ## Architecture
@@ -42,18 +48,23 @@ between them.
   German, picked with `byLanguage`; update both when controls or the first round change.
 - `src/i18n.ts` and `src/i18n/`: the game's texts (`shared/i18n.ts`). `i18n/en.ts` is the British
   English source, `i18n/de.ts` the German (with `keepEnglish` for the few texts that are the same)
-  and `i18n/en-US.ts` only "Plate Armor". `t(key, vars)` shows a text in the hub's language;
-  `TextKey` types the keys. Every name and text in `heroes.ts`, `upgrades.ts`, `planets.ts` and the
-  events is a `TextKey`, and every text on screen goes through `t` (in `sim.ts` it is imported as
-  `tr`, since `t` is a common local name there). Floating texts are translated when they pop.
-- `src/game/heroes.ts`: `HeroId`, `HEROES` (weapon numbers, aim mode, signature, paths, blurb, the
-  `pathKind` line of their path cards) and
-  each hero's `schemes` (`HeroScheme`: `name`, `body`, `accent`, optional `mark`, `bolt`);
-  `schemeOf` returns the scheme in use (the first). All hero colours come from here.
+  and `i18n/en-US.ts` the texts spelled differently in US English ("Plate Armor", "armored").
+  `t(key, vars)` shows a text in the hub's language; `TextKey` types the keys. Every name and text
+  in `heroes.ts`, `upgrades.ts`, `planets.ts` and the events is a `TextKey`, and every text on screen goes through `t` (in `sim.ts` and `blades.ts` it
+  is imported as `tr`, since `t` is a common local name there). Floating texts are translated when
+  they pop.
+- `src/game/heroes.ts`: `HeroId`, `HERO_IDS` (select order), `PoolId`, `HEROES` (weapon numbers,
+  aim mode, `pools`, `extra` pool skills, signature, paths, blurb, `short` name for the Fight
+  button, the `pathKind` line of their path cards, knights' `r`, `armour` and `unlock` deed text)
+  and each hero's `schemes` (`HeroScheme`: `name`, `body`, `accent`, optional `mark`, `bolt`);
+  `schemeOf(id, variant)` returns a scheme (Kael has a second, Fallen, used once he takes The
+  Fall), `isKnight`. All hero colours come from here; each hero's accent is unique.
 - `src/game/upgrades.ts`: `UPGRADES` (every path, pool skill and gear piece, with five tier lines),
   `MAX_TIER`, `MAX_ABILITIES`, `MAX_GEAR`, `FILLER`, `CAPSTONES`, `CROSSOVERS`, `capstonesOf`,
-  `crossoversOf`, `crossoverFor` and `capstoneFor` (card hints), `at` (per-tier tables),
-  `canOffer` and `rollChoices`.
+  `crossoversOf`, `crossoverFor(id, hero)` and `capstoneFor` (card hints), `at` (per-tier tables),
+  `POOL_NAMES` (the pools' card kind lines), `poolsOf` (the pools a hero draws from now), `canOffer`
+  and `rollChoices`. Pool skills carry `pool`; a hero is only offered skills of `poolsOf` or its
+  `extra`.
 - `src/game/planets.ts`: `PLANETS` (per planet: name, faction, `foes` (the HUD's kill count, with
   plural forms), `elite` (its pop), `hp` / `spawn` / `dmg`
   multipliers, ring-wave kind, elite kinds, boss, ground colours), `BOSSES` (name, boss bar label,
@@ -74,12 +85,25 @@ between them.
   each kind's behaviour, `bossAttacks` per boss, `detonate`), hazards (`hazards`, `inRingGap`),
   damage (`damage` with the knight's guard, `kill`, `explode`), bolts, bombs, fire and pickups
   (`gainXp`, `openChest`, `collectAll`). The arena ends at the end of `step`. Exports
-  `suppressorLength`, `suppressorHalf`, `shieldHalf`, `phalanxSpots` and `angleDiff` for drawing.
+  `suppressorLength`, `suppressorHalf`, `shieldHalf`, `phalanxSpots` and `angleDiff` for drawing,
+  and `stats`, `near`, `nearest`, `swarmSpot`, `bolt`, `ready`, `knock`, `damage`, `explode`,
+  `addBomb` and `heal` for `blades.ts`. Knight code runs only when the hero `isKnight`, so the
+  soldiers' `Math.random` order is unchanged.
+- `src/game/blades.ts`: everything the knights do, called from `sim.ts`: `knightMods` (their
+  `statsOf` numbers: reach, dodge, signature cooldown, Temper, Rage and the like), `knightAttack`
+  per aim mode (`slash`, `throw` boomerang blades, `ripple`, `spin`, `chain` lightning, `orbit`,
+  `flurry`), `knightSignature`, `knightAbilities` (every knight path and Blade, Current and Hollow
+  skill), the knights' allies (`knightAllies`, `moveKnightAlly`: starfighters, co-pilot, spirits,
+  puppets), hooks for kills, heals and hits (`onKill`, `healFactor`, `onHurt`, `rescue`,
+  `knightGuard`, `foeMod`, `contactMod`), `orbitBlades`, `bladeColor` and `heroVariant` for
+  drawing, and `checkDeeds` (the unlock deeds, into `state.deeds`). Slashes and lightning are
+  `state.slashes` / `state.zaps`, drawn by `GameScene` (lightning jitters from a hash).
 - `src/game/voyage.ts`: between fights. `frame` (tick, then `afterClear` and `nextPlanet` for the
   passing phases), `afterClear` (collect, credits, arena reward, map or victory), `rollNodes`,
   `chooseNode`, the trader (`priceOf`, `buy`, `reroll`, `leave`), the arena (`startArena`),
   events (`rollEvent`, `chooseEvent`) and `nextPlanet`.
-- `src/game/save.ts`: `SAVE_KEY`, `loadProgress`, `saveProgress`, `recordRun`.
+- `src/game/save.ts`: `SAVE_KEY`, `loadProgress`, `saveProgress`, `recordRun`, `recordUnlocks`,
+  `isUnlocked` and `unlockedHeroes`.
 - `src/art/glow.ts`: `C` (palette), `hex`, `shade`, `paint` (a canvas texture at `sharpRes`),
   `glow`, `shape`, `beam`, `outline`.
 - `src/art/factions.ts`: `bakeFactions` paints the later factions (`rb-mirerat`, `rb-toad`,
@@ -92,6 +116,10 @@ between them.
   the droids (`rb-clanker`, `rb-clanker-elite`, `rb-roller`, `-armed`, `-elite`, `rb-boss`), bolts
   (`rb-bolt-<HeroId>`, `-drone`, `-heavy`, `-rocket`, `-shell`), shards, `rb-medkit` (a green
   cross), `rb-chest`, `rb-sentry`, `rb-drone`, `rb-charge`, `rb-grenade`, `rb-crate`, `rb-shadow`.
+  Every scheme is baked: `heroKey(id, variant)` is `rb-hero-<id>` or `rb-hero-<id>-<variant>`.
+- `src/art/knights.ts`: `drawKnight` (the knights, from their scheme; `drawHero` hands knights to
+  it) and `bakeKnights`: the blades (`bladeKey`, `rb-blade-<id>`), `rb-fighter`, `rb-copilot`,
+  `rb-spirit`, `rb-puppet`, `rb-wreck`, `rb-ship` and `rb-bolt-fallen`.
 - `src/scenes/layout.ts`: `VIEW`, `CENTER`, HUD places (`XP_BAR`, `HP_BAR`, `KIT`, `TIMER`,
   `LEVEL`, `PLANET_TAG`, `CREDITS_TAG`, `BOSS_BAR`, `SIG_BUTTON`, `STICK`), card rectangles
   (`heroCardRect`, `levelCardRect`, `mapNodeRect` / `mapNodeSpot`, `tradeCardRect`, `REROLL`,
@@ -103,8 +131,10 @@ between them.
   per layer (bolts and foes drawn with additive blending), floating texts and the HUD (planet tag
   and credits). `splitHudCamera` keeps the HUD fixed. The panel is rebuilt whenever `panelKey`
   changes.
-- `src/ui/panels.ts`: `Panel` (HUD objects plus tappable `spots`) and `heroSelect`, `levelUp`
-  (also the arena reward), `starMap`, `trader`, `eventPanel`, `endScreen`.
+- `src/ui/panels.ts`: `Panel` (HUD objects plus tappable `spots`) and `heroSelect` (10 cards from
+  `heroCardRect` and the detail panel `HERO_DETAIL` with the `FIGHT` button), `levelUp` (also
+  the arena reward; pool labels from `POOL_NAMES`, `linkIcon` for crossovers), `starMap`,
+  `trader`, `eventPanel`, `endScreen`.
 
 ### Flow
 
@@ -127,13 +157,17 @@ knob follows that pointer id (`dragStick`, dragging the base along past the rim)
 walks the way of knob minus base, full speed at `STICK.r`, nothing inside `STICK.dead`; `drawHud`
 draws it. A second touch pointer (`addPointer(1)`) lets the other thumb tap the signature. A pointerdown inside
 `SIG_BUTTON` (or Space) queues the signature. Panel cards are hit-tested with `viewPoint` against
-`panel.spots`; 1/2/3 pick (a card, a node, an offer or an answer), 4 rerolls at the trader, Enter
-leaves the trader or runs again.
+`panel.spots`. On the hero select, tapping a card (or 1-9, 0) sets `GameScene.chosen` and tapping
+Fight (or Enter) starts the run, if the hero is unlocked. Elsewhere 1/2/3 pick (a card, a node, an
+offer or an answer), 4 rerolls at the trader, Enter leaves the trader or runs again.
 
 ### Save keys
 
-- `riftblade-progress`: `{ bestMs, wins: { [heroId]: count }, furthest: { [heroId]: planet 1-4 } }`.
-  `bestMs` is the whole run's time (`runMs`). Older saves without `furthest` load with `{}`.
+- `riftblade-progress`: `{ bestMs, wins: { [heroId]: count }, furthest: { [heroId]: planet 1-4 },
+  unlocked: HeroId[] }`. `bestMs` is the whole run's time (`runMs`). Older saves without
+  `furthest` load with `{}`, without `unlocked` with `[]`; unknown ids are dropped. The deeds of
+  reaching a world (Kael, Veyl, Joren) also count from `furthest`, so older saves keep their
+  progress. `GameScene` saves new `state.deeds` with `recordUnlocks` as they happen.
 
 ### Difficulty and reduced motion
 
@@ -145,10 +179,14 @@ shake or flash.
 ## Testing hooks
 
 - `window.game.scene.getScene('Game').state`: the `GameState`.
-- `.panel.spots`: the cards of the panel showing (`id` is a `HeroId`, an upgrade id, a node kind,
-  `option-0` / `option-1`, `sold`, `reroll`, `leave` or `again`), in game pixels.
+- `.panel.spots`: the cards of the panel showing (`id` is a `HeroId`, `fight`, an upgrade id, a
+  node kind, `option-0` / `option-1`, `sold`, `reroll`, `leave` or `again`), in game pixels. A
+  locked hero card has `locked: true`. `.chosen` is the hero picked on the select screen.
 - The hero is always at `CENTER` (480, 270) on screen; `SIG_BUTTON` is at (890, 470).
-- The playthrough (`e2e/playthrough.spec.ts`) picks Rook, walks a circle by holding the mouse at a
+- The playthrough (`e2e/playthrough.spec.ts`) checks the ten cards (knights locked on a fresh
+  save), waits out Phaser's start-up easing on the select screen (140 frames; its first 120 steps
+  are cut short, so a run started during them would play differently depending on load time),
+  taps Rook and then Fight, walks a circle by holding the mouse at a
   point turning once every 25 s, takes the first card at each level-up, fires Rally Order and plays
   to 60 s. It depends on: the hero card order, Rook's health and Rally Order length, the layout
   above, and Rook surviving a minute of that walk on Normal.
@@ -161,11 +199,20 @@ shake or flash.
   lines), the card tier lines (two lines) and the signature button (its label shrinks to fit) are
   the tightest spots, so check a new text with `?lang=de`.
 - **A new hero, planet or boss**: give its names and texts keys in the `i18n/` files too (a hero's
-  `pathKind`, a planet's `foes` and `elite`, a boss's `bar` and `beaten`).
+  `short`, `pathKind` and, for a knight, `unlock`; a planet's `foes` and `elite`, a boss's `bar`
+  and `beaten`).
 - **A new hero colour scheme**: add it to the hero's `schemes` in `heroes.ts`; the art reads
   `schemeOf`. To use another scheme, change `schemeOf` (and bake per scheme if both are needed).
-- **A new upgrade**: add it to `UPGRADES` (five tier lines), implement it in `statsOf` (a passive
-  number) or `abilities` (something with a cooldown) in `sim.ts`, and add allies in `syncAllies`.
+- **A new upgrade**: add it to `UPGRADES` (five tier lines, and `pool` for a pool skill),
+  implement it in `statsOf` (a passive number) or `abilities` (something with a cooldown) in
+  `sim.ts`, and add allies in `syncAllies`. For knights: `knightMods` and `knightAbilities` in
+  `blades.ts`.
+- **A new knight**: add its id to `HeroId` / `HERO_IDS`, its `HEROES` row (pools, a unique accent,
+  `unlock` deed), its texts in `i18n/` (name, short name, weapon, signature, blurb, path kind,
+  deed, and the paths' and capstones' names and tiers), three paths in `UPGRADES`, its capstones,
+  its art in `drawKnight`, its attack in `knightAttack` (or reuse an aim mode), its signature in
+  `knightSignature` and its deed in `checkDeeds` (and `isUnlocked` if older saves should count). Then the select grid (`HERO_CARD`
+  holds 10) and the playthrough's card list.
 - **A capstone or crossover**: add to `CAPSTONES` / `CROSSOVERS`; check `s.capstones.includes(id)`
   / `s.crossovers.includes(id)` where it acts.
 - **Balance**: spawn rate `spawnRate`, per planet `PLANETS[i].hp` / `spawn` / `dmg`, boss health
@@ -186,9 +233,20 @@ shake or flash.
 - Painted textures with a glow halo darken whatever is under them in WebGL; bolts and droids use
   `BlendModes.ADD` for that reason. Don't draw filled ellipses in the shared graphics layers (they
   drew stray wedges in WebGL); the hero's shadow is a sprite.
+- Phaser draws on `Math.random` for the id of every texture it makes, so baking more textures at
+  boot shifts the seeded sequence the playthrough's run starts with (Rook's run then sees other
+  droids and cards; the rules are unchanged).
+- The playthrough's animation frames sit on a fixed grid of 64 ms (the fake clock's timers can fire
+  late on a busy machine), so each step is the same length.
 - The sim uses `Math.random` only for rules; the ground decoration uses its own hash, so drawing
   never shifts the seeded sequence the test relies on. The Dune world's spawning calls
   `Math.random` in the same order as before the other planets came, so keep it that way.
 - Bosses are `kind: 'boss'` on every planet; which one it is comes from `PLANETS[state.planet].boss`.
   The boss's timers reuse `shellMs`, `spawnMs` and `modeMs` with a meaning per boss (see
   `bossAttacks`).
+- `blades.ts` and `sim.ts` import each other. That works because each only calls the other's
+  functions at run time; don't read the other module's values at load time (top-level constants
+  built from imported values).
+- The knights' random calls (crits, dodges, Persuasion) only happen when a knight is played, and
+  their pools are filtered out of a soldier's card roll before `Math.random` is used, so Rook's
+  seeded playthrough plays exactly as before.

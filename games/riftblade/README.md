@@ -3,9 +3,9 @@
 A survivor-style auto-attack roguelike built with [Phaser 4](https://phaser.io), TypeScript and
 Vite, part of the [game hub](../../README.md).
 
-Pick one of three soldiers and fight the Rift Crusade across four worlds: the Dune, Swamp, Ice and
+Pick one of ten heroes, three soldiers and seven blade knights, and fight the Rift Crusade across four worlds: the Dune, Swamp, Ice and
 Lava worlds. On each you hold out for five minutes while its faction pours in from every side, then
-beat its boss. You only steer: your weapon fires on its own. Shot-down foes drop lumen shards, and
+beat its boss. You only steer: your weapon fires (or your blade strikes) on its own. Shot-down foes drop lumen shards, and
 every level-up pauses the run on three upgrade cards. Your hero, level and kit carry over from
 world to world, and between worlds a star map offers a trader, an elite fight, a rest or an event.
 Beat the Hollow Champion on the Lava world to win the run. Everything is drawn in code in a "Glow
@@ -22,7 +22,8 @@ foes and bolts.
 | Hold the mouse anywhere on the field | Walk toward that point; the hero keeps walking while you hold |
 | Touch: put a finger down anywhere and drag | A steering stick appears where the finger went down; walk the way you drag, faster the further out (the stick follows a finger that goes past its rim) |
 | Space, or the round button bottom right | Signature move, once charged |
-| Tap a card, or 1 / 2 / 3 | Choose a hero, an upgrade at a level-up, a node on the star map, an offer at the trader or an answer to an event |
+| Tap a hero card, or 1-9 and 0; then Fight, or Enter | Choose a hero and start the run |
+| Tap a card, or 1 / 2 / 3 | Choose an upgrade at a level-up, a node on the star map, an offer at the trader or an answer to an event |
 | Reroll, or 4 | At the trader: new offers for a few credits |
 | Leave, or Enter | At the trader: on to the next world |
 | Run again, or Enter | After a run, back to the hero select screen |
@@ -38,6 +39,26 @@ foes and bolts.
 | Captain Rook (slate armour, bronze markings) | Twin pistols: alternating shots at the two nearest droids | **Rally Order**: 5 s of +50% fire rate (12 s) | Gunslinger, Commander, Demolitions |
 | Legionary TR-9 (charcoal armour, orange lenses) | Spread rifle: three wide, inaccurate bolts at the nearest droid. 150 health, slow | **Brace**: 3 s without damage, knocks droids back (13 s) | Suppressor, Riot Shield, Drop Doctrine |
 | Corporal Bram-17 (sand armour, pink markings) | Carbine: fires the way he walks (a little aim assist); standing still, at the nearest droid | **Frag Out**: a grenade that clears a circle (9 s) | Marksman, Jump Trooper, Brothers in Arms |
+| Kael Varro (magenta blade) | Slashes in front. Fast and fragile; Temper fills as he kills and drains as he heals | **Leap Strike**: leaps onto the strongest foe and slashes all round (10 s) | Prodigy, Ace Pilot, The Fall (turns him crimson and to the Hollow) |
+| Lord Vharn (turquoise blade) | Throws his blade, which flies out and back. 210 health, armoured, slow | **Grip**: lifts the 5 nearest foes and crushes them (12 s) | Dread, Iron Grip, Life Support |
+| Master Oom (golden blade) | A Current push ripples out around him. Tiny, very fast, 70 health | **Somersault**: a spinning leap that cuts through foes (8 s) | Stillness, Whirlwind, Old Teacher |
+| Elder Corvin Hale (sky blue blade) | A defensive spin hits every foe close by | **Deflect**: 3 s of foe bolts flying back, and foes that touch him thrown off (11 s) | Bulwark, Persuasion, Vantage |
+| Regent Veyl (lime lightning) | Forked lightning chains from foe to foe. Little health and slow, huge damage | **Overload**: 3 s of lightning in every direction (12 s) | Storm, Puppet Master, Dark Bargain |
+| Kresh the Twinblade (violet staff blade) | His double-ended staff orbits him. Fast, medium health | **Hunt**: marks the strongest foe and dashes in for triple damage (9 s) | Dervish, Stalker, Rebuilt |
+| Master Joren Vask (royal blue blade) | A fast flurry strikes in four directions around him. **Edge**: every 10th hit is a critical hit | **Breaking Point**: one huge strike that stuns the strongest foe (12 s) | Duelist Form, Breaker, Council Seat |
+
+The soldiers are open from the start. Each knight unlocks through a deed, shown on his locked card;
+the deed can be done with any hero, and the knight is free from the next run on:
+
+| Knight | Deed |
+| --- | --- |
+| Kael Varro | Reach the Swamp world |
+| Regent Veyl | Reach the Ice world |
+| Master Joren Vask | Reach the Lava world |
+| Master Oom | Win an elite arena on the star map |
+| Elder Corvin Hale | Clear the Swamp world taking at most 5 toad globs |
+| Kresh the Twinblade | Defeat 10 elites in one run |
+| Lord Vharn | Take Kael Varro's The Fall path to tier 5 |
 
 ### The run: the Rift Crusade
 
@@ -93,14 +114,32 @@ left. Every upgrade has five tiers. A run holds at most **5 abilities** (your pa
 skills) and **4 pieces of gear**; when both are full, only what you hold can come up, and when
 nothing is left a Field Ration heals you.
 
-- **Hero paths** (three per hero): Gunslinger (fire rate, ricochets, quick-draw bursts), Commander
+- **Hero paths** (three per hero), soldiers: Gunslinger (fire rate, ricochets, quick-draw bursts), Commander
   (1-3 squad troopers), Demolitions (timed charges, bigger blasts, bomblets); Suppressor (a slowing,
   burning cone), Riot Shield (blocks the front, bashes, reflects), Drop Doctrine (sentry turrets,
   supply crates); Marksman (piercing, heavy rounds), Jump Trooper (jet dashes that leave fire,
   homing mini rockets), Brothers in Arms (1-3 brothers who copy every shot).
-- **Blaster pool** (any hero): Ricochet Rounds, Overcharge (pierce), Thermal Grenade, Stun Rounds
+- **Knight paths**: Prodigy (wider slashes, combos, a thrown blade), Ace Pilot (a starfighter
+  strafes, a droid co-pilot repairs), The Fall (full Temper doubles damage, halves healing);
+  Dread (a slowing aura, weak foes flee), Iron Grip (Grip takes more foes and throws them), Life
+  Support (regrowing armour plates, rage when nearly down); Stillness (standing still charges the
+  push, then he throws wreckage), Whirlwind (the Somersault bounces from foe to foe), Old Teacher
+  (spirit pupils); Bulwark (longer Deflects, split bolts), Persuasion (foes his spin hits may
+  switch sides), Vantage (standing still raises a platform for damage and reach); Storm (longer,
+  forking chains), Puppet Master (fallen foes rise to fight for him), Dark Bargain (health for
+  damage, kills heal); Dervish (a bigger, faster orbit, the staff flies out), Stalker (Hunts
+  chain, kills speed him up), Rebuilt (rises once on mechanical legs); Duelist Form (more strikes,
+  a lunge, a counter), Breaker (hits strip armour from elites and bosses), Council Seat (turns foe
+  bolts back, a ward).
+- **Blaster pool** (soldiers): Ricochet Rounds, Overcharge (pierce), Thermal Grenade, Stun Rounds
   (slow), Quick Reload, Covering Drone, Scatter Shot, Call-In (a supply crate that crashes on the
   swarm and leaves a medkit).
+- **Blade pool** (knights): Blade Throw, Wide Arc (reach), Riposte (a counter after a hit),
+  Blade Dash, Spinning Guard (orbiting blades), Focus (critical hits).
+- **Current pool** (Kael, Oom, Corvin, Joren): Push Wave, Mending (healing), Foresight (dodge),
+  Calm Mind (signature cooldown).
+- **Hollow pool** (Vharn, Veyl, Kresh, and Kael after The Fall): Lightning Arc, Grip, Rage,
+  Drain. Joren may also draw Lightning Arc.
 - **Gear**: Servo Boots (speed), Magnet Coil (pickup range), Plate Armour, Overclock (cooldowns),
   Medpack (regeneration), Power Cell (damage), Lumen Lens (XP), Targeting Chip (critical hits).
 - **Capstones**: a path at tier 5 together with its gear piece unlocks at once:
@@ -116,17 +155,50 @@ nothing is left a Field Ration heals you.
   | Bram | Longshot | Marksman + Magnet Coil | Bolts pierce everything, every 2nd is heavy |
   | Bram | Skyfall | Jump Trooper + Servo Boots | Dashes land with a blast, twice the rockets |
   | Bram | The Batch | Brothers in Arms + Medpack | 5 brothers who also throw frags |
+  | Kael | Perfect Form | Prodigy + Overclock | A streak of 12 kills: 10 s of all-round combos at double speed |
+  | Kael | Squadron Run | Ace Pilot + Servo Boots | Three starfighters loop around him, always firing |
+  | Kael | Hollow Rebirth | The Fall + Plate Armour | +60 health, -30% damage taken, double slash damage, slower |
+  | Vharn | Terror | Dread + Magnet Coil | Foes in the aura deal half damage and fall to their knees every 4 s |
+  | Vharn | Crushing Will | Iron Grip + Overclock | Grip goes off on its own every 4 s |
+  | Vharn | Unbreakable | Life Support + Medpack | Once per world, survives a killing blow at 1 health |
+  | Oom | Lift the Ship | Stillness + Plate Armour | Every 12 s a starship wreck crashes onto the swarm |
+  | Oom | Golden Cyclone | Whirlwind + Servo Boots | While he moves, golden blades storm around him |
+  | Oom | Council of Spirits | Old Teacher + Medpack | 4 spirit masters, each with an attack of their own |
+  | Corvin | Perfect Guard | Bulwark + Plate Armour | Deflects all the time while walking |
+  | Corvin | Silver Tongue | Persuasion + Overclock | Every 10 s the 8 weakest foes near join him |
+  | Corvin | Unassailable | Vantage + Servo Boots | He carries his platform with him |
+  | Veyl | Tempest | Storm + Overclock | Lightning rains on 6 foes across the screen every second |
+  | Veyl | Court of Puppets | Puppet Master + Magnet Coil | Up to 20 puppets, and elites rise too |
+  | Veyl | Eternal Regent | Dark Bargain + Medpack | Overload lasts 5 s, and while it storms he cannot fall |
+  | Kresh | Violet Tornado | Dervish + Overclock | A second staff orbits the other way |
+  | Kresh | Apex Predator | Stalker + Servo Boots | Every elite and boss is marked for good: +50% damage to them |
+  | Kresh | Steel Strider | Rebuilt + Plate Armour | Rises twice, each time 25% stronger |
+  | Joren | Royal Fury | Duelist Form + Overclock | Edge every 5th hit, and its crits chain to 2 foes near |
+  | Joren | Shattering Blow | Breaker + Magnet Coil | Breaking Point hits every elite near at once |
+  | Joren | Master of the Order | Council Seat + Plate Armour | Every 8 s, takes every foe bolt near and fires it back as one blast |
 
 - **Crossovers**: a pool skill held with a fitting path gives a bonus: Gunslinger + Ricochet
   Rounds (ricochets seek new targets), Riot Shield + Stun Rounds (shield bashes stun), Brothers in
   Arms + Scatter Shot (brothers fire cones), Demolitions + Thermal Grenade (grenades split into
-  bomblets). The cards say when a pick completes one.
+  bomblets); for the knights, The Fall + Rage (full Temper also maxes Rage), Iron Grip + Blade
+  Throw (the thrown blade hits every gripped foe), Stillness + Push Wave (waves lift foes and throw
+  them twice as far), Bulwark + Blade Throw (deflected bolts ride a thrown blade back), Puppet
+  Master + Drain (puppets heal him when they hit), Dervish + Spinning Guard (a double ring), Council
+  Seat + Lightning Arc (turned-back bolts chain lightning in royal blue). A card that completes one
+  shows a link icon.
+
+![A crossover on offer: Rage completes Kael's The Fall](docs/screenshots/knights-crossover.webp)
+
+![Lord Vharn's Grip lifting a crowd of droids](docs/screenshots/knights-grip.webp)
+
+![Regent Veyl's Overload](docs/screenshots/knights-lightning.webp)
 
 ![Bram-17 and his brothers against the Grinder Crawler](docs/screenshots/boss.webp)
 
 ![The Hollow Champion's rings of fire on the Lava world](docs/screenshots/lava-boss.webp)
 
-The longest run, the wins and the furthest world reached per hero are saved in the browser.
+The longest run, the wins and the furthest world reached per hero, and the knights unlocked, are
+saved in the browser.
 
 ## Running locally
 
@@ -136,8 +208,9 @@ npm run dev   # then open http://localhost:5173/games/riftblade/
 
 ## Playthrough test
 
-`e2e/playthrough.spec.ts` plays the first minute in headless Chromium with real inputs: it picks
-Captain Rook on the hero select screen, walks him in a wide circle by holding the mouse down at a
+`e2e/playthrough.spec.ts` plays the first minute in headless Chromium with real inputs: on the
+hero select screen it checks the ten cards (the knights locked on a fresh save), taps Captain Rook
+and then Fight, walks him in a wide circle by holding the mouse down at a
 point that turns around him, takes the first card at the first level-up and checks the upgrade was
 taken, fires Rally Order from its button and plays on to the one-minute mark.
 
@@ -149,12 +222,14 @@ npx playwright test --project riftblade
 
 - `src/main.ts`: creates the game, the hub's settings and scaling.
 - `src/howToPlay.ts`: the How to play screen.
-- `src/game/`: the rules, without drawing: `heroes.ts` (the heroes and their colour schemes),
+- `src/game/`: the rules, without drawing: `heroes.ts` (the heroes, their pools, colour schemes
+  and unlock deeds), `blades.ts` (the knights' attacks, signatures and skills),
   `upgrades.ts` (paths, pool, gear, capstones, crossovers and the card roll), `planets.ts` (the
   four worlds, their bosses and the star map's numbers), `state.ts` (the state and the numbers),
   `sim.ts` (everything that happens in a fight), `voyage.ts` (between fights: the star map, trader,
   arena, events and the next world) and `save.ts`.
-- `src/art/`: `glow.ts` (painting helpers), `sprites.ts` (the heroes, Scrap droids and pickups) and
+- `src/art/`: `glow.ts` (painting helpers), `sprites.ts` (the heroes, Scrap droids and pickups),
+  `knights.ts` (the knights, their blades and allies) and
   `factions.ts` (the later factions and their bosses), all painted at boot.
 - `src/scenes/`: `BootScene.ts`, `GameScene.ts` (input, camera and drawing) and `layout.ts`.
 - `src/ui/panels.ts`: the hero select, level-up, star map, trader, event and end screens.
