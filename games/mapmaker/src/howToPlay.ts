@@ -28,6 +28,7 @@ export const howToPlay: HowToPlay = {
       action: 'At the harbor: pick a commission, take a hand aboard or buy an upgrade',
     },
     { input: 'Set sail', action: 'Start the next voyage with full supplies' },
+    { input: 'Moon or sun beside the logo', action: 'Switch between the white sheet and the dark night sheet' },
   ],
   loop: [
     'Tap survey stations next to charted land to push inland from the port.',
