@@ -8,6 +8,8 @@ import {
 } from './contracts';
 import { SECTORS, type Sector } from './campaign';
 import { Fog } from './fog';
+import { t, type TextKey } from '../i18n';
+import { locale } from '../../../../shared/i18n';
 import {
   RESEARCH_COSTS, RESEARCH_LEVELS, RESEARCH_MS, RESEARCH_STEP, TRACKS, TRACK_DEFS, noResearch, researchBonus,
   type Research, type Track,
@@ -50,7 +52,7 @@ export const NEBULA_SLOW = 0.7;
 /** Veteran ranks: the kills that earn each one, what each adds to a ship's damage and hit points, and their names. */
 export const VETERAN_RANKS = [3, 8] as const;
 export const VETERAN_STEP = 0.15;
-export const VETERAN_NAMES = ['Veteran', 'Ace'] as const;
+export const VETERAN_NAMES = ['rankVeteran', 'rankAce'] as const satisfies readonly TextKey[];
 /** Repair: a ship within REPAIR_RANGE px of a finished hub, outpost or Depot of its faction gets back this share of its hit points a second. */
 export const REPAIR_RANGE = 120;
 export const REPAIR_RATE = 0.03;
@@ -262,12 +264,22 @@ export interface Derelict extends Point {
   cooldown: number;
 }
 
-/** What a derelict of each kind is called and does. */
-export const DERELICT_DEFS: Record<DerelictKind, { name: string; text: string }> = {
-  sensors: { name: 'Wide Sensors', text: `Sees ${SENSOR_RANGE} px round it for its owner, nebulae included` },
-  shipyard: { name: 'Shipyard', text: 'Trains its owner\'s combat units out here, like a Barracks' },
-  gun: { name: 'Gun Platform', text: `Shoots its owner's enemies within ${DERELICT_GUN.range} px for ${DERELICT_GUN.damage}` },
+/** What a derelict of each kind is called and does, as keys of `i18n/en.ts` (see `derelictText`). */
+export const DERELICT_DEFS: Record<DerelictKind, { name: TextKey; text: TextKey }> = {
+  sensors: { name: 'sensorsName', text: 'sensorsText' },
+  shipyard: { name: 'shipyardName', text: 'shipyardText' },
+  gun: { name: 'gunName', text: 'gunText' },
 };
+
+/** What a derelict station gives its owner, in a sentence with its numbers. */
+export function derelictText(kind: DerelictKind): string {
+  return t(DERELICT_DEFS[kind].text, { range: kind === 'sensors' ? SENSOR_RANGE : DERELICT_GUN.range, damage: DERELICT_GUN.damage });
+}
+
+/** A derelict station's name in the hub's language. */
+function derelictName(kind: DerelictKind): string {
+  return t(DERELICT_DEFS[kind].name);
+}
 
 /** A short-lived shot (a beam from x, y to x2, y2) or wreck (a ring of radius r at x, y). */
 export interface Effect extends Point {
@@ -381,18 +393,18 @@ const AI_ARMY_TO_ATTACK = byDifficulty(9, 6, 4);
 /** A unit's numbers in its faction, with the faction's multipliers applied. */
 export function unitStats(side: Side, type: UnitId) {
   const d = side.def.units[type];
-  const t = side.def.tune;
+  const tune = side.def.tune;
   const p = side.perks;
   const r = side.research;
   return {
-    name: d.name,
-    cost: Math.round(d.cost * t.cost * p.cost),
+    name: t(d.name),
+    cost: Math.round(d.cost * tune.cost * p.cost),
     trainMs: Math.round(d.trainMs * p.train),
-    hp: Math.round(d.hp * t.hp * p.hp * researchBonus(r, 'hull')),
-    speed: d.speed * t.speed * p.speed * researchBonus(r, 'engines'),
+    hp: Math.round(d.hp * tune.hp * p.hp * researchBonus(r, 'hull')),
+    speed: d.speed * tune.speed * p.speed * researchBonus(r, 'engines'),
     sight: Math.round(d.sight * p.sight),
     weapon: d.weapon && {
-      damage: Math.round(d.weapon.damage * t.damage * p.damage * researchBonus(r, 'weapons')),
+      damage: Math.round(d.weapon.damage * tune.damage * p.damage * researchBonus(r, 'weapons')),
       range: d.weapon.range,
       cooldownMs: d.weapon.cooldownMs,
     },
@@ -402,14 +414,14 @@ export function unitStats(side: Side, type: UnitId) {
 /** A building's numbers in its faction, with the faction's multipliers applied. */
 export function buildingStats(side: Side, role: Role) {
   const d = side.def.buildings[role];
-  const t = side.def.tune;
+  const tune = side.def.tune;
   return {
-    name: d.name,
-    cost: Math.round(d.cost * t.cost),
-    hp: Math.round(d.hp * t.hp),
+    name: t(d.name),
+    cost: Math.round(d.cost * tune.cost),
+    hp: Math.round(d.hp * tune.hp),
     radius: d.radius,
     weapon: d.weapon && {
-      damage: Math.round(d.weapon.damage * t.damage * side.perks.turretDamage),
+      damage: Math.round(d.weapon.damage * tune.damage * side.perks.turretDamage),
       range: Math.round(d.weapon.range * side.perks.turretRange),
       cooldownMs: d.weapon.cooldownMs,
     },
@@ -421,7 +433,7 @@ export function flagshipStats(side: Side) {
   const heavy = unitStats(side, 'heavy');
   return {
     ...heavy,
-    name: side.def.flagship.name,
+    name: t(side.def.flagship.name),
     cost: Math.round(FLAGSHIP_COST * side.def.tune.cost * side.perks.cost),
     trainMs: FLAGSHIP_MS,
     hp: Math.round(heavy.hp * FLAGSHIP_HP),
@@ -434,7 +446,7 @@ export function flagshipStats(side: Side) {
 export function expansionStats(side: Side) {
   const hub = buildingStats(side, 'hub');
   return {
-    name: `${hub.name.split(' ')[0]} Outpost`,
+    name: t(side.def.outpost),
     cost: Math.round(EXPANSION_COST * side.def.tune.cost),
     hp: Math.round(hub.hp * EXPANSION_HP),
     radius: hub.radius,
@@ -603,24 +615,24 @@ export class World {
 
   /** The player picks one of the board's two contracts; it starts at once. */
   pickContract(goal: Goal): string | null {
-    if (this.phase !== 'playing') return 'The battle is over';
-    if (this.contract.goal || !this.contract.offer.includes(goal)) return 'That contract is not on the board';
+    if (this.phase !== 'playing') return t('battleOver');
+    if (this.contract.goal || !this.contract.offer.includes(goal)) return t('notOnBoard');
     this.startContract(goal);
     return null;
   }
 
   /** Starts building the flagship at the player's hub, once the third contract has unlocked it. One per battle. */
   buildFlagship(): string | null {
-    if (this.phase !== 'playing') return 'The battle is over';
+    if (this.phase !== 'playing') return t('battleOver');
     const side = this.sides[PLAYER];
     const f = side.flagship;
-    if (f.state === 'locked') return `Finish contract ${FLAGSHIP_STEP} to unlock the flagship`;
-    if (f.state === 'building') return 'The flagship is already being built';
-    if (f.state === 'out') return 'Your flagship is already flying';
-    if (f.state === 'lost') return 'Your flagship was lost: only one per battle';
-    if (!this.hubOf(PLAYER)) return 'No hub';
+    if (f.state === 'locked') return t('flagshipLocked', { n: FLAGSHIP_STEP });
+    if (f.state === 'building') return t('flagshipBuilding');
+    if (f.state === 'out') return t('flagshipOut');
+    if (f.state === 'lost') return t('flagshipGone');
+    if (!this.hubOf(PLAYER)) return t('noHub');
     const cost = flagshipStats(side).cost;
-    if (side.crystal < cost) return 'Not enough crystal';
+    if (side.crystal < cost) return t('notEnoughCrystal');
     side.crystal -= cost;
     f.state = 'building';
     f.left = FLAGSHIP_MS;
@@ -662,34 +674,34 @@ export class World {
     const side = this.sides[faction];
     const r = buildInfo(side, role).radius;
     if (x < ARENA.x + r || x > ARENA.x + ARENA.w - r || y < ARENA.y + r || y > ARENA.y + ARENA.h - r) {
-      return 'Off the map';
+      return t('offMap');
     }
-    if (faction === PLAYER && !this.fog.knows({ x, y })) return 'Scout there first';
-    if (!this.hubOf(faction)) return 'No hub';
+    if (faction === PLAYER && !this.fog.knows({ x, y })) return t('scoutFirst');
+    if (!this.hubOf(faction)) return t('noHub');
     if (role === 'expansion') {
-      if (this.hubsOf(faction).some((h) => dist(h, { x, y }) < EXPANSION_GAP)) return 'Too close to your hubs: pick a far crystal field';
-      if (!this.nodes.some((n) => n.amount > 0 && dist(n, { x, y }) <= EXPANSION_NEAR)) return 'Build it beside a crystal field';
+      if (this.hubsOf(faction).some((h) => dist(h, { x, y }) < EXPANSION_GAP)) return t('tooCloseHubs');
+      if (!this.nodes.some((n) => n.amount > 0 && dist(n, { x, y }) <= EXPANSION_NEAR)) return t('besideField');
     } else if (!this.hubsOf(faction, true).some((h) => dist(h, { x, y }) <= BUILD_RANGE)) {
-      return 'Too far from your hub';
+      return t('tooFarHub');
     }
     if (this.buildings.some((b) => dist(b, { x, y }) < buildingStats(this.sides[b.faction], b.type).radius + r + 6)) {
-      return 'Too close to a building';
+      return t('tooCloseBuilding');
     }
-    if (this.layout.rocks.some((k) => dist(k, { x, y }) < k.r + r + 4)) return 'Blocked by rocks';
-    if (this.nodes.some((n) => n.amount > 0 && dist(n, { x, y }) < NODE_CLEARANCE + r)) return 'Too close to crystal';
-    if (dist(this.beacon, { x, y }) < NODE_CLEARANCE + r + 10) return 'Too close to the relay beacon';
-    if (this.derelicts.some((d) => dist(d, { x, y }) < DERELICT_RADIUS + r)) return 'Too close to a derelict station';
+    if (this.layout.rocks.some((k) => dist(k, { x, y }) < k.r + r + 4)) return t('blockedRocks');
+    if (this.nodes.some((n) => n.amount > 0 && dist(n, { x, y }) < NODE_CLEARANCE + r)) return t('tooCloseCrystal');
+    if (dist(this.beacon, { x, y }) < NODE_CLEARANCE + r + 10) return t('tooCloseBeacon');
+    if (this.derelicts.some((d) => dist(d, { x, y }) < DERELICT_RADIUS + r)) return t('tooCloseDerelict');
     return null;
   }
 
   /** Starts a building for `faction` at (x, y), paying for it. Returns why not, or null when it started. */
   build(role: Build, x: number, y: number, faction = PLAYER): string | null {
-    if (this.phase !== 'playing') return 'The battle is over';
+    if (this.phase !== 'playing') return t('battleOver');
     const problem = this.placementProblem(role, x, y, faction);
     if (problem) return problem;
     const side = this.sides[faction];
     const stats = buildInfo(side, role);
-    if (side.crystal < stats.cost) return 'Not enough crystal';
+    if (side.crystal < stats.cost) return t('notEnoughCrystal');
     side.crystal -= stats.cost;
     this.buildings.push({
       kind: 'building', id: this.id(), faction, type: role === 'expansion' ? 'hub' : role, x, y, hp: stats.hp, maxHp: stats.hp,
@@ -701,14 +713,14 @@ export class World {
 
   /** Starts the next level of a research track at `faction`'s hub, paying for it. Returns why not, or null. */
   research(track: Track, faction = PLAYER): string | null {
-    if (this.phase !== 'playing') return 'The battle is over';
+    if (this.phase !== 'playing') return t('battleOver');
     const side = this.sides[faction];
-    if (!this.hubOf(faction)) return 'No hub';
+    if (!this.hubOf(faction)) return t('noHub');
     const r = side.research;
-    if (r.current) return `Already researching ${TRACK_DEFS[r.current.track].name}`;
-    if (r.levels[track] >= RESEARCH_LEVELS) return `${TRACK_DEFS[track].name} is fully researched`;
+    if (r.current) return t('alreadyResearching', { track: t(TRACK_DEFS[r.current.track].name) });
+    if (r.levels[track] >= RESEARCH_LEVELS) return t('fullyResearched', { track: t(TRACK_DEFS[track].name) });
     const cost = researchCost(side, track);
-    if (side.crystal < cost) return 'Not enough crystal';
+    if (side.crystal < cost) return t('notEnoughCrystal');
     side.crystal -= cost;
     r.current = { track, left: RESEARCH_MS };
     return null;
@@ -716,25 +728,25 @@ export class World {
 
   /** Queues a unit for `faction`, paying for it: harvesters at the hub, the rest at a barracks. */
   train(type: UnitId, faction = PLAYER): string | null {
-    if (this.phase !== 'playing') return 'The battle is over';
+    if (this.phase !== 'playing') return t('battleOver');
     const side = this.sides[faction];
     const cost = unitStats(side, type).cost;
-    if (side.crystal < cost) return 'Not enough crystal';
+    if (side.crystal < cost) return t('notEnoughCrystal');
     // Harvesters come from a hub, combat units from a Barracks or a claimed derelict shipyard.
     const producers: { queue: UnitId[] }[] = this.buildings.filter(
       (b) => b.faction === faction && b.done && b.type === (type === 'harvester' ? 'hub' : 'barracks'),
     );
     if (type !== 'harvester') producers.push(...this.derelicts.filter((d) => d.perk === 'shipyard' && d.owner === faction));
     if (!producers.length) {
-      return type === 'harvester' ? 'No hub' : `Build the ${side.def.buildings.barracks.name} (barracks) first`;
+      return type === 'harvester' ? t('noHub') : t('buildBarracksFirst', { barracks: t(side.def.buildings.barracks.name) });
     }
     const producer = producers.reduce((a, b) => (b.queue.length < a.queue.length ? b : a));
-    if (producer.queue.length >= MAX_QUEUE) return 'Queue full';
+    if (producer.queue.length >= MAX_QUEUE) return t('queueFull');
     side.crystal -= cost;
     producer.queue.push(type);
     // The player hears when a ship goes to the derelict shipyard rather than their own Barracks.
     const yard = this.derelicts.find((d) => d === producer);
-    if (faction === PLAYER && yard) this.events.push({ kind: 'notice', text: `${side.def.units[type].name} queued at the derelict ${DERELICT_DEFS[yard.perk].name}` });
+    if (faction === PLAYER && yard) this.events.push({ kind: 'notice', text: t('queuedAtDerelict', { unit: t(side.def.units[type].name), derelict: derelictName(yard.perk) }) });
     return null;
   }
 
@@ -751,7 +763,7 @@ export class World {
       const side = this.sides[target.faction];
       side.truceMs = 0;
       side.grudge = PLAYER;
-      this.events.push({ kind: 'notice', text: `Truce with the ${side.def.name} broken` });
+      this.events.push({ kind: 'notice', text: t('truceBroken', { faction: t(side.def.name) }) });
     }
     for (const u of units) {
       u.order = target && target.faction !== PLAYER
@@ -773,8 +785,8 @@ export class World {
   /** Accepts a rival's truce offer: peace for TRUCE_MS, and its tribute paid into the player's bank. */
   acceptTruce(faction: number): string | null {
     const side = this.sides[faction];
-    if (faction === PLAYER || !side.alive) return 'No such rival';
-    if (side.offerMs <= 0) return `The ${side.def.name} is not offering a truce`;
+    if (faction === PLAYER || !side.alive) return t('noRival');
+    if (side.offerMs <= 0) return t('noTruceOffer', { faction: t(side.def.name) });
     const tribute = Math.min(TRUCE_TRIBUTE, side.crystal);
     side.crystal -= tribute;
     this.sides[PLAYER].crystal += tribute;
@@ -790,14 +802,14 @@ export class World {
       if (target && this.atPeace(u.faction, target.faction)) u.order = null;
     }
     this.events.push({ kind: 'gain', amount: tribute });
-    this.events.push({ kind: 'notice', text: `Truce with the ${side.def.name} for ${TRUCE_MS / 1000} s: +${tribute} crystal tribute` });
+    this.events.push({ kind: 'notice', text: t('truceMade', { faction: t(side.def.name), s: TRUCE_MS / 1000, n: tribute }) });
     return null;
   }
 
   /** Turns a rival's truce offer down; it waits a while before offering again. */
   declineTruce(faction: number): string | null {
     const side = this.sides[faction];
-    if (faction === PLAYER || side.offerMs <= 0) return 'No offer to decline';
+    if (faction === PLAYER || side.offerMs <= 0) return t('noOffer');
     side.offerMs = 0;
     side.offerCooldownMs = OFFER_COOLDOWN_MS / 2;
     return null;
@@ -814,14 +826,14 @@ export class World {
 
   /** Pays a rival tribute to turn its grudge onto another faction for BRIBE_MS; its next raids go there. */
   bribe(faction: number): string | null {
-    if (this.phase !== 'playing') return 'The battle is over';
+    if (this.phase !== 'playing') return t('battleOver');
     const side = this.sides[faction];
-    if (faction === PLAYER || !side.alive) return 'No such rival';
-    if (this.pact) return 'The rivals are in a pact: tribute will not turn them';
+    if (faction === PLAYER || !side.alive) return t('noRival');
+    if (this.pact) return t('inPact');
     const target = this.bribeTarget(faction);
-    if (!target) return 'No other faction left to turn it on';
+    if (!target) return t('noTarget');
     const me = this.sides[PLAYER];
-    if (me.crystal < BRIBE_COST) return 'Not enough crystal';
+    if (me.crystal < BRIBE_COST) return t('notEnoughCrystal');
     me.crystal -= BRIBE_COST;
     side.crystal += BRIBE_COST;
     side.grudge = target.index;
@@ -834,7 +846,7 @@ export class World {
       const t = this.unit(u.order.id) ?? this.building(u.order.id);
       if (t?.faction === PLAYER && hub) u.order = { kind: 'attack', id: hub.id, auto: false };
     }
-    this.events.push({ kind: 'notice', text: `Tribute paid: the ${side.def.name} turns on the ${target.def.name} for ${BRIBE_MS / 1000} s` });
+    this.events.push({ kind: 'notice', text: t('tributePaid', { faction: t(side.def.name), target: t(target.def.name), s: BRIBE_MS / 1000 }) });
     return null;
   }
 
@@ -1109,12 +1121,11 @@ export class World {
         d.capturer = f;
         d.claim = Math.min(1, d.claim + step);
         if (d.claim >= 1 && d.owner !== f) {
-          if (d.owner === PLAYER) this.events.push({ kind: 'notice', text: `The derelict ${DERELICT_DEFS[d.perk].name} was taken by the ${this.sides[f].def.name}` });
+          if (d.owner === PLAYER) this.events.push({ kind: 'notice', text: t('derelictTaken', { derelict: derelictName(d.perk), faction: t(this.sides[f].def.name) }) });
           this.refundQueue(d);
           d.owner = f;
-          const def = DERELICT_DEFS[d.perk];
-          if (f === PLAYER) this.events.push({ kind: 'notice', text: `Derelict claimed: ${def.name}. ${def.text}` });
-          else aiLog(String(f), `claims the derelict ${def.name}`);
+          if (f === PLAYER) this.events.push({ kind: 'notice', text: t('derelictClaimed', { derelict: derelictName(d.perk), text: derelictText(d.perk) }) });
+          else aiLog(String(f), t('aiClaims', { derelict: derelictName(d.perk) }));
         }
       } else {
         d.claim = Math.max(0, d.claim - step);
@@ -1148,7 +1159,7 @@ export class World {
 
   /** A derelict goes back to nobody: its owner fell or was drained out. */
   private loseDerelict(d: Derelict) {
-    if (d.owner === PLAYER) this.events.push({ kind: 'notice', text: `The derelict ${DERELICT_DEFS[d.perk].name} is lost` });
+    if (d.owner === PLAYER) this.events.push({ kind: 'notice', text: t('derelictLost', { derelict: derelictName(d.perk) }) });
     this.refundQueue(d);
     d.owner = -1;
     d.capturer = -1;
@@ -1161,7 +1172,7 @@ export class World {
       const side = this.sides[d.owner];
       const back = d.queue.reduce((sum, type) => sum + unitStats(side, type).cost, 0);
       side.crystal += back;
-      if (d.owner === PLAYER) this.events.push({ kind: 'notice', text: `Ships queued at the derelict ${DERELICT_DEFS[d.perk].name} refunded: ◆${back}` });
+      if (d.owner === PLAYER) this.events.push({ kind: 'notice', text: t('derelictRefund', { derelict: derelictName(d.perk), n: back }) });
     }
     d.queue = [];
     d.trainLeft = 0;
@@ -1171,7 +1182,7 @@ export class World {
   private updateTruce(side: Side, dt: number) {
     if (side.truceMs > 0) {
       side.truceMs = Math.max(0, side.truceMs - dt);
-      if (side.truceMs <= 0) this.events.push({ kind: 'notice', text: `The truce with the ${side.def.name} has ended` });
+      if (side.truceMs <= 0) this.events.push({ kind: 'notice', text: t('truceEnded', { faction: t(side.def.name) }) });
     }
     if (side.offerMs > 0) side.offerMs = Math.max(0, side.offerMs - dt);
     side.offerCooldownMs = Math.max(0, side.offerCooldownMs - dt);
@@ -1189,7 +1200,7 @@ export class World {
     side.offerMs = OFFER_MS;
     this.events.push({
       kind: 'notice',
-      text: `The ${side.def.name} offers a truce: ${TRUCE_MS / 1000} s of peace and ${TRUCE_TRIBUTE} crystal tribute. Press T to answer`,
+      text: t('truceOffered', { faction: t(side.def.name), s: TRUCE_MS / 1000, n: TRUCE_TRIBUTE }),
     });
   }
 
@@ -1265,7 +1276,7 @@ export class World {
   /** A hacked turret changes sides: it becomes the hacker's own turret, as damaged as it was. */
   private takeOver(b: Building, faction: number) {
     const from = b.faction;
-    const was = this.sides[from].def.buildings[b.type].name;
+    const was = t(this.sides[from].def.buildings[b.type].name);
     const stats = buildingStats(this.sides[faction], b.type);
     b.faction = faction;
     b.hp = Math.max(1, Math.round((stats.hp * b.hp) / b.maxHp));
@@ -1276,8 +1287,8 @@ export class World {
     b.layMs = 0;
     b.lastHit = -1;
     this.booms.push({ x: b.x, y: b.y, color: this.sides[faction].def.color, life: BOOM_MS, r: stats.radius + 10 });
-    if (faction === PLAYER) this.events.push({ kind: 'notice', text: `Hacked: the ${was} is yours now` });
-    else if (from === PLAYER) this.events.push({ kind: 'notice', text: `Your ${was} was hacked and taken over` });
+    if (faction === PLAYER) this.events.push({ kind: 'notice', text: t('hackedYours', { building: was }) });
+    else if (from === PLAYER) this.events.push({ kind: 'notice', text: t('hackedLost', { building: was }) });
   }
 
   /** A Mine Lattice lays a mine at a random spot in its reach, while it has fewer than `cap` out. */
@@ -1331,7 +1342,12 @@ export class World {
       if (side.index === PLAYER) {
         this.events.push({
           kind: 'notice',
-          text: `${TRACK_DEFS[cur.track].name} ${side.research.levels[cur.track]} done: ships +${Math.round(RESEARCH_STEP * 100)}% ${TRACK_DEFS[cur.track].effect}`,
+          text: t('researchDone', {
+            track: t(TRACK_DEFS[cur.track].name),
+            level: side.research.levels[cur.track],
+            pct: Math.round(RESEARCH_STEP * 100),
+            effect: t(TRACK_DEFS[cur.track].effect),
+          }),
         });
       }
     }
@@ -1474,7 +1490,7 @@ export class World {
     let saving = false;
     if (this.elapsedMs >= AI_EXPAND_MS && expansions === 0) {
       if (side.crystal >= expansionStats(side).cost) {
-        if (this.expand(f)) aiLog(String(f), 'builds an outpost on a new crystal field');
+        if (this.expand(f)) aiLog(String(f), t('aiOutpost'));
       }
       else saving = true;
     }
@@ -1484,7 +1500,7 @@ export class World {
       const low = open.filter((t) => side.research.levels[t] === Math.min(...open.map((o) => side.research.levels[o])));
       const track = low[Math.floor(Math.random() * low.length)];
       if (track && side.crystal >= researchCost(side, track) && this.research(track, f) === null) {
-        aiLog(String(f), `researches ${TRACK_DEFS[track].name} ${side.research.levels[track] + 1}`);
+        aiLog(String(f), t('aiResearches', { track: t(TRACK_DEFS[track].name), level: side.research.levels[track] + 1 }));
       }
       else if (track) saving = true;
     }
@@ -1516,7 +1532,7 @@ export class World {
     for (const u of sent) u.order = { kind: 'attack', id: target.id, auto: false };
     if (sent.length > 0) {
       const at = this.sides[target.faction];
-      aiLog(String(f), `sends ${sent.length} ships at the ${at.def.name} ${at.def.buildings[target.type].name}`);
+      aiLog(String(f), t('aiAttacks', { n: sent.length, faction: t(at.def.name), building: t(at.def.buildings[target.type].name) }));
     }
   }
 
@@ -1558,7 +1574,7 @@ export class World {
     if (!idle) return;
     side.claimer = idle.id;
     idle.order = { kind: 'move', x: target.x, y: target.y };
-    aiLog(String(f), `sends a ship to claim the derelict ${DERELICT_DEFS[target.perk].name}`);
+    aiLog(String(f), t('aiClaimer', { derelict: derelictName(target.perk) }));
   }
 
   /** An AI expansion: a second hub beside the richest-looking crystal field away from everyone. */
@@ -1636,7 +1652,7 @@ export class World {
       const x = hub.x + Math.cos(angle) * d;
       const y = hub.y + Math.sin(angle) * d;
       if (this.placementProblem(role, x, y, faction) === null) {
-        if (this.build(role, x, y, faction) === null) aiLog(String(faction), `builds a ${buildInfo(this.sides[faction], role).name}`);
+        if (this.build(role, x, y, faction) === null) aiLog(String(faction), t('aiBuilds', { building: buildInfo(this.sides[faction], role).name }));
         return;
       }
     }
@@ -1673,7 +1689,7 @@ export class World {
       // A lost flagship is gone for the rest of the battle.
       if (u.flagship && u.faction === PLAYER) {
         this.sides[PLAYER].flagship.state = 'lost';
-        this.events.push({ kind: 'notice', text: `Your flagship, the ${this.sides[PLAYER].def.flagship.name}, is lost` });
+        this.events.push({ kind: 'notice', text: t('flagshipLost', { name: t(this.sides[PLAYER].def.flagship.name) }) });
       }
       // A destroyed ship leaves a salvage shard for whoever destroyed it; the player's count as kills.
       if (u.decoyMs !== null || u.lastHit < 0 || u.lastHit === u.faction) continue;
@@ -1707,11 +1723,13 @@ export class World {
     const k = after / before;
     u.maxHp = Math.round(u.maxHp * k);
     u.hp = Math.min(u.maxHp, u.hp * k);
-    const name = VETERAN_NAMES[this.rankOf(u) - 1];
+    const rank = VETERAN_NAMES[this.rankOf(u) - 1];
+    const name = t(rank);
     this.booms.push({ x: u.x, y: u.y, color: 0xffd36a, life: BOOM_MS, r: 14 });
     if (u.faction === PLAYER) {
       this.pops.push({ x: u.x, y: u.y - 20, text: name.toUpperCase(), color: 0xffd36a, life: POP_MS });
-      this.events.push({ kind: 'notice', text: `${this.sides[PLAYER].def.units[u.type].name} is now ${name === 'Ace' ? 'an' : 'a'} ${name}: +${Math.round(VETERAN_STEP * 100)}% damage and hull per rank` });
+      this.events.push({ kind: 'notice', text: t(rank === 'rankAce' ? 'rankUpAce' : 'rankUp', { unit: t(this.sides[PLAYER].def.units[u.type].name), rank: name, pct: Math.round(VETERAN_STEP * 100) }),
+      });
     }
   }
 
@@ -1754,12 +1772,12 @@ export class World {
         bc.capture = Math.min(1, bc.capture + step);
         if (bc.capture >= 1 && bc.owner !== f) {
           bc.owner = f;
-          if (f === PLAYER) this.events.push({ kind: 'notice', text: `Relay beacon captured: +${BEACON_PAY} crystal a second while your ships hold it` });
+          if (f === PLAYER) this.events.push({ kind: 'notice', text: t('beaconCaptured', { n: BEACON_PAY }) });
         }
       } else {
         bc.capture = Math.max(0, bc.capture - step);
         if (bc.capture <= 0) {
-          if (bc.owner === PLAYER) this.events.push({ kind: 'notice', text: 'The relay beacon was lost' });
+          if (bc.owner === PLAYER) this.events.push({ kind: 'notice', text: t('beaconLost') });
           bc.owner = -1;
           bc.capturer = f;
         }
@@ -1833,7 +1851,7 @@ export class World {
     } else if (c.goal === 'survive') {
       state.progress += dt / 1000;
     } else if (c.goal === 'convoy' && state.progress + this.units.filter((u) => u.convoy).length < c.target) {
-      this.failContract('the convoy was lost');
+      this.failContract(t('convoyLost'));
       return;
     }
     if (state.progress < c.target) return;
@@ -1845,10 +1863,10 @@ export class World {
     state.done.push(c.goal);
     state.index += 1;
     this.endConvoy();
-    let text = `Contract done: +${c.reward} crystal and Rank ${rank}: ${c.perk(side.def)}`;
+    let text = t('contractDone', { n: c.reward, rank, perk: c.perk(side.def) });
     if (state.index === FLAGSHIP_STEP && side.flagship.state === 'locked') {
       side.flagship.state = 'ready';
-      text += `. Flagship unlocked: build the ${side.def.flagship.name} at your hub`;
+      text += t('flagshipUnlocked', { name: t(side.def.flagship.name) });
     }
     this.events.push({ kind: 'notice', text });
     this.openBoard();
@@ -1874,13 +1892,13 @@ export class World {
     state.taken.push(goal);
     if (goal === 'convoy') this.launchConvoy();
     if (goal === 'survive') this.raidPlayer();
-    this.events.push({ kind: 'notice', text: `Contract ${RANKS[state.index]}: ${contractOf(goal).brief(this.sides[PLAYER].def)}` });
+    this.events.push({ kind: 'notice', text: t('contractStarted', { rank: RANKS[state.index], brief: contractOf(goal).brief(this.sides[PLAYER].def) }) });
   }
 
   /** A contract that can no longer be met: the board offers the next two in its place. */
   private failContract(why: string) {
     this.endConvoy();
-    this.events.push({ kind: 'notice', text: `Contract failed: ${why}. Pick another from the board` });
+    this.events.push({ kind: 'notice', text: t('contractFailed', { why }) });
     this.openBoard();
   }
 
@@ -1942,7 +1960,7 @@ export class World {
       .sort((a, b) => dist(a, field) - dist(b, field))
       .slice(0, CONVOY_RAIDERS);
     raiders.forEach((u, k) => { u.order = { kind: 'attack', id: convoy[k % convoy.length].id, auto: false }; });
-    if (raiders.length) this.events.push({ kind: 'notice', text: `The ${hunter.def.name} sends ${raiders.length} ships to hunt your convoy` });
+    if (raiders.length) this.events.push({ kind: 'notice', text: t('convoyHunted', { faction: t(hunter.def.name), n: raiders.length }) });
   }
 
   /** A convoy harvester flies to the far field; once there it starts mining it like any harvester. */
@@ -1995,7 +2013,7 @@ export class World {
     this.pact.waves += 1;
     this.pact.ms = PACT_WAVE_MS;
     this.raidPlayer();
-    this.events.push({ kind: 'notice', text: `The pact raids: every rival fleet is coming for your hub. Next wave in ${PACT_WAVE_MS / 1000} s` });
+    this.events.push({ kind: 'notice', text: t('pactRaids', { s: PACT_WAVE_MS / 1000 }) });
   }
 
   /** The rivals sign the pact: truces end, their grudges turn on the player, they get crystal, and they stop fighting each other. */
@@ -2014,9 +2032,8 @@ export class World {
       const target = this.unit(u.order.id) ?? this.building(u.order.id);
       if (target && this.atPeace(u.faction, target.faction)) u.order = null;
     }
-    const names = rivals.map((s) => `the ${s.def.name}`);
-    const who = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0];
-    this.events.push({ kind: 'notice', text: `Last stand: ${who} sign a pact and raid you together in ${PACT_MS / 1000} s` });
+    const who = new Intl.ListFormat(locale(), { type: 'conjunction' }).format(rivals.map((s) => t('theFaction', { faction: t(s.def.name) })));
+    this.events.push({ kind: 'notice', text: t('pactSigned', { who, s: PACT_MS / 1000 }) });
   }
 
   /** The flagship being built at the hub: when it is done it launches beside the hub. */
@@ -2029,7 +2046,7 @@ export class World {
     if (f.left > 0 || !hub) return;
     this.spawn(PLAYER, 'heavy', hub.x, hub.y + buildingStats(side, 'hub').radius + 24, null, true);
     f.state = 'out';
-    this.events.push({ kind: 'notice', text: `Flagship launched: the ${side.def.flagship.name}. Lose it and it is gone for this battle` });
+    this.events.push({ kind: 'notice', text: t('flagshipLaunched', { name: t(side.def.flagship.name) }) });
   }
 
   private wreck(e: Unit | Building) {

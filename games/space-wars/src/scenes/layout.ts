@@ -1,6 +1,7 @@
 import type { Role, UnitId } from '../game/factions';
 import { TRACKS, type Track } from '../game/research';
 import type { Build } from '../game/world';
+import type { TextKey } from '../i18n';
 
 export const VIEW = { w: 960, h: 540 };
 /** The top bar: the faction's crystal and counts. */
@@ -16,22 +17,22 @@ export const BUTTON = { w: 116, h: 30 };
 
 export type ButtonKey = Role | UnitId | 'expansion' | Track | 'fallback' | 'flagship';
 
-/** The generic role of each building and unit type, as the buttons and hover labels name it. */
-export const ROLE_LABEL: Record<ButtonKey, string> = {
-  hub: 'Hub',
-  depot: 'Depot',
-  barracks: 'Barracks',
-  turret: 'Turret',
-  harvester: 'Harvester',
-  scout: 'Scout',
-  gunship: 'Gunship',
-  heavy: 'Heavy',
-  expansion: 'Expansion',
-  hull: 'Research',
-  weapons: 'Research',
-  engines: 'Research',
-  fallback: 'Command',
-  flagship: 'Flagship',
+/** The generic role of each building and unit type, as the buttons and hover labels name it: keys of `i18n/en.ts`. */
+export const ROLE_LABEL: Record<ButtonKey, TextKey> = {
+  hub: 'roleHub',
+  depot: 'roleDepot',
+  barracks: 'roleBarracks',
+  turret: 'roleTurret',
+  harvester: 'roleHarvester',
+  scout: 'roleScout',
+  gunship: 'roleGunship',
+  heavy: 'roleHeavy',
+  expansion: 'roleExpansion',
+  hull: 'roleResearch',
+  weapons: 'roleResearch',
+  engines: 'roleResearch',
+  fallback: 'roleCommand',
+  flagship: 'roleFlagship',
 };
 
 export interface Button {

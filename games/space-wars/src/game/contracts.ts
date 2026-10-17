@@ -4,6 +4,7 @@
 // next two. No Phaser.
 
 import type { Faction } from './factions';
+import { t } from '../i18n';
 
 /** What the player's faction is improved by, as multipliers; 1 everywhere at the start. */
 export interface Perks {
@@ -51,6 +52,8 @@ export interface Contract {
   title: (def: Faction) => string;
   /** The goal in a sentence, shown on the command bar. */
   brief: (def: Faction) => string;
+  /** What to do, shown on the board's card under the title. */
+  task: () => string;
   /** The perk, as the bar shows it after the rank. */
   perk: (def: Faction) => string;
   apply: (p: Perks) => void;
@@ -68,9 +71,10 @@ export const FLAGSHIP_STEP = 3;
 /** The first contract, the same every battle: it is part of the first round. */
 export const FIRST_CONTRACT: Contract = {
   goal: 'barracks', target: 1, reward: 60, from: 0,
-  title: (d) => `Raise the ${d.buildings.barracks.name}`,
-  brief: (d) => `Raise the ${d.buildings.barracks.name}: finish your Barracks`,
-  perk: () => 'ships train 20% faster',
+  title: (d) => t('barracksTitle', { barracks: t(d.buildings.barracks.name) }),
+  brief: (d) => t('barracksBrief', { barracks: t(d.buildings.barracks.name) }),
+  task: () => t('barracksTask'),
+  perk: () => t('barracksPerk'),
   apply: (p) => { p.train *= 0.8; },
 };
 
@@ -78,65 +82,74 @@ export const FIRST_CONTRACT: Contract = {
 export const CONTRACT_POOL: readonly Contract[] = [
   {
     goal: 'kills', target: 7, reward: 120, from: 1,
-    title: () => 'Break the raid',
-    brief: () => 'Break the raid: destroy 7 enemy ships',
-    perk: (d) => `${d.buildings.turret.name} range +20%`,
+    title: () => t('killsTitle'),
+    brief: () => t('killsBrief'),
+    task: () => t('killsTask'),
+    perk: (d) => t('killsPerk', { turret: t(d.buildings.turret.name) }),
     apply: (p) => { p.turretRange *= 1.2; },
   },
   {
     goal: 'convoy', target: 2, reward: 150, from: 1,
-    title: () => 'Escort the convoy',
-    brief: () => 'Escort the convoy: get 2 of 3 harvesters there',
-    perk: () => 'harvesters carry 30% more',
+    title: () => t('convoyTitle'),
+    brief: () => t('convoyBrief'),
+    task: () => t('convoyTask'),
+    perk: () => t('convoyPerk'),
     apply: (p) => { p.carry *= 1.3; },
   },
   {
     goal: 'derelicts', target: 2, reward: 160, from: 1,
-    title: () => 'Claim two derelicts',
-    brief: () => 'Claim two derelicts: hold two at once',
-    perk: () => 'ships repair twice as fast',
+    title: () => t('derelictsTitle'),
+    brief: () => t('derelictsBrief'),
+    task: () => t('derelictsTask'),
+    perk: () => t('derelictsPerk'),
     apply: (p) => { p.repair *= 2; },
   },
   {
     goal: 'hold', target: 60, reward: 150, from: 1,
-    title: () => 'Hold the Relay 60 s',
-    brief: () => 'Hold the Relay: keep a ship on the relay beacon for 60 s',
-    perk: () => 'ships 10% faster',
+    title: () => t('holdTitle'),
+    brief: () => t('holdBrief'),
+    task: () => t('holdTask'),
+    perk: () => t('holdPerk'),
     apply: (p) => { p.speed *= 1.1; },
   },
   {
     goal: 'nebula', target: 45, reward: 140, from: 1,
-    title: () => 'Hold a nebula 45 s',
-    brief: () => 'Hold a nebula: no enemy ship in it, 45 s',
-    perk: () => 'ships see 20% further',
+    title: () => t('nebulaTitle'),
+    brief: () => t('nebulaBrief'),
+    task: () => t('nebulaTask'),
+    perk: () => t('nebulaPerk'),
     apply: (p) => { p.sight *= 1.2; },
   },
   {
     goal: 'lattice', target: 1, reward: 180, from: 2,
-    title: () => 'Break a Mine Lattice',
-    brief: () => 'Break a Mine Lattice: destroy one',
-    perk: (d) => `${d.buildings.turret.name} damage +25%`,
+    title: () => t('latticeTitle'),
+    brief: () => t('latticeBrief'),
+    task: () => t('latticeTask'),
+    perk: (d) => t('latticePerk', { turret: t(d.buildings.turret.name) }),
     apply: (p) => { p.turretDamage *= 1.25; },
   },
   {
     goal: 'razes', target: 3, reward: 200, from: 2,
-    title: () => 'Raze an outpost',
-    brief: () => 'Raze an outpost: destroy 3 enemy buildings',
-    perk: () => 'ship hulls +15%',
+    title: () => t('razesTitle'),
+    brief: () => t('razesBrief'),
+    task: () => t('razesTask'),
+    perk: () => t('razesPerk'),
     apply: (p) => { p.hp *= 1.15; },
   },
   {
     goal: 'survive', target: 90, reward: 220, from: 2,
-    title: () => 'Survive the raid 90 s',
-    brief: () => 'Survive the raid: every rival comes, 90 s',
-    perk: () => 'ships cost 10% less',
+    title: () => t('surviveTitle'),
+    brief: () => t('surviveBrief'),
+    task: () => t('surviveTask'),
+    perk: () => t('survivePerk'),
     apply: (p) => { p.cost *= 0.9; },
   },
   {
     goal: 'hubs', target: 1, reward: 300, from: 3,
-    title: () => 'Topple a hub',
-    brief: () => 'Topple a hub: destroy a rival hub',
-    perk: () => 'ship damage +10%',
+    title: () => t('hubsTitle'),
+    brief: () => t('hubsBrief'),
+    task: () => t('hubsTask'),
+    perk: () => t('hubsPerk'),
     apply: (p) => { p.damage *= 1.1; },
   },
 ];
