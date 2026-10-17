@@ -1,4 +1,5 @@
 import { byDifficulty } from '../../../../shared/settings';
+import { t as tr } from '../i18n';
 import {
   CARGO_NAMES,
   ROOST,
@@ -85,7 +86,7 @@ import {
 const newWyrm = (): Wyrm => ({ at: { ...ROOST }, path: [], progress: 0, from: null, job: null, loadMs: 0, switchMs: 0, food: 1, eatMs: 0, waitMs: 0 });
 
 /** The names of the boons a medal brings: its own and the ones of the medals below it. */
-export const boonNames = (m: Medal) => MEDALS.slice(0, MEDALS.indexOf(m) + 1).map((b) => BOONS[b].name);
+export const boonNames = (m: Medal) => MEDALS.slice(0, MEDALS.indexOf(m) + 1).map((b) => tr(BOONS[b].name));
 
 /** Whether a medal's boons apply: `boon` (the best medal on this difficulty) is it or a better one. */
 export const hasBoon = (s: GameState, m: Medal) => s.boon !== null && MEDALS.indexOf(s.boon) >= MEDALS.indexOf(m);
@@ -122,7 +123,7 @@ export function newGame(boon: Medal | null = null): GameState {
     upgrades: { wings: 0, hoard: 0, second: 0 },
     orderTimerMs: ORDER_EVERY_MS,
     banner: {
-      text: 'Lay track from the Roost to Millbrook and Ashford' + (boon ? `\nMedal boons: ${boonNames(boon).join(', ')}` : ''),
+      text: tr('startBanner') + (boon ? '\n' + tr('medalBoons', { boons: boonNames(boon).join(', ') }) : ''),
       ms: BANNER_MS * (boon ? 2 : 1.5),
     },
     pops: [],
@@ -346,7 +347,7 @@ export function buyUpgrade(s: GameState, u: Upgrade) {
   s.upgrades[u]++;
   if (u === 'second') {
     s.wyrms.push(newWyrm());
-    s.banner = { text: 'A second wyrm wakes in the Roost', ms: BANNER_MS };
+    s.banner = { text: tr('secondWyrmWakes'), ms: BANNER_MS };
   }
   return true;
 }
@@ -375,7 +376,7 @@ export function pickCharter(s: GameState, i: number) {
   if (s.phase !== 'play' || !charter) return false;
   s.charter = charter;
   s.charterOffer = null;
-  s.banner = { text: `Charter: ${charter.name}`, ms: BANNER_MS };
+  s.banner = { text: tr('charterBanner', { name: tr(charter.name) }), ms: BANNER_MS };
   return true;
 }
 
@@ -398,7 +399,7 @@ export function buyDepot(s: GameState, v: number) {
   const cost = depotCost(s);
   s.coins -= cost;
   s.depots.push(v);
-  pop(s, `Depot -${cost}`, villages(s)[v], '#f0c070');
+  pop(s, tr('depotPop', { n: cost }), villages(s)[v], '#f0c070');
   return true;
 }
 
@@ -438,7 +439,7 @@ export function sendCourier(s: GameState, v: number) {
   const w = s.wyrms[i];
   w.job = { leg: 'visit', village: v };
   w.path = path;
-  pop(s, `Gifts -${COURIER_COST}`, villages(s)[v], '#f0c070');
+  pop(s, tr('giftsCost', { n: COURIER_COST }), villages(s)[v], '#f0c070');
   if (!path.length) arrive(s, i);
   return true;
 }
@@ -479,7 +480,7 @@ function cheer(s: GameState, v: number, by: number) {
   if (s.moods[v] > -MOOD_MAX) return;
   s.moods[v] = 1 - MOOD_MAX;
   s.hearts--;
-  pop(s, `${villages(s)[v].name} loses faith!`, villages(s)[v], '#f08a6a');
+  pop(s, tr('losesFaith', { village: villages(s)[v].name }), villages(s)[v], '#f08a6a');
   if (s.hearts <= 0) s.phase = 'over';
 }
 
@@ -494,7 +495,7 @@ function tickMoods(s: GameState, dt: number) {
   for (const v of open) {
     if ((s.idleMs[v] += dt) < gap) continue;
     s.idleMs[v] = 0;
-    pop(s, `${villages(s)[v].name} feels forgotten`, villages(s)[v], '#d8c7a6');
+    pop(s, tr('feelsForgotten', { village: villages(s)[v].name }), villages(s)[v], '#d8c7a6');
     cheer(s, v, -1);
     if (s.phase !== 'play') return;
   }
@@ -524,7 +525,7 @@ function tickHazard(s: GameState, dt: number) {
   const kind = hazardKind(s, tile)!;
   s.hazard = { tile, kind, ms: HAZARD_WARN_MS };
   s.banner = {
-    text: kind === 'washout' ? 'The river is rising: a bridge is about to wash out!' : 'Stones are loosening: a rockfall is coming down on the track!',
+    text: tr(kind === 'washout' ? 'washoutWarning' : 'rockfallWarning'),
     ms: BANNER_MS,
   };
 }
@@ -540,7 +541,7 @@ function strikeHazard(s: GameState) {
   s.track = s.track.filter((k) => k !== key(h.tile));
   delete s.paid[key(h.tile)];
   syncSwitches(s);
-  pop(s, h.kind === 'washout' ? 'Washed out!' : 'Rockfall!', h.tile, '#f08a6a');
+  pop(s, tr(h.kind === 'washout' ? 'washedOut' : 'rockfall'), h.tile, '#f08a6a');
   for (const w of s.wyrms) {
     const i = w.path.findIndex((t) => sameTile(t, h.tile));
     if (i < 0) continue;
@@ -609,7 +610,7 @@ function moveWyrm(s: GameState, i: number, dt: number) {
 function stopForSwitch(s: GameState, w: Wyrm) {
   w.progress = 0;
   w.switchMs = SWITCH_MS;
-  pop(s, 'Switch!', w.at, '#f0c070');
+  pop(s, tr('switchPop'), w.at, '#f0c070');
 }
 
 /**
@@ -674,7 +675,7 @@ function arrive(s: GameState, i: number) {
   const w = s.wyrms[i];
   if (w.job?.leg === 'feed') {
     w.eatMs = EAT_MS;
-    pop(s, 'Munch!', ROOST, '#c9e8c0');
+    pop(s, tr('munch'), ROOST, '#c9e8c0');
     return;
   }
   if (w.job?.leg === 'visit') {
@@ -683,7 +684,7 @@ function arrive(s: GameState, i: number) {
     w.job = null;
     s.idleMs[v] = 0;
     cheer(s, v, 1);
-    pop(s, 'Gifts!', { c: villages(s)[v].c, r: villages(s)[v].r - 1 }, '#9be883');
+    pop(s, tr('gifts'), { c: villages(s)[v].c, r: villages(s)[v].r - 1 }, '#9be883');
     return;
   }
   const o = s.orders.find((o) => o.id === jobOrder(w.job));
@@ -739,7 +740,7 @@ function makeGoods(s: GameState, at: number) {
   if (to === undefined) return;
   addOrder(s, at, to, true);
   const v = villages(s)[at];
-  pop(s, `${CARGO_NAMES[workshopOf(v)!.makes]}!`, { c: v.c, r: v.r - 1 }, '#f3e9d2');
+  pop(s, `${tr(CARGO_NAMES[workshopOf(v)!.makes].name)}!`, { c: v.c, r: v.r - 1 }, '#f3e9d2');
 }
 
 function nextRound(s: GameState) {
@@ -753,10 +754,10 @@ function nextRound(s: GameState) {
   s.banner = {
     text:
       s.round === FESTIVAL_ROUND
-        ? `Festival at ${villages(s)[festivalHost(s)].name}: bring it ${FESTIVAL_GOAL} loads!`
+        ? tr('festivalBanner', { village: villages(s)[festivalHost(s)].name, n: FESTIVAL_GOAL })
         : joining
-          ? `Round ${s.round}: ${joining.name} joins the line`
-          : `Round ${s.round}`,
+          ? tr('roundJoins', { round: s.round, village: joining.name })
+          : tr('roundBanner', { round: s.round }),
     ms: BANNER_MS * (s.round === FESTIVAL_ROUND ? 1.5 : 1),
   };
 }
@@ -776,7 +777,7 @@ function offerCharters(s: GameState): Charter[] {
     }
     const cargos = [...new Set(openIndexes(s).map((i) => villages(s)[i].cargo))];
     const cargo = cargos[Math.floor(Math.random() * cargos.length)];
-    offer.push({ ...c, cargo, text: c.text.replace('%c', CARGO_NAMES[cargo]) });
+    offer.push({ ...c, cargo });
   }
   return offer;
 }
@@ -793,7 +794,7 @@ function failOrder(s: GameState, o: Order) {
     w.path = w.progress > 0 ? w.path.slice(0, 1) : [];
   }
   s.hearts--;
-  pop(s, `${CARGO_NAMES[o.cargo]} late!`, villages(s)[o.to], '#f08a6a');
+  pop(s, tr('late', { cargo: tr(CARGO_NAMES[o.cargo].name) }), villages(s)[o.to], '#f08a6a');
   if (s.hearts <= 0) return void (s.phase = 'over');
   cheer(s, o.to, -1);
 }

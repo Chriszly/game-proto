@@ -55,13 +55,21 @@ carry orders between villages before their time runs out.
 
 File map (all under `src/` unless it starts with `shared/`):
 
-- `howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips), handed to
-  `setupGame(game, { howToPlay })` in `main.ts`; update it when the controls or the first round change.
+- `howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips) in British
+  English (also used for US English, which spells it the same) and German, picked with
+  `byLanguage` and handed to `setupGame(game, { howToPlay })` in `main.ts`; update every language
+  when the controls or the first round change.
+- `i18n.ts` and `i18n/`: the game's texts (`shared/i18n.ts`). `i18n/en.ts` is the British English
+  source, `i18n/de.ts` the German (its `keepEnglish` lists the texts that are the same) and
+  `i18n/en-US.ts` the US spellings that differ (none yet). `t(key, vars)` shows a text in the hub's
+  language; `TextKey` types the keys. Every text on screen goes through `t`, and a new one gets its
+  German entry (and a US one if its spelling differs) in the same PR. Village names are names, not
+  texts: they are ids too (`WORKSHOPS`, the `village-<name>` textures) and stay English.
 - `main.ts`: creates the `Phaser.Game` (960x540 from `VIEW`, `Scale.FIT`, `pixelArt: false`) with
   `BootScene` then `GameScene`, calls `setupGame(game)` and `setupScaling(game)` from
   `shared/scaling.ts`; in dev builds puts `game` on `window`.
 - `game/map.ts`: `COLS`, `ROWS`, `Terrain`, `TRACK_COST` (mountain is the tunnel price), `Cargo` (goods and `passengers`),
-  `CARGO_NAMES`, `Tile`, `Village`, `Valley`, `ROOST`, `VILLAGE_NAMES`, `WORKSHOPS`,
+  `CARGO_NAMES` (each cargo's name and in-sentence word as `TextKey`s), `Tile`, `Village`, `Valley`, `ROOST`, `VILLAGE_NAMES`, `WORKSHOPS`,
   `generateValley`, `terrainAt`, and the tile helpers `key`, `sameTile`, `manhattan`, `opposite`,
   `inGrid`, `neighbours`.
 - `game/state.ts`: tuning constants (including `WAGONS`, `SWITCH_MS`, the belly's `FOOD_PER_TILE`,
@@ -71,7 +79,8 @@ File map (all under `src/` unless it starts with `shared/`):
   `HAZARD_EVERY_MS`, `HAZARD_WARN_MS`, `CHARTER_ROUND`, the passengers' `PASSENGER_ROUND`,
   `PASSENGER_CHANCE`, `PASSENGER_PAY`, `PASSENGER_TIME`, the depots' `DEPOT_ROUND`, `DEPOT_COST`,
   `DEPOT_STEP`, `DEPOT_WAIT`, the courier's `COURIER_COST`, the medals' `GOLD_MS`, `SILVER_MS`,
-  `HEAD_START_COINS`, `EARLY_RISER_ROUNDS`), the charter table `CHARTERS`, `MEDALS`, `BOONS`,
+  `HEAD_START_COINS`, `EARLY_RISER_ROUNDS`), the charter table `CHARTERS` (name and text as
+  `TextKey`s, the text's `{cargo}` filled in by the scene), `MEDALS`, `BOONS` (names as `TextKey`s),
   `roundGoal`, `isPassengers`, `Charter`, `Hazard`, `Order`, `OrderStatus`, `Job`, `Medal`, `Wyrm`,
   `Pop`, `Upgrade`, `GameState`.
 - `game/medals.ts`: `MEDALS_KEY`, `loadMedals` and `saveMedal` (keeps the better medal), the only
@@ -82,7 +91,8 @@ File map (all under `src/` unless it starts with `shared/`):
   `upgradeCost`, `buyUpgrade`, `secondWyrmRound`, `wyrmSpeed`, `orderPay` (pay with the Golden
   hoard, shown on the cards and paid on delivery), `jobOrder`, `pickCharter`, `depotCost`,
   `depotLocked`, `canBuyDepot`, `buyDepot`, `villageAt`, `canSendCourier`, `sendCourier`,
-  `festivalMedal`, `hasBoon`, `boonNames`, `moodOf`, `tick`. No Phaser import.
+  `festivalMedal`, `hasBoon`, `boonNames`, `moodOf`, `tick`. No Phaser import. Banners and pops are
+  translated with `t` (imported as `tr`, since `t` is a tile there) when they are made.
 - `scenes/BootScene.ts`: bakes the props and sprites (`bakeProps`, `bakeSprites`), then starts
   `Game`.
 - `scenes/GameScene.ts`: bakes this game's `valley` texture (`bakeValley`), draws the valley, the
@@ -95,7 +105,8 @@ File map (all under `src/` unless it starts with `shared/`):
 - `scenes/layout.ts`: `VIEW`, `BOARD`, the isometric projection (`ISO`, `iso`, `tileCenter`,
   `tileAt`, `groundDepth`), the panel, order card, button and charter card positions,
   `SEGMENT_GAPS` (where the wyrm's parts ride behind the head) and depths.
-- `ui/Button.ts`: `makeButton`, a wooden button with `setCaption`, `setLit` and `setEnabled`.
+- `ui/Button.ts`: `makeButton`, a wooden button with `setCaption`, `setLit` and `setEnabled`; a
+  caption too wide for the button shrinks from 15 to at least 10 pixels.
 - `art/palette.ts`: colour constants for the track, the UI and the pixel icons.
 - `art/canvas.ts`: `bakeCanvas` (paints a 2D canvas `sharpRes` times the shown size and adds it
   as a texture), `fit` (sizes an image to its texture's shown size) and shape helpers
@@ -114,7 +125,8 @@ File map (all under `src/` unless it starts with `shared/`):
   them), `coin`, `heart`, `heart-empty`, `food`, `depot`.
 - `shared/settings.ts` and `shared/setupGame.ts` (repo root, shared by every game): the hub's
   settings, `byDifficulty` and `setupGame`. `sim.ts` imports `byDifficulty`, `GameScene.ts`
-  imports `settings`.
+  imports `settings`. `shared/i18n.ts` gives `translator`, `byLanguage`, `formatNumber` and the
+  shared `t`, which `GameScene` uses for the difficulty's name.
 
 How it runs:
 
@@ -321,7 +333,7 @@ Data tables (where to tune):
   `remove-track.webp`, `game-over.webp`, `new-valley-1.webp`, `new-valley-2.webp`, `steering.webp`,
   `workshops-two-wyrms.webp`, `festival.webp`, `festival-won.webp`, `moods.webp`, `washout.webp`,
   `plain-track.webp`, `charter.webp`, `passengers.webp`, `depot-courier.webp`, `tunnel.webp`,
-  `festival-medal.webp` and `cover.png` are not made by
+  `festival-medal.webp`, `german-round.webp` (round 5 with `?lang=de`) and `cover.png` are not made by
   the test: play the dev build and capture them by hand (a script can set up later rounds through
   the dev server's `/games/wyrmrail/src/game/sim.ts` module, the same instance the game uses).
 - Moods, courier calls, depots, hazards, charters and passengers all start after round 1
@@ -331,10 +343,17 @@ Data tables (where to tune):
 
 ## Making common changes
 
+- **Add or change a text**: its key in `i18n/en.ts`, the German in `i18n/de.ts` (the build fails
+  without it) and, if its US spelling differs, the US one in `i18n/en-US.ts`; run
+  `node scripts/check-translations.mjs`. German runs longer than English: the order card's status
+  and mood tag share one line, the upgrade buttons and the hint line shrink their font to fit, and
+  the HUD's round line puts the charter on a second line; check a new text with `?lang=de`.
+
 - **Add a village:** add an entry to `VILLAGE_LIST` in `src/game/map.ts` with its `round` (no
   place: `generateValley` finds one; more villages may need a smaller spacing), and give it roof
   colours in `ROOFS` in `src/art/valley.ts` (the texture is `village-<name>`). The last village is
-  the festival's host. A new cargo needs a `Cargo` member, a `CARGO_NAMES` entry and an icon in
+  the festival's host. A new cargo needs a `Cargo` member, a `CARGO_NAMES` entry (with its two
+  texts in the `i18n/` files) and an icon in
   `CARGO_ICONS` (typed by `Cargo`, so the build fails until you do). Update the README's village
   table. Keep the first two as Millbrook and Ashford at their places or update the test.
 - **Add a workshop:** add the village's name to `WORKSHOPS` with what it `takes` and `makes`
@@ -351,9 +370,11 @@ Data tables (where to tune):
 - **Add an upgrade:** add its prices to `UPGRADE_COSTS` and a level to `upgrades` in `newGame`,
   apply it where it matters in `sim.ts`, and add a button in `GameScene.createPanel` and its
   caption in `drawPanel` (and a `BUTTONS` row in layout; the panel is full, so make room).
-- **Add a medal boon:** a new medal tier needs a `MEDALS` entry and a `BOONS` row; apply its boon
+- **Add a medal boon:** a new medal tier needs a `MEDALS` entry, its name in the `i18n/` files
+  and a `BOONS` row (with the boon's name there too); apply its boon
   in `newGame` (or where it matters, through `hasBoon`) and add it to the README's medal list.
-- **Add a charter:** add an entry to `CHARTERS` in `src/game/state.ts` (a new effect needs a field
+- **Add a charter:** add an entry to `CHARTERS` in `src/game/state.ts` with its name and text in
+  the `i18n/` files (a new effect needs a field
   on `Charter` and a check where it applies in `sim.ts`) and its line in the README.
 
 ## Gotchas
