@@ -315,6 +315,8 @@ const en = {
   selectFirst: 'Select ships first, then Fall back',
   fallingBack: 'Falling back to repair',
   rallyHow: 'Tap where new warships should gather; tap the flag to take it down',
+  fleetSelected: { one: 'Selected your {n} warship', other: 'Selected all {n} warships' },
+  noFleet: 'You have no warships yet: train some at your Barracks',
   rallyPlanted: 'Rally point planted: new warships fly there',
   rallyCleared: 'Rally point taken down: new warships wait by their Barracks',
   alertHarvesters: 'Your harvesters are under attack! Space jumps there',

@@ -25,7 +25,8 @@ stripes and long exhaust flames, under a chocolate-and-mustard striped HUD with 
 | Flagship button (after the third contract) | Build your one flagship at the hub |
 | Tap a combat unit | Select it (replaces the selection) |
 | Drag a box over combat units | Select every combat unit in the box |
-| Tap empty space | Move the selected units there |
+| The army count on the top bar, or Q | Select every warship you have |
+| Tap empty space | Move the selected units there (a wing fans out round the spot) |
 | Tap an enemy unit or building | Attack it with the selected units |
 | Build buttons, then tap the map | Place a building (green ring when it can go there) |
 | Expansion button, then tap a far crystal field | Place an outpost, a second hub |
@@ -37,6 +38,7 @@ stripes and long exhaust flames, under a chocolate-and-mustard striped HUD with 
 | The rivals on the top bar, or T | Open the rivals panel: accept or decline a truce, or pay tribute to turn a rival |
 | Right-click | Cancel a placement or the rally point, clear the selection and close the rivals panel |
 | Arrow keys or WASD, or drag with two fingers | Scroll the map |
+| Tap or drag on the minimap | Move the view there |
 | H | Centre the map on your hub |
 | Hover over a unit or building | Its name, role, hit points and stats |
 | Hover over a command button | What it is: cost, stats and ability |
@@ -228,6 +230,15 @@ rather than stacking on the Barracks. Tap the flag in rally mode to take it down
 ![A fresh wing of Lancers gathered round the rally flag, its dashed ring and the line from the Orbital Dock, while an orange alert ring marks a rival scout firing on them](docs/screenshots/rally-alert.webp)
 
 ![The map scrolled away from the base: two orange arrows on the map's bottom edge point at attacks off screen, and the message line says the base is under attack](docs/screenshots/alert-edge.webp)
+
+### Minimap
+
+The minimap in the map's bottom-right corner shows the whole battlefield: the space you have
+explored, crystal you have found, the relay beacon, every building you know of and every ship you
+can see, each in its faction's colour, with attack alerts as orange rings and a cream frame for the
+part of the map on screen. Tap or drag on it to move the view.
+
+![The minimap in the corner of the map: the explored space from the base to a rival outpost, the hub and Orbital Dock as gold squares, the rival outpost as an orange square, the beacon as a ring and the cream frame of the view](docs/screenshots/minimap.webp)
 
 ### Derelict stations
 
