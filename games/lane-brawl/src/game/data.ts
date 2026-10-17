@@ -1,4 +1,7 @@
-// The map, champions, items and balance numbers of Lane Brawl. Plain data, free of Phaser.
+// The map, champions, items and balance numbers of Lane Brawl. Plain data, free of Phaser. Names and
+// texts are keys of `i18n/en.ts`, which the scene shows with `t`.
+
+import type { TextKey } from '../i18n';
 
 export type Team = 'blue' | 'red';
 export type LaneId = 'top' | 'mid' | 'bottom';
@@ -53,7 +56,7 @@ export const TOWERS: TowerSpot[] = both<TowerSpot>([
 export type CampKind = 'boar' | 'wolf' | 'pup' | 'ember' | 'moss';
 export interface CampDef {
   kind: CampKind;
-  name: string;
+  name: TextKey;
   hp: number;
   dmg: number;
   attackMs: number;
@@ -67,11 +70,11 @@ export interface CampDef {
   buff?: 'ember' | 'moss';
 }
 export const CAMP_KINDS: Record<CampKind, CampDef> = {
-  boar: { kind: 'boar', name: 'Boar', hp: 600, dmg: 28, attackMs: 1200, range: 150, radius: 26, armor: 0, gold: 80, xp: 120, respawnMs: 60_000 },
-  wolf: { kind: 'wolf', name: 'Alpha wolf', hp: 460, dmg: 24, attackMs: 1000, range: 120, radius: 22, armor: 0, gold: 60, xp: 90, respawnMs: 60_000 },
-  pup: { kind: 'pup', name: 'Wolf', hp: 200, dmg: 12, attackMs: 900, range: 100, radius: 16, armor: 0, gold: 20, xp: 30, respawnMs: 60_000 },
-  ember: { kind: 'ember', name: 'Ember brute', hp: 1150, dmg: 40, attackMs: 1300, range: 150, radius: 30, armor: 8, gold: 100, xp: 170, respawnMs: 90_000, buff: 'ember' },
-  moss: { kind: 'moss', name: 'Moss brute', hp: 1150, dmg: 40, attackMs: 1300, range: 150, radius: 30, armor: 8, gold: 100, xp: 170, respawnMs: 90_000, buff: 'moss' },
+  boar: { kind: 'boar', name: 'campBoar', hp: 600, dmg: 28, attackMs: 1200, range: 150, radius: 26, armor: 0, gold: 80, xp: 120, respawnMs: 60_000 },
+  wolf: { kind: 'wolf', name: 'campWolf', hp: 460, dmg: 24, attackMs: 1000, range: 120, radius: 22, armor: 0, gold: 60, xp: 90, respawnMs: 60_000 },
+  pup: { kind: 'pup', name: 'campPup', hp: 200, dmg: 12, attackMs: 900, range: 100, radius: 16, armor: 0, gold: 20, xp: 30, respawnMs: 60_000 },
+  ember: { kind: 'ember', name: 'campEmber', hp: 1150, dmg: 40, attackMs: 1300, range: 150, radius: 30, armor: 8, gold: 100, xp: 170, respawnMs: 90_000, buff: 'ember' },
+  moss: { kind: 'moss', name: 'campMoss', hp: 1150, dmg: 40, attackMs: 1300, range: 150, radius: 30, armor: 8, gold: 100, xp: 170, respawnMs: 90_000, buff: 'moss' },
 };
 export interface CampSpot extends Vec {
   /** The camp's kind: a wolf pack is an alpha and two pups. */
@@ -169,7 +172,7 @@ export interface BuffDef {
 
 export interface AbilityDef {
   key: AbilityKey;
-  name: string;
+  name: TextKey;
   kind: AbilityKind;
   /** Cooldown in ms. */
   cd: number;
@@ -211,8 +214,8 @@ export interface AbilityDef {
 
 /** What a champion always has. */
 export interface PassiveDef {
-  name: string;
-  desc: string;
+  name: TextKey;
+  desc: TextKey;
   /** Percent less damage taken. */
   tough?: number;
   /** Every Nth attack hits for `critMult` times its damage. */
@@ -242,7 +245,7 @@ export interface PassiveDef {
 /** A small edge from a champion's story, on top of the class's passive. Percents. */
 export interface StoryPerk {
   /** One line for the pick screen. */
-  desc: string;
+  desc: TextKey;
   /** More damage to the guardian beast. */
   beastDmg?: number;
   /** Takes watchstones this much faster. */
@@ -254,18 +257,18 @@ export interface StoryPerk {
 export interface ChampionDef {
   id: string;
   /** The class's name: Warden, Blade... */
-  name: string;
-  role: string;
-  /** The champion who plays the class: one character, the same in every match. */
-  hero: string;
+  name: TextKey;
+  role: TextKey;
+  /** The champion who plays the class: one character, the same in every match. Its key is the unit's `name`. */
+  hero: TextKey;
   /** The first name, for the portrait, notices and labels over the head. */
   short: string;
   /** What the bards call them, for the pick screen. */
-  title: string;
+  title: TextKey;
   /** Why they fight in Kessmoor, one line for the pick screen (90 characters at most). */
-  motive: string;
-  /** One line on how the class plays, for the pick card. */
-  blurb: string;
+  motive: TextKey;
+  /** One line on how the class plays, after the class's name under the pick cards (lower case). */
+  blurb: TextKey;
   perk?: StoryPerk;
   color: string;
   hp: number;
@@ -284,13 +287,13 @@ export interface ChampionDef {
 export const CHAMPIONS: ChampionDef[] = [
   {
     id: 'warden',
-    name: 'Warden',
-    role: 'Tank',
-    hero: 'Hald Oathstone',
+    name: 'wardenName',
+    role: 'roleTank',
+    hero: 'wardenHero',
     short: 'Hald',
-    title: 'the Last Gate',
-    motive: 'Lost the old gate and forty guards; now he stands with whoever is losing.',
-    blurb: 'Soaks blows, guards friends',
+    title: 'wardenTitle',
+    motive: 'wardenMotive',
+    blurb: 'wardenBlurb',
     color: '#c98b3b',
     hp: 640,
     hpPerLevel: 95,
@@ -300,23 +303,23 @@ export const CHAMPIONS: ChampionDef[] = [
     range: 110,
     speed: 120,
     attackMs: 900,
-    passive: { name: 'Oathbound', desc: 'Takes 15% less damage', tough: 15 },
+    passive: { name: 'wardenPassive', desc: 'wardenPassiveDesc', tough: 15 },
     abilities: [
-      { key: 'Q', name: 'Gatefall', kind: 'burst', cd: 6000, range: 0, radius: 170, damage: 80, slow: 1500, level: 1 },
-      { key: 'W', name: 'Oathguard', kind: 'ally', cd: 10000, range: 350, radius: 120, shield: 130, level: 1 },
-      { key: 'E', name: 'Gate Rush', kind: 'dash', cd: 9000, range: 280, radius: 110, damage: 60, stun: 400, level: 1 },
-      { key: 'R', name: 'Last Gate', kind: 'burst', cd: 60000, range: 0, radius: 240, damage: 160, slow: 2000, level: 3 },
+      { key: 'Q', name: 'wardenQ', kind: 'burst', cd: 6000, range: 0, radius: 170, damage: 80, slow: 1500, level: 1 },
+      { key: 'W', name: 'wardenW', kind: 'ally', cd: 10000, range: 350, radius: 120, shield: 130, level: 1 },
+      { key: 'E', name: 'wardenE', kind: 'dash', cd: 9000, range: 280, radius: 110, damage: 60, stun: 400, level: 1 },
+      { key: 'R', name: 'wardenR', kind: 'burst', cd: 60000, range: 0, radius: 240, damage: 160, slow: 2000, level: 3 },
     ],
   },
   {
     id: 'blade',
-    name: 'Blade',
-    role: 'Assassin',
-    hero: 'Vesna Duskedge',
+    name: 'bladeName',
+    role: 'roleAssassin',
+    hero: 'bladeHero',
     short: 'Vesna',
-    title: 'the Unpaid Knife',
-    motive: 'Refused a contract on a Concord judge; fights for the pardon that frees her.',
-    blurb: 'Finishes the weak, slips away',
+    title: 'bladeTitle',
+    motive: 'bladeMotive',
+    blurb: 'bladeBlurb',
     color: '#8e6cf0',
     hp: 570,
     hpPerLevel: 80,
@@ -326,23 +329,23 @@ export const CHAMPIONS: ChampionDef[] = [
     range: 120,
     speed: 150,
     attackMs: 700,
-    passive: { name: 'Third Cut', desc: 'Every 3rd attack hits 2x', critEvery: 3, critMult: 2 },
+    passive: { name: 'bladePassive', desc: 'bladePassiveDesc', critEvery: 3, critMult: 2 },
     abilities: [
-      { key: 'Q', name: 'Quick Cut', kind: 'dash', cd: 5000, range: 260, radius: 90, damage: 85, level: 1 },
-      { key: 'W', name: 'Cutwind', kind: 'burst', cd: 8000, range: 0, radius: 130, damage: 70, level: 1 },
-      { key: 'E', name: 'Shadow Step', kind: 'dash', cd: 12000, range: 240, level: 1 },
-      { key: 'R', name: 'Last Word', kind: 'burst', cd: 60000, range: 280, radius: 60, damage: 190, executeBelow: 0.4, level: 3 },
+      { key: 'Q', name: 'bladeQ', kind: 'dash', cd: 5000, range: 260, radius: 90, damage: 85, level: 1 },
+      { key: 'W', name: 'bladeW', kind: 'burst', cd: 8000, range: 0, radius: 130, damage: 70, level: 1 },
+      { key: 'E', name: 'bladeE', kind: 'dash', cd: 12000, range: 240, level: 1 },
+      { key: 'R', name: 'bladeR', kind: 'burst', cd: 60000, range: 280, radius: 60, damage: 190, executeBelow: 0.4, level: 3 },
     ],
   },
   {
     id: 'archer',
-    name: 'Archer',
-    role: 'Marksman',
-    hero: 'Tamsin Farrow',
+    name: 'archerName',
+    role: 'roleMarksman',
+    hero: 'archerHero',
     short: 'Tamsin',
-    title: 'Ranger of the Greenmarch',
-    motive: 'Ranger of the Greywood; fights for the banner that will drain the overflow.',
-    blurb: 'Shoots far, runs between shots',
+    title: 'archerTitle',
+    motive: 'archerMotive',
+    blurb: 'archerBlurb',
     color: '#e6c03a',
     hp: 490,
     hpPerLevel: 72,
@@ -352,23 +355,23 @@ export const CHAMPIONS: ChampionDef[] = [
     range: 420,
     speed: 135,
     attackMs: 800,
-    passive: { name: 'Fleetfoot', desc: 'Runs 30% faster after a shot', haste: 30, hasteMs: 1500 },
+    passive: { name: 'archerPassive', desc: 'archerPassiveDesc', haste: 30, hasteMs: 1500 },
     abilities: [
-      { key: 'Q', name: 'Heartseeker', kind: 'bolt', cd: 4500, range: 700, speed: 900, width: 26, damage: 80, pierce: true, level: 1 },
-      { key: 'W', name: 'Featherfall', kind: 'bolt', cd: 9000, range: 600, speed: 800, width: 24, damage: 45, count: 3, spread: 0.2, level: 1 },
-      { key: 'E', name: 'Tumble', kind: 'dash', cd: 10000, range: 180, level: 1 },
-      { key: 'R', name: 'Hailstorm', kind: 'zone', cd: 60000, range: 650, radius: 230, dps: 75, ms: 2500, slow: 800, level: 3 },
+      { key: 'Q', name: 'archerQ', kind: 'bolt', cd: 4500, range: 700, speed: 900, width: 26, damage: 80, pierce: true, level: 1 },
+      { key: 'W', name: 'archerW', kind: 'bolt', cd: 9000, range: 600, speed: 800, width: 24, damage: 45, count: 3, spread: 0.2, level: 1 },
+      { key: 'E', name: 'archerE', kind: 'dash', cd: 10000, range: 180, level: 1 },
+      { key: 'R', name: 'archerR', kind: 'zone', cd: 60000, range: 650, radius: 230, dps: 75, ms: 2500, slow: 800, level: 3 },
     ],
   },
   {
     id: 'mage',
-    name: 'Mage',
-    role: 'Burst',
-    hero: 'Elowen Vey',
+    name: 'mageName',
+    role: 'roleBurst',
+    hero: 'mageHero',
     short: 'Elowen',
-    title: 'the Rift Scholar',
-    motive: 'Pulls fire and frost from the Riftwell; wants a key to it, whoever hands it over.',
-    blurb: 'Big spells, fragile up close',
+    title: 'mageTitle',
+    motive: 'mageMotive',
+    blurb: 'mageBlurb',
     color: '#3fd0d9',
     hp: 480,
     hpPerLevel: 66,
@@ -378,23 +381,23 @@ export const CHAMPIONS: ChampionDef[] = [
     range: 400,
     speed: 130,
     attackMs: 900,
-    passive: { name: 'Rift-Touched', desc: 'Abilities deal 20% more', spellpower: 20 },
+    passive: { name: 'magePassive', desc: 'magePassiveDesc', spellpower: 20 },
     abilities: [
-      { key: 'Q', name: 'Riftflame', kind: 'bolt', cd: 4000, range: 650, speed: 750, width: 30, damage: 95, level: 1 },
-      { key: 'W', name: 'Rime Ring', kind: 'burst', cd: 9000, range: 0, radius: 170, damage: 65, slow: 1800, level: 1 },
-      { key: 'E', name: 'Fold Step', kind: 'dash', cd: 12000, range: 230, level: 1 },
-      { key: 'R', name: 'Starfall', kind: 'burst', cd: 60000, range: 600, radius: 220, damage: 210, level: 3 },
+      { key: 'Q', name: 'mageQ', kind: 'bolt', cd: 4000, range: 650, speed: 750, width: 30, damage: 95, level: 1 },
+      { key: 'W', name: 'mageW', kind: 'burst', cd: 9000, range: 0, radius: 170, damage: 65, slow: 1800, level: 1 },
+      { key: 'E', name: 'mageE', kind: 'dash', cd: 12000, range: 230, level: 1 },
+      { key: 'R', name: 'mageR', kind: 'burst', cd: 60000, range: 600, radius: 220, damage: 210, level: 3 },
     ],
   },
   {
     id: 'priest',
-    name: 'Priest',
-    role: 'Support',
-    hero: 'Sister Maren',
+    name: 'priestName',
+    role: 'roleSupport',
+    hero: 'priestHero',
     short: 'Maren',
-    title: 'the Daykeeper',
-    motive: 'Tends the wounded of both banners; fights so the contest never turns to war.',
-    blurb: 'Heals and shields the team',
+    title: 'priestTitle',
+    motive: 'priestMotive',
+    blurb: 'priestBlurb',
     color: '#6fe07f',
     hp: 480,
     hpPerLevel: 68,
@@ -404,23 +407,23 @@ export const CHAMPIONS: ChampionDef[] = [
     range: 380,
     speed: 135,
     attackMs: 1000,
-    passive: { name: 'Dawnlight', desc: 'Allies near heal 2 a second', aura: 2, auraRadius: 320 },
+    passive: { name: 'priestPassive', desc: 'priestPassiveDesc', aura: 2, auraRadius: 320 },
     abilities: [
-      { key: 'Q', name: 'Sunlance', kind: 'bolt', cd: 4000, range: 600, speed: 800, width: 26, damage: 60, level: 1 },
-      { key: 'W', name: 'Mend', kind: 'ally', cd: 7000, range: 500, radius: 160, heal: 80, level: 1 },
-      { key: 'E', name: 'Dawn Veil', kind: 'ally', cd: 10000, range: 500, radius: 120, shield: 90, level: 1 },
-      { key: 'R', name: 'Noon Bell', kind: 'ally', cd: 60000, range: 400, radius: 280, heal: 70, shield: 60, level: 3 },
+      { key: 'Q', name: 'priestQ', kind: 'bolt', cd: 4000, range: 600, speed: 800, width: 26, damage: 60, level: 1 },
+      { key: 'W', name: 'priestW', kind: 'ally', cd: 7000, range: 500, radius: 160, heal: 80, level: 1 },
+      { key: 'E', name: 'priestE', kind: 'ally', cd: 10000, range: 500, radius: 120, shield: 90, level: 1 },
+      { key: 'R', name: 'priestR', kind: 'ally', cd: 60000, range: 400, radius: 280, heal: 70, shield: 60, level: 3 },
     ],
   },
   {
     id: 'berserker',
-    name: 'Berserker',
-    role: 'Fighter',
-    hero: 'Torvik the Unchained',
+    name: 'berserkerName',
+    role: 'roleFighter',
+    hero: 'berserkerHero',
     short: 'Torvik',
-    title: 'Chief of the Skarn',
-    motive: 'Rift ice drowned his hold; he will cut through anyone for land for his clan.',
-    blurb: 'Heals by hitting, grows wild',
+    title: 'berserkerTitle',
+    motive: 'berserkerMotive',
+    blurb: 'berserkerBlurb',
     color: '#ff8a3d',
     hp: 570,
     hpPerLevel: 85,
@@ -430,24 +433,24 @@ export const CHAMPIONS: ChampionDef[] = [
     range: 115,
     speed: 125,
     attackMs: 850,
-    passive: { name: 'Bloodthirst', desc: 'Heals 10% of attack damage', lifesteal: 10 },
+    passive: { name: 'berserkerPassive', desc: 'berserkerPassiveDesc', lifesteal: 10 },
     abilities: [
-      { key: 'Q', name: 'Cleave', kind: 'burst', cd: 6000, range: 0, radius: 150, damage: 75, level: 1 },
-      { key: 'W', name: 'Blood Up', kind: 'buff', cd: 12000, range: 0, ms: 4000, buff: { atk: 45 }, level: 1 },
-      { key: 'E', name: 'Skyfall', kind: 'dash', cd: 10000, range: 300, radius: 100, damage: 60, slow: 1200, level: 1 },
-      { key: 'R', name: 'Unchained', kind: 'buff', cd: 60000, range: 0, ms: 6000, buff: { dmg: 30, lifesteal: 20, speed: 20 }, level: 3 },
+      { key: 'Q', name: 'berserkerQ', kind: 'burst', cd: 6000, range: 0, radius: 150, damage: 75, level: 1 },
+      { key: 'W', name: 'berserkerW', kind: 'buff', cd: 12000, range: 0, ms: 4000, buff: { atk: 45 }, level: 1 },
+      { key: 'E', name: 'berserkerE', kind: 'dash', cd: 10000, range: 300, radius: 100, damage: 60, slow: 1200, level: 1 },
+      { key: 'R', name: 'berserkerR', kind: 'buff', cd: 60000, range: 0, ms: 6000, buff: { dmg: 30, lifesteal: 20, speed: 20 }, level: 3 },
     ],
   },
   {
     id: 'harpooner',
-    name: 'Harpooner',
-    role: 'Catcher',
-    hero: 'Morrow Deepline',
+    name: 'harpoonerName',
+    role: 'roleCatcher',
+    hero: 'harpoonerHero',
     short: 'Morrow',
-    title: 'the Whaler',
-    motive: 'The Rift Guardian sank his ship; whoever lets him at the beast gets his harpoon.',
-    blurb: 'Hooks foes in, holds the line',
-    perk: { desc: 'Deals 25% more to the Rift Guardian', beastDmg: 25 },
+    title: 'harpoonerTitle',
+    motive: 'harpoonerMotive',
+    blurb: 'harpoonerBlurb',
+    perk: { desc: 'harpoonerPerk', beastDmg: 25 },
     color: '#2fb39a',
     hp: 580,
     hpPerLevel: 88,
@@ -457,23 +460,23 @@ export const CHAMPIONS: ChampionDef[] = [
     range: 140,
     speed: 120,
     attackMs: 950,
-    passive: { name: 'Sea Legs', desc: 'Heals 4 health a second', regen: 4 },
+    passive: { name: 'harpoonerPassive', desc: 'harpoonerPassiveDesc', regen: 4 },
     abilities: [
-      { key: 'Q', name: 'Harpoon', kind: 'bolt', cd: 9000, range: 620, speed: 950, width: 26, damage: 70, pull: true, stun: 400, level: 1 },
-      { key: 'W', name: 'Riptide', kind: 'burst', cd: 8000, range: 0, radius: 160, damage: 60, knock: 120, level: 1 },
-      { key: 'E', name: 'Hold Fast', kind: 'buff', cd: 12000, range: 0, ms: 3000, shield: 120, buff: { armor: 20 }, level: 1 },
-      { key: 'R', name: 'Maelstrom', kind: 'zone', cd: 60000, range: 500, radius: 200, dps: 70, ms: 3000, slow: 1000, level: 3 },
+      { key: 'Q', name: 'harpoonerQ', kind: 'bolt', cd: 9000, range: 620, speed: 950, width: 26, damage: 70, pull: true, stun: 400, level: 1 },
+      { key: 'W', name: 'harpoonerW', kind: 'burst', cd: 8000, range: 0, radius: 160, damage: 60, knock: 120, level: 1 },
+      { key: 'E', name: 'harpoonerE', kind: 'buff', cd: 12000, range: 0, ms: 3000, shield: 120, buff: { armor: 20 }, level: 1 },
+      { key: 'R', name: 'harpoonerR', kind: 'zone', cd: 60000, range: 500, radius: 200, dps: 70, ms: 3000, slow: 1000, level: 3 },
     ],
   },
   {
     id: 'witch',
-    name: 'Witch',
-    role: 'Controller',
-    hero: 'Gwyth of the Mire',
+    name: 'witchName',
+    role: 'roleController',
+    hero: 'witchHero',
     short: 'Gwyth',
-    title: 'the Bog Witch',
-    motive: 'The overflow rots her mire; she curses anyone who would drain the Rift for gold.',
-    blurb: 'Curses ground, roots foes',
+    title: 'witchTitle',
+    motive: 'witchMotive',
+    blurb: 'witchBlurb',
     color: '#c55fae',
     hp: 460,
     hpPerLevel: 64,
@@ -483,24 +486,24 @@ export const CHAMPIONS: ChampionDef[] = [
     range: 400,
     speed: 128,
     attackMs: 950,
-    passive: { name: 'Hex', desc: 'Attacks slow for 0.6s', slowHit: 600 },
+    passive: { name: 'witchPassive', desc: 'witchPassiveDesc', slowHit: 600 },
     abilities: [
-      { key: 'Q', name: 'Hex Bolt', kind: 'bolt', cd: 4500, range: 620, speed: 750, width: 28, damage: 70, slow: 1500, level: 1 },
-      { key: 'W', name: 'Mire Rot', kind: 'zone', cd: 9000, range: 550, radius: 120, dps: 45, ms: 3500, level: 1 },
-      { key: 'E', name: 'Bramble Snare', kind: 'burst', cd: 12000, range: 500, radius: 90, damage: 40, stun: 1100, level: 1 },
-      { key: 'R', name: 'Mire Bloom', kind: 'zone', cd: 60000, range: 600, radius: 240, dps: 70, ms: 4000, slow: 1500, level: 3 },
+      { key: 'Q', name: 'witchQ', kind: 'bolt', cd: 4500, range: 620, speed: 750, width: 28, damage: 70, slow: 1500, level: 1 },
+      { key: 'W', name: 'witchW', kind: 'zone', cd: 9000, range: 550, radius: 120, dps: 45, ms: 3500, level: 1 },
+      { key: 'E', name: 'witchE', kind: 'burst', cd: 12000, range: 500, radius: 90, damage: 40, stun: 1100, level: 1 },
+      { key: 'R', name: 'witchR', kind: 'zone', cd: 60000, range: 600, radius: 240, dps: 70, ms: 4000, slow: 1500, level: 3 },
     ],
   },
   {
     id: 'stalker',
-    name: 'Stalker',
-    role: 'Ambusher',
-    hero: 'Kaida Mistwalker',
+    name: 'stalkerName',
+    role: 'roleAmbusher',
+    hero: 'stalkerHero',
     short: 'Kaida',
-    title: 'Last of the Mistwalkers',
-    motive: 'Her order of watchstone keepers was sold out; the traitor is a champion.',
-    blurb: 'Vanishes, strikes from nowhere',
-    perk: { desc: 'Takes watchstones twice as fast', captureRate: 100 },
+    title: 'stalkerTitle',
+    motive: 'stalkerMotive',
+    blurb: 'stalkerBlurb',
+    perk: { desc: 'stalkerPerk', captureRate: 100 },
     color: '#8fa0b8',
     hp: 520,
     hpPerLevel: 78,
@@ -510,23 +513,23 @@ export const CHAMPIONS: ChampionDef[] = [
     range: 115,
     speed: 145,
     attackMs: 750,
-    passive: { name: 'Ambush', desc: '2.3x first hit from hiding', ambush: 2.3 },
+    passive: { name: 'stalkerPassive', desc: 'stalkerPassiveDesc', ambush: 2.3 },
     abilities: [
-      { key: 'Q', name: 'Mist Stars', kind: 'bolt', cd: 5000, range: 520, speed: 950, width: 22, damage: 50, count: 3, spread: 0.25, level: 1 },
-      { key: 'W', name: 'Vanish', kind: 'buff', cd: 14000, range: 0, ms: 3000, buff: { stealth: true, speed: 30 }, level: 1 },
-      { key: 'E', name: 'Pounce', kind: 'dash', cd: 9000, range: 260, radius: 80, damage: 70, stun: 500, level: 1 },
-      { key: 'R', name: 'Final Mark', kind: 'bolt', cd: 60000, range: 700, speed: 1100, width: 30, damage: 200, executeBelow: 0.4, level: 3 },
+      { key: 'Q', name: 'stalkerQ', kind: 'bolt', cd: 5000, range: 520, speed: 950, width: 22, damage: 50, count: 3, spread: 0.25, level: 1 },
+      { key: 'W', name: 'stalkerW', kind: 'buff', cd: 14000, range: 0, ms: 3000, buff: { stealth: true, speed: 30 }, level: 1 },
+      { key: 'E', name: 'stalkerE', kind: 'dash', cd: 9000, range: 260, radius: 80, damage: 70, stun: 500, level: 1 },
+      { key: 'R', name: 'stalkerR', kind: 'bolt', cd: 60000, range: 700, speed: 1100, width: 30, damage: 200, executeBelow: 0.4, level: 3 },
     ],
   },
   {
     id: 'lancer',
-    name: 'Lancer',
-    role: 'Bruiser',
-    hero: 'Dame Liora Highbanner',
+    name: 'lancerName',
+    role: 'roleBruiser',
+    hero: 'lancerHero',
     short: 'Liora',
-    title: 'Knight of the Concord',
-    motive: 'Carries a banner at every contest, to prove a sworn oath still means something.',
-    blurb: 'Long reach, guards the team',
+    title: 'lancerTitle',
+    motive: 'lancerMotive',
+    blurb: 'lancerBlurb',
     color: '#d8cfb4',
     hp: 610,
     hpPerLevel: 90,
@@ -536,24 +539,24 @@ export const CHAMPIONS: ChampionDef[] = [
     range: 170,
     speed: 122,
     attackMs: 900,
-    passive: { name: 'Wide Reach', desc: 'Hits beside the target for 40%', splash: 40, splashRadius: 80 },
+    passive: { name: 'lancerPassive', desc: 'lancerPassiveDesc', splash: 40, splashRadius: 80 },
     abilities: [
-      { key: 'Q', name: 'Thrust', kind: 'bolt', cd: 5000, range: 380, speed: 1100, width: 30, damage: 90, pierce: true, level: 1 },
-      { key: 'W', name: 'Sweep', kind: 'burst', cd: 8000, range: 0, radius: 190, damage: 55, knock: 90, level: 1 },
-      { key: 'E', name: 'Vault', kind: 'dash', cd: 10000, range: 260, radius: 90, damage: 50, stun: 300, level: 1 },
-      { key: 'R', name: 'Rally', kind: 'ally', cd: 60000, range: 0, radius: 260, shield: 150, ms: 6000, buff: { armor: 15 }, level: 3 },
+      { key: 'Q', name: 'lancerQ', kind: 'bolt', cd: 5000, range: 380, speed: 1100, width: 30, damage: 90, pierce: true, level: 1 },
+      { key: 'W', name: 'lancerW', kind: 'burst', cd: 8000, range: 0, radius: 190, damage: 55, knock: 90, level: 1 },
+      { key: 'E', name: 'lancerE', kind: 'dash', cd: 10000, range: 260, radius: 90, damage: 50, stun: 300, level: 1 },
+      { key: 'R', name: 'lancerR', kind: 'ally', cd: 60000, range: 0, radius: 260, shield: 150, ms: 6000, buff: { armor: 15 }, level: 3 },
     ],
   },
   {
     id: 'gunslinger',
-    name: 'Gunslinger',
-    role: 'Marksman',
-    hero: 'Rook Calloway',
+    name: 'gunslingerName',
+    role: 'roleMarksman',
+    hero: 'gunslingerHero',
     short: 'Rook',
-    title: 'the Bounty Hunter',
-    motive: 'A drifter from the rail towns; signs with whoever pays and hunts every bounty.',
-    blurb: 'Six shots, smoke and a deadeye',
-    perk: { desc: 'Claims 50% more bounty gold', bountyGold: 50 },
+    title: 'gunslingerTitle',
+    motive: 'gunslingerMotive',
+    blurb: 'gunslingerBlurb',
+    perk: { desc: 'gunslingerPerk', bountyGold: 50 },
     color: '#c9925a',
     hp: 480,
     hpPerLevel: 72,
@@ -563,23 +566,23 @@ export const CHAMPIONS: ChampionDef[] = [
     range: 400,
     speed: 128,
     attackMs: 850,
-    passive: { name: 'Ricochet', desc: 'Shots hit beside for 35%', splash: 35, splashRadius: 90 },
+    passive: { name: 'gunslingerPassive', desc: 'gunslingerPassiveDesc', splash: 35, splashRadius: 90 },
     abilities: [
-      { key: 'Q', name: 'Fan the Hammer', kind: 'bolt', cd: 5000, range: 560, speed: 1300, width: 20, damage: 42, count: 3, spread: 0.12, level: 1 },
-      { key: 'W', name: 'Smoke Bomb', kind: 'zone', cd: 11000, range: 450, radius: 130, dps: 15, ms: 3000, slow: 1000, level: 1 },
-      { key: 'E', name: 'Dodge Roll', kind: 'dash', cd: 9000, range: 200, level: 1 },
-      { key: 'R', name: 'Last Round', kind: 'bolt', cd: 60000, range: 900, speed: 1500, width: 26, damage: 230, executeBelow: 0.3, level: 3 },
+      { key: 'Q', name: 'gunslingerQ', kind: 'bolt', cd: 5000, range: 560, speed: 1300, width: 20, damage: 42, count: 3, spread: 0.12, level: 1 },
+      { key: 'W', name: 'gunslingerW', kind: 'zone', cd: 11000, range: 450, radius: 130, dps: 15, ms: 3000, slow: 1000, level: 1 },
+      { key: 'E', name: 'gunslingerE', kind: 'dash', cd: 9000, range: 200, level: 1 },
+      { key: 'R', name: 'gunslingerR', kind: 'bolt', cd: 60000, range: 900, speed: 1500, width: 26, damage: 230, executeBelow: 0.3, level: 3 },
     ],
   },
   {
     id: 'automaton',
-    name: 'Automaton',
-    role: 'Tank',
-    hero: 'AX-9 Boilerheart',
+    name: 'automatonName',
+    role: 'roleTank',
+    hero: 'automatonHero',
     short: 'AX-9',
-    title: 'the Waking Engine',
-    motive: 'Aether leaked into its boiler; it fights to learn whether it is alive.',
-    blurb: 'Brass, steam and a rocket fist',
+    title: 'automatonTitle',
+    motive: 'automatonMotive',
+    blurb: 'automatonBlurb',
     color: '#d8a24a',
     hp: 700,
     hpPerLevel: 100,
@@ -589,23 +592,23 @@ export const CHAMPIONS: ChampionDef[] = [
     range: 110,
     speed: 112,
     attackMs: 1000,
-    passive: { name: 'Iron Hull', desc: 'Takes 12% less damage', tough: 12 },
+    passive: { name: 'automatonPassive', desc: 'automatonPassiveDesc', tough: 12 },
     abilities: [
-      { key: 'Q', name: 'Steam Vent', kind: 'burst', cd: 7000, range: 0, radius: 160, damage: 65, slow: 1200, level: 1 },
-      { key: 'W', name: 'Overclock', kind: 'buff', cd: 13000, range: 0, ms: 4000, buff: { atk: 40, armor: 15 }, level: 1 },
-      { key: 'E', name: 'Rocket Fist', kind: 'bolt', cd: 11000, range: 520, speed: 1000, width: 28, damage: 60, pull: true, stun: 500, level: 1 },
-      { key: 'R', name: 'Heartburst', kind: 'burst', cd: 60000, range: 0, radius: 250, damage: 160, stun: 800, level: 3 },
+      { key: 'Q', name: 'automatonQ', kind: 'burst', cd: 7000, range: 0, radius: 160, damage: 65, slow: 1200, level: 1 },
+      { key: 'W', name: 'automatonW', kind: 'buff', cd: 13000, range: 0, ms: 4000, buff: { atk: 40, armor: 15 }, level: 1 },
+      { key: 'E', name: 'automatonE', kind: 'bolt', cd: 11000, range: 520, speed: 1000, width: 28, damage: 60, pull: true, stun: 500, level: 1 },
+      { key: 'R', name: 'automatonR', kind: 'burst', cd: 60000, range: 0, radius: 250, damage: 160, stun: 800, level: 3 },
     ],
   },
   {
     id: 'tinker',
-    name: 'Tinker',
-    role: 'Controller',
-    hero: 'Winnie Voltwick',
+    name: 'tinkerName',
+    role: 'roleController',
+    hero: 'tinkerHero',
     short: 'Winnie',
-    title: 'Storm Engineer',
-    motive: 'Her storm engine could replace the Rift taps, if only her banner wins.',
-    blurb: 'Storm coils, jetpack, lightning',
+    title: 'tinkerTitle',
+    motive: 'tinkerMotive',
+    blurb: 'tinkerBlurb',
     color: '#5fd3f0',
     hp: 480,
     hpPerLevel: 72,
@@ -615,23 +618,23 @@ export const CHAMPIONS: ChampionDef[] = [
     range: 430,
     speed: 122,
     attackMs: 1000,
-    passive: { name: 'Overcharge', desc: 'Abilities deal 15% more', spellpower: 15 },
+    passive: { name: 'tinkerPassive', desc: 'tinkerPassiveDesc', spellpower: 15 },
     abilities: [
-      { key: 'Q', name: 'Spark Bolt', kind: 'bolt', cd: 4500, range: 620, speed: 900, width: 26, damage: 75, stun: 300, level: 1 },
-      { key: 'W', name: 'Coil Field', kind: 'zone', cd: 9000, range: 520, radius: 130, dps: 50, ms: 3500, slow: 800, level: 1 },
-      { key: 'E', name: 'Jetpack', kind: 'dash', cd: 11000, range: 300, level: 1 },
-      { key: 'R', name: 'Storm Engine', kind: 'zone', cd: 60000, range: 600, radius: 250, dps: 80, ms: 3000, slow: 1200, level: 3 },
+      { key: 'Q', name: 'tinkerQ', kind: 'bolt', cd: 4500, range: 620, speed: 900, width: 26, damage: 75, stun: 300, level: 1 },
+      { key: 'W', name: 'tinkerW', kind: 'zone', cd: 9000, range: 520, radius: 130, dps: 50, ms: 3500, slow: 800, level: 1 },
+      { key: 'E', name: 'tinkerE', kind: 'dash', cd: 11000, range: 300, level: 1 },
+      { key: 'R', name: 'tinkerR', kind: 'zone', cd: 60000, range: 600, radius: 250, dps: 80, ms: 3000, slow: 1200, level: 3 },
     ],
   },
   {
     id: 'wolfkin',
-    name: 'Wolfkin',
-    role: 'Hunter',
-    hero: 'Fenra Moonfang',
+    name: 'wolfkinName',
+    role: 'roleHunter',
+    hero: 'wolfkinHero',
     short: 'Fenra',
-    title: 'Packleader of the Greywood',
-    motive: 'The wolf packs in the camps were her kin; she fights to draw the Rift out of them.',
-    blurb: 'Half wolf, all teeth',
+    title: 'wolfkinTitle',
+    motive: 'wolfkinMotive',
+    blurb: 'wolfkinBlurb',
     color: '#9aa3ad',
     hp: 560,
     hpPerLevel: 84,
@@ -641,23 +644,23 @@ export const CHAMPIONS: ChampionDef[] = [
     range: 110,
     speed: 135,
     attackMs: 780,
-    passive: { name: 'Feral Hunger', desc: 'Heals 12% of attack damage', lifesteal: 12 },
+    passive: { name: 'wolfkinPassive', desc: 'wolfkinPassiveDesc', lifesteal: 12 },
     abilities: [
-      { key: 'Q', name: 'Lunge', kind: 'dash', cd: 6000, range: 260, radius: 90, damage: 70, slow: 1000, level: 1 },
-      { key: 'W', name: 'Pack Howl', kind: 'buff', cd: 12000, range: 0, ms: 4000, buff: { atk: 30, speed: 20 }, level: 1 },
-      { key: 'E', name: 'Rend', kind: 'burst', cd: 8000, range: 0, radius: 130, damage: 65, slow: 1000, level: 1 },
-      { key: 'R', name: 'Blood Moon', kind: 'buff', cd: 60000, range: 0, ms: 6000, buff: { dmg: 25, lifesteal: 25, speed: 25 }, level: 3 },
+      { key: 'Q', name: 'wolfkinQ', kind: 'dash', cd: 6000, range: 260, radius: 90, damage: 70, slow: 1000, level: 1 },
+      { key: 'W', name: 'wolfkinW', kind: 'buff', cd: 12000, range: 0, ms: 4000, buff: { atk: 30, speed: 20 }, level: 1 },
+      { key: 'E', name: 'wolfkinE', kind: 'burst', cd: 8000, range: 0, radius: 130, damage: 65, slow: 1000, level: 1 },
+      { key: 'R', name: 'wolfkinR', kind: 'buff', cd: 60000, range: 0, ms: 6000, buff: { dmg: 25, lifesteal: 25, speed: 25 }, level: 3 },
     ],
   },
   {
     id: 'bruin',
-    name: 'Bruin',
-    role: 'Brawler',
-    hero: 'Old Grumm Oakback',
+    name: 'bruinName',
+    role: 'roleBrawler',
+    hero: 'bruinHero',
     short: 'Grumm',
-    title: 'Keeper of the Hives',
-    motive: 'Logging crews cut half his grove; he means to win the forest a voice.',
-    blurb: 'A great bear who hits back',
+    title: 'bruinTitle',
+    motive: 'bruinMotive',
+    blurb: 'bruinBlurb',
     color: '#a0683a',
     hp: 680,
     hpPerLevel: 98,
@@ -667,19 +670,19 @@ export const CHAMPIONS: ChampionDef[] = [
     range: 110,
     speed: 116,
     attackMs: 950,
-    passive: { name: 'Thick Hide', desc: 'Heals 6 health a second', regen: 6 },
+    passive: { name: 'bruinPassive', desc: 'bruinPassiveDesc', regen: 6 },
     abilities: [
-      { key: 'Q', name: 'Maul', kind: 'burst', cd: 6000, range: 0, radius: 130, damage: 80, level: 1 },
-      { key: 'W', name: 'Roar', kind: 'burst', cd: 10000, range: 0, radius: 220, damage: 30, slow: 1500, level: 1 },
-      { key: 'E', name: 'Oak Charge', kind: 'dash', cd: 10000, range: 300, radius: 100, damage: 60, stun: 500, level: 1 },
-      { key: 'R', name: 'Grovewrath', kind: 'buff', cd: 60000, range: 0, ms: 6000, shield: 150, buff: { dmg: 25, atk: 30, armor: 15 }, level: 3 },
+      { key: 'Q', name: 'bruinQ', kind: 'burst', cd: 6000, range: 0, radius: 130, damage: 80, level: 1 },
+      { key: 'W', name: 'bruinW', kind: 'burst', cd: 10000, range: 0, radius: 220, damage: 30, slow: 1500, level: 1 },
+      { key: 'E', name: 'bruinE', kind: 'dash', cd: 10000, range: 300, radius: 100, damage: 60, stun: 500, level: 1 },
+      { key: 'R', name: 'bruinR', kind: 'buff', cd: 60000, range: 0, ms: 6000, shield: 150, buff: { dmg: 25, atk: 30, armor: 15 }, level: 3 },
     ],
   },
 ];
 
 export interface ItemDef {
   id: string;
-  name: string;
+  name: TextKey;
   /** The full price. A recipe item costs less by the parts it builds from that the buyer owns. */
   cost: number;
   /** Flat bonuses to a champion's stats. */
@@ -707,22 +710,22 @@ export interface ItemDef {
  * consumable (see `WARD`), and the three elixirs are timed buffs, one at a time (see `ELIXIR`).
  */
 export const ITEMS: ItemDef[] = [
-  { id: 'sword', name: 'Long Sword', cost: 350, dmg: 12 },
-  { id: 'dagger', name: 'Dagger', cost: 300, atk: 15 },
-  { id: 'cloth', name: 'Cloth Armor', cost: 300, armor: 6 },
-  { id: 'ruby', name: 'Ruby Crystal', cost: 300, hp: 100 },
-  { id: 'boots', name: 'Swift Boots', cost: 300, speed: 25 },
-  { id: 'sapphire', name: 'Sapphire', cost: 300, cdr: 8 },
-  { id: 'flask', name: 'Healing Flask', cost: 150, active: 'flask' },
-  { id: 'blade', name: 'Brutal Edge', cost: 950, dmg: 30, atk: 20, from: ['sword', 'dagger'] },
-  { id: 'thorns', name: 'Thornmail', cost: 900, armor: 16, hp: 180, from: ['cloth', 'ruby'] },
-  { id: 'phase', name: 'Phase Boots', cost: 600, speed: 40, active: 'dash', from: ['boots'] },
-  { id: 'cloak', name: "Sage's Cloak", cost: 900, cdr: 20, hp: 120, from: ['sapphire', 'ruby'] },
-  { id: 'belt', name: "Giant's Belt", cost: 700, hp: 320, from: ['ruby'] },
-  { id: 'ward', name: 'Vision Ward', cost: 75, ward: true },
-  { id: 'wrath', name: 'Wrath Elixir', cost: 400, elixir: { dmg: 20 } },
-  { id: 'iron', name: 'Iron Elixir', cost: 400, elixir: { armor: 15, regen: 4 } },
-  { id: 'swift', name: 'Swift Elixir', cost: 400, elixir: { speed: 15, atk: 20 } },
+  { id: 'sword', name: 'itemSword', cost: 350, dmg: 12 },
+  { id: 'dagger', name: 'itemDagger', cost: 300, atk: 15 },
+  { id: 'cloth', name: 'itemCloth', cost: 300, armor: 6 },
+  { id: 'ruby', name: 'itemRuby', cost: 300, hp: 100 },
+  { id: 'boots', name: 'itemBoots', cost: 300, speed: 25 },
+  { id: 'sapphire', name: 'itemSapphire', cost: 300, cdr: 8 },
+  { id: 'flask', name: 'itemFlask', cost: 150, active: 'flask' },
+  { id: 'blade', name: 'itemBlade', cost: 950, dmg: 30, atk: 20, from: ['sword', 'dagger'] },
+  { id: 'thorns', name: 'itemThorns', cost: 900, armor: 16, hp: 180, from: ['cloth', 'ruby'] },
+  { id: 'phase', name: 'itemPhase', cost: 600, speed: 40, active: 'dash', from: ['boots'] },
+  { id: 'cloak', name: 'itemCloak', cost: 900, cdr: 20, hp: 120, from: ['sapphire', 'ruby'] },
+  { id: 'belt', name: 'itemBelt', cost: 700, hp: 320, from: ['ruby'] },
+  { id: 'ward', name: 'itemWard', cost: 75, ward: true },
+  { id: 'wrath', name: 'itemWrath', cost: 400, elixir: { dmg: 20 } },
+  { id: 'iron', name: 'itemIron', cost: 400, elixir: { armor: 15, regen: 4 } },
+  { id: 'swift', name: 'itemSwift', cost: 400, elixir: { speed: 15, atk: 20 } },
 ];
 /**
  * Elixirs last three minutes, through death; a new one replaces the one a champion has. An AI
@@ -741,7 +744,6 @@ export interface ActiveDef {
   id: ActiveId;
   /** The key that casts it, and the button's label. */
   key: 'D' | 'H' | 'V';
-  name: string;
   cd: number;
   /** dash: how far it goes. */
   range?: number;
@@ -750,9 +752,9 @@ export interface ActiveDef {
 }
 /** The item actives, each on its own key and button. */
 export const ACTIVES: ActiveDef[] = [
-  { id: 'dash', key: 'D', name: 'Dash', cd: 18_000, range: 220 },
-  { id: 'flask', key: 'H', name: 'Flask', cd: 40_000, heal: 220 },
-  { id: 'ward', key: 'V', name: 'Ward', cd: 0, range: 600 },
+  { id: 'dash', key: 'D', cd: 18_000, range: 220 },
+  { id: 'flask', key: 'H', cd: 40_000, heal: 220 },
+  { id: 'ward', key: 'V', cd: 0, range: 600 },
 ];
 
 /**
@@ -801,14 +803,14 @@ export const AI_BUILDS: Record<string, string[]> = {
   fighter: ['flask', 'sword', 'dagger', 'blade', 'boots', 'phase', 'ruby', 'belt', 'cloth', 'thorns', 'sapphire'],
   caster: ['flask', 'sapphire', 'ruby', 'cloak', 'boots', 'sword', 'belt', 'phase', 'dagger', 'blade', 'cloth'],
 };
-export const AI_BUILD_FOR: Record<string, keyof typeof AI_BUILDS> = {
-  Tank: 'tank',
-  Bruiser: 'tank',
-  Brawler: 'tank',
-  Catcher: 'tank',
-  Burst: 'caster',
-  Support: 'caster',
-  Controller: 'caster',
+export const AI_BUILD_FOR: Partial<Record<TextKey, keyof typeof AI_BUILDS>> = {
+  roleTank: 'tank',
+  roleBruiser: 'tank',
+  roleBrawler: 'tank',
+  roleCatcher: 'tank',
+  roleBurst: 'caster',
+  roleSupport: 'caster',
+  roleController: 'caster',
 };
 
 /** How close a champion must stand to its Nexus to shop. */
@@ -824,9 +826,9 @@ export const ENEMY_LANES: LaneId[] = ['top', 'mid', 'bottom', 'mid', 'top'];
 export const SIDE_COLOR = { blue: '#3d8bfd', red: '#e0553f', neutral: '#f4d35e' } as const;
 
 /** The jungle buffs: the slayer of an ember or moss brute carries one until it dies or it runs out. */
-export const BUFFS: Record<'ember' | 'moss', { name: string; ms: number; color: string; buff: BuffDef }> = {
-  ember: { name: 'Ember', ms: 60_000, color: '#ff8a3d', buff: { dmg: 15, slowHit: 800 } },
-  moss: { name: 'Moss', ms: 60_000, color: '#7fe08a', buff: { cdr: 20, regen: 8 } },
+export const BUFFS: Record<'ember' | 'moss', { name: TextKey; ms: number; color: string; buff: BuffDef }> = {
+  ember: { name: 'buffEmber', ms: 60_000, color: '#ff8a3d', buff: { dmg: 15, slowHit: 800 } },
+  moss: { name: 'buffMoss', ms: 60_000, color: '#7fe08a', buff: { cdr: 20, regen: 8 } },
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -860,8 +862,7 @@ export const SIEGE = { mult: 1.25, ms: 60_000 };
 export interface UpgradeDef {
   id: string;
   key: AbilityKey;
-  name: string;
-  desc: string;
+  name: TextKey;
   /** Percent changes to the ability's numbers (cd is negative for a shorter cooldown). */
   radius?: number;
   /** Also scales a zone's damage per second. */
@@ -889,114 +890,115 @@ export const ULT_RANK = { damage: 20, heal: 20, shield: 20, cd: -15 };
 /** How many ranks the R has at a level (0 to 2). */
 export const ultRank = (level: number) => ULT_RANK_LEVELS.filter((l) => level >= l).length;
 
-const up = (id: string, key: AbilityKey, name: string, desc: string, fx: Partial<UpgradeDef>): UpgradeDef => ({ ...fx, id, key, name, desc });
+/** An upgrade; the scene words what it does from its one effect (`upgradeText` in `GameScene.ts`). */
+const up = (id: string, key: AbilityKey, name: TextKey, fx: Partial<UpgradeDef>): UpgradeDef => ({ ...fx, id, key, name });
 
 /** Per champion, the two upgrades offered at each of `UPGRADE_LEVELS`, in order. */
 export const UPGRADES: Record<string, [UpgradeDef, UpgradeDef][]> = {
   warden: [
-    [up('wide-slam', 'Q', 'Wide Gatefall', 'Gatefall radius +30%', { radius: 30 }), up('stun-slam', 'Q', 'Stun Gatefall', 'Gatefall stuns for 0.6s', { stun: 600 })],
-    [up('iron-bulwark', 'W', 'Iron Oath', 'Oathguard shield +40%', { shield: 40 }), up('long-charge', 'E', 'Long Rush', 'Gate Rush range +30%', { range: 30 })],
-    [up('titan-stand', 'R', 'Iron Gate', 'Last Gate damage +25%', { damage: 25 }), up('quick-slam', 'Q', 'Quick Gatefall', 'Gatefall cooldown -25%', { cd: -25 })],
-    [up('crushing-charge', 'E', 'Crushing Rush', 'Gate Rush damage +40%', { damage: 40 }), up('wide-bulwark', 'W', 'Wide Oath', 'Oathguard radius +40%', { radius: 40 })],
-    [up('quick-oath', 'W', 'Unbroken Oath', 'Oathguard cooldown -30%', { cd: -30 }), up('gatebreaker', 'E', 'Gatebreaker', 'Gate Rush stuns 0.4s longer', { stun: 400 })],
+    [up('wide-slam', 'Q', 'upWideSlam', { radius: 30 }), up('stun-slam', 'Q', 'upStunSlam', { stun: 600 })],
+    [up('iron-bulwark', 'W', 'upIronBulwark', { shield: 40 }), up('long-charge', 'E', 'upLongCharge', { range: 30 })],
+    [up('titan-stand', 'R', 'upTitanStand', { damage: 25 }), up('quick-slam', 'Q', 'upQuickSlam', { cd: -25 })],
+    [up('crushing-charge', 'E', 'upCrushingCharge', { damage: 40 }), up('wide-bulwark', 'W', 'upWideBulwark', { radius: 40 })],
+    [up('quick-oath', 'W', 'upQuickOath', { cd: -30 }), up('gatebreaker', 'E', 'upGatebreaker', { stun: 400 })],
   ],
   blade: [
-    [up('deep-strike', 'Q', 'Deep Cut', 'Quick Cut range +30%', { range: 30 }), up('keen-strike', 'Q', 'Keen Cut', 'Quick Cut damage +30%', { damage: 30 })],
-    [up('wide-whirl', 'W', 'Wide Wind', 'Cutwind radius +30%', { radius: 30 }), up('quick-step', 'E', 'Quick Step', 'Shadow Step cooldown -30%', { cd: -30 })],
-    [up('brutal-execute', 'R', 'Final Word', 'Last Word damage +25%', { damage: 25 }), up('crippling-whirl', 'W', 'Crippling Wind', 'Cutwind slows for 1.2s', { slow: 1200 })],
-    [up('swift-strike', 'Q', 'Swift Cut', 'Quick Cut cooldown -25%', { cd: -25 }), up('long-step', 'E', 'Long Step', 'Shadow Step range +30%', { range: 30 })],
-    [up('debt-collected', 'R', 'Debt Collected', 'Last Word cooldown -30%', { cd: -30 }), up('twin-wind', 'W', 'Twin Wind', 'Cutwind damage +40%', { damage: 40 })],
+    [up('deep-strike', 'Q', 'upDeepStrike', { range: 30 }), up('keen-strike', 'Q', 'upKeenStrike', { damage: 30 })],
+    [up('wide-whirl', 'W', 'upWideWhirl', { radius: 30 }), up('quick-step', 'E', 'upQuickStep', { cd: -30 })],
+    [up('brutal-execute', 'R', 'upBrutalExecute', { damage: 25 }), up('crippling-whirl', 'W', 'upCripplingWhirl', { slow: 1200 })],
+    [up('swift-strike', 'Q', 'upSwiftStrike', { cd: -25 }), up('long-step', 'E', 'upLongStep', { range: 30 })],
+    [up('debt-collected', 'R', 'upDebtCollected', { cd: -30 }), up('twin-wind', 'W', 'upTwinWind', { damage: 40 })],
   ],
   archer: [
-    [up('heavy-arrow', 'Q', 'Heavy Seeker', 'Heartseeker damage +30%', { damage: 30 }), up('wide-volley', 'W', 'Wide Feathers', 'Featherfall fires 2 more arrows', { count: 2 })],
-    [up('long-roll', 'E', 'Long Tumble', 'Tumble range +40%', { range: 40 }), up('quick-arrow', 'Q', 'Quick Seeker', 'Heartseeker cooldown -25%', { cd: -25 })],
-    [up('wide-rain', 'R', 'Wide Hail', 'Hailstorm radius +30%', { radius: 30 }), up('hard-volley', 'W', 'Hard Feathers', 'Featherfall damage +30%', { damage: 30 })],
-    [up('pinning-arrow', 'Q', 'Pinning Seeker', 'Heartseeker stuns for 0.5s', { stun: 500 }), up('heavy-rain', 'R', 'Heavy Hail', 'Hailstorm damage +25%', { damage: 25 })],
-    [up('long-hail', 'R', 'Long Hail', 'Hailstorm lasts 40% longer', { ms: 40 }), up('quick-tumble', 'E', 'Quick Tumble', 'Tumble cooldown -30%', { cd: -30 })],
+    [up('heavy-arrow', 'Q', 'upHeavyArrow', { damage: 30 }), up('wide-volley', 'W', 'upWideVolley', { count: 2 })],
+    [up('long-roll', 'E', 'upLongRoll', { range: 40 }), up('quick-arrow', 'Q', 'upQuickArrow', { cd: -25 })],
+    [up('wide-rain', 'R', 'upWideRain', { radius: 30 }), up('hard-volley', 'W', 'upHardVolley', { damage: 30 })],
+    [up('pinning-arrow', 'Q', 'upPinningArrow', { stun: 500 }), up('heavy-rain', 'R', 'upHeavyRain', { damage: 25 })],
+    [up('long-hail', 'R', 'upLongHail', { ms: 40 }), up('quick-tumble', 'E', 'upQuickTumble', { cd: -30 })],
   ],
   mage: [
-    [up('big-fireball', 'Q', 'Big Riftflame', 'Riftflame damage +30%', { damage: 30 }), up('swift-fireball', 'Q', 'Swift Riftflame', 'Riftflame cooldown -25%', { cd: -25 })],
-    [up('deep-freeze', 'W', 'Deep Rime', 'Rime Ring stuns for 0.6s', { stun: 600 }), up('far-blink', 'E', 'Far Fold', 'Fold Step range +30%', { range: 30 })],
-    [up('huge-meteor', 'R', 'Huge Starfall', 'Starfall radius +30%', { radius: 30 }), up('wide-nova', 'W', 'Wide Ring', 'Rime Ring radius +30%', { radius: 30 })],
-    [up('long-fireball', 'Q', 'Long Riftflame', 'Riftflame range +30%', { range: 30 }), up('heavy-meteor', 'R', 'Heavy Starfall', 'Starfall damage +25%', { damage: 25 })],
-    [up('quick-fold', 'E', 'Quick Fold', 'Fold Step cooldown -30%', { cd: -30 }), up('hard-rime', 'W', 'Hard Rime', 'Rime Ring damage +40%', { damage: 40 })],
+    [up('big-fireball', 'Q', 'upBigFireball', { damage: 30 }), up('swift-fireball', 'Q', 'upSwiftFireball', { cd: -25 })],
+    [up('deep-freeze', 'W', 'upDeepFreeze', { stun: 600 }), up('far-blink', 'E', 'upFarBlink', { range: 30 })],
+    [up('huge-meteor', 'R', 'upHugeMeteor', { radius: 30 }), up('wide-nova', 'W', 'upWideNova', { radius: 30 })],
+    [up('long-fireball', 'Q', 'upLongFireball', { range: 30 }), up('heavy-meteor', 'R', 'upHeavyMeteor', { damage: 25 })],
+    [up('quick-fold', 'E', 'upQuickFold', { cd: -30 }), up('hard-rime', 'W', 'upHardRime', { damage: 40 })],
   ],
   priest: [
-    [up('deep-mend', 'W', 'Deep Mend', 'Mend heals +30%', { heal: 30 }), up('wide-mend', 'W', 'Wide Mend', 'Mend radius +30%', { radius: 30 })],
-    [up('holy-smite', 'Q', 'Bright Lance', 'Sunlance damage +30%', { damage: 30 }), up('strong-ward', 'E', 'Strong Veil', 'Dawn Veil shield +40%', { shield: 40 })],
-    [up('wide-sanctuary', 'R', 'Loud Bell', 'Noon Bell radius +25%', { radius: 25 }), up('quick-ward', 'E', 'Quick Veil', 'Dawn Veil cooldown -25%', { cd: -25 })],
-    [up('binding-smite', 'Q', 'Binding Lance', 'Sunlance stuns for 0.5s', { stun: 500 }), up('quick-mend', 'W', 'Quick Mend', 'Mend cooldown -25%', { cd: -25 })],
-    [up('bright-bell', 'R', 'Bright Bell', 'Noon Bell heals +40%', { heal: 40 }), up('long-lance', 'Q', 'Long Lance', 'Sunlance range +30%', { range: 30 })],
+    [up('deep-mend', 'W', 'upDeepMend', { heal: 30 }), up('wide-mend', 'W', 'upWideMend', { radius: 30 })],
+    [up('holy-smite', 'Q', 'upHolySmite', { damage: 30 }), up('strong-ward', 'E', 'upStrongWard', { shield: 40 })],
+    [up('wide-sanctuary', 'R', 'upWideSanctuary', { radius: 25 }), up('quick-ward', 'E', 'upQuickWard', { cd: -25 })],
+    [up('binding-smite', 'Q', 'upBindingSmite', { stun: 500 }), up('quick-mend', 'W', 'upQuickMend', { cd: -25 })],
+    [up('bright-bell', 'R', 'upBrightBell', { heal: 40 }), up('long-lance', 'Q', 'upLongLance', { range: 30 })],
   ],
   berserker: [
-    [up('wide-cleave', 'Q', 'Wide Cleave', 'Cleave radius +30%', { radius: 30 }), up('savage-cleave', 'Q', 'Savage Cleave', 'Cleave damage +30%', { damage: 30 })],
-    [up('long-frenzy', 'W', 'Long Blood', 'Blood Up lasts 50% longer', { ms: 50 }), up('far-leap', 'E', 'Far Skyfall', 'Skyfall range +30%', { range: 30 })],
-    [up('endless-rampage', 'R', 'Endless Chains', 'Unchained lasts 40% longer', { ms: 40 }), up('crushing-leap', 'E', 'Crushing Skyfall', 'Skyfall stuns for 0.5s', { stun: 500 })],
-    [up('quick-cleave', 'Q', 'Quick Cleave', 'Cleave cooldown -25%', { cd: -25 }), up('quick-frenzy', 'W', 'Quick Blood', 'Blood Up cooldown -30%', { cd: -30 })],
-    [up('quick-skyfall', 'E', 'Quick Skyfall', 'Skyfall cooldown -30%', { cd: -30 }), up('quick-chains', 'R', 'Quick Chains', 'Unchained cooldown -30%', { cd: -30 })],
+    [up('wide-cleave', 'Q', 'upWideCleave', { radius: 30 }), up('savage-cleave', 'Q', 'upSavageCleave', { damage: 30 })],
+    [up('long-frenzy', 'W', 'upLongFrenzy', { ms: 50 }), up('far-leap', 'E', 'upFarLeap', { range: 30 })],
+    [up('endless-rampage', 'R', 'upEndlessRampage', { ms: 40 }), up('crushing-leap', 'E', 'upCrushingLeap', { stun: 500 })],
+    [up('quick-cleave', 'Q', 'upQuickCleave', { cd: -25 }), up('quick-frenzy', 'W', 'upQuickFrenzy', { cd: -30 })],
+    [up('quick-skyfall', 'E', 'upQuickSkyfall', { cd: -30 }), up('quick-chains', 'R', 'upQuickChains', { cd: -30 })],
   ],
   harpooner: [
-    [up('long-harpoon', 'Q', 'Long Harpoon', 'Harpoon range +25%', { range: 25 }), up('barbed-harpoon', 'Q', 'Barbed Harpoon', 'Harpoon damage +40%', { damage: 40 })],
-    [up('deep-undertow', 'W', 'Deep Riptide', 'Riptide radius +30%', { radius: 30 }), up('iron-brace', 'E', 'Iron Grip', 'Hold Fast shield +50%', { shield: 50 })],
-    [up('wide-maelstrom', 'R', 'Wide Maelstrom', 'Maelstrom radius +25%', { radius: 25 }), up('quick-harpoon', 'Q', 'Quick Harpoon', 'Harpoon cooldown -25%', { cd: -25 })],
-    [up('stunning-undertow', 'W', 'Stunning Riptide', 'Riptide stuns for 0.5s', { stun: 500 }), up('raging-maelstrom', 'R', 'Raging Maelstrom', 'Maelstrom damage +30%', { damage: 30 })],
-    [up('long-maelstrom', 'R', 'Long Maelstrom', 'Maelstrom lasts 40% longer', { ms: 40 }), up('quick-hold', 'E', 'Quick Hold', 'Hold Fast cooldown -30%', { cd: -30 })],
+    [up('long-harpoon', 'Q', 'upLongHarpoon', { range: 25 }), up('barbed-harpoon', 'Q', 'upBarbedHarpoon', { damage: 40 })],
+    [up('deep-undertow', 'W', 'upDeepUndertow', { radius: 30 }), up('iron-brace', 'E', 'upIronBrace', { shield: 50 })],
+    [up('wide-maelstrom', 'R', 'upWideMaelstrom', { radius: 25 }), up('quick-harpoon', 'Q', 'upQuickHarpoon', { cd: -25 })],
+    [up('stunning-undertow', 'W', 'upStunningUndertow', { stun: 500 }), up('raging-maelstrom', 'R', 'upRagingMaelstrom', { damage: 30 })],
+    [up('long-maelstrom', 'R', 'upLongMaelstrom', { ms: 40 }), up('quick-hold', 'E', 'upQuickHold', { cd: -30 })],
   ],
   witch: [
-    [up('cruel-hex', 'Q', 'Cruel Hex', 'Hex Bolt damage +30%', { damage: 30 }), up('lasting-blight', 'W', 'Lasting Rot', 'Mire Rot lasts 40% longer', { ms: 40 })],
-    [up('wide-snare', 'E', 'Wide Snare', 'Bramble Snare radius +40%', { radius: 40 }), up('quick-hex', 'Q', 'Quick Hex', 'Hex Bolt cooldown -25%', { cd: -25 })],
-    [up('wide-plague', 'R', 'Wide Bloom', 'Mire Bloom radius +25%', { radius: 25 }), up('foul-blight', 'W', 'Foul Rot', 'Mire Rot damage +35%', { damage: 35 })],
-    [up('deep-roots', 'E', 'Deep Roots', 'Bramble Snare holds 0.5s longer', { stun: 500 }), up('long-plague', 'R', 'Long Bloom', 'Mire Bloom lasts 30% longer', { ms: 30 })],
-    [up('wide-rot', 'W', 'Wide Rot', 'Mire Rot radius +30%', { radius: 30 }), up('quick-snare', 'E', 'Quick Snare', 'Bramble Snare cooldown -30%', { cd: -30 })],
+    [up('cruel-hex', 'Q', 'upCruelHex', { damage: 30 }), up('lasting-blight', 'W', 'upLastingBlight', { ms: 40 })],
+    [up('wide-snare', 'E', 'upWideSnare', { radius: 40 }), up('quick-hex', 'Q', 'upQuickHex', { cd: -25 })],
+    [up('wide-plague', 'R', 'upWidePlague', { radius: 25 }), up('foul-blight', 'W', 'upFoulBlight', { damage: 35 })],
+    [up('deep-roots', 'E', 'upDeepRoots', { stun: 500 }), up('long-plague', 'R', 'upLongPlague', { ms: 30 })],
+    [up('wide-rot', 'W', 'upWideRot', { radius: 30 }), up('quick-snare', 'E', 'upQuickSnare', { cd: -30 })],
   ],
   stalker: [
-    [up('sharp-shuriken', 'Q', 'Sharp Stars', 'Mist Stars damage +30%', { damage: 30 }), up('wide-fan', 'Q', 'Wide Stars', 'Mist Stars throws 2 more', { count: 2 })],
-    [up('long-vanish', 'W', 'Long Vanish', 'Vanish lasts 50% longer', { ms: 50 }), up('far-pounce', 'E', 'Far Pounce', 'Pounce range +30%', { range: 30 })],
-    [up('deadly-mark', 'R', 'Deadly Mark', 'Final Mark damage +25%', { damage: 25 }), up('quick-vanish', 'W', 'Quick Vanish', 'Vanish cooldown -30%', { cd: -30 })],
-    [up('stunning-pounce', 'E', 'Stunning Pounce', 'Pounce stuns 0.4s longer', { stun: 400 }), up('quick-shuriken', 'Q', 'Quick Stars', 'Mist Stars cooldown -25%', { cd: -25 })],
-    [up('quick-pounce', 'E', 'Quick Pounce', 'Pounce cooldown -30%', { cd: -30 }), up('long-stars', 'Q', 'Long Stars', 'Mist Stars range +30%', { range: 30 })],
+    [up('sharp-shuriken', 'Q', 'upSharpShuriken', { damage: 30 }), up('wide-fan', 'Q', 'upWideFan', { count: 2 })],
+    [up('long-vanish', 'W', 'upLongVanish', { ms: 50 }), up('far-pounce', 'E', 'upFarPounce', { range: 30 })],
+    [up('deadly-mark', 'R', 'upDeadlyMark', { damage: 25 }), up('quick-vanish', 'W', 'upQuickVanish', { cd: -30 })],
+    [up('stunning-pounce', 'E', 'upStunningPounce', { stun: 400 }), up('quick-shuriken', 'Q', 'upQuickShuriken', { cd: -25 })],
+    [up('quick-pounce', 'E', 'upQuickPounce', { cd: -30 }), up('long-stars', 'Q', 'upLongStars', { range: 30 })],
   ],
   lancer: [
-    [up('long-thrust', 'Q', 'Long Thrust', 'Thrust range +30%', { range: 30 }), up('hard-thrust', 'Q', 'Hard Thrust', 'Thrust damage +30%', { damage: 30 })],
-    [up('wide-sweep', 'W', 'Wide Sweep', 'Sweep radius +25%', { radius: 25 }), up('high-vault', 'E', 'High Vault', 'Vault range +30%', { range: 30 })],
-    [up('iron-phalanx', 'R', 'Iron Rally', 'Rally shield +40%', { shield: 40 }), up('crippling-sweep', 'W', 'Crippling Sweep', 'Sweep slows for 1.2s', { slow: 1200 })],
-    [up('stunning-vault', 'E', 'Stunning Vault', 'Vault stuns 0.4s longer', { stun: 400 }), up('quick-thrust', 'Q', 'Quick Thrust', 'Thrust cooldown -25%', { cd: -25 })],
-    [up('quick-rally', 'R', 'Quick Rally', 'Rally cooldown -30%', { cd: -30 }), up('hard-sweep', 'W', 'Hard Sweep', 'Sweep damage +40%', { damage: 40 })],
+    [up('long-thrust', 'Q', 'upLongThrust', { range: 30 }), up('hard-thrust', 'Q', 'upHardThrust', { damage: 30 })],
+    [up('wide-sweep', 'W', 'upWideSweep', { radius: 25 }), up('high-vault', 'E', 'upHighVault', { range: 30 })],
+    [up('iron-phalanx', 'R', 'upIronPhalanx', { shield: 40 }), up('crippling-sweep', 'W', 'upCripplingSweep', { slow: 1200 })],
+    [up('stunning-vault', 'E', 'upStunningVault', { stun: 400 }), up('quick-thrust', 'Q', 'upQuickThrust', { cd: -25 })],
+    [up('quick-rally', 'R', 'upQuickRally', { cd: -30 }), up('hard-sweep', 'W', 'upHardSweep', { damage: 40 })],
   ],
   gunslinger: [
-    [up('more-hammer', 'Q', 'Six Shooter', 'Fan the Hammer fires 2 more', { count: 2 }), up('hot-lead', 'Q', 'Hot Lead', 'Fan the Hammer damage +30%', { damage: 30 })],
-    [up('thick-smoke', 'W', 'Thick Smoke', 'Smoke Bomb radius +30%', { radius: 30 }), up('quick-roll', 'E', 'Quick Roll', 'Dodge Roll cooldown -30%', { cd: -30 })],
-    [up('steady-aim', 'R', 'Steady Aim', 'Last Round damage +25%', { damage: 25 }), up('long-smoke', 'W', 'Long Smoke', 'Smoke Bomb lasts 40% longer', { ms: 40 })],
-    [up('stunning-shot', 'Q', 'Stunning Shot', 'Fan the Hammer stuns 0.3s', { stun: 300 }), up('quick-hammer', 'Q', 'Quick Hammer', 'Fan the Hammer cooldown -25%', { cd: -25 })],
-    [up('quick-draw', 'R', 'Quick Draw', 'Last Round cooldown -30%', { cd: -30 }), up('far-roll', 'E', 'Far Roll', 'Dodge Roll range +30%', { range: 30 })],
+    [up('more-hammer', 'Q', 'upMoreHammer', { count: 2 }), up('hot-lead', 'Q', 'upHotLead', { damage: 30 })],
+    [up('thick-smoke', 'W', 'upThickSmoke', { radius: 30 }), up('quick-roll', 'E', 'upQuickRoll', { cd: -30 })],
+    [up('steady-aim', 'R', 'upSteadyAim', { damage: 25 }), up('long-smoke', 'W', 'upLongSmoke', { ms: 40 })],
+    [up('stunning-shot', 'Q', 'upStunningShot', { stun: 300 }), up('quick-hammer', 'Q', 'upQuickHammer', { cd: -25 })],
+    [up('quick-draw', 'R', 'upQuickDraw', { cd: -30 }), up('far-roll', 'E', 'upFarRoll', { range: 30 })],
   ],
   automaton: [
-    [up('wide-vent', 'Q', 'Wide Vent', 'Steam Vent radius +30%', { radius: 30 }), up('scalding-vent', 'Q', 'Scalding Vent', 'Steam Vent damage +30%', { damage: 30 })],
-    [up('long-overclock', 'W', 'Long Overclock', 'Overclock lasts 50% longer', { ms: 50 }), up('long-fist', 'E', 'Long Fist', 'Rocket Fist range +25%', { range: 25 })],
-    [up('big-overload', 'R', 'Big Heartburst', 'Heartburst radius +25%', { radius: 25 }), up('quick-vent', 'Q', 'Quick Vent', 'Steam Vent cooldown -25%', { cd: -25 })],
-    [up('heavy-fist', 'E', 'Heavy Fist', 'Rocket Fist damage +40%', { damage: 40 }), up('quick-overclock', 'W', 'Quick Overclock', 'Overclock cooldown -30%', { cd: -30 })],
-    [up('quick-fist', 'E', 'Quick Fist', 'Rocket Fist cooldown -30%', { cd: -30 }), up('hot-heart', 'R', 'Hot Heart', 'Heartburst damage +30%', { damage: 30 })],
+    [up('wide-vent', 'Q', 'upWideVent', { radius: 30 }), up('scalding-vent', 'Q', 'upScaldingVent', { damage: 30 })],
+    [up('long-overclock', 'W', 'upLongOverclock', { ms: 50 }), up('long-fist', 'E', 'upLongFist', { range: 25 })],
+    [up('big-overload', 'R', 'upBigOverload', { radius: 25 }), up('quick-vent', 'Q', 'upQuickVent', { cd: -25 })],
+    [up('heavy-fist', 'E', 'upHeavyFist', { damage: 40 }), up('quick-overclock', 'W', 'upQuickOverclock', { cd: -30 })],
+    [up('quick-fist', 'E', 'upQuickFist', { cd: -30 }), up('hot-heart', 'R', 'upHotHeart', { damage: 30 })],
   ],
   tinker: [
-    [up('hot-spark', 'Q', 'Hot Spark', 'Spark Bolt damage +30%', { damage: 30 }), up('quick-spark', 'Q', 'Quick Spark', 'Spark Bolt cooldown -25%', { cd: -25 })],
-    [up('wide-field', 'W', 'Wide Coil', 'Coil Field radius +30%', { radius: 30 }), up('long-jet', 'E', 'Long Jet', 'Jetpack range +30%', { range: 30 })],
-    [up('wide-storm', 'R', 'Wide Storm', 'Storm Engine radius +25%', { radius: 25 }), up('strong-field', 'W', 'Strong Coil', 'Coil Field damage +35%', { damage: 35 })],
-    [up('stunning-spark', 'Q', 'Stunning Spark', 'Spark Bolt stuns 0.4s longer', { stun: 400 }), up('long-storm', 'R', 'Long Storm', 'Storm Engine lasts 30% longer', { ms: 30 })],
-    [up('quick-coil', 'W', 'Quick Coil', 'Coil Field cooldown -30%', { cd: -30 }), up('long-spark', 'Q', 'Long Spark', 'Spark Bolt range +30%', { range: 30 })],
+    [up('hot-spark', 'Q', 'upHotSpark', { damage: 30 }), up('quick-spark', 'Q', 'upQuickSpark', { cd: -25 })],
+    [up('wide-field', 'W', 'upWideField', { radius: 30 }), up('long-jet', 'E', 'upLongJet', { range: 30 })],
+    [up('wide-storm', 'R', 'upWideStorm', { radius: 25 }), up('strong-field', 'W', 'upStrongField', { damage: 35 })],
+    [up('stunning-spark', 'Q', 'upStunningSpark', { stun: 400 }), up('long-storm', 'R', 'upLongStorm', { ms: 30 })],
+    [up('quick-coil', 'W', 'upQuickCoil', { cd: -30 }), up('long-spark', 'Q', 'upLongSpark', { range: 30 })],
   ],
   wolfkin: [
-    [up('far-lunge', 'Q', 'Far Lunge', 'Lunge range +30%', { range: 30 }), up('savage-lunge', 'Q', 'Savage Lunge', 'Lunge damage +30%', { damage: 30 })],
-    [up('long-howl', 'W', 'Long Howl', 'Pack Howl lasts 50% longer', { ms: 50 }), up('wide-rend', 'E', 'Wide Rend', 'Rend radius +30%', { radius: 30 })],
-    [up('long-moon', 'R', 'Long Moon', 'Blood Moon lasts 40% longer', { ms: 40 }), up('quick-lunge', 'Q', 'Quick Lunge', 'Lunge cooldown -25%', { cd: -25 })],
-    [up('deep-rend', 'E', 'Deep Rend', 'Rend damage +40%', { damage: 40 }), up('quick-howl', 'W', 'Quick Howl', 'Pack Howl cooldown -30%', { cd: -30 })],
-    [up('quick-rend', 'E', 'Quick Rend', 'Rend cooldown -30%', { cd: -30 }), up('red-moon', 'R', 'Red Moon', 'Blood Moon cooldown -30%', { cd: -30 })],
+    [up('far-lunge', 'Q', 'upFarLunge', { range: 30 }), up('savage-lunge', 'Q', 'upSavageLunge', { damage: 30 })],
+    [up('long-howl', 'W', 'upLongHowl', { ms: 50 }), up('wide-rend', 'E', 'upWideRend', { radius: 30 })],
+    [up('long-moon', 'R', 'upLongMoon', { ms: 40 }), up('quick-lunge', 'Q', 'upQuickLunge', { cd: -25 })],
+    [up('deep-rend', 'E', 'upDeepRend', { damage: 40 }), up('quick-howl', 'W', 'upQuickHowl', { cd: -30 })],
+    [up('quick-rend', 'E', 'upQuickRend', { cd: -30 }), up('red-moon', 'R', 'upRedMoon', { cd: -30 })],
   ],
   bruin: [
-    [up('wide-maul', 'Q', 'Wide Maul', 'Maul radius +30%', { radius: 30 }), up('heavy-maul', 'Q', 'Heavy Maul', 'Maul damage +30%', { damage: 30 })],
-    [up('loud-roar', 'W', 'Loud Roar', 'Roar radius +25%', { radius: 25 }), up('long-rush', 'E', 'Long Charge', 'Oak Charge range +30%', { range: 30 })],
-    [up('long-wrath', 'R', 'Long Wrath', 'Grovewrath lasts 40% longer', { ms: 40 }), up('quick-maul', 'Q', 'Quick Maul', 'Maul cooldown -25%', { cd: -25 })],
-    [up('stunning-roar', 'W', 'Stunning Roar', 'Roar stuns for 0.5s', { stun: 500 }), up('crushing-rush', 'E', 'Crushing Charge', 'Oak Charge damage +40%', { damage: 40 })],
-    [up('quick-roar', 'W', 'Quick Roar', 'Roar cooldown -30%', { cd: -30 }), up('quick-wrath', 'R', 'Quick Wrath', 'Grovewrath cooldown -30%', { cd: -30 })],
+    [up('wide-maul', 'Q', 'upWideMaul', { radius: 30 }), up('heavy-maul', 'Q', 'upHeavyMaul', { damage: 30 })],
+    [up('loud-roar', 'W', 'upLoudRoar', { radius: 25 }), up('long-rush', 'E', 'upLongRush', { range: 30 })],
+    [up('long-wrath', 'R', 'upLongWrath', { ms: 40 }), up('quick-maul', 'Q', 'upQuickMaul', { cd: -25 })],
+    [up('stunning-roar', 'W', 'upStunningRoar', { stun: 500 }), up('crushing-rush', 'E', 'upCrushingRush', { damage: 40 })],
+    [up('quick-roar', 'W', 'upQuickRoar', { cd: -30 }), up('quick-wrath', 'R', 'upQuickWrath', { cd: -30 })],
   ],
 };
 

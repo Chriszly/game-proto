@@ -2,6 +2,7 @@
 // the jungle and the shop. Free of Phaser, so the rules can be read without the view.
 
 import {
+  type LaneId,
   ABILITY_KEYS,
   AbilityDef,
   AbilityKey,
@@ -68,9 +69,10 @@ import {
   WARD_SPOTS,
   bountyOf,
 } from './data';
-import { GameState, Unit, dist, getUnit, laneNear, levelFor, refreshStats, spawnWard, spawnWave } from './state';
+import { GameState, ObjectiveTitle, Unit, dist, getUnit, laneNear, levelFor, refreshStats, spawnWard, spawnWave } from './state';
 import { shortName } from './names';
 import { aiLog } from '../../../../shared/watch';
+import { english, t as text, type TextKey } from '../i18n';
 
 const TEAMS: Team[] = ['blue', 'red'];
 
@@ -198,6 +200,11 @@ function breakStealth(u: Unit) {
 // ---------------------------------------------------------------------------------------------
 // Objectives and last hits.
 
+/** The title of a red tower's objective, by its lane. */
+const TOWER_TITLE: Record<LaneId, TextKey> = { top: 'objTowerTop', mid: 'objTowerMid', bottom: 'objTowerBottom' };
+/** A lane's name, for notices. */
+const LANE_NAME: Record<LaneId, TextKey> = { top: 'laneTop', mid: 'laneMid', bottom: 'laneBottom' };
+
 /** Starts the next objective when it is due, and settles the current one when it is done or late. */
 function updateObjective(s: GameState) {
   const o = s.objective;
@@ -234,24 +241,23 @@ function updateObjective(s: GameState) {
   for (let n = 0; n < OBJECTIVES.length; n++) {
     const def = OBJECTIVES[(s.objectiveIndex + n) % OBJECTIVES.length];
     let target: Unit | null = null;
-    let title = '';
+    let title: ObjectiveTitle = { key: 'objBeast' };
     if (def.kind === 'tower') {
       // The red tower closest to the blue Nexus: the next one in the way.
       target = closest(s.units.filter((u) => u.kind === 'tower' && u.side === 'red' && !u.dead), BASE.blue);
       const spot = target && TOWERS.find((t) => t.x === target!.x && t.y === target!.y);
-      title = `Topple the red ${spot ? spot.lane : ''} tower`.replace('  ', ' ');
+      title = { key: spot ? TOWER_TITLE[spot.lane] : 'objTower' };
     } else if (def.kind === 'camp') {
       // The nearest boar or wolf pack (its alpha) on blue's half of the jungle: the brutes are a
       // fight of their own, and red's half is red's to defend.
       target = closest(s.units.filter((u) => u.kind === 'camp' && !u.dead && (u.campKind === 'boar' || u.campKind === 'wolf') && ownHalf('blue', u)), from);
-      title = `Clear the ${target?.campKind === 'wolf' ? 'wolf pack' : `${CAMP_KINDS[target?.campKind ?? 'boar'].name.toLowerCase()}`}`;
+      title = { key: target?.campKind === 'wolf' ? 'objCampWolf' : 'objCampBoar' };
     } else if (def.kind === 'champion') {
       target = closest(s.units.filter((u) => u.kind === 'champion' && u.side === 'red' && !u.dead && !hiddenFrom(s, 'blue', u)), from);
-      title = `Defeat ${target?.name ?? 'a red champion'}`;
+      title = target?.champ ? { key: 'objChampion', name: target.champ.hero } : { key: 'objChampionAny' };
     } else {
       const beast = getUnit(s, s.beast);
       target = beast && !beast.dead ? beast : null;
-      title = 'Slay the guardian beast';
     }
     if (!target) continue;
     s.objective = { kind: def.kind, target: target.id, title, gold: def.gold, banner: def.banner ?? null, startAt: s.time, endsAt: s.time + def.ms };
@@ -427,7 +433,7 @@ export function buyBack(s: GameState, u: Unit): boolean {
   u.buybackReadyAt = s.time + BUYBACK.cd;
   revive(u);
   s.fx.push({ kind: 'ring', x: u.x, y: u.y, r: 50, color: '#f2c14e', ms: 600 });
-  if (u.player) notice(s, `You bought back for ${cost} gold`, '#f2c14e');
+  if (u.player) notice(s, text('noticeBoughtBack', { gold: cost }), '#f2c14e');
   else aiLog(u.side, `${shortName(u.name)} buys back for ${cost} gold`);
   return true;
 }
@@ -671,7 +677,7 @@ function updateUnit(s: GameState, u: Unit, dt: number) {
     if ((u.kind === 'champion' || u.kind === 'camp' || u.kind === 'beast') && s.time >= u.respawnAt) {
       if (u.kind === 'beast' && s.time >= ELDER.at && !s.beastElder) makeElder(s, u);
       revive(u);
-      if (u.kind === 'beast') notice(s, s.beastElder ? 'The Elder Guardian has awoken' : 'The guardian beast has awoken', '#f2c14e');
+      if (u.kind === 'beast') notice(s, text(s.beastElder ? 'noticeElderAwake' : 'noticeBeastAwake'), '#f2c14e');
     } else if (u.kind === 'champion' && !u.player) {
       // A dead AI champion spends its wait at the shop, and buys back when its base is in danger.
       aiShop(u);
@@ -815,7 +821,7 @@ function kill(s: GameState, t: Unit, killerId: number) {
           const b = BUFFS[def.buff];
           addBuff(champKiller, def.buff, b.buff, b.ms, b.color);
           s.fx.push({ kind: 'ring', x: champKiller.x, y: champKiller.y, r: 60, color: b.color, ms: 700 });
-          if (champKiller.side === 'blue') notice(s, `${champKiller.player ? 'You take' : `${shortName(champKiller.name)} takes`} the ${b.name} buff`, b.color);
+          if (champKiller.side === 'blue') notice(s, champKiller.player ? text('noticeYouTakeBuff', { buff: text(b.name) }) : text('noticeTakesBuff', { name: shortName(champKiller.name), buff: text(b.name) }), b.color);
         }
       }
       break;
@@ -834,10 +840,10 @@ function kill(s: GameState, t: Unit, killerId: number) {
           s.elderBuff[team] = s.time + ELDER.buffMs;
           champKiller.gold += ELDER.gold;
           aiLog(team, `${shortName(champKiller.name)} slays the Elder Guardian`);
-          notice(s, team === 'blue' ? `Blue slew the Elder Guardian: your champions are blessed for ${ELDER.buffMs / 1000}s` : `Red slew the Elder Guardian: red champions are blessed for ${ELDER.buffMs / 1000}s`, SIDE_COLOR[team]);
+          notice(s, text(team === 'blue' ? 'noticeElderBlue' : 'noticeElderRed', { s: ELDER.buffMs / 1000 }), SIDE_COLOR[team]);
         } else {
           aiLog(team, `${shortName(champKiller.name)} slays the guardian beast`);
-          notice(s, team === 'blue' ? `Blue slew the guardian beast: your minions are empowered for ${secs}s` : `Red slew the guardian beast: red minions are empowered for ${secs}s`, SIDE_COLOR[team]);
+          notice(s, text(team === 'blue' ? 'noticeBeastBlue' : 'noticeBeastRed', { s: secs }), SIDE_COLOR[team]);
         }
       }
       s.fx.push({ kind: 'ring', x: t.x, y: t.y, r: 90, color: '#c79bff', ms: 800 });
@@ -846,7 +852,7 @@ function kill(s: GameState, t: Unit, killerId: number) {
       if (champKiller) champKiller.gold += INHIBITOR.gold;
       const foe = t.side === 'blue' ? 'red' : 'blue';
       aiLog(foe, `breaks the ${t.lane} inhibitor`);
-      notice(s, t.side === 'red' ? `Red's ${t.lane} inhibitor fell: blue super minions march ${t.lane}` : `Your ${t.lane} inhibitor fell: red super minions march ${t.lane}`, SIDE_COLOR[foe]);
+      notice(s, text(t.side === 'red' ? 'noticeRedInhibitor' : 'noticeBlueInhibitor', { lane: t.lane ? text(LANE_NAME[t.lane]) : '' }), SIDE_COLOR[foe]);
       s.fx.push({ kind: 'ring', x: t.x, y: t.y, r: 70, color: SIDE_COLOR[t.side], ms: 700 });
       break;
     }
@@ -854,7 +860,7 @@ function kill(s: GameState, t: Unit, killerId: number) {
       if (champKiller) champKiller.gold += WARD.gold;
       const foe = t.side === 'blue' ? 'red' : 'blue';
       aiLog(foe, 'destroys a ward');
-      if (t.side === 'blue' && !s.watch) notice(s, 'Red destroyed one of your wards', SIDE_COLOR.red);
+      if (t.side === 'blue' && !s.watch) notice(s, text('noticeWardLost'), SIDE_COLOR.red);
       s.fx.push({ kind: 'ring', x: t.x, y: t.y, r: 24, color: SIDE_COLOR[t.side], ms: 400 });
       break;
     }
@@ -879,15 +885,19 @@ function kill(s: GameState, t: Unit, killerId: number) {
         champKiller.kills++;
         champKiller.killStreak++;
         gainXp(s, champKiller, KILL.xp);
-        const who = champKiller.player ? 'You' : shortName(champKiller.name);
         const side = champKiller.side as Team;
         aiLog(side, `${shortName(champKiller.name)} slays ${shortName(t.name)}${bounty ? ` and claims a ${bounty} gold bounty` : ''}`);
-        notice(s, `${t.player ? `${who} slew you` : `${who} slew ${shortName(t.name)}`}${bounty ? `, claiming a ${bounty}g bounty` : ''}`, SIDE_COLOR[side]);
+        const slain = champKiller.player
+          ? text('noticeYouSlew', { victim: shortName(t.name) })
+          : t.player
+            ? text('noticeSlewYou', { killer: shortName(champKiller.name) })
+            : text('noticeSlew', { killer: shortName(champKiller.name), victim: shortName(t.name) });
+        notice(s, bounty ? text('noticeBountyClaimed', { line: slain, gold: bounty }) : slain, SIDE_COLOR[side]);
         // Three kills in a row put a price on the killer's head, and every kill after raises it.
         const price = bountyOf(champKiller.killStreak);
         if (price) {
           aiLog(side, `${shortName(champKiller.name)} is on a ${champKiller.killStreak} kill streak: a ${price} gold bounty`);
-          notice(s, `${champKiller.player ? 'You are' : `${shortName(champKiller.name)} is`} on a ${champKiller.killStreak} kill streak: ${price}g bounty`, '#f2c14e');
+          notice(s, champKiller.player ? text('noticeYourStreak', { n: champKiller.killStreak, gold: price }) : text('noticeStreak', { name: shortName(champKiller.name), n: champKiller.killStreak, gold: price }), '#f2c14e');
         }
       }
       t.respawnAt = s.time + RESPAWN_BASE_MS + t.level * RESPAWN_PER_LEVEL_MS;
@@ -904,8 +914,8 @@ function gainXp(s: GameState, c: Unit, amount: number) {
     for (let l = c.level + 1; l <= level && c.champ; l++) {
       if (ULT_RANK_LEVELS.includes(l)) {
         const r = c.champ.abilities.find((a) => a.key === 'R')!;
-        if (c.player) notice(s, `Level ${l}: ${r.name} ranks up`, '#f2c14e');
-        aiLog(c.side, `${shortName(c.name)} ranks up ${r.name} at level ${l}`);
+        if (c.player) notice(s, text('noticeRankUp', { level: l, ability: text(r.name) }), '#f2c14e');
+        aiLog(c.side, `${shortName(c.name)} ranks up ${english(r.name)} at level ${l}`);
         continue;
       }
       const pair = upgradePairAt(c.champ.id, l);
@@ -919,7 +929,7 @@ function gainXp(s: GameState, c: Unit, amount: number) {
       } else {
         const up = aiRate(pair[1]) > aiRate(pair[0]) ? pair[1] : pair[0];
         c.upgrades.push(up.id);
-        aiLog(c.side, `${shortName(c.name)} takes ${up.name} at level ${l}`);
+        aiLog(c.side, `${shortName(c.name)} takes ${english(up.name)} at level ${l}`);
       }
     }
     c.level = level;
@@ -1050,7 +1060,7 @@ function championPlan(s: GameState, u: Unit, dt: number): boolean {
     const next = nextBuy(u);
     const rich = next !== null && u.gold >= Math.max(RECALL.rich, priceFor(u, next));
     if ((low || rich) && startRecall(s, u)) {
-      aiLog(u.side, `${shortName(u.name)} recalls, ${low ? 'hurt' : `to buy the ${next!.name}`}`);
+      aiLog(u.side, `${shortName(u.name)} recalls, ${low ? 'hurt' : `to buy the ${english(next!.name)}`}`);
       return true;
     }
   }
@@ -1109,7 +1119,7 @@ function free(s: GameState, u: Unit, minHp: number): boolean {
 
 /** The next item on an AI champion's build that it doesn't own yet, or null when the build is done. */
 function nextBuy(u: Unit): ItemDef | null {
-  const plan = AI_BUILDS[AI_BUILD_FOR[u.champ?.role ?? ''] ?? 'fighter'];
+  const plan = AI_BUILDS[(u.champ && AI_BUILD_FOR[u.champ.role]) ?? 'fighter'];
   for (const id of plan) {
     if (u.items.includes(id)) continue;
     // A part is done with once the item it builds into is owned.
@@ -1124,13 +1134,13 @@ function aiShop(u: Unit) {
   if (!u.champ || u.player || (!u.dead && !atShop(u))) return;
   const next = nextBuy(u);
   if (next && u.gold >= priceFor(u, next) && buy(u, next.id)) {
-    aiLog(u.side, `${shortName(u.name)} buys the ${next.name}`);
+    aiLog(u.side, `${shortName(u.name)} buys the ${english(next.name)}`);
     return;
   }
   // With the build done, spare gold goes on an elixir for the next push.
-  const elixir = ITEMS.find((it) => it.id === AI_ELIXIR[AI_BUILD_FOR[u.champ?.role ?? ''] ?? 'fighter']);
+  const elixir = ITEMS.find((it) => it.id === AI_ELIXIR[(u.champ && AI_BUILD_FOR[u.champ.role]) ?? 'fighter']);
   if (!next && elixir && !u.buffs.some((b) => b.elixir) && u.gold >= elixir.cost + ELIXIR.aiSpare && buy(u, elixir.id)) {
-    aiLog(u.side, `${shortName(u.name)} drinks a ${elixir.name}`);
+    aiLog(u.side, `${shortName(u.name)} drinks a ${english(elixir.name)}`);
     return;
   }
   if (u.wards === 0 && buy(u, 'ward')) aiLog(u.side, `${shortName(u.name)} buys a ward`);
@@ -1195,8 +1205,9 @@ function updateGanks(s: GameState) {
     const lane = laneNear(prey);
     const price = bountyOf(prey.killStreak);
     aiLog(team, `${shortName(hunter.name)} roams to the ${lane} lane after ${shortName(prey.name)}${price ? ` and its ${price} gold bounty` : ''}`);
-    if (team === 'red') notice(s, prey.player ? `Red's ${shortName(hunter.name)} is coming for you` : `Red's ${shortName(hunter.name)} roams to the ${lane} lane`, SIDE_COLOR.red);
-    else notice(s, `Your ${shortName(hunter.name)} roams to the ${lane} lane`, SIDE_COLOR.blue);
+    const roams = { name: shortName(hunter.name), lane: text(LANE_NAME[lane]) };
+    if (team === 'red') notice(s, prey.player ? text('noticeComingForYou', roams) : text('noticeRedRoams', roams), SIDE_COLOR.red);
+    else notice(s, text('noticeBlueRoams', roams), SIDE_COLOR.blue);
   }
 }
 
@@ -1225,7 +1236,7 @@ function updateJungle(s: GameState) {
     best.u.jungleTarget = best.goal.id;
     best.u.jungleUntil = s.time + JUNGLE.ms;
     const goal = best.goal;
-    aiLog(team, `${shortName(best.u.name)} heads into the jungle for ${goal.kind === 'camp' ? `the ${CAMP_KINDS[goal.campKind ?? 'boar'].name.toLowerCase()}` : 'a watchstone'}`);
+    aiLog(team, `${shortName(best.u.name)} heads into the jungle for ${goal.kind === 'camp' ? `the ${english(CAMP_KINDS[goal.campKind ?? 'boar'].name).toLowerCase()}` : 'a watchstone'}`);
   }
 }
 
@@ -1257,7 +1268,7 @@ function updateWatchstones(s: GameState, dt: number) {
       w.side = team;
       w.capture = null;
       s.fx.push({ kind: 'ring', x: w.x, y: w.y, r: 90, color: SIDE_COLOR[team], ms: 700 });
-      notice(s, team === 'blue' ? 'Your team took a watchstone' : 'Red took a watchstone', SIDE_COLOR[team]);
+      notice(s, text(team === 'blue' ? 'noticeWatchstoneBlue' : 'noticeWatchstoneRed'), SIDE_COLOR[team]);
       aiLog(team, 'takes a watchstone');
     }
   }
@@ -1334,7 +1345,7 @@ function beastAct(s: GameState, u: Unit, dt: number) {
   if (!s.beastElder && s.time >= ELDER.at && u.lastHitBy === null && u.hp >= u.maxHp) {
     makeElder(s, u);
     u.hp = u.maxHp;
-    notice(s, 'The guardian beast grows into the Elder Guardian', '#f2c14e');
+    notice(s, text('noticeElderGrows'), '#f2c14e');
   }
   const who = getUnit(s, u.lastHitBy);
   if (!who || who.dead || dist(who, u) > BEAST.leash) {

@@ -35,9 +35,9 @@ interface GameState {
   time: number;
   winner: 'blue' | 'red' | null;
   units: Unit[];
-  objective: { kind: 'tower' | 'camp' | 'champion'; target: number; title: string; gold: number; banner: string | null; startAt: number; endsAt: number } | null;
+  objective: { kind: 'tower' | 'camp' | 'champion'; target: number; title: { key: string; name?: string }; gold: number; banner: string | null; startAt: number; endsAt: number } | null;
   objectivesDone: number;
-  lastObjective: { title: string; done: boolean; gold: number; at: number } | null;
+  lastObjective: { title: { key: string; name?: string }; done: boolean; gold: number; at: number } | null;
   siegeUntil: number;
   lastHitMark: number | null;
   lastHits: number;
@@ -204,7 +204,7 @@ test('plays the first round', async ({ page }, testInfo) => {
   // The match opens with an objective: topple the red mid tower within 2:30 for 200 gold and the
   // siege banner. Its target is the tower this round brings down.
   expect(s.objective?.kind, 'first objective is a tower').toBe('tower');
-  expect(s.objective?.title).toBe('Topple the red mid tower');
+  expect(s.objective?.title).toEqual({ key: 'objTowerMid' });
   expect(s.objective?.target, 'objective marks the red mid tower').toBe(tower().id);
   expect(s.objective!.endsAt - s.objective!.startAt).toBe(150_000);
   expect(s.objective?.gold).toBe(200);
@@ -295,7 +295,7 @@ test('plays the first round', async ({ page }, testInfo) => {
   s = await state();
   // The objective is done: 200 gold paid and the siege banner raised.
   expect(s.objectivesDone, 'tower objective done').toBe(1);
-  expect(s.lastObjective, 'tower objective paid').toMatchObject({ title: 'Topple the red mid tower', done: true, gold: 200 });
+  expect(s.lastObjective, 'tower objective paid').toMatchObject({ title: { key: 'objTowerMid' }, done: true, gold: 200 });
   expect(s.siegeUntil, 'siege banner up').toBeGreaterThan(s.time);
   await snap('2-tower-down');
 

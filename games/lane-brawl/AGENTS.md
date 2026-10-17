@@ -37,8 +37,8 @@ Implemented today:
   timed `BuffDef` on the caster: attack speed, damage, speed, lifesteal, armor, cooldowns, regen,
   slowing hits or stealth) and `zone` (a lingering circle that hurts enemies by `dps` and slows
   them, in `s.zones`). R unlocks at level 3; levels run 1 to 8 (`XP_FOR_LEVEL`).
-- Champions and lore: each `ChampionDef` carries `hero` (the full name, like Hald Oathstone, which
-  `createGame` gives the unit as `name`), `short` (the first name for labels, the portrait and
+- Champions and lore: each `ChampionDef` carries `hero` (the text key of the full name, like
+  `wardenHero` for Hald Oathstone, which `createGame` gives the unit as `name`), `short` (the first name for labels, the portrait and
   notices, through `shortName` in `names.ts`), `title` and `motive` (one line, at most 90
   characters, for the pick screen). A class shows up at most once per match, so names never clash.
   Three champions carry a `perk` (`StoryPerk`) from their story, applied in `sim.ts`: Morrow's
@@ -47,7 +47,15 @@ Implemented today:
   bounty he claims, in `kill`).
   The setting (the Contest of Kessmoor) and each champion's story are in the README; ability,
   passive and upgrade names follow the stories, while ids (`wide-slam` and so on) keep the old
-  names.
+  names. Every name and line of a champion is a text key (see Languages below).
+- Languages: every text on screen is in British English, US English or German, following the hub's
+  Language setting (`?lang=de` for a quick look). `CHAMPIONS`, `ITEMS`, `UPGRADES`, `CAMP_KINDS`
+  and `BUFFS` hold text keys of `i18n/en.ts` instead of texts (roles too, so `AI_BUILD_FOR` is
+  keyed by role key), and the scene shows them with `t`. Notices are worded in `sim.ts` when they
+  happen; an objective keeps its title as a key (`ObjectiveTitle`), worded when drawn. An upgrade
+  has no text of its own besides its name: `upgradeText` in `GameScene.ts` words its one effect
+  with the ability's name (`upRadius`, `upStun` and so on). The `?watch` log stays in English
+  (`english` in `i18n.ts`), like the shared watch panel.
 - Jungle (LB6): camps of five kinds (`CAMP_KINDS`): boars, wolf packs (an alpha and two pups, one
   `group`), and per side one ember and one moss brute, whose slayer gets a 60 s buff (`BUFFS`, in
   `Unit.buffs`). Hitting one camp wakes its pack; a camp heals 5% a second when left alone and
@@ -245,8 +253,17 @@ Missing or rough:
 
 File map (`src/`):
 
-- `howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips), handed to
-  `setupGame(game, { howToPlay })` in `main.ts`; update it when the controls or the first round change.
+- `howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips) in British
+  English (which US English shares) and German, picked with `byLanguage` and handed to
+  `setupGame(game, { howToPlay })` in `main.ts`; update both when the controls or the first round
+  change.
+- `i18n.ts` and `i18n/`: the game's texts (`shared/i18n.ts`). `i18n/en.ts` is the British English
+  source (grouped: roles, champions, abilities, upgrades, items, jungle, then the HUD, notices,
+  shop and end panel), `i18n/de.ts` the German (with `keepEnglish`: the champions' own names and
+  texts made only of placeholders) and `i18n/en-US.ts` only the texts spelled differently ("armor").
+  `t(key, vars)` shows a text in the hub's language, `TextKey` types the keys and `english(key)`
+  gives the English for the watch log. Every text on screen goes through `t`, and a new one gets its
+  German entry (and a US one if its spelling differs) in the same PR.
 - `main.ts`: creates the `Phaser.Game` (960x540, `Phaser.Scale.FIT`, smooth scaling) with
   `GameScene` only, calls `setupGame(game)` from `shared/setupGame.ts` and `setupScaling(game)`
   from `shared/scaling.ts`, and in dev builds puts `game` on `window`.
@@ -315,7 +332,7 @@ File map (`src/`):
 - `game/names.ts`: `shortName`, a champion's first name from its full name.
 - `game/mastery.ts`: class mastery, the save key `lane-brawl-mastery` (`loadMastery`, `recordWin`,
   `masteryRank`).
-- `game/data.ts`: plain data. `WORLD`, `LANES`, `BASE`, `TOWERS`, `RIVER`, `CAMPS`, `CAMP_KINDS`,
+- `game/data.ts`: plain data, with text keys for names and texts. `WORLD`, `LANES`, `BASE`, `TOWERS`, `RIVER`, `CAMPS`, `CAMP_KINDS`,
   `PUPS`, `SIGHT`, `WATCHSTONES`, `WATCH`, `BUFFS`, `JUNGLE`, `KITE`, the balance constants (`TOWER`,
   `CAMP`, `MINION`, `KILL`, `XP_FOR_LEVEL`, respawn times), `CHAMPIONS` with their `AbilityDef`s,
   `ITEMS`, `ALLY_LANES`, `ENEMY_LANES`, `SIDE_COLOR`, and the loop's data: `OBJECTIVES`,
@@ -338,8 +355,9 @@ File map (`src/`):
 
 Shared code it imports (outside the game folder): `shared/setupGame.ts` (`setupGame`),
 `shared/settings.ts` (`byDifficulty`, `settings`), `shared/scaling.ts` (`setupScaling`,
-`sharpRes`, `splitHudCamera`, `viewPoint`) and `shared/watch.ts` (`watching`, `watchSteps`,
-`mountWatch`, `aiLog`).
+`sharpRes`, `splitHudCamera`, `viewPoint`), `shared/watch.ts` (`watching`, `watchSteps`,
+`mountWatch`, `aiLog`) and `shared/i18n.ts` (`translator`, `byLanguage`, `formatNumber`,
+`Translation`).
 
 Screens: `setupScaling` draws the canvas at the screen's resolution (`renderScale` canvas pixels
 per game pixel) and zooms every camera to match. `splitHudCamera` gives the scene a second, fixed
@@ -377,7 +395,7 @@ State model:
 - `Unit.path` and `wp` are a lane walk. The last point of each path is the enemy Nexus.
 - A player's champion has `player: true`; `moveTo` is a walk to a point, `target` an enemy to
   attack.
-- The loop: `objective` (kind, target unit id, title, gold, banner, `startAt`, `endsAt`) or null
+- The loop: `objective` (kind, target unit id, title as `{ key, name? }`, gold, banner, `startAt`, `endsAt`) or null
   between two, `objectiveIndex`, `nextObjectiveAt`, `objectivesDone`, `lastObjective` (how the last
   one ended), `siegeUntil`; `lastHitMark`, `lastHits`, `streak`, `bestStreak`; `upgradeOffers`
   (queued `{ level, options }`, the first one shown).
@@ -448,7 +466,8 @@ generator (`seeded` in `lowpoly.ts`); `performance.now` only times the bake for 
   round was tuned with (about 2100 `Math.random` calls come before the shuffle in the browser).
   Anything that adds or removes draws before the shuffle, or a sixteenth class, changes the roster:
   pick a new seed by replaying the generator and the shuffle in node, or re-tune the round.
-- It asserts the first objective and its target, the objective paid and the siege banner after
+- It asserts the first objective and its target (title key `objTowerMid`, so it passes in any
+  language), the objective paid and the siege banner after
   the tower falls, the camp objective, at least one last hit and a streak, level 2's offer, and
   Wide Gatefall (`wide-slam`) kept from the card.
 - Round 2 stays out of the first round: the AI buys only a Healing Flask at 0:00 (its wards and
@@ -469,16 +488,23 @@ generator (`seeded` in `lowpoly.ts`); `performance.now` only times the bake for 
   `skill-looks-3.webp` (every ability's effect, five classes each), `aim-indicators.webp`,
   `home-heal-and-dead-shop.webp`, `loop-objective.webp`, `loop-last-hit.webp` and
   `upgrade-*.webp` and `round2-*.webp` (the ward in the shop and planted by a bush, a recall, a
-  bounty, the buy back button and the watch log of the AI shopping) are staged docs shots (a scratch
+  bounty, the buy back button and the watch log of the AI shopping) and `german-pick.webp` (the pick
+  screen with `?lang=de`, Grumm's card under the pointer) are staged docs shots (a scratch
   Playwright script that places units through
   `window.game` and lets the match run), not test output. The `loop-*` and `upgrade-*` ones predate
   the square map.
 
 ## Making common changes
 
+- **Add or change a text**: its key in `i18n/en.ts`, the German in `i18n/de.ts` (the build fails
+  without it) and, when its spelling differs, the US one in `i18n/en-US.ts`; run
+  `node scripts/check-translations.mjs`. German runs longer than English: the ability boxes (about
+  ten characters; a longer name of several words shows only its first), the upgrade cards and the
+  pick cards are the tightest spots, so check a new text with `?lang=de`.
 - **Add a champion**: add a `ChampionDef` to `CHAMPIONS` with its `hero`, `short`, `title` and
-  `motive` (90 characters at most), a blurb (32 characters at most, for the card), a `PassiveDef` (a
+  `motive` (90 characters at most), a blurb (32 characters at most, in lower case), a `PassiveDef` (a
   short desc), optionally a `perk` that fits the story, and four `AbilityDef`s (keys Q, W, E, R; R at level 3) named to fit the story,
+  every text as a key (`<id>Name`, `<id>Hero`, `<id>Q` and so on) in `i18n/en.ts` and `i18n/de.ts`,
   its five upgrade pairs to `UPGRADES`, four looks in `skillFx.ts`, a `Kit` in `KITS` and its pose in
   `classPose` (`models.ts`) and its id to `ChampId`. `createGame` shuffles the classes other than the
   player's, gives blue the first four and red the next five, so any roster of ten or more works;
@@ -495,8 +521,9 @@ generator (`seeded` in `lowpoly.ts`); `performance.now` only times the bake for 
 - **Give an ability its look**: add a `LOOKS` row `'<championId>.<key>'` in `skillFx.ts` (and a
   `drawProjectile` case and `HIT_COLOR` for a bolt, a `drawZone` case for a zone, a `drawAura` case
   for a buff). A new champion needs four, or its casts fall back to a plain ring.
-- **Add or change an upgrade**: edit the champion's pair in `UPGRADES`; a new kind of effect needs
-  a field on `UpgradeDef` and a line in `abilityFor`. The playthrough expects the Warden's level 2
+- **Add or change an upgrade**: edit the champion's pair in `UPGRADES` (its name in the `i18n/`
+  files); a new kind of effect needs a field on `UpgradeDef`, a line in `abilityFor` and its wording
+  in `upgradeText` with a new `up*` text. The playthrough expects the Warden's level 2
   pair to be `wide-slam` then `stun-slam`.
 - **Add an objective kind**: add it to `ObjectiveKind` and `OBJECTIVES`, pick its target in
   `updateObjective` and give the marker a height in `HEAD` if the target is a new kind of unit.
