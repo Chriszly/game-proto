@@ -165,8 +165,17 @@ Missing or rough:
 
 File map (`src/`):
 
-- `howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips), handed to
-  `setupGame(game, { howToPlay })` in `main.ts`; update it when the controls or the first round change.
+- `howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips) in British
+  English (which US English shares) and German, picked with `byLanguage` and handed to
+  `setupGame(game, { howToPlay })` in `main.ts`; update every language when the controls or the
+  first round change.
+- `i18n.ts` and `i18n/`: the game's texts (`shared/i18n.ts`). `i18n/en.ts` is the British English
+  source, `i18n/de.ts` the German (with `keepEnglish` for the game's name, Winter and the texts
+  made only of other texts) and `i18n/en-US.ts` the US spellings, none so far. `t(key, vars)`
+  shows a text in the hub's language; `TextKey` types the keys. Every text on screen goes through
+  `t`; each honey kind has its name (`clover`), `<kind>Honey`, `<kind>Nectar`, `<kind>Jars` and
+  `<kind>Meadow` keys, the seasons and fair classes are keyed by their id, and the tables in
+  `game/` hold keys, not text. Prices show as `price` ("15c", "15 T" for Taler in German).
 - `main.ts`: creates the `Phaser.Game` (960x540, `Scale.FIT`, `pixelArt: false` since the art is
   smooth) with `BootScene` and `GameScene`, calls `setupGame(game)` and `setupScaling(game)`, and
   exposes `game` on window in dev builds.
@@ -186,18 +195,18 @@ File map (`src/`):
   difficulty), `caskKind`, `cask`, `catchSwarm`, `acceptContract`, `enterFair`, `enterMead`, plus
   the private `turn`, `tire`, `eat`, `deliver`, `place`, `hatch`, `raid`, `orders`, `contracts`,
   `swarm`, `enter` and `closeFair`.
-- `game/honey.ts`: the `HONEY` table (name, meadows needed, price), `KINDS`, `MARKET_MS`,
+- `game/honey.ts`: the `HONEY` table (name key, meadows needed, price), `KINDS`, `MARKET_MS`,
   `DEMAND`, `noJars`. `game/wasps.ts`: the `Wasp` type and raid timings. `game/orders.ts`: the
-  `Order` type and order numbers. `game/seasons.ts`: `Season`, `SEASONS`, `SEASON_NAME`, the
+  `Order` type and order numbers. `game/seasons.ts`: `Season`, `SEASONS`, the
   season and eating timings. `game/mead.ts`: `Cask` and the cask numbers. `game/swarm.ts`: the
-  swarm timing, catch price, `MAX_HIVES` and the queens (`Queen`, `QUEENS`, `QUEEN_IDS`,
+  swarm timing, catch price, `MAX_HIVES` and the queens (`Queen`, `QUEENS` with name and blurb keys, `QUEEN_IDS`,
   `BUSY_NECTAR`). `game/contracts.ts`: `Contract` and the contract numbers. `game/fair.ts`:
-  `FairClass`, `FAIR_CLASSES`, `CLASS_NAME`, `classesFor`, `FairEntries`, `noEntries`, `FAIR_GOLD`,
+  `FairClass`, `FAIR_CLASSES`, `classesFor`, `FairEntries`, `noEntries`, `FAIR_GOLD`,
   `FAIR_STEP`, `FAIR_MAX`, `fairGold`, `FAIR_MS`, `MEAD_POINTS`. `game/tired.ts`: `TIRE_MS`,
-  `REST_RATE`, `MEADOW_OF`, `rested`, `unwilted`.
-- `game/meadows.ts`: the `MEADOWS` goal chain (name, jars sold needed, benefit blurb) and
+  `REST_RATE`, `rested`, `unwilted`.
+- `game/meadows.ts`: the `MEADOWS` goal chain (name key, jars sold needed, benefit key) and
   `SUNFLOWER_COINS`.
-- `game/upgrades.ts`: the `UPGRADES` table (name, blurb, price per rank), `UPGRADE_IDS`,
+- `game/upgrades.ts`: the `UPGRADES` table (name and blurb keys, price per rank), `UPGRADE_IDS`,
   `nextPrice`.
 - `game/save.ts`: `loadProgress` (checks every number, clamps ranks and meadows), `saveProgress`,
   `clearProgress`.
@@ -228,8 +237,8 @@ File map (`src/`):
   each (`BEE_TEX`, `WASP_TEX`).
 
 Shared code the game imports (repo root, outside `src/`): `shared/setupGame.ts` (`setupGame`),
-`shared/settings.ts` (`settings`, `byDifficulty`) and `shared/scaling.ts` (`setupScaling`,
-`sharpRes`). See "Hub settings" and "Screens" below.
+`shared/settings.ts` (`settings`, `byDifficulty`), `shared/scaling.ts` (`setupScaling`,
+`sharpRes`) and `shared/i18n.ts` (`translator`, `byLanguage`, `Translation`). See "Hub settings" and "Screens" below.
 
 How it runs:
 
@@ -394,6 +403,12 @@ the fair's gold in `src/game/fair.ts`.
 
 ## Making common changes
 
+- Add or change a text: its key in `i18n/en.ts`, the German in `i18n/de.ts` (the build fails
+  without it) and, where US spelling differs, `i18n/en-US.ts`; run
+  `node scripts/check-translations.mjs`. German runs longer than English: the Send button, the
+  order and contract cards, the queen buttons' second line, the meadow tag and the swarm chip are
+  the tightest spots, so check a new text with `?lang=de`. A new honey kind needs its five keys
+  (see `i18n.ts` above), a new upgrade, meadow or queen its name and blurb keys.
 - Add an upgrade: add the id to `UpgradeId` and `UPGRADES` in `src/game/upgrades.ts`, its rank 0
   in `freshProgress` in `src/game/state.ts`, its effect where the rule lives, and it to `SHOP` in
   `GameScene.ts`. The shop is a 2x4 grid (`SHOP_BUTTONS`, `shopSpot` in `layout.ts`) with the
@@ -402,7 +417,7 @@ the fair's gold in `src/game/fair.ts`.
 - Retune the seasons: `SEASON_MS`, `SUMMER_NECTAR`, `WINTER_EAT_MS`, `BEES_PER_MEAL` and `EAT_ORDER` in
   `src/game/seasons.ts`; what each season does lives in `carry`, `isOpen` (`state.ts`) and `turn`,
   `eat`, `send`, `gatherAway`, `contracts` (`sim.ts`); the tints in `SEASON_TINT`. A season's
-  message is in `drawEvents`. Update the README's season table.
+  message is its `<season>Came` text in `i18n/`. Update the README's season table.
 - Retune mead: `CASK_MS`, `CASK_JARS`, `MAX_CASKS`, `MEAD_MULT` in `src/game/mead.ts`; more casks
   need `CASK`/`caskSpot` in `layout.ts` to fit the shelf (and fewer `SHELF.jars`).
 - Retune the swarm: `SWARM_MS`, `CATCH_PRICE` in `src/game/swarm.ts` and `crowded` in `state.ts`.
