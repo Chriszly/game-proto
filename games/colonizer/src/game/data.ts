@@ -402,3 +402,10 @@ export const RAID_REST_MS = 180000;
 export const RAID_PARTY = 10;
 export const RAID_TOWN_FROM = 3;
 export const RAID_MAX_MS = 150000;
+/**
+ * The player's attacks on the AI's base count as raids too: ASSAULT_MIN or more of the player's
+ * soldiers within BELL_RANGE of the AI's Town Center start one, and it is repelled (the AI's raid
+ * deed) when they are all gone from ASSAULT_CLEAR tiles of it and at least half of them fell.
+ */
+export const ASSAULT_MIN = 3;
+export const ASSAULT_CLEAR = 20;
