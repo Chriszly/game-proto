@@ -21,6 +21,16 @@ export const C = {
   roller: '#ffb347',
   elite: '#ffe066',
   boss: '#ff8a3c',
+  /** The wild beasts of the Swamp world. */
+  beast: '#c6ff3d',
+  toad: '#e8ff6a',
+  /** The Iron Dominion of the Ice world. */
+  iron: '#8c9cff',
+  ironLight: '#d6ddff',
+  /** The Hollow cult of the Lava world. */
+  hollow: '#b65cff',
+  ember: '#ffcf5a',
+  credits: '#ffd36b',
   heal: '#7dffa0',
   xp: '#5fe0c0',
   hp: '#7dffa0',
