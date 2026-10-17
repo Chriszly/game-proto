@@ -13,21 +13,16 @@ export type OmenKind = 'flood' | 'storm';
 
 export interface Omen {
   kind: OmenKind;
-  /** The omen in a line, for the round banner. */
-  text: string;
-  /** The omen in a few words, for the panel's strip. */
-  short: string;
   /** The threatened cell: the shore cell a flood takes, or the tower a storm topples. */
   at: At;
-  /** The rising lake's name, '' for a storm. */
+  /** The rising lake's name (its id, see `namedPlaces`), '' for a storm. The scene words the omen from kind and place. */
   place: string;
 }
 
-/** What an omen did when it struck: the cells it changed, and a word for the popup over them. */
+/** What an omen did when it struck: the cells it changed (the scene's popup over them names the kind). */
 export interface Struck {
   kind: OmenKind;
   cells: At[];
-  word: string;
 }
 
 const lone = (grid: Cell[][], col: number, row: number) => grid[row][col] === 'tower' && !AROUND.some(([dc, dr]) => isHome(grid[row + dr]?.[col + dc]));
@@ -47,7 +42,7 @@ export function omenFor(island: number, round: number, grid: Cell[][]): Omen | n
       const towers: At[] = [];
       grid.forEach((cells, row) => cells.forEach((_, col) => lone(grid, col, row) && towers.push([col, row])));
       const at = pick(towers);
-      if (at) return { kind, text: 'Storm: the marked tower falls unless a house stands by it', short: 'Omen: the marked tower falls if left alone', at, place: '' };
+      if (at) return { kind, at, place: '' };
     } else {
       const lakes = namedPlaces(grid, 'lake');
       const shores = lakes.flatMap((lake) => {
@@ -63,7 +58,7 @@ export function omenFor(island: number, round: number, grid: Cell[][]): Omen | n
         return out;
       });
       const shore = pick(shores);
-      if (shore) return { kind, text: `Flood: ${shore.place} rises over the marked cell`, short: `Omen: ${shore.place} floods the marked cell`, at: shore.at, place: shore.place };
+      if (shore) return { kind, at: shore.at, place: shore.place };
     }
   }
   return null;
@@ -74,9 +69,9 @@ export function strike(grid: Cell[][], omen: Omen): Struck | null {
   const [col, row] = omen.at;
   if (omen.kind === 'flood') {
     grid[row][col] = 'lake';
-    return { kind: 'flood', cells: [omen.at], word: 'Flooded' };
+    return { kind: 'flood', cells: [omen.at] };
   }
   if (!lone(grid, col, row)) return null;
   grid[row][col] = 'grass';
-  return { kind: 'storm', cells: [omen.at], word: 'Toppled' };
+  return { kind: 'storm', cells: [omen.at] };
 }
