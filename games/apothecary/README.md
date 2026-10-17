@@ -139,7 +139,8 @@ sign in: "+33%" or "-27%" against the price.
 of the street door, and undercuts one potion a day (the same one in every game, going round what
 customers ask for). Customers pay 30% less for a plain one that day ("rival -30%" under its
 shelf); a Fine one beats the cut and pays in full. The rival sells 4 of that potion a day itself;
-sell 5 or more and the day counts as outsold. The stall's lines say what is undercut and how the
+sell 5 or more and the day counts as outsold. A day a kept contract ends early only has to beat
+the rival's sales for the part of the day that went by. The stall's lines say what is undercut and how the
 race stands ("Outsold 2/10 days, 3/5 today"). Outsell it for a month, ten days running, and it
 closes for good: the stall is boarded up and the street is yours.
 

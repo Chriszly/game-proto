@@ -94,7 +94,8 @@ A hint on the first stretch of the run shows where to tap.
    madder. Each gives something big and takes something away (see the table below). They are never
    for sale in the shop.
 15. **The armoury**: on the game-over panel, "Armoury" opens a list of lasting upgrades bought with
-   banked coins. Every run after starts with them (the daily course too).
+   banked coins. Every ordinary run after starts with them; the daily course doesn't, so it stays
+   the same for everyone. A fall banks only the coins earned on the run, not the purse's.
 
    | Upgrade | Levels | Prices | What each level does |
    | --- | --- | --- | --- |
@@ -103,8 +104,9 @@ A hint on the first stretch of the run shows where to tap.
    | Squire's Purse | 2 | 30, 80 | Start with 10 more coins |
 
 16. **Daily course**: "Daily course" on the game-over panel starts a run whose course and boon
-   offers are drawn from the date, the same for everyone that day. Its best distance is kept apart
-   from the ordinary best, and the tag says "Daily" while it runs.
+   offers are drawn from the date, the same for everyone that day. It starts bare, without the
+   armoury or a bought boon (which waits for the next ordinary run), so everyone runs it alike. Its
+   best distance is kept apart from the ordinary best, and the tag says "Daily" while it runs.
 
 17. **Forked roads**: from the second checkpoint, once the boon is taken, two road cards come up for
    the next stage (not for a Gatekeeper's or the dragon's stage). **The High Road** has more coins

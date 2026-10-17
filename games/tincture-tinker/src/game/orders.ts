@@ -110,14 +110,14 @@ export const isTwin = (number: number, unlocked: PotionId[]) => unlocked.length 
 
 /**
  * The twist on order `number`: none on the first two or on a twin order, then a rush order, one that
- * forbids an ingredient it doesn't need, and a plain one, round and round.
+ * forbids an ingredient it doesn't need (none if it needs every kind), and a plain one, round and round.
  */
 export function twistFor(number: number, needs: Needs, unlocked: PotionId[] = []): Pick<Order, 'rush' | 'forbid'> {
   if (number < 3 || isTwin(number, unlocked)) return {};
   if (number % 3 === 0) return { rush: true };
   if (number % 3 === 1) {
     const spare = KINDS.filter((k) => !(k in needs));
-    return { forbid: spare[number % spare.length] };
+    return spare.length > 0 ? { forbid: spare[number % spare.length] } : {};
   }
   return {};
 }
@@ -189,7 +189,9 @@ export function orderFor(number: number, standing: Standing | PotionId[] = {}): 
       second: { potion: other.potion, needs, price },
     };
   }
-  const twist = twistFor(number, recipe.needs, unlocked);
+  // A royal commission's forbidden kind must be one none of its stages needs.
+  const needed = recipe.stages ? Object.assign({}, ...recipe.stages.map((st) => st.needs)) : recipe.needs;
+  const twist = twistFor(number, needed, unlocked);
   // Easy gives five more moves, Hard three fewer.
   const moves = Math.max(MIN_MOVES, recipe.moves + extraMoves + byDifficulty(5, 0, -3) - (twist.rush ? RUSH_MOVES : 0));
   const price = recipe.price + (twist.rush ? RUSH_COINS : 0);

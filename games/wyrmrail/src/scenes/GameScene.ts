@@ -11,6 +11,7 @@ import {
   isCrossing,
   jobOrder,
   moodOf,
+  onLine,
   newGame,
   openVillages,
   orderPay,
@@ -211,7 +212,8 @@ export class GameScene extends Phaser.Scene {
     this.createPanel();
     this.createOverlays();
 
-    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => this.onGridPointer(p, true));
+    // A tap on a card or button (the charter cards sit over the board) is not a tap on the board.
+    this.input.on('pointerdown', (p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => !over.length && this.onGridPointer(p, true));
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => p.isDown && this.onGridPointer(p, false));
     this.input.on('pointerup', () => (this.dragTile = null));
     this.draw();
@@ -237,8 +239,8 @@ export class GameScene extends Phaser.Scene {
     this.dragTile = key(t);
     if (this.mode === 'remove') return void removeTrack(this.state, t);
     if (down && throwSwitch(this.state, t)) return;
-    // Plain track continues from the piece laid just before it, when that is next to it.
-    if (buildTrack(this.state, t, this.mode === 'plain', this.lastLaid)) this.lastLaid = t;
+    // Plain track continues from the line tile touched just before it (laid or already there), when that is next to it.
+    if (buildTrack(this.state, t, this.mode === 'plain', this.lastLaid) || onLine(this.state, t)) this.lastLaid = t;
   }
 
   /** A prop standing on a tile, sorted with the wyrm by where it touches the ground. */

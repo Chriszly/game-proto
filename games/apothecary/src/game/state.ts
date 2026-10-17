@@ -652,6 +652,8 @@ export interface Rival {
   sold: number;
   /** Days running the shop has outsold the rival. */
   streak: number;
+  /** How much of today went by before a kept contract ended it early; unset for a day that runs to dusk. */
+  dayShare?: number;
 }
 export const RIVAL_DAY = 4;
 export const RIVAL_CUT = 0.3;

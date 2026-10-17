@@ -178,7 +178,7 @@ export type GameEvent =
   | { type: 'trial'; tier: number; passed: boolean; favor: number }
   | { type: 'rerolled' }
   | { type: 'bought'; item: ShopId }
-  | { type: 'toppled'; count: number; lean: number }
+  | { type: 'toppled'; count: number; lean: number; favor: number }
   | { type: 'regrown'; px: number }
   | { type: 'swapped'; kind: StoneKind }
   | { type: 'patron'; patron: PatronId };
@@ -195,6 +195,8 @@ export interface GameState {
   tiersBuilt: number;
   balancedTiers: number;
   favor: number;
+  /** The favor the stones of the tier being built have earned so far, taken back if it topples. */
+  tierFavor: number;
   /** Blessings kept, in the order chosen, and the ones on offer while choosing. */
   blessings: BlessingId[];
   offer: BlessingId[];
@@ -257,6 +259,7 @@ export function newGame(best = 0): GameState {
     tiersBuilt: 0,
     balancedTiers: 0,
     favor: 0,
+    tierFavor: 0,
     blessings: [],
     offer: [],
     speed: speedFor(1, 0),
@@ -335,11 +338,13 @@ function spawn(s: GameState) {
   s.wind = gustFor(s);
 }
 
-/** The gust on a new stone: in the endless sky, or from `STORM_FROM_TIER` under the Storm Caller. */
+/** Whether gusts can blow on the tier being built: in the endless sky, or from `STORM_FROM_TIER` under the Storm Caller. */
+export const gusty = (s: GameState) => s.endless || (s.patron === 'storm' && s.tier >= STORM_FROM_TIER);
+
+/** The gust on a new stone, when the tier is `gusty`. */
 function gustFor(s: GameState) {
-  if (s.endless) return gust(s.tier, GOAL_TIER);
-  if (s.patron === 'storm' && s.tier >= STORM_FROM_TIER) return gust(s.tier, STORM_FROM_TIER - 1);
-  return 0;
+  if (!gusty(s)) return 0;
+  return s.endless ? gust(s.tier, GOAL_TIER) : gust(s.tier, STORM_FROM_TIER - 1);
 }
 
 /** The kind of the stone that will be the temple's `n`th from the bottom (from 0): ordinary on the first tiers. */
@@ -477,6 +482,7 @@ function land(s: GameState) {
   s.stones.push({ x, w: kept, tier: s.tier, perfect, kind: m.kind, material: m.material });
   const favor = stoneFavor(s, perfect, m.kind);
   s.favor += favor;
+  s.tierFavor += favor;
   if (share < BALANCE) s.wobbly = true;
   s.inTier++;
   s.chain = perfect ? s.chain + 1 : 0;
@@ -522,6 +528,7 @@ function land(s: GameState) {
     s.best = Math.max(s.best, s.tiersBuilt);
     s.tier++;
     s.inTier = 0;
+    s.tierFavor = 0;
     s.wobbly = false;
     s.curse = null;
     s.swapped = false;
@@ -530,13 +537,16 @@ function land(s: GameState) {
     s.lean = Math.trunc(s.lean * LEAN_SETTLE);
     s.speed = speedFor(s.tier, s.blessings.filter((b) => b === 'calm').length, s.patron);
     s.trial = s.tier >= TRIALS_FROM_TIER ? { id: TRIALS[Math.floor(Math.random() * TRIALS.length)], done: 0, failed: false } : null;
+    if (balanced) {
+      s.offer = pickOffer(s);
+      s.curseOffer = pickCurse();
+    }
     if (s.tiersBuilt === GOAL_TIER && !s.endless) {
+      // A balanced crowning tier keeps its offer for the break "Keep building" opens.
       s.phase = 'crowned';
       return;
     }
     if (balanced) {
-      s.offer = pickOffer(s);
-      s.curseOffer = pickCurse();
       s.phase = 'blessing';
     } else if (s.favor >= CHEAPEST || s.tier >= MATERIAL_FROM_TIER) {
       // A wobbly tier earns no blessing, but the break still opens when favor can buy something or
@@ -549,12 +559,15 @@ function land(s: GameState) {
   spawn(s);
 }
 
-/** The tier being built falls off the temple: its stones go, the lean is gone with them and the tier starts over. */
+/** The tier being built falls off the temple: its stones go, and their favor, the lean is gone with them and the tier starts over. */
 function topple(s: GameState) {
   const count = s.inTier;
   s.stones.splice(s.stones.length - count, count);
-  s.events.push({ type: 'toppled', count, lean: s.lean });
+  const favor = Math.min(s.tierFavor, s.favor);
+  s.favor -= favor;
+  s.events.push({ type: 'toppled', count, lean: s.lean, favor });
   s.inTier = 0;
+  s.tierFavor = 0;
   s.wobbly = false;
   s.lean = 0;
   s.chain = 0;
@@ -598,6 +611,8 @@ export function reroll(s: GameState) {
   s.favor -= REROLL_COST;
   s.offer = pickOffer(s);
   s.curseOffer = pickCurse();
+  // The new curse is a different one, so it starts untaken.
+  s.cursed = false;
   s.events.push({ type: 'rerolled' });
   return true;
 }
@@ -654,12 +669,13 @@ function endBreak(s: GameState) {
   s.phase = 'swinging';
 }
 
-/** After the crown: keep building into the endless sky, where gusts push the falling stone, after a break to pick the first sky tier's material. */
+/**
+ * After the crown: keep building into the endless sky, where gusts push the falling stone, after a break
+ * to pick the first sky tier's material and, when the crowning tier was balanced, its blessing.
+ */
 export function keepBuilding(s: GameState) {
   if (s.phase !== 'crowned') return false;
   s.endless = true;
-  s.offer = [];
-  s.curseOffer = null;
   s.phase = 'blessing';
   spawn(s);
   return true;

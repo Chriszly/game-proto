@@ -28,6 +28,7 @@ import {
   CURSE_MULT,
   curseNow,
   drop,
+  gusty,
   keepBuilding,
   GILDED_MULT,
   GILDED_TIER,
@@ -564,7 +565,8 @@ export class GameScene extends Phaser.Scene {
       const side = e.lean > 0 ? 1 : -1;
       for (const g of this.stoneViews.splice(this.stoneViews.length - e.count, e.count)) this.tumble(g, side);
       this.cameras.main.shake(250, 0.008);
-      this.announce(['The tier topples!', `The temple leaned ${Math.abs(Math.round(e.lean))} too far ${side > 0 ? 'right' : 'left'}`]);
+      const dir = side > 0 ? 'right' : 'left';
+      this.announce(['The tier topples!', e.favor ? `Leaned too far ${dir}: -${e.favor} favor` : `The temple leaned ${Math.abs(Math.round(e.lean))} too far ${dir}`]);
     } else if (e.type === 'regrown') {
       this.redrawTop();
       this.popup(s.stones.at(-1)!.x, this.worldY(stackHeight(s)) - 34, `Regrown +${e.px}`, true);
@@ -732,7 +734,7 @@ export class GameScene extends Phaser.Scene {
     this.reserveButton = swappable ? { ...RESERVE_BUTTON } : null;
     this.drawLean();
     const playing = s.phase === 'swinging' || s.phase === 'falling';
-    this.windText.setText(s.endless && playing ? (s.wind ? `Gust ${s.wind > 0 ? '>>>' : '<<<'} ${Math.abs(s.wind)}` : 'Calm air') : '');
+    this.windText.setText(gusty(s) && playing ? (s.wind ? `Gust ${s.wind > 0 ? '>>>' : '<<<'} ${Math.abs(s.wind)}` : 'Calm air') : '');
     const counts = BLESSINGS.filter((b) => s.blessings.includes(b)).map((b) => {
       const n = s.blessings.filter((x) => x === b).length;
       const held = b === 'grace' && s.grace ? ` (${s.grace} held)` : '';

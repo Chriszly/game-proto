@@ -5,7 +5,7 @@ import { cardIcon, flaskIcon, relicIcon } from '../art/icons';
 import { BLUE, GOLD, INK, PURPLE, RED, STONE } from '../art/palette';
 import { artImage } from '../art/paint';
 import { backdrop } from '../art/scenery';
-import { card, describe, isTempered, tempered, type CardId } from '../game/cards';
+import { canBeTempered, card, describe, tempered, type CardId } from '../game/cards';
 import { depthText } from '../game/depth';
 import { ENEMIES, type StatusKind } from '../game/enemies';
 import { FLASKS, FLASK_SLOTS } from '../game/flasks';
@@ -800,7 +800,7 @@ export class GameScene extends Phaser.Scene {
     const s = this.state;
     const mode = this.picking;
     this.pickLayer.setVisible(!!mode);
-    const ids = mode ? [...new Set(s.deck)].filter((id) => mode !== 'temper' || !isTempered(id)) : [];
+    const ids = mode ? [...new Set(s.deck)].filter((id) => mode !== 'temper' || canBeTempered(id)) : [];
     const key = `${mode}|${ids.join()}`;
     if (key === this.pickKey) return;
     this.pickKey = key;
@@ -809,7 +809,7 @@ export class GameScene extends Phaser.Scene {
     });
     if (!mode) return;
     this.pickTitle.setText(PICK_TITLES[mode]).setColor(mode === 'temper' ? '#a8e070' : '#f09a3a');
-    const L = ids.length > PICKER.roomy.perRow * 2 ? PICKER.tight : PICKER.roomy;
+    const L = ids.length > PICKER.tight.perRow * 3 ? PICKER.packed : ids.length > PICKER.roomy.perRow * 2 ? PICKER.tight : PICKER.roomy;
     const perRow = Math.min(ids.length, L.perRow);
     ids.forEach((id, i) => {
       const row = Math.floor(i / L.perRow);

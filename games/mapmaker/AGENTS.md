@@ -223,7 +223,7 @@ voyages it took and a saved best, then Keep charting or New atlas.
   `sellChart` adds the chart's, and on `atlas` pushes an `AtlasPage` (island, voyages it took,
   tiles, kind) onto `atlas`. `isleStart` is the voyage the isle began on. `setSail` to a new isle
   resets `milestones`, `camps` and `dug`, sets `isleStart` and takes the new isle's `kind` and
-  `riddle`.
+  `riddle` (all from `next`, or a fresh `makeIsland` for a save from before it).
 - `ranks` maps upgrade ids to ranks; `maxSupplies`, `inkBonus` and `sightOf` derive their effects.
   The compass is read by `GameScene` only.
 - `commission` has `terrain`, `need`, `bonus`, `voyages`, `done` (tiles counted on earlier voyages)
@@ -234,9 +234,11 @@ voyages it took and a saved best, then Keep charting or New atlas.
   (`rollBoard`: up to `BOARD_SIZE` open commissions shuffled, the last made long when at least two
   are open and the fog holds `need * voyages + 1` tiles: two or three voyages for `LONG_PAY` times
   the pay a voyage) and picks `board[0]`; `pickCommission` swaps the pick at the harbor and
-  `isPicked` tells the UI which row it is. `setSail` to a new isle keeps a long commission the new
-  fog can still fill, else lays the board out again; it rolls a one-voyage one only when there is
-  none.
+  `isPicked` tells the UI which row it is. When the sale finds the isle charted in full it rolls the
+  next isle into `next` first and works the board out from that isle's fog, keeping a long
+  commission only when it has a voyage left and the new fog can still fill it; `setSail` lands on
+  `next` and clears it. `setSail` rolls a one-voyage commission only when none is set, which only a
+  save from before `next` can reach.
 - All mutation is in `src/game/sim.ts`. `GameScene` only calls those functions.
 
 ### Persistence
@@ -249,7 +251,8 @@ goal get `milestones: 0`, `isleStart: voyage`, `atlas: []` and zeroed new chart 
 before isle kinds and finds get `kind: 'green'` (atlas pages too), no camps, storms, dug tiles or
 riddle, and zero artifacts and treasure. Saves from before features, the board, hands, the rival
 and the Royal Atlas get their `features` from `findFeatures`, an empty board and hands, no hand,
-no rival, no `royal`, one-voyage commissions and zeroed new chart fields. `mapmaker-best` holds
+no rival, no `royal`, one-voyage commissions and zeroed new chart fields. Saves from before the
+next isle was rolled at the sale get `next: null`. `mapmaker-best` holds
 the fewest voyages a Royal Atlas took, kept across New atlas. The hub's settings live under the
 shared `hub-settings` key.
 
@@ -257,7 +260,7 @@ shared `hub-settings` key.
 
 - `Math.random` is used only in `src/game/island.ts` (noise lattices, landmark and find spots, the
   riddle's first candidate tile) and in `rollCommission`, `rollBoard` and `rollHands` (called by
-  `sellChart`, and `rollBoard` by `setSail` to a new isle). Rivers, the road, features and their
+  `sellChart`, which also calls `makeIsland` for the next isle once this one is charted in full). Rivers, the road, features and their
   names, storms' targets, the rival's every move and the riddle's clues are worked out from the
   tiles, without randomness. The art uses `rng()` and a sine hash; place names come from the island number
   and tile spots.

@@ -22,7 +22,8 @@ seconds without a tap.
   `'won'`, which holds everything (`held(state)` is `'over'` or `'won'`; `tick` stops, `loose`,
   `strew`, `hire` and `train` refuse) under the victory panel. `keepFighting` sets the phase back
   to `'break'` (the relic chest and road choice set by `clearWave` are still there); `startHeat`
-  starts a new run at an unlocked heat. `heat` and `heatUnlocked` are in `Progress`.
+  starts a new run at an unlocked heat (from the victory panel it counts the run in `runs`, as a
+  fall does; after a fall it was counted already). `heat` and `heatUnlocked` are in `Progress`.
   `heatRules(heat)` is cumulative: Heat 1 scales `spawnInterval` by 0.7, Heat 2 adds a bar in
   `bossBars` (so in `foeHp` too), Heat 3 halves `stats().repair` and `stats().mend`. `stats` takes
   `heat`, so it is a `Pick` of `ranks`, `relics` and `heat`. The game-over panel has a "Next run
@@ -32,7 +33,8 @@ seconds without a tap.
   first waves' random sequence is unchanged). An elite has `ELITE_HP` times the health and gives
   `ELITE_XP` times the experience and `ELITE_COINS` times the coins in `removeDead`. `Enemy.trait`
   is `'splitting'` (in `removeDead`, `SPLIT_INTO` goblins with `SPLIT_HP` of a goblin's health are
-  added at its spot, clamped to the road, with a `split` effect), `'enraged'` (`moveEnemies`
+  added at its spot, clamped to the road and kept on the road's side of a standing barricade or
+  stake line, with a `split` effect), `'enraged'` (`moveEnemies`
   multiplies its pace, so walk and barricade damage, by `ENRAGE_PACE` below half health) or
   `'warded'` (`ignite` and the chill in `arrowHit` skip it). The scene draws a coloured hexagon and
   the trait's name over its health bar (`eliteLabels`, one text per elite) and a rune ring for Warded.
@@ -52,9 +54,13 @@ seconds without a tap.
   `CALL_GOBLINS` goblins beside it (`call` effect). The Frost Giant sets `state.roarMs` to
   `ROAR_SLOW_MS` every `ROAR_MS` (`roar` effect); while it runs `shoot` multiplies the bow's
   cooldown by `ROAR_SLOW` and the scene shows the "Chilled bow" chip at `ROAR_CHIP`.
-- **Fortifications** (`forts.ts`, `state.forts`): during a break the "Fortify" button at `FORTIFY`
-  opens `FortifyPanel`; `fortify(state, id)` buys one per break (`forts.boughtWave` is the wave
-  whose break it was bought in; `canFortify`). `stakes` sets `forts.stakeHp` to `STAKE_HP`: in
+- **Fortifications** (`forts.ts`, `state.forts`): the "Fortify" button at `FORTIFY` (always shown,
+  lit while `canFortify`) opens `FortifyPanel`; `fortify(state, id)` buys one per break
+  (`forts.boughtWave` is the wave whose break it was bought in; `canFortify`, and `canBuyFort` per
+  fortification, which refuses an oil pot while one is armed). During a wave it pays at once and
+  sets `forts.queued`; `clearWave` sets the queued one up when the next break starts (`setUpFort`,
+  as that break's one) and clears it, so fortifications only change during breaks. One can be
+  queued at a time. `stakes` sets `forts.stakeHp` to `STAKE_HP`: in
   `moveEnemies`, once the barricade is down, walking foes stop at `STAKE_FRONT` and hack the stakes
   instead (Spiked Stakes counts there too); `oil` arms `forts.oil`, which `burstOil` spends on the
   first foe to start hacking at the standing barricade (`OIL_HIT`, `ignite` for `OIL_MS`, a
@@ -118,7 +124,7 @@ seconds without a tap.
   "Rank N, no cap" and the skill book shows the rank alone. Picking any card while `offerable` is
   empty sets `mastered` (saved with the progress), which only fills the skill book's filler pages.
   A skill added later puts the usual cards back, since `offerable` is no longer empty.
-- **Progression:** level, experience, upgrade ranks, relics, pending level-ups, best wave, run
+- **Progression:** level, experience, upgrade ranks, relics, pending level-ups (with the cards up for them), best wave, run
   count and `mastered` carry over between runs. Every run restarts at wave 1 on the first road, with no coins,
   guards or caltrops.
 - **Screens:** there is one scene with the battle and HUD, plus overlays drawn over it: the
@@ -156,8 +162,8 @@ seconds without a tap.
     `STREAK_MS`, `RAIN_KILLS`, `CALTROP_KILLS`, `rainNeed`, `newRun`, `Progress`, `progressOf`,
     `freshForts`, `offerable`.
   - `sim.ts`: `tick` (the battle and the auto-pick countdown), `held`, `pick`, `offer`, `rollChoices`,
-    `pickRoad`, `fightAgain`, `startHeat`, `keepFighting`, `loose` (Arrow Rain), `strew`
-    (caltrops), `hire`, `train`, `fortify`, `canFortify`, `setAim`,
+    `reoffer`, `pickRoad`, `fightAgain`, `startHeat`, `keepFighting`, `loose` (Arrow Rain), `strew`
+    (caltrops), `hire`, `train`, `fortify`, `canFortify`, `canBuyFort`, `setAim`,
     `crowdSpot`, `inRing`, `rainRingOf`, `AUTO_PICK_MS`, `RAIN_FALL_MS`, `RAIN_RING`, `CALTROP_PATCH`,
     `CALTROP_WAVES`, `MAX_PATCHES`, `SHIELD_BLOCK`, and the private steps: spawning (elites), shooting, guards (stuns), missiles
     (rocks), boss moves, volleys, damage, foe movement (caltrops, healing, the stake line, the oil pot), kills (coins, streak, charges, experience, splitting),
@@ -207,7 +213,8 @@ seconds without a tap.
   empty slot, or one row to train a hired guard, each with a button showing its cost (greyed out
   and not tappable when the coins are short), and a dim backdrop that closes it. `slot`/`open`
   tell the scene to hold everything still.
-- `src/ui/FortifyPanel.ts`: the panel the Fortify button opens during a break: a row per
+- `src/ui/FortifyPanel.ts`: the panel the Fortify button opens (a note under its title says when
+  one can be bought, and a queued one reads "Queued for the next break"): a row per
   fortification in `FORT_IDS` (a little picture, its text, what is held and a Buy button with its
   cost, greyed out when the coins are short or this break's one is bought) and a dim backdrop that
   closes it. `open` tells the scene to hold everything still.
@@ -281,9 +288,9 @@ seconds without a tap.
   calls `strew` 40px in front of it. A level-up, a fall, the open skill book or hire panel clears
   `aim`. A tap on a guard slot's zone (depth `UI_DEPTH - 3`, under every overlay) opens
   `HirePanel`, which calls `GameScene.hire`/`train`; the scene holds the battle while it is open and
-  closes it on a level-up or a fall. A tap on the Fortify button (shown only during a break) opens
-  `FortifyPanel`, which calls `GameScene.fortify`; the scene holds the break while it is open and
-  closes it when the wave comes on. A tap on the aim toggle (or T) calls `cycleAim`. A tap on a road card calls `pickRoad`. "Fight again" and "New hero" call
+  closes it on a level-up or a fall. A tap on the Fortify button (always shown; not after a fall or during a level-up) opens
+  `FortifyPanel`, which calls `GameScene.fortify`; the scene holds the battle while it is open and
+  closes it on a level-up or a fall. A tap on the aim toggle (or T) calls `cycleAim`. A tap on a road card calls `pickRoad`. "Fight again" and "New hero" call
   `restart`, the heat buttons on the game-over panel and "Heat N" on the victory panel call
   `restartAt`, and "Keep fighting" calls `keepFighting`. The "Skill book" button opens `SkillBook`; Back or a tap beside the book closes it.
   While it is open `GameScene.update` skips `tick` and its `clock`, so the battle, effects and the
@@ -310,13 +317,14 @@ seconds without a tap.
 ### State model
 
 - `GameState` (`src/game/state.ts`) has two halves. The progress fields (`level`, `xp`, `ranks`,
-  `levelUps`, `bestWave`, `runs`, `relics`, `mastered`, `heat`, `heatUnlocked`) form `Progress`. The run fields are `wave`, `phase`
+  `levelUps`, `bestWave`, `runs`, `relics`, `mastered`, `heat`, `heatUnlocked`, and `choices`, the
+  cards up for a pending level-up) form `Progress`. The run fields are `wave`, `phase`
   (`'break' | 'fighting' | 'over' | 'won'`), `breakMs`, `toSpawn`, `spawnMs`, `barricade`, `enemies`,
-  `missiles`, `effects`, `cooldown`, `choices`, `pickMs` (time left to pick before the auto-pick),
+  `missiles`, `effects`, `cooldown`, `pickMs` (time left to pick before the auto-pick),
   `kills`, `rain` (`charge`, `need`, `volleys`), `caltrops` (`charge`, `need`, `patches`), `coins`,
   `guards`, `road`, `roadChoices`, `roadMs`, `streak` (`count`, `ms` left, `best`, `bonusXp`),
   `relicFound` (a list, or null), `aimMode`, `roarMs`, `forts` (`stakeHp`, `oil`, `lookout`,
-  `boughtWave`), `won` and `nextId`.
+  `boughtWave`, `queued`), `won` and `nextId`.
 - `Enemy` holds its position, `hp`/`maxHp`, boss `bars`, slow and burn timers, `attacking`,
   `hitMs`, `castMs` (a shaman's healing timer, a boss's move timer), `trait` (an elite's, or null)
   and `moved` (the Ogre Warlord's call). `Missile` is an arrow, a fireball, a mage's
@@ -333,7 +341,7 @@ seconds without a tap.
   filler is offered (and found) before the last skill; with none left it offers the base skills
   (see Every skill learned).
 - Only `sim.ts` mutates state during play. The scene only replaces it wholesale (`newRun`,
-  `fightAgain`, `startHeat`), calls `offer` on load when level-ups are pending, and calls `loose`, `strew`,
+  `fightAgain`, `startHeat`), calls `reoffer` on load when level-ups are pending, and calls `loose`, `strew`,
   `hire`, `train`, `fortify`, `setAim`, `keepFighting`, `pick` and `pickRoad`.
 - **Invariants:** `choices` is set while `levelUps > 0`, and the battle (streak timer and volleys
   included) is frozen then. Every place that sets `choices` (`offer`, `fightAgain`) also resets
@@ -345,7 +353,8 @@ seconds without a tap.
   `roadChoices` is set by `clearWave` on a boss wave and cleared by `pickRoad`, which restarts
   `breakMs`; the break never ends while it is set. `caltrops.charge` never exceeds `caltrops.need`.
   `hire` and `train` refuse during a level-up or a fall, or without the coins; `coins` never goes
-  below 0. `fortify` refuses outside a break, during a level-up, twice in one break or without the
+  below 0. `fortify` refuses after a fall or the win, during a level-up, twice in one break, with one
+  already queued during a wave, or without the
   coins. `phase` is `'won'` only between clearing `WIN_WAVE` and "Keep fighting" (or a new run);
   `won` stays set for the rest of the run, so wave 60 never wins again. `heat` never exceeds
   `heatUnlocked`. In
@@ -364,8 +373,10 @@ Five `localStorage` keys. `palisade-skill-book` holds a JSON array of the upgrad
 battle speed (`'1'` or `'2'`, through `loadSpeed`/`saveSpeed`) and `palisade-aim` the aim priority
 (an `AimMode`, through `loadAim`/`saveAim`), and `palisade-auto-pick` the level-up's checkbox
 (`'0'` when unticked; anything else, or nothing, means on), all kept apart so "New hero" leaves
-them alone. `palisade-progress` holds JSON of `Progress`, relics, `heat` and `heatUnlocked` included. `loadProgress` merges it over
-`freshProgress()` (dropping unknown upgrade and relic ids; an older save gets heat 0) and falls back to fresh on any error.
+them alone. `palisade-progress` holds JSON of `Progress`, relics, `heat`, `heatUnlocked` and the level-up's
+`choices` included. `loadProgress` merges it over
+`freshProgress()` (dropping unknown upgrade and relic ids, and `choices` unless they are three known
+upgrades with a level-up pending; an older save gets heat 0) and falls back to fresh on any error.
 "New hero" calls `clearProgress`, which also drops the relics and the heats. The run itself (wave, foes,
 barricade, Arrow Rain and caltrops charge, streak, coins, guards, road, fortifications) is never saved, so a reload
 starts at wave 1.
@@ -552,15 +563,17 @@ fortifications' in `forts.ts` and the heats' in `heat.ts`. Arrow Rain's damage (
   Burning, lightning, caltrops, Spiked Stakes, arcane bolts and the oil pot's hit ignore it. Damage after armour is at least 1.
 - `STAKE_FRONT` (140) is left of the barricade art and right of the hero: foes hacking the stake
   line stand at `STAKE_FRONT + radius`, over the guard platforms, and are still within
-  `SPEAR_REACH`. A split's goblins are placed no further left than `HERO_FRONT + 20`, so a
-  Splitting foe that falls at the stakes does not end the run on the spot.
+  `SPEAR_REACH`. A split's goblins are placed at the face of a standing barricade or stake line at
+  the furthest left (so a Splitting harpy that flew over it drops them on the road's side), or no
+  further left than `HERO_FRONT + 20` when both are down, so a split does not end the run on the spot.
 - A harpy's `y` is where it flies, above the road's far edge (from `FIELD.top - 50`), so arrows and
   Arrow Rain aim at it there; its shadow is only drawn. `loose` clamps to `FIELD.top`, and the ring
   still reaches harpies flying low enough.
 - Experience can be fractional with Battle Lore, the Troll King's Crown or a streak. The HUD floors
   it, and the state keeps the fraction; the test compares it with `toBeCloseTo`.
-- `fightAgain` keeps any pending `choices`. `GameScene.create` rolls choices on load when
-  `levelUps > 0`, so a saved hero can open on a level-up overlay.
+- `fightAgain` and `startHeat` keep any pending `choices` (through `reoffer`), and `GameScene.create`
+  puts the saved ones back up on load when `levelUps > 0` (rolling new ones only when none were
+  saved), so a saved hero can open on a level-up overlay with the same cards as before the reload.
 - During the break after a boss the wave has already moved on to the next road; the track shows
   the finished road (`waveTrack(wave - 1)`) while `relicFound` or `roadChoices` is set, but
   `GameScene.track` is always the current wave's.

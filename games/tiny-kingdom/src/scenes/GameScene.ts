@@ -6,7 +6,7 @@ import { addArt, RES } from '../art/wood';
 import { joinedCells, joinedCount } from '../game/castle';
 import { DECREE_BONUS, decreeMarks, type At } from '../game/decree';
 import { GIFT_INFO, type Gift } from '../game/gifts';
-import { dailyIsland, LEVELS, levelOpen, parseIsland, starsFor, today, type Kingdom } from '../game/islands';
+import { dailyIsland, LEVELS, levelOpen, parseIsland, starScores, starsFor, today, type Kingdom } from '../game/islands';
 import { loadBest, loadCrowns, loadDailyBest, loadStars, saveBest, saveCrowns, saveDailyBest, saveStars } from '../game/save';
 import { OMEN_FROM } from '../game/omens';
 import { SEASON_INFO } from '../game/seasons';
@@ -648,9 +648,9 @@ export class GameScene extends Phaser.Scene {
 
   /** The line under the levels: a level's island and the scores its stars need. */
   private showLevel(level: number) {
-    const L = LEVELS[level - 1];
+    const [one, two, three] = starScores(level);
     const lock = levelOpen(level, this.stars) ? '' : '   (win a star on the level before)';
-    this.levelInfo.setText(`Level ${level}, island ${L.island}:   1 star ${L.stars[0]}   2 stars ${L.stars[1]}   3 stars ${L.stars[2]}${lock}`);
+    this.levelInfo.setText(`Level ${level}, island ${LEVELS[level - 1].island}:   1 star ${one}   2 stars ${two}   3 stars ${three}${lock}`);
   }
 
   private playLevel(level: number) {
@@ -1081,7 +1081,7 @@ export class GameScene extends Phaser.Scene {
     this.scoreText.setText(`Score ${s.score}`);
     this.goalText.setText(`${s.score} / ${s.goal} for round ${s.round + 1}`);
     if (s.mode === 'campaign') {
-      const [one, two, three] = LEVELS[s.level - 1].stars;
+      const [one, two, three] = starScores(s.level);
       this.bestText.setText(`Stars at ${one}, ${two} and ${three}`);
     } else if (s.mode === 'daily') this.bestText.setText(`Today's best ${loadDailyBest(s.day)}`);
     else this.bestText.setText(`Best score ${s.best}`);
@@ -1150,7 +1150,7 @@ export class GameScene extends Phaser.Scene {
       let won = `Best score ${s.best}.  Crowns ${s.crowns}.`;
       if (s.mode === 'campaign') {
         const stars = starsFor(s.level, s.score);
-        won = `Level ${s.level}: ${stars} ${stars === 1 ? 'star' : 'stars'}${stars < 3 ? ` (next at ${LEVELS[s.level - 1].stars[stars]})` : ''}.  Crowns ${s.crowns}.`;
+        won = `Level ${s.level}: ${stars} ${stars === 1 ? 'star' : 'stars'}${stars < 3 ? ` (next at ${starScores(s.level)[stars]})` : ''}.  Crowns ${s.crowns}.`;
       } else if (s.mode === 'daily') won = `Island of the day: today's best ${loadDailyBest(s.day)}.  Crowns ${s.crowns}.`;
       this.gameOverText.setText(`Final score ${s.score} on island ${s.island}, reaching round ${s.round}.\n${s.placed} buildings placed, ${s.castle} joined to the castle (+${s.castle}).\n\n${won}`);
     }

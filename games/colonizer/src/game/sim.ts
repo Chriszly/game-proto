@@ -36,6 +36,8 @@ import {
   HARVEST_RITES,
   LEASH,
   MONUMENT_MS,
+  ASSAULT_CLEAR,
+  ASSAULT_MIN,
   FIRST_RAID_MS,
   RELIC_DAMAGE,
   RELIC_GATHER,
@@ -241,6 +243,8 @@ export interface GameState {
   raid: Raid | null;
   raids: number;
   repelled: number;
+  /** The player's soldiers that have come at the AI's Town Center, while they are about (see `updateAssault`). */
+  assault: number[] | null;
   events: SimEvent[];
   /** How the match was won: the enemy Town Center fell, or a Monument stood long enough. */
   winBy: 'town' | 'monument' | null;
@@ -291,6 +295,7 @@ export function createGame(faction: FactionId, aiFaction: FactionId, aiGatherMul
     raid: null,
     raids: 0,
     repelled: 0,
+    assault: null,
     events: [],
     winBy: null,
   };
@@ -893,7 +898,6 @@ export function ringBell(s: GameState, owner: number): number {
   const p = s.players[owner];
   const homes = shelters(s, owner);
   if (homes.length === 0) return 0;
-  p.bell = true;
   const room = new Map<number, number>();
   for (const b of homes) room.set(b.id, (BUILDINGS[b.type].shelter ?? 0) - b.garrison.length);
   for (const u of s.units.values()) if (u.owner === owner && u.order.t === 'garrison') room.set(u.order.b, (room.get(u.order.b) ?? 0) - 1);
@@ -913,6 +917,8 @@ export function ringBell(s: GameState, owner: number): number {
     u.order = { t: 'garrison', b: best.b.id };
     sent++;
   }
+  // The bell only counts as rung once someone is on their way in.
+  if (sent > 0) p.bell = true;
   if (owner === PLAYER) say(s, sent > 0 ? `The bell rings: ${sent} villager${sent === 1 ? '' : 's'} run for shelter` : 'The bell rings, but no villager is near a shelter');
   return sent;
 }
@@ -1055,6 +1061,34 @@ function updateRaid(s: GameState) {
   if (r.target === PLAYER) say(s, 'The raid is repelled');
 }
 
+/**
+ * The player's attacks on the AI's base, which the planner doesn't send and so never records as
+ * raids: ASSAULT_MIN soldiers near its Town Center start one, any more that come join it, and once
+ * none is left within ASSAULT_CLEAR tiles it ends, repelled (the AI's raid deed) if half of them fell.
+ */
+function updateAssault(s: GameState) {
+  const town = [...s.buildings.values()].find((b) => b.owner === AI && b.type === 'town');
+  if (!town) {
+    s.assault = null;
+    return;
+  }
+  const cx = town.tx + 2;
+  const cy = town.ty + 2;
+  const tracked = new Set(s.raid ? s.raid.ids : []);
+  const near = (u: Unit, range: number) => Math.hypot(u.x - cx, u.y - cy) <= range;
+  const attackers = [...s.units.values()].filter((u) => u.owner === PLAYER && u.hp > 0 && isSoldier(unitDef(u).role) && !tracked.has(u.id) && near(u, BELL_RANGE));
+  if (!s.assault) {
+    if (attackers.length >= ASSAULT_MIN) s.assault = attackers.map((u) => u.id);
+    return;
+  }
+  const ids = s.assault;
+  for (const u of attackers) if (!ids.includes(u.id)) ids.push(u.id);
+  const alive = ids.map((id) => s.units.get(id)).filter((u): u is Unit => !!u && u.hp > 0);
+  if (alive.some((u) => near(u, ASSAULT_CLEAR))) return;
+  if ((ids.length - alive.length) * 2 >= ids.length) s.players[AI].deeds.raid = true;
+  s.assault = null;
+}
+
 function updateDeeds(s: GameState) {
   for (const p of s.players) {
     if (p.id === NEUTRAL) continue;
@@ -1097,6 +1131,7 @@ export function tick(s: GameState, dt: number) {
   updateCamps(s);
   updateDeeds(s);
   updateRaid(s);
+  updateAssault(s);
   updateSight(s);
   checkWinner(s);
 }

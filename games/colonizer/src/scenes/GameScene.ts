@@ -679,7 +679,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private onPointerUp(pointer: Phaser.Input.Pointer) {
-    const p = Object.assign(viewPoint(pointer), { event: pointer.event });
+    const p = Object.assign(viewPoint(pointer), { event: pointer.event, wasTouch: pointer.wasTouch });
     this.dragBox.clear();
     if (this.wallStart && this.placing === 'wall') {
       const end = this.toWorld(p.x, p.y);
@@ -696,6 +696,8 @@ export class GameScene extends Phaser.Scene {
     const additive = p.event.shiftKey;
     if (moved < 5) {
       const hit = entityAt(this.state, b.x, b.y);
+      // A touch screen has no right click, so a tap gives the orders one would.
+      if (p.wasTouch && !watching && this.tapOrder(b.x, b.y, hit)) return;
       if (!hit) {
         if (!additive) this.selectOwn([]);
         const camp = campAt(this.state, b.x, b.y);
@@ -724,6 +726,28 @@ export class GameScene extends Phaser.Scene {
     if (!additive) this.selected.clear();
     for (const u of inside) this.selected.add(u.id);
     this.panelKey = '';
+  }
+
+  /**
+   * A tap on a touch screen: with units selected, a tap anywhere but on another own unit or finished
+   * building orders them like a right click (an unfinished own building or a farm included, for the
+   * villagers); with a production building alone, a tap on the ground, a node or a farm plants its
+   * rally flag. Returns false when the tap should select instead.
+   */
+  private tapOrder(tx: number, ty: number, hit: ReturnType<typeof entityAt>): boolean {
+    const own = hit && hit.kind !== 'node' && hit.owner === PLAYER;
+    const ownBuilding = own && hit.kind === 'building' ? this.state.buildings.get(hit.id) : undefined;
+    const farm = !!ownBuilding && !!BUILDINGS[ownBuilding.type].farm;
+    if (this.selectedUnits().length > 0) {
+      const work = !!ownBuilding && (!ownBuilding.built || farm) && this.selectedUnits().some((u) => UNITS[u.type].role === 'villager');
+      if (own && !work) return false;
+      this.commandAt(tx, ty);
+      return true;
+    }
+    const b = this.selectedBuilding();
+    if (!b || !BUILDINGS[b.type].trains || (own && !farm)) return false;
+    if (setRally(this.state, PLAYER, b.id, tx, ty)) say(this.state, 'Rally flag set');
+    return true;
   }
 
   /** What a camp is, for the notice shown when it is clicked. */

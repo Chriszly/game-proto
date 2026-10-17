@@ -124,7 +124,8 @@ and pressed lettering on clay tags. It is all painted in code at startup; there 
 14. **Call the next wave early.** Once every pest of the current wave has come onto the path, the
     wave button turns into "Call wave N now, +15 early". Tapping it counts the current wave as done
     at once (its clearing bonus and its bud) plus 15 sap, and the next wave starts coming in while
-    the last pests are still walking. The card above the button previews the next wave's pests,
+    the last pests are still walking. Wave 30, the harvest, can't be called early: its stars wait for
+    its last pest. The card above the button previews the next wave's pests,
     counted from the game's own wave list (in two rows once there are more than three kinds, with
     the Queen Slug named in its title), so you can weigh the sap against the crowd.
 15. **Sap you can see.** A squashed pest leaves an orange splat and a "+N" pop, and its sap

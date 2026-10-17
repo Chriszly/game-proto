@@ -1,3 +1,4 @@
+import { byDifficulty } from '../../../../shared/settings';
 import { ISLANDS } from './tiles';
 
 // Where a kingdom is built: a random island, one typed in by its number, the island of the day,
@@ -35,8 +36,15 @@ export const LEVELS: Level[] = [
   { island: 5810, stars: [170, 200, 230] },
 ];
 
+/**
+ * The scores that earn one, two and three stars on campaign level `level` (1 and up) at the chosen
+ * difficulty. `LEVELS` holds Normal's; the same greedy player's mean final score over 300 islands
+ * is 1% higher on Easy and 6% lower on Hard, so the stars move with it.
+ */
+export const starScores = (level: number) => LEVELS[level - 1].stars.map((s) => Math.round(s * byDifficulty(1.01, 1, 0.94))) as Level['stars'];
+
 /** Stars a final score earns on campaign level `level` (1 and up): 0 to 3. */
-export const starsFor = (level: number, score: number) => LEVELS[level - 1].stars.filter((s) => score >= s).length;
+export const starsFor = (level: number, score: number) => starScores(level).filter((s) => score >= s).length;
 
 /** Whether level `level` can be played, given the best stars won on each level so far. */
 export const levelOpen = (level: number, stars: readonly number[]) => level === 1 || (stars[level - 2] ?? 0) > 0;

@@ -15,7 +15,7 @@ in code on 2D canvases (no image files), with `pixelArt` off.
 
 - Implemented: a menu that picks the faction (the AI plays the next one along), fog of war (unseen,
   explored and in sight), click, Shift and box selection, control groups (1 to 9, Ctrl to set),
-  right-click commands (attack, gather, build, walk), attack-move (A), stop (S), build placement with
+  right-click commands (attack, gather, build, walk; on a touch screen a tap gives them, `tapOrder`), attack-move (A), stop (S), build placement with
   a green or red ghost, a bottom panel with the selection, buttons for training, research and the
   build list, and a minimap; a top bar with resources, population, a three-pip age track, the match
   clock, the faction and the chosen boon; and an end screen with Victory or Defeat and a click back
@@ -44,7 +44,8 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   shelter (a building with `shelter`: the Town Center 12, a finished Watchtower 5) get a `garrison`
   order, walk there and are moved out of `s.units` into `Building.garrison`. Each adds
   `GARRISON_ARROW` to the building's volley. `releaseBell` (or a shelter falling, in `reap`) puts them
-  back on free tiles round it and `backToWork` sends each to its old node. `garrisoned` counts them;
+  back on free tiles round it and `backToWork` sends each to its old node. `Player.bell` is only set
+  when `ringBell` sent someone. `garrisoned` counts them;
   `popUsed` and `unitCount` include them. The AI rings when an enemy soldier is within `BELL_RANGE`
   of its Town Center and releases when none is.
 - Veteran ranks (`Unit.kills`, `Unit.rank`): a kill of a unit in `strike` counts; `RANK_KILLS`
@@ -94,7 +95,11 @@ in code on 2D canvases (no image files), with `pixelArt` off.
 - Raids: when the AI attack-moves its army at the player, the sim records a `Raid` (who, which
   units, where they are, how many are routed). The scene shows a horn toast naming it with an arrow
   towards it for 10 s, the minimap pulses rings where it is, and the deeds card counts the routed.
-  Killing every raider repels it and does the raid deed.
+  Killing every raider repels it and does the raid deed. The AI's raid deed comes from the player's
+  attacks instead (`updateAssault`, `GameState.assault`): `ASSAULT_MIN` (3) player soldiers within
+  `BELL_RANGE` of its Town Center start one, and once none of them is within `ASSAULT_CLEAR` (20)
+  tiles it ends, repelled if at least half of them fell. The AI's Monument rush is a raid with the
+  Monument as its goal, so it ends like any other once the Monument falls.
 - Feedback: hits throw ochre sparks, arrows fly from ranged attackers and towers, damage numbers
   rise, and every load the player drops off pops a "+N" badge with the resource's icon.
 - The AI is a rule-based planner (`src/game/planner.ts`), not a full build-order search: it keeps
@@ -142,7 +147,7 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   `CLAIM_RANGE`, `LEASH`, the bell (`BELL_RANGE`, `GARRISON_ARROW`), the ranks (`RANK_KILLS`,
   `RANK_HP`, `RANK_DMG`, `RANK_NAMES`), the Market (`MARKET_*`, `TRADE_ORE`), the champions
   (`AURA_*`, `HEAL_*`), `MONUMENT_MS`, the raid pacing (`FIRST_RAID_MS`, `RAID_REST_MS`,
-  `RAID_PARTY`, `RAID_TOWN_FROM`, `RAID_MAX_MS`), `TILE` (32) and `MAP_SIZE` (128).
+  `RAID_PARTY`, `RAID_TOWN_FROM`, `RAID_MAX_MS`, `ASSAULT_MIN`, `ASSAULT_CLEAR`), `TILE` (32) and `MAP_SIZE` (128).
 - `src/game/map.ts`: `generateMap()` draws lakes, rock ridges, forests, bushes and mines, mirrors
   each one, adds each side's starting trees, bushes and mine, then clears the camps' and the two
   trading posts' patches (`POST_PLAN` and its mirror, `MapData.posts`). Terrain is `Uint8Array` of
@@ -207,7 +212,8 @@ in code on 2D canvases (no image files), with `pixelArt` off.
 - `Player.age` is 1, 2 or 3; `Player.deeds` is `{ age2, army, raid }` (`army` is the most soldiers
   alive at once); `Player.boon` and `Player.boonPending`; `Player.bell` (the bell is ringing) and
   `Player.rates` (the Market's wood and food rates).
-- `GameState.raid` (`Raid | null`), `raids` and `repelled` counters, and `events`: `hit`, `drop` and
+- `GameState.raid` (`Raid | null`), `raids` and `repelled` counters, `assault` (the ids of the
+  player's soldiers attacking the AI's base, or null), and `events`: `hit`, `drop` and
   `grow` events the sim pushes and the scene drains each frame (capped at 400 when nobody drains them).
 - `GameState.players` has a third entry, `NEUTRAL` (the camp guards); its `faction` is only a
   placeholder. Code that loops over players skips it where it matters (`updateDeeds`, `checkWinner`).

@@ -610,6 +610,9 @@ export class World {
     if (producer.queue.length >= MAX_QUEUE) return 'Queue full';
     side.crystal -= cost;
     producer.queue.push(type);
+    // The player hears when a ship goes to the derelict shipyard rather than their own Barracks.
+    const yard = this.derelicts.find((d) => d === producer);
+    if (faction === PLAYER && yard) this.events.push({ kind: 'notice', text: `${side.def.units[type].name} queued at the derelict ${DERELICT_DEFS[yard.perk].name}` });
     return null;
   }
 
@@ -971,9 +974,8 @@ export class World {
         d.claim = Math.min(1, d.claim + step);
         if (d.claim >= 1 && d.owner !== f) {
           if (d.owner === PLAYER) this.events.push({ kind: 'notice', text: `The derelict ${DERELICT_DEFS[d.perk].name} was taken by the ${this.sides[f].def.name}` });
+          this.refundQueue(d);
           d.owner = f;
-          d.queue = [];
-          d.trainLeft = 0;
           const def = DERELICT_DEFS[d.perk];
           if (f === PLAYER) this.events.push({ kind: 'notice', text: `Derelict claimed: ${def.name}. ${def.text}` });
           else aiLog(String(f), `claims the derelict ${def.name}`);
@@ -1011,9 +1013,20 @@ export class World {
   /** A derelict goes back to nobody: its owner fell or was drained out. */
   private loseDerelict(d: Derelict) {
     if (d.owner === PLAYER) this.events.push({ kind: 'notice', text: `The derelict ${DERELICT_DEFS[d.perk].name} is lost` });
+    this.refundQueue(d);
     d.owner = -1;
     d.capturer = -1;
     d.claim = 0;
+  }
+
+  /** Ships still queued at a derelict shipyard that changes hands are paid back to its owner. */
+  private refundQueue(d: Derelict) {
+    if (d.owner >= 0 && d.queue.length) {
+      const side = this.sides[d.owner];
+      const back = d.queue.reduce((sum, type) => sum + unitStats(side, type).cost, 0);
+      side.crystal += back;
+      if (d.owner === PLAYER) this.events.push({ kind: 'notice', text: `Ships queued at the derelict ${DERELICT_DEFS[d.perk].name} refunded: ◆${back}` });
+    }
     d.queue = [];
     d.trainLeft = 0;
   }
@@ -1376,7 +1389,7 @@ export class World {
     for (const s of this.shards) {
       if (s.faction !== f) continue;
       const idle = this.units.find((u) => u.faction === f && u.type !== 'harvester' && u.decoyMs === null && !u.order
-        && u.id !== side.picket && dist(u, s) <= AI_SALVAGE_REACH);
+        && u.id !== side.picket && u.id !== side.claimer && dist(u, s) <= AI_SALVAGE_REACH);
       if (idle) idle.order = { kind: 'move', x: s.x, y: s.y };
     }
   }
@@ -1390,15 +1403,19 @@ export class World {
     const f = side.index;
     if (this.elapsedMs < AI_CLAIM_MS || army.length < AI_CLAIM_ARMY) return;
     const hub = this.hubOf(f)!;
+    const open = this.derelicts.filter((d) => d.owner !== f && dist(d, hub) <= AI_CLAIM_REACH).sort((a, b) => dist(a, hub) - dist(b, hub));
+    const target = open[0];
     const current = this.unit(side.claimer);
     if (current && current.faction === f) {
       const at = this.derelicts.reduce((a, b) => (dist(b, current) < dist(a, current) ? b : a));
-      if (at.owner === f && dist(at, current) <= DERELICT_RADIUS) side.claimer = -1;
+      if (!target || (at.owner === f && dist(at, current) <= DERELICT_RADIUS)) side.claimer = -1;
+      // A chase or a trip home for repairs pulls the claimer away: once idle, it heads back.
+      else if (!current.order && !current.repairing && dist(target, current) > DERELICT_RADIUS / 2) {
+        current.order = { kind: 'move', x: target.x, y: target.y };
+      }
       return;
     }
     side.claimer = -1;
-    const open = this.derelicts.filter((d) => d.owner !== f && dist(d, hub) <= AI_CLAIM_REACH).sort((a, b) => dist(a, hub) - dist(b, hub));
-    const target = open[0];
     if (!target) return;
     const idle = this.units.find((u) => u.faction === f && u.type !== 'harvester' && u.decoyMs === null && !u.order && u.id !== side.picket);
     if (!idle) return;
@@ -1443,8 +1460,12 @@ export class World {
       .findIndex((s) => s.index === f);
     if (rank < 0 || rank >= AI_PICKETS || this.elapsedMs < AI_PICKET_MS + rank * AI_PICKET_STAGGER_MS) return;
     const current = this.unit(side.picket);
-    if (current && current.faction === f) return;
-    const idle = this.units.find((u) => u.faction === f && u.type !== 'harvester' && u.decoyMs === null && !u.order);
+    if (current && current.faction === f) {
+      // A picket that chased a target off the beacon heads back once it is idle.
+      if (!current.order && dist(current, bc) > BEACON_RADIUS / 2) current.order = { kind: 'move', x: bc.x, y: bc.y };
+      return;
+    }
+    const idle = this.units.find((u) => u.faction === f && u.type !== 'harvester' && u.decoyMs === null && !u.order && u.id !== side.claimer);
     if (!idle) return;
     side.picket = idle.id;
     idle.order = { kind: 'move', x: bc.x, y: bc.y };

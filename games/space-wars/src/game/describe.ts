@@ -67,7 +67,7 @@ export function expansionLines(side: Side): string[] {
 export function fallBackLines(): string[] {
   return [
     'Sends the selected ships home to the nearest hub, outpost or Depot.',
-    `Ships within ${REPAIR_RANGE} px of one repair ${Math.round(REPAIR_RATE * 100)}% of their hull a second. Also F.`,
+    `Ships within ${REPAIR_RANGE} px of one repair ${Math.round(REPAIR_RATE * 100)}% of their hull a second. Also B.`,
     `Ranks: ${VETERAN_RANKS.map((k, i) => `${VETERAN_NAMES[i]} at ${k} kills`).join(', ')}, each +${Math.round(VETERAN_STEP * 100)}% damage and hull.`,
   ];
 }

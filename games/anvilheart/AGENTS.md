@@ -22,7 +22,8 @@ Implemented today:
   a sword is held, every desk that would buy it shows a tag ("Exact fit +50%" with the tipped
   price, or "Overkill" with "pays Nc").
 - Hammer streak: a merge within `STREAK_MS` (4s) of the last chains (`streak`, `streakMs`,
-  `streakSlot`); from the second merge on it pays `STREAK_COINS * streak` (5 per step) and pushes a
+  `streakSlot`); from the second merge on it pays `STREAK_COINS * min(streak, STREAK_TOP)` (5 per step, at most
+  25 a merge from the fifth on, so a long chain never outpays sales) and pushes a
   `streak` event (burst, sparks and a "Hammer streak ×N +Nc" tag). A timer ring round the last
   merge's anvil drains while `streakMs > 0`.
 - Royal commissions (`src/game/commissions.ts`, `COMMISSIONS`): Golden Claymore 500c, Runeblade
@@ -54,7 +55,8 @@ Implemented today:
   the board, barrel, coins, ranks, Auto Forge, `bestTier`, adventurers, heroes on the way and the
   streak, and starts the commissions over at level 0 with `won` false, keeping `stars`, `sold` and
   `reputation`; it pushes `charter` (a floating line). `commissionAt(level, charter)` asks for
-  `count + charter` swords (capped at `MAX_COUNT` 4, the banner's pips) and scales the reward with
+  `count + charter` swords (with no cap, so charters keep pace with the stars' price bonus; past the
+  banner's four pips the banner reads `Given made/count`) and scales the reward with
   the count. Every star raises `orderPrice` by `STAR_PRICE` (5%) (`payFor`, `orderPrice` and the
   order card take `stars`). The top bar names the charter (`Anvilheart II`, `roman`). "New smithy"
   in the corner still throws everything away, stars included.
@@ -113,7 +115,8 @@ Implemented today:
 Missing or rough:
 
 - No title screen and no in-game settings (they are on the hub page), no sound.
-- `walkedOff` is counted but not saved (its cost is the reputation drop, which is). Heroes on
+- `walkedOff` is counted but not saved (its cost is the reputation drop, which is: a walk-off
+  saves at once, like a forge, rust or a returning hero). Heroes on
   their way back (`returning`) are not saved either, so a reload loses them.
 - The win window is only shown when the Crown Blade is delivered; on reload the banner's "Tap
   here to found a new smithy" opens it again.
@@ -136,7 +139,7 @@ File map (`src/`):
 - `game/state.ts`: types (`GameState`, `Order`, `Adventurer`, `Returning`, `GameEvent`,
   `Progress`, `Fit`, `Trait`), board (`GRID`, `SLOTS`, `MAX_SLOTS`, `BARREL`, `anvilsOf`),
   timing, tip, streak, reputation, gem, star, rust, trait and returning-hero constants
-  (`EXACT_TIP`, `STREAK_MS`, `STREAK_COINS`, `LOOKS`, `REP_*`, `GEM_*`, `STAR_PRICE`, `RUST_*`,
+  (`EXACT_TIP`, `STREAK_MS`, `STREAK_COINS`, `STREAK_TOP`, `LOOKS`, `REP_*`, `GEM_*`, `STAR_PRICE`, `RUST_*`,
   `TRAITS`, `TRAIT_CHANCE`, `HAGGLER_*`, `NOBLE_PAY`, `RETURN_*`, `TROPHY_PAY`, `REPAIR_PAY`),
   `freshProgress`, `newShop`, `progressOf`, the sale price rule `fitOf`, `orderPrice` and
   `payFor`, and the formulas `forgeMs`, `oreChance`, `autoForging`, `gemsAbout`,
@@ -148,7 +151,7 @@ File map (`src/`):
   `standing`, `offers`, `chooseCommission`, `deliverable`, `deliver`, `sell`, `buy`,
   `toggleAutoForge`, `foundCharter`, plus the private `rust`, `arrive`, `rollTrait`, `comeBack`,
   `put` and `hammer` (streaks).
-- `game/commissions.ts`: `Commission`, `COMMISSIONS`, `MAX_COUNT`, `GRAND_PAY`,
+- `game/commissions.ts`: `Commission`, `COMMISSIONS`, `GRAND_PAY`,
   `commissionAt(level, charter)`, `grandOf`, `commissionTitle` and `offered`.
 - `game/swords.ts`: the `SWORDS` table (name, price per tier), `MAX_TIER`, `ORDER_TOP`, `swordOf`.
 - `game/upgrades.ts`: the `UPGRADES` table (name, blurb, price per rank, and `after`: the upgrades
@@ -233,7 +236,8 @@ State model (`src/game/state.ts`):
 - `commission` is `{ level, made, grand }`: which `commissionAt` stands (in this `charter`), how
   many of its sword were delivered and whether its grand way was chosen; `choosing` is true while
   the crown's offer for it waits. `stars` counts commissions completed over every charter; `won`
-  is true once this charter's Crown Blade is in, and `foundCharter` clears it.
+  is true once this charter's Crown Blade is in (`newShop` also sets it for a save past the last
+  commission), and `foundCharter` clears it.
 - `reputation` is 0 to `REP_MAX`.
 - `heatMs` is 0 when the forge is ready; buying a Bellows rank caps it at the new `forgeMs`. `nextVisitorMs` only counts down while a desk is free.
 - `autoForge` is the Auto Forge's on/off switch; it only matters once `ranks.auto` is 1. `buy`
@@ -272,9 +276,9 @@ Randomness and timing:
 Data tables: sword names and prices in `src/game/swords.ts`; upgrade prices and blurbs in
 `src/game/upgrades.ts`, with their effects in `forgeMs`, `oreChance` and `autoForging` in
 `src/game/state.ts`;
-forge time, visitor timing, patience, `FIRST_ORDER`, `EXACT_TIP`, `STREAK_MS`, `STREAK_COINS`,
+forge time, visitor timing, patience, `FIRST_ORDER`, `EXACT_TIP`, `STREAK_MS`, `STREAK_COINS`, `STREAK_TOP`,
 board size, desk count, reputation and gem numbers in `src/game/state.ts`; commissions in
-`src/game/commissions.ts` (with `MAX_COUNT` and `GRAND_PAY`); the star, rust, trait and
+`src/game/commissions.ts` (with `GRAND_PAY`); the star, rust, trait and
 returning-hero numbers in `src/game/state.ts`; the order range (`Math.max(3, bestTier + 1)`,
 capped at `ORDER_TOP`) and the difficulty, reputation and Haggler multipliers on patience in
 `arrive`.
@@ -350,8 +354,8 @@ capped at `ORDER_TOP`) and the difficulty, reputation and Haggler multipliers on
   Blade in `COMMISSIONS` uses `MAX_TIER`, and `SET` (100) must stay above `MAX_TIER`. The
   discovered row (9 frames) just fits between the upgrade buttons and the barrel.
 - Add or retune a commission: edit `COMMISSIONS` in `src/game/commissions.ts`; the last one wins.
-  A commission's `tier` should be at least 2, since the banner names the tier below it, and at most
-  `MAX_COUNT` (4) swords, the banner's pips; `commissionAt` adds one per charter and caps there.
+  A commission's `tier` should be at least 2, since the banner names the tier below it;
+  `commissionAt` adds one sword per charter, and the banner's four pips give way to its text past four.
   A commission whose title is over 14 characters (the grand way adds "Gemmed ") draws smaller.
 - Add a trait: add it to `Trait` and `TRAITS` in `src/game/state.ts`, its rule in `fitOf`,
   `payFor` or `arrive`, its card line in `TRAIT_LINES` and `TRAIT_COLOURS` and, if it changes a

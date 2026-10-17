@@ -83,6 +83,7 @@ export function newGame(): GameState {
     delivered: 0,
     totalDelivered: 0,
     track: [],
+    paid: {},
     orders: [],
     queue: [],
     switches: {},
@@ -124,7 +125,7 @@ function isStation(s: GameState, t: Tile) {
 }
 
 /** A tile the wyrm can stand on: track or a station. */
-function onLine(s: GameState, t: Tile) {
+export function onLine(s: GameState, t: Tile) {
   return s.track.includes(key(t)) || isStation(s, t);
 }
 
@@ -132,6 +133,8 @@ function onLine(s: GameState, t: Tile) {
 export function trackCost(s: GameState, t: Tile): number | null {
   const terrain = terrainAt(s.valley, t);
   if (terrain === 'mountain' || s.track.includes(key(t))) return null;
+  // A tile under a warned hazard can't take new track until the hazard has struck.
+  if (s.hazard && sameTile(s.hazard.tile, t)) return null;
   if (sameTile(t, ROOST) || villages(s).some((v) => sameTile(v, t))) return null;
   // Track grows from the line: next to track, the Roost or an open village.
   if (!neighbours(t).some((n) => onLine(s, n))) return null;
@@ -140,7 +143,7 @@ export function trackCost(s: GameState, t: Tile): number | null {
 
 export function canBuild(s: GameState, t: Tile) {
   const cost = trackCost(s, t);
-  return s.phase === 'play' && cost !== null && cost <= s.coins;
+  return s.phase === 'play' && !s.charterOffer && cost !== null && cost <= s.coins;
 }
 
 /**
@@ -163,6 +166,7 @@ export function buildTrack(s: GameState, t: Tile, plain = false, from: Tile | nu
     }
   }
   s.track.push(key(t));
+  s.paid[key(t)] = cost;
   syncSwitches(s, t);
   pop(s, `-${cost}`, t, '#f0c070');
   return true;
@@ -180,16 +184,17 @@ const tileOf = (k: string): Tile => {
 
 /** Track can be taken up for half its cost, unless the wyrm stands on it or is about to cross it. */
 export function canRemove(s: GameState, t: Tile) {
-  if (s.phase !== 'play' || !s.track.includes(key(t))) return false;
+  if (s.phase !== 'play' || s.charterOffer || !s.track.includes(key(t))) return false;
   return s.wyrms.every((w) => !sameTile(w.at, t) && !w.path.some((p) => sameTile(p, t)));
 }
 
 export function removeTrack(s: GameState, t: Tile) {
   if (!canRemove(s, t)) return false;
   s.track = s.track.filter((k) => k !== key(t));
-  if (s.hazard && sameTile(s.hazard.tile, t)) s.hazard = null;
   syncSwitches(s);
-  const refund = Math.floor(TRACK_COST[terrainAt(s.valley, t) as keyof typeof TRACK_COST] / 2);
+  // Half of what the tile cost when it was laid (a charter may have changed the price since).
+  const refund = Math.floor(s.paid[key(t)] / 2);
+  delete s.paid[key(t)];
   s.coins += refund;
   pop(s, `+${refund}`, t, '#f3c64e');
   return true;
@@ -223,7 +228,7 @@ function syncSwitches(s: GameState, newest?: Tile) {
 /** Throws the switch on a junction: it is set against the next of its arms. */
 export function throwSwitch(s: GameState, t: Tile) {
   const closed = s.switches[key(t)];
-  if (s.phase !== 'play' || !closed) return false;
+  if (s.phase !== 'play' || s.charterOffer || !closed) return false;
   const a = arms(s, t).map(key);
   s.switches[key(t)] = a[(a.indexOf(closed) + 1) % a.length];
   return true;
@@ -379,9 +384,12 @@ function cheer(s: GameState, v: number, by: number) {
   if (s.hearts <= 0) s.phase = 'over';
 }
 
-/** Every open village waits for a visit; one that waits too long sours. The wait allowed grows with the villages on the line. */
+/**
+ * Every open village waits for a visit; one that waits too long sours. The wait allowed grows with the
+ * villages on the line. In the festival every order goes to the host, so nobody waits for a visit.
+ */
 function tickMoods(s: GameState, dt: number) {
-  if (s.round < MOOD_ROUND) return;
+  if (s.round < MOOD_ROUND || s.round === FESTIVAL_ROUND) return;
   const open = openIndexes(s);
   const gap = MOOD_GAP_MS + MOOD_GAP_PER_VILLAGE_MS * open.length;
   for (const v of open) {
@@ -428,6 +436,7 @@ function strikeHazard(s: GameState) {
   }
   s.hazard = null;
   s.track = s.track.filter((k) => k !== key(h.tile));
+  delete s.paid[key(h.tile)];
   syncSwitches(s);
   pop(s, h.kind === 'washout' ? 'Washed out!' : 'Rockfall!', h.tile, '#f08a6a');
   for (const w of s.wyrms) {

@@ -19,7 +19,7 @@ eighth village finish with the festival. Every game is played in a new valley.
 | Tap or drag over tiles next to the line | Lay track there |
 | Tap an order | Send the wyrm to fetch and deliver it |
 | Tap a junction | Throw its switch |
-| Remove | Toggle: tap track to take it up for half its cost |
+| Remove | Toggle: tap track to take it up for half what it cost |
 | Plain | Toggle: lay track that joins only the piece it continues, and crossings |
 | A charter card | Pick the round's charter (from round 3) |
 | Swift wings, Golden hoard, Second wyrm | Buy an upgrade |
@@ -71,6 +71,7 @@ eighth village finish with the festival. Every game is played in a new valley.
 10. **Village moods**, from round 2: each village wears a face by its name. A delivery in time
     cheers the village it went to by one step; a late order sours it by one, and so does going
     without a visit (a pickup or a delivery) for 25 seconds plus 6 for every village on the line.
+    In the festival nobody waits for a visit, since every order goes to the host.
     Moods run from bitter through sulking, content and cheerful to delighted. A cheerful village's
     orders pay 25% more and a delighted one's 50% more; a sulking village sends orders with 30%
     less time ("rush order" on the card). A village that turns bitter loses faith in the line,
@@ -80,9 +81,10 @@ eighth village finish with the festival. Every game is played in a new valley.
     marked with an amber "!" and a warning for 9 seconds, then its track is gone: a wyrm heading
     over it stops short and picks its stop again (a pickup goes back to the queue), and an order
     with no way left waits until the track is rebuilt, at the usual price. A spare loop keeps the
-    line running meanwhile. The warning holds off while a wyrm is on the tile.
+    line running meanwhile. The warning holds off while a wyrm is on the tile. Taking the track up
+    yourself doesn't stop the hazard, and no track can be laid on its tile until it has struck.
 12. **Round charters**, from round 3: each round opens with two charters to choose from, and the
-    game waits until one is tapped. A charter rules the round: a *Fair* (one cargo pays double,
+    game waits until one is tapped (the board takes no taps meanwhile). A charter rules the round: a *Fair* (one cargo pays double,
     every deadline a quarter shorter), *Rush orders* (half again the pay, deadlines a third
     shorter), *Patient villages* (deadlines half as long again, a quarter less pay), *Cheap rails*
     (track at half price, a fifth less pay), *Busy season* (orders twice as often, a tenth less

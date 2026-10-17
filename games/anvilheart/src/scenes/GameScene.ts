@@ -250,8 +250,9 @@ export class GameScene extends Phaser.Scene {
     this.lastFrame = time;
     this.clock += dt;
     tick(this.state, dt);
-    // The Auto Forge forges inside tick, rust drops tiers and heroes bring swords back; keep them.
-    if (this.state.events.some((e) => e.kind === 'forged' || e.kind === 'rusted' || e.kind === 'returned')) this.save();
+    // The Auto Forge forges inside tick, rust drops tiers, heroes bring swords back and walk-offs
+    // cost reputation; keep them.
+    if (this.state.events.some((e) => e.kind === 'forged' || e.kind === 'rusted' || e.kind === 'returned' || e.kind === 'left')) this.save();
 
     this.drawSwords();
     this.drawVisitors();

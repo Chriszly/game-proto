@@ -75,14 +75,15 @@ in code.
     the first card each turn cost 1 more while in hand. Elites threaten them as a move, and the
     shrine's loot and the chained chest come with one.
 11. **Campfires**: rest to heal 30% of the hero's health (15% from depth 2), temper a card (each
-    card can be tempered once, for more damage, block or effect, or a lower cost; tempered cards
+    card but a curse can be tempered once, for more damage, block or effect, or a lower cost; tempered cards
     have a `+` and green lettering), or burn a card to thin the deck (down to no fewer than five
     cards).
 12. **The merchant** sells two common cards (30 gold), a rare card (65), two relics (80 each), two
     flasks (25 each, with a free slot) and removes one card from the deck per visit (40).
 13. **Mystery rooms** each hold one of four scenes with two choices: an altar (8 health for a rare
     card), a shrine (temper two random cards, or 45 gold and a Doubt curse), a chained chest (a
-    relic and a Rust curse) and a pool (heal 15, or temper a random card for 4 health).
+    relic and a Rust curse) and a pool (heal 15, or temper a random card for 4 health). Random
+    tempering never picks a curse, and the pool's second choice is closed when no card can be tempered.
 14. **Relics** are passive bonuses for the rest of the run, shown in the top bar.
 15. **Two acts**: beating the Bone King leaves a relic and opens the stair down to the Sunken
     Tombs, with new foes, its own elite and the Hollow Queen; the hero heals a rest's worth on the

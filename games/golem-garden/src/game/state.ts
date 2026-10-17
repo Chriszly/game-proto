@@ -315,7 +315,8 @@ export function comboAt(s: GameState, kind: GolemKind, col: number, row: number)
 export const slimed = (s: GameState, col: number, row: number) => s.slime.some((c) => c.col === col && c.row === row);
 
 /** Whether the next wave can be called early: the current one has all come in but is still on the path. */
-export const canCallEarly = (s: GameState) => s.phase === 'wave' && s.queue.length === 0;
+/** The harvest wave can't be called early: its stars count the leaves left once its pests are done. */
+export const canCallEarly = (s: GameState) => s.phase === 'wave' && s.queue.length === 0 && s.wave !== HARVEST_WAVE;
 
 /** The wave the wave button would send next. */
 export const nextWave = (s: GameState) => (s.phase === 'build' ? s.wave : s.wave + 1);
@@ -480,17 +481,24 @@ function step(s: GameState, dt: number) {
       const armour = stats.pierce ? 0 : (PEST_INFO[target.kind].armour ?? 0);
       target.hp -= pricks * Math.max(1, damage * boost - armour);
       target.hitMs = HIT_MS;
+      // A weaker slow never undoes a stronger one still running; an equal one tops it up.
       if (stats.slow) {
-        target.slowMs = stats.slow.ms;
-        target.slowFactor = stats.slow.factor;
+        const current = target.slowMs > 0 ? target.slowFactor : 1;
+        if (stats.slow.factor < current) {
+          target.slowMs = stats.slow.ms;
+          target.slowFactor = stats.slow.factor;
+        } else if (stats.slow.factor === current) {
+          target.slowMs = Math.max(target.slowMs, stats.slow.ms);
+        }
       }
     };
     for (const target of targets) {
       hit(target, stats.damage);
       const to = where(target);
       if (stats.splash) {
-        for (const other of inReach) {
-          if (other === target) continue;
+        // Splash lands on every pest near the target, in the golem's reach or not.
+        for (const other of s.pests) {
+          if (other === target || other.hp <= 0 || other.under) continue;
           const pos = where(other);
           if (Math.hypot(pos.x - to.x, pos.y - to.y) <= stats.splash) hit(other, stats.damage / 2);
         }

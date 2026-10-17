@@ -568,23 +568,34 @@ export function hire(state: GameState, slot: number, kind: GuardKind) {
 }
 
 /**
- * Buys a fortification during a break, one per break, if the coins are there: a stake line is set
- * up anew (or mended to full), an oil pot is armed, a lookout starts its waves over. Returns
- * whether it was bought.
+ * Buys a fortification, if the coins are there: during a break it is set up at once, one per
+ * break; during a wave it is paid now and queued, and set up when the next break starts (as that
+ * break's one). Returns whether it was bought.
  */
 export function fortify(state: GameState, id: FortId) {
   const f = state.forts;
-  if (state.phase !== 'break' || state.choices || f.boughtWave === state.wave || state.coins < FORTS[id].cost) return false;
+  if (!canBuyFort(state, id) || state.coins < FORTS[id].cost) return false;
   state.coins -= FORTS[id].cost;
+  if (state.phase === 'break') setUpFort(state, id);
+  else f.queued = id;
+  return true;
+}
+
+/** A stake line is set up anew (or mended to full), an oil pot is armed, a lookout starts its waves over. */
+function setUpFort(state: GameState, id: FortId) {
+  const f = state.forts;
   f.boughtWave = state.wave;
   if (id === 'stakes') f.stakeHp = STAKE_HP;
   else if (id === 'oil') f.oil = true;
   else f.lookout = LOOKOUT_WAVES;
-  return true;
 }
 
-/** Whether a fortification can still be bought in this break. */
-export const canFortify = (state: GameState) => state.phase === 'break' && !state.choices && state.forts.boughtWave !== state.wave;
+/** Whether a fortification can still be bought: one a break, or one queued during a wave. */
+export const canFortify = (state: GameState) =>
+  !held(state) && !state.choices && (state.phase === 'break' ? state.forts.boughtWave !== state.wave : state.forts.queued === null);
+
+/** Whether this fortification can be bought now: an oil pot only when none is armed. */
+export const canBuyFort = (state: GameState, id: FortId) => canFortify(state) && !(id === 'oil' && state.forts.oil);
 
 /** Sets who the ranger shoots first. */
 export function setAim(state: GameState, mode: AimMode) {
@@ -629,7 +640,11 @@ function removeDead(state: GameState) {
       const y = Math.min(FIELD.bottom - 8, Math.max(FIELD.top + 8, e.y));
       addEffect(state, { kind: 'split', x: e.x, y, radius });
       const hp = Math.max(1, Math.round(foeHp('goblin', state.wave, state.road, state.heat) * SPLIT_HP));
-      for (let i = 0; i < SPLIT_INTO; i++) addFoe(state, 'goblin', Math.max(HERO_FRONT + 20, e.x + 10), y + (i - (SPLIT_INTO - 1) / 2) * 22, hp, null);
+      // They land on the road's side of a standing barricade (or stake line), so one that flew over
+      // it does not drop goblins behind it, where nothing stops them reaching the hero.
+      const front = state.barricade.hp > 0 ? BARRICADE_FRONT : state.forts.stakeHp > 0 ? STAKE_FRONT : null;
+      const x = Math.max(front === null ? HERO_FRONT + 20 : front + ENEMIES.goblin.radius, e.x + 10);
+      for (let i = 0; i < SPLIT_INTO; i++) addFoe(state, 'goblin', x, y + (i - (SPLIT_INTO - 1) / 2) * 22, hp, null);
     }
     addEffect(state, { kind: 'xp', x: e.x, y: e.y - radius * 1.6, amount: base + bonus, streak: streak.count });
     addEffect(state, { kind: 'orb', x: e.x, y: e.y - radius, amount: base + bonus });
@@ -722,6 +737,17 @@ export function offer(state: GameState) {
   state.pickMs = AUTO_PICK_MS;
 }
 
+/**
+ * Puts the cards back up for a pending level-up, with the full time to pick: the same ones when they
+ * are kept (from the last run, or from the save on a reload), else new ones.
+ */
+export function reoffer(state: GameState, choices: UpgradeId[] | null) {
+  if (state.levelUps === 0) return;
+  if (!choices) return offer(state);
+  state.choices = choices;
+  state.pickMs = AUTO_PICK_MS;
+}
+
 /** Mend the Barricade: repairs half of it (a quarter from Heat 3), counted in `ranks` for the skill book. */
 function mend(state: GameState) {
   state.ranks.mend = (state.ranks.mend ?? 0) + 1;
@@ -800,6 +826,11 @@ function clearWave(state: GameState) {
   const max = s.barricadeMax;
   if (max > state.barricade.max) state.barricade = { hp: state.barricade.hp + max - state.barricade.max, max };
   state.barricade.hp = Math.min(state.barricade.max, state.barricade.hp + state.barricade.max * s.repair);
+  // A fortification bought during the wave is set up now, as this break's one.
+  if (state.forts.queued) {
+    setUpFort(state, state.forts.queued);
+    state.forts.queued = null;
+  }
   if (won) state.phase = 'won';
 }
 
@@ -814,8 +845,10 @@ export function keepFighting(state: GameState) {
 export function startHeat(state: GameState, heat: number): GameState {
   const progress = progressOf(state);
   progress.heat = Math.max(0, Math.min(progress.heatUnlocked, heat));
+  // Leaving a won run for a new heat ends it, so it counts like a fall does (which counted already).
+  if (state.phase !== 'over') progress.runs++;
   const next = newRun(progress, state.aimMode);
-  if (next.levelUps > 0) offer(next);
+  reoffer(next, state.choices);
   return next;
 }
 
@@ -837,13 +870,7 @@ function gameOver(state: GameState) {
 /** After a fall, a new run from wave 1 with the hero's level and upgrades kept. */
 export function fightAgain(state: GameState): GameState {
   const next = newRun(progressOf(state), state.aimMode);
-  if (next.levelUps > 0) {
-    // The same cards stay up, with the full time to pick again.
-    if (state.choices) {
-      next.choices = state.choices;
-      next.pickMs = AUTO_PICK_MS;
-    } else offer(next);
-  }
+  reoffer(next, state.choices);
   return next;
 }
 
