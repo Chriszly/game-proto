@@ -5,6 +5,7 @@ export const howToPlay: HowToPlay = {
   controls: [
     { input: 'WASD or arrow keys', action: 'Walk' },
     { input: 'Click or tap the ground', action: 'Walk there' },
+    { input: 'Touch: put a finger down anywhere and drag', action: 'A steering stick appears under it; walk the way you drag' },
     { input: 'Click or tap a person, chest, sign or foe', action: 'Walk over and talk, open, read or attack' },
     { input: 'Space, J or the sword button', action: 'Talk to or open what is in front, else swing the sword' },
     { input: 'Shift, K or the roll button', action: 'Roll out of the way; nothing hits you mid-roll' },

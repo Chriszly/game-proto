@@ -21,6 +21,12 @@ chapter ends.
 
 - **Walk** with WASD or the arrow keys, or click or tap the ground. Tapping a person, chest, sign,
   bush or foe walks over and talks, opens, reads, cuts or attacks.
+- **Steer by touch**: put a finger down anywhere on the world and drag. A steering stick appears
+  where the finger went down and the knight walks the way you drag; the stick follows a finger that
+  goes past its rim, and a quick tap still walks to what you tapped. Another finger can use the
+  buttons meanwhile.
+
+![The floating touch stick under a steering finger](docs/screenshots/touch-stick.webp)
 - **Space**, **J** or the sword button talks to or opens what is in front of you, and otherwise
   swings the sword. The sword cuts bushes and thorns too.
 - **Shift**, **K** or the roll button rolls out of the way; nothing hits you mid-roll.

@@ -5,7 +5,7 @@
 import Phaser from 'phaser';
 import { texScale } from '../art/paint';
 import { OBJECTIVES, stonesToFind, type GameState } from '../game/state';
-import { BUTTONS, VIEW } from './layout';
+import { BUTTONS, STICK, VIEW } from './layout';
 
 const FONT = 'Georgia, "Times New Roman", serif';
 const DEPTH = 10000;
@@ -26,6 +26,7 @@ export class Hud {
   private toastText: Phaser.GameObjects.Text;
   private buttons: Record<keyof typeof BUTTONS, Phaser.GameObjects.Image>;
   private box: Phaser.GameObjects.Graphics;
+  private stick: Phaser.GameObjects.Graphics;
   private speaker: Phaser.GameObjects.Text;
   private line: Phaser.GameObjects.Text;
   private hint: Phaser.GameObjects.Text;
@@ -53,10 +54,26 @@ export class Hud {
       vine: fixed(add.image(BUTTONS.vine.x, BUTTONS.vine.y, 'btn-vine').setScale(texScale('btn-vine') * (BUTTONS.vine.r / 30))),
       seed: fixed(add.image(BUTTONS.seed.x, BUTTONS.seed.y, 'btn-seed').setScale(texScale('btn-seed') * (BUTTONS.seed.r / 30))),
     };
+    this.stick = fixed(add.graphics());
     this.box = fixed(add.graphics()).setDepth(DEPTH + 1);
     this.speaker = fixed(add.text(150, 398, '', { fontFamily: FONT, fontSize: '17px', color: '#f0d890', fontStyle: 'bold' })).setDepth(DEPTH + 2);
     this.line = fixed(add.text(150, 424, '', { fontFamily: FONT, fontSize: '19px', color: '#f3ead2', wordWrap: { width: 650 }, lineSpacing: 4 })).setDepth(DEPTH + 2);
     this.hint = fixed(add.text(810, 500, '', { fontFamily: FONT, fontSize: '13px', color: '#a8b0d0' }).setOrigin(1, 0.5)).setDepth(DEPTH + 2);
+  }
+
+  /** The floating stick under a steering finger: a faint ring with a gold knob, or nothing. */
+  drawStick(st: { ox: number; oy: number; x: number; y: number } | null) {
+    const g = this.stick;
+    g.clear();
+    if (!st) return;
+    const d = Math.hypot(st.x - st.ox, st.y - st.oy);
+    const k = d > STICK.r ? STICK.r / d : 1;
+    const kx = st.ox + (st.x - st.ox) * k;
+    const ky = st.oy + (st.y - st.oy) * k;
+    g.fillStyle(0x0a0e24, 0.35).fillCircle(st.ox, st.oy, STICK.r);
+    g.lineStyle(3, 0xc8b070, 0.55).strokeCircle(st.ox, st.oy, STICK.r);
+    g.fillStyle(0xf0d890, 0.7).fillCircle(kx, ky, STICK.knob);
+    g.lineStyle(2, 0xf3ead2, 0.7).strokeCircle(kx, ky, STICK.knob);
   }
 
   /** Which touch button, if any, is at a point on the screen. */

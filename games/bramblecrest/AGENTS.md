@@ -66,8 +66,9 @@ Implemented today:
   haze at the view's top and bottom edges for the miniature look. Lamps, windows, braziers,
   glowing mushrooms, candles, fireflies, moonstones, seeds, bellseeds and the knight's lantern are
   lights, and `flashes` are short-lived ones (a burst, a ringing bell; none with reduce motion).
-- The HUD (`src/scenes/hud.ts`): hearts, moonstones, keys (in a dungeon), bellseeds, the journal line (the
-  quest's objective), place banners, toasts, the touch buttons, the dialog box and the end card.
+- The HUD (`src/scenes/hud.ts`): hearts, moonstones, keys (in a dungeon), bellseeds, the journal
+  line (the quest's objective), place banners, toasts, the touch buttons, the floating touch stick,
+  the dialog box and the end card.
 
 ## Architecture
 
@@ -88,6 +89,12 @@ Implemented today:
   HUD at 10000, both with scroll factor 0 on the HUD camera (`splitHudCamera`).
 - Movement by tap follows `route` one tile middle at a time; the last bit of a step is taken in one
   go, so a long frame never overshoots and oscillates.
+- Touch (`pointer.wasTouch`, not the mouse) goes through `stick`: a touch on the world records its
+  view and world point; dragged past `STICK.drag` it goes `live` and steers as a floating stick
+  (the base is dragged along past `STICK.r`, `moveInput` returns its direction after the keys,
+  snapped to an axis within `STICK.snap` so a block can be pushed), lifted before that it calls
+  `tapWorld` like a click. `addPointer(1)` lets a second finger press the buttons. The HUD draws it
+  with `drawStick`.
 
 ### Save
 

@@ -25,6 +25,12 @@ export const PICKUP_PX = 18;
 export const LANTERN = 120;
 export const LANTERN_OIL = 175;
 
+/**
+ * The floating touch stick: rim and knob radius, the dead zone, how far a finger drags before a
+ * touch steers instead of tapping, and how close to an axis (dy / dx) a drag snaps onto it.
+ */
+export const STICK = { r: 60, knob: 24, dead: 8, drag: 14, snap: 0.4 };
+
 /** Touch buttons, bottom right: sword, roll, hookvine and bellseeds. */
 export const BUTTONS = {
   sword: { x: 880, y: 456, r: 34 },
