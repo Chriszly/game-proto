@@ -172,7 +172,7 @@ three stars each. Run out of tiles or room and the kingdom is finished.
 
 ![A campaign level finished with one star](docs/screenshots/campaign-over.webp)
 
-The difficulty, set on the hub page's Settings, changes one thing: round goals are 20% lower on Easy and 20% higher on Hard.
+The difficulty, set on the hub page's Settings, changes the round goals, 20% lower on Easy and 20% higher on Hard, and moves the campaign's star scores with what that does to a final score: 1% higher on Easy and 6% lower on Hard.
 
 ## Running locally
 
