@@ -10,6 +10,10 @@ export const BARRICADE = { x: 112, y: 250 };
 export const XP_BAR = { x: 112, y: 514, w: 752, h: 16 };
 /** The 1x/2x speed switch, right of the experience bar, by its centre. */
 export const SPEED = { x: 908, y: 522, w: 60, h: 22 };
+/** The barricade's health bar in the top bar (its fill, inside a 3px frame, 14px tall at y 13). */
+export const BARRICADE_BAR = { x: 232, w: 198 };
+/** Width of the tooltip shown under the barricade's bar while it is hovered. */
+export const BARRICADE_TIP_W = 250;
 /** The boss's stacked health bars, by their top centre, right of the wave track. */
 export const BOSS_BAR = { x: 640, y: 66, w: 400, h: 14 };
 /** The wave track under the top bar: its panel, and the first of its ten marks and their spacing. */
@@ -40,6 +44,8 @@ export const STREAK = { x: 650, y: 499, w: 168, h: 21 };
 export const CARDS = { xs: [240, 480, 720], y: 300, w: 220, h: 250 };
 /** The auto-pick countdown under the cards: its text's centre, and the width and height of its bar. */
 export const COUNTDOWN = { x: 480, y: 450, w: 160, h: 6 };
+/** The auto-pick checkbox right of the countdown: its box's centre and size. */
+export const AUTO_TOGGLE = { x: 600, y: 462, size: 18 };
 /** The "Skill book" button in the top bar, and the book it opens: its size and the grid of slots. */
 export const SKILL_BOOK = {
   button: { x: 520, y: 20, w: 150, h: 26 },

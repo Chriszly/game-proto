@@ -46,7 +46,7 @@ const VIEW_RIGHT = 950;
 /** How long each kind of effect plays, in milliseconds. */
 const EFFECT_MS = {
   blast: 260, fireblast: 360, bolt: 220, death: 320, crit: 400, rain: 520, xp: 900, orb: 750, block: 260, heal: 700, stab: 200, arcane: 360,
-  rockHit: 400, call: 900, roar: 1_000, split: 400,
+  rockHit: 400, call: 900, roar: 1_000, split: 400, autoPick: 2_400,
 } as const;
 /** How long an Arrow Rain volley takes to come down after it is loosed. */
 export const RAIN_FALL_MS = 450;
@@ -68,19 +68,35 @@ const HEAL_SHARE = 0.12;
 const BOSS_HEAL_SHARE = 0.03;
 /** How long a level-up waits for a tap before it takes one of the offered upgrades at random. */
 export const AUTO_PICK_MS = 10_000;
+/** Where the pop-up naming an auto-picked upgrade shows: over the battle, under the wave banner. */
+const AUTO_PICK_POP = { x: 480, y: 250 };
 
 /** Whether the run is held still: over, or paused on the victory panel. */
 export const held = (state: Pick<GameState, 'phase'>) => state.phase === 'over' || state.phase === 'won';
 
-export function tick(state: GameState, ms: number) {
+/**
+ * Runs the game for `ms`. With `autoPick` off (the level-up's checkbox) the countdown to a random
+ * pick halts, so a level-up waits for a tap however long it takes.
+ */
+export function tick(state: GameState, ms: number, autoPick = true) {
   while (ms > 0 && !held(state)) {
+    if (state.choices && !autoPick) {
+      ageEffects(state, ms);
+      ms = 0;
+      continue;
+    }
     if (state.choices) {
       // The battle waits while the hero picks an upgrade, until the time to pick runs out.
       const dt = Math.min(ms, state.pickMs);
       state.pickMs -= dt;
       ageEffects(state, dt);
       ms -= dt;
-      if (state.pickMs <= 0) pick(state, state.choices[Math.floor(Math.random() * state.choices.length)]);
+      if (state.pickMs <= 0) {
+        // Time is up: one card is taken at random, and a pop-up names it.
+        const id = state.choices[Math.floor(Math.random() * state.choices.length)];
+        pick(state, id);
+        addEffect(state, { kind: 'autoPick', x: AUTO_PICK_POP.x, y: AUTO_PICK_POP.y, upgrade: id });
+      }
       continue;
     }
     const dt = Math.min(ms, SUBSTEP_MS);

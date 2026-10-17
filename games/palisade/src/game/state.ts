@@ -87,7 +87,7 @@ export interface Missile {
  */
 export interface Effect {
   id: number;
-  kind: 'blast' | 'fireblast' | 'bolt' | 'death' | 'crit' | 'rain' | 'xp' | 'orb' | 'block' | 'heal' | 'stab' | 'arcane' | 'rockHit' | 'call' | 'roar' | 'split';
+  kind: 'blast' | 'fireblast' | 'bolt' | 'death' | 'crit' | 'rain' | 'xp' | 'orb' | 'block' | 'heal' | 'stab' | 'arcane' | 'rockHit' | 'call' | 'roar' | 'split' | 'autoPick';
   x: number;
   y: number;
   /** Blast radius, or the lightning's path (the healed foes, the thrust's two ends). */
@@ -96,6 +96,8 @@ export interface Effect {
   /** `xp` and `orb`: the experience the kill gave. `xp`: the kill streak it was part of. */
   amount?: number;
   streak?: number;
+  /** `autoPick`: the upgrade the countdown took. */
+  upgrade?: UpgradeId;
   ms: number;
   total: number;
 }

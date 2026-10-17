@@ -30,9 +30,11 @@ wave 30 lifts the siege, which wins the run and unlocks the next heat.
 | Aim toggle (above the caltrops) or T | Cycle who the ranger shoots first: Nearest, Strongest, Flyers or Healers |
 | Keep fighting / Heat N | After the siege is lifted on wave 30: fight on past it, or start a new run at the next heat |
 | Tap a road card | After a boss, take that road for the next ten waves (after 10 seconds one is taken at random) |
-| Tap or click a card | Take that upgrade when a level-up comes up (after 10 seconds one is taken at random) |
+| Tap or click a card | Take that upgrade when a level-up comes up (after 10 seconds one is taken at random, and a pop-up names it) |
+| Auto-pick checkbox (beside the level-up's countdown) | On by default; untick it to halt the countdown so a level-up waits for your pick, tick it to let it run again |
 | 1x / 2x (bottom right) | Switch the battle between normal and double speed; the level-up countdown stays 10 real seconds |
 | Skill book (in the top bar) | Open the skill book; the battle waits until Back |
+| Hover over (or tap) the barricade's bar | Show its health, what Stout Timber adds and how much it mends after each wave |
 | Fight again / New hero | After a fall: start again from wave 1 keeping the hero, or with a new one; the "Next run at" row picks the heat |
 
 1. **Waves**: each wave brings more foes than the last, with more health. A short break with the
@@ -281,15 +283,19 @@ stronger for as long as the waves keep coming.
 ![Three of the newer skills on a level-up](docs/screenshots/new-skills-level-up.png)
 
 The skill book (its button in the top bar shows how many skills are found, such as "Skill book
-8/28") has a page for every upgrade and filler. The pages start as empty placeholders, and each fills in the
+8/28") has a page for every upgrade and filler, one theme a row: the bow, harder hits, fire, chill
+and slow, powder and lightning, the barricade and guards, then Battle Lore and the fillers. The pages start as empty placeholders, and each fills in the
 first time a level-up offers that upgrade, with its icon, what a rank does and the hero's rank
 (dimmed while it has none; for a filler, how many times it was picked, such as "2x"). Along its
-bottom it lists the relics won, with the bonus of each full set. The book stays filled for a new hero. It opens during a
+bottom it lists the relics won, with the bonus of each full set; hovering over a relic shows what
+it does and which set it belongs to. The book stays filled for a new hero. It opens during a
 level-up too, to check what the hero has before choosing.
 
 ![The empty skill book of a new hero](docs/screenshots/skill-book-empty.png)
-![A skill book part filled in, with two relics](docs/screenshots/skill-book.png)
-![A full skill book with the Warden's set](docs/screenshots/skill-book-sets.png)
+![A skill book part filled in, sorted by theme, with a relic's tooltip](docs/screenshots/skill-book.png)
+![The barricade's tooltip in the top bar](docs/screenshots/barricade-tooltip.png)
+![The pop-up after the countdown took an upgrade](docs/screenshots/auto-pick-pop.png)
+![Auto-pick unticked: the level-up waits for a pick](docs/screenshots/auto-pick-off.png)
 ![The skill book with all 28 skills](docs/screenshots/skill-book-new-skills.png)
 
 The switch at the right end of the experience bar plays the battle at double speed. It lights up

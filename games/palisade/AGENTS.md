@@ -167,8 +167,9 @@ seconds without a tap.
     `nextAim`, `sortTargets`.
   - `enemies.ts`: the `ENEMIES` table of wave 1 stats per `EnemyKind` (with `coins` and the
     `flying`, `shield` and `healer` flags), the three bosses included.
-  - `upgrades.ts`: the `UPGRADES` table, `UpgradeId`, `Icon`, `UPGRADE_IDS`, `FILLERS` and
-    `PURSE_COINS`.
+  - `upgrades.ts`: the `UPGRADES` table, `UpgradeId`, `Icon`, `UPGRADE_IDS`, `BOOK_ORDER` (the
+    skill book's order only; the level-up's random picks follow `UPGRADE_IDS`), `FILLERS`,
+    `BASE_SKILLS` and `PURSE_COINS`.
   - `relics.ts`: the `RELICS` table, `RelicId`, `RELIC_IDS`, `SETS`, `SetId`, `SET_IDS`,
     `setRelics` and `setComplete`.
   - `guards.ts`: the `GUARDS` table, `GuardKind`, `GUARD_KINDS`, `MAX_GUARD_LEVEL`, `trainCost`,
@@ -177,7 +178,7 @@ seconds without a tap.
   - `waves.ts`: `waveFoes` (with the road's foe count), `foeHp` (scaled by difficulty and road, a boss's by the heat's bars), `hpScale`, `bossBars` (with the heat), `BOSSES`,
     `bossOf`, `waveTrack`, `isBossWave`, `spawnInterval` (with the heat), break lengths.
   - `save.ts`: `loadProgress`, `saveProgress`, `clearProgress`, `loadSpeed`, `saveSpeed`,
-    `loadFound`, `saveFound`, `loadAim`, `saveAim`.
+    `loadFound`, `saveFound`, `loadAim`, `saveAim`, `loadAutoPick`, `saveAutoPick`.
 - `src/scenes/BootScene.ts`: paints every texture, then starts `Game`.
 - `src/scenes/GameScene.ts`: owns the `GameState`, ticks it each frame, draws the battle (elite
   badges and labels, rocks, stunned guards), the HUD
@@ -191,10 +192,13 @@ seconds without a tap.
 - `src/scenes/layout.ts`: screen positions (`HERO_FEET`, `BARRICADE`, `XP_BAR`, `BOSS_BAR`,
   `TRACK`, `RAIN`, `CALTROPS`, `AIM`, `FORTIFY` (with its panel's size), `HEAT`, `ROAR_CHIP`,
   `GUARD_HIT`, `HIRE`, `ROAD_CARDS`, `RAIN_HINT`, `STREAK`, `CARDS`,
-  `COUNTDOWN`, `SKILL_BOOK`, `SPEED`, `BUTTON`),
+  `COUNTDOWN`, `AUTO_TOGGLE`, `SKILL_BOOK`, `SPEED`, `BUTTON`, `BARRICADE_BAR`, `BARRICADE_TIP_W`),
   `HUD_HEIGHT`, `UI_DEPTH`, `FONT` (a system font stack).
 - `src/ui/LevelUp.ts`: the level-up overlay, its cards and the auto-pick countdown (seconds left
-  over an emptying bar, at `COUNTDOWN`). It records each card's spot in `cards`.
+  over an emptying bar, at `COUNTDOWN`), with the "Auto-pick" checkbox at `AUTO_TOGGLE` beside it.
+  Its `autoPick` flag (loaded with `loadAutoPick`, saved through `onAutoPick`) is passed to `tick`;
+  unticked, the bar stays grey and the text reads "Waiting for your pick". It records each card's
+  spot in `cards`.
 - `src/ui/RoadChoice.ts`: the two road cards after a boss (icon, name, catch and reward) and the
   "Taken at random in Ns" countdown. It records each card's spot in `cards`.
 - `src/ui/HirePanel.ts`: the panel a guard slot opens: two rows to hire a spearman or a mage on an
@@ -206,8 +210,11 @@ seconds without a tap.
   cost, greyed out when the coins are short or this break's one is bought) and a dim backdrop that
   closes it. `open` tells the scene to hold everything still.
 - `src/ui/SkillBook.ts`: the "Skill book found/total" button in the top bar and the book it opens,
-  a 4x7 grid with a slot for every id in `UPGRADE_IDS` order (the three fillers last), and the
-  relics won along the bottom (a full set's relics in green, its bonus above them).
+  a 4x7 grid with a slot for every id in `BOOK_ORDER` (`upgrades.ts`: one theme a row, the bow,
+  harder hits, fire, chill and slow, powder and lightning, the barricade and guards, then Battle
+  Lore and the three fillers), and the relics won along the bottom (a full set's relics in green,
+  its bonus above them). Hovering over a relic (a zone over its icon and name) shows `relicTip`:
+  its name and count, its text and its set with the other relic and the set's bonus.
   A slot not yet in `found` is an empty placeholder (a "?" frame and blank lines); a found one
   shows icon, name, rank of max (`Nx` for a filler, how many times it was picked) and
   `text`, dimmed at rank 0. Its `open` flag tells the scene to hold everything still.
@@ -245,8 +252,12 @@ seconds without a tap.
   is up, so the auto-pick countdown stays in real seconds. It calls `tick(state, dt)`, which runs
   `step` in substeps of at most `SUBSTEP_MS` (16) and stops while `choices` is set or the run is
   `held` (over, or won and on the victory panel). Only effects keep ageing then. The scene also
-  skips `tick` while the fortify panel is open. While `choices` is set, `tick` counts `pickMs` down instead,
-  and when it reaches 0 it calls `pick` with one of `choices` chosen by `Math.random`; any time left
+  skips `tick` while the fortify panel is open. While `choices` is set, `tick` counts `pickMs` down instead
+  (unless its `autoPick` argument, the level-up's checkbox, is false: then `pickMs` holds and only
+  effects age),
+  and when it reaches 0 it calls `pick` with one of `choices` chosen by `Math.random` and adds an
+  `autoPick` effect (at `AUTO_PICK_POP`, with the `upgrade`), which the scene shows as an
+  "Auto-picked" pop-up naming the upgrade and its new rank; any time left
   in the frame then goes on to the battle (or the next level-up's countdown). The scene keeps its
   own `clock`, used only for animation phases, pulses and blinking, and it stops during a pick and
   after a fall.
@@ -277,6 +288,9 @@ seconds without a tap.
   auto-pick countdown all wait. The button sits above the level-up overlay (depth `UI_DEPTH + 15`)
   so it works while choosing, and hides after a fall. Shooting is automatic. A dimming rectangle
   under each overlay is interactive, so taps on the battle are swallowed.
+  A zone over the barricade's health bar in the top bar shows `barricadeTip` on `pointerover`
+  (health of max, Stout Timber's rank and bonus, and `stats().repair` after each wave, refreshed by
+  `drawBarricadeTip` each frame) and hides it on `pointerout`; on a phone a tap shows it.
 - **Skill book:** after each `tick`, `GameScene.discover` adds every id in `choices` and `ranks`
   to `found` (so an old save's upgrades count as found), and the three `FILLERS` once `mastered`
   (an older save that learned everything before Second Wind could be offered), and saves it when
@@ -308,7 +322,7 @@ seconds without a tap.
   caltrops patch on the road (`x`, `y`, `ms` left). `Guard` is a hired guard (`kind`, `level`, `cd`, `stunMs`).
   `Volley` is an Arrow Rain volley in the air (`x`, `y`, `ms` until it lands). `Effect` is a
   short-lived visual with `ms`/`total`; `xp` and `orb` carry `amount` (the kill's experience) and
-  `xp` its `streak`.
+  `xp` its `streak`; `autoPick` carries the `upgrade` the countdown took.
 - Hero stats are never stored. `stats(state)` derives them from `ranks`, `relics` and `heat` each time.
   `pick` counts the fillers (`mend`, `purse`, `wind`) in `ranks` too (for the skill book); `stats`
   ignores them and `offerable` never offers one, so their ranks change nothing else.
@@ -342,12 +356,13 @@ seconds without a tap.
 
 ### Persistence
 
-Four `localStorage` keys. `palisade-skill-book` holds a JSON array of the upgrade ids found
+Five `localStorage` keys. `palisade-skill-book` holds a JSON array of the upgrade ids found
 (offered on a level-up, or held), read by `loadFound` (unknown ids dropped) and written by
 `GameScene.discover` whenever one is new; "New hero" leaves it alone. `palisade-speed` holds the
 battle speed (`'1'` or `'2'`, through `loadSpeed`/`saveSpeed`) and `palisade-aim` the aim priority
-(an `AimMode`, through `loadAim`/`saveAim`), both kept apart so "New hero" leaves them
-alone. `palisade-progress` holds JSON of `Progress`, relics, `heat` and `heatUnlocked` included. `loadProgress` merges it over
+(an `AimMode`, through `loadAim`/`saveAim`), and `palisade-auto-pick` the level-up's checkbox
+(`'0'` when unticked; anything else, or nothing, means on), all kept apart so "New hero" leaves
+them alone. `palisade-progress` holds JSON of `Progress`, relics, `heat` and `heatUnlocked` included. `loadProgress` merges it over
 `freshProgress()` (dropping unknown upgrade and relic ids; an older save gets heat 0) and falls back to fresh on any error.
 "New hero" calls `clearProgress`, which also drops the relics and the heats. The run itself (wave, foes,
 barricade, Arrow Rain and caltrops charge, streak, coins, guards, road, fortifications) is never saved, so a reload
@@ -428,7 +443,7 @@ fortifications' in `forts.ts` and the heats' in `heat.ts`. Arrow Rain's damage (
   `page.mouse` (down on `rainSpot`, three moves towards a foe with a step of game time after each,
   up), all scaled from the 960-wide view to the canvas box. It never opens the skill book (not part
   of the first round's loop); `.skillBook.open` and `.found` are there to read if a test ever does.
-  Nor does it touch the speed switch, the caltrops, the guard slots or the keyboard: with no
+  Nor does it touch the auto-pick checkbox (on with no `palisade-auto-pick` saved), the speed switch, the caltrops, the guard slots or the keyboard: with no
   `palisade-speed` saved the game plays at 1x. Keep the "Skill book" button clear of the cards,
   since it sits above the level-up overlay, and keep the Arrow Rain button clear of other
   interactive objects (the caltrops button and the guard slots included).
@@ -527,7 +542,7 @@ fortifications' in `forts.ts` and the heats' in `heat.ts`. Arrow Rain's damage (
 ## Gotchas
 
 - Positions live in two places. The rule geometry is in `state.ts`, and the draw positions are in
-  `layout.ts` and partly hard-coded in `GameScene` (the barricade bar at x 232, the banner and
+  `layout.ts` and partly hard-coded in `GameScene` (the banner and
   relic panel at y 170, the game-over panel, the top bar's texts) and in `scenery.ts` (the log at
   double-unit x 365, `BARRICADE_TEX`). Moving the barricade art means moving `BARRICADE` and
   `BARRICADE_FRONT` too.

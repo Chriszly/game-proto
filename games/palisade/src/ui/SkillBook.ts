@@ -3,8 +3,8 @@ import { iconTexture, relicTexture } from '../art/icons';
 import { fit } from '../art/lowpoly';
 import { GOLD, SLATE } from '../art/palette';
 import { SKILL_BOOK, UI_DEPTH, VIEW } from '../scenes/layout';
-import { RELIC_IDS, RELICS, SETS, setComplete, type RelicId } from '../game/relics';
-import { UPGRADE_IDS, UPGRADES, type UpgradeId } from '../game/upgrades';
+import { RELIC_IDS, RELICS, SETS, setComplete, setRelics, type RelicId } from '../game/relics';
+import { BOOK_ORDER, UPGRADE_IDS, UPGRADES, type UpgradeId } from '../game/upgrades';
 import { drawPanel, makeButton, textStyle } from './panel';
 
 /**
@@ -22,6 +22,10 @@ export class SkillBook {
   private slots: Phaser.GameObjects.Container;
   private relics: Phaser.GameObjects.Container;
   private shown = '';
+  /** The tooltip shown while the pointer is over a relic along the bottom. */
+  private relicTip: Phaser.GameObjects.Container;
+  private relicTipBg: Phaser.GameObjects.Graphics;
+  private relicTipText: Phaser.GameObjects.Text;
 
   constructor(private scene: Phaser.Scene) {
     const { x, y, w, h } = SKILL_BOOK.button;
@@ -62,8 +66,11 @@ export class SkillBook {
     this.slots = scene.add.container(0, 0);
     this.relics = scene.add.container(0, 0);
     const close = makeButton(scene, VIEW.w / 2 + p.w / 2 - 100, VIEW.h / 2 + p.h / 2 - 28, 150, 34, 'Back', () => this.setOpen(false));
+    this.relicTipBg = scene.add.graphics();
+    this.relicTipText = scene.add.text(0, 0, '', { ...textStyle(12, '#e9e4d8'), fontStyle: 'normal', lineSpacing: 3 }).setOrigin(0);
+    this.relicTip = scene.add.container(0, 0, [this.relicTipBg, this.relicTipText]).setVisible(false);
     this.root = scene.add
-      .container(0, 0, [dim, panel, page, title, note, this.slots, this.relics, close])
+      .container(0, 0, [dim, panel, page, title, note, this.slots, this.relics, close, this.relicTip])
       .setDepth(UI_DEPTH + 30)
       .setVisible(false);
   }
@@ -76,13 +83,13 @@ export class SkillBook {
     this.buttonText.setText(`Skill book ${found.size}/${UPGRADE_IDS.length}`);
     this.button.setVisible(!hidden);
     if (hidden) this.setOpen(false);
-    const key = UPGRADE_IDS.map((id) => (found.has(id) ? ranks[id] ?? 0 : '-')).join() + '|' + RELIC_IDS.map((id) => relics[id] ?? 0).join();
+    const key = BOOK_ORDER.map((id) => (found.has(id) ? ranks[id] ?? 0 : '-')).join() + '|' + RELIC_IDS.map((id) => relics[id] ?? 0).join();
     if (key === this.shown) return;
     this.shown = key;
     this.slots.removeAll(true);
     const { cols, colW, rowH, top } = SKILL_BOOK;
     const left = VIEW.w / 2 - (cols * colW) / 2;
-    UPGRADE_IDS.forEach((id, i) => {
+    BOOK_ORDER.forEach((id, i) => {
       const x = left + (i % cols) * colW;
       const y = top + Math.floor(i / cols) * rowH;
       this.addSlot(id, x, y, found.has(id), ranks[id] ?? 0);
@@ -93,6 +100,7 @@ export class SkillBook {
   /** The relics won so far, along the bottom of the book. */
   private showRelics(relics: Partial<Record<RelicId, number>>) {
     this.relics.removeAll(true);
+    this.relicTip.setVisible(false);
     const scene = this.scene;
     const y = VIEW.h / 2 + SKILL_BOOK.panel.h / 2 - 28;
     let x = VIEW.w / 2 - SKILL_BOOK.panel.w / 2 + 24;
@@ -114,6 +122,10 @@ export class SkillBook {
         .text(x + 28, y, n > 1 ? `${RELICS[id].name} x${n}` : RELICS[id].name, { ...textStyle(11, done ? '#8fdc6a' : '#e9e4d8'), fontStyle: done ? 'bold' : 'normal' })
         .setOrigin(0, 0.5);
       this.relics.add(name);
+      const zone = scene.add.zone(x, y - 14, 30 + name.width, 28).setOrigin(0).setInteractive();
+      const left = x;
+      zone.on('pointerover', () => this.showRelicTip(id, relics, left, y - 20)).on('pointerout', () => this.relicTip.setVisible(false));
+      this.relics.add(zone);
       x += 38 + name.width;
     }
     const sets = Object.entries(SETS).filter(([id]) => setComplete(relics, id as keyof typeof SETS));
@@ -121,6 +133,29 @@ export class SkillBook {
       const line = sets.map(([, set]) => `${set.name}: ${set.text}`).join('   ');
       this.relics.add(scene.add.text(VIEW.w / 2 - SKILL_BOOK.panel.w / 2 + 24, y - 22, line, textStyle(11, '#8fdc6a')).setOrigin(0, 0.5));
     }
+  }
+
+  /** The relic's name, what it does, how many are held and its set, in a box above it. */
+  private showRelicTip(id: RelicId, relics: Partial<Record<RelicId, number>>, x: number, bottom: number) {
+    const relic = RELICS[id];
+    const n = relics[id] ?? 0;
+    const set = SETS[relic.set];
+    const others = setRelics(relic.set).filter((other) => other !== id).map((other) => RELICS[other].name);
+    const done = setComplete(relics, relic.set);
+    this.relicTipText.setText([
+      n > 1 ? `${relic.name} x${n} (stacks)` : relic.name,
+      relic.text,
+      `${set.name} with ${others.join(' and ')}: ${set.text}${done ? ' (complete)' : ''}`,
+    ]);
+    const w = this.relicTipText.width + 16;
+    const h = this.relicTipText.height + 12;
+    // Kept inside the book's page.
+    const right = VIEW.w / 2 + SKILL_BOOK.panel.w / 2 - 12;
+    const left = Math.min(x, right - w);
+    this.relicTipBg.clear();
+    drawPanel(this.relicTipBg, left, bottom - h, w, h, { c: 6, fill: 0x1e222c, alpha: 0.97, lw: 1.5 });
+    this.relicTipText.setPosition(left + 8, bottom - h + 6);
+    this.relicTip.setVisible(true);
   }
 
   private addSlot(id: UpgradeId, x: number, y: number, found: boolean, rank: number) {

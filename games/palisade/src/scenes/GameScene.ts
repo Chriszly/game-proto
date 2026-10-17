@@ -12,7 +12,7 @@ import { GUARDS, type GuardKind } from '../game/guards';
 import { HEAT_RULES, MAX_HEAT, WIN_WAVE } from '../game/heat';
 import { RELICS, SETS, setComplete } from '../game/relics';
 import { ROADS, type RoadId } from '../game/roads';
-import { clearProgress, loadAim, loadFound, loadProgress, loadSpeed, saveAim, saveFound, saveProgress, saveSpeed } from '../game/save';
+import { clearProgress, loadAim, loadAutoPick, loadFound, loadProgress, loadSpeed, saveAim, saveAutoPick, saveFound, saveProgress, saveSpeed } from '../game/save';
 import {
   CALTROP_PATCH,
   RAIN_FALL_MS,
@@ -48,7 +48,7 @@ import {
   type Enemy,
   type GameState,
 } from '../game/state';
-import { FILLERS, type UpgradeId } from '../game/upgrades';
+import { FILLERS, UPGRADES, type UpgradeId } from '../game/upgrades';
 import { isBossWave, waveTrack } from '../game/waves';
 import { FortifyPanel } from '../ui/FortifyPanel';
 import { HirePanel } from '../ui/HirePanel';
@@ -56,7 +56,7 @@ import { LevelUp } from '../ui/LevelUp';
 import { RoadChoice } from '../ui/RoadChoice';
 import { chamferPts, drawPanel, makeButton, textStyle } from '../ui/panel';
 import { SkillBook } from '../ui/SkillBook';
-import { AIM, BARRICADE, BOSS_BAR, CALTROPS, FORTIFY, GUARD_HIT, HEAT, HERO_FEET, HUD_HEIGHT, RAIN, RAIN_HINT, ROAR_CHIP, SPEED, STREAK, TRACK, UI_DEPTH, VIEW, XP_BAR } from './layout';
+import { AIM, BARRICADE, BARRICADE_BAR, BARRICADE_TIP_W, BOSS_BAR, CALTROPS, FORTIFY, GUARD_HIT, HEAT, HERO_FEET, HUD_HEIGHT, RAIN, RAIN_HINT, ROAR_CHIP, SPEED, STREAK, TRACK, UI_DEPTH, VIEW, XP_BAR } from './layout';
 
 /** Longest simulated step, so a backgrounded tab doesn't jump the battle forward. */
 const MAX_STEP_MS = 250;
@@ -120,6 +120,9 @@ export class GameScene extends Phaser.Scene {
   private fx!: Phaser.GameObjects.Graphics;
   private glow!: Phaser.GameObjects.Graphics;
   private hud!: Phaser.GameObjects.Graphics;
+  /** The tooltip shown while the pointer is over the barricade's health bar. */
+  private barricadeTip!: Phaser.GameObjects.Container;
+  private barricadeTipText!: Phaser.GameObjects.Text;
   private trackG!: Phaser.GameObjects.Graphics;
   private aimG!: Phaser.GameObjects.Graphics;
   private waveText!: Phaser.GameObjects.Text;
@@ -197,7 +200,7 @@ export class GameScene extends Phaser.Scene {
     this.createRelicPanel();
     this.createGameOver();
     this.createWon();
-    this.levelUp = new LevelUp(this, (id) => this.pick(id));
+    this.levelUp = new LevelUp(this, (id) => this.pick(id), loadAutoPick(), saveAutoPick);
     this.roadChoice = new RoadChoice(this, (id) => this.pickRoad(id));
     this.hirePanel = new HirePanel(
       this,
@@ -228,7 +231,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.skillBook.open && !this.hirePanel.open && !this.fortifyPanel.open) {
       // The battle plays at the chosen speed; the auto-pick countdown stays in real seconds.
       const game = s.choices ? dt : dt * this.speed;
-      tick(s, game);
+      tick(s, game, this.levelUp.autoPick);
       if (!s.choices && !held(s)) this.clock += game;
     }
     if (s.phase !== phase || s.wave !== wave || s.levelUps !== levelUps || s.level !== level) saveProgress(progressOf(s));
@@ -568,6 +571,25 @@ export class GameScene extends Phaser.Scene {
         const alpha = t < 0.7 ? 1 : 1 - (t - 0.7) / 0.3;
         texts[0].setPosition(e.x, e.y - rise).setAlpha(alpha);
         texts[1]?.setPosition(e.x + texts[0].width / 2 + 2, e.y - rise - 10).setAlpha(alpha);
+      } else if (e.kind === 'autoPick' && e.upgrade) {
+        // The countdown took a card: name it, with its new rank, rising over the battle.
+        seen.add(e.id);
+        let texts = this.pops.get(e.id);
+        if (!texts) {
+          const u = UPGRADES[e.upgrade];
+          const rank = this.state.ranks[e.upgrade] ?? 0;
+          const name = u.filler ? u.name : `${u.name} (rank ${rank})`;
+          texts = [
+            this.add.text(e.x, e.y, 'Auto-picked', textStyle(15, '#c9c3b6', 4)).setOrigin(0.5),
+            this.add.text(e.x, e.y, name, textStyle(22, '#ffcf4a', 5)).setOrigin(0.5),
+          ];
+          for (const text of texts) text.setDepth(UI_DEPTH - 10);
+          this.pops.set(e.id, texts);
+        }
+        const rise = Math.min(1, t * 6) * 12 + t * 10;
+        const alpha = t < 0.8 ? 1 : 1 - (t - 0.8) / 0.2;
+        texts[0].setPosition(e.x, e.y - rise - 16).setAlpha(alpha);
+        texts[1].setPosition(e.x, e.y - rise + 6).setAlpha(alpha);
       } else if (e.kind === 'orb') {
         inFlight += e.amount ?? 0;
         this.drawOrbs(e.x, e.y, t);
@@ -654,6 +676,7 @@ export class GameScene extends Phaser.Scene {
       this.add.text(x, 19, text, textStyle(size, color)).setOrigin(0, 0.5).setDepth(UI_DEPTH + 1);
     this.waveText = top(18, '', '#ffcf4a', 20).setStroke('#141820', 3);
     top(140, 'Barricade');
+    this.createBarricadeTip();
     this.foesText = top(612, '');
     this.slainText = top(716, '');
     fit(this.add.image(796, 19, 'hud-coin')).setDepth(UI_DEPTH + 1);
@@ -672,15 +695,48 @@ export class GameScene extends Phaser.Scene {
     this.streakBonusText = this.add.text(STREAK.x + STREAK.w / 2 - 8, STREAK.y, '', textStyle(12, '#ffe07a')).setOrigin(1, 0.5).setDepth(UI_DEPTH + 2);
   }
 
+  /**
+   * Hovering over the barricade's health bar (or tapping it) shows its health, what Stout Timber
+   * adds and how much it is repaired after each wave, under the bar.
+   */
+  private createBarricadeTip() {
+    const { x, w } = BARRICADE_BAR;
+    const bg = this.add.graphics();
+    drawPanel(bg, x - 3, 34, BARRICADE_TIP_W, 70, { c: 6, fill: 0x1e222c, alpha: 0.95, lw: 1.5 });
+    this.barricadeTipText = this.add
+      .text(x + 7, 41, '', { ...textStyle(13, '#e9e4d8'), fontStyle: 'normal', lineSpacing: 3 })
+      .setOrigin(0);
+    this.barricadeTip = this.add.container(0, 0, [bg, this.barricadeTipText]).setDepth(UI_DEPTH + 9).setVisible(false);
+    this.add
+      .zone(x - 3, 10, w + 6, 20)
+      .setOrigin(0)
+      .setDepth(UI_DEPTH + 1)
+      .setInteractive()
+      .on('pointerover', () => this.barricadeTip.setVisible(true))
+      .on('pointerout', () => this.barricadeTip.setVisible(false));
+  }
+
+  private drawBarricadeTip() {
+    if (!this.barricadeTip.visible) return;
+    const s = this.state;
+    const st = stats(s);
+    const timber = s.ranks.timber ?? 0;
+    this.barricadeTipText.setText([
+      `Health ${Math.ceil(Math.max(0, s.barricade.hp))} / ${s.barricade.max}`,
+      timber > 0 ? `Stout Timber rank ${timber}: +${timber * 25}% health` : 'Stout Timber adds 25% health a rank',
+      `Repairs ${Math.round(st.repair * 100)}% after each wave`,
+    ]);
+  }
+
   private drawHud() {
     const s = this.state;
     const g = this.hud;
     g.clear();
     this.waveText.setText(`Wave ${s.wave}`);
+    this.drawBarricadeTip();
 
     // The barricade's health in the top bar.
-    const bx = 232;
-    const bw = 198;
+    const { x: bx, w: bw } = BARRICADE_BAR;
     const hp = Phaser.Math.Clamp(s.barricade.hp / s.barricade.max, 0, 1);
     g.fillStyle(SLATE.dark).fillPoints(chamferPts(bx - 3, 10, bw + 6, 20, 4), true);
     g.fillStyle(BAR.empty).fillRect(bx, 13, bw, 14);

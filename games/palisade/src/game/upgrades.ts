@@ -111,3 +111,18 @@ export const BASE_SKILLS: UpgradeId[] = ['swift', 'sharp', 'timber'];
 export const PURSE_COINS = 25;
 
 export const UPGRADE_IDS = Object.keys(UPGRADES) as UpgradeId[];
+
+/**
+ * The skill book's order, one theme a row of four: the bow, harder hits, fire, chill and slow,
+ * powder and lightning, the barricade and guards, then experience and the fillers. Only the book
+ * reads it; `UPGRADE_IDS` keeps the table's order, which the level-up's random picks depend on.
+ */
+export const BOOK_ORDER: UpgradeId[] = [
+  'swift', 'sharp', 'volley', 'pierce',
+  'crit', 'finisher', 'slayer', 'cloudburst',
+  'fire', 'wildfire', 'fireball', 'pyromancy',
+  'frost', 'deepFreeze', 'shatter', 'barbs',
+  'blast', 'bigBlast', 'storm', 'forked',
+  'timber', 'stakes', 'drill', 'bounty',
+  'lore', 'mend', 'purse', 'wind',
+];
