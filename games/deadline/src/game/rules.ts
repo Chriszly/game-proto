@@ -34,8 +34,8 @@ export const BREAK_MS = 2500;
 export type EnemyKind = 'grunt' | 'runner' | 'brute' | 'boss' | 'spitter' | 'riot' | 'crawler' | 'brood' | 'bloater';
 
 /**
- * Hit points at wave 1, walking speed and how fast they veer towards the hero (pixels per second),
- * and the size of their hit circle.
+ * Hit points at wave 1, walking speed and how fast they veer into the middle of their lane, where
+ * they go for its stretch of sandbags (pixels per second), and the size of their hit circle.
  */
 export const ENEMIES: Record<EnemyKind, { hp: number; speed: number; steer: number; radius: number }> = {
   grunt: { hp: 3, speed: 46, steer: 22, radius: 13 },
@@ -146,10 +146,10 @@ export const HEADSHOT = { every: 4, mult: 3 };
 export const RICOCHET = { range: 150 };
 
 /**
- * Survivors: from wave `fromWave`, one walks down the road each wave among the zombies, veering
- * towards the squad like they do. Bullets hurt them (they have `hp(wave)` hit points); one who
- * reaches the sandbags joins the squad as a companion, or, once the squad is full, hands over
- * `scrap` scrap. Zombies leave them alone; it is the squad's fire they must survive.
+ * Survivors: from wave `fromWave`, one walks down the road each wave among the zombies, keeping to
+ * the nearest seam between two lanes, out of the horde's columns. Bullets hurt them (they have
+ * `hp(wave)` hit points), so the player keeps the squad's rifles off that seam; one who reaches the
+ * sandbags joins the squad as a companion, or, once the squad is full, hands over `scrap` scrap. Zombies leave them alone; it is the squad's fire they must survive.
  */
 export const SURVIVOR = { fromWave: 3, speed: 44, steer: 30, radius: 12, hp: (wave: number) => 4 + wave, scrap: 15 };
 
@@ -197,6 +197,13 @@ export const WALL = { y: 690, ms: 6000 };
 export function laneAt(x: number) {
   const i = LANES.findIndex((l) => x < l.x1);
   return i < 0 ? LANES.length - 1 : i;
+}
+/** The middle of a lane, where the zombies in it walk. */
+export const laneMid = (lane: number) => (LANES[lane].x0 + LANES[lane].x1) / 2;
+/** The seam between two lanes nearest x, where survivors walk. */
+export function seamAt(x: number) {
+  const seams = LANES.slice(1).map((l) => l.x0);
+  return seams.reduce((a, b) => (Math.abs(b - x) < Math.abs(a - x) ? b : a));
 }
 
 /**

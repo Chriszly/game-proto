@@ -6,8 +6,8 @@ play. Keep this file up to date with any change to the game, as the root `AGENTS
 ## Current state
 
 Deadline is a portrait (540x960) wave defense game: a soldier at the bottom of a road fires volleys
-straight up on a timer, and the player only moves them left and right. Zombies walk down and veer
-towards the soldier; upgrade crates drift down among them and are shot open for a stat upgrade, and
+straight up on a timer, and the player only moves them left and right. Zombies walk down and keep
+to the middle of their lane, never chasing the soldier; upgrade crates drift down among them and are shot open for a stat upgrade, and
 fuel drums roll down and blow up the zombies round them when shot. Bosses fight back and leave a
 supply drop, and kills bank scrap that buys starting crates for the next run and lasting outpost
 upgrades. A run is the endless Open Road or a 10-wave operation, picked on the game over screen.
@@ -101,7 +101,7 @@ upgrades. A run is the endless Open Road or a 10-wave operation, picked on the g
   `BROOD`, `BLOATER`, `UPGRADES`, `PERKS`, `PERK_AT`, `perksOf`, `FIRE_ROUNDS`, `HEADSHOT`,
   `RICOCHET`, `SURVIVOR`, `CONDITIONS`, `CONDITION`, `drawCondition`, `EXTRACT`, `canExtract`,
   `CRATES` (upgrades plus `sandbag`),
-  `SANDBAG_CRATE_ODDS`, `LANES`, `laneAt`, `WALL`, `SUPPLIES`, `supplyPick`, `SHOTGUN`, `FLAMER`,
+  `SANDBAG_CRATE_ODDS`, `LANES`, `laneAt`, `laneMid`, `seamAt`, `WALL`, `SUPPLIES`, `supplyPick`, `SHOTGUN`, `FLAMER`,
   `MEDKIT`, `KIT_COSTS`, `PICKUP`, `DRUM`, `blastDamage`, `FRENZY`, `Stats`, `BASE_STATS`,
   `applyUpgrade`, `planWave`, `isBossWave`, `waveSize`, `waveTotal`, `waveToughness`, `toughness`, `drumCount`. No
   Phaser import; its only import is `byDifficulty` from `shared/settings.ts`.
@@ -197,12 +197,17 @@ upgrades. A run is the endless Open Road or a 10-wave operation, picked on the g
   hit on a zombie (`bulletHits`) does `HEADSHOT.mult` times the damage and counts in
   `state.headshots`; with `ricochet` a bullet whose hits ran out on a zombie (`b.ricochets` set by
   `fire`) is re-aimed from that zombie at `nearestEnemy` within `RICOCHET.range` with one more hit.
+- **Lanes, not the hero:** `moveEnemies` steers each zombie (not a flank spitter) towards
+  `laneMid(laneAt(e.x))` plus a small per-id offset, at its `ENEMIES[kind].steer`: the horde goes
+  for its lane's sandbags in three crowded columns and never homes in on the hero.
 - **Survivors:** a `survivor` spawn takes one from the `survivors` pool (sprite plus a label
-  Text). `moveSurvivors` walks it down at `SURVIVOR.speed`, steering towards the hero like a
-  zombie, and calls `rescue` at the sandbags: a companion (`applyUpgrade(stats, 'companion')`,
+  Text). `moveSurvivors` walks it down at `SURVIVOR.speed`, steering towards `seamAt(v.x)` (the
+  nearest boundary between two lanes, out of the horde's columns), and calls `rescue` at the
+  sandbags: a companion (`applyUpgrade(stats, 'companion')`,
   `addCompanions`) or `SURVIVOR.scrap` once the squad is full; `state.survivorsSaved` counts them.
-  `hitTargets` sweeps survivors along with the enemies, so the nearest thing in a bullet's path is
-  hit first; `hurtSurvivor` takes the damage and at 0 the survivor is lost (`state.survivorsLost`).
+  In `fire` a rifle's straight shot is held while `survivorAhead(x, y)` (a survivor up its column);
+  shotgun pellets, a marksman's aimed round and ricochets are not held. `hitTargets` sweeps
+  survivors along with the enemies, so the nearest thing in a bullet's path is hit first; `hurtSurvivor` takes the damage and at 0 the survivor is lost (`state.survivorsLost`).
   They don't count towards `waveTotal` or block a wave clear, and keep walking in the break.
 - **Conditions:** `state.condition` is read where it applies: `fire` multiplies the interval by
   `CONDITION.shortageFire` in a shortage (and `planWave` got `CONDITION.shortageDrums` more drums
@@ -414,8 +419,8 @@ upgrades. A run is the endless Open Road or a 10-wave operation, picked on the g
 - The test seeds `Math.random`, owns the clock (64ms frames), and forces the canvas renderer.
 - Flow: wave 1 starts with `BASE_STATS`, best 1 (saved), no scrap, starting kit or sandbags, the
   hero at `VIEW.w / 2` and the comic style; it taps the switch's NV half (style `nv`, saved, hero not moving, screenshot
-  `0-night-vision`) and its COMIC half (back to `comic`); at least 3 grunts come in; a first kill
-  (`fallen` equals `kills`, a streak started, `scrap` equals `kills`); the wave's drum comes in, and it plays on aiming at
+  `0-night-vision`) and its COMIC half (back to `comic`); at least 3 grunts come in; it taps above the lowest
+  enemy (zombies keep to their lanes, so the hero has to move) until a first kill (`fallen` equals `kills`, a streak started, `scrap` equals `kills`); the wave's drum comes in, and it plays on aiming at
   the front zombie until the drum's ring has caught a zombie while the front is above
   `FRONT_SAFE_Y`, then taps below the drum and waits for `drumsBlown` 1 (the blast caught some,
   killed all it caught, `fallen` equals `kills`, the streak counts the blast's kills); then the
@@ -517,6 +522,7 @@ upgrades. A run is the endless Open Road or a 10-wave operation, picked on the g
   scale; `applyStyle` only swaps its texture, so the stretch survives a style switch.
 - The supply drop pauses the whole update (`'supply'`), so crates, drums and survivors on the
   road wait too.
-- Survivors are in the bullets' sweep with the zombies, so a survivor standing between the squad
-  and a zombie takes the bullet; with pierce it goes on through them.
+- Survivors are in the bullets' sweep with the zombies, so a survivor hit by a pellet, a marksman's
+  round or a ricochet takes the bullet; with pierce it goes on through them. A rifle holding its
+  shot for a survivor still shows its muzzle flash.
   The favicon is the hub bear (ears, head, dot eyes, muzzle) with a helmet set between its ears.

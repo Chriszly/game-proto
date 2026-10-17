@@ -54,7 +54,8 @@ and the fuel drum's blast doesn't swell.
 
 - **Shooting** is automatic: a volley goes straight up from the soldier's rifle every so often.
   Stand below what you want to hit. Each hit shows a small damage number.
-- **Zombies** walk down the road and veer towards the soldier. Grunts come first; runners (fast,
+- **Zombies** walk down the road, each one keeping to the middle of its lane to go for that lane's
+  sandbags; they never chase the soldier, so move under the lane that needs you. Grunts come first; runners (fast,
   weak) join from wave 2 and brutes (slow, tough) from wave 3. A wave is cleared once all of its
   zombies are down, and the next one comes after a short pause. Later waves bring three more kinds:
 
@@ -91,8 +92,10 @@ and the fuel drum's blast doesn't swell.
   one for one more hit). Committing to one kind pays.
 
   ![Fire rounds, headshots and ricochets in both styles](docs/screenshots/perks.webp)
-- **Survivors**: from wave 3, one walks down among the zombies each wave, waving at you. Your
-  bullets hurt them like anything else in the way, so aiming becomes a choice. A survivor who
+- **Survivors**: from wave 3, one walks down among the zombies each wave, waving at you. They keep
+  to the seams between the lanes, out of the horde's columns, and a rifle with a survivor right in
+  front holds its shot, but shotgun pellets, a marksman's aimed round and ricochets still hurt them,
+  so aiming stays a choice. A survivor who
   reaches the sandbags joins the squad as a companion, or hands over 15 scrap once the squad is
   full.
 
