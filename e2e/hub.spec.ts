@@ -45,10 +45,11 @@ test('hub lists every game', async ({ page }, testInfo) => {
   // The cards are in alphabetical order.
   const names = (await page.locator('.game h2').allTextContents()).map((n) => n.trim());
   expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b, 'en')));
-  // Every card's cover loads.
+  // Every card's cover loads, once it scrolls into view.
   const covers = page.locator('.game .cover');
   await expect(covers).toHaveCount(GAMES.length);
   for (const cover of await covers.all()) {
+    await cover.scrollIntoViewIfNeeded();
     await expect.poll(() => cover.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
   }
   // Each card shows its game's favicon next to the name.
@@ -84,7 +85,7 @@ for (const { name, path } of GAMES.filter((g) => !ONLY || g.path === `/games/${O
 // The hub's Settings panel saves the shared settings, and a game opened afterwards honours them.
 test('hub settings reach the games', async ({ page }, testInfo) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Settings' });
   await expect(dialog).toBeVisible();
   const choice = (setting: string, option: string) => dialog.getByRole('group', { name: setting }).getByRole('button', { name: option, exact: true });
@@ -101,7 +102,7 @@ test('hub settings reach the games', async ({ page }, testInfo) => {
 
   // The choices are kept across visits.
   await page.reload();
-  await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(choice('Difficulty', 'Hard')).toHaveAttribute('aria-pressed', 'true');
   await expect(choice('Show FPS', 'On')).toHaveAttribute('aria-pressed', 'true');
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('hub-settings')!))).toEqual({
@@ -111,6 +112,7 @@ test('hub settings reach the games', async ({ page }, testInfo) => {
     reduceMotion: false,
     // British English is the default, whatever language the browser speaks.
     language: 'en',
+    genreFilter: false,
   });
 
   // A game opened now shows the FPS readout.
@@ -129,17 +131,63 @@ test('hub settings reach the games', async ({ page }, testInfo) => {
   await page.keyboard.press('Enter');
   await expect.poll(fullscreen).toBe(true);
 
-  // Reset all progress clears the games' saves and keeps the settings.
+  // Delete all progress clears the games' saves and keeps the settings.
   await page.goto('/');
   await page.evaluate(() => localStorage.setItem('apothecary-save', '{}'));
   page.once('dialog', (d) => d.accept());
-  await page.getByRole('button', { name: 'Settings' }).click();
-  await dialog.getByRole('button', { name: 'Reset all progress' }).click();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Delete all progress' }).click();
   expect(await page.evaluate(() => Object.keys(localStorage))).toEqual(['hub-settings']);
 
   await dialog.getByRole('button', { name: 'Restore defaults' }).click();
   await expect(choice('Difficulty', 'Normal')).toHaveAttribute('aria-pressed', 'true');
   await expect(choice('Show FPS', 'Off')).toHaveAttribute('aria-pressed', 'true');
+  await dialog.getByRole('button', { name: 'Done' }).click();
+  await expect(dialog).toBeHidden();
+});
+
+// A card's ⚙ deletes just that game's progress, a game played shows under Continue playing, and the
+// genre filter (off by default) lists one genre's games.
+test('hub game settings, continue playing and genre filter', async ({ page }, testInfo) => {
+  await page.goto('/games/apothecary/');
+  await expect(page.locator('canvas:not([data-backdrop])')).toBeVisible();
+  await page.goto('/');
+  await page.evaluate(() => {
+    localStorage.setItem('apothecary-save', '{}');
+    localStorage.setItem('apothecary-zoom', '2');
+    localStorage.setItem('deadline-best', '3');
+  });
+  await page.reload();
+  const recent = page.getByRole('navigation', { name: 'Continue playing' });
+  await expect(recent.getByRole('link')).toHaveText(['Apothecary']);
+
+  await page.getByRole('button', { name: 'Settings for Apothecary' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Apothecary' });
+  await expect(dialog).toContainText('This game has progress saved on this device');
+  await expect(dialog.getByRole('link', { name: 'Play' })).toHaveAttribute('href', 'games/apothecary/');
+  testInfo.attach('game settings', { body: await dialog.screenshot({ path: testInfo.outputPath('game-settings.png') }), contentType: 'image/png' });
+  page.once('dialog', (d) => d.accept());
+  await dialog.getByRole('button', { name: "Delete this game's progress" }).click();
+  await expect(dialog).toContainText('Nothing is saved for this game yet.');
+  await expect(dialog.getByRole('button', { name: "Delete this game's progress" })).toBeDisabled();
+  expect((await page.evaluate(() => Object.keys(localStorage))).sort()).toEqual(['deadline-best', 'hub-recent']);
+  await expect(recent).toBeHidden();
+  await dialog.getByRole('button', { name: 'Close' }).click();
+  await expect(dialog).toBeHidden();
+
+  // The genre filter shows once its setting is on.
+  const genres = page.getByRole('group', { name: 'Genres' });
+  await expect(genres).toBeHidden();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('group', { name: 'Genre filter' }).getByRole('button', { name: 'On' }).click();
+  await page.getByRole('dialog', { name: 'Settings' }).getByRole('button', { name: 'Close' }).click();
+  await genres.getByRole('button', { name: 'Puzzle' }).click();
+  await expect(genres.getByRole('button', { name: 'Puzzle' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.game:visible h2')).toContainText(['Lanternkeep', 'Mapmaker', 'Shrine Stack', 'TinctureTinker', 'Tiny Kingdom', 'Wyrmrail']);
+  await expect(page.locator('.game:visible')).toHaveCount(6);
+  testInfo.attach('genre filter', { body: await page.screenshot({ path: testInfo.outputPath('genre-filter.png') }), contentType: 'image/png' });
+  await genres.getByRole('button', { name: 'All' }).click();
+  await expect(page.locator('.game:visible')).toHaveCount(GAMES.length);
 });
 
 // The game grid fills the width: wide screens get more than three columns, a phone gets one and nothing scrolls sideways.
@@ -224,7 +272,7 @@ test('hub switches language', async ({ page }, testInfo) => {
   await page.route('https://abacus.jasoncameron.dev/get/**', (route) => route.fulfill({ json: { value: 1234 } }));
   await page.goto('/');
   await expect(page.locator('h1')).toHaveText('Game hub');
-  await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Settings' });
   // A first visit is in British English, though the browser under test speaks US English.
   await expect(dialog.getByRole('group', { name: 'Language' }).getByRole('button', { name: 'English (UK)' })).toHaveAttribute('aria-pressed', 'true');
@@ -243,7 +291,7 @@ test('hub switches language', async ({ page }, testInfo) => {
 
   // It is kept, and a game opened now shows its start, pause and How to play screens in German.
   await page.reload();
-  await expect(page.getByRole('button', { name: 'Einstellungen' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Einstellungen', exact: true })).toBeVisible();
   await page.goto('/games/apothecary/');
   await expect(page.locator('html')).toHaveAttribute('lang', 'de-DE');
   await expect(page.locator('.game-overlay-hint')).toHaveText('P drücken zum Pausieren \u00b7 H für die Spielanleitung');

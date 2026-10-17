@@ -7,6 +7,7 @@ import type { SharedKey } from './i18n/en';
  *
  * To add a setting: add it to `Settings` and `DEFAULTS`, describe it in `SETTING_FIELDS` so the hub
  * panel shows it, and honour it in the games (in `setupGame` when it can be done for all of them).
+ * A setting marked "hub only" changes just the hub page, and no game reads it.
  */
 
 export const DIFFICULTIES = ['easy', 'normal', 'hard'] as const;
@@ -37,9 +38,11 @@ export interface Settings {
   reduceMotion: boolean;
   /** The language of the hub, the shared screens and every game that has been translated. */
   language: Language;
+  /** Hub only: shows a row of genres above the games to filter the cards by. */
+  genreFilter: boolean;
 }
 
-export const DEFAULTS: Settings = { difficulty: 'normal', fps: 60, showFps: false, reduceMotion: false, language: 'en' };
+export const DEFAULTS: Settings = { difficulty: 'normal', fps: 60, showFps: false, reduceMotion: false, language: 'en', genreFilter: false };
 
 /**
  * One row of the hub's Settings panel. Labels and hints are keys of the shared texts
@@ -74,6 +77,7 @@ export const SETTING_FIELDS: readonly SettingField[] = [
   },
   { key: 'showFps', label: 'settingShowFps', hint: 'settingShowFpsHint', kind: 'toggle' },
   { key: 'reduceMotion', label: 'settingReduceMotion', hint: 'settingReduceMotionHint', kind: 'toggle' },
+  { key: 'genreFilter', label: 'settingGenreFilter', hint: 'settingGenreFilterHint', kind: 'toggle' },
 ];
 
 export const SETTINGS_KEY = 'hub-settings';
@@ -92,6 +96,7 @@ export function loadSettings(): Settings {
     showFps: typeof saved.showFps === 'boolean' ? saved.showFps : DEFAULTS.showFps,
     reduceMotion: typeof saved.reduceMotion === 'boolean' ? saved.reduceMotion : DEFAULTS.reduceMotion,
     language: LANGUAGES.find((l) => l === saved.language) ?? DEFAULTS.language,
+    genreFilter: typeof saved.genreFilter === 'boolean' ? saved.genreFilter : DEFAULTS.genreFilter,
   };
 }
 

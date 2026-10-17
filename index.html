@@ -7,6 +7,7 @@
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <style>
       :root { color-scheme: dark; }
+      [hidden] { display: none !important; }
       html, body { margin: 0; min-height: 100%; background: #1b1410; color: #f1e3c6; }
       body { font: 16px/1.4 ui-monospace, 'Courier New', monospace; }
       main { margin: 0 auto; padding: 32px 16px 48px; }
@@ -14,26 +15,42 @@
       .lede { margin: 0 0 28px; color: #c9b48f; }
       .games { list-style: none; margin: 0; padding: 0; display: grid; gap: 20px;
         grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+      .game { position: relative; }
       .game a { display: block; height: 100%; color: inherit; text-decoration: none; background: #2c2018;
         border: 3px solid #5a3f2a; box-shadow: 0 4px 0 #0e0a08; transition: transform 0.1s, border-color 0.1s; }
       .game a:hover, .game a:focus-visible { border-color: #f3c64e; transform: translateY(-2px); outline: none; }
-      .game .cover { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover;
+      .game .cover { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover;
         border-bottom: 3px solid #5a3f2a; }
       .game h2 { display: flex; align-items: center; gap: 10px; margin: 12px 14px 4px; font-size: 20px; color: #f3c64e; }
       .game .icon { width: 32px; height: 32px; flex: none; image-rendering: pixelated; }
       .game p { margin: 0 14px 16px; color: #d8c7a6; }
       .game .plays { margin-top: -10px; font-size: 13px; color: #a8957a; }
+      /* Each card's ⚙ opens that game's own settings. */
+      .game .game-gear { position: absolute; top: 8px; right: 8px; width: 36px; height: 36px; padding: 0; font-size: 20px;
+        line-height: 1; background: rgba(44, 32, 24, 0.85); }
+      .filters, .recent { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 20px; }
+      .recent-title { margin: 0 4px 0 0; font-size: 16px; color: #f3c64e; }
+      .recent a { display: flex; align-items: center; gap: 8px; padding: 6px 12px; color: inherit; text-decoration: none;
+        background: #2c2018; border: 2px solid #5a3f2a; box-shadow: 0 3px 0 #0e0a08; }
+      .recent a:hover, .recent a:focus-visible { border-color: #f3c64e; outline: none; }
+      .recent img { width: 24px; height: 24px; }
+      footer { margin-top: 32px; text-align: center; font-size: 14px; }
+      footer a { color: #c9b48f; }
       header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
       button { font: inherit; color: #f1e3c6; background: #3d2b1f; border: 2px solid #5a3f2a; padding: 6px 12px;
         cursor: pointer; box-shadow: 0 3px 0 #0e0a08; }
       button:hover, button:focus-visible { border-color: #f3c64e; outline: none; }
-      button[aria-pressed="true"] { background: #8f6a24; border-color: #f3c64e; color: #fff6dc; }
+      button:disabled { opacity: 0.5; cursor: default; border-color: #5a3f2a; }
+      .button { display: flex; align-items: center; justify-content: center; box-sizing: border-box; text-align: center; text-decoration: none; color: #f1e3c6; background: #3d2b1f;
+        border: 2px solid #5a3f2a; padding: 6px 12px; box-shadow: 0 3px 0 #0e0a08; }
+      .button:hover, .button:focus-visible { border-color: #f3c64e; outline: none; }
+      button[aria-pressed="true"], .primary { background: #8f6a24; border-color: #f3c64e; color: #fff6dc; }
       #open-settings { flex: none; margin-top: 6px; }
       dialog { width: min(620px, calc(100vw - 32px)); box-sizing: border-box; padding: 0; color: inherit;
         background: #2c2018; border: 3px solid #5a3f2a; box-shadow: 0 6px 0 #0e0a08; }
       .panel { position: relative; padding: 20px; }
       dialog::backdrop { background: rgba(10, 6, 4, 0.7); }
-      dialog h2 { margin: 0 0 4px; color: #f3c64e; }
+      dialog h2 { margin: 0 0 4px; padding-right: 48px; color: #f3c64e; }
       dialog .lede { margin-bottom: 16px; }
       .setting { padding: 12px 0; border-top: 2px solid #3d2b1f; }
       .setting-name { margin-bottom: 8px; color: #f3c64e; }
@@ -41,9 +58,10 @@
       .setting-hint { margin-top: 6px; font-size: 13px; color: #a8957a; }
       /* Both actions share one row at every width and language; a long label wraps inside its button. */
       .settings-actions { display: flex; gap: 8px; padding-top: 14px; border-top: 2px solid #3d2b1f; }
-      .settings-actions button { flex: 1 1 0; min-width: 0; }
-      #reset-progress { color: #f0b48a; }
-      #close-settings { position: absolute; top: 14px; right: 14px; }
+      .settings-actions > * { flex: 1 1 0; min-width: 0; }
+      #reset-progress, #reset-game { color: #f0b48a; }
+      /* The ✕ that closes a dialog, in the text colour on every screen size. */
+      .close { position: absolute; top: 14px; right: 14px; width: 36px; height: 36px; padding: 0; font-size: 18px; line-height: 1; }
     </style>
   </head>
   <body>
@@ -60,164 +78,264 @@
         <div class="panel">
           <h2 id="settings-title" data-i18n="settings">Settings</h2>
           <p class="lede" data-i18n="settingsLede">These apply to every game the next time it opens.</p>
-          <button type="button" id="close-settings" data-i18n="close">Close</button>
+          <button type="button" class="close" id="close-settings" data-i18n-label="close" aria-label="Close">✕</button>
         </div>
       </dialog>
+      <!-- One game's settings, opened from the ⚙ on its card. -->
+      <dialog id="game-settings" aria-labelledby="game-settings-title">
+        <div class="panel">
+          <h2 id="game-settings-title"></h2>
+          <p class="lede" id="game-progress"></p>
+          <div class="settings-actions">
+            <button type="button" id="reset-game" data-i18n="resetGame">Delete this game's progress</button>
+            <a class="button primary" id="play-game" href="" data-i18n="play">Play</a>
+          </div>
+          <button type="button" class="close" data-i18n-label="close" aria-label="Close">✕</button>
+        </div>
+      </dialog>
+      <!-- The games played last, newest first; filled in below from shared/progress.ts. -->
+      <nav class="recent" aria-labelledby="recent-title" hidden>
+        <h2 class="recent-title" id="recent-title" data-i18n="continuePlaying">Continue playing</h2>
+      </nav>
+      <!-- Shown when the Genre filter setting is on; the genres come from each card's data-genres. -->
+      <div class="filters" role="group" data-i18n-label="genres" aria-label="Genres" hidden></div>
       <!-- One entry per game in games/<name>; see AGENTS.md for adding a game. -->
       <ul class="games">
-        <li class="game">
+        <li class="game" data-genres="management">
           <a href="games/anvilheart/">
-            <img class="cover" data-i18n-alt="anvilheartCover" src="./games/anvilheart/cover.png" alt="The smithy with swords on anvils and adventurers at the counter" />
+            <img class="cover" loading="lazy" decoding="async" width="960" height="540" data-i18n-alt="anvilheartCover" src="./games/anvilheart/cover.png" alt="The smithy with swords on anvils and adventurers at the counter" />
             <h2><img class="icon" src="./games/anvilheart/favicon.svg" alt="" />Anvilheart</h2>
             <p data-i18n="anvilheartCard">Run a smithy: forge swords, drag matching ones together to merge them into better blades, and sell them to adventurers.</p>
           </a>
         </li>
-        <li class="game">
+        <li class="game" data-genres="management">
           <a href="games/apothecary/">
-            <img class="cover" data-i18n-alt="apothecaryCover" src="./games/apothecary/cover.png" alt="The apothecary shop with a customer at the counter" />
+            <img class="cover" loading="lazy" decoding="async" width="960" height="540" data-i18n-alt="apothecaryCover" src="./games/apothecary/cover.png" alt="The apothecary shop with a customer at the counter" />
             <h2><img class="icon" src="./games/apothecary/favicon.svg" alt="" />Apothecary</h2>
             <p data-i18n="apothecaryCard">Run a medieval apothecary as a plague doctor: grow herbs, refine them, brew potions and sell them.</p>
           </a>
         </li>
-        <li class="game">
+        <li class="game" data-genres="management">
           <a href="games/beehive-baron/">
-            <img class="cover" data-i18n-alt="beehiveBaronCover" src="./games/beehive-baron/cover.png" alt="A hive of honeycomb cells beside a meadow where bees gather nectar from flowers" />
+            <img class="cover" loading="lazy" decoding="async" width="960" height="540" data-i18n-alt="beehiveBaronCover" src="./games/beehive-baron/cover.png" alt="A hive of honeycomb cells beside a meadow where bees gather nectar from flowers" />
             <h2><img class="icon" src="./games/beehive-baron/favicon.svg" alt="" />Beehive Baron</h2>
             <p data-i18n="beehiveBaronCard">Run a hive: build comb cells, send foragers out to the flowers, harvest the honey and sell it to grow your colony.</p>
           </a>
         </li>
-        <li class="game">
+        <li class="game" data-genres="adventure action">
           <a href="games/bramblecrest/">
-            <img class="cover" data-i18n-alt="bramblecrestCover" src="./games/bramblecrest/cover.png" alt="A small knight in a lamplit village square at night, by a well, a pond and a cottage with glowing windows" />
+            <img class="cover" loading="lazy" decoding="async" width="960" height="540" data-i18n-alt="bramblecrestCover" src="./games/bramblecrest/cover.png" alt="A small knight in a lamplit village square at night, by a well, a pond and a cottage with glowing windows" />
             <h2><img class="icon" src="./games/bramblecrest/favicon.svg" alt="" />Bramblecrest</h2>
             <p data-i18n="bramblecrestCard">Explore an overgrown kingdom by lamplight as a small knight: cut back the thorns, find the tool in the sunken shrine, and hunt for hidden moonstones.</p>
           </a>
         </li>
-        <li class="game">
+        <li class="game" data-genres="action">
           <a href="games/broadside/">
-            <img class="cover" data-i18n-alt="broadsideCover" src="./games/broadside/cover.png" alt="A pirate ship firing a broadside at an enemy sloop" />
+            <img class="cover" loading="lazy" decoding="async" width="960" height="540" data-i18n-alt="broadsideCover" src="./games/broadside/cover.png" alt="A pirate ship firing a broadside at an enemy sloop" />
             <h2><img class="icon" src="./games/broadside/favicon.svg" alt="" />Broadside</h2>
             <p data-i18n="broadsideCard">Captain a pirate ship: steer left and right, fire broadsides at enemy ships, and spend the plunder on your ship between waves.</p>
           </a>
         </li>
-        <li class="game">
+        <li class="game" data-genres="strategy">
           <a href="games/catacomb/">
-            <img class="cover" data-i18n-alt="catacombCover" src="./games/catacomb/cover.png" alt="A knight with a hand of cards facing a slime in a dungeon room" />
+            <img class="cover" loading="lazy" decoding="async" width="960" height="540" data-i18n-alt="catacombCover" src="./games/catacomb/cover.png" alt="A knight with a hand of cards facing a slime in a dungeon room" />
             <h2><img class="icon" src="./games/catacomb/favicon.svg" alt="" />Catacomb</h2>
             <p data-i18n="catacombCard">Fight through a short dungeon with a deck of cards: play a hand of five each turn, and add a new card after every fight.</p>
           </a>
         </li>
-        <li class="game">
+        <li class="game" data-genres="strategy">
           <a href="games/colonizer/">
-            <img class="cover" data-i18n-alt="colonizerCover" src="./games/colonizer/cover.png" alt="An embroidered Bayeux-tapestry skirmish on linen: a Town Center, houses and archers meeting a raid, with the deeds card for Age III" />
+            <img class="cover" loading="lazy" decoding="async" width="960" height="540" data-i18n-alt="colonizerCover" src="./games/colonizer/cover.png" alt="An embroidered Bayeux-tapestry skirmish on linen: a Town Center, houses and archers meeting a raid, with the deeds card for Age III" />
             <h2><img class="icon" src="./games/colonizer/favicon.svg" alt="" />Colonizer</h2>
             <p data-i18n="colonizerCard">Build an embroidered empire: gather wood, food and ore, raise buildings and armies, research techs, and destroy the enemy Town Center before it destroys yours.</p>
           </a>
         </li>
-        <li class="game">
+        <li class="game" data-genres="action">
           <a href="games/deadline/">
-            <img class="cover" data-i18n-alt="deadlineCover" src="./games/deadline/cover.png" alt="A soldier behind sandbags shooting a zombie horde coming down a road" />
+            <img class="cover" loading="lazy" decoding="async" width="960" height="540" data-i18n-alt="deadlineCover" src="./games/deadline/cover.png" alt="A soldier behind sandbags shooting a zombie horde coming down a road" />
             <h2><img class="icon" src="./games/deadline/favicon.svg" alt="" />Deadline</h2>
             <p data-i18n="deadlineCard">Hold the bottom of the road against waves of zombies: move left and right, and shoot crates open for upgrades.</p>
           </a>
         </li>
-        <li class="game">
+        <li class="game" data-genres="strategy">
           <a href="games/golem-garden/">
-            <img class="cover" data-i18n-alt="golemGardenCover" src="./games/golem-garden/cover.png" alt="Stone and moss golems guarding a garden path as beetles crawl toward a great tree" />
+            <img class="cover" loading="lazy" decoding="async" width="960" height="540" data-i18n-alt="golemGardenCover" src="./games/golem-garden/cover.png" alt="Stone and moss golems guarding a garden path as beetles crawl toward a great tree" />
             <h2><img class="icon" src="./games/golem-garden/favicon.svg" alt="" />Golem Garden</h2>
             <p data-i18n="golemGardenCard">Plant seeds beside the garden path that grow into golems, and keep the pests away from the Heartwood wave after wave.</p>
           </a>
         </li>
-        <li class="game">
+        <li class="game" data-genres="action">
           <a href="games/hotfoot/">
-            <img class="cover" data-i18n-alt="hotfootCover" src="./games/hotfoot/cover.png" alt="A knight leaping over coins on a road at dusk, a spiked log hanging ahead" />
+            <img class="cover" loading="lazy" decoding="async" width="960" height="540" data-i18n-alt="hotfootCover" src="./games/hotfoot/cover.png" alt="A knight leaping over coins on a road at dusk, a spiked log hanging ahead" />
             <h2><img class="icon" src="./games/hotfoot/favicon.svg" alt="" />Hotfoot</h2>
             <p data-i18n="hotfootCard">Run as a knight who never stops: tap to jump spikes and pits or slide under blades, and pick one of two boons at every checkpoint.</p>
           </a>
         </li>
-        <li class="game">
+        <li class="game" data-genres="strategy action">
           <a href="games/lane-brawl/">
-            <img class="cover" data-i18n-alt="laneBrawlCover" src="./games/lane-brawl/cover.png" alt="A low-poly 3D lane with blue and red champions fighting by a crystal-topped tower, with an objective card and upgrade choice" />
+            <img class="cover" loading="lazy" decoding="async" width="960" height="540" data-i18n-alt="laneBrawlCover" src="./games/lane-brawl/cover.png" alt="A low-poly 3D lane with blue and red champions fighting by a crystal-topped tower, with an objective card and upgrade choice" />
             <h2><img class="icon" src="./games/lane-brawl/favicon.svg" alt="" />Lane Brawl</h2>
             <p data-i18n="laneBrawlCard">Lead a team of five champions down three lanes against NPC teams: farm, level up, buy items, push the lanes and destroy the enemy Nexus.</p>
           </a>
         </li>
-        <li class="game">
+        <li class="game" data-genres="puzzle">
           <a href="games/lanternkeep/">
-            <img class="cover" data-i18n-alt="lanternkeepCover" src="./games/lanternkeep/cover.png" alt="A castle at nightfall with glowing lanterns on its towers and moths flying between them" />
+            <img class="cover" loading="lazy" decoding="async" width="960" height="540" data-i18n-alt="lanternkeepCover" src="./games/lanternkeep/cover.png" alt="A castle at nightfall with glowing lanterns on its towers and moths flying between them" />
             <h2><img class="icon" src="./games/lanternkeep/favicon.svg" alt="" />Lanternkeep</h2>
             <p data-i18n="lanternkeepCard">Send moths from their jar to light the castle's lanterns before night falls, and spend the coins on wicks, oil and more moths.</p>
           </a>
         </li>
-        <li class="game">
+        <li class="game" data-genres="puzzle adventure">
           <a href="games/mapmaker/">
-            <img class="cover" data-i18n-alt="mapmakerCover" src="./games/mapmaker/cover.png" alt="A bear surveyor charting a fog-covered island tile by tile" />
+            <img class="cover" loading="lazy" decoding="async" width="960" height="540" data-i18n-alt="mapmakerCover" src="./games/mapmaker/cover.png" alt="A bear surveyor charting a fog-covered island tile by tile" />
             <h2><img class="icon" src="./games/mapmaker/favicon.svg" alt="" />Mapmaker</h2>
             <p data-i18n="mapmakerCard">Reveal a fog-covered island tile by tile on a limited store of supplies, and trade your charts at port for upgrades.</p>
           </a>
         </li>
-        <li class="game">
+        <li class="game" data-genres="action">
           <a href="games/palisade/">
-            <img class="cover" data-i18n-alt="palisadeCover" src="./games/palisade/cover.png" alt="The ranger behind the barricade facing the Troll King" />
+            <img class="cover" loading="lazy" decoding="async" width="960" height="540" data-i18n-alt="palisadeCover" src="./games/palisade/cover.png" alt="The ranger behind the barricade facing the Troll King" />
             <h2><img class="icon" src="./games/palisade/favicon.svg" alt="" />Palisade</h2>
             <p data-i18n="palisadeCard">Hold the barricade as a ranger: arrows fly on their own, every level-up offers three upgrades, and a boss comes every ten waves.</p>
           </a>
         </li>
-        <li class="game">
+        <li class="game" data-genres="action">
           <a href="games/riftblade/">
-            <img class="cover" data-i18n-alt="riftbladeCover" src="./games/riftblade/cover.png" alt="A neon-glow legionary on a dark desert grid, with a shield arc and a slowing cone, holding off a swarm of glowing scrap droids" />
+            <img class="cover" loading="lazy" decoding="async" width="960" height="540" data-i18n-alt="riftbladeCover" src="./games/riftblade/cover.png" alt="A neon-glow legionary on a dark desert grid, with a shield arc and a slowing cone, holding off a swarm of glowing scrap droids" />
             <h2><img class="icon" src="./games/riftblade/favicon.svg" alt="" />Riftblade</h2>
             <p data-i18n="riftbladeCard">Fight across four worlds as a blaster soldier or a blade knight: survive five minutes on each, beat its boss, and choose your way on the star map between them; every level-up offers a new skill.</p>
           </a>
         </li>
-        <li class="game">
+        <li class="game" data-genres="strategy">
           <a href="games/scrapyard-titans/">
-            <img class="cover" data-i18n-alt="scrapyardTitansCover" src="./games/scrapyard-titans/cover.png" alt="A cel-shaded 8x8 arena tilted toward the viewer, with junk-built robots fighting scrap mites, a bench, a shop of robot cards and seven rival commanders" />
+            <img class="cover" loading="lazy" decoding="async" width="960" height="540" data-i18n-alt="scrapyardTitansCover" src="./games/scrapyard-titans/cover.png" alt="A cel-shaded 8x8 arena tilted toward the viewer, with junk-built robots fighting scrap mites, a bench, a shop of robot cards and seven rival commanders" />
             <h2><img class="icon" src="./games/scrapyard-titans/favicon.svg" alt="" />Scrapyard Titans</h2>
             <p data-i18n="scrapyardTitansCard">Buy junk-built robots, merge them, bolt on parts and watch them brawl on an 8x8 board against seven rival commanders until one is left.</p>
           </a>
         </li>
-        <li class="game">
+        <li class="game" data-genres="puzzle">
           <a href="games/shrine-stack/">
-            <img class="cover" data-i18n-alt="shrineStackCover" src="./games/shrine-stack/cover.png" alt="A temple of stacked stones with lanterns on its balanced tiers, a stone swinging above it at dusk" />
+            <img class="cover" loading="lazy" decoding="async" width="960" height="540" data-i18n-alt="shrineStackCover" src="./games/shrine-stack/cover.png" alt="A temple of stacked stones with lanterns on its balanced tiers, a stone swinging above it at dusk" />
             <h2><img class="icon" src="./games/shrine-stack/favicon.svg" alt="" />Shrine Stack</h2>
             <p data-i18n="shrineStackCard">Drop swinging stones to stack a temple: overhangs break off, and every balanced tier of three earns a blessing.</p>
           </a>
         </li>
-        <li class="game">
+        <li class="game" data-genres="strategy">
           <a href="games/space-wars/">
-            <img class="cover" data-i18n-alt="spaceWarsCover" src="./games/space-wars/cover.png" alt="A 70s paperback space battle: chrome 3D ships around a relay beacon on a violet nebula, with a contract pill in the top bar" />
+            <img class="cover" loading="lazy" decoding="async" width="960" height="540" data-i18n-alt="spaceWarsCover" src="./games/space-wars/cover.png" alt="A 70s paperback space battle: chrome 3D ships around a relay beacon on a violet nebula, with a contract pill in the top bar" />
             <h2><img class="icon" src="./games/space-wars/favicon.svg" alt="" />Space Wars</h2>
             <p data-i18n="spaceWarsCard">Build a base on a random star map, mine crystal and raise a fleet to take down four rival factions, each with its own ships and buildings.</p>
           </a>
         </li>
-        <li class="game">
+        <li class="game" data-genres="puzzle">
           <a href="games/tincture-tinker/">
-            <img class="cover" data-i18n-alt="tinctureTinkerCover" src="./games/tincture-tinker/cover.png" alt="A board of herbs, roots and crystals next to an order for a Healing Draught" />
+            <img class="cover" loading="lazy" decoding="async" width="960" height="540" data-i18n-alt="tinctureTinkerCover" src="./games/tincture-tinker/cover.png" alt="A board of herbs, roots and crystals next to an order for a Healing Draught" />
             <h2><img class="icon" src="./games/tincture-tinker/favicon.svg" alt="" />TinctureTinker</h2>
             <p data-i18n="tinctureTinkerCard">Swap ingredients to match three or more and gather what each potion order asks for before the moves run out.</p>
           </a>
         </li>
-        <li class="game">
+        <li class="game" data-genres="puzzle">
           <a href="games/tiny-kingdom/">
-            <img class="cover" data-i18n-alt="tinyKingdomCover" src="./games/tiny-kingdom/cover.png" alt="A small island kingdom of farms, houses and towers between lakes and forests" />
+            <img class="cover" loading="lazy" decoding="async" width="960" height="540" data-i18n-alt="tinyKingdomCover" src="./games/tiny-kingdom/cover.png" alt="A small island kingdom of farms, houses and towers between lakes and forests" />
             <h2><img class="icon" src="./games/tiny-kingdom/favicon.svg" alt="" />Tiny Kingdom</h2>
             <p data-i18n="tinyKingdomCard">Place farms, houses and towers on a small island. Each one scores against its neighbours, so plan the layout before the tiles run out.</p>
           </a>
         </li>
-        <li class="game">
+        <li class="game" data-genres="puzzle management">
           <a href="games/wyrmrail/">
-            <img class="cover" data-i18n-alt="wyrmrailCover" src="./games/wyrmrail/cover.png" alt="A green wyrm pulling a wagon of grain along a railway between villages" />
+            <img class="cover" loading="lazy" decoding="async" width="960" height="540" data-i18n-alt="wyrmrailCover" src="./games/wyrmrail/cover.png" alt="A green wyrm pulling a wagon of grain along a railway between villages" />
             <h2><img class="icon" src="./games/wyrmrail/favicon.svg" alt="" />Wyrmrail</h2>
             <p data-i18n="wyrmrailCard">Lay track across a valley and send a dragon-drawn train to carry cargo between villages before each order runs out of time.</p>
           </a>
         </li>
       </ul>
+      <footer>
+        <a href="https://github.com/Chriszly/game-proto/issues/new/choose" target="_blank" rel="noopener" data-i18n="feedback">Report a bug or share an idea</a>
+      </footer>
     </main>
     <script type="module">
       import { mountSettingsPanel } from './shared/settingsPanel.ts';
-      import { showPlayCounts } from './shared/playCount.ts';
+      import { gameOf, showPlayCounts } from './shared/playCount.ts';
+      import { clearProgress, hasProgress, recentlyPlayed } from './shared/progress.ts';
+      import { loadSettings } from './shared/settings.ts';
       import { language, setLanguage, t, translatePage } from './shared/i18n.ts';
+
+      const games = document.querySelector('.games');
+      const cards = [...games.children];
+      const folder = (li) => gameOf(li.querySelector('a').getAttribute('href'));
+      const title = (li) => li.querySelector('h2').textContent.trim();
+
+      // Keep the cards in alphabetical order, so a new game lands in place wherever its card is added.
+      games.append(...cards.sort((a, b) => title(a).localeCompare(title(b), 'en')));
+
+      // Each card gets a ⚙ that opens its game's own settings: delete just that game's progress, or play.
+      const gameDialog = document.getElementById('game-settings');
+      let shown;
+      const showGame = () => {
+        document.getElementById('game-settings-title').textContent = title(shown);
+        const saved = hasProgress(folder(shown));
+        document.getElementById('game-progress').textContent = t(saved ? 'gameProgressSaved' : 'gameProgressNone');
+        document.getElementById('reset-game').disabled = !saved;
+        document.getElementById('play-game').href = shown.querySelector('a').getAttribute('href');
+      };
+      for (const card of cards) {
+        const gear = document.createElement('button');
+        gear.type = 'button';
+        gear.className = 'game-gear';
+        gear.textContent = '⚙';
+        gear.addEventListener('click', () => {
+          shown = card;
+          showGame();
+          gameDialog.showModal();
+        });
+        card.append(gear);
+      }
+      document.getElementById('reset-game').addEventListener('click', () => {
+        if (!confirm(t('resetGameConfirm', { game: title(shown) }))) return;
+        clearProgress(folder(shown));
+        showGame();
+        showRecent();
+      });
+
+      // Continue playing: the last three games played, linked by icon and name.
+      const recent = document.querySelector('.recent');
+      const showRecent = () => {
+        const played = recentlyPlayed().map((g) => cards.find((c) => folder(c) === g)).filter(Boolean).slice(0, 3);
+        recent.replaceChildren(recent.querySelector('.recent-title'));
+        for (const card of played) {
+          const link = document.createElement('a');
+          link.href = card.querySelector('a').getAttribute('href');
+          const icon = card.querySelector('h2 .icon').cloneNode();
+          link.append(icon, title(card));
+          recent.append(link);
+        }
+        recent.hidden = played.length === 0;
+      };
+      showRecent();
+
+      // The genre filter, when the setting is on: one button per genre on the cards, and All.
+      const filters = document.querySelector('.filters');
+      const GENRES = ['action', 'strategy', 'management', 'puzzle', 'adventure'];
+      let genre = 'all';
+      const showGenres = () => {
+        const on = loadSettings().genreFilter;
+        filters.hidden = !on;
+        if (!on) genre = 'all';
+        filters.replaceChildren(
+          ...['all', ...GENRES].map((g) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.textContent = t(`genre${g[0].toUpperCase()}${g.slice(1)}`);
+            button.setAttribute('aria-pressed', String(g === genre));
+            button.addEventListener('click', () => {
+              genre = g;
+              showGenres();
+            });
+            return button;
+          }),
+        );
+        for (const card of cards) card.hidden = genre !== 'all' && !card.dataset.genres.split(' ').includes(genre);
+      };
 
       // The page's text comes from shared/i18n (English in the markup is only the first paint), and
       // switches at once when the language setting changes.
@@ -225,19 +343,20 @@
         translatePage();
         document.title = t('hubTitle');
         for (const line of document.querySelectorAll('.plays')) line.textContent = t('plays', { n: Number(line.dataset.plays) });
+        for (const card of cards) card.querySelector('.game-gear').setAttribute('aria-label', t('gameSettings', { game: title(card) }));
+        if (shown) showGame();
+        showGenres();
       };
       setLanguage(language());
       translate();
       const dialog = document.getElementById('settings');
       mountSettingsPanel(dialog.querySelector('.panel'), translate);
       document.getElementById('open-settings').addEventListener('click', () => dialog.showModal());
-      document.getElementById('close-settings').addEventListener('click', () => dialog.close());
-      // A click on the backdrop closes it too.
-      dialog.addEventListener('click', (e) => e.target === dialog && dialog.close());
-      // Keep the cards in alphabetical order, so a new game lands in place wherever its card is added.
-      const games = document.querySelector('.games');
-      const title = (li) => li.querySelector('h2').textContent.trim();
-      games.append(...[...games.children].sort((a, b) => title(a).localeCompare(title(b), 'en')));
+      for (const d of [dialog, gameDialog]) {
+        d.querySelector('.close').addEventListener('click', () => d.close());
+        // A click on the backdrop closes it too.
+        d.addEventListener('click', (e) => e.target === d && d.close());
+      }
       showPlayCounts(document.querySelectorAll('.game a'));
     </script>
   </body>

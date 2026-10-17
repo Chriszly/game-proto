@@ -1,20 +1,21 @@
-import { DEFAULTS, SETTING_FIELDS, SETTINGS_KEY, loadSettings, saveSettings, type Settings } from './settings';
+import { DEFAULTS, SETTING_FIELDS, loadSettings, saveSettings, type Settings } from './settings';
 import { language, setLanguage, t } from './i18n';
+import { clearAllProgress } from './progress';
 
 /**
  * Builds the hub's Settings panel inside `root` from `SETTING_FIELDS`, so a new setting shows up
  * without touching the page. Changes save at once and apply the next time a game opens, except
- * the language, which the hub switches to at once: `onLanguage` is called to translate the page.
+ * the language, which the hub switches to at once, and the hub-only settings: `onChange` is called
+ * after every change to update the page. Below the settings, a Saved progress row deletes every
+ * game's saves, and the panel ends with Restore defaults and Done, which closes the dialog.
  */
-export function mountSettingsPanel(root: HTMLElement, onLanguage: () => void = () => {}) {
+export function mountSettingsPanel(root: HTMLElement, onChange: (settings: Settings) => void = () => {}) {
   let current = loadSettings();
   const set = (patch: Partial<Settings>) => {
     current = { ...current, ...patch };
     saveSettings(current);
-    if (current.language !== language()) {
-      setLanguage(current.language);
-      onLanguage();
-    }
+    if (current.language !== language()) setLanguage(current.language);
+    onChange(current);
     render();
   };
 
@@ -22,19 +23,36 @@ export function mountSettingsPanel(root: HTMLElement, onLanguage: () => void = (
   rows.className = 'settings-rows';
   root.append(rows);
 
+  // Deleting progress sits in a row of its own, apart from the buttons that end the panel.
+  const progress = document.createElement('div');
+  progress.className = 'setting';
+  const progressName = document.createElement('div');
+  progressName.className = 'setting-name';
+  const progressHint = document.createElement('div');
+  progressHint.className = 'setting-hint';
+  const reset = action('reset-progress', () => {
+    if (confirm(t('resetProgressConfirm'))) clearAllProgress();
+  });
+  const resetRow = document.createElement('div');
+  resetRow.className = 'setting-choices';
+  resetRow.append(reset);
+  progress.append(progressName, resetRow, progressHint);
+  root.append(progress);
+
   const actions = document.createElement('div');
   actions.className = 'settings-actions';
   const restore = action('restore-defaults', () => set(DEFAULTS));
-  const reset = action('reset-progress', () => {
-    if (!confirm(t('resetProgressConfirm'))) return;
-    clearProgress();
-  });
-  actions.append(restore, reset);
+  const done = action('settings-done', () => root.closest('dialog')?.close());
+  done.className = 'primary';
+  actions.append(restore, done);
   root.append(actions);
 
   function render() {
     restore.textContent = t('restoreDefaults');
+    done.textContent = t('done');
     reset.textContent = t('resetProgress');
+    progressName.textContent = t('savedProgress');
+    progressHint.textContent = t('savedProgressHint');
     rows.replaceChildren(
       ...SETTING_FIELDS.map((field) => {
         const row = document.createElement('div');
@@ -61,7 +79,8 @@ export function mountSettingsPanel(root: HTMLElement, onLanguage: () => void = (
           const button = document.createElement('button');
           button.type = 'button';
           button.textContent = option.text;
-          const chosen = current[field.key] === option.value;
+          // The language shown can differ from the setting for a quick look with `?lang=`.
+          const chosen = (field.key === 'language' ? language() : current[field.key]) === option.value;
           button.setAttribute('aria-pressed', String(chosen));
           button.addEventListener('click', () => set({ [field.key]: option.value } as Partial<Settings>));
           choices.append(button);
@@ -80,13 +99,4 @@ function action(id: string, onClick: () => void) {
   button.id = id;
   button.addEventListener('click', onClick);
   return button;
-}
-
-/** Removes every game's saves from the shared origin, keeping the settings. */
-function clearProgress() {
-  try {
-    for (const key of Object.keys(localStorage)) if (key !== SETTINGS_KEY) localStorage.removeItem(key);
-  } catch {
-    // Storage is blocked, so nothing was saved.
-  }
 }
