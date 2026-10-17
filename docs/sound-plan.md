@@ -483,6 +483,11 @@ Notes:
 Lantern-lighting against the clock in a shadow-puppet theatre; warm twilight folk, tense near
 nightfall.
 
+**Done** (see `games/lanternkeep/AGENTS.md`, Sound). Differs from the plan: the storm's rain is a
+running hat line in its music and there is no cricket ambience; a `late` part plays the last 10 s
+of every dusk instead of a layer over the kind's tune; the moths' and bats' sounds come from the
+scene comparing the state before and after `tick`, as the rules push no events for them.
+
 **Music:** Music-box folk at about 108 BPM in A minor. Voices are a triangle lead like a music
 box, a square pizzicato arpeggio and a soft shaker.
 - Dusk: rises as `duskMs` runs down, with a ticking layer in the last 10 s.
