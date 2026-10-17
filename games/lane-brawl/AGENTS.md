@@ -128,6 +128,14 @@ Implemented today:
   forgets an attacker past `BEAST.leash` and heals while nobody fights it. Its slayer's team gets
   `beastBuff[team]` for 90 s: its minions deal 1.5x and take 0.65x (`attack`, `takenMult`), drawn
   with a violet glow, with a chip per team at the top right (`buffChip`).
+- The elder beast (#291): from `ELDER.at` (14:00) the beast turns into the Elder Guardian for good
+  (`s.beastElder`, `makeElder`: `ELDER.hpMult` health and `ELDER.dmgMult` damage), when it wakes or,
+  if awake, the first tick nobody is fighting it at full health. Its slayer's team gets the usual
+  rewards plus `ELDER.gold` and `elderBuff[team]` for `ELDER.buffMs` (60 s): in `damage`, that
+  team's champions (`elderBlessed`) deal `ELDER.structMult` to towers, inhibitors and the Nexus, and
+  an enemy champion they leave under `ELDER.execute` of its health dies. The view draws it from
+  its own sheet (`ELDER_KEY`, `beastModel(pose, true)` with gold crystals, baked by `bakeElder` the
+  first time it shows) at 1.12 scale, and a gold chip per blessed team under the violet ones.
 - Bushes (LB2): `updateVision` hides enemy champions in a bush (`bushAt`) that no unit of that team
   sees in the same bush or within `BUSH_REVEAL`. `nearest`,
   the player's target, AI ganks and clicks skip hidden units; the view draws no sprite, bar, marker
@@ -300,7 +308,7 @@ File map (`src/`):
   `CAMP`, `MINION`, `KILL`, `XP_FOR_LEVEL`, respawn times), `CHAMPIONS` with their `AbilityDef`s,
   `ITEMS`, `ALLY_LANES`, `ENEMY_LANES`, `SIDE_COLOR`, and the loop's data: `OBJECTIVES`,
   `OBJECTIVE_GAP_MS`, `SIEGE`, `UPGRADES` (with `upgradeById`), `STREAK` and `LAST_HIT_LOOK`, plus
-  `ACTIVES`, `MAX_ITEMS`, `BEAST`, `BEAST_BUFF`, `BEAST_CONTESTERS`, `INHIBITORS`, `INHIBITOR`,
+  `ACTIVES`, `MAX_ITEMS`, `BEAST`, `BEAST_BUFF`, `ELDER`, `BEAST_CONTESTERS`, `INHIBITORS`, `INHIBITOR`,
   `SUPER_MINION`, `BUSHES` (with `bushAt`), `BUSH_REVEAL`, `REVEAL_MS`, `GANK` and `RETREAT`, and
   round 2's `WARD`, `WARD_SPOTS`, `WARD_AI`, `RECALL`, `BUYBACK`, `BOUNTY` (with `bountyOf`),
   `AI_BUILDS` and `AI_BUILD_FOR`.
@@ -497,7 +505,7 @@ generator (`seeded` in `lowpoly.ts`); `performance.now` only times the bake for 
 - **Tune round 2**: `WARD` (carry, range, life, hits), `WARD_SPOTS` and `WARD_AI` for the AI's
   warding, `RECALL` (channel time and the AI's reasons to go home), `BUYBACK` (price and cooldown),
   `BOUNTY` (streak, gold) and `AI_BUILDS` / `AI_BUILD_FOR` (what each role buys), all in `data.ts`.
-- **Tune the beast or the AI plans**: `BEAST`, `BEAST_BUFF`, `BEAST_CONTESTERS`, `GANK` and
+- **Tune the beast or the AI plans**: `BEAST`, `BEAST_BUFF`, `ELDER`, `BEAST_CONTESTERS`, `GANK` and
   `RETREAT` in `data.ts`. Move the pit with `BEAST.x`/`y`; `map.ts` paints it there.
 - **Add a bush**: add it to `BUSHES` (blue's half; `both` adds the mirror); `map.ts` paints it and
   keeps pines out of it.

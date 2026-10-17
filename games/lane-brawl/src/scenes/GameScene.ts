@@ -43,6 +43,7 @@ import { shortName } from '../game/names';
 import {
   BEAST_CELL,
   BEAST_KEY,
+  ELDER_KEY,
   INHIB_CELL,
   BOAR,
   BOAR_CELL,
@@ -60,6 +61,7 @@ import {
   WOLF,
   WOLF_CELL,
   bakeChampions,
+  bakeElder,
   bakeUnits,
   bruteKey,
   champKey,
@@ -926,7 +928,9 @@ export class GameScene extends Phaser.Scene {
         cell = WATCH_CELL;
         break;
       case 'beast':
-        key = BEAST_KEY;
+        // The elder form's sheet is baked the first time it shows.
+        if (s.beastElder) bakeElder(this);
+        key = s.beastElder ? ELDER_KEY : BEAST_KEY;
         frame = frameName(dirFor(u.facing), pose(14) === 'c0' ? 'idle' : pose(14));
         cell = BEAST_CELL;
         break;
@@ -944,7 +948,7 @@ export class GameScene extends Phaser.Scene {
     }
     const depth = 2 + fy / WORLD.h;
     // Super minions stand taller; the player's allies in a bush show through the grass.
-    const scale = (u.kind === 'minion' && u.power > 1 ? 1.5 : u.kind === 'inhibitor' && u.dead ? 0.7 : u.campKind === 'pup' ? 0.72 : 1) / RES;
+    const scale = (u.kind === 'minion' && u.power > 1 ? 1.5 : u.kind === 'inhibitor' && u.dead ? 0.7 : u.campKind === 'pup' ? 0.72 : u.kind === 'beast' && s.beastElder ? 1.12 : 1) / RES;
     const inBush = u.kind === 'champion' && u.side === 'blue' && bushAt(u) >= 0;
     // Blue's champions in a bush or in stealth show through, half seen.
     const ghost = u.kind === 'champion' && u.side === 'blue' && stealthed(u) ? 0.38 : inBush ? 0.6 : 1;
@@ -1224,7 +1228,7 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** A chip for each team whose minions the guardian beast empowered, with the time left. */
+  /** A chip for each team whose minions the guardian beast empowered, and one for each team with the elder blessing, with the time left. */
   private drawBuffs(g: Phaser.GameObjects.Graphics, s: GameState) {
     let i = 0;
     for (const team of ['blue', 'red'] as Team[]) {
@@ -1239,6 +1243,19 @@ export class GameScene extends Phaser.Scene {
       g.fillStyle(0xb98cff, 1).fillPoints([new Phaser.Math.Vector2(cx, cy - 7), new Phaser.Math.Vector2(cx + 5, cy), new Phaser.Math.Vector2(cx, cy + 7), new Phaser.Math.Vector2(cx - 5, cy)], true);
       g.fillStyle(0xffffff, 0.45).fillTriangle(cx, cy - 7, cx - 5, cy, cx, cy);
       this.t(`buff-${team}`, c.x + 24, c.y + 4, `${team === 'blue' ? 'Your' : 'Red'} minions empowered ${clock(left)}`, 10, team === 'blue' ? UI.blue : UI.red, 'left', true);
+    }
+    // The elder's blessing, in gold.
+    for (const team of ['blue', 'red'] as Team[]) {
+      const left = s.elderBuff[team] - s.time;
+      if (left <= 0) continue;
+      const c = buffChip(i++);
+      g.fillStyle(col(UI.edge), 1).fillRect(c.x - 1, c.y - 1, c.w + 2, c.h + 2);
+      g.fillStyle(col('#4a3a1c'), 1).fillRect(c.x, c.y, c.w, c.h);
+      g.lineStyle(1, col(SIDE_COLOR[team]), 1).strokeRect(c.x + 1, c.y + 1, c.w - 2, c.h - 2);
+      const cx = c.x + 12, cy = c.y + c.h / 2;
+      g.fillStyle(0xffc93d, 1).fillPoints([new Phaser.Math.Vector2(cx, cy - 7), new Phaser.Math.Vector2(cx + 5, cy), new Phaser.Math.Vector2(cx, cy + 7), new Phaser.Math.Vector2(cx - 5, cy)], true);
+      g.fillStyle(0xffffff, 0.45).fillTriangle(cx, cy - 7, cx - 5, cy, cx, cy);
+      this.t(`elder-${team}`, c.x + 24, c.y + 4, `${team === 'blue' ? 'Your' : 'Red'} elder blessing ${clock(left)}`, 10, UI.gold, 'left', true);
     }
   }
 

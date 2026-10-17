@@ -150,6 +150,8 @@ export const towerKey = (team: TeamName) => `lb-tower-${team}`;
 export const nexusKey = (team: TeamName) => `lb-nexus-${team}`;
 export const RUBBLE = 'lb-rubble';
 export const BEAST_KEY = 'lb-beast';
+/** The elder beast's sheet, baked the first time it appears (`bakeElder`). */
+export const ELDER_KEY = 'lb-beast-elder';
 export const inhibKey = (team: TeamName) => `lb-inhib-${team}`;
 export const COIN = 'lb-coin';
 
@@ -179,6 +181,14 @@ export function bakeUnits(scene: Phaser.Scene): number {
   bake(scene, BEAST_KEY, BEAST_CELL, movingCells(beastModel));
   bake(scene, RUBBLE, RUBBLE_CELL, [{ name: 'idle', model: rubbleModel, yaw: 0.2 }]);
   bake(scene, COIN, COIN_CELL, [{ name: 'idle', model: coinModel, yaw: 0.3 }]);
+  return performance.now() - t0;
+}
+
+/** Bakes the elder beast's sheet if it is not baked yet. Returns the time it took, in ms. */
+export function bakeElder(scene: Phaser.Scene): number {
+  if (scene.textures.exists(ELDER_KEY)) return 0;
+  const t0 = performance.now();
+  bake(scene, ELDER_KEY, BEAST_CELL, movingCells((p) => beastModel(p, true)));
   return performance.now() - t0;
 }
 

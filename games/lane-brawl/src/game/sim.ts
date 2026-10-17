@@ -43,6 +43,7 @@ import {
   ActiveId,
   BEAST,
   BEAST_BUFF,
+  ELDER,
   BEAST_CONTESTERS,
   BUSH_REVEAL,
   GANK,
@@ -584,6 +585,9 @@ export function damage(s: GameState, t: Unit, amount: number, sourceId: number):
   }
   // The siege banner, an objective's reward, makes the player's champion hit structures harder.
   if (sourceId === s.player && s.time < s.siegeUntil && (t.kind === 'tower' || t.kind === 'nexus')) amount *= SIEGE.mult;
+  // The elder's blessing: its team's champions hit structures harder.
+  const blessed = elderBlessed(s, getUnit(s, sourceId));
+  if (blessed && (t.kind === 'tower' || t.kind === 'inhibitor' || t.kind === 'nexus')) amount *= ELDER.structMult;
   // Morrow's grudge: the Whaler hits the beast that sank his ship harder.
   if (t.kind === 'beast') amount *= 1 + (getUnit(s, sourceId)?.champ?.perk?.beastDmg ?? 0) / 100;
   let rest = ((amount * 100) / (100 + Math.max(0, armorOf(t)))) * takenMult(s, t);
@@ -595,6 +599,11 @@ export function damage(s: GameState, t: Unit, amount: number, sourceId: number):
   }
   const lost = Math.min(Math.max(0, t.hp), rest);
   t.hp -= rest;
+  // ...and finish an enemy champion they leave nearly dead.
+  if (blessed && t.kind === 'champion' && t.hp > 0 && t.hp < t.maxHp * ELDER.execute) {
+    t.hp = 0;
+    s.fx.push({ kind: 'ring', x: t.x, y: t.y, r: 60, color: '#ffc93d', ms: 600 });
+  }
   t.flash = 120;
   t.lastHitBy = sourceId;
   // Hurting a champion draws the fire of that champion's towers, and breaks its recall.
@@ -609,6 +618,11 @@ export function damage(s: GameState, t: Unit, amount: number, sourceId: number):
   }
   if (t.hp <= 0) kill(s, t, sourceId);
   return lost;
+}
+
+/** Whether a unit is a champion whose team has the elder's blessing now. */
+function elderBlessed(s: GameState, u: Unit | undefined | null): boolean {
+  return !!u && u.kind === 'champion' && u.side !== 'neutral' && s.elderBuff[u.side] > s.time;
 }
 
 /** Damage a unit takes is scaled by this: minions empowered by the beast take less. */
@@ -652,8 +666,9 @@ function updateUnit(s: GameState, u: Unit, dt: number) {
   }
   if (u.dead) {
     if ((u.kind === 'champion' || u.kind === 'camp' || u.kind === 'beast') && s.time >= u.respawnAt) {
+      if (u.kind === 'beast' && s.time >= ELDER.at && !s.beastElder) makeElder(s, u);
       revive(u);
-      if (u.kind === 'beast') notice(s, 'The guardian beast has awoken', '#f2c14e');
+      if (u.kind === 'beast') notice(s, s.beastElder ? 'The Elder Guardian has awoken' : 'The guardian beast has awoken', '#f2c14e');
     } else if (u.kind === 'champion' && !u.player) {
       // A dead AI champion spends its wait at the shop, and buys back when its base is in danger.
       aiShop(u);
@@ -811,8 +826,16 @@ function kill(s: GameState, t: Unit, killerId: number) {
         champKiller.gold += BEAST.gold;
         gainXp(s, champKiller, BEAST.xp);
         const secs = Math.round(BEAST.buffMs / 1000);
-        aiLog(team, `${shortName(champKiller.name)} slays the guardian beast`);
-        notice(s, team === 'blue' ? `Blue slew the guardian beast: your minions are empowered for ${secs}s` : `Red slew the guardian beast: red minions are empowered for ${secs}s`, SIDE_COLOR[team]);
+        if (s.beastElder) {
+          // The elder blesses the slayers' whole team: siege damage and an execute.
+          s.elderBuff[team] = s.time + ELDER.buffMs;
+          champKiller.gold += ELDER.gold;
+          aiLog(team, `${shortName(champKiller.name)} slays the Elder Guardian`);
+          notice(s, team === 'blue' ? `Blue slew the Elder Guardian: your champions are blessed for ${ELDER.buffMs / 1000}s` : `Red slew the Elder Guardian: red champions are blessed for ${ELDER.buffMs / 1000}s`, SIDE_COLOR[team]);
+        } else {
+          aiLog(team, `${shortName(champKiller.name)} slays the guardian beast`);
+          notice(s, team === 'blue' ? `Blue slew the guardian beast: your minions are empowered for ${secs}s` : `Red slew the guardian beast: red minions are empowered for ${secs}s`, SIDE_COLOR[team]);
+        }
       }
       s.fx.push({ kind: 'ring', x: t.x, y: t.y, r: 90, color: '#c79bff', ms: 800 });
       break;
@@ -1290,8 +1313,22 @@ function updateVision(s: GameState) {
   }
 }
 
+/** The beast's elder form, for good: more health and harder blows. */
+function makeElder(s: GameState, u: Unit) {
+  s.beastElder = true;
+  u.maxHp = BEAST.hp * ELDER.hpMult;
+  u.dmg = BEAST.dmg * ELDER.dmgMult;
+  aiLog('blue', 'The guardian beast is now the Elder Guardian');
+}
+
 /** The guardian beast: claws whoever hurt it last (and those beside them), hurls rocks at range, and heals when left alone. */
 function beastAct(s: GameState, u: Unit, dt: number) {
+  // An awake beast that nobody is fighting grows into the elder form when its time comes.
+  if (!s.beastElder && s.time >= ELDER.at && u.lastHitBy === null && u.hp >= u.maxHp) {
+    makeElder(s, u);
+    u.hp = u.maxHp;
+    notice(s, 'The guardian beast grows into the Elder Guardian', '#f2c14e');
+  }
   const who = getUnit(s, u.lastHitBy);
   if (!who || who.dead || dist(who, u) > BEAST.leash) {
     u.lastHitBy = null;
