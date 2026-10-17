@@ -1,0 +1,1361 @@
+// The whole game in one scene: the map the knight is in, the knight, the people and foes in it,
+// the night's light and the HUD. Changing place swaps the map's sprites but keeps the scene.
+
+import Phaser from 'phaser';
+import { paintAll, texScale } from '../art/paint';
+import { paintGround, groundKey } from '../art/ground';
+import { buildMap, centre, CUTTABLE, LOW, setTile, SOLID, TILE, tileAt, type Door, type Facing, type ItemId, type MapDef, type MapId, type NpcId, type Prop, type PropKind } from '../game/maps';
+import { findPath, type Step } from '../game/path';
+import { advance, clearSave, give, hasFlag, load, MOONSTONES, newState, save, setFlag, type GameState } from '../game/state';
+import { talk, type TalkEffect } from '../game/talk';
+import { settings } from '../../../../shared/settings';
+import { scrollingCamera, splitHudCamera, viewPoint } from '../../../../shared/scaling';
+import { Hud } from './hud';
+import { NightLight, type Light } from './light';
+import {
+  BULB_DOWN_MS, BULB_EVERY_MS, BULB_HP, BULB_UP_MS, FOES, foeFree, makeFoe, SEED_SPEED, SUMMON_MS, THORNLING_SHOT_MS, VOLLEY_MS,
+  type Boss, type Foe, type Seed,
+} from './foes';
+import {
+  HURT_MS, LANTERN, LANTERN_OIL, PICKUP_PX, PULL_SPEED, ROLL_COOLDOWN_MS, ROLL_MS, ROLL_SPEED, SWING_COOLDOWN_MS, SWING_MS, SWING_RADIUS, SWING_REACH, VINE_RANGE, VINE_SPEED, WALK_SPEED,
+} from './layout';
+
+/** Where each prop's art touches the ground, as a share of its texture's height, and whether it blocks. */
+const PROP_ART: Record<PropKind, { key: string; foot: number; solid: boolean }> = {
+  house: { key: 'house', foot: 172 / 184, solid: true },
+  shed: { key: 'shed', foot: 122 / 132, solid: true },
+  hut: { key: 'hut', foot: 128 / 140, solid: true },
+  well: { key: 'well', foot: 84 / 100, solid: true },
+  lamp: { key: 'lamp', foot: 66 / 70, solid: true },
+  brazier: { key: 'brazier', foot: 40 / 44, solid: true },
+  shroom: { key: 'shroom', foot: 21 / 24, solid: false },
+  bench: { key: 'bench', foot: 26 / 30, solid: true },
+  rock: { key: 'rock', foot: 23 / 28, solid: true },
+  arch: { key: 'arch', foot: 96 / 104, solid: true },
+  statue: { key: 'statue-right', foot: 58 / 64, solid: true },
+};
+
+const DIRS: Record<Facing, { x: number; y: number }> = { up: { x: 0, y: -1 }, down: { x: 0, y: 1 }, left: { x: -1, y: 0 }, right: { x: 1, y: 0 } };
+const WARM: [number, number, number] = [255, 190, 110];
+
+/** What a tap asked the knight to do once they get there. */
+type Target =
+  | { kind: 'npc'; id: NpcId }
+  | { kind: 'chest'; id: string }
+  | { kind: 'sign'; i: number }
+  | { kind: 'cut' | 'dig' | 'block' | 'door'; tx: number; ty: number }
+  | { kind: 'foe'; foe: Foe };
+
+interface Dialog {
+  speaker: string;
+  lines: string[];
+  i: number;
+  then?: TalkEffect | 'chapter-end';
+}
+
+export class GameScene extends Phaser.Scene {
+  state!: GameState;
+  map!: MapDef;
+  player!: Phaser.GameObjects.Image;
+  dialog: Dialog | null = null;
+  /** The tiles a tap is walking the knight along, and what to do at the end. */
+  route: Step[] | null = null;
+  target: Target | null = null;
+  foes: Foe[] = [];
+  boss: Boss | null = null;
+
+  private hud!: Hud;
+  private night!: NightLight;
+  private world: Phaser.GameObjects.GameObject[] = [];
+  private ground!: Phaser.GameObjects.Image;
+  private blockers = new Set<number>();
+  private bushSprites = new Map<number, Phaser.GameObjects.Image>();
+  private npcSprites = new Map<NpcId, Phaser.GameObjects.Image>();
+  private chestSprites = new Map<string, Phaser.GameObjects.Image>();
+  private doorSprites = new Map<string, Phaser.GameObjects.Image[]>();
+  private stoneSprites = new Map<string, Phaser.GameObjects.Image>();
+  private blocks: { x: number; y: number; sprite: Phaser.GameObjects.Image }[] = [];
+  private seeds: Seed[] = [];
+  private hearts: { x: number; y: number; sprite: Phaser.GameObjects.Image }[] = [];
+  private glows: Light[] = [];
+  private wisp: { i: number; sprite: Phaser.GameObjects.Image; hop: number } | null = null;
+  private dug = new Set<string>();
+  private sword!: Phaser.GameObjects.Image;
+  private vine!: Phaser.GameObjects.Graphics;
+  private hookTip!: Phaser.GameObjects.Image;
+  private keys!: Record<string, Phaser.Input.Keyboard.Key>;
+  private swing: { t: number; dir: Facing } | null = null;
+  private swingCd = 0;
+  private roll: { t: number; dx: number; dy: number } | null = null;
+  private rollCd = 0;
+  /** The hookvine in flight: going out, coming back, or pulling the knight to a post. */
+  hook: { x: number; y: number; dx: number; dy: number; dist: number; phase: 'out' | 'back' | 'pull'; to?: { x: number; y: number } } | null = null;
+  private invuln = 0;
+  private walkT = 0;
+  private pushT = 0;
+  private chaseT = 0;
+  private fading = false;
+  private now = 0;
+
+  constructor() {
+    super('Game');
+  }
+
+  create() {
+    paintAll(this);
+    this.state = load();
+    this.hud = new Hud(this);
+    this.night = new NightLight(this);
+    scrollingCamera(this.cameras.main);
+    splitHudCamera(this);
+    this.player = this.add.image(0, 0, 'hero-down').setOrigin(0.5, 41 / 44).setScale(texScale('hero-down'));
+    this.sword = this.add.image(0, 0, 'sword').setOrigin(0.5, 0.95).setScale(texScale('sword')).setVisible(false);
+    this.vine = this.add.graphics();
+    this.hookTip = this.add.image(0, 0, 'hook').setScale(texScale('hook')).setVisible(false);
+    const kb = this.input.keyboard!;
+    this.keys = kb.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE,ENTER,J,SHIFT,K,Q,E,L', false) as Record<string, Phaser.Input.Keyboard.Key>;
+    kb.on('keydown', this.onKey, this);
+    this.input.on('pointerdown', this.onPointer, this);
+    this.enterMap(this.state.map, this.state.x, this.state.y, this.state.facing, false);
+  }
+
+  // ---------------------------------------------------------------- the map
+
+  /** Builds the map `id` around the knight, standing at (x, y) facing `facing`. */
+  private enterMap(id: MapId, x: number, y: number, facing: Facing, keepSpawn: boolean) {
+    for (const o of this.world) o.destroy();
+    this.world = [];
+    for (const s of this.seeds) s.sprite.destroy();
+    for (const h of this.hearts) h.sprite.destroy();
+    this.seeds = [];
+    this.hearts = [];
+    this.foes = [];
+    this.boss = null;
+    this.wisp = null;
+    this.blocks = [];
+    this.blockers.clear();
+    this.bushSprites.clear();
+    this.npcSprites.clear();
+    this.chestSprites.clear();
+    this.doorSprites.clear();
+    this.stoneSprites.clear();
+    this.dug.clear();
+    this.route = null;
+    this.target = null;
+    this.hook = null;
+    this.roll = null;
+    this.swing = null;
+
+    const s = this.state;
+    const map = buildMap(id);
+    this.map = map;
+    // What the knight has already changed here.
+    if (id === 'village' && hasFlag(s, 'gate-cut')) for (const i of [19, 20]) setTile(map, i, 3, 'path');
+    if (id === 'woods' && hasFlag(s, 'woods-thorns')) for (const i of [42, 43]) setTile(map, i, 10, 'path');
+    if (id === 'shrine' && hasFlag(s, 'boss')) map.tiles = map.tiles.map((t) => (t === 'ring' ? 'floor' : t));
+
+    paintGround(this, map);
+    this.ground = this.add.image(0, 0, groundKey(map)).setOrigin(0).setScale(texScale(groundKey(map))).setDepth(-10000);
+    this.world.push(this.ground);
+    const cam = this.cameras.main;
+    cam.setBounds(0, 0, map.w * TILE, map.h * TILE);
+    cam.setBackgroundColor(map.theme === 'shrine' ? '#05050a' : '#0b1020');
+    this.glows = [];
+
+    for (let ty = 0; ty < map.h; ty++)
+      for (let tx = 0; tx < map.w; tx++) {
+        const t = tileAt(map, tx, ty);
+        if (t === 'tree' || t === 'faketree') {
+          // Trees right at the edge of the map are left off where nobody can see behind them.
+          const key = map.theme === 'fen' ? 'tree-fen' : (tx * 7 + ty * 3) % 3 === 0 ? 'tree-b' : 'tree';
+          this.addWorld(this.add.image(tx * TILE + 16, ty * TILE + 30, key).setOrigin(0.5, 64 / 72), (ty + 1) * TILE - 2);
+        } else if (t === 'bush' || t === 'thorns') {
+          const img = this.add.image(tx * TILE + 16, ty * TILE + 28, t).setOrigin(0.5, t === 'bush' ? 25 / 30 : 29 / 34);
+          this.addWorld(img, (ty + 1) * TILE - 4);
+          this.bushSprites.set(ty * map.w + tx, img);
+        }
+      }
+
+    for (const p of map.props) this.addProp(p);
+    for (const n of map.npcs) {
+      const c = centre(n);
+      const img = this.add.image(c.x, c.y + 10, n.id).setOrigin(0.5, n.id === 'cat' ? 21 / 24 : (n.id === 'pip' ? 33 : 41) / (n.id === 'pip' ? 36 : 44));
+      this.addWorld(img, c.y + 10);
+      this.npcSprites.set(n.id, img);
+      this.block(n.x, n.y);
+    }
+    for (const ch of map.chests) {
+      const c = centre(ch);
+      const open = hasFlag(s, `chest-${ch.id}`);
+      const img = this.add.image(c.x, c.y + 12, open ? 'chest-open' : 'chest').setOrigin(0.5, 28 / 32);
+      this.addWorld(img, c.y + 12);
+      this.chestSprites.set(ch.id, img);
+      this.block(ch.x, ch.y);
+    }
+    map.signs.forEach((sg) => {
+      const c = centre(sg);
+      this.addWorld(this.add.image(c.x, c.y + 12, 'sign').setOrigin(0.5, 29 / 32), c.y + 12);
+      this.block(sg.x, sg.y);
+    });
+    for (const p of map.posts) {
+      const c = centre(p);
+      this.addWorld(this.add.image(c.x, c.y + 10, 'post').setOrigin(0.5, 36 / 40), c.y + 10);
+      this.glows.push({ x: c.x, y: c.y - 8, r: 40, col: [255, 220, 120], power: 0.4 });
+    }
+    for (const pl of map.plates) {
+      const c = centre(pl);
+      this.addWorld(this.add.image(c.x, c.y, 'plate'), -5000);
+    }
+    for (const b of map.blocks) {
+      const at = hasFlag(s, 'plate') && map.plates[0] ? map.plates[0] : b;
+      const c = centre(at);
+      const img = this.add.image(c.x, c.y + 16, 'block').setOrigin(0.5, 38 / 42);
+      this.addWorld(img, c.y + 16);
+      this.blocks.push({ x: at.x, y: at.y, sprite: img });
+    }
+    for (const d of map.doors) {
+      const imgs: Phaser.GameObjects.Image[] = [];
+      for (let j = 0; j < d.h; j++)
+        for (let i = 0; i < d.w; i++) {
+          const key = d.kind === 'key' ? 'door-key' : d.kind === 'bars' ? 'door-bars' : 'door-shut';
+          const img = this.add.image((d.x + i) * TILE + 16, (d.y + j + 1) * TILE + 6, key).setOrigin(0.5, 1);
+          this.addWorld(img, (d.y + j + 1) * TILE);
+          imgs.push(img);
+        }
+      this.doorSprites.set(d.id, imgs);
+    }
+    for (const st of map.stones) {
+      if (st.x < 0 || s.moonstones.includes(st.id)) continue;
+      const c = centre(st);
+      const img = this.add.image(c.x, c.y, 'moonstone');
+      this.addWorld(img, c.y);
+      img.setVisible(st.hidden !== 'buried');
+      this.stoneSprites.set(st.id, img);
+    }
+    map.enemies.forEach((e, i) => {
+      if (id === 'shrine' && hasFlag(s, `foe-${i}`)) return;
+      const c = centre(e);
+      this.spawnFoe(e.kind, c.x, c.y, i, e.room);
+    });
+    if (id === 'shrine' && map.boss && !hasFlag(s, 'boss')) this.makeBoss(map.boss);
+    if (map.wisp && !s.moonstones.includes('f-wisp')) {
+      const c = centre(map.wisp[0]);
+      const img = this.add.image(c.x, c.y, 'wisp');
+      this.addWorld(img, c.y + 40);
+      this.wisp = { i: 0, sprite: img, hop: 0 };
+    }
+
+    s.map = id;
+    s.x = x;
+    s.y = y;
+    s.facing = facing;
+    if (!keepSpawn) s.spawn = { map: id, x, y, facing };
+    this.player.setPosition(x, y);
+    this.applyFacing();
+    cam.startFollow(this.player, true, 0.2, 0.2);
+    cam.centerOn(x, y);
+    this.hud.showPlace(map.name);
+    this.updateDoors();
+    save(s);
+  }
+
+  private addWorld<T extends Phaser.GameObjects.Image>(img: T, depth: number) {
+    img.setScale(texScale(img.texture.key)).setDepth(depth);
+    this.world.push(img);
+    return img;
+  }
+
+  private addProp(p: Prop) {
+    const art = PROP_ART[p.kind];
+    const key = p.kind === 'statue' ? `statue-${p.facing ?? 'down'}` : art.key;
+    const x = (p.x + p.w / 2) * TILE;
+    const bottom = (p.y + p.h) * TILE;
+    this.addWorld(this.add.image(x, bottom, key).setOrigin(0.5, art.foot), bottom - 1);
+    if (art.solid) for (let j = 0; j < p.h; j++) for (let i = 0; i < p.w; i++) this.block(p.x + i, p.y + j);
+    const top = bottom - this.textures.get(key).getSourceImage().height * texScale(key) * art.foot;
+    switch (p.kind) {
+      case 'lamp':
+        this.glows.push({ x, y: bottom - 54, r: 140, col: WARM, power: 0.95 });
+        break;
+      case 'brazier':
+        this.glows.push({ x, y: bottom - 26, r: 130, col: [255, 160, 80], power: 1 });
+        break;
+      case 'shroom':
+        this.glows.push({ x, y: bottom - 8, r: 70, col: [120, 230, 255], power: 0.7 });
+        break;
+      case 'house':
+        for (const dx of [-45, 45]) this.glows.push({ x: x + dx, y: bottom - 45, r: 80, col: WARM, power: 0.75 });
+        break;
+      case 'hut':
+        this.glows.push({ x: x - 28, y: bottom - 30, r: 70, col: WARM, power: 0.7 });
+        break;
+      case 'arch':
+        this.glows.push({ x, y: top + 30, r: 70, col: [150, 200, 240], power: 0.5 });
+        break;
+    }
+  }
+
+  /** Marks a tile as blocked by something standing on it. */
+  private block(tx: number, ty: number) {
+    this.blockers.add(ty * this.map.w + tx);
+  }
+
+  private doorClosed(d: Door) {
+    const s = this.state;
+    if (d.kind === 'key') return !hasFlag(s, `door-${d.id}`);
+    if (d.kind === 'bars') return !hasFlag(s, d.flag!);
+    // A shut door closes behind the knight while its room still has foes (or its queen) in it.
+    const room = this.map.rooms.find((r) => r.id === d.room);
+    if (!room) return false;
+    const tx = Math.floor(s.x / TILE);
+    const ty = Math.floor(s.y / TILE);
+    const inside = tx >= room.x && tx < room.x + room.w && ty >= room.y && ty < room.y + room.h;
+    if (!inside) return false;
+    if (d.room === 'boss') return !!this.boss;
+    return this.foes.some((f) => f.alive && f.room === d.room);
+  }
+
+  private closedDoors = new Set<number>();
+
+  private updateDoors() {
+    this.closedDoors.clear();
+    for (const d of this.map.doors) {
+      const closed = this.doorClosed(d);
+      for (const img of this.doorSprites.get(d.id) ?? []) img.setVisible(closed);
+      if (closed) for (let j = 0; j < d.h; j++) for (let i = 0; i < d.w; i++) this.closedDoors.add((d.y + j) * this.map.w + d.x + i);
+    }
+  }
+
+  /** Whether the knight can't walk onto a tile. */
+  solidTile(tx: number, ty: number) {
+    if (tx < 0 || ty < 0 || tx >= this.map.w || ty >= this.map.h) return true;
+    const k = ty * this.map.w + tx;
+    return SOLID.has(tileAt(this.map, tx, ty)) || this.blockers.has(k) || this.closedDoors.has(k) || this.blocks.some((b) => b.x === tx && b.y === ty);
+  }
+
+  /** Things that stand on tiles, for foes (which can't walk through people or blocks either). */
+  private standing = (tx: number, ty: number) => {
+    const k = ty * this.map.w + tx;
+    return this.blockers.has(k) || this.closedDoors.has(k) || this.blocks.some((b) => b.x === tx && b.y === ty);
+  };
+
+  /** Whether the knight's feet fit at (x, y). */
+  private free(x: number, y: number) {
+    for (const [dx, dy] of [[-8, -6], [8, -6], [-8, 4], [8, 4]]) if (this.solidTile(Math.floor((x + dx) / TILE), Math.floor((y + dy) / TILE))) return false;
+    return true;
+  }
+
+  // ---------------------------------------------------------------- input
+
+  private onKey(e: KeyboardEvent) {
+    if (this.hud.ended || this.fading) return;
+    const code = e.code;
+    if (this.dialog) {
+      if (code === 'Space' || code === 'Enter' || code === 'KeyJ') this.nextLine();
+      return;
+    }
+    if (code === 'Space' || code === 'Enter' || code === 'KeyJ') this.act();
+    else if (code === 'ShiftLeft' || code === 'ShiftRight' || code === 'KeyK') this.startRoll();
+    else if (code === 'KeyQ' || code === 'KeyE' || code === 'KeyL') this.fireVine();
+  }
+
+  private onPointer(pointer: Phaser.Input.Pointer) {
+    if (this.hud.ended || this.fading) return;
+    if (this.dialog) {
+      this.nextLine();
+      return;
+    }
+    const btn = this.hud.buttonAt(viewPoint(pointer), this.state);
+    if (btn === 'sword') return this.act();
+    if (btn === 'roll') return this.startRoll();
+    if (btn === 'vine') return this.fireVine();
+    const w = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    this.tapWorld(w.x, w.y);
+  }
+
+  /** Where a tap in the world sends the knight, and what they do there. */
+  tapWorld(wx: number, wy: number) {
+    const s = this.state;
+    const tx = Math.floor(wx / TILE);
+    const ty = Math.floor(wy / TILE);
+    const foe = this.foes.find((f) => f.alive && Math.hypot(f.x - wx, f.y - 10 - wy) < 26);
+    if (foe && s.items.sword) return this.goTo({ kind: 'foe', foe }, Math.floor(foe.x / TILE), Math.floor(foe.y / TILE));
+    for (const n of this.map.npcs) {
+      const c = centre(n);
+      if (Math.hypot(c.x - wx, c.y - 6 - wy) < 24) return this.goTo({ kind: 'npc', id: n.id }, n.x, n.y);
+    }
+    const chest = this.map.chests.find((c) => c.x === tx && c.y === ty);
+    if (chest) return this.goTo({ kind: 'chest', id: chest.id }, tx, ty);
+    const sign = this.map.signs.findIndex((g) => g.x === tx && g.y === ty);
+    if (sign >= 0) return this.goTo({ kind: 'sign', i: sign }, tx, ty);
+    if (this.blocks.some((b) => b.x === tx && b.y === ty)) return this.goTo({ kind: 'block', tx, ty }, tx, ty);
+    if (this.closedDoors.has(ty * this.map.w + tx)) return this.goTo({ kind: 'door', tx, ty }, tx, ty);
+    if (s.items.sword && CUTTABLE.has(tileAt(this.map, tx, ty))) return this.goTo({ kind: 'cut', tx, ty }, tx, ty);
+    const buried = this.map.stones.find((st) => st.hidden === 'buried' && st.x === tx && st.y === ty && !this.dug.has(st.id));
+    if (buried && s.items.sword) return this.goTo({ kind: 'dig', tx, ty }, tx, ty, true);
+    this.target = null;
+    this.walkTo(tx, ty);
+  }
+
+  /** Walks to a free tile and returns whether there is a way. */
+  private walkTo(tx: number, ty: number) {
+    const s = this.state;
+    const from = { x: Math.floor(s.x / TILE), y: Math.floor(s.y / TILE) };
+    const path = findPath(this.map.w, this.map.h, (x, y) => (x === from.x && y === from.y ? false : this.solidTile(x, y)), from, { x: tx, y: ty });
+    this.route = path ? path.slice(1) : null;
+    return !!path;
+  }
+
+  /** Walks next to a target tile (or onto it, for digging) and then acts on it. */
+  private goTo(target: Target, tx: number, ty: number, onto = false) {
+    const s = this.state;
+    const here = { x: Math.floor(s.x / TILE), y: Math.floor(s.y / TILE) };
+    this.target = target;
+    if (onto) {
+      if (here.x === tx && here.y === ty) return this.arrive();
+      if (!this.walkTo(tx, ty)) this.target = null;
+      return;
+    }
+    if (Math.abs(here.x - tx) + Math.abs(here.y - ty) === 1) return this.arrive();
+    let best: Step[] | null = null;
+    for (const d of Object.values(DIRS)) {
+      const nx = tx + d.x;
+      const ny = ty + d.y;
+      if (this.solidTile(nx, ny) && !(nx === here.x && ny === here.y)) continue;
+      const path = findPath(this.map.w, this.map.h, (x, y) => (x === here.x && y === here.y ? false : this.solidTile(x, y)), here, { x: nx, y: ny });
+      if (path && (!best || path.length < best.length)) best = path;
+    }
+    if (!best) {
+      this.target = null;
+      return;
+    }
+    this.route = best.slice(1);
+    if (!this.route.length) this.arrive();
+  }
+
+  /** At the end of a tap's walk: face the target and act on it. */
+  private arrive() {
+    const t = this.target;
+    this.route = null;
+    if (!t) return;
+    const s = this.state;
+    if (t.kind === 'foe') return;
+    this.target = null;
+    const at =
+      t.kind === 'npc' ? this.map.npcs.find((n) => n.id === t.id)! : t.kind === 'chest' ? this.map.chests.find((c) => c.id === t.id)! : t.kind === 'sign' ? this.map.signs[t.i] : { x: t.tx, y: t.ty };
+    const dx = at.x + 0.5 - s.x / TILE;
+    const dy = at.y + 0.5 - s.y / TILE;
+    if (t.kind !== 'dig') s.facing = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : dy > 0 ? 'down' : 'up';
+    this.applyFacing();
+    if (t.kind === 'cut' || t.kind === 'dig') this.startSwing();
+    else this.interactAt(at.x, at.y);
+  }
+
+  /** Space, J or the sword button: talk to or use what is in front, else swing the sword. */
+  private act() {
+    const s = this.state;
+    const d = DIRS[s.facing];
+    const tx = Math.floor((s.x + d.x * 22) / TILE);
+    const ty = Math.floor((s.y - 4 + d.y * 22) / TILE);
+    if (this.interactAt(tx, ty)) return;
+    this.startSwing();
+  }
+
+  /** Talks to, opens, reads or pushes what is on a tile. Returns whether there was anything. */
+  private interactAt(tx: number, ty: number): boolean {
+    const s = this.state;
+    const npc = this.map.npcs.find((n) => n.x === tx && n.y === ty);
+    if (npc) {
+      const t = talk(npc.id, s);
+      this.openDialog(npc.name, t.lines, t.then);
+      return true;
+    }
+    const chest = this.map.chests.find((c) => c.x === tx && c.y === ty);
+    if (chest) {
+      if (!hasFlag(s, `chest-${chest.id}`)) this.openChest(chest.id, chest.item);
+      else this.hud.toast('Empty.');
+      return true;
+    }
+    const sign = this.map.signs.find((g) => g.x === tx && g.y === ty);
+    if (sign) {
+      this.openDialog('Sign', [sign.text]);
+      return true;
+    }
+    if (this.blocks.some((b) => b.x === tx && b.y === ty)) {
+      this.push(tx, ty);
+      return true;
+    }
+    const door = this.map.doors.find((d) => tx >= d.x && tx < d.x + d.w && ty >= d.y && ty < d.y + d.h);
+    if (door && this.closedDoors.has(ty * this.map.w + tx)) {
+      if (door.kind === 'key' && s.keys > 0) {
+        s.keys--;
+        setFlag(s, `door-${door.id}`);
+        this.hud.toast('The lock clicks open.');
+        this.updateDoors();
+        save(s);
+      } else if (door.kind === 'key') this.hud.toast('Locked. It needs a small key.');
+      else if (door.kind === 'bars') this.hud.toast('Iron bars. Something must lift them.');
+      else this.hud.toast('Thorny vines hold it shut.');
+      return true;
+    }
+    return false;
+  }
+
+  private openChest(id: string, item: ItemId) {
+    const s = this.state;
+    setFlag(s, `chest-${id}`);
+    this.chestSprites.get(id)?.setTexture('chest-open').setScale(texScale('chest-open'));
+    give(s, item);
+    const text: Record<ItemId, string> = {
+      sword: 'You found the Old Blade! Space, J or the sword button swings it. It cuts bushes and thorns too.',
+      hookvine: 'You found the Hookvine! Q, L or the vine button throws it. It pulls you to golden posts, over water and pits.',
+      key: 'You found a small key. It opens one locked door in the shrine.',
+      heart: 'You found a Heart Vessel! One more heart.',
+      oil: 'You found lantern oil. Your lantern burns brighter now.',
+    };
+    this.openDialog('', [text[item]]);
+    save(s);
+  }
+
+  private openDialog(speaker: string, lines: string[], then?: Dialog['then']) {
+    this.dialog = { speaker, lines, i: 0, then };
+    this.route = null;
+    this.target = null;
+  }
+
+  private nextLine() {
+    const d = this.dialog;
+    if (!d) return;
+    d.i++;
+    if (d.i < d.lines.length) return;
+    this.dialog = null;
+    if (d.then) this.effect(d.then);
+  }
+
+  private effect(e: TalkEffect | 'chapter-end') {
+    const s = this.state;
+    switch (e) {
+      case 'quest-blade':
+        advance(s, 'blade');
+        this.hud.toast('New quest: The Old Blade');
+        break;
+      case 'quest-thorns':
+        advance(s, 'thorns');
+        this.hud.toast('Quest done: The Old Blade');
+        break;
+      case 'cat-pet':
+        setFlag(s, hasFlag(s, 'cat-1') ? 'cat-2' : 'cat-1');
+        break;
+      case 'cat-stone':
+        setFlag(s, 'cat-3');
+        this.gainStone('v-cat');
+        break;
+      case 'finish':
+        advance(s, 'done');
+        this.chapterEnd();
+        break;
+      case 'chapter-end':
+        this.chapterEnd();
+        break;
+    }
+    save(s);
+  }
+
+  private chapterEnd() {
+    const s = this.state;
+    const n = s.moonstones.length;
+    const ending =
+      n >= MOONSTONES
+        ? 'Every moonstone hums at once. Far off in Glimmer Fen, something vast opens one eye, and smiles.'
+        : n >= 4
+          ? 'A cold light flickers over Glimmer Fen. Some of the moon is still missing.'
+          : 'The lamps burn on in Mossford. The woods are quiet, for now.';
+    this.hud.showEnd(
+      'Chapter One: The Thornmother',
+      [`Moonstones ${n} of ${MOONSTONES}   ·   Foes beaten ${s.beaten}   ·   Falls ${s.falls}`, ending],
+      () => undefined,
+      () => {
+        clearSave();
+        this.state = newState();
+        this.enterMap(this.state.map, this.state.x, this.state.y, this.state.facing, false);
+      },
+    );
+  }
+
+  private gainStone(id: string) {
+    const s = this.state;
+    if (s.moonstones.includes(id)) return;
+    s.moonstones.push(id);
+    this.stoneSprites.get(id)?.destroy();
+    this.stoneSprites.delete(id);
+    this.hud.toast(`Moonstone! ${s.moonstones.length} of ${MOONSTONES}`);
+    save(s);
+  }
+
+  // ---------------------------------------------------------------- actions
+
+  private startSwing() {
+    const s = this.state;
+    if (!s.items.sword || this.swingCd > 0 || this.roll || this.hook) return;
+    this.swing = { t: 0, dir: s.facing };
+    this.swingCd = SWING_COOLDOWN_MS;
+    const d = DIRS[s.facing];
+    const hx = s.x + d.x * SWING_REACH;
+    const hy = s.y - 10 + d.y * SWING_REACH;
+    // Foes and the Thornmother's bulbs in reach.
+    for (const f of this.foes) if (f.alive && Math.hypot(f.x - hx, f.y - 8 - hy) < SWING_RADIUS + 12) this.hitFoe(f, d);
+    if (this.boss) for (const b of this.boss.bulbs) if (b.state === 'down' && Math.hypot(b.x - hx, b.y - 10 - hy) < SWING_RADIUS + 14) this.hitBulb(b);
+    // Bushes and thorns: the tile in front, and the one the blade's tip reaches.
+    const tiles = new Set<string>();
+    for (const r of [16, SWING_REACH + 8]) tiles.add(`${Math.floor((s.x + d.x * r) / TILE)},${Math.floor((s.y - 4 + d.y * r) / TILE)}`);
+    for (const k of tiles) {
+      const [tx, ty] = k.split(',').map(Number);
+      if (CUTTABLE.has(tileAt(this.map, tx, ty))) this.cut(tx, ty);
+    }
+    // A swing on a buried moonstone's spot digs it up.
+    for (const st of this.map.stones)
+      if (st.hidden === 'buried' && !this.dug.has(st.id) && Math.hypot((st.x + 0.5) * TILE - hx, (st.y + 0.5) * TILE - hy) < 30) {
+        this.dug.add(st.id);
+        this.stoneSprites.get(st.id)?.setVisible(true);
+        this.hud.toast('Something glints in the mud!');
+      }
+  }
+
+  private cut(tx: number, ty: number) {
+    const s = this.state;
+    const t = tileAt(this.map, tx, ty);
+    const thorns = t === 'thorns';
+    setTile(this.map, tx, ty, thorns ? 'path' : 'grass');
+    const k = ty * this.map.w + tx;
+    const img = this.bushSprites.get(k);
+    if (img) {
+      this.puff(img.x, img.y - 10, thorns ? 0x7a3f5a : 0x4a8c44);
+      img.destroy();
+      this.bushSprites.delete(k);
+    }
+    if (thorns) {
+      // Thorns grow in pairs across a way; cutting one clears its twin.
+      for (const dx of [-1, 1]) if (tileAt(this.map, tx + dx, ty) === 'thorns') this.cut(tx + dx, ty);
+      if (this.map.id === 'village' && ty === 3) {
+        setFlag(s, 'gate-cut');
+        if (s.quest === 'thorns') {
+          advance(s, 'shrine');
+          this.hud.toast('The north gate is open');
+        }
+      }
+      if (this.map.id === 'woods') setFlag(s, 'woods-thorns');
+      save(s);
+    } else if (Math.random() < 0.2) this.dropHeart((tx + 0.5) * TILE, (ty + 0.5) * TILE);
+  }
+
+  private startRoll() {
+    const s = this.state;
+    if (this.roll || this.rollCd > 0 || this.hook) return;
+    const mv = this.moveInput();
+    const d = mv.x || mv.y ? mv : DIRS[s.facing];
+    const len = Math.hypot(d.x, d.y) || 1;
+    this.roll = { t: 0, dx: d.x / len, dy: d.y / len };
+    this.rollCd = ROLL_COOLDOWN_MS;
+    this.route = null;
+    this.target = null;
+  }
+
+  private fireVine() {
+    const s = this.state;
+    if (!s.items.hookvine || this.hook || this.roll) return;
+    const d = DIRS[s.facing];
+    this.hook = { x: s.x, y: s.y - 12, dx: d.x, dy: d.y, dist: 0, phase: 'out' };
+    this.route = null;
+    this.target = null;
+  }
+
+  private push(tx: number, ty: number) {
+    const s = this.state;
+    const b = this.blocks.find((bl) => bl.x === tx && bl.y === ty);
+    // A block on a plate sinks in and stays.
+    if (!b || this.map.plates.some((p) => p.x === tx && p.y === ty)) return;
+    const d = DIRS[s.facing];
+    const nx = tx + d.x;
+    const ny = ty + d.y;
+    if (this.solidTile(nx, ny) || this.foes.some((f) => f.alive && Math.floor(f.x / TILE) === nx && Math.floor(f.y / TILE) === ny)) return;
+    b.x = nx;
+    b.y = ny;
+    const c = centre(b);
+    this.tweens.add({ targets: b.sprite, x: c.x, y: c.y + 16, duration: 200 });
+    b.sprite.setDepth(c.y + 16);
+    const plate = this.map.plates.find((p) => p.x === nx && p.y === ny);
+    if (plate && !hasFlag(s, plate.flag)) {
+      setFlag(s, plate.flag);
+      this.hud.toast('Somewhere, iron bars grind open.');
+      save(s);
+    }
+  }
+
+  private dropHeart(x: number, y: number) {
+    const sprite = this.add.image(x, y, 'pickup-heart').setScale(texScale('pickup-heart')).setDepth(y);
+    this.hearts.push({ x, y, sprite });
+  }
+
+  private puff(x: number, y: number, colour: number) {
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      const dot = this.add.circle(x, y, 3, colour).setDepth(y + 1);
+      this.tweens.add({ targets: dot, x: x + Math.cos(a) * 20, y: y + Math.sin(a) * 14, alpha: 0, duration: 350, onComplete: () => dot.destroy() });
+    }
+  }
+
+  // ---------------------------------------------------------------- the loop
+
+  private moveInput() {
+    const k = this.keys;
+    const x = (k.D.isDown || k.RIGHT.isDown ? 1 : 0) - (k.A.isDown || k.LEFT.isDown ? 1 : 0);
+    const y = (k.S.isDown || k.DOWN.isDown ? 1 : 0) - (k.W.isDown || k.UP.isDown ? 1 : 0);
+    return { x, y };
+  }
+
+  update(_time: number, delta: number) {
+    const dt = Math.min(delta, 100);
+    this.now += dt;
+    const s = this.state;
+    if (!this.dialog && !this.hud.ended && !this.fading) {
+      this.swingCd = Math.max(0, this.swingCd - dt);
+      this.rollCd = Math.max(0, this.rollCd - dt);
+      this.invuln = Math.max(0, this.invuln - dt);
+      this.movePlayer(dt);
+      this.updateHook(dt);
+      this.updateFoes(dt);
+      this.updateSeeds(dt);
+      this.updateBoss(dt);
+      this.updateWisp(dt);
+      this.pickups();
+      this.updateDoors();
+      this.checkExits();
+    }
+    this.drawPlayer(dt);
+    this.drawWorld();
+    this.hud.update(dt, s, this.dialog ? { speaker: this.dialog.speaker, text: this.dialog.lines[this.dialog.i] } : null, this.map.id === 'shrine');
+  }
+
+  private movePlayer(dt: number) {
+    const s = this.state;
+    const sec = dt / 1000;
+    if (this.swing) {
+      this.swing.t += dt;
+      if (this.swing.t >= SWING_MS) this.swing = null;
+    }
+    if (this.roll) {
+      this.roll.t += dt;
+      this.tryMove(this.roll.dx * ROLL_SPEED * sec, this.roll.dy * ROLL_SPEED * sec);
+      if (this.roll.t >= ROLL_MS) this.roll = null;
+      return;
+    }
+    if (this.hook?.phase === 'pull') return;
+    let mv = this.moveInput();
+    if (mv.x || mv.y) {
+      this.route = null;
+      this.target = null;
+    } else if (this.target?.kind === 'foe') {
+      mv = this.chase(dt);
+    } else if (this.route?.length) {
+      const next = centre(this.route[0]);
+      const dx = next.x - s.x;
+      const dy = next.y + 4 - s.y;
+      const dist = Math.hypot(dx, dy);
+      // A long frame would step past the tile's middle and back again, so the last bit is one step.
+      if (dist < 4 || dist <= WALK_SPEED * sec) {
+        if (dist >= 4) this.tryMove(dx, dy);
+        this.route.shift();
+        if (!this.route.length) {
+          this.route = null;
+          if (this.target) this.arrive();
+        }
+        return;
+      }
+      mv = { x: dx / dist, y: dy / dist };
+    }
+    if (!mv.x && !mv.y) {
+      this.walkT = 0;
+      this.pushT = 0;
+      return;
+    }
+    if (this.swing) return;
+    const len = Math.hypot(mv.x, mv.y);
+    const vx = (mv.x / len) * WALK_SPEED * sec;
+    const vy = (mv.y / len) * WALK_SPEED * sec;
+    if (Math.abs(mv.x) > Math.abs(mv.y) + 0.01) s.facing = mv.x > 0 ? 'right' : 'left';
+    else if (mv.y) s.facing = mv.y > 0 ? 'down' : 'up';
+    this.walkT += dt;
+    const moved = this.tryMove(vx, vy);
+    // Leaning into a block for a moment pushes it.
+    if (!moved && (mv.x === 0) !== (mv.y === 0)) {
+      const d = DIRS[s.facing];
+      const tx = Math.floor((s.x + d.x * 14) / TILE);
+      const ty = Math.floor((s.y - 2 + d.y * 14) / TILE);
+      if (this.blocks.some((b) => b.x === tx && b.y === ty)) {
+        this.pushT += dt;
+        if (this.pushT > 350) {
+          this.pushT = 0;
+          this.push(tx, ty);
+        }
+      }
+    } else this.pushT = 0;
+    // A tap's route that has stopped moving (a foe in the way) gives up rather than walking on the spot.
+    if (!moved && this.route && !this.keysDown()) this.route = null;
+  }
+
+  private keysDown() {
+    const m = this.moveInput();
+    return m.x !== 0 || m.y !== 0;
+  }
+
+  /** Moves the knight, sliding along walls; returns whether they moved at all. */
+  private tryMove(vx: number, vy: number) {
+    const s = this.state;
+    let moved = false;
+    if (vx && this.free(s.x + vx, s.y)) {
+      s.x += vx;
+      moved = true;
+    }
+    if (vy && this.free(s.x, s.y + vy)) {
+      s.y += vy;
+      moved = true;
+    }
+    return moved;
+  }
+
+  /** Walks at a tapped foe and swings whenever it is in reach. */
+  private chase(dt: number) {
+    const s = this.state;
+    const t = this.target;
+    if (t?.kind !== 'foe' || !t.foe.alive) {
+      this.target = null;
+      return { x: 0, y: 0 };
+    }
+    const f = t.foe;
+    const dx = f.x - s.x;
+    const dy = f.y - s.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < SWING_REACH + 16) {
+      s.facing = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : dy > 0 ? 'down' : 'up';
+      this.startSwing();
+      return { x: 0, y: 0 };
+    }
+    this.chaseT -= dt;
+    if (this.chaseT <= 0 || !this.route?.length) {
+      this.chaseT = 400;
+      const keep = this.target;
+      this.walkTo(Math.floor(f.x / TILE), Math.floor(f.y / TILE));
+      this.target = keep;
+    }
+    if (this.route?.length) {
+      const next = centre(this.route[0]);
+      const nx = next.x - s.x;
+      const ny = next.y + 4 - s.y;
+      const nd = Math.hypot(nx, ny);
+      if (nd < Math.max(4, (WALK_SPEED * dt) / 1000)) {
+        this.route.shift();
+        return { x: 0, y: 0 };
+      }
+      return { x: nx / nd, y: ny / nd };
+    }
+    return { x: dx / dist, y: dy / dist };
+  }
+
+  private updateHook(dt: number) {
+    const h = this.hook;
+    if (!h) return;
+    const s = this.state;
+    const sec = dt / 1000;
+    if (h.phase === 'pull' && h.to) {
+      const dx = h.to.x - s.x;
+      const dy = h.to.y - s.y;
+      const dist = Math.hypot(dx, dy);
+      const step = PULL_SPEED * sec;
+      if (dist <= step) {
+        s.x = h.to.x;
+        s.y = h.to.y;
+        this.hook = null;
+      } else {
+        s.x += (dx / dist) * step;
+        s.y += (dy / dist) * step;
+      }
+      h.x = h.to.x;
+      h.y = h.to.y - 12;
+      return;
+    }
+    if (h.phase === 'back') {
+      const dx = s.x - h.x;
+      const dy = s.y - 12 - h.y;
+      const dist = Math.hypot(dx, dy);
+      const step = VINE_SPEED * 1.4 * sec;
+      if (dist <= step) this.hook = null;
+      else {
+        h.x += (dx / dist) * step;
+        h.y += (dy / dist) * step;
+      }
+      return;
+    }
+    // Flying out, a few pixels at a time so nothing is skipped.
+    let left = VINE_SPEED * sec;
+    while (left > 0 && h.phase === 'out') {
+      const step = Math.min(6, left);
+      left -= step;
+      h.x += h.dx * step;
+      h.y += h.dy * step;
+      h.dist += step;
+      // The post the knight stands on doesn't count, so they can throw on from it.
+      const post = this.map.posts.find((p) => Math.hypot(centre(p).x - h.x, centre(p).y - 12 - h.y) < 16 && Math.hypot(centre(p).x - s.x, centre(p).y - s.y) > 20);
+      if (post) {
+        const c = centre(post);
+        h.phase = 'pull';
+        h.to = { x: c.x, y: c.y + 4 };
+        this.route = null;
+        return;
+      }
+      const bulb = this.boss?.bulbs.find((b) => b.state === 'raised' && Math.hypot(b.x - h.x, b.y - 14 - h.y) < 20);
+      if (bulb) {
+        this.yank(bulb);
+        h.phase = 'back';
+        return;
+      }
+      const foe = this.foes.find((f) => f.alive && Math.hypot(f.x - h.x, f.y - 10 - h.y) < 16);
+      if (foe) {
+        foe.stun = 1600;
+        h.phase = 'back';
+        return;
+      }
+      const tx = Math.floor(h.x / TILE);
+      const ty = Math.floor((h.y + 12) / TILE);
+      const t = tileAt(this.map, tx, ty);
+      const blocked = (SOLID.has(t) && !LOW.has(t)) || this.blockers.has(ty * this.map.w + tx) || this.closedDoors.has(ty * this.map.w + tx);
+      if (blocked || h.dist >= VINE_RANGE) h.phase = 'back';
+    }
+  }
+
+  private hurt(damage: number, from: { x: number; y: number }) {
+    const s = this.state;
+    if (this.invuln > 0 || this.roll || this.hook?.phase === 'pull') return;
+    s.hp = Math.max(0, s.hp - damage);
+    this.invuln = HURT_MS;
+    const dx = s.x - from.x;
+    const dy = s.y - from.y;
+    const len = Math.hypot(dx, dy) || 1;
+    for (let i = 0; i < 4; i++) this.tryMove((dx / len) * 6, (dy / len) * 6);
+    if (!settings.reduceMotion) this.cameras.main.shake(120, 0.004);
+    if (s.hp <= 0) this.fall();
+  }
+
+  /** Out of hearts: wake at the place the knight last came in, healed. */
+  private fall() {
+    const s = this.state;
+    s.falls++;
+    s.hp = s.maxHp;
+    const sp = s.spawn;
+    this.fadeTo(() => {
+      this.enterMap(sp.map, sp.x, sp.y, sp.facing, true);
+      this.hud.toast('You wake by the lamplight, a little bruised.');
+    });
+  }
+
+  private fadeTo(then: () => void) {
+    this.fading = true;
+    const cam = this.cameras.main;
+    cam.fadeOut(220, 5, 8, 20);
+    cam.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+      then();
+      cam.fadeIn(260, 5, 8, 20);
+      this.fading = false;
+    });
+  }
+
+  private checkExits() {
+    const s = this.state;
+    const tx = Math.floor(s.x / TILE);
+    const ty = Math.floor(s.y / TILE);
+    const exit = this.map.exits.find((e) => tx >= e.x && tx < e.x + e.w && ty >= e.y && ty < e.y + e.h && (!e.flag || hasFlag(s, e.flag)));
+    if (!exit) return;
+    this.route = null;
+    this.target = null;
+    this.fadeTo(() => this.enterMap(exit.to, (exit.tx + 0.5) * TILE, (exit.ty + 0.5) * TILE + 4, exit.facing, false));
+  }
+
+  private pickups() {
+    const s = this.state;
+    this.hearts = this.hearts.filter((h) => {
+      if (Math.hypot(h.x - s.x, h.y - s.y) > PICKUP_PX + 4) return true;
+      s.hp = Math.min(s.maxHp, s.hp + 2);
+      h.sprite.destroy();
+      return false;
+    });
+    for (const st of this.map.stones) {
+      if (st.x < 0 || s.moonstones.includes(st.id)) continue;
+      if (st.hidden === 'buried' && !this.dug.has(st.id)) continue;
+      if (st.id === 's-boss' && !hasFlag(s, 'boss')) continue;
+      const c = centre(st);
+      if (Math.hypot(c.x - s.x, c.y - s.y) < PICKUP_PX) this.gainStone(st.id);
+    }
+  }
+
+  // ---------------------------------------------------------------- foes
+
+  private spawnFoe(kind: Foe['kind'], x: number, y: number, index: number, room?: string) {
+    const f = makeFoe(this, kind, x, y, index, room);
+    this.world.push(f.sprite);
+    this.foes.push(f);
+    return f;
+  }
+
+  private hitFoe(f: Foe, d: { x: number; y: number }) {
+    if (f.hurt > 0) return;
+    f.hp--;
+    f.hurt = 250;
+    for (let i = 0; i < 5; i++) if (foeFree(this.map, this.standing, f.x + d.x * 6, f.y + d.y * 6, FOES[f.kind].flies)) {
+      f.x += d.x * 6;
+      f.y += d.y * 6;
+    }
+    if (f.hp > 0) return;
+    f.alive = false;
+    this.state.beaten++;
+    this.puff(f.x, f.y - 10, f.kind === 'moth' ? 0xc8bce0 : 0x6a8a4a);
+    f.sprite.destroy();
+    if (this.map.id === 'shrine' && f.index >= 0) setFlag(this.state, `foe-${f.index}`);
+    if (Math.random() < 0.3) this.dropHeart(f.x, f.y);
+  }
+
+  private updateFoes(dt: number) {
+    const s = this.state;
+    const sec = dt / 1000;
+    for (const f of this.foes) {
+      if (!f.alive) continue;
+      const info = FOES[f.kind];
+      f.hurt = Math.max(0, f.hurt - dt);
+      if (f.stun > 0) {
+        f.stun -= dt;
+        continue;
+      }
+      const dx = s.x - f.x;
+      const dy = s.y - f.y;
+      const dist = Math.hypot(dx, dy);
+      const sees = dist < info.sees && (!f.room || this.inRoom(f.room));
+      f.t -= dt;
+      let vx = 0;
+      let vy = 0;
+      if (f.kind === 'slug') {
+        if (sees) {
+          vx = (dx / dist) * info.speed * 1.4;
+          vy = (dy / dist) * info.speed * 1.4;
+        } else {
+          if (f.t <= 0) {
+            const a = Math.random() * Math.PI * 2;
+            f.dir = Math.random() < 0.3 ? { x: 0, y: 0 } : { x: Math.cos(a), y: Math.sin(a) };
+            f.t = 1500 + Math.random() * 1500;
+          }
+          vx = f.dir.x * info.speed;
+          vy = f.dir.y * info.speed;
+        }
+      } else if (f.kind === 'moth') {
+        const wob = Math.sin(this.now / 220 + f.index);
+        if (sees) {
+          vx = (dx / dist) * info.speed + (-dy / dist) * wob * 50;
+          vy = (dy / dist) * info.speed + (dx / dist) * wob * 50;
+        } else {
+          const hx = f.home.x + Math.cos(this.now / 900 + f.index) * 40 - f.x;
+          const hy = f.home.y + Math.sin(this.now / 700 + f.index) * 30 - f.y;
+          vx = hx;
+          vy = hy;
+        }
+      } else if (f.kind === 'thornling' && sees && f.t <= 0) {
+        f.t = THORNLING_SHOT_MS;
+        this.shoot(f.x, f.y - 16, dx / dist, dy / dist);
+      }
+      const nx = f.x + vx * sec;
+      const ny = f.y + vy * sec;
+      if (foeFree(this.map, this.standing, nx, f.y, info.flies)) f.x = nx;
+      else f.t = 0;
+      if (foeFree(this.map, this.standing, f.x, ny, info.flies)) f.y = ny;
+      else f.t = 0;
+      if (Math.hypot(s.x - f.x, s.y - f.y) < 18) this.hurt(info.damage, f);
+    }
+    this.foes = this.foes.filter((f) => f.alive);
+  }
+
+  private inRoom(id: string) {
+    const r = this.map.rooms.find((room) => room.id === id);
+    if (!r) return true;
+    const tx = this.state.x / TILE;
+    const ty = this.state.y / TILE;
+    return tx >= r.x && tx < r.x + r.w && ty >= r.y && ty < r.y + r.h;
+  }
+
+  private shoot(x: number, y: number, dx: number, dy: number) {
+    const sprite = this.add.image(x, y, 'seed').setScale(texScale('seed'));
+    this.seeds.push({ x, y, vx: dx * SEED_SPEED, vy: dy * SEED_SPEED, sprite, life: 4000 });
+  }
+
+  private updateSeeds(dt: number) {
+    const s = this.state;
+    const sec = dt / 1000;
+    this.seeds = this.seeds.filter((sd) => {
+      sd.x += sd.vx * sec;
+      sd.y += sd.vy * sec;
+      sd.life -= dt;
+      const t = tileAt(this.map, Math.floor(sd.x / TILE), Math.floor((sd.y + 12) / TILE));
+      const gone = sd.life <= 0 || (SOLID.has(t) && !LOW.has(t));
+      if (!gone && Math.hypot(sd.x - s.x, sd.y - (s.y - 14)) < 13) {
+        this.hurt(1, sd);
+        sd.sprite.destroy();
+        return false;
+      }
+      if (gone) sd.sprite.destroy();
+      else sd.sprite.setPosition(sd.x, sd.y).setDepth(sd.y + 12);
+      return !gone;
+    });
+  }
+
+  // ---------------------------------------------------------------- the Thornmother
+
+  private makeBoss(at: { x: number; y: number }) {
+    const x = at.x * TILE;
+    const y = at.y * TILE;
+    const sprite = this.add.image(x, y + 30, 'boss').setOrigin(0.5, 128 / 140).setScale(texScale('boss')).setDepth(y + 30);
+    this.world.push(sprite);
+    const homes = [
+      { x: x - 4.4 * TILE, y: y + 8 },
+      { x: x + 4.4 * TILE, y: y + 8 },
+      { x, y: y + 3.9 * TILE },
+    ];
+    const bulbs = homes.map((h) => {
+      const img = this.add.image(h.x, h.y, 'bulb').setOrigin(0.5, 36 / 40).setScale(texScale('bulb')).setDepth(h.y);
+      this.world.push(img);
+      return { home: h, x: h.x, y: h.y, state: 'hidden' as const, t: 0, hp: BULB_HP, sprite: img };
+    });
+    this.boss = { x, y, sprite, bulbs, raiseT: 2000, volleyT: 2500, summonT: SUMMON_MS, awake: false };
+  }
+
+  private yank(b: Boss['bulbs'][number]) {
+    const s = this.state;
+    const dx = s.x - b.home.x;
+    const dy = s.y - b.home.y;
+    const len = Math.hypot(dx, dy) || 1;
+    b.state = 'down';
+    b.t = BULB_DOWN_MS;
+    b.x = b.home.x + (dx / len) * Math.min(44, len - 20);
+    b.y = b.home.y + (dy / len) * Math.min(44, len - 20);
+    this.hud.toast('The bulb is down. Strike it!');
+  }
+
+  private hitBulb(b: Boss['bulbs'][number]) {
+    b.hp--;
+    this.puff(b.x, b.y - 12, 0xd8e86a);
+    if (b.hp > 0) return;
+    b.state = 'gone';
+    b.sprite.setVisible(false);
+    const boss = this.boss!;
+    if (boss.bulbs.every((x) => x.state === 'gone')) this.bossDown();
+  }
+
+  private bossDown() {
+    const s = this.state;
+    const boss = this.boss!;
+    this.puff(boss.x, boss.y, 0x8a3f62);
+    this.tweens.add({ targets: boss.sprite, alpha: 0, scaleX: boss.sprite.scaleX * 0.6, scaleY: boss.sprite.scaleY * 0.6, duration: 900 });
+    this.boss = null;
+    for (const sd of this.seeds) sd.sprite.destroy();
+    this.seeds = [];
+    for (const f of this.foes) if (f.room === 'boss') {
+      f.alive = false;
+      f.sprite.destroy();
+    }
+    setFlag(s, 'boss');
+    advance(s, 'return');
+    this.map.tiles = this.map.tiles.map((t) => (t === 'ring' ? 'floor' : t));
+    // The ring's floor is painted anew; the ground picks up the new texture.
+    paintGround(this, this.map);
+    this.ground.setTexture(groundKey(this.map));
+    give(s, 'heart');
+    const st = this.stoneSprites.get('s-boss');
+    st?.setVisible(true);
+    this.openDialog('', [
+      'The Thornmother withers into a heap of dry bramble.',
+      'You found a Heart Vessel! One more heart.',
+      'A way out has opened at the top of the hall. Elder Wren should hear of this.',
+    ]);
+    save(s);
+  }
+
+  private updateBoss(dt: number) {
+    const boss = this.boss;
+    if (!boss) {
+      return;
+    }
+    if (!boss.awake) {
+      if (!this.inRoom('boss')) return;
+      boss.awake = true;
+      this.hud.showPlace('The Thornmother');
+    }
+    const left = boss.bulbs.filter((b) => b.state !== 'gone').length;
+    boss.raiseT -= dt;
+    if (boss.raiseT <= 0 && !boss.bulbs.some((b) => b.state === 'raised' || b.state === 'down')) {
+      const next = boss.bulbs.find((b, i) => b.state === 'hidden' && i === (3 - left) % 3) ?? boss.bulbs.find((b) => b.state === 'hidden');
+      if (next) {
+        next.state = 'raised';
+        next.t = BULB_UP_MS;
+      }
+      boss.raiseT = BULB_EVERY_MS;
+    }
+    for (const b of boss.bulbs) {
+      if (b.state === 'raised' || b.state === 'down') {
+        b.t -= dt;
+        if (b.t <= 0) {
+          b.state = 'hidden';
+          b.x = b.home.x;
+          b.y = b.home.y;
+          b.hp = BULB_HP;
+        }
+      }
+      const key = b.state === 'hidden' ? 'bulb' : 'bulb-lit';
+      b.sprite.setTexture(key).setScale(texScale(key)).setPosition(b.x, b.y).setDepth(b.y).setVisible(b.state !== 'gone');
+    }
+    boss.volleyT -= dt;
+    if (boss.volleyT <= 0) {
+      boss.volleyT = VOLLEY_MS[3 - left] ?? VOLLEY_MS[2];
+      const turn = (this.now / 1000) % 1;
+      for (let i = 0; i < 8; i++) {
+        const a = ((i + turn) / 8) * Math.PI * 2;
+        this.shoot(boss.x + Math.cos(a) * 30, boss.y + Math.sin(a) * 20, Math.cos(a), Math.sin(a));
+      }
+    }
+    boss.summonT -= dt;
+    if (boss.summonT <= 0) {
+      boss.summonT = SUMMON_MS;
+      if (this.foes.filter((f) => f.alive && f.room === 'boss').length < 2) {
+        const room = this.map.rooms.find((r) => r.id === 'boss')!;
+        const side = Math.random() < 0.5 ? room.x + 2 : room.x + room.w - 3;
+        const c = centre({ x: side, y: room.y + 2 + Math.floor(Math.random() * (room.h - 4)) });
+        this.spawnFoe('slug', c.x, c.y, -1, 'boss');
+      }
+    }
+    if (!settings.reduceMotion) boss.sprite.setScale(texScale('boss') * (1 + Math.sin(this.now / 400) * 0.02));
+  }
+
+  private updateWisp(dt: number) {
+    const w = this.wisp;
+    const path = this.map.wisp;
+    if (!w || !path) return;
+    const s = this.state;
+    w.hop = Math.max(0, w.hop - dt);
+    const bob = settings.reduceMotion ? 0 : Math.sin(this.now / 300) * 3;
+    const c = centre(path[w.i]);
+    if (w.hop <= 0) w.sprite.setPosition(c.x, c.y - 10 + bob);
+    if (Math.hypot(w.sprite.x - s.x, w.sprite.y + 10 - s.y) > 70 || w.hop > 0) return;
+    if (w.i < path.length - 1) {
+      w.i++;
+      w.hop = 700;
+      const n = centre(path[w.i]);
+      this.tweens.add({ targets: w.sprite, x: n.x, y: n.y - 10, duration: 650, ease: 'Sine.easeInOut' });
+      return;
+    }
+    if (Math.hypot(w.sprite.x - s.x, w.sprite.y + 10 - s.y) < 26) {
+      w.sprite.destroy();
+      this.wisp = null;
+      this.gainStone('f-wisp');
+      this.openDialog('The wisp', ['A voice like wind in reeds: "You found me. Now find the rest of the moon."']);
+    }
+  }
+
+  // ---------------------------------------------------------------- drawing
+
+  private applyFacing() {
+    const f = this.state.facing;
+    const key = f === 'up' ? 'hero-up' : f === 'down' ? 'hero-down' : 'hero-side';
+    this.player.setTexture(key).setScale(texScale(key)).setFlipX(f === 'left');
+  }
+
+  private drawPlayer(dt: number) {
+    const s = this.state;
+    this.applyFacing();
+    const bob = this.walkT > 0 && !settings.reduceMotion ? Math.abs(Math.sin(this.walkT / 90)) * 2 : 0;
+    this.player.setPosition(s.x, s.y - bob).setDepth(s.y);
+    let angle = 0;
+    if (this.roll && !settings.reduceMotion) angle = (this.roll.t / ROLL_MS) * 360 * (this.roll.dx < 0 ? -1 : 1);
+    this.player.setAngle(angle);
+    // Blink while it can't be hurt, or just fade a little with reduce motion on.
+    const blink = this.invuln > 0 && (settings.reduceMotion ? true : Math.floor(this.invuln / 80) % 2 === 0);
+    this.player.setAlpha(blink ? 0.55 : 1);
+    if (this.swing) {
+      const base = { up: 0, right: 90, down: 180, left: 270 }[this.swing.dir];
+      const p = this.swing.t / SWING_MS;
+      this.sword.setVisible(true).setPosition(s.x, s.y - 14).setAngle(base - 60 + p * 120).setDepth(s.y + (this.swing.dir === 'up' ? -1 : 1));
+    } else this.sword.setVisible(false);
+    this.vine.clear();
+    const h = this.hook;
+    this.hookTip.setVisible(!!h);
+    if (h) {
+      const sx = s.x;
+      const sy = s.y - 14;
+      this.vine.lineStyle(3, 0x6fb84a, 1);
+      this.vine.beginPath();
+      this.vine.moveTo(sx, sy);
+      const n = 8;
+      for (let i = 1; i <= n; i++) {
+        const t = i / n;
+        const wob = Math.sin(t * Math.PI * 3 + this.now / 60) * 3 * (1 - t);
+        this.vine.lineTo(sx + (h.x - sx) * t + -h.dy * wob, sy + (h.y - sy) * t + h.dx * wob);
+      }
+      this.vine.strokePath();
+      this.vine.setDepth(Math.max(s.y, h.y + 12) + 1);
+      this.hookTip.setPosition(h.x, h.y).setDepth(h.y + 13);
+    }
+    void dt;
+  }
+
+  private drawWorld() {
+    const s = this.state;
+    for (const f of this.foes) {
+      if (!f.alive) continue;
+      const key = f.kind === 'moth' ? (Math.floor(this.now / 120 + f.index) % 2 ? 'moth-a' : 'moth-b') : f.kind;
+      f.sprite.setTexture(key).setScale(texScale(key)).setPosition(f.x, f.y - (f.kind === 'moth' ? 12 : 0)).setDepth(f.y);
+      f.sprite.setAlpha(f.stun > 0 ? 0.6 : 1);
+      if (f.hurt > 0 && !settings.reduceMotion) f.sprite.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
+      else f.sprite.clearTint().setTintMode(Phaser.TintModes.MULTIPLY);
+      if (f.kind === 'slug' && f.dir.x) f.sprite.setFlipX(s.x < f.x);
+    }
+    for (const [id, img] of this.stoneSprites) {
+      const st = this.map.stones.find((x) => x.id === id);
+      if (!st) continue;
+      if (id === 's-boss') img.setVisible(hasFlag(s, 'boss'));
+      const c = centre(st);
+      img.setY(c.y - 4 + (settings.reduceMotion ? 0 : Math.sin(this.now / 350 + c.x) * 2));
+    }
+    // Lights: the map's own, the knight's lantern, moonstones, the wisp and the queen's lit bulbs.
+    const lights = [...this.glows];
+    lights.push({ x: s.x, y: s.y - 16, r: s.items.oil ? LANTERN_OIL : LANTERN, col: [255, 210, 150], power: 0.9 });
+    for (const [, img] of this.stoneSprites) if (img.visible) lights.push({ x: img.x, y: img.y, r: 40, col: [170, 210, 255], power: 0.6 });
+    if (this.wisp) lights.push({ x: this.wisp.sprite.x, y: this.wisp.sprite.y, r: 110, col: [170, 230, 255], power: 0.9 });
+    if (this.boss) {
+      lights.push({ x: this.boss.x, y: this.boss.y, r: 150, col: [200, 90, 160], power: 0.5 });
+      for (const b of this.boss.bulbs) if (b.state === 'raised' || b.state === 'down') lights.push({ x: b.x, y: b.y - 14, r: 80, col: [220, 255, 140], power: 0.8 });
+    }
+    for (const sd of this.seeds) lights.push({ x: sd.x, y: sd.y, r: 24, col: [230, 120, 200], power: 0.5 });
+    this.night.draw(this.cameras.main.worldView, lights, this.map.dark);
+  }
+
+  // ---------------------------------------------------------------- for the playthrough test
+
+  /** Where a point in the world is on the 960x540 screen. */
+  screenOf(x: number, y: number) {
+    const v = this.cameras.main.worldView;
+    return { x: x - v.x, y: y - v.y };
+  }
+
+  /** Where to tap to reach a person or a chest, in the world. */
+  spot(kind: 'npc' | 'chest', id: string) {
+    if (kind === 'npc') {
+      const n = this.map.npcs.find((x) => x.id === id)!;
+      const c = centre(n);
+      return { x: c.x, y: c.y - 6 };
+    }
+    const ch = this.map.chests.find((x) => x.id === id)!;
+    return centre(ch);
+  }
+}
