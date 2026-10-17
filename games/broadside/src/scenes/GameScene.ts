@@ -4,6 +4,8 @@ import { HI, lookOf, SEA_RES, SHEET_RES } from '../art/art';
 import { renderScale } from '../../../../shared/scaling';
 import { BOON_IDS, BOONS, costOfBoons, type BoonId } from '../game/admiralty';
 import { BOUNTIES, bountyMet, bountyPay } from '../game/bounties';
+import { CONVOY_ARRIVE } from '../game/convoy';
+import { COURSES, type CourseId } from '../game/courses';
 import { FIRST_HULL, HULL_IDS, HULLS, unlocked, type HullId } from '../game/hulls';
 import { ORDERS } from '../game/orders';
 import type { PerkId } from '../game/perks';
@@ -11,7 +13,7 @@ import { loadBestWave, loadHull, loadMedals, saveBestWave, saveHull, saveMedals 
 import { ENEMIES } from '../game/ships';
 import { SHOTS } from '../game/shot';
 import type { UpgradeId } from '../game/upgrades';
-import { boardable, boardMs, buy, canBoard, detourCourse, fortBounty, hire, loadShot, pickPerk, repair, sailOn, scuttle, scuttleGold, setSail, SHELL_R, tick } from '../game/sim';
+import { boardable, boardMs, buy, canBoard, convoyShip, detourCourse, fortBounty, hire, keep, loadShot, pickPerk, repair, sailOn, scuttle, scuttleGold, setSail, SHELL_R, tick } from '../game/sim';
 import {
   FORT,
   ISLANDS,
@@ -33,7 +35,7 @@ import { makeButton } from '../ui/Button';
 import { HAVEN_WAVE } from '../game/waves';
 import { Harbor, type HarborAction } from '../ui/Harbor';
 import { pinToScreen } from '../ui/screen';
-import { BOUNTY, FIRE, FONT, HELM, HUD_HEIGHT, ORDER_CARD, OVER, SCUTTLE, UI_DEPTH, VIEW, WIND } from './layout';
+import { BOUNTY, CONVOY, FIRE, FONT, HELM, HUD_HEIGHT, ORDER_CARD, OVER, SCUTTLE, UI_DEPTH, VIEW, WIND } from './layout';
 
 /** Longest simulated step, so a backgrounded tab doesn't jump the battle forward. */
 const MAX_STEP_MS = 250;
@@ -105,6 +107,8 @@ export class GameScene extends Phaser.Scene {
   private goldText!: Phaser.GameObjects.Text;
   private crewText!: Phaser.GameObjects.Text;
   private bountyText!: Phaser.GameObjects.Text;
+  private convoyText!: Phaser.GameObjects.Text;
+  private convoyLabel!: Phaser.GameObjects.Text;
   private infoText!: Phaser.GameObjects.Text;
   private bannerTitle!: Phaser.GameObjects.Text;
   private bannerSub!: Phaser.GameObjects.Text;
@@ -177,6 +181,7 @@ export class GameScene extends Phaser.Scene {
     this.aimLabel = this.add.text(0, 0, '', textStyle(13, '#6a4410', 'bold italic')).setOrigin(0.5).setDepth(8);
     this.courseLabel = this.add.text(0, 0, '', textStyle(12, '#2b2118', 'bold italic', '#f0e2c0', 4)).setOrigin(0.5).setDepth(8);
     this.boardLabel = this.add.text(0, 0, '', textStyle(13, '#6a4410', 'bold italic', '#f6ecd2', 4)).setOrigin(0.5).setDepth(8);
+    this.convoyLabel = this.add.text(0, 0, '', textStyle(12, '#2f5a3a', 'bold italic', '#f6ecd2', 4)).setOrigin(0.5).setDepth(8);
     this.bars = this.add.graphics().setDepth(UI_DEPTH - 40);
     this.add.image(0, 0, 'frame').setOrigin(0).setScale(1 / SHEET_RES).setScrollFactor(0).setDepth(UI_DEPTH - 30);
 
@@ -277,6 +282,8 @@ export class GameScene extends Phaser.Scene {
 
   private harborAction(id: HarborAction) {
     if (id === 'sail') setSail(this.state);
+    else if (id.startsWith('sail-')) setSail(this.state, id.slice('sail-'.length) as CourseId);
+    else if (id === 'keep') keep(this.state);
     else if (id === 'repair') repair(this.state);
     else if (id === 'hire') hire(this.state);
     else if (id === 'load-port' || id === 'load-starboard') loadShot(this.state, id === 'load-port' ? 'port' : 'starboard');
@@ -309,6 +316,7 @@ export class GameScene extends Phaser.Scene {
       if (escort) this.drawPrize(ship);
     }
     this.drawBoarding();
+    this.drawConvoy();
     for (const [id, sprite] of this.ships) {
       if (seen.has(id)) continue;
       sprite.destroy();
@@ -431,6 +439,30 @@ export class GameScene extends Phaser.Scene {
     const at = this.place(nearest);
     const label = nearest.boardMs > 0 ? 'Boarding her...' : canBoard(s, nearest) ? 'Crippled: sail alongside to board' : 'Crippled, but too few sailors to board her';
     this.boardLabel.setText(label).setPosition(at.x, at.y - radiusOf(nearest) - 36).setVisible(true);
+  }
+
+  /**
+   * The convoy: a label over the merchantman naming her island, and round the island the dashed
+   * green ring she must reach.
+   */
+  private drawConvoy() {
+    const s = this.state;
+    const ship = convoyShip(s);
+    this.convoyLabel.setVisible(!!ship && (s.phase === 'fighting' || s.phase === 'break'));
+    if (!ship || !s.convoy) return;
+    const island = ISLANDS[s.convoy.island];
+    const at = this.place(ship);
+    this.convoyLabel.setText(`Convoy for ${island.name}`).setPosition(at.x, at.y - lookOf(ship, s.hull).length / 2 - 28);
+    const c = this.place(island);
+    const g = this.bars;
+    g.lineStyle(2, GREEN, 0.9);
+    const rx = island.rx + CONVOY_ARRIVE;
+    const ry = island.ry + CONVOY_ARRIVE;
+    for (let k = 0; k < 24; k++) {
+      const a0 = (k / 24) * Math.PI * 2;
+      const a1 = a0 + 0.14;
+      g.lineBetween(c.x + Math.cos(a0) * rx, c.y + Math.sin(a0) * ry, c.x + Math.cos(a1) * rx, c.y + Math.sin(a1) * ry);
+    }
   }
 
   /** Engraved foam lines spreading from each ship's stern. */
@@ -666,11 +698,11 @@ export class GameScene extends Phaser.Scene {
         g.lineStyle(1, INK, 0.6 * (1 - t));
         g.strokeEllipse(e.x, e.y, 20 + t * 60, 10 + t * 30);
         g.strokeEllipse(e.x, e.y, 10 + t * 36, 5 + t * 18);
-      } else if (e.kind === 'coins' || e.kind === 'prize') {
+      } else if (e.kind === 'coins' || e.kind === 'prize' || e.kind === 'escape') {
         floaters.add(e.id);
         let text = this.floaters.get(e.id);
         if (!text) {
-          const caption = e.kind === 'coins' ? `+${e.gold} gold` : 'Prize taken!';
+          const caption = e.kind === 'coins' ? `+${e.gold} gold` : e.kind === 'prize' ? 'Prize taken!' : 'She got away!';
           text = this.add.text(e.x, e.y, caption, textStyle(e.kind === 'coins' ? 15 : 18, e.kind === 'coins' ? '#6a4410' : '#2f5a3a', 'bold italic', '#f6ecd2', 4)).setOrigin(0.5).setDepth(UI_DEPTH - 50);
           this.floaters.set(e.id, text);
         }
@@ -794,6 +826,11 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0, 0.5)
       .setDepth(UI_DEPTH - 5)
       .setScrollFactor(0);
+    this.convoyText = this.add
+      .text(CONVOY.x, CONVOY.y, '', textStyle(12, '#2f5a3a', 'bold italic', '#f0e2c0', 4))
+      .setOrigin(0, 0.5)
+      .setDepth(UI_DEPTH - 5)
+      .setScrollFactor(0);
     this.bannerTitle = this.add
       .text(VIEW.w / 2, 168, '', textStyle(44, '#2b2118', 'bold', '#f0e2c0', 7))
       .setOrigin(0.5)
@@ -856,10 +893,11 @@ export class GameScene extends Phaser.Scene {
 
     const breaking = s.phase === 'break';
     const fade = breaking ? Math.min(1, s.breakMs / 500) : 0;
-    this.bannerTitle.setVisible(breaking).setText(s.wave === HAVEN_WAVE ? 'The pirate haven' : `Wave ${s.wave}`).setAlpha(fade);
+    this.bannerTitle.setVisible(breaking).setText(s.wave === HAVEN_WAVE ? 'The pirate haven' : s.course ? `Wave ${s.wave}: ${COURSES[s.course].name}` : `Wave ${s.wave}`).setAlpha(fade);
     const flagship = s.toSpawn.includes('flagship') || s.enemies.some((e) => e.kind === 'flagship');
     const sub =
       s.wave === HAVEN_WAVE ? "Three shore forts and the admiral's flagship: sink her to win!"
+      : s.convoy ? `Convoy: see the merchantman safe to ${ISLANDS[s.convoy.island].name} for ${s.convoy.cargo} gold`
       : s.forts.length ? `${s.forts.length === 1 ? 'A shore fort guards' : `${s.forts.length} shore forts guard`} these waters: razed, each pays ${fortBounty(s.wave)} gold`
       : flagship ? 'The enemy flagship is sighted!'
       : 'Enemy sails sighted!';
@@ -875,6 +913,13 @@ export class GameScene extends Phaser.Scene {
       const standing = bounty.kind === 'keep' ? (met ? 'still standing' : 'lost') : met ? 'done' : 'not yet';
       const pay = s.waveLoot ? `+${bountyPay(s)} gold so far` : 'half the wave\'s loot';
       this.bountyText.setText(`Bounty: ${bounty.desc(s)}  ❦  ${standing}  ❦  pays ${pay}`).setColor(met ? '#2f5a3a' : '#9a4a30');
+    }
+    // The convoy's line under the bounty, or in its place.
+    const convoy = s.convoy?.state === 'sailing';
+    this.convoyText.setVisible(sailing && convoy).setY(s.bounty ? CONVOY.y : BOUNTY.y);
+    if (s.convoy && convoy) {
+      const ship = convoyShip(s);
+      this.convoyText.setText(`Convoy for ${ISLANDS[s.convoy.island].name}  ❦  hull ${Math.ceil(ship?.hp ?? 0)}/${ship?.maxHp ?? 0}  ❦  pays ${s.convoy.cargo} gold on arriving`);
     }
     const order = ORDERS[s.order];
     this.orderSeal.setTexture(`seal-${s.order}`);
@@ -944,6 +989,7 @@ export class GameScene extends Phaser.Scene {
     for (const e of this.state.enemies) mark(e, RUST);
     for (const f of this.state.forts) mark(f, RUST);
     for (const e of this.state.escorts) mark(e, GREEN);
+    if (this.state.convoy?.state === 'sailing') mark(ISLANDS[this.state.convoy.island], GREEN);
     for (const l of this.state.loot) mark(l, OCHRE);
   }
 
@@ -1026,16 +1072,22 @@ export class GameScene extends Phaser.Scene {
   /** While the player has a prize in tow, a button under the order card to scuttle the newest for double loot. */
   private createScuttle() {
     const b = makeButton(this, SCUTTLE.x, SCUTTLE.y, '', () => {
-      const prize = this.state.escorts[this.state.escorts.length - 1];
+      const prize = this.scuttlePrize();
       if (prize) scuttle(this.state, prize.id);
     }, SCUTTLE.w, SCUTTLE.h);
     this.scuttleText = b.text.setFontSize(15);
     this.scuttleButton = pinToScreen(b.button).setDepth(UI_DEPTH - 5).setVisible(false);
   }
 
+  /** The newest of the player's prizes and consorts (never the convoy), which the scuttle button sinks. */
+  private scuttlePrize() {
+    const s = this.state;
+    return s.escorts.filter((e) => e.id !== s.convoy?.id).pop();
+  }
+
   private drawScuttle() {
     const s = this.state;
-    const prize = s.escorts[s.escorts.length - 1];
+    const prize = this.scuttlePrize();
     this.scuttleButton.setVisible(s.phase === 'fighting' && !!prize);
     if (!prize) return;
     const name = ENEMIES[prize.kind as keyof typeof ENEMIES].name.toLowerCase();

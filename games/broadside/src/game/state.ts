@@ -2,7 +2,8 @@ import { BOONS, type BoonId } from './admiralty';
 import type { BountyId } from './bounties';
 import { FIRST_HULL, HULLS, type HullId } from './hulls';
 import { ORDERS, type OrderId } from './orders';
-import { SWIVEL_ARC, type PerkId } from './perks';
+import type { CourseId } from './courses';
+import { perkRank, SWIVEL_ARC, type PerkId } from './perks';
 import type { EnemyKind } from './ships';
 import { SHOTS, type ShotKind } from './shot';
 import type { UpgradeId } from './upgrades';
@@ -141,6 +142,10 @@ export interface Ship {
    * into `ISLANDS`) and which way round (1 or -1). Null when the way is clear.
    */
   detour: { island: number; side: 1 | -1 } | null;
+  /** A merchantman on the Merchant lane: time left before she gets clean away (0 for every other ship). */
+  escapeMs: number;
+  /** A prize kept at the harbor as a consort: she sails on into the next waves and draws a wage. */
+  kept: boolean;
 }
 
 export interface Ball {
@@ -155,8 +160,10 @@ export interface Ball {
   fromPlayer: boolean;
   /** The shot: what it does (chain slows, grape slows reloads) and how it looks; powder is round shot with a flash. */
   shot: ShotKind | 'powder';
-  /** Bouncing shot: flight left after skipping off the water once, or 0 when it has skipped or never will. */
+  /** Bouncing shot: the flight after each skip off the water, or 0 when it never skips. */
   skip: number;
+  /** Bouncing shot: skips left (one per rank of the perk). */
+  bounces: number;
 }
 
 /** A shore fort on an island. */
@@ -182,6 +189,15 @@ export interface Shell {
   damage: number;
 }
 
+/** The wave's convoy: the merchantman's ship id, the island she sails for, her cargo and how it went. */
+export interface Convoy {
+  id: number;
+  /** An index into `ISLANDS`. */
+  island: number;
+  cargo: number;
+  state: 'sailing' | 'arrived' | 'lost';
+}
+
 export interface Loot {
   id: number;
   x: number;
@@ -192,7 +208,7 @@ export interface Loot {
 
 export interface Effect {
   id: number;
-  kind: 'splash' | 'smoke' | 'hit' | 'sink' | 'coins' | 'blast' | 'prize';
+  kind: 'splash' | 'smoke' | 'hit' | 'sink' | 'coins' | 'blast' | 'prize' | 'escape';
   x: number;
   y: number;
   ms: number;
@@ -230,8 +246,21 @@ export interface GameState {
   /** The shot each side is loaded with, chosen at the harbor. */
   loadout: Record<Side, ShotKind>;
   enemies: Ship[];
-  /** Enemy ships the player boarded and took: they sail with the player until the wave is beaten. */
+  /**
+   * The player's own ships at sea: prizes boarded and taken (sold at the harbor unless kept),
+   * consorts kept from earlier waves, and the wave's convoy.
+   */
   escorts: Ship[];
+  /** Consorts waiting in harbor to sail with the player into the next wave. */
+  consorts: Ship[];
+  /** Prizes sold at this harbor, which can still be bought back and kept as consorts. */
+  moored: Ship[];
+  /** The consorts' wages paid at the last harbor (null when there were none). */
+  wages: number | null;
+  /** The course chosen for this wave (null before `FIRST_COURSE_WAVE` and at the haven). */
+  course: CourseId | null;
+  /** The wave's convoy, on convoy waves; null otherwise. */
+  convoy: Convoy | null;
   /** Mortar shells in the air. */
   shells: Shell[];
   /** The wave's shore forts, still standing. */
@@ -246,7 +275,10 @@ export interface GameState {
   /** Ships boarded and taken this run. */
   taken: number;
   ranks: Partial<Record<UpgradeId, number>>;
-  /** The perks taken from the prize drafts this run, and the draft now on offer at the harbor (empty once picked). */
+  /**
+   * The perks taken from the prize drafts this run (a perk is listed twice once its second rank is
+   * taken), and the draft now on offer at the harbor (empty once picked).
+   */
   perks: PerkId[];
   draft: PerkId[];
   /** Time left before the player's own mortar (a perk) fires again. */
@@ -276,6 +308,11 @@ export interface GameState {
 
 export const rank = (s: GameState, id: UpgradeId) => s.ranks[id] ?? 0;
 export const hasPerk = (s: GameState, id: PerkId) => s.perks.includes(id);
+/** A perk's number at the rank held (`values[0]` at rank 1, `values[1]` at rank 2), or `none` without it. */
+export function perkValue(s: GameState, id: PerkId, values: number[], none: number) {
+  const r = perkRank(s.perks, id);
+  return r ? values[Math.min(r, values.length) - 1] : none;
+}
 
 /** The player's ship as its hull, the upgrades bought, the perks drafted and the wave's order have made it. */
 export function stats(s: GameState) {
@@ -291,7 +328,7 @@ export function stats(s: GameState) {
     reloadMs: hull.reloadMs * Math.pow(0.85, rank(s, 'crew')) * (order.reload ?? 1),
     range: hull.range * (order.range ?? 1),
     /** How far either side of straight out the broadsides train. */
-    arc: ARC * (hasPerk(s, 'swivels') ? SWIVEL_ARC : 1),
+    arc: ARC * perkValue(s, 'swivels', SWIVEL_ARC, 1),
   };
 }
 
@@ -302,7 +339,7 @@ export const crewPace = (ship: Ship) => Math.max(CREW_PACE_MIN, ship.crew / ship
 export const reachOf = (range: number, charge: number) => range * (REACH_MIN + (1 - REACH_MIN) * charge);
 
 export function newShip(id: number, kind: Ship['kind'], x: number, y: number, heading: number, hp: number, radius: number, crew: number): Ship {
-  return { id, kind, x, y, heading, hp, maxHp: hp, reload: { port: 0, starboard: 0 }, hitMs: 0, agroundMs: 0, slowMs: 0, jamMs: 0, boardMs: 0, radius, crew, maxCrew: crew, detour: null };
+  return { id, kind, x, y, heading, hp, maxHp: hp, reload: { port: 0, starboard: 0 }, hitMs: 0, agroundMs: 0, slowMs: 0, jamMs: 0, boardMs: 0, radius, crew, maxCrew: crew, detour: null, escapeMs: 0, kept: false };
 }
 
 /** The shot one side fires this wave: what the captain's order loads, or else what was loaded at the harbor. */
@@ -336,6 +373,11 @@ export function newRun(bestWave = 0, boons: BoonId[] = [], hull: HullId = FIRST_
     loadout: { port: 'round', starboard: 'round' },
     enemies: [],
     escorts: [],
+    consorts: [],
+    moored: [],
+    wages: null,
+    course: null,
+    convoy: null,
     shells: [],
     forts: [],
     balls: [],

@@ -41,9 +41,10 @@ interface ShipLook {
   flag: string;
   /**
    * Something only this ship carries: a fireship's deck stacked with burning pitch, a ketch's
-   * mortar on the foredeck, or the flagship's gilded rail and stern lanterns.
+   * mortar on the foredeck, the flagship's gilded rail and stern lanterns, or a merchantman's
+   * cargo lashed on deck.
    */
-  extra?: 'fire' | 'mortar' | 'flagship';
+  extra?: 'fire' | 'mortar' | 'flagship' | 'cargo';
 }
 
 export const SHIP_LOOKS: Record<HullId | EnemyKind, ShipLook> = {
@@ -58,6 +59,7 @@ export const SHIP_LOOKS: Record<HullId | EnemyKind, ShipLook> = {
   ketch: { length: 60, beam: 24, masts: [-0.02, -0.28], guns: 0, sail: '#efe0bc', flag: 'rgba(80,110,60,0.9)', extra: 'mortar' },
   flagship: { length: 104, beam: 38, masts: [0.28, 0.06, -0.16, -0.34], guns: 4, sail: '#f4e4b8', flag: 'rgba(110,50,120,0.95)', extra: 'flagship' },
   admiral: { length: 114, beam: 42, masts: [0.3, 0.08, -0.14, -0.34], guns: 5, sail: '#efd9a0', flag: 'rgba(200,150,30,0.98)', extra: 'flagship' },
+  merchant: { length: 74, beam: 31, masts: [0.16, -0.2], guns: 0, sail: '#efe4c8', flag: 'rgba(50,120,110,0.95)', extra: 'cargo' },
 };
 
 /** The look of a ship: the player's by the hull sailed, an enemy's or a prize's by its kind. */
@@ -436,6 +438,10 @@ function bakeShip(scene: Phaser.Scene, kind: keyof typeof SHIP_LOOKS) {
       circle(ctx, 0.24 * L, 0, B * 0.3, '#c49a62', INK, 1);
       circle(ctx, 0.24 * L, 0, B * 0.19, '#3a332c', INK, 1);
       circle(ctx, 0.24 * L, 0, B * 0.09, INK);
+    }
+    if (look.extra === 'cargo') {
+      // Bales and crates of cargo lashed amidships.
+      for (const [bx, by] of [[0.02, 0.17], [0.02, -0.17], [-0.12, 0.17], [-0.12, -0.17]]) poly(ctx, P([[bx + 0.06, by + 0.13], [bx - 0.06, by + 0.13], [bx - 0.06, by - 0.13], [bx + 0.06, by - 0.13]]), '#b08850', INK, 0.8);
     }
     if (look.extra === 'fire') {
       // Barrels of pitch stacked on deck.

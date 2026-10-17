@@ -1,8 +1,11 @@
 import { byDifficulty } from '../../../../shared/settings';
 import { bountyMet, bountyPay, drawBounty } from './bounties';
+import { CONSORT_MAX, consortWage } from './consorts';
+import { CONVOY_ARRIVE, CONVOY_FAR, CONVOY_SAIL, convoyCargo, isConvoyWave } from './convoy';
+import { coursesFor, ESCAPE_MS, HUNTER_CARDS, MERCHANT_LOOT, type CourseId } from './courses';
 import { HULLS } from './hulls';
 import { drawOrder, ORDERS } from './orders';
-import { CARRONADE_DAMAGE, drawDraft, FIRST_DRAFT, OWN_MORTAR, RICOCHET_FLIGHT, SALVAGE_HULL, type PerkId } from './perks';
+import { CARRONADE_DAMAGE, DRAFT_SIZE, drawDraft, FIRST_DRAFT, GRAPNELS, GUNNERS_PACE, MAX_PERK_RANK, OWN_MORTAR, perkRank, RICOCHET_FLIGHT, SALVAGE_HULL, type PerkId } from './perks';
 import { ENEMIES, GRAPE_RANGE, type EnemyKind } from './ships';
 import { JAM_MS, nextShot, PELLET_FAN, SHOTS, SLOW_MS } from './shot';
 import {
@@ -31,6 +34,7 @@ import {
   loadedShot,
   newShip,
   offset,
+  perkValue,
   radiusOf,
   reachOf,
   sideRange,
@@ -84,6 +88,8 @@ const SHELL_SPREAD = 24;
 export const FIRE_BLAST = 70;
 /** How far off a shore fort's shells can land. */
 const FORT_SPREAD = 30;
+/** How far astern of the player consorts and the convoy set out at the start of a wave. */
+const CONSORT_STATION = 70;
 
 /** An angle brought into (-PI, PI]. */
 export function wrap(a: number) {
@@ -149,6 +155,7 @@ export function tick(s: GameState, dt: number) {
   spawn(s, dt);
   for (const e of s.enemies) sailEnemy(s, e, dt);
   for (const e of s.escorts) sailEscort(s, e, dt);
+  escape(s, dt);
   separate(s);
   for (const ship of [s.player, ...s.enemies, ...s.escorts]) runAground(s, ship);
   board(s, dt);
@@ -170,10 +177,13 @@ export function tick(s: GameState, dt: number) {
   }
   for (const e of s.escorts.filter((e) => e.hp <= 0)) effect(s, 'sink', e.x, e.y, 1400, { heading: e.heading, ship: e.kind as EnemyKind });
   s.escorts = s.escorts.filter((e) => e.hp > 0);
+  if (s.convoy?.state === 'sailing' && !convoyShip(s)) s.convoy.state = 'lost';
   if (playerSunk(s)) return;
+  arrive(s);
 
   gatherLoot(s, dt);
-  if (s.toSpawn.length === 0 && s.enemies.length === 0) {
+  // A convoy still at sea holds the wave open until she arrives or is sunk.
+  if (s.toSpawn.length === 0 && s.enemies.length === 0 && s.convoy?.state !== 'sailing') {
     // The wave is beaten: the crew hauls in every barrel still afloat before putting into harbor.
     for (const l of s.loot) haulIn(s, l);
     s.loot = [];
@@ -284,7 +294,36 @@ function spawn(s: GameState, dt: number) {
   }
   const type = ENEMIES[kind];
   const hp = Math.round(type.hp * hpScale(s.wave) * byDifficulty(0.75, 1, 1.3));
-  s.enemies.push(newShip(s.nextId++, kind, x, y, bearing({ x, y }, s.player), hp, type.radius, type.crew));
+  const ship = newShip(s.nextId++, kind, x, y, bearing({ x, y }, s.player), hp, type.radius, type.crew);
+  if (type.role === 'merchant') ship.escapeMs = ESCAPE_MS;
+  s.enemies.push(ship);
+}
+
+/** Merchantmen on the Merchant lane that run long enough get clean away, with no loot. */
+function escape(s: GameState, dt: number) {
+  for (const e of s.enemies) {
+    if (ENEMIES[e.kind as EnemyKind].role !== 'merchant' || e.hp <= 0) continue;
+    e.escapeMs -= dt;
+    if (e.escapeMs > 0) continue;
+    s.enemies = s.enemies.filter((o) => o !== e);
+    effect(s, 'escape', e.x, e.y, 1400);
+    return escape(s, 0);
+  }
+}
+
+/** The wave's convoy merchantman, while she is at sea. */
+export const convoyShip = (s: GameState) => (s.convoy ? s.escorts.find((e) => e.id === s.convoy!.id) : undefined);
+
+/** The convoy reaches her island: she pays her cargo straight into the hold and sails on out of the wave. */
+function arrive(s: GameState) {
+  const ship = convoyShip(s);
+  if (!ship || !s.convoy) return;
+  const island = ISLANDS[s.convoy.island];
+  const { dx, dy } = offset(island, ship);
+  if (Math.hypot(dx / (island.rx + CONVOY_ARRIVE), dy / (island.ry + CONVOY_ARRIVE)) >= 1) return;
+  s.escorts = s.escorts.filter((e) => e !== ship);
+  s.convoy.state = 'arrived';
+  haulIn(s, { id: 0, x: ship.x, y: ship.y, gold: s.convoy.cargo, ms: 0 });
 }
 
 /** An enemy ship crippled enough to board and take: under a fifth of its hull. Fireships burn instead. */
@@ -298,6 +337,8 @@ export function speedOf(s: GameState, e: Ship) {
   let speed = ENEMIES[e.kind as keyof typeof ENEMIES].speed * windSpeed(s.wind, e.heading);
   if (e.slowMs > 0) speed *= SHOTS.chain.slow ?? 1;
   if (boardable(e)) speed *= CRIPPLED;
+  // The convoy is laden with her cargo.
+  if (s.convoy?.id === e.id) speed *= CONVOY_SAIL;
   return speed;
 }
 
@@ -308,7 +349,9 @@ export function speedOf(s: GameState, e: Ship) {
  * bear off a beach rather than run onto it.
  */
 function sailEnemy(s: GameState, e: Ship, dt: number) {
-  captain(s, e, s.player, dt);
+  // On a convoy wave the sloops and fireships hunt the merchantman rather than the player.
+  const convoy = convoyShip(s);
+  captain(s, e, convoy && (e.kind === 'sloop' || e.kind === 'fireship') ? convoy : s.player, dt);
 }
 
 /**
@@ -336,6 +379,8 @@ function captain(s: GameState, e: Ship, target: Ship, dt: number) {
     }
   };
   if (type.role === 'fireship') close();
+  // A merchantman carries no guns and runs from the player.
+  else if (type.role === 'merchant') want = b + Math.PI;
   else if (type.role === 'mortar') {
     if (d < type.range * 0.55) want = b + Math.PI;
     else if (d < type.range * 0.85) want = broadside();
@@ -354,13 +399,27 @@ function captain(s: GameState, e: Ship, target: Ship, dt: number) {
  * player, as an enemy captain would go after the player, and otherwise keeps station close by.
  */
 function sailEscort(s: GameState, e: Ship, dt: number) {
-  const foe = nearestFoe(s, s.player, ESCORT_HUNT);
+  if (s.convoy?.id === e.id) return sailConvoy(s, e, s.convoy.island, dt);
+  const type = ENEMIES[e.kind as keyof typeof ENEMIES];
+  // A merchantman taken as a prize has no guns to fight with, so she only keeps station.
+  const foe = type.role === 'merchant' ? null : nearestFoe(s, s.player, ESCORT_HUNT);
   if (foe) return captain(s, e, foe, dt);
   e.detour = null;
-  const type = ENEMIES[e.kind as keyof typeof ENEMIES];
   const want = distance(e, s.player) > ESCORT_STATION ? bearing(e, s.player) : s.player.heading;
   const shorten = shoalAhead(e, e.heading) ? SHORTEN_SAIL : 1;
   steer(e, fend(e, want), type.turn, speedOf(s, e) * shorten, dt);
+}
+
+/** The convoy sails for her island, round any other island in the way, and never fends off her own. */
+function sailConvoy(s: GameState, e: Ship, to: number, dt: number) {
+  const island = ISLANDS[to];
+  const type = ENEMIES[e.kind as keyof typeof ENEMIES];
+  let want = bearing(e, island);
+  const round = planDetour(e, island, e.detour, to);
+  e.detour = round ? { island: round.island, side: round.side } : null;
+  if (round) want = round.heading;
+  const shorten = shoalAhead(e, e.heading, undefined, to) ? SHORTEN_SAIL : 1;
+  steer(e, fend(e, want, to), type.turn, speedOf(s, e) * shorten, dt);
 }
 
 /** The enemy ship afloat nearest `from`, within `within`. */
@@ -422,10 +481,10 @@ function blocked(i: number, ship: Ship, target: { x: number; y: number }) {
  * which way round: the shorter way, except that a captain already going round one way keeps to it
  * unless the other way is much shorter. Null when the way is clear.
  */
-function planDetour(ship: Ship, target: { x: number; y: number }, last: Ship['detour']) {
+function planDetour(ship: Ship, target: { x: number; y: number }, last: Ship['detour'], skip = -1) {
   let best: { island: number; heading: number; side: 1 | -1; dist: number } | null = null;
   for (let i = 0; i < ISLANDS.length; i++) {
-    if (!blocked(i, ship, target)) continue;
+    if (i === skip || !blocked(i, ship, target)) continue;
     const dist = distance(ship, ISLANDS[i]);
     if (best && best.dist < dist) continue;
     const ways = { 1: roundIsland(i, ship, target, 1), [-1]: roundIsland(i, ship, target, -1) };
@@ -467,13 +526,13 @@ export function detourCourse(s: GameState, e: Ship) {
 }
 
 /**
- * Whether sailing on `heading` would soon take the ship onto a beach (of `only` that island, or any):
- * looking far enough ahead to come about in time, so a slow-turning ship looks further.
+ * Whether sailing on `heading` would soon take the ship onto a beach (of `only` that island, or any
+ * but island `skip`): looking far enough ahead to come about in time, so a slow-turning ship looks further.
  */
-function shoalAhead(e: Ship, heading: number, only?: (typeof ISLANDS)[number]) {
+function shoalAhead(e: Ship, heading: number, only?: (typeof ISLANDS)[number], skip = -1) {
   const type = ENEMIES[e.kind as keyof typeof ENEMIES];
   const look = radiusOf(e) + LOOKOUT + type.speed / type.turn;
-  return (only ? [only] : ISLANDS).some((island) => {
+  return (only ? [only] : ISLANDS.filter((_, i) => i !== skip)).some((island) => {
     const { ax, ay } = zoneOf(island, e, 8);
     const o = offset(island, e);
     const at = (k: number) => Math.hypot((o.dx + Math.cos(heading) * look * k) / ax, (o.dy + Math.sin(heading) * look * k) / ay) < 1;
@@ -483,11 +542,12 @@ function shoalAhead(e: Ship, heading: number, only?: (typeof ISLANDS)[number]) {
 
 /**
  * The lookout: if the heading the captain wants would take the bow onto a beach within a short
- * way, bear off along the coast instead, whichever way round is nearer the wanted heading.
+ * way, bear off along the coast instead, whichever way round is nearer the wanted heading. Island
+ * `skip` (the convoy's destination) is left alone.
  */
-function fend(e: Ship, want: number) {
-  for (const island of ISLANDS) {
-    if (!shoalAhead(e, want, island)) continue;
+function fend(e: Ship, want: number, skip = -1) {
+  for (const [i, island] of ISLANDS.entries()) {
+    if (i === skip || !shoalAhead(e, want, island)) continue;
     const { ax, ay } = zoneOf(island, e, 8);
     const o = offset(island, e);
     // Along the coast: square to the beach's normal where the ship is, a little outward.
@@ -577,7 +637,7 @@ function firePlayer(s: GameState, side: Side, charge: number) {
     return;
   }
   // Carronades: shot at a ship inside half the reach hits harder.
-  if (target && hasPerk(s, 'carronades') && distance(player, target) < sideRange(s, side) / 2) damage *= CARRONADE_DAMAGE;
+  if (target && hasPerk(s, 'carronades') && distance(player, target) < sideRange(s, side) / 2) damage *= perkValue(s, 'carronades', CARRONADE_DAMAGE, 1);
   const kind = loadedShot(s, side);
   const shot = SHOTS[kind];
   const look = kind === 'round' && ORDERS[s.order].powder ? 'powder' : kind;
@@ -585,7 +645,7 @@ function firePlayer(s: GameState, side: Side, charge: number) {
   player.reload[side] = p.reloadMs;
 }
 
-/** The player's own mortar (a perk): every `OWN_MORTAR.reloadMs` a shell at the nearest enemy in range. */
+/** The player's own mortar (a perk): every `OWN_MORTAR.reloadMs` (by rank) a shell at the nearest enemy in range. */
 function ownMortar(s: GameState, dt: number) {
   if (!hasPerk(s, 'mortar')) return;
   s.mortarMs = Math.max(0, s.mortarMs - dt);
@@ -593,7 +653,7 @@ function ownMortar(s: GameState, dt: number) {
   const foe = nearestFoe(s, s.player, OWN_MORTAR.range);
   if (!foe) return;
   lobAt(s, s.player, foe, speedOf(s, foe), OWN_MORTAR.damage, SHELL_SPREAD);
-  s.mortarMs = OWN_MORTAR.reloadMs;
+  s.mortarMs = perkValue(s, 'mortar', OWN_MORTAR.reloadMs, 0);
 }
 
 /**
@@ -634,10 +694,10 @@ function enemyBroadsides(s: GameState, dt: number) {
 
 /**
  * The player's prizes fire their broadsides on their own at any enemy off a loaded side, as
- * enemies do; with Prize gun crews they reload twice as fast.
+ * enemies do; with Prize gun crews they reload two (or, at rank 2, three) times as fast.
  */
 function escortBroadsides(s: GameState, dt: number) {
-  const pace = hasPerk(s, 'gunners') ? 2 : 1;
+  const pace = perkValue(s, 'gunners', GUNNERS_PACE, 1);
   for (const e of s.escorts) {
     if (e.hp <= 0) continue;
     const type = ENEMIES[e.kind as keyof typeof ENEMIES];
@@ -647,6 +707,7 @@ function escortBroadsides(s: GameState, dt: number) {
       else e.reload.port = Math.max(0, e.reload.port - reloadStep(e, dt * pace));
       continue;
     }
+    if (type.guns === 0) continue;
     for (const side of SIDES) {
       e.reload[side] = Math.max(0, e.reload[side] - reloadStep(e, dt * pace));
       if (e.reload[side] > 0) continue;
@@ -787,8 +848,9 @@ function fire(
     const lead = { x: target.x + Math.cos(target.heading) * targetSpeed * flight, y: target.y + Math.sin(target.heading) * targetSpeed * flight };
     aim = out + Math.max(-arc, Math.min(arc, wrap(bearing(ship, lead) - out)));
   }
-  // Bouncing shot: the player's own balls skip once off the water and fly on.
-  const skip = ship.kind === 'player' && hasPerk(s, 'ricochet') ? ((range * RICOCHET_FLIGHT) / BALL_SPEED) * 1000 : 0;
+  // Bouncing shot: the player's own balls skip off the water (once, or twice at rank 2) and fly on.
+  const bounces = ship.kind === 'player' ? perkRank(s.perks, 'ricochet') : 0;
+  const skip = bounces ? ((range * RICOCHET_FLIGHT) / BALL_SPEED) * 1000 : 0;
   const r = radiusOf(ship);
   for (let i = 0; i < guns; i++) {
     const along = guns === 1 ? 0 : (i / (guns - 1) - 0.5) * r * 1.2;
@@ -808,6 +870,7 @@ function fire(
         fromPlayer: friendly,
         shot,
         skip,
+        bounces,
       });
     }
     effect(s, 'smoke', x, y, 600, { heading: out });
@@ -842,17 +905,17 @@ function moveBalls(s: GameState, dt: number) {
     }
     if (ball.ms <= 0) {
       effect(s, 'splash', ball.x, ball.y, 450);
-      if (ball.skip <= 0) return false;
-      // Bouncing shot skips off the water once and flies on.
+      if (ball.bounces <= 0) return false;
+      // Bouncing shot skips off the water and flies on.
       ball.ms = ball.skip;
-      ball.skip = 0;
+      ball.bounces--;
     }
     return true;
   });
 }
 
-/** The gold a ship of `kind` is worth on `wave`. */
-const lootOf = (kind: EnemyKind, wave: number) => ENEMIES[kind].loot + 2 * (wave - 1);
+/** The gold a ship of `kind` is worth this wave: more each wave, and double on the Merchant lane. */
+const lootOf = (s: GameState, kind: EnemyKind) => (ENEMIES[kind].loot + 2 * (s.wave - 1)) * (s.course === 'merchant' ? MERCHANT_LOOT : 1);
 
 /**
  * A sunk ship goes down and leaves a barrel of loot floating where it was. A fireship blows up as
@@ -863,15 +926,15 @@ function sink(s: GameState, e: Ship) {
   s.sunk++;
   s.waveSunk.push(kind);
   effect(s, 'sink', e.x, e.y, 1400, { heading: e.heading, ship: kind });
-  s.loot.push({ id: s.nextId++, x: e.x, y: e.y, gold: lootOf(kind, s.wave), ms: LOOT_MS });
+  s.loot.push({ id: s.nextId++, x: e.x, y: e.y, gold: lootOf(s, kind), ms: LOOT_MS });
   if (kind === 'fireship') blast(s, e.x, e.y, FIRE_BLAST, ENEMIES.fireship.damage);
-  if (hasPerk(s, 'salvage')) s.player.hp = Math.min(s.player.maxHp, s.player.hp + SALVAGE_HULL);
+  if (hasPerk(s, 'salvage')) s.player.hp = Math.min(s.player.maxHp, s.player.hp + perkValue(s, 'salvage', SALVAGE_HULL, 0));
 }
 
-/** The sailors a prize crew for `e` must number: half her full crew, a quarter with Grapnels. */
-export const prizeCrew = (s: GameState, e: Ship) => Math.ceil(e.maxCrew * PRIZE_CREW * (hasPerk(s, 'grapnels') ? 0.5 : 1));
-/** How long the player must stay alongside to take a prize: `BOARD_MS`, half with Grapnels. */
-export const boardMs = (s: GameState) => BOARD_MS * (hasPerk(s, 'grapnels') ? 0.5 : 1);
+/** The sailors a prize crew for `e` must number: half her full crew, less with Grapnels. */
+export const prizeCrew = (s: GameState, e: Ship) => Math.ceil(e.maxCrew * PRIZE_CREW * perkValue(s, 'grapnels', GRAPNELS, 1));
+/** How long the player must stay alongside to take a prize: `BOARD_MS`, less with Grapnels. */
+export const boardMs = (s: GameState) => BOARD_MS * perkValue(s, 'grapnels', GRAPNELS, 1);
 /** Whether the player has sailors enough to send a prize crew across to `e` and still work the ship. */
 export const canBoard = (s: GameState, e: Ship) => s.player.crew - prizeCrew(s, e) >= CREW_TO_BOARD;
 
@@ -914,17 +977,17 @@ function crewBack(s: GameState, e: Ship) {
 /** Scuttles the prize `id` for twice its loot, straight into the hold; her prize crew comes back aboard. */
 export function scuttle(s: GameState, id: number) {
   const e = s.escorts.find((o) => o.id === id);
-  if (!e || s.phase !== 'fighting') return false;
+  if (!e || s.phase !== 'fighting' || s.convoy?.id === id) return false;
   s.escorts = s.escorts.filter((o) => o !== e);
   crewBack(s, e);
   s.sunk++;
   effect(s, 'sink', e.x, e.y, 1400, { heading: e.heading, ship: e.kind as EnemyKind });
-  haulIn(s, { id: 0, x: e.x, y: e.y, gold: 2 * lootOf(e.kind as EnemyKind, s.wave), ms: 0 });
+  haulIn(s, { id: 0, x: e.x, y: e.y, gold: 2 * lootOf(s, e.kind as EnemyKind), ms: 0 });
   return true;
 }
 
 /** What scuttling a prize would bring in. */
-export const scuttleGold = (s: GameState, e: Ship) => 2 * lootOf(e.kind as EnemyKind, s.wave);
+export const scuttleGold = (s: GameState, e: Ship) => 2 * lootOf(s, e.kind as EnemyKind);
 
 function gatherLoot(s: GameState, dt: number) {
   const player = s.player;
@@ -955,14 +1018,40 @@ function haulIn(s: GameState, l: Loot) {
 }
 
 /**
- * The wave is beaten: prizes are sold and their crews come home, the Admiralty pays its bounty
- * if it was met, the crew patches some hull, and the harbor opens with the prize draft on offer.
+ * The wave is beaten: prizes are sold and their crews come home (each can still be bought back
+ * as a consort), consorts draw their wages, the Admiralty pays its bounty if it was met, the crew
+ * patches some hull, and the harbor opens with the prize draft on offer.
  */
 function reachHarbor(s: GameState) {
-  // Prizes still afloat are sold in harbor for their loot.
+  // Prizes still afloat are sold in harbor for their loot, and moored there in case one is kept.
+  s.moored = [];
   for (const e of s.escorts) {
+    if (e.kept || s.convoy?.id === e.id) continue;
     crewBack(s, e);
-    haulIn(s, { id: 0, x: e.x, y: e.y, gold: lootOf(e.kind as EnemyKind, s.wave), ms: 0 });
+    haulIn(s, { id: 0, x: e.x, y: e.y, gold: lootOf(s, e.kind as EnemyKind), ms: 0 });
+    s.moored.push(e);
+  }
+  // The richest prize is offered first.
+  s.moored.sort((a, b) => ENEMIES[b.kind as EnemyKind].loot - ENEMIES[a.kind as EnemyKind].loot);
+  // Consorts are paid their wages, patched like the player's ship, and wait in harbor; one the
+  // purse can't pay is paid off and sold.
+  s.consorts = [];
+  s.wages = null;
+  for (const e of s.escorts) {
+    if (!e.kept) continue;
+    const wage = consortWage(e.kind as EnemyKind);
+    if (s.gold < wage) {
+      crewBack(s, e);
+      haulIn(s, { id: 0, x: e.x, y: e.y, gold: lootOf(s, e.kind as EnemyKind), ms: 0 });
+      continue;
+    }
+    s.gold -= wage;
+    s.wages = (s.wages ?? 0) + wage;
+    e.hp = Math.min(e.maxHp, e.hp + Math.round(e.maxHp * HARBOR_PATCH));
+    e.slowMs = 0;
+    e.jamMs = 0;
+    e.detour = null;
+    s.consorts.push(e);
   }
   s.escorts = [];
   s.shells = [];
@@ -978,15 +1067,47 @@ function reachHarbor(s: GameState) {
     s.bountyPaid = bountyMet(s) ? bountyPay(s) : 0;
     if (s.bountyPaid) haulIn(s, { id: 0, x: s.player.x, y: s.player.y, gold: s.bountyPaid, ms: 0 });
   } else s.bountyPaid = null;
-  // The prize draft: the first wave's is fixed, later ones draw from the perks not yet taken.
-  s.draft = s.wave === 1 ? [...FIRST_DRAFT] : drawDraft(s.perks);
+  // The prize draft: the first wave's is fixed, later ones draw from the perks not yet taken (or
+  // their second rank), with a card more after a Hunter patrol.
+  s.draft = s.wave === 1 ? [...FIRST_DRAFT] : drawDraft(s.perks, DRAFT_SIZE + (s.course === 'hunter' ? HUNTER_CARDS : 0));
 }
 
 /** Takes one perk of the draft on offer at the harbor; false if it is not on offer. */
 export function pickPerk(s: GameState, id: PerkId) {
-  if (s.phase !== 'harbor' || !s.draft.includes(id)) return false;
+  if (s.phase !== 'harbor' || !s.draft.includes(id) || perkRank(s.perks, id) >= MAX_PERK_RANK) return false;
   s.perks.push(id);
   s.draft = [];
+  return true;
+}
+
+/** What keeping prize `e` as a consort costs: her sale price, bought back. */
+export const keepCost = (s: GameState, e: Ship) => lootOf(s, e.kind as EnemyKind);
+
+/**
+ * Why the next moored prize can't be kept as a consort right now, or null if she can: there is
+ * none, the player already keeps `CONSORT_MAX`, can't pay or can't spare her prize crew.
+ */
+export function keepBlocked(s: GameState): 'none' | 'full' | 'gold' | 'crew' | null {
+  const e = s.moored[0];
+  if (!e) return 'none';
+  if (s.consorts.length >= CONSORT_MAX) return 'full';
+  if (s.gold < keepCost(s, e)) return 'gold';
+  if (s.player.crew - prizeCrew(s, e) < CREW_TO_BOARD) return 'crew';
+  return null;
+}
+
+/**
+ * Keeps the richest prize sold at this harbor as a consort: she is bought back for her sale price,
+ * her prize crew goes across again, and she sails with the player into the next wave.
+ */
+export function keep(s: GameState) {
+  if (s.phase !== 'harbor' || keepBlocked(s)) return false;
+  const e = s.moored.shift()!;
+  s.gold -= keepCost(s, e);
+  e.kept = true;
+  e.crew = prizeCrew(s, e);
+  s.player.crew -= e.crew;
+  s.consorts.push(e);
   return true;
 }
 
@@ -1028,13 +1149,16 @@ export function repair(s: GameState) {
 }
 
 /**
- * Leaves the harbor for the next wave (not while the prize draft is still on offer): a new order,
- * wind and bounty, and shore forts on some islands from `FIRST_FORT_WAVE`.
+ * Leaves the harbor for the next wave (not while the prize draft is still on offer): on the
+ * `course` chosen when the harbor offers one (and only then), with a new order, wind and bounty,
+ * shore forts on some islands from `FIRST_FORT_WAVE`, the consorts kept and, on a convoy wave,
+ * the merchantman to see safe to her island.
  */
-export function setSail(s: GameState) {
-  if (s.phase !== 'harbor' || s.draft.length) return;
+export function setSail(s: GameState, course: CourseId | null = null) {
+  if (s.phase !== 'harbor' || s.draft.length || coursesFor(s.wave + 1) !== (course !== null)) return false;
   s.wave++;
-  s.toSpawn = waveShips(s.wave);
+  s.course = course;
+  s.toSpawn = waveShips(s.wave, course);
   s.order = drawOrder(s.order);
   // A new wind for the wave, from one of the eight main points of the compass.
   s.wind = Math.floor(Math.random() * 8) * (Math.PI / 4);
@@ -1045,7 +1169,7 @@ export function setSail(s: GameState) {
   s.wavePrizes = 0;
   s.waveMs = 0;
   s.waveSunk = [];
-  s.mortarMs = OWN_MORTAR.reloadMs;
+  s.mortarMs = perkValue(s, 'mortar', OWN_MORTAR.reloadMs, 0);
   s.forts = [];
   // Forts on islands drawn at random, never two on one. Uses Math.random once per fort.
   const islands = ISLANDS.map((_, i) => i);
@@ -1055,9 +1179,36 @@ export function setSail(s: GameState) {
     const hp = Math.round(FORT.hp * hpScale(s.wave) * byDifficulty(0.75, 1, 1.3));
     s.forts.push({ id: s.nextId++, island, x, y, hp, maxHp: hp, reload: FORT.reloadMs / 2, hitMs: 0 });
   }
+  // The consorts set out in line astern of the player.
+  s.escorts = s.consorts;
+  s.consorts = [];
+  s.moored = [];
+  s.escorts.forEach((e, i) => station(s, e, i + 1));
+  s.convoy = null;
+  if (isConvoyWave(s.wave)) {
+    // Her island is drawn from those far enough off to make a passage of it. Uses Math.random once.
+    const far = ISLANDS.map((_, i) => i).filter((i) => distance(s.player, ISLANDS[i]) >= CONVOY_FAR);
+    const island = far.length ? far[Math.floor(Math.random() * far.length)] : 0;
+    const type = ENEMIES.merchant;
+    const ship = newShip(s.nextId++, 'merchant', s.player.x, s.player.y, s.player.heading, Math.round(type.hp * hpScale(s.wave)), type.radius, type.crew);
+    station(s, ship, s.escorts.length + 1);
+    s.escorts.push(ship);
+    s.convoy = { id: ship.id, island, cargo: convoyCargo(s.wave), state: 'sailing' };
+  }
   s.phase = 'break';
   s.breakMs = BREAK_MS;
   s.loot = [];
+  return true;
+}
+
+/** Places a ship of the player's `k`th in line astern of her, on her heading, loaded. */
+function station(s: GameState, e: Ship, k: number) {
+  const p = s.player;
+  e.x = p.x - Math.cos(p.heading) * CONSORT_STATION * k;
+  e.y = p.y - Math.sin(p.heading) * CONSORT_STATION * k;
+  wrapPoint(e);
+  e.heading = p.heading;
+  e.reload = { port: 0, starboard: 0 };
 }
 
 /** Loads the next kind of shot into one side's guns at the harbor: round, chain, grape, round... */
