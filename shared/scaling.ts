@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { t } from './i18n';
 
 /**
  * Keeps a game sharp and well placed on every screen, from an upright phone to a 4K monitor.
@@ -166,7 +167,7 @@ function addTurnHint(game: Phaser.Game, wide: boolean) {
     `<svg viewBox="0 0 64 64" width="72" height="72" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true">` +
     `<rect x="${32 - pw / 2}" y="${32 - ph / 2}" width="${pw}" height="${ph}" rx="5"/>` +
     `<path d="M14 10a26 26 0 0 1 36 0M50 10l1 7-7-1"/></svg>` +
-    `<div>Turn your ${wide ? 'phone sideways' : 'phone upright'} to play</div>`;
+    `<div>${t(wide ? 'turnSideways' : 'turnUpright')}</div>`;
   document.body.append(hint);
   let shown = false;
   const update = () => {

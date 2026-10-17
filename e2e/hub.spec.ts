@@ -106,6 +106,8 @@ test('hub settings reach the games', async ({ page }, testInfo) => {
     fps: 30,
     showFps: true,
     reduceMotion: false,
+    // The browser under test speaks US English, so that is the default.
+    language: 'en-US',
   });
 
   // A game opened now shows the FPS readout.
@@ -210,4 +212,56 @@ test('hub shows play counts', async ({ page }, testInfo) => {
     body: await page.locator('.game').first().screenshot({ path: testInfo.outputPath('play-counts.png') }),
     contentType: 'image/png',
   });
+});
+
+// The Language setting switches the hub at once, reaches the shared screens of a game opened
+// afterwards, and formats numbers and dates to match (shared/i18n.ts).
+test('hub switches language', async ({ page }, testInfo) => {
+  await page.addInitScript(() => Object.assign(window, { showPlayCounts: true, showStartScreen: true }));
+  await page.route('https://abacus.jasoncameron.dev/get/**', (route) => route.fulfill({ json: { value: 1234 } }));
+  await page.goto('/');
+  await expect(page.locator('h1')).toHaveText('Game hub');
+  await page.getByRole('button', { name: 'Settings' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Settings' });
+  await expect(dialog.getByRole('group', { name: 'Language' }).getByRole('button', { name: 'English (US)' })).toHaveAttribute('aria-pressed', 'true');
+  await dialog.getByRole('group', { name: 'Language' }).getByRole('button', { name: 'Deutsch' }).click();
+
+  // The hub switches without a reload: the page, the panel, the cards and the play counts.
+  const einstellungen = page.getByRole('dialog', { name: 'Einstellungen' });
+  await expect(einstellungen.getByRole('group', { name: 'Sprache' }).getByRole('button', { name: 'Deutsch' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(einstellungen.getByRole('group', { name: 'Schwierigkeit' }).getByRole('button', { name: 'Leicht' })).toBeVisible();
+  await expect(page.locator('h1')).toHaveText('Spielesammlung');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'de-DE');
+  await expect(page.locator('.game a[href="games/apothecary/"] p').first()).toHaveText(/^Führe als Pestdoktor/);
+  await expect(page.locator('.game a[href="games/apothecary/"] .plays')).toHaveText('1.234-mal gespielt');
+  testInfo.attach('german settings', { body: await page.screenshot({ path: testInfo.outputPath('german-settings.png') }), contentType: 'image/png' });
+  await einstellungen.getByRole('button', { name: 'Schließen' }).click();
+
+  // It is kept, and a game opened now shows its start, pause and How to play screens in German.
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Einstellungen' })).toBeVisible();
+  await page.goto('/games/apothecary/');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'de-DE');
+  await expect(page.locator('.game-overlay-hint')).toHaveText('P drücken zum Pausieren \u00b7 H für die Spielanleitung');
+  await page.getByRole('button', { name: 'Spielanleitung' }).click();
+  await expect(page.getByRole('heading', { name: 'Spielanleitung: Apothecary' })).toBeVisible();
+  await expect(page.locator('.game-help h3').first()).toHaveText('Steuerung');
+  testInfo.attach('german how to play', { body: await page.screenshot({ path: testInfo.outputPath('german-how-to-play.png') }), contentType: 'image/png' });
+
+  // ?lang= shows another language without changing the setting.
+  await page.goto('/?lang=en');
+  await expect(page.locator('h1')).toHaveText('Game hub');
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('hub-settings')!).language)).toBe('de');
+
+  // Numbers and dates: British English, US English and German.
+  const formats = async (lang: string) => {
+    await page.goto(`/?lang=${lang}`);
+    return page.evaluate(async () => {
+      const i18n = await import('/shared/i18n.ts' as string);
+      return [i18n.formatNumber(1234.5), i18n.formatDate(new Date(2026, 9, 17))];
+    });
+  };
+  expect(await formats('en')).toEqual(['1,234.5', '17/10/2026']);
+  expect(await formats('en-US')).toEqual(['1,234.5', '10/17/2026']);
+  expect(await formats('de')).toEqual(['1.234,5', '17.10.2026']);
 });
