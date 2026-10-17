@@ -3,8 +3,8 @@ import { HANDS, type Hand } from '../game/hands';
 import { KINDS, type IsleKind } from '../game/kinds';
 import type { Terrain } from '../game/terrain';
 import type { UpgradeId } from '../game/upgrades';
-import { TINT } from './map';
-import { BLUE, BROWN, GOLD, GOLD_DARK, INK, MAGENTA, SHEET, TREE, bake, circle, poly, rrect, star, type Ctx } from './paint';
+import { TERRAINS, tintOf } from './map';
+import { BLUE, BROWN, GOLD, GOLD_DARK, INK, MAGENTA, RULE, SHEET, TRACK, TREE, bake, circle, poly, rrect, star, theme, type Ctx } from './paint';
 
 /** Upgrade icons: clean line symbols in ink with a magenta mark, 24 px, baked as `icon-<id>`. */
 const UPGRADE_ICONS: Record<UpgradeId, (ctx: Ctx) => void> = {
@@ -138,14 +138,14 @@ const HAND_ICONS: Record<Hand, (ctx: Ctx) => void> = {
 
 /** A tile's flat tint with its map symbol, for chart rows and the commission. */
 function swatch(ctx: Ctx, t: Terrain) {
-  ctx.fillStyle = ['village', 'port', 'ruins', 'river', 'road'].includes(t) ? '#dcebc8' : TINT[t];
+  ctx.fillStyle = ['village', 'port', 'ruins', 'river', 'road'].includes(t) ? tintOf('grass') : tintOf(t);
   ctx.fillRect(0, 0, 16, 16);
-  ctx.strokeStyle = 'rgba(29,35,41,0.35)';
+  ctx.strokeStyle = theme === 'dark' ? 'rgba(228,232,236,0.3)' : 'rgba(29,35,41,0.35)';
   ctx.lineWidth = 1;
   ctx.strokeRect(0.5, 0.5, 15, 15);
   if (t === 'forest') {
     for (const [x, y] of [[5, 5], [11, 6], [6, 11], [11, 11]]) {
-      circle(ctx, x, y, 2.4, 'rgba(255,255,255,0.4)', TREE, 0.9);
+      circle(ctx, x, y, 2.4, theme === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.4)', TREE, 0.9);
     }
   } else if (t === 'hills') {
     ctx.strokeStyle = BROWN;
@@ -195,7 +195,7 @@ function swatch(ctx: Ctx, t: Terrain) {
     ctx.quadraticCurveTo(3, 12, 13, 14);
     ctx.stroke();
   } else if (t === 'road') {
-    for (const [col, lw] of [[INK, 4], ['#f6ecd2', 2]] as const) {
+    for (const [col, lw] of [[INK, 4], [theme === 'dark' ? '#6a5c44' : '#f6ecd2', 2]] as const) {
       ctx.strokeStyle = col;
       ctx.lineWidth = lw;
       ctx.beginPath();
@@ -368,7 +368,7 @@ const MARKS: Record<string, (ctx: Ctx) => void> = {
 export function bakeIcons(scene: Phaser.Scene) {
   for (const [id, draw] of Object.entries(UPGRADE_ICONS)) bake(scene, `icon-${id}`, 24, 24, draw);
   for (const id of Object.keys(HANDS) as Hand[]) bake(scene, `hand-${id}`, 24, 24, HAND_ICONS[id]);
-  for (const t of Object.keys(TINT) as Terrain[]) bake(scene, `swatch-${t}`, 16, 16, (ctx) => swatch(ctx, t));
+  for (const t of TERRAINS) bake(scene, `swatch-${t}`, 16, 16, (ctx) => swatch(ctx, t));
   // The Lodestone Compass's mark for a landmark under the fog: a gold rose in a thin ring.
   bake(scene, 'landmark-hint', 26, 26, (ctx) => {
     circle(ctx, 13, 13, 11, null, '#c08a1e', 0.8);
@@ -384,12 +384,12 @@ export function bakeIcons(scene: Phaser.Scene) {
   for (const kind of [...(Object.keys(KINDS) as IsleKind[]), null]) {
     const filled = kind !== null;
     bake(scene, kind ? `atlas-${kind}` : 'atlas-empty', 16, 16, (ctx) => {
-      const c = kind ? KINDS[kind].page : '#b9c0c6';
+      const c = kind ? KINDS[kind].page : theme === 'dark' ? '#4a5560' : '#b9c0c6';
       ctx.fillStyle = c;
       ctx.fillRect(2, 2, 12, 12);
-      ctx.fillStyle = filled ? SHEET : '#eef0f1';
+      ctx.fillStyle = filled ? SHEET : TRACK;
       ctx.fillRect(4, 12, 10, 1.5);
-      ctx.fillStyle = filled ? MAGENTA : '#d6dadd';
+      ctx.fillStyle = filled ? MAGENTA : RULE;
       ctx.fillRect(2, 2, 2, 12);
       poly(ctx, [[9, 4.5], [12, 9.5], [6, 9.5]], null, SHEET, 1);
     });
