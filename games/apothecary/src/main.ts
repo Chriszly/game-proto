@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { BootScene } from './scenes/BootScene';
 import { GameScene } from './scenes/GameScene';
 import { setupGame } from '../../../shared/setupGame';
+import { howToPlay } from './howToPlay';
 import { setupScaling } from '../../../shared/scaling';
 
 export const GAME_WIDTH = 960;
@@ -26,7 +27,7 @@ const game = new Phaser.Game({
   },
   scene: [BootScene, GameScene],
 });
-setupGame(game);
+setupGame(game, { howToPlay });
 setupScaling(game);
 
 // Handy for poking at state from the browser console during development.

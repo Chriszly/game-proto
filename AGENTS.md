@@ -90,7 +90,7 @@ to its log and run summary.
   file under the same name rather than adding a new one.
 - **Add a game** by creating `games/<name>/` with an `index.html` that loads `./src/main.ts`, a
   `README.md`, an `AGENTS.md` (current state and architecture) with a `CLAUDE.md` that imports it,
-  a `cover.png` (a 16:9 screenshot) and an `e2e/playthrough.spec.ts` that plays its first round,
+  a `cover.png` (a 16:9 screenshot), a `src/howToPlay.ts` handed to `setupGame(game, { howToPlay })` and an `e2e/playthrough.spec.ts` that plays its first round,
   and it is played by the shared `.github/workflows/playthrough.yml`, which finds every
   `games/<name>/e2e/playthrough.spec.ts` on its own, so a new game needs no workflow of its own. Give it a `favicon.svg` linked from its `index.html`: the orange bear from the hub's
   `favicon.svg` (same ears, head, dot eyes and muzzle, 32x32 viewBox) with one prop for the game,
