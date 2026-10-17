@@ -48,7 +48,8 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
   - No audio, no camera shake.
   - Each boss's moves cycle in a fixed order (each boss wave starts one further along).
   - A spitter stands still at its range until shot, so a wave can't end while one stands; it is
-    an easy target once the soldier walks under it.
+    an easy target once the soldier walks under it. Zombies steer to the hero's x plus their own
+    offset, clamped to `HERO.minX..HERO.maxX`, so none stops out of every rifle's reach.
   - Supply drop picks and kit panel items are not shown in the wide-screen backdrop.
   - Night-vision textures are baked the first time that style is shown, a hitch of about 0.4s
     (measured in headless Chromium) on that first switch; later switches take a frame or so. On a
@@ -88,7 +89,7 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
   `CRATES` (upgrades plus `sandbag`),
   `SANDBAG_CRATE_ODDS`, `LANES`, `laneAt`, `WALL`, `SUPPLIES`, `supplyPick`, `SHOTGUN`, `FLAMER`,
   `MEDKIT`, `KIT_COSTS`, `PICKUP`, `DRUM`, `blastDamage`, `FRENZY`, `Stats`, `BASE_STATS`,
-  `applyUpgrade`, `planWave`, `isBossWave`, `waveSize`, `waveTotal`, `toughness`, `drumCount`. No
+  `applyUpgrade`, `planWave`, `isBossWave`, `waveSize`, `waveTotal`, `waveToughness`, `toughness`, `drumCount`. No
   Phaser import; its only import is `byDifficulty` from `shared/settings.ts`.
 - `src/game/save.ts`: `loadBest`/`saveBest`, `loadStyle`/`saveStyle`, `loadScrap`/`saveScrap`,
   `loadKit`/`saveKit`, the `ArtStyle` type (`'comic' | 'nv'`) and the key names.
@@ -145,7 +146,7 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
   (`dark`, under the enemies) or the blood moon's red cast (`moon`, over the road). `spawn` shifts entries off the front once `waveClock` passes their `at`.
   `checkWave` moves to `'break'` when `enemiesToCome()` is 0 and no enemy is live (crates and drums
   do not count) and saves the bank plus this run's scrap; after a boss wave it moves to `'supply'`
-  instead, with `offer = supplyPick()`, and `pickSupply` (a card tap or 1/2/3) moves on to
+  instead, with `offer = supplyPick(shotgunMaxed)` (no shotgun card once `pellets` is at `SHOTGUN.maxPairs`), and `pickSupply` (a card tap or 1/2/3) moves on to
   `'break'`. After `BREAK_MS` it calls `startWave(wave + 1)`. Crawler swarms are ordinary enemy
   spawns in the plan; `waveTotal` counts them, and `callPack` adds a boss's pack to
   `state.waveTotal` during the wave.
@@ -195,7 +196,8 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
   (saved) and shows the game over overlay with a win title.
 - **Sandbag walls:** a `sandbag` crate adds to `state.sandbags`. A tap on `Hud.onKit` toggles
   `state.placing`; the next tap on the road calls `placeWall(laneAt(x))` (the S key places in the
-  hero's lane). Walls are a `walls` pool, one per lane, at `WALL.y` for `WALL.ms`; `moveEnemies`
+  hero's lane). Both only work in the `'wave'` phase, since a wall placed in the break would run
+  out before the next wave arrives. Walls are a `walls` pool, one per lane, at `WALL.y` for `WALL.ms`; `moveEnemies`
   stops non-boss zombies in that lane just above it, and a boss calls `smashWall`.
 - **Supplies:** `state.pellets` adds bullet pairs to the hero's slot in `fire` (`SHOTGUN.angle`
   apart, with `vx`; hits are swept along the bullet's whole move). `tickFlamer` spends a flame
@@ -270,7 +272,8 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
   no-ops; Deadline uses neither).
 - Difficulty scales one number: enemy toughness in `planWave` in `src/game/rules.ts`, multiplied
   by `byDifficulty(0.75, 1, 1.3)` (easy, normal, hard). It applies to every enemy's hp, the boss
-  included, but not to crate hp, drum hp or blast damage.
+  included, but not to crate hp, drum hp, blast damage or fire rounds' burn (`FIRE_ROUNDS.damage`
+  uses `waveToughness`, the wave's toughness before difficulty).
 - `settings.reduceMotion` stops the zombies' side-to-side sway in `GameScene.moveEnemies` (they
   still walk and steer), holds the night-vision grain, scanline and flicker still (`animateFeed`
   does nothing), and makes a drum's blast show at full size instead of swelling and a flame burst

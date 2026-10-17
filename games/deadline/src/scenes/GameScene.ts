@@ -637,7 +637,7 @@ export class GameScene extends Phaser.Scene {
       } else if (s.phase === 'supply') {
         const card = this.cards.find((c) => inBox(x, y, c));
         if (card) this.pickSupply(card.kind);
-      } else if (this.hud.onKit(x, y) && (s.sandbags > 0 || s.placing)) s.placing = !s.placing;
+      } else if (this.hud.onKit(x, y) && ((s.phase === 'wave' && s.sandbags > 0) || s.placing)) s.placing = !s.placing;
       else if (s.placing) {
         // A tap on the road puts the wall in that lane; anywhere else puts the sandbags away.
         if (y > HUD_HEIGHT + 30 && y < REACH_Y) this.placeWall(laneAt(x));
@@ -902,8 +902,9 @@ export class GameScene extends Phaser.Scene {
             this.lobAcid(e.x, e.y - 4, SPITTER.poolRadius, SPITTER.warnMs, SPITTER.poolMs);
           }
         } else {
+          // The aim point stays inside the rifles' reach, so nothing (a spitter above all) stops where no bullet can get it.
           const aside = boss ? 0 : ((e.id * 53) % 81) - 40;
-          const dx = this.player.x + aside - e.x, maxStep = (steer * dt) / 1000;
+          const dx = Phaser.Math.Clamp(this.player.x + aside, HERO.minX, HERO.maxX) - e.x, maxStep = (steer * dt) / 1000;
           e.x += Phaser.Math.Clamp(dx, -maxStep, maxStep);
         }
       }
@@ -1086,7 +1087,8 @@ export class GameScene extends Phaser.Scene {
 
   /** Drops a sandbag wall across a lane (or tops up the one already there). */
   private placeWall(lane: number) {
-    if (this.state.sandbags <= 0) return;
+    // Not in the break: the wall would run out before the next wave reaches it.
+    if (this.state.sandbags <= 0 || this.state.phase !== 'wave') return;
     this.state.sandbags--;
     this.state.walls++;
     let w = this.walls.all.find((o) => o.alive && o.lane === lane);
@@ -1431,7 +1433,7 @@ export class GameScene extends Phaser.Scene {
         // A boss leaves a supply drop behind: the game waits for a pick.
         if (isBossWave(this.state.wave)) {
           this.state.phase = 'supply';
-          this.state.offer = supplyPick();
+          this.state.offer = supplyPick(this.state.pellets >= SHOTGUN.maxPairs);
           this.showSupply();
         }
       }

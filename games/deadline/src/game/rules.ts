@@ -141,7 +141,7 @@ export const PERK_KINDS = Object.keys(PERKS) as Perk[];
 export const PERK_AT = 3;
 /** The perks a run has earned, from how many crates of each kind it collected. */
 export const perksOf = (collected: Record<UpgradeKind, number>) => PERK_KINDS.filter((p) => collected[PERKS[p].upgrade] >= PERK_AT);
-export const FIRE_ROUNDS = { ms: 2400, tickMs: 400, damage: (wave: number) => Math.max(1, Math.round(toughness(wave) * 0.6)) };
+export const FIRE_ROUNDS = { ms: 2400, tickMs: 400, damage: (wave: number) => Math.max(1, Math.round(waveToughness(wave) * 0.6)) };
 export const HEADSHOT = { every: 4, mult: 3 };
 export const RICOCHET = { range: 150 };
 
@@ -220,10 +220,10 @@ export const SHOTGUN = { angle: 0.2, maxPairs: 3 };
 export const FLAMER = { charges: 2, trigger: 70, reach: 170, damage: (wave: number) => 20 + 8 * wave, cooldownMs: 800 };
 export const MEDKIT = { push: 200, reach: 120 };
 
-/** Three different supplies to pick from, drawn from `SUPPLY_KINDS`. */
-export function supplyPick(rand: () => number = Math.random): SupplyKind[] {
-  const pool = [...SUPPLY_KINDS];
-  pool.splice(Math.floor(rand() * pool.length), 1);
+/** Three different supplies to pick from, drawn from `SUPPLY_KINDS`; no shotgun once it has `SHOTGUN.maxPairs`. */
+export function supplyPick(shotgunMaxed = false, rand: () => number = Math.random): SupplyKind[] {
+  const pool = SUPPLY_KINDS.filter((k) => !(shotgunMaxed && k === 'shotgun'));
+  if (pool.length > 3) pool.splice(Math.floor(rand() * pool.length), 1);
   return pool;
 }
 
@@ -293,7 +293,9 @@ export const waveSize = (wave: number) => 12 + 6 * (wave - 1);
 export const waveTotal = (wave: number) => waveSize(wave) + (isBossWave(wave) ? 1 : 0) + swarmCount(wave) * SWARM.size;
 
 /** How much tougher a wave's zombies are than wave 1's (scaled by the hub's difficulty). */
-export const toughness = (wave: number) => (1 + 0.3 * (wave - 1)) * byDifficulty(0.75, 1, 1.3);
+/** How much tougher each wave gets, before the hub's difficulty: fire rounds burn by this, so difficulty doesn't scale them too. */
+export const waveToughness = (wave: number) => 1 + 0.3 * (wave - 1);
+export const toughness = (wave: number) => waveToughness(wave) * byDifficulty(0.75, 1, 1.3);
 
 /** How many fuel drums roll down in a wave (more in an ammo shortage). */
 export const drumCount = (wave: number, condition: Condition = 'clear') => 1 + Math.floor(wave / 4) + (condition === 'shortage' ? CONDITION.shortageDrums : 0);
