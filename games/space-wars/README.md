@@ -396,7 +396,8 @@ what it taps. Run it with `npx playwright test --project space-wars`.
   and a sector's head start), with no Phaser.
 - `src/game/describe.ts`: the tooltip and faction-card text, from the faction data.
 - `src/game/arena.ts`: the battlefield, the fixed start points and the placement and crystal distances.
-- `src/scenes/GameScene.ts`: draws the battle each frame, scrolls the map and turns clicks into commands.
+- `src/scenes/GameScene.ts`: draws the battle each frame, scrolls the map and turns clicks into commands, and plays the sound and music.
+- `src/audio.ts`: the music (a synth space opera in E minor) and the sound effects, made in code.
 - `src/scenes/layout.ts`: the top bar, the command bar, its buttons (the Fall back and Flagship buttons included), the rivals panel's box, the contract board, the sector strip, the perk cards, the role names and the font.
 - `src/art/mesh.ts`: the low-poly modelling kit (boxes, tubes, ellipsoids, extruded outlines).
 - `src/art/render3d.ts`: the software renderer that paints meshes with airbrushed and chrome shading.
