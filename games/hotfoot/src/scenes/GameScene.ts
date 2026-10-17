@@ -1,7 +1,10 @@
 import Phaser from 'phaser';
 import { viewPoint } from '../../../../shared/scaling';
 import { formatDate } from '../../../../shared/i18n';
+import { ui } from '../../../../shared/audio';
 import { settings } from '../../../../shared/settings';
+import { SoundCues } from '../audio/cues';
+import { sfx } from '../audio/sound';
 import { BOSS_ART, GOBLIN_ART } from '../art/foes';
 import { bakePanel } from '../art/hud';
 import { armouryIcon } from '../art/icons';
@@ -152,6 +155,8 @@ export class GameScene extends Phaser.Scene {
   private armouryRows: { id: ArmouryId; level: Phaser.GameObjects.Text; buy: Phaser.GameObjects.Container; full: Phaser.GameObjects.Text }[] = [];
   /** What is saved between runs; the run's own numbers are copied into it by `persist`. */
   private progress!: Progress;
+  /** Plays the run's sounds and music from what changed in it each frame. */
+  private cues = new SoundCues();
   private clock = 0;
   private lastFrame: number | null = null;
 
@@ -168,6 +173,7 @@ export class GameScene extends Phaser.Scene {
     this.progress = loadProgress();
     this.state = this.freshRun(null);
     this.persist();
+    this.cues.reset(this.state);
 
     this.add.image(0, 0, 'page').setOrigin(0).setDepth(-10);
     this.add.image(FRAME.x, FRAME.y, 'sky').setOrigin(0).setDepth(-5);
@@ -184,7 +190,7 @@ export class GameScene extends Phaser.Scene {
     this.fx = this.add.graphics().setDepth(6);
     this.caption = this.add
       .text(MARGIN.captionX, MARGIN.captionY, '', { fontFamily: FONT, fontSize: '13px', fontStyle: 'italic', color: C.madder })
-      .setOrigin(0, 0.5)
+      .setOrigin(0.5, 0.5)
       .setDepth(0);
     this.createHud();
     this.createHint();
@@ -224,6 +230,7 @@ export class GameScene extends Phaser.Scene {
     tick(s, dt);
     this.clock += dt;
     if (s.phase !== phase && s.phase !== 'running') this.persist();
+    this.cues.update(s);
 
     this.drawWorld();
     this.drawBoss();
@@ -882,7 +889,10 @@ export class GameScene extends Phaser.Scene {
       };
       line = t(next ? lines[next.kind] : s.boss ? (s.boss.kind === 'dragon' ? 'captionPastDragon' : 'captionPastGate') : onward[s.terrain]);
     }
-    if (this.caption.text !== line) this.caption.setText(line);
+    if (this.caption.text !== line) {
+      this.caption.setText(line).setScale(1);
+      if (this.caption.width > MARGIN.captionW) this.caption.setScale(MARGIN.captionW / this.caption.width);
+    }
   }
 
   private createHint() {
@@ -945,19 +955,20 @@ export class GameScene extends Phaser.Scene {
   }
 
   private pick(id: BoonId) {
-    pick(this.state, id);
+    if (pick(this.state, id)) sfx('pick');
   }
 
   private pickRoad(road: Road) {
-    pickRoad(this.state, road);
+    if (pickRoad(this.state, road)) sfx('pick');
   }
 
   /** Spends the coins on the boon missed at the last checkpoint, for the next run. */
   private buy() {
     if (buyMissed(this.state)) {
+      ui('coin');
       this.persist();
       this.drawGameOver();
-    }
+    } else ui('refuse');
   }
 
   /**
@@ -986,7 +997,10 @@ export class GameScene extends Phaser.Scene {
       parts.push(icon, name, text, level, buy, full);
       this.armouryRows.push({ id, level, buy, full });
     });
-    const back = makeButton(this, cx, cy + h / 2 - 44, t('back'), () => this.armouryPanel.setVisible(false));
+    const back = makeButton(this, cx, cy + h / 2 - 44, t('back'), () => {
+      ui('click');
+      this.armouryPanel.setVisible(false);
+    });
     parts.push(back);
     this.armouryPanel = this.add.container(0, 0, parts).setDepth(UI_DEPTH + 30).setVisible(false);
   }
@@ -1008,15 +1022,17 @@ export class GameScene extends Phaser.Scene {
   }
 
   private openArmoury() {
+    ui('click');
     this.armouryPanel.setVisible(true);
     this.drawArmoury();
   }
 
   private buyArmoury(id: ArmouryId) {
     if (buyArmoury(this.state, id)) {
+      ui('coin');
       this.persist();
       this.drawGameOver();
-    }
+    } else ui('refuse');
   }
 
   /**
@@ -1027,6 +1043,8 @@ export class GameScene extends Phaser.Scene {
     this.persist();
     this.state = this.freshRun(daily);
     this.persist();
+    sfx('again');
+    this.cues.reset(this.state);
     this.armouryPanel.setVisible(false);
     for (const sprite of [...this.traps.values(), ...this.coins.values(), ...this.ledges.values(), ...this.words.values()]) sprite.destroy();
     for (const art of this.shrines.values()) {

@@ -404,6 +404,11 @@ Notes:
 ### Hotfoot
 Endless auto-runner with boons and bosses; lively manuscript adventure.
 
+**Done.** Built as planned in `games/hotfoot/src/audio/`, played from the scene (`SoundCues`), so
+the sim stays free of audio. Differences: the shrine's refusal uses the shared `refuse` buzz, the
+Gatekeeper's win is an effect rather than a sting, there is no separate wind ambience (the Windy
+Pass loop is airy instead), and the margin caption moved to the middle, clear of the corner.
+
 **Music:** Galloping chiptune at about 150 BPM in D Mixolydian, with a square lead, a pulse
 counter-melody, a triangle bass in a gallop rhythm and drums.
 - One variation per terrain: ice sparkly, fen murky, wind airy.

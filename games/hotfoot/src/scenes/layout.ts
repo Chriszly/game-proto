@@ -23,8 +23,12 @@ export const STAGE_TITLE = { x: 560, y: 150 };
 export const ARMOURY_PANEL = { w: 640, h: 440, rowY: [-80, 10, 100] };
 /** The streak chip in the HUD. */
 export const STREAK_CHIP = { x: 565, y: 8, w: 98, h: 24 };
-/** The scrollwork in the margin under the road, and the rubric caption. */
-export const MARGIN = { scrollY: 487, captionX: 35, captionY: 525 };
+/**
+ * The scrollwork in the margin under the road, and the rubric caption: centred at `captionX` and
+ * at most `captionW` wide, so it stays clear of the shared corner buttons in the bottom left (on a
+ * small phone they reach about 165 px in) and of the touch Slide and Jump buttons on the right.
+ */
+export const MARGIN = { scrollY: 487, captionX: 458, captionY: 525, captionW: 540 };
 /** The boon cards at a checkpoint, by their centres: two of them, or three after a met dare. The road cards use the two. */
 export const CARDS = { xs: { 2: [330, 630], 3: [205, 480, 755] } as Record<number, number[]>, y: 300, w: 250, h: 260 };
 export const BUTTON = { w: 180, h: 40 };
