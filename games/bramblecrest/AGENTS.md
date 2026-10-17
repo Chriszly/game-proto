@@ -68,12 +68,21 @@ Implemented today:
   lights, and `flashes` are short-lived ones (a burst, a ringing bell; none with reduce motion).
 - The HUD (`src/scenes/hud.ts`): hearts, moonstones, keys (in a dungeon), bellseeds, the journal
   line (the quest's objective), place banners, toasts, the touch buttons, the floating touch stick,
-  the dialog box and the end card.
+  the dialog box and the end card. The counters sit side by side, and a longer word (German
+  "Schlüssel") pushes the next one along and widens their plate.
 
 ## Architecture
 
 - `src/main.ts` creates the game (960x540, `Phaser.AUTO`), calls `setupGame(game, { howToPlay })`
   and `setupScaling(game)`, and exposes `window.game` in dev builds.
+- `src/howToPlay.ts`: the How to play text in British English and German, picked with `byLanguage`
+  (US English uses the British one, since no word in it is spelled differently).
+- `src/i18n.ts` and `src/i18n/`: every text on screen (`shared/i18n.ts`). `i18n/en.ts` is the
+  British English source, `i18n/de.ts` the German and `i18n/en-US.ts` the US spellings (none so
+  far). `t(key, vars)` shows a text in the hub's language and `TextKey` types the keys. Place and
+  person names and signs are translated when a map is built (`maps.ts`), lines when a person is
+  talked to (`talk.ts`), and `OBJECTIVES` holds the journal line's keys. Logic compares ids, never
+  text.
 - `src/game/` is plain data and rules with no Phaser: `maps.ts` builds each map with a small
   `Builder` (rect, border, ellipse, seeded scatter, props) into a `MapDef`; `state.ts` holds the
   save and quest; `talk.ts` returns each person's lines and an effect by quest stage; `path.ts` is
@@ -123,15 +132,19 @@ hidden places. `load` fills in fields a save from an older version lacks (`items
   (`GATE`). Mirrored there, so change them together: the elder's, the chest's and the gate's
   places, `START_HP` (Normal's three hearts), the quest stage names, the `chest-blade` and
   `gate-cut` flags, the speaker name `Elder Wren`, the item text naming the Old Blade and the save
-  key. It checks that the view point it taps is on screen and below the HUD's top 70 pixels.
+  key. It runs in US English, so those are the `elderName` and `foundSword` texts of `i18n/en.ts`. It checks that the view point it taps is on screen and below the HUD's top 70 pixels.
 - It saves `0-start`, `1-elder`, `2-blade` and `3-gate` screenshots.
 
 ## Making common changes
 
-- **Add a person**: an `npcs` entry in the map, a sprite in `paint.ts` (keyed by id), and lines in
-  `talk.ts`.
+- **Add or change a text**: its key in `i18n/en.ts`, the German in `i18n/de.ts` (the build fails
+  without it) and a US spelling in `i18n/en-US.ts` if it differs (colour, centre); run
+  `node scripts/check-translations.mjs`. German runs longer: the dialog box wraps, but toasts, the
+  journal line and the end card's buttons don't, so check a new text with `?lang=de`.
+- **Add a person**: an `npcs` entry in the map (name via `t`), a sprite in `paint.ts` (keyed by id),
+  and lines in `talk.ts` (each a key in the `i18n/` files).
 - **Add a chest or item**: a `chests` entry with an `ItemId`; a new item needs its text in
-  `openChest` and its effect in `give`.
+  `openChest` (a key in the `i18n/` files) and its effect in `give`.
 - **Add a map**: a builder function in `maps.ts`, its id in `MapId`, its theme's colours in
   `ground.ts`, and exits both ways (an exit lands on the far side's tile and facing).
 - **Add a foe**: its kind in `EnemyKind`, its row in `FOES`, its sprite, and its behaviour in
@@ -139,7 +152,7 @@ hidden places. `load` fills in fields a save from an older version lacks (`items
 - **Add rock to break**: a `boulder` tile (outdoors, a sprite like a bush) or a `crack` tile (a
   dungeon wall, painted in `ground.ts`). Nothing else is needed: the burst and the saved flag
   handle it.
-- **Add a chapter**: new stages at the end of `QUESTS` with their `OBJECTIVES`, lines in `talk.ts`
+- **Add a chapter**: new stages at the end of `QUESTS` with their `OBJECTIVES` (text keys), lines in `talk.ts`
   that move them on, and a `chapterEnd` case; raise `MOONSTONES` with the new stones.
 - **Hookvine posts** only catch along the knight's row or column, so pairs across a gap must share
   a row (or column).

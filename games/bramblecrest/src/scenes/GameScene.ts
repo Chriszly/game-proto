@@ -8,6 +8,7 @@ import { BREAKABLE, buildMap, centre, CUTTABLE, DUNGEONS, LOW, setTile, SOLID, T
 import { findPath, type Step } from '../game/path';
 import { advance, CHAPTER_ONE_STONES, clearSave, give, hasFlag, load, MAX_SEEDS, MOONSTONES, newState, save, setFlag, stonesToFind, type GameState } from '../game/state';
 import { talk, type TalkEffect } from '../game/talk';
+import { t, type TextKey } from '../i18n';
 import { settings } from '../../../../shared/settings';
 import { scrollingCamera, splitHudCamera, viewPoint } from '../../../../shared/scaling';
 import { Hud } from './hud';
@@ -44,7 +45,7 @@ const PROP_ART: Record<PropKind, { key: string; foot: number; solid: boolean }> 
 const AFTER_BOSS: Record<string, string> = { 's-boss': 'boss', 'b-bell': 'wraith' };
 /** The order the belfry's bells must ring in, by voice (0 is the deepest). */
 const BELL_ORDER = [0, 2, 1];
-const BELL_SOUND = ['BONG', 'DONG', 'ting'];
+const BELL_SOUND: TextKey[] = ['bellLow', 'bellMid', 'bellHigh'];
 /** How high the Bellwraith's bell hangs while it hunts. */
 const BELL_LIFT = 72;
 
@@ -560,19 +561,19 @@ export class GameScene extends Phaser.Scene {
     const s = this.state;
     const npc = this.map.npcs.find((n) => n.x === tx && n.y === ty);
     if (npc) {
-      const t = talk(npc.id, s);
-      this.openDialog(npc.name, t.lines, t.then);
+      const said = talk(npc.id, s);
+      this.openDialog(npc.name, said.lines, said.then);
       return true;
     }
     const chest = this.map.chests.find((c) => c.x === tx && c.y === ty);
     if (chest) {
       if (!hasFlag(s, `chest-${chest.id}`)) this.openChest(chest.id, chest.item);
-      else this.hud.toast('Empty.');
+      else this.hud.toast(t('empty'));
       return true;
     }
     const sign = this.map.signs.find((g) => g.x === tx && g.y === ty);
     if (sign) {
-      this.openDialog('Sign', [sign.text]);
+      this.openDialog(t('sign'), [sign.text]);
       return true;
     }
     if (this.blocks.some((b) => b.x === tx && b.y === ty)) {
@@ -584,12 +585,12 @@ export class GameScene extends Phaser.Scene {
       if (door.kind === 'key' && s.keys > 0) {
         s.keys--;
         setFlag(s, `door-${door.id}`);
-        this.hud.toast('The lock clicks open.');
+        this.hud.toast(t('unlocked'));
         this.updateDoors();
         save(s);
-      } else if (door.kind === 'key') this.hud.toast('Locked. It needs a small key.');
-      else if (door.kind === 'bars') this.hud.toast('Iron bars. Something must lift them.');
-      else this.hud.toast('Thorny vines hold it shut.');
+      } else if (door.kind === 'key') this.hud.toast(t('locked'));
+      else if (door.kind === 'bars') this.hud.toast(t('barred'));
+      else this.hud.toast(t('thornyDoor'));
       return true;
     }
     return false;
@@ -601,12 +602,12 @@ export class GameScene extends Phaser.Scene {
     this.chestSprites.get(id)?.setTexture('chest-open').setScale(texScale('chest-open'));
     give(s, item);
     const text: Record<ItemId, string> = {
-      sword: 'You found the Old Blade! Space, J or the sword button swings it. It cuts bushes and thorns too.',
-      hookvine: 'You found the Hookvine! Q, L or the vine button throws it. It pulls you to golden posts, over water and pits.',
-      key: 'You found a small key. It opens one locked door in this place.',
-      heart: 'You found a Heart Vessel! One more heart.',
-      oil: 'You found lantern oil. Your lantern burns brighter now.',
-      seeds: `You got ${MAX_SEEDS} bellseeds! B, X or the seed button plants one. Step back: it bursts and breaks cracked stone.`,
+      sword: t('foundSword'),
+      hookvine: t('foundHookvine'),
+      key: t('foundKey'),
+      heart: t('foundHeart'),
+      oil: t('foundOil'),
+      seeds: t('foundSeeds', { n: MAX_SEEDS }),
     };
     this.openDialog('', [text[item]]);
     save(s);
@@ -632,11 +633,11 @@ export class GameScene extends Phaser.Scene {
     switch (e) {
       case 'quest-blade':
         advance(s, 'blade');
-        this.hud.toast('New quest: The Old Blade');
+        this.hud.toast(t('newQuestBlade'));
         break;
       case 'quest-thorns':
         advance(s, 'thorns');
-        this.hud.toast('Quest done: The Old Blade');
+        this.hud.toast(t('doneQuestBlade'));
         break;
       case 'cat-pet':
         setFlag(s, hasFlag(s, 'cat-1') ? 'cat-2' : 'cat-1');
@@ -651,16 +652,16 @@ export class GameScene extends Phaser.Scene {
         break;
       case 'quest-bell':
         advance(s, 'bell');
-        this.hud.toast('New quest: The Drowned Bell');
+        this.hud.toast(t('newQuestBell'));
         break;
       case 'seeds':
         advance(s, 'belfry');
         give(s, 'seeds');
-        this.openDialog('', [`You got ${MAX_SEEDS} bellseeds! B, X or the seed button plants one in front of you. Step back: it bursts, breaks cracked stone and boulders, and hurts anything close.`]);
+        this.openDialog('', [t('gotSeeds', { n: MAX_SEEDS })]);
         break;
       case 'refill':
         s.seeds = MAX_SEEDS;
-        this.hud.toast(`Bellseeds ${MAX_SEEDS}`);
+        this.hud.toast(t('seedsRefilled', { n: MAX_SEEDS }));
         break;
       case 'finish-two':
         advance(s, 'end');
@@ -677,18 +678,18 @@ export class GameScene extends Phaser.Scene {
     const ending =
       chapter === 1
         ? n >= total
-          ? 'Every moonstone hums at once. Far off in Glimmer Fen, something vast opens one eye, and smiles.'
+          ? t('endOneAll')
           : n >= 4
-            ? 'A cold light flickers over Glimmer Fen. Some of the moon is still missing.'
-            : 'The lamps burn on in Mossford. The woods are quiet, for now.'
+            ? t('endOneSome')
+            : t('endOneFew')
         : n >= total
-          ? 'The moonstones ring like little bells, all together. High above the fen, the moon rings back.'
+          ? t('endTwoAll')
           : n >= 10
-            ? 'The fen is still at last. Somewhere under the water, a last few stones keep humming.'
-            : 'The frogs sing over the drowned belfry. The night is quiet, for now.';
+            ? t('endTwoSome')
+            : t('endTwoFew');
     this.hud.showEnd(
-      chapter === 1 ? 'Chapter One: The Thornmother' : 'Chapter Two: The Drowned Bell',
-      [`Moonstones ${n} of ${total}   ·   Foes beaten ${s.beaten}   ·   Falls ${s.falls}`, ending],
+      chapter === 1 ? t('chapterOne') : t('chapterTwo'),
+      [t('endStats', { n, total, beaten: s.beaten, falls: s.falls }), ending],
       () => undefined,
       () => {
         clearSave();
@@ -704,7 +705,7 @@ export class GameScene extends Phaser.Scene {
     s.moonstones.push(id);
     this.stoneSprites.get(id)?.destroy();
     this.stoneSprites.delete(id);
-    this.hud.toast(`Moonstone! ${s.moonstones.length} of ${stonesToFind(s)}`);
+    this.hud.toast(t('moonstone', { n: s.moonstones.length, total: stonesToFind(s) }));
     save(s);
   }
 
@@ -738,14 +739,14 @@ export class GameScene extends Phaser.Scene {
       if (st.hidden === 'buried' && !this.dug.has(st.id) && Math.hypot((st.x + 0.5) * TILE - hx, (st.y + 0.5) * TILE - hy) < 30) {
         this.dug.add(st.id);
         this.stoneSprites.get(st.id)?.setVisible(true);
-        this.hud.toast('Something glints in the mud!');
+        this.hud.toast(t('glint'));
       }
   }
 
   private cut(tx: number, ty: number) {
     const s = this.state;
-    const t = tileAt(this.map, tx, ty);
-    const thorns = t === 'thorns';
+    const tile = tileAt(this.map, tx, ty);
+    const thorns = tile === 'thorns';
     setTile(this.map, tx, ty, thorns ? 'path' : 'grass');
     const k = ty * this.map.w + tx;
     const img = this.bushSprites.get(k);
@@ -761,7 +762,7 @@ export class GameScene extends Phaser.Scene {
         setFlag(s, 'gate-cut');
         if (s.quest === 'thorns') {
           advance(s, 'shrine');
-          this.hud.toast('The north gate is open');
+          this.hud.toast(t('gateOpen'));
         }
       }
       if (this.map.id === 'woods') setFlag(s, 'woods-thorns');
@@ -773,7 +774,7 @@ export class GameScene extends Phaser.Scene {
   private ringBell(bell: GameScene['bells'][number]) {
     const s = this.state;
     const c = centre(bell);
-    this.hud.toast(`${BELL_SOUND[bell.note]}...`);
+    this.hud.toast(t(BELL_SOUND[bell.note]));
     if (!settings.reduceMotion) {
       this.tweens.add({ targets: bell.sprite, angle: { from: -14, to: 14 }, duration: 160, yoyo: true, repeat: 1, onComplete: () => bell.sprite.setAngle(0) });
       this.flashes.push({ x: c.x, y: c.y - 14, r: 90, col: [255, 210, 130], power: 0.8, t: 500 });
@@ -783,12 +784,12 @@ export class GameScene extends Phaser.Scene {
     const i = this.bellSeq.length - 1;
     if (this.bellSeq[i] !== BELL_ORDER[i]) {
       this.bellSeq = [];
-      this.time.delayedCall(500, () => this.hud.toast('The bells clash, and fall silent.'));
+      this.time.delayedCall(500, () => this.hud.toast(t('bellsWrong')));
       return;
     }
     if (this.bellSeq.length < BELL_ORDER.length) return;
     setFlag(s, 'bells');
-    this.time.delayedCall(500, () => this.hud.toast('The bells ring true. Somewhere, iron bars grind open.'));
+    this.time.delayedCall(500, () => this.hud.toast(t('bellsRight')));
     save(s);
   }
 
@@ -799,7 +800,7 @@ export class GameScene extends Phaser.Scene {
     const s = this.state;
     if (!s.items.seeds || this.roll || this.hook || this.bombs.length >= 2) return;
     if (s.seeds <= 0) {
-      this.hud.toast('No bellseeds left. Cut bushes, or ask Old Sedge.');
+      this.hud.toast(t('noSeeds'));
       return;
     }
     const d = DIRS[s.facing];
@@ -939,7 +940,7 @@ export class GameScene extends Phaser.Scene {
     const plate = this.map.plates.find((p) => p.x === nx && p.y === ny);
     if (plate && !hasFlag(s, plate.flag)) {
       setFlag(s, plate.flag);
-      this.hud.toast('Somewhere, iron bars grind open.');
+      this.hud.toast(t('barsOpen'));
       save(s);
     }
   }
@@ -1220,7 +1221,7 @@ export class GameScene extends Phaser.Scene {
     const sp = s.spawn;
     this.fadeTo(() => {
       this.enterMap(sp.map, sp.x, sp.y, sp.facing, true);
-      this.hud.toast('You wake by the lamplight, a little bruised.');
+      this.hud.toast(t('wake'));
     });
   }
 
@@ -1435,7 +1436,7 @@ export class GameScene extends Phaser.Scene {
     b.t = BULB_DOWN_MS;
     b.x = b.home.x + (dx / len) * Math.min(44, len - 20);
     b.y = b.home.y + (dy / len) * Math.min(44, len - 20);
-    this.hud.toast('The bulb is down. Strike it!');
+    this.hud.toast(t('bulbDown'));
   }
 
   private hitBulb(b: Boss['bulbs'][number]) {
@@ -1470,9 +1471,9 @@ export class GameScene extends Phaser.Scene {
     const st = this.stoneSprites.get('s-boss');
     st?.setVisible(true);
     this.openDialog('', [
-      'The Thornmother withers into a heap of dry bramble.',
-      'You found a Heart Vessel! One more heart.',
-      'A way out has opened at the top of the hall. Elder Wren should hear of this.',
+      t('thornmotherBeaten'),
+      t('foundHeart'),
+      t('thornmotherWayOut'),
     ]);
     save(s);
   }
@@ -1485,7 +1486,7 @@ export class GameScene extends Phaser.Scene {
     if (!boss.awake) {
       if (!this.inRoom('boss')) return;
       boss.awake = true;
-      this.hud.showPlace('The Thornmother');
+      this.hud.showPlace(t('thornmother'));
     }
     const left = boss.bulbs.filter((b) => b.state !== 'gone').length;
     boss.raiseT -= dt;
@@ -1548,20 +1549,20 @@ export class GameScene extends Phaser.Scene {
     const w = this.wraith!;
     w.state = 'tipped';
     w.t = EXPOSED_MS;
-    this.hud.toast('The bell tips over. Strike what hides inside!');
+    this.hud.toast(t('bellTipped'));
   }
 
   private hitWraith() {
     const w = this.wraith!;
     if (w.state !== 'tipped') {
-      this.hud.toast('Clang! The bronze is too thick.');
+      this.hud.toast(t('clang'));
       return;
     }
     w.hp--;
     this.puff(w.x, w.y - 24, 0xc8e8ff);
     if (!settings.reduceMotion) this.flashes.push({ x: w.x, y: w.y - 30, r: 160, col: [190, 230, 255], power: 1, t: 400 });
     if (w.hp <= 0) return this.wraithDown();
-    this.hud.toast('The Bellwraith shrieks and flees into its bell!');
+    this.hud.toast(t('wraithFlees'));
     w.state = 'rise';
     w.t = 600;
   }
@@ -1582,9 +1583,9 @@ export class GameScene extends Phaser.Scene {
     give(s, 'heart');
     this.stoneSprites.get('b-bell')?.setVisible(true);
     this.openDialog('', [
-      'The Bellwraith frays into mist, and the great bell cracks in two.',
-      'You found a Heart Vessel! One more heart.',
-      'The fen falls quiet. Elder Wren will want to hear it from you.',
+      t('wraithBeaten'),
+      t('foundHeart'),
+      t('wraithQuiet'),
     ]);
     save(s);
   }
@@ -1596,7 +1597,7 @@ export class GameScene extends Phaser.Scene {
     if (!w.awake) {
       if (!this.inRoom('boss')) return;
       w.awake = true;
-      this.hud.showPlace('The Bellwraith');
+      this.hud.showPlace(t('bellwraith'));
     }
     const room = this.map.rooms.find((r) => r.id === 'boss')!;
     w.t -= dt;
@@ -1698,7 +1699,7 @@ export class GameScene extends Phaser.Scene {
       w.sprite.destroy();
       this.wisp = null;
       this.gainStone('f-wisp');
-      this.openDialog('The wisp', ['A voice like wind in reeds: "You found me. Now find the rest of the moon."']);
+      this.openDialog(t('wisp'), [t('wispVoice')]);
     }
   }
 

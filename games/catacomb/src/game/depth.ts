@@ -1,6 +1,8 @@
 // The depth ladder: beating the Hollow Queen unlocks the next depth, and each depth stacks one more
 // rule on the run. Depth 0 is the game as designed. The best depth unlocked is the game's one save.
 
+import { t, type TextKey } from '../i18n';
+
 const KEY = 'catacomb-best-depth';
 
 /** How much tougher foes are at depth 1, and again at every depth past 3. */
@@ -10,13 +12,13 @@ export const DEEP_REST_HEAL = 0.15;
 /** The curse the deck starts with from depth 3 on. */
 export const DEPTH_CURSE = 'wound';
 
-/** Each depth's new rule, for the hero panel and the README. */
-export const DEPTH_RULES = ['Foes have 20% more health', 'Campfires heal only 15%', 'The deck starts with a Wound curse', 'Foes have 20% more health again, and again each depth down'];
+/** Each depth's new rule (keys of `i18n/en.ts`), for the hero panel and the README. */
+export const DEPTH_RULES: TextKey[] = ['depthFoes', 'depthRest', 'depthWound', 'depthMore'];
 
-/** The rules in force at this depth, as one line. */
+/** The rules in force at this depth, as one line in the hub's language. */
 export function depthText(depth: number) {
-  if (depth <= 0) return 'The dungeon as it was';
-  return DEPTH_RULES.slice(0, Math.min(depth, DEPTH_RULES.length)).join('. ') + '.';
+  if (depth <= 0) return t('depthNone');
+  return DEPTH_RULES.slice(0, Math.min(depth, DEPTH_RULES.length)).map((rule) => t(rule)).join('. ') + '.';
 }
 
 /** The foes' health multiplier at this depth. */

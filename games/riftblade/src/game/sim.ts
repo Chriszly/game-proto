@@ -5,11 +5,14 @@
  */
 import { HEROES, type HeroId } from './heroes';
 import {
-  BOSS, DIFF, ELITE, ENEMY, HERO_R, LEASH, MAX_ENEMIES, MAX_SHARDS, ROLLER, RUN_MS, SPAWN_RING,
-  freshHero, freshState, refreshUnlocks, statsOf, xpFor,
-  type BoltColor, type Bomb, type Bullet, type Enemy, type EnemyKind, type GameState, type Stats,
+  BOSS, DIFF, ELITE, EMBER, ENEMY, HERO_R, KNIGHT, LEASH, LINE, MAX_ENEMIES, MAX_SHARDS, RATS, ROLLER, RUN_MS,
+  SPAWN_RING, TOAD, WALKER, freshHero, freshState, refreshUnlocks, statsOf, xpFor,
+  type BoltColor, type Bomb, type Bullet, type Enemy, type EnemyKind, type GameState, type Hazard, type Pickup, type Stats,
 } from './state';
-import { CAPSTONES, CROSSOVERS, FILLER, MAX_TIER, UPGRADES, at, rollChoices } from './upgrades';
+import { CAPSTONES, CROSSOVERS, FILLER, MAX_TIER, UPGRADES, at, rewardChoices, rollChoices } from './upgrades';
+import { ARENA_MS, BOG, BOSSES, CHAMPION, CREDITS, PLANETS, SIEGE, VENT, type FoeKind } from './planets';
+// `t` is a common local name here (targets, time), so the translator goes by `tr`.
+import { t as tr } from '../i18n';
 
 /** What the player is doing this frame: a move direction (length up to 1) and the signature key. */
 export interface Input {
@@ -25,7 +28,7 @@ const MAX_FRAME_MS = 100;
 /** After a hit the hero takes no damage for this long, ms. */
 export const HURT_GRACE_MS = 450;
 /** Colours of the blast rings. */
-const BLAST = { hero: '#ffb347', droid: '#ff6a4d', frag: '#ffd36b', shield: '#ff9a5a' };
+const BLAST = { hero: '#ffb347', droid: '#ff6a4d', frag: '#ffd36b', shield: '#ff9a5a', vent: '#ff6a3c', shell: '#9fd4ff', stomp: '#d6efff' };
 
 /** The stats for this frame, computed once per tick. */
 let st: Stats = statsOf(freshState());
@@ -45,29 +48,58 @@ export function startRun(s: GameState, id: HeroId) {
   st = statsOf(s);
 }
 
-/** Takes the card at `index` during a level-up. */
+/** Takes the card at `index` during a level-up (or a free pick won in the arena). */
 export function choose(s: GameState, index: number) {
   if (s.phase !== 'levelup' || !s.choices) return;
   const id = s.choices[index];
   if (!id) return;
   if (id === FILLER.id) heal(s, 0.3 * s.player.maxHp);
   else raise(s, id);
-  s.pendingLevels -= 1;
-  if (s.pendingLevels > 0) s.choices = rollChoices(s.hero!, s.ranks);
-  else {
+  if (s.rewardPicks > 0) s.rewardPicks -= 1;
+  else s.pendingLevels -= 1;
+  nextPick(s);
+}
+
+/** Shows the next cards (free picks first), or goes where the run is headed when none are left. */
+export function nextPick(s: GameState) {
+  if (s.rewardPicks > 0) {
+    s.phase = 'levelup';
+    s.choices = rewardChoices(s.hero!, s.ranks);
+  } else if (s.pendingLevels > 0) {
+    s.phase = 'levelup';
+    s.choices = rollChoices(s.hero!, s.ranks);
+  } else {
     s.choices = null;
-    s.phase = 'run';
+    s.phase = s.after;
+    s.after = 'run';
   }
 }
 
+/** One tier less of an upgrade (the shrine's price); at tier 0 it is gone and frees its slot. */
+export function lower(s: GameState, id: string) {
+  const rank = (s.ranks[id] ?? 0) - 1;
+  if (rank <= 0) delete s.ranks[id];
+  else s.ranks[id] = rank;
+  refreshUnlocks(s);
+  refreshHealth(s);
+  syncAllies(s);
+}
+
+/** Puts max health back in line with the stats (after the cache's cost or a tier lost). */
+export function refreshHealth(s: GameState) {
+  st = statsOf(s);
+  s.player.maxHp = st.maxHp;
+  s.player.hp = Math.min(s.player.hp, st.maxHp);
+}
+
 /** One more tier of an upgrade, with what follows from it: health, allies, unlocks. */
-function raise(s: GameState, id: string) {
+export function raise(s: GameState, id: string) {
   const before = statsOf(s).maxHp;
   s.ranks[id] = Math.min(MAX_TIER, (s.ranks[id] ?? 0) + 1);
   for (const fresh of refreshUnlocks(s)) {
     const cap = CAPSTONES.find((c) => c.id === fresh);
     const cross = CROSSOVERS.find((c) => c.id === fresh);
-    pop(s, cap ? `Capstone: ${cap.name}` : `Crossover: ${cross!.name}`, cap ? '#ffe066' : '#b48cff');
+    pop(s, cap ? tr('capstonePop', { name: tr(cap.name) }) : tr('crossoverPop', { name: tr(cross!.name) }), cap ? '#ffe066' : '#b48cff');
   }
   st = statsOf(s);
   const p = s.player;
@@ -100,6 +132,7 @@ export function tick(s: GameState, dtMs: number, input: Input) {
 function step(s: GameState, ms: number, input: Input) {
   const dt = ms / 1000;
   s.time += ms;
+  s.runMs += ms;
   buildGrid(s);
   moveHero(s, ms, input);
   director(s, ms);
@@ -110,8 +143,17 @@ function step(s: GameState, ms: number, input: Input) {
   moveBullets(s, ms);
   bombs(s, ms);
   fires(s, dt);
+  hazards(s, ms);
   pickups(s, ms);
   s.enemies = s.enemies.filter((e) => e.hp > 0);
+  // The arena ends when every elite has fallen, or when its minute is up.
+  if (s.arena && s.phase === 'run') {
+    const left = s.enemies.some((e) => e.elite);
+    if (!left || s.time >= ARENA_MS) {
+      s.arenaWon = !left;
+      s.phase = 'cleared';
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -211,13 +253,15 @@ function moveHero(s: GameState, ms: number, input: Input) {
     s.fires.push({ id: s.nextId++, x: p.x, y: p.y, r: 22, ms: 2000, dps: at([12, 12, 20, 20, 26], s.ranks['jump-trooper'] ?? 0, 12) });
     if (p.dashMs <= 0 && s.capstones.includes('skyfall')) explode(s, p.x, p.y, 110, 60, BLAST.frag);
   } else if (p.moving) {
-    const k = Math.min(1, len) * st.speed * dt;
+    const k = Math.min(1, len) * st.speed * (p.slowMs > 0 ? 1 - p.slowPct : 1) * dt;
     p.x += (input.mx / len) * k;
     p.y += (input.my / len) * k;
   }
   p.sigMs = Math.max(0, p.sigMs - ms);
   p.sigActiveMs = Math.max(0, p.sigActiveMs - ms);
   p.hurtMs = Math.max(0, p.hurtMs - ms);
+  p.slowMs = Math.max(0, p.slowMs - ms);
+  if (p.slowMs <= 0) p.slowPct = 0;
   if (st.regen > 0 && p.hp < p.maxHp) {
     p.regen += st.regen * dt;
     if (p.regen >= 1) {
@@ -228,7 +272,7 @@ function moveHero(s: GameState, ms: number, input: Input) {
   }
 }
 
-function heal(s: GameState, amount: number) {
+export function heal(s: GameState, amount: number) {
   s.player.hp = Math.min(s.player.maxHp, s.player.hp + amount);
 }
 
@@ -370,7 +414,10 @@ function primary(s: GameState, ms: number) {
     }
     return;
   }
-  const targets = nearest(s, p.x, p.y, 2, hero.range);
+  let targets = nearest(s, p.x, p.y, 2, hero.range);
+  // A boss in range is always the first target, so its adds can't screen it off.
+  const boss = targets.length ? s.enemies.find((e) => e.kind === 'boss' && e.hp > 0) : undefined;
+  if (boss && targets[0] !== boss && Math.hypot(boss.x - p.x, boss.y - p.y) - boss.r <= hero.range) targets = [boss, targets[0]];
   if (!targets.length) {
     // Nothing in range: hold the shot until something is.
     p.fireMs = 0;
@@ -575,6 +622,8 @@ export function syncAllies(s: GameState) {
     for (let i = have.length; i < want[kind]; i++) {
       s.allies.push({ id: s.nextId++, kind, x: s.player.x, y: s.player.y, cdMs: 400 + i * 150, lifeMs: 0, slot: i, aim: 0 });
     }
+    // A tier given up at the shrine can take an ally with it.
+    if (have.length > want[kind]) s.allies = s.allies.filter((a) => a.kind !== kind || a.slot < want[kind]);
   }
 }
 
@@ -582,7 +631,7 @@ function moveAllies(s: GameState, ms: number) {
   const p = s.player;
   const dt = ms / 1000;
   const rally = s.hero === 'rook' && p.sigActiveMs > 0 ? 1.5 : 1;
-  const counts = { trooper: 0, brother: 0, drone: 0, sentry: 0 };
+  const counts = { trooper: 0, brother: 0, drone: 0, sentry: 0, escort: 0 };
   for (const a of s.allies) counts[a.kind] += 1;
   for (const a of s.allies) {
     if (a.kind === 'sentry') {
@@ -590,18 +639,18 @@ function moveAllies(s: GameState, ms: number) {
     } else {
       // Troopers and brothers keep formation behind the hero; drones circle.
       const n = counts[a.kind];
-      const ang = a.kind === 'drone' ? s.time / 550 + (a.slot * Math.PI * 2) / n : p.facing + Math.PI + (a.slot - (n - 1) / 2) * 0.8;
-      const dist = a.kind === 'drone' ? 52 : a.kind === 'brother' ? 50 : 44;
+      const ang = a.kind === 'escort' ? -s.time / 900 : a.kind === 'drone' ? s.time / 550 + (a.slot * Math.PI * 2) / n : p.facing + Math.PI + (a.slot - (n - 1) / 2) * 0.8;
+      const dist = a.kind === 'escort' ? 74 : a.kind === 'drone' ? 52 : a.kind === 'brother' ? 50 : 44;
       const tx = p.x + Math.cos(ang) * dist;
       const ty = p.y + Math.sin(ang) * dist;
-      const k = a.kind === 'drone' ? 1 : Math.min(1, 8 * dt);
+      const k = a.kind === 'drone' || a.kind === 'escort' ? 1 : Math.min(1, 8 * dt);
       a.x += (tx - a.x) * k;
       a.y += (ty - a.y) * k;
     }
     if (a.kind === 'brother') continue;
     a.cdMs -= ms * (a.kind === 'trooper' ? rally : 1);
     if (a.cdMs > 0) continue;
-    const range = a.kind === 'trooper' ? 340 : 300;
+    const range = a.kind === 'trooper' || a.kind === 'escort' ? 340 : 300;
     const t = nearest(s, a.x, a.y, 1, range)[0];
     if (!t) {
       a.cdMs = 0;
@@ -619,6 +668,10 @@ function moveAllies(s: GameState, ms: number) {
     } else if (a.kind === 'sentry') {
       bolt(s, a.x, a.y, ang, 8 * ((s.ranks['drop-doctrine'] ?? 0) >= 4 ? 1.6 : 1), { ...plain, color: 'drone' });
       a.cdMs = 500;
+    } else if (a.kind === 'escort') {
+      // The stranded droid: a little turret that keeps up with the planet's toughness.
+      bolt(s, a.x, a.y, ang, 10 + 6 * s.planet, { ...plain, color: 'drone', speed: 620 });
+      a.cdMs = 420;
     } else {
       bolt(s, a.x, a.y, ang, 10, { ...plain, color: 'drone', speed: 600 });
       a.cdMs = at([1100, 850, 850, 700, 600], s.ranks.drone ?? 0, 1100);
@@ -630,37 +683,100 @@ function moveAllies(s: GameState, ms: number) {
 // ---------------------------------------------------------------------------------------------
 // The droids
 
-function spawnAt(s: GameState, kind: EnemyKind, x: number, y: number, elite = false) {
-  const spec = ENEMY[kind];
+export function spawnAt(s: GameState, kind: EnemyKind, x: number, y: number, elite = false) {
+  const planet = PLANETS[s.planet];
+  const boss = kind === 'boss' ? BOSSES[planet.boss] : null;
+  const spec = boss ?? ENEMY[kind];
   const t = s.time / 1000;
-  const hpScale = kind === 'boss' ? DIFF.hp : DIFF.hp * (1 + t / 240);
+  const hpScale = boss ? DIFF.hp : DIFF.hp * planet.hp * (1 + t / 240);
   const hp = spec.hp * hpScale * (elite ? ELITE.hp : 1);
-  const speed = spec.speed * (kind === 'boss' ? 1 : 1 + t / 1200) * (elite ? ELITE.speed : 1) * (0.92 + Math.random() * 0.16);
+  const speed = spec.speed * (boss ? 1 : 1 + t / 1200) * (elite ? ELITE.speed : 1) * (0.92 + Math.random() * 0.16);
   const e: Enemy = {
     id: s.nextId++, kind, elite, x, y, r: spec.r * (elite ? ELITE.size : 1), hp, maxHp: hp, speed,
-    dmg: spec.dmg * (elite ? 1.5 : 1), hitMs: 0, slowMs: 0, slowPct: 0, stunMs: 0, flashMs: 0, kx: 0, ky: 0,
+    dmg: spec.dmg * (boss ? 1 : planet.dmg) * (elite ? 1.5 : 1), hitMs: 0, slowMs: 0, slowPct: 0, stunMs: 0, flashMs: 0, kx: 0, ky: 0,
     mode: 'walk', modeMs: 0, vx: 0, vy: 0, shellMs: BOSS.shellMs, spawnMs: BOSS.spawnMs, bashMs: 0,
+    slot: 0, facing: 0, guardMs: 0, aimX: 0, aimY: 0, phase2: false,
   };
+  if (kind === 'toad') e.shellMs = TOAD.spitMs * 0.5;
+  else if (kind === 'walker') e.shellMs = WALKER.burstMs * 0.5;
+  else if (kind === 'knight') e.shellMs = KNIGHT.every * 0.5;
+  else if (kind === 'linetrooper') e.shellMs = LINE.volleyMs * 0.6;
   s.enemies.push(e);
   return e;
 }
 
 /** A point on the spawn ring around the hero, at `angle` or a random one. */
-function ringPoint(s: GameState, angle = Math.random() * Math.PI * 2) {
+export function ringPoint(s: GameState, angle = Math.random() * Math.PI * 2) {
   const d = SPAWN_RING.min + Math.random() * (SPAWN_RING.max - SPAWN_RING.min);
   return { x: s.player.x + Math.cos(angle) * d, y: s.player.y + Math.sin(angle) * d };
 }
 
-/** Droids per second at a run time (s), before difficulty. */
+/** Droids per second at a planet time (s), before difficulty and the planet's own pace. */
 export function spawnRate(t: number) {
   return 1.4 + t / 75 + (t / 160) ** 2;
 }
 
+/** Spawns one group of the planet's swarm on the ring (at most `room`); returns how many came. */
+function spawnGroup(s: GameState, t: number, room: number) {
+  const id = PLANETS[s.planet].id;
+  const spot = ringPoint(s);
+  if (id === 'dune') {
+    const rollerChance = t < 35 ? 0 : Math.min(0.28, 0.08 + t / 900);
+    spawnAt(s, Math.random() < rollerChance ? 'rollerbomb' : 'clanker', spot.x, spot.y);
+    return 1;
+  }
+  const roll = Math.random();
+  if (id === 'swamp') {
+    if (roll < (t < 30 ? 0 : Math.min(0.22, 0.07 + t / 900))) {
+      spawnAt(s, 'toad', spot.x, spot.y);
+      return 1;
+    }
+    // Mire rats run in packs.
+    const n = Math.min(room, RATS.pack[0] + Math.floor(Math.random() * (RATS.pack[1] - RATS.pack[0] + 1)));
+    for (let i = 0; i < n; i++) spawnAt(s, 'mirerat', spot.x + (Math.random() - 0.5) * 50, spot.y + (Math.random() - 0.5) * 50);
+    return n;
+  }
+  if (id === 'ice') {
+    if (roll < (t < 40 ? 0 : Math.min(0.12, 0.04 + t / 1500))) {
+      spawnAt(s, 'walker', spot.x, spot.y);
+      return 1;
+    }
+    // A squad of line troopers, side by side across the way to the hero, firing together.
+    const n = Math.min(room, LINE.squad);
+    const a = Math.atan2(s.player.y - spot.y, s.player.x - spot.x);
+    const volley = LINE.volleyMs * (0.5 + Math.random() * 0.5);
+    for (let i = 0; i < n; i++) {
+      const slot = (i - (n - 1) / 2) * LINE.gap;
+      const e = spawnAt(s, 'linetrooper', spot.x - Math.sin(a) * slot, spot.y + Math.cos(a) * slot);
+      e.slot = slot;
+      e.shellMs = volley;
+    }
+    return n;
+  }
+  if (roll < (t < 35 ? 0 : Math.min(0.16, 0.05 + t / 1100))) {
+    spawnAt(s, 'knight', spot.x, spot.y);
+    return 1;
+  }
+  const n = Math.min(room, 3);
+  for (let i = 0; i < n; i++) spawnAt(s, 'acolyte', spot.x + (Math.random() - 0.5) * 40, spot.y + (Math.random() - 0.5) * 40);
+  return n;
+}
+
+/** An elite of the planet's faction on the ring (also the arena's). */
+export function spawnElite(s: GameState, angle?: number) {
+  const planet = PLANETS[s.planet];
+  const spot = ringPoint(s, angle);
+  let kind: FoeKind;
+  if (planet.id === 'dune') kind = s.time > 120_000 && Math.random() < 0.5 ? 'rollerbomb' : 'clanker';
+  else kind = planet.elites[Math.random() < 0.6 ? 0 : 1];
+  return spawnAt(s, kind, spot.x, spot.y, true);
+}
+
 function director(s: GameState, ms: number) {
+  const planet = PLANETS[s.planet];
   const t = s.time / 1000;
   const living = s.enemies.length - (s.bossSpawned ? 1 : 0);
-  s.spawnDebt += (spawnRate(t) * DIFF.spawn * (s.bossSpawned ? 0.35 : 1) * ms) / 1000;
-  const rollerChance = t < 35 ? 0 : Math.min(0.28, 0.08 + t / 900);
+  s.spawnDebt += (spawnRate(t) * DIFF.spawn * planet.spawn * (s.bossSpawned ? 0.35 : 1) * (s.arena ? 0.4 : 1) * ms) / 1000;
   let made = 0;
   while (s.spawnDebt >= 1) {
     s.spawnDebt -= 1;
@@ -668,30 +784,49 @@ function director(s: GameState, ms: number) {
       s.spawnDebt = Math.min(s.spawnDebt, 1);
       break;
     }
-    const spot = ringPoint(s);
-    spawnAt(s, Math.random() < rollerChance ? 'rollerbomb' : 'clanker', spot.x, spot.y);
-    made += 1;
+    // A pack or squad pays for its others out of what is owed.
+    const n = spawnGroup(s, t, MAX_ENEMIES - living - made);
+    s.spawnDebt -= n - 1;
+    made += n;
   }
   if (s.time >= s.nextElite && !s.bossSpawned) {
     s.nextElite += ELITE.every;
-    const spot = ringPoint(s);
-    spawnAt(s, s.time > 120_000 && Math.random() < 0.5 ? 'rollerbomb' : 'clanker', spot.x, spot.y, true);
-    pop(s, 'Elite droid', '#ffe066');
+    spawnElite(s);
+    pop(s, tr(planet.elite), '#ffe066');
   }
   while (s.waves.length && s.time >= s.waves[0]) {
     s.waves.shift();
-    const n = 26;
+    const n = planet.swarm === 'linetrooper' ? 18 : 26;
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2;
-      spawnAt(s, 'clanker', s.player.x + Math.cos(a) * 440, s.player.y + Math.sin(a) * 440);
+      spawnAt(s, planet.swarm, s.player.x + Math.cos(a) * 440, s.player.y + Math.sin(a) * 440);
     }
-    pop(s, 'They surround you!', '#ff8a6a');
+    pop(s, tr('surround'), '#ff8a6a');
   }
-  if (!s.bossSpawned && s.time >= RUN_MS) {
+  if (!s.bossSpawned && !s.arena && s.time >= RUN_MS) {
     s.bossSpawned = true;
     const spot = ringPoint(s, s.player.facing);
-    spawnAt(s, 'boss', spot.x, spot.y);
-    pop(s, 'The Grinder Crawler', '#ff9a3c');
+    const e = spawnAt(s, 'boss', spot.x, spot.y);
+    if (planet.boss === 'bogmother') {
+      e.shellMs = BOG.globMs;
+      e.spawnMs = BOG.spawnMs;
+      e.modeMs = BOG.poolMs;
+    } else if (planet.boss === 'siege') {
+      e.shellMs = SIEGE.volleyMs;
+      e.spawnMs = SIEGE.barrageMs * 0.5;
+      e.modeMs = 0;
+    } else if (planet.boss === 'champion') {
+      e.shellMs = CHAMPION.dashEvery;
+      e.spawnMs = CHAMPION.ringMs;
+    }
+    pop(s, tr(BOSSES[planet.boss].name), '#ff9a3c');
+  }
+  // Lava vents: a warning glow near the hero, then an eruption.
+  if (planet.id === 'lava' && s.time >= s.nextVent) {
+    s.nextVent = s.time + VENT.minMs + Math.random() * (VENT.maxMs - VENT.minMs);
+    const a = Math.random() * Math.PI * 2;
+    const d = 40 + Math.random() * 200;
+    addHazard(s, 'vent', s.player.x + Math.cos(a) * d, s.player.y + Math.sin(a) * d, VENT.r, VENT.warnMs, 450, VENT.dmg);
   }
 }
 
@@ -703,17 +838,33 @@ function knock(e: Enemy, fromX: number, fromY: number, power: number) {
   if (e.mode === 'rush') e.mode = 'walk';
 }
 
+/** A hostile bolt from a droid, beast, trooper or boss. */
+function shoot(s: GameState, x: number, y: number, angle: number, speed: number, dmg: number, color: BoltColor, r: number, life = 3800) {
+  s.bullets.push({
+    id: s.nextId++, x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+    dmg, pierce: 0, bounces: 0, lifeMs: life, hostile: true, color, hit: [], homing: 0, bounced: false, r,
+  });
+}
+
+/** Something on the ground: a warning (`warnMs`) then a blast, or a lasting pool or ring. */
+function addHazard(s: GameState, kind: Hazard['kind'], x: number, y: number, r: number, warnMs: number, ms: number, dmg: number, angle = 0) {
+  if (s.hazards.length > 90) s.hazards.shift();
+  s.hazards.push({ id: s.nextId++, kind, x, y, r, warnMs, ms, maxMs: ms, dmg, angle, hit: false });
+}
+
 function moveEnemies(s: GameState, ms: number) {
   const p = s.player;
   const dt = ms / 1000;
   const blockHalf = shieldHalf(s);
   const shield = s.ranks['riot-shield'] ?? 0;
+  const harm = PLANETS[s.planet].dmg;
   for (const e of s.enemies) {
     if (e.hp <= 0) continue;
     e.hitMs -= ms;
     e.flashMs = Math.max(0, e.flashMs - ms);
     e.bashMs = Math.max(0, e.bashMs - ms);
     e.stunMs = Math.max(0, e.stunMs - ms);
+    e.guardMs = Math.max(0, e.guardMs - ms);
     if (e.slowMs > 0) e.slowMs -= ms;
     else e.slowPct = 0;
     const dx = p.x - e.x;
@@ -730,11 +881,12 @@ function moveEnemies(s: GameState, ms: number) {
     const resist = e.kind === 'boss' ? 0.3 : 1;
     const slow = 1 - e.slowPct * resist;
     const still = e.stunMs > 0 && e.kind !== 'boss';
-    // The boss never falls far behind: out past the view it rolls in three times as fast.
-    const catchUp = e.kind === 'boss' && dist > 480 ? 3 : 1;
+    // A boss never falls far behind: out past the view it comes on three times as fast.
+    const catchUp = e.kind === 'boss' && dist > 480 && e.mode === 'walk' ? 3 : 1;
     const speed = still ? 0 : e.speed * slow * catchUp;
     let vx = (dx / dist) * speed;
     let vy = (dy / dist) * speed;
+    const toHero = Math.atan2(dy, dx);
     if (e.kind === 'rollerbomb') {
       if (e.mode === 'walk' && dist < ROLLER.trigger && !still) {
         e.mode = 'arm';
@@ -757,8 +909,79 @@ function moveEnemies(s: GameState, ms: number) {
           continue;
         }
       }
+    } else if (e.kind === 'mirerat') {
+      // Rats weave as they run.
+      const weave = Math.sin(s.time / 170 + e.id) * 0.6 * speed;
+      vx += (-dy / dist) * weave;
+      vy += (dx / dist) * weave;
+    } else if (e.kind === 'toad') {
+      e.shellMs -= ms;
+      if (dist < TOAD.range) {
+        vx = vy = 0;
+        if (e.shellMs <= 0 && !still) {
+          e.shellMs = TOAD.spitMs;
+          shoot(s, e.x, e.y, toHero, TOAD.globSpeed, TOAD.globDmg * harm, 'glob', 8);
+        }
+      }
+    } else if (e.kind === 'linetrooper') {
+      // Advance on a spot beside the hero (the squad's line), stop in range and fire with the squad.
+      if (dist < LINE.range) vx = vy = 0;
+      else {
+        const tx = p.x + (dy / dist) * e.slot;
+        const ty = p.y - (dx / dist) * e.slot;
+        const d2 = Math.hypot(tx - e.x, ty - e.y) || 1;
+        vx = ((tx - e.x) / d2) * speed;
+        vy = ((ty - e.y) / d2) * speed;
+      }
+      e.shellMs -= ms;
+      if (e.shellMs <= 0) {
+        e.shellMs = LINE.volleyMs;
+        if (dist < LINE.range + 60 && !still) shoot(s, e.x, e.y, toHero + (Math.random() - 0.5) * 0.08, LINE.boltSpeed, LINE.dmg * harm, 'volley', 5);
+      }
+    } else if (e.kind === 'walker') {
+      e.shellMs -= ms;
+      if (dist < WALKER.range) {
+        vx = vy = 0;
+        if (e.shellMs <= 0 && !still) {
+          e.shellMs = WALKER.burstMs;
+          for (let i = 0; i < WALKER.shots; i++) shoot(s, e.x, e.y, toHero + (i - 1) * 0.12, WALKER.speed, WALKER.dmg * harm * (e.elite ? 1.3 : 1), 'slug', 6);
+        }
+      }
+    } else if (e.kind === 'knight') {
+      e.shellMs -= ms;
+      if (e.mode === 'walk') {
+        e.facing = toHero;
+        if (dist < KNIGHT.trigger && e.shellMs <= 0 && !still) {
+          e.mode = 'arm';
+          e.modeMs = KNIGHT.aimMs;
+        }
+      } else if (e.mode === 'arm') {
+        vx = vy = 0;
+        e.modeMs -= ms;
+        if (e.modeMs <= 0) {
+          e.mode = 'rush';
+          e.modeMs = KNIGHT.dashMs;
+          e.vx = Math.cos(e.facing) * KNIGHT.dashSpeed;
+          e.vy = Math.sin(e.facing) * KNIGHT.dashSpeed;
+        }
+      } else {
+        vx = e.vx * slow;
+        vy = e.vy * slow;
+        e.modeMs -= ms;
+        if (e.modeMs <= 0) {
+          e.mode = 'walk';
+          e.guardMs = KNIGHT.guardMs;
+          e.shellMs = KNIGHT.every;
+        }
+      }
+      if (e.mode !== 'walk') e.guardMs = Math.max(e.guardMs, 1);
+    } else if (e.kind === 'boss') {
+      const v = bossAttacks(s, e, ms, dx / dist, dy / dist, dist);
+      if (v) {
+        vx = v.vx;
+        vy = v.vy;
+      }
     }
-    if (e.kind === 'boss') bossAttacks(s, e, ms, dx / dist, dy / dist);
     e.x += (vx + e.kx) * dt;
     e.y += (vy + e.ky) * dt;
     const fade = Math.exp(-7 * dt);
@@ -817,30 +1040,127 @@ function moveEnemies(s: GameState, ms: number) {
   }
 }
 
-function bossAttacks(s: GameState, e: Enemy, ms: number, ux: number, uy: number) {
+/** Whether a fallen knight's shield takes a bolt flying this way (it guards its front). */
+function guarded(e: Enemy, vx: number, vy: number) {
+  return e.kind === 'knight' && e.mode === 'walk' && e.guardMs <= 0 && Math.abs(angleDiff(Math.atan2(-vy, -vx), e.facing)) < 1.05;
+}
+
+/** The planet boss's attacks; returns its own velocity when it moves other than straight at the hero. */
+function bossAttacks(s: GameState, e: Enemy, ms: number, ux: number, uy: number, dist: number): { vx: number; vy: number } | null {
+  const id = PLANETS[s.planet].boss;
+  const spec = BOSSES[id];
   const enraged = e.hp < e.maxHp * BOSS.enragedAt;
-  if (enraged) e.speed = ENEMY.boss.speed * 1.45;
+  const base = Math.atan2(uy, ux);
   e.shellMs -= ms;
-  if (e.shellMs <= 0) {
-    e.shellMs = BOSS.shellMs * (enraged ? 0.75 : 1);
-    const n = BOSS.shells + (enraged ? 2 : 0);
-    const base = Math.atan2(uy, ux);
-    for (let i = 0; i < n; i++) {
-      const a = base + (i - (n - 1) / 2) * 0.24;
-      s.bullets.push({
-        id: s.nextId++, x: e.x + ux * 50, y: e.y + uy * 50, vx: Math.cos(a) * BOSS.shellSpeed, vy: Math.sin(a) * BOSS.shellSpeed,
-        dmg: BOSS.shellDmg, pierce: 0, bounces: 0, lifeMs: 3800, hostile: true, color: 'shell', hit: [], homing: 0, bounced: false, r: 7,
-      });
-    }
-  }
   e.spawnMs -= ms;
-  if (e.spawnMs <= 0) {
-    e.spawnMs = BOSS.spawnMs;
-    for (let i = 0; i < BOSS.adds; i++) {
-      const a = Math.atan2(-uy, -ux) + (i - (BOSS.adds - 1) / 2) * 0.4;
-      spawnAt(s, 'clanker', e.x + Math.cos(a) * 70, e.y + Math.sin(a) * 70);
+  if (id === 'grinder') {
+    if (enraged) e.speed = spec.speed * 1.45;
+    if (e.shellMs <= 0) {
+      e.shellMs = BOSS.shellMs * (enraged ? 0.75 : 1);
+      const n = BOSS.shells + (enraged ? 2 : 0);
+      for (let i = 0; i < n; i++) {
+        shoot(s, e.x + ux * 50, e.y + uy * 50, base + (i - (n - 1) / 2) * 0.24, BOSS.shellSpeed, BOSS.shellDmg, 'shell', 7);
+      }
     }
+    if (e.spawnMs <= 0) {
+      e.spawnMs = BOSS.spawnMs;
+      for (let i = 0; i < BOSS.adds; i++) {
+        const a = Math.atan2(-uy, -ux) + (i - (BOSS.adds - 1) / 2) * 0.4;
+        spawnAt(s, 'clanker', e.x + Math.cos(a) * 70, e.y + Math.sin(a) * 70);
+      }
+    }
+    return null;
   }
+  if (id === 'bogmother') {
+    if (enraged) e.speed = spec.speed * 1.3;
+    if (e.shellMs <= 0) {
+      e.shellMs = BOG.globMs * (enraged ? 0.75 : 1);
+      const n = BOG.globs + (enraged ? 2 : 0);
+      for (let i = 0; i < n; i++) shoot(s, e.x + ux * 40, e.y + uy * 40, base + (i - (n - 1) / 2) * 0.22, TOAD.globSpeed, TOAD.globDmg * 1.6, 'glob', 9);
+    }
+    if (e.spawnMs <= 0) {
+      // Her young: a pack of mire rats.
+      e.spawnMs = BOG.spawnMs * (enraged ? 0.7 : 1);
+      const n = Math.min(BOG.young + (enraged ? 2 : 0), MAX_ENEMIES + 1 - s.enemies.length);
+      for (let i = 0; i < n; i++) {
+        const a = (i / Math.max(1, n)) * Math.PI * 2;
+        spawnAt(s, 'mirerat', e.x + Math.cos(a) * 60, e.y + Math.sin(a) * 60);
+      }
+    }
+    e.modeMs -= ms;
+    if (e.modeMs <= 0) {
+      e.modeMs = BOG.poolMs;
+      addHazard(s, 'bog', e.x, e.y, BOG.poolR, 0, BOG.poolLife, 0);
+    }
+    return null;
+  }
+  if (id === 'siege') {
+    if (enraged) e.speed = spec.speed * 1.25;
+    if (e.shellMs <= 0) {
+      e.shellMs = SIEGE.volleyMs;
+      for (let i = 0; i < 5; i++) shoot(s, e.x + ux * 50, e.y + uy * 50, base + (i - 2) * 0.16, WALKER.speed, WALKER.dmg * 1.4, 'slug', 7);
+    }
+    if (e.spawnMs <= 0) {
+      // An artillery barrage: one shell on the hero, the rest around, each with a warning ring.
+      e.spawnMs = SIEGE.barrageMs * (enraged ? 0.75 : 1);
+      const n = SIEGE.shells + (enraged ? 3 : 0);
+      const p = s.player;
+      for (let i = 0; i < n; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const d = i === 0 ? 0 : 60 + Math.random() * 170;
+        addHazard(s, 'shell', p.x + Math.cos(a) * d, p.y + Math.sin(a) * d, SIEGE.shellR, SIEGE.warnMs + i * 90, 400, SIEGE.shellDmg);
+      }
+    }
+    e.modeMs -= ms;
+    if (dist < SIEGE.stompR - 10 && e.modeMs <= 0) {
+      e.modeMs = SIEGE.stompMs;
+      addHazard(s, 'stomp', e.x, e.y, SIEGE.stompR, SIEGE.stompWarn, 400, SIEGE.stompDmg);
+    }
+    return null;
+  }
+  // The Hollow Champion: blade dashes; below half health, rings of fire too.
+  if (enraged && !e.phase2) {
+    e.phase2 = true;
+    pop(s, tr('championBurns'), '#ff9a3c');
+  }
+  if (e.phase2 && e.spawnMs <= 0) {
+    e.spawnMs = CHAMPION.ringMs;
+    addHazard(s, 'ring', e.x, e.y, 24, 0, (560 / CHAMPION.ringSpeed) * 1000, CHAMPION.ringDmg, Math.random() * Math.PI * 2);
+  }
+  if (e.mode === 'walk') {
+    if (e.shellMs <= 0 && dist < 520) {
+      e.mode = 'arm';
+      e.modeMs = CHAMPION.aimMs;
+      e.aimX = s.player.x;
+      e.aimY = s.player.y;
+    }
+    return null;
+  }
+  e.modeMs -= ms;
+  if (e.mode === 'arm') {
+    if (e.modeMs <= 0) {
+      const d = Math.hypot(e.aimX - e.x, e.aimY - e.y);
+      const a = Math.atan2(e.aimY - e.y, e.aimX - e.x);
+      e.mode = 'rush';
+      e.modeMs = ((d + 140) / CHAMPION.dashSpeed) * 1000;
+      e.vx = Math.cos(a) * CHAMPION.dashSpeed;
+      e.vy = Math.sin(a) * CHAMPION.dashSpeed;
+    }
+    return { vx: 0, vy: 0 };
+  }
+  if (e.modeMs <= 0) {
+    e.mode = 'walk';
+    e.shellMs = CHAMPION.dashEvery * (e.phase2 ? 0.7 : 1);
+  }
+  return { vx: e.vx, vy: e.vy };
+}
+
+/** Whether an angle (from a ring's centre) falls in one of the ring's gaps. */
+export function inRingGap(h: Hazard, angle: number) {
+  const seg = Math.PI / CHAMPION.ringGaps;
+  let rel = (angle - h.angle) % (Math.PI * 2);
+  if (rel < 0) rel += Math.PI * 2;
+  return Math.floor(rel / seg) % 2 === 1;
 }
 
 /** A rollerbomb goes off: on the hero when it touched them, and on every droid around it. */
@@ -876,7 +1196,13 @@ function kill(s: GameState, e: Enemy) {
   e.hp = 0;
   s.kills += 1;
   if (e.kind === 'boss') {
-    s.phase = 'won';
+    // The planet is cleared; the star map (or victory) comes next frame.
+    s.phase = 'cleared';
+    const credits = BOSSES[PLANETS[s.planet].boss].credits;
+    if (credits > 0) {
+      s.credits += credits;
+      pop(s, tr('plusCredits', { n: credits }), '#ffd36b');
+    }
     s.blasts.push({ id: s.nextId++, x: e.x, y: e.y, r: 160, ms: 900, maxMs: 900, color: BLAST.hero });
     for (const o of s.enemies) if (o !== e && o.hp > 0) o.hp = 0;
     return;
@@ -885,13 +1211,18 @@ function kill(s: GameState, e: Enemy) {
   dropShard(s, e.x, e.y, value);
   if (e.elite) {
     s.elitesKilled += 1;
-    s.pickups.push({ id: s.nextId++, kind: 'chest', x: e.x, y: e.y, heal: 0 });
+    // Arena elites pay in credits and the free pick at the end; others drop a chest too.
+    if (!s.arena) s.pickups.push({ id: s.nextId++, kind: 'chest', x: e.x, y: e.y, heal: 0, value: 0 });
+    const credits = s.arena ? CREDITS.arenaElite : CREDITS.elite;
+    s.pickups.push({ id: s.nextId++, kind: 'credits', x: e.x + 18, y: e.y + 6, heal: 0, value: credits });
   }
   // A rollerbomb shot down still blows up, but only hurts droids.
   if (e.kind === 'rollerbomb') {
     explodeDroids(s, e.x, e.y, ROLLER.blastR, ROLLER.hurtOthers, e);
     s.blasts.push({ id: s.nextId++, x: e.x, y: e.y, r: ROLLER.blastR, ms: 380, maxMs: 380, color: BLAST.droid });
   }
+  // An ash acolyte bursts into embers.
+  if (e.kind === 'acolyte') addHazard(s, 'ember', e.x, e.y, EMBER.r * (e.elite ? 1.6 : 1), 0, EMBER.ms, EMBER.dmg * PLANETS[s.planet].dmg);
 }
 
 function dropShard(s: GameState, x: number, y: number, value: number) {
@@ -903,7 +1234,7 @@ function dropShard(s: GameState, x: number, y: number, value: number) {
 }
 
 /** Damage to every droid near a point, apart from `skip` (no Power Cell: a droid's own blast). */
-function explodeDroids(s: GameState, x: number, y: number, r: number, dmg: number, skip: Enemy) {
+function explodeDroids(s: GameState, x: number, y: number, r: number, dmg: number, skip: Enemy | null) {
   near(s, x, y, r, (o) => {
     if (o === skip || o.hp <= 0) return;
     o.hp -= dmg;
@@ -952,6 +1283,12 @@ function moveBullets(s: GameState, ms: number) {
     near(s, b.x, b.y, b.r, (e) => {
       if (!alive || e.hp <= 0 || b.hit.includes(e.id)) return;
       b.hit.push(e.id);
+      if (guarded(e, b.vx, b.vy)) {
+        // A knight's shield takes most of a bolt from the front, and stops it.
+        damage(s, e, b.dmg * KNIGHT.block, { noCrit: true });
+        alive = false;
+        return;
+      }
       damage(s, e, b.dmg, { slow: true });
       if (b.color === 'heavy') knock(e, e.x - b.vx, e.y - b.vy, 60);
       if (b.pierce > 0) {
@@ -993,6 +1330,11 @@ function hostileBolt(s: GameState, b: Bullet, shield: number) {
     return shield >= 3 ? reflect(b) : false;
   }
   if (d < HERO_R + b.r) {
+    // A glob slows as well as hurts.
+    if (b.color === 'glob' && !untouchable(s)) {
+      p.slowMs = TOAD.slowMs;
+      p.slowPct = Math.max(p.slowPct, TOAD.slow);
+    }
     hurtHero(s, b.dmg);
     return false;
   }
@@ -1027,7 +1369,7 @@ function bombs(s: GameState, ms: number) {
       const a = (i / b.cluster) * Math.PI * 2 + Math.random();
       addBomb(s, 'bomblet', b.x + Math.cos(a) * 48, b.y + Math.sin(a) * 48, 260 + i * 60, 45, b.dmg * 0.5);
     }
-    if (b.heal > 0) s.pickups.push({ id: s.nextId++, kind: 'medkit', x: b.x, y: b.y, heal: b.heal });
+    if (b.heal > 0) s.pickups.push({ id: s.nextId++, kind: 'medkit', x: b.x, y: b.y, heal: b.heal, value: 0 });
     if (b.turret) s.allies.push({ id: s.nextId++, kind: 'sentry', x: b.x, y: b.y, cdMs: 200, lifeMs: 8000, slot: 0, aim: 0 });
   }
 }
@@ -1038,6 +1380,42 @@ function fires(s: GameState, dt: number) {
     near(s, f.x, f.y, f.r, (e) => damage(s, e, f.dps * dt, { noCrit: true }));
   }
   s.fires = s.fires.filter((f) => f.ms > 0);
+}
+
+/** Bog pools, lava vents, artillery shells, stomps, rings of fire and embers. */
+function hazards(s: GameState, ms: number) {
+  const p = s.player;
+  const dt = ms / 1000;
+  for (const h of s.hazards) {
+    const d = Math.hypot(p.x - h.x, p.y - h.y);
+    if (h.warnMs > 0) {
+      h.warnMs -= ms;
+      if (h.warnMs > 0) continue;
+      // The warning is over: it goes off.
+      if (d < h.r + HERO_R) hurtHero(s, h.dmg);
+      if (h.kind === 'vent') explodeDroids(s, h.x, h.y, h.r, VENT.foeDmg * PLANETS[s.planet].hp, null);
+      const color = h.kind === 'vent' ? BLAST.vent : h.kind === 'shell' ? BLAST.shell : BLAST.stomp;
+      s.blasts.push({ id: s.nextId++, x: h.x, y: h.y, r: h.r, ms: 420, maxMs: 420, color });
+      h.ms = 0;
+      continue;
+    }
+    h.ms -= ms;
+    if (h.kind === 'bog') {
+      if (d < h.r) {
+        p.slowMs = Math.max(p.slowMs, 120);
+        p.slowPct = Math.max(p.slowPct, BOG.slow);
+      }
+    } else if (h.kind === 'ember') {
+      if (d < h.r + HERO_R * 0.5) hurtHero(s, h.dmg);
+    } else if (h.kind === 'ring') {
+      h.r += CHAMPION.ringSpeed * dt;
+      if (!h.hit && Math.abs(d - h.r) < 9 + HERO_R * 0.6 && !inRingGap(h, Math.atan2(p.y - h.y, p.x - h.x))) {
+        h.hit = true;
+        hurtHero(s, h.dmg);
+      }
+    }
+  }
+  s.hazards = s.hazards.filter((h) => h.warnMs > 0 || h.ms > 0);
 }
 
 function pickups(s: GameState, ms: number) {
@@ -1064,13 +1442,36 @@ function pickups(s: GameState, ms: number) {
   }
   s.shards = keep;
   s.pickups = s.pickups.filter((k) => {
-    if (Math.hypot(p.x - k.x, p.y - k.y) > HERO_R + 16) return true;
-    if (k.kind === 'medkit') {
-      heal(s, k.heal);
-      pop(s, `+${k.heal} health`, '#7dffa0');
-    } else openChest(s);
+    const d = Math.hypot(p.x - k.x, p.y - k.y);
+    // Credits are pulled in like shards.
+    if (k.kind === 'credits' && d < reach && d > 1) {
+      const step = Math.min(d, 420 * dt);
+      k.x += ((p.x - k.x) / d) * step;
+      k.y += ((p.y - k.y) / d) * step;
+    }
+    if (d > HERO_R + 16) return true;
+    take(s, k);
     return false;
   });
+}
+
+function take(s: GameState, k: Pickup) {
+  if (k.kind === 'medkit') {
+    heal(s, k.heal);
+    pop(s, tr('plusHealth', { n: k.heal }), '#7dffa0');
+  } else if (k.kind === 'credits') {
+    s.credits += k.value;
+    pop(s, tr('plusCredits', { n: k.value }), '#ffd36b');
+  } else openChest(s);
+}
+
+/** At the end of a planet or the arena: every shard, credit and chest left lying is taken. */
+export function collectAll(s: GameState) {
+  st = statsOf(s);
+  for (const sh of s.shards) gainXp(s, sh.value);
+  s.shards = [];
+  for (const k of s.pickups) take(s, k);
+  s.pickups = [];
 }
 
 function gainXp(s: GameState, value: number) {
@@ -1090,15 +1491,15 @@ function openChest(s: GameState) {
   const held = Object.keys(s.ranks).filter((id) => s.ranks[id] < MAX_TIER);
   if (!held.length) {
     heal(s, 25);
-    pop(s, 'Supply chest: +50 health', '#ffe066');
+    pop(s, tr('supplyChest', { n: 50 }), '#ffe066');
     return;
   }
   const id = held[Math.floor(Math.random() * held.length)];
   raise(s, id);
-  pop(s, `Chest: ${UPGRADES[id].name} tier ${s.ranks[id]}`, '#ffe066');
+  pop(s, tr('chestPop', { name: tr(UPGRADES[id].name), n: s.ranks[id] }), '#ffe066');
 }
 
-function pop(s: GameState, text: string, color: string) {
+export function pop(s: GameState, text: string, color: string) {
   s.pops.push({ id: s.nextId++, x: s.player.x, y: s.player.y - 40 - 18 * (s.pops.length % 3), text, color, ms: 2200 });
   if (s.pops.length > 6) s.pops.shift();
 }

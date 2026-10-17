@@ -4,6 +4,7 @@ import { ORDER_IDS, type OrderId } from '../game/orders';
 import { HULLS, type HullId } from '../game/hulls';
 import type { EnemyKind } from '../game/ships';
 import { FORT, ISLANDS, WORLD } from '../game/state';
+import { t } from '../i18n';
 import { FIRE, HARBOR, HELM, HUD_HEIGHT, OVER, VIEW, WIND } from '../scenes/layout';
 
 // The art of an old hand-tinted sea chart: ink on parchment, a compass rose and rhumb lines,
@@ -267,7 +268,7 @@ function island(ctx: Ctx, i: (typeof ISLANDS)[number], seed: number) {
   palm(ctx, x - rx * 0.3, y + ry * 0.3, s, 5);
   if (rx > 30) palm(ctx, x + rx * 0.22, y + ry * 0.2, s * 0.86, -4);
   if (rx > 50) palm(ctx, x - rx * 0.03, y - ry * 0.1, s * 0.74, 2);
-  text(ctx, i.name, x, y + ry + 22, `italic 600 ${rx > 50 ? 14 : 12}px ${SERIF}`, INK);
+  text(ctx, t(i.name), x, y + ry + 22, `italic 600 ${rx > 50 ? 14 : 12}px ${SERIF}`, INK);
 }
 
 /** A compass rose: a 32-point star in ink and green on a ring graduated like a compass card. */
@@ -291,7 +292,7 @@ function rose(ctx: Ctx, x: number, y: number) {
   for (let k = 0; k < 4; k++) point(-Math.PI / 2 + (k / 4) * Math.PI * 2, 49, 7.5, k % 2 === 1);
   circle(ctx, x, y, 3.5, OCHRE, INK, 0.75);
   poly(ctx, [[x, y - 68], [x - 5, y - 59], [x, y - 61], [x + 5, y - 59]], INK);
-  text(ctx, 'N', x, y - 75, `700 12px ${SERIF}`, INK);
+  text(ctx, t('windN'), x, y - 75, `700 12px ${SERIF}`, INK);
 }
 
 /** The compass rose drawn on the chart, and a second one off to the east whose lines also cross it. */
@@ -582,8 +583,8 @@ function bakeWindRose(scene: Phaser.Scene) {
       const l = k % 8 === 0 ? 5 : k % 4 === 0 ? 3.5 : 2;
       line(ctx, c + Math.cos(a) * (R - 5), c + Math.sin(a) * (R - 5), c + Math.cos(a) * (R - 5 - l), c + Math.sin(a) * (R - 5 - l), INK, 0.6);
     }
-    for (const [label, a] of [['N', -Math.PI / 2], ['E', 0], ['S', Math.PI / 2], ['W', Math.PI]] as const) {
-      text(ctx, label, c + Math.cos(a) * (R - 14), c + Math.sin(a) * (R - 14), `700 8px ${SERIF}`, ink(0.7));
+    for (const [label, a] of [['windN', -Math.PI / 2], ['windE', 0], ['windS', Math.PI / 2], ['windW', Math.PI]] as const) {
+      text(ctx, t(label), c + Math.cos(a) * (R - 14), c + Math.sin(a) * (R - 14), `700 8px ${SERIF}`, ink(0.7));
     }
   });
 }
@@ -695,7 +696,7 @@ function bakeWheel(scene: Phaser.Scene, side: 'port' | 'starboard', held: boolea
     ctx.lineTo(c + 7 * dir, c - 7);
     ctx.lineTo(c - 5 * dir, c + 5);
     ctx.stroke();
-    text(ctx, side === 'port' ? 'Port' : 'Starboard', c, c + 22, `italic 700 13px ${SERIF}`, INK);
+    text(ctx, t(side === 'port' ? 'helmPort' : 'helmStarboard'), c, c + 22, `italic 700 13px ${SERIF}`, INK);
   });
 }
 
@@ -723,7 +724,7 @@ function bakeFireButton(scene: Phaser.Scene, side: 'port' | 'starboard', held: b
     poly(ctx, [[c - 12, cy - 4.5], [c + 20, cy - 3], [c + 20, cy + 3], [c - 12, cy + 4.5]].map(([x, y]) => [c + (x - c) * dir, y] as Pt), '#3a332c', INK, 1);
     line(ctx, c + 19 * dir, cy - 4, c + 19 * dir, cy + 4, INK, 2.2);
     circle(ctx, c - 13 * dir, cy, 2.6, '#3a332c', INK, 1);
-    text(ctx, side === 'port' ? 'Port guns' : 'Starboard', c, c + 17, `italic 700 ${side === 'port' ? 11 : 10.5}px ${SERIF}`, INK);
+    text(ctx, t(side === 'port' ? 'firePort' : 'fireStarboard'), c, c + 17, `italic 700 ${side === 'port' ? 11 : 10.5}px ${SERIF}`, INK);
   });
 }
 

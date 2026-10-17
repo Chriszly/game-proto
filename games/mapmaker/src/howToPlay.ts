@@ -29,6 +29,7 @@ const en: HowToPlay = {
       action: 'At the harbour: pick a commission, take a hand aboard or buy an upgrade',
     },
     { input: 'Set sail', action: 'Start the next voyage with full supplies' },
+    { input: 'Moon or sun beside the logo', action: 'Switch between the white sheet and the dark night sheet' },
   ],
   loop: [
     'Tap survey stations next to charted land to push inland from the port.',
@@ -85,6 +86,7 @@ const de: HowToPlay = {
       action: 'Im Hafen: einen Auftrag wählen, einen Helfer an Bord nehmen oder eine Verbesserung kaufen',
     },
     { input: 'In See stechen', action: 'Die nächste Reise mit vollen Vorräten beginnen' },
+    { input: 'Mond oder Sonne neben dem Logo', action: 'Zwischen dem weißen Blatt und dem dunklen Nachtblatt wechseln' },
   ],
   loop: [
     'Tippe Messstationen neben kartiertem Land an, um vom Hafen ins Inland vorzudringen.',

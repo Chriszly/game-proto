@@ -1,6 +1,7 @@
 import type { HowToPlay } from '../../../shared/howToPlay';
+import { byLanguage } from '../../../shared/i18n';
 
-export const howToPlay: HowToPlay = {
+const en: HowToPlay = {
   goal: 'Forge and merge swords, sell them to adventurers and deliver great swords to the crown. The Crown Blade wins the smithy.',
   controls: [
     {
@@ -56,3 +57,63 @@ export const howToPlay: HowToPlay = {
     'Each new charter after the win makes you choose one of two edicts that change its rules.',
   ],
 };
+
+const de: HowToPlay = {
+  goal: 'Schmiede und verschmilz Schwerter, verkaufe sie an Abenteurer und liefere große Schwerter an die Krone. Die Kronklinge gewinnt die Schmiede.',
+  controls: [
+    {
+      input: 'Schmieden klicken oder tippen',
+      action: 'Einen Rostigen Dolch auf den ersten freien Amboss legen, sobald die Esse heiß ist',
+    },
+    {
+      input: 'Ein Schwert auf seinen Zwilling ziehen',
+      action: 'Beide zu einem Schwert der nächsten Stufe verschmelzen',
+    },
+    {
+      input: 'Ein Schwert auf einen Amboss oder ein Schwert ziehen',
+      action: 'Es dorthin legen oder die beiden tauschen',
+    },
+    {
+      input: 'Ein Schwert auf einen Abenteurer ziehen',
+      action: 'Es verkaufen, wenn es mindestens so gut ist wie das gewünschte',
+    },
+    {
+      input: 'Ein Schwert auf das Auftragsbanner ziehen',
+      action: 'Es an die Krone liefern',
+    },
+    { input: 'Ein Juwel auf ein schlichtes Schwert ziehen', action: 'Das Juwel darin fassen' },
+    {
+      input: 'Den Schalter unter dem Ofen tippen',
+      action: 'Schilde statt Schwerter schmieden, sobald du eine Ritterklinge gemacht hast',
+    },
+    {
+      input: 'Gildenvorteile oder die Sterne tippen',
+      action: 'Gildensterne für bleibende Vorteile ausgeben',
+    },
+    {
+      input: 'Eine Verbesserung, das Fass oder die fünfte Reihe tippen',
+      action: 'Sie mit deinen Münzen kaufen',
+    },
+  ],
+  loop: [
+    'Tippe auf Schmieden, um Rostige Dolche auf die Ambosse zu legen.',
+    'Zieh zwei gleiche Schwerter zusammen, um ein besseres zu machen.',
+    'Verkaufe jedem Abenteurer das Schwert, das auf seiner Bestellkarte steht.',
+    'Gib deine Münzen für Verbesserungen der Esse und mehr Platz aus.',
+    'Schmiede das große Schwert, das der königliche Auftrag verlangt, und zieh es auf das Banner.',
+  ],
+  tips: [
+    'Genau das gewünschte Schwert bringt 50 % mehr; ein besseres zahlt nur den gewünschten Preis.',
+    'Verschmelzungen innerhalb von 4 Sekunden bilden eine Hammerserie, die Bonusmünzen bringt.',
+    'Eine Verschmelzung, während der Ring der Serie in seiner letzten Sekunde golden leuchtet, macht ein Meisterwerk: Es bringt 50 % mehr und rostet nie.',
+    'Abenteurer gehen, wenn sie zu lange warten, und das senkt den Ruf deiner Gilde.',
+    'Ein guter Ruf bringt öfter Abenteurer, und sie warten länger.',
+    'Ein Schwert, das 3 Minuten unberührt auf einem Amboss liegt, wird stumpf und fällt dann eine Stufe; im Löschfass ist es sicher.',
+    'Zwei Drachentöter verschmelzen zum Anvilheart, das der Auftrag für die Kronklinge verlangt.',
+    'Manche Abenteurer bestellen ein Set aus Schwert und Schild: Gib beides, in beliebiger Reihenfolge, für 50 % Bonus.',
+    'Jeder neue Freibrief nach dem Sieg lässt dich einen von zwei Erlassen wählen, die seine Regeln ändern.',
+  ],
+};
+
+/** US English spells every text the same as British English. */
+export const howToPlay = byLanguage({ en, de });

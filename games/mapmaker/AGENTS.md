@@ -42,8 +42,12 @@ voyages it took and a saved best, then Keep charting or New atlas.
   values, notices and the viewshed are magenta; the sheet
   has a header with a scale bar and north arrow; the panel is a crisp white card. All painted in
   code (`src/art/`), `pixelArt: false`.
-- One scene does everything: no title screen, pause, audio or menu. The hub's shared settings
-  apply; see Hub settings below.
+- Two themes: the white survey sheet and a dark night sheet (dark paper and cards, light ink,
+  deeper hypsometric tints, softer hillshade highlights, lighter contours). The first visit follows
+  the device's `prefers-color-scheme`; the moon or sun button beside the panel's logo switches it
+  and saves the pick.
+- One scene does everything: no title screen, pause, audio or menu (only the theme button). The
+  hub's shared settings apply; see Hub settings below.
 - No TODOs or FIXMEs in the code.
 
 ## Architecture
@@ -94,9 +98,11 @@ voyages it took and a saved best, then Keep charting or New atlas.
   `rollCommission` and `rollBoard` with the `COMMISSIONS` table, and `rollHands`.
 - `src/game/save.ts`: `loadGame` (fills the new fields on older saves, and turns English feature
   names and riddle clues from before the translations into keys and `Clue`s) and `saveGame`; `loadBest`
-  and `saveBest` for the Royal Atlas's fewest voyages.
-- `src/scenes/BootScene.ts`: sets the art's resolution (`sharpenArt`), bakes the surveyor and the
-  icons, then starts `Game`.
+  and `saveBest` for the Royal Atlas's fewest voyages; `loadTheme` (the saved theme, else the
+  device's `prefers-color-scheme`) and `saveTheme`.
+- `src/scenes/BootScene.ts`: sets the art's resolution (`sharpenArt`) and the theme
+  (`applyTheme(loadTheme())`), bakes the surveyor and the icons, then starts `Game`. The theme
+  switch comes back through it.
 - `src/scenes/GameScene.ts`: owns the `GameState`, takes taps, paints the island into two canvas
   textures, draws the sheet, survey stations with their costs, the map marks, surveyor and rival,
   value chips and notices, the viewshed, the side panel (with the riddle box and the Camp button)
@@ -106,7 +112,11 @@ voyages it took and a saved best, then Keep charting or New atlas.
   `OVERLAY_BUTTON`, `SHOP`, `HANDS_COLUMN`, `BOARD`, `BUTTON`, `SMALL_BUTTON`, `UI_DEPTH`, `FONT`) and `tileCentre`.
 - `src/ui/Button.ts`: `makeButton`, a flat ink button with an optional size, disabled look and
   left-aligned caption.
-- `src/art/paint.ts`: the palette (`INK`, `MAGENTA`, `BLUE`, `SHEET`, `VELLUM`...), `HI` (textures
+- `src/art/paint.ts`: the palette, `PALETTES.light` and `PALETTES.dark` (`INK`, `ON_INK`,
+  `MAGENTA`, `SHEET`, `VELLUM`, `CARD`, `TABLE`, `RULE`, the fog's colours, the overlay `DIM`...)
+  exported as `let`s that `applyTheme(theme)` swaps (read them when drawing, never copy them into
+  a module-level constant), `theme`, the fixed colours (`GOLD`, `OUTLINE` for the surveyors,
+  `ON_MAGENTA`, `SKIN`...), `HI` (textures
   are painted at HI times their size and shown at 1 / HI; 2, or `renderScale` when that is bigger,
   set by `sharpenArt`), `bake` (paint a canvas and add it as a texture),
   `rng`, `hex` and drawing helpers.
@@ -114,8 +124,9 @@ voyages it took and a saved best, then Keep charting or New atlas.
   rivers, roads and symbols for the whole island), `paintFog` (blank paper over uncharted tiles, translated UNSURVEYED lettering
   and the dashed survey limit), `placeNames` (village, ruin, bay and harbour names and peak
   heights, picked from the island number and tile spots, and every wood's and river's feature
-  name; villages keep their names in every language, the rest are translated), `TINT` (a flat colour per terrain for the
-  live chart and swatches), `CANVAS` and `TS` (80 units a tile; both painters draw in these units
+  name; villages keep their names in every language, the rest are translated) and `nameColor`, `tintOf` (a flat colour per terrain for the live chart and swatches, per
+  theme) and `TERRAINS`, the per-theme `BANDS`, `FOREST_TINT`, `ROAD_FILL`, `CONTOUR` and `SHINE`,
+  `CANVAS` and `TS` (80 units a tile; both painters draw in these units
   onto a canvas `HI / 2` times CANVAS, and paint the tints pixel by pixel at the canvas's own size).
 - `src/art/surveyor.ts`: `surveyor` and `surveyor-step`, the bear in a pith helmet behind a
   theodolite, and the rival's grey `rival` and `rival-step` (the `LOOKS` table); `SURVEYOR_ORIGIN`.
@@ -142,8 +153,10 @@ voyages it took and a saved best, then Keep charting or New atlas.
   feature charted whole) and `announceRival` (the rival read the riddle or dug the treasure).
   Buttons call `pitchCamp`, `returnToPort`, `sellChart` (then `saveBest` when the Royal Atlas
   page opens), `closeAtlas`, `newGame` (New atlas), `pickCommission` and `hire` (the harbor's
-  `card`s), `buy` and `setSail`. Every successful action calls `saveGame`. The overlay's
-  full-screen dim is interactive, so it swallows taps on the map.
+  `card`s), `buy` and `setSail`. Every successful action calls `saveGame`. The theme button
+  (`makeThemeButton`, above the overlays' dim) calls `saveTheme` with the other theme and starts
+  `Boot`, which bakes the icons again and restarts `Game` from the save, painting everything
+  anew. The overlay's full-screen dim is interactive, so it swallows taps on the map.
 - `update(time)` computes `dt` from the frame time (clamped to 100 ms) and only animates:
   - `syncIsland` repaints the terrain and place names when `state.tiles` is a new array (a load or
     a new isle), repaints the fog when tiles are charted (laying a `vellum` tile over each that
@@ -266,7 +279,8 @@ and the Royal Atlas get their `features` from `findFeatures`, an empty board and
 no rival, no `royal`, one-voyage commissions and zeroed new chart fields. Saves from before the
 next isle was rolled at the sale get `next: null`. Saves from before the translations get their
 feature names turned into keys and their riddle clues into `Clue`s. `mapmaker-best` holds
-the fewest voyages a Royal Atlas took, kept across New atlas. The hub's settings live under the
+the fewest voyages a Royal Atlas took, kept across New atlas. `mapmaker-theme` holds `'light'` or
+`'dark'` once the theme button has been used; until then the device's preference decides. The hub's settings live under the
 shared `hub-settings` key.
 
 ### Randomness and timing
@@ -315,7 +329,7 @@ shared `hub-settings` key.
 
 - `src/main.ts` sets `window.game` in dev builds only.
 - `e2e/playthrough.spec.ts` reads `game.scene.getScene('Game')`: its `state` (JSON-copied) and
-  `spots` (button centres by name: `return`, `camp`, `sell`, `sail`, `buy-<upgrade>`,
+  `spots` (button centres by name: `return`, `camp`, `theme`, `sell`, `sail`, `buy-<upgrade>`,
   `hire-<hand>`, `pick-<n>` for the board's rows, `keep` and `newAtlas` on the Royal Atlas page).
 - It seeds `Math.random`, owns the clock with 64 ms frames, and blocks WebGL so Phaser uses canvas.
 - It taps tile centres (from `MAP` 24,64 and 40px tiles) of `frontier` tiles the supplies can pay
@@ -371,6 +385,9 @@ shared `hub-settings` key.
 - Change the sell-back or the milestones: `SELL_BACK` and `MILESTONES` in `state.ts`, then the
   test's `MILESTONES` and the README. The panel lays out up to three milestone marks.
 - Move the map: `MAP` in `layout.ts`, then the test's `MAP`.
+- Add or change a colour: give it a row in both `PALETTES` in `paint.ts` (and a `let` and its
+  place in `applyTheme`), or a per-theme table like `BANDS` in `map.ts`; check both themes. The
+  playthrough runs in the browser's light scheme.
 
 ## Gotchas
 

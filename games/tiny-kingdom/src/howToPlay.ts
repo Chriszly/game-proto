@@ -1,6 +1,7 @@
 import type { HowToPlay } from '../../../shared/howToPlay';
+import { byLanguage } from '../../../shared/i18n';
 
-export const howToPlay: HowToPlay = {
+const en: HowToPlay = {
   goal: 'Place buildings on your island to score as many points as you can. The kingdom ends when the pouch is empty or nothing fits.',
   controls: [
     {
@@ -49,3 +50,64 @@ export const howToPlay: HowToPlay = {
     'Out of room? Merging two houses into a manor frees a cell.',
   ],
 };
+
+/** US English only changes the spelling. */
+const us = (text: string) => text.replace(/neighbour/g, 'neighbor');
+const enUS: HowToPlay = {
+  goal: us(en.goal),
+  controls: en.controls.map((c) => ({ input: us(c.input), action: us(c.action) })),
+  loop: en.loop.map(us),
+  tips: en.tips.map(us),
+};
+
+const de: HowToPlay = {
+  goal: 'Setze Gebäude auf deine Insel und sammle so viele Punkte wie möglich. Das Königreich endet, wenn der Beutel leer ist oder nichts mehr passt.',
+  controls: [
+    {
+      input: 'Ein Plättchen anklicken oder antippen',
+      action: 'Eines der drei Plättchen wählen, die in diesem Zug gezogen wurden',
+    },
+    {
+      input: 'Über ein Grasfeld fahren',
+      action: 'Zeigen, was das Gebäude dort bringen würde, und von welchen Nachbarn',
+    },
+    {
+      input: 'Ein Grasfeld anklicken oder antippen',
+      action: 'Das Gebäude setzen; die anderen beiden Plättchen gehen zurück in den Beutel',
+    },
+    {
+      input: 'Ein Haus antippen, dann ein Haus daneben',
+      action: 'Die beiden zu einem Herrenhaus vereinen',
+    },
+    {
+      input: 'Einen Markt antippen',
+      action: 'Einmal pro Runde zwei Plättchen einer Art gegen ein Geschenkgebäude tauschen',
+    },
+    {
+      input: 'Letztes Plättchen zurück',
+      action: 'Das letzte Setzen oder Vereinen zurücknehmen, einmal pro Runde',
+    },
+    {
+      input: 'Insel-Taste',
+      action: 'Ein Kampagnenlevel, die Insel des Tages oder eine Inselnummer wählen',
+    },
+  ],
+  loop: [
+    'Jeder Zug zieht drei Plättchen aus dem Beutel, und du wählst eines.',
+    'Setze es auf Gras, wo seine Nachbarn ihm die meisten Punkte bringen.',
+    'Arbeite auf den königlichen Erlass hin, ein Nebenziel, das +8 Punkte und eine Krone bringt.',
+    'Erreiche das Rundenziel (20 Punkte in Runde 1), um den Beutel aufzufüllen.',
+    'Wähle eines der zwei königlichen Geschenke, etwa mehr Türme oder ein neues Gebäude.',
+  ],
+  tips: [
+    'Gebäude stehen nur auf Gras, aber Seen und Wälder daneben bringen Punkte.',
+    'Ein neues Gebäude ändert auch, was die Gebäude daneben bringen, also zählt das ganze Brett.',
+    'Äcker mögen Seen, Häuser mögen Äcker, und ein Turm zählt die Häuser ringsum, verträgt aber keinen Turm neben sich.',
+    'Gebäude, die über eine Kette aus Gebäuden und Wegen mit der Burg verbunden sind, bringen am Ende je +1.',
+    'Jede Jahreszeit verdoppelt die Punkte mancher Gebäude beim Setzen, etwa Äcker beim Erntefest.',
+    'Ab Runde 3 warnt ein Omen vor einer Flut oder einem Sturm in der nächsten Runde, so bleibt dir eine Runde zur Vorbereitung.',
+    'Kein Platz mehr? Zwei Häuser zu einem Herrenhaus zu vereinen macht ein Feld frei.',
+  ],
+};
+
+export const howToPlay: HowToPlay = byLanguage({ en, 'en-US': enUS, de });

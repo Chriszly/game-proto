@@ -85,6 +85,7 @@ import {
   type Golem,
   type Pop,
 } from '../game/state';
+import { t } from '../i18n';
 import { makeButton } from '../ui/Button';
 import {
   FONT,
@@ -315,10 +316,10 @@ export class GameScene extends Phaser.Scene {
 
   private createHud() {
     const ink = '#4a2e18';
-    this.press(HUD.title.x, HUD.title.y, 'Golem Garden', 19, '#f2c44a');
+    this.press(HUD.title.x, HUD.title.y, t('title'), 19, '#f2c44a');
     const garden = this.add.image(HUD.garden.x, HUD.garden.y, 'pill');
     garden.setInteractive({ useHandCursor: true }).on('pointerdown', () => this.showPicker('choose'));
-    const tagText = `${gardenOf(this.state).name}  ·  ${this.state.thorny ? 'thorny' : 'gardens'}`;
+    const tagText = t(this.state.thorny ? 'gardenTagThorny' : 'gardenTag', { garden: t(gardenOf(this.state).name) });
     this.press(HUD.garden.x, HUD.garden.y, tagText, 10.5, this.state.thorny ? '#7a2a4a' : '#4a2e18', [0.5, 0.5]);
     // The leaf tag regrows a leaf too, like a tap on the Heartwood.
     this.add
@@ -355,7 +356,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createPanel() {
-    this.press(PANEL.x + PANEL.w / 2, PANEL.y + 9, 'Seeds', 14, '#f2c44a', [0.5, 0.5]);
+    this.press(PANEL.x + PANEL.w / 2, PANEL.y + 9, t('seeds'), 14, '#f2c44a', [0.5, 0.5]);
     const ink = '#3a2a18';
     this.seedButtons = SEEDS.map((kind, i) => {
       const x = SEED_BUTTONS.x;
@@ -375,7 +376,7 @@ export class GameScene extends Phaser.Scene {
         // The hedge strip: the hedge, its name and its cost; the hint says what it does.
         face = [
           this.add.image(left + 28, y + 15, 'hedge').setOrigin(0.5, 54 / 64).setScale(0.5),
-          this.press(left + 55, y - 9, HEDGE.name, 10.5, ink),
+          this.press(left + 55, y - 9, t(HEDGE.name), 10.5, ink),
           this.add.image(left + 62, y + 6, 'sap').setScale(0.5),
           this.press(left + 70, y + 7, String(HEDGE.cost), 12, ink),
         ];
@@ -387,7 +388,7 @@ export class GameScene extends Phaser.Scene {
           .image(left + (tall ? 31 : 27), y + (tall ? 27 : 22), `golem-${kind}`)
           .setOrigin(GOLEM_ORIGIN.x, GOLEM_ORIGIN.y)
           .setScale(tall ? 0.62 : 0.45);
-        const [first, second] = info.name.split(' ');
+        const [first, second] = t(info.card).split('\n');
         face = tall
           ? [
               icon,
@@ -395,21 +396,21 @@ export class GameScene extends Phaser.Scene {
               this.press(left + 61, y - 6, second, 14, ink),
               this.add.image(left + 68, y + 11, 'sap').setScale(0.62),
               this.press(left + 78, y + 12, String(info.cost), 14, ink),
-              this.press(left + 61, y + 27, info.blurb, 9, '#7a5a34'),
+              this.press(left + 61, y + 27, t(info.blurb), 9, '#7a5a34'),
             ]
           : [
               icon,
-              this.press(left + 55, y - 15, info.name, 10.5, ink),
+              this.press(left + 55, y - 15, t(info.name), 10.5, ink),
               this.add.image(left + 62, y - 1, 'sap').setScale(0.5),
               this.press(left + 70, y, String(info.cost), 12, ink),
-              this.press(left + 55, y + 14, info.blurb, 9, '#7a5a34'),
+              this.press(left + 55, y + 14, t(info.blurb), 9, '#7a5a34'),
             ];
         if (info.locked) {
           locked = this.add.container(0, 0, [
             this.add.image(x, y, 'card-locked'),
-            this.press(left + 55, y - 16, info.name, 10.5, ink),
-            this.press(left + 56, y - 4, 'Blooms after', 9, '#4a6a24'),
-            this.press(left + 56, y + 7, `${BLOOM_GOAL} waves`, 9, '#4a6a24'),
+            this.press(left + 55, y - 16, t(info.name), 10.5, ink),
+            this.press(left + 56, y - 4, t('bloomsAfter'), 9, '#4a6a24'),
+            this.press(left + 56, y + 7, t('bloomWaves', { n: BLOOM_GOAL }), 9, '#4a6a24'),
           ]);
           this.lockPips = this.add.graphics();
           locked.add(this.lockPips);
@@ -438,7 +439,7 @@ export class GameScene extends Phaser.Scene {
       const { wave, bloom } = s;
       const did = startWave(s);
       if (did === 'early') this.waveDone(wave, bloom, true);
-      else if (did === 'start' && s.wave % BOSS_EVERY === 0) this.announce([`Wave ${s.wave}: the Queen Slug is coming!`]);
+      else if (did === 'start' && s.wave % BOSS_EVERY === 0) this.announce([t('queenWave', { n: s.wave })]);
       this.refresh();
     });
     this.waveText = this.press(WAVE_BUTTON.x, WAVE_BUTTON.y - 8, '', 13, '#4a2a08', [0.5, 0.5]);
@@ -516,35 +517,32 @@ export class GameScene extends Phaser.Scene {
     const text = this.add
       .text(VIEW.w / 2, 164, '', { fontFamily: FONT, fontStyle: 'bold', fontSize: '15px', color: '#fbefd6', align: 'center' })
       .setOrigin(0.5)
-      .setLineSpacing(5);
+      .setLineSpacing(5)
+      .setWordWrapWidth(VIEW.w - 60);
     const stars = totalStars(s);
     if (mode === 'over') {
-      title.setText('The Heartwood has fallen');
-      text.setText(`Pests ate the Heartwood on wave ${s.wave}. ${s.kills} pests squashed.\nBest: ${s.best} waves cleared. Pick a garden to plant again.`);
+      title.setText(t('overTitle'));
+      text.setText(t('overText', { wave: s.wave, kills: s.kills, best: s.best }));
     } else if (mode === 'harvest' && s.thorny) {
-      title.setText('Thorny harvest: laurel won!');
-      text.setText(
-        `Wave ${HARVEST_WAVE} cleared in the thorny ${gardenOf(s).name} with ${s.heart} of ${START_HEART} leaves kept.\n` +
-          'Its laurel now crowns the garden\'s card. The waves go on: keep going, or plant another garden.',
-      );
+      title.setText(t('thornyHarvestTitle'));
+      text.setText(t('thornyHarvestText', { wave: HARVEST_WAVE, garden: t(gardenOf(s).name), heart: s.heart, max: START_HEART }));
     } else if (mode === 'harvest') {
       const n = s.harvest;
-      title.setText(`Harvest: ${this.starText(n)}`);
-      const kept = `${s.heart} of ${START_HEART} leaves kept`;
+      title.setText(t('harvestTitle', { stars: this.starText(n) }));
       const next = GARDENS.find((g) => g.unlockStars > stars);
-      const thorny = s.stars[s.garden] >= THORNY_STARS ? `Its thorny variant is open. ` : '';
+      const after = [
+        s.stars[s.garden] >= THORNY_STARS ? t('harvestThornyOpen') : '',
+        next ? t('harvestNext', { garden: t(next.name), need: next.unlockStars, stars }) : t('harvestAllOpen'),
+        t('harvestGoOn'),
+      ];
       text.setText(
-        `Wave ${HARVEST_WAVE} cleared with ${kept}: ${n} star${n === 1 ? '' : 's'} for the ${gardenOf(s).name}.\n` +
-          thorny +
-          (next ? `${next.name} opens at ${next.unlockStars} stars; you have ${stars}. ` : 'Every garden is open. ') +
-          'The waves go on: keep going, or plant another garden.',
+        t('harvestCleared', { wave: HARVEST_WAVE, heart: s.heart, max: START_HEART, n, garden: t(gardenOf(s).name) }) +
+          '\n' +
+          after.filter(Boolean).join(' '),
       );
     } else {
-      title.setText('Choose a garden');
-      text.setText(
-        `A new garden starts from wave 1; this one is left behind. Your best (${s.best} waves),\n` +
-          `your stars and the Heartwood's bloom carry over. ${THORNY_STARS} stars open a garden's thorny variant.`,
-      );
+      title.setText(t('chooseTitle'));
+      text.setText(t('chooseText', { best: s.best, thorny: THORNY_STARS }));
     }
     const parts: Phaser.GameObjects.GameObject[] = [dim, title, text];
     const { y, w, gap } = GARDEN_CARD;
@@ -567,17 +565,21 @@ export class GameScene extends Phaser.Scene {
         if (i === s.garden && s.thorny) parts.push(this.add.image(x, ty, 'pill').setScale(1.42, 1.9).setTint(0xf2c44a));
         const tag = this.add.image(x, ty, 'pill').setScale(1.3, 1.6);
         tag.setInteractive({ useHandCursor: true }).on('pointerdown', () => plantIt(true));
-        const won = s.laurels[i] ? ' · laurel won' : '';
-        parts.push(tag, this.press(x, ty, `Thorny · ${twist.name}${won}`, 10.5, '#7a2a4a', [0.5, 0.5]));
+        const label = t(s.laurels[i] ? 'thornyTagWon' : 'thornyTag', { twist: t(twist.name) });
+        parts.push(tag, this.press(x, ty, label, 10.5, '#7a2a4a', [0.5, 0.5]));
       }
-      parts.push(card, this.press(x, y - 80, garden.name, 18, '#3a2a18', [0.5, 0.5]), this.miniMap(i, x, y - 18, open));
-      parts.push(this.press(x, y + 50, garden.blurb, 10, '#7a5a34', [0.5, 0.5]).setAlign('center').setWordWrapWidth(w - 24));
+      parts.push(card, this.press(x, y - 80, t(garden.name), 18, '#3a2a18', [0.5, 0.5]), this.miniMap(i, x, y - 18, open));
+      parts.push(this.press(x, y + 50, t(garden.blurb), 10, '#7a5a34', [0.5, 0.5]).setAlign('center').setWordWrapWidth(w - 24));
       const caption = this.press(x, y + 78, '', 12.5, open ? '#4a6a24' : '#5a4a34', [0.5, 0.5]);
-      caption.setText(open ? `${this.starText(s.stars[i])}  ${here ? 'Replant here' : 'Plant here'}` : `Needs ${garden.unlockStars} star${garden.unlockStars === 1 ? '' : 's'} (you have ${stars})`);
+      caption.setText(
+        open
+          ? t(here ? 'replantHere' : 'plantHere', { stars: this.starText(s.stars[i]) })
+          : t('needsStars', { n: garden.unlockStars, have: stars }),
+      );
       parts.push(caption);
     });
     if (mode !== 'over') {
-      parts.push(makeButton(this, VIEW.w / 2, 492, mode === 'harvest' ? 'Keep going' : 'Back', () => this.closePicker()));
+      parts.push(makeButton(this, VIEW.w / 2, 492, t(mode === 'harvest' ? 'keepGoing' : 'back'), () => this.closePicker()));
     }
     return this.add.container(0, 0, parts).setDepth(UI_DEPTH + 10);
   }
@@ -596,11 +598,11 @@ export class GameScene extends Phaser.Scene {
     this.banner.setAlpha(0);
     const dim = this.add.rectangle(0, 0, VIEW.w, VIEW.h, 0x1a0e06, 0.76).setOrigin(0).setInteractive();
     const title = this.add
-      .text(VIEW.w / 2, 104, 'The Queen Slug is squashed!', { fontFamily: FONT, fontStyle: 'bold', fontSize: '30px', color: '#f2c44a', stroke: '#3a2008', strokeThickness: 6 })
+      .text(VIEW.w / 2, 104, t('boonTitle'), { fontFamily: FONT, fontStyle: 'bold', fontSize: '30px', color: '#f2c44a', stroke: '#3a2008', strokeThickness: 6 })
       .setOrigin(0.5);
-    const taken = s.boons.length ? `\nTaken so far: ${s.boons.map((b) => BOON_INFO[b].name).join(', ')}.` : '';
+    const taken = s.boons.length ? `\n${t('boonsTaken', { list: s.boons.map((b) => t(BOON_INFO[b].name)).join(', ') })}` : '';
     const text = this.add
-      .text(VIEW.w / 2, 166, `Pick a boon for this garden; it lasts until you plant another.${taken}`, {
+      .text(VIEW.w / 2, 166, t('boonText') + taken, {
         fontFamily: FONT,
         fontStyle: 'bold',
         fontSize: '15px',
@@ -618,12 +620,12 @@ export class GameScene extends Phaser.Scene {
         takeBoon(s, boon);
         this.boonBox?.destroy();
         this.boonBox = null;
-        this.announce([`Boon: ${BOON_INFO[boon].name}!`, BOON_INFO[boon].blurb]);
+        this.announce([t('boonBanner', { name: t(BOON_INFO[boon].name) }), t(BOON_INFO[boon].blurb)]);
         this.refresh();
       });
       const info = BOON_INFO[boon];
-      parts.push(card, this.press(x, y - 76, info.name, 18, '#3a2a18', [0.5, 0.5]), this.boonIcon(boon, x, y - 22));
-      parts.push(this.press(x, y + 36, info.blurb, 11, '#7a5a34', [0.5, 0.5]).setAlign('center').setWordWrapWidth(w - 28));
+      parts.push(card, this.press(x, y - 76, t(info.name), 18, '#3a2a18', [0.5, 0.5]), this.boonIcon(boon, x, y - 22));
+      parts.push(this.press(x, y + 36, t(info.blurb), 11, '#7a5a34', [0.5, 0.5]).setAlign('center').setWordWrapWidth(w - 28));
       parts.push(this.press(x, y + 76, this.boonDetail(boon), 12.5, '#4a6a24', [0.5, 0.5]));
     });
     this.boonBox = this.add.container(0, 0, parts).setDepth(UI_DEPTH + 10);
@@ -641,13 +643,13 @@ export class GameScene extends Phaser.Scene {
   private boonDetail(boon: Boon) {
     const s = this.state;
     const times = boonCount(s, boon);
-    const again = times ? ` (taken ${times}x)` : '';
-    if (boon === 'sun') return `Shines on row ${sunRow(s) + 1}`;
-    if (boon === 'leaf') return `${s.heart} of ${START_HEART} leaves now`;
-    if (boon === 'moss') return `Slows last ${Math.round((1 + BOON.mossSlow * (times + 1)) * 100)}%${again}`;
-    if (boon === 'hedge') return `Hedges hold ${Math.round(HEDGE.hp * (1 + BOON.hedgeHp * (times + 1)))}${again}`;
-    if (boon === 'pebble') return `Pebble damage +${Math.round(BOON.pebbleDamage * (times + 1) * 100)}%${again}`;
-    return `Compost up to ${COMPOST.cap + BOON.compostCap * (times + 1)}${again}`;
+    const again = (detail: string) => (times ? t('boonTaken', { detail, n: times }) : detail);
+    if (boon === 'sun') return t('boonSun', { row: sunRow(s) + 1 });
+    if (boon === 'leaf') return t('boonLeaves', { heart: s.heart, max: START_HEART });
+    if (boon === 'moss') return again(t('boonMoss', { pct: Math.round((1 + BOON.mossSlow * (times + 1)) * 100) }));
+    if (boon === 'hedge') return again(t('boonHedge', { hp: Math.round(HEDGE.hp * (1 + BOON.hedgeHp * (times + 1))) }));
+    if (boon === 'pebble') return again(t('boonPebble', { pct: Math.round(BOON.pebbleDamage * (times + 1) * 100) }));
+    return again(t('boonCompost', { cap: COMPOST.cap + BOON.compostCap * (times + 1) }));
   }
 
   /** A warm stripe along each row a Sunny row boon shines on. */
@@ -718,17 +720,16 @@ export class GameScene extends Phaser.Scene {
       this.savedLaurels = s.laurels.join(',');
       saveLaurels(s.laurels);
     }
-    this.hud.wave.setText(`Wave ${s.wave}`);
-    const prize = s.thorny ? 'laurel' : 'harvest';
-    this.hud.waveSub.setText(s.harvest ? `harvested ${this.starText(s.harvest)}` : `${prize} at ${HARVEST_WAVE}`);
+    this.hud.wave.setText(t('waveTag', { n: s.wave }));
+    this.hud.waveSub.setText(s.harvest ? t('harvested', { stars: this.starText(s.harvest) }) : t(s.thorny ? 'laurelAt' : 'harvestAt', { wave: HARVEST_WAVE }));
     this.hud.heart.setText(String(s.heart));
     this.hud.regrow.setVisible(canRegrow(s));
     this.hud.sap.setText(String(s.sap));
-    this.hud.best.setText(`Best: ${s.best}`);
+    this.hud.best.setText(t('best', { n: s.best }));
     this.hud.stars.setText(`${totalStars(s)} ★`);
     const full = s.bloom >= BLOOM_GOAL;
-    this.hud.bloom.setText(full ? 'Heartwood in bloom' : `Heartwood bloom ${s.bloom}/${BLOOM_GOAL}`);
-    this.hud.bloomSub.setText(full ? 'Thorn golem unlocked' : 'unlocks Thorn golem');
+    this.hud.bloom.setText(full ? t('bloomFull') : t('bloomCount', { n: s.bloom, goal: BLOOM_GOAL }));
+    this.hud.bloomSub.setText(t(full ? 'thornUnlocked' : 'unlocksThorn'));
     this.hud.flowers.forEach((f, i) => f.setTexture(i < s.bloom ? 'bloom' : 'bud'));
     this.treeFlowers.forEach((f, i) => f.setTexture(i < s.bloom ? 'bloom' : 'bud'));
     this.speed.bg.setTexture(s.fast ? 'speed-on' : 'speed');
@@ -759,14 +760,14 @@ export class GameScene extends Phaser.Scene {
     this.waveBg.setTexture(lit ? 'btn-wave' : 'btn-wave-off');
     const [line1, line2] =
       s.phase === 'build'
-        ? [`Start wave ${n}`, '']
+        ? [t('startWave', { n }), '']
         : early
-          ? [`Call wave ${n} now`, `+${EARLY_BONUS} early`]
+          ? [t('callWave', { n }), t('earlyBonus', { n: EARLY_BONUS })]
           : s.phase === 'wave' && s.wave === HARVEST_WAVE && s.queue.length === 0
-            ? ['Harvest wave', 'squash every pest']
+            ? [t('harvestWave'), t('squashEvery')]
             : s.phase === 'wave'
-            ? [`Wave ${s.wave}...`, 'still coming in']
-            : ['Garden lost', ''];
+            ? [t('waveComing', { n: s.wave }), t('stillComing')]
+            : [t('gardenLost'), ''];
     this.waveLabel = line2 ? `${line1}, ${line2}` : line1;
     this.waveText.setText(line1).setY(WAVE_BUTTON.y + (line2 ? -9 : 0)).setFontSize(line2 ? 13 : 15);
     this.waveSub.setText(line2).setX(WAVE_BUTTON.x + (early ? 6 : 0));
@@ -781,7 +782,7 @@ export class GameScene extends Phaser.Scene {
     const n = nextWave(this.state);
     const counts = waveCounts(n, twistOf(this.state));
     const boss = counts.queen > 0;
-    this.preview.title.setText(boss ? `Wave ${n}: Queen Slug!` : `Next: wave ${n}`).setColor(boss ? '#ffd27a' : '#fbefd6');
+    this.preview.title.setText(t(boss ? 'previewQueen' : 'previewNext', { n })).setColor(boss ? '#ffd27a' : '#fbefd6');
     const kinds = PREVIEW_PESTS.filter((kind) => counts[kind] > 0);
     // Up to three kinds sit in one row; more go in two rows of three, smaller.
     const big = kinds.length <= 3;
@@ -822,58 +823,64 @@ export class GameScene extends Phaser.Scene {
     const cost = upgradeCost(g);
     if (this.formMenu && cost !== null) {
       // Raising to level 3: pick the golem's form.
-      formsOf(g.kind).forEach((form, i) => set(i, `${FORM_INFO[form].name}\n${cost} sap`, s.sap >= cost));
-      set(2, 'Back', true);
+      formsOf(g.kind).forEach((form, i) => set(i, t('formChip', { form: t(FORM_INFO[form].name), cost }), s.sap >= cost));
+      set(2, t('back'), true);
       this.menu.chips[3].bg.setVisible(false);
       this.menu.chips[3].text.setVisible(false);
       return;
     }
     this.formMenu = false;
-    const top = g.form ? FORM_INFO[g.form].name : 'max level';
-    set(0, cost === null ? (g.growMs > 0 ? 'Raise\ngrowing' : `Raise\n${top}`) : `${picksForm(g) ? 'Form' : 'Raise'}\n${cost} sap`, cost !== null && s.sap >= cost);
+    const top = t(g.form ? FORM_INFO[g.form].name : 'maxLevel');
+    const raise = cost === null ? (g.growMs > 0 ? t('raiseGrowing') : t('raiseTop', { top })) : t(picksForm(g) ? 'formPickChip' : 'raiseChip', { cost });
+    set(0, raise, cost !== null && s.sap >= cost);
     const area = statsOf(s, g).area;
-    set(1, area ? 'Aim\nall near' : `Aim\n${TARGET_INFO[g.target].name}`, !area);
-    set(2, `Move\n${MOVE_FEE} sap`, s.sap >= MOVE_FEE);
-    set(3, `Uproot\n+${uprootValue(g)} sap`, true);
+    set(1, area ? t('aimAll') : t('aimChip', { target: t(TARGET_INFO[g.target].name) }), !area);
+    set(2, t('moveChip', { cost: MOVE_FEE }), s.sap >= MOVE_FEE);
+    set(3, t('uprootChip', { n: uprootValue(g) }), true);
   }
 
   private hintText() {
     const s = this.state;
     const moving = this.golemById(this.moving);
-    if (moving) return `Tap soil to move the ${GOLEM_INFO[moving.kind].name.toLowerCase()} there for ${MOVE_FEE} sap`;
+    if (moving) return t('hintMove', { golem: t(GOLEM_INFO[moving.kind].lower), cost: MOVE_FEE });
     const picked = this.golemById(this.picked);
     const hovered = picked ?? (this.hover && golemAt(s, this.hover.col, this.hover.row));
     if (hovered) {
-      const name = GOLEM_INFO[hovered.kind].name;
+      const info = GOLEM_INFO[hovered.kind];
+      const golem = t(info.name);
+      // The two forms a golem can take, by name: "Boulder or Sling".
+      const forms = (kind: typeof hovered.kind) => {
+        const [a, b] = formsOf(kind).map((f) => t(FORM_INFO[f].name));
+        return { a, b };
+      };
       if (picked && this.formMenu) {
-        const forms = formsOf(picked.kind);
-        const over = this.chipHover !== null && forms[this.chipHover];
-        if (over) return `${FORM_INFO[over].name}: ${FORM_INFO[over].blurb}`;
-        return `Level 3 picks its form for good: ${forms.map((f) => FORM_INFO[f].name).join(' or ')}`;
+        const over = this.chipHover !== null && formsOf(picked.kind)[this.chipHover];
+        if (over) return t('hintForm', { form: t(FORM_INFO[over].name), blurb: t(FORM_INFO[over].blurb) });
+        return t('hintFormPick', forms(picked.kind));
       }
       const combo = hovered.growMs === 0 ? comboAt(s, hovered.kind, hovered.col, hovered.row) : null;
-      if (hovered.form) return `${FORM_INFO[hovered.form].name} ${name.toLowerCase()}: ${FORM_INFO[hovered.form].blurb}`;
-      const level = hovered.growMs > 0 ? `${name}, still growing` : `${name}, level ${hovered.level}`;
-      if (combo) return `${name} lv ${hovered.level}: moss combo, ${combo === 'slowed' ? 'harder on slowed pests' : 'pricks twice'}`;
-      if (picked && !statsOf(s, picked).area) return `${level}, aims at ${TARGET_INFO[picked.target].blurb}`;
-      if (picked && picksForm(picked)) return `${level}. Level 3 picks a form: ${formsOf(picked.kind).map((f) => FORM_INFO[f].name).join(' or ')}`;
-      return picked ? `${level}. Tap it again to close` : `${level}. Tap it to raise, aim, move or uproot`;
+      if (hovered.form) return t('hintFormed', { form: t(FORM_INFO[hovered.form].name), golem: t(info.lower), blurb: t(FORM_INFO[hovered.form].blurb) });
+      const level = hovered.growMs > 0 ? t('hintGrowing', { golem }) : t('hintLevel', { golem, n: hovered.level });
+      if (combo) return t(combo === 'slowed' ? 'hintComboSlowed' : 'hintComboPricks', { golem, n: hovered.level });
+      if (picked && !statsOf(s, picked).area) return t('hintAims', { level, target: t(TARGET_INFO[picked.target].blurb) });
+      if (picked && picksForm(picked)) return t('hintPicksForm', { level, ...forms(picked.kind) });
+      return t(picked ? 'hintTapAgain' : 'hintTapGolem', { level });
     }
     const hedge = this.hover && hedgeAt(s, this.hover.col, this.hover.row);
-    if (hedge) return `A hedge: pests stop and chew on it (${Math.ceil(hedge.hp)} left)`;
+    if (hedge) return t('hintHedge', { n: Math.ceil(hedge.hp) });
     const twist = twistOf(s);
-    if (twist === 'hedges' && this.hover && gardenOf(s).map[this.hover.row][this.hover.col] === 'path') return 'Thorny garden: no hedges here';
-    if (s.selected === 'hedge') return 'Tap a path cell to plant a hedge there; pests chew through it';
+    if (twist === 'hedges' && this.hover && gardenOf(s).map[this.hover.row][this.hover.col] === 'path') return t('hintNoHedges');
+    if (s.selected === 'hedge') return t('hintPlantHedge');
     const onHeart = this.hover && gardenOf(s).map[this.hover.row][this.hover.col] === 'heart';
     const lost = s.heart < START_HEART;
     if (onHeart || (lost && s.phase === 'build')) {
-      if (!lost) return 'The Heartwood has all its leaves';
-      if (s.phase !== 'build') return 'Leaves regrow between waves';
-      return `Tap the Heartwood to regrow a leaf: ${regrowPrice(s)} sap${s.sap < regrowPrice(s) ? ' (not enough)' : ''}`;
+      if (!lost) return t('hintAllLeaves');
+      if (s.phase !== 'build') return t('hintRegrowLater');
+      return t(s.sap < regrowPrice(s) ? 'hintRegrowPoor' : 'hintRegrow', { n: regrowPrice(s) });
     }
-    if (s.phase === 'build' && nextWave(s) % BOSS_EVERY === 0) return 'The Queen Slug slimes golems beside her trail';
-    if (s.phase === 'build' && s.wave >= COMPOST.fromWave) return `Compost: clearing pays ${Math.round(COMPOST.rate * 100)}% of unspent sap (up to ${COMPOST.cap})`;
-    return s.golems.length ? 'Golems side by side with a moss golem combo' : 'Tap soil to plant the picked seed';
+    if (s.phase === 'build' && nextWave(s) % BOSS_EVERY === 0) return t('hintQueen');
+    if (s.phase === 'build' && s.wave >= COMPOST.fromWave) return t('hintCompost', { pct: Math.round(COMPOST.rate * 100), cap: COMPOST.cap });
+    return t(s.golems.length ? 'hintCombo' : 'hintPlant');
   }
 
   /** A little clay bead: a soft shadow, the colour and a glint. */
@@ -1129,11 +1136,11 @@ export class GameScene extends Phaser.Scene {
   private waveDone(n: number, bloomBefore: number, early: boolean) {
     const s = this.state;
     const sap = waveBonus(n) + (early ? EARLY_BONUS : 0);
-    const compost = s.compost ? `, +${s.compost} compost` : '';
-    const lines = [early ? `Wave ${n + 1} called early!  +${sap} sap${compost}` : `Wave ${n} cleared!  +${sap} sap${compost}`];
-    if (n === HARVEST_WAVE) lines.push(`Harvest! ${this.starText(s.harvest)} with ${s.heart} leaves kept`);
-    if (s.bloom > bloomBefore) lines.push(s.bloom >= BLOOM_GOAL ? 'The Heartwood is in bloom: Thorn golem unlocked!' : `A bud opens on the Heartwood (${s.bloom}/${BLOOM_GOAL})`);
-    if (early && s.wave % BOSS_EVERY === 0) lines.push('The Queen Slug is coming!');
+    const compost = s.compost ? t('compostBonus', { n: s.compost }) : '';
+    const lines = [(early ? t('waveCalled', { n: n + 1, sap }) : t('waveCleared', { n, sap })) + compost];
+    if (n === HARVEST_WAVE) lines.push(t('harvestBanner', { stars: this.starText(s.harvest), n: s.heart }));
+    if (s.bloom > bloomBefore) lines.push(s.bloom >= BLOOM_GOAL ? t('bloomBanner') : t('budBanner', { n: s.bloom, goal: BLOOM_GOAL }));
+    if (early && s.wave % BOSS_EVERY === 0) lines.push(t('queenComing'));
     this.announce(lines);
   }
 

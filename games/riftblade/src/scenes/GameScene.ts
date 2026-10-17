@@ -2,14 +2,19 @@ import Phaser from 'phaser';
 import { settings } from '../../../../shared/settings';
 import { splitHudCamera, viewPoint } from '../../../../shared/scaling';
 import { HEROES, schemeOf, type HeroId } from '../game/heroes';
-import { HERO_R, RUN_MS, clock, freshState, statsOf, type GameState, type Phase } from '../game/state';
-import { choose, phalanxSpots, shieldHalf, startRun, suppressorHalf, suppressorLength, tick } from '../game/sim';
+import { HERO_R, RUN_MS, clock, freshState, statsOf, type GameState } from '../game/state';
+import { choose, inRingGap, phalanxSpots, shieldHalf, startRun, suppressorHalf, suppressorLength } from '../game/sim';
+import { buy, chooseEvent, chooseNode, frame, leave, reroll } from '../game/voyage';
+import { ARENA_MS, BOSSES, CHAMPION, PLANETS, SIEGE, VENT, planetLabel } from '../game/planets';
 import { UPGRADES, MAX_TIER } from '../game/upgrades';
 import { loadProgress, recordRun, type Progress } from '../game/save';
 import { C, hex } from '../art/glow';
 import { heroKey } from '../art/sprites';
-import { Panel, endScreen, heroSelect, levelUp } from '../ui/panels';
-import { BOSS_BAR, CENTER, DEPTH, FONT, HP_BAR, KIT, LEVEL, SIG_BUTTON, STICK, TIMER, VIEW, XP_BAR, inside } from './layout';
+import { t } from '../i18n';
+import { Panel, endScreen, eventPanel, heroSelect, levelUp, starMap, trader } from '../ui/panels';
+import {
+  BOSS_BAR, CENTER, CREDITS_TAG, DEPTH, FONT, HP_BAR, KIT, LEVEL, PLANET_TAG, SIG_BUTTON, STICK, TIMER, VIEW, XP_BAR, inside,
+} from './layout';
 
 /** A pool of images for one kind of thing on the field, reused frame to frame. */
 class Pool {
@@ -55,8 +60,8 @@ export class GameScene extends Phaser.Scene {
   state: GameState = freshState();
   /** The panel showing (hero select, level-up or end of run) and where its cards are. */
   panel: Panel | null = null;
-  private shownPhase: Phase | null = null;
-  private shownChoices: string[] | null = null;
+  /** What the panel showing was built from, so it is rebuilt when any of it changes. */
+  private shown = '';
   private progress: Progress = loadProgress();
 
   private ground!: Phaser.GameObjects.Graphics;
@@ -66,7 +71,7 @@ export class GameScene extends Phaser.Scene {
   private pools!: Record<'pickups' | 'enemies' | 'allies' | 'bolts', Pool>;
   private hero!: Phaser.GameObjects.Image;
   private popTexts: Phaser.GameObjects.Text[] = [];
-  private texts!: Record<'timer' | 'level' | 'hp' | 'kit' | 'sig' | 'sigKey' | 'boss', Phaser.GameObjects.Text>;
+  private texts!: Record<'timer' | 'level' | 'planet' | 'credits' | 'hp' | 'kit' | 'sig' | 'sigKey' | 'boss', Phaser.GameObjects.Text>;
 
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
   /** Whether a pointer is held on the field to walk, and the signature asked for this frame. */
@@ -82,7 +87,7 @@ export class GameScene extends Phaser.Scene {
   create() {
     this.state = freshState();
     this.panel = null;
-    this.shownPhase = null;
+    this.shown = '';
     this.progress = loadProgress();
     // The world camera follows the hero; the HUD (scroll factor 0) gets a fixed camera.
     splitHudCamera(this);
@@ -106,6 +111,8 @@ export class GameScene extends Phaser.Scene {
     this.texts = {
       timer: text(TIMER.x, TIMER.y, 28, C.text, [0.5, 0.5], true),
       level: text(LEVEL.x, LEVEL.y, 18, C.text, [1, 0.5], true),
+      planet: text(PLANET_TAG.x, PLANET_TAG.y, 13, C.muted, [1, 0.5], true),
+      credits: text(CREDITS_TAG.x, CREDITS_TAG.y, 13, C.credits, [1, 0.5], true),
       hp: text(HP_BAR.x, HP_BAR.y + HP_BAR.h + 4, 12, C.muted, [0, 0]),
       kit: text(KIT.x, KIT.y, 11.5, C.muted, [0, 0]).setLineSpacing(2),
       sig: text(SIG_BUTTON.x, SIG_BUTTON.y - 6, 11, C.text, [0.5, 0.5], true),
@@ -115,13 +122,15 @@ export class GameScene extends Phaser.Scene {
     this.texts.timer.setShadow(0, 0, '#5fa8ff', 8, false, true);
 
     const kb = this.input.keyboard!;
-    this.keys = kb.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE,ONE,TWO,THREE,ENTER') as Record<string, Phaser.Input.Keyboard.Key>;
+    this.keys = kb.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE,ONE,TWO,THREE,FOUR,ENTER') as Record<string, Phaser.Input.Keyboard.Key>;
     this.keys.SPACE.on('down', () => (this.sigQueued = true));
     this.keys.ONE.on('down', () => this.pickIndex(0));
     this.keys.TWO.on('down', () => this.pickIndex(1));
     this.keys.THREE.on('down', () => this.pickIndex(2));
+    this.keys.FOUR.on('down', () => reroll(this.state));
     this.keys.ENTER.on('down', () => {
       if (this.state.phase === 'won' || this.state.phase === 'lost') this.backToSelect();
+      else leave(this.state);
     });
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => this.pointerDown(p));
     // A second touch pointer, so a thumb can hit the signature button while the other steers.
@@ -155,8 +164,10 @@ export class GameScene extends Phaser.Scene {
     const spot = this.panel?.spots.find((r) => inside(v, r));
     if (!spot) return;
     if (s.phase === 'select') this.begin(spot.id as HeroId);
-    else if (s.phase === 'levelup') this.pickIndex(this.panel!.spots.indexOf(spot));
-    else this.backToSelect();
+    else if (s.phase === 'won' || s.phase === 'lost') this.backToSelect();
+    else if (spot.id === 'reroll') reroll(s);
+    else if (spot.id === 'leave') leave(s);
+    else this.pickIndex(this.panel!.spots.indexOf(spot));
   }
 
   /** Moves the stick's knob to the finger; past the rim the base is dragged along behind it. */
@@ -172,12 +183,16 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** The card, node, offer or answer at `i` (a tap or the 1/2/3 keys). */
   private pickIndex(i: number) {
     const s = this.state;
     if (s.phase === 'select') {
       const id = this.panel?.spots[i]?.id;
       if (id) this.begin(id as HeroId);
     } else if (s.phase === 'levelup') choose(s, i);
+    else if (s.phase === 'map') chooseNode(s, i);
+    else if (s.phase === 'trader') buy(s, i);
+    else if (s.phase === 'event') chooseEvent(s, i);
   }
 
   private begin(id: HeroId) {
@@ -233,28 +248,36 @@ export class GameScene extends Phaser.Scene {
 
   update(_time: number, delta: number) {
     const s = this.state;
-    if (s.phase === 'run') {
-      const move = this.moveInput();
-      tick(s, delta, { ...move, signature: this.sigQueued });
-      this.sigQueued = false;
-    }
-    if (s.phase !== this.shownPhase || s.choices !== this.shownChoices) this.syncPanel();
+    const move = s.phase === 'run' ? this.moveInput() : { mx: 0, my: 0 };
+    frame(s, delta, { ...move, signature: s.phase === 'run' && this.sigQueued });
+    if (s.phase === 'run') this.sigQueued = false;
+    if (this.panelKey() !== this.shown) this.syncPanel();
     this.draw();
+  }
+
+  /** Everything the panel showing depends on. */
+  private panelKey() {
+    const s = this.state;
+    if (s.phase === 'run') return 'run';
+    return [s.phase, s.choices?.join(), s.offers.join(), s.credits, s.event?.id, s.nodes.join(), s.rewardPicks].join('|');
   }
 
   /** Shows the panel for the phase the run is in. */
   private syncPanel() {
     const s = this.state;
+    const was = this.shown.split('|')[0];
     this.panel?.destroy();
     this.panel = null;
-    if ((s.phase === 'won' || s.phase === 'lost') && this.shownPhase !== s.phase) {
-      this.progress = recordRun(s.hero!, s.time, s.phase === 'won');
+    if ((s.phase === 'won' || s.phase === 'lost') && was !== s.phase) {
+      this.progress = recordRun(s.hero!, s.runMs, s.phase === 'won', s.planet + 1);
     }
     if (s.phase === 'select') this.panel = heroSelect(this, this.progress);
     else if (s.phase === 'levelup') this.panel = levelUp(this, s);
+    else if (s.phase === 'map') this.panel = starMap(this, s);
+    else if (s.phase === 'trader') this.panel = trader(this, s);
+    else if (s.phase === 'event') this.panel = eventPanel(this, s);
     else if (s.phase === 'won' || s.phase === 'lost') this.panel = endScreen(this, s, this.progress);
-    this.shownPhase = s.phase;
-    this.shownChoices = s.choices;
+    this.shown = this.panelKey();
     this.walking = false;
     this.stick = null;
   }
@@ -264,7 +287,7 @@ export class GameScene extends Phaser.Scene {
     const p = s.player;
     const cam = this.cameras.main;
     cam.centerOn(p.x, p.y);
-    this.drawGround(p.x, p.y);
+    this.drawGround(p.x, p.y, s.hero ? s.planet : 0);
     this.under.clear();
     this.over.clear();
     for (const pool of Object.values(this.pools)) pool.begin();
@@ -273,60 +296,175 @@ export class GameScene extends Phaser.Scene {
     this.drawHud(s);
   }
 
-  /** The Dune world: a dark navy field, a faint grid and amber dune ridges, endless in every way. */
-  private drawGround(cx: number, cy: number) {
+  /**
+   * The planet's ground, endless in every way: a field in its colour with a faint grid, and its
+   * scenery from a hash: dune ridges and rocks, reeds and pools, ice cracks and shards, or glowing
+   * lava cracks and ash.
+   */
+  private drawGround(cx: number, cy: number, planet: number) {
     const g = this.ground;
     g.clear();
+    const def = PLANETS[planet];
     const x0 = cx - VIEW.w / 2 - 40;
     const y0 = cy - VIEW.h / 2 - 40;
     const x1 = cx + VIEW.w / 2 + 40;
     const y1 = cy + VIEW.h / 2 + 40;
+    if (def.id !== 'dune') g.fillStyle(hex(def.ground.field), 1).fillRect(x0, y0, x1 - x0, y1 - y0);
     const step = 48;
-    g.lineStyle(1, 0x508cff, 0.07);
+    g.lineStyle(1, hex(def.ground.grid), 0.07);
     for (let x = Math.floor(x0 / step) * step; x <= x1; x += step) g.lineBetween(x, y0, x, y1);
     for (let y = Math.floor(y0 / step) * step; y <= y1; y += step) g.lineBetween(x0, y, x1, y);
     const cell = 320;
-    const dune = hex(C.dune);
+    const deco = hex(def.ground.deco);
     for (let gx = Math.floor(x0 / cell); gx <= Math.floor(x1 / cell); gx++) {
       for (let gy = Math.floor(y0 / cell); gy <= Math.floor(y1 / cell); gy++) {
         const bx = gx * cell;
         const by = gy * cell;
-        // Two dune ridges per cell, as gentle waves.
-        for (let k = 0; k < 2; k++) {
-          const sx = bx + hash(gx, gy, k) * cell * 0.6;
-          const sy = by + hash(gx, gy, k + 3) * cell;
-          const len = 120 + hash(gx, gy, k + 5) * 140;
-          const amp = 8 + hash(gx, gy, k + 7) * 14;
-          g.lineStyle(2, dune, 0.09 + hash(gx, gy, k + 9) * 0.05);
-          g.beginPath();
-          for (let i = 0; i <= 12; i++) {
-            const x = sx + (len * i) / 12;
-            const y = sy + Math.sin((i / 12) * Math.PI * 1.6 + k) * amp;
-            if (i === 0) g.moveTo(x, y);
-            else g.lineTo(x, y);
-          }
-          g.strokePath();
-        }
-        // Sand specks and the odd rock.
-        g.fillStyle(dune, 0.16);
-        for (let k = 0; k < 6; k++) g.fillCircle(bx + hash(gx, gy, k + 11) * cell, by + hash(gx, gy, k + 17) * cell, 1.2);
-        if (hash(gx, gy, 23) > 0.55) {
-          const rx = bx + hash(gx, gy, 29) * cell;
-          const ry = by + hash(gx, gy, 31) * cell;
-          const rr = 8 + hash(gx, gy, 37) * 14;
-          g.lineStyle(1.5, dune, 0.22);
-          g.beginPath();
-          for (let i = 0; i <= 6; i++) {
-            const a = (i / 6) * Math.PI * 2;
-            const k2 = 0.7 + hash(gx + i, gy, 41) * 0.4;
-            const x = rx + Math.cos(a) * rr * k2;
-            const y = ry + Math.sin(a) * rr * k2 * 0.7;
-            if (i === 0) g.moveTo(x, y);
-            else g.lineTo(x, y);
-          }
-          g.strokePath();
-        }
+        if (def.id === 'swamp') this.swampCell(g, gx, gy, bx, by, cell, deco);
+        else if (def.id === 'ice') this.iceCell(g, gx, gy, bx, by, cell, deco);
+        else if (def.id === 'lava') this.lavaCell(g, gx, gy, bx, by, cell, deco);
+        else this.duneCell(g, gx, gy, bx, by, cell, deco);
       }
+    }
+  }
+
+  /** A closed wobbly loop (a pool, a rock, a lava pool), as a path to stroke or fill. */
+  private blob(g: Phaser.GameObjects.Graphics, gx: number, gy: number, x: number, y: number, r: number, squash: number, k: number) {
+    g.beginPath();
+    for (let i = 0; i <= 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      const w = 0.75 + hash(gx + (i % 8), gy, k) * 0.35;
+      const px = x + Math.cos(a) * r * w;
+      const py = y + Math.sin(a) * r * w * squash;
+      if (i === 0) g.moveTo(px, py);
+      else g.lineTo(px, py);
+    }
+    g.closePath();
+  }
+
+  /** A jagged line from a point: a crack in ice or a glowing seam in lava rock. */
+  private crack(g: Phaser.GameObjects.Graphics, gx: number, gy: number, x: number, y: number, len: number, k: number) {
+    const a0 = hash(gx, gy, k) * Math.PI * 2;
+    g.beginPath();
+    g.moveTo(x, y);
+    let px = x;
+    let py = y;
+    for (let i = 1; i <= 6; i++) {
+      const a = a0 + (hash(gx + i, gy, k + 1) - 0.5) * 1.4;
+      px += Math.cos(a) * (len / 6);
+      py += Math.sin(a) * (len / 6);
+      g.lineTo(px, py);
+    }
+    g.strokePath();
+  }
+
+  private swampCell(g: Phaser.GameObjects.Graphics, gx: number, gy: number, bx: number, by: number, cell: number, deco: number) {
+    // Murky pools, reed clumps and floating specks.
+    for (let k = 0; k < 2; k++) {
+      if (hash(gx, gy, k + 50) < 0.35) continue;
+      const x = bx + hash(gx, gy, k + 51) * cell;
+      const y = by + hash(gx, gy, k + 52) * cell;
+      const r = 30 + hash(gx, gy, k + 53) * 40;
+      g.fillStyle(0x0c2a20, 0.55);
+      this.blob(g, gx, gy, x, y, r, 0.6, k + 54);
+      g.fillPath();
+      g.lineStyle(1.5, deco, 0.16);
+      this.blob(g, gx, gy, x, y, r, 0.6, k + 54);
+      g.strokePath();
+    }
+    for (let k = 0; k < 3; k++) {
+      const x = bx + hash(gx, gy, k + 60) * cell;
+      const y = by + hash(gx, gy, k + 63) * cell;
+      g.lineStyle(1.5, deco, 0.2);
+      for (let i = 0; i < 4; i++) {
+        const lean = (hash(gx, gy, k * 4 + i + 66) - 0.5) * 10;
+        const h = 10 + hash(gx, gy, k * 4 + i + 70) * 12;
+        g.lineBetween(x + i * 4, y, x + i * 4 + lean, y - h);
+      }
+    }
+    g.fillStyle(deco, 0.14);
+    for (let k = 0; k < 7; k++) g.fillCircle(bx + hash(gx, gy, k + 80) * cell, by + hash(gx, gy, k + 88) * cell, 1.4);
+  }
+
+  private iceCell(g: Phaser.GameObjects.Graphics, gx: number, gy: number, bx: number, by: number, cell: number, deco: number) {
+    // Cracks in the ice, the odd shard sticking up, and snow.
+    g.lineStyle(1.5, deco, 0.12);
+    for (let k = 0; k < 2; k++) this.crack(g, gx, gy, bx + hash(gx, gy, k + 100) * cell, by + hash(gx, gy, k + 103) * cell, 90 + hash(gx, gy, k + 106) * 110, k * 10 + 110);
+    if (hash(gx, gy, 130) > 0.45) {
+      const x = bx + hash(gx, gy, 131) * cell;
+      const y = by + hash(gx, gy, 132) * cell;
+      const h = 14 + hash(gx, gy, 133) * 16;
+      g.fillStyle(deco, 0.08);
+      g.fillTriangle(x - 8, y, x + 8, y, x + 2, y - h);
+      g.lineStyle(1.5, deco, 0.28);
+      g.strokeTriangle(x - 8, y, x + 8, y, x + 2, y - h);
+    }
+    g.fillStyle(0xffffff, 0.22);
+    for (let k = 0; k < 9; k++) g.fillCircle(bx + hash(gx, gy, k + 140) * cell, by + hash(gx, gy, k + 150) * cell, 1.1);
+  }
+
+  private lavaCell(g: Phaser.GameObjects.Graphics, gx: number, gy: number, bx: number, by: number, cell: number, deco: number) {
+    // Glowing seams, cooled lava pools and ash.
+    for (let k = 0; k < 2; k++) {
+      const x = bx + hash(gx, gy, k + 200) * cell;
+      const y = by + hash(gx, gy, k + 203) * cell;
+      const len = 80 + hash(gx, gy, k + 206) * 120;
+      g.lineStyle(5, deco, 0.07);
+      this.crack(g, gx, gy, x, y, len, k * 10 + 210);
+      g.lineStyle(1.5, 0xffb347, 0.3);
+      this.crack(g, gx, gy, x, y, len, k * 10 + 210);
+    }
+    if (hash(gx, gy, 230) > 0.5) {
+      const x = bx + hash(gx, gy, 231) * cell;
+      const y = by + hash(gx, gy, 232) * cell;
+      const r = 22 + hash(gx, gy, 233) * 26;
+      g.fillStyle(0x3a0f08, 0.8);
+      this.blob(g, gx, gy, x, y, r, 0.65, 234);
+      g.fillPath();
+      g.lineStyle(2, deco, 0.3);
+      this.blob(g, gx, gy, x, y, r, 0.65, 234);
+      g.strokePath();
+    }
+    g.fillStyle(0xd0b8b0, 0.12);
+    for (let k = 0; k < 8; k++) g.fillCircle(bx + hash(gx, gy, k + 240) * cell, by + hash(gx, gy, k + 250) * cell, 1.2);
+  }
+
+  /** The Dune world: amber dune ridges, sand specks and the odd rock. */
+  private duneCell(g: Phaser.GameObjects.Graphics, gx: number, gy: number, bx: number, by: number, cell: number, dune: number) {
+    // Two dune ridges per cell, as gentle waves.
+    for (let k = 0; k < 2; k++) {
+      const sx = bx + hash(gx, gy, k) * cell * 0.6;
+      const sy = by + hash(gx, gy, k + 3) * cell;
+      const len = 120 + hash(gx, gy, k + 5) * 140;
+      const amp = 8 + hash(gx, gy, k + 7) * 14;
+      g.lineStyle(2, dune, 0.09 + hash(gx, gy, k + 9) * 0.05);
+      g.beginPath();
+      for (let i = 0; i <= 12; i++) {
+        const x = sx + (len * i) / 12;
+        const y = sy + Math.sin((i / 12) * Math.PI * 1.6 + k) * amp;
+        if (i === 0) g.moveTo(x, y);
+        else g.lineTo(x, y);
+      }
+      g.strokePath();
+    }
+    // Sand specks and the odd rock.
+    g.fillStyle(dune, 0.16);
+    for (let k = 0; k < 6; k++) g.fillCircle(bx + hash(gx, gy, k + 11) * cell, by + hash(gx, gy, k + 17) * cell, 1.2);
+    if (hash(gx, gy, 23) > 0.55) {
+      const rx = bx + hash(gx, gy, 29) * cell;
+      const ry = by + hash(gx, gy, 31) * cell;
+      const rr = 8 + hash(gx, gy, 37) * 14;
+      g.lineStyle(1.5, dune, 0.22);
+      g.beginPath();
+      for (let i = 0; i <= 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        const k2 = 0.7 + hash(gx + i, gy, 41) * 0.4;
+        const x = rx + Math.cos(a) * rr * k2;
+        const y = ry + Math.sin(a) * rr * k2 * 0.7;
+        if (i === 0) g.moveTo(x, y);
+        else g.lineTo(x, y);
+      }
+      g.strokePath();
     }
   }
 
@@ -346,6 +484,25 @@ export class GameScene extends Phaser.Scene {
       u.fillStyle(0xff7a2e, 0.18 * k).fillCircle(f.x, f.y, f.r);
       u.fillStyle(0xffd36b, 0.22 * k).fillCircle(f.x, f.y, f.r * 0.5);
     }
+    // Ground hazards: bog pools, embers, and warning rings that fill before a blast.
+    for (const h of s.hazards) {
+      if (h.kind === 'bog') {
+        const k = Math.min(1, h.ms / 800);
+        u.fillStyle(0x2f5a12, 0.35 * k).fillCircle(h.x, h.y, h.r);
+        u.lineStyle(2, hex(C.beast), 0.35 * k).strokeCircle(h.x, h.y, h.r);
+        u.fillStyle(hex(C.beast), 0.1 * k).fillCircle(h.x - h.r * 0.3, h.y - h.r * 0.2, h.r * 0.3);
+      } else if (h.kind === 'ember') {
+        const k = h.ms / h.maxMs;
+        u.fillStyle(0xff7a2e, 0.28 * k).fillCircle(h.x, h.y, h.r);
+        u.fillStyle(hex(C.ember), 0.4 * k).fillCircle(h.x, h.y, h.r * 0.45);
+      } else if (h.warnMs > 0) {
+        const total = h.kind === 'vent' ? VENT.warnMs : h.kind === 'stomp' ? SIEGE.stompWarn : SIEGE.warnMs;
+        const prog = Math.max(0, Math.min(1, 1 - h.warnMs / total));
+        const color = h.kind === 'vent' ? 0xff6a3c : h.kind === 'shell' ? hex(C.ironLight) : 0xd6efff;
+        u.lineStyle(2, color, 0.4 + 0.5 * prog).strokeCircle(h.x, h.y, h.r);
+        u.fillStyle(color, 0.08 + 0.16 * prog).fillCircle(h.x, h.y, h.r * prog);
+      }
+    }
     const coneLen = suppressorLength(s);
     if (coneLen > 0) {
       const half = suppressorHalf(s);
@@ -364,7 +521,7 @@ export class GameScene extends Phaser.Scene {
     // Pickups and shards.
     const pk = this.pools.pickups;
     for (const sh of s.shards) pk.next(sh.value >= 5 ? 'rb-shard-big' : 'rb-shard', sh.x, sh.y);
-    for (const k of s.pickups) pk.next(k.kind === 'chest' ? 'rb-chest' : 'rb-medkit', k.x, k.y);
+    for (const k of s.pickups) pk.next(k.kind === 'chest' ? 'rb-chest' : k.kind === 'credits' ? 'rb-credits' : 'rb-medkit', k.x, k.y);
     for (const b of s.bombs) {
       if (b.kind === 'charge') pk.next('rb-charge', b.x, b.y);
       else if (b.kind === 'grenade' || b.kind === 'frag') {
@@ -380,14 +537,16 @@ export class GameScene extends Phaser.Scene {
 
     // Droids.
     const en = this.pools.enemies;
+    const bossId = PLANETS[s.planet].boss;
     for (const e of s.enemies) {
-      let key = 'rb-clanker';
-      if (e.kind === 'boss') key = 'rb-boss';
+      let key = `rb-${e.kind}${e.elite ? '-elite' : ''}`;
+      if (e.kind === 'boss') key = bossId === 'grinder' ? 'rb-boss' : `rb-boss-${bossId}${e.phase2 ? '-burning' : ''}`;
       else if (e.kind === 'rollerbomb') key = `rb-roller${e.elite ? '-elite' : ''}${e.mode !== 'walk' ? '-armed' : ''}`;
-      else if (e.elite) key = 'rb-clanker-elite';
       const im = en.next(key, e.x, e.y);
-      if (e.kind === 'boss') im.setRotation(Math.atan2(p.y - e.y, p.x - e.x));
+      const toHero = Math.atan2(p.y - e.y, p.x - e.x);
+      if (e.kind === 'boss' && (bossId === 'grinder' || bossId === 'siege')) im.setRotation(toHero);
       else if (e.kind === 'rollerbomb' && e.mode === 'rush' && !still) im.setRotation(s.time / 80);
+      else if (e.kind !== 'clanker' && e.kind !== 'rollerbomb') im.setFlipX(Math.cos(e.kind === 'knight' ? e.facing : toHero) < 0);
       if (e.flashMs > 0 && !still) im.setScale(1.15);
       if (e.stunMs > 0) im.setAlpha(0.6);
     }
@@ -395,9 +554,10 @@ export class GameScene extends Phaser.Scene {
     // Allies.
     const al = this.pools.allies;
     for (const a of s.allies) {
-      const key = a.kind === 'trooper' ? 'rb-trooper' : a.kind === 'brother' ? 'rb-brother' : a.kind === 'sentry' ? 'rb-sentry' : 'rb-drone';
+      const key = a.kind === 'trooper' ? 'rb-trooper' : a.kind === 'brother' ? 'rb-brother' : a.kind === 'sentry' ? 'rb-sentry' : a.kind === 'escort' ? 'rb-escort' : 'rb-drone';
       const im = al.next(key, a.x, a.y);
       if (a.kind === 'trooper' || a.kind === 'brother') im.setOrigin(HERO_ORIGIN.x, HERO_ORIGIN.y).setFlipX(Math.cos(a.aim) < 0);
+      else if (a.kind === 'escort') im.setFlipX(Math.cos(a.aim) < 0);
       else if (a.kind === 'sentry') {
         im.setFlipX(Math.cos(a.aim) < 0);
         if (a.lifeMs < 1500) im.setAlpha(0.5 + 0.5 * (a.lifeMs / 1500));
@@ -434,6 +594,35 @@ export class GameScene extends Phaser.Scene {
       o.lineStyle(2, color, 0.8).strokeCircle(p.x, p.y, 30);
     }
     if (p.hurtMs > 0) o.lineStyle(2, hex(C.danger), (p.hurtMs / 450) * 0.8).strokeCircle(p.x, p.y, 24);
+    // Slowed: a lime ring at the feet.
+    if (p.slowMs > 0) o.lineStyle(2, hex(C.beast), 0.6).strokeCircle(p.x, p.y + 20, 15);
+    // Knights' shields, and the dash lines of knights and the Champion about to strike.
+    for (const e of s.enemies) {
+      if (e.kind === 'knight') {
+        if (e.mode === 'walk' && e.guardMs <= 0) {
+          o.lineStyle(3, hex(C.hollow), 0.9).beginPath().arc(e.x, e.y, e.r + 6, e.facing - 1.05, e.facing + 1.05).strokePath();
+        } else if (e.mode === 'arm') {
+          o.lineStyle(2, hex(C.ember), 0.5).lineBetween(e.x, e.y, e.x + Math.cos(e.facing) * 180, e.y + Math.sin(e.facing) * 180);
+        }
+      } else if (e.kind === 'boss' && bossId === 'champion' && e.mode === 'arm') {
+        const a = Math.atan2(e.aimY - e.y, e.aimX - e.x);
+        const len = Math.hypot(e.aimX - e.x, e.aimY - e.y) + 140;
+        o.lineStyle(10, 0xff8a3c, 0.12).lineBetween(e.x, e.y, e.x + Math.cos(a) * len, e.y + Math.sin(a) * len);
+        o.lineStyle(2, 0xff8a3c, 0.8).lineBetween(e.x, e.y, e.x + Math.cos(a) * len, e.y + Math.sin(a) * len);
+      }
+    }
+    // Rings of fire: burning arcs with gaps to slip through.
+    for (const h of s.hazards) {
+      if (h.kind !== 'ring') continue;
+      const seg = Math.PI / CHAMPION.ringGaps;
+      const k = Math.min(1, h.ms / 500);
+      for (let i = 0; i < CHAMPION.ringGaps * 2; i++) {
+        const a0 = h.angle + i * seg;
+        if (inRingGap(h, a0 + seg / 2)) continue;
+        o.lineStyle(12, 0xff6a3c, 0.15 * k).beginPath().arc(h.x, h.y, h.r, a0, a0 + seg).strokePath();
+        o.lineStyle(4, 0xffb347, 0.9 * k).beginPath().arc(h.x, h.y, h.r, a0, a0 + seg).strokePath();
+      }
+    }
     for (const b of s.blasts) {
       const t = 1 - b.ms / b.maxMs;
       const r = b.r * (0.35 + 0.65 * Math.min(1, t * 1.6));
@@ -443,8 +632,9 @@ export class GameScene extends Phaser.Scene {
       o.lineStyle(2.5, c, 0.9 * (1 - t)).strokeCircle(b.x, b.y, r);
     }
 
-    // Floating words: unlocks, chests, the boss.
-    s.pops.forEach((pop, i) => {
+    // Floating words: unlocks, chests, the boss (only while fighting, so they never cross a panel).
+    const pops = s.phase === 'run' ? s.pops : [];
+    pops.forEach((pop, i) => {
       let t = this.popTexts[i];
       if (!t) {
         t = this.add.text(0, 0, '', { fontFamily: FONT, fontSize: '15px', fontStyle: 'bold', color: '#ffffff' }).setOrigin(0.5).setDepth(DEPTH.pops);
@@ -454,7 +644,7 @@ export class GameScene extends Phaser.Scene {
       t.setText(pop.text).setColor(pop.color).setVisible(true);
       t.setPosition(p.x, p.y - 44 - i * 20 - (still ? 0 : age * 0.012)).setAlpha(Math.min(1, pop.ms / 400));
     });
-    for (let i = s.pops.length; i < this.popTexts.length; i++) this.popTexts[i].setVisible(false);
+    for (let i = pops.length; i < this.popTexts.length; i++) this.popTexts[i].setVisible(false);
   }
 
   private drawHud(s: GameState) {
@@ -473,11 +663,11 @@ export class GameScene extends Phaser.Scene {
     g.fillStyle(0x0d1426, 0.85).fillRoundedRect(HP_BAR.x - 2, HP_BAR.y - 2, HP_BAR.w + 4, HP_BAR.h + 4, 4);
     g.fillStyle(hpK > 0.35 ? hex(C.hp) : hex(C.danger), 1).fillRoundedRect(HP_BAR.x, HP_BAR.y, Math.max(2, HP_BAR.w * hpK), HP_BAR.h, 3);
     g.lineStyle(1, hex(C.hp), 0.5).strokeRoundedRect(HP_BAR.x - 2, HP_BAR.y - 2, HP_BAR.w + 4, HP_BAR.h + 4, 4);
-    this.texts.hp.setText(`${Math.ceil(p.hp)} / ${p.maxHp}   ·   ${s.kills} droids`);
+    this.texts.hp.setText(`${Math.ceil(p.hp)} / ${p.maxHp}   ·   ${t(PLANETS[s.planet].foes, { n: s.kills })}`);
     // The kit held.
     const lines = Object.entries(s.ranks).map(([id, rank]) => {
       const pips = '●'.repeat(rank) + '○'.repeat(MAX_TIER - rank);
-      return `${pips}  ${UPGRADES[id].name}`;
+      return `${pips}  ${t(UPGRADES[id].name)}`;
     });
     this.texts.kit.setText(lines.join('\n'));
     if (lines.length) {
@@ -486,11 +676,14 @@ export class GameScene extends Phaser.Scene {
     }
     // Clock and level.
     const boss = s.enemies.find((e) => e.kind === 'boss');
-    this.texts.timer.setText(s.bossSpawned ? 'BOSS' : clock(Math.min(s.time, RUN_MS))).setColor(s.bossSpawned ? C.boss : C.text);
-    this.texts.level.setText(`LV ${s.level}`);
+    if (s.arena) this.texts.timer.setText(clock(ARENA_MS - s.time)).setColor(C.elite);
+    else this.texts.timer.setText(s.bossSpawned ? t('bossTimer') : clock(Math.min(s.time, RUN_MS))).setColor(s.bossSpawned ? C.boss : C.text);
+    this.texts.level.setText(t('levelTag', { n: s.level }));
+    this.texts.planet.setText(s.arena ? t('eliteArena') : planetLabel(s.planet)).setColor(s.arena ? C.elite : PLANETS[s.planet].ground.deco);
+    this.texts.credits.setText(t('credits', { n: s.credits }));
     this.texts.boss.setVisible(!!boss);
     if (boss) {
-      this.texts.boss.setText('GRINDER CRAWLER');
+      this.texts.boss.setText(t(BOSSES[PLANETS[s.planet].boss].bar));
       g.fillStyle(0x0d1426, 0.9).fillRect(BOSS_BAR.x, BOSS_BAR.y, BOSS_BAR.w, BOSS_BAR.h);
       g.fillStyle(hex(C.boss), 1).fillRect(BOSS_BAR.x, BOSS_BAR.y, BOSS_BAR.w * Math.max(0, boss.hp / boss.maxHp), BOSS_BAR.h);
       g.lineStyle(1, hex(C.boss), 0.6).strokeRect(BOSS_BAR.x, BOSS_BAR.y, BOSS_BAR.w, BOSS_BAR.h);
@@ -506,8 +699,10 @@ export class GameScene extends Phaser.Scene {
     g.lineStyle(4, 0x2a3550, 1).strokeCircle(x, y, r - 4);
     g.lineStyle(4, accent, ready ? 1 : 0.7).beginPath().arc(x, y, r - 4, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * charge).strokePath();
     if (ready) g.lineStyle(10, accent, 0.18).strokeCircle(x, y, r - 2);
-    this.texts.sig.setText(hero.signature.name).setColor(ready ? C.text : C.muted);
-    this.texts.sigKey.setText(ready ? 'SPACE' : `${Math.ceil(p.sigMs / 1000)} s`);
+    this.texts.sig.setText(t(hero.signature.name)).setColor(ready ? C.text : C.muted);
+    // Longer names (German) shrink to stay inside the ring.
+    this.texts.sig.setScale(Math.min(1, (2 * r - 18) / this.texts.sig.width));
+    this.texts.sigKey.setText(ready ? t('spaceKey') : t('seconds', { n: Math.ceil(p.sigMs / 1000) }));
     // The floating stick under a steering finger: a faint ring and a knob in the hero's accent.
     const st = this.stick;
     if (st) {
