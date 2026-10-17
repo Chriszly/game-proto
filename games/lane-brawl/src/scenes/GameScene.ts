@@ -85,6 +85,8 @@ import { PoseName } from '../art/models';
 import { byDifficulty, settings } from '../../../../shared/settings';
 import { sharpRes, splitHudCamera, viewPoint } from '../../../../shared/scaling';
 import { mountWatch, watching, watchSteps } from '../../../../shared/watch';
+import { playMusic, playSting, ui } from '../../../../shared/audio';
+import { BUSY, SONG, sfx } from '../audio';
 import {
   BOTTOM_BAR,
   END_PANEL,
@@ -300,6 +302,10 @@ export class GameScene extends Phaser.Scene {
   private mastery: Record<string, number> = {};
   /** Whether this match's win was counted toward mastery yet, and the class's wins after it. */
   private winCounted: number | null = null;
+  /** Music: the phase last seen, blue's structures' health last frame, and the time the tense part lasts to. */
+  private musicPhase: Phase = 'pick';
+  private structureHp = new Map<number, number>();
+  private tenseUntil = 0;
 
   constructor() {
     super('Game');
@@ -395,6 +401,7 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.centerOn(BASE.blue.x + 300, BASE.blue.y - 200);
     // Watching the AI skips the pick screen: a random champion plays for blue like the rest.
     if (watching) this.watchMatch();
+    else this.startMusic('pick');
     this.refreshZones();
   }
 
@@ -415,6 +422,8 @@ export class GameScene extends Phaser.Scene {
     }
     if (s) this.updateFog(s);
     if (s) this.collectFx(s, frameMs);
+    if (s) this.playSounds(s);
+    if (s) this.updateMusic(s);
     this.followPlayer(frameMs);
     // The camera moves under a still pointer, so the world point under it is read again each frame.
     if (this.pointerSeen) this.lastWorld = this.worldAt(this.input.activePointer);
@@ -448,12 +457,16 @@ export class GameScene extends Phaser.Scene {
     if (import.meta.env.DEV) console.info(`Lane Brawl champions baked in ${Math.round(ms)} ms`);
     this.shopOpen = false;
     this.liveFx = [];
+    this.structureHp.clear();
+    this.tenseUntil = 0;
+    this.startMusic('lane');
     this.lastWorld = { x: BASE.blue.x + 70, y: BASE.blue.y - 40 };
     this.cameras.main.centerOn(BASE.blue.x + 70, BASE.blue.y - 40);
   }
 
   private resetToPick() {
     this.state = null;
+    this.startMusic('pick');
     this.mastery = loadMastery();
     this.shopOpen = false;
     this.liveFx = [];
@@ -479,6 +492,7 @@ export class GameScene extends Phaser.Scene {
 
   private toggleShop() {
     if (this.phase !== 'playing') return;
+    ui('click');
     this.setShop(!this.shopOpen);
   }
 
@@ -494,28 +508,31 @@ export class GameScene extends Phaser.Scene {
 
   private castAtCursor(key: AbilityKey) {
     const p = this.player();
-    if (this.state && p) cast(this.state, p, key, this.lastWorld);
+    if (this.state && p && !cast(this.state, p, key, this.lastWorld)) ui('refuse');
   }
 
   private activeAtCursor(a: ActiveDef) {
     const p = this.player();
-    if (this.state && p) useActive(this.state, p, a.id, this.lastWorld);
+    if (this.state && p && !useActive(this.state, p, a.id, this.lastWorld)) ui('refuse');
   }
 
   private pickUpgrade(choice: number) {
-    if (this.state && this.phase === 'playing') chooseUpgrade(this.state, choice);
+    if (this.state && this.phase === 'playing' && chooseUpgrade(this.state, choice)) sfx('upgrade');
   }
 
   /** T: the champion channels its way home. */
   private recall() {
     const p = this.player();
-    if (this.state && p) startRecall(this.state, p);
+    if (this.state && p) {
+      if (startRecall(this.state, p)) sfx('recall');
+      else ui('refuse');
+    }
   }
 
   /** X: a dead champion pays to respawn at once. */
   private buyBack() {
     const p = this.player();
-    if (this.state && p) buyBack(this.state, p);
+    if (this.state && p && !buyBack(this.state, p)) ui('refuse');
   }
 
   /** The zones the pointer can press, rebuilt when the screen they belong to changes. */
@@ -527,11 +544,11 @@ export class GameScene extends Phaser.Scene {
     this.zones = [];
     const phase = this.phase;
     if (phase === 'pick') {
-      CHAMPIONS.forEach((def, i) => this.zones.push({ ...pickCard(i), run: () => this.startMatch(def) }));
+      CHAMPIONS.forEach((def, i) => this.zones.push({ ...pickCard(i), run: () => (sfx('pick'), this.startMatch(def)) }));
       return;
     }
     if (phase === 'won' || phase === 'lost') {
-      this.zones.push({ ...PLAY_AGAIN, run: () => (watching ? this.watchMatch() : this.resetToPick()) });
+      this.zones.push({ ...PLAY_AGAIN, run: () => (ui('click'), watching ? this.watchMatch() : this.resetToPick()) });
       return;
     }
     // Watching the AI, nothing on the HUD takes a press.
@@ -546,8 +563,16 @@ export class GameScene extends Phaser.Scene {
     for (let i = 0; i < offer; i++) this.zones.push({ ...upgradeCard(i, offer), run: () => this.pickUpgrade(i) });
     if (this.shopOpen) {
       this.zones.push({ ...SHOP_PANEL, run: noop });
-      ITEMS.forEach((item, i) => this.zones.push({ ...shopRow(i), run: () => this.player() && this.state && buy(this.player()!, item.id) }));
+      ITEMS.forEach((item, i) => this.zones.push({ ...shopRow(i), run: () => this.buyItem(item.id) }));
     }
+  }
+
+  /** Buys an item from the shop: coins when it is bought, the buzz when it can't be. */
+  private buyItem(id: string) {
+    const p = this.player();
+    if (!p || !this.state) return;
+    if (buy(p, id)) ui('coin');
+    else ui('refuse');
   }
 
   /** The world point under a pointer, through the world camera (the HUD camera sits on top). */
@@ -648,6 +673,56 @@ export class GameScene extends Phaser.Scene {
     s.fx.length = 0;
     for (const l of this.liveFx) l.left -= delta;
     this.liveFx = this.liveFx.filter((l) => l.left > 0);
+  }
+
+  /**
+   * Plays the sounds the rules raised since last frame: the player's own always, the rest only
+   * where the camera shows them and blue sees them (watching, the busy combat ones not at all).
+   */
+  private playSounds(s: GameState) {
+    if (!s.sounds.length) return;
+    const v = this.viewRect();
+    const margin = 60;
+    for (const e of s.sounds) {
+      if (watching && BUSY.has(e.id)) continue;
+      if (!e.mine && e.x !== undefined && e.y !== undefined) {
+        if (e.x < v.x - margin || e.x > v.x + v.w + margin || e.y < v.y - margin || e.y > v.y + v.h + margin) continue;
+        if (this.fogged(e.x, e.y)) continue;
+      }
+      // Someone else's blows sound a little softer than the player's own.
+      sfx(e.id, !e.mine && BUSY.has(e.id) ? { volume: 0.55 } : undefined);
+    }
+    s.sounds.length = 0;
+  }
+
+  /** Starts a part of the song, or switches to it at the next bar. */
+  private startMusic(part: 'pick' | 'lane' | 'tense') {
+    this.musicPhase = part === 'pick' ? 'pick' : 'playing';
+    playMusic(SONG, part);
+  }
+
+  /**
+   * The march while the match runs, the tense part while one of blue's structures takes damage
+   * (for 8 s after) or the guardian beast is being fought, and the end sting when a Nexus falls.
+   */
+  private updateMusic(s: GameState) {
+    if (s.phase !== 'playing') {
+      if (this.musicPhase === 'playing') {
+        this.musicPhase = s.phase;
+        playMusic(SONG, 'pick');
+        playSting(SONG, watching ? 'end' : s.phase === 'won' ? 'win' : 'lose');
+      }
+      return;
+    }
+    for (const u of s.units) {
+      if (u.side !== 'blue' || (u.kind !== 'tower' && u.kind !== 'inhibitor' && u.kind !== 'nexus')) continue;
+      const before = this.structureHp.get(u.id);
+      if (before !== undefined && u.hp < before) this.tenseUntil = s.time + 8000;
+      this.structureHp.set(u.id, u.hp);
+    }
+    const beast = getUnit(s, s.beast);
+    const beastFight = !!beast && !beast.dead && beast.lastHitBy !== null;
+    playMusic(SONG, beastFight || s.time < this.tenseUntil ? 'tense' : 'lane');
   }
 
   /**

@@ -229,6 +229,25 @@ export type Fx =
    */
   | { kind: 'skill'; look: string; x: number; y: number; x2: number; y2: number; r: number; a: number; color: string; ms: number };
 
+/** A sound the rules raise for the view to play, by name in the scene's sound table. */
+export type SoundId =
+  | 'swing' | 'shot' | 'crit' | 'towerShot' | 'beastClaw'
+  | 'burst' | 'bolt' | 'dash' | 'ally' | 'buff' | 'zone' | 'impact'
+  | 'lastHit' | 'slain' | 'youDie' | 'streak' | 'crash' | 'nexus' | 'wardBreak'
+  | 'levelUp' | 'flask' | 'blink' | 'ward' | 'recallHome' | 'respawn' | 'buyBack'
+  | 'wave' | 'watchstone' | 'growl' | 'beastSlain' | 'brute' | 'objective' | 'objectiveMissed';
+
+/**
+ * A sound raised by the rules: at a point in the world (the view plays it only where blue sees and
+ * the camera shows), or anywhere when `x` is left out. `mine` marks the player's own deed.
+ */
+export interface SoundEvent {
+  id: SoundId;
+  x?: number;
+  y?: number;
+  mine?: boolean;
+}
+
 /** An objective's title: a text key, with the key of the champion's name to fill in `{name}`. */
 export interface ObjectiveTitle {
   key: TextKey;
@@ -262,6 +281,8 @@ export interface GameState {
   projectiles: Projectile[];
   /** Visuals raised since the view last drained this list. */
   fx: Fx[];
+  /** Sounds raised since the view last drained this list (the view plays the ones it can see). */
+  sounds: SoundEvent[];
   winner: Team | null;
   /** Multiplies the damage red's units deal, to make the match harder or easier. */
   enemyDamage: number;
@@ -477,6 +498,7 @@ export function createGame(pick: ChampionDef, enemyDamage: number, opts: MatchOp
     units: [],
     projectiles: [],
     fx: [],
+    sounds: [],
     winner: null,
     enemyDamage,
     player: 0,
