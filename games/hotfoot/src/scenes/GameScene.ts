@@ -260,7 +260,7 @@ export class GameScene extends Phaser.Scene {
     const missedName = s.missed ? BOONS[s.missed].name : '';
     let line: string;
     let canBuy = false;
-    if (s.pending) line = `The next run starts with ${BOONS[s.pending].name}.`;
+    if (s.pending) line = `The next ordinary run starts with ${BOONS[s.pending].name}.`;
     else if (!s.missed) line = 'Reach a checkpoint to be offered a boon for sale.';
     else if (!forSale(s.missed)) line = `${missedName} is not for sale.`;
     else if (s.bank < BOON_PRICE) line = `${missedName} is for sale for ${BOON_PRICE} coins; you have ${s.bank}.`;
@@ -927,7 +927,7 @@ export class GameScene extends Phaser.Scene {
 
   private drawArmoury() {
     const s = this.state;
-    this.armouryBank.setText(`${s.bank} coins banked. Every run after starts with what you forge here.`);
+    this.armouryBank.setText(`${s.bank} coins banked. Every ordinary run after starts with what you forge here.`);
     for (const row of this.armouryRows) {
       const lv = s.armoury[row.id];
       const max = ARMOURY[row.id].prices.length;

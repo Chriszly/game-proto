@@ -36,7 +36,8 @@ in.
   boons** (Cursed Gold, Glass Greaves, Iron Oath: from the second checkpoint one may take the
   second card, half the time; they trade something away and are never for sale) and the **daily
   course** (a "Daily course" button on the game-over panel starts a run whose course and boons are
-  drawn from a seed of the date, with its own best distance).
+  drawn from a seed of the date, with its own best distance; it starts bare, without the armoury or
+  a bought boon, so everyone runs it alike).
 - Round 2 upgrades: **forked roads** (from the checkpoint before stage 3, once the boon is taken,
   two road cards pick the next ordinary stage's road: the High Road has more coins, an extra goblin
   and bat in the pool, gaps 40 px tighter, no shrine and a streak cap of x7; the Low Road has gaps
@@ -62,7 +63,8 @@ in.
   starts as soon as `GameScene` loads. The hub's shared settings (difficulty, frame cap, FPS readout, reduced motion and full screen) apply; see Hub settings below.
 - Coins are counted during a run and banked when the knight falls. On the game-over panel they buy
   the boon missed at the last checkpoint (the card not taken), for `BOON_PRICE` (30) coins. The next
-  run starts with that boon at one rank, with full hearts. One purchase at a time; Field Dressing
+  ordinary run starts with that boon at one rank, with full hearts (a daily run keeps it waiting).
+  The Squire's Purse's starting coins (`purse`) are never banked: a fall banks `coins - purse`. One purchase at a time; Field Dressing
   and cursed boons are never for sale, and no boon is for sale before the first checkpoint. The
   "Armoury" button opens a panel over the game-over panel where the bank also buys armoury levels.
 - The best distance, the banked coins, a bought boon, the armoury's levels and the last daily
@@ -288,15 +290,15 @@ in.
   short visual timers (`coin`, `hit`, `block`, `dust`, `skid`, `stomp`, and `pop`, `heal`, `refuse`,
   which carry their words in `text`).
 - `ranks` maps `BoonId` to rank taken; `stats(s)` derives every boon effect from it (cursed ones
-  and the pairs' bonuses included), with the armoury's levels and the terrain's rule, so boons have
+  and the pairs' bonuses included), with the armoury's levels (none on a daily run) and the terrain's rule, so boons have
   no other state except `shields` (Aegis and Iron Oath charges, reset from `stats` on each `pick`).
 - `nextId` hands out ids for traps, ledges, shrines, coins and effects; sprite caches key on them.
 - All mutation is in `src/game/` (`sim.ts`, `course.ts`). `GameScene` only calls those functions,
   except `restart`, which replaces `state` with `freshRun(daily)`, and `buy` and `buyArmoury`,
   which call `buyMissed` and `buyArmoury`.
 - Progress across runs: `best` (the best distance in metres), `bank` (coins banked from finished
-  runs, added in `hurt` when the knight falls), `pending` (the boon bought at game over, applied and
-  cleared by the next `newRun`), `crown` and `missed` (the first other boon offered at the last
+  runs, added in `hurt` when the knight falls, less the run's starting `purse`), `pending` (the boon
+  bought at game over, applied and cleared by the next ordinary `newRun`; a daily one carries it on), `crown` and `missed` (the first other boon offered at the last
   checkpoint and not taken, set by `pick`; null before any checkpoint). `buyMissed` takes `BOON_PRICE` from `bank` into
   `pending`, and refuses unless the run is over, `missed` is `forSale` (not filler or cursed),
   nothing is pending and the bank covers the price. `buyArmoury` takes `nextPrice` from `bank` and
