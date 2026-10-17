@@ -6,6 +6,7 @@ import { PLANTS, RECIPES, REFINE, type ItemId } from '../game/items';
 import { potionPrice, researched, type GameState } from '../game/state';
 import { viewSize } from '../../../../shared/scaling';
 import { itemName, t } from '../i18n';
+import { coined } from './coins';
 
 const ROW = 30;
 const WIDTH = 360;
@@ -59,7 +60,7 @@ export class RecipeBook {
     heading(t('cauldron'));
     for (const recipe of RECIPES) {
       const { cy, row: shown } = row(recipe.inputs, recipe.out);
-      const text = scene.add.text(WIDTH / 2 - 20, cy, '', { ...TEXT, fontStyle: 'bold', color: '#7a4a10' }).setOrigin(1, 0.5);
+      const text = coined(scene.add.text(WIDTH / 2 - 20, cy, '', { ...TEXT, fontStyle: 'bold', color: '#7a4a10' }).setOrigin(1, 0.5));
       parts.push(text);
       this.prices.push({ text, potion: recipe.out, row: shown });
     }

@@ -29,11 +29,16 @@ bigger than the screen, so the camera follows the doctor.
 | Control | Action |
 | --- | --- |
 | WASD / arrow keys, or tap | Walk |
+| Touch: put a finger down and drag | A steering stick appears where the finger went down and the doctor walks the way you drag; it follows a finger that goes past its rim. A tap without dragging still walks to the spot |
 | Mouse wheel, + / - keys, or pinch with two fingers | Zoom in and out; the top bar stays the same size and the zoom is remembered |
 | Walk past ripe plants | Harvest every ripe plant within one character height of the doctor; the spinning sickle marks the edge |
 | Recipes (top bar) | Show what each station makes from what, and what each potion sells for; tap again to close |
-| Drop all (top bar) | Throw away everything the doctor carries |
-| Stand on a floor marker | Each is a dashed ring with a faint icon. Green: drop off items. Blue: work the station. Gold: pick up products or coins, a mix of every kind there. Purple: stand still on it to pay coins towards an upgrade or build, each kind with its own icon; its caption shows the coins still to pay |
+| Tap a slot in the hands bar (bottom of the screen) | Throw that item away; a small bin on each full slot shows it |
+| Tap a waiting customer's order bubble | With the doctor inside the shop, hand them everything they want that is on the shelf |
+| Cogwheel (top bar) | Open the settings |
+| Stand on a floor marker | Each is a dashed ring with a faint icon. Green: drop off items. Blue: work the station. Gold: pick up products or coins, a mix of every kind there, with what it gives beside the arrow (a sack at a refining table, an empty bottle at a cauldron, a coin at the till). Purple: stand still on it to pay coins towards an upgrade or build, each kind with its own icon; its caption shows the coins still to pay |
+
+![The floating touch stick under a steering finger](docs/screenshots/touch-stick.webp)
 
 1. **Gardens**: each garden grows one kind of plant in nine beds, three rows of three edge to
    edge. Harvest ripe wheat in the wheat field and mandrake in the mandrake patch. Beds regrow on
@@ -199,6 +204,9 @@ needed while working out in the gardens.
 counter fills a pip. Fill them all and the reward goes straight into the purse and the next day's
 contract comes in at once; at dusk an unkept contract lapses and the next day starts. A day lasts
 four minutes, and the little sun on the right of the card sinks towards the horizon as dusk nears.
+The top bar names the day ("Day 3") and shows its sky from dawn to dusk, a sun crossing it as the
+day passes and the moon at its end; over the last part of the day the world takes on a warm
+evening light that deepens towards dusk, and each new day is named across the screen as it starts.
 The first two days ask for Sleeping Tonics and then Healing Draughts; from day 3 the potion goes
 round every one customers ask for, so learned recipes and the shade gardens pay off every day. On
 days 4, 7, 10 and so on the contract is a bundle of two potions ("Contract: 2 Moonlight Salves + 2
@@ -210,7 +218,7 @@ fifths for the nightshade potions.
 
 **While you were away**: once anything runs without the doctor (a craftsman or pixies hired), the apothecary keeps going while the game is closed. On the next visit the time away, up
 to two hours, is played through the same rules with the doctor off his work spots, and a chip in
-the top right says what it earned: "While you were away: +32 coins, 9 potions". Tap the chip to
+the top right says what it earned: "While you were away: +32, 9 potions", with a gold coin after the 32 (every amount on screen is a number and a gold coin, with no currency name). Tap the chip to
 dismiss it. The coins land where they would have: in the till, or in the purse when a craftsman
 carries them or a contract pays.
 
@@ -336,9 +344,9 @@ until every cauldron has its pixies, and comes back whenever the doctor carries 
 
 ![Both lines with all their pixies](docs/screenshots/expansion-map.webp)
 
-You can carry four items at a time, more with a bigger pack; they stack up on the doctor's back. Progress is saved in the browser automatically.
+You can carry four items at a time, more with a bigger pack; they stack up on the doctor's back and show in the hands bar at the bottom of the screen. Progress is saved in the browser automatically.
 
-"Settings" in the top bar shows the difficulty and frame rate the game runs with, which are set on
+The cogwheel at the right of the top bar shows the difficulty and frame rate the game runs with, which are set on
 the hub page's Settings, and has "New game", which starts over. On Easy customers wait 50% longer
 before they leave, on Hard 30% less.
 

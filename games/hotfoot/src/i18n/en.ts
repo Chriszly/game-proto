@@ -124,6 +124,9 @@ const en = {
   // The controls hint on stage 1
   hintJump: 'Tap up here to jump\n(Space / Up)',
   hintSlide: 'Tap down here to slide\n(Down / S)',
+  // The round buttons in the margin on a touch screen
+  buttonJump: 'Jump',
+  buttonSlide: 'Slide',
 
   // The wayside shrine's banderole
   shrineName: 'Wayside shrine',

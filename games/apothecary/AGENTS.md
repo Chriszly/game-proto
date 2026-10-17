@@ -61,8 +61,12 @@ study, shade gardens and a mirrored second production line.
   `setupGame(game, { howToPlay })` in `src/main.ts`; update both languages when the controls or the
   first round change.
 - `src/i18n.ts` and `src/i18n/`: the game's texts (`shared/i18n.ts`). `i18n/en.ts` is the British
-  English source, `i18n/de.ts` the German (coins are Münzen, "M" after a price) and `i18n/en-US.ts`
-  only the Vigour Tonic, spelled Vigor. `t(key, vars)` shows a text in the hub's language and
+  English source, `i18n/de.ts` the German and `i18n/en-US.ts`
+  only the Vigour Tonic, spelled Vigor. No text names the currency: an amount is the number and
+  `{coin}`, which `t` fills with `COIN` (an em space) and `coined(text)` (`src/ui/coins.ts`) covers
+  with the painted `coin` texture, kept on the text's place, visibility, alpha and container; wrap
+  every text that can show `{coin}` in `coined`. The top bar shows the purse as a coin and the bare
+  number, and the till's pick-up marker is captioned with a coin. `t(key, vars)` shows a text in the hub's language and
   `TextKey` types the keys. An item's name is the text keyed by its id (`itemName(id)`), and
   `potionCount(potion, n)` gives "3 Healing Draughts" from the `<potion>Count` plural forms. Every
   text on screen and every `Feedback` line goes through `t`; the tables in `game/` hold `TextKey`s
@@ -106,7 +110,7 @@ study, shade gardens and a mirrored second production line.
   Panacea (`PANACEA`, `PANACEA_RECIPE`, `BrewOut`: what a brew can be, a potion or the Panacea).
 - `src/game/sim.ts`: the rules, free of Phaser. `tick` advances the world; marker actions
   (`dropAtRefiner`, `pickUpFromCauldron`, `stockShelf`, `collectTill`, `payUpgrade`,
-  `payCraftsman`, `payBelt`, `payExpansion`, `payShade`, `joinGuild`, `dropAll`, `cyclePriority`,
+  `payCraftsman`, `payBelt`, `payExpansion`, `payShade`, `joinGuild`, `dropItem`, `serveOrder`, `cyclePriority`,
   `cycleSign`, `replantGarden`, `clearBlight`, `sellToWagon`, `cycleMarketPick`, `buyHerb`,
   `sellHerb`) and `harvest` each change
   state and return `Feedback` lines, already translated with `t`. Also `refining`, `hasRoom`, `doneByHand` and `isBlighted`.
@@ -135,20 +139,35 @@ study, shade gardens and a mirrored second production line.
   (`ground-walls`, laid above the expansion yard so its edge doesn't cover the right wall), each garden and
   the scattered trees and bushes (`sceneryLayout`). `ui.ts` paints parchment cards on demand
   (`cardTexture(scene, kind, w, h)`: bar, button, contract, town, chip, bubble, sign, small, panel) and
-  `signTexture`, plus the `weather-<kind>` icons, the regular's `regular` star (`sparkle` in
+  `signTexture`, plus the `weather-<kind>` icons, the Settings button's `cog`, the hand slots' `bin`, the day bar's `moon`, the regular's `regular` star (`sparkle` in
   `paint.ts`, also on fine potions' icons), the plague card's `bell` and the `rival-stall`. `pixies.ts` paints the pixie (`PIXIE_FRAMES`, two wing
   beats) and the built routes' fairy-dust trails as one image (`drawFairyPaths`, re-painted when the
   set of built belts changes), and `pointAlong`/`laneOffset` place pixies on them. `stations.ts`
   also paints the study's desk (`study`) and the shop shelf (`shelf`); `TABLE_TOP` and
   `PALLET_DECK` are the light woods of the refining table and the pallets. `markers.ts` paints the
   floor markers (`pad-in`, `pad-out`, `pad-work`, `pad-up`) and one purple marker per
-  `UPGRADE_ICONS` entry (`upgradePad(icon)`, `pad-up-<icon>`).
+  `UPGRADE_ICONS` entry (`upgradePad(icon)`, `pad-up-<icon>`), and the pick-up markers that show what
+  they give beside the arrow (`pickUpPad(what)`, `pad-out-<sack|bottle|coin>`: the refining tables',
+  the cauldrons' and the till's). The counter's front panels each carry the shop's sign, Apothecary's
+  favicon (`shopSign` in `stations.ts`, drawn from the favicon's own shapes).
 - `src/ui/`: `BackStack` (items piled on the doctor), `IconRow` (customer wants), `Pallet` (crate
   stacks, exposes `item` and `count`, `setVisible`), `Shelf` (a shop shelf of one potion, up to six bottles, fine
   ones first; exposes `item` and `count`), `ProgressBar` (redraws only when its fill changes;
   an optional last argument sets its height, 6 by default; `setZone` marks a golden end zone, used for the cauldron's fine window),
-  `RecipeBook` (exposes `lines`, in the game's language), `Settings` (read-only view of the hub's
+  `RecipeBook` (exposes `lines`, in the game's language), `coins` (`coined`: gold coins over the
+  `{coin}` slots of a text), `Settings` (read-only view of the hub's
   settings, the difficulty named by the shared texts, and New game).
+
+- HUD: the top bar holds the purse (coin and number), Recipes (right edge at the bar's middle
+  minus 230, which the test clicks), the day bar (`createDayBar`, at `DAY_BAR` from the middle:
+  "Day 3", a dawn-to-dusk sky, the sun at the share of `DAY_MS` gone, the moon at its end, and a big
+  "Day N" across the screen when `contract.day` changes), the hint, and the Settings cogwheel
+  (`HUD_ICON_BUTTON`). `createWeather` also lays the evening light (`DUSK_FROM`, `DUSK_ALPHA`). The
+  hands bar (`HANDS_BAR`) sits at the bottom middle of the screen: a slot per `MAX_CARRY`, a `bin`
+  on each full one, and a tap on a slot calls `dropItem`. Both bars stop taps from walking.
+- Selling by hand: the doctor on the counter's work spot serves everyone, or a tap on a waiting
+  customer's order bubble calls `serveOrder` for that order, only while the doctor's feet are in the
+  shop (`inShop`), else "Step into the shop to serve".
 
 ### How it runs
 
@@ -179,6 +198,11 @@ study, shade gardens and a mirrored second production line.
   a tap on the Recipes panel closes it. A priority sign tapped while a panel is open only closes
   the panel. The tapped spot comes from
   `cameras.main.getWorldPoint`, since the pointer's own `worldX/Y` may be the UI camera's.
+- Touch stick: a touch on the map (`pointer.wasTouch`, never the mouse) walks to where it landed
+  like a tap and also starts `stick` (screen pixels, from `viewPoint`). Dragged past `STICK.drag`
+  it goes `live`, drops the tap's target and steers: `movePlayer` takes knob minus base after the
+  keys, nothing inside `STICK.dead`; the base is dragged along past `STICK.r`. Lifting the finger
+  or a second finger (`pinching`) ends it. `drawStick` draws it at `UI_DEPTH` on the UI camera.
 - Zoom: two cameras. The main camera follows the doctor and zooms (`MIN_ZOOM` 0.62 to `MAX_ZOOM`
   2, by the mouse wheel, + and - keys, or a two-finger pinch on `pointer1`/`pointer2`, which also
   cancels the walk when the second finger lands on the map, the top bar, a top-bar button or a
@@ -521,9 +545,10 @@ brew's `out` may be `PANACEA`.
 - Add or change a text: its key in `src/i18n/en.ts`, the German in `src/i18n/de.ts` (the build
   fails without it) and, when the US spelling differs, `src/i18n/en-US.ts`; run
   `node scripts/check-translations.mjs`. German runs longer than English: a station's row of
-  purple markers is the tightest spot (their German captions put the price on a second line), then
-  the top bar's buttons and hint and the contract card's title (which shrinks its font to fit), so
-  check a new text with `?lang=de`. Never compare a translated text in game logic; compare ids.
+  purple markers and the outfitter's are the tightest spots (their captions pass a `room` to
+  `fitCaption` in `GameScene.ts`, which sets one a size or two smaller rather than let it run into
+  its neighbour), then the top bar's buttons and hint and the contract card's title (which
+  shrinks its font to fit), so keep German short and check a new text with `?lang=de`. Never compare a translated text in game logic; compare ids.
 
 - Tune a number: edit the table in `src/game/items.ts` or `src/game/state.ts`; if it is a grow
   time, price, tip, carry size or recipe, update the matching expectation in the playthrough.
