@@ -6,19 +6,21 @@ as the root AGENTS.md asks.
 
 ## Current state
 
-Colonizer is a skirmish RTS: one player against one AI on a 128x128 tile map, with three factions
+Colonizer is a skirmish RTS: one player against one AI (or two, in a three-way match) on a 128x128 tile map, with three factions
 (Ember Legion, Tide Coven, Thorn Grove) that differ in their three combat units, one unique
 building each (Forge, Dock, Grove) and an Age III champion. The map is
-generated each match from `Math.random` and is point-symmetric, so both sides start the same. It is
+generated each match from `Math.random` in one of three kinds (Lowlands, Lakes, Highlands) and is
+point-symmetric, so both sides start the same. It is
 drawn as the Bayeux tapestry: wool laid-and-couched work and stem-stitch outlines on linen, painted
 in code on 2D canvases (no image files), with `pixelArt` off.
 
-- Implemented: a menu that picks the faction (the AI plays the next one along), fog of war (unseen,
+- Implemented: a menu that picks the map kind, one or two AI rivals and the faction (the AI plays
+  the next one along, the second AI the one after), fog of war (unseen,
   explored and in sight), click, Shift and box selection, control groups (1 to 9, Ctrl to set),
   right-click commands (attack, gather, build, walk; on a touch screen a tap gives them, `tapOrder`), attack-move (A), stop (S), build placement with
   a green or red ghost, a bottom panel with the selection, buttons for training, research and the
   build list, and a minimap; a top bar with resources, population, a three-pip age track, the match
-  clock, the faction and the chosen boon; and an end screen with Victory or Defeat and a click back
+  clock, the faction, the chosen boon and Age III edge; and an end screen with Victory or Defeat and a click back
   to the menu.
 - Animation: every unit has a few baked frames per pose (see `src/art/figures.ts`), flipped for
   left-facing. Villagers: idle, walk, carry wood, food or ore, chop, reap, mine and build. Soldiers:
@@ -90,8 +92,35 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   damage, Age II) and Stirrups (+20% move speed for cavalry, Age II).
 - Ages: Age II opens the one-time boon pick (`BOONS`: Shieldwall, own melee units take 20% less
   damage; Harvest Rites, farms gather 20% faster). Age III needs the three deeds (`DEEDS`: reach
-  Age II, 14 soldiers alive at once, repel a raid) before it can be researched, and gives every
-  soldier +2 damage (`AGE3_DAMAGE`).
+  Age II, 14 soldiers alive at once, repel a raid) before it can be researched, gives every
+  soldier +2 damage (`AGE3_DAMAGE`) and opens the edge pick (`EDGES`, `chooseEdge`,
+  `Player.edge`/`edgePending`): Masonry (`buildingHp` is `MASONRY_HP` times the def's, and what
+  stands is scaled up on the pick) or Muster (soldiers' queue time runs `MUSTER_SPEED` times as fast,
+  in `updateBuilding`). The top bar shows the edge's icon (`icon-stone`, `icon-drum`) at x 752.
+- Map kinds (`MAP_KINDS`, `generateMap(kind, sides)`): Lowlands is the map as first designed (a
+  seed gives the same map as before kinds); Lakes draws 12 lakes of radius 3 to 6, two of radius 6
+  either side of the middle and a pond by each start; Highlands draws two ridges along x + y =
+  `HIGH_RIDGE` (88) and its mirror, broken by `HIGH_PASSES`, whose surroundings are reserved from
+  other terrain and nodes. `generateMap` redraws (up to 30 times) a map on which `connected` finds a
+  Town Center corner, camp or trading post cut off by water or rock.
+- Three-way matches: `createGame(sides, map, toLast)` takes a `SideSetup` per side; a third one
+  becomes `AI2` (index 3, after `NEUTRAL`), starting at `THIRD_START` (top right). With `sides` 3
+  the map keeps that corner and its mirror (`FOURTH_CORNER`, left free) clear, gives both the start
+  trees, bushes and mine flipped left to right, and adds `THIRD_CAMPS` (two caches and their
+  mirrors). `MapData.starts` lists the Town Center corners in side order (`SIDES`). Every side is
+  everyone's enemy. A side whose Town Center falls is `out` (`checkWinner`): if the match goes on,
+  its units and buildings fall and its relics are freed; it ends with one side left, or when the
+  player is out unless `toLast` (watch mode). `rivalsOf(s, owner)` lists the sides still in;
+  `threeWay(s)` says whether there is a second AI. Only raids on the player are tracked as
+  `GameState.raid` in a three-way match; the AIs' raid deeds come from `updateAssault`, which
+  watches every AI's base for soldiers of any other side.
+- Temperaments (`TEMPERAMENTS`, `Player.temperament`): each AI side draws Raider, Builder or Warden
+  in `GameScene.create` (the player's side too when watching). A temperament sets the planner's
+  build plan (`plan`, with `unique` for the faction's building), research order, soldier order
+  (`roles`), Watchtowers kept (`towers`), palisade (`wall`: from which age, stakes each side of the
+  gate), raid gate (`firstRaid`, `rest`, `army`, `party`) and its boon and edge. The player learns
+  it once their sight touches that side's Town Center (`Player.scouted`, set in `updateSight`); the
+  status card's Rivals row shows `?` until then.
 - Raids: when the AI attack-moves its army at the player, the sim records a `Raid` (who, which
   units, where they are, how many are routed). The scene shows a horn toast naming it with an arrow
   towards it for 10 s, the minimap pulses rings where it is, and the deeds card counts the routed.
@@ -103,26 +132,28 @@ in code on 2D canvases (no image files), with `pixelArt` off.
 - Feedback: hits throw ochre sparks, arrows fly from ranged attackers and towers, damage numbers
   rise, and every load the player drops off pops a "+N" badge with the resource's icon.
 - The AI is a rule-based planner (`src/game/planner.ts`), not a full build-order search: it keeps
-  villagers coming, builds houses before the cap, a farm, camps, barracks, range, stable, academy
-  and watchtower, researches in a fixed order (Age III last, once its deeds are done), trains an
-  army, raids (below) and picks Shieldwall at Age II. It also
-  builds its faction's building after its camps (a Dock on the nearest shore), sets each production
-  building's rally flag in front of its base, lays a nine-stake diagonal palisade with a gate in the
-  middle across its front in Age II (`buildWall`), sends an army of 8 or more to take the nearest
-  relic it doesn't hold between raids, builds a Monument in Age III, and attacks a standing player
-  Monument with everything at once.
-- AI raids (`raidGoal`, `pressRaid` in the planner, `GameState.aiRaid` per side): none before
-  `FIRST_RAID_MS` (10 min), and `RAID_REST_MS` (3 min) after one ends before the next; it needs 14
-  soldiers (`ARMY_TO_ATTACK`), half of them idle or walking. Each raid has a `RaidGoal`: the first the
+  villagers coming, builds houses before the cap, then its temperament's build plan, researches in
+  its order (Age III last, once its deeds are done), trains an army in its order, raids (below) and
+  picks its boon and edge. It also builds its faction's building (a Dock on the nearest shore), sets
+  each production building's rally flag in front of its base, lays a diagonal palisade with a gate
+  in the middle across its front (`buildWall`, the temperament's `wall`), sends an army of 8 or more
+  to take the nearest relic it doesn't hold between raids, builds a Monument in Age III, and attacks
+  a standing rival Monument with everything at once. Its foe for each think is `foeFor`: the raid
+  under way's (`AiRaid.foe`), else a rival with a Monument, else the rivals by turns (`count`).
+- AI raids (`raidGoal`, `pressRaid` in the planner, `GameState.aiRaid` per side): none before its
+  temperament's `firstRaid`, and its `rest` after one ends before the next; it needs `army`
+  soldiers, half of them idle or walking. Each raid has a `RaidGoal`: the first the
   enemy's outlying economy (a `RAID_ECONOMY` building at least `RAID_CLEAR` tiles from its Town
   Center, else any outlying building), the second a relic it holds (each falling back on the other),
   from `RAID_TOWN_FROM` (the third) or in Age III its Town Center; a Monument always comes first.
-  Economy and relic raids send the `RAID_PARTY` (10) soldiers nearest the goal; a Town Center raid
+  Economy and relic raids send the temperament's `party` of soldiers nearest the goal; a Town Center raid
   sends everyone. Idle raiders are sent at the goal again; the party walks home when the goal is
   done, when half of it has fallen (`endRaid(s, by, true)`: repelled, the deed is done) or after
   `RAID_MAX_MS` for a non-town raid (`endRaid(s, by, false)`: withdrawn).
 - Watch AI (`?watch`, `shared/watch.ts`): Boot skips the menu and starts `Game` with two random
-  different factions; the planner plays both sides (`think(state, dt, PLAYER)` as well), both gather
+  different factions on a random map kind, half the time with the third faction as a second AI; the
+  planner plays every side (`GameScene.aiSides`, `think(state, dt, PLAYER)` as well), the sides are
+  named with their temperaments, every side gathers
   at the Normal rate, the whole map stays in sight (`sight.fill(2)` each frame), the sim runs
   `watchSteps()` times a frame, the panel shows no buttons, right clicks and hotkeys do nothing, and
   the end screen names the winning faction and starts another match on a click. The planner reports
@@ -142,20 +173,22 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   trainer, `age`, `limit`, `gift`), `unitFor(faction, role)`, `isCivil`/`isSoldier`/`earnsRanks`,
   `BUILDINGS`, `BUILD_ORDER`, `TECHS` (with `advance: 2 | 3` on
   the age techs), `GATHER_MS`, `CARRY`, `START`, `START_VILLAGERS`, `DEEDS`, `ARMY_DEED`,
-  `AGE3_DAMAGE`, `BOONS`, `SHIELDWALL_TAKEN`, `HARVEST_RITES`, `BUILD_MORE`, `UNIQUE`,
+  `AGE3_DAMAGE`, `BOONS`, `SHIELDWALL_TAKEN`, `HARVEST_RITES`, `EDGES`, `MASONRY_HP`, `MUSTER_SPEED`,
+  `MAP_KINDS`, `TEMPERAMENTS`, `BUILD_MORE`, `UNIQUE`,
   `UNIQUE_TEXT`, the Forge, Dock and Grove numbers, `UNIT_GAP`, `RELICS` and their bonuses,
   `CLAIM_RANGE`, `LEASH`, the bell (`BELL_RANGE`, `GARRISON_ARROW`), the ranks (`RANK_KILLS`,
   `RANK_HP`, `RANK_DMG`, `RANK_NAMES`), the Market (`MARKET_*`, `TRADE_ORE`), the champions
-  (`AURA_*`, `HEAL_*`), `MONUMENT_MS`, the raid pacing (`FIRST_RAID_MS`, `RAID_REST_MS`,
-  `RAID_PARTY`, `RAID_TOWN_FROM`, `RAID_MAX_MS`, `ASSAULT_MIN`, `ASSAULT_CLEAR`), `TILE` (32) and `MAP_SIZE` (128).
-- `src/game/map.ts`: `generateMap()` draws lakes, rock ridges, forests, bushes and mines, mirrors
-  each one, adds each side's starting trees, bushes and mine, then clears the camps' and the two
+  (`AURA_*`, `HEAL_*`), `MONUMENT_MS`, the raid pacing (`RAID_TOWN_FROM`, `RAID_MAX_MS`,
+  `ASSAULT_MIN`, `ASSAULT_CLEAR`; the rest is per temperament), `TILE` (32) and `MAP_SIZE` (128).
+- `src/game/map.ts`: `generateMap(kind, sides)` draws lakes, rock ridges (and Highlands' long
+  ridges), forests, bushes and mines, mirrors each one, adds each side's starting trees, bushes and mine, then clears the camps' and the two
   trading posts' patches (`POST_PLAN` and its mirror, `MapData.posts`). Terrain is `Uint8Array` of
   `GRASS`, `WATER`, `ROCK` and `DIRT`; `Node`s are the resources. `START_TILES` are the two Town
-  Center corners.
+  Center corners of a two-side match, `THIRD_START` the second AI's.
 - `src/game/sim.ts`: the rules, free of Phaser. `createGame` builds the state, `tick` advances it,
   `issue` gives unit orders, `placeBuilding`, `canPlace`, `train` and `research` queue things,
-  `chooseBoon` takes the Age II boon, `startRaid` records a raid, `notAllowed` says why a building
+  `chooseBoon` takes the Age II boon, `chooseEdge` the Age III edge, `buildingHp` reads a building's
+  full health, `startRaid` records a raid, `notAllowed` says why a building
   can't be placed at all, `unitCost` applies the Forge, `placeWall`/`wallLine` lay a palisade,
   `ringBell`/`releaseBell` run the garrison, `trade`/`marketPrice` the Market, `maxHp`, `unitCount`,
   `garrisoned`, `shelters`, `inAura` and `postAt` read things,
@@ -194,12 +227,16 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   `icon-<kind>`, `icon-banner-<faction>`, `topbar`, `panel`, `btn-on|off|hot`, `card-*`, `backdrop`,
   `rally-flag`, `camp-cache-<res>`, `camp-relic-<relic>-<faction|none>` (`relicKey`) and
   `fig-wild-brigand`/`fig-wild-poacher`.
-- `src/scenes/MenuScene.ts`: the three faction cards, each with its three soldiers and its own building. Clicking one
-  starts `Game` with that faction and the AI's.
+- `src/scenes/MenuScene.ts`: the three faction cards, each with its three soldiers and its own
+  building, and two rows of toggles (`MENU_OPTS`: map kind, one or two AIs, kept in the module's
+  `options` for the session). Clicking a card starts `Game` with that faction, the AI's, the second
+  AI's (or null) and the map kind.
 - `src/scenes/GameScene.ts`: the match: state, ground chunks, sprites and their animation frames,
   fog and needle, rings and health threads, input, the panel (selection, buttons, boon cards).
-- `src/scenes/hud.ts`: `TopBar`, `DeedCard`, `StatusCard` (relics held and the Monument count),
-  `Toast` and `Minimap` (camps, neutral units and every Monument), plus `stitchLine` and
+- `src/scenes/hud.ts`: `TopBar`, `DeedCard`, `StatusCard` (relics held, the Rivals row with each
+  rival's banner and temperament or `?`, and the Monument count),
+  `Toast` and `Minimap` (camps, neutral units and every Monument, each side in its colour, and a `?`
+  over every rival corner not yet seen), plus `stitchLine` and
   `stitchEllipse` for thread-like Graphics.
 - `src/scenes/fx.ts`: `Effects`: sparks, arrows in flight, damage numbers and drop-off badges.
 
@@ -210,23 +247,26 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   and `Unit.rank` are the veteran ranks, `Unit.pulse` a champion's heal timer. Orders also include
   `garrison` (a villager running to a shelter) and `trade` (a cart heading for a post).
 - `Player.age` is 1, 2 or 3; `Player.deeds` is `{ age2, army, raid }` (`army` is the most soldiers
-  alive at once); `Player.boon` and `Player.boonPending`; `Player.bell` (the bell is ringing) and
+  alive at once); `Player.boon` and `Player.boonPending`, `Player.edge` and `Player.edgePending`,
+  `Player.temperament`, `Player.scouted` and `Player.out`; `Player.bell` (the bell is ringing) and
   `Player.rates` (the Market's wood and food rates).
-- `GameState.raid` (`Raid | null`), `raids` and `repelled` counters, `assault` (the ids of the
-  player's soldiers attacking the AI's base, or null), and `events`: `hit`, `drop` and
+- `GameState.raid` (`Raid | null`), `raids` and `repelled` counters, `assault` (per AI side, by
+  index: the ids of other sides' soldiers attacking its base, or null), `toLast`, and `events`: `hit`, `drop` and
   `grow` events the sim pushes and the scene drains each frame (capped at 400 when nobody drains them).
 - `GameState.players` has a third entry, `NEUTRAL` (the camp guards); its `faction` is only a
   placeholder. Code that loops over players skips it where it matters (`updateDeeds`, `checkWinner`).
-- `GameState.aiRaid[side]`: `next` (earliest time of the next raid), `count`, `goal`, `party` and
-  `started`; the planner's memory, which changes no rule.
+  A three-way match has a fourth, `AI2`; per-side arrays (`aiClock`, `aiRaid`, `assault`) have one
+  entry per player, the guards' unused.
+- `GameState.aiRaid[side]`: `next` (earliest time of the next raid), `foe`, `count`, `goal`, `party`
+  and `started`; the planner's memory, which changes no rule.
 - `Building.rally`, `doneAt`, `workMs` (the Dock's and Grove's timer) and `garrison` (the
   sheltering villagers, as whole `Unit`s taken out of `units`); `Unit.post` (a guard's post);
   `GameState.gates`, `camps`, `posts` and `winBy`.
 
 ### How it runs
 
-- `GameScene.update(time, delta)`: clamps `delta` to 250 ms, runs `tick` and `think` (unless there
-  is a winner), scrolls the camera, paints ground chunks coming into view (four a frame at most),
+- `GameScene.update(time, delta)`: clamps `delta` to 250 ms, runs `tick` and `think` for each of
+  `aiSides` (unless there is a winner), scrolls the camera, paints ground chunks coming into view (four a frame at most),
   syncs sprites (picking each unit's frame in `frameOf`), turns sim events into effects, redraws the
   fog when sight changed, then the rings, top bar, deeds card, minimap, toast and panel.
 - The ground is 512 px chunks painted on first sight into textures `ground-<cx>-<cy>`, removed when
@@ -254,8 +294,9 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   the build list (`buildMenu`, `buildPage`) whenever the selection changes (`panelSelection`) or no
   villager is left in it, so clicking another unit or building shows its own buttons.
 - The panel is rebuilt when `panelSignature` changes (it also watches the bell, the Market rates
-  and the champion count). While `boonPending`, the two boon cards take
-  the buttons' place, with `hud` labels `Shieldwall` and `Harvest Rites`. The Town Center's buttons
+  and the champion count). While `boonPending` (or `edgePending`), `renderPick` puts the two boon
+  (or edge) cards in the buttons' place, with `hud` labels `Shieldwall` and `Harvest Rites` (or
+  `Masonry` and `Muster`). The Town Center's buttons
   are the Villager, the champion, `Ring the bell` or `Back to work`, and the age; a Market's are the
   Trade Cart and `Buy 100 wood 70o`-style buy and sell buttons with the live price; selected carts
   get `Trade`. A unit whose age is too low shows as `Ram (Age II)`, a champion at its limit as
@@ -288,7 +329,10 @@ in code on 2D canvases (no image files), with `pixelArt` off.
   counts a player's villagers (the planner's `TARGET_VILLAGERS`) adds `garrisoned(s, owner)`.
 - A ram's `strike` on a unit does nothing, so never give one a unit as an attack target: `issue`
   and `nearestEnemy('structures')` keep them on buildings.
-- The AI's gather rate is the only difficulty number: `byDifficulty(0.75, 1, 1.25)` in `GameScene`.
+- The AI's gather rate is the only difficulty number: `byDifficulty(0.75, 1, 1.25)` in `GameScene`,
+  for both AIs in a three-way match.
+- `GameScene` draws the temperaments after `generateMap`, so a seed gives the same map as before
+  temperaments; the playthrough's first round ends long before any temperament's first raid.
 - `canPlace(s, type, tx, ty, owner)` also refuses gate tiles, and a Dock away from water
   (`nearWater`); a gate may go on the owner's own stake.
 - A grown tree never goes next to a building, so it can't box one in; its id comes from `nextId`.
@@ -307,6 +351,7 @@ None: there is no save. Settings come from the hub (`shared/settings.ts`).
   or boon cards, in game-space screen coordinates with `label`, `x`, `y`, `w`, `h`), `popLog` (the
   player's drop-off badges, such as `+10 wood`), `toastLog` (raid toasts shown), `toast.shown`,
   `placing`, `attackMode`, `buildMenu`, `buildPage`, `status.shown` (the Monument line),
+  `status.temperaments` (each rival's temperament as the card shows it, `?` until scouted),
   `cameras.main.worldView.x/y` (not `scrollX/Y`, which differ once `renderScale` zooms the
   camera), and `toScreen(tx, ty)`. `e2e/screens.spec.ts` at the root opens the game on five screens. `state.camps` lists the camps with `holder`, `state.posts` the trading posts,
   and each building's `garrison` the villagers inside it.
@@ -343,7 +388,13 @@ None: there is no save. Settings come from the hub (`shared/settings.ts`).
 - Add a deed: add it to `DEEDS` and `Player.deeds`, keep it in `updateDeeds` and `deedCount`, and
   give it a row in `DeedCard.update`.
 - Add a boon: add it to `BOONS`, apply it in the sim, and the panel shows a third card (widen
-  `BOON` in layout.ts to fit).
+  `BOON` in layout.ts to fit). An Age III edge goes the same way in `EDGES`, with its icon in
+  `renderPick` and `TopBar.update`.
+- Add a temperament: add it to `TEMPERAMENTS`; the planner reads every field from it, the scene
+  draws it and the status card names it.
+- Add a map kind: add it to `MAP_KINDS` and give it its terrain in `drawMap` (map.ts); the menu
+  shows a toggle for it (re-space `MENU_OPTS` for a fourth). Keep Lowlands' `Math.random` calls as
+  they are, so the playthrough's seeded map stays the same.
 - Add a faction: add it to `FACTIONS` and `FACTION_IDS`, its colours to `WOOL`, its three units to
   `UNITS` (one each for melee, ranged and cavalry), its own building to `BUILDINGS` (with `faction`),
   `UNIQUE` and `UNIQUE_TEXT`, and the menu shows a card for it (re-space the cards for four).

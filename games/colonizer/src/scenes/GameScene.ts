@@ -6,14 +6,18 @@ import {
   BUILD_MORE,
   BUILD_ORDER,
   BUILDINGS,
+  EDGES,
   FACTION_IDS,
   FACTIONS,
+  MAP_KIND_IDS,
   HEAL_RANGE,
   MAP_SIZE,
   MARKET_LOT,
   RANK_NAMES,
   RELICS,
   TECHS,
+  TEMPERAMENT_IDS,
+  TEMPERAMENTS,
   TILE,
   UNIQUE,
   UNIQUE_TEXT,
@@ -22,19 +26,24 @@ import {
   unitFor,
   type BoonId,
   type BuildingId,
+  type EdgeId,
   type FactionId,
+  type MapKind,
   type Resource,
 } from '../game/data';
 import { generateMap, idx } from '../game/map';
 import {
   AI,
+  AI2,
   NEUTRAL,
   PLAYER,
   affordable,
   campAt,
   campSpots,
   canPlace,
+  buildingHp,
   chooseBoon,
+  chooseEdge,
   createGame,
   deedsDone,
   entityAt,
@@ -125,6 +134,11 @@ export class GameScene extends Phaser.Scene {
 
   private faction!: FactionId;
   private aiFaction!: FactionId;
+  /** The second AI's faction in a three-way match, or null. */
+  private rival2: FactionId | null = null;
+  private kind: MapKind = 'lowlands';
+  /** The sides the planner plays: the AI, the second AI, and the player's side when watching. */
+  private aiSides: number[] = [];
   private unitSprites = new Map<number, Phaser.GameObjects.Image>();
   private buildingSprites = new Map<number, Phaser.GameObjects.Image>();
   private nodeSprites = new Map<number, Phaser.GameObjects.Image>();
@@ -168,15 +182,22 @@ export class GameScene extends Phaser.Scene {
     super('Game');
   }
 
-  init(data: { faction?: FactionId; aiFaction?: FactionId }) {
+  init(data: { faction?: FactionId; aiFaction?: FactionId; rival2?: FactionId | null; kind?: MapKind }) {
     this.faction = data.faction ?? 'ember';
     this.aiFaction = data.aiFaction ?? 'tide';
+    this.rival2 = data.rival2 ?? null;
+    this.kind = data.kind ?? 'lowlands';
     if (watching) {
-      // Watch mode skips the menu: two different factions, picked at random, both played by the AI.
+      // Watch mode skips the menu: two different factions, picked at random, both played by the AI,
+      // on a map kind picked at random, and every other match a three-way one with the third faction.
       const i = Math.floor(Math.random() * FACTION_IDS.length);
+      const step = 1 + Math.floor(Math.random() * (FACTION_IDS.length - 1));
       this.faction = FACTION_IDS[i];
-      this.aiFaction = FACTION_IDS[(i + 1 + Math.floor(Math.random() * (FACTION_IDS.length - 1))) % FACTION_IDS.length];
+      this.aiFaction = FACTION_IDS[(i + step) % FACTION_IDS.length];
+      this.kind = MAP_KIND_IDS[Math.floor(Math.random() * MAP_KIND_IDS.length)];
+      this.rival2 = Math.random() < 0.5 ? FACTION_IDS.find((f) => f !== this.faction && f !== this.aiFaction)! : null;
     }
+    this.aiSides = [AI, ...(this.rival2 ? [AI2] : []), ...(watching ? [PLAYER] : [])];
     this.selected = new Set();
     this.groups = new Map();
     this.placing = null;
@@ -205,13 +226,23 @@ export class GameScene extends Phaser.Scene {
   }
 
   create() {
-    const map = generateMap();
+    const map = generateMap(this.kind, this.rival2 ? 3 : 2);
     this.terrain = map.terrain;
-    // The difficulty sets how fast the AI gathers; Normal is the game as designed. Watching, both
-    // sides gather alike.
-    this.state = createGame(this.faction, this.aiFaction, watching ? 1 : byDifficulty(0.75, 1, 1.25), map);
-    const side = (f: FactionId) => ({ name: FACTIONS[f].name, color: WOOL[f].cloth });
-    mountWatch({ sides: { [PLAYER]: side(this.faction), [AI]: side(this.aiFaction) }, time: () => this.state.time });
+    // The difficulty sets how fast the AIs gather; Normal is the game as designed. Watching, every
+    // side gathers alike. Each AI side draws its temperament for the match.
+    const mul = watching ? 1 : byDifficulty(0.75, 1, 1.25);
+    const temper = () => TEMPERAMENT_IDS[Math.floor(Math.random() * TEMPERAMENT_IDS.length)];
+    const sides = [
+      { faction: this.faction, gatherMul: 1, temperament: watching ? temper() : null },
+      { faction: this.aiFaction, gatherMul: mul, temperament: temper() },
+      ...(this.rival2 ? [{ faction: this.rival2, gatherMul: mul, temperament: temper() }] : []),
+    ];
+    this.state = createGame(sides, map, watching);
+    const side = (k: number) => {
+      const p = this.state.players[k];
+      return { name: `${FACTIONS[p.faction].name} (${TEMPERAMENTS[p.temperament ?? 'builder'].name})`, color: WOOL[p.faction].cloth };
+    };
+    mountWatch({ sides: Object.fromEntries([PLAYER, ...this.aiSides.filter((k) => k !== PLAYER)].map((k) => [k, side(k)])), time: () => this.state.time });
     const town = [...this.state.buildings.values()].find((b) => b.owner === PLAYER && b.type === 'town')!;
     const world = MAP_SIZE * TILE;
     // The world camera scrolls; the top bar, panel and cards (scroll factor 0) get a fixed camera.
@@ -259,8 +290,7 @@ export class GameScene extends Phaser.Scene {
     // sides and the whole map is in sight.
     for (let i = watchSteps(); i > 0 && this.state.winner === null; i--) {
       tick(this.state, dt);
-      think(this.state, dt);
-      if (watching) think(this.state, dt, PLAYER);
+      for (const side of this.aiSides) think(this.state, dt, side);
     }
     if (watching) this.state.sight.fill(2);
     this.scroll(dt);
@@ -542,7 +572,7 @@ export class GameScene extends Phaser.Scene {
       const def = BUILDINGS[b.type];
       if (b.owner !== PLAYER && !visible(s, b.tx, b.ty)) continue;
       if (!b.built) this.thread(g, b.tx * TILE + 4, b.ty * TILE - BUILDING_TOP + 2, def.w * TILE - 8, 1 - b.buildLeft / Math.max(1, def.time), T.indigo);
-      else if (b.hp < def.hp) this.thread(g, b.tx * TILE + 4, b.ty * TILE - BUILDING_TOP + 2, def.w * TILE - 8, b.hp / def.hp, b.owner === PLAYER ? T.green : T.red);
+      else if (b.hp < buildingHp(s, b)) this.thread(g, b.tx * TILE + 4, b.ty * TILE - BUILDING_TOP + 2, def.w * TILE - 8, b.hp / buildingHp(s, b), b.owner === PLAYER ? T.green : T.red);
       // A sheltering garrison: a knot of ochre per villager inside, along the top of the walls.
       for (let k = 0; k < b.garrison.length; k++) {
         g.fillStyle(ochre, 1).fillCircle(b.tx * TILE + 8 + (k % 6) * 7, b.ty * TILE - BUILDING_TOP + 10 + Math.floor(k / 6) * 7, 2.4);
@@ -887,9 +917,9 @@ export class GameScene extends Phaser.Scene {
     this.add.image(0, PANEL_Y, 'panel').setOrigin(0, 0).setScrollFactor(0).setDepth(9990);
     this.top = new TopBar(this, this.faction);
     this.deeds = new DeedCard(this);
-    this.status = new StatusCard(this, WOOL[this.aiFaction].cloth);
+    this.status = new StatusCard(this, this.state);
     this.toast = new Toast(this);
-    this.mini = new Minimap(this, this.terrain, this.aiFaction, this.faction);
+    this.mini = new Minimap(this, this.terrain, this.state);
     const fix = <O extends Phaser.GameObjects.Image | Phaser.GameObjects.Text | Phaser.GameObjects.Graphics>(o: O, d = 10000) => o.setScrollFactor(0).setDepth(d) as O;
     this.selTitle = fix(this.add.text(SEL.x + 2, SEL.y + 8, '', text(13, T.ink, true)).setOrigin(0, 0.5));
     this.selInfo = fix(this.add.text(SEL.x + 2, SEL.y + 22, '', { ...text(11), lineSpacing: 2, wordWrap: { width: SEL.w - 6 } }));
@@ -977,7 +1007,7 @@ export class GameScene extends Phaser.Scene {
       const src = this.textures.get(key).getSourceImage();
       const k = Math.min(70 / src.width, 70 / src.height);
       this.selBig.setTexture(key).setOrigin(0, 0).setScale(k).setPosition(SEL.x, SEL.y + 22).setVisible(true);
-      const lines = [b.built ? `Health ${Math.ceil(b.hp)} of ${def.hp}` : `Building, ${Math.floor((1 - b.buildLeft / def.time) * 100)}% done`];
+      const lines = [b.built ? `Health ${Math.ceil(b.hp)} of ${buildingHp(this.state, b)}` : `Building, ${Math.floor((1 - b.buildLeft / def.time) * 100)}% done`];
       const head = b.queue[0];
       if (head) {
         const name = head.kind === 'unit' ? UNITS[head.key].name : TECHS[head.key].name;
@@ -1020,7 +1050,8 @@ export class GameScene extends Phaser.Scene {
     this.hud = [];
     // Watching, the AI picks the boon and gives every order, so the panel shows no buttons.
     if (watching) return;
-    if (this.state.players[PLAYER].boonPending) return this.renderBoon();
+    const me = this.state.players[PLAYER];
+    if (me.boonPending || me.edgePending) return this.renderPick();
     this.actions()
       .slice(0, BUTTONS.cols * BUTTONS.rows)
       .forEach((a, i) => {
@@ -1041,27 +1072,31 @@ export class GameScene extends Phaser.Scene {
       });
   }
 
-  /** The Age II boon: two cards in place of the buttons until one is picked. */
-  private renderBoon() {
-    const title = this.add.text(BOON.x + 2, BOON.y - 10, 'AGE II BOON · PICK ONE', text(11, T.red, true)).setOrigin(0, 0.5).setScrollFactor(0).setDepth(10002);
+  /** The Age II boon, or the Age III edge: two cards in place of the buttons until one is picked. */
+  private renderPick() {
+    const age3 = !this.state.players[PLAYER].boonPending;
+    const title = this.add.text(BOON.x + 2, BOON.y - 10, age3 ? 'AGE III EDGE · PICK ONE' : 'AGE II BOON · PICK ONE', text(11, T.red, true)).setOrigin(0, 0.5).setScrollFactor(0).setDepth(10002);
     this.buttonObjects.push(title);
-    (Object.keys(BOONS) as BoonId[]).forEach((id, i) => {
-      const boon = BOONS[id];
+    const picks = age3 ? (Object.keys(EDGES) as EdgeId[]) : (Object.keys(BOONS) as BoonId[]);
+    const icons: Record<BoonId | EdgeId, string> = { shieldwall: 'icon-shield', harvest: 'icon-wheat', masonry: 'icon-stone', muster: 'icon-drum' };
+    picks.forEach((id, i) => {
+      const pick = age3 ? EDGES[id as EdgeId] : BOONS[id as BoonId];
       const x = BOON.x + i * BOON.dx;
       const y = BOON.y;
       const bg = this.add.image(x - 2, y - 2, 'card-boon').setOrigin(0, 0).setScrollFactor(0).setDepth(10001).setInteractive({ useHandCursor: true });
-      const icon = this.add.image(x + 18, y + 20, id === 'shieldwall' ? 'icon-shield' : 'icon-wheat').setScrollFactor(0).setDepth(10002);
-      const name = this.add.text(x + 34, y + 18, boon.name.toUpperCase(), text(12, T.red, true)).setOrigin(0, 0.5).setScrollFactor(0).setDepth(10002);
-      const body = id === 'shieldwall' ? `Your ${unitFor(this.faction, 'melee').name} take 20% less damage` : boon.text;
+      const icon = this.add.image(x + 18, y + 20, icons[id]).setScrollFactor(0).setDepth(10002);
+      const name = this.add.text(x + 34, y + 18, pick.name.toUpperCase(), text(12, T.red, true)).setOrigin(0, 0.5).setScrollFactor(0).setDepth(10002);
+      const body = id === 'shieldwall' ? `Your ${unitFor(this.faction, 'melee').name} take 20% less damage` : pick.text;
       const words = this.add.text(x + 12, y + 36, body, { ...text(11), wordWrap: { width: BOON.w - 24 } }).setScrollFactor(0).setDepth(10002);
       const choose = this.add.text(x + BOON.w / 2, y + BOON.h - 9, 'CHOOSE', text(9.5, T.green, true)).setOrigin(0.5).setScrollFactor(0).setDepth(10002);
       bg.on('pointerover', () => bg.setTexture('card-boon-hot').setPosition(x - 5, y - 5));
       bg.on('pointerout', () => bg.setTexture('card-boon').setPosition(x - 2, y - 2));
       bg.on('pointerdown', () => {
-        if (chooseBoon(this.state, PLAYER, id)) say(this.state, `${boon.name} chosen`);
+        const done = age3 ? chooseEdge(this.state, PLAYER, id as EdgeId) : chooseBoon(this.state, PLAYER, id as BoonId);
+        if (done) say(this.state, `${pick.name} chosen`);
       });
       this.buttonObjects.push(bg, icon, name, words, choose);
-      this.hud.push({ label: boon.name, x, y, w: BOON.w, h: BOON.h });
+      this.hud.push({ label: pick.name, x, y, w: BOON.w, h: BOON.h });
     });
   }
 
@@ -1072,7 +1107,7 @@ export class GameScene extends Phaser.Scene {
     const own = [...this.state.buildings.values()].filter((x) => x.owner === PLAYER).length;
     const rates = `${p.rates.wood.toFixed(2)}/${p.rates.food.toFixed(2)}`;
     const champion = unitCount(this.state, PLAYER, unitFor(this.faction, 'champion').id);
-    return [...this.selected].join(',') + `|${this.buildMenu}|${this.buildPage}|${this.placing}|${this.attackMode}|${q}|${p.techs.join(',')}|${p.age}|${p.boonPending}|${deedsDone(p)}|${this.resourceKey()}|${own}|${hasBuilt(this.state, PLAYER, 'forge')}|${p.bell}|${rates}|${champion}`;
+    return [...this.selected].join(',') + `|${this.buildMenu}|${this.buildPage}|${this.placing}|${this.attackMode}|${q}|${p.techs.join(',')}|${p.age}|${p.boonPending}|${p.edgePending}|${deedsDone(p)}|${this.resourceKey()}|${own}|${hasBuilt(this.state, PLAYER, 'forge')}|${p.bell}|${rates}|${champion}`;
   }
 
   private resourceKey() {
@@ -1220,19 +1255,28 @@ export class GameScene extends Phaser.Scene {
     const bg = this.add.rectangle(480, 270, 960, 540, hexNum(T.linen), 0.72).setScrollFactor(0);
     const card = this.add.image(480, 270, 'card-end').setScrollFactor(0);
     const title = this.add.text(480, 245, won ? 'VICTORY' : 'DEFEAT', { ...text(44, won ? T.green : T.red, true) }).setOrigin(0.5).setScrollFactor(0);
-    const how = this.state.winBy === 'monument' ? (won ? 'Your Monument stood for three minutes' : 'The enemy Monument stood for three minutes') : won ? 'The enemy Town Center has fallen' : 'Your Town Center has fallen';
+    const how =
+      this.state.winBy === 'monument'
+        ? won
+          ? 'Your Monument stood for three minutes'
+          : 'The enemy Monument stood for three minutes'
+        : won
+          ? this.rival2
+            ? 'Both rival Town Centers have fallen'
+            : 'The enemy Town Center has fallen'
+          : 'Your Town Center has fallen';
     const why = this.add.text(480, 284, how, { ...text(15, T.ink), fontStyle: 'italic' }).setOrigin(0.5).setScrollFactor(0);
     const sub = this.add.text(480, 312, 'Click to choose another faction', text(14, T.faded)).setOrigin(0.5).setScrollFactor(0);
     this.endPanel = this.add.container(0, 0, [bg, card, title, why, sub]).setScrollFactor(0).setDepth(11000);
   }
   /** The end of a watched match: which faction won and how, and a click starts another. */
   private showWatchEnd() {
-    const winner = this.state.winner === PLAYER ? this.faction : this.aiFaction;
+    const winner = this.state.players[this.state.winner ?? PLAYER].faction;
     const loser = this.state.winner === PLAYER ? this.aiFaction : this.faction;
     const bg = this.add.rectangle(480, 270, 960, 540, hexNum(T.linen), 0.72).setScrollFactor(0);
     const card = this.add.image(480, 270, 'card-end').setScrollFactor(0);
     const title = this.add.text(480, 245, `${FACTIONS[winner].name.toUpperCase()} WINS`, { ...text(34, WOOL[winner].cloth, true) }).setOrigin(0.5).setScrollFactor(0);
-    const how = this.state.winBy === 'monument' ? 'Its Monument stood for three minutes' : `The ${FACTIONS[loser].name} Town Center has fallen`;
+    const how = this.state.winBy === 'monument' ? 'Its Monument stood for three minutes' : this.rival2 ? "Both rivals' Town Centers have fallen" : `The ${FACTIONS[loser].name} Town Center has fallen`;
     const why = this.add.text(480, 284, how, { ...text(15, T.ink), fontStyle: 'italic' }).setOrigin(0.5).setScrollFactor(0);
     const sub = this.add.text(480, 312, 'Click to watch another match', text(14, T.faded)).setOrigin(0.5).setScrollFactor(0);
     this.endPanel = this.add.container(0, 0, [bg, card, title, why, sub]).setScrollFactor(0).setDepth(11000);

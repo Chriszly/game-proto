@@ -31,8 +31,8 @@ export const AGE_PIPS = { x: 424, y: 15, gap: 16, r: 6.5 };
 
 /** The deeds card under the top bar, at the right. */
 export const DEED_CARD = { x: 716, y: 36, w: 236, h: 92 };
-/** Under the deeds card: who holds each relic, and a standing Monument's count. */
-export const STATUS_CARD = { x: 716, y: 134, w: 236, h: 30, hMonument: 50 };
+/** Under the deeds card: who holds each relic, the rivals' temperaments, and a standing Monument's count. */
+export const STATUS_CARD = { x: 716, y: 134, w: 236, h: 50, hMonument: 70 };
 /** The horn toast, centred under the top bar. */
 export const TOAST = { x: 480, y: 38, w: 440, h: 24 };
 
@@ -42,3 +42,5 @@ export const BUTTONS = { x: 302, y: PANEL_Y + 7, w: 124, h: 30, dx: 130, dy: 34,
 export const BOON = { x: 302, y: PANEL_Y + 24, w: 252, h: 80, dx: 262 };
 export const MINI = { x: 848, y: PANEL_Y + 8, s: 96 };
 export const PANEL_BARS = [292, 828];
+/** The menu's option rows under the faction cards: the map kind and the number of rivals. */
+export const MENU_OPTS = { y: 438, w: 96, h: 24, gap: 6, kindX: 152, rivalsX: 640 };

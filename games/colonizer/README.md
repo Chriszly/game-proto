@@ -8,10 +8,49 @@ still at its edge, and the HUD as the tapestry's borders with slanted bars and s
 All of it is painted in code on 2D canvases; there are no image files.
 
 You pick one of three factions and play a skirmish on a 128 by 128 tile map against an AI opponent,
-which plays the next faction along. Gather wood, food and ore, put up buildings, research techs in
+which plays the next faction along, or against two AIs in a three-way match. The menu also picks the
+map kind: Lowlands, Lakes or Highlands. Gather wood, food and ore, put up buildings, research techs in
 the Academy and the Town Center, train villagers and armies, earn your way through three ages, and
 destroy the enemy Town Center to win, or raise a Monument in Age III and hold it for three minutes.
 Lose your own Town Center, or let the enemy's Monument stand, and the match is over.
+
+## Map kinds and rivals
+
+Two rows of toggles under the faction cards set up the match, and the menu keeps them for the next one.
+
+- **Map**: **Lowlands** is the map as first designed, open fields with a few lakes and rock ridges.
+  **Lakes** has twelve wide lakes, two big ones either side of the middle and a pond by each start,
+  so the ways across run between waters, a Dock always has a shore, and a short palisade across a
+  gap between two lakes shuts a whole approach. **Highlands** has two long rock ridges, one across
+  each side's half of the map, each broken by three narrow passes, so walls and rams decide where
+  armies get through. Every map is checked so that each Town Center, camp and trading post can be
+  walked to.
+- **Rivals**: **One AI**, or **Two AIs** for a three-way match: the second AI plays the third
+  faction from the top-right corner, with two caches of its own nearby (the free bottom-left corner
+  gets the same trees, bushes, mine and caches). Everyone raids everyone: each AI turns on its rivals
+  by turns, and on whoever raises a Monument first. A side whose Town Center falls is out, and
+  everything of it falls with it; the last Town Center standing wins, or a Monument that stands its
+  three minutes. So you can let the AIs wear each other down, pick a side to hit, or race them to the
+  Monument.
+
+![The menu with Highlands and Two AIs chosen: each card names both rivals](docs/screenshots/menu-map-and-rivals.webp)
+
+![A Highlands pass in a three-way match: the ridge's rock and the gap through it, and the log naming each side's temperament](docs/screenshots/highlands-three-way.webp)
+
+![Lakes: two big lakes and a stand of trees on the way across, and a minimap full of water](docs/screenshots/lakes.webp)
+
+## Rival temperaments
+
+Each AI draws a temperament for the match, which sets its build, raid timing and picks:
+
+| Temperament | Plays like | First raid | Raid party | Boon, Age III edge |
+| --- | --- | --- | --- | --- |
+| **Raider** | Stable early, cavalry first, no palisade, Stirrups right after Age II | 6 min, then every 2 min, once it has 8 soldiers | 6 | Shieldwall, Muster |
+| **Builder** | Saves for the Monument first in Age III, a big late army | 14 min, then 4 min apart, once it has 20 | 14 | Shieldwall, Masonry |
+| **Warden** | A long palisade from Age I, three Watchtowers, archers first | 12 min, then 3 min apart, once it has 14 | 10 | Harvest Rites, Masonry |
+
+The **Rivals** row of the card under the deeds card shows each rival's banner with **?** until you
+have seen its Town Center: scout its base to learn what it is.
 
 ![A Tide Coven raid meets the Ember Legion east of its base: the horn toast, sparks and damage numbers, the deeds card at 2 of 3 and the minimap's pulsing rings](docs/screenshots/raid.webp)
 
@@ -75,22 +114,30 @@ charge with a lowered lance.
 - **Age III** is earned, not only bought. The **deeds card** under the top bar lists three deeds:
   reach Age II, field 14 soldiers at once, and repel a raid (kill every raider the enemy sent, or
   half of them so the rest turn back). Once all three are done, the Town Center can research Age III
-  (500 food, 300 wood, 200 ore), and every soldier then deals 2 more damage.
+  (500 food, 300 wood, 200 ore), and every soldier then deals 2 more damage. Age III also offers the
+  **Age III edge**, a second one-time pick of two cards:
+  - **Masonry**: buildings and walls have 30% more health, those already standing included.
+  - **Muster**: soldiers train 25% faster.
+
+The top bar shows the boon's icon and then the edge's (a stretch of stone or a war drum).
 
 The top bar's age track has a pip for each age; the next pip fills as its deeds are done.
 
 ![Age II reached: the boon pick in the panel and the first deed ticked](docs/screenshots/playthrough-boon.webp)
 
+![Age III reached: the Masonry and Muster cards in the panel, and the Rivals row naming a scouted Builder](docs/screenshots/age3-edge.webp)
+
 ## Raids
 
-The enemy leaves your opening alone: its first raid comes no sooner than ten minutes in, and its
-army rests three minutes after each raid before the next. Each raid has a goal. The first goes for
-your outlying economy (a Lumber or Mining Camp, a farm, a Dock or a Grove away from your Town
-Center's arrows), the second for a relic you hold, and those send a party of ten while the rest stay
-home. From the third raid on, or once the enemy reaches Age III, it comes for your Town Center with
+The enemy leaves your opening alone: its first raid comes no sooner than six minutes in (a Raider),
+twelve (a Warden) or fourteen (a Builder), and its army rests a while after each raid before the
+next (see the temperaments above). Each raid has a goal. The first goes for your outlying economy (a
+Lumber or Mining Camp, a farm, a Dock or a Grove away from your Town Center's arrows), the second for
+a relic you hold, and those send a party (6, 14 or 10 by temperament) while the rest stay home. From the third raid on, or once the enemy reaches Age III, it comes for your Town Center with
 everything. A party turns home once its goal is done, once half of it has fallen (which counts as
 repelling it) or after two and a half minutes.
 
+In a three-way match the AIs raid each other too; only the raids that come for you sound the horn.
 When the enemy sends its army at you, a horn sounds: a toast under the top bar names
 the raid and the side it comes from, with an arrow pointing towards it, and the minimap pulses rings
 of red running stitch where the raiders are until the last of them falls. The deeds card counts
@@ -181,8 +228,8 @@ The build list's second page (**Walls & More**) has the **Palisade** (4 wood a s
 start on it and each goes on to the next unfinished piece nearby. A diagonal line has no gaps. A gate
 goes in a gap or straight onto one of your own stakes, and only your units walk through it. Soldiers
 and towers never pick walls as targets on their own, but an army with no way round breaks through the
-nearest stake or gate. The AI lays a short palisade with a gate across the front of its base once it
-reaches Age II.
+nearest stake or gate. A Builder AI lays a short palisade with a gate across the front of its base
+once it reaches Age II, a Warden a longer one in Age I, and a Raider none.
 
 ![A palisade with a gate, a Watchtower behind it and a raid hacking at the gate, while a new line is dragged out](docs/screenshots/palisade-and-gate.webp)
 
@@ -242,7 +289,9 @@ minimap's raid rings stand still.
 ## Watch AI
 
 Add `?watch` to the game's URL (`/games/colonizer/?watch`) to skip the menu and start a
-match between two random factions, both played by the AI, with the whole map in view. Scroll with the
+match between two random factions, both played by the AI, on a random map kind, with the whole map
+in view; every other match or so is a three-way one with the third faction. The log names each
+side's temperament. Scroll with the
 arrow keys or the minimap and click a unit to see what it is doing. The panel in the top right
 holds the match still, sets the speed from 1x to 8x (**[** and **]**) and opens a log of every build,
 unit, tech, attack and relic run (**L**). A click on the end screen starts another match.
@@ -253,11 +302,12 @@ unit, tech, attack and relic run (**L**). A click on the end screen starts anoth
 
 - There is no save yet: each match starts fresh.
 - The map is the same for a given seed, and the seed is fixed in the playthrough test.
-- The AI picks Shieldwall when it reaches Age II, and researches Age III once it has the three deeds.
-  Its raid deed is yours to give: it repels a raid when three or more of your soldiers come at its
-  Town Center and at least half of them fall before the rest leave.
+- The AI picks its boon and edge by temperament, and researches Age III once it has the three deeds.
+  Its raid deed is yours to give (or, in a three-way match, the other AI's): it repels a raid when
+  three or more enemy soldiers come at its Town Center and at least half of them fall before the
+  rest leave.
 - The AI builds its faction's own building early, sets a rally flag in front of its base for each
-  production building, and walls off the front of its base in Age II.
+  production building, and (unless it is a Raider) walls off the front of its base.
 - The AI plays at a human pace: about 30 commands a minute, so it can leave villagers idle too.
 - The AI rings its town bell when enemy soldiers reach its base, builds a Market and runs three
   trade carts, adds two rams to its army in Age II and trains its champion in Age III.

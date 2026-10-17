@@ -38,7 +38,12 @@ import {
   MONUMENT_MS,
   ASSAULT_CLEAR,
   ASSAULT_MIN,
-  FIRST_RAID_MS,
+  FACTIONS,
+  MASONRY_HP,
+  MUSTER_SPEED,
+  TEMPERAMENTS,
+  type EdgeId,
+  type TemperamentId,
   RELIC_DAMAGE,
   RELIC_GATHER,
   RELIC_SPEED,
@@ -60,7 +65,7 @@ import {
   type Resource,
   type UnitDef,
 } from './data';
-import { AMOUNT, START_TILES, WATER, ROCK, idx, inMap, type MapData, type Node, type PostSpot } from './map';
+import { AMOUNT, WATER, ROCK, idx, inMap, type MapData, type Node, type PostSpot } from './map';
 
 export type Order =
   | { t: 'idle' }
@@ -149,6 +154,8 @@ export interface RaidGoal {
 /** A side's planner memory for raids: the earliest time of the next, and the one under way. */
 export interface AiRaid {
   next: number;
+  /** The side the raid under way (or the last one) went for. */
+  foe: number;
   /** Raids launched so far, which picks the next goal. */
   count: number;
   goal: RaidGoal | null;
@@ -213,6 +220,22 @@ export interface Player {
   bell: boolean;
   /** The Market's rates for wood and food, in ore; 1 is the base price. */
   rates: { wood: number; food: number };
+  /** The Age III pick, once made; `edgePending` while the pick is open. */
+  edge: EdgeId | null;
+  edgePending: boolean;
+  /** An AI side's temperament for this match (null for the player's side when the player plays it). */
+  temperament: TemperamentId | null;
+  /** The player has seen this side's Town Center, which reveals its temperament. */
+  scouted: boolean;
+  /** This side's Town Center fell in a three-way match: it is out, and everything of it is gone. */
+  out: boolean;
+}
+
+/** One side of a match: its faction, how fast it gathers (the difficulty, for the AI) and its temperament. */
+export interface SideSetup {
+  faction: FactionId;
+  gatherMul: number;
+  temperament: TemperamentId | null;
 }
 
 export interface GameState {
@@ -243,8 +266,13 @@ export interface GameState {
   raid: Raid | null;
   raids: number;
   repelled: number;
-  /** The player's soldiers that have come at the AI's Town Center, while they are about (see `updateAssault`). */
-  assault: number[] | null;
+  /**
+   * Per AI side, by its index: the soldiers of other sides that have come at its Town Center, while
+   * they are about (see `updateAssault`), or null.
+   */
+  assault: (number[] | null)[];
+  /** Play on until one side is left, even after the player's side falls (watch mode). */
+  toLast: boolean;
   events: SimEvent[];
   /** How the match was won: the enemy Town Center fell, or a Monument stood long enough. */
   winBy: 'town' | 'monument' | null;
@@ -263,12 +291,39 @@ export const PLAYER = 0;
 export const AI = 1;
 /** The wild guards of the neutral camps: everyone's enemy, and nobody's to command. */
 export const NEUTRAL = 2;
+/** The second AI, in a three-way match. */
+export const AI2 = 3;
+/** The sides of a match in setup order: the player, the AI, and the second AI in a three-way match. */
+export const SIDES = [PLAYER, AI, AI2] as const;
 
 /**
- * Starts a match. `aiGatherMul` scales how fast the AI gathers (the difficulty's number; 1 is the game
- * as designed).
+ * Starts a match: `sides` in setup order (the player, the AI and, for a three-way match, the second
+ * AI) on `map`, whose `starts` has a corner for each. An AI side's `gatherMul` is the difficulty's
+ * number; 1 is the game as designed.
  */
-export function createGame(faction: FactionId, aiFaction: FactionId, aiGatherMul: number, map: MapData): GameState {
+export function createGame(sides: SideSetup[], map: MapData, toLast = false): GameState {
+  const player = (id: number, side: SideSetup): Player => ({
+    id,
+    faction: side.faction,
+    res: { ...START },
+    techs: [],
+    age: 1,
+    gatherMul: side.gatherMul,
+    deeds: { age2: false, army: 0, raid: false },
+    boon: null,
+    boonPending: false,
+    bell: false,
+    rates: { wood: 1, food: 1 },
+    edge: null,
+    edgePending: false,
+    temperament: side.temperament,
+    scouted: false,
+    out: false,
+  });
+  // The camp guards' side. Its faction is only a placeholder: wild units have their own colours.
+  const wild = { ...player(NEUTRAL, sides[0]), res: { wood: 0, food: 0, ore: 0 }, temperament: null };
+  const players = [player(PLAYER, sides[0]), player(AI, sides[1]), wild];
+  if (sides[2]) players.push(player(AI2, sides[2]));
   const s: GameState = {
     time: 0,
     winner: null,
@@ -281,21 +336,18 @@ export function createGame(faction: FactionId, aiFaction: FactionId, aiGatherMul
     nodes: new Map(),
     units: new Map(),
     buildings: new Map(),
-    players: [
-      { id: PLAYER, faction, res: { ...START }, techs: [], age: 1, gatherMul: 1, deeds: { age2: false, army: 0, raid: false }, boon: null, boonPending: false, bell: false, rates: { wood: 1, food: 1 } },
-      { id: AI, faction: aiFaction, res: { ...START }, techs: [], age: 1, gatherMul: aiGatherMul, deeds: { age2: false, army: 0, raid: false }, boon: null, boonPending: false, bell: false, rates: { wood: 1, food: 1 } },
-      // The camp guards' side. Its faction is only a placeholder: wild units have their own colours.
-      { id: NEUTRAL, faction, res: { wood: 0, food: 0, ore: 0 }, techs: [], age: 1, gatherMul: 1, deeds: { age2: false, army: 0, raid: false }, boon: null, boonPending: false, bell: false, rates: { wood: 1, food: 1 } },
-    ],
+    players,
     nextId: 1000,
     notice: '',
     noticeMs: 0,
-    aiClock: [0, 0],
-    aiRaid: [0, 1].map(() => ({ next: FIRST_RAID_MS, count: 0, goal: null, party: [], started: 0 })),
+    aiClock: players.map(() => 0),
+    // Each side's first raid waits for its temperament's time gate.
+    aiRaid: players.map((p) => ({ next: TEMPERAMENTS[p.temperament ?? 'builder'].firstRaid, foe: p.id === PLAYER ? AI : PLAYER, count: 0, goal: null, party: [], started: 0 })),
     raid: null,
     raids: 0,
     repelled: 0,
-    assault: null,
+    assault: players.map(() => null),
+    toLast,
     events: [],
     winBy: null,
   };
@@ -305,8 +357,8 @@ export function createGame(faction: FactionId, aiFaction: FactionId, aiGatherMul
   for (const spot of map.camps) {
     s.camps.push({ id: s.nextId++, kind: spot.kind, tx: spot.tx, ty: spot.ty, res: spot.res ?? null, amount: spot.amount ?? 0, relic: spot.relic ?? null, holder: null, claimed: false, guards: [] });
   }
-  START_TILES.forEach((start, owner) => {
-    addBuilding(s, owner, 'town', start.tx, start.ty, true);
+  map.starts.forEach((start, k) => {
+    addBuilding(s, SIDES[k], 'town', start.tx, start.ty, true);
   });
   rebuildSolid(s);
   // The guards stand around their camp, spread over the free tiles next to it.
@@ -320,7 +372,8 @@ export function createGame(faction: FactionId, aiFaction: FactionId, aiGatherMul
       camp.guards.push(u.id);
     });
   });
-  START_TILES.forEach((_, owner) => {
+  map.starts.forEach((_, k) => {
+    const owner = SIDES[k];
     const town = [...s.buildings.values()].find((b) => b.owner === owner && b.type === 'town');
     if (!town) return;
     // The starting villagers go straight to work: two on wood, the rest on the berry bushes.
@@ -355,6 +408,20 @@ export function unitCost(s: GameState, owner: number, def: UnitDef): Cost {
   const out: Cost = {};
   for (const r of Object.keys(def.cost) as Resource[]) out[r] = Math.round((def.cost[r] ?? 0) * FORGE_COST);
   return out;
+}
+
+/** The sides still in the match other than `owner` (never the camp guards). */
+export function rivalsOf(s: GameState, owner: number): number[] {
+  return s.players.filter((p) => p.id !== NEUTRAL && p.id !== owner && !p.out).map((p) => p.id);
+}
+
+/** Whether the match has a second AI. */
+export const threeWay = (s: GameState) => s.players.length > AI2;
+
+/** A building's full health: its kind's, and 30% more under Masonry. */
+export function buildingHp(s: GameState, b: Building) {
+  const hp = BUILDINGS[b.type].hp;
+  return s.players[b.owner].edge === 'masonry' ? Math.round(hp * MASONRY_HP) : hp;
 }
 
 /** Whether a side holds a relic. */
@@ -618,6 +685,11 @@ export function updateSight(s: GameState) {
     const def = BUILDINGS[b.type];
     reveal(b.tx + def.w / 2, b.ty + def.h / 2, def.sight);
   }
+  // Seeing a rival's Town Center reveals its temperament.
+  for (const b of s.buildings.values()) {
+    if (b.type !== 'town' || b.owner === PLAYER || s.players[b.owner].scouted) continue;
+    for (let y = b.ty; y < b.ty + 4; y++) for (let x = b.tx; x < b.tx + 4; x++) if (s.sight[idx(x, y)] === 2) s.players[b.owner].scouted = true;
+  }
 }
 
 // ---------------------------------------------------------------- pathing
@@ -877,6 +949,16 @@ export function chooseBoon(s: GameState, owner: number, boon: BoonId): boolean {
   return true;
 }
 
+/** Takes the Age III pick a player was offered; Masonry raises the health of what already stands. */
+export function chooseEdge(s: GameState, owner: number, edge: EdgeId): boolean {
+  const p = s.players[owner];
+  if (!p.edgePending) return false;
+  p.edge = edge;
+  p.edgePending = false;
+  if (edge === 'masonry') for (const b of s.buildings.values()) if (b.owner === owner) b.hp *= MASONRY_HP;
+  return true;
+}
+
 /** Soldiers a player has alive. */
 export function soldierCount(s: GameState, owner: number) {
   let n = 0;
@@ -1008,6 +1090,9 @@ const COMPASS = ['east', 'south-east', 'south', 'south-west', 'west', 'north-wes
 /** Records a raid: `ids` sent by `by` at `target`. One raid is tracked at a time. */
 export function startRaid(s: GameState, by: number, target: number, ids: number[]) {
   if (s.raid || ids.length === 0) return;
+  // In a three-way match only raids on the player are tracked (the AIs' raids on each other count
+  // through `updateAssault`), so one between them never hides one coming for the player.
+  if (threeWay(s) && target !== PLAYER) return;
   const town = [...s.buildings.values()].find((b) => b.owner === target && b.type === 'town');
   const live = ids.map((id) => s.units.get(id)).filter((u): u is Unit => !!u);
   const x = live.reduce((a, u) => a + u.x, 0) / Math.max(1, live.length);
@@ -1062,36 +1147,40 @@ function updateRaid(s: GameState) {
 }
 
 /**
- * The player's attacks on the AI's base, which the planner doesn't send and so never records as
- * raids: ASSAULT_MIN soldiers near its Town Center start one, any more that come join it, and once
- * none is left within ASSAULT_CLEAR tiles it ends, repelled (the AI's raid deed) if half of them fell.
+ * Attacks on an AI's base that no tracked raid covers (the player's, and in a three-way match the
+ * other AI's): ASSAULT_MIN soldiers of other sides near its Town Center start one, any more that come
+ * join it, and once none is left within ASSAULT_CLEAR tiles it ends, repelled (that AI's raid deed)
+ * if half of them fell.
  */
 function updateAssault(s: GameState) {
-  const town = [...s.buildings.values()].find((b) => b.owner === AI && b.type === 'town');
-  if (!town) {
-    s.assault = null;
-    return;
-  }
-  const cx = town.tx + 2;
-  const cy = town.ty + 2;
   const tracked = new Set(s.raid ? s.raid.ids : []);
-  const near = (u: Unit, range: number) => Math.hypot(u.x - cx, u.y - cy) <= range;
-  const attackers = [...s.units.values()].filter((u) => u.owner === PLAYER && u.hp > 0 && isSoldier(unitDef(u).role) && !tracked.has(u.id) && near(u, BELL_RANGE));
-  if (!s.assault) {
-    if (attackers.length >= ASSAULT_MIN) s.assault = attackers.map((u) => u.id);
-    return;
+  for (const p of s.players) {
+    if (p.id === PLAYER || p.id === NEUTRAL) continue;
+    const town = [...s.buildings.values()].find((b) => b.owner === p.id && b.type === 'town');
+    if (!town) {
+      s.assault[p.id] = null;
+      continue;
+    }
+    const cx = town.tx + 2;
+    const cy = town.ty + 2;
+    const near = (u: Unit, range: number) => Math.hypot(u.x - cx, u.y - cy) <= range;
+    const attackers = [...s.units.values()].filter((u) => u.owner !== p.id && u.owner !== NEUTRAL && u.hp > 0 && isSoldier(unitDef(u).role) && !tracked.has(u.id) && near(u, BELL_RANGE));
+    const ids = s.assault[p.id];
+    if (!ids) {
+      if (attackers.length >= ASSAULT_MIN) s.assault[p.id] = attackers.map((u) => u.id);
+      continue;
+    }
+    for (const u of attackers) if (!ids.includes(u.id)) ids.push(u.id);
+    const alive = ids.map((id) => s.units.get(id)).filter((u): u is Unit => !!u && u.hp > 0);
+    if (alive.some((u) => near(u, ASSAULT_CLEAR))) continue;
+    if ((ids.length - alive.length) * 2 >= ids.length) p.deeds.raid = true;
+    s.assault[p.id] = null;
   }
-  const ids = s.assault;
-  for (const u of attackers) if (!ids.includes(u.id)) ids.push(u.id);
-  const alive = ids.map((id) => s.units.get(id)).filter((u): u is Unit => !!u && u.hp > 0);
-  if (alive.some((u) => near(u, ASSAULT_CLEAR))) return;
-  if ((ids.length - alive.length) * 2 >= ids.length) s.players[AI].deeds.raid = true;
-  s.assault = null;
 }
 
 function updateDeeds(s: GameState) {
   for (const p of s.players) {
-    if (p.id === NEUTRAL) continue;
+    if (p.id === NEUTRAL || p.out) continue;
     if (p.age >= 2) p.deeds.age2 = true;
     p.deeds.army = Math.max(p.deeds.army, soldierCount(s, p.id));
   }
@@ -1158,15 +1247,17 @@ function updateBuilding(s: GameState, b: Building, dt: number) {
   const head = b.queue[0];
   if (!head) return;
   const p = s.players[b.owner];
-  head.left -= dt;
+  // Muster, the Age III pick, trains soldiers faster.
+  head.left -= head.kind === 'unit' && isSoldier(UNITS[head.key].role) && p.edge === 'muster' ? dt * MUSTER_SPEED : dt;
   if (head.left > 0) return;
   if (head.kind === 'tech') {
     b.queue.shift();
     const advance = TECHS[head.key].advance;
     if (advance) {
       p.age = advance;
-      // Reaching Age II opens the one-time boon pick.
+      // Reaching Age II opens the one-time boon pick, and Age III the pick of an edge.
       if (advance === 2 && !p.boon) p.boonPending = true;
+      if (advance === 3 && !p.edge) p.edgePending = true;
     } else p.techs.push(head.key);
     return;
   }
@@ -1471,7 +1562,7 @@ function villagerUpdate(s: GameState, u: Unit, def: UnitDef, dt: number) {
       u.act = 'build';
       faceTo(u, centre(f).x);
       b.buildLeft -= dt;
-      b.hp = Math.min(BUILDINGS[b.type].hp, b.hp + (BUILDINGS[b.type].hp * dt) / BUILDINGS[b.type].time);
+      b.hp = Math.min(buildingHp(s, b), b.hp + (buildingHp(s, b) * dt) / BUILDINGS[b.type].time);
       if (b.buildLeft <= 0) {
         finish(s, b);
         // A builder goes on to work the new farm, or the next unfinished building close by (the
@@ -1574,7 +1665,7 @@ function villagerUpdate(s: GameState, u: Unit, def: UnitDef, dt: number) {
 /** A building is done: full health, and a gate opens to its owner; a finished Monument starts its count. */
 function finish(s: GameState, b: Building) {
   b.built = true;
-  b.hp = BUILDINGS[b.type].hp;
+  b.hp = buildingHp(s, b);
   b.doneAt = s.time;
   if (b.type === 'gate') rebuildSolid(s);
   if (b.type === 'monument') say(s, b.owner === PLAYER ? 'Your Monument stands: hold it for 3 minutes to win' : 'The enemy Monument stands: destroy it within 3 minutes');
@@ -1748,14 +1839,24 @@ function reap(s: GameState) {
 }
 
 function checkWinner(s: GameState) {
-  for (const p of s.players) {
-    if (p.id === NEUTRAL) continue;
-    if (!hasBuildingFor(s, p.id, 'town')) {
-      s.winner = p.id === PLAYER ? AI : PLAYER;
-      s.winBy = 'town';
-      return;
-    }
+  // A side whose Town Center has fallen is out.
+  const fallen = s.players.filter((p) => p.id !== NEUTRAL && !p.out && !hasBuildingFor(s, p.id, 'town'));
+  for (const p of fallen) p.out = true;
+  // The match ends with one side left, or once the player's side is out (unless it plays on to the last).
+  const left = s.players.filter((p) => p.id !== NEUTRAL && !p.out);
+  if (left.length <= 1 || (s.players[PLAYER].out && !s.toLast)) {
+    s.winner = left.find((p) => p.id !== PLAYER)?.id ?? left[0]?.id ?? AI;
+    s.winBy = 'town';
+    return;
   }
+  // In a three-way match the others play on, and everything of a fallen side falls with it.
+  for (const p of fallen) {
+    for (const u of s.units.values()) if (u.owner === p.id) u.hp = 0;
+    for (const b of s.buildings.values()) if (b.owner === p.id) b.hp = 0;
+    for (const c of s.camps) if (c.relic && c.holder === p.id) c.holder = null;
+    say(s, p.id === PLAYER ? 'Your Town Center has fallen' : `The ${FACTIONS[p.faction].name} have fallen`);
+  }
+  if (fallen.length > 0) reap(s);
   // A Monument that has stood MONUMENT_MS since it was finished wins the match for its owner.
   for (const b of s.buildings.values()) {
     if (b.type === 'monument' && b.built && b.hp > 0 && s.time - b.doneAt >= MONUMENT_MS) {

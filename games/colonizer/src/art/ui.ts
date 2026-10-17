@@ -3,7 +3,7 @@
 import { AGE_PIPS, BUTTONS, MINI, PANEL_BARS, PANEL_Y, TOP_BARS, TOP_H, W, H } from '../scenes/layout';
 import { bar, band, canvas, card, knot, linen, mix, PI, reseed, rrect, se, sew, sp, T, thread, type Ctx } from './stitch';
 
-export type IconKind = 'wood' | 'food' | 'ore' | 'pop' | 'clock' | 'horn' | 'shield' | 'wheat' | 'banner' | 'sword' | 'feather';
+export type IconKind = 'wood' | 'food' | 'ore' | 'pop' | 'clock' | 'horn' | 'shield' | 'wheat' | 'banner' | 'sword' | 'feather' | 'stone' | 'drum';
 
 /** A small wool icon centred at (x, y), about 2s across. */
 export function icon(c: Ctx, kind: IconKind, x: number, y: number, s: number, col: string = T.red) {
@@ -50,6 +50,17 @@ export function icon(c: Ctx, kind: IconKind, x: number, y: number, s: number, co
   if (kind === 'feather') {
     se(c, x, y, s * 0.35, s * 0.95, T.indigo, { rot: 0.6, noCouch: true, lw: 0.5 });
     thread(c, [[x - s * 0.7, y + s * 0.95], [x + s * 0.45, y - s * 0.75]], T.ink, 0.7);
+  }
+  // Masonry: a little stretch of coursed stone.
+  if (kind === 'stone')
+    for (const [dx, dy, w] of [[-1, 0.15, 1], [0.05, 0.15, 0.95], [-0.5, -0.75, 1]] as const)
+      sp(c, [[x + dx * s, y + dy * s], [x + (dx + w) * s, y + dy * s], [x + (dx + w) * s, y + (dy + 0.8) * s], [x + dx * s, y + (dy + 0.8) * s]], T.grey, { noCouch: true, lw: 0.6 });
+  // Muster: a war drum and its two sticks.
+  if (kind === 'drum') {
+    sp(c, [[x - s * 0.8, y - s * 0.3], [x + s * 0.8, y - s * 0.3], [x + s * 0.7, y + s * 0.9], [x - s * 0.7, y + s * 0.9]], T.red, { ang: PI / 2, noCouch: true, lw: 0.6 });
+    se(c, x, y - s * 0.3, s * 0.8, s * 0.3, T.buff, { noCouch: true, lw: 0.6 });
+    thread(c, [[x - s * 0.9, y - s * 1.1], [x - s * 0.15, y - s * 0.35]], T.brown, 1.1);
+    thread(c, [[x + s * 0.9, y - s * 1.1], [x + s * 0.15, y - s * 0.35]], T.brown, 1.1);
   }
   if (kind === 'banner') sp(c, [[x - s * 0.5, y - s], [x + s * 0.5, y - s], [x + s * 0.5, y + s], [x, y + s * 0.6], [x - s * 0.5, y + s]], col, { ang: PI / 2, noCouch: true });
 }

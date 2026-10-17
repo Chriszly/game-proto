@@ -4,7 +4,7 @@ import { BUILDINGS, FACTION_IDS, RELICS, UNITS, type BuildingId, type FactionId,
 import { bakeFigureSheet, FRAME, WOOL } from '../art/figures';
 import { bakeBuilding, bakeBush, bakeCache, bakeFogPattern, bakeMine, bakeNeedle, bakePost, bakeRallyFlag, bakeRelic, bakeTree } from '../art/scenery';
 import { bakeBackdrop, bakeButton, bakeCard, bakeIcon, bakePanel, bakeTopBar, type IconKind } from '../art/ui';
-import { BOON, DEED_CARD, STATUS_CARD, TOAST } from './layout';
+import { BOON, DEED_CARD, MENU_OPTS, STATUS_CARD, TOAST } from './layout';
 import { T } from '../art/stitch';
 
 /**
@@ -52,12 +52,13 @@ export class BootScene extends Phaser.Scene {
     }
     for (const relic of Object.keys(RELICS) as RelicId[]) this.bake(relicKey(relic, null), bakeRelic(relic, null));
     for (const res of ['ore', 'food', 'wood'] as const) this.bake(`camp-cache-${res}`, bakeCache(res));
-    for (const kind of ['wood', 'food', 'ore', 'pop', 'clock', 'horn', 'wheat', 'sword', 'feather'] as IconKind[]) this.bake(`icon-${kind}`, bakeIcon(kind));
+    for (const kind of ['wood', 'food', 'ore', 'pop', 'clock', 'horn', 'wheat', 'sword', 'feather', 'stone', 'drum'] as IconKind[]) this.bake(`icon-${kind}`, bakeIcon(kind));
     this.bake('rally-flag', bakeRallyFlag());
     this.bake('icon-shield', bakeIcon('shield', 22, T.red));
     this.bake('topbar', bakeTopBar());
     this.bake('panel', bakePanel());
     for (const s of ['on', 'off', 'hot'] as const) this.bake(`btn-${s}`, bakeButton(s));
+    for (const s of ['on', 'off', 'hot'] as const) this.bake(`opt-${s}`, bakeButton(s, MENU_OPTS.w, MENU_OPTS.h));
     this.bake('card-deeds', bakeCard(DEED_CARD.w, DEED_CARD.h, { lw: 1.1 }));
     this.bake('card-status', bakeCard(STATUS_CARD.w, STATUS_CARD.h, { lw: 1.1 }));
     this.bake('card-status-tall', bakeCard(STATUS_CARD.w, STATUS_CARD.hMonument, { lw: 1.1 }));
