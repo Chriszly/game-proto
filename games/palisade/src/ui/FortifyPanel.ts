@@ -7,9 +7,9 @@ import type { Forts } from '../game/state';
 import { drawPanel, textStyle } from './panel';
 
 /**
- * The panel the "Fortify" button opens during a break: three fortifications, one of which can be
- * bought per break for coins. The battle (the break's countdown included) waits while it is open;
- * a tap beside it closes it.
+ * The panel the "Fortify" button opens: three fortifications, one of which can be bought per break
+ * for coins (bought during a wave, it is set up when the next break starts). The battle (the
+ * break's countdown included) waits while it is open; a tap beside it closes it.
  */
 export class FortifyPanel {
   open = false;
@@ -33,8 +33,11 @@ export class FortifyPanel {
     this.root.setVisible(false);
   }
 
-  /** Opens (or redraws) the panel with what is held, the coins to spend and whether this break's buy is still open. */
-  show(forts: Forts, coins: number, canBuy: boolean) {
+  /**
+   * Opens (or redraws) the panel with what is held, the coins to spend, a note on when one can be
+   * bought and which fortifications can be bought now (an armed oil pot cannot be bought again).
+   */
+  show(forts: Forts, coins: number, note: string, buyable: (id: FortId) => boolean) {
     this.open = true;
     this.root.setVisible(true);
     this.body.removeAll(true);
@@ -48,11 +51,11 @@ export class FortifyPanel {
     const coinText = scene.add.text(left + w - 58, top + 24, String(coins), textStyle(14, '#ffe07a')).setOrigin(0, 0.5);
     const title = scene.add.text(left + 18, top + 24, 'Fortify', textStyle(17, '#ffcf4a', 3)).setOrigin(0, 0.5);
     const sub = scene.add
-      .text(left + 18, top + 46, canBuy ? 'One fortification a break. Coins also hire guards.' : 'Bought this break. The next break sells another.', { ...textStyle(12, '#c9c3b6'), fontStyle: 'normal' })
+      .text(left + 18, top + 46, note, { ...textStyle(12, '#c9c3b6'), fontStyle: 'normal' })
       .setOrigin(0, 0.5);
     this.body.add([g, coinIcon, coinText, title, sub]);
-    const held = (id: FortId) => (id === 'stakes' ? (forts.stakeHp > 0 ? `Standing, ${Math.ceil(forts.stakeHp)} left` : '') : id === 'oil' ? (forts.oil ? 'Armed' : '') : forts.lookout > 0 ? `${forts.lookout} wave${forts.lookout > 1 ? 's' : ''} left` : '');
-    FORT_IDS.forEach((id, i) => this.addRow(id, left, top + 62 + i * 66, w, held(id), canBuy && coins >= FORTS[id].cost));
+    const held = (id: FortId) => (forts.queued === id ? 'Queued for the next break' : id === 'stakes' ? (forts.stakeHp > 0 ? `Standing, ${Math.ceil(forts.stakeHp)} left` : '') : id === 'oil' ? (forts.oil ? 'Armed' : '') : forts.lookout > 0 ? `${forts.lookout} wave${forts.lookout > 1 ? 's' : ''} left` : '');
+    FORT_IDS.forEach((id, i) => this.addRow(id, left, top + 62 + i * 66, w, held(id), buyable(id) && coins >= FORTS[id].cost));
   }
 
   /** A fortification's name, text and what is held, with a button that buys it for its cost. */

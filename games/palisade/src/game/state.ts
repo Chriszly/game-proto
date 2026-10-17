@@ -1,6 +1,7 @@
 import type { AimMode } from './aim';
 import type { Trait } from './elites';
 import type { EnemyKind } from './enemies';
+import type { FortId } from './forts';
 import { FIRST_BREAK_MS } from './waves';
 import type { GuardKind } from './guards';
 import { heatRules } from './heat';
@@ -143,6 +144,8 @@ export interface Forts {
   lookout: number;
   /** The wave whose break a fortification was bought in, so each break sells one. */
   boughtWave: number;
+  /** A fortification bought during a wave, set up when the next break starts. */
+  queued: FortId | null;
 }
 
 /** `'won'` is the pause on the victory panel after wave 30; "Keep fighting" goes back to `'break'`. */
@@ -292,13 +295,13 @@ export type Stats = ReturnType<typeof stats>;
 export const rainNeed = (wave: number, s: Stats) => Math.max(2, Math.round((RAIN_KILLS + Math.floor((wave - 1) / 2)) * s.rainCharge));
 
 /** The hero's level and upgrades, kept from one run to the next. */
-export type Progress = Pick<GameState, 'level' | 'xp' | 'ranks' | 'levelUps' | 'bestWave' | 'runs' | 'relics' | 'mastered' | 'heat' | 'heatUnlocked'>;
+export type Progress = Pick<GameState, 'level' | 'xp' | 'ranks' | 'levelUps' | 'bestWave' | 'runs' | 'relics' | 'mastered' | 'heat' | 'heatUnlocked' | 'choices'>;
 
 export function freshProgress(): Progress {
-  return { level: 1, xp: 0, ranks: {}, levelUps: 0, bestWave: 0, runs: 0, relics: {}, mastered: false, heat: 0, heatUnlocked: 0 };
+  return { level: 1, xp: 0, ranks: {}, levelUps: 0, bestWave: 0, runs: 0, relics: {}, mastered: false, heat: 0, heatUnlocked: 0, choices: null };
 }
 
-export const freshForts = (): Forts => ({ stakeHp: 0, oil: false, lookout: 0, boughtWave: 0 });
+export const freshForts = (): Forts => ({ stakeHp: 0, oil: false, lookout: 0, boughtWave: 0, queued: null });
 
 /** A new run from wave 1, with the hero's progress kept. */
 export function newRun(progress: Progress, aimMode: AimMode = 'nearest'): GameState {
@@ -340,8 +343,9 @@ export function newRun(progress: Progress, aimMode: AimMode = 'nearest'): GameSt
 }
 
 export function progressOf(state: GameState): Progress {
-  const { level, xp, ranks, levelUps, bestWave, runs, relics, mastered, heat, heatUnlocked } = state;
-  return { level, xp, ranks: { ...ranks }, levelUps, bestWave, runs, relics: { ...relics }, mastered, heat, heatUnlocked };
+  const { level, xp, ranks, levelUps, bestWave, runs, relics, mastered, heat, heatUnlocked, choices } = state;
+  // The cards up for a pending level-up are kept too, so a reload shows the same three.
+  return { level, xp, ranks: { ...ranks }, levelUps, bestWave, runs, relics: { ...relics }, mastered, heat, heatUnlocked, choices: choices && [...choices] };
 }
 
 /** Upgrades that can still be offered: not maxed, and with what they build on already picked. */

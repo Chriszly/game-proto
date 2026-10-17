@@ -26,7 +26,7 @@ wave 30 lifts the siege, which wins the run and unlocks the next heat.
 | Drag the Caltrops button (above Arrow Rain) | Once it reads READY, drag it onto the road and let go to strew caltrops there |
 | C | Strew charged caltrops in front of the thickest crowd |
 | Tap a slot on the barricade ("Hire") | Hire a spearman or a mage for coins, or train a hired guard; the battle waits until the panel closes |
-| Fortify (under the wave track, during a break) | Buy one fortification for the coming waves: a stake line, an oil pot or a lookout; one per break |
+| Fortify (under the wave track) | Buy one fortification for the coming waves: a stake line, an oil pot or a lookout; one per break (bought during a wave, it is set up when the next break starts) |
 | Aim toggle (above the caltrops) or T | Cycle who the ranger shoots first: Nearest, Strongest, Flyers or Healers |
 | Keep fighting / Heat N | After the siege is lifted on wave 30: fight on past it, or start a new run at the next heat |
 | Tap a road card | After a boss, take that road for the next ten waves (after 10 seconds one is taken at random) |
@@ -180,17 +180,19 @@ The battle waits while the panel is open; a tap beside it closes it.
 
 ### Fortifications
 
-During each break, a "Fortify" button under the wave track opens a panel of three
-fortifications; one can be bought per break, for coins that would otherwise hire guards. The break
-waits while the panel is open.
+A "Fortify" button under the wave track opens a panel of three fortifications; one can be bought
+per break, for coins that would otherwise hire guards. During a wave one can be bought ahead: it
+is paid at once and set up when the next break starts, as that break's one. The battle waits while
+the panel is open.
 
 | Fortification | Cost | What it does |
 | --- | --- | --- |
 | Stake line | 25 coins | A row of stakes behind the barricade. Once the barricade is down, foes stop at the stakes and hack through 80 of them before walking on (Spiked Stakes pricks them there too); buying it again sets it back to full |
-| Oil pot | 15 coins | Armed on the barricade. The first foe to reach it next wave bursts the pot: every foe near it takes 15 and burns for 6s, Warded elites aside |
+| Oil pot | 15 coins | Armed on the barricade (one at a time). The first foe to reach it next wave bursts the pot: every foe near it takes 15 and burns for 6s, Warded elites aside |
 | Lookout | 20 coins | A pennant on the barricade: Arrow Rain's ring is 40% wider for the next three waves (the one it was bought before included) |
 
 ![The fortify panel](docs/screenshots/fortify-panel.webp)
+![A lookout bought during a wave, queued for the next break](docs/screenshots/fortify-queued.webp)
 ![An oil pot and a lookout on the barricade](docs/screenshots/fortifications.webp)
 ![Foes hacking at the stake line after the barricade fell](docs/screenshots/stake-line.webp)
 
@@ -231,7 +233,7 @@ and carries one of three traits, named over its health bar:
 
 | Trait | What it does |
 | --- | --- |
-| Splitting | Falls apart into two goblins (with 60% of a goblin's health) where it fell, on the road even if it flew |
+| Splitting | Falls apart into two goblins (with 60% of a goblin's health) where it fell, on the road even if it flew, and never behind a standing barricade |
 | Enraged | Below half health it walks and hits 60% faster, and turns red |
 | Warded | Immune to burning and chill, with a violet rune ring on the road; Shatter's bonus never applies to it |
 

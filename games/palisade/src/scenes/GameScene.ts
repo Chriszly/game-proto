@@ -17,6 +17,7 @@ import {
   CALTROP_PATCH,
   RAIN_FALL_MS,
   RAIN_RING,
+  canBuyFort,
   canFortify,
   crowdSpot,
   fightAgain,
@@ -25,10 +26,10 @@ import {
   hire,
   keepFighting,
   loose,
-  offer,
   pick,
   pickRoad,
   rainRingOf,
+  reoffer,
   setAim,
   startHeat,
   strew,
@@ -181,8 +182,11 @@ export class GameScene extends Phaser.Scene {
     this.caltropPieces.clear();
     this.aim = null;
     this.eliteLabels.clear();
-    this.state = newRun(loadProgress(), loadAim());
-    if (this.state.levelUps > 0) offer(this.state);
+    const progress = loadProgress();
+    this.state = newRun(progress, loadAim());
+    // A pending level-up comes back with the cards it had up before the reload.
+    reoffer(this.state, progress.choices);
+    saveProgress(progressOf(this.state));
 
     fit(this.add.image(0, 0, 'background')).setOrigin(0);
     const hero = FIGURES.hero!;
@@ -227,7 +231,7 @@ export class GameScene extends Phaser.Scene {
     // Everything, the auto-pick countdown included, waits while the skill book, a hire panel or the
     // fortify panel is open.
     if (s.choices || held(s)) this.hirePanel.close();
-    if (s.choices || s.phase !== 'break') this.fortifyPanel.close();
+    if (s.choices || held(s)) this.fortifyPanel.close();
     if (!this.skillBook.open && !this.hirePanel.open && !this.fortifyPanel.open) {
       // The battle plays at the chosen speed; the auto-pick countdown stays in real seconds.
       const game = s.choices ? dt : dt * this.speed;
@@ -984,8 +988,17 @@ export class GameScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => {
         const s = this.state;
-        if (s.phase !== 'break' || s.choices || this.aim || this.skillBook.open || this.hirePanel.open) return;
-        this.fortifyPanel.show(s.forts, s.coins, canFortify(s));
+        if (held(s) || s.choices || this.aim || this.skillBook.open || this.hirePanel.open) return;
+        // During a wave one is bought ahead, and set up when the next break starts.
+        const note =
+          s.phase !== 'break'
+            ? s.forts.queued
+              ? 'Bought for the next break. That break sells no other.'
+              : 'Buy one now: it is set up when the next break starts.'
+            : canFortify(s)
+              ? 'One fortification a break. Coins also hire guards.'
+              : 'Bought this break. The next break sells another.';
+        this.fortifyPanel.show(s.forts, s.coins, note, (id) => canBuyFort(s, id));
       });
     this.heatText = this.add.text(HEAT.x, HEAT.y, '', textStyle(11, '#ffb08a')).setOrigin(0.5).setDepth(UI_DEPTH - 4);
     this.roarText = this.add.text(ROAR_CHIP.x, ROAR_CHIP.y, 'Chilled bow: slow shots', textStyle(10, '#d8f0ff')).setOrigin(0.5).setDepth(UI_DEPTH - 5);
@@ -998,15 +1011,15 @@ export class GameScene extends Phaser.Scene {
     const { x, y, w, h } = AIM;
     drawPanel(g, x - w / 2, y - h / 2, w, h, { c: 5, fill: 0x1e222c, alpha: 0.92, edge: s.aimMode === 'nearest' ? GOLD.dark : GOLD.light, lw: 1.5 });
     this.aimText.setText(`Aim: ${AIMS[s.aimMode].name}`);
-    // The Fortify button only during a break; lit while this break's fortification is still to buy.
+    // The Fortify button is always there; lit while one can still be bought (in a break, or queued
+    // during a wave for the next one).
     const f = FORTIFY;
     const fg = this.fortifyBg;
     fg.clear();
-    const show = s.phase === 'break' && !s.choices;
-    const open = show && canFortify(s);
-    this.fortifyText.setVisible(show).setColor(open ? '#ffe7a0' : '#9aa0ac').setText(open ? 'Fortify' : 'Fortified');
-    if (show) drawPanel(fg, f.x - f.w / 2, f.y - f.h / 2, f.w, f.h, { c: 5, fill: open ? SLATE.light : 0x1e222c, alpha: 0.95, edge: open ? GOLD.light : 0x4a5060, lw: open ? 2 : 1 });
-    if (show && open) fg.fillStyle(GOLD.light, 0.1 + 0.15 * this.pulse(900)).fillPoints(chamferPts(f.x - f.w / 2, f.y - f.h / 2, f.w, f.h, 5), true);
+    const open = canFortify(s);
+    this.fortifyText.setColor(open ? '#ffe7a0' : '#9aa0ac').setText(open ? 'Fortify' : s.forts.queued ? 'Queued' : 'Fortified');
+    drawPanel(fg, f.x - f.w / 2, f.y - f.h / 2, f.w, f.h, { c: 5, fill: open ? SLATE.light : 0x1e222c, alpha: 0.95, edge: open ? GOLD.light : 0x4a5060, lw: open ? 2 : 1 });
+    if (open) fg.fillStyle(GOLD.light, 0.1 + 0.15 * this.pulse(900)).fillPoints(chamferPts(f.x - f.w / 2, f.y - f.h / 2, f.w, f.h, 5), true);
     // The heat chip beside the wave track, and the chilled-bow chip while the Frost Giant's roar lasts.
     const heat = s.heat > 0;
     this.heatText.setVisible(heat).setText(`Heat ${s.heat}`);
