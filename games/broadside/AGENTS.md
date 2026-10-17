@@ -13,7 +13,10 @@ charge reaches further and hits harder. Each wave has one captain's order (a bon
 and a wind, and from wave 2 an Admiralty bounty. Sunk enemies drop loot barrels, crippled ones can
 be boarded and taken as escorts (which costs crew), and gold buys upgrades and sailors at a harbor
 between waves, where a prize draft offers a perk for the run and each side's guns are loaded with a
-kind of shot. From wave 6 islands carry shore forts; wave 20 is the pirate haven, whose admiral's
+kind of shot. From wave 6 islands carry shore forts and the harbor offers two courses for the next
+wave (Merchant lane or Hunter patrol); from wave 7 every third wave is a convoy wave, a merchantman
+to see safe to an island. Prizes can be kept as consorts that sail on from wave to wave, and late
+drafts offer a perk's second rank. Wave 20 is the pirate haven, whose admiral's
 flagship wins the campaign when sunk. Between runs, the Admiralty's medals buy starting upgrades
 and the player chooses a ship.
 
@@ -26,7 +29,29 @@ and the player chooses a ship.
   while a draft is open); the perks' rules live in `sim.ts` (`ricochet` in `fire`/`moveBalls`
   via `Ball.skip`, `salvage` in `sink`, `gunners` in `escortBroadsides`, `mortar` in `ownMortar`
   with `GameState.mortarMs`, `grapnels` in `boardMs`/`prizeCrew`, `swivels` in `stats().arc`,
-  `carronades` in `firePlayer`). Shore forts (`GameState.forts`, `Fort`, `FORT` in `state.ts`):
+  `carronades` in `firePlayer`). Perk ranks: `perks` lists a perk once per rank taken
+  (`perkRank`, `MAX_PERK_RANK` 2); `drawDraft(taken, size)` fills the draft with new perks first
+  and then the second rank of held ones, and each perk's numbers are arrays by rank read through
+  `perkValue(s, id, values, none)` in `state.ts` (Bouncing shot's rank is `Ball.bounces`).
+  Courses (`src/game/courses.ts`): when `coursesFor(s.wave + 1)` (from `FIRST_COURSE_WAVE` 6, not
+  the haven) the harbor shows `sail-merchant`/`sail-hunter` instead of `sail`, and `setSail(s,
+  course)` refuses a missing or unwanted course and sets `GameState.course`; `waveShips(wave,
+  course)` adds `MERCHANTS` merchantmen or `HUNTER_BRIGS` brigs, `lootOf` doubles on the Merchant
+  lane, and `reachHarbor` draws `HUNTER_CARDS` more cards after a Hunter patrol. Merchantmen
+  (`role: 'merchant'`, no guns) run from the player in `captain` and get away when
+  `Ship.escapeMs` (set in `spawn` to `ESCAPE_MS`) runs out (`escape`, an `escape` effect, no
+  loot). Consorts (`src/game/consorts.ts`): `reachHarbor` sells every prize but keeps it in
+  `GameState.moored` (richest first); `keep` buys `moored[0]` back for `keepCost` (her sale price),
+  sends `prizeCrew` across and puts her in `consorts` with `Ship.kept`, `keepBlocked` says why it
+  can't (`none`, `full` at `CONSORT_MAX`, `gold`, `crew`); `setSail` moves `consorts` into
+  `escorts` (`station`: in line astern), and the next `reachHarbor` pays `consortWage` each (into
+  `wages`) and patches them, or sells one it can't pay. Convoys (`src/game/convoy.ts`): on
+  `isConvoyWave` `setSail` adds a `merchant` to `escorts` and sets `GameState.convoy` (her id, an
+  island at least `CONVOY_FAR` off, `convoyCargo`, `state`); `sailConvoy` steers her for the island
+  (`planDetour`, `fend` and `shoalAhead` skip that island) at `CONVOY_SAIL` of her speed
+  (`speedOf`), `sailEnemy` sends sloops and fireships after her (`convoyShip`), `arrive` pays the
+  cargo within `CONVOY_ARRIVE` of the beach, `tick` marks her `lost` once she is gone from
+  `escorts`, and the harbor waits while she is `sailing`. Shore forts (`GameState.forts`, `Fort`, `FORT` in `state.ts`):
   `setSail` places `fortsFor(wave)` of them on islands drawn at random, `fortsFire` lobs shells at
   the player in range, the player's and prizes' balls and any blast batter them in `moveBalls`
   and `blast`, and `raze` pays `fortBounty(wave)`; the wave is beaten without them, and `setSail`
@@ -110,13 +135,14 @@ File map (all under `src/`, plus the shared files it imports):
   frame and draws everything (HUD, order card, helm wheels and fire controls with their charge
   rings, wakes, detour courses, effects, firing arcs, harbor and game-over overlays).
 - `scenes/layout.ts`: `VIEW`, `HUD_HEIGHT`, the `HELM` wheel centres, the `FIRE` control centres,
-  `ORDER_CARD`, `BOUNTY` (the bounty line's left edge), the `HARBOR` panel and row geometry (with
-  `loadY` for the loading buttons), `DRAFT` (the prize draft's cards), the `OVER` (game-over)
+  `ORDER_CARD`, `BOUNTY` (the bounty line's left edge), `CONVOY` (the convoy's line under it), the
+  `HARBOR` panel and row geometry (with `loadY` for the loading buttons), `COURSE` (the two course
+  buttons), `DRAFT` (the prize draft's cards), the `OVER` (game-over)
   panel, its ship buttons (`shipY`, `shipW`) and rows, `WIND` (the wind rose), `SCUTTLE`,
   `BUTTON`, `UI_DEPTH` and `FONT` (a Georgia serif stack, no web fonts).
 - `game/state.ts`: types, the world and timing constants (including `CHARGE_MS`, `REACH_MIN` and
   `CHARGE_DAMAGE`), `stats()` (the player's stats from the hull, upgrades, perks and the wave's
-  order, including `arc`), `crewPace`, `reachOf`, `newShip`, `newRun` (with the Admiralty's
+  order, including `arc`), `perkValue` (a perk's number at the rank held), `crewPace`, `reachOf`, `newShip`, `newRun` (with the Admiralty's
   boons and the hull), `FIRST_ORDER`, `loadedShot`, `sideRange`, the wind (`WIND_SPEED`,
   `WIND_REACH`, `FIRST_WIND`, `windSpeed`, `windReach`, `windFrom`), boarding (`BOARD_HP`,
   `BOARD_REACH`, `BOARD_MS`, `PRIZE_CREW`, `CREW_TO_BOARD`), crew (`CREW_PACE_MIN`,
@@ -126,9 +152,16 @@ File map (all under `src/`, plus the shared files it imports):
 - `game/hulls.ts`: `HullId`, the `HULLS` table (name, description, `unlockWave`, the stats the
   old `PLAYER` had, `crew`, and `mortarSide` with `shell` for the Bomb Ketch), `HULL_IDS`,
   `FIRST_HULL` and `unlocked`.
-- `game/perks.ts`: `PerkId`, the `PERKS` table (name, description), `PERK_IDS`, `DRAFT_SIZE`,
-  `FIRST_DRAFT`, `drawDraft` and the perks' numbers (`SALVAGE_HULL`, `RICOCHET_FLIGHT`,
-  `OWN_MORTAR`, `SWIVEL_ARC`, `CARRONADE_DAMAGE`).
+- `game/perks.ts`: `PerkId`, the `PERKS` table (name, `desc`, `desc2` for rank 2), `PERK_IDS`,
+  `DRAFT_SIZE`, `FIRST_DRAFT`, `MAX_PERK_RANK`, `perkRank`, `drawDraft` and the perks' numbers by
+  rank (`SALVAGE_HULL`, `RICOCHET_FLIGHT`, `OWN_MORTAR`, `GUNNERS_PACE`, `GRAPNELS`, `SWIVEL_ARC`,
+  `CARRONADE_DAMAGE`).
+- `game/courses.ts`: `CourseId`, the `COURSES` table (name, desc for the sail button),
+  `COURSE_IDS`, `FIRST_COURSE_WAVE`, `coursesFor`, `MERCHANTS`, `MERCHANT_LOOT`, `ESCAPE_MS`,
+  `HUNTER_BRIGS` and `HUNTER_CARDS`.
+- `game/convoy.ts`: `CONVOY_WAVE`, `CONVOY_EVERY`, `isConvoyWave`, `convoyCargo`, `CONVOY_SAIL`,
+  `CONVOY_ARRIVE` and `CONVOY_FAR`.
+- `game/consorts.ts`: `CONSORT_MAX` and `consortWage`.
 - `game/bounties.ts`: `BountyId`, the `BOUNTIES` table (`desc` for the wave, `kind` keep or do,
   `met`, `offered`), `BOUNTY_IDS`, `FIRST_BOUNTY_WAVE`, `BOUNTY_HULL`, `BOUNTY_SHARE`, `swiftMs`,
   `drawBounty`, `bountyMet` and `bountyPay`.
@@ -149,15 +182,16 @@ File map (all under `src/`, plus the shared files it imports):
   reaching the harbor (`reachHarbor`: prizes sold and crews back, the bounty paid, the draft set)
   and winning at the haven. `hurt` and `kill` are the only places hull and crew are taken off.
   `detourCourse`, `speedOf`, `boardable`, `canBoard`, `prizeCrew`, `boardMs`, `scuttleGold`,
-  `fortBounty`, `SHELL_MS`, `SHELL_R` and `FIRE_BLAST` are exported for the scene. `scuttle` is
-  the in-battle action; `pickPerk`, `buy`, `repair`, `hire`, `loadShot` and `setSail` are the
-  harbor actions, and `sailOn` the end card's.
+  `fortBounty`, `convoyShip`, `keepCost`, `keepBlocked`, `SHELL_MS`, `SHELL_R` and `FIRE_BLAST`
+  are exported for the scene. `scuttle` is the in-battle action (never the convoy); `pickPerk`,
+  `buy`, `repair`, `hire`, `keep`, `loadShot` and `setSail` are the harbor actions, and `sailOn`
+  the end card's.
 - `game/ships.ts`: the `ENEMIES` table (name, hp, radius, speed, turn, guns, damage, reload,
   range, loot, `crew`, `grape` for ships that load grapeshot within `GRAPE_RANGE`, and `role`
   for the fireship and the mortar ketch, whose `damage`, `reloadMs` and `range` are the blast's
-  or the mortar's). `name` labels a detour course and the scuttle button.
+  or the mortar's; `merchant` for the merchantman, with no guns). `name` labels a detour course and the scuttle button.
 - `game/upgrades.ts`: the `UPGRADES` table, `UPGRADE_IDS`, `costOf`, `REPAIR_COST` and `HIRE`.
-- `game/waves.ts`: `waveShips(wave)` (which ships come, in order), `hpScale(wave)`, `HAVEN_WAVE`,
+- `game/waves.ts`: `waveShips(wave, course)` (which ships come, in order, on the course chosen), `hpScale(wave)`, `HAVEN_WAVE`,
   `FIRST_FORT_WAVE` and `fortsFor(wave)`.
 - `game/save.ts`: `loadBestWave`, `saveBestWave`, `loadMedals`, `saveMedals`, `loadHull` and
   `saveHull`.
@@ -170,16 +204,20 @@ File map (all under `src/`, plus the shared files it imports):
   it repeats seamlessly), `frame` (screen vignette and neatline), `ship-<kind>` (hulls included),
   `fort`, `shot-round`,
   `shot-chain`, `shot-grape`, `shot-powder`, `loot`, `helm-<side>[-held]`, `fire-<side>[-held]`,
-  `seal-<order>`, `order-card`, `hud-bar`, `wind-rose`, `panel-harbor` and `panel-over`. Every texture is
+  `seal-<order>` (the merchantman's look has `extra: 'cargo'`), `order-card`, `hud-bar`, `wind-rose`, `panel-harbor` and `panel-over`. Every texture is
   painted finer than game pixels and shown scaled down by the same factor, set by `bakeAll` from
   `sharpRes` and the screen's `renderScale`: small pieces at `HI` (2 on a screen that needs no
   scaling, up to about 4 on 4K), `frame` and the panels at `SHEET_RES` (shown at `1 / SHEET_RES`),
   and `sea` at `SEA_RES`, a whole number so its copies join without a seam. A new texture is
   baked at one of these and shown at its inverse.
-- `ui/Harbor.ts`: the harbor panel, a ledger on parchment. Its rows are built from `UPGRADE_IDS`
-  plus `repair` and `hire`, followed by the two loading buttons (`load-port`, `load-starboard`)
-  and a "Set sail" button, and a second container holds the prize draft's `DRAFT_SIZE` cards
-  (`draft-<perk>`), shown instead of the ledger while `GameState.draft` is not empty. It records
+- `ui/Harbor.ts`: the harbor panel, a ledger on parchment. Under the title, the gold line, a line
+  of news (bounty, convoy, consorts' wages) and the perks held (`II` for rank 2). Its rows are
+  built from `UPGRADE_IDS` plus `repair`, `hire` and `keep`, followed by the two loading buttons
+  (`load-port`, `load-starboard`) and either a "Set sail" button (`sail`) or, when `coursesFor`
+  the next wave, one button per course (`sail-<course>`, `COURSE` in `layout.ts`), and a second
+  container holds up to `DRAFT_SIZE + HUNTER_CARDS` cards (`draft-<perk>`, headed "Prize: rank 2"
+  for a held perk, centred by the draft's length), shown instead of the ledger while
+  `GameState.draft` is not empty. It records
   each visible button's screen rectangle in `buttons` (the cards while drafting, else the
   ledger's).
 - `ui/Button.ts`: `makeButton`, a cream chart-label button ruled in ink.
@@ -205,7 +243,8 @@ How it runs:
   but nothing spawns or fires, and `charge` is held at null), `fighting`, `harbor`, `over` or
   `won` (the haven's end card, which shares the game-over container; "Sail on" returns to
   `harbor`). `tick` returns early in `harbor`, `over` and `won`, after ageing effects. The harbor
-  opens once `toSpawn` and `enemies` are both empty (forts don't count); on that tick every
+  opens once `toSpawn` and `enemies` are both empty (forts don't count) and no convoy is still
+  `sailing`; on that tick every
   barrel left in `loot` goes through `haulIn` (gold, `plundered`, `waveLoot` and a `coins`
   effect), `loot` is emptied and `charge`/`aim` reset, and `reachHarbor` pays the bounty and
   sets the draft. The game is over when the player's hp reaches 0 or below; `playerSunk` then
@@ -272,6 +311,8 @@ State model (`src/game/state.ts`):
 - `GameState` holds the phase, `hull` (`HullId`), wave, timers (`breakMs`, `spawnMs`), the
   `toSpawn` queue, `player`, `helm`, `aim` (which fire controls are held, written by the scene),
   `charge` (each side's charge 0..1, or null when not aiming), `order` (the wave's `OrderId`),
+  `course` (the wave's `CourseId` or null), `convoy` (`Convoy` or null), `consorts` and `moored`
+  (ships waiting in harbor), `wages` (the last harbor's, null for none),
   `wind` (the heading the wind blows toward), `loadout` (each side's `ShotKind`), `enemies`,
   `escorts` (prizes), `shells`, `forts`, `balls`, `loot`, `effects`, `gold`, `plundered`, `sunk`,
   `taken` (prizes this run), `ranks` (upgrade ranks, absent means 0), `perks` and `draft`
@@ -283,15 +324,17 @@ State model (`src/game/state.ts`):
   before an island can damage it again), `slowMs` (chain shot) and `jamMs` (grapeshot), which
   `tick` counts down for every ship in every phase, so a ship hit just before the game ends
   doesn't stay tinted behind the panel; `boardMs` (time the player has been alongside); and
-  `detour` (enemies and escorts). The player is always id 1 with kind `player`. A prize keeps its
+  `detour` (enemies and escorts); `escapeMs` (a fleeing merchantman's time left, else 0) and
+  `kept` (a consort). The player is always id 1 with kind `player`. A prize keeps its
   id, so its sprite carries over from the enemy it was. A `Fort` has its `island` index,
   position, `hp`/`maxHp`, `reload` and `hitMs`.
 - `Ball` carries its velocity, remaining `ms`, `damage`, `fromPlayer` (fired by the player or a
   prize, so it hits enemies), `shot` (`round`, `chain`, `grape` or `powder`; prize shot is always
-  `round`, enemy shot `round` or `grape` up close) and `skip` (flight left after one bounce, 0
-  without Bouncing shot). A `Shell` has its landing spot, `ms`, `total` and `damage`. `Loot` has
+  `round`, enemy shot `round` or `grape` up close) and `skip` (the flight after each skip off
+  the water, 0 without Bouncing shot) and `bounces` (skips left, the perk's rank). A `Shell` has its landing spot, `ms`, `total` and `damage`. `Loot` has
   `gold` and `ms` to live. An `Effect` is visual only (`splash`, `smoke` with the side's
-  `heading`, `hit`, `sink`, `coins`, `blast` with its `size`, `prize`).
+  `heading`, `hit`, `sink`, `coins`, `blast` with its `size`, `prize`, `escape` drawn as "She got
+  away!").
 - Only `sim.ts` functions mutate state, plus the scene writing `helm` and `aim` each frame. The
   player's derived stats always come from `stats(s)`. The stored derived values are
   `player.maxHp`, which `buy('hull')` updates, and `player.radius`/`maxCrew`, set from the hull
@@ -310,10 +353,13 @@ Randomness and timing: `Math.random` is used in `spawn` (the angle at which an e
 `fire` (one call per shot, even for the player, whose spread is 0; grapeshot makes three per gun,
 and from wave 3 brigs and bigger ships fire it up close), in `lobAt` (two per shell: ketches,
 forts and the player's own mortar) and `lob` with a spread (the Bomb Ketch's mortar uses none),
-and once each in `setSail` for `drawOrder`, the wind, `drawBounty` and each fort's island, and in
-`reachHarbor` for `drawDraft` (once per card), never before wave 1 is beaten, which is why the
+and once each in `setSail` for `drawOrder`, the wind, `drawBounty`, each fort's island and a convoy's
+island, and in `reachHarbor` for `drawDraft` (once per card), never before wave 1 is beaten, which is why the
 first order, wind and draft are fixed and wave 1 has no bounty, forts or grapeshot from enemies.
-Adding guns or shots therefore shifts the random sequence the test relies on.
+Adding guns or shots therefore shifts the random sequence the test relies on. So does adding a
+Phaser `Text` (each takes a UUID from `Math.random` when created), so a new text object in
+`GameScene` or `Harbor` makes the playthrough's first wave play out differently, though just as
+repeatably.
 The art uses its own seeded generator (`rng` in `art.ts`), never `Math.random`. All timing comes
 from `update`'s `time`. There is no `Date` or `setTimeout` in the game.
 
@@ -331,7 +377,12 @@ Data tables, where to tune:
 - Fireship and mortar: `FIRE_BLAST`, `SHELL_MS`, `SHELL_R` and `SHELL_SPREAD` at the top of
   `sim.ts`; their damage is `ENEMIES[kind].damage`.
 - Admiralty: `BOONS` and `BEST_BONUS` in `admiralty.ts`; `WIN_MEDALS` in `state.ts`.
-- Perks: `PERKS`, `FIRST_DRAFT`, `DRAFT_SIZE` and their numbers in `perks.ts`.
+- Perks: `PERKS`, `FIRST_DRAFT`, `DRAFT_SIZE`, `MAX_PERK_RANK` and their numbers by rank in `perks.ts`.
+- Courses: `COURSES`, `FIRST_COURSE_WAVE`, `MERCHANTS`, `MERCHANT_LOOT`, `ESCAPE_MS`, `HUNTER_BRIGS`
+  and `HUNTER_CARDS` in `courses.ts`; the merchantman in `ENEMIES`.
+- Convoys: `CONVOY_WAVE`, `CONVOY_EVERY`, `convoyCargo`, `CONVOY_SAIL`, `CONVOY_ARRIVE` and
+  `CONVOY_FAR` in `convoy.ts`. Consorts: `CONSORT_MAX` and `consortWage` in `consorts.ts`,
+  `CONSORT_STATION` (how far astern they set out) at the top of `sim.ts`.
 - Bounties: `BOUNTIES`, `FIRST_BOUNTY_WAVE`, `BOUNTY_HULL`, `BOUNTY_SHARE` and `swiftMs` in
   `bounties.ts`.
 - Crew: `crew` per hull and enemy kind, `GRAPE_RANGE` in `ships.ts`, `PRIZE_CREW`,
@@ -409,7 +460,8 @@ Data tables, where to tune:
   taps the first card), and `WORLD` (copied into the test, which measures bearings and distances
   the shortest way round). The test also relies on: the `break` phase allowing steering, the
   first enemy appearing within 5s, `GameState` field names, harbor button ids matching
-  `UpgradeId` / `'sail'` / `load-<side>` / `draft-<perk>`, the draft's cards being the only
+  `UpgradeId` / `'sail'` / `load-<side>` / `draft-<perk>` (the harbor after wave 1 offers no
+  course, so its button is still `sail`), the draft's cards being the only
   buttons listed while it is on offer, `bestWave` becoming 1 on reaching the harbor, wave 1
   posting no bounty, and wave 2 having more ships than wave 1. Also `FIRST_WIND` (0, copied into
   the test), both sides starting loaded with round shot, the chain order overriding the loadout,
@@ -419,11 +471,15 @@ Data tables, where to tune:
 
 - **Add an upgrade:** add an id to `UpgradeId` and an entry to `UPGRADES` in `upgrades.ts`, then
   apply it in `stats()` in `state.ts`. The harbor adds a row automatically, but `HARBOR` in
-  `layout.ts` only fits seven rows (five upgrades, repair, hire) plus the loading buttons and
-  "Set sail", so adjust `h`, `firstRowY`, `rowGap` or `loadY`.
-- **Add a perk:** add an id to `PerkId` and an entry to `PERKS` in `perks.ts`, then its rule in
-  `sim.ts` (or `stats()`) behind `hasPerk(s, id)`. The draft offers it on its own; keep the name
+  `layout.ts` only fits eight rows (five upgrades, repair, hire, keep) plus the loading buttons
+  and the sail buttons, so adjust `h`, `firstRowY`, `rowGap` or `loadY`.
+- **Add a perk:** add an id to `PerkId` and an entry to `PERKS` in `perks.ts` (with `desc2` for its
+  second rank), then its rule in `sim.ts` (or `stats()`) behind `hasPerk(s, id)`, with its number
+  an array by rank read through `perkValue`. The draft offers it on its own; keep the name
   and description short enough for a `DRAFT` card.
+- **Add a course:** add an id to `CourseId` and an entry to `COURSES` in `courses.ts`, apply it in
+  `waveShips` (or `lootOf`/`reachHarbor` in `sim.ts`), and widen `COURSE` in `layout.ts` (it fits
+  two buttons side by side).
 - **Add a bounty:** add an id to `BountyId` and an entry to `BOUNTIES` in `bounties.ts` with
   `met` reading the wave's trackers (add one to `GameState`, reset in `setSail`, if none fits)
   and `offered` if only some waves can post it. Nothing on wave 1: the playthrough expects the
@@ -470,6 +526,9 @@ Data tables, where to tune:
   Prizes are enemy kinds, so they can go through it. The player's own numbers come from
   `HULLS[s.hull]` through `stats()`; `SHIP_LOOKS` is keyed by hull or enemy kind, so the scene
   goes through `lookOf(ship, s.hull)`.
+- `s.escorts` holds prizes, consorts and the convoy alike: tell the convoy by `s.convoy?.id` (she is
+  never sold, scuttled or kept, and `sailEscort` hands her to `sailConvoy`) and a consort by
+  `kept`. A merchantman prize has no guns, so she keeps station and `escortBroadsides` skips her.
 - Every loop over all ships must include `s.escorts` as well as `s.player` and `s.enemies`
   (timers, separation, running aground, blasts, wakes). A ship moves between `enemies` and
   `escorts` on capture, so take it out of the list before pushing it to the other. Forts are not

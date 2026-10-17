@@ -10,10 +10,10 @@ export const howToPlay: HowToPlay = {
     { input: 'Tap Scuttle the prize', action: 'Sink your newest prize at once for twice her loot' },
     {
       input: 'Tap a card or a row at the harbor',
-      action: 'Keep a perk, buy an upgrade, patch the hull or hire sailors',
+      action: 'Keep a perk, buy an upgrade, patch the hull, hire sailors or keep a prize as a consort',
     },
     { input: 'Tap Port or Starboard under the ledger', action: "Load that side's guns with the next kind of shot" },
-    { input: 'Tap Set sail', action: 'Leave the harbor for the next wave' },
+    { input: 'Tap Set sail, or from wave 6 a course', action: 'Leave the harbor for the next wave: the Merchant lane or a Hunter patrol' },
   ],
   loop: [
     "Read the captain's order and the wind for the wave, then steer to close on an enemy.",
@@ -29,6 +29,8 @@ export const howToPlay: HowToPlay = {
     'Sail alongside a ship under a fifth of its hull for a moment to take her as a prize that fights for you.',
     "Running onto an island's sand costs you 8 hull, but islands also make cover to fight round.",
     'The sea has no edge: sail off one side and you come back in on the other.',
+    'Keep a prize as a consort at the harbor and she sails on with you from wave to wave, for a wage.',
+    'On a convoy wave, see the merchantman safe to her island for her cargo: the sloops and fireships hunt her.',
     'Medals from each run buy a head start for the next one on the "Sunk!" panel.',
   ],
 };

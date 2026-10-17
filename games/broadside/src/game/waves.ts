@@ -1,10 +1,14 @@
+import { HUNTER_BRIGS, MERCHANTS, type CourseId } from './courses';
 import type { EnemyKind } from './ships';
 
-/** The ships a wave brings, in the order they come. */
-export function waveShips(wave: number): EnemyKind[] {
+/**
+ * The ships a wave brings, in the order they come, on the `course` chosen for it: the Merchant
+ * lane adds merchantmen, the Hunter patrol more brigs.
+ */
+export function waveShips(wave: number, course: CourseId | null = null): EnemyKind[] {
   const ships: EnemyKind[] = [];
   const sloops = 1 + wave;
-  const brigs = wave >= 3 ? Math.floor((wave - 1) / 2) : 0;
+  const brigs = (wave >= 3 ? Math.floor((wave - 1) / 2) : 0) + (course === 'hunter' ? HUNTER_BRIGS : 0);
   const galleons = wave >= 5 ? Math.floor((wave - 3) / 2) : 0;
   const fireships = wave >= 3 ? Math.floor(wave / 3) : 0;
   const ketches = wave >= 4 ? Math.floor((wave - 1) / 3) : 0;
@@ -14,6 +18,7 @@ export function waveShips(wave: number): EnemyKind[] {
   for (let i = 0; i < galleons; i++) ships.splice(Math.min(ships.length, 2 + i * 3), 0, 'galleon');
   for (let i = 0; i < fireships; i++) ships.splice(Math.min(ships.length, 2 + i * 3), 0, 'fireship');
   for (let i = 0; i < ketches; i++) ships.splice(Math.min(ships.length, 3 + i * 4), 0, 'ketch');
+  if (course === 'merchant') for (let i = 0; i < MERCHANTS; i++) ships.splice(Math.min(ships.length, 1 + i * 3), 0, 'merchant');
   // Every fifth wave the enemy's flagship comes last, once its fleet is engaged; at the pirate
   // haven it is the admiral's own.
   if (wave === HAVEN_WAVE) ships.push('admiral');

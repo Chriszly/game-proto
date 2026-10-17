@@ -15,7 +15,9 @@ wave is beaten the ship puts into harbor, where a prize draft offers three perks
 and the gold buys a stronger hull, heavier shot, more guns, a faster crew, faster sails and more
 sailors, and each side's guns are loaded with the shot you choose. From wave 2 the Admiralty posts
 a bounty each wave, a side goal that pays half the wave's loot on top. From wave 6 some islands
-carry shore forts that shell you; wave 20 is the pirate haven, three forts and the admiral's
+carry shore forts that shell you, and the harbor charts two courses for the next wave; from wave 7
+every third wave sends a merchantman with you to see safe to an island. A prize can be kept as a
+consort that sails on with you from wave to wave, and late drafts offer the second rank of a perk; wave 20 is the pirate haven, three forts and the admiral's
 flagship, and sinking her wins the campaign. When your ship goes down, the Admiralty awards
 medals that buy a head start for the next run, which can sail a different ship.
 
@@ -31,9 +33,9 @@ round the held button, while a brig steers round the island on a dotted course](
 | Hold **Port guns** (above the left wheel) or Q, then let go | Aim, charge and fire the port broadside |
 | Hold **Starboard** guns (above the right wheel) or E, then let go | Aim, charge and fire the starboard broadside |
 | Tap a card of the prize draft (as the harbor opens) | Keep that perk for the rest of the run |
-| Tap a row at the harbor | Buy that upgrade, patch the hull or hire sailors |
+| Tap a row at the harbor | Buy that upgrade, patch the hull, hire sailors or keep a prize as a consort |
 | Tap **Port** or **Starboard** under the harbor's ledger | Load that side with the next kind of shot |
-| Set sail | Leave the harbor for the next wave |
+| **Set sail**, or from wave 6 **Merchant lane** or **Hunter patrol** | Leave the harbor for the next wave, on the course chosen |
 | Tap **Scuttle the prize** (under the bounty) | Sink your newest prize for twice its loot |
 | Tap a ship and rows on the "Sunk!" panel, then **Sail again** | Choose the ship for the next run and spend the Admiralty's medals on starting upgrades |
 | **Sail on** (once the haven is razed) | Keep the run going through the waves beyond |
@@ -81,8 +83,8 @@ On a phone, one thumb can hold a wheel while the other holds a fire control.
    The prize crew patches her to half her hull and she sails with you as an escort for the rest of
    the wave, in a ring of green dots, fighting any enemy near you; enemies shoot at her too. A
    button under the order card scuttles your newest prize at once for twice her loot; a prize
-   still afloat when the wave is beaten is sold in harbor for her loot. Fireships can't be
-   boarded.
+   still afloat when the wave is beaten is sold in harbor for her loot, unless you keep her as a
+   consort (below). Fireships can't be boarded.
 5. **Enemy ships** come over the horizon one after another, close in and turn to fire their own
    broadsides, which go off on their own. Their crews aim worse than yours. Rust-coloured arrows at
    the edge of the screen point to ships out of sight.
@@ -117,20 +119,22 @@ On a phone, one thumb can hold a wheel while the other holds a fire control.
    | New canvas | 3 | Fast Sails 1 |
    | An extra pair of guns | 5 | More Guns 1 |
 
-13. **The prize draft.** As each harbor opens, three cards offer perks; tap one to keep it for the
-   rest of the run, at no cost, and the ledger opens. The first wave always offers Salvage,
-   Bouncing shot and A mortar of your own; later drafts draw from the perks not yet taken, so
-   every run builds differently.
+13. **The prize draft.** As each harbor opens, three cards offer perks (four after a Hunter
+   patrol); tap one to keep it for the rest of the run, at no cost, and the ledger opens. The first
+   wave always offers Salvage, Bouncing shot and A mortar of your own; later drafts draw from the
+   perks not yet taken, so every run builds differently. Once fewer new perks are left than the
+   draft has cards, it fills up with the second rank of perks you hold (headed "Prize: rank 2"),
+   so drafts go on until about wave 14.
 
-   | Perk | What it does |
-   | --- | --- |
-   | Salvage | Every ship sunk patches 6 hull |
-   | Bouncing shot | A ball of yours that would splash skips once across the water and flies half as far again |
-   | A mortar of your own | Every 6 seconds a shell is lobbed at the nearest enemy within 360, bursting for 22 |
-   | Prize gun crews | Your prizes reload twice as fast |
-   | Grapnels | Boarding takes half the time and a prize needs half the crew |
-   | Swivel guns | Broadsides train half as wide again either side (48 degrees instead of 32) |
-   | Carronades | Shot at a ship inside half your reach hits 50% harder |
+   | Perk | What it does | Rank 2 |
+   | --- | --- | --- |
+   | Salvage | Every ship sunk patches 6 hull | Patches 12 |
+   | Bouncing shot | A ball of yours that would splash skips once across the water and flies half as far again | Skips twice |
+   | A mortar of your own | Every 6 seconds a shell is lobbed at the nearest enemy within 360, bursting for 22 | Every 4 seconds |
+   | Prize gun crews | Your prizes reload twice as fast | Three times as fast |
+   | Grapnels | Boarding takes half the time and a prize needs half the crew | A quarter of each |
+   | Swivel guns | Broadsides train half as wide again either side (48 degrees instead of 32) | Twice as wide (64 degrees) |
+   | Carronades | Shot at a ship inside half your reach hits 50% harder | 75% harder |
 
 14. **Admiralty bounties.** From wave 2, a line under the order card names one side goal for the
    wave and whether it still stands. Met when the wave is beaten, it pays half the loot gathered
@@ -140,7 +144,7 @@ On a phone, one thumb can hold a wheel while the other holds a fire control.
    | --- | --- |
    | Lose no more than 20 hull | The hull lost this wave (before any patching) stays at 20 or under |
    | Never run aground | Your ship touches no beach this wave |
-   | Beat the wave within N seconds | The last ship sinks within 30 seconds plus 8 a ship |
+   | Beat the wave within N seconds | The last ship sinks within 30 seconds plus 8 a ship (never on a convoy wave) |
    | Board a ship and take her as a prize | A prize is taken this wave |
    | Sink the mortar ketch before any brig | Only on waves with both; a ketch goes down or is taken as a prize before the first brig is |
 
@@ -170,6 +174,34 @@ On a phone, one thumb can hold a wheel while the other holds a fire control.
    | Frigate | the start | 120 | 2 (10 damage, 2 s reload, range 260) | 90 | 40 sailors |
    | Cutter | best wave 3 | 90 | 1 heavy gun (14 damage, 1.5 s reload, range 240) | 114, turns faster | 24 sailors |
    | Bomb Ketch | best wave 6 | 150 | 2 to port (10 damage, 2.2 s, range 250); a mortar to starboard | 70, turns slowly | 36 sailors; holding the starboard control aims a shell that lands where the arc reaches two seconds later, bursting for 26 (more when charged) |
+
+19. **Choose the next course.** From the harbor after wave 5, "Set sail" becomes two buttons, one
+   per charted course for the next wave (not the haven), and the wave's banner names it:
+
+   | Course | The wave brings |
+   | --- | --- |
+   | Merchant lane | Three merchantmen among the warships. They carry no guns and run from you, and one that runs for 30 seconds gets clean away ("She got away!"). Every ship sunk, scuttled or sold that wave pays double loot |
+   | Hunter patrol | Two more brigs, and the prize draft after the wave has four cards instead of three |
+
+20. **Keep a consort.** The harbor's "Keep a consort" row buys back the richest prize sold there
+   for her sale price: her prize crew goes across again and she sails into the next wave with
+   you, setting out astern, and on from wave to wave while she floats. Each harbor she draws a
+   wage of half her wave 1 loot (a brig 13 gold), and the crew patches a quarter of her hull; one
+   the purse can't pay is paid off and sold. You can keep two at once, and scuttling one sinks
+   her for double loot as with any prize.
+21. **Convoy waves.** From wave 7, every third wave (7, 10, 13, 16, 19 and on, never the haven)
+   a laden merchantman sets out astern of you for an island at least 500 away, named on the
+   wave's banner and a green line under the order card, and a dashed green ring marks where she
+   must reach; a green arrow points to it when off screen. She sails slower than you and steers
+   round other islands on her own; the enemy's sloops and fireships hunt her instead of you. If
+   she gets there she pays her cargo (90 gold plus 6 a wave) straight into the hold; sunk, it is
+   lost. The wave isn't over until she arrives or is sunk.
+
+![From wave 6 the harbor charts two courses, and a brig prize can be kept as a consort](docs/screenshots/harbor-courses.webp)
+
+![A convoy for Turtle Isle: the dashed green ring she must reach, with sloops closing in](docs/screenshots/convoy.webp)
+
+![A draft after a Hunter patrol: four cards, two of them a perk's second rank](docs/screenshots/prize-draft-rank-2.webp)
 
 ![The prize draft as the harbor opens: three perks, one to keep](docs/screenshots/prize-draft.webp)
 
@@ -235,6 +267,7 @@ astern came over the edge after the ship](docs/screenshots/wrap-around.webp)
 | Mortar ketch | wave 4 | Keeps its distance and lobs a shell every few seconds; a rust ring marks where it will land, two seconds later, where you'd be holding your course. 20 damage to any ship under it. 30 gold |
 | Flagship | every fifth wave | Comes last, four guns a side and the toughest hull, its hull bar always shown, 150 gold; loads grapeshot up close |
 | Admiral's flagship | wave 20 | The haven's last ship: five guns a side, 440 hull, 300 gold. Sinking her wins the campaign |
+| Merchantman | Merchant lane waves | No guns; runs from you and gets away after 30 seconds. 40 gold (doubled on the lane). Also the convoy you escort |
 
 Every wave brings one more sloop than the last, and enemy hulls (and forts) get 12% tougher each wave.
 
