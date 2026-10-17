@@ -284,7 +284,8 @@ study, shade gardens and a mirrored second production line.
   garden belt carry `run` (`GARDEN_RUN` of their garden) so pixies fly them from the garden they
   came from: `beltSpan(id, kind, run)` and `takeForBelt` return it.
 - Rival: `tick` calls `rivalNewDay` whenever `rival.day` falls behind `contract.day`: yesterday's
-  `sold` against `RIVAL_SALES` moves `streak` on or resets it, `RIVAL_MONTH_DAYS` closes the
+  `sold` against `RIVAL_SALES` (times `dayShare`, the part of the day that went by, which
+  `deliverForContract` sets when a kept contract ends the day early) moves `streak` on or resets it, `RIVAL_MONTH_DAYS` closes the
   rival, and `rivalPotionFor(day)` picks today's potion (none before `RIVAL_DAY`). `createRival`
   draws the stall at `RIVAL` once there is anything to say, boarded (faded) when closed.
 - Plague: `tick` starts it at `PLAGUE_DAY` (`plagueAt(0)`), counts the stage's `left` down and
@@ -293,7 +294,8 @@ study, shade gardens and a mirrored second production line.
   Panacea first whenever `PANACEA_RECIPE.inputs` are in; `brew` sets `plague.cured` instead of
   putting it out, and `pickUpFromCauldron` never takes it out fine. `createPlague` draws the card
   at `PLAGUE_CARD` (under the town card, clear of the shelves when the doctor is at the counter)
-  with notes for each change, and `showWin` opens the cure's panel, closed like the others by
+  with notes for each change (starting from `plagueSaved`, the plague as loaded before `catchUp`
+  played the time away, so a stage, relapse or cure while away is told too), and `showWin` opens the cure's panel, closed like the others by
   `closePanels` (any tap).
 
 ### State model
@@ -312,7 +314,7 @@ handed over at the counter, ever), `tips` (tip coins ever), `lastSeen` (wall-clo
 save or load, 0 in a new game), `reputation` (0 to 100), `regulars` (`face`, `wants`), `rush`
 (`day`, `size`, `served`, `lost`, `paid`, or null), `plague` (`stage`, `need`, `made`, `left`,
 `relapses`, `cured`, or null before day 5), `signs` (a `PriceSign` per potion, Fair when missing)
-and `rival` (`open`, `day`, `potion`, `sold`, `streak`). Each order also has `tip`, its full tip (`maxTip`
+and `rival` (`open`, `day`, `potion`, `sold`, `streak`, and `dayShare` once a kept contract ended the day early). Each order also has `tip`, its full tip (`maxTip`
 of its size), and may have `asked`, `face`, `regular` and `rush`. `counter.shelf` and `carrying`
 can hold fine potions. A plot may be `blighted` with `blightMs`; a belt item may carry `run`; a
 brew's `out` may be `PANACEA`.

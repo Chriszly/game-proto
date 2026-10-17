@@ -250,7 +250,7 @@ function deliverForPlague(state: GameState, potion: PotionId) {
   if (!stage || !plague || (stage.potion && stage.potion !== potion)) return;
   plague.made++;
   if (plague.made < plague.need) return;
-  state.plague = { ...plagueAt(plague.stage + 1, plague.relapses), left: 0 };
+  state.plague = plagueAt(plague.stage + 1, plague.relapses);
 }
 
 /**
@@ -301,15 +301,17 @@ export function clearBlight(state: GameState, plotIndex: number): Feedback | nul
 /**
  * A new day for the rival: yesterday's sales of its potion are counted (more than its own keep the
  * streak going, fewer break it; a month's streak closes it for good), and it picks today's potion.
+ * A day a kept contract ended early only has to beat the rival's sales for the part of it that went by.
  */
 function rivalNewDay(state: GameState) {
   const { rival } = state;
   if (rival.open && rival.potion) {
-    rival.streak = rival.sold > RIVAL_SALES ? rival.streak + 1 : 0;
+    rival.streak = rival.sold > RIVAL_SALES * (rival.dayShare ?? 1) ? rival.streak + 1 : 0;
     if (rival.streak >= RIVAL_MONTH_DAYS) rival.open = false;
   }
   rival.day = state.contract.day;
   rival.sold = 0;
+  delete rival.dayShare;
   rival.potion = rival.open ? rivalPotionFor(state, rival.day) : null;
 }
 
@@ -665,6 +667,7 @@ function deliverForContract(state: GameState) {
   contract.made++;
   if (contract.made < contract.need) return;
   state.coins += contract.reward;
+  state.rival.dayShare = 1 - contract.dayLeft / DAY_MS;
   state.contract = contractFor(state, contract.day + 1, contract.kept + 1);
 }
 
