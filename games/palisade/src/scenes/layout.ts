@@ -44,6 +44,8 @@ export const STREAK = { x: 650, y: 499, w: 168, h: 21 };
 export const CARDS = { xs: [240, 480, 720], y: 300, w: 220, h: 250 };
 /** The auto-pick countdown under the cards: its text's centre, and the width and height of its bar. */
 export const COUNTDOWN = { x: 480, y: 450, w: 160, h: 6 };
+/** The auto-pick checkbox right of the countdown: its box's centre and size. */
+export const AUTO_TOGGLE = { x: 600, y: 462, size: 18 };
 /** The "Skill book" button in the top bar, and the book it opens: its size and the grid of slots. */
 export const SKILL_BOOK = {
   button: { x: 520, y: 20, w: 150, h: 26 },

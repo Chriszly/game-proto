@@ -12,7 +12,7 @@ import { GUARDS, type GuardKind } from '../game/guards';
 import { HEAT_RULES, MAX_HEAT, WIN_WAVE } from '../game/heat';
 import { RELICS, SETS, setComplete } from '../game/relics';
 import { ROADS, type RoadId } from '../game/roads';
-import { clearProgress, loadAim, loadFound, loadProgress, loadSpeed, saveAim, saveFound, saveProgress, saveSpeed } from '../game/save';
+import { clearProgress, loadAim, loadAutoPick, loadFound, loadProgress, loadSpeed, saveAim, saveAutoPick, saveFound, saveProgress, saveSpeed } from '../game/save';
 import {
   CALTROP_PATCH,
   RAIN_FALL_MS,
@@ -48,7 +48,7 @@ import {
   type Enemy,
   type GameState,
 } from '../game/state';
-import { FILLERS, type UpgradeId } from '../game/upgrades';
+import { FILLERS, UPGRADES, type UpgradeId } from '../game/upgrades';
 import { isBossWave, waveTrack } from '../game/waves';
 import { FortifyPanel } from '../ui/FortifyPanel';
 import { HirePanel } from '../ui/HirePanel';
@@ -200,7 +200,7 @@ export class GameScene extends Phaser.Scene {
     this.createRelicPanel();
     this.createGameOver();
     this.createWon();
-    this.levelUp = new LevelUp(this, (id) => this.pick(id));
+    this.levelUp = new LevelUp(this, (id) => this.pick(id), loadAutoPick(), saveAutoPick);
     this.roadChoice = new RoadChoice(this, (id) => this.pickRoad(id));
     this.hirePanel = new HirePanel(
       this,
@@ -231,7 +231,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.skillBook.open && !this.hirePanel.open && !this.fortifyPanel.open) {
       // The battle plays at the chosen speed; the auto-pick countdown stays in real seconds.
       const game = s.choices ? dt : dt * this.speed;
-      tick(s, game);
+      tick(s, game, this.levelUp.autoPick);
       if (!s.choices && !held(s)) this.clock += game;
     }
     if (s.phase !== phase || s.wave !== wave || s.levelUps !== levelUps || s.level !== level) saveProgress(progressOf(s));
@@ -571,6 +571,25 @@ export class GameScene extends Phaser.Scene {
         const alpha = t < 0.7 ? 1 : 1 - (t - 0.7) / 0.3;
         texts[0].setPosition(e.x, e.y - rise).setAlpha(alpha);
         texts[1]?.setPosition(e.x + texts[0].width / 2 + 2, e.y - rise - 10).setAlpha(alpha);
+      } else if (e.kind === 'autoPick' && e.upgrade) {
+        // The countdown took a card: name it, with its new rank, rising over the battle.
+        seen.add(e.id);
+        let texts = this.pops.get(e.id);
+        if (!texts) {
+          const u = UPGRADES[e.upgrade];
+          const rank = this.state.ranks[e.upgrade] ?? 0;
+          const name = u.filler ? u.name : `${u.name} (rank ${rank})`;
+          texts = [
+            this.add.text(e.x, e.y, 'Auto-picked', textStyle(15, '#c9c3b6', 4)).setOrigin(0.5),
+            this.add.text(e.x, e.y, name, textStyle(22, '#ffcf4a', 5)).setOrigin(0.5),
+          ];
+          for (const text of texts) text.setDepth(UI_DEPTH - 10);
+          this.pops.set(e.id, texts);
+        }
+        const rise = Math.min(1, t * 6) * 12 + t * 10;
+        const alpha = t < 0.8 ? 1 : 1 - (t - 0.8) / 0.2;
+        texts[0].setPosition(e.x, e.y - rise - 16).setAlpha(alpha);
+        texts[1].setPosition(e.x, e.y - rise + 6).setAlpha(alpha);
       } else if (e.kind === 'orb') {
         inFlight += e.amount ?? 0;
         this.drawOrbs(e.x, e.y, t);

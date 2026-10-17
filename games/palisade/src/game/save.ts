@@ -102,3 +102,22 @@ export function saveAim(mode: AimMode) {
     // Storage can be blocked; the choice then only lasts until a reload.
   }
 }
+
+const AUTO_PICK_KEY = 'palisade-auto-pick';
+
+/** Whether a level-up takes a card at random once its countdown runs out (on unless turned off). */
+export function loadAutoPick(): boolean {
+  try {
+    return localStorage.getItem(AUTO_PICK_KEY) !== '0';
+  } catch {
+    return true;
+  }
+}
+
+export function saveAutoPick(on: boolean) {
+  try {
+    localStorage.setItem(AUTO_PICK_KEY, on ? '1' : '0');
+  } catch {
+    // Storage can be blocked; the choice then only lasts until a reload.
+  }
+}

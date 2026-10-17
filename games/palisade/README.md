@@ -30,7 +30,8 @@ wave 30 lifts the siege, which wins the run and unlocks the next heat.
 | Aim toggle (above the caltrops) or T | Cycle who the ranger shoots first: Nearest, Strongest, Flyers or Healers |
 | Keep fighting / Heat N | After the siege is lifted on wave 30: fight on past it, or start a new run at the next heat |
 | Tap a road card | After a boss, take that road for the next ten waves (after 10 seconds one is taken at random) |
-| Tap or click a card | Take that upgrade when a level-up comes up (after 10 seconds one is taken at random) |
+| Tap or click a card | Take that upgrade when a level-up comes up (after 10 seconds one is taken at random, and a pop-up names it) |
+| Auto-pick checkbox (beside the level-up's countdown) | On by default; untick it to halt the countdown so a level-up waits for your pick, tick it to let it run again |
 | 1x / 2x (bottom right) | Switch the battle between normal and double speed; the level-up countdown stays 10 real seconds |
 | Skill book (in the top bar) | Open the skill book; the battle waits until Back |
 | Hover over (or tap) the barricade's bar | Show its health, what Stout Timber adds and how much it mends after each wave |
@@ -293,6 +294,8 @@ level-up too, to check what the hero has before choosing.
 ![The empty skill book of a new hero](docs/screenshots/skill-book-empty.png)
 ![A skill book part filled in, sorted by theme, with a relic's tooltip](docs/screenshots/skill-book.png)
 ![The barricade's tooltip in the top bar](docs/screenshots/barricade-tooltip.png)
+![The pop-up after the countdown took an upgrade](docs/screenshots/auto-pick-pop.png)
+![Auto-pick unticked: the level-up waits for a pick](docs/screenshots/auto-pick-off.png)
 ![The skill book with all 28 skills](docs/screenshots/skill-book-new-skills.png)
 
 The switch at the right end of the experience bar plays the battle at double speed. It lights up
