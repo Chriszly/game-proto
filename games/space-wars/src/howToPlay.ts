@@ -1,6 +1,7 @@
 import type { HowToPlay } from '../../../shared/howToPlay';
+import { byLanguage } from '../../../shared/i18n';
 
-export const howToPlay: HowToPlay = {
+const en: HowToPlay = {
   goal: 'Lead one of five factions, build a fleet and destroy all four rival hubs. If your own hub falls, you lose.',
   controls: [
     { input: 'Tap a faction card', action: 'Pick the faction you command before the battle' },
@@ -36,3 +37,50 @@ export const howToPlay: HowToPlay = {
     'Rivals hold off for about a minute and a quarter, then attack whoever last hit them.',
   ],
 };
+
+/** US English only changes the spelling. */
+const enUS: HowToPlay = {
+  goal: en.goal,
+  controls: en.controls.map((c) => ({ input: c.input, action: c.action.replace(/Centre/g, 'Center') })),
+  loop: en.loop,
+  tips: en.tips,
+};
+
+const de: HowToPlay = {
+  goal: 'Führe eine von fünf Fraktionen, baue eine Flotte und zerstöre alle vier rivalisierenden Basen. Fällt deine eigene Basis, verlierst du.',
+  controls: [
+    { input: 'Eine Fraktionskarte antippen', action: 'Vor der Schlacht die Fraktion wählen, die du führst' },
+    { input: 'Einen offenen Sektor unter den Karten antippen', action: 'Den Feldzugssektor wählen, in dem du kämpfst' },
+    { input: 'Eine Karte auf dem Vertragsbrett antippen', action: 'Diesen Vertrag als nächstes Ziel annehmen' },
+    { input: 'Ein Schiff antippen oder einen Rahmen über Schiffe ziehen', action: 'Deine Kampfschiffe wählen' },
+    { input: 'Freien Raum oder einen Feind antippen', action: 'Die gewählten Schiffe dorthin fliegen lassen oder das Ziel angreifen' },
+    { input: 'Bau-Taste, dann auf die Karte tippen', action: 'Ein Gebäude nahe einer deiner Basen setzen' },
+    { input: 'Bau- und Forschungstasten', action: 'Schiffe an Kaserne oder Basis einreihen oder Verbesserungen erforschen' },
+    { input: 'Rückzug-Taste oder B', action: 'Die gewählten Schiffe zur Reparatur heimschicken' },
+    { input: 'Flaggschiff-Taste', action: 'Dein einziges Flaggschiff an der Basis bauen, sobald drei Verträge erfüllt sind' },
+    { input: 'Rivalen in der oberen Leiste oder T', action: 'Die Rivalenliste öffnen, um Waffenruhen anzunehmen oder Tribut zu zahlen' },
+    { input: 'Pfeiltasten / WASD oder mit zwei Fingern ziehen', action: 'Die Karte verschieben' },
+    { input: 'H', action: 'Die Karte auf deine Basis zentrieren' },
+  ],
+  loop: [
+    'Deine Sammler bauen von selbst Kristall ab und bringen es zu deiner Basis.',
+    'Gib Kristall für eine Kaserne aus, um den ersten Vertrag zu erfüllen.',
+    'Baue Kriegsschiffe an deiner Kaserne und wähle sie als Staffel.',
+    'Schicke Späher ins Unerkundete, um das Relaisfeuer zu finden, und halte es für Kristall.',
+    'Zerstöre feindliche Schiffe für Bergegut und stoße dann in die rivalisierenden Basen vor.',
+  ],
+  tips: [
+    'Nach dem ersten Vertrag bietet das Brett immer zwei an: tippe einen an, sonst gilt nach 15 s der erste. Jeder bringt Kristall und einen Rangbonus für den Rest der Schlacht.',
+    'Der dritte erfüllte Vertrag schaltet ein Flaggschiff frei: ein langsames Großkampfschiff mit einer stärkeren Fraktionsfähigkeit. Geht es verloren, ist es für die Schlacht weg.',
+    'Sind nur noch zwei Rivalen übrig oder hältst du mehr als ein Drittel der Basen, schließen sie einen Pakt und greifen dich nach einem Countdown gemeinsam an.',
+    'Jeder Sieg öffnet den nächsten, schwereren Feldzugssektor und lässt dich einen Bonus aus dieser Schlacht für die folgenden Sektoren behalten.',
+    'Ein Kriegsschiff allein am Relaisfeuer erobert es, und der Besitzer verdient 3 Kristall pro Sekunde, solange eins dort bleibt.',
+    'Jedes zerstörte feindliche Schiff lässt einen goldenen Splitter im Wert von 8 Kristall fallen.',
+    'Schiffe in einem Nebel fliegen langsamer, bleiben aber verborgen, bis sie feuern oder ein Feind nahe kommt.',
+    'Ein Schiff mit 3 Abschüssen wird Veteran, mit 8 ein Ass, und trifft jedes Mal härter.',
+    'Schiffe reparieren sich langsam neben einer Basis, einem Außenposten oder Lager.',
+    'Rivalen halten sich etwa eineinviertel Minuten zurück und greifen dann den an, der sie zuletzt getroffen hat.',
+  ],
+};
+
+export const howToPlay: HowToPlay = byLanguage({ en, 'en-US': enUS, de });

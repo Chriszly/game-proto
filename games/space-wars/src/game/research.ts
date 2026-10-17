@@ -1,20 +1,21 @@
 // Research at the hub: three tracks (hull, weapons, engines) bought with crystal, one at a time,
 // each improving every ship of the faction by a step per level. No Phaser.
+import type { TextKey } from '../i18n';
 
 export type Track = 'hull' | 'weapons' | 'engines';
 
 export const TRACKS: readonly Track[] = ['hull', 'weapons', 'engines'];
 
+/** A track's name and what one level adds (for the tooltip), as keys of `i18n/en.ts`. */
 export interface TrackDef {
-  name: string;
-  /** What one level adds, for the tooltip. */
-  effect: string;
+  name: TextKey;
+  effect: TextKey;
 }
 
 export const TRACK_DEFS: Record<Track, TrackDef> = {
-  hull: { name: 'Hull', effect: 'hit points' },
-  weapons: { name: 'Weapons', effect: 'damage' },
-  engines: { name: 'Engines', effect: 'speed' },
+  hull: { name: 'hullName', effect: 'hullEffect' },
+  weapons: { name: 'weaponsName', effect: 'weaponsEffect' },
+  engines: { name: 'enginesName', effect: 'enginesEffect' },
 };
 
 /** How many levels each track has, and what each level adds as a share (0.1 is +10%). */

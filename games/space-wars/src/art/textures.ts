@@ -165,7 +165,7 @@ export function bakeAll(scene: Phaser.Scene) {
   if (scene.textures.exists(SHARD_KEY)) return;
   RES = Phaser.Math.Clamp(renderScale, 2, MAX_RES);
   // Every faction's heavy is drawn at the same size: as long as the Iron Dominion battleship.
-  const heavyReach = reach(FACTION_ART['Iron Dominion']().units.heavy).r;
+  const heavyReach = reach(FACTION_ART.ironDominion().units.heavy).r;
   FACTIONS.forEach((def, f) => {
     const art = FACTION_ART[def.name]();
     for (const type of UNIT_TYPES) {

@@ -262,7 +262,7 @@ test('plays the first round', async ({ page }, testInfo) => {
   const card = (await game.pickCards())[0];
   await tap(card.x + card.w / 2, card.y + card.h / 2);
   s = await game.state();
-  expect(s.sides[PLAYER].def.name, 'the picked faction commands the battle').toBe('Solar Concord');
+  expect(s.sides[PLAYER].def.name, 'the picked faction commands the battle').toBe('solarConcord');
   // The fog of war hides the map beyond what the base sees, the relay beacon included: it has to be found.
   expect(await game.knows(s.beacon.x, s.beacon.y), 'the beacon starts hidden in the fog').toBe(false);
   expect(s.fog.explored, 'only the area round the base is explored').toBeLessThan(0.15);
