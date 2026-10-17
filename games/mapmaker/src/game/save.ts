@@ -1,5 +1,7 @@
+import en from '../i18n/en';
+import type { TextKey } from '../i18n';
 import { findFeatures } from './island';
-import { GRID, WRECK_SUPPLIES, indexOf, maxSupplies, type GameState } from './state';
+import { GRID, WRECK_SUPPLIES, indexOf, maxSupplies, type Clue, type GameState, type Ground, type Riddle } from './state';
 
 // The whole game is saved whenever it reaches the port or the harbor, and on every survey, so a
 // reload carries on where it left off. The best Royal Atlas (fewest voyages) is kept apart, so it
@@ -38,6 +40,9 @@ export function loadGame(): GameState | null {
     s.royal ??= null;
     // Saves from before the next isle was rolled at the sale: setSail rolls it.
     s.next ??= null;
+    // Saves from before the translations kept feature names and riddle clues in English words.
+    for (const f of [...s.features, ...(s.next?.features ?? []), ...(s.chart?.features ?? [])]) f.name = nameKey(f.name);
+    for (const r of [s.riddle, s.next?.riddle]) if (r) r.clues = r.clues.map(oldClue).filter((c) => c !== null);
     for (const c of [s.commission, ...s.board]) {
       if (!c) continue;
       c.voyages ??= 1;
@@ -66,6 +71,37 @@ export function loadGame(): GameState | null {
   } catch {
     return null;
   }
+}
+
+/** The key of a feature name saved as its English words, from before the names were keys. */
+function nameKey(name: string): TextKey {
+  return name in en ? (name as TextKey) : ((Object.keys(en) as TextKey[]).find((k) => en[k] === name) ?? 'otterBrook');
+}
+
+const OLD_TILES = ['', 'One tile', 'Two tiles', 'Three tiles'];
+type FromClue = Extract<Clue, { kind: 'from' }>;
+const OLD_MARKS: Record<string, FromClue['mark']> = {
+  'a peak': 'mountain',
+  'a village': 'village',
+  'the ruins': 'ruins',
+  'the port': 'port',
+};
+const OLD_GROUND: Record<string, Ground> = { 'on a meadow': 'grass', 'in a forest': 'forest', 'on the sand': 'beach', 'on the hills': 'hills' };
+const OLD_TRAITS: Record<string, Clue> = {
+  'by the water': { kind: 'water' },
+  'out of sight of the sea': { kind: 'inland' },
+  'beside a river': { kind: 'river' },
+};
+
+/** A riddle clue saved as its English words, from before the clues were translated, or null if unread. */
+function oldClue(clue: Riddle['clues'][number] | string): Clue | null {
+  if (typeof clue !== 'string') return clue;
+  if (OLD_GROUND[clue]) return { kind: 'ground', ground: OLD_GROUND[clue] };
+  if (OLD_TRAITS[clue]) return OLD_TRAITS[clue];
+  const m = /^(\w+ tiles?) (north|east|south|west) of (.+)$/.exec(clue);
+  const tiles = m ? OLD_TILES.indexOf(m[1]) : -1;
+  if (!m || tiles < 1 || !OLD_MARKS[m[3]]) return null;
+  return { kind: 'from', tiles, dir: m[2] as FromClue['dir'], mark: OLD_MARKS[m[3]] };
 }
 
 export function saveGame(s: GameState) {

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { settings } from '../../../../shared/settings';
+import { formatNumber } from '../../../../shared/i18n';
 import { renderScale } from '../../../../shared/scaling';
 import { CANVAS, NAME_COLOR, TINT, TS, paintFog, paintTerrain, placeNames } from '../art/map';
 import { BLUE, GOLD_DARK, GREEN, GREY, HI, INK, MAGENTA, RULE, SHEET, SLATE, TRACK, VELLUM, hex } from '../art/paint';
@@ -47,13 +48,16 @@ import {
   indexOf,
   maxSupplies,
   rankOf,
+  type Clue,
   type Commission,
   type GameState,
+  type Ground,
   type Point,
   type Tile,
 } from '../game/state';
 import { CHART_ORDER, TERRAIN, isLandmark } from '../game/terrain';
 import { UPGRADES, UPGRADE_IDS, nextCost } from '../game/upgrades';
+import { coins, t, type TextKey } from '../i18n';
 import { makeButton } from '../ui/Button';
 import {
   BOARD,
@@ -241,7 +245,7 @@ export class GameScene extends Phaser.Scene {
       .setScale(1 / HI)
       .setDepth(5.8)
       .setVisible(false);
-    this.hoverPill = this.pill(0, 0, '−1 supply', 64, 13, 7.5).setDepth(8).setVisible(false);
+    this.hoverPill = this.pill(0, 0, t('supplyCost', { n: 1 }), 64, 13, 7.5).setDepth(8).setVisible(false);
     this.createPanel();
     this.syncIsland();
 
@@ -250,8 +254,8 @@ export class GameScene extends Phaser.Scene {
     // known. Taps on a button or the overlay are theirs alone.
     this.input.on('pointerdown', (p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
       if (over.length > 0) return;
-      const t = this.tileAtScreen(p.worldX, p.worldY);
-      if (!t) return;
+      const at = this.tileAtScreen(p.worldX, p.worldY);
+      if (!at) return;
       const s = this.state;
       const before = {
         surveyed: s.surveyed.length,
@@ -261,18 +265,18 @@ export class GameScene extends Phaser.Scene {
         rivalRuins: !!s.rival?.ruins,
         rivalTreasure: !!s.riddle?.rival,
       };
-      if (survey(s, t.x, t.y)) {
+      if (survey(s, at.x, at.y)) {
         saveGame(s);
         const fresh = s.surveyed.slice(before.surveyed);
-        this.announce(t, fresh);
+        this.announce(at, fresh);
         this.announceFinds(fresh, before.storms, before.known);
         this.announceFeatures(before.features);
         this.announceRival(before.rivalRuins, before.rivalTreasure);
-      } else if (dig(s, t.x, t.y)) {
+      } else if (dig(s, at.x, at.y)) {
         saveGame(s);
-        const c = tileCentre(t.x, t.y);
-        if (s.riddle?.found) this.notice(c.x, c.y - 14, `Treasure! +${TREASURE_VALUE}c`, true);
-        else this.notice(c.x, c.y - 14, 'Nothing here');
+        const c = tileCentre(at.x, at.y);
+        if (s.riddle?.found) this.notice(c.x, c.y - 14, t('treasureFound', { n: TREASURE_VALUE }), true);
+        else this.notice(c.x, c.y - 14, t('nothingHere'));
       }
     });
   }
@@ -388,13 +392,13 @@ export class GameScene extends Phaser.Scene {
     for (let k = 0; k < 4; k++) g.fillStyle(k % 2 ? hex(SHEET) : hex(INK)).fillRect(sx + k * 20, 32.5, 20, 5);
     g.lineStyle(0.75, hex(INK)).strokeRect(sx, 32.5, 80, 5);
     this.text(sx, 25, '0', { size: 7, weight: 500 }).setOrigin(0.5);
-    this.text(sx + 80, 25, '2 tiles', { size: 7, weight: 500 }).setOrigin(0.5);
+    this.text(sx + 80, 25, t('scaleBar'), { size: 7, weight: 500 }).setOrigin(0.5);
     // North arrow.
     const nx = 609;
     const ny = 33;
     g.fillStyle(hex(INK)).fillTriangle(nx, ny - 13, nx + 5.5, ny + 6, nx, ny + 2);
     g.lineStyle(0.75, hex(INK)).strokeTriangle(nx, ny - 13, nx - 5.5, ny + 6, nx, ny + 2);
-    this.text(nx, ny + 13, 'N', { size: 7, weight: 800 }).setOrigin(0.5);
+    this.text(nx, ny + 13, t('northArrow'), { size: 7, weight: 800 }).setOrigin(0.5);
     // Grid letters along the top and numbers down the side.
     for (let x = 0; x < GRID.w; x++) {
       this.text(MAP.x + (x + 0.5) * MAP.tile, MAP.y - 8, String.fromCharCode(65 + x), { size: 7, color: '#7a858e' }).setOrigin(0.5);
@@ -466,7 +470,7 @@ export class GameScene extends Phaser.Scene {
       if (hinted && !hint) {
         const c = tileCentre(i % GRID.w, Math.floor(i / GRID.w));
         const star = this.add.image(0, 0, 'landmark-hint').setScale(1 / HI);
-        const label = this.text(0, 17, tile.terrain === 'village' ? 'village?' : 'ruins?', {
+        const label = this.text(0, 17, t(tile.terrain === 'village' ? 'villageHint' : 'ruinsHint'), {
           size: 7.5,
           italic: true,
           color: GOLD_DARK,
@@ -520,13 +524,13 @@ export class GameScene extends Phaser.Scene {
     };
     for (const p of fresh) {
       const find = s.tiles[indexOf(p.x, p.y)].find;
-      if (find === 'wreck') say(p, `Shipwreck: +${WRECK_SUPPLIES} supplies`, true);
-      if (find === 'cave') say(p, `Cave: an artifact (${artifactValue(s)}c)`, true);
-      if (find === 'storm' && s.storms.length === stormsBefore) say(p, 'A storm blows over');
+      if (find === 'wreck') say(p, t('wreckFound', { n: WRECK_SUPPLIES }), true);
+      if (find === 'cave') say(p, t('caveFound', { n: artifactValue(s) }), true);
+      if (find === 'storm' && s.storms.length === stormsBefore) say(p, t('stormOver'));
     }
-    for (const st of s.storms.slice(stormsBefore)) say(st, 'Storm: blocked this voyage');
+    for (const st of s.storms.slice(stormsBefore)) say(st, t('stormBlocks'));
     if (!knewRiddle && s.riddle?.known) {
-      say(fresh.find((p) => s.tiles[indexOf(p.x, p.y)].terrain === 'ruins')!, 'A riddle chart in the ruins!', true);
+      say(fresh.find((p) => s.tiles[indexOf(p.x, p.y)].terrain === 'ruins')!, t('riddleFound'), true);
     }
   }
 
@@ -538,7 +542,7 @@ export class GameScene extends Phaser.Scene {
       if (doneBefore.includes(f.name)) continue;
       const mid = f.tiles[Math.floor(f.tiles.length / 2)];
       const c = tileCentre(mid.x, mid.y);
-      this.notice(c.x, c.y - 16 - 18 * n++, `${f.name} charted whole: +${f.bonus}c`, true);
+      this.notice(c.x, c.y - 16 - 18 * n++, t('chartedWhole', { name: t(f.name), n: f.bonus }), true);
     }
   }
 
@@ -548,8 +552,8 @@ export class GameScene extends Phaser.Scene {
     const r = s.rival;
     if (!r) return;
     const c = tileCentre(r.at.x, r.at.y);
-    if (!hadTreasure && s.riddle?.rival) this.notice(c.x, c.y - 30, 'The rival dug up the treasure!');
-    else if (!hadRuins && r.ruins) this.notice(c.x, c.y - 30, 'The rival has read the riddle');
+    if (!hadTreasure && s.riddle?.rival) this.notice(c.x, c.y - 30, t('rivalDug'));
+    else if (!hadRuins && r.ruins) this.notice(c.x, c.y - 30, t('rivalRead'));
   }
 
   /** A notice on the map: a magenta pill (or a white one with magenta type) that floats up and fades. */
@@ -593,8 +597,9 @@ export class GameScene extends Phaser.Scene {
     const tx = Phaser.Math.Clamp(centre.x + 5, MAP.x + 82, MAP.x + MAP_W - 82);
     const g = this.add.graphics();
     g.fillStyle(hex(MAGENTA)).fillRoundedRect(-80, -13.5, 160, 27, 4);
-    const label = this.text(-71, 0, 'VIEWSHED', { size: 8, weight: 800, color: '#ffd9ec', ls: 1.5 }).setOrigin(0, 0.5);
-    const count = this.text(-11, 0, `${fresh.length} tiles`, { size: 10, weight: 600, color: '#ffffff' }).setOrigin(0, 0.5);
+    const label = this.text(-71, 0, t('viewshed'), { size: 8, weight: 800, color: '#ffd9ec', ls: 1.5 }).setOrigin(0, 0.5);
+    // The count follows the label, which runs longer in some languages.
+    const count = this.text(Math.max(-11, label.x + label.width + 6), 0, t('tiles', { n: fresh.length }), { size: 10, weight: 600, color: '#ffffff' }).setOrigin(0, 0.5);
     const sum = this.text(71, 0, '+0', { size: 15, weight: 900, color: '#ffffff' }).setOrigin(1, 0.5);
     const tally = this.add.container(tx, ty, [g, label, count, sum]).setDepth(7).setAlpha(0);
     this.sweep = { age: 0, centre, radius, tiles, total, tally, tallyCount: sum, tallyAt: { x: tx, y: ty }, below };
@@ -614,13 +619,13 @@ export class GameScene extends Phaser.Scene {
     if (!sw) return;
     sw.age += dt;
     const still = settings.reduceMotion;
-    const t = sw.age;
-    const fade = t < HOLD_MS ? 1 : Math.max(0, 1 - (t - HOLD_MS) / FADE_MS);
+    const age = sw.age;
+    const fade = age < HOLD_MS ? 1 : Math.max(0, 1 - (age - HOLD_MS) / FADE_MS);
     if (fade <= 0) {
       this.endSweep();
       return;
     }
-    const grow = still ? 1 : 1 - Math.pow(1 - Math.min(1, t / RING_MS), 3);
+    const grow = still ? 1 : 1 - Math.pow(1 - Math.min(1, age / RING_MS), 3);
     const r = sw.radius * grow;
     const g = this.ring.clear();
     g.fillStyle(hex(MAGENTA), 0.07 * fade).fillCircle(sw.centre.x, sw.centre.y, r);
@@ -631,7 +636,7 @@ export class GameScene extends Phaser.Scene {
       const a = (k / dots) * Math.PI * 2;
       g.fillCircle(sw.centre.x + Math.cos(a) * r, sw.centre.y + Math.sin(a) * r, 0.9);
     }
-    const tallyOn = still || t >= GATHER_AT;
+    const tallyOn = still || age >= GATHER_AT;
     if (tallyOn) {
       sw.tally.setAlpha(fade);
       const edge = sw.below ? sw.tallyAt.y - 13.5 : sw.tallyAt.y + 13.5;
@@ -650,7 +655,7 @@ export class GameScene extends Phaser.Scene {
       }
       // Each chip leaves for the tally a little after the one before it.
       const leave = GATHER_AT + n * 40;
-      const k = Math.min(1, Math.max(0, (t - leave) / GATHER_MS));
+      const k = Math.min(1, Math.max(0, (age - leave) / GATHER_MS));
       if (k >= 1) {
         tile.chip.setAlpha(0);
         gathered += tile.value;
@@ -661,7 +666,7 @@ export class GameScene extends Phaser.Scene {
       tile.chip.setPosition(home.x + (sw.tallyAt.x + 50 - home.x) * e, home.y + (sw.tallyAt.y - home.y) * e);
       tile.chip.setAlpha(reached ? 1 - k * 0.6 : 0);
     });
-    const shown = still || t > GATHER_AT + sw.tiles.length * 40 + GATHER_MS ? sw.total : gathered;
+    const shown = still || age > GATHER_AT + sw.tiles.length * 40 + GATHER_MS ? sw.total : gathered;
     const caption = `+${Math.round(shown)}`;
     if (sw.tallyCount.text !== caption) sw.tallyCount.setText(caption);
   }
@@ -743,14 +748,14 @@ export class GameScene extends Phaser.Scene {
         const cost = costOf(s, p.x, p.y);
         if (!lit && cost !== 1) {
           const label = this.costLabel(used++);
-          const caption = cost === 0 ? 'FREE' : `−${cost}`;
+          const caption = cost === 0 ? t('free') : `−${cost}`;
           if (label.text !== caption) label.setText(caption);
           label.setPosition(c.x, c.y + 10).setColor(can ? MAGENTA : GREY).setVisible(true);
         }
         if (lit) {
           const f = featureAt(s, p.x, p.y);
-          const price = cost === 0 ? 'free to follow' : `−${cost} ${cost === 1 ? 'supply' : 'supplies'}`;
-          this.showPill(c, f ? `${price} · finishes ${f.name} +${f.bonus}c` : price);
+          const price = cost === 0 ? t('freeToFollow') : t('supplyCost', { n: cost });
+          this.showPill(c, f ? t('finishes', { price, name: t(f.name), n: f.bonus }) : price);
         }
       }
       const h = this.hover;
@@ -758,17 +763,17 @@ export class GameScene extends Phaser.Scene {
         const c = tileCentre(h.x, h.y);
         g.lineStyle(1.25, hex(MAGENTA));
         dashedRect(g, c.x - 12, c.y - 12, 24, 24, 3, 3);
-        this.showPill(c, `dig here −${DIG_COST}`);
+        this.showPill(c, t('digHere', { n: DIG_COST }));
       }
     }
     for (let k = used; k < this.costLabels.length; k++) this.costLabels[k].setVisible(false);
   }
 
   private showPill(c: Spot, caption: string) {
-    const t = this.hoverPill.list[1] as Phaser.GameObjects.Text;
-    if (t.text !== caption) {
-      t.setText(caption);
-      const w = t.width + 12;
+    const label = this.hoverPill.list[1] as Phaser.GameObjects.Text;
+    if (label.text !== caption) {
+      label.setText(caption);
+      const w = label.width + 12;
       (this.hoverPill.list[0] as Phaser.GameObjects.Graphics).clear().fillStyle(hex(MAGENTA)).fillRoundedRect(-w / 2, -6.5, w, 13, 6.5);
     }
     this.hoverPill.setPosition(c.x, c.y + 15.5).setVisible(true);
@@ -819,20 +824,20 @@ export class GameScene extends Phaser.Scene {
     const label = (x: number, y: number, s: string) => this.text(x, y, s, { size: 8.5, weight: 700, color: GREY, ls: 1.5 }).setOrigin(0, 0.5);
     const g = this.add.graphics();
     const rule = (y: number) => g.fillStyle(hex(RULE)).fillRect(PL, y, PR - PL, 1);
-    this.text(PL, 50, 'MAPMAKER', { size: 24, weight: 900, ls: 1 }).setOrigin(0, 0.5);
+    this.text(PL, 50, t('title'), { size: 24, weight: 900, ls: 1 }).setOrigin(0, 0.5);
     this.add.image(PR - 9, 50, 'logo').setScale(1 / HI);
     const isle = this.text(PL, 72, '', { size: 9, weight: 700, color: GREY, ls: 1.5 }).setOrigin(0, 0.5);
     const atlas = this.text(PR, 72, '', { size: 8.5, weight: 700, color: GREY, ls: 1 }).setOrigin(1, 0.5);
     const atlasIcon = this.add.image(PR - 60, 72, 'atlas-empty').setScale(1 / HI);
     rule(85);
-    label(PL, 99, 'SUPPLIES');
+    label(PL, 99, t('supplies'));
     const supplies = this.text(PL, 120, '', { size: 22, weight: 800 }).setOrigin(0, 0.5);
     const max = this.text(PL + 15, 123, '', { size: 12, weight: 600, color: GREY }).setOrigin(0, 0.5);
-    const unused = this.text(PL + 55, 143, `unused: ${SELL_BACK}c each on return`, { size: 8, weight: 600, color: MAGENTA }).setOrigin(0, 0.5);
+    const unused = this.text(PL + 55, 143, t('unusedEach', { n: SELL_BACK }), { size: 8, weight: 600, color: MAGENTA }).setOrigin(0, 0.5);
     rule(154);
-    label(PL, 167, 'COINS');
-    const coins = this.text(PL, 187, '', { size: 22, weight: 800 }).setOrigin(0, 0.5);
-    label(PL + 95, 167, 'THIS CHART');
+    label(PL, 167, t('coinsHead'));
+    const coinTotal = this.text(PL, 187, '', { size: 22, weight: 800 }).setOrigin(0, 0.5);
+    label(PL + 95, 167, t('thisChart'));
     const tiles = this.text(PL + 95, 184, '', { size: 13, weight: 700 }).setOrigin(0, 0.5);
     const worth = this.text(PL + 95, 199, '', { size: 11, weight: 600, color: SLATE }).setOrigin(0, 0.5);
     rule(212);
@@ -840,24 +845,24 @@ export class GameScene extends Phaser.Scene {
     const bw = PR - PL;
     g.lineStyle(1, hex(INK)).strokeRect(PL, 220, bw, 72);
     g.fillStyle(hex(INK)).fillRect(PL, 220, bw, 18);
-    this.text(PL + 9, 229, 'COMMISSION', { size: 8.5, weight: 800, color: '#ffffff', ls: 2 }).setOrigin(0, 0.5);
+    this.text(PL + 9, 229, t('commissionHead'), { size: 8.5, weight: 800, color: '#ffffff', ls: 2 }).setOrigin(0, 0.5);
     const order = this.text(PR - 9, 229, '', { size: 7.5, weight: 600, color: '#aab3ba', ls: 1 }).setOrigin(1, 0.5);
     const commission = this.text(PL + 9, 251, '', { size: 11.5, weight: 600 }).setOrigin(0, 0.5);
     const swatches = [0, 1, 2, 3].map((k) => this.add.image(PL + 16.5 + k * 19, 274, 'swatch-forest').setScale(0.94 / HI));
     const soFar = this.text(PL + 70, 274, '', { size: 12, weight: 700 }).setOrigin(0, 0.5);
-    const done = this.text(PR - 51, 274, 'Done!', { size: 12, weight: 800, color: GREEN }).setOrigin(0, 0.5);
+    const done = this.text(PR - 51, 274, t('done'), { size: 12, weight: 800, color: GREEN }).setOrigin(0, 0.5);
     // The riddle chart.
     g.lineStyle(1, hex(INK)).strokeRect(PL, 300, bw, 62);
     g.fillStyle(hex(MAGENTA)).fillRect(PL, 300, bw, 18);
     this.add.image(PL + 10, 309, 'riddle').setScale(0.62 / HI);
-    this.text(PL + 21, 309, 'RIDDLE CHART', { size: 8.5, weight: 800, color: '#ffffff', ls: 2 }).setOrigin(0, 0.5);
+    this.text(PL + 21, 309, t('riddleHead'), { size: 8.5, weight: 800, color: '#ffffff', ls: 2 }).setOrigin(0, 0.5);
     const riddleTag = this.text(PR - 9, 309, '', { size: 7.5, weight: 700, color: '#ffd9ec', ls: 1 }).setOrigin(1, 0.5);
     const riddle = this.text(PL + 9, 323, '', { size: 10.5, weight: 600, wrap: bw - 18 });
     // The isle goal.
     const isleLabel = label(PL, 377, '');
     const pct = this.text(PR, 378, '', { size: 17, weight: 800 }).setOrigin(1, 0.5);
     const marks = MILESTONES.map((m) =>
-      this.text(PL + (bw * m.pct) / 100, 411, m.atlas ? 'Atlas page' : `+${m.coins}c`, { size: 8.5, weight: 700, color: MAGENTA }).setOrigin(
+      this.text(PL + (bw * m.pct) / 100, 411, m.atlas ? t('atlasPage') : `+${coins(m.coins)}`, { size: 8.5, weight: 700, color: MAGENTA }).setOrigin(
         m.pct === 100 ? 1 : 0.5,
         0.5,
       ),
@@ -868,7 +873,7 @@ export class GameScene extends Phaser.Scene {
       this,
       RETURN_BUTTON.x,
       RETURN_BUTTON.y,
-      'Return to port',
+      t('returnToPort'),
       () => {
         if (returnToPort(this.state)) saveGame(this.state);
       },
@@ -889,7 +894,7 @@ export class GameScene extends Phaser.Scene {
       riddle,
       riddleTag,
       unused,
-      coins,
+      coins: coinTotal,
       tiles,
       worth,
       order,
@@ -917,7 +922,7 @@ export class GameScene extends Phaser.Scene {
       this,
       CAMP_BUTTON.x,
       CAMP_BUTTON.y,
-      `Camp −${CAMP_COST}`,
+      t('camp', { n: CAMP_COST }),
       () => {
         if (pitchCamp(this.state)) saveGame(this.state);
       },
@@ -930,23 +935,23 @@ export class GameScene extends Phaser.Scene {
     const s = this.state;
     const p = this.panel;
     const max = maxSupplies(s);
-    const set = (t: Phaser.GameObjects.Text, v: string) => t.text !== v && t.setText(v);
-    set(this.header.isle, `ISLE ${s.island}`);
+    const set = (text: Phaser.GameObjects.Text, v: string) => text.text !== v && text.setText(v);
+    set(this.header.isle, t('isleHead', { n: s.island }));
     this.header.sheet.setX(24 + this.header.isle.width + 14);
-    const aboard = s.hand ? `  ·  ${HANDS[s.hand].name.toUpperCase()} ABOARD` : '';
-    set(this.header.sheet, `${KINDS[s.kind].name.toUpperCase()}  ·  SURVEY SHEET ${s.voyage - s.isleStart + 1}  ·  SCALE 1 : 40${aboard}`);
-    set(p.isle, `ISLE ${s.island} · VOYAGE ${s.voyage}`);
+    const aboard = s.hand ? t('aboard', { hand: t(HANDS[s.hand].name).toUpperCase() }) : '';
+    set(this.header.sheet, t('sheetHead', { kind: t(KINDS[s.kind].name).toUpperCase(), sheet: s.voyage - s.isleStart + 1, aboard }));
+    set(p.isle, t('panelIsle', { island: s.island, voyage: s.voyage }));
     const pages = s.atlas.length;
-    set(p.atlas, pages === 0 ? 'ATLAS 0' : `ATLAS ${pages}`);
+    set(p.atlas, t('atlasCount', { n: pages }));
     p.atlas.setColor(pages ? INK : GREY);
     p.atlasIcon.setTexture(pages ? `atlas-${s.atlas[pages - 1].kind}` : 'atlas-empty').setX(PR - p.atlas.width - 10);
     set(p.supplies, `${s.supplies}`);
     set(p.max, `/ ${max}`);
     p.max.setX(PL + p.supplies.width + 3);
-    set(p.coins, `${s.coins}`);
+    set(p.coins, formatNumber(s.coins));
     const chart = s.chart ?? chartOf(s);
-    set(p.tiles, `${s.surveyed.length} tiles`);
-    set(p.worth, `worth ${chart.base - chart.rivalLoss + chart.ink + chart.featureCoins + chart.artifactCoins + chart.treasure}c`);
+    set(p.tiles, t('tiles', { n: s.surveyed.length }));
+    set(p.worth, t('worth', { n: chart.base - chart.rivalLoss + chart.ink + chart.featureCoins + chart.artifactCoins + chart.treasure }));
 
     const g = p.live.clear();
     // Supply pips, with the unused ones bracketed in magenta while they can still sell back. A
@@ -984,7 +989,7 @@ export class GameScene extends Phaser.Scene {
 
     // The commission.
     const c = s.commission;
-    set(p.order, `WO-${String(s.voyage).padStart(2, '0')}`);
+    set(p.order, t('workOrder', { n: String(s.voyage).padStart(2, '0') }));
     if (c) {
       const have = Math.min(c.done + (chart.counts[c.terrain] ?? 0), c.need);
       set(p.commission, commissionText(c));
@@ -995,8 +1000,8 @@ export class GameScene extends Phaser.Scene {
         if (img.texture.key !== `swatch-${c.terrain}`) img.setTexture(`swatch-${c.terrain}`);
         img.setAlpha(k < have ? 1 : 0.28);
       });
-      const left = c.voyages > 1 ? ` · ${c.left === 1 ? 'last voyage' : `${c.left} voyages left`}` : '';
-      set(p.soFar, `So far ${have} / ${c.need}${left}`);
+      const left = c.voyages > 1 ? ` · ${voyagesLeft(c)}` : '';
+      set(p.soFar, t('soFar', { have, need: c.need }) + left);
       p.soFar.setX(pips ? PL + 9 + c.need * 19 + 6 : PL + 9).setVisible(true);
       const met = have >= c.need;
       p.done.setVisible(met);
@@ -1010,7 +1015,7 @@ export class GameScene extends Phaser.Scene {
         g.strokePath();
       }
     } else {
-      set(p.commission, 'No commission this voyage.');
+      set(p.commission, t('noCommission'));
       p.swatches.forEach((img) => img.setVisible(false));
       p.soFar.setVisible(false);
       p.done.setVisible(false);
@@ -1018,24 +1023,23 @@ export class GameScene extends Phaser.Scene {
 
     // The riddle chart: hidden in the ruins, then its clues, then the treasure.
     const r = s.riddle;
-    const clue = r ? `“${r.clues.join(', ')}.”` : '';
     const riddle = !r
-      ? 'No riddle on this isle.'
+      ? t('noRiddle')
       : r.found && r.rival
-        ? 'The rival surveyor dug up the treasure first.'
+        ? t('rivalDugRiddle')
         : r.found
-          ? `Treasure dug up: +${TREASURE_VALUE}c ${s.treasure ? 'on this chart' : 'sold'}.`
+          ? t(s.treasure ? 'treasureOnChart' : 'treasureSold', { n: TREASURE_VALUE })
         : r.known
-          ? clue
-          : 'The ruins on this isle hold a riddle chart. Chart them to read it.';
+          ? t('riddleQuote', { clues: r.clues.map(clueText).join(', ') })
+          : t('riddleHidden');
     set(p.riddle, riddle);
     p.riddle.setColor(r?.known && !r.found ? INK : r?.found && !r.rival ? GREEN : SLATE).setFontStyle(r?.known && !r.found ? 'italic 600' : '600');
-    set(p.riddleTag, r?.known && !r.found ? `DIG −${DIG_COST} SUPPLY` : '');
+    set(p.riddleTag, r?.known && !r.found ? t('digTag', { n: DIG_COST }) : '');
 
     // The isle goal: the share charted, with its milestones.
     const { pct } = isleProgress(s);
-    set(p.isleLabel, `ISLE ${s.island} SURVEYED`);
-    set(p.pct, `${pct}%`);
+    set(p.isleLabel, t('isleSurveyed', { n: s.island }));
+    set(p.pct, t('percent', { n: pct }));
     const bw = PR - PL;
     const by = 389;
     g.fillStyle(hex(TRACK)).fillRect(PL, by, bw, 8);
@@ -1048,7 +1052,7 @@ export class GameScene extends Phaser.Scene {
       const reached = !paid && k < s.milestones + due;
       const col = paid ? hex(GREY) : reached ? hex(INK) : hex(MAGENTA);
       g.fillStyle(col).fillTriangle(mx, by - 1, mx - 4, by - 7, mx + 4, by - 7);
-      const caption = m.atlas ? (paid ? 'Atlas page ✓' : 'Atlas page') : paid ? `+${m.coins}c ✓` : `+${m.coins}c`;
+      const caption = (m.atlas ? t('atlasPage') : `+${coins(m.coins)}`) + (paid ? ' ✓' : '');
       // Reached on this voyage: paid with the chart, so it prints in ink until then.
       set(p.marks[k], caption);
       p.marks[k].setColor(paid ? GREY : reached ? INK : MAGENTA);
@@ -1063,16 +1067,16 @@ export class GameScene extends Phaser.Scene {
     const back = s.phase === 'survey' ? Math.min(s.supplies * SELL_BACK, chart.base) : 0;
     const capped = s.phase === 'survey' && back < s.supplies * SELL_BACK;
     p.tag.setVisible(back > 0);
-    set(p.tagText, `+${back}c`);
+    set(p.tagText, `+${coins(back)}`);
     set(
       p.turnBack,
       s.phase !== 'survey' || s.supplies === 0
         ? ''
         : back === 0
-          ? `Unused supplies sell back for ${SELL_BACK}c, up to the chart's worth`
+          ? t('sellBackNone', { each: SELL_BACK })
           : capped
-          ? `Turn back now: ${s.supplies} unused × ${SELL_BACK}c, up to the chart's ${chart.base}c`
-          : `Turn back now: ${s.supplies} unused × ${SELL_BACK}c`,
+          ? t('sellBackCapped', { n: s.supplies, each: SELL_BACK, worth: chart.base })
+          : t('sellBack', { n: s.supplies, each: SELL_BACK }),
     );
     this.syncCampButton();
   }
@@ -1115,39 +1119,40 @@ export class GameScene extends Phaser.Scene {
   private showChart() {
     const s = this.state;
     const chart = s.chart!;
-    const c = this.overlayBase(`Chart of Isle ${s.island} · Voyage ${s.voyage}`);
+    const c = this.overlayBase(t('chartTitle', { island: s.island, voyage: s.voyage }));
     const top = OVERLAY.y - OVERLAY.h / 2;
     const left = OVERLAY.x - OVERLAY.w / 2 + 60;
     const right = OVERLAY.x + OVERLAY.w / 2 - 60;
     type Row = { icon?: string; label: string; value: string; color?: string };
     const rows: Row[] = [];
     const kinds = CHART_ORDER.filter((t) => chart.counts[t]);
-    if (kinds.length === 0) rows.push({ label: 'Nothing charted this voyage', value: '0' });
-    for (const t of kinds) {
-      const n = chart.counts[t]!;
-      rows.push({ icon: `swatch-${t}`, label: `${TERRAIN[t].name}   ${n} × ${TERRAIN[t].value}`, value: `${n * TERRAIN[t].value}` });
+    if (kinds.length === 0) rows.push({ label: t('nothingCharted'), value: '0' });
+    for (const terrain of kinds) {
+      const n = chart.counts[terrain]!;
+      const { name, value } = TERRAIN[terrain];
+      rows.push({ icon: `swatch-${terrain}`, label: `${t(name)}   ${n} × ${value}`, value: `${n * value}` });
     }
     if (chart.rivalTiles > 0) {
-      rows.push({ icon: 'claim', label: `Charted by the rival first   ${chart.rivalTiles} tile${chart.rivalTiles > 1 ? 's' : ''} at half`, value: `−${chart.rivalLoss}`, color: GREY });
+      rows.push({ icon: 'claim', label: t('rivalFirst', { n: chart.rivalTiles }), value: `−${chart.rivalLoss}`, color: GREY });
     }
-    if (chart.ink > 0) rows.push({ label: 'Fine Ink', value: `+${chart.ink}` });
-    for (const f of chart.features) rows.push({ label: `${f.name} charted whole`, value: `+${f.bonus}`, color: GREEN });
+    if (chart.ink > 0) rows.push({ label: t('inkName'), value: `+${chart.ink}` });
+    for (const f of chart.features) rows.push({ label: t('featureRow', { name: t(f.name) }), value: `+${f.bonus}`, color: GREEN });
     if (chart.artifacts > 0) {
       const each = artifactValue(s);
-      const hand = s.hand === 'naturalist' ? ' (Naturalist)' : '';
-      rows.push({ icon: 'artifact', label: `Artifacts from caves   ${chart.artifacts} × ${each}${hand}`, value: `+${chart.artifactCoins}`, color: GOLD_DARK });
+      const hand = s.hand === 'naturalist' ? ` (${t('naturalistName')})` : '';
+      rows.push({ icon: 'artifact', label: t('artefactsRow', { n: chart.artifacts, each }) + hand, value: `+${chart.artifactCoins}`, color: GOLD_DARK });
     }
-    if (chart.treasure > 0) rows.push({ icon: 'treasure', label: 'Treasure from the riddle', value: `+${chart.treasure}`, color: GOLD_DARK });
+    if (chart.treasure > 0) rows.push({ icon: 'treasure', label: t('treasureRow'), value: `+${chart.treasure}`, color: GOLD_DARK });
     const com = s.commission;
     if (com) {
       const have = com.done + (chart.counts[com.terrain] ?? 0);
-      const on = chart.bonus > 0 ? `+${chart.bonus}` : com.left > 1 ? `${have} / ${com.need}, ${com.left - 1} more voyage${com.left > 2 ? 's' : ''}` : 'missed';
-      rows.push({ label: `Commission: ${commissionText(com, 'short')}`, value: on, color: chart.bonus > 0 ? GREEN : GREY });
+      const on = chart.bonus > 0 ? `+${chart.bonus}` : com.left > 1 ? t('moreVoyages', { have, need: com.need, n: com.left - 1 }) : t('missed');
+      rows.push({ label: t('commissionRow', { text: commissionText(com, 'short') }), value: on, color: chart.bonus > 0 ? GREEN : GREY });
     }
     if (chart.unused > 0) {
       const capped = chart.sellBack < chart.unused * SELL_BACK;
       rows.push({
-        label: `Unused supplies   ${chart.unused} × ${SELL_BACK}${capped ? ' (up to the tiles)' : ''}`,
+        label: t(capped ? 'unusedRowCapped' : 'unusedRow', { n: chart.unused, each: SELL_BACK }),
         value: `+${chart.sellBack}`,
         color: MAGENTA,
       });
@@ -1155,8 +1160,8 @@ export class GameScene extends Phaser.Scene {
     MILESTONES.slice(s.milestones, s.milestones + chart.milestones).forEach((m) =>
       rows.push(
         m.atlas
-          ? { icon: `atlas-${s.kind}`, label: `Atlas page: ${KINDS[s.kind].name} ${s.island} charted in full`, value: 'bound', color: MAGENTA }
-          : { label: `Isle ${s.island} ${m.pct}% surveyed`, value: `+${m.coins}`, color: MAGENTA },
+          ? { icon: `atlas-${s.kind}`, label: t('atlasRow', { kind: t(KINDS[s.kind].name), island: s.island }), value: t('bound'), color: MAGENTA }
+          : { label: t('milestoneRow', { island: s.island, pct: m.pct }), value: `+${m.coins}`, color: MAGENTA },
       ),
     );
     const room = OVERLAY_BUTTON.y - 60 - (top + 62);
@@ -1174,10 +1179,10 @@ export class GameScene extends Phaser.Scene {
     g.fillStyle(hex(INK)).fillRect(left, y, right - left, 1.5);
     c.add(g);
     y += 16;
-    c.add(this.text(left, y, 'Sells for', { size: 15, weight: 800 }).setOrigin(0, 0.5));
-    c.add(this.text(right, y, `${chart.total} coins`, { size: 15, weight: 800 }).setOrigin(1, 0.5));
+    c.add(this.text(left, y, t('sellsFor'), { size: 15, weight: 800 }).setOrigin(0, 0.5));
+    c.add(this.text(right, y, t('coinCount', { n: chart.total }), { size: 15, weight: 800 }).setOrigin(1, 0.5));
     c.add(
-      makeButton(this, OVERLAY_BUTTON.x, OVERLAY_BUTTON.y, 'Sell chart', () => {
+      makeButton(this, OVERLAY_BUTTON.x, OVERLAY_BUTTON.y, t('sellChart'), () => {
         if (!sellChart(this.state)) return;
         // The chart that completes the Royal Atlas sets a best if it is one.
         if (this.state.phase === 'atlas' && this.state.royal) saveBest(this.state.royal.voyage);
@@ -1190,15 +1195,15 @@ export class GameScene extends Phaser.Scene {
   /** The Royal Atlas: the win page, with the four pages, the voyages it took and the best. */
   private showAtlas() {
     const s = this.state;
-    const c = this.overlayBase('The Royal Atlas');
+    const c = this.overlayBase(t('royalTitle'));
     const top = OVERLAY.y - OVERLAY.h / 2;
     const left = OVERLAY.x - OVERLAY.w / 2 + 60;
     const right = OVERLAY.x + OVERLAY.w / 2 - 60;
     const voyages = s.royal?.voyage ?? s.voyage;
     const best = loadBest() ?? voyages;
-    c.add(this.text(OVERLAY.x, top + 76, 'Every kind of isle is charted and bound.', { size: 13, weight: 600, color: SLATE }).setOrigin(0.5));
-    c.add(this.text(OVERLAY.x, top + 112, `Completed in ${voyages} voyage${voyages === 1 ? '' : 's'}`, { size: 22, weight: 900 }).setOrigin(0.5));
-    const record = best >= voyages ? 'A new best!' : `Best: ${best} voyages`;
+    c.add(this.text(OVERLAY.x, top + 76, t('royalLine'), { size: 13, weight: 600, color: SLATE }).setOrigin(0.5));
+    c.add(this.text(OVERLAY.x, top + 112, t('completedIn', { n: voyages }), { size: 22, weight: 900 }).setOrigin(0.5));
+    const record = best >= voyages ? t('newBest') : t('best', { n: best });
     c.add(this.text(OVERLAY.x, top + 138, record, { size: 11, weight: 700, color: best >= voyages ? MAGENTA : GREY, ls: 1 }).setOrigin(0.5));
     // One page per kind, in the order the isles come, with the isle that bound it.
     const kinds = Object.keys(KINDS) as IsleKind[];
@@ -1212,26 +1217,28 @@ export class GameScene extends Phaser.Scene {
       g.fillStyle(hex(MAGENTA)).fillRect(x - 36, y - 48, 7, 96);
       g.lineStyle(1, hex(SHEET), 0.7).strokeTriangle(x + 3, y - 14, x + 20, y + 14, x - 14, y + 14);
       c.add(g);
-      c.add(this.text(x + 3, y + 30, KINDS[kind].name.toUpperCase(), { size: 7, weight: 800, color: SHEET, ls: 1 }).setOrigin(0.5));
+      const name = this.text(x + 3, y + 30, t(KINDS[kind].name).toUpperCase(), { size: 7, weight: 800, color: SHEET, ls: 1 }).setOrigin(0.5);
+      // A long name (Dschungelinsel) is squeezed to fit the page.
+      c.add(name.setScale(Math.min(1, 62 / name.width), 1));
       if (page) {
-        c.add(this.text(x, y + 66, `Isle ${page.island}`, { size: 10.5, weight: 700 }).setOrigin(0.5));
-        c.add(this.text(x, y + 80, `${page.voyages} voyage${page.voyages === 1 ? '' : 's'}`, { size: 9, weight: 600, color: GREY }).setOrigin(0.5));
+        c.add(this.text(x, y + 66, t('isle', { n: page.island }), { size: 10.5, weight: 700 }).setOrigin(0.5));
+        c.add(this.text(x, y + 80, t('voyages', { n: page.voyages }), { size: 9, weight: 600, color: GREY }).setOrigin(0.5));
       }
     });
     c.add(
-      this.text(OVERLAY.x, top + 340, 'Keep charting, or begin a new atlas and try to bind one in fewer voyages.', {
+      this.text(OVERLAY.x, top + 340, t('royalHint'), {
         size: 10,
         weight: 500,
         color: SLATE,
       }).setOrigin(0.5),
     );
     c.add(
-      makeButton(this, OVERLAY_BUTTON.x - 110, OVERLAY_BUTTON.y, 'Keep charting', () => {
+      makeButton(this, OVERLAY_BUTTON.x - 110, OVERLAY_BUTTON.y, t('keepCharting'), () => {
         if (closeAtlas(this.state)) saveGame(this.state);
       }),
     );
     c.add(
-      makeButton(this, OVERLAY_BUTTON.x + 110, OVERLAY_BUTTON.y, 'New atlas', () => {
+      makeButton(this, OVERLAY_BUTTON.x + 110, OVERLAY_BUTTON.y, t('newAtlas'), () => {
         this.state = newGame();
         saveGame(this.state);
         this.endSweep();
@@ -1244,14 +1251,14 @@ export class GameScene extends Phaser.Scene {
 
   private showHarbor() {
     const s = this.state;
-    const c = this.overlayBase('The harbor');
+    const c = this.overlayBase(t('harbourTitle'));
     const top = OVERLAY.y - OVERLAY.h / 2;
     const left = OVERLAY.x - OVERLAY.w / 2 + 34;
     const right = OVERLAY.x + OVERLAY.w / 2 - 34;
     const small = (x: number, y: number, caption: string, origin = 0) =>
       this.text(x, y, caption, { size: 8.5, weight: 700, color: GREY, ls: 1.5 }).setOrigin(origin, 0.5);
-    c.add(this.text(left, top + 62, `Chart sold for ${s.lastSale} coins.`, { size: 12, weight: 600, color: SLATE }).setOrigin(0, 0.5));
-    c.add(this.text(right, top + 62, `Coins ${s.coins}`, { size: 15, weight: 800 }).setOrigin(1, 0.5));
+    c.add(this.text(left, top + 62, t('chartSold', { n: s.lastSale }), { size: 12, weight: 600, color: SLATE }).setOrigin(0, 0.5));
+    c.add(this.text(right, top + 62, t('coinsHave', { n: s.coins }), { size: 15, weight: 800 }).setOrigin(1, 0.5));
     const g = this.add.graphics();
     c.add(g);
     // The upgrades, down the left.
@@ -1263,15 +1270,15 @@ export class GameScene extends Phaser.Scene {
       const cost = nextCost(id, rank);
       g.fillStyle(hex(RULE)).fillRect(left, y - SHOP.gap / 2, shopRight - left, 1);
       c.add(this.add.image(left + 14, y, `icon-${id}`).setScale(1 / HI));
-      const name = this.text(left + 36, y - 9, up.name, { size: 12.5, weight: 800 }).setOrigin(0, 0.5);
+      const name = this.text(left + 36, y - 9, t(up.name), { size: 12.5, weight: 800 }).setOrigin(0, 0.5);
       c.add(name);
       up.costs.forEach((_, k) => {
         const px = left + 36 + name.width + 10 + k * 9;
         if (k < rank) g.fillStyle(hex(MAGENTA)).fillRect(px, y - 12.5, 6, 7);
         else g.lineStyle(1, hex(MAGENTA)).strokeRect(px + 0.5, y - 12, 5, 6);
       });
-      c.add(this.text(left + 36, y + 8, up.text, { size: 10.5, weight: 500, color: SLATE }).setOrigin(0, 0.5));
-      const label = cost === null ? 'Max' : `${cost}c`;
+      c.add(this.text(left + 36, y + 8, t(up.text), { size: 10.5, weight: 500, color: SLATE }).setOrigin(0, 0.5));
+      const label = cost === null ? t('max') : coins(cost);
       const can = cost !== null && s.coins >= cost;
       c.add(
         makeButton(
@@ -1290,64 +1297,63 @@ export class GameScene extends Phaser.Scene {
     });
     // The hands, down the right: tap one to take them aboard, tap again to leave them ashore.
     const hx = HANDS_COLUMN.x;
-    c.add(small(hx, HANDS_COLUMN.y - HANDS_COLUMN.h / 2 - 12, 'HIRE A HAND · THIS VOYAGE'));
+    c.add(small(hx, HANDS_COLUMN.y - HANDS_COLUMN.h / 2 - 12, t('hireHead')));
     s.hands.forEach((id, n) => {
       const y = HANDS_COLUMN.y + n * HANDS_COLUMN.gap;
       const on = s.hand === id;
       c.add(this.card(hx, y, HANDS_COLUMN.w, HANDS_COLUMN.h, on, () => hire(this.state, on ? null : id)));
       c.add(this.add.image(hx + 16, y, `hand-${id}`).setScale(0.9 / HI));
-      c.add(this.text(hx + 32, y - 8, HANDS[id].name, { size: 11, weight: 800, color: on ? '#ffffff' : INK }).setOrigin(0, 0.5));
-      c.add(this.text(hx + 32, y + 7, HANDS[id].text, { size: 8, weight: 500, color: on ? '#ffd9ec' : SLATE }).setOrigin(0, 0.5));
+      c.add(this.text(hx + 32, y - 8, t(HANDS[id].name), { size: 11, weight: 800, color: on ? '#ffffff' : INK }).setOrigin(0, 0.5));
+      c.add(this.text(hx + 32, y + 7, t(HANDS[id].text), { size: 8, weight: 500, color: on ? '#ffd9ec' : SLATE }).setOrigin(0, 0.5));
       this.spots[`hire-${id}`] = { x: hx + HANDS_COLUMN.w / 2, y };
     });
-    if (s.hands.length === 0) c.add(this.text(hx, HANDS_COLUMN.y, 'No hands at the harbor', { size: 9.5, weight: 500, color: SLATE }).setOrigin(0, 0.5));
+    if (s.hands.length === 0) c.add(this.text(hx, HANDS_COLUMN.y, t('noHands'), { size: 9.5, weight: 500, color: SLATE }).setOrigin(0, 0.5));
     // The commission board, across the bottom: the one picked is inked.
     const by = BOARD.y - BOARD.h / 2 - 14;
     g.fillStyle(hex(RULE)).fillRect(left, by - 12, right - left, 1);
     const com = s.commission;
     if (s.board.length > 0) {
-      c.add(small(left, by, 'COMMISSION BOARD · PICK ONE'));
+      c.add(small(left, by, t('boardPick')));
       s.board.forEach((b, n) => {
         const y = BOARD.y + n * BOARD.gap;
         const on = isPicked(s, n);
         c.add(this.card(left, y, right - left, BOARD.h, on, () => pickCommission(this.state, n)));
         c.add(this.add.image(left + 14, y, `swatch-${b.terrain}`).setScale(0.8 / HI));
         c.add(this.text(left + 28, y, commissionText(b), { size: 10.5, weight: on ? 800 : 600, color: on ? '#ffffff' : INK }).setOrigin(0, 0.5));
-        if (b.voyages > 1) c.add(this.text(right - 10, y, 'LONG', { size: 7.5, weight: 800, color: on ? '#ffd9ec' : MAGENTA, ls: 1.5 }).setOrigin(1, 0.5));
+        if (b.voyages > 1) c.add(this.text(right - 10, y, t('long'), { size: 7.5, weight: 800, color: on ? '#ffd9ec' : MAGENTA, ls: 1.5 }).setOrigin(1, 0.5));
         this.spots[`pick-${n}`] = { x: OVERLAY.x, y };
       });
     } else if (com) {
-      c.add(small(left, by, 'COMMISSION UNDER WAY'));
+      c.add(small(left, by, t('underWay')));
       c.add(this.text(left, BOARD.y, commissionText(com), { size: 11, weight: 700 }).setOrigin(0, 0.5));
       c.add(
-        this.text(left, BOARD.y + 18, `${com.done} of ${com.need} charted so far · ${com.left === 1 ? 'last voyage' : `${com.left} voyages left`}`, {
+        this.text(left, BOARD.y + 18, t('chartedSoFar', { done: com.done, need: com.need, left: voyagesLeft(com) }), {
           size: 10,
           weight: 500,
           color: SLATE,
         }).setOrigin(0, 0.5),
       );
     } else {
-      c.add(small(left, by, 'COMMISSION BOARD'));
-      c.add(this.text(left, BOARD.y, 'No commission for the next voyage.', { size: 10.5, weight: 500, color: SLATE }).setOrigin(0, 0.5));
+      c.add(small(left, by, t('boardHead')));
+      c.add(this.text(left, BOARD.y, t('noNextCommission'), { size: 10.5, weight: 500, color: SLATE }).setOrigin(0, 0.5));
     }
     // The atlas: one bound page per isle charted in full, toward the Royal Atlas.
     const ay = OVERLAY_BUTTON.y;
-    c.add(small(left, ay - 8, 'ATLAS'));
+    c.add(small(left, ay - 8, t('atlasHead')));
     const pages = s.atlas.length;
     if (pages === 0) {
-      c.add(this.text(left, ay + 7, 'Chart an isle in full', { size: 9.5, weight: 500, color: SLATE }).setOrigin(0, 0.5));
+      c.add(this.text(left, ay + 7, t('chartAnIsle'), { size: 9.5, weight: 500, color: SLATE }).setOrigin(0, 0.5));
     } else {
       s.atlas.slice(-6).forEach((page, k) => c.add(this.add.image(left + 8 + k * 14, ay + 8, `atlas-${page.kind}`).setScale(1 / HI)));
       const shown = Math.min(pages, 6);
       const kinds = atlasKinds(s).size;
-      const royal = s.royal ? ' · Royal Atlas bound' : ` · ${kinds} of ${ROYAL_KINDS} kinds`;
-      c.add(this.text(left + 4 + shown * 14, ay + 8, `${pages} page${pages > 1 ? 's' : ''}${royal}`, { size: 10, weight: 700 }).setOrigin(0, 0.5));
+      const royal = s.royal ? t('royalBound') : t('kindsOf', { n: kinds, total: ROYAL_KINDS });
+      c.add(this.text(left + 4 + shown * 14, ay + 8, t('pages', { n: pages }) + royal, { size: 10, weight: 700 }).setOrigin(0, 0.5));
     }
     const { pct } = isleProgress(s);
-    c.add(small(right, ay - 8, `ISLE ${s.island}`, 1));
-    c.add(this.text(right, ay + 7, `${pct}% surveyed`, { size: 10, weight: 700, color: pct === 100 ? MAGENTA : INK }).setOrigin(1, 0.5));
-    const next = KINDS[kindOf(s.island + 1)].name.toLowerCase();
-    const caption = islandCharted(s) ? `Sail to ${/^[aeiou]/.test(next) ? 'an' : 'a'} ${next}` : 'Set sail';
+    c.add(small(right, ay - 8, t('isleHead', { n: s.island }), 1));
+    c.add(this.text(right, ay + 7, t('pctSurveyed', { n: pct }), { size: 10, weight: 700, color: pct === 100 ? MAGENTA : INK }).setOrigin(1, 0.5));
+    const caption = islandCharted(s) ? t(KINDS[kindOf(s.island + 1)].sail) : t('setSail');
     c.add(
       makeButton(this, OVERLAY_BUTTON.x, OVERLAY_BUTTON.y, caption, () => {
         if (!setSail(this.state)) return;
@@ -1372,10 +1378,41 @@ export class GameScene extends Phaser.Scene {
 
 /** A commission in words: "Chart 3 forests this voyage: +12c", or "7 forests over 2 voyages" when short. */
 function commissionText(c: Commission, form: 'full' | 'short' = 'full') {
-  const name = c.need === 1 ? TERRAIN[c.terrain].name.toLowerCase() : TERRAIN[c.terrain].plural;
-  const span = c.voyages > 1 ? `over ${c.voyages} voyages` : 'this voyage';
-  return form === 'short' ? `${c.need} ${name} ${span}` : `Chart ${c.need} ${name} ${span}: +${c.bonus}c`;
+  const count = t(TERRAIN[c.terrain].count, { n: c.need });
+  const long = c.voyages > 1;
+  if (form === 'short') return t(long ? 'commissionOverShort' : 'commissionThisShort', { count, voyages: c.voyages });
+  return t(long ? 'commissionOver' : 'commissionThis', { count, voyages: c.voyages, n: c.bonus });
 }
+
+/** What is left of a long commission: "last voyage" or "2 voyages left". */
+function voyagesLeft(c: Commission) {
+  return c.left === 1 ? t('lastVoyage') : t('voyagesLeft', { n: c.left });
+}
+
+/** A riddle clue in words: "Two tiles west of a peak", "on a meadow", "by the water". */
+function clueText(c: Clue) {
+  switch (c.kind) {
+    case 'from':
+      return t('clueFrom', { tiles: t(CLUE_TILES[c.tiles]), dir: t(c.dir), mark: t(CLUE_MARKS[c.mark]) });
+    case 'ground':
+      return t(CLUE_GROUND[c.ground]);
+    case 'water':
+      return t('byWater');
+    case 'inland':
+      return t('inland');
+    case 'river':
+      return t('byRiver');
+  }
+}
+
+const CLUE_TILES: TextKey[] = ['oneTile', 'oneTile', 'twoTiles', 'threeTiles'];
+const CLUE_MARKS: Record<Extract<Clue, { kind: 'from' }>['mark'], TextKey> = {
+  mountain: 'markPeak',
+  village: 'markVillage',
+  ruins: 'markRuins',
+  port: 'markPort',
+};
+const CLUE_GROUND: Record<Ground, TextKey> = { grass: 'onMeadow', forest: 'inForest', beach: 'onSand', hills: 'onHills' };
 
 /** Strokes a rectangle in dashes, in the graphics' current line style. */
 function dashedRect(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number, dash: number, gap: number) {

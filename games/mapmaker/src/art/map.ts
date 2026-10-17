@@ -1,5 +1,6 @@
 import { GRID, indexOf, type Feature, type Point, type Tile } from '../game/state';
 import type { Terrain } from '../game/terrain';
+import { t, type TextKey } from '../i18n';
 import { BLUE, GREEN, INK, SHEET, TREE, VELLUM, circle, poly, rng, type Ctx } from './paint';
 
 // The island as a survey sheet. `paintTerrain` paints the whole island once (it is hidden under the
@@ -357,7 +358,7 @@ export function paintFog(ctx: Ctx, tiles: Tile[]) {
     ctx.lineTo(x * TS + 0.5, CANVAS.h);
   }
   ctx.stroke();
-  // UNSURVEYED, lettered across up to two wide stretches of blank paper.
+  // UNSURVEYED (in the player's language), lettered across up to two wide stretches of blank paper.
   ctx.font = `700 26px Inter, system-ui, sans-serif`;
   (ctx as Ctx & { letterSpacing: string }).letterSpacing = '10px';
   ctx.fillStyle = 'rgba(110,120,130,0.35)';
@@ -374,7 +375,7 @@ export function paintFog(ctx: Ctx, tiles: Tile[]) {
         continue;
       }
       if (run >= 5) {
-        ctx.fillText('UNSURVEYED', (x - run / 2) * TS, y * TS + TS / 2);
+        ctx.fillText(t('unsurveyed'), (x - run / 2) * TS, y * TS + TS / 2);
         placed = y;
         count++;
         break;
@@ -427,8 +428,9 @@ export interface PlaceName {
 }
 
 const VILLAGES = ['Ashby', 'Kelwick', 'Marlow', 'Pennick', 'Brackenford', 'Oakhurst', 'Saltmere', 'Wendle', 'Hollin', 'Thistle End'];
-const RUINS = ['Old Abbey (ruin)', 'Watchtower (ruin)', 'Old Fort (ruin)', 'Standing Stones'];
-const BAYS = ['South Bay', 'Calm Bay', 'Gull Bay', 'Seal Bay'];
+// Villages keep their names in every language; the ruins and bays are keys of `i18n/en.ts`.
+const RUINS: TextKey[] = ['oldAbbey', 'watchtower', 'oldFort', 'standingStones'];
+const BAYS: TextKey[] = ['southBay', 'calmBay', 'gullBay', 'sealBay'];
 
 /**
  * The names printed on an island: its villages, ruins, peak heights, its woods and rivers (the
@@ -442,10 +444,10 @@ export function placeNames(tiles: Tile[], island: number, port: Point, features:
   let r = island;
   for (let y = 0; y < GRID.h; y++) {
     for (let x = 0; x < GRID.w; x++) {
-      const t = T(x, y);
-      if (t === 'village') out.push({ tile: { x, y }, dx: 0, dy: 20, text: VILLAGES[v++ % VILLAGES.length], kind: 'village' });
-      if (t === 'ruins') out.push({ tile: { x, y }, dx: 0, dy: 20, text: RUINS[r++ % RUINS.length], kind: 'ruin' });
-      if (t === 'mountain') {
+      const here = T(x, y);
+      if (here === 'village') out.push({ tile: { x, y }, dx: 0, dy: 20, text: VILLAGES[v++ % VILLAGES.length], kind: 'village' });
+      if (here === 'ruins') out.push({ tile: { x, y }, dx: 0, dy: 20, text: t(RUINS[r++ % RUINS.length]), kind: 'ruin' });
+      if (here === 'mountain') {
         const m = 480 + Math.floor(hash(x + island * 17, y) * 260);
         out.push({ tile: { x, y }, dx: -2, dy: 16, text: `${m} m`, kind: 'height' });
       }
@@ -464,16 +466,16 @@ export function placeNames(tiles: Tile[], island: number, port: Point, features:
           best = p;
         }
       }
-      out.push({ tile: best, dx: 0, dy: 0, text: f.name, kind: 'wood' });
+      out.push({ tile: best, dx: 0, dy: 0, text: t(f.name), kind: 'wood' });
     } else if (f.kind === 'river') {
       // A river's name runs beside its middle tile.
       const mid = f.tiles[Math.floor(f.tiles.length / 2)];
-      out.push({ tile: mid, dx: 0, dy: -16, text: f.name, kind: 'river' });
+      out.push({ tile: mid, dx: 0, dy: -16, text: t(f.name), kind: 'river' });
     }
   }
-  out.push({ tile: port, dx: -26, dy: 12, text: 'Harbour', kind: 'port' });
+  out.push({ tile: port, dx: -26, dy: 12, text: t('harbourName'), kind: 'port' });
   if (port.y + 1 < GRID.h && T(port.x, port.y + 1) === 'sea') {
-    out.push({ tile: { x: port.x, y: port.y + 1 }, dx: 50, dy: 4, text: BAYS[island % BAYS.length], kind: 'water' });
+    out.push({ tile: { x: port.x, y: port.y + 1 }, dx: 50, dy: 4, text: t(BAYS[island % BAYS.length]), kind: 'water' });
   }
   return out;
 }
