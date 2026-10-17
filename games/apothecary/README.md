@@ -29,11 +29,14 @@ bigger than the screen, so the camera follows the doctor.
 | Control | Action |
 | --- | --- |
 | WASD / arrow keys, or tap | Walk |
+| Touch: put a finger down and drag | A steering stick appears where the finger went down and the doctor walks the way you drag; it follows a finger that goes past its rim. A tap without dragging still walks to the spot |
 | Mouse wheel, + / - keys, or pinch with two fingers | Zoom in and out; the top bar stays the same size and the zoom is remembered |
 | Walk past ripe plants | Harvest every ripe plant within one character height of the doctor; the spinning sickle marks the edge |
 | Recipes (top bar) | Show what each station makes from what, and what each potion sells for; tap again to close |
 | Drop all (top bar) | Throw away everything the doctor carries |
 | Stand on a floor marker | Each is a dashed ring with a faint icon. Green: drop off items. Blue: work the station. Gold: pick up products or coins, a mix of every kind there. Purple: stand still on it to pay coins towards an upgrade or build, each kind with its own icon; its caption shows the coins still to pay |
+
+![The floating touch stick under a steering finger](docs/screenshots/touch-stick.webp)
 
 1. **Gardens**: each garden grows one kind of plant in nine beds, three rows of three edge to
    edge. Harvest ripe wheat in the wheat field and mandrake in the mandrake patch. Beds regrow on
