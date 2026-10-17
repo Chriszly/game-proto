@@ -1,4 +1,5 @@
 import { byDifficulty } from '../../../../shared/settings';
+import type { TextKey } from '../i18n';
 import { ARMOURY_EACH, noArmoury, type Armoury } from './armoury';
 import { BOONS, type BoonId } from './boons';
 import { pairsOf } from './pairs';
@@ -41,9 +42,10 @@ export const streakMult = (streak: number, max = STREAK.max) => Math.min(max, 1 
  * and a streak cap two higher; the Low Road is safer, with wider gaps, and has the shrine.
  */
 export type Road = 'high' | 'low';
-export const ROADS: Record<Road, { name: string; text: string }> = {
-  high: { name: 'The High Road', text: 'More coins and more foes, closer together, and the streak climbs to x7. No shrine.' },
-  low: { name: 'The Low Road', text: 'Fewer foes, further apart, and a wayside shrine to heal at.' },
+/** Each road's texts, keys of `i18n/en.ts`: its name, short name for the tag, card text, the card's kind line and the stage title's line. */
+export const ROADS: Record<Road, { name: TextKey; short: TextKey; text: TextKey; kind: TextKey; title: TextKey }> = {
+  high: { name: 'highName', short: 'highShort', text: 'highText', kind: 'highKind', title: 'highTitle' },
+  low: { name: 'lowName', short: 'lowShort', text: 'lowText', kind: 'lowKind', title: 'lowTitle' },
 };
 export const ROAD = { from: 3, highStreak: 2, highGap: -40, lowGap: 40 };
 /** The streak's cap on this road: `STREAK.max`, two more on the High Road. */
@@ -69,19 +71,8 @@ export function dareOf(stage: number): Dare {
   const kind = DARE.kinds[(stage - DARE.from) % DARE.kinds.length];
   return { kind, goal: DARE.goals[kind], progress: 0, done: false, failed: false };
 }
-/** A dare in the herald's words. */
-export function dareText(d: Dare) {
-  switch (d.kind) {
-    case 'stomp':
-      return `Stomp ${d.goal} foes`;
-    case 'nohit':
-      return 'Take no hit';
-    case 'coins':
-      return `Take ${d.goal} coins`;
-    case 'streak':
-      return `Reach a x${d.goal} streak`;
-  }
-}
+/** A dare in the herald's words: the key of its text in `i18n/en.ts`, filled in with its goal as `n`. */
+export const DARE_TEXT: Record<DareKind, TextKey> = { stomp: 'dareStomp', nohit: 'dareNohit', coins: 'dareCoins', streak: 'dareStreak' };
 
 /**
  * The rockfall: on every `every`th stage a fall of boulders rolls in behind the knight, keeping
@@ -115,11 +106,12 @@ export const HARDER = { speed: 60, gap: -50 };
  * pushes jumps back.
  */
 export type Terrain = 'road' | 'ice' | 'marsh' | 'wind';
-export const TERRAIN: Record<Terrain, { name: string; rule: string }> = {
-  road: { name: 'The Old Road', rule: '' },
-  ice: { name: 'The Frozen Pass', rule: 'Slides run long, and landings skid' },
-  marsh: { name: 'The Fen', rule: 'The mire drags at the boots: jumps are lower' },
-  wind: { name: 'The Windy Pass', rule: 'A headwind pushes every jump back' },
+/** Each terrain's name and rule (none on the old road), keys of `i18n/en.ts`. */
+export const TERRAIN: Record<Terrain, { name: TextKey; rule: TextKey | null }> = {
+  road: { name: 'roadName', rule: null },
+  ice: { name: 'iceName', rule: 'iceRule' },
+  marsh: { name: 'marshName', rule: 'marshRule' },
+  wind: { name: 'windName', rule: 'windRule' },
 };
 /** The terrains' numbers: ice slides longer and skids on landing (jumps wait out the skid), the fen jumps lower, the wind slows the knight in the air. */
 export const ICE = { slide: 1.6, skidMs: 220 };
@@ -247,8 +239,9 @@ export interface Effect {
   h: number;
   ms: number;
   total: number;
-  /** The words of a `pop` ("+3") or a `refuse` ("Hearts full"). */
-  text?: string;
+  /** The words of a `pop` ("+3") or a `refuse` ("Hearts full"): a key of `i18n/en.ts`, filled in with `n`. */
+  text?: TextKey;
+  n?: number;
 }
 
 export interface Runner {

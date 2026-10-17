@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { DARE_TAG, HUD_HEIGHT, STREAK_CHIP, TAG, TRACK, VIEW } from '../scenes/layout';
+import { t } from '../i18n';
 import { C, gold, paint, poly, SERIF } from './ink';
 
 // The page furniture round the miniature: the lapis rubric band of the HUD ruled in gold, the
@@ -30,7 +31,7 @@ export function bakeHud(scene: Phaser.Scene) {
     ctx.stroke();
   });
 
-  // The illuminated S of "Stage": a gold square, a madder field with gold penwork, a vellum letter.
+  // The illuminated first letter of "Stage" (`stageInitial`, E for "Etappe" in German): a gold square, a madder field with gold penwork, a vellum letter.
   paint(scene, 'initial', 32, 32, (ctx) => {
     ctx.fillStyle = gold(ctx, 0, 0, 32, 32);
     ctx.fillRect(1, 1, 30, 30);
@@ -55,9 +56,9 @@ export function bakeHud(scene: Phaser.Scene) {
     ctx.textBaseline = 'middle';
     ctx.lineWidth = 2;
     ctx.strokeStyle = C.ink;
-    ctx.strokeText('S', 16, 17.5);
+    ctx.strokeText(t('stageInitial'), 16, 17.5);
     ctx.fillStyle = C.goldPale;
-    ctx.fillText('S', 16, 17.5);
+    ctx.fillText(t('stageInitial'), 16, 17.5);
   });
 
   const { w, h } = STREAK_CHIP;

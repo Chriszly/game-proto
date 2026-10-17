@@ -1,0 +1,212 @@
+import type { Translation } from '../../../../shared/i18n';
+import type en from './en';
+
+/** Hotfoot's texts in German. */
+const de: Translation<typeof en> = {
+  // Boons: name and card text
+  heartName: 'Stärkendes Bier',
+  heartText: 'Ein Herz mehr, und ein Herz zurück',
+  bootsName: 'Flügelstiefel',
+  bootsText: 'Springe 12 % höher',
+  doubleName: 'Zweiter Satz',
+  doubleText: 'Springe einmal in der Luft erneut',
+  aegisName: 'Ägis',
+  aegisText: 'Wehre nach jedem Rastplatz den ersten Treffer ab',
+  magnetName: 'Magnetstein',
+  magnetText: 'Münzen fliegen dir von weiter her zu',
+  greedName: 'Goldgier',
+  greedText: 'Jede Münze ist eine mehr wert',
+  greavesName: 'Geölte Schienen',
+  greavesText: 'Rutschen dauert 30 % länger',
+  cloakName: 'Schattenumhang',
+  cloakText: 'Nach einem Treffer 50 % länger unverwundbar',
+  mendName: 'Feldverband',
+  mendText: 'Zwei Herzen zurück',
+  giltName: 'Verfluchtes Gold',
+  giltText: 'Münzen zählen doppelt, aber ein Herz weniger',
+  glassName: 'Gläserne Schienen',
+  glassText: 'Rutschen dauert 60 % länger, aber du bist nur halb so lange unverwundbar',
+  oathName: 'Eiserner Eid',
+  oathText: 'Wehre nach jedem Rastplatz zwei Treffer mehr ab, aber springe 15 % niedriger',
+
+  // Boon pairs: name, what it gives, and the pop when it is made
+  glideName: 'Falkenflug',
+  glideText: 'nach einem Sprung nur halb so schnell fallen',
+  glidePop: 'Falkenflug!',
+  hoardName: 'Koboldschatz',
+  hoardText: 'ein zertretener Feind zerplatzt in drei Münzen',
+  hoardPop: 'Koboldschatz!',
+  bulwarkName: 'Bollwerk',
+  bulwarkText: 'ein abgewehrter Treffer stößt die Feinde vor dir fort',
+  bulwarkPop: 'Bollwerk!',
+
+  // The armoury: name and text of each lasting upgrade
+  ironHeartName: 'Eisernes Herz',
+  ironHeartText: 'Beginne jeden Lauf mit einem Herz mehr',
+  charmName: 'Magnetamulett',
+  charmText: 'Münzen fliegen dir von etwas weiter her zu',
+  purseName: 'Knappenbeutel',
+  purseText: 'Beginne jeden Lauf mit 10 Münzen mehr',
+
+  // Roads: name, short name for the tag, card text and the stage title's line
+  highName: 'Der Höhenweg',
+  highShort: 'Höhenweg',
+  highText: 'Mehr Münzen und mehr Feinde, dichter beisammen, und die Serie steigt bis x7. Kein Schrein.',
+  highKind: 'Kühner: mehr Münzen, mehr Feinde',
+  highTitle: 'Der Höhenweg: mehr Münzen, mehr Feinde',
+  lowName: 'Der Talweg',
+  lowShort: 'Talweg',
+  lowText: 'Weniger Feinde, weiter auseinander, und ein Wegschrein zum Heilen.',
+  lowKind: 'Sicherer: weniger Feinde, ein Schrein',
+  lowTitle: 'Der Talweg: der sicherere Weg',
+
+  // Terrains: name and rule
+  roadName: 'Die Alte Straße',
+  iceName: 'Der Frostpass',
+  iceRule: 'Rutschen dauert lange, und Landungen schlittern',
+  marshName: 'Das Moor',
+  marshRule: 'Der Sumpf zieht an den Stiefeln: Sprünge sind niedriger',
+  windName: 'Der Windpass',
+  windRule: 'Gegenwind drückt jeden Sprung zurück',
+
+  // Bosses
+  gateName: 'Der Torwächter',
+  gateBeatenTag: 'Der Torwächter ist besiegt',
+  gateTrack: 'Torwächter besiegen',
+  gateTitle: 'Der Torwächter versperrt den Weg',
+  gateTitleRule: 'Zertritt ihn dreimal; spring über seine Fässer, rutsch unter seinen Äxten durch',
+  gateBeaten: 'Torwächter besiegt! +{n}',
+  dragonName: 'Der Drache',
+  dragonBeatenTag: 'Der Drache ist besiegt',
+  dragonTrack: 'Drachen besiegen',
+  dragonTitle: 'Die Drachenfeste',
+  dragonTitleRule: 'Zertritt den Drachen dreimal: spring über sein Feuer, rutsch unter seinem Schwanz durch',
+  dragonBeaten: 'Der Drache ist besiegt! Die Krone ist dein. +{n}',
+
+  // The herald's dare: what it asks, its progress and its lines
+  dareStomp: 'Zertritt {n} Feinde',
+  dareNohit: 'Nimm keinen Treffer',
+  dareCoins: 'Sammle {n} Münzen',
+  dareStreak: 'Erreiche eine x{n}-Serie',
+  dareMet: 'erfüllt!',
+  dareLost: 'verloren',
+  dareSoFar: 'bisher',
+  dareTag: 'Mutprobe: {dare} · {progress}',
+  dareTitle: 'Die Mutprobe des Herolds: {dare}',
+  dareMetPop: 'Mutprobe erfüllt! +{n}',
+
+  // Words over the road
+  coinPop: '+{n}',
+  healPop: '+1 Herz',
+  heartsFull: 'Herzen voll',
+  needsCoins: 'Braucht {n} Münzen',
+
+  // HUD
+  stageInitial: 'E',
+  stageRest: 'tappe {n}',
+  metres: '{n} m',
+  coins: 'Münzen',
+  best: 'Rekord {n} m',
+  streak: 'Serie x{n}',
+  streakMax: 'max',
+  streakNext: '{n} bis x{mult}',
+  trackNext: 'Fahne in {n} m',
+  trackAt: 'An der Fahne',
+  trackFirst: 'Erster Lauf',
+  trackNewBest: 'Rekord!',
+  daily: 'Tageslauf',
+  rockfall: 'Steinschlag!',
+
+  // The stage's title
+  stageTitle: 'Etappe {n}: {name}',
+  rockfallTitle: 'Ein Steinschlag folgt: jeder Treffer, jedes Schlittern lässt ihn aufholen',
+
+  // The controls hint on stage 1
+  hintJump: 'Oben tippen zum Springen\n(Leertaste / Hoch)',
+  hintSlide: 'Unten tippen zum Rutschen\n(Runter / S)',
+
+  // The wayside shrine's banderole
+  shrineName: 'Wegschrein',
+  shrineRule: 'Rutschen: {n} Münzen = 1 Herz',
+
+  // The checkpoint's cards
+  checkpointTitle: 'Rastplatz {n}! Wähle eine Gabe',
+  roadTitle: 'Wähle deinen Weg für Etappe {n}',
+  cursed: 'Verflucht: eine Gabe mit Preis',
+  heal: 'Heilung',
+  newBoon: 'Neu',
+  newRanks: 'Neu, {n} Ränge',
+  rank: 'Rang {n} von {max}',
+  pairHeld: 'Mit {partner}: {pair}, {text}',
+  pairHint: 'Passt zu {partner}: {text}',
+
+  // The game-over panel
+  fallen: 'Der Ritter ist gefallen',
+  fellAt: 'Gefallen bei {m} m auf Etappe {stage}, mit {coins} Münzen ({bank} gespart).',
+  gatesBeaten: 'Torwächter besiegt: {n}.',
+  dragonDown: 'Der Drache ist besiegt!',
+  bestDaily: 'Rekord auf der Tagesstrecke vom {date}: {n} m.',
+  bestRun: 'Bester Lauf: {n} m.',
+  crowned: 'Gekrönt in der Drachenfeste.',
+  boons: 'Gaben: {boons}',
+  boonsNone: 'keine',
+  boonRanks: '{boon} x{n}',
+  missed: 'Am letzten Rastplatz verpasst: {boon}.',
+  shopPending: 'Der nächste normale Lauf beginnt mit {boon}.',
+  shopReach: 'Erreiche einen Rastplatz, damit dir eine Gabe zum Kauf angeboten wird.',
+  shopNotForSale: '{boon} ist nicht käuflich.',
+  shopTooDear: '{boon} gibt es für {price} Münzen; du hast {n}.',
+  shopBuy: 'Beginne den nächsten Lauf mit {boon} für {price} Münzen.',
+  buy: 'Für {n} Münzen kaufen',
+  armoury: 'Rüstkammer',
+  runAgain: 'Neuer Lauf',
+  dailyCourse: 'Tagesstrecke',
+
+  // The armoury panel
+  armouryTitle: 'Die Rüstkammer',
+  armouryBank: '{n} Münzen gespart. Jeder normale Lauf beginnt mit dem, was du hier schmiedest.',
+  level: 'Stufe {n} von {max}',
+  forge: 'Für {n} schmieden',
+  fullyForged: 'Fertig geschmiedet',
+  back: 'Zurück',
+
+  // The rubric under the road
+  captionOver: 'Hier fällt der Ritter, und die Kobolde feiern.',
+  captionRoads: 'Hier schauet der Ritter vom Banner aus und wählet den Weg voraus.',
+  captionBoons: 'Hier rastet der Ritter beim Banner und wählet eine Gabe.',
+  captionStart: 'Hier zieht der Ritter in der Dämmerung auf die alte Straße hinaus.',
+  captionDragonWait: 'Hier harret der Drache der Feste des Ritters auf der Straße.',
+  captionDragonTired: 'Hier ermattet der Drache und senkt sein Haupt: nun spring auf ihn!',
+  captionDragonFire: 'Hier speiet der Drache Feuer die Straße entlang.',
+  captionDragonTail: 'Hier peitschet der Drache mit dem Schwanz nach dem Ritter.',
+  captionDragonChase: 'Hier jaget der Ritter dem Drachen nach.',
+  captionGateWait: 'Hier versperret der Torwächter die Straße und lässt den Ritter nicht vorbei.',
+  captionGateTired: 'Hier ermattet der Torwächter: nun spring auf seinen Helm!',
+  captionGateBarrel: 'Hier rollet der Torwächter ein Fass nach dem Ritter.',
+  captionGateAxe: 'Hier schleudert der Torwächter eine Axt nach dem Ritter.',
+  captionGateChase: 'Hier jaget der Ritter dem Torwächter nach.',
+  captionRockfall: 'Hier holet der Steinschlag den Ritter ein: lauf sauber!',
+  captionSpikes: 'Hier springet der Ritter über die Stacheln.',
+  captionPit: 'Hier springet der Ritter über die Grube.',
+  captionBlade: 'Hier ducket sich der Ritter unter dem hängenden Stamm.',
+  captionFlames: 'Hier springet der Ritter über die Flamme.',
+  captionGoblin: 'Hier springet der Ritter über den Kobold, der ihn erwartet.',
+  captionBat: 'Hier flieget die Fledermaus auf den Ritter zu.',
+  captionWall: 'Hier klettert der Ritter auf die alte Mauer.',
+  captionShrine: 'Hier stehet ein Wegschrein, wo ein Ritter Heilung findet.',
+  captionBarrel: 'Hier springet der Ritter über das rollende Fass.',
+  captionAxe: 'Hier ducket sich der Ritter unter der fliegenden Axt.',
+  captionFire: 'Hier springet der Ritter über das Feuer des Drachen.',
+  captionTail: 'Hier ducket sich der Ritter unter dem Schwanz des Drachen.',
+  captionRoad: 'Hier läuft der Ritter weiter zum nächsten Banner.',
+  captionIce: 'Hier gleitet der Ritter über den Frostpass.',
+  captionMarsh: 'Hier watet der Ritter durch das Moor.',
+  captionWind: 'Hier stemmt sich der Ritter gegen den Wind.',
+  captionPastDragon: 'Hier ziehet der Ritter am gefallenen Drachen vorbei und träget die Krone.',
+  captionPastGate: 'Hier ziehet der Ritter am gefallenen Torwächter vorbei.',
+};
+
+/** Texts that are the same in German. */
+export const keepEnglish: (keyof typeof en)[] = ['coinPop', 'metres', 'streakMax', 'boonRanks'];
+
+export default de;
