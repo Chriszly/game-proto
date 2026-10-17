@@ -9,7 +9,8 @@ Deadline is a portrait (540x960) wave defense game: a soldier at the bottom of a
 straight up on a timer, and the player only moves them left and right. Zombies walk down and veer
 towards the soldier; upgrade crates drift down among them and are shot open for a stat upgrade, and
 fuel drums roll down and blow up the zombies round them when shot. Bosses fight back and leave a
-supply drop, and kills bank scrap that buys starting crates for the next run.
+supply drop, and kills bank scrap that buys starting crates for the next run and lasting outpost
+upgrades. A run is the endless Open Road or a 10-wave operation, picked on the game over screen.
 
 - **Implemented:** endless waves that grow in size and toughness, runners from wave 2, brutes from
   wave 3, spitters (acid from range) and crawler swarms from wave 4, riot zombies (a shield only
@@ -24,7 +25,13 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
   the next run, four crate upgrades (fire rate, damage, companion, pierce) and the perks their third
   crate evolves into (fire rounds, headshots, ricochets), survivors walking among the zombies from
   wave 3 (shots hurt them; one who reaches the sandbags joins the squad or gives scrap), wave
-  conditions from wave 6 (blackout, blood moon, ammo shortage), a squad of up to eight companions in three staggered rows of three, fuel drums with a
+  conditions from wave 6 (blackout, blood moon, ammo shortage), the horde adapting from wave 8
+  (every fourth grunt becomes armoured brutes, riot zombies or flank spitters, answering the
+  squad's strongest stat), squad roles (a joining survivor picks Gunner, Grenadier or Marksman),
+  outpost upgrades (Barricade, Field Medic, Fuel Depot, Veteran, three lasting levels each, bought
+  with scrap), operations (Hospital and Lights Out: 10 waves under fixed rules, each with its own
+  best and medal, picked on the game over screen beside the Open Road),
+  a squad of up to eight companions in three staggered rows of three, fuel drums with a
   blast ring that previews how many zombies they would catch, a frenzy streak (12 quick kills
   double the fire rate for 5s), damage numbers on hits, a wave progress strip with a boss warning,
   a saved best wave, a HUD, a wave banner, health bars, a boss bar and a game over screen.
@@ -34,15 +41,18 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
   overwatch console.
 - **Progression** within a run is the crates (and the perks three of a kind evolve into), the
   survivors who make it and the boss supply drops: no XP or levels. Stats reset on restart. Between
-  runs, scrap (saved) buys starting crates, each kind once, spent at the next run's start. The run
-  has an ending: extraction, offered on every boss supply drop from wave 20.
+  runs, scrap (saved) buys starting crates, each kind once, spent at the next run's start, and
+  outpost levels, kept for good. The Open Road has an ending: extraction, offered on every boss
+  supply drop from wave 20; an operation ends as a win when its wave 10 is cleared.
 - **Screens:** there is no title or menu. `BootScene` only starts `GameScene`, which bakes the
-  textures it needs and begins wave 1 at once. The supply drop (phase `'supply'`) and game over are
-  overlays in the same scene; an extraction ends in the same game over overlay with a win title
-  (`state.extracted`). On game over a tap on a starting crate buys or refunds it; any other
-  tap calls `scene.restart()`.
-- **Persistence:** the best wave reached, the art style, banked scrap and the starting crates
-  bought for the next run (see Save keys). It also reads the hub's
+  textures it needs and begins wave 1 at once. The supply drop (phase `'supply'`), the role pick
+  (phase `'role'`) and game over are overlays in the same scene; an extraction or a won operation
+  ends in the same game over overlay with a win title (`state.extracted`). On game over a tap on a
+  starting crate buys or refunds it, on an outpost upgrade buys its next level, on an operation
+  picks it for the next run; any other tap calls `scene.restart()`.
+- **Persistence:** the Open Road's best wave, the art style, banked scrap, the starting crates
+  bought for the next run, the outpost levels, the next operation and each operation's best (see
+  Save keys). It also reads the hub's
   shared settings (the `hub-settings` key, see Hub settings below).
 - **Rough edges seen in the code:**
   - No audio, no camera shake.
@@ -50,7 +60,8 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
   - A spitter stands still at its range until shot, so a wave can't end while one stands; it is
     an easy target once the soldier walks under it. Zombies steer to the hero's x plus their own
     offset, clamped to `HERO.minX..HERO.maxX`, so none stops out of every rifle's reach.
-  - Supply drop picks and kit panel items are not shown in the wide-screen backdrop.
+  - Supply drop picks, kit panel items, squad roles and the operation are not shown in the
+    wide-screen backdrop.
   - Night-vision textures are baked the first time that style is shown, a hitch of about 0.4s
     (measured in headless Chromium) on that first switch; later switches take a frame or so. On a
     big screen the textures are painted finer, and the first switch takes about twice as long.
@@ -81,7 +92,10 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
   in-acid warning, drawn per style into one Graphics plus Text objects, redrawn only when its data
   changes), and the layout constants `STYLE_SWITCH`, `PROGRESS`, `CONDITION_CHIP`, `FRENZY_PANEL`,
   `KIT_PANEL`, `HUD_DEPTH`.
-- `src/game/rules.ts`: pure numbers and rules: `VIEW`, `HERO`, `REACH_Y`, `SQUAD_SLOTS`,
+- `src/game/rules.ts`: pure numbers and rules (also `OUTPOST`, `OUTPOST_KINDS`, `OUTPOST_MAX`,
+  `NO_OUTPOST`, `outpostCost`, `ROLES`, `ROLE_KINDS`, `GRENADE`, `MARKSMAN`, `OPERATIONS`,
+  `OPERATION_KINDS`, `OPERATION_BONUS`, `MEDALS`, `medalOf`, `ADAPTS`, `ADAPT`, `adaptTo`,
+  `WaveRules`): `VIEW`, `HERO`, `REACH_Y`, `SQUAD_SLOTS`,
   `MAX_COMPANIONS`, `ENEMIES`, `SCRAP`, `SPITTER`, `ACID_SLOW`, `riotShield`, `SWARM`,
   `swarmCount`, `BOSS`, `BOSS_MOVES`, `BOSSES`, `BOSS_KINDS`, `isBoss`, `bossKind`, `bossMove`,
   `BROOD`, `BLOATER`, `UPGRADES`, `PERKS`, `PERK_AT`, `perksOf`, `FIRE_ROUNDS`, `HEADSHOT`,
@@ -92,7 +106,9 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
   `applyUpgrade`, `planWave`, `isBossWave`, `waveSize`, `waveTotal`, `waveToughness`, `toughness`, `drumCount`. No
   Phaser import; its only import is `byDifficulty` from `shared/settings.ts`.
 - `src/game/save.ts`: `loadBest`/`saveBest`, `loadStyle`/`saveStyle`, `loadScrap`/`saveScrap`,
-  `loadKit`/`saveKit`, the `ArtStyle` type (`'comic' | 'nv'`) and the key names.
+  `loadKit`/`saveKit`, `loadOutpost`/`saveOutpost`, `loadOperation`/`saveOperation`,
+  `loadOperationBests`/`saveOperationBests`, the `ArtStyle` type (`'comic' | 'nv'`) and the key
+  names.
 - `src/game/pool.ts`: generic `Pool<T>` with `take`, `release`, `live` and `all`, to reuse sprites.
 - `src/art/paint.ts`: shared canvas tools (`bake`, `rng`, `circle`, `path`, colour helpers), `HI`
   (textures are painted at 2x on a screen that needs no scaling), `FULL_SCREEN` (layers painted at
@@ -103,6 +119,7 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
 - `src/art/nightvision.ts`: `bakeNightVision`; sprites are painted in greys, then `phosphor` maps
   them to green and blooms the brightest pixels; chemlights and amber brackets are painted after.
 - `src/art/theme.ts`: `UPGRADE_COLORS`, `CRATE_COLORS` (adds the sandbag crate's tan),
+  `ROLE_COLORS`, `OUTPOST_COLORS`, `OPERATION_COLORS`,
   `ACID_COLOR`, `SHIELD_COLOR`, `SURVIVOR_COLOR`, `BURN_COLOR` and the per-style `Theme` (fonts, text colours, accent,
   warning, hp bar) in `THEMES`. System font stacks only.
 - `src/art/backdrop.ts`: `Backdrop`, the page canvas behind the game (comic panels or the overwatch
@@ -130,7 +147,7 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
   shows or hides the night-vision overlay (`scan` image and `grain` tile sprite), clears effects,
   rebuilds the game over overlay if it is up, and tells the `Hud` and `Backdrop`.
 - **Tick:** `GameScene.update` clamps `delta` to 100ms, runs `animateFeed` (grain and flicker),
-  and unless the phase is `'over'` or `'supply'` (everything holds still then) runs in order:
+  and unless the phase is `'over'`, `'supply'` or `'role'` (everything holds still then) runs in order:
   `moveHero`, `spawn`, `fire`, `moveBullets`, `tickBoss`, `moveEnemies` (stops the frame on game
   over; also ticks the burn of fire rounds), `movePickups`, `moveDrums`, `moveAcid`, `moveWalls`,
   `moveSurvivors`, `hitTargets`, `tickFlamer`,
@@ -138,8 +155,11 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
   `refreshBackdrop`. All timing is accumulated `dt` in private clocks (`waveClock`, `fireClock`,
   `breakClock`, `sinceKill`, `runMs`, effect and splat ages); no Phaser timers drive gameplay.
   Tweens only fade the banner and the upgrade pop-up text.
-- **Waves:** `startWave` draws `state.condition = drawCondition(wave)` (from wave 6), then sets
-  `plan = planWave(wave, Math.random, condition)`, a list of `Spawn`s (enemy, pickup, drum or
+- **Waves:** `startWave` draws `state.condition = drawCondition(wave)` (from wave 6; an operation
+  with a fixed `condition` takes that instead and draws nothing), sets `state.adapt =
+  adaptTo(stats)` from `ADAPT.fromWave`, then sets `plan = planWave(wave, Math.random, condition,
+  rules)` (`WaveRules`: the Fuel Depot's `extraDrums`, the operation's `drums`, `survivors` and
+  `survivorsFrom`, and `adapt`), a list of `Spawn`s (enemy, pickup, drum or
   survivor) sorted by `at`, resets `fallen` and `waveTotal` (`waveTotal(wave)`: its zombies plus
   its boss), sets `state.bossKind` (`bossKind(wave)` on a boss wave), and saves a new best. The
   banner names the boss and the condition, and `applyCondition` shows the blackout's dark rectangle
@@ -190,6 +210,29 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
   under a blood moon, and in a blackout `visibility(x, y)` (0 beyond `CONDITION.blackoutRadius`
   of the hero, fading in over 70px) sets every enemy's and survivor's alpha and hides the bars
   of those out of sight. The `Hud` shows the condition on a chip under the progress strip.
+- **The horde adapts:** `adaptTo(stats)` scores pierce (its level), fire rate (rate crates in
+  `fireInterval`) and the squad (companions / 2) and picks the highest at `ADAPT.minScore` or more.
+  `planWave` then turns every `ADAPT.every`th grunt into a brute with `armoured`, a riot zombie,
+  or a spitter with `flank` at a road edge, with no extra draws. In `hitTargets` an `armoured`
+  enemy ends the bullet (no pierce on, no ricochet) and `drawBars` paints its plate; a `flank`
+  spitter doesn't steer in `moveEnemies`. The banner and the condition chip name it.
+- **Squad roles:** `state.roles` holds each companion's `Role`, in `squad` order; `addCompanions`
+  fills any missing ones as Gunners. `rescue` (squad not full) saves the phase in `rolePrev` and
+  moves to `'role'`; `showRoles` draws three cards (`roleCards`, keys 1/2/3) and `pickRole` adds
+  the companion with that role and goes back to `rolePrev`. While the pick is up, `moveSurvivors`
+  holds every other survivor. In `fire` a marksman only shoots every `MARKSMAN.every`th volley, at
+  `toughestEnemy` (a bullet with `mult` and extra pierce), a grenadier's every `GRENADE.every`th
+  bullet is a `grenade`, which bursts on the first zombie it hits (`grenade(x, y)`: every zombie
+  within `GRENADE.radius` past shields). `drawBars` badges grenadiers and marksmen.
+- **Outpost:** `state.outpost` (saved under `deadline-outpost`) is applied in `create`: Barricade
+  levels as `sandbags`, Field Medic as `medkits`, Veteran as companions (Gunners); the Fuel Depot
+  goes to `planWave` as `extraDrums`. `buyOutpost` buys the next level at `outpostCost`.
+- **Operations:** `state.operation` (read from `deadline-operation` in `create`) sets the wave
+  rules from `OPERATIONS`; `pickOperation` sets `state.nextOperation` and saves it, so the choice
+  sticks. In an operation `state.best` is its best (waves cleared, from `deadline-operation-best`),
+  `deadline-best` is left alone, and `checkWave` calls `recordOperation` on each clear and
+  `completeOperation` (`endAsWin` with `OPERATION_BONUS`) once the last wave is cleared, in place of
+  its supply drop. `medalOf(cleared)` gives the medal. The HUD's best chip shows the operation.
 - **Extraction:** `showSupply` adds a fourth, wide card when `canExtract(wave)` (a boss wave from
   `EXTRACT.fromWave`), tapped or taken with 4; `pickSupply('extract')` calls `extract`, which
   sets `state.extracted`, pays `state.payout = round(scrap * EXTRACT.bonus(wave))` into the bank
@@ -205,7 +248,8 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
   `FLAMER.reach`. In `moveEnemies` a zombie at the line spends a medkit (`useMedkit`) instead of
   ending the game.
 - **Scrap:** `kill` adds `SCRAP[kind]` to `state.scrap`. `gameOver` adds it to `state.bank` and
-  saves it (an extraction adds the payout instead); `showGameOver` draws the shop (`shop` tap boxes) and `buyKit` buys or refunds a
+  saves it (a win adds the payout instead); `showGameOver` draws the shop, the outpost and the
+  operation picker (`shop` tap boxes, each with its `act`) and `buyKit` buys or refunds a
   starting crate into `state.nextKit` (saved as `deadline-kit`). `create` applies the saved kit to
   the starting stats (`state.startKit`) and clears it.
 - **Drums:** `moveDrums` rolls each drum down at `DRUM.speed`, counts the zombies within
@@ -232,8 +276,9 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
   crate into a damage crate, and `collect` does the same for a companion crate that was already
   falling when the squad filled; `applyUpgrade` also caps the count.
 - **Input:** a `pointerdown` inside `Hud.onSwitch` (the `STYLE_SWITCH` box, padded 6px) calls
-  `switchStyle` and nothing else; the V key does the same. In `'over'` it buys from the shop or
-  restarts, in `'supply'` it picks a card (1, 2, 3, or 4 for the extraction card), on the kit panel it toggles placing, and while placing it
+  `switchStyle` and nothing else; the V key does the same. In `'over'` it runs a `shop` button's
+  `act` or restarts, in `'supply'` it picks a card (1, 2, 3, or 4 for the extraction card), in
+  `'role'` a role card (1, 2, 3), on the kit panel it toggles placing, and while placing it
   places a wall. Otherwise `createInput` sets `pointerTarget` (clamped to `heroRange()`) on
   `pointerdown`, and on `pointermove` while held (unless the press was used by any of the above:
   `pressOnUi`). `moveHero` walks towards it at `HERO.speed` and clears it
@@ -263,6 +308,12 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
   scrap), at game over and on each shop purchase or refund. A broken value loads as 0.
 - `deadline-kit`: a JSON array of `UpgradeKind`s bought for the next run. Written by `buyKit`,
   read and removed by `create`; unknown kinds are dropped.
+- `deadline-outpost`: a JSON object of `OutpostKind` levels (0 to 3). Written by `buyOutpost`;
+  missing or broken levels load as 0.
+- `deadline-operation`: the `OperationKind` the next run plays. Written by `pickOperation`, read
+  (and kept) by `create`; anything unknown loads as `'road'`.
+- `deadline-operation-best`: a JSON object of each operation's most waves cleared. Written by
+  `recordOperation`.
 - All are read and written through `src/game/save.ts`, wrapped in try/catch.
 
 ### Hub settings
@@ -295,7 +346,8 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
   last drum), `scrap` (this run) and `bank` (saved before it), `startKit` and `nextKit`,
   `sandbags`, `placing` and `walls` (placed this run), `pellets`, `flames` and `medkits`, `offer`
   and `supplies` (picked this run), `inAcid`, `bossMove`, `bossMoves` and `bossKind`, `perks` and
-  `headshots`, `survivorsSaved` and `survivorsLost`, `condition`, `extracted` and `payout`. The
+  `headshots`, `survivorsSaved` and `survivorsLost`, `condition`, `extracted` and `payout`,
+  `outpost`, `roles`, `operation`, `nextOperation`, `operationBests` and `adapt`. The
   scene's public `squad` holds the companion images, one per `stats.companions`,
   and `style` the current `ArtStyle`.
 - Entities (`Enemy`, `Survivor`, `Pickup`, `Drum`, `Bullet`, `Acid`, `Wall`, `Splat`, `Fx`) are private interfaces in
@@ -315,7 +367,8 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
 ### Randomness and timing
 
 - `Math.random` is used only by `planWave`, `drawCondition` and `supplyPick` (their default
-  `rand`). `startWave` calls `drawCondition` (one draw, from wave 6 only) before `planWave`. The order of
+  `rand`). The horde adapting draws nothing; an operation's extra survivors draw after the first
+  one's, and its fixed condition skips the condition's draw. `startWave` calls `drawCondition` (one draw, from wave 6 only) before `planWave`. The order of
   `rand()` calls in `planWave` (per enemy: kind roll then x; then per crate: upgrade then x; then
   per drum: x; then per crawler swarm: x; then, from wave 2, the sandbag crate roll and its time
   and x; then, from wave 3, the survivor's time and x) fixes what the seeded test sees. Newer draws
@@ -353,7 +406,7 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
   `window.game.scene.getScene('Game')` and from it `state` (deep-copied), `player.x`/`player.y`,
   `pointerTarget !== null` (as "moving"), `style`, `liveEnemies()`, `livePickups()` and
   `liveDrums()` (`id`, `hp`, `maxHp`, `x`, `y`, `caught`), and `localStorage` (`deadline-best`,
-  `deadline-style`, `deadline-scrap`). `liveEnemies()` also gives `shield`; `liveAcid()`,
+  `deadline-style`, `deadline-scrap`). `liveEnemies()` also gives `shield`, `armoured` and `flank`; `liveAcid()`,
   `liveWalls()` and `liveSurvivors()` exist for checks by hand.
 - Inputs: only mouse clicks on the game's canvas (`#game canvas`; the page has a second canvas
   behind it), converted from game pixels with its bounding box. The Playwright project `deadline`
@@ -377,7 +430,9 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
   `GameState` shape, the scene key `'Game'`, the public fields above, `planWave`'s random draws
   for wave 1, the drum's timing, speed, radius or one-hit hp, or the wave-1 blast damage means
   updating the test in the same PR, and refreshing `docs/screenshots/playthrough-*.webp`.
-- The test runs on Normal difficulty (no `hub-settings` saved), so enemy hp is unscaled.
+- The test runs on Normal difficulty (no `hub-settings` saved), so enemy hp is unscaled. It
+  starts from a fresh save, so the outpost is at 0 and the run is the Open Road: wave 1 has no
+  survivors, roles or adapting, and its plan is unchanged.
 - Balance matters: the test needs wave 1 to be winnable by its simple strategy within the game time
   it allows, and the wave-1 drum to catch a zombie while the front is far enough away; slower
   firing, tougher wave 1 grunts or a later drum can turn it red.
@@ -418,6 +473,10 @@ supply drop, and kills bank scrap that buys starting crates for the next run.
   `fire`, `hitTargets` or `moveEnemies`; the HUD lists it on the kit panel on its own.
 - **Add a condition:** add it to `Condition`, `CONDITIONS` and `CONDITION_DRAWS`, and read
   `state.condition` where it applies (`fire`, `moveEnemies`, `planWave`, `visibility`).
+- **Add an outpost upgrade, role or operation:** add it to `OUTPOST`, `ROLES` or `OPERATIONS` in
+  `rules.ts` and a colour in `theme.ts`; apply an outpost level in `create` (or `planWave`), a role
+  in `fire`, an operation's rules in `startWave`/`planWave`. The game over screen lays out four
+  outpost buttons and three operations; more need a new layout there.
 - **Add a new phase or screen** (title, pause): extend `Phase`, guard `update`, `spawn` and the
   `pointerdown` handler on it, and keep wave 1 starting at once or update the test's opening steps.
 

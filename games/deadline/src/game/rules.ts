@@ -229,6 +229,106 @@ export function supplyPick(shotgunMaxed = false, rand: () => number = Math.rando
 
 /** What each starting crate costs in scrap, bought on the game over screen for the next run. */
 export const KIT_COSTS: Record<UpgradeKind, number> = { rate: 40, damage: 60, companion: 80, pierce: 100 };
+/**
+ * Outpost upgrades: lasting upgrades bought with scrap on the game over screen, each up to
+ * `OUTPOST_MAX` levels, every level costing more than the last. They are never spent and never
+ * refunded; a fresh save starts with every one at 0.
+ * - barricade: start each run with a sandbag wall per level;
+ * - medic: start each run with a medkit per level;
+ * - depot: one more fuel drum rolls down every wave, per level;
+ * - veteran: start each run with a companion (a Gunner) per level.
+ */
+export type OutpostKind = 'barricade' | 'medic' | 'depot' | 'veteran';
+export const OUTPOST: Record<OutpostKind, { label: string; detail: string; costs: number[] }> = {
+  barricade: { label: 'Barricade', detail: 'Start with a sandbag wall', costs: [60, 120, 200] },
+  medic: { label: 'Field Medic', detail: 'Start with a medkit', costs: [100, 180, 280] },
+  depot: { label: 'Fuel Depot', detail: 'One more drum a wave', costs: [80, 150, 240] },
+  veteran: { label: 'Veteran', detail: 'Start with a companion', costs: [120, 220, 340] },
+};
+export const OUTPOST_KINDS = Object.keys(OUTPOST) as OutpostKind[];
+export const OUTPOST_MAX = 3;
+export type Outpost = Record<OutpostKind, number>;
+export const NO_OUTPOST: Outpost = { barricade: 0, medic: 0, depot: 0, veteran: 0 };
+/** What the next level of an outpost upgrade costs, or null once it is at `OUTPOST_MAX`. */
+export const outpostCost = (kind: OutpostKind, level: number) => (level < OUTPOST_MAX ? OUTPOST[kind].costs[level] : null);
+
+/**
+ * Squad roles: a survivor who joins the squad picks one (the player chooses on a card). Companions
+ * from crates, starting crates and the Veteran are Gunners.
+ * - gunner: one bullet every volley, like the soldier;
+ * - grenadier: one bullet every volley, and every `GRENADE.every`th volley a grenade instead, which
+ *   bursts on the first zombie it hits and hurts every zombie within `GRENADE.radius`, past shields;
+ * - marksman: one slow shot every `MARKSMAN.every` volleys at the toughest zombie on the road,
+ *   doing `MARKSMAN.mult` times the damage and going through `MARKSMAN.pierce` more zombies (and
+ *   any shield).
+ */
+export type Role = 'gunner' | 'grenadier' | 'marksman';
+export const ROLES: Record<Role, { label: string; detail: string }> = {
+  gunner: { label: 'Gunner', detail: 'Fires every volley,\nlike the rest of\nthe squad' },
+  grenadier: { label: 'Grenadier', detail: 'Every fourth volley\na grenade: a small\nblast past shields' },
+  marksman: { label: 'Marksman', detail: 'A slow piercing\nshot at the\ntoughest zombie' },
+};
+export const ROLE_KINDS = Object.keys(ROLES) as Role[];
+export const GRENADE = { every: 4, radius: 46, damage: (wave: number) => Math.round(2 + 1.5 * wave) };
+export const MARKSMAN = { every: 3, mult: 3, pierce: 2 };
+
+/**
+ * Operations: the game over screen picks what the next run is. The Open Road is the endless run
+ * with extraction; an operation is `waves` waves long under a fixed rule set, won by clearing its
+ * last wave (paying the run's scrap `OPERATION_BONUS` times over). Each operation keeps its own
+ * best (the most waves cleared) and the medal that earns.
+ * - survivors: how many walk down each wave, from wave `survivorsFrom`;
+ * - drums: whether fuel drums roll down at all;
+ * - condition: the condition every wave has (null: drawn as usual from wave 6).
+ */
+export type OperationKind = 'road' | 'hospital' | 'lightsout';
+export interface Operation {
+  label: string;
+  detail: string;
+  waves: number | null;
+  survivors: number;
+  survivorsFrom: number;
+  drums: boolean;
+  condition: Condition | null;
+}
+export const OPERATIONS: Record<OperationKind, Operation> = {
+  road: { label: 'Open Road', detail: 'Endless, extract\nfrom wave 20', waves: null, survivors: 1, survivorsFrom: SURVIVOR.fromWave, drums: true, condition: null },
+  hospital: { label: 'Hospital', detail: '10 waves, 2 survivors\na wave, no drums', waves: 10, survivors: 2, survivorsFrom: 1, drums: false, condition: null },
+  lightsout: { label: 'Lights Out', detail: '10 waves, every\nwave a blackout', waves: 10, survivors: 1, survivorsFrom: SURVIVOR.fromWave, drums: true, condition: 'blackout' },
+};
+export const OPERATION_KINDS = Object.keys(OPERATIONS) as OperationKind[];
+export const OPERATION_BONUS = 2;
+/** The medals an operation's best earns: waves cleared out of its 10. */
+export const MEDALS = [
+  { label: 'Gold', cleared: 10 },
+  { label: 'Silver', cleared: 8 },
+  { label: 'Bronze', cleared: 5 },
+];
+export const medalOf = (cleared: number) => MEDALS.find((m) => cleared >= m.cleared)?.label ?? null;
+
+/**
+ * The horde adapts: from wave `ADAPT.fromWave` the wave plan answers the squad's strongest stat,
+ * turning every `ADAPT.every`th grunt into its counter:
+ * - armour (against pierce): armoured brutes, which stop any bullet that hits them, pierce or not;
+ * - shields (against fire rate): riot zombies;
+ * - flanks (against a wide squad): spitters that keep to the road's edges.
+ * A stat only counts once it scores `ADAPT.minScore`: pierce by its level, fire rate by the rate
+ * upgrades in it, the squad by every two companions. The first of the highest wins a tie.
+ */
+export type Adapt = 'armour' | 'shields' | 'flanks';
+export const ADAPTS: Record<Adapt, { label: string }> = {
+  armour: { label: 'Armoured brutes' },
+  shields: { label: 'Riot shields' },
+  flanks: { label: 'Flank spitters' },
+};
+export const ADAPT = { fromWave: 8, minScore: 2, every: 4 };
+export function adaptTo(stats: Stats): Adapt | null {
+  const rate = Math.round(Math.log(BASE_STATS.fireInterval / stats.fireInterval) / Math.log(1.25));
+  const scores: [Adapt, number][] = [['armour', stats.pierce], ['shields', rate], ['flanks', Math.floor(stats.companions / 2)]];
+  const best = scores.reduce((a, b) => (b[1] > a[1] ? b : a));
+  return best[1] >= ADAPT.minScore ? best[0] : null;
+}
+
 /** Pickups drift down slower than the horde, so there is time to shoot them open. */
 export const PICKUP = { speed: 40, halfSize: 22 };
 
@@ -275,7 +375,7 @@ export function applyUpgrade(stats: Stats, kind: UpgradeKind): Stats {
 
 /** Something that comes in during a wave: `at` ms after the wave starts, `x` across the screen. */
 export type Spawn =
-  | { at: number; x: number; type: 'enemy'; kind: EnemyKind; hp: number }
+  | { at: number; x: number; type: 'enemy'; kind: EnemyKind; hp: number; armoured?: boolean; flank?: boolean }
   | { at: number; x: number; type: 'pickup'; upgrade: CrateKind; hp: number }
   | { at: number; x: number; type: 'drum'; hp: number }
   | { at: number; x: number; type: 'survivor'; hp: number };
@@ -307,7 +407,18 @@ export const drumCount = (wave: number, condition: Condition = 'clear') => 1 + M
  * 3. Draws for things added later come last, so earlier waves keep the enemies, crates and drums
  * they had. The wave's condition (drawn before the plan) can add drums.
  */
-export function planWave(wave: number, rand: () => number = Math.random, condition: Condition = 'clear'): Spawn[] {
+export interface WaveRules {
+  /** Fuel drums added to every wave (the Fuel Depot), or none at all. */
+  extraDrums?: number;
+  drums?: boolean;
+  /** Survivors a wave, from wave `survivorsFrom`. */
+  survivors?: number;
+  survivorsFrom?: number;
+  /** What the horde answers the squad with, from `ADAPT.fromWave`. */
+  adapt?: Adapt | null;
+}
+
+export function planWave(wave: number, rand: () => number = Math.random, condition: Condition = 'clear', rules: WaveRules = {}): Spawn[] {
   const tough = toughness(wave);
   const gap = Math.max(180, 550 - 35 * (wave - 1));
   const x = () => Math.round(SPAWN_MARGIN + rand() * (VIEW.w - 2 * SPAWN_MARGIN));
@@ -323,6 +434,21 @@ export function planWave(wave: number, rand: () => number = Math.random, conditi
               : 'grunt';
     spawns.push({ at: i * gap, x: x(), type: 'enemy', kind, hp: Math.round(ENEMIES[kind].hp * tough) });
   }
+  // The horde adapts: every few grunts become the counter to the squad's strongest stat. No draws,
+  // so the rest of the plan is the same as without it.
+  if (rules.adapt && wave >= ADAPT.fromWave) {
+    let grunts = 0, flank = 0;
+    for (const sp of spawns) {
+      if (sp.type !== 'enemy' || sp.kind !== 'grunt' || ++grunts % ADAPT.every) continue;
+      const kind: EnemyKind = rules.adapt === 'armour' ? 'brute' : rules.adapt === 'shields' ? 'riot' : 'spitter';
+      Object.assign(sp, { kind, hp: Math.round(ENEMIES[kind].hp * tough) });
+      if (rules.adapt === 'armour') sp.armoured = true;
+      if (rules.adapt === 'flanks') {
+        sp.flank = true;
+        sp.x = flank++ % 2 ? VIEW.w - SPAWN_MARGIN - 10 : SPAWN_MARGIN + 10;
+      }
+    }
+  }
   if (isBossWave(wave)) {
     spawns.push({ at: size * gap + 1500, x: VIEW.w / 2, type: 'enemy', kind: 'boss', hp: Math.round(ENEMIES.boss.hp * tough) });
   }
@@ -336,7 +462,7 @@ export function planWave(wave: number, rand: () => number = Math.random, conditi
   // Fuel drums come in early and spread over the wave, so the zombies behind them catch up and walk
   // through their blast rings. Their draws come last, so a wave's enemies and crates are the same
   // as without them.
-  const drums = drumCount(wave, condition);
+  const drums = rules.drums === false ? 0 : drumCount(wave, condition) + (rules.extraDrums ?? 0);
   for (let i = 0; i < drums; i++) {
     const at = 2000 + Math.round((i * size * gap) / drums);
     spawns.push({ at, x: Math.round(VIEW.w * (0.3 + rand() * 0.4)), type: 'drum', hp: DRUM.hp });
@@ -354,9 +480,12 @@ export function planWave(wave: number, rand: () => number = Math.random, conditi
   if (wave >= 2 && rand() < SANDBAG_CRATE_ODDS) {
     spawns.push({ at: 4000 + Math.round(rand() * size * gap * 0.5), x: Math.round(VIEW.w * (0.25 + rand() * 0.5)), type: 'pickup', upgrade: 'sandbag', hp: 8 + 4 * wave });
   }
-  // From wave 3, a survivor walks down among the zombies, somewhere in the first part of the wave.
-  if (wave >= SURVIVOR.fromWave) {
-    spawns.push({ at: 3000 + Math.round(rand() * size * gap * 0.6), x: x(), type: 'survivor', hp: SURVIVOR.hp(wave) });
+  // From wave 3, a survivor walks down among the zombies, somewhere in the first part of the wave
+  // (an operation can send more, from earlier).
+  if (wave >= (rules.survivorsFrom ?? SURVIVOR.fromWave)) {
+    for (let i = 0; i < (rules.survivors ?? 1); i++) {
+      spawns.push({ at: 3000 + Math.round(rand() * size * gap * 0.6), x: x(), type: 'survivor', hp: SURVIVOR.hp(wave) });
+    }
   }
   return spawns.sort((a, b) => a.at - b.at);
 }

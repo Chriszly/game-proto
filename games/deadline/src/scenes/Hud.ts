@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { CONDITIONS, HUD_HEIGHT, PERKS, VIEW, type Condition, type Perk, type Stats } from '../game/rules';
+import { ADAPTS, CONDITIONS, HUD_HEIGHT, PERKS, VIEW, type Adapt, type Condition, type Perk, type Stats } from '../game/rules';
 import type { ArtStyle } from '../game/save';
 import { GEOM, num, tex } from '../art/paint';
 import { ACID_COLOR, CRATE_COLORS, THEMES, UPGRADE_COLORS, type Theme } from '../art/theme';
@@ -54,6 +54,10 @@ export interface HudData {
   /** This wave's condition, and whether a boss is on the road (its bar takes the chip's place). */
   condition: Condition;
   bossLive: boolean;
+  /** What the horde answers the squad with this wave, shown on the condition's chip. */
+  adapt: Adapt | null;
+  /** The operation being played (null on the Open Road): its best chip reads waves cleared out of `waves`. */
+  operation: { label: string; waves: number } | null;
 }
 
 type Text = Phaser.GameObjects.Text;
@@ -117,11 +121,14 @@ export class Hud {
 
   /** The wave's condition on a chip under the progress strip (none when the wave is clear). */
   private drawCondition(d: HudData, th: Theme) {
-    const t = this.t.condition, show = d.condition !== 'clear';
+    const t = this.t.condition, show = d.condition !== 'clear' || d.adapt !== null;
     t.setVisible(show);
     if (!show) return;
     const c = CONDITION_CHIP, comic = this.style === 'comic', y = c.y + (d.bossLive ? c.bossDrop : 0);
-    const label = `${CONDITIONS[d.condition].label.toUpperCase()}: ${CONDITIONS[d.condition].detail.toUpperCase()}`;
+    const parts = [];
+    if (d.condition !== 'clear') parts.push(`${CONDITIONS[d.condition].label.toUpperCase()}: ${CONDITIONS[d.condition].detail.toUpperCase()}`);
+    if (d.adapt) parts.push(`ADAPTED: ${ADAPTS[d.adapt].label.toUpperCase()}`);
+    const label = parts.join(' · ');
     if (comic) this.font(t, 9.5, th.ink, th).setText(label).setOrigin(1, 0.5).setPosition(c.x - 8, y + c.h / 2);
     else this.font(t, 9, th.warn, th, { glow: th.warn }).setText(label).setOrigin(1, 0.5).setPosition(c.x - 8, y + c.h / 2);
     const w = t.width + 16, x = c.x - w;
@@ -213,7 +220,7 @@ export class Hud {
     const kw = Math.max(104, t.kills.width + 18);
     this.caption(VIEW.w - 8 - kw, 5, kw, 26, '#fff8e8', ink);
     t.kills.setPosition(VIEW.w - 8 - kw / 2, 18.5);
-    this.font(t.best, 10.5, ink, th).setText(d.newBest ? `NEW BEST: WAVE ${d.best}` : `BEST: WAVE ${d.best}`).setOrigin(0.5);
+    this.font(t.best, 10.5, ink, th).setText(this.bestText(d, ': ')).setOrigin(0.5);
     const bw = t.best.width + 16;
     this.caption(VIEW.w / 2 - bw / 2 - 4, 8, bw, 20, d.newBest ? '#ffd23f' : '#8cd05a', ink);
     t.best.setPosition(VIEW.w / 2 - 4, 18.5);
@@ -263,7 +270,7 @@ export class Hud {
     const pad = (n: number, w: number) => String(n).padStart(w, '0');
     this.font(t.wave, 19, PH, th, { ...glow(PH), ls: 1 }).setText(`WAVE ${pad(d.wave, 2)}`).setOrigin(0, 0.5).setPosition(14, 18);
     this.font(t.kills, 17, PH, th, glow(PH)).setText(`KILLS ${pad(d.kills, 3)}`).setOrigin(1, 0.5).setPosition(VIEW.w - 14, 18);
-    this.font(t.best, 11, AMB, th, glow(AMB)).setText(d.newBest ? `NEW BEST ${pad(d.best, 2)}` : `BEST ${pad(d.best, 2)}`).setOrigin(0.5).setPosition(VIEW.w / 2 - 4, 18.5);
+    this.font(t.best, 11, AMB, th, glow(AMB)).setText(this.bestText(d, ' ')).setOrigin(0.5).setPosition(VIEW.w / 2 - 4, 18.5);
     const bw = t.best.width + 16;
     g.lineStyle(1, num(AMB)).strokeRoundedRect(VIEW.w / 2 - 4 - bw / 2, 9, bw, 18, 2);
     let x = 14;
@@ -301,6 +308,13 @@ export class Hud {
       g.fillStyle(num(AMB), lit ? 1 : 0.18).fillRect(f.x + 8 + (i * mw) / segs, f.y + 24, mw / segs - 2, 9);
     }
     this.font(t.hint, 8.5, '#9fd8a4', th, { weight: 'normal' }).setText(d.frenzyOn ? '2X FIRE ACTIVE' : 'FULL: 2X FIRE 5S').setOrigin(0, 0.5).setPosition(f.x + 8, f.y + 42);
+  }
+
+  /** The best chip: the best wave reached on the Open Road, or an operation's waves cleared. */
+  private bestText(d: HudData, sep: string) {
+    const comic = this.style === 'comic', wave = comic ? `WAVE ${d.best}` : String(d.best).padStart(2, '0');
+    if (d.operation) return `${d.operation.label.toUpperCase()}${sep}${d.newBest ? 'NEW BEST' : 'BEST'} ${d.best}/${d.operation.waves}`;
+    return `${d.newBest ? 'NEW BEST' : 'BEST'}${sep}${wave}`;
   }
 
   /** The style switch: a pill with the two style names, the active one lit. */
