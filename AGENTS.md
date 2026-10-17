@@ -113,7 +113,7 @@ and tries to link it to the repo (the run summary says if the link has to be mad
   and it is played by the shared `.github/workflows/playthrough.yml`, which finds every
   `games/<name>/e2e/playthrough.spec.ts` on its own, so a new game needs no workflow of its own. Give it a `favicon.svg` linked from its `index.html`: the orange bear from the hub's
   `favicon.svg` (same ears, head, dot eyes and muzzle, 32x32 viewBox) with one prop for the game,
-  like Apothecary's plague doctor hat and beak. Then add a card for it in the hub's `index.html` and in `e2e/hub.spec.ts`, a
+  like Apothecary's plague doctor hat and beak. Then add a card for it in the hub's `index.html` (the hub sorts its cards by name) and in `e2e/hub.spec.ts`, a
   Playwright project in `playwright.config.ts`, a row in the README's table of games and a row in
   the table of guides above. Add its Game label (its folder name, description `Game: <Name>`) to `.github/labels.json` (the Labels
   workflow creates it on main), its Project (title, short description and README) to `.github/projects.json`, its name to the
