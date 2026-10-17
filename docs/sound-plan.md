@@ -198,6 +198,10 @@ Notes:
 - Nectar comes in bunches (up to 24 bees), so play at most one blip per 100 ms.
 - Ambience: a hive hum that follows the bees at home, and birdsong in spring and summer.
 
+Done: `games/beehive-baron/src/audio.ts`, played from `GameScene.playEvents` (see the game's
+`AGENTS.md`). Winter is half time rather than a slower tempo, a `gold` sting covers later golds,
+the season's part switch stands in for its motif (plus a chime), and the ambience is not built.
+
 ### Bramblecrest
 Top-down adventure in a lamplit village and woods at night; cosy, mysterious, moonlit.
 

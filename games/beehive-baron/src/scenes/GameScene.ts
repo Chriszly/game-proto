@@ -1,6 +1,8 @@
+import { playMusic, playSting, ui } from '../../../../shared/audio';
 import { settings } from '../../../../shared/settings';
 import Phaser from 'phaser';
 import { BEE_TEX, WASP_TEX } from '../art/bees';
+import { SONG, sfx, type SoundName } from '../audio';
 import { LIVE, SEASON_TINT } from '../art/palette';
 import { CARD_PAD, FLOWER_TEX, JAR_TEX, meadowOrigin } from '../art/scenery';
 import { CONTRACTS_FROM } from '../game/contracts';
@@ -114,6 +116,9 @@ const textStyle = (size: number, color: string, weight = '800', stroke = false):
   ...(stroke ? { stroke: '#3a2410', strokeThickness: 3 } : {}),
 });
 
+/** How often a wasp on the comb shown buzzes, in game time. */
+const WASP_BUZZ_MS = 1500;
+
 /** How close a tap must be to a wasp to swat it. */
 const SWAT_RADIUS = 30;
 
@@ -222,6 +227,12 @@ export class GameScene extends Phaser.Scene {
   private clock = 0;
   private lastSave = 0;
   private lastFrame: number | null = null;
+  /** True until the events of loading (the away nectar) are drained, which make no sound. */
+  private hushed = true;
+  /** The song's part playing now: the season's, or the fair's while it is on. */
+  private musicPart = '';
+  /** Game time until a wasp on the comb buzzes again. */
+  private waspBuzz = 0;
 
   constructor() {
     super('Game');
@@ -267,6 +278,9 @@ export class GameScene extends Phaser.Scene {
     this.meadowStrips = [];
     this.meadowBlooms = [];
     this.shopButtons.clear();
+    this.hushed = true;
+    this.musicPart = '';
+    this.waspBuzz = 0;
     const progress = loadProgress();
     this.state = newHive(progress);
 
@@ -310,12 +324,12 @@ export class GameScene extends Phaser.Scene {
     this.createCasks();
     this.trails = this.add.graphics().setDepth(49);
 
-    this.sendButton = new Button(this, SEND_BUTTON.x, SEND_BUTTON.y, SEND_BUTTON.w, SEND_BUTTON.h, () => this.act(send(this.state)));
+    this.sendButton = new Button(this, SEND_BUTTON.x, SEND_BUTTON.y, SEND_BUTTON.w, SEND_BUTTON.h, () => this.act(send(this.state), 'send'));
     this.sellButton = new Button(this, SELL_BUTTON.x, SELL_BUTTON.y, SELL_BUTTON.w, SELL_BUTTON.h, () => this.act(sell(this.state)));
     SHOP.forEach((item, i) => {
       const at = shopSpot(i);
       const onClick = () =>
-        item === 'brood' ? (this.placing = !this.placing) : item === 'cask' ? this.act(cask(this.state)) : this.act(buy(this.state, item));
+        item === 'brood' ? ((this.placing = !this.placing), ui('click')) : item === 'cask' ? this.act(cask(this.state)) : this.act(buy(this.state, item), 'buy');
       this.shopButtons.set(item, new Button(this, at.x, at.y, SHOP_BUTTONS.w, SHOP_BUTTONS.h, onClick));
     });
     this.createOrder();
@@ -333,6 +347,7 @@ export class GameScene extends Phaser.Scene {
     const gained = progress.seen > 0 ? gatherAway(this.state, Date.now() - progress.seen) : 0;
     this.showAway(gained);
     this.save();
+    this.playSeasonMusic();
 
     this.input.on('pointerdown', (p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => this.tapComb(p, over));
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => (this.hover = cellAt(p.worldX, p.worldY)));
@@ -364,6 +379,8 @@ export class GameScene extends Phaser.Scene {
       if (this.awayLeft === 0) this.away.setVisible(false);
     }
 
+    this.playSeasonMusic();
+    this.buzzWasps(dt);
     this.drawSeason();
     this.drawTabs();
     this.drawComb();
@@ -382,8 +399,29 @@ export class GameScene extends Phaser.Scene {
     this.drawButtons();
   }
 
-  private act(done: boolean) {
-    if (done) this.save();
+  /** After a player's action: saves and plays `sound` if it was done, else the refusal buzz. */
+  private act(done: boolean, sound?: SoundName | 'click') {
+    if (!done) return ui('refuse');
+    this.save();
+    if (sound === 'click') ui('click');
+    else if (sound) sfx(sound);
+  }
+
+  /** The season's part of the song, or the fair's jig while the fair is on; switched at the next bar. */
+  private playSeasonMusic() {
+    const part = fairOn(this.state) ? 'fair' : season(this.state);
+    if (part === this.musicPart) return;
+    this.musicPart = part;
+    playMusic(SONG, part);
+  }
+
+  /** A wasp sitting on the comb shown buzzes now and then. */
+  private buzzWasps(dt: number) {
+    if (!this.state.wasps.some((w) => w.phase === 'steal' && hiveOf(w.slot) === this.hive)) return (this.waspBuzz = 0);
+    this.waspBuzz -= dt;
+    if (this.waspBuzz > 0) return;
+    this.waspBuzz = WASP_BUZZ_MS;
+    sfx('wasp', { volume: 0.6 });
   }
 
   private save() {
@@ -408,7 +446,7 @@ export class GameScene extends Phaser.Scene {
     const cell = this.state.cells[slot];
     if (cell !== null) {
       if (!this.entering) return this.act(harvest(this.state, slot));
-      if (!enterFair(this.state, slot)) return;
+      if (!enterFair(this.state, slot)) return ui('refuse');
       this.entering = false;
       return this.save();
     }
@@ -617,7 +655,10 @@ export class GameScene extends Phaser.Scene {
 
   /** Little flourishes for what just happened. */
   private drawEvents() {
-    for (const e of this.state.events.splice(0)) {
+    const events = this.state.events.splice(0);
+    if (!this.hushed) this.playEvents(events);
+    this.hushed = false;
+    for (const e of events) {
       if (e.kind === 'built' || e.kind === 'capped') {
         const c = cellCentre(e.slot);
         if (!settings.reduceMotion) {
@@ -715,6 +756,119 @@ export class GameScene extends Phaser.Scene {
           blooms.setAlpha(0);
           this.tweens.add({ targets: blooms, alpha: 1, duration: 900 });
         }
+      }
+    }
+  }
+
+  /**
+   * The sounds for what just happened: one per kind of event a frame (the sound table's gaps thin
+   * out the rest), and nothing for cells on the comb not shown.
+   */
+  private playEvents(events: GameState['events']) {
+    const shown = (slot: number | null) => slot === null || hiveOf(slot) === this.hive;
+    // The fair's gold, the Baron and the season's turn come with their own music.
+    const baron = events.some((e) => e.kind === 'baron');
+    for (const e of events) {
+      switch (e.kind) {
+        case 'built':
+          sfx('build', { pitch: 2 ** ((2 * e.touching) / 12) });
+          break;
+        case 'nectar':
+          if (shown(e.slot)) sfx('nectar');
+          break;
+        case 'capped':
+          if (shown(e.slot)) sfx('capped');
+          break;
+        case 'harvested':
+          sfx('harvest');
+          break;
+        case 'sold':
+          sfx('sell');
+          break;
+        case 'order-done':
+          sfx('orderDone');
+          break;
+        case 'spilled':
+        case 'order-failed':
+        case 'contract-lapsed':
+        case 'judged':
+          sfx('sad');
+          break;
+        case 'stolen':
+          if (shown(e.slot)) sfx('sad');
+          break;
+        case 'ate':
+          if (e.what === 'bee') sfx('starve');
+          else if (e.what === 'jar' || shown(e.slot)) sfx('sad');
+          break;
+        case 'wasp':
+          this.waspBuzz = WASP_BUZZ_MS;
+          sfx('wasp');
+          break;
+        case 'swatted':
+          sfx('swat');
+          break;
+        case 'guarded':
+          sfx('zap');
+          break;
+        case 'hatched':
+          if (shown(e.slot)) sfx('hatched');
+          break;
+        case 'unlocked':
+          playSting(SONG, 'unlock');
+          break;
+        case 'demand':
+          if (this.state.sold > 0) sfx('demand');
+          break;
+        case 'wilted':
+          sfx('wilted');
+          break;
+        case 'order':
+        case 'contract':
+          sfx('ding');
+          break;
+        case 'season':
+          sfx('season');
+          break;
+        case 'year':
+          sfx('year');
+          break;
+        case 'casked':
+          sfx('casked');
+          break;
+        case 'mead':
+          sfx('mead');
+          break;
+        case 'swarm-ready':
+          sfx('swarmReady');
+          break;
+        case 'swarmed':
+          sfx('swarmed');
+          break;
+        case 'caught':
+          sfx('caught');
+          break;
+        case 'lent':
+          ui('coin');
+          break;
+        case 'returned':
+          sfx('returned');
+          break;
+        case 'fair-open':
+          sfx('fairOpen');
+          break;
+        case 'entered':
+          sfx('stamp');
+          break;
+        case 'gold':
+          if (!baron) playSting(SONG, 'gold');
+          break;
+        case 'baron':
+          playSting(SONG, 'baron');
+          break;
+        case 'fair-closed':
+          // Autumn comes in the same step, and its chime closes the fair.
+          break;
       }
     }
   }
@@ -818,7 +972,7 @@ export class GameScene extends Phaser.Scene {
         bee: this.add.image(x + e.w - 14, 26, 'bee-0').setScale(0.5),
       };
       const zone = this.add.zone(x, 0, e.w, e.h).setOrigin(0).setInteractive({ useHandCursor: true });
-      zone.on('pointerdown', () => this.act(forage(this.state, kind)));
+      zone.on('pointerdown', () => this.state.forage !== kind && this.act(forage(this.state, kind), 'click'));
       parts.push(entry.icon, entry.name, entry.price, entry.lock, entry.bee, zone);
       return entry;
     });
@@ -910,7 +1064,11 @@ export class GameScene extends Phaser.Scene {
     };
     // Once every meadow is open the card is the fair's: a tap arms entering a capped cell's honey.
     this.goalZone = this.add.zone(x, y, GOAL.w, GOAL.h).setOrigin(0).setDepth(21);
-    this.goalZone.on('pointerdown', () => fairOn(this.state) && !fairWon(this.state) && (this.entering = !this.entering));
+    this.goalZone.on('pointerdown', () => {
+      if (!fairOn(this.state) || fairWon(this.state)) return;
+      this.entering = !this.entering;
+      ui('click');
+    });
     this.meadowTagText = this.add.text(-MEADOW_TAG.w / 2 + 26, 0, '', textStyle(11.5, '#f1e8ff', '800')).setOrigin(0, 0.5);
     this.meadowTag = this.add
       .container(0, 0, [this.add.image(0, 0, 'meadow-tag'), this.add.image(-MEADOW_TAG.w / 2 + 13, -1, 'lock').setScale(0.8), this.meadowTagText])
@@ -1058,6 +1216,7 @@ export class GameScene extends Phaser.Scene {
       .setDepth(UI_DEPTH + 1)
       .setInteractive({ useHandCursor: true });
     text.on('pointerdown', () => {
+      ui('click');
       clearProgress();
       for (const sprite of [...this.bees.values(), ...this.wasps.values()]) sprite.destroy();
       this.bees.clear();
@@ -1087,6 +1246,7 @@ export class GameScene extends Phaser.Scene {
       const label = this.add.text(0, -1, t('hive', { n: hive + 1 }), textStyle(10.5, '#7a4410', '800')).setOrigin(0.5);
       const zone = this.add.zone(0, 0, HIVE_TAB.w, HIVE_TAB.h).setInteractive({ useHandCursor: true });
       zone.on('pointerdown', () => {
+        if (this.hive !== hive) ui('click');
         this.hive = hive;
         this.placing = false;
       });
@@ -1120,7 +1280,8 @@ export class GameScene extends Phaser.Scene {
     // While the fair card is armed, a tap on a ready cask enters its mead.
     this.casks.forEach((c, i) =>
       c.cask.on('pointerdown', () => {
-        if (!this.entering || !enterMead(this.state, i)) return;
+        if (!this.entering) return;
+        if (!enterMead(this.state, i)) return ui('refuse');
         this.entering = false;
         this.save();
       }),
@@ -1158,7 +1319,7 @@ export class GameScene extends Phaser.Scene {
       title: this.add.text(CONTRACT.x - CONTRACT.w / 2 + 14, CONTRACT.y - 7, '', textStyle(12.5, '#2f5a24', '900')).setOrigin(0, 0.5).setDepth(31),
       detail: this.add.text(CONTRACT.x - CONTRACT.w / 2 + 14, CONTRACT.y + 8, '', textStyle(10, '#4a6a30', '700')).setOrigin(0, 0.5).setDepth(31),
     };
-    this.contract.card.on('pointerdown', () => this.act(acceptContract(this.state)));
+    this.contract.card.on('pointerdown', () => this.state.contract?.phase === 'offer' && this.act(acceptContract(this.state)));
   }
 
   private drawContract() {
@@ -1189,7 +1350,11 @@ export class GameScene extends Phaser.Scene {
     const detail = this.add.text(12, 27, '', textStyle(10, '#ffe0b0', '700')).setOrigin(0, 0.5);
     const bar = this.add.graphics();
     const card = this.add.image(-CARD_PAD, -CARD_PAD, 'swarm-chip').setOrigin(0).setInteractive({ useHandCursor: true });
-    card.on('pointerdown', () => this.state.coins >= CATCH_PRICE && this.queenCard.root.setVisible(true));
+    card.on('pointerdown', () => {
+      if (this.state.coins < CATCH_PRICE) return ui('refuse');
+      ui('click');
+      this.queenCard.root.setVisible(true);
+    });
     const root = this.add.container(SWARM.x, SWARM.y, [card, text, detail, bar]).setDepth(UI_DEPTH - 1).setVisible(false);
     this.swarm = { root, text, detail, bar };
   }
@@ -1217,7 +1382,10 @@ export class GameScene extends Phaser.Scene {
     const more = this.add.text(0, END_CARD.h / 2 - 22, t('keepPlaying'), textStyle(10.5, '#8a6a40', '600')).setOrigin(0.5);
     const shade = this.add.rectangle(0, 0, VIEW.w * 2, VIEW.h * 2, 0x2a1808, 0.45);
     const root = this.add.container(END_CARD.x, END_CARD.y, [shade, card, title, sub, detail, more]).setDepth(UI_DEPTH + 5).setVisible(false);
-    card.on('pointerdown', () => root.setVisible(false));
+    card.on('pointerdown', () => {
+      ui('click');
+      root.setVisible(false);
+    });
     this.endCard = { root, detail };
   }
 
@@ -1236,7 +1404,10 @@ export class GameScene extends Phaser.Scene {
     const sub = this.add.text(0, -END_CARD.h / 2 + 58, t('queenSub', { n: CATCH_PRICE }), textStyle(10.5, '#6a4a28', '700')).setOrigin(0.5);
     const more = this.add.text(0, END_CARD.h / 2 - 20, t('waitOutside'), textStyle(10.5, '#8a6a40', '600')).setOrigin(0.5);
     const root = this.add.container(END_CARD.x, END_CARD.y, [shade, card, title, sub, more]).setDepth(UI_DEPTH + 5).setVisible(false);
-    shade.on('pointerdown', () => root.setVisible(false));
+    shade.on('pointerdown', () => {
+      ui('click');
+      root.setVisible(false);
+    });
     const buttons = QUEEN_IDS.map((queen, i) => {
       const b = new Button(this, END_CARD.x + (i - 1) * 130, END_CARD.y + 18, 122, 56, () => {
         root.setVisible(false);
