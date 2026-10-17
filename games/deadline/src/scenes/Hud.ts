@@ -1,6 +1,9 @@
 import Phaser from 'phaser';
 import { ADAPTS, CONDITIONS, HUD_HEIGHT, PERKS, VIEW, type Adapt, type Condition, type Perk, type Stats } from '../game/rules';
 import type { ArtStyle } from '../game/save';
+import { formatNumber } from '../../../../shared/i18n';
+// `t` names this HUD's Text objects here, so the translator goes by `tr`.
+import { t as tr, type TextKey } from '../i18n';
 import { GEOM, num, tex } from '../art/paint';
 import { ACID_COLOR, CRATE_COLORS, THEMES, UPGRADE_COLORS, type Theme } from '../art/theme';
 
@@ -57,10 +60,13 @@ export interface HudData {
   /** What the horde answers the squad with this wave, shown on the condition's chip. */
   adapt: Adapt | null;
   /** The operation being played (null on the Open Road): its best chip reads waves cleared out of `waves`. */
-  operation: { label: string; waves: number } | null;
+  operation: { label: TextKey; waves: number } | null;
 }
 
 type Text = Phaser.GameObjects.Text;
+
+/** Shots a second, to one decimal in the player's language (2.9 or 2,9). */
+export const fireRate = (s: Stats) => formatNumber(1000 / s.fireInterval, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
 export class Hud {
   private bar: Phaser.GameObjects.Image;
@@ -126,8 +132,8 @@ export class Hud {
     if (!show) return;
     const c = CONDITION_CHIP, comic = this.style === 'comic', y = c.y + (d.bossLive ? c.bossDrop : 0);
     const parts = [];
-    if (d.condition !== 'clear') parts.push(`${CONDITIONS[d.condition].label.toUpperCase()}: ${CONDITIONS[d.condition].detail.toUpperCase()}`);
-    if (d.adapt) parts.push(`ADAPTED: ${ADAPTS[d.adapt].label.toUpperCase()}`);
+    if (d.condition !== 'clear') parts.push(`${tr(CONDITIONS[d.condition].label).toUpperCase()}: ${tr(CONDITIONS[d.condition].detail).toUpperCase()}`);
+    if (d.adapt) parts.push(tr('adapted', { adapt: tr(ADAPTS[d.adapt].label).toUpperCase() }));
     const label = parts.join(' · ');
     if (comic) this.font(t, 9.5, th.ink, th).setText(label).setOrigin(1, 0.5).setPosition(c.x - 8, y + c.h / 2);
     else this.font(t, 9, th.warn, th, { glow: th.warn }).setText(label).setOrigin(1, 0.5).setPosition(c.x - 8, y + c.h / 2);
@@ -147,15 +153,15 @@ export class Hud {
    */
   private drawKit(d: HudData, th: Theme) {
     const g = this.g, t = this.t, k = KIT_PANEL, comic = this.style === 'comic';
-    const list = [d.flames && `FLAME ${d.flames}`, d.medkits && `MEDKIT ${d.medkits}`, d.pellets && `SPREAD ${d.pellets}`].filter(Boolean).join(' · ');
+    const list = [d.flames && tr('kitFlames', { n: d.flames }), d.medkits && tr('kitMedkits', { n: d.medkits }), d.pellets && tr('kitSpread', { n: d.pellets })].filter(Boolean).join(' · ');
     // The perks take the sandbag hint's line while there is no hint to show; with one, they join the supplies.
-    const perks = d.perks.map((p) => PERKS[p].label.toUpperCase()).join(' · ');
+    const perks = d.perks.map((p) => tr(PERKS[p].label).toUpperCase()).join(' · ');
     const ready = d.sandbags > 0, hint = ready || d.placing;
     const line2 = hint ? '' : perks, line3 = hint && perks ? [perks, list].filter(Boolean).join(' · ') : list;
     const show = hint || list !== '' || perks !== '';
     [t.kit, t.kitHint, t.kitList].forEach((o) => o.setVisible(show));
     if (show) {
-      const bag = CRATE_COLORS.sandbag, title = ready ? `SANDBAGS${comic ? ' x' : ' '}${d.sandbags}` : perks && !list ? 'PERKS' : 'KIT';
+      const bag = CRATE_COLORS.sandbag, title = ready ? tr(comic ? 'kitSandbags' : 'nvKitSandbags', { n: d.sandbags }) : tr(perks && !list ? 'kitPerks' : 'kit');
       if (comic) {
         this.caption(k.x, k.y, k.w, k.h, d.placing ? '#ffd23f' : '#fff8e8', th.ink, 2.2);
         if (ready) {
@@ -163,14 +169,14 @@ export class Hud {
           g.lineStyle(1.3, num(th.ink)).strokeRoundedRect(k.x + k.w - 30, k.y + 7, 22, 11, 5);
         }
         this.font(t.kit, 12, th.ink, th).setText(title).setOrigin(0, 0.5).setPosition(k.x + 8, k.y + 13);
-        this.font(t.kitHint, 8.5, d.placing ? th.warn : hint ? th.ink : '#c05a1a', th).setText(d.placing ? 'NOW TAP A LANE!' : ready ? 'TAP HERE, THEN A LANE' : line2).setOrigin(0, 0.5).setPosition(k.x + 8, k.y + 28);
+        this.font(t.kitHint, 8.5, d.placing ? th.warn : hint ? th.ink : '#c05a1a', th).setText(d.placing ? tr('kitPlacing') : ready ? tr('kitReady') : line2).setOrigin(0, 0.5).setPosition(k.x + 8, k.y + 28);
         this.font(t.kitList, 8, '#5a4a6a', th).setText(line3).setOrigin(0, 0.5).setPosition(k.x + 8, k.y + 42);
       } else {
         g.fillStyle(num('#040c06'), 0.72).fillRoundedRect(k.x, k.y, k.w, k.h, 3);
         g.lineStyle(1, num(d.placing ? th.text : th.accent), 0.8).strokeRoundedRect(k.x, k.y, k.w, k.h, 3);
         if (ready) g.fillStyle(num(bag)).fillRect(k.x + k.w - 20, k.y + 8, 12, 6);
         this.font(t.kit, 11, th.accent, th, { glow: th.accent, weight: 'bold' }).setText(title).setOrigin(0, 0.5).setPosition(k.x + 8, k.y + 12);
-        this.font(t.kitHint, 8.5, d.placing ? th.text : '#9fd8a4', th, { weight: 'normal' }).setText(d.placing ? 'SELECT LANE' : ready ? 'TAP, THEN A LANE' : line2).setOrigin(0, 0.5).setPosition(k.x + 8, k.y + 27);
+        this.font(t.kitHint, 8.5, d.placing ? th.text : '#9fd8a4', th, { weight: 'normal' }).setText(d.placing ? tr('nvKitPlacing') : ready ? tr('nvKitReady') : line2).setOrigin(0, 0.5).setPosition(k.x + 8, k.y + 27);
         this.font(t.kitList, 8.5, th.muted, th, { weight: 'normal' }).setText(line3).setOrigin(0, 0.5).setPosition(k.x + 8, k.y + 41);
       }
     }
@@ -178,7 +184,7 @@ export class Hud {
     if (d.inAcid) {
       const col = comic ? ACID_COLOR : th.warn;
       this.font(t.acid, comic ? 13 : 12, col, th, comic ? { stroke: th.ink, sw: 4 } : { glow: col, weight: 'bold' })
-        .setText(comic ? 'IN THE ACID! HALF FIRE' : 'ACID: FIRE RATE HALVED').setOrigin(0.5).setPosition(VIEW.w / 2, 820);
+        .setText(tr(comic ? 'inAcid' : 'nvInAcid')).setOrigin(0.5).setPosition(VIEW.w / 2, 820);
     }
   }
 
@@ -202,21 +208,21 @@ export class Hud {
   private stats(d: HudData) {
     const s = d.stats, star = (p: Perk) => (d.perks.includes(p) ? '★' : '');
     return [
-      { label: this.style === 'comic' ? 'DAMAGE' : 'DMG', value: String(s.damage) + star('headshot'), color: UPGRADE_COLORS.damage },
-      { label: 'RATE', value: `${(1000 / s.fireInterval).toFixed(1)}/s${star('fire')}`, color: UPGRADE_COLORS.rate },
-      { label: 'SQUAD', value: String(s.companions + 1), color: UPGRADE_COLORS.companion },
-      { label: 'PIERCE', value: String(s.pierce) + star('ricochet'), color: UPGRADE_COLORS.pierce },
+      { label: tr(this.style === 'comic' ? 'statDamage' : 'statDamageShort'), value: String(s.damage) + star('headshot'), color: UPGRADE_COLORS.damage },
+      { label: tr('statRate'), value: `${fireRate(s)}/s${star('fire')}`, color: UPGRADE_COLORS.rate },
+      { label: tr('statSquad'), value: String(s.companions + 1), color: UPGRADE_COLORS.companion },
+      { label: tr('statPierce'), value: String(s.pierce) + star('ricochet'), color: UPGRADE_COLORS.pierce },
     ];
   }
 
   private drawComic(d: HudData, th: Theme) {
     const g = this.g, ink = th.ink, t = this.t;
     // Top bar: wave and kills in caption boxes, the best wave on a green chip between them.
-    this.font(t.wave, 19, ink, th).setText(`WAVE ${d.wave}`).setOrigin(0.5).setPosition(0, 0);
+    this.font(t.wave, 19, ink, th).setText(tr('wave', { wave: d.wave })).setOrigin(0.5).setPosition(0, 0);
     const ww = Math.max(102, t.wave.width + 18);
     this.caption(8, 5, ww, 26, '#ffe04a', ink);
     t.wave.setPosition(8 + ww / 2, 18);
-    this.font(t.kills, 17, ink, th).setText(`KILLS ${d.kills}`).setOrigin(0.5);
+    this.font(t.kills, 17, ink, th).setText(tr('kills', { kills: d.kills })).setOrigin(0.5);
     const kw = Math.max(104, t.kills.width + 18);
     this.caption(VIEW.w - 8 - kw, 5, kw, 26, '#fff8e8', ink);
     t.kills.setPosition(VIEW.w - 8 - kw / 2, 18.5);
@@ -248,28 +254,28 @@ export class Hud {
       g.lineStyle(1.1, num(ink)).strokeRect(cx + 1, p.y + 5, bwid / n - 3, p.h - 10);
     }
     this.skull(404, p.y + p.h / 2, '#f4ecd8', ink, true);
-    const note = d.bossWave ? 'BOSS WAVE!' : d.bossNext ? 'BOSS NEXT WAVE!' : `BOSS AT WAVE ${d.nextBoss}`;
+    const note = d.bossWave ? tr('bossWave') : d.bossNext ? tr('bossNext') : tr('bossAt', { wave: d.nextBoss });
     this.font(t.note, 10, d.bossWave || d.bossNext ? th.warn : '#5a4a6a', th).setText(note).setOrigin(0, 0.5).setPosition(416, p.y + p.h / 2);
 
     // Frenzy meter.
     const f = FRENZY_PANEL;
     this.caption(f.x, f.y, f.w, f.h, '#fff8e8', ink, 2.2);
-    this.font(t.frenzy, 13, '#ff8a2a', th, { stroke: ink, sw: 3.5 }).setText(d.frenzyOn ? 'FRENZY ON!' : 'FRENZY!').setOrigin(0, 0.5).setPosition(f.x + 8, f.y + 13);
+    this.font(t.frenzy, 13, '#ff8a2a', th, { stroke: ink, sw: 3.5 }).setText(tr(d.frenzyOn ? 'frenzyOn' : 'frenzy')).setOrigin(0, 0.5).setPosition(f.x + 8, f.y + 13);
     this.star(f.x + f.w - 18, f.y + 14, 9, 14, '#ffe24a', ink);
     this.font(t.streak, 9, ink, th).setText(`x${d.streak}`).setOrigin(0.5).setPosition(f.x + f.w - 18, f.y + 14.5);
     const mx = f.x + 8, my = f.y + 26, mw = f.w - 16, mh = 10;
     g.fillStyle(num('#d8d0c0')).fillRect(mx, my, mw, mh);
     g.fillStyle(num(d.frenzyOn ? '#ffd23f' : '#ff8a2a')).fillRect(mx, my, mw * d.frenzyFill, mh);
     g.lineStyle(1.4, num(ink)).strokeRect(mx, my, mw, mh);
-    this.font(t.hint, 8, ink, th).setText(d.frenzyOn ? 'DOUBLE FIRE!' : 'FULL = DOUBLE FIRE!').setOrigin(0, 0.5).setPosition(f.x + 8, f.y + 43);
+    this.font(t.hint, 8, ink, th).setText(tr(d.frenzyOn ? 'frenzyOnHint' : 'frenzyHint')).setOrigin(0, 0.5).setPosition(f.x + 8, f.y + 43);
   }
 
   private drawNv(d: HudData, th: Theme) {
     const g = this.g, t = this.t, PH = th.text, AMB = th.accent;
     const glow = (c: string) => ({ glow: c, weight: 'bold' });
     const pad = (n: number, w: number) => String(n).padStart(w, '0');
-    this.font(t.wave, 19, PH, th, { ...glow(PH), ls: 1 }).setText(`WAVE ${pad(d.wave, 2)}`).setOrigin(0, 0.5).setPosition(14, 18);
-    this.font(t.kills, 17, PH, th, glow(PH)).setText(`KILLS ${pad(d.kills, 3)}`).setOrigin(1, 0.5).setPosition(VIEW.w - 14, 18);
+    this.font(t.wave, 19, PH, th, { ...glow(PH), ls: 1 }).setText(tr('wave', { wave: pad(d.wave, 2) })).setOrigin(0, 0.5).setPosition(14, 18);
+    this.font(t.kills, 17, PH, th, glow(PH)).setText(tr('kills', { kills: pad(d.kills, 3) })).setOrigin(1, 0.5).setPosition(VIEW.w - 14, 18);
     this.font(t.best, 11, AMB, th, glow(AMB)).setText(this.bestText(d, ' ')).setOrigin(0.5).setPosition(VIEW.w / 2 - 4, 18.5);
     const bw = t.best.width + 16;
     g.lineStyle(1, num(AMB)).strokeRoundedRect(VIEW.w / 2 - 4 - bw / 2, 9, bw, 18, 2);
@@ -294,27 +300,28 @@ export class Hud {
     }
     const warn = d.bossWave || d.bossNext;
     this.skull(404, p.y + p.h / 2, warn ? th.warn : th.muted, warn ? th.warn : th.muted, false);
-    const note = d.bossWave ? 'BOSS WAVE' : d.bossNext ? 'BOSS NEXT WAVE' : `BOSS AT WAVE ${pad(d.nextBoss, 2)}`;
+    const note = d.bossWave ? tr('nvBossWave') : d.bossNext ? tr('nvBossNext') : tr('bossAt', { wave: pad(d.nextBoss, 2) });
     this.font(t.note, 9.5, warn ? th.warn : th.muted, th, glow(warn ? th.warn : th.muted)).setText(note).setOrigin(0, 0.5).setPosition(415, p.y + p.h / 2);
 
     const f = FRENZY_PANEL;
     g.fillStyle(num('#040c06'), 0.72).fillRoundedRect(f.x, f.y, f.w, f.h, 3);
     g.lineStyle(1, num(AMB), 0.8).strokeRoundedRect(f.x, f.y, f.w, f.h, 3);
-    this.font(t.frenzy, 11, AMB, th, { ...glow(AMB), ls: 2 }).setText(d.frenzyOn ? 'FRENZY ON' : 'FRENZY').setOrigin(0, 0.5).setPosition(f.x + 8, f.y + 12);
+    this.font(t.frenzy, 11, AMB, th, { ...glow(AMB), ls: 2 }).setText(tr(d.frenzyOn ? 'nvFrenzyOn' : 'nvFrenzy')).setOrigin(0, 0.5).setPosition(f.x + 8, f.y + 12);
     this.font(t.streak, 12, '#ffffff', th, glow('#ffffff')).setText(`x${d.streak}`).setOrigin(1, 0.5).setPosition(f.x + f.w - 8, f.y + 12);
     const segs = 14, mw = f.w - 16;
     for (let i = 0; i < segs; i++) {
       const lit = (i + 1) / segs <= d.frenzyFill + 0.001;
       g.fillStyle(num(AMB), lit ? 1 : 0.18).fillRect(f.x + 8 + (i * mw) / segs, f.y + 24, mw / segs - 2, 9);
     }
-    this.font(t.hint, 8.5, '#9fd8a4', th, { weight: 'normal' }).setText(d.frenzyOn ? '2X FIRE ACTIVE' : 'FULL: 2X FIRE 5S').setOrigin(0, 0.5).setPosition(f.x + 8, f.y + 42);
+    this.font(t.hint, 8.5, '#9fd8a4', th, { weight: 'normal' }).setText(tr(d.frenzyOn ? 'nvFrenzyOnHint' : 'nvFrenzyHint')).setOrigin(0, 0.5).setPosition(f.x + 8, f.y + 42);
   }
 
   /** The best chip: the best wave reached on the Open Road, or an operation's waves cleared. */
   private bestText(d: HudData, sep: string) {
-    const comic = this.style === 'comic', wave = comic ? `WAVE ${d.best}` : String(d.best).padStart(2, '0');
-    if (d.operation) return `${d.operation.label.toUpperCase()}${sep}${d.newBest ? 'NEW BEST' : 'BEST'} ${d.best}/${d.operation.waves}`;
-    return `${d.newBest ? 'NEW BEST' : 'BEST'}${sep}${wave}`;
+    const comic = this.style === 'comic', wave = comic ? tr('wave', { wave: d.best }) : String(d.best).padStart(2, '0');
+    const best = tr(d.newBest ? 'newBest' : 'best');
+    if (d.operation) return `${tr(d.operation.label).toUpperCase()}${sep}${best} ${d.best}/${d.operation.waves}`;
+    return `${best}${sep}${wave}`;
   }
 
   /** The style switch: a pill with the two style names, the active one lit. */
@@ -326,8 +333,8 @@ export class Hud {
     g.lineStyle(comic ? 1.6 : 1, num(line)).strokeRoundedRect(s.x, s.y, s.w, s.h, comic ? 3 : 2);
     const label = (t: Text, text: string, cx: number, active: boolean) =>
       this.font(t, 9, comic ? th.ink : active ? '#020a05' : th.accent, th).setText(text).setOrigin(0.5).setPosition(cx, s.y + s.h / 2 + 0.5);
-    label(this.t.comic, 'COMIC', s.x + half / 2, comic);
-    label(this.t.nv, 'NV', s.x + half * 1.5, !comic);
+    label(this.t.comic, tr('styleComic'), s.x + half / 2, comic);
+    label(this.t.nv, tr('styleNv'), s.x + half * 1.5, !comic);
   }
 
   private skull(x: number, y: number, fill: string, line: string, filled: boolean) {
