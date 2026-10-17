@@ -161,6 +161,15 @@ function drawHand(s: GameState) {
   if (s.selected && !s.hand.includes(s.selected)) s.selected = s.hand[0] ?? null;
 }
 
+/**
+ * Redraws the hand when none of it has room but a tile in the pouch has: a merge frees a cell
+ * and a gift adds tiles without a new hand, and either can leave the hand stuck while `finish`
+ * still refuses. A hand that has room is kept, so a merge is never a free redraw.
+ */
+function keepHandPlayable(s: GameState) {
+  if (s.phase === 'playing' && !s.hand.some((b) => fitsAnywhere(s.grid, b)) && anyPlace(s)) drawHand(s);
+}
+
 /** Whether a tile of `kind` is in the hand, ready to place. */
 export const inHand = (s: GameState, kind: Building) => s.hand.includes(kind);
 
@@ -335,7 +344,7 @@ function end(s: GameState) {
 /** Ends the kingdom when no tiles are left, or none can go anywhere and no merge would make room. */
 function checkEnd(s: GameState) {
   const tilesLeft = BUILDINGS.some((b) => s.pouch[b] > 0);
-  if (!tilesLeft || (!anyPlace(s) && !anyMerge(s))) end(s);
+  if (!tilesLeft || (!anyPlace(s) && !housesCanMerge(s.grid))) end(s);
 }
 
 /**
@@ -403,8 +412,9 @@ function settle(s: GameState, prior: Snapshot, at: { col: number; row: number },
   }
   // A change that began a round or won a crown is kept: undoing it would hand back what was paid.
   s.undo = newRound || decree ? null : prior;
-  // A goal reached carries on to its gift, even with the pouch empty, unless the island is full.
-  if (s.phase === 'gift' && !s.grid.some((cells) => cells.includes('grass'))) s.giftsDue = 0;
+  // A goal reached carries on to its gift, even with the pouch empty, unless the island is full
+  // and no two houses could merge to make room.
+  if (s.phase === 'gift' && !s.grid.some((cells) => cells.includes('grass')) && !housesCanMerge(s.grid)) s.giftsDue = 0;
   if (s.phase === 'playing' || s.giftsDue === 0) checkEnd(s);
   return { gained: s.score - prior.score, changes, decree, newRound, season: seasonal, struck };
 }
@@ -481,8 +491,9 @@ export function canMerge(s: GameState, from: { col: number; row: number }, to: {
 export const mergeable = (s: GameState, col: number, row: number) =>
   SIDES.some(([dc, dr]) => canMerge(s, { col, row }, { col: col + dc, row: row + dr }));
 
-/** Whether any two houses on the board could merge. */
-const anyMerge = (s: GameState) => s.grid.some((cells, row) => cells.some((_, col) => mergeable(s, col, row)));
+/** Whether any two houses on `grid` stand side by side, so they could merge, whatever the phase. */
+const housesCanMerge = (grid: Cell[][]) =>
+  grid.some((cells, row) => cells.some((cell, col) => cell === 'house' && (cells[col + 1] === 'house' || grid[row + 1]?.[col] === 'house')));
 
 /** What merging the house at `from` into the one at `to` would add to the score (it can be negative), or null. */
 export function previewMerge(s: GameState, from: { col: number; row: number }, to: { col: number; row: number }) {
@@ -503,7 +514,9 @@ export function merge(s: GameState, from: { col: number; row: number }, to: { co
   const prior = snapshot(s);
   s.grid[to.row][to.col] = 'manor';
   s.grid[from.row][from.col] = 'grass';
-  return settle(s, prior, to, 0);
+  const placed = settle(s, prior, to, 0);
+  keepHandPlayable(s);
+  return placed;
 }
 
 /** Takes one of the gifts on offer while one is due. Returns false if that is not allowed now. */
@@ -518,6 +531,7 @@ export function chooseGift(s: GameState, gift: Gift) {
   s.gifts = giftsFor(s.island, s.round - s.giftsDue, s.unlocked);
   if (s.giftsDue === 0) {
     s.phase = 'playing';
+    keepHandPlayable(s);
     checkEnd(s);
   }
   return true;

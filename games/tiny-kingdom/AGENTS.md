@@ -25,7 +25,8 @@ Implemented today:
   `Math.random` and an undone placement redraws the same hand; when no drawn tile has room but a
   pouch tile has, the first is swapped for one that has. `hand` is sorted in `BUILDINGS` order.
   `select`, `previewPlacement` and `place` only take kinds in the hand (`inHand`); `place`, `clear`
-  and `trade` draw the next hand; `chooseGift` keeps it. `shownKinds` gives one tile button per
+  and `trade` draw the next hand; `merge` and `chooseGift` keep it unless none of it has room while
+  a pouch tile has (`keepHandPlayable` then redraws, so a full board can't get stuck). `shownKinds` gives one tile button per
   kind in the hand and `handCount` how many of it the hand holds; the pouch line under the
   buttons lists what is left to draw.
 - The castle (`src/game/castle.ts`): `islandMap` puts a `'C'` (`'castle'`, a `Terrain`) on a random
@@ -77,7 +78,10 @@ Implemented today:
 - Island of the day: `dailyIsland(today())` hashes the local date (YYYY-MM-DD, from `new Date()`)
   to an island number, the same for every player that day. Its best is saved per day.
 - Campaign: `LEVELS` (eight islands, each with three star scores set from a greedy bot's final
-  score on Normal at 0.75, 0.9 and 1.05 of it). `starsFor(level, score)` counts the stars;
+  score on Normal at 0.75, 0.9 and 1.05 of it). `starScores(level)` scales them by
+  `byDifficulty(1.01, 1, 0.94)`, the same bot's mean final score on Easy and Hard against Normal
+  over 300 islands; `starsFor(level, score)` counts the stars against them, and the islands card
+  and game over show them;
   `levelOpen` needs a star on the level before. The best stars per level are saved at game over.
 - New buildings: the market (+1 per different kind of building around it, credited to the first
   one of each kind in `AROUND` order), the harbor (`canPlace` only allows it on grass with a lake
@@ -147,8 +151,9 @@ Implemented today:
   baked at `RES` texture pixels per view pixel (the screen's `renderScale`, up to 4 on a 4K
   screen) and shown at view size by `addArt`. Fonts are the system sans stack (`FONT`), weights 700 to 900.
 - The game ends when the pouch is empty, or when no tile has room (`anyPlace`) and no two houses
-  could merge. When only a merge is left, the undo button reads "No room: merge houses or finish"
-  and calls `finish`. A reached goal first gets its gift, unless the island is full. `end` pays
+  could merge (`housesCanMerge`, which ignores the phase). When only a merge is left, the undo
+  button reads "No room: merge houses or finish" and calls `finish`. A reached goal first gets its
+  gift, unless the island is full and no two houses could merge. `end` pays
   the castle bonus; the best final score, the crowns, the daily best and the campaign stars
   persist (`gameEnded`).
 
@@ -212,13 +217,14 @@ File map (`src/`):
   `previewPlacement`, `previewScore`, `select`, `place`, `canClear`, `previewClear`, `clear`,
   `canTrade`, `tradeGives`, `trade`, `canMerge`, `mergeable`, `previewMerge`, `merge`, `anyPlace`,
   `finish`, `canUndo`, `undo`, `chooseGift`, `shownKinds` and `handCount`; `settle` is the shared
-  tail of `place`, `clear` and `merge`, `drawHand` draws the next hand and `end` finishes the
-  kingdom. No Phaser; `goalFor` reads `byDifficulty` from `shared/settings.ts`.
+  tail of `place`, `clear` and `merge`, `drawHand` draws the next hand, `keepHandPlayable` redraws
+  a stuck one after a merge or gift, `housesCanMerge` checks for a merge whatever the phase and
+  `end` finishes the kingdom. No Phaser; `goalFor` reads `byDifficulty` from `shared/settings.ts`.
 - `game/omens.ts`: `OMEN_FROM`, `OmenKind`, `Omen`, `Struck`, `omenFor` and `strike`.
 - `game/castle.ts`: `castleAt`, `joinedCells` and `joinedCount`.
 - `game/seasons.ts`: `SEASONS`, `Season`, `SEASON_INFO` (name, rule, short rule, doubled
   buildings, colour), `seasonFor` and `seasonBonus`.
-- `game/islands.ts`: `Mode`, `Kingdom`, `Level`, `LEVELS`, `starsFor`, `levelOpen`, `today`,
+- `game/islands.ts`: `Mode`, `Kingdom`, `Level`, `LEVELS`, `starScores` (reads `byDifficulty`), `starsFor`, `levelOpen`, `today`,
   `dailyIsland` and `parseIsland`.
 - `game/decree.ts`: `DECREE_BONUS`, `Decree`, `DecreeMarks`, `At`, `regions`, `namedPlaces`,
   `decreeMarks` and `decreeFor`.
@@ -338,16 +344,18 @@ Data tables:
   layout stays in view pixels (`VIEW`); pointers go through `viewPoint`, since `pointer.x/y` are
   canvas pixels, and the art is baked at `RES` (see Art). `e2e/screens.spec.ts` at the root checks
   the game on five screens.
-- Difficulty scales one number: the round goals. `goalFor` in `src/game/state.ts` multiplies the
+- Difficulty scales the round goals and the campaign's star scores. `goalFor` in `src/game/state.ts` multiplies the
   base goal by `byDifficulty(0.8, 1, 1.2)` (Easy, Normal, Hard) and rounds it, so the goals are
   16, 36, 60, 88, ... on Easy, 20, 45, 75, 110, ... on Normal and 24, 54, 90, 132, ... on Hard.
-  Pouches, scoring, decrees, gifts, seasons and the campaign's star scores do not change (so stars
-  come easier on Easy, where goals and their refills come sooner).
+  The campaign's star scores follow with `starScores` (`byDifficulty(1.01, 1, 0.94)`, measured from
+  the greedy bot's mean final score over 300 islands), since stars save the same on every
+  difficulty. Pouches, scoring, decrees, gifts and seasons do not change.
 - `settings.reduceMotion`: the score popups and the decree's "+8" only fade in place (no rise or
   fall), and the crown count does not bump. The round banner only fades. Nothing blinks.
 - Keep Normal exactly as designed: the playthrough runs on Normal and expects goals 20 and 45.
 - Keep the Tiny Kingdom row of the difficulty table in the root README (and the line under the
-  screenshots in this game's README) in sync with the `byDifficulty` values.
+  screenshots in this game's README) in sync with the `byDifficulty` values in `goalFor` and
+  `starScores`.
 
 ## Testing hooks
 
@@ -439,7 +447,8 @@ Data tables:
   storm that struck is already on the board when the hand is checked for room.
 - Season bonuses are banked into `bonus` at placement, so they are in the undo `Snapshot`; a
   manor's merge never gets one.
-- `checkEnd` counts a possible merge as a reason to go on; `finish` is the way out then.
+- `checkEnd` counts a possible merge as a reason to go on (`housesCanMerge`, not `mergeable`, which
+  needs the playing phase); `finish` is the way out then.
 - Canvas shadows ignore the canvas transform: use `shadow()` in `wood.ts`, which converts art
   units to canvas pixels (`RES / ART`).
 - Show baked textures with `addArt`, never `this.add.image`: a texture is `RES` times its view
