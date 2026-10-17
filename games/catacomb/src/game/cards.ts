@@ -169,3 +169,5 @@ export const kindOf = (id: CardId): CardKind => {
   return c.curse ? 'curse' : c.power ? 'power' : c.damage ? 'attack' : 'skill';
 };
 export const isCurse = (id: CardId) => !!card(id).curse;
+/** Whether tempering would change the card: not tempered yet, and not a curse (a tempered curse is the same curse). */
+export const canBeTempered = (id: CardId) => !isTempered(id) && !isCurse(id);

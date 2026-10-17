@@ -34,7 +34,7 @@ with one more rule. The art is painterly: shapes and pixel grids drawn in code, 
   (passive bonuses, shown in the top bar with a tap-for-text tip), and defeat and victory panels
   whose button restarts the scene.
 - **Progression** within a run: the deck grows by rewards, purchases and curses, shrinks at a
-  campfire or the merchant, cards can be tempered once each, gold, relics and flasks are kept until
+  campfire or the merchant, cards (not curses) can be tempered once each, gold, relics and flasks are kept until
   the run ends, and health carries over between rooms and acts. Across runs, only the best depth
   unlocked carries over.
 - **Persistence:** one key, `catacomb-best-depth` (`loadBestDepth`/`saveBestDepth` in
@@ -68,7 +68,8 @@ File map (all under `src/` unless it starts with `shared/`):
 - `game/cards.ts`: the `Card` type (with `up`, what tempering changes, and the optional `power`
   and `curse` kinds), `PowerKind`, `CurseKind`, the `CARDS` table, `BaseId` (a key of `CARDS`) and
   `CardId` (a `BaseId`, or `BaseId+` once tempered), `card(id)` (the rules, with `up` applied to a
-  tempered id), `isTempered`, `baseOf`, `tempered`, `isCurse`, `STARTER_DECK` (the Knight's) and
+  tempered id), `isTempered`, `baseOf`, `tempered`, `isCurse`, `canBeTempered` (not yet tempered and
+  not a curse: the campfire picker, `temperRandom` and the pool's Bathe use it), `STARTER_DECK` (the Knight's) and
   `HUNTER_DECK`, the `COMMON` and `RARE` pools (derived from `rarity`; curses are in neither),
   the power and curse constants (`POWER_BLOCK`, `POWER_STRENGTH`, `THORNS`, `WOUND_HURT`,
   `DOUBT_COST`), `describe` (card text) and `kindOf` (attack, skill, power or curse).
@@ -205,7 +206,7 @@ State model (`src/game/state.ts`):
   curse onto both `deck` and `fight.discard` (each fight otherwise shuffles a copy into `draw`); a
   played power goes to `fight.powers` and to no pile; a dead
   foe is spliced out of `enemies` at once (poison or Thorns can do it on the foes' turn, and `act`
-  then returns false); the hero's block resets in `startTurn`, foes' block in
+  then returns false, skipping a multi-hit attack's remaining hits and its rider); the hero's block resets in `startTurn`, foes' block in
   `endTurn`; `nextId` is shared by foes and pops; a room joins `cleared` only when it is left (or
   a boss falls), so `cleared` drives which map paths are lit; a relic is owned at most once; at
   most `FLASK_SLOTS` flasks are held (a drop or purchase with full slots is refused); `depth` is

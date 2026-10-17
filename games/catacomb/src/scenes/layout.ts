@@ -37,10 +37,11 @@ export const HERO_PANEL = { knightX: 280, hunterX: 680, feetY: 312, depthY: 216,
 export const FLASKS = { x: 60, y: 120, gap: 58, r: 24 };
 /** The powers in play, in a row under the flasks, left of the hero. */
 export const POWERS = { x: 44, y: 296, gap: 36, r: 15 };
-/** The deck laid out to pick a card to burn, temper or sell, by the cards' centres: roomier while it fits in two rows. */
+/** The deck laid out to pick a card to burn, temper or sell, by the cards' centres: roomier while it fits in two rows, tight up to three, packed (four rows of 15, room for every card and its tempered copy) beyond. */
 export const PICKER = {
   roomy: { y: 210, rowGap: 170, gap: 120, perRow: 7, scale: 0.8 },
   tight: { y: 180, rowGap: 128, gap: 86, perRow: 10, scale: 0.58 },
+  packed: { y: 160, rowGap: 96, gap: 60, perRow: 15, scale: 0.42 },
   back: { x: 860, y: 80 },
 };
 /** The merchant's wares: cards by their centres with prices under them, two flasks under those, and relics and the removal in boxes on the right. */
