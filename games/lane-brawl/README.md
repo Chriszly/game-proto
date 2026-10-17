@@ -32,6 +32,7 @@ left, under bevelled slate panels.
 | Click a champion card | Pick your champion and start the match |
 | Click the ground | Walk there |
 | Click an enemy | Walk to it and attack it until it dies or you stop it by clicking the ground |
+| Touch: put a finger down and drag | A steering stick appears where the finger went down and your champion walks the way you drag; it follows a finger that goes past its rim, and letting go stops the champion. A tap without dragging walks or attacks as a click does |
 | Hold Q, W, E or R, then let go | Show the ability's range and where it will land while held; cast it at the cursor on letting go |
 | Click an ability box | Cast the ability at the cursor (hovering the box shows its range) |
 | D, H, or click their buttons | Use an item's active: D dashes toward the cursor (Phase Boots), H drinks the Healing Flask |
@@ -42,6 +43,8 @@ left, under bevelled slate panels.
 | B, or Shop | Open or close the shop; buy an item by clicking it |
 | Esc | Close the shop |
 | Play again | After a match: pick a champion again |
+
+![The floating touch stick under a steering finger](docs/screenshots/touch-stick.webp)
 
 1. **Your team**: you and four allies drawn at random from the other fourteen classes; red gets
    five more of them. Allies walk a lane each and fight what they meet. Each champion's name shows

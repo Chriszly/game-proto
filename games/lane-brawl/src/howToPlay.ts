@@ -7,6 +7,7 @@ const en: HowToPlay = {
   controls: [
     { input: 'Click or tap the ground', action: 'Walk there' },
     { input: 'Click or tap an enemy', action: 'Walk to it and attack it' },
+    { input: 'Touch: put a finger down and drag', action: 'A steering stick appears under it; walk the way you drag' },
     { input: 'Hold Q, W, E or R, then let go', action: 'Aim an ability while held and cast it at the cursor' },
     { input: 'Click an ability box', action: 'Cast that ability at the cursor' },
     { input: 'D, H, V, or their buttons', action: 'Dash, drink the Healing Flask, or plant a Vision Ward' },
@@ -38,6 +39,7 @@ const de: HowToPlay = {
   controls: [
     { input: 'Den Boden anklicken oder antippen', action: 'Dorthin laufen' },
     { input: 'Einen Feind anklicken oder antippen', action: 'Hinlaufen und angreifen' },
+    { input: 'Touch: Finger aufsetzen und ziehen', action: 'Darunter erscheint ein Steuerknüppel; in Zugrichtung laufen' },
     { input: 'Q, W, E oder R halten, dann loslassen', action: 'Beim Halten eine Fähigkeit zielen und am Zeiger wirken' },
     { input: 'Ein Fähigkeitsfeld anklicken', action: 'Diese Fähigkeit am Zeiger wirken' },
     { input: 'D, H, V oder ihre Tasten', action: 'Sprinten, den Heiltrank trinken oder einen Sichtwächter setzen' },

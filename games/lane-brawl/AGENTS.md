@@ -423,6 +423,12 @@ How it runs:
   bars, which block, and the objective card, which also blocks; the D, H and V buttons sit in the
   bottom bar, the Recall/Buy back button in the top bar). Anything else is a world click: a
   hostile unit under the cursor becomes the player's target, otherwise the point becomes a move.
+  A world touch (`pointer.wasTouch`, never the mouse) also starts `stick` (view pixels); dragged
+  past `STICK.drag` it goes `live` and `steer` calls `commandMove` each frame for a point
+  `STICK.ahead` px from the champion the way knob minus base points (nothing inside `STICK.dead`;
+  the base is dragged along past `STICK.r`). Letting go of a live stick stops the champion where
+  it stands. `addPointer(1)` lets a second finger press an ability box while steering; `drawStick`
+  draws it in `drawHud`.
 
 Randomness and timing: `Math.random` only draws the rosters, in `createGame` (the test seeds it, with
 a seed picked for the roster the round was tuned with); no `Date.now` or `performance.now` in the rules. Game time
