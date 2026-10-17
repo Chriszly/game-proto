@@ -95,15 +95,15 @@ export function matchesAt(board: Board, { row, col }: Cell): boolean {
   return across >= 3 || down >= 3;
 }
 
-/** True if swapping `a` and `b` does something: two Catalysts together, or a match. */
+/** True if swapping `a` and `b` does something: two specials (Catalysts or Blooms) together, or a match. */
 export function swapWorks(board: Board, a: Cell, b: Cell): boolean {
   const ta = board[a.row][a.col];
   const tb = board[b.row][b.col];
   if (stuck(ta) || stuck(tb)) return false;
-  return (!!ta.catalyst && !!tb.catalyst) || findMatches(swapped(board, a, b)).length > 0;
+  return (special(ta) && special(tb)) || findMatches(swapped(board, a, b)).length > 0;
 }
 
-/** Every swap of neighbours that makes a match (or puts two Catalysts together). */
+/** Every swap of neighbours that makes a match (or puts two specials together). */
 export function validMoves(board: Board): [Cell, Cell][] {
   const moves: [Cell, Cell][] = [];
   for (let row = 0; row < ROWS; row++) {
@@ -136,8 +136,8 @@ export function collapse(board: Board, cleared: Cell[], newTile: NewTile): Board
   return next;
 }
 
-/** A new board with no matches on it and at least one move to make. */
-export function freshBoard(newTile: NewTile): Board {
+/** A new board with no matches on it and at least one move to make; `rand` rerolls kinds that would match. */
+export function freshBoard(newTile: NewTile, rand: () => number = Math.random): Board {
   for (;;) {
     const board: Board = [];
     for (let row = 0; row < ROWS; row++) {
@@ -146,7 +146,7 @@ export function freshBoard(newTile: NewTile): Board {
         let tile = newTile();
         const left = col >= 2 && board[row][col - 1].kind === board[row][col - 2].kind ? board[row][col - 1].kind : null;
         const up = row >= 2 && board[row - 1][col].kind === board[row - 2][col].kind ? board[row - 1][col].kind : null;
-        while (tile.kind === left || tile.kind === up) tile = { ...tile, kind: randomKind() };
+        while (tile.kind === left || tile.kind === up) tile = { ...tile, kind: randomKind(rand) };
         board[row].push(tile);
       }
     }
@@ -176,15 +176,16 @@ export function shuffle(board: Board, newTile: NewTile): Board {
 /**
  * Corks `jars` random tiles into jars, coats `resin` others in resin and grows `mould` on others,
  * keeping the board free of matches and with a move left. Leaves the board alone when all are 0.
+ * `rand` picks the cells (Math.random unless a guild examination's fixed board is being laid).
  */
-export function addBlockers(board: Board, jars: number, resin: number, mould = 0): Board {
+export function addBlockers(board: Board, jars: number, resin: number, mould = 0, rand: () => number = Math.random): Board {
   if (jars + resin + mould === 0) return board;
   for (let attempt = 0; attempt < 50; attempt++) {
     const next = board.map((row) => [...row]);
     const pick = (n: number, mark: 'jar' | 'resin' | 'mould') => {
       for (let placed = 0, tries = 0; placed < n && tries < 200; tries++) {
-        const row = Math.floor(Math.random() * ROWS);
-        const col = Math.floor(Math.random() * COLS);
+        const row = Math.floor(rand() * ROWS);
+        const col = Math.floor(rand() * COLS);
         if (stuck(next[row][col])) continue;
         next[row][col] = { ...next[row][col], [mark]: true };
         placed++;
