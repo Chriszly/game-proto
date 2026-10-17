@@ -7,8 +7,9 @@ A green wyrm sleeps in the Roost at the edge of a floating valley, drawn in isom
 track from the Roost to the villages, then send the wyrm along it, pulling two wagons, to carry each
 village's goods to another before the order runs out of time. Where the line branches, the switches
 decide which way the wyrm goes. Keep it fed at the Roost, bring goods to the workshops that make
-better ones, keep the villages in good cheer, wake a second wyrm late in the game, and after the
-eighth village finish with the festival. Every game is played in a new valley.
+better ones, keep the villages in good cheer, build depots and tunnels, wake a second wyrm late in
+the game, and after the eighth village finish with the festival and its medal. Every game is played
+in a new valley.
 
 ![The valley at the start](docs/screenshots/playthrough-0-valley.webp)
 
@@ -19,6 +20,8 @@ eighth village finish with the festival. Every game is played in a new valley.
 | Tap or drag over tiles next to the line | Lay track there |
 | Tap an order | Send the wyrm to fetch and deliver it |
 | Tap a junction | Throw its switch |
+| Tap a village | Courier call: send a free wyrm with gifts (from round 2) |
+| Depot, then a village | Build a depot there (from round 2) |
 | Remove | Toggle: tap track to take it up for half what it cost |
 | Plain | Toggle: lay track that joins only the piece it continues, and crossings |
 | A charter card | Pick the round's charter (from round 3) |
@@ -28,9 +31,10 @@ eighth village finish with the festival. Every game is played in a new valley.
    forest is scattered about and the villages that join after the first round get new places. The
    Roost, Millbrook and Ashford always stand in the same spots, with open grass between them.
 2. **Track** grows from the line: a tile can take track when it is next to track, the Roost or a
-   village. Lit outlines show where. Grass costs 2 coins, forest 4 and a bridge over the river 6;
-   mountains can't be built on. Track joins up with every piece and station next to it. Laying
-   track through a forest clears its pines.
+   village. Lit outlines show where. Grass costs 2 coins, forest 4, a bridge over the river 6 and
+   a **tunnel** through a mountain 20, which opens shortcuts through the east; the wyrm is out of
+   sight inside. Track joins up with every piece and station next to it. Laying track through a
+   forest clears its pines.
    With **Plain** on, a new piece joins only the piece it continues (the one the drag came from,
    or its first neighbour on the line) and the one straight across from that, so a line can run
    beside another without making junctions; a plain piece laid with track on all four sides is a
@@ -77,7 +81,7 @@ eighth village finish with the festival. Every game is played in a new valley.
     less time ("rush order" on the card). A village that turns bitter loses faith in the line,
     which costs a heart, and it sulks on from there.
 11. **Washouts and rockfalls**, from round 3: every 35 seconds the valley picks on a bridge (a
-    washout) or a piece of track beside a mountain (a rockfall), if the line has one. The tile is
+    washout) or a piece of track beside a mountain (a rockfall; a tunnel is safe), if the line has one. The tile is
     marked with an amber "!" and a warning for 9 seconds, then its track is gone: a wyrm heading
     over it stops short and picks its stop again (a pickup goes back to the queue), and an order
     with no way left waits until the track is rebuilt, at the usual price. A spare loop keeps the
@@ -93,10 +97,23 @@ eighth village finish with the festival. Every game is played in a new valley.
 13. **Passengers**, from round 3: now and then an order is passengers, who pay triple and allow
     40% less time. They fill both wagons: a wyrm only fetches them while it carries nothing, and
     loads nothing else until they are delivered.
-14. **Rounds**: one delivery finishes round 1, then each round asks for one more than its number.
+14. **Depots**, from round 2: the Depot button, then a tap on a village, builds a depot there, shown
+    by a shed by its name. The first costs 60 coins and each one after it 30 more. Goods waiting
+    at a depot (sent or not) use up their time at half speed, and a wyrm loads them at once.
+15. **Courier calls**, from round 2: tap a village (without dragging off it) to send a free wyrm,
+    one heading nowhere and carrying nothing, with gifts for 5 coins. When it gets there the
+    village's wait for a visit starts again and it cheers up by one step. A delighted village
+    needs no gifts. The hint line says when a village is sulking and a wyrm is free.
+16. **Rounds**: one delivery finishes round 1, then each round asks for one more than its number.
     A new village joins in each round from 2 to 8 (see below).
-15. **The festival**: round 9 is the last. The festival is held at Kettlecross, under bunting, and
+17. **The festival**: round 9 is the last. The festival is held at Kettlecross, under bunting, and
     every new order goes there. Ten deliveries win the game.
+18. **Festival medals**: a won festival is graded by its time and the hearts left: gold for all
+    three hearts in 2:30 or less, silver for two hearts or more in 4:00 or less, else bronze. The
+    best medal on each difficulty is kept in the browser, and it gives the next game on that
+    difficulty its boon and the boons below it: bronze a *Head start* (25 more coins), silver a
+    *Swift start* (Swift wings 1 from the start) and gold an *Early riser* (the second wyrm from
+    round 3).
 
 ![Laying track](docs/screenshots/playthrough-1-track.webp)
 
@@ -126,6 +143,13 @@ An order pays 10 coins plus 3 per tile between the two villages (as the crow fli
 | Swift wings | 3 | 30, 60, 100 | The wyrm flies 0.6 tiles a second faster (from 2) |
 | Golden hoard | 3 | 40, 80, 140 | Every order pays 25% more |
 | Second wyrm | 1 | 150, from round 5 | A second, copper wyrm joins the line |
+| Depot | One per village | 60, then 30 more each, from round 2 | Goods at that village wait at half speed and load at once |
+
+![Depots by Ashford and Fernhollow, a courier call cheering Stonereach, and two tunnel mouths](docs/screenshots/depot-courier.webp)
+
+![A tunnel through a mountain east of the river](docs/screenshots/tunnel.webp)
+
+![A gold festival medal and the boons it unlocks](docs/screenshots/festival-medal.webp)
 
 ![Round 4: the villages' moods, a sulking village's rush order and a forgotten one souring](docs/screenshots/moods.webp)
 

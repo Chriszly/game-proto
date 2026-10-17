@@ -18,8 +18,19 @@ import {
 import {
   BANNER_MS,
   BASE_SPEED,
+  BOONS,
   CHARTERS,
   CHARTER_ROUND,
+  COURIER_COST,
+  DEPOT_COST,
+  DEPOT_ROUND,
+  DEPOT_STEP,
+  DEPOT_WAIT,
+  EARLY_RISER_ROUNDS,
+  GOLD_MS,
+  HEAD_START_COINS,
+  MEDALS,
+  SILVER_MS,
   DEADLINE_BASE_MS,
   DEADLINE_PER_TILE_MS,
   EAT_MS,
@@ -63,6 +74,7 @@ import {
   type Charter,
   type GameState,
   type Job,
+  type Medal,
   type Order,
   type Upgrade,
   type Wyrm,
@@ -72,7 +84,14 @@ import {
 
 const newWyrm = (): Wyrm => ({ at: { ...ROOST }, path: [], progress: 0, from: null, job: null, loadMs: 0, switchMs: 0, food: 1, eatMs: 0, waitMs: 0 });
 
-export function newGame(): GameState {
+/** The names of the boons a medal brings: its own and the ones of the medals below it. */
+export const boonNames = (m: Medal) => MEDALS.slice(0, MEDALS.indexOf(m) + 1).map((b) => BOONS[b].name);
+
+/** Whether a medal's boons apply: `boon` (the best medal on this difficulty) is it or a better one. */
+export const hasBoon = (s: GameState, m: Medal) => s.boon !== null && MEDALS.indexOf(s.boon) >= MEDALS.indexOf(m);
+
+/** A new game; `boon` is the best festival medal won on this difficulty, whose boons it starts with. */
+export function newGame(boon: Medal | null = null): GameState {
   const valley = generateValley();
   const s: GameState = {
     phase: 'play',
@@ -95,13 +114,22 @@ export function newGame(): GameState {
     hazardTimerMs: HAZARD_EVERY_MS,
     charter: null,
     charterOffer: null,
+    depots: [],
+    boon,
+    festivalMs: 0,
+    medal: null,
     wyrms: [newWyrm()],
     upgrades: { wings: 0, hoard: 0, second: 0 },
     orderTimerMs: ORDER_EVERY_MS,
-    banner: { text: 'Lay track from the Roost to Millbrook and Ashford', ms: BANNER_MS * 1.5 },
+    banner: {
+      text: 'Lay track from the Roost to Millbrook and Ashford' + (boon ? `\nMedal boons: ${boonNames(boon).join(', ')}` : ''),
+      ms: BANNER_MS * (boon ? 2 : 1.5),
+    },
     pops: [],
     nextId: 1,
   };
+  if (hasBoon(s, 'bronze')) s.coins += HEAD_START_COINS;
+  if (hasBoon(s, 'silver')) s.upgrades.wings = 1;
   // The first order is always grain from Millbrook to Ashford.
   addOrder(s, 0, 1);
   return s;
@@ -132,7 +160,7 @@ export function onLine(s: GameState, t: Tile) {
 /** What a piece of track on `t` would cost, or null if none can go there. */
 export function trackCost(s: GameState, t: Tile): number | null {
   const terrain = terrainAt(s.valley, t);
-  if (terrain === 'mountain' || s.track.includes(key(t))) return null;
+  if (s.track.includes(key(t))) return null;
   // A tile under a warned hazard can't take new track until the hazard has struck.
   if (s.hazard && sameTile(s.hazard.tile, t)) return null;
   if (sameTile(t, ROOST) || villages(s).some((v) => sameTile(v, t))) return null;
@@ -303,8 +331,11 @@ export function dispatch(s: GameState, id: number) {
   return true;
 }
 
+/** The round the second wyrm can be woken from: earlier with the gold medal's Early riser boon. */
+export const secondWyrmRound = (s: GameState) => SECOND_WYRM_ROUND - (hasBoon(s, 'gold') ? EARLY_RISER_ROUNDS : 0);
+
 /** Why an upgrade can't be bought yet, whatever the coins: the second wyrm comes late in the game. */
-export const upgradeLocked = (s: GameState, u: Upgrade) => u === 'second' && s.round < SECOND_WYRM_ROUND;
+export const upgradeLocked = (s: GameState, u: Upgrade) => u === 'second' && s.round < secondWyrmRound(s);
 
 export const upgradeCost = (s: GameState, u: Upgrade): number | null => (UPGRADE_COSTS[u] as readonly number[])[s.upgrades[u]] ?? null;
 
@@ -328,11 +359,12 @@ export const wyrmSpeed = (s: GameState, w: Wyrm) =>
 export const orderPay = (s: GameState, o: Order) => Math.round(o.pay * (1 + HOARD_BONUS * s.upgrades.hoard));
 
 /** The order a job is for, if any. */
-export const jobOrder = (job: Job | null) => (job && job.leg !== 'feed' ? job.order : null);
+export const jobOrder = (job: Job | null) => (job && 'order' in job ? job.order : null);
 
 /** Where a job takes the wyrm, or null if its order is gone. */
 function jobTarget(s: GameState, job: Job): Tile | null {
   if (job.leg === 'feed') return ROOST;
+  if (job.leg === 'visit') return villages(s)[job.village];
   const o = s.orders.find((o) => o.id === job.order);
   return o ? villages(s)[job.leg === 'pickup' ? o.from : o.to] : null;
 }
@@ -344,6 +376,70 @@ export function pickCharter(s: GameState, i: number) {
   s.charter = charter;
   s.charterOffer = null;
   s.banner = { text: `Charter: ${charter.name}`, ms: BANNER_MS };
+  return true;
+}
+
+/** What the next depot costs: each one costs more than the last. */
+export const depotCost = (s: GameState) => DEPOT_COST + DEPOT_STEP * s.depots.length;
+
+/** Whether depots can be built yet. */
+export const depotLocked = (s: GameState) => s.round < DEPOT_ROUND;
+
+/** Whether a depot can go at village `v`: an open village without one, once depots are unlocked and paid for. */
+export function canBuyDepot(s: GameState, v: number) {
+  return (
+    s.phase === 'play' && !s.charterOffer && !depotLocked(s) && openIndexes(s).includes(v) && !s.depots.includes(v) && depotCost(s) <= s.coins
+  );
+}
+
+/** Builds a depot at village `v` (WR11): goods waiting there use up their time at half speed and load at once. */
+export function buyDepot(s: GameState, v: number) {
+  if (!canBuyDepot(s, v)) return false;
+  const cost = depotCost(s);
+  s.coins -= cost;
+  s.depots.push(v);
+  pop(s, `Depot -${cost}`, villages(s)[v], '#f0c070');
+  return true;
+}
+
+/** The village index at a tile, if an open village stands there. */
+export const villageAt = (s: GameState, t: Tile) => openIndexes(s).find((i) => sameTile(villages(s)[i], t)) ?? null;
+
+/** A wyrm free for a courier call: not heading anywhere, not busy at a stop, and carrying nothing. */
+const idleWyrm = (s: GameState, i: number) => {
+  const w = s.wyrms[i];
+  return !w.job && !w.path.length && w.loadMs <= 0 && w.eatMs <= 0 && w.switchMs <= 0 && !s.orders.some((o) => o.wyrm === i);
+};
+
+/** The wyrm a courier call to village `v` would send: the free one nearest it along the line, with its way there. */
+function courierFor(s: GameState, v: number) {
+  let best: { i: number; path: Tile[] } | null = null;
+  s.wyrms.forEach((w, i) => {
+    if (!idleWyrm(s, i)) return;
+    const path = planRoute(s, w, villages(s)[v]);
+    if (path && (!best || path.length < best.path.length)) best = { i, path };
+  });
+  return best as { i: number; path: Tile[] } | null;
+}
+
+/** Whether a courier call can go to village `v`: moods count, it isn't delighted already, the gifts are paid for, and a free wyrm can reach it. */
+export function canSendCourier(s: GameState, v: number) {
+  if (s.phase !== 'play' || s.charterOffer || s.round < MOOD_ROUND || s.coins < COURIER_COST) return false;
+  if (!openIndexes(s).includes(v) || s.moods[v] >= MOOD_MAX) return false;
+  if (s.wyrms.some((w) => w.job?.leg === 'visit' && w.job.village === v)) return false;
+  return courierFor(s, v) !== null;
+}
+
+/** A courier call (WR13): a free wyrm flies to village `v` with gifts, which reset its wait and cheer it by one. */
+export function sendCourier(s: GameState, v: number) {
+  if (!canSendCourier(s, v)) return false;
+  const { i, path } = courierFor(s, v)!;
+  s.coins -= COURIER_COST;
+  const w = s.wyrms[i];
+  w.job = { leg: 'visit', village: v };
+  w.path = path;
+  pop(s, `Gifts -${COURIER_COST}`, villages(s)[v], '#f0c070');
+  if (!path.length) arrive(s, i);
   return true;
 }
 
@@ -361,8 +457,11 @@ export function tick(s: GameState, dt: number) {
     s.orderTimerMs = ORDER_EVERY_MS;
     randomOrder(s);
   }
+  if (s.round === FESTIVAL_ROUND) s.festivalMs += dt;
   for (const o of [...s.orders]) {
-    if ((o.timeLeftMs -= dt) <= 0) failOrder(s, o);
+    // Goods waiting at a depot keep longer.
+    const wait = o.status !== 'carrying' && s.depots.includes(o.from) ? DEPOT_WAIT : 1;
+    if ((o.timeLeftMs -= dt * wait) <= 0) failOrder(s, o);
     if (s.phase !== 'play') return;
   }
   tickMoods(s, dt);
@@ -401,9 +500,12 @@ function tickMoods(s: GameState, dt: number) {
   }
 }
 
-/** The track a washout (a bridge) or a rockfall (track beside a mountain) could take. */
+/** The track a washout (a bridge) or a rockfall (track beside a mountain, not a tunnel through one) could take. */
 function hazardKind(s: GameState, t: Tile): 'washout' | 'rockfall' | null {
-  if (terrainAt(s.valley, t) === 'river') return 'washout';
+  const terrain = terrainAt(s.valley, t);
+  if (terrain === 'river') return 'washout';
+  // A tunnel runs inside the mountain, safe from the stones coming down its sides.
+  if (terrain === 'mountain') return null;
   return neighbours(t).some((n) => terrainAt(s.valley, n) === 'mountain') ? 'rockfall' : null;
 }
 
@@ -575,12 +677,27 @@ function arrive(s: GameState, i: number) {
     pop(s, 'Munch!', ROOST, '#c9e8c0');
     return;
   }
+  if (w.job?.leg === 'visit') {
+    // The gifts: the village is visited and cheered.
+    const v = w.job.village;
+    w.job = null;
+    s.idleMs[v] = 0;
+    cheer(s, v, 1);
+    pop(s, 'Gifts!', { c: villages(s)[v].c, r: villages(s)[v].r - 1 }, '#9be883');
+    return;
+  }
   const o = s.orders.find((o) => o.id === jobOrder(w.job));
   if (!o) return void (w.job = null);
   if (w.job!.leg === 'pickup') {
+    s.idleMs[o.from] = 0;
+    // A depot has the goods ready on the platform: they are aboard at once.
+    if (s.depots.includes(o.from)) {
+      o.status = 'carrying';
+      w.job = null;
+      return;
+    }
     o.status = 'loading';
     w.loadMs = LOAD_MS;
-    s.idleMs[o.from] = 0;
     return;
   }
   // Delivered, in time: the village is visited and cheered.
@@ -598,8 +715,19 @@ function arrive(s: GameState, i: number) {
   if (s.delivered < roundGoal(s.round)) return;
   if (s.round === FESTIVAL_ROUND) {
     s.phase = 'won';
+    s.medal = festivalMedal(s);
     s.banner = null;
   } else nextRound(s);
+}
+
+/**
+ * The festival's medal (WR14), by its time and the hearts left: gold for every heart in `GOLD_MS`,
+ * silver for two hearts in `SILVER_MS`, else bronze.
+ */
+export function festivalMedal(s: GameState): Medal {
+  if (s.hearts >= START_HEARTS && s.festivalMs <= GOLD_MS) return 'gold';
+  if (s.hearts >= START_HEARTS - 1 && s.festivalMs <= SILVER_MS) return 'silver';
+  return 'bronze';
 }
 
 /** A workshop turns the goods just brought into better ones, and sends them on as a new order. */

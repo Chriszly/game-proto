@@ -67,6 +67,21 @@ export const PASSENGER_ROUND = 3;
 export const PASSENGER_CHANCE = 0.15;
 export const PASSENGER_PAY = 3;
 export const PASSENGER_TIME = 0.6;
+/** Depots (WR11), from `DEPOT_ROUND`: the first one's price and what each one after it adds. */
+export const DEPOT_ROUND = 2;
+export const DEPOT_COST = 60;
+export const DEPOT_STEP = 30;
+/** How fast goods waiting at a depot use up their time, times the usual. */
+export const DEPOT_WAIT = 0.5;
+/** Courier calls (WR13), once moods count: what the gifts cost. */
+export const COURIER_COST = 5;
+/** Festival medals (WR14): a gold medal wants every heart and the festival in this time, silver two hearts and this time. */
+export const GOLD_MS = 150_000;
+export const SILVER_MS = 240_000;
+/** How many rounds earlier the second wyrm wakes with the gold medal's Early riser boon. */
+export const EARLY_RISER_ROUNDS = 2;
+/** The coins the bronze medal's Head start boon adds to the start. */
+export const HEAD_START_COINS = 25;
 /** How long a banner and a floating number stay on screen. */
 export const BANNER_MS = 2_800;
 export const POP_MS = 1_200;
@@ -131,8 +146,18 @@ export interface Order {
 /** Passengers fill both wagons: a wyrm carrying them loads nothing else. */
 export const isPassengers = (o: Order) => o.cargo === 'passengers';
 
-/** A stop the wyrm is heading for: an order to fetch or deliver, or the Roost to eat. */
-export type Job = { order: number; leg: 'pickup' | 'drop' } | { leg: 'feed' };
+/** A festival medal, worst to best. */
+export const MEDALS = ['bronze', 'silver', 'gold'] as const;
+export type Medal = (typeof MEDALS)[number];
+/** What each medal unlocks for the next game on its difficulty; a better medal keeps the boons below it too. */
+export const BOONS: Record<Medal, { name: string; text: string }> = {
+  bronze: { name: 'Head start', text: `${HEAD_START_COINS} more coins to start with` },
+  silver: { name: 'Swift start', text: 'Swift wings 1 from the start' },
+  gold: { name: 'Early riser', text: `the second wyrm wakes from round ${SECOND_WYRM_ROUND - EARLY_RISER_ROUNDS}` },
+};
+
+/** A stop the wyrm is heading for: an order to fetch or deliver, the Roost to eat, or a village to bring gifts to. */
+export type Job = { order: number; leg: 'pickup' | 'drop' } | { leg: 'feed' } | { leg: 'visit'; village: number };
 
 export interface Wyrm {
   /** The tile it last stood on. */
@@ -200,6 +225,13 @@ export interface GameState {
   /** This round's charter, and the two on offer while the player has yet to pick (the game waits). */
   charter: Charter | null;
   charterOffer: Charter[] | null;
+  /** The villages with a depot, by index. */
+  depots: number[];
+  /** The best medal on this difficulty when the game began: its boons and the ones below it apply. */
+  boon: Medal | null;
+  /** Game time spent in the festival so far, and the medal it earned once won. */
+  festivalMs: number;
+  medal: Medal | null;
   /** The wyrms on the line: one, then two once the second is bought. */
   wyrms: Wyrm[];
   upgrades: Record<Upgrade, number>;

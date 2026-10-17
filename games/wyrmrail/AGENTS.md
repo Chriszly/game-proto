@@ -31,11 +31,17 @@ carry orders between villages before their time runs out.
   (WR8), a Plain toggle that lays track joined only to the piece it continues, and crossings
   without a junction; round charters (WR9) from round 3, one of two picked at each round's start
   while the game waits; passengers (WR10) from round 3, a rare order paying triple on a short
-  deadline that fills both wagons.
-- **Progression** is only within a game: coins, track, upgrades and the round. There is no meta
-  progression.
-- **Persistence:** none. The game writes nothing to browser storage; a reload starts a new game.
-  It only reads the hub's shared settings (see Hub settings below).
+  deadline that fills both wagons; depots (WR11) from round 2, bought per village for a rising
+  price, where goods wait at half speed and load at once; tunnels (WR12), track through a mountain
+  for 20 coins, safe from rockfalls, with the wyrm hidden inside; courier calls (WR13) from round
+  2, a tap on a village sending a free wyrm with gifts that cheer it; festival medals (WR14), the
+  won festival graded by time and hearts, the best per difficulty saved and unlocking boons for
+  the next game.
+- **Progression** is mostly within a game: coins, track, upgrades, depots and the round. The only
+  meta progression is the best festival medal per difficulty and the boons it gives a new game.
+- **Persistence:** `wyrmrail-medals` (`src/game/medals.ts`) holds the best medal per difficulty,
+  as `{ easy?, normal?, hard? }` of `bronze`, `silver` or `gold`. Nothing else is saved; a reload
+  starts a new game. It also reads the hub's shared settings (see Hub settings below).
 - **Rough edges you can see in the code:**
   - Auto-join (the default) joins every neighbour; the Plain toggle is the way round the junctions
     it makes, but a cut can't be joined later except by taking the track up and laying it again.
@@ -54,7 +60,7 @@ File map (all under `src/` unless it starts with `shared/`):
 - `main.ts`: creates the `Phaser.Game` (960x540 from `VIEW`, `Scale.FIT`, `pixelArt: false`) with
   `BootScene` then `GameScene`, calls `setupGame(game)` and `setupScaling(game)` from
   `shared/scaling.ts`; in dev builds puts `game` on `window`.
-- `game/map.ts`: `COLS`, `ROWS`, `Terrain`, `TRACK_COST`, `Cargo` (goods and `passengers`),
+- `game/map.ts`: `COLS`, `ROWS`, `Terrain`, `TRACK_COST` (mountain is the tunnel price), `Cargo` (goods and `passengers`),
   `CARGO_NAMES`, `Tile`, `Village`, `Valley`, `ROOST`, `VILLAGE_NAMES`, `WORKSHOPS`,
   `generateValley`, `terrainAt`, and the tile helpers `key`, `sameTile`, `manhattan`, `opposite`,
   `inGrid`, `neighbours`.
@@ -63,23 +69,29 @@ File map (all under `src/` unless it starts with `shared/`):
   `SECOND_WYRM_ROUND`, `FESTIVAL_ROUND`, `FESTIVAL_GOAL`, the moods' `MOOD_ROUND`, `MOOD_MAX`,
   `MOOD_GAP_MS`, `MOOD_GAP_PER_VILLAGE_MS`, `MOOD_PAY`, `MOOD_RUSH`, the hazards' `HAZARD_ROUND`,
   `HAZARD_EVERY_MS`, `HAZARD_WARN_MS`, `CHARTER_ROUND`, the passengers' `PASSENGER_ROUND`,
-  `PASSENGER_CHANCE`, `PASSENGER_PAY`, `PASSENGER_TIME`), the charter table `CHARTERS`,
-  `roundGoal`, `isPassengers`, `Charter`, `Hazard`, `Order`, `OrderStatus`, `Job`, `Wyrm`, `Pop`,
-  `Upgrade`, `GameState`.
+  `PASSENGER_CHANCE`, `PASSENGER_PAY`, `PASSENGER_TIME`, the depots' `DEPOT_ROUND`, `DEPOT_COST`,
+  `DEPOT_STEP`, `DEPOT_WAIT`, the courier's `COURIER_COST`, the medals' `GOLD_MS`, `SILVER_MS`,
+  `HEAD_START_COINS`, `EARLY_RISER_ROUNDS`), the charter table `CHARTERS`, `MEDALS`, `BOONS`,
+  `roundGoal`, `isPassengers`, `Charter`, `Hazard`, `Order`, `OrderStatus`, `Job`, `Medal`, `Wyrm`,
+  `Pop`, `Upgrade`, `GameState`.
+- `game/medals.ts`: `MEDALS_KEY`, `loadMedals` and `saveMedal` (keeps the better medal), the only
+  browser storage the game touches.
 - `game/sim.ts`: all rules. `newGame`, `villages`, `openVillages`, `festivalHost`, `workshopOf`,
   `trackCost`, `canBuild`, `buildTrack` (joined or plain), `isCut`, `isCrossing`, `arms`,
   `canRemove`, `removeTrack`, `throwSwitch`, `route`, `routable`, `dispatch`, `upgradeLocked`,
-  `upgradeCost`, `buyUpgrade`, `wyrmSpeed`, `orderPay` (pay with the Golden hoard, shown on the
-  cards and paid on delivery), `jobOrder`, `pickCharter`, `moodOf`, `tick`. No Phaser import.
+  `upgradeCost`, `buyUpgrade`, `secondWyrmRound`, `wyrmSpeed`, `orderPay` (pay with the Golden
+  hoard, shown on the cards and paid on delivery), `jobOrder`, `pickCharter`, `depotCost`,
+  `depotLocked`, `canBuyDepot`, `buyDepot`, `villageAt`, `canSendCourier`, `sendCourier`,
+  `festivalMedal`, `hasBoon`, `boonNames`, `moodOf`, `tick`. No Phaser import.
 - `scenes/BootScene.ts`: bakes the props and sprites (`bakeProps`, `bakeSprites`), then starts
   `Game`.
 - `scenes/GameScene.ts`: bakes this game's `valley` texture (`bakeValley`), draws the valley, the
-  props (pines, peaks, Roost, villages, workshop signs, festival bunting), track, switches and
-  crossing plates, build hints, the hazard's mark, each wyrm's planned route, cargo markers, the
+  props (pines, peaks, Roost, villages, workshop signs, depot sheds, festival bunting), track,
+  switches, crossing plates and tunnel mouths, build hints, the hazard's mark, each wyrm's planned route, cargo markers, the
   villages' mood faces, the wyrms (`WyrmView` each), pops, HUD (with the bellies and the round's
-  charter), the orders and upgrades panel (with the Remove and Plain toggles), the banner, the
-  charter cards and the game over or festival panel, and wires input to sim functions. Exposes
-  `state` and `orderSpots`.
+  charter), the orders and upgrades panel (with the Depot, Remove and Plain toggles), the banner, the
+  charter cards and the game over or festival panel (with the medal, which it saves), and wires
+  input to sim functions. Exposes `state` and `orderSpots`.
 - `scenes/layout.ts`: `VIEW`, `BOARD`, the isometric projection (`ISO`, `iso`, `tileCenter`,
   `tileAt`, `groundDepth`), the panel, order card, button and charter card positions,
   `SEGMENT_GAPS` (where the wyrm's parts ride behind the head) and depths.
@@ -99,7 +111,7 @@ File map (all under `src/` unless it starts with `shared/`):
   `wyrm-wings`, the copper second wyrm's `wyrm2-*` (the same drawing through `toCopper`),
   `wagon-u` and `wagon-v` (lengthwise along the columns or the rows), each `PART` sized with its
   ground point at `PART_ORIGIN`; and the pixel icons `cargo-<cargo>` (`cargo-passengers` among
-  them), `coin`, `heart`, `heart-empty`, `food`.
+  them), `coin`, `heart`, `heart-empty`, `food`, `depot`.
 - `shared/settings.ts` and `shared/setupGame.ts` (repo root, shared by every game): the hub's
   settings, `byDifficulty` and `setupGame`. `sim.ts` imports `byDifficulty`, `GameScene.ts`
   imports `settings`.
@@ -107,7 +119,8 @@ File map (all under `src/` unless it starts with `shared/`):
 How it runs:
 
 - **Boot:** all art is drawn in code and baked to textures in `BootScene.create`; there are no
-  asset files. `GameScene.create` calls `newGame` (which generates the valley), bakes the
+  asset files. `GameScene.create` calls `newGame` with the best medal on the hub's difficulty
+  (`loadMedals`; it generates the valley and applies the boons), bakes the
   `valley` texture for it and creates every object once; the second wyrm's objects are created
   when it is bought.
 - **Time:** `GameScene.update(time)` computes `dt` from the frame timestamp, clamped to
@@ -137,8 +150,10 @@ How it runs:
   is on, continuing from `lastLaid`, the last line tile touched: one track was just laid on, or
   track or a station already there, so a drag that starts on the line continues from it), or `removeTrack` while
   Remove is on; a `pointerdown` on a junction calls `throwSwitch` instead. Dragging acts once per
-  new tile. Order cards call `dispatch`; the upgrade buttons `buyUpgrade`; the charter cards
-  `pickCharter`; Remove and Plain set the scene's `mode` (`auto`, `plain` or `remove`), which
+  new tile. A `pointerdown` on an open village remembers it (`pressedVillage`), a move to another
+  tile forgets it, and the `pointerup` calls `sendCourier` for it. In `depot` mode a tap on a
+  village calls `buyDepot` (and goes back to `auto` once bought); the Depot button toggles it. Order cards call `dispatch`; the upgrade buttons `buyUpgrade`; the charter cards
+  `pickCharter`; Remove, Plain and Depot set the scene's `mode` (`auto`, `plain`, `remove` or `depot`), which
   lives in the scene, not the state. Sim functions check the phase and return false when the
   action is not allowed; `canBuild`, `canRemove` and `throwSwitch` also refuse while
   `charterOffer` is set.
@@ -148,7 +163,10 @@ How it runs:
   only when the track, the switches or the round change (`trackKey`), as half rails from each
   tile's middle towards its arms (the sim's `arms`, so a cut draws no rail) in passes (ballast or
   bridge deck, sleepers, rails, then the switches: a striped barrier across the barred arm, dimmed
-  rails on it and a lever, and a plate on each crossing); the hazard's tile has an orange bed. The
+  rails on it and a lever, and a plate on each crossing); the hazard's tile has an orange bed.
+  With the rails, `drawPortals` makes a graphics object per tunnel tile, just in front of its peak,
+  with a dark mouth towards each arm; wyrm parts (and their wings and loads) standing on a tunnel
+  tile are hidden (`inTunnel`). The
   build hints (diamonds, blue in plain mode) and the hazard's diamond are drawn every frame, the
   mood faces when `moodKey` (round and moods) changes, the charter cards when `charterKey` changes. Order cards are rebuilt when `cardKey` (hoard rank, ids, statuses,
   routability, wyrm count) changes; their time bars are redrawn every frame. Each wyrm's path is
@@ -169,15 +187,16 @@ State model (`src/game/state.ts`):
   fetch yet), `switches` (junction key to the key of the arm its switch is set against), `cuts`
   ("c,r|c,r" pairs of neighbouring line tiles not joined, lower key first), `crossings` (tile
   keys), `moods` and `idleMs` (by village index), `hazard` and `hazardTimerMs`, `charter` and
-  `charterOffer`, `wyrms`, `upgrades` (`wings`, `hoard`, `second`), `orderTimerMs`, `banner`,
-  `pops`, `nextId`.
+  `charterOffer`, `depots` (village indexes), `boon` (the medal the game started with),
+  `festivalMs` and `medal`, `wyrms`, `upgrades` (`wings`, `hoard`, `second`), `orderTimerMs`,
+  `banner`, `pops`, `nextId`.
 - `Order.from` and `.to` index into `valley.villages`. `Order.status` runs `waiting` -> `queued`
   (sent; a wyrm is on its way or will be) -> `loading` -> `carrying` -> removed on delivery. A
   late order is removed in any status. `Order.wyrm` is the index of the wyrm that set off for it
   (null before); `Order.made` marks a workshop's goods.
 - `Wyrm` has `at` (last tile), `from` (the tile before it, for switches), `path` (tiles still to
   cross), `progress` (0-1 towards `path[0]`), `job` (the stop it is heading for: order id and
-  `pickup` or `drop` leg, or `feed`), `loadMs`, `switchMs`, `food` (0-1), `eatMs` and `waitMs`.
+  `pickup` or `drop` leg, `feed`, or `visit` with a village for a courier call), `loadMs`, `switchMs`, `food` (0-1), `eatMs` and `waitMs`.
   A wyrm's loaded orders are the ones with status `carrying` and `Order.wyrm` set to its index; there are
   never more than `WAGONS`.
 - A switch is kept for every track tile with three or more arms that is not a crossing
@@ -219,7 +238,23 @@ State model (`src/game/state.ts`):
   paying `WORKSHOP_PAY` times the usual, unless the board already has more than `MAX_ORDERS`.
   `randomOrder` sends cargo a workshop takes to it with `WORKSHOP_CHANCE`.
 - The festival: `FESTIVAL_ROUND` (9) follows round 8. Every new order goes to `festivalHost`
-  (the last village) and `roundGoal` is `FESTIVAL_GOAL`; meeting it sets `phase` to `won`.
+  (the last village) and `roundGoal` is `FESTIVAL_GOAL`; meeting it sets `phase` to `won` and
+  `medal` to `festivalMedal`: gold with every heart and `festivalMs` (game time in round 9, not
+  counting the charter pick) within `GOLD_MS`, silver with two hearts within `SILVER_MS`, else
+  bronze. The scene saves it with `saveMedal` for the hub's difficulty and shows the best.
+- Medal boons: `newGame(boon)` adds `HEAD_START_COINS` (bronze), sets Swift wings to 1 (silver)
+  and `secondWyrmRound` is `EARLY_RISER_ROUNDS` earlier (gold); `hasBoon` checks a medal or
+  better, and the start banner names them. A test browser has no medals, so it starts as designed.
+- Depots (from `DEPOT_ROUND`): `buyDepot` costs `depotCost` (`DEPOT_COST` plus `DEPOT_STEP` per
+  depot). `tick` counts an order's time down at `DEPOT_WAIT` while it is not `carrying` and its
+  `from` has a depot; `arrive` makes a pickup there `carrying` at once, with no `LOAD_MS`.
+- Tunnels: `trackCost` prices a mountain tile at `TRACK_COST.mountain`, and `hazardKind` never
+  picks a mountain tile. `generateValley` still keeps every village reachable without tunnels.
+- Courier calls (from `MOOD_ROUND`): `sendCourier` needs `COURIER_COST`, a village below
+  `MOOD_MAX` with no courier already on its way, and a free wyrm (no job, no path, not loading,
+  eating or at a switch, no order of its own); the nearest one along the line gets a `visit` job.
+  `arrive` resets the village's `idleMs` and cheers it by one. A hazard drops the visit, gifts
+  and all.
 - Only `src/game/sim.ts` mutates state. The scene only reads it and calls sim functions.
 - Invariants: a station (the Roost or an open village) is on the line without track; track can't
   be laid on a station or a locked village's tile; track can't be removed from `wyrm.at` or any
@@ -285,11 +320,14 @@ Data tables (where to tune):
   `docs/screenshots/`; refresh them when the look of the first round changes. `round-2.webp`,
   `remove-track.webp`, `game-over.webp`, `new-valley-1.webp`, `new-valley-2.webp`, `steering.webp`,
   `workshops-two-wyrms.webp`, `festival.webp`, `festival-won.webp`, `moods.webp`, `washout.webp`,
-  `plain-track.webp`, `charter.webp`, `passengers.webp` and `cover.png` are not made by
+  `plain-track.webp`, `charter.webp`, `passengers.webp`, `depot-courier.webp`, `tunnel.webp`,
+  `festival-medal.webp` and `cover.png` are not made by
   the test: play the dev build and capture them by hand (a script can set up later rounds through
   the dev server's `/games/wyrmrail/src/game/sim.ts` module, the same instance the game uses).
-- Moods, hazards, charters and passengers all start after round 1 (`MOOD_ROUND` 2, the rest 3),
-  so the playthrough never meets them; keep them there or give the test a step for them.
+- Moods, courier calls, depots, hazards, charters and passengers all start after round 1
+  (`MOOD_ROUND` and `DEPOT_ROUND` 2, the rest 3), so the playthrough never meets them; keep them
+  there or give the test a step for them. The test never taps a village, and its browser has no
+  saved medals, so no boon changes the first round.
 
 ## Making common changes
 
@@ -304,7 +342,7 @@ Data tables (where to tune):
 - **Change the valley:** edit `generateValley`; keep the first round's block (`isHome`) grass and
   every village reachable (it retries until they are).
 - **Add a terrain:** extend `Terrain` and `TERRAIN_OF`, give it a price in `TRACK_COST` (or block
-  it in `trackCost` like mountains), place it in `generateValley`, paint its block in `block` in
+  it in `trackCost`), place it in `generateValley`, paint its block in `block` in
   `src/art/valley.ts` (and a prop
   if it has one, placed in `GameScene.createScenery`) and, if track looks different on it, handle
   it in `GameScene.drawTrack` (like `bridge`).
@@ -312,7 +350,9 @@ Data tables (where to tune):
   the whole diamond inside `BOARD`, clear of the panel.
 - **Add an upgrade:** add its prices to `UPGRADE_COSTS` and a level to `upgrades` in `newGame`,
   apply it where it matters in `sim.ts`, and add a button in `GameScene.createPanel` and its
-  caption in `drawPanel` (and a `BUTTONS` row in layout).
+  caption in `drawPanel` (and a `BUTTONS` row in layout; the panel is full, so make room).
+- **Add a medal boon:** a new medal tier needs a `MEDALS` entry and a `BOONS` row; apply its boon
+  in `newGame` (or where it matters, through `hasBoon`) and add it to the README's medal list.
 - **Add a charter:** add an entry to `CHARTERS` in `src/game/state.ts` (a new effect needs a field
   on `Charter` and a check where it applies in `sim.ts`) and its line in the README.
 
