@@ -129,6 +129,8 @@ export class GameScene extends Phaser.Scene {
   /** The last pointer position, in view pixels. */
   private pointer = { x: 0, y: 0 };
   private drag: Drag | null = null;
+  /** Two fingers on the map scroll it: their midpoint when last seen, in view pixels. */
+  private touchPan: { x: number; y: number } | null = null;
   private message = '';
   private lastFrame: number | null = null;
   /** Game time the scene has drawn, for the flicker of flames and the bob of floating pylons. */
@@ -288,8 +290,10 @@ export class GameScene extends Phaser.Scene {
     this.input.on('pointerdown', this.onDown, this);
     this.input.on('pointermove', this.onMove, this);
     this.input.on('pointerup', this.onUp, this);
+    // A second touch pointer, so two fingers can scroll the map.
+    this.input.addPointer(1);
     // Arrow keys scroll the map; keep the browser from scrolling the page with them too.
-    this.keys = this.input.keyboard!.addKeys('UP,DOWN,LEFT,RIGHT,W,A,S,D,H,F,T') as Record<string, Phaser.Input.Keyboard.Key>;
+    this.keys = this.input.keyboard!.addKeys('UP,DOWN,LEFT,RIGHT,W,A,S,D,H,B,T') as Record<string, Phaser.Input.Keyboard.Key>;
     this.input.keyboard!.addCapture('UP,DOWN,LEFT,RIGHT');
     this.newGame();
   }
@@ -339,6 +343,7 @@ export class GameScene extends Phaser.Scene {
     this.selected.clear();
     this.placing = null;
     this.drag = null;
+    this.touchPan = null;
     this.message = '';
     this.lastFrame = null;
     this.flash = { amount: 0, ms: 0 };
@@ -451,8 +456,8 @@ export class GameScene extends Phaser.Scene {
     }
     if (Phaser.Input.Keyboard.JustDown(k.H)) this.centreOnHub();
     if (!this.picking && !watching) {
-      // F falls the selection back; T opens and closes the rivals panel.
-      if (Phaser.Input.Keyboard.JustDown(k.F)) this.press(BUTTONS.find((b) => b.key === 'fallback')!);
+      // B falls the selection back (F is the shared full screen key); T opens and closes the rivals panel.
+      if (Phaser.Input.Keyboard.JustDown(k.B)) this.press(BUTTONS.find((b) => b.key === 'fallback')!);
       if (Phaser.Input.Keyboard.JustDown(k.T)) this.rivalsOpen = !this.rivalsOpen;
     }
   }
@@ -1066,7 +1071,7 @@ export class GameScene extends Phaser.Scene {
     g.strokeRoundedRect(b.x, b.y, b.w, b.h, round);
     const caption = this.captions[i];
     this.setText(caption.name, 'FALL BACK');
-    this.setText(caption.cost, on ? `${this.selected.size} selected · F` : 'Select ships · F');
+    this.setText(caption.cost, on ? `${this.selected.size} selected · B` : 'Select ships · B');
     caption.name.setColor(on ? INK_CSS.chocolate : INK_CSS.cocoa);
   }
 
@@ -1253,8 +1258,23 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** The midpoint of the two fingers down on the screen, in view pixels, or null unless two are down. */
+  private twoFingers() {
+    const down = [this.input.pointer1, this.input.pointer2].filter((t) => t?.isDown);
+    if (down.length < 2) return null;
+    const [a, b] = down.map((t) => viewPoint(t));
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  }
+
   private onDown(pointer: Phaser.Input.Pointer) {
     const p = viewPoint(pointer);
+    // A second finger on the map turns the first one's box into a two-finger scroll.
+    const mid = this.state.phase === 'playing' && !this.picking && this.inMap(p.x, p.y) ? this.twoFingers() : null;
+    if (mid) {
+      this.touchPan = mid;
+      this.drag = null;
+      return;
+    }
     if (this.state.phase !== 'playing') {
       this.newGame();
       return;
@@ -1313,6 +1333,14 @@ export class GameScene extends Phaser.Scene {
   private onMove(pointer: Phaser.Input.Pointer) {
     const p = viewPoint(pointer);
     this.pointer = p;
+    if (this.touchPan) {
+      const mid = this.twoFingers();
+      if (mid) {
+        this.scrollTo(this.camera.scrollX - (mid.x - this.touchPan.x), this.camera.scrollY - (mid.y - this.touchPan.y));
+        this.touchPan = mid;
+      }
+      return;
+    }
     if (this.drag) {
       this.drag.x1 = p.x;
       this.drag.y1 = p.y;
@@ -1323,6 +1351,11 @@ export class GameScene extends Phaser.Scene {
     const p = viewPoint(pointer);
     const d = this.drag;
     this.drag = null;
+    // Lifting either finger ends a two-finger scroll; the other finger's lift is not a tap.
+    if (this.touchPan) {
+      if (!this.twoFingers()) this.touchPan = null;
+      return;
+    }
     if (!d || this.state.phase !== 'playing') return;
     if (Math.hypot(p.x - d.x0, p.y - d.y0) >= DRAG_MIN) {
       const a = this.toWorld(d.x0, d.y0);

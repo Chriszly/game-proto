@@ -39,7 +39,7 @@ Implemented today:
 - Repair and fall back (`REPAIR_RANGE`, `REPAIR_RATE`, `World.fallBack`, `sendHome`, `repairSpots`,
   `Unit.repairing`): any ship within 120 px of a finished hub, outpost or Depot of its faction gets
   back 3% of its hit points a second (a green cross beside it). The Fall back button at the right of
-  the message line (`FALL_BACK_BUTTON` in `layout.ts`, kind `command`, also the F key) sends the
+  the message line (`FALL_BACK_BUTTON` in `layout.ts`, kind `command`, also the B key, since F is the shared full screen key) sends the
   selected ships to a point 30 px short of their nearest repair spot. The AI pulls a warship below
   30% (`AI_FALL_BACK_HP`) home when it is not on a raid, and leaves repairing ships out of raids.
 - Derelict stations (`World.derelicts`, `Derelict`, `updateDerelict`, `DERELICT_DEFS`): three neutral
@@ -52,8 +52,11 @@ Implemented today:
   stations. They show once the player has seen them (`derelictAt` for the hover label), cannot be
   destroyed or built beside, and the player can build at them only in the sense of training. From
   60 s (`AI_CLAIM_MS`) a rival with 3 warships sends one idle ship (`Side.claimer`) to the nearest
-  station it does not own within 600 px of its hub (`contestDerelicts`), and frees it once the
-  station is its.
+  station it does not own within 600 px of its hub (`contestDerelicts`), sends it back whenever it
+  is idle away from the station (after a chase, a salvage run or repairs), and frees it once the
+  station is its. Salvage runs and the beacon picket never take the claimer. Ships still queued at a
+  shipyard that changes hands are refunded to its old owner (`refundQueue`), and a player ship that
+  `train` queues at the shipyard rather than a Barracks pops a notice.
 - Truces and tribute (`Side.truceMs`, `offerMs`, `offerCooldownMs`, `grudgeLockMs`, `pressure`,
   `World.atPeace`, `acceptTruce`, `declineTruce`, `bribe`, `bribeTarget`, `considerTruce`,
   `updateTruce`): a rival whose grudge is the player offers a truce when its hub is under 75% or it
@@ -139,7 +142,8 @@ Implemented today:
   It sits at least 200 px from the player's start, outside the hub's sight, so it starts hidden in
   the fog. Buildings keep clear of it. The two rivals whose hubs are nearest the beacon each send
   one idle warship (`Side.picket`) to contest or hold it (`World.contestBeacon`), the nearest from
-  30 s on, the next from 120 s; a lost picket is replaced.
+  30 s on, the next from 120 s; a lost picket is replaced, and one that chased a target off the
+  beacon flies back once idle.
 - Salvage (`World.shards`, `World.updateShards`): a ship destroyed by another faction (not a
   decoy) leaves a shard worth 8 for that faction (`Shard.faction`); the nearest unit of that
   faction within 260 px pulls it in at 220 px/s and banks it on contact (`salvaged` counts the
@@ -154,7 +158,8 @@ Implemented today:
 - Faction picker: a new map opens on a picker with a card per faction. Tapping a card starts the
   battle with that faction under the player's command (`World(layout, pick)`: it takes slot 0, the
   bottom-left start, and the others fill the rest in order). The world does not update while picking.
-- Camera and hover: arrow keys and WASD scroll the map, H centres it on the hub, and hovering a unit
+- Camera and hover: arrow keys and WASD scroll the map, and so does dragging with two fingers on a
+  touch screen (`touchPan`, `twoFingers`: a second finger cancels the first one's box), H centres it on the hub, and hovering a unit
   or building shows its name, role, hit points and stats. Hovering a command button shows what it is
   (cost, stats, ability). Selecting one unit shows its name and hit points on the command bar.
 
@@ -162,7 +167,7 @@ Missing or rough:
 
 - No pathfinding (units move in straight lines and pass over rocks), no unit
   collision, no sound and no save.
-- No minimap and no edge scrolling: the map scrolls with the keys only.
+- No minimap and no edge scrolling: the map scrolls with the keys or a two-finger drag.
 - The rivals' Barracks and Turrets are placed at random within 60 to 150 px of their hub.
 - Ships of a type spawn on the same spot and stack (no collision), so a fresh wing looks like one
   ship until it moves.

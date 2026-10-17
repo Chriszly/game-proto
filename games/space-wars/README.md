@@ -28,10 +28,10 @@ stripes and long exhaust flames, under a chocolate-and-mustard striped HUD with 
 | Expansion button, then tap a far crystal field | Place an outpost, a second hub |
 | Train buttons | Queue a unit: harvesters at a hub, combat units at a Barracks |
 | Research buttons (Hull, Weapons, Engines) | Start the next level at your hub |
-| Fall back button, or F | Send the selected ships home to the nearest hub or Depot, where ships repair |
+| Fall back button, or B | Send the selected ships home to the nearest hub or Depot, where ships repair |
 | The rivals on the top bar, or T | Open the rivals panel: accept or decline a truce, or pay tribute to turn a rival |
 | Right-click | Cancel a placement, clear the selection and close the rivals panel |
-| Arrow keys or WASD | Scroll the map |
+| Arrow keys or WASD, or drag with two fingers | Scroll the map |
 | H | Centre the map on your hub |
 | Hover over a unit or building | Its name, role, hit points and stats |
 | Hover over a command button | What it is: cost, stats and ability |
@@ -138,7 +138,7 @@ earn no ranks, so a veteran is worth pulling back from a losing fight.
 
 Any ship within 120 pixels of a finished hub, outpost or Depot of its faction gets back 3% of its hit
 points a second, with a green cross beside it while it heals. The **Fall back** button at the right
-end of the message line (or F) sends the selected ships to a point just short of their nearest hub
+end of the message line (or B) sends the selected ships to a point just short of their nearest hub
 or Depot. Rivals pull their hurt ships home too.
 
 ![Three hurt Lancers selected and falling back toward the hub, where a Halo Cruiser and an Aegis already repair under green crosses](docs/screenshots/repair.webp)
