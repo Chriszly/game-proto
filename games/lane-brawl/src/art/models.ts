@@ -1032,13 +1032,14 @@ export function watchstoneModel(team: TeamName | 'neutral'): Model {
  * The guardian beast: a hulking horned quadruped of slate hide with violet crystals growing along
  * its back, built like the boar but heavier, and drawn about twice its size.
  */
-export function beastModel(pose: PoseName): Model {
+export function beastModel(pose: PoseName, elder = false): Model {
   const md = new Model();
-  const hide = rgb('#5d5a72');
-  const dark = rgb('#3a3850');
-  const belly = rgb('#8a84a0');
-  const horn = rgb('#efe6cf');
-  const crystal = rgb('#b98cff');
+  // The elder form is darker, with gold crystals and pale gold horns.
+  const hide = rgb(elder ? '#4b4460' : '#5d5a72');
+  const dark = rgb(elder ? '#2e2a40' : '#3a3850');
+  const belly = rgb(elder ? '#a08a74' : '#8a84a0');
+  const horn = rgb(elder ? '#fff0b8' : '#efe6cf');
+  const crystal = rgb(elder ? '#ffc93d' : '#b98cff');
   const k = pose[0] === 'w' ? WALK[Number(pose[1])] : 0;
   const lunge = pose === 'a1' ? 5 : pose === 'a0' ? -3 : 0;
   const rear = pose === 'a0' ? -0.18 : pose === 'a1' ? 0.12 : 0;

@@ -92,6 +92,14 @@ left, under bevelled slate panels.
    **empowered minions** for 90 seconds (they hit 50% harder and take 35% less damage; they glow
    violet, and a chip at the top right shows the time left); the slayer takes 150 gold and 250 XP.
    Two AI champions from each side go to fight over it while it is awake.
+   **The Elder Guardian**: from 14:00 the beast wakes (or, awake and left alone, grows) into its
+   elder form, darker with gold crystals, with 60% more health and 40% harder blows. Slaying it
+   gives the usual rewards plus 150 gold and the **elder blessing** to the slayers' whole team for
+   60 seconds: champions deal 50% more damage to towers, inhibitors and the Nexus, and an enemy
+   champion they leave under 15% health dies. A gold chip at the top right shows the time left. It
+   is a closing objective for a stalled match.
+
+   ![The Elder Guardian in its pit by the river: the beast darker, with gold crystals along its back and pale gold horns](docs/screenshots/elder-beast.webp)
    **Tall grass**: eighteen bushes in the jungle and beside the lanes. A champion inside one can't be seen or targeted by
    enemies unless one of them stands in the same bush or right next to it; your own champion shows
    through the grass. Attacking or casting shows the champion for 1.5 seconds. A target that slips

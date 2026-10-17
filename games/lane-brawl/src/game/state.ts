@@ -283,6 +283,10 @@ export interface GameState {
   beastBuff: Record<Team, number>;
   /** Beasts each team slew. */
   beastKills: Record<Team, number>;
+  /** Whether the beast is in its elder form (from `ELDER.at`). */
+  beastElder: boolean;
+  /** Game time each team's elder blessing lasts until (0 when it has none). */
+  elderBuff: Record<Team, number>;
   /** The AI champions sent to fight over the beast now. */
   contesters: number[];
   /** When the AI next sends gankers, and next sends a champion into the jungle. */
@@ -478,6 +482,8 @@ export function createGame(pick: ChampionDef, enemyDamage: number, opts: MatchOp
     beast: 0,
     beastBuff: { blue: 0, red: 0 },
     beastKills: { blue: 0, red: 0 },
+    beastElder: false,
+    elderBuff: { blue: 0, red: 0 },
     contesters: [],
     nextGank: GANK.firstAt,
     nextJungle: JUNGLE.firstAt,

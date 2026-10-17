@@ -1046,6 +1046,14 @@ export const BEAST = {
 };
 /** Empowered minions deal this much more damage and take this much of what they would. */
 export const BEAST_BUFF = { dmg: 1.5, taken: 0.65 };
+/**
+ * The elder beast: from `at` the beast wakes (or, if awake and unhurt, grows) into the Elder
+ * Guardian, tougher and harder-hitting. Its slayers' whole team gets `buffMs` of the elder's
+ * blessing: champions deal `structMult` times damage to towers, inhibitors and the Nexus, and an
+ * enemy champion they leave under `execute` of its health dies. The usual beast rewards come too.
+ */
+export const ELDER = { at: 14 * 60_000, hpMult: 1.6, dmgMult: 1.4, buffMs: 60_000, structMult: 1.5, execute: 0.15, gold: 150 };
+
 /** How many AI champions of each team go to fight over the beast while it is awake. */
 export const BEAST_CONTESTERS = 2;
 
