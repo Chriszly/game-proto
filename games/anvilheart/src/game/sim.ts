@@ -24,6 +24,7 @@ import {
   SLOTS,
   STREAK_COINS,
   STREAK_MS,
+  STREAK_TOP,
   TRAITS,
   TRAIT_CHANCE,
   autoForging,
@@ -196,13 +197,13 @@ export function drop(s: GameState, from: number, to: number) {
   return true;
 }
 
-/** Chains a merge on `slot` into the hammer streak, paying its bonus from the second merge on. */
+/** Chains a merge on `slot` into the hammer streak, paying its bonus (capped at `STREAK_TOP` steps) from the second merge on. */
 function hammer(s: GameState, slot: number) {
   s.streak = s.streakMs > 0 ? s.streak + 1 : 1;
   s.streakMs = STREAK_MS;
   s.streakSlot = slot;
   if (s.streak < 2) return;
-  const coins = STREAK_COINS * s.streak;
+  const coins = STREAK_COINS * Math.min(s.streak, STREAK_TOP);
   s.coins += coins;
   s.events.push({ kind: 'streak', slot, streak: s.streak, coins });
 }

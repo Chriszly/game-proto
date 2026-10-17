@@ -29,20 +29,18 @@ export const COMMISSIONS: Commission[] = [
   { tier: MAX_TIER, count: 1, gem: false, reward: 20000, title: 'The Crown Blade' },
 ];
 
-/** The most swords a commission can ask for: the banner's pips. */
-export const MAX_COUNT = 4;
 /** What the grand (gemmed) way of a commission pays, against the plain one. */
 export const GRAND_PAY = 2.5;
 
 /**
  * The commission at `level` (0 for the first) in the smithy's `charter` (0 for the first), or null
  * once the Crown Blade is delivered. Each later charter asks for one more sword, paying as much
- * more.
+ * more, with no cap, so charters keep pace with the guild stars' price bonus.
  */
 export function commissionAt(level: number, charter = 0): Commission | null {
   const base = COMMISSIONS[level];
   if (!base) return null;
-  const count = Math.min(MAX_COUNT, base.count + charter);
+  const count = base.count + charter;
   return { ...base, count, reward: Math.round((base.reward * count) / base.count) };
 }
 
