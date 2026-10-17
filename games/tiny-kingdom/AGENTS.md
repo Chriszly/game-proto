@@ -47,9 +47,10 @@ Implemented today:
   lets it `strike` as the next round begins (flood: the cell becomes a lake, whatever stood
   there; storm: the tower becomes grass if it is still alone), recomputes the score, then draws the
   decree and the next omen on the board as it stands. `Placed.struck` carries the cells for the
-  scene's "Flooded" / "Toppled" popups. The panel's omen strip (`OMEN`, coral) shows `omen.short`,
-  the round banner `omen.text`, and `refreshBoardMarks` draws a coral dashed box with "Flood" or
-  "Storm" on the threatened cell.
+  scene's "Flooded" / "Toppled" popups. An omen holds no text: the scene's `omenLine` words it
+  from `kind` and `place`, in a few words for the panel's omen strip (`OMEN`, coral) and in a line
+  for the round banner, and `refreshBoardMarks` draws a coral dashed box with "Flood" or "Storm" on
+  the threatened cell.
 - Clearing a wood: with `'lumber'` selected and in the hand, a tap on a forest beside a lumber camp
   (`canClear`) calls `clear`, which turns it to grass, spends the lumber tile and settles like a
   placement (undoable). `previewClear` gives the (usually negative) change; the hover shows a
@@ -116,7 +117,10 @@ Implemented today:
   the most open shore; later rounds draw a kind and a place from a generator seeded by island and
   round, never repeating the last round's kind and place. Lakes and woods are named by
   `namedPlaces` from where their centre lies (North, South, East, West or Mid, plus mere / pool /
-  tarn / water or wood / grove / holt / shaw for repeats). Progress (`decreeMarks`) is always
+  tarn / water or wood / grove / holt / shaw for repeats). That English name is the place's id in
+  `Decree.place` and `Omen.place`; `placeName` in `src/i18n.ts` shows it in the hub's language
+  (Ostweiher, Nordwald). A decree holds no text either: the scene's `decreeLine` words it from
+  `kind`, `place` and `need`. Progress (`decreeMarks`) is always
   counted from the board. Fulfilling it pays `DECREE_BONUS` (8) into `state.bonus` and a crown
   (`state.crowns`, saved). An unfulfilled decree lapses when the round ends. The board outlines the
   lake or wood (or the best tower's 3x3) with a yellow dashed line, shows the name on a navy pill,
@@ -183,13 +187,23 @@ Missing or rough:
   `new-buildings`, the season, manor and islands-card shots predate the hand, the castle and the
   omen strip, so their panels look older.
 - `docs/screenshots/favicon.webp` is an older shot no README links.
+- `docs/screenshots/german-links.webp` is the playthrough's `3-links` shot from a run with the
+  browser's locale set to `de-DE` (a copy of `playwright.config.ts` with `locale: 'de-DE'`).
 
 ## Architecture
 
 File map (`src/`):
 
-- `howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips), handed to
-  `setupGame(game, { howToPlay })` in `main.ts`; update it when the controls or the first round change.
+- `howToPlay.ts`: the How to play screen's text (goal, controls, core loop and tips) in British
+  English, US English (the same with US spelling, made by `us`) and German, picked with `byLanguage`
+  and handed to `setupGame(game, { howToPlay })` in `main.ts`; update every language when the
+  controls or the first round change.
+- `i18n.ts` and `i18n/`: the game's texts (`shared/i18n.ts`). `i18n/en.ts` is the British English
+  source (harbour, neighbours), `i18n/de.ts` the German and `i18n/en-US.ts` only the texts with
+  "harbour" in them, spelled "harbor". `t(key, vars)` shows a text in the hub's language;
+  `TextKey` types the keys; `placeName(id)` turns a lake's or wood's id into its name. Every text
+  on screen goes through `t`, and a new one gets its German entry (and a US one if its spelling
+  differs) in the same PR. In German a farm is an Acker, since Feld means a board cell.
 - `main.ts`: creates the `Phaser.Game` (960x540, `Phaser.Scale.FIT`, `pixelArt: false`) with
   `BootScene` and `GameScene`, calls `setupGame(game)` from `shared/setupGame.ts` and
   `setupScaling(game)` from `shared/scaling.ts`, and in dev builds puts `game` on `window`.
@@ -207,8 +221,8 @@ File map (`src/`):
   `cellCentre`.
 - `game/tiles.ts`: `BUILDINGS` (farm, house, tower, windmill, market, harbor, lumber, road),
   `SPECIALS` (the four gift buildings), the `Building`, `Special`, `Structure` (a building or
-  `'manor'`), `Terrain` (grass, lake, forest, castle) and `Cell` types, `INFO` (name, short name
-  and rule text for each), `isBuilding`, `isBuilt`, `scores`, `isHome`, `MAP_SIZE`, `ISLANDS`,
+  `'manor'`), `Terrain` (grass, lake, forest, castle) and `Cell` types, `INFO` (the `TextKey`s of
+  each one's name, rule and count, such as "3 farms"), `isBuilding`, `isBuilt`, `scores`, `isHome`, `MAP_SIZE`, `ISLANDS`,
   `SIDES`, `AROUND`, `islandMap` (lakes, woods, then the castle), `seeded` (mulberry32),
   `randomIsland` and `startingGrid`.
 - `game/state.ts`: `GameState`, `Snapshot`, `Share`, `Preview`, `Placed`, `FIRST_POUCH`,
@@ -222,14 +236,14 @@ File map (`src/`):
   `end` finishes the kingdom. No Phaser; `goalFor` reads `byDifficulty` from `shared/settings.ts`.
 - `game/omens.ts`: `OMEN_FROM`, `OmenKind`, `Omen`, `Struck`, `omenFor` and `strike`.
 - `game/castle.ts`: `castleAt`, `joinedCells` and `joinedCount`.
-- `game/seasons.ts`: `SEASONS`, `Season`, `SEASON_INFO` (name, rule, short rule, doubled
-  buildings, colour), `seasonFor` and `seasonBonus`.
+- `game/seasons.ts`: `SEASONS`, `Season`, `SEASON_INFO` (name, rule and short rule as `TextKey`s,
+  doubled buildings, colour), `seasonFor` and `seasonBonus`.
 - `game/islands.ts`: `Mode`, `Kingdom`, `Level`, `LEVELS`, `starScores` (reads `byDifficulty`), `starsFor`, `levelOpen`, `today`,
   `dailyIsland` and `parseIsland`.
 - `game/decree.ts`: `DECREE_BONUS`, `Decree`, `DecreeMarks`, `At`, `regions`, `namedPlaces`,
   `decreeMarks` and `decreeFor`.
-- `game/gifts.ts`: `GIFTS`, `Gift`, `GIFT_INFO` (label, icon, line, tiles), `giftsFor` and
-  `newSpecial`.
+- `game/gifts.ts`: `GIFTS`, `Gift`, `GIFT_INFO` (label and line as `TextKey`s, icon, tiles),
+  `giftsFor` and `newSpecial`.
 - `game/save.ts`: `loadBest`, `saveBest`, `loadCrowns`, `saveCrowns`, `loadDailyBest`,
   `saveDailyBest`, `loadStars` and `saveStars`.
 - `art/wood.ts`: the toolkit: `RES` and `setArtRes` (texture pixels per view pixel, from
@@ -249,8 +263,8 @@ File map (`src/`):
 - `ui/Button.ts`: `makeButton`, the beech plaque button used by the game-over overlay.
 
 Shared code it imports (outside the game folder): `shared/setupGame.ts` (`setupGame`),
-`shared/scaling.ts` (`setupScaling`, `sharpRes`, `viewPoint`) and `shared/settings.ts`
-(`byDifficulty`, `settings`).
+`shared/scaling.ts` (`setupScaling`, `sharpRes`, `viewPoint`), `shared/settings.ts`
+(`byDifficulty`, `settings`) and `shared/i18n.ts` (`translator`, `byLanguage`, `Translation`).
 
 How it runs:
 
@@ -323,7 +337,7 @@ identical every load. Only Phaser tweens use time.
 Data tables:
 
 - Scoring rules: the cases in `cellParts`, with `SIDES` and `AROUND` for the neighbourhoods.
-- Button rule text: `INFO` in `src/game/tiles.ts` (keep it matching `cellParts`).
+- Button rule text: the `<kind>Rule` texts in `src/i18n/` (keep every language matching `cellParts`).
 - Pouches, the hand and goals: `FIRST_POUCH`, `ROUND_POUCH`, `HAND`, `TRADE_GIVE` and `goalFor`
   in `src/game/state.ts`. Omens: `OMEN_FROM` and the kinds in `omenFor` in `src/game/omens.ts`.
 - Seasons: `SEASON_INFO` in `src/game/seasons.ts`. Campaign: `LEVELS` in `src/game/islands.ts`.
@@ -370,8 +384,9 @@ Data tables:
   bounding box. It reads `localStorage['tiny-kingdom-crowns']` to check the crown is saved.
 - The test mirrors these, so change them together: the `GameState` shape, `GRID`, `VIEW`,
   `islandMap` (as `ISLAND` and `MAP`, the castle included), `FIRST_POUCH`, `ROUND_POUCH`, `HAND`,
-  the goals 20 and 45 (`GOALS`), `DECREE_BONUS`, round 1's decree (`FIRST_DECREE`: 3 farms on the
-  shore of Eastmere), round 1's gifts (`FIRST_GIFTS`) and the windmill gift's tiles (`WINDMILLS`),
+  the goals 20 and 45 (`GOALS`), `DECREE_BONUS`, round 1's decree (`FIRST_DECREE`: kind `shore`,
+  place `Eastmere`, need 3; round 2's must differ in kind or place, compared by those ids, never by
+  text), round 1's gifts (`FIRST_GIFTS`) and the windmill gift's tiles (`WINDMILLS`),
   the hands `drawHand` deals on island 1990 (`PLAN[].hand`, `ROUND_2_HAND`), the scene key
   `'Game'` and its public fields.
 - The test seeds `Math.random`, so the game always picks island 1990. Changing `islandMap`,
@@ -402,9 +417,15 @@ Data tables:
 
 ## Making common changes
 
-- **Change a building's rule**: edit its case in `cellParts`, its `rule` in `INFO`, the README
+- **Add or change a text**: its key in `i18n/en.ts`, the German in `i18n/de.ts` (the build fails
+  without it) and, when it spells "harbour", the US spelling in `i18n/en-US.ts`; run
+  `node scripts/check-translations.mjs`. German runs longer than English: the tile buttons' rules
+  (two lines where English has two, three at most), the pouch line, the gift row and the omen strip
+  are the tightest spots; `fit` in `GameScene.ts` shrinks a one-line text to its room, so check a
+  new text with `?lang=de`.
+- **Change a building's rule**: edit its case in `cellParts`, its `<kind>Rule` text in every `i18n/` file, the README
   scoring table, then recompute the `gained` values (and links) in the test's `PLAN`.
-- **Add a building**: add it to `BUILDINGS`, `INFO`, `cellParts`, `FIRST_POUCH` / `ROUND_POUCH`
+- **Add a building**: add it to `BUILDINGS`, `INFO` (with its name, rule and count in the `i18n/` files), `cellParts`, `FIRST_POUCH` / `ROUND_POUCH`
   (and to `SPECIALS` plus a new and a more gift in `gifts.ts` if it is won as a gift); paint it in
   `src/art/wood.ts`, add it to `PROPS` and `ICONS` in `textures.ts` (a flat tile like the road
   goes in `cellTile` and `tileKey` instead). The hand never shows more than `HAND` kinds, so the
@@ -412,7 +433,8 @@ Data tables:
   its hands if the first pouch changed.
 - **Change the hand**: `HAND` and `drawHand` in `state.ts`; the test's hands follow from them.
 - **Add an omen kind**: add it to `OmenKind`, pick its cell and texts in `omenFor` and its effect
-  in `strike`; the scene's mark label (`refreshBoardMarks`) names the kinds.
+  in `strike`; its texts in the `i18n/` files, worded by the scene's `omenLine`, popup word
+  (`tapAt`) and mark label (`refreshBoardMarks`).
 - **Change the trade**: `TRADE_GIVE`, `canTrade`, `tradeGives` and `trade` in `state.ts`; the
   card's chips come from `tradeGives` and `unlocked` (`refreshTrade`).
 - **Add a season or change one**: `SEASONS` and `SEASON_INFO`; round 1's season must not double
@@ -420,9 +442,9 @@ Data tables:
 - **Add a campaign level**: append to `LEVELS` (the card's row fits about eight plaques at
   `ISLANDS_CARD.level`); set its star scores from a greedy run.
 - **Add a decree kind**: add it to `DecreeKind`, `ASK`, `decreeMarks` (what counts and the open
-  spots), `makeDecree` (its text and when it can be offered) and the shuffle in `decreeFor`; pick
-  its spot texture in `refreshDecree`.
-- **Add a gift**: add it to `GIFTS` and `GIFT_INFO` and to a pool in `giftsFor`; a gift that is not
+  spots), `makeDecree` (when it can be offered) and the shuffle in `decreeFor`; its text in the
+  `i18n/` files and the scene's `decreeLine`; pick its spot texture in `refreshDecree`.
+- **Add a gift**: add it to `GIFTS` and `GIFT_INFO` (its label and line in the `i18n/` files) and to a pool in `giftsFor`; a gift that is not
   a tile pack also needs handling in `chooseGift`.
 - **Retune rounds**: `FIRST_POUCH`, `ROUND_POUCH` and `goalFor` (keep its `byDifficulty` factor
   and the README difficulty rows in step); the round banner reads `ROUND_POUCH` itself. Update the

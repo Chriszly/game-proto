@@ -1,4 +1,5 @@
 // The buildings and the land they go on. How each building scores is in state.ts.
+import type { TextKey } from '../i18n';
 
 /**
  * Every building the pouch holds, in the order of the panel's tile buttons. The first three are
@@ -16,23 +17,24 @@ export type Terrain = 'grass' | 'lake' | 'forest' | 'castle';
 export type Cell = Terrain | Structure;
 
 export interface BuildingInfo {
-  name: string;
-  /** A short name for the slim two-column buttons. */
-  short: string;
+  name: TextKey;
   /** The rule in a sentence, shown on the tile's button. */
-  rule: string;
+  rule: TextKey;
+  /** A count of them, such as "3 farms", for the pouch line, the trade card and the round banner. */
+  count: TextKey;
 }
 
+/** Each structure's texts, as keys of `i18n/en.ts` shown with `t`. */
 export const INFO: Record<Structure, BuildingInfo> = {
-  farm: { name: 'Farm', short: 'Farm', rule: '1 point, +1 per lake beside it' },
-  house: { name: 'House', short: 'House', rule: '+2 per farm, +1 per house, manor, forest or camp beside it' },
-  tower: { name: 'Tower', short: 'Tower', rule: '+2 per house or manor around it, 0 next to a tower' },
-  windmill: { name: 'Windmill', short: 'Mill', rule: '+1 per farm around it, and +1 to each farm beside it' },
-  market: { name: 'Market', short: 'Market', rule: '+1 for each different building around it' },
-  harbor: { name: 'Harbor', short: 'Harbor', rule: "Only on a lake's shore: +2 per lake, +1 per house beside it" },
-  lumber: { name: 'Lumber camp', short: 'Lumber', rule: 'By a forest only: +2 per forest, +1 to houses beside it. Or clears a wood by a camp' },
-  road: { name: 'Road', short: 'Road', rule: 'Scores nothing, but joins the buildings along it to the castle' },
-  manor: { name: 'Manor', short: 'Manor', rule: 'Two houses merged: 4 points, +3 per farm, +1 per house, manor or forest beside it' },
+  farm: { name: 'farmName', rule: 'farmRule', count: 'farmCount' },
+  house: { name: 'houseName', rule: 'houseRule', count: 'houseCount' },
+  tower: { name: 'towerName', rule: 'towerRule', count: 'towerCount' },
+  windmill: { name: 'windmillName', rule: 'windmillRule', count: 'windmillCount' },
+  market: { name: 'marketName', rule: 'marketRule', count: 'marketCount' },
+  harbor: { name: 'harborName', rule: 'harborRule', count: 'harborCount' },
+  lumber: { name: 'lumberName', rule: 'lumberRule', count: 'lumberCount' },
+  road: { name: 'roadName', rule: 'roadRule', count: 'roadCount' },
+  manor: { name: 'manorName', rule: 'manorRule', count: 'manorCount' },
 };
 
 const STRUCTURES: readonly string[] = [...BUILDINGS, 'manor'];
