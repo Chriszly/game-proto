@@ -20,6 +20,7 @@ const GAMES = [
   { name: 'Space Wars', path: '/games/space-wars/' },
   { name: 'Lane Brawl', path: '/games/lane-brawl/' },
   { name: 'Colonizer', path: '/games/colonizer/' },
+  { name: 'Riftblade', path: '/games/riftblade/' },
   { name: 'Bramblecrest', path: '/games/bramblecrest/' },
 ];
 
