@@ -61,8 +61,12 @@ study, shade gardens and a mirrored second production line.
   `setupGame(game, { howToPlay })` in `src/main.ts`; update both languages when the controls or the
   first round change.
 - `src/i18n.ts` and `src/i18n/`: the game's texts (`shared/i18n.ts`). `i18n/en.ts` is the British
-  English source, `i18n/de.ts` the German (coins are Münzen, "M" after a price) and `i18n/en-US.ts`
-  only the Vigour Tonic, spelled Vigor. `t(key, vars)` shows a text in the hub's language and
+  English source, `i18n/de.ts` the German and `i18n/en-US.ts`
+  only the Vigour Tonic, spelled Vigor. No text names the currency: an amount is the number and
+  `{coin}`, which `t` fills with `COIN` (an em space) and `coined(text)` (`src/ui/coins.ts`) covers
+  with the painted `coin` texture, kept on the text's place, visibility, alpha and container; wrap
+  every text that can show `{coin}` in `coined`. The top bar shows the purse as a coin and the bare
+  number, and the till's pick-up marker is captioned with a coin. `t(key, vars)` shows a text in the hub's language and
   `TextKey` types the keys. An item's name is the text keyed by its id (`itemName(id)`), and
   `potionCount(potion, n)` gives "3 Healing Draughts" from the `<potion>Count` plural forms. Every
   text on screen and every `Feedback` line goes through `t`; the tables in `game/` hold `TextKey`s
@@ -147,7 +151,8 @@ study, shade gardens and a mirrored second production line.
   stacks, exposes `item` and `count`, `setVisible`), `Shelf` (a shop shelf of one potion, up to six bottles, fine
   ones first; exposes `item` and `count`), `ProgressBar` (redraws only when its fill changes;
   an optional last argument sets its height, 6 by default; `setZone` marks a golden end zone, used for the cauldron's fine window),
-  `RecipeBook` (exposes `lines`, in the game's language), `Settings` (read-only view of the hub's
+  `RecipeBook` (exposes `lines`, in the game's language), `coins` (`coined`: gold coins over the
+  `{coin}` slots of a text), `Settings` (read-only view of the hub's
   settings, the difficulty named by the shared texts, and New game).
 
 ### How it runs

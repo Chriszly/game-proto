@@ -122,7 +122,8 @@ import { Shelf } from '../ui/Shelf';
 import { RecipeBook } from '../ui/RecipeBook';
 import { Settings } from '../ui/Settings';
 import { ProgressBar } from '../ui/ProgressBar';
-import { itemName, potionCount, t, type TextKey } from '../i18n';
+import { COIN, itemName, potionCount, t, type TextKey } from '../i18n';
+import { coined } from '../ui/coins';
 import {
   BELT_BUILD,
   BELT_PATHS,
@@ -749,10 +750,12 @@ export class GameScene extends Phaser.Scene {
   /** Lays a floor marker with a caption. A marker a belt replaces goes away once `gone` holds. */
   private addMarker(at: Point, texture: string, caption: string, act: () => Feedback | null, gone?: () => boolean) {
     const pad = fit(this.add.image(at.x, at.y, texture).setDepth(-400));
-    const text = this.add
-      .text(at.x, at.y + 26, caption, { ...CAPTION, color: CAPTION_INK })
-      .setOrigin(0.5, 0)
-      .setDepth(-400);
+    const text = coined(
+      this.add
+        .text(at.x, at.y + 26, caption, { ...CAPTION, color: CAPTION_INK })
+        .setOrigin(0.5, 0)
+        .setDepth(-400),
+    );
     const shown = () => !gone?.();
     this.markers.push({ zone: new Phaser.Geom.Rectangle(at.x - 22, at.y - 22, 44, 44), act, shown });
     if (gone) {
@@ -822,10 +825,12 @@ export class GameScene extends Phaser.Scene {
     const open = () => shown() && get().level < max;
     const marker = this.markers.length - 1;
     this.markers[marker].pays = true;
-    const text = this.add
-      .text(at.x, at.y + 26, '', { ...CAPTION, color: CAPTION_PAY })
-      .setOrigin(0.5, 0)
-      .setDepth(-400);
+    const text = coined(
+      this.add
+        .text(at.x, at.y + 26, '', { ...CAPTION, color: CAPTION_PAY })
+        .setOrigin(0.5, 0)
+        .setDepth(-400),
+    );
     this.views.push(() => {
       const { level, paid } = get();
       text.setVisible(open());
@@ -883,10 +888,12 @@ export class GameScene extends Phaser.Scene {
    */
   private addBuildMarker(at: Point, icon: UpgradeIcon, caption: TextKey, cost: number, build: Build, shown: () => boolean, act: () => Feedback | null) {
     const pad = fit(this.add.image(at.x, at.y, upgradePad(icon)).setDepth(-400));
-    const text = this.add
-      .text(at.x, at.y + 26, '', { ...CAPTION, color: CAPTION_PAY })
-      .setOrigin(0.5, 0)
-      .setDepth(-400);
+    const text = coined(
+      this.add
+        .text(at.x, at.y + 26, '', { ...CAPTION, color: CAPTION_PAY })
+        .setOrigin(0.5, 0)
+        .setDepth(-400),
+    );
     this.markers.push({ zone: new Phaser.Geom.Rectangle(at.x - 22, at.y - 22, 44, 44), act, shown, pays: true });
     this.views.push(() => {
       const show = shown();
@@ -1110,7 +1117,7 @@ export class GameScene extends Phaser.Scene {
     // whenever the doctor carries one.
     const allBelted = () => !doneByHand(this.state, 'cauldron') && !doneByHand(this.state, 'cauldron2');
     this.addMarker(COUNTER_MARKERS.drop, 'pad-in', t('drop'), () => stockShelf(this.state), () => allBelted() && !this.carries(isSellable));
-    this.addMarker(COUNTER_MARKERS.pickUp, 'pad-out', t('coins'), () => collectTill(this.state));
+    this.addMarker(COUNTER_MARKERS.pickUp, 'pad-out', COIN, () => collectTill(this.state));
     this.addWorkSpot(COUNTER_MARKERS.work, 'counter');
     this.addUpgradeMarker(COUNTER_MARKERS.upgrade, 'counter');
     this.addCraftsmen('counter');
@@ -1214,10 +1221,12 @@ export class GameScene extends Phaser.Scene {
     const coin = fit(this.add.image(x, top + 1, 'coin'), 0.8).setDepth(depth + 0.04).setVisible(false);
     // A gold star on a regular's bubble, on its top left corner.
     const regular = fit(this.add.image(x, top + 1, 'regular')).setDepth(depth + 0.04).setVisible(false);
-    const tipText = this.add
-      .text(x, top - 7, '', { fontFamily: SERIF, fontSize: '11px', fontStyle: 'bold', color: '#7a4a00', stroke: TEXT_HALO, strokeThickness: 3 })
-      .setOrigin(0.5, 1)
-      .setDepth(depth + 0.04);
+    const tipText = coined(
+      this.add
+        .text(x, top - 7, '', { fontFamily: SERIF, fontSize: '11px', fontStyle: 'bold', color: '#7a4a00', stroke: TEXT_HALO, strokeThickness: 3 })
+        .setOrigin(0.5, 1)
+        .setDepth(depth + 0.04),
+    );
     let drawn = '';
     this.views.push(() => {
       const order = this.state.orders[i];
@@ -1516,7 +1525,7 @@ export class GameScene extends Phaser.Scene {
       if (feedback) this.showFeedback(feedback);
     });
     const style = { fontFamily: SERIF, fontSize: '12px', fontStyle: 'bold', color: INK, stroke: TEXT_HALO, strokeThickness: 3 };
-    const want = this.add.text(WAGON.want.x + 10, WAGON.want.y, '', style).setOrigin(0.5).setDepth(WAGON.y + 0.2).setVisible(false);
+    const want = coined(this.add.text(WAGON.want.x + 10, WAGON.want.y, '', style).setOrigin(0.5).setDepth(WAGON.y + 0.2).setVisible(false));
     const icon = fit(this.add.image(WAGON.want.x, WAGON.want.y, itemTexture('healingDraught'))).setDepth(WAGON.y + 0.2).setVisible(false);
     const left = this.add.text(WAGON.left.x, WAGON.left.y, '', style).setOrigin(0.5).setDepth(WAGON.y + 0.2).setVisible(false);
     let drawn = '';
@@ -1555,10 +1564,12 @@ export class GameScene extends Phaser.Scene {
     this.addMarker(HERB_MARKET.buy, 'pad-out', '', () => buyHerb(this.state), () => !open());
     this.markers[this.markers.length - 1].pays = true;
     const caption = (at: Point) =>
-      this.add
-        .text(at.x, at.y + 26, '', { ...CAPTION, color: CAPTION_INK })
-        .setOrigin(0.5, 0)
-        .setDepth(-400);
+      coined(
+        this.add
+          .text(at.x, at.y + 26, '', { ...CAPTION, color: CAPTION_INK })
+          .setOrigin(0.5, 0)
+          .setDepth(-400),
+      );
     const sellText = caption(HERB_MARKET.sell);
     const buyText = caption(HERB_MARKET.buy);
     const pick = this.card(HERB_MARKET.pick.x, HERB_MARKET.pick.y, 'small', signTexture(this, PRICE_SIGN_W, true)).setDepth(-910);
@@ -1745,7 +1756,7 @@ export class GameScene extends Phaser.Scene {
     const { y, h } = AWAY_CHIP;
     const d = UI_DEPTH;
         const lead = this.add.text(0, y + h / 2, t('awayLead'), { ...HUD_TEXT, fontSize: '13px', fontStyle: 'normal' }).setOrigin(0, 0.5).setDepth(d + 0.1);
-    const sum = this.add.text(0, y + h / 2, t('awaySum', { coins: away.coins, n: away.potions }), { ...HUD_TEXT, fontSize: '13px', color: '#6a2c90' }).setOrigin(0, 0.5).setDepth(d + 0.1);
+    const sum = coined(this.add.text(0, y + h / 2, t('awaySum', { coins: away.coins, n: away.potions }), { ...HUD_TEXT, fontSize: '13px', color: '#6a2c90' }).setOrigin(0, 0.5).setDepth(d + 0.1));
     const w = Math.max(AWAY_CHIP.w, Math.ceil(lead.width + sum.width + 46));
     const x = AWAY_CHIP.x + AWAY_CHIP.w - w;
     lead.setX(x + 28);
@@ -1814,7 +1825,7 @@ export class GameScene extends Phaser.Scene {
     this.settings = new Settings(this, UI_DEPTH + 1, () => this.startOver());
 
     this.views.push(() => {
-      coins.setText(t('coinsHud', { n: this.state.coins }));
+      coins.setText(formatNumber(this.state.coins));
       for (const part of drop) part.setAlpha(this.state.carrying.length > 0 ? 1 : 0.5);
       frames.forEach((frame, i) => frame.setVisible(i < carryCapacity(this.state)));
       slots.forEach((slot, i) => {
@@ -2000,17 +2011,19 @@ export class GameScene extends Phaser.Scene {
     const start = Math.max(this.time.now, this.nextFeedbackAt);
     lines.forEach((line, i) => {
       this.time.delayedCall(start - this.time.now + i * 180, () => {
-        const text = this.add
-          .text(this.player.x, this.player.y - 60, line, {
-            fontFamily: SERIF,
-            fontSize: '14px',
-            fontStyle: 'bold',
-            color: INK,
-            stroke: TEXT_HALO,
-            strokeThickness: 4,
-          })
-          .setOrigin(0.5)
-          .setDepth(WORLD_UI_DEPTH);
+        const text = coined(
+          this.add
+            .text(this.player.x, this.player.y - 60, line, {
+              fontFamily: SERIF,
+              fontSize: '14px',
+              fontStyle: 'bold',
+              color: INK,
+              stroke: TEXT_HALO,
+              strokeThickness: 4,
+            })
+            .setOrigin(0.5)
+            .setDepth(WORLD_UI_DEPTH),
+        );
         this.tweens.add({ targets: text, y: text.y - 36, alpha: 0, duration: 1100, onComplete: () => text.destroy() });
       });
     });
