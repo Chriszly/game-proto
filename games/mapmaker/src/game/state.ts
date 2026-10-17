@@ -1,5 +1,6 @@
 import { byDifficulty } from '../../../../shared/settings';
 import type { Hand } from './hands';
+import type { Island } from './island';
 import type { IsleKind } from './kinds';
 import type { Terrain } from './terrain';
 import type { UpgradeId } from './upgrades';
@@ -212,6 +213,8 @@ export interface GameState {
   rival: Rival | null;
   /** Set once the atlas holds a page of every kind of isle: the voyage it was completed on. */
   royal: { voyage: number } | null;
+  /** The next isle, rolled by the sale that charted this one in full; `setSail` lands on it. */
+  next: Island | null;
 }
 
 export const rankOf = (s: GameState, id: UpgradeId) => s.ranks[id] ?? 0;

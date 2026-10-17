@@ -36,6 +36,8 @@ export function loadGame(): GameState | null {
     s.hand ??= null;
     s.rival ??= null;
     s.royal ??= null;
+    // Saves from before the next isle was rolled at the sale: setSail rolls it.
+    s.next ??= null;
     for (const c of [s.commission, ...s.board]) {
       if (!c) continue;
       c.voyages ??= 1;
