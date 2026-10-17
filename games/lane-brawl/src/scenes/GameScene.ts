@@ -111,6 +111,12 @@ import {
 
 /** Simulation step in ms. Each frame runs as many steps as the time since the last frame needs. */
 const STEP = 16;
+/**
+ * The floating touch stick, in view pixels: rim and knob radius, the dead zone, how far a finger
+ * drags before a touch steers instead of walking to where it landed, and how far ahead of the
+ * champion (in world pixels) it walks for.
+ */
+const STICK = { r: 60, knob: 24, dead: 8, drag: 14, ahead: 60 };
 /** Red's units deal this much damage, by difficulty. */
 const ENEMY_DAMAGE = byDifficulty(0.8, 1, 1.25);
 
@@ -270,6 +276,11 @@ export class GameScene extends Phaser.Scene {
   private groundG!: Phaser.GameObjects.Graphics;
   private topG!: Phaser.GameObjects.Graphics;
   private hudG!: Phaser.GameObjects.Graphics;
+  /**
+   * A finger on the map, in view pixels: where it went down and where it is now. Dragged past
+   * `STICK.drag` it goes `live` and steers the champion like a joystick; until then it was a tap.
+   */
+  private stick: { id: number; ox: number; oy: number; x: number; y: number; live: boolean } | null = null;
   private sprites = new Map<number, UnitSprite>();
   private mapTiles: Phaser.GameObjects.Image[] = [];
   private portrait!: Phaser.GameObjects.Image;
@@ -370,6 +381,17 @@ export class GameScene extends Phaser.Scene {
       });
     });
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => this.onPointerDown(p));
+    // A second touch pointer, so one thumb can press an ability while the other steers.
+    if (this.input.manager.pointersTotal < 3) this.input.addPointer(1);
+    this.stick = null;
+    this.input.on('pointermove', (p: Phaser.Input.Pointer) => this.dragStick(p));
+    this.input.on('pointerup', (p: Phaser.Input.Pointer) => {
+      if (this.stick?.id !== p.id) return;
+      // Letting go stops the champion where it stands, rather than at the point it steered for.
+      const me = this.player();
+      if (this.stick.live && this.state && me && !me.dead) commandMove(this.state, me);
+      this.stick = null;
+    });
     this.cameras.main.centerOn(BASE.blue.x + 300, BASE.blue.y - 200);
     // Watching the AI skips the pick screen: a random champion plays for blue like the rest.
     if (watching) this.watchMatch();
@@ -382,6 +404,7 @@ export class GameScene extends Phaser.Scene {
     // fast a match begins, where the camera is and so where a click lands.
     const frameMs = Math.min(this.game.loop.rawDelta, 250);
     const s = this.state;
+    this.steer();
     if (s && s.phase === 'playing') {
       // Watching the AI, the panel's speed runs more steps per frame (none while it holds the match).
       this.acc += frameMs * watchSteps();
@@ -567,6 +590,50 @@ export class GameScene extends Phaser.Scene {
     }
     if (foe) commandAttack(this.state, foe.id);
     else commandMove(this.state, w);
+    // A touch may also turn into the floating stick, if the finger drags on from here.
+    if (pointer.wasTouch && !this.stick) this.stick = { id: pointer.id, ox: p.x, oy: p.y, x: p.x, y: p.y, live: false };
+  }
+
+  /** Moves the stick's knob to the finger; past the rim the base is dragged along behind it. */
+  private dragStick(pointer: Phaser.Input.Pointer) {
+    const st = this.stick;
+    if (!st || st.id !== pointer.id || !pointer.isDown) return;
+    const v = viewPoint(pointer);
+    st.x = v.x;
+    st.y = v.y;
+    const d = Math.hypot(st.x - st.ox, st.y - st.oy);
+    if (d > STICK.drag) st.live = true;
+    if (d > STICK.r) {
+      const k = (d - STICK.r) / d;
+      st.ox += (st.x - st.ox) * k;
+      st.oy += (st.y - st.oy) * k;
+    }
+  }
+
+  /** While the stick steers, the champion walks for a point a little ahead the way it points. */
+  private steer() {
+    const st = this.stick;
+    const me = this.player();
+    if (!st?.live || !this.state || this.phase !== 'playing' || !me || me.dead) return;
+    const dx = st.x - st.ox;
+    const dy = st.y - st.oy;
+    const d = Math.hypot(dx, dy);
+    if (d <= STICK.dead) return;
+    commandMove(this.state, { x: me.x + (dx / d) * STICK.ahead, y: me.y + (dy / d) * STICK.ahead });
+  }
+
+  /** The stick under a steering finger: a faint ring and a gold knob. */
+  private drawStick(g: Phaser.GameObjects.Graphics) {
+    const st = this.stick;
+    if (!st?.live) return;
+    const d = Math.hypot(st.x - st.ox, st.y - st.oy);
+    const k = d > STICK.r ? STICK.r / d : 1;
+    const kx = st.ox + (st.x - st.ox) * k;
+    const ky = st.oy + (st.y - st.oy) * k;
+    g.fillStyle(0x0d111a, 0.35).fillCircle(st.ox, st.oy, STICK.r);
+    g.lineStyle(3, col(UI.gold), 0.55).strokeCircle(st.ox, st.oy, STICK.r);
+    g.fillStyle(col(UI.gold), 0.7).fillCircle(kx, ky, STICK.knob);
+    g.lineStyle(2, 0xffffff, 0.6).strokeCircle(kx, ky, STICK.knob);
   }
 
   /** Takes the visuals the sim raised this frame and ages the ones on screen. */
@@ -1142,6 +1209,7 @@ export class GameScene extends Phaser.Scene {
     this.portrait.setVisible(false);
     if (pick) this.drawPick(g);
     else if (this.state) this.drawPlaying(g, this.state);
+    if (!pick) this.drawStick(g);
     for (const [key, obj] of this.texts) if (!this.used.has(key)) obj.setVisible(false);
   }
 
