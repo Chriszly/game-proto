@@ -48,6 +48,7 @@ The hub's **Settings** button opens the settings every game shares. They are sav
   | Anvilheart | adventurers wait 50% longer | adventurers wait 30% less |
   | Broadside | enemy ships and forts have 25% less health | enemy ships and forts have 30% more health |
   | Lane Brawl | red's champions, minions and towers deal 20% less damage | red's champions, minions and towers deal 25% more damage |
+  | Scrapyard Titans | your commander has 130 health and rivals get 1 gold less a round | your commander has 80 health and rivals get 1 gold more a round |
   | TinctureTinker | 5 more moves per order | 3 fewer moves per order |
   | Catacomb | foes have 25% less health | foes have 30% more health |
   | Golem Garden | pests have 25% less health | pests have 30% more health |
@@ -81,6 +82,7 @@ what each AI decides (**L**).
 | Colonizer | two random factions, both run by the planner, on an open map; a click on the end screen starts another match |
 | Space Wars | all five factions run by the AI on an open map until one is left; contracts don't run; a tap on the end screen starts another battle |
 | Lane Brawl | all ten champions run by the AI, blue's with a random class, with no fog; objectives don't run; the camera follows blue's champion; Watch another on the end screen starts another match |
+| Scrapyard Titans | all eight commanders run by the AI, your seat's with a random commander, season and terrain; your seat's fights play on the board; Watch another on the end screen starts another match |
 
 ## Running locally
 
