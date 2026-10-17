@@ -6,6 +6,7 @@ import { HIRE, UI_DEPTH, VIEW } from '../scenes/layout';
 import { GUARD_KINDS, GUARDS, MAX_GUARD_LEVEL, guardDamage, trainCost, type GuardKind } from '../game/guards';
 import { GUARD_SLOTS, type Guard } from '../game/state';
 import { drawPanel, textStyle } from './panel';
+import { t } from '../i18n';
 
 /**
  * The panel a guard slot opens: on an empty slot, a spearman or a mage to hire for coins; on a
@@ -58,23 +59,24 @@ export class HirePanel {
     const coinIcon = fit(scene.add.image(left + HIRE.w - 70, top + 22, 'hud-coin'));
     const coinText = scene.add.text(left + HIRE.w - 58, top + 22, String(coins), textStyle(14, '#ffe07a')).setOrigin(0, 0.5);
     const title = scene.add
-      .text(left + 18, top + 22, guard ? `${GUARDS[guard.kind].name}, level ${guard.level}` : 'Hire a guard', textStyle(17, '#ffcf4a', 3))
+      .text(left + 18, top + 22, guard ? t('guardLevel', { guard: t(GUARDS[guard.kind].name), level: guard.level }) : t('hireTitle'), textStyle(17, '#ffcf4a', 3))
       .setOrigin(0, 0.5);
     this.body.add([g, coinIcon, coinText, title]);
     if (guard) {
       const kind = guard.kind;
       const full = guard.level >= MAX_GUARD_LEVEL;
-      this.addRow(kind, top + 52, `Damage ${Math.round(guardDamage(kind, guard.level))}${full ? '' : ` (next level ${Math.round(guardDamage(kind, guard.level + 1))})`}`,
-        full ? null : { caption: 'Train', cost: trainCost(kind, guard.level), afford: coins >= trainCost(kind, guard.level), act: () => this.onTrain(slot) });
+      const damage = Math.round(guardDamage(kind, guard.level));
+      this.addRow(kind, top + 52, full ? t('guardDamage', { damage }) : t('guardDamageNext', { damage, next: Math.round(guardDamage(kind, guard.level + 1)) }),
+        full ? null : { caption: t('train'), cost: trainCost(kind, guard.level), afford: coins >= trainCost(kind, guard.level), act: () => this.onTrain(slot) });
       this.body.add(
-        scene.add.text(left + 18, top + 140, full ? 'Fully trained.' : 'Training adds 60% damage, up to level 3.', { ...textStyle(12, '#c9c3b6'), fontStyle: 'normal' }),
+        scene.add.text(left + 18, top + 140, full ? t('fullyTrained') : t('trainingNote'), { ...textStyle(12, '#c9c3b6'), fontStyle: 'normal' }),
       );
     } else {
       GUARD_KINDS.forEach((kind, i) =>
-        this.addRow(kind, top + 46 + i * 70, GUARDS[kind].text, { caption: 'Hire', cost: GUARDS[kind].cost, afford: coins >= GUARDS[kind].cost, act: () => this.onHire(slot, kind) }),
+        this.addRow(kind, top + 46 + i * 70, t(GUARDS[kind].text), { caption: t('hire'), cost: GUARDS[kind].cost, afford: coins >= GUARDS[kind].cost, act: () => this.onHire(slot, kind) }),
       );
     }
-    this.body.add(scene.add.text(cx, top + HIRE.h - 14, 'Guards serve until the run ends', { ...textStyle(10, '#9aa0ac'), fontStyle: 'normal' }).setOrigin(0.5));
+    this.body.add(scene.add.text(cx, top + HIRE.h - 14, t('guardsServe'), { ...textStyle(10, '#9aa0ac'), fontStyle: 'normal' }).setOrigin(0.5));
   }
 
   /** A guard's portrait, name and text, with a button that hires or trains it for its cost. */
@@ -85,7 +87,7 @@ export class HirePanel {
     const back = scene.add.graphics();
     drawPanel(back, x0 + 10, y, HIRE.w - 20, 62, { c: 6, fill: SLATE.light, alpha: 1, edge: GOLD.dark, lw: 1 });
     const portrait = fit(scene.add.image(x0 + 38, y + 58, guardTexture(kind)), 0.82).setOrigin(0.5, 1);
-    const name = scene.add.text(x0 + 66, y + 14, GUARDS[kind].name, textStyle(14, '#ffe7a0')).setOrigin(0, 0.5);
+    const name = scene.add.text(x0 + 66, y + 14, t(GUARDS[kind].name), textStyle(14, '#ffe7a0')).setOrigin(0, 0.5);
     const desc = scene.add.text(x0 + 66, y + 28, text, { ...textStyle(11, '#e9e4d8'), fontStyle: 'normal', wordWrap: { width: 150 } });
     this.body.add([back, portrait, name, desc]);
     if (!button) return;

@@ -2,11 +2,14 @@
 // at the barricade, or a mage, who throws arcane bolts that burst. Each can be trained twice.
 // Guards are hired for one run only.
 
+import type { TextKey } from '../i18n';
+
 export type GuardKind = 'spear' | 'mage';
 
 export interface GuardType {
-  name: string;
-  text: string;
+  /** Name and text, keys of `i18n/en.ts`. */
+  name: TextKey;
+  text: TextKey;
   /** Coins to hire one. */
   cost: number;
   /** Milliseconds between two attacks. */
@@ -15,8 +18,8 @@ export interface GuardType {
 }
 
 export const GUARDS: Record<GuardKind, GuardType> = {
-  spear: { name: 'Spearman', text: 'Stabs foes at the barricade, through shields', cost: 20, ms: 700, damage: 12 },
-  mage: { name: 'Mage', text: 'Throws an arcane bolt every 1.8s that bursts', cost: 30, ms: 1_800, damage: 16 },
+  spear: { name: 'spearName', text: 'spearText', cost: 20, ms: 700, damage: 12 },
+  mage: { name: 'mageName', text: 'mageText', cost: 30, ms: 1_800, damage: 16 },
 };
 
 export const GUARD_KINDS = Object.keys(GUARDS) as GuardKind[];

@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { OMEN, UI_DEPTH } from '../scenes/layout';
 import { OMEN_XP, OMENS, type OmenId } from '../game/omens';
 import { drawPanel, makeButton, textStyle } from './panel';
+import { t } from '../i18n';
 
 /**
  * The omen named during a break from wave 4: its name and what it does, with Accept and Refuse.
@@ -27,11 +28,11 @@ export class OmenCard {
       .text(x, y - 16, '', { ...textStyle(13, '#e9e4d8'), fontStyle: 'normal', align: 'center', wordWrap: { width: w - 40 } })
       .setOrigin(0.5);
     const reward = scene.add
-      .text(x, y + 6, `Accept for ${Math.round((OMEN_XP - 1) * 100)}% more experience this wave. Left alone, it is refused.`, { ...textStyle(11, '#8fdc6a'), fontStyle: 'normal' })
+      .text(x, y + 6, t('omenReward', { n: Math.round((OMEN_XP - 1) * 100) }), { ...textStyle(11, '#8fdc6a'), fontStyle: 'normal' })
       .setOrigin(0.5);
     const { accept, refuse } = this.buttons;
-    const yes = makeButton(scene, accept.x, accept.y, accept.w, accept.h, 'Accept', () => onDecide(true));
-    const no = makeButton(scene, refuse.x, refuse.y, refuse.w, refuse.h, 'Refuse', () => onDecide(false));
+    const yes = makeButton(scene, accept.x, accept.y, accept.w, accept.h, t('accept'), () => onDecide(true));
+    const no = makeButton(scene, refuse.x, refuse.y, refuse.w, refuse.h, t('refuse'), () => onDecide(false));
     this.root = scene.add.container(0, 0, [g, this.title, this.text, reward, yes, no]).setDepth(UI_DEPTH + 4).setVisible(false);
   }
 
@@ -45,7 +46,7 @@ export class OmenCard {
     const key = omen ? `${omen}-${wave}` : null;
     if (!omen || key === this.shown) return;
     this.shown = key;
-    this.title.setText(`Omen for wave ${wave}: ${OMENS[omen].name}`);
-    this.text.setText(OMENS[omen].text);
+    this.title.setText(t('omenTitle', { wave, omen: t(OMENS[omen].name) }));
+    this.text.setText(t(OMENS[omen].text));
   }
 }

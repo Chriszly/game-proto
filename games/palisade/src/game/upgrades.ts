@@ -1,6 +1,8 @@
 // Every level-up offers three of these. Most have several ranks; follow-ups only show up once the
 // upgrade they improve has been picked. Adding an upgrade is an entry here plus its effect in
-// `stats` (state.ts).
+// `stats` (state.ts). Names and texts are keys of `i18n/en.ts`, shown with `t`.
+
+import type { TextKey } from '../i18n';
 
 export type UpgradeId =
   | 'swift'
@@ -58,9 +60,9 @@ export type Icon =
   | 'wind';
 
 export interface Upgrade {
-  name: string;
+  name: TextKey;
   /** What one more rank does. */
-  text: string;
+  text: TextKey;
   maxRank: number;
   icon: Icon;
   /** Only offered once this upgrade has a rank. */
@@ -70,34 +72,34 @@ export interface Upgrade {
 }
 
 export const UPGRADES: Record<UpgradeId, Upgrade> = {
-  swift: { name: 'Swift Draw', text: 'Shoot 20% faster', maxRank: 5, icon: 'bow' },
-  sharp: { name: 'Steel Tips', text: 'Arrows deal 25% more damage', maxRank: 5, icon: 'tip' },
-  volley: { name: 'Volley', text: 'One more arrow per shot, at another foe', maxRank: 3, icon: 'volley' },
-  pierce: { name: 'Bodkin Points', text: 'Arrows fly on through one more foe', maxRank: 3, icon: 'pierce' },
-  crit: { name: 'Keen Eye', text: '10% more chance of a double-damage hit', maxRank: 3, icon: 'eye' },
-  fire: { name: 'Fire Arrows', text: 'Arrows set foes ablaze, burning them for 3s', maxRank: 1, icon: 'fire' },
-  wildfire: { name: 'Wildfire', text: 'Burning deals 50% more damage', maxRank: 3, icon: 'fire', requires: 'fire' },
-  frost: { name: 'Frost Arrows', text: 'Arrows chill foes, slowing them by 35%', maxRank: 1, icon: 'frost' },
-  deepFreeze: { name: 'Deep Freeze', text: 'Chill slows 10% more and lasts longer', maxRank: 3, icon: 'frost', requires: 'frost' },
-  shatter: { name: 'Shatter', text: 'Arrows deal 20% more damage to chilled foes', maxRank: 3, icon: 'shatter', requires: 'frost' },
-  blast: { name: 'Blasting Powder', text: 'Arrows burst on impact, hurting foes nearby', maxRank: 1, icon: 'blast' },
-  bigBlast: { name: 'Black Powder', text: 'Bursts are wider and hit harder', maxRank: 3, icon: 'blast', requires: 'blast' },
-  fireball: { name: 'Tome of Fire', text: 'Hurl a fireball every 3s that explodes', maxRank: 1, icon: 'fireball' },
-  pyromancy: { name: 'Pyromancy', text: 'Fireballs come 15% sooner and hit 40% harder', maxRank: 3, icon: 'fireball', requires: 'fireball' },
-  storm: { name: 'Storm Staff', text: 'Call lightning every 3.5s that leaps between 3 foes', maxRank: 1, icon: 'storm' },
-  forked: { name: 'Forked Lightning', text: 'Lightning leaps to one more foe and hits 25% harder', maxRank: 3, icon: 'storm', requires: 'storm' },
-  timber: { name: 'Stout Timber', text: 'The barricade gets 25% more health and is repaired', maxRank: 5, icon: 'barricade' },
-  lore: { name: 'Battle Lore', text: 'Gain 20% more experience', maxRank: 3, icon: 'book' },
-  finisher: { name: 'Finishing Shot', text: 'Arrows hit foes below 15% more health twice as hard', maxRank: 3, icon: 'finisher' },
-  slayer: { name: 'Giant Slayer', text: 'Arrows and Arrow Rain deal 30% more damage to bosses', maxRank: 3, icon: 'slayer' },
-  cloudburst: { name: 'Cloudburst', text: 'Arrow Rain hits 25% harder over a 15% wider ring', maxRank: 3, icon: 'cloudburst' },
-  barbs: { name: 'Barbed Caltrops', text: 'Caltrops prick 50% harder and slow foes 10% more', maxRank: 3, icon: 'barbs' },
-  stakes: { name: 'Spiked Stakes', text: 'Foes hacking at the barricade take 6 damage a second', maxRank: 3, icon: 'stakes' },
-  bounty: { name: 'Bounty Hunter', text: 'Every kill pays 1 more coin', maxRank: 3, icon: 'bounty' },
-  drill: { name: 'Drill Sergeant', text: 'Hired guards attack 20% faster', maxRank: 3, icon: 'drill' },
-  mend: { name: 'Mend the Barricade', text: 'Repair half of the barricade', maxRank: Infinity, icon: 'mend', filler: true },
-  purse: { name: 'War Chest', text: 'Gain 25 coins to hire guards with', maxRank: Infinity, icon: 'purse', filler: true },
-  wind: { name: 'Second Wind', text: 'Charge Arrow Rain and Caltrops at once', maxRank: Infinity, icon: 'wind', filler: true },
+  swift: { name: 'swiftName', text: 'swiftText', maxRank: 5, icon: 'bow' },
+  sharp: { name: 'sharpName', text: 'sharpText', maxRank: 5, icon: 'tip' },
+  volley: { name: 'volleyName', text: 'volleyText', maxRank: 3, icon: 'volley' },
+  pierce: { name: 'pierceName', text: 'pierceText', maxRank: 3, icon: 'pierce' },
+  crit: { name: 'critName', text: 'critText', maxRank: 3, icon: 'eye' },
+  fire: { name: 'fireName', text: 'fireText', maxRank: 1, icon: 'fire' },
+  wildfire: { name: 'wildfireName', text: 'wildfireText', maxRank: 3, icon: 'fire', requires: 'fire' },
+  frost: { name: 'frostName', text: 'frostText', maxRank: 1, icon: 'frost' },
+  deepFreeze: { name: 'deepFreezeName', text: 'deepFreezeText', maxRank: 3, icon: 'frost', requires: 'frost' },
+  shatter: { name: 'shatterName', text: 'shatterText', maxRank: 3, icon: 'shatter', requires: 'frost' },
+  blast: { name: 'blastName', text: 'blastText', maxRank: 1, icon: 'blast' },
+  bigBlast: { name: 'bigBlastName', text: 'bigBlastText', maxRank: 3, icon: 'blast', requires: 'blast' },
+  fireball: { name: 'fireballName', text: 'fireballText', maxRank: 1, icon: 'fireball' },
+  pyromancy: { name: 'pyromancyName', text: 'pyromancyText', maxRank: 3, icon: 'fireball', requires: 'fireball' },
+  storm: { name: 'stormName', text: 'stormText', maxRank: 1, icon: 'storm' },
+  forked: { name: 'forkedName', text: 'forkedText', maxRank: 3, icon: 'storm', requires: 'storm' },
+  timber: { name: 'timberName', text: 'timberText', maxRank: 5, icon: 'barricade' },
+  lore: { name: 'loreName', text: 'loreText', maxRank: 3, icon: 'book' },
+  finisher: { name: 'finisherName', text: 'finisherText', maxRank: 3, icon: 'finisher' },
+  slayer: { name: 'slayerName', text: 'slayerText', maxRank: 3, icon: 'slayer' },
+  cloudburst: { name: 'cloudburstName', text: 'cloudburstText', maxRank: 3, icon: 'cloudburst' },
+  barbs: { name: 'barbsName', text: 'barbsText', maxRank: 3, icon: 'barbs' },
+  stakes: { name: 'stakesName', text: 'stakesText', maxRank: 3, icon: 'stakes' },
+  bounty: { name: 'bountyName', text: 'bountyText', maxRank: 3, icon: 'bounty' },
+  drill: { name: 'drillName', text: 'drillText', maxRank: 3, icon: 'drill' },
+  mend: { name: 'mendName', text: 'mendText', maxRank: Infinity, icon: 'mend', filler: true },
+  purse: { name: 'purseName', text: 'purseText', maxRank: Infinity, icon: 'purse', filler: true },
+  wind: { name: 'windName', text: 'windText', maxRank: Infinity, icon: 'wind', filler: true },
 };
 
 /** The fillers: Mend fills the one empty card with two upgrades left, War Chest and Second Wind the two with one left. */
