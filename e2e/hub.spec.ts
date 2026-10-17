@@ -42,6 +42,9 @@ test('hub lists every game', async ({ page }, testInfo) => {
   await page.goto('/');
   await expect(page.locator('.game')).toHaveCount(GAMES.length);
   await expectFavicon(page);
+  // The cards are in alphabetical order.
+  const names = (await page.locator('.game h2').allTextContents()).map((n) => n.trim());
+  expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b, 'en')));
   // Every card's cover loads.
   const covers = page.locator('.game .cover');
   await expect(covers).toHaveCount(GAMES.length);
