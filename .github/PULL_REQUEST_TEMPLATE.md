@@ -18,7 +18,7 @@
 
 ## Screenshots
 
-<!-- Screenshots of newly added elements, committed to the repo so the images are hosted on GitHub. Skip if nothing visual changed. -->
+<!-- Screenshots of newly added elements, committed to the repo so the images are hosted on GitHub. At most 4 new ones, as WebP under 200 KB each (npm run screenshots -- <file>); the Screenshots check enforces this. Skip if nothing visual changed. -->
 
 ---
 
