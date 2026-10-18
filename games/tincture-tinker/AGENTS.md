@@ -76,8 +76,8 @@ bottle green, serif italics), all painted in code on 2D canvases. It shares no c
   the keys. Every text on screen goes through `t`, numbers in texts are formatted for the language,
   and a new text gets its German entry (and a US one if its spelling differs) in the same PR.
 - `src/main.ts`: creates the `Phaser.Game` (960x540, FIT scaling, `pixelArt: false`) with
-  `BootScene` and `GameScene`, calls `setupGame(game)` and `setupScaling(game)` from
-  `shared/scaling.ts`, and puts `game` on `window` in dev builds.
+  `BootScene` and `GameScene`, calls `setupGame(game)` and `setupScaling(game, { fill: true })` from
+  `shared/scaling.ts` (the view takes the screen's shape, see Screens), and puts `game` on `window` in dev builds.
 - `src/game/kinds.ts`: `KINDS`, the `Kind` type, `KIND_NAMES` and `KIND_COUNTS` (each kind's name
   and its count in a sentence, "3 wheat", as `TextKey`s) and `randomKind(rand?)`.
 - `src/game/orders.ts`: `PotionId`, `POTION_NAMES` (`TextKey`s, the same as the ids), `Needs`, `Stage`, the `Order` type (with
@@ -121,12 +121,13 @@ bottle green, serif italics), all painted in code on 2D canvases. It shares no c
   `SERIF`, `cellX`, `cellY`. It matches the approved mockup at half its 1920x1080 size.
 - `src/art/nouveau.ts`: the painting toolkit: `bake` (paints in art units, twice the view, onto a
   canvas of `RES` canvas pixels per view pixel, and adds it with `textures.addCanvas`), `RES` (1, or
-  up to 4 on a big screen, from `sharpRes`; the same for every texture), `shown(image, scale)` (sizes
+  up to 4 on a big screen, from `sharpRes` of the larger of the designed size and `viewSize`; the same for every texture), `shown(image, scale)` (sizes
   an image to `scale` times its texture's view size by setting its scale to `scale / RES`), the inks (`SEPIA`, `GOLD`,
   `CREAM`, `BOTTLE`...), shape helpers (`poly`, `rrect`, `whip`, `cornerOrn`, `doubleRule`,
   `goldStar`, `coin`) and `ingredient(kind, x, y, s)`, the five ingredient silhouettes.
-- `src/art/textures.ts`: `bakeTextures` and the texture keys: `table` (the whole static
-  background: wall, tray and cells, ribbon band, order label with its crest and "Bench tools"
+- `src/art/textures.ts`: `bakeTextures` and the texture keys: `wall` (the bottle-green wall with its lily
+  pattern and gold rules, painted at `viewSize` so it covers the whole view), `table` (the static
+  960x540 layout over it: tray and cells, ribbon band, order label with its crest and "Bench tools"
   heading, painted in the hub's language at boot like the tool names), `kind-<kind>`, `catalyst-<kind>` (sunburst halo), `bloom-<kind>` (rose petal
   rosette), `jar-<kind>` (corked glass jar), `resin-<kind>` (amber coat), `mould-<kind>` (grey-green
   fuzz of spots), `need-<kind>`,
@@ -145,7 +146,8 @@ bottle green, serif italics), all painted in code on 2D canvases. It shares no c
 ### How it runs
 
 - **Boot:** `BootScene.create` paints every texture (see the file map). There are no asset files.
-- **Start:** `GameScene.create` adds the `table` image and the persistent UI (ribbon texts and bar,
+- **Start:** `GameScene.create` scrolls the camera by `-viewFrame(this)`'s x and y, so the designed
+  960x540 layout sits in the middle of the view, adds the `wall` image at the view's top-left and the `table` image and the persistent UI (ribbon texts and bar,
   moves, stars and coins, the tool buttons, the caption, the result card), then
   `begin(startOrder(loadProgress()))`. `begin` replaces `state`, destroys and recreates one image per
   tile (keyed by tile `id` in `sprites`), rebuilds the order label (`buildPanel`) and hides the
@@ -251,7 +253,7 @@ bottle green, serif italics), all painted in code on 2D canvases. It shares no c
   instruction or a tip for the order: forbidden kind, blockers, rush, then the specials).
 - **Tick:** `update(time)` takes `dt` from Phaser's frame timestamp, clamped to `MAX_STEP_MS`, and
   feeds `runQueue` (plays queued `Anim`s in order, by game time) and `updateHint`.
-- **Rendering:** tile sprites are long-lived and moved by animations, not redrawn. Depths: table 0,
+- **Rendering:** tile sprites are long-lived and moved by animations, not redrawn. Depths: wall and table 0,
   bands 1.5, cursor 1.8, Catalysts and Blooms 1.9 (their halos sit under the neighbours), tiles 2,
   resin 2.1 (tiles fall behind it), panel 3, tiles flying to the label 4, result card `UI_DEPTH`. `refresh` redraws the need bars (`bars` graphics), moves, live stars and
   rule line, the rank ribbon, the tool looks, the coins, the caption and the cursor, and puts the
@@ -352,8 +354,12 @@ seals or rich orders existed load with their defaults. The hub's settings are st
 - The settings live under the `hub-settings` storage key, read once at page load, not in the
   game's own save.
 - Screens: `setupScaling` draws the canvas at the screen's resolution (`renderScale` canvas pixels
-  per game pixel, every camera zoomed to match; the one camera never scrolls) and asks to turn a
-  phone held upright. Textures are painted at `RES` (`sharpRes` of the view) and shown with
+  per game pixel, every camera zoomed to match) and asks to turn a phone held upright. With
+  `fill: true` the view grows from 960x540 to the screen's shape (up to 1296x540 or 960x720): the
+  whole layout keeps its 960x540 coordinates and the one camera's fixed scroll (`-viewFrame` x/y,
+  set once in `create`) centres it, while the `wall` texture fills the view around it. Input reads
+  `pointer.worldX/worldY`, so it follows the scroll; at exactly 960x540 the scroll is 0 and
+  nothing moves. Textures are painted at `RES` (`sharpRes` of the view) and shown with
   `shown`, texts at `Math.max(2, renderScale)`. `e2e/screens.spec.ts` at the root checks the game
   on five screens.
 

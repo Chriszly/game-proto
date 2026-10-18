@@ -4,6 +4,7 @@ import type { Tile } from '../game/board';
 import type { PotionId } from '../game/orders';
 import { TOOLS, type Tool } from '../game/sim';
 import { BOARD, BUTTON, PANEL, TOOL, TRAY, VIEW } from '../scenes/layout';
+import { viewSize } from '../../../../shared/scaling';
 import { t } from '../i18n';
 import {
   ART,
@@ -64,6 +65,9 @@ const BREWS: Record<PotionId, string> = {
 };
 
 export function bakeTextures(scene: Phaser.Scene) {
+  // The wall fills the whole view, whatever the screen's shape; the table sits in its middle.
+  const view = viewSize(scene);
+  bake(scene, 'wall', view.width, view.height, () => paintWall(view.width * ART, view.height * ART));
   bake(scene, 'table', VIEW.w, VIEW.h, paintTable);
   for (const kind of KINDS) {
     bake(scene, kindTexture(kind), BOARD.cell, BOARD.cell, () => ingredient(kind, 56, 56, 39, 7));
@@ -95,13 +99,14 @@ export function bakeTextures(scene: Phaser.Scene) {
   bake(scene, 'result-card', 400, 236, paintResultCard);
 }
 
-/** The bottle-green wall, the cream tray with its cells, the rank ribbon and the order label. */
-function paintTable() {
-  const W = VIEW.w * ART;
-  const H = VIEW.h * ART;
+/** The bottle-green wall with its lily pattern and gold rules, `W` x `H` art units: the whole view. */
+function paintWall(W: number, H: number) {
   ctx.fillStyle = GREEN;
   ctx.fillRect(0, 0, W, H);
-  const vg = ctx.createRadialGradient(700, 400, 200, 960, 540, 1300);
+  // Centred on the table in the middle of the view, as it was on the designed 960x540 view.
+  const ox = (W - VIEW.w * ART) / 2;
+  const oy = (H - VIEW.h * ART) / 2;
+  const vg = ctx.createRadialGradient(ox + 700, oy + 400, 200, ox + 960, oy + 540, 1300 * Math.max(1, W / (VIEW.w * ART), H / (VIEW.h * ART)));
   vg.addColorStop(0, 'rgba(70,110,90,0.35)');
   vg.addColorStop(1, 'rgba(0,0,0,0.35)');
   ctx.fillStyle = vg;
@@ -109,8 +114,8 @@ function paintTable() {
   // A faint lily pattern on the wall.
   ctx.save();
   ctx.globalAlpha = 0.12;
-  for (let j = 0; j < 7; j++) {
-    for (let i = 0; i < 12; i++) {
+  for (let j = 0; j * 170 < H + 100; j++) {
+    for (let i = 0; i * 170 < W + 100; i++) {
       const x = i * 170 + (j % 2) * 85;
       const y = j * 170;
       ctx.beginPath();
@@ -129,7 +134,10 @@ function paintTable() {
   ctx.strokeRect(10, 10, W - 20, H - 20);
   ctx.lineWidth = 1;
   ctx.strokeRect(18, 18, W - 36, H - 36);
+}
 
+/** The cream tray with its cells, the rank ribbon and the order label, over the wall. */
+function paintTable() {
   // The rank ribbon above the board: its tails and cream band (the scene writes on it).
   {
     const x = 92;

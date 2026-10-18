@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { playMusic, playSting, ui } from '../../../../shared/audio';
-import { renderScale } from '../../../../shared/scaling';
+import { renderScale, viewFrame } from '../../../../shared/scaling';
 import { settings } from '../../../../shared/settings';
 import { BROWN, GOLD, MOSS, num, OCHRE, RES, RUST, SEPIA, shown } from '../art/nouveau';
 import { needTexture, POTION_ORIGIN, potionTexture, tileTexture, TOOL_PAD, toolTexture } from '../art/textures';
@@ -140,6 +140,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   create() {
+    // The view can be wider or taller than the designed 960x540 (fill mode): the camera puts the
+    // designed layout in the middle of the view, and the wall behind it covers the whole view.
+    const frame = viewFrame(this);
+    this.cameras.main.setScroll(-frame.x, -frame.y);
+    shown(this.add.image(-frame.x, -frame.y, 'wall').setOrigin(0));
     shown(this.add.image(0, 0, 'table').setOrigin(0));
     this.cursor = shown(this.add.image(0, 0, 'cursor')).setDepth(DEPTH.cursor).setVisible(false);
     this.bars = this.add.graphics().setDepth(DEPTH.panel);
