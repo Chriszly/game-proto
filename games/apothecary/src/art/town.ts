@@ -101,11 +101,11 @@ function drawWick(c: Ctx) {
   ink(c, [[13, 9], [15, 4]], { closed: false, w: 1, col: '#d8cfb2' });
 }
 
-/** A short candle on a brass dish, lit. */
-function drawCandle(c: Ctx) {
+/** A short candle on a brass dish, lit: plain wax, or another colour. */
+function drawCandle(c: Ctx, wax = '#f0e2a8') {
   shadow(c, 8.5, 14, 6, 1.4, 0.25);
   both(c, ellPts(8, 13, 6, 1.8, 14), WASH.brass, { layers: 1 }, { w: 0.7 });
-  both(c, rectPts(5.5, 5.5, 5, 7.5, 1), '#f0e2a8', { layers: 2 }, { w: 0.8 });
+  both(c, rectPts(5.5, 5.5, 5, 7.5, 1), wax, { layers: 2 }, { w: 0.8 });
   wash(c, [[8, 1], [9.6, 4], [8, 5.5], [6.4, 4]], WASH.flameLight, { layers: 2, edge: 0 });
 }
 
@@ -186,18 +186,18 @@ function drawLinen(c: Ctx) {
   for (const y of [7.8, 10.6]) ink(c, [[2.5, y], [13.5, y]], { closed: false, w: 0.5, alpha: 0.6 });
 }
 
-/** A pot of deep blue dye. */
-function drawDye(c: Ctx) {
+/** A pot of deep blue dye, or of another colour. */
+function drawDye(c: Ctx, dye = '#3a5aa8') {
   shadow(c, 8.5, 14.5, 5.5, 1.4, 0.25);
   both(c, [[3.5, 6], [12.5, 6], [11.5, 14], [4.5, 14]], '#9a7a5a', { layers: 2 }, { w: 0.8 });
-  both(c, ellPts(8, 6, 4.5, 1.6, 12), '#3a5aa8', { layers: 2, edge: 0 }, { w: 0.6 });
+  both(c, ellPts(8, 6, 4.5, 1.6, 12), dye, { layers: 2, edge: 0 }, { w: 0.6 });
 }
 
-/** A bolt of blue cloth. */
-function drawCloth(c: Ctx) {
+/** A bolt of blue cloth, or of another colour. */
+function drawCloth(c: Ctx, cloth = '#4a6ab8', end = '#34508e') {
   shadow(c, 8.5, 14, 7, 1.4, 0.25);
-  both(c, rectPts(2, 6, 12, 7.5, 2), '#4a6ab8', { layers: 2, bloom: 1, cx: 6, cy: 8 }, { w: 0.8 });
-  both(c, ellPts(14, 9.8, 1.8, 3.8, 10), '#34508e', { layers: 1 }, { w: 0.6 });
+  both(c, rectPts(2, 6, 12, 7.5, 2), cloth, { layers: 2, bloom: 1, cx: 6, cy: 8 }, { w: 0.8 });
+  both(c, ellPts(14, 9.8, 1.8, 3.8, 10), end, { layers: 1 }, { w: 0.6 });
 }
 
 /** A hooded blue cloak. */
@@ -255,19 +255,19 @@ function drawCoppice(c: Ctx, stage: number) {
   }
 }
 
-/** An ore pit: a dug hollow in the earth, filling with rust-red stones of ore. 48x44 as shown. */
-function drawOrePit(c: Ctx, stage: number) {
+/** An ore pit: a dug hollow in the earth, filling with rust-red stones of ore (or copper's). 48x44 as shown. */
+function drawOrePit(c: Ctx, stage: number, stone = ['#8a5a4a', '#7a4e40']) {
   both(c, ellPts(24, 34, 18, 7, 20), '#4a3628', { layers: 2 }, { w: 0.9 });
   const stones: Pt[] = [[17, 33], [24, 31], [31, 33], [20, 28], [28, 28], [24, 25]];
-  for (const [x, y] of stones.slice(0, [1, 3, 6][stage])) both(c, ellPts(x, y, 4, 3, 10), chance(0.5) ? '#8a5a4a' : '#7a4e40', { layers: 2, bloom: 1, cx: x - 1, cy: y - 1 }, { w: 0.7 });
+  for (const [x, y] of stones.slice(0, [1, 3, 6][stage])) both(c, ellPts(x, y, 4, 3, 10), chance(0.5) ? stone[0] : stone[1], { layers: 2, bloom: 1, cx: x - 1, cy: y - 1 }, { w: 0.7 });
   ink(c, [[38, 30], [44, 14]], { closed: false, w: 1.6, col: WASH.woodDark });
   both(c, [[42, 12], [48, 15], [45, 17]], WASH.ironRim, { layers: 1 }, { w: 0.6 });
 }
 
-function drawOre(c: Ctx) {
+function drawOre(c: Ctx, stone = '#8a5a4a', fleck = '#c08a5a') {
   shadow(c, 8.5, 14, 6, 1.4, 0.25);
-  both(c, [[2.5, 12], [4, 6], [9, 3.5], [13.5, 7], [13, 12.5]], '#8a5a4a', { layers: 2, bloom: 1, cx: 6, cy: 7 }, { w: 0.8 });
-  for (const [x, y] of [[6, 8], [10, 9]]) wash(c, ellPts(x, y, 1, 0.8, 6), '#c08a5a', { layers: 1, edge: 0 });
+  both(c, [[2.5, 12], [4, 6], [9, 3.5], [13.5, 7], [13, 12.5]], stone, { layers: 2, bloom: 1, cx: 6, cy: 7 }, { w: 0.8 });
+  for (const [x, y] of [[6, 8], [10, 9]]) wash(c, ellPts(x, y, 1, 0.8, 6), fleck, { layers: 1, edge: 0 });
 }
 
 function drawTimber(c: Ctx) {
@@ -301,10 +301,10 @@ function drawHorseshoe(c: Ctx) {
   for (const [x, y] of [[3.5, 10], [12.5, 10], [5, 4.5], [11, 4.5]]) wash(c, ellPts(x, y, 0.5, 0.5, 6), '#2a2a2a', { layers: 1, edge: 0 });
 }
 
-function drawPot(c: Ctx) {
+function drawPot(c: Ctx, body: string = WASH.iron, rim: string = WASH.ironRim) {
   shadow(c, 8.5, 14.5, 6.5, 1.4, 0.25);
-  both(c, ellPts(8, 9.5, 6.2, 5, 20), WASH.iron, { layers: 2, bloom: 1, cx: 6, cy: 8 }, { w: 0.8 });
-  both(c, ellPts(8, 5.5, 5, 1.4, 14), WASH.ironRim, { layers: 1 }, { w: 0.6 });
+  both(c, ellPts(8, 9.5, 6.2, 5, 20), body, { layers: 2, bloom: 1, cx: 6, cy: 8 }, { w: 0.8 });
+  both(c, ellPts(8, 5.5, 5, 1.4, 14), rim, { layers: 1 }, { w: 0.6 });
   ink(c, [[3, 5.5], [3, 3], [13, 3], [13, 5.5]], { closed: false, w: 0.7 });
 }
 
@@ -395,6 +395,110 @@ function drawTankard(c: Ctx, beer: string) {
   for (const y of [7.5, 12]) ink(c, [[3, y], [12, y]], { closed: false, w: 0.8, col: WASH.woodDeep });
   ink(c, [[12, 7], [14.5, 8], [14.5, 11.5], [12, 12.5]], { closed: false, w: 1.1 });
   both(c, ellPts(7.5, 5, 5, 2, 12), '#f4ecd8', { layers: 1, edge: 0 }, { w: 0.5 });
+}
+
+/** An apple tree in leaf, its apples reddening as it ripens. 48x44 as shown. */
+function drawOrchard(c: Ctx, stage: number) {
+  shadow(c, 24, 42, 13, 2.5, 0.2);
+  both(c, [[22, 43], [22.5, 28], [25.5, 28], [26, 43]], WASH.woodDark, { layers: 2 }, { w: 0.8 });
+  const r = [7, 11, 13][stage];
+  both(c, ellPts(24, 30 - r, r * 1.3, r, 20), WASH.leaf, { layers: 3, bloom: 1, cx: 20, cy: 22 - r }, { w: 0.9 });
+  const apples: Pt[] = [[17, 18], [29, 14], [24, 22], [33, 21], [20, 11], [27, 8]];
+  if (stage > 0) for (const [x, y] of apples.slice(0, stage === 2 ? 6 : 3)) both(c, ellPts(x, y + (2 - stage) * 4, 2.2, 2.2, 10), stage === 2 ? '#c0443a' : '#9ab84a', { layers: 1, edge: 0 }, { w: 0.5 });
+}
+
+/** Lavender: grey-green tufts that send up purple spikes when ripe. 48x44 as shown. */
+function drawLavender(c: Ctx, stage: number) {
+  const height = [6, 16, 26][stage];
+  for (let i = 0; i < 4; i++) {
+    const x = 8 + i * 10.5 + rr(-1, 1);
+    both(c, ellPts(x, 40, 5, 3.5, 12), '#7a9a7a', { layers: 2, edge: 0 }, { w: 0.5 });
+    for (const d of [-2.5, 0, 2.5]) {
+      const top = 40 - height + Math.abs(d);
+      ink(c, [[x + d * 0.4, 40], [x + d, top]], { closed: false, w: 0.8, col: '#6a8a5a' });
+      if (stage > 0) both(c, ellPts(x + d, top + 2, 1.3, stage === 2 ? 4 : 2, 8), stage === 2 ? '#8a6ac0' : '#a8a0b8', { layers: 1, edge: 0 }, { w: 0.4 });
+    }
+  }
+}
+
+/** Madder: low whorls of leaves, the red roots showing through the earth when ripe. 48x44 as shown. */
+function drawMadder(c: Ctx, stage: number) {
+  const height = [6, 14, 20][stage];
+  if (stage === 2) for (const x of [12, 24, 36]) ink(c, [[x - 4, 42], [x, 38], [x + 5, 43]], { closed: false, w: 1.6, col: '#a8443a' });
+  for (let i = 0; i < 3; i++) {
+    const x = 12 + i * 12 + rr(-1, 1);
+    for (let k = 0; k < 5; k++) {
+      const a = (k / 5) * Math.PI * 2;
+      both(c, [[x, 40 - height / 2], [x + Math.cos(a) * 6, 40 - height / 2 + Math.sin(a) * 3 - height / 3], [x + Math.cos(a + 0.4) * 4, 40 - height / 2 + Math.sin(a + 0.4) * 2]], '#6a9a4a', { layers: 1, edge: 0 }, { w: 0.4 });
+    }
+    if (stage === 2) for (const dx of [-2, 2]) both(c, ellPts(x + dx, 40 - height, 1.2, 1.2, 6), '#e8d870', { layers: 1, edge: 0 }, { w: 0.3 });
+  }
+}
+
+/** A slice of apple tart in its crust. */
+function drawAppleTart(c: Ctx) {
+  shadow(c, 8.5, 14, 7, 1.5, 0.25);
+  both(c, ellPts(8, 10, 7, 3.6, 20), '#c88a48', { layers: 2 }, { w: 0.9 });
+  both(c, ellPts(8, 9.4, 5.4, 2.6, 18), '#e8c070', { layers: 1, edge: 0 }, { w: 0.6 });
+  for (const x of [5, 8, 11]) ink(c, [[x - 1.5, 9.4], [x + 1.5, 9.4]], { closed: false, w: 0.9, col: '#b8603a' });
+}
+
+/** A dark fruit cake, a cherry of apple on top. */
+function drawFruitCake(c: Ctx) {
+  shadow(c, 8.5, 14.5, 6.5, 1.4, 0.25);
+  both(c, rectPts(2.5, 6, 11, 8, 1.5), '#8a5a36', { layers: 2, bloom: 1, cx: 6, cy: 8 }, { w: 0.9 });
+  both(c, ellPts(8, 6, 5.5, 1.6, 14), '#f0e2c8', { layers: 1 }, { w: 0.6 });
+  for (const [x, y] of [[5, 10], [9, 12], [11, 9]]) wash(c, ellPts(x, y, 0.9, 0.9, 6), '#c0443a', { layers: 1, edge: 0 });
+  both(c, ellPts(8, 4, 1.8, 1.8, 10), '#c0443a', { layers: 1, edge: 0 }, { w: 0.5 });
+}
+
+function drawApple(c: Ctx) {
+  shadow(c, 8.5, 14.5, 5.5, 1.3, 0.25);
+  both(c, ellPts(8, 9.5, 5.5, 5, 18), '#c0443a', { layers: 2, bloom: 1, cx: 6, cy: 8 }, { w: 0.8 });
+  ink(c, [[8, 5], [9, 2]], { closed: false, w: 0.9, col: WASH.woodDark });
+  both(c, [[9, 3.5], [12.5, 2], [11, 4.5]], WASH.leaf, { layers: 1, edge: 0 }, { w: 0.4 });
+}
+
+/** A tied bunch of lavender. */
+function drawLavenderBunch(c: Ctx) {
+  for (let i = 0; i < 5; i++) {
+    const x = 4 + i * 2;
+    ink(c, [[8, 15], [x, 6]], { closed: false, w: 0.8, col: '#6a8a5a' });
+    both(c, ellPts(x, 4.5, 1.2, 3, 8), '#8a6ac0', { layers: 1, edge: 0 }, { w: 0.4 });
+  }
+  ink(c, [[6.5, 11.5], [9.5, 11.5]], { closed: false, w: 1.4, col: '#c8a060' });
+}
+
+/** A lilac bar of soap. */
+function drawSoap(c: Ctx) {
+  shadow(c, 8.5, 13.5, 6.5, 1.4, 0.25);
+  both(c, rectPts(2.5, 6, 11, 7, 3), '#c8b4e0', { layers: 2, bloom: 1, cx: 6, cy: 8 }, { w: 0.8 });
+  for (const [x, y] of [[13, 4], [14.5, 2], [11.5, 2.5]]) ink(c, ellPts(x, y, 1, 1, 8), { w: 0.4, alpha: 0.6 });
+}
+
+/** A bundle of red madder roots. */
+function drawMadderRoot(c: Ctx) {
+  for (const [a, b] of [[3, 12], [5, 14], [8, 14.5]]) ink(c, [[8, 4], [a + 2, 9], [b - 2, b]], { closed: false, w: 1.5, col: '#a8443a' });
+  both(c, [[6, 4], [8, 1], [10, 4]], WASH.leaf, { layers: 1, edge: 0 }, { w: 0.4 });
+}
+
+/** A gown: a fitted bodice in blue and a full red skirt. */
+function drawGown(c: Ctx) {
+  shadow(c, 8.5, 15, 6, 1.2, 0.25);
+  both(c, [[5.5, 7], [10.5, 7], [14, 14.5], [2, 14.5]], '#a83a4a', { layers: 2, bloom: 1, cx: 7, cy: 11 }, { w: 0.8 });
+  both(c, [[5.5, 2], [10.5, 2], [10.5, 7.5], [5.5, 7.5]], '#34508e', { layers: 2 }, { w: 0.7 });
+  ink(c, [[5.5, 7.3], [10.5, 7.3]], { closed: false, w: 0.6, col: WASH.brass });
+}
+
+/** A brass-topped lantern with a candle lit inside. */
+function drawLantern(c: Ctx) {
+  shadow(c, 8.5, 15, 5, 1.2, 0.25);
+  ink(c, ellPts(8, 2, 1.6, 1.4, 8), { w: 0.7 });
+  both(c, [[4.5, 5], [8, 2.8], [11.5, 5]], '#c07a48', { layers: 1 }, { w: 0.6 });
+  wash(c, rectPts(5, 5, 6, 8, 0.5), '#f6e0a0', { layers: 2, edge: 0 });
+  wash(c, [[8, 6.5], [9.3, 9], [8, 10.5], [6.7, 9]], WASH.flameLight, { layers: 2, edge: 0 });
+  for (const x of [5, 11]) ink(c, [[x, 5], [x, 13]], { closed: false, w: 0.8, col: WASH.iron });
+  both(c, rectPts(4, 13, 8, 1.8, 0.4), '#c07a48', { layers: 1 }, { w: 0.6 });
 }
 
 /** A malting floor: a wide wooden tray of sprouting barley with a rake across it. 88x60 as shown. */
@@ -599,6 +703,28 @@ export function bakeTown(scene: Phaser.Scene) {
   paint(scene, 'good-driedHops', 16, 16, (c) => drawSack(c, '#9aa05a', (s) => both(s, ellPts(8, 10, 2, 2.6, 8), '#9aa05a', { layers: 1 }, { w: 0.5 })), 4);
   paint(scene, 'good-ale', 16, 16, (c) => drawTankard(c, '#d89a3a'), 4);
   paint(scene, 'good-stout', 16, 16, (c) => drawTankard(c, '#3a2618'), 4);
+  for (const stage of [0, 1, 2]) paint(scene, bedTexture('apple', stage), 48, 44, (c) => drawOrchard(c, stage), 3, 151 + stage);
+  for (const stage of [0, 1, 2]) paint(scene, bedTexture('lavender', stage), 48, 44, (c) => drawLavender(c, stage), 3, 161 + stage);
+  for (const stage of [0, 1, 2]) paint(scene, bedTexture('madder', stage), 48, 44, (c) => drawMadder(c, stage), 3, 171 + stage);
+  for (const stage of [0, 1, 2]) paint(scene, bedTexture('copper', stage), 48, 44, (c) => drawOrePit(c, stage, ['#c07a48', '#5a9a7a']), 3, 181 + stage);
+  paint(scene, 'good-apple', 16, 16, drawApple, 4);
+  paint(scene, 'good-appleTart', 16, 16, drawAppleTart, 4);
+  paint(scene, 'good-fruitCake', 16, 16, drawFruitCake, 4);
+  paint(scene, 'good-lavender', 16, 16, drawLavenderBunch, 4);
+  paint(scene, 'good-soap', 16, 16, drawSoap, 4);
+  paint(scene, 'good-scentedCandle', 16, 16, (c) => drawCandle(c, '#c8b4e0'), 4);
+  paint(scene, 'good-madder', 16, 16, drawMadderRoot, 4);
+  paint(scene, 'good-redDye', 16, 16, (c) => drawDye(c, '#b8443a'), 4);
+  paint(scene, 'good-redCloth', 16, 16, (c) => drawCloth(c, '#b8443a', '#8a3030'), 4);
+  paint(scene, 'good-gown', 16, 16, drawGown, 4);
+  paint(scene, 'good-copper', 16, 16, (c) => drawOre(c, '#c07a48', '#5a9a7a'), 4);
+  paint(scene, 'good-copperPot', 16, 16, (c) => drawPot(c, '#c07a48', '#e0a070'), 4);
+  paint(scene, 'good-lantern', 16, 16, drawLantern, 4);
+  paint(scene, 'good-cider', 16, 16, (c) => drawTankard(c, '#e8c860'), 4);
+  paint(scene, 'good-appleAle', 16, 16, (c) => {
+    drawTankard(c, '#c8883a');
+    both(c, ellPts(12.5, 13, 2.4, 2.2, 10), '#c0443a', { layers: 1 }, { w: 0.5 });
+  }, 4);
   paint(scene, 'maltings', 88, 60, drawMaltings, 3);
   paint(scene, 'oast', 72, 68, drawOast, 3);
   paint(scene, 'kettle', 88, 64, drawKettle, 3);

@@ -376,9 +376,10 @@ before (three times as much a shop) but nothing like the shop itself:
 | --- | --- |
 | Station or counter level (4 levels: a station works half again as fast a level, the counter sells 15% dearer) | 60, 120, 240, 480 |
 | Baker (2 per station) or shopkeeper (1) | 90, then 180 |
-| Pixies: field to mill, hives to oven, mill to oven, oven to the shelves | 180, 180, 300, 450 |
+| Pixies: field to mill, hives to oven, orchard to oven, mill to oven, oven to the shelves | 180, 180, 180, 300, 450 |
 | Outfitter: pack, boots, sickle (one level each) | 360, 300, 300 |
 | Study: crafting order, price signs | 120, 180 |
+| Study: apple tart, then fruit cake | 180, 360 |
 
 Between its gardens and its first station, every shop has a little market of its own, like the
 apothecary's. Its **outfitter** sells one more level of the doctor's pack, boots and sickle, which
@@ -387,6 +388,23 @@ count everywhere on top of the apothecary's two (so a pack holds up to 11 with e
 recipes, and its price signs, which put a Cheap, Fair or Dear sign under each shelf; both work as
 in the apothecary, and until they are learned a station makes what the shelves hold fewest of and
 everything sells at Fair.
+
+Each shop knows two recipes when it is bought, and its study teaches two more, one after the other,
+from a purple marker under its lessons. Learning the first plants the shop's third garden, which
+stands empty with "Learn a recipe at the study to plant it" until then, and has its own pixies to
+its station. A recipe not learned yet isn't made, its shelf stands empty and no customer asks for it;
+the town map shows its icon faint on the shop's card. The recipes cost three times as much in each
+shop as in the one before:
+
+| Shop | Third garden | First recipe | Second recipe |
+| --- | --- | --- | --- |
+| Bakery | Orchard (apples) | Apple tart: flour and an apple (45 coins) | Fruit cake: flour, honeycomb and an apple (66) |
+| Chandlery | Lavender field | Lavender soap: beeswax and lavender (135) | Scented candle: beeswax, a wick and lavender (198) |
+| Dye house | Madder field (the dye mill grinds madder root into red dye) | Red cloth: linen and red dye (405) | Gown: two linen, blue dye and red dye (594) |
+| Smithy | Copper pit | Copper pot: two copper (1,215) | Lantern: iron and copper (1,782) |
+| Tavern | Orchard (apples) | Cider: two apples (3,645) | Apple ale: malt, dried hops and an apple (5,346) |
+
+![The bakery's orchard, planted with the apple tart learned, and the fruit cake for sale at its study](docs/screenshots/shop-recipes.webp)
 
 ![A shop's market: the outfitter's three markers and the study's two lessons](docs/screenshots/town-market.webp)
 
@@ -411,12 +429,12 @@ wick (117). Its prices are three times the bakery's:
 | --- | --- |
 | Station or counter level | 180, 360, 720, 1,440 |
 | Chandler (2 per station) or shopkeeper (1) | 270, then 540 |
-| Pixies: hives to press, flax to wheel, press to vat, wheel to vat, vat to the shelves | 540, 540, 900, 900, 1,350 |
+| Pixies: hives to press, flax to wheel, lavender to vat, press to vat, wheel to vat, vat to the shelves | 540, 540, 540, 900, 900, 1,350 |
 
 ![The chandlery's dipping vat with tapers first, and candles sold dear](docs/screenshots/chandlery.webp)
 
 The third shop is the **dye house** (100,000 coins). Its looms weave two flax into linen, and its
-woad mill grinds woad leaves into blue dye. The dye vat makes blue cloth from a linen and a dye (216
+dye mill grinds woad leaves into blue dye. The dye vat makes blue cloth from a linen and a dye (216
 coins) or a cloak from two linen and a dye (351). A full district of manors grows into mansions,
 which also want blue cloth and cloaks.
 
@@ -424,7 +442,7 @@ which also want blue cloth and cloaks.
 | --- | --- |
 | Station or counter level | 540, 1,080, 2,160, 4,320 |
 | Dyer (2 per station) or shopkeeper (1) | 810, then 1,620 |
-| Pixies: flax to loom, woad to mill, loom to vat, mill to vat, vat to the shelves | 1,620, 1,620, 2,700, 2,700, 4,050 |
+| Pixies: flax to loom, woad to mill, madder to mill, loom to vat, mill to vat, vat to the shelves | 1,620, 1,620, 1,620, 2,700, 2,700, 4,050 |
 
 ![The dye house's vat and shop](docs/screenshots/dye-house.webp)
 
@@ -437,7 +455,7 @@ district of mansions grows into palaces, which also want horseshoes and iron pot
 | --- | --- |
 | Station or counter level | 1,620, 3,240, 6,480, 12,960 |
 | Smith (2 per station) or shopkeeper (1) | 2,430, then 4,860 |
-| Pixies: coppice to kiln, ore to bloomery, kiln to bloomery, bloomery to anvil, anvil to the shelves | 4,860, 4,860, 8,100, 8,100, 12,150 |
+| Pixies: coppice to kiln, ore to bloomery, copper to anvil, kiln to bloomery, bloomery to anvil, anvil to the shelves | 4,860, 4,860, 4,860, 8,100, 8,100, 12,150 |
 
 ![The smithy's anvil and shop](docs/screenshots/smithy.webp)
 
@@ -450,7 +468,7 @@ grows into castles, which also want ale and stout.
 | --- | --- |
 | Station or counter level | 4,860, 9,720, 19,440, 38,880 |
 | Brewer (2 per station) or shopkeeper (1) | 7,290, then 14,580 |
-| Pixies: barley to maltings, hops to oast, maltings to kettle, oast to kettle, kettle to the shelves | 14,580, 14,580, 24,300, 24,300, 36,450 |
+| Pixies: barley to maltings, hops to oast, orchard to kettle, maltings to kettle, oast to kettle, kettle to the shelves | 14,580, 14,580, 14,580, 24,300, 24,300, 36,450 |
 
 ![The tavern's brew kettle and shop](docs/screenshots/tavern.webp)
 

@@ -9,7 +9,7 @@ import type { PriceSign, Upgrade } from './state';
 // as the shop before's, while its goods sell for about as much more. Phaser-free, like `state.ts`.
 
 /** What a town shop grows, makes and sells. The apothecary's wheat and flour are painted the same. */
-export type GoodId = 'wheat' | 'honeycomb' | 'flour' | 'bread' | 'honeyCake' | 'flax' | 'wax' | 'wick' | 'candle' | 'taper' | 'woad' | 'linen' | 'dye' | 'cloth' | 'cloak' | 'ore' | 'timber' | 'charcoal' | 'iron' | 'horseshoe' | 'pot' | 'barley' | 'hops' | 'malt' | 'driedHops' | 'ale' | 'stout';
+export type GoodId = 'wheat' | 'honeycomb' | 'flour' | 'bread' | 'honeyCake' | 'flax' | 'wax' | 'wick' | 'candle' | 'taper' | 'woad' | 'linen' | 'dye' | 'cloth' | 'cloak' | 'ore' | 'timber' | 'charcoal' | 'iron' | 'horseshoe' | 'pot' | 'barley' | 'hops' | 'malt' | 'driedHops' | 'ale' | 'stout' | 'apple' | 'appleTart' | 'fruitCake' | 'lavender' | 'scentedCandle' | 'soap' | 'madder' | 'redDye' | 'redCloth' | 'gown' | 'copper' | 'copperPot' | 'lantern' | 'cider' | 'appleAle';
 
 export const GOODS: Record<GoodId, { color: number }> = {
   wheat: { color: 0xd9b24a },
@@ -39,6 +39,21 @@ export const GOODS: Record<GoodId, { color: number }> = {
   driedHops: { color: 0x9aa05a },
   ale: { color: 0xd89a3a },
   stout: { color: 0x3a2618 },
+  apple: { color: 0xb8443a },
+  appleTart: { color: 0xc88a48 },
+  fruitCake: { color: 0x8a5a36 },
+  lavender: { color: 0x9a82c8 },
+  scentedCandle: { color: 0xc8b4e0 },
+  soap: { color: 0xd8cce8 },
+  madder: { color: 0x8a4a3a },
+  redDye: { color: 0xa83a32 },
+  redCloth: { color: 0xa8443a },
+  gown: { color: 0x8a3a5a },
+  copper: { color: 0xc07a48 },
+  copperPot: { color: 0xc8804a },
+  lantern: { color: 0xe0b04a },
+  cider: { color: 0xe0c060 },
+  appleAle: { color: 0xc8883a },
 };
 
 /** The shops on the town map besides the apothecary, in the order they are bought. */
@@ -89,6 +104,11 @@ export interface ShopDef {
   routes: RouteDef[];
   /** What customers buy, and its price. */
   sells: Partial<Record<GoodId, number>>;
+  /**
+   * The products its study teaches, one a level of `ShopState.recipes`, in order; the others are
+   * known from the start. A station doesn't make, and customers don't ask for, one not learned yet.
+   */
+  research: GoodId[];
   /** What a hired hand at a station is called on its marker. */
   worker: TextKey;
 }
@@ -102,6 +122,7 @@ export const SHOPS: Record<ShopId, ShopDef> = {
     gardens: [
       { good: 'wheat', grow: 24_000, name: 'wheatField' },
       { good: 'honeycomb', grow: 30_000, name: 'beehives' },
+      { good: 'apple', grow: 32_000, name: 'orchard' },
     ],
     stations: [
       { id: 'mill', name: 'mill', texture: 'mill', recipes: [{ inputs: ['wheat'], out: 'flour', ms: 2_500 }] },
@@ -112,16 +133,20 @@ export const SHOPS: Record<ShopId, ShopDef> = {
         recipes: [
           { inputs: ['flour', 'flour'], out: 'bread', ms: 5_000 },
           { inputs: ['flour', 'honeycomb'], out: 'honeyCake', ms: 6_000 },
+          { inputs: ['flour', 'apple'], out: 'appleTart', ms: 6_500 },
+          { inputs: ['flour', 'honeycomb', 'apple'], out: 'fruitCake', ms: 8_000 },
         ],
       },
     ],
     routes: [
       { id: 'field', from: { garden: 0 }, to: { station: 'mill' }, cost: 60 },
       { id: 'hives', from: { garden: 1 }, to: { station: 'oven' }, cost: 60 },
+      { id: 'orchard', from: { garden: 2 }, to: { station: 'oven' }, cost: 60 },
       { id: 'mill', from: { station: 'mill' }, to: { station: 'oven' }, cost: 100 },
       { id: 'oven', from: { station: 'oven' }, to: 'shelf', cost: 150 },
     ],
-    sells: { bread: 24, honeyCake: 39 },
+    sells: { bread: 24, honeyCake: 39, appleTart: 45, fruitCake: 66 },
+    research: ['appleTart', 'fruitCake'],
     worker: 'baker',
   },
   chandlery: {
@@ -132,6 +157,7 @@ export const SHOPS: Record<ShopId, ShopDef> = {
     gardens: [
       { good: 'honeycomb', grow: 30_000, name: 'beehives' },
       { good: 'flax', grow: 26_000, name: 'flaxField' },
+      { good: 'lavender', grow: 30_000, name: 'lavenderField' },
     ],
     stations: [
       { id: 'press', name: 'press', texture: 'press', recipes: [{ inputs: ['honeycomb'], out: 'wax', ms: 3_000 }] },
@@ -143,17 +169,21 @@ export const SHOPS: Record<ShopId, ShopDef> = {
         recipes: [
           { inputs: ['wax', 'wick'], out: 'candle', ms: 5_000 },
           { inputs: ['wax', 'wax', 'wick'], out: 'taper', ms: 7_000 },
+          { inputs: ['wax', 'lavender'], out: 'soap', ms: 6_000 },
+          { inputs: ['wax', 'wick', 'lavender'], out: 'scentedCandle', ms: 8_000 },
         ],
       },
     ],
     routes: [
       { id: 'hives', from: { garden: 0 }, to: { station: 'press' }, cost: 60 },
       { id: 'flax', from: { garden: 1 }, to: { station: 'wheel' }, cost: 60 },
+      { id: 'lavender', from: { garden: 2 }, to: { station: 'vat' }, cost: 60 },
       { id: 'press', from: { station: 'press' }, to: { station: 'vat' }, cost: 100 },
       { id: 'wheel', from: { station: 'wheel' }, to: { station: 'vat' }, cost: 100 },
       { id: 'vat', from: { station: 'vat' }, to: 'shelf', cost: 150 },
     ],
-    sells: { candle: 72, taper: 117 },
+    sells: { candle: 72, taper: 117, soap: 135, scentedCandle: 198 },
+    research: ['soap', 'scentedCandle'],
     worker: 'chandler',
   },
   dyeHouse: {
@@ -164,10 +194,19 @@ export const SHOPS: Record<ShopId, ShopDef> = {
     gardens: [
       { good: 'flax', grow: 26_000, name: 'flaxField' },
       { good: 'woad', grow: 32_000, name: 'woadField' },
+      { good: 'madder', grow: 34_000, name: 'madderField' },
     ],
     stations: [
       { id: 'loom', name: 'loom', texture: 'loom', recipes: [{ inputs: ['flax', 'flax'], out: 'linen', ms: 4_000 }] },
-      { id: 'grinder', name: 'grinder', texture: 'grinder', recipes: [{ inputs: ['woad'], out: 'dye', ms: 3_000 }] },
+      {
+        id: 'grinder',
+        name: 'grinder',
+        texture: 'grinder',
+        recipes: [
+          { inputs: ['woad'], out: 'dye', ms: 3_000 },
+          { inputs: ['madder'], out: 'redDye', ms: 3_500 },
+        ],
+      },
       {
         id: 'dyeVat',
         name: 'dyeVat',
@@ -175,17 +214,21 @@ export const SHOPS: Record<ShopId, ShopDef> = {
         recipes: [
           { inputs: ['linen', 'dye'], out: 'cloth', ms: 6_000 },
           { inputs: ['linen', 'linen', 'dye'], out: 'cloak', ms: 8_000 },
+          { inputs: ['linen', 'redDye'], out: 'redCloth', ms: 6_500 },
+          { inputs: ['linen', 'linen', 'dye', 'redDye'], out: 'gown', ms: 10_000 },
         ],
       },
     ],
     routes: [
       { id: 'flax', from: { garden: 0 }, to: { station: 'loom' }, cost: 60 },
       { id: 'woad', from: { garden: 1 }, to: { station: 'grinder' }, cost: 60 },
+      { id: 'madder', from: { garden: 2 }, to: { station: 'grinder' }, cost: 60 },
       { id: 'loom', from: { station: 'loom' }, to: { station: 'dyeVat' }, cost: 100 },
       { id: 'grinder', from: { station: 'grinder' }, to: { station: 'dyeVat' }, cost: 100 },
       { id: 'dyeVat', from: { station: 'dyeVat' }, to: 'shelf', cost: 150 },
     ],
-    sells: { cloth: 216, cloak: 351 },
+    sells: { cloth: 216, cloak: 351, redCloth: 405, gown: 594 },
+    research: ['redCloth', 'gown'],
     worker: 'dyer',
   },
   smithy: {
@@ -196,6 +239,7 @@ export const SHOPS: Record<ShopId, ShopDef> = {
     gardens: [
       { good: 'timber', grow: 34_000, name: 'coppice' },
       { good: 'ore', grow: 36_000, name: 'orePit' },
+      { good: 'copper', grow: 38_000, name: 'copperPit' },
     ],
     stations: [
       { id: 'kiln', name: 'kiln', texture: 'kiln', recipes: [{ inputs: ['timber'], out: 'charcoal', ms: 3_500 }] },
@@ -207,17 +251,21 @@ export const SHOPS: Record<ShopId, ShopDef> = {
         recipes: [
           { inputs: ['iron'], out: 'horseshoe', ms: 6_000 },
           { inputs: ['iron', 'iron'], out: 'pot', ms: 8_000 },
+          { inputs: ['copper', 'copper'], out: 'copperPot', ms: 8_000 },
+          { inputs: ['iron', 'copper'], out: 'lantern', ms: 9_000 },
         ],
       },
     ],
     routes: [
       { id: 'timber', from: { garden: 0 }, to: { station: 'kiln' }, cost: 60 },
       { id: 'ore', from: { garden: 1 }, to: { station: 'bloomery' }, cost: 60 },
+      { id: 'copper', from: { garden: 2 }, to: { station: 'anvil' }, cost: 60 },
       { id: 'kiln', from: { station: 'kiln' }, to: { station: 'bloomery' }, cost: 100 },
       { id: 'bloomery', from: { station: 'bloomery' }, to: { station: 'anvil' }, cost: 100 },
       { id: 'anvil', from: { station: 'anvil' }, to: 'shelf', cost: 150 },
     ],
-    sells: { horseshoe: 648, pot: 1_053 },
+    sells: { horseshoe: 648, pot: 1_053, copperPot: 1_215, lantern: 1_782 },
+    research: ['copperPot', 'lantern'],
     worker: 'smith',
   },
   tavern: {
@@ -228,6 +276,7 @@ export const SHOPS: Record<ShopId, ShopDef> = {
     gardens: [
       { good: 'barley', grow: 28_000, name: 'barleyField' },
       { good: 'hops', grow: 34_000, name: 'hopGarden' },
+      { good: 'apple', grow: 32_000, name: 'orchard' },
     ],
     stations: [
       { id: 'maltings', name: 'maltings', texture: 'maltings', recipes: [{ inputs: ['barley'], out: 'malt', ms: 3_500 }] },
@@ -239,17 +288,21 @@ export const SHOPS: Record<ShopId, ShopDef> = {
         recipes: [
           { inputs: ['malt', 'driedHops'], out: 'ale', ms: 6_000 },
           { inputs: ['malt', 'malt', 'driedHops'], out: 'stout', ms: 8_000 },
+          { inputs: ['apple', 'apple'], out: 'cider', ms: 6_500 },
+          { inputs: ['malt', 'driedHops', 'apple'], out: 'appleAle', ms: 9_000 },
         ],
       },
     ],
     routes: [
       { id: 'barley', from: { garden: 0 }, to: { station: 'maltings' }, cost: 60 },
       { id: 'hops', from: { garden: 1 }, to: { station: 'oast' }, cost: 60 },
+      { id: 'orchard', from: { garden: 2 }, to: { station: 'kettle' }, cost: 60 },
       { id: 'maltings', from: { station: 'maltings' }, to: { station: 'kettle' }, cost: 100 },
       { id: 'oast', from: { station: 'oast' }, to: { station: 'kettle' }, cost: 100 },
       { id: 'kettle', from: { station: 'kettle' }, to: 'shelf', cost: 150 },
     ],
-    sells: { ale: 1_944, stout: 3_159 },
+    sells: { ale: 1_944, stout: 3_159, cider: 3_645, appleAle: 5_346 },
+    research: ['cider', 'appleAle'],
     worker: 'brewer',
   },
 };
@@ -290,6 +343,9 @@ export const LESSONS = ['craftOrder', 'priceSigns'] as const;
 export type Lesson = (typeof LESSONS)[number];
 export const LESSON_COST: Record<Lesson, number> = { craftOrder: 40, priceSigns: 60 };
 export const lessonCost = (id: ShopId, lesson: Lesson) => tierCost(id, LESSON_COST[lesson]);
+/** A recipe at a shop's study costs this, doubling for the next, before the shop's `tierCost`. */
+export const RECIPE_COST = 60;
+export const recipeCost = (id: ShopId, level: number) => tierCost(id, RECIPE_COST) * 2 ** level;
 
 /** Beds in each garden, three by three like the apothecary's. */
 export const BEDS = 9;
@@ -362,6 +418,8 @@ export interface ShopState {
   outfitter: Record<Gear, Upgrade>;
   /** The lessons learned at this shop's study. */
   study: Record<Lesson, Upgrade>;
+  /** The recipes learned at this shop's study: `level` of its `research`, in order. */
+  recipes: Upgrade;
   /** What each station makes first once the crafting order is learned, or null for its own order. */
   priority: Record<string, GoodId | null>;
   /** Each shelf's price sign once the price signs are learned; Fair unless set. */
@@ -397,6 +455,7 @@ export function createShop(id: ShopId): ShopState {
     sold: 0,
     outfitter: { pack: none(), boots: none(), sickle: none() },
     study: { craftOrder: none(), priceSigns: none() },
+    recipes: none(),
     priority: Object.fromEntries(def.stations.map((s) => [s.id, null])),
     signs: {},
   };
@@ -422,6 +481,7 @@ export function normalizeTown(saved: Partial<TownState> | undefined): TownState 
       counter: { ...fresh.counter, ...shop.counter },
       outfitter: { ...fresh.outfitter, ...shop.outfitter },
       study: { ...fresh.study, ...shop.study },
+      recipes: shop.recipes ?? fresh.recipes,
       priority: { ...fresh.priority, ...shop.priority },
     };
   }
@@ -440,9 +500,30 @@ export const takes = (station: StationDef, good: GoodId) => station.recipes.some
 /** Whether a shop's study has taught a lesson. */
 export const shopStudied = (shop: ShopState, lesson: Lesson) => shop.study[lesson].level > 0;
 /** The goods a station can put first: its recipes' products, when it has more than one. */
-export const priorityChoices = (station: StationDef): GoodId[] => (station.recipes.length > 1 ? station.recipes.map((r) => r.out) : []);
+export const priorityChoices = (station: StationDef, knows: (good: GoodId) => boolean = () => true): GoodId[] => {
+  const outs = station.recipes.map((r) => r.out).filter(knows);
+  return outs.length > 1 ? outs : [];
+};
 /** The sign on a good's shelf: Fair unless set, and always Fair before the price signs are learned. */
 export const shopSignOf = (shop: ShopState, good: GoodId): PriceSign => (shopStudied(shop, 'priceSigns') && shop.signs[good]) || 'fair';
+
+/** Whether a shop makes a product yet: known from the start, or learned at its study. */
+export const shopKnows = (shop: ShopState, def: ShopDef, good: GoodId) => {
+  const at = def.research.indexOf(good);
+  return at < 0 || at < shop.recipes.level;
+};
+/** Whether a shop makes or uses a good yet: one it knows that a recipe it knows takes, or that none takes. */
+export const shopMakes = (shop: ShopState, def: ShopDef, good: GoodId) => {
+  const takers = def.stations.flatMap((s) => s.recipes).filter((r) => r.inputs.includes(good));
+  return shopKnows(shop, def, good) && (takers.length === 0 || takers.some((r) => shopKnows(shop, def, r.out)));
+};
+/** The goods customers ask for at a shop: what it sells and knows. */
+export const shopSells = (shop: ShopState, def: ShopDef) => (Object.keys(def.sells) as GoodId[]).filter((g) => shopKnows(shop, def, g));
+
+/** The gardens a shop starts with; the next opens with its first recipe learned at the study. */
+export const OPEN_GARDENS = 2;
+/** Whether a shop's garden grows yet. */
+export const gardenOpen = (shop: ShopState, g: number) => g < OPEN_GARDENS || shop.recipes.level > 0;
 
 /** Whether customers buy a good at this shop. */
 export const sellsGood = (def: ShopDef, good: GoodId) => def.sells[good] !== undefined;
