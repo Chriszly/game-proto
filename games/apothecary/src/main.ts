@@ -28,7 +28,7 @@ const game = new Phaser.Game({
   scene: [BootScene, GameScene],
 });
 setupGame(game, { howToPlay });
-setupScaling(game);
+setupScaling(game, { fill: true });
 
 // Handy for poking at state from the browser console during development.
 if (import.meta.env.DEV) Object.assign(window, { game });
