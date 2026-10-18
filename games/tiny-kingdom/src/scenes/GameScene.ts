@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { playMusic, playSting, ui } from '../../../../shared/audio';
 import { settings } from '../../../../shared/settings';
-import { viewPoint } from '../../../../shared/scaling';
+import { viewFrame, viewSize } from '../../../../shared/scaling';
 import { propKey, PROP_ORIGIN, tileKey } from '../art/textures';
 import { addArt, RES } from '../art/wood';
 import { PLACE_PITCH, sfx, SONG } from '../audio';
@@ -222,7 +222,11 @@ export class GameScene extends Phaser.Scene {
 
   create() {
     this.state = newGame(loadBest(), loadCrowns());
-    addArt(this, 0, 0, 'bg').setOrigin(0).setDepth(-1);
+    // The layout is drawn for VIEW (960x540); on a wider or taller screen the camera centres it in
+    // the view (`viewFrame`), and the background's table fills the rest.
+    const frame = viewFrame(this);
+    this.cameras.main.setScroll(-frame.x, -frame.y);
+    addArt(this, -frame.x, -frame.y, 'bg').setOrigin(0).setDepth(-1);
     this.createBoard();
     this.createDecree();
     this.createPanel();
@@ -274,7 +278,7 @@ export class GameScene extends Phaser.Scene {
     zone.on('pointermove', (p: Phaser.Input.Pointer) => this.hoverPointer(p));
     zone.on('pointerout', () => this.hoverAt(-1, -1));
     zone.on('pointerdown', (p: Phaser.Input.Pointer) => {
-      const at = viewPoint(p);
+      const at = this.cameras.main.getWorldPoint(p.x, p.y);
       this.tapAt(at.x, at.y);
     });
   }
@@ -547,7 +551,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createGameOver() {
-    const dim = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x2a170a, 0.55).setInteractive();
+    const dim = this.dimmer();
     const panel = addArt(this, VIEW.w / 2, VIEW.h / 2, 'walnut-520x260');
     const title = this.add
       .text(VIEW.w / 2, VIEW.h / 2 - 90, t('gameOver'), style(28, CREAM, '900', { shadow: { offsetX: 1, offsetY: 2, color: 'rgba(0,0,0,0.45)', fill: true } }))
@@ -559,6 +563,13 @@ export class GameScene extends Phaser.Scene {
     });
     const again = makeButton(this, VIEW.w / 2 + 110, VIEW.h / 2 + 88, t('newKingdom'), () => this.start(randomIsland()));
     this.gameOver = this.add.container(0, 0, [dim, panel, title, this.gameOverText, islands, again]).setDepth(UI_DEPTH + 20).setVisible(false);
+  }
+
+  /** A dark veil over the whole view that swallows taps, behind a card. */
+  private dimmer() {
+    const frame = viewFrame(this);
+    const { width, height } = viewSize(this);
+    return this.add.rectangle(width / 2 - frame.x, height / 2 - frame.y, width, height, 0x2a170a, 0.55).setInteractive();
   }
 
   /** A beech plaque button of a baked size, lighter while the pointer is over it. */
@@ -579,7 +590,7 @@ export class GameScene extends Phaser.Scene {
     const C = ISLANDS_CARD;
     const left = C.x - C.w / 2;
     const top = C.y - C.h / 2;
-    const dim = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x2a170a, 0.55).setInteractive();
+    const dim = this.dimmer();
     const objects: Phaser.GameObjects.GameObject[] = [dim, addArt(this, C.x, C.y, `walnut-${C.w}x${C.h}`)];
     const heading = (x: number, y: number, text: string) => objects.push(this.add.text(x, y, text, style(10, '#f2c33a', '900', { letterSpacing: 1 } as never)).setOrigin(0, 0.5));
     objects.push(
@@ -721,9 +732,9 @@ export class GameScene extends Phaser.Scene {
     return { col, row };
   }
 
-  /** Hovers where a pointer is on the screen, in view pixels (the canvas has `renderScale` times as many). */
+  /** Hovers where a pointer is, in layout pixels (the camera centres the layout in the view). */
   private hoverPointer(p = this.input.activePointer) {
-    const at = viewPoint(p);
+    const at = this.cameras.main.getWorldPoint(p.x, p.y);
     this.hoverAt(at.x, at.y);
   }
 

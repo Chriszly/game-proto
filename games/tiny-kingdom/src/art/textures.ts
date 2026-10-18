@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { BUTTON, DECREE, GIFT_CARD, ISLAND_BUTTON, ISLANDS_CARD, PANEL, TILE_BUTTONS, TITLE, TRADE_CARD, TRAY, UNDO_BUTTON, VIEW } from '../scenes/layout';
+import { BUTTON, DECREE, GIFT_CARD, ISLAND_BUTTON, ISLANDS_CARD, PANEL, TILE_BUTTONS, TITLE, TRADE_CARD, TRAY, UNDO_BUTTON } from '../scenes/layout';
+import { viewFrame, viewSize } from '../../../../shared/scaling';
 import { bake, setArtRes, ball, castle, circle, crown, ctx, grain, harbor, house, lumber, manor, market, peg, PI, reseed, rnd, rrect, stripes, T, tile, tower, walnut, windmill } from './wood';
 
 // Every texture the game uses, painted once at boot:
@@ -115,17 +116,24 @@ function prop(kind: PropKind) {
   else manor(0, 2, 1);
 }
 
-function background() {
-  const W = VIEW.w * 2;
+/**
+ * The table, sign, tray and panel, painted over a view of `view` size with the 960x540 layout at
+ * `frame` (the view's middle, see `viewFrame`): the table's planks cover the whole view.
+ */
+function background(view: { width: number; height: number }, frame: { x: number; y: number }) {
+  const left = -frame.x * 2;
+  const W = view.width * 2;
   reseed(2);
   // the table: planks with grain
   ctx.fillStyle = '#cfa673';
-  ctx.fillRect(0, 0, W, VIEW.h * 2);
-  for (let i = 0; i < 9; i++) {
+  ctx.fillRect(left, -frame.y * 2, W, view.height * 2);
+  const first = Math.floor((-frame.y * 2) / 120);
+  const last = Math.ceil(((view.height - frame.y) * 2) / 120);
+  for (let i = first; i < Math.max(9, last); i++) {
     const y = i * 120;
     ctx.fillStyle = i % 2 ? '#d3ab78' : '#caa06c';
-    ctx.fillRect(0, y, W, 120);
-    grain(0, y, W, 120, '#7a5530', 10, 5, 0.18);
+    ctx.fillRect(left, y, W, 120);
+    grain(left, y, W, 120, '#7a5530', 10, 5, 0.18);
     ctx.fillStyle = 'rgba(80,50,20,0.25)';
     ctx.fillRect(0, y + 118, W, 2);
   }
@@ -243,8 +251,11 @@ function walnutBoard(scene: Phaser.Scene, w: number, h: number) {
 }
 
 export function bakeTextures(scene: Phaser.Scene) {
-  setArtRes(VIEW.w, VIEW.h);
-  bake(scene, 'bg', VIEW.w, VIEW.h, background);
+  // The view can be wider or taller than VIEW (`setupScaling`'s fill): the background covers all of it.
+  const view = viewSize(scene);
+  const frame = viewFrame(scene);
+  setArtRes(view.width, view.height);
+  bake(scene, 'bg', view.width, view.height, () => background(view, frame), frame.x, frame.y);
   for (let v = 0; v < GRASS_VARIANTS; v++) bake(scene, `tile-grass-${v}`, 64, 64, () => cellTile('grass', v));
   bake(scene, 'tile-plain', 64, 64, () => cellTile('plain'));
   bake(scene, 'tile-lake', 64, 64, () => cellTile('lake'));
