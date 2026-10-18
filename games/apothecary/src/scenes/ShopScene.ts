@@ -3,11 +3,10 @@ import { formatNumber } from '../../../../shared/i18n';
 import { playMusic, ui } from '../../../../shared/audio';
 import { scrollingCamera, splitHudCamera, viewPoint, viewSize } from '../../../../shared/scaling';
 import { SONG, sfx } from '../audio';
-import { plantTexture } from '../art/garden';
 import { pickUpPad, upgradePad, type UpgradeIcon } from '../art/markers';
 import { INK, SERIF, TEXT_HALO, fit, resOf } from '../art/paint';
 import { PIXIE_FRAMES } from '../art/pixies';
-import { bakeYard, goodTexture, hiveTexture, yardTexture } from '../art/town';
+import { bakeYard, bedTexture, goodTexture, yardTexture } from '../art/town';
 import { craftsmanTexture, customerTexture } from '../art/townsfolk';
 import { signTexture } from '../art/ui';
 import { catchUp } from '../game/away';
@@ -169,7 +168,7 @@ export class ShopScene extends Phaser.Scene {
       for (let b = g * BEDS; b < (g + 1) * BEDS; b++) {
         const at = bedPosition(b);
         fit(this.add.image(at.x, at.y, 'plot')).setDepth(-500);
-        const texture = (stage: number) => (garden.good === 'honeycomb' ? hiveTexture(stage) : plantTexture('wheat', stage));
+        const texture = (stage: number) => bedTexture(garden.good, stage);
         const plant = fit(this.add.image(at.x, at.y + 10, texture(2)).setOrigin(0.5, 1).setDepth(at.y));
         let drawn = -1;
         this.views.push(() => {

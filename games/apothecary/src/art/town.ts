@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { GoodId, ShopId } from '../game/town';
 import { counterLayout, gardenLayout, shopWorld, FENCE_Y, SHOP_HUD } from '../scenes/shopLayout';
+import { plantTexture } from './garden';
 import { itemTexture } from './items';
 import { WASH, both, chance, ellPts, hatch, ink, paint, paper, rectPts, rr, shadow, wash, type Ctx, type Pt } from './paint';
 
@@ -12,6 +13,9 @@ export const goodTexture = (good: GoodId) => (good === 'wheat' || good === 'flou
 /** A beehive bed's skep, from empty to full of honey. */
 export const hiveTexture = (stage: number) => `hive-${stage}`;
 export const yardTexture = (shop: ShopId) => `yard-${shop}`;
+/** What grows on a town garden's bed at a stage: a skep for honeycomb, the apothecary's wheat, or flax. */
+export const bedTexture = (good: GoodId, stage: number) =>
+  good === 'honeycomb' ? hiveTexture(stage) : good === 'wheat' ? plantTexture('wheat', stage) : `bed-${good}-${stage}`;
 /** A house on the town map, for a shop or the apothecary. */
 export const lotTexture = (lot: ShopId | 'apothecary') => `lot-${lot}`;
 
@@ -64,6 +68,103 @@ function drawHive(c: Ctx, stage: number) {
     both(c, ellPts(x, y, 1.6, 1.1, 8), '#e8b830', { layers: 1, edge: 0 }, { w: 0.5 });
     wash(c, ellPts(x - 0.6, y - 1.5, 1.2, 0.9, 8), '#f4f0e0', { layers: 1, edge: 0, alpha: 0.8 });
   }
+}
+
+/** Flax: thin stalks that grow tall and open sky-blue flowers when ripe. 48x44 as shown. */
+function drawFlax(c: Ctx, stage: number) {
+  const height = [8, 24, 36][stage];
+  for (let i = 0; i < 7; i++) {
+    const x = 4 + i * 6.6 + rr(-1, 1);
+    const top = 43 - height + (i % 2) * 3;
+    const lean = rr(-1.5, 1.5);
+    ink(c, [[x, 43], [x + lean * 0.5, (43 + top) / 2], [x + lean, top]], { closed: false, w: 1.2, col: '#6f9a4a' });
+    if (stage > 0) both(c, [[x, top + 10], [x - 3.5, top + 7], [x - 0.5, top + 8.5]], '#7fae52', { layers: 1, edge: 0 }, { w: 0.4 });
+    if (stage === 2) {
+      both(c, ellPts(x + lean, top - 1, 2.6, 2.2, 10), '#7a8fc8', { layers: 2, edge: 0 }, { w: 0.6 });
+      wash(c, ellPts(x + lean, top - 1, 0.8, 0.8, 6), '#f0e6a0', { layers: 1, edge: 0 });
+    }
+  }
+}
+
+/** A cake of yellow beeswax. */
+function drawWax(c: Ctx) {
+  shadow(c, 8.5, 13.5, 6.5, 1.5, 0.25);
+  both(c, rectPts(2.5, 6, 11, 7, 1.5), '#e0c45a', { layers: 2, bloom: 1, cx: 6, cy: 8 }, { w: 0.9 });
+  both(c, [[2.5, 6], [5.5, 3.5], [16, 3.5], [13.5, 6]], '#f0d878', { layers: 1 }, { w: 0.8 });
+}
+
+/** A coil of spun flax wick. */
+function drawWick(c: Ctx) {
+  shadow(c, 8.5, 13.5, 6, 1.4, 0.25);
+  for (const r of [5.5, 4, 2.5]) ink(c, ellPts(8, 9, r, r * 0.7, 18), { w: 1.3, col: '#d8cfb2' });
+  for (const r of [5.5, 4, 2.5]) ink(c, ellPts(8, 9, r, r * 0.7, 18), { w: 0.4, alpha: 0.7 });
+  ink(c, [[13, 9], [15, 4]], { closed: false, w: 1, col: '#d8cfb2' });
+}
+
+/** A short candle on a brass dish, lit. */
+function drawCandle(c: Ctx) {
+  shadow(c, 8.5, 14, 6, 1.4, 0.25);
+  both(c, ellPts(8, 13, 6, 1.8, 14), WASH.brass, { layers: 1 }, { w: 0.7 });
+  both(c, rectPts(5.5, 5.5, 5, 7.5, 1), '#f0e2a8', { layers: 2 }, { w: 0.8 });
+  wash(c, [[8, 1], [9.6, 4], [8, 5.5], [6.4, 4]], WASH.flameLight, { layers: 2, edge: 0 });
+}
+
+/** A tall, thin taper, lit. */
+function drawTaper(c: Ctx) {
+  shadow(c, 8.5, 14.5, 4, 1.2, 0.25);
+  both(c, rectPts(6.6, 4, 2.8, 10.5, 0.8), '#f4e8c0', { layers: 2 }, { w: 0.7 });
+  wash(c, [[8, 0], [9.3, 2.4], [8, 3.8], [6.7, 2.4]], WASH.flameLight, { layers: 2, edge: 0 });
+}
+
+/** A wax press: a timber frame with a big screw over a tub, and wax dripping into a pan. 88x60 as shown. */
+function drawPress(c: Ctx) {
+  shadow(c, 46, 55, 40, 5, 0.18);
+  for (const lx of [14, 68]) both(c, rectPts(lx, 8, 7, 46, 1), WASH.woodDark, { layers: 2 }, { w: 1 });
+  both(c, rectPts(10, 4, 66, 7, 1.5), WASH.wood, { layers: 2 }, { w: 1.1 });
+  both(c, rectPts(41, 8, 5, 20, 1), WASH.iron, { layers: 1 }, { w: 0.8 });
+  for (let y = 10; y < 28; y += 3) ink(c, [[40, y], [47, y + 1.5]], { closed: false, w: 0.5, col: WASH.ironRim });
+  ink(c, [[30, 12], [57, 12]], { closed: false, w: 2.2, col: WASH.woodDeep });
+  both(c, rectPts(26, 28, 36, 20, 3), '#b07a46', { layers: 2, bloom: 1, cx: 36, cy: 34 }, { w: 1.1 });
+  for (const y of [33, 42]) ink(c, [[26, y], [62, y]], { closed: false, w: 1, col: WASH.iron });
+  both(c, ellPts(44, 28, 18, 3, 18), '#e0a83a', { layers: 2, edge: 0 }, { w: 0.6 });
+  both(c, ellPts(72, 53, 10, 3, 14), WASH.ironRim, { layers: 1 }, { w: 0.8 });
+  wash(c, ellPts(72, 52, 7, 1.8, 12), '#e8d070', { layers: 2, edge: 0 });
+  ink(c, [[62, 44], [68, 50]], { closed: false, w: 1.2, col: '#e8d070' });
+}
+
+/** A spinning wheel: a spoked wheel on a slanted bench, with a spindle of flax. 80x64 as shown. */
+function drawWheel(c: Ctx) {
+  shadow(c, 40, 60, 34, 4, 0.18);
+  both(c, [[8, 50], [72, 40], [74, 46], [10, 56]], WASH.wood, { layers: 2 }, { w: 1 });
+  for (const [x, y] of [[12, 54], [66, 44], [30, 51]]) ink(c, [[x, y], [x - 2, y + 7]], { closed: false, w: 2, col: WASH.woodDark });
+  ink(c, [[30, 48], [30, 36]], { closed: false, w: 2, col: WASH.woodDark });
+  ink(c, ellPts(30, 26, 20, 20, 30), { w: 2.4, col: WASH.woodDark });
+  ink(c, ellPts(30, 26, 20, 20, 30), { w: 0.7 });
+  for (let i = 0; i < 8; i++) ink(c, [[30, 26], [30 + Math.cos((i * Math.PI) / 4) * 19, 26 + Math.sin((i * Math.PI) / 4) * 19]], { closed: false, w: 0.7, col: WASH.woodDeep });
+  both(c, ellPts(30, 26, 3, 3, 10), WASH.woodDeep, { layers: 1 }, { w: 0.6 });
+  ink(c, [[58, 42], [62, 22]], { closed: false, w: 1.6, col: WASH.woodDark });
+  both(c, ellPts(62, 20, 5, 8, 14), '#c8c0a0', { layers: 2 }, { w: 0.8 });
+  ink(c, [[30, 6], [62, 14]], { closed: false, w: 0.5, alpha: 0.6 });
+}
+
+/** A dipping vat: a copper pot of wax over a little fire, with candles hung on a rack to dry. 84x60 as shown. */
+function drawVat(c: Ctx) {
+  shadow(c, 42, 56, 38, 5, 0.18);
+  both(c, rectPts(52, 8, 4, 46, 1), WASH.woodDark, { layers: 1 }, { w: 0.8 });
+  both(c, rectPts(78, 8, 4, 46, 1), WASH.woodDark, { layers: 1 }, { w: 0.8 });
+  ink(c, [[52, 10], [82, 10]], { closed: false, w: 2, col: WASH.woodDeep });
+  for (const x of [58, 64, 70, 76]) {
+    ink(c, [[x, 10], [x, 14]], { closed: false, w: 0.5 });
+    both(c, rectPts(x - 1.5, 14, 3, 18, 0.8), '#f0e2a8', { layers: 1 }, { w: 0.6 });
+  }
+  for (const [dx, h, col] of [[-6, 7, WASH.flame], [2, 9, WASH.flameLight], [-2, 5, WASH.flameCore]] as [number, number, string][]) {
+    wash(c, [[26 + dx - 4, 56], [26 + dx, 56 - h], [26 + dx + 4, 56]], col, { layers: 2, edge: 0 });
+  }
+  both(c, [[6, 22], [46, 22], [42, 48], [10, 48]], '#b8683a', { layers: 3, bloom: 1, cx: 18, cy: 30 }, { w: 1.2 });
+  hatch(c, [[30, 22], [46, 22], [42, 48], [30, 48]], { gap: 2.4, alpha: 0.25, w: 0.5 });
+  both(c, ellPts(26, 22, 20, 4, 20), '#e8d070', { layers: 2 }, { w: 1 });
+  ink(c, [[18, 22], [22, 4]], { closed: false, w: 0.6 });
+  both(c, rectPts(20.5, 4, 3, 12, 0.6), '#f0e2a8', { layers: 1 }, { w: 0.5 });
 }
 
 /** A millstone on a timber frame, a hopper of grain above it and a sack catching the flour. 88x60 as shown. */
@@ -182,6 +283,19 @@ export function bakeTown(scene: Phaser.Scene) {
   for (const stage of [0, 1, 2]) paint(scene, hiveTexture(stage), 40, 44, (c) => drawHive(c, stage), 3, 81 + stage);
   paint(scene, 'mill', 88, 60, drawMill, 3);
   paint(scene, 'oven', 80, 62, drawOven, 3);
+  for (const stage of [0, 1, 2]) paint(scene, bedTexture('flax', stage), 48, 44, (c) => drawFlax(c, stage), 3, 91 + stage);
+  paint(scene, 'good-flax', 16, 16, (c) => {
+    for (let i = 0; i < 4; i++) ink(c, [[5 + i * 2, 15], [6 + i * 2, 4]], { closed: false, w: 0.9, col: '#6f9a4a' });
+    both(c, ellPts(10, 4, 2.4, 2, 10), '#7a8fc8', { layers: 1, edge: 0 }, { w: 0.5 });
+    ink(c, [[4, 11], [13, 11]], { closed: false, w: 1.2, col: WASH.woodDark });
+  }, 4);
+  paint(scene, 'good-wax', 16, 16, drawWax, 4);
+  paint(scene, 'good-wick', 16, 16, drawWick, 4);
+  paint(scene, 'good-candle', 16, 16, drawCandle, 4);
+  paint(scene, 'good-taper', 16, 16, drawTaper, 4);
+  paint(scene, 'press', 88, 60, drawPress, 3);
+  paint(scene, 'wheel', 80, 64, drawWheel, 3);
+  paint(scene, 'vat', 84, 60, drawVat, 3);
   paint(scene, lotTexture('apothecary'), 96, 84, (c) =>
     drawLot(c, '#5e6e46', '#d8c8a2', (s) => {
       // A green bottle on the sign.
@@ -192,6 +306,11 @@ export function bakeTown(scene: Phaser.Scene) {
     drawLot(c, '#8a4e36', '#e0cfa8', (s) => {
       both(s, ellPts(88, 50, 5.4, 3.6, 14), '#c0803e', { layers: 1 }, { w: 0.7 });
       ink(s, [[86, 49], [88, 48], [90, 49]], { closed: false, w: 0.6 });
+    }), 3);
+  paint(scene, lotTexture('chandlery'), 96, 84, (c) =>
+    drawLot(c, '#4e5a6e', '#e4d8b4', (s) => {
+      both(s, rectPts(86.4, 47, 3.2, 8, 0.6), '#f0e2a8', { layers: 1 }, { w: 0.6 });
+      wash(s, [[88, 41.5], [89.4, 44.5], [88, 46], [86.6, 44.5]], WASH.flameLight, { layers: 1, edge: 0 });
     }), 3);
 }
 

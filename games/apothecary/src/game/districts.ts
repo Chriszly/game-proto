@@ -24,6 +24,7 @@ export const DISTRICTS: { id: DistrictId; name: TextKey }[] = [
 export const HOME_TIERS: { name: TextKey; needs: Need[] }[] = [
   { name: 'cottageCount', needs: ['bread', 'healingDraught'] },
   { name: 'houseCount', needs: ['bread', 'healingDraught', 'honeyCake', 'sleepingTonic'] },
+  { name: 'manorCount', needs: ['bread', 'healingDraught', 'honeyCake', 'sleepingTonic', 'candle', 'taper'] },
 ];
 
 /** Homes a district starts with when it opens, and the most it holds. */

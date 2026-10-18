@@ -42,12 +42,13 @@ study, shade gardens and a mirrored second production line.
   walked into as its own `Shop` scene, a yard laid out from its `ShopDef`: gardens, a row of
   stations with drop, work and pick-up markers, and a counter whose shelves customers buy from.
   Stations, the counter and pixie routes have purple markers; their costs grow by `TIER_STEP` (3)
-  a tier. The Bakery is the only shop so far (wheat and honeycomb, mill and oven, bread and honey
-  cake). Below the lots, a card per district (`DISTRICTS`: Market Row, Riverside, Hilltop) shows its
+  a tier. The shops so far are the Bakery (wheat and honeycomb, mill and oven, bread and honey
+  cake) and the Chandlery (honeycomb and flax, wax press, spinning wheel and dipping vat, candles
+  and tapers). Below the lots, a card per district (`DISTRICTS`: Market Row, Riverside, Hilltop) shows its
   households: every `SUPPLY_MS` each home asks for one need of its tier (`HOME_TIERS`: cottages,
-  then houses) and buys it off a shop's shelf (potions off the apothecary's), and happy districts
-  grow homes and then tiers (see `runDistrict`). Planned next: the Chandlery, Dye house, Smithy
-  and Tavern, each adding goods a new manor tier asks for.
+  then houses, then manors, which want candles and tapers) and buys it off a shop's shelf (potions
+  off the apothecary's), and happy districts grow homes and then tiers (see `runDistrict`). Planned
+  next: the Dye house, Smithy and Tavern, each adding goods that a tier asks for.
 - Gardens have nine beds each, three by three edge to edge (`PLOTS_PER_GARDEN`, `plotPosition`).
   Two shade gardens grow nightshade for the Shadow Elixir, Moonlight Salve and Witch's Brew. A brew's last quarter
   is its fine window: picked up then by hand, it becomes a Fine potion (its own item kind) worth
@@ -166,8 +167,9 @@ study, shade gardens and a mirrored second production line.
 - `src/scenes/TownScene.ts` (`Town`) and `src/scenes/ShopScene.ts` (`Shop`, started with
   `{ shop }`): both call `loadState` and `catchUp` on create, and run the apothecary with
   `tick(state, dt, null)` (as while away) next to `tickTown`; `GameScene` runs `tickTown(state, dt,
-  null)` after its own `tick`. `src/art/town.ts` paints the goods, hives, mill, oven, a shop's yard
-  (`bakeYard`) and the lot houses (`bakeTown`, called by `BootScene`).
+  null)` after its own `tick`. `src/art/town.ts` paints the goods, the beds (`bedTexture`: hives, flax), each
+  shop's stations (mill, oven, wax press, spinning wheel, dipping vat), a shop's yard (`bakeYard`)
+  and the lot houses (`bakeTown`, called by `BootScene`).
 - `src/scenes/BootScene.ts`: bakes all textures and animations, then starts `Game`.
 - `src/scenes/GameScene.ts`: builds the world, markers and HUD, reads input, walks the doctor
   around stations and through the shop door, calls the sim each frame and updates views. Also
@@ -713,9 +715,11 @@ Under browser automation the engine is a no-op, so the playthrough is unchanged.
 - New randomness in `tick` must stay behind a condition that is false on day 1 (like the blight's),
   or the playthrough's seeded orders change.
 - The town's randomness (`tickTown`'s customers) runs only for a shop bought, which needs the
-  cure, so the playthrough never reaches it. A new shop is a `SHOPS` entry with its goods in
-  `GoodId`, `GOODS` and art in `src/art/town.ts`, a lot house in `lotTexture` and its texts; the
-  scenes lay it out from its def.
+  cure, so the playthrough never reaches it. A new shop is a `SHOPS` entry (at most two gardens,
+  which is what the yard has room for) with its goods in `GoodId`, `GOODS` and art in
+  `src/art/town.ts` (a `good-<id>` icon, a station texture per station, `bedTexture` for a new
+  garden good, and a lot house in `bakeTown`), its texts, and its goods in a `HOME_TIERS` need list;
+  the scenes lay it out from its def.
 - `rival.open` starts true and `rival.day` 0, so the rival exists in every save; it only does
   anything from `RIVAL_DAY`. `rival.potion` is null until then and once closed.
 - Fine potions are not in `POTIONS`, so they have no pallets, shelves, belt lanes or orders of their

@@ -247,6 +247,19 @@ const en = {
   districtSteady: 'Getting by',
   districtFull: 'As big as it grows',
   districtLocked: 'Opens once {district} has houses',
+  chandlery: 'Chandlery',
+  chandleryMakes: 'Candles and tapers',
+  flaxField: 'Flax field',
+  press: 'Wax press',
+  wheel: 'Spinning wheel',
+  vat: 'Dipping vat',
+  flax: 'Flax',
+  wax: 'Beeswax',
+  wick: 'Wick',
+  candle: 'Candle',
+  taper: 'Taper',
+  chandler: 'Chandler',
+  manorCount: { one: '{n} manor', other: '{n} manors' },
 };
 
 export default en;
