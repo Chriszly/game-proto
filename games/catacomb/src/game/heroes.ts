@@ -21,5 +21,3 @@ export const HEROES: Record<HeroId, Hero> = {
   knight: { name: 'knightName', hp: 50, deck: STARTER_DECK, flask: 'block', text: 'knightText' },
   hunter: { name: 'hunterName', hp: 40, deck: HUNTER_DECK, flask: 'poison', text: 'hunterText' },
 };
-
-export const HERO_IDS = Object.keys(HEROES) as HeroId[];

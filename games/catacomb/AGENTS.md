@@ -45,8 +45,8 @@ with one more rule. The art is painterly: shapes and pixel grids drawn in code, 
   - Card faces show a card's own numbers, not what Whetstone, Weak or Vulnerable make of them; the
     foes' intents do show the real damage.
   - The relic tip shows on tap or hover; there is no list of owned relics elsewhere.
-  - Most foes are still pixel grids, rounded and repainted; only the knight and the slime are
-    drawn as shapes. The panels, buttons and merchant boxes are flat rectangles, not painted.
+  - Most foes are still pixel grids, rounded and repainted; only the knight, the hunter and the
+    slime are drawn as shapes. The panels, buttons and merchant boxes are flat rectangles, not painted.
   - The second act's backdrops are the first act's with a green wash (`washed` in
     `src/art/scenery.ts`), not drawn on their own.
   - The card id `vampBite` is shown as "Leech".
@@ -91,7 +91,7 @@ File map (all under `src/` unless it starts with `shared/`):
   `describe` (card text, built from the `deal`, `apply`, `gainBlock` and other parts in `i18n/`),
   `describePower` (a power's text without "Power.", for its tip in play) and `kindOf` (attack, skill, power or curse).
 - `game/heroes.ts`: `HeroId`, `HEROES` (name, health, deck, starting flask, caption; the caption's
-  `{hp}` is the hero's health) and `HERO_IDS`.
+  `{hp}` is the hero's health).
 - `game/flasks.ts`: `FlaskId`, `FLASKS` (name, text and the number its `{n}` shows), `FLASK_IDS`, `FLASK_SLOTS` (3),
   `FLASK_PRICE` and each flask's number. Their effects live in `useFlask` in `sim.ts`.
 - `game/depth.ts`: the depth ladder: `DEPTH_RULES` and `depthText(depth)` for the panels,
@@ -99,9 +99,12 @@ File map (all under `src/` unless it starts with `shared/`):
   `saveBestDepth`, key `catacomb-best-depth`).
 - `game/enemies.ts`: `EnemyKind`, `StatusKind`, the `Intent` union (attack with an optional
   `apply` status, block, buff, debuff, and `curse`, which adds a curse card to the deck) and the
-  `ENEMIES` table of health, `gold`, `elite`/`boss` and `moves` (the first is the opening move).
-- `game/relics.ts`: `RelicId`, `RELICS` (name and text) and `RELIC_IDS`. Their effects live in
-  `sim.ts` (search for `hasRelic`).
+  `ENEMIES` table of health, `gold` and `moves` (the first is the opening move); whether a foe is an
+  elite or a boss comes from its room's kind.
+- `game/relics.ts`: `RelicId`, `RELICS` (name, text and the number its `{n}` shows), each relic's
+  number (`OAK_WARD_BLOCK`, `WHETSTONE_DAMAGE`, `EMBER_LANTERN_ENERGY`, `MENDING_MOSS_HEAL`,
+  `GOLDEN_IDOL_GOLD`, `BONE_CHARM_VULNERABLE`, `VENOM_GLAND_POISON`), `relicText(id)` (the shown text
+  with its number) and `RELIC_IDS`. Their effects live in `sim.ts` (search for `hasRelic`).
 - `game/events.ts`: `EventId`, `EVENTS` (title, text, two choice captions and the number each
   caption's `{n}` shows), their cost constants
   and the curses the shrine's loot and the chest add (`SHRINE_CURSE`, `CHEST_CURSE`). Their effects
@@ -114,17 +117,18 @@ File map (all under `src/` unless it starts with `shared/`):
   `SHOP_RELICS`, `SHOP_FLASKS`, `WEAK_MULT` and `VULNERABLE_MULT`), `Phase`, `Status` and
   `noStatus`, `Ware`, `Shop` (cards, relics, flasks, removal), `Enemy` (with its `intent` and
   `status`), `Fight` (with the hero's `status`, `strength`, the `powers` in play, the cards
-  `played` this turn and the `gold` its foes drop), `Pop`, `GameState` (with `hero`, `depth`,
+  `played` this turn, the cards `drawn` this fight, `wasVulnerable` and the `gold` its foes drop), `Pop`, `GameState` (with `hero`, `depth`,
   `bestDepth`, `flasks` and `flaskWon`).
 - `game/sim.ts`: all rules. `newRun`, `chooseHero`, `setDepth`, `walkTo`, `playCard`, `canPlay`,
   `costOf` (a card's cost in hand, with Doubt), `canUseFlask`, `useFlask`, `heroHit` and `foeHit`
   (damage after relics, strength and statuses), `endTurn`, `takeReward`, `descend`, `rest`,
   `restShare`, `restHeal`, `canRemove`, `removeCard`, `canTemper`, `temperCard`, `buyCard`,
   `buyRelic`, `canBuyFlask`, `buyFlask`, `canBuyRemoval`, `buyRemoval`, `leaveShop`, `canChoose`,
-  `chooseEvent`, `eventHere`, `hasRelic`, `actName`, `tick`, `intentOf`, `shuffle`; private `act`
+  `chooseEvent`, `eventHere`, `hasRelic`, `actName`, `tick`, `shuffle`; private `act`
   (a foe's go, poison first), `endRound` (after the foes' turn), `winFight`, `grantRelic`,
   `grantFlask`, `curse` (a curse card into the deck and the discard pile), `applyPoison` (Venom
-  Gland and Venom Veil), `makeShop` and `nextIntent`. No Phaser import.
+  Gland and Venom Veil), `powerCount` (the copies of a power in play; Thorns and Venom Veil add
+  their effect once per copy, like Bulwark and Battle Rage in `startTurn`), `makeShop` and `nextIntent`. No Phaser import.
 - `scenes/BootScene.ts`: reads the screen's resolution (`setArtRes`), bakes every texture
   (`bakeScenery`, at the view's size, `bakeCharacters`, `bakeIcons`, `bakeCardFrames`), then starts `Game`.
 - `scenes/GameScene.ts`: builds and draws the map (room icons rebuilt by `buildRooms` when a new
@@ -132,7 +136,7 @@ File map (all under `src/` unless it starts with `shared/`):
   `flaskLayer` and the powers in play in `powerLayer`), reward overlay, the merchant (`shopLayer`,
   with the flasks under the cards), panel (hero choice with the depth row, campfire, mystery room,
   descent, defeat and victory), the card picker (`pickLayer`, shown while `picking` is `burn`,
-  `temper` or `sell`), floating numbers and HUD (gold and relic icons, with a tip that flasks and
+  `temper` or `sell`), floating numbers (the hero's over the map token while the map shows) and HUD (gold and relic icons, with a tip that flasks and
   powers reuse), and wires taps to sim functions. The hero's and the map token's textures follow
   `state.hero`. Exposes `state`, `hand` and `rewards`.
 - `scenes/layout.ts`: screen positions and sizes for the fight, hand, reward, buttons, campfire
@@ -217,10 +221,12 @@ State model (`src/game/state.ts`):
   `rest`, `shop`, `event` (which can lead to `reward`), `descend` (to the next act's `map`), `over`
   and `won` as side exits.
 - `Fight` holds the `draw`, `hand` and `discard` piles, `energy`, hero `block`, `turn`, `enemies`,
-  `acted`, the hero's `status` and `strength`, the `powers` in play, the cards `played` this turn
-  and the `gold` to drop. `enemies[0]` is the one in front and takes single-target damage.
+  `acted`, the hero's `status` and `strength`, the `powers` in play, the cards `played` this turn,
+  the cards `drawn` this fight (for the draw sound), `wasVulnerable` (set in `endTurn`) and the `gold`
+  to drop. `enemies[0]` is the one in front and takes single-target damage.
 - Statuses wear off like this: the hero's Weak in `endTurn`, a foe's Weak after it acts, everyone's
-  Vulnerable in `endRound`; a foe's poison bites at the start of its go, the hero's in `endRound`.
+  Vulnerable in `endRound` (the hero's only when `wasVulnerable`, so Vulnerable a foe puts on starts
+  wearing off the round after and lasts its full number of foe turns); a foe's poison bites at the start of its go, the hero's in `endRound`.
 - Only `src/game/sim.ts` mutates state. The scene only reads it and calls sim functions.
 - Invariants: a fight never changes `deck` except through a foe's `curse` intent, which pushes the
   curse onto both `deck` and `fight.discard` (each fight otherwise shuffles a copy into `draw`); a
@@ -270,10 +276,10 @@ Data tables (where to tune):
   reward, merchant, panel and picker containers sit at the frame (`fx`, `fy`) and keep their
   960x540 `layout.ts` positions inside it; their backdrops sit at `-fx, -fy` and the overlays'
   dimmers (`dimmer`) cover the whole view. The top bar spans the view (room text on its right
-  edge), the fight's orb and draw pile are pinned to the bottom-left corner, End turn and the
+  edge), the fight's orb and draw pile count are pinned to the bottom-left corner, End turn and the
   discard pile to the bottom-right, the hand to the bottom edge (`handLayer` at `fy` inside the
-  fight), the flasks and powers to the left edge and the picker's Back to the right. On a grown
-  view the draw pile's count sits over the orb instead of under it, clear of the corner buttons.
+  fight), the flasks and powers to the left edge and the picker's Back to the right. The draw
+  pile's count sits over the orb, clear of the corner buttons under it.
   `hand` and `rewards` hold view coordinates (the frame offset added). `bakeScenery` paints both
   backdrops at the view's size, the designed picture in the frame with more wall, floor or
   flagstones around it. At 960x540 nothing moves. Taps go through Phaser's own hit tests. The art is painted at
@@ -299,7 +305,7 @@ The sim has no sound: `GameScene` plays the hero's own actions in its tap handle
 `act(done, sound)` (the sound when the sim took the action, `ui('refuse')` when it returned
 false), and `Cues.hear(state, dt)` (called right after `tick` in `update`) plays everything else by
 comparing the state with the last frame: the phase, new pops (by `on`, `kind` and text), the fight's
-foe, hand and draw pile counts, the deck's curses and the gold. A frame plays each sound at most
+foe and draw pile counts, the cards drawn (`fight.drawn`), the deck's curses and the gold. A frame plays each sound at most
 once, so an attack on every foe is one thwack. Nothing uses `Math.random` outside the engine
 (which only draws while sound is on), so the seeded playthrough is unchanged.
 
@@ -327,7 +333,7 @@ Sound table (`src/audio/sounds.ts`) and where each plays:
 | `drip` | now and then on the hero panel and the map (every 2.6 to 6.8s, steady pattern) |
 | `descend` | the descent panel's Descend |
 | `fight`, `stab` | arriving at a fight; `stab` too for an elite or a boss |
-| `draw` | the hand grows (each turn's draw, a card that draws, the Foresight Flask) |
+| `draw` | cards are drawn (each turn's draw, a card that draws, even one that only replaces itself, the Foresight Flask) |
 | `shuffle` | the discard pile shuffled into the draw pile |
 | `attack`, `skill`, `power` | a hand card played, by its kind |
 | `hit` | a damage pop on a foe |
@@ -398,7 +404,7 @@ for the hero's own action, or from `Cues.hear` for something the run does on its
   spots, so check a new text with `?lang=de`.
 - **Add a power:** add its `PowerKind` and text (`POWER_TEXT`, with its key in `i18n/`) in `cards.ts` and a card with
   `power` set, then its effect in `sim.ts`: a per-turn one in `startTurn`'s power loop, one that
-  reacts elsewhere behind `hasPower`.
+  reacts elsewhere scaled by `powerCount` (each copy in play adds its effect again).
 - **Add a curse:** add its `CurseKind` and text (`CURSE_TEXT`, with its key in `i18n/`) in `cards.ts` and a card with
   `curse` set and `rarity: 'curse'`; what it does goes where it bites (`drawCards` for a draw
   effect, `costOf` for a cost one). Give it a source: an elite's `curse` move, an event or a depth.
@@ -431,9 +437,9 @@ for the hero's own action, or from `Cues.hear` for something the run does on its
 - **Add a room kind:** extend `RoomKind`, handle it in `enterRoom` in `src/game/sim.ts`, add a
   room icon in `src/art/icons.ts`, put it in `COLUMN_KINDS`, and handle its view in
   `GameScene.update` (`onMap`), `drawPanel` or `drawReward`, and its name in `drawHud`.
-- **Add a relic:** add it to `RelicId` and `RELICS` in `src/game/relics.ts`, its icon to
-  `RELIC_ICONS` in `src/art/icons.ts`, and its effect where it applies in `src/game/sim.ts`
-  behind `hasRelic`. Update the README's relic table.
+- **Add a relic:** add it to `RelicId` and `RELICS` in `src/game/relics.ts`, its number as a constant there (passed to its
+  text as `{n}`), its icon to `RELIC_ICONS` in `src/art/icons.ts`, and its effect where it
+  applies in `src/game/sim.ts` behind `hasRelic`, using that constant. Update the README's relic table.
 - **Add an event:** add it to `EventId` and `EVENTS` in `src/game/events.ts` and its two choices
   to `chooseEvent` (and any health cost to `canChoose`) in `src/game/sim.ts`.
 - **Add a status:** extend `StatusKind`, `noStatus`, its name in `i18n/` under the kind as key, its effect in
