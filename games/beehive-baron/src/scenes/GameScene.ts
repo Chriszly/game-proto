@@ -83,6 +83,7 @@ import {
   SWARM,
   UI_DEPTH,
   VIEW,
+  viewEdges,
   WASP_FROM,
   WASP_TO,
   caskSpot,
@@ -149,6 +150,8 @@ export class GameScene extends Phaser.Scene {
   private wasps = new Map<number, Phaser.GameObjects.Image>();
   /** Where each wasp was drawn this frame, for taps to swat it. */
   private waspAt = new Map<number, { x: number; y: number }>();
+  /** The whole view in layout coordinates (see `viewEdges`). */
+  private edges = { x: 0, y: 0, w: VIEW.w, h: VIEW.h, right: VIEW.w, bottom: VIEW.h };
   /** Whether the next tap on an empty spot places a brood cell (the Brood cell button arms it). */
   private placing = false;
   /** Whether the next tap on a capped cell enters its honey in the fair (the fair card arms it). */
@@ -284,20 +287,24 @@ export class GameScene extends Phaser.Scene {
     const progress = loadProgress();
     this.state = newHive(progress);
 
-    this.add.image(0, 0, 'bg-back').setOrigin(0);
+    // The game fills the screen's shape: the layout stays in VIEW, centred, and the scenery and the
+    // HUD reach out to the view's edges.
+    this.edges = viewEdges(this);
+    this.cameras.main.setScroll(this.edges.x, this.edges.y);
+    this.add.image(this.edges.x, this.edges.y, 'bg-back').setOrigin(0);
     MEADOWS.forEach((_, i) => {
       const o = meadowOrigin(i);
       this.meadowStrips.push(this.add.image(o.x, o.y, `meadow-${i}`).setOrigin(0).setDepth(0.01));
       this.meadowBlooms.push(this.add.image(o.x, o.y, `meadow-${i}-blooms`).setOrigin(0).setDepth(0.02));
     });
-    this.add.image(0, 0, 'bg-front').setOrigin(0).setDepth(0.05);
+    this.add.image(this.edges.x, this.edges.y, 'bg-front').setOrigin(0).setDepth(0.05);
     for (let i = 0; i < FLOWERS; i++) {
       const f = flowerSpot(i);
       const tex = this.textures.getFrame(`flower-${i}`);
       this.add.image(f.x, f.y, `flower-${i}`).setOrigin(0.5, FLOWER_TEX.head / tex.realHeight).setDepth(0.1 + f.y / 10_000);
     }
     // The season lies over the scenery as a tint: the hive, the cards and the bees stay as they are.
-    this.seasonTint = this.add.rectangle(0, 0, VIEW.w, VIEW.h, 0xffffff, 0).setOrigin(0).setDepth(0.5);
+    this.seasonTint = this.add.rectangle(this.edges.x, this.edges.y, this.edges.w, this.edges.h, 0xffffff, 0).setOrigin(0).setDepth(0.5);
     this.add.image(HIVE.x, HIVE.y, 'hive').setOrigin(0).setDepth(1);
     this.plaque = this.add.text(PLAQUE.x, PLAQUE.y, '', textStyle(11, '#7a4410')).setOrigin(0.5).setDepth(1.5);
     this.createTabs();
@@ -617,7 +624,7 @@ export class GameScene extends Phaser.Scene {
     const cell = { x: c.x, y: c.y - 6 };
     const along = (t: number) => {
       const u = 0.5 - 0.5 * Math.cos(Math.PI * t);
-      const from = { x: WASP_FROM.x, y: WASP_FROM.y + (w.id % 3) * 30 };
+      const from = { x: WASP_FROM.x + this.edges.right - VIEW.w, y: WASP_FROM.y + (w.id % 3) * 30 };
       return { x: from.x + (cell.x - from.x) * u, y: from.y + (cell.y - from.y) * u - 50 * Math.sin(Math.PI * u) };
     };
     const still = settings.reduceMotion;
@@ -628,7 +635,8 @@ export class GameScene extends Phaser.Scene {
     }
     const from = along(w.turned);
     const u = Math.min(1, w.ms / WASP_OUT_MS);
-    return { x: from.x + (WASP_TO.x - from.x) * u, y: from.y + (WASP_TO.y - from.y) * u - 40 * Math.sin(Math.PI * u), left: false };
+    const to = WASP_TO.x + this.edges.right - VIEW.w;
+    return { x: from.x + (to - from.x) * u, y: from.y + (WASP_TO.y - from.y) * u - 40 * Math.sin(Math.PI * u), left: false };
   }
 
   private drawWasps() {
@@ -1158,20 +1166,22 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createHud() {
-    this.add.image(-CARD_PAD, -CARD_PAD, 'hud').setOrigin(0).setDepth(UI_DEPTH);
+    // The HUD is pinned to the view's top edge, its title and counts at the left, the stats at the right.
+    const { x: left, y: top, right } = this.edges;
+    this.add.image(left - CARD_PAD, top - CARD_PAD, 'hud').setOrigin(0).setDepth(UI_DEPTH);
     const d = UI_DEPTH + 1;
-    this.add.text(16, 18, t('title'), textStyle(19, '#ffd25a', '900')).setOrigin(0, 0.5).setDepth(d);
-    this.add.image(237, 19, 'coin').setDepth(d);
+    this.add.text(left + 16, top + 18, t('title'), textStyle(19, '#ffd25a', '900')).setOrigin(0, 0.5).setDepth(d);
+    this.add.image(left + 237, top + 19, 'coin').setDepth(d);
     this.hud = {
-      coins: this.add.text(249, 18, '', textStyle(16, '#fff1cc', '800')).setOrigin(0, 0.5).setDepth(d),
-      coinsLabel: this.add.text(0, 19, t('coins'), textStyle(11, '#d9b880', '600')).setOrigin(0, 0.5).setDepth(d),
-      honeyIcon: this.add.image(0, 19, 'honey-icon-clover').setDepth(d),
-      honey: this.add.text(0, 18, '', textStyle(16, '#fff1cc', '800')).setOrigin(0, 0.5).setDepth(d),
-      honeyLabel: this.add.text(0, 19, t('honeyLabel'), textStyle(11, '#d9b880', '600')).setOrigin(0, 0.5).setDepth(d),
-      waxIcon: this.add.image(0, 19, 'wax-icon').setDepth(d),
-      wax: this.add.text(0, 18, '', textStyle(16, '#fff1cc', '800')).setOrigin(0, 0.5).setDepth(d),
-      waxLabel: this.add.text(0, 19, t('wax'), textStyle(11, '#d9b880', '600')).setOrigin(0, 0.5).setDepth(d),
-      stats: this.add.text(VIEW.w - 16, 18, '', textStyle(13.5, '#fff1cc', '700')).setOrigin(1, 0.5).setDepth(d),
+      coins: this.add.text(left + 249, top + 18, '', textStyle(16, '#fff1cc', '800')).setOrigin(0, 0.5).setDepth(d),
+      coinsLabel: this.add.text(0, top + 19, t('coins'), textStyle(11, '#d9b880', '600')).setOrigin(0, 0.5).setDepth(d),
+      honeyIcon: this.add.image(0, top + 19, 'honey-icon-clover').setDepth(d),
+      honey: this.add.text(0, top + 18, '', textStyle(16, '#fff1cc', '800')).setOrigin(0, 0.5).setDepth(d),
+      honeyLabel: this.add.text(0, top + 19, t('honeyLabel'), textStyle(11, '#d9b880', '600')).setOrigin(0, 0.5).setDepth(d),
+      waxIcon: this.add.image(0, top + 19, 'wax-icon').setDepth(d),
+      wax: this.add.text(0, top + 18, '', textStyle(16, '#fff1cc', '800')).setOrigin(0, 0.5).setDepth(d),
+      waxLabel: this.add.text(0, top + 19, t('wax'), textStyle(11, '#d9b880', '600')).setOrigin(0, 0.5).setDepth(d),
+      stats: this.add.text(right - 16, top + 18, '', textStyle(13.5, '#fff1cc', '700')).setOrigin(1, 0.5).setDepth(d),
     };
     this.hint = this.add.text(HINT.x, HINT.y, '', textStyle(13, '#ffffff', '800', true)).setOrigin(0.5).setDepth(d);
   }
@@ -1181,7 +1191,7 @@ export class GameScene extends Phaser.Scene {
     const h = this.hud;
     h.coins.setText(`${s.coins}`);
     h.coinsLabel.setX(h.coins.x + h.coins.width + 3);
-    const honeyX = Math.max(335, h.coinsLabel.x + h.coinsLabel.width + 26);
+    const honeyX = Math.max(this.edges.x + 335, h.coinsLabel.x + h.coinsLabel.width + 26);
     h.honeyIcon.setX(honeyX);
     h.honey.setText(`${jarCount(s)}`).setX(honeyX + 12);
     h.honeyLabel.setX(h.honey.x + h.honey.width + 3);
@@ -1211,7 +1221,7 @@ export class GameScene extends Phaser.Scene {
   /** A small button in the corner that throws the comb and coins away for a fresh hive. */
   private createReset() {
     const text = this.add
-      .text(VIEW.w - 16, VIEW.h - 6, t('newHive'), textStyle(12, '#1f4a18', '700'))
+      .text(this.edges.right - 16, this.edges.bottom - 6, t('newHive'), textStyle(12, '#1f4a18', '700'))
       .setOrigin(1, 1)
       .setDepth(UI_DEPTH + 1)
       .setInteractive({ useHandCursor: true });

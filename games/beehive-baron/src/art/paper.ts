@@ -192,7 +192,10 @@ export function cut(ctx: Ctx, pts: Pt[], color: string, o: CutOptions = {}) {
   ctx.globalCompositeOperation = 'multiply';
   ctx.globalAlpha = o.grain ?? 0.35;
   ctx.fillStyle = ctx.createPattern(grainTile(), 'repeat')!;
-  ctx.fillRect(0, 0, ctx.canvas.width / res, ctx.canvas.height / res);
+  // Reach back to the canvas's corner when the context is shifted right or down (the filling view's backgrounds).
+  const m = ctx.getTransform();
+  const [x0, y0] = [Math.min(0, -m.e / m.a), Math.min(0, -m.f / m.d)];
+  ctx.fillRect(x0, y0, ctx.canvas.width / res - x0, ctx.canvas.height / res - y0);
   ctx.restore();
   ctx.save();
   ctx.globalAlpha = 0.35;

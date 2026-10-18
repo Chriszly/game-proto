@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { CELL_CAP, FLOWERS } from '../game/state';
 import { MEADOWS } from '../game/meadows';
-import { AWAY, BOARD, CASK, COMB, CONTRACT, END_CARD, FAR_RIDGE, FLOWER_GROUND, GOAL, HIVE, HIVE_TAB, MARKET, MEADOW_SPOTS, ORDER, PLAQUE, MEADOW_TAG, SWARM, VIEW, farY, flowerSpot } from '../scenes/layout';
+import { viewEdges, AWAY, BOARD, CASK, COMB, CONTRACT, END_CARD, FAR_RIDGE, FLOWER_GROUND, GOAL, HIVE, HIVE_TAB, MARKET, MEADOW_SPOTS, ORDER, PLAQUE, MEADOW_TAG, SWARM, farY, flowerSpot } from '../scenes/layout';
 import { KINDS } from '../game/honey';
 import { BROOD_CARD, CARD, KIND_CARD, MEADOW_CARD, MEAD_CARD, NOTE_CARD, ORCHARD_CARD, PETALS, WAX_CARD } from './palette';
 
@@ -15,6 +15,22 @@ import { addTexture, circ, cut, hex, outline, rect, reseed, resOfCtx, rr, sketch
 
 const NEAR_RIDGE = smooth([[-10, 260], [100, 250], [210, 260], [350, 240], [450, 235], [550, 250], [650, 235], [750, 245], [850, 235], [970, 250]]);
 const GROUND_RIDGE = smooth([[-10, 390], [200, 370], [450, 395], [700, 380], [970, 390]]);
+
+/**
+ * A hill from its ridge down past the view's bottom: the ridge runs on level beyond its ends when
+ * the view is wider than the 960x540 layout.
+ */
+function widen(ridge: Pt[], v: { x: number; right: number; bottom: number }): Pt[] {
+  const first = ridge[0];
+  const last = ridge[ridge.length - 1];
+  const left = Math.min(first[0], v.x - 10);
+  const right = Math.max(last[0], v.right + 10);
+  const bottom = Math.max(560, v.bottom + 20);
+  // Points are only added where the view needs them, so the 960x540 hills cut exactly as before.
+  const before: Pt[] = left < first[0] ? [[left, first[1]]] : [];
+  const after: Pt[] = right > last[0] ? [[right, last[1]]] : [];
+  return [...before, ...ridge, ...after, [right, bottom], [left, bottom]];
+}
 
 export function bakeScenery(scene: Phaser.Scene) {
   reseed(29);
@@ -30,8 +46,10 @@ export function bakeScenery(scene: Phaser.Scene) {
 
 /** Sky, sun, clouds and the far hill. */
 function bakeBackBackground(scene: Phaser.Scene) {
-  const { canvas, ctx } = sketch(VIEW.w, VIEW.h);
-  cut(ctx, rect(0, 0, VIEW.w, VIEW.h), CARD.sky, { depth: 0, wob: 0, grain: 0.3 });
+  const v = viewEdges(scene);
+  const { canvas, ctx } = sketch(v.w, v.h);
+  ctx.translate(-v.x, -v.y);
+  cut(ctx, rect(v.x, v.y, v.w, v.h), CARD.sky, { depth: 0, wob: 0, grain: 0.3 });
   cut(ctx, circ(480, 85, 24), CARD.sun, { depth: 2 });
   for (const [cx, cy, s] of [[515, 170, 18], [548, 118, 13]]) {
     const pts: Pt[] = [];
@@ -43,7 +61,7 @@ function bakeBackBackground(scene: Phaser.Scene) {
     pts.push([cx + s * 1.7, cy + 5], [cx - s * 1.7, cy + 5]);
     cut(ctx, pts, CARD.cloud, { depth: 2.5, shadow: 0.2 });
   }
-  cut(ctx, [...FAR_RIDGE, [970, 560], [-10, 560]], CARD.farHill, { depth: 4, shadow: 0.3, wob: 1.2 });
+  cut(ctx, widen(FAR_RIDGE, v), CARD.farHill, { depth: 4, shadow: 0.3, wob: 1.2 });
   addTexture(scene, 'bg-back', canvas);
 }
 
@@ -100,9 +118,11 @@ export const meadowOrigin = (i: number) => {
 
 /** The near hills, the button board and the jar shelf, over the meadows. */
 function bakeFrontBackground(scene: Phaser.Scene) {
-  const { canvas, ctx } = sketch(VIEW.w, VIEW.h);
-  cut(ctx, [...NEAR_RIDGE, [970, 560], [-10, 560]], CARD.nearHill, { depth: 5, shadow: 0.3, wob: 1.2 });
-  cut(ctx, [...GROUND_RIDGE, [970, 560], [-10, 560]], CARD.grass, { depth: 5, shadow: 0.3, wob: 1.2 });
+  const v = viewEdges(scene);
+  const { canvas, ctx } = sketch(v.w, v.h);
+  ctx.translate(-v.x, -v.y);
+  cut(ctx, widen(NEAR_RIDGE, v), CARD.nearHill, { depth: 5, shadow: 0.3, wob: 1.2 });
+  cut(ctx, widen(GROUND_RIDGE, v), CARD.grass, { depth: 5, shadow: 0.3, wob: 1.2 });
   // The kraft board the buttons sit on.
   cut(ctx, rr(BOARD.x - 1, BOARD.y - 1, BOARD.w + 2, BOARD.h + 2, 10), CARD.board, { depth: 6 });
   cut(ctx, rr(BOARD.x + 5, BOARD.y + 5, BOARD.w - 10, BOARD.h - 10, 7), CARD.boardInner, { depth: 0 });
@@ -270,9 +290,11 @@ function bakeCards(scene: Phaser.Scene) {
   };
 
   // The HUD: a dark brown strip with a scalloped lower edge.
-  card('hud', VIEW.w, 44, (ctx) => {
-    const pts: Pt[] = [[-PAD, -PAD], [VIEW.w + PAD, -PAD]];
-    for (let x = VIEW.w + 10; x >= -10; x -= 20) {
+  // As wide as the view, which can be wider than the layout when the game fills a wide screen.
+  const hudW = viewEdges(scene).w;
+  card('hud', hudW, 44, (ctx) => {
+    const pts: Pt[] = [[-PAD, -PAD], [hudW + PAD, -PAD]];
+    for (let x = hudW + 10; x >= -10; x -= 20) {
       for (let k = 0; k <= 4; k++) {
         const t = (k / 4) * Math.PI;
         pts.push([x - 10 + Math.cos(t) * 10, 36 + Math.sin(t) * 4.5]);
