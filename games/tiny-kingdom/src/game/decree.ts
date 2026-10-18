@@ -14,7 +14,7 @@ export interface Decree {
   kind: DecreeKind;
   /** The lake or wood it names, by its English name as an id ('' for a watch decree); the scene words the decree from kind, place and need. */
   place: string;
-  /** The named lake's or wood's cells. */
+  /** The named lake's or wood's cells when the decree was drawn; `decreeRegion` keeps those still standing. */
   cells: At[];
   /** How many it asks for: farms or houses on the place's edge, or houses around one tower. */
   need: number;
@@ -101,6 +101,13 @@ function housesAround(grid: Cell[][], col: number, row: number) {
   return AROUND.filter(([dc, dr]) => isHome(grid[row + dr]?.[col + dc])).length;
 }
 
+/**
+ * The decree's lake or wood as it stands on `grid`: its cells that are still lake or forest, so a
+ * wood cell a lumber camp cleared no longer counts as inside it. Empty for a watch decree.
+ */
+export const decreeRegion = (grid: Cell[][], decree: Decree): At[] =>
+  decree.cells.filter(([c, r]) => grid[r]?.[c] === (decree.kind === 'shore' ? 'lake' : 'forest'));
+
 /** Where `decree` stands on `grid`. */
 export function decreeMarks(grid: Cell[][], decree: Decree): DecreeMarks {
   if (decree.kind === 'watch') {
@@ -119,7 +126,7 @@ export function decreeMarks(grid: Cell[][], decree: Decree): DecreeMarks {
   }
   // A manor counts as a house.
   const counts = (cell: Cell) => (decree.kind === 'shore' ? cell === 'farm' : isHome(cell));
-  const around = edge(decree.cells);
+  const around = edge(decreeRegion(grid, decree));
   const counted = around.filter(([c, r]) => counts(grid[r][c]));
   return { have: counted.length, counted, spots: around.filter(([c, r]) => grid[r][c] === 'grass'), tower: null };
 }

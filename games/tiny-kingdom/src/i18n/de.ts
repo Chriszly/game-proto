@@ -130,6 +130,7 @@ const de: Translation<typeof en> = {
   undo: 'Letztes Plättchen zurück',
   undoUsed: 'Rückgängig schon genutzt',
   noRoom: 'Kein Platz: Häuser vereinen oder beenden',
+  noRoomWood: 'Kein Platz: Wald roden oder beenden',
   starsAt: 'Sterne bei {one}, {two} und {three}',
   todaysBest: 'Heutiger Rekord {n}',
   bestScore: 'Rekord {n}',

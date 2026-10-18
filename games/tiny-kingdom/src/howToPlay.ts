@@ -21,12 +21,16 @@ const en: HowToPlay = {
       action: 'Merge the two into a manor',
     },
     {
+      input: 'Pick the lumber camp, then tap a wood beside a camp',
+      action: 'Clear the wood to grass, freeing a cell',
+    },
+    {
       input: 'Tap a market',
       action: 'Trade two tiles of one kind for a gift building, once a round',
     },
     {
       input: 'Undo last tile',
-      action: 'Take back the last placement or merge, once per round',
+      action: 'Take back the last placement, clearing or merge, once per round',
     },
     {
       input: 'Island button',
@@ -80,12 +84,16 @@ const de: HowToPlay = {
       action: 'Die beiden zu einem Herrenhaus vereinen',
     },
     {
+      input: 'Das Holzfällerlager wählen, dann einen Wald neben einem Lager antippen',
+      action: 'Den Wald zu Gras roden und so ein Feld frei machen',
+    },
+    {
       input: 'Einen Markt antippen',
       action: 'Einmal pro Runde zwei Plättchen einer Art gegen ein Geschenkgebäude tauschen',
     },
     {
       input: 'Letztes Plättchen zurück',
-      action: 'Das letzte Setzen oder Vereinen zurücknehmen, einmal pro Runde',
+      action: 'Das letzte Setzen, Roden oder Vereinen zurücknehmen, einmal pro Runde',
     },
     {
       input: 'Insel-Taste',
