@@ -17,7 +17,7 @@ const en: HowToPlay = {
       action: 'Between nights: buy its next level, put a fill in the cask or rekindle a hearth',
     },
     {
-      input: 'Click or tap a resting moth',
+      input: 'Click or tap an idle moth on its jar',
       action: 'With the second jar bought: move it to rest at the other jar',
     },
     {
@@ -26,7 +26,7 @@ const en: HowToPlay = {
     },
     {
       input: 'Click or tap a curse / Go on',
-      action: 'After the Great Festival: take a curse for more pay, or take none',
+      action: 'At every nightfall from the tenth: take a curse for more pay, or take none',
     },
     { input: 'Next dusk', action: "Start the next night's dusk" },
     {
@@ -42,7 +42,7 @@ const en: HowToPlay = {
     'Spend your coins on upgrades, then start the next dusk with one more lantern.',
   ],
   tips: [
-    "Dusk lasts 45 seconds, and a full lantern burns for 20, so don't light them all too early.",
+    "Dusk lasts 45 seconds, and a full lantern burns for 20 on Normal, so don't light them all too early.",
     'Fewer than three in five lanterns lit at nightfall puts out one of your three hearths.',
     'Saving a lantern with under 15% oil left is a close call and pays 2 coins at once.',
     "Meet the herald's order on the card under the HUD for 15 more coins at nightfall.",
@@ -51,7 +51,7 @@ const en: HowToPlay = {
     'Lanterns side by side form chains that pay 8 coins when all of them burn at nightfall.',
     'From night 6 a moth rests 6 seconds after its fourth flight of a dusk; Nectar shortens it.',
     'Lost a hearth? The Hearth card rekindles it between nights for 40, then 80, then 120 coins.',
-    'After the Festival each curse you take makes the nights harder and every nightfall pay 25% more.',
+    'From the tenth nightfall each curse you take makes the nights harder and every nightfall pay 25% more.',
   ],
 };
 
@@ -71,7 +71,7 @@ const de: HowToPlay = {
       action: 'Zwischen den Nächten: die nächste Stufe kaufen, das Fass füllen oder ein Herdfeuer entfachen',
     },
     {
-      input: 'Eine ruhende Motte anklicken oder antippen',
+      input: 'Eine freie Motte an ihrem Glas anklicken oder antippen',
       action: 'Mit dem zweiten Glas: sie zum Ruhen ans andere Glas schicken',
     },
     {
@@ -80,7 +80,7 @@ const de: HowToPlay = {
     },
     {
       input: 'Einen Fluch anklicken oder antippen / Weiter',
-      action: 'Nach dem Großen Fest: einen Fluch für mehr Lohn nehmen oder keinen',
+      action: 'Bei jedem Einbruch der Nacht ab der zehnten: einen Fluch für mehr Lohn nehmen oder keinen',
     },
     { input: 'Nächste Nacht', action: 'Die Dämmerung der nächsten Nacht beginnen' },
     {
@@ -96,7 +96,7 @@ const de: HowToPlay = {
     'Gib deine Münzen für Verbesserungen aus und beginne die nächste Dämmerung mit einer Laterne mehr.',
   ],
   tips: [
-    'Die Dämmerung dauert 45 Sekunden, und eine volle Laterne brennt 20, also zünde nicht alle zu früh an.',
+    'Die Dämmerung dauert 45 Sekunden, und eine volle Laterne brennt auf Normal 20, also zünde nicht alle zu früh an.',
     'Brennen bei Einbruch der Nacht weniger als drei von fünf Laternen, erlischt eines deiner drei Herdfeuer.',
     'Eine Laterne mit weniger als 15 % Öl zu retten, ist knapp und bringt sofort 2 Münzen.',
     'Erfülle den Auftrag des Herolds auf der Karte unter der Leiste für 15 Münzen mehr bei Einbruch der Nacht.',
@@ -105,7 +105,7 @@ const de: HowToPlay = {
     'Laternen nebeneinander bilden Ketten, die 8 Münzen bringen, wenn alle bei Einbruch der Nacht brennen.',
     'Ab Nacht 6 ruht eine Motte nach ihrem vierten Flug einer Dämmerung 6 Sekunden; Nektar verkürzt das.',
     'Ein Herdfeuer verloren? Die Herd-Karte entfacht es zwischen den Nächten für 40, dann 80, dann 120 Münzen.',
-    'Nach dem Fest macht jeder genommene Fluch die Nächte schwerer, und jede Nacht zahlt 25 % mehr.',
+    'Ab dem zehnten Einbruch der Nacht macht jeder genommene Fluch die Nächte schwerer, und jede Nacht zahlt 25 % mehr.',
   ],
 };
 

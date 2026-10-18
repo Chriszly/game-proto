@@ -467,6 +467,12 @@ const LANTERN_GELS: Record<LanternKind, { lit: [string, string]; dark: [string, 
   bell: { lit: ['#9af0d8', '#48c8b0'], dark: ['#5a8a90', '#3a6068'] },
 };
 
+/** A lantern texture's height (the special kinds are taller, for the bell under the base) and where its anchor is painted. */
+const lampH = (kind: LanternKind) => (kind === 'plain' ? 56 : 60);
+const LAMP_Y = 36;
+/** The lantern image's origin y for `kind`, as a fraction; set it again after every setTexture. */
+export const lampOriginY = (kind: LanternKind) => LAMP_Y / lampH(kind);
+
 /**
  * A hanging lantern centred on (0, 0): a black card frame with two coloured gel panes. The kinds
  * differ in their gel and an emblem: a beacon has a flared crown, a candle a single slim pane, and
@@ -1049,11 +1055,11 @@ export function bakeTextures(scene: Phaser.Scene) {
   bake(scene, 'moon', 100, 100, paintMoon, 50, 50);
   bake(scene, 'glow', 128, 128, () => glow(64, 64, 64, '#ffbe6a', 1), 0, 0, 1);
   bake(scene, 'glow-pale', 128, 128, () => glow(64, 64, 64, '#ffe0a0', 1), 0, 0, 1);
-  bake(scene, 'lantern-lit', 32, 56, () => paintLantern(true), 16, 36);
-  bake(scene, 'lantern-dark', 32, 56, () => paintLantern(false), 16, 36);
+  bake(scene, 'lantern-lit', 32, lampH('plain'), () => paintLantern(true), 16, LAMP_Y);
+  bake(scene, 'lantern-dark', 32, lampH('plain'), () => paintLantern(false), 16, LAMP_Y);
   for (const kind of ['beacon', 'candle', 'bell'] as const satisfies readonly LanternKind[]) {
-    bake(scene, `lantern-${kind}-lit`, 32, 60, () => paintLantern(true, kind), 16, 36);
-    bake(scene, `lantern-${kind}-dark`, 32, 60, () => paintLantern(false, kind), 16, 36);
+    bake(scene, `lantern-${kind}-lit`, 32, lampH(kind), () => paintLantern(true, kind), 16, LAMP_Y);
+    bake(scene, `lantern-${kind}-dark`, 32, lampH(kind), () => paintLantern(false, kind), 16, LAMP_Y);
   }
   bake(scene, 'flame', 10, 16, paintFlame, 5, 8);
   for (const kind of Object.keys(MOTH_LOOK) as MothKind[]) {
