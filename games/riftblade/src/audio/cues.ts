@@ -50,6 +50,9 @@ export class SoundCues {
   private kills = 0;
   private elites = 0;
   private chests = 0;
+  private powerUps = 0;
+  private objectivesDone = 0;
+  private objective = false;
   private signatures = 0;
   private damage = 0;
   private hurtMs = 0;
@@ -96,6 +99,9 @@ export class SoundCues {
     this.kills = s.kills;
     this.elites = s.elitesKilled;
     this.chests = s.chests;
+    this.powerUps = s.powerUps;
+    this.objectivesDone = s.objectivesDone;
+    this.objective = !!s.objective;
     this.signatures = s.signatures;
     this.damage = s.damageTaken;
     this.xp = s.xp;
@@ -170,7 +176,10 @@ export class SoundCues {
     const p = s.player;
     if (s.kills > this.kills) play('kill', 0.9 + Math.min(4, s.kills - this.kills) * 0.08);
     if (s.elitesKilled > this.elites) play('eliteKill');
-    if (s.chests > this.chests) play('chest');
+    if (s.chests > this.chests || s.powerUps > this.powerUps) play('chest');
+    // Side objectives: a new one, and one done.
+    if (s.objective && !this.objective) play('node');
+    if (s.objectivesDone > this.objectivesDone) play('capstone');
     if (s.signatures > this.signatures && s.hero) play(SIGNATURE[s.hero]);
     if (s.damageTaken > this.damage + 0.01) play('hurt');
     else if (s.phase === 'run' && s.hero && isKnight(s.hero) && p.hurtMs > this.hurtMs + 1) play('dodge');
@@ -196,6 +205,9 @@ export class SoundCues {
     this.kills = s.kills;
     this.elites = s.elitesKilled;
     this.chests = s.chests;
+    this.powerUps = s.powerUps;
+    this.objectivesDone = s.objectivesDone;
+    this.objective = !!s.objective;
     this.signatures = s.signatures;
     this.damage = s.damageTaken;
     this.hurtMs = p.hurtMs;

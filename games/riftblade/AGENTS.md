@@ -26,6 +26,11 @@ between them.
   the Field Ration as filler), 36 capstones and 13 crossovers (the cards show a link icon); gold-ringed elites with
   chests and credits, ring waves at 1:30, 3:00 and 4:15 on every planet; once the boss appears
   no new foes spawn but its own adds. Every gun aims at the nearest foe.
+- Side objectives (`objectives.ts`): three a world, at 1:00 (one of four shared ones), 2:15 (the
+  world's own) and 3:30 (the hero's own, one per hero), each timed, with a marker, an arrow at the
+  screen's edge and two HUD lines under the clock; rewards are credits, a level or a free card.
+  None in the arena; the boss calls one off. Power-ups (bomb, magnet, lure, overdrive, shield,
+  freeze, credit cache) drop from foes after a world's first minute.
 - Four factions: Scrap bots (Clankers, Rollerbombs; the Grinder Crawler), wild beasts (mire rat
   packs, spitter toads with slowing globs; the Bog Mother with globs, young and bog pools), the
   Iron Dominion (line trooper squads firing volleys, walker gunners; the Siege Walker with volleys,
@@ -83,7 +88,9 @@ between them.
   `Bomb`, `Fire`, `Ally`, `Pickup`, `Hazard`, `Pop`, `EventState`), the balance numbers (`RUN_MS`,
   `MAX_ENEMIES`, `MAX_SHARDS`, `ENEMY` for every foe kind, `ELITE`, `ROLLER`, `RATS`, `TOAD`,
   `LINE`, `WALKER`, `EMBER`, `KNIGHT`, `BOSS`, `WAVES`, `SPAWN_RING`, `LEASH`, `PICKUP_R`, `HERO_R`),
-  `DIFF` (difficulty), `freshState`, `xpFor`, `statsOf` (the hero's numbers from upgrades and
+  `POWER` and `POWER_UPS` (power-up drop chance, weights and effects), the objective types
+  (`Objective`, `ObjectiveId`, `SHARED_OBJECTIVES`, `WORLD_OBJECTIVES`, `HERO_OBJECTIVES`,
+  `OBJECTIVE_AT`, `StructureKind`), `DIFF` (difficulty), `freshState`, `xpFor`, `statsOf` (the hero's numbers from upgrades and
   `maxHpMod`, with `squadMods` for Elara and Triad-77), `botCount` and `botMax` (Triad-77's
   bots and their health), `refreshUnlocks` and `clock`. `Bot` and `Flag` are Triad-77's bots
   (`state.bots`, `formation`, `scrap`) and Elara's signal flag (`state.flag`, `supplyWorld`).
@@ -98,7 +105,9 @@ between them.
   each kind's behaviour, `bossAttacks` per boss, `detonate`), hazards (`hazards`, `inRingGap`),
   damage (`damage` with the knight's guard and `BOSS.alone`, double damage to a boss with no other
   foe left, `kill`, `explode`), bolts, bombs, fire and pickups
-  (`gainXp`, `openChest`, `collectAll`). The arena ends at the end of `step`. Exports
+  (`gainXp`, `openChest`, `collectAll`), power-ups (`dropPowerUp` from `kill`, `powerUp` when
+  taken; Lure and Overdrive work through `statsOf`, the shield in `hurtHero`; `collectAll` drops
+  any left lying) and `state.hits` (counted in `damage`). The arena ends at the end of `step`. Exports
   `suppressorLength`, `suppressorHalf`, `shieldHalf`, `phalanxSpots` and `angleDiff` for drawing,
   and `stats`, `near`, `nearest`, `swarmSpot`, `bolt`, `volley`, `ready`, `knock`, `damage`,
   `explode`, `addBomb`, `heal` and `SHORT_LIVED` (allies gone after a fight) for `blades.ts`,
@@ -128,6 +137,18 @@ between them.
   commandos, `bike`, `medic`, `shieldbot`, `command`, `spare`; `droneSpot` for Eyes in the Sky) and
   hooks (`squadHurt`, `hurtFactor`, `squadHeal`, `squadCrit`, `turnedBonus`, `squadKill`,
   `squadBlock`, `bubble`, `rebuildTime`). `AID`, `BUBBLE` and `TRIAD` hold their numbers.
+- `src/game/objectives.ts`: the side objectives, called from `sim.ts` once a step like `squad.ts`
+  (it imports `sim.ts`, so the same rule about load-time values holds): `OBJ` (each one's time
+  limit, goal, zone radius and reward), `OBJ_MISC` (pushes, escort and pilgrim, nests, vents, the
+  zone's end size, stand times, the wreck, thawed troopers), `objectives` (starts one when
+  `objectiveAt` comes, runs it, ends it), `pick` (shared from `sharedSeen`, then
+  `WORLD_OBJECTIVES[planet]`, then `HERO_OBJECTIVES[hero]`), `start` (puts out its marker, spots,
+  ward or structures), `run` per id, `finish` (reward: credits, `gainXp` to the next level, or a
+  `rewardPicks` card) and `cancelObjective` (the boss). `objectiveName` / `objectiveHint` give its
+  text keys (`obj_<id>`, `obj_<id>_hint`, the hint with `{n}` = the goal). Structures (`beacon`,
+  `nest`, `cache`, `monolith`: `StructureKind`, `isStructure`) are foes that `moveEnemies` pins
+  in place (`aimX`/`aimY`), `knock` skips and `kill` breaks without a kill, shard or drop;
+  frozen troopers thawed become `thawed` allies (40 s, short-lived).
 - `src/game/voyage.ts`: between fights. `frame` (tick, then `afterClear` and `nextPlanet` for the
   passing phases), `afterClear` (collect, credits, arena reward, map or victory), `rollNodes`,
   `chooseNode`, the trader (`priceOf`, `buy`, `reroll`, `leave`), the arena (`startArena`),
@@ -160,21 +181,27 @@ between them.
   `rb-spirit`, `rb-puppet`, `rb-wreck`, `rb-ship` and `rb-bolt-fallen`.
 - `src/scenes/layout.ts`: `VIEW` (the designed 960x540), `SCREEN` (the real view), `FRAME` (where
   the designed rectangle sits in it), `fitLayout`, `CENTER`, HUD places (`XP_BAR`, `HP_BAR`, `KIT`, `TIMER`,
-  `LEVEL`, `PLANET_TAG`, `CREDITS_TAG`, `BOSS_BAR`, `SIG_BUTTON`, `STICK`), card rectangles
+  `LEVEL`, `PLANET_TAG`, `CREDITS_TAG`, `BOSS_BAR`, `OBJECTIVE_HUD`, `SIG_BUTTON`, `STICK`), card rectangles
   (`heroCardRect` for the 6x2 grid, `levelCardRect` with `LEVEL_CARD4` for four cards, `UNLOCK` and
   `CONTINUE` for the new hero panel, `mapNodeRect` / `mapNodeSpot`, `tradeCardRect`, `REROLL`,
   `LEAVE`, `eventOptionRect`, `AGAIN`), `DEPTH`, `inside`.
+- `src/scenes/objectiveArt.ts`: the objectives and power-ups, drawn in code on the graphics
+  layers (no baked textures, so boot's Math.random draws are unchanged): `drawObjectiveGround`
+  (zones, spots, the escort's goal, the pilgrim, the duel's mark), `drawStructure`, `drawPowerUp`
+  (`POWER_COLORS`), `objectiveTarget` (where the HUD arrow points) and `OBJ_COLOR` (cyan).
 - `src/scenes/GameScene.ts`: owns `state`, reads input, runs `frame`, follows the hero with the
   camera and draws: the planet's ground (`drawGround` with `duneCell`, `swampCell`, `iceCell`,
   `lavaCell`, scenery from a hash, so the rules' `Math.random` is untouched), graphics layers under
   and over the sprites (hazards, warnings, knight shields, dash lines, rings of fire), image pools
-  per layer (bolts and foes drawn with additive blending), floating texts and the HUD (planet tag
-  and credits). `splitHudCamera` keeps the HUD fixed. The panel is rebuilt whenever `panelKey`
+  per layer (bolts and foes drawn with additive blending; structures are skipped there and drawn
+  by `objectiveArt.ts`; the wreck, escort bot and frozen troopers use pool images), floating texts
+  and the HUD (planet tag, credits, running power-ups beside the health line, and
+  `drawObjectiveHud`: the objective's lines at `OBJECTIVE_HUD` and the edge arrow). `splitHudCamera` keeps the HUD fixed. The panel is rebuilt whenever `panelKey`
   changes.
 - `src/ui/panels.ts`: `Panel` (HUD objects plus tappable `spots`) and `heroSelect` (12 cards from
   `heroCardRect`, keyed by `heroKeyLabel`, and the detail panel `HERO_DETAIL` with the `FIGHT`
   button; a locked hero shows only `rb-locked`), `unlockPanel` (the new hero, with a `continue`
-  spot), `levelUp` (also the arena reward; three or four cards whose lines flow down; pool labels
+  spot), `levelUp` (also the arena's and an objective's reward, titled by `state.after`; three or four cards whose lines flow down; pool labels
   from `POOL_NAMES`, `linkIcon` for crossovers), `starMap`, `trader`, `eventPanel`, `endScreen`.
 
 ### Layout on every screen shape
@@ -271,6 +298,7 @@ the arena is won), `unlock` (a new hero), `win`, `lose`.
   does not go off plays `ui('refuse')`.
 - New bombs: `toss` (grenade, frag), `charge`, `whistle` (crate, orbital, carpet). New blasts:
   `boom` (radius 90 and up, louder with size) or `pop`.
+- Side objectives: `node` when one starts, `capstone` when one is done; `chest` for a power-up.
 - `kill`, `eliteKill`, `bossHit` (the boss's hit flash), `hurt`, `dodge` (a knight's Foresight),
   `barrier`, `heal` (health up by more than 8), `shard` (pitch rises with a combo), `chest`,
   `ui('coin')` for credits gained.
@@ -287,7 +315,8 @@ free of audio) or from the scene's input handler.
 
 ## Testing hooks
 
-- `window.game.scene.getScene('Game').state`: the `GameState`.
+- `window.game.scene.getScene('Game').state`: the `GameState` (`objective` is the side objective
+  under way, `objectivesDone` and `powerUps` count them).
 - `.panel.spots`: the cards of the panel showing (moved into `FRAME` on a wider or taller view; `id` is a `HeroId`, `fight`, an upgrade id, a
   node kind, `option-0` / `option-1`, `sold`, `reroll`, `leave`, `again` or `continue`), in game
   pixels. A locked hero card has `locked: true`. `.chosen` is the hero picked on the select screen
@@ -301,6 +330,9 @@ free of audio) or from the scene's input handler.
   the mouse at a point turning once every 25 s, takes the first card at each level-up, fires Brace
   and plays to 60 s. It depends on: the hero card order, TR-9 being the open hero, his health,
   paths and Brace length, the layout above, and TR-9 surviving a minute of that walk on Normal.
+  Side objectives start at `OBJECTIVE_AT[0]` (1:00) and power-ups drop from `POWER.fromMs` (1:00),
+  neither calling Math.random before then, so they leave the playthrough's minute as it was. Keep
+  both at or after 1:00, or update the playthrough.
 
 ## Making common changes
 
@@ -336,6 +368,15 @@ free of audio) or from the scene's input handler.
 - **A new foe**: add a `FoeKind` (planets.ts) and `ENEMY` entry, its spawning in `spawnGroup`, its
   behaviour in `moveEnemies`, its texture in `factions.ts` (key `rb-<kind>` and `-elite`, picked up
   by `GameScene.drawRun` on its own).
+- **A new side objective**: add its id to `ObjectiveId` (and to `SHARED_OBJECTIVES`,
+  `WORLD_OBJECTIVES` or `HERO_OBJECTIVES`), its row in `OBJ`, its setup in `start` and its rules
+  in `run` (objectives.ts), its drawing in `drawObjectiveGround` (a structure: a `StructureKind`,
+  an `ENEMY` row and `drawStructure`), whether the HUD shows seconds (`timed` in
+  `drawObjectiveHud`) and whether the arrow points at it (`objectiveTarget`), its texts
+  `obj_<id>` and `obj_<id>_hint` in `i18n/`, and its README row.
+- **A new power-up**: add it to `PowerUp`, `POWER_UPS` and `POWER.weights`, its effect in
+  `powerUp` (sim.ts), its sign in `drawPowerUp` and `POWER_COLORS`, its `pu_<kind>` text, and the
+  README row.
 - **A new event**: add its id to `EventId`, its title, text and options (as `TextKey`s, with the
   texts in `i18n/`) in `rollEvent` and its effect in `chooseEvent` (voyage.ts).
 - **A new planet or boss**: add a `PLANETS` row (and a `BossId` in `BOSSES` with its attacks in
@@ -346,6 +387,8 @@ free of audio) or from the scene's input handler.
 - Painted textures with a glow halo darken whatever is under them in WebGL; bolts and bots use
   `BlendModes.ADD` for that reason. Don't draw filled ellipses in the shared graphics layers (they
   drew stray wedges in WebGL); the hero's shadow is a sprite.
+- The objective's two HUD texts are made when the first objective starts, not in `create`: a
+  Phaser text makes a texture too, and one more at boot shifted the playthrough's seeded minute.
 - Phaser draws on `Math.random` for the id of every texture it makes, so baking more textures at
   boot shifts the seeded sequence the playthrough's run starts with (Rook's run then sees other
   bots and cards; the rules are unchanged).

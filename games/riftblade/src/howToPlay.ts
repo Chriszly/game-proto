@@ -29,6 +29,8 @@ const en: HowToPlay = {
     'You hold at most 5 abilities and 4 pieces of gear. A path at tier 5 plus its matching gear unlocks a capstone.',
     'Locked heroes stay a mystery: each joins after a deed, like taking a path to tier 5 or reaching a new world. The run pauses to show the new hero.',
     'A card with a link icon completes a crossover: a pool skill and a path that work together.',
+    'From 1:00 each world sets three side objectives: one shared, the world\'s own and your hero\'s own. Follow the arrow and finish in time for credits, a level or a free upgrade.',
+    'Foes now and then drop power-ups: a bomb for the whole screen, a magnet for every shard, a lure, overdrive, a shield, a freeze and credits. Walk over them.',
   ],
 };
 
@@ -59,6 +61,8 @@ const de: HowToPlay = {
     'Du hältst höchstens 5 Fähigkeiten und 4 Ausrüstungsteile. Ein Pfad auf Stufe 5 mit der passenden Ausrüstung schaltet eine Krönung frei.',
     'Gesperrte Helden bleiben ein Geheimnis: jeder kommt nach einer Tat hinzu, etwa einem Pfad auf Stufe 5 oder einer neuen Welt. Der Lauf hält an, um den neuen Helden zu zeigen.',
     'Eine Karte mit Kettensymbol vervollständigt eine Kombination: eine Vorratsfähigkeit und ein Pfad, die zusammenwirken.',
+    'Ab 1:00 stellt jede Welt drei Nebenziele: ein gemeinsames, eines der Welt und eines deines Helden. Folge dem Pfeil und schaff es rechtzeitig für Credits, eine Stufe oder ein freies Upgrade.',
+    'Gegner lassen ab und zu Extras fallen: eine Bombe für den ganzen Bildschirm, einen Magneten für alle Splitter, einen Köder, Overdrive, einen Schild, Frost und Credits. Lauf darüber.',
   ],
 };
 

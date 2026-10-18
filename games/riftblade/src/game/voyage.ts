@@ -3,7 +3,7 @@
  * star map's nodes (trader, elite arena, rest, events) and the jump to the next planet. Pure state
  * changes like `sim.ts`; randomness from Math.random.
  */
-import { ELITE, WAVES, statsOf, type EventState, type GameState } from './state';
+import { ELITE, OBJECTIVE_AT, WAVES, statsOf, type EventState, type GameState } from './state';
 import { collectAll, heal, lower, nextPick, pop, raise, refreshHealth, spawnElite, tick, SHORT_LIVED, type Input } from './sim';
 import { FILLER, MAX_TIER, UPGRADES, UPGRADE_IDS, canOffer, rollChoices } from './upgrades';
 import { t } from '../i18n';
@@ -37,6 +37,8 @@ function clearField(s: GameState) {
   s.platform = null;
   s.flag = null;
   s.allies = s.allies.filter((a) => !SHORT_LIVED.includes(a.kind));
+  s.objective = null;
+  s.lureMs = s.overdriveMs = s.shieldHits = 0;
 }
 
 /** A boss (or the arena) has fallen: take what is lying about, then the cards, the map or the win. */
@@ -260,6 +262,8 @@ export function nextPlanet(s: GameState) {
   s.bossSpawned = false;
   s.arena = false;
   s.globHits = 0;
+  s.objectiveSlot = 0;
+  s.objectiveAt = OBJECTIVE_AT[0];
   s.player.saved = false;
   s.allies = s.allies.filter((a) => a.kind !== 'escort');
   if (s.escort) {
