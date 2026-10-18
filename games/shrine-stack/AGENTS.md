@@ -105,7 +105,7 @@ Missing or rough:
 - `docs/screenshots/game-over.webp`, `gilded.webp`, `crowned.webp`, `wobbly-break.webp`,
   `shop-bought.webp`, `curse-taken.webp`, `stone-kinds.webp`, `endless-gust.webp`, `four-blessings.webp`,
   `material-pick.webp`, `reserve.webp`, `lean-meter.webp`, `toppled.webp`, `regrown.webp`,
-  `storm-gust.webp`, `crowned-blessing.webp` and `cover.png` (a copy of `gilded.webp`) are not produced by the test; refresh
+  `storm-gust.webp`, `crowned-blessing.webp`, `fill-ultrawide.webp`, `fill-tablet.webp` (the play scene filling a 2560x1080 and a 1024x768 screen) and `cover.png` (a copy of `gilded.webp`) are not produced by the test; refresh
   them by hand (play several tiers in the dev build, or drive it with a Playwright script that taps
   like the test does) if the look changes.
 
@@ -125,7 +125,7 @@ File map (`src/`):
 - `audio.ts`: the game's sound (see Sound below): `SONG`, the `sfx` table and `bellPitch`.
 - `main.ts`: creates the `Phaser.Game` (960x540 from `VIEW`, `Phaser.Scale.FIT`,
   `pixelArt: true`) with `GameScene` only, calls `setupGame(game)` from `shared/setupGame.ts` and
-  then `setupScaling(game)` from `shared/scaling.ts`, and in dev builds puts `game` on `window`.
+  then `setupScaling(game, { fill: true })` from `shared/scaling.ts`, and in dev builds puts `game` on `window`.
 - `game/state.ts`: the tuning constants (`TOWER_X`, `PLINTH_W`, `START_W`, `STONE_H`, `DROP_GAP`,
   `SWING`, `BASE_SPEED`, `TIER_SPEEDUP`, `CALM`, `GRAVITY`, `PERFECT_PX`, `STEADY_PX`, `BROAD_PX`,
   `STONES_PER_TIER`, `BALANCE`, `PERFECT_FAVOR`, `TIER_FAVOR`, `OFFER_SIZE`, `MIN_W`,
@@ -168,7 +168,7 @@ Shared code it imports (outside the game folder): `shared/setupGame.ts` (`setupG
 
 How it runs:
 
-- Coordinates: stone `x` values are view pixels (the temple's middle is `TOWER_X`); heights are
+- Coordinates: stone `x` values are world pixels, the same as view pixels inside the designed frame (the temple's middle is `TOWER_X`); heights are
   pixels above the plinth's top. The scene turns a height into a world y with
   `PLINTH_Y - h`. The camera only scrolls vertically: `update` eases `scrollY` towards keeping
   the temple's top at `TOP_SCREEN_Y`.
@@ -209,9 +209,20 @@ How it runs:
   container (fixed with `pin`).
 - Screens: `setupScaling` draws the canvas at the screen's resolution (`renderScale` canvas pixels
   per game pixel, a whole number, so `pixelArt` stays crisp) and zooms the camera to match from its
-  top-left corner. The scene lays out with `VIEW` and the camera only ever moves by `scrollY`, so it
-  keeps that top-left origin and needs no `splitHudCamera`: scroll-factor-0 objects (panel, hint,
-  banner, the tap zone, break and end layers) stay where they were placed. Anything new that reads
+  top-left corner. The game fills the screen's shape (`fill: true`): the view is 960x540 or wider
+  (up to 1296) or taller (up to 720). `create` reads `vw`/`vh` from `viewSize` and `fx`/`fy` from
+  `viewFrame` (the designed 960x540 frame in the middle of the view) and starts the camera at
+  `scroll(-fx, -fy)`, so the world (rule coordinates such as `TOWER_X` and `PLINTH_Y` unchanged)
+  sits in that frame; `update` keeps `scrollX` and eases `scrollY` towards its target minus `fy`.
+  The sky, stars and parallax mountains and clouds are painted over the whole view (each parallax
+  layer starts `fy * (1 - factor)` down), the hill grows by `fx` each side, the panel is pinned to
+  the left edge and stretched to the view's height, the hint sits on the bottom edge, the banner and
+  gust readout follow the tower (`fx + TOWER_X`), the tap zone and the dims cover the view, the
+  patron and break layers are laid out with the `layout.ts` constants and then moved by
+  (`fx`, `fy`) (`buildOffer` moves the parts `fillOffer` made, and the test spots with them), and
+  the end panel is centred in the view. The panel's popups (reroll, buy, swap) are fixed on screen.
+  At 960x540 `fx` and `fy` are 0 and nothing moves. The camera only ever scrolls, so it keeps that
+  top-left origin and needs no `splitHudCamera`: scroll-factor-0 objects stay where they were placed. Anything new that reads
   `this.scale`, `pointer.x/y` or follows with `startFollow`/`setBounds` must go through the helpers
   in `shared/scaling.ts` instead. `index.html` has the shared `100dvh` and `touch-action: none` styles.
 - Rendering: placed stones are one `Graphics` each in `stoneViews`, drawn once (redrawn only by

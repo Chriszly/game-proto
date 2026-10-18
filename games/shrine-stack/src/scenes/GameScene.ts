@@ -56,6 +56,7 @@ import {
 import { makeButton } from '../ui/Button';
 import { playMusic, playSting, ui } from '../../../../shared/audio';
 import { bellPitch, sfx, SONG } from '../audio';
+import { viewFrame, viewSize } from '../../../../shared/scaling';
 import {
   BUILD_ON,
   CARDS,
@@ -310,6 +311,12 @@ export class GameScene extends Phaser.Scene {
   private musicPart = '';
   /** The wind of the stone in hand last frame, to hear a new gust once. */
   private lastWind = 0;
+  /** The view's size in game pixels (wider or taller than `VIEW` when it fills the screen). */
+  private vw: number = VIEW.w;
+  private vh: number = VIEW.h;
+  /** Where the designed 960x540 frame sits in the view: the world and the break's layer move by this. */
+  private fx = 0;
+  private fy = 0;
 
   constructor() {
     super('Game');
@@ -337,7 +344,10 @@ export class GameScene extends Phaser.Scene {
     this.lastWind = 0;
     this.movingKey = '';
     this.offerKey = '';
-    this.cameras.main.setScroll(0, 0);
+    ({ width: this.vw, height: this.vh } = viewSize(this));
+    ({ x: this.fx, y: this.fy } = viewFrame(this));
+    // The camera puts the designed frame in the middle of the view; it only ever moves up from here.
+    this.cameras.main.setScroll(-this.fx, -this.fy);
 
     this.createBackdrop();
     this.createPlinth();
@@ -346,20 +356,20 @@ export class GameScene extends Phaser.Scene {
     this.createPanel();
 
     this.hint = this.add
-      .text(TOWER_X, VIEW.h - 18, t('hint'), textStyle(14, '#d8cbe8'))
+      .text(this.fx + TOWER_X, this.vh - 18, t('hint'), textStyle(14, '#d8cbe8'))
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(UI_DEPTH);
-    this.windText = this.add.text(TOWER_X, 20, '', textStyle(15, '#bfe4f4')).setOrigin(0.5).setScrollFactor(0).setDepth(UI_DEPTH);
+    this.windText = this.add.text(this.fx + TOWER_X, 20, '', textStyle(15, '#bfe4f4')).setOrigin(0.5).setScrollFactor(0).setDepth(UI_DEPTH);
     const backdrop = this.add.rectangle(0, 0, 420, 64, 0x231c38, 0.92).setStrokeStyle(3, GOLD);
     this.bannerText = this.add.text(0, 0, '', textStyle(20)).setOrigin(0.5).setAlign('center').setLineSpacing(6);
-    this.banner = pin(this.add.container(TOWER_X, 70, [backdrop, this.bannerText]))
+    this.banner = pin(this.add.container(this.fx + TOWER_X, this.fy + 70, [backdrop, this.bannerText]))
       .setDepth(UI_DEPTH + 5)
       .setAlpha(0);
 
     // One zone over the whole view: a tap drops the swinging stone.
     this.add
-      .zone(0, 0, VIEW.w, VIEW.h)
+      .zone(0, 0, this.vw, this.vh)
       .setOrigin(0)
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: true })
@@ -383,7 +393,7 @@ export class GameScene extends Phaser.Scene {
     this.updateSound();
 
     // The camera follows the temple's top up, easing so each new stone slides the view gently.
-    const target = Math.min(0, PLINTH_Y - stackHeight(s) - TOP_SCREEN_Y);
+    const target = Math.min(0, PLINTH_Y - stackHeight(s) - TOP_SCREEN_Y) - this.fy;
     const cam = this.cameras.main;
     cam.scrollY += (target - cam.scrollY) * (1 - Math.exp(-dt / CAMERA_MS));
 
@@ -399,26 +409,30 @@ export class GameScene extends Phaser.Scene {
     const bands = 27;
     for (let i = 0; i < bands; i++) {
       const c = Phaser.Display.Color.Interpolate.ColorWithColor(top, low, bands - 1, Math.pow(i / (bands - 1), 1.6) * (bands - 1));
-      sky.fillStyle(Phaser.Display.Color.GetColor(c.r, c.g, c.b)).fillRect(0, (i * VIEW.h) / bands, VIEW.w, VIEW.h / bands + 1);
+      sky.fillStyle(Phaser.Display.Color.GetColor(c.r, c.g, c.b)).fillRect(0, (i * this.vh) / bands, this.vw, this.vh / bands + 1);
     }
     const rand = seeded(20261013);
     for (let i = 0; i < 60; i++) {
-      sky.fillStyle(0xf3e9d2, 0.4 + rand() * 0.5).fillRect(Math.round(rand() * VIEW.w), Math.round(rand() * 280), rand() < 0.2 ? 2 : 1, rand() < 0.2 ? 2 : 1);
+      sky.fillStyle(0xf3e9d2, 0.4 + rand() * 0.5).fillRect(Math.round(rand() * this.vw), Math.round(rand() * (280 + this.fy)), rand() < 0.2 ? 2 : 1, rand() < 0.2 ? 2 : 1);
     }
-    sky.fillStyle(0xf6e7c0, 0.18).fillCircle(820, 92, 34);
-    sky.fillStyle(0xf6e7c0).fillCircle(820, 92, 24);
-    sky.fillStyle(0xe7d4a6).fillCircle(812, 86, 5).fillCircle(828, 100, 3);
+    const mx = this.fx + 820;
+    const my = this.fy + 92;
+    sky.fillStyle(0xf6e7c0, 0.18).fillCircle(mx, my, 34);
+    sky.fillStyle(0xf6e7c0).fillCircle(mx, my, 24);
+    sky.fillStyle(0xe7d4a6).fillCircle(mx - 8, my - 6, 5).fillCircle(mx + 8, my + 8, 3);
 
-    // Far mountains drift slowly as the camera climbs.
-    const far = this.add.graphics().setScrollFactor(0, 0.15).setDepth(-9);
+    // Far mountains drift slowly as the camera climbs. Each layer starts as far down as the
+    // designed frame sits in the view, whatever its scroll factor.
+    const sink = (f: number) => this.fy * (1 - f);
+    const far = this.add.graphics().setScrollFactor(0, 0.15).setDepth(-9).setY(sink(0.15));
     far.fillStyle(0x4a3a62).fillPoints(this.ridge(380, 70, 7, rand), true);
-    const near = this.add.graphics().setScrollFactor(0, 0.35).setDepth(-8);
+    const near = this.add.graphics().setScrollFactor(0, 0.35).setDepth(-8).setY(sink(0.35));
     near.fillStyle(0x34294a).fillPoints(this.ridge(430, 50, 11, rand), true);
 
     // Clouds at every height, so climbing shows.
-    const clouds = this.add.graphics().setScrollFactor(0, 0.6).setDepth(-7);
+    const clouds = this.add.graphics().setScrollFactor(0, 0.6).setDepth(-7).setY(sink(0.6));
     for (let y = 260; y > -16000; y -= 110 + rand() * 90) {
-      const x = 240 + rand() * 720;
+      const x = 240 + rand() * (this.vw - 240);
       const w = 50 + rand() * 70;
       clouds.fillStyle(0xf3e9d2, 0.12 + rand() * 0.1);
       clouds.fillEllipse(x, y, w, w * 0.32).fillEllipse(x + w * 0.3, y - 6, w * 0.6, w * 0.3);
@@ -429,20 +443,20 @@ export class GameScene extends Phaser.Scene {
   private ridge(baseY: number, height: number, peaks: number, rand: () => number) {
     const points = [new Phaser.Math.Vector2(0, VIEW.h + 400)];
     for (let i = 0; i <= peaks * 2; i++) {
-      const x = (i / (peaks * 2)) * VIEW.w;
+      const x = (i / (peaks * 2)) * this.vw;
       const y = i % 2 ? baseY - height * (0.5 + rand() * 0.5) : baseY - rand() * height * 0.2;
       points.push(new Phaser.Math.Vector2(x, y));
     }
-    points.push(new Phaser.Math.Vector2(VIEW.w, VIEW.h + 400));
+    points.push(new Phaser.Math.Vector2(this.vw, VIEW.h + 400));
     return points;
   }
 
   private createPlinth() {
     const g = this.add.graphics().setDepth(1);
     // The hill the shrine stands on.
-    g.fillStyle(0x2f4a36).fillEllipse(TOWER_X, PLINTH_Y + 120, 900, 200);
-    g.fillStyle(0x3d5e42).fillEllipse(TOWER_X, PLINTH_Y + 110, 760, 150);
-    g.fillStyle(0x2f4a36).fillRect(0, PLINTH_Y + 60, VIEW.w, 200);
+    g.fillStyle(0x2f4a36).fillEllipse(TOWER_X, PLINTH_Y + 120, 900 + 2 * this.fx, 200);
+    g.fillStyle(0x3d5e42).fillEllipse(TOWER_X, PLINTH_Y + 110, 760 + 2 * this.fx, 150);
+    g.fillStyle(0x2f4a36).fillRect(-this.fx, PLINTH_Y + 60, this.vw, 200 + this.fy);
     // Three steps up to the plinth, the top one exactly as wide as the plinth.
     const steps = [
       { w: PLINTH_W + 80, h: 14 },
@@ -462,7 +476,7 @@ export class GameScene extends Phaser.Scene {
     const fixed = <T extends Phaser.GameObjects.Components.ScrollFactor & Phaser.GameObjects.Components.Depth>(o: T) =>
       o.setScrollFactor(0).setDepth(UI_DEPTH);
     const small = (color: string) => ({ fontFamily: FONT, fontSize: '13px', color, stroke: '#14101f', strokeThickness: 2 });
-    fixed(this.add.rectangle(PANEL.x, PANEL.y, PANEL.w, PANEL.h, 0x231c38, 0.92).setOrigin(0).setStrokeStyle(3, 0x4a3a6a));
+    fixed(this.add.rectangle(PANEL.x, PANEL.y, PANEL.w, this.vh - 2 * PANEL.y, 0x231c38, 0.92).setOrigin(0).setStrokeStyle(3, 0x4a3a6a));
     fixed(this.add.text(PANEL.x + PANEL.w / 2, PANEL.y + 20, t('title'), textStyle(22, '#f3c64e')).setOrigin(0.5));
     this.patronText = fixed(this.add.text(PANEL.x + PANEL.w / 2, PANEL.y + 42, '', { fontFamily: FONT, fontSize: '12px', color: '#d8cbe8' }).setOrigin(0.5));
     this.tierText = fixed(this.add.text(PANEL.x + 16, PANEL.y + 56, '', textStyle(18)));
@@ -544,20 +558,22 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createGameOver() {
-    const dim = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x0c0916, 0.7).setInteractive();
-    const panel = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, 520, 260, 0x231c38).setStrokeStyle(4, 0x6a5a9a);
-    const title = (this.gameOverTitle = this.add.text(VIEW.w / 2, VIEW.h / 2 - 90, '', textStyle(30, '#f3c64e')).setOrigin(0.5));
+    const cx = this.vw / 2;
+    const cy = this.vh / 2;
+    const dim = this.add.rectangle(cx, cy, this.vw, this.vh, 0x0c0916, 0.7).setInteractive();
+    const panel = this.add.rectangle(cx, cy, 520, 260, 0x231c38).setStrokeStyle(4, 0x6a5a9a);
+    const title = (this.gameOverTitle = this.add.text(cx, cy - 90, '', textStyle(30, '#f3c64e')).setOrigin(0.5));
     this.gameOverText = this.add
-      .text(VIEW.w / 2, VIEW.h / 2 - 10, '', { fontFamily: FONT, fontSize: '16px', color: '#f1e3c6', align: 'center' })
+      .text(cx, cy - 10, '', { fontFamily: FONT, fontSize: '16px', color: '#f1e3c6', align: 'center' })
       .setOrigin(0.5);
     this.gameOver = [dim, panel, title, this.gameOverText];
     const restart = () => {
       ui('click');
       this.scene.restart();
     };
-    this.againButton = makeButton(this, VIEW.w / 2, VIEW.h / 2 + 80, t('buildAgain'), restart);
-    this.againBeside = makeButton(this, VIEW.w / 2 - 115, VIEW.h / 2 + 80, t('buildAgain'), restart);
-    this.keepBuildingButton = makeButton(this, VIEW.w / 2 + 115, VIEW.h / 2 + 80, t('keepBuilding'), () => {
+    this.againButton = makeButton(this, cx, cy + 80, t('buildAgain'), restart);
+    this.againBeside = makeButton(this, cx - 115, cy + 80, t('buildAgain'), restart);
+    this.keepBuildingButton = makeButton(this, cx + 115, cy + 80, t('keepBuilding'), () => {
       if (keepBuilding(this.state)) {
         sfx('rise');
         this.onKeepBuilding();
@@ -597,10 +613,10 @@ export class GameScene extends Phaser.Scene {
       if (s.phase === 'over') saveBest(s.best);
     } else if (e.type === 'rerolled') {
       sfx('shuffle');
-      this.popup(PANEL.x + 150, PANEL.y + 126, `-${REROLL_COST}`, false);
+      this.popup(PANEL.x + 150, PANEL.y + 126, `-${REROLL_COST}`, false, true);
     } else if (e.type === 'bought') {
       ui('coin');
-      this.popup(PANEL.x + 150, PANEL.y + 126, `-${SHOP_INFO[e.item].cost}`, false);
+      this.popup(PANEL.x + 150, PANEL.y + 126, `-${SHOP_INFO[e.item].cost}`, false, true);
       if (e.item === 'wider') this.redrawTop();
     } else if (e.type === 'trial') {
       const top = s.stones.at(-1)!;
@@ -627,7 +643,7 @@ export class GameScene extends Phaser.Scene {
       this.popup(s.stones.at(-1)!.x, this.worldY(stackHeight(s)) - 34, t('regrown', { n: e.px }), true);
     } else if (e.type === 'swapped') {
       sfx('swish');
-      this.popup(PANEL.x + PANEL.w + 90, RESERVE_BUTTON.y + 8, t('inHand', { kind: t(KIND_INFO[e.kind].name) }), false);
+      this.popup(PANEL.x + PANEL.w + 90, RESERVE_BUTTON.y + 8, t('inHand', { kind: t(KIND_INFO[e.kind].name) }), false, true);
     } else if (e.type === 'patron') {
       const info = PATRON_INFO[e.patron];
       sfx('gong');
@@ -706,10 +722,12 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private popup(x: number, y: number, text: string, big: boolean) {
+  /** A number or word that floats up and fades, in the world or, `fixed`, on the screen (by the panel). */
+  private popup(x: number, y: number, text: string, big: boolean, fixed = false) {
     const t = this.add
       .text(x, y, text, textStyle(big ? 20 : 16, big ? '#f3c64e' : '#f3e9d2'))
       .setOrigin(0.5, 1)
+      .setScrollFactor(fixed ? 0 : 1)
       .setDepth(UI_DEPTH - 1);
     this.tweens.add({ targets: t, y: y - 40, alpha: 0, duration: POPUP_MS, ease: 'Quad.easeIn', onComplete: () => t.destroy() });
   }
@@ -825,7 +843,7 @@ export class GameScene extends Phaser.Scene {
     for (const part of this.gameOver) part.setVisible(ended);
     for (const part of this.againButton) part.setVisible(ended && !crowned);
     for (const part of [...this.againBeside, ...this.keepBuildingButton]) part.setVisible(ended && crowned);
-    this.keepButton = crowned && ended ? { x: VIEW.w / 2 + 115, y: VIEW.h / 2 + 80, w: 200, h: 40 } : null;
+    this.keepButton = crowned && ended ? { x: this.vw / 2 + 115, y: this.vh / 2 + 80, w: 200, h: 40 } : null;
     if (s.phase === 'over' && s.endless) {
       this.gameOverTitle.setText(t('fallen'));
       this.gameOverText.setText(t('fallenSky', { tiers: s.tiersBuilt, favour: s.favor, best: s.best }));
@@ -850,8 +868,20 @@ export class GameScene extends Phaser.Scene {
     this.materialButtons = [];
     const s = this.state;
     if (s.phase !== 'blessing') return;
-    const dim = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x0c0916, 0.55).setInteractive();
-    this.addOffer(dim, ...this.makeShop());
+    const dim = this.add.rectangle(this.vw / 2, this.vh / 2, this.vw, this.vh, 0x0c0916, 0.55).setInteractive();
+    this.addOffer(dim);
+    this.fillOffer();
+    // Laid out for the designed frame: move it, and the spots the test reads, to where the frame sits.
+    for (const part of this.offerParts) if (part !== dim) part.setPosition(part.x + this.fx, part.y + this.fy);
+    for (const spot of [...this.blessingCards, this.rerollButton, ...this.shopButtons, this.curseToggle, this.buildOnButton, ...this.materialButtons]) {
+      if (spot) Object.assign(spot, { x: spot.x + this.fx, y: spot.y + this.fy });
+    }
+  }
+
+  /** The break's parts, laid out in the designed 960x540 frame. */
+  private fillOffer() {
+    const s = this.state;
+    this.addOffer(...this.makeShop());
     if (canPickMaterial(s)) this.addOffer(...this.makeMaterials());
     if (!s.offer.length) {
       const sky = s.endless && s.tier === GOAL_TIER + 1;
@@ -996,7 +1026,7 @@ export class GameScene extends Phaser.Scene {
     this.patronCards = [];
     const s = this.state;
     if (s.phase !== 'patron') return;
-    const dim = this.add.rectangle(VIEW.w / 2, VIEW.h / 2, VIEW.w, VIEW.h, 0x0c0916, 0.55).setInteractive();
+    const dim = this.add.rectangle(this.vw / 2, this.vh / 2, this.vw, this.vh, 0x0c0916, 0.55).setInteractive();
     const title = this.add.text(PATRON_TITLE.x, PATRON_TITLE.y, t('patronTitle'), textStyle(22, '#f3c64e')).setOrigin(0.5);
     const sub = this.add.text(PATRON_TITLE.x, PATRON_TITLE.y + 30, t('patronSub'), textStyle(14, '#d8cbe8')).setOrigin(0.5);
     const parts: UiPart[] = [dim, title, sub];
@@ -1016,9 +1046,12 @@ export class GameScene extends Phaser.Scene {
         .on('pointerout', () => bg.setStrokeStyle(3, 0x6a5a9a))
         .on('pointerdown', () => choosePatron(this.state, id));
       parts.push(bg, icon, name, boon, bane);
-      this.patronCards.push({ id, x, y, w, h });
+      this.patronCards.push({ id, x: x + this.fx, y: y + this.fy, w, h });
     });
-    for (const part of parts) this.patronParts.push(part.setScrollFactor(0).setDepth(UI_DEPTH + 10));
+    for (const part of parts) {
+      if (part !== dim) part.setPosition(part.x + this.fx, part.y + this.fy);
+      this.patronParts.push(part.setScrollFactor(0).setDepth(UI_DEPTH + 10));
+    }
   }
 
   /** A small emblem for each patron, centred on the graphics' origin. */
